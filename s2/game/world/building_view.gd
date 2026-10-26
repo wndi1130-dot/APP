@@ -4,9 +4,14 @@ extends Node3D
 ## 그래서 술레후프와 짠 지도들이 한 그리기로 간다. 대응표나 조각 하나라도 못 읽으면
 ## can_draw()가 거짓이 되고 map_view가 회색 상자를 그린다.
 ##
-## 건물 × 층마다 메시 넷: 바깥 턱 줄(남쪽을 보는 가로 줄, 3 m와 턱 두 메시를 바꿔 낌),
-## 바깥 서는 줄(북쪽 가로 줄과 세로 줄, 1층 기단), 안 턱 줄(가로 안벽, 늘 턱), 안 서는 줄
-## (세로 안벽과 계단). 지붕은 건물마다 하나. 문짝과 유리만 낱 노드다.
+## 건물 × 층마다 메시 넷: 바깥 턱 줄(카메라 쪽 남·동을 보는 줄, 3 m와 턱 두 메시를 바꿔 낌),
+## 바깥 서는 줄(북·서를 보는 줄, 1층 기단), 안 턱 줄(안벽, 늘 턱), 안 서는 줄(계단).
+## 지붕은 건물마다 하나. 문짝과 유리는 건물·층·줄마다 묶고 3 m와 턱 메시를 바꿔 낀다.
+## 대각뷰(결정 476, 남동에서 북서를 봄)에서 보이는 규칙: 든 건물은 그 층을 열고(턱 줄을 낮추고
+## 안벽을 보임) 위층과 지붕을 걷는다. 발밑에서 NEAR_R 칸 안의 둘레 건물도 지붕과 플레이어 층
+## 위를 걷고 그 층을 연다. 걷은 지붕·위층은 그림자도 걷는다 — 남기면 그 그림자가 연 건물 안을
+## 덮어 검은 구덩이가 된다. 연 건물 안이 얼마나 보이는지는 시야 가림이 정한다(본 칸·들어간
+## 방·불빛만 밝고, 소품은 본 칸에만).
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
@@ -28,6 +33,7 @@ const FLAT_LIFT: float = 0.02      # 평지붕을 벽 윗면보다 띄워 겹친
 const CHIMNEY_BACK: float = 0.8    # 굴뚝을 용마루에서 북쪽 경사로 물린 거리
 const FADE_S: float = 0.15         # 들고 날 때 점박이(3.4, 가안)
 const HOLE_R: float = 3.5          # 가림 구멍 반지름(3.3, 가안)
+const NEAR_R: float = 10.0         # 둘레 건물: 지붕·위층을 걷고 플레이어 층을 여는 거리(칸, 결정 476)
 const PIECES: Array[String] = [
 	"ext_wall", "ext_wall_cut", "ext_plinth", "ext_plinth_corner", "ext_plinth_corner_in",
 	"ext_corner", "ext_corner_in", "ext_corner_cut", "ext_corner_in_cut", "wall_end_cap",
@@ -87,7 +93,11 @@ var cut_meshes: Dictionary = {}   # Vector2i(건물, 층) -> [3 m 메시, 턱 �
 var roofs: Dictionary = {}        # 건물 -> 노드
 var door_nodes: Dictionary = {}   # Vector3i(x, y, 층) -> {"node", "plan", "cut"}
 var window_nodes: Dictionary = {}
+var opening_groups: Dictionary = {} # 건물|층|줄 -> {node, b, lv, line, cut, full, low, doors, windows}
+var opening_bakes: int = 0       # 문·창 묶음을 실제로 구운 횟수(낱 문 확인은 제외)
 var outer_cells: Dictionary = {}  # 건물 -> 바깥벽 칸 번호들(지붕 시야)
+var _outer_buildings: Dictionary = {} # 칸 번호 -> 닿는 건물 번호들
+var seen_buildings_checked: int = 0
 var outer_doors: Dictionary = {}  # 건물 -> 1층 바깥 문 칸들(문가에서는 열림을 둔다)
 var footprints: Dictionary = {}   # 건물 -> Rect2i(1층 사각형)
 var drawn_cells: Dictionary = {}  # 층 -> 실제 키트가 맡은 벽·문·창 칸
@@ -98,6 +108,7 @@ var _want := Vector2i(-2, 0)
 var _holding := false
 var _instant := true
 var _fades: Dictionary = {}       # 노드 -> [시작, 끝, 지난 몫]
+var near: Dictionary = {}         # 건물 -> true(발밑에서 NEAR_R 칸 안, 든 건물 빼고)
 var _seen: Dictionary = {}        # 건물 -> Vector2
 var _focus_cell := Vector2i(-99, -99)
 var _synced: Dictionary = {}
@@ -284,13 +295,14 @@ static func cell_kind(lg: FieldGrid, c: Vector2i, b: int) -> Dictionary:
 	return {"kind": "int"}
 
 
-## 가로 줄이 북쪽 바깥 줄이 아니면 턱 줄이다(남쪽 바깥 줄, 남쪽을 보는 꺾인 줄, 안의 가로 줄).
+## 카메라(남동, 결정 476) 쪽을 보는 바깥 줄이 턱 줄이다: 남쪽·동쪽 바깥 줄과 그쪽으로 꺾인
+## 모서리. 북쪽·서쪽 줄과 북서 모서리만 선다. 안벽은 늘 턱(_plan_inner).
 static func cut_line(kind: Dictionary) -> bool:
 	match kind["kind"]:
 		"ext":
-			return kind["n"].y > 0
+			return kind["n"].y > 0 or kind["n"].x > 0
 		"corner", "inner":
-			return kind["d"].y > 0
+			return kind["d"].y > 0 or kind["d"].x > 0
 	return false
 
 
@@ -436,13 +448,13 @@ static func _plan_level(out: Dictionary, lg: FieldGrid, lv: int, b: int, area: R
 						_add(out, low, xf, b, lv, "cut_low")
 					else:
 						_add(out, full, xf, b, lv, "stand")
-				# 선 세로 줄이 턱 모서리와 만나는 끝은 열렸을 때 마구리로 막는다. 마구리는 3 m라
+				# 선 줄이 턱 모서리와 만나는 끝은 열렸을 때 마구리로 막는다. 마구리는 3 m라
 				# 턱 줄 노드에 넣으면 그 노드가 낮아지지 않는다: 열렸을 때만 보이는 안 턱 줄에 둔다.
-				if n.x != 0:
-					for s: Vector2i in [NORTH, SOUTH]:
+				if not cut:
+					for s: Vector2i in ([NORTH, SOUTH] if n.x != 0 else [WEST, EAST]):
 						var next: Dictionary = kinds.get(c + s, {})
 						if not next.is_empty() and next["kind"] in ["corner", "inner"] and cut_line(next):
-							var edge := at + Vector3(0, 0, s.y * 0.5)
+							var edge := at + Vector3(s.x * 0.5, 0, s.y * 0.5)
 							_add(out, "wall_end_cap", _xf(edge, atan2(float(s.y), float(-s.x))), b, lv, "int_cut")
 			"corner", "inner":
 				var d: Vector2i = kind["d"]
@@ -462,7 +474,7 @@ static func _plan_level(out: Dictionary, lg: FieldGrid, lv: int, b: int, area: R
 		for run: Vector2i in _runs(walls[key]):
 			var n := Vector2i(key.x, key.y)
 			var xf := _run_xf(n, key.z, run)
-			if n.y > 0:
+			if cut_line({"kind": "ext", "n": n}):
 				_add(out, "ext_wall", xf, b, lv, "cut_full")
 				_add(out, "ext_wall_cut", xf, b, lv, "cut_low")
 			else:
@@ -475,10 +487,11 @@ static func _plan_level(out: Dictionary, lg: FieldGrid, lv: int, b: int, area: R
 			_add(out, "int_wall_cut", _xf(Vector3((span.x + span.y) * 0.5, 0, y + 0.5), 0.0, Vector3(span.y - span.x, 1, 1)), b, lv, "int_cut")
 	for x: int in v_runs:
 		for span: Vector2 in _merge(v_runs[x]):
-			_add(out, "int_wall", _xf(Vector3(x + 0.5, 0, (span.x + span.y) * 0.5), PI * 0.5, Vector3(span.y - span.x, 1, 1)), b, lv, "int_stand")
+			_add(out, "int_wall_cut", _xf(Vector3(x + 0.5, 0, (span.x + span.y) * 0.5), PI * 0.5, Vector3(span.y - span.x, 1, 1)), b, lv, "int_cut")
 
 
-## 안벽 칸: 가로로 이어지면 가로 토막(턱 줄), 세로로 이어지면 세로 토막(서는 줄).
+## 안벽 칸: 가로로 이어지면 가로 토막, 세로로 이어지면 세로 토막. 대각뷰에서는 어느 쪽이든 그
+## 뒤(북서) 방을 가리므로 둘 다 턱이다(결정 476).
 ## 토막은 칸 가운데를 지나고, 바깥벽에 닿으면 그 칸 가운데까지, 홀로 끝나면 칸 끝까지 간다.
 static func _plan_inner(out: Dictionary, lg: FieldGrid, kinds: Dictionary, c: Vector2i, b: int, lv: int, h_runs: Dictionary, v_runs: Dictionary) -> void:
 	var w := kinds.has(c + WEST)
@@ -489,11 +502,9 @@ static func _plan_inner(out: Dictionary, lg: FieldGrid, kinds: Dictionary, c: Ve
 	if solid == S.DOOR:
 		var across := w or e
 		var at := Vector3(c.x + 0.5, 0, c.y + 0.5)
-		if across:
-			_add(out, "door_frame_cut", _xf(at, 0.0), b, lv, "int_cut")
-		else:
-			_add(out, "int_door", _xf(at, PI * 0.5), b, lv, "int_stand")
-		out["doors"].append({"cell": c, "lv": lv, "b": b, "line": "int_cut" if across else "int_stand", "yaw": 0.0 if across else PI * 0.5, "outer": false})
+		var yaw := 0.0 if across else PI * 0.5
+		_add(out, "door_frame_cut", _xf(at, yaw), b, lv, "int_cut")
+		out["doors"].append({"cell": c, "lv": lv, "b": b, "line": "int_cut", "yaw": yaw, "outer": false})
 		return
 	if w or e:
 		var lo := -0.5 if w else (-INT_HALF if nn or ss else -0.5)
@@ -803,6 +814,10 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial, pace = null) -> void
 			drawn_cells[key.y][c] = true
 	for b: int in p["outer"]:
 		outer_cells[b] = PackedInt32Array(p["outer"][b].keys())
+		for cell_index: int in outer_cells[b]:
+			if not _outer_buildings.has(cell_index):
+				_outer_buildings[cell_index] = {}
+			_outer_buildings[cell_index][b] = true
 	outer_doors = p["outer_doors"]
 	footprints = p["footprints"]
 	var bakes: Dictionary = {}
@@ -854,16 +869,13 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial, pace = null) -> void
 		node.set_instance_shader_parameter("seen_fixed", Vector2.ZERO)
 		roofs[b] = node
 	for row: Dictionary in p["doors"]:
-		var node := _node(row["b"], row["lv"], null, false)
-		var key := Vector3i(row["cell"].x, row["cell"].y, row["lv"])
-		door_nodes[key] = {"node": node, "plan": row, "cut": false}
-		_draw_door(key)
+		_add_opening(row, false)
 		await BuildPace.rest(pace)
 	for row: Dictionary in p["windows"]:
-		var node := _node(row["b"], row["lv"], null, false)
-		var key := Vector3i(row["cell"].x, row["cell"].y, row["lv"])
-		window_nodes[key] = {"node": node, "plan": row, "cut": false}
-		_draw_window(key)
+		_add_opening(row, true)
+		await BuildPace.rest(pace)
+	for group: Dictionary in opening_groups.values():
+		_set_opening_mesh(group, bool(group["cut"]))
 		await BuildPace.rest(pace)
 	_apply()
 	_instant = false
@@ -911,7 +923,7 @@ func cut_node(b: int, lv: int) -> MeshInstance3D:
 
 # ---------------------------------------------------------------- 보이는 규칙 (3장)
 
-## 0 숨김, 1 닫힘(바깥 껍데기), 2 열림(턱과 안).
+## 0 숨김, 1 닫힘(바깥 껍데기), 2 열림(턱과 안). 둘레 건물(near)은 플레이어 층에서 열린다.
 func _mode(b: int, lv: int) -> int:
 	if player_lv < 0:
 		if lv >= 0:
@@ -919,15 +931,18 @@ func _mode(b: int, lv: int) -> int:
 		return 2 if b == open_b and lv == open_lv else 1
 	if lv < 0:
 		return 0
-	if b != open_b:
+	var at := open_lv if b == open_b else (player_lv if near.has(b) else -1)
+	if at < 0:
 		return 1
-	if lv > open_lv:
+	if lv > at:
 		return 0
-	return 2 if lv == open_lv else 1
+	return 2 if lv == at else 1
 
 
 func _low(b: int, lv: int) -> bool:
-	return b == open_b and lv == open_lv
+	if b == open_b:
+		return lv == open_lv
+	return player_lv >= 0 and near.has(b) and lv == player_lv
 
 
 func _apply() -> void:
@@ -946,24 +961,15 @@ func _apply() -> void:
 			if parts.has(slot):
 				_show(parts[slot], mode == 2)
 	for b: int in roofs:
-		_show(roofs[b], player_lv >= 0 and b != open_b)
-	for key: Vector3i in door_nodes:
-		var row: Dictionary = door_nodes[key]
-		var plan_row: Dictionary = row["plan"]
-		var mode := _mode(plan_row["b"], key.z)
-		var cut: bool = plan_row["line"] == "int_cut" or (plan_row["line"] == "cut" and _low(plan_row["b"], key.z))
-		if cut != row["cut"]:
-			row["cut"] = cut
-			_draw_door(key)
-		_show(row["node"], mode == 2 if plan_row["line"].begins_with("int") else mode > 0)
-	for key: Vector3i in window_nodes:
-		var row: Dictionary = window_nodes[key]
-		var plan_row: Dictionary = row["plan"]
-		var cut: bool = plan_row["line"] == "cut" and _low(plan_row["b"], key.z)
-		if cut != row["cut"]:
-			row["cut"] = cut
-			_draw_window(key)
-		_show(row["node"], _mode(plan_row["b"], key.z) > 0)
+		_show(roofs[b], player_lv >= 0 and b != open_b and not near.has(b))
+	for group: Dictionary in opening_groups.values():
+		var b: int = int(group["b"])
+		var lv: int = int(group["lv"])
+		var line: String = String(group["line"])
+		var mode: int = _mode(b, lv)
+		var cut: bool = line == "int_cut" or (line == "cut" and _low(b, lv))
+		_set_opening_mesh(group, cut)
+		_show(group["node"] as MeshInstance3D, mode == 2 if line.begins_with("int") else mode > 0)
 	var open := open_b >= 0 and footprints.has(open_b)
 	material.set_shader_parameter("open_building", float(open_b) if open else -1.0)
 	if open:
@@ -992,6 +998,23 @@ func _show(node: MeshInstance3D, on: bool) -> void:
 	_fades[node] = [1.0 - target, target, 0.0]
 
 
+## 발밑 칸에서 NEAR_R 안에 1층 사각형이 닿는 건물(든 건물 빼고). 바뀌면 참.
+func _update_near(c: Vector2i) -> bool:
+	var now: Dictionary = {}
+	for b: int in footprints:
+		if b == open_b:
+			continue
+		var r: Rect2i = footprints[b]
+		var dx := maxi(maxi(r.position.x - c.x, c.x - (r.end.x - 1)), 0)
+		var dy := maxi(maxi(r.position.y - c.y, c.y - (r.end.y - 1)), 0)
+		if Vector2(dx, dy).length() <= NEAR_R:
+			now[b] = true
+	if now == near:
+		return false
+	near = now
+	return true
+
+
 func show_levels(player_level: int) -> void:
 	if player_level == player_lv:
 		return
@@ -1010,6 +1033,7 @@ func cut_away(building_id: int, level: int) -> void:
 		return
 	open_b = building_id
 	open_lv = level
+	_update_near(_focus_cell)
 	_apply()
 
 
@@ -1022,31 +1046,126 @@ func _near_door(b: int) -> bool:
 
 # ---------------------------------------------------------------- 문과 창
 
+func _opening_key(b: int, lv: int, line: String) -> String:
+	return "%d|%d|%s" % [b, lv, line]
+
+
+func _add_opening(plan_row: Dictionary, window: bool) -> void:
+	var b: int = int(plan_row["b"])
+	var lv: int = int(plan_row["lv"])
+	var line: String = String(plan_row["line"])
+	var cut: bool = line == "int_cut" or (line == "cut" and _low(b, lv))
+	var group_key: String = _opening_key(b, lv, line)
+	if not opening_groups.has(group_key):
+		opening_groups[group_key] = {"node": _node(b, lv, null, false), "b": b, "lv": lv,
+			"line": line, "cut": cut, "full": null, "low": null,
+			"full_ready": false, "low_ready": false, "doors": [], "windows": []}
+	var group: Dictionary = opening_groups[group_key] as Dictionary
+	var cell: Vector2i = plan_row["cell"] as Vector2i
+	var key: Vector3i = Vector3i(cell.x, cell.y, lv)
+	var row: Dictionary = {"node": group["node"], "plan": plan_row, "cut": cut, "group": group}
+	if window:
+		window_nodes[key] = row
+		(group["windows"] as Array).append(key)
+	else:
+		door_nodes[key] = row
+		(group["doors"] as Array).append(key)
+
+
+## 처음 쓰는 판만 굽는다. 빈 턱(null)도 완료로 기억하고 노드와 흐려짐 소유권은 그대로 둔다.
+func _set_opening_mesh(group: Dictionary, cut: bool) -> void:
+	if bool(group["cut"]) != cut:
+		group["cut"] = cut
+		for key: Vector3i in group["doors"]:
+			door_nodes[key]["cut"] = cut
+		for key: Vector3i in group["windows"]:
+			window_nodes[key]["cut"] = cut
+	var slot: String = "low" if cut else "full"
+	var ready: String = slot + "_ready"
+	if not bool(group[ready]):
+		var bake: Bake = Bake.new()
+		for key: Vector3i in group["doors"]:
+			_bake_door(bake, key, cut)
+			door_nodes[key]["drawn"] = _opening_state(key, false)
+		for key: Vector3i in group["windows"]:
+			_bake_window(bake, key, cut)
+			window_nodes[key]["drawn"] = _opening_state(key, true)
+		group[slot] = bake.mesh()
+		group[ready] = true
+		opening_bakes += 1
+	(group["node"] as MeshInstance3D).mesh = group[slot] as Mesh
+
+
+## 문·창 하나가 바뀌면 두 판을 버리고 지금 쓰는 판만 다시 굽는다.
+func _invalidate_opening_group(group: Dictionary) -> void:
+	group["full"] = null
+	group["low"] = null
+	group["full_ready"] = false
+	group["low_ready"] = false
+	_set_opening_mesh(group, bool(group["cut"]))
+
+
+## 같은 좌표의 다른 층은 건드리지 않도록 굽기에 쓰는 입력만 따로 기억한다.
+func _opening_state(key: Vector3i, window: bool) -> Dictionary:
+	var lg: FieldGrid = levels[key.z] as FieldGrid
+	var cell: Vector2i = Vector2i(key.x, key.y)
+	var source: Dictionary = (lg.windows if window else lg.doors).get(cell, {}) as Dictionary
+	var state: Dictionary = {"faces": lg.faces(cell), "outer": lg.outer_face(cell),
+		"planks": Vector2i(BuildingRules.planks(source, 0), BuildingRules.planks(source, 1))}
+	if window:
+		state["broken"] = bool(source.get("broken", false))
+		state["open"] = bool(source.get("open", false))
+		state["glass"] = bool(source.get("glass", false))
+		state["curtain"] = String(source.get("curtain", ""))
+		var glass: Dictionary = {}
+		for fell: Vector2i in lg.floor_glass:
+			if (lg.floor_glass[fell] as Vector2i) == cell:
+				glass[fell] = true
+		state["floor_glass"] = glass
+	else:
+		state["state"] = String(source.get("state", "closed"))
+	return state
+
+
+## 도구·시험에서 문 하나의 모양을 읽는다. 화면에는 묶음 메시만 둔다.
+func door_mesh(key: Vector3i) -> Mesh:
+	if not door_nodes.has(key):
+		return null
+	var row: Dictionary = door_nodes[key] as Dictionary
+	var bake: Bake = Bake.new()
+	_bake_door(bake, key, bool(row["cut"]))
+	return bake.mesh()
+
+
 func update_door(c: Vector2i) -> void:
-	for lv in levels:
-		var key := Vector3i(c.x, c.y, lv)
-		if door_nodes.has(key):
-			_draw_door(key)
+	for lv: int in levels:
+		var key: Vector3i = Vector3i(c.x, c.y, lv)
+		if not door_nodes.has(key):
+			continue
+		var row: Dictionary = door_nodes[key] as Dictionary
+		if (row.get("drawn", {}) as Dictionary) != _opening_state(key, false):
+			_invalidate_opening_group(row["group"] as Dictionary)
 
 
 func update_window(c: Vector2i) -> void:
-	for lv in levels:
-		var key := Vector3i(c.x, c.y, lv)
-		if window_nodes.has(key):
-			_draw_window(key)
+	for lv: int in levels:
+		var key: Vector3i = Vector3i(c.x, c.y, lv)
+		if not window_nodes.has(key):
+			continue
+		var row: Dictionary = window_nodes[key] as Dictionary
+		if (row.get("drawn", {}) as Dictionary) != _opening_state(key, true):
+			_invalidate_opening_group(row["group"] as Dictionary)
 
 
 ## 문짝: 경첩(대응표 hinge_m)이 기준이고 닫히면 문 칸을 가로지른다. 열리면 안쪽으로 90°.
-func _draw_door(key: Vector3i) -> void:
-	var row: Dictionary = door_nodes[key]
-	var plan_row: Dictionary = row["plan"]
-	var lg: FieldGrid = levels[key.z]
-	var door: Dictionary = lg.doors.get(Vector2i(key.x, key.y), {})
-	var yaw: float = plan_row["yaw"]
+func _bake_door(bake: Bake, key: Vector3i, cut: bool) -> void:
+	var row: Dictionary = door_nodes[key] as Dictionary
+	var plan_row: Dictionary = row["plan"] as Dictionary
+	var lg: FieldGrid = levels[key.z] as FieldGrid
+	var door: Dictionary = lg.doors.get(Vector2i(key.x, key.y), {}) as Dictionary
+	var yaw: float = float(plan_row["yaw"])
 	var at := Vector3(key.x + 0.5, 0, key.y + 0.5)
 	var hinge := at + Basis(Vector3.UP, yaw) * Vector3(-0.45, 0, 0)
-	var cut: bool = row["cut"]
-	var bake := Bake.new()
 	match String(door.get("state", "closed")):
 		"open":
 			bake.add(_arrays["door_leaf_cut" if cut else "door_leaf"], _xf(hinge, yaw + PI * 0.5))
@@ -1064,7 +1183,6 @@ func _draw_door(key: Vector3i) -> void:
 			bake.add(_arrays["door_leaf_cut" if cut else "door_leaf"], _xf(hinge, yaw))
 	if not cut:
 		_bake_door_planks(bake, lg, Vector2i(key.x, key.y), door, yaw)
-	row["node"].mesh = bake.mesh()
 
 
 ## 문 판자(J08): 면마다 그 면 쪽에 DOOR_PLANKS 자리부터.
@@ -1081,18 +1199,17 @@ func _bake_door_planks(bake: Bake, lg: FieldGrid, c: Vector2i, door: Dictionary,
 			bake.box(xf, Vector3(0.52, 0.07, 0.02), ZONE_WOOD_OUT if f == outer else ZONE_WOOD_IN)
 
 
-func _draw_window(key: Vector3i) -> void:
-	var row: Dictionary = window_nodes[key]
-	var lg: FieldGrid = levels[key.z]
-	var win: Dictionary = lg.windows.get(Vector2i(key.x, key.y), {})
-	var xf := _xf(Vector3(key.x + 0.5, 0, key.y + 0.5), row["plan"]["yaw"])
-	var bake := Bake.new()
+func _bake_window(bake: Bake, key: Vector3i, cut: bool) -> void:
+	var row: Dictionary = window_nodes[key] as Dictionary
+	var lg: FieldGrid = levels[key.z] as FieldGrid
+	var win: Dictionary = lg.windows.get(Vector2i(key.x, key.y), {}) as Dictionary
+	var xf := _xf(Vector3(key.x + 0.5, 0, key.y + 0.5), float(row["plan"]["yaw"]))
 	var c := Vector2i(key.x, key.y)
 	var sides := lg.faces(c)
 	var outer := lg.outer_face(c)
 	var inner := 1 - outer if outer >= 0 else 1
 	var in_dir := Vector3(sides[inner].x - c.x, 0, sides[inner].y - c.y)
-	if not row["cut"]:
+	if not cut:
 		if win.get("broken", false):
 			# 깬 창: 틀에 유리가 남았으면 들쭉날쭉한 조각, 치웠으면 빈 틀.
 			if win.get("glass", false):
@@ -1124,7 +1241,6 @@ func _draw_window(key: Vector3i) -> void:
 	for fell: Vector2i in lg.floor_glass:
 		if lg.floor_glass[fell] == c:
 			bake.add(_arrays["window_glass_floor"], Transform3D(xf.basis, Vector3(fell.x + 0.5, xf.origin.y, fell.y + 0.5)))
-	row["node"].mesh = bake.mesh()
 
 
 ## 연 창: 한쪽 경첩을 축으로 안쪽으로 80° 돌린 유리짝(여닫이창).
@@ -1151,8 +1267,16 @@ static func _window_plank_slots() -> Array:
 # ---------------------------------------------------------------- 시야와 매 틀
 
 ## 지붕은 바깥벽 칸 가운데 가장 밝게 본 값을 받는다(지붕 밑 칸은 늘 못 본 칸이라).
-func update_seen(vis_bytes: PackedByteArray) -> void:
-	for b: int in roofs:
+func update_seen(vis_bytes: PackedByteArray, changed: PackedInt32Array = PackedInt32Array()) -> void:
+	var touched: Dictionary = roofs if changed.is_empty() else {}
+	if not changed.is_empty():
+		for cell_index: int in changed:
+			for b: int in _outer_buildings.get(cell_index, {}):
+				if roofs.has(b):
+					touched[b] = true
+	seen_buildings_checked = 0
+	for b: int in touched:
+		seen_buildings_checked += 1
 		var now := 0
 		var before := 0
 		for i: int in outer_cells.get(b, PackedInt32Array()):
@@ -1173,7 +1297,11 @@ func _process(delta: float) -> void:
 		var plane := (player_lv if player_lv >= 0 else -1) * LEVEL_H
 		if absf(back.y) > 0.01:
 			var focus := cam.global_position - back * ((cam.global_position.y - plane) / back.y)
-			_focus_cell = Vector2i(floori(focus.x), floori(focus.z))
+			var cell := Vector2i(floori(focus.x), floori(focus.z))
+			if cell != _focus_cell:
+				_focus_cell = cell
+				if _update_near(cell):
+					_apply()
 			material.set_shader_parameter("hole_center", focus + Vector3(0, 0.9, 0))
 			material.set_shader_parameter("cam_back", back)
 	if _holding and not _near_door(open_b):

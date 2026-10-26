@@ -10,6 +10,11 @@ import type { Wound, WoundBook, WoundGrade, WoundPart, WoundState } from './woun
 import { CAPTAIN_ID } from './field_receipt';
 import type { FieldPromiseSpec, FieldReturnRecord } from './field_receipt';
 import { departureMemory } from './memory';
+import { arrivalMin } from './stop_time';
+import { pickWeather } from './omens';
+import type { Weather } from './omens';
+import { routeWeather } from './route_weather';
+import { rainAt } from './season';
 
 // S3 출발 계약 판 2(docs/design/briefs/s3_departure_receipt_contract.md 2절). 열차가 정차 고르기에서 「내리기」를 누를 때
 // 판 상태에서 한 장 만든다. 판 1(field_receipt.ts FieldDeparture)의 칸은 그대로 두고 사람 칸을 넓힌다.
@@ -55,6 +60,11 @@ export interface FieldDepartureV2 {
   stopId: string;
   placeId: string;
   segment: number;
+  /** 이 정차에 열차가 닿는 시각(0시부터 분, 결정 471 B0 stop_time.ts). 없던 계약은 10:30 */
+  arriveMin?: number;
+  /** 결정 474 N2: 기온 켠 판의 현재 정차와 지난 최대 세 정차(S2 날씨 id). */
+  stopWeather?: StopWeather;
+  pastWeather?: { seg: number; weather: StopWeather }[];
   /** 처음부터 나가는 수색대: 열차장과 동료 */
   roster: DeparturePerson[];
   /** 작업조 부르기로 내려올 수 있는 사람: 운송조(S1 정차의 작업조)와 호위조(경비대 둘) */
@@ -63,6 +73,14 @@ export interface FieldDepartureV2 {
   domestic: boolean;
   /** 정차 전체에 걸리는 열차 사정 */
   train: { food: number; hungerSegs: number };
+}
+
+export type StopWeather = Exclude<Weather, 'cold' | 'cold_front'> | 'rain';
+
+function stopWeatherId(weather: Weather, seg: number): StopWeather {
+  if (weather === 'sleet' && rainAt(seg)) return 'rain';
+  if (weather === 'cold' || weather === 'cold_front') return 'clear';
+  return weather;
 }
 
 // ---- 몸 능력(카드 A: 나이·칸 바탕 + 사람마다 정해진 ±1) ----
@@ -203,6 +221,13 @@ export function buildDeparture(g: Game, opts: DepartureOpts): FieldDepartureV2 {
   ];
   return {
     version: 2, departureId: `dep_${opts.placeId}_${seg}`, stopId: `stop_${opts.placeId}_${seg}`, placeId: opts.placeId, segment: seg,
-    roster, workCrew, promises: departurePromises(g), domestic: !!g.dom, train: { food: g.food, hungerSegs: g.hunger ?? 0 },
+    arriveMin: arrivalMin(g.seed, seg), roster, workCrew, promises: departurePromises(g), domestic: !!g.dom, train: { food: g.food, hungerSegs: g.hunger ?? 0 },
+    ...(g.climate ? {
+      stopWeather: stopWeatherId(g.stop?.weather ?? pickWeather(g), seg),
+      pastWeather: Array.from({ length: Math.min(3, seg - 1) }, (_, i) => {
+        const past = Math.max(1, seg - 3) + i;
+        return { seg: past, weather: stopWeatherId(routeWeather(g.seed, past), past) };
+      }),
+    } : {}),
   };
 }

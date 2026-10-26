@@ -596,6 +596,16 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 ## overcast noon, 0.14 against 0.38 at night). Never flatter than a clear day.
 const TONE_CONTRAST := 1.2
 const TONE_CONTRAST_DIM := 1.38
+## The view fill: in the diagonal view (decision 476) the walls turned from the
+## sun fill much of the screen, and lit by the fill alone they fell under the
+## grade to black (V 0.01; the reference reads both wall faces at 0.45~0.6;
+## easing a grey day's spread to 1.32 lifted them too but cost the spread). A
+## light from the camera's side (south-east), near level and without shadow:
+## the south and east faces the camera sees take it, the ground and its shadows
+## barely (sin VIEW_FILL_TILT), so the spread stays. This much by day, half at
+## dawn and dusk, none at night (the night is the lamps', decision 471 B3·B4).
+const VIEW_FILL := 2.0
+const VIEW_FILL_TILT := 5.0
 ## The grey the tone turns about: 0.4 by day, lower as the hour's light goes,
 ## so the spread does not darken a dim picture (night stays where it was).
 const TONE_PIVOT_DAY := 0.4
@@ -670,6 +680,8 @@ static func light(l: Dictionary) -> Dictionary:
 		"shadow": lerpf(1.0, SKY_DOME_SHADOW, dome),
 		"ambient_color": l["ambient_color"],
 		"ambient_energy": fill - moved,
+		"fill_energy": VIEW_FILL * (float(l["weights"]["day"]) + 0.5 * (float(l["weights"]["dawn"]) + float(l["weights"]["dusk"]))),
+		"fill_color": color.lerp(Color(l["ambient_color"]), 0.5),
 		"fog_color": l["fog_color"],
 		"fog_density": 0.012 + 0.03 * float(l["haze"]),
 		"background": l["background"],

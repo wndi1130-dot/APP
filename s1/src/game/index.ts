@@ -17,6 +17,8 @@ export * from './scene';
 export * from './needs';
 export * from './council_log';
 export * from './omens';
+export { routeWeather, STAY as WEATHER_STAY } from './route_weather';
+export * from './stop_time';
 export * from './people';
 export * from './domestic';
 export * from './pot_view';

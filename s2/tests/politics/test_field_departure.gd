@@ -7,6 +7,7 @@ const V = preload("res://tests/politics/field_vectors.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
+const TrainStop = preload("res://game/train/train_stop.gd")
 
 var _tables: Dictionary
 
@@ -90,3 +91,56 @@ func test_a_receipt_with_care_or_crew_rows_is_v5() -> void:
 	var plain := Receipt.new("sulechow_station")
 	plain.add_wound("p_001", "arm_left", "fracture", false, {"splinted": true})
 	assert_false((plain.to_dict()["people"]["wounds"][0] as Dictionary).has("treat"), "no care rows on a v2 receipt")
+
+
+func test_the_contract_carries_the_arrival_the_route_board_shows() -> void:
+	# Decision 471 B0: the train rolls the stop's arrival from its run's seed and stretch (stop_time.ts);
+	# the six contracts hold S1's own answers.
+	for row: Dictionary in _contracts():
+		var d: Dictionary = row["departure"]
+		assert_eq(int(d["arriveMin"]), TrainStop.arrival_min(String(row["state"]["seed"]), int(d["segment"])), _at(row))
+	var bands: Array = [0, 0, 0, 0]
+	for i in 2000:
+		var m := TrainStop.arrival_min("share-%d" % i, 3)
+		assert_eq(m % 10, 0)
+		var k := -1
+		for b: int in TrainStop.ARRIVALS.size():
+			if m >= int(TrainStop.ARRIVALS[b][1]) and m <= int(TrainStop.ARRIVALS[b][2]):
+				k = b
+		assert_gt(k, -1, "%d is in a band" % m)
+		bands[maxi(k, 0)] += 1
+	for b: int in bands.size():
+		assert_almost_eq(float(bands[b]) / 20.0, float(TrainStop.ARRIVALS[b][0]), 3.5, "band %d share" % b)
+
+
+func test_route_weather_fields_match_s1_and_are_absent_with_climate_off() -> void:
+	# Decision 474 N2: current S2 id, the previous three in order, no disaster in the past.
+	var path: String = "res://tests/fixtures/train/route_weather.json"
+	assert_true(FileAccess.file_exists(path))
+	if not FileAccess.file_exists(path):
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	assert_true(parsed is Dictionary)
+	if not parsed is Dictionary:
+		return
+	var fixture: Dictionary = parsed
+	assert_eq(fixture.get("format", ""), "route-weather-v1")
+	assert_eq((fixture.get("contracts", []) as Array).size(), 162)
+	var tables: Dictionary = _tables.merged(fixture["tables"], true)
+	var bad: Array[String] = []
+	for row: Dictionary in fixture.get("contracts", []):
+		var g: Dictionary = (fixture["baseState"] as Dictionary).duplicate(true)
+		for key: String in ["seed", "seg", "climate", "disasters", "disaster"]:
+			if row.has(key):
+				g[key] = row[key]
+		if row.has("storedWeather"):
+			g["stop"]["weather"] = row["storedWeather"]
+		var before: String = JSON.stringify(g)
+		var d: Dictionary = FieldDeparture.build(g, tables, fixture["opts"])
+		var got: Dictionary = {}
+		for key: String in ["stopWeather", "pastWeather"]:
+			if d.has(key):
+				got[key] = d[key]
+		_check(bad, String(row["name"]), row["expected"], got)
+		_check(bad, String(row["name"]) + " state unchanged", before, JSON.stringify(g))
+	assert_eq(bad, [] as Array[String])

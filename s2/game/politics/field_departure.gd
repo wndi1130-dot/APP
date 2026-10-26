@@ -8,6 +8,8 @@ extends RefCounted
 
 const Rng = preload("res://game/politics/rng.gd")
 const TrainStop = preload("res://game/train/train_stop.gd")
+const RouteWeather = preload("res://game/train/route_weather.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 const PersonMemory = preload("res://game/politics/person_memory.gd")
 const KitPick = preload("res://game/politics/kit_pick.gd")
 
@@ -201,11 +203,40 @@ static func build(g: Dictionary, t: Dictionary, opts: Dictionary) -> Dictionary:
 		work.append(person(g, t, id, "carrier", KitPick.kit(CARRIER_GEAR, stock)))
 	for i: int in escorts.size():
 		work.append(person(g, t, escorts[i], "escort", KitPick.kit(ESCORT_GEAR[i], stock)))
-	return {
+	var departure: Dictionary = {
 		"version": 2, "departureId": "dep_%s_%d" % [place, seg], "stopId": "stop_%s_%d" % [place, seg], "placeId": place, "segment": seg,
+		"arriveMin": TrainStop.arrival_min(String(g["seed"]), seg),
 		"roster": roster, "workCrew": work, "promises": promises_of(g, t), "domestic": g.get("dom") != null,
 		"train": ({"food": g["food"], "hungerSegs": int(g.get("hunger", 0))} as Dictionary).merged(KitPick.train_kit(g)),
 	}
+	if bool(g.get("climate", false)):
+		var current: String = RouteWeather.weather(String(g["seed"]), seg, t)
+		var disaster: Variant = g.get("disaster") if bool(g.get("disasters", false)) else null
+		if disaster is Dictionary:
+			if String(disaster.get("stage", "")) == "active":
+				current = String(disaster["kind"])
+			elif String(disaster.get("stage", "")) == "brewing":
+				current = "overcast" if String(disaster["kind"]) == "blizzard" else "cold_front"
+		if stop is Dictionary and stop.get("weather") != null:
+			current = String(stop["weather"])
+		departure["stopWeather"] = _weather_id(current, seg, t)
+		var past: Array = []
+		for previous: int in range(maxi(1, seg - 3), seg):
+			past.append({"seg": previous, "weather": _weather_id(RouteWeather.weather(String(g["seed"]), previous, t), previous, t)})
+		departure["pastWeather"] = past
+	return departure
+
+
+## Decision 474 N2: S2 weather ids, including rain and a clear cold snap.
+static func _weather_id(weather: String, seg: int, t: Dictionary) -> String:
+	var rows: Array = t.get("SEASON_ROWS", SeasonTable.prologue())
+	var row: Dictionary = rows[clampi(seg, 1, rows.size()) - 1]
+	var falls: Dictionary = t.get("FALLS", SeasonTable.falls())
+	if weather == "sleet" and float(row["temp"]) > float(falls["rain_above"]):
+		return "rain"
+	if weather == "cold" or weather == "cold_front":
+		return "clear"
+	return weather
 
 
 ## Everyone who may go out: the roster on v1, the roster and the work crew on v2.
