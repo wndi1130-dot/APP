@@ -8,7 +8,9 @@ extends Control
 ## its cohesion, what this agenda does to it). Along the bottom the way the
 ## train goes and the lever that calls the vote. Once pulled the stones turn,
 ## the verdict is stamped, the list shows each group's yes and no, and the lever
-## stays down on 「확인」, which closes the session.
+## stays down on 「확인」, which closes the session. Under the list, the count's
+## one line on why it split so (council_vote.gd result.why, S1 council.ts
+## verdict__why), except for a secret ballot or a decree.
 ##
 ## Every number is the politics port's own, off the state it is given
 ## (council_vote.gd blocs · expected · agenda_need · agenda_title · cast_vote ·
@@ -1064,7 +1066,8 @@ func _list(counting: bool) -> void:
 			_hair(top + 44.0 - 2.0)
 
 
-## After the count: each group's yes and no (cast_vote byComm), rows 36 high.
+## After the count: each group's yes and no (cast_vote byComm), rows 36 high,
+## then why it split so.
 func _results() -> void:
 	_head("", [["찬성", SKY], ["반대", RED]], COLS_AFTER)
 	var comms: Array = m["comms"]
@@ -1078,6 +1081,24 @@ func _results() -> void:
 		_num(str(int(r.get("no", 0))), 500, RED, COLS_AFTER[1], base)
 		if i < comms.size() - 1:
 			_hair(top + 36.0 - 2.0)
+	_why(42.0 + 36.0 * float(comms.size()) + 6.0)
+
+
+## The count's one line (S1 voteWhy): the group whose undecided or
+## leader-brought seats split furthest from what was expected, small under the
+## list. A secret ballot does not say how groups split; a decree has no count.
+func _why(top: float) -> void:
+	var why: String = String(result.get("why", "")) if result.get("why") != null else ""
+	if why == "" or bool(result.get("secret", false)) or bool(result.get("decree", false)):
+		return
+	var k: float = UiFonts.K
+	_hair(top - 4.0)
+	var l := _ink(UiFonts.keep_all(why), UiFonts.WORD, 400, 12.0, INK2, 0.24)
+	l.name = "Why"
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.position = Vector2(PANE_X0, top + 2.0) * k
+	l.size = Vector2(PANE_X1 - PANE_X0, maxf(PANE_SIZE.y - top - 10.0, 16.0)) * k
+	_on_pane(l)
 
 
 ## The pane's head (.cl__head at 30, 12, 30 high): its words and the columns'.
