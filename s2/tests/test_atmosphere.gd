@@ -224,8 +224,12 @@ func test_the_dusk_shade_is_the_open_sky_s_cool_light() -> void:
 		var sun: Color = dusk["sun_color"]
 		var shade: Color = dusk["ambient_color"]
 		assert_gt(sun.r - sun.b, 0.2, "a warm low sun (cold %s)" % cold)
-		assert_lt(sun.s, 0.5, "no deep orange sun (cold %s)" % cold)
+		assert_lt(sun.s, 0.6 if cold < 0.5 else 0.5, "no deep orange sun (cold %s)" % cold)
 		assert_gte(shade.b, shade.r, "a cool shade (cold %s)" % cold)
+	# Late autumn's dusk sun is warmer than deep winter's (the season shows in it).
+	var autumn: Color = Atmosphere.look(Atmosphere.sun_times(0.0).y - 0.4, ["clear"], "K1", 0.0)["sun_color"]
+	var winter: Color = Atmosphere.look(Atmosphere.sun_times(1.0).y - 0.4, ["clear"], "K1", 1.0)["sun_color"]
+	assert_gt(autumn.r - autumn.b, winter.r - winter.b, "a warmer sun in late autumn")
 
 
 func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:

@@ -66,6 +66,21 @@ func test_the_rare_store_is_locked_boarded_boxed_and_watched() -> void:
 		assert_eq(int(box["building"]), b)
 		assert_gt(box["items"].size(), 0, "never an empty box")
 	assert_between(d["spawns"]["dead_rare_store"].size(), 2, 4)
+	# One of them just inside the gap, the way they came in.
+	var by_gap: Vector2i = d["spawns"]["dead_rare_store"][1]
+	var touches_gap := false
+	for c: Vector2i in spot["gap"]:
+		touches_gap = touches_gap or (c - by_gap).length_squared() == 1
+	assert_true(touches_gap, "one of the dead stands just inside the gap")
+	# A handcart or a sled left at the door, beside it and not in the way.
+	var carts: Array = d["props"].filter(func(p: Dictionary) -> bool:
+		return SidePath.CART_KINDS.has(String(p["kind"])) and String(p.get("note", "")).begins_with("문 앞에 버려진"))
+	assert_eq(carts.size(), 1)
+	var cart: Rect2i = carts[0]["rect"]
+	assert_false(cart.has_point(spot["door"]), "not on the door")
+	assert_true(cart.intersects(spot["store"].grow(1)), "at the store's front")
+	for c: Vector2i in spot["entrance"]:
+		assert_false(cart.has_point(c), "not in the gap")
 	var boarded := 0
 	for c: Vector2i in d["grid"].windows:
 		var w: Dictionary = d["grid"].windows[c]
