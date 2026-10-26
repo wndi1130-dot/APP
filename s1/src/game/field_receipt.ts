@@ -452,6 +452,7 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   }
 
   bodySearches(g, departure, r);
+  residentScenes(g, departure, r);
   RETURN_HOOK.after?.(g, departure, r); // 사람 기억(memory.ts): 그 정차에서 사람마다 겪거나 본 일
   closeFieldStop(g, departure, r);
   if (r.symbol) {
@@ -516,6 +517,28 @@ function closeFieldStop(g: Game, departure: AnyDeparture, r: FieldReceipt): void
  * 영수증 witnessed의 template 'body_search' 줄만 읽고, 한 귀환에 칸마다 한 번이다. S2 field_return.gd와 같은 값.
  */
 export const BODY_SEARCH_REL: Readonly<Record<Comm, number>> = Object.freeze({ tail: 0, medtech: -1, guard: 0, front: -1, engine: 0 });
+
+/**
+ * 정차 사람 장면(J21): 그 정차에 사는 사람들의 겨울 몫을 가져간 것을 본 사람이 살아 돌아오면 그 칸이 한 귀환에 한 번 마음에 둔다
+ * (결정 439 카드 3 「가」: 안건 없이 작게, 값은 정치 흐름과 맞춤). 돕기·지나치기는 칸 값이 없고 사람 기억(memory.ts)에만 남는다.
+ */
+export const RESIDENT_ROBBED_REL: Readonly<Record<Comm, number>> = Object.freeze({ tail: 0, medtech: -1, guard: 0, front: -1, engine: 0 });
+
+function residentScenes(g: Game, departure: AnyDeparture, r: FieldReceipt): void {
+  const back = new Set(returnedOf(r));
+  const minded = new Set<Comm>();
+  for (const row of r.witnessed) {
+    if (row.template !== 'resident_robbed' || !Array.isArray(row.witnesses)) continue;
+    for (const w of row.witnesses as unknown[]) {
+      const pid = typeof w === 'string' ? w : (w as { person?: unknown } | null)?.person;
+      if (typeof pid !== 'string' || !back.has(pid)) continue;
+      const c = departurePeople(departure).find(x => x.id === pid)?.comm;
+      if (!c || minded.has(c)) continue;
+      minded.add(c);
+      if (RESIDENT_ROBBED_REL[c]) bumpRel(g, c, RESIDENT_ROBBED_REL[c], 'field.resident');
+    }
+  }
+}
 
 function bodySearches(g: Game, departure: AnyDeparture, r: FieldReceipt): void {
   const minded = new Set<Comm>();

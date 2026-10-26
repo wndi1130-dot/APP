@@ -992,7 +992,7 @@ func bite(p) -> void:
 	game.telemetry.injury(now, p.pid, "bite")
 	if p.team == "raider":
 		return
-	var part_word: String = {"arm": "팔", "torso": "몸통", "leg": "다리"}.get(part, part)
+	var part_word: String = {"arm": "팔", "torso": "몸통", "head_neck": "목", "leg": "다리"}.get(part, part)
 	game.say(p, UiFonts.josa("%s %s을(를) 물렸다." % [p.display_name, part_word]), true, "bite_" + part)
 	var seen: Array = []
 	for o in game.allies_alive():

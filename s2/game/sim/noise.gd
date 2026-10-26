@@ -54,6 +54,7 @@ const SOURCES := {
 	"glass": {"levels": [Level.LOUD], "at": "spot", "pull": true},
 	"hammer": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
 	"salvage": {"levels": [Level.NORMAL, Level.LOUD], "at": "spot", "pull": true},
+	"axe": {"levels": [Level.LOUD], "at": "maker", "pull": true},
 	"search": {"levels": [Level.QUIET], "at": "maker", "pull": true},
 	"glass_step": {"levels": [Level.QUIET], "at": "maker", "pull": true},
 	"ladder": {"levels": [Level.QUIET, Level.NORMAL], "at": "maker", "pull": true},

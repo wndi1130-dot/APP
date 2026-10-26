@@ -11,10 +11,15 @@ extends Control
 ## stays down on 「확인」, which closes the session.
 ##
 ## Every number is the politics port's own, off the state it is given
-## (council_vote.gd blocs · expected · agenda_need · agenda_title · cast_vote,
-## field_council.gd leave_special_council); the card sets nothing itself.
-## Deals are not in the port (blocs takes none), so the mockup's deal tools and
-## its 「거래 n/3」 are not drawn.
+## (council_vote.gd blocs · expected · agenda_need · agenda_title · cast_vote ·
+## tool_status · make_deal, field_council.gd leave_special_council). The card
+## changes its state only by the deals made on it (결정 426 PR 7): the picked
+## group's pane has the mockup's tools in a row (six: 결정 433 adds 설득), the
+## tool picked with its cost and why not or what it does, and 거래; 공개 협상
+## asks which of its three conditions (and for 「칼질」 which car), and the
+## seats a deal would bring ring on the board before it is made. The bill counts
+## 「거래 n/3」 and holds its agenda once a deal is made. Tables without the
+## deal tables (the field sample's) draw no tools.
 
 signal left(g: Dictionary)
 
@@ -26,6 +31,7 @@ const HomeBar = preload("res://game/ui/home_bar.gd")
 const CouncilVote = preload("res://game/politics/council_vote.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const FieldCouncil = preload("res://game/politics/field_council.gd")
+const LawTech = preload("res://game/train/train_lawtech.gd")
 const PANE_TEX := preload("res://game/ui/tex/council_pane.png")
 const BUSTS := preload("res://game/ui/tex/busts.png")
 const PAPER_TEX := preload("res://game/ui/tex/paper.png")
@@ -70,6 +76,16 @@ const RELW: Dictionary = {
 }
 ## A group's situation in the order a law's mats change it (train_state.gd situation).
 const STAT_WORD: Array = ["온기", "배급", "과밀", "노출"]
+## The deal tools in the mockup's order (s1 ui/council.ts TOOLS; 설득 last, 결정
+## 433): [id, the word under its medal, its name on the deal line].
+const TOOLS: Array = [["open", "협상", "공개 협상"], ["favor", "부탁", "사적 부탁"], ["fetch", "조달", "현장 조달"],
+	["bribe", "뇌물", "뇌물"], ["blackmail", "협박", "협박"], ["persuade", "설득", "설득"]]
+## The tools' row (.tools: 6 under the cohesion, 54 high) and the deal line under it.
+const TOOLS_Y: float = 148.0
+const TOOL_H: float = 54.0
+const DEAL_Y: float = 205.0
+## What the pane asks after 거래 on 공개 협상: its conditions, then the car to cut.
+enum Ask { TOOLS, CONDITIONS, CUT }
 
 const INK := Color("eee9dc")
 const INK2 := Color(238 / 255.0, 233 / 255.0, 220 / 255.0, 0.7)
@@ -85,6 +101,10 @@ const PINK2 := Color(35 / 255.0, 26 / 255.0, 18 / 255.0, 0.72)
 const RULE := Color(42 / 255.0, 32 / 255.0, 24 / 255.0, 0.16)
 const PRESS := Color(242 / 255.0, 166 / 255.0, 60 / 255.0, 0.14)
 const SOOT_CUT := Color("10151a")
+## The picked tool's lamp (c1.css --lamp1..3), the ink on it, the 거래 pill (--fill, --face).
+const LAMP: Array = [[0.0, Color("ffe2a0")], [0.6, Color("f6ab40")], [1.0, Color("c26f18")]]
+const ON_INK := Color("2a1804")
+const FACE := Color("1b2128")
 const CHIP_Y: Array = [[0.0, Color("7db6ee")], [1.0, Color("3f86d4")]]
 const CHIP_N: Array = [[0.0, Color("ec8371")], [1.0, Color("c94632")]]
 ## The room's dark before the vote and after it (c3.css .cnshade, #stage[data-res] .cnshade).
@@ -124,6 +144,12 @@ var _bill_reach: float = 0.0
 var _pane_parts: Control
 var _shade: ShaderMaterial
 var _revealed: bool = false
+## The tool picked in the pane, what the pane asks, the condition picked (for
+## 「칼질」), and the last deal's word a group (make_deal's text).
+var tool: String = ""
+var ask: int = Ask.TOOLS
+var cond_at: int = 0
+var said: Dictionary = {}
 
 
 ## What the card says for agenda `at` of the session open in `g0` (tests read
@@ -135,7 +161,9 @@ static func model(g0: Dictionary, t0: Dictionary, at: int) -> Dictionary:
 	var options: Array = council["options"]
 	var i: int = clampi(at, 0, options.size() - 1)
 	var agenda: Dictionary = options[i]
-	var map: Dictionary = CouncilVote.blocs(g0, t0, agenda, [])
+	# The deals made stand on the council's own agenda (the bill holds it once one is made).
+	var deals: Array = council.get("deals", []) if i == int(council.get("idx", 0)) else []
+	var map: Dictionary = CouncilVote.blocs(g0, t0, agenda, deals)
 	var ex: Dictionary = CouncilVote.expected(map, t0)
 	var comms: Array = []
 	var total: int = 0
@@ -147,6 +175,7 @@ static func model(g0: Dictionary, t0: Dictionary, at: int) -> Dictionary:
 		comms.append({
 			"id": c, "name": String(t0["COMM_NAME"].get(c, c)), "seats": int(b["seats"]), "absent": int(b["absent"]),
 			"yes": int(b["yes"]), "und": int(b["und"]), "no": int(b["no"]), "hard": int(b["hard"]), "score": int(b["score"]),
+			"pool": int(b["pool"]),
 			"stage": stage, "relw": String(RELW.get(stage, "")), "coh": int(round(float(s.get("coh", 0.0)) * 100.0)),
 			"leader": String(lead.get("name", "")), "role": String(REP_ROLE.get(c, "")), "trait": trait_of(lead),
 			"bust": bust_of(lead), "stance": stance_of(int(b["score"])), "stake": stake_of(t0, agenda, c),
@@ -160,19 +189,81 @@ static func model(g0: Dictionary, t0: Dictionary, at: int) -> Dictionary:
 		"comms": comms, "got": int(ex["min"]), "mean": int(round(float(ex["mean"]))), "max": int(ex["max"]),
 		"need": need, "total": total, "title": CouncilVote.agenda_title(t0, agenda),
 		"kind": "통치" if need > 51 else "일반", "secret": (g0.get("passed", {}) as Dictionary).has("secret_ballot"),
-		"tag": String(law.get("tag", "")), "changes": change_rows(t0, agenda),
+		"tag": String(law.get("tag", "")), "changes": change_rows(t0, agenda, g0),
 		"surprise": bool(council.get("emergency", false)), "special": bool(council.get("special", false)),
 		"idx": i, "count": options.size(),
 		"seg": int(g0.get("seg", 1)), "segments": int((t0.get("P", {}) as Dictionary).get("segments", 24)),
+		"dealing": can_deal(t0), "deals": (council.get("deals", []) as Array).size(),
+		"deal_max": int((t0.get("P", {}) as Dictionary).get("maxDealsPerSession", 3)),
 	}
+
+
+## Whether `t0` carries what the deals read (the turn tables do; the field sample's do not).
+static func can_deal(t0: Dictionary) -> bool:
+	var p: Dictionary = t0.get("P", {})
+	for key: String in ["CONDITIONS", "COMMON_CONDITIONS", "FETCH_WANT", "OPPOSITE"]:
+		if not t0.has(key):
+			return false
+	return p.has("persuadeBase") and p.has("blackmailTrust") and p.has("maxDealsPerSession")
+
+
+## The state with agenda `at` the council's own (deals are made on it).
+static func _on_agenda(g0: Dictionary, at: int) -> Dictionary:
+	var gc: Dictionary = g0.duplicate(true)
+	gc["council"]["idx"] = at
+	return gc
+
+
+## The deal tools for group `comm` on agenda `at`: {id, word, name, ok, why,
+## cost, hint, red} each (council_vote.gd tool_status; the hint is what the
+## mockup's deal line says it does, `red` its part in the accent).
+static func tools_of(g0: Dictionary, t0: Dictionary, at: int, comm: String) -> Array:
+	var gc := _on_agenda(g0, at)
+	var agenda: Dictionary = gc["council"]["options"][at]
+	var b: Dictionary = CouncilVote.blocs(gc, t0, agenda, gc["council"].get("deals", []))[comm]
+	var brought: int = int(b["und"]) + int(b["no"]) - int(b["hard"])
+	var coh: float = float(gc["comms"][comm].get("coh", 0.0))
+	var out: Array = []
+	for row: Array in TOOLS:
+		var id: String = row[0]
+		var st: Dictionary = CouncilVote.tool_status(gc, t0, comm, id)
+		var hint: String = ""
+		var red: String = ""
+		match id:
+			"open": hint = "조건 셋 중 하나 수락"
+			"favor", "bribe": hint = "설득 가능 %d → 찬성 %d" % [brought, CouncilMath.round_half_up(float(brought) * coh)]
+			"fetch":
+				hint = "다음 정차까지 · 어기면 "
+				red = "▼▼"
+			"blackmail": hint = "쥔 비밀 하나 사용"
+			"persuade": hint = "먹히면 미정 전부, 아니면 관계 −1"
+		out.append({"id": id, "word": row[1], "name": row[2], "ok": bool(st["ok"]), "why": String(st.get("why", "")),
+				"cost": String(st.get("cost", "")), "hint": hint, "red": red})
+	return out
+
+
+## Each seat's kind in group `comm` were deal `tool` made on agenda `at` (the board rings them).
+static func kinds_after(g0: Dictionary, t0: Dictionary, at: int, comm: String, tool_id: String) -> Array:
+	var gc := _on_agenda(g0, at)
+	var agenda: Dictionary = gc["council"]["options"][at]
+	var deals: Array = (gc["council"].get("deals", []) as Array).duplicate()
+	deals.append({"comm": comm, "tool": tool_id, "label": ""})
+	var b: Dictionary = CouncilVote.blocs(gc, t0, agenda, deals)[comm]
+	return CouncilBoard.kinds_before({"seats": int(b["seats"]), "yes": int(b["yes"]), "und": int(b["und"]),
+			"pool": int(b["pool"]), "no": int(b["no"]), "hard": int(b["hard"])})
 
 
 ## The bill's lines for `agenda`: [label, word, number] each, the number "" when
 ## the line has none. A law's lines are its own (LAWS changes), each split where
 ## its number is (「기관실·경비대 배급 +10」 → 기관실·경비대 · 배급 +10; a step a
 ## stretch, 「+1.5/구간」, reads 구간마다 +1.5); a motion's are what passing and
-## failing do (s1 field_council.ts changes, off FIELD).
-static func change_rows(t0: Dictionary, agenda: Dictionary) -> Array:
+## failing do (s1 field_council.ts changes, off FIELD). An amendment says first
+## which law it stands in for; the technologies in use that bend the law come
+## after its first lines, three, or more while the tech lines are fewer than two
+## (S1 ui/council.ts withTech, lawTechLines), so the bill shows them unscrolled;
+## the rest of the law's lines follow (S1 drops them; the bill scrolls) when
+## `g0` is given.
+static func change_rows(t0: Dictionary, agenda: Dictionary, g0: Dictionary = {}) -> Array:
 	var out: Array = []
 	if agenda.get("kind") == "motion":
 		var f: Dictionary = t0.get("FIELD", {})
@@ -188,9 +279,21 @@ static func change_rows(t0: Dictionary, agenda: Dictionary) -> Array:
 			out.append(["가결", name + " 관계", sign_of(float(f.get("promiseRel", 0)))])
 			out.append(["부결", name + " 관계", sign_of(-float(f.get("promiseRel", 0)))])
 		return out
-	var law: Dictionary = (t0.get("LAWS", {}) as Dictionary).get(agenda.get("law"), {})
+	var laws: Dictionary = t0.get("LAWS", {})
+	var law: Dictionary = laws.get(agenda.get("law"), {})
+	if agenda.get("amend") != null:
+		out.append(["%s 대신 선다" % String(laws.get(agenda["amend"], {}).get("title", agenda["amend"])), "", ""])
+	var changes: Array = []
 	for line in law.get("changes", []):
-		out.append(split_change(String(line)))
+		changes.append(split_change(String(line)))
+	var tech: Array = []
+	if not g0.is_empty() and agenda.get("law") != null:
+		for line: String in LawTech.law_lines(g0, String(agenda["law"])):
+			tech.append([line, "", ""])
+	var first: int = maxi(3, 5 - tech.size()) - out.size()
+	out.append_array(changes.slice(0, first))
+	out.append_array(tech)
+	out.append_array(changes.slice(first))
 	return out
 
 
@@ -384,9 +487,9 @@ func _show() -> void:
 	_fill_pane()
 
 
-## Another agenda on the bill (the arrows), before the vote.
+## Another agenda on the bill (the arrows), before the vote and before any deal.
 func turn(step: int) -> void:
-	if not result.is_empty() or m.is_empty():
+	if not result.is_empty() or m.is_empty() or int(m.get("deals", 0)) > 0:
 		return
 	var to: int = clampi(idx + step, 0, int(m["count"]) - 1)
 	if to == idx:
@@ -396,13 +499,76 @@ func turn(step: int) -> void:
 	_show()
 
 
-## Pick group `gi` (-1: back to the list), before the vote.
+## Pick group `gi` (-1: back to the list), before the vote: its tools open on
+## the first it can use.
 func _pick(gi: int) -> void:
 	if not result.is_empty():
 		return
 	sel = gi
+	ask = Ask.TOOLS
+	tool = ""
+	if sel >= 0 and bool(m.get("dealing", false)):
+		var tools: Array = tools_of(g, t, idx, String(m["comms"][sel]["id"]))
+		tool = String(tools[0]["id"])
+		for tl: Dictionary in tools:
+			if bool(tl["ok"]):
+				tool = String(tl["id"])
+				break
 	board.select(sel)
 	_fill_pane()
+
+
+## A tool picked in the pane: its line and the seats it would bring.
+func _pick_tool(id: String) -> void:
+	tool = id
+	ask = Ask.TOOLS
+	_fill_pane()
+
+
+## 거래: a 공개 협상 asks its condition first; any other is made now.
+func _deal_pressed() -> void:
+	if sel < 0 or not result.is_empty():
+		return
+	if tool == "open":
+		ask = Ask.CONDITIONS
+		_fill_pane()
+	else:
+		_make(tool, 0, "")
+
+
+## A condition of the 공개 협상 picked: 「칼질」 asks which car, the rest are made.
+func _cond_pressed(i: int) -> void:
+	var conds: Array = CouncilVote.open_conditions(_on_agenda(g, idx), t, String(m["comms"][sel]["id"]))
+	if i < conds.size() and conds[i]["kind"] == "cut":
+		cond_at = i
+		ask = Ask.CUT
+		_fill_pane()
+	else:
+		_make("open", i, "")
+
+
+func _cut_pressed(target: String) -> void:
+	_make("open", cond_at, target)
+
+
+## Make the deal on the agenda on the bill (make_deal off the state as given)
+## and draw the session again.
+func _make(tool_id: String, cond_index: int, cut_target: String) -> void:
+	var comm: String = String(m["comms"][sel]["id"])
+	var r: Dictionary = CouncilVote.make_deal(_on_agenda(g, idx), t, comm, tool_id, cond_index, cut_target)
+	g = r["g"]
+	said[comm] = String(r["text"])
+	ask = Ask.TOOLS
+	_show()
+
+
+## 접기: from a condition back to the tools, from the tools back to the list.
+func _fold_pressed() -> void:
+	if ask != Ask.TOOLS:
+		ask = Ask.TOOLS
+		_fill_pane()
+	else:
+		_pick(-1)
 
 
 ## The lever: pulled, the vote is cast; down on 「확인」, the session closes.
@@ -520,7 +686,7 @@ func _sheet_material(is_shadow: bool, reach: float, sigma: float) -> ShaderMater
 func _fill_bill() -> void:
 	_tight = false
 	_lay_bill()
-	if bill_bottom + 8.0 > BILL_MAX_H:
+	if bill_bottom + 8.0 + _foot_h() > BILL_MAX_H:
 		_tight = true
 		_lay_bill()
 	_fit_bill()
@@ -568,7 +734,8 @@ func _lay_bill() -> void:
 	title.size = Vector2(room, line_h * float(lines))
 	title.position = Vector2(TITLE_X0 * k, (24.0 + nav_h * 0.5) * k - title.size.y * 0.5)
 	_on_bill(title)
-	var after: bool = not result.is_empty()
+	# The agenda holds once a deal is made on it (the deals stand on it).
+	var after: bool = not result.is_empty() or int(m.get("deals", 0)) > 0
 	_on_bill(_arrow("back", Vector2(2.0, 24.0 + nav_h * 0.5 - 22.0), -1, after or int(m["idx"]) <= 0))
 	_on_bill(_arrow("fwd", Vector2(136.0, 24.0 + nav_h * 0.5 - 22.0), 1, after or int(m["idx"]) >= int(m["count"]) - 1))
 	# The tags: what it needs, open or secret, the law's own word.
@@ -618,7 +785,8 @@ func _lay_bill() -> void:
 ## at most); rows past that scroll, a fade of the paper over the last.
 func _fit_bill() -> void:
 	var k: float = UiFonts.K
-	var h: float = clampf(bill_bottom + 8.0, BILL_SIZE.y, BILL_MAX_H)
+	var foot: float = _foot_h()
+	var h: float = clampf(bill_bottom + 8.0 + foot, BILL_SIZE.y, BILL_MAX_H)
 	var sheet := Vector2(BILL_SIZE.x, h) * k
 	bill.size = sheet
 	bill.pivot_offset = sheet * 0.5
@@ -629,16 +797,16 @@ func _fit_bill() -> void:
 	var sh := bill.get_node("Shadow") as ColorRect
 	sh.size = sheet + Vector2(_bill_reach, _bill_reach) * 2.0
 	(sh.material as ShaderMaterial).set_shader_parameter("sheet_size", sheet)
-	var view: float = h - 8.0 - _rows_top
+	var view: float = h - 8.0 - foot - _rows_top
 	_rows_clip.size = Vector2(BILL_SIZE.x, view) * k
-	bill_scroll_max = maxf(0.0, bill_bottom - (h - 8.0))
+	bill_scroll_max = maxf(0.0, bill_bottom - (h - 8.0 - foot))
 	bill_scroll = clampf(bill_scroll, 0.0, bill_scroll_max)
 	_rows_clip.mouse_filter = Control.MOUSE_FILTER_STOP if bill_scroll_max > 0.0 else Control.MOUSE_FILTER_IGNORE
 	if bill_scroll_max > 0.0:
 		var fade := Control.new()
 		fade.name = "Fade"
 		fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		fade.position = Vector2(0.0, h - 8.0 - 24.0) * k
+		fade.position = Vector2(0.0, h - 8.0 - foot - 24.0) * k
 		fade.size = Vector2(BILL_SIZE.x, 24.0) * k
 		fade.draw.connect(func() -> void:
 			var c0 := Color(PAPER, 0.0)
@@ -652,7 +820,43 @@ func _fit_bill() -> void:
 			fade.draw_polyline(PackedVector2Array([Vector2(cx - 5.0 * k, cy - 3.0 * k), Vector2(cx, cy + 2.0 * k),
 					Vector2(cx + 5.0 * k, cy - 3.0 * k)]), PINK2, 1.8 * k, true))
 		_bill_parts.add_child(fade)
+	if foot > 0.0:
+		_bill_foot(h)
 	_place_rows()
+
+
+## Room under the rows for 「거래 n/3」 when deals are made here.
+func _foot_h() -> float:
+	return 26.0 if bool(m.get("dealing", false)) else 0.0
+
+
+## 「거래 n/3」 at the bill's foot (.bill__foot: 16 in, 9 up; the word 12 spaced,
+## the count 16 · 600, a ring 11 across a deal, filled when made).
+func _bill_foot(h: float) -> void:
+	var k: float = UiFonts.K
+	var made: int = int(m.get("deals", 0))
+	var most: int = int(m.get("deal_max", 3))
+	var top: float = h - 9.0 - 20.0
+	var word := _ink("거래", UiFonts.WORD, 400, 12.0, PINK2, 1.44)
+	word.name = "DealsWord"
+	_bill_parts.add_child(word)
+	GlassParts.put(word, BILL_X0, top, 20.0)
+	var n := _ink("%d/%d" % [made, most], UiFonts.NUMBER, 600, 16.0, PINK, 0.32)
+	n.name = "Deals"
+	_bill_parts.add_child(n)
+	GlassParts.put_on(n, word.position.x + GlassParts.text_w(word) + 6.0 * k, GlassParts.base_of(word))
+	var pips := Control.new()
+	pips.name = "DealPips"
+	pips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pips.position = Vector2(BILL_X1 + 1.0 - 11.0 * float(most) - 6.0 * float(most - 1), top + 4.5) * k
+	pips.size = Vector2(17.0 * float(most), 11.0) * k
+	pips.draw.connect(func() -> void:
+		for i in most:
+			var c := Vector2((5.5 + 17.0 * float(i)) * k, 5.5 * k)
+			if i < made:
+				pips.draw_circle(c, 5.5 * k, PINK2, true, -1.0, true)
+			pips.draw_arc(c, 4.5 * k, 0.0, TAU, 24, RULE * Color(1, 1, 1, 2.25), 2.0 * k, true))
+	_bill_parts.add_child(pips)
 
 
 func _place_rows() -> void:
@@ -847,6 +1051,7 @@ func _fill_pane() -> void:
 ## picks its group (not while the count is on).
 func _list(counting: bool) -> void:
 	var k: float = UiFonts.K
+	board.preview(-1)
 	# The columns' words only, no 「집단별 표」 over them (결정 417).
 	_head("", [["찬성", SKY], ["미정", INK2], ["반대", RED]], COLS_BEFORE)
 	var comms: Array = m["comms"]
@@ -962,7 +1167,12 @@ func _detail(c: Dictionary) -> void:
 	GlassParts.put_on(seats, PANE_X0 * k, base)
 	stage_l.position.x = seats.position.x + GlassParts.text_w(seats)
 	var soft: int = int(c["no"]) - int(c["hard"])
-	_stones([["y", int(c["yes"]), SKY], ["u", int(c["und"]), INK], ["s", soft, INK], ["n", int(c["hard"]), RED]], y, 244.0)
+	var stones: Array = [["y", int(c["yes"]), SKY], ["u", int(c["und"]), INK]]
+	if int(c.get("pool", 0)) > 0:
+		# What a bribe or a debt has the leader bring, in the deal ring's amber.
+		stones.append(["u", int(c["pool"]), AMBER])
+	stones.append_array([["s", soft, INK], ["n", int(c["hard"]), RED]])
+	_stones(stones, y, 244.0)
 	# How it stands to the captain, and its stance on this agenda (.cm__rel).
 	y += 24.0
 	var relw := _ink(String(c["relw"]), UiFonts.WORD, 400, 12.0, INK2, 0.48)
@@ -999,6 +1209,24 @@ func _detail(c: Dictionary) -> void:
 		rows.append(["이 안건", "바뀌는 것 없음"])
 	if int(c["absent"]) > 0:
 		rows.append(["부재", "%d석" % int(c["absent"])])
+	if bool(m.get("dealing", false)):
+		# The deal tools and their line take the rows' room; the bill says what
+		# the agenda does car by car, so the first row alone stays, under them.
+		_deal_part(c)
+		if ask != Ask.TOOLS:
+			return
+		# One line under them, at the left: the lever stands up over the pane's
+		# bottom right (a frame px 25 over the main key).
+		var note: String = "가결되면 기습으로 기억" if bool(m.get("surprise", false)) and int(c["absent"]) > 0 and int(c["score"]) < 0 \
+				else "%s %s" % [rows[0][0], rows[0][1]]
+		var nl := _ink(note, UiFonts.WORD, 400, 12.0, INK2, 0.24)
+		nl.name = "Stake"
+		_on_pane(nl)
+		GlassParts.put(nl, PANE_X0, DEAL_Y + 45.0, 20.0)
+		nl.clip_text = true
+		nl.size.x = minf(GlassParts.text_w(nl), (200.0 - PANE_X0) * UiFonts.K)
+		return
+	board.preview(-1)
 	_hair(y)
 	y += 2.0
 	for r: Array in rows:
@@ -1015,6 +1243,217 @@ func _detail(c: Dictionary) -> void:
 		var warn := _ink("가결되면 기습으로 기억", UiFonts.WORD, 500, 12.0, Color("f29078"), 0.48)
 		_on_pane(warn)
 		GlassParts.put(warn, PANE_X0, y, 20.0)
+
+
+## The deal part of the picked group's pane: the tools in a row (.tools, a
+## medal and its word a tool, the picked one lit), the tool's line (.deal: its
+## name · cost; why not in the accent, or what it does) and 거래; or, asked,
+## the 공개 협상's conditions or the car to cut.
+func _deal_part(c: Dictionary) -> void:
+	var comm: String = String(c["id"])
+	if ask == Ask.CONDITIONS:
+		board.preview(-1)
+		_conditions(comm)
+		return
+	if ask == Ask.CUT:
+		board.preview(-1)
+		_cut_targets(comm)
+		return
+	var k: float = UiFonts.K
+	var tools: Array = tools_of(g, t, idx, comm)
+	var w: float = (PANE_X1 - PANE_X0) / float(tools.size())
+	var cur: Dictionary = tools[0]
+	for i in tools.size():
+		var tl: Dictionary = tools[i]
+		var id: String = String(tl["id"])
+		var on: bool = id == tool
+		if on:
+			cur = tl
+		var b := _bare_key("Tool_" + id, Vector2(PANE_X0 + w * float(i), TOOLS_Y), Vector2(w, TOOL_H))
+		b.tooltip_text = String(tl["name"])
+		b.pressed.connect(_pick_tool.bind(id))
+		var med: Control = _tool_medal(id, on, not bool(tl["ok"]))
+		med.position = Vector2((w - 34.0) * 0.5, 1.0) * k
+		b.add_child(med)
+		var lab := _ink(String(tl["word"]), UiFonts.WORD, 500 if on else 400, 12.0, INK if on else INK2, 0.48)
+		if not bool(tl["ok"]):
+			lab.modulate.a = 0.55
+		b.add_child(lab)
+		GlassParts.put_on(lab, (b.size.x - GlassParts.text_w(lab)) * 0.5, 49.0 * k)
+		_on_pane(b)
+	# The seats it would bring ring on the board.
+	if bool(cur["ok"]):
+		board.preview(sel, kinds_after(g, t, idx, comm, String(cur["id"])))
+	else:
+		board.preview(-1)
+	# The deal line: what it is and costs; under it why not, what it does, or
+	# what the deal already made with this group came to.
+	# A deal already made with this group: its tool, whether it took, and what it came to.
+	var made: String = ""
+	var title: String = String(cur["name"])
+	var cost_word: String = String(cur["cost"])
+	var cost_col: Color = INK
+	for d: Dictionary in g["council"].get("deals", []):
+		if d["comm"] == comm:
+			made = String(said.get(comm, d["label"]))
+			for row: Array in TOOLS:
+				if row[0] == d["tool"]:
+					title = String(row[2])
+			var took: bool = not bool(d.get("refused", false))
+			cost_word = "맺음" if took else "안 됨"
+			cost_col = SKY if took else RED
+	var off: bool = not bool(cur["ok"])
+	var nm := _ink(title, UiFonts.WORD, 500, 14.0, INK, 0.0)
+	_on_pane(nm)
+	GlassParts.put(nm, PANE_X0, DEAL_Y, 20.0)
+	var base: float = GlassParts.base_of(nm)
+	if cost_word != "":
+		var dot := _ink("·", UiFonts.WORD, 400, 14.0, INK3, 0.0)
+		_on_pane(dot)
+		GlassParts.put_on(dot, nm.position.x + GlassParts.text_w(nm) + 6.0 * k, base)
+		var cost := _ink(cost_word, UiFonts.WORD, 400, 14.0, cost_col, 0.0)
+		cost.name = "DealCost"
+		_on_pane(cost)
+		GlassParts.put_on(cost, dot.position.x + GlassParts.text_w(dot) + 6.0 * k, base)
+	var line: String = made if made != "" else (String(cur["why"]) if off else String(cur["hint"]))
+	var small := _ink(line, UiFonts.WORD, 400, 12.0, AMBER if off and made == "" else INK2, 0.0)
+	small.name = "DealLine"
+	_on_pane(small)
+	GlassParts.put(small, PANE_X0, DEAL_Y + 20.0, 17.0)
+	small.clip_text = true
+	small.size.x = minf(GlassParts.text_w(small), (244.0 - 64.0 - 6.0 - PANE_X0) * k)
+	if not off and made == "" and String(cur["red"]) != "":
+		var red := _ink(String(cur["red"]), UiFonts.WORD, 500, 12.0, RED, 0.0)
+		_on_pane(red)
+		GlassParts.put_on(red, small.position.x + GlassParts.text_w(small), GlassParts.base_of(small))
+	_on_pane(_pill("Deal", "거래", Vector2(244.0 - 64.0, DEAL_Y + 4.0), off))
+
+
+## A tool's medal (.med--s: 34, a 30 disc, an 18 mark): matte; lamp-lit when
+## picked (.tool.on); faded when it cannot (.tool.is-off .med: .36).
+func _tool_medal(id: String, on: bool, off: bool) -> Control:
+	var k: float = UiFonts.K
+	if not on:
+		var med: Control = GlassParts.medal(id, INK, 34.0, 30.0, 18.0)
+		if off:
+			med.modulate.a = 0.36
+		return med
+	var c := Control.new()
+	c.name = "Medal_" + id
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.size = Vector2(34.0, 34.0) * k
+	c.draw.connect(func() -> void:
+		var ctr: Vector2 = c.size * 0.5
+		var r: float = 15.0 * k
+		for i in 3:
+			c.draw_circle(ctr + Vector2(0, 1.0 * k), r + float(3 - i) * k, Color(0, 0, 0, 0.08 + 0.05 * i), true, -1.0, true)
+		var pts := PackedVector2Array()
+		var cols := PackedColorArray()
+		for i in 48:
+			var a: float = TAU * float(i) / 48.0
+			var p: Vector2 = ctr + Vector2(cos(a), sin(a)) * r
+			pts.append(p)
+			# The lamp's light from a little under the middle outwards (circle at 50% 60%).
+			cols.append(GlassParts.grad_at(LAMP, clampf((p - (ctr + Vector2(0, 0.2 * r))).length() / (r * 1.2), 0.0, 1.0)))
+		c.draw_polygon(pts, cols)
+		c.draw_arc(ctr, r - 1.0 * k, 0.0, TAU, 64, GlassParts.RING, 2.0 * k, true))
+	var mark := _icon(id, 18.0, ON_INK, 2.0)
+	mark.position = (c.size - mark.size) * 0.5
+	c.add_child(mark)
+	return c
+
+
+## The 공개 협상's three conditions (s1 ui/council.ts conds), a row each: its
+## number, what it is, and when it is paid (지금 · 다음 정차 · 다음 회기까지).
+func _conditions(comm: String) -> void:
+	var k: float = UiFonts.K
+	var conds: Array = CouncilVote.open_conditions(_on_agenda(g, idx), t, comm)
+	for i in conds.size():
+		var cd: Dictionary = conds[i]
+		var top: float = 146.0 + 44.0 * float(i)
+		var b := _bare_key("Cond_%d" % i, Vector2(PANE_X0, top), Vector2(PANE_X1 - PANE_X0, 44.0))
+		b.pressed.connect(_cond_pressed.bind(i))
+		_on_pane(b)
+		var n := _ink(str(i + 1), UiFonts.NUMBER, 600, 15.0, AMBER, 0.0)
+		_on_pane(n)
+		GlassParts.put(n, PANE_X0 + 2.0, top, 44.0)
+		var base: float = GlassParts.base_of(n)
+		var kind: String = String(cd["kind"])
+		var when: String = "지금 치른다" if bool(cd["now"]) else ("다음 정차" if kind in ["target", "skip_dispatch"] else "다음 회기까지")
+		var wl := _ink(when, UiFonts.WORD, 400, 11.0, INK2, 0.0)
+		_on_pane(wl)
+		GlassParts.put_on(wl, 244.0 * k - GlassParts.text_w(wl), base)
+		var lab := _ink(String(cd["label"]), UiFonts.WORD, 500, 13.0, INK, 0.0)
+		lab.name = "CondWord_%d" % i
+		_on_pane(lab)
+		GlassParts.put_on(lab, (PANE_X0 + 20.0) * k, base)
+		lab.clip_text = true
+		lab.size.x = minf(GlassParts.text_w(lab), wl.position.x - lab.position.x - 6.0 * k)
+		if i < conds.size() - 1:
+			_hair(top + 44.0 - 2.0)
+
+
+## Which car 「칼질」 cuts: the other four, two a row.
+func _cut_targets(comm: String) -> void:
+	var k: float = UiFonts.K
+	var head := _ink("칼질할 칸", UiFonts.WORD, 400, 12.0, INK2, 1.2)
+	_on_pane(head)
+	GlassParts.put(head, PANE_X0, 146.0, 20.0)
+	var j: int = 0
+	for o: String in t["COMMS"]:
+		if o == comm:
+			continue
+		var at := Vector2(PANE_X0 + 111.0 * float(j % 2), 168.0 + (48.0 if j >= 2 else 0.0))
+		var b := _bare_key("Cut_" + o, at, Vector2(109.0, 44.0))
+		b.pressed.connect(_cut_pressed.bind(o))
+		b.draw.connect(func() -> void:
+			GlassParts.round_rect(b, Rect2(Vector2(0, 2.0) * k, b.size - Vector2(0, 4.0) * k), 4.0 * k, Color(0, 0, 0, 0.36)))
+		var lab := _ink(String(t["COMM_NAME"][o]), UiFonts.WORD, 500, 14.0, INK, 1.4)
+		b.add_child(lab)
+		GlassParts.put(lab, 0.0, 0.0, 44.0)
+		lab.position.x = (b.size.x - GlassParts.text_w(lab)) * 0.5
+		_on_pane(b)
+		j += 1
+
+
+## A bare key over the pane (its own look drawn by its parts), the press a lamp wash.
+func _bare_key(key_name: String, at: Vector2, sz: Vector2) -> Button:
+	var k: float = UiFonts.K
+	var b := Button.new()
+	b.name = key_name
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	for state in ["normal", "hover", "focus", "disabled"]:
+		b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	var press := StyleBoxFlat.new()
+	press.bg_color = PRESS
+	b.add_theme_stylebox_override("pressed", press)
+	b.add_theme_stylebox_override("hover_pressed", press)
+	b.position = at * k
+	b.size = sz * k
+	b.mouse_filter = Control.MOUSE_FILTER_STOP
+	return b
+
+
+## The 거래 pill (.pill--g: 36 high, radius 18, the light fill, the face's ink;
+## its key 44 high round it); faded and shut when the deal cannot be made
+## (.deal.is-off .pill--g: .34).
+func _pill(key_name: String, word: String, at: Vector2, off: bool) -> Button:
+	var k: float = UiFonts.K
+	var b := _bare_key(key_name, at - Vector2(0.0, 4.0), Vector2(64.0, 44.0))
+	b.disabled = off
+	b.mouse_filter = Control.MOUSE_FILTER_IGNORE if off else Control.MOUSE_FILTER_STOP
+	if not off:
+		b.pressed.connect(_deal_pressed)
+	b.draw.connect(func() -> void:
+		GlassParts.round_rect(b, Rect2(Vector2(0.0, 4.0) * k, Vector2(64.0, 36.0) * k), 18.0 * k, FILL))
+	var lab := _ink(word, UiFonts.WORD, 500, 14.0, FACE, 0.0)
+	b.add_child(lab)
+	GlassParts.put(lab, 0.0, 4.0, 36.0)
+	lab.position.x = (b.size.x - GlassParts.text_w(lab)) * 0.5
+	if off:
+		b.modulate.a = 0.34
+	return b
 
 
 ## The leader's portrait (.cm__por 46 × 56 at 29, 13, tilted −2°): paper with
@@ -1050,7 +1489,7 @@ func _fold() -> Button:
 	b.position = Vector2(195.0, 2.0) * k
 	b.size = Vector2(55.0, 44.0) * k
 	b.mouse_filter = Control.MOUSE_FILTER_STOP
-	b.pressed.connect(_pick.bind(-1))
+	b.pressed.connect(_fold_pressed)
 	var mark := _icon("fwd", 14.0, INK2, 2.0)
 	mark.position = Vector2(35.0, 15.0) * k
 	b.add_child(mark)
