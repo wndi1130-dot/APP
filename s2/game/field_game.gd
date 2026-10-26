@@ -406,9 +406,9 @@ func _ready() -> void:
 	place = FieldMaps.resolve(String(opts.get("place", "")))
 	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
-	var built: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
+	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
-	_take_map(SidePath.add(built, rng.seed))
+	_take_map(SidePath.add(stop_map, rng.seed))
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
