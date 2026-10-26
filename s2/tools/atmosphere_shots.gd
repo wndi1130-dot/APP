@@ -172,7 +172,7 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 	# The rules drop sleet below -3 C (the rules temperature stays the stop's);
 	# the shot still shows what the picture would let fall.
 	if String(game.atmo["falls"]) != "none" and not game.snow.emitting:
-		game.snow.amount = 400
+		game.snow.amount = 1200
 		game.snow.emitting = true
 	for _i in range(4):
 		await process_frame

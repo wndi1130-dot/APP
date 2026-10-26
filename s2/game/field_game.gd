@@ -829,7 +829,7 @@ func _build_world() -> void:
 	add_child(camera)
 	camera.current = true
 	snow = GPUParticles3D.new()
-	snow.amount = maxi(weather.particles(), 1)
+	snow.amount = maxi(weather.particles(), 1) * 3  # the rules' count is thin from 52° up (precip.gdshader)
 	snow.lifetime = 4.0
 	snow.visibility_aabb = AABB(Vector3(-30, -2, -20), Vector3(60, 14, 40))
 	var pm := ParticleProcessMaterial.new()
@@ -858,7 +858,6 @@ func _build_world() -> void:
 		flake.size = Vector2(0.025, 0.5)
 		fm.set_shader_parameter("shape", 0)
 		fm.set_shader_parameter("opacity", 0.6)
-		snow.amount *= 3  # a streak is a hair across where a flake is a dot (precip.gdshader)
 		pm.initial_velocity_min = 7.0
 		pm.initial_velocity_max = 9.0
 		pm.gravity = Vector3(0.0, -4.0, 0.0)

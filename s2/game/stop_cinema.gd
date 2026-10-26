@@ -488,7 +488,7 @@ func _build_world() -> void:
 		MapView.box(st, Vector3(6000, 0.12, 0.08), Vector3(0, 0.16, z), STEEL)
 	_mesh(world, st, false)
 	snow = GPUParticles3D.new()
-	snow.amount = 900
+	snow.amount = 2700  # three times the old 900, as the field draws (field_game.gd)
 	snow.lifetime = 3.0
 	snow.local_coords = false
 	snow.visibility_aabb = AABB(Vector3(-40, -10, -40), Vector3(80, 30, 80))
@@ -513,7 +513,6 @@ func _build_world() -> void:
 		flake.size = Vector2(0.025, 0.5)
 		fm.set_shader_parameter("shape", 0)
 		fm.set_shader_parameter("opacity", 0.6)
-		snow.amount *= 3  # as the field's (field_game.gd)
 		pm.direction = Vector3(0.05, -1, 0.02)
 		pm.initial_velocity_min = 7.0
 		pm.initial_velocity_max = 9.0
