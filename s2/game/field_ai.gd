@@ -41,6 +41,9 @@ const SAVE_FAR: float = 4.0
 ## This many on a companion at once and it steps back toward the chief.
 const CROWD_R: float = 2.5
 const CROWD_N: int = 3
+## Stepping back toward the chief, it keeps this far from the chief's body (check
+## shots 10-26: it backed into the chief and the two bodies stood as one).
+const CHIEF_ROOM: float = 1.0
 ## Walking, the one in front keeps this far ahead of the chief.
 const LEAD_AHEAD: float = 3.0
 ## Slow work is dropped when one of the dead gets this near.
@@ -532,7 +535,12 @@ func _engage(p, z: Dictionary) -> void:
 		var away: Vector3 = (p.position - z["pos"])
 		away.y = 0
 		var back: Vector3 = (away.normalized() + (game.player.position - p.position).normalized() * 0.5).normalized()
-		_walk(p, game.walkable_near(p.position + back * 2.5, false, 2), true)
+		# It steps back with its face to them, at a walk, not turning its back to run off
+		# and round again to shove (move_rules.gd; user field test: they "whip round").
+		p.running = false
+		_walk(p, game.walkable_near(_beside_chief(p.position, p.position + back * 2.5, away), false, 2), false)
+		p.brain["face_hold"] = z["pos"]
+		p.brain["face_hold_t"] = game.clock.elapsed
 		if d < 1.3:
 			p.face_point(z["pos"])
 			game.combat.shove(p)
@@ -560,6 +568,25 @@ func _engage(p, z: Dictionary) -> void:
 	if d <= game.combat.melee_range(p) and not game.combat.melee_blocked(p, z["pos"]):
 		p.stop()
 	game.combat.melee_target(p, z, true)
+
+
+## Where to step back to from `from`, `to` as the crowd and the chief give it, not
+## through the chief: a way back that comes within CHIEF_ROOM of the chief ends at
+## the chief's side instead, the side it is on (straight on: square to `away`).
+func _beside_chief(from: Vector3, to: Vector3, away: Vector3) -> Vector3:
+	var chief: Vector3 = game.player.position
+	var way := Vector3(to.x - from.x, 0.0, to.z - from.z)
+	var rel := Vector3(chief.x - from.x, 0.0, chief.z - from.z)
+	var along := clampf(rel.dot(way) / maxf(way.length_squared(), 0.0001), 0.0, 1.0)
+	var off := from + way * along - chief
+	off.y = 0.0
+	if off.length() >= CHIEF_ROOM:
+		return to
+	if off.length() < 0.05:
+		off = Vector3(-away.z, 0.0, away.x)
+		if off.length() < 0.05:
+			off = Vector3.RIGHT
+	return Vector3(chief.x, to.y, chief.z) + off.normalized() * CHIEF_ROOM
 
 
 ## A swing once begun is seen through where it stands (결정 441 (1)): no next target or
