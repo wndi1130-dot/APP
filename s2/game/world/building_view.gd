@@ -42,11 +42,16 @@ const EAST := Vector2i(1, 0)
 const WEST := Vector2i(-1, 0)
 const DIRS: Array[Vector2i] = [NORTH, EAST, SOUTH, WEST]
 const DIAGS: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, 1), Vector2i(-1, 1), Vector2i(-1, -1)]
-## 벽면 칠(rgb)과 지붕 갈래(a: 0 슬레이트, 1 기와). 결정 408에서 시안 그림을 보고 정함.
+## 벽면 칠 갈래(rgb, 셰이더가 선형 값으로 그대로 씀). 결정 469 C1: 회색 넷(결정 408)에서
+## 바랜 집 칠 여덟으로 — 크림·버터·세이지·흐린 파랑·회백·살구·벽돌·청회. 괄호는 sRGB.
 const PAINTS: Array[Color] = [
-	Color(0.60, 0.57, 0.51, 0.0), Color(0.56, 0.52, 0.44, 1.0),
-	Color(0.50, 0.53, 0.51, 0.0), Color(0.58, 0.49, 0.43, 1.0),
+	Color(0.67, 0.57, 0.37), Color(0.71, 0.54, 0.21),   # (0.84, 0.78, 0.64) (0.86, 0.76, 0.50)
+	Color(0.34, 0.42, 0.27), Color(0.30, 0.39, 0.51),   # (0.62, 0.68, 0.56) (0.58, 0.66, 0.74)
+	Color(0.60, 0.60, 0.55), Color(0.67, 0.37, 0.25),   # (0.80, 0.80, 0.77) (0.84, 0.64, 0.54)
+	Color(0.34, 0.15, 0.11), Color(0.21, 0.34, 0.34),   # (0.62, 0.42, 0.36) (0.50, 0.62, 0.62)
 ]
+## 지붕 색 갈래 수(셰이더 ROOFS: 슬레이트·기와·짙은 초록·갈색 널).
+const ROOF_KINDS: int = 4
 ## 생활 색(사용자 2026-10-24, 분위기 틀): 바깥 문짝·덧문·창틀에 남은 칠, a는 남은 정도
 ## (0 칠 없음). 바랜 색만 두고 셰이더가 한 번 더 누른다(흰 눈 위에서 튀지 않게).
 const ACCENTS: Array[Color] = [
@@ -870,10 +875,19 @@ func _node(b: int, lv: int, mesh: Mesh, shadow: bool) -> MeshInstance3D:
 	node.position.y = lv * LEVEL_H
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)
-	node.set_instance_shader_parameter("paint", PAINTS[posmod(b, PAINTS.size())])
+	node.set_instance_shader_parameter("paint", paint_for(b))
 	node.set_instance_shader_parameter("building_id", float(b))
 	node.set_instance_shader_parameter("accent", accent_for(b))
 	return node
+
+
+## 건물마다 벽 칠(rgb)과 지붕 색 갈래(a: 0~ROOF_KINDS-1)를 굴린다(결정 469 C1). 번호를
+## 섞어 고르므로 한 줄에 선 이웃 집이 차례로 같은 색을 되풀이하지 않는다.
+static func paint_for(b: int) -> Color:
+	var h := (b * 2654435761 + 40503) & 0xffffffff
+	var c := PAINTS[(h >> 8) % PAINTS.size()]
+	c.a = float((h >> 20) % ROOF_KINDS)
+	return c
 
 
 ## 건물마다 남은 칠(ACCENTS). 이웃한 번호끼리 같은 색이 덜 붙게 건너뛰며 고른다.

@@ -39,7 +39,7 @@ uniform float open_floor = -1000.0;
 uniform float open_building = -1.0;
 
 // 노드마다: 점박이로 사라짐(0 다 보임, 1 다 사라짐), 고정 시야(x < 0이면 칸에서 읽음),
-// 벽면 칠(rgb)과 지붕 갈래(a: 0 슬레이트, 1 기와), 건물 번호.
+// 벽면 칠(rgb)과 지붕 색 갈래(a: ROOFS 번호), 건물 번호.
 instance uniform float fade = 0.0;
 instance uniform vec2 seen_fixed = vec2(-1.0, -1.0);
 instance uniform vec4 paint = vec4(0.58, 0.55, 0.50, 0.0);
@@ -60,6 +60,12 @@ void vertex() {
 	w_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	w_nrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
+
+// 지붕 색 갈래(결정 469 C1, sRGB — 쓸 때 선형으로): 슬레이트·바랜 기와·짙은 초록·갈색 널.
+// 밝기는 옛 슬레이트·기와 칠(0.52~0.60)과 같은 줄에 둔다(지붕이 화면의 반이라 어두워지지 않게).
+const vec3 ROOFS[4] = vec3[4](vec3(0.47, 0.50, 0.56), vec3(0.66, 0.44, 0.34), vec3(0.42, 0.52, 0.42), vec3(0.56, 0.46, 0.37));
+// 바깥벽 칠과 지붕은 집마다 굴린 색이라 모델 색 보정을 이만큼 덜 받는다(생활 색과 같은 길).
+uniform float house_colour : hint_range(0.0, 1.0) = 0.8;
 
 // 벽지·커튼 색(바랜 것만). 건물·층의 번호로 고른다.
 const vec3 PAPERS[5] = vec3[5](vec3(0.60, 0.46, 0.43), vec3(0.50, 0.56, 0.46), vec3(0.66, 0.56, 0.38), vec3(0.48, 0.52, 0.58), vec3(0.72, 0.68, 0.56));
@@ -118,6 +124,7 @@ void fragment() {
 		brick = mix(stone_color * 0.95, brick, 1.0 - seam(fract(bc), vec2(0.05, 0.11)));
 		float bare = smoothstep(0.6, 0.7, fx_fbm2(fp * 0.8 + vec2(7.3, 1.9))) * exposed * (1.0 - up);
 		base = mix(base, brick, bare);
+		lively = house_colour * exposed * (1.0 - bare);
 		if (exposed < 0.5 && up < 0.5 && building_id >= 0.0) {
 			// 안쪽 벽: 건물·층마다 바랜 벽지(세로 줄이나 잔무늬), 군데군데 뜯겨 회벽이 드러남.
 			float pick = fx_hash(vec2(building_id, floor(w_pos.y / level_h) + 3.0));
@@ -166,13 +173,16 @@ void fragment() {
 		lively = 0.8;
 	} else if (zone == 4) {
 		// 지붕: 높이로 줄을 긋고 용마루 쪽으로 엇갈린 이음.
-		vec3 roof = mix(slate_color, tile_color, paint.a);
+		vec3 roof = ROOFS[clamp(int(paint.a + 0.5), 0, 3)];
+		roof = mix(roof / 12.92, pow((roof + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), roof));
+		lively = house_colour * 0.75;
 		if (up > 0.97) {
-			// 평지붕: 높이가 한결같아 기와 줄이 안 생긴다. 1 m 폭 루핑 띠와 엇갈린 이음.
+			// 평지붕: 1 m 폭 루핑 띠, 띠 사이 이음만 옅게(가로 이음은 바둑판으로 읽혀 뺌, 결정 469 C4).
 			vec2 fc = w_pos.xz / vec2(0.95, 3.0);
 			fc.y += 0.37 * fx_hash(vec2(floor(fc.x), 5.0));
-			base = slate_color * 1.15 * (0.88 + 0.2 * fx_hash(floor(fc))) * (0.9 + 0.18 * big);
-			base *= 1.0 - 0.25 * seam(fract(fc), vec2(0.03, 0.02));
+			base = slate_color * 1.15 * (0.92 + 0.12 * fx_hash(floor(fc))) * (0.9 + 0.18 * big);
+			base *= 1.0 - 0.12 * seam(vec2(fract(fc.x), 0.5), vec2(0.03, 0.0));
+			lively = 0.0;
 		} else {
 			float ax = abs(n.x) > abs(n.z) ? w_pos.z : w_pos.x;
 			vec2 tc = vec2(ax / 0.32, w_pos.y / 0.15);
