@@ -17,13 +17,16 @@ const TrainMods = preload("res://game/train/train_mods.gd")
 const TrainLawTech = preload("res://game/train/train_lawtech.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const TurnCommon = preload("res://game/train/turn/turn_common.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 
 
+## S1 heatCost: the communities' heating, by the outside's stage when the
+## board has climate on (train_climate.gd temp_mult; 1 otherwise).
 static func heat_cost(g: Dictionary, t: Dictionary) -> float:
 	var sum := 0.0
 	for c: String in St.comms(t):
 		sum += comm_heat(g, c)
-	return sum * float(t["P"]["coalHeatPerLever"])
+	return sum * float(t["P"]["coalHeatPerLever"]) * TrainClimate.temp_mult(g, t)
 
 
 ## One community's term of heat_cost, before coalHeatPerLever: its heat
@@ -348,7 +351,7 @@ static func check_end(g0: Dictionary, t: Dictionary) -> Dictionary:
 
 const END_TEXT := {
 	"complete": "라이프치히 중앙역에 닿았다.", "stranded": "석탄이 다 떨어졌다. 열차가 섰다.",
-	"ousted": "의회가 열차장을 끌어내렸다.", "revolt": "반란이 일어났다.",
+	"ousted": "의회가 열차장을 끌어내렸다. 아무도 소리치지 않았다. 사람들이 길을 비켜 섰다.", "revolt": "반란이 일어났다. 식당칸 탁자가 엎어지고 고함이 칸을 넘어왔다.",
 }
 
 

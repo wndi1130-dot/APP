@@ -27,6 +27,7 @@ const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldTrainGuard = preload("res://game/field_train_guard.gd")
+const FieldAlarms = preload("res://game/field_alarms.gd")
 const FieldResidents = preload("res://game/field_residents.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const Gait = preload("res://game/sim/gait.gd")
@@ -145,6 +146,7 @@ var mission: String = ""
 var mission_play: FieldMission      # the goals of this stop, in the field
 var holdout: FieldHoldout           # holding the train while it gets ready (off on a plain stop)
 var train_guard: FieldTrainGuard    # the brakes heard, and the train holding what they bring (decision 416)
+var building_alarms: FieldAlarms    # buildings' alarms set off by breaking in (J17)
 var residents: FieldResidents       # the people who live at the stop (J21)
 var rng := RandomNumberGenerator.new()
 var place: String = ""                 # which map this stop is played on (FieldMaps)
@@ -436,6 +438,7 @@ func _ready() -> void:
 	mission_play.place()
 	holdout = FieldHoldout.new(self)
 	train_guard = FieldTrainGuard.new(self)
+	building_alarms = FieldAlarms.new(self)
 	residents = FieldResidents.new(self)
 	_build_world()
 	await BuildPace.rest(pace)
@@ -1501,6 +1504,7 @@ func _step(delta: float) -> void:
 	_update_hordes(delta)
 	_update_spawns(delta)
 	train_guard.tick()
+	building_alarms.tick()
 	_update_blood(delta)
 	_update_night(delta)
 	_update_zone(delta)
@@ -1653,6 +1657,10 @@ func _drive(p: Person, delta: float) -> void:
 
 
 func _move_person(p: Person, delta: float) -> void:
+	# A walk along a path keeps the weapon's planted-feet span too (결정 441 (1)).
+	if combat.feet_held(p):
+		p.moving = false
+		return
 	if p.path.is_empty():
 		p.moving = false
 		return
@@ -1856,7 +1864,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
 			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
-	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false)
+	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false) * SimNoise.reach(tag)
 	var reacted: int = zombies.hear(at, level, radius)
 	ledger.observe(level, tag, radius, reacted)
 	_score(level, tag)

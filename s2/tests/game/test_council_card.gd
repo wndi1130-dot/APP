@@ -253,3 +253,31 @@ func test_open_asks_its_condition_and_a_cut_its_car() -> void:
 	(c.pane.find_child("Cut_engine", true, false) as Button).pressed.emit()
 	assert_eq(c.g["council"]["deals"], want["g"]["council"]["deals"])
 	assert_eq(c.g["comms"]["engine"]["rel"], want["g"]["comms"]["engine"]["rel"], "the cut is paid now")
+
+
+## After the count the pane says why it split so, small under the groups'
+## yes and no (council_vote.gd result.why, S1 council.ts verdict__why); a
+## secret ballot does not say how the groups split.
+func test_the_count_says_why_it_split_under_the_list() -> void:
+	var c = _card()
+	var gi: Dictionary = c.g.duplicate(true)
+	gi["council"]["idx"] = 0
+	var want: Dictionary = CouncilVote.cast_vote(gi, c.t)["result"]
+	c.bar.main_pressed.emit()
+	c.board.finish_reveal()
+	var why := c.pane.find_child("Why", true, false) as Label
+	if want.get("why") != null and not bool(want.get("secret", false)):
+		assert_not_null(why, "the port's line")
+		assert_eq(why.text.replace(UiFonts.WORD_JOINER, ""), String(want["why"]))
+	else:
+		assert_null(why, "no line when the port has none")
+	c.result["why"] = "꼬리칸 미정 4석 가운데 0석이 찬성했다(기대 2석, 한 석마다 찬성 50%)."
+	c.result["secret"] = false
+	c._fill_pane()
+	why = c.pane.find_child("Why", true, false) as Label
+	assert_not_null(why)
+	assert_eq(why.text.replace(UiFonts.WORD_JOINER, ""), String(c.result["why"]))
+	assert_lte((why.position.y + why.get_minimum_size().y) / UiFonts.K, CouncilCard.PANE_SIZE.y, "inside the pane")
+	c.result["secret"] = true
+	c._fill_pane()
+	assert_null(c.pane.find_child("Why", true, false), "a secret ballot keeps the split")
