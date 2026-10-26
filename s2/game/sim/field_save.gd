@@ -558,12 +558,12 @@ static func _apply_exact(game, save: Dictionary) -> void:
 
 
 static func _refresh_restored_view(game) -> void:
-	for id in game.view.container_nodes.keys():
+	# Boxes are drawn in shared chunk meshes (map_view.gd): ask the view, not its nodes.
+	for id in game.view.container_ids():
 		if not game.data["containers"].has(id):
-			game.view.container_nodes[id].queue_free()
-			game.view.container_nodes.erase(id)
+			game.view.remove_object_container(id)
 	for id in game.data["containers"]:
-		if game.view.container_nodes.has(id):
+		if game.view.has_container(id):
 			game.view.update_container(id)
 		else:
 			game.view.add_container(id)
