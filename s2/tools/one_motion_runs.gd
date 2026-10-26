@@ -4,13 +4,14 @@ extends SceneTree
 ## step; the player walks a fixed round (walk) or the holdout runs (holdout),
 ## the companions play by their own AI. Prints one JSON line per trial.
 ## --seeds 1:20 --seconds 300 --hz 30 --mode both|walk|holdout --label before|after
-## --bot counter|none: in the holdout the player fights back where it stands
-## (counter, _counter) or stands still as the runs before it did (none).
+## --bot counter|none: the player fights back what is on it (counter, _counter:
+## where it stands in the holdout, stopping on its round in the walk) or lets
+## it be as the runs before it did (none).
 ## No imports, no saves, no files written.
 
 const WALK_CELLS := [Vector2i(80, 12), Vector2i(90, 32), Vector2i(60, 40),
 	Vector2i(30, 32), Vector2i(30, 12), Vector2i(50, 6)]
-## How often the holdout's player looks round, as a thumb on the pad would.
+## How often the player looks round, as a thumb on the pad would.
 const REACT_S := 0.25
 const Weapons = preload("res://game/sim/weapons.gd")
 
@@ -129,28 +130,28 @@ static func _striking(p) -> bool:
 	return p.swing_t > 0.0 or p.strike_t > 0.0 or p.shove_t > 0.0
 
 
-## The holdout's player at the pad, fighting back where it stands (the plain
-## melee loop): grabbed, it shoves free; one dead on its feet in reach, it
-## shoves it (one alone is put down, then finished on the ground, never swung
-## at on its feet); two or more, it swings at the nearest; none standing, it
-## ends a rising one or one lying in reach. It never walks after one: a target
-## that drifts out of reach is let go. No dice of its own (game.rng only), so
-## seeds still repeat.
-func _counter(game, counts: Dictionary) -> void:
+## The player at the pad, fighting back what is on it (the plain melee loop):
+## grabbed, it shoves free; one dead on its feet in reach, it shoves it (one
+## alone is put down, then finished on the ground, never swung at on its
+## feet); two or more, it swings at the nearest; none standing, it ends a
+## rising one or one lying in reach. It never walks after one: a target that
+## drifts out of reach is let go. No dice of its own (game.rng only), so seeds
+## still repeat. True while there is a fight at hand: the walk waits for it.
+func _counter(game, counts: Dictionary) -> bool:
 	var p = game.player
 	var combat = game.combat
 	if game.ended or not p.is_alive():
-		return
+		return false
 	if not p.grabbers.is_empty():
 		if combat.break_grab(p):
 			counts["bot_frees"] += 1
-		return
+		return true
 	if not p.can_act() or combat.striking(p):
-		return
+		return true
 	var reach: float = float(Weapons.get_data(p.weapon_id()).get("reach", 0.9)) + combat.MELEE_SLACK
 	if not p.target_zombie.is_empty():
 		if p.target_zombie["state"] != "dead" and p.position.distance_to(p.target_zombie["pos"]) <= reach:
-			return
+			return true
 		combat.stop_fight(p)
 	var up: Array = []
 	var rising: Dictionary = {}
@@ -184,6 +185,9 @@ func _counter(game, counts: Dictionary) -> void:
 	elif up.is_empty() and not lying.is_empty():
 		combat.fight(p, lying, false)
 		counts["bot_finishes"] += 1
+	else:
+		return false
+	return true
 
 
 func _trial(run_seed: int, mode: String) -> Dictionary:
@@ -213,12 +217,13 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 	var counts := {"bot_shoves": 0, "bot_swings": 0, "bot_finishes": 0, "bot_frees": 0}
 	var react := maxi(1, roundi(REACT_S * hz))
 	var clock := Time.get_ticks_usec()
+	var beset := false                # a fight at hand: the walk waits for it
 	for tick in range(ticks):
-		if mode == "walk" and tick % (hz * 2) == 0 and game.player.can_act() and game.player.action == "":
+		if bot == "counter" and tick % react == 0:
+			beset = _counter(game, counts)
+		if mode == "walk" and tick % (hz * 2) == 0 and game.player.can_act() and game.player.action == "" and not beset:
 			var goal: Vector2i = WALK_CELLS[mini(int(float(tick) / hz / 50.0), WALK_CELLS.size() - 1)]
 			game.player.go_to(game.find_path(game.player.position, game.lift(goal, 0)), false)
-		if mode == "holdout" and bot == "counter" and tick % react == 0:
-			_counter(game, counts)
 		game._step(delta)
 		if game.ended and first_end < 0.0:
 			first_end = (tick + 1) * delta
@@ -246,9 +251,16 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 			if z["state"] in ["downed", "dead"] and not initially_fallen.has(z["id"]):
 				fallen[z["id"]] = true
 	var bites := 0
+	var bites_player := 0             # of the bites, the player's (the heavier number)
+	var grabs_player := 0
 	for injury in game.telemetry.injuries:
+		var players: bool = injury["who"] == game.player.pid
 		if injury["kind"] == "bite":
 			bites += 1
+			if players:
+				bites_player += 1
+		elif injury["kind"] == "grab" and players:
+			grabs_player += 1
 	var deaths := 0
 	for p in game.squad:
 		if p.body.dead:
@@ -268,5 +280,7 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 		"steps": steps, "step_reactions": step_reactions,
 		"first_end_s": first_end, "wall_s": float(Time.get_ticks_usec() - clock) / 1000000.0}
 	row.merge(counts)
+	row["bites_player"] = bites_player
+	row["grabs_player"] = grabs_player
 	game.free()
 	return row
