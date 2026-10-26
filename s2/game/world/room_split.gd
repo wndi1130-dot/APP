@@ -23,6 +23,11 @@ const SHOP_ROLES := ["shop", "shopmain", "market"]
 const SPLIT_OVER := {"bed": 24, "kitchen": 20, "living": 36}
 const TARGET_AREA := {"bed": 16, "kitchen": 15, "living": 27}
 const MIN_SIDE := 3
+## 부엌 쪽만 폭 두 칸(조리대 한 줄 + 지나는 길)·여덟 칸까지 좁게 둘 수 있다: 폭 6·7칸 부엌의 가운데
+## 줄이 문 앞이나 창에 걸려도 2 + 1 + 3·4로 가른다. 넓게 가를 수 있으면 그쪽을 먼저(GALLEY_COST).
+const GALLEY_SIDE := 2
+const GALLEY_MIN := 8
+const GALLEY_COST := 3
 ## 문이 원래 없는 쪽(새 칸막이 문으로만 드나드는 쪽)에는 더 안쪽 방이 온다: 침실을 지나 거실로 가지 않게.
 const PRIVACY := {"bed": 3, "kitchen": 2, "living": 1}
 ## 집 한 채에서 가르는 횟수 상한: 이 수에 처음 큰 방 수를 더한다(연립 한 동에 큰 방이 여럿).
@@ -410,6 +415,9 @@ static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary,
 				entries.append(c + d)
 	if entries.is_empty():
 		return {}
+	var galley := keep == "kitchen" or add == "kitchen"
+	var least := GALLEY_MIN if galley else MIN_REMAINDER
+	var narrowest := GALLEY_SIDE if galley else MIN_SIDE
 	var lines: Array = []
 	for axis in [0, 1]:
 		var along := Vector2i.RIGHT if axis == 0 else Vector2i.DOWN
@@ -425,14 +433,14 @@ static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary,
 					a[c] = true
 				else:
 					b[c] = true
-			if line.size() < 2 or a.size() < MIN_REMAINDER or b.size() < MIN_REMAINDER:
+			if line.size() < 2 or a.size() < least or b.size() < least:
 				continue
 			line.sort()
 			var valid := line[line.size() - 1] - line[0] == along * (line.size() - 1)
 			for c: Vector2i in line:
 				valid = valid and (g.solid_at(c) == S.NONE or soft.has(c)) and not protected.has(c)
 			valid = valid and g.solid_at(line[0] - along) == S.WALL and g.solid_at(line[line.size() - 1] + along) == S.WALL
-			if valid and _short_side(a) >= MIN_SIDE and _short_side(b) >= MIN_SIDE and _connected(a) and _connected(b):
+			if valid and _short_side(a) >= narrowest and _short_side(b) >= narrowest and _connected(a) and _connected(b):
 				lines.append({"line": line, "a": a, "b": b, "axis": axis})
 	var best := {}
 	var best_score := 2147483647
@@ -448,7 +456,14 @@ static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary,
 				continue
 			if not anchors.is_empty() and _touches(add_cells, anchors):
 				continue
+			# 좁은 쪽(갤리)은 부엌만: 다른 쪽은 늘 MIN_REMAINDER·MIN_SIDE.
+			var kitchen_cells: Dictionary = keep_cells if keep == "kitchen" else add_cells
+			var other_cells: Dictionary = add_cells if keep == "kitchen" else keep_cells
+			if galley and not _wide(other_cells):
+				continue
 			var score := absi(keep_cells.size() - int(TARGET_AREA[keep])) + absi(add_cells.size() - int(TARGET_AREA[add]))
+			if galley and not _wide(kitchen_cells):
+				score += GALLEY_COST
 			if score >= best_score:
 				continue
 			var door := _cut_door(row["line"], row["axis"], keep_cells, add_cells, protected, entries)
@@ -493,6 +508,11 @@ static func _touches(cells: Dictionary, entries: Array) -> bool:
 			if cells.has(e + d):
 				return true
 	return false
+
+
+## 칸막이 한쪽이 방 하나로 넉넉한가(MIN_REMAINDER칸·폭 MIN_SIDE 이상).
+static func _wide(cells: Dictionary) -> bool:
+	return cells.size() >= MIN_REMAINDER and _short_side(cells) >= MIN_SIDE
 
 
 static func _short_side(cells: Dictionary) -> int:
@@ -679,7 +699,7 @@ static func _cut_rooms(data: Dictionary, b: int, rooms: Array, stats: Dictionary
 			if SPLIT_OVER.has(cls) and r["cells"].size() > int(SPLIT_OVER[cls]) and not failed.has(i) and (pick < 0 or r["cells"].size() > rooms[pick]["cells"].size()):
 				pick = i
 		if pick < 0:
-			return
+			break
 		var room: Dictionary = rooms[pick]
 		var has := {}
 		for r: Dictionary in rooms:

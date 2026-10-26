@@ -376,10 +376,38 @@ func test_the_room_without_its_own_way_in_is_the_more_private_one() -> void:
 
 
 func test_a_room_under_the_limit_or_too_narrow_to_halve_is_left_whole() -> void:
-	for spec: Array in [[6, 4, "침실"], [6, 6, "부엌"]]:
+	# 5칸 폭 부엌은 좁은 부엌(2칸)을 떼도 남는 쪽이 2칸이라 못 가른다.
+	for spec: Array in [[6, 4, "침실"], [5, 5, "부엌"]]:
 		var d := _cut_house(spec[0], spec[1], spec[2])
 		var stats := Split.apply(d)
 		assert_eq(stats["cut"], 0, str(spec))
+
+
+func test_a_six_wide_kitchen_gives_a_narrow_kitchen_and_a_full_room() -> void:
+	var d := _cut_house(6, 6, "부엌")
+	var stats := Split.apply(d)
+	assert_eq(stats["cut"], 1)
+	var row: Dictionary = stats["cuts"][0]
+	var g: Grid = d["grid"]
+	var map := Furnish.rooms_of(g)
+	var sides := {}
+	for room: Dictionary in map["rooms"]:
+		var lo: Vector2i = room["cells"][0]
+		var hi := lo
+		for c: Vector2i in room["cells"]:
+			lo = lo.min(c)
+			hi = hi.max(c)
+		sides[room["cells"].size()] = mini(hi.x - lo.x + 1, hi.y - lo.y + 1)
+	# 2 + 1 + 3: 부엌은 폭 2칸 12칸, 다른 쪽은 폭 3칸 18칸.
+	assert_eq(sides.get(12, 0), Split.GALLEY_SIDE)
+	assert_eq(sides.get(18, 0), Split.MIN_SIDE)
+	assert_ne(row["class"], "kitchen", "the new side is the room the home lacks; the kitchen keeps the narrow side")
+	Furnish.furnish_rooms(d)
+	var runs := 0
+	for p: Dictionary in d["props"]:
+		if p.get("rule") == "kitchen" and p.get("counter_run", false):
+			runs += 1
+	assert_gte(runs, Furnish.COUNTER_MIN, "a counter run along the narrow kitchen's long wall")
 
 
 func test_a_kitchen_keeps_a_straight_counter_wall_after_a_cut() -> void:

@@ -36,6 +36,8 @@ func test_kitchens_get_empty_boxes_in_spare_furniture_and_keys_stand() -> void:
 		if c.has("room"):
 			keyed += 1
 			assert_true(LootDress.AFFINITY.has(String(c["room"])), id)
+		elif Furnish._name_places(String(c.get("name", ""))):
+			keyed += 1  # its name says the room (안방 상자), so no key is set
 		if not id.begins_with("kitchen_"):
 			continue
 		added += 1
