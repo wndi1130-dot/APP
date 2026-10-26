@@ -42,6 +42,10 @@ const SOURCES := {
 	"run": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
 	"crouch": {"levels": [Level.QUIET], "at": "maker", "pull": true},
 	"melee": {"levels": [Level.QUIET, Level.NORMAL], "at": "maker", "pull": true},
+	# A melee blow landing on the dead (decision 473 W3): normal, carried 0.75 of
+	# its radius (9 m, 4.5 m indoors) after the paired runs. The quiet knife from
+	# behind, a whiff, a stomp and a door struck stay "melee".
+	"blow": {"levels": [Level.NORMAL], "at": "maker", "pull": true, "reach": 0.75},
 	"impact": {"levels": [Level.QUIET], "at": "spot", "pull": true},
 	"fight": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
 	"fall": {"levels": [Level.NORMAL], "at": "maker", "pull": true},

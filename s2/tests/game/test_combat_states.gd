@@ -147,13 +147,18 @@ func test_a_body_hit_that_leaves_it_up_holds_it_longer() -> void:
 	assert_gt(held, 0, "a body hit that leaves it up happens now and then")
 
 
-# Decision 473 W3: a blow on the dead is heard at normal; a quiet knife from
-# behind, crouched, on one that has not noticed anyone, stays quiet.
+# Decision 473 W3: a blow on the dead is heard at normal, as "blow" that carries
+# 0.75 of normal's radius; a quiet knife from behind, crouched, on one that has
+# not noticed anyone, stays a quiet "melee".
 func test_a_blow_on_the_dead_is_heard_and_a_quiet_knife_stays_quiet() -> void:
 	_hand("crowbar")
 	game.sounds.clear()
 	game.combat.swing(p, _body_at("wander"))
 	assert_eq(_blow_level(), SimNoise.Level.NORMAL)
+	assert_eq(_blow_tag(), "blow")
+	assert_almost_eq(SimNoise.reach("blow"), 0.75, 0.0001)
+	assert_almost_eq(SimNoise.radius(SimNoise.Level.NORMAL, false, SimNoise.reach("blow")), 9.0, 0.0001, "12 m at normal, 0.75 of it")
+	assert_almost_eq(SimNoise.radius(SimNoise.Level.NORMAL, true, SimNoise.reach("blow")), 4.5, 0.0001, "indoors half, then 0.75 of it")
 	_hand("knife")
 	p.crouched = true
 	var z := _body_at("wander")
@@ -162,11 +167,19 @@ func test_a_blow_on_the_dead_is_heard_and_a_quiet_knife_stays_quiet() -> void:
 	game.combat.swing(p, z)
 	assert_eq(z["state"], "dead", "ended from behind")
 	assert_eq(_blow_level(), SimNoise.Level.QUIET)
+	assert_eq(_blow_tag(), "melee")
 
 
 ## The level of the blow's own sound, the first melee one since the list was cleared.
 func _blow_level() -> int:
 	for s in game.sounds:
-		if s["tag"] == "melee":
+		if s["tag"] == "melee" or s["tag"] == "blow":
 			return int(s["level"])
 	return -1
+
+
+func _blow_tag() -> String:
+	for s in game.sounds:
+		if s["tag"] == "melee" or s["tag"] == "blow":
+			return String(s["tag"])
+	return ""
