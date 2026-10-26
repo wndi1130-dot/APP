@@ -104,7 +104,7 @@ const INERTIA: Dictionary = {
 	"mid": [0.12, 0.15, 0.25],
 	"short": [0.10, 0.12, 0.20],
 }
-const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear"]
+const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "take"]
 ## Who comes down from the train: the laws it lives under go out with them
 ## (opts "laws", decision 430).
 const TRAIN_ROLES: Array = ["chief", "companion", "carrier", "escort", "worker"]
