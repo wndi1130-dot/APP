@@ -166,6 +166,26 @@ func test_a_box_dressed_over_its_limit_still_gives() -> void:
 	game.hud._close_modal()
 
 
+## On a wide phone the canvas is 390 mockup px high: a full box, a full bag and a full coat
+## still leave 「모두 담기」 on the screen — the lists give up height (decision 472 6).
+func test_a_full_pane_stays_inside_the_screen() -> void:
+	var game = _game()
+	var p = game.player
+	var box := _at_a_box(game)
+	var c: Dictionary = game.data["containers"][box]
+	c["items"] = ["food_pack", "scrap", "wood", "cloth", "bandage", "document", "plank", "medkit", "flare", "scrap", "wood", "food_pack"]
+	for id in ["scrap", "wood", "cloth", "bandage", "plank", "flare", "document", "medkit", "bottle_spirit", "tweezers"]:
+		p.add_item(id, 1)
+	game.hud.loot(box)
+	var pane: Control = game.hud.modal.find_child("Pane", true, false)
+	var bottom: float = pane.position.y + pane.get_combined_minimum_size().y
+	assert_lte(bottom, pane.get_viewport_rect().size.y, "the foot is on the screen")
+	var keys: Array = game.hud.modal.find_children("*", "Button", true, false).map(func(b) -> String: return String(b.text))
+	assert_has(keys, "모두 담기")
+	assert_eq(_texts(game.hud, "Near").size(), c["items"].size(), "every row still there, to drag to")
+	game.hud._close_modal()
+
+
 func test_the_bag_is_ordered_by_weight_or_by_name() -> void:
 	var game = _game()
 	var p = game.player
