@@ -36,6 +36,8 @@ static func draw_event(g: Dictionary, t: Dictionary) -> String:
 		var memo: Dictionary = g.get("eventLog", {}).get(id, {})
 		if not memo.is_empty() and (int(g["seg"]) - int(memo["seg"]) < int(t["EVENT_COOLDOWN"]) or int(memo["n"]) >= int(t["EVENT_CHAIN_MAX"]) or memo.get("st") == key): continue
 		pool.append(id)
+	# A frozen stretch puts the track events in again (S1 freezeTrackBoost), before the hands' roof (handsTrackBoost).
+	pool = TrainClimate.track_boost(g, t, pool)
 	if float(g.get("hands", {}).get("short", {}).get("roof", 0)) > float(t["HANDS"]["roofOver"]):
 		for id: String in ["water_tower", "snow_drift"]:
 			if pool.has(id):
@@ -54,10 +56,11 @@ static func depart(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var p: Dictionary = t["P"]
 	# With climate on the season table's stage replaces the regular winter drop (S1 climateDepart, decision 370 1).
 	var shift: Variant = TrainClimate.depart(g, t)
-	if TrainClimate.would_freeze(g, t, shift): return C.unsupported(g0, "depart: climate freezeDepart")
 	if not TrainClimate.on(g) and int(g["seg"]) % int(p["winterEvery"]) == 0:
 		for comm: String in t["COMMS"]: g["comms"][comm]["base"][0] -= float(p["winterDrop"])
 		C.journal(g, "추위가 한 단계 깊어졌다. 모든 칸 온기 −5.", "bad")
+	# S1 disasterDepart stands here (no disasters in S2), then freezeDepart.
+	TrainClimate.freeze_depart(g, t, shift)
 	# 내정 훅 자리: domesticDepart / domesticStrikeLine / domesticStrikeRuns.
 	var engine: Dictionary = g["comms"]["engine"]
 	var striking: bool = int(engine["fervor"]) >= 1 and float(engine["rel"]) <= float(p["strikeRel"])

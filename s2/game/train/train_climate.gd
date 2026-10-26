@@ -12,10 +12,13 @@ extends RefCounted
 ## t.FALLS, the swap tables); the seasons' weather shares are the season table's
 ## (season_table.gd, the same file as S1's). A board with climate off is untouched.
 ##
-## Not here yet: the track freeze (freezeDepart, climateSettle, freezeCoal/Food,
-## the track events' boost) — a freeze S1 would start is refused as unported
-## (turn_travel.gd depart) — and the disasters' cold snap one stage deeper
-## (departStage's coldStep: S2 has no disasters).
+## The track freeze too (freezeDepart, climateSettle, freezeCoal/Food, the track
+## events' boost): leaving a wet stop for a colder stage freezes the track for
+## CL.freezeLen stretches — a coal more, half a day's food more, the water tower
+## and the snow drift drawn twice as often — and it thaws at the settle's end.
+##
+## Not here yet: the disasters' cold snap one stage deeper (departStage's
+## coldStep, and freezeDepart's coldStart: S2 has no disasters).
 
 const C = preload("res://game/train/turn/turn_common.gd")
 const SeasonTable = preload("res://game/season_table.gd")
@@ -25,7 +28,11 @@ const LINES: Dictionary = {
 	"drop": ["날씨가 추워지고 있어…", "창에 성에가 다시 낀다……"],
 	"deep": ["숨 쉬는 것도 아파…", "쇠붙이가 손에 들러붙는다……"],
 	"ease": ["바람이 좀 누그러졌어…", "지붕의 눈이 녹아 흘러내린다……"],
+	"freeze": ["바퀴가 자꾸 헛돌아…", "선로가 얼어붙고 있다……"],
+	"thaw": ["이제 좀 굴러가네…", "바퀴 밑 얼음이 갈라진다……"],
 }
+## climate.ts TRACK_EVENTS: the track events a freeze draws more often.
+const TRACK_EVENTS: Array[String] = ["water_tower", "snow_drift"]
 ## climate.ts WEATHER_TEMP's cold (the one a departure's line can add).
 const COLD_TEMP: float = -12.0
 ## season.ts DRAWN: the five a stop's weather is drawn from, in this order.
@@ -88,16 +95,59 @@ static func depart(g: Dictionary, t: Dictionary) -> Variant:
 	return {"from": from, "to": to}
 
 
-## Whether a departure that shifted the stage `shift` would freeze the track
-## (climate.ts freezeDepart's test): S2 does not carry the freeze yet.
-static func would_freeze(g: Dictionary, t: Dictionary, shift: Variant) -> bool:
-	if not on(g) or not shift is Dictionary or not bool(t["CL"]["freezeOn"]):
-		return false
+## climate.ts freezeDepart (after the departure's stage, `shift` from depart):
+## a colder stage left from a wet stop freezes the track — wet is sleet at the
+## stop left, or the stage left being a wet one (late autumn, decision 370 3).
+## No disasters in S2, so no cold snap starts one.
+static func freeze_depart(g: Dictionary, t: Dictionary, shift: Variant) -> void:
+	if not on(g) or not bool(t["CL"]["freezeOn"]) or not shift is Dictionary:
+		return
 	if int(shift["to"]) <= int(shift["from"]):
-		return false
+		return
 	var last: Variant = g.get("lastStop")
 	var sleet: bool = last is Dictionary and String((last as Dictionary).get("weather", "")) == "sleet"
-	return sleet or bool(t["CL"]["wet"][int(shift["from"])])
+	if not sleet and not bool(t["CL"]["wet"][int(shift["from"])]):
+		return
+	var cl: Dictionary = t["CL"]
+	g["freeze"] = cl["freezeLen"]
+	if not g.get("climateStats") is Dictionary:
+		g["climateStats"] = {"drops": 0, "freezes": 0}
+	g["climateStats"]["freezes"] = int(g["climateStats"]["freezes"]) + 1
+	C.journal(g, _line(g, LINES["freeze"]), "bad")
+	C.journal(g, "선로 결빙: 석탄 +%s, 식량 +반나절." % _js(float(cl["freezeCoal"])), "bad")
+
+
+## climate.ts climateSettle (the settle's end): a frozen stretch goes by; the
+## last one writes the thaw.
+static func settle(g: Dictionary, t: Dictionary) -> void:
+	if not on(g) or float(g.get("freeze", 0)) == 0.0:
+		return
+	g["freeze"] = float(g["freeze"]) - 1.0
+	if float(g["freeze"]) <= 0.0:
+		C.journal(g, _line(g, LINES["thaw"]), "good")
+
+
+## climate.ts freezeCoal: the coal a frozen stretch costs more (0 otherwise).
+static func freeze_coal(g: Dictionary, t: Dictionary) -> float:
+	return float(t["CL"]["freezeCoal"]) if on(g) and float(g.get("freeze", 0)) > 0.0 else 0.0
+
+
+## climate.ts freezeFood: the share more food_cost a frozen stretch takes (0 otherwise).
+static func freeze_food(g: Dictionary, t: Dictionary) -> float:
+	return float(t["CL"]["freezeFood"]) if on(g) and float(g.get("freeze", 0)) > 0.0 else 0.0
+
+
+## climate.ts freezeTrackBoost: in a frozen stretch the track events already in
+## the travel pool go in again (freezeTrack times in all).
+static func track_boost(g: Dictionary, t: Dictionary, pool: Array) -> Array:
+	if not on(g) or float(g.get("freeze", 0)) == 0.0:
+		return pool
+	var out: Array = pool.duplicate()
+	for id: String in TRACK_EVENTS:
+		if pool.has(id):
+			for _i: int in range(1, int(t["CL"]["freezeTrack"])):
+				out.append(id)
+	return out
 
 
 ## climate.ts line: the other voice from the last line; the board's first by its seed.

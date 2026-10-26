@@ -1,9 +1,10 @@
 extends GutTest
 ## The outside temperature on the train (train_climate.gd) against S1 with climate
-## on and the track freeze off (s1/tools/turn_port_fixtures.ts --climate): the same
-## four seeds' whole states step by step, and departures S1 makes on purpose — the
-## season table turning colder (stretch 17), staying, and a regular winter-drop
-## stretch, which climate replaces.
+## and the track freeze on (s1/tools/turn_port_fixtures.ts --climate): the same
+## four seeds' whole states step by step, a board leaving late autumn at stretch
+## 17 through its frozen stretch to the thaw, and departures S1 makes on purpose —
+## the season table turning colder (stretch 17, the track freezing), staying, and a
+## regular winter-drop stretch, which climate replaces.
 
 const Advance = preload("res://game/train/train_advance.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
@@ -37,18 +38,26 @@ func test_fixture_contract() -> void:
 	assert_false(_data.is_empty(), "the climate record exists and parses")
 	if _data.is_empty():
 		return
-	assert_eq(_data.get("format"), "turn-vectors-climate-v1")
-	assert_eq(int(_data["freezeOn"]), 0, "the track freeze is off in this record")
+	assert_eq(_data.get("format"), "turn-vectors-climate-v2")
+	assert_eq(int(_data["freezeOn"]), 1, "the track freeze is on in this record")
 	var stepped: int = 0
 	var changed: int = 0
+	var froze: int = 0
+	var thawed: int = 0
 	for run: Dictionary in _data["runs"]:
 		for row: Dictionary in run["steps"]:
 			assert_true(bool(row["before"]["climate"]))
 			stepped += 1
 			if row["after"].get("climateChange") != row["before"].get("climateChange"):
 				changed += 1
+			var was: float = float(row["before"].get("freeze", 0))
+			var now: float = float(row["after"].get("freeze", 0))
+			froze += int(was == 0.0 and now > 0.0)
+			thawed += int(was > 0.0 and now == 0.0)
 	assert_gt(stepped, 100)
 	assert_gt(changed, 0, "the season table's stage changes within the record")
+	assert_gt(froze, 0, "a departure freezes the track within the record")
+	assert_gt(thawed, 0, "and a settle thaws it")
 
 
 ## Every step of the four climate runs ends in S1's whole state (stage, warmth,
@@ -105,12 +114,56 @@ func test_the_seasons_are_s1_s() -> void:
 	assert_eq(t["FALLS"], SeasonTable.data()["falls"])
 
 
-## A board whose track has frozen is not one S2 carries yet; a climate board is.
-func test_a_frozen_track_is_not_ported_yet() -> void:
+## A board whose track has frozen is one S2 carries, as a climate board is.
+func test_a_frozen_track_is_a_board_s2_carries() -> void:
 	var g: Dictionary = (_data["runs"][0]["steps"][0]["before"] as Dictionary).duplicate(true)
 	assert_true(St.is_s1a(g), "climate on, no freeze")
 	g["freeze"] = 1
-	assert_false(St.is_s1a(g), "a freeze in force")
+	assert_true(St.is_s1a(g), "a freeze in force")
+
+
+## What the track freeze asks of a departure: a colder stage left wet. Late
+## autumn is wet; a dry stage freezes only after sleet; the same or a warmer
+## stage never; climate off never (S1 freezeDepart).
+func test_a_colder_wet_departure_freezes_the_track() -> void:
+	var t: Dictionary = (_data["tables"] as Dictionary).duplicate(true)
+	var g: Dictionary = (_data["runs"][0]["steps"][0]["before"] as Dictionary).duplicate(true)
+	g["lastStop"] = {"weather": "fog"}
+	for case: Array in [[{"from": 0, "to": 1}, "fog", 1.0], [{"from": 1, "to": 2}, "fog", 0.0],
+			[{"from": 1, "to": 2}, "sleet", 1.0], [{"from": 0, "to": 0}, "sleet", 0.0], [{"from": 1, "to": 0}, "sleet", 0.0]]:
+		var h: Dictionary = g.duplicate(true)
+		h["freeze"] = 0
+		h["lastStop"] = {"weather": case[1]}
+		TrainClimate.freeze_depart(h, t, case[0])
+		assert_eq(float(h["freeze"]), float(case[2]), "%s after %s" % [case[0], case[1]])
+	var off: Dictionary = g.duplicate(true)
+	off["climate"] = false
+	off["freeze"] = 0
+	TrainClimate.freeze_depart(off, t, {"from": 0, "to": 1})
+	assert_eq(float(off["freeze"]), 0.0, "climate off")
+
+
+## A frozen stretch: a coal more and half a day's food more in the forecast, its
+## own rows on the ledger (내역 판 「선로 결빙」), the track events in the pool
+## twice; none of it once it has thawed.
+func test_a_frozen_stretch_costs_more_and_draws_the_track_twice() -> void:
+	var t: Dictionary = _data["tables"]
+	var g: Dictionary = (_data["runs"][0]["steps"][0]["before"] as Dictionary).duplicate(true)
+	g["freeze"] = 0
+	var dry: Dictionary = TrainTurn.forecast(g, t)
+	var frozen := g.duplicate(true)
+	frozen["freeze"] = 1
+	var cold: Dictionary = TrainTurn.forecast(frozen, t)
+	assert_almost_eq(float(cold["coal"]) - float(dry["coal"]), float(t["CL"]["freezeCoal"]), 1e-9)
+	assert_almost_eq(float(cold["food"]) - float(dry["food"]), TrainTurn.food_cost(g, t) * float(t["CL"]["freezeFood"]), 1e-9)
+	var parts: Dictionary = TrainTurn.forecast_parts(frozen, t)
+	var coal_why: Array = (parts["coal"] as Array).map(func(r: Array) -> String: return String(r[0]))
+	var food_why: Array = (parts["food"] as Array).map(func(r: Array) -> String: return String(r[0]))
+	assert_true(coal_why.has("freeze") and food_why.has("freeze"))
+	var plain: Dictionary = TrainTurn.forecast_parts(g, t)
+	assert_false((plain["coal"] as Array).map(func(r: Array) -> String: return String(r[0])).has("freeze"), "no row unfrozen")
+	assert_eq(TrainClimate.track_boost(frozen, t, ["tail_cold", "water_tower"]), ["tail_cold", "water_tower", "water_tower"])
+	assert_eq(TrainClimate.track_boost(g, t, ["tail_cold", "water_tower"]), ["tail_cold", "water_tower"])
 
 
 ## Where ice does not stand (late autumn, no night frost, no cold weather) the
