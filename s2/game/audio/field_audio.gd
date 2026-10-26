@@ -9,8 +9,12 @@ extends Node3D
 ##   birds      a flock taking off when a horde sets off; with it a far thud
 ##              (impact, low and dull). No far moans: the horde is told by
 ##              these, the radio and the screen's sound marks
-##   impact     noisy actions (kick, glass, pry, lid, pickaxe, fights); from
+##   impact     noisy actions (kick, glass, pry, lid, pickaxe); from
 ##              behind a wall they come through duller (SFX_MID)
+##   swing_light, swing_heavy  a weapon coming round (or a shove), light
+##              under 2 kg, heavy from it (hit_feel.gd)
+##   hit_blunt, hit_blade, hit_stomp  a melee blow landing, by the weapon;
+##              made here from noise and tones (rights_ledger), not recorded
 ##   gun        shots (falls back to impact, lower)
 ##   step_snow  the player's footsteps
 ##   wind       outdoor bed, wandering, with gusts over it (WIND_DRIFT, _gust)
@@ -28,7 +32,7 @@ const Motion = preload("res://game/sim/motion.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm"]
+const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp"]
 ## One of the dead going down is heard in four beats, as it is drawn (the
 ## fall's own times: dead_pose, motion "dead_fall"). Only the player hears it:
 ## it is no sound of the rules. Each: group, loudness, lowest and highest pitch.
@@ -152,7 +156,9 @@ const GUST_PITCH_APART: float = 0.06  # and its starting pitch more than this fr
 const HOWL_LAYERS: Array = [1, 3]
 const HOWL_LEN: Array = [3.0, 6.5]
 const GUSTS: int = 3                  # players for gusts (a howl lays up to three)
-const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fight", "fall", "melee", "impact", "ladder", "bell", "train_guard"]
+## Melee blows ("melee", "fight") are not here: hit_feel.gd voices them by
+## the weapon (a miss, the swing alone), where any of these files would do.
+const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fall", "impact", "ladder", "bell", "train_guard"]
 
 var game
 var lib: Dictionary = {}               # group -> Array[AudioStream]
@@ -239,7 +245,8 @@ func setup(field_game) -> void:
 		engine.stream = lib["train_idle"][0]
 		engine.finished.connect(engine.play)
 		engine.play()
-	for i in range(6):
+	# Blows come quick and with their swings: room for a few at once.
+	for i in range(10):
 		var o := AudioStreamPlayer3D.new()
 		o.bus = "SFX"
 		o.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
@@ -851,6 +858,16 @@ func lunge_tell(at: Vector3) -> void:
 	var own: bool = has(TELL_GROUP)
 	var d: float = at.distance_to(game.player.position)
 	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH)
+
+
+## A blow's own sound (hit_feel.gd), heard to `reach` m and duller through a
+## wall. The dead hear the blow by make_sound, not by this.
+func feel_sound(group: String, at: Vector3, loud: float, reach: float) -> void:
+	if quiet:
+		return
+	played.append(group)
+	var d: float = at.distance_to(game.player.position)
+	_one_shot(group, at, loud * clampf(1.0 - d / reach, 0.0, 1.0), randf_range(0.92, 1.08), null, _bus_at(at))
 
 
 ## A sound the dead can hear is also one the player hears (field make_sound).

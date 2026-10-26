@@ -232,14 +232,32 @@ func test_the_dusk_shade_is_the_open_sky_s_cool_light() -> void:
 	assert_gt(autumn.r - autumn.b, winter.r - winter.b, "a warmer sun in late autumn")
 
 
+func test_the_night_light_is_a_neutral_grey() -> void:
+	# After dark the only colour is the lamps' orange: the moon and the fill are
+	# a faintly warm grey, under a clear sky or cloud (no blue screen).
+	for cold in [0.0, 1.0]:
+		var t := Atmosphere.sun_times(cold)
+		for kinds in [["clear"], ["overcast"], ["rain"]]:
+			var night := Atmosphere.look(t.y + 3.0, kinds, "K1", cold)
+			for key in ["ambient_color", "sun_color"]:
+				var c: Color = night[key]
+				assert_lte(c.b, c.r, "%s %s (cold %s) not blue" % [key, kinds, cold])
+				assert_lt(c.s, 0.08, "%s %s (cold %s) grey" % [key, kinds, cold])
+
+
 func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
-	# Contrast 1.2 about the hour's grey whatever falls: an overcast, a fog or
-	# a sleet takes colour out, not the spread (the grey day used to go flat).
+	# Contrast 1.2 about the hour's grey under a clear sky; an overcast, a fog or
+	# a sleet spreads the tones further, never less, and takes colour out (the
+	# grey day used to go flat).
 	var clear := Atmosphere.grade(Atmosphere.look(12.0, ["clear"], "K1", 0.0))
+	assert_almost_eq(float(clear["spread"]), Atmosphere.TONE_CONTRAST, 0.0001)
 	for kinds in [["overcast"], ["fog"], ["sleet"], ["blizzard"]]:
 		var g := Atmosphere.grade(Atmosphere.look(12.0, kinds, "K1", 0.0))
-		assert_almost_eq(float(g["contrast"]), float(clear["contrast"]), 0.0001, "%s keeps the contrast" % [kinds])
-		assert_almost_eq(float(g["brightness"]), float(clear["brightness"]), 0.0001)
+		assert_gt(float(g["spread"]), float(clear["spread"]), "%s spreads the tones more" % [kinds])
+		assert_lte(float(g["spread"]), Atmosphere.TONE_CONTRAST_DIM + 0.0001)
+		for c: float in [0.1, 0.4, 0.8]:
+			var out: float = 0.5 + float(g["contrast"]) * (float(g["brightness"]) * c - 0.5)
+			assert_almost_eq(out, float(g["spread"]) * (c - 0.4) + 0.4, 0.0001, "%s turns about the day's grey" % [kinds])
 		assert_lt(float(g["saturation"]), float(clear["saturation"]), "%s takes colour out" % [kinds])
 	# Godot: 0.5 + k(b·c − 0.5). By day that is 1.2(c − 0.4) + 0.4.
 	for c: float in [0.1, 0.4, 0.8]:
@@ -252,18 +270,19 @@ func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	var night := Atmosphere.grade(Atmosphere.look(t.y + 3.0, ["clear"], "K1", 0.0))
 	var p := float(night["pivot"])
 	assert_lt(p, 0.15)
+	assert_gt(float(night["spread"]), Atmosphere.TONE_CONTRAST, "the night spreads the lamps from the dark")
 	assert_almost_eq(0.5 + float(night["contrast"]) * (float(night["brightness"]) * p - 0.5), p, 0.0001)
 
 
 func test_an_overcast_lights_from_above_and_keeps_the_ground() -> void:
-	# A closed sky by day: part of the fill becomes a light nearly overhead with
-	# a faint shadow, so walls fall darker while the ground keeps its light; a
+	# A closed sky by day: part of the fill becomes a high light with a soft
+	# shadow, so walls fall darker while the ground keeps its light; a
 	# clear sky and the night are as the look has them.
 	var l := Atmosphere.look(12.0, ["overcast"], "K1", 0.0)
 	var lt := Atmosphere.light(l)
 	assert_lt(float(lt["ambient_energy"]), float(l["ambient_energy"]), "less flat fill")
 	assert_lt(float(lt["sun_pitch"]), float(l["sun_pitch"]), "the light stands higher")
-	assert_lt(float(lt["shadow"]), 0.6, "only a faint shadow under cloud")
+	assert_lt(float(lt["shadow"]), 0.6, "a soft shadow under cloud")
 	var ground_before := float(l["sun_energy"]) * sin(deg_to_rad(-float(l["sun_pitch"]))) + float(l["ambient_energy"])
 	var ground_after := float(lt["sun_energy"]) * sin(deg_to_rad(-float(lt["sun_pitch"]))) + float(lt["ambient_energy"])
 	assert_almost_eq(ground_after, ground_before, ground_before * 0.02, "the ground keeps its light")
@@ -300,6 +319,22 @@ func test_a_closed_sky_greys_the_day_and_what_falls_dims_it() -> void:
 	var band := Atmosphere.look(12.0, ["clear"], "K1", 1.0)
 	assert_gte(Color(l["ambient_color"]).srgb_to_linear().get_luminance(), Color(band["ambient_color"]).srgb_to_linear().get_luminance() - 0.001)
 	assert_lt(Color(l["ambient_color"]).s, Color(band["ambient_color"]).s, "grey, not tinted")
+
+
+func test_a_low_day_sun_lights_the_ground_as_noon_does() -> void:
+	# Decision 471 B0: two stops in five come in the morning. Through the day
+	# band the ground keeps the noon light; the sun still stands low (long
+	# shadows), and dawn and dusk still dim.
+	for c in [0.0, 0.5, 1.0]:
+		var t := Atmosphere.sun_times(c)
+		var noon := (t.x + t.y) * 0.5
+		var morning := t.x + 1.0
+		for kinds in [["clear"], ["overcast"]]:
+			var at_noon := _face(Atmosphere.look(noon, kinds, "K1", c))
+			var early := Atmosphere.look(morning, kinds, "K1", c)
+			assert_almost_eq(_face(early) / at_noon, 1.0, 0.03, "%s %s morning" % [c, kinds])
+			assert_gt(float(early["sun_pitch"]), float(Atmosphere.look(noon, kinds, "K1", c)["sun_pitch"]), "the sun still low")
+			assert_lt(_face(Atmosphere.look(t.x - 0.3, kinds, "K1", c)), at_noon * 0.8, "%s %s dawn still dim" % [c, kinds])
 
 
 ## The light an up-facing face gets (linear).
@@ -350,6 +385,26 @@ func test_params_are_every_global_and_keep_the_haze_grey() -> void:
 	var shut: Vector4 = Atmosphere.params(Atmosphere.look(12.0, ["overcast"], "K1", 1.0))["fx_cloud"]
 	assert_almost_eq(shut.w, 0.0, 0.001)
 	assert_eq(FxState.apply(p).size(), FxState.GLOBALS.size())
+
+
+func test_the_sight_mask_leaves_the_day_readable() -> void:
+	# Ground out of sight stays readable by day and sinks after dark (469 D3):
+	# never seen 0.55 and seen before 0.75 at noon; dimmed less at night (0.60,
+	# 0.78), where the dark is the night's own.
+	var t := Atmosphere.sun_times(0.0)
+	var day: Vector2 = Atmosphere.params(Atmosphere.look(12.0, ["overcast"], "K1", 0.0))["fx_sight"]
+	var dusk: Vector2 = Atmosphere.params(Atmosphere.look(t.y - 0.4, ["clear"], "K1", 0.0))["fx_sight"]
+	var night: Vector2 = Atmosphere.params(Atmosphere.look(t.y + 3.0, ["clear"], "K1", 0.0))["fx_sight"]
+	assert_almost_eq(day.x, FxState.SIGHT_DAY.x, 0.001)
+	assert_almost_eq(day.y, FxState.SIGHT_DAY.y, 0.001)
+	assert_almost_eq(night.x, FxState.SIGHT_NIGHT.x, 0.01)
+	assert_almost_eq(night.y, FxState.SIGHT_NIGHT.y, 0.01)
+	assert_between(dusk.x, minf(night.x, day.x), maxf(night.x, day.x), "dusk between night and day")
+	assert_lt(night.x, night.y, "at night too, ground seen before stays lighter")
+	assert_lt(day.x, day.y, "ground seen before stays lighter than ground never seen")
+	# A stop drawn without the frame (a storm stage, the gallery) goes by its hour band.
+	assert_eq(FxState.params_for(["clear"], 0.0, Vector2(1, 0), 0.4, 12.0)["fx_sight"], FxState.SIGHT_DAY)
+	assert_eq(FxState.params_for(["clear"], 0.0, Vector2(1, 0), 0.4, 23.0)["fx_sight"], FxState.SIGHT_NIGHT)
 
 
 func test_regions_name_the_twelve_bands() -> void:

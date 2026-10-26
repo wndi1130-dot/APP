@@ -194,7 +194,8 @@ func test_a_companion_stuck_on_the_way_finds_the_way_again() -> void:
 func _by_a_box() -> String:
 	for id in game.data["containers"]:
 		var c: Dictionary = game.data["containers"][id]
-		if c["locked"] or c["searched"] or c.has("pick") or int(c.get("level", 0)) != 0:
+		# A box that shows it is empty is passed by (card P3): one with something in it.
+		if c["locked"] or c["searched"] or c.has("pick") or int(c.get("level", 0)) != 0 or (c["items"] as Array).is_empty():
 			continue
 		game.player.position = game.walkable_near(game.lift(c["cell"], 0), false, 2)
 		for q in game.squad:

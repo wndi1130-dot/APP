@@ -62,9 +62,10 @@ const HOLD_LEFT: float = 1.5
 const D_CARD: float = HOLD_LEFT + HOLD_K * CARD_SPEED
 const D_NEAR: float = D_CARD + (RUN_SPEED + CARD_SPEED) * 0.5 * NEAR_S
 ## The look down ends where the field's own camera begins (field_game.gd
-## CAM_PITCH and cam_size 24 m of height): the same pitch, the same height of
-## ground on the screen, a narrow lens standing in for its flat one.
-const FIELD_PITCH_DEG: float = 52.0
+## CAM_PITCH, CAM_YAW and cam_size 24 m of height): the same pitch and turn, the
+## same height of ground on the screen, a narrow lens standing in for its flat one.
+const FIELD_PITCH_DEG: float = 35.0
+const FIELD_YAW_DEG: float = 45.0
 const FIELD_VIEW_H: float = 24.0
 const DOWN_FOV: float = 24.0
 ## Every map's train (field_maps.gd cars_of; all 81 maps, 2026-10-24): 80 m,
@@ -453,6 +454,8 @@ func _build_world() -> void:
 	var air: Color = Color(light["fog_color"]).darkened(0.3)
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = air
+	# The field's exposure (field_game.gd _build_world), so the stop and the field it opens on are one brightness.
+	env.tonemap_exposure = Atmosphere.EXPOSURE
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = light["ambient_color"]
 	env.ambient_light_energy = float(light["ambient_energy"]) * 1.15
@@ -546,7 +549,7 @@ static func stop_look(o: Dictionary) -> Dictionary:
 		var sun := Atmosphere.sun_times(cold, side)
 		hour = [sun.x + 0.25, sun.y - 0.4, sun.y + 1.7][clampi(int(round(-hour)) - 2, 0, 2)]
 	elif hour < 0.0:
-		hour = HOUR
+		hour = float(o.get("arrive_min", HOUR * 60.0)) / 60.0
 	# The season by the season table, as the field names it (a cold given
 	# outright names it by that cold).
 	var season := Atmosphere.season_for(cold, side) if o.has("cold") else Atmosphere.season_at(act, float(o.get("act_progress", 0.0)), scheme)
@@ -559,10 +562,13 @@ static func stop_look(o: Dictionary) -> Dictionary:
 ## A colour open to the sky as the field's world_vis.gdshader shows it: darker
 ## when wet, under the snow as far as it lies.
 func _ground(base: Color) -> Color:
+	# As world_vis does: the floor colour read as sRGB, dampened and snowed in
+	# linear (its FX_SNOW is a linear number), handed back as an sRGB vertex colour.
 	var damp: float = 1.0 - 0.35 * wet
-	var bare := Color(base.r * damp, base.g * damp, base.b * damp)
+	var lin := base.srgb_to_linear()
+	var bare := Color(lin.r * damp, lin.g * damp, lin.b * damp)
 	var snowy: Color = FX_SNOW * lerpf(1.0, 0.75, wet)
-	return bare.lerp(Color(snowy.r, snowy.g, snowy.b), 0.75 * white)
+	return bare.lerp(Color(snowy.r, snowy.g, snowy.b), 0.75 * white).linear_to_srgb()
 
 
 func _build_train() -> void:
@@ -755,13 +761,13 @@ func _tree(st: SurfaceTool, at: Vector3) -> void:
 	MapView.box(st, Vector3(1.1, 1.1, 1.1), at + Vector3(0, 4.0, 0), crown)
 
 
-## A building as one block of its own paint (building_view.gd PAINTS, a little
+## A building as one block of its own paint (building_view.gd paint_for, a little
 ## darker), dark windows along it, lamp-lit ones where a stove is kept going,
 ## and a gable roof along its long side, snow-laden as far as snow lies.
 func _building(st: SurfaceTool, lamps: SurfaceTool, b: Dictionary, floors: int) -> void:
 	var roof: Color = ROOF.lightened(0.12).darkened(0.3 * wet).lerp(ROOF_SNOW, white)
 	var r: Rect2i = b["rect"]
-	var paint: Color = BuildingView.PAINTS[posmod(int(b.get("id", 0)), BuildingView.PAINTS.size())]
+	var paint: Color = BuildingView.paint_for(int(b.get("id", 0)))
 	var wall := Color(paint.r, paint.g, paint.b).darkened(0.28)
 	var h: float = 3.0 * floors - 0.3
 	var mid := Vector3(r.position.x + r.size.x * 0.5, 0.0, r.position.y + r.size.y * 0.5)
@@ -823,6 +829,8 @@ func _mesh(parent: Node3D, st: SurfaceTool, shadow: bool) -> MeshInstance3D:
 	node.mesh = st.commit()
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
+	# The colours are sRGB numbers, as the field's floors and every other material's are (mood C9).
+	mat.vertex_color_is_srgb = true
 	mat.roughness = 1.0
 	node.material_override = mat
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -885,8 +893,9 @@ func _place_camera() -> void:
 func _down_pose() -> Transform3D:
 	var focus := _down_focus()
 	var pitch: float = deg_to_rad(FIELD_PITCH_DEG)
+	var yaw: float = deg_to_rad(FIELD_YAW_DEG)
 	var dist: float = FIELD_VIEW_H * 0.5 / tan(deg_to_rad(DOWN_FOV * 0.5))
-	var at := focus + Vector3(0, sin(pitch), cos(pitch)) * dist
+	var at := focus + Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)) * dist
 	return Transform3D(Basis(), at).looking_at(focus, Vector3.UP)
 
 

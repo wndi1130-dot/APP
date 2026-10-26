@@ -318,6 +318,40 @@ func test_the_storm_screen_layer_is_drawn_small_and_stretched() -> void:
 	assert_eq(game.storm_port.render_target_update_mode, SubViewport.UPDATE_DISABLED, "off: not drawn at all")
 
 
+func test_the_ground_reads_streets_pavements_and_yards() -> void:
+	# 결정 469 C1·C4: picture only, the floor kinds stay as the map set them.
+	var MapView = load("res://game/world/map_view.gd")
+	var FieldGrid = load("res://game/world/field_grid.gd")
+	var F = FieldGrid.Floor
+	var g = FieldGrid.new(20, 12)
+	# A street five wide along x (z 2..6), a footpath two wide along z, a house wall.
+	for x in 20:
+		for z in range(2, 7):
+			g.floor[g.index(Vector2i(x, z))] = F.ROAD
+	for z in range(7, 12):
+		for x in range(10, 12):
+			g.floor[g.index(Vector2i(x, z))] = F.ROAD
+	for x in range(2, 6):
+		g.set_solid(Vector2i(x, 10), FieldGrid.Solid.WALL)
+	var floors: PackedByteArray = g.floor.duplicate()
+	var d: PackedFloat32Array = MapView.ground_details(g)
+	assert_eq(g.floor, floors, "the rules' floors are untouched")
+	var at := func(c: Vector2i) -> int: return int(d[g.index(c)])
+	assert_eq(at.call(Vector2i(3, 2)) & 15, 1, "kerb on the north side")
+	assert_eq(at.call(Vector2i(3, 6)) & 15, 4, "and on the south")
+	assert_eq(at.call(Vector2i(3, 4)) & 16, 16, "the centre line runs along x in the middle row")
+	assert_eq((at.call(Vector2i(3, 4)) >> 6) & 7, 2, "half way across the cell")
+	assert_eq(at.call(Vector2i(3, 3)) & 48, 0, "not beside it")
+	assert_eq(at.call(Vector2i(10, 9)) & 512, 512, "two wide: a footpath")
+	assert_eq(d[g.index(Vector2i(3, 1))], -1.0, "pavement beside the street, along it")
+	assert_eq(d[g.index(Vector2i(3, 7))], -1.0)
+	assert_eq(d[g.index(Vector2i(3, 0))], 0.0, "grass past the pavement")
+	assert_eq(at.call(Vector2i(10, 4)) & 48, 0, "no line where the footpath joins")
+	var corner: int = g.width * g.height
+	assert_gt(d[corner + 10 * (g.width + 1) + 3], 0.3, "soil at the wall's foot")
+	assert_eq(d[corner + 0 * (g.width + 1) + 15], 0.0, "none out in the yard")
+
+
 func test_snow_banks_against_walls_the_wind_blows_at() -> void:
 	# weather_fx 14.1: the ground rises at the foot of a wall on the wind's side.
 	var MapView = load("res://game/world/map_view.gd")

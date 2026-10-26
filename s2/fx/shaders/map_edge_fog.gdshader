@@ -46,7 +46,7 @@ void fragment() {
 	// seen now full, seen before dim, never seen dark), a little less in the
 	// dark, so the edge is never the brightest thing on the screen.
 	vec2 seen = texture(vis, world_pos.xz / map_size).rg;
-	float lit = max(max(seen.r, seen.g * 0.3 + 0.24), 0.45);
+	float lit = max(max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), 0.45);
 	col *= mix(1.0, lit, clamp(mask_on, 0.0, 1.0));
 	ALBEDO = fx_photo(col, fx_fade);
 	ROUGHNESS = 1.0;

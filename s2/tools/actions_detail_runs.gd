@@ -420,6 +420,10 @@ func _checks() -> int:
 	game.actions.search(p, id)
 	_check(p.action == "" and game.rng.state == dice and c["items"] == unchanged, "revisit does not reroll")
 	game.actions.take_all(p, id)
+	# Each thing comes out by its weight's time (card R1), one after another.
+	for i in range(c["items"].size() + 1):
+		if p.action == "take":
+			_finish_action(game, p)
 	_check(c["items"].is_empty(), "all valid revealed items are taken")
 	c["items"] = ["cloth"]
 	p.position = at + Vector3(3.0, 0, 0)

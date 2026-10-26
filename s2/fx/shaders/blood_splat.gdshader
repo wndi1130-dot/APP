@@ -84,7 +84,7 @@ void fragment() {
 	float lit = 1.0;
 	if (mask_on > 0.5) {
 		vec2 seen = texture(vis, world_pos.xz / map_size).rg;
-		lit = max(seen.r, seen.g * 0.3 + 0.24);
+		lit = max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g));
 	}
 	ALBEDO = fx_photo(col, fx_fade) * lit;
 	ROUGHNESS = mix(0.28, 0.92, dry);
