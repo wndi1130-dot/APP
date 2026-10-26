@@ -61,8 +61,9 @@ static func forecast(g: Dictionary, t: Dictionary) -> Dictionary:
 	var p: Dictionary = t["P"]
 	var run := float(p["coalStrike"]) if bool(g["inStrike"]) else float(p["coalRun"])
 	var coal := heat_cost(g, t) * St.law_mult(g, t, "heatMult") + St.law_sum(g, t, "coalAdd") + St.calm_coal(g, t) + run \
-		- (2.0 if bool(g["forcedRun"]) else 0.0) + (float(p["tailIdleCoal"]) if tail_idle(g) else 0.0) + St.loco_coal(g, t) + TrainHands.hands_coal(g, t)
-	var food := food_cost(g, t) + St.law_sum(g, t, "foodAdd")
+		- (2.0 if bool(g["forcedRun"]) else 0.0) + (float(p["tailIdleCoal"]) if tail_idle(g) else 0.0) + St.loco_coal(g, t) \
+		+ TrainClimate.freeze_coal(g, t) + TrainHands.hands_coal(g, t)
+	var food := food_cost(g, t) * (1.0 + TrainClimate.freeze_food(g, t)) + St.law_sum(g, t, "foodAdd")
 	if g.has("nextCardUid") and g.get("hands") is Dictionary:
 		coal += float(t["HANDS"]["stokerCoal"]) * float(g["hands"]["short"]["stoker"])
 	return {"coal": 0.0 if g.get("stranded") != null else coal + dom_coal(g), "food": food + dom_food(g)}
@@ -86,10 +87,17 @@ static func dom_food(g: Dictionary) -> float:
 static func forecast_parts(g: Dictionary, t: Dictionary) -> Dictionary:
 	var p: Dictionary = t["P"]
 	var coal: Array = [["run", (float(p["coalStrike"]) if bool(g["inStrike"]) else float(p["coalRun"])) - (2 if bool(g["forcedRun"]) else 0)], ["idle", float(p["tailIdleCoal"]) if tail_idle(g) else 0], ["heat", heat_cost(g, t) * St.law_mult(g, t, "heatMult") + St.law_sum(g, t, "coalAdd")], ["calm.pot", St.calm_coal(g, t)], ["disaster", 0], ["loco", St.loco_coal(g, t)]]
+	# The track freeze's rows (train_climate.gd) only while it is frozen, as S1's.
+	var freeze_coal: float = TrainClimate.freeze_coal(g, t)
+	if freeze_coal != 0: coal.append(["freeze", freeze_coal])
 	var hands_coal: float = float(t["HANDS"]["stokerCoal"]) * TrainHands.hand_short(g, "stoker")
 	if hands_coal != 0: coal.append(["hands", hands_coal])
 	coal.append(["upkeep", dom_coal(g)])
-	return {"coal": coal, "food": [["ration", food_cost(g, t) + St.law_sum(g, t, "foodAdd")], ["upkeep", dom_food(g)]]}
+	var food: Array = [["ration", food_cost(g, t) + St.law_sum(g, t, "foodAdd")]]
+	var freeze_food: float = TrainClimate.freeze_food(g, t)
+	if freeze_food != 0: food.append(["freeze", food_cost(g, t) * freeze_food])
+	food.append(["upkeep", dom_food(g)])
+	return {"coal": coal, "food": food}
 
 
 static func seg_km_of(g: Dictionary, t: Dictionary, seg: int = -1) -> float:

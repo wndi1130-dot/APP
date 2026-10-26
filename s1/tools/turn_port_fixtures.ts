@@ -1,6 +1,7 @@
 // S1a 한 바퀴의 전체 JSON 전/후. 규칙은 S1에서 직접 실행한다.
-// --climate: 같은 씨앗을 바깥 기온 켠 판(enableClimate, 결빙 CL.freezeOn 0)으로 돌려 turn_vectors_climate.json에 쓴다
-// (S2 기온 이식 train_climate.gd의 맞대기. 결빙은 다음 이식에서 따로).
+// --climate: 같은 씨앗을 바깥 기온 켠 판(enableClimate, 결빙 켬 CL.freezeOn 1)으로 돌려 turn_vectors_climate.json에 쓴다
+// (S2 기온·선로 결빙 이식 train_climate.gd의 맞대기). 서막 30걸음 안에는 결빙이 안 서서, 결빙이 서는 17구간 출발부터
+// 풀릴 때까지를 판 하나(turn-climate-freeze)로 더 돌린다.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import * as S1 from '../src/game';
@@ -30,9 +31,11 @@ export function tables(): Record<string, unknown> {
   return plain(out);
 }
 
-function play(seed: string, limit: number, climate = false) {
+/** setup은 기온을 켠 뒤 판을 고친다. until이 참이 되는 걸음에서 멈춘다(그 걸음까지 적는다). */
+function play(seed: string, limit: number, climate = false, setup?: (g: Game) => void, until?: (before: Game, after: Game) => boolean) {
   const g = S1.createGame(seed);
   if (climate) S1.enableClimate(g);
+  setup?.(g);
   const steps = [];
   for (let step = 0; step < limit && g.phase !== 'end'; step += 1) {
     const before = plain(g);
@@ -58,6 +61,7 @@ function play(seed: string, limit: number, climate = false) {
     }
     if (g.dom || g.dark) throw new Error('S1a 밖의 표본');
     steps.push({ seed, step, action, before, after: plain(g), agenda });
+    if (until?.(before, g)) break;
   }
   return { seed, steps, finalPhase: g.phase, ended: g.phase === 'end' };
 }
@@ -137,7 +141,7 @@ export function turnVectors() {
 }
 
 /** 기온 켠 판의 출발 표본: 서막 30걸음 안에는 계절표가 한 번 풀리기만 하므로(3구간 첫 추위 → 늦가을), 추워지는 출발
- * (17구간 늦가을 → 첫 추위), 단계가 그대로인 출발, 정기 한파 구간(winterEvery)의 출발을 따로 만든다. 부르는 쪽이 결빙을 끈다. */
+ * (17구간 늦가을 → 첫 추위 — 늦가을이 젖은 단계라 선로가 언다), 단계가 그대로인 출발, 정기 한파 구간(winterEvery)의 출발을 따로 만든다. */
 function climateParts() {
   const parts: { name: string; action: Action; before: Game; after: Game }[] = [];
   const cases: [string, number, number][] = [['drop', 17, 0], ['same', 5, 0], ['winter', S1.P.winterEvery, S1.stageAt(S1.P.winterEvery)]];
@@ -153,23 +157,32 @@ function climateParts() {
   return parts;
 }
 
-/** 기온 켠 판(결빙 끔)의 같은 네 씨앗과 출발 표본 */
+/** 결빙 판: 17구간 늦가을에서 떠나 선로가 얼고(석탄 +1, 식량 +반나절, 선로 사건 두 배), 그 구간 정산 끝에 풀릴 때까지 */
+const FREEZE_SEED = 'turn-climate-freeze';
+function freezeRun(limit: number) {
+  return play(FREEZE_SEED, limit, true, g => { g.seg = 17; g.outside = 0; },
+    (before, after) => (before.freeze ?? 0) > 0 && (after.freeze ?? 0) === 0);
+}
+
+function climateRuns(limit: number) {
+  return [...SEEDS.map(seed => play(seed, limit, true)), freezeRun(limit)];
+}
+
+/** 기온 켠 판(결빙 켬)의 같은 네 씨앗, 결빙 판 하나, 출발 표본 */
 export function climateVectors() {
-  if (S1.CL.freezeOn) throw new Error('F-INPUT: 결빙을 끄고 부른다');
-  const runs = SEEDS.map(seed => play(seed, MAX_STEPS, true));
-  return { format: 'turn-vectors-climate-v1', seeds: SEEDS, maxSteps: MAX_STEPS, freezeOn: 0, tables: tables(), runs, parts: climateParts() };
+  if (!S1.CL.freezeOn) throw new Error('F-INPUT: 결빙을 켜고 부른다');
+  return { format: 'turn-vectors-climate-v2', seeds: [...SEEDS, FREEZE_SEED], maxSteps: MAX_STEPS, freezeOn: S1.CL.freezeOn, tables: tables(), runs: climateRuns(MAX_STEPS), parts: climateParts() };
 }
 
 function main(): void {
   const climate = process.argv.includes('--climate');
-  if (climate) S1.CL.freezeOn = 0;
   const out = resolve(import.meta.dirname, `../../s2/tests/fixtures/train/${climate ? 'turn_vectors_climate' : 'turn_vectors'}.json`);
   const data = climate ? climateVectors() : turnVectors();
   let bytes = Buffer.from(`${JSON.stringify(data)}\n`, 'utf8');
   // 씨앗 네 개는 보존하고 걸음만 줄인다. 줄인 길이는 파일과 실행 출력에 남긴다.
   while (bytes.length > LIMIT && data.maxSteps > 1) {
     data.maxSteps -= 1;
-    data.runs = SEEDS.map(seed => play(seed, data.maxSteps, climate));
+    data.runs = climate ? climateRuns(data.maxSteps) : SEEDS.map(seed => play(seed, data.maxSteps));
     bytes = Buffer.from(`${JSON.stringify(data)}\n`, 'utf8');
   }
   if (bytes.length > LIMIT) throw new Error('F-FIXTURE-SIZE: 한 걸음도 30 MiB를 넘는다');
