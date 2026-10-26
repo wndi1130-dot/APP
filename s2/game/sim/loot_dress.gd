@@ -9,7 +9,8 @@ extends RefCounted
 ##
 ## Rolled once from the run's seed, like the pockets: same seed, same stop. The
 ## map's numbers are not changed: a building ends with the same bundles it
-## started with (the finds are added on top, each listed in the PR's new values).
+## started with (the finds are added on top, each listed in the PR's new values),
+## save the few moved between buildings to keep a promised share (PROMISES).
 ## Untouched: a stop goal's box ("pick"), the fixed boxes the story leans on
 ## (loot_tables.gd FIXED, only named), locked ones (only named; a named find may
 ## go in one), and boxes standing in no building (only named).
@@ -75,6 +76,16 @@ const CAP: int = 6
 ## its name can weigh (a sack of oats, a picture: 1.5), as it is named after it
 ## is dealt: six food bundles named sacks are 9 in a jar shelf that takes 8.
 const NAMED_MOST: float = 1.5
+## Promised shares (card S1, decision 442): of a stop's buildings of these kinds, this
+## share holds one bundle of the family at least, so a shop holds what it sells. The
+## share of their count is kept, and the part of one is rolled. Nothing is added: the
+## bundle is moved from a building of the stop holding two or more (one of the same
+## kinds first), so the stop's load stays what it was; with none to spare, none is
+## moved. Within one stop: nothing is counted from one stop to the next yet.
+const PROMISES: Array = [
+	{"family": "food", "kinds": ["grocery", "bakery", "fish", "cold"], "share": 0.7},
+	{"family": "med", "kinds": ["pharmacy", "clinic"], "share": 0.7},
+]
 
 ## What a building is, from the words of its name (first that matches). Only the
 ## naming and the finds read it.
@@ -498,6 +509,7 @@ static func dress(data: Dictionary, seed: int) -> Dictionary:
 		if not by_building.has(b):
 			by_building[b] = []
 		(by_building[b] as Array).append(id)
+	report["promised"] = _keep_promises(containers, buildings, by_building, seed)
 	for b: int in by_building:
 		report["moved"] += _deal(containers, by_building[b], _rng(seed, "deal:%d" % b))
 	# 1b. The rare store, if the stop has one, is filled anew (its own dice).
@@ -576,6 +588,86 @@ static func _deal(containers: Dictionary, ids: Array, rng: RandomNumberGenerator
 		if to != row[1]:
 			moved += 1
 	return moved
+
+
+## The promised shares (PROMISES), before the boxes are dealt. Returns, for each
+## family, [buildings of the kinds, how many must hold it, how many did, bundles moved].
+static func _keep_promises(containers: Dictionary, buildings: Array, by_building: Dictionary, seed: int) -> Dictionary:
+	var out := {}
+	var all: Array = by_building.keys()
+	all.sort()
+	for p: Dictionary in PROMISES:
+		var family := String(p["family"])
+		var rng := _rng(seed, "promise:" + family)
+		var mine: Array = []
+		for b: int in all:
+			if (p["kinds"] as Array).has(_building_kind_of(buildings, containers[by_building[b][0]])):
+				mine.append(b)
+		var exact := float(p["share"]) * mine.size()
+		var wanted := floori(exact) + (1 if rng.randf() < exact - floorf(exact) else 0)
+		var bare: Array = []
+		for b: int in mine:
+			if _held(containers, by_building[b], family) == 0:
+				bare.append(b)
+		var held := mine.size() - bare.size()
+		# Which bare ones get it: shuffled, so it is not always the first on the map.
+		for i in range(bare.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var t: int = bare[i]
+			bare[i] = bare[j]
+			bare[j] = t
+		var others: Array = all.filter(func(b: int) -> bool: return not mine.has(b))
+		var moved := 0
+		for b: int in bare:
+			if held + moved >= wanted:
+				break
+			var from := _spare(containers, by_building, mine, family)
+			if from.is_empty():
+				from = _spare(containers, by_building, others, family)
+			if from.is_empty():
+				break
+			# Fresh lists: a map may hand out the same list (or a read-only one) twice.
+			var left: Array = (containers[from[0]]["items"] as Array).duplicate()
+			left.remove_at(int(from[1]))
+			containers[from[0]]["items"] = left
+			var to: String = by_building[b][0]
+			containers[to]["items"] = (containers[to]["items"] as Array) + [String(from[2])]
+			moved += 1
+		out[family] = [mine.size(), wanted, held, moved]
+	return out
+
+
+## How many things of the family these boxes hold (a bundle or a thing named from one).
+static func _held(containers: Dictionary, ids: Array, family: String) -> int:
+	var n := 0
+	for id: String in ids:
+		for item in containers[id].get("items", []):
+			var s := String(item)
+			var from := String(FieldItems.row(s).get("from", s)) if FieldItems.has(s) else s
+			if String(FAMILY.get(from, "")) == family:
+				n += 1
+	return n
+
+
+## A bundle of the family that one of these buildings can spare (it holds two or
+## more; the one holding most first): [box, index, bundle], or [] when none can.
+static func _spare(containers: Dictionary, by_building: Dictionary, among: Array, family: String) -> Array:
+	var best: Array = []
+	var most := 1
+	for b: int in among:
+		var n := _held(containers, by_building[b], family)
+		if n <= most:
+			continue
+		for id: String in by_building[b]:
+			var items: Array = containers[id].get("items", [])
+			for i in range(items.size()):
+				if String(FAMILY.get(String(items[i]), "")) == family:
+					best = [id, i, String(items[i])]
+					most = n
+					break
+			if not best.is_empty() and most == n:
+				break
+	return best
 
 
 ## What a thing weighs while the boxes are dealt: a bundle at the most its name can.

@@ -28,6 +28,16 @@ const JUNK: Dictionary = {
 	"storage": [["junk_nails", 0.08], ["junk_paper", 0.05]],
 }
 const JUNK_MOST: int = 2
+## How many boxes of a room the odds and ends are reckoned for (card R2, decision
+## 469): what a room of its kind holds now, about (the stops' 75th percentile of
+## boxes in one room of one building, 2026-10-27). A room with more boxes than
+## this does not get more odds and ends — each box's chance shrinks so the room
+## keeps what it would have — so cutting a room's furniture into smaller boxes
+## does not grow the stop's load.
+const ROOM_BOXES: Dictionary = {
+	"kitchen": 14, "pantry": 4, "bedroom": 4, "bathroom": 2, "clinic": 3,
+	"toolbox": 2, "shop": 2, "office": 4, "hall": 8, "storage": 2,
+}
 ## A looted house (spill_looted): at most this many lie tipped out on its floors,
 ## each within this of its cell's middle (the reference's 0.2~0.8 of a square).
 const SPILL_MOST: int = 4
@@ -44,22 +54,38 @@ static func strew(containers: Dictionary, seed: int, rooms: Dictionary) -> int:
 	rng.seed = ("%d:dress:junk" % seed).hash()
 	var ids: Array = containers.keys()
 	ids.sort()
+	# The boxes of each room of each building, so a room's share is spread over them.
+	var in_room: Dictionary = {}
+	for id: String in ids:
+		if _strewn(id, containers[id]):
+			var key := _room_key(containers[id], rooms, id)
+			in_room[key] = int(in_room.get(key, 0)) + 1
 	var put := 0
 	for id: String in ids:
 		var c: Dictionary = containers[id]
-		if c.has("pick") or LootTables.FIXED.has(id) or bool(c.get("locked", false)) or int(c.get("building", -1)) < 0:
+		if not _strewn(id, c):
 			continue
-		var rows: Array = JUNK.get(String(rooms.get(id, "")), [])
+		var room := String(rooms.get(id, ""))
+		var rows: Array = JUNK.get(room, [])
+		var share := minf(1.0, float(ROOM_BOXES.get(room, 1)) / float(maxi(1, int(in_room[_room_key(c, rooms, id)]))))
 		var here := 0
 		for row: Array in rows:
 			# Every row is rolled, so the dice do not hang on what came before.
-			if rng.randf() < float(row[1]) and here < JUNK_MOST:
+			if rng.randf() < float(row[1]) * share and here < JUNK_MOST:
 				var items: Array = (c.get("items", []) as Array).duplicate()
 				items.append(String(row[0]))
 				c["items"] = items
 				here += 1
 		put += here
 	return put
+
+
+static func _strewn(id: String, c: Dictionary) -> bool:
+	return not (c.has("pick") or LootTables.FIXED.has(id) or bool(c.get("locked", false)) or int(c.get("building", -1)) < 0)
+
+
+static func _room_key(c: Dictionary, rooms: Dictionary, id: String) -> String:
+	return "%d|%s" % [int(c.get("building", -1)), String(rooms.get(id, ""))]
 
 
 ## What a looted house leaves on its floors (결정 카드 J 가, 차이 7-②). The room
