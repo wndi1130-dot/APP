@@ -83,7 +83,14 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 		"have": int(float((dom.get("frags", {}) as Dictionary).get(branch, 0))),
 		"variant": String(def["variants"][st["variant"]]["name"]) if st.get("variant") != null and def.has("variants") else "",
 		"effect": _effect(id, st.get("variant")), "ways": [], "word": "", "can": false, "why": "", "cost": [],
+		# What it takes from the stores each stretch while it runs, and whether
+		# they could not pay it last stretch (it ran at half: Research.mult).
+		"upkeep": [], "starved": bool(st.get("starved", false)),
 	}
+	var upkeep: Dictionary = Research.upkeep_of(g0, id)
+	for key: String in ["parts", "wood", "scrap"]:
+		if float(upkeep.get(key, 0)) > 0.0:
+			r["upkeep"].append({"key": key, "icon": ICON[key], "n": float(upkeep[key])})
 	if stage == "new":
 		# S1 offers the defective plate only when the full one cannot be had (restoreCheck).
 		var mode: String = "defect" if check.get("full") != null and check.get("defect") == null else "full"
@@ -246,10 +253,12 @@ func _row(r: Dictionary, top: float) -> void:
 		_pips(id, int(r["have"]), int(r["need"]), top)
 		_cost(r["cost"], top + 40.0, "Cost_" + id, 44.0 + (14.0 * int(r["need"]) + 10.0 if int(r["need"]) > 0 else 0.0))
 	else:
-		_add(_mark("check", 13.0, Vector2(44.0, top + 28.0), INK2 if stage == "done" else ACCENT))
-		var said := UiFonts.label(("½ " if stage == "defective" else "") + String(r["effect"]), UiFonts.WORD, 400, 12.0, INK2, 0.52)
+		var half: bool = stage == "defective" or bool(r["starved"])
+		_add(_mark("check", 13.0, Vector2(44.0, top + 28.0), ACCENT if half else INK2))
+		var said := UiFonts.label(("½ " if half else "") + String(r["effect"]), UiFonts.WORD, 400, 12.0, INK2, 0.52)
 		said.name = "Effect_" + id
 		_text(said, 62.0, top + 40.0)
+		_upkeep(r, top)
 	if String(r["word"]) == "":
 		return
 	var cancelling: bool = _cancelling == id
@@ -259,6 +268,24 @@ func _row(r: Dictionary, top: float) -> void:
 	key.size = Vector2(KEY_W, KEY_H) * k
 	key.tooltip_text = String(r["why"])
 	key.pressed.connect(func() -> void: _press(r, key))
+
+
+## A running technology's upkeep a stretch where its key would stand: each
+## store's mark and amount, red when the stores could not pay it.
+func _upkeep(r: Dictionary, top: float) -> void:
+	var k: float = UiFonts.K
+	var x: float = 316.0
+	var upkeep: Array = r["upkeep"]
+	for i in range(upkeep.size() - 1, -1, -1):
+		var u: Dictionary = upkeep[i]
+		var color: Color = RED if bool(r["starved"]) else INK2
+		var n := UiFonts.label(str(snappedf(float(u["n"]), 0.01)), UiFonts.NUMBER, 400, 13.0, color, 0.52)
+		n.name = "Upkeep_%s_%s" % [r["id"], u["key"]]
+		x -= GlassParts.text_w(n) / k
+		_text(n, x, top + 26.0)
+		x -= 19.0
+		_add(_mark(String(u["icon"]), 15.0, Vector2(x, top + 13.0), color))
+		x -= 10.0
 
 
 ## The ways a restoration can go, a full key each, in the row's place (its
