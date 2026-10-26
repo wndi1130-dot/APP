@@ -37,15 +37,16 @@ vec3 floor_to_linear(vec3 c) {
 // gutter and a worn centre line, concrete pavements and footpaths, the platform
 // in long slabs with a stripe at the edge, gravel speckled.
 // The colours are sRGB, like the floor colours, set by real reflectance (linear
-// luminance; measured albedos in brackets): dry grass 0.22 (green grass 0.25),
+// luminance; measured albedos in brackets): dry grass 0.19 (green grass 0.25),
 // faded green 0.17, soil 0.16 (bare soil 0.17), aged asphalt 0.11 (worn 0.12),
-// concrete 0.32 (new 0.55, weathered lower), gravel 0.24. Table and sources:
+// concrete 0.39 (new 0.55, weathered lower), gravel 0.24. Light pavement, mid
+// grass and soil, dark road: the ground reads in grey alone. Table and sources:
 // docs/art/material_values.md.
-const vec3 DRY_GRASS = vec3(0.57, 0.50, 0.32);
+const vec3 DRY_GRASS = vec3(0.54, 0.47, 0.30);
 const vec3 OLD_GREEN = vec3(0.44, 0.48, 0.29);
 const vec3 SOIL = vec3(0.50, 0.41, 0.31);
 const vec3 ASPHALT = vec3(0.37, 0.37, 0.38);
-const vec3 CONCRETE = vec3(0.60, 0.59, 0.56);
+const vec3 CONCRETE = vec3(0.66, 0.65, 0.62);
 const vec3 LINE_PAINT = vec3(0.76, 0.64, 0.30);
 const vec3 GRAVEL = vec3(0.55, 0.52, 0.47);
 
@@ -174,7 +175,8 @@ void fragment() {
 	base = floor_to_linear(base);
 	float soil = mix(grain.a, grain.b, clamp(wet * 1.4, 0.0, 1.0));
 	// Laid surfaces (road, platform, pavement) take less of the soil's blotches.
-	float laid = (kind == 1 || kind == 2 || ground_detail < -0.5) ? 0.4 : 1.0;
+	// Grass a little less than before, so the blotches do not break the forms.
+	float laid = (kind == 1 || kind == 2 || ground_detail < -0.5) ? 0.35 : 0.7;
 	base *= 1.0 + (soil - 0.5) * 1.3 * ground_k * wander * mix(1.0, laid, bare_k);
 	base *= 1.0 - 0.35 * wet;
 	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));
