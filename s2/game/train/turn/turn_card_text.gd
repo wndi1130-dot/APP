@@ -9,6 +9,7 @@ extends RefCounted
 
 const St = preload("res://game/train/train_state.gd")
 const TurnCards = preload("res://game/train/turn/turn_cards.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 
 const RES_NAME: Dictionary = {"coal": "석탄", "food": "식량", "med": "의약품", "lux": "사치품", "trust": "신임",
 	"tension": "긴장", "fear": "공포", "injured": "부상자"}
@@ -290,16 +291,27 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 			says.append_array(["솥을 다시 열어라. 줄 끝까지 한 그릇씩 간다.",
 				"조용하면 됐다. 경비대는 그대로 선다." if _was(past, "guard_line") else "경비대를 줄 옆에 세워라. 질서가 먼저다."])
 		"guard_frost":
-			# S1a keeps the climate off, so the frost always holds (climate.ts seasonHolds).
+			# Where ice does not stand on a climate board (late autumn) the post is
+			# soaked by cold rain, not frostbitten; the values are the same (S1
+			# seasonHolds; climate off: the frost always holds).
+			var frost: bool = TrainClimate.holds(g, t, "frost")
+			out["title"] = "동상" if frost else "젖은 보초"
 			out["speaker"] = _leader(g, t, "guard")
 			out["focus"] = "guard"
-			out["body"] = _again(past, "지붕 경계를 서던 대원 둘이 동상을 입었다. 교대를 줄여 달라고 한다.", {
-				"hold_post": "지난번 지붕에 섰던 대원 하나가 발가락 둘을 잃었다. 경비대가 지붕 교대를 거부하겠다고 한다.",
-				"watch_less": "경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 동상을 입었다.",
-				"guard_heat": "경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 바람은 여전히 살을 엔다.",
-			}, "지붕 경계 대원들이 또 동상을 입었다.")
+			if frost:
+				out["body"] = _again(past, "지붕 경계를 서던 대원 둘이 동상을 입었다. 교대를 줄여 달라고 한다.", {
+					"hold_post": "지난번 지붕에 섰던 대원 하나가 발가락 둘을 잃었다. 경비대가 지붕 교대를 거부하겠다고 한다.",
+					"watch_less": "경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 동상을 입었다.",
+					"guard_heat": "경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 바람은 여전히 살을 엔다.",
+				}, "지붕 경계 대원들이 또 동상을 입었다.")
+			else:
+				out["body"] = _again(past, "지붕 경계를 서던 대원 둘이 찬비에 흠뻑 젖어 이가 맞부딪힌다. 교대를 줄여 달라고 한다.", {
+					"hold_post": "지난번 지붕에 섰던 대원 하나가 열이 올라 일어나지 못한다. 경비대가 지붕 교대를 거부하겠다고 한다.",
+					"watch_less": "경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 젖은 채 떨었다.",
+					"guard_heat": "경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 찬비는 그대로다.",
+				}, "지붕 경계 대원들이 또 젖은 채 떨었다.")
 			says.append_array(["경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.", "얼어 죽은 보초는 아무것도 못 본다. 지붕에서 내려와라.",
-				"거부는 없다. 지붕이 비면 다 같이 죽는다." if _was(past, "hold_post") else "경계는 줄이지 않는다. 장갑을 두 겹 껴라."])
+				"거부는 없다. 지붕이 비면 다 같이 죽는다." if _was(past, "hold_post") else ("경계는 줄이지 않는다. 장갑을 두 겹 껴라." if frost else "경계는 줄이지 않는다. 젖은 옷은 교대 때마다 갈아입어라.")])
 
 
 static func _demand(g: Dictionary, t: Dictionary, c: String, out: Dictionary, says: Array) -> void:
