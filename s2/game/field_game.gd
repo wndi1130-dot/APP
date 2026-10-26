@@ -13,6 +13,7 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
+const SidePath = preload("res://game/world/side_path.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -382,7 +383,9 @@ func _ready() -> void:
 	if opts.get("map_data") is Dictionary:
 		_take_map(opts["map_data"])
 	else:
-		_take_map(FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+		var built: Dictionary = FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
+		# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd).
+		_take_map(SidePath.add(built, rng.seed))
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
@@ -2742,6 +2745,9 @@ func finish(reason: String) -> void:
 	# A hidden core looked at without the engine hand (field_unified 3장): one line, a reason to bring them.
 	if String(data["spots"].get(CoreScenes.SPOT, {}).get("state", "")) == "seen_hidden":
 		receipt.place_note("coreHint", true)
+	# The side path's rare store goes on the receipt only when someone got to it.
+	if SidePath.visited(data):
+		receipt.place_note("sidePath", "rareStore")
 	if mission != "":
 		receipt.place_note("mission", mission)
 	mission_play.finish(reason)
