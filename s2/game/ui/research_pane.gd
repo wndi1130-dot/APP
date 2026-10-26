@@ -106,7 +106,14 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 		"law": law_tag(id, st.get("variant")) if LAW_TAGGED.has(id) else "",
 		"law_on": LawTech.law_standing(g0, id, st.get("variant")),
 		"use": LawTech.use_line(g0, id, st.get("variant")) if LAW_TAGGED.has(id) else "",
+		# What it takes from the stores each stretch while it runs, and whether
+		# they could not pay it last stretch (it ran at half: Research.mult).
+		"upkeep": [], "starved": bool(st.get("starved", false)),
 	}
+	var upkeep: Dictionary = Research.upkeep_of(g0, id)
+	for key: String in ["parts", "wood", "scrap"]:
+		if float(upkeep.get(key, 0)) > 0.0:
+			r["upkeep"].append({"key": key, "icon": ICON[key], "n": float(upkeep[key])})
 	if stage == "new":
 		# S1 offers the defective plate only when the full one cannot be had (restoreCheck).
 		var mode: String = "defect" if check.get("full") != null and check.get("defect") == null else "full"
@@ -307,8 +314,13 @@ func _row(r: Dictionary, top: float) -> void:
 	word.name = "Name_" + id
 	_text(word, 64.0, top + 18.0)
 	var law_x1: float = 226.0 if String(r["word"]) != "" else 312.0
-	var tagged: bool = _law(r, top + 18.0, 64.0 + GlassParts.text_w(word) / k + 8.0, law_x1)
 	var stage: String = String(r["stage"])
+	# A running technology's upkeep stands where its key would; the name line's
+	# law tag stops short of it (the line under the name has the width).
+	var name_x1: float = law_x1
+	if not bool(r["active"]) and stage != "new" and not (r["upkeep"] as Array).is_empty():
+		name_x1 = minf(law_x1, _upkeep(r, top) - 8.0)
+	var tagged: bool = _law(r, top + 18.0, 64.0 + GlassParts.text_w(word) / k + 8.0, name_x1)
 	# Where the line under the name ends, for a tag the name line had no room for.
 	var under_x: float = 0.0
 	if bool(r["active"]):
@@ -318,8 +330,9 @@ func _row(r: Dictionary, top: float) -> void:
 		_pips(id, int(r["have"]), int(r["need"]), top)
 		under_x = _cost(r["cost"], top + 40.0, "Cost_" + id, 44.0 + (14.0 * int(r["need"]) + 10.0 if int(r["need"]) > 0 else 0.0))
 	else:
-		_add(_mark("check", 13.0, Vector2(44.0, top + 28.0), INK2 if stage == "done" else ACCENT))
-		var said := UiFonts.label(("½ " if stage == "defective" else "") + String(r["effect"]), UiFonts.WORD, 400, 12.0, INK2, 0.52)
+		var half: bool = stage == "defective" or bool(r["starved"])
+		_add(_mark("check", 13.0, Vector2(44.0, top + 28.0), ACCENT if half else INK2))
+		var said := UiFonts.label(("½ " if half else "") + String(r["effect"]), UiFonts.WORD, 400, 12.0, INK2, 0.52)
 		said.name = "Effect_" + id
 		_text(said, 62.0, top + 40.0)
 		under_x = 62.0 + GlassParts.text_w(said) / k
@@ -354,6 +367,26 @@ func _law(r: Dictionary, base: float, x0: float, x1: float) -> bool:
 			return true
 		tag.free()
 	return false
+
+
+## A running technology's upkeep a stretch where its key would stand: each
+## store's mark and amount, red when the stores could not pay it. Returns
+## where it starts (CSS px), so the name line's law tag stops short of it.
+func _upkeep(r: Dictionary, top: float) -> float:
+	var k: float = UiFonts.K
+	var x: float = 316.0
+	var upkeep: Array = r["upkeep"]
+	for i in range(upkeep.size() - 1, -1, -1):
+		var u: Dictionary = upkeep[i]
+		var color: Color = RED if bool(r["starved"]) else INK2
+		var n := UiFonts.label(str(snappedf(float(u["n"]), 0.01)), UiFonts.NUMBER, 400, 13.0, color, 0.52)
+		n.name = "Upkeep_%s_%s" % [r["id"], u["key"]]
+		x -= GlassParts.text_w(n) / k
+		_text(n, x, top + 26.0)
+		x -= 19.0
+		_add(_mark(String(u["icon"]), 15.0, Vector2(x, top + 13.0), color))
+		x -= 10.0
+	return x + 10.0
 
 
 ## The ways a restoration can go, a full key each, in the row's place (its

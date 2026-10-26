@@ -274,3 +274,23 @@ func test_the_slice_opens_the_research_room() -> void:
 	await wait_process_frames(1)
 	assert_false(is_instance_valid(f.research))
 	assert_eq(f.sel, was, "folding brings back the car picked before the rooms")
+
+
+## A running technology shows what it takes a stretch where its key would be;
+## when the stores could not pay it, the amount turns red and it runs at ½.
+func test_a_running_technology_shows_its_upkeep_and_when_it_starves() -> void:
+	var g := _game()
+	g["dom"]["techs"]["e2"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
+	var r: Dictionary = ResearchPane.model(g, ["e2"])["rows"][0]
+	assert_eq(r["upkeep"], [{"key": "parts", "icon": "gear", "n": 0.25}])
+	assert_false(bool(r["starved"]))
+	var p := _pane(g, ["e2"])
+	var n := p.find_child("Upkeep_e2_parts", true, false) as Label
+	assert_eq(n.text, "0.25")
+	assert_false((p.find_child("Effect_e2", true, false) as Label).text.begins_with("½"))
+	g["dom"]["techs"]["e2"]["starved"] = true
+	var p2 := _pane(g, ["e2"])
+	assert_true((p2.find_child("Effect_e2", true, false) as Label).text.begins_with("½ "), "it runs at half")
+	assert_eq((p2.find_child("Upkeep_e2_parts", true, false) as Label).get_theme_color("font_color"), ResearchPane.RED)
+	g["dom"]["techs"]["e5"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
+	assert_null(_pane(g, ["e5"]).find_child("Upkeep_e5_parts", true, false), "no upkeep, nothing drawn")
