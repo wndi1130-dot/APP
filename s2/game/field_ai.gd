@@ -7,6 +7,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const W = preload("res://game/sim/weapons.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const FieldCombat = preload("res://game/field_combat.gd")
+const SearchRules = preload("res://game/sim/search_rules.gd")
 
 const FOLLOW_OFFSETS: Array = [Vector2(-1.3, -1.2), Vector2(1.3, -1.2), Vector2(0.0, -2.4)]
 const THINK: float = 0.25
@@ -1030,7 +1031,8 @@ func _help_near() -> Array:
 	var lv: int = game.level_of(player.position)
 	for id in game.data["containers"]:
 		var c: Dictionary = game.data["containers"][id]
-		if c["searched"] or c["locked"] or c.get("busy", false) or c.has("pick") or int(c.get("level", 0)) != lv:
+		# A box that shows it is empty is not worth the stop (card P3, decision 472).
+		if c["searched"] or c["locked"] or c.get("busy", false) or c.has("pick") or int(c.get("level", 0)) != lv or SearchRules.shows_empty(c):
 			continue
 		var d: float = _spot_of(c).distance_to(player.position)
 		if d < HELP_R:
@@ -1110,7 +1112,7 @@ func _search_near(p, around: Vector3) -> bool:
 	var best_d := 9.0
 	for id in game.data["containers"]:
 		var c: Dictionary = game.data["containers"][id]
-		if c["searched"] or c["locked"] or c.get("busy", false):
+		if c["searched"] or c["locked"] or c.get("busy", false) or SearchRules.shows_empty(c):
 			continue
 		var d: float = FieldGrid.center(c["cell"]).distance_to(around)
 		if d < best_d:

@@ -11,6 +11,14 @@ const COMPANION_LIMIT := 1
 ## counter or a crate (and a box of its own) three — whatever the map's seconds.
 ## The look is short; the time goes into what is taken (take_seconds).
 const SIZE_SECONDS: Dictionary = {Carry.BOX_SMALL: 0.5, Carry.BOX_MID: 1.5, Carry.BOX_BIG: 3.0}
+## What stands open with no door — shelves, racks, an open fridge, a bench top —
+## shows what it holds at a glance, so it opens as a small cabinet does, however
+## much it takes (decision 472, with card P3).
+const SEE_THROUGH: Array = [
+	"towel_shelf", "small_shelf", "bookcase", "jar_shelf", "record_shelf_row", "hymn_shelf", "lamp_shelf",
+	"evidence_shelf", "bread_rack", "mail_sorting_rack", "shelf", "display_shelf", "fridge_open",
+	"workbench", "tool_bench", "hardware_rack", "parts_rack", "cloth_bolt_rack",
+]
 ## Taking a thing out of a box (card R1 가): this many seconds a unit of weight,
 ## never more than TAKE_MOST for one thing.
 const TAKE_PER_WEIGHT := 0.6
@@ -21,8 +29,11 @@ static func seconds(base: float, skill: int) -> float:
 	return maxf(base, 0.0) / (1.0 + SKILL_STEP * maxi(skill, 0))
 
 
-## A box's own seconds before the searcher's skill: by its size.
+## A box's own seconds before the searcher's skill: by its size, or a small
+## cabinet's when it stands open.
 static func box_seconds(c: Dictionary) -> float:
+	if SEE_THROUGH.has(String(c.get("furniture", ""))):
+		return float(SIZE_SECONDS[Carry.BOX_SMALL])
 	return float(SIZE_SECONDS.get(Carry.box_limit(c), SIZE_SECONDS[Carry.BOX_BIG]))
 
 
@@ -43,6 +54,14 @@ static func take_order(items: Array) -> Array:
 	for i: int in order:
 		out.append(items[i])
 	return out
+
+
+## A box that shows before it is opened that there is nothing in it (card P3 가,
+## decision 472): empty, and not locked nor a goal's record box (those must be
+## opened to know). A searched box left empty shows it too. The mark is drawn on
+## the box itself (map_view.gd), so it shows only where the box does.
+static func shows_empty(c: Dictionary) -> bool:
+	return not c.is_empty() and not bool(c.get("locked", false)) and not c.has("pick") and (c.get("items", []) as Array).is_empty()
 
 
 static func can_search(container: Dictionary) -> bool:

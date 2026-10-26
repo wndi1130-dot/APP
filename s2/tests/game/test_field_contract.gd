@@ -10,6 +10,7 @@ const BodyState = preload("res://game/sim/body_state.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
+const FieldItems = preload("res://game/sim/field_items.gd")
 const V = preload("res://tests/politics/field_vectors.gd")
 
 
@@ -92,6 +93,43 @@ func test_the_return_is_v5_and_the_train_takes_it_in() -> void:
 	assert_eq(book.size(), 1)
 	assert_eq([book[0]["grade"], book[0]["part"]], ["fracture", "armL"], "the field's break, not a new draw")
 	assert_eq(applied["record"]["sent"], r["people"]["sent"])
+
+
+## J07: what the food was goes back by name (foodIn), as much as melted into stock.food, so the
+## train's pot can read a spoiled, raw or dented thing from its id; what was eaten is not in it.
+func test_the_food_goes_back_by_name() -> void:
+	var d := _departure(_state())
+	var game = _game(d)
+	var carrier = game.squad[0]
+	carrier.add_item("meat_spoiled", 1)
+	carrier.add_item("can_dented", 2)
+	carrier.add_item("scrap", 1)
+	game.unloaded["apple_wilted"] = int(game.unloaded.get("apple_wilted", 0)) + 1
+	var want := {}
+	for q in game.squad:
+		for id in q.items:
+			if String(FieldItems.stock_of(String(id))[0]) == "food" or String(id) == "food_pack":
+				want[String(id)] = int(want.get(String(id), 0)) + int(q.items[id])
+	for id in game.unloaded:
+		if String(FieldItems.stock_of(String(id))[0]) == "food" or String(id) == "food_pack":
+			want[String(id)] = int(want.get(String(id), 0)) + int(game.unloaded[id])
+	_board(game)
+	game.finish("departed")
+	var r: Dictionary = JSON.parse_string(JSON.stringify(game.receipt.to_dict()))
+	assert_eq(Receipt.check(r), [] as Array[String])
+	var food_in: Dictionary = r["foodIn"]
+	for id in food_in:
+		food_in[id] = int(food_in[id])
+	assert_eq(food_in, want)
+	assert_eq(int(food_in["meat_spoiled"]), 1)
+	assert_eq(int(food_in["can_dented"]), 2)
+	assert_false(food_in.has("scrap"), "only food")
+	# The train adds food from stock.food as before (rounded): foodIn tells what it was, not more of it.
+	var melted := 0.0
+	for id in food_in:
+		melted += float(game.STOCK_OF[id][1]) * int(food_in[id]) if game.STOCK_OF.has(id) else float(FieldItems.stock_of(String(id))[1]) * int(food_in[id])
+	assert_eq(int(r["stock"].get("food", 0)), roundi(melted), "stock.food is the melted sum, rounded as ever")
+	assert_eq(FieldReturn.apply_field_return(_state(), V.tables(), d, r)["status"], "applied")
 
 
 func test_care_goes_out_with_the_wound() -> void:

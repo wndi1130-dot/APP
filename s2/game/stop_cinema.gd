@@ -549,7 +549,7 @@ static func stop_look(o: Dictionary) -> Dictionary:
 		var sun := Atmosphere.sun_times(cold, side)
 		hour = [sun.x + 0.25, sun.y - 0.4, sun.y + 1.7][clampi(int(round(-hour)) - 2, 0, 2)]
 	elif hour < 0.0:
-		hour = HOUR
+		hour = float(o.get("arrive_min", HOUR * 60.0)) / 60.0
 	# The season by the season table, as the field names it (a cold given
 	# outright names it by that cold).
 	var season := Atmosphere.season_for(cold, side) if o.has("cold") else Atmosphere.season_at(act, float(o.get("act_progress", 0.0)), scheme)

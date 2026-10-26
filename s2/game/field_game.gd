@@ -379,6 +379,8 @@ func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_DISABLED
 	rng.seed = int(opts.get("seed", Time.get_ticks_usec()))
 	clock.speed = float(opts.get("clock_speed", 1.0))
+	# The stop's arrival (decision 471 B0: the slice rolls it from the stop's seed).
+	clock.arrive_min = float(opts.get("arrive_min", FieldClock.ARRIVE_MIN))
 	# A storm stop plays by its stage's weather (clear, blizzard, clear) and
 	# looks like the stage; without one the stop is as before.
 	storm = StormLook.look(String(opts.get("storm", "")))
@@ -1566,9 +1568,6 @@ func _process(delta: float) -> void:
 		view.set_mask_shade(smoothstep(0.0, 1.0, mask_in))
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
-		if p != player and p.turn_rate <= 0.0:
-			p.turn_rate = deg_to_rad(TURN_DEG_PER_S) * (0.85 + 0.3 * p.name_unit())
-			p.look = p.facing
 		p.visible = level_shown(level_of(p.position)) and _person_visible(p) and not rode_off.has(p) and arrive_t < 0.0
 		p.refresh_view(p.visible)
 	hud.tick(delta)
@@ -1576,10 +1575,22 @@ func _process(delta: float) -> void:
 	music.tick(delta)
 
 
+## The drawn bodies of the AI people come round on the rules' clock, each at
+## its own rate near TURN_DEG_PER_S (decision 442 card C2: it was the frame's,
+## so the rules that wait on a turn did not play in a field run on _step alone).
+func _turn_people(delta: float) -> void:
+	for p in people:
+		if p != player and p.turn_rate <= 0.0:
+			p.turn_rate = deg_to_rad(TURN_DEG_PER_S) * (0.85 + 0.3 * p.name_unit())
+			p.look = p.facing
+		p.turn_tick(delta)
+
+
 func _step(delta: float) -> void:
 	clock.advance(delta)
 	weather.dusk = clock.dusk_share()
 	var now := clock.elapsed
+	_turn_people(delta)
 	radio_t -= delta
 	_tick_radio(delta)
 	for p in people:
@@ -2989,6 +3000,15 @@ func finish(reason: String) -> void:
 			# One entry a core, so the count reads off the list (CoreScenes.count).
 			for k in range(int(unloaded[id])):
 				receipt.gain_item(id)
+	# What the food was before it melted into stock.food (s3 contract 3 foodIn, J07): the
+	# train's pot reads fresh, wilted, spoiled, raw, frozen or dented from the id.
+	if contract_on():
+		var food_in := {}
+		for id in unloaded:
+			var into: String = String(STOCK_OF[id][0]) if STOCK_OF.has(id) else (String(FieldItems.stock_of(id)[0]) if FieldItems.has(id) else "")
+			if into == "food" and int(unloaded[id]) > 0:
+				food_in[String(id)] = int(unloaded[id])
+		receipt.set_food_in(food_in)
 	# The cores' count and the blueprint pieces go into extras here and only here (decision
 	# 426), on a stop receipt, one that has its ids: setting extras on a field receipt without
 	# ids would make it a stop receipt with empty ones, which the receipt check turns down.
