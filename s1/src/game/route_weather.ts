@@ -1,4 +1,4 @@
-import { hash } from './omens';
+import { hash } from './fnv_hash';
 import type { Weather } from './omens';
 import { fallsAt, weatherWeights } from './season';
 

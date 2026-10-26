@@ -1,6 +1,7 @@
 import { P } from './data';
 import { rainAt, rowAt } from './season';
 import { routeWeather } from './route_weather';
+import { hash } from './fnv_hash';
 import type { Game, StopState } from './state';
 
 // 정차 조짐(2026-10-07 사용자): 위험을 꼬리표로 적지 않고, 정찰조가 본 조짐과 그 해석으로 알린다.
@@ -248,11 +249,7 @@ export function signTier(threat: number, horde: boolean): SignTier {
   return 'some';
 }
 
-export function hash(s: string): number {
-  let x = 2166136261;
-  for (let i = 0; i < s.length; i += 1) x = Math.imul(x ^ s.charCodeAt(i), 16777619);
-  return x >>> 0;
-}
+export { hash };
 
 /** 아직 안 본 문장 중 하나. 다 봤으면 가장 오래전에 본 것. 난수 흐름을 건드리지 않게 판 씨앗과 구간으로 고른다. */
 export function pickFresh(pool: string[], seen: string[], salt: string): string {
