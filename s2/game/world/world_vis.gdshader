@@ -138,7 +138,8 @@ void fragment() {
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
 	float lit = mix(1.0, max(seen.r, seen.g * 0.3 + 0.24), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
-	vec3 dimmed = mix(vec3(grey), base, seen.r * 0.6 + 0.4);
+	// The memory's grey only where the mask is drawn: with it off all is in sight.
+	vec3 dimmed = mix(vec3(grey), base, mix(1.0, seen.r * 0.6 + 0.4, clamp(mask_on, 0.0, 1.0)));
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
 	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;
 	ROUGHNESS = mix(1.0, 0.4, wet * (1.0 - cover));
