@@ -17,6 +17,7 @@ extends RefCounted
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootTables = preload("res://game/sim/loot_tables.gd")
 const LootJunk = preload("res://game/sim/loot_junk.gd")
+const Carry = preload("res://game/sim/carry.gd")
 
 ## What may be moved between the boxes of one building, and as what.
 const FAMILY: Dictionary = {
@@ -70,6 +71,10 @@ const AFFINITY: Dictionary = {
 }
 ## No box takes more than this many things from the others.
 const CAP: int = 6
+## Nor more than it holds (carry.gd box_limit). A bundle is counted at the most
+## its name can weigh (a sack of oats, a picture: 1.5), as it is named after it
+## is dealt: six food bundles named sacks are 9 in a jar shelf that takes 8.
+const NAMED_MOST: float = 1.5
 
 ## What a building is, from the words of its name (first that matches). Only the
 ## naming and the finds read it.
@@ -554,8 +559,9 @@ static func _deal(containers: Dictionary, ids: Array, rng: RandomNumberGenerator
 		var weights: Array = []
 		for id: String in ids:
 			var w := 0.0
-			if (containers[id]["items"] as Array).size() < CAP:
-				w = float(AFFINITY[room_of(containers[id])][family])
+			var c: Dictionary = containers[id]
+			if (c["items"] as Array).size() < CAP and _dealt_load(c) + _dealt_weight(row[0]) <= Carry.box_limit(c):
+				w = float(AFFINITY[room_of(c)][family])
 			weights.append(w)
 			total += w
 		var to: String = row[1]
@@ -570,6 +576,18 @@ static func _deal(containers: Dictionary, ids: Array, rng: RandomNumberGenerator
 		if to != row[1]:
 			moved += 1
 	return moved
+
+
+## What a thing weighs while the boxes are dealt: a bundle at the most its name can.
+static func _dealt_weight(item: String) -> float:
+	return NAMED_MOST if FieldItems.BUNDLES.has(item) else Carry.item_weight(item)
+
+
+static func _dealt_load(c: Dictionary) -> float:
+	var t := 0.0
+	for item in c.get("items", []):
+		t += _dealt_weight(String(item))
+	return t
 
 
 static func _boxes(containers: Dictionary, buildings: Array, rooms: Array, kinds: Array) -> Array:
