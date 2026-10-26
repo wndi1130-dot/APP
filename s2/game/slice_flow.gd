@@ -53,6 +53,8 @@ const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 const WorkshopPane = preload("res://game/ui/workshop_pane.gd")
+const ModsPane = preload("res://game/ui/mods_pane.gd")
+const ResearchPane = preload("res://game/ui/research_pane.gd")
 const StopCinema = preload("res://game/stop_cinema.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
@@ -159,7 +161,9 @@ var pane: Control = null           # the picked car's pane (car_pane.gd)
 var bar: Control = null            # the keys along the bottom (home_bar.gd)
 var sel: String = ""               # the picked car's id, "" with the pane folded
 var shop: Control = null           # the workshop's pane where the car's stands (workshop_pane.gd)
-var shop_was: String = ""          # the car picked before the workshop came up
+var shop_was: String = ""          # the car picked before the workshop or the refit pane came up
+var mods: Control = null           # the refit pane, where the workshop's stands (mods_pane.gd)
+var research: Control = null       # the research pane, where the workshop's stands (research_pane.gd)
 var shop_seg: int = -1             # the stretch the workshop last worked (once each leaving)
 var outside: MeshInstance3D = null  # the world outside the train (fx/outside_view.gd)
 ## The stop seen from the train (결정 421-3): the scene from the roof to the
@@ -252,6 +256,7 @@ func go(i: int) -> void:
 	pane = null
 	bar = null
 	shop = null
+	mods = null
 	sel = ""
 	var row: Array = STEPS[i]
 	# Over the train, not over the field; the slice's state, but the session's
@@ -982,7 +987,7 @@ func _show_home(word: String) -> void:
 	b.g = train_g
 	b.main_word = word
 	b.main_pressed.connect(next)
-	b.open_rooms = ["gear"]
+	b.open_rooms = ["papers", "wrench", "gear"]
 	b.room_pressed.connect(_open_room)
 	h.add_child(b)
 	layer.add_child(h)
@@ -996,10 +1001,9 @@ func _show_home(word: String) -> void:
 ## Pick car `id` ("" folds the pane): its pane comes up and the camera moves
 ## it into the middle of what the pane leaves clear.
 func _select(id: String) -> void:
-	# A car picked over the workshop puts the workshop away.
-	if id != "" and is_instance_valid(shop):
-		shop.queue_free()
-		shop = null
+	# A car picked over the workshop or the refit pane puts it away.
+	if id != "":
+		_put_rooms_away()
 	var was: String = sel
 	sel = ""
 	var def: Dictionary = {}
@@ -1027,28 +1031,88 @@ func _select(id: String) -> void:
 func _open_room(icon: String) -> void:
 	if icon == "gear":
 		_open_workshop()
+	elif icon == "wrench":
+		_open_mods()
+	elif icon == "papers":
+		_open_research()
 
 
 ## The workshop's pane where the car's stands; folding it brings the car back.
 func _open_workshop() -> void:
 	if is_instance_valid(shop) or not is_instance_valid(home):
 		return
-	shop_was = sel if sel != "" else FIRST_CAR
-	_select("")
+	_room_up()
 	var w = WorkshopPane.new()
 	w.name = "WorkshopPane"
-	w.folded.connect(_close_workshop)
+	w.folded.connect(_close_room)
 	home.add_child(w)
 	w.pin(TrainGauges.BAND_H)
 	w.show_state(train_g)
 	shop = w
 
 
-func _close_workshop() -> void:
-	if is_instance_valid(shop):
-		shop.queue_free()
-	shop = null
+func _close_room() -> void:
+	_put_rooms_away()
 	_select(shop_was)
+
+
+## The refit pane (mods_pane.gd) where the workshop's stands, with this
+## train's cars; a refit started or taken back draws the band again (its wood).
+func _open_mods() -> void:
+	if is_instance_valid(mods) or not is_instance_valid(home):
+		return
+	_room_up()
+	var m = ModsPane.new()
+	m.name = "ModsPane"
+	if is_instance_valid(train) and train.rules is Dictionary:
+		m.cars = ModsPane.formation(train.rules)
+	m.folded.connect(_close_room)
+	m.changed.connect(_room_changed)
+	home.add_child(m)
+	m.pin(TrainGauges.BAND_H)
+	m.show_state(train_g)
+	mods = m
+
+
+## The research pane (research_pane.gd) where the workshop's stands: what
+## can be restored now, its fragments and what it asks; a start, a way picked
+## or a stop draws the band again (its parts and wood).
+func _open_research() -> void:
+	if is_instance_valid(research) or not is_instance_valid(home):
+		return
+	_room_up()
+	var r = ResearchPane.new()
+	r.name = "ResearchPane"
+	r.folded.connect(_close_room)
+	r.changed.connect(_room_changed)
+	home.add_child(r)
+	r.pin(TrainGauges.BAND_H)
+	r.show_state(train_g)
+	research = r
+
+
+## One room's pane at a time: a room opened over another keeps the car
+## picked before the first, to come back to on folding.
+func _room_up() -> void:
+	if not is_instance_valid(shop) and not is_instance_valid(mods) and not is_instance_valid(research):
+		shop_was = sel if sel != "" else FIRST_CAR
+	_put_rooms_away()
+	_select("")
+
+
+func _put_rooms_away() -> void:
+	for r in [shop, mods, research]:
+		if is_instance_valid(r):
+			r.queue_free()
+	shop = null
+	mods = null
+	research = null
+
+
+func _room_changed() -> void:
+	gauges.refresh(train_g, train_t)
+	if is_instance_valid(bar):
+		bar.g = train_g
 
 
 ## A lever on the pane: set it in the slice's state and draw again what reads it.

@@ -2353,10 +2353,11 @@ func near_ground(p) -> Array:
 	return out
 
 
-## Put `id` from the bag into a searched box within reach (as many as a press moves).
+## Put `id` from the bag into a searched box within reach (as many as a press
+## moves and the box still takes, Carry.box_room).
 func store(p, box: String, id: String) -> bool:
 	var c: Dictionary = game.data["containers"].get(box, {})
-	var n: int = move_count(p, id)
+	var n: int = mini(move_count(p, id), Carry.box_room(c, id))
 	if n <= 0 or not SearchRules.can_take(c) or not _in_reach(p, _container_at(c)):
 		return false
 	p.take_item(id, n)
