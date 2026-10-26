@@ -112,10 +112,12 @@ func test_a_leg_that_hurts_limps_on_its_side() -> void:
 	assert_eq(_walked(r, own), "p_limp_heavy_r", "the run on but the leg cannot: it limps at a walk")
 	q.running = true
 	assert_ne(_walked(q, own).begins_with("p_limp"), true, "running it does not limp")
+	# (Cut lightly: one cut deep bleeds hard, and bleeding hard it reels, test_gait.gd.)
 	var arm := _person()
-	arm.body.add_wound("arm_left", "deep", 1.0)
+	arm.body.add_wound("arm_left", "laceration", 1.0)
 	assert_eq(_walked(arm, own), "p_walk", "an arm does not limp")
-	assert_eq(_walked(p, _own(OLD)), "p_walk", "a folder without them: as before")
+	q.running = false
+	assert_eq(_walked(q, _own(OLD)), "p_walk", "a folder without them: as before")
 
 
 func test_a_wound_is_treated_where_it_is_and_someone_else_knelt_by() -> void:

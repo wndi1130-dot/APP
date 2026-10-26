@@ -1,9 +1,10 @@
 extends RefCounted
 ## How a living body goes on its feet: which walk and run it is drawn in by what
 ## is in its hand (decision 422 M11/M14, 423 card 3), how it holds a long weapon
-## with a broken arm (422 M2, 423 card 5), and each person's own beat, stride and
-## lean. The clips are picture only; the beat and the stride are also where the
-## footsteps fall (field_game.gd steps_in), so the feet and the sound stay one.
+## with a broken arm (422 M2, 423 card 5), when it reels (spent or bleeding hard:
+## decision 448, how one moves shows the wounds), and each person's own beat,
+## stride and lean. The clips are picture only; the beat and the stride are also
+## where the footsteps fall (field_game.gd steps_in), so the feet and the sound stay one.
 ##
 ## As the reference game picks them: a long gun and a two-handed weapon walk and
 ## run their own way, a handgun its own, a heavy tool its own; one-handed weapons,
@@ -60,6 +61,14 @@ static func weak_hold(p) -> bool:
 ## walks, as field_game.gd moves it (person.gd speed, load_lets_run).
 static func runs(p) -> bool:
 	return p.running and not p.crouched and p.load_lets_run() and p.body.can_run()
+
+
+## Reeling on its feet: spent, or bleeding hard (body_state.gd bleed_level 2,
+## where the rules slow the walk and the body goes down in two minutes), and not
+## running or crouched. Walking, a leg that limps shows its limp instead
+## (person_visual.gd limp_of); standing still it reels either way.
+static func reels(p) -> bool:
+	return not runs(p) and not p.crouched and (p.body.exhaustion_level() >= 2 or p.body.bleed_level() >= 2)
 
 
 ## The walk (or the run) for what is in the hand, "" for the plain one.
