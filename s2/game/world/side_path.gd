@@ -38,6 +38,9 @@ const THICKET_SHARE := 0.5
 const BOX_NAMES: Array[String] = ["궤짝", "선반", "상자", "공구함", "자루", "보관함"]
 ## 틈에 걸친 것(지나갈 수 있음, 모형은 art3d): 벌어진 철망(가시 없음)·열린 나무 쪽문·무너진 판자 울타리.
 const GAP_KINDS: Array[String] = ["gap_wire", "gap_gate", "gap_planks"]
+## Left at the store's door (ref-ops R1: a rare place tells of itself from outside): one of these.
+const CART_KINDS: Array[String] = ["handcart", "sled_load"]
+const CART_NOTE: Dictionary = {"handcart": "손수레", "sled_load": "짐 실은 썰매"}
 
 
 ## 이 판에 샛길이 나는가(씨앗만 본다).
@@ -369,13 +372,30 @@ static func _build(data: Dictionary, spot: Dictionary, rng: RandomNumberGenerato
 	# Ordinary store bundles first, so a box is never empty; loot_dress.gd fills them anew.
 	LootRules.fill(boxes, ("%d|rare-store" % run_seed).hash())
 	data["containers"].merge(boxes)
-	# The dead: one shut in with the boxes, the rest about the clearing.
+	# Left at the door: a handcart or a loaded sled along the front wall beside it, clear of the
+	# door's and the front window's cells and of the way in from the gap.
+	var cart_kind: String = CART_KINDS[rng.randi_range(0, CART_KINDS.size() - 1)]
+	var ca := _at(g, side, gap_u + GAP + 1, STORE_SIZE.y + 1)
+	var cb := _at(g, side, gap_u + GAP + 2, STORE_SIZE.y + 1)
+	var cart := Rect2i(ca.min(cb), (ca - cb).abs() + Vector2i.ONE)
+	for y in range(cart.position.y, cart.end.y):
+		for x in range(cart.position.x, cart.end.x):
+			g.set_solid(Vector2i(x, y), S.LOW)
+	data.get_or_add("low_blocks", []).append(cart)
+	data["props"].append({"kind": cart_kind, "rect": cart, "solid": "low", "facing": 0 if cart.size.x > 1 else 1,
+		"level": 0, "note": "문 앞에 버려진 " + String(CART_NOTE[cart_kind])})
+	# The dead: one shut in with the boxes, one just inside the gap (the way they came in),
+	# the rest about the clearing.
 	var dead: Array[Vector2i] = [in_door + step * 2]
 	var yard: Array[Vector2i] = []
 	for c: Vector2i in lot:
 		if not store.grow(1).has_point(c):
 			yard.append(c)
-	for i in range(rng.randi_range(DEAD.x, DEAD.y) - 1):
+	var dead_count := rng.randi_range(DEAD.x, DEAD.y)
+	var by_gap := _at(g, side, gap_u + rng.randi_range(0, GAP - 1), DEPTH - 1)
+	yard.erase(by_gap)
+	dead.append(by_gap)
+	for i in range(dead_count - 2):
 		if yard.is_empty():
 			break
 		dead.append(yard.pop_at(rng.randi_range(0, yard.size() - 1)))
