@@ -12,6 +12,8 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const CoreScenes = preload("res://game/world/core_scenes.gd")
+const LootDress = preload("res://game/sim/loot_dress.gd")
 const S = FieldGrid.Solid
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
@@ -709,6 +711,7 @@ static func clear_fronts(data: Dictionary) -> Dictionary:
 ## 방 이름(가구 메모 「X의 Y」의 X)의 낱말 → 다시 놓는 묶음. 앞에서부터 본다.
 const NAME_CLASS: Array = [
 	["기록", ""], ["병", ""], ["약", ""], ["진료", ""], ["제의", ""],
+	["차고", "garage"], ["장작", "woodshed"], ["외양간", "barn"], ["마구간", "barn"], ["건초", "barn"], ["헛간", "barn"],
 	["부엌", "kitchen"], ["거실", "living"], ["저장", "store"],
 	["욕실", "bath"], ["세면실", "bath"],
 	["안방", "bed"], ["침실", "bed"], ["살림", "bed"], ["숙직", "bed"],
@@ -716,7 +719,7 @@ const NAME_CLASS: Array = [
 	["서무", "office"], ["사령", "office"], ["접수", "office"], ["계량", "office"],
 	["창고", "storage"], ["보관", "storage"], ["비축", "storage"], ["입고", "storage"], ["광", "storage"],
 	["매장", "shop"], ["가게", "shop"],
-	["작업", "work"], ["공구", "work"], ["공방", "work"],
+	["작업", "work"], ["공구", "work"], ["공방", "work"], ["정비", "work"],
 ]
 
 ## 묶음마다 놓는 가구. size는 (긴 변, 짧은 변). need: 꼭 있을 것. holds: 상자가 드는 용기.
@@ -779,6 +782,44 @@ const PALETTE: Dictionary = {
 		{"kind": "toolbox", "size": Vector2i(1, 1), "holds": true, "at": "wall"},
 		{"kind": "shelf", "size": Vector2i(3, 1), "holds": true, "at": "wall"},
 	],
+	# 작업실·공구실·정비실(ref-ops 대조 7: 바깥 건물은 공구·재료 몫): 작업대가 꼭 있고 연장·부품.
+	"work": [
+		{"kind": "workbench", "size": Vector2i(3, 1), "need": true, "holds": true, "at": "wall"},
+		{"kind": "tool_rack", "size": Vector2i(2, 1), "chance": 0.75, "at": "wall"},
+		{"kind": "tool_chest", "size": Vector2i(2, 1), "chance": 0.6, "holds": true, "at": "wall"},
+		{"kind": "parts_rack", "size": Vector2i(3, 1), "chance": 0.5, "holds": true, "at": "wall"},
+		{"kind": "part_crate", "size": Vector2i(1, 1), "chance": 0.5, "holds": true, "at": "wall"},
+		{"kind": "sawhorse", "size": Vector2i(2, 1), "chance": 0.35, "at": "mid"},
+		{"kind": "fuel_drum", "size": Vector2i(1, 1), "chance": 0.3, "at": "wall"},
+	],
+	# 차고: 작업대, 반쯤은 서 있는 차, 타이어·기름통·연장.
+	"garage": [
+		{"kind": "workbench", "size": Vector2i(3, 1), "need": true, "holds": true, "at": "wall"},
+		{"kind": "car", "size": Vector2i(4, 2), "chance": 0.45, "at": "mid"},
+		{"kind": "tire_stack", "size": Vector2i(2, 2), "chance": 0.6, "at": "wall", "corner": true},
+		{"kind": "tool_rack", "size": Vector2i(2, 1), "chance": 0.7, "at": "wall"},
+		{"kind": "fuel_can_group", "size": Vector2i(2, 1), "chance": 0.55, "at": "wall"},
+		{"kind": "tool_chest", "size": Vector2i(2, 1), "chance": 0.5, "holds": true, "at": "wall"},
+		{"kind": "hardware_rack", "size": Vector2i(3, 1), "chance": 0.4, "holds": true, "at": "wall"},
+	],
+	# 헛간·외양간·마구간·건초 헛간: 사료 자루와 상자, 건초 수레·짐수레, 연장.
+	"barn": [
+		{"kind": "sack_pile", "size": Vector2i(2, 2), "need": true, "at": "wall"},
+		{"kind": "crate_stack", "size": Vector2i(2, 2), "need": true, "holds": true, "at": "wall"},
+		{"kind": "hay_cart", "size": Vector2i(3, 2), "chance": 0.45, "at": "mid"},
+		{"kind": "tool_rack", "size": Vector2i(2, 1), "chance": 0.6, "at": "wall"},
+		{"kind": "farm_cart", "size": Vector2i(4, 2), "chance": 0.25, "at": "mid"},
+		{"kind": "barrel", "size": Vector2i(1, 1), "chance": 0.5, "at": "wall"},
+		{"kind": "sawhorse", "size": Vector2i(2, 1), "chance": 0.3, "at": "mid"},
+	],
+	# 장작 헛간·장작 창고: 장작 더미가 꼭 있고 장작 단·모탕·선반.
+	"woodshed": [
+		{"kind": "firewood_stack", "size": Vector2i(3, 2), "need": true, "at": "wall"},
+		{"kind": "firewood_rick", "size": Vector2i(3, 1), "chance": 0.7, "at": "wall"},
+		{"kind": "sawhorse", "size": Vector2i(2, 1), "chance": 0.6, "at": "mid"},
+		{"kind": "shelf", "size": Vector2i(3, 1), "chance": 0.5, "holds": true, "at": "wall"},
+		{"kind": "tool_rack", "size": Vector2i(2, 1), "chance": 0.45, "at": "wall"},
+	],
 	"store": [
 		{"kind": "jar_shelf", "size": Vector2i(3, 1), "need": true, "holds": true, "at": "wall"},
 		{"kind": "shelf", "size": Vector2i(3, 1), "holds": true, "at": "wall"},
@@ -806,7 +847,11 @@ const DENSITY: Dictionary = {
 	"office": [0.38, 0.52, 0.67, 0.33], "shop": [0.30, 0.42, 0.61, 0.39],
 	"storage": [0.25, 0.40, 0.67, 0.33], "store": [0.25, 0.40, 0.67, 0.33],
 	"boiler": [0.25, 0.40, 0.67, 0.33],
+	"work": [0.25, 0.40, 0.67, 0.33], "garage": [0.25, 0.40, 0.67, 0.33],
+	"barn": [0.25, 0.40, 0.67, 0.33], "woodshed": [0.25, 0.40, 0.67, 0.33],
 }
+## Rooms that, short of their share, take the pieces the dice left out (_palette_for).
+const FILL_UNROLLED: Dictionary = {"work": true, "garage": true, "barn": true, "woodshed": true}
 const OPTIONAL_BY_KIND: Dictionary = {"display_shelf": 0.6, "crate_stack": 0.6, "barrel": 0.6,
 	"shelf": 0.6, "sack_pile": 0.6, "fuel_drum": 0.6, "toolbox": 0.6, "tin_crate": 0.6}
 const COUNTER_MIN: int = 4
@@ -839,10 +884,8 @@ static func room_class(name: String, kinds: Dictionary, lv: int) -> String:
 		elif kinds.has("jar_shelf") and lv < 0:
 			cls = "store"
 	# 가게 위층은 살림집이다(가게 이름을 물려받은 위층 방에 침대가 있다).
-	if lv >= 1 and (cls == "shop" or cls == "storage" or cls == "work") and kinds.has("bed"):
+	if lv >= 1 and cls in ["shop", "storage", "work", "garage", "barn", "woodshed"] and kinds.has("bed"):
 		return "bed"
-	if cls == "work":
-		return ""
 	# 지하의 부엌은 보일러실, 침실·거실은 저장 칸으로(결정 423, 지하실 카드 「가」. 방 수는 그대로).
 	if lv < 0 and cls == "kitchen":
 		return "boiler"
@@ -1017,6 +1060,17 @@ static func _home(name: String) -> bool:
 	return false
 
 
+## 이 장소 종류에서 멈춘 기계(core_scenes.gd SCENES 낱말)가 설 수 있는 건물 id.
+static func _machine_buildings(data: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	var rows: Array = CoreScenes.SCENES.get(String(data.get("place_kind", "")), [])
+	for b: Dictionary in data.get("buildings", []):
+		for row: Array in rows:
+			if String(b.get("name", "")).contains(String(row[0])):
+				out[int(b["id"])] = true
+	return out
+
+
 ## 모든 층을 먼저 읽고 건물당 욕실 하나를 고른다. 작은 방은 이 선택에만 쓴다.
 ## 원래 부엌·유일한 침실은 어느 후보 단계에서도 바꾸지 않는다.
 static func density_plan(data: Dictionary) -> Dictionary:
@@ -1026,6 +1080,7 @@ static func density_plan(data: Dictionary) -> Dictionary:
 	var classes: Dictionary = {}
 	var buildings: Dictionary = {}
 	var homes: Dictionary = {}
+	var machine := _machine_buildings(data)
 	for b: Dictionary in data.get("buildings", []):
 		if _home(String(b.get("name", ""))):
 			homes[int(b["id"])] = true
@@ -1050,6 +1105,9 @@ static func density_plan(data: Dictionary) -> Dictionary:
 			var cls := room_class(labels.get(ri, "") if name.is_empty() else name, kinds, lv)
 			if cls.is_empty():
 				cls = inherited.get(ri, "")
+			# 멈춘 기계가 서는 건물의 일터 방은 지도가 둔 그대로다 — 새 가구가 기계 자리를 먹지 않게.
+			if FILL_UNROLLED.has(cls) and machine.has(int(map["rooms"][ri]["building"])):
+				cls = ""
 			var key := "%d:%d" % [lv, ri]
 			classes[key] = cls
 			if lv < 0:
@@ -1137,16 +1195,30 @@ static func _palette_for(cls: String, area: int, rng: RandomNumberGenerator) -> 
 		var sb: Vector2i = b["size"]
 		return sa.x * sa.y > sb.x * sb.y)
 	var out := selected.duplicate(true)
-	var typical: int = {"bed": 15, "living": 28, "office": 16, "shop": 28, "storage": 9, "store": 9, "boiler": 18}.get(cls, 100000)
+	var typical: int = {"bed": 15, "living": 28, "office": 16, "shop": 28, "storage": 9, "store": 9, "boiler": 18,
+		"work": 30, "garage": 40, "barn": 30, "woodshed": 20}.get(cls, 100000)
 	var repeats := clampi(int(ceil(float(area) / typical)) - 1, 0, 5)
 	for cycle in range(repeats):
 		for original: Dictionary in selected:
-			if original["kind"] in ["cold_stove", "radio_set", "nightstand", "side_table"]:
+			# One of these to a room: a second stove, workbench or car is not more of the room.
+			if original["kind"] in ["cold_stove", "radio_set", "nightstand", "side_table", "workbench", "car", "hay_cart", "farm_cart"]:
 				continue
 			var item := original.duplicate()
 			item["need"] = false
 			item["fill"] = true
 			out.append(item)
+	# A workplace or farm room short of its share after the dice takes the pieces it did not
+	# roll, while it is under the share, so a small workshop is never barer than the map left it.
+	if FILL_UNROLLED.has(cls):
+		var rolled: Dictionary = {}
+		for item: Dictionary in selected:
+			rolled[item["kind"]] = true
+		for source: Dictionary in PALETTE[cls]:
+			if not rolled.has(source["kind"]):
+				var item := source.duplicate()
+				item["need"] = false
+				item["fill"] = true
+				out.append(item)
 	return out
 
 
@@ -1565,7 +1637,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 			# 지도의 담는 가구(궤, 약품 상자 등)가 남은 방은 담는 가구를 이미 가졌다. 창고·저장 칸은
 			# 쌓아 둔 짐(석탄 더미, 연료통, 자루)이 곧 담는 것이다.
 			var kept_holder := false
-			var piles: bool = cls == "storage" or cls == "store"
+			var piles: bool = cls in ["storage", "store", "barn", "woodshed"]
 			for i: int in idxs:
 				var kk := String(props[i].get("kind", ""))
 				if not drop.has(i) and (HOLDER_KINDS.has(kk) or (piles and not PASS_KINDS.has(kk))):
@@ -1585,7 +1657,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 						if pl["item"]["kind"] == ("bed" if item["near"] == "bed_head" else "desk"):
 							item["near_cells"].append((pl["rect"] as Rect2i).position)
 				var need: bool = item.get("need", false)
-				if need and item.get("holds", false) and kept_holder and cls in ["storage", "store", "shop"]:
+				if need and item.get("holds", false) and kept_holder and cls in ["storage", "store", "shop", "work", "garage", "barn"]:
 					need = false
 				# 꼭 있을 것은 자리가 없으면 한 칸씩 짧은 꼴로, 그래도 없으면 벽에서 떨어져서 찾는다.
 				var variants: Array = [item]
@@ -1714,7 +1786,8 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 	return stats
 
 
-const ROOM_LABEL: Dictionary = {"bed": "살림방", "kitchen": "부엌", "living": "거실", "bath": "욕실", "office": "사무실", "shop": "매장", "storage": "창고", "store": "저장 칸", "boiler": "보일러실"}
+const ROOM_LABEL: Dictionary = {"bed": "살림방", "kitchen": "부엌", "living": "거실", "bath": "욕실", "office": "사무실", "shop": "매장", "storage": "창고", "store": "저장 칸", "boiler": "보일러실",
+	"work": "작업실", "garage": "차고", "barn": "헛간", "woodshed": "장작 헛간"}
 const KIND_LABEL: Dictionary = {
 	"bed": "침대", "wardrobe": "장롱", "blanket_chest": "담요 궤", "bookcase": "책장", "bench": "긴 의자",
 	"cold_stove": "꺼진 난로", "jar_shelf": "항아리 선반", "dining_set": "식탁과 의자", "fridge_open": "문 열린 냉장고",
@@ -1724,6 +1797,9 @@ const KIND_LABEL: Dictionary = {
 	"dresser": "서랍장", "chair": "의자", "nightstand": "침대 곁 협탁", "counter": "조리대", "sink": "개수대",
 	"cupboard": "찬장", "settee": "긴 소파", "armchair": "안락의자", "low_table": "낮은 탁자", "side_table": "곁탁자",
 	"toilet": "변기", "washstand": "세면대", "bathtub": "욕조", "towel_shelf": "수건 선반", "small_shelf": "작은 선반", "file_cabinet": "서류장", "desk": "책상",
+	"workbench": "작업대", "tool_rack": "연장 걸이", "tool_chest": "공구 궤", "parts_rack": "부품 선반", "part_crate": "부품 상자",
+	"sawhorse": "모탕", "car": "자동차", "tire_stack": "타이어 더미", "fuel_can_group": "기름통", "hardware_rack": "철물 선반",
+	"hay_cart": "건초 수레", "farm_cart": "짐수레", "firewood_stack": "장작 더미", "firewood_rick": "장작 단",
 }
 
 
@@ -1749,6 +1825,7 @@ const HOLDER_KINDS: Dictionary = {
 ## 걸어서 닿는 칸). 들 가구가 없으면 그대로. 돌려주는 값: 옮긴 상자 수.
 static func boxes_into_furniture(data: Dictionary) -> int:
 	var moved := 0
+	var stats := {"keyed": 0, "kitchen_added": 0}
 	var containers: Variant = data.get("containers", {})
 	if not containers is Dictionary or containers.is_empty():
 		return 0
@@ -1821,4 +1898,107 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 				used[key] = true
 				moved += 1
 				break
+		# The room each box stands in, as a key loot_dress.gd room_of reads before the box's name.
+		# A key the map gave is kept; a room of no known kind gets none; a box whose name says its
+		# room in loot_dress.gd's words (부엌 찬장, 매장 상자, 작업실 상자) keeps that, so what it
+		# holds never belies its name. 「창고」 is no such word there: a 창고 상자 takes the key.
+		var keys := _room_keys(data, lv, g, map, of)
+		var in_room: Dictionary = {}  # room -> boxes in it
+		for id: String in ids:
+			var box: Dictionary = containers[id]
+			var bc: Variant = _cell(box.get("cell"))
+			if int(box.get("level", 0)) != lv or bc == null:
+				continue
+			var ri := _at(g, of, bc)
+			in_room[ri] = int(in_room.get(ri, 0)) + 1
+			var key: String = keys.get(ri, "")
+			if not key.is_empty() and not box.has("room") and not _name_places(String(box.get("name", ""))):
+				box["room"] = key
+				stats["keyed"] += 1
+		# A kitchen's spare counters, cupboards and fridge get an empty box each: the place's
+		# bundles are dealt over the boxes by room when the stop opens (loot_dress.gd), so more
+		# places to open, the same things in all.
+		for ri: int in holders_of:
+			if keys.get(ri, "") != "kitchen":
+				continue
+			var list: Array = holders_of[ri]
+			for k in range(list.size()):
+				var kind: String = list[k][1]
+				if int(in_room.get(ri, 0)) >= KITCHEN_MOST:
+					break
+				if used.has(Vector3i(lv, ri, k)) or not KITCHEN_SPARE.has(kind):
+					continue
+				if not seen_of.has(ri):
+					var room: Dictionary = map["rooms"][ri]
+					seen_of[ri] = _from_first(g, of, ri, _keys(g, of, ri, room["cells"], stairs_by.get(lv, {}), []))
+				var r: Rect2i = list[k][0]
+				var spot := _front_cell(r, seen_of[ri], r.position)
+				var id := "kitchen_%d_%d_%d" % [lv, ri, k]
+				if spot.x < 0 or containers.has(id):
+					continue
+				containers[id] = {"id": id, "name": KIND_LABEL.get(kind, kind), "cell": spot, "level": lv,
+					"building": int(map["rooms"][ri]["building"]), "search": KITCHEN_SEARCH, "items": [], "locked": false,
+					"searched": false, "furniture": kind, "room": "kitchen"}
+				used[Vector3i(lv, ri, k)] = true
+				in_room[ri] = int(in_room.get(ri, 0)) + 1
+				stats["kitchen_added"] += 1
+	data["box_rooms"] = stats
 	return moved
+
+
+static func _name_places(name: String) -> bool:
+	return LootDress.room_of({"name": name}) != "storage"
+
+
+## Kitchen furniture that opens: an empty box goes in each one no box is in yet, until the
+## kitchen has KITCHEN_MOST places to open (the reference kitchen has some 8 to 12).
+const KITCHEN_SPARE: Dictionary = {"counter": true, "cupboard": true, "fridge_open": true}
+const KITCHEN_MOST: int = 10
+## Seconds to search one of those (card L, decision 442): half a map box's 4, so opening all
+## of a stop's adds some 36 s, not 73 (after the box-size factor: cupboard 1.5 s, counter 2 s).
+const KITCHEN_SEARCH: float = 2.0
+## Room kind (room_class) -> the room key loot_dress.gd deals by. A living room deals as a
+## bedroom (loot-feel: its hall is a chapel's, nearly every pull 0.3), the store a pantry.
+const ROOM_KEYS: Dictionary = {"kitchen": "kitchen", "bed": "bedroom", "living": "bedroom", "bath": "bathroom",
+	"store": "pantry", "storage": "storage", "shop": "shop", "office": "office", "boiler": "toolbox"}
+
+
+## The room key of a room: a closet or pantry split off (room_split.gd) by its hidden name,
+## then its kind, then words in its name, then its building's role.
+static func room_key(cls: String, words: String, role: String) -> String:
+	if _named(words, "벽장"):
+		return "bedroom"
+	if _named(words, "찬방"):
+		return "pantry"
+	if ROOM_KEYS.has(cls):
+		return ROOM_KEYS[cls]
+	for word: String in ["진료", "병실", "약"]:
+		if _named(words, word):
+			return "clinic"
+	for word: String in ["작업", "공구", "공방"]:
+		if _named(words, word):
+			return "toolbox"
+	if role in ["shop", "shopmain", "market"]:
+		return "shop"
+	if role == "office":
+		return "office"
+	return ""
+
+
+## Room number -> room key on one level.
+static func _room_keys(data: Dictionary, lv: int, g: FieldGrid, map: Dictionary, of: PackedInt32Array) -> Dictionary:
+	var classes: Dictionary = data.get("density_classes", {})
+	var props: Array = data.get("props", [])
+	var labels := _room_labels(data, lv, g, of)
+	var in_room := _props_by_room(g, of, props, lv)
+	var roles: Dictionary = {}
+	for b: Variant in data.get("buildings", []):
+		if b is Dictionary:
+			roles[int(b.get("id", -1))] = String(b.get("role", ""))
+	var out: Dictionary = {}
+	for ri in range(map["rooms"].size()):
+		var words := "%s %s" % [labels.get(ri, ""), _note_name(props, in_room.get(ri, []))]
+		var key := room_key(String(classes.get("%d:%d" % [lv, ri], "")), words, String(roles.get(int(map["rooms"][ri]["building"]), "")))
+		if not key.is_empty():
+			out[ri] = key
+	return out

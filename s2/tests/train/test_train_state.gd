@@ -84,7 +84,9 @@ func test_a_switched_on_branch_is_not_s1a() -> void:
 	assert_true(St.is_s1a({"dom": {"wood": 1}}))
 	assert_true(St.is_s1a({"dom": {"wood": 1, "techs": {}}}))
 	assert_false(St.is_s1a({"dom": {"wood": 1, "people": []}}))
-	assert_false(St.is_s1a({"climate": true}))
+	# The outside's stages are ported (train_climate.gd); a track freeze is not yet.
+	assert_true(St.is_s1a({"climate": true}))
+	assert_false(St.is_s1a({"climate": true, "freeze": 1}))
 	assert_true(St.is_s1a({"climate": false, "dark": null}))
 
 

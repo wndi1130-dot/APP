@@ -9,6 +9,7 @@ extends RefCounted
 const Rng = preload("res://game/politics/rng.gd")
 const TrainStop = preload("res://game/train/train_stop.gd")
 const PersonMemory = preload("res://game/politics/person_memory.gd")
+const KitPick = preload("res://game/politics/kit_pick.gd")
 
 ## The chief's one id outside the roll of names; the train's wound book keeps him by name.
 const CAPTAIN_ID := "captain"
@@ -188,18 +189,23 @@ static func build(g: Dictionary, t: Dictionary, opts: Dictionary) -> Dictionary:
 	for id: String in companion_candidates(g, t, "guard"):
 		if not taken.has(id) and escorts.size() < ESCORT_GEAR.size():
 			escorts.append(id)
-	var roster: Array = [person(g, t, CAPTAIN_ID, "chief", CHIEF_GEAR)]
+	# The hands come out of the armory and the chief's and companions' coats and gloves out of
+	# the wardrobe when the train keeps them (kit_pick.gd, PR 5 and PR D).
+	var stock: Variant = KitPick.stock_of(g)
+	var closet: Variant = KitPick.closet_of(g)
+	var roster: Array = [person(g, t, CAPTAIN_ID, "chief", KitPick.dress(KitPick.kit(CHIEF_GEAR, stock), closet))]
 	for id: String in companions:
-		roster.append(person(g, t, id, "companion", COMPANION_GEAR[String(_profile(t, id).get("community", "tail"))]))
+		roster.append(person(g, t, id, "companion", KitPick.dress(KitPick.kit(COMPANION_GEAR[String(_profile(t, id).get("community", "tail"))], stock), closet)))
 	var work: Array = []
 	for id: String in carriers:
-		work.append(person(g, t, id, "carrier", CARRIER_GEAR))
+		work.append(person(g, t, id, "carrier", KitPick.kit(CARRIER_GEAR, stock)))
 	for i: int in escorts.size():
-		work.append(person(g, t, escorts[i], "escort", ESCORT_GEAR[i]))
+		work.append(person(g, t, escorts[i], "escort", KitPick.kit(ESCORT_GEAR[i], stock)))
 	return {
 		"version": 2, "departureId": "dep_%s_%d" % [place, seg], "stopId": "stop_%s_%d" % [place, seg], "placeId": place, "segment": seg,
+		"arriveMin": TrainStop.arrival_min(String(g["seed"]), seg),
 		"roster": roster, "workCrew": work, "promises": promises_of(g, t), "domestic": g.get("dom") != null,
-		"train": {"food": g["food"], "hungerSegs": int(g.get("hunger", 0))},
+		"train": ({"food": g["food"], "hungerSegs": int(g.get("hunger", 0))} as Dictionary).merged(KitPick.train_kit(g)),
 	}
 
 

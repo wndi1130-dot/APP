@@ -4,9 +4,14 @@ extends Node3D
 ## 그래서 술레후프와 짠 지도들이 한 그리기로 간다. 대응표나 조각 하나라도 못 읽으면
 ## can_draw()가 거짓이 되고 map_view가 회색 상자를 그린다.
 ##
-## 건물 × 층마다 메시 넷: 바깥 턱 줄(남쪽을 보는 가로 줄, 3 m와 턱 두 메시를 바꿔 낌),
-## 바깥 서는 줄(북쪽 가로 줄과 세로 줄, 1층 기단), 안 턱 줄(가로 안벽, 늘 턱), 안 서는 줄
-## (세로 안벽과 계단). 지붕은 건물마다 하나. 문짝과 유리만 낱 노드다.
+## 건물 × 층마다 메시 넷: 바깥 턱 줄(카메라 쪽 남·동을 보는 줄, 3 m와 턱 두 메시를 바꿔 낌),
+## 바깥 서는 줄(북·서를 보는 줄, 1층 기단), 안 턱 줄(안벽, 늘 턱), 안 서는 줄(계단).
+## 지붕은 건물마다 하나. 문짝과 유리만 낱 노드다.
+## 대각뷰(결정 476, 남동에서 북서를 봄)에서 보이는 규칙: 든 건물은 그 층을 열고(턱 줄을 낮추고
+## 안벽을 보임) 위층과 지붕을 걷는다. 발밑에서 NEAR_R 칸 안의 둘레 건물도 지붕과 플레이어 층
+## 위를 걷고 그 층을 연다. 걷은 지붕·위층은 그림자도 걷는다 — 남기면 그 그림자가 연 건물 안을
+## 덮어 검은 구덩이가 된다. 연 건물 안이 얼마나 보이는지는 시야 가림이 정한다(본 칸·들어간
+## 방·불빛만 밝고, 소품은 본 칸에만).
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
@@ -28,6 +33,7 @@ const FLAT_LIFT: float = 0.02      # 평지붕을 벽 윗면보다 띄워 겹친
 const CHIMNEY_BACK: float = 0.8    # 굴뚝을 용마루에서 북쪽 경사로 물린 거리
 const FADE_S: float = 0.15         # 들고 날 때 점박이(3.4, 가안)
 const HOLE_R: float = 3.5          # 가림 구멍 반지름(3.3, 가안)
+const NEAR_R: float = 10.0         # 둘레 건물: 지붕·위층을 걷고 플레이어 층을 여는 거리(칸, 결정 476)
 const PIECES: Array[String] = [
 	"ext_wall", "ext_wall_cut", "ext_plinth", "ext_plinth_corner", "ext_plinth_corner_in",
 	"ext_corner", "ext_corner_in", "ext_corner_cut", "ext_corner_in_cut", "wall_end_cap",
@@ -42,11 +48,17 @@ const EAST := Vector2i(1, 0)
 const WEST := Vector2i(-1, 0)
 const DIRS: Array[Vector2i] = [NORTH, EAST, SOUTH, WEST]
 const DIAGS: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, 1), Vector2i(-1, 1), Vector2i(-1, -1)]
-## 벽면 칠(rgb)과 지붕 갈래(a: 0 슬레이트, 1 기와). 결정 408에서 시안 그림을 보고 정함.
+## 벽면 칠 갈래(rgb, 셰이더가 선형 값으로 그대로 씀). 결정 469 C1: 회색 넷(결정 408)에서
+## 바랜 집 칠 여덟으로 — 크림·버터·세이지·흐린 파랑·회백·살구·벽돌·청회. 괄호는 sRGB. 가장 밝은
+## 채널을 0.6(sRGB 0.8) 안팎에 두어 그늘진 벽이 V 0.15 밑으로 꺼지지 않게 한다.
 const PAINTS: Array[Color] = [
-	Color(0.60, 0.57, 0.51, 0.0), Color(0.56, 0.52, 0.44, 1.0),
-	Color(0.50, 0.53, 0.51, 0.0), Color(0.58, 0.49, 0.43, 1.0),
+	Color(0.67, 0.57, 0.37), Color(0.71, 0.54, 0.21),   # (0.84, 0.78, 0.64) (0.86, 0.76, 0.50)
+	Color(0.39, 0.48, 0.32), Color(0.34, 0.45, 0.57),   # (0.66, 0.72, 0.60) (0.62, 0.70, 0.78)
+	Color(0.60, 0.60, 0.55), Color(0.67, 0.37, 0.25),   # (0.80, 0.80, 0.77) (0.84, 0.64, 0.54)
+	Color(0.45, 0.20, 0.13), Color(0.27, 0.45, 0.45),   # (0.70, 0.48, 0.40) (0.56, 0.70, 0.70)
 ]
+## 지붕 색 갈래 수(셰이더 ROOFS: 슬레이트·기와·짙은 초록·갈색 널).
+const ROOF_KINDS: int = 4
 ## 생활 색(사용자 2026-10-24, 분위기 틀): 바깥 문짝·덧문·창틀에 남은 칠, a는 남은 정도
 ## (0 칠 없음). 바랜 색만 두고 셰이더가 한 번 더 누른다(흰 눈 위에서 튀지 않게).
 const ACCENTS: Array[Color] = [
@@ -82,6 +94,8 @@ var roofs: Dictionary = {}        # 건물 -> 노드
 var door_nodes: Dictionary = {}   # Vector3i(x, y, 층) -> {"node", "plan", "cut"}
 var window_nodes: Dictionary = {}
 var outer_cells: Dictionary = {}  # 건물 -> 바깥벽 칸 번호들(지붕 시야)
+var _outer_buildings: Dictionary = {} # 칸 번호 -> 닿는 건물 번호들
+var seen_buildings_checked: int = 0
 var outer_doors: Dictionary = {}  # 건물 -> 1층 바깥 문 칸들(문가에서는 열림을 둔다)
 var footprints: Dictionary = {}   # 건물 -> Rect2i(1층 사각형)
 var drawn_cells: Dictionary = {}  # 층 -> 실제 키트가 맡은 벽·문·창 칸
@@ -92,6 +106,7 @@ var _want := Vector2i(-2, 0)
 var _holding := false
 var _instant := true
 var _fades: Dictionary = {}       # 노드 -> [시작, 끝, 지난 몫]
+var near: Dictionary = {}         # 건물 -> true(발밑에서 NEAR_R 칸 안, 든 건물 빼고)
 var _seen: Dictionary = {}        # 건물 -> Vector2
 var _focus_cell := Vector2i(-99, -99)
 var _synced: Dictionary = {}
@@ -278,13 +293,14 @@ static func cell_kind(lg: FieldGrid, c: Vector2i, b: int) -> Dictionary:
 	return {"kind": "int"}
 
 
-## 가로 줄이 북쪽 바깥 줄이 아니면 턱 줄이다(남쪽 바깥 줄, 남쪽을 보는 꺾인 줄, 안의 가로 줄).
+## 카메라(남동, 결정 476) 쪽을 보는 바깥 줄이 턱 줄이다: 남쪽·동쪽 바깥 줄과 그쪽으로 꺾인
+## 모서리. 북쪽·서쪽 줄과 북서 모서리만 선다. 안벽은 늘 턱(_plan_inner).
 static func cut_line(kind: Dictionary) -> bool:
 	match kind["kind"]:
 		"ext":
-			return kind["n"].y > 0
+			return kind["n"].y > 0 or kind["n"].x > 0
 		"corner", "inner":
-			return kind["d"].y > 0
+			return kind["d"].y > 0 or kind["d"].x > 0
 	return false
 
 
@@ -430,13 +446,13 @@ static func _plan_level(out: Dictionary, lg: FieldGrid, lv: int, b: int, area: R
 						_add(out, low, xf, b, lv, "cut_low")
 					else:
 						_add(out, full, xf, b, lv, "stand")
-				# 선 세로 줄이 턱 모서리와 만나는 끝은 열렸을 때 마구리로 막는다. 마구리는 3 m라
+				# 선 줄이 턱 모서리와 만나는 끝은 열렸을 때 마구리로 막는다. 마구리는 3 m라
 				# 턱 줄 노드에 넣으면 그 노드가 낮아지지 않는다: 열렸을 때만 보이는 안 턱 줄에 둔다.
-				if n.x != 0:
-					for s: Vector2i in [NORTH, SOUTH]:
+				if not cut:
+					for s: Vector2i in ([NORTH, SOUTH] if n.x != 0 else [WEST, EAST]):
 						var next: Dictionary = kinds.get(c + s, {})
 						if not next.is_empty() and next["kind"] in ["corner", "inner"] and cut_line(next):
-							var edge := at + Vector3(0, 0, s.y * 0.5)
+							var edge := at + Vector3(s.x * 0.5, 0, s.y * 0.5)
 							_add(out, "wall_end_cap", _xf(edge, atan2(float(s.y), float(-s.x))), b, lv, "int_cut")
 			"corner", "inner":
 				var d: Vector2i = kind["d"]
@@ -456,7 +472,7 @@ static func _plan_level(out: Dictionary, lg: FieldGrid, lv: int, b: int, area: R
 		for run: Vector2i in _runs(walls[key]):
 			var n := Vector2i(key.x, key.y)
 			var xf := _run_xf(n, key.z, run)
-			if n.y > 0:
+			if cut_line({"kind": "ext", "n": n}):
 				_add(out, "ext_wall", xf, b, lv, "cut_full")
 				_add(out, "ext_wall_cut", xf, b, lv, "cut_low")
 			else:
@@ -469,10 +485,11 @@ static func _plan_level(out: Dictionary, lg: FieldGrid, lv: int, b: int, area: R
 			_add(out, "int_wall_cut", _xf(Vector3((span.x + span.y) * 0.5, 0, y + 0.5), 0.0, Vector3(span.y - span.x, 1, 1)), b, lv, "int_cut")
 	for x: int in v_runs:
 		for span: Vector2 in _merge(v_runs[x]):
-			_add(out, "int_wall", _xf(Vector3(x + 0.5, 0, (span.x + span.y) * 0.5), PI * 0.5, Vector3(span.y - span.x, 1, 1)), b, lv, "int_stand")
+			_add(out, "int_wall_cut", _xf(Vector3(x + 0.5, 0, (span.x + span.y) * 0.5), PI * 0.5, Vector3(span.y - span.x, 1, 1)), b, lv, "int_cut")
 
 
-## 안벽 칸: 가로로 이어지면 가로 토막(턱 줄), 세로로 이어지면 세로 토막(서는 줄).
+## 안벽 칸: 가로로 이어지면 가로 토막, 세로로 이어지면 세로 토막. 대각뷰에서는 어느 쪽이든 그
+## 뒤(북서) 방을 가리므로 둘 다 턱이다(결정 476).
 ## 토막은 칸 가운데를 지나고, 바깥벽에 닿으면 그 칸 가운데까지, 홀로 끝나면 칸 끝까지 간다.
 static func _plan_inner(out: Dictionary, lg: FieldGrid, kinds: Dictionary, c: Vector2i, b: int, lv: int, h_runs: Dictionary, v_runs: Dictionary) -> void:
 	var w := kinds.has(c + WEST)
@@ -483,11 +500,9 @@ static func _plan_inner(out: Dictionary, lg: FieldGrid, kinds: Dictionary, c: Ve
 	if solid == S.DOOR:
 		var across := w or e
 		var at := Vector3(c.x + 0.5, 0, c.y + 0.5)
-		if across:
-			_add(out, "door_frame_cut", _xf(at, 0.0), b, lv, "int_cut")
-		else:
-			_add(out, "int_door", _xf(at, PI * 0.5), b, lv, "int_stand")
-		out["doors"].append({"cell": c, "lv": lv, "b": b, "line": "int_cut" if across else "int_stand", "yaw": 0.0 if across else PI * 0.5, "outer": false})
+		var yaw := 0.0 if across else PI * 0.5
+		_add(out, "door_frame_cut", _xf(at, yaw), b, lv, "int_cut")
+		out["doors"].append({"cell": c, "lv": lv, "b": b, "line": "int_cut", "yaw": yaw, "outer": false})
 		return
 	if w or e:
 		var lo := -0.5 if w else (-INT_HALF if nn or ss else -0.5)
@@ -797,6 +812,10 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial, pace = null) -> void
 			drawn_cells[key.y][c] = true
 	for b: int in p["outer"]:
 		outer_cells[b] = PackedInt32Array(p["outer"][b].keys())
+		for cell_index: int in outer_cells[b]:
+			if not _outer_buildings.has(cell_index):
+				_outer_buildings[cell_index] = {}
+			_outer_buildings[cell_index][b] = true
 	outer_doors = p["outer_doors"]
 	footprints = p["footprints"]
 	var bakes: Dictionary = {}
@@ -870,10 +889,19 @@ func _node(b: int, lv: int, mesh: Mesh, shadow: bool) -> MeshInstance3D:
 	node.position.y = lv * LEVEL_H
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)
-	node.set_instance_shader_parameter("paint", PAINTS[posmod(b, PAINTS.size())])
+	node.set_instance_shader_parameter("paint", paint_for(b))
 	node.set_instance_shader_parameter("building_id", float(b))
 	node.set_instance_shader_parameter("accent", accent_for(b))
 	return node
+
+
+## 건물마다 벽 칠(rgb)과 지붕 색 갈래(a: 0~ROOF_KINDS-1)를 굴린다(결정 469 C1). 번호를
+## 섞어 고르므로 한 줄에 선 이웃 집이 차례로 같은 색을 되풀이하지 않는다.
+static func paint_for(b: int) -> Color:
+	var h := (b * 2654435761 + 40503) & 0xffffffff
+	var c := PAINTS[(h >> 8) % PAINTS.size()]
+	c.a = float((h >> 20) % ROOF_KINDS)
+	return c
 
 
 ## 건물마다 남은 칠(ACCENTS). 이웃한 번호끼리 같은 색이 덜 붙게 건너뛰며 고른다.
@@ -896,7 +924,7 @@ func cut_node(b: int, lv: int) -> MeshInstance3D:
 
 # ---------------------------------------------------------------- 보이는 규칙 (3장)
 
-## 0 숨김, 1 닫힘(바깥 껍데기), 2 열림(턱과 안).
+## 0 숨김, 1 닫힘(바깥 껍데기), 2 열림(턱과 안). 둘레 건물(near)은 플레이어 층에서 열린다.
 func _mode(b: int, lv: int) -> int:
 	if player_lv < 0:
 		if lv >= 0:
@@ -904,15 +932,18 @@ func _mode(b: int, lv: int) -> int:
 		return 2 if b == open_b and lv == open_lv else 1
 	if lv < 0:
 		return 0
-	if b != open_b:
+	var at := open_lv if b == open_b else (player_lv if near.has(b) else -1)
+	if at < 0:
 		return 1
-	if lv > open_lv:
+	if lv > at:
 		return 0
-	return 2 if lv == open_lv else 1
+	return 2 if lv == at else 1
 
 
 func _low(b: int, lv: int) -> bool:
-	return b == open_b and lv == open_lv
+	if b == open_b:
+		return lv == open_lv
+	return player_lv >= 0 and near.has(b) and lv == player_lv
 
 
 func _apply() -> void:
@@ -931,7 +962,7 @@ func _apply() -> void:
 			if parts.has(slot):
 				_show(parts[slot], mode == 2)
 	for b: int in roofs:
-		_show(roofs[b], player_lv >= 0 and b != open_b)
+		_show(roofs[b], player_lv >= 0 and b != open_b and not near.has(b))
 	for key: Vector3i in door_nodes:
 		var row: Dictionary = door_nodes[key]
 		var plan_row: Dictionary = row["plan"]
@@ -977,6 +1008,23 @@ func _show(node: MeshInstance3D, on: bool) -> void:
 	_fades[node] = [1.0 - target, target, 0.0]
 
 
+## 발밑 칸에서 NEAR_R 안에 1층 사각형이 닿는 건물(든 건물 빼고). 바뀌면 참.
+func _update_near(c: Vector2i) -> bool:
+	var now: Dictionary = {}
+	for b: int in footprints:
+		if b == open_b:
+			continue
+		var r: Rect2i = footprints[b]
+		var dx := maxi(maxi(r.position.x - c.x, c.x - (r.end.x - 1)), 0)
+		var dy := maxi(maxi(r.position.y - c.y, c.y - (r.end.y - 1)), 0)
+		if Vector2(dx, dy).length() <= NEAR_R:
+			now[b] = true
+	if now == near:
+		return false
+	near = now
+	return true
+
+
 func show_levels(player_level: int) -> void:
 	if player_level == player_lv:
 		return
@@ -995,6 +1043,7 @@ func cut_away(building_id: int, level: int) -> void:
 		return
 	open_b = building_id
 	open_lv = level
+	_update_near(_focus_cell)
 	_apply()
 
 
@@ -1136,8 +1185,16 @@ static func _window_plank_slots() -> Array:
 # ---------------------------------------------------------------- 시야와 매 틀
 
 ## 지붕은 바깥벽 칸 가운데 가장 밝게 본 값을 받는다(지붕 밑 칸은 늘 못 본 칸이라).
-func update_seen(vis_bytes: PackedByteArray) -> void:
-	for b: int in roofs:
+func update_seen(vis_bytes: PackedByteArray, changed: PackedInt32Array = PackedInt32Array()) -> void:
+	var touched: Dictionary = roofs if changed.is_empty() else {}
+	if not changed.is_empty():
+		for cell_index: int in changed:
+			for b: int in _outer_buildings.get(cell_index, {}):
+				if roofs.has(b):
+					touched[b] = true
+	seen_buildings_checked = 0
+	for b: int in touched:
+		seen_buildings_checked += 1
 		var now := 0
 		var before := 0
 		for i: int in outer_cells.get(b, PackedInt32Array()):
@@ -1158,7 +1215,11 @@ func _process(delta: float) -> void:
 		var plane := (player_lv if player_lv >= 0 else -1) * LEVEL_H
 		if absf(back.y) > 0.01:
 			var focus := cam.global_position - back * ((cam.global_position.y - plane) / back.y)
-			_focus_cell = Vector2i(floori(focus.x), floori(focus.z))
+			var cell := Vector2i(floori(focus.x), floori(focus.z))
+			if cell != _focus_cell:
+				_focus_cell = cell
+				if _update_near(cell):
+					_apply()
 			material.set_shader_parameter("hole_center", focus + Vector3(0, 0.9, 0))
 			material.set_shader_parameter("cam_back", back)
 	if _holding and not _near_door(open_b):

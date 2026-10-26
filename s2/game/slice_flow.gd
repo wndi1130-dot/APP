@@ -29,6 +29,7 @@ extends Node
 ## part; its levers set that state through train_turn.gd set_lever.
 
 const FieldGame = preload("res://game/field_game.gd")
+const FieldClock = preload("res://game/sim/field_clock.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
@@ -291,11 +292,12 @@ func go(i: int) -> void:
 		else:
 			_start_field()
 		return
-	# Leaving a stop the workshop does a stretch's work, once (train_workshop.gd).
+	# Leaving a stop the technologies take their upkeep and the workshop does a
+	# stretch's work, once (train_workshop.gd stretch).
 	var shop_events: Array = []
 	if id == "travel" and int(row[2]) != shop_seg:
 		shop_seg = int(row[2])
-		shop_events = TrainWorkshop.run(train_g)["events"]
+		shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if String(row[1]) != "":
 		_show_train(String(row[1]), int(row[2]))
 		# What it made, for the people on the train to see (the train scene's events).
@@ -1230,6 +1232,9 @@ func _departure() -> Dictionary:
 ## bodies, kit, hunger and soreness, the promises riding on the stop).
 func _field_opts() -> Dictionary:
 	var o := {"seed": int(opts.get("seed", 1))}
+	# When the train comes in (decision 471 B0): the departure contract's, rolled by the train
+	# from its run's seed and stretch; a contract without one, from the slice's seed and step.
+	o["arrive_min"] = int(opts.get("arrive_min", _departure().get("arriveMin", FieldClock.arrival_for(int(opts.get("seed", 1)) * 1000 + step))))
 	# The stop is drawn in the same cold as the stretch that brought the train
 	# here (the stop pick and the field are the same stretch, so the stop scene
 	# building it from the pick gives the same).

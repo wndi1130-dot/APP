@@ -13,6 +13,7 @@ const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 
 const TAIL := {"id": "tail1", "kind": "comm", "comm": "tail", "name": "꼬리칸 1", "plate": "꼬리"}
 
@@ -129,7 +130,7 @@ func test_an_insulated_car_says_so_and_burns_what_the_forecast_does() -> void:
 	assert_gt(share, 0.0)
 	var want: float = 3.0 * float(g["comms"]["tail"]["pop"]) / 40.0 \
 		* (1.0 - float(TrainMods.D["insulateHeat"]) * share) \
-		* float(t["P"]["coalHeatPerLever"]) * St.law_mult(g, t, "heatMult")
+		* float(t["P"]["coalHeatPerLever"]) * TrainClimate.temp_mult(g, t) * St.law_mult(g, t, "heatMult")
 	assert_eq(m["levers"][0]["cost"], "−" + TrainGauges._num(snappedf(want, 0.1)))
 	assert_ne(m["levers"][0]["cost"], plain["levers"][0]["cost"], "insulation burns less")
 	var sum := 0.0
@@ -192,3 +193,21 @@ func test_the_keys_stand_where_the_mockups_do() -> void:
 func test_the_care_room_counts_who_is_hurt_or_sick() -> void:
 	assert_eq(HomeBar.badges({}), ["", "", "", "", "", ""])
 	assert_eq(HomeBar.badges({"injured": 2, "sickCount": 1}), ["", "", "", "", "", "3"])
+
+
+## With the outside on (train_climate.gd) the cars' heating coal is still each
+## car's share of the forecast's heat_cost: the stage's multiplier is in both.
+func test_the_cars_heating_is_the_forecasts_under_any_stage() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/turn_vectors_climate.json"))
+	var t: Dictionary = data["tables"]
+	var g: Dictionary = (data["runs"][0]["steps"][0]["before"] as Dictionary).duplicate(true)
+	assert_true(bool(g["climate"]))
+	for stage: int in (t["CL"]["mult"] as Array).size():
+		g["outside"] = stage
+		var sum := 0.0
+		for c: String in St.comms(t):
+			sum += TrainTurn.comm_heat(g, c) * float(t["P"]["coalHeatPerLever"]) * TrainClimate.temp_mult(g, t) * St.law_mult(g, t, "heatMult")
+		assert_almost_eq(sum, TrainTurn.heat_cost(g, t) * St.law_mult(g, t, "heatMult"), 1e-9, "stage %d" % stage)
+		g["comms"]["tail"]["heat"] = 3
+		assert_eq(CarPane.model(g, t, TAIL)["levers"][0]["cost"],
+			"−" + TrainGauges._num(snappedf(TrainTurn.comm_heat(g, "tail") * float(t["P"]["coalHeatPerLever"]) * float(t["CL"]["mult"][stage]) * St.law_mult(g, t, "heatMult"), 0.1)))

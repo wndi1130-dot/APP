@@ -3,6 +3,7 @@ extends RefCounted
 ## The returned options can be passed as field_council.gd's regular argument.
 
 const State = preload("res://game/train/train_state.gd")
+const LawTech = preload("res://game/train/train_lawtech.gd")
 const Stop = preload("res://game/train/train_stop.gd")
 
 
@@ -19,7 +20,10 @@ static func _active(g: Dictionary, law: String) -> bool:
 
 
 static func law_open(g: Dictionary, t: Dictionary, law: String) -> bool:
-	# 내정 훅 자리: domesticLawOpen. S1a에서는 내정 법을 열지 않는다.
+	# 내정 훅(domesticLawOpen): 기술이 연 변형 법 셋과 그 원래 법만 옮겼다(train_lawtech.gd). 나머지 S1c 법은 닫힌 채.
+	var dom_open: Variant = LawTech.law_open(g, law)
+	if dom_open != null:
+		return bool(dom_open)
 	if (t["S1C_LAWS"] as Array).has(law) or (t["FAREWELL_LAWS"] as Array).has(law):
 		return false
 	match law:

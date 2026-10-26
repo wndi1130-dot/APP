@@ -12,6 +12,22 @@ const CouncilMath = preload("res://game/politics/council_math.gd")
 
 const FNV_OFFSET := 2166136261
 const FNV_PRIME := 16777619
+## Decision 471 B0: when the train comes in to a stretch's stop (stop_time.ts ARRIVALS, the same
+## bands as field_clock.gd): [share %, first minute, last minute], on the ten minutes.
+const ARRIVALS: Array = [[40, 540, 590], [35, 600, 750], [20, 780, 860], [5, 890, 930]]
+const ARRIVE_MIN_DEFAULT := 630
+
+
+## The stop of stretch `seg` comes in at this minute of the day (stop_time.ts arrivalMin): the
+## run's seed and the stretch alone, no draw from the board's dice.
+static func arrival_min(seed: String, seg: int) -> int:
+	var x: int = hash_text("%s:arr:%d" % [seed, seg]) % 100
+	for band: Array in ARRIVALS:
+		if x < int(band[0]):
+			var steps: int = int(float(int(band[2]) - int(band[1])) / 10.0) + 1
+			return int(band[1]) + (hash_text("%s:arr:%d:m" % [seed, seg]) % steps) * 10
+		x -= int(band[0])
+	return ARRIVE_MIN_DEFAULT
 
 
 ## FNV-1a over UTF-16 code units, as hash() in omens.ts reads a JS string.

@@ -26,6 +26,7 @@ const St = preload("res://game/train/train_state.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
 const CSS_SIZE := Vector2(330, 286)
@@ -89,8 +90,9 @@ static func model(g0: Dictionary, t0: Dictionary, car0: Dictionary) -> Dictionar
 		var bad: bool = v < float(row[2]) if bool(row[3]) else v > float(row[2])
 		stats.append({"word": row[0], "n": int(round(v)), "mark": float(row[2]), "bad": bad})
 	# What this car's step burns in a stretch: its own share of train_turn.gd
-	# heat_cost (insulation and the laws' heat multiplier with it) and food_cost.
-	var coal: float = TrainTurn.comm_heat(g0, c) * float(p["coalHeatPerLever"]) * St.law_mult(g0, t0, "heatMult")
+	# heat_cost (insulation, the outside's stage and the laws' heat multiplier
+	# with it) and food_cost.
+	var coal: float = TrainTurn.comm_heat(g0, c) * float(p["coalHeatPerLever"]) * TrainClimate.temp_mult(g0, t0) * St.law_mult(g0, t0, "heatMult")
 	var dom: Dictionary = g0.get("dom", {}) if g0.get("dom") is Dictionary else {}
 	var food: float = float(pop) * float(ration) * float(p["foodPerPersonLever"])
 	var names: Dictionary = t0.get("COMM_NAME", {})

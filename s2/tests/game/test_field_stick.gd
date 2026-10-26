@@ -122,7 +122,9 @@ func test_stick_rim_walks_unless_set_to_run() -> void:
 	hud.stick_at = Vector2(200 + hud.STICK_R * 0.4, 400)
 	hud._apply_stick()
 	assert_false(p.running)
-	assert_almost_eq(p.stick.x, 0.4, 0.02)
+	assert_almost_eq(p.stick.length(), 0.4, 0.02)
+	# Right on the screen is north-east on the ground: the camera is turned (결정 476).
+	assert_almost_eq(p.stick.angle(), Vector2.RIGHT.rotated(-deg_to_rad(game.CAM_YAW)).angle(), 0.01)
 
 
 func test_setting_the_stick_down_by_the_toggles_starts_nothing() -> void:

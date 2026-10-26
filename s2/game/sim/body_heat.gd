@@ -22,6 +22,15 @@ var heat: float = 100.0
 var wet: float = 0.0
 
 
+func save_of() -> Dictionary:
+	return {"heat": heat, "wet": wet}
+
+
+func restore(saved: Dictionary) -> void:
+	heat = float(saved.get("heat", heat))
+	wet = float(saved.get("wet", wet))
+
+
 # 0 warm (>=65), 1 cold (>=35), 2 light hypothermia (>=12), 3 severe.
 func level() -> int:
 	return level_of(heat)

@@ -12,17 +12,40 @@ extends RefCounted
 ## the armory holds weapons as the field carries them: id, quality, condition.
 
 const Weapons = preload("res://game/sim/weapons.gd")
+const Wear = preload("res://game/sim/wear.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 
 const AMOUNTS: Array[String] = ["scrap", "wood", "parts", "cores", "cloth", "ammo_pistol", "ammo_shell", "ammo_craft"]
 ## S1's Field, the receipt's FRAGMENT_KINDS.
 const FIELDS: Array[String] = ["engine", "med", "craft", "radio", "expedition"]
-## What the wardrobe can hold: the long coat the workshop makes (decision 070).
-## The field's own clothes table takes this over when it comes.
-const WEARABLES: Array[String] = ["coat_long"]
+## What the wardrobe holds (decision 443, card E 가): the outer things only, one wardrobe for
+## the train — whatever the field's clothes table (wear.gd) puts on these places: the jacket
+## (the railway coat), the coat over it (the long coat the workshop makes, decision 070) and
+## the gloves. What goes under is each one's own.
+const WARDROBE_SLOTS: Array[String] = ["jacket", "coat", "hands"]
+## The wardrobe at the start (card E 가, the user's 「철도원 외투 6벌·장갑 6켤레」): unworn.
+const START_WARDROBE: Array = [
+	{"id": "jacket_short", "condition": 1.0}, {"id": "jacket_short", "condition": 1.0}, {"id": "jacket_short", "condition": 1.0},
+	{"id": "jacket_short", "condition": 1.0}, {"id": "jacket_short", "condition": 1.0}, {"id": "jacket_short", "condition": 1.0},
+	{"id": "gloves", "condition": 1.0}, {"id": "gloves", "condition": 1.0}, {"id": "gloves", "condition": 1.0},
+	{"id": "gloves", "condition": 1.0}, {"id": "gloves", "condition": 1.0}, {"id": "gloves", "condition": 1.0},
+]
 ## The train's stores at the start of a run (S1 domestic/data.ts D.scrap0, wood0, parts0).
 const START: Dictionary = {"scrap": 10, "wood": 10, "parts": 4}
 const START_FRAGS: Dictionary = {"engine": 1, "med": 1}
+## The armory and the three stocks of rounds at the start (decision 426 PR 5, with the
+## domestic stream 2026-10-25): the field's first squad's kits, eleven weapons
+## (field_departure.gd: the chief, three companions, two escorts), and the rounds that
+## squad goes out with (pool and loaded: pistol 8+8, shells 4+1, arrows 8+1).
+const START_AMMO: Dictionary = {"ammo_pistol": 16, "ammo_shell": 5, "ammo_craft": 9}
+const START_ARMORY: Array = [
+	{"id": "axe", "quality": "factory", "condition": 0.9}, {"id": "pistol", "quality": "factory", "condition": 0.8},
+	{"id": "pipe_shotgun", "quality": "crude", "condition": 0.9}, {"id": "knife", "quality": "factory", "condition": 0.8},
+	{"id": "bow", "quality": "factory", "condition": 0.9}, {"id": "crowbar", "quality": "factory", "condition": 0.9},
+	{"id": "crowbar", "quality": "factory", "condition": 0.8}, {"id": "knife", "quality": "factory", "condition": 0.7},
+	{"id": "shotgun", "quality": "factory", "condition": 0.8}, {"id": "crowbar", "quality": "factory", "condition": 0.9},
+	{"id": "axe", "quality": "factory", "condition": 0.9},
+]
 ## S1's eight specialties; first unused community names in PROFILES order.
 const START_EXPERTS: Array = [
 	{
@@ -88,13 +111,19 @@ static func empty() -> Dictionary:
 	return d
 
 
-## The stores a new run starts with: S1's starting scrap, wood and parts.
+## The stores a new run starts with: S1's starting scrap, wood and parts, the field's first
+## kits and rounds (START_ARMORY, START_AMMO) and the wardrobe's railway coats and gloves
+## (START_WARDROBE).
 static func start() -> Dictionary:
 	var d := empty()
 	for key: String in START:
 		d[key] = START[key]
 	for field: String in START_FRAGS:
 		d["frags"][field] = START_FRAGS[field]
+	for key: String in START_AMMO:
+		d[key] = START_AMMO[key]
+	d["armory"] = START_ARMORY.duplicate(true)
+	d["wardrobe"] = START_WARDROBE.duplicate(true)
 	d["techs"] = {}
 	d["restoring"] = null
 	d["experts"] = START_EXPERTS.duplicate(true)
@@ -222,14 +251,25 @@ static func is_tech(v: Variant) -> bool:
 	return true
 
 
-## One wardrobe entry: a thing the wardrobe knows and a condition from 0 to 1.
+## One wardrobe entry: an outer thing the field's clothes table knows (WARDROBE_SLOTS), a
+## condition from 0 to 1 (1 - its wear), and where it is holed if it is ({part: true}, parts
+## it covers).
 static func is_wearable(c: Variant) -> bool:
-	if not c is Dictionary or c.size() != 2:
+	if not c is Dictionary or not (c.size() == 2 or c.size() == 3 and c.has("holes")):
 		return false
 	var id: Variant = c.get("id")
 	var condition: Variant = c.get("condition")
-	return id is String and WEARABLES.has(id) and (condition is float or condition is int) \
-		and float(condition) >= 0.0 and float(condition) <= 1.0
+	if not (id is String and Wear.is_garment(id) and WARDROBE_SLOTS.has(Wear.slot_of(id))):
+		return false
+	if not ((condition is float or condition is int) and float(condition) >= 0.0 and float(condition) <= 1.0):
+		return false
+	var holes: Variant = c.get("holes", {})
+	if not holes is Dictionary:
+		return false
+	for part: Variant in holes:
+		if not (part is String and Wear.covers(id).has(part) and holes[part] == true):
+			return false
+	return true
 
 
 ## What is on the workshop's line (train_workshop.gd): {id, progress, need, paid}.

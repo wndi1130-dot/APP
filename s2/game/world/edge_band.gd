@@ -26,6 +26,10 @@ const EDGE_WAVE: float = 1.2
 const RAIL_CLEAR: float = 2.5
 ## A road goes on this far past the edge before it is blocked.
 const ROAD_RUN: float = 5.0
+## A run of road cells along an edge wider than this is a road running beside the edge,
+## not one leaving the map: no corridor and no block for it, the woods stand as anywhere
+## (else a whole side was lined with crates, a wall). Roads out are 2 to 6 cells.
+const ROAD_WIDEST := 8
 ## Trees are drawn in pieces this many metres a side, so those off screen are not.
 const CHUNK: float = 16.0
 ## Only the first trees throw a shadow, the ones whose shadow falls on the ground
@@ -36,11 +40,52 @@ const TREE_HEIGHT := Vector2(3.6, 5.6)
 
 const TREE_MODEL := "res://models/props_common/bare_tree.glb"
 const BLOCK_MODELS: Array[String] = ["res://models/props_stop01/sleeper_fence.glb", "res://models/props_common/crate_stack.glb"]
+## Now and then a small glade behind the first rows, with a trace of people in it, so
+## the band reads as woods and not as a wall (ref-ops 참고 대조 4 E3): one chance every
+## GLADE_EVERY metres along an edge, a square GLADE_SIZE metres a side, its near side
+## GLADE_NEAR metres out — past the thick first rows, well inside what the camera shows.
+const GLADE_EVERY: float = 48.0
+const GLADE_CHANCE: float = 0.5
+const GLADE_SIZE := Vector2(4.0, 6.0)
+const GLADE_NEAR: float = 3.0
+## Felled: a cluster of cut stumps. Rest: a log to sit on, a cold fire before it and a
+## pile of firewood (needs a glade of 5 m or more). A trace whose model is not there yet
+## is left out, never drawn as a grey box (the cold fire is asked of art3d).
+const STUMPS_MODEL := "res://models/props_field/stump_cluster.glb"
+const LOG_MODEL := "res://models/props_field/fallen_log.glb"
+const FIREWOOD_MODEL := "res://models/props_field/firewood_pile.glb"
+const COLD_FIRE_MODEL := "res://models/props_field/cold_campfire.glb"
 
 
-## Half the ground the field camera shows: across from the aspect, along from the pitch.
-static func view_half(cam_size: float, aspect: float, pitch_deg: float) -> Vector2:
-	return Vector2(cam_size * aspect * 0.5, cam_size * 0.5 / sin(deg_to_rad(pitch_deg)))
+## Half the ground the field camera shows along the map's x and z: across from the
+## aspect, along from the pitch; a camera turned yaw_deg from north (결정 476) shows
+## that rectangle turned, so this is half the box round it.
+static func view_half(cam_size: float, aspect: float, pitch_deg: float, yaw_deg: float = 0.0) -> Vector2:
+	var across := cam_size * aspect * 0.5
+	var along := cam_size * 0.5 / sin(deg_to_rad(pitch_deg))
+	var c := absf(cos(deg_to_rad(yaw_deg)))
+	var s := absf(sin(deg_to_rad(yaw_deg)))
+	return Vector2(across * c + along * s, across * s + along * c)
+
+
+## How far from the middle of the screen the player may stand, as a share of half
+## the screen each way, before the view follows past the band (keep_on_screen).
+const KEEP: float = 0.6
+
+
+## A turned view (결정 476) held inside the band stops so far in at a corner of the
+## map that the player would slide to the screen's corner, under the thumbs, or off
+## it: the view moves toward `at` just enough to keep it inside the middle KEEP of
+## the screen. Only there does the screen go past the band, onto the fog and the
+## ground past the edge (fx/map_edge.gd: 48 m of ground, the fog whole from 12 m).
+static func keep_on_screen(focus: Vector3, at: Vector3, cam_size: float, aspect: float, pitch_deg: float, yaw_deg: float) -> Vector3:
+	var half := Vector2(cam_size * aspect * 0.5, cam_size * 0.5 / sin(deg_to_rad(pitch_deg))) * KEEP
+	var yaw := deg_to_rad(yaw_deg)
+	# Where `at` lies from the focus across and down the screen, in metres of ground.
+	var off := Vector2(at.x - focus.x, at.z - focus.z).rotated(yaw)
+	var over := off - Vector2(clampf(off.x, -half.x, half.x), clampf(off.y, -half.y, half.y))
+	var move := over.rotated(-yaw)
+	return focus + Vector3(move.x, 0, move.y)
 
 
 ## The point the camera looks at, kept so its view ends inside the band.
@@ -76,7 +121,7 @@ static func openings(g: FieldGrid) -> Array:
 				if (kind == F.ROAD or kind == F.RAIL) and g.people_can_walk(c):
 					f = kind
 			if f != run_floor:
-				if run_from >= 0:
+				if run_from >= 0 and (run_floor == F.RAIL or i - run_from <= ROAD_WIDEST):
 					out.append({"side": side, "from": run_from, "to": i - 1, "floor": run_floor})
 				run_from = i if f >= 0 else -1
 				run_floor = f
@@ -141,10 +186,61 @@ static func plan(g: FieldGrid, seed: int) -> Dictionary:
 			var at := Vector3(across.position.x + across.size.x * t, 0, at_end.y) if along_x \
 				else Vector3(at_end.x, 0, across.position.y + across.size.y * t)
 			blocks.append({"at": at, "yaw": 0.0 if along_x else PI * 0.5, "model": BLOCK_MODELS[k % 2 if rng.randf() < 0.7 else 1]})
+	var glades := _glades(g, seed, clear)
+	var no_trees: Array[Rect2] = clear.duplicate()
+	for gl: Dictionary in glades:
+		no_trees.append((gl["rect"] as Rect2).grow(0.5))  # no trunk against the trace's edge
 	var trees: Array = []
-	_scatter(g, rng, clear, trees, INNER_SPACING, TRUNK_GAP, INNER_ROW)
-	_scatter(g, rng, clear, trees, DEEP_SPACING, INNER_ROW, BAND)
-	return {"trees": trees, "blocks": blocks, "clear": clear, "runs": runs}
+	_scatter(g, rng, no_trees, trees, INNER_SPACING, TRUNK_GAP, INNER_ROW)
+	_scatter(g, rng, no_trees, trees, DEEP_SPACING, INNER_ROW, BAND)
+	return {"trees": trees, "blocks": blocks, "glades": glades, "clear": clear, "runs": runs}
+
+
+## The glades, {rect, kind "felled" | "rest", props [{at, yaw, model}]}, from their own
+## draw so the trees elsewhere stand where they did. None on a run's corridor or a corner.
+static func _glades(g: FieldGrid, seed: int, clear: Array[Rect2]) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(str(seed) + ":glades")
+	var out: Array = []
+	for side in 4:
+		var length := float(g.height if side < 2 else g.width)
+		var u := GLADE_NEAR + GLADE_SIZE.y
+		while u + GLADE_EVERY <= length - GLADE_NEAR - GLADE_SIZE.y + 0.01:
+			var roll := rng.randf()
+			var s := rng.randf_range(GLADE_SIZE.x, GLADE_SIZE.y)
+			var a := u + rng.randf_range(0.0, GLADE_EVERY - s)
+			var rest := s >= 5.0 and rng.randf() < 0.5
+			u += GLADE_EVERY
+			if roll >= GLADE_CHANCE:
+				continue
+			var r := _side_rect(g, side, a, s)
+			if clear.any(func(c: Rect2) -> bool: return c.grow(1.0).intersects(r)):
+				continue
+			# Props lie along the edge (yaw 0 runs along x, so turned on the west and east).
+			var yaw := PI * 0.5 if side < 2 else 0.0
+			var mid := Vector3(r.get_center().x, 0, r.get_center().y)
+			var across := Vector3(1, 0, 0) if side < 2 else Vector3(0, 0, 1)
+			var props: Array = []
+			if rest:
+				props.append({"at": mid - across * 1.5, "yaw": yaw, "model": LOG_MODEL})
+				props.append({"at": mid + across * 0.3, "yaw": yaw, "model": COLD_FIRE_MODEL})
+				props.append({"at": mid + across * 1.9, "yaw": yaw, "model": FIREWOOD_MODEL})
+			else:
+				props.append({"at": mid, "yaw": yaw + rng.randf_range(-0.3, 0.3), "model": STUMPS_MODEL})
+			out.append({"rect": r, "kind": "rest" if rest else "felled", "props": props})
+	return out
+
+
+## A square `s` metres a side, `a` metres along `side`, its near side GLADE_NEAR out.
+static func _side_rect(g: FieldGrid, side: int, a: float, s: float) -> Rect2:
+	match side:
+		0:
+			return Rect2(-GLADE_NEAR - s, a, s, s)
+		1:
+			return Rect2(g.width + GLADE_NEAR, a, s, s)
+		2:
+			return Rect2(a, -GLADE_NEAR - s, s, s)
+	return Rect2(a, g.height + GLADE_NEAR, s, s)
 
 
 static func _run_end(r: Rect2, side: int) -> Vector2:
@@ -217,7 +313,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		for yy in range(floori(r.position.y), ceili(r.end.y)):
 			for xx in range(floori(r.position.x), ceili(r.end.x)):
 				var col := base.darkened(0.15) if f == F.RAIL and posmod(xx, 2) == 0 else base
-				_quad(ground, Rect2(xx, yy, 1, 1), 0.004, col)
+				_quad(ground, Rect2(xx, yy, 1, 1), 0.004, col, f)
 	if not p["runs"].is_empty():
 		var ground_node := MeshInstance3D.new()
 		ground_node.name = "Runs"
@@ -267,6 +363,18 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 			node.mesh = st.commit()
 			node.material_override = material
 			root.add_child(node)
+	var traces := 0
+	for gl: Dictionary in p["glades"]:
+		for t: Dictionary in gl["props"]:
+			var mesh := _model_mesh(String(t["model"]))
+			if mesh == null:
+				continue
+			var node := MeshInstance3D.new()
+			node.name = "Trace"
+			node.mesh = mesh
+			node.transform = Transform3D(Basis(Vector3.UP, float(t["yaw"])), t["at"])
+			root.add_child(node)
+			traces += 1
 	for b: Dictionary in p["blocks"]:
 		var mesh := _model_mesh(String(b["model"]))
 		var node := MeshInstance3D.new()
@@ -281,7 +389,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 			node.material_override = material
 		node.transform = Transform3D(Basis(Vector3.UP, float(b["yaw"])), b["at"])
 		root.add_child(node)
-	return {"trees": p["trees"].size(), "blocks": p["blocks"].size(), "chunks": by_chunk.size(), "runs": p["runs"].size()}
+	return {"trees": p["trees"].size(), "blocks": p["blocks"].size(), "glades": p["glades"].size(), "traces": traces, "chunks": by_chunk.size(), "runs": p["runs"].size()}
 
 
 static func _model_mesh(path: String) -> Mesh:
@@ -291,12 +399,15 @@ static func _model_mesh(path: String) -> Mesh:
 	return meshes.get(0, null)
 
 
-static func _quad(st: SurfaceTool, r: Rect2, y: float, color: Color) -> void:
+## `kind`: the floor kind, so the ground shader gives the run the map's own bare
+## look (world_vis bare_ground: asphalt, sleepers' gravel); -1 none.
+static func _quad(st: SurfaceTool, r: Rect2, y: float, color: Color, kind: int = -1) -> void:
 	var a := Vector3(r.position.x, y, r.position.y)
 	var corners := [a, a + Vector3(r.size.x, 0, 0), a + Vector3(r.size.x, 0, r.size.y), a + Vector3(0, 0, r.size.y)]
 	for idx in [0, 1, 2, 0, 2, 3]:
 		st.set_color(color)
 		st.set_normal(Vector3.UP)
+		st.set_uv2(Vector2(kind + 1, 0))
 		st.add_vertex(corners[idx])
 
 

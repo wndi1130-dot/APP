@@ -20,17 +20,18 @@
 열차(S1 기준 구현, Godot 이식은 같은 값)가 정차 고르기에서 「내리기」를 누를 때 판 상태에서 만든다. 판 1(`s1/src/game/field_receipt.ts` FieldDeparture)의 칸은 그대로 두고 사람 칸을 넓힌다. 판 1 계약도 계속 읽는다(시험 표본).
 
 ```
-{ version: 2, departureId, stopId, placeId, segment, domestic,
+{ version: 2, departureId, stopId, placeId, segment, arriveMin?, domestic,
   promises: [ {id, kind, madeTo, label, subjects} ],      // 판 1과 같음
   roster:   [ Person ],      // 처음부터 나가는 수색대(열차장 + 동료)
   workCrew: [ Person ],      // 작업조 부르기로 내려올 수 있는 사람(운송조·호위조)
-  train:    { food, hungerSegs, cold, weather } }          // 정차 전체에 걸리는 열차 사정
+  train:    { food, hungerSegs, cold, weather,
+              ammo?: {pistol, shell, craft}, lures? } }  // 정차 전체에 걸리는 열차 사정, 탄·미끼는 열차가 재고로 둘 때만
 Person = { id, comm, name, role: chief|companion|carrier|escort,
   body:  { strength, melee, shooting, stealth, search },  // 몸 능력 0~10 (결정 카드 A)
   know:  { field, skill } | null,                          // 지식 층(내정 명부의 분야·등급)
   wounds:[ { woundId, part, grade, state, daysLeft, septic } ],  // 열차 명부의 활성 상처
   hunger: 0|1|2, sore: 0|1|2, rest: 0|1|2,                 // 결정 카드 B
-  gear:  { hands: [[id, quality, condition]], items: {id: n}, wear: {...}, bag },
+  gear:  { hands: [[id, quality, condition]], items: {id: n}, wear: {place: id | {id, condition, holes?} | ""}, bag },
   rel,                                                     // 그 칸과 열차장의 관계
   stance?: good|bad, cues?: [key] }                        // 열차장에 대한 그 사람의 기억(사람 기억 줄기, 없으면 칸 관계만)
 ```
@@ -38,7 +39,8 @@ Person = { id, comm, name, role: chief|companion|carrier|escort,
 - **id는 열차 명부의 id다.** 이름 있는 사람은 프로필 id(`p_001`…), 열차장은 명부 밖의 고정 id `captain` 하나다. 필드는 이 id를 끝까지 바꾸지 않고 영수증의 사람 목록·상처·목격에 그대로 쓴다. 기본 분대(`p_guard_marek` 등)는 열차 없이 필드만 여는 시험 입구에만 남는다.
 - **수색대**: 열차장과 동료 셋이 기본이다. 동료 후보는 그 구간에 나갈 수 있는 사람이다(S1 `crewNames`와 같은 거름: 16~65세, 정찰조로 다녀온 사람·앓는 대표·근신·경비·깊은 상처 이상인 사람 제외). 출발 화면이 후보 가운데서 고르게 하고, 기본은 칸마다 한 사람(경비대·의무진·꼬리칸, 지금 기본 분대의 칸 구성)이다.
 - **작업조**: 이름 있는 공동체 사람이다(몸과 부상 5장). 운송조는 S1 정차의 작업조(`stopCrew`: `crewComm` 칸에서 `crewSize`명), 호위조는 경비대에서 둘이다. 필드에서 부르기 전에는 열차에 있고, 부르면 그때 영수증 `people.sent`에 든다.
-- **장비는 묶지 않는다.** 결정 407 C1(장부 한 곳)대로 출발 때 열차 재고에서 빼지 않는다. 쓴 탄·잃은 무기는 귀환 때 순증감으로 돌아온다. 무기·탄을 열차 재고에서 고르는 화면은 파밍 손맛 줄기(결정 426) 몫이고, 그 전까지는 역할별 기본 장비를 싣는다.
+- **장비는 묶지 않는다.** 결정 407 C1(장부 한 곳)대로 출발 때 열차 재고에서 빼지 않는다. 쓴 탄·잃은 무기는 귀환 때 순증감으로 돌아온다. 무기·탄을 열차 재고에서 고르는 화면은 파밍 손맛 줄기(결정 426) 몫이고, 그 전까지는 역할별 기본 장비를 싣는다. 열차가 무기고·탄·옷장을 재고로 두면(S2 `train_dom.gd`, `kit_pick.gd`) 역할 장비를 무기고에서 집고(같은 것 → 같은 종류 가장 좋은 상태 → 빈손), 탄은 `train.ammo`로 넘기며(필드는 총부터 채우고 나머지가 공동 탄), 열차장과 동료의 겉옷·장갑은 옷장에서 꺼내 상태·구멍 그대로 입힌다(비면 `""` = 외투 없이, 작업조는 기본 차림, 결정 443). 재고에서 빼지 않는 것은 같다 — 줄어드는 것은 귀환의 순증감(J01). 무기고·탄·옷장 칸이 없는 열차(S1의 상태)는 기본 장비 그대로다.
+- **도착 시각** `arriveMin`(0시부터 분, 결정 471 B0): 열차가 판 씨앗과 구간으로 굴린다(S1 `stop_time.ts`, 아침 40·한낮 35·늦은 오후 20·해 질 녘 5%, 10분 단위 — S2 `field_clock.gd`의 띠와 같다). 노선표가 도착 전에 같은 값을 보이고, 필드 시계·정차 장면이 이 값에서 시작한다. 없던 계약은 10:30.
 - **약속**은 판 1과 같다. 서막 약속은 판 상태의 `story.flags`와 서막 운반조에서, 교대 약속은 그 칸에 걸린 `skip_dispatch` 약속에서 만든다.
 - **동시 점유 금지**(첫 시험 범위 4절): 계약에 든 사람은 그 구간에 공방·가르치기·침상에 없다. 수색대는 정차 시작부터, 작업조는 불린 뒤부터.
 

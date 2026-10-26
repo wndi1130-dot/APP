@@ -606,7 +606,9 @@ static func struck_motion(z: Dictionary) -> int:
 	if HIT_UPPER >= table.size() or not z.has("hit_at"):
 		return -1
 	var since := float(z["age"]) - float(z["hit_at"])
-	if since < 0.0 or since >= seconds_of(HIT_LEFT, 0.4):
+	# A body hit that stuns it (field_combat BODY_STUN) holds the motion's last
+	# pose, the head thrown to the side, until it comes on again.
+	if since < 0.0 or since >= maxf(seconds_of(HIT_LEFT, 0.4), float(z.get("hit_hold", 0.0))):
 		return -1
 	var shoved := float(z.get("shoved_t", 0.0))
 	if shoved > 0.0 and float(Motion.row("dead_shoved")["len"]) - shoved < since:
