@@ -11,6 +11,19 @@ const SimNoise = preload("res://game/sim/noise.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 
 
+class StubCombat:
+	extends RefCounted
+	var near: bool = false
+
+	func tap_assist_off(_p) -> bool:
+		return near
+
+
+class StubField:
+	extends RefCounted
+	var combat = StubCombat.new()
+
+
 func _person(pid: String = "p_test", name_text: String = "시험") -> Node3D:
 	var p := Person.new()
 	add_child_autofree(p)
@@ -72,11 +85,12 @@ func test_the_drawn_walk_and_run_follow_the_hand() -> void:
 		assert_eq(_drawn(p, note, own, true), String(row[1]), "%s walking" % row[0])
 		p.running = true
 		assert_eq(_drawn(p, note, own, true), String(row[2]), "%s running" % row[0])
-	# Crouched there is one walk, whatever is in the hand; standing, one stand.
+	# Crouched a gun is held low in both hands (test_crouched_by_what_is_held);
+	# standing, one stand.
 	p.running = false
 	p.crouched = true
 	_hold(p, "shotgun")
-	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_CROUCH_WALK)
+	assert_eq(_drawn(p, note, own, true), String(Gait.CROUCH_WALK["long"]))
 	p.crouched = false
 	assert_eq(_drawn(p, note, own, false), PersonVisual.OWN_STAND)
 	# Turning on the spot it steps round in the walk of what it holds.
@@ -181,13 +195,198 @@ func test_over_the_load_or_with_a_big_thing_the_run_on_walks() -> void:
 	p.add_item("symbol_bell", 1)
 	assert_false(p.load_lets_run())
 	assert_false(Gait.runs(p))
-	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_WALK, "the bell in the arms: it walks")
+	assert_eq(_drawn(p, note, own, true), Gait.CARRY_BIG, "the bell in the arms: it walks, carrying it")
 	p.items.clear()
 	p.add_item("scrap", int(ceil(p.carry_limit() * 1.25)))
 	assert_eq(p.carry_state(), 2)
 	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_WALK, "over the load: it walks")
 	p.items.clear()
 	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_RUN, "put down, it runs again")
+
+
+# Bleeding hard (the rules walk it slower and it goes down in two minutes) it
+# reels as one spent does, walking and standing (decision 448: how one moves
+# shows the wounds); a leg that limps shows the limp first, walking. A light
+# bleed walks as before. Bleeding does not stop the run, so running it runs.
+func test_bleeding_hard_it_reels_and_a_limp_comes_first() -> void:
+	var own := _own()
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.1, [], own)
+	p.body.add_wound("arm_left", "laceration", 1.0)
+	assert_eq(p.body.bleed_level(), 1)
+	assert_false(Gait.reels(p))
+	for i in 10:
+		PersonVisual.motion_of(p, note, 0.1, [], own)   # the flinch at the new wound plays out
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_WALK, "a light bleed: it walks")
+	p.body.add_wound("torso", "deep", 1.0)
+	assert_eq(p.body.bleed_level(), 2)
+	assert_lt(float(p.mults()["move"]), 1.0, "the rules walk it slower")
+	assert_true(Gait.reels(p))
+	for i in 10:
+		PersonVisual.motion_of(p, note, 0.1, [], own)   # the flinch at the new wound plays out
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_SPENT, "bleeding hard: it reels")
+	assert_eq(_drawn(p, note, own, false), PersonVisual.OWN_SPENT, "and stopping it does not stand up straight")
+	p.running = true
+	assert_true(p.body.can_run())
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_RUN, "the run on: it runs")
+	p.running = false
+	p.crouched = true
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_CROUCH_WALK, "crouched: the crouched walk")
+	p.crouched = false
+	p.body.add_wound("leg_left", "laceration", 1.0)
+	for i in 10:
+		PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_true(_drawn(p, note, own, true).begins_with("p_limp_light"), "a leg that limps: the limp first")
+	assert_eq(_drawn(p, note, own, false), PersonVisual.OWN_SPENT, "standing still it reels")
+	# Spent with a limp, the same: the limp walking, the reel standing.
+	var q := _person("p_q", "지친")
+	var q_note := {}
+	PersonVisual.motion_of(q, q_note, 0.1, [], own)
+	q.body.exhaustion = 0.9
+	q.body.add_wound("leg_right", "laceration", 1.0)
+	for i in 10:
+		PersonVisual.motion_of(q, q_note, 0.1, [], own)
+	assert_true(_drawn(q, q_note, own, true).begins_with("p_limp_light"), "spent and limping: the limp walking")
+	assert_eq(_drawn(q, q_note, own, false), PersonVisual.OWN_SPENT, "and the reel standing")
+
+
+# Decision 448: crouched, a gun is held low in both hands (a long gun and a
+# handgun each its own way); anything else crouches the plain way, and so does a
+# long weapon held in one hand (a hurt arm). The crouched walks go round with the
+# footsteps at the crouch's round.
+func test_crouched_by_what_is_held() -> void:
+	var own := _own()
+	for clip_name: String in Gait.CROUCH_WALK.values():
+		var n := PersonVisual.clip_named(own, clip_name, -1)
+		assert_gt(n, -1, clip_name + " is in the build")
+		assert_almost_eq(float(own[n]["round"]), float(SimNoise.STEP_ROUND["crouch"]), 0.01 * float(own[n]["round"]), clip_name + ": the crouch's round")
+		assert_true(PersonVisual.is_stepped(clip_name), clip_name)
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.1, [], own)
+	p.crouched = true
+	for row in [["shotgun", "long"], ["pistol", "pistol"]]:
+		_hold(p, String(row[0]))
+		assert_eq(_drawn(p, note, own, true), String(Gait.CROUCH_WALK[row[1]]), "%s crouched, walking" % row[0])
+		assert_eq(_drawn(p, note, own, false), String(Gait.CROUCH_STAND[row[1]]), "%s crouched, still" % row[0])
+	for wid in ["knife", "axe", "bow", ""]:
+		_hold(p, wid)
+		if wid == "":
+			p.hands = []
+		assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_CROUCH_WALK, "%s crouched, walking" % wid)
+		assert_eq(_drawn(p, note, own, false), PersonVisual.OWN_CROUCH_STAND, "%s crouched, still" % wid)
+	_hold(p, "shotgun")
+	p.body.fracture(true, "arm_left")
+	for i in 10:
+		PersonVisual.motion_of(p, note, 0.1, [], own)   # the flinch at the new break plays out
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_CROUCH_WALK, "a long gun in one hand: the plain crouch")
+
+
+# Decision 448: something big held in both arms is carried so, walking (it cannot
+# be run); a body wound as sore as it shows standing goes bent with a hand to its
+# side; an arm that hurts walks as before. A leg's limp comes first, then the reel
+# (spent or bleeding hard), then full arms, then the hurt. Both go round with the
+# footsteps at the walk's round.
+func test_carried_and_hurt_walks() -> void:
+	var own := _own()
+	for clip_name in [Gait.CARRY_BIG, Gait.WALK_HURT]:
+		var n := PersonVisual.clip_named(own, clip_name, -1)
+		assert_gt(n, -1, clip_name + " is in the build")
+		assert_almost_eq(float(own[n]["round"]), float(SimNoise.STEP_ROUND["walk"]), 0.01 * float(own[n]["round"]), clip_name + ": the walk's round")
+		assert_true(PersonVisual.is_stepped(clip_name), clip_name)
+	var p := _person()
+	var note := {}
+	PersonVisual.motion_of(p, note, 0.1, [], own)
+	p.add_item("symbol_bell", 1)
+	assert_eq(_drawn(p, note, own, true), Gait.CARRY_BIG, "the bell in both arms")
+	p.running = true
+	assert_eq(_drawn(p, note, own, true), Gait.CARRY_BIG, "the run on: it walks carrying")
+	p.running = false
+	p.items.clear()
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_WALK, "put down: the plain walk")
+	p.body.add_wound("arm_right", "laceration", 1.0)
+	for i in 10:
+		PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_WALK, "an arm that hurts: as before")
+	p.body.add_wound("torso", "laceration", 1.0)
+	for i in 10:
+		PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_lt(p.body.bleed_level(), 2)
+	assert_eq(_drawn(p, note, own, true), Gait.WALK_HURT, "the body hurting: bent, a hand to its side")
+	p.add_item("symbol_bell", 1)
+	assert_eq(_drawn(p, note, own, true), Gait.CARRY_BIG, "full arms before the hurt")
+	p.body.exhaustion = 0.9
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_SPENT, "spent: the reel before full arms")
+	p.body.exhaustion = 0.0
+	p.body.add_wound("arm_left", "deep", 1.0)
+	for i in 10:
+		PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_eq(p.body.bleed_level(), 2)
+	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_SPENT, "bleeding hard: the reel before full arms")
+	p.items.clear()
+	p.body.add_wound("leg_left", "laceration", 1.0)
+	for i in 10:
+		PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_true(_drawn(p, note, own, true).begins_with("p_limp_light"), "a leg that limps comes first")
+
+
+# Decision 422 M3: with danger near (the dead the tap helper stops for, or a fight
+# with someone living) a hand weapon comes up on guard standing, and stays up a
+# while after; a knife low with its point out, anything else (the bare fists too)
+# up by the shoulder. Walking it walks; a gun or a bow, a hurt arm, full arms or
+# crouching are as before.
+func test_danger_near_a_hand_weapon_comes_up_on_guard() -> void:
+	var own := _own()
+	for clip_name in [Gait.READY_ONE, Gait.READY_STAB]:
+		assert_gt(PersonVisual.clip_named(own, clip_name, -1), -1, clip_name + " is in the build")
+	var field := StubField.new()
+	var p := _person()
+	var note := {}
+	_hold(p, "crowbar")
+	PersonVisual.motion_of(p, note, 0.1, [], own)
+	PersonVisual.guard_note(field, p, note, 0.3)
+	assert_eq(_drawn(p, note, own, false), PersonVisual.OWN_STAND, "nothing near: it stands")
+	field.combat.near = true
+	PersonVisual.guard_note(field, p, note, 0.3)
+	assert_eq(_drawn(p, note, own, false), Gait.READY_ONE, "the dead near: on guard")
+	_hold(p, "knife")
+	assert_eq(_drawn(p, note, own, false), Gait.READY_STAB, "a knife: low, its point out")
+	p.hands = []
+	assert_eq(_drawn(p, note, own, false), Gait.READY_ONE, "bare fists: up")
+	_hold(p, "crowbar")
+	assert_eq(_drawn(p, note, own, true), "p_walk_axe", "walking it walks")
+	for wid in ["shotgun", "pistol", "bow"]:
+		_hold(p, wid)
+		assert_eq(Gait.ready_name(p), "", wid + ": aimed its own way")
+	_hold(p, "shotgun")
+	PersonVisual.guard_note(field, p, note, 0.3)
+	assert_eq(_drawn(p, note, own, false), PersonVisual.OWN_STAND, "a gun: it stands")
+	# The danger gone, the guard stays up GUARD_HOLD and then comes down.
+	_hold(p, "crowbar")
+	PersonVisual.guard_note(field, p, note, 0.3)
+	field.combat.near = false
+	PersonVisual.guard_note(field, p, note, 0.3)
+	assert_eq(_drawn(p, note, own, false), Gait.READY_ONE, "just gone: still on guard")
+	for i in int(ceil(Gait.GUARD_HOLD / 0.1)):
+		PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_eq(_drawn(p, note, own, false), PersonVisual.OWN_STAND, "gone a while: it stands down")
+	# A living foe is danger too, the dead or not.
+	assert_false(Gait.threatened(field, p))
+	p.target_person = _person("p_foe", "약탈자")
+	assert_true(Gait.threatened(field, p))
+	p.target_person = null
+	# Crouched it keeps low; a hurt arm or full arms hold nothing up.
+	field.combat.near = true
+	PersonVisual.guard_note(field, p, note, 0.3)
+	p.crouched = true
+	assert_eq(_drawn(p, note, own, false), PersonVisual.OWN_CROUCH_STAND, "crouched it keeps low")
+	p.crouched = false
+	p.add_item("symbol_bell", 1)
+	assert_eq(Gait.ready_name(p), "", "something big in the arms")
+	p.items.clear()
+	p.body.fracture(true, "arm_left")
+	assert_eq(Gait.ready_name(p), "", "an arm too hurt to hold it up")
 
 
 func test_each_person_has_their_own_beat_stride_and_lean() -> void:

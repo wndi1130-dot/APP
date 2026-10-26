@@ -22,24 +22,34 @@ varying float bank;
 // The floor kind + 1 the ground carries in UV2.x (map_view, map_edge); 0 on all else.
 varying flat float ground_kind;
 
+// The map's floor colours (map_view FLOOR_COLORS, vertex colour) are sRGB numbers,
+// as every other material's colour is: read them as such (mood C9).
+vec3 floor_to_linear(vec3 c) {
+	return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
 // Bare ground by floor kind, for while no snow lies on it: the kinds read apart
 // by brightness as the reference's grass, asphalt and concrete tile sets do (D13).
 // Open ground is dead grass and soil in patches, the road dark asphalt, the
 // platform light concrete slabs, gravel speckled. Other kinds keep their colour.
+// sRGB, like the floor colours.
 vec3 bare_ground(int kind, vec3 colour, vec2 p, vec4 grain) {
 	if (kind == 0 || kind == 5) {
 		float patch = fx_fbm2(p * 0.22 + vec2(3.7, 1.1));
-		vec3 grass = mix(vec3(0.70, 0.68, 0.53), vec3(0.80, 0.77, 0.60), fx_vnoise(p * 2.3));
-		vec3 soil = vec3(0.50, 0.43, 0.35) * (0.9 + 0.2 * grain.a);
+		// Under the platform's concrete as grass and soil are in the world (albedo grass 0.25,
+		// bare soil 0.17, new concrete 0.55: about 0.7 and 0.6 of it in sRGB) and in the
+		// reference's tiles (grass about 0.7 of the pavement): mood, 바닥 색.
+		vec3 grass = mix(vec3(0.53, 0.52, 0.46), vec3(0.56, 0.55, 0.49), fx_vnoise(p * 2.3));
+		vec3 soil = vec3(0.45, 0.42, 0.38) * (0.95 + 0.1 * grain.a);
 		return mix(grass, soil, smoothstep(0.42, 0.6, patch));
 	} else if (kind == 1) {
-		return vec3(0.10, 0.10, 0.11) * (0.9 + 0.2 * fx_vnoise(p * 1.7));
+		return vec3(0.26, 0.26, 0.27) * (0.95 + 0.1 * fx_vnoise(p * 1.7));
 	} else if (kind == 2) {
 		vec2 slab = fract(p * 0.5);
 		float seam = step(0.96, max(slab.x, slab.y));
-		return vec3(0.86, 0.85, 0.82) * (0.94 + 0.1 * fx_hash(floor(p * 0.5))) * (1.0 - 0.3 * seam);
+		return vec3(0.72, 0.72, 0.71) * (0.97 + 0.05 * fx_hash(floor(p * 0.5))) * (1.0 - 0.15 * seam);
 	} else if (kind == 7) {
-		return vec3(0.55, 0.54, 0.51) * (0.8 + 0.4 * fx_hash(floor(p * 6.0)));
+		return vec3(0.59, 0.58, 0.57) * (0.9 + 0.2 * fx_hash(floor(p * 6.0)));
 	}
 	return colour;
 }
@@ -84,6 +94,7 @@ void fragment() {
 	if (ground_kind > 0.5 && bare_k > 0.001) {
 		base = mix(base, bare_ground(int(ground_kind + 0.5) - 1, base, world_pos.xz, grain), bare_k);
 	}
+	base = floor_to_linear(base);
 	float soil = mix(grain.a, grain.b, clamp(wet * 1.4, 0.0, 1.0));
 	base *= 1.0 + (soil - 0.5) * 1.3 * ground_k * wander;
 	base *= 1.0 - 0.35 * wet;
@@ -128,7 +139,7 @@ void fragment() {
 	base *= mix(1.0, fx_cloud_shade(world_pos.xz, TIME), sky);
 	vec2 seen = cell.rg;
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
-	float lit = mix(1.0, max(seen.r, seen.g * 0.3 + 0.24), mask_on);
+	float lit = mix(1.0, max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
 	vec3 dimmed = mix(vec3(grey), base, seen.r * 0.6 + 0.4);
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.

@@ -13,7 +13,7 @@ const SEEDS = ['card-0', 'card-1'];
 const CHECKPOINTS = [6, 20, 44];
 const LIMIT = 8 * 1024 * 1024;
 /** S2 turn_cards.gd view가 그리는 종류. */
-const KINDS = ['travel', 'info', 'need_warn', 'demand', 'favor', 'rescue', 'bitten', 'ration_cut', 'rep_sick'];
+const KINDS = ['travel', 'info', 'need_warn', 'demand', 'favor', 'rescue', 'bitten', 'ration_cut', 'rep_sick', 'promise_ledger'];
 /** 사건마다 고를 수 있는 길(cards.ts TRAVEL_EVENTS 선택지 id). */
 const TRAVEL_PICKS: Record<string, string[]> = {
   tail_cold: ['fuel_front', 'blankets', 'endure'], crowd_fight: ['guard_break', 'widen', 'let_be'],
@@ -134,6 +134,13 @@ for (const seed of SEEDS) {
       const g = plain(base);
       if (sick) { g.comms[c].sick = { since: g.seg, rep: plain(g.comms[c].leader) }; g.med = c === 'tail' ? 0 : g.med; } else delete g.comms[c].sick;
       add(`rep_sick/${at}/${c}/${sick ? 'sick' : 'up'}`, g, card('rep_sick', { comm: c }));
+    }
+    // 약속 장부(결과 아크, council_log.ts): 칸마다, 사치품이 모자랄 때, 대표가 앓아 측근이 나올 때.
+    for (const c of S1.COMMS) for (const tag of ['ok', 'poor', 'sick'] as const) {
+      const g = plain(base);
+      if (tag === 'poor') g.lux = 0;
+      if (tag === 'sick') g.comms[c].sick = { since: g.seg, rep: plain(g.comms[c].leader) };
+      add(`promise_ledger/${at}/${c}/${tag}`, g, card('promise_ledger', { comm: c }));
     }
     // 법 요구 예고: 묶음마다 예고 순번 넷.
     for (const id of Object.keys(S1.NEEDS)) for (const n of [0, 1, 2, 3]) add(`need_warn/${at}/${id}/${n}`, plain(base), card('need_warn', { text: id, n }));

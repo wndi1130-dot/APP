@@ -32,7 +32,8 @@ const EVENT_DISPLAY_SECONDS := 1.6
 ## the table is heard by the dead within its radius and shows on the HUD the
 ## same way (field_game make_sound); a test reads the code's calls against it.
 ## "at": maker (whoever made it), spot (a door, window, lid or lure),
-## train (the train's own place: the engine end).
+## train (the train's own place: the engine end). "reach": times its level's
+## radius (1 when not said): a building's alarm carries twice as far.
 ## The brakes and the guards at the train pull nothing (decision 416): the
 ## first horde's 4.5 minutes already count them, and the dead they call come
 ## to the train, not after the squad.
@@ -53,10 +54,12 @@ const SOURCES := {
 	"glass": {"levels": [Level.LOUD], "at": "spot", "pull": true},
 	"hammer": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
 	"salvage": {"levels": [Level.NORMAL, Level.LOUD], "at": "spot", "pull": true},
+	"axe": {"levels": [Level.LOUD], "at": "maker", "pull": true},
 	"search": {"levels": [Level.QUIET], "at": "maker", "pull": true},
 	"glass_step": {"levels": [Level.QUIET], "at": "maker", "pull": true},
 	"ladder": {"levels": [Level.QUIET, Level.NORMAL], "at": "maker", "pull": true},
 	"lid": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
+	"floor_creak": {"levels": [Level.QUIET], "at": "spot", "pull": true},
 	"pickaxe": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
 	"smoke": {"levels": [Level.NORMAL], "at": "spot", "pull": true},
 	"light": {"levels": [Level.NORMAL], "at": "maker", "pull": true},
@@ -68,7 +71,14 @@ const SOURCES := {
 	"whistle": {"levels": [Level.VERY_LOUD], "at": "train", "pull": true},
 	"train_brake": {"levels": [Level.LOUD], "at": "train", "pull": false},
 	"train_guard": {"levels": [Level.QUIET], "at": "train", "pull": false},
+	"building_alarm": {"levels": [Level.LOUD], "at": "spot", "pull": true, "reach": 2.0},
+	"building_alarm_ring": {"levels": [Level.LOUD], "at": "spot", "pull": false, "reach": 2.0},
 }
+
+
+## Times its level's radius a sound of this tag carries.
+static func reach(tag: String) -> float:
+	return float((SOURCES.get(tag, {}) as Dictionary).get("reach", 1.0))
 
 
 ## Points a sound of this tag adds to the stop's score (0 for one that pulls nothing).
