@@ -186,6 +186,16 @@ const PERSON_CLIPS: Array = [
 	["p_ready_two", "", 24, true, "p_ready_two", 1.6],
 	["p_ready_stab", "", 24, true, "p_ready_stab", 1.6],
 	["p_hold_weak", "", 24, true, "p_hold_weak", 3.0],
+	# Decision 448: creeping with a long weapon or a handgun (walking and still),
+	# the weak-hand hold the other way round (the right arm hurt), a big thing
+	# carried in both arms, and walking bent over a wound.
+	["p_crouch_walk_long", "", 32, true, "p_crouch_walk_long", 1.08],
+	["p_crouch_walk_pistol", "", 32, true, "p_crouch_walk_pistol", 1.08],
+	["p_crouch_idle_long", "", 24, true, "p_crouch_idle_long", 3.0],
+	["p_crouch_idle_pistol", "", 24, true, "p_crouch_idle_pistol", 3.0],
+	["p_hold_weak_r", "", 24, true, "p_hold_weak_r", 3.0],
+	["p_carry_big", "", 32, true, "p_carry_big", 0.78],
+	["p_walk_hurt", "", 32, true, "p_walk_hurt", 0.78],
 	# From the two free motion sets (UAL1_Standard.glb and UAL2_Standard.glb, read together).
 	["p_reload", "Pistol_Reload", 32, false, "", 1.667],
 	["p_climb", "ClimbUp_1m", 20, false, "", 0.667],
@@ -202,6 +212,80 @@ const ROUND_LEAST: float = 0.05               # a loop whose feet go back less t
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
 const PERSON_CRAWL_CLIP: String = "p_crawl"   # the same for the living
 const HIP_HEIGHT: float = 1.0                 # the hips the layers' sinks were written for, metres
+# The walk's legs and hips (as p_walk), for walks that do something else with
+# the hands and must cover the walk's ground a round.
+const WALK_LEGS: Array = [
+	["turn", "hips", "z", [0.0, 0.035, 0.0]],
+	["turn", "hips", "y", [0.0, -0.09, 0.0]],
+	["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.4, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0]]]],
+	["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.26, 0.38, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0], [0.0, -0.3, -1.5708], [0.0, -0.12, -1.5708, 2.0]]]],
+	["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.4, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0]]]],
+	["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.26, 0.38, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0], [0.0, -0.3, 1.5708], [0.0, -0.12, 4.7124, 2.0]]]],
+]
+const WALK_SINK: Array = [0.025, 0.02, -1.5708, 2.0]
+# The run's legs, hips and lean, the same whatever the hands hold so each run
+# covers the run's ground a round (SimNoise.STEP_ROUND). The thigh swings from
+# 27 degrees back to 40 ahead; the shin lands 18 ahead, gives under the body,
+# pushes off and folds to 100 back (the heel up behind) on the way forward.
+const RUN_LEGS: Array = [
+	["turn", "hips", "x", 0.12],
+	["turn", "hips", "z", [0.0, 0.05, 0.0]],
+	["turn", "hips", "y", [0.0, -0.14, 0.0]],
+	["swing", "thigh.L", "shin.L", 0.07, [0.12, 0.585, 0.0]],
+	["swing", "shin.L", "foot.L", 0.05, [[-0.707, 0.611, 0.0], [0.0, -0.628, -1.5708], [0.0, -0.41, -1.5708, 2.0]]],
+	["swing", "thigh.R", "shin.R", -0.07, [0.12, 0.585, 3.1416]],
+	["swing", "shin.R", "foot.R", -0.05, [[-0.707, 0.611, 3.1416], [0.0, -0.628, 1.5708], [0.0, -0.41, -1.5708, 2.0]]],
+	["turn", "spine", "x", 0.22],
+	["turn", "chest", "x", 0.1],
+	["turn", "neck", "x", -0.3],
+]
+const RUN_SINK: Array = [0.075, 0.025, -1.5708, 2.0]   # lowest as the legs pass, under the body
+# Creeping (crouched), the same whatever the hands hold, covering the crouched
+# walk's ground a round: knees half bent, the back well forward, the head up to
+# see ahead. The thigh swings from 11 degrees to 46 ahead, the foot kept low.
+const CROUCH_LEGS: Array = [
+	["turn", "hips", "x", 0.25],
+	["turn", "hips", "y", [0.0, -0.06, 0.0]],
+	["swing", "thigh.L", "shin.L", 0.1, [0.5, 0.305, 0.0]],
+	["swing", "shin.L", "foot.L", 0.07, [[-0.558, 0.36, 0.0], [0.0, -0.236, -1.5708], [0.0, -0.166, -1.5708, 2.0]]],
+	["swing", "thigh.R", "shin.R", -0.1, [0.5, 0.305, 3.1416]],
+	["swing", "shin.R", "foot.R", -0.07, [[-0.558, 0.36, 3.1416], [0.0, -0.236, 1.5708], [0.0, -0.166, -1.5708, 2.0]]],
+	["turn", "spine", "x", 0.42],
+	["turn", "chest", "x", 0.14],
+	["turn", "chest", "y", [0.0, 0.06, 0.0]],
+	["turn", "neck", "x", -0.65],
+]
+const CROUCH_SINK: Array = [0.12, 0.01, -1.5708, 2.0]
+# The crouch kept still, a little less deep, the left foot ahead, breathing.
+const CROUCH_STILL: Array = [
+	["turn", "hips", "x", 0.18],
+	["swing", "thigh.L", "shin.L", 0.12, 0.45],
+	["swing", "shin.L", "foot.L", 0.09, -0.2],
+	["swing", "thigh.R", "shin.R", -0.12, 0.21],
+	["swing", "shin.R", "foot.R", -0.09, -0.45],
+	["turn", "hips", "y", -0.08],
+	["turn", "spine", "x", [0.38, 0.015, 0.0]],
+	["turn", "chest", "x", [0.12, 0.01, 0.0]],
+	["turn", "neck", "x", -0.58],
+	["turn", "head", "y", [0.0, 0.2, 0.5]],
+]
+const CROUCH_STILL_SINK: Array = [0.06, 0.004, 0.0]
+# What the hands do creeping with a long weapon: held as walking with it
+# (p_walk_long) but tipped further ahead, lower with the body.
+const CROUCH_LONG_ARMS: Array = [
+	["aim", "upper_arm.R", "forearm.R", [-0.1, -1.0, 0.3]],
+	["aim", "forearm.R", "hand.R", [0.05, -0.8, 1.0]],
+	["aim", "upper_arm.L", "forearm.L", [-0.3, -0.7, 0.75]],
+	["aim", "forearm.L", "hand.L", [-0.7, 0.3, 0.75]],
+]
+# And with a handgun: the right forearm hanging so the muzzle points ahead and
+# a little down (PersonVisual.grip_of), the left hand closed over the right.
+const CROUCH_PISTOL_ARMS: Array = [
+	["swing", "upper_arm.R", "forearm.R", -0.1, 0.55],
+	["swing", "forearm.R", "hand.R", 0.2, -0.2],
+	["swing", "upper_arm.L", "forearm.L", -0.38, 0.45],
+	["swing", "forearm.L", "hand.L", -0.45, 0.05],
+]
 
 # Layers: a hand-made addition on top of a motion. For a frame at progress u
 # (0..1), w = TAU * u, and a layer holds:
@@ -211,6 +295,8 @@ const HIP_HEIGHT: float = 1.0                 # the hips the layers' sinks were 
 #   "steps": [...]            applied in order after the bones are matched:
 #       ["turn", bone, axis, value]       bend a bone about "x" (forward), "y" (twist) or "z" (sideways)
 #       ["aim", bone, child, [x, y, z]]   point a bone at a direction in the body's space
+#       ["swing", bone, child, x, angle]  the same at angle radians forward of straight
+#                                         down (back below 0; past a right angle it points up), x as in "aim"
 #   "sink": value             lower the hips by that many metres, applied last
 # A value is a number, or [base, size, lag] for base + size * sin(w - lag),
 # or [base, size, lag, beats] for base + size * sin(beats * w - lag),
@@ -1098,25 +1184,19 @@ const LAYERS: Dictionary = {
 		],
 		"sink": [0.025, 0.02, -1.5708, 2.0],
 	},
-	# Leaning a little into it, knees high, elbows bent and pumping.
+	# Leaning into it. Each leg lands a little bent ahead, gives under the body,
+	# pushes off behind and folds up with the heel high on the way forward. The
+	# arms swing against the legs from the shoulder, well behind the body and
+	# up in front, the elbow bent so the hand goes from the hip to the chest.
 	"p_run": {
-		"steps": [
-			["turn", "hips", "z", [0.0, 0.05, 0.0]],
-			["turn", "hips", "y", [0.0, -0.12, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.12, 0.6, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0]]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.5, 0.55, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0], [0.0, -0.55, -1.5708], [0.0, -0.2, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.12, 0.6, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0]]]],
-			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.5, 0.55, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0], [0.0, -0.55, 1.5708], [0.0, -0.2, 4.7124, 2.0]]]],
-			["turn", "spine", "x", 0.15],
-			["turn", "chest", "x", 0.05],
-			["turn", "chest", "y", [0.0, 0.16, 0.0]],
-			["turn", "neck", "x", -0.12],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.0, -0.55, 0.0]]],
-			["aim", "forearm.L", "hand.L", [0.05, [0.2, 0.25, 0.0], [0.9, -0.2, 0.0]]],
-			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.0, 0.55, 0.0]]],
-			["aim", "forearm.R", "hand.R", [-0.05, [0.2, -0.25, 0.0], [0.9, 0.2, 0.0]]],
+		"steps": RUN_LEGS + [
+			["turn", "chest", "y", [0.0, 0.32, 0.0]],
+			["swing", "upper_arm.L", "forearm.L", 0.18, [-0.78, -0.75, 0.0]],
+			["swing", "forearm.L", "hand.L", [0.0, 0.15, 0.0], [0.82, -0.9, 0.0]],
+			["swing", "upper_arm.R", "forearm.R", -0.18, [-0.78, 0.75, 0.0]],
+			["swing", "forearm.R", "hand.R", [0.0, 0.15, 0.0], [0.82, 0.9, 0.0]],
 		],
-		"sink": [0.07, 0.04, -1.5708, 2.0],
+		"sink": RUN_SINK,
 	},
 	# Standing easy: breathing, the weight drifting from one foot to the other.
 	"p_stand": {
@@ -1264,43 +1344,45 @@ const LAYERS: Dictionary = {
 		],
 		"sink": ["keys", [[0, 0.0], [0.4, 0.05], [1, 0.0]]],
 	},
-	# Crouched walk: hips low, knees well bent, back forward, feet kept low,
-	# head up to see ahead, arms low in front.
+	# Creeping (decision 448, 4): half crouched rather than squatting, the arms
+	# bent along the sides with the hands before the hips, swinging a little.
 	"p_crouch_walk": {
-		"steps": [
-			["turn", "hips", "y", [0.0, -0.06, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.12, -1.0, [[1.3, 0.65, 0.0], [0.0, -0.05, 0.0, 3.0]]]],
-			["aim", "shin.L", "foot.L", [0.08, -1.0, [[-0.75, 0.5, 0.0], [0.0, -0.22, -1.5708]]]],
-			["aim", "thigh.R", "shin.R", [-0.12, -1.0, [[1.3, 0.65, 3.1416], [0.0, -0.05, 9.4248, 3.0]]]],
-			["aim", "shin.R", "foot.R", [-0.08, -1.0, [[-0.75, 0.5, 3.1416], [0.0, -0.22, 1.5708]]]],
-			["turn", "spine", "x", 0.5],
-			["turn", "chest", "x", 0.1],
-			["turn", "chest", "y", [0.0, 0.08, 0.0]],
-			["turn", "neck", "x", -0.4],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.5, -0.15, 0.0]]],
-			["aim", "forearm.L", "hand.L", [0.0, -0.6, 1.0]],
-			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.5, 0.15, 0.0]]],
-			["aim", "forearm.R", "hand.R", [0.0, -0.6, 1.0]],
+		"steps": CROUCH_LEGS + [
+			["swing", "upper_arm.L", "forearm.L", 0.22, [-0.42, -0.1, 0.0]],
+			["swing", "forearm.L", "hand.L", -0.05, [0.5, -0.1, 0.0]],
+			["swing", "upper_arm.R", "forearm.R", -0.22, [-0.42, 0.1, 0.0]],
+			["swing", "forearm.R", "hand.R", 0.05, [0.5, 0.1, 0.0]],
 		],
-		"sink": [0.22, 0.015, -1.5708, 2.0],
+		"sink": CROUCH_SINK,
 	},
-	# The same low crouch kept still, breathing.
+	# The same crouch kept still.
 	"p_crouch_idle": {
-		"steps": [
-			["aim", "thigh.L", "shin.L", [0.15, -1.0, 1.45]],
-			["aim", "shin.L", "foot.L", [0.1, -1.0, -0.75]],
-			["aim", "thigh.R", "shin.R", [-0.15, -1.0, 1.35]],
-			["aim", "shin.R", "foot.R", [-0.1, -1.0, -0.8]],
-			["turn", "spine", "x", [0.5, 0.02, 0.0]],
-			["turn", "chest", "x", [0.1, 0.02, 0.0]],
-			["turn", "neck", "x", -0.4],
-			["turn", "head", "y", [0.0, 0.2, 0.5]],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, 0.45]],
-			["aim", "forearm.L", "hand.L", [0.0, -0.7, 1.0]],
-			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, 0.45]],
-			["aim", "forearm.R", "hand.R", [0.0, -0.7, 1.0]],
+		"steps": CROUCH_STILL + [
+			["swing", "upper_arm.L", "forearm.L", 0.22, -0.4],
+			["swing", "forearm.L", "hand.L", -0.05, 0.5],
+			["swing", "upper_arm.R", "forearm.R", -0.22, -0.4],
+			["swing", "forearm.R", "hand.R", 0.05, 0.5],
 		],
-		"sink": [0.23, 0.006, 0.0],
+		"sink": CROUCH_STILL_SINK,
+	},
+	# Creeping with a long weapon held low before the body in both hands, tipped
+	# well forward: the right fist by the hip, the left out along it.
+	"p_crouch_walk_long": {
+		"steps": CROUCH_LEGS + CROUCH_LONG_ARMS,
+		"sink": CROUCH_SINK,
+	},
+	"p_crouch_idle_long": {
+		"steps": CROUCH_STILL + CROUCH_LONG_ARMS,
+		"sink": CROUCH_STILL_SINK,
+	},
+	# Creeping with a handgun held low before the body in both hands, the muzzle ahead.
+	"p_crouch_walk_pistol": {
+		"steps": CROUCH_LEGS + CROUCH_PISTOL_ARMS,
+		"sink": CROUCH_SINK,
+	},
+	"p_crouch_idle_pistol": {
+		"steps": CROUCH_STILL + CROUCH_PISTOL_ARMS,
+		"sink": CROUCH_STILL_SINK,
 	},
 	# Searching a drawer or shelf: bent a little at the waist, the two hands
 	# turning things over in front of the chest by turns, head down.
@@ -1899,46 +1981,28 @@ const LAYERS: Dictionary = {
 		"sink": [0.025, 0.02, -1.5708, 2.0],
 	},
 	# Running with a long weapon in both hands across the front (decision 422, second set):
-	# held as when walking with it, the body leaning into the run.
+	# held as when walking with it, the legs and lean of the run.
 	"p_run_long": {
-		"steps": [
-			["turn", "hips", "z", [0.0, 0.05, 0.0]],
-			["turn", "hips", "y", [0.0, -0.12, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.12, 0.6, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0]]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.5, 0.55, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0], [0.0, -0.55, -1.5708], [0.0, -0.2, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.12, 0.6, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0]]]],
-			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.5, 0.55, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0], [0.0, -0.55, 1.5708], [0.0, -0.2, 4.7124, 2.0]]]],
-			["turn", "spine", "x", 0.15],
-			["turn", "chest", "x", 0.05],
+		"steps": RUN_LEGS + [
 			["turn", "chest", "y", [0.0, 0.05, 0.0]],
-			["turn", "neck", "x", -0.12],
 			["aim", "upper_arm.R", "forearm.R", [-0.1, -1.0, [0.35, 0.02, 0.0]]],
 			["aim", "forearm.R", "hand.R", [0.05, -0.25, 1.0]],
 			["aim", "upper_arm.L", "forearm.L", [-0.3, -0.65, [0.65, 0.02, 0.0]]],
 			["aim", "forearm.L", "hand.L", [-0.75, 0.5, 0.5]],
 		],
-		"sink": [0.07, 0.04, -1.5708, 2.0],
+		"sink": RUN_SINK,
 	},
 	# Running with a pistol (decision 422, second set): the right elbow bent and pumping less,
-	# the muzzle up, the left arm pumping as it runs.
+	# the muzzle up, the left arm swinging as in the run.
 	"p_run_pistol": {
-		"steps": [
-			["turn", "hips", "z", [0.0, 0.05, 0.0]],
-			["turn", "hips", "y", [0.0, -0.12, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.12, 0.6, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0]]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.5, 0.55, 0.0], [0.0, -0.06, 0.0, 3.0], [0.0, 0.02, 0.0, 5.0], [0.0, -0.55, -1.5708], [0.0, -0.2, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.12, 0.6, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0]]]],
-			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.5, 0.55, 3.1416], [0.0, -0.06, 9.4248, 3.0], [0.0, 0.02, 15.708, 5.0], [0.0, -0.55, 1.5708], [0.0, -0.2, 4.7124, 2.0]]]],
-			["turn", "spine", "x", 0.15],
-			["turn", "chest", "x", 0.05],
+		"steps": RUN_LEGS + [
 			["turn", "chest", "y", [0.0, 0.16, 0.0]],
-			["turn", "neck", "x", -0.12],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -1.0, [0.0, -0.55, 0.0]]],
-			["aim", "forearm.L", "hand.L", [0.05, [0.2, 0.25, 0.0], [0.9, -0.2, 0.0]]],
+			["swing", "upper_arm.L", "forearm.L", 0.18, [-0.78, -0.75, 0.0]],
+			["swing", "forearm.L", "hand.L", [0.0, 0.15, 0.0], [0.82, -0.9, 0.0]],
 			["aim", "upper_arm.R", "forearm.R", [-0.2, -1.0, [0.05, 0.2, 0.0]]],
 			["aim", "forearm.R", "hand.R", [-0.05, [0.15, -0.12, 0.0], 0.9]],
 		],
-		"sink": [0.07, 0.04, -1.5708, 2.0],
+		"sink": RUN_SINK,
 	},
 	# On guard with a one-handed weapon (decision 422, second set): knees bent, left side
 	# forward, the right fist up by the shoulder with the head of the weapon back, the left hand out.
@@ -2018,6 +2082,59 @@ const LAYERS: Dictionary = {
 			["aim", "forearm.L", "hand.L", [-0.85, 0.1, 0.5]],
 		],
 		"sink": [0.0, 0.004, 0.0, 4.0],
+	},
+	# The same the other way round (decision 448): the hurt right arm across the
+	# belly, the weapon held low in the left hand.
+	"p_hold_weak_r": {
+		"steps": [
+			["turn", "hips", "z", [0.0, -0.04, 0.0]],
+			["aim", "thigh.L", "shin.L", [[0.08, -0.02, 0.0], -1.0, 0.0]],
+			["aim", "shin.L", "foot.L", [[0.06, -0.02, 0.0], -1.0, -0.02]],
+			["aim", "thigh.R", "shin.R", [[-0.08, -0.02, 0.0], -1.0, 0.0]],
+			["aim", "shin.R", "foot.R", [[-0.06, -0.02, 0.0], -1.0, -0.02]],
+			["turn", "spine", "z", [0.0, 0.03, 0.0]],
+			["turn", "spine", "x", [0.03, 0.012, 0.0, 4.0]],
+			["turn", "chest", "x", [0.02, -0.015, 0.0, 4.0]],
+			["turn", "head", "y", [0.0, -0.1, 0.8]],
+			["turn", "chest", "x", 0.08],
+			["turn", "neck", "x", 0.12],
+			["aim", "upper_arm.L", "forearm.L", [0.16, -1.0, [0.08, 0.01, 0.0, 4.0]]],
+			["aim", "forearm.L", "hand.L", [0.06, -1.0, 0.25]],
+			["aim", "upper_arm.R", "forearm.R", [-0.12, -1.0, 0.2]],
+			["aim", "forearm.R", "hand.R", [0.85, 0.1, 0.5]],
+		],
+		"sink": [0.0, 0.004, 0.0, 4.0],
+	},
+	# Carrying a big thing (decision 448, 19): the walk's legs, both arms brought
+	# round in front to hold it against the belly, leaning back a little under it.
+	"p_carry_big": {
+		"steps": WALK_LEGS + [
+			["turn", "spine", "x", -0.06],
+			["turn", "chest", "x", 0.02],
+			["turn", "chest", "y", [0.0, 0.04, 0.0]],
+			["turn", "neck", "x", 0.1],
+			["swing", "upper_arm.L", "forearm.L", 0.25, 0.45],
+			["swing", "forearm.L", "hand.L", -0.55, 1.45],
+			["swing", "upper_arm.R", "forearm.R", -0.25, 0.45],
+			["swing", "forearm.R", "hand.R", 0.55, 1.45],
+		],
+		"sink": WALK_SINK,
+	},
+	# Walking hurt (decision 448, 6): the walk's legs, bent at the waist and over
+	# to the right, the right hand held to that side, the left arm hardly swinging.
+	"p_walk_hurt": {
+		"steps": WALK_LEGS + [
+			["turn", "spine", "x", [0.32, 0.02, 0.0, 2.0]],
+			["turn", "chest", "x", 0.1],
+			["turn", "spine", "z", 0.08],
+			["turn", "chest", "y", [0.0, 0.06, 0.0]],
+			["turn", "neck", "x", -0.15],
+			["swing", "upper_arm.R", "forearm.R", -0.25, -0.15],
+			["swing", "forearm.R", "hand.R", 0.9, 1.3],
+			["aim", "upper_arm.L", "forearm.L", [0.16, -1.0, [0.04, -0.2, 0.0]]],
+			["aim", "forearm.L", "hand.L", [0.08, -1.0, [0.25, -0.18, 0.0]]],
+		],
+		"sink": WALK_SINK,
 	},
 	# Fixing_Kneeling gets down at its start and up at its end: the kneeling middle alone, looped.
 	"p_kneel_work": {"span": [0.2, 0.8], "steps": []},
@@ -2181,6 +2298,9 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scal
 			"aim":
 				var dir: Array = step[3]
 				aim(body, step[1], step[2], Vector3(_value(dir[0], w), _value(dir[1], w), _value(dir[2], w)))
+			"swing":
+				var angle := _value(step[4], w)
+				aim(body, step[1], step[2], Vector3(_value(step[3], w), -cos(angle), sin(angle)))
 	if layer.has("sink"):
 		sink(body, _value(layer["sink"], w) * sink_scale)
 
