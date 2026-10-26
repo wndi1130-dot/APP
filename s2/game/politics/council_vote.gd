@@ -1,8 +1,10 @@
 extends RefCounted
 ## S1a council stance, blocs and one non-decree vote. The field slice's two motions and every
 ## S1a law but 비상대권 are accepted, enacted or repealed (결정 426 PR 7: S1a laws are LAW_IDS less
-## S1C_LAWS and FAREWELL_LAWS; emergency_powers, ratifying and deals are not ported yet, and no
-## S1a law has a variant to amend to). tests/train/test_law_port.gd checks them against S1.
+## S1C_LAWS and FAREWELL_LAWS; emergency_powers and ratifying are not ported yet).
+## tests/train/test_law_port.gd checks them against S1. The three variant laws a technology opens
+## (train_lawtech.gd) come up beside them, over a standing original as an amendment
+## (tests/train/test_lawtech_port.gd).
 
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const VoteCount = preload("res://game/politics/vote_count.gd")
@@ -10,6 +12,7 @@ const CouncilAgenda = preload("res://game/politics/council_agenda.gd")
 const St = preload("res://game/train/train_state.gd")
 const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 const Stop = preload("res://game/train/train_stop.gd")
+const CouncilLog = preload("res://game/politics/council_log.gd")
 
 const LEDGER_MAX := 64
 const SUPPORTED_LAWS := [
@@ -18,6 +21,8 @@ const SUPPORTED_LAWS := [
 	"patrol", "secret_ballot", "strike_ban", "guided_voting", "evening_pot", "wall_ledger",
 	"night_of_names", "emergency_ration",
 ]
+## S1C_LAWS a technology opens in place of a harsh law (LAW_VARIANT_OF, domestic/laws.ts).
+const VARIANT_LAWS := ["seed_half", "child_pack", "triage_std"]
 const CHILD_LAWS := ["child_labor", "child_pack"]
 const SUPPORTED_MOTIONS := ["field_symbol", "field_promise"]
 
@@ -68,10 +73,14 @@ static func _is_law(agenda: Dictionary) -> bool:
 	return agenda.get("kind") != "motion"
 
 
+static func supported_law(law: Variant) -> bool:
+	return SUPPORTED_LAWS.has(law) or VARIANT_LAWS.has(law)
+
+
 static func _assert_supported(agenda: Dictionary) -> void:
 	if _is_law(agenda):
-		assert(SUPPORTED_LAWS.has(agenda.get("law")), "지원하지 않는 법 안건: %s" % agenda.get("law"))
-		assert(not bool(agenda.get("ratify", false)) and not agenda.has("amend"), "추인·개정 안건은 아직 옮기지 않았다")
+		assert(supported_law(agenda.get("law")), "지원하지 않는 법 안건: %s" % agenda.get("law"))
+		assert(not bool(agenda.get("ratify", false)), "추인 안건은 아직 옮기지 않았다")
 	else:
 		assert(SUPPORTED_MOTIONS.has(agenda.get("motion")), "지원하지 않는 동의 안건: %s" % agenda.get("motion"))
 
@@ -266,6 +275,8 @@ static func agenda_title(t: Dictionary, agenda: Dictionary) -> String:
 		if agenda["motion"] == "field_symbol":
 			return "%s의 상징물을 열차 앞에 세우기" % name
 		return "%s과(와)의 약속을 지킨 것을 기록에 올리기" % name if agenda.get("verdict") == "kept" else "%s과(와)의 약속 어김 추궁" % name
+	if agenda.get("amend") != null:
+		return "%s 개정: %s" % [t["LAWS"][agenda["amend"]]["title"], t["LAWS"][agenda["law"]]["title"]]
 	return "%s%s" % [t["LAWS"][agenda["law"]]["title"], " 폐지" if bool(agenda.get("repeal", false)) else ""]
 
 
@@ -379,7 +390,7 @@ static func _calm_repeal(g: Dictionary, t: Dictionary, law: String) -> void:
 
 
 static func _enact_law_mut(g: Dictionary, t: Dictionary, law: String, bought_from: Array) -> void:
-	assert(SUPPORTED_LAWS.has(law), "지원하지 않는 법: %s" % law)
+	assert(supported_law(law), "지원하지 않는 법: %s" % law)
 	var definition: Dictionary = t["LAWS"][law]
 	var base: Variant = t["LAW_VARIANT_OF"].get(law)
 	if not g.get("boughtBy") is Dictionary:
@@ -450,7 +461,7 @@ static func enact_law(g0: Dictionary, t: Dictionary, law: String, bought_from: A
 ## (stance 3 or more) take it badly, and a law bought with a promise and turned
 ## over within three sessions is remembered as betrayal.
 static func _repeal_law_mut(g: Dictionary, t: Dictionary, law: String) -> void:
-	assert(SUPPORTED_LAWS.has(law), "지원하지 않는 법: %s" % law)
+	assert(supported_law(law), "지원하지 않는 법: %s" % law)
 	var definition: Dictionary = t["LAWS"][law]
 	var supporters: Array[String] = []
 	for comm: String in t["COMMS"]:
@@ -592,6 +603,7 @@ static func tool_status(g: Dictionary, t: Dictionary, comm: String, tool: String
 	match tool:
 		"open", "fetch":
 			var cost: String = "다음 정차: %s" % t["FETCH_WANT"][comm]["label"] if tool == "fetch" else "조건 하나"
+			if bool(s.get("openClosed", false)): return {"ok": false, "why": "약속을 세 번 어겼다", "cost": cost}
 			if _truthy(s.get("promise")): return {"ok": false, "why": "지키지 않은 약속", "cost": cost}
 			if hostile: return {"ok": false, "why": "열차장을 적대한다", "cost": cost}
 			if float(s["rel"]) <= -40.0: return {"ok": false, "why": "관계가 반대 이하", "cost": cost}
@@ -833,6 +845,12 @@ static func cast_vote(g0: Dictionary, t: Dictionary) -> Dictionary:
 		"passed": counted["passed"], "byComm": by_comm, "flips": flips, "decree": false,
 		"secret": _law_active(g, "secret_ballot"),
 	}
+	var turned := {}
+	for i: int in (t["COMMS"] as Array).size():
+		turned[t["COMMS"][i]] = {"und": counted["turned"][i][0], "pool": counted["turned"][i][1]}
+	var why: Variant = CouncilLog.vote_why(t, map, turned)
+	if why != null:
+		result["why"] = why
 	council["result"] = result
 	if not _law_active(g, "secret_ballot"):
 		g["fear"] = _clamp(float(g["fear"]) + 1.0, 0.0, 100.0)
@@ -855,6 +873,17 @@ static func cast_vote(g0: Dictionary, t: Dictionary) -> Dictionary:
 				_offend(g, comm)
 				_journal(g, "%s의 작업조가 돌아와 쓰러져 자는 사이 표결했다. 기습으로 기억한다." % t["COMM_NAME"][comm], "dark")
 	var title := agenda_title(t, agenda)
+	var kind := "motion" if not _is_law(agenda) else ("ratify" if bool(agenda.get("ratify", false)) else ("amend" if agenda.get("amend") != null else ("repeal" if bool(agenda.get("repeal", false)) else "enact")))
+	var row := {
+		"session": g["session"], "seg": g["seg"], "title": title, "kind": kind, "by": agenda.get("by") if agenda.get("by") != null else "chief",
+		"passed": result["passed"], "yes": result["yes"], "no": result["no"], "absent": result["absent"], "need": need, "exp": expected(map, t),
+	}
+	if why != null:
+		row["why"] = why
+	CouncilLog.log_vote(g, row)
+	# The car handed the agenda choice picked this one (result arc): fails in a row sting.
+	if council.get("holder") != null and not pre:
+		CouncilLog.note_held(g, t, str(council["holder"]), bool(result["passed"]))
 	var attendance := ", 부재 %d" % int(result["absent"]) if int(result["absent"]) != 0 else ""
 	_journal(g, "%s: 찬성 %d, 반대 %d%s. %s." % [title, int(result["yes"]), int(result["no"]), attendance, "가결" if bool(result["passed"]) else "부결"], "good" if bool(result["passed"]) else "bad")
 	if not _is_law(agenda):
