@@ -457,6 +457,8 @@ func start_swing(p, at) -> void:
 		return
 	var stomp_it: bool = stomps(p, at)
 	p.strike_kind = "stomp" if stomp_it else "swing"
+	if not stomp_it:
+		game.feel.swing(p, p.weapon_id())
 	var windup: float = (STOMP_WINDUP if stomp_it else W.melee_windup(p.weapon_id())) / float(p.mults()["swing"])
 	if windup <= 0.0:
 		_strike(p, at)
@@ -551,6 +553,7 @@ func _swing_empty(p) -> void:
 			return
 		if lg.doors.has(c) and String(lg.doors[c]["state"]) in ["closed", "locked"]:
 			_wear(p, WR.melee_wear(wid, String(p.weapon()["quality"]), int(p.skills["melee"])))
+			game.feel.struck_door(p, FieldGrid.center(c), wid)
 			game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "melee", p)
 			return
 	game.make_sound(p.position, SimNoise.Level.QUIET, "melee", p)
@@ -570,6 +573,7 @@ func stomp(p, z: Dictionary) -> void:
 	p.body.add_fatigue(STOMP_FATIGUE)
 	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
 	z["stomped"] = int(z.get("stomped", 0)) + 1
+	game.feel.stomped(p, z["pos"], int(z["stomped"]) >= STOMPS_TO_END)
 	if int(z["stomped"]) >= STOMPS_TO_END:
 		_kill(p, z, "")
 
@@ -587,7 +591,12 @@ func _strike(p, at) -> void:
 			_swing_empty(p)
 			return
 	if at is Dictionary:
+		# Read before the blow: a weapon worn through by it leaves the hand.
+		var wid: String = p.weapon_id()
+		var was: String = at["state"]
 		swing(p, at)
+		var now_state: String = at["state"]
+		game.feel.landed(p, at["pos"], wid, now_state != was and (now_state == "dead" or now_state == "downed"))
 	else:
 		swing_person(p, at)
 
@@ -716,6 +725,7 @@ func swing_person(p, o) -> void:
 	game.make_sound(o.position, SimNoise.Level.NORMAL, "fight", p)
 	var hit: float = clampf(0.45 + 0.05 * int(p.skills["melee"]) - 0.03 * int(o.skills["melee"]), 0.2, 0.85)
 	if rng.randf() < hit:
+		game.feel.landed(p, o.position, wid, false)
 		o.body.apply_cut(wid == "axe" or rng.randf() < 0.3, game.clock.elapsed, BodyState.pick_part(wound_rng()))
 		o.last_hurt_by = p.pid
 		game.telemetry.injury(game.clock.elapsed, o.pid, "cut")
@@ -759,6 +769,7 @@ func _shove_now(p) -> void:
 	blows.erase(p.get_instance_id())
 	p.shove_t = SHOVE_WINDUP / float(p.mults()["swing"])
 	p.swing_t = p.shove_t
+	game.feel.swing(p, "")
 
 
 ## In a blow or a shove: drawn back, landing, or coming back from it.
@@ -977,6 +988,7 @@ func bite(p) -> void:
 	var block: float = Wear.block(p, site, true)
 	var blocked: bool = block > 0.0 and rng.randf() < block
 	Wear.tear(p, site, blocked, true)
+	game.feel.bitten(p, blocked)
 	if not blocked:
 		p.body.apply_bite(rng, site, now)
 	# The one at the front bit: it is drawn tearing away through the rest of its bite (DeadBody.bite_after_k).
@@ -1134,6 +1146,7 @@ func fire(p, at: Vector3, target = null) -> String:
 		h.erase("silencer_cond")
 		silencer = ""
 	game.make_sound(p.position, WR.shot_level(wid, silencer), "gun" if int(d["sound"]) > 0 else "bow", p)
+	game.feel.shot(p, wid, at)
 	if silencer != "":
 		h["silencer_cond"] = float(h.get("silencer_cond", 1.0)) - WR.silencer_wear(silencer, wid)
 		if float(h["silencer_cond"]) <= 0.0:

@@ -376,9 +376,10 @@ func is_worn() -> bool:
 
 ## The time the people's motions go on by in a frame: none while the field stands
 ## paused (the player's pause or the app away), as the dead and the train stand
-## still then (field_game.gd still shading); at the end, the train leaving, they go on.
+## still then (field_game.gd still shading), and through a blow's hold (hit_feel.gd);
+## at the end, the train leaving, they go on.
 static func frame_delta(field, delta: float) -> float:
-	return 0.0 if field.get("paused") == true and field.get("ended") != true else delta
+	return 0.0 if (field.get("paused") == true or field.get("hitstop") == true) and field.get("ended") != true else delta
 
 
 func _process(delta: float) -> void:
