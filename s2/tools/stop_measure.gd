@@ -213,6 +213,9 @@ func _measure(place: String, vp: RID) -> Dictionary:
 	f.cam_size = opening
 	await _settle(f)
 	if shots != "":
+		# A paused frame starts the old-photo fade (field_game _update_fade): the
+		# row keeps what it was at the shot, so a faded picture shows in the numbers.
+		r["fx_fade_at_shot"] = snappedf(float(f.fx_params["fx_fade"]), 0.01)
 		await _shot("%s_start" % place)
 		if edges:
 			# Round the edges: what the stop holds at each (the edge is where a

@@ -51,6 +51,8 @@ var vis_bytes := PackedByteArray()
 var vis_lit := PackedInt32Array()
 var lamp_lit := PackedInt32Array()   # cells the lamp channel was written to last time
 var vis_upload_count: int = 0        # texture uploads after setup
+var _lit_mark := PackedInt32Array()  # cell -> the update_vis call that last lit it
+var _vis_call: int = 0
 var track_wait: Dictionary = {}      # snow marks handed over, written at the next sight update
 var light_nodes: Dictionary = {}     # light kind -> MeshInstance3D (the glowing face itself)
 var light_mats: Dictionary = {}      # light kind -> StandardMaterial3D
@@ -73,6 +75,7 @@ var _prop_memory := PackedByteArray()
 var _prop_seen_now: Dictionary = {}
 var _props_mask_on: bool = true
 var _prop_tile_culling: bool = true # Tests can compare with the full item scan.
+var _prop_tile_y: Dictionary = {}  # Vector3i(tile x, tile y, level) -> Vector2(lowest, highest item y), all batches
 ## How deep the sight mask is drawn, 0..1: 1 in full, less while it comes in
 ## over a field just handed over from the stop scene (field_game.gd
 ## MASK_IN_S). Picture only: what is in sight is the same either way.
@@ -361,49 +364,60 @@ func update_vis(seen_now: Dictionary, memory: PackedByteArray, lamp: Dictionary 
 	_prop_memory = memory
 	_prop_seen_now = seen_now
 	var n: int = grid.width * grid.height
-	var changed: Dictionary = {}
+	# Changed cells in a packed list, a cell lit this call marked with the call's
+	# number (no dictionaries: this runs every 0.1 s over every cell in sight).
+	var changed := PackedInt32Array()
+	var everything := false
 	if vis_bytes.size() != n * 4:
 		vis_bytes.resize(n * 4)
 		vis_bytes.fill(0)
 		for i in range(n):
 			vis_bytes[i * 4 + 3] = 255
-			changed[i] = true
 		for k in range(memory.size()):
 			if memory[k]:
 				vis_bytes[(k % n) * 4 + 1] = 255
-	var lit_now: Dictionary = {}
+		_lit_mark.resize(n)
+		_lit_mark.fill(-1)
+		everything = true
+	_vis_call += 1
+	var lit := PackedInt32Array()
 	for key: int in seen_now:
-		lit_now[posmod(key, n)] = true
-	for i: int in vis_lit:
-		if not lit_now.has(i) and vis_bytes[i * 4] != 0:
-			vis_bytes[i * 4] = 0
-			changed[i] = true
-	for i: int in lit_now:
+		var i: int = key % n
+		if _lit_mark[i] == _vis_call:
+			continue
+		_lit_mark[i] = _vis_call
+		lit.append(i)
 		if vis_bytes[i * 4] != 255 or vis_bytes[i * 4 + 1] != 255:
 			vis_bytes[i * 4] = 255
 			vis_bytes[i * 4 + 1] = 255
-			changed[i] = true
-	vis_lit = PackedInt32Array(lit_now.keys())
+			changed.append(i)
+	for i: int in vis_lit:
+		if _lit_mark[i] != _vis_call and vis_bytes[i * 4] != 0:
+			vis_bytes[i * 4] = 0
+			changed.append(i)
+	vis_lit = lit
 	for i: int in track_wait:
 		if vis_bytes[i * 4 + 3] != int(track_wait[i]):
 			vis_bytes[i * 4 + 3] = int(track_wait[i])
-			changed[i] = true
+			changed.append(i)
 	track_wait = {}
 	for i: int in lamp_lit:
 		if not lamp.has(i) and vis_bytes[i * 4 + 2] != 0:
 			vis_bytes[i * 4 + 2] = 0
-			changed[i] = true
+			changed.append(i)
 	for i: int in lamp:
 		if vis_bytes[i * 4 + 2] != int(lamp[i]):
 			vis_bytes[i * 4 + 2] = int(lamp[i])
-			changed[i] = true
+			changed.append(i)
 	lamp_lit = PackedInt32Array(lamp.keys())
-	if not changed.is_empty():
+	if everything or not changed.is_empty():
 		vis_image.set_data(grid.width, grid.height, false, Image.FORMAT_RGBA8, vis_bytes)
 		vis_texture.update(vis_image)
 		vis_upload_count += 1
 		if buildings:
-			buildings.update_seen(vis_bytes, PackedInt32Array(changed.keys()))
+			if everything:
+				changed = PackedInt32Array(range(n))
+			buildings.update_seen(vis_bytes, changed)
 	refresh_props()
 
 
@@ -1394,6 +1408,10 @@ func _index_prop(batch: Dictionary, item: Dictionary) -> void:
 	tile["min_y"] = minf(float(tile["min_y"]), xf.origin.y)
 	tile["max_y"] = maxf(float(tile["max_y"]), xf.origin.y)
 	item["tile"] = key
+	# All batches' tiles in one table, so a refill tests each tile once. The
+	# heights only grow (a wider span reaches further: never too few items).
+	var span: Vector2 = _prop_tile_y.get(key, Vector2(xf.origin.y, xf.origin.y))
+	_prop_tile_y[key] = Vector2(minf(span.x, xf.origin.y), maxf(span.y, xf.origin.y))
 
 
 func _unindex_prop(batch: Dictionary, item: Dictionary) -> void:
@@ -1427,23 +1445,36 @@ func _prop_ground_offset(offset: Vector3, ray: Vector3) -> Vector2:
 
 
 func _nearby_prop_items(batch: Dictionary, eye: Vector3, ray: Vector3) -> Array:
-	if not _prop_tile_culling:
-		return batch["items"] as Array
+	return _prop_items_in(batch, _near_prop_tiles(eye, ray))
+
+
+## The tiles in reach of the camera, tested once a refill for all batches.
+func _near_prop_tiles(eye: Vector3, ray: Vector3) -> Dictionary:
+	var near: Dictionary = {}
 	var focus: Vector3 = eye + ray * ((global_position.y - eye.y) / ray.y) if absf(ray.y) > 0.001 else eye
 	var half_x: Vector2 = _prop_ground_offset(global_transform.basis.x * (TILE * 0.5), ray)
 	var half_z: Vector2 = _prop_ground_offset(global_transform.basis.z * (TILE * 0.5), ray)
 	var radius: float = maxf((half_x + half_z).length(), (half_x - half_z).length())
 	var height_stride: float = _prop_ground_offset(global_transform.basis.y, ray).length()
-	var items: Array = []
-	for key: Vector3i in batch["tiles"]:
-		var tile: Dictionary = batch["tiles"][key] as Dictionary
-		var middle_y: float = (float(tile["min_y"]) + float(tile["max_y"])) * 0.5
-		var at: Vector3 = to_global(Vector3((key.x + 0.5) * TILE, middle_y, (key.y + 0.5) * TILE))
+	for key: Vector3i in _prop_tile_y:
+		var span: Vector2 = _prop_tile_y[key]
+		var at: Vector3 = to_global(Vector3((key.x + 0.5) * TILE, (span.x + span.y) * 0.5, (key.y + 0.5) * TILE))
 		# With a level-zero item this is 39 m plus half a tile diagonal. Projecting
 		# upper floors too keeps the bound conservative for their shifted focus.
-		var reach: float = PROP_CULL_DISTANCE + radius + (float(tile["max_y"]) - float(tile["min_y"])) * 0.5 * height_stride
+		var reach: float = PROP_CULL_DISTANCE + radius + (span.y - span.x) * 0.5 * height_stride
 		if _prop_ground_offset(at - focus, ray).length() <= reach + 0.001:
-			items.append_array(tile["items"])
+			near[key] = true
+	return near
+
+
+func _prop_items_in(batch: Dictionary, near: Dictionary) -> Array:
+	if not _prop_tile_culling:
+		return batch["items"] as Array
+	var items: Array = []
+	var tiles: Dictionary = batch["tiles"]
+	for key: Vector3i in tiles:
+		if near.has(key):
+			items.append_array(tiles[key]["items"])
 	return items
 
 
@@ -1555,9 +1586,10 @@ func refresh_props(camera: Camera3D = null) -> void:
 		return
 	var eye := camera.global_position
 	var ray := -camera.global_transform.basis.z
+	var near := _near_prop_tiles(eye, ray) if _prop_tile_culling else {}
 	for batch: Dictionary in prop_batches.values():
 		var counts := {0: 0, 1: 0}
-		for item: Dictionary in _nearby_prop_items(batch, eye, ray):
+		for item: Dictionary in _prop_items_in(batch, near):
 			var lv: int = item["level"]
 			if not level_roots[lv].visible or (shown_level == -99 and lv != 0):
 				continue
