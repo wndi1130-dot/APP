@@ -1825,7 +1825,8 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 				break
 		# The room each box stands in, as a key loot_dress.gd room_of reads before the box's name.
 		# A key the map gave is kept; a room of no known kind gets none; a box whose name says its
-		# room (부엌 찬장, 매장 상자, 뒤 창고 상자) keeps that, so what it holds never belies its name.
+		# room in loot_dress.gd's words (부엌 찬장, 매장 상자, 작업실 상자) keeps that, so what it
+		# holds never belies its name. 「창고」 is no such word there: a 창고 상자 takes the key.
 		var keys := _room_keys(data, lv, g, map, of)
 		var in_room: Dictionary = {}  # room -> boxes in it
 		for id: String in ids:
@@ -1871,7 +1872,7 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 
 
 static func _name_places(name: String) -> bool:
-	return LootDress.room_of({"name": name}) != "storage" or name.contains("창고")
+	return LootDress.room_of({"name": name}) != "storage"
 
 
 ## Kitchen furniture that opens: an empty box goes in each one no box is in yet, until the
