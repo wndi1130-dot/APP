@@ -43,7 +43,7 @@ void fragment() {
 	vec3 col = fx_photo(fog_albedo * (0.88 + 0.18 * n), fx_fade) * fog_light;
 	// Under the sight mask the fog past sight dims as unseen ground does, a
 	// little less, and smoothly (the mask's own cells would show their edges).
-	float lit = mix(1.0, 0.45, smoothstep(clear_r * 0.8, clear_r * 1.2, eye));
+	float lit = mix(1.0, max(0.45, fx_sight.x), smoothstep(clear_r * 0.8, clear_r * 1.2, eye));
 	col *= mix(1.0, lit, clamp(mask_on, 0.0, 1.0));
 	ALBEDO = col;
 	// A fixed dither of a few percent: a smooth fog in the dark otherwise breaks

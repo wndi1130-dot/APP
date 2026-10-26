@@ -352,6 +352,25 @@ func test_params_are_every_global_and_keep_the_haze_grey() -> void:
 	assert_eq(FxState.apply(p).size(), FxState.GLOBALS.size())
 
 
+func test_the_sight_mask_leaves_the_day_readable() -> void:
+	# Ground out of sight stays readable by day and sinks after dark (469 D3):
+	# never seen 0.55 and seen before 0.75 at noon, 0.24 and 0.54 at night.
+	var t := Atmosphere.sun_times(0.0)
+	var day: Vector2 = Atmosphere.params(Atmosphere.look(12.0, ["overcast"], "K1", 0.0))["fx_sight"]
+	var dusk: Vector2 = Atmosphere.params(Atmosphere.look(t.y - 0.4, ["clear"], "K1", 0.0))["fx_sight"]
+	var night: Vector2 = Atmosphere.params(Atmosphere.look(t.y + 3.0, ["clear"], "K1", 0.0))["fx_sight"]
+	assert_almost_eq(day.x, FxState.SIGHT_DAY.x, 0.001)
+	assert_almost_eq(day.y, FxState.SIGHT_DAY.y, 0.001)
+	assert_almost_eq(night.x, FxState.SIGHT_NIGHT.x, 0.01)
+	assert_almost_eq(night.y, FxState.SIGHT_NIGHT.y, 0.01)
+	assert_gt(dusk.x, night.x, "dusk between night and day")
+	assert_lt(dusk.x, day.x)
+	assert_lt(day.x, day.y, "ground seen before stays lighter than ground never seen")
+	# A stop drawn without the frame (a storm stage, the gallery) goes by its hour band.
+	assert_eq(FxState.params_for(["clear"], 0.0, Vector2(1, 0), 0.4, 12.0)["fx_sight"], FxState.SIGHT_DAY)
+	assert_eq(FxState.params_for(["clear"], 0.0, Vector2(1, 0), 0.4, 23.0)["fx_sight"], FxState.SIGHT_NIGHT)
+
+
 func test_regions_name_the_twelve_bands() -> void:
 	assert_eq(Atmosphere.REGIONS.size(), 12)
 	assert_eq(Atmosphere.region_key("region_04"), "K4")

@@ -737,7 +737,7 @@ func _update_atmosphere() -> void:
 		fx_light = Atmosphere.light(atmo)
 		var p := Atmosphere.params(atmo, weather.wind_dir, float(fx_params.get("fx_snow", 0.0)))
 		var changed := {}
-		for key in ["fx_tint", "fx_sky", "fx_cloud", "fx_cold", "fx_frost"]:
+		for key in ["fx_tint", "fx_sky", "fx_cloud", "fx_cold", "fx_frost", "fx_sight"]:
 			if p[key] != fx_params.get(key):
 				fx_params[key] = p[key]
 				changed[key] = p[key]

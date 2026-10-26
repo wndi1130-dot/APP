@@ -680,4 +680,6 @@ static func params(l: Dictionary, wind_dir := Vector2(1, 0), ground_snow := -1.0
 	# Shadows cross the ground only where there are gaps to cross between.
 	var shade := sun_share * (1.0 - smoothstep(0.78, 0.94, cover))
 	p["fx_cloud"] = Vector4(cover, dir.x * (1.5 + 3.0 * float(l["wind"])), dir.y * (1.5 + 3.0 * float(l["wind"])), shade)
+	# The sight mask by the hour's light: night (lum 0.09) as dark as before, full day lightest.
+	p["fx_sight"] = FxState.sight_floor(inverse_lerp(0.09, 1.0, float(l["lum"])))
 	return p
