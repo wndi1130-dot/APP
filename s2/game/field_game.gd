@@ -1749,6 +1749,7 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 		if p == player and audio != null:
 			audio.footstep(p.position, running)
 		_wake_frozen_near(p)
+		_floor_creak(p, cell)
 	if running:
 		p.brain["run_score_t"] = float(p.brain.get("run_score_t", 0.0)) + delta
 		if p.brain["run_score_t"] >= 5.0:
@@ -1763,6 +1764,26 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 					combat.fall(p, "얼음에 미끄러졌다")
 		elif p.carry_state() >= 2 and rng.randf() < delta * 0.03:
 			combat.fall(p, "짐에 눌려 넘어졌다")
+
+
+## A loose board with something under it (room_stories.gd, card K) creaks when stepped on
+## or beside, softly and not again for a while; once searched it is quiet.
+const CREAK_AGAIN: float = 3.0
+
+
+func _floor_creak(p: Person, cell: Vector2i) -> void:
+	for s: Dictionary in data.get("floor_stashes", []):
+		var box: Dictionary = data["containers"].get(s["id"], {})
+		var d: Vector2i = (cell - (s["cell"] as Vector2i)).abs()
+		if box.is_empty() or box["searched"] or maxi(d.x, d.y) > 1 or int(s["level"]) != level_of(p.position):
+			continue
+		if clock.elapsed < float(s.get("quiet_until", -INF)):
+			continue
+		s["quiet_until"] = clock.elapsed + CREAK_AGAIN
+		var at := lift(s["cell"], int(s["level"]))
+		make_sound(at, SimNoise.Level.QUIET, "floor_creak", p)
+		if audio != null:
+			audio.floor_creak(at)
 
 
 ## Frozen ones wake when someone walks right up to them (crouching gets closer).
