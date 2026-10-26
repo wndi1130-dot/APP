@@ -26,7 +26,7 @@ func test_which_boxes_show_they_are_empty() -> void:
 
 
 func _vertices(game, id: String) -> int:
-	var mesh: Mesh = game.view.container_nodes[id].mesh
+	var mesh: Mesh = game.view.container_mesh(id)
 	var n := 0
 	for s in mesh.get_surface_count():
 		n += (mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()

@@ -48,13 +48,33 @@ func _word(b: Button) -> String:
 
 func test_the_rows_are_this_trains_lived_in_cars_with_s1s_numbers() -> void:
 	var m: Dictionary = ModsPane.model(_game())
-	assert_eq(m["rows"].map(func(r: Dictionary) -> String: return r["id"]), ["tail1", "medtech", "front"],
-		"the default train's cars the people live in, in train order (not the dining car or the captain's)")
+	assert_eq(m["rows"].map(func(r: Dictionary) -> String: return r["id"]), ["tail3", "tail2", "tail1", "medtech", "guard", "front", "engine"],
+		"the default train's cars the people live in, in train order (not the dining car, the captain's or the workshop)")
 	for r: Dictionary in m["rows"]:
 		assert_eq(r["gain"], TrainMods.insulate_numbers(r["id"]))
 		assert_eq([r["word"], r["can"]], ["단열", true])
 	assert_eq(m["rows"][0]["gain"], "온기 +2, 난방 −1할, 과밀 +2", "one of the tail's three cars")
 	assert_eq(m["need"], "")
+
+
+## Seven lived-in cars do not fit under the stores: the pane stays the car
+## pane's height and the rows are dragged up inside it.
+func test_more_cars_than_fit_scroll_inside_the_pane() -> void:
+	var p := _pane(_game())
+	await wait_process_frames(2)
+	assert_almost_eq(p.size.y / UiFonts.K, ModsPane.CSS_H_MAX, 0.5, "no higher than the car's pane")
+	var s := p.find_child("List", true, false) as ScrollContainer
+	assert_not_null(s)
+	var rows := p.find_child("Rows", true, false) as Control
+	assert_gt(rows.size.y, s.size.y, "seven rows are longer than the room for them")
+	assert_lte(s.position.y + s.size.y, p.size.y + 0.5, "the list ends inside the pane")
+	assert_not_null(p.find_child("Key_engine", true, false), "the last car's key is there to drag up to")
+	var more := p.find_child("More", true, false) as Control
+	assert_not_null(more, "the glass darkens where rows are left below")
+	assert_true(more.visible)
+	s.scroll_vertical = 10000
+	await wait_process_frames(2)
+	assert_false(more.visible, "dragged to the end, the shade goes")
 
 
 func test_without_its_research_the_keys_wait_and_the_head_names_it() -> void:

@@ -75,7 +75,7 @@ func test_an_event_reaches_its_cars() -> void:
 	# The default formation has the workshop car now (결정 443 (2)).
 	var s := _scene()
 	var ids := func(evs: Array) -> Array: return evs.map(func(c): return String(c["id"]))
-	assert_eq(ids.call(View.cars_for({"kind": "ration", "comm": "tail"}, s.cars)), ["tail1"])
+	assert_eq(ids.call(View.cars_for({"kind": "ration", "comm": "tail"}, s.cars)), ["tail3", "tail2", "tail1"], "a tail event reaches all three tail cars")
 	assert_eq(ids.call(View.cars_for({"kind": "mod_done", "car": "medtech"}, s.cars)), ["medtech"])
 	assert_eq(ids.call(View.cars_for({"kind": "made", "car": "", "comm": ""}, s.cars)), ["workshop"], "what was made is seen in the workshop")
 	var wide: Array = ids.call(View.cars_for({"kind": "law_passed"}, s.cars))

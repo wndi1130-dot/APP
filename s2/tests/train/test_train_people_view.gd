@@ -354,6 +354,9 @@ func test_a_freezing_car_trembles_shares_blankets_and_breathes() -> void:
 		pass_test("no baked people here")
 		return
 	var view = s.people_view
+	# The thirteen-car train starts the camera away from tail1; only cars on
+	# the screen breathe.
+	s.focus_car("tail1")
 	assert_true(s.set_sit("tail", 0, 15.0), "a freezing tail")
 	for i in 40:
 		s.step(0.5)

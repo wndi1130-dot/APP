@@ -111,3 +111,36 @@ func test_the_contract_carries_the_arrival_the_route_board_shows() -> void:
 		bands[maxi(k, 0)] += 1
 	for b: int in bands.size():
 		assert_almost_eq(float(bands[b]) / 20.0, float(TrainStop.ARRIVALS[b][0]), 3.5, "band %d share" % b)
+
+
+func test_route_weather_fields_match_s1_and_are_absent_with_climate_off() -> void:
+	# Decision 474 N2: current S2 id, the previous three in order, no disaster in the past.
+	var path: String = "res://tests/fixtures/train/route_weather.json"
+	assert_true(FileAccess.file_exists(path))
+	if not FileAccess.file_exists(path):
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	assert_true(parsed is Dictionary)
+	if not parsed is Dictionary:
+		return
+	var fixture: Dictionary = parsed
+	assert_eq(fixture.get("format", ""), "route-weather-v1")
+	assert_eq((fixture.get("contracts", []) as Array).size(), 162)
+	var tables: Dictionary = _tables.merged(fixture["tables"], true)
+	var bad: Array[String] = []
+	for row: Dictionary in fixture.get("contracts", []):
+		var g: Dictionary = (fixture["baseState"] as Dictionary).duplicate(true)
+		for key: String in ["seed", "seg", "climate", "disasters", "disaster"]:
+			if row.has(key):
+				g[key] = row[key]
+		if row.has("storedWeather"):
+			g["stop"]["weather"] = row["storedWeather"]
+		var before: String = JSON.stringify(g)
+		var d: Dictionary = FieldDeparture.build(g, tables, fixture["opts"])
+		var got: Dictionary = {}
+		for key: String in ["stopWeather", "pastWeather"]:
+			if d.has(key):
+				got[key] = d[key]
+		_check(bad, String(row["name"]), row["expected"], got)
+		_check(bad, String(row["name"]) + " state unchanged", before, JSON.stringify(g))
+	assert_eq(bad, [] as Array[String])

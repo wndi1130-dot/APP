@@ -239,7 +239,7 @@ func test_mission_holdout_grid_and_work_reservations_survive() -> void:
 		resumed._process(STEP)
 	_same(_snapshot(resumed), _snapshot(game), "work completed once")
 	assert_true(resumed.data["containers"]["resume_scrap"]["searched"])
-	assert_true(resumed.view.container_nodes.has("resume_scrap"), "the new heap is also drawn")
+	assert_true(resumed.view.has_container("resume_scrap"), "the new heap is also drawn")
 	assert_true(is_instance_valid(resumed.holdout.doors[0]["node"]))
 
 

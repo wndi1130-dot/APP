@@ -70,7 +70,7 @@ func test_the_core_comes_with_the_last_of_the_four_drives() -> void:
 	assert_eq(heap["items"].size(), 10, "they lie there in a heap")
 	assert_eq(heap["items"].count("scrap"), 10)
 	assert_eq(heap["cell"], game.data["spots"][DRIVES[3]]["cell"], "where the last drive came off")
-	assert_true(game.view.container_nodes.has("plow_core_heap"), "and it is drawn")
+	assert_true(game.view.has_container("plow_core_heap"), "and it is drawn")
 	game.actions._searched(p, "plow_core_heap")
 	# Taking from the heap needs the hands to reach it: stand where it lies.
 	p.position = game.lift(heap["cell"], int(heap.get("level", 0)))
