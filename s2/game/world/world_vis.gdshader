@@ -79,6 +79,9 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain) {
 		}
 		// Dry grass, faded green in drifts, soil showing where feet and eaves wore it.
 		float patch = fx_fbm2(p * 0.22 + vec2(3.7, 1.1));
+		// Darker than the pavement's concrete as in the world and the reference's tiles
+		// (grass about 0.7~0.8 of the pavement in sRGB; mood, 바닥 색): same lightness
+		// as before, the hue of dry grass and soil (결정 469 C1).
 		vec3 grass = mix(DRY_GRASS, OLD_GREEN, smoothstep(0.35, 0.75, fx_vnoise(p * 0.45 + 9.0)));
 		grass *= 0.88 + 0.22 * fx_vnoise(p * 2.3);
 		float bare = smoothstep(0.52, 0.68, patch) * 0.7;
@@ -220,7 +223,7 @@ void fragment() {
 	base *= mix(1.0, fx_cloud_shade(world_pos.xz, TIME), sky);
 	vec2 seen = cell.rg;
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
-	float lit = mix(1.0, max(seen.r, seen.g * 0.3 + 0.24), mask_on);
+	float lit = mix(1.0, max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
 	// The memory's grey only where the mask is drawn: with it off all is in sight.
 	vec3 dimmed = mix(vec3(grey), base, mix(1.0, seen.r * 0.6 + 0.4, clamp(mask_on, 0.0, 1.0)));

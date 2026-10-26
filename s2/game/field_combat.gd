@@ -23,7 +23,12 @@ const SHOVE_KNOCK: float = 0.35
 ## after the last one (user, build 47: 0.5 felt late). Still one per swing time.
 const SHOVE_TIME: float = 0.35
 const SHOVE_WINDUP: float = 0.15     # the arms come back first; then the shove lands (build 89: it was instant)
-const SHOVE_LUNGE: float = 0.15
+## The arms out and back after it lands, as long as the lockout after it: the whole shove
+## is seen through, half a second (user field test 10-25: "a little longer"; it was 0.15).
+const SHOVE_LUNGE: float = 0.35
+## The feet stay planted from the arms coming back until this long after it lands, the
+## first half of the shove: the body does not slide on under its own push.
+const SHOVE_PLANT: float = 0.1
 ## What stops a melee blow while it is drawn back (opts["melee_break"], to be
 ## shown on the phone): "grab" a grab on the one swinging stops it (as with the
 ## shove), "none" nothing does. The time is spent either way.
@@ -56,7 +61,7 @@ const ALLY_TURN_DEG: float = 35.0
 ## off these works of the hands (the ones the stick breaks off, and rummaging a
 ## body); any other (a climb, a crossing, a door or a window, a weapon swap)
 ## runs to its end and no blow or shove starts meanwhile.
-const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "loot"]
+const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "take", "loot"]
 
 var game
 ## The player's shove pressed during a blow: it goes once the blow is over
@@ -121,7 +126,6 @@ func update(delta: float) -> void:
 				p.shove_t = 0.0
 				if p.can_act() and p.grabbers.is_empty():
 					p.swing_t = 0.0
-					p.lunge_t = SHOVE_LUNGE
 					shove(p)
 		if p.strike_t > 0.0:
 			p.strike_t -= delta
@@ -469,10 +473,19 @@ func start_swing(p, at) -> void:
 		blows[p.get_instance_id()] = {"at": game.clock.elapsed, "row": Motion.swing_row(p.weapon_id()), "mult": float(p.mults()["swing"])}
 
 
-## True while a melee blow holds the feet (decision 425): from its weapon's
-## feet_from of the swing to its end (Motion.swing_row), the body does not walk
-## off under the stick. Shoves and stomps do not hold them.
+## True while a melee blow or a shove holds the feet (decision 425): the body does
+## not walk off under the stick or its own push. Stomps do not hold them.
 func feet_held(p) -> bool:
+	return shove_holds_feet(p) or blow_holds_feet(p)
+
+
+## A shove: from the arms drawn back to just after it lands (SHOVE_PLANT).
+func shove_holds_feet(p) -> bool:
+	return p.shove_t > 0.0 or p.lunge_t > SHOVE_LUNGE - SHOVE_PLANT
+
+
+## A melee blow: from its weapon's feet_from of the swing to its end (Motion.swing_row).
+func blow_holds_feet(p) -> bool:
 	var id: int = p.get_instance_id()
 	if not blows.has(id):
 		return false
@@ -784,6 +797,8 @@ func shove(p) -> void:
 	var rng: RandomNumberGenerator = game.rng
 	var m: Dictionary = p.mults()
 	p.swing_t = SHOVE_TIME / float(m["swing"])
+	# Every shove is seen, the reflex ones (not drawn back first) too: the arms out and back.
+	p.lunge_t = SHOVE_LUNGE
 	p.body.add_fatigue(0.003)
 	var forward := Vector3(sin(p.facing), 0, cos(p.facing))
 	var hit := 0

@@ -15,6 +15,7 @@ const MapEdge = preload("res://fx/map_edge.gd")
 const WoodsShade = preload("res://fx/woods_shade.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
 const SidePath = preload("res://game/world/side_path.gd")
+const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -29,11 +30,14 @@ const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldTrainGuard = preload("res://game/field_train_guard.gd")
 const FieldAlarms = preload("res://game/field_alarms.gd")
+const FieldResidents = preload("res://game/field_residents.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const Gait = preload("res://game/sim/gait.gd")
+const MoveRules = preload("res://game/sim/move_rules.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
+const LootRules = preload("res://game/sim/loot_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const SmellRules = preload("res://game/sim/smell_rules.gd")
@@ -62,6 +66,7 @@ const BuildPace = preload("res://game/world/build_pace.gd")
 const OutsideTemp = preload("res://game/sim/outside_temp.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
+const PeopleSeparation = preload("res://game/sim/people_separation.gd")
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
 const TURN_DEG_PER_S: float = 400.0
 # The train rolling away in the stop's closing scene: it pulls at this much
@@ -99,7 +104,14 @@ const INERTIA: Dictionary = {
 	"mid": [0.12, 0.15, 0.25],
 	"short": [0.10, 0.12, 0.20],
 }
-const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear"]
+const STICK_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "take"]
+## Who comes down from the train: the laws it lives under go out with them
+## (opts "laws", decision 430).
+const TRAIN_ROLES: Array = ["chief", "companion", "carrier", "escort", "worker"]
+## Under the emergency ration law a work crew that eats less hauls less a trip
+## (decision 430 ②, card domestic Q1 가): the law's haulMult in S1 data.ts
+## (LAWS_RES in the train tables; test_ration_law.gd holds the two together).
+const RATION_HAUL: float = 0.8
 const CAM_PITCH: float = 52.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
 const NIGHT_SUN_MIN: float = 0.1
@@ -147,6 +159,7 @@ var mission_play: FieldMission      # the goals of this stop, in the field
 var holdout: FieldHoldout           # holding the train while it gets ready (off on a plain stop)
 var train_guard: FieldTrainGuard    # the brakes heard, and the train holding what they bring (decision 416)
 var building_alarms: FieldAlarms    # buildings' alarms set off by breaking in (J17)
+var residents: FieldResidents       # the people who live at the stop (J21)
 var rng := RandomNumberGenerator.new()
 var place: String = ""                 # which map this stop is played on (FieldMaps)
 var map_script: Script                 # a map handed over as it is, in place of a place's (tests)
@@ -272,6 +285,11 @@ var glints: Array = []
 var key_ways: Dictionary = {}
 ## Where the note of this stop says a box is hidden at the next one ("" if none).
 var note_spot: String = ""
+## The scrawled map to the side path, read (side_note.gd, card M): {"at": where the way
+## through the edge woods starts} while anyone in the squad holds it and nobody has got
+## there yet, else {}. The HUD marks that side of the screen while it is set.
+var side_hint: Dictionary = {}
+var side_reached: bool = false
 ## Tins thrown, still to land and rattle: [{"pos", "at", "who"}]; and where
 ## they landed, shown a moment: [{"pos", "t"}].
 var lures: Array = []
@@ -389,6 +407,8 @@ func _ready() -> void:
 		var built: Dictionary = FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
 		# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd).
 		_take_map(SidePath.add(built, rng.seed))
+	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
+	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
 	# opts "loot_dress" false keeps the map's own bundles, as before.
 	if bool(opts.get("loot_dress", true)):
@@ -422,7 +442,10 @@ func _ready() -> void:
 	# Room stories on the maps laid out by rule (house_layout.md 4): this run's own dice for this
 	# place, so a resumed stop gets the same ones; what was picked stays in the place's state.
 	if data.has("room_stats"):
-		receipt.place_note("roomStories", RoomStories.apply(data, ("%d:stories:%s" % [rng.seed, data["place_id"]]).hash()))
+		var stories := RoomStories.apply(data, ("%d:stories:%s" % [rng.seed, data["place_id"]]).hash())
+		receipt.place_note("roomStories", stories)
+		# What a looted house tipped out lies on its floors (loot_junk.gd, card J); out in _give_finds.
+		data["loose"] = LootDress.LootJunk.spill_looted(data, stories, rng.seed)
 	# A freight yard's or works' one fixed core scene (decision 426): the place is the map's,
 	# whether a core is left in it is this run's dice, kept in the place's state like the stories.
 	var core_note := CoreScenes.apply(data, ("%d:core:%s" % [rng.seed, data["place_id"]]).hash())
@@ -438,6 +461,7 @@ func _ready() -> void:
 	holdout = FieldHoldout.new(self)
 	train_guard = FieldTrainGuard.new(self)
 	building_alarms = FieldAlarms.new(self)
+	residents = FieldResidents.new(self)
 	_build_world()
 	await BuildPace.rest(pace)
 	view = MapView.new()
@@ -465,12 +489,18 @@ func _ready() -> void:
 	actions = Actions.new(self)
 	await BuildPace.heavy(pace)
 	await _spawn_people()
+	residents.place()
 	people_look = PersonVisual.new()
 	add_child(people_look)
 	people_look.setup(self)
 	await BuildPace.rest(pace)
 	_spawn_dead()
 	_give_finds()
+	_ammo_from_train()
+	# What is under a loose board (card K): room_stories.gd lays the place after the dressing,
+	# floor_stash.gd fills its box.
+	if bool(opts.get("loot_dress", true)):
+		preload("res://game/sim/floor_stash.gd").fill(data, rng.seed)
 	ammo_start = ammo.duplicate()
 	loaded_start = loaded_totals()
 	cloth_start = 0
@@ -480,6 +510,7 @@ func _ready() -> void:
 	hud = Hud.new()
 	add_child(hud)
 	hud.setup(self)
+	_say_bare_coats()
 	await BuildPace.rest(pace)
 	audio = FieldAudio.new()
 	add_child(audio)
@@ -737,7 +768,7 @@ func _update_atmosphere() -> void:
 		fx_light = Atmosphere.light(atmo)
 		var p := Atmosphere.params(atmo, weather.wind_dir, float(fx_params.get("fx_snow", 0.0)))
 		var changed := {}
-		for key in ["fx_tint", "fx_sky", "fx_cloud", "fx_cold", "fx_frost"]:
+		for key in ["fx_tint", "fx_sky", "fx_cloud", "fx_cold", "fx_frost", "fx_sight"]:
 			if p[key] != fx_params.get(key):
 				fx_params[key] = p[key]
 				changed[key] = p[key]
@@ -1121,6 +1152,40 @@ func default_squad(pipe_quality: String) -> Array:
 
 
 ## Is this stop sent under the train's departure contract v2 (the people the train picked)?
+## The wardrobe ran short (decision 443, card E 가): who went out with no coat over them is
+## said once at the start — they feel the cold sooner.
+func _say_bare_coats() -> void:
+	if not contract_on() or hud == null:
+		return
+	var bare: Array = []
+	for p in squad:
+		if not p.worn.has("jacket") and not p.worn.has("coat"):
+			bare.append(p.display_name)
+	if not bare.is_empty():
+		hud.toast("외투 없음 — 추위: %s" % ", ".join(bare))
+
+
+## The rounds the train hands over (the contract's train.ammo, kit_pick.gd, PR 5): the guns of
+## those who went out are loaded first, as far as the rounds go, and the rest is the pool. A stop
+## without them keeps the field's own pool (and the guns as they were loaded).
+func _ammo_from_train() -> void:
+	if not contract_on():
+		return
+	var given: Variant = (opts["departure"].get("train", {}) as Dictionary).get("ammo")
+	if not given is Dictionary:
+		return
+	for k: String in ["pistol", "shell", "craft"]:
+		var left := int(given.get(k, 0))
+		for p in squad:
+			for h in p.hands:
+				var id: String = String(h.get("id", ""))
+				if id != "" and W.is_ranged(id) and String(W.get_data(id).get("ammo", "")) == k:
+					var n := mini(int(h.get("loaded", 0)), left)
+					h["loaded"] = n
+					left -= n
+		ammo[k] = left
+
+
 func contract_on() -> bool:
 	var dep: Variant = opts.get("departure")
 	return dep is Dictionary and int((dep as Dictionary).get("version", 0)) == 2
@@ -1175,6 +1240,8 @@ func make_person(row: Dictionary, at: Vector3) -> Person:
 	p.hunger_level = clampi(int(row.get("hunger", 0)), 0, 2)
 	p.sore_level = clampi(int(row.get("sore", 0)), 0, 2)
 	p.bag = String(row.get("bag", "pack"))
+	# The emergency ration law (decision 430): an underfed body tires sooner.
+	p.body.ration_cut = TRAIN_ROLES.has(String(row["role"])) and (opts.get("laws", []) as Array).has("emergency_ration")
 	# What they go out in (wear.gd): a row may say, place by place, else what everyone wears.
 	Wear.dress_from(p, row.get("wear", {}))
 	var slots: Array = []
@@ -1502,6 +1569,7 @@ func _step(delta: float) -> void:
 	_tick_radio(delta)
 	for p in people:
 		_update_person(p, delta)
+	_separate_people(delta)
 	zombies.update(delta)
 	ai.update(delta)
 	_left_behind()
@@ -1515,9 +1583,11 @@ func _step(delta: float) -> void:
 	_update_zone(delta)
 	_watch_named()
 	_reveal_glints()
+	_read_side_note()
 	_land_lures()
 	actions.update(delta)
 	holdout.tick(delta)
+	residents.tick(delta)
 	holdout.watch(delta)
 	holdout.den_watch()
 	_check_end()
@@ -1526,6 +1596,55 @@ func _step(delta: float) -> void:
 		if now - float(s["t"]) < SimNoise.EVENT_DISPLAY_SECONDS:
 			keep.append(s)
 	sounds = keep
+
+
+## The living standing still keep out of each other's bodies (people_separation.gd),
+## once everyone has moved: only where they stand changes, never onto a cell people
+## cannot walk, through a wall or onto a stair. Anyone on the way somewhere passes
+## through as before, and the player, anyone at work at a spot, carrying someone
+## or in a fight stays put: the other one standing steps aside. (Easing walkers
+## and fighters too changed the fights the 40 runs measure, 10-26.)
+func _separate_people(delta: float) -> void:
+	var bodies: Array = []
+	var positions := PackedVector3Array()
+	var floors := PackedInt32Array()
+	var ids := PackedInt64Array()
+	var speeds := PackedFloat32Array()
+	var fixed := PackedByteArray()
+	for p in people:
+		if not p.visible or not p.is_alive() or p.body.downed or p.fallen_t > 0.0 or not p.grabbers.is_empty():
+			continue
+		if p.moving or not p.path.is_empty():
+			continue
+		bodies.append(p)
+		positions.append(p.position)
+		floors.append(level_of(p.position))
+		ids.append(hash(String(p.pid)))
+		speeds.append(p.speed(grid_at(p.position).floor_at(FieldGrid.cell_of(p.position))))
+		var fighting: bool = not p.target_zombie.is_empty() or p.target_person != null or p.swing_t > 0.0 or p.strike_t > 0.0 or p.shove_t > 0.0
+		fixed.append(1 if p == player or p.action != "" or p.carrying_wounded != null or fighting else 0)
+	if bodies.size() < 2:
+		return
+	var pushes := PeopleSeparation.pushes(positions, floors, ids, speeds, fixed, delta)
+	for i in range(bodies.size()):
+		if pushes[i] == Vector3.ZERO:
+			continue
+		var dest := positions[i] + pushes[i]
+		var cell := FieldGrid.cell_of(dest)
+		var lg := grid_at(positions[i])
+		if level_of(dest) != floors[i] or not lg.people_can_walk(cell) or not lg.body_line_clear(FieldGrid.cell_of(positions[i]), cell):
+			continue
+		if _on_stair(cell, floors[i]):
+			continue
+		bodies[i].position = dest
+
+
+## A stair or ladder end on that floor (the dead are never pushed onto one either).
+func _on_stair(cell: Vector2i, level: int) -> bool:
+	for stair in stairs:
+		if stair["cell"] == cell and (int(stair["low"]) == level or int(stair["high"]) == level):
+			return true
+	return false
 
 
 func _update_zone(delta: float) -> void:
@@ -1543,6 +1662,7 @@ func _update_zone(delta: float) -> void:
 	var pl := level_of(player.position)
 	view.show_levels(pl)
 	view.cut_away(grid_at(player.position).building_at(FieldGrid.cell_of(player.position)), pl)
+	view.update_ground(ground_items)
 
 
 # ---------------------------------------------------------------- people
@@ -1687,6 +1807,23 @@ func _move_person(p: Person, delta: float) -> void:
 			hud.toast("너무 무거움")
 			p.stop()
 		return
+	var way := atan2(d.x, d.z)
+	var face := way
+	if p != player:
+		# One the AI walks turns into the way before it goes (move_rules.gd); backing
+		# off a crowd it keeps its face to them and steps back (field_ai.gd _engage).
+		var hold: Variant = p.brain.get("face_hold")
+		if hold is Vector3 and clock.elapsed - float(p.brain.get("face_hold_t", -INF)) < MoveRules.FACE_HOLD:
+			var them: Vector3 = hold
+			face = atan2(them.x - p.position.x, them.z - p.position.z)
+			if absf(angle_difference(face, way)) > PI * 0.5:
+				spd = minf(spd, MoveRules.BACKPEDAL)   # none runs backwards
+		elif p.turn_rate > 0.0:
+			spd *= MoveRules.heading_share(absf(angle_difference(p.look, way)))
+		p.facing = face
+		if spd <= 0.0:
+			p.moving = false   # a half turn is made standing, not gliding off the other way meanwhile
+			return
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
@@ -1700,8 +1837,10 @@ func _move_person(p: Person, delta: float) -> void:
 		if not actions.can_vault_window(p, dc):
 			return
 		actions.vault_window(p, dc)
-	p.facing = atan2(step.x, step.z)
+	p.facing = face
 	var gone := p.position.distance_to(dest)
+	if absf(angle_difference(face, way)) > PI * 0.5:
+		gone = -gone   # stepping back: the walk's round runs back, so it is drawn backwards
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
@@ -1731,7 +1870,7 @@ static func steps_in(p, gone: float) -> int:
 	p.brain["step_r"] = fposmod(now, 1.0)
 	var n := 0
 	for at: float in SimNoise.STEP_AT:
-		n += int(floorf(now - at)) - int(floorf(was - at))
+		n += absi(int(floorf(now - at)) - int(floorf(was - at)))   # a step back is a step too
 	return n
 
 
@@ -2430,7 +2569,16 @@ func _refresh_vision() -> void:
 		seen_memory[key] = 1
 	if not ended and not paused:
 		_mark_tracks()
-	view.update_vis(seen_now, seen_memory, lit_now)
+	# The room the eye stands in is drawn as seen whichever way the eye faces
+	# (decision 469 D3): its floor, furniture and walls keep their outline. Only
+	# the picture: who and what the rules see stays the cone's (seen_now).
+	var shown := seen_now
+	var room := _room_cells(lg, lv, origin)
+	if not room.is_empty():
+		shown = seen_now.duplicate()
+		for i in room:
+			shown[(lv + 1) * n + i] = true
+	view.update_vis(shown, seen_memory, lit_now)
 	view.update_labels(seen_memory, mask_on)
 
 
@@ -2441,6 +2589,54 @@ func dark_at(at: Vector3) -> bool:
 		return false
 	var lv := level_of(at)
 	return lv >= 0 and _dark_cell(grid_at(at), lv, FieldGrid.cell_of(at))
+
+
+## The room round the eye on its floor (decision 469 D3): floor cells of the
+## same building reached from it side by side without passing a wall, door or
+## window, and the walls, doors and windows round them. None outdoors, in a
+## doorway or in the cellar, and none past ROOM_SHOWN_MAX cells (a hall is not
+## one room). Kept until the eye moves or the floor changes.
+const ROOM_SHOWN_MAX: int = 400
+var _room_cache: Dictionary = {}
+
+
+func _room_cells(lg: FieldGrid, lv: int, origin: Vector2i) -> Array[int]:
+	var at := Vector3i(origin.x, origin.y, lv)
+	if _room_cache.get("at") == at and int(_room_cache.get("rev", -1)) == lg.revision:
+		return _room_cache["cells"]
+	var out: Array[int] = []
+	var b := lg.building_at(origin)
+	if lv >= 0 and b >= 0 and _room_floor(lg, origin, b):
+		var done := {lg.index(origin): true}
+		var todo: Array[Vector2i] = [origin]
+		while not todo.is_empty() and out.size() <= ROOM_SHOWN_MAX:
+			var c: Vector2i = todo.pop_back()
+			out.append(lg.index(c))
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					var d := c + Vector2i(dx, dy)
+					if (dx == 0 and dy == 0) or not lg.inside(d) or done.has(lg.index(d)):
+						continue
+					var floor_cell := _room_floor(lg, d, b)
+					# Floor goes on side by side; across a corner only the wall shows.
+					if floor_cell and dx != 0 and dy != 0:
+						continue
+					if not floor_cell and lg.building_at(d) != b:
+						continue
+					done[lg.index(d)] = true
+					if floor_cell:
+						todo.append(d)
+					else:
+						out.append(lg.index(d))
+		if out.size() > ROOM_SHOWN_MAX:
+			out = []
+	_room_cache = {"at": at, "rev": lg.revision, "cells": out}
+	return out
+
+
+func _room_floor(lg: FieldGrid, c: Vector2i, b: int) -> bool:
+	var solid := lg.solid_at(c)
+	return lg.building_at(c) == b and (solid == FieldGrid.Solid.NONE or solid == FieldGrid.Solid.BLOCK or solid == FieldGrid.Solid.LOW)
 
 
 func _dark_cell(lg: FieldGrid, lv: int, c: Vector2i) -> bool:
@@ -2635,6 +2831,11 @@ func depart() -> void:
 
 
 ## The line under the weather: the held train's clock and doors, or the stop's goals.
+## What a work crew's trip carries for the laws the train lives under (1.0 with none).
+func haul_mult() -> float:
+	return RATION_HAUL if (opts.get("laws", []) as Array).has("emergency_ration") else 1.0
+
+
 func goal_text() -> String:
 	if holdout.enabled() and (holdout.opened or not mission_play.active()):
 		return holdout.goal_line()
@@ -3059,6 +3260,8 @@ const LURE_MARK_S: float = 3.0
 func _give_finds() -> void:
 	if not bool(opts.get("loot_dress", true)):
 		return
+	for g: Dictionary in data.get("loose", []):
+		ground_items.append(g.duplicate())
 	glints = LootDress.glints(data, rng.seed)
 	key_ways = LootDress.key_ways(grid.doors, rng.seed)
 	var who := RandomNumberGenerator.new()
@@ -3102,6 +3305,28 @@ func _give_finds() -> void:
 			var holder: Dictionary = dead[who.randi_range(0, dead.size() - 1)]
 			holder["carry"] = (holder.get("carry", []) as Array) + ["note_map"]
 			note_spot = LootDress.NOTE_SPOTS[who.randi_range(0, LootDress.NOTE_SPOTS.size() - 1)]
+	# A scrawled map to this stop's side path, on its own dice (card M).
+	var carriers: Array = []
+	for z in zombies.list:
+		if z["kind"] != "frozen":
+			carriers.append(z)
+	SideNote.place(data, carriers, rng.seed)
+
+
+## Who holds the scrawled map and whether anyone has reached the way in (card M).
+func _read_side_note() -> void:
+	if not data.has("side_path"):
+		return
+	var held := false
+	var at := SideNote.way_in(data)
+	for p in squad:
+		if not p.is_alive():
+			continue
+		if p.items.has(SideNote.ID):
+			held = true
+		if not side_reached and at != Vector3.INF and Vector2(p.position.x - at.x, p.position.z - at.z).length() < SideNote.REACHED:
+			side_reached = true
+	side_hint = SideNote.hint(data, held, side_reached, SidePath.visited(data))
 
 
 ## A snow cell two steps out of a door of building b, or (-1, -1).
