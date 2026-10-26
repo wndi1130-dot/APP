@@ -760,13 +760,13 @@ func _tree(st: SurfaceTool, at: Vector3) -> void:
 	MapView.box(st, Vector3(1.1, 1.1, 1.1), at + Vector3(0, 4.0, 0), crown)
 
 
-## A building as one block of its own paint (building_view.gd PAINTS, a little
+## A building as one block of its own paint (building_view.gd paint_for, a little
 ## darker), dark windows along it, lamp-lit ones where a stove is kept going,
 ## and a gable roof along its long side, snow-laden as far as snow lies.
 func _building(st: SurfaceTool, lamps: SurfaceTool, b: Dictionary, floors: int) -> void:
 	var roof: Color = ROOF.lightened(0.12).darkened(0.3 * wet).lerp(ROOF_SNOW, white)
 	var r: Rect2i = b["rect"]
-	var paint: Color = BuildingView.PAINTS[posmod(int(b.get("id", 0)), BuildingView.PAINTS.size())]
+	var paint: Color = BuildingView.paint_for(int(b.get("id", 0)))
 	var wall := Color(paint.r, paint.g, paint.b).darkened(0.28)
 	var h: float = 3.0 * floors - 0.3
 	var mid := Vector3(r.position.x + r.size.x * 0.5, 0.0, r.position.y + r.size.y * 0.5)
