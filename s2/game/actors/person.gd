@@ -459,13 +459,20 @@ func _fit_weapon_model(id: String) -> void:
 	weapon_mesh.add_child(weapon_model)
 
 
+## The drawn body comes round toward facing at turn_rate, on the rules' clock
+## (field_game _step; decision 442 card C2): what waits on the turn (turned_to,
+## the walk's heading_share) and the picture read the same angle, and a field
+## stepped without frames (the 40 runs) turns the same as one on screen.
+func turn_tick(delta: float) -> void:
+	if turn_rate <= 0.0:
+		look = facing
+		return
+	look = wrapf(rotate_toward(look, look + angle_difference(look, facing), turn_rate * delta), -PI, PI)
+
+
 ## Per-frame visuals: facing, posture, tag text.
 func refresh_view(show_tag: bool) -> void:
-	if turn_rate <= 0.0:
-		rotation.y = facing
-	else:
-		look = wrapf(rotate_toward(look, look + angle_difference(look, facing), turn_rate * get_process_delta_time()), -PI, PI)
-		rotation.y = look
+	rotation.y = facing if turn_rate <= 0.0 else look
 	var lying := body.downed or body.dead or fallen_t > 0.0
 	if lying:
 		body_mesh.rotation = Vector3(PI * 0.5, 0, 0)
