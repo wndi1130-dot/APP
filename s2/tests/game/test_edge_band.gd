@@ -27,6 +27,38 @@ func test_values_are_fixed() -> void:
 	assert_eq(EdgeBand.RAIL_CLEAR, 2.5)
 	assert_eq(EdgeBand.ROAD_RUN, 5.0)
 	assert_eq(EdgeBand.SHADE_DEPTH, 1.2)
+	assert_eq(EdgeBand.GLADE_EVERY, 48.0)
+	assert_eq(EdgeBand.GLADE_CHANCE, 0.5)
+	assert_eq(EdgeBand.GLADE_SIZE, Vector2(4.0, 6.0))
+	assert_eq(EdgeBand.GLADE_NEAR, 3.0)
+
+
+func test_now_and_then_a_glade_with_a_trace_of_people_behind_the_first_rows() -> void:
+	# A town-sized map: about a dozen chances round it.
+	var g := FieldGrid.new(170, 120)
+	for x in g.width:
+		g.floor[g.index(Vector2i(x, 60))] = F.RAIL
+	var total := 0
+	for seed in range(1, 21):
+		var plan := EdgeBand.plan(g, seed)
+		total += plan["glades"].size()
+		for gl: Dictionary in plan["glades"]:
+			var r: Rect2 = gl["rect"]
+			assert_between(r.size.x, EdgeBand.GLADE_SIZE.x, EdgeBand.GLADE_SIZE.y)
+			assert_eq(r.size.x, r.size.y, "square")
+			var near := minf(EdgeBand.outside(g, r.position.x, r.position.y), EdgeBand.outside(g, r.end.x, r.end.y))
+			assert_almost_eq(near, EdgeBand.GLADE_NEAR, 0.001, "behind the first rows")
+			assert_true(EdgeBand.outside(g, r.get_center().x, r.get_center().y) < EdgeBand.BAND - 2.0, "where the camera shows it")
+			assert_true(absf(r.get_center().y - 60.5) > EdgeBand.RAIL_CLEAR + r.size.y * 0.5 or (r.position.x >= 0.0 and r.end.x <= g.width), "not on the rail line running out")
+			assert_true(["felled", "rest"].has(gl["kind"]))
+			for p: Dictionary in gl["props"]:
+				var at: Vector3 = p["at"]
+				assert_true(r.has_point(Vector2(at.x, at.z)), "the trace stands in its glade")
+			for t: Dictionary in plan["trees"]:
+				var at: Vector3 = t["at"]
+				assert_false(r.has_point(Vector2(at.x, at.z)), "no tree in a glade")
+	# 20 maps of about 12 chances at one in two: well over none, well under all.
+	assert_between(total, 60, 180)
 
 
 func test_the_camera_never_looks_past_the_band() -> void:
@@ -89,5 +121,8 @@ func test_the_band_is_built_under_the_ground_level() -> void:
 	assert_not_null(band)
 	assert_not_null(band.get_node("Runs"), "the road and rail runs out of the map")
 	assert_eq(int(counts["blocks"]), 1)
+	var plan := EdgeBand.plan(g, EdgeBand.seed_of({"place_id": "test"}))
+	assert_eq(int(counts["glades"]), plan["glades"].size())
+	assert_eq(band.get_child_count(), 1 + int(counts["chunks"]) + 1 + int(counts["traces"]), "runs, tree pieces, the road's block and the glades' traces")
 	assert_gt(int(counts["trees"]), 0)
 	assert_gt(int(counts["chunks"]), 4, "the woods are cut in pieces so those off screen are not drawn")
