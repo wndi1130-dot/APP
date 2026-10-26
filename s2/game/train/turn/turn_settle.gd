@@ -27,13 +27,10 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var notes: Array = []
 	var f: Dictionary = Turn.forecast(g, t)
 	var p: Dictionary = t["P"]
-	var coal_parts: Array = [["run", (float(p["coalStrike"]) if bool(g["inStrike"]) else float(p["coalRun"])) - (2 if bool(g["forcedRun"]) else 0)], ["idle", float(p["tailIdleCoal"]) if Turn.tail_idle(g) else 0], ["heat", Turn.heat_cost(g, t) * St.law_mult(g, t, "heatMult") + St.law_sum(g, t, "coalAdd")], ["calm.pot", St.calm_coal(g, t)], ["disaster", 0], ["loco", St.loco_coal(g, t)]]
-	var hands_coal: float = float(t["HANDS"]["stokerCoal"]) * float(g.get("hands", {}).get("short", {}).get("stoker", 0))
-	if hands_coal != 0: coal_parts.append(["hands", hands_coal])
-	coal_parts.append(["upkeep", Turn.dom_coal(g)])
+	var parts: Dictionary = Turn.forecast_parts(g, t)
 	if float(g["coal"]) - float(f["coal"]) <= 0: return C.unsupported(g0, "settle: enterStranded")
-	C.bump_parts(g, "coal", -float(f["coal"]), coal_parts)
-	C.bump_parts(g, "food", -float(f["food"]), [["ration", Turn.food_cost(g, t) + St.law_sum(g, t, "foodAdd")], ["upkeep", Turn.dom_food(g)]])
+	C.bump_parts(g, "coal", -float(f["coal"]), parts["coal"])
+	C.bump_parts(g, "food", -float(f["food"]), parts["food"])
 	if bool(g["inStrike"]): C.bump(g, "tension", 3, "strike")
 	else: g["comms"]["engine"]["base"][3] += float(p["engineFatigue"])
 	if g.get("space") is Dictionary and g["space"].get("giver") != null and float(g["space"].get("step", 0)) > 0: C.bump_rel(g, g["space"]["giver"], float(p["spaceHoldRel"]) * float(g["space"]["step"]), "situation")

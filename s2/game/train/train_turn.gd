@@ -29,10 +29,13 @@ static func heat_cost(g: Dictionary, t: Dictionary) -> float:
 ## One community's term of heat_cost, before coalHeatPerLever: its heat
 ## step over its people, less what its insulated cars save. The car pane's
 ## heat cost reads this too, so the forecast and the pane agree (J12).
-static func comm_heat(g: Dictionary, c: String) -> float:
+## `insulated` false: what it would burn with no car insulated (the cost
+## pane's 「단열」 line is the difference).
+static func comm_heat(g: Dictionary, c: String, insulated: bool = true) -> float:
 	var s: Dictionary = g["comms"][c]
+	var share: float = TrainMods.insulated_share(g, c) if insulated else 0.0
 	return (float(s["heat"]) * float(s["pop"])) / 40.0 \
-		* (1.0 - float(TrainMods.D["insulateHeat"]) * TrainMods.insulated_share(g, c))
+		* (1.0 - float(TrainMods.D["insulateHeat"]) * share)
 
 
 static func food_cost(g: Dictionary, t: Dictionary) -> float:
@@ -70,6 +73,20 @@ static func dom_coal(g: Dictionary) -> float:
 
 static func dom_food(g: Dictionary) -> float:
 	return 0.0 - TrainLawTech.food(g)
+
+
+## What forecast's coal and food are made of, as settle lays them on the
+## ledger (S1 turn.ts forecastWeights): {coal: [[why, weight], ...], food: […]}.
+## Weights only: settle splits the forecast over them (turn_common.gd
+## split_parts), so their sum may differ from it. The cost pane reads these, so
+## a forecast's rows and the stretch's ledger rows are the same causes (J12).
+static func forecast_parts(g: Dictionary, t: Dictionary) -> Dictionary:
+	var p: Dictionary = t["P"]
+	var coal: Array = [["run", (float(p["coalStrike"]) if bool(g["inStrike"]) else float(p["coalRun"])) - (2 if bool(g["forcedRun"]) else 0)], ["idle", float(p["tailIdleCoal"]) if tail_idle(g) else 0], ["heat", heat_cost(g, t) * St.law_mult(g, t, "heatMult") + St.law_sum(g, t, "coalAdd")], ["calm.pot", St.calm_coal(g, t)], ["disaster", 0], ["loco", St.loco_coal(g, t)]]
+	var hands_coal: float = float(t["HANDS"]["stokerCoal"]) * TrainHands.hand_short(g, "stoker")
+	if hands_coal != 0: coal.append(["hands", hands_coal])
+	coal.append(["upkeep", dom_coal(g)])
+	return {"coal": coal, "food": [["ration", food_cost(g, t) + St.law_sum(g, t, "foodAdd")], ["upkeep", dom_food(g)]]}
 
 
 static func seg_km_of(g: Dictionary, t: Dictionary, seg: int = -1) -> float:

@@ -65,7 +65,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var s: Dictionary = g["comms"][comm]
 	match str(card["kind"]):
 		"travel": return travel_view(g, t, card.get("text", ""))
-		"info": return {"title": "", "choices": [choice("", "덮는다", [])]}
+		"info": return {"title": str(card.get("who", "알림")), "choices": [choice("", "알았다", [])]}
 		"need_warn":
 			if not t["NEEDS"].has(card.get("text")): return {}
 			var def: Dictionary = t["NEEDS"][card["text"]]
