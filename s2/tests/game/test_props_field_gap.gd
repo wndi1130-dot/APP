@@ -1,8 +1,8 @@
 extends "res://addons/gut/test.gd"
-## gap 장부/파일 이름 집합과 삼각형 예산(샛길 틈 세 갈래, 벽장 선반, 겨울 잡목 덤불). 다른 묶음 파일은 대상에서 제외한다.
+## gap 장부/파일 이름 집합과 삼각형 예산(샛길 틈 세 갈래, 벽장 선반, 겨울 잡목 덤불, 들뜬 마루). 다른 묶음 파일은 대상에서 제외한다.
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const KIT_DIR := "res://models/props_field"
-const EXPECTED_TEXT := "gap_wire gap_gate gap_planks small_shelf thicket"
+const EXPECTED_TEXT := "gap_wire gap_gate gap_planks small_shelf thicket loose_board"
 
 
 func _assets() -> Dictionary:
@@ -10,9 +10,9 @@ func _assets() -> Dictionary:
 	return parsed.get("assets", {}) if parsed is Dictionary else {}
 
 
-func test_catalog_names_equal_the_five_gap_kinds() -> void:
+func test_catalog_names_equal_the_six_gap_kinds() -> void:
 	var assets := _assets()
-	assert_eq(assets.size(), 5, "빈 장부는 통과하지 않음")
+	assert_eq(assets.size(), 6, "빈 장부는 통과하지 않음")
 	var expected: PackedStringArray = EXPECTED_TEXT.split(" ", false)
 	var listed: PackedStringArray = PackedStringArray(assets.keys())
 	expected.sort()
@@ -60,3 +60,12 @@ func test_the_thicket_is_lighter_than_a_bare_tree() -> void:
 	assert_lt(int(thicket.get("lod0_tris", 9999)), 376)
 	assert_gte(float(thicket.get("height_m", 0.0)), 1.5)
 	assert_lte(float(thicket.get("height_m", 9.0)), 2.5)
+
+
+# The loose floorboard (card K) lies on the floor: walked over, no higher than
+# 6 cm, a light model (map-layout asked for 200 triangles at most).
+func test_the_loose_board_lies_flat_and_is_walked_over() -> void:
+	var board: Dictionary = _assets().get("loose_board", {})
+	assert_eq(String(board.get("solid", "")), "none")
+	assert_lte(float(board.get("dimensions_m", [0, 9, 0])[1]), 0.06, "as high as a lifted board")
+	assert_lte(int(board.get("lod0_tris", 9999)), 200)
