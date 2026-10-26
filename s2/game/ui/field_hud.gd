@@ -3861,18 +3861,20 @@ func _apply_stick() -> void:
 		rim_run = false
 		p.running = run_button.button_pressed or stick_dash
 		return
-	# The camera looks north with no turn: screen right is +x, screen down is +z.
+	# The camera is turned (field_game.gd CAM_YAW): the push on the screen turns
+	# with it onto the ground, so up on the stick is up on the screen.
 	var push := clampf(v.length() / STICK_R, 0.0, 1.0)
+	var dir: Vector2 = game.screen_dir(v.normalized())
 	stick_push = push
 	if fighting(p):
 		# A resting thumb, or a push at the one being hit, keeps the fight going;
 		# a real push elsewhere calls it off (field_unified 10).
 		var to := _fight_dir(p)
-		if push < STICK_STOPS_FIGHT or (to != Vector2.ZERO and v.normalized().dot(to) > 0.7):
+		if push < STICK_STOPS_FIGHT or (to != Vector2.ZERO and dir.dot(to) > 0.7):
 			p.stick = Vector2.ZERO
 			return
 		stop_fight(p)
-	p.stick = v.normalized() * push
+	p.stick = dir * push
 	game.combat.drop_melee(p)
 	_update_rim(0.0)
 	_set_running(p)
@@ -4289,7 +4291,7 @@ func stop_fight(p) -> void:
 	attack_button.button_pressed = false
 
 
-## Screen direction from the player to the one being hit (camera looks north).
+## Ground direction (x, z) from the player to the one being hit.
 func _fight_dir(p) -> Vector2:
 	var at: Vector3 = p.target_zombie["pos"] if not p.target_zombie.is_empty() else p.target_person.position
 	var d := Vector2(at.x - p.position.x, at.z - p.position.z)

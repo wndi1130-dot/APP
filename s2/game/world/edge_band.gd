@@ -57,9 +57,15 @@ const FIREWOOD_MODEL := "res://models/props_field/firewood_pile.glb"
 const COLD_FIRE_MODEL := "res://models/props_field/cold_campfire.glb"
 
 
-## Half the ground the field camera shows: across from the aspect, along from the pitch.
-static func view_half(cam_size: float, aspect: float, pitch_deg: float) -> Vector2:
-	return Vector2(cam_size * aspect * 0.5, cam_size * 0.5 / sin(deg_to_rad(pitch_deg)))
+## Half the ground the field camera shows along the map's x and z: across from the
+## aspect, along from the pitch; a camera turned yaw_deg from north (결정 476) shows
+## that rectangle turned, so this is half the box round it.
+static func view_half(cam_size: float, aspect: float, pitch_deg: float, yaw_deg: float = 0.0) -> Vector2:
+	var across := cam_size * aspect * 0.5
+	var along := cam_size * 0.5 / sin(deg_to_rad(pitch_deg))
+	var c := absf(cos(deg_to_rad(yaw_deg)))
+	var s := absf(sin(deg_to_rad(yaw_deg)))
+	return Vector2(across * c + along * s, across * s + along * c)
 
 
 ## The point the camera looks at, kept so its view ends inside the band.

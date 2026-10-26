@@ -113,7 +113,11 @@ const TRAIN_ROLES: Array = ["chief", "companion", "carrier", "escort", "worker"]
 ## (decision 430 ②, card domestic Q1 가): the law's haulMult in S1 data.ts
 ## (LAWS_RES in the train tables; test_ration_law.gd holds the two together).
 const RATION_HAUL: float = 0.8
-const CAM_PITCH: float = 52.0
+## The field camera (결정 476, the diagonal view): orthographic, turned CAM_YAW from
+## north so it looks across the map's axes from the south-east, CAM_PITCH down
+## from level. One value each: the pitch was picked from 30, 35 and 40.
+const CAM_PITCH: float = 35.0
+const CAM_YAW: float = 45.0
 const FADE_TIME: float = 0.25           # seconds for the pause fade to come and go
 const NIGHT_SUN_MIN: float = 0.1
 # The radio (user 2026-10-11, decisions 032): it can be turned down, and when
@@ -981,8 +985,9 @@ func _build_storm() -> void:
 	m.set_shader_parameter("whiteout", float(storm["whiteout"]))
 	# Frost is the full-size strips' (storm_frost); here it would only blur.
 	m.set_shader_parameter("edge_frost", 0.0)
-	# The camera looks north from above: world z runs down the screen.
-	m.set_shader_parameter("storm_dir", Vector2(weather.wind_dir.x, weather.wind_dir.y * 0.7))
+	# The wind on the ground as it runs across the screen (the camera is turned CAM_YAW).
+	var wind: Vector2 = weather.wind_dir.rotated(deg_to_rad(CAM_YAW))
+	m.set_shader_parameter("storm_dir", Vector2(wind.x, wind.y * 0.7))
 	storm_screen.material = m
 	storm_port.add_child(storm_screen)
 
@@ -2688,14 +2693,13 @@ func _update_camera(delta: float) -> void:
 	var focus := player.position + cam_push
 	# The view ends inside the woods round the map, never past them (edge_band.gd).
 	var screen := get_viewport().get_visible_rect().size
-	focus = EdgeBand.clamp_focus(focus, EdgeBand.view_half(cam_size, screen.x / maxf(screen.y, 1.0), CAM_PITCH), grid.width, grid.height)
+	focus = EdgeBand.clamp_focus(focus, EdgeBand.view_half(cam_size, screen.x / maxf(screen.y, 1.0), CAM_PITCH, CAM_YAW), grid.width, grid.height)
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
 	if map_edge != null:
 		map_edge.set_eye(player.position)
 		map_edge.set_room(_open_room())
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
-	var pitch := deg_to_rad(CAM_PITCH)
-	var back := Vector3(0, sin(pitch), cos(pitch)) * 60.0
+	var back := cam_back() * 60.0
 	# A blow's kick moves the eye, not the place it follows (hit_feel.gd).
 	var kick: Vector3 = feel.camera_offset() * camera.size if feel != null else Vector3.ZERO
 	camera.position = cam_focus + back + kick
@@ -2703,6 +2707,20 @@ func _update_camera(delta: float) -> void:
 	snow.position = cam_focus + Vector3(0, 9, 0)
 	_update_storm()
 	_update_light()
+
+
+## Which way the camera stands from what it looks at, one metre out: south-east
+## (CAM_YAW) and up (CAM_PITCH).
+static func cam_back() -> Vector3:
+	var pitch := deg_to_rad(CAM_PITCH)
+	var yaw := deg_to_rad(CAM_YAW)
+	return Vector3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch))
+
+
+## A direction on the screen (x right, y down) as one on the ground (x, z): the
+## camera is turned CAM_YAW, so up on the screen is north-west on the map.
+func screen_dir(v: Vector2) -> Vector2:
+	return v.rotated(-deg_to_rad(CAM_YAW))
 
 
 func screen_to_ground(screen: Vector2) -> Vector3:

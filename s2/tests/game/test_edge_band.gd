@@ -75,6 +75,14 @@ func test_the_camera_never_looks_past_the_band() -> void:
 	assert_almost_eq(south.z + far.y, 120.0 + EdgeBand.BAND, 0.0001, "zoomed out, the bottom of the view stops there too")
 	var narrow := EdgeBand.clamp_focus(Vector3(3, 0, 3), Vector2(100, 100), 40, 30)
 	assert_eq(narrow, Vector3(20, 0, 15), "a map smaller than the view is centred")
+	# A camera turned 45° (결정 476) shows its rectangle turned: the box round it.
+	var turned := EdgeBand.view_half(24.0, 2.0, 35.0, 45.0)
+	var box := (24.0 + 12.0 / sin(deg_to_rad(35.0))) * cos(deg_to_rad(45.0))
+	assert_almost_eq(turned.x, box, 0.0001)
+	assert_almost_eq(turned.y, box, 0.0001)
+	var corner := EdgeBand.clamp_focus(Vector3(1, 0, 1), turned, 170, 120)
+	assert_almost_eq(corner.x - turned.x, -EdgeBand.BAND, 0.0001, "the turned view stops at the band too")
+	assert_almost_eq(corner.z - turned.y, -EdgeBand.BAND, 0.0001)
 
 
 func test_rails_run_out_through_a_clear_corridor_and_roads_end_at_a_block() -> void:
