@@ -333,7 +333,7 @@ func test_the_ground_reads_streets_pavements_and_yards() -> void:
 			g.floor[g.index(Vector2i(x, z))] = F.ROAD
 	for x in range(2, 6):
 		g.set_solid(Vector2i(x, 10), FieldGrid.Solid.WALL)
-	var floors: PackedInt32Array = g.floor.duplicate()
+	var floors: PackedByteArray = g.floor.duplicate()
 	var d: PackedFloat32Array = MapView.ground_details(g)
 	assert_eq(g.floor, floors, "the rules' floors are untouched")
 	var at := func(c: Vector2i) -> int: return int(d[g.index(c)])
