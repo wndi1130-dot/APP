@@ -182,6 +182,9 @@ var zombies: Zombies
 var camera: Camera3D
 var environment: Environment
 var sun: DirectionalLight3D
+## The light from the camera's side that keeps the walls turned from the sun out
+## of the black (Atmosphere.VIEW_FILL): no shadow, by day only.
+var view_fill: DirectionalLight3D
 var snow: GPUParticles3D
 ## Storm stop (weather_fx 14장, opts["storm"]: before, during, after): its look,
 ## the snow layers with their place relative to the view, and the screen layer
@@ -805,6 +808,7 @@ func _update_atmosphere() -> void:
 		sun.light_energy = maxf(float(fx_light["sun_energy"]), NIGHT_SUN_MIN * night)
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
 		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
+		_set_view_fill()
 		_update_window_light()
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
@@ -817,9 +821,18 @@ func _update_atmosphere() -> void:
 		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
 
 
+## The view fill follows the look; a storm stage keeps its own light (none).
+func _set_view_fill() -> void:
+	if view_fill == null:
+		return
+	view_fill.light_energy = float(fx_light.get("fill_energy", 0.0)) if storm.is_empty() else 0.0
+	view_fill.light_color = fx_light.get("fill_color", Color.WHITE)
+	view_fill.visible = view_fill.light_energy > 0.001
+
+
 ## Low sun through the windows (decision 474 B8): from 14:50 the pools on the
-## floor warm from gold to deep orange and draw back to the sill, gone at sunset. Clouds hold it back
-## as they hold back the sun (Atmosphere sun_visible).
+## floor warm from gold to deep orange and draw back to the sill, gone at
+## sunset. Clouds hold it back as they hold back the sun (Atmosphere sun_visible).
 func _update_window_light() -> void:
 	var z := sun.global_transform.basis.z
 	var sunny := 1.0 - smoothstep(0.55, 0.95, float(atmo["cloud"]))
@@ -892,6 +905,13 @@ func _build_world() -> void:
 		_apply_grade(atmo["grade"])
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
+	view_fill = DirectionalLight3D.new()
+	view_fill.shadow_enabled = false
+	var back := cam_back()
+	var toward := Vector3(-back.x, 0.0, -back.z).normalized() + Vector3(0.0, -tan(deg_to_rad(Atmosphere.VIEW_FILL_TILT)), 0.0)
+	view_fill.transform = Transform3D(Basis.looking_at(toward, Vector3.UP), Vector3.ZERO)
+	add_child(view_fill)
+	_set_view_fill()
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
 	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
 	lantern.visible = false

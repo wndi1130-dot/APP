@@ -56,7 +56,8 @@ func test_the_blow_lands_after_the_draw_back_and_the_swing_is_no_longer() -> voi
 	assert_true(_touched(z), "now it lands")
 	assert_eq(p.strike_t, 0.0)
 	# 0.30 drawn back + what is left = the axe's swing time: the draw-back is not extra.
-	assert_almost_eq(p.swing_t + 0.30 / mult, float(W.get_data("axe")["swing"]) / mult, 0.005)
+	# The player's gap after the blow is (decision 473 W1).
+	assert_almost_eq(p.swing_t + 0.30 / mult, float(W.get_data("axe")["swing"]) / mult + W.melee_gap("axe"), 0.005)
 
 
 func test_a_second_call_while_drawn_back_does_nothing() -> void:

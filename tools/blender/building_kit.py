@@ -467,6 +467,19 @@ def roof_gable_end(p):
     tri = [(-half, 0.0), (half, 0.0), (0.0, apex)]
     p.face([(x, YO, z) for x, z in tri], "wall", 1, (0.0, -1.0, 0.0))
     p.face([(x, YI, z) for x, z in tri], "wall", 0, (0.0, 1.0, 0.0))
+    # 다락 환기창(결정 476: 대각뷰에서 박공 면이 빈 삼각형으로 읽혔다). 나무 틀과 널 넷,
+    # 그 뒤는 어둠(유리 구역). 박공과 같은 배율로 줄어 작은 집은 작은 창이 된다.
+    w, h, f = 0.9, 0.6, 0.06
+    c = apex * 0.55
+    lo, hi = c - h / 2.0, c + h / 2.0
+    p.rect("y", YO - 0.002, (-w / 2.0, w / 2.0), (lo, hi), "glass", 1, -1)
+    for x0, x1 in ((-w / 2.0 - f, -w / 2.0), (w / 2.0, w / 2.0 + f)):
+        p.box((x0, x1), (YO - 0.05, YO), (lo, hi + f), "wood", 1, sides="yxXZ")
+    p.box((-w / 2.0, w / 2.0), (YO - 0.05, YO), (hi, hi + f), "wood", 1, sides="yzZ")
+    p.box((-w / 2.0 - f - 0.03, w / 2.0 + f + 0.03), (YO - 0.07, YO), (lo - f, lo), "wood", 1, sides="yxXzZ")
+    for i in range(4):
+        z = lo + (i + 0.5) * h / 4.0
+        p.box((-w / 2.0, w / 2.0), (YO - 0.035, YO - 0.004), (z - 0.03, z + 0.03), "wood", 1, sides="yzZ")
 
 
 def roof_flat(p):
@@ -583,7 +596,7 @@ PIECES = [
     ("door_frame_cut", door_frame_cut, "opening", "none", "cell_floor", "cut", True, 18, "턱 줄에 든 문 칸"),
     ("door_leaf_cut", door_leaf_cut, "state", "none", "hinge", "free", False, 12, "턱 높이 문짝"),
     ("roof_gable", roof_gable, "roof", "span", "wall_top", "free", False, 28, "박공지붕(경사 둘, 처마, 용마루 덮개)"),
-    ("roof_gable_end", roof_gable_end, "roof", "span_xz", "wall_top", "free", False, 4, "박공 끝 삼각 벽"),
+    ("roof_gable_end", roof_gable_end, "roof", "span_xz", "wall_top", "free", False, 80, "박공 끝 삼각 벽과 다락 환기창"),
     ("roof_flat", roof_flat, "roof", "xy", "wall_top", "free", True, 4, "평지붕 면"),
     ("roof_parapet", roof_parapet, "roof", "x", "wall_top", "free", True, 8, "평지붕 둘레 낮은 벽"),
     ("chimney", chimney, "roof", "none", "roof_base", "free", True, 40, "굴뚝 몸통과 덮개돌"),
