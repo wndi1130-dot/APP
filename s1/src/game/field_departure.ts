@@ -10,6 +10,7 @@ import type { Wound, WoundBook, WoundGrade, WoundPart, WoundState } from './woun
 import { CAPTAIN_ID } from './field_receipt';
 import type { FieldPromiseSpec, FieldReturnRecord } from './field_receipt';
 import { departureMemory } from './memory';
+import { arrivalMin } from './stop_time';
 
 // S3 출발 계약 판 2(docs/design/briefs/s3_departure_receipt_contract.md 2절). 열차가 정차 고르기에서 「내리기」를 누를 때
 // 판 상태에서 한 장 만든다. 판 1(field_receipt.ts FieldDeparture)의 칸은 그대로 두고 사람 칸을 넓힌다.
@@ -55,6 +56,8 @@ export interface FieldDepartureV2 {
   stopId: string;
   placeId: string;
   segment: number;
+  /** 이 정차에 열차가 닿는 시각(0시부터 분, 결정 471 B0 stop_time.ts). 없던 계약은 10:30 */
+  arriveMin?: number;
   /** 처음부터 나가는 수색대: 열차장과 동료 */
   roster: DeparturePerson[];
   /** 작업조 부르기로 내려올 수 있는 사람: 운송조(S1 정차의 작업조)와 호위조(경비대 둘) */
@@ -203,6 +206,6 @@ export function buildDeparture(g: Game, opts: DepartureOpts): FieldDepartureV2 {
   ];
   return {
     version: 2, departureId: `dep_${opts.placeId}_${seg}`, stopId: `stop_${opts.placeId}_${seg}`, placeId: opts.placeId, segment: seg,
-    roster, workCrew, promises: departurePromises(g), domestic: !!g.dom, train: { food: g.food, hungerSegs: g.hunger ?? 0 },
+    arriveMin: arrivalMin(g.seed, seg), roster, workCrew, promises: departurePromises(g), domestic: !!g.dom, train: { food: g.food, hungerSegs: g.hunger ?? 0 },
   };
 }

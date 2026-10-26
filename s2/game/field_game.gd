@@ -379,8 +379,11 @@ func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_DISABLED
 	rng.seed = int(opts.get("seed", Time.get_ticks_usec()))
 	clock.speed = float(opts.get("clock_speed", 1.0))
-	# The stop's arrival (decision 471 B0: the slice rolls it from the stop's seed).
-	clock.arrive_min = float(opts.get("arrive_min", FieldClock.ARRIVE_MIN))
+	# When the train came in (decision 471 B0): the stop's own, else the departure contract's, else 10:30.
+	var contract_min: float = float(FieldClock.ARRIVE_MIN)
+	if opts.get("departure") is Dictionary:
+		contract_min = float((opts["departure"] as Dictionary).get("arriveMin", contract_min))
+	clock.arrive_min = float(opts.get("arrive_min", contract_min))
 	# A storm stop plays by its stage's weather (clear, blizzard, clear) and
 	# looks like the stage; without one the stop is as before.
 	storm = StormLook.look(String(opts.get("storm", "")))
