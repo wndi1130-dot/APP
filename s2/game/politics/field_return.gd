@@ -12,6 +12,7 @@ const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TurnDeath = preload("res://game/train/turn/turn_death.gd")
 const PersonMemory = preload("res://game/politics/person_memory.gd")
+const CouncilLog = preload("res://game/politics/council_log.gd")
 const LEDGER_MAX := 64
 const FIELD_PROMISE_KINDS := ["prologue", "skip_dispatch"]
 const SYMBOL_USES := ["hang_before_session", "hang_in_car"]
@@ -327,6 +328,7 @@ static func _break_promise(g: Dictionary, t: Dictionary, comm: String, label: St
 	state["broken"] = int(state.get("broken", 0)) + 1  # the car's own count (turn.ts breakPromise)
 	_offend(g, comm)
 	_journal(g, "%s과(와)의 약속을 어겼다: %s." % [t["COMM_NAME"][comm], label], "bad")
+	CouncilLog.note_broken(g, t, comm)
 
 
 static func _break_prologue(g: Dictionary, t: Dictionary, comm: String, label: String) -> void:
@@ -335,6 +337,7 @@ static func _break_prologue(g: Dictionary, t: Dictionary, comm: String, label: S
 	g["stats"]["promisesBroken"] = int(g["stats"]["promisesBroken"]) + 1
 	g["comms"][comm]["broken"] = int(g["comms"][comm].get("broken", 0)) + 1  # field_receipt.ts breakPrologueVow
 	_journal(g, "%s과(와)의 약속을 어겼다: %s." % [t["COMM_NAME"][comm], label], "bad")
+	CouncilLog.note_broken(g, t, comm)
 
 
 static func _active_wounds(g: Dictionary, comm: String = "") -> Array:
@@ -615,6 +618,7 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 			_journal(g, "%s: 그 약속을 본 사람이 아무도 돌아오지 못했다. 지켰는지 어겼는지 열차는 모른다." % spec["label"])
 			lines.append({"k": "promise", "comm": comm, "text": "%s과(와)의 약속: 본 사람이 돌아오지 못해 알 수 없다." % t["COMM_NAME"][comm]})
 	_body_searches(g, departure, receipt)
+	_resident_scenes(g, departure, receipt)
 	# Each person's own memory of the stop (person_memory.gd, s1 memory.ts on RETURN_HOOK).
 	PersonMemory.from_return(g, t, departure, receipt, returned_of(receipt))
 	_close_field_stop(g, t, departure, receipt)
@@ -709,6 +713,31 @@ static func _close_field_stop(g: Dictionary, t: Dictionary, departure: Dictionar
 ## s1 field_receipt.ts BODY_SEARCH_REL): the car of one who saw it and came back
 ## minds it or not, once a return.
 const BODY_SEARCH_REL: Dictionary = {"tail": 0.0, "medtech": -1.0, "guard": 0.0, "front": -1.0, "engine": 0.0}
+
+
+## The people living at a stop (J21): one who saw their winter stores taken and came back alive makes
+## their car mind it, once a return (s1 field_receipt.ts RESIDENT_ROBBED_REL, decision 439 card 3).
+const RESIDENT_ROBBED_REL: Dictionary = {"tail": 0.0, "medtech": -1.0, "guard": 0.0, "front": -1.0, "engine": 0.0}
+
+
+static func _resident_scenes(g: Dictionary, departure: Dictionary, receipt: Dictionary) -> void:
+	var back: Array = returned_of(receipt)
+	var minded: Dictionary = {}
+	for row: Dictionary in receipt.get("witnessed", []):
+		if String(row.get("template", "")) != "resident_robbed":
+			continue
+		for w: Variant in row.get("witnesses", []):
+			var pid: String = String(w) if w is String else String((w as Dictionary).get("person", ""))
+			if not back.has(pid):
+				continue
+			for r: Dictionary in FieldDeparture.people_of(departure):
+				var comm: String = String(r.get("comm", ""))
+				if String(r.get("id", "")) != pid or minded.has(comm):
+					continue
+				minded[comm] = true
+				var d: float = float(RESIDENT_ROBBED_REL.get(comm, 0.0))
+				if d != 0.0:
+					_bump_rel(g, comm, d, "field.resident")
 
 
 static func _body_searches(g: Dictionary, departure: Dictionary, receipt: Dictionary) -> void:

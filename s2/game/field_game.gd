@@ -13,6 +13,7 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const RoomStories = preload("res://game/world/room_stories.gd")
+const SidePath = preload("res://game/world/side_path.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -26,6 +27,7 @@ const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldTrainGuard = preload("res://game/field_train_guard.gd")
+const FieldAlarms = preload("res://game/field_alarms.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const Gait = preload("res://game/sim/gait.gd")
 const Carry = preload("res://game/sim/carry.gd")
@@ -33,6 +35,7 @@ const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
+const SmellRules = preload("res://game/sim/smell_rules.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
@@ -142,6 +145,7 @@ var mission: String = ""
 var mission_play: FieldMission      # the goals of this stop, in the field
 var holdout: FieldHoldout           # holding the train while it gets ready (off on a plain stop)
 var train_guard: FieldTrainGuard    # the brakes heard, and the train holding what they bring (decision 416)
+var building_alarms: FieldAlarms    # buildings' alarms set off by breaking in (J17)
 var rng := RandomNumberGenerator.new()
 var place: String = ""                 # which map this stop is played on (FieldMaps)
 var map_script: Script                 # a map handed over as it is, in place of a place's (tests)
@@ -381,7 +385,9 @@ func _ready() -> void:
 	if opts.get("map_data") is Dictionary:
 		_take_map(opts["map_data"])
 	else:
-		_take_map(FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+		var built: Dictionary = FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
+		# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd).
+		_take_map(SidePath.add(built, rng.seed))
 	# The boxes get their named things, from this run's seed (decision 423-8).
 	# opts "loot_dress" false keeps the map's own bundles, as before.
 	if bool(opts.get("loot_dress", true)):
@@ -430,6 +436,7 @@ func _ready() -> void:
 	mission_play.place()
 	holdout = FieldHoldout.new(self)
 	train_guard = FieldTrainGuard.new(self)
+	building_alarms = FieldAlarms.new(self)
 	_build_world()
 	await BuildPace.rest(pace)
 	view = MapView.new()
@@ -1496,6 +1503,7 @@ func _step(delta: float) -> void:
 	_update_hordes(delta)
 	_update_spawns(delta)
 	train_guard.tick()
+	building_alarms.tick()
 	_update_blood(delta)
 	_update_night(delta)
 	_update_zone(delta)
@@ -1647,6 +1655,10 @@ func _drive(p: Person, delta: float) -> void:
 
 
 func _move_person(p: Person, delta: float) -> void:
+	# A walk along a path keeps the weapon's planted-feet span too (결정 441 (1)).
+	if combat.feet_held(p):
+		p.moving = false
+		return
 	if p.path.is_empty():
 		p.moving = false
 		return
@@ -1850,7 +1862,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
 			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
-	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false)
+	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false) * SimNoise.reach(tag)
 	var reacted: int = zombies.hear(at, level, radius)
 	ledger.observe(level, tag, radius, reacted)
 	_score(level, tag)
@@ -1929,16 +1941,20 @@ func _update_blood(delta: float) -> void:
 
 
 ## Freshest, closest trail point a zombie at `at` can smell: the same 12 m
-## event shape as the minute pulse; falling snow weakens older drops (8.1).
+## event shape as the minute pulse; falling snow weakens older drops (8.1),
+## rain washes every drop to half its pull (decision 445).
 func strongest_scent(at: Vector3) -> Dictionary:
 	var best: Dictionary = {}
 	var best_score := 0.0
 	var now := clock.elapsed
 	var snowing := weather.kinds.has("snow") or weather.kinds.has("blizzard")
+	var raining := weather.kinds.has("rain")
 	for b in blood:
 		var reach: float = BLOOD_SCENT_R * weather.scent_mult(b["pos"], at)
 		if snowing and now - float(b["t"]) > 30.0:
 			reach *= 0.7
+		if raining:
+			reach *= SmellRules.RAIN_FADE
 		var d: float = at.distance_to(b["pos"])
 		if d > reach:
 			continue
@@ -2515,7 +2531,9 @@ func on_door_banged(c: Vector2i, by: Dictionary = {}) -> void:
 	door["hp"] = int(door["hp"]) - 1
 	# The planks on the face they strike from give way first (building_rules.gd).
 	var had: int = BuildingRules.planks_total(door)
-	BuildingRules.wear_planks(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	var toppled := BuildingRules.wear_defences(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	if not toppled.is_empty():
+		actions.topple_furniture(toppled, c)
 	if BuildingRules.planks_total(door) != had:
 		grid.refresh_cell(c)
 		view.update_door(c)
@@ -2752,6 +2770,9 @@ func finish(reason: String) -> void:
 	# A hidden core looked at without the engine hand (field_unified 3장): one line, a reason to bring them.
 	if String(data["spots"].get(CoreScenes.SPOT, {}).get("state", "")) == "seen_hidden":
 		receipt.place_note("coreHint", true)
+	# The side path's rare store goes on the receipt only when someone got to it.
+	if SidePath.visited(data):
+		receipt.place_note("sidePath", "rareStore")
 	if mission != "":
 		receipt.place_note("mission", mission)
 	mission_play.finish(reason)

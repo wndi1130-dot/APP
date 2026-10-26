@@ -18,6 +18,7 @@ const UiTheme = preload("res://game/ui/ui_theme.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
 const HudSkin = preload("res://game/ui/hud_skin.gd")
 const PauseVeil = preload("res://game/ui/pause_veil.gd")
+const MapStamp = preload("res://game/ui/map_stamp.gd")
 const TextFit = preload("res://game/ui/text_fit.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
@@ -304,6 +305,7 @@ var game
 var theme: Theme
 var root: Control
 var pause_veil: Control                   # pause_veil.gd
+var map_stamp: Control                    # map_stamp.gd
 var text_fit: Node                       # text_fit.gd
 var touch: Control
 var overlay: Control
@@ -466,6 +468,10 @@ func setup(field_game) -> void:
 	pause_veil = PauseVeil.new()
 	pause_veil.setup(self)
 	root.add_child(pause_veil)
+	# A read scrawled map marks its side path's gap (map_stamp.gd, 결정 카드 loot-feel M).
+	map_stamp = MapStamp.new()
+	map_stamp.setup(self)
+	root.add_child(map_stamp)
 	_build_top()
 	_build_portrait()
 	_build_allies()
