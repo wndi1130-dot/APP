@@ -24,9 +24,8 @@ const TARGET_AREA := {"bed": 16, "kitchen": 15, "living": 27}
 const MIN_SIDE := 3
 ## 문이 원래 없는 쪽(새 칸막이 문으로만 드나드는 쪽)에는 더 안쪽 방이 온다: 침실을 지나 거실로 가지 않게.
 const PRIVACY := {"bed": 3, "kitchen": 2, "living": 1}
-## 집 한 채에서 가르는 횟수 상한.
+## 집 한 채에서 가르는 횟수 상한: 이 수에 처음 큰 방 수를 더한다(연립 한 동에 큰 방이 여럿).
 const MAX_CUTS := 8
-static var DEBUG_WHY: Dictionary = {}  # TEMP-DEBUG
 
 
 static func is_home(building: Dictionary) -> bool:
@@ -231,7 +230,7 @@ static func _protected(data: Dictionary, g: Grid, lv: int, map: Dictionary, ri: 
 
 
 ## 상자가 놓일 칸을 먼저 예약한다. 하나라도 옮길 수 없으면 격자를 건드리지 않는다.
-static func _box_moves(data: Dictionary, g: Grid, lv: int, candidate: Dictionary) -> Variant:
+static func _box_moves(data: Dictionary, g: Grid, lv: int, candidate: Dictionary, soft: Dictionary = {}) -> Variant:
 	var boxes: Dictionary = data.get("containers", {})
 	var occupied := {}
 	for box: Dictionary in boxes.values():
@@ -252,7 +251,7 @@ static func _box_moves(data: Dictionary, g: Grid, lv: int, candidate: Dictionary
 			return da < db if da != db else (a.y < b.y if a.y != b.y else a.x < b.x))
 		var found := false
 		for spot: Vector2i in spots:
-			if not occupied.has(spot) and g.solid_at(spot) == S.NONE:
+			if not occupied.has(spot) and (g.solid_at(spot) == S.NONE or soft.has(spot)):
 				moves[id] = spot
 				occupied[spot] = true
 				found = true
@@ -283,7 +282,7 @@ static func _apply(data: Dictionary, lv: int, room: Dictionary, cls: String, kin
 	var candidate := choose(g, cells, BATH_SIZES if kind == "bath" else STORE_SIZES, _protected(data, g, lv, map, 0, soft), accept, soft)
 	if candidate.is_empty():
 		return {}
-	var moves: Variant = _box_moves(data, g, lv, candidate)
+	var moves: Variant = _box_moves(data, g, lv, candidate, soft)
 	if moves == null:
 		return {}
 	_clear(data, g, lv, replaced)
@@ -407,28 +406,16 @@ static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary,
 				else:
 					b[c] = true
 			if line.size() < 2 or a.size() < MIN_REMAINDER or b.size() < MIN_REMAINDER:
-				DEBUG_WHY["size"] = int(DEBUG_WHY.get("size", 0)) + 1  # TEMP-DEBUG
 				continue
 			line.sort()
 			var valid := line[line.size() - 1] - line[0] == along * (line.size() - 1)
-			if not valid: DEBUG_WHY["gap"] = int(DEBUG_WHY.get("gap", 0)) + 1  # TEMP-DEBUG
-			var why_p := false  # TEMP-DEBUG
-			var why_s := false  # TEMP-DEBUG
 			for c: Vector2i in line:
-				why_p = why_p or protected.has(c)  # TEMP-DEBUG
-				why_s = why_s or not (g.solid_at(c) == S.NONE or soft.has(c))  # TEMP-DEBUG
 				valid = valid and (g.solid_at(c) == S.NONE or soft.has(c)) and not protected.has(c)
-			if why_p: DEBUG_WHY["protected"] = int(DEBUG_WHY.get("protected", 0)) + 1  # TEMP-DEBUG
-			if why_s: DEBUG_WHY["solid"] = int(DEBUG_WHY.get("solid", 0)) + 1  # TEMP-DEBUG
-			if not (g.solid_at(line[0] - along) == S.WALL and g.solid_at(line[line.size() - 1] + along) == S.WALL): DEBUG_WHY["end"] = int(DEBUG_WHY.get("end", 0)) + 1  # TEMP-DEBUG
 			valid = valid and g.solid_at(line[0] - along) == S.WALL and g.solid_at(line[line.size() - 1] + along) == S.WALL
-			if valid and not (_short_side(a) >= MIN_SIDE and _short_side(b) >= MIN_SIDE): DEBUG_WHY["side"] = int(DEBUG_WHY.get("side", 0)) + 1  # TEMP-DEBUG
 			if valid and _short_side(a) >= MIN_SIDE and _short_side(b) >= MIN_SIDE and _connected(a) and _connected(b):
 				lines.append({"line": line, "a": a, "b": b, "axis": axis})
 	var best := {}
 	var best_score := 2147483647
-	DEBUG_WHY["rooms"] = int(DEBUG_WHY.get("rooms", 0)) + 1  # TEMP-DEBUG
-	if lines.is_empty(): DEBUG_WHY["no_line"] = int(DEBUG_WHY.get("no_line", 0)) + 1  # TEMP-DEBUG
 	for row: Dictionary in lines:
 		var touch_a := _touches(row["a"], entries)
 		var touch_b := _touches(row["b"], entries)
@@ -436,17 +423,14 @@ static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary,
 			var keep_cells: Dictionary = row["a"] if keep_a else row["b"]
 			var add_cells: Dictionary = row["b"] if keep_a else row["a"]
 			if not (touch_a if keep_a else touch_b) and PRIVACY[keep] < PRIVACY[add]:
-				DEBUG_WHY["privacy"] = int(DEBUG_WHY.get("privacy", 0)) + 1  # TEMP-DEBUG
 				continue
 			if not (touch_b if keep_a else touch_a) and PRIVACY[add] < PRIVACY[keep]:
-				DEBUG_WHY["privacy"] = int(DEBUG_WHY.get("privacy", 0)) + 1  # TEMP-DEBUG
 				continue
 			var score := absi(keep_cells.size() - int(TARGET_AREA[keep])) + absi(add_cells.size() - int(TARGET_AREA[add]))
 			if score >= best_score:
 				continue
 			var door := _cut_door(row["line"], row["axis"], keep_cells, add_cells, protected, entries)
 			if door.x < 0:
-				DEBUG_WHY["door"] = int(DEBUG_WHY.get("door", 0)) + 1  # TEMP-DEBUG
 				continue
 			var walls := {}
 			for c: Vector2i in row["line"]:
@@ -456,7 +440,6 @@ static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary,
 			remaining.merge(add_cells)
 			var found := {"walls": walls, "door": door, "keep": keep_cells, "add": add_cells, "remaining": remaining}
 			if accept.is_valid() and not accept.call(found):
-				DEBUG_WHY["accept"] = int(DEBUG_WHY.get("accept", 0)) + 1  # TEMP-DEBUG
 				continue
 			best = found
 			best_score = score
@@ -553,7 +536,7 @@ static func _bisect(data: Dictionary, lv: int, room: Dictionary, add: String) ->
 	var candidate := _cut(g, cells, line_protected, soft, keep, add, accept, stairs)
 	if candidate.is_empty():
 		return {}
-	var moves: Variant = _box_moves(data, g, lv, candidate)
+	var moves: Variant = _box_moves(data, g, lv, candidate, soft)
 	if moves == null:
 		return {}
 	_clear(data, g, lv, replaced)
@@ -660,7 +643,10 @@ static func _carve_bath(data: Dictionary, rooms: Array, stats: Dictionary) -> bo
 ## 것부터: 거실, 부엌, 그다음 침실(아이 방). 거실·부엌으로 못 가르면 침실로 한 번 더 본다.
 static func _cut_rooms(data: Dictionary, b: int, rooms: Array, stats: Dictionary) -> void:
 	var failed := {}
-	for _n in range(MAX_CUTS):
+	var over := 0
+	for r: Dictionary in rooms:
+		over += int(SPLIT_OVER.has(r["class"]) and r["cells"].size() > int(SPLIT_OVER[r["class"]]))
+	for _n in range(MAX_CUTS + over):
 		var pick := -1
 		for i in range(rooms.size()):
 			var r: Dictionary = rooms[i]
@@ -694,6 +680,29 @@ static func _cut_rooms(data: Dictionary, b: int, rooms: Array, stats: Dictionary
 	_living_from_a_bedroom(data, rooms, stats)
 
 
+## 방에 제 문이 있나: 문(또는 뚫린 곳) 너머가 건물 밖·복도·계단 칸이고 다른 침실·부엌·욕실이 아니다.
+static func _own_way_in(data: Dictionary, lv: int, inside: Dictionary, rooms: Array) -> bool:
+	var g: Grid = data.get("levels", {0: data["grid"]})[lv]
+	var private := {}
+	for r: Dictionary in rooms:
+		if r["level"] == lv and r["class"] in ["bed", "kitchen", "bath"]:
+			for c: Vector2i in r["cells"]:
+				if not inside.has(c):
+					private[c] = true
+	for c: Vector2i in Furnish._stairs_by_level(data).get(lv, {}):
+		if inside.has(c):
+			return true
+	for c: Vector2i in inside:
+		for d: Vector2i in DIRS:
+			var n: Vector2i = c + d
+			if inside.has(n) or not (g.doors.has(n) or g.people_can_walk(n)):
+				continue
+			var beyond: Vector2i = n + d if g.doors.has(n) else n
+			if not private.has(beyond):
+				return true
+	return false
+
+
 ## 가르고도 거실이 없는 집에 침실이 둘 이상이면, 가장 낮은 층의 가장 큰 침실을 거실로 쓴다(벽은 그대로).
 ## 바닥 글씨로 방 이름이 적힌 방은 글씨와 어긋나지 않게 두지 않는다.
 static func _living_from_a_bedroom(data: Dictionary, rooms: Array, stats: Dictionary) -> void:
@@ -714,6 +723,9 @@ static func _living_from_a_bedroom(data: Dictionary, rooms: Array, stats: Dictio
 		var inside := {}
 		for c: Vector2i in room["cells"]:
 			inside[c] = true
+		# 다른 방을 지나야 들어오는 안쪽 침실은 거실로 쓰지 않는다(PRIVACY와 같은 뜻).
+		if not _own_way_in(data, lv, inside, rooms):
+			continue
 		var written := false
 		for label: Dictionary in data.get("labels", []):
 			written = written or (int(label.get("level", 0)) == lv and inside.has(label.get("cell")) and Furnish._name_class(String(label.get("text", "")))[1])

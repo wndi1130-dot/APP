@@ -120,8 +120,16 @@ func test_door_stair_window_fronts_and_every_floor_cell_remain_reachable() -> vo
 	var protected := Split._protected(d, g, 0, map, 0)
 	var stats := Split.apply(d)
 	assert_gt(stats["rows"].size(), 0)
+	# 큰 방 가르기의 칸막이는 문 앞 피할 자리의 양옆 칸만 지날 수 있다(결정 469 F1): 문 앞 곧은 두 칸,
+	# 계단과 그 곁, 창 앞 칸은 늘 빈다.
+	var cut_walls := {}
+	for row: Dictionary in stats["cuts"]:
+		for c: Vector2i in row["walls"] + [row["door"]]:
+			cut_walls[c] = true
+	for c: Vector2i in [Vector2i(9, 13), Vector2i(9, 12), Vector2i(3, 3), Vector2i(4, 3), Vector2i(3, 4), Vector2i(2, 3), Vector2i(3, 2), Vector2i(4, 2)]:
+		assert_false(cut_walls.has(c), str(c))
 	for c: Vector2i in protected:
-		if g.inside(c) and map["of"][g.index(c)] == 0:
+		if g.inside(c) and map["of"][g.index(c)] == 0 and not cut_walls.has(c):
 			assert_eq(g.solid_at(c), S.NONE, str(c))
 	var seen := _reachable(g, Vector2i(0, 0))
 	for y in range(g.height):
