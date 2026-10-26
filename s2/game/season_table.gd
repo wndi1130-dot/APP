@@ -151,19 +151,23 @@ static func hash32(s: String) -> int:
 static func pick_weather(act_name: String, progress: float, stop_seed: String) -> Dictionary:
 	var prologue_stop := act_name == "prologue" or act(act_name).is_empty()
 	var seg := int(round(seg_at(progress)))
-	var key := "%s:w:%d" % [stop_seed, seg] if prologue_stop else "%s:w:%s:%d" % [stop_seed, act_name, int(round(clampf(progress, 0.0, 1.0) * 100.0))]
-	var w := weights(season_at(act_name, progress))
-	var total := 0
-	for v in w:
-		total += int(v)
 	var picked := "snow"
-	if total > 0:
-		var x := hash32(key) % total
-		for i in DRAWN.size():
-			if x < int(w[i]):
-				picked = String(DRAWN[i])
-				break
-			x -= int(w[i])
+	if prologue_stop:
+		# Decision 474 N2. Load at the call to avoid a preload cycle: the flow reads this table.
+		picked = load("res://game/train/route_weather.gd").weather(stop_seed, seg)
+	else:
+		var key := "%s:w:%s:%d" % [stop_seed, act_name, int(round(clampf(progress, 0.0, 1.0) * 100.0))]
+		var w := weights(season_at(act_name, progress))
+		var total := 0
+		for v in w:
+			total += int(v)
+		if total > 0:
+			var x := hash32(key) % total
+			for i in DRAWN.size():
+				if x < int(w[i]):
+					picked = String(DRAWN[i])
+					break
+				x -= int(w[i])
 	var temp := float(row(seg).get("temp", 0.0)) if prologue_stop else temp_at(act_name, progress)
 	var f := falls()
 	var falling := "none"
