@@ -48,6 +48,7 @@ const SnowTracks = preload("res://game/sim/snow_tracks.gd")
 const PrecipShader = preload("res://fx/shaders/precip.gdshader")
 const W = preload("res://game/sim/weapons.gd")
 const Combat = preload("res://game/field_combat.gd")
+const HitFeel = preload("res://game/hit_feel.gd")
 const AI = preload("res://game/field_ai.gd")
 const Actions = preload("res://game/field_actions.gd")
 const Hud = preload("res://game/ui/field_hud.gd")
@@ -203,6 +204,7 @@ var receipt: Receipt
 var telemetry: Telemetry
 var lines := AllyLines.new()
 var combat: Combat
+var feel: HitFeel                      # a blow's hold, shake, buzz and sound (view only)
 var ai: AI
 var actions: Actions
 var hud: Hud
@@ -217,6 +219,7 @@ var raiders: Array = []
 var player: Person
 var paused: bool = false
 var slow: float = 1.0                    # the body picture up: the field runs at this rate (body_injury 4.6)
+var hitstop: bool = false                # a blow's hold this frame (hit_feel.gd): the rules and pictures stand
 var away: bool = false             # the app pushed the field into a pause; say so once on return
 var ended: bool = false
 var leave_t: float = -1.0          # since the train began to roll away (-1: it stands)
@@ -485,6 +488,7 @@ func _ready() -> void:
 	zombies.setup(self, opts["vat"] if opts.get("vat") is Dictionary else VatBaker.build(int(opts.get("vertices", 1500))))
 	await BuildPace.rest(pace)
 	combat = Combat.new(self)
+	feel = HitFeel.new(self)
 	ai = AI.new(self)
 	actions = Actions.new(self)
 	await BuildPace.heavy(pace)
@@ -1533,8 +1537,15 @@ func _process(delta: float) -> void:
 	if arrive_t >= 0.0:
 		_arrive(delta)
 	elif not ended and not paused:
-		_step(delta * slow)
-		_update_snow()
+		# Held as the frame starts: a hold shorter than a frame still stands one.
+		hitstop = feel.holding()
+		feel.tick(delta, true)
+		if not hitstop:
+			_step(delta * slow)
+			_update_snow()
+	else:
+		hitstop = false
+		feel.tick(delta, false)
 	_update_fade(delta)
 	if leave_t >= 0.0:
 		leave_t += delta
@@ -2685,8 +2696,10 @@ func _update_camera(delta: float) -> void:
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
 	var pitch := deg_to_rad(CAM_PITCH)
 	var back := Vector3(0, sin(pitch), cos(pitch)) * 60.0
-	camera.position = cam_focus + back
-	camera.look_at(cam_focus, Vector3.UP)
+	# A blow's kick moves the eye, not the place it follows (hit_feel.gd).
+	var kick: Vector3 = feel.camera_offset() * camera.size if feel != null else Vector3.ZERO
+	camera.position = cam_focus + back + kick
+	camera.look_at(cam_focus + kick, Vector3.UP)
 	snow.position = cam_focus + Vector3(0, 9, 0)
 	_update_storm()
 	_update_light()
