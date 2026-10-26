@@ -62,14 +62,22 @@ static func bump_parts(g: Dictionary, key: String, delta: float, parts: Array, f
 	var value: float = before + delta
 	g[key] = clampf(value, 0, 100) if key in ["trust", "tension"] else (maxf(0, value) if floor_zero else value)
 	var real: float = float(g[key]) - before
+	if real == 0 or parts.is_empty(): return
+	for row: Array in split_parts(real, parts): note(g, key, float(row[1]), str(row[0]))
+
+## How bump_parts lays `real` over its parts' weights, [[why, share], ...]; the
+## last takes what is left. The train's cost pane splits the forecast so too, so
+## the forecast's rows are the ledger's (J12).
+static func split_parts(real: float, parts: Array) -> Array:
 	var total: float = 0
 	for part: Array in parts: total += float(part[1])
-	if real == 0 or parts.is_empty(): return
+	var out: Array = []
 	var left: float = real
 	for i: int in parts.size():
 		var share: float = left if i == parts.size() - 1 or total == 0 else real * (float(parts[i][1]) / total)
 		left -= share
-		note(g, key, share, str(parts[i][0]))
+		out.append([str(parts[i][0]), share])
+	return out
 
 static func profile(t: Dictionary, value: String, key: String = "name") -> Dictionary:
 	for p: Dictionary in t["PROFILES"]:
