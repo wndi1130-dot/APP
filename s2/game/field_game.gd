@@ -2510,7 +2510,9 @@ func on_door_banged(c: Vector2i, by: Dictionary = {}) -> void:
 	door["hp"] = int(door["hp"]) - 1
 	# The planks on the face they strike from give way first (building_rules.gd).
 	var had: int = BuildingRules.planks_total(door)
-	BuildingRules.wear_planks(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	var toppled := BuildingRules.wear_defences(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	if not toppled.is_empty():
+		actions.topple_furniture(toppled, c)
 	if BuildingRules.planks_total(door) != had:
 		grid.refresh_cell(c)
 		view.update_door(c)
