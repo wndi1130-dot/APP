@@ -9,7 +9,8 @@ extends RefCounted
 ##
 ## Rolled once from the run's seed, like the pockets: same seed, same stop. The
 ## map's numbers are not changed: a building ends with the same bundles it
-## started with (the finds are added on top, each listed in the PR's new values).
+## started with (the finds are added on top, each listed in the PR's new values),
+## save the few moved between buildings to keep a promised share (PROMISES).
 ## Untouched: a stop goal's box ("pick"), the fixed boxes the story leans on
 ## (loot_tables.gd FIXED, only named), locked ones (only named; a named find may
 ## go in one), and boxes standing in no building (only named).
@@ -76,6 +77,16 @@ const CAP: int = 6
 ## its name can weigh (a sack of oats, a picture: 1.5), as it is named after it
 ## is dealt: six food bundles named sacks are 9 in a jar shelf that takes 8.
 const NAMED_MOST: float = 1.5
+## Promised shares (card S1, decision 442): of a stop's buildings of these kinds, this
+## share holds one bundle of the family at least, so a shop holds what it sells. The
+## share of their count is kept, and the part of one is rolled. Nothing is added: the
+## bundle is moved from a building of the stop holding two or more (one of the same
+## kinds first), so the stop's load stays what it was; with none to spare, none is
+## moved. With a deck handed in (DECKS), it is kept over the stops instead.
+const PROMISES: Array = [
+	{"family": "food", "kinds": ["grocery", "bakery", "fish", "cold"], "deck": "food_shop"},
+	{"family": "med", "kinds": ["pharmacy", "clinic"], "deck": "pharmacy"},
+]
 
 ## What a building is, from the words of its name (first that matches). Only the
 ## naming and the finds read it.
@@ -211,6 +222,16 @@ const RARE_CHANCE: float = 0.25         # one named find
 # 나단계 (decision 423, P23, card 11)
 const PAN_CHANCE: float = 0.50          # one frying pan in a kitchen
 const BOTTLE_CHANCE: float = 0.40       # one broken bottle in a washroom, a bedroom or a store
+## Decks over the stops (card S1, decision 442; the contract's lootDeck, kept on the
+## train by s3-link): [n, share] — of every n looks, n × share come up. A look is a
+## building of a promise's kinds (food_shop, pharmacy: it comes up when it holds the
+## family after it is seen, as it was or moved in), a stop with a garage
+## (garage_fuel), or a stop (pan, bottle). The state handed in and out is
+## {id: {n, k, seen, hit}}; one of another n or k starts a new batch.
+const DECKS: Dictionary = {
+	"food_shop": [10, 0.7], "pharmacy": [10, 0.7],
+	"garage_fuel": [10, FUEL_CHANCE], "pan": [10, PAN_CHANCE], "bottle": [10, BOTTLE_CHANCE],
+}
 ## Things lying under the snow out of doors, shown only to one close by
 ## (field_game.glint_reach): how many a stop, and what they are.
 const GLINTS: int = 6
@@ -474,12 +495,15 @@ static func name_pocket(id: String, salt: int) -> String:
 ## Dress the stop in place. data: the map's dictionary (containers, buildings,
 ## place_kind). Returns what was done, for the tests and the measuring tool:
 ## {"moved", "named", "finds": [[id, box]], "rare": id or "", "fragment": id or "",
-## "store": kind or ""}.
-static func dress(data: Dictionary, seed: int) -> Dictionary:
+## "store": kind or "", "promised", "loot_deck"}. deck: where the decks stood after
+## the last stop (DECKS); empty, the promised shares are kept within this stop and
+## the rest roll as before. Where they stand after this one is "loot_deck".
+static func dress(data: Dictionary, seed: int, deck: Dictionary = {}) -> Dictionary:
 	var containers: Dictionary = data.get("containers", {})
 	var buildings: Array = data.get("buildings", [])
 	var place_kind: String = String(data.get("place_kind", ""))
 	var report := {"moved": 0, "named": 0, "finds": [], "rare": "", "fragment": "", "store": ""}
+	var decks := deck.duplicate(true)
 	name_keys(data)
 	# 1. Within each building, the bundles go where the room says.
 	# The odds and ends go in first, as the reference rolls them, and stay where
@@ -499,6 +523,7 @@ static func dress(data: Dictionary, seed: int) -> Dictionary:
 		if not by_building.has(b):
 			by_building[b] = []
 		(by_building[b] as Array).append(id)
+	report["promised"] = _keep_promises(containers, buildings, by_building, seed, decks, not deck.is_empty())
 	for b: int in by_building:
 		report["moved"] += _deal(containers, by_building[b], _rng(seed, "deal:%d" % b))
 	# 1b. The rare store, if the stop has one, is filled anew (its own dice).
@@ -523,9 +548,12 @@ static func dress(data: Dictionary, seed: int) -> Dictionary:
 			items[i] = name_bundle(item, table, name_rng, String(themes.get("%s|%s" % [id, FAMILY[item]], "")))
 			report["named"] += 1
 	# 3. Finds of their own.
-	_finds(containers, buildings, seed, report)
+	_finds(containers, buildings, seed, report, decks)
 	_rare(containers, place_kind, seed, report)
 	_fragment(containers, place_kind, seed, report)
+	for id: String in DECKS:
+		_deck_row(decks, id)
+	report["loot_deck"] = decks
 	return report
 
 
@@ -579,6 +607,162 @@ static func _deal(containers: Dictionary, ids: Array, rng: RandomNumberGenerator
 	return moved
 
 
+## The promised shares (PROMISES), before the boxes are dealt. Returns, for each
+## family, [buildings of the kinds, how many must hold it, how many did, bundles moved]
+## (with a deck carried over, how many must is how many came up). The deck rows are
+## counted either way, so the next stop can carry on.
+static func _keep_promises(containers: Dictionary, buildings: Array, by_building: Dictionary, seed: int,
+		decks: Dictionary, carried: bool) -> Dictionary:
+	var out := {}
+	var all: Array = by_building.keys()
+	all.sort()
+	for p: Dictionary in PROMISES:
+		var family := String(p["family"])
+		var rng := _rng(seed, "promise:" + family)
+		var mine: Array = []
+		for b: int in all:
+			if (p["kinds"] as Array).has(_building_kind_of(buildings, containers[by_building[b][0]])):
+				mine.append(b)
+		var others: Array = all.filter(func(b: int) -> bool: return not mine.has(b))
+		var row := _deck_row(decks, String(p["deck"]))
+		if carried:
+			out[family] = _keep_deck(containers, by_building, mine, others, family, row, rng)
+			continue
+		var exact := float(DECKS[p["deck"]][1]) * mine.size()
+		var wanted := floori(exact) + (1 if rng.randf() < exact - floorf(exact) else 0)
+		var bare: Array = []
+		for b: int in mine:
+			if _held(containers, by_building[b], family) == 0:
+				bare.append(b)
+		var held := mine.size() - bare.size()
+		# Which bare ones get it: shuffled, so it is not always the first on the map.
+		for i in range(bare.size() - 1, 0, -1):
+			var j := rng.randi_range(0, i)
+			var t: int = bare[i]
+			bare[i] = bare[j]
+			bare[j] = t
+		var moved := 0
+		for b: int in bare:
+			if held + moved >= wanted:
+				break
+			if not _move_in(containers, by_building, mine, others, family, b):
+				break
+			moved += 1
+		for b: int in mine:
+			_count(row, _held(containers, by_building[b], family) > 0)
+		out[family] = [mine.size(), wanted, held, moved]
+	return out
+
+
+## A promise kept over the stops: each building of the kinds, in order, is one look;
+## one that holds the family comes up, a bare one gets a bundle moved in with the
+## chance the deck has left (and comes up if one could be spared).
+static func _keep_deck(containers: Dictionary, by_building: Dictionary, mine: Array, others: Array,
+		family: String, row: Dictionary, rng: RandomNumberGenerator) -> Array:
+	var held := 0
+	var up := 0
+	var moved := 0
+	for b: int in mine:
+		var holds := _held(containers, by_building[b], family) > 0
+		if holds:
+			held += 1
+		elif rng.randf() < _chance(row) and _move_in(containers, by_building, mine, others, family, b):
+			holds = true
+			moved += 1
+		if holds:
+			up += 1
+		_count(row, holds)
+	return [mine.size(), up, held, moved]
+
+
+## Move one bundle of the family into building b from one that can spare it (one of
+## the same kinds first). False when none can.
+static func _move_in(containers: Dictionary, by_building: Dictionary, mine: Array, others: Array, family: String, b: int) -> bool:
+	var from := _spare(containers, by_building, mine, family)
+	if from.is_empty():
+		from = _spare(containers, by_building, others, family)
+	if from.is_empty():
+		return false
+	# Fresh lists: a map may hand out the same list (or a read-only one) twice.
+	var left: Array = (containers[from[0]]["items"] as Array).duplicate()
+	left.remove_at(int(from[1]))
+	containers[from[0]]["items"] = left
+	var to: String = by_building[b][0]
+	containers[to]["items"] = (containers[to]["items"] as Array) + [String(from[2])]
+	return true
+
+
+## The row of one deck in the state, made fresh when it is missing, of another n or k,
+## or used up.
+static func _deck_row(decks: Dictionary, id: String) -> Dictionary:
+	var n: int = DECKS[id][0]
+	var k: int = roundi(float(DECKS[id][1]) * n)
+	var row: Dictionary = decks.get(id, {})
+	if int(row.get("n", 0)) != n or int(row.get("k", -1)) != k or int(row.get("seen", 0)) >= n:
+		row = {"n": n, "k": k, "seen": 0, "hit": 0}
+	else:
+		row = {"n": n, "k": k, "seen": int(row["seen"]), "hit": int(row.get("hit", 0))}
+	decks[id] = row
+	return row
+
+
+## The chance the next look comes up: what is left of k over what is left of n.
+static func _chance(row: Dictionary) -> float:
+	return float(maxi(0, int(row["k"]) - int(row["hit"]))) / float(int(row["n"]) - int(row["seen"]))
+
+
+## Count one look; at n looks the batch starts again.
+static func _count(row: Dictionary, up: bool) -> void:
+	row["seen"] = int(row["seen"]) + 1
+	if up:
+		row["hit"] = int(row["hit"]) + 1
+	if int(row["seen"]) >= int(row["n"]):
+		row["seen"] = 0
+		row["hit"] = 0
+
+
+## One look at a deck with a roll already made (so the dice fall as they did before
+## the decks): true when it comes up.
+static func _look(decks: Dictionary, id: String, roll: float) -> bool:
+	var row := _deck_row(decks, id)
+	var up := roll < _chance(row)
+	_count(row, up)
+	return up
+
+
+## How many things of the family these boxes hold (a bundle or a thing named from one).
+static func _held(containers: Dictionary, ids: Array, family: String) -> int:
+	var n := 0
+	for id: String in ids:
+		for item in containers[id].get("items", []):
+			var s := String(item)
+			var from := String(FieldItems.row(s).get("from", s)) if FieldItems.has(s) else s
+			if String(FAMILY.get(from, "")) == family:
+				n += 1
+	return n
+
+
+## A bundle of the family that one of these buildings can spare (it holds two or
+## more; the one holding most first): [box, index, bundle], or [] when none can.
+static func _spare(containers: Dictionary, by_building: Dictionary, among: Array, family: String) -> Array:
+	var best: Array = []
+	var most := 1
+	for b: int in among:
+		var n := _held(containers, by_building[b], family)
+		if n <= most:
+			continue
+		for id: String in by_building[b]:
+			var items: Array = containers[id].get("items", [])
+			for i in range(items.size()):
+				if String(FAMILY.get(String(items[i]), "")) == family:
+					best = [id, i, String(items[i])]
+					most = n
+					break
+			if not best.is_empty() and most == n:
+				break
+	return best
+
+
 ## What a thing weighs while the boxes are dealt: a bundle at the most its name can.
 static func _dealt_weight(item: String) -> float:
 	return NAMED_MOST if FieldItems.BUNDLES.has(item) else Carry.item_weight(item)
@@ -613,7 +797,7 @@ static func _put(containers: Dictionary, ids: Array, item: String, rng: RandomNu
 	(report["finds"] as Array).append([item, id])
 
 
-static func _finds(containers: Dictionary, buildings: Array, seed: int, report: Dictionary) -> void:
+static func _finds(containers: Dictionary, buildings: Array, seed: int, report: Dictionary, decks: Dictionary) -> void:
 	var rng := _rng(seed, "finds")
 	if rng.randf() < BIG_PACK_CHANCE:
 		_put(containers, _boxes(containers, buildings, ["bedroom", "storage"], LIVED_IN), "found_big_pack", rng, report)
@@ -630,8 +814,11 @@ static func _finds(containers: Dictionary, buildings: Array, seed: int, report: 
 			(containers[id]["items"] as Array).append("nails")
 			(report["finds"] as Array).append(["nails", id])
 			nails += 1
-	if rng.randf() < FUEL_CHANCE:
-		_put(containers, _boxes(containers, buildings, [], ["garage"]), "fuel_can", rng, report)
+	# A stop with no garage rolls too but turns no card: the dice fall as before.
+	var garages := _boxes(containers, buildings, [], ["garage"])
+	var fuel_roll := rng.randf()
+	if not garages.is_empty() and _look(decks, "garage_fuel", fuel_roll):
+		_put(containers, garages, "fuel_can", rng, report)
 	# Its own dice, so the finds above come out as they did.
 	var parts_rng := _rng(seed, "parts")
 	var where: Array = _boxes(containers, buildings, ["toolbox"], [])
@@ -655,9 +842,9 @@ static func _finds(containers: Dictionary, buildings: Array, seed: int, report: 
 			_put(containers, _boxes(containers, buildings, row[2], row[3]), String(row[0]), wear_rng, report)
 	# Something to grab when there is nothing better (P23).
 	var hands_rng := _rng(seed, "grab")
-	if hands_rng.randf() < PAN_CHANCE:
+	if _look(decks, "pan", hands_rng.randf()):
 		_put(containers, _boxes(containers, buildings, ["kitchen"], []), "frying_pan", hands_rng, report)
-	if hands_rng.randf() < BOTTLE_CHANCE:
+	if _look(decks, "bottle", hands_rng.randf()):
 		_put(containers, _boxes(containers, buildings, ["bathroom", "bedroom", "storage"], LIVED_IN), "broken_bottle", hands_rng, report)
 
 

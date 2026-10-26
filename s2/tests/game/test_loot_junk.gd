@@ -53,6 +53,31 @@ func test_each_row_is_its_own_roll_and_at_most_two_a_box() -> void:
 		assert_almost_eq(int(hits.get(row[0], 0)) / float(runs), float(row[1]), 0.03, String(row[0]))
 
 
+func test_a_room_cut_into_more_boxes_keeps_its_odds_and_ends() -> void:
+	# Card R2: a kitchen of ROOM_BOXES boxes and the same kitchen cut into twice as many
+	# hold about the same weight of odds and ends; a room of fewer boxes rolls each in full.
+	var full: int = LootJunk.ROOM_BOXES["kitchen"]
+	var weight := {}
+	for n in [full, full * 2]:
+		var total := 0.0
+		for seed in range(1, 401):
+			var boxes := {}
+			var rooms := {}
+			for i in range(n):
+				boxes["k%02d" % i] = {"name": "부엌 찬장", "building": 0, "items": []}
+				rooms["k%02d" % i] = "kitchen"
+			# Another building's kitchen is its own room.
+			boxes["other"] = {"name": "부엌 찬장", "building": 1, "items": []}
+			rooms["other"] = "kitchen"
+			LootJunk.strew(boxes, seed, rooms)
+			for id: String in boxes:
+				if id != "other":
+					for item in boxes[id]["items"]:
+						total += FieldItems.weight(String(item))
+		weight[n] = total / 400.0
+	assert_almost_eq(weight[full * 2], weight[full], weight[full] * 0.05, "%.2f → %.2f" % [weight[full], weight[full * 2]])
+
+
 func test_goal_fixed_locked_and_outdoor_boxes_are_left_alone() -> void:
 	for seed in range(1, 200):
 		var boxes := {
