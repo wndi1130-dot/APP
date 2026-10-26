@@ -14,6 +14,12 @@ extends RefCounted
 ##
 ## The work is shared: parts, the making line, restoration, then insulation.
 ## Making a thing slows a refit (decision 070); the order is fixed in S2.
+##
+## A stretch (`stretch`) is S1 domesticSettle's order: the running technologies
+## take their upkeep from the stores first (payUpkeep), then the workshop works
+## (`run`, S1 runWorkshop). One the stores cannot keep runs at half that
+## stretch (train_research.gd pay_upkeep, mult). S1's 「부품이 모자란다」 card is
+## not here yet: S2 runs on, as that card's 「그냥 달린다」.
 
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
@@ -107,6 +113,16 @@ static func cancel(g: Dictionary) -> bool:
 		dom[key] = float(dom.get(key, 0)) + float(paid[key])
 	dom["make"] = null
 	return true
+
+
+## A stretch leaving a stop: the upkeep, then the work. `run`'s answer with
+## "starved", the running technologies whose upkeep the stores could not pay.
+static func stretch(g: Dictionary) -> Dictionary:
+	TrainDom.ensure(g)
+	var starved: Array[String] = TrainResearch.pay_upkeep(g)
+	var out: Dictionary = run(g)
+	out["starved"] = starved
+	return out
 
 
 ## A stretch of work (the train leaving a stop): parts up to the target while
