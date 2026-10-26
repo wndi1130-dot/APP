@@ -38,15 +38,16 @@ vec3 floor_to_linear(vec3 c) {
 // in long slabs with a stripe at the edge, gravel speckled.
 // The colours are sRGB, like the floor colours, set by real reflectance (linear
 // luminance; measured albedos in brackets): dry grass 0.22 (green grass 0.25),
-// faded green 0.19, soil 0.18 (bare soil 0.17), aged asphalt 0.14 (worn 0.12),
-// concrete 0.39 (new 0.55, weathered lower), gravel 0.24. Light pavement, mid
-// grass and soil, dark road: the ground reads in grey alone. Table and sources:
+// faded green 0.19, soil 0.18 (bare soil 0.17), aged asphalt 0.11 (worn 0.12),
+// concrete 0.53 (new 0.55), gravel 0.24. Light pavement, mid grass and soil,
+// dark road: the ground reads in grey alone, and an overcast day keeps its
+// spread of light (V p95-p5 at least 0.40, 결정 471 B1). Table and sources:
 // docs/art/material_values.md.
 const vec3 DRY_GRASS = vec3(0.57, 0.50, 0.32);
 const vec3 OLD_GREEN = vec3(0.47, 0.51, 0.31);
 const vec3 SOIL = vec3(0.53, 0.44, 0.34);
-const vec3 ASPHALT = vec3(0.41, 0.41, 0.42);
-const vec3 CONCRETE = vec3(0.66, 0.65, 0.62);
+const vec3 ASPHALT = vec3(0.37, 0.37, 0.38);
+const vec3 CONCRETE = vec3(0.76, 0.75, 0.72);
 const vec3 LINE_PAINT = vec3(0.76, 0.64, 0.30);
 const vec3 GRAVEL = vec3(0.55, 0.52, 0.47);
 
