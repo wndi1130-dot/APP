@@ -18,6 +18,18 @@ func test_the_size_of_a_box_sets_how_long_opening_takes() -> void:
 	assert_almost_eq(SearchRules.box_seconds({"search": 8, "furniture": "desk"}), 1.5, 0.0001, "the map's long search no longer counts")
 
 
+## Open shelves, racks, an open fridge and bench tops show what they hold: a small cabinet's half
+## second whatever their size (card R1, the coordinator's detail).
+func test_what_stands_open_opens_at_a_glance() -> void:
+	assert_almost_eq(SearchRules.box_seconds({"furniture": "shelf"}), 0.5, 0.0001, "a big open shelf")
+	assert_almost_eq(SearchRules.box_seconds({"furniture": "fridge_open"}), 0.5, 0.0001)
+	assert_almost_eq(SearchRules.box_seconds({"furniture": "bookcase"}), 0.5, 0.0001, "a middling one")
+	assert_almost_eq(SearchRules.box_seconds({"furniture": "counter"}), 3.0, 0.0001, "a counter has doors")
+	assert_almost_eq(SearchRules.box_seconds({"furniture": "glass_cabinet"}), 0.5, 0.0001, "small anyway")
+	for kind: String in SearchRules.SEE_THROUGH:
+		assert_true(Carry.BOX_LIMITS.has(kind), kind)
+
+
 func test_the_searcher_waits_by_the_box_and_the_skill() -> void:
 	var game = FieldGame.new()
 	game.opts = {"seed": 5, "raiders": false, "auto_pause": false}
