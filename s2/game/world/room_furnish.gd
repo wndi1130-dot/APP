@@ -12,6 +12,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const CoreScenes = preload("res://game/world/core_scenes.gd")
 const S = FieldGrid.Solid
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
@@ -1058,6 +1059,17 @@ static func _home(name: String) -> bool:
 	return false
 
 
+## 이 장소 종류에서 멈춘 기계(core_scenes.gd SCENES 낱말)가 설 수 있는 건물 id.
+static func _machine_buildings(data: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	var rows: Array = CoreScenes.SCENES.get(String(data.get("place_kind", "")), [])
+	for b: Dictionary in data.get("buildings", []):
+		for row: Array in rows:
+			if String(b.get("name", "")).contains(String(row[0])):
+				out[int(b["id"])] = true
+	return out
+
+
 ## 모든 층을 먼저 읽고 건물당 욕실 하나를 고른다. 작은 방은 이 선택에만 쓴다.
 ## 원래 부엌·유일한 침실은 어느 후보 단계에서도 바꾸지 않는다.
 static func density_plan(data: Dictionary) -> Dictionary:
@@ -1067,6 +1079,7 @@ static func density_plan(data: Dictionary) -> Dictionary:
 	var classes: Dictionary = {}
 	var buildings: Dictionary = {}
 	var homes: Dictionary = {}
+	var machine := _machine_buildings(data)
 	for b: Dictionary in data.get("buildings", []):
 		if _home(String(b.get("name", ""))):
 			homes[int(b["id"])] = true
@@ -1091,6 +1104,9 @@ static func density_plan(data: Dictionary) -> Dictionary:
 			var cls := room_class(labels.get(ri, "") if name.is_empty() else name, kinds, lv)
 			if cls.is_empty():
 				cls = inherited.get(ri, "")
+			# 멈춘 기계가 서는 건물의 일터 방은 지도가 둔 그대로다 — 새 가구가 기계 자리를 먹지 않게.
+			if FILL_UNROLLED.has(cls) and machine.has(int(map["rooms"][ri]["building"])):
+				cls = ""
 			var key := "%d:%d" % [lv, ri]
 			classes[key] = cls
 			if lv < 0:
