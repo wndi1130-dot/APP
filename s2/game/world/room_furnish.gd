@@ -12,6 +12,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const LootDress = preload("res://game/sim/loot_dress.gd")
 const S = FieldGrid.Solid
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
@@ -1823,7 +1824,8 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 				moved += 1
 				break
 		# The room each box stands in, as a key loot_dress.gd room_of reads before the box's name.
-		# A key the map gave is kept; a room of no known kind gets none.
+		# A key the map gave is kept; a room of no known kind gets none; a box whose name says its
+		# room (부엌 찬장, 매장 상자, 뒤 창고 상자) keeps that, so what it holds never belies its name.
 		var keys := _room_keys(data, lv, g, map, of)
 		var in_room: Dictionary = {}  # room -> boxes in it
 		for id: String in ids:
@@ -1834,7 +1836,7 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 			var ri := _at(g, of, bc)
 			in_room[ri] = int(in_room.get(ri, 0)) + 1
 			var key: String = keys.get(ri, "")
-			if not key.is_empty() and not box.has("room"):
+			if not key.is_empty() and not box.has("room") and not _name_places(String(box.get("name", ""))):
 				box["room"] = key
 				stats["keyed"] += 1
 		# A kitchen's spare counters, cupboards and fridge get an empty box each: the place's
@@ -1866,6 +1868,10 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 				stats["kitchen_added"] += 1
 	data["box_rooms"] = stats
 	return moved
+
+
+static func _name_places(name: String) -> bool:
+	return LootDress.room_of({"name": name}) != "storage" or name.contains("창고")
 
 
 ## Kitchen furniture that opens: an empty box goes in each one no box is in yet, until the
