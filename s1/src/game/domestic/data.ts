@@ -46,6 +46,9 @@ export const D = {
   extraCarCoal: 0.4,
   // 4.4 쓸 만한 칸(화물역 정차)
   wagonChance: 0.12, coachChance: 0.08, coachCrowd: 15,
+  /** 측선 칸을 고쳐 다는 자재(결정 426 카드 ④ 나: 우연은 기회만 준다). 객차는 판자를 대고(목재) 연결기를 고치고(고철),
+   * 화차는 바닥이 멀쩡해 연결기(고철)를 고치고 선반(목재)만 짠다. 단열 한 칸(목재 8)·장갑(고철 12) 사이의 값이다. 정차 안에 고쳐 달아 공방 줄은 안 쓴다. */
+  coachWood: 10, coachScrap: 6, wagonScrap: 8, wagonWood: 4,
   // 6.5 고장
   breakChance: 0.1, breakPerDefect: 0.03, breakSegs: 3,
   // 7.2 결함판

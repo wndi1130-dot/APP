@@ -374,9 +374,17 @@ func is_worn() -> bool:
 	return draw != null
 
 
+## The time the people's motions go on by in a frame: none while the field stands
+## paused (the player's pause or the app away), as the dead and the train stand
+## still then (field_game.gd still shading); at the end, the train leaving, they go on.
+static func frame_delta(field, delta: float) -> float:
+	return 0.0 if field.get("paused") == true and field.get("ended") != true else delta
+
+
 func _process(delta: float) -> void:
 	if draw == null:
 		return
+	delta = frame_delta(game, delta)
 	for d: Dictionary in worn.values():
 		d["n"] = 0
 		d["k"] = 0
@@ -643,13 +651,13 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	var unit: float = p.name_unit("stand")
 	# The run as the feet go: out of breath or spent with the run still on, it walks.
 	var running: bool = Gait.runs(p)
-	# Spent, it reels as the dead do (the living have no such motion of their own
-	# yet), still reeling where it stops for breath.
-	var spent: bool = not running and not p.crouched and p.body.exhaustion_level() >= 2
-	var own_spent := clip_named(own, OWN_SPENT, -1) if spent else -1
-	if spent and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
-		if own_spent >= 0:
-			return Vector2(_own_cycle(note, OWN_BASE + own_spent, t, _length(own, own_spent, 1.0) * 2.0, unit), own_spent)
+	# Spent or bleeding hard it reels (gait.gd reels; the dead's reel in a folder
+	# without its own), still reeling where it stops.
+	var reeling: bool = Gait.reels(p)
+	var own_reel := clip_named(own, OWN_SPENT, -1) if reeling else -1
+	if reeling and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+		if own_reel >= 0:
+			return Vector2(_own_cycle(note, OWN_BASE + own_reel, t, _length(own, own_reel, 1.0) * 2.0, unit), own_reel)
 		return Vector2(_own_cycle(note, STAGGER, t, _length(clips, STAGGER, 1.0) * 2.0, unit), STAGGER)
 	if t - float(note.get("moved", -10.0)) >= STILL_AFTER and t - float(note.get("turned", -10.0)) < TURN_HOLD:
 		# Turning on the spot: the walk goes round by the turn, not by ground covered.
@@ -675,11 +683,10 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 			var breath := 0.5 + 0.5 * sin(TAU * (t / 3.5 + unit))
 			return Vector2(lerpf(CROUCH_LOW.x, CROUCH_LOW.y, breath), TELL)
 		return Vector2(_own_cycle(note, STAND, t, _length(clips, STAND, 1.0), unit), STAND)
-	var own_gait := own_spent if spent else -1
-	if not spent:
-		own_gait = limp_of(p, own) if not running and not p.crouched else -1
-	if not spent and own_gait < 0:
-		own_gait = gait_of(p, own, running)
+	# Walking, a leg that limps shows the limp before the reel: where it hurts.
+	var own_gait := limp_of(p, own) if not running and not p.crouched else -1
+	if own_gait < 0:
+		own_gait = own_reel if reeling else gait_of(p, own, running)
 	if own_gait >= 0:
 		note["motion"] = OWN_BASE + own_gait
 		var stepped := _round(note, "step", gone, _round_of(own, own_gait, 1.2))
@@ -691,7 +698,7 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		gait = RUN
 	elif p.crouched:
 		gait = CROUCH_WALK
-	elif spent:
+	elif reeling:
 		gait = STAGGER
 	note["motion"] = gait
 	return Vector2(_round(note, "step", gone, _round_of(clips, gait, float(DeadBody.STRIDE.get(gait, 1.2)))), gait)

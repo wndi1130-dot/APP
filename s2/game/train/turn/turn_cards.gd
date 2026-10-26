@@ -65,7 +65,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var s: Dictionary = g["comms"][comm]
 	match str(card["kind"]):
 		"travel": return travel_view(g, t, card.get("text", ""))
-		"info": return {"title": "", "choices": [choice("", "덮는다", [])]}
+		"info": return {"title": str(card.get("who", "알림")), "choices": [choice("", "알았다", [])]}
 		"need_warn":
 			if not t["NEEDS"].has(card.get("text")): return {}
 			var def: Dictionary = t["NEEDS"][card["text"]]
@@ -106,6 +106,9 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 				choice("cut_spare_tail", "꼬리칸은 뺀다", [["rel", "tail", k["spareRel"]["tail"]], ["rel", "front", k["spareRel"]["front"]]], "cut_spare_tail"),
 				choice("cut_front_first", "앞칸이 먼저 낸다", [["rel", "tail", k["frontRel"]["tail"]], ["rel", "front", k["frontRel"]["front"]]], "cut_front_first"),
 				choice("refuse", "거절한다", [["rel", "tail", k["refuseRel"]], ["tension", k["refuseTension"]]], "cut_refuse")]}
+		"promise_ledger":
+			# The result arc (council_log.gd): a second broken promise brings the car's ledger; a third closes open deals.
+			return {"title": "약속 장부", "choices": [choice("", "사과하고 갚는다", [["lux", -3], ["rel", comm, 8]]), choice("", "물리친다", [["rel", comm, -5]], "ledger_refuse")]}
 		"rep_sick":
 			return {"title": "대표가 앓는다", "choices": [choice("", "약을 보낸다", [["med", -2], ["rel", comm, 3]], "rep_heal"), choice("", "측근을 만난다", [], "proxy_meet"), choice("", "그냥 둔다", [])] if s.get("sick") is Dictionary else [choice("", "알았다", [])]}
 	return {}
@@ -186,6 +189,7 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 		"cut_front_first": RationCut.apply(g, t, "front_first")
 		"cut_refuse": RationCut.apply(g, t, "refuse")
 		"proxy_meet": g["comms"][comm]["leader"]["traitShown"] = 2
+		"ledger_refuse": Field._offend(g, comm)
 	# hub.ts registers hubChoose for every accepted card, including non-hub cards.
 	var hub: Dictionary = C.hub(g)
 	if not hub.has("lines"): hub["lines"] = []

@@ -16,7 +16,7 @@ export const PORTED_LAWS: LawId[] = S1.LAW_IDS.filter(l => !S1.S1C_LAWS.includes
 type Action = { kind: 'enact' | 'repeal'; law: LawId } | { kind: 'cast_vote' } | { kind: 'advance' } | { kind: 'choose_card'; uid: number; index: number };
 
 /** 판을 둘째 회기의 의회까지 돌린 상태(카드·정차는 turn_port_fixtures의 play와 같은 길로 고른다). */
-function council(seed: string): Game {
+export function council(seed: string): Game {
   const g = S1.createGame(seed);
   for (let step = 0; step < 200; step += 1) {
     if (g.cards.length > 0) {
