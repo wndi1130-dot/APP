@@ -9,6 +9,7 @@ const GrabRules = preload("res://game/sim/grab_rules.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const FieldCombat = preload("res://game/field_combat.gd")
 
 var game
 var p
@@ -76,24 +77,63 @@ func test_paths_hold_player_companion_and_raider_only_during_the_weapon_feet_spa
 		who.team = "squad"
 
 
-func test_shove_and_stomp_do_not_hold_path_feet() -> void:
-	for kind in ["shove", "stomp"]:
-		p.stop()
-		p.swing_t = 0.0
-		p.strike_t = 0.0
-		if kind == "shove":
-			game.combat.start_shove(p)
-		else:
-			p.hands = []
-			var z := _dead(p.position + Vector3(0.5, 0, 0))
-			z["state"] = "downed"
-			game.combat.start_swing(p, z)
-			assert_eq(p.strike_kind, "stomp")
-		p.path = PackedVector3Array([p.position + Vector3(2, 0, 0)])
-		var at: Vector3 = p.position
-		assert_false(game.combat.feet_held(p))
-		game._move_person(p, 0.1)
-		assert_ne(p.position, at, kind)
+func test_a_stomp_does_not_hold_path_feet() -> void:
+	p.stop()
+	p.swing_t = 0.0
+	p.strike_t = 0.0
+	p.hands = []
+	var z := _dead(p.position + Vector3(0.5, 0, 0))
+	z["state"] = "downed"
+	game.combat.start_swing(p, z)
+	assert_eq(p.strike_kind, "stomp")
+	p.path = PackedVector3Array([p.position + Vector3(2, 0, 0)])
+	var at: Vector3 = p.position
+	assert_false(game.combat.feet_held(p))
+	game._move_person(p, 0.1)
+	assert_ne(p.position, at)
+
+
+# A shove plants the feet from the arms drawn back until just after it lands, the
+# first half of it (user field test 10-25: the shove a little longer), then they are free.
+func test_a_shove_plants_the_feet_for_its_first_half() -> void:
+	p.stop()
+	p.swing_t = 0.0
+	p.strike_t = 0.0
+	game.combat.start_shove(p)
+	p.path = PackedVector3Array([p.position + Vector3(2, 0, 0)])
+	var at: Vector3 = p.position
+	assert_true(game.combat.feet_held(p), "drawn back, the feet are planted")
+	game._move_person(p, 0.1)
+	assert_eq(p.position, at)
+	p.shove_t = 0.0
+	p.lunge_t = FieldCombat.SHOVE_LUNGE - FieldCombat.SHOVE_PLANT * 0.5
+	assert_true(game.combat.feet_held(p), "just landed, still planted")
+	p.lunge_t = FieldCombat.SHOVE_LUNGE - FieldCombat.SHOVE_PLANT - 0.01
+	assert_false(game.combat.feet_held(p), "the arms coming back, it may step")
+	game._move_person(p, 0.1)
+	assert_ne(p.position, at)
+
+
+# A companion's reflex shove (not drawn back first) is seen all the same, plants the
+# feet just after it lands, and keeps the walk it was on: the hold is for swings.
+func test_a_reflex_shove_is_seen_plants_the_feet_and_keeps_the_order() -> void:
+	ally.stop()
+	ally.swing_t = 0.0
+	ally.strike_t = 0.0
+	ally.strike_kind = "swing"      # it swung before
+	game.combat.shove(ally)
+	assert_almost_eq(ally.lunge_t, FieldCombat.SHOVE_LUNGE, 0.001, "the arms out and back are seen")
+	assert_true(game.combat.feet_held(ally), "planted as it lands")
+	ally.path = PackedVector3Array([ally.position + Vector3(2, 0, 0)])
+	assert_false(game.ai._hold_swing(ally), "the order is not held")
+	assert_false(ally.path.is_empty(), "nor the walk dropped")
+	var at: Vector3 = ally.position
+	game._move_person(ally, 0.05)
+	assert_eq(ally.position, at)
+	game.combat.update(FieldCombat.SHOVE_PLANT + 0.01)
+	assert_false(game.combat.feet_held(ally))
+	game._move_person(ally, 0.05)
+	assert_ne(ally.position, at, "then it walks on")
 
 
 func test_companion_walks_between_targets_then_stops_before_swinging() -> void:

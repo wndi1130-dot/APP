@@ -1,14 +1,18 @@
 extends SceneTree
 ## How long the boxes take to look through, before (the map's seconds) and after (by their size,
-## SearchRules.box_seconds, card H): every map (the first stop and MAP_DIR's), as built, by the
-## three box sizes, and how long an empty box keeps one waiting (dressed with seed n). Before the
-## searcher's skill.
+## SearchRules.box_seconds — card H, then card R1): every map (the first stop and MAP_DIR's), as
+## built, by the three box sizes, and how long an empty box keeps one waiting (dressed with seed n).
+## Then what taking it all out costs (card R1, SearchRules.take_seconds, clothes left) and both by
+## stop: the loot loop's time table. Before the searcher's skill. An empty box that shows it
+## before it is opened (card P3, SearchRules.shows_empty) keeps nobody waiting after: it is
+## counted among the empty ones but not in the wait after, and how many such are written below.
 ## -- <out.md>
 
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
+const Wear = preload("res://game/sim/wear.gd")
 
 
 func _initialize() -> void:
@@ -21,8 +25,11 @@ func _initialize() -> void:
 				maps.append(id)
 	var names := {Carry.BOX_SMALL: "작은 가구", Carry.BOX_MID: "중간 가구", Carry.BOX_BIG: "큰 가구·상자만"}
 	var rows := {}
+	var takes := {}
+	var shown_empty := 0
 	for size in names:
 		rows[size] = {"n": 0, "before": 0.0, "after": 0.0, "empty": 0, "empty_before": 0.0, "empty_after": 0.0}
+		takes[size] = {"boxes": 0, "items": 0, "seconds": 0.0}
 	for n in range(1, maps.size() + 1):
 		var data := FieldMaps.build(maps[n - 1])
 		LootDress.dress(data, n)
@@ -37,7 +44,19 @@ func _initialize() -> void:
 			if (c.get("items", []) as Array).is_empty():
 				r["empty"] += 1
 				r["empty_before"] += before
-				r["empty_after"] += after
+				if SearchRules.shows_empty(c):
+					shown_empty += 1
+				else:
+					r["empty_after"] += after
+			var t: Dictionary = takes[Carry.box_limit(c)]
+			var any := false
+			for item in c.get("items", []):
+				if not Wear.is_garment(String(item)):
+					any = true
+					t["items"] += 1
+					t["seconds"] += SearchRules.take_seconds(String(item))
+			if any:
+				t["boxes"] += 1
 		print(n, " ", maps[n - 1])
 	var lines: PackedStringArray = []
 	lines.append("# 뒤지기 시간 전/후 (지도 %d장, 씨앗 n = n번째 지도, 솜씨 0)\n" % maps.size())
@@ -52,6 +71,20 @@ func _initialize() -> void:
 			tot[k] += r[k]
 	lines.append("|모두|%d|%.2f → %.2f|%.0f → %.0f|%d|%.0f → %.0f|" % [tot["n"], float(tot["before"]) / maxi(1, int(tot["n"])),
 		float(tot["after"]) / maxi(1, int(tot["n"])), tot["before"], tot["after"], tot["empty"], tot["empty_before"], tot["empty_after"]])
+	lines.append("\n빈 상자 가운데 열기 전부터 비었다고 보이는 것(카드 P3) %d개는 후 기다림에서 뺐다 — 남은 것은 잠긴 상자·목표 기록 상자." % shown_empty)
+	lines.append("\n## 챙기는 데 시간 (무게 1에 %.1f초, 한 번 최대 %.0f초, 옷 빼고 다 꺼낼 때)
+" % [SearchRules.TAKE_PER_WEIGHT, SearchRules.TAKE_MOST])
+	lines.append("|크기|물건 든 상자|물건|꺼내기 합 초|상자당 꺼내기 초|")
+	lines.append("|---|---:|---:|---:|---:|")
+	var all_take := {"boxes": 0, "items": 0, "seconds": 0.0}
+	for size in [Carry.BOX_SMALL, Carry.BOX_MID, Carry.BOX_BIG]:
+		var t: Dictionary = takes[size]
+		lines.append("|%s|%d|%d|%.0f|%.2f|" % [names[size], t["boxes"], t["items"], t["seconds"], float(t["seconds"]) / maxi(1, int(t["boxes"]))])
+		for k: String in all_take:
+			all_take[k] += t[k]
+	lines.append("|모두 꺼내기|%d|%d|%.0f|%.2f|" % [all_take["boxes"], all_take["items"], all_take["seconds"], float(all_take["seconds"]) / maxi(1, int(all_take["boxes"]))])
+	var stops := float(maps.size())
+	lines.append("\n정차(지도)당: 다 열기 %.0f초 · 다 꺼내기 %.0f초 · 그중 빈 상자 기다림 %.0f초" % [float(tot["after"]) / stops, float(all_take["seconds"]) / stops, float(tot["empty_after"]) / stops])
 	var f := FileAccess.open(out_path, FileAccess.WRITE)
 	f.store_string("\n".join(lines) + "\n")
 	f.close()

@@ -172,7 +172,7 @@ const OWN_AIMS: Dictionary = {"one": "p_aim_one", "two": "p_aim_two"}
 # the ground is done kneeling. Climbing has none that stays on the ground (UAL's
 # p_climb lifts the feet off it in place).
 const OWN_WORK: Dictionary = {
-	"search": ["p_search_mid", 1.0], "inspect": ["p_search_mid", 1.0], "door": ["p_search_mid", 1.0],
+	"search": ["p_search_mid", 1.0], "take": ["p_search_mid", 1.0], "inspect": ["p_search_mid", 1.0], "door": ["p_search_mid", 1.0],
 	"pry": ["p_pry", 1.0], "pick": ["p_search_mid", 1.0], "glass": ["p_search_mid", 1.0],
 	"salvage": ["p_search_mid", 1.0], "repair": ["p_search_mid", 1.0], "wall": ["p_search_mid", 1.0],
 	"craft": ["p_search_mid", 1.0], "swap": ["p_search_mid", 0.8],
@@ -219,8 +219,8 @@ const FOREARM: float = 0.32
 const GRIP_FOLLOW: float = 0.5           # how far the weapon turns toward the hand's way each frame
 const OWN_MIX_TIME: float = 0.35
 # The own shove's arms are back at 0.3 of it and out at 0.4 (body_bake.gd p_shove):
-# drawn back over the rules' wind-up, out as it lands, half back by the lunge's end.
-const SHOVE_OUT: Vector2 = Vector2(0.4, 0.7)
+# drawn back over the rules' wind-up, out as it lands, all the way back by the lunge's end.
+const SHOVE_OUT: Vector2 = Vector2(0.4, 1.0)
 const CROUCH_WALK: int = 1                       # walk_b: bent over, both feet barely leaving the ground
 const CROUCH_LOW: Vector2 = Vector2(0.87, 0.97)  # where in the tell it is held, breathing between the two
 const STAND_PACE: Vector2 = Vector2(0.85, 1.15)  # each person stands at their own pace, from their own place in it
@@ -376,9 +376,10 @@ func is_worn() -> bool:
 
 ## The time the people's motions go on by in a frame: none while the field stands
 ## paused (the player's pause or the app away), as the dead and the train stand
-## still then (field_game.gd still shading); at the end, the train leaving, they go on.
+## still then (field_game.gd still shading), and through a blow's hold (hit_feel.gd);
+## at the end, the train leaving, they go on.
 static func frame_delta(field, delta: float) -> float:
-	return 0.0 if field.get("paused") == true and field.get("ended") != true else delta
+	return 0.0 if (field.get("paused") == true or field.get("hitstop") == true) and field.get("ended") != true else delta
 
 
 func _process(delta: float) -> void:
@@ -679,6 +680,8 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		if mood.y >= 0.0:
 			return mood
 		var own_stand := clip_named(own, OWN_CROUCH_STAND if p.crouched else OWN_STAND, -1)
+		if p.crouched and clip_named(own, Gait.crouch_name(p, false), -1) >= 0:
+			own_stand = clip_named(own, Gait.crouch_name(p, false), -1)   # a gun held low in both hands
 		if not p.crouched and Gait.weak_hold(p) and clip_named(own, Gait.HOLD_WEAK, -1) >= 0:
 			own_stand = clip_named(own, Gait.HOLD_WEAK, -1)   # a broken arm: the long weapon held low in one hand
 		if own_stand >= 0:
@@ -688,8 +691,11 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 			var breath := 0.5 + 0.5 * sin(TAU * (t / 3.5 + unit))
 			return Vector2(lerpf(CROUCH_LOW.x, CROUCH_LOW.y, breath), TELL)
 		return Vector2(_own_cycle(note, STAND, t, _length(clips, STAND, 1.0), unit), STAND)
-	# Walking, a leg that limps shows the limp before the reel: where it hurts.
+	# Walking, a leg that limps shows the limp first: where it hurts. Then the reel,
+	# then arms full or the body hurting (gait.gd burden_name), then the hand's walk.
 	var own_gait := limp_of(p, own) if not running and not p.crouched else -1
+	if own_gait < 0 and not reeling and not running and not p.crouched:
+		own_gait = clip_named(own, Gait.burden_name(p, PAIN_SHOWN), -1)
 	if own_gait < 0:
 		own_gait = own_reel if reeling else gait_of(p, own, running)
 	if own_gait >= 0:
@@ -710,20 +716,23 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 
 
 ## The living's own walk (or run) for what is in the hand (gait.gd), the plain
-## one where the folder has none of it; crouched, the crouched walk. -1 with
-## neither in the folder.
+## one where the folder has none of it; crouched, the crouched walk for what is
+## in the hand, or the plain one. -1 with neither in the folder.
 static func gait_of(p, own: Array, running: bool) -> int:
 	if p.crouched and not running:
-		return clip_named(own, OWN_CROUCH_WALK, -1)
+		var low := clip_named(own, Gait.crouch_name(p, true), -1)
+		return low if low >= 0 else clip_named(own, OWN_CROUCH_WALK, -1)
 	var held := clip_named(own, Gait.gait_name(p, running), -1)
 	return held if held >= 0 else clip_named(own, OWN_RUN if running else OWN_WALK, -1)
 
 
 ## A gait that goes round with the footsteps (field_game.gd steps_in): the
-## walks and runs whose round is the rules' own, not the limps or the reel.
+## walks and runs whose round is the rules' own (carrying and walking hurt go
+## at the walk's), not the limps or the reel.
 static func is_stepped(gait_name: String) -> bool:
 	return gait_name == OWN_WALK or gait_name == OWN_RUN or gait_name == OWN_CROUCH_WALK \
-		or Gait.WALK.values().has(gait_name) or Gait.RUN.values().has(gait_name)
+		or Gait.WALK.values().has(gait_name) or Gait.RUN.values().has(gait_name) \
+		or Gait.CROUCH_WALK.values().has(gait_name) or gait_name == Gait.CARRY_BIG or gait_name == Gait.WALK_HURT
 
 
 ## Every Gait.GUARD_LOOK, whether danger is near enough for the hand weapon to

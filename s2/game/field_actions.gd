@@ -87,6 +87,11 @@ var ongoing: Dictionary = {}
 ## here and is done once as soon as the blow is over (decision 420: one body
 ## does one thing at a time). Short-lived, never saved.
 var after_blow: Dictionary = {}
+## What 「모두 담기」 still has to take out of a box, by who takes it (card R1 가):
+## {"box": id, "left": [item ids, heaviest first]}. Short-lived, never saved.
+var take_queue: Dictionary = {}
+## The thing coming out of a box now, by who takes it (the pane's bar shows it).
+var taking: Dictionary = {}
 ## Who stands on broken glass, and on which cell (one crunch a cell, J08).
 var glass_feet: Dictionary = {}
 ## Frames with glass in them the player was stopped at and asked about: cell -> when.
@@ -1069,6 +1074,8 @@ func _companion_take(p, c: Dictionary) -> void:
 
 ## Take one item from a searched container into the player's bag. `asked`:
 ## the player has seen what putting a garment on takes (field_hud.gd wear_pane).
+## It takes its weight's time (card R1 가, SearchRules.take_seconds), standing
+## at the box: the stick or a blow lets it go, the thing stays in the box.
 func take(p, id: String, index: int, asked: bool = false) -> void:
 	var c: Dictionary = game.data["containers"].get(id, {})
 	if not SearchRules.can_take(c) or not _can_start(p, _container_at(c)):
@@ -1079,37 +1086,95 @@ func take(p, id: String, index: int, asked: bool = false) -> void:
 	if Wear.is_garment(item) and _asks(p, item, asked):
 		game.hud.wear_pane({"box": id, "i": index, "id": item})
 		return
-	c["items"].remove_at(index)
-	# A garment is put on, not bagged (wear.gd): laid at the feet as found, then worn.
+	take_queue.erase(p.get_instance_id())
+	# A garment is put on, not bagged (wear.gd): laid at the feet as found, then
+	# worn — the putting on is its time.
 	if Wear.is_garment(item):
+		c["items"].remove_at(index)
 		_put_down_garment(p, Wear.make(item))
 		dress(p, game.ground_items.size() - 1)
 		game.view.update_container(id)
 		return
-	# Something to hit with goes straight into a free hand (P23), and so does a
-	# gun from the rare store (card F), empty until it is loaded.
-	if not (W.breaks(item) or W.is_ranged(item)) or not _into_hand(p, item):
-		_receive(p, item, 1)
-	if item == "symbol_bell":
-		game.make_sound(_container_at(c), SimNoise.Level.NORMAL, "bell", p)
-		game.hud.toast("종이 흔들려 울렸다.")
-	game.view.update_container(id)
+	_begin_take(p, id, item)
 
 
+## 「모두 담기」: everything but clothes, the heaviest first, one after another,
+## each its own weight's time; the stick or a blow stops the rest.
 func take_all(p, id: String) -> void:
 	var c: Dictionary = game.data["containers"].get(id, {})
-	if not SearchRules.can_take(c):
+	if not SearchRules.can_take(c) or not _can_start(p, _container_at(c)):
 		return
 	# Clothes stay in the box: each is put on by itself (wear.gd).
-	var i := 0
-	while i < c["items"].size():
-		if Wear.is_garment(String(c["items"][i])):
-			i += 1
-			continue
-		var before: int = c["items"].size()
-		take(p, id, i)
-		if c["items"].size() == before:
+	var left: Array = []
+	for item in SearchRules.take_order(c["items"]):
+		if not Wear.is_garment(String(item)):
+			left.append(item)
+	if left.is_empty():
+		return
+	take_queue[p.get_instance_id()] = {"box": id, "left": left}
+	_take_next(p, id)
+
+
+## The seconds 「모두 담기」 would take from this box (the pane shows them).
+static func take_all_seconds(c: Dictionary) -> float:
+	var total := 0.0
+	for item in c.get("items", []):
+		if not Wear.is_garment(String(item)):
+			total += SearchRules.take_seconds(String(item))
+	return total
+
+
+## The thing `p` is taking out of a box now ("" when none).
+func taking_item(p) -> String:
+	return String(taking.get(p.get_instance_id(), "")) if p.action == "take" else ""
+
+
+func _begin_take(p, id: String, item: String) -> bool:
+	var c: Dictionary = game.data["containers"].get(id, {})
+	if not _begin_work(p, "take", "챙기기", SearchRules.take_seconds(item), _take_done.bind(p, id, item), "container", id, _container_at(c)):
+		return false
+	taking[p.get_instance_id()] = item
+	return true
+
+
+## The next of 「모두 담기」 that is still in the box; none left ends it.
+func _take_next(p, id: String) -> void:
+	var pid: int = p.get_instance_id()
+	var queue: Dictionary = take_queue.get(pid, {})
+	if queue.is_empty() or String(queue["box"]) != id:
+		return
+	var c: Dictionary = game.data["containers"].get(id, {})
+	var left: Array = queue["left"]
+	while not left.is_empty():
+		var item: String = left.pop_front()
+		if c.get("items", []).has(item):
+			if _begin_take(p, id, item):
+				return
 			break
+	take_queue.erase(pid)
+
+
+func _take_done(p, id: String, item: String) -> void:
+	var pid: int = p.get_instance_id()
+	taking.erase(pid)
+	if not _finished_work(p, "take"):
+		take_queue.erase(pid)
+		return
+	var c: Dictionary = game.data["containers"].get(id, {})
+	var index: int = c.get("items", []).find(item)
+	if index >= 0:
+		c["items"].remove_at(index)
+		# Something to hit with goes straight into a free hand (P23), and so does a
+		# gun from the rare store (card F), empty until it is loaded.
+		if not (W.breaks(item) or W.is_ranged(item)) or not _into_hand(p, item):
+			_receive(p, item, 1)
+		if item == "symbol_bell":
+			game.make_sound(_container_at(c), SimNoise.Level.NORMAL, "bell", p)
+			game.hud.toast("종이 흔들려 울렸다.")
+		game.view.update_container(id)
+	_take_next(p, id)
+	if p == game.player:
+		game.hud.took(id)
 
 
 func _receive(p, item: String, n: int) -> void:
@@ -2405,7 +2470,9 @@ func near_boxes(p) -> Array:
 	for id in game.data["containers"]:
 		var c: Dictionary = game.data["containers"][id]
 		var at := _container_at(c)
-		if SearchRules.can_take(c) and _in_reach(p, at):
+		# The box `p` is taking out of is busy with it, and still theirs to show.
+		var own: bool = p.action == "take" and is_same(p.action_busy, c)
+		if (SearchRules.can_take(c) or own) and _in_reach(p, at):
 			rows.append([p.position.distance_to(at), String(id)])
 	rows.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
 	return rows.map(func(r: Array) -> String: return r[1])

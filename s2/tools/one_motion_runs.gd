@@ -136,6 +136,9 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 	var started_striking := 0         # begun while a blow or a shove was on
 	var struck_acting := 0            # a blow or a shove begun while an action was on
 	var both_ticks := 0               # ticks with a body doing both at once
+	var searches := 0                 # boxes the squad began to search
+	var empty_searches := 0           # of those, ones that held nothing (card P3: shown before)
+	var search_s := 0.0               # seconds the squad spent searching
 	var initially_fallen: Dictionary = {}
 	var fallen: Dictionary = {}
 	var first_end := -1.0
@@ -163,6 +166,12 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 				struck_acting += 1
 			if now_striking and now_action != "" and now_action != "aim":
 				both_ticks += 1
+			if now_action == "search":
+				search_s += delta
+				if before[0] != "search":
+					searches += 1
+					if (p.action_busy.get("items", []) as Array).is_empty():
+						empty_searches += 1
 			was[p] = [now_action, now_striking]
 		for z in game.zombies.list:
 			if z["state"] in ["downed", "dead"] and not initially_fallen.has(z["id"]):
@@ -185,6 +194,7 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 	var row := {"kind": "trial", "label": label, "mode": mode, "seed": run_seed, "ticks": ticks,
 		"actions_started": started, "started_while_striking": started_striking,
 		"struck_while_acting": struck_acting, "both_ticks": both_ticks,
+		"searches": searches, "empty_searches": empty_searches, "search_s": snappedf(search_s, 0.1),
 		"fallen": fallen.size(), "kills": int(game.combat.kills), "bites": bites, "deaths": deaths,
 		"steps": steps, "step_reactions": step_reactions,
 		"first_end_s": first_end, "wall_s": float(Time.get_ticks_usec() - clock) / 1000000.0}
