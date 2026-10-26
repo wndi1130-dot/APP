@@ -401,6 +401,8 @@ var rim_run: bool = false
 var stick_tap_ms: int = -10000
 var stick_tap_pos := Vector2(-999, -999)
 var pause_button: Button
+var resume_button: Button
+var resume_view_ready: bool = false
 var settings_button: Button          # shown while paused: opens the settings (stick, radio)
 var bag_box: HBoxContainer           # the bag key, right under the portrait
 var alarm_button: Button             # a found watch still set to ring: one press stops it (P19)
@@ -2466,6 +2468,8 @@ func _open_modal(width: float = 640.0, pauses: bool = true) -> VBoxContainer:
 
 
 func _close_modal() -> void:
+	if game.resume_pending:
+		return
 	# A thing still coming out goes on in the field (field_actions.gd take).
 	taking_box = ""
 	if modal != null:
@@ -2476,6 +2480,49 @@ func _close_modal() -> void:
 		game.slow = 1.0
 		modal_slows = false
 		modal_open = false
+
+
+func show_resume() -> void:
+	# Reuse the existing pause shade and button style, with only one action.
+	resume_view_ready = false
+	game.resume_pending = false
+	var box: VBoxContainer = _open_modal(320.0)
+	game.resume_pending = true
+	resume_button = _button("이어서", _continue_resume)
+	resume_button.disabled = true
+	box.add_child(resume_button)
+
+
+func tick_resume() -> void:
+	if not resume_view_ready:
+		# The paused field must already show the restored clock, wounds and orders.
+		# These are read-only UI updates; action/input/timer updates stay stopped.
+		_tick_clock()
+		_tick_portrait(game.player)
+		_tick_allies()
+		_tick_status(game.player)
+		_tick_grab(game.player, 0.0)
+		grab_button.text = "밀쳐!" if game.player.grab_front else "뒤에서! 밀쳐!"
+		if goal_label != null:
+			goal_label.text = UiFonts.keep_all(goal_shown())
+			var goal_parent: Control = goal_label.get_parent()
+			goal_parent.visible = goal_open and goal_label.text != ""
+			goal_key.visible = goal_label.text != ""
+			feel_label.text = UiFonts.keep_all(game.holdout.feel_line())
+			feel_label.visible = feel_label.text != "" and goal_parent.visible
+		resume_view_ready = true
+	if is_instance_valid(resume_button):
+		resume_button.disabled = game.resume_wait_left > 0.0 or game.away
+
+
+func _continue_resume() -> void:
+	game.continue_resume()
+
+
+func close_resume() -> void:
+	game.resume_pending = false
+	_close_modal()
+	resume_button = null
 
 
 ## The body picture (body_injury 4.6): six parts, the wounds of the part
@@ -3495,7 +3542,7 @@ func _swap() -> void:
 
 
 func _toggle_pause() -> void:
-	if modal_open:
+	if modal_open or game.resume_pending:
 		return
 	game.paused = not game.paused
 
