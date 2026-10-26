@@ -4,10 +4,16 @@ extends SceneTree
 ## step; the player walks a fixed round (walk) or the holdout runs (holdout),
 ## the companions play by their own AI. Prints one JSON line per trial.
 ## --seeds 1:20 --seconds 300 --hz 30 --mode both|walk|holdout --label before|after
+## --bot counter|none: the player fights back what is on it (counter, _counter:
+## where it stands in the holdout, stopping on its round in the walk) or lets
+## it be as the runs before it did (none).
 ## No imports, no saves, no files written.
 
 const WALK_CELLS := [Vector2i(80, 12), Vector2i(90, 32), Vector2i(60, 40),
 	Vector2i(30, 32), Vector2i(30, 12), Vector2i(50, 6)]
+## How often the player looks round, as a thumb on the pad would.
+const REACT_S := 0.25
+const Weapons = preload("res://game/sim/weapons.gd")
 
 var keep: Array = []
 var game_script: GDScript
@@ -17,6 +23,7 @@ var seed_first := 1
 var seed_last := 20
 var modes: Array[String] = ["walk", "holdout"]
 var label := "after"
+var bot := "counter"
 
 
 func _initialize() -> void:
@@ -56,7 +63,7 @@ func _run() -> void:
 		quit(1)
 		return
 	print(JSON.stringify({"kind": "config", "label": label, "seeds": [seed_first, seed_last], "seconds": seconds,
-		"hz": hz, "modes": modes, "engine": Engine.get_version_info()["string"],
+		"hz": hz, "modes": modes, "bot": bot, "engine": Engine.get_version_info()["string"],
 		"field_actions_sha256": FileAccess.get_sha256("res://game/field_actions.gd"),
 		"field_combat_sha256": FileAccess.get_sha256("res://game/field_combat.gd")}))
 	for mode in modes:
@@ -103,6 +110,7 @@ func _arguments() -> bool:
 			"--hz": hz = value.to_int()
 			"--seconds": seconds = value.to_float()
 			"--label": label = value
+			"--bot": bot = value
 			"--mode":
 				if value != "both":
 					modes.assign([value])
@@ -114,11 +122,72 @@ func _arguments() -> bool:
 				push_error("Unknown argument: " + args[i])
 				return false
 		i += 2
-	return hz > 0 and seconds > 0 and seed_last >= seed_first and modes.all(func(m): return m in ["walk", "holdout"])
+	return hz > 0 and seconds > 0 and seed_last >= seed_first and bot in ["counter", "none"] \
+		and modes.all(func(m): return m in ["walk", "holdout"])
 
 
 static func _striking(p) -> bool:
 	return p.swing_t > 0.0 or p.strike_t > 0.0 or p.shove_t > 0.0
+
+
+## The player at the pad, fighting back what is on it (the plain melee loop):
+## grabbed, it shoves free; one dead on its feet in reach, it shoves it (one
+## alone is put down, then finished on the ground, never swung at on its
+## feet); two or more, it swings at the nearest; none standing, it ends a
+## rising one or one lying in reach. It never walks after one: a target that
+## drifts out of reach is let go. No dice of its own (game.rng only), so seeds
+## still repeat. True while there is a fight at hand: the walk waits for it.
+func _counter(game, counts: Dictionary) -> bool:
+	var p = game.player
+	var combat = game.combat
+	if game.ended or not p.is_alive():
+		return false
+	if not p.grabbers.is_empty():
+		if combat.break_grab(p):
+			counts["bot_frees"] += 1
+		return true
+	if not p.can_act() or combat.striking(p):
+		return true
+	var reach: float = float(Weapons.get_data(p.weapon_id()).get("reach", 0.9)) + combat.MELEE_SLACK
+	if not p.target_zombie.is_empty():
+		if p.target_zombie["state"] != "dead" and p.position.distance_to(p.target_zombie["pos"]) <= reach:
+			return true
+		combat.stop_fight(p)
+	var up: Array = []
+	var rising: Dictionary = {}
+	var lying: Dictionary = {}
+	for z in game.zombies.in_radius(p.position, maxf(reach, combat.SHOVE_REACH)):
+		if combat.melee_blocked(p, z["pos"]):
+			continue
+		var d: float = p.position.distance_to(z["pos"])
+		match String(z["state"]):
+			"dead", "frozen":
+				pass
+			"rising":
+				if d <= reach and (rising.is_empty() or d < p.position.distance_to(rising["pos"])):
+					rising = z
+			"downed":
+				if d <= reach and (lying.is_empty() or d < p.position.distance_to(lying["pos"])):
+					lying = z
+			_:
+				up.append(z)
+	up.sort_custom(func(a, b): return p.position.distance_to(a["pos"]) < p.position.distance_to(b["pos"]))
+	if up.size() == 1 and p.position.distance_to(up[0]["pos"]) <= combat.SHOVE_REACH:
+		p.face_point(up[0]["pos"])
+		combat.start_shove(p)
+		counts["bot_shoves"] += 1
+	elif up.size() > 1 and p.position.distance_to(up[0]["pos"]) <= reach:
+		combat.fight(p, up[0], false)
+		counts["bot_swings"] += 1
+	elif up.is_empty() and not rising.is_empty():
+		combat.fight(p, rising, false)
+		counts["bot_swings"] += 1
+	elif up.is_empty() and not lying.is_empty():
+		combat.fight(p, lying, false)
+		counts["bot_finishes"] += 1
+	else:
+		return false
+	return true
 
 
 func _trial(run_seed: int, mode: String) -> Dictionary:
@@ -145,9 +214,14 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 	for z in game.zombies.list:
 		if z["state"] in ["dead", "downed", "rising"]:
 			initially_fallen[z["id"]] = true
+	var counts := {"bot_shoves": 0, "bot_swings": 0, "bot_finishes": 0, "bot_frees": 0}
+	var react := maxi(1, roundi(REACT_S * hz))
 	var clock := Time.get_ticks_usec()
+	var beset := false                # a fight at hand: the walk waits for it
 	for tick in range(ticks):
-		if mode == "walk" and tick % (hz * 2) == 0 and game.player.can_act() and game.player.action == "":
+		if bot == "counter" and tick % react == 0:
+			beset = _counter(game, counts)
+		if mode == "walk" and tick % (hz * 2) == 0 and game.player.can_act() and game.player.action == "" and not beset:
 			var goal: Vector2i = WALK_CELLS[mini(int(float(tick) / hz / 50.0), WALK_CELLS.size() - 1)]
 			game.player.go_to(game.find_path(game.player.position, game.lift(goal, 0)), false)
 		game._step(delta)
@@ -177,9 +251,16 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 			if z["state"] in ["downed", "dead"] and not initially_fallen.has(z["id"]):
 				fallen[z["id"]] = true
 	var bites := 0
+	var bites_player := 0             # of the bites, the player's (the heavier number)
+	var grabs_player := 0
 	for injury in game.telemetry.injuries:
+		var players: bool = injury["who"] == game.player.pid
 		if injury["kind"] == "bite":
 			bites += 1
+			if players:
+				bites_player += 1
+		elif injury["kind"] == "grab" and players:
+			grabs_player += 1
 	var deaths := 0
 	for p in game.squad:
 		if p.body.dead:
@@ -198,5 +279,8 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 		"fallen": fallen.size(), "kills": int(game.combat.kills), "bites": bites, "deaths": deaths,
 		"steps": steps, "step_reactions": step_reactions,
 		"first_end_s": first_end, "wall_s": float(Time.get_ticks_usec() - clock) / 1000000.0}
+	row.merge(counts)
+	row["bites_player"] = bites_player
+	row["grabs_player"] = grabs_player
 	game.free()
 	return row
