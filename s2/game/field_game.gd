@@ -59,6 +59,7 @@ const BuildPace = preload("res://game/world/build_pace.gd")
 ## 10-25; it was -14 C fixed), the same the stop scene and the pictures read.
 const OutsideTemp = preload("res://game/sim/outside_temp.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const EdgeBand = preload("res://game/world/edge_band.gd")
 ## Everyone but the player turns their body at this pace (about 0.45 s to turn round).
 const TURN_DEG_PER_S: float = 400.0
 # The train rolling away in the stop's closing scene: it pulls at this much
@@ -444,6 +445,7 @@ func _ready() -> void:
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
 	map_edge.set_fog(fx_light["fog_color"])
+	map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
 	# The shade under the side path's trees: the gap reads as the light way in.
 	if data.get("side_path") is Dictionary:
 		var shade := WoodsShade.new()
@@ -749,6 +751,7 @@ func _update_atmosphere() -> void:
 		environment.background_color = fx_light["background"]
 		if map_edge != null:
 			map_edge.set_fog(fx_light["fog_color"])
+			map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
 		_apply_grade(atmo["grade"])
 	if cold_frost != null and cold_frost.visible:
 		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
@@ -2430,7 +2433,12 @@ func cell_seen(at: Vector3) -> bool:
 
 func _update_camera(delta: float) -> void:
 	var focus := player.position + cam_push
+	# The view ends inside the woods round the map, never past them (edge_band.gd).
+	var screen := get_viewport().get_visible_rect().size
+	focus = EdgeBand.clamp_focus(focus, EdgeBand.view_half(cam_size, screen.x / maxf(screen.y, 1.0), CAM_PITCH), grid.width, grid.height)
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
+	if map_edge != null:
+		map_edge.set_eye(player.position)
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
 	var pitch := deg_to_rad(CAM_PITCH)
 	var back := Vector3(0, sin(pitch), cos(pitch)) * 60.0
