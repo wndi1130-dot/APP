@@ -5,13 +5,14 @@ extends RefCounted
 ## Only the S1a game: the domestic, dark-path, climate, disaster and arrivals branches are off, so
 ## their hooks give 0 or 1 here exactly as they do in S1 when switched off. A dom holding the
 ## S2's explicitly ported stores/workshop/insulation/research subset (train_dom.gd) keeps
-## unported S1c hooks off. Insulation adds only its own S1c situation terms below.
+## unported S1c hooks off. Technology bending a law and insulation (train_lawtech.gd) add their
+## S1c situation share, law effects and variant laws.
 ## tests/train/test_train_state.gd checks every function against the S1 answers.
 
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
-const TrainMods = preload("res://game/train/train_mods.gd")
+const TrainLawTech = preload("res://game/train/train_lawtech.gd")
 const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 
 
@@ -37,7 +38,8 @@ static func comms(t: Dictionary) -> Array:
 
 
 ## situation(g, c) in state.ts: [warmth, ration, crowding, exposure], each 0..100. The space lever
-## moves crowding from the tail to the giving car; insulation is the only ported domestic term.
+## moves crowding from the tail to the giving car; the dom's share is technology and insulation's
+## (TrainLawTech.sit, S1 dom.sit).
 static func situation(g: Dictionary, t: Dictionary, c: String) -> Array[float]:
 	var s: Dictionary = g["comms"][c]
 	var p: Dictionary = t["P"]
@@ -51,21 +53,12 @@ static func situation(g: Dictionary, t: Dictionary, c: String) -> Array[float]:
 	if sp is Dictionary and sp.get("giver") != null and float(sp.get("step", 0)) > 0:
 		var side := -1.0 if c == "tail" else (1.0 if c == sp["giver"] else 0.0)
 		room = side * float(p["spaceStep"]) * float(sp["step"])
-	# S1 lawTechSit: insulation only; other technology relief remains zero.
-	var share: float = TrainMods.insulated_share(g, c)
-	var quota: bool = law_active(g, "heat_quota")
-	var half: float = 0.5 if bool(TrainMods.D["insulateQuotaHalf"]) and quota else 1.0
-	var warm: float = float(TrainMods.D["insulateWarm"]) * share * half
-	if quota:
-		var mats: Array = TrainMods.HEAT_QUOTA_MATS.get(c, [0, 0, 0, 0])
-		var penalty: float = maxf(0.0, -float(mats[0]))
-		warm += minf(penalty, penalty * share)
-	var crowd: float = float(TrainMods.D["insulateCrowd"]) * TrainMods.insulated_count(g, c)
+	var d: Array[float] = TrainLawTech.sit(g, c)
 	return [
-		clampv(float(base[0]) + float(p["leverStep"]) * (float(s["heat"]) - 2.0) + warm - float(h["stoveWarm"]) * float(short.get("stove", 0.0)), 0.0, 100.0),
-		clampv(float(base[1]) + float(p["leverStep"]) * (float(s["ration"]) - 2.0), 0.0, 100.0),
-		clampv(float(base[2]) + crowd + room, 0.0, 100.0),
-		clampv(float(base[3]) + float(expose.get(c, 0.0)), 0.0, 100.0),
+		clampv(float(base[0]) + float(p["leverStep"]) * (float(s["heat"]) - 2.0) + d[0] - float(h["stoveWarm"]) * float(short.get("stove", 0.0)), 0.0, 100.0),
+		clampv(float(base[1]) + float(p["leverStep"]) * (float(s["ration"]) - 2.0) + d[1], 0.0, 100.0),
+		clampv(float(base[2]) + d[2] + room, 0.0, 100.0),
+		clampv(float(base[3]) + d[3] + float(expose.get(c, 0.0)), 0.0, 100.0),
 	]
 
 
@@ -115,16 +108,16 @@ static func law_active(g: Dictionary, law: String) -> bool:
 	return (g.get("passed", {}) as Dictionary).has(law)
 
 
-## The fixed effects of a law (lawTechRes; the domestic tech that bends one law is off in S1a).
-static func law_res(t: Dictionary, law: String) -> Dictionary:
-	return t["LAWS_RES"][law]
+## The fixed effects of a law as technology has bent them (lawTechRes); without `g`, the law's own.
+static func law_res(t: Dictionary, law: String, g: Dictionary = {}) -> Dictionary:
+	return TrainLawTech.res(g, law, t["LAWS_RES"][law])
 
 
 ## Sum of one additive law effect over the laws in force (lawSum in turn.ts).
 static func law_sum(g: Dictionary, t: Dictionary, key: String) -> float:
 	var sum := 0.0
 	for law: String in (g.get("passed", {}) as Dictionary):
-		var v := float(law_res(t, law).get(key, 0))
+		var v := float(law_res(t, law, g).get(key, 0))
 		# Sparing the tail under 비상식량감축법 saves less (rationCutFood).
 		if law == "emergency_ration" and key == "foodAdd":
 			v = RationCut.food(g, t, v)
@@ -141,7 +134,7 @@ static func law_mult(g: Dictionary, t: Dictionary, key: String) -> float:
 	for edu: String in t.get("EDU_LAWS", []):
 		if law_active(g, edu): schooling = true
 	for law: String in (g.get("passed", {}) as Dictionary):
-		var factor: float = float(law_res(t, law).get(key, 1))
+		var factor: float = float(law_res(t, law, g).get(key, 1))
 		if key == "haulMult" and schooling and law in ["child_labor", "child_pack"]: factor = 1 + (factor - 1) / 2
 		m *= factor
 	return m
@@ -151,7 +144,7 @@ static func law_mult(g: Dictionary, t: Dictionary, key: String) -> float:
 static func law_floor(g: Dictionary, t: Dictionary, key: String) -> float:
 	var floor_v := 0.0
 	for law: String in (g.get("passed", {}) as Dictionary):
-		floor_v = maxf(floor_v, float(law_res(t, law).get(key, 0)))
+		floor_v = maxf(floor_v, float(law_res(t, law, g).get(key, 0)))
 	return floor_v
 
 
