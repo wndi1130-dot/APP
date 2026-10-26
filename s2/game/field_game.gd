@@ -1526,6 +1526,7 @@ func _update_zone(delta: float) -> void:
 	var pl := level_of(player.position)
 	view.show_levels(pl)
 	view.cut_away(grid_at(player.position).building_at(FieldGrid.cell_of(player.position)), pl)
+	view.update_ground(ground_items)
 
 
 # ---------------------------------------------------------------- people
