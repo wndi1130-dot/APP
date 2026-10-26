@@ -1,13 +1,14 @@
 {
   "version": 1,
   "batch": "gap",
-  "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf + thicket",
+  "input": "map-layout data[\"side_path\"] gap_kind 셋 + small_shelf + thicket + loose_board",
   "expected_kinds": [
     "gap_wire",
     "gap_gate",
     "gap_planks",
     "small_shelf",
-    "thicket"
+    "thicket",
+    "loose_board"
   ],
   "blender": "4.5.10 LTS",
   "palette": {
@@ -81,6 +82,36 @@
       0.37,
       0.39,
       0.38,
+      1.0
+    ],
+    "floor_board": [
+      0.57,
+      0.33,
+      0.12,
+      1.0
+    ],
+    "floor_board_b": [
+      0.53,
+      0.31,
+      0.115,
+      1.0
+    ],
+    "floor_board_lift": [
+      0.6,
+      0.36,
+      0.14,
+      1.0
+    ],
+    "floor_seam": [
+      0.3,
+      0.17,
+      0.07,
+      1.0
+    ],
+    "floor_hole": [
+      0.09,
+      0.055,
+      0.035,
       1.0
     ]
   },
@@ -282,6 +313,46 @@
         "worn_wood"
       ],
       "judgment": "low: 2×2칸을 거의 다 덮는 겨울 잡목 덤불, 네 귀 가까운 낮은 어두운 속심 넷과 바깥·위로 퍼진 밝은 마른 가지 서른",
+      "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
+    },
+    "loose_board": {
+      "path": "res://models/props_field/loose_board.glb",
+      "status": "ready",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.045,
+      "solid": "none",
+      "lod0_tris": 120,
+      "triangle_limit": 600,
+      "bounds_m": [
+        [
+          -0.48,
+          0.0,
+          -0.48
+        ],
+        [
+          0.48,
+          0.045,
+          0.48
+        ]
+      ],
+      "dimensions_m": [
+        0.96,
+        0.045,
+        0.96
+      ],
+      "bytes": 9420,
+      "sha256": "15be0530de71f9c228b6a39cdab503eeb4c0cd9107bb607f0319597d3dd67ce8",
+      "colours": [
+        "floor_board",
+        "floor_board_b",
+        "floor_board_lift",
+        "floor_hole",
+        "floor_seam"
+      ],
+      "judgment": "none: 사는 집 나무 바닥의 마루 판 넷 가운데 한 장이 한쪽 끝 3.5 cm 들리고 조금 돌아감, 밑 틈은 어둡게(마루 밑 숨긴 칸, 카드 K)",
       "placement": "rect 중앙 바닥, +Y 위/+Z 앞, facing -90도씩"
     }
   },

@@ -34,6 +34,7 @@ const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
+const SmellRules = preload("res://game/sim/smell_rules.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
@@ -1929,16 +1930,20 @@ func _update_blood(delta: float) -> void:
 
 
 ## Freshest, closest trail point a zombie at `at` can smell: the same 12 m
-## event shape as the minute pulse; falling snow weakens older drops (8.1).
+## event shape as the minute pulse; falling snow weakens older drops (8.1),
+## rain washes every drop to half its pull (decision 445).
 func strongest_scent(at: Vector3) -> Dictionary:
 	var best: Dictionary = {}
 	var best_score := 0.0
 	var now := clock.elapsed
 	var snowing := weather.kinds.has("snow") or weather.kinds.has("blizzard")
+	var raining := weather.kinds.has("rain")
 	for b in blood:
 		var reach: float = BLOOD_SCENT_R * weather.scent_mult(b["pos"], at)
 		if snowing and now - float(b["t"]) > 30.0:
 			reach *= 0.7
+		if raining:
+			reach *= SmellRules.RAIN_FADE
 		var d: float = at.distance_to(b["pos"])
 		if d > reach:
 			continue
@@ -2505,7 +2510,9 @@ func on_door_banged(c: Vector2i, by: Dictionary = {}) -> void:
 	door["hp"] = int(door["hp"]) - 1
 	# The planks on the face they strike from give way first (building_rules.gd).
 	var had: int = BuildingRules.planks_total(door)
-	BuildingRules.wear_planks(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	var toppled := BuildingRules.wear_defences(door, grid.face_toward(c, by.get("pos", FieldGrid.center(c))))
+	if not toppled.is_empty():
+		actions.topple_furniture(toppled, c)
 	if BuildingRules.planks_total(door) != had:
 		grid.refresh_cell(c)
 		view.update_door(c)
