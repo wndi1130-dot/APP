@@ -38,13 +38,13 @@ vec3 floor_to_linear(vec3 c) {
 // in long slabs with a stripe at the edge, gravel speckled.
 // The colours are sRGB, like the floor colours, set by real reflectance (linear
 // luminance; measured albedos in brackets): dry grass 0.22 (green grass 0.25),
-// faded green 0.17, soil 0.16 (bare soil 0.17), aged asphalt 0.14 (worn 0.12),
+// faded green 0.19, soil 0.18 (bare soil 0.17), aged asphalt 0.14 (worn 0.12),
 // concrete 0.39 (new 0.55, weathered lower), gravel 0.24. Light pavement, mid
 // grass and soil, dark road: the ground reads in grey alone. Table and sources:
 // docs/art/material_values.md.
 const vec3 DRY_GRASS = vec3(0.57, 0.50, 0.32);
-const vec3 OLD_GREEN = vec3(0.44, 0.48, 0.29);
-const vec3 SOIL = vec3(0.50, 0.41, 0.31);
+const vec3 OLD_GREEN = vec3(0.47, 0.51, 0.31);
+const vec3 SOIL = vec3(0.53, 0.44, 0.34);
 const vec3 ASPHALT = vec3(0.41, 0.41, 0.42);
 const vec3 CONCRETE = vec3(0.66, 0.65, 0.62);
 const vec3 LINE_PAINT = vec3(0.76, 0.64, 0.30);
@@ -83,7 +83,7 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain) {
 		// (grass about 0.7~0.8 of the pavement in sRGB; mood, 바닥 색): same lightness
 		// as before, the hue of dry grass and soil (결정 469 C1).
 		vec3 grass = mix(DRY_GRASS, OLD_GREEN, smoothstep(0.35, 0.75, fx_vnoise(p * 0.45 + 9.0)));
-		grass *= 0.88 + 0.22 * fx_vnoise(p * 2.3);
+		grass *= 0.92 + 0.16 * fx_vnoise(p * 2.3);
 		float bare = smoothstep(0.52, 0.68, patch) * 0.7;
 		bare = max(bare, smoothstep(0.3, 0.6, clamp(detail, 0.0, 1.0) + (patch - 0.5) * 0.5));
 		return mix(grass, SOIL * (0.92 + 0.16 * grain.a), bare);
@@ -178,8 +178,9 @@ void fragment() {
 	base = floor_to_linear(base);
 	float soil = mix(grain.a, grain.b, clamp(wet * 1.4, 0.0, 1.0));
 	// Laid surfaces (road, platform, pavement) take less of the soil's blotches.
-	// Grass a little less than before, so the blotches do not break the forms.
-	float laid = (kind == 1 || kind == 2 || ground_detail < -0.5) ? 0.35 : 0.7;
+	// Less on bare ground than under snow, so the blotches do not break the forms nor
+	// sink grass in a shadow under V 0.15 (결정 470 dark share).
+	float laid = (kind == 1 || kind == 2 || ground_detail < -0.5) ? 0.35 : 0.45;
 	base *= 1.0 + (soil - 0.5) * 1.3 * ground_k * wander * mix(1.0, laid, bare_k);
 	base *= 1.0 - 0.35 * wet;
 	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));
