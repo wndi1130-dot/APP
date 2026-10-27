@@ -280,6 +280,11 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 		"steps": steps, "step_reactions": step_reactions,
 		"first_end_s": first_end, "wall_s": float(Time.get_ticks_usec() - clock) / 1000000.0}
 	row.merge(counts)
+	# Dead contacts by side (decision 474 J1), where the rules count them.
+	if game.combat.get("contacts") != null:
+		row["contacts"] = game.combat.contacts.duplicate(true)
+		row["crowd_most"] = int(game.combat.crowd_most)
+		row["crowd_falls"] = int(game.combat.get("crowd_falls") if game.combat.get("crowd_falls") != null else 0)
 	row["bites_player"] = bites_player
 	row["grabs_player"] = grabs_player
 	game.free()
