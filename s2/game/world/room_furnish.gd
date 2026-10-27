@@ -1708,7 +1708,14 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 				var kk := String(props[i].get("kind", ""))
 				if not drop.has(i):
 					covered[STANDS_FOR.get(kk, kk)] = true
-			for item: Dictionary in _palette_for(cls, area, rng):
+			var items := _palette_for(cls, area, rng)
+			# 부엌을 갈라 뗀 식당(room_split DINING)은 거실 묶음의 꼭 있을 가구 다음에 식탁을 꼭 둔다.
+			if cls == "living" and _named(String(labels.get(ri, "")), "식당"):
+				var at := 0
+				while at < items.size() and bool((items[at] as Dictionary).get("need", false)):
+					at += 1
+				items.insert(at, {"kind": "dining_set", "size": Vector2i(2, 2), "need": true, "at": "mid"})
+			for item: Dictionary in items:
 				if covered.has(item["kind"]) or (item.get("fill", false) and used >= target):
 					continue
 				if item.get("near", "") in ["bed_head", "desk"]:

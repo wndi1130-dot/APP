@@ -445,10 +445,13 @@ func test_a_six_wide_kitchen_gives_a_narrow_kitchen_and_a_full_room() -> void:
 	assert_ne(row["class"], "kitchen", "the new side is the room the home lacks; the kitchen keeps the narrow side")
 	Furnish.furnish_rooms(d)
 	var runs := 0
+	var tables := 0
 	for p: Dictionary in d["props"]:
 		if p.get("rule") == "kitchen" and p.get("counter_run", false):
 			runs += 1
+		tables += int(p["kind"] == "dining_set" and p.get("rule") == "living")
 	assert_gte(runs, Furnish.COUNTER_MIN, "a counter run along the narrow kitchen's long wall")
+	assert_eq(tables, 1, "the dining room cut off the kitchen has its table")
 
 
 func test_a_kitchen_keeps_a_straight_counter_wall_after_a_cut() -> void:
