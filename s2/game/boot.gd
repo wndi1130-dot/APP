@@ -199,8 +199,12 @@ func _start(resume: Dictionary = {}) -> void:
 	field.opts = opts
 	field.restart_requested.connect(_on_restart)
 	add_child(field)
-	# The brightness the player left in the settings (결정 471 B5): the play flow's own, never a tool's.
-	ScreenLift.apply_saved(field)
+	# The brightness the player left in the settings (결정 471 B5): the play flow's own, never a
+	# tool's, put on once the field is built.
+	if field.is_built:
+		ScreenLift.apply_saved(field)
+	else:
+		field.built.connect(func() -> void: ScreenLift.apply_saved(field), CONNECT_ONE_SHOT)
 
 
 ## The map picked on the start screen ("mine_03"), or "" for the usual stop.

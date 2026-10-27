@@ -77,6 +77,25 @@ func test_a_run_without_the_curve_keeps_the_value_and_breaks_nothing() -> void:
 	assert_eq(ScreenLift.load_lift(), 10)
 
 
+func test_the_play_flow_puts_the_saved_brightness_on() -> void:
+	ScreenLift.save_lift(-15)
+	var game := LiftCatcher.new()
+	ScreenLift.apply_saved(game)
+	assert_almost_eq(game.screen_lift, -0.15, 0.0001)
+
+
+## 촬영 도구·밝기 셈·봇·시험도 FieldGame.new()로 필드를 만들어 HUD가 같이 생긴다. 그 둘이 저장 파일을
+## 읽지 않아야 저장값과 상관없이 0이다(읽는 곳은 플레이 흐름 boot·slice_flow와 설정 막대뿐).
+func test_the_field_and_its_hud_never_read_the_saved_brightness() -> void:
+	for path: String in ["res://game/field_game.gd", "res://game/ui/field_hud.gd"]:
+		var code := FileAccess.get_file_as_string(path)
+		assert_gt(code.length(), 0, path)
+		for needle: String in ["load_lift", "apply_saved", "screen.cfg"]:
+			assert_false(code.contains(needle), "%s reads the saved brightness (%s)" % [path, needle])
+	var boot := FileAccess.get_file_as_string("res://game/boot.gd")
+	assert_true(boot.contains("ScreenLift.apply_saved(field)"), "the start menu's flow puts it on")
+
+
 func test_a_field_made_like_a_tool_stays_at_zero_and_the_flow_lifts_it() -> void:
 	ScreenLift.save_lift(20)
 	var game = FieldGame.new()
