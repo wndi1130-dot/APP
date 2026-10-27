@@ -7,6 +7,7 @@ const FieldSave = preload("res://game/sim/field_save.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
+const ScreenLift = preload("res://game/ui/screen_lift.gd")
 ## Shader gallery (fx library), opened from the menu for a look on the phone.
 const GALLERY_SCENE := "res://fx/gallery.tscn"
 const TRAIN_SCENE := "res://game/train/train.tscn"
@@ -198,6 +199,8 @@ func _start(resume: Dictionary = {}) -> void:
 	field.opts = opts
 	field.restart_requested.connect(_on_restart)
 	add_child(field)
+	# The brightness the player left in the settings (결정 471 B5): the play flow's own, never a tool's.
+	ScreenLift.apply_saved(field)
 
 
 ## The map picked on the start screen ("mine_03"), or "" for the usual stop.
