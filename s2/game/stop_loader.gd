@@ -15,6 +15,8 @@ const FieldGame = preload("res://game/field_game.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const RoomFinish = preload("res://game/world/room_finish.gd")
+const SidePath = preload("res://game/world/side_path.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 ## The dead's stand-in bodies at the field's own count (field_game.gd opts
 ## "vertices", 1500): the same every stop, so baked once, off the main thread.
@@ -27,6 +29,8 @@ const BUDGET_RESTING_USEC: int = 30000
 
 ## The stop's place (FieldMaps id, resolved) and its map once built.
 var place: String = ""
+## The field seed the map is made for (-1: none known, the field puts the side path on).
+var seed_for: int = -1
 var data: Dictionary = {}
 var vat: Dictionary = {}
 var field: Node = null
@@ -50,18 +54,20 @@ func _ready() -> void:
 	set_process(false)
 
 
-## Start on the map of `place_id` (the default map when there is none). The
-## same place again keeps what is under way.
-func prepare(place_id: String) -> void:
+## Start on the map of `place_id` (the default map when there is none), with the
+## field's seed when it is known (its side path is then put on the map here; -1: the
+## field puts it on). The same place and seed again keeps what is under way.
+func prepare(place_id: String, run_seed: int = -1) -> void:
 	var id: String = FieldMaps.resolve(place_id)
-	if _state != "idle" and id == place:
+	if _state != "idle" and id == place and run_seed == seed_for:
 		return
 	place = id
+	seed_for = run_seed
 	data = {}
 	_path = FieldMaps.path_of(place)
 	_data_from = Time.get_ticks_usec()
 	if not threaded:
-		_take(FieldMaps.build(place))
+		_take(make_ready(load(_path), seed_for))
 		return
 	if ResourceLoader.load_threaded_request(_path, "", false) != OK:
 		_start_task(load(_path))
@@ -78,8 +84,11 @@ func has_data() -> bool:
 ## standing still, with `opts` (the field's own: squad, seed, departure); it is
 ## handed over by field_built. Waits for the map first if it is not done.
 func build_field(parent: Node, opts: Dictionary) -> void:
-	if _state == "idle":
-		prepare(String(opts.get("place", "")))
+	# The map is made for the field's own seed (its side path); one made for another is
+	# made again, here, before the field is (never a whole map built in one frame).
+	var want: int = int(opts["seed"]) if opts.has("seed") else -1
+	if _state == "idle" or want != seed_for:
+		prepare(String(opts.get("place", place)), want)
 	if not has_data():
 		await data_ready
 	var o: Dictionary = opts.duplicate()
@@ -139,7 +148,7 @@ func _process(_delta: float) -> void:
 		var built: Variant = _box.get("data")
 		if _box.get("vat") is Dictionary:
 			vat = _box["vat"]
-		_take(built if built is Dictionary and not (built as Dictionary).is_empty() else FieldMaps.build(place))
+		_take(built if built is Dictionary and not (built as Dictionary).is_empty() else make_ready(load(_path), seed_for))
 	if is_instance_valid(field) and not field.is_built:
 		var now: int = Time.get_ticks_usec()
 		stats["longest_frame_ms"] = maxf(float(stats.get("longest_frame_ms", 0.0)), float(now - _last_frame) / 1000.0)
@@ -151,22 +160,37 @@ func _process(_delta: float) -> void:
 func _start_task(script: Script) -> void:
 	_box = {}
 	_state = "building"
-	_task = WorkerThreadPool.add_task(_build_off_thread.bind(_box, script, VAT_VERTICES if vat.is_empty() else 0), false, "stop map")
+	_task = WorkerThreadPool.add_task(_build_off_thread.bind(_box, script, seed_for, VAT_VERTICES if vat.is_empty() else 0), false, "stop map")
 	set_process(true)
 
 
-## On the worker: the map script's static build, the plan of its buildings
-## (building_view.gd plan reads the map alone), what the ground draws on each
-## cell (map_view.gd ground_details) and the rooms' finish (room_finish.gd),
-## nothing in the scene tree.
-static func _build_off_thread(box: Dictionary, script: Script, vat_vertices: int) -> void:
-	var d: Dictionary = FieldMaps.build_from(script)
-	d["_building_plan"] = BuildingView.plan(d)
-	d["_ground_details"] = MapView.ground_details(d["grid"])
-	d["_room_finish"] = RoomFinish.build(d)
-	box["data"] = d
+## On the worker: the map and what is made ahead from it (make_ready), nothing in
+## the scene tree.
+static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, vat_vertices: int) -> void:
+	box["data"] = make_ready(script, run_seed)
 	if vat_vertices > 0:
 		box["vat"] = VatBaker.build(vat_vertices)
+
+
+## The map script's static build; with the field's seed, the side path put on it
+## first (side_path.gd: the same way the field would put it on, and it can grow and
+## shift the map); then from the map as it now is the plan of its buildings
+## (building_view.gd), the ground's and the floors' arrays (map_view.gd, 2a) with the
+## maps they fit, and the rooms' finish (room_finish.gd). Data only, no nodes.
+static func make_ready(script: Script, run_seed: int) -> Dictionary:
+	var d: Dictionary = FieldMaps.build_from(script)
+	if run_seed >= 0:
+		d = SidePath.add(d, run_seed)
+		d["_side_seed"] = run_seed
+	d["_building_plan"] = BuildingView.plan(d)
+	var g: FieldGrid = d["grid"]
+	d["_ground_arrays"] = MapView.ground_arrays(g, MapView.ground_details(g))
+	d["_ground_key"] = MapView.ground_key(g)
+	var keys: Dictionary = {}
+	d["_floor_arrays"] = MapView.level_floor_arrays(d.get("levels", {}), keys)
+	d["_floor_keys"] = keys
+	d["_room_finish"] = RoomFinish.build(d)
+	return d
 
 
 func _take(d: Dictionary) -> void:
