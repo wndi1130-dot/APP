@@ -1929,7 +1929,7 @@ const KIND_LABEL: Dictionary = {
 
 ## 상자가 들어갈 수 있는 가구(장, 선반, 궤, 책상, 계산대, 상자 더미 등).
 const HOLDER_KINDS: Dictionary = {
-	"dresser": true, "nightstand": true, "counter": true, "cupboard": true, "side_table": true, "washstand": true, "towel_shelf": true, "small_shelf": true,
+	"dresser": true, "nightstand": true, "counter": true, "cupboard": true, "side_table": true, "washstand": true, "towel_shelf": true, "small_shelf": true, "medicine_cabinet": true, "waste_bin": true,
 	"wardrobe": true, "blanket_chest": true, "bookcase": true, "shelf": true, "jar_shelf": true,
 	"display_shelf": true, "shop_counter": true, "crate_stack": true, "tin_crate": true, "fridge_open": true,
 	"desk": true, "typewriter_desk": true, "office_desk": true, "file_cabinet": true, "map_cabinet": true,
@@ -1947,7 +1947,7 @@ const HOLDER_KINDS: Dictionary = {
 ## 걸어서 닿는 칸). 들 가구가 없으면 그대로. 돌려주는 값: 옮긴 상자 수.
 static func boxes_into_furniture(data: Dictionary) -> int:
 	var moved := 0
-	var stats := {"keyed": 0, "kitchen_added": 0}
+	var stats := {"keyed": 0, "kitchen_added": 0, "spare_added": 0}
 	var containers: Variant = data.get("containers", {})
 	if not containers is Dictionary or containers.is_empty():
 		return 0
@@ -2037,33 +2037,43 @@ static func boxes_into_furniture(data: Dictionary) -> int:
 			if not key.is_empty() and not box.has("room") and not _name_places(String(box.get("name", ""))):
 				box["room"] = key
 				stats["keyed"] += 1
-		# A kitchen's spare counters, cupboards and fridge get an empty box each: the place's
-		# bundles are dealt over the boxes by room when the stop opens (loot_dress.gd), so more
-		# places to open, the same things in all.
+		# A home room's spare furniture that opens gets an empty box each: the kitchen's counters,
+		# cupboards and fridge, and (card R2) the bathroom's cabinet and washstand, the bedroom's
+		# nightstand, dresser and wardrobe, the living room's bookcase and side table. The place's
+		# bundles are dealt over the boxes by room when the stop opens (loot_dress.gd, the odds and
+		# ends by room share in loot_junk.gd), so more places to open, the same things in all. One
+		# box to a cell, so no two boxes share the spot a finger presses.
+		var spots: Dictionary = {}
+		for id: String in ids:
+			var box: Dictionary = containers[id]
+			if int(box.get("level", 0)) == lv and _cell(box.get("cell")) != null:
+				spots[_cell(box.get("cell"))] = true
 		for ri: int in holders_of:
-			if keys.get(ri, "") != "kitchen":
+			var key: String = keys.get(ri, "")
+			if not SPARE.has(key):
 				continue
 			var list: Array = holders_of[ri]
 			for k in range(list.size()):
 				var kind: String = list[k][1]
-				if int(in_room.get(ri, 0)) >= KITCHEN_MOST:
+				if int(in_room.get(ri, 0)) >= int(SPARE_MOST[key]):
 					break
-				if used.has(Vector3i(lv, ri, k)) or not KITCHEN_SPARE.has(kind):
+				if used.has(Vector3i(lv, ri, k)) or not SPARE[key].has(kind):
 					continue
 				if not seen_of.has(ri):
 					var room: Dictionary = map["rooms"][ri]
 					seen_of[ri] = _from_first(g, of, ri, _keys(g, of, ri, room["cells"], stairs_by.get(lv, {}), []))
 				var r: Rect2i = list[k][0]
 				var spot := _front_cell(r, seen_of[ri], r.position)
-				var id := "kitchen_%d_%d_%d" % [lv, ri, k]
-				if spot.x < 0 or containers.has(id):
+				var id := "%s_%d_%d_%d" % ["kitchen" if key == "kitchen" else "spare", lv, ri, k]
+				if spot.x < 0 or spots.has(spot) or containers.has(id):
 					continue
 				containers[id] = {"id": id, "name": KIND_LABEL.get(kind, kind), "cell": spot, "level": lv,
 					"building": int(map["rooms"][ri]["building"]), "search": KITCHEN_SEARCH, "items": [], "locked": false,
-					"searched": false, "furniture": kind, "room": "kitchen"}
+					"searched": false, "furniture": kind, "room": key}
 				used[Vector3i(lv, ri, k)] = true
+				spots[spot] = true
 				in_room[ri] = int(in_room.get(ri, 0)) + 1
-				stats["kitchen_added"] += 1
+				stats["kitchen_added" if key == "kitchen" else "spare_added"] += 1
 	data["box_rooms"] = stats
 	return moved
 
@@ -2076,6 +2086,15 @@ static func _name_places(name: String) -> bool:
 ## kitchen has KITCHEN_MOST places to open (the reference kitchen has some 8 to 12).
 const KITCHEN_SPARE: Dictionary = {"counter": true, "cupboard": true, "fridge_open": true}
 const KITCHEN_MOST: int = 10
+## The same for a home's other rooms (card R2, decision 469: some 12 to 20 places to open a home),
+## by room key (ROOM_KEYS: a living room deals as a bedroom, a dining room as the kitchen it was
+## cut from, so its living-room pieces open too). The most a room gets is what one taps apart.
+const SPARE: Dictionary = {
+	"kitchen": {"counter": true, "cupboard": true, "fridge_open": true, "side_table": true, "bookcase": true},
+	"bathroom": {"medicine_cabinet": true, "washstand": true, "towel_shelf": true, "waste_bin": true},
+	"bedroom": {"nightstand": true, "dresser": true, "wardrobe": true, "blanket_chest": true, "bookcase": true, "side_table": true},
+}
+const SPARE_MOST: Dictionary = {"kitchen": KITCHEN_MOST, "bathroom": 4, "bedroom": 4}
 ## Seconds to search one of those (card L, decision 442): half a map box's 4, so opening all
 ## of a stop's adds some 36 s, not 73 (after the box-size factor: cupboard 1.5 s, counter 2 s).
 const KITCHEN_SEARCH: float = 2.0
