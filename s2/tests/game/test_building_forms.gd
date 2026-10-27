@@ -80,5 +80,7 @@ func test_the_head_word_names_the_use() -> void:
 	assert_eq(use.call("가게 겸 집"), "shop")
 	assert_eq(use.call("빵집"), "shop")
 	assert_eq(use.call("우물집"), "shelter")
+	assert_eq(use.call("펌프 집"), "works", "spaced like 펌프집")
+	assert_eq(use.call("양치기 집"), "home")
 	assert_eq(use.call("갱구 관리동"), "headframe")
 	assert_eq(Uses.use_of({"name": "농가", "role": "store"}), "home", "role store is read by name")

@@ -100,6 +100,12 @@ static func use_of(row: Dictionary) -> String:
 		return "headframe"  # 갱구 둘레 건물(「갱구 관리동」)은 벽돌 기계동 꼴(결정 478)
 	var text := name.get_slice(" 겸 ", 0)  # 「가게 겸 집」은 가게: 앞 낱말이 겉에 보인다
 	var head := head_word(text)
+	if head == "집":  # 띄어 쓴 「펌프 집」도 붙여 쓴 「펌프집」처럼: 일터·정자 줄에 걸리면 그것
+		var words := text.split(" ", false)
+		var at := words.rfind("집")
+		var joined := _use_of_words(words[at - 1] + "집") if at > 0 else "?"
+		if joined in ["works", "shelter"]:
+			return joined
 	var use := _use_of_words(head)
 	if use == "?":
 		use = _use_of_words(text)
