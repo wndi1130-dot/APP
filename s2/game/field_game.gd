@@ -430,7 +430,7 @@ func _ready() -> void:
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
-	_take_map(SidePath.add(stop_map, rng.seed))
+	_take_map(with_side_path(stop_map, rng.seed))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
 	if opts.get("departure") is Dictionary:
@@ -1382,6 +1382,23 @@ func allies_alive() -> Array:
 
 
 # ---------------------------------------------------------------- levels
+
+## What the stop loader makes ahead from a map off the main thread (stop_loader.gd
+## _build_off_thread): the building plan, the ground's details, the rooms' finish.
+const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_room_finish"]
+
+
+## The side path on a map built here or handed over (side_path.gd). It can grow the
+## map, shift it and put its store on it, so what the loader made ahead from the map
+## as it was no longer fits: dropped, made again from the map as it is now.
+static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
+	var had := map.has("side_path")
+	var out := SidePath.add(map, run_seed)
+	if out.has("side_path") and not had:
+		for key in AHEAD_KEYS:
+			out.erase(key)
+	return out
+
 
 ## The map the field stands on. Everything that reads the ground goes through
 ## these four, so a stop of several joined maps can hand over a new one here.
