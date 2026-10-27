@@ -1,7 +1,8 @@
 extends RefCounted
 ## 방 마감(결정 469 C3·477): 살림방 갈래마다 바닥 재질과 벽 칠을 집마다 굴려, 땅·건물 셰이더가
 ## 칸으로 읽는 그림 하나에 담는다(시야 그림 vis와 같은 길, filter_nearest).
-## 방 갈래는 지도가 그 방에 놓은 가구로 읽는다(room_furnish가 방 이름·가구로 고른 묶음의 결과).
+## 방 갈래는 지도가 그 방에 놓은 가구로 읽는다: 가구에 적힌 그 방 갈래(rule)가 먼저, 없으면
+## 가구 종류(room_furnish가 방 이름·가구로 고른 묶음의 결과).
 ## 손으로 그린 지도(첫 정차)는 가구가 이름 붙은 물건 상자로만 있어 그 이름이 말하는 방으로 읽는다.
 ## 욕실·부엌·침실·거실 밖의 방은 0이라 지금 그림 그대로다.
 ## 층마다 채널 하나: 0층 R, 1층 G, 지하 B, 2층 A. 칸 값 = 갈래 + 8 × 판(0~2).
@@ -32,6 +33,9 @@ const SIGNS: Array = [
 ## (loot_dress 방 낱말 「부엌」「침실 서랍」「화장실 장」) -> [갈래, 순위]. 순위는 위의 센 신호와 같다.
 ## 그런 지도에서 object_rules가 지어낸 가구(legacy_model)는 찬장을 책장으로 읽어 쓰지 않는다.
 const NAME_SIGNS: Dictionary = {"bathroom": [BATH, 0], "kitchen": [KITCHEN, 1], "bedroom": [BED, 2]}
+## room_furnish가 가구마다 적은 그 방의 갈래(rule). 바깥 띠가 지도를 넓혀도 남는다(map-layout).
+## 가게·창고·일터 같은 다른 갈래의 가구는 종류로 다시 가르지 않는다(가게 조리대는 부엌이 아니다).
+const RULE_SIGNS: Dictionary = {"bath": [BATH, 0], "kitchen": [KITCHEN, 1], "bed": [BED, 2], "living": [LIVING, 3]}
 ## 층 -> 채널(R G B A).
 const CHANNEL: Dictionary = {0: 0, 1: 1, -1: 2, 2: 3}
 
@@ -63,10 +67,13 @@ static func build(data: Dictionary) -> Image:
 	var signs := _signs()
 	var marks: Dictionary = {}  # 층 -> [[칸, [갈래, 순위]], ...]
 	for p: Variant in data.get("props", []):
-		if not p is Dictionary or p.has("legacy_model") or not signs.has(String(p.get("kind", ""))) or not p.get("rect") is Rect2i:
+		if not p is Dictionary or p.has("legacy_model") or not p.get("rect") is Rect2i:
+			continue
+		var sign: Variant = RULE_SIGNS.get(String(p["rule"])) if p.has("rule") else signs.get(String(p.get("kind", "")))
+		if sign == null:
 			continue
 		var r: Rect2i = p["rect"]
-		_mark(marks, int(p.get("level", 0)), r.position + r.size / 2, signs[String(p["kind"])])
+		_mark(marks, int(p.get("level", 0)), r.position + r.size / 2, sign)
 	for b: Variant in data.get("containers", {}).values():
 		if not b is Dictionary or (b.has("furniture") and not b.get("object_legacy", false)) or not b.get("cell") is Vector2i:
 			continue

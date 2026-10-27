@@ -48,6 +48,20 @@ func test_rooms_take_their_kind_from_their_furniture() -> void:
 	assert_eq(_code(img, Vector2i(3, 3), 1), 0, "a room with no telling furniture keeps the old look")
 
 
+## room_furnish가 적은 방 갈래(rule)가 가구 종류보다 먼저: 가게 조리대는 부엌이 아니다.
+func test_the_rooms_rule_comes_before_the_furniture_kind() -> void:
+	var data := _house()
+	var shop := _prop("counter", Rect2i(2, 2, 2, 1), 0)
+	shop["rule"] = "shop"
+	var lounge := _prop("bed", Rect2i(6, 2, 2, 1), 0)
+	lounge["rule"] = "living"
+	data["props"] = [shop, lounge, _prop("sink", Rect2i(2, 2, 1, 1), 1)]
+	var img := RoomFinish.build(data)
+	assert_eq(_code(img, Vector2i(3, 3), 0), 0, "a shop's counter makes no kitchen")
+	assert_eq(_code(img, Vector2i(8, 4), 0) % 8, RoomFinish.LIVING, "the rule wins over a bed")
+	assert_eq(_code(img, Vector2i(3, 3), 1) % 8, RoomFinish.KITCHEN, "no rule: the kind still tells")
+
+
 ## 손으로 그린 지도(첫 정차): 가구 대신 이름 붙은 상자. object_rules가 찬장에 붙인 책장은 믿지 않는다.
 func test_hand_laid_boxes_tell_their_room_by_name() -> void:
 	var data := _house()

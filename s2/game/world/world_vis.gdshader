@@ -168,28 +168,36 @@ vec3 room_tiles(vec3 a, vec3 b, vec3 grout, vec2 p, vec2 px, float size) {
 	return mix(c, grout, max(band(d.x, 0.006, px.x + 1e-4), band(d.y, 0.006, px.y + 1e-4)));
 }
 
-vec3 room_floor(int code, vec2 p, vec2 px) {
+// `tone` is the finish's mean colour, to scale the whole of it (pattern and all).
+vec3 room_floor(int code, vec2 p, vec2 px, out vec3 tone) {
 	int kind = code & 7;
 	int roll = code >> 3;
 	if (kind == 3) {
 		if (roll == 0) {
-			return room_tiles(vec3(0.76, 0.75, 0.71), vec3(0.76, 0.75, 0.71), vec3(0.56, 0.56, 0.53), p, px, 0.15);
+			tone = vec3(0.76, 0.75, 0.71);
+			return room_tiles(tone, tone, vec3(0.56, 0.56, 0.53), p, px, 0.15);
 		} else if (roll == 1) {
-			return room_tiles(vec3(0.62, 0.68, 0.71), vec3(0.62, 0.68, 0.71), vec3(0.50, 0.52, 0.53), p, px, 0.15);
+			tone = vec3(0.62, 0.68, 0.71);
+			return room_tiles(tone, tone, vec3(0.50, 0.52, 0.53), p, px, 0.15);
 		}
-		return room_tiles(vec3(0.74, 0.72, 0.64), vec3(0.55, 0.62, 0.56), vec3(0.52, 0.52, 0.49), p, px, 0.2);
+		vec3 cream = vec3(0.74, 0.72, 0.64);
+		vec3 sage = vec3(0.55, 0.62, 0.56);
+		tone = 0.5 * (cream + sage);
+		return room_tiles(cream, sage, vec3(0.52, 0.52, 0.49), p, px, 0.2);
 	}
 	if (kind == 2 && roll == 0) {
 		// Linoleum laid in a checker: its seams barely show.
-		return room_tiles(vec3(0.72, 0.68, 0.56), vec3(0.48, 0.55, 0.48), vec3(0.58, 0.58, 0.52), p, px, 0.33);
+		vec3 cream = vec3(0.72, 0.68, 0.56);
+		vec3 sage = vec3(0.48, 0.55, 0.48);
+		tone = 0.5 * (cream + sage);
+		return room_tiles(cream, sage, vec3(0.58, 0.58, 0.52), p, px, 0.33);
 	}
 	if (kind == 2 && roll == 1) {
-		return room_tiles(vec3(0.64, 0.43, 0.32), vec3(0.64, 0.43, 0.32), vec3(0.52, 0.47, 0.42), p, px, 0.3);
+		tone = vec3(0.64, 0.43, 0.32);
+		return room_tiles(tone, tone, vec3(0.52, 0.47, 0.42), p, px, 0.3);
 	}
-	if (kind == 2 || roll == 0) {
-		return room_boards(HONEY_BOARD, p, px);
-	}
-	return room_boards(roll == 1 ? WALNUT_BOARD : GREY_BOARD, p, px);
+	tone = (kind == 2 || roll == 0) ? HONEY_BOARD : (roll == 1 ? WALNUT_BOARD : GREY_BOARD);
+	return room_boards(tone, p, px);
 }
 
 void vertex() {
@@ -236,13 +244,27 @@ void fragment() {
 	}
 	// A furnished room's floor under its roof (room_finish; 0 elsewhere keeps the kind's colour).
 	vec2 room_px = fwidth(world_pos.xz);
+	float unseen_k = 1.0;
 	if (sky < 0.5 && up > 0.9) {
 		int rc = room_code(world_pos.xz, world_pos.y + 0.05, map_size);
 		if (rc > 0) {
-			base = room_floor(rc, world_pos.xz, room_px);
+			vec3 tone;
+			vec3 finish = room_floor(rc, world_pos.xz, room_px, tone);
+			// Out of sight the finish keeps its hue and half its pattern, a shade under the plain
+			// floor (the kind's colour, WOOD V 0.40) as the mask leaves it (`dimmed` below, in
+			// linear: 0.6 grey + 0.4 brightest channel), so the boxes' floor mats (map_view
+			// _bake_container) stand out of an unseen room as they did, and it sinks no deeper.
+			float away = (1.0 - cell.r) * clamp(mask_on, 0.0, 1.0);
+			vec3 luma = vec3(0.3, 0.59, 0.11);
+			vec3 was_l = floor_to_linear(base);
+			vec3 tone_l = floor_to_linear(tone);
+			float was = 0.6 * dot(was_l, luma) + 0.4 * max(was_l.r, max(was_l.g, was_l.b));
+			float as_seen = 0.6 * dot(tone_l, luma) + 0.4 * max(tone_l.r, max(tone_l.g, tone_l.b));
+			unseen_k = mix(1.0, 0.93 * was / max(as_seen, 0.001), away);
+			base = mix(finish, tone, 0.5 * away);
 		}
 	}
-	base = floor_to_linear(base);
+	base = floor_to_linear(base) * unseen_k;
 	float soil = mix(grain.a, grain.b, clamp(wet * 1.4, 0.0, 1.0));
 	// Laid surfaces (road, platform, pavement) take less of the soil's blotches.
 	// Less on bare ground than under snow, so the blotches do not break the forms nor
