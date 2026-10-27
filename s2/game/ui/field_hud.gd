@@ -460,8 +460,6 @@ var dest_marker := Vector3.INF
 
 func setup(field_game) -> void:
 	game = field_game
-	# The brightness the player left in the settings (결정 471 B5), on a world already built.
-	ScreenLift.apply(game, ScreenLift.load_lift())
 	layer = 10
 	theme = UiTheme.make(22)
 	# The 시안's type on every word of the field: IBM Plex Sans KR (ui_fonts.gd).
