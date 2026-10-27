@@ -620,7 +620,8 @@ static func step_train(g0: Dictionary, t: Dictionary) -> Dictionary:
 
 ## The papers as S1's slice takes them (slice_vectors.ts pickFirst): from the front, one
 ## by one, each on its first way that can be taken (train_advance.gd choose_card leaves
-## a card it refuses where it was), a card with none put aside.
+## a card it refuses where it was), a card with none put aside. A kind the port does not
+## take yet is said and put aside too, so the board never stops on a paper.
 static func pick_first(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var g: Dictionary = g0
 	for n in 50:
@@ -631,7 +632,8 @@ static func pick_first(g0: Dictionary, t: Dictionary) -> Dictionary:
 		for i in 12:
 			var out: Dictionary = TrainAdvance.choose_card(g, t, uid, i)
 			if out.has("_turn_port_error"):
-				return out
+				push_warning("slice: paper put aside, " + String(out["_turn_port_error"]))
+				break
 			if not _holds(out, uid):
 				g = out
 				taken = true
