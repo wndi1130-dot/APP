@@ -72,6 +72,13 @@ static func plan(data: Dictionary) -> int:
 	return picked.size()
 
 
+## Plan again from scratch, the planner's own rows dropped first: for a stop
+## marked no_fire by its place on the route after its map was built.
+static func replan(data: Dictionary) -> int:
+	data["lights"] = (data["lights"] as Array).filter(func(l: Dictionary) -> bool: return not String(l.get("id", "")).begins_with("night_"))
+	return plan(data)
+
+
 ## Open ground out of doors, clear of the train.
 static func _open(data: Dictionary, grid: FieldGrid, c: Vector2i) -> bool:
 	if not grid.inside(c) or grid.indoor(c) or grid.solid_at(c) != FieldGrid.Solid.NONE:

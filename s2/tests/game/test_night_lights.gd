@@ -92,6 +92,13 @@ func test_a_map_with_its_own_rows_keeps_them_and_no_fire_means_no_fire() -> void
 	NightLights.plan(calm)
 	for l: Dictionary in _night_rows(calm):
 		assert_false(NightLights.FIRES.has(String(l["kind"])), "%s is a fire" % l["kind"])
+	# Marked after the map was built (by its place on the route): planned again.
+	var late := _town()
+	NightLights.plan(late)
+	late["no_fire"] = true
+	assert_gt(NightLights.replan(late), 0)
+	for l: Dictionary in _night_rows(late):
+		assert_false(NightLights.FIRES.has(String(l["kind"])), "%s is a fire" % l["kind"])
 
 
 func test_a_light_out_of_doors_keeps_off_the_floor_past_the_wall() -> void:
