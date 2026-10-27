@@ -7,7 +7,7 @@ const F = FieldGrid.Floor
 
 
 func after_each() -> void:
-	EdgeBand.view_band = EdgeBand.BAND
+	EdgeBand.view_band = EdgeBand.VIEW_BAND
 
 
 ## 60 x 40 snow; a rail line along row 20 out of both side edges, a road down
@@ -68,6 +68,9 @@ func test_now_and_then_a_glade_with_a_trace_of_people_behind_the_first_rows() ->
 
 
 func test_the_camera_never_looks_past_the_band() -> void:
+	# The clamp's own sums at a 12 m reach (the default reach, 24 m, is checked in
+	# test_view_band_is_live_without_changing_woods_or_default_fog).
+	EdgeBand.view_band = EdgeBand.BAND
 	var half := EdgeBand.view_half(24.0, 2.0, 52.0)
 	assert_almost_eq(half.x, 24.0, 0.0001)
 	assert_almost_eq(half.y, 12.0 / sin(deg_to_rad(52.0)), 0.0001)
@@ -306,7 +309,7 @@ func test_far_plan_is_repeatable_without_moving_the_original_band() -> void:
 				assert_eq(planned[key], original[key], "unchanged original placement: " + key)
 			EdgeBand.view_band = 36.0
 			assert_eq(EdgeBand.plan(g, seed), planned, "camera trials do not reseed the scenery")
-			EdgeBand.view_band = EdgeBand.BAND
+			EdgeBand.view_band = EdgeBand.VIEW_BAND
 	var a := EdgeBand.plan(_grid(), 11)
 	var b := EdgeBand.plan(_grid(), 12)
 	assert_ne(a["far"], b["far"], "other stops have other distant scenery")
@@ -347,11 +350,11 @@ func _original_band_plan(g: FieldGrid, seed: int) -> Dictionary:
 
 
 func test_view_band_is_live_without_changing_woods_or_default_fog() -> void:
-	assert_eq(EdgeBand.view_band, 12.0)
+	assert_eq(EdgeBand.VIEW_BAND, 24.0, "the camera looks 24 m past the edge (user 10-27)")
+	assert_eq(EdgeBand.view_band, EdgeBand.VIEW_BAND)
 	assert_eq(EdgeBand.BAND, 12.0)
 	assert_eq(MapEdge.MARGIN, EdgeBand.FAR_REACH + 12.0)
-	assert_eq(MapEdge.fog_reach(), 12.0)
-	EdgeBand.view_band = 24.0
+	assert_eq(MapEdge.fog_reach(), 36.0, "the fog is whole 12 m past the camera's reach")
 	var half := EdgeBand.view_half(24.0, 2.0, 35.0, 45.0)
 	var corner := EdgeBand.clamp_focus(Vector3(-200, 0, -200), half, 170, 120)
 	assert_almost_eq(corner.x - half.x, -24.0, 0.0001)
@@ -365,7 +368,7 @@ func test_view_band_is_live_without_changing_woods_or_default_fog() -> void:
 	EdgeBand.view_band = 36.0
 	assert_eq(MapEdge.fog_reach(), 48.0)
 	EdgeBand.view_band = 12.0
-	assert_eq(MapEdge.fog_reach(), 12.0)
+	assert_eq(MapEdge.fog_reach(), 24.0)
 
 
 func test_missing_far_models_are_skipped_without_a_placeholder() -> void:

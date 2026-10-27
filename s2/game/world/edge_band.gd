@@ -13,7 +13,10 @@ const F = FieldGrid.Floor
 
 ## Metres of woods drawn outside each edge, independent of the camera's reach.
 const BAND: float = 12.0
-static var view_band: float = BAND
+## How far past the edge the camera may look: past the woods, onto the far ground
+## (user 10-27, picked from 12 / 24 / 36 m pictures). Trials set view_band.
+const VIEW_BAND: float = 24.0
+static var view_band: float = VIEW_BAND
 ## Sparse, unreachable ground beyond the woods, batched in larger pieces.
 const FAR_NEAR: float = 16.0
 const FAR_REACH: float = 60.0
@@ -81,14 +84,14 @@ static func view_half(cam_size: float, aspect: float, pitch_deg: float, yaw_deg:
 
 
 ## How far from the middle of the screen the player may stand, as a share of half
-## the screen each way, before the view follows past the band (keep_on_screen).
+## the screen each way, before the view follows past view_band (keep_on_screen).
 const KEEP: float = 0.6
 
 
-## A turned view (결정 476) held inside the band stops so far in at a corner of the
+## A turned view (결정 476) held inside view_band stops so far in at a corner of the
 ## map that the player would slide to the screen's corner, under the thumbs, or off
 ## it: the view moves toward `at` just enough to keep it inside the middle KEEP of
-## the screen. Only there does the screen go past the band, onto the fog and the
+## the screen. Only there does the screen go past view_band, onto the fog and the
 ## ground past the edge (fx/map_edge.gd).
 static func keep_on_screen(focus: Vector3, at: Vector3, cam_size: float, aspect: float, pitch_deg: float, yaw_deg: float) -> Vector3:
 	var half := Vector2(cam_size * aspect * 0.5, cam_size * 0.5 / sin(deg_to_rad(pitch_deg))) * KEEP

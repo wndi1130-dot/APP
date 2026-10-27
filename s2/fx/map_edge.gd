@@ -27,9 +27,11 @@ const BLEND := 10.0
 ## The fog sheets: height (m) and how much each covers. Three, low to high, so
 ## a roof or a fence at the edge goes into the fog too.
 const SHEETS: Array = [[0.35, 0.55], [1.5, 0.5], [3.2, 0.45]]
-## Keep the original reach at the default view; expanded trials reveal more ground.
+## The fog starts this far inside the edge and is solid FOG_PAST metres beyond
+## the camera's reach past it (EdgeBand.view_band): the far ground shows through
+## thin fog on screen and nothing past it reads.
 const FOG_INSET := 2.5
-const FOG_REACH := 12.0
+const FOG_PAST := 12.0
 
 var ground: MeshInstance3D
 var sheets: Array[MeshInstance3D] = []
@@ -43,7 +45,7 @@ var _room := Rect2i(0, 0, -1, -1)
 
 
 static func fog_reach() -> float:
-	return FOG_REACH if is_equal_approx(EdgeBand.view_band, EdgeBand.BAND) else EdgeBand.view_band + 12.0
+	return EdgeBand.view_band + FOG_PAST
 
 
 func setup(grid: FieldGrid, map_material: ShaderMaterial) -> void:
