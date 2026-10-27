@@ -2,7 +2,9 @@ extends RefCounted
 ## Warm light on the ground (weather_fx 12장): which lights are on and which
 ## cells they reach. Pure rules, no scene. The view writes the result into the
 ## spare channel of the sight texture, so the number of lights costs nothing.
-## Picture only: no game rule reads these cells.
+## Besides the picture only the eye reads them: a lit room is not dark
+## (decision 439 card 1), and at night a lit cell in plain view is seen past
+## the short reach (decision 479). The dead, mates and raiders never do.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")

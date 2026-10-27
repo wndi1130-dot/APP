@@ -2688,8 +2688,18 @@ func _refresh_vision() -> void:
 		return
 	view.set_mask_enabled(true)
 	var forward := Vector2.ZERO if tower else Vector2(sin(player.facing), cos(player.facing))
-	var result := lg.visible_cells(origin, radius, forward, VIEW_CONE_COS, NEAR_SIGHT)
+	# At night the eye still sees, past its short reach and out to the day's,
+	# what a light shows it with no wall between (decision 479): the dead by a
+	# fire, the ground in the torch's beam.
+	var lit_far := lv >= 0 and clock.is_dark() and radius < base
+	var result := lg.visible_cells(origin, base if lit_far else radius, forward, VIEW_CONE_COS, NEAR_SIGHT)
 	lit_now = lamp_cells(result)
+	if lit_far:
+		var near2 := radius * radius
+		for i: int in result.keys():
+			var c := Vector2i(i % lg.width, i / lg.width)
+			if Vector2(c - origin).length_squared() > near2 and int(lit_now.get(i, 0)) < BuildingRules.LIT_MIN:
+				result.erase(i)
 	# Indoors after dark the eye reaches into an unlit room only as far as in a cellar.
 	if lv >= 0 and clock.is_dark():
 		var reach2 := BuildingRules.DARK_SIGHT * BuildingRules.DARK_SIGHT

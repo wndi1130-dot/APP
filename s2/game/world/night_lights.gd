@@ -100,19 +100,20 @@ static func _props(data: Dictionary, grid: FieldGrid, kinds: Array) -> Array:
 	return out
 
 
-## A fire lit in a drum standing out of doors.
+## A fire lit in a drum standing out of doors (an old fuel drum is the usual
+## burn barrel).
 static func _barrels(data: Dictionary, grid: FieldGrid) -> Array:
 	var out: Array = []
-	for r: Rect2i in _props(data, grid, ["barrel"]):
+	for r: Rect2i in _props(data, grid, ["barrel", "fuel_drum"]):
 		out.append({"cell": r.position})
 	return out
 
 
-## A campfire on open ground by a woodpile: the free cell two steps out from it
-## with open ground all round.
+## A campfire on open ground by a woodpile (or a stack of old sleepers): the
+## free cell two steps out from it with open ground all round.
 static func _campfires(data: Dictionary, grid: FieldGrid) -> Array:
 	var out: Array = []
-	for r: Rect2i in _props(data, grid, ["firewood_pile", "firewood_stack"]):
+	for r: Rect2i in _props(data, grid, ["firewood_pile", "firewood_stack", "sleeper_stack"]):
 		var mid := r.position + r.size / 2
 		for d: Vector2i in [Vector2i(0, 1), Vector2i(1, 0), Vector2i(0, -1), Vector2i(-1, 0)]:
 			var c := mid + Vector2i(d.x * (r.size.x / 2 + 2), d.y * (r.size.y / 2 + 2))
@@ -130,11 +131,11 @@ static func _clear_round(data: Dictionary, grid: FieldGrid, c: Vector2i) -> bool
 	return true
 
 
-## A car out of doors with its headlights left on: they throw along its length,
-## from whichever end has open ground in front.
+## A car or a truck out of doors with its headlights left on: they throw along
+## its length, from whichever end has open ground in front.
 static func _cars(data: Dictionary, grid: FieldGrid) -> Array:
 	var out: Array = []
-	for r: Rect2i in _props(data, grid, ["car"]):
+	for r: Rect2i in _props(data, grid, ["car", "ore_truck", "fish_truck", "snowplow_truck", "box_truck"]):
 		var long := Vector2i(1, 0) if r.size.x >= r.size.y else Vector2i(0, 1)
 		var mid := r.position + r.size / 2
 		for ahead: Vector2i in [long, -long]:

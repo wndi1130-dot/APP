@@ -157,3 +157,31 @@ func _near_candle(rows: Array, c: Vector2i) -> bool:
 		if l["kind"] == "candle" and Vector2(c - l["cell"]).length() < float(NightLights.LIGHT["candle"]["reach"]):
 			return true
 	return false
+
+
+func test_at_night_the_eye_sees_what_a_light_shows_past_its_reach() -> void:
+	# Decision 479: past the short night reach, a lit cell with no wall between
+	# is seen (the dead by a fire), an unlit one at the same distance is not.
+	var game = FieldGame.new()
+	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": ["clear"]}
+	add_child_autofree(game)
+	game.set_process(false)
+	game.clock.elapsed = (1000.0 - 630.0) * 60.0 / 15.0
+	var g: FieldGrid = game.grid
+	var origin := FieldGrid.cell_of(game.player.position)
+	var lit := Vector2i(-1, -1)
+	var dark := Vector2i(-1, -1)
+	for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var a := origin + d * 14
+		var b := origin + d * 14 + Vector2i(d.y, d.x) * 3
+		if g.inside(a) and g.inside(b) and not g.indoor(a) and not g.indoor(b) and g.line_clear(origin, a) and g.line_clear(origin, b):
+			lit = a
+			dark = b
+			game.player.facing = atan2(float(d.x), float(d.y))
+			break
+	assert_ne(lit, Vector2i(-1, -1), "an open line 14 cells out from the chief")
+	game.data["lights"].append({"id": "test_fire", "kind": "barrel_fire", "cell": lit, "side": Vector2i.ZERO, "strength": 1.0, "falls": 0.9, "reach": 2.0, "outdoor": true, "when": "always", "from_min": 0})
+	game.lamp_key = "-"
+	game._refresh_vision()
+	assert_true(game.seen_now.has(game.seen_key(FieldGrid.center(lit))), "the fire 14 cells out is seen")
+	assert_false(game.seen_now.has(game.seen_key(FieldGrid.center(dark))), "the dark ground beside it is not")
