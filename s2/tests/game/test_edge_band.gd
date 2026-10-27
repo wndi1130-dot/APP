@@ -264,6 +264,32 @@ func test_far_fields_stay_inside_the_ring_and_tracks_follow_only_roads() -> void
 		assert_ne(String(item["model"]), EdgeBand.FAR_CAR, "no abandoned road car at a stop without road exits")
 
 
+func test_the_near_ring_gets_low_cover_in_loose_clumps() -> void:
+	assert_eq(EdgeBand.FAR_NEAR, EdgeBand.BAND, "the far ground starts where the woods end")
+	var g := FieldGrid.new(170, 120)
+	var ring_banks := 0
+	for seed in range(1, 11):
+		var planned := EdgeBand.plan(g, seed)
+		var by_side: Array = [[], [], [], []]
+		for item: Dictionary in planned["far"]:
+			if not EdgeBand.COVER_MODELS.has(String(item["model"])):
+				continue
+			var at := item["at"] as Vector3
+			var depth := EdgeBand.outside(g, at.x, at.z)
+			if depth < EdgeBand.VIEW_BAND:
+				(by_side[int(item["side"])] as Array).append(depth)
+		for side in 4:
+			var depths := by_side[side] as Array
+			assert_gt(depths.size(), 4, "every side's near ring has cover (seed %d side %d)" % [seed, side])
+			if depths.size() > 1:
+				assert_gt(float(depths.max()) - float(depths.min()), 4.0, "spread over the ring's depth, not a row")
+		for plot: Dictionary in planned["fields"]:
+			var r := plot["rect"] as Rect2
+			if String(plot["kind"]) == "bank" and EdgeBand.outside(g, r.get_center().x, r.get_center().y) < EdgeBand.VIEW_BAND:
+				ring_banks += 1
+	assert_gt(ring_banks, 0, "now and then a short snow bank in the ring")
+
+
 func test_horde_sites_are_metadata_outside_the_band_and_away_from_rails() -> void:
 	var g := _grid()
 	for seed in range(1, 21):

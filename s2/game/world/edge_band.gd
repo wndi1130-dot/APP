@@ -17,8 +17,9 @@ const BAND: float = 12.0
 ## (user 10-27, picked from 12 / 24 / 36 m pictures). Trials set view_band.
 const VIEW_BAND: float = 24.0
 static var view_band: float = VIEW_BAND
-## Sparse, unreachable ground beyond the woods, batched in larger pieces.
-const FAR_NEAR: float = 16.0
+## Sparse, unreachable ground beyond the woods, batched in larger pieces. It starts
+## where the woods end, so the ring the camera shows past them is not left open.
+const FAR_NEAR: float = BAND
 const FAR_REACH: float = 60.0
 const FAR_CHUNK: float = 32.0
 const FAR_HOUSE := "house"
@@ -70,6 +71,20 @@ const STUMPS_MODEL := "res://models/props_field/stump_cluster.glb"
 const LOG_MODEL := "res://models/props_field/fallen_log.glb"
 const FIREWOOD_MODEL := "res://models/props_field/firewood_pile.glb"
 const COLD_FIRE_MODEL := "res://models/props_field/cold_campfire.glb"
+## The near ring past the woods, BAND to the camera's reach, gets low cover in loose
+## clumps so it does not read as bare ground (coordinator 10-27): stumps, dry bushes
+## and grass, boulders, now and then a short snow bank. Clumps at uneven gaps and
+## depths, some left out, so nothing lines up into a fence or a row. The reach is the
+## constant, not view_band, so camera trials never move the scenery.
+const FAR_GRASS := "res://models/props_field/dry_grass.glb"
+const COVER_MODELS: Array[String] = [STUMPS_MODEL, FAR_BUSH, FAR_GRASS, FAR_ROCK]
+## More of it near the woods: past about 17 m the edge fog is over half, and cover
+## there barely shows.
+const COVER_GAP := Vector2(3.5, 8.0)
+const COVER_SKIP: float = 0.12
+const COVER_BANK: float = 0.2
+const COVER_PIECES := Vector2i(3, 6)
+const COVER_SPREAD: float = 3.0
 
 
 ## Half the ground the field camera shows along the map's x and z: across from the
@@ -277,7 +292,49 @@ static func _far_plan(g: FieldGrid, seed: int, runs: Array) -> Dictionary:
 			if _far_empty(g, at, 3.3, corridors):
 				_far_prop(scenery, at, side, FAR_CAR, rng)
 				break
-	return {"far": scenery, "fields": _far_fields(g, seed, corridors), "tracks": tracks, "sounds": _far_sounds(g, seed, rails)}
+	var fields := _far_fields(g, seed, corridors)
+	var cover := _ring_cover(g, seed, corridors)
+	scenery.append_array(cover["props"])
+	for bank: Dictionary in cover["banks"]:
+		if _far_plot_clear(bank["rect"] as Rect2, corridors, fields):
+			fields.append(bank)
+	return {"far": scenery, "fields": fields, "tracks": tracks, "sounds": _far_sounds(g, seed, rails)}
+
+
+## Low cover in the near ring (COVER_*), from its own draw so the far scenery stands
+## where it did: {props: [scenery], banks: [bank plots]}. The west and east sides run on
+## past the map's corners so the corner squares are covered once.
+static func _ring_cover(g: FieldGrid, seed: int, corridors: Array[Rect2]) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(str(seed) + ":cover")
+	var props: Array[Dictionary] = []
+	var banks: Array[Dictionary] = []
+	for side in 4:
+		var length := float(g.height if side < 2 else g.width)
+		var past := VIEW_BAND if side < 2 else 0.0
+		var along := -past + rng.randf_range(2.0, 8.0)
+		while along < length + past:
+			var here := along
+			along += rng.randf_range(COVER_GAP.x, COVER_GAP.y)
+			if rng.randf() < COVER_SKIP:
+				continue
+			var depth := minf(rng.randf_range(BAND + 1.0, VIEW_BAND - 1.0), rng.randf_range(BAND + 1.0, VIEW_BAND - 1.0))
+			var center := _far_at(g, side, here, depth)
+			if rng.randf() < COVER_BANK:
+				var size := Vector2(rng.randf_range(3.0, 6.0), rng.randf_range(0.5, 0.9))
+				if side < 2:
+					size = Vector2(size.y, size.x)
+				if _far_empty(g, center, maxf(size.x, size.y) * 0.5, corridors):
+					banks.append({"rect": Rect2(Vector2(center.x, center.z) - size * 0.5, size), "side": side, "kind": "bank"})
+				continue
+			var main: String = COVER_MODELS[rng.randi_range(0, COVER_MODELS.size() - 1)]
+			for _piece in rng.randi_range(COVER_PIECES.x, COVER_PIECES.y):
+				var model: String = main if rng.randf() < 0.7 else COVER_MODELS[rng.randi_range(0, COVER_MODELS.size() - 1)]
+				var angle := rng.randf_range(0.0, TAU)
+				var at := center + Vector3(cos(angle), 0, sin(angle)) * rng.randf_range(0.5, COVER_SPREAD)
+				if _far_empty(g, at, 1.0, corridors):
+					_far_prop(props, at, side, model, rng)
+	return {"props": props, "banks": banks}
 
 
 static func _far_at(g: FieldGrid, side: int, along: float, depth: float) -> Vector3:
