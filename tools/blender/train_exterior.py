@@ -22,7 +22,7 @@ import bmesh
 import bpy
 from mathutils import Vector
 
-SCRIPT_VERSION = 1
+SCRIPT_VERSION = 2   # 2: 둥근 지붕 매끈하게, 연결막을 완충기 끝까지(대각뷰, 결정 476)
 ATLAS = 256
 CELL = 32
 # sRGB 0..255. 흰 눈 바탕에서 튀지 않게 어둡고 차갑게(셰이더가 채도를 다시 누른다).
@@ -65,13 +65,14 @@ def uv_of(colour):
 
 
 class Piece:
-    """한 BMesh. 면마다 한 색(그 색 칸의 가운데 UV)."""
+    """한 BMesh. 면마다 한 색(그 색 칸의 가운데 UV). smooth 면은 이웃 smooth 면과 꼭짓점을 합쳐 매끈하게 그린다."""
     def __init__(self, pid):
         self.pid = pid
         self.bm = bmesh.new()
         self.uv = self.bm.loops.layers.uv.new("UVMap")
+        self.smooth_faces = []
 
-    def face(self, pts, colour, outward):
+    def face(self, pts, colour, outward, smooth=False):
         pts = [Vector((p[0], -p[2], p[1])) for p in pts]
         outward = Vector((outward[0], -outward[2], outward[1]))
         normal = Vector((0, 0, 0))
@@ -82,7 +83,9 @@ class Piece:
         if normal.dot(outward) < 0:
             pts.reverse()
         f = self.bm.faces.new([self.bm.verts.new(p) for p in pts])
-        f.smooth = False
+        f.smooth = smooth
+        if smooth:
+            self.smooth_faces.append(f)
         u = uv_of(colour)
         for loop in f.loops:
             loop[self.uv].uv = u
@@ -123,6 +126,10 @@ class Piece:
             self.face([lo[i], lo[j], hi[j], hi[i]], colour, ring[i] + ring[j])
 
     def fin(self):
+        # 둥근 지붕의 띠들이 꼭짓점을 나눠 가져야 대각뷰에서 계단처럼 끊기지 않는다(평면 면과는 합치지 않는다).
+        shared = list({v for f in self.smooth_faces for v in f.verts})
+        if shared:
+            bmesh.ops.remove_doubles(self.bm, verts=shared, dist=1e-5)
         bmesh.ops.triangulate(self.bm, faces=list(self.bm.faces))
         self.bm.normal_update()
         if any(f.calc_area() < 1e-11 for f in self.bm.faces):
@@ -144,7 +151,7 @@ def roof(p, x0, x1, colour, steps, z_half=1.44, eave=EAVE_Y, peak=PEAK_Y, under=
     prof = roof_profile(z_half, eave, peak, steps)
     for (za, ya), (zb, yb) in zip(prof, prof[1:]):
         # 호의 가운데(처마 높이의 z=0)에서 바깥으로
-        p.face([(x0, ya, za), (x1, ya, za), (x1, yb, zb), (x0, yb, zb)], colour, (0, (ya + yb) / 2 - eave + 0.01, (za + zb) / 2))
+        p.face([(x0, ya, za), (x1, ya, za), (x1, yb, zb), (x0, yb, zb)], colour, (0, (ya + yb) / 2 - eave + 0.01, (za + zb) / 2), smooth=True)
     if under:
         p.face([(x0, eave - 0.03, z_half), (x1, eave - 0.03, z_half), (x1, eave - 0.03, -z_half), (x0, eave - 0.03, -z_half)], "roof_dark", (0, -1, 0))
         for zs in (1, -1):
@@ -202,8 +209,9 @@ def end_wall(p, xs, colour, door_colour="inside", detail=True, bellows=True, top
     if not bellows:
         p.face([(x, dy0, -dz), (x, dy0, dz), (x, dy1, dz), (x, dy1, -dz)], door_colour, (xs, 0, 0))
         return
-    # 연결막: 문 둘레를 감싸는 고무 주름 상자(문 쪽은 비어 어두운 통로)
-    x1 = xs * (BODY_X + 0.30)
+    # 연결막: 문 둘레를 감싸는 고무 주름 상자(문 쪽은 비어 어두운 통로). 완충기 끝 2cm 안까지 나와,
+    # 필드가 칸을 거의 붙여 놓으면(train_model_kit FIELD_GAP_M) 이웃 칸 연결막과 맞닿는다.
+    x1 = xs * (HALF_L - 0.02)
     lo, hi = sorted((x, x1))
     w, yb, yt = 0.56, FLOOR_Y + 0.02, 2.48
     p.box((lo, hi), (yb, yt), (-w, w), "bellows", skip=("+x" if xs > 0 else "-x", "-x" if xs > 0 else "+x"))

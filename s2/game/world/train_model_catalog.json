@@ -17,14 +17,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 231420,
+      "bytes": 225020,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.34,
         2.94
       ],
-      "sha256": "190c2785f2f86a7d5d692433d6cd89cc1c8d1116198973d1601f15d7388aef54",
+      "sha256": "0a01990c2d137500888c6c72273454207df96f338dcfc55b946946f2aa974672",
       "no_cutaway": true,
       "source": "tools/blender/train_exterior.py"
     },
@@ -41,14 +41,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 212388,
+      "bytes": 206628,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.02,
         2.94
       ],
-      "sha256": "8b2201261624953e72422bc6dbd4a06724079f264e91bd1528da51f33e72cd3f",
+      "sha256": "d6759bc48c091c3a01ff10358595d33d3f38227c45f41732193fea4581b8bebe",
       "no_cutaway": true,
       "source": "tools/blender/train_exterior.py"
     },
@@ -65,14 +65,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 170364,
+      "bytes": 160956,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.61,
         2.96
       ],
-      "sha256": "cbe52539287a6594e5954fbb0084b0196d080b39af3005b89755554d225f8fd8",
+      "sha256": "a08a8859ca8565ee8c6b6a63389e50e811351e1a7053683fe67c5fc245d25943",
       "source": "tools/blender/train_exterior.py"
     },
     "tender": {
@@ -132,14 +132,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 160908,
+      "bytes": 158984,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.05,
         2.88
       ],
-      "sha256": "7fd3c7167464d91e60d4018bff6693aac01f5e108e78a760bee488e09112cfaa",
+      "sha256": "617ef17fdd74800f56bf13489496e2ed97ddfebf7f292459879f3333f78c8ded",
       "no_cutaway": true,
       "source": "tools/blender/train_exterior.py"
     },
@@ -156,14 +156,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 201444,
+      "bytes": 195684,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.02,
         2.94
       ],
-      "sha256": "8f15db5d79727f12470e66425f62ca3288875799c3921b6ce24144ee361987ae",
+      "sha256": "9edb77c7078289d88ac2fbaf6bfa067cff3ace4daf182ca5da6498b611f77625",
       "no_cutaway": true,
       "source": "tools/blender/train_exterior.py"
     },
@@ -180,14 +180,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 207068,
+      "bytes": 201308,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.02,
         2.94
       ],
-      "sha256": "a562eeda45ab3825995e6ca5cd245d3752cfb5a71d419ef35448bd17aa539264",
+      "sha256": "97c7d3d17fe32ef2d9e3b683ffdd63fc876401bd96b298e98f8cf3bcebee8695",
       "attachment_sites": {
         "roof_clear": {
           "zone": "roof",
