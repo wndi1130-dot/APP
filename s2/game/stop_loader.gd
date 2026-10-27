@@ -14,6 +14,7 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
 const MapView = preload("res://game/world/map_view.gd")
+const RoomFinish = preload("res://game/world/room_finish.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 ## The dead's stand-in bodies at the field's own count (field_game.gd opts
 ## "vertices", 1500): the same every stop, so baked once, off the main thread.
@@ -155,12 +156,14 @@ func _start_task(script: Script) -> void:
 
 
 ## On the worker: the map script's static build, the plan of its buildings
-## (building_view.gd plan reads the map alone) and what the ground draws on each
-## cell (map_view.gd ground_details), nothing in the scene tree.
+## (building_view.gd plan reads the map alone), what the ground draws on each
+## cell (map_view.gd ground_details) and the rooms' finish (room_finish.gd),
+## nothing in the scene tree.
 static func _build_off_thread(box: Dictionary, script: Script, vat_vertices: int) -> void:
 	var d: Dictionary = FieldMaps.build_from(script)
 	d["_building_plan"] = BuildingView.plan(d)
 	d["_ground_details"] = MapView.ground_details(d["grid"])
+	d["_room_finish"] = RoomFinish.build(d)
 	box["data"] = d
 	if vat_vertices > 0:
 		box["vat"] = VatBaker.build(vat_vertices)
