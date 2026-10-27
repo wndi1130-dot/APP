@@ -188,7 +188,8 @@ static func attach_field(parent: Node3D, data: Dictionary) -> Node3D:
 ## 옆 선로 화차(지도 data["wagons"])마다 모델을 붙인다(대각뷰에서 갈색 상자가 가장 큰 덜 만든
 ## 덩이였다, 결정 476). 모델로 바꾸지 못한 화차의 번호는 meta "fallback_wagons"로 돌려주고,
 ## 지도 보기는 그 화차만 상자로 그린다. 화차 칸·막힘·석탄 값은 지도 자료 그대로다.
-static func attach_wagons(parent: Node3D, wagons: Array) -> Node3D:
+## heights: 화차마다 선 높이(선로 위면 레일 윗면, track_view.gd). 없으면 땅(0).
+static func attach_wagons(parent: Node3D, wagons: Array, heights: Array = []) -> Node3D:
 	var kit := TrainModelKit.new()
 	kit.name = "WagonModels"
 	parent.add_child(kit)
@@ -196,7 +197,8 @@ static func attach_wagons(parent: Node3D, wagons: Array) -> Node3D:
 	for index in wagons.size():
 		var w: Dictionary = wagons[index]
 		var rect: Rect2i = w["rect"]
-		var at := Vector3(rect.position.x + rect.size.x * 0.5, 0, rect.position.y + rect.size.y * 0.5)
+		var lift := float(heights[index]) if index < heights.size() else 0.0
+		var at := Vector3(rect.position.x + rect.size.x * 0.5, lift, rect.position.y + rect.size.y * 0.5)
 		if not kit._append_slot(wagon_kind(w), at, Vector3(rect.size.x - WAGON_GAP_M, 3.0, float(rect.size.y)), 1.0, false):
 			fallback.append(index)
 	kit.set_meta("fallback_wagons", fallback)

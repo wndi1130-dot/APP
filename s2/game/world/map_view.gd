@@ -12,6 +12,7 @@ const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
+const TrackView = preload("res://game/world/track_view.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
 const ObjectRules = preload("res://game/sim/object_rules.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
@@ -151,6 +152,8 @@ func setup(map_data: Dictionary) -> void:
 	await _build_ground()
 	# 지도 칸 밖: 숲 띠·눈둑·밖으로 이어지는 길과 선로(edge_band.gd, 결정 448 17번).
 	edge_band = EdgeBand.build(level_roots[0], grid, data, material, FLOOR_COLORS)
+	# 선로 칸의 침목과 레일, 지도 밖으로 이어지는 것까지(track_view.gd, 결정 476).
+	TrackView.build(level_roots[0], grid, material, edge_band.get("rail_runs", []))
 	_build_walls()
 	await BuildPace.rest(pace)
 	await _build_props()
@@ -1108,8 +1111,6 @@ func _build_ground() -> void:
 			var f := grid.floor_at(c)
 			# One colour a kind: the shader gives the grain (no cell checker, 결정 469 C4).
 			var color := FLOOR_COLORS[f]
-			if f == F.RAIL and (x % 2 == 0):
-				color = color.darkened(0.15)
 			color.a = sky_alpha(grid, c)
 			var a := Vector3(x, 0, y)
 			var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
@@ -1172,6 +1173,8 @@ func _build_blocks() -> void:
 	var tt := _begin()
 	var train: Rect2i = data["train"]
 	train_node = _mesh_node()
+	# 선로 위면 바퀴가 레일 윗면에 서게 올린다(굴러가는 장면은 x만 바꾼다).
+	train_node.position.y = TrackView.height_under(grid, train)
 	# 모델을 먼저 붙이고, 모델로 바꾸지 못했다고 돌려받은 칸만 상자로 그린다.
 	var models := TrainModels.attach_field(train_node, data)
 	await BuildPace.rest(pace)
@@ -1206,7 +1209,7 @@ func _build_blocks() -> void:
 	_build_lights()
 	await BuildPace.rest(pace)
 	# Wagons on the sidings: the kit's models, a box only where it has none.
-	var wagon_models := TrainModels.attach_wagons(level_roots[0], data["wagons"])
+	var wagon_models := TrainModels.attach_wagons(level_roots[0], data["wagons"], TrackView.wagon_heights(grid, data["wagons"]))
 	for index: int in wagon_models.get_meta("fallback_wagons", []):
 		var w: Dictionary = data["wagons"][index]
 		var r: Rect2i = w["rect"]
