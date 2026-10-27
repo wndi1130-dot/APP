@@ -20,6 +20,9 @@ func build(parent: Node3D, car: Dictionary, stove_builder: Callable) -> void:
 	root.name = "Interior"
 	parent.add_child(root)
 	for row in Catalog.layout(car)["props"]:
+		# A row kept for some cars only: the three tail cars share a layout and each has one thing of its own.
+		if row.has("cars") and not (row["cars"] as Array).has(String(car.get("id", ""))):
+			continue
 		var at := Catalog.vector(row["at"])
 		if row.get("system", "") == "stove":
 			stove_builder.call(at)

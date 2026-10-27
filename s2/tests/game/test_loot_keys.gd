@@ -99,14 +99,16 @@ func test_a_box_searched_again_holds_no_more() -> void:
 
 ## Card I: a box's room is what its furniture says when map-layout lays that furniture in one kind
 ## of room only; a shelf laid in several says nothing. Before it a key the map gives, after it the name.
+## What a room takes to reach its share (RoomFurnish.FILL) is laid there too.
 func test_the_furniture_says_the_room_when_it_is_of_one_room() -> void:
 	var rooms_of: Dictionary = {}
-	for room: String in RoomFurnish.PALETTE:
-		for item: Dictionary in RoomFurnish.PALETTE[room]:
-			if bool(item.get("holds", false)):
-				if not rooms_of.has(item["kind"]):
-					rooms_of[item["kind"]] = {}
-				rooms_of[item["kind"]][room] = true
+	for table: Dictionary in [RoomFurnish.PALETTE, RoomFurnish.FILL]:
+		for room: String in table:
+			for item: Dictionary in table[room]:
+				if bool(item.get("holds", false)):
+					if not rooms_of.has(item["kind"]):
+						rooms_of[item["kind"]] = {}
+					rooms_of[item["kind"]][room] = true
 	for kind: String in rooms_of:
 		var rooms: Array = (rooms_of[kind] as Dictionary).keys()
 		if rooms.size() == 1:

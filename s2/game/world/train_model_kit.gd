@@ -20,6 +20,14 @@ const ASSET_KEYS := ["status", "category", "path", "dimensions_m", "lod0_tris", 
 ## 껍데기가 한 겹이라 앞벽을 자르면 뒷벽 안쪽이 비어 보이는 몸에 쓴다.
 const NO_CUTAWAY_KEY := "no_cutaway"
 const KIND_KEYS := ["assets", "people", "parts"]
+## 필드에서 이웃 칸 모델 사이에 남기는 틈(m). 대각뷰(결정 476)는 칸마다 끝면을 비스듬히 보여
+## 0.6 m 틈이면 끝벽의 어두운 통로가 칸마다 구멍처럼 보였다. 연결막이 완충기 끝까지 나와 맞닿게 좁힌다.
+const FIELD_GAP_M := 0.1
+## 옆 선로 화차를 화차 칸에 놓을 때 앞뒤로 남기는 틈(m, 지도 보기의 화차 상자와 같음).
+const WAGON_GAP_M := 0.2
+## 객차 옆벽이 칸 가운데에서 떨어진 거리(모델 단위 m, tools/blender/train_exterior.py BODY_Z).
+## 문 조각은 이 벽에 붙는다.
+const DOOR_WALL_Z := 1.40
 const RULE_KEYS := ["kinds", "site", "requires", "forbids"]
 static var _catalog: Dictionary = {}
 static var _libraries: Dictionary = {}
@@ -170,11 +178,91 @@ static func attach_field(parent: Node3D, data: Dictionary) -> Node3D:
 	for index in cars.size():
 		var rect: Rect2i = cars[index]["rect"]
 		var at := Vector3(rect.position.x + rect.size.x * 0.5, 0, train.position.y + 1.5)
-		if not kit._append_slot(cars[index]["kind"], at, Vector3(rect.size.x - 0.6, 3.0, 2.8), heading, false):
+		if not kit._append_slot(cars[index]["kind"], at, Vector3(rect.size.x - FIELD_GAP_M, 3.0, 2.8), heading, false):
 			fallback.append(index)
 	kit.set_meta("fallback_cars", fallback)
 	kit._finish()
 	return kit
+
+
+## 옆 선로 화차(지도 data["wagons"])마다 모델을 붙인다(대각뷰에서 갈색 상자가 가장 큰 덜 만든
+## 덩이였다, 결정 476). 모델로 바꾸지 못한 화차의 번호는 meta "fallback_wagons"로 돌려주고,
+## 지도 보기는 그 화차만 상자로 그린다. 화차 칸·막힘·석탄 값은 지도 자료 그대로다.
+static func attach_wagons(parent: Node3D, wagons: Array) -> Node3D:
+	var kit := TrainModelKit.new()
+	kit.name = "WagonModels"
+	parent.add_child(kit)
+	var fallback: Array[int] = []
+	for index in wagons.size():
+		var w: Dictionary = wagons[index]
+		var rect: Rect2i = w["rect"]
+		var at := Vector3(rect.position.x + rect.size.x * 0.5, 0, rect.position.y + rect.size.y * 0.5)
+		if not kit._append_slot(wagon_kind(w), at, Vector3(rect.size.x - WAGON_GAP_M, 3.0, float(rect.size.y)), 1.0, false):
+			fallback.append(index)
+	kit.set_meta("fallback_wagons", fallback)
+	kit._finish()
+	return kit
+
+
+## 지도 화차의 모델 종류. 지도 자료에 종류 칸이 없어 이름과 석탄으로 고른다
+## (field_maps 화차: 「석탄 화차」「빈 화차」「평판 화차」「탄수차」·「버려진 탄수차」).
+static func wagon_kind(w: Dictionary) -> String:
+	var name := String(w.get("name", ""))
+	if name.contains("탄수차"):
+		return "wagon_tender"
+	if name.contains("평판"):
+		return "wagon_flat"
+	return "wagon_coal" if float(w.get("coal", 0.0)) > 0.0 else "wagon_open"
+
+
+## 필드 열차의 타는 문(map_view door_faces: {cell, z})마다 문 조각(door_open: 어두운 문간·젖혀
+## 벽에 붙인 문짝·디딤판)을 그 칸 객차의 옆벽에 붙인다(대각뷰에서 베이지 판이 판자를 기댄 것처럼
+## 보였다, 결정 476). 위쪽 면은 돌려 붙인다. 객차가 아닌 칸이거나 모델이 없으면 meta
+## "fallback_doors"로 돌려주고 지도 보기가 그 문만 상자로 그린다. 문 칸·승하차 자료는 그대로다.
+static func attach_doors(parent: Node3D, faces: Array, data: Dictionary) -> Node3D:
+	var kit := TrainModelKit.new()
+	kit.name = "DoorModels"
+	parent.add_child(kit)
+	var train: Rect2i = data["train"]
+	var mid_z: float = train.position.y + 1.5
+	var fallback: Array[int] = []
+	var ready := can_replace("door_open")
+	for index in faces.size():
+		var cell: Vector2i = faces[index]["cell"]
+		var k: float = _coach_scale_at(data, cell.x) if ready else 0.0
+		if k <= 0.0:
+			fallback.append(index)
+			continue
+		var side := 1.0 if float(faces[index]["z"]) > mid_z else -1.0
+		var basis := Basis(Vector3.UP, 0.0 if side > 0.0 else PI).scaled(Vector3.ONE * k)
+		kit._append_piece("door_open", Transform3D(basis, Vector3(float(cell.x) + 0.5, 0.0, mid_z + side * DOOR_WALL_Z * k)))
+	kit.set_meta("fallback_doors", fallback)
+	kit._finish()
+	return kit
+
+
+## 그 x에 선 칸이 객차 모델로 그려지면 그 배율(attach_field와 같은 셈), 아니면 0.
+static func _coach_scale_at(data: Dictionary, x: int) -> float:
+	for car in data["train_cars"]:
+		var rect: Rect2i = car["rect"]
+		if x < rect.position.x or x >= rect.end.x:
+			continue
+		var plan := model_plan(String(car["kind"]))
+		if plan.size() != 1 or not String(plan[0]).begins_with("coach_") or not can_replace(String(car["kind"])):
+			return 0.0
+		return (float(rect.size.x) - FIELD_GAP_M) / float(catalog()["assets"][plan[0]]["dimensions_m"][0])
+	return 0.0
+
+
+## 칸 밖에 붙는 조각 하나(문 조각): 두 판 모두 transform 그대로.
+func _append_piece(id: String, transform: Transform3D) -> void:
+	for lod in 2:
+		for row in asset_meshes(id)[lod]:
+			var key := "%s:%d:false:%d" % [id, lod, int(floor(transform.origin.x / 32.0))]
+			if not _batches.has(key):
+				_batches[key] = {"mesh": row["mesh"], "material": row["material"], "lod": lod, "transforms": []}
+			_batches[key]["transforms"].append(transform * row["transform"])
+	set_meta("model_count", int(get_meta("model_count", 0)) + 1)
 
 
 func _graybox_car(x: float) -> void:

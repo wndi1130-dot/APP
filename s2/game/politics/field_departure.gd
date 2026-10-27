@@ -209,6 +209,9 @@ static func build(g: Dictionary, t: Dictionary, opts: Dictionary) -> Dictionary:
 		"roster": roster, "workCrew": work, "promises": promises_of(g, t), "domestic": g.get("dom") != null,
 		"train": ({"food": g["food"], "hungerSegs": int(g.get("hunger", 0))} as Dictionary).merged(KitPick.train_kit(g)),
 	}
+	# The decks' places (decision 474 S1), when a field stop has left them in the train's state.
+	if g.get("lootDeck") is Dictionary:
+		departure["lootDeck"] = (g["lootDeck"] as Dictionary).duplicate(true)
 	if bool(g.get("climate", false)):
 		var current: String = RouteWeather.weather(String(g["seed"]), seg, t)
 		var disaster: Variant = g.get("disaster") if bool(g.get("disasters", false)) else null

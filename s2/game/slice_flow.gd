@@ -49,6 +49,7 @@ const WorldWeather = preload("res://game/ui/world_weather.gd")
 const WorldFilm = preload("res://game/ui/world_film.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const SeasonTable = preload("res://game/season_table.gd")
+const TrainStop = preload("res://game/train/train_stop.gd")
 const OutsideView = preload("res://fx/outside_view.gd")
 const St = preload("res://game/train/train_state.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
@@ -793,6 +794,9 @@ func _show_train(phase: String, seg: int) -> void:
 			rules["comms"][c]["sit"] = [sit[0], sit[1], sit[2], sit[3]]
 			rules["comms"][c]["pop"] = int(train_g["comms"][c]["pop"])
 			rules["comms"][c]["rel"] = float(train_g["comms"][c]["rel"])
+	# The hands the stretch's settle left (turn_settle.gd: have, short by post, expose), so
+	# the cars look as many hands as there are (carry_people 3.6): empty posts when short.
+	rules["train"]["hands"] = (train_g["hands"] as Dictionary).duplicate(true) if train_g.get("hands") is Dictionary else {}
 	train = TRAIN_SCENE.instantiate()
 	train.opts = {"panel": false, "seed": int(opts.get("seed", 1))}
 	# The values last shown, so the people react to what changed since (train_people_view.gd).
@@ -840,6 +844,22 @@ func outside_look(rules: Dictionary, seg: int) -> Dictionary:
 ## season table's row for that stretch, the same for the train and the stop.
 static func prologue_progress(seg: int) -> float:
 	return SeasonTable.seg_progress(seg)
+
+
+## S1's names for a stop's weather (omens.ts WEATHER_NAME); what falls as rain reads 「비」.
+const WEATHER_WORD: Dictionary = {"snow": "눈", "fog": "안개", "sleet": "진눈깨비", "overcast": "흐림", "clear": "맑은 추위", "blizzard": "눈보라"}
+
+
+## The stop ahead on the departure lever's small line, 「10:00 도착 · 안개」: the arrival
+## the departure contract will carry (train_stop.gd arrival_min, unless the slice is told
+## one) and the weather the stop will wear (stop_weather). Only on the train before the stop.
+func next_stop_line() -> String:
+	if String(STEPS[step][0]) != "train" or step + 1 >= STEPS.size():
+		return ""
+	var at := int(opts.get("arrive_min", TrainStop.arrival_min(String(train_g.get("seed", "")), int(train_g.get("seg", 1)))))
+	var w: Dictionary = stop_weather(int(STEPS[step + 1][2]))
+	var word: String = "비" if String(w["falls"]) == "rain" else String(WEATHER_WORD.get(String(w["weather"]), String(w["weather"])))
+	return "%02d:%02d 도착 · %s" % [floori(at / 60.0), at % 60, word]
 
 
 ## A stretch's weather from the season table (코디네이터 10-25): its season's
@@ -991,6 +1011,12 @@ func _show_home(word: String) -> void:
 	b.name = "HomeBar"
 	b.g = train_g
 	b.main_word = word
+	# Before the stop the main key is the departure lever, its small line the stop ahead
+	# (decisions 471 B0, 474 N2, 475; the user 10-27: both the route band and this line).
+	var ahead := next_stop_line()
+	if ahead != "":
+		b.lever = true
+		b.lever_small = ahead
 	b.main_pressed.connect(next)
 	b.open_rooms = ["papers", "wrench", "gear"]
 	b.room_pressed.connect(_open_room)

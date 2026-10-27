@@ -87,6 +87,12 @@ const MOAN_RANGE: float = 25.0
 ## goes through this bus. The two far buses are SFX with a low-pass on them.
 const MOAN_BANDS: Array = [[0.0, 1.0, "SFX"], [8.0, 0.9, "SFX_MID"], [16.0, 0.75, "SFX_FAR"]]
 const DULL_BUSES: Dictionary = {"SFX_MID": 2400.0, "SFX_FAR": 900.0}   # low-pass cutoff, Hz
+## Past the map's edge the danger is heard, not walled off: a few places past the
+## woods (EdgeBand.build's sound_spots) keep a far, dull horde bed going, louder as
+## the player walks toward the nearest, gone this far from it.
+const EDGE_RANGE: float = 45.0
+const EDGE_LOUD: float = 0.35
+const EDGE_PITCH: float = 0.85
 const BED_RANGE: float = 40.0
 const BED_FULL: float = 12.0          # this much weighted crowd is a full bed
 ## A voice is given only to one of the dead in sight; one that has a voice
@@ -164,6 +170,8 @@ var game
 var lib: Dictionary = {}               # group -> Array[AudioStream]
 var slots: Array = []                  # {"player": AudioStreamPlayer3D, "z": Dictionary, "wait": float}
 var bed: AudioStreamPlayer
+var edge_bed: AudioStreamPlayer        # the danger past the map's edge (_tick_edge)
+var edge_spots: Array = []             # Vector3 places past the woods (map_view.edge_band)
 var wind: AudioStreamPlayer
 var engine: AudioStreamPlayer3D
 var one_shots: Array = []
@@ -218,6 +226,9 @@ func setup(field_game) -> void:
 		add_child(p)
 		slots.append({"player": p, "z": {}, "wait": randf_range(0.5, 3.0)})
 	bed = _loop_player("horde_bed")
+	edge_bed = _loop_player("horde_bed")
+	edge_bed.bus = "SFX_FAR" if AudioServer.get_bus_index("SFX_FAR") >= 0 else "SFX"
+	edge_bed.pitch_scale = EDGE_PITCH
 	wind = _loop_player("wind")
 	drift.seed = randi()
 	drift.frequency = WIND_DRIFT_HZ
@@ -326,7 +337,7 @@ func tick(delta: float) -> void:
 		return
 	var at: Vector3 = game.player.position
 	if game.ended:
-		for p in [bed, wind]:
+		for p in [bed, edge_bed, wind]:
 			p.volume_db = -80.0
 		for g: Dictionary in gusts:
 			(g["player"] as AudioStreamPlayer).volume_db = -80.0
@@ -348,6 +359,7 @@ func tick(delta: float) -> void:
 	_tick_falls(at)
 	# The mass: one bed scaled by how many dead are near and how near.
 	bed.volume_db = lerpf(bed.volume_db, _db(clampf(crowd / BED_FULL, 0.0, 1.0) * 0.8), minf(1.0, delta * 2.0))
+	_tick_edge(at, delta)
 	birds_t = maxf(0.0, birds_t - delta)
 	_tick_wind(at, delta)
 	engine.volume_db = _db(clampf(1.0 - at.distance_to(engine.position) / 70.0, 0.0, 1.0) * 0.5)
@@ -355,6 +367,18 @@ func tick(delta: float) -> void:
 	var bus := AudioServer.get_bus_index("SFX")
 	if bus >= 0:
 		AudioServer.set_bus_volume_db(bus, -18.0 if game.deaf_t > 0.0 else 0.0)
+
+
+## The edge bed, by the nearest place past the edge (EDGE_RANGE). The places come
+## with the map's drawing, so they are read the first time there are any.
+func _tick_edge(at: Vector3, delta: float) -> void:
+	if edge_spots.is_empty() and game.view != null:
+		edge_spots = game.view.edge_band.get("sound_spots", [])
+	var near := INF
+	for s: Vector3 in edge_spots:
+		near = minf(near, Vector2(s.x - at.x, s.z - at.z).length())
+	var want := _db(clampf(1.0 - near / EDGE_RANGE, 0.0, 1.0) * EDGE_LOUD)
+	edge_bed.volume_db = lerpf(edge_bed.volume_db, want, minf(1.0, delta * 2.0))
 
 
 ## Can the player see this spot as one of the dead is drawn there? The same

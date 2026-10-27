@@ -17,6 +17,7 @@ const RoomStories = preload("res://game/world/room_stories.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
+const RouteStops = preload("res://game/train/route_stops.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -433,12 +434,20 @@ func _ready() -> void:
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	_take_map(SidePath.add(stop_map, rng.seed))
+	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
+	# no fire at the first leg's fifth stop), before anything is put on the map.
+	if opts.get("departure") is Dictionary:
+		RouteStops.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)))
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
 	# opts "loot_dress" false keeps the map's own bundles, as before.
 	if bool(opts.get("loot_dress", true)):
-		loot_report = LootDress.dress(data, rng.seed)
+		# The decks pick up where the last field stop left them (decision 474 S1, the contract's lootDeck).
+		var deck: Dictionary = {}
+		if opts.get("departure") is Dictionary:
+			deck = (opts["departure"] as Dictionary).get("lootDeck", {})
+		loot_report = LootDress.dress(data, rng.seed, deck)
 		# The box a note of the last stop told of (card 10, opts "stash": its spot).
 		if String(opts.get("stash", "")) != "":
 			loot_report["stash"] = LootDress.place_stash(data, String(opts["stash"]), rng.seed)
@@ -3135,6 +3144,8 @@ func finish(reason: String) -> void:
 			if into == "food" and int(unloaded[id]) > 0:
 				food_in[String(id)] = int(unloaded[id])
 		receipt.set_food_in(food_in)
+		# Where the decks stand after this stop rides back to the train for the next contract (474 S1).
+		receipt.set_loot_deck(loot_report.get("loot_deck", {}))
 	# The cores' count and the blueprint pieces go into extras here and only here (decision
 	# 426), on a stop receipt, one that has its ids: setting extras on a field receipt without
 	# ids would make it a stop receipt with empty ones, which the receipt check turns down.

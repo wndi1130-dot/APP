@@ -10,7 +10,7 @@ import { onDeath } from './death';
 import { PROLOGUE } from './prologue';
 import { hangWhy, hangSymbol } from './domestic/symbols';
 import { journal, PROFILES, situation, storyOf } from './state';
-import type { Game, Phase } from './state';
+import type { Game, LootDeck, Phase } from './state';
 import { breakPromise, burnPyre, checkStopPromises, crewAwayOf, crewRest, keepPromise } from './turn';
 import { noteBroken } from './council_log';
 import { canonical, decodeReceipt, v3Schema } from './stop_receipt';
@@ -94,6 +94,8 @@ export type FieldReceiptV5 = Omit<ReceiptV4, 'version'> & {
   version: 5; crew: FieldCrewRow[]; defense: FieldDefense | null;
   /** 승강장에서 실은 옷장 자리 옷, 남은 미끼, 실은 음식의 이름별 개수(계약 글 3절). 없으면 빈 것 */
   wardrobeIn?: FieldGarment[]; luresBack?: Record<string, number>; foodIn?: Record<string, number>;
+  /** 갈래별 보장 몫(덱)의 쓴 뒤 자리(결정 474 S1). 반영하면 판 상태 lootDeck을 이것으로 바꾼다 */
+  lootDeck?: LootDeck;
 };
 export type FieldReceipt = ReceiptV4 | FieldReceiptV5;
 /** 출발 계약 판 1(시험 표본) 또는 판 2(field_departure.ts buildDeparture). */
@@ -171,7 +173,8 @@ const v4Schema = {
 };
 const level = { enum: [0, 1, 2] };
 const handRow = { type: 'array', prefixItems: [{ type: 'string' }, { type: 'string' }, { type: 'number' }], minItems: 3, maxItems: 3 };
-const counts = { type: 'object', additionalProperties: { type: 'integer', minimum: 0 } };
+const count = { type: 'integer', minimum: 0 };
+const counts = { type: 'object', additionalProperties: count };
 const treat = { type: 'object', properties: Object.fromEntries(WOUND_TREATS.map(k => [k, { const: true }])), additionalProperties: false };
 const woundV5 = { ...receiptSchema.$defs.wound, properties: { ...receiptSchema.$defs.wound.properties, treat } };
 const garment = object({
@@ -193,6 +196,7 @@ const v5Schema = {
     wardrobeIn: { type: 'array', items: garment },
     luresBack: counts,
     foodIn: counts,
+    lootDeck: { type: 'object', additionalProperties: object({ n: count, k: count, seen: count, hit: count }) },
   },
   required: [...v4Schema.required, 'crew', 'defense'],
 };
@@ -208,7 +212,7 @@ export function decodeFieldReceipt(input: unknown): FieldReceipt {
   const record = value as Record<string, unknown>;
   const ok = record.version === 4 ? v4Validator(record) : record.version === 5 ? v5Validator(record) : false;
   if (!ok) throw new Error('필드 영수증 계약이 올바르지 않다');
-  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, wardrobeIn: _w, luresBack: _l, foodIn: _fi, ...rest } = record;
+  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, wardrobeIn: _w, luresBack: _l, foodIn: _fi, lootDeck: _ld, ...rest } = record;
   // 판 3 검사는 처치 칸을 모른다: 상처 줄에서 처치만 떼어 넘긴다(검사만, 돌려주는 값은 그대로).
   const people = rest.people as { wounds?: Record<string, unknown>[] };
   const bare = people.wounds ? { ...people, wounds: people.wounds.map(({ treat: _t, ...w }) => w) } : people;
@@ -379,6 +383,8 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
     if (s.parts) g.dom.parts = Math.max(0, g.dom.parts + s.parts);
     // 천(cloth)은 S1 내정 그릇에 칸이 없다: 받기만 하고 S2 열차(train_dom.gd)가 담는다(결정 426 D②).
   }
+  // 덱의 자리(결정 474 S1): 필드가 쓴 뒤 자리를 그대로 들고 다음 정차 계약에 싣는다 — 정차를 넘어 n곳마다 정확히 k곳.
+  if (r.version === 5 && r.lootDeck) g.lootDeck = structuredClone(r.lootDeck);
   const got = ([['coal', '석탄'], ['food', '식량'], ['medicine', '의약품'], ['luxury', '사치품'], ['wood', '목재'], ['scrap', '고철'], ['parts', '부품']] as const)
     .filter(([k]) => s[k]).map(([k, name]) => {
       const lack = have[k] === undefined ? 0 : Math.max(0, -(have[k]! + s[k]!));

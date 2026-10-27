@@ -524,6 +524,9 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		for key: String in ["wood", "scrap", "cloth", "parts"]:
 			if float(stock.get(key, 0)) != 0.0:
 				g["dom"][key] = maxf(0.0, float(g["dom"].get(key, 0)) + float(stock[key]))
+	# The decks' places (decision 474 S1): what the field left them at rides to the next contract.
+	if int(receipt["version"]) == 5 and receipt.get("lootDeck") is Dictionary:
+		g["lootDeck"] = (receipt["lootDeck"] as Dictionary).duplicate(true)
 	var got: Array[String] = []
 	for row: Array in [["coal", "석탄"], ["food", "식량"], ["medicine", "의약품"], ["luxury", "사치품"], ["wood", "목재"], ["scrap", "고철"], ["cloth", "천"], ["parts", "부품"]]:
 		var amount := float(stock.get(row[0], 0))

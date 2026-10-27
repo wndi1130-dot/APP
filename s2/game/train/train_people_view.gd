@@ -1063,7 +1063,9 @@ func _cover(wanted: Array, dt: float) -> void:
 	for key in covers.keys():
 		var rec: Dictionary = covers[key]
 		var members: Array = rec["under"]
-		if not members.all(func(m): return is_instance_valid(m)):
+		# Gone, or taken off the car this frame: a reseat takes a body out of the
+		# tree before it is freed, and one out of the tree has no place to cover.
+		if not members.all(func(m): return is_instance_valid(m) and (m as Node).is_inside_tree()):
 			covers.erase(key)
 			continue
 		var up: bool = seen.has(key) and bool(rec["up"])

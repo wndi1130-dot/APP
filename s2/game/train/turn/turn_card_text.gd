@@ -10,12 +10,14 @@ extends RefCounted
 const St = preload("res://game/train/train_state.gd")
 const TurnCards = preload("res://game/train/turn/turn_cards.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
+const TrainResearch = preload("res://game/train/train_research.gd")
+const C = preload("res://game/train/turn/turn_common.gd")
 
 const RES_NAME: Dictionary = {"coal": "석탄", "food": "식량", "med": "의약품", "lux": "사치품", "trust": "신임",
 	"tension": "긴장", "fear": "공포", "injured": "부상자"}
 const BASE_NAME: Array[String] = ["온기", "배급", "과밀", "노출"]
 ## The kinds whose S1 view runs withAfford itself (the rest only meet guardCosts).
-const AFFORD_KINDS: Array[String] = ["travel", "demand", "ration_cut", "favor", "rescue", "bitten", "rep_sick", "promise_ledger"]
+const AFFORD_KINDS: Array[String] = ["travel", "demand", "ration_cut", "favor", "rescue", "bitten", "rep_sick", "promise_ledger", "keepsake"]
 
 
 ## The card as S1 shows it: turn_cards.gd view's choices with S1's words, and
@@ -88,6 +90,26 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var warn: Array = def["warn"]
 			out["body"] = "%s %d구간 안에 정하지 않으면 손해가 난다. 약속하면 한 구간을 더 벌지만, 어기면 신임을 크게 잃는다." % [warn[int(card.get("n", 0)) % warn.size()], int(t["NEED_GRACE"])]
 			says = ["다음 회기 안에 정하겠다. 내 이름을 걸고 약속한다.", "서두른다고 좋은 법이 나오지 않는다. 지켜봐라."]
+		"keepsake":
+			# S1 cards.ts keepsake: no one brings it; the car asks who wears the coat.
+			var dead: String = str(card.get("who", ""))
+			var field: bool = card.get("text") == "field"
+			var like: String = String(C.profile(t, dead).get("like", ""))
+			out["focus"] = c
+			out["body"] = ("%s은(는) 정차에서 돌아오지 못했다. 침상 밑에 여벌 외투와 장화가 남았다." % dead if field else "%s의 외투와 장화가 남았다." % dead) \
+				+ (" 칸 사람들은 그를 '%s'%s 좋아하던 사람으로 기억한다." % [like, _eul(like)] if like != "" else "") + " 누가 입을지 칸이 묻는다."
+			says = ["그 칸 사람들이 나눠 입어라. 그게 맞다."]
+			if c != "tail": says.append("꼬리칸엔 장화 없는 사람이 있다. 그리로 보내라.")
+			says.append("그 침상은 아무도 건드리지 마라." if field else ("그 옷은 그와 함께 불에 들어간다." if St.law_active(g, "corpse_burn") else "그 옷은 그와 함께 간다. 손대지 마라."))
+		"dom:short":
+			# S1 domestic/cards.ts: the craft master brings it; the machines that could not pay run at half.
+			out["speaker"] = _craft_master(g, t)
+			var names: Array = []
+			for id: String in str(card.get("text", "")).split(",", false):
+				names.append(TrainResearch.TECHS[id]["name"] if TrainResearch.TECHS.has(id) else id)
+			out["body"] = "유지비를 못 낸 기계가 반쯤만 돈다(%s)." % ", ".join(names)
+			says = ["그건 세워라. 그 부품으로 보일러부터 막는다!", "삐걱대도 달린다!", "기계를 굶길 순 없다. 목표치를 올려라!"]
+			why = ["기술 하나가 멈춘다", "반쯤만 돈다", "부품 목표치 +3"]
 		"info":
 			out["title"] = str(card.get("who", "알림"))
 			out["body"] = str(card.get("text", ""))
@@ -192,8 +214,28 @@ static func _again(past: Variant, first: String, by_pick: Dictionary, fallback: 
 	return String(by_pick.get(past.get("pick"), fallback))
 
 
+## S1 chief(g, 'craft'): the workshop's most skilled hand (the dom's experts), or no one.
+static func _craft_master(g: Dictionary, t: Dictionary) -> Variant:
+	var best: Dictionary = {}
+	var dom: Variant = g.get("dom")
+	for e: Variant in (dom.get("experts", []) if dom is Dictionary else []):
+		if e is Dictionary and e.get("field") == "craft" and (best.is_empty() or int(e["skill"]) > int(best["skill"])):
+			best = e
+	if best.is_empty():
+		return null
+	return {"name": String(best["name"]), "role": String(t["COMM_NAME"].get(String(best.get("comm", "")), "공방"))}
+
+
 static func _leader(g: Dictionary, t: Dictionary, c: String) -> Dictionary:
 	return {"name": String(g["comms"][c]["leader"]["name"]), "role": String(t["REP_ROLE"][c]), "comm": c}
+
+
+## S1 cards.ts eul: 을 after a final consonant, 를 after a vowel, 을(를) for anything not Hangul.
+static func _eul(word: String) -> String:
+	var code: int = word.unicode_at(word.length() - 1)
+	if code < 0xac00 or code > 0xd7a3:
+		return "을(를)"
+	return "을" if (code - 0xac00) % 28 != 0 else "를"
 
 
 ## S1 josa: 은/는-like pairs by the word's last sound (here only Hangul names).

@@ -3,7 +3,7 @@ import { COMMS } from './data';
 import type { Comm } from './data';
 import { living } from './domestic/state';
 import { PROFILES } from './state';
-import type { Game } from './state';
+import type { Game, LootDeck } from './state';
 import { crewNames, stopCrew } from './turn';
 import { CAPTAIN, isActive } from './wounds';
 import type { Wound, WoundBook, WoundGrade, WoundPart, WoundState } from './wounds';
@@ -62,6 +62,8 @@ export interface FieldDepartureV2 {
   segment: number;
   /** 이 정차에 열차가 닿는 시각(0시부터 분, 결정 471 B0 stop_time.ts). 없던 계약은 10:30 */
   arriveMin?: number;
+  /** 갈래별 보장 몫(덱)의 자리(결정 474 S1). 판 상태에 있을 때만, 필드가 이어서 뽑는다 */
+  lootDeck?: LootDeck;
   /** 결정 474 N2: 기온 켠 판의 현재 정차와 지난 최대 세 정차(S2 날씨 id). */
   stopWeather?: StopWeather;
   pastWeather?: { seg: number; weather: StopWeather }[];
@@ -221,7 +223,7 @@ export function buildDeparture(g: Game, opts: DepartureOpts): FieldDepartureV2 {
   ];
   return {
     version: 2, departureId: `dep_${opts.placeId}_${seg}`, stopId: `stop_${opts.placeId}_${seg}`, placeId: opts.placeId, segment: seg,
-    arriveMin: arrivalMin(g.seed, seg), roster, workCrew, promises: departurePromises(g), domestic: !!g.dom, train: { food: g.food, hungerSegs: g.hunger ?? 0 },
+    arriveMin: arrivalMin(g.seed, seg), ...(g.lootDeck ? { lootDeck: structuredClone(g.lootDeck) } : {}), roster, workCrew, promises: departurePromises(g), domestic: !!g.dom, train: { food: g.food, hungerSegs: g.hunger ?? 0 },
     ...(g.climate ? {
       stopWeather: stopWeatherId(g.stop?.weather ?? pickWeather(g), seg),
       pastWeather: Array.from({ length: Math.min(3, seg - 1) }, (_, i) => {
