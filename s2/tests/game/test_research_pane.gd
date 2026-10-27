@@ -294,3 +294,31 @@ func test_a_running_technology_shows_its_upkeep_and_when_it_starves() -> void:
 	assert_eq((p2.find_child("Upkeep_e2_parts", true, false) as Label).get_theme_color("font_color"), ResearchPane.RED)
 	g["dom"]["techs"]["e5"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
 	assert_null(_pane(g, ["e5"]).find_child("Upkeep_e5_parts", true, false), "no upkeep, nothing drawn")
+
+
+## A technology stood down (the 「부품이 모자란다」 paper's 「하나를 세운다」,
+## S1 standDown): 멈춤 before what it does, no upkeep, and 다시 돌리기 — dimmed
+## with the part it owes as its tooltip, and a press runs it again once it can.
+func test_a_stood_down_technology_runs_again_from_its_row() -> void:
+	var g := _game()
+	g["dom"]["techs"]["e2"] = {"stage": "done", "defect": false, "progress": 2, "need": 2, "off": true, "refund": true}
+	g["dom"]["parts"] = 0
+	var r: Dictionary = ResearchPane.model(g, ["e2"])["rows"][0]
+	assert_true(bool(r["off"]))
+	assert_eq(r["word"], "다시 돌리기")
+	assert_false(bool(r["can"]))
+	var p := _pane(g, ["e2"])
+	await wait_process_frames(1)
+	assert_true((p.find_child("Effect_e2", true, false) as Label).text.begins_with("멈춤 "))
+	assert_null(p.find_child("Upkeep_e2_parts", true, false), "a stood-down technology pays no upkeep")
+	var key: Button = _key(p, "Key_e2")
+	assert_eq(_word(key), "다시 돌리기")
+	assert_eq(key.tooltip_text, "세울 때 돌려받은 부품 1이 든다")
+	key.pressed.emit()
+	assert_true(bool(g["dom"]["techs"]["e2"]["off"]), "owed a part: it stays down")
+	g["dom"]["parts"] = 2
+	var p2 := _pane(g, ["e2"])
+	await wait_process_frames(1)
+	_key(p2, "Key_e2").pressed.emit()
+	assert_false(bool(g["dom"]["techs"]["e2"]["off"]), "it runs again")
+	assert_eq(float(g["dom"]["parts"]), 1.0)

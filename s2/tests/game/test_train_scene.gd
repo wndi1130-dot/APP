@@ -148,7 +148,7 @@ func _tripping(s) -> bool:
 
 func test_every_car_holds_as_many_bodies_as_the_look_says() -> void:
 	var s = _scene()
-	assert_eq(s.cars.size(), 6)
+	assert_eq(s.cars.size(), 13, "S1's formation (결정 카드 Q2 나): three tail cars to the engine and its locomotive")
 	for c in s.cars:
 		var comm: Dictionary = Rules.comm_of(s.rules, c["def"])
 		assert_eq(_count(s, c["id"]), Look.figures(c["def"], comm, s.phase()), String(c["id"]))
@@ -348,9 +348,12 @@ func test_when_no_new_trips_start_everyone_comes_home() -> void:
 		s.step(0.1)
 	s.rules["errands"] = []
 	s.rules.erase("calls")
-	# A low car walks at 0.6: two cars there and back with a stay is two and a half minutes.
-	for i in 2500:
+	# A low car walks at 0.6: two cars there and back with a stay is two and a half
+	# minutes; from the last tail car to the dining car and back is the longest walk.
+	for i in 9000:
 		s.step(0.1)
+		if i >= 2500 and i % 100 == 0 and s.cars.all(func(c): return int(c["out"]) == 0):
+			break
 	var strays: Array = []
 	for c in s.cars:
 		assert_eq(int(c["out"]), 0, String(c["id"]))
@@ -379,10 +382,13 @@ func test_friendly_cars_call_on_each_other_and_the_tail_calls_on_nobody() -> voi
 			var from_door: float = minf(absf(b.position.x - x0), absf(b.position.x - x0 - Scene.CAR_LENGTH))
 			if absf(from_door - Scene.CALL_INSIDE) > 0.05 or not is_equal_approx(b.position.z, Scene.AISLE_Z):
 				bad.append("a caller stands at %s" % b.position)
-		if int(s.car("tail1")["out"]) != 0:
-			bad.append("the tail sent someone")
+		for tail in ["tail1", "tail2", "tail3"]:
+			if int(s.car(tail)["out"]) != 0:
+				bad.append("the tail sent someone")
 	assert_true(called.has("front") or called.has("medtech"), "the infirmary and the front car are on calling terms")
-	assert_eq(called.keys().filter(func(id) -> bool: return id != "front" and id != "medtech"), [], "nobody calls anywhere else")
+	# S1's formation has the guard's and the engine's cars too, and their ideas are close.
+	var friends: Array = ["front", "medtech", "guard", "engine"]
+	assert_eq(called.keys().filter(func(id) -> bool: return not friends.has(id)), [], "nobody calls anywhere else")
 	assert_eq(bad.slice(0, 3), [], "a caller stops just inside the doorway, on the aisle")
 
 
@@ -455,8 +461,10 @@ func test_the_line_over_the_council_names_its_step_of_unrest() -> void:
 
 func test_a_communitys_own_numbers_move_no_seat_in_the_council() -> void:
 	var s = _council()
-	for i in 200:
+	for i in 600:
 		s.step(0.1)
+		if i >= 200 and _leaning(s) > 0:
+			break
 	assert_gt(_leaning(s), 0, "the room is in the middle of its gestures")
 	var before: Array = _seats_of(s)
 	s.set_comm("tail", "rel", -80)
@@ -566,8 +574,9 @@ func test_broken_rules_show_problems_and_no_cars_and_do_not_stop_the_scene() -> 
 func test_the_panel_picks_a_car_and_its_slider_sets_that_communitys_warmth() -> void:
 	var s = _scene(true)
 	assert_not_null(s.panel)
-	s.panel.pick(1)
-	assert_eq(s.panel.title.text, String(s.rules["cars"][1]["name"]))
+	var medtech: int = (s.rules["cars"] as Array).map(func(c): return String(c["id"])).find("medtech")
+	s.panel.pick(medtech)
+	assert_eq(s.panel.title.text, String(s.rules["cars"][medtech]["name"]))
 	s.panel.sliders["sit0"].value = 10
 	assert_almost_eq(float(s.rules["comms"]["medtech"]["sit"][0]), 10.0, 0.001)
 
@@ -582,7 +591,7 @@ func test_the_start_menu_has_a_way_into_the_train_and_the_panel_a_way_back() -> 
 
 func test_the_dining_car_has_no_warmth_to_set() -> void:
 	var s = _scene(true)
-	s.panel.pick(2)
+	s.panel.pick((s.rules["cars"] as Array).map(func(c): return String(c["id"])).find("dining"))
 	assert_eq(s.panel.comm_id(), "")
 	assert_false(s.panel.sliders["sit0"].editable)
 

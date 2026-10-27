@@ -111,6 +111,30 @@ func test_a_long_thing_carries_over_and_parts_stop_at_the_target() -> void:
 	assert_eq(r2["made"], ["crowbar"])
 
 
+## The remade core (decision 474 S3): parts and scrap paid up front, two
+## stretches of work, then one more core in the stores, where a tier-3
+## restoration looks for it; taken back whole before the work starts.
+func test_a_remade_core_goes_to_the_stores_cores() -> void:
+	var short := _game({"parts": 6, "scrap": 3})
+	assert_eq(TrainWorkshop.why_not(short, "core_remake"), "고철 5 모자람")
+	assert_eq(TrainWorkshop.why_not(_game(), "core_remake"), "부품 2 모자람", "four parts at the start")
+	var g := _game({"parts": 6, "scrap": 8})
+	TrainWorkshop.set_target(g, 0)
+	assert_true(TrainWorkshop.start(g, "core_remake"))
+	assert_eq([float(g["dom"]["parts"]), float(g["dom"]["scrap"])], [0.0, 0.0], "paid now")
+	assert_true(TrainWorkshop.cancel(g))
+	assert_eq([float(g["dom"]["parts"]), float(g["dom"]["scrap"])], [6.0, 8.0], "taken back whole")
+	TrainWorkshop.start(g, "core_remake")
+	var r1: Dictionary = TrainWorkshop.run(g)
+	assert_eq(r1["made"], [], "longer than a stretch")
+	assert_false(TrainWorkshop.cancel(g), "work has gone into it")
+	var r2: Dictionary = TrainWorkshop.run(g)
+	assert_eq(r2["made"], ["core_remake"])
+	assert_eq(float(g["dom"]["cores"]), 1.0)
+	assert_null(TrainWorkshop.line(g))
+	assert_true(TrainDom.is_store(g["dom"]), "the cores are a store S1 has")
+
+
 func test_no_parts_without_the_stores() -> void:
 	var g := _game({"scrap": 1, "wood": 0, "parts": 0})
 	var r: Dictionary = TrainWorkshop.run(g)

@@ -3,11 +3,13 @@ extends Control
 ## carriage's pane (car_pane.gd), where it stands, when the bottom bar's 공방
 ## room is pressed. On it: the stores the workshop uses as their marks and
 ## numbers; the parts it keeps with their target and a key either side; the
-## three things decision 070 lets it make, each with what it costs as marks and
-## numbers and a key to put it on the line. The thing on the line shows how far
-## along it is in its own row, and its key takes it back while the workshop has
-## not touched it. A store that is short turns its number red (결정 417: no
-## sentence for why).
+## three things decision 070 lets it make and the remade core (decision 474
+## S3), each with what it costs as marks and numbers and a key to put it on the
+## line. The thing on the line shows how far along it is in its own row, and
+## its key takes it back while the workshop has not touched it. A store that is
+## short turns its number red (결정 417: no sentence for why). The pane stays
+## the car's pane's height: the rows past four are dragged up under the stores
+## (as mods_pane.gd), a shade at the foot while some are below.
 ##
 ## The rules are train_workshop.gd; the pane reads them, asks them and draws
 ## again. It changes the state it was given (the slice's own train state).
@@ -26,7 +28,7 @@ const CSS_SIZE := Vector2(330, 286)
 ## The stores and their marks (hud_icons.gd).
 const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"], ["cloth", "it_cloth"]]
 const ICON: Dictionary = {"scrap": "it_nails", "wood": "it_plank", "parts": "gear", "cloth": "it_cloth"}
-## Rows: the parts first, then decision 070's three (train_workshop.gd ORDER).
+## Rows: the parts first, then the things to make (train_workshop.gd ORDER).
 const ROW_TOP: float = 66.0
 const ROW_H: float = 54.0
 ## A key: 44 tall (81 game px, over the 48 dp of field_hud.gd MIN_TOUCH).
@@ -39,9 +41,12 @@ const WELL := Color(0, 0, 0, 0.6)
 const ACCENT := Color("f2a63c")
 const RED := Color("e2604b")
 const SOOT_CUT := Color("10151a")
+const SHADE := Color("0b0e12")
 
 var g: Dictionary = {}
 var _parts: Control
+## Where a row's parts go while the rows are laid (the scrolled list), else the pane.
+var _into: Control = null
 
 
 ## What the pane says for state `g0` (tests read this; the pane draws it).
@@ -60,9 +65,10 @@ static func model(g0: Dictionary) -> Dictionary:
 		for key: String in rc:
 			cost.append({"key": key, "icon": ICON.get(key, ""), "n": float(rc[key]), "short": float(dom.get(key, 0)) < float(rc[key])})
 		var on_line: bool = String(now["id"]) == id
-		# How many the train holds: in the armory or the wardrobe, wherever the field put them too.
-		var have: int = 0
-		var held: Variant = dom.get("wardrobe" if String(r["to"]) == "wardrobe" else "armory")
+		# How many the train holds: in the armory or the wardrobe, wherever the field put them too;
+		# the cores in the stores, the field's and the workshop's alike.
+		var have: int = int(float(dom.get("cores", 0))) if String(r["to"]) == "cores" else 0
+		var held: Variant = null if String(r["to"]) == "cores" else dom.get("wardrobe" if String(r["to"]) == "wardrobe" else "armory")
 		if held is Array:
 			for it: Variant in held:
 				if it is Dictionary and String((it as Dictionary).get("id", "")) == id:
@@ -126,14 +132,51 @@ func _draw_all() -> void:
 	var m: Dictionary = model(g)
 	_head()
 	_stores(m["stores"])
-	_parts_row(m["parts"], ROW_TOP)
 	var rows: Array = m["rows"]
+	var k: float = UiFonts.K
+	var list := Control.new()
+	list.name = "Rows"
+	list.mouse_filter = Control.MOUSE_FILTER_PASS
+	list.custom_minimum_size = Vector2(CSS_SIZE.x, ROW_H * (rows.size() + 1)) * k
+	var s := ScrollContainer.new()
+	s.name = "List"
+	s.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	s.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	s.mouse_filter = Control.MOUSE_FILTER_PASS
+	s.position = Vector2(0.0, ROW_TOP) * k
+	s.size = Vector2(CSS_SIZE.x, CSS_SIZE.y - ROW_TOP) * k
+	s.add_child(list)
+	_parts.add_child(s)
+	_into = list
+	_parts_row(m["parts"], 0.0)
 	for i in rows.size():
-		_row(rows[i], ROW_TOP + ROW_H * (i + 1))
+		_row(rows[i], ROW_H * (i + 1))
+	_into = null
+	if list.custom_minimum_size.y > s.size.y + 0.5:
+		_parts.add_child(_more(s))
+
+
+## While rows are left under the list's foot, the glass darkens there (a fold
+## of shade 22 high), so the rows below are known to be there to drag up.
+func _more(s: ScrollContainer) -> Control:
+	var k: float = UiFonts.K
+	var fade := Control.new()
+	fade.name = "More"
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fade.position = Vector2(0.0, s.position.y + s.size.y - 22.0 * k)
+	fade.size = Vector2(s.size.x, 22.0 * k)
+	fade.draw.connect(func() -> void:
+		var w: float = fade.size.x
+		var h: float = fade.size.y
+		fade.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, h), Vector2(0, h)]),
+			PackedColorArray([Color(SHADE, 0.0), Color(SHADE, 0.0), Color(SHADE, 0.85), Color(SHADE, 0.85)])))
+	var bar: ScrollBar = s.get_v_scroll_bar()
+	bar.value_changed.connect(func(v: float) -> void: fade.visible = v < bar.max_value - bar.page - 1.0)
+	return fade
 
 
 func _add(c: Control) -> Control:
-	_parts.add_child(c)
+	(_into if _into != null else _parts).add_child(c)
 	return c
 
 

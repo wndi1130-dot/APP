@@ -24,8 +24,8 @@ static func is_s1a(g: Dictionary) -> bool:
 			continue
 		if key == "dom" and TrainDom.is_store(v):
 			continue
-		# The outside's stages are ported (train_climate.gd); a track freeze is not yet.
-		if key == "climate" and v is bool and float(g.get("freeze", 0)) == 0.0:
+		# The outside's stages and the track freeze are ported (train_climate.gd).
+		if key == "climate" and v is bool:
 			continue
 		return false
 	return true
