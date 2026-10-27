@@ -267,7 +267,8 @@ func _lit_cells(img: Image) -> int:
 
 
 func test_no_game_rule_reads_the_lamp_light() -> void:
-	# Picture only: sight, the dead, mates and raiders never look at these cells.
+	# Only the eye reads them (decisions 439 card 1, 479): the dead, mates and
+	# raiders never look at these cells.
 	for path in ["res://game/field_ai.gd", "res://game/field_combat.gd", "res://game/field_actions.gd", "res://game/actors/zombies.gd", "res://game/sim/weather.gd", "res://game/sim/noise.gd", "res://game/sim/horde_director.gd"]:
 		var code := FileAccess.get_file_as_string(path)
 		assert_false(code.contains("lamp_cells") or code.contains("lamp_fixed") or code.contains("LampLight"), path)

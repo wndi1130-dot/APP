@@ -5,7 +5,8 @@
 // 2) s2/tests/fixtures/train/slice_vectors.json: 그 판에서 조각이 밟는 차례(첫 정차까지 → 출발 계약 → 영수증 반영 → 특별 회기 →
 //    표결 → 회기 닫기 → 둘째 역 → 끝)를 S1이 직접 낸 전/후. 같은 계약에 영수증 셋(가져옴 많음 / 빈손 / 사람 하나 잃음)을 넣어
 //    서로 다른 회기·둘째 역이 나오는지 본다(s3_departure_receipt_contract.md 5장, J01 받아들임).
-// 정차는 필드가 대신 나가므로 resolveStop을 부르지 않는다. 열차 서류는 조각에 화면이 없어 걸음마다 비운다(field_arrival.test.ts slice()와 같다).
+// 정차는 필드가 대신 나가므로 resolveStop을 부르지 않는다. 열차 서류는 조각이 한 장씩 띄우고 고르기 전엔 못 가므로(slice_flow.gd),
+// 표본은 걸음 앞뒤에 서류마다 첫 고를 수 있는 선택지를 고른다(고를 칸이 없으면 그 서류만 치운다, field_arrival.test.ts slice()와 같다).
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -21,8 +22,15 @@ import { tables } from './turn_port_fixtures';
 export const SEED = 'slice-seed-a';
 export const PLACE_ID = 'sulechow_station';
 const plain = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
-const clear = (g: Game) => { g.cards = []; };
-const step = (g: Game) => { clear(g); S1.advance(g); clear(g); };
+/** 서류를 앞에서부터 한 장씩, 첫 고를 수 있는 선택지로 고른다(slice_flow.gd pick_first와 같다). 고를 칸이 없으면 그 서류만 치운다. */
+export function pickFirst(g: Game): void {
+  for (let i = 0; i < 50 && g.cards.length > 0; i += 1) {
+    const card = g.cards[0];
+    const open = S1.viewCard(g, card).choices.findIndex(c => !c.disabled);
+    if (open < 0 || !S1.chooseCard(g, card.uid, open)) g.cards = g.cards.filter(c => c.uid !== card.uid);
+  }
+}
+const step = (g: Game) => { pickFirst(g); S1.advance(g); pickFirst(g); };
 
 /** 조각의 첫 정차에 선 판(정차를 풀기 전): 2구간으로 두고 두 걸음. */
 export function firstStop(g: Game): Game {

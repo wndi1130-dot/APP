@@ -79,6 +79,10 @@ var uid: int = -1
 var sheet: Control
 var body: VBoxContainer
 var _armed: int = -1
+## The widest the holder lets the paper be, mockup px (0: as drawn, cut wider up to
+## WIDE): on a narrow screen it stops short of what stands at its right, and the
+## words wrap to it.
+var fit_w: float = 0.0
 ## The paper's width in mockup px, and frames left before the fit is looked at.
 var _w: float = PaperSheet.SIZE.x
 var _settle: int = 0
@@ -168,7 +172,7 @@ func show_card(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> void:
 	t = t0
 	uid = uid0
 	_armed = -1
-	_w = PaperSheet.SIZE.x
+	_w = PaperSheet.SIZE.x if fit_w <= 0.0 else minf(PaperSheet.SIZE.x, fit_w)
 	_fill()
 
 
@@ -236,8 +240,9 @@ func _process(_delta: float) -> void:
 			_settle = SETTLE
 			set_process(true)
 			return
-		if _w < WIDE:
-			_w = minf(WIDE, _w + WIDEN)
+		var widest: float = WIDE if fit_w <= 0.0 else minf(WIDE, fit_w)
+		if _w < widest:
+			_w = minf(widest, _w + WIDEN)
 			_fill()
 			return
 	sheet.modulate.a = 1.0

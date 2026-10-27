@@ -149,7 +149,8 @@ func test_every_map_keeps_every_box_reachable_from_the_train() -> void:
 
 
 ## 집 가구(다시 놓는 종류, 담는 가구, 큰 가구)가 벽·문·창 칸에 걸친 곳과, 문 안쪽 두
-## 칸(같은 방)이 막힌 문. 벽선에 걸쳐 세운 기계·탈것·기둥·문짝은 지도 그대로라 안 본다.
+## 칸(같은 방, 9칸 이하·폭 두 칸 방은 한 칸)이 막힌 문. 벽선에 걸쳐 세운 기계·탈것·기둥·문짝은
+## 지도 그대로라 안 본다.
 func _faults(d: Dictionary) -> Array:
 	var out: Array = []
 	for p: Dictionary in d["props"]:
@@ -179,7 +180,10 @@ func _faults(d: Dictionary) -> Array:
 				var ri := RoomFurnish._at(g, of, n)
 				if ri < 0:
 					continue
-				for fc: Vector2i in [n, n + dd]:
+				var cells: Array[Vector2i] = []
+				cells.assign(map["rooms"][ri]["cells"])
+				var small := cells.size() <= RoomFurnish.SMALL_ROOM_CELLS or RoomFurnish._narrow(cells)
+				for fc: Vector2i in ([n] if small else [n, n + dd]):
 					if RoomFurnish._at(g, of, fc) == ri and not g.people_can_walk(fc):
 						out.append("문 %d %s 앞 %s" % [lv, dc, fc])
 	return out

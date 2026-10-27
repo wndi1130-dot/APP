@@ -17,6 +17,11 @@ func test_room_keys_follow_the_kind_then_the_name_then_the_role() -> void:
 	assert_eq(Furnish.room_key("boiler", "", ""), "toolbox")
 	assert_eq(Furnish.room_key("storage", "벽장 저장 칸 ", ""), "bedroom", "a closet split off a bedroom")
 	assert_eq(Furnish.room_key("storage", "찬방 저장 칸 ", ""), "pantry", "a pantry split off a kitchen")
+	assert_eq(Furnish.room_key("living", "식당 거실 ", ""), "kitchen", "a dining room cut off a kitchen")
+	assert_eq(Furnish.room_key("work", "", ""), "toolbox")
+	assert_eq(Furnish.room_key("garage", "", ""), "toolbox")
+	assert_eq(Furnish.room_key("barn", "", ""), "storage")
+	assert_eq(Furnish.room_key("woodshed", "", ""), "storage")
 	assert_eq(Furnish.room_key("", "진료실 ", ""), "clinic")
 	assert_eq(Furnish.room_key("", "공구방 ", ""), "toolbox")
 	assert_eq(Furnish.room_key("", " ", "shop"), "shop")
@@ -36,6 +41,8 @@ func test_kitchens_get_empty_boxes_in_spare_furniture_and_keys_stand() -> void:
 		if c.has("room"):
 			keyed += 1
 			assert_true(LootDress.AFFINITY.has(String(c["room"])), id)
+		elif Furnish._name_places(String(c.get("name", ""))):
+			keyed += 1  # its name says the room (안방 상자), so no key is set
 		if not id.begins_with("kitchen_"):
 			continue
 		added += 1

@@ -93,9 +93,12 @@ func test_office_names_and_workshops_are_work_rooms() -> void:
 	assert_ne(Furnish.room_class("관리인 집 안방", {}, 0), "office")
 
 func test_preserved_storage_on_a_door_front_uses_a_short_shape_when_needed() -> void:
+	# 폭 두 칸 창고라 문 앞은 문 쪽 한 줄: 선반을 그 줄(문 벽에 붙여)에 두고, 다른 줄 가운데에
+	# 상자 더미를 두어 세 칸짜리 자리를 없앤다.
 	var d := _house([[5, 2, "창고"]])
-	d["props"].append({"kind": "hardware_rack", "rect": Rect2i(2, 2, 3, 1), "level": 0, "note": "창고의 철물 선반"})
-	d["containers"]["box"] = {"cell": Vector2i(2, 2), "level": 0, "items": ["wood"]}
+	d["props"].append({"kind": "hardware_rack", "rect": Rect2i(2, 3, 3, 1), "level": 0, "note": "창고의 철물 선반"})
+	d["props"].append({"kind": "crate_stack", "rect": Rect2i(4, 2, 1, 1), "level": 0, "note": "창고의 상자 더미"})
+	d["containers"]["box"] = {"cell": Vector2i(2, 3), "level": 0, "items": ["wood"]}
 	var stats := Furnish.clear_fronts(d)
 	assert_eq(stats["shortened"], 1)
 	assert_lt((d["props"][0]["rect"] as Rect2i).get_area(), 3)
