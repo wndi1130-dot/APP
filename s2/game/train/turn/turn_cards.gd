@@ -128,6 +128,13 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var hold_riot: Dictionary = choice("", "경비대를 푼다", [["fear", 8], ["trust", -5], ["rel", "tail", -5]], "riot_guard")
 			if refused != null: hold_riot["disabled"] = refused
 			return {"title": "난장판", "choices": [choice("", "들어준다", [["food", -10], ["coal", -6], ["tension", -10], ["rel", "tail", 4], ["rel", opp, -3]], "riot_yield"), hold_riot, choice("", "아무것도 안 한다", [], "ladder_ignore")]}
+		"keepsake":
+			# S1 cards.ts keepsake (사람의 무게 A1(나)): the dead's coat and boots. One who died at a stop
+			# (text "field") left only the spare under the bunk.
+			var keep: Array = [choice("", "그 칸에 나눈다", [["base", comm, 0, 2], ["rel", comm, 2]], "keep_share")]
+			if comm != "tail": keep.append(choice("", "꼬리칸에 보낸다", [["base", "tail", 0, 2], ["rel", comm, -3]], "keep_tail"))
+			keep.append(choice("", "그대로 둔다" if card.get("text") == "field" else "함께 보낸다", [["rel", comm, 4]]))
+			return {"title": "외투와 장화", "choices": keep}
 		"dom:short":
 			# S1 domestic/cards.ts dom:short (its upkeep half, train_research.gd pay_upkeep raises it).
 			return {"title": "부품이 모자란다", "key": "dom:short", "choices": [choice("", "하나를 세운다", [], "dom_short_stand"),
@@ -213,6 +220,10 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 		"cut_front_first": RationCut.apply(g, t, "front_first")
 		"cut_refuse": RationCut.apply(g, t, "refuse")
 		"proxy_meet": g["comms"][comm]["leader"]["traitShown"] = 2
+		# S1 revertLater: the coat warms that car for two stretches (turn_people.gd tick takes it back).
+		"keep_share", "keep_tail":
+			if not g.has("tempBase"): g["tempBase"] = []
+			g["tempBase"].append({"c": comm if selected["special"] == "keep_share" else "tail", "i": 0, "v": 2, "until": int(g["seg"]) + 2})
 		"dom_short_stand": TrainResearch.stand_down(g)
 		"dom_short_target": TrainWorkshop.set_target(g, TrainWorkshop.target(g) + 3)
 		"ledger_refuse": Field._offend(g, comm)
