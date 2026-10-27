@@ -59,7 +59,8 @@ var indoor := false
 ## reach, the camera turned to the cluster (결정 478: the same buildings before and after, every group).
 var near := false
 ## --roofs: hold off the roof lifting round the camera's focus (building_view NEAR_R, 결정 476) so a
-## before/after of the buildings' forms shows their roofs; the game itself lifts them near the focus.
+## before/after of the buildings' forms shows their roofs, and the see-through hole round the focus
+## with them; the game itself lifts them near the focus.
 var roofs := false
 ## The reference scenes the look (mood) and the materials (art3d) both judge by
 ## (색감 루프, 2026-10-26): late autumn K1, a street at midday under overcast,
@@ -221,6 +222,7 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 		bv._instant = true
 		bv.near = {}
 		bv._apply()
+		bv.material.set_shader_parameter("hole_strength", 0.0)
 	game._update_light()
 	# Cloud shadows drift with the shader clock, so two runs of one clear scene laid
 	# them in different places: hold them still for a before/after of the same spot.

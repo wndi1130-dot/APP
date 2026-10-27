@@ -63,7 +63,10 @@ static func rows_of(id: String, data: Dictionary, plan: Dictionary) -> Array:
 		var b := int(r["b"])
 		var piece := String(r["id"])
 		if piece.begins_with("roof_") and piece not in ROOF_TRIM:
-			_put(roofs, b, piece.trim_prefix("roof_"))
+			var shape := piece.trim_prefix("roof_")
+			var pitch := float(r.get("pitch", 1.0))
+			shape += "_steep" if pitch > 1.2 else ("_low" if pitch < 0.9 else "")
+			_put(roofs, b, shape)
 		elif piece in EXTRA_PIECES:
 			_put(extras, b, piece)
 	var openings: Dictionary = {}

@@ -18,6 +18,7 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const BuildingShader = preload("res://game/world/building.gdshader")
 const BuildPace = preload("res://game/world/build_pace.gd")
 const RoomFinish = preload("res://game/world/room_finish.gd")
+const BuildingForms = preload("res://game/world/building_forms.gd")
 const S = FieldGrid.Solid
 const CATALOG_PATH := "res://models/building_kit/catalog.json"
 const MODE_SETTING := "visuals/building_models_enabled"
@@ -101,6 +102,7 @@ var _outer_buildings: Dictionary = {} # 칸 번호 -> 닿는 건물 번호들
 var seen_buildings_checked: int = 0
 var outer_doors: Dictionary = {}  # 건물 -> 1층 바깥 문 칸들(문가에서는 열림을 둔다)
 var footprints: Dictionary = {}   # 건물 -> Rect2i(1층 사각형)
+var looks: Dictionary = {}        # 건물 -> 꼴(building_forms.gd pick, 결정 478)
 var drawn_cells: Dictionary = {}  # 층 -> 실제 키트가 맡은 벽·문·창 칸
 var open_b: int = -1
 var open_lv: int = 0
@@ -312,7 +314,8 @@ static func cut_line(kind: Dictionary) -> bool:
 ##   slot: cut_full·cut_low(바깥 턱 줄의 3 m·턱), stand, int_cut(열렸을 때만: 안 턱 줄과 마구리), int_stand
 ## roofs: {"id", "xf"(세계 기준), "b"}, doors·windows: {"cell", "lv", "b", "line", "yaw"}
 static func plan(data: Dictionary) -> Dictionary:
-	var out := {"pieces": [], "roofs": [], "doors": [], "windows": [], "outer": {}, "outer_doors": {}, "footprints": {}, "kinds": {}}
+	var out := {"pieces": [], "roofs": [], "doors": [], "windows": [], "outer": {}, "outer_doors": {}, "footprints": {}, "kinds": {},
+		"looks": {}}
 	var levels: Dictionary = data.get("levels", {0: data["grid"]})
 	var areas := _areas(data, levels)
 	var lvs: Array = levels.keys()
@@ -577,9 +580,20 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 			prints[lv] = _footprint(levels[lv], b, area, wall_rects(data, b, lv, area))
 	if prints.has(0) and not prints[0].is_empty():
 		out["footprints"][b] = _bounds(prints[0])
+	# 꼴(결정 478 1가): 용도·지역으로 벽 재질·색·지붕(박공 물매·평지붕)·굴뚝.
+	var row_b: Dictionary = {"id": b}
+	for row: Variant in data.get("buildings", []):
+		if row is Dictionary and int(row.get("id", -1)) == b:
+			row_b = row
+	var storeys := 0
+	for lv: int in prints:
+		if not (prints[lv] as Dictionary).is_empty():
+			storeys += 1
+	var look := BuildingForms.pick(row_b, String(data.get("place_id", "")), paint_for(b), storeys)
+	out["looks"][b] = look
 	var gables: Array = []
-	# 오르는 옥상으로 고른 건물(roof_rules.gd)은 맨 위도 낮은 담을 두른 평지붕이다.
-	var flat_top := false
+	# 오르는 옥상으로 고른 건물(roof_rules.gd)과 꼴이 평지붕인 건물은 맨 위도 낮은 담을 두른 평지붕이다.
+	var flat_top: bool = String(look["roof"]) == "flat"
 	for row: Variant in data.get("rooftops", []):
 		flat_top = flat_top or (row is Dictionary and int(row.get("building", -1)) == b)
 	for lv: int in prints:
@@ -594,8 +608,8 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 			if _touches(r, above) or (flat_top and above.is_empty()):
 				_plan_flat(out, r, top, above, b)
 			else:
-				gables.append(_plan_gable(out, r, top, b))
-	if gables.is_empty() or not _chimney_wanted(data, b):
+				gables.append(_plan_gable(out, r, top, b, float(look["pitch"])))
+	if gables.is_empty() or not (bool(look["chimney"]) or _chimney_wanted(data, b)):
 		return
 	# 굴뚝은 가장 높은 박공에 하나: 난로가 그 지붕 밑에 있으면 그 위, 없으면 가운데에서 조금 비켜.
 	gables.sort_custom(func(p: Dictionary, q: Dictionary) -> bool: return p["top"] > q["top"])
@@ -610,16 +624,14 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 	var ridge: Vector2 = g["ridge"]
 	var at := Vector2(spot.x, ridge.y - CHIMNEY_BACK) if along_x else Vector2(ridge.x + CHIMNEY_BACK, spot.y)
 	at = Vector2(clampf(at.x, r.position.x + 1.0, r.end.x - 1.0), clampf(at.y, r.position.y + 1.0, r.end.y - 1.0))
-	var base: float = g["top"] + g["k"] * ROOF_RISE - CHIMNEY_BACK * ROOF_TAN - 0.15
+	var base: float = g["top"] + g["pitch"] * (g["k"] * ROOF_RISE - CHIMNEY_BACK * ROOF_TAN) - 0.15
 	out["roofs"].append({"id": "chimney", "xf": _xf(Vector3(at.x, base, at.y), 0.0), "b": b})
 
 
+## 난로가 있는 건물(꼴과 상관없이 굴뚝).
 static func _chimney_wanted(data: Dictionary, b: int) -> bool:
 	for stove: Dictionary in data.get("stoves", []):
 		if int(stove.get("building", -1)) == b:
-			return true
-	for row: Dictionary in data.get("buildings", []):
-		if int(row.get("id", -1)) == b and String(row.get("name", "")).contains("주택"):
 			return true
 	return false
 
@@ -682,13 +694,15 @@ static func _touches(r: Rect2i, cells: Dictionary) -> bool:
 	return false
 
 
-static func _plan_gable(out: Dictionary, r: Rect2i, top: float, b: int) -> Dictionary:
+## pitch: 물매 배수(1 = 35°, building_forms.gd). 높이만 늘려 같은 조각을 쓴다.
+static func _plan_gable(out: Dictionary, r: Rect2i, top: float, b: int, pitch: float = 1.0) -> Dictionary:
 	var along_x := r.size.x >= int(r.size.y * 0.75)
 	var span := float(r.size.y if along_x else r.size.x) - 2.0 * FACE_IN
 	var length := float(r.size.x if along_x else r.size.y) - 2.0 * FACE_IN + 2.0 * OVERHANG
 	var k := span / ROOF_SPAN
 	var mid := Vector2(r.position.x + r.size.x * 0.5, r.position.y + r.size.y * 0.5)
-	out["roofs"].append({"id": "roof_gable", "xf": _xf(Vector3(mid.x, top, mid.y), 0.0 if along_x else PI * 0.5, Vector3(length, k, k)), "b": b})
+	out["roofs"].append({"id": "roof_gable", "xf": _xf(Vector3(mid.x, top, mid.y), 0.0 if along_x else PI * 0.5, Vector3(length, k * pitch, k)), "b": b,
+		"pitch": pitch})
 	for side in [-1, 1]:
 		var at: Vector3
 		var n: Vector2i
@@ -698,8 +712,8 @@ static func _plan_gable(out: Dictionary, r: Rect2i, top: float, b: int) -> Dicti
 		else:
 			at = Vector3(mid.x, top, r.position.y + 0.5 if side < 0 else r.end.y - 0.5)
 			n = Vector2i(0, side)
-		out["roofs"].append({"id": "roof_gable_end", "xf": _xf(at, yaw_of(n), Vector3(k, k, 1)), "b": b})
-	return {"rect": r, "top": top, "k": k, "along_x": along_x, "ridge": mid}
+		out["roofs"].append({"id": "roof_gable_end", "xf": _xf(at, yaw_of(n), Vector3(k, k * pitch, 1)), "b": b})
+	return {"rect": r, "top": top, "k": k, "pitch": pitch, "along_x": along_x, "ridge": mid}
 
 
 ## 평지붕: 바깥면까지 덮고, 높은 쪽에 붙은 변은 그 벽 바깥면까지 늘인다. 낮은 벽은 붙지 않은 변에만.
@@ -827,6 +841,7 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial, pace = null) -> void
 			_outer_buildings[cell_index][b] = true
 	outer_doors = p["outer_doors"]
 	footprints = p["footprints"]
+	looks = p.get("looks", {})
 	var bakes: Dictionary = {}
 	for row: Dictionary in p["pieces"]:
 		var key := "%d|%d|%s" % [row["b"], row["lv"], row["slot"]]
@@ -895,7 +910,9 @@ func _node(b: int, lv: int, mesh: Mesh, shadow: bool) -> MeshInstance3D:
 	node.position.y = lv * LEVEL_H
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON if shadow else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(node)
-	node.set_instance_shader_parameter("paint", paint_for(b))
+	var look: Dictionary = looks.get(b, {})
+	node.set_instance_shader_parameter("paint", look.get("paint", paint_for(b)))
+	node.set_instance_shader_parameter("wall_kind", float(look.get("wall_kind", 0.0)))
 	node.set_instance_shader_parameter("building_id", float(b))
 	node.set_instance_shader_parameter("accent", accent_for(b))
 	return node
