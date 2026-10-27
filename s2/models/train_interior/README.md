@@ -118,7 +118,7 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 
 ## 공개 3D로 바꾼 것
 
-`tools/blender/train_interior_swap.py`(공개 3D)와 `tools/blender/train_ice_chest.py`(얼음 상자)가 위 표의 같은 경로를 덮어쓴다. 전체 삼각형: 5984.
+`tools/blender/train_interior_swap.py`(공개 3D)와 `tools/blender/train_ice_chest.py`(얼음 상자)가 위 표의 같은 경로를 덮어쓰고, `tools/blender/train_car_dress.py`(찬 칸·꼬리칸·운전실 꾸밈)가 새 경로를 더한다. 전체 삼각형: 6676.
 
 | 이름 | 원본 | 크기 | 삼각형 | 색 | sha256 |
 |---|---|---|---:|---|---|
@@ -127,3 +127,9 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 | food_crates | 손으로 만듦(tools/blender/train_ice_chest.py) | 3×1×1.2 | 588 | cloth, cloth_faded, frost, ice, ice_dark, iron, iron_worn, wood, wood_dark, wood_worn | 1f7287a4d048888a398878ec092f2941d09fbc593391dcfd56429782aaf581fa |
 | cupboard | Poly Haven painted_wooden_shelves (CC0) | 0.52×1.12×0.38 | 524 | wood_dark | bba09d580fdb9a0b29ce47a08c63d0f889ce9183180b6ec4606ebb614af1d013 |
 | wood_chair | Poly Haven painted_wooden_chair_01 (CC0) | 0.44×0.96×0.54 | 532 | wood, wood_dark, wood_worn | 7adc491ae241dc704dba49531007df9e829d85294801782f4accbd2009d89161 |
+| blanket_stack | 손으로 만듦(tools/blender/train_car_dress.py) | 0.82×0.28×0.53 | 128 | blanket_stripe, cloth, cloth_faded | 2a9229be17cab6b11ed41d11ed092b39a07c28a3867ca26e674efc3de1763abd |
+| lantern_off | 손으로 만듦(tools/blender/train_car_dress.py) | 0.16×0.34×0.16 | 136 | glass_dark, iron, iron_worn | fca900d76010c7ce41432d819b2aecad0a8de0a9ba4a023e86c0f49fa9186a64 |
+| blanket_curtain | 손으로 만듦(tools/blender/train_car_dress.py) | 3.6×2.77×0.12 | 152 | blanket_stripe, iron, wool, wool_dark | 7f2a03a2ba54c3f730c7fda80e43377e9770bbd383fdf823a9ad3efa05d6710e |
+| laundry_line | 손으로 만듦(tools/blender/train_car_dress.py) | 3×0.61×0.01 | 68 | blanket_stripe, cloth, cloth_blue, cloth_faded, paper_aged, wood_worn | 208cd57d14fe8ae1821a768110eabb0e08ee7eaf6a67fe70e06844c9329800d2 |
+| patch_boards | 손으로 만듦(tools/blender/train_car_dress.py) | 1.46×0.88×0.05 | 108 | iron, wood, wood_dark, wood_worn | a7a11c42b690ec8aca725eab0b742f7ac312c7fd98e308d82052aac181982e6a |
+| coal_heap | 손으로 만듦(tools/blender/train_car_dress.py) | 2.4×0.63×1.1 | 100 | iron, soot | 109a1fab0042fcc7e770f07caf67a4734aa9bab00fca52de9637582203339a50 |

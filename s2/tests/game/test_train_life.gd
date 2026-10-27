@@ -281,6 +281,15 @@ func test_all_car_types_can_be_built_without_putting_passengers_in_storage() -> 
 			assert_eq(c["bodies"].size(), 0)
 
 
+func test_each_tail_car_has_one_thing_of_its_own() -> void:
+	var s = _scene()
+	var own := {"tail1": "laundry", "tail2": "patched_window", "tail3": "corner_cupboard"}
+	for car_id in own:
+		for other in own:
+			assert_eq(s.life.rooms[car_id].props.has(own[other]), car_id == other, "%s / %s" % [car_id, own[other]])
+	assert_false(s.life.rooms["front"].props.has("laundry"), "a car outside the list keeps the plain layout")
+
+
 func test_expansion_uses_s1_car_ids_and_keeps_car_bound_traces() -> void:
 	var s = _scene()
 	s.set_value("view.collapse_by_car", {"tail1": 4})
