@@ -57,14 +57,31 @@ func test_a_row_of_counters_opens_the_one_pressed_at_its_front_and_top() -> void
 			break
 	assert_eq(row.size(), 3, "houses_01 has a row of counters")
 	var missed: Array = []
+	var floors := 0
 	for id: String in row:
 		var c: Dictionary = game.data["containers"][id]
 		_look_at(c)
 		for h in [0.0, 0.45, 0.9]:
+			# A counter's floor point with another box right beside it on the camera's side lies on
+			# that box's corner as drawn: the finger meets the nearer box first, as the rule says.
+			if h == 0.0 and _box_on_camera_side(c):
+				continue
+			floors += int(h == 0.0)
 			var got := _press(c, h)
 			if got != id:
 				missed.append("%s %.2f → %s" % [id, h, got])
 	assert_eq(missed, [], "the counter pressed is the one opened")
+	assert_gt(floors, 0, "some counter of the row is pressed at its floor")
+
+
+## Another box on the next cell east or south (the camera stands south-east, CAM_YAW).
+func _box_on_camera_side(c: Dictionary) -> bool:
+	var at: Vector2i = c["cell"]
+	for id in game.data["containers"]:
+		var o: Dictionary = game.data["containers"][id]
+		if int(o.get("level", 0)) == int(c.get("level", 0)) and (o["cell"] == at + Vector2i.RIGHT or o["cell"] == at + Vector2i.DOWN):
+			return true
+	return false
 
 
 func test_a_tall_piece_is_picked_anywhere_up_its_front() -> void:
