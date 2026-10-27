@@ -2075,16 +2075,20 @@ const KITCHEN_SEARCH: float = 2.0
 ## Room kind (room_class) -> the room key loot_dress.gd deals by. A living room deals as a
 ## bedroom (loot-feel: its hall is a chapel's, nearly every pull 0.3), the store a pantry.
 const ROOM_KEYS: Dictionary = {"kitchen": "kitchen", "bed": "bedroom", "living": "bedroom", "bath": "bathroom",
-	"store": "pantry", "storage": "storage", "shop": "shop", "office": "office", "boiler": "toolbox"}
+	"store": "pantry", "storage": "storage", "shop": "shop", "office": "office", "boiler": "toolbox",
+	"work": "toolbox", "garage": "toolbox", "barn": "storage", "woodshed": "storage"}
 
 
-## The room key of a room: a closet or pantry split off (room_split.gd) by its hidden name,
-## then its kind, then words in its name, then its building's role.
+## The room key of a room: a closet, pantry or dining room split off (room_split.gd) by its
+## hidden name, then its kind, then words in its name, then its building's role. A dining room
+## deals as the kitchen it was cut from (loot-feel: one kitchen share for the home).
 static func room_key(cls: String, words: String, role: String) -> String:
 	if _named(words, "벽장"):
 		return "bedroom"
 	if _named(words, "찬방"):
 		return "pantry"
+	if _named(words, "식당"):
+		return "kitchen"
 	if ROOM_KEYS.has(cls):
 		return ROOM_KEYS[cls]
 	for word: String in ["진료", "병실", "약"]:
