@@ -297,7 +297,7 @@ func _field_view() -> Dictionary:
 	return {"cars": cars.size(), "engines": engines, "kit": train.get_node("TrainModels"), "vertices": train.mesh.surface_get_array_len(0)}
 
 
-func test_field_models_fill_the_logical_slot_length_within_0_6m() -> void:
+func test_field_models_fill_the_logical_slot_length_within_the_gap() -> void:
 	for kind: String in ["medtech", "freight", "engine"]:
 		for length: int in [12, 16, 20]:
 			var slot := Rect2i(4, 0, length, 3)
@@ -305,8 +305,25 @@ func test_field_models_fill_the_logical_slot_length_within_0_6m() -> void:
 			var label := "%s %dm" % [kind, length]
 			assert_eq(root.get_meta("model_count", 0), 1, label)
 			var ends := _model_ends(root, kind)
-			assert_between(ends.x - slot.position.x, 0.0, 0.6, label + " 앞쪽 끝")
-			assert_between(slot.end.x - ends.y, 0.0, 0.6, label + " 뒤쪽 끝")
+			assert_between(ends.x - slot.position.x, 0.0, Kit.FIELD_GAP_M, label + " 앞쪽 끝")
+			assert_between(slot.end.x - ends.y, 0.0, Kit.FIELD_GAP_M, label + " 뒤쪽 끝")
+
+
+## 대각뷰(결정 476)는 칸마다 끝면을 비스듬히 보인다: 16 m 칸에 나란히 선 두 객차의 연결막
+## (차체 바닥과 처마 사이·폭 가운데에서 가장 바깥 꼭짓점 — 완충기·연결기는 그 밑, 지붕은 그 위)이
+## 0.2 m 안으로 맞닿아, 사이로 끝벽 통로가 보이지 않는다.
+func test_neighbour_coaches_meet_at_their_gangways() -> void:
+	for id: String in ["coach_worn", "coach_clean", "coach_chief", "coach_medic", "coach_glass"]:
+		var reach := 0.0
+		for row in Kit.asset_meshes(id)[0]:
+			var arrays: Array = (row["mesh"] as Mesh).surface_get_arrays(0)
+			for v: Vector3 in arrays[Mesh.ARRAY_VERTEX]:
+				var at: Vector3 = row["transform"] * v
+				if at.y > 1.15 and at.y < 2.5 and absf(at.z) < 0.6:
+					reach = maxf(reach, absf(at.x))
+		var dims: Array = Kit.catalog()["assets"][id]["dimensions_m"]
+		var scale: float = (16.0 - Kit.FIELD_GAP_M) / float(dims[0])
+		assert_lt(16.0 - 2.0 * reach * scale, 0.2, id + ": the gangways of two neighbouring coaches meet")
 
 
 func test_field_records_measured_height_beyond_the_box_envelope() -> void:
@@ -316,7 +333,7 @@ func test_field_records_measured_height_beyond_the_box_envelope() -> void:
 	if overflow.size() == 1:
 		var dims: Array = Kit.catalog()["assets"]["locomotive"]["dimensions_m"]
 		assert_eq(overflow[0]["kind"], "engine")
-		assert_almost_eq(float(overflow[0]["height_m"]), float(dims[1]) * 15.4 / 16.0, 0.001)
+		assert_almost_eq(float(overflow[0]["height_m"]), float(dims[1]) * (16.0 - Kit.FIELD_GAP_M) / 16.0, 0.001)
 	var stage := Kit.create_stage(autofree(Node3D.new()))
 	assert_false(stage.has_meta("envelope_overflow"), "정차 모델은 정차 봉투 안에 든다")
 
@@ -384,7 +401,7 @@ func test_two_body_engine_parts_name_the_body_they_attach_to() -> void:
 		var placed: Array = root._batches[key]["transforms"]
 		assert_eq(placed.size(), 1, "본체를 지정한 요청만 붙는다")
 		# 탄수차 5.2m, 틈 0.4m, 기관차 10.4m: 기관차 중심은 쌍의 중심에서 2.8m.
-		assert_almost_eq((placed[0] as Transform3D).origin.x, 8.0 + 2.8 * 15.4 / 16.0, 0.001)
+		assert_almost_eq((placed[0] as Transform3D).origin.x, 8.0 + 2.8 * (16.0 - Kit.FIELD_GAP_M) / 16.0, 0.001)
 
 
 func test_every_kind_maps_to_its_expected_model_or_box() -> void:

@@ -243,7 +243,7 @@ static func is_tech(v: Variant) -> bool:
 		if key == "variant":
 			if v[key] not in ["a", "b"]:
 				return false
-		elif key in ["finishing", "starved", "off", "pending"]:
+		elif key in ["finishing", "starved", "off", "refund", "pending"]:
 			if not v[key] is bool:
 				return false
 		else:

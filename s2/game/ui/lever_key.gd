@@ -7,7 +7,9 @@ extends Button
 ## brass guide round a slot, catch notches top and bottom, an amber lamp at the
 ## foot (where the lever lands), four rivets and three cut arrows pointing
 ## down; the rod pivots in the middle of the plate, the wooden T grip with brass
-## ends rides on it with its catch bar under. 148 × 48 like any main key.
+## ends rides on it with its catch bar under. 148 × 48 like any main key; with a
+## small line the nameplate widens till both lines fit (`face_w`), the housing
+## riding at its right.
 ##
 ## Tapped, it pulls: the catch is lifted, the grip comes down faster and faster,
 ## growing as it passes the middle (it comes toward the eye), and lands in the
@@ -29,7 +31,13 @@ const INK := Color("2a1804")
 ## The nameplate in the key (the base's padding 5 and rim 2), and its size.
 const FACE_AT := Vector2(7, 6)
 const FACE_CSS := Vector2(102, 36)
-## The housing: 2 in from the base's right inside its rim, 26 above its top.
+## With a small line the plate is at least this wide: 「00:00 도착 · 맑은 추위」
+## (the longest stop line, 120) and 7 each side.
+const SMALL_FACE_W: float = 134.0
+## Room each side of the words on the plate.
+const FACE_PAD: float = 7.0
+## The housing: 2 in from the base's right inside its rim, 26 above its top
+## (its x follows the plate: 1 past its right).
 const HOUSE_AT := Vector2(110, -26)
 const HOUSE_CSS := Vector2(34, 72)
 const REACH_CSS: float = 12.0
@@ -52,6 +60,8 @@ const LAMP := Color("f0ae52")
 var word: String = ""
 var small: String = ""
 var down: bool = false
+## The nameplate's width, mockup px (FACE_CSS.x, or wider for a small line).
+var face_w: float = FACE_CSS.x
 ## The lever: 1 up … 0 toward the eye … −1 down.
 var k: float = 1.0
 
@@ -75,7 +85,13 @@ func _init(word0: String = "", small0: String = "") -> void:
 	word = word0
 	small = small0
 	focus_mode = Control.FOCUS_NONE
-	custom_minimum_size = CSS_SIZE * UiFonts.K
+	_word_l = UiFonts.label("", UiFonts.WORD, 600, 16.0, INK, 4.48)
+	_word_l.name = "Word"
+	_small_l = UiFonts.label("", UiFonts.WORD, 500, 12.0, Color(INK, 0.8), 0.48)
+	_small_l.name = "Small"
+	face_w = fit_face_w(word, small)
+	var css := key_css()
+	custom_minimum_size = css * UiFonts.K
 	for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
 		add_theme_stylebox_override(state, StyleBoxEmpty.new())
 	var img := Image.new()
@@ -86,24 +102,20 @@ func _init(word0: String = "", small0: String = "") -> void:
 	_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_body)
 	var reach: float = UiFonts.px(REACH_CSS)
-	_base = _part(false, CSS_SIZE, Vector4(12, 8, 8, 12))
+	_base = _part(false, css, Vector4(12, 8, 8, 12))
 	_base.name = "Base"
 	_base.position = -Vector2(reach, reach)
 	_body.add_child(_base)
-	_face = _part(true, FACE_CSS, Vector4(8, 8, 8, 8))
+	_face = _part(true, Vector2(face_w, FACE_CSS.y), Vector4(8, 8, 8, 8))
 	_face.name = "Face"
 	_face.position = FACE_AT * UiFonts.K - Vector2(reach, reach)
 	_body.add_child(_face)
-	_word_l = UiFonts.label("", UiFonts.WORD, 600, 16.0, INK, 4.48)
-	_word_l.name = "Word"
 	_body.add_child(_word_l)
-	_small_l = UiFonts.label("", UiFonts.WORD, 500, 12.0, Color(INK, 0.8), 0.48)
-	_small_l.name = "Small"
 	_body.add_child(_small_l)
 	_house = Control.new()
 	_house.name = "Lever"
 	_house.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_house.position = HOUSE_AT * UiFonts.K
+	_house.position = house_at() * UiFonts.K
 	_house.size = HOUSE_CSS * UiFonts.K
 	_house.draw.connect(_draw_house)
 	_body.add_child(_house)
@@ -127,6 +139,33 @@ func set_word(word0: String, small0: String = "", down0: bool = false) -> void:
 	_small_l.visible = small != ""
 	_lay_words()
 	_house.queue_redraw()
+
+
+## The plate's width for these words: as drawn (102) for a word alone, else
+## wide enough for the longer line with FACE_PAD each side, SMALL_FACE_W at least.
+func fit_face_w(word0: String, small0: String) -> float:
+	if small0 == "":
+		return FACE_CSS.x
+	_word_l.text = word0
+	_small_l.text = small0
+	var need: float = maxf(ink_w(_word_l), ink_w(_small_l)) / UiFonts.K
+	return maxf(SMALL_FACE_W, ceilf(need + FACE_PAD * 2.0))
+
+
+## The key's size, mockup px: the plate and the 46 round it (rim, padding, housing).
+func key_css() -> Vector2:
+	return Vector2(face_w + CSS_SIZE.x - FACE_CSS.x, CSS_SIZE.y)
+
+
+## Where the housing sits on the key, mockup px.
+func house_at() -> Vector2:
+	return Vector2(FACE_AT.x + face_w + 1.0, HOUSE_AT.y)
+
+
+## A plate label's inked width, game px: its letter spacing kept off the last letter.
+func ink_w(l: Label) -> float:
+	var f: Font = l.get_theme_font("font")
+	return GlassParts.text_w(l) - float(f.get_spacing(TextServer.SPACING_GLYPH))
 
 
 ## Whether a pull is under way (from the tap or the drag till `pulled`).
@@ -159,7 +198,7 @@ func _lay_words() -> void:
 	var lh_s: float = 12.0 * 1.1
 	var col_h: float = lh_w + (3.0 + lh_s if small != "" else 0.0)
 	var top: float = FACE_AT.y + (FACE_CSS.y - col_h) * 0.5
-	var mid_x: float = (FACE_AT.x + FACE_CSS.x * 0.5) * kk
+	var mid_x: float = (FACE_AT.x + face_w * 0.5) * kk
 	var sw: float = float(UiFonts.face(UiFonts.WORD, 600, 4.48).get_spacing(TextServer.SPACING_GLYPH))
 	GlassParts.put(_word_l, 0.0, top, lh_w)
 	_word_l.position.x = mid_x - (GlassParts.text_w(_word_l) - sw) * 0.5
@@ -171,7 +210,7 @@ func _lay_words() -> void:
 
 ## The housing above the key is the key too: its grip is what a finger takes.
 func _has_point(point: Vector2) -> bool:
-	return Rect2(Vector2.ZERO, size).has_point(point) or Rect2(HOUSE_AT * UiFonts.K, HOUSE_CSS * UiFonts.K).has_point(point)
+	return Rect2(Vector2.ZERO, size).has_point(point) or Rect2(house_at() * UiFonts.K, HOUSE_CSS * UiFonts.K).has_point(point)
 
 
 ## Held down the key sinks 2 and brightens (.main:active).
