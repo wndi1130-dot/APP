@@ -4,6 +4,8 @@ extends "res://addons/gut/test.gd"
 ## over the train, the main key goes nowhere till a way is chosen, then the train goes on.
 
 const SliceFlow = preload("res://game/slice_flow.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const CarPane = preload("res://game/ui/car_pane.gd")
 
 
 func _flow():
@@ -38,3 +40,14 @@ func test_a_step_gone_to_straight_takes_each_paper_on_its_first_way() -> void:
 	assert_false(SliceFlow.papers_of(g))
 	assert_false(g.has("_turn_port_error"))
 	assert_ne(JSON.stringify(g), JSON.stringify(f.train_g), "the way taken moves the board")
+
+
+## On the narrow screen (1280 × 720, the test window) the paper stops short of the car
+## pane's words (the coordinator 10-27), so the car's numbers stay in sight.
+func test_on_a_narrow_screen_the_paper_stops_short_of_the_car_pane() -> void:
+	var f = _flow()
+	var screen: float = f.get_viewport().get_visible_rect().size.x / UiFonts.K
+	var words_x: float = (screen - CarPane.CSS_SIZE.x + SliceFlow.PANE_WORDS_X) * UiFonts.K
+	await get_tree().process_frame
+	var sheet: Control = f.paper.sheet
+	assert_lte(sheet.position.x + sheet.size.x, words_x, "the paper ends before the pane's words at %d wide" % int(screen * UiFonts.K))

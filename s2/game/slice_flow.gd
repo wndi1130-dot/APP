@@ -86,6 +86,9 @@ const CouncilAgenda = preload("res://game/politics/council_agenda.gd")
 const FIRST_SEG: int = 2
 ## Steps the train may take from the session to the second station before the slice gives up.
 const RUN_LIMIT: int = 12
+## Where the car pane's words start in from its left (car_pane.gd), and the paper's room short of them.
+const PANE_WORDS_X: float = 44.0
+const PAPER_GAP: float = 6.0
 ## The train's people left to stand by it while the field is out (stop-cam's train defense).
 const GUARDS_LEFT: int = 2
 
@@ -676,6 +679,11 @@ func _show_paper() -> void:
 		return
 	var c = TurnCard.new()
 	c.name = "Paper"
+	# On a narrow screen the paper stops short of the car pane's words (44 in from its
+	# edge), so the car's numbers stay in sight while a way is chosen.
+	if is_instance_valid(pane):
+		var screen: float = get_viewport().get_visible_rect().size.x / UiFonts.K
+		c.fit_w = screen - CarPane.CSS_SIZE.x + PANE_WORDS_X - PAPER_GAP - TurnCard.SHEET_AT.x
 	layer.add_child(c)
 	c.show_card(train_g, train_t, int((train_g["cards"] as Array)[0]["uid"]))
 	c.chose.connect(_paper_chosen)
