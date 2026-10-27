@@ -8,9 +8,10 @@ const FieldGame = preload("res://game/field_game.gd")
 const SCREEN_FILE := "user://screen.cfg"
 
 
-func _stop() -> Node:
+func _stop(more := {}) -> Node:
 	var game = FieldGame.new()
 	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": ["clear"]}
+	game.opts.merge(more, true)
 	add_child_autofree(game)
 	game.set_process(false)
 	return game
@@ -43,6 +44,31 @@ func test_the_brightness_bends_the_dark_end_within_twenty_percent() -> void:
 	game.set_screen_lift(0.0)
 	assert_almost_eq(_offsets(game)[1], 0.3, 0.0001)
 
+
+func test_a_storm_stage_takes_the_brightness_on_a_plain_curve() -> void:
+	# A storm stage has no grade of its own: 0 leaves its picture as made.
+	var game = _stop({"storm": "during"})
+	assert_false(game.environment.adjustment_enabled)
+	game.set_screen_lift(0.2)
+	assert_true(game.environment.adjustment_enabled)
+	var o := _offsets(game)
+	assert_eq(o.size(), 3)
+	assert_almost_eq(o[1], pow(0.5, 1.2), 0.0001)
+	game.set_screen_lift(0.0)
+	assert_false(game.environment.adjustment_enabled)
+
+func test_a_brightness_handed_over_before_the_build_is_kept() -> void:
+	# The play flow may hand it over right after add_child, while the stop builds.
+	for more in [{}, {"storm": "during"}]:
+		var game = FieldGame.new()
+		game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "weather": ["clear"]}
+		game.opts.merge(more, true)
+		game.set_screen_lift(0.2)
+		add_child_autofree(game)
+		game.set_process(false)
+		assert_eq(game.screen_lift, 0.2)
+		var o := _offsets(game)
+		assert_almost_eq(o[1], pow(0.3 if more.is_empty() else 0.5, 1.2), 0.0001, str(more))
 
 func test_a_field_the_tools_make_ignores_a_saved_brightness() -> void:
 	# A player who saved +20 % must not shift the shots, measures and bots:

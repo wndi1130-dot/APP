@@ -943,6 +943,9 @@ func _build_world() -> void:
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
 		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_apply_grade(atmo["grade"])
+	elif screen_lift != 0.0:
+		# A brightness handed over before the world was built.
+		set_screen_lift(screen_lift)
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
 	view_fill = DirectionalLight3D.new()
