@@ -44,6 +44,8 @@ const SmellRules = preload("res://game/sim/smell_rules.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
+const NightLights = preload("res://game/world/night_lights.gd")
+const NightLightView = preload("res://game/world/night_light_view.gd")
 const SnowTracks = preload("res://game/sim/snow_tracks.gd")
 const PrecipShader = preload("res://fx/shaders/precip.gdshader")
 const W = preload("res://game/sim/weapons.gd")
@@ -178,6 +180,7 @@ var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upsta
 var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
 var map_edge: MapEdge                   # ground and fog past the map's edge (fx/map_edge.gd)
+var night_view: NightLightView          # the hearts of the lights people left (decision 471 B4)
 var zombies: Zombies
 var camera: Camera3D
 var environment: Environment
@@ -491,6 +494,10 @@ func _ready() -> void:
 	add_child(view)
 	view.pace = pace
 	await view.setup(data)
+	night_view = NightLightView.new()
+	night_view.name = "NightLights"
+	add_child(night_view)
+	night_view.build(data)
 	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
 	map_edge = MapEdge.new()
 	add_child(map_edge)
@@ -683,13 +690,16 @@ func lamp_cells(sight: Dictionary = {}) -> Dictionary:
 	var key := LampLight.on_key(lights, now, fire, raid)
 	if key != lamp_key:
 		lamp_key = key
-		lamp_fixed = LampLight.fixed_cells(lights, grid.width, grid.height, now, fire, raid)
+		lamp_fixed = LampLight.fixed_cells(lights, grid.width, grid.height, now, fire, raid, grid)
 		for kind in ["car_window", "firebox", "hideout"]:
 			var on := false
 			for l in lights:
 				if l["kind"] == kind and LampLight.is_on(l, now, fire, raid):
 					on = true
 			view.set_light_on(kind, on)
+		for l: Dictionary in lights:
+			if NightLights.KINDS.has(String(l["kind"])):
+				night_view.set_on(String(l["id"]), LampLight.is_on(l, now, fire, raid))
 	var cells := lamp_fixed.duplicate()
 	var dark := clock.is_dark()
 	for p in people:
@@ -697,7 +707,21 @@ func lamp_cells(sight: Dictionary = {}) -> Dictionary:
 			continue
 		var only: Dictionary = sight if p == player else {}
 		LampLight.stamp(cells, grid.width, grid.height, FieldGrid.cell_of(p.position), Vector2i.ZERO, float(p.lamp["strength"]), float(p.lamp["reach"]), only)
+		if p == player:
+			_stamp_beam(cells)
 	return cells
+
+
+## The chief's torch throws a beam ahead beside the lantern (decision 471 B4),
+## not through walls. Its cells count as lamp light, so it also lets the eye
+## further into a dark room along it (decision 439 card 1).
+func _stamp_beam(cells: Dictionary) -> void:
+	var b: Dictionary = LampLight.BEAM
+	var ahead := Vector2(sin(player.facing), cos(player.facing))
+	var origin := FieldGrid.cell_of(player.position)
+	var reach := float(b["reach"])
+	var los := grid_at(player.position).visible_cells(origin, int(ceil(reach)), ahead, cos(deg_to_rad(float(b["half_deg"]))), 0.0)
+	LampLight.beam(cells, grid.width, grid.height, origin, ahead, float(b["strength"]), reach, float(b["half_deg"]), los)
 
 
 ## The chief's lantern is a real light, so people and the dead near it are lit
@@ -708,7 +732,7 @@ func _update_lantern(delta: float) -> void:
 	lantern.position = player.position + Vector3(0, 1.4, 0)
 	lantern.light_energy = float(player.lamp.get("strength", 1.0)) * (1.0 - 0.3 * lamp_pulse)
 	var night := maxf(clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0), float(storm.get("lamp_gain", 0.0)))
-	view.set_lamp_gain(lerpf(LAMP_GAIN_DAY, 1.0, night))
+	view.set_lamp_gain(lerpf(LAMP_GAIN_DAY, 1.0, night), night)
 
 
 ## Whoever crossed into a new outdoor ground cell leaves a mark: people (deeper
