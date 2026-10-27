@@ -80,12 +80,17 @@ var blows: Dictionary = {}
 var tracers: Array = []                 # {"from", "to", "t"} for the view
 var kills: int = 0
 ## Dead hands that reached someone, by where they came from (decision 474 J1:
-## seen = inside the view cone, unseen = side or back) and what came of it;
-## a bite is counted on the side of the hand that held. Read by the 40 runs.
-var contacts := {"seen": {"reach": 0, "grab": 0, "scratch": 0, "blocked": 0, "miss": 0, "bite": 0},
-	"unseen": {"reach": 0, "grab": 0, "scratch": 0, "blocked": 0, "miss": 0, "bite": 0}}
+## seen = inside the view cone, unseen = side or back, down = on the ground)
+## and what came of it (held_off: a grab the grace kept off; miss: snapped at
+## air); a bite is counted on the side of the hand that held. Read by the 40 runs.
+var contacts := {"seen": {"reach": 0, "grab": 0, "held_off": 0, "scratch": 0, "blocked": 0, "miss": 0, "bite": 0, "fall": 0},
+	"unseen": {"reach": 0, "grab": 0, "held_off": 0, "scratch": 0, "blocked": 0, "miss": 0, "bite": 0, "fall": 0},
+	"down": {"reach": 0, "grab": 0, "held_off": 0, "scratch": 0, "blocked": 0, "miss": 0, "bite": 0, "fall": 0}}
+var crowd_falls: int = 0
+## Not put down by a crowd again before this (decision 474 J1: up and clear first).
+const CROWD_FALL_META: StringName = &"crowd_fall_until"
 var crowd_most: int = 0   # the most dead on one person as a hand reached (crowd_at)
-const GRAB_SEEN: StringName = &"grab_seen"   # the hand that holds came in sight
+const GRAB_SIDE: StringName = &"grab_side"   # where the hand that holds came from
 # Picks where a wound lands. A stream of its own, so the fight rolls in game.rng stay as they were.
 var _wound_rng := RandomNumberGenerator.new()
 var _wound_seeded: bool = false
@@ -929,17 +934,22 @@ func zombie_reaches(z: Dictionary, p) -> String:
 	var now: float = game.clock.elapsed
 	var part: String = BodyState.pick_scratch_part(wound_rng())
 	var block: float = Wear.block(p, part)
-	var outcome: String = GrabRules.attack_outcome(rng, block)
-	var side: String = "seen" if GrabRules.in_sight(p.facing, z["pos"] - p.position, p.fallen_t > 0.0 or p.body.downed) else "unseen"
+	var prone: bool = p.fallen_t > 0.0 or p.body.downed
+	var seen: bool = GrabRules.in_sight(p.facing, z["pos"] - p.position, prone)
+	var side: String = "down" if prone else ("seen" if seen else "unseen")
+	var crowd: int = crowd_at(p)
 	contacts[side]["reach"] += 1
-	crowd_most = maxi(crowd_most, crowd_at(p))
+	crowd_most = maxi(crowd_most, crowd)
+	if crowd >= GrabRules.CROWD_FALL and _crowd_fall(p, now):
+		contacts[side]["fall"] += 1
+		return "fall"
+	var outcome: String = GrabRules.attack_outcome(rng, block, seen, crowd)
 	match outcome:
 		"grab":
 			if not GrabRules.can_regrab(p, now):
-				contacts[side]["miss"] += 1
+				contacts[side]["held_off"] += 1
 				return "miss"
-			var prone: bool = p.fallen_t > 0.0 or p.body.downed
-			var front: bool = GrabRules.front_contact(p.facing, z["pos"] - p.position, prone)
+			var front: bool = seen   # the window too: seen coming, the long one
 			z["victim"] = p
 			z["state"] = "grab"
 			if not p.grabbers.has(z):
@@ -949,7 +959,7 @@ func zombie_reaches(z: Dictionary, p) -> String:
 			if p.grabbers.size() == 1:
 				p.grab_left = window
 				p.grab_front = front
-				p.set_meta(GRAB_SEEN, side == "seen")
+				p.set_meta(GRAB_SIDE, side)
 			else:
 				p.grab_left = minf(p.grab_left, window)
 			p.cancel_action()
@@ -1005,6 +1015,25 @@ static func _subject(word: String) -> String:
 	return "%s%s" % [word, "이" if closed else "가"]
 
 
+## Three or more of the dead on someone put them down (decision 474 J1): the
+## hands that held drop off as they go down and get their breath back (not
+## pushed off), and on the ground, nothing seen coming and no shove, the rest
+## may take hold: no grace for a fall (the first measure gave one and the fall
+## kept the dead off instead). Not put down again until up and clear.
+func _crowd_fall(p, now: float) -> bool:
+	if p.fallen_t > 0.0 or p.body.downed or now < float(p.get_meta(CROWD_FALL_META, -INF)):
+		return false
+	for g in p.grabbers.duplicate():
+		p.release_grab(g)
+		g["state"] = "chase"
+		g["cooldown"] = GrabRules.RELEASE_RECOVERY
+	p.grab_left = 0.0
+	p.set_meta(CROWD_FALL_META, now + FALL_TIME + GrabRules.REGRAB_GRACE)
+	fall(p, "망자들에 밀려 넘어졌다", 0.0)
+	crowd_falls += 1
+	return true
+
+
 ## The dead with their hands on someone or reaching for them (attack or grab,
 ## in reach and not shut off): what decision 474 J1 counts as "붙은 수".
 func crowd_at(p) -> int:
@@ -1041,7 +1070,7 @@ func bite(p) -> void:
 	game.feel.bitten(p, blocked)
 	if not blocked:
 		p.body.apply_bite(rng, site, now)
-		contacts["seen" if bool(p.get_meta(GRAB_SEEN, true)) else "unseen"]["bite"] += 1
+		contacts[String(p.get_meta(GRAB_SIDE, "seen"))]["bite"] += 1
 	# The one at the front bit: it is drawn tearing away through the rest of its bite (DeadBody.bite_after_k).
 	p.grabbers[0]["bit_at"] = float(p.grabbers[0]["age"])
 	for z in p.grabbers.duplicate():
@@ -1078,7 +1107,7 @@ func fall(p, msg: String, fracture_chance: float = 0.05, leg: bool = false) -> v
 	p.stop()
 	p.aim.stop()
 	game.make_sound(p.position, SimNoise.Level.NORMAL, "fall", p)
-	if game.rng.randf() < fracture_chance:
+	if fracture_chance > 0.0 and game.rng.randf() < fracture_chance:
 		p.body.fracture(not leg, wound_side("leg" if leg else "arm"), game.clock.elapsed)
 		game.telemetry.injury(game.clock.elapsed, p.pid, "fracture")
 		game.say(p, "%s %s, %s가 부러졌다." % [p.display_name, msg, "다리" if leg else "팔"], true, "fracture")

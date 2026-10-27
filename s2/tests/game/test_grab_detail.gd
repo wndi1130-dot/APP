@@ -25,7 +25,7 @@ func _roll_grab(z: Dictionary) -> String:
 	var rng := RandomNumberGenerator.new()
 	for value in range(1, 100):
 		rng.seed = value
-		if rng.randf() < Rules.GRAB_SHARE:
+		if rng.randf() < Rules.grab_share(true):
 			game.rng.seed = value
 			break
 	return game.combat.zombie_reaches(z, game.player)
@@ -63,13 +63,15 @@ func test_grace_does_not_prevent_a_scratch() -> void:
 	game.zombies.release(z, game.player.position, false)
 	game.player.coat["heavy"] = false
 	game.player.coat["block"] = 0.0
+	var hand := _hand()   # spawning rolls the game's dice: before they are set
 	var rng := RandomNumberGenerator.new()
 	for value in range(1, 100):
 		rng.seed = value
-		if rng.randf() >= Rules.GRAB_SHARE:
+		var r: float = rng.randf()
+		if r >= Rules.grab_share(true) and r < Rules.grab_share(true) + Rules.SCRATCH_SEEN:
 			game.rng.seed = value
 			break
-	assert_eq(game.combat.zombie_reaches(_hand(), game.player), "scratch")
+	assert_eq(game.combat.zombie_reaches(hand, game.player), "scratch")
 	assert_true(game.player.grabbers.is_empty())
 
 
@@ -175,3 +177,57 @@ func test_the_crowd_on_someone_counts_only_the_dead_reaching_for_them() -> void:
 	far["state"] = "attack"
 	far["victim"] = p
 	assert_eq(game.combat.crowd_at(p), 3)
+
+
+## Decision 474 J1: a hand from beside or behind takes hold far more often than
+## one seen coming, each more of the dead on the person adds, never past the most.
+func test_a_hand_unseen_or_in_a_crowd_takes_hold_more_often() -> void:
+	assert_almost_eq(Rules.grab_share(true), Rules.GRAB_SEEN, 0.0001)
+	assert_almost_eq(Rules.grab_share(false), Rules.GRAB_UNSEEN, 0.0001)
+	assert_gte(Rules.grab_share(false), 2.0 * Rules.grab_share(true), "behind, twice the seen one")
+	assert_almost_eq(Rules.grab_share(true, 3), Rules.GRAB_SEEN + 2.0 * Rules.CROWD_STEP, 0.0001)
+	assert_almost_eq(Rules.grab_share(false, 6), Rules.GRAB_MOST, 0.0001)
+
+
+## A seen hand that does not take hold scratches only so often; the rest snap at air.
+func test_a_seen_hand_past_the_scratch_band_snaps_at_air() -> void:
+	var hand := _hand()
+	var rng := RandomNumberGenerator.new()
+	for value in range(1, 200):
+		rng.seed = value
+		if rng.randf() >= Rules.grab_share(true) + Rules.SCRATCH_SEEN:
+			game.rng.seed = value
+			break
+	assert_eq(game.combat.zombie_reaches(hand, game.player), "miss")
+	assert_eq(int(game.combat.contacts["seen"]["miss"]), 1)
+	assert_true(game.player.grabbers.is_empty())
+	var back: Dictionary = game.zombies.spawn("dead", game.player.position + Vector3(0, 0, -0.6))
+	game.rng.seed = 1
+	assert_ne(game.combat.zombie_reaches(back, game.player), "miss", "from behind none snaps at air")
+
+
+## Three of the dead on someone put them down once (decision 474 J1): the hands that
+## held drop off where they are, no grace keeps the rest off, and not again until clear.
+func test_three_on_someone_put_them_down_once() -> void:
+	var p = game.player
+	var on: Array = [_hand()]
+	assert_eq(_roll_grab(on[0]), "grab", "one alone takes hold first")
+	var held_at: Vector3 = on[0]["pos"]
+	for x in [-0.5, 0.5]:
+		var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(x, 0, 0.6))
+		z["state"] = "attack"
+		z["victim"] = p
+		on.append(z)
+	assert_eq(game.combat.crowd_at(p), 3)
+	assert_eq(game.combat.zombie_reaches(on[1], p), "fall")
+	assert_almost_eq(p.fallen_t, game.combat.FALL_TIME, 0.0001)
+	assert_true(p.grabbers.is_empty(), "the hands let go")
+	assert_eq(on[0]["pos"], held_at, "not pushed off: the fall gives no room")
+	assert_true(Rules.can_regrab(p, game.clock.elapsed), "on the ground no grace keeps the rest off")
+	assert_gt(float(on[0]["cooldown"]), 0.0, "the one that held gets its breath back")
+	assert_eq(int(game.combat.crowd_falls), 1)
+	p.fallen_t = 0.0
+	on[0]["state"] = "attack"
+	assert_eq(game.combat.crowd_at(p), 3, "still three on them")
+	assert_ne(game.combat.zombie_reaches(on[2], p), "fall", "not again until up and clear")
+	assert_eq(int(game.combat.crowd_falls), 1)

@@ -4,7 +4,17 @@ extends RefCounted
 # 1 s felt too fast on the S22 (user, build 20); the back window keeps half of the front.
 const FRONT_WINDOW := 1.5
 const BACK_WINDOW := 0.75
-const GRAB_SHARE := 0.65
+## Decision 474 J1 (start values, measured by the 40 runs): a hand that comes
+## from beside or behind takes hold far more often than one seen coming, and
+## of a seen hand that does not take hold only some scratch; the rest snap at
+## air. Each more of the dead on the person (crowd) adds to the grab, and
+## three or more put them down (field_combat._crowd_fall). One die as before.
+const GRAB_SEEN := 0.45
+const GRAB_UNSEEN := 0.9
+const SCRATCH_SEEN := 0.35
+const CROWD_STEP := 0.1
+const GRAB_MOST := 0.95
+const CROWD_FALL := 3
 const BITE_ARM := 0.60
 const BITE_TORSO := 0.20
 const BITE_HEAD := 0.05  # the head or the neck, by one standing (결정 441 (5))
@@ -45,10 +55,22 @@ static func bite_location(rng: RandomNumberGenerator, crawler: bool) -> String:
 	return "leg"
 
 
-# A dead hand reaches: "grab" (65%) or "scratch"; the coat may turn a scratch into "blocked".
-static func attack_outcome(rng: RandomNumberGenerator, coat_block: float) -> String:
-	if rng.randf() < GRAB_SHARE:
+## How often a dead hand takes hold: by whether it was seen coming and how many
+## of the dead are on the person (1 = this one alone).
+static func grab_share(seen: bool, crowd: int = 1) -> float:
+	var base: float = GRAB_SEEN if seen else GRAB_UNSEEN
+	return minf(GRAB_MOST, base + CROWD_STEP * float(maxi(crowd - 1, 0)))
+
+
+# A dead hand reaches: "grab", "scratch" (the coat may turn it into "blocked"),
+# or, for one seen coming, "miss" (it snaps at air).
+static func attack_outcome(rng: RandomNumberGenerator, coat_block: float, seen: bool = true, crowd: int = 1) -> String:
+	var r: float = rng.randf()
+	var grab: float = grab_share(seen, crowd)
+	if r < grab:
 		return "grab"
+	if seen and r >= grab + SCRATCH_SEEN:
+		return "miss"
 	if rng.randf() < coat_block:
 		return "blocked"
 	return "scratch"
