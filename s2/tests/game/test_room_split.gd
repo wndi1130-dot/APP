@@ -385,26 +385,25 @@ func test_a_room_under_the_limit_or_too_narrow_to_halve_is_left_whole() -> void:
 		assert_eq(stats["cut"], 0, str(spec))
 
 
-## 침실 셋(4x4)이 좁은 복도에 문을 낸 집: 부엌도 거실도 없다.
+## 침실 셋(4x4)과 작은 욕실(2x4)이 좁은 복도에 문을 낸 집: 부엌도 거실도 없다. 욕실은 진짜 방으로 둔다
+## (가르기 뒤 _split_baths는 새로 쓰이니, 미리 단 욕실 표시는 가구 놓기까지 가지 않는다).
 func _three_bedrooms() -> Dictionary:
-	var g := Grid.new(18, 10)
+	var g := Grid.new(21, 10)
 	for y in range(1, 9):
-		for x in range(1, 17):
+		for x in range(1, 20):
 			var c := Vector2i(x, y)
 			g.building[g.index(c)] = 0
 			g.floor[g.index(c)] = Grid.Floor.WOOD
-			g.set_solid(c, S.WALL if x in [1, 16] or y in [1, 6, 8] or (y < 6 and x in [6, 11]) else S.NONE)
+			g.set_solid(c, S.WALL if x in [1, 19] or y in [1, 6, 8] or (y < 6 and x in [6, 11, 16]) else S.NONE)
 	var props: Array = []
-	for door: Vector2i in [Vector2i(1, 7), Vector2i(3, 6), Vector2i(8, 6), Vector2i(13, 6)]:
+	for door: Vector2i in [Vector2i(1, 7), Vector2i(3, 6), Vector2i(8, 6), Vector2i(13, 6), Vector2i(17, 6)]:
 		g.set_solid(door, S.DOOR)
 		g.doors[door] = {"state": "closed", "hp": 8, "building": 0, "cell": door}
 	for x: int in [2, 7, 12]:
 		props.append({"kind": "bed", "rect": Rect2i(x, 2, 2, 1), "level": 0, "note": "침실의 침대"})
 	g.refresh_paths()
-	var d := {"grid": g, "levels": {0: g}, "place_id": "split_fixture", "buildings": [{"id": 0, "name": "주택", "rect": Rect2i(1, 1, 16, 8)}],
+	return {"grid": g, "levels": {0: g}, "place_id": "split_fixture", "buildings": [{"id": 0, "name": "주택", "rect": Rect2i(1, 1, 19, 8)}],
 		"labels": [], "props": props, "containers": {}, "stairs": [], "low_blocks": [], "stoves": []}
-	d["_split_baths"] = {0: {"key": "other", "level": 1, "room": 0, "area": 6, "short": 2, "doors": 1, "class": "bath"}}
-	return d
 
 
 func test_a_home_without_a_kitchen_turns_a_bedroom_with_a_counter_wall_into_one() -> void:
@@ -417,6 +416,7 @@ func test_a_home_without_a_kitchen_turns_a_bedroom_with_a_counter_wall_into_one(
 	assert_eq(classes.count("kitchen"), 1)
 	assert_eq(classes.count("living"), 1)
 	assert_eq(classes.count("bed"), 1)
+	assert_eq(classes.count("bath"), 1, "the small one-door room stays the bath")
 	var runs := 0
 	for p: Dictionary in d["props"]:
 		if p.get("rule") == "kitchen" and p.get("counter_run", false):
