@@ -494,6 +494,10 @@ func _ready() -> void:
 	add_child(view)
 	view.pace = pace
 	await view.setup(data)
+	# A stop the route marks no_fire (RouteStops.dress, s3-link) gets its lights
+	# planned again without fires (decision 471 B4).
+	if data.get("no_fire", false):
+		NightLights.replan(data)
 	night_view = NightLightView.new()
 	night_view.name = "NightLights"
 	add_child(night_view)
