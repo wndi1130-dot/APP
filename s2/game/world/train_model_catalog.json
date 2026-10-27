@@ -17,14 +17,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 231420,
+      "bytes": 225020,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.34,
         2.94
       ],
-      "sha256": "190c2785f2f86a7d5d692433d6cd89cc1c8d1116198973d1601f15d7388aef54",
+      "sha256": "0a01990c2d137500888c6c72273454207df96f338dcfc55b946946f2aa974672",
       "no_cutaway": true,
       "source": "tools/blender/train_exterior.py"
     },
@@ -41,14 +41,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 212388,
+      "bytes": 206628,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.02,
         2.94
       ],
-      "sha256": "8b2201261624953e72422bc6dbd4a06724079f264e91bd1528da51f33e72cd3f",
+      "sha256": "d6759bc48c091c3a01ff10358595d33d3f38227c45f41732193fea4581b8bebe",
       "no_cutaway": true,
       "source": "tools/blender/train_exterior.py"
     },
@@ -65,14 +65,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 170364,
+      "bytes": 160956,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.61,
         2.96
       ],
-      "sha256": "cbe52539287a6594e5954fbb0084b0196d080b39af3005b89755554d225f8fd8",
+      "sha256": "a08a8859ca8565ee8c6b6a63389e50e811351e1a7053683fe67c5fc245d25943",
       "source": "tools/blender/train_exterior.py"
     },
     "tender": {
@@ -132,14 +132,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 160908,
+      "bytes": 158984,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.05,
         2.88
       ],
-      "sha256": "7fd3c7167464d91e60d4018bff6693aac01f5e108e78a760bee488e09112cfaa",
+      "sha256": "617ef17fdd74800f56bf13489496e2ed97ddfebf7f292459879f3333f78c8ded",
       "no_cutaway": true,
       "source": "tools/blender/train_exterior.py"
     },
@@ -156,14 +156,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 201444,
+      "bytes": 195684,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.02,
         2.94
       ],
-      "sha256": "8f15db5d79727f12470e66425f62ca3288875799c3921b6ce24144ee361987ae",
+      "sha256": "9edb77c7078289d88ac2fbaf6bfa067cff3ace4daf182ca5da6498b611f77625",
       "no_cutaway": true,
       "source": "tools/blender/train_exterior.py"
     },
@@ -180,14 +180,14 @@
         256
       ],
       "materials": 1,
-      "bytes": 207068,
+      "bytes": 201308,
       "byte_limit": 1800000,
       "dimensions_m": [
         16,
         3.02,
         2.94
       ],
-      "sha256": "a562eeda45ab3825995e6ca5cd245d3752cfb5a71d419ef35448bd17aa539264",
+      "sha256": "97c7d3d17fe32ef2d9e3b683ffdd63fc876401bd96b298e98f8cf3bcebee8695",
       "attachment_sites": {
         "roof_clear": {
           "zone": "roof",
@@ -386,6 +386,126 @@
         0.796621
       ],
       "sha256": "ad76a1a2508f19e7b5e9451c93bdd130a8559a23dc2cef36fcb5e4d057010dd8"
+    },
+    "wagon_coal": {
+      "triangle_limit": 4000,
+      "texture_limit": 1024,
+      "byte_limit": 1800000,
+      "attachment_sites": {},
+      "status": "ready",
+      "path": "res://models/train_exterior/wagon_coal.glb",
+      "category": "exterior",
+      "lod0_tris": 1084,
+      "lod1_tris": 420,
+      "texture_size": [
+        256,
+        256
+      ],
+      "materials": 1,
+      "bytes": 107308,
+      "dimensions_m": [
+        10,
+        2.7,
+        2.84
+      ],
+      "sha256": "51cea00ed32a679a931adf78e8b06821c897e01ff587231ce2fa57a90f2fcad4",
+      "source": "tools/blender/train_exterior.py"
+    },
+    "wagon_open": {
+      "triangle_limit": 4000,
+      "texture_limit": 1024,
+      "byte_limit": 1800000,
+      "attachment_sites": {},
+      "status": "ready",
+      "path": "res://models/train_exterior/wagon_open.glb",
+      "category": "exterior",
+      "lod0_tris": 940,
+      "lod1_tris": 396,
+      "texture_size": [
+        256,
+        256
+      ],
+      "materials": 1,
+      "bytes": 90168,
+      "dimensions_m": [
+        10,
+        2.3,
+        2.84
+      ],
+      "sha256": "0a8673fe1aedc7fd193c490a9e5407a1309b8b8323cd5726dddddb7a7aec92a8",
+      "source": "tools/blender/train_exterior.py"
+    },
+    "wagon_flat": {
+      "triangle_limit": 4000,
+      "texture_limit": 1024,
+      "byte_limit": 1800000,
+      "attachment_sites": {},
+      "status": "ready",
+      "path": "res://models/train_exterior/wagon_flat.glb",
+      "category": "exterior",
+      "lod0_tris": 886,
+      "lod1_tris": 370,
+      "texture_size": [
+        256,
+        256
+      ],
+      "materials": 1,
+      "bytes": 82712,
+      "dimensions_m": [
+        12,
+        2.44,
+        2.72
+      ],
+      "sha256": "5d5789d7dccc76d15944cd786b9ab720081f9a3f4226a6ae47d1311698d70370",
+      "source": "tools/blender/train_exterior.py"
+    },
+    "wagon_tender": {
+      "triangle_limit": 4000,
+      "texture_limit": 1024,
+      "byte_limit": 1800000,
+      "attachment_sites": {},
+      "status": "ready",
+      "path": "res://models/train_exterior/wagon_tender.glb",
+      "category": "exterior",
+      "lod0_tris": 884,
+      "lod1_tris": 418,
+      "texture_size": [
+        256,
+        256
+      ],
+      "materials": 1,
+      "bytes": 86644,
+      "dimensions_m": [
+        6,
+        2.88,
+        2.72
+      ],
+      "sha256": "04baab7cda105baa7141d5855f4a60c610ac823b9160f29d730e5e557764805c",
+      "source": "tools/blender/train_exterior.py"
+    },
+    "door_open": {
+      "triangle_limit": 400,
+      "texture_limit": 1024,
+      "byte_limit": 1800000,
+      "attachment_sites": {},
+      "status": "ready",
+      "path": "res://models/train_exterior/door_open.glb",
+      "category": "exterior",
+      "lod0_tris": 80,
+      "lod1_tris": 22,
+      "texture_size": [
+        256,
+        256
+      ],
+      "materials": 1,
+      "bytes": 10992,
+      "dimensions_m": [
+        1.968,
+        1.9,
+        0.26
+      ],
+      "sha256": "4294eb798e74ab634ffebb60056cc92d3b0fdedc84c6db0fe67167db3fc4c299",
+      "source": "tools/blender/train_exterior.py"
     }
   },
   "kinds": {
@@ -517,6 +637,41 @@
       "assets": [
         "tender",
         "locomotive"
+      ],
+      "people": false,
+      "parts": []
+    },
+    "wagon_coal": {
+      "assets": [
+        "wagon_coal"
+      ],
+      "people": false,
+      "parts": []
+    },
+    "wagon_open": {
+      "assets": [
+        "wagon_open"
+      ],
+      "people": false,
+      "parts": []
+    },
+    "wagon_flat": {
+      "assets": [
+        "wagon_flat"
+      ],
+      "people": false,
+      "parts": []
+    },
+    "wagon_tender": {
+      "assets": [
+        "wagon_tender"
+      ],
+      "people": false,
+      "parts": []
+    },
+    "door_open": {
+      "assets": [
+        "door_open"
       ],
       "people": false,
       "parts": []

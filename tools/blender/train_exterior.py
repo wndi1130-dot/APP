@@ -22,7 +22,7 @@ import bmesh
 import bpy
 from mathutils import Vector
 
-SCRIPT_VERSION = 1
+SCRIPT_VERSION = 2   # 2: 둥근 지붕 매끈하게, 연결막을 완충기 끝까지(대각뷰, 결정 476)
 ATLAS = 256
 CELL = 32
 # sRGB 0..255. 흰 눈 바탕에서 튀지 않게 어둡고 차갑게(셰이더가 채도를 다시 누른다).
@@ -65,13 +65,14 @@ def uv_of(colour):
 
 
 class Piece:
-    """한 BMesh. 면마다 한 색(그 색 칸의 가운데 UV)."""
+    """한 BMesh. 면마다 한 색(그 색 칸의 가운데 UV). smooth 면은 이웃 smooth 면과 꼭짓점을 합쳐 매끈하게 그린다."""
     def __init__(self, pid):
         self.pid = pid
         self.bm = bmesh.new()
         self.uv = self.bm.loops.layers.uv.new("UVMap")
+        self.smooth_faces = []
 
-    def face(self, pts, colour, outward):
+    def face(self, pts, colour, outward, smooth=False):
         pts = [Vector((p[0], -p[2], p[1])) for p in pts]
         outward = Vector((outward[0], -outward[2], outward[1]))
         normal = Vector((0, 0, 0))
@@ -82,7 +83,9 @@ class Piece:
         if normal.dot(outward) < 0:
             pts.reverse()
         f = self.bm.faces.new([self.bm.verts.new(p) for p in pts])
-        f.smooth = False
+        f.smooth = smooth
+        if smooth:
+            self.smooth_faces.append(f)
         u = uv_of(colour)
         for loop in f.loops:
             loop[self.uv].uv = u
@@ -123,6 +126,10 @@ class Piece:
             self.face([lo[i], lo[j], hi[j], hi[i]], colour, ring[i] + ring[j])
 
     def fin(self):
+        # 둥근 지붕의 띠들이 꼭짓점을 나눠 가져야 대각뷰에서 계단처럼 끊기지 않는다(평면 면과는 합치지 않는다).
+        shared = list({v for f in self.smooth_faces for v in f.verts})
+        if shared:
+            bmesh.ops.remove_doubles(self.bm, verts=shared, dist=1e-5)
         bmesh.ops.triangulate(self.bm, faces=list(self.bm.faces))
         self.bm.normal_update()
         if any(f.calc_area() < 1e-11 for f in self.bm.faces):
@@ -144,7 +151,7 @@ def roof(p, x0, x1, colour, steps, z_half=1.44, eave=EAVE_Y, peak=PEAK_Y, under=
     prof = roof_profile(z_half, eave, peak, steps)
     for (za, ya), (zb, yb) in zip(prof, prof[1:]):
         # 호의 가운데(처마 높이의 z=0)에서 바깥으로
-        p.face([(x0, ya, za), (x1, ya, za), (x1, yb, zb), (x0, yb, zb)], colour, (0, (ya + yb) / 2 - eave + 0.01, (za + zb) / 2))
+        p.face([(x0, ya, za), (x1, ya, za), (x1, yb, zb), (x0, yb, zb)], colour, (0, (ya + yb) / 2 - eave + 0.01, (za + zb) / 2), smooth=True)
     if under:
         p.face([(x0, eave - 0.03, z_half), (x1, eave - 0.03, z_half), (x1, eave - 0.03, -z_half), (x0, eave - 0.03, -z_half)], "roof_dark", (0, -1, 0))
         for zs in (1, -1):
@@ -202,8 +209,9 @@ def end_wall(p, xs, colour, door_colour="inside", detail=True, bellows=True, top
     if not bellows:
         p.face([(x, dy0, -dz), (x, dy0, dz), (x, dy1, dz), (x, dy1, -dz)], door_colour, (xs, 0, 0))
         return
-    # 연결막: 문 둘레를 감싸는 고무 주름 상자(문 쪽은 비어 어두운 통로)
-    x1 = xs * (BODY_X + 0.30)
+    # 연결막: 문 둘레를 감싸는 고무 주름 상자(문 쪽은 비어 어두운 통로). 완충기 끝 2cm 안까지 나와,
+    # 필드가 칸을 거의 붙여 놓으면(train_model_kit FIELD_GAP_M) 이웃 칸 연결막과 맞닿는다.
+    x1 = xs * (HALF_L - 0.02)
     lo, hi = sorted((x, x1))
     w, yb, yt = 0.56, FLOOR_Y + 0.02, 2.48
     p.box((lo, hi), (yb, yt), (-w, w), "bellows", skip=("+x" if xs > 0 else "-x", "-x" if xs > 0 else "+x"))
@@ -540,6 +548,158 @@ def build_medic(p, d):
           wins=windows_row(7, 1.0), extras=medic_extras, vents=(-4.5, -2.0, 2.0, 4.5), door_col="grey")
 
 
+# ---------------------------------------------------------------- 옆 선로 화차·타는 문(대각뷰, 결정 476)
+# 지도의 화차 칸(field_maps wagons): 석탄 화차·빈 화차 10x3, 평판 화차 12x3, 탄수차 6x3(기존 tender.glb).
+# 키트가 길이로만 배율을 정하므로 모델 길이를 지도 칸 길이에 맞춰 짓는다.
+WAGON_FLOOR = 1.18
+
+
+def axle_pair(p, half, detail=True, inset=2.3):
+    """두 축 화차: 대차 없이 틀 밑에 바로 붙은 바퀴 넷·축상자, (가까운 판) 판스프링·굴대 머리.
+    축은 완충기 끝에서 inset 안쪽."""
+    sides = 16 if detail else 8
+    for ax in (-(half - inset), half - inset):
+        for zs in (1, -1):
+            z0, z1 = sorted((zs * (WHEEL_Z - 0.06), zs * (WHEEL_Z + 0.06)))
+            p.cyl((ax, WHEEL_R, z0), (ax, WHEEL_R, z1), WHEEL_R, "iron", sides, cap_colour="iron_worn")
+            zb0, zb1 = sorted((zs * 0.84, zs * 0.96))
+            p.box((ax - 0.18, ax + 0.18), (0.30, 0.66), (zb0, zb1), "iron")
+            if detail:
+                p.box((ax - 0.75, ax + 0.75), (0.70, 0.80), (zb0, zb1), "steel")
+                za, zb = sorted((zs * (WHEEL_Z + 0.06), zs * (WHEEL_Z + 0.10)))
+                p.cyl((ax, WHEEL_R, za), (ax, WHEEL_R, zb), 0.12, "steel", 6)
+
+
+def wagon_frame(p, half, detail=True):
+    """화차 틀: 옆 들보·끝 들보·완충기 넷·연결기 둘·밑면."""
+    body = half - 0.4
+    for zs in (1, -1):
+        p.box((-body, body), (WAGON_FLOOR - 0.24, WAGON_FLOOR), sorted((zs * 1.20, zs * 1.34)), "iron")
+    for xs in (1, -1):
+        a, b = sorted((xs * body, xs * (body + 0.14)))
+        p.box((a, b), (0.86, WAGON_FLOOR), (-1.36, 1.36), "iron_worn" if detail else "iron")
+        for zs in (1, -1):
+            p.cyl((xs * (body + 0.14), 1.02, zs * 0.86), (xs * (half - 0.05), 1.02, zs * 0.86), 0.08, "iron", 6 if detail else 4, caps=detail)
+            p.cyl((xs * (half - 0.05), 1.02, zs * 0.86), (xs * half, 1.02, zs * 0.86), 0.19, "steel", 10 if detail else 6, cap_colour="iron_worn")
+        a, b = sorted((xs * (body + 0.14), xs * (half - 0.12)))
+        p.box((a, b), (0.95, 1.08), (-0.09, 0.09), "iron")
+    p.face([(-body, WAGON_FLOOR - 0.24, -1.34), (body, WAGON_FLOOR - 0.24, -1.34), (body, WAGON_FLOOR - 0.24, 1.34), (-body, WAGON_FLOOR - 0.24, 1.34)], "iron", (0, -1, 0))
+
+
+def coal_heap(p, x0, x1, z_half, eave, peak, detail):
+    """옆벽 위로 솟은 석탄 둔덕: 울퉁불퉁한 높이 격자를 면마다 따로 그늘지게 그려(매끈하게 합치지 않음)
+    덮개 씌운 둥근 지붕이 아니라 덩어리 더미로 읽히게 한다. 가장자리는 옆벽 안쪽 아래(eave)에 묻힌다."""
+    nx, nz = (12, 6) if detail else (6, 2)
+
+    def height(i, k):
+        if i in (0, nx) or k in (0, nz):
+            return eave
+        ridge = math.sin(math.pi * k / nz) * min(1.0, math.sin(math.pi * i / nx) * 1.6)
+        lump = (((i * 7 + k * 13) % 5) - 2) * 0.035 if detail else 0.0
+        return eave + (peak - eave) * ridge + lump
+
+    grid = [[(x0 + (x1 - x0) * i / nx, height(i, k), -z_half + 2 * z_half * k / nz) for k in range(nz + 1)] for i in range(nx + 1)]
+    for i in range(nx):
+        for k in range(nz):
+            a, b, c, d = grid[i][k], grid[i + 1][k], grid[i + 1][k + 1], grid[i][k + 1]
+            colour = "iron" if (i * 3 + k) % 4 == 0 else "black"
+            p.face([a, b, c], colour, (0, 1, 0))
+            p.face([a, c, d], colour, (0, 1, 0))
+
+
+def open_wagon(p, detail, coal=False):
+    """두 축 무개화차 10 m: 판자 옆벽 1.1 m와 쇠 기둥, 안은 어두운 바닥. coal이면 옆벽 위로 솟은
+    석탄 둔덕(위를 보는 면이라 셰이더가 철에 맞게 눈을 얹는다)."""
+    half = 5.0
+    body = half - 0.4
+    top = WAGON_FLOOR + 1.1
+    wagon_frame(p, half, detail)
+    axle_pair(p, half, detail)
+    p.face([(-body, WAGON_FLOOR, -1.3), (body, WAGON_FLOOR, -1.3), (body, WAGON_FLOOR, 1.3), (-body, WAGON_FLOOR, 1.3)], "inside", (0, 1, 0))
+    for zs in (1, -1):
+        z0, z1 = sorted((zs * 1.30, zs * 1.36))
+        p.box((-body, body), (WAGON_FLOOR, top), (z0, z1), "plank")
+        if detail:
+            for x in (-3.6, -1.8, 0.0, 1.8, 3.6):
+                p.box((x - 0.06, x + 0.06), (WAGON_FLOOR - 0.2, top + 0.02), sorted((zs * 1.36, zs * 1.42)), "iron_worn")
+            p.box((-body, body), (top - 0.06, top), sorted((zs * 1.36, zs * 1.40)), "iron")
+            for y in (WAGON_FLOOR + 0.37, WAGON_FLOOR + 0.73):
+                p.box((-body, body), (y - 0.015, y + 0.015), sorted((zs * 1.36, zs * 1.37)), "plank_dark", skip=("-y", "+y"))
+    for xs in (1, -1):
+        a, b = sorted((xs * (body - 0.06), xs * body))
+        p.box((a, b), (WAGON_FLOOR, top), (-1.30, 1.30), "plank_dark")
+    if coal:
+        coal_heap(p, -body + 0.1, body - 0.1, 1.26, top - 0.15, top + 0.35, detail)
+
+
+def coal_wagon(p, detail):
+    open_wagon(p, detail, coal=True)
+
+
+def flat_wagon(p, detail):
+    """평판 화차 12 m: 낮은 판자 바닥, 옆 말뚝, 가운데 방수포를 덮어 끈으로 묶은 짐 한 덩이."""
+    half = 6.0
+    body = half - 0.4
+    wagon_frame(p, half, detail)
+    axle_pair(p, half, detail)
+    p.box((-body, body), (WAGON_FLOOR, WAGON_FLOOR + 0.08), (-1.36, 1.36), "plank_dark", skip=("-y",))
+    for zs in (1, -1) if detail else ():
+        for x in (-4.6, -2.3, 0.0, 2.3, 4.6):
+            p.box((x - 0.05, x + 0.05), (WAGON_FLOOR + 0.08, WAGON_FLOOR + 0.9), sorted((zs * 1.26, zs * 1.36)), "iron_worn", skip=("-y",))
+    roof(p, -3.4, 3.4, "tarp", 6 if detail else 3, z_half=1.1, eave=WAGON_FLOOR + 0.08, peak=WAGON_FLOOR + 1.25, under=False, caps=True)
+    if detail:
+        for x in (-2.4, 0.0, 2.4):
+            roof(p, x - 0.03, x + 0.03, "plank_dark", 6, z_half=1.11, eave=WAGON_FLOOR + 0.09, peak=WAGON_FLOOR + 1.26, under=False, caps=False)
+
+
+def tender_wagon(p, detail):
+    """버려진 탄수차 6 m(두 축): 둥근 등의 물탱크와 앞쪽의 빈 석탄 칸, 탱크 위 급수구 뚜껑."""
+    half = 3.0
+    body = half - 0.4
+    top = WAGON_FLOOR + 1.25
+    wagon_frame(p, half, detail)
+    axle_pair(p, half, detail, inset=1.45)
+    # 물탱크(뒤쪽 2/3): 옆·끝벽과 둥근 등
+    tx0, tx1 = -body, 0.6
+    p.box((tx0, tx1), (WAGON_FLOOR, top), (-1.3, 1.3), "green_dark", skip=("-y", "+y"))
+    roof(p, tx0, tx1, "green_dark", 6 if detail else 3, z_half=1.3, eave=top, peak=top + 0.35, under=False, caps=True)
+    vent(p, tx0 + 0.9, detail, y=top + 0.35)
+    # 석탄 칸(앞쪽): 낮은 옆벽, 안은 어둡고 비어 있다
+    cx0, cx1 = 0.6, body
+    p.face([(cx0, WAGON_FLOOR, -1.25), (cx1, WAGON_FLOOR, -1.25), (cx1, WAGON_FLOOR, 1.25), (cx0, WAGON_FLOOR, 1.25)], "inside", (0, 1, 0))
+    for zs in (1, -1):
+        z0, z1 = sorted((zs * 1.25, zs * 1.32))
+        p.box((cx0, cx1), (WAGON_FLOOR, top - 0.35), (z0, z1), "green_dark")
+    a, b = sorted((cx1 - 0.07, cx1))
+    p.box((a, b), (WAGON_FLOOR, top - 0.35), (-1.25, 1.25), "green_dark")
+    if detail:
+        # 탱크 띠 둘과 녹 자국
+        for x in (tx0 + 0.15, tx1 - 0.15):
+            for zs in (1, -1):
+                p.box((x - 0.03, x + 0.03), (WAGON_FLOOR, top), sorted((zs * 1.3, zs * 1.32)), "iron")
+        p.box((-1.6, -1.2), (WAGON_FLOOR + 0.2, top - 0.1), (1.3, 1.31), "rust", skip=("-z", "-y", "+y"))
+
+
+def door_open(p, detail):
+    """필드 열차의 타는 문(map_view door_faces 자리): 옆벽에 붙은 어두운 문간과 쇠 문틀, 왼쪽으로 젖혀
+    벽에 붙인 문짝(작은 창), 밑 디딤판, 손잡이 둘. 원점은 문 칸 가운데의 객차 옆벽 아래 레일 높이,
+    z=0이 벽이고 +z가 바깥(키트가 칸 옆벽에 붙인다). 먼 판은 문간·문짝·디딤판 하나만."""
+    y0, y1 = FLOOR_Y + 0.08, 2.36
+    w = 0.45
+    p.face([(-w, y0, 0.012), (w, y0, 0.012), (w, y1, 0.012), (-w, y1, 0.012)], "inside", (0, 0, 1))
+    lx0, lx1 = -w - 0.95, -w - 0.09
+    p.box((lx0, lx1), (y0, y1), (0.05, 0.10), "iron_worn", skip=("-z",))
+    p.box((-w + 0.03, w - 0.03), (FLOOR_Y - 0.30, FLOOR_Y - 0.25), (0.0, 0.26), "iron", skip=("-z",))
+    if detail:
+        for x0, x1 in ((-w - 0.07, -w), (w, w + 0.07)):
+            p.box((x0, x1), (y0 - 0.04, y1 + 0.07), (0.0, 0.045), "iron", skip=("-z",))
+        p.box((-w - 0.07, w + 0.07), (y1, y1 + 0.07), (0.0, 0.045), "iron", skip=("-z",))
+        p.face([(lx0 + 0.12, 1.82, 0.102), (lx1 - 0.12, 1.82, 0.102), (lx1 - 0.12, 2.20, 0.102), (lx0 + 0.12, 2.20, 0.102)], "glass", (0, 0, 1))
+        p.box((-w + 0.03, w - 0.03), (FLOOR_Y - 0.62, FLOOR_Y - 0.57), (0.0, 0.14), "iron", skip=("-z",))
+        for x in (-w - 0.10, w + 0.10):
+            p.cyl((x, 1.40, 0.06), (x, 2.25, 0.06), 0.018, "brass", 4, caps=False)
+
+
 BUILDERS = {
     "coach_worn": (build_worn, "판자를 덧댄 낡은 3등 객차(꼬리·식당·경비·공방·찬 칸 등)"),
     "coach_clean": (build_clean, "칠이 남은 앞칸 객차, 크림 띠"),
@@ -547,7 +707,16 @@ BUILDERS = {
     "coach_medic": (build_medic, "의무칸, 반쯤 친 흰 커튼. 붉은 십자 없음"),
     "coach_glass": (glass_coach, "온실칸, 유리 벽과 지붕 채광창"),
     "freight_open": (freight, "문을 열어 둔 덮개 화차, 문간에 나무 상자·자루"),
+    "wagon_coal": (coal_wagon, "옆 선로 석탄 무개화차 10 m(두 축), 옆벽 위로 솟은 석탄 둔덕"),
+    "wagon_open": (open_wagon, "옆 선로 빈 무개화차 10 m(두 축)"),
+    "wagon_flat": (flat_wagon, "옆 선로 평판 화차 12 m(두 축), 방수포 덮은 짐"),
+    "wagon_tender": (tender_wagon, "옆 선로 버려진 탄수차 6 m(두 축), 물탱크와 빈 석탄 칸"),
+    "door_open": (door_open, "필드 열차의 타는 문: 문간·젖힌 문짝·디딤판(칸 옆벽에 붙는 조각)"),
 }
+# 길이 검사: 모델 반 길이(완충기 끝). None이면 길이·바닥 검사를 하지 않는다(벽에 붙는 조각).
+HALF_LENGTHS = {"wagon_coal": 5.0, "wagon_open": 5.0, "wagon_flat": 6.0, "wagon_tender": 3.0, "door_open": None}
+# 대응표에 처음 들어가는 자산: (삼각형 상한).
+NEW_ASSETS = {"wagon_coal": 4000, "wagon_open": 4000, "wagon_flat": 4000, "wagon_tender": 4000, "door_open": 400}
 
 
 # ---------------------------------------------------------------- 내보내기
@@ -607,7 +776,7 @@ def export(pid, pieces, mat, path):
             bpy.data.meshes.remove(mesh)
 
 
-def check_glb(path, tris):
+def check_glb(path, tris, half=HALF_L):
     data = path.read_bytes()
     magic, version, length = struct.unpack_from("<4sII", data)
     chunk_length, chunk_type = struct.unpack_from("<II", data, 12)
@@ -630,8 +799,8 @@ def check_glb(path, tris):
         hi = [max(hi[i], pos["max"][i]) for i in range(3)]
     if sorted(counts) != sorted(tris):
         raise ValueError("삼각형 수 검사 실패 %s %s" % (counts, tris))
-    if abs(hi[0] - HALF_L) > 1e-4 or abs(lo[0] + HALF_L) > 1e-4 or abs(lo[1]) > 1e-4:
-        raise ValueError("길이 16m·바닥 0 검사 실패 %s %s" % (lo, hi))
+    if half is not None and (abs(hi[0] - half) > 1e-4 or abs(lo[0] + half) > 1e-4 or abs(lo[1]) > 1e-4):
+        raise ValueError("길이 %gm·바닥 0 검사 실패 %s %s" % (half * 2, lo, hi))
     return len(data), hashlib.sha256(data).hexdigest(), [round(hi[i] - lo[i], 6) for i in range(3)], names
 
 
@@ -639,6 +808,9 @@ def update_catalog(repo, rows):
     path = repo / "s2/game/world/train_model_catalog.json"
     book = json.loads(path.read_text(encoding="utf-8"))
     for r in rows:
+        if r["id"] not in book["assets"]:
+            book["assets"][r["id"]] = {"triangle_limit": NEW_ASSETS[r["id"]], "texture_limit": 1024, "byte_limit": 1800000, "attachment_sites": {}}
+            book["kinds"].setdefault(r["id"], {"assets": [r["id"]], "people": False, "parts": []})
         a = book["assets"][r["id"]]
         a.update({"status": "ready", "path": "res://models/train_exterior/%s.glb" % r["id"], "category": "exterior",
                   "lod0_tris": r["lod0"], "lod1_tris": r["lod1"], "texture_size": [ATLAS, ATLAS], "materials": 1,
@@ -675,7 +847,7 @@ def main():
                 raise ValueError("LOD1이 절반을 넘음 %s" % tris)
             path = out_dir / (pid + ".glb")
             export(pid, pieces, mat, path)
-            size, digest, dims, names = check_glb(path, tris)
+            size, digest, dims, names = check_glb(path, tris, HALF_LENGTHS.get(pid, HALF_L))
             rows.append({"id": pid, "lod0": tris[0], "lod1": tris[1], "bytes": size, "sha256": digest, "dims": dims, "note": note})
             print("TRAIN_EXT_READY %s lod0=%d lod1=%d bytes=%d dims=%s nodes=%s" % (pid, tris[0], tris[1], size, dims, names), flush=True)
         except Exception as error:

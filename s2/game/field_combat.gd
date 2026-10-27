@@ -53,7 +53,8 @@ const MELEE_SLACK: float = 0.15          # a blow lands this far past the weapon
 ## half of that for a crowd that comes on in numbers).
 const BODY_STUN: float = 0.9
 ## How loud a melee blow on the dead is (decision 473 W3: quiet before; the
-## reference game's blows carry 8 tiles). A quiet knife from behind stays quiet.
+## reference game's blows carry 8 tiles), under its own tag "blow" that carries
+## 0.75 of the level's radius (noise.gd). A quiet knife from behind stays quiet.
 const BLOW_LEVEL := SimNoise.Level.NORMAL
 const RAIDER_AMMO: int = 6
 ## A companion breathes after a blow that landed, and again when it picks the
@@ -692,7 +693,10 @@ func swing(p, z: Dictionary) -> void:
 	z["hit_way"] = String(p.get_meta(Pose.BLOW_WAY, ""))
 	var state: String = z["state"]
 	var quiet_kill: bool = wid == "knife" and p.crouched and from_back and state != "chase" and state != "attack" and state != "grab"
-	game.make_sound(z["pos"], SimNoise.Level.QUIET if quiet_kill else BLOW_LEVEL, "melee", p)
+	if quiet_kill:
+		game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
+	else:
+		game.make_sound(z["pos"], BLOW_LEVEL, "blow", p)
 	var blade: bool = bool(d["blade"])
 	# Rising corpse: crush the head before it stands (zombies.md 갓 일어난 자).
 	if state == "rising":

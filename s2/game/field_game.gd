@@ -17,6 +17,7 @@ const RoomStories = preload("res://game/world/room_stories.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
+const RouteStops = preload("res://game/train/route_stops.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -430,6 +431,10 @@ func _ready() -> void:
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	_take_map(SidePath.add(stop_map, rng.seed))
+	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
+	# no fire at the first leg's fifth stop), before anything is put on the map.
+	if opts.get("departure") is Dictionary:
+		RouteStops.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)))
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).

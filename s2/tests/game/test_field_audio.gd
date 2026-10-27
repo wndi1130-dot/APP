@@ -141,6 +141,23 @@ func test_noises_pick_their_sound() -> void:
 	assert_eq(a.last_tag_group, "")
 
 
+# Past the map's edge the danger is heard: a far bed, louder toward the nearest
+# place out there, none beyond EDGE_RANGE.
+func test_the_danger_past_the_edge_is_heard_louder_nearer() -> void:
+	var a = game.audio
+	a._tick_edge(game.player.position, 10.0)
+	assert_false(a.edge_spots.is_empty(), "the map's drawing hands the places over")
+	a.edge_spots = [Vector3(-30, 0, 60)]
+	a._tick_edge(Vector3(2, 0, 60), 10.0)
+	var far_db: float = a.edge_bed.volume_db
+	a._tick_edge(Vector3(-10, 0, 60), 10.0)
+	var near_db: float = a.edge_bed.volume_db
+	assert_gt(far_db, -80.0, "32 m from a place past the edge it is heard")
+	assert_gt(near_db, far_db, "and louder walking toward it")
+	a._tick_edge(Vector3(100, 0, 60), 10.0)
+	assert_eq(a.edge_bed.volume_db, -80.0, "past EDGE_RANGE it is gone")
+
+
 # Scene one: a horde sets off far away. It is out of sight, so no voice: a far
 # thud (low, through the dullest bus) and birds tell it, the bed stays silent.
 func test_a_far_horde_is_told_by_a_thud_and_birds_not_by_voices() -> void:

@@ -794,6 +794,9 @@ func _show_train(phase: String, seg: int) -> void:
 			rules["comms"][c]["sit"] = [sit[0], sit[1], sit[2], sit[3]]
 			rules["comms"][c]["pop"] = int(train_g["comms"][c]["pop"])
 			rules["comms"][c]["rel"] = float(train_g["comms"][c]["rel"])
+	# The hands the stretch's settle left (turn_settle.gd: have, short by post, expose), so
+	# the cars look as many hands as there are (carry_people 3.6): empty posts when short.
+	rules["train"]["hands"] = (train_g["hands"] as Dictionary).duplicate(true) if train_g.get("hands") is Dictionary else {}
 	train = TRAIN_SCENE.instantiate()
 	train.opts = {"panel": false, "seed": int(opts.get("seed", 1))}
 	# The values last shown, so the people react to what changed since (train_people_view.gd).
