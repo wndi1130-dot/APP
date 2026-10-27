@@ -6,6 +6,7 @@ const Catalog = preload("res://game/train/train_catalog.gd")
 const Context = preload("res://game/train/train_context.gd")
 const Body = preload("res://game/train/train_body.gd")
 const SeasonTable = preload("res://game/season_table.gd")
+const Schedule = preload("res://game/train/train_schedule.gd")
 
 
 func _scene(panel: bool = false):
@@ -720,6 +721,31 @@ func test_reregistering_a_refuge_cancels_its_incoming_evacuation() -> void:
 	for a in movers:
 		assert_true(a.get("evacuating", false))
 		assert_true(s.life.places.bookings.has(a["body"].get_instance_id()))
+
+
+func test_a_job_short_of_hands_leaves_its_work_places_empty_and_tires_the_rest() -> void:
+	var s = _scene()
+	assert_true(s.set_value("view.work_time", true))
+	var places: Dictionary = s.life.places.spots
+	for id in ["engine/work", "engine/work_b", "workshop/work", "workshop/work_b"]:
+		assert_true(places[id]["open"], "손이 다 있으면 열림: " + id)
+	# More than half the firebox shifts and all the repair hands missing (train_hands.gd short).
+	var short := {"stoker": 0.6, "stove": 0.0, "watch": 0.0, "roof": 0.0, "repair": 1.0}
+	assert_true(s.set_value("train.hands", {"have": 30.0, "short": short, "expose": {}}))
+	assert_true(places["engine/work"]["open"], "화실 손이 반 넘게 모자라도 한 자리는 남음")
+	assert_false(places["engine/work_b"]["open"], "화실 둘째 자리는 빔")
+	assert_false(places["workshop/work"]["open"], "수리 손이 없으면 공방 일 자리 둘 다 빔")
+	assert_false(places["workshop/work_b"]["open"])
+	assert_almost_eq(float(s.life.contexts["engine"]["job_short"]), 0.6, 0.001)
+	assert_almost_eq(float(s.life.contexts["tail1"]["job_short"]), 0.0, 0.001, "일 자리가 없는 칸은 손 몫과 상관없음")
+	# The one left at the firebox gets their breath back every other turn; a full crew does not.
+	var c: Dictionary = s.life.contexts["engine"]
+	assert_eq(Schedule.gesture("work", c, {}, 1), "catch_breath")
+	assert_ne(Schedule.gesture("work", c, {}, 0), "catch_breath")
+	var enough := {"stoker": 0.0, "stove": 0.0, "watch": 0.0, "roof": 0.0, "repair": 1.0}
+	assert_true(s.set_value("train.hands", {"have": 66.0, "short": enough, "expose": {}}))
+	assert_true(places["engine/work_b"]["open"])
+	assert_ne(Schedule.gesture("work", s.life.contexts["engine"], {}, 1), "catch_breath")
 
 
 func test_a_burning_car_opens_no_everyday_place_whatever_its_screen_stage() -> void:
