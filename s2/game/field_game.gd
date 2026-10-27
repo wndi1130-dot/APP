@@ -378,6 +378,12 @@ var season_name: String = ""
 var sky_photo: String = ""
 var look_hour: float = -1.0
 var atmo: Dictionary = {}
+## The player's brightness from the settings (decision 471 B5), -0.2..0.2; 0 is
+## the picture as made, and the night's dark is set there. It bends the dark end
+## of the grade's curve like a gamma. Only the play flow sets it
+## (set_screen_lift): a field the tools, measures and bots make stays at 0.
+var screen_lift: float = 0.0
+const SCREEN_LIFT_MAX: float = 0.2
 var atmo_min: float = -INF
 var breath: Node3D
 ## Frost creeping in at the screen's edges on cold nights (plain stops; a storm has its own).
@@ -869,8 +875,33 @@ func _apply_grade(g: Dictionary) -> void:
 	var shadow: Color = Color(0.3, 0.3, 0.3).lerp(Color(g["shadow"]) * (0.3 / maxf(Color(g["shadow"]).v, 0.05)), k * 0.35)
 	var lit: Color = Color(0.85, 0.85, 0.85).lerp(Color(g["light"]) * (0.85 / maxf(Color(g["light"]).v, 0.05)), k * 0.3)
 	var gr := tex.gradient
-	gr.offsets = PackedFloat32Array([0.0, 0.3, 0.85, 1.0])
+	# The player's brightness reads the input as x^(1/(1+lift)): each stop moves to o^(1+lift).
+	var bend := 1.0 + screen_lift
+	gr.offsets = PackedFloat32Array([0.0, pow(0.3, bend), pow(0.85, bend), 1.0])
 	gr.colors = PackedColorArray([Color(0, 0, 0), shadow, lit, Color(1, 1, 1)])
+
+
+## The player's brightness (decision 471 B5), from the settings row. A storm
+## stage has no grade of its own, so the brightness alone bends its curve.
+func set_screen_lift(lift: float) -> void:
+	screen_lift = clampf(lift, -SCREEN_LIFT_MAX, SCREEN_LIFT_MAX)
+	if environment == null:
+		return
+	if storm.is_empty() and atmo.has("grade"):
+		_apply_grade(atmo["grade"])
+		return
+	environment.adjustment_enabled = screen_lift != 0.0
+	if not environment.adjustment_enabled:
+		return
+	environment.adjustment_saturation = 1.0
+	environment.adjustment_contrast = 1.0
+	environment.adjustment_brightness = 1.0
+	var tex := GradientTexture1D.new()
+	tex.width = 64
+	tex.gradient = Gradient.new()
+	tex.gradient.offsets = PackedFloat32Array([0.0, pow(0.5, 1.0 + screen_lift), 1.0])
+	tex.gradient.colors = PackedColorArray([Color(0, 0, 0), Color(0.5, 0.5, 0.5), Color(1, 1, 1)])
+	environment.adjustment_color_correction = tex
 
 
 ## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
