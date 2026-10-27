@@ -848,7 +848,83 @@ static func pay_upkeep(g: Dictionary) -> Array[String]:
 			continue
 		for key: String in ["parts", "wood", "scrap"]:
 			d[key] = float(d.get(key, 0)) - float(upkeep.get(key, 0))
+	# S1 payUpkeep: the 「부품이 모자란다」 paper, once in three stretches (the
+	# choices are turn_cards.gd's). Only on a board that carries papers. S1's
+	# other way to it, a breakdown without the parts (rollBreakdown), is not in S2.
+	if not starved.is_empty() and g.get("cards") is Array and g.has("nextCardUid"):
+		var shown: bool = (g["cards"] as Array).any(func(row: Dictionary) -> bool: return row.get("kind") == "dom:short")
+		var last: int = int(g.get("eventLog", {}).get("dom:short", {}).get("seg", -99))
+		if not shown and int(g.get("seg", 0)) - last >= 3:
+			var row: Dictionary = {"uid": g["nextCardUid"], "kind": "dom:short", "text": ",".join(starved)}
+			g["nextCardUid"] = int(g["nextCardUid"]) + 1
+			g["cards"].append(row)
 	return starved
+
+
+## S1 running: a technology that pays upkeep — not stood down, restored, and
+## working (or working at half for want of its upkeep).
+static func _running(g: Dictionary, id: String) -> bool:
+	var st: Dictionary = _dom(g).get("techs", {}).get(id, {})
+	if st.is_empty() or bool(st.get("off", false)) or not usable(g, {}, id):
+		return false
+	return mult(g, {}, id) > 0.0 or bool(st.get("starved", false))
+
+
+## S1 standDown (the paper's 「하나를 세운다」): the running technology with the
+## largest parts upkeep stops, and the part it would take comes back. Null when
+## none takes parts.
+static func stand_down(g: Dictionary) -> Variant:
+	var d: Dictionary = _dom(g)
+	var pick: String = ""
+	var most: float = 0.0
+	for id: String in TECHS:
+		var parts: float = float(upkeep_of(g, id).get("parts", 0))
+		if parts > most and _running(g, id):
+			pick = id
+			most = parts
+	if pick == "":
+		return null
+	var st: Dictionary = d["techs"][pick]
+	st["off"] = true
+	st["refund"] = true
+	d["parts"] = float(d.get("parts", 0)) + 1.0
+	if not g.get("journal") is Array:
+		g["journal"] = []
+	g["journal"].append({"seg": int(g.get("seg", 0)), "text": "%s을(를) 세웠다. 그 몫의 부품을 돌린다." % title(g, pick), "tone": "bad"})
+	return pick
+
+
+## S1 restartWhy: why a stood-down technology cannot run again ("" when it can) —
+## the part it gave back is owed.
+static func restart_why(g: Dictionary, id: String) -> String:
+	var st: Dictionary = _dom(g).get("techs", {}).get(id, {})
+	if not bool(st.get("off", false)):
+		return "세워 둔 기술이 아니다"
+	if bool(st.get("refund", false)) and float(_dom(g).get("parts", 0)) < 1.0:
+		return "세울 때 돌려받은 부품 1이 든다"
+	return ""
+
+
+## S1 restartTech: it runs again, paying back the part.
+static func restart(g: Dictionary, id: String) -> bool:
+	if restart_why(g, id) != "":
+		return false
+	var d: Dictionary = _dom(g)
+	var st: Dictionary = d["techs"][id]
+	if bool(st.get("refund", false)):
+		d["parts"] = float(d.get("parts", 0)) - 1.0
+	st["off"] = false
+	st.erase("refund")
+	return true
+
+
+## S1 techTitle: the name, with the variant's in brackets.
+static func title(g: Dictionary, id: String) -> String:
+	var def: Dictionary = TECHS[id]
+	var v: Variant = _dom(g).get("techs", {}).get(id, {}).get("variant")
+	if v != null and def.has("variants"):
+		return "%s(%s)" % [def["name"], def["variants"][v]["name"]]
+	return String(def["name"])
 
 
 static func work_power(g: Dictionary, t: Dictionary = {}) -> float:

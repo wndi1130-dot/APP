@@ -14,7 +14,9 @@ extends Control
 ## names that law at the right of its name (or of the line under it when the
 ## name leaves no room), red with 없음 while it does not stand (S1 useTag), so
 ## none is bought unawares (7.3); its use line is the key's tooltip when
-## nothing blocks it.
+## nothing blocks it. A technology stood down (S1 standDown, the 「부품이
+## 모자란다」 paper's 「하나를 세운다」) says 멈춤 before what it does and its key
+## is 다시 돌리기, dimmed while the part it gave back cannot be paid again.
 ##
 ## The rules are train_research.gd; the pane asks them, and tries a start on a
 ## copy to know whether a way can go. It changes the state it was given.
@@ -108,7 +110,7 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 		"use": LawTech.use_line(g0, id, st.get("variant")) if LAW_TAGGED.has(id) else "",
 		# What it takes from the stores each stretch while it runs, and whether
 		# they could not pay it last stretch (it ran at half: Research.mult).
-		"upkeep": [], "starved": bool(st.get("starved", false)),
+		"upkeep": [], "starved": bool(st.get("starved", false)), "off": false,
 	}
 	var upkeep: Dictionary = Research.upkeep_of(g0, id)
 	for key: String in ["parts", "wood", "scrap"]:
@@ -141,6 +143,12 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 		r["can"] = why == null
 		r["why"] = "" if why == null else String(why)
 		r["need"] = int(cost["frags"]) - int(cost["defectFrags"])
+	# Stood down (S1 standDown): it runs again for the part it gave back (restartTech).
+	if bool(st.get("off", false)) and stage in ["done", "defective"]:
+		r["off"] = true
+		r["word"] = "다시 돌리기"
+		r["why"] = Research.restart_why(g0, id)
+		r["can"] = r["why"] == ""
 	return r
 
 
@@ -318,7 +326,7 @@ func _row(r: Dictionary, top: float) -> void:
 	# A running technology's upkeep stands where its key would; the name line's
 	# law tag stops short of it (the line under the name has the width).
 	var name_x1: float = law_x1
-	if not bool(r["active"]) and stage != "new" and not (r["upkeep"] as Array).is_empty():
+	if not bool(r["active"]) and not bool(r["off"]) and stage != "new" and not (r["upkeep"] as Array).is_empty():
 		name_x1 = minf(law_x1, _upkeep(r, top) - 8.0)
 	var tagged: bool = _law(r, top + 18.0, 64.0 + GlassParts.text_w(word) / k + 8.0, name_x1)
 	# Where the line under the name ends, for a tag the name line had no room for.
@@ -330,9 +338,9 @@ func _row(r: Dictionary, top: float) -> void:
 		_pips(id, int(r["have"]), int(r["need"]), top)
 		under_x = _cost(r["cost"], top + 40.0, "Cost_" + id, 44.0 + (14.0 * int(r["need"]) + 10.0 if int(r["need"]) > 0 else 0.0))
 	else:
-		var half: bool = stage == "defective" or bool(r["starved"])
+		var half: bool = not bool(r["off"]) and (stage == "defective" or bool(r["starved"]))
 		_add(_mark("check", 13.0, Vector2(44.0, top + 28.0), ACCENT if half else INK2))
-		var said := UiFonts.label(("½ " if half else "") + String(r["effect"]), UiFonts.WORD, 400, 12.0, INK2, 0.52)
+		var said := UiFonts.label(("멈춤 " if bool(r["off"]) else ("½ " if half else "")) + String(r["effect"]), UiFonts.WORD, 400, 12.0, INK2, 0.52)
 		said.name = "Effect_" + id
 		_text(said, 62.0, top + 40.0)
 		under_x = 62.0 + GlassParts.text_w(said) / k
@@ -413,6 +421,12 @@ func _press(r: Dictionary, key: Button) -> void:
 	var id: String = String(r["id"])
 	if not bool(r["can"]):
 		UiDeny.shake(key)
+		return
+	if bool(r["off"]):
+		if Research.restart(g, id):
+			_after()
+		else:
+			UiDeny.shake(key)
 		return
 	if bool(r["active"]):
 		if _cancelling != id:
