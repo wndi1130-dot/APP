@@ -65,3 +65,20 @@ func test_one_use_rolls_its_colour_by_building() -> void:
 		assert_eq(look["wall"], "boards")
 		seen[Color(look["paint"].r, look["paint"].g, look["paint"].b)] = true
 	assert_gt(seen.size(), 1, "the same use is not one colour")
+
+
+func test_the_head_word_names_the_use() -> void:
+	var use := func(name: String) -> String: return Uses.use_of({"name": name, "group": "church"})
+	assert_eq(use.call("성당 관리인 집"), "home", "the last word wins over 성당·관리")
+	assert_eq(use.call("학교 숙직 헛간"), "barn")
+	assert_eq(use.call("공구 창고"), "store")
+	assert_eq(use.call("식품 집하 창고"), "store", "집하 is not 집")
+	assert_eq(use.call("우편 집배소"), "office", "a one-letter word only at the end of a word")
+	assert_eq(use.call("저장 광 가"), "store", "the 가 tag comes off")
+	assert_eq(use.call("장작 광"), "barn")
+	assert_eq(use.call("판매 홀"), "shop")
+	assert_eq(use.call("가게 겸 집"), "shop")
+	assert_eq(use.call("빵집"), "shop")
+	assert_eq(use.call("우물집"), "shelter")
+	assert_eq(use.call("갱구 관리동"), "headframe")
+	assert_eq(Uses.use_of({"name": "농가", "role": "store"}), "home", "role store is read by name")
