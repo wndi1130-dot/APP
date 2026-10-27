@@ -74,11 +74,12 @@ const AFFINITY: Dictionary = {
 ## Within a room, the furniture made for a thing draws it (decision 442): a medicine
 ## cabinet the medicine and the small things, a wardrobe, a dresser or a chest the cloth
 ## and the clothes, a cupboard or a larder shelf the food. A pull on the room's affinity,
-## scaled so the pulls of a room's boxes average one: the room still draws what AFFINITY
-## says, only where in it the thing lies changes.
+## scaled so the pulls of a building's room's boxes average one: the room still draws what
+## AFFINITY says, only where in it the thing lies changes. The cloth pulls harder: the cloth
+## lies mostly in houses whose bedrooms have one wardrobe among side tables and shelves.
 const FURNITURE_PULL: Dictionary = {
 	"medicine_cabinet": {"med": 4.0, "small": 3.0},
-	"wardrobe": {"cloth": 4.0}, "dresser": {"cloth": 4.0}, "blanket_chest": {"cloth": 4.0},
+	"wardrobe": {"cloth": 8.0}, "dresser": {"cloth": 8.0}, "blanket_chest": {"cloth": 8.0},
 	"cupboard": {"food": 3.0}, "jar_shelf": {"food": 3.0}, "tin_crate": {"food": 3.0},
 }
 ## No box takes more than this many things from the others.
@@ -792,19 +793,24 @@ static func _spare(containers: Dictionary, by_building: Dictionary, among: Array
 
 
 ## Each box's share of its room's draw for a family: its furniture's pull (FURNITURE_PULL),
-## over the room's average. A room with no such furniture gives every box 1.
+## over the average of that room in its building. A room with no such furniture gives every
+## box 1, and each building's room draws as much as before.
 static func _room_shares(containers: Dictionary, ids: Array, family: String) -> Dictionary:
 	var count: Dictionary = {}
 	var sum: Dictionary = {}
 	for id: String in ids:
-		var room := room_of(containers[id])
-		count[room] = int(count.get(room, 0)) + 1
-		sum[room] = float(sum.get(room, 0.0)) + _pull(containers[id], family)
+		var key := _room_key(containers[id])
+		count[key] = int(count.get(key, 0)) + 1
+		sum[key] = float(sum.get(key, 0.0)) + _pull(containers[id], family)
 	var out: Dictionary = {}
 	for id: String in ids:
-		var room := room_of(containers[id])
-		out[id] = _pull(containers[id], family) * float(count[room]) / float(sum[room])
+		var key := _room_key(containers[id])
+		out[id] = _pull(containers[id], family) * float(count[key]) / float(sum[key])
 	return out
+
+
+static func _room_key(c: Dictionary) -> String:
+	return "%d|%s" % [int(c.get("building", -1)), room_of(c)]
 
 
 static func _pull(c: Dictionary, family: String) -> float:

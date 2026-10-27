@@ -49,8 +49,8 @@ func test_the_wardrobe_draws_the_cloth_and_the_bedroom_its_share() -> void:
 	# The room's share is AFFINITY's: bedroom 4.0 × 4 boxes against larder 0.3 × 4.
 	var room_share := 4.0 * 4 / (4.0 * 4 + 0.3 * 4)
 	assert_almost_eq(in_bedroom / float(all), room_share, 0.03, "the bedroom draws what it did")
-	# In the bedroom, the wardrobe pulls 4 against the tables' 1 each: 4 of 7.
-	assert_gt(in_wardrobe / float(in_bedroom), 0.5, "most of the bedroom's cloth is in the wardrobe")
+	# In the bedroom, the wardrobe pulls 8 against the tables' 1 each: 8 of 11.
+	assert_almost_eq(in_wardrobe / float(in_bedroom), 8.0 / 11.0, 0.04, "most of the bedroom's cloth is in the wardrobe")
 
 
 func test_the_medicine_cabinet_draws_the_medicine() -> void:
@@ -77,7 +77,7 @@ func test_a_room_without_such_furniture_gives_every_box_one() -> void:
 	var mixed := _house()
 	var s := LootDress._room_shares(mixed, mixed.keys(), "cloth")
 	assert_almost_eq(float(s["w"]) + float(s["t1"]) + float(s["t2"]) + float(s["t3"]), 4.0, 0.0001, "a room's shares average one")
-	assert_almost_eq(float(s["w"]) / float(s["t1"]), 4.0, 0.0001)
+	assert_almost_eq(float(s["w"]) / float(s["t1"]), 8.0, 0.0001)
 
 
 func test_clothes_found_go_to_the_wardrobe_and_rooms_without_one_roll_as_before() -> void:
@@ -90,7 +90,7 @@ func test_clothes_found_go_to_the_wardrobe_and_rooms_without_one_roll_as_before(
 		var report := {"finds": []}
 		LootDress._put_fit(boxes, ids, "scarf_thick", "cloth", rng, report)
 		in_w += int(report["finds"][0][1] == "w")
-	assert_gt(in_w / 1000.0, 0.5, "4 of 7")
+	assert_almost_eq(in_w / 1000.0, 8.0 / 11.0, 0.04, "8 of 11")
 	# No pulling furniture: the same box as _put on the same dice.
 	var plain := {"a": _box("bedroom", "side_table"), "b": _box("bedroom", "side_table"), "c": _box("bedroom", "")}
 	for i in range(200):
@@ -107,5 +107,26 @@ func test_clothes_found_go_to_the_wardrobe_and_rooms_without_one_roll_as_before(
 
 func test_the_new_values_are_the_listed_ones() -> void:
 	assert_eq(LootDress.FURNITURE_PULL["medicine_cabinet"], {"med": 4.0, "small": 3.0})
-	assert_eq(LootDress.FURNITURE_PULL["wardrobe"], {"cloth": 4.0})
+	assert_eq(LootDress.FURNITURE_PULL["wardrobe"], {"cloth": 8.0})
 	assert_eq(LootDress.FURNITURE_PULL["cupboard"], {"food": 3.0})
+
+
+func test_each_building_draws_its_finds_as_before() -> void:
+	# A house with a wardrobe and a side table, a house with two side tables: a find falls in
+	# the second house half the time, as _put gives it, the wardrobe only wins within its own.
+	var boxes := {"w": _box("bedroom", "wardrobe"), "a": _box("bedroom", "side_table"),
+		"b": _box("bedroom", "side_table"), "c": _box("bedroom", "side_table")}
+	boxes["b"]["building"] = 1
+	boxes["c"]["building"] = 1
+	var other := 0
+	var in_w := 0
+	for i in range(2000):
+		var rng := RandomNumberGenerator.new()
+		rng.seed = i
+		var report := {"finds": []}
+		LootDress._put_fit(boxes, ["w", "a", "b", "c"], "scarf_thick", "cloth", rng, report)
+		var to := String(report["finds"][0][1])
+		other += int(to == "b" or to == "c")
+		in_w += int(to == "w")
+	assert_almost_eq(other / 2000.0, 0.5, 0.04, "the other house keeps its half")
+	assert_almost_eq(in_w / 2000.0, 0.5 * 8.0 / 9.0, 0.04, "the wardrobe takes 8 of 9 in its own house")
