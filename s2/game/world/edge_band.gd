@@ -548,19 +548,22 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 	var root := Node3D.new()
 	root.name = "EdgeBand"
 	parent.add_child(root)
-	# Roads and rails run on out in their own colour (the rails' sleepers every other
-	# metre), a hair above the ground past the edge (fx/map_edge.gd). Roads end at their
-	# block; rails go on through the far ground into the fog, past the camera's reach.
+	# Roads and rails run on out in their own colour, a hair above the ground past the
+	# edge (fx/map_edge.gd). Roads end at their block; rails go on through the far ground
+	# into the fog, past the camera's reach. Their sleepers and rails are the map's
+	# (track_view.gd, from rail_runs).
 	var ground := SurfaceTool.new()
 	ground.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rail_runs: Array[Rect2] = []
 	for run: Dictionary in p["runs"]:
 		var f := int(run["floor"])
 		var r := run_rect(g, run, FAR_REACH if f == F.RAIL else ROAD_RUN, 0.0)
+		if f == F.RAIL:
+			rail_runs.append(r)
 		var base: Color = colors[f]
 		for yy in range(floori(r.position.y), ceili(r.end.y)):
 			for xx in range(floori(r.position.x), ceili(r.end.x)):
-				var col := base.darkened(0.15) if f == F.RAIL and posmod(xx, 2) == 0 else base
-				_quad(ground, Rect2(xx, yy, 1, 1), 0.004, col, f)
+				_quad(ground, Rect2(xx, yy, 1, 1), 0.004, base, f)
 	if not p["runs"].is_empty():
 		var ground_node := MeshInstance3D.new()
 		ground_node.name = "Runs"
@@ -643,6 +646,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 	for s: Dictionary in p["sounds"]:
 		spots.append(s["at"] as Vector3)
 	counts["sound_spots"] = spots
+	counts["rail_runs"] = rail_runs
 	return counts
 
 
