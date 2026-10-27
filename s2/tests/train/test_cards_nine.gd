@@ -210,3 +210,18 @@ func test_a_corpse_bite_is_cut_only_while_the_window_is_open() -> void:
 	g["hiddenBites"][0]["at"] = g["seg"]
 	var cut := _pick(g, 0)
 	assert_eq((cut["hiddenBites"] as Array).size(), 0)
+
+
+## A way the rule shuts says why on the paper, as S1's card does (card.ts):
+## the guard who will not go keeps 「경비대가 따르지 않는다」 on the last
+## chance and on a protest, not an empty reason over a dead key.
+func test_a_way_the_rule_shuts_keeps_why() -> void:
+	var g := _board()
+	g["comms"]["guard"]["rel"] = -50
+	for kind: String in ["tension_crisis", "protest"]:
+		g["cards"] = []
+		C.card(g, {"kind": kind, "comm": "tail"})
+		var v: Dictionary = CardText.view(g, _data["tables"], g["cards"][0])
+		var shut: Array = (v["choices"] as Array).filter(func(c: Dictionary) -> bool: return c["disabled"] != "")
+		assert_eq(shut.size(), 1, kind)
+		assert_eq(shut[0]["disabled"], "경비대가 따르지 않는다", kind)

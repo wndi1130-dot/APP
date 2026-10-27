@@ -37,7 +37,6 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var says: Array = []
 	var why: Array = []
 	# A choice S1 shuts itself (bite_found's cut once the window closes), kept past the words below.
-	var shut: String = ""
 	var kind: String = str(card["kind"])
 	var c: String = str(card.get("comm", "tail"))
 	match kind:
@@ -146,7 +145,6 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			if card.get("text") == "corpse":
 				out["body"] = "%s이(가) 두었던 시신에게 물렸다." % str(card.get("who", "그 사람"))
 				says = ["아직 늦지 않았다. 의무칸으로 옮겨 잘라라!", "빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.", "일어나기 전에 끝내라. 가족은 뒤로 물려라."]
-				shut = String(v["choices"][0].get("disabled", ""))
 			else:
 				out["body"] = ("%s %s의 붕대 아래가 검게 부었다. 자르기엔 늦었다. 열차장이 숨겨 줬다는 말이 벌써 돈다." % [str(card.get("text", "")), str(card.get("who", "대원"))]).strip_edges()
 				says = ["빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.", "일어나기 전에 끝내라. 내가 숨긴 일이다, 내가 책임진다."]
@@ -199,9 +197,9 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 		var ch: Dictionary = choices[i]
 		ch["say"] = String(says[i]) if i < says.size() else ""
 		ch["why"] = String(why[i]) if i < why.size() else ""
-		ch["disabled"] = ""
-	if shut != "":
-		choices[0]["disabled"] = shut
+		# A way the rule shuts keeps why (S1 card.ts shows it on the way): the guard who
+		# will not go, the infection window that has closed.
+		ch["disabled"] = String(ch.get("disabled", ""))
 	# withAfford in the kinds' own views, then guardCosts over every view: when
 	# every way is shut the card would trap the captain, so then none is.
 	if AFFORD_KINDS.has(kind):
