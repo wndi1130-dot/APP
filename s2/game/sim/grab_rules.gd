@@ -19,6 +19,7 @@ const COAT_HIT_WEAR: float = 0.1
 const COAT_BLOCK_WEAR: float = 0.05
 const COAT_PARTS: Array[String] = ["arm_left", "arm_right", "torso"]
 const RELEASE_META: StringName = &"dead_regrab_until"
+const SIGHT_COS: float = 0.17   # field_game.VIEW_CONE_COS
 
 
 # Seconds to shove free. Two or more grabbers: no window.
@@ -51,6 +52,16 @@ static func attack_outcome(rng: RandomNumberGenerator, coat_block: float) -> Str
 	if rng.randf() < coat_block:
 		return "blocked"
 	return "scratch"
+
+
+## Inside the person's own view cone (field_game VIEW_CONE_COS, about 160
+## degrees ahead): a dead hand seen coming (decision 474 J1). Lying, none is.
+static func in_sight(facing: float, offset: Vector3, prone: bool = false) -> bool:
+	if prone:
+		return false
+	offset.y = 0.0
+	var forward := Vector3(sin(facing), 0, cos(facing))
+	return offset.length() < 0.01 or forward.dot(offset.normalized()) > SIGHT_COS
 
 
 static func front_contact(facing: float, offset: Vector3, prone: bool = false) -> bool:

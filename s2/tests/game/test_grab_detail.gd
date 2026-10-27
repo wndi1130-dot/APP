@@ -130,3 +130,48 @@ func test_repeating_the_same_contact_does_not_duplicate_a_grab_or_reset_its_wind
 	assert_eq(_roll_grab(z), "grab")
 	assert_eq(game.player.grab_left, 0.25)
 	assert_eq(game.telemetry.injuries.size(), count)
+
+
+## Decision 474 J1, counted only: a hand from inside the view cone (about
+## 160 degrees ahead) is seen, one from beside or behind is not; lying, none is.
+func test_a_hand_is_seen_inside_the_view_cone_only() -> void:
+	assert_true(Rules.in_sight(0.0, Vector3(0, 0, 1)))
+	assert_true(Rules.in_sight(0.0, Vector3(0.9, 0, 0.3)), "well to one side, still in the cone")
+	assert_false(Rules.in_sight(0.0, Vector3(1, 0, 0)), "beside")
+	assert_false(Rules.in_sight(0.0, Vector3(0, 0, -1)), "behind")
+	assert_false(Rules.in_sight(0.0, Vector3(0, 0, 1), true), "lying")
+
+
+## A grab from the front and its bite are counted as seen; one from behind as unseen.
+func test_contacts_and_bites_are_counted_on_the_side_they_came_from() -> void:
+	var c: Dictionary = game.combat.contacts
+	game.player.coat["heavy"] = false
+	game.player.coat["block"] = 0.0
+	assert_eq(_roll_grab(_hand()), "grab")
+	assert_eq(int(c["seen"]["reach"]), 1)
+	assert_eq(int(c["seen"]["grab"]), 1)
+	assert_eq(int(c["unseen"]["reach"]), 0)
+	game.combat.bite(game.player)
+	var bitten: bool = game.telemetry.injuries.any(func(i): return i["kind"] == "bite")
+	assert_eq(int(c["seen"]["bite"]), 1 if bitten else 0, "the held hand was seen")
+	assert_eq(int(c["unseen"]["bite"]), 0)
+	game.clock.elapsed = Rules.REGRAB_GRACE + 1.0
+	var back: Dictionary = game.zombies.spawn("dead", game.player.position + Vector3(0, 0, -0.6))
+	assert_eq(_roll_grab(back), "grab")
+	assert_eq(int(c["unseen"]["reach"]), 1)
+	assert_eq(int(c["unseen"]["grab"]), 1)
+
+
+## "붙은 수" (decision 474 J1): the dead attacking or holding that one person, in reach.
+func test_the_crowd_on_someone_counts_only_the_dead_reaching_for_them() -> void:
+	var p = game.player
+	for x in [-0.5, 0.0, 0.5]:
+		var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(x, 0, 0.6))
+		z["state"] = "attack"
+		z["victim"] = p
+	var idle: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0, 0, -0.6))
+	idle["state"] = "wander"
+	var far: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0, 0, 4.0))
+	far["state"] = "attack"
+	far["victim"] = p
+	assert_eq(game.combat.crowd_at(p), 3)
