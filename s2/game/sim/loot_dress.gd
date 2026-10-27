@@ -71,6 +71,16 @@ const AFFINITY: Dictionary = {
 	"hall": {"food": 0.3, "med": 0.3, "lux": 0.3, "wood": 0.3, "scrap": 0.3, "cloth": 0.3, "small": 0.3},
 	"storage": {"food": 3.0, "med": 0.5, "lux": 0.5, "wood": 4.0, "scrap": 4.0, "cloth": 1.0, "small": 0.5},
 }
+## Within a room, the furniture made for a thing draws it (decision 442): a medicine
+## cabinet the medicine and the small things, a wardrobe, a dresser or a chest the cloth
+## and the clothes, a cupboard or a larder shelf the food. A pull on the room's affinity,
+## scaled so the pulls of a room's boxes average one: the room still draws what AFFINITY
+## says, only where in it the thing lies changes.
+const FURNITURE_PULL: Dictionary = {
+	"medicine_cabinet": {"med": 4.0, "small": 3.0},
+	"wardrobe": {"cloth": 4.0}, "dresser": {"cloth": 4.0}, "blanket_chest": {"cloth": 4.0},
+	"cupboard": {"food": 3.0}, "jar_shelf": {"food": 3.0}, "tin_crate": {"food": 3.0},
+}
 ## No box takes more than this many things from the others.
 const CAP: int = 6
 ## Nor more than it holds (carry.gd box_limit). A bundle is counted at the most
@@ -585,15 +595,18 @@ static func _deal(containers: Dictionary, ids: Array, rng: RandomNumberGenerator
 				keep.append(item)
 		containers[id]["items"] = keep
 	var moved := 0
+	var shares: Dictionary = {}   # family -> {box: its share of its room's draw}
 	for row: Array in pool:
 		var family: String = FAMILY[row[0]]
+		if not shares.has(family):
+			shares[family] = _room_shares(containers, ids, family)
 		var total := 0.0
 		var weights: Array = []
 		for id: String in ids:
 			var w := 0.0
 			var c: Dictionary = containers[id]
 			if (c["items"] as Array).size() < CAP and _dealt_load(c) + _dealt_weight(row[0]) <= Carry.box_limit(c):
-				w = float(AFFINITY[room_of(c)][family])
+				w = float(AFFINITY[room_of(c)][family]) * float(shares[family][id])
 			weights.append(w)
 			total += w
 		var to: String = row[1]
@@ -778,6 +791,26 @@ static func _spare(containers: Dictionary, by_building: Dictionary, among: Array
 	return best
 
 
+## Each box's share of its room's draw for a family: its furniture's pull (FURNITURE_PULL),
+## over the room's average. A room with no such furniture gives every box 1.
+static func _room_shares(containers: Dictionary, ids: Array, family: String) -> Dictionary:
+	var count: Dictionary = {}
+	var sum: Dictionary = {}
+	for id: String in ids:
+		var room := room_of(containers[id])
+		count[room] = int(count.get(room, 0)) + 1
+		sum[room] = float(sum.get(room, 0.0)) + _pull(containers[id], family)
+	var out: Dictionary = {}
+	for id: String in ids:
+		var room := room_of(containers[id])
+		out[id] = _pull(containers[id], family) * float(count[room]) / float(sum[room])
+	return out
+
+
+static func _pull(c: Dictionary, family: String) -> float:
+	return float((FURNITURE_PULL.get(String(c.get("furniture", "")), {}) as Dictionary).get(family, 1.0))
+
+
 ## What a thing weighs while the boxes are dealt: a bundle at the most its name can.
 static func _dealt_weight(item: String) -> float:
 	return NAMED_MOST if FieldItems.BUNDLES.has(item) else Carry.item_weight(item)
@@ -802,6 +835,27 @@ static func _boxes(containers: Dictionary, buildings: Array, rooms: Array, kinds
 			continue
 		out.append(id)
 	return out
+
+
+## _put, with the furniture made for the thing drawing it within its room (FURNITURE_PULL).
+## Where no box's furniture pulls the family, the same dice as _put.
+static func _put_fit(containers: Dictionary, ids: Array, item: String, family: String, rng: RandomNumberGenerator, report: Dictionary) -> void:
+	var shares := _room_shares(containers, ids, family)
+	if ids.is_empty() or shares.values().all(func(v: float) -> bool: return v == 1.0):
+		_put(containers, ids, item, rng, report)
+		return
+	var total := 0.0
+	for id: String in ids:
+		total += float(shares[id])
+	var at := rng.randf() * total
+	var to: String = ids[ids.size() - 1]
+	for id: String in ids:
+		at -= float(shares[id])
+		if at < 0.0:
+			to = id
+			break
+	(containers[to]["items"] as Array).append(item)
+	(report["finds"] as Array).append([item, to])
 
 
 static func _put(containers: Dictionary, ids: Array, item: String, rng: RandomNumberGenerator, report: Dictionary) -> void:
@@ -854,7 +908,7 @@ static func _finds(containers: Dictionary, buildings: Array, seed: int, report: 
 	var wear_rng := _rng(seed, "wear")
 	for row: Array in WEAR_FINDS:
 		if wear_rng.randf() < float(row[1]):
-			_put(containers, _boxes(containers, buildings, row[2], row[3]), String(row[0]), wear_rng, report)
+			_put_fit(containers, _boxes(containers, buildings, row[2], row[3]), String(row[0]), "cloth", wear_rng, report)
 	# Something to grab when there is nothing better (P23).
 	var hands_rng := _rng(seed, "grab")
 	if _look(decks, "pan", hands_rng.randf()):
