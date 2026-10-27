@@ -479,8 +479,9 @@ func _ready() -> void:
 		# What a looted house tipped out lies on its floors (loot_junk.gd, card J); out in _give_finds.
 		data["loose"] = LootDress.LootJunk.spill_looted(data, stories, rng.seed)
 	# A freight yard's or works' one fixed core scene (decision 426): the place is the map's,
-	# whether a core is left in it is this run's dice, kept in the place's state like the stories.
-	var core_note := CoreScenes.apply(data, ("%d:core:%s" % [rng.seed, data["place_id"]]).hash())
+	# whether a core is left in it is this run's dice, kept in the place's state like the stories;
+	# the visible core turns a card of the decks dress handed back (474 S3), so the receipt carries it on.
+	var core_note := CoreScenes.apply(data, ("%d:core:%s" % [rng.seed, data["place_id"]]).hash(), loot_report.get("loot_deck", {}))
 	if not core_note.is_empty():
 		receipt.place_note("coreScene", core_note)
 	telemetry = Telemetry.new("s2-%d" % rng.seed)
