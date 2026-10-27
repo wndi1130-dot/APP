@@ -225,3 +225,20 @@ func test_a_way_the_rule_shuts_keeps_why() -> void:
 		var shut: Array = (v["choices"] as Array).filter(func(c: Dictionary) -> bool: return c["disabled"] != "")
 		assert_eq(shut.size(), 1, kind)
 		assert_eq(shut[0]["disabled"], "경비대가 따르지 않는다", kind)
+
+
+## The last chance, a protest and a riot read S1's words: the tail's leader
+## brings them, and a riot that has caught fire says so.
+func test_the_ladder_papers_read_s1_s_words() -> void:
+	var g := _board()
+	C.card(g, {"kind": "tension_crisis", "comm": "tail"})
+	var v: Dictionary = CardText.view(g, _data["tables"], g["cards"][0])
+	assert_string_starts_with(String(v["body"]), "칸마다 사람들이 모였다.")
+	assert_not_null(v["speaker"], "the tail's leader brings it")
+	assert_eq(v["choices"][2]["say"], "(열차장은 아무 말도 하지 않는다.)")
+	g["cards"] = []
+	C.card(g, {"kind": "protest", "comm": "tail", "text": "riot"})
+	g["riot"] = {"fire": ["tail1"]}
+	var riot: Dictionary = CardText.view(g, _data["tables"], g["cards"][0])
+	assert_eq(riot["title"], "난장판")
+	assert_eq(riot["body"], "싸움이 번졌다. 물건이 날고 어른들이 쓰러진다. 불이 붙었다. 사람들은 걸어서 옆 칸으로 옮겨 간다.")
