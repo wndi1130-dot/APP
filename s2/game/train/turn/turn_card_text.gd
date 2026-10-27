@@ -19,7 +19,7 @@ const RES_NAME: Dictionary = {"coal": "석탄", "food": "식량", "med": "의약
 const BASE_NAME: Array[String] = ["온기", "배급", "과밀", "노출"]
 ## The kinds whose S1 view runs withAfford itself (the rest only meet guardCosts).
 const AFFORD_KINDS: Array[String] = ["travel", "demand", "ration_cut", "favor", "rescue", "bitten", "rep_sick", "promise_ledger", "keepsake",
-	"strike_warn", "strike", "bite_found", "orphan", "elder", "birth", "naming"]
+	"strike_warn", "strike", "bite_found", "orphan", "elder", "birth", "naming", "tension_crisis", "protest"]
 
 
 ## The card as S1 shows it: turn_cards.gd view's choices with S1's words, and
@@ -37,7 +37,6 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var says: Array = []
 	var why: Array = []
 	# A choice S1 shuts itself (bite_found's cut once the window closes), kept past the words below.
-	var shut: String = ""
 	var kind: String = str(card["kind"])
 	var c: String = str(card.get("comm", "tail"))
 	match kind:
@@ -146,7 +145,6 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			if card.get("text") == "corpse":
 				out["body"] = "%s이(가) 두었던 시신에게 물렸다." % str(card.get("who", "그 사람"))
 				says = ["아직 늦지 않았다. 의무칸으로 옮겨 잘라라!", "빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.", "일어나기 전에 끝내라. 가족은 뒤로 물려라."]
-				shut = String(v["choices"][0].get("disabled", ""))
 			else:
 				out["body"] = ("%s %s의 붕대 아래가 검게 부었다. 자르기엔 늦었다. 열차장이 숨겨 줬다는 말이 벌써 돈다." % [str(card.get("text", "")), str(card.get("who", "대원"))]).strip_edges()
 				says = ["빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.", "일어나기 전에 끝내라. 내가 숨긴 일이다, 내가 책임진다."]
@@ -191,6 +189,23 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["focus"] = c
 			out["body"] = "%s의 아이에게 이름이 필요하다. 칸 사람들이 열차장을 쳐다본다." % mother
 			says = ["이름은 엄마가 짓는 거다. 내가 끼어들 일 아니다.", "이 아이는 열차 모두의 아이다. 열차 이름을 줘라.", "내 이름을 줘라. 이 아이는 내가 지킨다."]
+		"tension_crisis":
+			# S1 cards.ts tension_crisis: the ladder's last rung, the tail's leader brings it.
+			out["speaker"] = _leader(g, t, "tail")
+			out["focus"] = "tail"
+			out["body"] = "칸마다 사람들이 모였다. 통로마다 막아선 사람들이 거래를 끊었다. 오늘 밤을 넘기지 못할 수도 있다."
+			says = ["경비대, 통로를 비워라. 손은 쓰지 마라.", "창고를 열어라! 오늘 밤은 모두 배불리 먹는다.", "(열차장은 아무 말도 하지 않는다.)"]
+		"protest":
+			# S1 cards.ts protest: a protest, or a riot (text "riot") with fire when it has caught.
+			out["speaker"] = _leader(g, t, "tail")
+			out["focus"] = "tail"
+			if card.get("text") != "riot":
+				out["body"] = "복도마다 사람들이 모여 열차장을 찾는다. 배급과 석탄을 두고 목소리가 높아지고 있다."
+				says = ["들어보자. 줄 수 있는 것은 나눠 주겠다.", "통로에 경비를 세워라. 손은 쓰지 마라.", "지금은 줄 것이 없다. 돌아가 제 일을 해라."]
+			else:
+				var fire: bool = g.get("riot") is Dictionary and not (g["riot"].get("fire", []) as Array).is_empty()
+				out["body"] = "싸움이 번졌다. 물건이 날고 어른들이 쓰러진다." + (" 불이 붙었다. 사람들은 걸어서 옆 칸으로 옮겨 간다." if fire else "")
+				says = ["요구를 듣겠다. 모두 손을 내려라.", "경비대를 풀어라! 싸움부터 말려라.", "(열차장은 아무 말도 하지 않는다.)"]
 		"info":
 			out["title"] = str(card.get("who", "알림"))
 			out["body"] = str(card.get("text", ""))
@@ -199,9 +214,9 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 		var ch: Dictionary = choices[i]
 		ch["say"] = String(says[i]) if i < says.size() else ""
 		ch["why"] = String(why[i]) if i < why.size() else ""
-		ch["disabled"] = ""
-	if shut != "":
-		choices[0]["disabled"] = shut
+		# A way the rule shuts keeps why (S1 card.ts shows it on the way): the guard who
+		# will not go, the infection window that has closed.
+		ch["disabled"] = String(ch.get("disabled", ""))
 	# withAfford in the kinds' own views, then guardCosts over every view: when
 	# every way is shut the card would trap the captain, so then none is.
 	if AFFORD_KINDS.has(kind):
