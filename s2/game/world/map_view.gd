@@ -1207,6 +1207,10 @@ func _build_blocks() -> void:
 				box(tt, Vector3(0.8, 0.07, 0.1), Vector3(at_x, 0.3 + 0.3 * k, z), wood)
 	train_node.mesh = tt.commit()
 	_build_lights()
+	# The window and firebox faces stand with the train on its rails (slide_train moves them along).
+	for kind: String in ["car_window", "firebox"]:
+		if light_nodes.has(kind):
+			light_nodes[kind].position.y = train_node.position.y
 	await BuildPace.rest(pace)
 	# Wagons on the sidings: the kit's models, a box only where it has none.
 	var wagon_models := TrainModels.attach_wagons(level_roots[0], data["wagons"], TrackView.wagon_heights(grid, data["wagons"]))

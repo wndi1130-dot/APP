@@ -106,5 +106,8 @@ func test_the_field_lays_its_line_and_stands_the_train_on_it() -> void:
 	assert_gt(inside.multimesh.instance_count, 100, "the main line through the place")
 	assert_true(track.has_node("TrackOutside"), "and on out past the edge")
 	assert_almost_eq(game.view.train_node.position.y, TrackView.RAIL_TOP, 0.0001)
+	for kind: String in ["car_window", "firebox"]:
+		if game.view.light_nodes.has(kind):
+			assert_almost_eq(game.view.light_nodes[kind].position.y, TrackView.RAIL_TOP, 0.0001, kind + " stands with the train")
 	game.view.slide_train(12.0)
 	assert_almost_eq(game.view.train_node.position.y, TrackView.RAIL_TOP, 0.0001, "it rolls along the rails")
