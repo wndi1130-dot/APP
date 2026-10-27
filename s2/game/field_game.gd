@@ -736,7 +736,8 @@ func _update_lantern(delta: float) -> void:
 	lantern.position = player.position + Vector3(0, 1.4, 0)
 	lantern.light_energy = float(player.lamp.get("strength", 1.0)) * (1.0 - 0.3 * lamp_pulse)
 	var night := maxf(clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0), float(storm.get("lamp_gain", 0.0)))
-	view.set_lamp_gain(lerpf(LAMP_GAIN_DAY, 1.0, night), night)
+	# The pools show through the mask in full from sunset (night 0.5 at 15:45).
+	view.set_lamp_gain(lerpf(LAMP_GAIN_DAY, 1.0, night), clampf(night * 2.0, 0.0, 1.0), level_of(player.position))
 
 
 ## Whoever crossed into a new outdoor ground cell leaves a mark: people (deeper

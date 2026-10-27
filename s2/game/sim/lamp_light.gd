@@ -18,7 +18,7 @@ const WINDOW_FACING := 0.25   # how square to the sun a window must look to let 
 const WINDOW_HALF_WIDTH := 0.6   # metres either side of the sun's line through the window
 const WINDOW_TEXELS := 4   # window light texels a cell side, so a slanting patch keeps its edges
 ## The chief's torch beam ahead of the lantern (decision 471 B4: 12~15 m, 50~60 degrees).
-const BEAM := {"strength": 0.85, "reach": 13.0, "half_deg": 27.0}
+const BEAM := {"strength": 0.6, "reach": 13.0, "half_deg": 27.0}
 
 
 ## Is this light (a row of SulehufMap data["lights"]) on?

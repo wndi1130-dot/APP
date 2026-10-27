@@ -33,13 +33,13 @@ func build(data: Dictionary) -> void:
 		var nodes: Array = []
 		match kind:
 			"barrel_fire":
-				nodes.append(_quad(at + Vector3(0, 1.15, 0), Vector2(0.55, 0.6), FLAME_TINT, n, 1.0, false))
+				nodes.append(_quad(at + Vector3(0, 1.3, 0), Vector2(0.9, 0.9), FLAME_TINT, n, 1.0, false))
 			"campfire":
 				if ResourceLoader.exists(COLD_FIRE_MODEL):
 					var stones: Node3D = (load(COLD_FIRE_MODEL) as PackedScene).instantiate()
 					stones.position = at
 					add_child(stones)
-				nodes.append(_quad(at + Vector3(0, 0.45, 0), Vector2(0.8, 0.85), FLAME_TINT, n, 1.0, false))
+				nodes.append(_quad(at + Vector3(0, 0.6, 0), Vector2(1.1, 1.2), FLAME_TINT, n, 1.0, false))
 			"candle":
 				nodes.append(_quad(at + Vector3(side.x * 0.3, 1.05, side.y * 0.3), Vector2(0.28, 0.28), CANDLE_TINT, n, 0.6, true))
 			"headlights":

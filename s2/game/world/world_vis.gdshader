@@ -18,6 +18,9 @@ uniform float lamp_gain = 0.0;
 // How far a lamp's light lifts the sight mask out of doors (decision 474 B9):
 // 0 by day (no lamp outshines the day), 1 at night.
 uniform float lamp_reveal = 0.0;
+// The lamp channel is one layer for every floor: it lights the ground and the
+// floor the player stands on (height lamp_floor), not a roof above a fire.
+uniform float lamp_floor = 0.0;
 // Low sun through the windows at dusk (LampLight.window_cells): ground floor only.
 uniform sampler2D win : hint_default_black, filter_linear, repeat_disable;
 uniform vec3 win_color : source_color = vec3(1.0, 0.5, 0.28);
@@ -233,7 +236,8 @@ void fragment() {
 	vec2 seen = cell.rg;
 	// Ground out of doors in a lamp's pool shows as the light shows it, seen
 	// or not (decision 474 B9); a room behind a shut door keeps its mask (sky 0).
-	float reveal = max(seen.r, smoothstep(0.08, 0.24, cell.b) * lamp_reveal * sky);
+	float lamp_here = max(step(-0.5, world_pos.y) * (1.0 - step(1.0, world_pos.y)), 1.0 - step(1.0, abs(world_pos.y - lamp_floor)));
+	float reveal = max(seen.r, smoothstep(0.08, 0.24, cell.b) * lamp_reveal * sky * lamp_here);
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
 	float lit = mix(1.0, max(reveal, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
@@ -247,7 +251,7 @@ void fragment() {
 		NORMAL = normalize(cross(dFdy(VERTEX), dFdx(VERTEX)));
 	}
 	// A lamp out of sight still shows faintly, so mates can be found in the dark.
-	float lamp = cell.b * lamp_gain * mix(0.4, 1.0, reveal) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
+	float lamp = cell.b * lamp_gain * lamp_here * mix(0.4, 1.0, reveal) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
 	float pool = texture(win, uv).r * win_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0))
 		* smoothstep(0.6, 0.9, up) * step(-0.5, world_pos.y) * (1.0 - step(1.0, world_pos.y));
 	EMISSION = (lamp_color * lamp + win_color * pool) * (0.25 + 0.75 * grey);
