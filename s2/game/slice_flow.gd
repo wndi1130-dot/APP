@@ -18,9 +18,12 @@ extends Node
 ## its sheet arrival_sheet.gd, the end end_card.gd). Different finds, rescues and
 ## losses on the same people make a different session or station
 ## (tests/train/test_slice_vectors.gd against S1). It reads no test fixture. The
-## train's paper cards have no screen in the slice yet: they are put aside each
-## step, as S1's slice does (field_arrival.test.ts). A step gone to straight (the
-## tests do) plays what lies before it on the board first.
+## train's paper cards come up on the train steps one at a time (turn_card.gd), and
+## the train does not go on before each is chosen (the user 10-27: 「열차 단계에
+## 서류가 오면 한 장씩 띄우고, 고르기 전엔 다음으로 못 가게 해」). A step gone to
+## straight (the tests do) plays what lies before it on the board first, taking each
+## paper on its first way that can be taken, as S1's slice does (slice_vectors.ts
+## pickFirst, field_arrival.test.ts).
 ##
 ## The slice holds that one train state; the gauges, the car pane and the stop
 ## card all read it. On the train the carriages
@@ -38,6 +41,8 @@ const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
 const ArrivalSheet = preload("res://game/ui/arrival_sheet.gd")
 const EndCard = preload("res://game/ui/end_card.gd")
 const FieldArrival = preload("res://game/politics/field_arrival.gd")
+const TurnCard = preload("res://game/ui/turn_card.gd")
+const UiDeny = preload("res://game/ui/ui_deny.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
@@ -81,6 +86,9 @@ const CouncilAgenda = preload("res://game/politics/council_agenda.gd")
 const FIRST_SEG: int = 2
 ## Steps the train may take from the session to the second station before the slice gives up.
 const RUN_LIMIT: int = 12
+## Where the car pane's words start in from its left (car_pane.gd), and the paper's room short of them.
+const PANE_WORDS_X: float = 44.0
+const PAPER_GAP: float = 6.0
 ## The train's people left to stand by it while the field is out (stop-cam's train defense).
 const GUARDS_LEFT: int = 2
 
@@ -150,6 +158,8 @@ var lines: VBoxContainer
 var next_button: Button             # the main key (lamp_key.gd), its arrow drawn by itself
 var panel_style: StyleBoxFlat
 var card: Control = null           # a real screen standing in for the panel (stop_pick)
+var paper: Control = null          # the train's paper card up now (turn_card.gd), one at a time
+var going: bool = false            # the main key was pulled: on with the train once the papers are chosen
 var gauges: Control                # the train's gauges along the top, over the train
 var soot_bot: TextureRect          # the soot rising from the bottom edge under the keys
 var weather: Control               # the snow, the fog and the drift over the train (world_weather.gd)
@@ -257,6 +267,8 @@ func go(i: int) -> void:
 	if is_instance_valid(card):
 		card.queue_free()
 	card = null
+	_drop_paper()
+	going = false
 	home = null
 	pane = null
 	bar = null
@@ -322,6 +334,7 @@ func go(i: int) -> void:
 		return
 	if HOME_STEPS.has(id):
 		_show_home(String(row[4]))
+		_show_paper()
 		return
 	_show_panel(String(row[3]), [], String(row[4]))
 
@@ -595,25 +608,137 @@ static func start_board() -> Array:
 	return [d["state"], d["tables"]]
 
 
-## One step of the train's turn as the slice takes it: the paper cards put aside before
-## and after (no screen for them yet), the turn as S1 runs it. An unported step comes
-## back with its _turn_port_error.
+## One step of the train's turn as a step gone to straight takes it: the papers before and
+## after taken on their first way (pick_first), the turn as S1 runs it. An unported step
+## comes back with its _turn_port_error.
 static func step_train(g0: Dictionary, t: Dictionary) -> Dictionary:
-	var g: Dictionary = g0.duplicate(true)
-	g["cards"] = []
+	var g: Dictionary = pick_first(g0.duplicate(true), t)
+	if g.has("_turn_port_error"):
+		return g
 	var out: Dictionary = TrainAdvance.advance(g, t)
-	if not out.has("_turn_port_error"):
-		out["cards"] = []
-	return out
+	if out.has("_turn_port_error"):
+		return out
+	return pick_first(out, t)
 
 
-## The new game on its first run: the slice starts on FIRST_SEG and takes one step.
+## The papers as S1's slice takes them (slice_vectors.ts pickFirst): from the front, one
+## by one, each on its first way that can be taken (train_advance.gd choose_card leaves
+## a card it refuses where it was), a card with none put aside. A kind the port does not
+## take yet is said and put aside too, so the board never stops on a paper.
+static func pick_first(g0: Dictionary, t: Dictionary) -> Dictionary:
+	var g: Dictionary = g0
+	for n in 50:
+		if not papers_of(g) or g.has("_turn_port_error"):
+			break
+		var uid: int = int((g["cards"] as Array)[0]["uid"])
+		var taken := false
+		for i in 12:
+			var out: Dictionary = TrainAdvance.choose_card(g, t, uid, i)
+			if out.has("_turn_port_error"):
+				push_warning("slice: paper put aside, " + String(out["_turn_port_error"]))
+				break
+			if not _holds(out, uid):
+				g = out
+				taken = true
+				break
+		if not taken:
+			g = g.duplicate(true)
+			g["cards"] = (g["cards"] as Array).filter(func(c: Dictionary) -> bool: return int(c["uid"]) != uid)
+	return g
+
+
+## Whether a board has papers waiting.
+static func papers_of(g: Dictionary) -> bool:
+	return g.get("cards") is Array and not (g["cards"] as Array).is_empty()
+
+
+static func _holds(g: Dictionary, uid: int) -> bool:
+	for c: Dictionary in g.get("cards", []):
+		if int(c["uid"]) == uid:
+			return true
+	return false
+
+
+## The new game on its first run: the slice starts on FIRST_SEG and takes one step. The
+## papers it brings stay on the board: the train step shows them first.
 static func to_travel(state: Dictionary, t: Dictionary) -> Dictionary:
 	var g: Dictionary = state.duplicate(true)
 	if g.is_empty():
 		return g
 	g["seg"] = FIRST_SEG
-	return step_train(g, t)
+	g = pick_first(g, t)
+	if g.has("_turn_port_error"):
+		return g
+	return TrainAdvance.advance(g, t)
+
+
+## The first paper waiting, over the train on its steps (turn_card.gd); none when none waits.
+func _show_paper() -> void:
+	_drop_paper()
+	if not papers_of(train_g) or not HOME_STEPS.has(current()):
+		return
+	var c = TurnCard.new()
+	c.name = "Paper"
+	# On a narrow screen the paper stops short of the car pane's words (44 in from its
+	# edge), so the car's numbers stay in sight while a way is chosen.
+	if is_instance_valid(pane):
+		var screen: float = get_viewport().get_visible_rect().size.x / UiFonts.K
+		c.fit_w = screen - CarPane.CSS_SIZE.x + PANE_WORDS_X - PAPER_GAP - TurnCard.SHEET_AT.x
+	layer.add_child(c)
+	c.show_card(train_g, train_t, int((train_g["cards"] as Array)[0]["uid"]))
+	c.chose.connect(_paper_chosen)
+	paper = c
+
+
+func _drop_paper() -> void:
+	if is_instance_valid(paper):
+		paper.queue_free()
+	paper = null
+
+
+## A way chosen on the paper: the board it gives back, then the next paper, and once
+## none waits the train goes on if the main key was pulled. A way the port does not
+## take yet is said and its card put aside, so the slice goes on.
+func _paper_chosen(g: Dictionary) -> void:
+	if g.has("_turn_port_error"):
+		push_warning("slice: paper put aside, " + String(g["_turn_port_error"]))
+		var uid: int = int((train_g["cards"] as Array)[0]["uid"])
+		var rest: Dictionary = train_g.duplicate(true)
+		rest["cards"] = (rest["cards"] as Array).filter(func(c: Dictionary) -> bool: return int(c["uid"]) != uid)
+		_take(rest)
+	else:
+		_take(g)
+	_show_paper()
+	if going and not papers_of(train_g):
+		going = false
+		train_on()
+
+
+## The main key on the train steps: with papers waiting it goes nowhere (the paper
+## shakes); else the board runs to where the next step stands (to the stop, or on to
+## the second station), stopping at each paper that comes, and the step goes on.
+func train_on() -> void:
+	if papers_of(train_g):
+		going = true
+		if is_instance_valid(paper):
+			UiDeny.shake(paper)
+		return
+	var id := current()
+	for i in RUN_LIMIT:
+		if port_error != "" or String(train_g.get("phase", "")) == "end":
+			break
+		if id == "train" and String(train_g.get("phase", "")) != "travel":
+			break
+		if id == "travel" and (not _returned() or FieldArrival.second_station_reached(train_g)):
+			break
+		if id != "train" and id != "travel":
+			break
+		_take(TrainAdvance.advance(train_g, train_t))
+		if papers_of(train_g):
+			going = true
+			_show_paper()
+			return
+	next()
 
 
 ## The slice's first stop: the run, then the train standing at the stop, not yet resolved.
@@ -1017,7 +1142,7 @@ func _show_home(word: String) -> void:
 	if ahead != "":
 		b.lever = true
 		b.lever_small = ahead
-	b.main_pressed.connect(next)
+	b.main_pressed.connect(train_on)
 	b.open_rooms = ["papers", "wrench", "gear"]
 	b.room_pressed.connect(_open_room)
 	h.add_child(b)
