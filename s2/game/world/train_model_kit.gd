@@ -20,6 +20,9 @@ const ASSET_KEYS := ["status", "category", "path", "dimensions_m", "lod0_tris", 
 ## 껍데기가 한 겹이라 앞벽을 자르면 뒷벽 안쪽이 비어 보이는 몸에 쓴다.
 const NO_CUTAWAY_KEY := "no_cutaway"
 const KIND_KEYS := ["assets", "people", "parts"]
+## 필드에서 이웃 칸 모델 사이에 남기는 틈(m). 대각뷰(결정 476)는 칸마다 끝면을 비스듬히 보여
+## 0.6 m 틈이면 끝벽의 어두운 통로가 칸마다 구멍처럼 보였다. 연결막이 완충기 끝까지 나와 맞닿게 좁힌다.
+const FIELD_GAP_M := 0.1
 const RULE_KEYS := ["kinds", "site", "requires", "forbids"]
 static var _catalog: Dictionary = {}
 static var _libraries: Dictionary = {}
@@ -170,7 +173,7 @@ static func attach_field(parent: Node3D, data: Dictionary) -> Node3D:
 	for index in cars.size():
 		var rect: Rect2i = cars[index]["rect"]
 		var at := Vector3(rect.position.x + rect.size.x * 0.5, 0, train.position.y + 1.5)
-		if not kit._append_slot(cars[index]["kind"], at, Vector3(rect.size.x - 0.6, 3.0, 2.8), heading, false):
+		if not kit._append_slot(cars[index]["kind"], at, Vector3(rect.size.x - FIELD_GAP_M, 3.0, 2.8), heading, false):
 			fallback.append(index)
 	kit.set_meta("fallback_cars", fallback)
 	kit._finish()
