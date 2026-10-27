@@ -13,23 +13,25 @@ extends Node3D
 
 const MapView = preload("res://game/world/map_view.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const EdgeBand = preload("res://game/world/edge_band.gd")
 const FOG_SHADER := preload("res://fx/shaders/map_edge_fog.gdshader")
 const FIELD_FOG_SHADER := preload("res://fx/shaders/field_fog.gdshader")
 ## The fog's own brightness under the light (a pale grey, as the reference
 ## game's (0.9, 0.9, 0.95) fog reads lit).
 const FOG_ALBEDO := 0.8
 
-## How far past the edge the ground and the fog go (the camera never shows more
-## than about 30 m past it).
-const MARGIN := 48.0
+## Ground and fog extend beyond the last distant scenery.
+const MARGIN: float = EdgeBand.FAR_REACH + 12.0
 ## The edge cells' colours give way to the edge's mean colour over this far.
 const BLEND := 10.0
 ## The fog sheets: height (m) and how much each covers. Three, low to high, so
 ## a roof or a fence at the edge goes into the fog too.
 const SHEETS: Array = [[0.35, 0.55], [1.5, 0.5], [3.2, 0.45]]
-## The fog starts this far inside the edge and is solid this far out.
+## The fog starts this far inside the edge and is solid FOG_PAST metres beyond
+## the camera's reach past it (EdgeBand.view_band): the far ground shows through
+## thin fog on screen and nothing past it reads.
 const FOG_INSET := 2.5
-const FOG_REACH := 12.0
+const FOG_PAST := 12.0
 
 var ground: MeshInstance3D
 var sheets: Array[MeshInstance3D] = []
@@ -40,6 +42,10 @@ var field_mat: ShaderMaterial
 var _map_mat: ShaderMaterial
 var _mask := -1.0
 var _room := Rect2i(0, 0, -1, -1)
+
+
+static func fog_reach() -> float:
+	return EdgeBand.view_band + FOG_PAST
 
 
 func setup(grid: FieldGrid, map_material: ShaderMaterial) -> void:
@@ -57,7 +63,7 @@ func setup(grid: FieldGrid, map_material: ShaderMaterial) -> void:
 		m.shader = FOG_SHADER
 		m.set_shader_parameter("map_size", size)
 		m.set_shader_parameter("inset", FOG_INSET)
-		m.set_shader_parameter("reach", FOG_REACH)
+		m.set_shader_parameter("reach", fog_reach())
 		m.set_shader_parameter("layer_k", float(s[1]))
 		m.set_shader_parameter("vis", map_material.get_shader_parameter("vis"))
 		var node := MeshInstance3D.new()

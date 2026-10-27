@@ -87,7 +87,7 @@
   "godot_material": "built-in StandardMaterial3D, vertex colour enabled on import; no material file",
   "triangle_limit": 600,
   "total_triangle_limit": 8000,
-  "total_triangles": 5984,
+  "total_triangles": 6676,
   "assets": {
     "bench": {
       "status": "ready",
@@ -1985,6 +1985,355 @@
       "bytes": 31756,
       "sha256": "7adc491ae241dc704dba49531007df9e829d85294801782f4accbd2009d89161",
       "source_asset": "Poly Haven painted_wooden_chair_01 (CC0)"
+    },
+    "blanket_stack": {
+      "status": "ready",
+      "path": "res://models/train_interior/blanket_stack.glb",
+      "reference_size_m": [
+        0.82,
+        0.28,
+        0.53
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.82,
+            0.28,
+            0.53
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.82,
+        0.28,
+        0.53
+      ],
+      "bounds_m": [
+        [
+          -0.41,
+          -0.14,
+          -0.265
+        ],
+        [
+          0.41,
+          0.14,
+          0.265
+        ]
+      ],
+      "use": "찬 칸 뒤 받침 위: 작게 접어 넷을 쌓은 담요(접힌 둥근 모서리가 앞을 본다)",
+      "lod0_tris": 128,
+      "colours": [
+        "blanket_stripe",
+        "cloth",
+        "cloth_faded"
+      ],
+      "bytes": 9488,
+      "sha256": "2a9229be17cab6b11ed41d11ed092b39a07c28a3867ca26e674efc3de1763abd",
+      "source_asset": "손으로 만듦(tools/blender/train_car_dress.py)",
+      "palette_extra": {
+        "blanket_stripe": [
+          0.22,
+          0.15,
+          0.13
+        ]
+      }
+    },
+    "lantern_off": {
+      "status": "ready",
+      "path": "res://models/train_interior/lantern_off.glb",
+      "reference_size_m": [
+        0.16,
+        0.34,
+        0.16
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.16,
+            0.34,
+            0.16
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.16,
+        0.34,
+        0.16
+      ],
+      "bounds_m": [
+        [
+          -0.08,
+          -0.17,
+          -0.08
+        ],
+        [
+          0.08,
+          0.17,
+          0.08
+        ]
+      ],
+      "use": "찬 칸 바닥: 불 꺼진 손등불(어두운 유리, 쇠 받침·뚜껑·고리)",
+      "lod0_tris": 136,
+      "colours": [
+        "glass_dark",
+        "iron",
+        "iron_worn"
+      ],
+      "bytes": 10304,
+      "sha256": "fca900d76010c7ce41432d819b2aecad0a8de0a9ba4a023e86c0f49fa9186a64",
+      "source_asset": "손으로 만듦(tools/blender/train_car_dress.py)",
+      "palette_extra": {
+        "glass_dark": [
+          0.1,
+          0.12,
+          0.13
+        ]
+      }
+    },
+    "blanket_curtain": {
+      "status": "ready",
+      "path": "res://models/train_interior/blanket_curtain.glb",
+      "reference_size_m": [
+        3.6,
+        2.77,
+        0.12
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            3.6,
+            2.77,
+            0.12
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        3.6,
+        2.77,
+        0.12
+      ],
+      "bounds_m": [
+        [
+          -1.8,
+          -1.385,
+          -0.06
+        ],
+        [
+          1.8,
+          1.385,
+          0.06
+        ]
+      ],
+      "use": "찬 칸 뒤 받침 앞: 천장에 매단 막대에 담요 두 폭을 양 끝으로 걷어 둔 커튼",
+      "lod0_tris": 152,
+      "colours": [
+        "blanket_stripe",
+        "iron",
+        "wool",
+        "wool_dark"
+      ],
+      "bytes": 11556,
+      "sha256": "7f2a03a2ba54c3f730c7fda80e43377e9770bbd383fdf823a9ad3efa05d6710e",
+      "source_asset": "손으로 만듦(tools/blender/train_car_dress.py)",
+      "palette_extra": {
+        "blanket_stripe": [
+          0.22,
+          0.15,
+          0.13
+        ],
+        "wool": [
+          0.26,
+          0.24,
+          0.22
+        ],
+        "wool_dark": [
+          0.21,
+          0.2,
+          0.19
+        ]
+      }
+    },
+    "laundry_line": {
+      "status": "ready",
+      "path": "res://models/train_interior/laundry_line.glb",
+      "reference_size_m": [
+        3.0,
+        0.61,
+        0.01
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            3.0,
+            0.61,
+            0.01
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        3.0,
+        0.61,
+        0.01
+      ],
+      "bounds_m": [
+        [
+          -1.5,
+          -0.305,
+          -0.005
+        ],
+        [
+          1.5,
+          0.305,
+          0.005
+        ]
+      ],
+      "use": "꼬리칸 1 머리 위: 살짝 처진 빨랫줄과 셔츠·수건·양말·홑이불",
+      "lod0_tris": 68,
+      "colours": [
+        "blanket_stripe",
+        "cloth",
+        "cloth_blue",
+        "cloth_faded",
+        "paper_aged",
+        "wood_worn"
+      ],
+      "bytes": 5768,
+      "sha256": "208cd57d14fe8ae1821a768110eabb0e08ee7eaf6a67fe70e06844c9329800d2",
+      "source_asset": "손으로 만듦(tools/blender/train_car_dress.py)",
+      "palette_extra": {
+        "blanket_stripe": [
+          0.22,
+          0.15,
+          0.13
+        ],
+        "cloth_blue": [
+          0.2,
+          0.25,
+          0.3
+        ]
+      }
+    },
+    "patch_boards": {
+      "status": "ready",
+      "path": "res://models/train_interior/patch_boards.glb",
+      "reference_size_m": [
+        1.46,
+        0.88,
+        0.05
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            1.46,
+            0.88,
+            0.05
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        1.46,
+        0.88,
+        0.05
+      ],
+      "bounds_m": [
+        [
+          -0.73,
+          -0.44,
+          -0.025
+        ],
+        [
+          0.73,
+          0.44,
+          0.025
+        ]
+      ],
+      "use": "꼬리칸 2 뒷벽 창 하나: 기울게 못 박은 판자 셋",
+      "lod0_tris": 108,
+      "colours": [
+        "iron",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 8596,
+      "sha256": "a7a11c42b690ec8aca725eab0b742f7ac312c7fd98e308d82052aac181982e6a",
+      "source_asset": "손으로 만듦(tools/blender/train_car_dress.py)",
+      "palette_extra": {}
+    },
+    "coal_heap": {
+      "status": "ready",
+      "path": "res://models/train_interior/coal_heap.glb",
+      "reference_size_m": [
+        2.4,
+        0.63,
+        1.1
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            2.4,
+            0.63,
+            1.1
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        2.4,
+        0.63,
+        1.1
+      ],
+      "bounds_m": [
+        [
+          -1.2,
+          -0.315,
+          -0.55
+        ],
+        [
+          1.2,
+          0.315,
+          0.55
+        ]
+      ],
+      "use": "기관차 운전실 화실 앞: 바닥에 부린 석탄 더미 2.4 m",
+      "lod0_tris": 100,
+      "colours": [
+        "iron",
+        "soot"
+      ],
+      "bytes": 11228,
+      "sha256": "109a1fab0042fcc7e770f07caf67a4734aa9bab00fca52de9637582203339a50",
+      "source_asset": "손으로 만듦(tools/blender/train_car_dress.py)",
+      "palette_extra": {}
     }
   },
   "failures": [],

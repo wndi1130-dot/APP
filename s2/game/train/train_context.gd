@@ -4,6 +4,13 @@ extends RefCounted
 const Catalog = preload("res://game/train/train_catalog.gd")
 const Look = preload("res://game/train/train_look.gd")
 const SeasonTable = preload("res://game/season_table.gd")
+## Whose hands a car's work places stand for (train_hands.gd jobs, carry_people 3.6):
+## the engine crew's shovels are the firebox shifts, the workshop's bench the repairs.
+const JOB_OF := {"engine_room": "stoker", "technical": "repair"}
+## How short of hands a job may be before its second work place, then its first,
+## stands empty (train_hands.gd short: 0 none missing .. 1 nobody at it).
+const SECOND_GONE: float = 0.5
+const FIRST_GONE: float = 0.99
 
 
 static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
@@ -32,6 +39,12 @@ static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
 	# 불난 칸은 화면 단계를 어떻게 덮어써도 일상 자리를 열지 않는다.
 	var burning: bool = fire or stage == 5
 	var peaceful: bool = (stage < 3 or stage == 6) and not burning
+	var work: bool = bool(view.get("work_time", false)) and not night and not council and peaceful
+	# The hands the turn settled; without a share nothing is missing.
+	var hands: Variant = train.get("hands")
+	var short: Dictionary = (hands as Dictionary).get("short", {}) if hands is Dictionary else {}
+	var job: String = String(JOB_OF.get(Catalog.layout_id(car), ""))
+	var job_short: float = clampf(float(short.get(job, 0.0)), 0.0, 1.0) if job != "" else 0.0
 	var c := {
 		"car_id": String(car.get("id", "")), "layout": Catalog.layout_id(car),
 		"warmth": warm, "ration": ration, "crowding": float(sit[2]), "exposure": float(sit[3]),
@@ -47,7 +60,9 @@ static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
 		"patients": patients > 0, "patient_count": patients,
 		"stove": fuel and warm >= Look.WARM_FREEZING and stage < 4 and not burning,
 		"meal": food and not council and bool(view.get("meal_time", true)) and peaceful,
-		"work": bool(view.get("work_time", false)) and not night and not council and peaceful,
+		"work": work,
+		# A short job leaves its work places empty, the second then the first; the ones left get their breath back.
+		"job_short": job_short, "work_first": work and job_short < FIRST_GONE, "work_second": work and job_short < SECOND_GONE,
 		"social": not council and float(train.get("fear", 0)) < Look.FEAR_FROZEN and peaceful,
 		"gather": stage >= 2 and stage <= 4 and not council and not burning,
 		"memorial": (bool(view.get("memorial", false)) or (laws.has("night_of_names") and night)) and not council and peaceful,

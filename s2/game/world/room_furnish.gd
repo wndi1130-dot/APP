@@ -959,6 +959,8 @@ const ONE_ROOM_HOME: String = "living"
 ## 방으로 칠 크기: 복도·벽장은 뺀다.
 const ROOM_MIN_CELLS: int = 12
 const ROOM_MIN_SIDE: int = 3
+## 이만큼 이하인 방(과 폭 두 칸 방)은 문 앞을 1칸만 비운다(_forbidden).
+const SMALL_ROOM_CELLS: int = 9
 ## 남긴 지도 가구가 대신하는 꼭 있을 가구.
 const STANDS_FOR: Dictionary = {"bunk_bed": "bed", "office_desk": "desk", "typewriter_desk": "desk"}
 
@@ -1276,9 +1278,25 @@ static func _roomy(cells: Array[Vector2i]) -> bool:
 	return mini(hi.x - lo.x + 1, hi.y - lo.y + 1) >= ROOM_MIN_SIDE
 
 
+## 폭이 두 칸 이하인 방.
+static func _narrow(cells: Array[Vector2i]) -> bool:
+	if cells.is_empty():
+		return false
+	var lo := cells[0]
+	var hi := cells[0]
+	for c in cells:
+		lo = lo.min(c)
+		hi = hi.max(c)
+	return mini(hi.x - lo.x + 1, hi.y - lo.y + 1) <= 2
+
+
 ## 비울 칸: "all"은 아무것도, "tall"은 큰 가구만 못 놓는다.
 static func _forbidden(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i], stairs: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
+	# 9칸 이하 방(욕실·벽장·찬방)과 폭 두 칸 방(좁은 부엌)은 문 안쪽 1칸만: 2칸이면 욕실에
+	# 변기·세면대밖에, 좁은 부엌에 조리대 한 줄도 못 선다(결정 442 「작은 욕실 문 앞 비움」 가).
+	# 문 바로 앞 칸은 어느 방이든 늘 빈다.
+	var deep: Array = [0] if cells.size() <= SMALL_ROOM_CELLS or _narrow(cells) else [0, 1]
 	for c in cells:
 		if stairs.has(c):
 			out[c] = "all"
@@ -1290,10 +1308,10 @@ static func _forbidden(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array
 			if _at(g, of, n) == ri:
 				continue
 			if g.doors.has(n) or g.people_can_walk(n):
-				# 문(뚫린 곳) 안쪽 2칸 x 문과 양옆 1칸.
+				# 문(뚫린 곳) 안쪽 2칸(작은 방은 1칸) x 문과 양옆 1칸.
 				var inward := -d
 				var side := Vector2i(inward.y, inward.x)
-				for k in [0, 1]:
+				for k in deep:
 					for s in [-1, 0, 1]:
 						out[c + inward * k + side * s] = "all"
 			elif g.windows.has(n) and not out.has(c):
@@ -1690,7 +1708,14 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 				var kk := String(props[i].get("kind", ""))
 				if not drop.has(i):
 					covered[STANDS_FOR.get(kk, kk)] = true
-			for item: Dictionary in _palette_for(cls, area, rng):
+			var items := _palette_for(cls, area, rng)
+			# 부엌을 갈라 뗀 식당(room_split DINING)은 거실 묶음의 꼭 있을 가구 다음에 식탁을 꼭 둔다.
+			if cls == "living" and _named(String(labels.get(ri, "")), "식당"):
+				var at := 0
+				while at < items.size() and bool((items[at] as Dictionary).get("need", false)):
+					at += 1
+				items.insert(at, {"kind": "dining_set", "size": Vector2i(2, 2), "need": true, "at": "mid"})
+			for item: Dictionary in items:
 				if covered.has(item["kind"]) or (item.get("fill", false) and used >= target):
 					continue
 				if item.get("near", "") in ["bed_head", "desk"]:
@@ -2057,16 +2082,20 @@ const KITCHEN_SEARCH: float = 2.0
 ## Room kind (room_class) -> the room key loot_dress.gd deals by. A living room deals as a
 ## bedroom (loot-feel: its hall is a chapel's, nearly every pull 0.3), the store a pantry.
 const ROOM_KEYS: Dictionary = {"kitchen": "kitchen", "bed": "bedroom", "living": "bedroom", "bath": "bathroom",
-	"store": "pantry", "storage": "storage", "shop": "shop", "office": "office", "boiler": "toolbox"}
+	"store": "pantry", "storage": "storage", "shop": "shop", "office": "office", "boiler": "toolbox",
+	"work": "toolbox", "garage": "toolbox", "barn": "storage", "woodshed": "storage"}
 
 
-## The room key of a room: a closet or pantry split off (room_split.gd) by its hidden name,
-## then its kind, then words in its name, then its building's role.
+## The room key of a room: a closet, pantry or dining room split off (room_split.gd) by its
+## hidden name, then its kind, then words in its name, then its building's role. A dining room
+## deals as the kitchen it was cut from (loot-feel: one kitchen share for the home).
 static func room_key(cls: String, words: String, role: String) -> String:
 	if _named(words, "벽장"):
 		return "bedroom"
 	if _named(words, "찬방"):
 		return "pantry"
+	if _named(words, "식당"):
+		return "kitchen"
 	if ROOM_KEYS.has(cls):
 		return ROOM_KEYS[cls]
 	for word: String in ["진료", "병실", "약"]:

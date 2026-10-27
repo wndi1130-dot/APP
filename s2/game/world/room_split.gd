@@ -23,6 +23,13 @@ const SHOP_ROLES := ["shop", "shopmain", "market"]
 const SPLIT_OVER := {"bed": 24, "kitchen": 20, "living": 36}
 const TARGET_AREA := {"bed": 16, "kitchen": 15, "living": 27}
 const MIN_SIDE := 3
+## 부엌 쪽만 폭 두 칸(조리대 한 줄 + 지나는 길)·여덟 칸까지 좁게 둘 수 있다: 폭 6·7칸 부엌의 가운데
+## 줄이 문 앞이나 창에 걸려도 2 + 1 + 3·4로 가른다. 넓게 가를 수 있으면 그쪽을 먼저(GALLEY_COST).
+const GALLEY_SIDE := 2
+const GALLEY_MIN := 8
+const GALLEY_COST := 3
+## 부엌을 갈라 생긴 거실의 숨은 이름표: 가구는 거실 묶음, 상자는 부엌 열쇠(room_furnish.room_key).
+const DINING := "식당 거실"
 ## 문이 원래 없는 쪽(새 칸막이 문으로만 드나드는 쪽)에는 더 안쪽 방이 온다: 침실을 지나 거실로 가지 않게.
 const PRIVACY := {"bed": 3, "kitchen": 2, "living": 1}
 ## 집 한 채에서 가르는 횟수 상한: 이 수에 처음 큰 방 수를 더한다(연립 한 동에 큰 방이 여럿).
@@ -117,7 +124,8 @@ static func choose(g: Grid, cells: Array, sizes: Array, protected: Dictionary, a
 				continue
 			var doors: Array = wall.keys()
 			# 벽장·찬방(두 칸)은 긴 변의 문을 먼저 본다: 안쪽 끝 칸에 선반을 두어도 문 안쪽 두 칸이 빈다.
-			# 폭 두 칸 욕실은 짧은 끝의 문을 먼저 본다: 문 앞 두 칸 너머 안쪽 끝이 통째로 남는다.
+			# 폭 두 칸 욕실은 긴 변의 문을 먼저 본다: 작은 방은 문 앞이 한 칸뿐이라 먼 쪽 한 줄이 통째로
+			# 가구 자리이고 모두 가까운 줄에서 손이 닿는다(짧은 끝 문이면 가구 셋이 끝).
 			doors.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
 				var la := _in_line(a, rect)
 				var lb := _in_line(b, rect)
@@ -126,7 +134,7 @@ static func choose(g: Grid, cells: Array, sizes: Array, protected: Dictionary, a
 				var ea := _narrow_end(a, rect)
 				var eb := _narrow_end(b, rect)
 				if ea != eb:
-					return ea
+					return eb
 				var da := _distance(a, entries)
 				var db := _distance(b, entries)
 				return da < db if da != db else (a.y < b.y if a.y != b.y else a.x < b.x))
@@ -165,6 +173,15 @@ static func _keeps_counter_run(data: Dictionary, g: Grid, lv: int, found: Dictio
 	g.doors[door] = {"state": "closed", "hp": DOOR_HP, "cell": door}
 	var cells: Array[Vector2i] = []
 	cells.assign(found[side].keys())
+	var ok := _counter_run(data, g, lv, cells, soft)
+	for c: Vector2i in was:
+		g.set_solid(c, was[c])
+	g.doors.erase(door)
+	return ok
+
+
+## 그 칸들(방 하나)에 조리대 한 줄(COUNTER_MIN칸)이 설 곧은 벽이 있는가.
+static func _counter_run(data: Dictionary, g: Grid, lv: int, cells: Array[Vector2i], soft: Dictionary = {}) -> bool:
 	var of := PackedInt32Array()
 	of.resize(g.width * g.height)
 	of.fill(-1)
@@ -175,7 +192,6 @@ static func _keeps_counter_run(data: Dictionary, g: Grid, lv: int, found: Dictio
 	for c: Vector2i in cells:
 		if (g.solid_at(c) == S.NONE or soft.has(c)) and forbid.get(c, "") != "all" and Furnish._wall_sides(g, of, 0, Rect2i(c, Vector2i.ONE)) > 0:
 			usable[c] = true
-	var ok := false
 	for c: Vector2i in usable:
 		for d: Vector2i in [Vector2i.RIGHT, Vector2i.DOWN]:
 			if usable.has(c - d):
@@ -183,11 +199,9 @@ static func _keeps_counter_run(data: Dictionary, g: Grid, lv: int, found: Dictio
 			var n := 1
 			while usable.has(c + d * n):
 				n += 1
-			ok = ok or n >= Furnish.COUNTER_MIN
-	for c: Vector2i in was:
-		g.set_solid(c, was[c])
-	g.doors.erase(door)
-	return ok
+			if n >= Furnish.COUNTER_MIN:
+				return true
+	return false
 
 
 ## 폭 두 칸, 길이 넷 이상인 칸의 짧은 끝에 난 문.
@@ -410,6 +424,9 @@ static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary,
 				entries.append(c + d)
 	if entries.is_empty():
 		return {}
+	var galley := keep == "kitchen" or add == "kitchen"
+	var least := GALLEY_MIN if galley else MIN_REMAINDER
+	var narrowest := GALLEY_SIDE if galley else MIN_SIDE
 	var lines: Array = []
 	for axis in [0, 1]:
 		var along := Vector2i.RIGHT if axis == 0 else Vector2i.DOWN
@@ -425,14 +442,14 @@ static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary,
 					a[c] = true
 				else:
 					b[c] = true
-			if line.size() < 2 or a.size() < MIN_REMAINDER or b.size() < MIN_REMAINDER:
+			if line.size() < 2 or a.size() < least or b.size() < least:
 				continue
 			line.sort()
 			var valid := line[line.size() - 1] - line[0] == along * (line.size() - 1)
 			for c: Vector2i in line:
 				valid = valid and (g.solid_at(c) == S.NONE or soft.has(c)) and not protected.has(c)
 			valid = valid and g.solid_at(line[0] - along) == S.WALL and g.solid_at(line[line.size() - 1] + along) == S.WALL
-			if valid and _short_side(a) >= MIN_SIDE and _short_side(b) >= MIN_SIDE and _connected(a) and _connected(b):
+			if valid and _short_side(a) >= narrowest and _short_side(b) >= narrowest and _connected(a) and _connected(b):
 				lines.append({"line": line, "a": a, "b": b, "axis": axis})
 	var best := {}
 	var best_score := 2147483647
@@ -448,7 +465,14 @@ static func _cut(g: Grid, cells: Array, protected: Dictionary, soft: Dictionary,
 				continue
 			if not anchors.is_empty() and _touches(add_cells, anchors):
 				continue
+			# 좁은 쪽(갤리)은 부엌만: 다른 쪽은 늘 MIN_REMAINDER·MIN_SIDE.
+			var kitchen_cells: Dictionary = keep_cells if keep == "kitchen" else add_cells
+			var other_cells: Dictionary = add_cells if keep == "kitchen" else keep_cells
+			if galley and not _wide(other_cells):
+				continue
 			var score := absi(keep_cells.size() - int(TARGET_AREA[keep])) + absi(add_cells.size() - int(TARGET_AREA[add]))
+			if galley and not _wide(kitchen_cells):
+				score += GALLEY_COST
 			if score >= best_score:
 				continue
 			var door := _cut_door(row["line"], row["axis"], keep_cells, add_cells, protected, entries)
@@ -495,6 +519,11 @@ static func _touches(cells: Dictionary, entries: Array) -> bool:
 	return false
 
 
+## 칸막이 한쪽이 방 하나로 넉넉한가(MIN_REMAINDER칸·폭 MIN_SIDE 이상).
+static func _wide(cells: Dictionary) -> bool:
+	return cells.size() >= MIN_REMAINDER and _short_side(cells) >= MIN_SIDE
+
+
 static func _short_side(cells: Dictionary) -> int:
 	var lo: Vector2i = cells.keys()[0]
 	var hi := lo
@@ -506,7 +535,8 @@ static func _short_side(cells: Dictionary) -> int:
 
 ## 큰 방 하나를 가른다. 그 방의 다시 놓을 지도 가구는 먼저 치우고, 남는 지도 가구의 메모는 그 쪽 이름으로.
 ## 두 쪽 묶음은 숨은 이름표로 적는다. room은 원래 쪽으로 줄고, 돌려주는 값의 cells가 새 쪽이다.
-static func _bisect(data: Dictionary, lv: int, room: Dictionary, add: String, anchors: Array = []) -> Dictionary:
+## adds: 새 쪽 묶음 후보, 차례대로 처음 되는 것(지킬 칸은 한 번만 구한다).
+static func _bisect(data: Dictionary, lv: int, room: Dictionary, adds: Array[String], anchors: Array = []) -> Dictionary:
 	var g: Grid = data.get("levels", {0: data["grid"]})[lv]
 	var keep: String = room["class"]
 	var cells: Array[Vector2i] = []
@@ -550,16 +580,23 @@ static func _bisect(data: Dictionary, lv: int, room: Dictionary, add: String, an
 	for c: Vector2i in sides:
 		if not hard.has(c) and str(protected.get(c, "")) == "all":
 			line_protected.erase(c)
-	# 부엌으로 남거나 새로 서는 쪽에는 조리대 한 줄이 설 곧은 벽이 있어야 한다.
-	var accept := Callable()
-	if keep == "kitchen" or add == "kitchen":
-		var side := "keep" if keep == "kitchen" else "add"
-		accept = func(found: Dictionary) -> bool: return _keeps_counter_run(data, g, lv, found, soft, side)
-	var candidate := _cut(g, cells, line_protected, soft, keep, add, accept, stairs, anchors)
-	if candidate.is_empty():
-		return {}
-	var moves: Variant = _box_moves(data, g, lv, candidate, soft)
-	if moves == null:
+	var add := ""
+	var candidate := {}
+	var moves: Variant = null
+	for want: String in adds:
+		# 부엌으로 남거나 새로 서는 쪽에는 조리대 한 줄이 설 곧은 벽이 있어야 한다.
+		var accept := Callable()
+		if keep == "kitchen" or want == "kitchen":
+			var side := "keep" if keep == "kitchen" else "add"
+			accept = func(found: Dictionary) -> bool: return _keeps_counter_run(data, g, lv, found, soft, side)
+		candidate = _cut(g, cells, line_protected, soft, keep, want, accept, stairs, anchors)
+		if candidate.is_empty():
+			continue
+		moves = _box_moves(data, g, lv, candidate, soft)
+		if moves != null:
+			add = want
+			break
+	if add.is_empty():
 		return {}
 	_clear(data, g, lv, replaced)
 	var b: int = room["building"]
@@ -586,7 +623,7 @@ static func _bisect(data: Dictionary, lv: int, room: Dictionary, add: String, an
 		if int(hint.get("level", 0)) == lv and add_cells.has(hint.get("cell")):
 			hint["cell"] = keep_at
 	hints.append({"text": Furnish.ROOM_LABEL[keep], "cell": keep_at, "level": lv})
-	hints.append({"text": Furnish.ROOM_LABEL[add], "cell": _first(add_cells), "level": lv})
+	hints.append({"text": DINING if keep == "kitchen" and add == "living" else Furnish.ROOM_LABEL[add], "cell": _first(add_cells), "level": lv})
 	for prop: Dictionary in _props(data):
 		if int(prop.get("level", 0)) != lv or not prop.get("rect") is Rect2i:
 			continue
@@ -665,7 +702,8 @@ static func _carve_bath(data: Dictionary, rooms: Array, stats: Dictionary) -> bo
 
 
 ## 집 한 채의 큰 방을 차례로 가른다(가장 큰 방부터, SPLIT_OVER를 넘는 동안). 새 쪽 묶음은 그 집에 없는
-## 것부터: 거실, 부엌, 그다음 침실(아이 방). 거실·부엌으로 못 가르면 침실로 한 번 더 본다.
+## 것부터: 거실, 부엌, 그다음 침실(아이 방). 부엌을 가를 때는 늘 거실(식당)부터. 거실·부엌으로 못
+## 가르면 침실로 한 번 더 본다.
 static func _cut_rooms(data: Dictionary, b: int, rooms: Array, stats: Dictionary) -> void:
 	var failed := {}
 	var over := 0
@@ -679,25 +717,24 @@ static func _cut_rooms(data: Dictionary, b: int, rooms: Array, stats: Dictionary
 			if SPLIT_OVER.has(cls) and r["cells"].size() > int(SPLIT_OVER[cls]) and not failed.has(i) and (pick < 0 or r["cells"].size() > rooms[pick]["cells"].size()):
 				pick = i
 		if pick < 0:
-			return
+			break
 		var room: Dictionary = rooms[pick]
 		var has := {}
 		for r: Dictionary in rooms:
 			has[r["class"]] = true
 		var wants: Array[String] = []
-		for cls: String in ["living", "kitchen"]:
-			if not has.has(cls):
+		# 부엌·거실이 다 없으면 부엌 먼저: 거실은 끝에 침실 하나를 거실로 돌려서도 생긴다.
+		for cls: String in (["kitchen", "living"] if not has.has("kitchen") else ["living", "kitchen"]):
+			# 부엌을 가르면 새 쪽은 먼저 거실(식당): 집에 거실이 있어도(연립은 칸마다 따로 산다).
+			# 침실은 지나다니는 방이 될 수 없어 좁은 부엌 곁에는 잘 안 선다.
+			if not has.has(cls) or (cls == "living" and room["class"] == "kitchen"):
 				wants.append(cls)
 		wants.append("bed")
 		var anchors: Array = []
 		for carved: Dictionary in stats["rows"]:
 			if carved["kind"] != "bath" and carved["building"] == b and carved["level"] == room["level"]:
 				anchors.append(carved["door"])
-		var row := {}
-		for add: String in wants:
-			row = _bisect(data, room["level"], room, add, anchors)
-			if not row.is_empty():
-				break
+		var row := _bisect(data, room["level"], room, wants, anchors)
 		if row.is_empty():
 			failed[pick] = true
 			stats["skipped"] += 1
@@ -706,7 +743,8 @@ static func _cut_rooms(data: Dictionary, b: int, rooms: Array, stats: Dictionary
 		stats["boxes_moved"] += row["boxes_moved"]
 		stats["cuts"].append(row)
 		rooms.append({"level": row["level"], "building": b, "cells": row["cells"], "area": row["cells"].size(), "class": row["class"]})
-	_living_from_a_bedroom(data, rooms, stats)
+	_bedroom_as(data, rooms, stats, "kitchen")
+	_bedroom_as(data, rooms, stats, "living")
 
 
 ## 방에 제 문이 있나: 문(또는 뚫린 곳) 너머가 건물 밖·복도·계단 칸이고 다른 침실·부엌·욕실이 아니다.
@@ -732,27 +770,31 @@ static func _own_way_in(data: Dictionary, lv: int, inside: Dictionary, rooms: Ar
 	return false
 
 
-## 가르고도 거실이 없는 집에 침실이 둘 이상이면, 가장 낮은 층의 가장 큰 침실을 거실로 쓴다(벽은 그대로).
-## 바닥 글씨로 방 이름이 적힌 방은 글씨와 어긋나지 않게 두지 않는다.
-static func _living_from_a_bedroom(data: Dictionary, rooms: Array, stats: Dictionary) -> void:
+## 가르고도 부엌·거실이 없는 집에 침실이 둘 이상이면 침실 하나를 그 방으로 쓴다(벽은 그대로, 하나는
+## 침실로 남는다). 부엌은 조리대 한 줄이 설 곧은 벽이 있는 침실 가운데 넓이가 부엌 목표에 가장 가까운 것,
+## 거실은 가장 큰 것(둘 다 가장 낮은 층부터). 바닥 글씨로 방 이름이 적힌 방은 글씨와 어긋나지 않게 두지 않는다.
+static func _bedroom_as(data: Dictionary, rooms: Array, stats: Dictionary, cls: String) -> void:
 	var beds: Array = []
 	for r: Dictionary in rooms:
-		if r["class"] == "living":
+		if r["class"] == cls:
 			return
 		if r["class"] == "bed" and r["cells"].size() >= MIN_REMAINDER:
 			beds.append(r)
 	if beds.size() < 2:
 		return
+	var aim: int = TARGET_AREA["kitchen"]
 	beds.sort_custom(func(a: Dictionary, c: Dictionary) -> bool:
 		if a["level"] != c["level"]:
 			return a["level"] < c["level"]
+		if cls == "kitchen":
+			return absi(a["cells"].size() - aim) < absi(c["cells"].size() - aim)
 		return a["cells"].size() > c["cells"].size())
 	for room: Dictionary in beds:
 		var lv: int = room["level"]
 		var inside := {}
 		for c: Vector2i in room["cells"]:
 			inside[c] = true
-		# 다른 방을 지나야 들어오는 안쪽 침실은 거실로 쓰지 않는다(PRIVACY와 같은 뜻).
+		# 다른 방을 지나야 들어오는 안쪽 침실은 거실·부엌으로 쓰지 않는다(PRIVACY와 같은 뜻).
 		if not _own_way_in(data, lv, inside, rooms):
 			continue
 		var written := false
@@ -760,7 +802,12 @@ static func _living_from_a_bedroom(data: Dictionary, rooms: Array, stats: Dictio
 			written = written or (int(label.get("level", 0)) == lv and inside.has(label.get("cell")) and Furnish._name_class(String(label.get("text", "")))[1])
 		if written:
 			continue
-		var title: String = Furnish.ROOM_LABEL["living"]
+		if cls == "kitchen":
+			var cells: Array[Vector2i] = []
+			cells.assign(room["cells"])
+			if not _counter_run(data, data.get("levels", {0: data["grid"]})[lv], lv, cells, _replaced_in(data, lv, cells)["cells"]):
+				continue
+		var title: String = Furnish.ROOM_LABEL[cls]
 		for hint: Dictionary in data.get("_room_hints", []):
 			if int(hint.get("level", 0)) == lv and inside.has(hint.get("cell")):
 				hint["text"] = title
@@ -771,7 +818,7 @@ static func _living_from_a_bedroom(data: Dictionary, rooms: Array, stats: Dictio
 			var cut := note.find("의 ")
 			if cut > 0 and inside.has((prop["rect"] as Rect2i).get_center()):
 				prop["note"] = title + note.substr(cut)
-		room["class"] = "living"
+		room["class"] = cls
 		stats["relabelled"] = int(stats.get("relabelled", 0)) + 1
 		return
 
@@ -805,7 +852,7 @@ static func apply(data: Dictionary, map_script: Script = null) -> Dictionary:
 		if not home and not is_shop_house(identity):
 			continue
 		var b: int = building["id"]
-		var made: int = stats["rows"].size() + stats["cuts"].size()
+		var made: int = stats["rows"].size() + stats["cuts"].size() + int(stats.get("relabelled", 0))
 		# 이 건물에 닿는 지도 가구만 한 번 골라 둔다(나누는 동안 가구 줄을 몇 번이고 훑지 않게).
 		if building.get("rect") is Rect2i:
 			var reach: Rect2i = (building["rect"] as Rect2i).grow(1)
@@ -840,7 +887,8 @@ static func apply(data: Dictionary, map_script: Script = null) -> Dictionary:
 		# 큰 방에서 못 뗀 욕실은 가른 뒤의 방에서 한 번 더 본다.
 		if needs_bath:
 			_carve_bath(data, rooms, stats)
-		if stats["rows"].size() + stats["cuts"].size() > made:
+		# 침실을 부엌·거실로 돌린 집도 이름표를 박는다(가구 놓기가 그 이름표로 묶음을 읽는다).
+		if stats["rows"].size() + stats["cuts"].size() + int(stats.get("relabelled", 0)) > made:
 			_pin_classes(data, rooms)
 	# 방 번호는 마지막 칸막이 뒤에 다시 구한다. 가구 코드는 이 욕실만 우선 읽는다.
 	var baths := {}

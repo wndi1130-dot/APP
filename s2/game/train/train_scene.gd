@@ -24,7 +24,8 @@ const BackdropShader = preload("res://fx/shaders/horizon_backdrop.gdshader")
 ## frames, roof, buffers, bellows and bogies in one model a kind of car
 ## (tools/blender/train_shell.py). Without the file the boxes below stand in.
 const SHELL_ROOT := "res://models/train_shell/shell_%s.glb"
-const SHELL_OF := {"front": "clean", "dining": "clean", "captain": "chief", "medical": "medic"}
+## 기관차·탄수차는 객차 창·나무 벽 대신 쇠판 벽(운전실 창 하나) 껍데기(열세 칸 점검, 2026-10-27).
+const SHELL_OF := {"front": "clean", "dining": "clean", "captain": "chief", "medical": "medic", "loco": "engine", "tender": "engine"}
 const SHELL_GLASS_Z: float = -1.40       # the glass sits in the shell's window reveal
 ## How warm or cold a car's walls look (tint on the shell, no new light).
 const SHELL_COLD := Color(0.66, 0.74, 0.92)
@@ -424,9 +425,13 @@ func _seat_key(c: Dictionary) -> String:
 func _seat_car(c: Dictionary, reseat: bool = true) -> void:
 	var comm := Rules.comm_of(rules, c["def"])
 	var n := Look.figures(c["def"], comm, phase())
-	if bool(Catalog.layout(c["def"]).get("storage_only", false)):
+	var layout := Catalog.layout(c["def"])
+	if bool(layout.get("storage_only", false)):
 		n = 0
 	var w := Look.warmth(comm)
+	# A car kept cold on purpose (the cold car) shows its own warmth: frost on the glass, cold walls, no stove.
+	if layout.has("look_warmth"):
+		w = float(layout["look_warmth"])
 	var m := Look.mood(comm, rules.get("train", {}))
 	var look := Look.mood_look(m)
 	c["mood"] = m

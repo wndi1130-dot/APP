@@ -8,12 +8,13 @@ import { applyFieldReturn, chooseSymbolUse } from '../../src/game/field_receipt'
 import type { FieldDeparture, FieldReceipt } from '../../src/game/field_receipt';
 import { nextFieldStep } from '../../src/game/field_council';
 import { arrivalSummary, endCard, finishSlice, secondStationReached } from '../../src/game/field_arrival';
+import { pickFirst } from '../../tools/slice_vectors';
 
 // 둘째 역 도착 화면과 끝 카드(구현명세 S3 연결 v1 5절, 결정 297, 확인 줄 19·22·23·24).
 const dir = fileURLToPath(new URL('../../../s2/tests/game/fixtures/field_v4/', import.meta.url));
 const read = <T>(name: string): T => JSON.parse(readFileSync(join(dir, name), 'utf8')) as T;
-const clear = (g: Game) => { g.cards = []; };
-const step = (g: Game) => { clear(g); advance(g); clear(g); };
+// 조각은 서류를 한 장씩 띄우고 고르기 전엔 못 가므로, 걸음 앞뒤에 서류마다 첫 고를 수 있는 선택지를 고른다(slice_vectors.ts와 같다).
+const step = (g: Game) => { pickFirst(g); advance(g); pickFirst(g); };
 
 /** 첫 정차(2구간)에서 필드를 마치고 돌아와 특별 회기까지 끝낸 판을 둘째 역까지 달린다. */
 function slice(receipt: string, hang = false): Game {
@@ -21,7 +22,7 @@ function slice(receipt: string, hang = false): Game {
   g.seg = 2;
   step(g); step(g);
   resolveStop(g, true);
-  clear(g);
+  pickFirst(g);
   const rec = applyFieldReturn(g, read<FieldDeparture>('departure_prologue.json'), read<FieldReceipt>(`${receipt}.json`)).record;
   if (hang) chooseSymbolUse(g, rec.receiptId, 'hang_before_session');
   expect(nextFieldStep(g)).toBe('council');

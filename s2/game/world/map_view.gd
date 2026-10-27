@@ -62,6 +62,8 @@ var light_mats: Dictionary = {}      # light kind -> StandardMaterial3D
 var wall_nodes: Dictionary = {}   # Vector2i(building id, level) -> MeshInstance3D
 var buildings: Node3D             # the building kit (building_view.gd); null draws grey boxes
 var train_node: MeshInstance3D    # the train, its doors and the way over it
+var train_models: Node3D          # the train kit (train_model_kit.gd): the cars' models and their lit windows
+var car_windows_lit := false
 var cut_building: int = -2
 var cut_level: int = 0
 var levels: Dictionary = {}       # level -> FieldGrid
@@ -435,8 +437,13 @@ func update_tracks(changed: Dictionary) -> void:
 
 
 ## How strong the lamp light shows on the ground: faint by day, full at night.
-func set_lamp_gain(gain: float) -> void:
+## reveal: how far a lamp's pool out of doors shows through the sight mask
+## (0 by day, 1 at night, decision 474 B9). floor_level: the player's floor,
+## whose floor the lamps light besides the ground.
+func set_lamp_gain(gain: float, reveal: float = 0.0, floor_level: int = 0) -> void:
 	material.set_shader_parameter("lamp_gain", clampf(gain, 0.0, 1.0))
+	material.set_shader_parameter("lamp_reveal", clampf(reveal, 0.0, 1.0))
+	material.set_shader_parameter("lamp_floor", floor_level * LEVEL_H)
 
 
 ## The low sun's pools through the windows (texel index -> byte) and their colour.
@@ -452,7 +459,13 @@ func update_window_light(texels: Dictionary, color: Color) -> void:
 
 ## The glowing faces themselves (car windows, the firebox door, the gap in the
 ## hideout boards): lit ones show amber, unlit car windows stay as dark glass.
+## The model coaches light their own panes (the train kit); a car window face is
+## left only on a car the kit could not draw.
 func set_light_on(kind: String, on: bool) -> void:
+	if kind == "car_window":
+		car_windows_lit = on
+		if train_models != null:
+			train_models.set_windows_lit(on)
 	if not light_nodes.has(kind):
 		return
 	if kind == "car_window":
@@ -462,10 +475,10 @@ func set_light_on(kind: String, on: bool) -> void:
 
 
 func light_is_on(kind: String) -> bool:
+	if kind == "car_window":
+		return car_windows_lit
 	if not light_nodes.has(kind):
 		return false
-	if kind == "car_window":
-		return light_mats[kind].albedo_color == FxState.LAMP
 	return light_nodes[kind].visible
 
 
@@ -1174,13 +1187,19 @@ func _build_blocks() -> void:
 	train_node = _mesh_node()
 	# 모델을 먼저 붙이고, 모델로 바꾸지 못했다고 돌려받은 칸만 상자로 그린다.
 	var models := TrainModels.attach_field(train_node, data)
+	train_models = models
+	models.set_windows_lit(car_windows_lit)
 	await BuildPace.rest(pace)
 	for index: int in models.get_meta("fallback_cars", []):
 		var car: Dictionary = data["train_cars"][index]
 		var r: Rect2i = car["rect"]
 		box(tt, Vector3(r.size.x - 0.6, 3.0, 2.8), Vector3(r.position.x + r.size.x * 0.5, 1.5, train.position.y + 1.5), Color(0.3, 0.29, 0.28) if car["kind"] == "car" else Color(0.22, 0.22, 0.24))
-	# Doors where people step down, on each side of the train that has them.
-	for face in door_faces(data):
+	# Doors where people step down, on each side of the train that has them: the
+	# kit's door pieces on the coaches' sides, a box only where it has none.
+	var faces := door_faces(data)
+	var doors := TrainModels.attach_doors(train_node, faces, data)
+	for index: int in doors.get_meta("fallback_doors", []):
+		var face: Dictionary = faces[index]
 		box(tt, Vector3(1.0, 2.0, 0.1), Vector3(face["cell"].x + 0.5, 1.4, face["z"]), Color(0.42, 0.38, 0.33))
 	# A way over the train: a plank across the gap between two cars and rungs
 	# up to it on each side (over the roof if the way is not at a gap).
@@ -1201,7 +1220,10 @@ func _build_blocks() -> void:
 	train_node.mesh = tt.commit()
 	_build_lights()
 	await BuildPace.rest(pace)
-	for w in data["wagons"]:
+	# Wagons on the sidings: the kit's models, a box only where it has none.
+	var wagon_models := TrainModels.attach_wagons(level_roots[0], data["wagons"])
+	for index: int in wagon_models.get_meta("fallback_wagons", []):
+		var w: Dictionary = data["wagons"][index]
 		var r: Rect2i = w["rect"]
 		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
 		box(st, Vector3(r.size.x - 0.2, 1.9, r.size.y - 0.2), mid + Vector3(0, 0.95, 0), Color(0.33, 0.3, 0.28))
@@ -1680,6 +1702,9 @@ func _build_lights() -> void:
 	for l in data["lights"]:
 		var kind := String(l["kind"])
 		if not LIGHT_FACES.has(kind):
+			continue
+		# A model coach lights its own panes where its glass is (the train kit).
+		if kind == "car_window" and train_models != null and train_models.lights_window_at(l["cell"]):
 			continue
 		if not tools.has(kind):
 			tools[kind] = _begin()

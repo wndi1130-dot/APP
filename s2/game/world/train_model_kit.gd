@@ -6,6 +6,7 @@ const CATALOG_PATH := "res://game/world/train_model_catalog.json"
 const MODE_SETTING := "visuals/train_models_enabled"
 const Graybox = preload("res://scripts/graybox.gd")
 const Weathered = preload("res://fx/shaders/weathered.gdshader")
+const FxState = preload("res://fx/fx_state.gd")
 ## 대응표 맨 위에 꼭 있어야 하는 키와 허용하는 값의 꼴.
 const CATALOG_SHAPE := {
 	"near_distance_m": [TYPE_INT, TYPE_FLOAT],
@@ -23,11 +24,30 @@ const KIND_KEYS := ["assets", "people", "parts"]
 ## 필드에서 이웃 칸 모델 사이에 남기는 틈(m). 대각뷰(결정 476)는 칸마다 끝면을 비스듬히 보여
 ## 0.6 m 틈이면 끝벽의 어두운 통로가 칸마다 구멍처럼 보였다. 연결막이 완충기 끝까지 나와 맞닿게 좁힌다.
 const FIELD_GAP_M := 0.1
+## 옆 선로 화차를 화차 칸에 놓을 때 앞뒤로 남기는 틈(m, 지도 보기의 화차 상자와 같음).
+const WAGON_GAP_M := 0.2
+## 객차 옆벽이 칸 가운데에서 떨어진 거리(모델 단위 m, tools/blender/train_exterior.py BODY_Z).
+## 문 조각은 이 벽에 붙는다.
+const DOOR_WALL_Z := 1.40
+## 저녁 창빛(대각뷰, 결정 476): 지도 보기의 3 m 간격 창 판은 모델 창과 어긋나 벽에 붙은 판처럼 보였다.
+## 객차 모델의 유리 자리(대응표 "windows", 한쪽 면 [x0, x1, y0, y1] m)마다 빛 판을 붙인다. 판은 옆벽에서
+## 바깥쪽으로 이만큼(LOD0은 벽 안 6 cm 유리 바로 앞, LOD1은 벽 앞 3 mm 유리 바로 앞)이라 커튼·판자가 그 앞을 가린다.
+const WINDOW_GLOW_OUT := [-0.056, 0.006]
+## 창빛 색은 등불 색(FxState.LAMP)에서 밝기만 낮춘다. 창마다 (칸, 면, 창 번호)로 정해진 밝기 차를 둔다.
+const WINDOW_GLOW_LOW := 0.55
+const WINDOW_GLOW_HIGH := 0.8
+## 온실칸 긴 유리 띠는 작은 창보다 훨씬 넓어 같은 밝기면 띠 하나가 화면을 차지한다. 이만큼 낮춘다.
+const WINDOW_GLOW_DIM := {"coach_glass": 0.6}
 const RULE_KEYS := ["kinds", "site", "requires", "forbids"]
 static var _catalog: Dictionary = {}
 static var _libraries: Dictionary = {}
 static var _cuts: Dictionary = {}
+static var _glow_mesh: QuadMesh
+static var _glow_material: StandardMaterial3D
 var _batches: Dictionary = {}
+var _glow_nodes: Array[MultiMeshInstance3D] = []
+var _lit_slots: Array[int] = []
+var _lit_rects: Array[Rect2i] = []
 
 
 static func catalog() -> Dictionary:
@@ -173,11 +193,114 @@ static func attach_field(parent: Node3D, data: Dictionary) -> Node3D:
 	for index in cars.size():
 		var rect: Rect2i = cars[index]["rect"]
 		var at := Vector3(rect.position.x + rect.size.x * 0.5, 0, train.position.y + 1.5)
-		if not kit._append_slot(cars[index]["kind"], at, Vector3(rect.size.x - FIELD_GAP_M, 3.0, 2.8), heading, false):
+		if not kit._append_slot(cars[index]["kind"], at, Vector3(rect.size.x - FIELD_GAP_M, 3.0, 2.8), heading, false, index):
 			fallback.append(index)
+	# 지도의 car_window 빛 자리는 칸 옆 줄이나 그 바로 바깥 줄에 놓인다(지도마다 다르다).
+	for slot in kit._lit_slots:
+		var lit: Rect2i = cars[slot]["rect"]
+		kit._lit_rects.append(lit.grow_individual(0, 1, 0, 1))
 	kit.set_meta("fallback_cars", fallback)
 	kit._finish()
 	return kit
+
+
+## 저녁 창빛을 켜고 끈다(지도 보기 set_light_on "car_window"). 처음에는 꺼져 있다.
+func set_windows_lit(on: bool) -> void:
+	for node in _glow_nodes:
+		node.visible = on
+
+
+## 지도의 car_window 빛 자리가 이 키트가 창빛을 넣은 칸의 것이면 참. 지도 보기는 그 칸에 판을 그리지 않는다.
+func lights_window_at(cell: Vector2i) -> bool:
+	for rect in _lit_rects:
+		if rect.has_point(cell):
+			return true
+	return false
+
+
+## 창 하나의 밝기(WINDOW_GLOW_LOW..HIGH). 같은 칸·면·창이면 늘 같은 값이라 다시 찍어도 그림이 같다.
+static func glow_level(slot: int, side: int, window: int) -> float:
+	return lerpf(WINDOW_GLOW_LOW, WINDOW_GLOW_HIGH, float(posmod(hash(Vector3i(slot, side, window)), 1000)) / 999.0)
+
+
+## 옆 선로 화차(지도 data["wagons"])마다 모델을 붙인다(대각뷰에서 갈색 상자가 가장 큰 덜 만든
+## 덩이였다, 결정 476). 모델로 바꾸지 못한 화차의 번호는 meta "fallback_wagons"로 돌려주고,
+## 지도 보기는 그 화차만 상자로 그린다. 화차 칸·막힘·석탄 값은 지도 자료 그대로다.
+static func attach_wagons(parent: Node3D, wagons: Array) -> Node3D:
+	var kit := TrainModelKit.new()
+	kit.name = "WagonModels"
+	parent.add_child(kit)
+	var fallback: Array[int] = []
+	for index in wagons.size():
+		var w: Dictionary = wagons[index]
+		var rect: Rect2i = w["rect"]
+		var at := Vector3(rect.position.x + rect.size.x * 0.5, 0, rect.position.y + rect.size.y * 0.5)
+		if not kit._append_slot(wagon_kind(w), at, Vector3(rect.size.x - WAGON_GAP_M, 3.0, float(rect.size.y)), 1.0, false):
+			fallback.append(index)
+	kit.set_meta("fallback_wagons", fallback)
+	kit._finish()
+	return kit
+
+
+## 지도 화차의 모델 종류. 지도 자료에 종류 칸이 없어 이름과 석탄으로 고른다
+## (field_maps 화차: 「석탄 화차」「빈 화차」「평판 화차」「탄수차」·「버려진 탄수차」).
+static func wagon_kind(w: Dictionary) -> String:
+	var name := String(w.get("name", ""))
+	if name.contains("탄수차"):
+		return "wagon_tender"
+	if name.contains("평판"):
+		return "wagon_flat"
+	return "wagon_coal" if float(w.get("coal", 0.0)) > 0.0 else "wagon_open"
+
+
+## 필드 열차의 타는 문(map_view door_faces: {cell, z})마다 문 조각(door_open: 어두운 문간·젖혀
+## 벽에 붙인 문짝·디딤판)을 그 칸 객차의 옆벽에 붙인다(대각뷰에서 베이지 판이 판자를 기댄 것처럼
+## 보였다, 결정 476). 위쪽 면은 돌려 붙인다. 객차가 아닌 칸이거나 모델이 없으면 meta
+## "fallback_doors"로 돌려주고 지도 보기가 그 문만 상자로 그린다. 문 칸·승하차 자료는 그대로다.
+static func attach_doors(parent: Node3D, faces: Array, data: Dictionary) -> Node3D:
+	var kit := TrainModelKit.new()
+	kit.name = "DoorModels"
+	parent.add_child(kit)
+	var train: Rect2i = data["train"]
+	var mid_z: float = train.position.y + 1.5
+	var fallback: Array[int] = []
+	var ready := can_replace("door_open")
+	for index in faces.size():
+		var cell: Vector2i = faces[index]["cell"]
+		var k: float = _coach_scale_at(data, cell.x) if ready else 0.0
+		if k <= 0.0:
+			fallback.append(index)
+			continue
+		var side := 1.0 if float(faces[index]["z"]) > mid_z else -1.0
+		var basis := Basis(Vector3.UP, 0.0 if side > 0.0 else PI).scaled(Vector3.ONE * k)
+		kit._append_piece("door_open", Transform3D(basis, Vector3(float(cell.x) + 0.5, 0.0, mid_z + side * DOOR_WALL_Z * k)))
+	kit.set_meta("fallback_doors", fallback)
+	kit._finish()
+	return kit
+
+
+## 그 x에 선 칸이 객차 모델로 그려지면 그 배율(attach_field와 같은 셈), 아니면 0.
+static func _coach_scale_at(data: Dictionary, x: int) -> float:
+	for car in data["train_cars"]:
+		var rect: Rect2i = car["rect"]
+		if x < rect.position.x or x >= rect.end.x:
+			continue
+		var plan := model_plan(String(car["kind"]))
+		if plan.size() != 1 or not String(plan[0]).begins_with("coach_") or not can_replace(String(car["kind"])):
+			return 0.0
+		return (float(rect.size.x) - FIELD_GAP_M) / float(catalog()["assets"][plan[0]]["dimensions_m"][0])
+	return 0.0
+
+
+## 칸 밖에 붙는 조각 하나(문 조각): 두 판 모두 transform 그대로.
+func _append_piece(id: String, transform: Transform3D) -> void:
+	for lod in 2:
+		for row in asset_meshes(id)[lod]:
+			var key := "%s:%d:false:%d" % [id, lod, int(floor(transform.origin.x / 32.0))]
+			if not _batches.has(key):
+				_batches[key] = {"mesh": row["mesh"], "material": row["material"], "lod": lod, "transforms": []}
+			_batches[key]["transforms"].append(transform * row["transform"])
+	set_meta("model_count", int(get_meta("model_count", 0)) + 1)
 
 
 func _graybox_car(x: float) -> void:
@@ -190,7 +313,8 @@ func _graybox_car(x: float) -> void:
 	set_meta("fallback_count", int(get_meta("fallback_count", 0)) + 1)
 
 
-func _append_slot(kind: String, at: Vector3, envelope: Vector3, heading: float, cutaway: bool) -> bool:
+## glow_slot: 필드 칸 번호. 0 이상이면 몸 하나인 칸의 유리 자리에 저녁 창빛을 붙인다.
+func _append_slot(kind: String, at: Vector3, envelope: Vector3, heading: float, cutaway: bool, glow_slot: int = -1) -> bool:
 	if not can_replace(kind):
 		return false
 	var data := catalog()
@@ -236,6 +360,8 @@ func _append_slot(kind: String, at: Vector3, envelope: Vector3, heading: float, 
 	if height * scale_factor > envelope.y or width * scale_factor > envelope.z:
 		_record("envelope_overflow", {"kind": kind, "height_m": height * scale_factor, "width_m": width * scale_factor, "envelope_m": envelope})
 	var base := Transform3D(Basis(Vector3.UP, PI if heading < 0 else 0.0).scaled(Vector3.ONE * scale_factor), at)
+	if glow_slot >= 0 and plan.size() == 1:
+		_append_window_glow(plan[0], base * Transform3D(Basis.IDENTITY, offsets[plan[0]]), glow_slot)
 	for placement in placements:
 		var id: String = placement["asset"]
 		var transform := base * Transform3D(Basis.IDENTITY, placement["at"])
@@ -249,6 +375,47 @@ func _append_slot(kind: String, at: Vector3, envelope: Vector3, heading: float, 
 				_batches[key]["transforms"].append(transform if sliced else transform * row["transform"])
 	set_meta("model_count", int(get_meta("model_count", 0)) + 1)
 	return true
+
+
+## 몸의 양 옆벽 유리 자리마다 빛 판 하나(두 LOD). 판 색은 MultiMesh 인스턴스 색으로 창마다 다르다.
+func _append_window_glow(id: String, body: Transform3D, slot: int) -> void:
+	var windows: Array = catalog()["assets"][id].get("windows", [])
+	if windows.is_empty():
+		return
+	var dim := float(WINDOW_GLOW_DIM.get(id, 1.0))
+	for w in windows.size():
+		var pane: Array = windows[w]
+		var size := Vector3(float(pane[1]) - float(pane[0]), float(pane[3]) - float(pane[2]), 1.0)
+		var centre := Vector2(float(pane[0]) + float(pane[1]), float(pane[2]) + float(pane[3])) * 0.5
+		for side: int in [1, -1]:
+			var colour := FxState.LAMP * (glow_level(slot, side, w) * dim)
+			colour.a = 1.0
+			var turn := Basis(Vector3.UP, 0.0 if side > 0 else PI)
+			for lod in 2:
+				var at := Vector3(centre.x, centre.y, side * (DOOR_WALL_Z + float(WINDOW_GLOW_OUT[lod])))
+				var key := "window_glow:%d:%d" % [lod, int(floor(body.origin.x / 32.0))]
+				if not _batches.has(key):
+					_batches[key] = {"mesh": _glow_quad(), "material": _glow_paint(), "lod": lod, "transforms": [], "colors": []}
+				_batches[key]["transforms"].append(body * Transform3D(turn * Basis.from_scale(size), at))
+				_batches[key]["colors"].append(colour)
+	_lit_slots.append(slot)
+
+
+## 1 m x 1 m, +Z를 보는 판 하나를 모든 창빛이 같이 쓴다.
+static func _glow_quad() -> QuadMesh:
+	if _glow_mesh == null:
+		_glow_mesh = QuadMesh.new()
+	return _glow_mesh
+
+
+## 빛을 받지 않는 판(지도 보기의 창 판과 같다). 색은 인스턴스 색을 sRGB로 읽는다.
+static func _glow_paint() -> StandardMaterial3D:
+	if _glow_material == null:
+		_glow_material = StandardMaterial3D.new()
+		_glow_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_glow_material.vertex_color_use_as_albedo = true
+		_glow_material.vertex_color_is_srgb = true
+	return _glow_material
 
 
 ## 부품을 배치에 넣기 전에 파일이 있는지와 두 LOD에 실제 메시가 있는지 본다. 빈 글이면 붙여도 된다.
@@ -360,10 +527,14 @@ func _finish() -> void:
 		node.name = key.replace(":", "_")
 		var multi := MultiMesh.new()
 		multi.transform_format = MultiMesh.TRANSFORM_3D
+		# 인스턴스 색 칸은 instance_count를 정하기 전에 켜야 잡힌다.
+		multi.use_colors = row.has("colors")
 		multi.mesh = row["mesh"]
 		multi.instance_count = row["transforms"].size()
 		for i in multi.instance_count:
 			multi.set_instance_transform(i, row["transforms"][i])
+			if multi.use_colors:
+				multi.set_instance_color(i, row["colors"][i])
 		node.multimesh = multi
 		node.material_override = row["material"]
 		var near_distance := float(catalog()["near_distance_m"])
@@ -373,4 +544,9 @@ func _finish() -> void:
 			node.visibility_range_begin = near_distance
 			node.visibility_range_end = float(catalog()["far_distance_m"])
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		if row.has("colors"):
+			# 창빛은 그림자를 드리우지 않고, 지도 보기가 켤 때까지 숨긴다.
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			node.visible = false
+			_glow_nodes.append(node)
 		add_child(node)

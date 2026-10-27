@@ -223,14 +223,17 @@ const RARE_CHANCE: float = 0.25         # one named find
 const PAN_CHANCE: float = 0.50          # one frying pan in a kitchen
 const BOTTLE_CHANCE: float = 0.40       # one broken bottle in a washroom, a bedroom or a store
 ## Decks over the stops (card S1, decision 442; the contract's lootDeck, kept on the
-## train by s3-link): [n, share] — of every n looks, n × share come up. A look is a
+## train by s3-link): [n, share] — of every n looks, n × share (rounded) come up. A look is a
 ## building of a promise's kinds (food_shop, pharmacy: it comes up when it holds the
 ## family after it is seen, as it was or moved in), a stop with a garage
-## (garage_fuel), or a stop (pan, bottle). The state handed in and out is
-## {id: {n, k, seen, hit}}; one of another n or k starts a new batch.
+## (garage_fuel), a stop with a stopped machine in it (core_scene: a core left in it,
+## core_scenes.gd P_CORE, decisions 474 S3·442 — of seven, since a run has seven or so),
+## or a stop (pan, bottle). The state
+## handed in and out is {id: {n, k, seen, hit}}; one of another n or k starts a new batch.
 const DECKS: Dictionary = {
 	"food_shop": [10, 0.7], "pharmacy": [10, 0.7],
 	"garage_fuel": [10, FUEL_CHANCE], "pan": [10, PAN_CHANCE], "bottle": [10, BOTTLE_CHANCE],
+	"core_scene": [7, 0.15],
 }
 ## Things lying under the snow out of doors, shown only to one close by
 ## (field_game.glint_reach): how many a stop, and what they are.
@@ -719,6 +722,18 @@ static func _count(row: Dictionary, up: bool) -> void:
 	if int(row["seen"]) >= int(row["n"]):
 		row["seen"] = 0
 		row["hit"] = 0
+
+
+## A deck looked at from outside (core_scenes.gd): the chance the next look comes up —
+## at the start of a batch first_chance when one is given, so a stop with no deck
+## rolls as it did before (the batch still comes up exactly k times) — and the look counted.
+static func deck_chance(decks: Dictionary, id: String, first_chance: float = -1.0) -> float:
+	var row := _deck_row(decks, id)
+	return first_chance if first_chance >= 0.0 and int(row["seen"]) == 0 else _chance(row)
+
+
+static func deck_count(decks: Dictionary, id: String, up: bool) -> void:
+	_count(_deck_row(decks, id), up)
 
 
 ## One look at a deck with a roll already made (so the dice fall as they did before
