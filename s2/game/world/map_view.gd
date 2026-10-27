@@ -435,8 +435,13 @@ func update_tracks(changed: Dictionary) -> void:
 
 
 ## How strong the lamp light shows on the ground: faint by day, full at night.
-func set_lamp_gain(gain: float) -> void:
+## reveal: how far a lamp's pool out of doors shows through the sight mask
+## (0 by day, 1 at night, decision 474 B9). floor_level: the player's floor,
+## whose floor the lamps light besides the ground.
+func set_lamp_gain(gain: float, reveal: float = 0.0, floor_level: int = 0) -> void:
 	material.set_shader_parameter("lamp_gain", clampf(gain, 0.0, 1.0))
+	material.set_shader_parameter("lamp_reveal", clampf(reveal, 0.0, 1.0))
+	material.set_shader_parameter("lamp_floor", floor_level * LEVEL_H)
 
 
 ## The low sun's pools through the windows (texel index -> byte) and their colour.
