@@ -10,6 +10,8 @@ const Travel = preload("res://game/train/turn/turn_travel.gd")
 const Field = preload("res://game/politics/field_return.gd")
 const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 const Ladder = preload("res://game/train/turn/turn_ladder.gd")
+const TrainResearch = preload("res://game/train/train_research.gd")
+const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 
 static func choice(id: String, label: String, effs: Array, special: String = "", witness: bool = false) -> Dictionary:
 	return {"id": id, "label": label, "effs": effs, "special": special, "witness": witness}
@@ -126,6 +128,76 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var hold_riot: Dictionary = choice("", "경비대를 푼다", [["fear", 8], ["trust", -5], ["rel", "tail", -5]], "riot_guard")
 			if refused != null: hold_riot["disabled"] = refused
 			return {"title": "난장판", "choices": [choice("", "들어준다", [["food", -10], ["coal", -6], ["tension", -10], ["rel", "tail", 4], ["rel", opp, -3]], "riot_yield"), hold_riot, choice("", "아무것도 안 한다", [], "ladder_ignore")]}
+		"keepsake":
+			# S1 cards.ts keepsake (사람의 무게 A1(나)): the dead's coat and boots. One who died at a stop
+			# (text "field") left only the spare under the bunk.
+			var keep: Array = [choice("", "그 칸에 나눈다", [["base", comm, 0, 2], ["rel", comm, 2]], "keep_share")]
+			if comm != "tail": keep.append(choice("", "꼬리칸에 보낸다", [["base", "tail", 0, 2], ["rel", comm, -3]], "keep_tail"))
+			keep.append(choice("", "그대로 둔다" if card.get("text") == "field" else "함께 보낸다", [["rel", comm, 4]]))
+			return {"title": "외투와 장화", "choices": keep}
+		"dom:short":
+			# S1 domestic/cards.ts dom:short (its upkeep half, train_research.gd pay_upkeep raises it).
+			return {"title": "부품이 모자란다", "key": "dom:short", "choices": [choice("", "하나를 세운다", [], "dom_short_stand"),
+				choice("", "그냥 달린다", [], "dom_short_go"), choice("", "목표치 +3", [], "dom_short_target")]}
+		"strike_warn":
+			# S1 cards.ts strike_warn: the engine warns before the fire goes out (turn_settle.gd raises it).
+			return {"title": "파업 경고", "choices": [choice("", "교대를 늘린다", [["coal", -float(t["P"]["shiftCoal"])], ["base", "engine", 3, -float(t["P"]["shiftRelief"])], ["rel", "engine", 6]]),
+				choice("", "기관실 배급 +1", [["lever", "engine", "ration", 1], ["rel", "engine", 5], ["rel", "medtech", -2]]), choice("", "듣기만 한다", [["rel", "engine", -3]])]}
+		"strike":
+			# S1 cards.ts strike: the train stands at the engine's door (turn_travel.gd raises it).
+			return {"title": "파업", "choices": [choice("", "요구를 들어준다", [["lever", "engine", "ration", 1], ["fervor", "engine", -1], ["fervor", "medtech", 1], ["rel", "engine", 12]]),
+				choice("", "교대를 늘린다", [["coal", -float(t["P"]["shiftCoal"])], ["base", "engine", 3, -float(t["P"]["shiftRelief"])], ["fervor", "engine", -1], ["rel", "engine", 8]]),
+				choice("", "수석 기관사를 산다", [["lux", -3]], "strike_bribe"), choice("", "버틴다", [["tension", 3]])]}
+		"pro_deal":
+			# S1 prologue.ts pro_deal: the tail's first ask past the lakes; a kept depot promise asks only the stove.
+			var kept: bool = g.get("story", {}).get("flags", {}).get("depot_promise") == "kept"
+			var yes: Dictionary = choice("", "들어준다", [], "pro_deal_yes")
+			yes["extra"] = ["꼬리칸 난방 레버 +1" if kept else "꼬리칸 난방 레버 +1 · 배급 레버 +1"]
+			return {"title": "열차 안 첫 거래", "choices": [yes, choice("", "거절한다", [["rel", "tail", t["PROLOGUE"]["dealRefuseRel"]]], "pro_deal_no")]}
+		"leash":
+			return {"title": "목줄이 끊겼다", "choices": [choice("", "알았다", [])]}
+		"bite_found":
+			# S1 cards.ts bite_found: a hidden bite shows (turn_settle.gd) and is too late to cut; a bite
+			# from a corpse kept in the car (text "corpse") can still be cut while its window is open.
+			if card.get("text") == "corpse":
+				var bite: Dictionary = {}
+				for b: Dictionary in g.get("hiddenBites", []):
+					if b.get("who") == card.get("who"):
+						bite = b
+						break
+				var cut: Dictionary = choice("", "의무칸에서 자른다", [["med", -3], ["injured", 1]], "bite_cut")
+				if bite.is_empty() or int(g["seg"]) > int(bite["at"]): cut["disabled"] = "감염 창이 닫혔다"
+				return {"title": "시신에게 물렸다", "key": "bite_corpse", "choices": [cut, choice("", "따로 눕힌다", [["tension", 2]], "bite_isolate"), choice("", "쏜다", [["fear", 3], ["rel", comm, -3]], "bite_shoot", true)]}
+			return {"title": "숨긴 물림이 드러났다", "key": "bite_found", "choices": [choice("", "따로 눕힌다", [["trust", -5], ["tension", 2]], "bite_isolate"),
+				choice("", "쏜다", [["trust", -5], ["fear", 3], ["rel", comm, -3]], "bite_shoot", true)]}
+		"orphan":
+			# S1 cards.ts orphan (사람의 무게 A1(가)): a parent who left children died. A living other
+			# parent raises them; the rest of the ways ease that parent's hands.
+			var f: Dictionary = People.family(g, t, str(card.get("who", "")))
+			var other: Dictionary = {}
+			for o: Dictionary in f.get("others", []):
+				if f["fam"]["parents"].has(o["id"]):
+					other = o
+					break
+			var oc: String = String(other.get("community", comm))
+			var ways: Array = [choice("", "곁의 부모가 키운다", [["base", oc, 1, -1], ["rel", oc, 2]], "orphan_parent")] if not other.is_empty() else [choice("", "같은 칸이 돌본다", [["base", comm, 1, -2]], "orphan_same")]
+			if comm != "front": ways.append(choice("", "앞칸 집에 맡긴다", [["base", "front", 2, 1], ["rel", comm, 4], ["rel", "front", -4]], "orphan_front"))
+			if comm != "medtech": ways.append(choice("", "의무칸에 둔다", [["base", "medtech", 3, 2], ["rel", "medtech", -2], ["trust", 1]], "orphan_med"))
+			return {"title": "남은 아이", "choices": ways}
+		"elder":
+			# S1 cards.ts elder (사람의 무게 A3): the old one chose to get off; the captain picks no one.
+			return {"title": "내리겠다는 노인", "choices": [choice("", "붙잡는다", [["rel", comm, 3]], "elder_hold"),
+				choice("", "보내 준다", [["pop", comm, -1], ["rel", comm, -5], ["trust", -2]], "elder_leave", true),
+				choice("", "작별을 치른다", [["pop", comm, -1], ["lux", -1], ["tension", -3], ["rel", comm, 2]], "elder_leave")]}
+		"birth":
+			# S1 cards.ts birth (사람의 무게 A4): a child born where it stays under BIRTH.warm comes small.
+			var cold: bool = float(St.situation(g, t, comm)[0]) < float(t["BIRTH"]["warm"])
+			return {"title": "아이가 나온다", "choices": [choice("", "의무칸으로 옮긴다", [["med", -2], ["base", "medtech", 3, 2]], "birth_ok"),
+				choice("", "그 칸에서 낳는다", [], "birth_weak" if cold else "birth_ok")]}
+		"naming":
+			var mine: Dictionary = choice("", "내 이름을 준다", [["trust", 3], ["rel", "medtech", -2], ["rel", "tail", -2]])
+			mine["log"] = "아이에게 열차장의 이름을 주었다."
+			return {"title": "아이의 이름", "choices": [choice("", "엄마가 짓는다", [["rel", comm, 3]]), choice("", "열차 이름을 준다", [], "name_train"), mine]}
 		"rep_sick":
 			return {"title": "대표가 앓는다", "choices": [choice("", "약을 보낸다", [["med", -2], ["rel", comm, 3]], "rep_heal"), choice("", "측근을 만난다", [], "proxy_meet"), choice("", "그냥 둔다", [])] if s.get("sick") is Dictionary else [choice("", "알았다", [])]}
 	return {}
@@ -207,6 +279,83 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 		"cut_front_first": RationCut.apply(g, t, "front_first")
 		"cut_refuse": RationCut.apply(g, t, "refuse")
 		"proxy_meet": g["comms"][comm]["leader"]["traitShown"] = 2
+		# S1 revertLater: the coat warms that car for two stretches (turn_people.gd tick takes it back).
+		"keep_share", "keep_tail":
+			if not g.has("tempBase"): g["tempBase"] = []
+			g["tempBase"].append({"c": comm if selected["special"] == "keep_share" else "tail", "i": 0, "v": 2, "until": int(g["seg"]) + 2})
+		"dom_short_stand": TrainResearch.stand_down(g)
+		"dom_short_target": TrainWorkshop.set_target(g, TrainWorkshop.target(g) + 3)
+		"strike_bribe":
+			if C.rnd(g) < 0.25:
+				C.bump_rel(g, "engine", -30, "leak")
+				C.journal(g, "수석 기관사를 사려던 게 드러났다. 기관실이 등을 돌렸다.", "bad")
+			elif C.rnd(g) < float(g["comms"]["engine"]["coh"]):
+				g["comms"]["engine"]["fervor"] = 0
+				C.bump_rel(g, "engine", 5, "card")
+				C.journal(g, "수석 기관사가 화부들을 불 앞으로 돌려보냈다.", "dark")
+			else: C.journal(g, "수석 기관사는 받았지만 화부들이 따르지 않았다.", "bad")
+		"bite_cut":
+			g["hiddenBites"] = g.get("hiddenBites", []).filter(func(b: Dictionary) -> bool: return b.get("who") != card.get("who"))
+			C.journal(g, "%s%s의 물린 곳을 의무칸에서 잘랐다." % ["" if card.get("text") == "corpse" else "숨겼던 ", card.get("who", "대원")], "dark")
+		"bite_isolate":
+			for b: Dictionary in g.get("hiddenBites", []):
+				if b.get("who") == card.get("who"): b["isolated"] = true
+			C.journal(g, "%s을(를) 빈 칸 끝에 따로 두었다." % card.get("who", "대원"), "dark")
+		"bite_shoot":
+			g["hiddenBites"] = g.get("hiddenBites", []).filter(func(b: Dictionary) -> bool: return b.get("who") != card.get("who"))
+			Death.on_death(g, t, comm, [card.get("who", "이름 모를 대원")], "chosen", true)
+			C.journal(g, "%s을(를) 쏘았다. 칸 사람들이 다 들었다." % card.get("who", "대원"), "dark")
+		"orphan_parent", "orphan_same", "orphan_front", "orphan_med":
+			var f: Dictionary = People.family(g, t, str(card.get("who", "")))
+			var parent_comm: String = comm
+			for o: Dictionary in f.get("others", []):
+				if f["fam"]["parents"].has(o["id"]):
+					parent_comm = o["community"]
+					break
+			var sp: String = selected["special"]
+			var to: String = "front" if sp == "orphan_front" else ("medtech" if sp == "orphan_med" else (parent_comm if sp == "orphan_parent" else comm))
+			# Kept by the other parent's car or its own car, that car holds together a little more.
+			if sp in ["orphan_parent", "orphan_same"]: g["comms"][to]["coh"] = clampf(float(g["comms"][to]["coh"]) + 0.05, 0, 1)
+			for k: Dictionary in f.get("kids", []):
+				if not g.has("raised"): g["raised"] = {}
+				g["raised"][k["name"]] = to
+		# S1 elder_leave: the pop effect already took the one who left; the name goes to the left.
+		"elder_leave":
+			if not g.has("left"): g["left"] = []
+			g["left"].append(card.get("who", "노인"))
+		# S1 elder_hold: held back, the old one may still get off alone at night (turn_people.gd elder_tick).
+		"elder_hold":
+			var held: Variant = card.get("who")
+			if held is String and held != "": g["elderHeld"] = {"who": held, "comm": comm, "at": g["seg"], "until": int(g["seg"]) + int(t["ELDER_NIGHT"]["segs"])}
+		"birth_ok":
+			g["comms"][comm]["pop"] = int(g["comms"][comm]["pop"]) + 1
+			for o: String in t["COMMS"]: C.bump_rel(g, o, 2, "birth")
+			C.bump(g, "tension", -3, "birth")
+			if g.get("born") is Dictionary: g["born"]["weak"] = false
+			# S1 puts the naming paper first, past addCard.
+			var named: Dictionary = {"uid": g["nextCardUid"], "kind": "naming", "comm": comm}
+			if card.has("who"): named["who"] = card["who"]
+			g["cards"].push_front(named)
+			g["nextCardUid"] = int(g["nextCardUid"]) + 1
+			C.journal(g, "%s의 아이가 태어났다. 열차가 잠깐 조용해졌다." % card.get("who", ""), "good")
+		"birth_weak":
+			g["comms"][comm]["pop"] = int(g["comms"][comm]["pop"]) + 1
+			if g.get("born") is Dictionary:
+				g["born"]["weak"] = true
+				g["born"]["left"] = int(t["BIRTH"]["weakSegs"])
+			C.journal(g, "%s의 아이가 작게 태어났다. 의무진이 의약품을 아껴 둔다." % card.get("who", ""), "bad")
+		"name_train":
+			for o: String in t["COMMS"]: g["comms"][o]["coh"] = clampf(float(g["comms"][o]["coh"]) + 0.02, 0, 1)
+		# S1 prologue.ts prologueChoose: the levers go up as the tail asked (S1 setLever: the law floor to 4).
+		"pro_deal_yes", "pro_deal_no":
+			if selected["special"] == "pro_deal_yes":
+				var kept: bool = g.get("story", {}).get("flags", {}).get("depot_promise") == "kept"
+				var tail: Dictionary = g["comms"]["tail"]
+				tail["heat"] = int(clampf(float(tail["heat"]) + 1, float(St.law_floor(g, t, "heatFloor")), 4))
+				if not kept: tail["ration"] = int(clampf(float(tail["ration"]) + 1, float(St.law_floor(g, t, "rationFloor")), 4))
+				C.journal(g, "꼬리칸 난방을 한 칸 올렸다." if kept else "꼬리칸 난방과 배급을 한 칸씩 올렸다.", "deal")
+			else: C.journal(g, "꼬리칸의 첫 청을 거절했다.", "bad")
+			C.journal(g, "길잡이가 다시 말한다. 라이프치히 중앙역에 열차들이 모이고, 그 남쪽 땅엔 석탄이 묻혀 있다고.")
 		"ledger_refuse": Field._offend(g, comm)
 		"riot_guard":
 			Ladder.riot_end(g, t)

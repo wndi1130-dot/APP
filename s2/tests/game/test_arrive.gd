@@ -22,7 +22,10 @@ func test_the_train_rolls_in_and_the_brakes_cry_before_it_stands() -> void:
 	assert_eq(game.arrive_t, 0.0)
 	assert_gt(game.arrive_far(), 30.0, "from off the screen")
 	assert_almost_eq(absf(game.view.train_node.position.x), game.arrive_far(), 0.001)
-	assert_eq(game.view.light_nodes["car_window"].position.x, game.view.train_node.position.x, "its windows with it")
+	# Its windows with it: the model coaches' panes ride in the train's own node.
+	assert_true(game.view.train_node.is_ancestor_of(game.view.train_models), "its windows with it")
+	if game.view.light_nodes.has("car_window"):
+		assert_eq(game.view.light_nodes["car_window"].position.x, game.view.train_node.position.x, "its windows with it")
 	assert_false(game.hud.visible)
 	var clock: float = game.clock.elapsed
 	var last: float = game.arrive_far()

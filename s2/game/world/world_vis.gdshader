@@ -1,6 +1,7 @@
 shader_type spatial;
 render_mode cull_back, diffuse_lambert, specular_disabled;
 #include "res://fx/shaders/fx_common.gdshaderinc"
+#include "res://game/world/room_finish.gdshaderinc"
 // CC0 photo detail (사용자 10-25 공개 자산 먼저, fx/atmosphere.gd): the ground's grain (R snow,
 // G autumn leaf, B wet soil, A grit, light and dark round 0.5) and the photo
 // sky the puddles give back. FxState writes them; the map's colours stay.
@@ -15,6 +16,12 @@ uniform float frost = 0.0;
 // Warm lamp light from the mask's B channel (weather_fx 12.2): no light nodes.
 uniform vec3 lamp_color : source_color = vec3(1.0, 0.64, 0.30);
 uniform float lamp_gain = 0.0;
+// How far a lamp's light lifts the sight mask out of doors (decision 474 B9):
+// 0 by day (no lamp outshines the day), 1 at night.
+uniform float lamp_reveal = 0.0;
+// The lamp channel is one layer for every floor: it lights the ground and the
+// floor the player stands on (height lamp_floor), not a roof above a fire.
+uniform float lamp_floor = 0.0;
 // Low sun through the windows at dusk (LampLight.window_cells): ground floor only.
 uniform sampler2D win : hint_default_black, filter_linear, repeat_disable;
 uniform vec3 win_color : source_color = vec3(1.0, 0.5, 0.28);
@@ -138,6 +145,67 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain) {
 	return colour;
 }
 
+// Room floors by kind and the house's roll (room_finish, 결정 469 C3), sRGB like the
+// floor kinds. Varnished boards (linear albedo 0.2~0.3) in bedrooms and living rooms,
+// linoleum or quarry tile in kitchens, small glazed tile in bathrooms (0.4~0.6;
+// docs/art/material_values.md). The one plain WOOD (V 0.40) left the rooms the cut-away
+// opens below the brightness line (V 0.36) once the day fill lit the walls (mood).
+const vec3 HONEY_BOARD = vec3(0.58, 0.46, 0.32);
+const vec3 WALNUT_BOARD = vec3(0.50, 0.38, 0.27);
+const vec3 GREY_BOARD = vec3(0.56, 0.52, 0.45);
+
+// Boards 0.16 m wide along x, ends staggered on a 1.9 m run, a shade apart each.
+vec3 room_boards(vec3 tone, vec2 p, vec2 px) {
+	float k = floor(p.y / 0.16);
+	float run = p.x + fx_hash(vec2(k, 13.0)) * 1.9;
+	vec3 c = tone * (0.88 + 0.2 * fx_hash(vec2(k, floor(run / 1.9))));
+	c *= 0.94 + 0.08 * fx_vnoise(vec2(run * 3.0, k * 7.0));
+	float side = band((fract(p.y / 0.16 + 0.5) - 0.5) * 0.16, 0.005, px.y + 1e-4);
+	float end = band((fract(run / 1.9 + 0.5) - 0.5) * 1.9, 0.005, px.x + 1e-4);
+	return c * (1.0 - 0.3 * max(side, end));
+}
+
+// Square tiles `size` across, a shade apart, in grout; two colours in a checker.
+vec3 room_tiles(vec3 a, vec3 b, vec3 grout, vec2 p, vec2 px, float size) {
+	vec2 cell = floor(p / size);
+	vec3 c = mod(cell.x + cell.y, 2.0) > 0.5 ? b : a;
+	c *= 0.95 + 0.08 * fx_hash(cell);
+	vec2 d = (fract(p / size + 0.5) - 0.5) * size;
+	return mix(c, grout, max(band(d.x, 0.006, px.x + 1e-4), band(d.y, 0.006, px.y + 1e-4)));
+}
+
+// `tone` is the finish's mean colour, to scale the whole of it (pattern and all).
+vec3 room_floor(int code, vec2 p, vec2 px, out vec3 tone) {
+	int kind = code & 7;
+	int roll = code >> 3;
+	if (kind == 3) {
+		if (roll == 0) {
+			tone = vec3(0.76, 0.75, 0.71);
+			return room_tiles(tone, tone, vec3(0.56, 0.56, 0.53), p, px, 0.15);
+		} else if (roll == 1) {
+			tone = vec3(0.62, 0.68, 0.71);
+			return room_tiles(tone, tone, vec3(0.50, 0.52, 0.53), p, px, 0.15);
+		}
+		vec3 cream = vec3(0.74, 0.72, 0.64);
+		vec3 sage = vec3(0.55, 0.62, 0.56);
+		tone = 0.5 * (cream + sage);
+		return room_tiles(cream, sage, vec3(0.52, 0.52, 0.49), p, px, 0.2);
+	}
+	if (kind == 2 && roll == 0) {
+		// Linoleum laid in a checker: its seams barely show.
+		vec3 cream = vec3(0.72, 0.68, 0.56);
+		vec3 sage = vec3(0.48, 0.55, 0.48);
+		tone = 0.5 * (cream + sage);
+		return room_tiles(cream, sage, vec3(0.58, 0.58, 0.52), p, px, 0.33);
+	}
+	if (kind == 2 && roll == 1) {
+		tone = vec3(0.64, 0.43, 0.32);
+		return room_tiles(tone, tone, vec3(0.52, 0.47, 0.42), p, px, 0.3);
+	}
+	tone = (kind == 2 || roll == 0) ? HONEY_BOARD : (roll == 1 ? WALNUT_BOARD : GREY_BOARD);
+	return room_boards(tone, p, px);
+}
+
 void vertex() {
 	ground_kind = UV2.x;
 	ground_detail = UV2.y;
@@ -180,7 +248,29 @@ void fragment() {
 	if (ground_kind > 0.5 && bare_k > 0.001) {
 		base = mix(base, bare_ground(kind, ground_detail, base, world_pos.xz, grain), bare_k);
 	}
-	base = floor_to_linear(base);
+	// A furnished room's floor under its roof (room_finish; 0 elsewhere keeps the kind's colour).
+	vec2 room_px = fwidth(world_pos.xz);
+	float unseen_k = 1.0;
+	if (sky < 0.5 && up > 0.9) {
+		int rc = room_code(world_pos.xz, world_pos.y + 0.05, map_size);
+		if (rc > 0) {
+			vec3 tone;
+			vec3 finish = room_floor(rc, world_pos.xz, room_px, tone);
+			// Out of sight the finish keeps its hue and half its pattern, a shade under the plain
+			// floor (the kind's colour, WOOD V 0.40) as the mask leaves it (`dimmed` below, in
+			// linear: 0.6 grey + 0.4 brightest channel), so the boxes' floor mats (map_view
+			// _bake_container) stand out of an unseen room as they did, and it sinks no deeper.
+			float away = (1.0 - cell.r) * clamp(mask_on, 0.0, 1.0);
+			vec3 luma = vec3(0.3, 0.59, 0.11);
+			vec3 was_l = floor_to_linear(base);
+			vec3 tone_l = floor_to_linear(tone);
+			float was = 0.6 * dot(was_l, luma) + 0.4 * max(was_l.r, max(was_l.g, was_l.b));
+			float as_seen = 0.6 * dot(tone_l, luma) + 0.4 * max(tone_l.r, max(tone_l.g, tone_l.b));
+			unseen_k = mix(1.0, 0.93 * was / max(as_seen, 0.001), away);
+			base = mix(finish, tone, 0.5 * away);
+		}
+	}
+	base = floor_to_linear(base) * unseen_k;
 	float soil = mix(grain.a, grain.b, clamp(wet * 1.4, 0.0, 1.0));
 	// Laid surfaces (road, platform, pavement) take less of the soil's blotches.
 	// Less on bare ground than under snow, so the blotches do not break the forms nor
@@ -228,11 +318,15 @@ void fragment() {
 	// Cloud shadows drift over whatever is open to the sky.
 	base *= mix(1.0, fx_cloud_shade(world_pos.xz, TIME), sky);
 	vec2 seen = cell.rg;
+	// Ground out of doors in a lamp's pool shows as the light shows it, seen
+	// or not (decision 474 B9); a room behind a shut door keeps its mask (sky 0).
+	float lamp_here = max(step(-0.5, world_pos.y) * (1.0 - step(1.0, world_pos.y)), 1.0 - step(1.0, abs(world_pos.y - lamp_floor)));
+	float reveal = max(seen.r, smoothstep(0.08, 0.24, cell.b) * lamp_reveal * sky * lamp_here);
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
-	float lit = mix(1.0, max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
+	float lit = mix(1.0, max(reveal, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
 	// The memory's grey only where the mask is drawn: with it off all is in sight.
-	vec3 dimmed = mix(vec3(grey), base, mix(1.0, seen.r * 0.6 + 0.4, clamp(mask_on, 0.0, 1.0)));
+	vec3 dimmed = mix(vec3(grey), base, mix(1.0, reveal * 0.6 + 0.4, clamp(mask_on, 0.0, 1.0)));
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
 	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;
 	ROUGHNESS = mix(1.0, 0.4, wet * (1.0 - cover));
@@ -241,7 +335,7 @@ void fragment() {
 		NORMAL = normalize(cross(dFdy(VERTEX), dFdx(VERTEX)));
 	}
 	// A lamp out of sight still shows faintly, so mates can be found in the dark.
-	float lamp = cell.b * lamp_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
+	float lamp = cell.b * lamp_gain * lamp_here * mix(0.4, 1.0, reveal) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
 	float pool = texture(win, uv).r * win_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0))
 		* smoothstep(0.6, 0.9, up) * step(-0.5, world_pos.y) * (1.0 - step(1.0, world_pos.y));
 	EMISSION = (lamp_color * lamp + win_color * pool) * (0.25 + 0.75 * grey);

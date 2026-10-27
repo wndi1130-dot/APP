@@ -110,4 +110,4 @@ func test_a_shortfall_shuts_a_way_but_never_all() -> void:
 func test_a_kind_it_does_not_draw_has_no_view() -> void:
 	if _data.is_empty(): return
 	var g: Dictionary = (_data["cases"][0]["state"] as Dictionary).duplicate(true)
-	assert_eq(CardText.view(g, _data["tables"], {"uid": 1, "kind": "strike"}), {})
+	assert_eq(CardText.view(g, _data["tables"], {"uid": 1, "kind": "trip_depart"}), {})

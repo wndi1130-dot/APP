@@ -4,11 +4,13 @@ const Kit = preload("res://game/world/train_model_kit.gd")
 const FieldMap = preload("res://game/world/sulehuf_map.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const FieldGame = preload("res://game/field_game.gd")
+const FxState = preload("res://fx/fx_state.gd")
 ## 지금 대응표에서 모델로 바뀌어야 하는 종류. 대응표의 나머지 종류는 모두 상자로 떨어져야 한다.
 ## 객차 넷이 맑은 유리창으로 다시 들어와(결정 407 G3) 지금은 모든 종류가 모델이다. 상자로 떨어지는 갈래는
 ## 보류·누락·못 읽는 대응표 시험이 본다.
 const MODEL_KINDS := ["car", "tail1", "tail2", "tail3", "cold", "medtech", "dining", "guard", "captain", "front", "workshop",
-	"engine_room", "greenhouse", "freight", "store", "tender", "locomotive", "engine"]
+	"engine_room", "greenhouse", "freight", "store", "tender", "locomotive", "engine",
+	"wagon_coal", "wagon_open", "wagon_flat", "wagon_tender", "door_open"]
 var _previous_setting: bool
 
 
@@ -229,12 +231,59 @@ func test_repeated_models_are_batched_and_far_lod_has_no_shadow() -> void:
 	var data := {"train": Rect2i(0, 0, 32, 3), "train_cars": [{"rect": Rect2i(0, 0, 16, 3), "kind": "medtech"}, {"rect": Rect2i(16, 0, 16, 3), "kind": "medtech"}]}
 	var root := Kit.attach_field(parent, data)
 	assert_eq(root.get_meta("model_count"), 2)
-	assert_eq(root.get_child_count(), 4, "body and flue, two LODs, one 32m batch")
+	assert_eq(root.get_child_count(), 6, "body and flue, two LODs, one 32m batch; the window glow, two LODs")
+	var panes: int = (Kit.catalog()["assets"]["coach_medic"]["windows"] as Array).size() * 2 * 2
 	for node in root.get_children():
-		assert_eq(node.multimesh.instance_count, 2)
+		assert_eq(node.multimesh.instance_count, panes if node in root._glow_nodes else 2)
 		if node.visibility_range_begin > 0:
 			assert_eq(node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 			assert_eq(node.visibility_range_end, 120.0)
+
+
+func test_coach_windows_glow_on_their_glass_and_only_when_lit() -> void:
+	# 낡은 객차(창 여덟), 온실칸(긴 유리 띠 하나), 덮개 화차(창 없음): 창빛은 객차 둘의 유리 자리에만.
+	var data := {"train": Rect2i(0, 1, 48, 3), "train_cars": [{"rect": Rect2i(0, 1, 16, 3), "kind": "car"},
+		{"rect": Rect2i(16, 1, 16, 3), "kind": "greenhouse"}, {"rect": Rect2i(32, 1, 16, 3), "kind": "freight"}]}
+	var root := Kit.attach_field(autofree(Node3D.new()), data)
+	var book: Dictionary = Kit.catalog()["assets"]
+	var worn: Array = book["coach_worn"]["windows"]
+	var k := (16.0 - Kit.FIELD_GAP_M) / float(book["coach_worn"]["dimensions_m"][0])
+	assert_eq(root._glow_nodes.size(), 2, "one 32m batch, two LODs")
+	for node: MultiMeshInstance3D in root._glow_nodes:
+		assert_false(node.visible, "dark until the map says dusk")
+		assert_eq(node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		assert_true(node.multimesh.use_colors)
+		assert_eq(node.multimesh.instance_count, (worn.size() + 1) * 2, "every pane on both sides")
+	# 머리 없는 시험에서는 MultiMesh가 값을 돌려주지 않아 키트의 배치 목록을 읽는다.
+	for lod in 2:
+		var row: Dictionary = root._batches["window_glow:%d:0" % lod]
+		var levels: Dictionary = {}
+		for i in row["transforms"].size():
+			var placed: Transform3D = row["transforms"][i]
+			var colour: Color = row["colors"][i]
+			var level: float = colour.r / FxState.LAMP.r
+			if placed.origin.x < 16.0:
+				levels[snappedf(level, 0.001)] = true
+				assert_between(level, Kit.WINDOW_GLOW_LOW - 0.001, Kit.WINDOW_GLOW_HIGH + 0.001)
+			else:
+				assert_between(level, Kit.WINDOW_GLOW_LOW * 0.6 - 0.001, Kit.WINDOW_GLOW_HIGH * 0.6 + 0.001, "the greenhouse band is dimmer")
+		assert_gt(levels.size(), 3, "windows differ in brightness")
+	# 가까운 판은 창 가운데, 유리(벽 안 6 cm)와 커튼·판자(벽 안 5 cm부터) 사이에 창 크기로.
+	var first: Transform3D = root._batches["window_glow:0:0"]["transforms"][0]
+	var pane: Array = worn[0]
+	assert_almost_eq(first.origin.x, 8.0 + (float(pane[0]) + float(pane[1])) * 0.5 * k, 0.001)
+	assert_almost_eq(first.origin.y, (float(pane[2]) + float(pane[3])) * 0.5 * k, 0.001)
+	assert_between(absf(first.origin.z - 2.5) / k, Kit.DOOR_WALL_Z - 0.06 + 0.001, Kit.DOOR_WALL_Z - 0.05 - 0.001)
+	assert_almost_eq(first.basis.x.length(), (float(pane[1]) - float(pane[0])) * k, 0.001)
+	root.set_windows_lit(true)
+	for node: MultiMeshInstance3D in root._glow_nodes:
+		assert_true(node.visible)
+	# 지도의 빛 자리: 객차 둘의 옆 줄과 바로 바깥 줄만(지도마다 둘 중 하나에 놓는다).
+	assert_true(root.lights_window_at(Vector2i(3, 3)))
+	assert_true(root.lights_window_at(Vector2i(3, 4)))
+	assert_true(root.lights_window_at(Vector2i(20, 0)))
+	assert_false(root.lights_window_at(Vector2i(3, 5)))
+	assert_false(root.lights_window_at(Vector2i(35, 4)), "the freight car has no windows")
 
 
 func test_field_uses_models_only_for_ready_kinds_and_rolls_with_train_parent() -> void:
@@ -294,10 +343,10 @@ func _field_view() -> Dictionary:
 	var engines := 0
 	for car in cars:
 		engines += 1 if car["kind"] == "engine" else 0
-	return {"cars": cars.size(), "engines": engines, "kit": train.get_node("TrainModels"), "vertices": train.mesh.surface_get_array_len(0)}
+	return {"cars": cars.size(), "engines": engines, "kit": train.get_node("TrainModels"), "doors": int(train.get_node("DoorModels").get_meta("model_count", 0)), "vertices": train.mesh.surface_get_array_len(0) if train.mesh.get_surface_count() > 0 else 0}
 
 
-func test_field_models_fill_the_logical_slot_length_within_0_6m() -> void:
+func test_field_models_fill_the_logical_slot_length_within_the_gap() -> void:
 	for kind: String in ["medtech", "freight", "engine"]:
 		for length: int in [12, 16, 20]:
 			var slot := Rect2i(4, 0, length, 3)
@@ -305,8 +354,76 @@ func test_field_models_fill_the_logical_slot_length_within_0_6m() -> void:
 			var label := "%s %dm" % [kind, length]
 			assert_eq(root.get_meta("model_count", 0), 1, label)
 			var ends := _model_ends(root, kind)
-			assert_between(ends.x - slot.position.x, 0.0, 0.6, label + " 앞쪽 끝")
-			assert_between(slot.end.x - ends.y, 0.0, 0.6, label + " 뒤쪽 끝")
+			assert_between(ends.x - slot.position.x, 0.0, Kit.FIELD_GAP_M, label + " 앞쪽 끝")
+			assert_between(slot.end.x - ends.y, 0.0, Kit.FIELD_GAP_M, label + " 뒤쪽 끝")
+
+
+## 대각뷰(결정 476)는 칸마다 끝면을 비스듬히 보인다: 16 m 칸에 나란히 선 두 객차의 연결막
+## (차체 바닥과 처마 사이·폭 가운데에서 가장 바깥 꼭짓점 — 완충기·연결기는 그 밑, 지붕은 그 위)이
+## 0.2 m 안으로 맞닿아, 사이로 끝벽 통로가 보이지 않는다.
+func test_neighbour_coaches_meet_at_their_gangways() -> void:
+	for id: String in ["coach_worn", "coach_clean", "coach_chief", "coach_medic", "coach_glass"]:
+		var reach := 0.0
+		for row in Kit.asset_meshes(id)[0]:
+			var arrays: Array = (row["mesh"] as Mesh).surface_get_arrays(0)
+			for v: Vector3 in arrays[Mesh.ARRAY_VERTEX]:
+				var at: Vector3 = row["transform"] * v
+				if at.y > 1.15 and at.y < 2.5 and absf(at.z) < 0.6:
+					reach = maxf(reach, absf(at.x))
+		var dims: Array = Kit.catalog()["assets"][id]["dimensions_m"]
+		var scale: float = (16.0 - Kit.FIELD_GAP_M) / float(dims[0])
+		assert_lt(16.0 - 2.0 * reach * scale, 0.2, id + ": the gangways of two neighbouring coaches meet")
+
+
+## 옆 선로 화차는 이름·석탄으로 모델을 고르고(지도 자료에 종류 칸이 없다) 화차 칸 길이를 채운다.
+## 손잡이를 끄면 모두 지도 보기의 상자로 돌아간다(결정 476).
+func test_wagons_take_models_by_name_and_coal() -> void:
+	var wagons := [
+		{"name": "석탄 화차", "rect": Rect2i(56, 15, 10, 3), "coal": 10.0},
+		{"name": "버려진 탄수차", "rect": Rect2i(60, 23, 6, 3), "coal": 0.0},
+		{"name": "빈 화차", "rect": Rect2i(82, 23, 10, 3), "coal": 0.0},
+		{"name": "평판 화차", "rect": Rect2i(103, 71, 12, 3), "coal": 0},
+	]
+	var kinds := wagons.map(func(w: Dictionary) -> String: return Kit.wagon_kind(w))
+	assert_eq(kinds, ["wagon_coal", "wagon_tender", "wagon_open", "wagon_flat"])
+	var root := Kit.attach_wagons(autofree(Node3D.new()), wagons)
+	assert_eq(root.get_meta("model_count", 0), 4)
+	assert_eq(Array(root.get_meta("fallback_wagons")), [])
+	for i in wagons.size():
+		var r: Rect2i = wagons[i]["rect"]
+		var ends := _model_ends(root, String(kinds[i]))
+		assert_between(ends.x - r.position.x, 0.0, Kit.WAGON_GAP_M, String(kinds[i]) + " 앞쪽 끝")
+		assert_between(r.end.x - ends.y, 0.0, Kit.WAGON_GAP_M, String(kinds[i]) + " 뒤쪽 끝")
+	ProjectSettings.set_setting(Kit.MODE_SETTING, false)
+	var boxes := Kit.attach_wagons(autofree(Node3D.new()), wagons)
+	assert_eq(Array(boxes.get_meta("fallback_wagons")), [0, 1, 2, 3], "손잡이 끔: 화차는 모두 상자")
+
+
+## 타는 문은 그 칸 객차의 옆벽에 문 조각으로 붙고(위쪽 면은 돌려 바깥을 본다), 객차가 아닌 칸의
+## 문은 지도 보기의 상자로 남는다.
+func test_doors_sit_on_the_coach_walls_and_stay_boxes_off_the_coaches() -> void:
+	var data := {"train": Rect2i(0, 1, 48, 3), "train_cars": [
+		{"rect": Rect2i(0, 1, 16, 3), "kind": "car"}, {"rect": Rect2i(16, 1, 16, 3), "kind": "car"},
+		{"rect": Rect2i(32, 1, 16, 3), "kind": "engine"}]}
+	var faces := [{"cell": Vector2i(2, 4), "z": 3.95}, {"cell": Vector2i(18, 0), "z": 1.05}, {"cell": Vector2i(34, 4), "z": 3.95}]
+	var root := Kit.attach_doors(autofree(Node3D.new()), faces, data)
+	assert_eq(root.get_meta("model_count", 0), 2)
+	assert_eq(Array(root.get_meta("fallback_doors")), [2], "기관차 칸의 문은 상자")
+	var placed: Array = []
+	for key: String in root._batches:
+		if key.begins_with("door_open:0:"):
+			placed.append_array(root._batches[key]["transforms"])
+	assert_eq(placed.size(), 2)
+	if placed.size() != 2:
+		return
+	placed.sort_custom(func(a: Transform3D, b: Transform3D) -> bool: return a.origin.z > b.origin.z)
+	var k: float = (16.0 - Kit.FIELD_GAP_M) / 16.0
+	var lower: Transform3D = placed[0]
+	var upper: Transform3D = placed[1]
+	assert_almost_eq(lower.origin, Vector3(2.5, 0.0, 2.5 + Kit.DOOR_WALL_Z * k), Vector3.ONE * 0.01, "아래쪽 옆벽")
+	assert_almost_eq(upper.origin, Vector3(18.5, 0.0, 2.5 - Kit.DOOR_WALL_Z * k), Vector3.ONE * 0.01, "위쪽 옆벽")
+	assert_gt(lower.basis.z.z, 0.0, "아래쪽 문은 남쪽(+z)을 본다")
+	assert_lt(upper.basis.z.z, 0.0, "위쪽 문은 북쪽(-z)을 본다")
 
 
 func test_field_records_measured_height_beyond_the_box_envelope() -> void:
@@ -316,7 +433,7 @@ func test_field_records_measured_height_beyond_the_box_envelope() -> void:
 	if overflow.size() == 1:
 		var dims: Array = Kit.catalog()["assets"]["locomotive"]["dimensions_m"]
 		assert_eq(overflow[0]["kind"], "engine")
-		assert_almost_eq(float(overflow[0]["height_m"]), float(dims[1]) * 15.4 / 16.0, 0.001)
+		assert_almost_eq(float(overflow[0]["height_m"]), float(dims[1]) * (16.0 - Kit.FIELD_GAP_M) / 16.0, 0.001)
 	var stage := Kit.create_stage(autofree(Node3D.new()))
 	assert_false(stage.has_meta("envelope_overflow"), "정차 모델은 정차 봉투 안에 든다")
 
@@ -384,7 +501,7 @@ func test_two_body_engine_parts_name_the_body_they_attach_to() -> void:
 		var placed: Array = root._batches[key]["transforms"]
 		assert_eq(placed.size(), 1, "본체를 지정한 요청만 붙는다")
 		# 탄수차 5.2m, 틈 0.4m, 기관차 10.4m: 기관차 중심은 쌍의 중심에서 2.8m.
-		assert_almost_eq((placed[0] as Transform3D).origin.x, 8.0 + 2.8 * 15.4 / 16.0, 0.001)
+		assert_almost_eq((placed[0] as Transform3D).origin.x, 8.0 + 2.8 * (16.0 - Kit.FIELD_GAP_M) / 16.0, 0.001)
 
 
 func test_every_kind_maps_to_its_expected_model_or_box() -> void:
@@ -417,7 +534,8 @@ func test_switch_off_and_missing_models_reach_station_home_and_field_view() -> v
 	var off := _field_view()
 	assert_eq(off["kit"].get_meta("fallback_cars").size(), off["cars"], "손잡이 끔: 필드 칸이 모두 상자")
 	assert_eq(off["kit"].get_child_count(), 0)
-	assert_eq(off["vertices"] - on["vertices"], 30 * models, "모델이 맡던 칸마다 꼭짓점 30개짜리 상자가 하나씩 는다")
+	assert_gt(on["doors"], 0, "손잡이를 켜면 필드 문은 문 조각")
+	assert_eq(off["vertices"] - on["vertices"], 30 * (models + on["doors"]), "모델이 맡던 칸과 문마다 꼭짓점 30개짜리 상자가 하나씩 는다")
 	for stage in _stage_roots():
 		assert_eq(stage.get_meta("fallback_count"), 6)
 		assert_eq(stage.find_children("*", "MultiMeshInstance3D", true, false).size(), 0)

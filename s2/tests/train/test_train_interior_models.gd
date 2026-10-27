@@ -11,6 +11,8 @@ const EXPECTED := [
 	"divider", "empty_platform", "storage_board", "boiler",
 	# 공개 3D(CC0)에서 가져와 더한 자리(tools/blender/train_interior_swap.py).
 	"cupboard", "wood_chair",
+	# 찬 칸·꼬리칸 꾸밈(tools/blender/train_car_dress.py).
+	"blanket_stack", "lantern_off", "blanket_curtain", "laundry_line", "patch_boards", "coal_heap",
 ]
 
 

@@ -96,6 +96,8 @@ func test_bath_dimensions_one_door_faces_opacity_and_furnishing() -> void:
 			kinds.append(p["kind"])
 	assert_has(kinds, "toilet")
 	assert_has(kinds, "washstand")
+	# 문 앞이 한 칸뿐인 작은 욕실: 변기·세면대·약장에 하나 더(결정 469 F4 표준 묶음 넷).
+	assert_gte(kinds.size(), 4, str(kinds))
 
 
 func test_closet_and_pantry_strict_area_thresholds() -> void:
@@ -120,8 +122,16 @@ func test_door_stair_window_fronts_and_every_floor_cell_remain_reachable() -> vo
 	var protected := Split._protected(d, g, 0, map, 0)
 	var stats := Split.apply(d)
 	assert_gt(stats["rows"].size(), 0)
+	# 큰 방 가르기의 칸막이는 문 앞 피할 자리의 양옆 칸만 지날 수 있다(결정 469 F1): 문 앞 곧은 두 칸,
+	# 계단과 그 곁, 창 앞 칸은 늘 빈다.
+	var cut_walls := {}
+	for row: Dictionary in stats["cuts"]:
+		for c: Vector2i in row["walls"] + [row["door"]]:
+			cut_walls[c] = true
+	for c: Vector2i in [Vector2i(9, 13), Vector2i(9, 12), Vector2i(3, 3), Vector2i(4, 3), Vector2i(3, 4), Vector2i(2, 3), Vector2i(3, 2), Vector2i(4, 2)]:
+		assert_false(cut_walls.has(c), str(c))
 	for c: Vector2i in protected:
-		if g.inside(c) and map["of"][g.index(c)] == 0:
+		if g.inside(c) and map["of"][g.index(c)] == 0 and not cut_walls.has(c):
 			assert_eq(g.solid_at(c), S.NONE, str(c))
 	var seen := _reachable(g, Vector2i(0, 0))
 	for y in range(g.height):
@@ -243,8 +253,13 @@ func test_an_unnamed_home_keeps_its_room_kinds_after_a_split() -> void:
 	assert_eq(d["labels"], [], "the split writes no floor text")
 	Furnish.furnish_rooms(d)
 	map = Furnish.rooms_of(g)
-	for c: Vector2i in was:
-		assert_eq(d["density_classes"]["0:%d" % Furnish._at(g, map["of"], c)], was[c], str(c))
+	# 36칸 부엌은 둘로 갈리고(결정 469 F1) 한쪽은 부엌 그대로다. 가르지 않은 가운데 방은 종류 그대로.
+	var top := {}
+	for x in range(2, 14):
+		top[d["density_classes"].get("0:%d" % Furnish._at(g, map["of"], Vector2i(x, 3)), "")] = true
+	assert_has(top, "kitchen")
+	var middle := Vector2i(3, 6)
+	assert_eq(d["density_classes"]["0:%d" % Furnish._at(g, map["of"], middle)], was[middle])
 	var kitchen := 0
 	for p: Dictionary in d["props"]:
 		if p.get("rule") == "kitchen":
@@ -288,3 +303,211 @@ func test_a_pantry_never_takes_the_kitchen_s_last_counter_wall() -> void:
 				if Furnish._at(g, map["of"], (p["rect"] as Rect2i).position) == ri:
 					kitchen += 1
 		assert_gt(kitchen, 0, "kitchen beside the pantry at %s is furnished" % row["rect"])
+
+
+## 큰 방 가르기(결정 469 F1): 욕실 후보가 이미 있는 집으로 고정해 가르기만 본다.
+func _cut_house(w: int, h: int, title: String) -> Dictionary:
+	var d := _house(w, h, title)
+	d["_split_baths"] = {0: {"key": "other", "level": 1, "room": 0, "area": 6, "short": 2, "doors": 1, "class": "bath"}}
+	return d
+
+
+func test_a_big_bedroom_is_cut_by_one_straight_wall_and_one_door_into_two_furnished_rooms() -> void:
+	var d := _cut_house(12, 7, "침실")
+	var g: Grid = d["grid"]
+	var before := Furnish.rooms_of(g)
+	var stats := Split.apply(d)
+	assert_gt(stats["cut"], 0)
+	for row: Dictionary in stats["cuts"]:
+		var walls: Array = row["walls"]
+		for c: Vector2i in walls:
+			assert_eq(g.solid_at(c), S.WALL)
+		var door: Vector2i = row["door"]
+		assert_eq(g.solid_at(door), S.DOOR)
+		var faces := g.faces(door)
+		assert_true(g.people_can_walk(faces[0]) and g.people_can_walk(faces[1]))
+		var xs := {}
+		var ys := {}
+		for c: Vector2i in walls + [door]:
+			xs[c.x] = true
+			ys[c.y] = true
+		assert_true(xs.size() == 1 or ys.size() == 1, "one straight line")
+	var after := Furnish.rooms_of(g)
+	assert_eq(after["rooms"].size(), before["rooms"].size() + stats["cut"] + stats["rows"].size())
+	# 가른 두 쪽은 가구를 놓는 방 크기다(벽장·찬방처럼 뗀 작은 칸은 빼고 본다).
+	var carved := {}
+	for row: Dictionary in stats["rows"]:
+		var rect: Rect2i = row["rect"]
+		carved[rect.position] = true
+	for room: Dictionary in after["rooms"]:
+		var small := false
+		for c: Vector2i in room["cells"]:
+			small = small or carved.has(c)
+		if not small:
+			assert_gte(room["cells"].size(), Split.MIN_REMAINDER)
+	var seen := _reachable(g, Vector2i(0, 0))
+	for y in range(g.height):
+		for x in range(g.width):
+			if g.people_can_walk(Vector2i(x, y)):
+				assert_has(seen, Vector2i(x, y))
+	# 거실이 없던 집이라 처음 떼는 쪽은 거실이고, 두 쪽 모두 그 묶음의 가구가 선다.
+	Furnish.furnish_rooms(d)
+	var rules := {}
+	for p: Dictionary in d["props"]:
+		rules[p.get("rule", "")] = true
+	assert_has(rules, "bed")
+	assert_has(rules, "living")
+
+
+func test_the_room_without_its_own_way_in_is_the_more_private_one() -> void:
+	var d := _cut_house(12, 7, "침실")
+	var g: Grid = d["grid"]
+	Split.apply(d)
+	Furnish.furnish_rooms(d)
+	var map := Furnish.rooms_of(g)
+	for ri in range(map["rooms"].size()):
+		var outside := false
+		for c: Vector2i in map["rooms"][ri]["cells"]:
+			for dir: Vector2i in Furnish.DIRS:
+				var n: Vector2i = c + dir
+				if g.doors.has(n) and g.building_at(n + dir) != 0:
+					outside = true
+		# 바깥 문이 없는 방(안쪽 방)은 거실이 아니다: 침실을 지나 거실로 들어가지 않는다.
+		if not outside:
+			assert_ne(d["density_classes"]["0:%d" % ri], "living", str(map["rooms"][ri]["cells"][0]))
+
+
+func test_a_room_under_the_limit_or_too_narrow_to_halve_is_left_whole() -> void:
+	# 5칸 폭 부엌은 좁은 부엌(2칸)을 떼도 남는 쪽이 2칸이라 못 가른다.
+	for spec: Array in [[6, 4, "침실"], [5, 5, "부엌"]]:
+		var d := _cut_house(spec[0], spec[1], spec[2])
+		var stats := Split.apply(d)
+		assert_eq(stats["cut"], 0, str(spec))
+
+
+## 침실 셋(4x4)과 작은 욕실(2x4)이 좁은 복도에 문을 낸 집: 부엌도 거실도 없다. 욕실은 진짜 방으로 둔다
+## (가르기 뒤 _split_baths는 새로 쓰이니, 미리 단 욕실 표시는 가구 놓기까지 가지 않는다).
+func _three_bedrooms() -> Dictionary:
+	var g := Grid.new(21, 10)
+	for y in range(1, 9):
+		for x in range(1, 20):
+			var c := Vector2i(x, y)
+			g.building[g.index(c)] = 0
+			g.floor[g.index(c)] = Grid.Floor.WOOD
+			g.set_solid(c, S.WALL if x in [1, 19] or y in [1, 6, 8] or (y < 6 and x in [6, 11, 16]) else S.NONE)
+	var props: Array = []
+	for door: Vector2i in [Vector2i(1, 7), Vector2i(3, 6), Vector2i(8, 6), Vector2i(13, 6), Vector2i(17, 6)]:
+		g.set_solid(door, S.DOOR)
+		g.doors[door] = {"state": "closed", "hp": 8, "building": 0, "cell": door}
+	for x: int in [2, 7, 12]:
+		props.append({"kind": "bed", "rect": Rect2i(x, 2, 2, 1), "level": 0, "note": "침실의 침대"})
+	g.refresh_paths()
+	return {"grid": g, "levels": {0: g}, "place_id": "split_fixture", "buildings": [{"id": 0, "name": "주택", "rect": Rect2i(1, 1, 19, 8)}],
+		"labels": [], "props": props, "containers": {}, "stairs": [], "low_blocks": [], "stoves": []}
+
+
+func test_a_home_without_a_kitchen_turns_a_bedroom_with_a_counter_wall_into_one() -> void:
+	var d := _three_bedrooms()
+	var stats := Split.apply(d)
+	assert_eq(stats["cut"], 0, "no room is past its limit")
+	assert_eq(int(stats.get("relabelled", 0)), 2, "a kitchen, then a living room; one bedroom stays")
+	Furnish.furnish_rooms(d)
+	var classes: Array = d["density_classes"].values()
+	assert_eq(classes.count("kitchen"), 1)
+	assert_eq(classes.count("living"), 1)
+	assert_eq(classes.count("bed"), 1)
+	assert_eq(classes.count("bath"), 1, "the small one-door room stays the bath")
+	var runs := 0
+	for p: Dictionary in d["props"]:
+		if p.get("rule") == "kitchen" and p.get("counter_run", false):
+			runs += 1
+	assert_gte(runs, Furnish.COUNTER_MIN, "the new kitchen has its counter run")
+
+
+func test_a_six_wide_kitchen_gives_a_narrow_kitchen_and_a_full_room() -> void:
+	var d := _cut_house(6, 6, "부엌")
+	var stats := Split.apply(d)
+	assert_eq(stats["cut"], 1)
+	var row: Dictionary = stats["cuts"][0]
+	var g: Grid = d["grid"]
+	var map := Furnish.rooms_of(g)
+	var sides := {}
+	for room: Dictionary in map["rooms"]:
+		var lo: Vector2i = room["cells"][0]
+		var hi := lo
+		for c: Vector2i in room["cells"]:
+			lo = lo.min(c)
+			hi = hi.max(c)
+		sides[room["cells"].size()] = mini(hi.x - lo.x + 1, hi.y - lo.y + 1)
+	# 2 + 1 + 3: 부엌은 폭 2칸 12칸, 다른 쪽은 폭 3칸 18칸.
+	assert_eq(sides.get(12, 0), Split.GALLEY_SIDE)
+	assert_eq(sides.get(18, 0), Split.MIN_SIDE)
+	assert_ne(row["class"], "kitchen", "the new side is the room the home lacks; the kitchen keeps the narrow side")
+	Furnish.furnish_rooms(d)
+	var runs := 0
+	var tables := 0
+	for p: Dictionary in d["props"]:
+		if p.get("rule") == "kitchen" and p.get("counter_run", false):
+			runs += 1
+		tables += int(p["kind"] == "dining_set" and p.get("rule") == "living")
+	assert_gte(runs, Furnish.COUNTER_MIN, "a counter run along the narrow kitchen's long wall")
+	assert_eq(tables, 1, "the dining room cut off the kitchen has its table")
+
+
+func test_a_kitchen_keeps_a_straight_counter_wall_after_a_cut() -> void:
+	var d := _cut_house(12, 6, "부엌")
+	var stats := Split.apply(d)
+	assert_gt(stats["cut"], 0)
+	Furnish.furnish_rooms(d)
+	var runs := 0
+	for p: Dictionary in d["props"]:
+		if p.get("rule") == "kitchen" and p.get("counter_run", false):
+			runs += 1
+	assert_gte(runs, Furnish.COUNTER_MIN, "a counter run of at least four")
+
+
+func test_a_shop_keeps_its_ground_floor_and_cuts_only_the_home_upstairs() -> void:
+	var d := _cut_house(12, 7, "매장")
+	d["buildings"][0]["name"] = "빵집"
+	var up := _house(12, 7, "침실")
+	var ug: Grid = up["grid"]
+	ug.set_solid(Vector2i(8, 9), S.WALL)
+	ug.doors.clear()
+	d["levels"][1] = ug
+	d["labels"].append({"text": "침실", "cell": Vector2i(2, 2), "level": 1})
+	d["stairs"] = [{"cell": Vector2i(3, 7), "low": 0, "high": 1}]
+	var ground_before: PackedByteArray = d["grid"].solid.duplicate()
+	var stats := Split.apply(d)
+	assert_eq(d["grid"].solid, ground_before, "the shop floor is not cut")
+	assert_gt(stats["cut"], 0)
+	for row: Dictionary in stats["cuts"]:
+		assert_eq(row["level"], 1)
+
+
+func test_actual_houses_have_cut_walls_drawn_and_homes_get_a_bath_and_a_living_room() -> void:
+	var d := Maps.build("houses_01")
+	assert_gt(d["room_splits"]["cut"], 0)
+	var visual := View.plan(d)
+	for row: Dictionary in d["room_splits"]["cuts"]:
+		var found := false
+		for door: Dictionary in visual["doors"]:
+			if door["lv"] == row["level"] and door["cell"] == row["door"]:
+				found = true
+		assert_true(found, "cut door in drawing plan")
+	# 방 갈래는 놓인 가구의 묶음(rule)으로 센다: 바깥 띠가 지도를 넓힌 뒤에는 방 번호 표가 밀린다.
+	var per := {}
+	for p: Dictionary in d["props"]:
+		if p.has("rule") and p.has("building") and int(p.get("level", 0)) >= 0:
+			per.get_or_add(int(p["building"]), {})[p["rule"]] = true
+	var homes := 0
+	var baths := 0
+	var livings := 0
+	for b: int in per:
+		if per[b].has("bed"):
+			homes += 1
+			baths += int(per[b].has("bath"))
+			livings += int(per[b].has("living"))
+	# 합격선(80%)은 측정 도구로 잰다(PR 본문). 여기서는 다른 지도 고침에 흔들리지 않을 만큼 낮은 바닥만.
+	assert_gt(homes, 0)
+	assert_gte(float(baths) / homes, 0.5, "homes with a bath")
+	assert_gte(float(livings) / homes, 0.4, "homes with a living room")

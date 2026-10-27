@@ -119,7 +119,8 @@ func refresh(event: String = "rules") -> void:
 				traits["injured"] = true
 				traits["aggregate_patient"] = true
 			if not traits.has("role"):
-				if context["layout"] == "technical":
+				# The workshop's people work at its bench, the engine crew shovel at the firebox end.
+				if context["layout"] in ["technical", "engine_room"]:
 					traits["role"] = "worker"
 				elif context["layout"] == "medical" and not traits.get("injured", false) and not traits.get("sick", false):
 					traits["role"] = "carer"
