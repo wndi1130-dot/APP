@@ -748,9 +748,12 @@ const PALETTE: Dictionary = {
 		{"kind": "low_table", "size": Vector2i(1, 1), "chance": 0.75, "at": "mid", "near": "stove"},
 		{"kind": "side_table", "size": Vector2i(1, 1), "chance": 0.55, "holds": true, "at": "wall"},
 	],
+	# 욕실 표준 묶음(결정 469 F4): 변기·세면대·약장이 꼭, 휴지통은 거의 늘, 넓으면 욕조·수건 선반.
 	"bath": [
 		{"kind": "toilet", "size": Vector2i(1, 1), "need": true, "at": "wall", "corner": true},
 		{"kind": "washstand", "size": Vector2i(1, 1), "need": true, "at": "wall", "holds": true},
+		{"kind": "medicine_cabinet", "size": Vector2i(1, 1), "need": true, "at": "wall", "holds": true},
+		{"kind": "waste_bin", "size": Vector2i(1, 1), "chance": 0.9, "at": "wall", "holds": true},
 		{"kind": "bathtub", "size": Vector2i(2, 1), "chance": 0.5, "at": "wall", "corner": true},
 		{"kind": "towel_shelf", "size": Vector2i(1, 1), "chance": 0.4, "holds": true, "at": "wall"},
 	],
@@ -838,6 +841,7 @@ const REPLACED: Dictionary = {
 	"dresser": true, "chair": true, "nightstand": true, "counter": true, "sink": true, "cupboard": true,
 	"settee": true, "armchair": true, "low_table": true, "side_table": true,
 	"toilet": true, "washstand": true, "bathtub": true, "towel_shelf": true,
+	"waste_bin": true,
 }
 ## 목표 하한·상한, 절대 상한, 빈 바닥 하한. 길·문·계단 검사는 항상 우선한다.
 ## 사무실·창고·가게는 사분위가 없어 중앙값 주위의 작업 범위를 둔다.
@@ -852,6 +856,44 @@ const DENSITY: Dictionary = {
 }
 ## Rooms that, short of their share, take the pieces the dice left out (_palette_for).
 const FILL_UNROLLED: Dictionary = {"work": true, "garage": true, "barn": true, "woodshed": true}
+## 목표 몫 채우기(결정 469 F2): 묶음을 다 굴리고도 목표 몫(DENSITY 하한~상한에서 굴린 값)보다 빈 방은
+## 이 차례로 더 놓는다. 벽 가구가 먼저, 모형이 있는 것(위층에서도 몸을 막음)이 먼저. 담는 가구는
+## 묶음에서 놓이는 방 갈래에만 둔다(loot_dress.gd FURNITURE_ROOM이 가구로 방을 읽는다).
+const FILL: Dictionary = {
+	"bed": [
+		{"kind": "wardrobe", "size": Vector2i(2, 1), "holds": true, "at": "wall"},
+		{"kind": "blanket_chest", "size": Vector2i(2, 1), "holds": true, "at": "wall"},
+		{"kind": "dresser", "size": Vector2i(2, 1), "holds": true, "at": "wall"},
+		{"kind": "chair", "size": Vector2i(1, 1), "at": "wall"},
+	],
+	"kitchen": [
+		{"kind": "fridge_open", "size": Vector2i(1, 1), "holds": true, "at": "wall"},
+		{"kind": "shelf", "size": Vector2i(3, 1), "holds": true, "at": "wall"},
+		{"kind": "cupboard", "size": Vector2i(1, 1), "holds": true, "at": "wall"},
+		{"kind": "barrel", "size": Vector2i(1, 1), "at": "wall"},
+		{"kind": "dining_set", "size": Vector2i(2, 2), "at": "mid"},
+		{"kind": "chair", "size": Vector2i(1, 1), "at": "wall"},
+	],
+	"living": [
+		{"kind": "bookcase", "size": Vector2i(2, 1), "holds": true, "at": "wall"},
+		{"kind": "blanket_chest", "size": Vector2i(2, 1), "holds": true, "at": "wall"},
+		{"kind": "side_table", "size": Vector2i(1, 1), "holds": true, "at": "wall"},
+		{"kind": "armchair", "size": Vector2i(1, 1), "at": "wall"},
+		{"kind": "settee", "size": Vector2i(2, 1), "at": "wall"},
+	],
+	"bath": [
+		{"kind": "towel_shelf", "size": Vector2i(1, 1), "holds": true, "at": "wall"},
+		{"kind": "waste_bin", "size": Vector2i(1, 1), "holds": true, "at": "wall"},
+	],
+	"office": [
+		{"kind": "file_cabinet", "size": Vector2i(1, 1), "holds": true, "at": "wall"},
+		{"kind": "shelf", "size": Vector2i(3, 1), "holds": true, "at": "wall"},
+		{"kind": "chair", "size": Vector2i(1, 1), "at": "wall"},
+	],
+}
+## 방마다 하나만 서는 가구(채우기가 둘째를 놓지 않는다).
+const ONE_PER_ROOM: Dictionary = {"fridge_open": true, "dining_set": true, "settee": true, "bathtub": true,
+	"waste_bin": true, "bed": true, "cold_stove": true, "desk": true, "radio_set": true}
 const OPTIONAL_BY_KIND: Dictionary = {"display_shelf": 0.6, "crate_stack": 0.6, "barrel": 0.6,
 	"shelf": 0.6, "sack_pile": 0.6, "fuel_drum": 0.6, "toolbox": 0.6, "tin_crate": 0.6}
 const COUNTER_MIN: int = 4
@@ -1719,6 +1761,38 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 					why = "path"
 				if not ok and need:
 					_missing(stats, cls, item, why)
+			# 목표 몫 채우기(결정 469 F2): 묶음만으로 목표 몫에 못 미치면 FILL 차례로 더 놓는다. 길·문·계단
+			# 검사로 깎인 자리는 다른 벽에서 찾는다. 상한·빈 바닥 하한은 그대로, 한 번 못 선 종류는 다시 보지 않는다.
+			var stuck: Dictionary = {}
+			var adding := true
+			while used < target and adding:
+				adding = false
+				for source: Dictionary in FILL.get(cls, []):
+					var kind: String = source["kind"]
+					if used >= target or stuck.has(kind):
+						continue
+					if ONE_PER_ROOM.has(kind) and (covered.has(kind) or placed.any(func(pl: Dictionary) -> bool: return pl["item"]["kind"] == kind)):
+						continue
+					var size: Vector2i = source["size"]
+					var a := size.x * size.y
+					if used + a > cap or float(area - used - a) < area * floor_min:
+						stuck[kind] = true
+						continue
+					var v: Dictionary = source.duplicate()
+					v["fill"] = true
+					var cands := _candidates(g, of, ri, cells, v, forbid, taken, keys["seeds"], stove_cells, box_at, TOP_CANDIDATES)
+					var cand := {} if cands.is_empty() else _first_open(g, of, ri, keys, before, guard, rects, cands, rng.randi_range(0, mini(3, cands.size()) - 1))
+					if cand.is_empty():
+						stuck[kind] = true
+						continue
+					var r: Rect2i = cand["rect"]
+					placed.append({"item": v, "rect": r, "facing": cand["facing"]})
+					for y in range(r.position.y, r.end.y):
+						for x in range(r.position.x, r.end.x):
+							taken[Vector2i(x, y)] = true
+					used += a
+					holders += int(v.get("holds", false))
+					adding = true
 			# 상자: 가까운 용기 가구로, 가구 하나에 하나. 그 가구 칸 가운데 바로 앞이
 			# 걸어서 닿는 칸에 둔다. 들 가구가 없고 원래 칸이 가구에 덮였으면 닿는 바닥으로.
 			# 상자 자리는 예전처럼 남긴 가구를 칠하기 전 칸으로 본다.
@@ -1786,6 +1860,29 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 	return stats
 
 
+## 후보 가운데 pick 번째를 먼저, 나머지는 차례로 세워 보고 길이 남는 첫 자리. 그 자리는 칸을 막고
+## rects에 든 채로 돌려준다. 없으면 빈 사전(칸과 rects는 처음 그대로).
+static func _first_open(g: FieldGrid, of: PackedInt32Array, ri: int, keys: Dictionary, before: Dictionary, guard: Array,
+		rects: Array, cands: Array, pick: int) -> Dictionary:
+	var tries: Array = [cands[pick]]
+	for k in range(cands.size()):
+		if k != pick:
+			tries.append(cands[k])
+	for cand: Dictionary in tries:
+		var r: Rect2i = cand["rect"]
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				g.set_solid(Vector2i(x, y), S.LOW)
+		rects.append(r)
+		if _still_open(g, of, ri, keys, before, rects + guard):
+			return cand
+		rects.pop_back()
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				g.set_solid(Vector2i(x, y), S.NONE)
+	return {}
+
+
 const ROOM_LABEL: Dictionary = {"bed": "살림방", "kitchen": "부엌", "living": "거실", "bath": "욕실", "office": "사무실", "shop": "매장", "storage": "창고", "store": "저장 칸", "boiler": "보일러실",
 	"work": "작업실", "garage": "차고", "barn": "헛간", "woodshed": "장작 헛간"}
 const KIND_LABEL: Dictionary = {
@@ -1796,7 +1893,7 @@ const KIND_LABEL: Dictionary = {
 	"firebox": "보일러 화실", "coal_bin": "석탄함", "fuel_drum": "연료통", "toolbox": "공구함",
 	"dresser": "서랍장", "chair": "의자", "nightstand": "침대 곁 협탁", "counter": "조리대", "sink": "개수대",
 	"cupboard": "찬장", "settee": "긴 소파", "armchair": "안락의자", "low_table": "낮은 탁자", "side_table": "곁탁자",
-	"toilet": "변기", "washstand": "세면대", "bathtub": "욕조", "towel_shelf": "수건 선반", "small_shelf": "작은 선반", "file_cabinet": "서류장", "desk": "책상",
+	"toilet": "변기", "washstand": "세면대", "bathtub": "욕조", "towel_shelf": "수건 선반", "medicine_cabinet": "약장", "waste_bin": "휴지통", "small_shelf": "작은 선반", "file_cabinet": "서류장", "desk": "책상",
 	"workbench": "작업대", "tool_rack": "연장 걸이", "tool_chest": "공구 궤", "parts_rack": "부품 선반", "part_crate": "부품 상자",
 	"sawhorse": "모탕", "car": "자동차", "tire_stack": "타이어 더미", "fuel_can_group": "기름통", "hardware_rack": "철물 선반",
 	"hay_cart": "건초 수레", "farm_cart": "짐수레", "firewood_stack": "장작 더미", "firewood_rick": "장작 단",

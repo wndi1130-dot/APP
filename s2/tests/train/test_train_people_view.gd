@@ -387,6 +387,41 @@ func test_a_freezing_car_trembles_shares_blankets_and_breathes() -> void:
 		assert_false((view.breath["tail1"]["p"] as GPUParticles3D).emitting, "no breath")
 
 
+## One under a blanket taken off the car (a reseat takes the body out of the
+## tree before it is freed): the blanket goes with them, and the body out of
+## the tree is not asked where it is (an engine error, which fails the test).
+func test_a_blanket_goes_with_one_taken_off_the_car() -> void:
+	var s := Scene.new()
+	s.rules = Rules.load_default()
+	s.opts = {"seed": 7, "panel": false}
+	add_child_autofree(s)
+	if s.people_view == null:
+		pass_test("no baked people here")
+		return
+	var view = s.people_view
+	assert_true(s.set_sit("tail", 0, 15.0), "a freezing tail")
+	for i in 40:
+		s.step(0.5)
+		view._process(0.5)
+	var c: Dictionary = s.car("tail1")
+	var gone: Node3D = null
+	var key := -1
+	for k in view.covers:
+		var under: Array = view.covers[k]["under"]
+		if (c["bodies"] as Array).has(under[0]):
+			gone = under[0]
+			key = k
+			break
+	assert_not_null(gone, "a blanket is up in the freezing tail")
+	if gone == null:
+		return
+	(c["bodies"] as Array).erase(gone)
+	s.people.remove_child(gone)
+	gone.queue_free()
+	view._process(0.5)
+	assert_false(view.covers.has(key), "the blanket goes with them")
+
+
 ## A long train draws only the cars on the screen (one draw a body would
 ## otherwise put every car's people in every frame); the rest go on living.
 func test_only_the_cars_on_the_screen_are_drawn() -> void:

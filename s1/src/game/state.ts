@@ -295,6 +295,11 @@ export interface ResWhy { seg: number; label: string; coal: number; food: number
 
 export interface Settlement { coal: number; food: number; med: number; rel: Record<Comm, number>; trust: number; tension: number; notes: string[] }
 
+/** 덱 한 갈래: n곳마다 정확히 k곳. seen = 지금 묶음에서 본 곳, hit = 그중 맞은 곳(S2 loot_dress.gd가 값의 주인) */
+export interface LootDeckRow { n: number; k: number; seen: number; hit: number }
+/** 갈래 id(food_shop·pharmacy·garage_fuel·pan·bottle …) → 자리 */
+export type LootDeck = Record<string, LootDeckRow>;
+
 export interface Game {
   version: 1;
   seed: string;
@@ -462,6 +467,8 @@ export interface Game {
   lastStop?: StopState | null;
   /** 필드(S2)에서 직접 뛰고 돌아온 귀환 기록(field_receipt.ts). 직접 영수증이 들어온 판에만 있고, 주사위 정차만 도는 판엔 없다 */
   fieldReturns?: FieldReturns;
+  /** 갈래별 보장 몫(덱)의 자리(결정 474 S1): 필드 정차가 쓴 뒤 영수증으로 돌아오고 다음 출발 계약에 실린다. 필드 정차가 없던 판엔 없다 */
+  lootDeck?: LootDeck;
   /** S1c 내정(공방, 기술, 전문가, 위생). 없으면 S1a 판이다(domestic/state.ts). */
   dom?: DomState;
   /** 고른 기관차(결정 125). 없으면 c3(옛 저장과 안 고른 판). 게임 시작 때 setLoco(loco.ts)로 정한다. */

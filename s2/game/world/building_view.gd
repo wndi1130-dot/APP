@@ -17,6 +17,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const BuildingShader = preload("res://game/world/building.gdshader")
 const BuildPace = preload("res://game/world/build_pace.gd")
+const RoomFinish = preload("res://game/world/room_finish.gd")
 const S = FieldGrid.Solid
 const CATALOG_PATH := "res://models/building_kit/catalog.json"
 const MODE_SETTING := "visuals/building_models_enabled"
@@ -804,6 +805,12 @@ func setup(map_data: Dictionary, world_mat: ShaderMaterial, pace = null) -> void
 	for key in ["vis", "map_size", "lamp_color"]:
 		material.set_shader_parameter(key, world_mat.get_shader_parameter(key))
 	material.set_shader_parameter("hole_radius", HOLE_R)
+	# 살림방 바닥·벽 마감(결정 469 C3): 땅과 건물 셰이더가 같은 그림을 칸으로 읽는다.
+	var finish: Image = map_data["_room_finish"] if map_data.get("_room_finish") is Image else RoomFinish.build(map_data)
+	var room_tex := ImageTexture.create_from_image(finish)
+	for m: ShaderMaterial in [material, world_mat]:
+		m.set_shader_parameter("room_tex", room_tex)
+		m.set_shader_parameter("room_on", 1.0)
 	# Planned off the main thread with the map, when it was (stop_loader.gd).
 	var p: Dictionary = map_data["_building_plan"] if map_data.get("_building_plan") is Dictionary else plan(map_data)
 	await BuildPace.rest(pace)

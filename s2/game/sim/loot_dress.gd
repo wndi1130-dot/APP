@@ -51,7 +51,7 @@ const ROOM_WORDS: Dictionary = {
 const FURNITURE_ROOM: Dictionary = {
 	"dresser": "bedroom", "wardrobe": "bedroom", "nightstand": "bedroom", "bookcase": "bedroom", "side_table": "bedroom",
 	"cupboard": "kitchen", "fridge_open": "kitchen", "counter": "kitchen",
-	"washstand": "bathroom", "towel_shelf": "bathroom",
+	"washstand": "bathroom", "towel_shelf": "bathroom", "medicine_cabinet": "bathroom", "waste_bin": "bathroom",
 	"desk": "office", "file_cabinet": "office",
 	"display_shelf": "shop", "shop_counter": "shop",
 	"jar_shelf": "pantry", "tin_crate": "pantry",

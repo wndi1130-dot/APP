@@ -17,7 +17,9 @@ const V5_REQUIRED := ["crew", "defense"]
 ## v5 may also carry (s3 contract 3): the outer things put aboard at the platform, the lures
 ## that came back, the food put aboard by name before it melted into stock.food (J07: the pot
 ## reads its state by id). Left out when there are none.
-const V5_OPTIONAL := ["wardrobeIn", "luresBack", "foodIn"]
+const V5_OPTIONAL := ["wardrobeIn", "luresBack", "foodIn", "lootDeck"]
+## A deck's place (decision 474 S1, loot_dress.gd decks): n places, exactly k of them, seen and hit so far.
+const DECK_KEYS := ["n", "k", "seen", "hit"]
 ## The v5 keys that are counts by id.
 const V5_COUNTS := ["luresBack", "foodIn"]
 ## gearBack.wear's places: the wardrobe's (wear.gd OUTER_PLACES), the coat only when one is on.
@@ -75,6 +77,7 @@ var _defense: Dictionary = {}
 var _wardrobe_in: Array = []
 var _lures_back: Dictionary = {}
 var _food_in: Dictionary = {}
+var _loot_deck: Dictionary = {}
 
 
 func _init(place_id: String, place_type: String = "freight", variant: String = "s2_graybox") -> void:
@@ -346,6 +349,12 @@ func set_food_in(by_id: Dictionary) -> void:
 	_food_in = by_id.duplicate()
 
 
+## Where each deck stands after this stop's draws (decision 474 S1; loot_dress.gd report
+## "loot_deck"): the train keeps it for the next contract. On a v5 receipt only.
+func set_loot_deck(deck: Dictionary) -> void:
+	_loot_deck = deck.duplicate(true)
+
+
 ## The train's defence at the stop (decision 416; the stop-sound stream fills it): those who
 ## stood at the train, who of them got hurt or died, their wounds. Opts the receipt into v5.
 func set_defense(held: bool, people: Array, hurt: Array, dead: Array, wounds: Array = []) -> void:
@@ -421,6 +430,8 @@ func to_dict() -> Dictionary:
 				d["luresBack"] = _lures_back.duplicate()
 			if not _food_in.is_empty():
 				d["foodIn"] = _food_in.duplicate()
+			if not _loot_deck.is_empty():
+				d["lootDeck"] = _loot_deck.duplicate(true)
 		return d
 	if not _wounds.is_empty():
 		d["version"] = 2
@@ -683,6 +694,21 @@ static func _check_v5_fields(out: Array[String], d: Dictionary, id_re: RegEx) ->
 		for kind: Variant in counts:
 			if not (_is_id(kind, id_re) and _is_int(counts[kind]) and float(counts[kind]) >= 0.0):
 				out.append("%s.%s: 0 이상 정수가 아님" % [key, str(kind)])
+	if d.has("lootDeck"):
+		var deck: Variant = d["lootDeck"]
+		if not deck is Dictionary:
+			out.append("lootDeck: 사전이 아님")
+		else:
+			for kind: Variant in deck:
+				var row: Variant = deck[kind]
+				if not (_is_id(kind, id_re) and row is Dictionary):
+					out.append("lootDeck.%s: 꼴이 아님" % str(kind))
+					continue
+				var place: Dictionary = row
+				_no_extra(out, "lootDeck.%s" % str(kind), place, DECK_KEYS)
+				for key: String in DECK_KEYS:
+					if not (_is_int(place.get(key)) and float(place.get(key)) >= 0.0):
+						out.append("lootDeck.%s.%s: 0 이상 정수가 아님" % [str(kind), key])
 	var defense: Variant = d.get("defense")
 	if defense is Dictionary:
 		_no_extra(out, "defense", defense, DEFENSE_KEYS)

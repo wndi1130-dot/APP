@@ -113,6 +113,31 @@ func test_the_contract_carries_the_arrival_the_route_board_shows() -> void:
 		assert_almost_eq(float(bands[b]) / 20.0, float(TrainStop.ARRIVALS[b][0]), 3.5, "band %d share" % b)
 
 
+func test_the_decks_place_rides_from_one_stop_to_the_next() -> void:
+	# Decision 474 S1: the field's decks (loot_dress.gd) keep 「exactly k of n」 across stops only if
+	# where they stand rides the receipt back into the train's state and out on the next contract.
+	var deck := {"food_shop": {"n": 10, "k": 7, "seen": 4, "hit": 3}, "garage_fuel": {"n": 10, "k": 3, "seen": 2, "hit": 0}}
+	for row: Dictionary in _contracts():
+		assert_false((row["departure"] as Dictionary).has("lootDeck"), _at(row) + " no deck before a field stop")
+		var receipt: Dictionary = (row["receipt"] as Dictionary).duplicate(true)
+		receipt["lootDeck"] = deck.duplicate(true)
+		assert_eq(Receipt.check(receipt), [] as Array[String], _at(row) + " a v5 receipt may carry the deck")
+		var applied := FieldReturn.apply_field_return(row["state"], _tables, row["departure"], receipt)
+		assert_eq(applied["g"].get("lootDeck"), deck, _at(row) + " the train keeps where the decks stand")
+		var again := FieldDeparture.build(applied["g"], _tables, row["opts"])
+		assert_eq(again.get("lootDeck"), deck, _at(row) + " the next contract carries it")
+	var bad := (_contracts()[0]["receipt"] as Dictionary).duplicate(true)
+	bad["lootDeck"] = {"pan": {"n": 10, "k": 5, "seen": -1, "hit": 0}}
+	assert_ne(Receipt.check(bad), [] as Array[String], "a deck row with a negative count is refused")
+	bad["lootDeck"] = {"pan": {"n": 10, "k": 5}}
+	assert_ne(Receipt.check(bad), [] as Array[String], "a deck row without seen and hit is refused")
+	var r := Receipt.new("sulechow_station")
+	r.set_ids("ret_d", "stop_d", "dep_d")
+	r.set_defense(true, [], [], [])
+	r.set_loot_deck(deck)
+	assert_eq(r.to_dict().get("lootDeck"), deck, "the receipt writes the deck on v5")
+
+
 func test_route_weather_fields_match_s1_and_are_absent_with_climate_off() -> void:
 	# Decision 474 N2: current S2 id, the previous three in order, no disaster in the past.
 	var path: String = "res://tests/fixtures/train/route_weather.json"
