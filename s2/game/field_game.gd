@@ -46,6 +46,10 @@ const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
 const SnowTracks = preload("res://game/sim/snow_tracks.gd")
+const SoundRipple = preload("res://game/world/sound_ripple.gd")
+## The squad's sounds whose reach shows on the ground (decision 471 H1): a door kicked in,
+## glass broken, wood chopped — and the player's running steps (_footsteps).
+const RIPPLE_TAGS: Array[String] = ["kick", "glass", "axe"]
 const PrecipShader = preload("res://fx/shaders/precip.gdshader")
 const W = preload("res://game/sim/weapons.gd")
 const Combat = preload("res://game/field_combat.gd")
@@ -282,6 +286,8 @@ var unloaded: Dictionary = {}
 var loaded_wear: Array = []
 var blood: Array = []
 var sounds: Array = []                 # recent sounds for the HUD: {pos, level, t}
+var ripples: SoundRipple               # the reach of the squad's loud sounds, on the ground for a second (H1)
+var ripple_run_t := -INF               # when the player's running last drew one
 var shot_times: Array = []
 var hordes: Dictionary = {}            # index -> {"t": arrival, "ids": [], "cleared": bool, "entry": key}
 var pending_spawn: Array = []          # {"t", "pos", "horde", "target"}
@@ -505,6 +511,8 @@ func _ready() -> void:
 	map_edge = MapEdge.new()
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
+	ripples = SoundRipple.new()
+	add_child(ripples)
 	map_edge.set_fog(fx_light["fog_color"])
 	map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
 	# The shade under the side path's trees: the gap reads as the light way in.
@@ -2007,6 +2015,8 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 		var level := SimNoise.footstep_level(running, glass)
 		var reacted: int = zombies.hear(p.position, level, r)
 		ledger.observe(level, "run" if running else ("crouch" if p.crouched else "walk"), r, reacted)
+		if running:
+			_ripple_run(p, r)
 		if p == player and audio != null:
 			audio.footstep(p.position, running)
 		_wake_frozen_near(p)
@@ -2139,6 +2149,14 @@ func on_person_died(p: Person) -> void:
 ## Every noise goes through here: the dead hear it, the next horde comes
 ## earlier, the frozen wake, raiders turn, the HUD shows it. The dead walk to
 ## where the sound was, not to whoever made it (body_injury 8.2).
+## The player's running shows its reach on the ground, a ring a second at most (H1).
+func _ripple_run(p: Person, r: float) -> void:
+	if p != player or ripples == null or clock.elapsed - ripple_run_t < SoundRipple.SECONDS:
+		return
+	ripple_run_t = clock.elapsed
+	ripples.show_ring(p.position, r)
+
+
 func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> void:
 	var now := clock.elapsed
 	var indoor := grid_at(at).indoor(FieldGrid.cell_of(at))
@@ -2155,6 +2173,8 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 	ledger.observe(level, tag, radius, reacted)
 	_score(level, tag)
 	sounds.append({"pos": at, "level": level, "t": now, "tag": tag})
+	if from != null and squad.has(from) and RIPPLE_TAGS.has(tag) and ripples != null:
+		ripples.show_ring(at, radius)
 	# The train's own sounds (noise.gd SOURCES) call the dead to the train and
 	# pull nothing: they tell nobody where the squad is.
 	var noticed: bool = level >= SimNoise.Level.LOUD and SimNoise.notices(tag)
