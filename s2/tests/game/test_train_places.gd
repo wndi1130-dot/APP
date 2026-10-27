@@ -174,6 +174,12 @@ func test_storage_has_no_living_places_and_the_cold_car_keeps_no_food() -> void:
 	assert_gt(float(rear["at"][0]) - float(rear["size"][0]) * .5, 8.0)
 	# No food where the dead are laid (user 2026-10-25): the food is in the store car.
 	assert_eq(props.filter(func(p): return String(p.get("when", "")) == "food" or String(p["model"]) == "food_crates").size(), 0)
+	# Nothing there reads as a laid-out body: no blanket spread flat, only folded ones stacked.
+	assert_eq(props.filter(func(p): return String(p["model"]) == "blanket").size(), 0)
+	assert_gt(props.filter(func(p): return String(p["model"]) == "blanket_stack").size(), 0)
+	# Until the dead are kept there it is only a cold store: the memorial shows with them.
+	for memorial in props.filter(func(p): return String(p["model"]) == "memorial_board"):
+		assert_eq(String(memorial.get("when", "")), "stored")
 	var store: Array = Catalog.data()["layouts"]["freight"]["props"]
 	assert_eq(store.filter(func(p): return String(p["model"]) == "food_crates").size(), 1)
 	assert_false(Catalog.data()["layouts"].has("classroom"), "classroom is part of dining")

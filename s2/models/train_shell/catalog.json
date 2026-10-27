@@ -1,7 +1,7 @@
 {
   "version": 1,
   "script": "tools/blender/train_shell.py",
-  "script_version": 1,
+  "script_version": 2,
   "blender": "4.5.10 LTS",
   "axis": "X 칸 길이 0..16, +Y 위(바닥 윗면 0), +Z 열린 앞(카메라 쪽)",
   "texture": [
@@ -81,6 +81,24 @@
         ]
       ],
       "use": "의무칸, 흰 벽과 반쯤 친 커튼. 붉은 십자 없음"
+    },
+    "shell_engine": {
+      "tris": 1254,
+      "bytes": 85220,
+      "sha256": "17bb248407393df986ad5fe319fb86891120b98df03d3a2270bc64f8e8bf17e4",
+      "bounds_m": [
+        [
+          -0.5,
+          -1.44,
+          -1.52
+        ],
+        [
+          16.5,
+          3.37,
+          1.52
+        ]
+      ],
+      "use": "기관차·탄수차, 쇠판 벽과 운전실 창 하나"
     }
   }
 }

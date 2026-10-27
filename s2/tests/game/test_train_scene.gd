@@ -326,6 +326,8 @@ func test_the_stove_burns_with_the_cars_warmth_and_frost_takes_the_glass() -> vo
 	assert_almost_eq(float(c["glass"].get_shader_parameter("cold_car")), 1.0, 0.001)
 	assert_true(s.car("dining").has("stove_light"), "the dining car has a stove of its own")
 	assert_almost_eq(float(s.car("tail1")["glass"].get_shader_parameter("cold_car")), Look.frost(35.0), 0.001)
+	# The cold car is kept cold on purpose: its glass frosts whatever warmth the rules give it.
+	assert_almost_eq(float(s.car("cold")["glass"].get_shader_parameter("cold_car")), 1.0, 0.001)
 
 
 # ---------------------------------------------------------------- time passing
