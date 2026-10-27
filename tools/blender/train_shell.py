@@ -21,7 +21,7 @@ import bmesh
 import bpy
 from mathutils import Vector
 
-SCRIPT_VERSION = 1
+SCRIPT_VERSION = 2   # 2: 기관차·탄수차 쇠판 벽 갈래(engine)
 ATLAS = 256
 CELL = 32
 TRIANGLE_LIMIT = 3000
@@ -63,6 +63,9 @@ VARIANTS = {
               "rack": "brass", "curtain": "curtain_red", "note": "열차장실, 짙은 나무 판과 접힌 붉은 커튼"},
     "medic": {"wains": "pale_green", "wall": "white_dirty", "frame": "grey_white", "floor": ("plank_worn", "floor"),
               "rack": "", "curtain": "curtain", "note": "의무칸, 흰 벽과 반쯤 친 커튼. 붉은 십자 없음"},
+    # 기관차·탄수차(사람 없는 칸): 객차 창·징두리 대신 쇠판 벽과 판 이음 띠, 운전실 쪽 창 하나.
+    "engine": {"wains": "iron", "wall": "iron_worn", "frame": "steel", "floor": ("iron_worn", "iron"),
+               "rack": "", "curtain": "", "win_x": [14.0], "plates": True, "note": "기관차·탄수차, 쇠판 벽과 운전실 창 하나"},
 }
 
 
@@ -135,8 +138,8 @@ class Piece:
         return len(self.bm.faces)
 
 
-def openings():
-    return [(x - WIN_W / 2, x + WIN_W / 2) for x in WIN_X]
+def openings(v=None):
+    return [(x - WIN_W / 2, x + WIN_W / 2) for x in (v or {}).get("win_x", WIN_X)]
 
 
 def back_wall(p, v):
@@ -148,12 +151,12 @@ def back_wall(p, v):
     p.face([(0, WAINS, z), (L, WAINS, z), (L, ya, z), (0, ya, z)], v["wall"], out)
     p.face([(0, yb, z), (L, yb, z), (L, TOP, z), (0, TOP, z)], v["wall"], out)
     cuts = [0.0]
-    for a, b in openings():
+    for a, b in openings(v):
         cuts += [a, b]
     cuts.append(L)
     for i in range(0, len(cuts), 2):
         p.face([(cuts[i], ya, z), (cuts[i + 1], ya, z), (cuts[i + 1], yb, z), (cuts[i], yb, z)], v["wall"], out)
-    for a, b in openings():
+    for a, b in openings(v):
         # 구멍 둘레(안으로 12cm)와 창틀(벽에서 3cm), 창턱(8cm)
         p.face([(a, ya, z), (b, ya, z), (b, ya, BACK_OUT), (a, ya, BACK_OUT)], v["frame"], (0, 1, 0))
         p.face([(a, yb, z), (b, yb, z), (b, yb, BACK_OUT), (a, yb, BACK_OUT)], v["frame"], (0, -1, 0))
@@ -179,6 +182,14 @@ def back_wall(p, v):
     while x < L - 0.5:
         p.box((x - 0.012, x + 0.012), (0.05, WAINS - 0.03), (z, z + 0.01), v["frame"], skip=("-z", "-y", "+y"))
         x += 1.0
+    if v.get("plates"):
+        # 쇠판 벽: 2 m마다 세로 이음 띠(창 자리는 건너뜀)와 위쪽 가로 띠
+        x = 2.0
+        while x < L - 0.5:
+            if not any(a - 0.1 < x < b + 0.1 for a, b in openings(v)):
+                p.box((x - 0.03, x + 0.03), (WAINS + 0.03, TOP - 0.05), (z, z + 0.02), v["frame"], skip=("-z", "-y", "+y"))
+            x += 2.0
+        p.box((0.1, L - 0.1), (TOP - 0.40, TOP - 0.35), (z, z + 0.02), v["frame"], skip=("-z",))
     # 창 위 짐 선반(가로대 둘과 받침)
     if v["rack"]:
         for zz in (-1.12, -0.98):

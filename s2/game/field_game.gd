@@ -17,6 +17,7 @@ const RoomStories = preload("res://game/world/room_stories.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
+const RouteStops = preload("res://game/train/route_stops.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -45,6 +46,10 @@ const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
 const SnowTracks = preload("res://game/sim/snow_tracks.gd")
+const SoundRipple = preload("res://game/world/sound_ripple.gd")
+## The squad's sounds whose reach shows on the ground (decision 471 H1): a door kicked in,
+## glass broken, wood chopped — and the player's running steps (_footsteps).
+const RIPPLE_TAGS: Array[String] = ["kick", "glass", "axe"]
 const PrecipShader = preload("res://fx/shaders/precip.gdshader")
 const W = preload("res://game/sim/weapons.gd")
 const Combat = preload("res://game/field_combat.gd")
@@ -281,6 +286,8 @@ var unloaded: Dictionary = {}
 var loaded_wear: Array = []
 var blood: Array = []
 var sounds: Array = []                 # recent sounds for the HUD: {pos, level, t}
+var ripples: SoundRipple               # the reach of the squad's loud sounds, on the ground for a second (H1)
+var ripple_run_t := -INF               # when the player's running last drew one
 var shot_times: Array = []
 var hordes: Dictionary = {}            # index -> {"t": arrival, "ids": [], "cleared": bool, "entry": key}
 var pending_spawn: Array = []          # {"t", "pos", "horde", "target"}
@@ -430,6 +437,10 @@ func _ready() -> void:
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	_take_map(SidePath.add(stop_map, rng.seed))
+	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
+	# no fire at the first leg's fifth stop), before anything is put on the map.
+	if opts.get("departure") is Dictionary:
+		RouteStops.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)))
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
@@ -474,8 +485,9 @@ func _ready() -> void:
 		# What a looted house tipped out lies on its floors (loot_junk.gd, card J); out in _give_finds.
 		data["loose"] = LootDress.LootJunk.spill_looted(data, stories, rng.seed)
 	# A freight yard's or works' one fixed core scene (decision 426): the place is the map's,
-	# whether a core is left in it is this run's dice, kept in the place's state like the stories.
-	var core_note := CoreScenes.apply(data, ("%d:core:%s" % [rng.seed, data["place_id"]]).hash())
+	# whether a core is left in it is this run's dice, kept in the place's state like the stories;
+	# the visible core turns a card of the decks dress handed back (474 S3), so the receipt carries it on.
+	var core_note := CoreScenes.apply(data, ("%d:core:%s" % [rng.seed, data["place_id"]]).hash(), loot_report.get("loot_deck", {}))
 	if not core_note.is_empty():
 		receipt.place_note("coreScene", core_note)
 	telemetry = Telemetry.new("s2-%d" % rng.seed)
@@ -499,6 +511,8 @@ func _ready() -> void:
 	map_edge = MapEdge.new()
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
+	ripples = SoundRipple.new()
+	add_child(ripples)
 	map_edge.set_fog(fx_light["fog_color"])
 	map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
 	# The shade under the side path's trees: the gap reads as the light way in.
@@ -2001,6 +2015,8 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 		var level := SimNoise.footstep_level(running, glass)
 		var reacted: int = zombies.hear(p.position, level, r)
 		ledger.observe(level, "run" if running else ("crouch" if p.crouched else "walk"), r, reacted)
+		if running:
+			_ripple_run(p, r)
 		if p == player and audio != null:
 			audio.footstep(p.position, running)
 		_wake_frozen_near(p)
@@ -2133,6 +2149,14 @@ func on_person_died(p: Person) -> void:
 ## Every noise goes through here: the dead hear it, the next horde comes
 ## earlier, the frozen wake, raiders turn, the HUD shows it. The dead walk to
 ## where the sound was, not to whoever made it (body_injury 8.2).
+## The player's running shows its reach on the ground, a ring a second at most (H1).
+func _ripple_run(p: Person, r: float) -> void:
+	if p != player or ripples == null or clock.elapsed - ripple_run_t < SoundRipple.SECONDS:
+		return
+	ripple_run_t = clock.elapsed
+	ripples.show_ring(p.position, r)
+
+
 func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> void:
 	var now := clock.elapsed
 	var indoor := grid_at(at).indoor(FieldGrid.cell_of(at))
@@ -2149,6 +2173,8 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 	ledger.observe(level, tag, radius, reacted)
 	_score(level, tag)
 	sounds.append({"pos": at, "level": level, "t": now, "tag": tag})
+	if from != null and squad.has(from) and RIPPLE_TAGS.has(tag) and ripples != null:
+		ripples.show_ring(at, radius)
 	# The train's own sounds (noise.gd SOURCES) call the dead to the train and
 	# pull nothing: they tell nobody where the squad is.
 	var noticed: bool = level >= SimNoise.Level.LOUD and SimNoise.notices(tag)

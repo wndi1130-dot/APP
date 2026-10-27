@@ -15,11 +15,11 @@ func _scene() -> Node3D:
 	return s
 
 
-func test_the_four_shells_match_their_catalog_and_budget() -> void:
+func test_the_five_shells_match_their_catalog_and_budget() -> void:
 	var book: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SHELL_DIR + "/catalog.json"))
 	var assets: Dictionary = book["assets"]
-	assert_eq(assets.keys().size(), 4)
-	for variant in ["plain", "clean", "chief", "medic"]:
+	assert_eq(assets.keys().size(), 5)
+	for variant in ["plain", "clean", "chief", "medic", "engine"]:
 		var id: String = "shell_" + variant
 		assert_true(assets.has(id), id)
 		var path: String = "%s/%s.glb" % [SHELL_DIR, id]
@@ -41,6 +41,24 @@ func test_every_car_wears_its_shell_and_the_glass_sits_in_the_reveal() -> void:
 			assert_almost_eq((child as Node3D).position.z, Scene.SHELL_GLASS_Z + 0.02, 0.001)
 	assert_eq(panes, 4)
 	assert_not_null(s.backdrop, "land and sky behind the windows")
+
+
+## 기관차는 객차 창·나무 벽 대신 쇠판 벽(운전실 창 하나) 껍데기를 입고, 사람 칸은 그대로다(열세 칸 점검).
+func test_the_locomotive_wears_the_iron_shell() -> void:
+	var s = _scene()
+	var loco: Dictionary = {}
+	for c in s.cars:
+		if String((c["def"] as Dictionary).get("kind", "")) == "loco":
+			loco = c
+	assert_false(loco.is_empty(), "the default train has its locomotive")
+	if loco.is_empty():
+		return
+	var shell: Node = (loco["node"] as Node3D).get_node_or_null("Shell")
+	assert_not_null(shell)
+	if shell != null:
+		assert_string_ends_with(shell.scene_file_path, "shell_engine.glb")
+	var tail: Node = (s.car("tail1")["node"] as Node3D).get_node_or_null("Shell")
+	assert_string_ends_with(tail.scene_file_path, "shell_plain.glb")
 
 
 func test_a_cold_car_looks_bluer_than_a_warm_one() -> void:

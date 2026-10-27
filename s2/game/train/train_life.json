@@ -285,6 +285,101 @@
           "yaw": 0,
           "material": "cloth",
           "when": "crowd3"
+        },
+        {
+          "id": "laundry",
+          "model": "laundry_line",
+          "at": [
+            4,
+            2.25,
+            0.1
+          ],
+          "size": [
+            3,
+            0.61,
+            0.01
+          ],
+          "yaw": 0,
+          "material": "cloth",
+          "cars": [
+            "tail1"
+          ]
+        },
+        {
+          "id": "patched_window",
+          "model": "patch_boards",
+          "at": [
+            9.86,
+            1.75,
+            -1.275
+          ],
+          "size": [
+            1.46,
+            0.88,
+            0.05
+          ],
+          "yaw": 0,
+          "material": "wood",
+          "cars": [
+            "tail2"
+          ]
+        },
+        {
+          "id": "corner_cupboard",
+          "model": "cupboard",
+          "at": [
+            0.32,
+            0.56,
+            -1.1
+          ],
+          "size": [
+            0.52,
+            1.12,
+            0.38
+          ],
+          "yaw": 0,
+          "material": "wood",
+          "cars": [
+            "tail3"
+          ]
+        },
+        {
+          "id": "wall_shelf",
+          "model": "shelf",
+          "at": [
+            8,
+            1.62,
+            -1.15
+          ],
+          "size": [
+            2,
+            0.12,
+            0.3
+          ],
+          "yaw": 0,
+          "material": "wood",
+          "cars": [
+            "tail3"
+          ]
+        },
+        {
+          "id": "shelf_bowls",
+          "model": "bowls",
+          "at": [
+            7.7,
+            1.72,
+            -1.15
+          ],
+          "size": [
+            0.7,
+            0.08,
+            0.3
+          ],
+          "yaw": 0,
+          "material": "wood",
+          "cars": [
+            "tail3"
+          ]
         }
       ],
       "spots": [
@@ -3718,6 +3813,150 @@
           "yaw": 0,
           "material": "wood",
           "when": "food"
+        },
+        {
+          "id": "store_crate_stack",
+          "model": "crate_stack",
+          "at": [
+            0.75,
+            0.6,
+            -0.8
+          ],
+          "size": [
+            1.2,
+            1.2,
+            1.0
+          ],
+          "yaw": 0,
+          "material": "wood"
+        },
+        {
+          "id": "store_barrel_a",
+          "model": "barrel",
+          "at": [
+            5.0,
+            0.45,
+            -0.95
+          ],
+          "size": [
+            0.6,
+            0.9,
+            0.6
+          ],
+          "yaw": 0,
+          "material": "iron"
+        },
+        {
+          "id": "store_barrel_b",
+          "model": "barrel",
+          "at": [
+            5.0,
+            0.45,
+            -0.3
+          ],
+          "size": [
+            0.6,
+            0.9,
+            0.6
+          ],
+          "yaw": 0,
+          "material": "iron"
+        },
+        {
+          "id": "store_shelf",
+          "model": "shelf",
+          "at": [
+            7.0,
+            1.6,
+            -1.12
+          ],
+          "size": [
+            3.0,
+            0.12,
+            0.3
+          ],
+          "yaw": 0,
+          "material": "wood"
+        },
+        {
+          "id": "store_parts",
+          "model": "part_crate",
+          "at": [
+            6.6,
+            1.785,
+            -1.12
+          ],
+          "size": [
+            0.5,
+            0.25,
+            0.3
+          ],
+          "yaw": 0,
+          "material": "wood"
+        },
+        {
+          "id": "store_sack_pile",
+          "model": "sack_pile",
+          "at": [
+            9.0,
+            0.3,
+            -0.9
+          ],
+          "size": [
+            0.9,
+            0.6,
+            0.9
+          ],
+          "yaw": 0,
+          "material": "cloth"
+        },
+        {
+          "id": "store_pallets",
+          "model": "pallet_stack",
+          "at": [
+            13.6,
+            0.25,
+            -0.7
+          ],
+          "size": [
+            1.3,
+            0.5,
+            1.1
+          ],
+          "yaw": 0,
+          "material": "wood"
+        },
+        {
+          "id": "store_crate_stack_b",
+          "model": "crate_stack",
+          "at": [
+            15.0,
+            0.55,
+            -0.85
+          ],
+          "size": [
+            1.0,
+            1.1,
+            0.9
+          ],
+          "yaw": 0,
+          "material": "wood"
+        },
+        {
+          "id": "store_handcart",
+          "model": "handcart",
+          "at": [
+            13.6,
+            0.45,
+            0.55
+          ],
+          "size": [
+            1.3,
+            0.9,
+            0.8
+          ],
+          "yaw": 0,
+          "material": "wood"
         }
       ],
       "spots": []
@@ -4212,21 +4451,22 @@
       ]
     },
     "cold": {
-      "label": "앞 빈 바닥·뒤 안치 자리",
+      "label": "앞 담요 궤·뒤 안치 자리(걷어 둔 담요 커튼)",
       "storage_only": true,
+      "look_warmth": 10,
       "props": [
         {
-          "id": "divider",
-          "model": "divider",
+          "id": "blanket_chest",
+          "model": "blanket_chest",
           "at": [
-            8,
-            1,
-            -0.65
+            5,
+            0.325,
+            -0.8
           ],
           "size": [
-            0.1,
             2,
-            1.1
+            0.65,
+            1
           ],
           "yaw": 0,
           "material": "wood"
@@ -4248,11 +4488,92 @@
           "material": "iron"
         },
         {
+          "id": "blankets_a",
+          "model": "blanket_stack",
+          "at": [
+            11.62,
+            0.64,
+            -0.45
+          ],
+          "size": [
+            0.82,
+            0.28,
+            0.53
+          ],
+          "yaw": 0.04,
+          "material": "cloth"
+        },
+        {
+          "id": "blankets_b",
+          "model": "blanket_stack",
+          "at": [
+            12.58,
+            0.64,
+            -0.5
+          ],
+          "size": [
+            0.82,
+            0.28,
+            0.53
+          ],
+          "yaw": 0.04,
+          "material": "cloth"
+        },
+        {
+          "id": "curtain",
+          "model": "blanket_curtain",
+          "at": [
+            12,
+            1.465,
+            0.6
+          ],
+          "size": [
+            3.6,
+            2.77,
+            0.12
+          ],
+          "yaw": 0,
+          "material": "cloth"
+        },
+        {
+          "id": "lantern",
+          "model": "lantern_off",
+          "at": [
+            12.15,
+            0.17,
+            0.33
+          ],
+          "size": [
+            0.16,
+            0.34,
+            0.16
+          ],
+          "yaw": 0.3,
+          "material": "iron"
+        },
+        {
+          "id": "memorial",
+          "model": "memorial_board",
+          "at": [
+            12,
+            1.67,
+            -1.27
+          ],
+          "size": [
+            0.6,
+            0.7,
+            0.06
+          ],
+          "yaw": 0,
+          "material": "wood",
+          "when": "stored"
+        },
+        {
           "id": "storage_note",
           "model": "storage_board",
           "at": [
             12,
-            1.2,
+            1.05,
             -1.28
           ],
           "size": [
@@ -4275,17 +4596,66 @@
           "id": "boiler",
           "model": "boiler",
           "at": [
-            8,
+            6.4,
             1,
             -0.3
           ],
           "size": [
-            10,
+            9.2,
             2,
             1.4
           ],
           "yaw": 0,
           "material": "iron"
+        },
+        {
+          "id": "cab_coal",
+          "model": "coal_heap",
+          "at": [
+            14.75,
+            0.315,
+            -0.55
+          ],
+          "size": [
+            2.4,
+            0.63,
+            1.1
+          ],
+          "yaw": 0,
+          "material": "iron"
+        },
+        {
+          "id": "cab_tool_chest",
+          "model": "tool_chest",
+          "at": [
+            12.5,
+            0.4,
+            -0.8
+          ],
+          "size": [
+            2,
+            0.8,
+            1
+          ],
+          "yaw": 0,
+          "material": "iron"
+        },
+        {
+          "id": "cab_wrench",
+          "model": "wrench",
+          "at": [
+            11.9,
+            1.4,
+            -1.13
+          ],
+          "size": [
+            0.12,
+            0.6,
+            0.08
+          ],
+          "yaw": 0,
+          "material": "iron",
+          "when": "always"
         }
       ],
       "spots": []
