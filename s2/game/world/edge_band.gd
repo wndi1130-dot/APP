@@ -492,12 +492,13 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 	root.name = "EdgeBand"
 	parent.add_child(root)
 	# Roads and rails run on out in their own colour (the rails' sleepers every other
-	# metre), a hair above the ground past the edge (fx/map_edge.gd).
+	# metre), a hair above the ground past the edge (fx/map_edge.gd). Roads end at their
+	# block; rails go on through the far ground into the fog, past the camera's reach.
 	var ground := SurfaceTool.new()
 	ground.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for run: Dictionary in p["runs"]:
 		var f := int(run["floor"])
-		var r := run_rect(g, run, BAND if f == F.RAIL else ROAD_RUN, 0.0)
+		var r := run_rect(g, run, FAR_REACH if f == F.RAIL else ROAD_RUN, 0.0)
 		var base: Color = colors[f]
 		for yy in range(floori(r.position.y), ceili(r.end.y)):
 			for xx in range(floori(r.position.x), ceili(r.end.x)):
