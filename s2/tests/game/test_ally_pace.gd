@@ -85,7 +85,8 @@ func test_the_player_is_not_slowed() -> void:
 	p.swing_t = 0.0
 	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.7, 0, 0))
 	_land(p, z)
-	assert_almost_eq(p.swing_t, _plain(p, "knife"), 0.005)
+	# No companion's rest, only its weapon's gap (decision 473 W1).
+	assert_almost_eq(p.swing_t, _plain(p, "knife") + W.melee_gap("knife"), 0.005)
 
 
 func test_a_companion_waits_when_it_takes_the_next_one() -> void:

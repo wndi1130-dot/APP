@@ -132,6 +132,10 @@ const RADIO_NEAR_M: float = 60.0
 const LAMP_OFF_SIGHT: float = 0.42     # how far the eye reaches at night with the lanterns out (0.55 with them; 0.3 was too blind, build 89)
 const NIGHT_AMBIENT_MIN: float = 0.2
 const LAMP_GAIN_DAY: float = 0.25       # how much of the lamp light shows on the ground by day
+## The low sun through the windows (decision 474 B8): gold at 14:50, deep orange
+## (about 22 degrees) by sunset. Never red: red is the colour of want (atmosphere 6).
+const WINDOW_GOLD := Color(1.0, 0.8, 0.52)
+const WINDOW_SUNSET := Color(1.0, 0.46, 0.14)
 const EXTRA_ITEMS: Dictionary = {
 	"info_telegraph": {"name": "전신 기록", "weight": 0.5, "stock": "info"},
 	"info_timetable": {"name": "시간표", "weight": 0.5, "stock": "info"},
@@ -178,6 +182,9 @@ var zombies: Zombies
 var camera: Camera3D
 var environment: Environment
 var sun: DirectionalLight3D
+## The light from the camera's side that keeps the walls turned from the sun out
+## of the black (Atmosphere.VIEW_FILL): no shadow, by day only.
+var view_fill: DirectionalLight3D
 var snow: GPUParticles3D
 ## Storm stop (weather_fx 14장, opts["storm"]: before, during, after): its look,
 ## the snow layers with their place relative to the view, and the screen layer
@@ -222,6 +229,10 @@ var crew: Array = []
 var raiders: Array = []
 var player: Person
 var paused: bool = false
+var resume_pending: bool = false
+var resume_wait_left: float = 0.0
+var resume_ready_at_ms: int = 0
+var resume_announce: bool = false
 var slow: float = 1.0                    # the body picture up: the field runs at this rate (body_injury 4.6)
 var hitstop: bool = false                # a blow's hold this frame (hit_feel.gd): the rules and pictures stand
 var away: bool = false             # the app pushed the field into a pause; say so once on return
@@ -335,6 +346,7 @@ var track_last: Dictionary = {}
 ## two real lights (the chief's lantern and the firebox).
 var lamp_key: String = "-"
 var lamp_fixed: Dictionary = {}
+var dusk_pools_on: bool = false   # the low sun lies on some floor through a window
 ## The light the last look found (cell index -> 0..255) and, per floor, the
 ## indoor cells a window lights (rebuilt when that floor's doors and windows
 ## change): what dark_at reads (decision 439 card 1).
@@ -379,8 +391,11 @@ func _ready() -> void:
 		process_mode = Node.PROCESS_MODE_DISABLED
 	rng.seed = int(opts.get("seed", Time.get_ticks_usec()))
 	clock.speed = float(opts.get("clock_speed", 1.0))
-	# The stop's arrival (decision 471 B0: the slice rolls it from the stop's seed).
-	clock.arrive_min = float(opts.get("arrive_min", FieldClock.ARRIVE_MIN))
+	# When the train came in (decision 471 B0): the stop's own, else the departure contract's, else 10:30.
+	var contract_min: float = float(FieldClock.ARRIVE_MIN)
+	if opts.get("departure") is Dictionary:
+		contract_min = float((opts["departure"] as Dictionary).get("arriveMin", contract_min))
+	clock.arrive_min = float(opts.get("arrive_min", contract_min))
 	# A storm stop plays by its stage's weather (clear, blizzard, clear) and
 	# looks like the stage; without one the stop is as before.
 	storm = StormLook.look(String(opts.get("storm", "")))
@@ -546,7 +561,9 @@ func _ready() -> void:
 	# Coming back to a stop left mid-play (S3 spec 4): only when the start hands a save over.
 	if opts.get("field_resume") is Dictionary:
 		FieldSave.apply(self, opts["field_resume"])
-		train_guard.resumed()
+		# A version-1 save kept no guard state: the brakes were heard before it was left.
+		if not FieldSave.exact(opts["field_resume"]):
+			train_guard.resumed()
 	elif data["anchors"].has("whistle") and bool(opts.get("arrival_horde", true)):
 		# The train has just stood: its brakes are heard as the clock starts,
 		# the scene of it rolling in or not (decision 416).
@@ -791,6 +808,8 @@ func _update_atmosphere() -> void:
 		sun.light_energy = maxf(float(fx_light["sun_energy"]), NIGHT_SUN_MIN * night)
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
 		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
+		_set_view_fill()
+		_update_window_light()
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
@@ -800,6 +819,28 @@ func _update_atmosphere() -> void:
 		_apply_grade(atmo["grade"])
 	if cold_frost != null and cold_frost.visible:
 		_fit_frost_strips(cold_frost, float(cold_frost.get_meta("amount", 0.0)))
+
+
+## The view fill follows the look; a storm stage keeps its own light (none).
+func _set_view_fill() -> void:
+	if view_fill == null:
+		return
+	view_fill.light_energy = float(fx_light.get("fill_energy", 0.0)) if storm.is_empty() else 0.0
+	view_fill.light_color = fx_light.get("fill_color", Color.WHITE)
+	view_fill.visible = view_fill.light_energy > 0.001
+
+
+## Low sun through the windows (decision 474 B8): from 14:50 the pools on the
+## floor warm from gold to deep orange and draw back to the sill, gone at
+## sunset. Clouds hold it back as they hold back the sun (Atmosphere sun_visible).
+func _update_window_light() -> void:
+	var z := sun.global_transform.basis.z
+	var sunny := 1.0 - smoothstep(0.55, 0.95, float(atmo["cloud"]))
+	var cells := LampLight.window_cells(grid, Vector2(z.x, z.z), clock.game_minutes(), sunny)
+	if cells.is_empty() and not dusk_pools_on:
+		return
+	dusk_pools_on = not cells.is_empty()
+	view.update_window_light(cells, WINDOW_GOLD.lerp(WINDOW_SUNSET, clock.dusk_share()))
 
 
 ## The look's colour grade on the WorldEnvironment: saturation and contrast, and
@@ -864,6 +905,13 @@ func _build_world() -> void:
 		_apply_grade(atmo["grade"])
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
+	view_fill = DirectionalLight3D.new()
+	view_fill.shadow_enabled = false
+	var back := cam_back()
+	var toward := Vector3(-back.x, 0.0, -back.z).normalized() + Vector3(0.0, -tan(deg_to_rad(Atmosphere.VIEW_FILL_TILT)), 0.0)
+	view_fill.transform = Transform3D(Basis.looking_at(toward, Vector3.UP), Vector3.ZERO)
+	add_child(view_fill)
+	_set_view_fill()
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
 	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
 	lantern.visible = false
@@ -1522,8 +1570,10 @@ func interrupt() -> void:
 	# The one save slot, before the app may be shut (S3 spec 4). Off until the train side reads it.
 	if bool(opts.get("field_save", false)):
 		FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
-	if ended or paused:
+	if ended:
 		return
+	if not away:
+		resume_announce = not paused
 	paused = true
 	away = true
 
@@ -1534,11 +1584,47 @@ func welcome_back() -> void:
 	if not away:
 		return
 	away = false
-	if hud != null and not ended:
-		hud.toast("멈춰 둔 자리다.")
+	if not ended:
+		if resume_announce and hud != null:
+			hud.toast("멈춰 둔 자리다.")
+		begin_resume()
+
+
+## One entry path for both an app interruption and a restored slot. This clock
+## is real foreground time, independent of the field clock's rate and pause.
+func begin_resume() -> void:
+	resume_pending = true
+	resume_wait_left = 1.0
+	paused = true
+	if hud != null:
+		hud.show_resume()
+	paused = true
+	# Arm on the first visible field frame, after restoration/building has finished.
+	resume_ready_at_ms = -1
+
+
+func continue_resume() -> bool:
+	if not resume_pending or resume_ready_at_ms < 0 or away:
+		return false
+	resume_wait_left = maxf(0.0, float(resume_ready_at_ms - Time.get_ticks_msec()) / 1000.0)
+	if resume_wait_left > 0.0:
+		return false
+	if hud != null:
+		hud.close_resume()
+	resume_pending = false
+	paused = false
+	return true
 
 
 func _process(delta: float) -> void:
+	if resume_pending:
+		if not away and resume_ready_at_ms >= 0:
+			resume_wait_left = maxf(0.0, float(resume_ready_at_ms - Time.get_ticks_msec()) / 1000.0)
+		if hud != null:
+			hud.tick_resume()
+		if not away and resume_ready_at_ms < 0:
+			resume_ready_at_ms = Time.get_ticks_msec() + 1000
+		return
 	delta = minf(delta, 0.1)
 	if arrive_t >= 0.0:
 		_arrive(delta)

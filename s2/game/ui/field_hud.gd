@@ -37,6 +37,7 @@ const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const Amputation = preload("res://game/sim/amputation.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
+const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
@@ -48,6 +49,13 @@ const HOLD_TIME: float = 0.35
 const DRAG_PX: float = 28.0
 const AIM_CANCEL_PX: float = 56.0   # drag the aim back onto yourself and let go: no shot
 const BODY_H: float = 1.7           # feet to head: a finger anywhere on the body picks it
+## How tall a box is drawn, for the finger (decision 476): a wardrobe, a cupboard or a
+## shelf (RoomFurnish.TALL_KINDS), other furniture that holds things (a counter, a
+## dresser, a chest), a crate standing on its own; and a thing lying on the ground.
+const BOX_TALL_H: float = 1.9
+const BOX_H: float = 0.9
+const BOX_LOOSE_H: float = 0.55
+const ITEM_H: float = 0.3
 const STICK_R: float = 72.0         # thumb travel to full push (the rim runs, if set)
 const STICK_DEAD: float = 10.0
 const AIM_SLIDE_PX: float = 70.0    # slide along the aim pad: next target
@@ -401,6 +409,8 @@ var rim_run: bool = false
 var stick_tap_ms: int = -10000
 var stick_tap_pos := Vector2(-999, -999)
 var pause_button: Button
+var resume_button: Button
+var resume_view_ready: bool = false
 var settings_button: Button          # shown while paused: opens the settings (stick, radio)
 var bag_box: HBoxContainer           # the bag key, right under the portrait
 var alarm_button: Button             # a found watch still set to ring: one press stops it (P19)
@@ -2466,6 +2476,8 @@ func _open_modal(width: float = 640.0, pauses: bool = true) -> VBoxContainer:
 
 
 func _close_modal() -> void:
+	if game.resume_pending:
+		return
 	# A thing still coming out goes on in the field (field_actions.gd take).
 	taking_box = ""
 	if modal != null:
@@ -2476,6 +2488,49 @@ func _close_modal() -> void:
 		game.slow = 1.0
 		modal_slows = false
 		modal_open = false
+
+
+func show_resume() -> void:
+	# Reuse the existing pause shade and button style, with only one action.
+	resume_view_ready = false
+	game.resume_pending = false
+	var box: VBoxContainer = _open_modal(320.0)
+	game.resume_pending = true
+	resume_button = _button("이어서", _continue_resume)
+	resume_button.disabled = true
+	box.add_child(resume_button)
+
+
+func tick_resume() -> void:
+	if not resume_view_ready:
+		# The paused field must already show the restored clock, wounds and orders.
+		# These are read-only UI updates; action/input/timer updates stay stopped.
+		_tick_clock()
+		_tick_portrait(game.player)
+		_tick_allies()
+		_tick_status(game.player)
+		_tick_grab(game.player, 0.0)
+		grab_button.text = "밀쳐!" if game.player.grab_front else "뒤에서! 밀쳐!"
+		if goal_label != null:
+			goal_label.text = UiFonts.keep_all(goal_shown())
+			var goal_parent: Control = goal_label.get_parent()
+			goal_parent.visible = goal_open and goal_label.text != ""
+			goal_key.visible = goal_label.text != ""
+			feel_label.text = UiFonts.keep_all(game.holdout.feel_line())
+			feel_label.visible = feel_label.text != "" and goal_parent.visible
+		resume_view_ready = true
+	if is_instance_valid(resume_button):
+		resume_button.disabled = game.resume_wait_left > 0.0 or game.away
+
+
+func _continue_resume() -> void:
+	game.continue_resume()
+
+
+func close_resume() -> void:
+	game.resume_pending = false
+	_close_modal()
+	resume_button = null
 
 
 ## The body picture (body_injury 4.6): six parts, the wounds of the part
@@ -3495,7 +3550,7 @@ func _swap() -> void:
 
 
 func _toggle_pause() -> void:
-	if modal_open:
+	if modal_open or game.resume_pending:
 		return
 	game.paused = not game.paused
 
@@ -4336,15 +4391,99 @@ func _pick_enemy(world: Vector3):
 ## on the ground, at its nearest between the feet and the head. The finger is on
 ## your floor; a body on another floor sits elsewhere on the screen. Read at the
 ## feet alone, a press on the chest landed 1.4 m off once the camera leaned to 35°.
-func _finger_off(world: Vector3, base: Vector3) -> float:
+## tall: how high the thing stands (a body by default).
+func _finger_off(world: Vector3, base: Vector3, tall: float = BODY_H) -> float:
 	var at: Vector3 = game.shift_to_height(world, base.y)
 	var rise: Vector3 = game.shift_to_height(world, base.y + 1.0) - at
 	var off := Vector2(at.x - base.x, at.z - base.z)
 	var step := Vector2(rise.x, rise.z)
 	var h := 0.0
 	if step.length_squared() > 0.000001:
-		h = clampf(-off.dot(step) / step.length_squared(), 0.0, BODY_H)
+		h = clampf(-off.dot(step) / step.length_squared(), 0.0, tall)
 	return (off + step * h).length()
+
+
+## Where the finger's line enters a box standing in base's cell, up to tall: the
+## highest point of the line inside it (the first it meets from the camera), or
+## -INF when the line passes by.
+func _enters_at(world: Vector3, base: Vector3, tall: float) -> float:
+	var at: Vector3 = game.shift_to_height(world, base.y)
+	var rise: Vector3 = game.shift_to_height(world, base.y + 1.0) - at
+	var lo := 0.0
+	var hi := tall
+	for axis in [0, 2]:
+		var o: float = at[axis] - base[axis]
+		var s: float = rise[axis]
+		if absf(s) < 0.000001:
+			if absf(o) > 0.5:
+				return -INF
+			continue
+		var a := (-0.5 - o) / s
+		var b := (0.5 - o) / s
+		lo = maxf(lo, minf(a, b))
+		hi = minf(hi, maxf(a, b))
+	return base.y + hi if lo <= hi else -INF
+
+
+func _box_h(c: Dictionary) -> float:
+	var kind := String(c.get("furniture", ""))
+	if kind == "":
+		return BOX_LOOSE_H
+	return BOX_TALL_H if RoomFurnish.TALL_KINDS.has(kind) else BOX_H
+
+
+## The box under the finger (decision 476), on the floor the finger is on: of the
+## boxes whose drawn furniture (its cell, up to _box_h) the finger's line passes
+## through, the one it meets first; else the one the line passes nearest, within
+## 1.0 m. Read at the floor alone, a press on a counter's top landed 1.3 m behind
+## it once the camera leaned to 35°, and the first box within reach won over the
+## nearest, so a row of counters opened the one next to the one pressed.
+func _pick_box(world: Vector3) -> String:
+	var first := ""
+	var first_y := -INF
+	var near := ""
+	var near_d := 1.0
+	for id in game.data["containers"]:
+		var c: Dictionary = game.data["containers"][id]
+		var at: Vector3 = game.lift(c["cell"], int(c.get("level", 0)))
+		if absf(at.y - world.y) > 0.1:
+			continue
+		var tall := _box_h(c)
+		var y := _enters_at(world, at, tall)
+		if y > first_y:
+			first_y = y
+			first = String(id)
+		var d := _finger_off(world, at, tall)
+		if d < near_d:
+			near_d = d
+			near = String(id)
+	return first if first != "" else near
+
+
+## The ally (or the ground thing) the finger's line passes nearest, within reach:
+## the same rule as the boxes, nearest and not first, a body read feet to head.
+func _pick_ally(world: Vector3):
+	var best = null
+	var best_d := 0.8
+	for row in ally_buttons:
+		var o = row["p"]
+		if o.is_alive():
+			var d := _finger_off(world, o.position)
+			if d < best_d:
+				best_d = d
+				best = o
+	return best
+
+
+func _pick_item(world: Vector3) -> int:
+	var best := -1
+	var best_d := 0.9
+	for i in range(game.ground_items.size()):
+		var d := _finger_off(world, game.ground_items[i]["pos"], ITEM_H)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
 
 
 func _tap(pos: Vector2) -> void:
@@ -4365,22 +4504,19 @@ func _tap(pos: Vector2) -> void:
 ## Doors, windows, containers, spots, lids, ground items and companions.
 func _tap_thing(p, world: Vector3) -> bool:
 	var cell := FieldGrid.cell_of(world)
-	for row in ally_buttons:
-		var o = row["p"]
-		if o.is_alive() and o.position.distance_to(world) < 0.8:
-			_ally_menu(o)
-			return true
-	for i in range(game.ground_items.size()):
-		var g: Dictionary = game.ground_items[i]
-		if world.distance_to(g["pos"]) < 0.9:
-			_go_and_do(p, "item", i, g["pos"])
-			return true
-	for id in game.data["containers"]:
-		var c: Dictionary = game.data["containers"][id]
-		var at: Vector3 = game.lift(c["cell"], int(c.get("level", 0)))
-		if at.distance_to(world) < 1.0:
-			_go_and_do(p, "container", id, at)
-			return true
+	var ally = _pick_ally(world)
+	if ally != null:
+		_ally_menu(ally)
+		return true
+	var item := _pick_item(world)
+	if item >= 0:
+		_go_and_do(p, "item", item, game.ground_items[item]["pos"])
+		return true
+	var box := _pick_box(world)
+	if box != "":
+		var c: Dictionary = game.data["containers"][box]
+		_go_and_do(p, "container", box, game.lift(c["cell"], int(c.get("level", 0))))
+		return true
 	# Stairs: a tap on them goes up (or down) them.
 	var lv: int = game.level_of(p.position)
 	for s in game.stairs:

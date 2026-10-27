@@ -4,6 +4,18 @@ extends RefCounted
 ## spare channel of the sight texture, so the number of lights costs nothing.
 ## Picture only: no game rule reads these cells.
 
+const FieldGrid = preload("res://game/world/field_grid.gd")
+const FieldClock = preload("res://game/sim/field_clock.gd")
+const BuildingRules = preload("res://game/sim/building_rules.gd")
+
+## Low sun through the windows (decision 474 B8): the pools come up over the
+## ten minutes before 14:50, then draw back toward the sill until sunset.
+const WINDOW_FROM_MIN := 880.0
+const WINDOW_REACH := Vector2(6.0, 1.5)   # cells into the room at 14:50, at sunset
+const WINDOW_FACING := 0.25   # how square to the sun a window must look to let it in
+const WINDOW_HALF_WIDTH := 0.6   # metres either side of the sun's line through the window
+const WINDOW_TEXELS := 4   # window light texels a cell side, so a slanting patch keeps its edges
+
 
 ## Is this light (a row of SulehufMap data["lights"]) on?
 static func is_on(light: Dictionary, game_minutes: float, tower_fire: bool, raiders_in: bool) -> bool:
@@ -71,3 +83,83 @@ static func on_key(lights: Array, game_minutes: float, tower_fire: bool, raiders
 		if is_on(l, game_minutes, tower_fire, raiders_in):
 			ids.append(String(l["id"]))
 	return ",".join(ids)
+
+
+## Strength and reach of the window pools at this hour: none before 14:40 and
+## from sunset, full at 14:50, then drawing in toward the sill.
+static func window_glow(game_minutes: float) -> Vector2:
+	var dusk := float(FieldClock.DUSK_MIN)
+	var sunset := float(FieldClock.SUNSET_MIN)
+	if game_minutes < WINDOW_FROM_MIN or game_minutes >= sunset:
+		return Vector2.ZERO
+	var k := clampf((game_minutes - dusk) / (sunset - dusk), 0.0, 1.0)
+	var rise := clampf((game_minutes - WINDOW_FROM_MIN) / (dusk - WINDOW_FROM_MIN), 0.0, 1.0)
+	return Vector2(rise * (1.0 - smoothstep(0.85, 1.0, k)), lerpf(WINDOW_REACH.x, WINDOW_REACH.y, k))
+
+
+## The floor the low sun reaches through the ground floor's windows: texel
+## index (WINDOW_TEXELS a cell side) -> byte. to_sun: the level way to the sun (x, z); sunny:
+## how much of it the clouds let through. Only windows that look out toward
+## the sun and are not shut by a curtain or planks; the pool stays on its own
+## room's floor (no walls, furniture or doors crossed, never out of doors).
+static func window_cells(grid: FieldGrid, to_sun: Vector2, game_minutes: float, sunny: float) -> Dictionary:
+	var cells: Dictionary = {}
+	var glow := window_glow(game_minutes)
+	if glow.x * sunny <= 0.0 or to_sun.length_squared() < 0.0001:
+		return cells
+	var sun := to_sun.normalized()
+	for c: Vector2i in grid.windows:
+		if grid.solid_at(c) != FieldGrid.Solid.WINDOW or BuildingRules.window_opaque(grid.windows[c]):
+			continue
+		var out := grid.outer_face(c)
+		if out < 0:
+			continue
+		var f := grid.faces(c)
+		if Vector2(f[out] - c).dot(sun) < WINDOW_FACING:
+			continue
+		_sun_patch(cells, grid.width, c, -sun, glow.x * sunny, glow.y, _room_floor(grid, f[1 - out], c, glow.y + 1.0))
+	return cells
+
+
+## One window's patch of sun: a strip about as wide as the window, thrown
+## across the floor away from the sun and fading only toward its far end, so
+## it reads as daylight and not as a lamp's round glow.
+static func _sun_patch(cells: Dictionary, width: int, window: Vector2i, into: Vector2, strength: float, reach: float, floor_cells: Dictionary) -> void:
+	var n := WINDOW_TEXELS
+	var from := Vector2(window) + Vector2(0.5, 0.5)
+	for i: int in floor_cells:
+		var c := Vector2i(i % width, i / width)
+		for sy in n:
+			for sx in n:
+				var o := Vector2(c) + Vector2((sx + 0.5) / n, (sy + 0.5) / n) - from
+				var along := o.dot(into)
+				var across := absf(o.cross(into))
+				if along <= 0.0 or along >= reach or across >= WINDOW_HALF_WIDTH:
+					continue
+				var v := strength * (1.0 - smoothstep(0.5 * reach, reach, along)) * (1.0 - smoothstep(0.35, WINDOW_HALF_WIDTH, across))
+				var b := int(round(clampf(v, 0.0, 1.0) * 255.0))
+				var t := (c.y * n + sy) * width * n + c.x * n + sx
+				if b > int(cells.get(t, 0)):
+					cells[t] = b
+
+
+## Open floor of the window's building within reach of it, walked from the
+## cell just inside.
+static func _room_floor(grid: FieldGrid, from: Vector2i, window: Vector2i, reach: float) -> Dictionary:
+	var b := grid.building_at(from)
+	var found: Dictionary = {}
+	var todo: Array[Vector2i] = [from]
+	while not todo.is_empty():
+		var c: Vector2i = todo.pop_back()
+		if not grid.inside(c) or grid.building_at(c) != b or Vector2(c - window).length() >= reach:
+			continue
+		var i := grid.index(c)
+		if found.has(i):
+			continue
+		var s := grid.solid_at(c)
+		if s != FieldGrid.Solid.NONE and s != FieldGrid.Solid.LOW:
+			continue
+		found[i] = true
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			todo.append(c + d)
+	return found

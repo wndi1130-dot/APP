@@ -9,17 +9,17 @@ const DATA: Dictionary = {
 	"knife": {
 		"name": "칼", "kind": "melee", "hands": 1, "weight": 1.0, "sound": 0,
 		"reach": 1.0, "swing": 0.45, "windup": 0.10, "head_base": 0.30, "head_kill": 0.85, "knockdown": 0.1,
-		"blade": true, "fatigue": 0.004, "wear": 0.01, "pry": false, "feet_from": 0.5,
+		"blade": true, "fatigue": 0.004, "wear": 0.01, "pry": false, "feet_from": 0.5, "gap": 0.15,
 	},
 	"crowbar": {
 		"name": "쇠지렛대", "kind": "melee", "hands": 1, "weight": 2.0, "sound": 0,
 		"reach": 1.15, "swing": 0.6, "windup": 0.18, "head_base": 0.28, "head_kill": 0.6, "knockdown": 0.5,
-		"blade": false, "fatigue": 0.006, "wear": 0.0014, "pry": true, "feet_from": 0.1,
+		"blade": false, "fatigue": 0.006, "wear": 0.0014, "pry": true, "feet_from": 0.1, "gap": 0.25,
 	},
 	"axe": {
 		"name": "손도끼", "kind": "melee", "hands": 1, "weight": 3.0, "sound": 0,
 		"reach": 1.6, "swing": 0.9, "windup": 0.30, "head_base": 0.32, "head_kill": 0.9, "knockdown": 0.6,
-		"blade": true, "fatigue": 0.012, "wear": 0.006, "pry": false, "feet_from": 0.1,
+		"blade": true, "fatigue": 0.012, "wear": 0.006, "pry": false, "feet_from": 0.1, "gap": 0.3,
 	},
 	"pistol": {
 		"name": "권총", "kind": "gun", "hands": 1, "weight": 2.0, "sound": 2,
@@ -76,17 +76,17 @@ const IMPROVISED: Dictionary = {
 	"frying_pan": {
 		"name": "프라이팬", "kind": "melee", "hands": 1, "weight": 1.5, "sound": 0,
 		"reach": 1.0, "swing": 0.6, "windup": 0.18, "head_base": 0.24, "head_kill": 0.45, "knockdown": 0.45,
-		"blade": false, "fatigue": 0.007, "wear": 0.05, "pry": false, "feet_from": 0.1, "breaks": true,
+		"blade": false, "fatigue": 0.007, "wear": 0.05, "pry": false, "feet_from": 0.1, "breaks": true, "gap": 0.2,
 	},
 	"broken_bottle": {
 		"name": "깨진 병", "kind": "melee", "hands": 1, "weight": 0.5, "sound": 0,
 		"reach": 0.8, "swing": 0.4, "windup": 0.08, "head_base": 0.25, "head_kill": 0.6, "knockdown": 0.05,
-		"blade": true, "fatigue": 0.004, "wear": 0.25, "pry": false, "feet_from": 0.5, "breaks": true,
+		"blade": true, "fatigue": 0.004, "wear": 0.25, "pry": false, "feet_from": 0.5, "breaks": true, "gap": 0.1,
 	},
 	"wood_stake": {
 		"name": "나무 말뚝", "kind": "melee", "hands": 1, "weight": 1.0, "sound": 0,
 		"reach": 1.1, "swing": 0.5, "windup": 0.12, "head_base": 0.28, "head_kill": 0.7, "knockdown": 0.15,
-		"blade": true, "fatigue": 0.005, "wear": 0.2, "pry": false, "feet_from": 0.5, "breaks": true,
+		"blade": true, "fatigue": 0.005, "wear": 0.2, "pry": false, "feet_from": 0.5, "breaks": true, "gap": 0.15,
 	},
 }
 
@@ -176,6 +176,17 @@ static func melee_windup(id: String) -> float:
 		return 0.0
 	var w: float = float(d.get("windup", 0.1 * float(d.get("weight", 1.0))))
 	return minf(w, float(d.get("swing", w)) * 0.5)
+
+
+## The player's wait after a melee blow lands before the next can start
+## (decision 473 W1): the reference game's delay between attacks, here by
+## the weapon's weight (knife 0.15, crowbar 0.25, hatchet 0.3 s). The blow's
+## timing is untouched (decision 411); companions rest by their own pace instead.
+static func melee_gap(id: String) -> float:
+	var d: Dictionary = get_data(id)
+	if d.get("kind", "") != "melee":
+		return 0.0
+	return float(d.get("gap", 0.0))
 
 
 ## Strength against the weight in the hand (decisions 2026-10-11 '근접 타수'):
