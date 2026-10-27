@@ -2287,8 +2287,9 @@ func _update_night(delta: float) -> void:
 
 
 ## The lanterns go out and on together, the chief's and everyone's (user 2026-10-10).
+## They start lit: a stop reached after dark asks before the people are made.
 func lamps_on() -> bool:
-	return player.lamp_on
+	return player == null or player.lamp_on
 
 
 func set_lamps(on: bool) -> void:
