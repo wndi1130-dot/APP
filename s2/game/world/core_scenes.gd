@@ -1,9 +1,10 @@
 extends RefCounted
 ## 코어 장면(결정 426 D②): 드문 재료 코어는 장소에 고정된 장면에서 얻는다. 화물역·공장·탄광 지도마다
 ## 기계 건물 하나에 멈춘 기계 하나를 둔다. 자리는 지도로 정해져 늘 같고(「그 장소에 가야 한다」),
-## 그 안에 코어가 남았는지는 판마다 굴린다. 보이는 코어는 정차를 넘는 덱(결정 474 S3, loot_dress.gd
-## DECKS core_scene)으로, 코어 장면이 있는 정차 20곳 중 정확히 3곳에 남는다(기대치 0.15 그대로, 운으로
-## 0개인 판이 없다). 덱 상태가 없으면 지금처럼 정차마다 0.15.
+## 그 안에 코어가 남았는지는 판마다 굴린다. 보이는 코어는 정차를 넘는 덱(결정 474 S3·442, loot_dress.gd
+## DECKS core_scene)으로, 코어 장면이 있는 정차 7곳 중 정확히 1곳에 남는다 — 한 판(24구간)에 장면 정차가
+## 평균 7.25곳이라, 코어를 하나도 못 보는 판이 32%에서 8.5%로 준다(s3-link 셈). 새 묶음의 첫 장은
+## 예전처럼 0.15로 굴려, 덱 상태 없이 굴리면 지금과 같다.
 ##
 ## 확률은 S1 장소 부산물(`s1/src/game/domestic/data.ts` BYPRODUCT core 0.15)이다. 탄광(들름)은 S1 표에
 ## 없지만 코디네이터 판단(10-25)으로 갱도 머리의 권양기에 같은 값을 쓴다. 기관 전문가의
@@ -71,14 +72,16 @@ static func apply(data: Dictionary, dice_seed: int, deck: Dictionary = {}) -> Di
 
 
 ## "core"(보이는 코어) / "hidden"(숨은 코어) / "bare"(뜯긴 기계). 같은 씨앗·같은 덱은 같은 결과.
-## 보이는 코어는 덱이 남긴 확률로, 숨은 코어는 보이는 코어가 안 나온 나머지에서 제 몫(정차마다
-## P_HIDDEN)이 나오게 같은 주사위를 다시 읽는다. 새 덱이면 지금과 같다(0.15 / 다음 0.15 / 나머지).
+## 보이는 코어는 덱이 남긴 확률로(새 묶음의 첫 장은 P_CORE), 숨은 코어는 보이는 코어가 안 나온
+## 나머지에서 제 몫(정차마다 P_HIDDEN)이 나오게 같은 주사위를 다시 읽는다. 덱 상태가 없으면 지금과
+## 같다(0.15 / 다음 0.15 / 나머지). 숨은 코어는 진행을 막지 않아(영수증 한 줄) 덱에 넣지 않는다.
 static func roll(dice_seed: int, deck: Dictionary = {}) -> String:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = dice_seed
 	var r := rng.randf()
-	var chance := LootDress._chance(LootDress._deck_row(deck, "core_scene"))
-	if LootDress._look(deck, "core_scene", r):
+	var chance := LootDress.deck_chance(deck, "core_scene", P_CORE)
+	LootDress.deck_count(deck, "core_scene", r < chance)
+	if r < chance:
 		return "core"
 	return "hidden" if (r - chance) / (1.0 - chance) < P_HIDDEN / (1.0 - P_CORE) else "bare"
 
