@@ -1179,8 +1179,12 @@ func _build_blocks() -> void:
 		var car: Dictionary = data["train_cars"][index]
 		var r: Rect2i = car["rect"]
 		box(tt, Vector3(r.size.x - 0.6, 3.0, 2.8), Vector3(r.position.x + r.size.x * 0.5, 1.5, train.position.y + 1.5), Color(0.3, 0.29, 0.28) if car["kind"] == "car" else Color(0.22, 0.22, 0.24))
-	# Doors where people step down, on each side of the train that has them.
-	for face in door_faces(data):
+	# Doors where people step down, on each side of the train that has them: the
+	# kit's door pieces on the coaches' sides, a box only where it has none.
+	var faces := door_faces(data)
+	var doors := TrainModels.attach_doors(train_node, faces, data)
+	for index: int in doors.get_meta("fallback_doors", []):
+		var face: Dictionary = faces[index]
 		box(tt, Vector3(1.0, 2.0, 0.1), Vector3(face["cell"].x + 0.5, 1.4, face["z"]), Color(0.42, 0.38, 0.33))
 	# A way over the train: a plank across the gap between two cars and rungs
 	# up to it on each side (over the roof if the way is not at a gap).
@@ -1201,7 +1205,10 @@ func _build_blocks() -> void:
 	train_node.mesh = tt.commit()
 	_build_lights()
 	await BuildPace.rest(pace)
-	for w in data["wagons"]:
+	# Wagons on the sidings: the kit's models, a box only where it has none.
+	var wagon_models := TrainModels.attach_wagons(level_roots[0], data["wagons"])
+	for index: int in wagon_models.get_meta("fallback_wagons", []):
+		var w: Dictionary = data["wagons"][index]
 		var r: Rect2i = w["rect"]
 		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
 		box(st, Vector3(r.size.x - 0.2, 1.9, r.size.y - 0.2), mid + Vector3(0, 0.95, 0), Color(0.33, 0.3, 0.28))
