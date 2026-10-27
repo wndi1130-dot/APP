@@ -10,6 +10,8 @@ const Travel = preload("res://game/train/turn/turn_travel.gd")
 const Field = preload("res://game/politics/field_return.gd")
 const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 const Ladder = preload("res://game/train/turn/turn_ladder.gd")
+const TrainResearch = preload("res://game/train/train_research.gd")
+const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 
 static func choice(id: String, label: String, effs: Array, special: String = "", witness: bool = false) -> Dictionary:
 	return {"id": id, "label": label, "effs": effs, "special": special, "witness": witness}
@@ -126,6 +128,10 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var hold_riot: Dictionary = choice("", "경비대를 푼다", [["fear", 8], ["trust", -5], ["rel", "tail", -5]], "riot_guard")
 			if refused != null: hold_riot["disabled"] = refused
 			return {"title": "난장판", "choices": [choice("", "들어준다", [["food", -10], ["coal", -6], ["tension", -10], ["rel", "tail", 4], ["rel", opp, -3]], "riot_yield"), hold_riot, choice("", "아무것도 안 한다", [], "ladder_ignore")]}
+		"dom:short":
+			# S1 domestic/cards.ts dom:short (its upkeep half, train_research.gd pay_upkeep raises it).
+			return {"title": "부품이 모자란다", "key": "dom:short", "choices": [choice("", "하나를 세운다", [], "dom_short_stand"),
+				choice("", "그냥 달린다", [], "dom_short_go"), choice("", "목표치 +3", [], "dom_short_target")]}
 		"rep_sick":
 			return {"title": "대표가 앓는다", "choices": [choice("", "약을 보낸다", [["med", -2], ["rel", comm, 3]], "rep_heal"), choice("", "측근을 만난다", [], "proxy_meet"), choice("", "그냥 둔다", [])] if s.get("sick") is Dictionary else [choice("", "알았다", [])]}
 	return {}
@@ -207,6 +213,8 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 		"cut_front_first": RationCut.apply(g, t, "front_first")
 		"cut_refuse": RationCut.apply(g, t, "refuse")
 		"proxy_meet": g["comms"][comm]["leader"]["traitShown"] = 2
+		"dom_short_stand": TrainResearch.stand_down(g)
+		"dom_short_target": TrainWorkshop.set_target(g, TrainWorkshop.target(g) + 3)
 		"ledger_refuse": Field._offend(g, comm)
 		"riot_guard":
 			Ladder.riot_end(g, t)
