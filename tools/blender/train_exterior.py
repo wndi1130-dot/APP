@@ -324,6 +324,31 @@ def windows_row(count, width, x_from=-6.1, x_to=6.1, ya=1.62, yb=2.32, inner="gl
     return out
 
 
+# 객차 유리창 줄(한쪽 면, 양옆 같음). 짓기(build_*)와 대응표 "windows"(필드 저녁 창빛 자리,
+# train_model_kit)가 이 표를 같이 읽어 창과 빛이 어긋나지 않는다. 커튼·판자 장식은 저마다의 줄을 쓴다.
+COACH_WINDOWS = {
+    "coach_worn": dict(count=8, width=0.9, x_from=-5.9, x_to=5.9),
+    "coach_clean": dict(count=9, width=0.95, x_from=-6.0, x_to=6.0, ya=1.6, yb=2.36),
+    "coach_chief": dict(count=5, width=1.45, x_from=-5.6, x_to=5.6, ya=1.6, yb=2.36, inner="glass_warm"),
+    "coach_medic": dict(count=7, width=1.0),
+}
+GLASS_Y = 1.62        # 온실칸 유리 띠 아래 끝(그 위 0.32 m는 안쪽 화분 잎 줄)
+GLASS_TOP = 2.48
+
+
+def window_lights(pid):
+    """대응표 "windows": 저녁에 빛이 드는 유리 자리 [x0, x1, y0, y1](한쪽 면, 모델 m).
+    온실칸은 긴 유리 띠 하나에서 화분 잎 줄 위만 밝힌다(잎 면과 겹치지 않게)."""
+    if pid == "coach_glass":
+        return [[round(-BODY_X + 0.35, 4), round(BODY_X - 0.35, 4), round(GLASS_Y + 0.34, 4), round(GLASS_TOP - 0.02, 4)]]
+    return [[round(w[0], 4), round(w[1], 4), w[2], w[3]] for w in windows_row(**COACH_WINDOWS[pid])]
+
+
+def write_windows(book):
+    for pid in list(COACH_WINDOWS) + ["coach_glass"]:
+        book["assets"][pid]["windows"] = window_lights(pid)
+
+
 # ---------------------------------------------------------------- 객차
 def coach(p, detail, body, body_low=None, roof_col="roof", wins=None, door_xs=(6.55, 7.25),
           extras=None, vents=(-4.5, -1.5, 1.5, 4.5), belt=None, door_col=None):
@@ -446,16 +471,16 @@ def medic_extras(p, detail):
 
 def glass_coach(p, detail):
     """온실칸: 나무 아래 판, 위는 유리 벽(세로 살), 지붕 가운데 유리 등."""
-    y_glass = 1.62
+    y_glass = GLASS_Y
     for zs in (1, -1):
-        holes = [[-BODY_X + 0.35, BODY_X - 0.35, y_glass, 2.48, "glass_green"]]
+        holes = [[-BODY_X + 0.35, BODY_X - 0.35, y_glass, GLASS_TOP, "glass_green"]]
         side_wall(p, zs, holes, "plank", detail=detail)
         if detail:
             z0, z1 = sorted((zs * (BODY_Z - 0.065), zs * (BODY_Z - 0.01)))
             n = 14
             for i in range(1, n):
                 x = -BODY_X + 0.35 + (2 * (BODY_X - 0.35)) * i / n
-                p.box((x - 0.03, x + 0.03), (y_glass, 2.48), (z0, z1), "plank_dark", skip=("-y", "+y"))
+                p.box((x - 0.03, x + 0.03), (y_glass, GLASS_TOP), (z0, z1), "plank_dark", skip=("-y", "+y"))
             # 안쪽 화분 줄(유리 아래쪽 어두운 잎)
             zi = zs * (BODY_Z - 0.055)
             for i in range(0, n, 2):
@@ -529,23 +554,23 @@ def freight(p, detail):
 
 def build_worn(p, d):
     coach(p, d, "green", body_low="green_dark", roof_col="roof",
-          wins=windows_row(8, 0.9, x_from=-5.9, x_to=5.9), extras=worn_extras, vents=(-4.6, -0.9, 1.6, 4.6), door_col="green_faded")
+          wins=windows_row(**COACH_WINDOWS["coach_worn"]), extras=worn_extras, vents=(-4.6, -0.9, 1.6, 4.6), door_col="green_faded")
 
 
 def build_clean(p, d):
     coach(p, d, "maroon", body_low="maroon_dark", roof_col="roof",
-          wins=windows_row(9, 0.95, x_from=-6.0, x_to=6.0, ya=1.6, yb=2.36), belt="cream", door_col="maroon_dark")
+          wins=windows_row(**COACH_WINDOWS["coach_clean"]), belt="cream", door_col="maroon_dark")
 
 
 def build_chief(p, d):
     coach(p, d, "blue", body_low="blue_dark", roof_col="roof_dark",
-          wins=windows_row(5, 1.45, x_from=-5.6, x_to=5.6, ya=1.6, yb=2.36, inner="glass_warm"), belt="brass",
+          wins=windows_row(**COACH_WINDOWS["coach_chief"]), belt="brass",
           extras=chief_extras, vents=(-3.0, 0.0, 3.0), door_col="blue_dark")
 
 
 def build_medic(p, d):
     coach(p, d, "cream", body_low="grey", roof_col="roof",
-          wins=windows_row(7, 1.0), extras=medic_extras, vents=(-4.5, -2.0, 2.0, 4.5), door_col="grey")
+          wins=windows_row(**COACH_WINDOWS["coach_medic"]), extras=medic_extras, vents=(-4.5, -2.0, 2.0, 4.5), door_col="grey")
 
 
 # ---------------------------------------------------------------- 옆 선로 화차·타는 문(대각뷰, 결정 476)
@@ -819,6 +844,7 @@ def update_catalog(repo, rows):
         if r["id"] == "coach_medic":
             # 지붕 부품(연통) 자리: 새 지붕 꼭대기
             a["attachment_sites"]["roof_clear"]["position"] = [0, PEAK_Y, 0]
+    write_windows(book)
     path.write_text(json.dumps(book, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -827,9 +853,14 @@ def main():
     parser.add_argument("--repo", required=True)
     parser.add_argument("--preview", action="store_true")
     parser.add_argument("--out", default="")
+    parser.add_argument("--windows-only", action="store_true", help="굽지 않고 대응표의 창 자리만 다시 쓴다")
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
     repo = Path(args.repo).resolve()
     out_dir = repo / "s2/models/train_exterior"
+    if args.windows_only:
+        update_catalog(repo, [])
+        print("TRAIN_EXTERIOR windows written", flush=True)
+        return
     if args.preview:
         preview(out_dir, Path(args.out) if args.out else repo / "s2/.godot/train_exterior_work")
         return

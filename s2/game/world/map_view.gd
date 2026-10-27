@@ -62,6 +62,8 @@ var light_mats: Dictionary = {}      # light kind -> StandardMaterial3D
 var wall_nodes: Dictionary = {}   # Vector2i(building id, level) -> MeshInstance3D
 var buildings: Node3D             # the building kit (building_view.gd); null draws grey boxes
 var train_node: MeshInstance3D    # the train, its doors and the way over it
+var train_models: Node3D          # the train kit (train_model_kit.gd): the cars' models and their lit windows
+var car_windows_lit := false
 var cut_building: int = -2
 var cut_level: int = 0
 var levels: Dictionary = {}       # level -> FieldGrid
@@ -457,7 +459,13 @@ func update_window_light(texels: Dictionary, color: Color) -> void:
 
 ## The glowing faces themselves (car windows, the firebox door, the gap in the
 ## hideout boards): lit ones show amber, unlit car windows stay as dark glass.
+## The model coaches light their own panes (the train kit); a car window face is
+## left only on a car the kit could not draw.
 func set_light_on(kind: String, on: bool) -> void:
+	if kind == "car_window":
+		car_windows_lit = on
+		if train_models != null:
+			train_models.set_windows_lit(on)
 	if not light_nodes.has(kind):
 		return
 	if kind == "car_window":
@@ -467,10 +475,10 @@ func set_light_on(kind: String, on: bool) -> void:
 
 
 func light_is_on(kind: String) -> bool:
+	if kind == "car_window":
+		return car_windows_lit
 	if not light_nodes.has(kind):
 		return false
-	if kind == "car_window":
-		return light_mats[kind].albedo_color == FxState.LAMP
 	return light_nodes[kind].visible
 
 
@@ -1179,6 +1187,8 @@ func _build_blocks() -> void:
 	train_node = _mesh_node()
 	# 모델을 먼저 붙이고, 모델로 바꾸지 못했다고 돌려받은 칸만 상자로 그린다.
 	var models := TrainModels.attach_field(train_node, data)
+	train_models = models
+	models.set_windows_lit(car_windows_lit)
 	await BuildPace.rest(pace)
 	for index: int in models.get_meta("fallback_cars", []):
 		var car: Dictionary = data["train_cars"][index]
@@ -1692,6 +1702,9 @@ func _build_lights() -> void:
 	for l in data["lights"]:
 		var kind := String(l["kind"])
 		if not LIGHT_FACES.has(kind):
+			continue
+		# A model coach lights its own panes where its glass is (the train kit).
+		if kind == "car_window" and train_models != null and train_models.lights_window_at(l["cell"]):
 			continue
 		if not tools.has(kind):
 			tools[kind] = _begin()

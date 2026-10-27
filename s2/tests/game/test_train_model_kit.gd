@@ -4,6 +4,7 @@ const Kit = preload("res://game/world/train_model_kit.gd")
 const FieldMap = preload("res://game/world/sulehuf_map.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const FieldGame = preload("res://game/field_game.gd")
+const FxState = preload("res://fx/fx_state.gd")
 ## 지금 대응표에서 모델로 바뀌어야 하는 종류. 대응표의 나머지 종류는 모두 상자로 떨어져야 한다.
 ## 객차 넷이 맑은 유리창으로 다시 들어와(결정 407 G3) 지금은 모든 종류가 모델이다. 상자로 떨어지는 갈래는
 ## 보류·누락·못 읽는 대응표 시험이 본다.
@@ -230,12 +231,59 @@ func test_repeated_models_are_batched_and_far_lod_has_no_shadow() -> void:
 	var data := {"train": Rect2i(0, 0, 32, 3), "train_cars": [{"rect": Rect2i(0, 0, 16, 3), "kind": "medtech"}, {"rect": Rect2i(16, 0, 16, 3), "kind": "medtech"}]}
 	var root := Kit.attach_field(parent, data)
 	assert_eq(root.get_meta("model_count"), 2)
-	assert_eq(root.get_child_count(), 4, "body and flue, two LODs, one 32m batch")
+	assert_eq(root.get_child_count(), 6, "body and flue, two LODs, one 32m batch; the window glow, two LODs")
+	var panes: int = (Kit.catalog()["assets"]["coach_medic"]["windows"] as Array).size() * 2 * 2
 	for node in root.get_children():
-		assert_eq(node.multimesh.instance_count, 2)
+		assert_eq(node.multimesh.instance_count, panes if node in root._glow_nodes else 2)
 		if node.visibility_range_begin > 0:
 			assert_eq(node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 			assert_eq(node.visibility_range_end, 120.0)
+
+
+func test_coach_windows_glow_on_their_glass_and_only_when_lit() -> void:
+	# 낡은 객차(창 여덟), 온실칸(긴 유리 띠 하나), 덮개 화차(창 없음): 창빛은 객차 둘의 유리 자리에만.
+	var data := {"train": Rect2i(0, 1, 48, 3), "train_cars": [{"rect": Rect2i(0, 1, 16, 3), "kind": "car"},
+		{"rect": Rect2i(16, 1, 16, 3), "kind": "greenhouse"}, {"rect": Rect2i(32, 1, 16, 3), "kind": "freight"}]}
+	var root := Kit.attach_field(autofree(Node3D.new()), data)
+	var book: Dictionary = Kit.catalog()["assets"]
+	var worn: Array = book["coach_worn"]["windows"]
+	var k := (16.0 - Kit.FIELD_GAP_M) / float(book["coach_worn"]["dimensions_m"][0])
+	assert_eq(root._glow_nodes.size(), 2, "one 32m batch, two LODs")
+	for node: MultiMeshInstance3D in root._glow_nodes:
+		assert_false(node.visible, "dark until the map says dusk")
+		assert_eq(node.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		assert_true(node.multimesh.use_colors)
+		assert_eq(node.multimesh.instance_count, (worn.size() + 1) * 2, "every pane on both sides")
+	# 머리 없는 시험에서는 MultiMesh가 값을 돌려주지 않아 키트의 배치 목록을 읽는다.
+	for lod in 2:
+		var row: Dictionary = root._batches["window_glow:%d:0" % lod]
+		var levels: Dictionary = {}
+		for i in row["transforms"].size():
+			var placed: Transform3D = row["transforms"][i]
+			var colour: Color = row["colors"][i]
+			var level: float = colour.r / FxState.LAMP.r
+			if placed.origin.x < 16.0:
+				levels[snappedf(level, 0.001)] = true
+				assert_between(level, Kit.WINDOW_GLOW_LOW - 0.001, Kit.WINDOW_GLOW_HIGH + 0.001)
+			else:
+				assert_between(level, Kit.WINDOW_GLOW_LOW * 0.6 - 0.001, Kit.WINDOW_GLOW_HIGH * 0.6 + 0.001, "the greenhouse band is dimmer")
+		assert_gt(levels.size(), 3, "windows differ in brightness")
+	# 가까운 판은 창 가운데, 유리(벽 안 6 cm)와 커튼·판자(벽 안 5 cm부터) 사이에 창 크기로.
+	var first: Transform3D = root._batches["window_glow:0:0"]["transforms"][0]
+	var pane: Array = worn[0]
+	assert_almost_eq(first.origin.x, 8.0 + (float(pane[0]) + float(pane[1])) * 0.5 * k, 0.001)
+	assert_almost_eq(first.origin.y, (float(pane[2]) + float(pane[3])) * 0.5 * k, 0.001)
+	assert_between(absf(first.origin.z - 2.5) / k, Kit.DOOR_WALL_Z - 0.06 + 0.001, Kit.DOOR_WALL_Z - 0.05 - 0.001)
+	assert_almost_eq(first.basis.x.length(), (float(pane[1]) - float(pane[0])) * k, 0.001)
+	root.set_windows_lit(true)
+	for node: MultiMeshInstance3D in root._glow_nodes:
+		assert_true(node.visible)
+	# 지도의 빛 자리: 객차 둘의 옆 줄과 바로 바깥 줄만(지도마다 둘 중 하나에 놓는다).
+	assert_true(root.lights_window_at(Vector2i(3, 3)))
+	assert_true(root.lights_window_at(Vector2i(3, 4)))
+	assert_true(root.lights_window_at(Vector2i(20, 0)))
+	assert_false(root.lights_window_at(Vector2i(3, 5)))
+	assert_false(root.lights_window_at(Vector2i(35, 4)), "the freight car has no windows")
 
 
 func test_field_uses_models_only_for_ready_kinds_and_rolls_with_train_parent() -> void:

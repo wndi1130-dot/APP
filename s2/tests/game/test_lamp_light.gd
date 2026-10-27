@@ -6,6 +6,7 @@ const LampLight = preload("res://game/sim/lamp_light.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FxState = preload("res://fx/fx_state.gd")
+const TrainModels = preload("res://game/world/train_model_kit.gd")
 
 const DUSK_ELAPSED := (960.0 - 630.0) * 60.0 / 15.0   # 16:00, after sunset
 
@@ -152,6 +153,25 @@ func test_the_mask_carries_the_lamp_channel_and_real_lights_stay_at_two() -> voi
 			omni += 1
 			assert_false(child.shadow_enabled)
 	assert_eq(omni, 2, "the chief's lantern and the firebox")
+	# The model coaches light their own panes (both sides, every pane of glass,
+	# unshaded too): no box face is left on them.
+	assert_false(game.view.light_nodes.has("car_window"))
+	var panes := 0
+	for node: MultiMeshInstance3D in game.view.train_models._glow_nodes:
+		assert_true(node.visible)
+		if node.visibility_range_begin == 0.0:
+			panes += node.multimesh.instance_count
+	assert_eq(panes, 4 * 8 * 2, "four coaches, eight panes a side")
+
+
+func test_without_train_models_the_car_windows_are_box_faces() -> void:
+	var was: bool = ProjectSettings.get_setting(TrainModels.MODE_SETTING, true)
+	ProjectSettings.set_setting(TrainModels.MODE_SETTING, false)
+	var game = _stop()
+	ProjectSettings.set_setting(TrainModels.MODE_SETTING, was)
+	game.clock.elapsed = DUSK_ELAPSED
+	game._refresh_vision()
+	assert_true(game.view.light_is_on("car_window"))
 	# 16 windows, each a five-faced box.
 	assert_eq(game.view.light_nodes["car_window"].mesh.get_faces().size(), 16 * 10 * 3)
 
