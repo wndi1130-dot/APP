@@ -226,11 +226,13 @@ const BOTTLE_CHANCE: float = 0.40       # one broken bottle in a washroom, a bed
 ## train by s3-link): [n, share] — of every n looks, n × share come up. A look is a
 ## building of a promise's kinds (food_shop, pharmacy: it comes up when it holds the
 ## family after it is seen, as it was or moved in), a stop with a garage
-## (garage_fuel), or a stop (pan, bottle). The state handed in and out is
-## {id: {n, k, seen, hit}}; one of another n or k starts a new batch.
+## (garage_fuel), a stop with a stopped machine in it (core_scene: a core left
+## in it, core_scenes.gd P_CORE, decision 474 S3), or a stop (pan, bottle). The state
+## handed in and out is {id: {n, k, seen, hit}}; one of another n or k starts a new batch.
 const DECKS: Dictionary = {
 	"food_shop": [10, 0.7], "pharmacy": [10, 0.7],
 	"garage_fuel": [10, FUEL_CHANCE], "pan": [10, PAN_CHANCE], "bottle": [10, BOTTLE_CHANCE],
+	"core_scene": [20, 0.15],
 }
 ## Things lying under the snow out of doors, shown only to one close by
 ## (field_game.glint_reach): how many a stop, and what they are.
