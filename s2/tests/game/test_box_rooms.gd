@@ -1,6 +1,6 @@
 extends "res://addons/gut/test.gd"
 ## Boxes carry the key of the room they stand in (loot_dress.gd room_of reads it before the
-## name), and a kitchen's spare counters, cupboards and fridge get an empty box each.
+## name), and a home room's spare furniture that opens gets an empty box each (card R2).
 
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -47,7 +47,7 @@ func test_kitchens_get_empty_boxes_in_spare_furniture_and_keys_stand() -> void:
 			continue
 		added += 1
 		assert_eq(c["room"], "kitchen", id)
-		assert_true(Furnish.KITCHEN_SPARE.has(String(c["furniture"])), id)
+		assert_true(Furnish.SPARE["kitchen"].has(String(c["furniture"])), id)
 		assert_eq((c["items"] as Array).size(), 0, id + " starts empty")
 		assert_eq(float(c["search"]), Furnish.KITCHEN_SEARCH, id + " is quick to open")
 		var front := false
@@ -62,6 +62,37 @@ func test_kitchens_get_empty_boxes_in_spare_furniture_and_keys_stand() -> void:
 	var before: Dictionary = data["containers"].duplicate(true)
 	Furnish.boxes_into_furniture(data)
 	assert_eq(data["containers"], before)
+
+
+## Card R2: the bathroom's cabinet, the bedroom's nightstand and the living room's bookcase open
+## too, one box to a piece and to a cell (no two boxes under one finger), empty, by the room's key.
+func test_home_rooms_get_empty_boxes_one_to_a_cell() -> void:
+	var data := FieldMaps.build("houses_01")
+	var at: Dictionary = {}  # Vector3i(x, y, level) -> boxes
+	for id: String in data["containers"]:
+		var c: Dictionary = data["containers"][id]
+		var key := Vector3i(c["cell"].x, c["cell"].y, int(c.get("level", 0)))
+		at[key] = int(at.get(key, 0)) + 1
+		# A box in a piece never names another room (the bag's tab shows the name).
+		var says := LootDress.room_of_name(String(c.get("name", "")))
+		var room := String(LootDress.FURNITURE_ROOM.get(String(c.get("furniture", "")), ""))
+		var own := String(Furnish.KIND_LABEL.get(String(c.get("furniture", "")), ""))
+		assert_true(room.is_empty() or says == "storage" or says == room or c.get("name") == own, "%s %s in %s" % [id, c.get("name", ""), c.get("furniture", "")])
+	var spare := 0
+	var rooms: Dictionary = {}
+	for id: String in data["containers"]:
+		var c: Dictionary = data["containers"][id]
+		if not id.begins_with("spare_") and not id.begins_with("kitchen_"):
+			continue
+		assert_eq(int(at[Vector3i(c["cell"].x, c["cell"].y, int(c.get("level", 0)))]), 1, id + " has a cell of its own")
+		if not id.begins_with("spare_"):
+			continue
+		spare += 1
+		rooms[String(c["room"])] = true
+		assert_true(Furnish.SPARE[String(c["room"])].has(String(c["furniture"])), id)
+		assert_eq((c["items"] as Array).size(), 0, id + " starts empty")
+	assert_eq(spare, int(data["box_rooms"]["spare_added"]))
+	assert_true(rooms.has("bathroom") and rooms.has("bedroom"), str(rooms.keys()))
 
 
 ## Every kitchen room that got an added box has at most `most` boxes in it.
