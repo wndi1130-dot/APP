@@ -13,7 +13,11 @@ extends Control
 ## tension glows from coal to fire along the gauge's width and the glass over
 ## it cracks once more past 30, 50 and 70. 주의 · 위험 (토큰 2차 「상태」): tension
 ## above 50 · 70, trust below 45 · 30, with a lamp tag by the number.
-## The mockup's outside thermometer waits for the train to have weather.
+## After tension the outside thermometer (시안 2차 ② .otemp) reads the train's
+## climate (train_climate.gd outside_view): the stage's name and the shown
+## temperature, a column in a glass tube with a tick at each stage, frost on the
+## glass as the stages get colder, a snow mark while the track is frozen. A
+## board with climate off has none.
 ##
 ## While a sheet is up only what it is about stays lit (`focus`); the rest
 ## fades to a third and loses most of its colour (.hud--top .is-dim).
@@ -29,6 +33,7 @@ const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 const EDGE_TOP := preload("res://game/ui/tex/edge_top.png")
 
 ## The band (48) and how far its soot smokes down (92), in game px.
@@ -73,6 +78,33 @@ const CK_Y: float = 40.0
 const CK_TH: Array = [30, 50, 70]
 const CK_SET: Array = [[[-128, 12, 1]], [[-60, 17, 1], [24, 6, 0]], [[-100, 25, 2], [-166, 22, 1], [148, 9, 0]]]
 
+## The outside thermometer's colours a stage, warmest first (.otemp data-st):
+## the column's foot and head, the number. S1 has six stages to the mockup's
+## five; 첫 추위 sits halfway between 늦가을 (the mockup's 풀림) and 추위.
+const OT_COLS: Array = [
+	[Color("a39478"), Color("d4c9b0"), INK],
+	[Color("999890"), Color("cbcac2"), INK],
+	[Color("8e9ca8"), Color("c2ccd4"), INK],
+	[Color("7f9bb2"), Color("c6d8e5"), Color("dde6ec")],
+	[Color("6f98bb"), Color("d3e5f1"), Color("d2e5f2")],
+	[Color("8dbfe2"), Color("eef7fc"), Color("eaf6fd")],
+]
+## How thick the frost on the glass lies a stage (.otemp__fr opacity).
+const OT_FROST: Array = [0.0, 0.06, 0.12, 0.26, 0.5, 0.78]
+## Where the column's head stands at the warmest and the coldest stage's
+## temperature (share of the tube; otH's 90 and 29), and how far it may go.
+const OT_TOP: float = 0.9
+const OT_LOW: float = 0.29
+const OT_CLAMP: Vector2 = Vector2(0.18, 0.96)
+const OT_GLASS := Color(5 / 255.0, 8 / 255.0, 11 / 255.0, 0.82)
+const OT_RIM := Color(208 / 255.0, 218 / 255.0, 226 / 255.0, 0.34)
+const OT_TICK := Color(214 / 255.0, 224 / 255.0, 232 / 255.0, 0.62)
+const OT_FERN := Color(232 / 255.0, 242 / 255.0, 248 / 255.0)
+const OT_COLD_WORD := Color("b9cfdf")
+const OT_FREEZE := Color("c2ccd4")
+const OT_FROST_INK := Color("1f2b36")
+const OT_FROZEN_GLOW := Color(190 / 255.0, 228 / 255.0, 250 / 255.0, 0.65)
+
 var g: Dictionary = {}
 var t: Dictionary = {}
 ## What stays lit while a sheet is up ("trust", "tension", "mood", "coal" …); empty: all.
@@ -100,7 +132,17 @@ static func model(g0: Dictionary, t0: Dictionary) -> Dictionary:
 		stocks.append(entry)
 	var trust: int = int(round(float(g0.get("trust", 0))))
 	var tension: int = int(round(float(g0.get("tension", 0))))
+	var outside: Variant = TrainClimate.outside_view(g0, t0)
+	if outside is Dictionary:
+		var temps: Array = t0["CL"]["temp"]
+		outside["text"] = deg(float(outside["temp"]))
+		outside["fill"] = ot_fill(temps, float(outside["temp"]))
+		var ticks: Array = []
+		for x: Variant in temps:
+			ticks.append(ot_fill(temps, float(x)))
+		outside["ticks"] = ticks
 	return {
+		"outside": outside,
 		"trust": trust,
 		"tension": tension,
 		"trust_level": level("trust", trust),
@@ -123,6 +165,19 @@ static func level(key: String, v: int) -> int:
 ## 8.5 → "8.5", 10.0 → "10".
 static func _num(x: float) -> String:
 	return str(int(x)) if is_equal_approx(x, round(x)) else "%.1f" % x
+
+
+## A temperature as the thermometer writes it: −3°, 5° (tfmt).
+static func deg(x: float) -> String:
+	return ("−" if x < 0.0 else "") + _num(absf(x)) + "°"
+
+
+## Where the column's head stands in the tube for `temp` (0–1): the warmest
+## stage's temperature at OT_TOP, the coldest's at OT_LOW, a line between.
+static func ot_fill(temps: Array, temp: float) -> float:
+	var hi: float = float(temps[0])
+	var lo: float = float(temps[temps.size() - 1])
+	return clampf(OT_TOP - (hi - temp) * (OT_TOP - OT_LOW) / maxf(hi - lo, 1.0), OT_CLAMP.x, OT_CLAMP.y)
 
 
 func _ready() -> void:
@@ -162,6 +217,8 @@ func refresh(g0: Dictionary, t0: Dictionary) -> void:
 		return
 	_parts.add_child(_meter("trust", "신임", int(m["trust"]), int(m["trust_level"])))
 	_parts.add_child(_meter("tension", "긴장", int(m["tension"]), int(m["tension_level"])))
+	if m["outside"] is Dictionary:
+		_parts.add_child(_outside(m["outside"]))
 	_parts.add_child(_standing(int(m["unrest"]), int(m["neutral"]), int(m["support"])))
 	var right := HBoxContainer.new()
 	right.name = "Stocks"
@@ -188,20 +245,24 @@ static func tone(c: Color, dim: bool) -> Color:
 	return GlassParts.tone(c, dim)
 
 
-## The mockup's places: .hud__l at 12 with 10 between, the mood centred 8 left
-## of the middle, .hud__r ending 12 from the right.
+## The mockup's places: .hud__l at 12 with 10 between (trust, tension, the
+## thermometer), the mood centred 8 left of the middle, .hud__r ending 12 from
+## the right.
 func _lay_out() -> void:
 	if _parts == null:
 		return
 	var k: float = UiFonts.K
 	var trust: Control = _parts.get_node_or_null("MeterTrust")
 	var tension: Control = _parts.get_node_or_null("MeterTension")
+	var outside: Control = _parts.get_node_or_null("Outside")
 	var mood: Control = _parts.get_node_or_null("Standing")
 	var right: Control = _parts.get_node_or_null("Stocks")
 	if trust:
 		trust.position = Vector2(12.0 * k, 0)
 	if tension:
 		tension.position = Vector2((12.0 + 104.0 + 10.0) * k, 0)
+	if outside:
+		outside.position = Vector2((12.0 + 104.0 + 10.0 + 104.0 + 10.0) * k, 0)
 	if mood:
 		mood.position = Vector2(size.x * 0.5 - 8.0 * k - mood.size.x * 0.5, 1.0 * k)
 	if right:
@@ -566,6 +627,128 @@ func _medal(icon: String, color: Color, at_css: Vector2, dim: bool) -> Control:
 	var m: Control = GlassParts.medal(icon, color, 44.0, 38.0, 22.0, dim)
 	m.position = at_css * UiFonts.K
 	return m
+
+
+## The outside thermometer (.otemp, 48 high): the glass at the left (a tube
+## 10 × 32 from 5 down with its bulb, frost round it on a 28 × 50 board), the
+## temperature on a baseline at 25 and the stage's name at 40 from 23 in, a
+## snow mark on the bulb, glowing cold, while the track is frozen. It only shows.
+func _outside(o: Dictionary) -> Control:
+	var dim: bool = _dim("outside")
+	var k: float = UiFonts.K
+	var st: int = clampi(int(o["stage"]), 0, OT_COLS.size() - 1)
+	var c := Control.new()
+	c.name = "Outside"
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.tooltip_text = "바깥 기온"
+	var glass := Control.new()
+	glass.name = "Glass"
+	glass.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glass.position = Vector2(-4.0, 0.0) * k
+	glass.size = Vector2(28.0, 50.0) * k
+	glass.draw.connect(_draw_outside.bind(glass, o, st, dim))
+	c.add_child(glass)
+	var num := _label(String(o["text"]), UiFonts.NUMBER, 500, 22.0, tone(OT_COLS[st][2], dim), 0.33)
+	num.name = "Temp"
+	c.add_child(num)
+	_sit(num, 23.0, 25.0)
+	var word := _label(String(o["name"]), UiFonts.WORD, 400, 12.0, tone(OT_COLD_WORD if st >= 4 else INK2, dim), 0.96)
+	word.name = "Stage"
+	c.add_child(word)
+	_sit(word, 23.0, 40.0)
+	if bool(o["freezing"]):
+		# On the bulb, so a long stage name with it still clears the mood.
+		var mark := TextureRect.new()
+		mark.name = "Frozen"
+		var px: int = int(round(11.0 * k))
+		mark.texture = HudIcons.texture("snow", px, tone(OT_FROST_INK, dim), 2.2, tone(OT_FREEZE, dim))
+		mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mark.size = Vector2(px, px)
+		mark.position = Vector2(10.0 - 5.5, 37.0 - 5.5) * k
+		mark.tooltip_text = "선로 결빙"
+		c.add_child(mark)
+	c.custom_minimum_size = Vector2(maxf(23.0 + maxf(_text_w(num), _text_w(word)) + 2.0, 58.0), 48.0) * k
+	c.size = c.custom_minimum_size
+	return c
+
+
+func _draw_outside(ci: Control, o: Dictionary, st: int, dim: bool) -> void:
+	var k: float = UiFonts.K
+	var cols: Array = OT_COLS[st]
+	var foot: Color = tone(cols[0], dim)
+	var head: Color = tone(cols[1], dim)
+	var tube := Rect2(9.0 * k, 5.0 * k, 10.0 * k, 32.0 * k)
+	# The glass: dark, lit down its left and shaded down its right, a rim.
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = tone(OT_GLASS, dim)
+	sb.corner_radius_top_left = int(round(5.0 * k))
+	sb.corner_radius_top_right = int(round(5.0 * k))
+	sb.corner_radius_bottom_left = int(round(3.0 * k))
+	sb.corner_radius_bottom_right = int(round(3.0 * k))
+	sb.corner_detail = 8
+	sb.anti_aliasing_size = 0.7
+	sb.set_border_width_all(int(round(1.5 * k)))
+	sb.border_color = tone(OT_RIM, dim)
+	ci.draw_style_box(sb, tube)
+	GlassParts.grad_rect(ci, tube.grow(-1.5 * k), 3.0 * k, [[0.0, tone(Color(1, 1, 1, 0.08), dim)], [0.45, Color(1, 1, 1, 0)], [1.0, tone(Color(0, 0, 0, 0.28), dim)]])
+	# The column, foot to head, round at the top.
+	var h: float = tube.size.y * float(o["fill"])
+	var r: float = 2.5 * k
+	var col := Rect2(tube.position.x + 2.5 * k, tube.end.y - h, 5.0 * k, h)
+	ci.draw_polygon(PackedVector2Array([Vector2(col.position.x, col.position.y + r), Vector2(col.end.x, col.position.y + r), col.end, Vector2(col.position.x, col.end.y)]),
+		PackedColorArray([head, head, foot, foot]))
+	ci.draw_circle(Vector2(col.get_center().x, col.position.y + r), r, head, true, -1.0, true)
+	# The bulb over the column's foot: a drop shade, the rim, its colour lit up and left.
+	var bulb := Vector2(14.0 * k, 37.0 * k)
+	if bool(o["freezing"]):
+		GlassParts.glow_ring(ci, bulb, 8.5 * k, 6.0 * k, tone(OT_FROZEN_GLOW, dim))
+	ci.draw_circle(bulb + Vector2(0.0, 1.0) * k, 8.5 * k, tone(Color(0, 0, 0, 0.35), dim), true, -1.0, true)
+	ci.draw_circle(bulb, 8.5 * k, tone(OT_RIM, dim), true, -1.0, true)
+	var lit := bulb + Vector2(-1.4, -1.96) * k
+	for i in 7:
+		var f: float = float(i) / 6.0
+		ci.draw_circle(bulb.lerp(lit, f), 7.0 * k * (1.0 - f * 0.85), foot.lerp(head, f), true, -1.0, true)
+	# A tick at each stage's temperature, long and short by turns ending long at the coldest.
+	var ticks: Array = o["ticks"]
+	for i in ticks.size():
+		var y: float = tube.position.y + (1.0 - float(ticks[i])) * tube.size.y
+		var long: bool = (ticks.size() - 1 - i) % 2 == 0
+		ci.draw_rect(Rect2(20.0 * k, y - 0.75 * k, (4.0 if long else 3.0) * k, 1.5 * k), tone(OT_TICK, dim))
+	var a: float = float(OT_FROST[st])
+	if a > 0.0:
+		_frost(ci, tone(Color(OT_FERN, 0.85 * a), dim))
+
+
+## Frost round the tube (otTex's ferns, the same seed): from its two sides and
+## the bulb's foot outwards, and a few short twigs on the glass.
+func _frost(ci: Control, col: Color) -> void:
+	var k: float = UiFonts.K
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var pts: Array = []
+	for i in 7:
+		pts.append([9.0, 7.0 + rng.randf() * 30.0, PI + (rng.randf() - 0.5) * 1.3, 4.0 + rng.randf() * 5.0])
+	for i in 7:
+		pts.append([19.0, 7.0 + rng.randf() * 30.0, (rng.randf() - 0.5) * 1.3, 4.0 + rng.randf() * 5.0])
+	for i in 5:
+		pts.append([14.0 + (rng.randf() - 0.5) * 8.0, 44.0, PI * 0.5 + (rng.randf() - 0.5) * 2.2, 3.0 + rng.randf() * 4.0])
+	for i in 4:
+		pts.append([10.0 + rng.randf() * 8.0, 8.0 + rng.randf() * 26.0, -PI * 0.5 + (rng.randf() - 0.5) * 1.6, 2.5 + rng.randf() * 2.5])
+	for p: Array in pts:
+		_fern(ci, Vector2(float(p[0]), float(p[1])) * k, float(p[2]), float(p[3]) * k, col, 1)
+
+
+func _fern(ci: Control, from: Vector2, ang: float, length: float, col: Color, depth: int) -> void:
+	var to: Vector2 = from + Vector2(cos(ang), sin(ang)) * length
+	ci.draw_line(from, to, col, 0.6 * UiFonts.K, true)
+	if depth <= 0:
+		return
+	for f: float in [0.4, 0.7]:
+		var at: Vector2 = from.lerp(to, f)
+		_fern(ci, at, ang + 0.7, length * 0.4, col, depth - 1)
+		_fern(ci, at, ang - 0.7, length * 0.4, col, depth - 1)
 
 
 ## A stock (.res, 48 high): its mark at 20, the count on a baseline at 25, and

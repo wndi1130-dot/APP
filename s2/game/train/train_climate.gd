@@ -33,8 +33,9 @@ const LINES: Dictionary = {
 }
 ## climate.ts TRACK_EVENTS: the track events a freeze draws more often.
 const TRACK_EVENTS: Array[String] = ["water_tower", "snow_drift"]
-## climate.ts WEATHER_TEMP's cold (the one a departure's line can add).
-const COLD_TEMP: float = -12.0
+## climate.ts WEATHER_TEMP: what a stop's weather adds to the shown temperature
+## (cold is the one a departure's line can add).
+const WEATHER_TEMP: Dictionary = {"overcast": 0.0, "snow": -2.0, "fog": 2.0, "sleet": 5.0, "clear": -4.0, "cold_front": -6.0, "blizzard": -5.0, "cold": -12.0}
 
 
 static func on(g: Dictionary) -> bool:
@@ -64,6 +65,29 @@ static func temp_mult(g: Dictionary, t: Dictionary) -> float:
 	return float(t["CL"]["mult"][int(g.get("outside", 1))])
 
 
+## climate.ts outsideView: what the strip's thermometer reads — the stage in
+## force and its name, the shown temperature (the stretch's midday plus the
+## stop's weather, the stop being the one stood at or else the last one), how
+## far it moved if the stage changed this stretch (°, negative when colder) or
+## null, and whether the track is frozen. Null with climate off. (The cold snap
+## as the weather needs disasters.)
+static func outside_view(g: Dictionary, t: Dictionary) -> Variant:
+	if not on(g):
+		return null
+	var seg: int = int(g["seg"])
+	var stage: int = int(g["outside"]) if g.get("outside") != null else 1
+	var stop: Variant = g.get("stop") if g.get("stop") != null else g.get("lastStop")
+	var w: String = String((stop as Dictionary).get("weather", "")) if stop is Dictionary and (stop as Dictionary).get("weather") != null else ""
+	var ch: Variant = g.get("climateChange")
+	return {
+		"stage": stage,
+		"name": String(t["CL"]["names"][stage]),
+		"temp": seg_temp(t, seg) + float(WEATHER_TEMP.get(w, 0.0)),
+		"delta": seg_temp(t, seg) - seg_temp(t, seg - 1) if ch is Dictionary and int(ch["seg"]) == seg else null,
+		"freezing": float(g.get("freeze", 0)) > 0.0,
+	}
+
+
 ## climate.ts climateDepart: on leaving, a change of stage moves every car's
 ## warmth by ∓5 a stage, sets the stage in force and writes two lines. Returns
 ## {from, to}, or null with climate off. (departStage's cold snap needs disasters.)
@@ -87,7 +111,7 @@ static func depart(g: Dictionary, t: Dictionary) -> Variant:
 		g["climateStats"]["drops"] = int(g["climateStats"]["drops"]) + 1
 	C.journal(g, _line(g, LINES["deep" if diff >= 2 else ("drop" if diff > 0 else "ease")]), "bad" if diff > 0 else "good")
 	var warm: float = -float(cl["warmStep"]) * diff
-	var temp: float = seg_temp(t, seg) + (COLD_TEMP if to > stage_at(t, seg) else 0.0)
+	var temp: float = seg_temp(t, seg) + (float(WEATHER_TEMP["cold"]) if to > stage_at(t, seg) else 0.0)
 	C.journal(g, "바깥 %s°. 모든 칸 온기 %s%s, 난방 석탄 ×%s." % [_js(temp).replace("-", "−"), "+" if warm > 0 else "−", _js(absf(warm)), _js(float(cl["mult"][to]))],
 		"bad" if diff > 0 else "good")
 	return {"from": from, "to": to}
