@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const Mission = preload("res://game/sim/mission.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const SulehufMap = preload("res://game/world/sulehuf_map.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
@@ -16,6 +17,17 @@ func _game(extra: Dictionary):
 	add_child_autofree(game)
 	game.set_process(false)
 	return game
+
+
+## Decision 486: at a clear site the first press has the train offer, the second sends the
+## escort, and the carriers follow FieldWork.ESCORT_LEAD later.
+func _call_crew(game) -> void:
+	var at: Vector3 = game.player.position
+	game.player.position = game.work.position_of("work_site")
+	game.actions.start_work(game.player)
+	game.actions.start_work(game.player)
+	game.player.position = at
+	game.work.update(FieldWork.ESCORT_LEAD)
 
 
 func _run(extra: Dictionary) -> Dictionary:
@@ -170,7 +182,7 @@ func test_no_work_crew_on_a_survey() -> void:
 	assert_eq(game.crew.size(), 0)
 	var plain = _game({})
 	plain.zombies.list.clear()
-	plain.actions.start_work(plain.player)
+	_call_crew(plain)
 	assert_true(plain.actions.work_started, "the plain stop calls them as before")
 
 
@@ -293,7 +305,7 @@ func test_the_yard_has_a_conveyor_and_one_card_once_the_crew_is_down() -> void:
 	assert_eq(play.conveyor()["state"], "stopped")
 	play.conveyor_card(game.player)
 	assert_eq(game.decisions.size(), 0, "nothing to decide before the crew is down")
-	game.actions.start_work(game.player)
+	_call_crew(game)
 	assert_true(game.actions.work_started)
 	assert_eq(game.crew.size(), 6)
 	play._conveyor_choice("load", game.player)
@@ -305,7 +317,7 @@ func test_the_yard_has_a_conveyor_and_one_card_once_the_crew_is_down() -> void:
 func test_mending_takes_scrap_and_two_pairs_of_hands_once() -> void:
 	var game = _depot()
 	var play = game.mission_play
-	game.actions.start_work(game.player)
+	_call_crew(game)
 	play._conveyor_choice("repair", game.player)
 	assert_eq(play.conveyor()["state"], "stopped", "no scrap, no repair")
 	assert_eq(game.decisions.size(), 0)
@@ -358,7 +370,7 @@ func test_a_running_belt_loads_twice_as_much_and_is_heard_instead_of_the_picks()
 func test_leaving_mid_repair_keeps_the_coal_and_the_half_mended_belt() -> void:
 	var game = _depot()
 	var play = game.mission_play
-	game.actions.start_work(game.player)
+	_call_crew(game)
 	game.player.add_item("scrap", 2)
 	play._conveyor_choice("repair", game.player)
 	play._repaired(game.crew[0])
