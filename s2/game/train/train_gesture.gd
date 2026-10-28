@@ -410,14 +410,17 @@ static func _visual(name: String, visual: String, role: int, confirmed: bool, fr
 	d["arms"] = arms
 
 	match visual:
-		"seat_breathe", "floor_breathe", "kneel_breathe", "bunk_breathe":
+		"seat_breathe", "floor_breathe", "kneel_breathe":
 			d["head"] = Vector3(0, Body.BOB, 0)
 		"bunk", "bunk_breathe", "bunk_turn":
+			# Lying comes first for the breath too; the breath only rides on top.
 			var turn: float = 0.5 if visual == "bunk_turn" else 1.0
 			d["lean"] = -PI * 0.5 * turn
 			d["turn"] = PI * 0.5 * turn
 			d["head_pos"] = (pose["head_pos"] as Vector3).lerp(
 				Vector3(0, Body.SEAT_HEIGHT + Body.HEAD_RADIUS, Body.HEIGHT * Body.SEATED_SCALE), turn)
+			if visual == "bunk_breathe":
+				d["head"] = Vector3(0, Body.BOB, 0)
 		"wall", "wall_nod":
 			d["lean"] = -Body.SIDE_LEAN
 			d["head"] = Vector3(0, -Body.BOW_DROP if visual == "wall_nod" else 0.0, 0)

@@ -217,32 +217,33 @@
       ],
       "footprint_source": "input_modal_rect",
       "height_m": 4.4,
-      "lod0_tris": 208,
+      "lod0_tris": 504,
       "triangle_limit": 600,
       "bounds_m": [
         [
-          -0.47999998927116394,
-          0,
-          -0.47999998927116394
+          -1.1205,
+          0.0,
+          -0.6441
         ],
         [
-          0.47999998927116394,
-          4.400000095367432,
-          0.47999998927116394
+          0.5007,
+          4.4,
+          1.6592
         ]
       ],
-      "bytes": 15996,
-      "sha256": "fcc90a999fc6f0f6aaf896076056540f4180be8d8ec0bb7686256c6a877eb452",
+      "bytes": 52432,
+      "sha256": "435fe85f3a05760c128b2b39d7a90de87969eee4040140b2e05dcff486cb4bf6",
       "colours": [
         "bark",
-        "snow",
-        "worn_wood"
+        "snow"
       ],
-      "judgment": "가로수 의미를 우선한 tree; 눈 얹힌 좁은 맨가지 수관",
+      "judgment": "눈 조금 얹은 맨가지 활엽 가로수(Quaternius CommonTree_Dead_Snow_5, CC0)",
       "placement": "rect 가운데 바닥, 앞 +Z, 위 +Y, facing -90도씩",
       "source_rects_wh": {
         "1x1": 161
-      }
+      },
+      "source_asset": "눈 조금 얹은 맨가지 활엽 가로수(Quaternius CommonTree_Dead_Snow_5, CC0)",
+      "source_script": "tools/blender/props_field_street.py"
     },
     "firewood_pile": {
       "id": "firewood_pile",

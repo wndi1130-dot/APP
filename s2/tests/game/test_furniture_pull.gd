@@ -130,3 +130,21 @@ func test_each_building_draws_its_finds_as_before() -> void:
 		in_w += int(to == "w")
 	assert_almost_eq(other / 2000.0, 0.5, 0.04, "the other house keeps its half")
 	assert_almost_eq(in_w / 2000.0, 0.5 * 8.0 / 9.0, 0.04, "the wardrobe takes 8 of 9 in its own house")
+
+
+func test_a_full_wardrobe_leaves_its_rooms_draw_to_the_room() -> void:
+	# The wardrobe already holds CAP things: the cloth falls where it would with no wardrobe
+	# at all, the side tables drawing the bedroom's whole share (ref-ops check, decision 485).
+	var differ := 0
+	for seed in range(1, 201):
+		var full := _house()
+		for i in range(LootDress.CAP):
+			(full["w"]["items"] as Array).append("wrist_watch")
+		var none := _house()
+		none.erase("w")
+		LootDress._deal(full, full.keys(), LootDress._rng(seed, "deal:0"))
+		LootDress._deal(none, none.keys(), LootDress._rng(seed, "deal:0"))
+		for id: String in none:
+			differ += int(_cloth(full[id]) != _cloth(none[id]))
+		assert_eq((full["w"]["items"] as Array).size(), LootDress.CAP, "nothing more in the full wardrobe")
+	assert_eq(differ, 0, "the same boxes as a bedroom without the wardrobe")

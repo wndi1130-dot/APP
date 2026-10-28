@@ -560,6 +560,8 @@ PROPS = {
     "oxygen_cylinder": (oxygen_cylinder, (1, 1), 1.4, 297, 297, "받침 포함 산소통 하나"),
     "pallet_stack": (pallet_stack, (2, 2), 0.6, 286, 288, "짐받이 세 단"),
 }
+# 공개 3D(CC0)로 바꾼 종류 → 그것을 굽는 스크립트. main은 이 종류의 파일과 장부 줄을 다시 굽지 않고 둔다.
+KEPT = {"bare_tree": "tools/blender/props_field_street.py"}
 
 
 def export(piece, path):
@@ -664,7 +666,16 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     bpy.ops.wm.read_factory_settings(use_empty=True)
     rows, failures = [], []
+    previous = {}
+    if os.path.exists(os.path.join(out_dir, "catalog.json")):
+        with open(os.path.join(out_dir, "catalog.json"), encoding="utf-8") as handle:
+            previous = json.load(handle).get("assets", {})
     for pid, (build, footprint, height, modal_count, source_count, use) in PROPS.items():
+        if pid in KEPT and pid in previous:
+            # 공개 3D로 바꾼 종류는 KEPT의 스크립트가 굽는다: 지금 파일과 장부 줄을 그대로 둔다.
+            rows.append({"id": pid, **previous[pid]})
+            write_books(out_dir, rows, failures)
+            continue
         piece = Piece(pid)
         try:
             build(piece)

@@ -2,6 +2,7 @@ import { bump, bumpRel, put } from '../ledger';
 import { COMMS, COMM_NAME, P } from '../data';
 import type { Comm } from '../data';
 import { crowdFeverP } from '../crowd';
+import { suppliesHygieneShort } from '../supplies';
 import { onDeath } from '../death';
 import { clamp, drawPerson, journal, lawActive, rnd, situation, totalPop } from '../state';
 import type { Game } from '../state';
@@ -70,7 +71,7 @@ export function hotWaterShare(g: Game, c: Comm): number {
 export function hygieneScore(g: Game, c: Comm): number {
   const crowd = situation(g, c)[2];
   const share = c === 'front' ? Math.max(1, hotWaterShare(g, c)) : hotWaterShare(g, c);
-  return share - (crowd >= 95 ? 2 : crowd >= 80 ? 1 : 0);
+  return share - (crowd >= 95 ? 2 : crowd >= 80 ? 1 : 0) - (suppliesHygieneShort(g, c) ? P.supHygienePenalty : 0);
 }
 
 /** 대야를 누르면 나오는 까닭 한 줄(16.3 '보이는 법'). 늘 조건(자리·과밀·온기·몫)만 적는다(16.1 가). 소수점은 안 띄운다.
@@ -87,7 +88,8 @@ export function hygieneWhy(g: Game, c: Comm): string {
   const share = c === 'front' ? Math.max(1, hotWaterShare(g, c)) : hotWaterShare(g, c);
   // 틈을 메운 칸이 있으면 김이 차는 것도 까닭이다(결정 217·225). 사람이 아니라 처지의 이야기로만 적는다.
   const damp = insulatedShare(g, c) > 0 && D.insulateLice > 0 ? ` · ${COMMS.indexOf(c) % 2 === 0 ? '창에 김이 서려 침구가 잘 안 마른다' : '공기가 무거워 옷이 눅눅하다'}` : '';
-  return `${place} · 과밀 ${crowd} · 온기 ${Math.round(warm)} · 몫 ${Math.round(share)}${damp}`;
+  const supplies = suppliesHygieneShort(g, c) ? ' · 비누·휴지가 모자람' : '';
+  return `${place} · 과밀 ${crowd} · 온기 ${Math.round(warm)} · 몫 ${Math.round(share)}${damp}${supplies}`;
 }
 
 export function hygiene(g: Game, c: Comm): Hygiene {

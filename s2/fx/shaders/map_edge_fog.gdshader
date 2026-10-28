@@ -17,6 +17,11 @@ uniform float mask_on = 1.0; // the sight mask's shade (map_view mask_on)
 // The map's sight mask (map_view vis_texture); past the edge it reads the
 // nearest edge cell, as the ground there does.
 uniform sampler2D vis : filter_linear, repeat_disable;
+// By day round and soft about the eye, as the ground (world_vis, decision 491).
+uniform vec2 eye_xz = vec2(-1000.0);
+uniform float eye_r = 18.0;
+uniform float round_day = 0.0;
+uniform float round_floor = 0.95;
 
 varying vec3 world_pos;
 
@@ -46,7 +51,16 @@ void fragment() {
 	// seen now full, seen before dim, never seen dark), a little less in the
 	// dark, so the edge is never the brightest thing on the screen.
 	vec2 seen = texture(vis, world_pos.xz / map_size).rg;
-	float lit = max(max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), 0.45);
+	float reveal = seen.r;
+	float floor_k = mix(fx_sight.x, fx_sight.y, seen.g);
+	float round_k = clamp(round_day, 0.0, 1.0);
+	if (round_k > 0.001) {
+		float near = 1.0 - smoothstep(eye_r * 0.4, eye_r * 1.3, distance(world_pos.xz, eye_xz));
+		// As world_vis: the floor first, the round shape after.
+		reveal = mix(reveal, near, smoothstep(0.5, 1.0, round_k));
+		floor_k = mix(floor_k, round_floor, smoothstep(0.0, 0.5, round_k));
+	}
+	float lit = max(max(reveal, floor_k), 0.45);
 	col *= mix(1.0, lit, clamp(mask_on, 0.0, 1.0));
 	ALBEDO = fx_photo(col, fx_fade);
 	ROUGHNESS = 1.0;

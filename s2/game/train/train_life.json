@@ -3,6 +3,7 @@
   "note": "모든 새 치수·정원·초·문턱·인원·배치는 첫 값(가안). 화면만 바꾸며 놀이 규칙과 정산에는 쓰지 않는다. 기존 기색의 값은 train_look.gd에 둔다.",
   "tuning": {
     "tick": 0.25,
+    "min_hold": 30,
     "max_movers": 4,
     "interaction_limit": 1,
     "distraction_every": [
@@ -386,6 +387,7 @@
         {
           "id": "bench",
           "activity": "rest",
+          "look_at": 0,
           "anchors": [
             [
               3,
@@ -422,16 +424,20 @@
         {
           "id": "stove_side",
           "activity": "warm",
+          "look_at": [
+            7.85,
+            -0.4
+          ],
           "anchors": [
             [
-              7.2,
+              7.25,
               0,
-              0.02
+              0.1
             ],
             [
               8.6,
               0,
-              -0.08
+              -0.15
             ]
           ],
           "capacity": 2,
@@ -448,6 +454,16 @@
         {
           "id": "window",
           "activity": "watch",
+          "look_at": [
+            [
+              5,
+              -1.4
+            ],
+            [
+              11,
+              -1.4
+            ]
+          ],
           "anchors": [
             [
               5,
@@ -474,6 +490,7 @@
         {
           "id": "door_tail",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               1,
@@ -500,6 +517,7 @@
         {
           "id": "door_front",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               15,
@@ -526,6 +544,10 @@
         {
           "id": "gather",
           "activity": "gather",
+          "look_at": [
+            3.63,
+            -0.07
+          ],
           "anchors": [
             [
               2.1,
@@ -562,6 +584,10 @@
         {
           "id": "refuge",
           "activity": "refuge",
+          "look_at": [
+            12.15,
+            -0.18
+          ],
           "anchors": [
             [
               10.6,
@@ -598,6 +624,7 @@
         {
           "id": "bunk",
           "activity": "sleep",
+          "look_at": 0,
           "anchors": [
             [
               4,
@@ -634,6 +661,7 @@
         {
           "id": "mending",
           "activity": "mend",
+          "look_at": 0,
           "anchors": [
             [
               5.5,
@@ -655,6 +683,7 @@
         {
           "id": "cleanup",
           "activity": "clean",
+          "look_at": 0,
           "anchors": [
             [
               0.65,
@@ -838,6 +867,7 @@
         {
           "id": "bench",
           "activity": "rest",
+          "look_at": 0,
           "anchors": [
             [
               3,
@@ -874,16 +904,20 @@
         {
           "id": "stove_side",
           "activity": "warm",
+          "look_at": [
+            7.85,
+            -0.4
+          ],
           "anchors": [
             [
-              7.2,
+              7.25,
               0,
-              0.02
+              0.1
             ],
             [
               8.6,
               0,
-              -0.08
+              -0.15
             ]
           ],
           "capacity": 2,
@@ -900,6 +934,16 @@
         {
           "id": "window",
           "activity": "watch",
+          "look_at": [
+            [
+              5,
+              -1.4
+            ],
+            [
+              11,
+              -1.4
+            ]
+          ],
           "anchors": [
             [
               5,
@@ -926,6 +970,7 @@
         {
           "id": "door_tail",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               1,
@@ -952,6 +997,7 @@
         {
           "id": "door_front",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               15,
@@ -978,6 +1024,10 @@
         {
           "id": "gather",
           "activity": "gather",
+          "look_at": [
+            3.63,
+            -0.07
+          ],
           "anchors": [
             [
               2.1,
@@ -1014,6 +1064,10 @@
         {
           "id": "refuge",
           "activity": "refuge",
+          "look_at": [
+            12.15,
+            -0.18
+          ],
           "anchors": [
             [
               10.6,
@@ -1050,6 +1104,7 @@
         {
           "id": "bunk",
           "activity": "sleep",
+          "look_at": 0,
           "anchors": [
             [
               4,
@@ -1076,6 +1131,7 @@
         {
           "id": "mending",
           "activity": "mend",
+          "look_at": 0,
           "anchors": [
             [
               5.5,
@@ -1097,6 +1153,7 @@
         {
           "id": "cleanup",
           "activity": "clean",
+          "look_at": 0,
           "anchors": [
             [
               0.65,
@@ -1309,6 +1366,7 @@
         {
           "id": "bench",
           "activity": "rest",
+          "look_at": 0,
           "anchors": [
             [
               3,
@@ -1345,16 +1403,20 @@
         {
           "id": "stove_side",
           "activity": "warm",
+          "look_at": [
+            7.85,
+            -0.4
+          ],
           "anchors": [
             [
-              7.2,
+              7.25,
               0,
-              0.02
+              0.1
             ],
             [
               8.6,
               0,
-              -0.08
+              -0.15
             ]
           ],
           "capacity": 2,
@@ -1371,6 +1433,16 @@
         {
           "id": "window",
           "activity": "watch",
+          "look_at": [
+            [
+              5,
+              -1.4
+            ],
+            [
+              11,
+              -1.4
+            ]
+          ],
           "anchors": [
             [
               5,
@@ -1397,6 +1469,7 @@
         {
           "id": "door_tail",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               1,
@@ -1423,6 +1496,7 @@
         {
           "id": "door_front",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               15,
@@ -1449,6 +1523,10 @@
         {
           "id": "gather",
           "activity": "gather",
+          "look_at": [
+            3.63,
+            -0.07
+          ],
           "anchors": [
             [
               2.1,
@@ -1485,6 +1563,10 @@
         {
           "id": "refuge",
           "activity": "refuge",
+          "look_at": [
+            12.15,
+            -0.18
+          ],
           "anchors": [
             [
               10.6,
@@ -1521,6 +1603,7 @@
         {
           "id": "bunk",
           "activity": "sleep",
+          "look_at": 0,
           "anchors": [
             [
               4,
@@ -1547,6 +1630,7 @@
         {
           "id": "mending",
           "activity": "mend",
+          "look_at": 0,
           "anchors": [
             [
               5.5,
@@ -1568,6 +1652,7 @@
         {
           "id": "cleanup",
           "activity": "clean",
+          "look_at": 0,
           "anchors": [
             [
               0.65,
@@ -1594,6 +1679,10 @@
         {
           "id": "care",
           "activity": "care",
+          "look_at": [
+            13.9,
+            -0.92
+          ],
           "anchors": [
             [
               13.6,
@@ -1620,6 +1709,7 @@
         {
           "id": "bed",
           "activity": "heal",
+          "look_at": 0,
           "anchors": [
             [
               1.8,
@@ -1940,6 +2030,7 @@
         {
           "id": "bench",
           "activity": "rest",
+          "look_at": 0,
           "anchors": [
             [
               3,
@@ -1976,6 +2067,16 @@
         {
           "id": "window",
           "activity": "watch",
+          "look_at": [
+            [
+              5,
+              -1.4
+            ],
+            [
+              11,
+              -1.4
+            ]
+          ],
           "anchors": [
             [
               5,
@@ -2002,6 +2103,7 @@
         {
           "id": "door_tail",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               1,
@@ -2028,6 +2130,7 @@
         {
           "id": "door_front",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               15,
@@ -2054,6 +2157,10 @@
         {
           "id": "gather",
           "activity": "gather",
+          "look_at": [
+            3.63,
+            -0.07
+          ],
           "anchors": [
             [
               2.1,
@@ -2090,6 +2197,10 @@
         {
           "id": "refuge",
           "activity": "refuge",
+          "look_at": [
+            12.15,
+            -0.18
+          ],
           "anchors": [
             [
               10.6,
@@ -2126,6 +2237,7 @@
         {
           "id": "cleanup",
           "activity": "clean",
+          "look_at": 0,
           "anchors": [
             [
               0.65,
@@ -2152,6 +2264,10 @@
         {
           "id": "meal",
           "activity": "eat",
+          "look_at": [
+            8,
+            -0.2
+          ],
           "anchors": [
             [
               4,
@@ -2188,6 +2304,10 @@
         {
           "id": "serve",
           "activity": "serve",
+          "look_at": [
+            1.35,
+            -0.75
+          ],
           "anchors": [
             [
               1.35,
@@ -2214,6 +2334,10 @@
         {
           "id": "pot_work",
           "activity": "cook",
+          "look_at": [
+            1.35,
+            -0.75
+          ],
           "anchors": [
             [
               1.35,
@@ -2235,6 +2359,10 @@
         {
           "id": "classroom",
           "activity": "teach",
+          "look_at": [
+            3.1,
+            -0.47
+          ],
           "anchors": [
             [
               1.6,
@@ -2271,6 +2399,10 @@
         {
           "id": "council",
           "activity": "session",
+          "look_at": [
+            8,
+            -0.2
+          ],
           "anchors": [
             [
               14.7,
@@ -2307,6 +2439,7 @@
         {
           "id": "memorial",
           "activity": "mourn",
+          "look_at": "partner",
           "anchors": [
             [
               14.2,
@@ -2595,6 +2728,7 @@
         {
           "id": "bench",
           "activity": "rest",
+          "look_at": 0,
           "anchors": [
             [
               3,
@@ -2631,16 +2765,20 @@
         {
           "id": "stove_side",
           "activity": "warm",
+          "look_at": [
+            7.85,
+            -0.4
+          ],
           "anchors": [
             [
-              7.2,
+              7.25,
               0,
-              0.02
+              0.1
             ],
             [
               8.6,
               0,
-              -0.08
+              -0.15
             ]
           ],
           "capacity": 2,
@@ -2657,6 +2795,16 @@
         {
           "id": "window",
           "activity": "watch",
+          "look_at": [
+            [
+              5,
+              -1.4
+            ],
+            [
+              11,
+              -1.4
+            ]
+          ],
           "anchors": [
             [
               5,
@@ -2683,6 +2831,7 @@
         {
           "id": "door_tail",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               1,
@@ -2709,6 +2858,7 @@
         {
           "id": "door_front",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               15,
@@ -2735,6 +2885,10 @@
         {
           "id": "gather",
           "activity": "gather",
+          "look_at": [
+            3.63,
+            -0.07
+          ],
           "anchors": [
             [
               2.1,
@@ -2771,6 +2925,10 @@
         {
           "id": "refuge",
           "activity": "refuge",
+          "look_at": [
+            12.15,
+            -0.18
+          ],
           "anchors": [
             [
               10.6,
@@ -2807,6 +2965,7 @@
         {
           "id": "bunk",
           "activity": "sleep",
+          "look_at": 0,
           "anchors": [
             [
               4,
@@ -2833,6 +2992,7 @@
         {
           "id": "mending",
           "activity": "mend",
+          "look_at": 0,
           "anchors": [
             [
               5.5,
@@ -2854,6 +3014,7 @@
         {
           "id": "cleanup",
           "activity": "clean",
+          "look_at": 0,
           "anchors": [
             [
               0.65,
@@ -2880,6 +3041,10 @@
         {
           "id": "work",
           "activity": "work",
+          "look_at": [
+            5,
+            -0.35
+          ],
           "anchors": [
             [
               4.5,
@@ -2901,6 +3066,10 @@
         {
           "id": "work_b",
           "activity": "work",
+          "look_at": [
+            5,
+            -0.35
+          ],
           "anchors": [
             [
               5.6,
@@ -2922,6 +3091,7 @@
         {
           "id": "handoff",
           "activity": "carry",
+          "look_at": "partner",
           "anchors": [
             [
               12,
@@ -3089,6 +3259,7 @@
         {
           "id": "bench",
           "activity": "rest",
+          "look_at": 0,
           "anchors": [
             [
               3,
@@ -3125,16 +3296,20 @@
         {
           "id": "stove_side",
           "activity": "warm",
+          "look_at": [
+            7.85,
+            -0.4
+          ],
           "anchors": [
             [
-              7.2,
+              7.25,
               0,
-              0.02
+              0.1
             ],
             [
               8.6,
               0,
-              -0.08
+              -0.15
             ]
           ],
           "capacity": 2,
@@ -3151,6 +3326,10 @@
         {
           "id": "window",
           "activity": "watch",
+          "look_at": [
+            5,
+            -1.4
+          ],
           "anchors": [
             [
               5,
@@ -3172,6 +3351,10 @@
         {
           "id": "window_b",
           "activity": "watch",
+          "look_at": [
+            11,
+            -1.4
+          ],
           "anchors": [
             [
               11,
@@ -3193,6 +3376,7 @@
         {
           "id": "door_tail",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               1,
@@ -3219,6 +3403,7 @@
         {
           "id": "door_front",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               15,
@@ -3245,6 +3430,10 @@
         {
           "id": "gather",
           "activity": "gather",
+          "look_at": [
+            3.63,
+            -0.07
+          ],
           "anchors": [
             [
               2.1,
@@ -3281,6 +3470,10 @@
         {
           "id": "refuge",
           "activity": "refuge",
+          "look_at": [
+            12.15,
+            -0.18
+          ],
           "anchors": [
             [
               10.6,
@@ -3317,6 +3510,7 @@
         {
           "id": "bunk",
           "activity": "sleep",
+          "look_at": 0,
           "anchors": [
             [
               4,
@@ -3343,6 +3537,7 @@
         {
           "id": "cleanup",
           "activity": "clean",
+          "look_at": 0,
           "anchors": [
             [
               0.65,
@@ -3507,6 +3702,7 @@
         {
           "id": "bench",
           "activity": "rest",
+          "look_at": 0,
           "anchors": [
             [
               3,
@@ -3543,11 +3739,15 @@
         {
           "id": "stove_side",
           "activity": "warm",
+          "look_at": [
+            0.45,
+            -0.9
+          ],
           "anchors": [
             [
-              1.0,
+              1.1,
               0,
-              -0.55
+              -0.45
             ]
           ],
           "capacity": 1,
@@ -3564,6 +3764,16 @@
         {
           "id": "window",
           "activity": "watch",
+          "look_at": [
+            [
+              5,
+              -1.4
+            ],
+            [
+              11,
+              -1.4
+            ]
+          ],
           "anchors": [
             [
               5,
@@ -3590,6 +3800,7 @@
         {
           "id": "door_tail",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               1,
@@ -3616,6 +3827,7 @@
         {
           "id": "door_front",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               15,
@@ -3642,6 +3854,10 @@
         {
           "id": "gather",
           "activity": "gather",
+          "look_at": [
+            3.63,
+            -0.07
+          ],
           "anchors": [
             [
               2.1,
@@ -3678,6 +3894,10 @@
         {
           "id": "refuge",
           "activity": "refuge",
+          "look_at": [
+            12.15,
+            -0.18
+          ],
           "anchors": [
             [
               10.6,
@@ -3714,6 +3934,7 @@
         {
           "id": "cleanup",
           "activity": "clean",
+          "look_at": 0,
           "anchors": [
             [
               0.65,
@@ -3740,6 +3961,10 @@
         {
           "id": "desk",
           "activity": "read",
+          "look_at": [
+            8,
+            -0.2
+          ],
           "anchors": [
             [
               8,
@@ -4162,6 +4387,7 @@
         {
           "id": "bench",
           "activity": "rest",
+          "look_at": 0,
           "anchors": [
             [
               3,
@@ -4198,16 +4424,20 @@
         {
           "id": "stove_side",
           "activity": "warm",
+          "look_at": [
+            7.85,
+            -0.4
+          ],
           "anchors": [
             [
-              7.2,
+              7.25,
               0,
-              0.02
+              0.1
             ],
             [
               8.6,
               0,
-              -0.08
+              -0.15
             ]
           ],
           "capacity": 2,
@@ -4224,6 +4454,16 @@
         {
           "id": "window",
           "activity": "watch",
+          "look_at": [
+            [
+              5,
+              -1.4
+            ],
+            [
+              11,
+              -1.4
+            ]
+          ],
           "anchors": [
             [
               5,
@@ -4250,6 +4490,7 @@
         {
           "id": "door_tail",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               1,
@@ -4276,6 +4517,7 @@
         {
           "id": "door_front",
           "activity": "chat",
+          "look_at": "partner",
           "anchors": [
             [
               15,
@@ -4302,6 +4544,10 @@
         {
           "id": "gather",
           "activity": "gather",
+          "look_at": [
+            3.63,
+            -0.07
+          ],
           "anchors": [
             [
               2.1,
@@ -4338,6 +4584,10 @@
         {
           "id": "refuge",
           "activity": "refuge",
+          "look_at": [
+            11.05,
+            -0.18
+          ],
           "anchors": [
             [
               9.6,
@@ -4374,6 +4624,7 @@
         {
           "id": "bunk",
           "activity": "sleep",
+          "look_at": 0,
           "anchors": [
             [
               4,
@@ -4400,6 +4651,7 @@
         {
           "id": "cleanup",
           "activity": "clean",
+          "look_at": 0,
           "anchors": [
             [
               0.65,
@@ -4426,6 +4678,7 @@
         {
           "id": "work",
           "activity": "work",
+          "look_at": 0,
           "anchors": [
             [
               13.4,
@@ -4447,6 +4700,7 @@
         {
           "id": "work_b",
           "activity": "work",
+          "look_at": 0,
           "anchors": [
             [
               14.1,
