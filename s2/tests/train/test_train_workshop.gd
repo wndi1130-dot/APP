@@ -174,3 +174,98 @@ func test_a_stretch_takes_the_upkeep_before_the_work() -> void:
 	TrainWorkshop.run(plain)
 	assert_false(plain["dom"]["techs"]["e2"].has("starved"), "run alone pays no upkeep")
 	assert_gte(float(plain["dom"]["parts"]), before)
+
+
+func test_locked_research_recipes_are_hidden_and_refused() -> void:
+	var g: Dictionary = _game()
+	var before: Dictionary = g.duplicate(true)
+	assert_eq(TrainWorkshop.shown(g), ["bow", "crowbar", "coat_long", "core_remake"] as Array[String])
+	for id: String in ["rounds", "arrows", "lure"]:
+		assert_eq(TrainWorkshop.why_not(g, id), "아직 만들 줄 모른다", id)
+		assert_false(TrainWorkshop.start(g, id), id)
+	assert_eq(g, before, "locked recipes take nothing")
+	g["dom"]["techs"]["w2"] = {"stage": "restoring", "defect": false, "progress": 1.0, "need": 6.0, "variant": "a"}
+	g["dom"]["restoring"] = "w2"
+	assert_false(TrainWorkshop.shown(g).has("rounds"))
+	assert_false(TrainWorkshop.start(g, "rounds"), "restoration has not finished")
+
+
+func test_w2_a_makes_six_pistol_rounds_for_two_scrap_and_one_work() -> void:
+	var g: Dictionary = _game({"scrap": 2, "ammo_pistol": 7, "target": 0})
+	g["dom"]["techs"]["w2"] = {"stage": "done", "defect": false, "progress": 6.0, "need": 6.0, "variant": "a"}
+	assert_eq(TrainWorkshop.shown(g), ["bow", "crowbar", "coat_long", "core_remake", "rounds"] as Array[String])
+	assert_eq(TrainWorkshop.why_not(g, "arrows"), "아직 만들 줄 모른다")
+	assert_true(TrainWorkshop.start(g, "rounds"))
+	assert_eq(float(g["dom"]["scrap"]), 0.0)
+	assert_eq(float(g["dom"]["make"]["need"]), 1.0)
+	assert_eq(g["dom"]["make"]["paid"], {"scrap": 2.0})
+	assert_true(TrainDom.is_store(g["dom"]), "the new line fits the store contract")
+	var result: Dictionary = TrainWorkshop.run(g)
+	assert_eq(result["made"], ["rounds"])
+	assert_eq(float(result["used"]), 1.0)
+	assert_eq(float(g["dom"]["ammo_pistol"]), 13.0)
+	assert_null(TrainWorkshop.line(g))
+	assert_true(TrainDom.is_store(g["dom"]))
+
+
+func test_w2_b_makes_three_arrows_for_two_wood_and_one_work() -> void:
+	var g: Dictionary = _game({"wood": 2, "ammo_craft": 4, "target": 0})
+	g["dom"]["techs"]["w2"] = {"stage": "done", "defect": false, "progress": 6.0, "need": 6.0, "variant": "b"}
+	assert_eq(TrainWorkshop.shown(g), ["bow", "crowbar", "coat_long", "core_remake", "arrows"] as Array[String])
+	assert_false(TrainWorkshop.start(g, "rounds"))
+	assert_true(TrainWorkshop.start(g, "arrows"))
+	assert_eq(float(g["dom"]["wood"]), 0.0)
+	assert_eq(g["dom"]["make"]["paid"], {"wood": 2.0})
+	var result: Dictionary = TrainWorkshop.run(g)
+	assert_eq(result["made"], ["arrows"])
+	assert_eq(float(result["used"]), 1.0)
+	assert_eq(float(g["dom"]["ammo_craft"]), 7.0)
+	assert_null(TrainWorkshop.line(g))
+	assert_true(TrainDom.is_store(g["dom"]))
+
+
+func test_w4_makes_one_lure_for_one_part_and_one_work_without_gear() -> void:
+	var g: Dictionary = _game({"parts": 1, "lures": 2, "target": 0})
+	g["gearOn"] = false
+	g["dom"]["techs"]["w4"] = {"stage": "done", "defect": false, "progress": 3.0, "need": 3.0}
+	assert_eq(TrainWorkshop.shown(g), ["bow", "crowbar", "coat_long", "core_remake", "lure"] as Array[String])
+	assert_true(TrainWorkshop.start(g, "lure"))
+	assert_eq(float(g["dom"]["parts"]), 0.0)
+	assert_eq(g["dom"]["make"]["paid"], {"parts": 1.0})
+	var result: Dictionary = TrainWorkshop.run(g)
+	assert_eq(result["made"], ["lure"])
+	assert_eq(float(result["used"]), 1.0)
+	assert_eq(float(g["dom"]["lures"]), 3.0)
+	assert_null(TrainWorkshop.line(g))
+	assert_true(TrainDom.is_store(g["dom"]))
+
+
+func test_defective_research_opens_recipes_and_off_closes_them() -> void:
+	for row: Dictionary in [{"tech": "w2", "variant": "a", "recipe": "rounds"}, {"tech": "w2", "variant": "b", "recipe": "arrows"}, {"tech": "w4", "recipe": "lure"}]:
+		var g: Dictionary = _game({"target": 0})
+		var tech: String = String(row["tech"])
+		var id: String = String(row["recipe"])
+		var state: Dictionary = {"stage": "defective", "defect": true, "progress": 3.0, "need": 3.0}
+		if row.has("variant"):
+			state["variant"] = row["variant"]
+		g["dom"]["techs"][tech] = state
+		assert_gt(TrainResearch.mult(g, {}, tech), 0.0, id)
+		assert_true(TrainWorkshop.shown(g).has(id), id)
+		assert_true(TrainWorkshop.start(g, id), id)
+		assert_eq(TrainWorkshop.run(g)["made"], [id])
+		state["off"] = true
+		var before: Dictionary = g.duplicate(true)
+		assert_eq(TrainResearch.mult(g, {}, tech), 0.0, id)
+		assert_false(TrainWorkshop.shown(g).has(id), id)
+		assert_eq(TrainWorkshop.why_not(g, id), "아직 만들 줄 모른다", id)
+		assert_false(TrainWorkshop.start(g, id), id)
+		assert_eq(g, before, id + " stays unpaid while off")
+
+
+func test_w2_recipes_close_without_working_knowledge() -> void:
+	var g: Dictionary = _game({"experts": []})
+	g["dom"]["techs"]["w2"] = {"stage": "done", "defect": false, "progress": 6.0, "need": 6.0, "variant": "a"}
+	assert_eq(TrainResearch.mult(g, {}, "w2"), 0.0)
+	assert_false(TrainWorkshop.shown(g).has("rounds"))
+	assert_eq(TrainWorkshop.why_not(g, "rounds"), "아직 만들 줄 모른다")
+	assert_false(TrainWorkshop.start(g, "rounds"))
