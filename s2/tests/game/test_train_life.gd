@@ -1359,16 +1359,16 @@ func test_a_return_from_a_scene_or_a_fire_faces_the_way_it_sat() -> void:
 	assert_gt(checked, 0)
 
 
-func test_a_distraction_or_a_borrowed_slump_never_drops_one_on_their_feet() -> void:
+func test_a_distraction_never_drops_one_on_their_feet() -> void:
 	# catch_breath borrows a slump to the floor. As a distraction on one standing it sat
 	# them down; the next frame, on the floor, the distraction was skipped and the
-	# request stood them up again, and so on every frame; or, under window_watch, they
-	# stayed on the floor for the whole hold.
+	# request stood them up again, and so on every frame (rub_stamp); or, under
+	# window_watch, they stayed on the floor for the whole hold.
 	var s = _scene()
 	var c: Dictionary = s.car("guard")
 	var b: Node3D = _at_window(s)
 	var a: Dictionary = s.life.actors[b.get_instance_id()]
-	for requested in ["rub_stamp", "window_watch", "catch_breath"]:
+	for requested in ["rub_stamp", "window_watch"]:
 		a["requested"] = requested
 		a["distraction"] = "catch_breath"
 		for i in 5:

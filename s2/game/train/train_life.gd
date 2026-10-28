@@ -322,10 +322,8 @@ func _face_spot(body: Node3D) -> void:
 	var spot: Dictionary = places.spots.get(places.bookings.get(id, ""), {})
 	var member: Dictionary = spot.get("members", {}).get(id, {})
 	body.rotation.y = _spot_facing(spot, int(member.get("anchor", 0)), body.position)
-	# A new arrival also resets a repeated motion's stored base facing, and the pose
-	# its place gives it (Motion.rest_pose), which gestures do not move.
+	# A new arrival also resets a repeated motion's stored base facing.
 	body.set_meta("life_facing", body.rotation.y)
-	body.set_meta("life_rest_pose", String(body.pose))
 
 
 func _spot_facing(spot: Dictionary, anchor: int, at: Vector3) -> float:
@@ -511,11 +509,10 @@ func show_body(c: Dictionary, body: Node3D) -> void:
 	if body.state not in ["wait", "visit"]:
 		return
 	var requested: String = a["requested"]
-	var rest: String = Motion.rest_pose(body, requested)
-	# A distraction is short and never moves the body off its place's pose: none on a
-	# seat or the floor, and none that would sit it down or drop it (catch_breath
-	# borrows a slump to the floor).
-	if a["distraction"] != "" and rest not in ["sit", "floor"] and Motion.keeps_pose(String(a["distraction"]), rest):
+	# A distraction is short and never moves the body: none on a seat or the floor, and
+	# none that would sit it down or drop it (catch_breath borrows a slump to the floor:
+	# on one standing it dropped them, and the next frame the request stood them up).
+	if a["distraction"] != "" and body.pose not in ["sit", "floor"] and Motion.keeps_pose(String(a["distraction"]), String(body.pose)):
 		requested = a["distraction"]
 	# Each one's motion runs from when that one started it, not from the shared
 	# clock: a look round starts facing ahead and a one-off at its first frame.
@@ -700,12 +697,10 @@ func _facing_of(b: Node3D) -> float:
 
 
 ## Faces a body the way its snapshot saw it; its next gesture turns from there.
-## The pose it is put back in is its place's pose again.
 func _face_saved(body: Node3D, previous: Dictionary) -> void:
 	if previous.has("facing"):
 		body.rotation.y = float(previous["facing"])
 		body.set_meta("life_facing", body.rotation.y)
-	body.set_meta("life_rest_pose", String(body.pose))
 
 
 func _pair_ready(spot_id: String) -> void:

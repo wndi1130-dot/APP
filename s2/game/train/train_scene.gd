@@ -632,7 +632,6 @@ func _plain(b: Node3D) -> void:
 		b.gesture_facing = 0.0
 	b.remove_meta("life_motion")
 	b.remove_meta("life_turned")
-	b.remove_meta("life_rest_pose")
 	var actor: Dictionary = life.actors.get(b.get_instance_id(), {})
 	if not actor.is_empty():
 		actor["motion"] = ""
