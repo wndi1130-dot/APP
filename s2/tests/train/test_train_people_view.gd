@@ -344,7 +344,9 @@ func test_lap_gun_draws_follow_the_receivers_before_clips_are_chosen() -> void:
 		s.people_view.shown_for(b, "t_gun_clean", s.clock, true)
 	s.people_view._process(0.0)
 	assert_eq(s.people_view.guns.multimesh.visible_instance_count, View.LAP_GUNS)
-	# Two at one x may come in either order, so each receiver's gun is looked for among all.
+	# A headless run's renderer gives instance transforms back as zero, so where the
+	# guns lie is read back only with a real one; each receiver's gun is looked for among all.
+	var readable: bool = DisplayServer.get_name() != "headless"
 	var laid: Array = []
 	for g in View.LAP_GUNS:
 		laid.append(s.people_view.guns.multimesh.get_instance_transform(g).origin)
@@ -352,8 +354,9 @@ func test_lap_gun_draws_follow_the_receivers_before_clips_are_chosen() -> void:
 		var b: Node3D = ordered[i]
 		if i < View.LAP_GUNS:
 			assert_eq(s.people_view.drawn[b], "t_gun_clean")
-			var want: Vector3 = s.people_view.place_of(b, "t_gun_clean", {}) * View.LAP_AT
-			assert_true(laid.any(func(p): return (p as Vector3).is_equal_approx(want)), "a gun at %s among %s" % [want, laid])
+			if readable:
+				var want: Vector3 = s.people_view.place_of(b, "t_gun_clean", {}) * View.LAP_AT
+				assert_true(laid.any(func(p): return (p as Vector3).is_equal_approx(want)), "a gun at %s among %s" % [want, laid])
 		else:
 			assert_ne(s.people_view.drawn[b], "t_gun_clean")
 

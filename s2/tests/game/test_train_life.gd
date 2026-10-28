@@ -1309,6 +1309,18 @@ func test_a_return_from_a_scene_or_a_fire_faces_the_way_it_sat() -> void:
 		for body in s.car(car_id)["bodies"]:
 			body.gesture = ""
 			body.rotation.y = 0.7
+	# Invitations go down the car's list: a well grown-up on a seat goes first, so one
+	# of the pair comes back to a seat.
+	var med: Array = s.car("medtech")["bodies"]
+	var on_seat: Node3D = null
+	for body in med:
+		var traits: Dictionary = s.life.actors[body.get_instance_id()]["traits"]
+		if body.state == "seat" and not traits.get("child", false) and not traits.get("sick", false) and not traits.get("injured", false):
+			on_seat = body
+			break
+	assert_not_null(on_seat, "a well grown-up of medtech sits")
+	med.erase(on_seat)
+	med.push_front(on_seat)
 	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
 	var ids: Array = s.life.interactions["medtech"].members.map(func(m): return m["actor"])
 	var seated: Array = []
