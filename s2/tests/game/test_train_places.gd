@@ -340,3 +340,26 @@ func test_the_engine_room_is_lived_in() -> void:
 	for a in ["rest", "sleep", "warm", "work"]:
 		assert_has(acts, a)
 	assert_eq(Catalog.layout_id({"id": "engine", "kind": "comm", "comm": "engine", "interior": "engine_room"}), "engine_room")
+
+
+## One warming their hands stands beside the car's own stove, clear of the furniture: the dining
+## and captain's cars keep theirs in a corner, and their places once stood mid-car inside the table
+## and the desk. The dining car's corner stove is the kitchen's, so it has no place to warm at.
+func test_places_at_the_stove_stand_beside_it_clear_of_the_furniture() -> void:
+	for id in Catalog.data()["layouts"]:
+		var row: Dictionary = Catalog.data()["layouts"][id]
+		var stoves: Array = (row["props"] as Array).filter(func(p): return String(p.get("system", "")) == "stove")
+		for spot in row["spots"]:
+			if String(spot["activity"]) != "warm":
+				continue
+			assert_eq(stoves.size(), 1, id)
+			var stove: Vector3 = Catalog.vector(stoves[0]["at"])
+			for anchor in spot["anchors"]:
+				assert_lte(absf(float(anchor[0]) - stove.x), 1.0, "%s: beside the stove" % id)
+				for prop in row["props"]:
+					var at: Vector3 = Catalog.vector(prop["at"])
+					var size: Vector3 = Catalog.vector(prop["size"])
+					var inside := absf(float(anchor[0]) - at.x) < size.x * 0.5 and absf(float(anchor[2]) - at.z) < size.z * 0.5
+					assert_false(inside, "%s: a place at the stove inside %s" % [id, prop["id"]])
+	var dining: Array = (Catalog.data()["layouts"]["dining"]["spots"] as Array).map(func(s): return String(s["activity"]))
+	assert_does_not_have(dining, "warm", "the kitchen stove is the cook's")
