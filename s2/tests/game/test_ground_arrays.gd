@@ -83,13 +83,15 @@ func test_the_loader_puts_the_side_path_on_first_and_the_field_keeps_its_arrays(
 
 func test_a_map_made_for_another_seed_is_made_again() -> void:
 	var loader = StopLoader.new()
-	loader.threaded = false
 	add_child_autofree(loader)
 	loader.prepare(PLACE, 3)
-	assert_true(loader.has_data())
-	assert_eq(int(loader.data["_side_seed"]), 3)
+	if not loader.has_data():
+		await wait_for_signal(loader.data_ready, 30)
+	assert_eq(int(loader.data.get("_side_seed", -1)), 3, "made on the worker for that seed")
 	loader.prepare(PLACE, 3)
-	assert_eq(int(loader.data["_side_seed"]), 3, "the same place and seed keeps what is under way")
+	assert_true(loader.has_data(), "the same place and seed keeps what is under way")
 	loader.prepare(PLACE, 4)
+	assert_false(loader.has_data(), "another seed: made again")
+	await wait_for_signal(loader.data_ready, 30)
 	assert_eq(loader.seed_for, 4)
-	assert_eq(int(loader.data["_side_seed"]), 4)
+	assert_eq(int(loader.data.get("_side_seed", -1)), 4)

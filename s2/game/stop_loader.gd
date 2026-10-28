@@ -67,7 +67,7 @@ func prepare(place_id: String, run_seed: int = -1) -> void:
 	_path = FieldMaps.path_of(place)
 	_data_from = Time.get_ticks_usec()
 	if not threaded:
-		_take(make_ready(load(_path), seed_for))
+		_take(FieldMaps.build(place))
 		return
 	if ResourceLoader.load_threaded_request(_path, "", false) != OK:
 		_start_task(load(_path))
@@ -84,11 +84,14 @@ func has_data() -> bool:
 ## standing still, with `opts` (the field's own: squad, seed, departure); it is
 ## handed over by field_built. Waits for the map first if it is not done.
 func build_field(parent: Node, opts: Dictionary) -> void:
-	# The map is made for the field's own seed (its side path); one made for another is
-	# made again, here, before the field is (never a whole map built in one frame).
+	# A map made for another field seed (another side path) is made again, here,
+	# before the field is (never a whole map built in one frame). One made with no
+	# seed has no side path yet: the field puts it on (field_game.gd with_side_path).
 	var want: int = int(opts["seed"]) if opts.has("seed") else -1
-	if _state == "idle" or want != seed_for:
-		prepare(String(opts.get("place", place)), want)
+	if _state == "idle":
+		prepare(String(opts.get("place", "")), want)
+	elif seed_for >= 0 and want != seed_for:
+		prepare(place, want)
 	if not has_data():
 		await data_ready
 	var o: Dictionary = opts.duplicate()
@@ -148,7 +151,7 @@ func _process(_delta: float) -> void:
 		var built: Variant = _box.get("data")
 		if _box.get("vat") is Dictionary:
 			vat = _box["vat"]
-		_take(built if built is Dictionary and not (built as Dictionary).is_empty() else make_ready(load(_path), seed_for))
+		_take(built if built is Dictionary and not (built as Dictionary).is_empty() else FieldMaps.build(place))
 	if is_instance_valid(field) and not field.is_built:
 		var now: int = Time.get_ticks_usec()
 		stats["longest_frame_ms"] = maxf(float(stats.get("longest_frame_ms", 0.0)), float(now - _last_frame) / 1000.0)
