@@ -2,13 +2,15 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { createGame, isGone, PROFILES } from '../../src/game/state';
+import { createGame, drawPerson, isGone, PROFILES } from '../../src/game/state';
 import type { Game } from '../../src/game/state';
 import { crewNames } from '../../src/game/turn';
-import { COMM_NAME } from '../../src/game/data';
+import { COMMS, COMM_NAME, REP_AGE, TRAIT_BAN } from '../../src/game/data';
+import { nextRandom } from '../../src/core/rng';
+import { enableDark, repGone } from '../../src/game/dark/state';
 import { enableDomestic } from '../../src/game/domestic/state';
 import {
-  applyFieldReturn, BODY_SEARCH_REL, checkDeparture, chooseSymbolUse, decodeFieldReceipt, judgePromises, matchDeparture, symbolOptions,
+  applyFieldReturn, BODY_SEARCH_REL, CAPTAIN_ID, checkDeparture, chooseSymbolUse, decodeFieldReceipt, judgePromises, matchDeparture, symbolOptions,
 } from '../../src/game/field_receipt';
 import type { FieldDeparture, FieldReceipt } from '../../src/game/field_receipt';
 
@@ -262,6 +264,129 @@ describe('필드 영수증 판 4: 판에 반영', () => {
     (g.comms.tail as any).promise = live;
     applyFieldReturn(g, dep(), read('case1_symbol_kept.json'));
     expect(g.comms.tail.promise).toEqual(live);
+  });
+});
+
+describe('필드에 남겨진 대표 승계(사용자 답 2026-10-29)', () => {
+  function leftReturn(g: Game, leftBehind: string[], missing: string[] = []) {
+    const sent = [...leftBehind, ...missing];
+    const departure: FieldDeparture = {
+      ...dep(), segment: g.seg, domestic: false, promises: [],
+      roster: sent.map(id => ({ id, comm: id === CAPTAIN_ID ? 'front' : PROFILES.find(p => p.id === id)!.community })),
+    };
+    const receipt: FieldReceipt = {
+      ...read<FieldReceipt>('case3_nosymbol_kept.json'), stock: {}, fieldPromises: [],
+      people: { sent, injured: [], bitten: [], dead: [], leftBehind, missing, rescued: [] },
+    };
+    return { departure, receipt };
+  }
+
+  it.each(['leftBehind', 'missing'] as const)('S1a 대표의 %s: 같은 칸의 새 대표, 주 난수 두 번, 일지와 자리 초기화', kind => {
+    const g = createGame(SEED);
+    const c = 'engine';
+    const s = g.comms[c];
+    const old = structuredClone(s.leader);
+    const used = [...g.usedProfiles];
+    const rng = nextRandom(nextRandom(g.rng).rng).rng;
+    s.sick = { since: g.seg, rep: old };
+    s.debt = true;
+    s.promise = { kind: 'open', cond: { kind: 'skip_dispatch', label: '파견 제외', now: false }, label: '파견 제외', due: g.seg + 1, madeSession: 0 };
+    const { departure, receipt } = leftReturn(g, kind === 'leftBehind' ? [old.personId] : [], kind === 'missing' ? [old.personId] : []);
+    applyFieldReturn(g, departure, receipt);
+    const who = PROFILES.find(p => p.id === s.leader.personId)!;
+    expect(who.community).toBe(c);
+    expect(who.age).toBeGreaterThanOrEqual(REP_AGE[c][0]);
+    expect(who.age).toBeLessThanOrEqual(REP_AGE[c][1]);
+    expect(s.leader.personId).not.toBe(old.personId);
+    expect(used).not.toContain(who.id);
+    expect(g.usedProfiles).toEqual([...used, who.id]);
+    expect(g.left).toEqual([old.name]);
+    expect(s.leader.trait).not.toBe(old.trait);
+    expect(s.leader.trait).not.toBe(TRAIT_BAN[c]);
+    expect(s.leader.traitShown).toBe(0);
+    expect(s.sick).toBeUndefined();
+    expect(s.debt).toBe(false);
+    expect(s.promise).toBeNull();
+    expect(g.rng).toEqual(rng);
+    expect(g.journal).toContainEqual({ seg: g.seg, text: `${who.name}이(가) ${COMM_NAME[c]} 대표 자리를 이었다.`, tone: 'dark' });
+    const once = JSON.stringify(g);
+    expect(applyFieldReturn(g, departure, receipt).status).toBe('duplicate');
+    expect(JSON.stringify(g)).toBe(once);
+  });
+
+  it('대표 아닌 사람은 떠난 명단에만 들어가고 대표와 난수는 그대로다', () => {
+    const g = createGame(SEED);
+    const who = PROFILES.find(p => p.community === 'engine' && p.id !== g.comms.engine.leader.personId)!;
+    const leaders = COMMS.map(c => structuredClone(g.comms[c].leader));
+    const rng = structuredClone(g.rng);
+    const { departure, receipt } = leftReturn(g, [who.id]);
+    applyFieldReturn(g, departure, receipt);
+    expect(g.left).toEqual([who.name]);
+    expect(COMMS.map(c => g.comms[c].leader)).toEqual(leaders);
+    expect(g.rng).toEqual(rng);
+    expect(g.journal.some(row => row.text.endsWith('대표 자리를 이었다.'))).toBe(false);
+  });
+
+  it.each(['leftBehind', 'missing'] as const)('열차장의 %s는 떠난 명단이나 대표에 영향을 주지 않는다', kind => {
+    const g = createGame(SEED);
+    const leaders = COMMS.map(c => structuredClone(g.comms[c].leader));
+    const rng = structuredClone(g.rng);
+    const { departure, receipt } = leftReturn(g, kind === 'leftBehind' ? [CAPTAIN_ID] : [], kind === 'missing' ? [CAPTAIN_ID] : []);
+    applyFieldReturn(g, departure, receipt);
+    expect(g.left ?? []).toEqual([]);
+    expect(COMMS.map(c => g.comms[c].leader)).toEqual(leaders);
+    expect(g.rng).toEqual(rng);
+  });
+
+  it.each([false, true])('함께 남겨진 사람은 후임에서 제외한다(대체 풀=%s)', fallback => {
+    const g = createGame(SEED);
+    const c = 'engine';
+    if (fallback) g.usedProfiles = PROFILES.map(p => p.id);
+    const old = structuredClone(g.comms[c].leader);
+    const probe = structuredClone(g);
+    probe.left = [old.name];
+    // 전원을 먼저 명단에 넣지 않으면 첫 후임으로 뽑힐 사람을 함께 남긴다.
+    const companion = drawPerson(probe, c, REP_AGE[c]);
+    const rng = nextRandom(nextRandom(g.rng).rng).rng;
+    const { departure, receipt } = leftReturn(g, [old.personId], [companion.id]);
+    applyFieldReturn(g, departure, receipt);
+    expect(g.left).toEqual([old.name, companion.name]);
+    expect([old.personId, companion.id]).not.toContain(g.comms[c].leader.personId);
+    expect(g.rng).toEqual(rng);
+    expect(g.journal.filter(row => row.text.endsWith('대표 자리를 이었다.'))).toHaveLength(1);
+    if (fallback) expect(g.usedProfiles).toEqual(PROFILES.map(p => p.id));
+  });
+
+  it('대체 풀은 사용한 프로필·나이 제한을 풀되 떠난 사람과 죽은 사람은 뺀다', () => {
+    const g = createGame(SEED);
+    const c = 'engine';
+    const old = g.comms[c].leader;
+    const survivor = PROFILES.find(p => p.community === c && p.age < REP_AGE[c][0])!;
+    const others = PROFILES.filter(p => p.community === c && p.id !== old.personId && p.id !== survivor.id);
+    g.left = others.slice(1).map(p => p.name);
+    g.deaths = [others[0].name];
+    g.usedProfiles = PROFILES.map(p => p.id);
+    const { departure, receipt } = leftReturn(g, [old.personId]);
+    applyFieldReturn(g, departure, receipt);
+    expect(g.comms[c].leader.personId).toBe(survivor.id);
+    expect(g.usedProfiles).toEqual(PROFILES.map(p => p.id));
+  });
+
+  it('dark 판은 하차 명령의 repGone과 같은 대표·일지·두 난수 상태를 낸다', () => {
+    const g = createGame(SEED);
+    enableDark(g);
+    const c = 'engine';
+    const old = g.comms[c].leader;
+    const expected = structuredClone(g);
+    expected.left = [old.name];
+    repGone(expected, c, old.personId);
+    const { departure, receipt } = leftReturn(g, [old.personId]);
+    applyFieldReturn(g, departure, receipt);
+    expect(g.comms[c].leader).toEqual(expected.comms[c].leader);
+    expect(g.rng).toEqual(expected.rng);
+    expect(g.dark!.rng).toEqual(expected.dark!.rng);
+    expect(g.usedProfiles).toEqual(expected.usedProfiles);
+    expect(g.journal).toContainEqual(expected.journal.at(-1));
   });
 });
 

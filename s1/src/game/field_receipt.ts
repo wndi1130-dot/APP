@@ -5,12 +5,13 @@ import chronicleSchema from '../../schema/chronicle.schema.json';
 import receiptSchema from '../../schema/receipt.schema.json';
 import { bump, bumpRel } from './ledger';
 import { addSupplies } from './supplies';
-import { COMMS, COMM_NAME, LOOT_NAME, PLACES, STAY } from './data';
+import { COMMS, COMM_NAME, LOOT_NAME, PLACES, REP_AGE, STAY, TRAIT_BAN, TRAITS } from './data';
 import type { Comm, LootKey } from './data';
 import { onDeath } from './death';
+import { repGone } from './dark/state';
 import { PROLOGUE } from './prologue';
 import { hangWhy, hangSymbol } from './domestic/symbols';
-import { isGone, journal, PROFILES, situation, storyOf } from './state';
+import { drawPerson, isGone, journal, pick, PROFILES, situation, storyOf } from './state';
 import type { Game, LootDeck, Phase } from './state';
 import { breakPromise, burnPyre, checkStopPromises, crewAwayOf, crewRest, keepPromise, noteTarget } from './turn';
 import { noteBroken } from './council_log';
@@ -28,7 +29,7 @@ const CAPTAIN_COMM: Comm = 'front';
 // 열차가 필드에 넘기는 「출발 명세」와 필드가 돌려주는 「귀환 영수증」(판 4)을 따로 둔다.
 // 필드는 일어난 일만 적는다(누가 나갔고 누가 돌아왔고 무엇을 들고 왔고 약속을 누가 봤나). 약속의 지킴·어김·알 수 없음과
 // 상징물의 쓰임은 열차가 정한다. 그래서 같은 영수증을 두 번 받아도, 자동 풀이가 만든 영수증이어도 판정은 한 길이다.
-// 이 모듈은 난수를 쓰지 않는다. 주사위 정차만 도는 판(봇·시뮬)은 이 길을 지나지 않으니 그 판들의 값은 그대로다.
+// 남겨진 대표를 이을 때만 난수를 쓴다(사용자 답 2026-10-29). 주사위 정차만 도는 판(봇·시뮬)은 이 길을 지나지 않는다.
 
 export const FIELD_PROMISE_KINDS = ['prologue', 'skip_dispatch'] as const;
 export type FieldPromiseKind = typeof FIELD_PROMISE_KINDS[number];
@@ -472,10 +473,27 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   residentScenes(g, departure, r);
   RETURN_HOOK.after?.(g, departure, r); // 사람 기억(memory.ts): 그 정차에서 사람마다 겪거나 본 일
   // 남겨지거나 사라진 사람은 떠난 사람 명단에도 넣는다: 다음 작업조와 열차 사람 판정(isGone)이 인구와 같은 사람을 본다.
-  // 사람 기억이 이번 귀환의 가족을 찾은 뒤에 넣는다. 열차장은 넣지 않고, 칸 대표여도 자리는 그대로다(남겨진 대표를 잇는 규칙이 아직 없다).
+  // 사람 기억이 이번 귀환의 가족을 찾은 뒤에 넣는다. 열차장은 제외하고, 전원을 먼저 넣어 함께 남겨진 사람이 후임으로 뽑히지 않게 한다.
   for (const pid of lost) {
     const name = personOf(departure, pid).name;
     if (pid !== CAPTAIN_ID && !isGone(g, name)) (g.left ??= []).push(name);
+  }
+  // 사용자 답 2026-10-29: 남겨진 대표는 하차 명령처럼 그 칸의 다른 사람이 잇는다.
+  for (const pid of lost) {
+    if (pid === CAPTAIN_ID) continue;
+    const c = COMMS.find(c => g.comms[c].leader.personId === pid);
+    if (!c) continue;
+    if (g.dark) repGone(g, c, pid);
+    else {
+      const s = g.comms[c];
+      const p = drawPerson(g, c, REP_AGE[c]);
+      const traits = TRAITS.filter(t => t !== TRAIT_BAN[c] && t !== s.leader.trait);
+      s.leader = { personId: p.id, name: p.name, age: p.age, trait: pick(g, traits), traitShown: 0 };
+      s.sick = undefined;
+      s.debt = false;
+      s.promise = null;
+      journal(g, `${p.name}이(가) ${COMM_NAME[c]} 대표 자리를 이었다.`, 'dark');
+    }
   }
   closeFieldStop(g, departure, r);
   if (r.symbol) {

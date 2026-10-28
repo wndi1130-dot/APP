@@ -66,6 +66,43 @@ static func _profile(t: Dictionary, person_id: String) -> Dictionary:
 	return {}
 
 
+## S1 state.pick: one main-RNG draw, including a one-person pool.
+static func _pick(g: Dictionary, items: Array) -> Variant:
+	var draw := Rng.next(int(g["rng"]["state"]))
+	g["rng"]["state"] = int(draw[1])
+	return items[int(floorf(float(draw[0]) * items.size()))]
+
+
+## S1a succession (사용자 답 2026-10-29). Keep drawPerson's ordered pool and fallback.
+static func _succeed_rep(g: Dictionary, t: Dictionary, comm: String) -> void:
+	var state: Dictionary = g["comms"][comm]
+	var ages: Array = t["REP_AGE"][comm]
+	var used: Array = g["usedProfiles"]
+	var pool: Array = []
+	var fallback: Array = []
+	for profile: Dictionary in t["PROFILES"]:
+		if profile["community"] != comm or TrainState.is_gone(g, profile["name"]):
+			continue
+		fallback.append(profile)
+		if not used.has(profile["id"]) and int(profile["age"]) >= int(ages[0]) and int(profile["age"]) <= int(ages[1]):
+			pool.append(profile)
+	var person: Dictionary = _pick(g, pool if not pool.is_empty() else fallback)
+	if not used.has(person["id"]):
+		used.append(person["id"])
+	var traits: Array = []
+	for trait_id: String in t["TRAITS"]:
+		if trait_id != t["TRAIT_BAN"].get(comm) and trait_id != state["leader"]["trait"]:
+			traits.append(trait_id)
+	state["leader"] = {
+		"personId": person["id"], "name": person["name"], "age": person["age"],
+		"trait": _pick(g, traits), "traitShown": 0,
+	}
+	state.erase("sick")
+	state["debt"] = false
+	state["promise"] = null
+	_journal(g, "%s이(가) %s 대표 자리를 이었다." % [person["name"], t["COMM_NAME"][comm]], "dark")
+
+
 static func _person_of(t: Dictionary, departure: Dictionary, person_id: String) -> Dictionary:
 	if person_id == FieldDeparture.CAPTAIN_ID:
 		return {"name": FieldDeparture.CAPTAIN_NAME, "comm": FieldDeparture.CAPTAIN_COMM}
@@ -643,13 +680,21 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	PersonMemory.from_return(g, t, departure, receipt, returned_of(receipt))
 	# Left behind or missing: on the left list as well, so the next crew and the train's
 	# is_gone see the same people as the count. After the memories have found this return's
-	# kin. Not the captain; a car's rep keeps the seat (no rule yet for a rep left behind).
+	# kin. Exclude the captain; list everyone before drawing a successor from those still aboard.
 	for person_id: String in lost_ids:
 		var name: String = _person_of(t, departure, person_id)["name"]
 		if person_id != FieldDeparture.CAPTAIN_ID and not TrainState.is_gone(g, name):
 			if not g.get("left") is Array:
 				g["left"] = []
 			(g["left"] as Array).append(name)
+	# 사용자 답 2026-10-29: another person from the car succeeds a rep left behind or missing.
+	for person_id: String in lost_ids:
+		if person_id == FieldDeparture.CAPTAIN_ID:
+			continue
+		for comm: String in t["COMMS"]:
+			if g["comms"][comm]["leader"].get("personId") == person_id:
+				_succeed_rep(g, t, comm)
+				break
 	_close_field_stop(g, t, departure, receipt)
 	if receipt["symbol"] is Dictionary:
 		var comm: String = receipt["symbol"]["groupId"]
