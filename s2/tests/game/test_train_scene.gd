@@ -382,7 +382,10 @@ func test_friendly_cars_call_on_each_other_and_the_tail_calls_on_nobody() -> voi
 				continue
 			var x0: float = s.car(String(b.visit_car))["x0"]
 			var from_door: float = minf(absf(b.position.x - x0), absf(b.position.x - x0 - Scene.CAR_LENGTH))
-			if absf(from_door - Scene.CALL_INSIDE) > 0.05 or not is_equal_approx(b.position.z, Scene.AISLE_Z):
+			# Its own place at the door, or the second of the door's pair when one of the
+			# car already waits there for someone to talk to.
+			var off: float = minf(absf(from_door - Scene.CALL_INSIDE), absf(from_door - Scene.CALL_INSIDE - Scene.CALL_APART))
+			if off > 0.05 or not is_equal_approx(b.position.z, Scene.AISLE_Z):
 				bad.append("a caller stands at %s" % b.position)
 		for tail in ["tail1", "tail2", "tail3"]:
 			if int(s.car(tail)["out"]) != 0:

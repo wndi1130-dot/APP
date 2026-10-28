@@ -98,7 +98,10 @@ func test_stove_spots_form_a_staggered_front_semicircle() -> void:
 			count += 1
 			var stove: Dictionary = layout["props"].filter(func(p): return p["id"] == "stove")[0]
 			var center := Vector2(float(stove["at"][0]), float(stove["at"][2]))
-			assert_eq(spot["look_at"], [center.x, center.y])
+			var focus: Array = spot["look_at"]
+			assert_eq(focus.size(), 2)
+			assert_almost_eq(float(focus[0]), center.x, 0.001)
+			assert_almost_eq(float(focus[1]), center.y, 0.001)
 			var depths: Array[float] = []
 			for anchor in spot["anchors"]:
 				var at := Vector2(float(anchor[0]), float(anchor[2]))
@@ -1319,6 +1322,16 @@ func test_a_return_from_a_scene_or_a_fire_faces_the_way_it_sat() -> void:
 		var b: Node3D = s.life.actors[id]["body"]
 		assert_eq(b.state, "seat")
 		assert_almost_eq(float(b.rotation.y), 0.7, 0.001, "back on its seat facing the way it sat")
+	# The fire moves a few at a time from the front of the car's list: one on a seat goes first.
+	var tail: Array = s.car("tail1")["bodies"]
+	var sitter: Node3D = null
+	for body in tail:
+		if body.state == "seat":
+			sitter = body
+			break
+	assert_not_null(sitter, "someone of tail1 sits")
+	tail.erase(sitter)
+	tail.push_front(sitter)
 	var checked: int = 0
 	for a in _start_fire(s, "tail1"):
 		# One on its feet when the fire starts has no seat facing to keep.
