@@ -1,5 +1,5 @@
 extends RefCounted
-## What stands round a stop map, outside its cells (결정 448 17번): bare woods
+## What stands round a stop map, outside its cells (결정 448 17번): woods
 ## starting just past the last walkable cell, the rails running on out of them,
 ## and every road ending deep in the band at sleepers or crates (지도 발주 6장:
 ## no wire on roads or bands; barricades are crates, sleds and sleeper piles).
@@ -9,6 +9,9 @@ extends RefCounted
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
+const BuildingUses = preload("res://game/world/building_uses.gd")
+const Atmosphere = preload("res://fx/atmosphere.gd")
+const BuildPace = preload("res://game/world/build_pace.gd")
 const F = FieldGrid.Floor
 
 ## Metres of woods drawn outside each edge, independent of the camera's reach.
@@ -28,10 +31,15 @@ const FAR_BUSH := "res://models/props_field/dry_bush.glb"
 const FAR_ROCK := "res://models/props_field/boulder.glb"
 const FAR_POLE := "res://models/props_field/fallen_pole.glb"
 const FAR_CAR := "res://models/props_field/wrecked_car_cluster.glb"
-## The first rows, close and thick, read as the end of the way.
+## The first rows, close and thick, read as the end of the way: young spruce and
+## thicket, low enough not to hide the cells behind them from the tilted camera
+## (35°: a tree hides about 1.4 times its height of ground behind it).
 const INNER_ROW: float = 2.6
-const INNER_SPACING: float = 2.0
-const DEEP_SPACING: float = 4.0
+const YOUNG_TALL := Vector2(1.8, 3.4)
+## Past them the tall woods, taller deeper in (full height CANOPY_RAMP metres past
+## INNER_ROW), so the edge reads as a forest's edge and the tall crowns stand back.
+const CANOPY_TALL := Vector2(4.6, 8.5)
+const CANOPY_RAMP: float = 5.0
 ## No trunk nearer the edge than this: the last walkable cell stays clear.
 const TRUNK_GAP: float = 0.3
 ## How far that start wanders out along the edge.
@@ -52,9 +60,17 @@ const CHUNK: float = 16.0
 ## people walk: the sun's shadow reaches the edge even from the middle of a map,
 ## and further out the fog past the edge (fx/map_edge.gd) lies over the ground.
 const SHADE_DEPTH: float = 1.2
-const TREE_HEIGHT := Vector2(3.6, 5.6)
 
-const TREE_MODEL := "res://models/props_common/bare_tree.glb"
+## The woods' models. Each tree is made on a one-cell footprint (1 m across at 4~5 m
+## tall), too thin for a crown: SPREAD widens it across so neighbouring crowns meet
+## and the woods read as one mass from the tilted camera (user 10-28). Spruce is the
+## body of the woods; the leafless broadleaf is mixed in (user 10-28).
+const SPRUCE := "res://models/props_field/spruce.glb"
+const BROADLEAF := "res://models/props_common/bare_tree.glb"
+const ORCHARD := "res://models/props_field/bare_orchard_tree.glb"
+const STREET := "res://models/props_field/street_tree.glb"
+const THICKET := "res://models/props_field/thicket.glb"
+const SPREAD: Dictionary = {SPRUCE: 1.9, BROADLEAF: 2.0, ORCHARD: 2.0, STREET: 2.0}
 const BLOCK_MODELS: Array[String] = ["res://models/props_stop01/sleeper_fence.glb", "res://models/props_common/crate_stack.glb"]
 ## Now and then a small glade behind the first rows, with a trace of people in it, so
 ## the band reads as woods and not as a wall (ref-ops 참고 대조 4 E3): one chance every
@@ -85,6 +101,42 @@ const COVER_SKIP: float = 0.12
 const COVER_BANK: float = 0.2
 const COVER_PIECES := Vector2i(3, 6)
 const COVER_SPREAD: float = 3.0
+
+## How thick the woods stand by what the place is (결정 478: map group -> region):
+## forest and mountain stops dense, town stops thin with fruit and street trees, the
+## rail works between (user 10-28; a place with no group is "mixed").
+const PROFILE_OF: Dictionary = {
+	"mountain_works": "dense", "high_mountain": "dense", "waterside": "dense", "bare_line": "dense",
+	"rail_works": "mixed", "town": "town",
+}
+## Per layer the jittered lattice's spacing and the share of its points left empty.
+## young: the share of the first rows that is young spruce (the rest thicket or bush).
+## conifer: the least share of spruce among the tall trees; the region band's own share
+## wins when higher (Atmosphere.REGIONS, from seasons_regions.md 5장). far: the share
+## of the far ground under woods (_far_woods), before the region band's forest share.
+const PROFILES: Dictionary = {
+	"dense": {"edge": 1.5, "edge_skip": 0.1, "young": 0.55, "canopy": 2.2, "canopy_skip": 0.04, "conifer": 0.7,
+		"under": 3.0, "under_skip": 0.25, "far": 0.75, "far_fields": 1},
+	"mixed": {"edge": 1.8, "edge_skip": 0.25, "young": 0.5, "canopy": 2.8, "canopy_skip": 0.12, "conifer": 0.6,
+		"under": 3.6, "under_skip": 0.35, "far": 0.4, "far_fields": 3},
+	"town": {"edge": 2.2, "edge_skip": 0.3, "young": 0.2, "canopy": 3.6, "canopy_skip": 0.2, "conifer": 0.15,
+		"under": 4.0, "under_skip": 0.4, "far": 0.0, "far_fields": 3},
+}
+## What grows low under the tall trees, by weight; town edges are bush, not thicket.
+const UNDER: Dictionary = {
+	"dense": [[THICKET, 0.35], [FAR_GRASS, 0.35], [FAR_BUSH, 0.18], [LOG_MODEL, 0.12]],
+	"mixed": [[THICKET, 0.3], [FAR_GRASS, 0.4], [FAR_BUSH, 0.22], [LOG_MODEL, 0.08]],
+	"town": [[FAR_GRASS, 0.5], [FAR_BUSH, 0.35], [THICKET, 0.15]],
+}
+## A town's tall trees that are not spruce: fruit trees, street trees, a few others.
+const TOWN_TREES: Array = [[ORCHARD, 0.5], [STREET, 0.35], [BROADLEAF, 0.15]]
+## Past the band the woods go on in stands out to FAR_WOODS, where the edge fog is
+## about whole (MapEdge.fog_reach at the default reach), kept where a noise is under
+## the place's share so clearings open between the stands: closer in the ring the
+## camera shows (BAND to VIEW_BAND), thinner past it.
+const FAR_WOODS: float = 34.0
+const FAR_WOODS_SPACING := Vector2(3.0, 4.2)
+const FAR_WOODS_TALL := Vector2(5.0, 9.0)
 
 
 ## Half the ground the field camera shows along the map's x and z: across from the
@@ -136,6 +188,36 @@ static func seed_of(data: Dictionary) -> int:
 	return hash(String(data.get("place_id", "")) + ":edge")
 
 
+## How the woods round this map grow: {profile (PROFILES), conifer (share of spruce
+## among tall trees), forest (the region band's forest share)}. The region band is
+## the stretch's (field_game puts it in the map's data as "region_band").
+static func look_of(data: Dictionary) -> Dictionary:
+	var profile := String(PROFILE_OF.get(BuildingUses.region_of(String(data.get("place_id", ""))), "mixed"))
+	var band := Atmosphere.region(String(data.get("region_band", "")))
+	var least := float(PROFILES[profile]["conifer"])
+	var conifer := least
+	if profile != "town":
+		var wood := float(band["conifer"]) + float(band["birch"])
+		conifer = maxf(least, float(band["conifer"]) / maxf(wood, 0.01))
+	return {"profile": profile, "conifer": conifer, "forest": float(band["forest"])}
+
+
+## Everything plan() reads: of the map only its size and where roads and rails cross
+## its edges, of the data only the place (seed) and the region band (look).
+static func plan_key(g: FieldGrid, seed: int, look: Dictionary) -> Dictionary:
+	return {"size": Vector2i(g.width, g.height), "openings": openings(g), "seed": seed, "look": look}
+
+
+## The plan made ahead off the main thread (stop_loader.make_ready), with the key it
+## was made from: {key, plan}. build() uses it only while the key still fits; a field
+## given another region band than the loader saw plans again on the main thread.
+static func plan_ahead(d: Dictionary) -> Dictionary:
+	var g: FieldGrid = d["grid"]
+	var seed := seed_of(d)
+	var look := look_of(d)
+	return {"key": plan_key(g, seed, look), "plan": plan(g, seed, look)}
+
+
 ## Where a road or the rails cross an edge: {"side": 0 west 1 east 2 north 3 south,
 ## "from", "to" (cells along the edge, to inclusive), "floor"}.
 static func openings(g: FieldGrid) -> Array:
@@ -149,7 +231,9 @@ static func openings(g: FieldGrid) -> Array:
 			if i < n:
 				var c := _edge_cell(g, side, i)
 				var kind := g.floor_at(c)
-				if (kind == F.ROAD or kind == F.RAIL) and g.people_can_walk(c):
+				# Rails as the map draws them (track_view.gd runs: the rail floor alone), so the
+				# rails out of the map meet those in it even where a car stands on the last cell.
+				if kind == F.RAIL or (kind == F.ROAD and g.people_can_walk(c)):
 					f = kind
 			if f != run_floor:
 				if run_from >= 0 and (run_floor == F.RAIL or i - run_from <= ROAD_WIDEST):
@@ -193,9 +277,12 @@ static func outside(g: FieldGrid, x: float, z: float) -> float:
 	return Vector2(maxf(dx, 0.0), maxf(dz, 0.0)).length()
 
 
-## Everything the band places, the same for the same map: trees {at, yaw, height},
-## blocks {at, yaw, model}, the clear corridors and the openings they come from.
-static func plan(g: FieldGrid, seed: int) -> Dictionary:
+## Everything the band places, the same for the same map: trees {at, yaw, model,
+## height and spread, or scale for what grows low}, blocks {at, yaw, model}, the clear
+## corridors and the openings they come from. `look`: look_of, "mixed" when empty.
+static func plan(g: FieldGrid, seed: int, look: Dictionary = {}) -> Dictionary:
+	var lk := look if not look.is_empty() else look_of({})
+	var profile: Dictionary = PROFILES[lk["profile"]]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed
 	var runs := openings(g)
@@ -222,17 +309,19 @@ static func plan(g: FieldGrid, seed: int) -> Dictionary:
 	for gl: Dictionary in glades:
 		no_trees.append((gl["rect"] as Rect2).grow(0.5))  # no trunk against the trace's edge
 	var trees: Array = []
-	_scatter(g, rng, no_trees, trees, INNER_SPACING, TRUNK_GAP, INNER_ROW)
-	_scatter(g, rng, no_trees, trees, DEEP_SPACING, INNER_ROW, BAND)
+	_scatter(g, rng, no_trees, trees, float(profile["edge"]), TRUNK_GAP, INNER_ROW, "edge", lk)
+	_scatter(g, rng, no_trees, trees, float(profile["canopy"]), INNER_ROW, BAND, "canopy", lk)
+	_scatter(g, rng, no_trees, trees, float(profile["under"]), INNER_ROW, BAND, "under", lk)
 	# New scenery never consumes a draw from the woods or the glades.
-	var distant := _far_plan(g, seed, runs)
+	var distant := _far_plan(g, seed, runs, lk)
 	return {"trees": trees, "blocks": blocks, "glades": glades, "clear": clear, "runs": runs,
 		"far": distant["far"], "fields": distant["fields"], "tracks": distant["tracks"], "sounds": distant["sounds"]}
 
 
-## Scenery {at, yaw, scale, model, side}; houses use dimensions as their scale.
+## Scenery {at, yaw, scale (trees: height and spread), model, side}; houses use
+## dimensions as their scale.
 ## Corridors continue to the far edge, without changing the near woods' clear list.
-static func _far_plan(g: FieldGrid, seed: int, runs: Array) -> Dictionary:
+static func _far_plan(g: FieldGrid, seed: int, runs: Array, look: Dictionary) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(str(seed) + ":far")
 	var corridors: Array[Rect2] = []
@@ -262,7 +351,12 @@ static func _far_plan(g: FieldGrid, seed: int, runs: Array) -> Dictionary:
 			for tree_index in grove_size:
 				var angle := TAU * float(tree_index) / float(grove_size) + rng.randf_range(-0.3, 0.3)
 				var at := center + Vector3(cos(angle), 0, sin(angle)) * rng.randf_range(1.2, 3.5)
-				_far_prop(scenery, at, side, FAR_TREES[rng.randi_range(0, FAR_TREES.size() - 1)], rng)
+				# A town's groves are willow and fruit trees; elsewhere the woods' own
+				# trees, from as many draws, so the rest of the far ground stays put.
+				if String(look["profile"]) == "town":
+					_far_prop(scenery, at, side, FAR_TREES[rng.randi_range(0, FAR_TREES.size() - 1)], rng)
+				else:
+					_far_tree(scenery, at, side, SPRUCE if rng.randf() < float(look["conifer"]) else BROADLEAF, rng)
 		for model: String in [FAR_BUSH, FAR_ROCK, FAR_POLE]:
 			var wanted := rng.randi_range(0, 2) if model == FAR_POLE else rng.randi_range(1, 3)
 			for _piece in wanted:
@@ -292,13 +386,79 @@ static func _far_plan(g: FieldGrid, seed: int, runs: Array) -> Dictionary:
 			if _far_empty(g, at, 3.3, corridors):
 				_far_prop(scenery, at, side, FAR_CAR, rng)
 				break
-	var fields := _far_fields(g, seed, corridors)
+	var fields := _far_fields(g, seed, corridors, int(PROFILES[look["profile"]]["far_fields"]))
 	var cover := _ring_cover(g, seed, corridors)
 	scenery.append_array(cover["props"])
 	for bank: Dictionary in cover["banks"]:
 		if _far_plot_clear(bank["rect"] as Rect2, corridors, fields):
 			fields.append(bank)
+	scenery.append_array(_far_woods(g, seed, corridors, fields, houses, look))
 	return {"far": scenery, "fields": fields, "tracks": tracks, "sounds": _far_sounds(g, seed, rails)}
+
+
+## The woods going on past the band (FAR_WOODS*), from their own draw: stands where a
+## noise is under the place's share, none on a corridor, a plot or near a house.
+static func _far_woods(g: FieldGrid, seed: int, corridors: Array[Rect2], plots: Array[Dictionary], houses: Array[Vector3], look: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var share := float(PROFILES[look["profile"]]["far"]) * (0.6 + 0.5 * float(look["forest"]))
+	if share <= 0.0:
+		return out
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(str(seed) + ":woods")
+	var noise := FastNoiseLite.new()
+	noise.seed = posmod(seed, 100000)
+	noise.frequency = 0.05
+	var rings := [[BAND, VIEW_BAND, FAR_WOODS_SPACING.x, share], [VIEW_BAND, FAR_WOODS, FAR_WOODS_SPACING.y, share * 0.65]]
+	for ring: Array in rings:
+		var near := float(ring[0])
+		var far := float(ring[1])
+		var spacing := float(ring[2])
+		var z := -far
+		while z < float(g.height) + far:
+			var x := -far
+			while x < float(g.width) + far:
+				if outside(g, x + spacing * 0.5, z + spacing * 0.5) < near - spacing:
+					x += spacing
+					continue
+				var at := Vector3(x + spacing * (0.5 + rng.randf_range(-0.42, 0.42)), 0, z + spacing * (0.5 + rng.randf_range(-0.42, 0.42)))
+				var yaw := rng.randf() * TAU
+				var size := rng.randf()
+				var pick := rng.randf()
+				x += spacing
+				var depth := outside(g, at.x, at.z)
+				if depth < near or depth >= far or noise.get_noise_2d(at.x, at.z) * 0.5 + 0.5 > float(ring[3]):
+					continue
+				if not _far_empty(g, at, 1.2, corridors) or _near_house(houses, at, 7.0) or _on_plot(plots, at, 1.5):
+					continue
+				var model := SPRUCE if pick < float(look["conifer"]) else BROADLEAF
+				out.append({"at": at, "yaw": yaw, "height": lerpf(FAR_WOODS_TALL.x, FAR_WOODS_TALL.y, size), "spread": SPREAD[model],
+					"model": model, "side": _side_of(g, at)})
+			z += spacing
+	return out
+
+
+static func _near_house(houses: Array[Vector3], at: Vector3, reach: float) -> bool:
+	for h in houses:
+		if h.distance_to(at) < reach:
+			return true
+	return false
+
+
+static func _on_plot(plots: Array[Dictionary], at: Vector3, pad: float) -> bool:
+	for p in plots:
+		if (p["rect"] as Rect2).grow(pad).has_point(Vector2(at.x, at.z)):
+			return true
+	return false
+
+
+## Which side's far ground a point lies on (0 west 1 east 2 north 3 south); a corner
+## square goes with the side it lies further out from.
+static func _side_of(g: FieldGrid, at: Vector3) -> int:
+	var dx := maxf(-at.x, at.x - float(g.width))
+	var dz := maxf(-at.z, at.z - float(g.height))
+	if dx >= dz:
+		return 0 if at.x < 0.0 else 1
+	return 2 if at.z < 0.0 else 3
 
 
 ## Low cover in the near ring (COVER_*), from its own draw so the far scenery stands
@@ -363,14 +523,20 @@ static func _far_prop(scenery: Array[Dictionary], at: Vector3, side: int, model:
 	scenery.append({"at": at, "yaw": rng.randf_range(0.0, TAU), "scale": Vector3.ONE * scale, "model": model, "side": side})
 
 
+## A tree of the woods out there, by height and crown (SPREAD), from two draws like _far_prop.
+static func _far_tree(scenery: Array[Dictionary], at: Vector3, side: int, model: String, rng: RandomNumberGenerator) -> void:
+	var tall := rng.randf_range(FAR_WOODS_TALL.x, FAR_WOODS_TALL.y)
+	scenery.append({"at": at, "yaw": rng.randf_range(0.0, TAU), "height": tall, "spread": SPREAD[model], "model": model, "side": side})
+
+
 ## Axis-aligned plots and a few low snow banks; leave gaps between the plots.
-static func _far_fields(g: FieldGrid, seed: int, corridors: Array[Rect2]) -> Array[Dictionary]:
+static func _far_fields(g: FieldGrid, seed: int, corridors: Array[Rect2], most: int = 3) -> Array[Dictionary]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(str(seed) + ":fields")
 	var plots: Array[Dictionary] = []
 	for side in 4:
 		var length := float(g.height if side < 2 else g.width)
-		var wanted := rng.randi_range(1, 3)
+		var wanted := mini(rng.randi_range(1, 3), most)
 		var placed := 0
 		for _attempt in 96:
 			if placed == wanted:
@@ -500,8 +666,11 @@ static func _run_end(r: Rect2, side: int) -> Vector2:
 	return Vector2(0, r.end.y)
 
 
-## A jittered lattice over the ring between `near` and `far` metres outside.
-static func _scatter(g: FieldGrid, rng: RandomNumberGenerator, clear: Array[Rect2], trees: Array, spacing: float, near: float, far: float) -> void:
+## A jittered lattice over the ring between `near` and `far` metres outside; what each
+## point there grows is the layer's (_pick), or nothing. Every point takes the same
+## draws, so one layer's choices never move another's points; lattice cells too far
+## in to reach the ring take none (most of the lattice: the plan is built on the way in).
+static func _scatter(g: FieldGrid, rng: RandomNumberGenerator, clear: Array[Rect2], trees: Array, spacing: float, near: float, far: float, layer: String, look: Dictionary) -> void:
 	var lo := -far
 	var hi_x := float(g.width) + far
 	var hi_z := float(g.height) + far
@@ -509,16 +678,72 @@ static func _scatter(g: FieldGrid, rng: RandomNumberGenerator, clear: Array[Rect
 	while z < hi_z:
 		var x := lo
 		while x < hi_x:
+			if outside(g, x + spacing * 0.5, z + spacing * 0.5) < near - spacing:
+				x += spacing
+				continue
 			var px := x + spacing * 0.5 + rng.randf_range(-0.42, 0.42) * spacing
 			var pz := z + spacing * 0.5 + rng.randf_range(-0.42, 0.42) * spacing
 			var yaw := rng.randf() * TAU
-			var tall := rng.randf_range(TREE_HEIGHT.x, TREE_HEIGHT.y)
+			var roll := rng.randf()
+			var pick := rng.randf()
+			var size := rng.randf()
 			var d := outside(g, px, pz)
 			var start := near if near > TRUNK_GAP else _edge_start(px, pz, rng.seed)
 			if d >= start and d < far and not _in_any(clear, px, pz):
-				trees.append({"at": Vector3(px, 0, pz), "yaw": yaw, "height": tall})
+				var item := _pick(layer, look, d, roll, pick, size)
+				if not item.is_empty():
+					item["at"] = Vector3(px, 0, pz)
+					item["yaw"] = yaw
+					trees.append(item)
 			x += spacing
 		z += spacing
+
+
+## What a layer grows at `d` metres out: {} (the point stays empty, `roll`), else
+## {model, height, spread} for a tree or {model, scale} for what grows low.
+static func _pick(layer: String, look: Dictionary, d: float, roll: float, pick: float, size: float) -> Dictionary:
+	var name := String(look["profile"])
+	var profile: Dictionary = PROFILES[name]
+	match layer:
+		"edge":
+			if roll < float(profile["edge_skip"]):
+				return {}
+			var young := float(profile["young"])
+			if pick < young:
+				return _tree(SPRUCE, lerpf(YOUNG_TALL.x, YOUNG_TALL.y, size))
+			var bush := THICKET if name != "town" or (pick - young) / (1.0 - young) < 0.4 else FAR_BUSH
+			return {"model": bush, "scale": lerpf(0.7, 1.2, size)}
+		"canopy":
+			if roll < float(profile["canopy_skip"]):
+				return {}
+			var tall := lerpf(CANOPY_TALL.x, CANOPY_TALL.y, clampf((d - INNER_ROW) / CANOPY_RAMP, 0.0, 1.0)) * lerpf(0.7, 1.0, size)
+			var conifer := float(look["conifer"])
+			if pick < conifer:
+				return _tree(SPRUCE, tall)
+			if name != "town":
+				return _tree(BROADLEAF, tall)
+			var other := _weighted(TOWN_TREES, (pick - conifer) / (1.0 - conifer))
+			return _tree(other, tall * (0.55 if other == ORCHARD else 0.85))
+	if roll < float(profile["under_skip"]):
+		return {}
+	return {"model": _weighted(UNDER[name], pick), "scale": lerpf(0.8, 1.3, size)}
+
+
+static func _tree(model: String, tall: float) -> Dictionary:
+	return {"model": model, "height": tall, "spread": SPREAD[model]}
+
+
+## The model whose share of the weights `t` (0~1) falls in.
+static func _weighted(table: Array, t: float) -> String:
+	var total := 0.0
+	for row: Array in table:
+		total += float(row[1])
+	var at := t * total
+	for row: Array in table:
+		at -= float(row[1])
+		if at < 0.0:
+			return String(row[0])
+	return String(table[-1][0])
 
 
 ## Where the woods begin past the edge, uneven along it so the edge is not ruled.
@@ -542,9 +767,17 @@ static func _chunk(at: Vector3) -> Vector2i:
 
 ## Draw the band under `parent` (the ground level's root): the road and rail runs
 ## in the map's own material, trees and blocks as models. Returns counts for the
-## build log and the tests.
-static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Material, colors: Array) -> Dictionary:
-	var p := plan(g, seed_of(data))
+## build log and the tests. With a staged build's `pace` it rests between pieces
+## (build_pace.gd), so a stop being made ready never stops the screen for the woods.
+static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Material, colors: Array, pace = null) -> Dictionary:
+	var seed := seed_of(data)
+	var look := look_of(data)
+	# The plan made ahead on the stop loader's worker (plan_ahead), read once, when it
+	# was made from the same inputs; else made here, on the main thread.
+	var ahead: Dictionary = data.get("_edge_plan", {})
+	data.erase("_edge_plan")
+	var planned_ahead: bool = not ahead.is_empty() and ahead["key"] == plan_key(g, seed, look)
+	var p: Dictionary = (ahead["plan"] as Dictionary) if planned_ahead else plan(g, seed, look)
 	var root := Node3D.new()
 	root.name = "EdgeBand"
 	parent.add_child(root)
@@ -571,36 +804,48 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		ground_node.material_override = material
 		ground_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(ground_node)
-	# Trees and blocks: models when there are, else the grey trunk and crown the map uses.
-	var tree_mesh: Mesh = _model_mesh(TREE_MODEL)
-	var tree_h := tree_mesh.get_aabb().size.y if tree_mesh else 1.0
-	# Trees deep in the band throw no shadow: half the cost of a shadow pass for woods
-	# the player only sees the tops of (SHADE_DEPTH).
-	var by_chunk: Dictionary = {}
+	await BuildPace.rest(pace)
+	# Trees and what grows under them. Only the first rows' spruce throw a shadow, on the
+	# ground people walk (SHADE_DEPTH): they go in CHUNK pieces here. Every other plant
+	# throws none and is batched with the far ground by model in its larger pieces
+	# (_build_far), so the woods' many models add few draws. Without its model a tree
+	# is the grey trunk and crown the map uses, here; what grows low is left out.
+	var meshes: Dictionary = {}
+	var with_far: Array = []
+	var groups: Dictionary = {}
 	for t: Dictionary in p["trees"]:
-		var cell := _chunk(t["at"])
 		var at: Vector3 = t["at"]
-		var key := Vector3i(cell.x, cell.y, 1 if outside(g, at.x, at.z) > SHADE_DEPTH else 0)
-		if not by_chunk.has(key):
-			by_chunk[key] = []
-		by_chunk[key].append(t)
-	for key: Vector3i in by_chunk:
-		var list: Array = by_chunk[key]
-		if tree_mesh:
+		var model := String(t["model"])
+		if not meshes.has(model):
+			meshes[model] = _model_mesh(model)
+		var shade := outside(g, at.x, at.z) <= SHADE_DEPTH
+		if meshes[model] != null and not (model == SPRUCE and shade):
+			with_far.append(t)
+			continue
+		if meshes[model] == null and not t.has("height"):
+			continue
+		var cell := _chunk(at)
+		var key := "%s|%d|%d|%d" % [model, cell.x, cell.y, 0 if shade else 1]
+		if not groups.has(key):
+			groups[key] = []
+		(groups[key] as Array).append(t)
+	for key: String in groups:
+		var parts := key.split("|")
+		var model := parts[0]
+		var list: Array = groups[key]
+		var mesh: Mesh = meshes[model]
+		var node: GeometryInstance3D
+		if mesh:
 			var mm := MultiMesh.new()
 			mm.transform_format = MultiMesh.TRANSFORM_3D
-			mm.mesh = tree_mesh
+			mm.mesh = mesh
 			mm.instance_count = list.size()
+			var mesh_h := maxf(mesh.get_aabb().size.y, 0.01)
 			for i in list.size():
-				var t: Dictionary = list[i]
-				var s := float(t["height"]) / maxf(tree_h, 0.01)
-				mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, float(t["yaw"])).scaled(Vector3(s, s, s)), t["at"]))
-			var node := MultiMeshInstance3D.new()
-			node.name = "Trees_%d_%d_%d" % [key.x, key.y, key.z]
-			node.multimesh = mm
-			if key.z == 1:
-				node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			root.add_child(node)
+				mm.set_instance_transform(i, _plant_transform(list[i], mesh_h))
+			var mmi := MultiMeshInstance3D.new()
+			mmi.multimesh = mm
+			node = mmi
 		else:
 			var st := SurfaceTool.new()
 			st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -608,11 +853,16 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 				var tall := float(t["height"])
 				_box(st, Vector3(0.4, tall * 0.55, 0.4), t["at"] + Vector3(0, tall * 0.275, 0), Color(0.3, 0.26, 0.22))
 				_box(st, Vector3(2.0, tall * 0.4, 2.0), t["at"] + Vector3(0, tall * 0.75, 0), Color(0.62, 0.66, 0.66))
-			var node := MeshInstance3D.new()
-			node.name = "Trees_%d_%d_%d" % [key.x, key.y, key.z]
-			node.mesh = st.commit()
-			node.material_override = material
-			root.add_child(node)
+			var mi := MeshInstance3D.new()
+			mi.mesh = st.commit()
+			mi.material_override = material
+			node = mi
+		var label := "Trees" if model == SPRUCE else model.get_file().get_basename()
+		node.name = "%s_%s_%s_%s" % [label, parts[1], parts[2], parts[3]]
+		if parts[3] == "1":
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(node)
+		await BuildPace.rest(pace)
 	var traces := 0
 	for gl: Dictionary in p["glades"]:
 		for t: Dictionary in gl["props"]:
@@ -639,8 +889,9 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 			node.material_override = material
 		node.transform = Transform3D(Basis(Vector3.UP, float(b["yaw"])), b["at"])
 		root.add_child(node)
-	var counts := {"trees": (p["trees"] as Array).size(), "blocks": (p["blocks"] as Array).size(), "glades": (p["glades"] as Array).size(), "traces": traces, "chunks": by_chunk.size(), "runs": (p["runs"] as Array).size()}
-	counts.merge(_build_far(root, g, p, material, colors))
+	var counts := {"trees": (p["trees"] as Array).size(), "blocks": (p["blocks"] as Array).size(), "glades": (p["glades"] as Array).size(), "traces": traces, "chunks": groups.size(), "runs": (p["runs"] as Array).size(), "planned_ahead": planned_ahead}
+	await BuildPace.rest(pace)
+	counts.merge(await _build_far(root, g, p, material, colors, with_far, pace))
 	# Where the danger past the woods is heard (field_audio.gd, the edge bed).
 	var spots: Array[Vector3] = []
 	for s: Dictionary in p["sounds"]:
@@ -652,7 +903,9 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 
 ## One MultiMesh per model and large chunk, plus one shared terrain/house mesh
 ## per chunk. No colliders, audio players or placeholder boxes for missing art.
-static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Material, colors: Array) -> Dictionary:
+## `plants`: the band's woods that throw no shadow, batched with these by model.
+## Rests between pieces with a staged build's `pace`, as build() does.
+static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Material, colors: Array, plants: Array = [], pace = null) -> Dictionary:
 	var root := Node3D.new()
 	root.name = "Far"
 	parent.add_child(root)
@@ -662,7 +915,7 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 	var ground_color := ground["color"] as Color
 	var ground_kind := int(ground["kind"])
 	var house_count := 0
-	for item: Dictionary in p["far"]:
+	for item: Dictionary in (p["far"] as Array) + plants:
 		var at := item["at"] as Vector3
 		var chunk := _far_chunk(at)
 		var model := String(item["model"])
@@ -685,9 +938,10 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.mesh = mesh
 		mm.instance_count = instances.size()
+		var mesh_h := maxf(mesh.get_aabb().size.y, 0.01)
 		for index in instances.size():
 			var item := instances[index] as Dictionary
-			mm.set_instance_transform(index, Transform3D(Basis(Vector3.UP, float(item["yaw"])).scaled(item["scale"] as Vector3), item["at"] as Vector3))
+			mm.set_instance_transform(index, _plant_transform(item, mesh_h))
 		var node := MultiMeshInstance3D.new()
 		var chunk := _far_chunk(first["at"] as Vector3)
 		node.name = "%s_%d_%d" % [String(first["model"]).get_file().get_basename(), chunk.x, chunk.y]
@@ -695,6 +949,7 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(node)
 		prop_count += instances.size()
+		await BuildPace.rest(pace)
 	for plot: Dictionary in p["fields"]:
 		var rect := plot["rect"] as Rect2
 		if String(plot["kind"]) == "bank":
@@ -743,7 +998,10 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 		node.material_override = material
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(node)
-	return {"far": prop_count, "houses": house_count, "fields": (p["fields"] as Array).size(), "tracks": (p["tracks"] as Array).size(), "sounds": (p["sounds"] as Array).size()}
+		await BuildPace.rest(pace)
+	# far_pieces: every piece drawn out there (each model's batches and the ground), for
+	# comparing what the band costs to draw beside chunks (the band's own pieces).
+	return {"far": prop_count, "far_pieces": root.get_child_count(), "houses": house_count, "fields": (p["fields"] as Array).size(), "tracks": (p["tracks"] as Array).size(), "sounds": (p["sounds"] as Array).size()}
 
 
 ## Match the ground outside the blend without depending on map_view (which
@@ -815,6 +1073,20 @@ static func _house(st: SurfaceTool, item: Dictionary, color: Color) -> void:
 				st.set_uv(Vector2.ZERO)
 				st.set_uv2(Vector2.ZERO)
 				st.add_vertex(transform * points[corner])
+
+
+## A plant's place: a tree stands `height` metres tall with its crown widened by
+## `spread`; anything else is scaled by `scale` (a number, or a Vector3 out far).
+static func _plant_transform(t: Dictionary, mesh_h: float) -> Transform3D:
+	var s := Vector3.ONE
+	if t.has("height"):
+		var up := float(t["height"]) / mesh_h
+		var across := up * float(t["spread"])
+		s = Vector3(across, up, across)
+	else:
+		var scale: Variant = t.get("scale", 1.0)
+		s = scale as Vector3 if scale is Vector3 else Vector3.ONE * float(scale)
+	return Transform3D(Basis(Vector3.UP, float(t["yaw"])).scaled(s), t["at"] as Vector3)
 
 
 static func _model_mesh(path: String) -> Mesh:

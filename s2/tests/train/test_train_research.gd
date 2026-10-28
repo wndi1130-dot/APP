@@ -59,7 +59,7 @@ func test_all_read_functions_against_s1() -> void:
 	for row: Dictionary in _data["cases"]:
 		var g: Dictionary = row["state"]
 		var id: String = String(row["id"])
-		var want: Dictionary = row["read"]
+		var want: Dictionary = row["read"].duplicate(true)
 		var skills: Dictionary = {}
 		for field: String in Research.FIELDS:
 			skills[field] = Research.top_skill(g, field)
@@ -67,6 +67,13 @@ func test_all_read_functions_against_s1() -> void:
 			"check": Research.restore_check(g, id), "finish": Research.finish_check(g, id), "upkeep": Research.upkeep_of(g, id),
 			"work": Workshop.work_power(g), "usable": Research.usable(g, {}, id), "mult": Research.mult(g, {}, id),
 			"prereqs": Research.prereqs(id), "visible": Research.visible_techs(g), "skills": skills}
+		# Decision 449's W4 gear exception has its own S2 comparisons below.
+		if not bool(g.get("gearOn", false)):
+			(got["visible"] as Array).erase("w4")
+			if id == "w4":
+				for key: String in ["block", "check"]:
+					want.erase(key)
+					got.erase(key)
 		_same(want, got, _label(row))
 		_same(Research.VISIBLE, Research.visible(g), _label(row) + " S2 visible")
 		assert_true(Dom.is_store(g["dom"]), _label(row) + " projected state")
@@ -78,6 +85,9 @@ func test_start_and_finish_against_s1() -> void:
 	for row: Dictionary in _data["cases"]:
 		var id: String = String(row["id"])
 		for sample: Dictionary in row["starts"]:
+			# S1 blocks W4 without gear; S2 compares these modes with gear-on answers below.
+			if id == "w4" and not bool(sample["before"].get("gearOn", false)):
+				continue
 			var g: Dictionary = sample["before"].duplicate(true)
 			var result: bool = Research.start_restore(g, id, String(sample["mode"]), sample["variant"])
 			accepted += int(result)
@@ -150,3 +160,49 @@ func test_empty_roster_and_legacy_save_are_distinct() -> void:
 	assert_eq(Workshop.work_power(g), 6.25 * 0.75)
 	g["dom"]["techs"]["w1"]["off"] = true
 	assert_eq(Workshop.work_power(g), 5.0 * 0.75)
+
+
+func test_workshop_technologies_are_visible_without_scouting() -> void:
+	var g: Dictionary = {"gearOn": false, "dom": Dom.start()}
+	for id: String in ["w2", "w4"]:
+		assert_true(Research.VISIBLE.has(id), id)
+		assert_true(Research.visible(g).has(id), id)
+	assert_true(Research.visible_techs(g).has("w4"))
+	assert_false(Research.visible_techs(g).has("r4"))
+	assert_false(Research.visible(g).has("r4"))
+
+
+func test_w4_restores_without_gear_but_r4_stays_blocked() -> void:
+	var g: Dictionary = {"dom": Dom.start()}
+	assert_null(Research.restore_block(g, "w4"), "no gear flag")
+	g["gearOn"] = false
+	assert_null(Research.restore_block(g, "w4"), "gear is off")
+	assert_eq(Research.restore_block(g, "r4"), "아직 이 열차에서 못 쓴다")
+	assert_false(Research.start_restore(g, "r4", "full", "a"))
+	assert_true(Research.start_restore(g, "w4", "full"))
+	assert_eq([float(g["dom"]["parts"]), float(g["dom"]["wood"])], [3.0, 8.0])
+	var result: Dictionary = Research.advance_restore(g, 3.0)
+	assert_eq(result.get("done"), "w4")
+	assert_true(Research.usable(g, {}, "w4"))
+	assert_true(Dom.is_store(g["dom"]))
+
+
+func test_w4_without_gear_keeps_s1_restoration_answers() -> void:
+	var compared: int = 0
+	for row: Dictionary in _data["cases"]:
+		if row["id"] != "w4" or not bool(row["state"].get("gearOn", false)):
+			continue
+		compared += 1
+		var g: Dictionary = row["state"].duplicate(true)
+		g["gearOn"] = false
+		_same(row["read"]["block"], Research.restore_block(g, "w4"), _label(row) + " S2 block")
+		_same(row["read"]["check"], Research.restore_check(g, "w4"), _label(row) + " S2 check")
+		for sample: Dictionary in row["starts"]:
+			var before: Dictionary = sample["before"].duplicate(true)
+			var after: Dictionary = sample["after"].duplicate(true)
+			before["gearOn"] = false
+			after["gearOn"] = false
+			_same(sample["result"], Research.start_restore(before, "w4", String(sample["mode"]), sample["variant"]), _label(row) + " S2 start")
+			_same(after, before, _label(row) + " S2 after")
+	assert_gt(compared, 0)
+	assert_eq(_bad, [] as Array[String])

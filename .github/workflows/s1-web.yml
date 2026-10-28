@@ -3,6 +3,7 @@ name: S1 web checks
 # S1(웹 TS)의 테스트·타입 검사·빌드·화면 스모크. S1↔S2 영수증 계약 테스트(s1/tests/receipt.test.ts)가
 # S2의 GDScript 영수증 표본을 읽으므로, S2 쪽 영수증 파일을 바꾸는 PR에도 돈다.
 # 프로필 필드 계약(s1/tests/profile_fields.test.ts)은 character_creation.md 9장의 id 목록을 읽으므로 그 문서가 바뀔 때도 돈다.
+# S2 맞대기 표본(s2/tests/fixtures/train 등)은 S1 도구가 뽑으므로, 표본을 바꾸는 PR에도 돌아 지금 S1 코드로 다시 뽑은 값과 견준다.
 on:
   push:
     branches: [main]
@@ -11,6 +12,8 @@ on:
       - s2/game/sim/receipt.gd
       - s2/tests/game/test_receipt.gd
       - s2/tests/game/fixtures/**
+      - s2/tests/fixtures/train/**
+      - s2/game/train/slice_start.json
       - docs/design/briefs/character_creation.md
       - .github/workflows/s1-web.yml
   pull_request:
@@ -19,6 +22,8 @@ on:
       - s2/game/sim/receipt.gd
       - s2/tests/game/test_receipt.gd
       - s2/tests/game/fixtures/**
+      - s2/tests/fixtures/train/**
+      - s2/game/train/slice_start.json
       - docs/design/briefs/character_creation.md
       - .github/workflows/s1-web.yml
   workflow_dispatch:
@@ -53,6 +58,11 @@ jobs:
 
       - name: Unit, receipt contract and profile tests
         run: npm test
+
+      - name: S2 port fixtures match current S1 code
+        # 표본 도구 열셋을 다시 돌려 저장된 표본과 다르면 실패한다(어느 파일·어느 칸인지 찍는다).
+        # 표 칸만 늦은 표본이 PR 다섯에 걸쳐 쌓여도 S2 맞대기 시험은 저장된 표본끼리 견주니 못 잡았다(10-28).
+        run: npx tsx tools/port_fixtures_check.ts
 
       - name: Typecheck and Vite build
         run: npm run build

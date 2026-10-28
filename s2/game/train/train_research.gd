@@ -6,7 +6,10 @@ const TrainHands = preload("res://game/train/train_hands.gd")
 ## Decision 446: the technologies whose effect runs on S2's train. The law ones
 ## (train_lawtech.gd) are here; M2 and M3 wait for M1 (their tier's way in, its
 ## wound and typhus effects not on S2 yet), E4 and M5 for their effects outside a law.
-const VISIBLE: Array[String] = ["e1", "e2", "e3", "e5", "w1", "x1"]
+const VISIBLE: Array[String] = ["e1", "e2", "e3", "e5", "w1", "x1", "w2", "w4"]
+## Decision 449: W4 makes workshop lures without scouting.
+const S2_OPEN_GEAR: Array[String] = ["w4"]
+
 # BEGIN S1 TABLES
 const TECHS: Dictionary = {
 	"e1": {
@@ -619,11 +622,11 @@ static func mult(g: Dictionary, t: Dictionary, id: String) -> float:
 	return 0.0
 
 
-## S1's screen filter, separate from decision 446's narrower S2 exposure.
+## S1's screen filter with decision 449's workshop exception.
 static func visible_techs(g: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	for id: String in TECHS:
-		if not GEAR_TECHS.has(id) or bool(g.get("gearOn", false)):
+		if not GEAR_TECHS.has(id) or S2_OPEN_GEAR.has(id) or bool(g.get("gearOn", false)):
 			out.append(id)
 	return out
 
@@ -665,7 +668,8 @@ static func restore_block(g: Dictionary, id: String) -> Variant:
 	var def: Dictionary = TECHS[id]
 	if d.get("techs", {}).has(id):
 		return "이미 손댔다"
-	if NOT_YET.has(id) or (GEAR_TECHS.has(id) and not bool(g.get("gearOn", false))):
+	var needs_gear: bool = GEAR_TECHS.has(id) and not S2_OPEN_GEAR.has(id)
+	if NOT_YET.has(id) or (needs_gear and not bool(g.get("gearOn", false))):
 		return "아직 이 열차에서 못 쓴다"
 	var pre: Array[String] = prereqs(id)
 	var known: bool = false

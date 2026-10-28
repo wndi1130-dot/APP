@@ -18,6 +18,9 @@ extends RefCounted
 ## the workshop can remake one from parts and scrap, slow but sure. It goes to
 ## the stores' cores, where the field's cores go (train_dom.gd take_extras).
 ##
+## Decision 449 adds W2's rounds/arrows and W4's lures to the stores.
+## Their costs, work and counts are new values (decision 442, the PR's table).
+##
 ## The work is shared: parts, the making line, restoration, then insulation.
 ## Making a thing slows a refit (decision 070); the order is fixed in S2.
 ##
@@ -57,8 +60,26 @@ const RECIPES: Dictionary = {
 	"crowbar": {"name": "쇠지렛대", "cost": {"scrap": 4}, "work": 2.0, "to": "armory"},
 	"coat_long": {"name": "두꺼운 겉옷", "cost": {"cloth": 4}, "work": 3.0, "to": "wardrobe"},
 	"core_remake": {"name": "재생 코어", "cost": {"parts": 6, "scrap": 8}, "work": 8.0, "to": "cores"},
+	"rounds": {"name": "권총탄 한 줌", "cost": {"scrap": 2}, "work": 1.0, "to": "ammo_pistol", "n": 6, "needs": {"tech": "w2", "variant": "a"}},
+	"arrows": {"name": "화살 묶음", "cost": {"wood": 2}, "work": 1.0, "to": "ammo_craft", "n": 3, "needs": {"tech": "w2", "variant": "b"}},
+	"lure": {"name": "태엽 미끼", "cost": {"parts": 1}, "work": 1.0, "to": "lures", "n": 1, "needs": {"tech": "w4"}},
 }
-const ORDER: Array[String] = ["bow", "crowbar", "coat_long", "core_remake"]
+const ORDER: Array[String] = ["bow", "crowbar", "coat_long", "core_remake", "rounds", "arrows", "lure"]
+
+
+## Decision 446: show only recipes the train can use now, in their usual order.
+static func shown(g: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for id: String in ORDER:
+		var needs: Dictionary = RECIPES[id].get("needs", {})
+		if needs.is_empty():
+			out.append(id)
+			continue
+		var tech: String = String(needs["tech"])
+		var effect: float = TrainLawTech.variant_mult(g, tech, String(needs["variant"])) if needs.has("variant") else TrainResearch.mult(g, {}, tech)
+		if effect > 0.0:
+			out.append(id)
+	return out
 
 
 ## A stretch's work.
@@ -86,6 +107,8 @@ static func line(g: Dictionary) -> Variant:
 static func why_not(g: Dictionary, id: String) -> String:
 	if not RECIPES.has(id):
 		return "만들 수 없다"
+	if not shown(g).has(id):
+		return "아직 만들 줄 모른다"
 	var dom: Dictionary = g.get("dom", {})
 	if dom.get("make") != null:
 		return "다른 것을 만드는 중"
@@ -206,9 +229,11 @@ static func now(g: Dictionary) -> Dictionary:
 
 
 static func _deliver(dom: Dictionary, id: String) -> void:
-	if String(RECIPES[id]["to"]) == "cores":
-		dom["cores"] = float(dom.get("cores", 0)) + 1.0
-	elif String(RECIPES[id]["to"]) == "wardrobe":
+	var recipe: Dictionary = RECIPES[id]
+	var to: String = String(recipe["to"])
+	if TrainDom.AMOUNTS.has(to):
+		dom[to] = float(dom.get(to, 0)) + float(recipe.get("n", 1))
+	elif to == "wardrobe":
 		if not dom.get("wardrobe") is Array:
 			dom["wardrobe"] = []
 		(dom["wardrobe"] as Array).append({"id": id, "condition": 1.0})

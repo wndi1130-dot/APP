@@ -478,7 +478,8 @@ func test_the_wind_wanders_and_its_gusts_never_come_round_the_same_way() -> void
 	var n0: int = a.gust_log.size()
 	for k in range(480):
 		a._tick_wind(at, 0.25)
-		levels.append(a.wind.volume_db)
+		if k * 0.25 > float(a.WIND_IN[1]):
+			levels.append(a.bed_db())   # once it has come in: the wandering, not the coming up
 		if a.gust_log.size() > n0 + starts.size():
 			starts.append(k * 0.25)
 	assert_gt(levels.max() - levels.min(), 2.0, "the bed rises and falls")
@@ -490,13 +491,191 @@ func test_the_wind_wanders_and_its_gusts_never_come_round_the_same_way() -> void
 	for g in gaps:
 		distinct[g] = true
 	assert_gt(distinct.size(), gaps.size() / 2, "the gaps are uneven, no beat")
-	var full: float = a.lib["wind"][0].get_length()
 	for k in range(n0 + 1, a.gust_log.size()):
 		var g: Array = a.gust_log[k]
 		var before: Array = a.gust_log[k - 1]
 		assert_between(float(g[1]), float(a.GUST_LEN[0]), float(a.GUST_LEN[1]))
-		assert_gte(absf(float(g[0]) - float(before[0])), a.GUST_APART * full - 0.001, "not the place just heard")
+		assert_ne(String(g[6]), String(before[6]), "not the file just heard")
 		assert_gt(absf(float(g[3]) - float(before[3])), a.GUST_PITCH_APART, "nor the pitch")
+
+
+# Not one wind (결정 434 1절: 「패턴 여러게 + 오프닝 달라지게」): beds of
+# their own grain and gusts of their own, a stop never taking the bed the one
+# before had, a blizzard its own kind, a howl's layers each from its own file.
+func test_the_wind_is_many_and_no_two_stops_running_share_a_bed() -> void:
+	var a = game.audio
+	assert_gte(a.beds.size(), 6, "five beds of their own and the plain one")
+	for name in ["breeze", "gusty", "low", "whistle", "forest", "blizzard"]:
+		assert_true(a.beds.has(name), name)
+	assert_gte(a.gust_files.size(), 3, "gusts of their own")
+	assert_true(a.beds.has(a.bed_name))
+	var names: Array = a.beds.keys()
+	var last := ""
+	var seen: Dictionary = {}
+	for i in range(60):
+		var b: String = a.pick_bed(names, ["fog", "snow"], 0.4, false, last, randf())
+		assert_ne(b, last, "never the bed the stop before had")
+		assert_ne(b, "blizzard", "no blizzard's roar on a fog stop")
+		assert_ne(b, "plain", "nor the old short loop")
+		seen[b] = true
+		last = b
+	assert_gte(seen.size(), 5, "the stops go round many beds")
+	var storm: Dictionary = {}
+	for i in range(60):
+		storm[a.pick_bed(names, ["blizzard"], 0.9, true, "", randf())] = true
+	assert_true(storm.has("blizzard"))
+	assert_false(storm.has("breeze"), "no soft breeze in a blizzard")
+	assert_false(storm.has("plain"), "nor the old short loop in a blizzard")
+	# A new stop takes another bed than this one.
+	var was: String = a.bed_name
+	var b2 = a.get_script().new()
+	game.add_child(b2)
+	b2.setup(game)
+	assert_ne(b2.bed_name, was, "the next stop opens on another bed")
+	b2.queue_free()
+	# A howl's layers come from files of their own.
+	for g in a.gusts:
+		g["len"] = 0.0
+	var n: int = a.gust_log.size()
+	a.howl()
+	var files: Dictionary = {}
+	for g in a.gust_log.slice(n):
+		files[g[6]] = true
+	assert_eq(files.size(), a.gust_log.size() - n, "each layer its own file")
+
+
+# Nor is the bed a loop (user 2026-10-28: 「지금 루프 형태라싸구려겜같음」): over
+# ten minutes its pieces never follow each other the way two like them already
+# did, are of uneven length, never go back over the stretch just heard and come
+# from more than one file; the gusts come at gaps that scatter, no two running
+# alike, at strengths no two running alike, each told to whoever follows them.
+func test_ten_minutes_of_wind_never_go_round_in_the_same_order() -> void:
+	var a = game.audio
+	var at: Vector3 = game.player.position
+	var heard: Array = []
+	a.gust_started.connect(func(peak: float, length: float, howl: bool) -> void: heard.append([peak, length, howl]))
+	var n0: int = a.gust_log.size()
+	var log0: int = a.bed_log.size()
+	var top := 0.0
+	for k in range(6000):
+		a._tick_wind(at, 0.1)
+		top = maxf(top, a.wind_now())
+	var heard_pieces: Array = a.bed_log.slice(log0)
+	assert_gt(heard_pieces.size(), 60, "ten minutes is many pieces")
+	assert_eq(a.repeats_in(a.bed_log), 0, "no two pieces follow each other as two like them did")
+	var files: Dictionary = {}
+	var len_sum := 0.0
+	var len_sq := 0.0
+	var back := 0
+	for i in range(heard_pieces.size()):
+		var p: Array = heard_pieces[i]
+		files[p[0]] = true
+		len_sum += float(p[2])
+		len_sq += float(p[2]) * float(p[2])
+		for j in range(maxi(0, i - 2), i):
+			if p[0] == heard_pieces[j][0]:
+				var s0: Vector2 = a.piece_span(heard_pieces[j])
+				var s1: Vector2 = a.piece_span(p)
+				if s1.x < s0.y and s0.x < s1.y:
+					back += 1
+	assert_eq(back, 0, "no piece goes back over the stretch of the two before it")
+	assert_gte(files.size(), 2, "pieces from kin beds too")
+	assert_false(files.has("plain"), "never a piece of the old short loop")
+	var len_mean: float = len_sum / heard_pieces.size()
+	var len_sd: float = sqrt(maxf(0.0, len_sq / heard_pieces.size() - len_mean * len_mean))
+	assert_gt(len_sd, 1.0, "pieces of uneven length")
+	# The gusts: when, how hard, and told.
+	var times: Array = []
+	var peaks: Array = []
+	for g in a.gust_log.slice(n0):
+		if not g[5]:
+			times.append(float(g[7]))
+			peaks.append(float(g[2]))
+	assert_gt(times.size(), 40, "gusts all through")
+	assert_eq(heard.size(), a.gust_log.size() - n0, "every gust told")
+	assert_gt(top, 0.0, "how hard it blows, for the snow and the trees")
+	var gaps: Array = []
+	for k in range(1, times.size()):
+		gaps.append(times[k] - times[k - 1])
+	var mean := 0.0
+	for g in gaps:
+		mean += g
+	mean /= gaps.size()
+	var sd := 0.0
+	for g in gaps:
+		sd += (g - mean) * (g - mean)
+	sd = sqrt(sd / gaps.size())
+	assert_gt(sd / mean, 0.2, "the gaps scatter: no beat")
+	var alike_gaps := 0
+	var alike_peaks := 0
+	for k in range(1, gaps.size()):
+		if absf(gaps[k] - gaps[k - 1]) < 0.3:
+			alike_gaps += 1
+	for k in range(1, peaks.size()):
+		if absf(peaks[k] - peaks[k - 1]) < a.GUST_LOUD_APART - 0.001:
+			alike_peaks += 1
+	assert_eq(alike_gaps, 0, "no two gaps running alike")
+	assert_eq(alike_peaks, 0, "no two gusts running alike in strength")
+	gut.p("10 min: %d pieces from %d files, length sd %.2f s, %d repeats; %d gusts, gap CV %.2f, %d gaps and %d strengths alike running" % [heard_pieces.size(), files.size(), len_sd, a.repeats_in(a.bed_log), times.size(), sd / mean, alike_gaps, alike_peaks])
+
+
+# Near a building's corner the wind is heard from it too, louder as it blows
+# harder; on a still day it keeps still.
+func test_the_wind_is_heard_from_a_corner_near_by() -> void:
+	var a = game.audio
+	var places: Dictionary = a.spot_places()
+	assert_false(places["corner"].is_empty(), "the map's buildings have corners")
+	var stand := Vector3.INF
+	for c: Vector3 in places["corner"]:
+		for off in [Vector2i(-2, -2), Vector2i(2, -2), Vector2i(-2, 2), Vector2i(2, 2)]:
+			var cell := Vector2i(int(c.x) + off.x, int(c.z) + off.y)
+			if game.grid.people_can_walk(cell) and not game.grid.indoor(cell):
+				stand = game.lift(cell, 0)
+				break
+		if stand != Vector3.INF:
+			break
+	assert_ne(stand, Vector3.INF, "a corner one can stand by outside")
+	game.player.position = stand
+	game.weather.wind = 0.9
+	for k in range(40):
+		a._tick_wind(stand, 0.1)
+	var s: AudioStreamPlayer3D = a.spot_players["corner"]
+	assert_lte(Vector2(s.position.x - stand.x, s.position.z - stand.z).length(), a.SPOT_RANGE, "heard from a corner near by")
+	assert_gt(s.volume_db, -40.0, "whistling in a hard wind")
+	game.weather.wind = 0.1
+	for k in range(40):
+		a._tick_wind(stand, 0.1)
+	assert_lte(s.volume_db, -79.0, "still on a still day")
+
+
+# The field standing still (the resume screen does not tick the ear) while the
+# players go on: the next piece comes as the field goes on, not seconds of
+# silence after a file ran out under it. A gust never starts so late in its
+# file that the file runs out before the gust has died away.
+func test_the_wind_goes_on_after_the_field_stood_still_and_no_gust_runs_out() -> void:
+	var a = game.audio
+	var at: Vector3 = game.player.position
+	for k in range(40):
+		a._tick_wind(at, 0.1)
+	var n: int = a.bed_log.size()
+	a.wind_clock_ms = Time.get_ticks_msec() - 8000   # eight seconds with no tick
+	a._tick_wind(at, 0.1)
+	assert_eq(a.bed_log.size(), n + 1, "the next piece at once")
+	a._tick_wind(at, 0.1)
+	assert_eq(a.bed_log.size(), n + 1, "and only the one")
+	var over := 0
+	for k in range(200):
+		for g in a.gusts:
+			g["len"] = 0.0
+		if k % 2 == 0:
+			a._gust(randf_range(float(a.GUST_LEN[0]), float(a.GUST_LEN[1])), 0.6, false)
+		else:
+			a.howl()
+	for g in a.gust_log:
+		var full: float = a.gust_stream(String(g[6])).get_length()
+		if float(g[0]) + float(g[1]) * maxf(float(g[3]), float(g[4])) > full + 0.001:
+			over += 1
+	assert_eq(over, 0, "no gust runs out of its file")
 
 
 # Nor does a stop open the same way (user 2026-10-25: 「처음내릴떄 휘오오옹
@@ -505,20 +684,23 @@ func test_the_wind_wanders_and_its_gusts_never_come_round_the_same_way() -> void
 func test_getting_down_the_wind_comes_up_its_own_way_each_stop() -> void:
 	var at: Vector3 = game.player.position
 	var opens: Array = []
+	var stop_beds: Array = [game.audio.bed_name]
 	for i in range(5):
 		var b = game.audio.get_script().new()
 		game.add_child(b)
 		b.setup(game)
+		assert_ne(b.bed_name, stop_beds.back(), "each stop on another bed than the one before")
+		stop_beds.append(b.bed_name)
 		assert_between(b.wind_in, float(b.WIND_IN[0]), float(b.WIND_IN[1]))
 		assert_between(b.gust_t, float(b.FIRST_AFTER[0]), float(b.FIRST_AFTER[1]))
 		assert_between(b.howl_wait, float(b.FIRST_AFTER[0]), float(b.FIRST_AFTER[1]))
 		var first_gust: float = b.gust_t
 		b._tick_wind(at, 1.0 / 60.0)
-		assert_lt(b.wind.volume_db, -30.0, "near silence the moment one gets down")
+		assert_lt(b.bed_db(), -30.0, "near silence the moment one gets down")
 		var first_pitch: float = b.wind.pitch_scale
 		while b.wind_up < b.wind_in:
 			b._tick_wind(at, 0.1)
-		assert_gt(b.wind.volume_db, -25.0, "up to its level once it has come in")
+		assert_gt(b.bed_db(), -25.0, "up to its level once it has come in")
 		opens.append([snappedf(b.wind_in, 0.01), snappedf(first_gust, 0.01), snappedf(first_pitch, 0.001)])
 		b.queue_free()
 	var distinct: Dictionary = {}

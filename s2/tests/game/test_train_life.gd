@@ -233,6 +233,24 @@ func test_collapse_is_display_only_and_never_infers_fire_from_tension() -> void:
 		assert_eq(int(Context.read(r, car)["stage"]), step)
 
 
+func test_a_burning_guard_car_opens_no_window_post() -> void:
+	var r := Rules.load_default()
+	var guard: Dictionary = {}
+	for car: Dictionary in r["cars"]:
+		if String(car["id"]) == "guard":
+			guard = car
+	assert_false(guard.is_empty(), "the default train has a guard car")
+	var calm := Context.read(r, guard)
+	assert_true(bool(calm["post_first"]) and bool(calm["post_second"]), "both posts kept by day and night")
+	r["view"]["fire_cars"] = ["guard"]
+	var burning := Context.read(r, guard)
+	assert_false(bool(burning["post_first"]), "no one walks to the window of a burning car")
+	assert_false(bool(burning["post_second"]))
+	r["view"]["fire_cars"] = []
+	r["view"]["collapse_by_car"] = {"guard": 5}
+	assert_false(bool(Context.read(r, guard)["post_first"]), "the fire stage shown for the car alone closes them too")
+
+
 func test_fire_moves_bounded_groups_to_a_safe_adjacent_car_without_new_people() -> void:
 	var s = _scene()
 	var count_before: int = s.people.get_child_count()
@@ -777,6 +795,21 @@ func test_short_watch_and_stove_hands_empty_the_lantern_posts_and_the_places_at_
 	for id in ["guard/window", "guard/window_b", "front/stove_side", "guard/stove_side"]:
 		assert_true(places[id]["open"], "손이 돌아오면 다시 열림: " + id)
 	assert_eq(int(places["front/stove_side"]["capacity"]), 2)
+
+
+func test_a_hungry_car_alone_does_not_crouch_the_sentry_or_the_stoker() -> void:
+	var s = _scene()
+	# Short rations give every place a catch_breath (train_schedule.gd), whether or not a job is short of hands.
+	assert_true(s.set_value("comms.guard.sit", [55, 40, 45, 55]))
+	assert_eq(Schedule.gesture("watch", s.life.contexts["guard"], {}, 0), "catch_breath")
+	var View = load("res://game/train/train_people_view.gd")
+	var b = s.car("guard")["bodies"][0]
+	b.gesture = "catch_breath"
+	b.pose = "stand"
+	assert_eq(View._forced(b, {"layout": "guard", "job_short": 0.0}, "watch", 0.0), "t_lantern", "hungry, the lantern stays up")
+	assert_eq(View._forced(b, {"layout": "guard", "job_short": 0.6}, "watch", 0.0), "t_crouch", "short of relief, the sentry crouches")
+	assert_eq(View._forced(b, {"layout": "engine_room", "job_short": 0.0}, "work", 0.0), "t_shovel")
+	assert_eq(View._forced(b, {"layout": "engine_room", "job_short": 0.6}, "work", 0.0), "t_crouch")
 
 
 func test_a_burning_car_opens_no_everyday_place_whatever_its_screen_stage() -> void:
