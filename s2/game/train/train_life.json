@@ -1974,32 +1974,6 @@
           "when": "always"
         },
         {
-          "id": "stove_side",
-          "activity": "warm",
-          "anchors": [
-            [
-              7.2,
-              0,
-              0.02
-            ],
-            [
-              8.6,
-              0,
-              -0.08
-            ]
-          ],
-          "capacity": 2,
-          "hold": [
-            10,
-            18
-          ],
-          "cycle": [
-            31,
-            9
-          ],
-          "when": "stove"
-        },
-        {
           "id": "window",
           "activity": "watch",
           "anchors": [
@@ -3555,17 +3529,12 @@
           "activity": "warm",
           "anchors": [
             [
-              7.2,
+              1.0,
               0,
-              0.02
-            ],
-            [
-              8.6,
-              0,
-              -0.08
+              -0.55
             ]
           ],
-          "capacity": 2,
+          "capacity": 1,
           "hold": [
             10,
             18
