@@ -1710,7 +1710,8 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 					covered[STANDS_FOR.get(kk, kk)] = true
 			var items := _palette_for(cls, area, rng)
 			# 부엌을 갈라 뗀 식당(room_split DINING)은 거실 묶음의 꼭 있을 가구 다음에 식탁을 꼭 둔다.
-			if cls == "living" and _named(String(labels.get(ri, "")), "식당"):
+			var dining: bool = cls == "living" and _named(String(labels.get(ri, "")), "식당")
+			if dining:
 				var at := 0
 				while at < items.size() and bool((items[at] as Dictionary).get("need", false)):
 					at += 1
@@ -1863,6 +1864,9 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 				added.append({"kind": kind, "rect": r, "solid": "low", "facing": pl["facing"],
 					"note": "%s의 %s" % [label, KIND_LABEL.get(kind, kind)], "level": lv,
 					"building": int(room["building"]), "rule": cls, "counter_run": pl["item"].get("run", false)})
+				# 식당 마감(room_finish DINING): 거실 묶음이라 rule만으로는 그냥 거실과 갈리지 않는다.
+				if dining:
+					added[-1]["dining"] = true
 				if lv == 0:
 					new_ground.append(r)
 			stats["rooms"] += 1
