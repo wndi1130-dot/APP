@@ -5,6 +5,8 @@ extends "res://addons/gut/test.gd"
 const SnowCover = preload("res://game/sim/snow_cover.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const FieldGame = preload("res://game/field_game.gd")
+const Atmosphere = preload("res://fx/atmosphere.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 
 
 func _stop(weather: Array) -> Node:
@@ -120,3 +122,62 @@ func test_field_takes_the_storm_pictures_without_changing_rules() -> void:
 	assert_eq(after.snow_cover.depth_cm, 50.0)
 	assert_gt(float(after.fx_params["fx_snow"]), float(plain.fx_params["fx_snow"]))
 	assert_eq(after.look_kinds, after.weather.kinds, "no look given: drawn as it plays")
+
+
+## Decision 474 N2: the stretches before the stop lay or eat the old snow.
+func test_past_stretches_lay_snow_and_the_older_ones_count_less() -> void:
+	assert_almost_eq(SnowCover.after_past(5.0, []), 5.0, 0.001, "no past: the climate's depth")
+	assert_almost_eq(SnowCover.after_past(5.0, [{"weather": "snow", "temp": -3.0}]), 5.0 + SnowCover.PAST_HOURS, 0.001)
+	var older := SnowCover.after_past(5.0, [{"weather": "snow", "temp": -3.0}, {"weather": "overcast", "temp": -3.0}])
+	assert_almost_eq(older, 5.0 + SnowCover.PAST_HOURS * SnowCover.PAST_KEEP, 0.001, "one stretch back counts less")
+	assert_eq(SnowCover.after_past(20.0, [{"weather": "rain", "temp": 3.0}]), 0.0, "rain eats it, never below zero")
+	assert_lt(SnowCover.after_past(10.0, [{"weather": "fog", "temp": 2.0}]), 10.0, "a mild stretch thaws it")
+	assert_almost_eq(SnowCover.after_past(10.0, [{"weather": "clear", "temp": -4.0}]), 10.0, 0.001, "a clear cold snap keeps it")
+	assert_eq(SnowCover.after_past(70.0, [{"weather": "blizzard", "temp": -10.0}]), SnowCover.MAX_CM)
+
+
+func test_winter_stops_on_the_route_samples_lie_over_7cm_four_to_eight_in_ten() -> void:
+	# The departure's pastWeather on the S1 route samples (N2 fixture), stops whose
+	# nights freeze; the climate alone gave every run the same 4 of 10.
+	var f: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/route_weather.json"))
+	var rows: Array = f["tables"]["SEASON_ROWS"]
+	var side := Atmosphere.side_for("prologue")
+	var total := 0
+	var over := 0
+	var shares := {}
+	for c: Dictionary in f["contracts"]:
+		if not bool(c.get("climate", false)) or c.has("disaster") or not (c["expected"] as Dictionary).has("pastWeather"):
+			continue
+		var seg := int(c["seg"])
+		if not bool(rows[seg - 1]["night_freeze"]):
+			continue
+		var cold := Atmosphere.cold_for("prologue", SeasonTable.seg_progress(seg))
+		var past: Array = []
+		for p: Dictionary in c["expected"]["pastWeather"]:
+			past.append({"weather": String(p["weather"]), "temp": float(rows[int(p["seg"]) - 1]["temp"])})
+		var cm := SnowCover.after_past(Atmosphere.cold_key(cold, "snow_cm", 0, side), past)
+		total += 1
+		var run := String(c["seed"])
+		shares[run] = (shares.get(run, 0) as int) + (1 if cm > 7.0 else 0)
+		if cm > 7.0:
+			over += 1
+	assert_gt(total, 30)
+	var share := float(over) / float(total)
+	assert_between(share, 0.4, 0.8, "winter stops over 7 cm: %.2f" % share)
+	assert_gt((shares.values() as Array).max() - (shares.values() as Array).min(), 0, "the weather before makes runs differ")
+
+
+func test_field_lays_the_past_stretches_on_its_old_snow() -> void:
+	var plain = FieldGame.new()
+	plain.opts = {"seed": 5, "raiders": false, "auto_pause": false, "cold": 0.55, "weather": ["clear"]}
+	add_child_autofree(plain)
+	plain.set_process(false)
+	var after = FieldGame.new()
+	after.opts = {"seed": 5, "raiders": false, "auto_pause": false, "cold": 0.55, "weather": ["clear"],
+		"departure": {"pastWeather": [{"seg": 21, "weather": "snow"}, {"seg": 22, "weather": "snow"}, {"seg": 23, "weather": "snow"}]}}
+	add_child_autofree(after)
+	after.set_process(false)
+	var want := SnowCover.after_past(plain.snow_cover.depth_cm, [{"weather": "snow", "temp": -2.0}, {"weather": "snow", "temp": -3.0}, {"weather": "snow", "temp": -3.0}])
+	assert_almost_eq(after.snow_cover.depth_cm, want, 0.01)
+	assert_gt(after.snow_cover.depth_cm, plain.snow_cover.depth_cm)
+	assert_eq(after.snow_cover.fresh_cm, 0.0, "old snow, not fresh")
