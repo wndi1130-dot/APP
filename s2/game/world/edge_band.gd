@@ -10,6 +10,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
+const WorkSpots = preload("res://game/world/work_spots.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
 const F = FieldGrid.Floor
@@ -35,6 +36,7 @@ const FAR_CAR := "res://models/props_field/wrecked_car_cluster.glb"
 ## thicket, low enough not to hide the cells behind them from the tilted camera
 ## (35°: a tree hides about 1.4 times its height of ground behind it).
 const INNER_ROW: float = 2.6
+const FELL_SPAN: int = 8
 const YOUNG_TALL := Vector2(1.8, 3.4)
 ## Past them the tall woods, taller deeper in (full height CANOPY_RAMP metres past
 ## INNER_ROW), so the edge reads as a forest's edge and the tall crowns stand back.
@@ -316,6 +318,71 @@ static func plan(g: FieldGrid, seed: int, look: Dictionary = {}) -> Dictionary:
 	var distant := _far_plan(g, seed, runs, lk)
 	return {"trees": trees, "blocks": blocks, "glades": glades, "clear": clear, "runs": runs,
 		"far": distant["far"], "fields": distant["fields"], "tracks": distant["tracks"], "sounds": distant["sounds"]}
+
+
+## Work from the same plan build() draws. Corner trees belong to one side, with
+## their projection clamped to that side's last span; their plan indices stay intact.
+static func fell_groves(g: FieldGrid, p: Dictionary, data: Dictionary) -> Array:
+	var trees: Array = p.get("trees", []) as Array
+	var spans: Dictionary = {}
+	for plan_idx: int in range(trees.size()):
+		var tree: Dictionary = trees[plan_idx] as Dictionary
+		if not tree.has("height"):
+			continue
+		var at: Vector3 = tree["at"] as Vector3
+		var depth: float = outside(g, at.x, at.z)
+		if depth <= 0.0 or depth > INNER_ROW:
+			continue
+		var side: int = _side_of(g, at)
+		var length: int = g.height if side < 2 else g.width
+		var along: float = at.z if side < 2 else at.x
+		var projection: int = clampi(floori(along), 0, length - 1)
+		var key: Vector2i = Vector2i(side, floori(float(projection) / float(FELL_SPAN)))
+		if not spans.has(key):
+			var indices: Array[int] = []
+			spans[key] = indices
+		(spans[key] as Array[int]).append(plan_idx)
+	var field: PackedInt32Array = PackedInt32Array()
+	var candidates: Array[Dictionary] = []
+	for key: Vector2i in spans:
+		var indices: Array[int] = spans[key] as Array[int]
+		if indices.size() < 6:
+			continue
+		var stand: Array[Vector2i] = []
+		var nearest: float = -1.0
+		var length: int = g.height if key.x < 2 else g.width
+		for along: int in range(key.y * FELL_SPAN, mini((key.y + 1) * FELL_SPAN, length)):
+			var cell: Vector2i = _edge_cell(g, key.x, along)
+			if not g.people_can_walk(cell):
+				continue
+			if field.is_empty():
+				field = WorkSpots.field_of(data)
+			var distance: float = WorkSpots.reach(data, cell, field)
+			if distance < 0.0:
+				continue
+			stand.append(cell)
+			if nearest < 0.0 or distance < nearest:
+				nearest = distance
+		if stand.is_empty():
+			continue
+		var cells: Array[Vector2i] = []
+		for plan_idx: int in indices:
+			var tree: Dictionary = trees[plan_idx] as Dictionary
+			cells.append(FieldGrid.cell_of(tree["at"] as Vector3))
+		var grove: Dictionary = {"kind": "fell", "cells": cells, "stand": stand,
+			"trees": indices.size(), "level": 0, "edge": true, "plan_idx": indices}
+		candidates.append({"grove": grove, "path_m": nearest, "order": candidates.size()})
+	candidates.sort_custom(_fell_nearer)
+	var out: Array = []
+	for i: int in range(mini(2, candidates.size())):
+		out.append(candidates[i]["grove"])
+	return out
+
+
+static func _fell_nearer(a: Dictionary, b: Dictionary) -> bool:
+	if float(a["path_m"]) == float(b["path_m"]):
+		return int(a["order"]) < int(b["order"])
+	return float(a["path_m"]) < float(b["path_m"])
 
 
 ## Scenery {at, yaw, scale (trees: height and spread), model, side}; houses use
@@ -898,6 +965,9 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		spots.append(s["at"] as Vector3)
 	counts["sound_spots"] = spots
 	counts["rail_runs"] = rail_runs
+	var groves: Array = data.get("fell_groves", []) as Array
+	groves.append_array(fell_groves(g, p, data))
+	data["fell_groves"] = groves
 	return counts
 
 

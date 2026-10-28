@@ -18,6 +18,7 @@ const SidePath = preload("res://game/world/side_path.gd")
 const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const RouteStops = preload("res://game/train/route_stops.gd")
+const WorkSpots = preload("res://game/world/work_spots.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -457,6 +458,7 @@ func _ready() -> void:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
 	if opts.get("departure") is Dictionary:
 		RouteStops.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)))
+	WorkSpots.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else -1, rng.seed)
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
