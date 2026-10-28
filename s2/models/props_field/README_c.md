@@ -23,7 +23,7 @@ rect 가운데 바닥. +Y 위, +Z 전면. facing 0~3은 기존 map_view의 -Y �
 | mail_sorting_rack | 13 | 3×1 | 1.2 | low:8, none:5 | 312 | 22872 | 우편 분류 15칸과 종이; low 우세 기준의 낮은 선반 |
 | plank_bridge | 13 | 2×3 | 0.24 | none:13 | 144 | 11096 | 보 두 줄 위 널판 아홉 장의 평평한 작은 다리, none |
 | rail_pile | 13 | 3×1 | 0.6 | low:13 | 240 | 17816 | 폐레일 여섯 개를 두 층으로 쌓아 low 유지 |
-| stump_cluster | 13 | 4×4 | 0.48 | none:13 | 216 | 15760 | none 기준의 낮게 잘린 그루터기 세 개와 나이테 |
+| stump_cluster | 13 | 4×4 | 0.48 | none:13 | 334 | 35116 | 뿌리째 낮게 잘린 그루터기 넷(Poly Haven tree_stump_01·02, CC0) |
 | wrecked_car_cluster | 13 | 4×4 | 1.2 | low:13 | 256 | 17932 | 찌그러진 폐차 두 대의 껍데기·바퀴·눈; 소지품 없음 |
 | band_saw | 12 | 4×2 | 1.3 | low:12 | 188 | 13148 | 두 바퀴·수직 띠톱·작업판을 갖춘 소형 제재기, low 상한 |
 | box_truck | 12 | 6×2 | 2.4 | low:9, wall:3 | 372 | 25520 | 상자형 적재함의 의미와 wall 혼용을 우선해 low 높이 예외; +Z 전면과 짧은 깊이를 지키는 압축 비례 |
@@ -48,7 +48,7 @@ rect 가운데 바닥. +Y 위, +Z 전면. facing 0~3은 기존 map_view의 -Y �
 | hopper | 10 | 3×3 | 2.3 | wall:10 | 116 | 9120 | 좁은 배출구와 넓은 상부 투입함의 광석 호퍼, wall |
 | mine_portal | 10 | 3×2 | 2.6 | none:10 | 96 | 7732 | 열린 갱구의 기둥·상인방 의미를 우선, none 높이 예외 |
 | rail_stack | 10 | 4×1 | 0.75 | low:10 | 348 | 25364 | 레일 아홉 개를 세 층으로 정돈한 야적, low |
-| 합계 | 491 | 40종 | — | — | 8638 | 632988 | 고유 자산 합계 |
+| 합계 | 491 | 40종 | — | — | 8756 | 652344 | 고유 자산 합계 |
 
 ## SHA-256
 
@@ -69,7 +69,7 @@ rect 가운데 바닥. +Y 위, +Z 전면. facing 0~3은 기존 map_view의 -Y �
 | mail_sorting_rack | d19bfc28f04ea2c6702d3e7edc7f355b54ea4de5a22942db53e3c7f808f69774 |
 | plank_bridge | 2eb97ea57e403d6bcedf5a63007d29753db7378a1dff89146abe75e7a27bcd41 |
 | rail_pile | 4ff25912d0f924a6ae3a43002a22dbc95657fc56a7665b8f4f1dc3bb6826e282 |
-| stump_cluster | 55722fcb043c10f1a76629c7b86b9c2c981f962082291370651eea05b4db0ce3 |
+| stump_cluster | 3fff2152f114296f581ff9173c091862fe9613a52bcd589b88ce9e16d4b4b700 |
 | wrecked_car_cluster | a7cdd3410aaf171cd6e9650b511af4b14815d7780ec4b1a3312d1ecf01af194d |
 | band_saw | 31c9d2650a75a7bd137ef1b7e3840c670c68215e4000816b5cb3c021ae4c9e35 |
 | box_truck | 1874c58b532d9057e13475a285f86df233cf115a9c0065c0b625d3d276623489 |

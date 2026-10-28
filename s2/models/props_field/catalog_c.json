@@ -856,20 +856,20 @@
       "facing": {
         "0": 13
       },
-      "lod0_tris": 216,
+      "lod0_tris": 334,
       "triangle_limit": 600,
-      "bytes": 15760,
-      "sha256": "55722fcb043c10f1a76629c7b86b9c2c981f962082291370651eea05b4db0ce3",
+      "bytes": 35116,
+      "sha256": "3fff2152f114296f581ff9173c091862fe9613a52bcd589b88ce9e16d4b4b700",
       "bounds_godot": [
         [
-          -1.92,
-          0.0,
-          -1.92
+          -1.699,
+          -0.2012,
+          -1.8432
         ],
         [
-          1.92,
-          0.48,
-          1.92
+          1.699,
+          0.3719,
+          1.8432
         ]
       ],
       "colours": [
@@ -877,7 +877,7 @@
         "wood",
         "worn_wood"
       ],
-      "judgment": "none 기준의 낮게 잘린 그루터기 세 개와 나이테",
+      "judgment": "뿌리째 낮게 잘린 그루터기 넷(Poly Haven tree_stump_01·02, CC0)",
       "placement": "rect 가운데 바닥. +Y 위, +Z 전면. facing 0~3은 기존 map_view의 -Y 회전 0/90/180/270도를 따른다. 손잡이를 포함한 원형 AABB가 최빈 발자국 안이다. 현 map_view는 회전만 하며 rect별 축척 보정은 하지 않는다.",
       "map_families": [
         "sawmill"
@@ -886,7 +886,9 @@
         "벌목 빈터 · 그루터기 군",
         "서쪽 개간지 · 그루터기 군",
         "동쪽 트인 벌채지 · 그루터기 군"
-      ]
+      ],
+      "source_asset": "뿌리째 낮게 잘린 그루터기 넷(Poly Haven tree_stump_01·02, CC0)",
+      "source_script": "tools/blender/props_field_cc0.py"
     },
     "wrecked_car_cluster": {
       "path": "res://models/props_field/wrecked_car_cluster.glb",
@@ -2619,15 +2621,15 @@
       "office_04": 4776,
       "office_05": 3084,
       "office_06": 1536,
-      "sawmill_01": 3338,
-      "sawmill_02": 3030,
-      "sawmill_03": 3534,
-      "sawmill_04": 3070,
-      "sawmill_05": 3094,
-      "sawmill_06": 3058,
-      "sawmill_07": 4024,
-      "sawmill_08": 4044,
-      "sawmill_09": 3282,
+      "sawmill_01": 3456,
+      "sawmill_02": 3148,
+      "sawmill_03": 3652,
+      "sawmill_04": 3188,
+      "sawmill_05": 3212,
+      "sawmill_06": 3294,
+      "sawmill_07": 4142,
+      "sawmill_08": 4516,
+      "sawmill_09": 3400,
       "summit_01": 660,
       "summit_02": 888,
       "summit_03": 660,
