@@ -13,6 +13,10 @@ const SeasonTable = preload("res://game/season_table.gd")
 
 const SEEDS: int = 50
 const STEP: float = 0.5
+## How long an event's actor stays in sight, seconds: gone behind the camera, or its
+## LIFE_S at most (journey_dead.gd 30, journey_crows.gd 24, journey_wagons.gd 60; the
+## wagons' string is past in well under that at the run speed).
+const ACTOR_S: Dictionary = {"dead_rush": Vector2(14.0, 30.0), "crows_rise": Vector2(12.0, 24.0), "dead_wagons": Vector2(20.0, 40.0)}
 
 
 func test_stretch_windows_follow_the_bands_and_the_border_fields() -> void:
@@ -77,6 +81,31 @@ func test_the_order_holds_across_a_window_change() -> void:
 		assert_eq(Sequencer.repeats(seq.history), 0, "seed %d" % s)
 
 
+## A border window after a village (not one of its kinds), every kind of it making a
+## run of three seen inside ten minutes: a bare stretch goes between, nothing repeats.
+func test_a_window_that_leaves_no_kind_open_bridges_instead_of_repeating() -> void:
+	var seq = Sequencer.new()
+	seq.setup(5)
+	var order: Array = ["field", "village", "wood", "field", "village", "lake", "field", "village", "field", "village"]
+	for i in order.size():
+		seq.history.append({"kind": order[i], "at": 60.0 * i, "len_s": 60.0, "mirror": false, "seed": i})
+	assert_eq(Sequencer.repeats(seq.history), 0, "the order given is clean")
+	var bare: Array = Route.kinds({"band": "K1", "neutral": true})
+	var first: Dictionary = seq.next(600.0, bare)
+	assert_eq(String(first["kind"]), Sequencer.BRIDGE, "field, village, then any border kind would come again")
+	var t: float = 600.0 + float(first["len_s"])
+	for i in 30:
+		t += float(seq.next(t, bare)["len_s"])
+	assert_eq(Sequencer.repeats(seq.history), 0)
+	assert_eq(seq.bridged, 1)
+
+
+func test_every_window_has_kinds_enough_to_keep_the_order() -> void:
+	for band: String in Route.KINDS:
+		assert_gte((Route.KINDS[band] as Array).size(), 3, band + ": with fewer, a section would go on and on")
+	assert_gte(Route.NEUTRAL_KINDS.size(), 3)
+
+
 func test_each_section_is_dressed_its_own_way() -> void:
 	var seq = Sequencer.new()
 	seq.setup(1)
@@ -93,7 +122,8 @@ func test_each_section_is_dressed_its_own_way() -> void:
 
 ## Half an hour of the train's screen: the land from the sequencer, the event
 ## where it would come into sight `ahead` seconds on, the cards from `cards`
-## ([[open, close], …]). Returns the director.
+## ([[open, close], …]), each event's actor in sight for a while as journey.gd has
+## it (busy, then finished). Returns the director.
 func _run(seed_value: int, minutes: float, cards: Array = [], neutral: bool = false, light: String = "day", weather: String = "overcast"):
 	var seq = Sequencer.new()
 	seq.setup(seed_value)
@@ -106,13 +136,22 @@ func _run(seed_value: int, minutes: float, cards: Array = [], neutral: bool = fa
 		t += float(section["len_s"])
 	var d = Director.new()
 	d.setup(seed_value * 31 + 5)
+	var actors := RandomNumberGenerator.new()
+	actors.seed = seed_value * 17 + 3
+	var actor_until: float = -1.0
 	var now: float = 0.0
 	var i: int = 0
 	while now < minutes * 60.0:
 		var ahead: float = now + 3.0
 		while i + 1 < sections.size() and float(sections[i + 1]["at"]) <= ahead:
 			i += 1
-		d.tick(now, _quiet(cards, now), String(sections[i]["kind"]), light, weather, neutral)
+		if actor_until >= 0.0 and now >= actor_until:
+			actor_until = -1.0
+			d.finished(now)
+		var begun: Dictionary = d.tick(now, _quiet(cards, now), String(sections[i]["kind"]), light, weather, neutral, actor_until >= 0.0)
+		if not begun.is_empty():
+			var span: Vector2 = ACTOR_S[String(begun["id"])]
+			actor_until = now + actors.randf_range(span.x, span.y)
 		now += STEP
 	return d
 
@@ -129,10 +168,16 @@ func test_half_an_hour_brings_many_kinds_of_event_at_gaps_that_keep_no_beat() ->
 	var spreads: Array = []
 	var shortest: float = INF
 	var scenes: int = 0
+	var fewest_kinds: int = 1 << 30
 	for s: int in SEEDS:
 		var d = _run(300 + s, 30.0)
-		kinds_total += Director.distinct(d.started)
+		var kinds: int = Director.distinct(d.started)
+		kinds_total += kinds
+		fewest_kinds = mini(fewest_kinds, kinds)
 		assert_gte(d.started.size(), 8, "seed %d: an event every few minutes" % s)
+		# Each run on its own too, not only the fifty together (a kind is an event and its variant).
+		assert_gte(kinds, 3, "seed %d: kinds of event" % s)
+		assert_between(Director.spread(d.started), 0.2, 0.85, "seed %d: the gaps keep no beat" % s)
 		spreads.append(Director.spread(d.started))
 		for g: float in Director.gaps(d.started):
 			shortest = minf(shortest, g)
@@ -142,7 +187,7 @@ func test_half_an_hour_brings_many_kinds_of_event_at_gaps_that_keep_no_beat() ->
 	var mean_kinds: float = float(kinds_total) / float(SEEDS)
 	spreads.sort()
 	var median: float = float(spreads[spreads.size() / 2])
-	gut.p("30 min: kinds of (event, variant) %.2f on average, gap spread median %.2f, shortest gap %.1f s, scene in %d of %d" % [mean_kinds, median, shortest, scenes, SEEDS])
+	gut.p("30 min: kinds of (event, variant) %.2f on average (fewest %d), gap spread median %.2f, shortest gap %.1f s, scene in %d of %d" % [mean_kinds, fewest_kinds, median, shortest, scenes, SEEDS])
 	assert_gte(mean_kinds, 5.0)
 	assert_between(median, 0.3, 0.7)
 	assert_gte(shortest, 30.0)

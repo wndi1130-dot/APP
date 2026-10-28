@@ -12,18 +12,25 @@ extends RefCounted
 const REPEAT_S: float = 600.0
 ## A section that cannot be followed yet goes on by this much (seconds).
 const EXTEND_S := Vector2(15.0, 30.0)
+## A short bare stretch between, of a kind no window lays (journey_kit.gd lays ground
+## and poles only for it): where a new window leaves no kind open and the last kind is
+## not one of its own to go on with, it breaks the run instead of repeating one.
+const BRIDGE := "plain"
 
 var rng := RandomNumberGenerator.new()
 ## Sections begun, oldest first: {kind, at, len_s, mirror, seed}.
 var history: Array = []
 ## How many times a section was lengthened instead of a run coming again.
 var extended: int = 0
+## How many bare stretches went between (a window change that left no kind open).
+var bridged: int = 0
 
 
 func setup(seed_value: int) -> void:
 	rng.seed = seed_value
 	history.clear()
 	extended = 0
+	bridged = 0
 
 
 ## The section that begins at `at` (seconds of running) from `kinds`, rows of
@@ -35,28 +42,29 @@ func next(at: float, kinds: Array) -> Dictionary:
 		return {}
 	var last: String = String(history[-1]["kind"]) if not history.is_empty() else ""
 	var open: Array = _open(rows, at, history)
-	if open.is_empty() and last != "" and _row(rows, last).size() > 0:
-		# Every kind would repeat a run (or there is no other): this one goes on.
-		extended += 1
+	if open.is_empty() and last != "":
 		var cur: Dictionary = history[-1]
 		var more: float = rng.randf_range(EXTEND_S.x, EXTEND_S.y)
-		cur["len_s"] = float(cur["len_s"]) + more
-		return {"kind": last, "at": at, "len_s": more, "mirror": bool(cur["mirror"]), "seed": int(cur["seed"]), "extend": true}
+		if _row(rows, last).size() > 0 or last == BRIDGE:
+			# Every kind would repeat a run (or there is no other): this one goes on.
+			extended += 1
+			cur["len_s"] = float(cur["len_s"]) + more
+			return {"kind": last, "at": at, "len_s": more, "mirror": bool(cur["mirror"]), "seed": int(cur["seed"]), "extend": true}
+		# A new window without the last kind, and every kind of it would repeat a run.
+		bridged += 1
+		var bridge := {"kind": BRIDGE, "at": at, "len_s": more, "mirror": false, "seed": rng.randi(), "extend": false}
+		history.append(bridge.duplicate())
+		return bridge
+	# Open is never empty here (the first section has no last kind). One step ahead: a
+	# kind after which some kind can still follow is better.
 	var pool: Array = open
-	if pool.is_empty():
-		# A window with only kinds the last section was not (a new band): any of them.
-		pool = rows.filter(func(r: Dictionary) -> bool: return String(r["kind"]) != last)
-		if pool.is_empty():
-			pool = rows
-	else:
-		# One step ahead: a kind after which some kind can still follow is better.
-		var mid: float = at + _mean_len(rows)
-		var ahead: Array = pool.filter(func(r: Dictionary) -> bool:
-			var h: Array = history.duplicate()
-			h.append({"kind": String(r["kind"]), "at": at})
-			return not _open(rows, mid, h).is_empty())
-		if not ahead.is_empty():
-			pool = ahead
+	var mid: float = at + _mean_len(rows)
+	var ahead: Array = pool.filter(func(r: Dictionary) -> bool:
+		var h: Array = history.duplicate()
+		h.append({"kind": String(r["kind"]), "at": at})
+		return not _open(rows, mid, h).is_empty())
+	if not ahead.is_empty():
+		pool = ahead
 	var row: Dictionary = _pick(pool)
 	var span: Vector2 = row.get("len_s", Vector2(40.0, 90.0))
 	var section := {"kind": String(row["kind"]), "at": at, "len_s": rng.randf_range(span.x, span.y),

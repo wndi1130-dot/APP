@@ -37,6 +37,8 @@ var _chunk_i: int = 0
 ## Running seconds at the corridor's first metre (the train screen's, going on), and that metre.
 var _t0: float = 0.0
 var _x_origin: float = NAN
+## Metres of the train screen's section under way still to lay (handoff section_left_m).
+var _carry_m: float = 0.0
 
 
 ## A corridor going on from `handoff` (journey.gd handoff()), or, when that is empty,
@@ -52,6 +54,12 @@ static func make(handoff: Dictionary, seg: int, seed_value: int) -> RefCounted:
 		c.seq.setup(int(handoff.get("seed", seed_value)))
 		c.seq.history = (handoff.get("history", []) as Array).duplicate(true)
 		c._t0 = float(handoff.get("at", 0.0))
+		# The section the train's screen was laying goes on first, for what it had left.
+		var sec: Dictionary = handoff.get("section", {})
+		if not sec.is_empty() and float(handoff.get("section_left_m", 0.0)) > 0.5:
+			c._section = sec.duplicate()
+			c._carry_m = float(handoff["section_left_m"])
+			c._chunk_i = int(handoff.get("chunk", 0))
 	else:
 		var ws: Array = Route.windows(seg)
 		c.window = ws[-1] if not ws.is_empty() else {"band": Route.DEFAULT_BAND, "neutral": false}
@@ -67,6 +75,8 @@ func lay(world: Node3D, x0: float, x1: float, white: float, wet: float) -> void:
 	var x: float = x0
 	if is_nan(_x_origin):
 		_x_origin = x0
+		if _carry_m > 0.0:
+			_section_end = x0 + _carry_m
 	while x < x1 - 0.5:
 		if x >= _section_end:
 			_section = seq.next(_t0 + (x - _x_origin) / RUN_SPEED, Route.kinds(window))

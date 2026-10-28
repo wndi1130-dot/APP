@@ -44,6 +44,9 @@ const SLEEPER_STEP: float = 0.65
 const EVENT_AHEAD: float = 45.0
 const SEEN_FILE := "user://journey_seen.cfg"
 const REBASE_M: float = 2000.0
+## How far past the camera's middle the land may be in sight (the wide diagonal view
+## sees about 22 m ahead, 36 m through the pane): a new window's land begins past it.
+const SIGHT_M: float = 40.0
 
 var host: Node3D                    # the train scene (train_scene.gd)
 var look: Dictionary = {}
@@ -157,9 +160,21 @@ func step(delta: float) -> void:
 
 
 ## The next window of the stretch's land (7b: a decision card or a session ended).
+## What is in sight stays; the pieces laid ahead out of sight go and the section under
+## way ends there, so the new window's land (a border field's bare one) begins past
+## the view, a piece at most later (the pieces go back in one a frame).
 func next_window() -> void:
-	if window_i + 1 < windows.size():
-		window_i += 1
+	if window_i + 1 >= windows.size():
+		return
+	window_i += 1
+	if not _filled:
+		return
+	var keep_to: float = travelled + _cam_x() + SIGHT_M
+	while chunks.size() > 1 and float(chunks[-1]["s0"]) >= keep_to:
+		var c: Dictionary = chunks.pop_back()
+		(c["node"] as Node3D).queue_free()
+		laid_to = float(c["s0"])
+	_section_end = laid_to
 
 
 func window() -> Dictionary:
@@ -167,13 +182,15 @@ func window() -> Dictionary:
 
 
 ## What the stop scene needs to lay the same land on the way in (stop_cinema.gd
-## _lay_corridor): the band, the window, where the order stands, the look. {} when
-## none was laid (the side-on screen): the stop scene then goes by the stretch.
+## _lay_corridor): the band, the window, where the order stands, the section being
+## laid and what is left of it (its next piece), the look. {} when none was laid (the
+## side-on screen): the stop scene then goes by the stretch.
 func handoff() -> Dictionary:
 	if not _filled:
 		return {}
 	return {"band": band, "window": window().duplicate(), "seed": hash([int(_opts.get("seed", 1)), seg, "corridor"]),
-		"history": seq.history.duplicate(true), "at": laid_to / RUN_SPEED, "look": look}
+		"history": seq.history.duplicate(true), "at": laid_to / RUN_SPEED, "look": look,
+		"section": _section.duplicate(), "section_left_m": maxf(_section_end - laid_to, 0.0), "chunk": _chunk_i}
 
 
 ## The kind of land at route metre `s` ("" none laid there).
@@ -296,6 +313,7 @@ func _step_events(delta: float) -> void:
 			events.erase(actor)
 			actor.queue_free()
 			director.finished(clock)
+	director.watch(clock, quiet or calm)
 	if speed < 0.5:
 		return
 	var ahead: float = travelled + _cam_x() + EVENT_AHEAD

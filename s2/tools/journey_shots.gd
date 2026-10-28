@@ -11,6 +11,8 @@ extends SceneTree
 ## --no-kit: the stop scene's own corridor of firs and poles (the before of the hand-over).
 ## --lit: the views lit by the stretch's own daylight (Atmosphere.light of its look, as
 ## the stop scene lights its world) — a preview: the train screen's own light is mood's.
+## --long=<s>: after the before/after, the frame times over <s> seconds with the land
+## running, the frames a piece was laid in apart (one every 15 s: 150 frames miss them).
 
 const Journey = preload("res://game/train/journey/journey.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
@@ -61,6 +63,7 @@ var tag := "1688"
 var stop_mode := false
 var no_kit := false
 var lit := false
+var long_s := 0.0
 var flow = null
 var t = null
 var cam: Camera3D = null
@@ -86,6 +89,8 @@ func _initialize() -> void:
 			no_kit = true
 		elif a == "--lit":
 			lit = true
+		elif a.begins_with("--long="):
+			long_s = float(a.substr(7))
 	DirAccess.make_dir_recursive_absolute(out)
 	if stop_mode:
 		_run_stop()
@@ -114,6 +119,12 @@ func _run_views() -> void:
 	_show(true)
 	await _shot("after_diag")
 	await _measure("after")
+	if long_s > 0.0:
+		await _measure_long(long_s)
+		_save()
+		print("DONE")
+		quit()
+		return
 	for e: Array in EVENTS:
 		var actor: Node3D = journey.force_event(String(e[0]), String(e[1]))
 		var waited := 0.0
@@ -182,6 +193,35 @@ func _measure(key: String) -> void:
 		"journey_chunks": (journey.get("chunks") as Array).size() if journey != null else 0,
 	}
 	print("PERF ", key, " ", results[key])
+
+
+## The frame times over `seconds` with the land running: the frames a piece was laid
+## in (journey laid_to moved) and the rest, apart.
+func _measure_long(seconds: float) -> void:
+	var started: int = Time.get_ticks_usec()
+	var last: int = started
+	var laid: Array = []
+	var other: Array = []
+	var laid_before: float = float(journey.get("laid_to"))
+	while float(Time.get_ticks_usec() - started) / 1000000.0 < seconds:
+		await process_frame
+		var now: int = Time.get_ticks_usec()
+		var ms: float = float(now - last) / 1000.0
+		last = now
+		var laid_now: float = float(journey.get("laid_to"))
+		if laid_now > laid_before:
+			laid.append(snappedf(ms, 0.1))
+			laid_before = laid_now
+		else:
+			other.append(ms)
+	other.sort()
+	var over_33: int = other.filter(func(x: float) -> bool: return x > 33.4).size()
+	var over_50: int = other.filter(func(x: float) -> bool: return x > 50.0).size()
+	results["long"] = {"seconds": seconds, "pieces_laid": laid.size(), "laid_frame_ms": laid,
+		"other_frames": other.size(), "other_median_ms": float(other[other.size() / 2]) if not other.is_empty() else 0.0,
+		"other_p99_ms": float(other[int(other.size() * 0.99)]) if not other.is_empty() else 0.0,
+		"other_over_33ms": over_33, "other_over_50ms": over_50}
+	print("LONG ", results["long"])
 
 
 func _save() -> void:

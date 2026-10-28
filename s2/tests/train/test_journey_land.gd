@@ -9,6 +9,7 @@ const Kit = preload("res://game/train/journey/journey_kit.gd")
 const Corridor = preload("res://game/train/journey/journey_corridor.gd")
 const Wagons = preload("res://game/train/journey/journey_wagons.gd")
 const Route = preload("res://game/train/journey/journey_route.gd")
+const Director = preload("res://game/train/journey/journey_director.gd")
 
 const LOOK: Dictionary = {"band": "day", "snow_level": 0, "wet_ground": 1.0, "season": "late_autumn", "fall": 0.0, "ice": 1.0, "kinds": ["overcast"]}
 
@@ -131,6 +132,64 @@ func test_no_event_while_a_card_is_up_and_some_when_not() -> void:
 	assert_gt(j.director.started.size(), 3, "a quarter hour without one: several")
 
 
+## Stretch 2 runs into the border fields at 18 km: a card put away there moves the land
+## on, and what was laid ahead of the view for the window before goes.
+func test_a_border_field_window_takes_back_the_land_laid_ahead_out_of_sight() -> void:
+	var dropped_villages: int = 0
+	for s: int in 20:
+		var host := FakeTrain.new()
+		add_child_autofree(host)
+		var j: Node3D = Journey.attach(host, host, LOOK, 2, {"seed": 40 + s, "remember": false})
+		j.calm = true
+		for i in 150 + 37 * s:
+			j.step(0.1)
+		var keep_to: float = j.travelled + host.cam_x + Journey.SIGHT_M
+		for c: Dictionary in j.chunks:
+			if float(c["s0"]) >= keep_to and String(c["kind"]) == "village":
+				dropped_villages += 1
+		j.next_window()
+		assert_true(bool(j.window()["neutral"]), "seed %d: the border fields" % s)
+		for c: Dictionary in j.chunks:
+			assert_lt(float(c["s0"]), keep_to, "seed %d: nothing of the window before left out of sight ahead" % s)
+		var cut: float = j.laid_to
+		for i in 600:
+			j.step(0.1)
+		for c: Dictionary in j.chunks:
+			if float(c["s0"]) >= cut:
+				assert_ne(String(c["kind"]), "village", "seed %d: no village in the border fields" % s)
+				assert_eq(int((c["node"] as Node3D).get_meta("houses", 0)), 0, "seed %d: no house laid there" % s)
+	assert_gt(dropped_villages, 0, "some village laid ahead was taken back (the case is met)")
+
+
+## A card opened and put away while the train stood (at a stop): once it runs again the
+## next event still waits AFTER_CARD of running time.
+func test_a_card_put_away_while_the_train_stood_still_holds_the_next_event_off() -> void:
+	var host := FakeTrain.new()
+	add_child_autofree(host)
+	var j: Node3D = Journey.attach(host, host, LOOK, 1, {"seed": 11, "remember": false})
+	host.run = false
+	for i in 200:
+		j.step(0.1)
+	assert_lt(j.speed, 0.5, "it has stopped")
+	j.quiet = true
+	for i in 50:
+		j.step(0.1)
+	j.director.due = 0.0
+	j.quiet = false
+	for i in 50:
+		j.step(0.1)
+	var put_away: float = j.clock
+	var before: int = j.director.started.size()
+	host.run = true
+	for i in 900:
+		j.step(0.1)
+		if j.director.started.size() > before:
+			break
+	assert_gt(j.director.started.size(), before, "an event comes once it runs again")
+	var first: Dictionary = j.director.started[before]
+	assert_gte(float(first["at"]) - put_away, Director.AFTER_CARD.x, "not inside AFTER_CARD of the card put away")
+
+
 func test_the_stop_corridor_lays_the_same_kit_and_only_where_there_is_one() -> void:
 	var c = Corridor.make({}, 1, 1)
 	assert_not_null(c, "K1 has its kit")
@@ -144,9 +203,25 @@ func test_the_stop_corridor_lays_the_same_kit_and_only_where_there_is_one() -> v
 	for n in world.get_children():
 		assert_null((n as Node).get_node_or_null("Ground"), "the stop scene keeps its own ground")
 	assert_null(Corridor.make({}, 11, 1), "K4 has no kit yet: the stop scene's own corridor")
-	var host := FakeTrain.new()
-	add_child_autofree(host)
-	var j: Node3D = Journey.attach(host, host, LOOK, 1, {"seed": 5, "remember": false})
-	var went_on = Corridor.make(j.handoff(), 1, 5)
-	assert_not_null(went_on)
-	assert_eq((went_on.seq.history as Array).size(), (j.seq.history as Array).size(), "the order goes on from the train's screen")
+	# The section the train's screen was laying goes on first, then the order from its history.
+	var carried: int = 0
+	for s: int in 6:
+		var host := FakeTrain.new()
+		add_child_autofree(host)
+		var j: Node3D = Journey.attach(host, host, LOOK, 1, {"seed": 5 + s, "remember": false})
+		for i in 40 * s:
+			j.step(0.1)
+		var hand: Dictionary = j.handoff()
+		var went_on = Corridor.make(hand, 1, 5)
+		assert_not_null(went_on)
+		assert_eq((went_on.seq.history as Array).size(), (j.seq.history as Array).size(), "the order goes on from the train's screen")
+		if float(hand["section_left_m"]) <= 0.5:
+			continue
+		carried += 1
+		var road := Node3D.new()
+		add_child_autofree(road)
+		went_on.lay(road, -40.0, 20.0, 0.0, 0.3)
+		var kind: String = String(j._section["kind"])
+		assert_true(String(road.get_child(0).name).begins_with("Land_%s_" % kind), "seed %d: the stop's first piece goes on with the train's %s" % [s, kind])
+		assert_eq(int(went_on._section["seed"]), int(j._section["seed"]), "the same dressing")
+	assert_gt(carried, 0, "a section was under way at the cut in some seed")

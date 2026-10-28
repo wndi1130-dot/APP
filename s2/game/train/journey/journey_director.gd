@@ -80,9 +80,7 @@ func setup(seed_value: int, seen_before: Dictionary = {}, events: Array = EVENTS
 func tick(now: float, quiet: bool, kind_ahead: String, light: String, weather: String, neutral: bool = false, busy: bool = false) -> Dictionary:
 	if not playing.is_empty() and now >= float(playing["until"]) and not busy:
 		finished(now)
-	if _was_quiet and not quiet:
-		due = maxf(due, now + rng.randf_range(AFTER_CARD.x, AFTER_CARD.y))
-	_was_quiet = quiet
+	watch(now, quiet)
 	if quiet or neutral or busy or not playing.is_empty() or now < due:
 		return {}
 	var fits: Array = []
@@ -101,6 +99,14 @@ func tick(now: float, quiet: bool, kind_ahead: String, light: String, weather: S
 	if String(row.get("tier", "common")) != "common":
 		used.append(id)
 	return playing.duplicate()
+
+
+## The card state, every tick and while the train stands too (no event begins then,
+## but a card put away still holds the next one off for AFTER_CARD of running time).
+func watch(now: float, quiet: bool) -> void:
+	if _was_quiet and not quiet:
+		due = maxf(due, now + rng.randf_range(AFTER_CARD.x, AFTER_CARD.y))
+	_was_quiet = quiet
 
 
 ## The event under way has gone by (its actor is done, or its time is up).
