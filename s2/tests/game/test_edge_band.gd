@@ -25,8 +25,13 @@ func _grid() -> FieldGrid:
 func test_values_are_fixed() -> void:
 	assert_eq(EdgeBand.BAND, 12.0)
 	assert_eq(EdgeBand.INNER_ROW, 2.6)
-	assert_eq(EdgeBand.INNER_SPACING, 2.0)
-	assert_eq(EdgeBand.DEEP_SPACING, 4.0)
+	assert_eq(EdgeBand.YOUNG_TALL, Vector2(1.8, 3.4))
+	assert_eq(EdgeBand.CANOPY_TALL, Vector2(4.6, 8.5))
+	assert_eq(EdgeBand.CANOPY_RAMP, 5.0)
+	assert_eq(EdgeBand.FAR_WOODS, 34.0)
+	assert_eq(float(EdgeBand.PROFILES["dense"]["canopy"]), 2.2)
+	assert_eq(float(EdgeBand.PROFILES["mixed"]["canopy"]), 2.8)
+	assert_eq(float(EdgeBand.PROFILES["town"]["canopy"]), 3.6)
 	assert_eq(EdgeBand.TRUNK_GAP, 0.3)
 	assert_eq(EdgeBand.EDGE_WAVE, 1.2)
 	assert_eq(EdgeBand.RAIL_CLEAR, 2.5)
@@ -373,8 +378,11 @@ func _original_band_plan(g: FieldGrid, seed: int) -> Dictionary:
 	for glade: Dictionary in glades:
 		no_trees.append((glade["rect"] as Rect2).grow(0.5))
 	var trees: Array = []
-	EdgeBand._scatter(g, rng, no_trees, trees, EdgeBand.INNER_SPACING, EdgeBand.TRUNK_GAP, EdgeBand.INNER_ROW)
-	EdgeBand._scatter(g, rng, no_trees, trees, EdgeBand.DEEP_SPACING, EdgeBand.INNER_ROW, EdgeBand.BAND)
+	var look := EdgeBand.look_of({})
+	var profile: Dictionary = EdgeBand.PROFILES[look["profile"]]
+	EdgeBand._scatter(g, rng, no_trees, trees, float(profile["edge"]), EdgeBand.TRUNK_GAP, EdgeBand.INNER_ROW, "edge", look)
+	EdgeBand._scatter(g, rng, no_trees, trees, float(profile["canopy"]), EdgeBand.INNER_ROW, EdgeBand.BAND, "canopy", look)
+	EdgeBand._scatter(g, rng, no_trees, trees, float(profile["under"]), EdgeBand.INNER_ROW, EdgeBand.BAND, "under", look)
 	return {"trees": trees, "blocks": blocks, "glades": glades, "clear": clear, "runs": runs}
 
 
@@ -408,3 +416,95 @@ func test_missing_far_models_are_skipped_without_a_placeholder() -> void:
 	var counts := EdgeBand._build_far(root, FieldGrid.new(2, 2), planned, StandardMaterial3D.new(), [Color.WHITE])
 	assert_eq(int(counts["far"]), 0)
 	assert_eq(root.get_node("Far").get_child_count(), 0, "a missing model adds no grey geometry")
+
+
+## A town-sized map with the rails across it, the woods round it as `place_id`'s.
+func _woods(place_id: String, seed: int, band: String = "") -> Dictionary:
+	var g := FieldGrid.new(170, 120)
+	for x in g.width:
+		g.floor[g.index(Vector2i(x, 60))] = F.RAIL
+	return {"g": g, "plan": EdgeBand.plan(g, seed, EdgeBand.look_of({"place_id": place_id, "region_band": band}))}
+
+
+func test_forest_stops_grow_dense_spruce_woods_and_towns_thin_fruit_and_street_trees() -> void:
+	assert_eq(EdgeBand.look_of({"place_id": "sawmill_03"})["profile"], "dense")
+	assert_eq(EdgeBand.look_of({"place_id": "bare_line_01"})["profile"], "dense")
+	assert_eq(EdgeBand.look_of({"place_id": "lodge_02"})["profile"], "dense")
+	assert_eq(EdgeBand.look_of({"place_id": "houses_01"})["profile"], "town")
+	assert_eq(EdgeBand.look_of({"place_id": "freight_02"})["profile"], "mixed")
+	assert_eq(EdgeBand.look_of({"place_id": "test"})["profile"], "mixed", "a place with no group")
+	var counts := {}
+	for place: String in ["sawmill_01", "freight_01", "houses_01"]:
+		var w := _woods(place, 5)
+		var g: FieldGrid = w["g"]
+		var tall := 0
+		var spruce := 0
+		var by_model := {}
+		for t: Dictionary in w["plan"]["trees"]:
+			var at: Vector3 = t["at"]
+			var model := String(t["model"])
+			by_model[model] = int(by_model.get(model, 0)) + 1
+			if t.has("height"):
+				tall += 1
+				spruce += 1 if model == EdgeBand.SPRUCE else 0
+				if EdgeBand.outside(g, at.x, at.z) < EdgeBand.INNER_ROW:
+					assert_lte(float(t["height"]), EdgeBand.YOUNG_TALL.y, "the first rows stay low (%s)" % place)
+					assert_eq(model, EdgeBand.SPRUCE, "only young spruce among the first rows' trees")
+			else:
+				assert_true(t.has("scale"), "what grows low has a scale")
+		counts[place] = (w["plan"]["trees"] as Array).size()
+		if place == "houses_01":
+			assert_gt(int(by_model.get(EdgeBand.ORCHARD, 0)), 0, "fruit trees round a town")
+			assert_gt(int(by_model.get(EdgeBand.STREET, 0)), 0, "street trees round a town")
+			assert_lt(float(spruce) / float(tall), 0.5)
+		else:
+			assert_gt(float(spruce) / float(tall), 0.6, "spruce is the woods' body (%s)" % place)
+			assert_gt(int(by_model.get(EdgeBand.BROADLEAF, 0)), 0, "with leafless broadleaf mixed in")
+			assert_gt(int(by_model.get(EdgeBand.THICKET, 0)), 0, "and thicket under them")
+	assert_gt(int(counts["sawmill_01"]), int(counts["freight_01"]) * 1.3, "forest stops thicker than the rail works")
+	assert_gt(int(counts["freight_01"]), int(counts["houses_01"]) * 1.5, "the rail works thicker than a town")
+
+
+func test_deep_spruce_crowns_meet_and_the_woods_go_on_past_the_band() -> void:
+	var mesh := EdgeBand._model_mesh(EdgeBand.SPRUCE)
+	if mesh == null:
+		pass_test("no spruce model here")
+		return
+	var w := _woods("lodge_01", 9)
+	var g: FieldGrid = w["g"]
+	var across := mesh.get_aabb().size.x / mesh.get_aabb().size.y
+	var deep := 0
+	var narrow := 0
+	for t: Dictionary in w["plan"]["trees"]:
+		var at: Vector3 = t["at"]
+		if String(t["model"]) == EdgeBand.SPRUCE and EdgeBand.outside(g, at.x, at.z) > EdgeBand.INNER_ROW + EdgeBand.CANOPY_RAMP:
+			deep += 1
+			if float(t["height"]) * float(t["spread"]) * across <= float(EdgeBand.PROFILES["dense"]["canopy"]):
+				narrow += 1
+	assert_gt(deep, 200)
+	assert_eq(narrow, 0, "deep crowns are wider than the gap between trunks")
+	# Out to FAR_WOODS the woods go on; the few groves further out are as before.
+	var woods := 0
+	for item: Dictionary in w["plan"]["far"]:
+		var at := item["at"] as Vector3
+		if item.has("height") and EdgeBand.outside(g, at.x, at.z) < EdgeBand.FAR_WOODS:
+			woods += 1
+	assert_gt(woods, 300, "a forest stop's woods go on into the far ground")
+	var town := _woods("houses_01", 9)
+	for item: Dictionary in town["plan"]["far"]:
+		assert_false(item.has("height"), "a town's far ground keeps its groves, fields and houses")
+
+
+func test_the_region_band_sets_the_share_of_spruce_never_below_the_body() -> void:
+	var sandy := EdgeBand.look_of({"place_id": "sawmill_01", "region_band": "K4"})
+	assert_almost_eq(float(sandy["conifer"]), 0.95 / (0.95 + 0.12), 0.0001, "the pine sand plain is near all conifer")
+	var flood := EdgeBand.look_of({"place_id": "sawmill_01", "region_band": "K6"})
+	assert_eq(float(flood["conifer"]), float(EdgeBand.PROFILES["dense"]["conifer"]), "a broadleaf band still gets spruce first")
+	assert_eq(float(EdgeBand.look_of({"place_id": "houses_01", "region_band": "K4"})["conifer"]), float(EdgeBand.PROFILES["town"]["conifer"]))
+	var thin := _woods("sawmill_01", 4, "K7")
+	var thick := _woods("sawmill_01", 4, "K10")
+	assert_gt((thick["plan"]["far"] as Array).size(), (thin["plan"]["far"] as Array).size(), "a forested band has more woods out far")
+	var pine := _woods("sawmill_01", 4, "K4")["plan"]["trees"] as Array
+	var mixed := _woods("sawmill_01", 4, "K6")["plan"]["trees"] as Array
+	assert_eq(pine.size(), mixed.size(), "the band stands where it did; only what grows there follows the band")
+	assert_eq((pine[0] as Dictionary)["at"], (mixed[0] as Dictionary)["at"])
