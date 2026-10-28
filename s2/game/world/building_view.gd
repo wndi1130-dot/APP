@@ -828,6 +828,23 @@ static func _plan_flat(out: Dictionary, r: Rect2i, top: float, above: Dictionary
 				join = maxi(join, _join(Vector2i(x, y), above, level))
 		sides[d] = join
 		inset[d] = [FACE_IN, 0.0, -FACE_IN][join]
+	# 낮은 벽 길이는 칸 경계 기준(아래 오목 모서리 당김은 판에만).
+	var px0: float = r.position.x + inset[WEST]
+	var px1: float = r.end.x - inset[EAST]
+	# 오목 모서리(ㄱ자 안쪽): 두 이음 변이 만나는 모서리 대각 칸이 바깥이면 그 모서리 네모가 벽 밖으로 나간다.
+	# 이 조각의 동서 이음 변을 바깥면까지 당기고, 그 변 건너 조각(남북 변이 바깥, 그 대각이 이 조각)이 그만큼 늘인다.
+	for e: Vector2i in [WEST, EAST]:
+		if sides[e] != 1:
+			continue
+		var shift := 0
+		for d: Vector2i in [NORTH, SOUTH]:
+			var diag := Vector2i(r.end.x if e == EAST else r.position.x - 1, r.end.y if d == SOUTH else r.position.y - 1)
+			var corner := _join(diag, above, level)
+			if sides[d] == 1 and corner == 0:
+				shift += 1
+			elif sides[d] == 0 and corner == 1:
+				shift -= 1
+		inset[e] = FACE_IN * signf(shift)
 	var x0: float = r.position.x + inset[WEST]
 	var x1: float = r.end.x - inset[EAST]
 	var z0: float = r.position.y + inset[NORTH]
@@ -839,8 +856,8 @@ static func _plan_flat(out: Dictionary, r: Rect2i, top: float, above: Dictionary
 	for d: Vector2i in [NORTH, SOUTH]:
 		if sides[d] == 0:
 			var row := r.position.y - 1 if d == NORTH else r.end.y
-			var a0 := x0 - (FACE_IN + EXT_T if sides[WEST] == 1 and level.has(Vector2i(r.position.x - 1, row)) else 0.0)
-			var a1 := x1 + (FACE_IN + EXT_T if sides[EAST] == 1 and level.has(Vector2i(r.end.x, row)) else 0.0)
+			var a0 := px0 - (FACE_IN + EXT_T if sides[WEST] == 1 and level.has(Vector2i(r.position.x - 1, row)) else 0.0)
+			var a1 := px1 + (FACE_IN + EXT_T if sides[EAST] == 1 and level.has(Vector2i(r.end.x, row)) else 0.0)
 			var z := r.position.y + 0.5 if d == NORTH else r.end.y - 0.5
 			out["roofs"].append({"id": "roof_parapet", "xf": _xf(Vector3((a0 + a1) * 0.5, y, z), yaw_of(d), Vector3(a1 - a0, 1, 1)), "b": b})
 	for d: Vector2i in [WEST, EAST]:

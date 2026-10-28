@@ -525,14 +525,21 @@ func test_an_l_shaped_flat_roof_meets_itself_without_a_gap_or_inner_parapets() -
 	var p := BuildingView.plan(_l_block())
 	var slabs := _roofs_of(p, "roof_flat")
 	assert_eq(slabs.size(), 3, "긴 변이 반만 옆 조각에 닿는 곳에서 잘린 세 조각")
-	# 조각끼리 맞닿은 변은 칸 경계(x 5, z 5)에서 만난다(예전에는 바깥벽 안쪽으로 0.275씩 줄어 0.55 틈).
-	var east_edges := []
+	# 조각끼리 맞닿은 변은 틈 없이 만난다(예전에는 바깥벽 안쪽으로 0.275씩 줄어 0.55 틈). ㄱ자 안쪽 모서리
+	# (x 5·z 5)의 벽 바깥면 너머 네모는 어느 판도 덮지 않는다.
+	var boxes := []
 	var south_edges := []
 	for xf: Transform3D in slabs:
-		east_edges.append(snappedf(xf.origin.x + xf.basis.get_scale().x * 0.5, 0.001))
-		south_edges.append(snappedf(xf.origin.z + xf.basis.get_scale().z * 0.5, 0.001))
-	assert_true(east_edges.has(5.0), "윗줄 서쪽 조각이 동쪽 조각과 x 5에서 만난다 %s" % [east_edges])
+		var half := xf.basis.get_scale() * 0.5
+		boxes.append(Rect2(xf.origin.x - half.x, xf.origin.z - half.z, half.x * 2.0, half.z * 2.0))
+		south_edges.append(snappedf(xf.origin.z + half.z, 0.001))
 	assert_true(south_edges.has(5.0), "윗줄 서쪽 조각이 아랫줄 조각과 z 5에서 만난다 %s" % [south_edges])
+	for at: Vector2 in [Vector2(4.6, 3.5), Vector2(4.9, 3.5), Vector2(3.5, 4.99), Vector2(3.5, 5.01), Vector2(4.6, 4.9)]:
+		assert_true(boxes.any(func(box: Rect2) -> bool: return box.has_point(at)), "이음 자리를 판이 덮는다 %s %s" % [at, boxes])
+	assert_false(boxes.any(func(box: Rect2) -> bool: return box.has_point(Vector2(4.86, 4.86))), "안쪽 모서리 바깥 네모는 비운다 %s" % [boxes])
+	for i in range(boxes.size()):
+		for j in range(i + 1, boxes.size()):
+			assert_lt((boxes[i] as Rect2).intersection(boxes[j]).get_area(), 0.0001, "판끼리 겹치지 않는다")
 	var parapets := _roofs_of(p, "roof_parapet")
 	assert_eq(parapets.size(), 8, "바깥 변에만 낮은 벽(안쪽 이음에는 없음)")
 	for xf: Transform3D in parapets:
