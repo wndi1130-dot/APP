@@ -4,6 +4,7 @@ import placeSchema from '../../schema/place.schema.json';
 import chronicleSchema from '../../schema/chronicle.schema.json';
 import receiptSchema from '../../schema/receipt.schema.json';
 import { bump, bumpRel } from './ledger';
+import { addSupplies } from './supplies';
 import { COMMS, COMM_NAME, LOOT_NAME, PLACES, STAY } from './data';
 import type { Comm, LootKey } from './data';
 import { onDeath } from './death';
@@ -371,11 +372,13 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   const s = r.stock;
   const have: Partial<Record<keyof typeof s, number>> = {
     coal: g.coal, food: g.food, medicine: g.med, luxury: g.lux, ...(g.dom ? { wood: g.dom.wood, scrap: g.dom.scrap, parts: g.dom.parts } : {}),
+    ...(g.supOn ? { supplies: g.sup ?? 0 } : {}),
   };
   if (s.coal) bump(g, 'coal', s.coal, 'field.loot', { floor0: true });
   if (s.food) bump(g, 'food', s.food, 'field.loot', { floor0: true });
   if (s.medicine) bump(g, 'med', s.medicine, 'field.loot', { floor0: true });
   if (s.luxury) bump(g, 'lux', s.luxury, 'field.loot', { floor0: true });
+  if (s.supplies) addSupplies(g, s.supplies, 'field.loot'); // 꺼진 판에서는 천처럼 받아도 재고에 담지 않는다
   if (s.symbol) g.symbols = Math.max(0, g.symbols + s.symbol);
   if (g.dom) {
     if (s.wood) g.dom.wood = Math.max(0, g.dom.wood + s.wood);
@@ -385,8 +388,8 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   }
   // 덱의 자리(결정 474 S1): 필드가 쓴 뒤 자리를 그대로 들고 다음 정차 계약에 싣는다 — 정차를 넘어 n곳마다 정확히 k곳.
   if (r.version === 5 && r.lootDeck) g.lootDeck = structuredClone(r.lootDeck);
-  const got = ([['coal', '석탄'], ['food', '식량'], ['medicine', '의약품'], ['luxury', '사치품'], ['wood', '목재'], ['scrap', '고철'], ['parts', '부품']] as const)
-    .filter(([k]) => s[k]).map(([k, name]) => {
+  const got = ([['coal', '석탄'], ['food', '식량'], ['medicine', '의약품'], ['luxury', '사치품'], ['supplies', '생필품'], ['wood', '목재'], ['scrap', '고철'], ['parts', '부품']] as const)
+    .filter(([k]) => s[k] && (k !== 'supplies' || g.supOn)).map(([k, name]) => {
       const lack = have[k] === undefined ? 0 : Math.max(0, -(have[k]! + s[k]!));
       return `${name} ${s[k]! > 0 ? '+' : ''}${s[k]}${lack > 0 ? ` (모자라 0, 부족 ${lack})` : ''}`;
     });

@@ -9,7 +9,7 @@ import type { Comm } from './data';
 // 까닭 열쇠는 영어로 두고 화면에 보이는 이름은 화면 쪽 표(ui/why_names.ts)에 둔다.
 // 'card'는 「지금 한 행동 그 자체」라는 뜻이라 화면이 행동 이름으로 적는다.
 
-export type Stat = 'trust' | 'tension' | 'coal' | 'food' | 'med' | 'lux';
+export type Stat = 'trust' | 'tension' | 'coal' | 'food' | 'med' | 'lux' | 'sup';
 export type LedgerKey = Stat | `rel:${Comm}`;
 export interface LedgerRow { k: LedgerKey; d: number; why: string }
 
@@ -25,9 +25,10 @@ function note(g: Game, k: LedgerKey, d: number, why: string): void {
 
 /** 수치를 d만큼 바꾸고 실제로 바뀐 만큼을 까닭과 함께 적는다. */
 export function bump(g: Game, k: Stat, d: number, why: string, opt?: { floor0?: boolean }): void {
-  const before = g[k];
+  if (k === 'sup' && !g.supOn) return;
+  const before = k === 'sup' ? g.sup ?? 0 : g[k];
   const raw = before + d;
-  g[k] = k === 'trust' || k === 'tension' ? clamp(raw, 0, 100) : opt?.floor0 ? Math.max(0, raw) : raw;
+  g[k] = k === 'trust' || k === 'tension' ? clamp(raw, 0, 100) : k === 'sup' || opt?.floor0 ? Math.max(0, raw) : raw;
   note(g, k, g[k] - before, why);
 }
 
@@ -35,9 +36,10 @@ export function bump(g: Game, k: Stat, d: number, why: string, opt?: { floor0?: 
  *  여러 몫을 곱하고 더해 한 숫자로 움직이는 자리(구간 정산의 긴장, 운행·난방·배급을 한꺼번에 빼는 석탄)에 쓴다.
  *  몫마다 따로 bump하면 자르는 횟수가 달라져 숫자가 바뀐다. 마지막 까닭이 나머지를 받아 적은 합이 실제 변화와 꼭 같다. */
 export function bumpParts(g: Game, k: Stat, d: number, parts: [string, number][], opt?: { floor0?: boolean }): void {
-  const before = g[k];
+  if (k === 'sup' && !g.supOn) return;
+  const before = k === 'sup' ? g.sup ?? 0 : g[k];
   const raw = before + d;
-  g[k] = k === 'trust' || k === 'tension' ? clamp(raw, 0, 100) : opt?.floor0 ? Math.max(0, raw) : raw;
+  g[k] = k === 'trust' || k === 'tension' ? clamp(raw, 0, 100) : k === 'sup' || opt?.floor0 ? Math.max(0, raw) : raw;
   const real = g[k] - before;
   const total = parts.reduce((a, [, w]) => a + w, 0);
   if (real === 0 || parts.length === 0) return;
@@ -51,9 +53,10 @@ export function bumpParts(g: Game, k: Stat, d: number, parts: [string, number][]
 
 /** 값을 통째로 놓는 자리(긴장을 65로, 의약품을 0으로). 차이를 적는다. */
 export function put(g: Game, k: Stat, v: number, why: string): void {
-  const before = g[k];
-  g[k] = v;
-  note(g, k, v - before, why);
+  if (k === 'sup' && !g.supOn) return;
+  const before = k === 'sup' ? g.sup ?? 0 : g[k];
+  g[k] = k === 'sup' ? Math.max(0, v) : v;
+  note(g, k, g[k] - before, why);
 }
 
 /** 집단 관계를 d만큼 바꾼다(−100..100). */
