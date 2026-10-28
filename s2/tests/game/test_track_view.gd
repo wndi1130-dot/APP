@@ -6,6 +6,8 @@ const TrackView = preload("res://game/world/track_view.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const Kit = preload("res://game/world/train_model_kit.gd")
 const FieldGame = preload("res://game/field_game.gd")
+const MapView = preload("res://game/world/map_view.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
 const F = FieldGrid.Floor
 
 
@@ -49,12 +51,12 @@ func test_pieces_keep_one_spacing_so_runs_that_meet_join() -> void:
 	assert_eq(halves.size(), whole.size())
 	for i in whole.size():
 		assert_true(halves.has(whole[i]))
-	var west := TrackView.spots(TrackView.outside_runs([Rect2(-60, 1, 60, 3)]))
+	var west := TrackView.spots(TrackView.outside_runs([Rect2(-60, 1, 60, 3)], 20.0))
 	assert_almost_eq(whole[0].x - west[west.size() - 1].x, TrackView.STEP, 0.0001, "no gap or overlap at the edge")
 
 
 func test_outside_runs_follow_the_map_rule_and_skip_lines_along_z() -> void:
-	var out := TrackView.outside_runs([Rect2(20, 6, 60, 6), Rect2(5, -60, 3, 60)])
+	var out := TrackView.outside_runs([Rect2(20, 6, 60, 6), Rect2(5, -60, 3, 60)], 20.0)
 	assert_eq(out.size(), 2, "two lines past the east edge, none for a north run")
 	assert_almost_eq(float(out[0]["z"]), 7.5, 0.0001)
 	assert_almost_eq(float(out[1]["z"]), 10.5, 0.0001)
@@ -72,7 +74,7 @@ func test_one_piece_mesh_inside_and_outside_with_the_map_material() -> void:
 	assert_eq(outside.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	assert_eq(TrackView.piece().get_faces().size() / 3, 22, "a sleeper box and two rails open at their joined ends")
 	assert_eq(inside.multimesh.instance_count, TrackView.spots(TrackView.runs(_grid())).size())
-	assert_eq(outside.multimesh.instance_count, TrackView.spots(TrackView.outside_runs([Rect2(-60, 1, 60, 3)])).size())
+	assert_eq(outside.multimesh.instance_count, TrackView.spots(TrackView.outside_runs([Rect2(-60, 1, 60, 3)], 20.0)).size())
 	var box: AABB = TrackView.piece().get_aabb()
 	assert_almost_eq(box.end.y, TrackView.RAIL_TOP, 0.0001)
 	assert_almost_eq(box.size.z, TrackView.SLEEPER.z, 0.0001)
@@ -154,3 +156,36 @@ func test_the_field_lays_its_line_and_stands_the_train_on_it() -> void:
 			assert_almost_eq(game.view.light_nodes[kind].position.y, TrackView.RAIL_TOP, 0.0001, kind + " stands with the train")
 	game.view.slide_train(12.0)
 	assert_almost_eq(game.view.train_node.position.y, TrackView.RAIL_TOP, 0.0001, "it rolls along the rails")
+
+func test_outside_runs_take_the_side_not_the_shape() -> void:
+	# A band wider than its length still runs east-west past the west or east edge; a north or south band
+	# wider than it is deep is still no east-west line (edge_band.gd hands over rectangles without their side).
+	var out := TrackView.outside_runs([Rect2(-60, 0, 60, 61), Rect2(100, 5, 60, 61), Rect2(10, -60, 70, 60), Rect2(10, 40, 70, 60)], 100.0)
+	assert_eq(out.size(), TrackView.lines(0.0, 61.0).size() * 2, "the west and east bands only")
+	for run: Dictionary in out:
+		assert_true(float(run["x1"]) <= 0.0 or float(run["x0"]) >= 100.0, "every line lies past the west or east edge")
+
+
+func test_overlapping_crossings_board_a_line_once() -> void:
+	var found := TrackView.runs(_grid())
+	var on := TrackView.crossing_runs(found, [Rect2i(5, 0, 3, 5), Rect2i(6, 0, 4, 5), Rect2i(5, 0, 3, 5), Rect2i(12, 0, 2, 5)])
+	assert_eq(on.size(), 2, "the three over 5..10 make one stretch, the one at 12 its own")
+	assert_eq(_span(on, 2.5), [5.0, 10.0])
+	var meeting := TrackView.crossing_runs(found, [Rect2i(5, 0, 3, 5), Rect2i(8, 0, 2, 5)])
+	assert_eq(meeting.size(), 1, "crossings that meet end to end are one stretch of boards")
+
+
+func test_the_map_hands_its_crossings_to_the_track() -> void:
+	var data: Dictionary = FieldMaps.build_from(load(FieldMaps.path_of("bare_line_01")))
+	var g: FieldGrid = data["grid"]
+	var at := Vector2i(-1, -1)
+	for y in g.height:
+		for x in g.width:
+			if at.x < 0 and g.floor_at(Vector2i(x, y)) == F.RAIL:
+				at = Vector2i(x, y)
+	assert_true(at.x >= 0, "the line map has rails")
+	data["rail_crossings"] = [Rect2i(at.x, 0, 2, g.height)]
+	var view: Node3D = autofree(MapView.new())
+	view.setup(data)
+	var track: Node3D = view.level_roots[0].get_node("Track")
+	assert_true(track.has_node("TrackCrossings"), "MapView.setup hands data[rail_crossings] on to the boards")
