@@ -201,6 +201,22 @@ static func look_of(data: Dictionary) -> Dictionary:
 	return {"profile": profile, "conifer": conifer, "forest": float(band["forest"])}
 
 
+## Everything plan() reads: of the map only its size and where roads and rails cross
+## its edges, of the data only the place (seed) and the region band (look).
+static func plan_key(g: FieldGrid, seed: int, look: Dictionary) -> Dictionary:
+	return {"size": Vector2i(g.width, g.height), "openings": openings(g), "seed": seed, "look": look}
+
+
+## The plan made ahead off the main thread (stop_loader.make_ready), with the key it
+## was made from: {key, plan}. build() uses it only while the key still fits; a field
+## given another region band than the loader saw plans again on the main thread.
+static func plan_ahead(d: Dictionary) -> Dictionary:
+	var g: FieldGrid = d["grid"]
+	var seed := seed_of(d)
+	var look := look_of(d)
+	return {"key": plan_key(g, seed, look), "plan": plan(g, seed, look)}
+
+
 ## Where a road or the rails cross an edge: {"side": 0 west 1 east 2 north 3 south,
 ## "from", "to" (cells along the edge, to inclusive), "floor"}.
 static func openings(g: FieldGrid) -> Array:
@@ -750,7 +766,14 @@ static func _chunk(at: Vector3) -> Vector2i:
 ## in the map's own material, trees and blocks as models. Returns counts for the
 ## build log and the tests.
 static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Material, colors: Array) -> Dictionary:
-	var p := plan(g, seed_of(data), look_of(data))
+	var seed := seed_of(data)
+	var look := look_of(data)
+	# The plan made ahead on the stop loader's worker (plan_ahead), read once, when it
+	# was made from the same inputs; else made here, on the main thread.
+	var ahead: Dictionary = data.get("_edge_plan", {})
+	data.erase("_edge_plan")
+	var planned_ahead: bool = not ahead.is_empty() and ahead["key"] == plan_key(g, seed, look)
+	var p: Dictionary = (ahead["plan"] as Dictionary) if planned_ahead else plan(g, seed, look)
 	var root := Node3D.new()
 	root.name = "EdgeBand"
 	parent.add_child(root)
@@ -860,7 +883,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 			node.material_override = material
 		node.transform = Transform3D(Basis(Vector3.UP, float(b["yaw"])), b["at"])
 		root.add_child(node)
-	var counts := {"trees": (p["trees"] as Array).size(), "blocks": (p["blocks"] as Array).size(), "glades": (p["glades"] as Array).size(), "traces": traces, "chunks": groups.size(), "runs": (p["runs"] as Array).size()}
+	var counts := {"trees": (p["trees"] as Array).size(), "blocks": (p["blocks"] as Array).size(), "glades": (p["glades"] as Array).size(), "traces": traces, "chunks": groups.size(), "runs": (p["runs"] as Array).size(), "planned_ahead": planned_ahead}
 	counts.merge(_build_far(root, g, p, material, colors, with_far))
 	# Where the danger past the woods is heard (field_audio.gd, the edge bed).
 	var spots: Array[Vector3] = []
