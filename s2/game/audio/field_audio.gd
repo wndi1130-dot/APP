@@ -36,6 +36,7 @@ const Motion = preload("res://game/sim/motion.gd")
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
+const W = preload("res://game/sim/weapons.gd")
 
 const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking"]
 ## One of the dead going down is heard in four beats, as it is drawn (the
@@ -212,7 +213,8 @@ const SPOT_REREAD: float = 4.0        # s between readings of the map (the ring 
 ## giving, the end, a thick coat, ice), the ground under one that is down and a
 ## weapon about to give; a dull weapon is heard lower and duller. Each layer
 ## its own few files, never the same one twice running, pitch and loudness
-## a little different each time. A weapon not in BLOW_FAMILY shoves (a gun).
+## a little different each time. A melee weapon not in BLOW_FAMILY is an edge
+## or a blunt one by its data; anything else shoves (a gun).
 const BLOW_FAMILY: Dictionary = {"knife": "blow_cut", "broken_bottle": "blow_cut", "axe": "blow_chop", "crowbar": "blow_thud", "frying_pan": "blow_clang", "wood_stake": "blow_wood", "boot": "blow_stomp", "": "blow_shove"}
 const BLOW_LAYER: Dictionary = {"head": "blow_head", "finish": "blow_finish", "blocked": "blow_blocked", "shatter": "blow_shatter", "stuck": "blow_stuck"}
 ## What the body hit is worth under a layer that takes over (a coat, ice).
@@ -248,7 +250,8 @@ var blow_wired: bool = false           # the combat tells its blows (struck): hi
 var blow_last: Dictionary = {}         # blow group -> index of the file it played last
 var blow_log: Array = []               # every layer played [group, file index] (tests)
 var blow_mark: Array = [-1, Vector3.ZERO]          # frame and place of the last blow
-var hit_mark: Array = [-1, Vector3.ZERO, null]     # frame, place and player of the last hit_*
+var hit_mark: Array = [-1, Vector3.ZERO, null, 0]  # frame, place, player and its cut of the last hit_*
+var hits_stopped: int = 0              # hit_* stopped for a blow told after them (tests)
 var last_shot: AudioStreamPlayer3D     # the player the last one-shot went out on (null: none)
 var wind_clock_ms: int = -1            # real time of the last wind tick (WIND_STOOD_S)
 var slots: Array = []                  # {"player": AudioStreamPlayer3D, "z": Dictionary, "wait": float}
@@ -1369,8 +1372,8 @@ func feel_sound(group: String, at: Vector3, loud: float, reach: float) -> void:
 		return
 	var d: float = at.distance_to(game.player.position)
 	_one_shot(group, at, loud * clampf(1.0 - d / reach, 0.0, 1.0), randf_range(0.92, 1.08), null, _bus_at(at))
-	if hit:
-		hit_mark = [Engine.get_process_frames(), at, last_shot]
+	if hit and last_shot != null:
+		hit_mark = [Engine.get_process_frames(), at, last_shot, int(last_shot.get_meta("cut", 0))]
 
 
 ## mark [frame, place, …] was made this frame within BLOW_SAME_M of at.
@@ -1387,7 +1390,11 @@ static func blow_layers(info: Dictionary) -> Array:
 		return [["blow_miss", 0.6, 1.0]]
 	var target: String = String(info.get("target", "standing"))
 	var edge: int = int(info.get("edge", -1))
-	var family: String = String(BLOW_FAMILY.get(String(info.get("weapon", "")), "blow_shove"))
+	var wid: String = String(info.get("weapon", ""))
+	var family: String = String(BLOW_FAMILY.get(wid, ""))
+	if family == "":
+		var d: Dictionary = W.get_data(wid)
+		family = ("blow_cut" if bool(d.get("blade", false)) else "blow_thud") if d.get("kind", "") == "melee" else "blow_shove"
 	var pitch: float = 1.0
 	if edge >= 1:
 		pitch *= BLOW_DULL_PITCH
@@ -1413,14 +1420,24 @@ func blow(info: Dictionary) -> void:
 	var at: Vector3 = info.get("at", game.player.position)
 	# Its hit_* went first this frame (a stomp is felt before it is told): the
 	# blow's own layers take its place.
-	if blow_wired and _same_blow(hit_mark, at) and is_instance_valid(hit_mark[2]):
-		(hit_mark[2] as AudioStreamPlayer3D).stop()
+	if blow_wired and _same_blow(hit_mark, at):
+		var o = hit_mark[2]
+		# Only if that player still has that sound (not another since).
+		if is_instance_valid(o) and int(o.get_meta("cut", 0)) == int(hit_mark[3]):
+			o.stop()
+			hits_stopped += 1
+		hit_mark = [-1, Vector3.ZERO, null, 0]   # a second blow there stops nothing
 	blow_mark = [Engine.get_process_frames(), at]
 	var d: float = at.distance_to(game.player.position)
 	var near: float = clampf(1.0 - d / BLOW_REACH, 0.0, 1.0)
-	var bus: String = "SFX_MID" if int(info.get("edge", -1)) >= 1 else _bus_at(at)
-	for layer: Array in blow_layers(info):
+	var plain: String = _bus_at(at)
+	# A dull weapon's own hit is duller; what came of it is heard as it is.
+	var dull: String = "SFX_MID" if int(info.get("edge", -1)) >= 1 else plain
+	var layers: Array = blow_layers(info)
+	for i in layers.size():
+		var layer: Array = layers[i]
 		var group: String = layer[0]
+		var bus: String = dull if i == 0 else plain
 		var file: int = _fresh_file(group)
 		played.append(group)
 		if file < 0:
@@ -1511,11 +1528,17 @@ func _one_shot(group: String, at: Vector3, lin: float, pitch: float, stream: Aud
 	last_shot = null
 	if lin <= 0.01 or not has(group):
 		return
-	var o: AudioStreamPlayer3D = one_shots[0]
+	var o: AudioStreamPlayer3D = null
 	for p in one_shots:
 		if not p.playing:
 			o = p
 			break
+	if o == null:
+		# All busy: the one that started longest ago gives way.
+		o = one_shots[0]
+		for p in one_shots:
+			if int(p.get_meta("cut", 0)) < int(o.get_meta("cut", 0)):
+				o = p
 	o.bus = bus
 	last_bus = bus
 	o.position = at

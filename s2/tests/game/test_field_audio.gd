@@ -848,9 +848,16 @@ func test_a_told_blow_takes_the_place_of_the_old_hit() -> void:
 	var door: Vector3 = game.player.position + Vector3(0, 0, 6.0)
 	a.feel_sound("hit_blunt", door, 0.85, 40.0)
 	assert_eq(a.hit_mark[1], door, "a door struck is heard")
-	var foot: Vector3 = game.player.position + Vector3(-1.0, 0, 0)
+	var foot: Vector3 = game.player.position + Vector3(0, 0, -3.0)
+	var stopped: int = a.hits_stopped
 	a.feel_sound("hit_stomp", foot, 0.85, 40.0)
 	assert_eq(a.hit_mark[1], foot)
 	a.blow({"weapon": "boot", "target": "downed", "result": "body", "edge": -1, "at": foot})
-	assert_eq(a.blow_mark[1], foot, "the stomp told after it was felt")
+	assert_eq(a.hits_stopped, stopped + 1, "the stomp felt before it was told is stopped")
+	assert_eq(int(a.hit_mark[0]), -1, "and let go of")
+	a.blow({"weapon": "axe", "target": "downed", "result": "finish", "edge": 0, "at": foot})
+	assert_eq(a.hits_stopped, stopped + 1, "a second blow there in the same frame stops nothing")
+	# Only the base hit of a dull weapon goes through the duller bus.
+	a.blow({"weapon": "crowbar", "target": "standing", "result": "head", "edge": 1, "at": at})   # near enough never to be behind a wall
+	assert_eq(a.last_bus, "SFX", "the head giving is heard as it is")
 
