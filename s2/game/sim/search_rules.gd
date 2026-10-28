@@ -23,6 +23,10 @@ const SEE_THROUGH: Array = [
 ## never more than TAKE_MOST for one thing.
 const TAKE_PER_WEIGHT := 0.6
 const TAKE_MOST := 2.0
+## 「서둘러 ½」 (decision 481): the work at a box hurried takes this share of the time
+## it has left, and so does each thing still to come out; its rummage is the
+## "search_hurry" sound (noise.gd: twice the reach), as often as NOISE_EVERY.
+const HURRY_TIME := 0.5
 
 
 static func seconds(base: float, skill: int) -> float:

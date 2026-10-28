@@ -50,8 +50,8 @@ const NightLightView = preload("res://game/world/night_light_view.gd")
 const SnowTracks = preload("res://game/sim/snow_tracks.gd")
 const SoundRipple = preload("res://game/world/sound_ripple.gd")
 ## The squad's sounds whose reach shows on the ground (decision 471 H1): a door kicked in,
-## glass broken, wood chopped — and the player's running steps (_footsteps).
-const RIPPLE_TAGS: Array[String] = ["kick", "glass", "axe"]
+## glass broken, wood chopped, a box hurried (decision 481) — and the player's running steps (_footsteps).
+const RIPPLE_TAGS: Array[String] = ["kick", "glass", "axe", "search_hurry"]
 const PrecipShader = preload("res://fx/shaders/precip.gdshader")
 const W = preload("res://game/sim/weapons.gd")
 const Combat = preload("res://game/field_combat.gd")
@@ -1922,7 +1922,7 @@ func _update_person(p: Person, delta: float) -> void:
 	if p.action != "":
 		# Each action takes its body multiplier once, here (not also in its length).
 		var rate := 1.0 if p.action == "climb" else float(p.mults()["swap" if p.action == "swap" else "hands"])
-		if p.action == "search":
+		if p.action == "search" or p.action == "take":
 			actions.search_noise(p, delta)
 		p.action_t -= delta * rate
 		if p.action_t <= 0.0:

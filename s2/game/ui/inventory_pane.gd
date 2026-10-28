@@ -234,6 +234,7 @@ static func _near_side(hud, p, at: Dictionary, all: Array) -> Control:
 	var empty := ""
 	var all_key: LampKey = null
 	var all_note := ""
+	var hurry_key: Button = null
 	match String(at["kind"]):
 		"box":
 			var c: Dictionary = game.data["containers"][at["id"]]
@@ -260,6 +261,12 @@ static func _near_side(hud, p, at: Dictionary, all: Array) -> Control:
 				var secs: float = game.actions.take_all_seconds(c)
 				if secs > 0.0:
 					all_note = "다 챙기면 %.1f초" % secs
+			# 「서둘러 ½」 under it (decision 481): half the time left, heard twice as far.
+			if game.actions.hurried(p) and is_same(p.action_busy, c):
+				hurry_key = GlassPane.key("서두르는 중", Callable(), "run")
+				hurry_key.disabled = true
+			elif game.actions.can_hurry(p, String(at["id"])):
+				hurry_key = GlassPane.key("서둘러 ½", hud._loot_hurry.bind(String(at["id"])), "run")
 		"ground":
 			for i: int in game.actions.near_ground(p):
 				var g: Dictionary = game.ground_items[i]
@@ -290,6 +297,14 @@ static func _near_side(hud, p, at: Dictionary, all: Array) -> Control:
 			foot.add_child(note)
 		foot.add_child(all_key)
 		side.add_child(foot)
+	if hurry_key != null:
+		var under := GlassPane.row()
+		under.name = "Hurry"
+		under.alignment = BoxContainer.ALIGNMENT_END
+		hurry_key.size_flags_horizontal = Control.SIZE_SHRINK_END
+		hurry_key.custom_minimum_size.x = UiFonts.px(KEY_W * 1.4)
+		under.add_child(hurry_key)
+		side.add_child(under)
 	return side
 
 

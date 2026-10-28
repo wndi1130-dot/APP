@@ -2910,6 +2910,12 @@ func _loot_all(id: String) -> void:
 	loot(id)
 
 
+## 「서둘러 ½」 (decision 481): what is left at the box half the time, heard twice as far.
+func _loot_hurry(id: String) -> void:
+	game.actions.hurry(game.player, id)
+	loot(id)
+
+
 ## 「멈추기」 while things come out: what is out stays out, the rest stays in.
 func _loot_stop(id: String) -> void:
 	var p = game.player

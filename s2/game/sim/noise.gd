@@ -60,6 +60,8 @@ const SOURCES := {
 	"salvage": {"levels": [Level.NORMAL, Level.LOUD], "at": "spot", "pull": true},
 	"axe": {"levels": [Level.LOUD], "at": "maker", "pull": true},
 	"search": {"levels": [Level.QUIET], "at": "maker", "pull": true},
+	# A box hurried (decision 481 「서둘러 ½」): the rummage carried twice as far, 6 m (3 m indoors).
+	"search_hurry": {"levels": [Level.QUIET], "at": "maker", "pull": true, "reach": 2.0},
 	"glass_step": {"levels": [Level.QUIET], "at": "maker", "pull": true},
 	"ladder": {"levels": [Level.QUIET, Level.NORMAL], "at": "maker", "pull": true},
 	"lid": {"levels": [Level.NORMAL], "at": "spot", "pull": true},

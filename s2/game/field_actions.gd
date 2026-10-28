@@ -92,6 +92,10 @@ var after_blow: Dictionary = {}
 var take_queue: Dictionary = {}
 ## The thing coming out of a box now, by who takes it (the pane's bar shows it).
 var taking: Dictionary = {}
+## The box each one hurries (decision 481 「서둘러 ½」), and the seconds since its rummage
+## was last heard. Short-lived, never saved.
+var hurrying: Dictionary = {}
+var hurry_noise_t: Dictionary = {}
 ## Who stands on broken glass, and on which cell (one crunch a cell, J08).
 var glass_feet: Dictionary = {}
 ## Frames with glass in them the player was stopped at and asked about: cell -> when.
@@ -1019,15 +1023,65 @@ func _unlock(id: String, p = null) -> void:
 	game.view.update_container(id)
 
 
-## Called each frame of a container search: the quiet rummage when it is due.
+## Called each frame of a container search, or of taking out of a hurried box: the quiet
+## rummage when it is due — twice as far while hurried (decision 481), as often as ever.
 func search_noise(p, delta: float) -> void:
-	if p.action != "search" or p.action_busy.is_empty():
+	if p.action_busy.is_empty():
+		return
+	if hurried(p):
+		var pid: int = p.get_instance_id()
+		hurry_noise_t[pid] = float(hurry_noise_t.get(pid, 0.0)) + delta
+		if float(hurry_noise_t[pid]) < SEARCH_NOISE_EVERY:
+			return
+		hurry_noise_t[pid] = fmod(float(hurry_noise_t[pid]), SEARCH_NOISE_EVERY)
+		game.make_sound(_container_at(p.action_busy), SimNoise.Level.QUIET, "search_hurry", p)
+		return
+	if p.action != "search":
 		return
 	p.action_noise_t += delta
 	if p.action_noise_t < SEARCH_NOISE_EVERY:
 		return
 	p.action_noise_t = fmod(p.action_noise_t, SEARCH_NOISE_EVERY)
 	game.make_sound(_container_at(p.action_busy), SimNoise.Level.QUIET, "search", p)
+
+
+## 「서둘러 ½」 (decision 481): what is left of the work at box `id` takes half its time
+## (SearchRules.HURRY_TIME), and so does each thing still to come out; the rummage is
+## heard twice as far, at once and then every SEARCH_NOISE_EVERY. Not at work there
+## yet, everything comes out (take_all), hurried. The hurry ends with the work.
+func hurry(p, id: String) -> void:
+	var c: Dictionary = game.data["containers"].get(id, {})
+	if c.is_empty() or hurried(p):
+		return
+	if not (is_same(p.action_busy, c) and ["search", "take"].has(p.action)):
+		take_all(p, id)
+		if not is_same(p.action_busy, c):
+			return
+	var pid: int = p.get_instance_id()
+	hurrying[pid] = id
+	p.action_t *= SearchRules.HURRY_TIME
+	p.action_total *= SearchRules.HURRY_TIME
+	hurry_noise_t[pid] = 0.0
+	game.make_sound(_container_at(c), SimNoise.Level.QUIET, "search_hurry", p)
+
+
+## Is `p` at work (opening or taking out) at the box they hurry?
+func hurried(p) -> bool:
+	var id := String(hurrying.get(p.get_instance_id(), ""))
+	return id != "" and ["search", "take"].has(p.action) and is_same(p.action_busy, game.data["containers"].get(id, {}))
+
+
+## Can the box be hurried now: something to take out of it (not clothes), or `p` at it.
+func can_hurry(p, id: String) -> bool:
+	var c: Dictionary = game.data["containers"].get(id, {})
+	if c.is_empty() or hurried(p):
+		return false
+	return is_same(p.action_busy, c) or take_all_seconds(c) > 0.0
+
+
+func _end_hurry(p) -> void:
+	hurrying.erase(p.get_instance_id())
+	hurry_noise_t.erase(p.get_instance_id())
 
 
 func _search_work_done(p, id: String) -> void:
@@ -1087,6 +1141,8 @@ func take(p, id: String, index: int, asked: bool = false) -> void:
 		game.hud.wear_pane({"box": id, "i": index, "id": item})
 		return
 	take_queue.erase(p.get_instance_id())
+	if not hurried(p):
+		_end_hurry(p)
 	# A garment is put on, not bagged (wear.gd): laid at the feet as found, then
 	# worn — the putting on is its time.
 	if Wear.is_garment(item):
@@ -1111,6 +1167,8 @@ func take_all(p, id: String) -> void:
 			left.append(item)
 	if left.is_empty():
 		return
+	if not hurried(p):
+		_end_hurry(p)
 	take_queue[p.get_instance_id()] = {"box": id, "left": left}
 	_take_next(p, id)
 
@@ -1131,7 +1189,8 @@ func taking_item(p) -> String:
 
 func _begin_take(p, id: String, item: String) -> bool:
 	var c: Dictionary = game.data["containers"].get(id, {})
-	if not _begin_work(p, "take", "챙기기", SearchRules.take_seconds(item), _take_done.bind(p, id, item), "container", id, _container_at(c)):
+	var share: float = SearchRules.HURRY_TIME if String(hurrying.get(p.get_instance_id(), "")) == id else 1.0
+	if not _begin_work(p, "take", "챙기기", SearchRules.take_seconds(item) * share, _take_done.bind(p, id, item), "container", id, _container_at(c)):
 		return false
 	taking[p.get_instance_id()] = item
 	return true
@@ -1152,6 +1211,7 @@ func _take_next(p, id: String) -> void:
 				return
 			break
 	take_queue.erase(pid)
+	_end_hurry(p)
 
 
 func _take_done(p, id: String, item: String) -> void:
@@ -1159,6 +1219,7 @@ func _take_done(p, id: String, item: String) -> void:
 	taking.erase(pid)
 	if not _finished_work(p, "take"):
 		take_queue.erase(pid)
+		_end_hurry(p)
 		return
 	var c: Dictionary = game.data["containers"].get(id, {})
 	var index: int = c.get("items", []).find(item)
