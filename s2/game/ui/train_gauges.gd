@@ -149,6 +149,9 @@ const WHY_INK := Color("231a12")
 const WHY_MARK := Color(35 / 255.0, 26 / 255.0, 18 / 255.0, 0.72)
 const WHY_ICON := Color("5f7383")
 const WHY_IN_S: float = 0.26
+## The slip and the change hang under the band, over whatever the slice lays
+## after it on the same layer (the train's paper card, 결정 480).
+const OVER_PAPERS: int = 8
 
 var g: Dictionary = {}
 var t: Dictionary = {}
@@ -1021,6 +1024,10 @@ func _outside(o: Dictionary) -> Control:
 		# odelta: the change floats up under the glass, centred 12 in, from 44.
 		var dl := _label(String(s["delta_text"]), UiFonts.NUMBER, 600, 16.0, tone(OT_DELTA_INK, dim))
 		dl.name = "OtDelta"
+		dl.z_index = OVER_PAPERS
+		# A dark edge too, so it reads over a paper card as over the night.
+		dl.add_theme_color_override("font_outline_color", tone(Color(10 / 255.0, 16 / 255.0, 22 / 255.0, 0.85), dim))
+		dl.add_theme_constant_override("outline_size", int(round(2.5 * k)))
 		dl.add_theme_color_override("font_shadow_color", tone(Color(0, 0, 0, 0.9), dim))
 		dl.add_theme_constant_override("shadow_offset_x", 0)
 		dl.add_theme_constant_override("shadow_offset_y", int(round(1.0 * k)))
@@ -1113,6 +1120,8 @@ func _why(o: Dictionary) -> Control:
 	var c := Control.new()
 	c.name = "Why"
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Over what the slice lays after the band (the train's paper card).
+	c.z_index = OVER_PAPERS
 	var body := Control.new()
 	body.name = "Paper"
 	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
