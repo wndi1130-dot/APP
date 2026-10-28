@@ -24,7 +24,7 @@ func test_the_strip_says_the_trains_numbers() -> void:
 		var id: String = st["id"]
 		assert_eq(st["n"], int(round(float(g.get(id, 0)))), id)
 		if cost.has(id) and float(cost[id]) > 0.0:
-			assert_eq(st["left"], int(floor(float(st["n"]) / float(cost[id]))), id + ": stretches it lasts")
+			assert_eq(st["left"], int(floor(float(g.get(id, 0)) / float(cost[id]))), id + ": stretches it lasts, off the store as it is")
 			assert_true(String(st["line"]).ends_with("%d구간" % int(st["left"])), st["line"])
 		else:
 			assert_eq(st["line"], "", id + ": no cost, no line")
@@ -263,3 +263,63 @@ func test_the_slip_stays_on_a_narrow_screen() -> void:
 	assert_not_null(why)
 	assert_gte(why.position.x, 0.0, "in from the left")
 	assert_lte(why.position.x + why.size.x, 1280.0, "in from the right")
+
+
+## A store's fraction counts: 3.87 stretches of coal is 3 left and short, though
+## its number shows rounded up (11.6 coal at 3 a stretch shows 12, lasts 3).
+func test_the_stretches_left_come_off_the_store_as_it_is() -> void:
+	var s: Array = StopPickCard.sample()
+	var g: Dictionary = (s[0] as Dictionary).duplicate(true)
+	var t: Dictionary = s[1]
+	var per: float = float(TrainTurn.forecast(g, t).get("coal", 0.0))
+	assert_gt(per, 0.0)
+	g["coal"] = per * 3.87
+	var coal: Dictionary = (TrainGauges.model(g, t)["stocks"] as Array)[0]
+	assert_eq(coal["left"], 3, "floor of the store itself, not of its rounded number")
+	assert_true(bool(coal["short"]), "three left: short")
+
+
+## The band narrows under 840: at 839 the bars are narrow, just over 840 and at 844 the
+## widest reading (첫 추위 at a cold stop, −15°) still ends before the mood.
+func test_the_narrow_line_keeps_the_thermometer_off_the_mood() -> void:
+	var s: Array = _start()
+	s[0]["stop"] = {"weather": "cold"}
+	var strip = TrainGauges.new()
+	strip.g = s[0]
+	strip.t = s[1]
+	add_child_autofree(strip)
+	strip.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	var k: float = UiFonts.K
+	for css: float in [839.0, 840.5, 844.0]:
+		strip.size = Vector2(css * k, TrainGauges.BAND_H)
+		strip._lay_out()
+		var trust: Control = strip.find_child("MeterTrust", true, false)
+		assert_almost_eq(trust.size.x, (66.0 if css < 840.0 else 104.0) * k, 0.01, "bars at %d" % css)
+		var o: Control = strip.find_child("Outside", true, false)
+		var mood: Control = strip.find_child("Standing", true, false)
+		var right: float = 0.0
+		for id: String in ["Temp", "Stage"]:
+			var l: Control = o.find_child(id, true, false)
+			if l != null:
+				right = maxf(right, o.position.x + l.position.x + l.size.x)
+		assert_lte(right, mood.position.x, "its words end before the mood at %d" % css)
+		assert_lte(o.position.x + o.size.x, mood.position.x, "and so does its key at %d" % css)
+
+
+## A roll to a longer number widens the thermometer and its key with it.
+func test_a_roll_to_a_longer_number_widens_the_thermometer() -> void:
+	var s: Array = _start()
+	var strip = TrainGauges.new()
+	strip.g = s[0]
+	strip.t = s[1]
+	add_child_autofree(strip)
+	var g2: Dictionary = (s[0] as Dictionary).duplicate(true)
+	g2["stop"] = {"weather": "cold"}
+	strip.refresh(g2, s[1])
+	var o: Control = strip.find_child("Outside", true, false)
+	var before: float = o.size.x
+	strip._ot_apply(o, strip._ot_state(strip._ot_t0 + 5000))
+	var temp: Control = o.find_child("Temp", true, false)
+	assert_eq((temp as Label).text, "−15°")
+	assert_gte(o.size.x, temp.position.x + temp.size.x, "the number stays inside it")
+	assert_gt(o.size.x, before, "−3° grew to −15°")
