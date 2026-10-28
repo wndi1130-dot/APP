@@ -16,6 +16,8 @@ const DECORATION: Array[String] = ["corpse"]
 const SEE_R: float = 30.0
 const SEEN_BESIDE_R: float = 3.0
 const RADIO_EVERY: float = 60.0
+## Who speaks the crew's radio lines: the engineer for now, changed here alone.
+const SPEAKER: String = "기관사"
 const ESCORT_LEAD: float = 3.0
 const HOLD_N: int = 4
 const HOLD_CLEAR_S: float = 5.0
@@ -239,7 +241,7 @@ func _tick(id: String) -> void:
 			state["clear_s"] = 0.0
 			_cancel_workers(id)
 			_event(id, "hold")
-			game.set_radio("기관사: 작업조 잠깐 멈춰. 호위가 막는다.", "reply")
+			game.set_radio(SPEAKER + ": 작업조 잠깐 멈춰. 호위가 막는다.", "reply")
 		elif stage == "hold":
 			# Only the seconds the escort is held at four or more count toward the overflow.
 			if int(safe["near_awake"]) < HOLD_N:
@@ -287,7 +289,7 @@ func _tick(id: String) -> void:
 				if float(safe["share"]) >= CLEAR_SHARE:
 					game.set_radio(blocked_reason(safe), "reply")
 				else:
-					game.set_radio("기관사: 저기 %s 보이네. 근데 둘레에 망자가 %s — 아직 사람 못 내보내." % [job(id)["name"], game.director.size_word(int(safe["total"]) - int(safe["cleared"]))], "reply")
+					game.set_radio(SPEAKER + ": 저기 %s 보이네. 근데 둘레에 망자가 %s — 아직 사람 못 내보내." % [job(id)["name"], game.director.size_word(int(safe["total"]) - int(safe["cleared"]))], "reply")
 	elif safe["open"]:
 		if stage != "open":
 			_open(id)
@@ -297,7 +299,7 @@ func _tick(id: String) -> void:
 		state["half"] = true
 		state["phase"] = "half"
 		_event(id, "half")
-		game.set_radio("기관사: 좀 줄었어. 조금만 더 치워 주면 내보낼게.", "reply")
+		game.set_radio(SPEAKER + ": 좀 줄었어. 조금만 더 치워 주면 내보낼게.", "reply")
 	else:
 		state["phase"] = "half" if state["half"] else "closed"
 	_paint(id, safe)
@@ -310,10 +312,10 @@ func _open(id: String) -> void:
 	if state["retry"] and not state["retry_said"]:
 		state["retry_said"] = true
 		state["last_open"] = elapsed
-		game.set_radio("기관사: 다시 내보낼까요?", "reply")
+		game.set_radio(SPEAKER + ": 다시 내보낼까요?", "reply")
 	elif elapsed - float(state["last_open"]) >= RADIO_EVERY:
 		state["last_open"] = elapsed
-		game.set_radio("기관사: 이 정도면 이제 거의 안전한 것 같습니다. 작업조 내보낼까요?", "reply")
+		game.set_radio(SPEAKER + ": 이 정도면 이제 거의 안전한 것 같습니다. 작업조 내보낼까요?", "reply")
 
 
 ## The ring over the site fills toward the share the train asks for: full when the ring is cleared enough.
@@ -343,11 +345,11 @@ func _number(n: int) -> String:
 
 func blocked_reason(safe: Dictionary) -> String:
 	if int(safe["path_awake"]) > 0:
-		return "기관사: 열차에서 거기까지 길에 망자가 %s." % _number(int(safe["path_awake"]))
+		return SPEAKER + ": 열차에서 거기까지 길에 망자가 %s." % _number(int(safe["path_awake"]))
 	if int(safe["near_awake"]) > 0:
-		return "기관사: 일터 바로 곁에 깨어 있는 놈이 %s." % _number(int(safe["near_awake"]))
+		return SPEAKER + ": 일터 바로 곁에 깨어 있는 놈이 %s." % _number(int(safe["near_awake"]))
 	var left: int = maxi(ceili(float(safe["total"]) * CLEAR_SHARE) - int(safe["cleared"]), 0)
-	return "기관사: 둘레에 아직 %s." % _number(left)
+	return SPEAKER + ": 둘레에 아직 %s." % _number(left)
 
 
 ## Rows retain their order within each role. Existing people never get copied.
@@ -426,7 +428,7 @@ func start(id: String = "work_site") -> bool:
 		else:
 			escorts.append(row)
 	if workers.is_empty():
-		game.set_radio("기관사: 지금 내보낼 일꾼이 없다.", "reply")
+		game.set_radio(SPEAKER + ": 지금 내보낼 일꾼이 없다.", "reply")
 		return false
 	if _outside_people() + rows.size() + _pending_people() > game.ALLY_CAP:
 		game.hud.toast("사람이 너무 많음")
@@ -447,7 +449,7 @@ func start(id: String = "work_site") -> bool:
 	for i in escorts.size():
 		_disembark(id, escorts[i], i)
 	_paint(id, safe)
-	game.set_radio("기관사: 작업조 내려간다. %s 지켜라." % job(id)["name"], "reply")
+	game.set_radio(SPEAKER + ": 작업조 내려간다. %s 지켜라." % job(id)["name"], "reply")
 	return true
 
 
@@ -546,7 +548,7 @@ func retreat(id: String, why: String = "") -> void:
 				p.brain["mender"] = true
 			p.brain["job"] = "home"
 	_event(id, "retreat")
-	game.set_radio("기관사: 작업조 물러나!", "reply")
+	game.set_radio(SPEAKER + ": 작업조 물러나!", "reply")
 
 
 ## Everyone who can still walk is aboard (one who only slipped is still on the way).

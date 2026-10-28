@@ -178,7 +178,7 @@ func _trial(id: String, run_seed: int) -> Dictionary:
 	game.process_mode = Node.PROCESS_MODE_DISABLED
 	var row: Dictionary = {"map": id, "seed": run_seed, "t_old": -1.0, "t_new": -1.0, "t_open": -1.0,
 		"t_sent": -1.0, "t_hold": -1.0, "t_retreat": -1.0, "quick_retreat": false,
-		"player_dead": false, "end": "seconds", "_end_t": 0.0}
+		"player_dead": false, "end": "seconds", "_end_t": 0.0, "downed_near": -1}
 	if not game.work.site_ids().has("work_site"):
 		row["end"] = "no_work_site"
 		game.free()
@@ -200,6 +200,7 @@ func _trial(id: String, run_seed: int) -> Dictionary:
 			row["t_old"] = now
 		if new_open and float(row["t_new"]) < 0.0:
 			row["t_new"] = now
+			row["downed_near"] = _downed_near(game)
 		if press == "new":
 			## The player taps the key whenever it is lit and nobody has gone out yet.
 			if float(row["t_sent"]) < 0.0 and game.work.phase() == "open":
@@ -264,6 +265,16 @@ func _pilot(game) -> void:
 	game.combat.melee_target(p, nearest, true)
 
 
+## The downed in reach of the site when the gate opens: cleared now, up again later (decision 487).
+func _downed_near(game) -> int:
+	var at: Vector3 = game.work.position_of("work_site")
+	var n: int = 0
+	for z: Dictionary in game.zombies.list:
+		if z["state"] == "downed" and at.distance_to(z["pos"]) <= FieldWork.NEAR_R:
+			n += 1
+	return n
+
+
 func _near_path(path: PackedVector3Array, at: Vector3) -> bool:
 	for i in path.size():
 		var closest: Vector3 = path[i]
@@ -283,10 +294,16 @@ func _summary(rows: Array[Dictionary], label: String = "all") -> Dictionary:
 	var sent_count: int = 0
 	var observed: int = 0
 	var quick: int = 0
+	var safe_lit: int = 0
+	var downed_lit: int = 0
 	for row: Dictionary in rows:
 		if row["end"] in ["no_work_site", "empty_site"]:
 			continue
 		counted += 1
+		if int(row.get("downed_near", -1)) >= 0:
+			safe_lit += 1
+			if int(row["downed_near"]) > 0:
+				downed_lit += 1
 		lit.append(float(row["t_open"]) if float(row["t_open"]) >= 0.0 else INF)
 		if float(row["t_sent"]) >= 0.0:
 			sent_count += 1
@@ -302,7 +319,8 @@ func _summary(rows: Array[Dictionary], label: String = "all") -> Dictionary:
 		"median_over_seconds": float(middle) / seconds if reached else null,
 		"median_over_1200": float(middle) / 1200.0 if reached else null,
 		"sent": sent_count, "quick_retreat_observed": observed, "followup_under_60": sent_count - observed,
-		"quick_retreat_share": float(quick) / observed if observed > 0 else null}
+		"quick_retreat_share": float(quick) / observed if observed > 0 else null,
+		"downed_near_lit": downed_lit, "downed_near_share": float(downed_lit) / safe_lit if safe_lit > 0 else null}
 	if label == "all":
 		var per_map: Dictionary = {}
 		for row: Dictionary in rows:
