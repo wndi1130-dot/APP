@@ -8,6 +8,7 @@ import { crewShortNow, crewShortSpent, deathEmergCost } from './death_weight';
 import { climateDepart, climateSettle, freezeCoal, freezeDepart, freezeFood, stageAt, tempMult } from './climate';
 import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from './calm';
 import { bump, bumpParts, bumpRel, put } from './ledger';
+import { addSupplies, SUP_YIELD, suppliesRelations, suppliesUse } from './supplies';
 import { drawTravelEvent } from './cards';
 import { addContentCard, contentAwayTick, contentFollowupTick, contentPool } from './content';
 import { locoCoal } from './loco';
@@ -34,7 +35,7 @@ import {
 } from './domestic/hooks';
 import { D } from './domestic/data';
 import { insulatedShare, lawTechRes } from './domestic/lawtech';
-import { techMult } from './domestic/state';
+import { personById, techMult } from './domestic/state';
 import { childHaul, childSettle, countHands, handsNote } from './domestic/classroom';
 import { heatAllocSettle } from './domestic/heat_alloc';
 import { applyScoutGear, effThreat, scoutHaulNow, scoutNowText, scoutPlan, threatStep } from './domestic/scout_gear';
@@ -790,6 +791,18 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (chore) notes.push(chore);
   crewRest(g, stop.crewComm);
   g.lastCrew = stop.crewComm;
+  if (g.supOn) {
+    // domesticStop이 동행자를 돌려보내기 전에 목재·고철과 같은 배율을 읽는다.
+    const escort = personById(g, g.dom?.escort);
+    const mult = STAY[stop.stay].mult * lawMult(g, 'haulMult')
+      * (escort?.field === 'craft' ? D.escortMaterials : 1) * domesticHaulMult(g);
+    const beforeSup = g.sup ?? 0;
+    addSupplies(g, (SUP_YIELD[stop.place] ?? 0) * mult, 'stop.loot');
+    // 맡긴 수색의 고정 덤은 체류와 무관하게 +1. 감축법의 산출 벌은 덤에도 붙는다.
+    const cut = lawActive(g, 'emergency_ration') ? lawTechRes(g, 'emergency_ration').haulMult ?? 1 : 1;
+    addSupplies(g, P.supSearch * cut, 'sup.search');
+    notes.push(`생필품 ${Math.round((g.sup ?? 0) - beforeSup)}을(를) 실어 왔다.`);
+  }
   notes.push(...domesticStop(g, false, dead.length)); // S1c 내정 훅
   stop.result = { passed: false, gains, injured: injuredOnly, dead, notes };
   const got = (Object.keys(gains) as LootKey[]).map(k => `${LOOT_NAME[k]} ${gains[k]}`).join(', ');
@@ -900,9 +913,11 @@ function settle(g: Game): void {
   medicineTick(g, notes);
   childSettle(g, notes); // 아동 노동이 서 있는 동안 의무진 관계 정산마다 −1(결정 214)
   heatAllocSettle(g, notes); // 난방 배당이 서 있는 동안 관계 −2와 추운 칸의 밤사이 죽음(결정 230~240·276)
+  const sup = suppliesUse(g); // 이번 배급 몫을 위생 정산이 읽는다(꺼진 판은 아무 일도 안 함)
   domesticSettle(g, notes); // S1c 내정 훅
   hubLeakTick(g, notes); // 라이프치히 두 구간 전부터 창고 유출
   drift(g);
+  suppliesRelations(g, sup); // 처지 회복의 관계 15 천장 밖에서 더한다
   calmSettle(g); // 저녁 솥불·벽 장부
   checkDuePromises(g);
   arrivalsSettle(g, notes); // 늦게 탄 사람의 빈속 몫과 잠자리 다툼(arrivals.ts)
@@ -914,7 +929,7 @@ function settle(g: Game): void {
   if (g.council && !g.council.emergency && !g.council.martial) dropUnratified(g);
   if (g.council) bribeDetection(g);
   leashTick(g);
-  aiLeaders(g);
+  aiLeaders(g, sup?.plenty ?? false);
   darkSettle(g); // S1b 훅: 시신, 군중 시계, 진실, 도둑질, 불씨
   meters(g);
   if (g.phase !== 'end') riotTick(g, notes); // 폭동(riot.ts): 긴장이 문턱을 위로 넘은 정산에 켜진다
@@ -1146,7 +1161,7 @@ function leashTick(g: Game): void {
 }
 
 /** AI 지도자: 요구, 부탁, 선동, 안건 올리기, 파업 경고(브리프 4장, 5장). 구간마다 많아야 카드 두 장. */
-function aiLeaders(g: Game): void {
+function aiLeaders(g: Game, supPlenty = false): void {
   let cards = 0;
   // 요구: 처지가 가장 나쁜 집단 하나.
   let worst: Comm | null = null;
@@ -1165,6 +1180,7 @@ function aiLeaders(g: Game): void {
     // 같은 요구를 여러 번 받았으면 다음 요구까지 조금 더 뜸하다.
     const seen = Math.max(g.eventLog?.[`demand:${worst}`]?.n ?? 0, worst === 'engine' ? g.eventLog?.['demand:engine_shift']?.n ?? 0 : 0);
     g.comms[worst].demandCool = 3 + Math.min(seen, 2) * 3;
+    if (supPlenty) g.comms[worst].demandCool += P.supDemandCool;
     cards += 1;
   }
   // 파업 경고

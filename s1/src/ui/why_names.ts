@@ -16,6 +16,9 @@ export const WHY_NAME: Record<string, string> = {
   bury: '시신을 모셔 둠',
   delegate: '공방에 맡긴 일',
   wash: '씻을 물이 모자람',
+  sup: '생필품 배급',
+  'sup.use': '생필품 사용',
+  'sup.search': '맡긴 수색의 생필품 덤',
   knowhow: '기술 물려주기',
   tech: '기술 되살리기',
   symbol: '상징물을 내림',
@@ -32,6 +35,7 @@ export const WHY_NAME: Record<string, string> = {
   'calm.night': '떠난 사람의 밤',
   // 아직 안 옮긴 자리(turn.ts, politics.ts, dark/)가 쓸 이름
   'stop.loot': '정차 수색',
+  'field.loot': '필드에서 실어 온 것',
   'stop.stay': '정차하며 땐 석탄',
   run: '기관 운행',
   idle: '꼬리칸이 손을 놓음',

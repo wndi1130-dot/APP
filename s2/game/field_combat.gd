@@ -93,6 +93,23 @@ var crowd_falls: int = 0
 ## heads ended, heads knocked down, bodies knocked down, bodies held (stunned).
 var melee_tally := {"swung": 0, "landed": 0, "missed": 0, "air": 0,
 	"head_kill": 0, "head_down": 0, "body_down": 0, "body_stun": 0}
+## The moment a melee blow, a stomp or a shove meets one of the dead, or goes
+## through air (decision 491 4): the sound line picks and mixes what is heard by
+## it (field_audio); nothing in the rules reads it. info:
+##   way      "swing", "stomp" or "shove"
+##   weapon   the id in the hand ("" a bare-handed shove, "boot" a stomp)
+##   target   as it was struck: "standing", "downed", "frozen" (waking too),
+##            "rising", or "" (air)
+##   result   "body" (reels or goes down), "head" (goes down by the head),
+##            "finish" (ended: the head, a quiet kill, the last stomp, a rising
+##            head crushed; decision 487's blow on one lying too), "blocked" (a
+##            blade stopped by a thick coat), "shatter" (a frozen body broken),
+##            "stuck" (a knife in a frozen body) or "miss"
+##   edge     weapons.gd condition_level before the blow wears it: 0 sharp,
+##            1 dull, 2 about to break; -1 with no melee weapon
+##   at       where the one struck is seen (seen_pos), or the air ahead
+##   by_player  the player struck it
+signal struck(info: Dictionary)
 ## Not put down by a crowd again before this (decision 474 J1: up and clear first).
 const CROWD_FALL_META: StringName = &"crowd_fall_until"
 var crowd_most: int = 0   # the most dead on one person as a hand reached (crowd_at)
@@ -308,14 +325,15 @@ func _pursue_zombie(p, delta: float) -> void:
 	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
 	var seen: Vector3 = game.zombies.seen_pos(z)   # judged where it is seen (decision 474 J2)
 	var d: float = p.position.distance_to(seen)
-	# Shut off by a wall or a whole window: no swing, walk round instead.
-	if d > reach + MELEE_SLACK or melee_blocked(p, z["pos"]):
+	# Shut off by a wall or a whole window: no swing, walk round instead (to where
+	# it is seen, as the reach and the blow are).
+	if d > reach + MELEE_SLACK or melee_blocked(p, seen):
 		p.brain["repath_t"] = float(p.brain.get("repath_t", 0.0)) - delta
 		if p.brain["repath_t"] <= 0.0 or p.path.is_empty():
 			p.brain["repath_t"] = 0.4
 			var path: PackedVector3Array = game.find_path(p.position, z["pos"], false)
 			if path.size() > 0:
-				path[path.size() - 1] = z["pos"] + (p.position - z["pos"]).normalized() * (reach * 0.8)
+				path[path.size() - 1] = seen + (p.position - seen).normalized() * (reach * 0.8)
 			p.go_to(path, p.running)
 		return
 	p.stop()
@@ -597,6 +615,7 @@ func _swing_empty(p) -> void:
 			game.make_sound(FieldGrid.center(c), SimNoise.Level.NORMAL, "melee", p)
 			return
 	game.make_sound(p.position, SimNoise.Level.QUIET, "melee", p)
+	_struck(p, p.position + fwd * minf(reach, 1.0), "swing", wid, "", "miss", _edge_of(p))
 
 
 ## No melee weapon in the hand (bare, or a gun) and the one aimed at lies there.
@@ -614,14 +633,18 @@ func stomp(p, z: Dictionary) -> void:
 	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
 	z["stomped"] = int(z.get("stomped", 0)) + 1
 	game.feel.stomped(p, z["pos"], int(z["stomped"]) >= STOMPS_TO_END)
-	if int(z["stomped"]) >= STOMPS_TO_END:
+	var seen: Vector3 = game.zombies.seen_pos(z)
+	var ended: bool = int(z["stomped"]) >= STOMPS_TO_END
+	if ended:
 		_kill(p, z, "")
+	_struck(p, seen, "stomp", "boot", "downed", "finish" if ended else "body", -1)
 
 
 func _stomp_reaches(p, z: Dictionary) -> bool:
 	if not game.zombies.list.has(z) or String(z["state"]) != "downed":
 		return false
-	return p.position.distance_to(z["pos"]) <= STOMP_REACH + MELEE_SLACK + 0.3 and not melee_blocked(p, z["pos"])
+	var seen: Vector3 = game.zombies.seen_pos(z)   # at its chest (decision 487)
+	return p.position.distance_to(seen) <= STOMP_REACH + MELEE_SLACK + 0.3 and not melee_blocked(p, seen)
 
 
 func _strike(p, at) -> void:
@@ -660,6 +683,8 @@ func _land_strike(p) -> void:
 	if stopped or not (air or (_stomp_reaches(p, at) if stomp_it else _strike_reaches(p, at))):
 		if not stomp_it:
 			melee_tally["missed"] += 1
+		if not stopped:
+			_missed(p, at, stomp_it)
 		p.swing_t = WHIFF_RECOVER
 		return
 	if stomp_it:
@@ -704,6 +729,7 @@ func swing(p, z: Dictionary) -> void:
 	var m: Dictionary = p.mults()
 	p.swing_t = float(d["swing"]) / float(m["swing"])
 	p.body.add_fatigue(float(d["fatigue"]) * BodyState.fatigue_mult({"carry_state": p.carry_state(), "cold_level": p.cold_level()}))
+	var edge := _edge_of(p)   # as the blow lands, before it wears the weapon (struck)
 	_wear(p, WR.melee_wear(wid, String(p.weapon()["quality"]), int(p.skills["melee"])))
 	# Read before the blow's own sound: a quiet sound turns the body toward it
 	# (zombies.hear), and this one comes from where the body stands.
@@ -714,6 +740,8 @@ func swing(p, z: Dictionary) -> void:
 	z["hit_by"] = p.position
 	z["hit_way"] = String(p.get_meta(Pose.BLOW_WAY, ""))
 	var state: String = z["state"]
+	var seen: Vector3 = game.zombies.seen_pos(z)
+	var target := target_of(state)
 	var quiet_kill: bool = wid == "knife" and p.crouched and from_back and state != "chase" and state != "attack" and state != "grab"
 	if quiet_kill:
 		game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
@@ -723,18 +751,22 @@ func swing(p, z: Dictionary) -> void:
 	# Rising corpse: crush the head before it stands (zombies.md 갓 일어난 자).
 	if state == "rising":
 		_kill(p, z, "머리를 부쉈다")
+		_struck(p, seen, "swing", wid, target, "finish", edge)
 		return
 	# Frozen: blunt or heavy blows shatter the frozen body; a knife wakes it.
 	if state == "frozen" or state == "waking":
 		if wid == "knife":
 			game.zombies.wake(z)
 			_toast(p, "칼날이 언 몸에 박혔다.")
+			_struck(p, seen, "swing", wid, target, "stuck", edge)
 		else:
 			_kill(p, z, "언 몸이 부서졌다")
+			_struck(p, seen, "swing", wid, target, "shatter", edge)
 		return
 	# Quiet kill from behind: knife, crouched, the thing has not noticed anyone.
 	if quiet_kill:
 		_kill(p, z, "뒤에서 조용히 끝냈다")
+		_struck(p, seen, "swing", wid, target, "finish", edge)
 		return
 	var downed: bool = state == "downed"
 	melee_tally["landed"] += 1
@@ -747,15 +779,18 @@ func swing(p, z: Dictionary) -> void:
 		if rng.randf() < float(d["head_kill"]) or downed:
 			melee_tally["head_kill"] += 1
 			_kill(p, z, "")
+			_struck(p, seen, "swing", wid, target, "finish", edge)
 		else:
 			melee_tally["head_down"] += 1
 			game.zombies.knock_down(z)
+			_struck(p, seen, "swing", wid, target, "head", edge)
 		return
 	# Body hit: the thick coat of a 껴입은 자 stops blades (zombies.md).
 	if z["kind"] == "clothed" and blade:
 		z["stun"] = 0.3
 		melee_tally["body_stun"] += 1
 		_toast(p, "두꺼운 옷에 날이 막혔다.")
+		_struck(p, seen, "swing", wid, target, "blocked", edge)
 		return
 	if rng.randf() < float(odds["knockdown"]):
 		melee_tally["body_down"] += 1
@@ -765,6 +800,7 @@ func swing(p, z: Dictionary) -> void:
 		z["stun"] = BODY_STUN
 		z["hit_hold"] = BODY_STUN   # the picture holds its struck pose as long (dead_body.gd)
 		_push(z, p.position, 0.3)
+	_struck(p, seen, "swing", wid, target, "body", edge)
 
 
 ## Raider or squad melee on a person. Hit chance from melee skill.
@@ -790,6 +826,38 @@ func swing_person(p, o) -> void:
 			game.ai.raider_hit(o, p)
 		elif o == game.player or o.team == "squad":
 			game.say(o, "%s 베였다." % o.display_name, true, "hurt")
+
+
+## What a blow (struck) reads off the state of the one struck.
+static func target_of(state: String) -> String:
+	if state == "waking":
+		return "frozen"
+	if state in ["downed", "frozen", "rising"]:
+		return state
+	return "standing"
+
+
+## The melee weapon's edge as struck reads it (weapons.gd condition_level).
+func _edge_of(p) -> int:
+	if p.hands.is_empty() or W.get_data(p.weapon_id()).get("kind", "") != "melee":
+		return -1
+	return W.condition_level(float(p.hands[0]["condition"]))
+
+
+func _struck(p, at: Vector3, way: String, wid: String, target: String, result: String, edge: int) -> void:
+	struck.emit({"way": way, "weapon": wid, "target": target, "result": result, "edge": edge,
+		"at": at, "by_player": p == game.player})
+
+
+## A blow or a stomp that came round on no one: the one aimed at moved off.
+func _missed(p, at, stomp_it: bool) -> void:
+	var on_dead: bool = at is Dictionary and not at.is_empty()
+	var spot: Vector3 = game.zombies.seen_pos(at) if on_dead else p.position + Vector3(sin(p.facing), 0, cos(p.facing))
+	var target: String = target_of(String(at["state"])) if on_dead and String(at["state"]) != "dead" else ""
+	if stomp_it:
+		_struck(p, spot, "stomp", "boot", target, "miss", -1)
+	else:
+		_struck(p, spot, "swing", p.weapon_id(), target, "miss", _edge_of(p))
 
 
 func _kill(p, z: Dictionary, msg: String) -> void:
@@ -873,8 +941,13 @@ func shove(p) -> void:
 			continue
 		if grabbing:
 			p.release_grab(z)
+		var seen: Vector3 = game.zombies.seen_pos(z)
+		var target := target_of(String(z["state"]))
 		game.zombies.release(z, p.position, rng.randf() < SHOVE_KNOCK)
+		_struck(p, seen, "shove", p.weapon_id(), target, "body", -1)
 		hit += 1
+	if hit == 0:
+		_struck(p, p.position + forward * SHOVE_REACH, "shove", p.weapon_id(), "", "miss", -1)
 	if hit > 0 and p.grabbers.is_empty():
 		p.grab_left = 0.0
 	return
