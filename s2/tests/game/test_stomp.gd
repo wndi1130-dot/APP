@@ -3,6 +3,7 @@ extends "res://addons/gut/test.gd"
 ## 2026-10-11). It lands late and takes several, so a weapon stays worth carrying.
 
 const FieldGame = preload("res://game/field_game.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 const W = preload("res://game/sim/weapons.gd")
 
 var game
@@ -133,6 +134,18 @@ func test_one_on_the_ground_is_struck_on_its_upper_body() -> void:
 	assert_almost_eq(game.zombies.seen_pos(back).distance_to(back["pos"]), 0.0, 0.01, "stood up, it is where it stands")
 
 
+func test_one_gone_over_against_a_wall_is_struck_where_it_lies() -> void:
+	# Its chest drawn into the wall, it is judged where it lies, or no blow or
+	# boot could ever reach it.
+	var z := _lying_at(1.3, true)   # on its face toward the east: the chest 0.4 m on, in the next cell
+	var chest: Vector3 = game.zombies.seen_pos(z)
+	assert_eq(FieldGrid.cell_of(chest), FieldGrid.cell_of(z["pos"]) + Vector2i(1, 0))
+	game.grid.set_solid(FieldGrid.cell_of(chest), FieldGrid.Solid.WALL)
+	var seen: Vector3 = game.zombies.seen_pos(z)
+	assert_almost_eq(seen.distance_to(z["pos"]), 0.0, 0.01, "struck where it lies")
+	assert_false(game.combat.melee_blocked(p, seen), "a blow can reach it there")
+
+
 func test_a_lying_one_is_stomped_on_its_upper_body() -> void:
 	_bare()
 	var c = game.combat
@@ -145,4 +158,4 @@ func test_a_lying_one_is_stomped_on_its_upper_body() -> void:
 	var near := _lying_at(1.0, false)   # the chest 0.6 m off, under the boot
 	c.start_swing(p, near)
 	c.update(c.STOMP_WINDUP / mult + 0.01)
-	assert_eq(int(near["stomped"]), 1)
+	assert_eq(int(near.get("stomped", 0)), 1)

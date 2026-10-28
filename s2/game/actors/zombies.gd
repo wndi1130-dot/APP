@@ -1142,15 +1142,20 @@ func shoved_k(z: Dictionary) -> float:
 ## drawn GRAB_BACK further off them (render), and one on the ground is struck
 ## on its upper body, LYING_HIT toward its head, which lies off to the side it
 ## went over (decision 487: not the head itself, 0.75 m off, which lies away
-## from whoever felled it, out among the rest).
+## from whoever felled it, out among the rest). Drawn into a wall or a crate
+## (gone over against it, hanging back off someone by it), it is struck where
+## it stands instead: no blow could reach it in there.
 func seen_pos(z: Dictionary) -> Vector3:
 	var pos := draw_pos(z)
+	var off := Vector3.ZERO
 	if z["state"] == "grab" and shoved_k(z) >= 1.0:
-		pos -= Basis(Vector3.UP, z["angle"]) * Vector3(0, 0, GRAB_BACK)
+		off = Basis(Vector3.UP, z["angle"]) * Vector3(0, 0, -GRAB_BACK)
 	elif (z["state"] == "downed" or z["state"] == "rising") and not z["crawl"]:
 		var down := DeadPose.down_k(z)
 		var turn: float = float(DeadPose.sprawl(float(z["phase"]))["turn"]) * down
-		pos += Basis(Vector3.UP, float(z["angle"]) + turn) * Vector3(0, 0, DeadPose.fall_side(z) * LYING_HIT * down)
+		off = Basis(Vector3.UP, float(z["angle"]) + turn) * Vector3(0, 0, DeadPose.fall_side(z) * LYING_HIT * down)
+	if off != Vector3.ZERO and game.grid_at(pos).body_line_clear(FieldGrid.cell_of(pos), FieldGrid.cell_of(pos + off)):
+		pos += off
 	return pos
 
 
