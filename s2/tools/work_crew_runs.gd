@@ -176,17 +176,21 @@ func _trial(id: String, run_seed: int) -> Dictionary:
 	root.add_child(game)
 	game.set_process(false)
 	game.process_mode = Node.PROCESS_MODE_DISABLED
-	var row: Dictionary = {"map": id, "seed": run_seed, "t_old": -1.0, "t_new": -1.0,
+	var row: Dictionary = {"map": id, "seed": run_seed, "t_old": -1.0, "t_new": -1.0, "t_open": -1.0,
 		"t_sent": -1.0, "t_hold": -1.0, "t_retreat": -1.0, "quick_retreat": false,
 		"player_dead": false, "end": "seconds", "_end_t": 0.0}
 	if not game.work.site_ids().has("work_site"):
 		row["end"] = "no_work_site"
 		game.free()
 		return row
+	# A site with nothing left to load (a yard whose wagons hold no coal) never lights: not a run of the gate.
+	if game.work.remaining() <= FieldWork.EMPTY:
+		row["end"] = "empty_site"
+		game.free()
+		return row
 	var dt: float = 1.0 / hz
 	var pilot_left: float = 0.0
 	var pressed: bool = false
-	var ready_press: bool = false
 	var event_at: int = 0
 	while game.clock.elapsed <= seconds:
 		var now: float = game.clock.elapsed
@@ -196,12 +200,12 @@ func _trial(id: String, run_seed: int) -> Dictionary:
 			row["t_old"] = now
 		if new_open and float(row["t_new"]) < 0.0:
 			row["t_new"] = now
-		if not pressed and (new_open if press == "new" else old_open):
+		if press == "new":
+			## The player taps the key whenever it is lit and nobody has gone out yet.
+			if float(row["t_sent"]) < 0.0 and game.work.phase() == "open":
+				game.actions.start_work(game.player)
+		elif not pressed and old_open:
 			pressed = true
-			game.actions.start_work(game.player)
-		elif press == "new" and pressed and not ready_press and game.work.phase() == "open":
-			## A safety sample can precede the one-second radio call. Tap once when it lights.
-			ready_press = true
 			game.actions.start_work(game.player)
 		while event_at < game.telemetry.work_events.size():
 			var event: Dictionary = game.telemetry.work_events[event_at]
@@ -230,10 +234,12 @@ func _pilot(game) -> void:
 	if not p.can_act():
 		return
 	var at: Vector3 = game.work.position_of("work_site")
+	var path: PackedVector3Array = game.work.route("work_site")
 	var nearest: Dictionary = {}
 	var distance: float = INF
 	for z: Dictionary in game.zombies.list:
-		if not game.work.awake(z) or at.distance_to(z["pos"]) > FieldWork.RING_R + PILOT_EXTRA_R:
+		# The ring the train counts, and the walk from the door it watches.
+		if not game.work.awake(z) or (at.distance_to(z["pos"]) > FieldWork.RING_R + PILOT_EXTRA_R and not _near_path(path, z["pos"])):
 			continue
 		if p.position.distance_to(z["pos"]) < distance:
 			nearest = z
@@ -252,35 +258,65 @@ func _pilot(game) -> void:
 	game.combat.melee_target(p, nearest, true)
 
 
-func _summary(rows: Array[Dictionary]) -> Dictionary:
-	var shares_1200: Array[float] = []
-	var shares_1800: Array[float] = []
+func _near_path(path: PackedVector3Array, at: Vector3) -> bool:
+	for i in path.size():
+		var closest: Vector3 = path[i]
+		if i > 0:
+			closest = Geometry3D.get_closest_point_to_segment(at, path[i - 1], path[i])
+		if closest.distance_to(at) <= FieldWork.PATH_R + PILOT_EXTRA_R:
+			return true
+	return false
+
+
+## The gate's numbers over the runs that had something to load: when the key lit (a run that never
+## lit counts as later than the stop, so it can only push the median up), and how many sent crews
+## were called back within QUICK_S. Also one summary per map.
+func _summary(rows: Array[Dictionary], label: String = "all") -> Dictionary:
+	var lit: Array[float] = []
+	var counted: int = 0
 	var sent_count: int = 0
 	var observed: int = 0
 	var quick: int = 0
 	for row: Dictionary in rows:
-		if float(row["t_new"]) >= 0.0:
-			shares_1200.append(float(row["t_new"]) / 1200.0)
-			shares_1800.append(float(row["t_new"]) / 1800.0)
+		if row["end"] in ["no_work_site", "empty_site"]:
+			continue
+		counted += 1
+		lit.append(float(row["t_open"]) if float(row["t_open"]) >= 0.0 else INF)
 		if float(row["t_sent"]) >= 0.0:
 			sent_count += 1
 			if row["quick_retreat"] or float(row["_end_t"]) - float(row["t_sent"]) >= QUICK_S:
 				observed += 1
 				if row["quick_retreat"]:
 					quick += 1
-	return {"kind": "summary", "press": press, "seconds": seconds, "hz": hz, "runs": rows.size(),
-		"new_open": shares_1200.size(), "unreached": rows.size() - shares_1200.size(),
-		"median_t_new_over_1200": _median(shares_1200), "median_t_new_over_1800": _median(shares_1800),
+	var middle: Variant = _median(lit)
+	var reached: bool = middle != null and is_finite(float(middle))
+	var out: Dictionary = {"kind": "summary", "of": label, "press": press, "seconds": seconds, "hz": hz, "runs": rows.size(),
+		"counted": counted, "lit": lit.filter(func(t: float) -> bool: return is_finite(t)).size(),
+		"median_t_open": middle if reached else null, "median_unreached": middle != null and not reached,
+		"median_over_seconds": float(middle) / seconds if reached else null,
+		"median_over_1200": float(middle) / 1200.0 if reached else null,
 		"sent": sent_count, "quick_retreat_observed": observed, "followup_under_60": sent_count - observed,
 		"quick_retreat_share": float(quick) / observed if observed > 0 else null}
+	if label == "all":
+		var per_map: Dictionary = {}
+		for row: Dictionary in rows:
+			if not per_map.has(row["map"]):
+				var fresh: Array[Dictionary] = []
+				per_map[row["map"]] = fresh
+			(per_map[row["map"]] as Array[Dictionary]).append(row)
+		var maps_out: Array = []
+		for id: String in per_map:
+			maps_out.append(_summary(per_map[id], id))
+		out["maps"] = maps_out
+	return out
 
 
 func _median(values: Array[float]) -> Variant:
 	if values.is_empty():
 		return null
 	values.sort()
-	var middle: int = floori(float(values.size()) / 2.0)
-	return values[middle] if values.size() % 2 == 1 else (values[middle - 1] + values[middle]) / 2.0
+	var mid: int = floori(float(values.size()) / 2.0)
+	return values[mid] if values.size() % 2 == 1 else (values[mid - 1] + values[mid]) / 2.0
 
 
 func _record(row: Dictionary) -> bool:

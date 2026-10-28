@@ -1513,8 +1513,8 @@ func spot_default(p, id: String, verb: String) -> void:
 		"conveyor":
 			game.mission_play.conveyor_card(p)
 		"work_site":
-			game.work.active_site = id
 			if game.work.phase(id) in ["working", "hold", "retreat"]:
+				game.work.active_site = id
 				game.hud.work_panel()
 			else:
 				start_work(p, id)

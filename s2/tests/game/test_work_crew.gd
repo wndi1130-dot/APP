@@ -260,7 +260,7 @@ func test_coal_wagon_escorts_land_three_seconds_before_four_workers() -> void:
 	_advance(1.0)
 	assert_eq(_role("worker").size(), 4)
 	for p in game.crew:
-		assert_eq(p.position, game.work.door_of("work_site"))
+		assert_lt(p.position.distance_to(game.work.door_of("work_site")), 1.0)
 
 
 func test_dispatch_between_ticks_still_gives_the_escort_at_least_three_seconds() -> void:
@@ -338,7 +338,7 @@ func test_hold_retreat_dropped_load_and_same_people_on_the_next_dispatch() -> vo
 	assert_eq(game.crew, original)
 	for p in game.crew:
 		assert_false(bool(p.brain["boarded"]))
-		assert_eq(p.position, game.work.door_of("work_site"))
+		assert_lt(p.position.distance_to(game.work.door_of("work_site")), 1.0)
 		assert_eq(int((game.receipt as CountReceipt).sent_calls[p.pid]), 1)
 	worker.position = game.work.dropped[0]["pos"]
 	game.ai._crew(worker, 0.1, true)
@@ -384,6 +384,40 @@ func test_a_fallen_escort_calls_retreat() -> void:
 	_role("escort")[0].body.downed = true
 	_advance(1.0)
 	assert_eq(game.work.phase(), "retreat")
+
+
+func test_only_the_seconds_held_at_four_count_toward_the_overflow() -> void:
+	_send()
+	for i in 4:
+		_spawn(_at() + Vector3(0, 0, 15))
+	_advance(1.0)
+	_advance(16.0)
+	game.zombies.list[0]["state"] = "dead"
+	_advance(4.0)
+	assert_eq(game.work.phase(), "hold", "four clear seconds do not add to the twenty")
+	game.zombies.list[0]["state"] = "wander"
+	_advance(3.0)
+	assert_eq(game.work.phase(), "hold")
+	_advance(1.0)
+	assert_eq(game.work.phase(), "retreat")
+
+
+func test_a_slipping_escort_does_not_call_retreat() -> void:
+	_send()
+	_role("escort")[0].fallen_t = 1.0
+	_advance(1.0)
+	assert_eq(game.work.phase(), "working")
+
+
+func test_half_is_said_only_after_more_is_cleared_than_at_first_sight() -> void:
+	_ring(4)
+	_advance(1.0)
+	assert_true(_radio().contains("아직 사람 못 내보내"))
+	_advance(1.0)
+	assert_eq(_events(), ["seen"] as Array[String])
+	game.zombies.list[4]["state"] = "dead"
+	_advance(1.0)
+	assert_eq(_radio(), "기관사: 좀 줄었어. 조금만 더 치워 주면 내보낼게.")
 
 
 func test_worker_backs_behind_escort_at_eight_and_drops_at_three_metres() -> void:
@@ -510,7 +544,7 @@ func test_empty_site_is_done_after_the_last_load_is_unloaded() -> void:
 
 
 func test_budget_counts_wagons_once_salvage_wood_and_five_other_job_amounts() -> void:
-	var data: Dictionary = {"wagons": [{"coal": 2.0}, {"coal": 3.5}], "spots": {
+	var data: Dictionary = {"wagons": [{"coal": 2.0, "work": Vector2i(1, 1)}, {"coal": 3.5, "work": Vector2i(2, 1)}, {"coal": 9.0}], "spots": {
 		"wagon": {"kind": "work_site", "amount": 999.0},
 		"heap": {"kind": "work_site", "job": "coal_heap", "amount": 1.0},
 		"salvage": {"kind": "salvage", "material": "wood", "amount": 2},

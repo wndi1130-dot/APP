@@ -2030,7 +2030,7 @@ func _tick_allies() -> void:
 		var coal: bool = game.work.job(game.work.active_site)["yield"] == "coal"
 		crew_button.text = "작업조 %d\n%s %.1f" % [alive, "석탄" if coal else "목재", game.actions.coal_delivered if coal else game.actions.wood_delivered]
 		# The ration law's picture on the chip: the crew hauls less a trip (decision 430 ②).
-		crew_button.icon = StatusArt.texture("ration", false, false, STATUS_ART_SIZE) if game.haul_mult() < 1.0 else null
+		crew_button.icon = StatusArt.texture("ration", false, false, STATUS_ART_SIZE) if game.haul_mult() < 1.0 and coal else null
 	_place_allies()
 
 
@@ -3269,7 +3269,7 @@ func work_panel() -> void:
 	var cargo: String = "석탄" if coal else "목재"
 	var delivered: float = game.actions.coal_delivered if coal else game.actions.wood_delivered
 	var pane := _open_pane(title, "남은 %s %.1f · 실은 %s %.1f" % [cargo, game.work.remaining(site), cargo, delivered], "coal" if coal else "wood")
-	if game.haul_mult() < 1.0:
+	if game.haul_mult() < 1.0 and coal:
 		var why := GlassPane.row()
 		why.name = "RationHaul"
 		var art := TextureRect.new()

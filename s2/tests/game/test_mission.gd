@@ -367,6 +367,29 @@ func test_a_running_belt_loads_twice_as_much_and_is_heard_instead_of_the_picks()
 	assert_almost_eq(game.actions.dig_noise_t, pick_t, 0.001, "the pickaxes are not")
 
 
+func test_menders_called_back_and_sent_out_again_go_back_to_the_belt_and_the_card_comes_once() -> void:
+	var game = _depot()
+	var play = game.mission_play
+	_call_crew(game)
+	game.player.add_item("scrap", 2)
+	play._conveyor_choice("repair", game.player)
+	var menders: Array = game.crew.filter(func(q): return q.brain.get("job", "") == "repair")
+	assert_eq(menders.size(), play.REPAIR_HANDS)
+	var cards: int = game.decisions.size()
+	game.work.retreat("work_site")
+	for q in game.crew:
+		q.position = game.work.door_of("work_site")
+		game.ai._crew(q, 0.1, true)
+	game.work.update(1.0)
+	assert_eq(game.work.phase(), "closed")
+	game.work.update(1.0)
+	assert_eq(game.work.phase(), "open")
+	game.actions.start_work(game.player)
+	game.work.update(FieldWork.ESCORT_LEAD)
+	assert_eq(game.crew.filter(func(q): return q.brain.get("job", "") == "repair"), menders, "the half-mended belt keeps its menders")
+	assert_eq(game.decisions.size(), cards, "the depot's card is not asked again")
+
+
 func test_leaving_mid_repair_keeps_the_coal_and_the_half_mended_belt() -> void:
 	var game = _depot()
 	var play = game.mission_play

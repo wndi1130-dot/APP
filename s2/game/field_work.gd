@@ -14,6 +14,7 @@ const CLEAR_SHARE: float = 0.7
 const CLEARED: Array[String] = ["dead", "downed"]
 const DECORATION: Array[String] = ["corpse"]
 const SEE_R: float = 30.0
+const SEEN_BESIDE_R: float = 3.0
 const RADIO_EVERY: float = 60.0
 const ESCORT_LEAD: float = 3.0
 const HOLD_N: int = 4
@@ -25,7 +26,6 @@ const WORKER_BACK_R: float = 8.0
 const WORKER_RUN_R: float = 3.0
 const BEHIND_M: float = 2.0
 const START_SPREAD: float = 6.0
-const DROPPED_R: float = 25.0
 const BOARD_R: float = 1.5
 const WORK_R: float = 2.2
 const DROP_R: float = 1.0
@@ -73,6 +73,7 @@ var active_site: String = "work_site"
 var elapsed: float = 0.0
 var tick_left: float = 0.0
 var sent: Dictionary = {}
+var crew_down_said: bool = false
 
 
 func _init(field_game) -> void:
@@ -89,7 +90,7 @@ func site_ids() -> Array[String]:
 
 func _site(id: String) -> Dictionary:
 	if not sites.has(id):
-		sites[id] = {"phase": "unseen", "seen": false, "warned": false, "half": false,
+		sites[id] = {"phase": "unseen", "seen": false, "warned": false, "warn_share": 0.0, "half": false,
 			"last_open": -INF, "retry": false, "retry_said": false, "hold_s": 0.0, "clear_s": 0.0,
 			"path": PackedVector3Array(), "path_at": -INF, "door": Vector3.ZERO,
 			"pending": [], "roster": [], "depart_at": 0.0, "sent": false, "noise_s": 0.0,
@@ -115,8 +116,17 @@ func position_of(id: String) -> Vector3:
 
 func remaining(id: String = "work_site") -> float:
 	if job_id(id) == "coal_wagon":
-		return game.actions.coal_left()
+		return wagon_coal(game.data)
 	return maxf(float(game.data["spots"][id].get("amount", 0.0)), 0.0)
+
+
+## Coal the crew can dig: wagons with a work cell, the ones field_ai.gd _wagon_with_coal sends them to.
+static func wagon_coal(data: Dictionary) -> float:
+	var total: float = 0.0
+	for wagon: Dictionary in data.get("wagons", []):
+		if wagon.has("work"):
+			total += maxf(float(wagon.get("coal", 0.0)), 0.0)
+	return total
 
 
 func awake(z: Dictionary) -> bool:
@@ -212,8 +222,10 @@ func update(delta: float) -> void:
 
 func _tick(id: String) -> void:
 	var state: Dictionary = _site(id)
-	var safe: Dictionary = safety(id)
 	var stage: String = phase(id)
+	if stage == "done":
+		return
+	var safe: Dictionary = safety(id)
 	if stage in ["working", "hold"]:
 		for p in members(id):
 			if p.role == "worker" and (not p.is_alive() or p.body.downed):
@@ -228,13 +240,17 @@ func _tick(id: String) -> void:
 			_event(id, "hold")
 			game.set_radio("기관사: 작업조 잠깐 멈춰. 호위가 막는다.", "reply")
 		elif stage == "hold":
-			state["hold_s"] = float(state["hold_s"]) + TICK_S
-			state["clear_s"] = float(state["clear_s"]) + TICK_S if int(safe["near_awake"]) < HOLD_N else 0.0
-			if float(state["hold_s"]) >= OVERFLOW_S:
-				retreat(id)
-			elif float(state["clear_s"]) >= HOLD_CLEAR_S:
+			# Only the seconds the escort is held at four or more count toward the overflow.
+			if int(safe["near_awake"]) < HOLD_N:
+				state["clear_s"] = float(state["clear_s"]) + TICK_S
+			else:
+				state["clear_s"] = 0.0
+				state["hold_s"] = float(state["hold_s"]) + TICK_S
+			if float(state["clear_s"]) >= HOLD_CLEAR_S:
 				state["phase"] = "working"
-				_event(id, "back")
+				_event(id, "resume")
+			elif float(state["hold_s"]) >= OVERFLOW_S:
+				retreat(id)
 		if phase(id) == "working":
 			_release_workers(id)
 			if _finished(id):
@@ -249,16 +265,16 @@ func _tick(id: String) -> void:
 			state["phase"] = "closed"
 			state["retry"] = true
 			state["retry_said"] = false
-			_event(id, "back")
+			_event(id, "returned")
 		_paint(id, safe)
-		return
-	if stage == "done":
 		return
 	if _finished(id):
 		state["phase"] = "done"
 		_event(id, "done")
 	elif not state["seen"]:
-		if game.player.position.distance_to(position_of(id)) <= SEE_R and game.sight_clear(game.player.position, position_of(id)):
+		var distance: float = game.player.position.distance_to(position_of(id))
+		# Right beside it counts as seen even when the site's own cell is behind a wall.
+		if distance <= SEE_R and (distance <= SEEN_BESIDE_R or game.sight_clear(game.player.position, position_of(id))):
 			state["seen"] = true
 			_event(id, "seen")
 			if safe["open"]:
@@ -266,15 +282,21 @@ func _tick(id: String) -> void:
 			else:
 				state["phase"] = "closed"
 				state["warned"] = true
-				game.set_radio("기관사: 저기 %s 보이네. 근데 둘레에 망자가 %s — 아직 사람 못 내보내." % [job(id)["name"], game.director.size_word(int(safe["total"]) - int(safe["cleared"]))], "reply")
-	elif stage != "open" and state["warned"] and not state["half"] and float(safe["share"]) >= CLEAR_SHARE / 2.0:
+				state["warn_share"] = float(safe["share"])
+				if float(safe["share"]) >= CLEAR_SHARE:
+					game.set_radio(blocked_reason(safe), "reply")
+				else:
+					game.set_radio("기관사: 저기 %s 보이네. 근데 둘레에 망자가 %s — 아직 사람 못 내보내." % [job(id)["name"], game.director.size_word(int(safe["total"]) - int(safe["cleared"]))], "reply")
+	elif safe["open"]:
+		if stage != "open":
+			_open(id)
+	elif stage != "open" and state["warned"] and not state["half"] and float(safe["share"]) >= CLEAR_SHARE / 2.0 \
+			and float(safe["share"]) > float(state.get("warn_share", 0.0)):
+		# Half way to the share the train asks for, and more cleared than when it first said no.
 		state["half"] = true
 		state["phase"] = "half"
 		_event(id, "half")
 		game.set_radio("기관사: 좀 줄었어. 조금만 더 치워 주면 내보낼게.", "reply")
-	elif safe["open"]:
-		if stage != "open":
-			_open(id)
 	else:
 		state["phase"] = "half" if state["half"] else "closed"
 	_paint(id, safe)
@@ -293,12 +315,14 @@ func _open(id: String) -> void:
 		game.set_radio("기관사: 이 정도면 이제 거의 안전한 것 같습니다. 작업조 내보낼까요?", "reply")
 
 
+## The ring over the site fills toward the share the train asks for: full when the ring is cleared enough.
 func _paint(id: String, safe: Dictionary) -> void:
 	var state: Dictionary = _site(id)
 	var spot: Dictionary = game.data["spots"][id]
-	var cells: int = roundi(float(safe["share"]) * SHARE_CELLS)
+	var progress: float = minf(float(safe["share"]) / CLEAR_SHARE, 1.0)
+	var cells: int = roundi(progress * SHARE_CELLS)
 	var bright: bool = phase(id) == "open"
-	spot["work_share"] = safe["share"]
+	spot["work_share"] = progress
 	spot["state"] = "ready" if bright else phase(id)
 	if cells == int(state["cells"]) and bright == bool(state["bright"]):
 		return
@@ -438,9 +462,12 @@ func _disembark(id: String, row: Dictionary, side: int) -> void:
 	p.target_person = null
 	p.hold_attack = false
 	p.aim.stop()
-	p.position = door
+	p.position = door + _spread(p, 0.5)
 	p.visible = true
-	p.brain.merge({"work_site": id, "job": "dig", "side": side % 2, "load": 0.0,
+	# One who was mending the depot's conveyor goes back to it while it is still half mended.
+	var belt: Dictionary = game.mission_play.conveyor()
+	var mending: bool = p.brain.get("mender", false) and not belt.is_empty() and belt["state"] == "part"
+	p.brain.merge({"work_site": id, "job": "repair" if mending else "dig", "side": side % 2, "load": 0.0,
 		"load_kind": job(id)["yield"], "boarded": false, "fleeing": false, "work_run": false,
 		"work_wait": -1.0}, true)
 	p.brain.erase("board_at")
@@ -464,7 +491,10 @@ func _release_workers(id: String) -> void:
 	for i in pending.size():
 		_disembark(id, pending[i], i)
 	pending.clear()
-	game.mission_play.crew_down(game.player)
+	# The depot's one card comes up the first time carriers are down this stop, not on every return.
+	if not crew_down_said:
+		crew_down_said = true
+		game.mission_play.crew_down(game.player)
 
 
 func members(id: String) -> Array:
@@ -479,7 +509,8 @@ func _crew_in_trouble(id: String) -> bool:
 	for p in members(id):
 		if p.brain.get("boarded", false):
 			continue
-		if not p.grabbers.is_empty() or (p.role == "escort" and (not p.is_alive() or p.body.downed or p.fallen_t > 0.0)):
+		# An escort dead or downed, not one who slipped and gets straight up again.
+		if not p.grabbers.is_empty() or (p.role == "escort" and (not p.is_alive() or p.body.downed)):
 			return true
 	return false
 
@@ -502,14 +533,17 @@ func retreat(id: String) -> void:
 		if not p.brain.get("boarded", false):
 			if p.role == "worker":
 				drop_load(p)
+			if p.brain.get("job", "") == "repair":
+				p.brain["mender"] = true
 			p.brain["job"] = "home"
 	_event(id, "retreat")
 	game.set_radio("기관사: 작업조 물러나!", "reply")
 
 
+## Everyone who can still walk is aboard (one who only slipped is still on the way).
 func _returned(id: String) -> bool:
 	for p in members(id):
-		if p.is_alive() and not p.body.downed and p.fallen_t <= 0.0 and not p.brain.get("boarded", false):
+		if p.is_alive() and not p.body.downed and not p.brain.get("boarded", false):
 			return false
 	return true
 
@@ -546,17 +580,17 @@ func _erase_same(rows: Array, row: Dictionary) -> void:
 			return
 
 
-## What the crew set down within DROPPED_R of the site and carries on: its wood on the ground, or its coal.
+## What the crew set down and carries on: its wood on the ground, or its coal. Wherever it was set
+## down (between the site, the wagons and the door), so nothing a carrier dropped is lost on the way.
 func _dropped_near(id: String) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var at: Vector3 = position_of(id)
 	if job(id)["yield"] == "wood":
 		for item: Dictionary in game.ground_items:
-			if item.get("crew_drop", false) and float(item.get("n", 0.0)) > EMPTY and at.distance_to(item["pos"]) <= DROPPED_R:
+			if item.get("crew_drop", false) and float(item.get("n", 0.0)) > EMPTY:
 				out.append(item)
 		return out
 	for row: Dictionary in dropped:
-		if row["kind"] == job(id)["yield"] and float(row["n"]) > EMPTY and at.distance_to(row["pos"]) <= DROPPED_R:
+		if row["kind"] == job(id)["yield"] and float(row["n"]) > EMPTY:
 			out.append(row)
 	return out
 
@@ -574,10 +608,13 @@ func _take_drop(p, row: Dictionary, id: String) -> void:
 		game.view.update_ground(game.ground_items)
 
 
+## The ration law cuts a coal trip (decision 430 ②); the depot belt speeds only the wagons it loads.
 func _trip(id: String) -> float:
 	var n: float = float(job(id)["trip"])
 	if job(id)["yield"] == "coal":
-		n *= game.mission_play.load_mult() * game.haul_mult()
+		n *= game.haul_mult()
+	if job_id(id) == "coal_wagon":
+		n *= game.mission_play.load_mult()
 	return n
 
 
@@ -637,7 +674,7 @@ func crew_step(p, think: bool) -> bool:
 	var wagon: Dictionary = game.ai._wagon_with_coal() if job_id(id) == "coal_wagon" else {}
 	if remaining(id) <= EMPTY or (job_id(id) == "coal_wagon" and wagon.is_empty()):
 		return true
-	var at: Vector3 = FieldGrid.center(wagon["work"]) if not wagon.is_empty() else position_of(id)
+	var at: Vector3 = (FieldGrid.center(wagon["work"]) if not wagon.is_empty() else position_of(id)) + _spread(p, 1.5)
 	if p.position.distance_to(at) > WORK_R:
 		game.ai._walk(p, at, false)
 		return true
@@ -646,6 +683,12 @@ func crew_step(p, think: bool) -> bool:
 	if elapsed >= float(p.brain["work_wait"]):
 		p.start_action("dig", String(job(id)["verb"]), float(job(id)["work_s"]), _worked.bind(p, id))
 	return true
+
+
+## A small fixed offset per person (from the pid, no dice) so a crew does not stand in one spot.
+func _spread(p, reach: float) -> Vector3:
+	var h: int = absi(hash(String(p.pid)))
+	return Vector3(float(h % 7 - 3) / 3.0 * reach, 0.0, float((h >> 3) % 3 - 1) * 0.3)
 
 
 func nearest_threat(at: Vector3, radius: float) -> Dictionary:
@@ -749,9 +792,7 @@ func noise(delta: float, belt: bool = false) -> void:
 
 ## Coal wagons are counted once, even when several spots refer to the yard.
 static func budget(data: Dictionary) -> Dictionary:
-	var out: Dictionary = {"coal": 0.0, "wood": 0.0}
-	for wagon: Dictionary in data.get("wagons", []):
-		out["coal"] = float(out["coal"]) + float(wagon.get("coal", 0.0))
+	var out: Dictionary = {"coal": wagon_coal(data), "wood": 0.0}
 	for spot: Dictionary in data.get("spots", {}).values():
 		if spot.get("kind", "") == "salvage" and spot.get("material", "") == "wood":
 			out["wood"] = float(out["wood"]) + float(spot.get("amount", 0.0))
