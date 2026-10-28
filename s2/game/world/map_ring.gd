@@ -146,6 +146,8 @@ static func add(original: Dictionary) -> Dictionary:
 	RoomFurnish.boxes_into_furniture(ring)
 	BuildingRules.dress_windows(ring)
 	LootRules.fill(ring["containers"], seed_value)
+	# After the fill (it reads the names): a box in a piece whose name says another room takes the piece's name.
+	RoomFurnish.name_boxes_by_furniture(ring)
 	_keep_place_kinds(ring["containers"], data["containers"])
 	for y in range(g.height):
 		for x in range(g.width):

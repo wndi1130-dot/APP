@@ -170,6 +170,27 @@ func test_the_first_stops_rooms_are_read_by_role_not_by_number() -> void:
 	assert_eq(BuildingRules.role_of(d, 0), "")
 
 
+## 손으로 쓴 주택 지도 건물 줄의 용도·층이 지은 자료까지 간다(결정 478: 손으로 쓴 role이 이김).
+## 용도가 「home」인 건물은 창마다 커튼을 단다.
+func test_a_hand_laid_houses_map_keeps_each_buildings_role_and_floors() -> void:
+	var d := FieldMaps.build("houses_01")
+	assert_eq(BuildingRules.role_of(d, 0), "shop", "빵집")
+	assert_eq(int(BuildingRules.building(d, 0)["top"]), 2, "빵집 2층")
+	var homes: Dictionary = {}
+	for b: Dictionary in d["buildings"]:
+		if String(b.get("role", "")) == "home":
+			homes[int(b["id"])] = true
+	assert_gt(homes.size(), 0)
+	var g: FieldGrid = d["levels"][0]
+	var seen := 0
+	for c: Vector2i in g.windows:
+		var w: Dictionary = g.windows[c]
+		if homes.has(int(w.get("building", -1))):
+			seen += 1
+			assert_true(BuildingRules.has_curtain(w), "home window %s" % c)
+	assert_gt(seen, 0)
+
+
 func test_the_raiders_hear_the_den_door_by_its_role_wherever_the_den_is() -> void:
 	var game = _game()
 	var r = game.make_person({"id": "r_test", "name": "약탈자", "role": "raider", "skills": {"strength": 5, "melee": 1, "shooting": 0, "stealth": 1, "search": 1}, "hands": []}, Vector3(5, 0, 5))

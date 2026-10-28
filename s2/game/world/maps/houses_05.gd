@@ -1210,7 +1210,8 @@ static func _build_south(repair: bool = true) -> Dictionary:
 	for n in range(5):
 		d["train_cars"].append({"rect": Rect2i(16 + n * 16, 1, 16, 3), "kind": "engine" if n == 4 else "car"})
 	for row in PLAN["buildings"]:
-		d["buildings"].append({"id": row["id"], "name": row["name"], "rect": _rect(row["rect"]), "warm": false, "window_broken": false})
+		d["buildings"].append({"id": row["id"], "name": row["name"], "rect": _rect(row["rect"]), "warm": false, "window_broken": false,
+			"role": String(row.get("role", "")), "top": int(row.get("top", 1))})
 	for row in PLAN["shells"]:
 		var lg: FieldGrid = d["levels"][row["level"]]
 		var r := _rect(row["rect"])
@@ -5728,7 +5729,8 @@ static func _add_north(data: Dictionary) -> void:
 	for row in NORTH["grounds"]:
 		_floor(g, _rect(row["rect"]), row["floor"])
 	for row in NORTH["buildings"]:
-		data["buildings"].append({"id": row["id"], "name": row["name"], "rect": _rect(row["rect"]), "warm": false, "window_broken": false})
+		data["buildings"].append({"id": row["id"], "name": row["name"], "rect": _rect(row["rect"]), "warm": false, "window_broken": false,
+			"role": String(row.get("role", "")), "top": int(row.get("top", 1))})
 	for row in NORTH["shells"]:
 		var grid: FieldGrid = data["levels"][row["level"]]
 		var r := _rect(row["rect"])

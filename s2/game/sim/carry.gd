@@ -112,7 +112,7 @@ const BOX_MID: float = 8.0
 const BOX_BIG: float = 20.0
 const BOX_LIMITS: Dictionary = {
 	"": BOX_BIG,
-	"nightstand": BOX_SMALL, "side_table": BOX_SMALL, "washstand": BOX_SMALL, "towel_shelf": BOX_SMALL,
+	"nightstand": BOX_SMALL, "side_table": BOX_SMALL, "washstand": BOX_SMALL, "towel_shelf": BOX_SMALL, "medicine_cabinet": BOX_SMALL, "waste_bin": BOX_SMALL,
 	"toolbox": BOX_SMALL, "strongbox": BOX_SMALL, "glass_cabinet": BOX_SMALL, "small_shelf": BOX_SMALL,
 	"dresser": BOX_MID, "cupboard": BOX_MID, "bookcase": BOX_MID, "jar_shelf": BOX_MID, "desk": BOX_MID,
 	"typewriter_desk": BOX_MID, "office_desk": BOX_MID, "file_cabinet": BOX_MID, "map_cabinet": BOX_MID,

@@ -295,7 +295,7 @@ func go(i: int) -> void:
 	# The next stop is known on the train: its map is made ready off the main
 	# thread while the train runs.
 	if id == "train" and _cinema_on():
-		loader.prepare(_field_place())
+		loader.prepare(_field_place(), int(opts.get("seed", 1)))
 	if id == "stop_pick" and _cinema_on():
 		_show_stop_cinema()
 		return
@@ -390,7 +390,7 @@ func _show_stop_cinema() -> void:
 	for p in plates.get_children():
 		plates.remove_child(p)
 		p.queue_free()
-	loader.prepare(_field_place())
+	loader.prepare(_field_place(), int(opts.get("seed", 1)))
 	# Its own scene (scenes/stop_cinema.tscn), so the train and the weather can be dressed there.
 	var c = STOP_CINEMA_SCENE.instantiate()
 	c.name = "StopCinema"

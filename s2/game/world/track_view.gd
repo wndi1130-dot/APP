@@ -4,7 +4,8 @@ extends RefCounted
 ## rail_runs) 하나라 그리기 호출은 둘이다. 재질은 지도 재질(world_vis)을 그대로 받아 시야 가림·기억
 ## 회색·눈이 땅과 같이 먹는다(셰이더가 MODEL_MATRIX로 자리를 잡아 인스턴스마다 맞다).
 ## 자료는 읽기만 한다: 선로 칸은 지도 쪽, 그림은 열차 쪽. 치수는 정차 장면(stop_cinema.gd)과 같다.
-## 지도의 선로는 모두 x 방향이다(세로 선로·갈림길 없음).
+## 지도의 선로는 모두 x 방향이다(세로 선로·갈림길 없음). 길이 선로를 건너는 건널목(지도
+## data["rail_crossings"], map-layout M1)에는 레일 사이와 바깥에 판자를 깐다 — 메시 하나, 그리기 호출 하나.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const F = FieldGrid.Floor
@@ -22,6 +23,13 @@ const STEEL := Color(0.25, 0.25, 0.27)
 ## 세로로 붙은 RAIL 칸 묶음은 이 칸 수마다 선로 한 벌(본선 3칸, 나란히 붙은 두 줄 6칸은 두 벌).
 ## 1~2칸 폭(곁선, 화차 밑 토막)은 그 가운데 한 벌.
 const LINE_CELLS := 3
+## 건널목 판자: 판 윗면은 레일 윗면 바로 밑(레일이 판 사이로 보인다), 판은 침목 위에 얹는다.
+## 레일 안쪽은 바퀴 테 홈(FLANGEWAY)을 비우고, 바깥은 판 두 장 0.5 m씩.
+const PLANK_TOP := RAIL_TOP - 0.01
+const PLANK_BASE := SLEEPER_Y + SLEEPER.y * 0.5
+const PLANK_GAP := 0.02
+const FLANGEWAY := 0.06
+const PLANK_COLORS := [Color(0.31, 0.27, 0.23), Color(0.27, 0.24, 0.21)]
 
 
 ## x 방향 선로 줄기 [{"x0", "x1", "z"}]: 같은 가운데 줄(z)을 가진 RAIL 칸이 x로 이어진 구간.
@@ -70,17 +78,70 @@ static func outside_runs(rects: Array) -> Array:
 	return out
 
 
-## 지도 안 선로와 지도 밖 선로를 묶음 하나씩. 둘 다 그림자를 드리우지 않는다: 0.22 m 높이라 그림자는
-## 거의 안 보이는데, 그림자 그리기마다 조각이 다시 들어가 삼각형이 네 배가 됐다(첫 정차 지도 +5.8만).
-static func build(parent: Node3D, grid: FieldGrid, material: Material, outside: Array = []) -> Node3D:
+## 건널목(지도 data["rail_crossings"], 칸 단위 Rect2i — x 폭 = 길이 선로를 건너는 폭, y = 그 RAIL 띠 줄)을
+## 지나는 선로 줄기 토막 [{"x0", "x1", "z"}].
+static func crossing_runs(line_runs: Array, crossings: Array) -> Array:
+	var out: Array = []
+	for r: Rect2i in crossings:
+		for run: Dictionary in line_runs:
+			var z := float(run["z"])
+			if z < float(r.position.y) or z >= float(r.end.y):
+				continue
+			var x0 := maxf(float(run["x0"]), float(r.position.x))
+			var x1 := minf(float(run["x1"]), float(r.end.x))
+			if x1 > x0:
+				out.append({"x0": x0, "x1": x1, "z": z})
+	return out
+
+
+## 판자를 까는 가로(z) 구간 [시작, 끝, 판 수]: 레일 사이 하나, 양 바깥 둘(선로 가운데 줄에서 잰 값).
+static func board_spans() -> Array:
+	var inner := GAUGE_HALF - RAIL.z * 0.5 - FLANGEWAY
+	var outer := GAUGE_HALF + RAIL.z * 0.5 + 0.04
+	return [[-inner, inner, 5], [outer, outer + 0.5, 2], [-outer - 0.5, -outer, 2]]
+
+
+## 건널목 판자 한 메시(건널목은 정차마다 몇 곳뿐이라 MultiMesh 없이 하나). 토막이 없으면 null.
+static func crossing_mesh(pieces: Array) -> ArrayMesh:
+	if pieces.is_empty():
+		return null
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for run: Dictionary in pieces:
+		var x0 := float(run["x0"])
+		var x1 := float(run["x1"])
+		var k := 0
+		for span: Array in board_spans():
+			var n := int(span[2])
+			var w := (float(span[1]) - float(span[0]) - PLANK_GAP * (n - 1)) / float(n)
+			for i in n:
+				var z := float(run["z"]) + float(span[0]) + w * 0.5 + (w + PLANK_GAP) * i
+				_box(st, Vector3(x1 - x0, PLANK_TOP - PLANK_BASE, w), Vector3((x0 + x1) * 0.5, (PLANK_TOP + PLANK_BASE) * 0.5, z), PLANK_COLORS[k % 2])
+				k += 1
+	return st.commit()
+
+
+## 지도 안 선로와 지도 밖 선로를 묶음 하나씩, 건널목이 있으면 판자 메시 하나. 모두 그림자를 드리우지
+## 않는다: 0.22 m 높이라 그림자는 거의 안 보이는데, 그림자 그리기마다 조각이 다시 들어가 삼각형이 네 배가
+## 됐다(첫 정차 지도 +5.8만).
+static func build(parent: Node3D, grid: FieldGrid, material: Material, outside: Array = [], crossings: Array = []) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Track"
 	parent.add_child(root)
-	for line: Array in [["TrackMap", runs(grid)], ["TrackOutside", outside_runs(outside)]]:
+	var inside := runs(grid)
+	for line: Array in [["TrackMap", inside], ["TrackOutside", outside_runs(outside)]]:
 		var node := _instances(String(line[0]), line[1], material)
 		if node != null:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			root.add_child(node)
+	var boards := crossing_mesh(crossing_runs(inside, crossings))
+	if boards != null:
+		var node := MeshInstance3D.new()
+		node.name = "TrackCrossings"
+		node.mesh = boards
+		node.material_override = material
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(node)
 	return root
 
 
