@@ -376,9 +376,13 @@ static func moan_band(d: float) -> Array:
 
 ## How well a bed fits what blows (a blizzard, a hard or a light wind) and the
 ## ground it blows over (open, or trees and walls to blow through); 0: not at all.
+## The old short file ("plain", wind.ogg, 6.6 s) is no bed while there are
+## others: too short to cut pieces from, it is the loop that was heard.
 static func bed_weight(name: String, kinds: Array, strength: float, open_ground: bool) -> float:
 	var storm := kinds.has("blizzard")
 	match name:
+		"plain":
+			return 0.0
 		"blizzard":
 			return 6.0 if storm else 0.0
 		"gusty":

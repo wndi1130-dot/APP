@@ -515,6 +515,7 @@ func test_the_wind_is_many_and_no_two_stops_running_share_a_bed() -> void:
 		var b: String = a.pick_bed(names, ["fog", "snow"], 0.4, false, last, randf())
 		assert_ne(b, last, "never the bed the stop before had")
 		assert_ne(b, "blizzard", "no blizzard's roar on a fog stop")
+		assert_ne(b, "plain", "nor the old short loop")
 		seen[b] = true
 		last = b
 	assert_gte(seen.size(), 5, "the stops go round many beds")
@@ -523,6 +524,7 @@ func test_the_wind_is_many_and_no_two_stops_running_share_a_bed() -> void:
 		storm[a.pick_bed(names, ["blizzard"], 0.9, true, "", randf())] = true
 	assert_true(storm.has("blizzard"))
 	assert_false(storm.has("breeze"), "no soft breeze in a blizzard")
+	assert_false(storm.has("plain"), "nor the old short loop in a blizzard")
 	# A new stop takes another bed than this one.
 	var was: String = a.bed_name
 	var b2 = a.get_script().new()
@@ -577,6 +579,7 @@ func test_ten_minutes_of_wind_never_go_round_in_the_same_order() -> void:
 					back += 1
 	assert_eq(back, 0, "no piece goes back over the stretch of the two before it")
 	assert_gte(files.size(), 2, "pieces from kin beds too")
+	assert_false(files.has("plain"), "never a piece of the old short loop")
 	var len_mean: float = len_sum / heard_pieces.size()
 	var len_sd: float = sqrt(maxf(0.0, len_sq / heard_pieces.size() - len_mean * len_mean))
 	assert_gt(len_sd, 1.0, "pieces of uneven length")
