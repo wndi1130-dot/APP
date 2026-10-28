@@ -18,6 +18,7 @@ const SidePath = preload("res://game/world/side_path.gd")
 const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const RouteStops = preload("res://game/train/route_stops.gd")
+const WorkSpots = preload("res://game/world/work_spots.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -457,6 +458,7 @@ func _ready() -> void:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
 	if opts.get("departure") is Dictionary:
 		RouteStops.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)))
+	WorkSpots.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else -1, rng.seed)
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
@@ -1466,9 +1468,9 @@ func allies_alive() -> Array:
 
 ## What the stop loader makes ahead from a map off the main thread (stop_loader.gd
 ## make_ready): the building plan, the ground's details or arrays, the floors' arrays,
-## the rooms' finish.
+## the rooms' finish, the walk from the train and the trees to fell (work_spots.gd).
 const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground_arrays", "_ground_key",
-	"_floor_arrays", "_floor_keys", "_room_finish"]
+	"_floor_arrays", "_floor_keys", "_room_finish", "_walk_field", "_walk_key", "fell_groves"]
 
 
 ## The side path on a map built here or handed over (side_path.gd). The loader puts it
