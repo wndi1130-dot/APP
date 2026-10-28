@@ -144,3 +144,44 @@ func test_the_workshop_room_opens_and_the_others_wait() -> void:
 	assert_null(bar.get_node_or_null("Note"), "the workshop says nothing over its key")
 	(bar.get_node("Room_papers") as Button).pressed.emit()
 	assert_not_null(bar.get_node_or_null("Note"), "research is still 준비 중")
+
+
+func test_rounds_row_only_appears_while_w2_a_runs() -> void:
+	var g: Dictionary = _game()
+	var p: Control = _pane(g)
+	await wait_frames(1)
+	assert_null(p.find_child("Name_rounds", true, false))
+	g["dom"]["techs"]["w2"] = {"stage": "done", "defect": false, "progress": 6.0, "need": 6.0, "variant": "a"}
+	p.show_state(g)
+	await wait_frames(1)
+	var rounds: Label = p.find_child("Name_rounds", true, false) as Label
+	assert_not_null(rounds)
+	if rounds != null:
+		assert_eq(rounds.text, "권총탄 한 줌")
+	assert_eq((p.find_child("Have_rounds", true, false) as Label).text, "×16")
+	assert_null(p.find_child("Name_arrows", true, false))
+	g["dom"]["techs"]["w2"]["variant"] = "b"
+	p.show_state(g)
+	await wait_frames(1)
+	assert_null(p.find_child("Name_rounds", true, false))
+	assert_eq((p.find_child("Name_arrows", true, false) as Label).text, "화살 묶음")
+	assert_eq((p.find_child("Have_arrows", true, false) as Label).text, "×9")
+	g["dom"]["techs"]["w2"]["variant"] = "a"
+	g["dom"]["techs"]["w2"]["off"] = true
+	p.show_state(g)
+	await wait_frames(1)
+	assert_null(p.find_child("Name_rounds", true, false), "the selected way is off")
+	assert_null(p.find_child("Name_arrows", true, false))
+
+
+func test_research_recipe_rows_count_their_store_amounts() -> void:
+	var g: Dictionary = _game()
+	g["dom"]["lures"] = 2
+	g["dom"]["techs"]["w2"] = {"stage": "done", "defect": false, "progress": 6.0, "need": 6.0, "variant": "b"}
+	g["dom"]["techs"]["w4"] = {"stage": "done", "defect": false, "progress": 3.0, "need": 3.0}
+	var amounts: Dictionary = {}
+	for row: Dictionary in WorkshopPane.model(g)["rows"]:
+		amounts[row["id"]] = row["have"]
+	assert_eq(amounts.get("arrows"), 9)
+	assert_eq(amounts.get("lure"), 2)
+	assert_false(amounts.has("rounds"))
