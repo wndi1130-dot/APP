@@ -486,6 +486,8 @@ func car_state(c: Dictionary) -> Dictionary:
 		"resent": Look.resents(comm) if not comm.is_empty() else false,
 		"night": String(view.get("daytime", "day")) == "night", "stove_x": _stove_x(c),
 		"meal": bool(scene.life.contexts.get(c["id"], {}).get("meal", false)),
+		# How short of hands the car's own job is (train_context.gd): only then does one at it stop to crouch.
+		"job_short": float(scene.life.contexts.get(c["id"], {}).get("job_short", 0.0)),
 		"marks": _marks_of(String(c["id"])),
 	}
 
@@ -567,8 +569,9 @@ static func _forced(b, s: Dictionary, activity: String, t: float) -> String:
 		"serve", "eat":
 			return "t_eat"
 		"work":
-			# Getting their breath back between turns at a job short of hands (train_schedule.gd).
-			if gesture == "catch_breath":
+			# Getting their breath back between turns at a job short of hands (train_schedule.gd);
+			# a hungry car's catch_breath alone keeps them at the shovel.
+			if gesture == "catch_breath" and float(s.get("job_short", 0.0)) > 0.0:
 				return "t_crouch"
 			# Coal and the firebox are shovelled; the rest is knelt at.
 			return "t_shovel" if pose == "stand" and String(s["layout"]) in ["technical", "tender", "loco", "engine_room"] else "t_kneel_work"
@@ -585,8 +588,9 @@ static func _forced(b, s: Dictionary, activity: String, t: float) -> String:
 		"watch":
 			if String(s["layout"]) != "guard":
 				return ""
-			# A sentry short of relief gets their breath back between turns (train_schedule.gd).
-			return "t_crouch" if gesture == "catch_breath" else "t_lantern"
+			# A sentry short of relief gets their breath back between turns (train_schedule.gd);
+			# a hungry car's catch_breath alone keeps the lantern up.
+			return "t_crouch" if gesture == "catch_breath" and float(s.get("job_short", 0.0)) > 0.0 else "t_lantern"
 	match gesture:
 		Gesture.BOWL_SIT:
 			return "t_eat"
