@@ -612,8 +612,9 @@ func _finish_fallen(p) -> bool:
 	for z in _dead_near(p.position, nearest):
 		if z["state"] != "downed" or game.combat.stomps(p, z):
 			continue
-		var d: float = p.position.distance_to(z["pos"])
-		if d <= nearest and not game.combat.melee_blocked(p, z["pos"]):
+		var seen: Vector3 = game.zombies.seen_pos(z)   # where a blow is judged (decision 487)
+		var d: float = p.position.distance_to(seen)
+		if d <= nearest and not game.combat.melee_blocked(p, seen):
 			nearest = d
 			best = z
 	if best.is_empty():

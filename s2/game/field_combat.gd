@@ -325,14 +325,15 @@ func _pursue_zombie(p, delta: float) -> void:
 	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
 	var seen: Vector3 = game.zombies.seen_pos(z)   # judged where it is seen (decision 474 J2)
 	var d: float = p.position.distance_to(seen)
-	# Shut off by a wall or a whole window: no swing, walk round instead.
-	if d > reach + MELEE_SLACK or melee_blocked(p, z["pos"]):
+	# Shut off by a wall or a whole window: no swing, walk round instead (to where
+	# it is seen, as the reach and the blow are).
+	if d > reach + MELEE_SLACK or melee_blocked(p, seen):
 		p.brain["repath_t"] = float(p.brain.get("repath_t", 0.0)) - delta
 		if p.brain["repath_t"] <= 0.0 or p.path.is_empty():
 			p.brain["repath_t"] = 0.4
 			var path: PackedVector3Array = game.find_path(p.position, z["pos"], false)
 			if path.size() > 0:
-				path[path.size() - 1] = z["pos"] + (p.position - z["pos"]).normalized() * (reach * 0.8)
+				path[path.size() - 1] = seen + (p.position - seen).normalized() * (reach * 0.8)
 			p.go_to(path, p.running)
 		return
 	p.stop()
@@ -642,7 +643,8 @@ func stomp(p, z: Dictionary) -> void:
 func _stomp_reaches(p, z: Dictionary) -> bool:
 	if not game.zombies.list.has(z) or String(z["state"]) != "downed":
 		return false
-	return p.position.distance_to(z["pos"]) <= STOMP_REACH + MELEE_SLACK + 0.3 and not melee_blocked(p, z["pos"])
+	var seen: Vector3 = game.zombies.seen_pos(z)   # at its chest (decision 487)
+	return p.position.distance_to(seen) <= STOMP_REACH + MELEE_SLACK + 0.3 and not melee_blocked(p, seen)
 
 
 func _strike(p, at) -> void:
