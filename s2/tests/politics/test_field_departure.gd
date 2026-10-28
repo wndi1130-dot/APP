@@ -30,6 +30,47 @@ func _at(row: Dictionary) -> String:
 	return "%s/domestic=%s" % [row["seed"], row["domestic"]]
 
 
+func _profile(id: String) -> Dictionary:
+	for p: Dictionary in _tables["PROFILES"]:
+		if p["id"] == id:
+			return p
+	return {}
+
+
+func test_one_left_in_the_field_is_on_the_left_list_and_not_sent_again() -> void:
+	var row: Dictionary = _contracts()[0]
+	var receipt: Dictionary = (row["receipt"] as Dictionary).duplicate(true)
+	var pid: String = ""
+	for id: String in receipt["people"]["sent"]:
+		if not _profile(id).is_empty():
+			pid = id
+			break
+	var who: Dictionary = _profile(pid)
+	assert_true(TrainStop.crew_names(row["state"], _tables, who["community"], 99).has(who["name"]), "could go out before")
+	receipt["people"]["leftBehind"] = [pid]
+	receipt["crew"] = (receipt["crew"] as Array).filter(func(c: Dictionary) -> bool: return c["person"] != pid)
+	var g: Dictionary = FieldReturn.apply_field_return(row["state"], _tables, row["departure"], receipt)["g"]
+	assert_eq(g["left"], [who["name"]])
+	assert_false(TrainStop.crew_names(g, _tables, who["community"], 99).has(who["name"]))
+
+
+func test_one_left_earlier_and_rescued_alive_comes_off_the_list_and_back_into_the_count() -> void:
+	var row: Dictionary = _contracts()[0]
+	var receipt: Dictionary = (row["receipt"] as Dictionary).duplicate(true)
+	var who: Dictionary = {}
+	for p: Dictionary in _tables["PROFILES"]:
+		if p["community"] == "tail" and not (receipt["people"]["sent"] as Array).has(p["id"]):
+			who = p
+			break
+	receipt["people"]["rescued"] = [who["id"]]
+	var control: Dictionary = FieldReturn.apply_field_return(row["state"], _tables, row["departure"], receipt)["g"]
+	var state: Dictionary = (row["state"] as Dictionary).duplicate(true)
+	state["left"] = [who["name"]]
+	var g: Dictionary = FieldReturn.apply_field_return(state, _tables, row["departure"], receipt)["g"]
+	assert_eq(g["left"], [])
+	assert_eq(int(g["comms"]["tail"]["pop"]), int(control["comms"]["tail"]["pop"]) + 1)
+
+
 func test_the_fixture_has_six_contracts() -> void:
 	assert_eq(_contracts().size(), 6, "three seeds, with and without the domestic rules")
 
