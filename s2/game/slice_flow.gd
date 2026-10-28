@@ -43,6 +43,7 @@ const EndCard = preload("res://game/ui/end_card.gd")
 const FieldArrival = preload("res://game/politics/field_arrival.gd")
 const TurnCard = preload("res://game/ui/turn_card.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
+const ScreenLift = preload("res://game/ui/screen_lift.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
@@ -1359,6 +1360,9 @@ func _start_field() -> void:
 		field.finished.connect(_field_done)
 		stage = field
 		field.go_live()
+		# The brightness set in the settings, on a field the play makes (screen_lift.gd;
+		# a tool's or a bot's field stays at 0).
+		ScreenLift.apply_saved(field)
 		return
 	loader.abandon()
 	field = FieldGame.new()
@@ -1366,6 +1370,11 @@ func _start_field() -> void:
 	field.finished.connect(_field_done)
 	add_child(field)
 	stage = field
+	# The same, once the field is built (it may still be building here).
+	if field.is_built:
+		ScreenLift.apply_saved(field)
+	else:
+		field.built.connect(func() -> void: ScreenLift.apply_saved(field), CONNECT_ONE_SHOT)
 
 
 ## The departure contract for the stop the slice's train stands at (field_departure.gd,

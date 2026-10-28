@@ -4646,7 +4646,7 @@ func _draw_overlay() -> void:
 				overlay.draw_colored_polygon(PackedVector2Array([m + Vector2(-7, -10), m + Vector2(7, -10), m + Vector2(0, 0)]), Color(1, 0.75, 0.4, 0.9))
 	# What the auto aim has settled on.
 	if auto_aim and aim_target != null:
-		var at: Vector3 = aim_target["pos"] if aim_target is Dictionary else aim_target.position
+		var at: Vector3 = game.zombies.seen_pos(aim_target) if aim_target is Dictionary else aim_target.position
 		var c := _project(at + Vector3(0, 1.0, 0))
 		overlay.draw_arc(c, 22.0, 0, TAU, 24, Color(1, 0.9, 0.7, 0.9), 2.5)
 	# Aim circle: big when raised, shrinks while still (field_unified 10).
