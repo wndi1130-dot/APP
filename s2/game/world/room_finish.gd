@@ -9,7 +9,8 @@ extends RefCounted
 ## 손으로 그린 지도(첫 정차)는 가구가 이름 붙은 물건 상자로만 있어 그 이름이 말하는 방으로 읽는다.
 ## 살림집 밖(가게·일터)의 방은 0이라 지금 그림 그대로다.
 ## 층마다 채널 하나: 0층 R, 1층 G, 지하 B, 2층 A. 칸 값 = 갈래(1~7) + 8 × 판(0~29),
-## 판 = 지역 × VARIANTS + 집마다 굴린 번호. 같은 집의 같은 갈래 방은 같은 판(한 집의 부엌은 한 마감).
+## 판 = 지역 × VARIANTS + 집마다 굴린 번호. 한 집에 같은 갈래 방이 여럿이면(농가의 침실 다섯, 연립의 부엌
+## 여럿) 방마다 다음 판으로 넘어가 옆방끼리 같은 마감이 되풀이되지 않는다.
 ## 그림은 지도 폭의 두 배: 오른쪽 절반(x + 지도 폭)은 깔개 칸(room_furnish가 놓은 data.rugs의 look, 0은
 ## 없음). 셰이더가 이웃 칸으로 깔개 가장자리를 찾는다.
 
@@ -79,9 +80,9 @@ static func region_index(data: Dictionary) -> int:
 	return maxi(0, REGIONS.find(BuildingUses.region_of(String(data.get("place_id", "")))))
 
 
-## 칸 값: 갈래 + 8 × (지역 × VARIANTS + 집의 판).
-static func code_for(building: int, cls: int, region: int) -> int:
-	return cls + 8 * (region * VARIANTS + variant_for(building, cls))
+## 칸 값: 갈래 + 8 × (지역 × VARIANTS + 집의 판). `nth`는 그 집의 같은 갈래 방 가운데 몇째인가.
+static func code_for(building: int, cls: int, region: int, nth: int = 0) -> int:
+	return cls + 8 * (region * VARIANTS + (variant_for(building, cls) + nth) % VARIANTS)
 
 
 ## 지도 자료(levels·props)로 방 마감 그림. 첫 층 격자 크기.
@@ -133,6 +134,7 @@ static func build(data: Dictionary) -> Image:
 			if HOME_KINDS.has(int(best[ri][0])):
 				homes[int(map["rooms"][ri]["building"])] = true
 		found[lv] = [map, best]
+	var nth: Dictionary = {}  # 건물 × 8 + 갈래 -> 지금까지 칠한 방 수
 	for lv: int in found:
 		var g: FieldGrid = levels[lv]
 		var map: Dictionary = found[lv][0]
@@ -148,7 +150,8 @@ static func build(data: Dictionary) -> Image:
 				cls = HALL
 			if cls == 0:
 				continue
-			var code := code_for(b, cls, region)
+			var code := code_for(b, cls, region, int(nth.get(b * 8 + cls, 0)))
+			nth[b * 8 + cls] = int(nth.get(b * 8 + cls, 0)) + 1
 			for c: Vector2i in room["cells"]:
 				bytes[(c.y * w * 2 + c.x) * 4 + ch] = code
 	for rug: Variant in data.get("rugs", []):

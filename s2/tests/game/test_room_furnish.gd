@@ -551,3 +551,54 @@ func test_workshops_garages_barns_and_woodsheds_have_their_own_sets() -> void:
 	assert_true(_kinds_in(d, "차고", "work").has("workbench"), "차고의 작업실에 작업대")
 	var lodge := FieldMaps.build("lodge_02")
 	assert_true(_kinds_in(lodge, "장작 창고", "woodshed").has("firewood_stack"), "장작 창고에 장작 더미")
+
+
+## 깔개(사용자 10-28): 침대는 양옆으로 한 칸씩 넓게 그 밑에, 방 칸을 벗어난 줄은 깎는다. 계단은 덮지 않는다.
+func test_a_rug_lies_under_the_bed_inside_the_room() -> void:
+	var cells: Array[Vector2i] = []
+	for y in range(4):
+		for x in range(5):
+			cells.append(Vector2i(x, y))
+	var placed := [{"item": {"kind": "bed"}, "rect": Rect2i(1, 1, 2, 1), "facing": 0}]
+	var rug := RoomFurnish._lay_rug("bed", cells, placed, {}, 0)
+	assert_eq(rug.get("rect"), Rect2i(1, 0, 2, 3), "the bed's width, a cell more on either long side")
+	assert_between(int(rug.get("look", 0)), 1, 224)
+	var by_wall := [{"item": {"kind": "bed"}, "rect": Rect2i(1, 0, 2, 1), "facing": 0}]
+	assert_eq(RoomFurnish._lay_rug("bed", cells, by_wall, {}, 0).get("rect"), Rect2i(1, 0, 2, 2), "trimmed at the wall")
+	assert_true(RoomFurnish._lay_rug("bed", cells, by_wall, {Vector2i(2, 1): true}, 0).is_empty(), "never over the stairs")
+	assert_true(RoomFurnish._lay_rug("bed", cells, placed, {}, 600 << 6).is_empty(), "not every bedroom has one")
+	assert_true(RoomFurnish._lay_rug("kitchen", cells, placed, {}, 0).is_empty(), "no rug in a kitchen")
+
+
+## 배치 틀(사용자 10-28 「가구배치가 단조로우면 안돼」): 한 동네의 침실들에서 침대가 한 구석으로 몰리지 않는다.
+func test_beds_do_not_all_take_the_same_corner() -> void:
+	var d := FieldMaps.build("houses_01")
+	var corners: Dictionary = {}
+	var beds := 0
+	var maps: Dictionary = {}
+	for p: Dictionary in d["props"]:
+		if p.get("kind", "") != "bed" or p.get("rule", "") != "bed":
+			continue
+		var lv := int(p.get("level", 0))
+		if not maps.has(lv):
+			maps[lv] = RoomFurnish.rooms_of(d["levels"][lv])
+		var r: Rect2i = p["rect"]
+		var ri := RoomFurnish._at(d["levels"][lv], maps[lv]["of"], r.position)
+		if ri < 0:
+			continue
+		var cells: Array = maps[lv]["rooms"][ri]["cells"]
+		var lo: Vector2i = cells[0]
+		var hi: Vector2i = cells[0]
+		for c: Vector2i in cells:
+			lo = lo.min(c)
+			hi = hi.max(c)
+		var mid := Vector2(lo + hi) / 2.0
+		var at := Vector2(r.position) + Vector2(r.size - Vector2i.ONE) / 2.0
+		corners["%d%d" % [int(at.x > mid.x), int(at.y > mid.y)]] = int(corners.get("%d%d" % [int(at.x > mid.x), int(at.y > mid.y)], 0)) + 1
+		beds += 1
+	assert_gt(beds, 8, "houses_01 has its bedrooms")
+	var most := 0
+	for k: String in corners:
+		most = maxi(most, int(corners[k]))
+	assert_eq(corners.size(), 4, "beds stand in all four quarters of their rooms: %s" % str(corners))
+	assert_lt(float(most) / beds, 0.5, "no quarter takes half the beds: %s" % str(corners))

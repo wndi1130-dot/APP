@@ -731,7 +731,8 @@ const PALETTE: Dictionary = {
 		{"kind": "dresser", "size": Vector2i(2, 1), "chance": 0.8, "holds": true, "at": "wall"},
 		{"kind": "wardrobe", "size": Vector2i(2, 1), "chance": 0.6, "holds": true, "at": "wall"},
 		{"kind": "chair", "size": Vector2i(1, 1), "chance": 0.5, "at": "wall"},
-		{"kind": "nightstand", "size": Vector2i(1, 1), "chance": 0.3, "holds": true, "at": "wall", "near": "bed_head"},
+		# 침대 머리 곁 협탁, 반쯤은 양쪽에 짝으로(사용자 10-28 「짝 가구」).
+		{"kind": "nightstand", "size": Vector2i(1, 1), "chance": 0.5, "holds": true, "at": "wall", "near": "bed_head", "copies": 2},
 	],
 	"kitchen": [
 		# 난로·싱크·조리대는 _kitchen_run에서 한 줄로 먼저 놓는다.
@@ -891,6 +892,15 @@ const FILL: Dictionary = {
 		{"kind": "chair", "size": Vector2i(1, 1), "at": "wall"},
 	],
 }
+## 배치 틀(사용자 10-28 「가구배치가 단조로우면 안돼」): 살림방은 방마다 기댈 벽 하나와 자리 고르는 결을
+## 굴린다. 큰 가구는 그 벽을 먼저 보고, 같은 점수의 자리는 결이 가른다(늘 위·왼쪽 구석으로 몰리지 않게).
+const LAYOUT_CLASSES: Dictionary = {"bed": true, "living": true, "kitchen": true, "bath": true}
+const ANCHOR_KINDS: Dictionary = {"bed": true, "settee": true, "wardrobe": true, "dresser": true, "bookcase": true, "bathtub": true}
+const LEAN_BONUS := 1.5
+const GRAIN := 0.6
+## 깔개(room_finish 깔개 칸): 방 갈래마다 깔릴 몫과 고르는 무늬(셰이더 room_rug_finish의 0~6).
+const RUG_CHANCE: Dictionary = {"bed": 0.55, "living": 0.8, "dining": 0.9}
+const RUG_WEAVES: Dictionary = {"bed": [0, 2, 3, 6], "living": [1, 3, 4, 5, 0], "dining": [1, 5, 0]}
 ## 방마다 하나만 서는 가구(채우기가 둘째를 놓지 않는다).
 const ONE_PER_ROOM: Dictionary = {"fridge_open": true, "dining_set": true, "settee": true, "bathtub": true,
 	"waste_bin": true, "bed": true, "cold_stove": true, "desk": true, "radio_set": true}
@@ -1383,7 +1393,8 @@ static func _dist_to(r: Rect2i, cells: Array) -> int:
 
 ## 한 가구의 놓을 자리 후보. [{"rect", "facing", "score"}], 점수 높은 것부터.
 static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i], item: Dictionary,
-		forbid: Dictionary, taken: Dictionary, doors_in: Array, stove_cells: Array, box_at: Dictionary, k: int = TOP_CANDIDATES) -> Array:
+		forbid: Dictionary, taken: Dictionary, doors_in: Array, stove_cells: Array, box_at: Dictionary, k: int = TOP_CANDIDATES,
+		taste: Dictionary = {}) -> Array:
 	var size: Vector2i = item["size"]
 	var tall: bool = size.x * size.y >= 2 or TALL_KINDS.has(String(item["kind"]))
 	var holds: bool = item.get("holds", false)
@@ -1434,6 +1445,10 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 					score += 5.0 if item.get("corner", false) else 1.0
 				if item.get("at", "wall") == "mid" and walls == 0:
 					score += 2.0
+				if not taste.is_empty():
+					if ANCHOR_KINDS.has(String(item["kind"])) and backs.has(taste["back"]):
+						score += LEAN_BONUS
+					score += GRAIN * _grain(r, int(taste["salt"]))
 				match item.get("near", ""):
 					"far_door":
 						score += 0.3 * _dist_to(r, doors_in)
@@ -1447,6 +1462,11 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 							score -= 2.0 * _dist_to(r, item["near_cells"])
 				_keep_top(out, {"rect": r, "facing": facing, "score": score}, k)
 	return out
+
+
+## 방의 결: 자리(꼴과 칸)마다 0~1의 정해진 값. 같은 방은 늘 같다.
+static func _grain(r: Rect2i, salt: int) -> float:
+	return float(hash([r.position.x, r.position.y, r.size.x, r.size.y, salt]) % 1000) / 1000.0
 
 
 ## 점수 높은 것, 같으면 위·왼쪽·넓은 것이 앞. 위 몇 개만 남긴다.
@@ -1494,7 +1514,7 @@ static func _hang_curtains(g: FieldGrid, cells: Array[Vector2i]) -> void:
 ## 없으면 기존 길 검사에서 거절한다. 그때는 일자나 더 짧은 줄을 고른다.
 static func _kitchen_run(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i],
 		forbid: Dictionary, taken: Dictionary, box_at: Dictionary, keys: Dictionary, before: Dictionary,
-		guard: Array, available: int) -> Array:
+		guard: Array, available: int, salt: int = -1) -> Array:
 	var usable: Dictionary = {}
 	for c in cells:
 		if g.solid_at(c) == S.NONE and not taken.has(c) and forbid.get(c, "") != "all" and _wall_sides(g, of, ri, Rect2i(c, Vector2i.ONE)) > 0:
@@ -1519,8 +1539,10 @@ static func _kitchen_run(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arr
 							line.append(c)
 						if line.size() != length or box_at.has(line[0]) or box_at.has(line[-1]):
 							continue
-						var score := _wall_sides(g, of, ri, Rect2i(start, Vector2i.ONE)) * 4
-						candidates.append({"line": line, "score": score + int(turn != 0)})
+						var score := _wall_sides(g, of, ri, Rect2i(start, Vector2i.ONE)) * 4.0 + float(turn != 0)
+						if salt >= 0:
+							score += 2.0 * GRAIN * _grain(Rect2i(start, line[-1] - start), salt)
+						candidates.append({"line": line, "score": score})
 		candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a["score"] > b["score"])
 		for candidate: Dictionary in candidates:
 			var line: Array[Vector2i] = candidate["line"]
@@ -1531,7 +1553,9 @@ static func _kitchen_run(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arr
 			if _still_open(g, of, ri, keys, before, rects + guard):
 				var out: Array = []
 				for i in range(line.size()):
-					var kind: String = "cold_stove" if i == 0 else ("sink" if i == line.size() - 1 else "counter")
+					# 난로와 개수대는 방마다 어느 끝에 설지 굴린다.
+					var at := line.size() - 1 - i if salt >= 0 and (salt >> 4) & 1 == 1 else i
+					var kind: String = "cold_stove" if at == 0 else ("sink" if at == line.size() - 1 else "counter")
 					var r: Rect2i = rects[i]
 					var facing := 0
 					for d in DIRS:
@@ -1669,6 +1693,9 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 			var forbid := _forbidden(g, of, ri, cells, stairs)
 			var rng := RandomNumberGenerator.new()
 			rng.seed = ("%s|%d|%d|%d" % [place, int(room["building"]), lv, ri]).hash()
+			# 배치 틀: rng를 쓰지 않아 묶음 고르기·목표 몫은 그대로다.
+			var look_seed: int = ("%s|%d|%d|%d|look" % [place, int(room["building"]), lv, ri]).hash() & 0x7fffffff
+			var taste: Dictionary = {"back": DIRS[look_seed & 3], "salt": look_seed} if LAYOUT_CLASSES.has(cls) else {}
 			var area := cells.size()
 			var used := 0
 			for c: Vector2i in taken:
@@ -1683,7 +1710,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 			var stove_cells: Array = []
 			var holders := 0
 			if cls == "kitchen":
-				placed = _kitchen_run(g, of, ri, cells, forbid, taken, box_at, keys, before, guard, cap - used)
+				placed = _kitchen_run(g, of, ri, cells, forbid, taken, box_at, keys, before, guard, cap - used, look_seed)
 				if placed.is_empty():
 					_missing(stats, cls, {"kind": "counter_run"}, "spot_or_path")
 				for pl: Dictionary in placed:
@@ -1749,7 +1776,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 						why = "space"
 						continue
 					var cands := _candidates(g, of, ri, cells, v, forbid, taken, keys["seeds"], stove_cells, box_at,
-						TOP_CANDIDATES_NEED if need else TOP_CANDIDATES)
+						TOP_CANDIDATES_NEED if need else TOP_CANDIDATES, taste)
 					if cands.is_empty():
 						why = "spot"
 						continue
@@ -1806,7 +1833,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 						continue
 					var v: Dictionary = source.duplicate()
 					v["fill"] = true
-					var cands := _candidates(g, of, ri, cells, v, forbid, taken, keys["seeds"], stove_cells, box_at, TOP_CANDIDATES)
+					var cands := _candidates(g, of, ri, cells, v, forbid, taken, keys["seeds"], stove_cells, box_at, TOP_CANDIDATES, taste)
 					var cand := {} if cands.is_empty() else _first_open(g, of, ri, keys, before, guard, rects, cands, rng.randi_range(0, mini(3, cands.size()) - 1))
 					if cand.is_empty():
 						stuck[kind] = true
@@ -1819,6 +1846,11 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 					used += a
 					holders += int(v.get("holds", false))
 					adding = true
+			var rug := _lay_rug("dining" if dining else cls, cells, placed, stairs, look_seed)
+			if not rug.is_empty():
+				rug["level"] = lv
+				rug["building"] = int(room["building"])
+				data.get_or_add("rugs", []).append(rug)
 			# 상자: 가까운 용기 가구로, 가구 하나에 하나. 그 가구 칸 가운데 바로 앞이
 			# 걸어서 닿는 칸에 둔다. 들 가구가 없고 원래 칸이 가구에 덮였으면 닿는 바닥으로.
 			# 상자 자리는 예전처럼 남긴 가구를 칠하기 전 칸으로 본다.
@@ -1891,6 +1923,62 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 
 ## 후보 가운데 pick 번째를 먼저, 나머지는 차례로 세워 보고 길이 남는 첫 자리. 그 자리는 칸을 막고
 ## rects에 든 채로 돌려준다. 없으면 빈 사전(칸과 rects는 처음 그대로).
+## 깔개 하나(room_finish 깔개 칸): 침대는 양옆으로 한 칸씩 넓게 그 밑에, 식탁은 둘레 한 칸 넓게,
+## 거실은 낮은 탁자 둘레, 없으면 방 가운데. 방 칸을 벗어나는 줄은 깎고, 2×2보다 작으면 깔지 않는다.
+## 납작해서 길·문 앞을 막지 않는다(걷는 길 검사 밖). 계단 칸은 덮지 않는다. {} 이면 없음.
+static func _lay_rug(cls: String, cells: Array[Vector2i], placed: Array, stairs: Dictionary, salt: int) -> Dictionary:
+	if float((salt >> 6) % 1000) / 1000.0 >= float(RUG_CHANCE.get(cls, 0.0)):
+		return {}
+	var inside: Dictionary = {}
+	var lo := cells[0]
+	var hi := cells[0]
+	for c in cells:
+		if not stairs.has(c):
+			inside[c] = true
+		lo = lo.min(c)
+		hi = hi.max(c)
+	var core := Rect2i()
+	for want: String in (["dining_set"] if cls == "dining" else (["bed"] if cls == "bed" else ["low_table", "dining_set", "settee"])):
+		for pl: Dictionary in placed:
+			if core.size == Vector2i.ZERO and String(pl["item"]["kind"]) == want:
+				core = pl["rect"]
+	var rug: Rect2i
+	if core.size == Vector2i.ZERO:
+		var mid := (lo + hi) / 2
+		rug = Rect2i(mid - Vector2i.ONE, Vector2i(3, 2) if hi.x - lo.x >= hi.y - lo.y else Vector2i(2, 3))
+	elif cls == "bed":
+		rug = core.grow_individual(0, 1, 0, 1) if core.size.x >= core.size.y else core.grow_individual(1, 0, 1, 0)
+	else:
+		rug = core.grow(1)
+	# 방 밖으로 나간 변을 깎는다: 바깥 칸이 가장 많은 변부터.
+	for _i in range(8):
+		var out := [0, 0, 0, 0]  # 왼·오른·위·아래 변의 바깥 칸
+		for y in range(rug.position.y, rug.end.y):
+			for x in range(rug.position.x, rug.end.x):
+				if not inside.has(Vector2i(x, y)):
+					out[0] += int(x == rug.position.x)
+					out[1] += int(x == rug.end.x - 1)
+					out[2] += int(y == rug.position.y)
+					out[3] += int(y == rug.end.y - 1)
+		var worst := 0
+		for side in range(4):
+			if out[side] > out[worst]:
+				worst = side
+		if out[worst] == 0:
+			break
+		rug = rug.grow_individual(-int(worst == 0), -int(worst == 2), -int(worst == 1), -int(worst == 3))
+		if rug.size.x < 2 or rug.size.y < 2:
+			return {}
+	if rug.size.x < 2 or rug.size.y < 2:
+		return {}
+	for y in range(rug.position.y, rug.end.y):
+		for x in range(rug.position.x, rug.end.x):
+			if not inside.has(Vector2i(x, y)):
+				return {}
+	var weaves: Array = RUG_WEAVES[cls]
+	return {"rect": rug, "look": 1 + int(weaves[(salt >> 16) % weaves.size()]) * 32 + (salt >> 20) % 32}
+
+
 static func _first_open(g: FieldGrid, of: PackedInt32Array, ri: int, keys: Dictionary, before: Dictionary, guard: Array,
 		rects: Array, cands: Array, pick: int) -> Dictionary:
 	var tries: Array = [cands[pick]]

@@ -161,10 +161,10 @@ static func add(original: Dictionary) -> Dictionary:
 			g.zone[i] = ""
 	g.doors.merge(rg.doors)
 	g.windows.merge(rg.windows)
-	for key in ["buildings", "props", "low_blocks", "trees", "labels"]:
+	for key in ["buildings", "props", "low_blocks", "trees", "labels", "rugs"]:
 		if not data.has(key):
 			data[key] = []
-		data[key].append_array(ring[key])
+		data[key].append_array(ring.get(key, []))
 	data["containers"].merge(ring["containers"])
 	g.refresh_paths()
 	# The room kinds were numbered by room on the grid that was furnished: the grown grid numbers

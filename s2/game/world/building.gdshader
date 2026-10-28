@@ -199,9 +199,9 @@ vec3 room_wall(int kind, int region, int roll, vec2 fp, float rise, float big, f
 	}
 	if (kind == 7) {
 		// 창고: 흰 회칠, 아래 1.2 m만 기름칠(초록·밤색), 잿빛 칠. 무늬 없이 얼룩만.
-		vec3 paint = STORE_PAINTS[roll];
+		vec3 coat = STORE_PAINTS[roll];
 		vec3 wash = vec3(0.72, 0.70, 0.66);
-		c = (roll == 1 || roll == 2) && rise >= 1.2 ? wash : paint;
+		c = (roll == 1 || roll == 2) && rise >= 1.2 ? wash : coat;
 		c = mix(c, c * 0.7, step(1.18, rise) * step(rise, 1.22) * float(roll == 1 || roll == 2));
 		c *= (0.88 + 0.18 * big) * (0.95 + 0.06 * fine);
 		lively = 0.5;

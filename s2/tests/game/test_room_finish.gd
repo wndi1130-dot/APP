@@ -81,7 +81,7 @@ func test_hand_laid_boxes_tell_their_room_by_name() -> void:
 	assert_eq(_code(img, Vector2i(7, 3), 1), 0, "a box laid in furniture is read from the furniture's prop")
 
 
-func test_one_house_one_finish_per_kind_and_houses_differ() -> void:
+func test_houses_and_rooms_of_a_kind_differ() -> void:
 	var seen: Dictionary = {}
 	for b in range(40):
 		var v := RoomFinish.variant_for(b, RoomFinish.KITCHEN)
@@ -89,6 +89,14 @@ func test_one_house_one_finish_per_kind_and_houses_differ() -> void:
 		assert_eq(v, RoomFinish.variant_for(b, RoomFinish.KITCHEN), "the same house rolls the same")
 		seen[v] = true
 	assert_eq(seen.size(), RoomFinish.VARIANTS, "forty houses use every finish")
+	var data := _house()
+	data["props"] = [_prop("bed", Rect2i(2, 2, 2, 1), 0), _prop("bed", Rect2i(6, 2, 2, 1), 0)]
+	var img := RoomFinish.build(data)
+	var one := _code(img, Vector2i(3, 3), 0)
+	var two := _code(img, Vector2i(7, 3), 0)
+	assert_eq(one % 8, RoomFinish.BED)
+	assert_eq(two % 8, RoomFinish.BED)
+	assert_ne(one, two, "two bedrooms side by side in one house take the next finish each")
 
 
 ## 지역(결정 478)마다 판 묶음이 따로: 높은 산의 부엌은 읍내 부엌과 다른 판에서 고른다.
