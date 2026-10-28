@@ -3182,14 +3182,9 @@
               5,
               0,
               -0.45
-            ],
-            [
-              11,
-              0,
-              -0.45
             ]
           ],
-          "capacity": 2,
+          "capacity": 1,
           "hold": [
             7,
             13
@@ -3198,7 +3193,28 @@
             0,
             0
           ],
-          "when": "always"
+          "when": "post_first"
+        },
+        {
+          "id": "window_b",
+          "activity": "watch",
+          "anchors": [
+            [
+              11,
+              0,
+              -0.45
+            ]
+          ],
+          "capacity": 1,
+          "hold": [
+            7,
+            13
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "post_second"
         },
         {
           "id": "door_tail",

@@ -41,6 +41,9 @@ func refresh(contexts: Dictionary) -> Array:
 		var s: Dictionary = spots[id]
 		var c: Dictionary = contexts.get(s["car"], {})
 		s["capacity"] = int(Catalog.tuning("half_class_capacity")) if String(id).ends_with("/classroom") and c.get("half_class", false) else s["base_capacity"]
+		# Half the stove hands missing leaves room for one at each stove (train_context.gd stove_half).
+		if String(id).ends_with("/stove_side") and c.get("stove_half", false):
+			s["capacity"] = mini(1, int(s["base_capacity"]))
 		for actor in s["members"].keys():
 			if int(s["members"][actor]["anchor"]) >= int(s["capacity"]):
 				released.append(actor)
