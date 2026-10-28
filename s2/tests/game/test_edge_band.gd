@@ -508,3 +508,28 @@ func test_the_region_band_sets_the_share_of_spruce_never_below_the_body() -> voi
 	var mixed := _woods("sawmill_01", 4, "K6")["plan"]["trees"] as Array
 	assert_eq(pine.size(), mixed.size(), "the band stands where it did; only what grows there follows the band")
 	assert_eq((pine[0] as Dictionary)["at"], (mixed[0] as Dictionary)["at"])
+
+
+func test_the_plan_made_ahead_is_used_while_it_fits() -> void:
+	var g := _grid()
+	var data := {"place_id": "sawmill_01", "grid": g}
+	var ahead := EdgeBand.plan_ahead(data)
+	assert_eq(ahead["plan"], EdgeBand.plan(g, EdgeBand.seed_of(data), EdgeBand.look_of(data)), "the same plan the main thread would make")
+	var colors := [Color.WHITE, Color.GRAY, Color.GRAY, Color.GRAY, Color.DIM_GRAY, Color.WHITE, Color.WHITE, Color.GRAY]
+	var built := {}
+	for way: String in ["fresh", "ahead", "other_band"]:
+		var d := data.duplicate()
+		if way != "fresh":
+			d["_edge_plan"] = ahead
+		if way == "other_band":
+			d["region_band"] = "K4"
+		var root := Node3D.new()
+		add_child_autofree(root)
+		var counts := EdgeBand.build(root, g, d, StandardMaterial3D.new(), colors)
+		assert_false(d.has("_edge_plan"), "read once, not kept with the map (%s)" % way)
+		assert_eq(bool(counts["planned_ahead"]), way == "ahead", way)
+		counts.erase("planned_ahead")
+		counts["children"] = root.get_node("EdgeBand").get_child_count()
+		built[way] = counts
+	assert_eq(built["ahead"], built["fresh"], "the band built from the plan made ahead is the band built here")
+	assert_ne(built["other_band"]["far"], 0)

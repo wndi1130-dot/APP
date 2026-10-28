@@ -48,6 +48,7 @@ func test_a_stop_built_over_frames_is_the_stop_built_at_once_and_stands_till_sho
 	var loader = await _loader()
 	assert_true(loader.has_data(), "the map came back from the worker")
 	assert_true(loader.data.has("_building_plan"), "its buildings planned off the main thread too")
+	assert_true(loader.data.has("_edge_plan"), "and the woods round it")
 	loader.resting = true
 	var holder := Node3D.new()
 	add_child_autofree(holder)
