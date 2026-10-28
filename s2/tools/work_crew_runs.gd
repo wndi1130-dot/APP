@@ -218,6 +218,10 @@ func _trial(id: String, run_seed: int) -> Dictionary:
 		if row["player_dead"] or game.ended or now >= seconds or game.work.phase() == "done":
 			row["end"] = "player_dead" if row["player_dead"] else (game.telemetry.end_reason if game.ended else ("done" if game.work.phase() == "done" else "seconds"))
 			break
+		# Both gate numbers are known once a sent crew has had QUICK_S out: stop the run there.
+		if float(row["t_sent"]) >= 0.0 and now >= float(row["t_sent"]) + QUICK_S + 1.0:
+			row["end"] = "measured"
+			break
 		if pilot_left <= 0.0:
 			_pilot(game)
 			pilot_left += PILOT_EVERY
