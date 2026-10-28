@@ -779,6 +779,21 @@ func test_short_watch_and_stove_hands_empty_the_lantern_posts_and_the_places_at_
 	assert_eq(int(places["front/stove_side"]["capacity"]), 2)
 
 
+func test_a_hungry_car_alone_does_not_crouch_the_sentry_or_the_stoker() -> void:
+	var s = _scene()
+	# Short rations give every place a catch_breath (train_schedule.gd), whether or not a job is short of hands.
+	assert_true(s.set_value("comms.guard.sit", [55, 40, 45, 55]))
+	assert_eq(Schedule.gesture("watch", s.life.contexts["guard"], {}, 0), "catch_breath")
+	var View = load("res://game/train/train_people_view.gd")
+	var b = s.car("guard")["bodies"][0]
+	b.gesture = "catch_breath"
+	b.pose = "stand"
+	assert_eq(View._forced(b, {"layout": "guard", "job_short": 0.0}, "watch", 0.0), "t_lantern", "hungry, the lantern stays up")
+	assert_eq(View._forced(b, {"layout": "guard", "job_short": 0.6}, "watch", 0.0), "t_crouch", "short of relief, the sentry crouches")
+	assert_eq(View._forced(b, {"layout": "engine_room", "job_short": 0.0}, "work", 0.0), "t_shovel")
+	assert_eq(View._forced(b, {"layout": "engine_room", "job_short": 0.6}, "work", 0.0), "t_crouch")
+
+
 func test_a_burning_car_opens_no_everyday_place_whatever_its_screen_stage() -> void:
 	var s = _scene()
 	assert_true(s.set_value("view.work_time", true))
