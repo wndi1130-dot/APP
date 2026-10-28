@@ -70,7 +70,9 @@ static func temp_mult(g: Dictionary, t: Dictionary) -> float:
 ## stop's weather, the stop being the one stood at or else the last one), how
 ## far it moved if the stage changed this stretch (°, negative when colder) or
 ## null, and whether the track is frozen. Null with climate off. (The cold snap
-## as the weather needs disasters.)
+## as the weather needs disasters.) For the thermometer's slip (결정 483) also
+## what the temperature is made of — the stretch's midday (`base`), the
+## weather and what it adds — and the heating coal's multiple; nothing ahead.
 static func outside_view(g: Dictionary, t: Dictionary) -> Variant:
 	if not on(g):
 		return null
@@ -85,6 +87,10 @@ static func outside_view(g: Dictionary, t: Dictionary) -> Variant:
 		"temp": seg_temp(t, seg) + float(WEATHER_TEMP.get(w, 0.0)),
 		"delta": seg_temp(t, seg) - seg_temp(t, seg - 1) if ch is Dictionary and int(ch["seg"]) == seg else null,
 		"freezing": float(g.get("freeze", 0)) > 0.0,
+		"base": seg_temp(t, seg),
+		"weather": w,
+		"weather_temp": float(WEATHER_TEMP.get(w, 0.0)),
+		"mult": temp_mult(g, t),
 	}
 
 

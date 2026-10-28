@@ -119,3 +119,70 @@ func test_while_a_sheet_is_up_only_what_it_is_about_stays_lit() -> void:
 	var c: Color = TrainGauges.tone(TrainGauges.RED, true)
 	assert_almost_eq(c.a, 0.3, 0.001, "a third of its alpha")
 	assert_eq(TrainGauges.tone(TrainGauges.RED, false), TrainGauges.RED)
+
+
+## otempTo: 80 ms a degree, a degree at a time, the stage's name when the tick is passed.
+func test_the_number_rolls_a_degree_at_a_time() -> void:
+	var temps: Array = _start()[1]["CL"]["temp"]
+	var p: Dictionary = TrainGauges.roll_plan(4.0, -3.0, 0, 1, temps)
+	assert_almost_eq(float(p["ms"]), 560.0, 0.001, "seven degrees, 80 ms each")
+	var cross: Array = p["cross"]
+	assert_eq(cross.size(), 1)
+	assert_almost_eq(float(cross[0][0]), 560.0, 0.001, "첫 추위's tick at the end")
+	assert_eq(int(cross[0][1]), 1)
+	assert_almost_eq(TrainGauges.shown_temp(p, 280.0), 1.0, 0.001, "halfway: 1°")
+	assert_almost_eq(TrainGauges.shown_temp(p, 560.0), -3.0, 0.001, "the new reading at the end")
+	assert_eq([TrainGauges.shown_stage(p, 559.0), TrainGauges.shown_stage(p, 560.0)], [0, 1], "the name changes as the tick is passed")
+	var q: Dictionary = TrainGauges.roll_plan(-3.0, -5.0, 1, 1, temps)
+	assert_almost_eq(float(q["ms"]), 160.0, 0.001)
+	assert_eq((q["cross"] as Array).size(), 0, "the same stage: no tick to pass")
+
+
+func test_a_new_reading_rolls_the_thermometer() -> void:
+	var s: Array = _start()
+	var strip = TrainGauges.new()
+	strip.g = s[0]
+	strip.t = s[1]
+	add_child_autofree(strip)
+	assert_true((strip._ot_plan as Dictionary).is_empty(), "the first board does not roll")
+	var g2: Dictionary = (s[0] as Dictionary).duplicate(true)
+	g2["stop"] = {"weather": "snow"}
+	strip.refresh(g2, s[1])
+	assert_false((strip._ot_plan as Dictionary).is_empty(), "snow: a roll from −3° to −5°")
+	var t0: int = strip._ot_t0
+	assert_eq(strip._ot_state(t0)["text"], "−3°")
+	assert_eq(strip._ot_state(t0 + 80)["text"], "−4°")
+	assert_eq(strip._ot_state(t0 + 160)["text"], "−5°")
+	assert_eq(strip._ot_state(t0 + 160)["delta_text"], "▼2°")
+	assert_not_null(strip.find_child("OtDelta", true, false), "the change is there before it floats up")
+	var end: Dictionary = strip._ot_state(t0 + 3000)
+	var o: Dictionary = TrainGauges.model(g2, s[1])["outside"]
+	assert_eq([end["text"], end["name"]], [o["text"], o["name"]], "over: the reading itself")
+	assert_almost_eq(float(end["fill"]), float(o["fill"]), 0.0001)
+	assert_eq([float(end["delta_p"]), float(end["puff"]), float(end["stamp"])], [-1.0, -1.0, -1.0], "nothing left moving")
+
+
+## A 16:9 screen (1280 wide, 693 of the mockup's px) narrows the bars so the
+## thermometer ends before the mood (235.7); a wider one keeps them as they were.
+func test_a_narrow_band_packs_the_left_gauges() -> void:
+	var s: Array = _start()
+	var strip = TrainGauges.new()
+	strip.g = s[0]
+	strip.t = s[1]
+	add_child_autofree(strip)
+	var k: float = UiFonts.K
+	# Off the screen's width (the band spans it), so the test sets it.
+	strip.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	strip.size = Vector2(1280, TrainGauges.BAND_H)
+	strip._lay_out()
+	var trust: Control = strip.find_child("MeterTrust", true, false)
+	assert_almost_eq(trust.size.x, 66.0 * k, 0.01, "narrow bars")
+	var o: Control = strip.find_child("Outside", true, false)
+	assert_null(o.find_child("Stage", true, false), "no stage name on a narrow band")
+	assert_lte(o.position.x + o.size.x, 230.0 * k, "the thermometer ends before the mood")
+	strip.size = Vector2(1558, TrainGauges.BAND_H)
+	strip._lay_out()
+	trust = strip.find_child("MeterTrust", true, false)
+	assert_almost_eq(trust.size.x, 104.0 * k, 0.01, "wide bars")
+	o = strip.find_child("Outside", true, false)
+	assert_not_null(o.find_child("Stage", true, false), "the stage's name on a wide band")

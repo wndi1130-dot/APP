@@ -17,7 +17,14 @@ extends Control
 ## climate (train_climate.gd outside_view): the stage's name and the shown
 ## temperature, a column in a glass tube with a tick at each stage, frost on the
 ## glass as the stages get colder, a snow mark while the track is frozen. A
-## board with climate off has none.
+## board with climate off has none. When the reading changes the number rolls
+## a degree at a time to the new one (otempTo · odelta): the tube shivers and
+## breathes a puff of cold, flashes white as it passes a stage's tick while
+## the name is stamped anew, and the change floats up under it.
+##
+## On a band under 800 of the mockup's px (a 16:9 screen) the bars narrow to
+## 66, 주의 · 위험 is a lamp by the number and the thermometer keeps only its
+## number.
 ##
 ## While a sheet is up only what it is about stays lit (`focus`); the rest
 ## fades to a third and loses most of its colour (.hud--top .is-dim).
@@ -104,12 +111,49 @@ const OT_COLD_WORD := Color("b9cfdf")
 const OT_FREEZE := Color("c2ccd4")
 const OT_FROST_INK := Color("1f2b36")
 const OT_FROZEN_GLOW := Color(190 / 255.0, 228 / 255.0, 250 / 255.0, 0.65)
+## otempTo · odelta, in ms: 80 a degree and 1.8 s at most; the white flash past
+## a stage's tick and the name's stamp; the change under the glass (from 160
+## for 2.6 s); the tube's shiver (oshiv: 0.3 s in 6 steps, three times, mockup
+## px); the puff of cold off the bulb.
+const OT_STEP_MS: float = 80.0
+const OT_MAX_MS: float = 1800.0
+const OT_FLASH_MS: float = 550.0
+const OT_STAMP_MS: float = 500.0
+const OT_DELTA_AT: float = 160.0
+const OT_DELTA_MS: float = 2600.0
+const OT_SHIVER_MS: float = 900.0
+const OT_SHIVER_CYCLE: float = 300.0
+const OT_SHIVER_STEPS: float = 6.0
+const OT_SHIVER: Array = [0.0, -0.8, 0.7, -0.5, 0.0]
+const OT_PUFF_MS: float = 1300.0
+## The name's stamp starts this large; the flash's rim and glow, the stamp's
+## ink, the puff and the change.
+const OT_STAMP_FROM: float = 1.6
+const OT_FLASH_RIM := Color(246 / 255.0, 251 / 255.0, 254 / 255.0, 0.95)
+const OT_FLASH_GLOW := Color(196 / 255.0, 230 / 255.0, 252 / 255.0, 0.85)
+const OT_STAMP_INK := Color("f2f9fd")
+const OT_PUFF := Color(222 / 255.0, 238 / 255.0, 250 / 255.0, 0.55)
+const OT_DELTA_INK := Color("d6e9f6")
+## A band narrower than this (mockup px: a 16:9 screen) narrows the bars from
+## METER_W to METER_W_NARROW.
+const NARROW_CSS: float = 800.0
+const METER_W: float = 104.0
+const METER_W_NARROW: float = 66.0
+## The 위험 tag's glow, which the narrow band's lamp casts too.
+const TAG_GLOW := Color(242 / 255.0, 166 / 255.0, 60 / 255.0, 0.7)
 
 var g: Dictionary = {}
 var t: Dictionary = {}
 ## What stays lit while a sheet is up ("trust", "tension", "mood", "coal" …); empty: all.
 var focus: Array = []
 var _parts: Control
+## The band is under NARROW_CSS (set at each refresh).
+var _narrow: bool = false
+## The thermometer's last reading (the model's outside: temp, stage …) or
+## null, its roll to a new one (roll_plan; empty: none) and when that began.
+var _ot_last: Variant = null
+var _ot_plan: Dictionary = {}
+var _ot_t0: int = 0
 
 
 ## What the strip says for state `g0` (tests read this; the strip draws it).
@@ -180,7 +224,84 @@ static func ot_fill(temps: Array, temp: float) -> float:
 	return clampf(OT_TOP - (hi - temp) * (OT_TOP - OT_LOW) / maxf(hi - lo, 1.0), OT_CLAMP.x, OT_CLAMP.y)
 
 
+## The thermometer's roll from `from` (stage `st0`) to `to` (`st1`), otempTo:
+## 80 ms a degree, 1.8 s at most, and when it passes each stage's temperature
+## on the way ([ms, stage], at once when the number stays).
+static func roll_plan(from: float, to: float, st0: int, st1: int, temps: Array) -> Dictionary:
+	var ms: float = minf(OT_MAX_MS, absf(to - from) * OT_STEP_MS)
+	var cross: Array = []
+	var dir: int = signi(st1 - st0)
+	if dir != 0:
+		var s: int = st0 + dir
+		while s != st1 + dir:
+			var at: float = 0.0 if to == from else ms * clampf((float(temps[s]) - from) / (to - from), 0.0, 1.0)
+			cross.append([at, s])
+			s += dir
+	return {"from": from, "to": to, "st0": st0, "st1": st1, "ms": ms, "cross": cross}
+
+
+## The degree the roll shows `elapsed_ms` in: a whole degree at a time, evenly
+## (count), the new reading exactly at the end.
+static func shown_temp(plan: Dictionary, elapsed_ms: float) -> float:
+	var from: float = float(plan["from"])
+	var to: float = float(plan["to"])
+	var ms: float = float(plan["ms"])
+	var p: float = 1.0 if ms <= 0.0 else clampf(elapsed_ms / ms, 0.0, 1.0)
+	if p >= 1.0:
+		return to
+	return from + signf(to - from) * floorf(absf(to - from) * p + 1e-6)
+
+
+## The stage the roll shows `elapsed_ms` in: the last whose tick it has passed.
+static func shown_stage(plan: Dictionary, elapsed_ms: float) -> int:
+	var last: Array = _ot_crossed(plan, elapsed_ms)
+	return int(plan["st0"]) if last.is_empty() else int(last[1])
+
+
+## The latest [ms, stage] of `plan`'s crossings passed by `elapsed_ms`, or [].
+static func _ot_crossed(plan: Dictionary, elapsed_ms: float) -> Array:
+	var best: Array = []
+	for cr: Array in plan["cross"]:
+		if elapsed_ms >= float(cr[0]) and (best.is_empty() or float(cr[0]) >= float(best[0])):
+			best = cr
+	return best
+
+
+## When every part of the roll is over (the number, the change, the puff, the shiver).
+static func _ot_end(plan: Dictionary) -> float:
+	return maxf(float(plan["ms"]), maxf(OT_DELTA_AT + OT_DELTA_MS, maxf(OT_PUFF_MS, OT_SHIVER_MS)))
+
+
+## The tube's shiver at `e` ms (oshiv), in mockup px.
+static func _shiver_at(e: float) -> float:
+	if e < 0.0 or e >= OT_SHIVER_MS:
+		return 0.0
+	var q: float = floorf(fmod(e, OT_SHIVER_CYCLE) / OT_SHIVER_CYCLE * OT_SHIVER_STEPS) / OT_SHIVER_STEPS
+	var f: float = q * float(OT_SHIVER.size() - 1)
+	var i: int = mini(int(f), OT_SHIVER.size() - 2)
+	return lerpf(float(OT_SHIVER[i]), float(OT_SHIVER[i + 1]), f - float(i))
+
+
+## The change's [alpha, drop in mockup px] at `p` of its 2.6 s (odelta): in from
+## 6 above by 12 %, sinking 7 by 75 %, out 4 lower by the end.
+static func _delta_pose(p: float) -> Vector2:
+	if p < 0.12:
+		return Vector2(p / 0.12, lerpf(-6.0, 0.0, p / 0.12))
+	if p < 0.75:
+		return Vector2(1.0, lerpf(0.0, 7.0, (p - 0.12) / 0.63))
+	var f: float = clampf((p - 0.75) / 0.25, 0.0, 1.0)
+	return Vector2(1.0 - f, lerpf(7.0, 11.0, f))
+
+
+## An ease-out that overshoots a little and settles (the stamp's bounce).
+static func _back_out(q: float) -> float:
+	var c1: float = 1.70158
+	var u: float = q - 1.0
+	return 1.0 + (c1 + 1.0) * u * u * u + c1 * u * u
+
+
 func _ready() -> void:
+	set_process(false)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	custom_minimum_size = Vector2(0, BAND_H)
@@ -209,12 +330,14 @@ func refresh(g0: Dictionary, t0: Dictionary) -> void:
 	t = t0
 	if _parts == null:
 		return
+	_narrow = _is_narrow()
 	for c in _parts.get_children():
 		_parts.remove_child(c)
 		c.queue_free()
 	var m: Dictionary = model(g, t)
 	if m.is_empty():
 		return
+	_ot_note(m["outside"])
 	_parts.add_child(_meter("trust", "신임", int(m["trust"]), int(m["trust_level"])))
 	_parts.add_child(_meter("tension", "긴장", int(m["tension"]), int(m["tension_level"])))
 	if m["outside"] is Dictionary:
@@ -236,6 +359,152 @@ func set_focus(ids: Array) -> void:
 	refresh(g, t)
 
 
+## Whether the band is under NARROW_CSS; not yet laid out (no width) is wide.
+func _is_narrow() -> bool:
+	return size.x > 0.0 and size.x / UiFonts.K < NARROW_CSS
+
+
+## A bar's width as the band stands (mockup px).
+func _meter_w() -> float:
+	return METER_W_NARROW if _narrow else METER_W
+
+
+## Note the thermometer's reading `o` (the model's outside, null with climate
+## off): a new temperature or stage starts a roll from what shows now (the
+## last reading, or where a roll under way has got to). The first reading and
+## a board without climate have none.
+func _ot_note(o: Variant) -> void:
+	if not (o is Dictionary):
+		_ot_last = null
+		_ot_plan = {}
+		set_process(false)
+		return
+	var now_o: Dictionary = o
+	if _ot_last is Dictionary:
+		var last: Dictionary = _ot_last
+		var temp1: float = float(now_o["temp"])
+		var st1: int = int(now_o["stage"])
+		if not is_equal_approx(float(last["temp"]), temp1) or int(last["stage"]) != st1:
+			var now: int = Time.get_ticks_msec()
+			var from: float = float(last["temp"])
+			var st0: int = int(last["stage"])
+			if not _ot_plan.is_empty() and float(now - _ot_t0) < _ot_end(_ot_plan):
+				var e: float = maxf(0.0, float(now - _ot_t0))
+				from = shown_temp(_ot_plan, e)
+				st0 = shown_stage(_ot_plan, e)
+			_ot_plan = roll_plan(from, temp1, st0, st1, t["CL"]["temp"])
+			_ot_t0 = now
+			set_process(true)
+	_ot_last = now_o
+
+
+## What the thermometer shows at `now_ms` (otempTo · odelta): the reading
+## itself, or while it rolls the degree, stage and column it has got to, the
+## flash and stamp since the last tick passed (0 · −1 none), the change and how
+## far it has floated (−1 none), the shiver (mockup px) and the puff (−1 none).
+func _ot_state(now_ms: int) -> Dictionary:
+	if not (_ot_last is Dictionary):
+		return {}
+	var o: Dictionary = _ot_last
+	var out := {"temp": float(o["temp"]), "text": String(o["text"]), "stage": int(o["stage"]), "name": String(o["name"]), "fill": float(o["fill"]),
+		"flash": 0.0, "stamp": -1.0, "delta_text": "", "delta_p": -1.0, "shiver": 0.0, "puff": -1.0}
+	if _ot_plan.is_empty():
+		return out
+	var e: float = maxf(0.0, float(now_ms - _ot_t0))
+	if e >= _ot_end(_ot_plan):
+		return out
+	var from: float = float(_ot_plan["from"])
+	var to: float = float(_ot_plan["to"])
+	var ms: float = float(_ot_plan["ms"])
+	var p: float = 1.0 if ms <= 0.0 else clampf(e / ms, 0.0, 1.0)
+	var st: int = shown_stage(_ot_plan, e)
+	out["temp"] = shown_temp(_ot_plan, e)
+	out["text"] = deg(float(out["temp"]))
+	out["stage"] = st
+	out["name"] = String(t["CL"]["names"][st])
+	# The column slides on as the tube's height did (linear), not by degrees.
+	out["fill"] = ot_fill(t["CL"]["temp"], lerpf(from, to, p))
+	var last: Array = _ot_crossed(_ot_plan, e)
+	if not last.is_empty():
+		var since: float = e - float(last[0])
+		out["flash"] = maxf(0.0, 1.0 - since / OT_FLASH_MS)
+		out["stamp"] = minf(1.0, since / OT_STAMP_MS)
+	if not is_equal_approx(to, from):
+		out["delta_text"] = ("▼" if to < from else "▲") + _num(absf(to - from)) + "°"
+		var dp: float = (e - OT_DELTA_AT) / OT_DELTA_MS
+		out["delta_p"] = dp if dp >= 0.0 and dp <= 1.0 else -1.0
+	out["shiver"] = _shiver_at(e)
+	out["puff"] = e / OT_PUFF_MS if e < OT_PUFF_MS else -1.0
+	return out
+
+
+## While the thermometer rolls, set its parts where the roll has got to; at
+## the end show the reading and stop.
+func _process(_delta: float) -> void:
+	if _ot_plan.is_empty():
+		set_process(false)
+		return
+	var now: int = Time.get_ticks_msec()
+	var c: Control = null
+	if _parts != null:
+		c = _parts.get_node_or_null("Outside")
+	if c != null:
+		_ot_apply(c, _ot_state(now))
+	if float(now - _ot_t0) >= _ot_end(_ot_plan):
+		_ot_plan = {}
+		set_process(false)
+		if c != null:
+			_ot_apply(c, _ot_state(now))
+
+
+## Set the thermometer `c`'s parts to `s` (_ot_state) where they stand: the
+## number, the stage's name and colour, the stamp on the name, the glass's
+## shiver, the change under it; the glass draws the rest from the same state.
+func _ot_apply(c: Control, s: Dictionary) -> void:
+	if s.is_empty():
+		return
+	var dim: bool = _dim("outside")
+	var k: float = UiFonts.K
+	var st: int = clampi(int(s["stage"]), 0, OT_COLS.size() - 1)
+	var glass: Control = c.get_node_or_null("Glass")
+	if glass != null:
+		glass.position = Vector2(-4.0 + float(s["shiver"]), 0.0) * k
+		glass.queue_redraw()
+	var num: Label = c.get_node_or_null("Temp")
+	if num != null:
+		num.add_theme_color_override("font_color", tone(OT_COLS[st][2], dim))
+		if num.text != String(s["text"]):
+			num.text = String(s["text"])
+			_sit(num, 23.0, 31.0 if _narrow else 25.0)
+	var word: Label = c.get_node_or_null("Stage")
+	if word != null:
+		if word.text != String(s["name"]):
+			word.text = String(s["name"])
+			_sit(word, 23.0, 40.0)
+		# is-new: stamped from 1.6 at the left middle with a bounce, in from
+		# nothing (whole by 60 %), from near white to the stage's ink.
+		var base: Color = OT_COLD_WORD if st >= 4 else INK2
+		var ink: Color = base
+		var grow: float = 1.0
+		var q: float = float(s["stamp"])
+		if q >= 0.0:
+			ink = OT_STAMP_INK.lerp(base, q)
+			ink.a *= minf(1.0, q / 0.6)
+			grow = lerpf(OT_STAMP_FROM, 1.0, _back_out(q))
+		word.add_theme_color_override("font_color", tone(ink, dim))
+		word.pivot_offset = Vector2(0.0, word.size.y * 0.5)
+		word.scale = Vector2(grow, grow)
+	var dl: Label = c.get_node_or_null("OtDelta")
+	if dl != null:
+		var dp: float = float(s["delta_p"])
+		dl.visible = dp >= 0.0
+		if dp >= 0.0:
+			var pose: Vector2 = _delta_pose(dp)
+			dl.modulate.a = clampf(pose.x, 0.0, 1.0)
+			dl.size = dl.get_combined_minimum_size()
+			dl.position = Vector2(12.0 * k - dl.size.x * 0.5, (44.0 + pose.y) * k)
+
+
 func _dim(id: String) -> bool:
 	return not focus.is_empty() and not focus.has(id)
 
@@ -246,12 +515,17 @@ static func tone(c: Color, dim: bool) -> Color:
 
 
 ## The mockup's places: .hud__l at 12 with 10 between (trust, tension, the
-## thermometer), the mood centred 8 left of the middle, .hud__r ending 12 from
-## the right.
+## thermometer; the bars as wide as the band allows), the mood centred 8 left
+## of the middle, .hud__r ending 12 from the right. A band that went over or
+## under NARROW_CSS builds its parts again first.
 func _lay_out() -> void:
 	if _parts == null:
 		return
+	if _is_narrow() != _narrow:
+		refresh(g, t)
+		return
 	var k: float = UiFonts.K
+	var mw: float = _meter_w()
 	var trust: Control = _parts.get_node_or_null("MeterTrust")
 	var tension: Control = _parts.get_node_or_null("MeterTension")
 	var outside: Control = _parts.get_node_or_null("Outside")
@@ -260,9 +534,9 @@ func _lay_out() -> void:
 	if trust:
 		trust.position = Vector2(12.0 * k, 0)
 	if tension:
-		tension.position = Vector2((12.0 + 104.0 + 10.0) * k, 0)
+		tension.position = Vector2((12.0 + mw + 10.0) * k, 0)
 	if outside:
-		outside.position = Vector2((12.0 + 104.0 + 10.0 + 104.0 + 10.0) * k, 0)
+		outside.position = Vector2((12.0 + mw + 10.0 + mw + 10.0) * k, 0)
 	if mood:
 		mood.position = Vector2(size.x * 0.5 - 8.0 * k - mood.size.x * 0.5, 1.0 * k)
 	if right:
@@ -290,20 +564,21 @@ func _text_w(l: Label) -> float:
 ## A gauge (.meter, 104 × 48): its mark (trust · tension in the word's place:
 ## decisions.md 「계기는 글자 대신 아이콘과 숫자」, 결정 417) and number on one
 ## baseline (28.5),
-## a 주의 · 위험 tag at the right when it is in a zone, the bar at 36 and the
-## zones under it at 47.
+## a 주의 · 위험 tag at the right when it is in a zone (a narrow band: a lamp),
+## the bar at 36 and the zones under it at 47.
 func _meter(key: String, word: String, n: int, lv: int) -> Control:
 	var dim: bool = _dim(key)
+	var mw: float = _meter_w()
 	var c := Control.new()
 	c.name = "Meter" + ("Trust" if key == "trust" else "Tension")
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	c.size = Vector2(104, 48) * UiFonts.K
+	c.size = Vector2(mw, 48) * UiFonts.K
 	var bar := Control.new()
 	bar.name = "Bar"
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.position = Vector2(0, 0)
 	bar.size = c.size
-	bar.draw.connect(_draw_meter.bind(bar, key, n, lv, dim))
+	bar.draw.connect(_draw_meter.bind(bar, key, n, lv, dim, mw))
 	c.add_child(bar)
 	var mark := TextureRect.new()
 	mark.name = "Mark"
@@ -320,7 +595,10 @@ func _meter(key: String, word: String, n: int, lv: int) -> Control:
 	num.name = "Value"
 	c.add_child(num)
 	_sit(num, 18.0 + 5.0, 28.5)
-	if lv > 0:
+	if lv > 0 and _narrow:
+		# No room for the tag by the number (23–51 of 66): a lamp at its end.
+		c.add_child(_lamp(lv, dim, Vector2(mw - 5.0, 19.0)))
+	elif lv > 0:
 		var tag := _label("위험" if lv > 1 else "주의", UiFonts.WORD, 600, 12.0, tone(AMBER_L if lv > 1 else TAG_INK, dim), 1.2)
 		tag.name = "Tag"
 		var sb := StyleBoxFlat.new()
@@ -342,9 +620,35 @@ func _meter(key: String, word: String, n: int, lv: int) -> Control:
 	return c
 
 
-func _draw_meter(ci: Control, key: String, n: int, lv: int, dim: bool) -> void:
+## The narrow band's 주의 · 위험: a lamp 8 across centred at `at_css`, 주의 lit
+## amber, 위험 dark in an amber ring with the tag's glow round it.
+func _lamp(lv: int, dim: bool, at_css: Vector2) -> Control:
 	var k: float = UiFonts.K
-	var w: float = 104.0 * k
+	var dot := Control.new()
+	dot.name = "Tag"
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dot.tooltip_text = "위험" if lv > 1 else "주의"
+	dot.size = Vector2(8.0, 8.0) * k
+	dot.position = (at_css - Vector2(4.0, 4.0)) * k
+	dot.draw.connect(_draw_lamp.bind(dot, lv, dim))
+	return dot
+
+
+func _draw_lamp(ci: Control, lv: int, dim: bool) -> void:
+	var k: float = UiFonts.K
+	var mid: Vector2 = ci.size * 0.5
+	var r: float = 4.0 * k
+	if lv > 1:
+		GlassParts.glow_ring(ci, mid, r, 4.0 * k, tone(TAG_GLOW, dim))
+		ci.draw_circle(mid, r, tone(TAG_INK, dim), true, -1.0, true)
+		ci.draw_arc(mid, r - 1.0 * k, 0.0, TAU, 32, tone(WARN, dim), 2.0 * k, true)
+	else:
+		ci.draw_circle(mid, r, tone(WARN, dim), true, -1.0, true)
+
+
+func _draw_meter(ci: Control, key: String, n: int, lv: int, dim: bool, mw: float) -> void:
+	var k: float = UiFonts.K
+	var w: float = mw * k
 	var bar := Rect2(0, 36.0 * k, w, 8.0 * k)
 	var r: float = 4.0 * k
 	# The zones under the bar (.mz, 3 high at 47; the stronger at .9, the other .38).
@@ -377,7 +681,7 @@ func _draw_meter(ci: Control, key: String, n: int, lv: int, dim: bool) -> void:
 		# Coal to fire across the gauge's width, lit up to the value.
 		if at > 0.5:
 			_heat_rect(ci, Rect2(bar.position, Vector2(maxf(at, r * 2.0), bar.size.y)), w, r, dim, lv == 2)
-		_glass_cracks(ci, n, lv, dim)
+		_glass_cracks(ci, n, lv, dim, mw / CK_W)
 
 
 ## A rounded rect with soft edges.
@@ -464,15 +768,17 @@ static func _pill_outline(rect: Rect2, radius: float) -> Array:
 ## The glass over the tension bar: one more layer of cracks past each of 30,
 ## 50 and 70, from the bar's middle (y 40 of a 48 box whose top is 36 above
 ## the bar). A white hairline over a dark shade; in danger an ember glow under.
-func _glass_cracks(ci: CanvasItem, n: int, lv: int, dim: bool) -> void:
+## The walk is laid on CK_W; a narrower bar squeezes it across by `sx`.
+func _glass_cracks(ci: CanvasItem, n: int, lv: int, dim: bool, sx: float) -> void:
 	var tiers: int = 3 if n >= 70 else (2 if n >= 50 else (1 if n >= 30 else 0))
 	var k: float = UiFonts.K
 	var origin := Vector2(0, 0)
+	var squeeze := Vector2(sx, 1.0)
 	for tier in range(1, tiers + 1):
 		for path: Array in _tier_paths(tier):
 			var pts := PackedVector2Array()
 			for p: Vector2 in path:
-				pts.append(origin + p * k)
+				pts.append(origin + p * squeeze * k)
 			if lv == 2:
 				ci.draw_polyline(pts, tone(Color(228 / 255.0, 123 / 255.0, 60 / 255.0, 0.36), dim), 2.6 * k * 0.7, true)
 			var shade := PackedVector2Array()
@@ -484,7 +790,7 @@ func _glass_cracks(ci: CanvasItem, n: int, lv: int, dim: bool) -> void:
 			var x: float = 70.0 / 100.0 * CK_W
 			var chip := PackedVector2Array([Vector2(x - 2, CK_Y - 1), Vector2(x + 1.5, CK_Y - 3.5), Vector2(x + 2.5, CK_Y + 0.5)])
 			for i in chip.size():
-				chip[i] = origin + chip[i] * k
+				chip[i] = origin + chip[i] * squeeze * k
 			ci.draw_colored_polygon(chip, tone(Color(232 / 255.0, 240 / 255.0, 245 / 255.0, 0.18), dim))
 
 
@@ -633,10 +939,13 @@ func _medal(icon: String, color: Color, at_css: Vector2, dim: bool) -> Control:
 ## 10 × 32 from 5 down with its bulb, frost round it on a 28 × 50 board), the
 ## temperature on a baseline at 25 and the stage's name at 40 from 23 in, a
 ## snow mark on the bulb, glowing cold, while the track is frozen. It only shows.
+## A narrow band drops the name and sets the number at 31, the middle. Its
+## parts show where a roll has got to (_ot_state); _process moves them on.
 func _outside(o: Dictionary) -> Control:
 	var dim: bool = _dim("outside")
 	var k: float = UiFonts.K
-	var st: int = clampi(int(o["stage"]), 0, OT_COLS.size() - 1)
+	var s: Dictionary = _ot_state(Time.get_ticks_msec())
+	var st: int = clampi(int(s["stage"]), 0, OT_COLS.size() - 1)
 	var c := Control.new()
 	c.name = "Outside"
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -646,16 +955,29 @@ func _outside(o: Dictionary) -> Control:
 	glass.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	glass.position = Vector2(-4.0, 0.0) * k
 	glass.size = Vector2(28.0, 50.0) * k
-	glass.draw.connect(_draw_outside.bind(glass, o, st, dim))
+	glass.draw.connect(_draw_outside.bind(glass, o, dim))
 	c.add_child(glass)
-	var num := _label(String(o["text"]), UiFonts.NUMBER, 500, 22.0, tone(OT_COLS[st][2], dim), 0.33)
+	var num := _label(String(s["text"]), UiFonts.NUMBER, 500, 22.0, tone(OT_COLS[st][2], dim), 0.33)
 	num.name = "Temp"
 	c.add_child(num)
-	_sit(num, 23.0, 25.0)
-	var word := _label(String(o["name"]), UiFonts.WORD, 400, 12.0, tone(OT_COLD_WORD if st >= 4 else INK2, dim), 0.96)
-	word.name = "Stage"
-	c.add_child(word)
-	_sit(word, 23.0, 40.0)
+	_sit(num, 23.0, 31.0 if _narrow else 25.0)
+	var words_w: float = _text_w(num)
+	if not _narrow:
+		var word := _label(String(s["name"]), UiFonts.WORD, 400, 12.0, tone(OT_COLD_WORD if st >= 4 else INK2, dim), 0.96)
+		word.name = "Stage"
+		c.add_child(word)
+		_sit(word, 23.0, 40.0)
+		words_w = maxf(words_w, _text_w(word))
+	if String(s["delta_text"]) != "":
+		# odelta: the change floats up under the glass, centred 12 in, from 44.
+		var dl := _label(String(s["delta_text"]), UiFonts.NUMBER, 600, 16.0, tone(OT_DELTA_INK, dim))
+		dl.name = "OtDelta"
+		dl.add_theme_color_override("font_shadow_color", tone(Color(0, 0, 0, 0.9), dim))
+		dl.add_theme_constant_override("shadow_offset_x", 0)
+		dl.add_theme_constant_override("shadow_offset_y", int(round(1.0 * k)))
+		dl.visible = false
+		c.add_child(dl)
+	_ot_apply(c, s)
 	if bool(o["freezing"]):
 		# On the bulb, so a long stage name with it still clears the mood.
 		var mark := TextureRect.new()
@@ -669,17 +991,30 @@ func _outside(o: Dictionary) -> Control:
 		mark.position = Vector2(10.0 - 5.5, 37.0 - 5.5) * k
 		mark.tooltip_text = "선로 결빙"
 		c.add_child(mark)
-	c.custom_minimum_size = Vector2(maxf(23.0 + maxf(_text_w(num), _text_w(word)) + 2.0, 58.0), 48.0) * k
+	# Narrow: just the number (no 58 at least), so the thermometer ends before the mood.
+	var w_css: float = 23.0 + words_w + 2.0
+	c.custom_minimum_size = Vector2(w_css if _narrow else maxf(w_css, 58.0), 48.0) * k
 	c.size = c.custom_minimum_size
 	return c
 
 
-func _draw_outside(ci: Control, o: Dictionary, st: int, dim: bool) -> void:
+## The glass as the thermometer shows now (_ot_state): the stage's colours and
+## the column's height, a white flash on the rim with its glow, the puff.
+func _draw_outside(ci: Control, o: Dictionary, dim: bool) -> void:
+	var s: Dictionary = _ot_state(Time.get_ticks_msec())
+	if s.is_empty():
+		return
 	var k: float = UiFonts.K
+	var st: int = clampi(int(s["stage"]), 0, OT_COLS.size() - 1)
 	var cols: Array = OT_COLS[st]
 	var foot: Color = tone(cols[0], dim)
 	var head: Color = tone(cols[1], dim)
 	var tube := Rect2(9.0 * k, 5.0 * k, 10.0 * k, 32.0 * k)
+	# is-cross: the rim goes white and the tube glows as it passes a stage's tick.
+	var flash: float = float(s["flash"])
+	var rim: Color = tone(OT_RIM.lerp(OT_FLASH_RIM, flash), dim)
+	if flash > 0.0:
+		GlassParts.shadow(ci, tube, 5.0 * k, 0.0, 6.0 * k, tone(Color(OT_FLASH_GLOW, OT_FLASH_GLOW.a * flash), dim))
 	# The glass: dark, lit down its left and shaded down its right, a rim.
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = tone(OT_GLASS, dim)
@@ -690,11 +1025,11 @@ func _draw_outside(ci: Control, o: Dictionary, st: int, dim: bool) -> void:
 	sb.corner_detail = 8
 	sb.anti_aliasing_size = 0.7
 	sb.set_border_width_all(int(round(1.5 * k)))
-	sb.border_color = tone(OT_RIM, dim)
+	sb.border_color = rim
 	ci.draw_style_box(sb, tube)
 	GlassParts.grad_rect(ci, tube.grow(-1.5 * k), 3.0 * k, [[0.0, tone(Color(1, 1, 1, 0.08), dim)], [0.45, Color(1, 1, 1, 0)], [1.0, tone(Color(0, 0, 0, 0.28), dim)]])
 	# The column, foot to head, round at the top.
-	var h: float = tube.size.y * float(o["fill"])
+	var h: float = tube.size.y * float(s["fill"])
 	var r: float = 2.5 * k
 	var col := Rect2(tube.position.x + 2.5 * k, tube.end.y - h, 5.0 * k, h)
 	ci.draw_polygon(PackedVector2Array([Vector2(col.position.x, col.position.y + r), Vector2(col.end.x, col.position.y + r), col.end, Vector2(col.position.x, col.end.y)]),
@@ -705,7 +1040,7 @@ func _draw_outside(ci: Control, o: Dictionary, st: int, dim: bool) -> void:
 	if bool(o["freezing"]):
 		GlassParts.glow_ring(ci, bulb, 8.5 * k, 6.0 * k, tone(OT_FROZEN_GLOW, dim))
 	ci.draw_circle(bulb + Vector2(0.0, 1.0) * k, 8.5 * k, tone(Color(0, 0, 0, 0.35), dim), true, -1.0, true)
-	ci.draw_circle(bulb, 8.5 * k, tone(OT_RIM, dim), true, -1.0, true)
+	ci.draw_circle(bulb, 8.5 * k, rim, true, -1.0, true)
 	var lit := bulb + Vector2(-1.4, -1.96) * k
 	for i in 7:
 		var f: float = float(i) / 6.0
@@ -719,6 +1054,16 @@ func _draw_outside(ci: Control, o: Dictionary, st: int, dim: bool) -> void:
 	var a: float = float(OT_FROST[st])
 	if a > 0.0:
 		_frost(ci, tone(Color(OT_FERN, 0.85 * a), dim))
+	# is-drop: a breath of cold spreads from by the bulb and fades.
+	var pf: float = float(s["puff"])
+	if pf >= 0.0:
+		_puff(ci, Vector2(12.0, 24.0) * k, 22.0 * lerpf(0.35, 1.7, pf) * k, tone(Color(OT_PUFF, OT_PUFF.a * lerpf(0.9, 0.0, pf)), dim))
+
+
+## A puff of cold: six discs one in another, so it is thickest at the middle.
+func _puff(ci: Control, mid: Vector2, radius: float, col: Color) -> void:
+	for i in 6:
+		ci.draw_circle(mid, radius * (1.0 - float(i) / 6.0), Color(col, col.a * 0.25), true, -1.0, true)
 
 
 ## Frost round the tube (otTex's ferns, the same seed): from its two sides and
