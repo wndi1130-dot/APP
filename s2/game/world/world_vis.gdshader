@@ -26,6 +26,16 @@ uniform float lamp_floor = 0.0;
 uniform sampler2D win : hint_default_black, filter_linear, repeat_disable;
 uniform vec3 win_color : source_color = vec3(1.0, 0.5, 0.28);
 uniform float win_gain = 1.0;
+// Out of doors by day the sight mask is round and soft about the eye (decision
+// 491): the sight cone's straight sides drew a bright wedge on open ground.
+// round_day 0 (night, or never set) leaves the cells to rule, as indoors always.
+uniform vec2 eye_xz = vec2(-1000.0);
+uniform float eye_r = 18.0;
+uniform float round_day = 0.0;
+uniform float round_floor = 0.95;
+// Where the round falloff starts and ends, in sight radii.
+const float ROUND_IN = 0.4;
+const float ROUND_OUT = 1.3;
 
 varying vec3 world_pos;
 varying vec3 world_nrm;
@@ -323,10 +333,26 @@ void fragment() {
 	float lamp_here = max(step(-0.5, world_pos.y) * (1.0 - step(1.0, world_pos.y)), 1.0 - step(1.0, abs(world_pos.y - lamp_floor)));
 	float reveal = max(seen.r, smoothstep(0.08, 0.24, cell.b) * lamp_reveal * sky * lamp_here);
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
-	float lit = mix(1.0, max(reveal, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
+	float floor_k = mix(fx_sight.x, fx_sight.y, seen.g);
+	float round_k = clamp(round_day, 0.0, 1.0) * sky;
+	// Between dusk and night the floor comes up first and the round shape takes over
+	// after, so the cone's side never stands out at half strength by the eye.
+	float round_floor_k = smoothstep(0.0, 0.5, round_k);
+	float pool_seen = seen.r;
+	if (round_k > 0.001) {
+		float near = 1.0 - smoothstep(eye_r * ROUND_IN, eye_r * ROUND_OUT, distance(world_pos.xz, eye_xz));
+		float lamp_seen = smoothstep(0.08, 0.24, cell.b) * lamp_reveal * lamp_here;
+		reveal = mix(reveal, max(near, lamp_seen), smoothstep(0.5, 1.0, round_k));
+		pool_seen = mix(pool_seen, near, smoothstep(0.5, 1.0, round_k));
+		// One floor out there, no trail where the eye has been.
+		floor_k = mix(floor_k, round_floor, round_floor_k);
+	}
+	float lit = mix(1.0, max(reveal, floor_k), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
 	// The memory's grey only where the mask is drawn: with it off all is in sight.
-	vec3 dimmed = mix(vec3(grey), base, mix(1.0, reveal * 0.6 + 0.4, clamp(mask_on, 0.0, 1.0)));
+	// Out of doors by day the colour goes less (0.9 kept, not 0.4).
+	float keep = mix(reveal * 0.6 + 0.4, reveal * 0.1 + 0.9, round_floor_k);
+	vec3 dimmed = mix(vec3(grey), base, mix(1.0, keep, clamp(mask_on, 0.0, 1.0)));
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
 	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;
 	ROUGHNESS = mix(1.0, 0.4, wet * (1.0 - cover));
@@ -336,7 +362,7 @@ void fragment() {
 	}
 	// A lamp out of sight still shows faintly, so mates can be found in the dark.
 	float lamp = cell.b * lamp_gain * lamp_here * mix(0.4, 1.0, reveal) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
-	float pool = texture(win, uv).r * win_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0))
+	float pool = texture(win, uv).r * win_gain * mix(0.4, 1.0, pool_seen) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0))
 		* smoothstep(0.6, 0.9, up) * step(-0.5, world_pos.y) * (1.0 - step(1.0, world_pos.y));
 	EMISSION = (lamp_color * lamp + win_color * pool) * (0.25 + 0.75 * grey);
 }

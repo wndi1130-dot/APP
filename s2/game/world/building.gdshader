@@ -38,6 +38,13 @@ uniform vec3 cam_back = vec3(0.0, 0.788, 0.616);
 uniform vec4 open_rect = vec4(0.0);
 uniform float open_floor = -1000.0;
 uniform float open_building = -1.0;
+// 바깥 면·지붕의 시야 가림은 낮엔 사람 둘레로 둥글고 부드럽게(world_vis와 같은 값, 결정 491).
+uniform vec2 eye_xz = vec2(-1000.0);
+uniform float eye_r = 18.0;
+uniform float round_day = 0.0;
+uniform float round_floor = 0.95;
+const float ROUND_IN = 0.4;
+const float ROUND_OUT = 1.3;
 
 // 노드마다: 점박이로 사라짐(0 다 보임, 1 다 사라짐), 고정 시야(x < 0이면 칸에서 읽음),
 // 벽면 칠(rgb)과 지붕 색 갈래(a: ROOFS 번호), 건물 번호.
@@ -321,14 +328,25 @@ void fragment() {
 	// 시야 가림(world_vis와 같은 셈). 지붕은 건물마다 고정 시야를 받는다(바깥벽 칸의 값).
 	vec4 cell = texture(vis, (w_pos.xz - n.xz * 0.1) / map_size);
 	vec2 seen = seen_fixed.x >= 0.0 ? seen_fixed : cell.rg;
-	float lit = mix(1.0, max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
+	float reveal = seen.r;
+	float floor_k = mix(fx_sight.x, fx_sight.y, seen.g);
+	float round_k = clamp(round_day, 0.0, 1.0) * exposed;
+	// 해 질 녘과 밤 사이엔 바닥 값을 먼저 올리고 둥근 꼴은 뒤에 — 원뿔 옆선이 반쯤 남지 않게(world_vis와 같다).
+	float round_floor_k = smoothstep(0.0, 0.5, round_k);
+	if (round_k > 0.001) {
+		float near = 1.0 - smoothstep(eye_r * ROUND_IN, eye_r * ROUND_OUT, distance(w_pos.xz, eye_xz));
+		reveal = mix(reveal, near, smoothstep(0.5, 1.0, round_k));
+		floor_k = mix(floor_k, round_floor, round_floor_k);
+	}
+	float lit = mix(1.0, max(reveal, floor_k), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
-	// 기억의 회색도 가림이 켜졌을 때만(가림을 끄면 모두 보이는 것과 같다).
-	vec3 dimmed = mix(vec3(grey), base, mix(1.0, seen.r * 0.6 + 0.4, clamp(mask_on, 0.0, 1.0)));
+	// 기억의 회색도 가림이 켜졌을 때만(가림을 끄면 모두 보이는 것과 같다). 낮 바깥은 색을 덜 뺀다.
+	float keep = mix(reveal * 0.6 + 0.4, reveal * 0.1 + 0.9, round_floor_k);
+	vec3 dimmed = mix(vec3(grey), base, mix(1.0, keep, clamp(mask_on, 0.0, 1.0)));
 	dimmed *= mix(1.0, indoor_dark, (1.0 - exposed) * (1.0 - clamp(cell.b * 2.0, 0.0, 1.0)));
 	ALBEDO = fx_photo(dimmed, fx_fade) * lit;
 	ROUGHNESS = rough;
 	METALLIC = metal * (1.0 - cover);
-	float lamp = cell.b * lamp_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
+	float lamp = cell.b * lamp_gain * mix(0.4, 1.0, reveal) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
 	EMISSION = lamp_color * (0.25 + 0.75 * grey) * lamp;
 }
