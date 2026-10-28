@@ -158,6 +158,8 @@ static func build_from(script: Script) -> Dictionary:
 		data["room_stats"]["fronts"] = RoomFurnish.clear_fronts(data)
 		data["furniture_stats"] = RoomFurnish.block_furniture(data)
 		data["room_stats"]["boxes_moved"] = RoomFurnish.boxes_into_furniture(data)
+		# A box in a piece whose name says another room takes the piece's name (the bag's tab).
+		data["room_stats"]["boxes_renamed"] = RoomFurnish.name_boxes_by_furniture(data)
 		# Low cellar windows at the foot of the walls show a cellar from outside.
 		data["cellar_windows"] = CellarRules.windows(data)
 		data.erase("_rooms")

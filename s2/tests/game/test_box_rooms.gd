@@ -73,6 +73,11 @@ func test_home_rooms_get_empty_boxes_one_to_a_cell() -> void:
 		var c: Dictionary = data["containers"][id]
 		var key := Vector3i(c["cell"].x, c["cell"].y, int(c.get("level", 0)))
 		at[key] = int(at.get(key, 0)) + 1
+		# A box in a piece never names another room (the bag's tab shows the name).
+		var says := LootDress.room_of_name(String(c.get("name", "")))
+		var room := String(LootDress.FURNITURE_ROOM.get(String(c.get("furniture", "")), ""))
+		var own := String(Furnish.KIND_LABEL.get(String(c.get("furniture", "")), ""))
+		assert_true(room.is_empty() or says == "storage" or says == room or c.get("name") == own, "%s %s in %s" % [id, c.get("name", ""), c.get("furniture", "")])
 	var spare := 0
 	var rooms: Dictionary = {}
 	for id: String in data["containers"]:

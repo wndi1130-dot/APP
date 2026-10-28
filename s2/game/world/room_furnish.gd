@@ -2082,6 +2082,31 @@ static func _name_places(name: String) -> bool:
 	return LootDress.room_of({"name": name}) != "storage"
 
 
+## A box in a piece of furniture whose name says another room (a map's 「부엌 상자」 moved into
+## the wardrobe of a room laid out again, a 「매장 상자」 in an upstairs dresser) takes the
+## piece's name, so the bag's tab says what was opened. Its key becomes the piece's room, the
+## room loot_dress.gd reads a box in a piece by anyway (room_of_box), so what it holds is the
+## same. The ring's boxes are filled by their names (loot_rules.gd fill), so the ring calls
+## this after its fill (map_ring.gd). Returns how many were renamed.
+static func name_boxes_by_furniture(data: Dictionary) -> int:
+	var renamed := 0
+	var containers: Variant = data.get("containers", {})
+	if not containers is Dictionary:
+		return 0
+	for id: String in containers:
+		var box: Dictionary = containers[id]
+		var kind := String(box.get("furniture", ""))
+		var room := String(LootDress.FURNITURE_ROOM.get(kind, ""))
+		var says := LootDress.room_of_name(String(box.get("name", "")))
+		if room.is_empty() or not KIND_LABEL.has(kind) or says == "storage" or says == room or box.get("name") == KIND_LABEL[kind]:
+			continue
+		if not box.has("room"):
+			box["room"] = room
+		box["name"] = KIND_LABEL[kind]
+		renamed += 1
+	return renamed
+
+
 ## Kitchen furniture that opens: an empty box goes in each one no box is in yet, until the
 ## kitchen has KITCHEN_MOST places to open (the reference kitchen has some 8 to 12).
 const KITCHEN_SPARE: Dictionary = {"counter": true, "cupboard": true, "fridge_open": true}

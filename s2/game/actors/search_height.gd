@@ -20,7 +20,7 @@ const BY_WORD: Dictionary = {
 	# 집 방마다 열리는 가구(카드 R2, room_furnish.gd SPARE): 낮은 협탁·곁탁자·휴지통, 허리 높이
 	# 세면대·서랍장·장롱, 눈높이 약장·책장.
 	"협탁": LOW, "곁탁자": LOW, "휴지통": LOW, "세면대": MID, "서랍장": MID, "장롱": MID,
-	"약장": HIGH, "책장": HIGH,
+	"약장": HIGH, "책장": HIGH, "서류장": MID,
 }
 ## The living's own motion for each height.
 const CLIP: Dictionary = {FLOOR: "p_kneel_work", LOW: "p_search_low", MID: "p_search_mid", HIGH: "p_search_high"}
