@@ -105,7 +105,7 @@ func _run_views() -> void:
 	_diagonal()
 	if lit:
 		_daylight(flow.outside.look if flow.outside != null else {})
-	journey = Journey.attach(t, t, flow.outside.look if flow.outside != null else {}, 1, {"seed": 1, "remember": false, "running": true})
+	journey = Journey.attach(t, t, flow.outside.look if flow.outside != null else {}, 1, {"seed": 1, "remember": false, "running": true, "view": "diag"})
 	journey.calm = true
 	await create_timer(2.0).timeout
 	_show(false)

@@ -13,11 +13,13 @@ const Route = preload("res://game/train/journey/journey_route.gd")
 const LOOK: Dictionary = {"band": "day", "snow_level": 0, "wet_ground": 1.0, "season": "late_autumn", "fall": 0.0, "ice": 1.0, "kinds": ["overcast"]}
 
 
-## A stand-in for the train scene: as long as the slice's train, running, its camera on the guard car.
+## A stand-in for the train scene: as long as the slice's train, running, its camera on
+## the guard car, the diagonal view (train_scene view_mode).
 class FakeTrain:
 	extends Node3D
 	var cam_x: float = 127.0
 	var run: bool = true
+	var view_mode: String = "diag"
 
 	func running() -> bool:
 		return run
@@ -98,6 +100,21 @@ func test_the_land_keeps_up_with_the_train_and_frees_what_is_behind() -> void:
 	for c: Dictionary in j.chunks:
 		var n: Node3D = c["node"]
 		assert_lte(absf(n.position.x), Journey.REBASE_M * 2.0 + 400.0)
+
+
+func test_on_the_side_on_screen_it_waits_unseen_and_lays_nothing() -> void:
+	var host := FakeTrain.new()
+	host.view_mode = "section"
+	add_child_autofree(host)
+	var j: Node3D = Journey.attach(host, host, LOOK, 1, {"seed": 2, "remember": false})
+	await wait_process_frames(3)
+	assert_false(j.visible)
+	assert_eq(j.chunks.size(), 0, "nothing laid where it is not seen")
+	assert_true(j.handoff().is_empty(), "the stop scene then goes by the stretch")
+	host.view_mode = "diag"
+	await wait_process_frames(3)
+	assert_true(j.visible)
+	assert_gt(j.chunks.size(), 2, "the diagonal view on: the land laid round the train")
 
 
 func test_no_event_while_a_card_is_up_and_some_when_not() -> void:

@@ -12,7 +12,8 @@ extends Node3D
 ## flow hands it, and changes no rule value.
 ##   var journey := Journey.attach(parent, train_scene, look, seg, {"seed": 1})
 
-## For the sound and the windows (7b 창가의 한마디): an event's kind, where, and its moment.
+## For the sound and the windows (7b 창가의 한마디): an event's kind, where, and its
+## moment — "begin" (laid ahead, coming into sight) or "gone" (gone by).
 signal journey_event(kind: String, at: Vector3, phase: String)
 
 const Kit = preload("res://game/train/journey/journey_kit.gd")
@@ -22,8 +23,9 @@ const Director = preload("res://game/train/journey/journey_director.gd")
 const Events = preload("res://game/train/journey/journey_events.gd")
 const MapView = preload("res://game/world/map_view.gd")
 
-## The setting that turns it on (off on the side-on train screen: there the land in 3D
-## would cover the sky; the diagonal view turns it on, 결정 486).
+## A switch to turn it off (on by default). It shows on the diagonal train screen only
+## (train_scene view_mode "diag", 결정 486): on the side-on one the land in 3D would
+## cover the sky, so there it waits unseen and lays nothing.
 const SETTING := "visuals/journey_enabled"
 ## The run (m/s), slower than a train would (7b: an information screen, a fast flow
 ## pulls the eye), and slow enough that at the train screen's 30 frames a second the
@@ -71,15 +73,17 @@ var _section_end: float = -INF
 var _chunk_i: int = 0
 var _opts: Dictionary = {}
 var _seen_cfg: Dictionary = {}
+var _filled: bool = false
 
 
 static func enabled() -> bool:
-	return bool(ProjectSettings.get_setting(SETTING, false))
+	return bool(ProjectSettings.get_setting(SETTING, true))
 
 
 ## Hang the land beside the train scene `train_scene` under `parent`, for stretch
 ## `stretch` in the stretch's `l` look. o: seed (int), band (else the season table's),
-## remember (keep what was seen over runs, default true), fill (lay it all now).
+## remember (keep what was seen over runs, default true), view ("diag" stands in for
+## the train's view_mode: tools, tests), running (stands in for the train's).
 static func attach(parent: Node, train_scene: Node3D, l: Dictionary, stretch: int, o: Dictionary = {}) -> Node3D:
 	var j = load("res://game/train/journey/journey.gd").new()
 	j.host = train_scene
@@ -105,17 +109,35 @@ func _ready() -> void:
 	add_child(land)
 	_build_track()
 	speed = RUN_SPEED if _running() else 0.0
-	# The land as far as the train and past it, now: nothing is laid in sight.
+	visible = shown()
+	if visible:
+		_fill()
+
+
+func _process(delta: float) -> void:
+	visible = shown()
+	if visible:
+		step(minf(delta, 0.1))
+
+
+## Whether the train's screen is the diagonal one (train_scene view_mode).
+func shown() -> bool:
+	if _opts.has("view"):
+		return String(_opts["view"]) == "diag"
+	return host != null and String(host.get("view_mode")) == "diag"
+
+
+## The land as far as the train and past it, at once: nothing is laid in sight.
+func _fill() -> void:
+	_filled = true
 	while laid_to < _front():
 		_lay_one()
 
 
-func _process(delta: float) -> void:
-	step(minf(delta, 0.1))
-
-
 ## One tick (the tests call it straight).
 func step(delta: float) -> void:
+	if not _filled:
+		_fill()
 	var target: float = RUN_SPEED if _running() else 0.0
 	speed = move_toward(speed, target, RUN_SPEED * delta / ACCEL_S)
 	travelled += speed * delta
@@ -144,8 +166,11 @@ func window() -> Dictionary:
 
 
 ## What the stop scene needs to lay the same land on the way in (stop_cinema.gd
-## _lay_corridor): the band, the window, where the order stands, the look.
+## _lay_corridor): the band, the window, where the order stands, the look. {} when
+## none was laid (the side-on screen): the stop scene then goes by the stretch.
 func handoff() -> Dictionary:
+	if not _filled:
+		return {}
 	return {"band": band, "window": window().duplicate(), "seed": hash([int(_opts.get("seed", 1)), seg, "corridor"]),
 		"history": seq.history.duplicate(true), "at": laid_to / RUN_SPEED, "look": look}
 
@@ -266,6 +291,7 @@ func _step_events(delta: float) -> void:
 		var actor: Node3D = e
 		actor.call("advance", delta, travelled)
 		if bool(actor.call("is_done")):
+			journey_event.emit(String(actor.get_meta("journey_id", "")), actor.global_position, "gone")
 			events.erase(actor)
 			actor.queue_free()
 			director.finished(clock)
@@ -294,6 +320,7 @@ func _begin_event(ev: Dictionary, ahead: float) -> Node3D:
 	if actor == null:
 		return null
 	land.add_child(actor)
+	actor.set_meta("journey_id", String(ev["id"]))
 	actor.position = Vector3(ahead - _base, 0.0, 0.0)
 	actor.call("begin", self, ev, hash([int(_opts.get("seed", 1)), seg, director.started.size(), events.size()]))
 	events.append(actor)
