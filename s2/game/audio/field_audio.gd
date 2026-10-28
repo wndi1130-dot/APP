@@ -172,6 +172,7 @@ const PIECE_RECENT: int = 4           # nor where one of the last this many star
 const PIECE_TRIES: int = 24
 const KIN_SHARE: float = 0.3          # of pieces cut from the stop's kin beds
 const KIN_BEDS: int = 2
+const WIND_STOOD_S: float = 1.0       # s of real time with no tick: the field stood still
 const FIRST_AFTER: Array = [2.0, 10.0]   # s after getting down to the first gust, or the howl
 const WIND_PHASE: float = 1000.0      # the wandering starts somewhere in this much of its noise
 const WIND_DRIFT_HZ: float = 0.07     # how fast the bed wanders
@@ -220,6 +221,7 @@ var spot_at: Dictionary = {}           # spot kind -> Array[Vector3] on the map
 var spot_look_t: float = 0.0
 var spot_read_t: float = 0.0
 var gust_gaps: Array = []              # every gap between gusts (tests)
+var wind_clock_ms: int = -1            # real time of the last wind tick (WIND_STOOD_S)
 var slots: Array = []                  # {"player": AudioStreamPlayer3D, "z": Dictionary, "wait": float}
 var bed: AudioStreamPlayer
 var edge_bed: AudioStreamPlayer        # the danger past the map's edge (_tick_edge)
@@ -310,7 +312,8 @@ func setup(field_game) -> void:
 		var file: AudioStream = load("res://audio/wind_spot/spot_%s.wav" % kind) if ResourceLoader.exists("res://audio/wind_spot/spot_%s.wav" % kind) else null
 		if file != null:
 			s.stream = file
-			s.finished.connect(s.play)
+			# Round again from a new place each time: no beat to it.
+			s.finished.connect(func() -> void: s.play(randf() * file.get_length()))
 			s.play(randf() * file.get_length())
 		spot_players[kind] = s
 	drift.seed = randi()
@@ -856,11 +859,14 @@ func _next_piece() -> void:
 
 ## The bed this frame at `lin` (its level with its wandering): the piece in
 ## front rising over the one going out, equal in power as they cross.
-func _tick_pieces(lin: float, pitch: float, delta: float) -> void:
+## stood: the field stood still a while (the resume screen does not tick the
+## ear) while the players went on, so the piece in front may have run out of
+## its file: the next one comes at once, not seconds of silence after.
+func _tick_pieces(lin: float, pitch: float, delta: float, stood: bool = false) -> void:
 	if piece.is_empty():
 		return
 	piece["t"] = float(piece["t"]) + delta
-	if float(piece["t"]) >= float(piece["len"]) - float(piece["xf"]):
+	if stood or float(piece["t"]) >= float(piece["len"]) - float(piece["xf"]):
 		_next_piece()
 	var p: AudioStreamPlayer = piece["player"]
 	var k_in: float = 1.0 if float(piece["in"]) <= 0.0 else clampf(float(piece["t"]) / float(piece["in"]), 0.0, 1.0)
@@ -871,7 +877,7 @@ func _tick_pieces(lin: float, pitch: float, delta: float) -> void:
 	piece_out["t"] = float(piece_out["t"]) + delta
 	var o: AudioStreamPlayer = piece_out["player"]
 	var k_out: float = (float(piece_out["t"]) - (float(piece_out["len"]) - float(piece_out["xf"]))) / float(piece_out["xf"])
-	if k_out >= 1.0:
+	if k_out >= 1.0 or stood:
 		o.stop()
 		o.volume_db = -80.0
 		piece_out = {}
@@ -968,7 +974,10 @@ func _tick_wind(at: Vector3, delta: float) -> void:
 	# The bed wanders on a slow noise: no two stretches alike, no beat to it.
 	var n: float = drift.get_noise_1d(wind_t)
 	var n2: float = drift.get_noise_1d(wind_t + 977.0)
-	_tick_pieces(level * (1.0 + WIND_DRIFT * n), 1.0 + WIND_PITCH_DRIFT * n2, delta)
+	var now_ms: int = Time.get_ticks_msec()
+	var stood: bool = wind_clock_ms >= 0 and float(now_ms - wind_clock_ms) > 1000.0 * (delta + WIND_STOOD_S)
+	wind_clock_ms = now_ms
+	_tick_pieces(level * (1.0 + WIND_DRIFT * n), 1.0 + WIND_PITCH_DRIFT * n2, delta, stood)
 	var gust_now := 0.0
 	for g: Dictionary in gusts:
 		if float(g["len"]) > 0.0:
@@ -1040,6 +1049,9 @@ func _gust(length: float, peak: float, howl_layer: bool, avoid: Array = []) -> v
 		var pitch_was: float = float(last[3])
 		if absf(p0 - pitch_was) <= GUST_PITCH_APART:
 			p0 = pitch_was + 2.0 * GUST_PITCH_APART if pitch_was + 2.0 * GUST_PITCH_APART <= hi else pitch_was - 2.0 * GUST_PITCH_APART
+	# Never so late in the file that it runs out before the gust has died away
+	# (its length at its highest pitch, and a little over).
+	from = clampf(from, 0.0, maxf(0.0, full - length * maxf(p0, p1) * 1.05))
 	var p: AudioStreamPlayer = g["player"]
 	g["t"] = 0.0
 	g["len"] = length

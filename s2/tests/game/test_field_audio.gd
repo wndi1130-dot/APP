@@ -478,7 +478,8 @@ func test_the_wind_wanders_and_its_gusts_never_come_round_the_same_way() -> void
 	var n0: int = a.gust_log.size()
 	for k in range(480):
 		a._tick_wind(at, 0.25)
-		levels.append(a.bed_db())
+		if k * 0.25 > float(a.WIND_IN[1]):
+			levels.append(a.bed_db())   # once it has come in: the wandering, not the coming up
 		if a.gust_log.size() > n0 + starts.size():
 			starts.append(k * 0.25)
 	assert_gt(levels.max() - levels.min(), 2.0, "the bed rises and falls")
@@ -645,6 +646,36 @@ func test_the_wind_is_heard_from_a_corner_near_by() -> void:
 	for k in range(40):
 		a._tick_wind(stand, 0.1)
 	assert_lte(s.volume_db, -79.0, "still on a still day")
+
+
+# The field standing still (the resume screen does not tick the ear) while the
+# players go on: the next piece comes as the field goes on, not seconds of
+# silence after a file ran out under it. A gust never starts so late in its
+# file that the file runs out before the gust has died away.
+func test_the_wind_goes_on_after_the_field_stood_still_and_no_gust_runs_out() -> void:
+	var a = game.audio
+	var at: Vector3 = game.player.position
+	for k in range(40):
+		a._tick_wind(at, 0.1)
+	var n: int = a.bed_log.size()
+	a.wind_clock_ms = Time.get_ticks_msec() - 8000   # eight seconds with no tick
+	a._tick_wind(at, 0.1)
+	assert_eq(a.bed_log.size(), n + 1, "the next piece at once")
+	a._tick_wind(at, 0.1)
+	assert_eq(a.bed_log.size(), n + 1, "and only the one")
+	var over := 0
+	for k in range(200):
+		for g in a.gusts:
+			g["len"] = 0.0
+		if k % 2 == 0:
+			a._gust(randf_range(float(a.GUST_LEN[0]), float(a.GUST_LEN[1])), 0.6, false)
+		else:
+			a.howl()
+	for g in a.gust_log:
+		var full: float = a.gust_stream(String(g[6])).get_length()
+		if float(g[0]) + float(g[1]) * maxf(float(g[3]), float(g[4])) > full + 0.001:
+			over += 1
+	assert_eq(over, 0, "no gust runs out of its file")
 
 
 # Nor does a stop open the same way (user 2026-10-25: 「처음내릴떄 휘오오옹
