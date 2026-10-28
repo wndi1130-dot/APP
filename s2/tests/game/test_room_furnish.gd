@@ -602,3 +602,23 @@ func test_beds_do_not_all_take_the_same_corner() -> void:
 		most = maxi(most, int(corners[k]))
 	assert_eq(corners.size(), 4, "beds stand in all four quarters of their rooms: %s" % str(corners))
 	assert_lt(float(most) / beds, 0.5, "no quarter takes half the beds: %s" % str(corners))
+
+## 가구 색 판(art3d furniture_tints): 한 집의 새 가구는 한 판, 집마다 판을 굴린다.
+func test_one_house_one_tint_and_houses_differ() -> void:
+	var d := FieldMaps.build("houses_01")
+	var by_house: Dictionary = {}
+	for p: Dictionary in d["props"]:
+		# room_furnish가 놓은 줄(조리대 줄 표시가 있는 줄)만: 벽장 선반 같은 room_split 줄은 따로다.
+		if not p.has("counter_run"):
+			continue
+		assert_true(p.has("tint"), "%s has a tint" % p.get("kind", ""))
+		var t := int(p.get("tint", -1))
+		assert_between(t, 0, RoomFurnish.TINT_SETS - 1)
+		var b := int(p.get("building", -1))
+		if by_house.has(b):
+			assert_eq(t, by_house[b], "one set to a house")
+		by_house[b] = t
+	var sets: Dictionary = {}
+	for b: int in by_house:
+		sets[by_house[b]] = true
+	assert_gt(sets.size(), 1, "houses roll their own sets: %s" % str(by_house))

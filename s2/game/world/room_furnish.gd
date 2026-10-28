@@ -901,6 +901,9 @@ const GRAIN := 0.6
 ## 깔개(room_finish 깔개 칸): 방 갈래마다 깔릴 몫과 고르는 무늬(셰이더 room_rug_finish의 0~6).
 const RUG_CHANCE: Dictionary = {"bed": 0.55, "living": 0.8, "dining": 0.9}
 const RUG_WEAVES: Dictionary = {"bed": [0, 2, 3, 6], "living": [1, 3, 4, 5, 0], "dining": [1, 5, 0]}
+## 가구 색 판(art3d `furniture_tints.gd` TINTS, 종류마다 넷): 한 집의 가구는 한 판으로 맞춘다. 표에 없는
+## 종류나 판 번호가 없는 줄은 모형 제 색.
+const TINT_SETS := 4
 ## 방마다 하나만 서는 가구(채우기가 둘째를 놓지 않는다).
 const ONE_PER_ROOM: Dictionary = {"fridge_open": true, "dining_set": true, "settee": true, "bathtub": true,
 	"waste_bin": true, "bed": true, "cold_stove": true, "desk": true, "radio_set": true}
@@ -1464,6 +1467,11 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 	return out
 
 
+## 그 집 가구의 색 판 번호(0~TINT_SETS-1). 지도와 건물로 정해져 판마다 같다.
+static func tint_for(place: String, building: int) -> int:
+	return (("%s|%d|tint" % [place, building]).hash() & 0x7fffffff) % TINT_SETS
+
+
 ## 방의 결: 자리(꼴과 칸)마다 0~1의 정해진 값. 같은 방은 늘 같다.
 static func _grain(r: Rect2i, salt: int) -> float:
 	return float(hash([r.position.x, r.position.y, r.size.x, r.size.y, salt]) % 1000) / 1000.0
@@ -1895,7 +1903,8 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 							g.set_solid(Vector2i(x, y), S.NONE)
 				added.append({"kind": kind, "rect": r, "solid": "low", "facing": pl["facing"],
 					"note": "%s의 %s" % [label, KIND_LABEL.get(kind, kind)], "level": lv,
-					"building": int(room["building"]), "rule": cls, "counter_run": pl["item"].get("run", false)})
+					"building": int(room["building"]), "rule": cls, "counter_run": pl["item"].get("run", false),
+					"tint": tint_for(place, int(room["building"]))})
 				# 식당 마감(room_finish DINING): 거실 묶음이라 rule만으로는 그냥 거실과 갈리지 않는다.
 				if dining:
 					added[-1]["dining"] = true

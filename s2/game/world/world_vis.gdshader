@@ -151,14 +151,18 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain) {
 // rooms, linoleum or tile in kitchens, small tile in bathrooms, patterned tile, terrazzo or stone in
 // halls, concrete or rough planks in store rooms. Within the measured ranges (linear albedo:
 // varnished boards 0.1~0.3, linoleum 0.2~0.5, glazed tile 0.5~0.75; docs/art/material_values.md),
-// never under walnut (linear 0.14): the plain WOOD (V 0.40) left the cut-away rooms below the
-// brightness line (V 0.36, mood). Patterns are drawn a little larger than life so they read from
-// the slanted view, and their seams fade to the mean as a pixel grows (no shimmer far out).
-const vec3 HONEY_BOARD = vec3(0.58, 0.46, 0.32);
-const vec3 WALNUT_BOARD = vec3(0.50, 0.38, 0.27);
-const vec3 GREY_BOARD = vec3(0.56, 0.52, 0.45);
-const vec3 PINE_BOARD = vec3(0.64, 0.50, 0.33);
-const vec3 OAK_BLOCK = vec3(0.62, 0.52, 0.38);
+// the darkest wood at linear 0.18: the plain WOOD (V 0.40) left the cut-away rooms below the
+// brightness line (V 0.36), and a house's floor held it at 0.368 against the reference's 0.495
+// (mood B1 10-28: the floor is what falls short, the dark checker and dark boards most). Patterns
+// are drawn a little larger than life so they read from the slanted view, and their seams fade to
+// the mean as a pixel grows (no shimmer far out).
+const vec3 HONEY_BOARD = vec3(0.64, 0.52, 0.37);
+const vec3 WALNUT_BOARD = vec3(0.56, 0.43, 0.31);
+const vec3 GREY_BOARD = vec3(0.60, 0.56, 0.49);
+const vec3 PINE_BOARD = vec3(0.68, 0.55, 0.38);
+const vec3 OAK_BLOCK = vec3(0.66, 0.56, 0.42);
+// How far an unseen room's floor keeps its own lightness, from the plain floor's (0) to its own (1).
+const float UNSEEN_FOLLOW = 0.5;
 
 // Seam strength left as a pixel covers `size` (1 near, 0 once a seam is under a fifth of a pixel).
 float seam_k(vec2 px, float size) {
@@ -334,14 +338,14 @@ vec3 room_floor(int code, vec2 p, vec2 px, out vec3 tone) {
 			c = room_boards(tone, p, px, plank);
 		} else {
 			// Ox red, or the waterside's grey-blue.
-			tone = region == 4 ? vec3(0.56, 0.62, 0.66) : vec3(0.60, 0.42, 0.36);
+			tone = region == 4 ? vec3(0.60, 0.66, 0.70) : vec3(0.64, 0.46, 0.40);
 			c = room_painted(tone, wood, p, px, plank);
 		}
 	} else if (kind == 4 || kind == 6) {
 		// Living and dining rooms: parquet (herringbone, basket weave), boards, oatmeal carpet;
 		// dining rooms swap the carpet for terracotta tile.
 		if (roll == 0 || roll == 1) {
-			tone = roll == 0 ? vec3(0.60, 0.47, 0.32) : WALNUT_BOARD * 1.04;
+			tone = roll == 0 ? vec3(0.66, 0.53, 0.37) : WALNUT_BOARD;
 			c = room_herring(tone, p, px, 0.6, 0.2);
 		} else if (roll == 2) {
 			tone = OAK_BLOCK;
@@ -350,8 +354,8 @@ vec3 room_floor(int code, vec2 p, vec2 px, out vec3 tone) {
 			tone = kind == 6 ? wood : (hills ? PINE_BOARD : GREY_BOARD);
 			c = room_boards(tone, p, px, plank);
 		} else if (kind == 6) {
-			tone = vec3(0.64, 0.45, 0.35);
-			c = room_tiles(tone, tone * 0.94, vec3(0.55, 0.50, 0.45), p, px, 0.3);
+			tone = vec3(0.68, 0.49, 0.38);
+			c = room_tiles(tone, tone * 0.94, vec3(0.58, 0.53, 0.48), p, px, 0.3);
 		} else {
 			tone = vec3(0.66, 0.60, 0.51);
 			c = room_carpet(tone, p);
@@ -359,25 +363,25 @@ vec3 room_floor(int code, vec2 p, vec2 px, out vec3 tone) {
 	} else if (kind == 2) {
 		// Kitchens: linoleum checkers, quarry tile, speckled linoleum, a tile laid on the diagonal.
 		if (roll == 0) {
-			vec3 cream = vec3(0.72, 0.68, 0.56);
-			vec3 sage = vec3(0.48, 0.55, 0.48);
+			vec3 cream = vec3(0.76, 0.72, 0.60);
+			vec3 sage = vec3(0.57, 0.64, 0.56);
 			tone = 0.5 * (cream + sage);
-			c = room_tiles(cream, sage, vec3(0.58, 0.58, 0.52), p, px, 0.33);
+			c = room_tiles(cream, sage, vec3(0.62, 0.62, 0.56), p, px, 0.33);
 		} else if (roll == 1) {
-			tone = vec3(0.64, 0.43, 0.32);
-			c = room_tiles(tone, tone, vec3(0.52, 0.47, 0.42), p, px, 0.3);
+			tone = vec3(0.68, 0.48, 0.36);
+			c = room_tiles(tone, tone, vec3(0.56, 0.51, 0.46), p, px, 0.3);
 		} else if (roll == 2) {
 			tone = vec3(0.74, 0.70, 0.55);
 			c = room_flecks(tone, vec3(0.45, 0.43, 0.36), vec3(0.86, 0.84, 0.76), p, 0.08);
 		} else if (roll == 3) {
 			vec3 cream = vec3(0.78, 0.76, 0.70);
-			vec3 slate = vec3(0.46, 0.47, 0.48);
+			vec3 slate = vec3(0.54, 0.55, 0.56);
 			tone = 0.5 * (cream + slate);
 			vec2 q = vec2(p.x + p.y, p.x - p.y) * 0.7071;
 			c = room_tiles(cream, slate, vec3(0.60, 0.60, 0.57), q, px * 1.4142, 0.34);
 		} else {
 			vec3 cream = vec3(0.74, 0.72, 0.64);
-			vec3 blue = vec3(0.50, 0.58, 0.66);
+			vec3 blue = vec3(0.56, 0.64, 0.72);
 			tone = 0.5 * (cream + blue);
 			c = room_tiles(cream, blue, vec3(0.60, 0.60, 0.57), p, px, 0.33);
 		}
@@ -419,7 +423,7 @@ vec3 room_floor(int code, vec2 p, vec2 px, out vec3 tone) {
 			c = room_flags(tone, vec3(0.46, 0.45, 0.42), p, px);
 		} else {
 			vec3 cream = vec3(0.76, 0.74, 0.67);
-			vec3 slate = vec3(0.44, 0.44, 0.44);
+			vec3 slate = vec3(0.54, 0.54, 0.53);
 			tone = 0.5 * (cream + slate);
 			c = room_tiles(cream, slate, vec3(0.58, 0.58, 0.55), p, px, 0.4);
 		}
@@ -429,16 +433,16 @@ vec3 room_floor(int code, vec2 p, vec2 px, out vec3 tone) {
 			tone = vec3(0.62, 0.61, 0.58);
 			c = room_screed(tone, p, px);
 		} else if (roll == 1) {
-			tone = vec3(0.56, 0.48, 0.38);
+			tone = vec3(0.61, 0.53, 0.42);
 			c = room_boards(tone, p, px, 0.24);
 		} else if (roll == 2) {
-			tone = vec3(0.62, 0.44, 0.36);
-			c = room_bricks(tone, vec3(0.52, 0.50, 0.46), p, px);
+			tone = vec3(0.66, 0.48, 0.40);
+			c = room_bricks(tone, vec3(0.56, 0.54, 0.50), p, px);
 		} else if (roll == 3) {
 			tone = vec3(0.56, 0.61, 0.57);
 			c = room_screed(tone, p, px);
 		} else {
-			tone = vec3(0.60, 0.52, 0.44);
+			tone = vec3(0.64, 0.56, 0.47);
 			c = room_carpet(tone, p * 0.5);
 		}
 	} else {
@@ -452,8 +456,8 @@ vec3 room_floor(int code, vec2 p, vec2 px, out vec3 tone) {
 // Rugs (room_furnish data.rugs, room_finish's right half): a field in one of eight colours, a
 // border in one of four, inset from the rug's cells and drawn in one of seven weaves. Kept off the
 // box mats' tan and the searched grey so a rug never reads as a box (map_view _bake_container).
-const vec3 RUG_FIELD[8] = vec3[8](vec3(0.62, 0.34, 0.30), vec3(0.38, 0.42, 0.54), vec3(0.40, 0.50, 0.40), vec3(0.54, 0.40, 0.48),
-	vec3(0.36, 0.52, 0.52), vec3(0.50, 0.58, 0.66), vec3(0.76, 0.72, 0.62), vec3(0.70, 0.50, 0.48));
+const vec3 RUG_FIELD[8] = vec3[8](vec3(0.66, 0.38, 0.34), vec3(0.44, 0.48, 0.60), vec3(0.45, 0.55, 0.45), vec3(0.60, 0.45, 0.53),
+	vec3(0.42, 0.58, 0.58), vec3(0.54, 0.62, 0.70), vec3(0.78, 0.74, 0.64), vec3(0.74, 0.54, 0.52));
 const vec3 RUG_BORDER[4] = vec3[4](vec3(0.78, 0.74, 0.64), vec3(0.46, 0.22, 0.20), vec3(0.26, 0.30, 0.40), vec3(0.32, 0.32, 0.27));
 const float RUG_INSET = 0.14;
 
@@ -571,17 +575,19 @@ void fragment() {
 				finish = mix(finish, rug, on);
 				tone = mix(tone, rug_tone, on);
 			}
-			// Out of sight the finish keeps its hue and half its pattern, a shade under the plain
-			// floor (the kind's colour, WOOD V 0.40) as the mask leaves it (`dimmed` below, in
-			// linear: 0.6 grey + 0.4 brightest channel), so the boxes' floor mats (map_view
-			// _bake_container) stand out of an unseen room as they did, and it sinks no deeper.
+			// Out of sight the finish keeps its hue and half its pattern, and its lightness goes
+			// halfway (UNSEEN_FOLLOW) to a shade under the plain floor (the kind's colour, WOOD
+			// V 0.40) as the mask leaves it (`dimmed` below, in linear: 0.6 grey + 0.4 brightest
+			// channel): the unseen rooms are 89 % of a house's floor (mood B1), so a light tile stays
+			// lighter than a dark board there too, and the boxes' floor mats (map_view _bake_container)
+			// still stand above the floor round them.
 			float away = (1.0 - cell.r) * clamp(mask_on, 0.0, 1.0);
 			vec3 luma = vec3(0.3, 0.59, 0.11);
 			vec3 was_l = floor_to_linear(base);
 			vec3 tone_l = floor_to_linear(tone);
 			float was = 0.6 * dot(was_l, luma) + 0.4 * max(was_l.r, max(was_l.g, was_l.b));
 			float as_seen = 0.6 * dot(tone_l, luma) + 0.4 * max(tone_l.r, max(tone_l.g, tone_l.b));
-			unseen_k = mix(1.0, 0.93 * was / max(as_seen, 0.001), away);
+			unseen_k = mix(1.0, 0.93 * mix(was, as_seen, UNSEEN_FOLLOW) / max(as_seen, 0.001), away);
 			base = mix(finish, tone, 0.5 * away);
 		}
 	}
