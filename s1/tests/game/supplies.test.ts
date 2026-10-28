@@ -126,30 +126,28 @@ describe('생필품: 소비와 배급', () => {
     for (const c of COMMS) expect(g.supCover?.[c]).toBe(0.375);
   });
 
-  it('기여 배급은 자리에 남아 실제 일손을 낸 칸부터 채운다', () => {
+  it('기여 배급은 일을 낸 칸부터 채우고, 쉬러 돌아온 작업조도 일한 사람으로 센다', () => {
     const g = enabled();
     for (const c of COMMS) g.comms[c].pop = 0;
     Object.assign(g.comms.tail, { pop: 80, away: 79, rel: 0 });
-    Object.assign(g.comms.engine, { pop: 60, away: 0, rel: 0 });
+    Object.assign(g.comms.engine, { pop: 20, away: 0, rel: 0 });
     g.passed.contribution_ration = 1;
-    g.sup = 2; // 기관실 1.2를 먼저, 꼬리칸 1.6의 절반을 다음으로.
+    g.sup = 1.8; // 꼬리칸 1.6을 먼저(작업조가 쉬러 와 있어도), 기관실 0.4의 절반을 다음으로.
     suppliesUse(g);
-    expect(g.supCover?.engine).toBe(1);
-    expect(g.supCover?.tail).toBeCloseTo(0.5, 12);
+    expect(g.supCover?.tail).toBe(1);
+    expect(g.supCover?.engine).toBeCloseTo(0.5, 12);
     expect(Object.keys(g.supCover!)).toHaveLength(2);
     expect(g.sup).toBe(0);
   });
 
-  it('일손이 같은 칸은 고정 공동체 순서로 나누며 난수를 쓰지 않는다', () => {
-    const g = enabled();
-    g.passed.contribution_ration = 1;
-    for (const c of COMMS) g.comms[c].away = g.comms[c].pop;
-    const rng = structuredClone(g.rng);
-    g.sup = 1.8;
-    suppliesUse(g);
-    expect(g.supCover?.tail).toBe(1);
-    for (const c of COMMS.filter(c => c !== 'tail')) expect(g.supCover?.[c]).toBe(0);
-    expect(g.rng).toEqual(rng);
+  it('기여 배급 나눔은 난수를 쓰지 않고 같은 판이면 같은 몫이다', () => {
+    const a = enabled(), b = enabled();
+    for (const g of [a, b]) { g.passed.contribution_ration = 1; g.sup = 1.8; }
+    const rng = structuredClone(a.rng);
+    suppliesUse(a); suppliesUse(b);
+    expect(a.supCover).toEqual(b.supCover);
+    expect(Object.values(a.supCover!).filter(f => f === 1).length).toBeGreaterThan(0);
+    expect(a.rng).toEqual(rng);
   });
 
   it('인구 0인 칸은 필요량·관계·위생에서 빠지고 이전 몫도 지운다', () => {
