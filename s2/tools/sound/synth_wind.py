@@ -4,7 +4,9 @@ elsewhere; 결정 434 1절: 「바람코드 수정안됬어? 패턴 여러게 + 
 band (500-1500 Hz), so every bed, gust and howl had the same grain. These
 differ in band, motion and grain:
 
-beds (s2/audio/wind/wind_<name>.wav, looped by field_audio.gd):
+beds (s2/audio/wind/wind_<name>.wav; field_audio.gd plays them as pieces of
+uneven length cross-faded one into the next, never the same two in the same
+order, so each is long enough to cut many pieces from):
   breeze   soft and low, slow swells
   gusty    dark under, bright when it gusts, uneven gusts
   low      a low moan, two narrow bands wandering against each other
@@ -16,6 +18,11 @@ gusts (s2/audio/wind_gust/gust_<name>.wav, a stretch of one laid over the bed):
   rise     an airy sweep up and down
   whistle  a sliding whistle
   low      a low howl
+
+spots (s2/audio/wind_spot/spot_<name>.wav, heard from a place near the player):
+  corner   a thin steady whistle round a building's corner, swelling
+  tree     branches creaking and twigs hissing as the wind goes through
+  car      a hollow moan through the gap between two wagons
 
     python s2/tools/sound/synth_wind.py
 
@@ -32,8 +39,9 @@ from scipy import signal
 
 SR = 22050
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-BED_LEN = 12.0
+BED_LEN = 30.0
 GUST_LEN = 9.0
+SPOT_LEN = 8.0
 XFADE = 0.6
 # wind.ogg decoded as the game decodes it, RMS through 200-6000 Hz (2026-10-25).
 REF_LOUD = 0.0131
@@ -206,11 +214,48 @@ def gust(name, n):
     return x
 
 
+def spot(name, n):
+    m = n + int(XFADE * SR)
+    if name == "corner":
+        f = 1650 + 140 * slow(m, 0.3, 101)
+        swell = np.clip(0.5 + 0.5 * slow(m, 0.22, 102), 0.15, 1.0)
+        x = swell * (moving_band(noise(m, 103), f, 70) * 10.0 + moving_band(noise(m, 104), f * 2.03, 90) * 4.0)
+        x += 0.25 * band(noise(m, 105), 900, 4000) * swell
+    elif name == "tree":
+        swell = np.clip(0.5 + 0.5 * slow(m, 0.18, 111), 0.1, 1.0)
+        x = 0.6 * band(noise(m, 112), 2500, 8000) * swell
+        rng = np.random.default_rng(113)
+        t = int(SR * rng.uniform(0.3, 1.2))
+        while t < m:
+            # A branch creaks: a slow, rough tone bending down.
+            g = int(SR * rng.uniform(0.25, 0.7))
+            if t + g >= m:
+                break
+            f0 = rng.uniform(260, 520)
+            k = np.arange(g) / SR
+            pitch = f0 * (1.0 - 0.18 * k / k[-1])
+            ph = 2 * np.pi * np.cumsum(pitch) / SR
+            tone = np.sign(np.sin(ph)) * 0.5 + np.sin(2 * ph) * 0.3
+            creak = band(tone * (1.0 + 0.6 * noise(g, int(t) % 9973)), 300, 2400) * np.hanning(g)
+            x[t:t + g] += creak * rng.uniform(0.15, 0.35)
+            t += g + int(SR * rng.uniform(0.6, 2.4))
+    elif name == "car":
+        f1 = 190 + 25 * slow(m, 0.15, 121)
+        swell = np.clip(0.55 + 0.45 * slow(m, 0.2, 122), 0.15, 1.0)
+        x = swell * (moving_band(noise(m, 123), f1, 14) * 3.5 + moving_band(noise(m, 124), f1 * 2.4, 18) * 1.6)
+        x += 0.3 * band(noise(m, 125), 400, 1800) * swell
+    else:
+        raise ValueError(name)
+    return loop_ready(x, n)
+
+
 def main():
     for name in ["breeze", "gusty", "low", "whistle", "forest", "blizzard"]:
         save(ROOT / "audio" / "wind" / f"wind_{name}.wav", bed(name, int(BED_LEN * SR)))
     for name in ["rise", "whistle", "low"]:
         save(ROOT / "audio" / "wind_gust" / f"gust_{name}.wav", gust(name, int(GUST_LEN * SR)))
+    for name in ["corner", "tree", "car"]:
+        save(ROOT / "audio" / "wind_spot" / f"spot_{name}.wav", spot(name, int(SPOT_LEN * SR)))
 
 
 if __name__ == "__main__":
