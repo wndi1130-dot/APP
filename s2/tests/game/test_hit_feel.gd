@@ -8,6 +8,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const HitFeel = preload("res://game/hit_feel.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const W = preload("res://game/sim/weapons.gd")
+const FxState = preload("res://fx/fx_state.gd")
 
 var game
 var p
@@ -210,3 +211,57 @@ func test_a_field_with_no_frames_keeps_only_a_few_kicks() -> void:
 	for i in 40:
 		game.feel.shot(p, "pistol", p.position + Vector3(5, 0, 0))
 	assert_eq(game.feel.kicks.size(), HitFeel.KICKS_MAX)
+
+
+func test_a_blow_throws_blood_the_way_it_went() -> void:
+	# Decision 444 D: drops off the body, flying on from the blow (east here).
+	FxState.blood_level = FxState.BloodLevel.NORMAL
+	var fx = game.blood_fx
+	fx.clear()
+	game.zombies.spawn("dead", p.position + Vector3(0.9, 0, 0))
+	game.combat.swing_air(p)
+	_land()
+	assert_gt(fx.drop_count(), 0, "the blow throws drops")
+	var east := 0.0
+	for d in fx.drops:
+		east += float(d["vel"].x)
+	assert_gt(east, 0.0, "they fly on the way the blow went")
+
+
+func test_the_blood_has_its_own_dice() -> void:
+	FxState.blood_level = FxState.BloodLevel.NORMAL
+	var state: int = game.rng.state
+	game.feel.landed(p, p.position + Vector3(0.9, 0, 0), "knife", true)
+	assert_eq(game.rng.state, state, "the rules' dice are not touched")
+	assert_gt(game.blood_fx.records.size(), 0, "one that goes down leaves a pool under it")
+
+
+func test_a_round_a_vest_held_does_not_bleed() -> void:
+	FxState.blood_level = FxState.BloodLevel.NORMAL
+	var fx = game.blood_fx
+	fx.clear()
+	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(3.0, 0, 0))
+	z["round_held"] = true
+	game.combat._shot_bleeds(p, z, "chase")
+	assert_eq(fx.drop_count(), 0)
+	assert_false(z.has("round_held"), "the mark is spent")
+	game.combat._shot_bleeds(p, z, "chase")
+	assert_gt(fx.drop_count(), 0, "a round that went in bleeds")
+
+
+func test_a_blow_on_one_shoved_back_bleeds_where_it_is_seen() -> void:
+	# A blow is judged where the body is drawn (decision 474 J2); what it throws
+	# comes off there too, not off the rules' spot already 1.3 m on (review M1).
+	FxState.blood_level = FxState.BloodLevel.NORMAL
+	var fx = game.blood_fx
+	fx.clear()
+	var z: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.9, 0, 0))
+	game.zombies.release(z, p.position, false)
+	assert_gt(z["pos"].x - p.position.x, 2.0, "the rules have it on already")
+	game.combat._strike(p, z)
+	assert_gt(fx.drops.size(), 0)
+	var x := 0.0
+	for d in fx.drops:
+		x += float(d["pos"].x) - p.position.x
+	x /= float(fx.drops.size())
+	assert_lt(x, 1.4, "the drops come off the drawn body, not the rules' spot")

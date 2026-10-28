@@ -376,3 +376,19 @@ func test_finishing_never_starts_a_walk_to_a_far_body_or_replaces_a_shove_with_a
 	assert_false(game.ai._finish_fallen(ally), "활을 들고 있을 때 새 밟기로 바꾸지 않는다")
 	ally.hands = []
 	assert_false(game.ai._finish_fallen(ally), "맨손일 때도 기존 밀치기 선택을 유지한다")
+
+
+func test_finishing_measures_to_the_chest_a_blow_is_judged_at() -> void:
+	# Decision 487 (J2): one on the ground is struck on its chest, toward the head the
+	# way it went over; a companion does not walk out to one whose chest is past reach.
+	var r: float = game.combat.melee_range(ally)
+	var fallen := _dead(ally.position + Vector3(r - 0.2, 0, 0))
+	fallen["state"] = "downed"
+	fallen["t"] = 99.0            # lying flat, not getting up
+	fallen["angle"] = -PI * 0.5   # it faced the companion
+	fallen["phase"] = 0.5 / 5.17  # lying straight on its line
+	fallen["fell_fwd"] = false    # on its back: the chest away, past the reach
+	assert_false(game.ai._finish_fallen(ally))
+	fallen["fell_fwd"] = true     # on its face: the chest toward the companion
+	assert_true(game.ai._finish_fallen(ally))
+	assert_eq(ally.target_zombie, fallen)

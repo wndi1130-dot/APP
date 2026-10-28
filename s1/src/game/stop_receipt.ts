@@ -10,7 +10,7 @@ import type { InfoDocument, RecurringRoles } from './info_documents';
 import { goalStatus } from './stop_goals';
 import type { GoalStatus, StopEnd, StopGoal } from './stop_goals';
 
-export type StockKey = 'coal' | 'food' | 'medicine' | 'luxury' | 'symbol' | 'info' | 'scrap' | 'wood' | 'cloth' | 'parts'
+export type StockKey = 'coal' | 'food' | 'medicine' | 'luxury' | 'symbol' | 'info' | 'scrap' | 'wood' | 'cloth' | 'parts' | 'supplies'
   | 'ammo_pistol' | 'ammo_shell' | 'ammo_craft';
 export interface ReceiptPeople {
   sent: string[]; injured: string[]; bitten: string[]; dead: string[];
@@ -96,6 +96,8 @@ export const v3Schema = {
   ...receiptSchema, $id: 'urn:s1:prep:stop-receipt-v3',
   properties: {
     ...receiptSchema.properties, version: { const: 3 }, receiptId: id, stopId: id,
+    // 판 3 이후의 추가 물자. 구형 공용 스키마·S2 계약 파일은 그대로 둔다.
+    stock: { ...receiptSchema.properties.stock, properties: { ...receiptSchema.properties.stock.properties, supplies: { type: 'integer' } } },
     goal: object({ kind: { enum: ['coal', 'food', 'medicine', 'materials', null] }, required: amount, earned: amount,
       status: { enum: ['done', 'part', 'retreat', 'failed'] } }),
     extras: object({ documents, symbolCount: amount,

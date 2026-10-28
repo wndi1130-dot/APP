@@ -4,7 +4,7 @@ import { s } from './dom';
 // 석탄 수레, 빵, 알약과 병, 반지, 맞잡은 손, 끊어지려는 밧줄, 주먹, 편 손, 일지 책, 서류 뭉치).
 
 export type IconName =
-  | 'coal' | 'food' | 'med' | 'lux' | 'trust' | 'tension' | 'fist' | 'hand' | 'book' | 'menu' | 'overview'
+  | 'coal' | 'food' | 'med' | 'lux' | 'sup' | 'trust' | 'tension' | 'fist' | 'hand' | 'book' | 'menu' | 'overview'
   | 'arrow' | 'back' | 'eye' | 'eyeOff' | 'secret' | 'symbol' | 'heat' | 'ration' | 'people' | 'witness'
   | 'open' | 'favor' | 'fetch' | 'bribe' | 'blackmail' | 'persuade' | 'papers' | 'numbers' | 'lever' | 'scale' | 'bed' | 'gear' | 'wrench' | 'radio' | 'compass' | 'check' | 'lock' | 'alert' | 'skull' | 'dot' | 'peg' | 'cloth';
 
@@ -13,6 +13,7 @@ const P: Record<IconName, string> = {
   food: 'M4 14c0-4 4-7 8-7s8 3 8 7c0 2-2 3-4 3H8c-2 0-4-1-4-3z M9 10l1 3 M12 9v4 M15 10l-1 3',
   med: 'M8 4h4v3H8z M7 7h6v13H7z M7 12h6 M15 13l4-4a2 2 0 0 1 3 3l-4 4a2 2 0 0 1-3-3z',
   lux: 'M12 9a6 6 0 1 0 0.01 0 M9 5l3-3 3 3-3 3z',
+  sup: 'M4 13h8a2 2 0 0 1 2 2v4H2v-4a2 2 0 0 1 2-2z M5 16h6 M16 4h4v15h-4 M16 4a3 3 0 1 0 0 6 M16 7h4 M7 8h.01 M10 5h.01',
   trust: 'M3 12l4-4 3 2 3-2 4 3 4 3 M7 8l5 6 M10 16l3 2 3-2 3-3',
   tension: 'M2 12c3 0 4-2 7-2 M22 12c-3 0-4 2-7 2 M9 10l1 2-1 2 M15 14l-1-2 1-2 M10 9l1-2 M14 15l-1 2',
   fist: 'M7 10V7a1.5 1.5 0 0 1 3 0v3 M10 9V6a1.5 1.5 0 0 1 3 0v3 M13 9V7a1.5 1.5 0 0 1 3 0v4 M7 10H5v4c0 3 2 6 6 6h2c3 0 4-3 4-6v-3 M8 21v2h7v-2',

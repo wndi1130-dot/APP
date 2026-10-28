@@ -143,9 +143,12 @@ static func add(original: Dictionary) -> Dictionary:
 	ring["room_stats"] = RoomFurnish.furnish_rooms(ring)
 	RoomFurnish.clear_fronts(ring)
 	RoomFurnish.block_furniture(ring)
+	# Fill by name before the spare boxes come: they stay empty and take a share of the place's
+	# bundles when the stop opens (room_furnish boxes_into_furniture), as on the inner map. Their
+	# names (서랍장, 찬장, 곁탁자, 수건 선반) would roll a box of their own.
+	LootRules.fill(ring["containers"], seed_value)
 	RoomFurnish.boxes_into_furniture(ring)
 	BuildingRules.dress_windows(ring)
-	LootRules.fill(ring["containers"], seed_value)
 	# After the fill (it reads the names): a box in a piece whose name says another room takes the piece's name.
 	RoomFurnish.name_boxes_by_furniture(ring)
 	_keep_place_kinds(ring["containers"], data["containers"])
@@ -161,10 +164,10 @@ static func add(original: Dictionary) -> Dictionary:
 			g.zone[i] = ""
 	g.doors.merge(rg.doors)
 	g.windows.merge(rg.windows)
-	for key in ["buildings", "props", "low_blocks", "trees", "labels"]:
+	for key in ["buildings", "props", "low_blocks", "trees", "labels", "rugs"]:
 		if not data.has(key):
 			data[key] = []
-		data[key].append_array(ring[key])
+		data[key].append_array(ring.get(key, []))
 	data["containers"].merge(ring["containers"])
 	g.refresh_paths()
 	# The room kinds were numbered by room on the grid that was furnished: the grown grid numbers

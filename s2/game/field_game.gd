@@ -18,6 +18,7 @@ const SidePath = preload("res://game/world/side_path.gd")
 const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const RouteStops = preload("res://game/train/route_stops.gd")
+const WorkSpots = preload("res://game/world/work_spots.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
@@ -66,6 +67,7 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const BreathFx = preload("res://fx/breath_fx.gd")
+const BloodFx = preload("res://fx/blood_fx.gd")
 const AllyLines = preload("res://game/sim/ally_lines.gd")
 const LeaveScene = preload("res://game/ui/leave_scene.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
@@ -396,6 +398,7 @@ var screen_lift: float = 0.0
 const SCREEN_LIFT_MAX: float = 0.2
 var atmo_min: float = -INF
 var breath: Node3D
+var blood_fx: Node3D                  # drops and marks off a blow (decision 444 D, view only)
 ## Frost creeping in at the screen's edges on cold nights (plain stops; a storm has its own).
 var cold_frost: Control
 var cold_frost_mat: ShaderMaterial
@@ -457,6 +460,7 @@ func _ready() -> void:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
 	if opts.get("departure") is Dictionary:
 		RouteStops.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)))
+	WorkSpots.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else -1, rng.seed)
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
@@ -537,6 +541,10 @@ func _ready() -> void:
 	map_edge = MapEdge.new()
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
+	blood_fx = BloodFx.new()
+	add_child(blood_fx)
+	blood_fx.begin_stop(int(opts.get("seed", 1)))
+	blood_fx.set_sight(view.vis_texture, Vector2(view.grid.width, view.grid.height))
 	ripples = SoundRipple.new()
 	add_child(ripples)
 	map_edge.set_fog(fx_light["fog_color"])
@@ -1466,9 +1474,9 @@ func allies_alive() -> Array:
 
 ## What the stop loader makes ahead from a map off the main thread (stop_loader.gd
 ## make_ready): the building plan, the ground's details or arrays, the floors' arrays,
-## the rooms' finish.
+## the rooms' finish, the walk from the train and the trees to fell (work_spots.gd).
 const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground_arrays", "_ground_key",
-	"_floor_arrays", "_floor_keys", "_room_finish"]
+	"_floor_arrays", "_floor_keys", "_room_finish", "_walk_field", "_walk_key", "fell_groves"]
 
 
 ## The side path on a map built here or handed over (side_path.gd). The loader puts it
