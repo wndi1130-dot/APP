@@ -581,10 +581,23 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 	if prints.has(0) and not prints[0].is_empty():
 		out["footprints"][b] = _bounds(prints[0])
 	# 꼴(결정 478 1가): 용도·지역으로 벽 재질·색·지붕(박공 물매·평지붕)·굴뚝.
+	# 한 건물이 여러 줄(사각형 여럿)이면 가장 큰 줄의 이름으로, 넓이는 줄들의 합으로 고른다(줄 순서와 상관없이).
 	var row_b: Dictionary = {"id": b}
+	var found := false
+	var cells := 0
 	for row: Variant in data.get("buildings", []):
-		if row is Dictionary and int(row.get("id", -1)) == b:
+		if not (row is Dictionary and int(row.get("id", -1)) == b):
+			continue
+		var r: Rect2i = row["rect"] if row.get("rect") is Rect2i else Rect2i()
+		var best: Rect2i = row_b["rect"] if row_b.get("rect") is Rect2i else Rect2i()
+		cells += r.get_area()
+		if not found or r.get_area() > best.get_area() or (r.get_area() == best.get_area() \
+				and (r.position.y < best.position.y or (r.position.y == best.position.y and r.position.x < best.position.x))):
 			row_b = row
+			found = true
+	if found:
+		row_b = row_b.duplicate()
+		row_b["cells"] = cells
 	var storeys := 0
 	for lv: int in prints:
 		if not (prints[lv] as Dictionary).is_empty():
@@ -596,6 +609,7 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 	var flat_top: bool = String(look["roof"]) == "flat"
 	for row: Variant in data.get("rooftops", []):
 		flat_top = flat_top or (row is Dictionary and int(row.get("building", -1)) == b)
+	var flat_tops: Array = []
 	for lv: int in prints:
 		var here: Dictionary = prints[lv]
 		var above: Dictionary = prints.get(lv + 1, {})
@@ -604,12 +618,25 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 			if not above.has(c):
 				region[c] = true
 		var top := (lv + 1) * LEVEL_H
+		var flats: Array[Rect2i] = []
 		for r: Rect2i in _rects_of(region):
 			if _touches(r, above) or (flat_top and above.is_empty()):
-				_plan_flat(out, r, top, above, b)
+				flats.append(r)
 			else:
 				gables.append(_plan_gable(out, r, top, b, float(look["pitch"])))
-	if gables.is_empty() or not (bool(look["chimney"]) or _chimney_wanted(data, b)):
+		# 같은 높이 평지붕 조각끼리 맞닿은 변은 한 지붕으로 잇는다(틈·안쪽 낮은 벽 없이).
+		var level_flat: Dictionary = {}
+		for r: Rect2i in flats:
+			for y in range(r.position.y, r.end.y):
+				for x in range(r.position.x, r.end.x):
+					level_flat[Vector2i(x, y)] = true
+		for r: Rect2i in flats:
+			for piece: Rect2i in _split_flat(r, above, level_flat):
+				flat_tops.append(_plan_flat(out, piece, top, above, level_flat, b))
+	if not (bool(look["chimney"]) or _chimney_wanted(data, b)):
+		return
+	if gables.is_empty():
+		_plan_flat_chimney(out, data, flat_tops, b)
 		return
 	# 굴뚝은 가장 높은 박공에 하나: 난로가 그 지붕 밑에 있으면 그 위, 없으면 가운데에서 조금 비켜.
 	gables.sort_custom(func(p: Dictionary, q: Dictionary) -> bool: return p["top"] > q["top"])
@@ -626,6 +653,37 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 	at = Vector2(clampf(at.x, r.position.x + 1.0, r.end.x - 1.0), clampf(at.y, r.position.y + 1.0, r.end.y - 1.0))
 	var base: float = g["top"] + g["pitch"] * (g["k"] * ROOF_RISE - CHIMNEY_BACK * ROOF_TAN) - 0.15
 	out["roofs"].append({"id": "chimney", "xf": _xf(Vector3(at.x, base, at.y), 0.0), "b": b})
+
+
+## 박공 없이 평지붕만인 건물의 굴뚝: 가장 높은 평지붕 조각에서 난로 위, 없으면 가장 큰 조각 가운데에서 조금 비켜.
+static func _plan_flat_chimney(out: Dictionary, data: Dictionary, flats: Array, b: int) -> void:
+	if flats.is_empty():
+		return
+	var top := -INF
+	for f: Dictionary in flats:
+		top = maxf(top, float(f["top"]))
+	var pick: Dictionary = {}
+	var spot := Vector2(INF, INF)
+	for f: Dictionary in flats:
+		if float(f["top"]) < top:
+			continue
+		var r: Rect2i = f["rect"]
+		for stove: Dictionary in data.get("stoves", []):
+			var sc: Vector2i = stove.get("cell", Vector2i(-1, -1))
+			if int(stove.get("building", -1)) == b and r.has_point(sc):
+				pick = f
+				spot = Vector2(sc.x + 0.5, sc.y + 0.5)
+		if spot.x == INF and (pick.is_empty() or r.get_area() > (pick["rect"] as Rect2i).get_area()):
+			pick = f
+	var r: Rect2i = pick["rect"]
+	if spot.x == INF:
+		spot = Vector2(r.position.x + r.size.x * 0.5 + 1.5, r.position.y + r.size.y * 0.5)
+	# 조각 안쪽 1 m(조각이 2 m보다 좁으면 그 가운데)에 둔다.
+	var lo := Vector2(r.position) + Vector2.ONE
+	var hi := Vector2(r.end) - Vector2.ONE
+	var at := Vector2(clampf(spot.x, lo.x, hi.x) if lo.x <= hi.x else r.position.x + r.size.x * 0.5,
+		clampf(spot.y, lo.y, hi.y) if lo.y <= hi.y else r.position.y + r.size.y * 0.5)
+	out["roofs"].append({"id": "chimney", "xf": _xf(Vector3(at.x, top + FLAT_LIFT - 0.05, at.y), 0.0), "b": b})
 
 
 ## 난로가 있는 건물(꼴과 상관없이 굴뚝).
@@ -716,43 +774,90 @@ static func _plan_gable(out: Dictionary, r: Rect2i, top: float, b: int, pitch: f
 	return {"rect": r, "top": top, "k": k, "pitch": pitch, "along_x": along_x, "ridge": mid}
 
 
-## 평지붕: 바깥면까지 덮고, 높은 쪽에 붙은 변은 그 벽 바깥면까지 늘인다. 낮은 벽은 붙지 않은 변에만.
-static func _plan_flat(out: Dictionary, r: Rect2i, top: float, above: Dictionary, b: int) -> void:
-	var sides := {}   # 쪽 -> 높은 쪽에 붙었나
-	for d in DIRS:
-		var touch := false
-		var edge: Rect2i
-		match d:
-			NORTH:
-				edge = Rect2i(r.position.x, r.position.y - 1, r.size.x, 1)
-			SOUTH:
-				edge = Rect2i(r.position.x, r.end.y, r.size.x, 1)
-			WEST:
-				edge = Rect2i(r.position.x - 1, r.position.y, 1, r.size.y)
-			EAST:
-				edge = Rect2i(r.end.x, r.position.y, 1, r.size.y)
-		for c: Vector2i in above:
-			if edge.has_point(c):
-				touch = true
+## 평지붕 칸 하나의 이음: 2 높은 쪽 벽, 1 같은 높이 평지붕, 0 바깥.
+static func _join(c: Vector2i, above: Dictionary, level: Dictionary) -> int:
+	return 2 if above.has(c) else (1 if level.has(c) else 0)
+
+
+## 사각형의 한 변 바로 바깥 칸 줄.
+static func _edge(r: Rect2i, d: Vector2i) -> Rect2i:
+	match d:
+		NORTH:
+			return Rect2i(r.position.x, r.position.y - 1, r.size.x, 1)
+		SOUTH:
+			return Rect2i(r.position.x, r.end.y, r.size.x, 1)
+		WEST:
+			return Rect2i(r.position.x - 1, r.position.y, 1, r.size.y)
+	return Rect2i(r.end.x, r.position.y, 1, r.size.y)
+
+
+## 평지붕 사각형을 이음이 바뀌는 자리에서 잘라, 조각마다 변 하나가 이음 한 가지만 갖게 한다
+## (ㄱ자 평지붕의 긴 변이 반은 옆 조각, 반은 바깥에 닿는 곳).
+static func _split_flat(r: Rect2i, above: Dictionary, level: Dictionary) -> Array[Rect2i]:
+	var xs: Array[int] = [r.position.x, r.end.x]
+	var ys: Array[int] = [r.position.y, r.end.y]
+	for x in range(r.position.x + 1, r.end.x):
+		for y: int in [r.position.y - 1, r.end.y]:
+			if _join(Vector2i(x - 1, y), above, level) != _join(Vector2i(x, y), above, level):
+				xs.append(x)
 				break
-		sides[d] = touch
-	var x0 := r.position.x + (-FACE_IN if sides[WEST] else FACE_IN)
-	var x1 := r.end.x - (-FACE_IN if sides[EAST] else FACE_IN)
-	var z0 := r.position.y + (-FACE_IN if sides[NORTH] else FACE_IN)
-	var z1 := r.end.y - (-FACE_IN if sides[SOUTH] else FACE_IN)
+	for y in range(r.position.y + 1, r.end.y):
+		for x: int in [r.position.x - 1, r.end.x]:
+			if _join(Vector2i(x, y - 1), above, level) != _join(Vector2i(x, y), above, level):
+				ys.append(y)
+				break
+	xs.sort()
+	ys.sort()
+	var out: Array[Rect2i] = []
+	for i in range(xs.size() - 1):
+		for j in range(ys.size() - 1):
+			out.append(Rect2i(xs[i], ys[j], xs[i + 1] - xs[i], ys[j + 1] - ys[j]))
+	return out
+
+
+## 평지붕: 바깥면까지 덮고, 높은 쪽에 붙은 변은 그 벽 바깥면까지, 같은 높이 평지붕에 붙은 변은 칸 경계까지
+## 늘인다(옆 조각과 틈 없이 만남). 낮은 벽은 바깥 변에만. level: 이 높이 평지붕 칸 전부.
+static func _plan_flat(out: Dictionary, r: Rect2i, top: float, above: Dictionary, level: Dictionary, b: int) -> Dictionary:
+	var sides := {}   # 쪽 -> 이음(_split_flat 뒤라 한 변이 한 가지)
+	var inset := {}
+	for d in DIRS:
+		var e := _edge(r, d)
+		var join := 0
+		for y in range(e.position.y, e.end.y):
+			for x in range(e.position.x, e.end.x):
+				join = maxi(join, _join(Vector2i(x, y), above, level))
+		sides[d] = join
+		inset[d] = [FACE_IN, 0.0, -FACE_IN][join]
+	var x0: float = r.position.x + inset[WEST]
+	var x1: float = r.end.x - inset[EAST]
+	var z0: float = r.position.y + inset[NORTH]
+	var z1: float = r.end.y - inset[SOUTH]
 	var y := top + FLAT_LIFT
 	out["roofs"].append({"id": "roof_flat", "xf": _xf(Vector3((x0 + x1) * 0.5, y, (z0 + z1) * 0.5), 0.0, Vector3(x1 - x0, 1, z1 - z0)), "b": b})
-	# 가로 낮은 벽은 모서리까지, 세로 낮은 벽은 그 사이만(겹친 윗면이 깜박이지 않게).
+	# 가로 낮은 벽은 모서리까지, 세로 낮은 벽은 그 사이만(겹친 윗면이 깜박이지 않게). 안쪽 모서리(옆 조각이
+	# 이 변 바깥으로 꺾여 나간 곳)에서는 가로 벽이 그 모서리 칸의 벽 두께까지, 세로 벽은 가로 벽 바깥면까지 간다.
 	for d: Vector2i in [NORTH, SOUTH]:
-		if not sides[d]:
+		if sides[d] == 0:
+			var row := r.position.y - 1 if d == NORTH else r.end.y
+			var a0 := x0 - (FACE_IN + EXT_T if sides[WEST] == 1 and level.has(Vector2i(r.position.x - 1, row)) else 0.0)
+			var a1 := x1 + (FACE_IN + EXT_T if sides[EAST] == 1 and level.has(Vector2i(r.end.x, row)) else 0.0)
 			var z := r.position.y + 0.5 if d == NORTH else r.end.y - 0.5
-			out["roofs"].append({"id": "roof_parapet", "xf": _xf(Vector3((x0 + x1) * 0.5, y, z), yaw_of(d), Vector3(x1 - x0, 1, 1)), "b": b})
+			out["roofs"].append({"id": "roof_parapet", "xf": _xf(Vector3((a0 + a1) * 0.5, y, z), yaw_of(d), Vector3(a1 - a0, 1, 1)), "b": b})
 	for d: Vector2i in [WEST, EAST]:
-		if not sides[d]:
-			var a0 := z0 + (EXT_T if not sides[NORTH] else 0.0)
-			var a1 := z1 - (EXT_T if not sides[SOUTH] else 0.0)
+		if sides[d] == 0:
+			var col := r.position.x - 1 if d == WEST else r.end.x
+			var a0 := z0 + (EXT_T if sides[NORTH] == 0 else 0.0)
+			if sides[NORTH] == 1 and level.has(Vector2i(col, r.position.y - 1)):
+				a0 = r.position.y - FACE_IN
+			var a1 := z1 - (EXT_T if sides[SOUTH] == 0 else 0.0)
+			if sides[SOUTH] == 1 and level.has(Vector2i(col, r.end.y)):
+				a1 = r.end.y + FACE_IN
+			# 깊이 한 칸 조각은 가로 벽 둘이 끝까지 덮어 세로 벽 자리가 없다(길이가 0 밑이면 뒤집힌다).
+			if a1 - a0 <= 0.01:
+				continue
 			var x := r.position.x + 0.5 if d == WEST else r.end.x - 0.5
 			out["roofs"].append({"id": "roof_parapet", "xf": _xf(Vector3(x, y, (a0 + a1) * 0.5), yaw_of(d), Vector3(a1 - a0, 1, 1)), "b": b})
+	return {"rect": r, "top": top}
 
 
 ## 계단: 아래층 칸에 가파른 계단, 위층 같은 칸에 난간과 어두운 구멍. 오르는 쪽은
