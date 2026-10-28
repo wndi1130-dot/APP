@@ -1,11 +1,46 @@
 extends RefCounted
-## PR 4: S1 domestic/workshop.ts and lawtech.ts, insulation only.
+## S1 domestic/workshop.ts, state.ts and lawtech.ts: insulation and furnishing.
 ## Starts pay once; only untouched jobs refund the recorded payment.
 
 const TrainResearch = preload("res://game/train/train_research.gd")
 const D: Dictionary = {
 	"insulateWork": 3, "insulateWood": 8, "insulateWarm": 6,
 	"insulateHeat": 0.3, "insulateCrowd": 2, "insulateQuotaHalf": false,
+	"furnishClothWood": 0, "furnishFurnitureCap": 4, "furnishThreshold": [0, 3, 8, 15],
+	"furnishWarm": [0, 1, 1, 2], "furnishCrowd": -0.5, "furnishRel": 2,
+	"furnishGapMin": 1, "furnishGapMax": 2, "furnishGapRel": 0.5,
+	"furnishGapCap": 2, "furnishPianoRel": 0.3,
+}
+const FURNISH_CARS: Array[String] = ["tail1", "tail2", "tail3", "medtech", "guard", "front"]
+const FURNISH_STEPS: Array[int] = [1, 2, 3]
+const FURNISH_NAMES: Array[String] = ["누더기", "손봄", "갖춤", "북유럽식"]
+const FURNISH_WORK: Dictionary = {
+	1: {"wood": 1, "scrap": 3, "cloth": 1, "parts": 0, "work": 1, "points": 3},
+	2: {"wood": 1, "scrap": 6, "cloth": 2, "parts": 0, "work": 3, "points": 5},
+	3: {"wood": 2, "scrap": 8, "cloth": 2, "parts": 2, "work": 4, "points": 7},
+}
+const FURNITURE_SIZE: Dictionary = {
+	"small": {"slots": 4, "points": 1, "crowd": 0},
+	"medium": {"slots": 2, "points": 2, "crowd": 0.5},
+	"large": {"slots": 1, "points": 3, "crowd": 1.5},
+}
+const FURNITURE: Dictionary = {
+	"chair": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
+	"side_table": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
+	"small_shelf": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
+	"oil_lamp": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
+	"small_box": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
+	"frame": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
+	"drawer": {"size": "medium", "warm": 0, "crowd": 0, "piano": false},
+	"bed_frame": {"size": "medium", "warm": 0, "crowd": -1, "piano": false},
+	"table": {"size": "medium", "warm": 0, "crowd": 0, "piano": false},
+	"bookshelf": {"size": "medium", "warm": 0, "crowd": 0, "piano": false},
+	"small_stove": {"size": "medium", "warm": 2, "crowd": 0, "piano": false},
+	"wardrobe": {"size": "large", "warm": 0, "crowd": 0, "piano": false},
+	"piano": {"size": "large", "warm": 0, "crowd": 0, "piano": true},
+	"cupboard": {"size": "large", "warm": 0, "crowd": 0, "piano": false},
+	"iron_stove": {"size": "large", "warm": 4, "crowd": 0, "piano": false},
+	"safe": {"size": "large", "warm": 0, "crowd": 0, "piano": false},
 }
 const CAR_COMM: Dictionary = {
 	"tail1": "tail", "tail2": "tail", "tail3": "tail", "medtech": "medtech",
@@ -25,12 +60,42 @@ static func _dom(g: Dictionary) -> Dictionary:
 	return g["dom"] if g.get("dom") is Dictionary else {}
 
 
-static func job_check(g: Dictionary, kind: String, car: String) -> Dictionary:
-	if kind != "insulate":
+## Typed Array[int].has coerces its argument; validate before that can turn
+## a fractional step into an integer job (JSON numbers arrive as floats).
+static func is_furnish_step(step: Variant) -> bool:
+	return (step is int or step is float) and is_finite(float(step)) \
+		and float(step) == floorf(float(step)) and float(step) >= 1.0 and float(step) <= 3.0
+
+
+static func job_check(g: Dictionary, kind: String, car: String, step: Variant = null) -> Dictionary:
+	if kind not in ["insulate", "furnish"]:
 		return {"ok": false, "why": "아직 이 열차에서 못 쓴다"}
 	var d: Dictionary = _dom(g)
 	if d.get("job") != null:
 		return {"ok": false, "why": "개조 하나가 이미 줄에 있다"}
+	if kind == "furnish":
+		if not FURNISH_CARS.has(car):
+			return {"ok": false, "why": "살림은 사람이 사는 객차 여섯 칸만"}
+		var f: Dictionary = furnish_of(g, car)
+		if step != null and not is_furnish_step(step):
+			return {"ok": false, "why": "이미 살림 작업을 마쳤다"}
+		var n: int = next_furnish_work(g, car) if step == null else int(step)
+		if not FURNISH_STEPS.has(n) or (f["jobs"] as Array).has(n):
+			return {"ok": false, "why": "이미 살림 작업을 마쳤다"}
+		if int(f["tier"]) < n - 1:
+			return {"ok": false, "why": "살림 %d단부터" % (n - 1)}
+		if n == 2 and not (d.get("insulated", []) as Array).has(car):
+			return {"ok": false, "why": "이 칸 단열부터"}
+		if n >= 2 and TrainResearch.mult(g, {}, "w5") <= 0.0:
+			return {"ok": false, "why": "객차 목공을 사용해야 한다"}
+		if n == 3 and not TrainResearch.usable(g, {}, "w1"):
+			return {"ok": false, "why": "공구 수리부터"}
+		var cost: Dictionary = furnish_cost(n)
+		for key: String in ["wood", "scrap", "parts", "cloth"]:
+			if float(d.get(key, 0)) < float(cost[key]):
+				var word: String = {"wood": "목재", "scrap": "고철", "parts": "부품", "cloth": "천"}[key]
+				return {"ok": false, "why": "%s %d이 든다" % [word, int(cost[key])]}
+		return {"ok": true}
 	if not TrainResearch.usable(g, {}, "e5"):
 		return {"ok": false, "why": "단열 개조를 아직 모른다"}
 	if not CAR_COMM.has(car):
@@ -42,14 +107,22 @@ static func job_check(g: Dictionary, kind: String, car: String) -> Dictionary:
 	return {"ok": true}
 
 
-static func start_job(g: Dictionary, kind: String, car: String) -> bool:
-	if not bool(job_check(g, kind, car)["ok"]):
+static func start_job(g: Dictionary, kind: String, car: String, step: Variant = null) -> bool:
+	if not g.get("dom") is Dictionary or not bool(job_check(g, kind, car, step)["ok"]):
 		return false
 	var d: Dictionary = _dom(g)
-	var wood0: float = float(d.get("wood", 0))
-	d["wood"] = wood0 - float(D["insulateWood"])
-	d["job"] = {"kind": kind, "car": car, "progress": 0.0, "need": D["insulateWork"],
-		"paid": {"wood": wood0 - float(d["wood"]), "scrap": 0.0}}
+	var n: int = next_furnish_work(g, car) if step == null else int(step)
+	var cost: Dictionary = furnish_cost(n) if kind == "furnish" else {"wood": D["insulateWood"], "scrap": 0, "parts": 0, "work": D["insulateWork"]}
+	var paid := {}
+	for key: String in ["wood", "scrap", "parts", "cloth"]:
+		if not cost.has(key):
+			continue
+		var before: float = float(d.get(key, 0))
+		d[key] = before - float(cost[key])
+		paid[key] = before - float(d[key])
+	d["job"] = {"kind": kind, "car": car, "progress": 0.0, "need": cost["work"], "paid": paid}
+	if kind == "furnish":
+		d["job"]["furnishStep"] = n
 	_journal(g, "공방 개조 줄에 올렸다: %s." % job_title(kind, car))
 	return true
 
@@ -66,30 +139,42 @@ static func cancel_job(g: Dictionary) -> bool:
 	var job: Dictionary = d["job"]
 	d["wood"] = float(d.get("wood", 0)) + float(job["paid"]["wood"])
 	d["scrap"] = float(d.get("scrap", 0)) + float(job["paid"]["scrap"])
+	d["parts"] = float(d.get("parts", 0)) + float(job["paid"].get("parts", 0))
+	if job["paid"].has("cloth"):
+		d["cloth"] = float(d.get("cloth", 0)) + float(job["paid"]["cloth"])
 	d["job"] = null
 	_journal(g, "공방 개조 줄에서 내렸다: %s." % job_title(String(job["kind"]), String(job["car"])))
 	return true
 
 
-## S1 runWorkshop's modify branch + completeJob's insulation branch.
+## S1 runWorkshop's modify branch + completeJob.
 ## The event is S2's train-scene envelope; it is emitted only on completion.
 static func advance_job(g: Dictionary, work: float) -> Dictionary:
 	var out := {"used": 0.0, "did": [], "events": []}
 	var d: Dictionary = _dom(g)
 	var job: Variant = d.get("job")
-	if work <= 0.0 or not job is Dictionary or job.get("kind") != "insulate" or not CAR_COMM.has(job.get("car")):
+	if work <= 0.0 or not job is Dictionary or job.get("kind") not in ["insulate", "furnish"] or not CAR_COMM.has(job.get("car")):
+		return out
+	if job["kind"] == "furnish" and (not FURNISH_CARS.has(job["car"]) or not is_furnish_step(job.get("furnishStep"))):
 		return out
 	var spend: float = minf(work, float(job["need"]) - float(job["progress"]))
 	job["progress"] = float(job["progress"]) + spend
 	out["used"] = spend
 	if float(job["progress"]) >= float(job["need"]) - 1e-9:
 		var car: String = String(job["car"])
-		out["did"].append(job_title("insulate", car))
+		out["did"].append(job_title(String(job["kind"]), car))
 		d["job"] = null
-		if not d.has("insulated"):
-			d["insulated"] = []
-		(d["insulated"] as Array).append(car)
-		_journal(g, "%s 벽의 틈을 메웠다. 밤바람이 덜 들고, 아침 창에 김이 서렸다." % CAR_NAME[car], "good")
+		if job["kind"] == "furnish":
+			var f: Dictionary = _mutable_furnish(g, car)
+			var n: int = int(job["furnishStep"])
+			if not (f["jobs"] as Array).has(n):
+				(f["jobs"] as Array).append(n)
+			_update_furnish(g, car)
+		else:
+			if not d.has("insulated"):
+				d["insulated"] = []
+			(d["insulated"] as Array).append(car)
+			_journal(g, "%s 벽의 틈을 메웠다. 밤바람이 덜 들고, 아침 창에 김이 서렸다." % CAR_NAME[car], "good")
 		out["events"].append({"kind": "mod_done", "car": car, "comm": CAR_COMM[car],
 			"sign": 1, "size": 0.4, "day": int(g.get("seg", 0))})
 	return out
@@ -154,9 +239,123 @@ static func insulate_car_note(g: Dictionary, car: String) -> String:
 
 
 static func job_title(kind: String, car: String) -> String:
+	if kind == "furnish":
+		return "%s 살림" % String(CAR_NAME.get(car, car))
 	if kind != "insulate":
 		return "아직 이 열차에서 못 쓴다"
 	return "%s 단열" % String(CAR_NAME.get(car, car))
+
+
+## S1 furnishOf: reading an older save never adds a key to it.
+static func furnish_of(g: Dictionary, car: String) -> Dictionary:
+	return _dom(g).get("furnish", {}).get(car, {"work": 0, "jobs": [], "furnPts": 0, "tier": 0, "best": 0, "items": []})
+
+
+static func furnish_score(g: Dictionary, car: String) -> int:
+	var f: Dictionary = furnish_of(g, car)
+	var points: int = mini(int(f["furnPts"]), int(D["furnishFurnitureCap"]))
+	for n: Variant in f["jobs"]:
+		points += int(FURNISH_WORK[int(n)]["points"])
+	return points
+
+
+## 0 means no next work (S1 undefined). Retained tiers can need an earlier job
+## after furniture has been removed, so do not simply count completed jobs.
+static func next_furnish_work(g: Dictionary, car: String) -> int:
+	var f: Dictionary = furnish_of(g, car)
+	if int(f["tier"]) >= 3:
+		return 0
+	var next: int = int(f["tier"]) + 1
+	if not (f["jobs"] as Array).has(next):
+		return next
+	for n: int in FURNISH_STEPS:
+		if n <= next and not (f["jobs"] as Array).has(n):
+			return n
+	return 0
+
+
+## S2 pays actual cloth, not S1's cloth-to-wood conversion (currently zero).
+static func furnish_cost(step: int) -> Dictionary:
+	if not FURNISH_WORK.has(step):
+		return {}
+	var cost: Dictionary = FURNISH_WORK[step]
+	return {"wood": cost["wood"], "scrap": cost["scrap"], "parts": cost["parts"], "work": cost["work"], "cloth": cost["cloth"]}
+
+
+static func _mutable_furnish(g: Dictionary, car: String) -> Dictionary:
+	var d: Dictionary = _dom(g)
+	if not d.has("furnish"):
+		d["furnish"] = {}
+	if not d["furnish"].has(car):
+		d["furnish"][car] = furnish_of(g, car)
+	return d["furnish"][car]
+
+
+## Same clamped relationship + 64-entry ledger as turn_common.bump_rel.
+## Kept here to avoid the State -> Dom -> Mods -> State preload cycle.
+static func _bump_furnish_rel(g: Dictionary, c: String, delta: float) -> void:
+	if delta == 0.0 or not g.get("comms", {}).has(c):
+		return
+	var s: Dictionary = g["comms"][c]
+	var before: float = float(s["rel"])
+	s["rel"] = clampf(before + delta, -100.0, 100.0)
+	var real: float = float(s["rel"]) - before
+	if real == 0.0:
+		return
+	if not g.has("ledger"):
+		g["ledger"] = []
+	g["ledger"].append({"k": "rel:" + c, "d": real, "why": "furnish"})
+	if g["ledger"].size() > 64:
+		g["ledger"] = g["ledger"].slice(g["ledger"].size() - 64)
+
+
+static func _update_furnish(g: Dictionary, car: String) -> void:
+	var f: Dictionary = _mutable_furnish(g, car)
+	f["work"] = f["jobs"].size()
+	var points: int = 0
+	for item: Dictionary in f["items"]:
+		points += int(FURNITURE_SIZE[item["size"]]["points"])
+	f["furnPts"] = mini(int(D["furnishFurnitureCap"]), points)
+	var score: int = furnish_score(g, car)
+	var reached: int = 0
+	for n: int in FURNISH_STEPS:
+		if score >= int(D["furnishThreshold"][n]):
+			reached = n
+	f["tier"] = maxi(maxi(int(f["tier"]), int(f["best"])), reached)
+	var c: String = CAR_COMM[car]
+	var changes: Dictionary = {1: "벽을 맞추고 잠자리를 손봤다", 2: "선반과 식탁이 들어섰다", 3: "붙박이 침대가 들어섰다"}
+	for n: int in FURNISH_STEPS:
+		if n > int(f["best"]) and n <= int(f["tier"]):
+			_bump_furnish_rel(g, c, float(D["furnishRel"]) * n / float(COMM_CARS[c]))
+			_journal(g, "%s에 살림 %d단: %s. %s에서 그 소리를 들었다." % [CAR_NAME[car], n, changes[n], "앞칸" if c == "tail" else "꼬리칸"], "good")
+	f["best"] = f["tier"]
+
+
+static func place_furniture(g: Dictionary, car: String, kind: String) -> Dictionary:
+	if not g.get("dom") is Dictionary or not FURNISH_CARS.has(car):
+		return {"ok": false, "why": "살림은 사람이 사는 객차 여섯 칸만"}
+	if not FURNITURE.has(kind):
+		return {"ok": false, "why": "알 수 없는 가구"}
+	var size: String = FURNITURE[kind]["size"]
+	var count: int = 0
+	for item: Dictionary in furnish_of(g, car)["items"]:
+		count += int(item["size"] == size)
+	if count >= int(FURNITURE_SIZE[size]["slots"]):
+		return {"ok": false, "why": "이 크기 가구를 놓을 자리가 없다"}
+	_mutable_furnish(g, car)["items"].append({"kind": kind, "size": size})
+	_update_furnish(g, car)
+	# S2 reads situation directly from the state, so no refreshSit cache.
+	return {"ok": true}
+
+
+static func remove_furniture(g: Dictionary, car: String, index: Variant) -> Dictionary:
+	if not g.get("dom") is Dictionary or not FURNISH_CARS.has(car) or not (index is int or index is float):
+		return {"ok": false, "why": "그 자리에 가구가 없다"}
+	if not is_finite(float(index)) or float(index) != floorf(float(index)) or float(index) < 0.0 or float(index) >= furnish_of(g, car)["items"].size():
+		return {"ok": false, "why": "그 자리에 가구가 없다"}
+	_mutable_furnish(g, car)["items"].remove_at(int(index))
+	_update_furnish(g, car)
+	return {"ok": true}
 
 
 static func _journal(g: Dictionary, text: String, tone: String = "") -> void:

@@ -1,4 +1,4 @@
-// 단열 개조 이식 표본(결정 426 PR 4). S2가 단열 개조 줄·난방 석탄·처지 몫을 GDScript로 옮길 때 맞대 볼 기준 값을 만든다.
+// 단열·살림 이식 표본(결정 426 PR 4·486·489). 개조 줄·가구·처지·관계 정산을 S1 함수의 답과 맞댄다.
 // 규칙 코드는 읽기만 하고 고치지 않는다. 답은 모두 S1 함수가 내고, 여기서는 상태를 흔들고 비추기만 한다.
 // 사용: npx tsx tools/mods_port_fixtures.ts [출력 경로=../s2/tests/fixtures/train/mods_vectors.json]
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -11,11 +11,12 @@ import {
 import type { Comm, Game, LawId } from '../src/game';
 import { HANDS, LAWS, P } from '../src/game/data';
 import { enactLaw, repealLaw } from '../src/game/politics';
-import { CAR_COMM, COMM_CARS, D } from '../src/game/domestic/data';
-import { createS1cGame } from '../src/game/domestic/state';
+import { CAR_COMM, COMM_CARS, D, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE_SIZE, FURNITURE } from '../src/game/domestic/data';
+import type { FurnishStep, FurnitureKind } from '../src/game/domestic/data';
+import { createS1cGame, furnishOf, furnishScore, nextFurnishWork } from '../src/game/domestic/state';
 import { refreshSit } from '../src/game/domestic/sit';
-import { insulatedShare, insulateCarNote, insulateNumbers, insulatePickLine } from '../src/game/domestic/lawtech';
-import { cancelJob, cancelOpen, CAR_NAME, jobCheck, jobTitle, runWorkshop, startJob, workPower } from '../src/game/domestic/workshop';
+import { insulatedShare, insulateCarNote, insulateNumbers, insulatePickLine, furnishComparison, furnishTick } from '../src/game/domestic/lawtech';
+import { cancelJob, cancelOpen, CAR_NAME, jobCheck, jobTitle, runWorkshop, startJob, workPower, furnishCost, placeFurniture, removeFurniture } from '../src/game/domestic/workshop';
 
 const FORMAT = 'mods-vectors-v1';
 const seeds = ['mods-0', 'mods-1'];
@@ -160,11 +161,118 @@ for (const seed of seeds) for (const point of played(seed)) {
       cancelOpen: cancelOpen(g), work: workPower(g), perCar, cancel: mutation(g, cancelJob), run: run(g) });
   }
 }
-const dKeys = ['insulateWork', 'insulateWood', 'insulateWarm', 'insulateHeat', 'insulateCrowd', 'insulateQuotaHalf'] as const;
+// Furnishing uses the same neutralized S1 state as insulation. Only S2's cloth
+// payment is absent here; tests compare the shared fields in both directions
+// and independently check paid.cloth and its refund in S2.
+type FurnishOp = { op: 'check' | 'start' | 'cancel' | 'run' | 'place' | 'remove' | 'tick'; car?: string; step?: number; kind?: string; index?: number };
+function furnishBase(): Game {
+  const g = prepare(createGame('furnish-oracle'), 0);
+  const d = g.dom!;
+  d.wood = 100; d.scrap = 100; d.parts = 30; d.insulated = [...FURNISH_CARS];
+  for (const id of ['w1', 'w5'] as const) d.techs[id] = { stage: 'done', defect: false, progress: 3, need: 3 };
+  for (const p of d.people) p.skill = 2;
+  for (const c of COMMS) { g.comms[c].rel = 0; g.comms[c].pop = 10; }
+  g.journal = []; g.ledger = [];
+  return g;
+}
+function furnishState(g: Game) {
+  const s = state(g);
+  return { ...s, ledger: clone(g.ledger ?? []),
+    comms: byComm(c => ({ ...s.comms[c], rel: g.comms[c].rel })),
+    dom: { ...s.dom!, furnish: clone(g.dom!.furnish ?? {}) } };
+}
+function furnishOwned(g: Game) {
+  return clone({ ...owned(g), parts: g.dom!.parts, furnish: g.dom!.furnish ?? {},
+    rel: byComm(c => g.comms[c].rel), ledger: g.ledger ?? [] });
+}
+function furnishApply(g: Game, op: FurnishOp): unknown {
+  switch (op.op) {
+    case 'check': return jobCheck(g, 'furnish', op.car!, op.step as FurnishStep | undefined);
+    case 'start': return startJob(g, 'furnish', op.car!, op.step as FurnishStep | undefined);
+    case 'cancel': return cancelJob(g);
+    case 'run': return runWorkshop(g);
+    case 'place': return placeFurniture(g, op.car!, op.kind as FurnitureKind);
+    case 'remove': return removeFurniture(g, op.car!, op.index!);
+    case 'tick': furnishTick(g); return null;
+  }
+}
+const furnishCases: unknown[] = [];
+function furnishCase(name: string, g: Game, ops: FurnishOp[]) {
+  g.journal = []; g.ledger = [];
+  const input = clone(furnishState(g));
+  const steps = ops.map(op => {
+    const result = furnishApply(g, op);
+    return clone({ ...op, result, after: furnishOwned(g), effects: effects(g), comparison: furnishComparison(g),
+      cars: Object.fromEntries(FURNISH_CARS.map(car => [car, { state: furnishOf(g, car), score: furnishScore(g, car), next: nextFurnishWork(g, car) ?? 0 }])) });
+  });
+  // Snapshot each step before another operation mutates a shared furniture list.
+  furnishCases.push({ name, state: input, steps });
+}
+const allJobs: FurnishOp[] = FURNISH_STEPS.flatMap(step => [
+  { op: 'check', car: 'tail1', step }, { op: 'start', car: 'tail1', step }, { op: 'cancel' },
+  { op: 'start', car: 'tail1', step }, { op: 'run' },
+] as FurnishOp[]);
+for (const car of FURNISH_CARS) {
+  furnishCase(`jobs-${car}`, furnishBase(), [...allJobs.map(op => ({ ...op, ...(op.car ? { car } : {}) })),
+    { op: 'check', car }, { op: 'run' }, { op: 'tick' }, { op: 'tick' }]);
+}
+for (const car of [...FURNISH_CARS, 'engine', 'store', 'tail4', 'unknown']) {
+  furnishCase(`furniture-${car}`, furnishBase(), [
+    ...Object.keys(FURNITURE).map(kind => ({ op: 'place', car, kind } as FurnishOp)),
+    { op: 'place', car, kind: 'unknown' },
+    ...[-1, 0.5, 99, 0, 0, 0].map(index => ({ op: 'remove', car, index } as FurnishOp)),
+    { op: 'check', car }, { op: 'tick' },
+  ]);
+}
+function atTier(car: string, tier: number): Game {
+  const g = furnishBase();
+  for (const step of FURNISH_STEPS.filter(n => n <= tier)) {
+    if (!startJob(g, 'furnish', car, step)) throw new Error(`Cannot prepare tier ${step}`);
+    while (g.dom!.job) runWorkshop(g);
+  }
+  return g;
+}
+for (const mode of ['before-tier', 'no-insulation', 'no-w5', 'off-w5', 'defective-w5', 'starved-w5', 'no-w1', 'off-w1', 'wood', 'scrap', 'parts', 'busy', 'bad-step']) {
+  const g = atTier('front', mode === 'before-tier' ? 0 : mode.includes('w1') || mode === 'parts' ? 2 : 1);
+  const d = g.dom!;
+  if (mode === 'no-insulation') d.insulated = [];
+  if (mode === 'no-w5') delete d.techs.w5;
+  if (mode === 'off-w5') d.techs.w5!.off = true;
+  if (mode === 'defective-w5') { d.techs.w5!.stage = 'defective'; d.techs.w5!.defect = true; }
+  if (mode === 'starved-w5') d.techs.w5!.starved = true;
+  if (mode === 'no-w1') delete d.techs.w1;
+  if (mode === 'off-w1') d.techs.w1!.off = true; // S1 uses usable, not mult, for w1.
+  if (mode === 'wood' || mode === 'scrap' || mode === 'parts') d[mode] = 0;
+  if (mode === 'busy') startJob(g, 'furnish', 'guard');
+  const step = mode === 'bad-step' ? 4 : mode.includes('w1') || mode === 'parts' ? 3 : 2;
+  furnishCase(`gate-${mode}`, g, [{ op: 'check', car: 'front', step }, { op: 'start', car: 'front', step }]);
+}
+const recovered = furnishBase();
+furnishCase('furniture-replaces-first-work-and-recovers-missing-score', recovered, [
+  { op: 'place', car: 'tail1', kind: 'piano' }, { op: 'place', car: 'tail1', kind: 'chair' },
+  { op: 'remove', car: 'tail1', index: 0 }, { op: 'start', car: 'tail1' }, { op: 'run' },
+  { op: 'start', car: 'tail1' }, { op: 'run' }, { op: 'start', car: 'tail1' }, { op: 'run' },
+  { op: 'remove', car: 'tail1', index: 0 }, { op: 'place', car: 'tail1', kind: 'iron_stove' }, { op: 'tick' },
+]);
+for (const tier of [1, 2, 3]) for (const population of ['all', 'front-empty', 'tail-only']) {
+  const g = atTier('front', tier);
+  placeFurniture(g, 'tail1', 'piano'); placeFurniture(g, 'tail2', 'piano');
+  placeFurniture(g, 'guard', 'small_stove'); placeFurniture(g, 'guard', 'iron_stove');
+  placeFurniture(g, 'guard', 'bed_frame');
+  if (population === 'front-empty') g.comms.front.pop = 0;
+  if (population === 'tail-only') for (const c of COMMS) if (c !== 'tail') g.comms[c].pop = 0;
+  g.comms.tail.rel = 99.9; g.comms.medtech.rel = -99.9;
+  furnishCase(`comparison-${tier}-${population}`, g, [{ op: 'tick' }, { op: 'tick' }]);
+}
+const dKeys = ['insulateWork', 'insulateWood', 'insulateWarm', 'insulateHeat', 'insulateCrowd', 'insulateQuotaHalf',
+  'furnishClothWood', 'furnishFurnitureCap', 'furnishThreshold', 'furnishWarm', 'furnishCrowd', 'furnishRel',
+  'furnishGapMin', 'furnishGapMax', 'furnishGapRel', 'furnishGapCap', 'furnishPianoRel'] as const;
 const output = { format: FORMAT, seeds, checkpoints, profiles,
   scope: 'Played S1a + neutralized S1c dom; modify-only order, no work debt, no other law-tech relief; no climate/hygiene/UI',
   tables: { COMMS, P, HANDS, CAR_COMM, COMM_CARS, CAR_NAME, HEAT_QUOTA_MATS: LAWS.heat_quota.mats,
-    D: Object.fromEntries(dKeys.map(k => [k, D[k]])) }, pickLine: insulatePickLine(), legacy, cases };
+    D: Object.fromEntries(dKeys.map(k => [k, D[k]])), FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE_SIZE, FURNITURE },
+  furnish: { costs: FURNISH_STEPS.map(step => ({ step, cost: furnishCost(step) })), cases: furnishCases },
+  pickLine: insulatePickLine(), legacy, cases };
 const out = resolve(process.argv.find(a => a.endsWith('.json')) ?? '../s2/tests/fixtures/train/mods_vectors.json');
 const text = JSON.stringify(output) + '\n';
 if (Buffer.byteLength(text) >= 5_000_000) throw new Error('Fixture exceeds 5 MB');

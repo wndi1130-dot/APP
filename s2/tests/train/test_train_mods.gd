@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 const Mods = preload("res://game/train/train_mods.gd")
 const Dom = preload("res://game/train/train_dom.gd")
 const Research = preload("res://game/train/train_research.gd")
+const LawTech = preload("res://game/train/train_lawtech.gd")
 const Workshop = preload("res://game/train/train_workshop.gd")
 const State = preload("res://game/train/train_state.gd")
 const Turn = preload("res://game/train/train_turn.gd")
@@ -30,6 +31,207 @@ func _same(want: Variant, got: Variant, label: String) -> void:
 		diff = TV.diff(got, want, label + " unexpected")
 	if diff != "" and _bad.size() < 12:
 		_bad.append(diff)
+
+
+func _furnish_owned(g: Dictionary) -> Dictionary:
+	var out: Dictionary = _owned(g).duplicate(true)
+	if out["job"] is Dictionary:
+		out["job"]["paid"].erase("cloth")
+	out["parts"] = g["dom"]["parts"]
+	out["furnish"] = g["dom"].get("furnish", {}).duplicate(true)
+	out["rel"] = {}
+	for c: String in Mods.COMM_CARS:
+		out["rel"][c] = g["comms"][c]["rel"]
+	out["ledger"] = g.get("ledger", []).duplicate(true)
+	return out
+
+
+func test_furnish_tables_and_costs_match_s1_except_actual_cloth() -> void:
+	var tables: Dictionary = _data["tables"]
+	var work := {}
+	for n: int in Mods.FURNISH_STEPS:
+		work[str(n)] = Mods.FURNISH_WORK[n]
+	_same(tables["FURNISH_WORK"], work, "furnish work")
+	_same(tables["FURNISH_CARS"], Mods.FURNISH_CARS, "furnish cars")
+	_same(tables["FURNISH_STEPS"], Mods.FURNISH_STEPS, "furnish steps")
+	_same(tables["FURNITURE_SIZE"], Mods.FURNITURE_SIZE, "furniture sizes")
+	_same(tables["FURNITURE"], Mods.FURNITURE, "furniture")
+	for row: Dictionary in _data["furnish"]["costs"]:
+		var cost: Dictionary = Mods.furnish_cost(int(row["step"]))
+		assert_eq(cost["cloth"], Mods.FURNISH_WORK[int(row["step"])]["cloth"])
+		cost.erase("cloth")
+		_same(row["cost"], cost, "furnish cost")
+	assert_eq(_bad, [] as Array[String])
+
+
+func test_furnish_sequences_match_s1_in_both_directions() -> void:
+	var actions: int = 0
+	for row: Dictionary in _data["furnish"]["cases"]:
+		var g: Dictionary = row["state"].duplicate(true)
+		g["dom"]["cloth"] = 100.0
+		var cloth: float = 100.0
+		for sample: Dictionary in row["steps"]:
+			var result: Variant = null
+			var car: String = String(sample.get("car", ""))
+			match sample["op"]:
+				"check": result = Mods.job_check(g, "furnish", car, sample.get("step"))
+				"start":
+					result = Mods.start_job(g, "furnish", car, sample.get("step"))
+					if result:
+						cloth -= float(Mods.FURNISH_WORK[int(g["dom"]["job"]["furnishStep"])]["cloth"])
+				"cancel":
+					var refund: float = float(g["dom"]["job"]["paid"].get("cloth", 0)) if g["dom"].get("job") is Dictionary else 0.0
+					result = Mods.cancel_job(g)
+					if result:
+						cloth += refund
+				"run":
+					var out: Dictionary = Workshop.run(g)
+					result = {"used": out["used"], "did": out["did"]}
+				"place": result = Mods.place_furniture(g, car, String(sample["kind"]))
+				"remove": result = Mods.remove_furniture(g, car, sample["index"])
+				"tick": LawTech.furnish_tick(g)
+			var label: String = "%s/%d %s" % [row["name"], actions, sample["op"]]
+			_same(sample["result"], result, label + " result")
+			_same(sample["after"], _furnish_owned(g), label + " after")
+			_same(sample["effects"], _effects(g), label + " effects")
+			_same(sample["comparison"], LawTech.furnish_comparison(g), label + " comparison")
+			var cars := {}
+			for id: String in Mods.FURNISH_CARS:
+				cars[id] = {"state": Mods.furnish_of(g, id), "score": Mods.furnish_score(g, id), "next": Mods.next_furnish_work(g, id)}
+			_same(sample["cars"], cars, label + " car states")
+			assert_almost_eq(float(g["dom"]["cloth"]), cloth, 1e-9, label + " actual S2 cloth")
+			assert_true(Dom.is_store(g["dom"]), label + " dom contract")
+			actions += 1
+	assert_gt(actions, 300)
+	assert_eq(_bad, [] as Array[String])
+
+
+func _furnish_game() -> Dictionary:
+	var g: Dictionary = _ready_game()
+	g["dom"].merge({"wood": 100.0, "scrap": 100.0, "parts": 20.0, "cloth": 20.0, "target": 0}, true)
+	g["comms"] = {}
+	for c: String in Mods.COMM_CARS:
+		g["comms"][c] = {"rel": 0.0, "pop": 10}
+	return g
+
+
+func _finish_furnish(g: Dictionary, car: String, step: int) -> void:
+	assert_true(Mods.start_job(g, "furnish", car, step))
+	Mods.advance_job(g, 20.0)
+	assert_null(g["dom"]["job"])
+
+
+func test_furnish_three_thresholds_research_gates_and_permanent_tiers() -> void:
+	var g: Dictionary = _furnish_game()
+	var before: Dictionary = g.duplicate(true)
+	assert_eq(Mods.furnish_of(g, "tail1")["tier"], 0)
+	assert_eq(g, before, "read alone never migrates an old state")
+	for car: String in ["engine", "store", "tail4"]:
+		assert_false(Mods.start_job(g, "furnish", car))
+	for step: Variant in [0, 4, 1.5, "1", true, NAN, INF]:
+		assert_false(Mods.start_job(g, "furnish", "tail1", step))
+	assert_eq(Mods.job_check(g, "furnish", "tail1", 2)["why"], "살림 1단부터")
+	_finish_furnish(g, "tail1", 1)
+	assert_eq([Mods.furnish_score(g, "tail1"), Mods.furnish_of(g, "tail1")["tier"]], [3, 1])
+	assert_eq(Mods.job_check(g, "furnish", "tail1")["why"], "이 칸 단열부터")
+	g["dom"]["insulated"] = ["tail1"]
+	assert_eq(Mods.job_check(g, "furnish", "tail1")["why"], "객차 목공을 사용해야 한다")
+	g["dom"]["techs"]["w5"] = {"stage": "done", "defect": false, "need": 3, "progress": 3, "off": true}
+	assert_false(Mods.start_job(g, "furnish", "tail1"))
+	g["dom"]["techs"]["w5"]["off"] = false
+	_finish_furnish(g, "tail1", 2)
+	assert_eq([Mods.furnish_score(g, "tail1"), Mods.furnish_of(g, "tail1")["tier"]], [8, 2])
+	assert_eq(Mods.job_check(g, "furnish", "tail1")["why"], "공구 수리부터")
+	g["dom"]["techs"]["w1"] = {"stage": "done", "defect": false, "need": 3, "progress": 3, "off": true}
+	_finish_furnish(g, "tail1", 3)
+	assert_eq([Mods.furnish_score(g, "tail1"), Mods.furnish_of(g, "tail1")["tier"]], [15, 3])
+	assert_almost_eq(g["comms"]["tail"]["rel"], 4.0, 1e-9, "first tiers give (2 + 4 + 6) / 3")
+	var rel: float = g["comms"]["tail"]["rel"]
+	g["dom"]["techs"]["w5"]["off"] = true
+	Mods.place_furniture(g, "tail1", "piano")
+	Mods.remove_furniture(g, "tail1", 0)
+	assert_eq(Mods.furnish_of(g, "tail1")["tier"], 3)
+	assert_eq(g["comms"]["tail"]["rel"], rel, "no repeated tier reward")
+	assert_false(Mods.start_job(g, "furnish", "tail1"))
+
+
+func test_furnish_cloth_and_recorded_four_store_refund() -> void:
+	var g: Dictionary = _furnish_game()
+	g["dom"]["cloth"] = 0
+	var before: Dictionary = g.duplicate(true)
+	assert_eq(Mods.job_check(g, "furnish", "front")["why"], "천 1이 든다")
+	assert_false(Mods.start_job(g, "furnish", "front"))
+	assert_eq(g, before)
+	g["dom"]["cloth"] = 3.0
+	assert_true(Mods.start_job(g, "furnish", "front"))
+	assert_eq(g["dom"]["job"]["paid"], {"wood": 1.0, "scrap": 3.0, "parts": 0.0, "cloth": 1.0})
+	g["dom"]["job"]["paid"] = {"wood": 0.25, "scrap": 1.5, "parts": 0.75, "cloth": 0.5}
+	assert_true(Mods.cancel_job(g))
+	assert_eq([g["dom"]["wood"], g["dom"]["scrap"], g["dom"]["parts"], g["dom"]["cloth"]], [99.25, 98.5, 20.75, 2.5])
+	assert_true(Mods.start_job(g, "furnish", "front"))
+	Mods.advance_job(g, 0.25)
+	before = g.duplicate(true)
+	assert_false(Mods.cancel_job(g))
+	assert_eq(g, before)
+
+
+func test_furnish_contract_rejects_malformed_state_and_jobs() -> void:
+	var g: Dictionary = _furnish_game()
+	Mods.place_furniture(g, "tail1", "piano")
+	var valid: Dictionary = Mods.furnish_of(g, "tail1").duplicate(true)
+	assert_true(Dom.is_store({"furnish": {"tail1": valid}}))
+	assert_true(Dom.is_store({"job": {"kind": "insulate", "car": "tail1", "need": 3, "progress": 0, "paid": {"wood": 8, "scrap": 0, "parts": 0}}}))
+	for patch: Dictionary in [{"work": 1}, {"jobs": [1, 1], "work": 2}, {"jobs": [4], "work": 1},
+		{"jobs": [1.5], "work": 1}, {"jobs": [true], "work": 1}, {"jobs": ["1"], "work": 1},
+		{"furnPts": 4}, {"furnPts": NAN}, {"tier": -1}, {"tier": 4, "best": 4}, {"best": 0}, {"tier": 0.5},
+		{"items": [{"kind": "piano", "size": "small"}]}, {"items": [{"kind": "unknown", "size": "large"}]},
+		{"items": [{"kind": "piano", "size": "large"}, {"kind": "piano", "size": "large"}], "furnPts": 4}, {"extra": true}]:
+		var bad: Dictionary = valid.duplicate(true)
+		bad.merge(patch, true)
+		assert_false(Dom.is_store({"furnish": {"tail1": bad}}), str(patch))
+	for key: String in valid:
+		var missing: Dictionary = valid.duplicate(true)
+		missing.erase(key)
+		assert_false(Dom.is_furnish(missing), "missing " + key)
+	for car: String in ["engine", "store", "tail4"]:
+		assert_false(Dom.is_store({"furnish": {car: valid}}))
+	assert_false(Dom.is_store({"furnish": []}))
+	assert_true(Mods.start_job(g, "furnish", "front"))
+	var job: Dictionary = g["dom"]["job"].duplicate(true)
+	assert_true(Dom.is_job(job))
+	for patch: Dictionary in [{"car": "engine"}, {"furnishStep": 0}, {"furnishStep": 1.5}, {"furnishStep": 4}, {"furnishStep": true}, {"furnishStep": "1"}, {"furnishStep": NAN}, {"furnishStep": INF}, {"paid": {"wood": 1, "scrap": 3, "cloth": -1}}]:
+		var bad: Dictionary = job.duplicate(true)
+		bad.merge(patch, true)
+		assert_false(Dom.is_job(bad), str(patch))
+	job.erase("furnishStep")
+	assert_false(Dom.is_job(job))
+
+
+func test_furnish_raw_situation_counts_one_stove_per_car_and_crowd_without_dividing() -> void:
+	var g: Dictionary = _furnish_game()
+	for kind: String in ["small_stove", "iron_stove", "bed_frame"]:
+		assert_true(Mods.place_furniture(g, "tail1", kind)["ok"])
+	var sit: Array[float] = LawTech.sit(g, "tail")
+	assert_almost_eq(sit[0], 4.0 / 3.0, 1e-9, "one largest stove, divided by three cars")
+	assert_almost_eq(sit[2], 1.0, 1e-9, "0.5 + 1.5 + (0.5 - 1) - tier * 0.5, not divided")
+	for i: int in 3:
+		assert_true(Mods.place_furniture(g, "tail2", "chair")["ok"])
+	sit = LawTech.sit(g, "tail")
+	assert_almost_eq(sit[0], 5.0 / 3.0, 1e-9, "second car adds its own tier stove")
+	assert_almost_eq(sit[2], 0.5, 1e-9, "second car adds its own tier crowd relief")
+	assert_eq(LawTech.sit(g, "engine"), [0.0, 0.0, 0.0, 0.0] as Array[float])
+
+
+func test_settlement_compares_after_workshop_finishes_a_tier() -> void:
+	var g: Dictionary = _furnish_game()
+	assert_true(Mods.start_job(g, "furnish", "front"))
+	Workshop.stretch(g)
+	assert_eq(Mods.furnish_of(g, "front")["tier"], 1)
+	assert_eq(g["comms"]["front"]["rel"], 2.0)
+	for c: String in ["tail", "medtech", "guard"]:
+		assert_eq(g["comms"][c]["rel"], -0.5, "new tier compares in this settlement")
+	assert_eq(g["comms"]["engine"]["rel"], 0.0)
+	assert_eq(g["ledger"][0], {"k": "rel:front", "d": 2.0, "why": "furnish"})
 
 
 func _label(row: Dictionary) -> String:
@@ -172,7 +374,7 @@ func test_dom_contract_accepts_only_the_insulation_subset() -> void:
 	for replacement: Dictionary in [{"kind": "armor"}, {"kind": "convert"}, {"car": "cold"}, {"car": 1},
 		{"progress": -1}, {"progress": 4}, {"progress": NAN}, {"need": 0}, {"need": INF},
 		{"paid": null}, {"paid": {"wood": 8}}, {"paid": {"wood": -1, "scrap": 0}},
-		{"paid": {"wood": 8, "scrap": 0, "parts": 1}}, {"paid": {"wood": INF, "scrap": 0}}, {"extra": true}]:
+		{"paid": {"wood": 8, "scrap": 0, "coal": 1}}, {"paid": {"wood": INF, "scrap": 0}}, {"extra": true}]:
 		var bad: Dictionary = valid.duplicate(true)
 		bad.merge(replacement, true)
 		assert_false(Dom.is_store({"job": bad}), str(replacement))

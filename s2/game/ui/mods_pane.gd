@@ -32,7 +32,7 @@ const CSS_H_MIN: float = 286.0
 ## fit are dragged up under the stores (glass_pane.gd scroll), as S1's
 ## thirteen-car train has seven lived-in cars.
 const CSS_H_MAX: float = 286.0
-const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"]]
+const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"], ["cloth", "it_cloth"]]
 const ROW_TOP: float = 66.0
 const ROW_H: float = 54.0
 const KEY_H: float = 44.0
@@ -77,8 +77,8 @@ static func model(g0: Dictionary, cars0: Array = []) -> Dictionary:
 	for car: Dictionary in (cars0 if not cars0.is_empty() else formation()):
 		var id: String = String(car["id"])
 		var done: bool = (dom.get("insulated", []) as Array).has(id)
-		var on_line: bool = job is Dictionary and String(job.get("car", "")) == id
-		var r := {"id": id, "name": String(car["name"]), "done": done, "on_line": on_line,
+		var on_line: bool = job is Dictionary and job.get("kind") == "insulate" and String(job.get("car", "")) == id
+		var r := {"id": id, "car": id, "kind": "insulate", "name": String(car["name"]), "done": done, "on_line": on_line,
 			"gain": TrainMods.insulate_numbers(id), "word": "", "can": false, "why": "", "share": 0.0,
 			"cost": {"key": "wood", "icon": "it_plank", "n": float(TrainMods.D["insulateWood"]),
 				"short": float(dom.get("wood", 0)) < float(TrainMods.D["insulateWood"])}}
@@ -93,10 +93,38 @@ static func model(g0: Dictionary, cars0: Array = []) -> Dictionary:
 			r["can"] = bool(check["ok"])
 			r["why"] = String(check.get("why", ""))
 		rows.append(r)
+		if TrainMods.FURNISH_CARS.has(id):
+			rows.append(_furnish_row(g0, car))
 	# Insulating needs research's 단열 개조 (e5): while it does not work the keys are dim,
 	# and the head says which technology (a phone has no tooltip).
 	var need: String = "" if TrainResearch.usable(g0, {}, "e5") else String(TrainResearch.TECHS["e5"]["name"])
 	return {"stores": stores, "rows": rows, "need": need}
+
+
+static func _furnish_row(g0: Dictionary, car: Dictionary) -> Dictionary:
+	var id: String = String(car["id"])
+	var dom: Dictionary = g0.get("dom", {})
+	var job: Variant = dom.get("job")
+	var tier: int = int(TrainMods.furnish_of(g0, id)["tier"])
+	var on_line: bool = job is Dictionary and job.get("kind") == "furnish" and job.get("car") == id
+	var step: int = int(job["furnishStep"]) if on_line else TrainMods.next_furnish_work(g0, id)
+	var cost: Dictionary = TrainMods.furnish_cost(step)
+	var price: Array[String] = []
+	for key: String in ["wood", "scrap", "cloth", "parts", "work"]:
+		if float(cost.get(key, 0)) > 0.0:
+			var word: String = {"wood": "목재", "scrap": "고철", "cloth": "천", "parts": "부품", "work": "일"}[key]
+			price.append("%s %d" % [word, int(cost[key])])
+	var check: Dictionary = TrainMods.job_check(g0, "furnish", id)
+	var can: bool = TrainMods.cancel_open(g0) if on_line else bool(check["ok"])
+	var why: String = ("" if can else "공방이 이미 손댔다") if on_line else String(check.get("why", ""))
+	var tooltip: String = " · ".join(price)
+	if why != "":
+		tooltip += ("\n" if tooltip != "" else "") + why
+	return {"id": "furnish_" + id, "car": id, "kind": "furnish", "name": String(car["name"]),
+		"done": tier >= 3, "on_line": on_line, "gain": "살림 %d단 → %d단" % [tier, tier + 1] if tier < 3 else "살림 3단 · 북유럽식",
+		"word": "취소" if on_line else ("살림" if tier < 3 else ""), "can": can, "why": tooltip,
+		"share": float(job["progress"]) / maxf(1.0, float(job["need"])) if on_line else 0.0,
+		"cost": {"key": "wood", "icon": "it_plank", "n": float(cost.get("wood", 0)), "short": float(dom.get("wood", 0)) < float(cost.get("wood", 0))}}
 
 
 static func css_size(rows: int) -> Vector2:
@@ -233,7 +261,7 @@ func _head(need: String) -> void:
 func _stores(stores: Array) -> void:
 	for i in stores.size():
 		var s: Dictionary = stores[i]
-		var x: float = 44.0 + 68.0 * i
+		var x: float = 44.0 + 62.0 * i
 		_add(_mark(String(s["icon"]), 18.0, Vector2(x, 39.0)))
 		var n := UiFonts.label(_num(float(s["n"])), UiFonts.NUMBER, 500, 15.0, INK, 0.225)
 		n.name = "Store_" + String(s["key"])
@@ -273,7 +301,7 @@ func _row(r: Dictionary, top: float) -> void:
 	key.size = Vector2(KEY_W, KEY_H) * k
 	key.tooltip_text = String(r["why"])
 	key.pressed.connect(func() -> void:
-		var ok: bool = TrainMods.cancel_job(g) if bool(r["on_line"]) else TrainMods.start_job(g, "insulate", id)
+		var ok: bool = TrainMods.cancel_job(g) if bool(r["on_line"]) else TrainMods.start_job(g, String(r["kind"]), String(r["car"]))
 		if not ok:
 			UiDeny.shake(key)
 			return

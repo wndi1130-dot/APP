@@ -63,7 +63,7 @@ const OPENS: Array = [
 ]
 ## Every effect of these is on a law (7.3): without the law there is no use for
 ## them. E4 and M5 have effects outside a law and are not here.
-const LAW_ONLY_TECHS: Array[String] = ["e1", "e2", "e3", "e5", "m2", "m3", "x1"]
+const LAW_ONLY_TECHS: Array[String] = ["e1", "e2", "e3", "e5", "m2", "m3"]
 
 
 static func _active(g: Dictionary, law: String) -> bool:
@@ -123,7 +123,70 @@ static func sit(g: Dictionary, c: String) -> Array[float]:
 		var half: float = 0.5 if bool(TrainMods.D["insulateQuotaHalf"]) and _active(g, "heat_quota") else 1.0
 		out[0] += float(TrainMods.D["insulateWarm"]) * TrainMods.insulated_share(g, c) * half
 		out[2] += float(TrainMods.D["insulateCrowd"]) * n
+	# One stove per car: the larger of the tier's and its furniture's warmth.
+	for car: String in TrainMods.FURNISH_CARS:
+		if TrainMods.CAR_COMM[car] != c:
+			continue
+		var f: Dictionary = TrainMods.furnish_of(g, car)
+		var warm: float = float(TrainMods.D["furnishWarm"][int(f["tier"])])
+		var crowd: float = float(TrainMods.D["furnishCrowd"]) * float(f["tier"])
+		for item: Dictionary in f["items"]:
+			var furniture: Dictionary = TrainMods.FURNITURE[item["kind"]]
+			warm = maxf(warm, float(furniture["warm"]))
+			crowd += float(TrainMods.FURNITURE_SIZE[item["size"]]["crowd"]) + float(furniture["crowd"])
+		out[0] += warm / float(TrainMods.COMM_CARS[c])
+		out[2] += crowd
 	return out
+
+
+## S1 furnishComparison: max of other populated communities, capped per gap
+## and then proportionally at two relationship points over the whole train.
+static func furnish_comparison(g: Dictionary) -> Dictionary:
+	var out := {"tail": 0.0, "medtech": 0.0, "guard": 0.0, "front": 0.0, "engine": 0.0}
+	if not g.get("dom") is Dictionary:
+		return out
+	var means := {}
+	for c: String in out:
+		if c == "engine" or float(g.get("comms", {}).get(c, {}).get("pop", 0)) <= 0.0:
+			continue
+		var total: float = 0.0
+		for car: String in TrainMods.FURNISH_CARS:
+			if TrainMods.CAR_COMM[car] == c:
+				total += float(TrainMods.furnish_of(g, car)["tier"])
+		means[c] = total / float(TrainMods.COMM_CARS[c])
+	var loss: float = 0.0
+	for c: String in means:
+		var best: float = 0.0
+		for other: String in means:
+			if other != c:
+				best = maxf(best, float(means[other]))
+		var gap: float = best - float(means[c])
+		if gap >= float(TrainMods.D["furnishGapMin"]):
+			out[c] = -float(TrainMods.D["furnishGapRel"]) * minf(gap, float(TrainMods.D["furnishGapMax"]))
+		loss -= float(out[c])
+	if loss > float(TrainMods.D["furnishGapCap"]):
+		for c: String in means:
+			out[c] *= float(TrainMods.D["furnishGapCap"]) / loss
+	return out
+
+
+## Called after runWorkshop, once per settlement; a piano pays only once per
+## populated community, after comparison (same clamp and ledger order as S1).
+static func furnish_tick(g: Dictionary) -> void:
+	if not g.get("dom") is Dictionary:
+		return
+	var comparison: Dictionary = furnish_comparison(g)
+	for c: String in comparison:
+		TrainMods._bump_furnish_rel(g, c, float(comparison[c]))
+		if c == "engine" or float(g.get("comms", {}).get(c, {}).get("pop", 0)) <= 0.0:
+			continue
+		var piano: bool = false
+		for car: String in TrainMods.FURNISH_CARS:
+			if TrainMods.CAR_COMM[car] == c:
+				for item: Dictionary in TrainMods.furnish_of(g, car)["items"]:
+					piano = piano or bool(TrainMods.FURNITURE[item["kind"]]["piano"])
+		if piano:
+			TrainMods._bump_furnish_rel(g, c, float(TrainMods.D["furnishPianoRel"]))
 
 
 ## lawTechRes: a law's fixed effects as technology has bent them (M5: 모두를
@@ -204,7 +267,7 @@ static func use_line(g: Dictionary, tech: String, variant: Variant = null) -> St
 			if not parts.has(part): parts.append(part)
 	if parts.is_empty():
 		return ""
-	return "쓸모: %s%s" % [", ".join(parts), "(지금 서 있다)" if law_standing(g, tech, variant) else "(지금은 없다)"]
+	return "%s: %s%s" % ["쓸모" if LAW_ONLY_TECHS.has(tech) else "법 쓸모", ", ".join(parts), "(지금 서 있다)" if law_standing(g, tech, variant) else "(지금은 없다)"]
 
 
 static func _tech_name(t: Dictionary) -> String:
