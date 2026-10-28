@@ -82,7 +82,9 @@ static func gesture(activity: String, c: Dictionary, person: Dictionary, turn: i
 	if activity == "warm" and float(c["warmth"]) < Look.WARM_COLD:
 		return "rub_stamp"
 	# A job short of hands: the ones left at it stop every other turn to get their breath back (carry_people 3.6).
-	if activity == "work" and float(c.get("job_short", 0.0)) > 0.0 and turn % 2 == 1:
+	# Only the guard car's window watchers stand the watch; other cars' windows are just looked out of.
+	var at_job: bool = activity == "work" or (activity == "watch" and String(c.get("hands_job", "")) == "watch")
+	if at_job and float(c.get("job_short", 0.0)) > 0.0 and turn % 2 == 1:
 		return "catch_breath"
 	if activity == "gather":
 		var row: Dictionary = Catalog.data()["collapse"][int(c["stage"])]

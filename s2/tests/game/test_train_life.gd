@@ -748,6 +748,37 @@ func test_a_job_short_of_hands_leaves_its_work_places_empty_and_tires_the_rest()
 	assert_ne(Schedule.gesture("work", s.life.contexts["engine"], {}, 1), "catch_breath")
 
 
+func test_short_watch_and_stove_hands_empty_the_lantern_posts_and_the_places_at_the_stoves() -> void:
+	var s = _scene()
+	var places: Dictionary = s.life.places.spots
+	for id in ["guard/window", "guard/window_b", "front/stove_side", "guard/stove_side"]:
+		assert_true(places[id]["open"], "손이 다 있으면 열림: " + id)
+	assert_eq(int(places["front/stove_side"]["capacity"]), 2)
+	# More than half the watch, half the stove hands and some firebox shifts missing (train_hands.gd short).
+	var short := {"stoker": 0.6, "stove": 0.5, "watch": 0.6, "roof": 0.0, "repair": 0.0}
+	assert_true(s.set_value("train.hands", {"have": 40.0, "short": short, "expose": {}}))
+	assert_true(places["guard/window"]["open"], "보초 손이 반 넘게 모자라도 한 자리는 남음")
+	assert_false(places["guard/window_b"]["open"], "보초 둘째 자리는 빔")
+	assert_true(places["tail1/window"]["open"], "다른 칸 창가는 보초 손과 상관없음")
+	assert_true(places["front/stove_side"]["open"], "난로 손이 반 모자라도 난로 곁 한 자리는 남음")
+	assert_eq(int(places["front/stove_side"]["capacity"]), 1)
+	# The sentry left gets their breath back every other turn; window watchers elsewhere do not.
+	assert_eq(Schedule.gesture("watch", s.life.contexts["guard"], {}, 1), "catch_breath")
+	assert_ne(Schedule.gesture("watch", s.life.contexts["guard"], {}, 0), "catch_breath")
+	assert_ne(Schedule.gesture("watch", s.life.contexts["engine"], {}, 1), "catch_breath", "화실 손이 모자라도 기관실 창가는 보초가 아님")
+	assert_ne(Schedule.gesture("watch", s.life.contexts["tail1"], {}, 1), "catch_breath")
+	# Nobody at the watch or the stoves: the posts and the places at every stove stand empty.
+	var none := {"stoker": 0.0, "stove": 1.0, "watch": 1.0, "roof": 1.0, "repair": 0.0}
+	assert_true(s.set_value("train.hands", {"have": 12.0, "short": none, "expose": {}}))
+	for id in ["guard/window", "guard/window_b", "front/stove_side", "guard/stove_side"]:
+		assert_false(places[id]["open"], "손이 없으면 빔: " + id)
+	var enough := {"stoker": 0.0, "stove": 0.0, "watch": 0.0, "roof": 0.0, "repair": 0.0}
+	assert_true(s.set_value("train.hands", {"have": 80.0, "short": enough, "expose": {}}))
+	for id in ["guard/window", "guard/window_b", "front/stove_side", "guard/stove_side"]:
+		assert_true(places[id]["open"], "손이 돌아오면 다시 열림: " + id)
+	assert_eq(int(places["front/stove_side"]["capacity"]), 2)
+
+
 func test_a_burning_car_opens_no_everyday_place_whatever_its_screen_stage() -> void:
 	var s = _scene()
 	assert_true(s.set_value("view.work_time", true))
