@@ -478,7 +478,9 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
     const name = personOf(departure, pid).name;
     if (pid !== CAPTAIN_ID && !isGone(g, name)) (g.left ??= []).push(name);
   }
-  // 사용자 답 2026-10-29: 남겨진 대표는 하차 명령처럼 그 칸의 다른 사람이 잇는다.
+  closeFieldStop(g, departure, r);
+  // 사용자 답 2026-10-29: 남겨진 대표는 하차 명령처럼 그 칸의 다른 사람이 잇는다. 정차를 닫은 뒤에 잇는다:
+  // 이번 정차가 기한인 그 칸 약속은 떠난 대표 앞에서 지킴·어김으로 먼저 판정하고, 새 대표는 약속 없이 시작한다.
   for (const pid of lost) {
     if (pid === CAPTAIN_ID) continue;
     const c = COMMS.find(c => g.comms[c].leader.personId === pid);
@@ -495,7 +497,6 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
       journal(g, `${p.name}이(가) ${COMM_NAME[c]} 대표 자리를 이었다.`, 'dark');
     }
   }
-  closeFieldStop(g, departure, r);
   if (r.symbol) {
     lines.push({ k: 'symbol', comm: r.symbol.groupId, text: `${COMM_NAME[r.symbol.groupId]}의 상징물을 가져왔다. 쓰임을 고른다.` });
   }

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { advance, chooseCard, viewCard } from '../../src/game';
 import { createGame, drawPerson, isGone, PROFILES } from '../../src/game/state';
 import type { Game } from '../../src/game/state';
 import { crewNames } from '../../src/game/turn';
@@ -312,6 +313,33 @@ describe('필드에 남겨진 대표 승계(사용자 답 2026-10-29)', () => {
     const once = JSON.stringify(g);
     expect(applyFieldReturn(g, departure, receipt).status).toBe('duplicate');
     expect(JSON.stringify(g)).toBe(once);
+  });
+
+  /** 첫 정차에 선 판(target_rotation.test.ts와 같은 길). */
+  function atStop(seed = SEED): Game {
+    const g = createGame(seed);
+    for (let i = 0; i < 80 && !(g.phase === 'stop' && g.stop && !g.stop.done); i += 1) {
+      if (g.cards.length) { const c = g.cards[0]; chooseCard(g, c.uid, viewCard(g, c).choices.findIndex(x => !x.disabled)); continue; }
+      advance(g);
+    }
+    return g;
+  }
+
+  it('이번 정차가 기한인 그 칸 약속은 대표를 잇기 전에 지킴·어김으로 판정된다', () => {
+    const g = atStop();
+    expect(g.phase).toBe('stop');
+    const c = 'engine';
+    const s = g.comms[c];
+    const old = structuredClone(s.leader);
+    const other = (['coal', 'food', 'medicine', 'luxury'] as const).find(t => t !== g.stop!.target)!;
+    s.promise = { kind: 'open', cond: { kind: 'target', label: '그 갈래를 노린다', now: false, target: other }, label: '그 갈래를 노린다', due: g.seg, madeSession: 0 };
+    const broken = g.stats.promisesBroken;
+    const { departure, receipt } = leftReturn(g, [old.personId]);
+    applyFieldReturn(g, departure, receipt);
+    expect(g.stop!.done).toBe(true);
+    expect(g.stats.promisesBroken).toBe(broken + 1);
+    expect(s.leader.personId).not.toBe(old.personId);
+    expect(s.promise).toBeNull();
   });
 
   it('대표 아닌 사람은 떠난 명단에만 들어가고 대표와 난수는 그대로다', () => {

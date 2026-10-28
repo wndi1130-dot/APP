@@ -4,6 +4,7 @@ extends GutTest
 const V = preload("res://tests/politics/field_vectors.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
+const SliceFlow = preload("res://game/slice_flow.gd")
 
 var _tables: Dictionary
 
@@ -129,3 +130,44 @@ func test_fallback_ignores_age_and_used_profiles_but_excludes_left_and_dead() ->
 	assert_eq(g["usedProfiles"], g0["usedProfiles"], "fallback does not append an already used profile")
 	assert_eq(V.diff(row["apply"]["after"]["rng"], g["rng"]), "", "one person still consumes one draw, then one trait draw")
 	assert_eq(_succession_lines(g).size(), 1)
+
+
+## PR #981 점검: a promise to that car due at this stop is judged against the rep who was left, then the rep is
+## succeeded with no promise (S1 field_receipt.test.ts, the same order).
+func test_a_promise_due_at_this_stop_is_judged_before_the_rep_is_succeeded() -> void:
+	var start: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://game/train/slice_start.json"))
+	var slice: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/slice_vectors.json"))
+	var t: Dictionary = start["tables"]
+	var g: Dictionary = SliceFlow.first_stop(start["state"], t)
+	var comm: String = g["stop"]["crewComm"]
+	var rep: String = g["comms"][comm]["leader"]["personId"]
+	for c: String in g["comms"]:
+		(g["comms"][c] as Dictionary).erase("promise")
+	var other: String = ""
+	for kind: String in ["coal", "food", "medicine", "luxury"]:
+		if kind != g["stop"]["target"]:
+			other = kind
+			break
+	g["comms"][comm]["promise"] = {"kind": "open", "cond": {"kind": "target", "label": "그 갈래를 노린다", "now": false, "target": other},
+		"label": "그 갈래를 노린다", "due": g["seg"], "madeSession": 0}
+	var departure: Dictionary = FieldDeparture.build(g, t, {"placeId": slice["placeId"]})
+	if not (departure["roster"] as Array).any(func(row: Dictionary) -> bool: return row["id"] == rep):
+		(departure["roster"] as Array).append({"id": rep, "comm": comm})
+	var receipt: Dictionary = (slice["cases"][0]["receipt"] as Dictionary).duplicate(true)
+	receipt["receiptId"] = "ret_rep_promise"
+	receipt["departureId"] = departure["departureId"]
+	receipt["stopId"] = departure["stopId"]
+	receipt["symbol"] = null
+	var sent: Array = []
+	for row: Dictionary in departure["roster"]:
+		sent.append(row["id"])
+	receipt["people"]["sent"] = sent
+	receipt["people"]["leftBehind"] = [rep]
+	var broken := int(g["stats"]["promisesBroken"])
+	var result: Dictionary = FieldReturn.apply_field_return(g, t, departure, receipt)
+	assert_eq(result["status"], "applied")
+	var after: Dictionary = result["g"]
+	assert_true(bool(after["stop"]["done"]))
+	assert_eq(int(after["stats"]["promisesBroken"]), broken + 1, "judged against the rep who was left")
+	assert_ne(after["comms"][comm]["leader"]["personId"], rep)
+	assert_null(after["comms"][comm]["promise"])

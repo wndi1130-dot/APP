@@ -687,7 +687,9 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 			if not g.get("left") is Array:
 				g["left"] = []
 			(g["left"] as Array).append(name)
-	# 사용자 답 2026-10-29: another person from the car succeeds a rep left behind or missing.
+	_close_field_stop(g, t, departure, receipt)
+	# 사용자 답 2026-10-29: another person from the car succeeds a rep left behind or missing,
+	# after the stop is closed: a promise to that car due at this stop is judged first (S1 same order).
 	for person_id: String in lost_ids:
 		if person_id == FieldDeparture.CAPTAIN_ID:
 			continue
@@ -695,7 +697,6 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 			if g["comms"][comm]["leader"].get("personId") == person_id:
 				_succeed_rep(g, t, comm)
 				break
-	_close_field_stop(g, t, departure, receipt)
 	if receipt["symbol"] is Dictionary:
 		var comm: String = receipt["symbol"]["groupId"]
 		lines.append({"k": "symbol", "comm": comm, "text": "%s의 상징물을 가져왔다. 쓰임을 고른다." % t["COMM_NAME"][comm]})
