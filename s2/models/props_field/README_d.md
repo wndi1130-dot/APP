@@ -66,7 +66,7 @@ rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 
 | `snowplow_truck` | 6 | 6×3 | 2.5 | wall:6 | 416 | 28848 | 앞쪽 제설 삽날을 붙인 화물차, wall 높이 |
 | `wire_coil` | 6 | 1×1 | 0.28 | low:6 | 308 | 23988 | 바닥에 감긴 매끈한 전선; 가시·철조망 없음 |
 | `blanket_screen` | 5 | 3×1 | 1.25 | low:5 | 92 | 7448 | 담요 한 장을 낮은 목재 틀에 펼친 가림막, low 높이·소지품 더미 없음 |
-| `boulder` | 5 | 2×2 | 1.2 | low:5 | 64 | 6448 | 눈이 조금 얹힌 각진 바위, low 높이 |
+| `boulder` | 5 | 2×2 | 1.2 | low:5 | 310 | 32652 | 이끼 낀 둥근 바위와 작은 돌 둘(Poly Haven rock_moss_set_02, CC0) |
 | `butcher_block` | 5 | 2×1 | 0.9 | low:3, none:2 | 72 | 6060 | 두꺼운 정육 작업판·튼튼한 다리, low 우세 |
 | `courtyard_planter` | 5 | 3×2 | 1.2 | low:5 | 168 | 12660 | 중정 화분의 석재 통·눈·마른 가지 |
 
@@ -151,7 +151,7 @@ rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 
 | `snowplow_truck` | `62fe8f7b5587fe50f55dce91b544d87961e60fa69331466f48d0479941bc75ee` |
 | `wire_coil` | `37f589500319e2d79d30fff9caa5cf3105439c4cbe0a285bae3da87684f5b845` |
 | `blanket_screen` | `a6dcf69dd1890405e81b30702c80a4ec13dff3ba7ebda349a7adc78d90ae36a7` |
-| `boulder` | `8a1ac8069b780b72a3484a1236a7a270d168b8f583a8acb834a42d025a70a736` |
+| `boulder` | `76a57677f09eb53c65f17df1125d70828d34b0e16f782b8a732108d8b2c85c0a` |
 | `butcher_block` | `00da435c6edbb4f680955d2b402dd34b5c9da19c86f75a8a4db1eded871127e7` |
 | `courtyard_planter` | `f41fdf8e1402fc4146f35e9831d031de2b593b631ddcc3b062f6bf93399df6da` |
 

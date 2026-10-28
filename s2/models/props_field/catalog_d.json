@@ -3109,14 +3109,14 @@
       "modal_rect_count": 5,
       "bounds_m": [
         [
-          -0.96,
-          0.0,
-          -0.96
+          -0.8808,
+          -0.2724,
+          -0.9216
         ],
         [
-          0.96,
-          1.2,
-          0.96
+          0.8808,
+          0.8983,
+          0.9216
         ]
       ],
       "dimensions_m": [
@@ -3124,17 +3124,19 @@
         1.2,
         1.92
       ],
-      "lod0_tris": 64,
+      "lod0_tris": 310,
       "triangle_limit": 600,
-      "bytes": 6448,
-      "sha256": "8a1ac8069b780b72a3484a1236a7a270d168b8f583a8acb834a42d025a70a736",
+      "bytes": 32652,
+      "sha256": "76a57677f09eb53c65f17df1125d70828d34b0e16f782b8a732108d8b2c85c0a",
       "colours": [
         "snow",
         "stone",
         "worn_metal"
       ],
       "placement": "rect 가운데 바닥, +Y 위·+Z 앞, facing에 따라 +Y 둘레 시계 방향 90도씩 회전. 손잡이·열린 문까지 발자국 안에 포함.",
-      "judgment": "눈이 조금 얹힌 각진 바위, low 높이"
+      "judgment": "이끼 낀 둥근 바위와 작은 돌 둘(Poly Haven rock_moss_set_02, CC0)",
+      "source_asset": "이끼 낀 둥근 바위와 작은 돌 둘(Poly Haven rock_moss_set_02, CC0)",
+      "source_script": "tools/blender/props_field_cc0.py"
     },
     "butcher_block": {
       "status": "ready",
