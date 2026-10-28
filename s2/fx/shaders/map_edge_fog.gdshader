@@ -40,13 +40,16 @@ void fragment() {
 	d += (fx_fbm2(world_pos.xz * 0.05 + drift * 0.03 + vec2(13.0, world_pos.y)) - 0.5) * 10.0;
 	float ramp = smoothstep(-inset, reach, d);
 	float n = fx_fbm2(world_pos.xz * 0.11 + drift * 0.08 + vec2(world_pos.y * 5.3, world_pos.y * 2.1));
-	float sheet = mix(smoothstep(0.3, 0.72, n), 1.0, smoothstep(reach * 0.45, reach, d));
+	// Patchy out to about 22 m past the edge (the camera's reach is 24 m), whole only
+	// beyond: the far ground reads as ground going on, not as a white wall (O1).
+	float sheet = mix(smoothstep(0.3, 0.72, n), 1.0, smoothstep(reach * 0.6, reach, d));
 	// The hour's fog hue at a pale fog's brightness; the light does the rest.
 	// The fog's own light and dark: 0.88 .. 1.06 of it.
-	// Half of it the reference's cool white, so a warm hour does not turn it khaki.
+	// A third of it the reference's cool white, so a warm hour does not turn it khaki.
 	vec3 hue = fog_color / max(max(fog_color.r, fog_color.g), max(fog_color.b, 0.05));
-	hue = mix(hue, vec3(0.95, 0.95, 1.0), 0.5);
-	vec3 col = hue * 0.8 * (0.88 + 0.18 * n);
+	hue = mix(hue, vec3(0.95, 0.95, 1.0), 0.3);
+	// A shade under the reference's pale sheet, so the haze over the far ground is air and not snow.
+	vec3 col = hue * 0.72 * (0.88 + 0.18 * n);
 	// Under the sight mask the fog dims as the ground beneath it does (world_vis:
 	// seen now full, seen before dim, never seen dark), a little less in the
 	// dark, so the edge is never the brightest thing on the screen.
