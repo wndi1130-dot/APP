@@ -17,7 +17,7 @@ rect가 비어 있던 버드나무·낚시깃대·얼음자리는 지도 Rect2i 
 | `bare_willow` | 225 | 1×1 | 4.6 | 196 | 15188 | 잎 없는 버드나무; 가늘게 아래로 늘어진 가지, tree 높이 예외 |
 | `map_cabinet` | 206 | 3×1 | 0.48 | 120 | 9416 | none 우세; 지도용 얇고 넓은 서랍 네 단, 손잡이는 앞면 |
 | `record_shelf_row` | 206 | 4×1 | 1.25 | 192 | 14456 | 기록 선반의 쓰임을 우선해 none 0.5m 예외; 긴 세 칸과 문서철 |
-| `street_tree` | 198 | 1×1 | 4.4 | 208 | 15996 | 가로수 의미를 우선한 tree; 눈 얹힌 좁은 맨가지 수관 |
+| `street_tree` | 198 | 1×1 | 4.4 | 504 | 52432 | 눈 조금 얹은 맨가지 활엽 가로수(Quaternius CommonTree_Dead_Snow_5, CC0) |
 | `firewood_pile` | 197 | 2×1 | 0.85 | 132 | 9492 | low 우세; 잘린 장작 여섯 토막과 위쪽 눈 |
 | `car` | 153 | 4×2 | 1.18 | 348 | 23828 | low 1.3m 이하; 눈 쌓인 소형 승용차, +Z 앞을 지키며 4×2m 안에서 폭을 줄임 |
 | `conductor_log_chest` | 153 | 2×1 | 0.48 | 60 | 5232 | none 우세; 운행일지용 닫힌 나무 궤와 금속 손잡이 |
@@ -87,7 +87,7 @@ rect가 비어 있던 버드나무·낚시깃대·얼음자리는 지도 Rect2i 
 | `bare_willow` | `0f5526325832b017cc2cc5c977eafe692f213032db29c279ac016bec247bcff0` |
 | `map_cabinet` | `92edf039eaa138081c24f74c8cd568028a85f0c2254cdb685029c6e4436fe8ed` |
 | `record_shelf_row` | `3be843d80743c82ef425958f8181827722dd1e05d8eef33b0d52bbc679e0adcf` |
-| `street_tree` | `fcc90a999fc6f0f6aaf896076056540f4180be8d8ec0bb7686256c6a877eb452` |
+| `street_tree` | `435fe85f3a05760c128b2b39d7a90de87969eee4040140b2e05dcff486cb4bf6` |
 | `firewood_pile` | `604e221d7080382b4bd92d0d04e61b78b5e4b92c87a545369243943633207e11` |
 | `car` | `6d9f5a5144ab403b464b7b08d229e55812381cfd3cc8ac801e68ba985bfb095f` |
 | `conductor_log_chest` | `302e343644da4f23e2672685b7d7f1779d247f965de74b02236e372ed87afc8c` |
