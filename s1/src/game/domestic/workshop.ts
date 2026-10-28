@@ -3,14 +3,14 @@ import { COMM_NAME, COMMS } from '../data';
 import type { Comm } from '../data';
 import { clamp, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
-import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, GREEN_BODY, TECHS, TECH_IDS, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
-import type { TechId, Upkeep, Variant } from './data';
+import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE, FURNITURE_SIZE, GREEN_BODY, TECHS, TECH_IDS, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
+import type { FurnitureKind, FurnishStep, FurnishTier, TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
 import { refreshSit } from './sit';
 import { locoAutoRepairParts, locoOf, locoRepairParts } from '../loco';
 import { saveRestore, workBonus } from './classroom';
 import { handsWorkMult } from '../hands';
-import { domCard, secondPath, techMult, techUsable, techVariants, topSkill, variantMult, zoneOf } from './state';
+import { domCard, furnishOf, furnishScore, nextFurnishWork, secondPath, techMult, techUsable, techVariants, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
 
 // 공방(6장): 작업량, 일 목록, 목표치와 우선순위, 복원(7장), 유지비(7.4), 고장(6.5), 개조(4.4).
@@ -273,9 +273,29 @@ export function techRelSides(id: TechId, variant?: Variant): { like: Comm[]; dis
 // ---- 개조(4.4, 6.2) ----
 export interface JobCheck { ok: boolean; why?: string }
 
-export function jobCheck(g: Game, kind: ModKind, car: string): JobCheck {
+export function furnishCost(step: FurnishStep): { wood: number; scrap: number; parts: number; work: number } {
+  const cost = FURNISH_WORK[step];
+  return { wood: cost.wood + cost.cloth * D.furnishClothWood, scrap: cost.scrap, parts: cost.parts, work: cost.work };
+}
+
+export function jobCheck(g: Game, kind: ModKind, car: string, step?: FurnishStep): JobCheck {
   const d = dom(g);
   if (d.job) return { ok: false, why: '개조 하나가 이미 줄에 있다' };
+  if (kind === 'furnish') {
+    if (!FURNISH_CARS.some(c => c === car)) return { ok: false, why: '살림은 사람이 사는 객차 여섯 칸만' };
+    const f = furnishOf(g, car);
+    const n = step ?? nextFurnishWork(g, car);
+    if (!n || !FURNISH_STEPS.includes(n) || f.jobs.includes(n)) return { ok: false, why: '이미 살림 작업을 마쳤다' };
+    if (f.tier < n - 1) return { ok: false, why: `살림 ${n - 1}단부터` };
+    if (n === 2 && !d.insulated.includes(car)) return { ok: false, why: '이 칸 단열부터' };
+    if (n >= 2 && techMult(g, 'w5') <= 0) return { ok: false, why: '객차 목공을 사용해야 한다' };
+    if (n === 3 && !techUsable(g, 'w1')) return { ok: false, why: '공구 수리부터' };
+    const cost = furnishCost(n);
+    if (d.wood < cost.wood) return { ok: false, why: `목재 ${cost.wood}이 든다` };
+    if (d.scrap < cost.scrap) return { ok: false, why: `고철 ${cost.scrap}이 든다` };
+    if (d.parts < cost.parts) return { ok: false, why: `부품 ${cost.parts}이 든다` };
+    return { ok: true };
+  }
   if (kind === 'insulate') {
     if (!techUsable(g, 'e5')) return { ok: false, why: '단열 개조를 아직 모른다' };
     if (!CAR_COMM[car]) return { ok: false, why: '사람이 사는 칸만' };
@@ -297,12 +317,19 @@ export function jobCheck(g: Game, kind: ModKind, car: string): JobCheck {
   return { ok: true };
 }
 
-export function startJob(g: Game, kind: ModKind, car: string): boolean {
+export function startJob(g: Game, kind: ModKind, car: string, step?: FurnishStep): boolean {
   const d = dom(g);
-  if (!jobCheck(g, kind, car).ok) return false;
-  const wood0 = d.wood, scrap0 = d.scrap;
+  if (!jobCheck(g, kind, car, step).ok) return false;
+  const wood0 = d.wood, scrap0 = d.scrap, parts0 = d.parts;
+  const furnishStep = kind === 'furnish' ? step ?? nextFurnishWork(g, car)! : undefined;
+  const cost = furnishStep ? furnishCost(furnishStep) : undefined;
   if (kind === 'insulate') d.wood -= D.insulateWood;
   else if (kind === 'armor') d.scrap -= D.armorScrap;
+  else if (kind === 'furnish') {
+    d.wood -= cost!.wood;
+    d.scrap -= cost!.scrap;
+    d.parts -= cost!.parts;
+  }
   else {
     // 칸 기능 바꾸기: 자재 20을 많은 쪽부터 쓴다.
     let left = D.convertMaterials;
@@ -311,8 +338,8 @@ export function startJob(g: Game, kind: ModKind, car: string): boolean {
       left -= 1;
     }
   }
-  const need = kind === 'insulate' ? D.insulateWork : kind === 'armor' ? D.armorWork : D.convertWork;
-  d.job = { kind, car, progress: 0, need, paid: { wood: wood0 - d.wood, scrap: scrap0 - d.scrap } };
+  const need = kind === 'insulate' ? D.insulateWork : kind === 'armor' ? D.armorWork : kind === 'furnish' ? cost!.work : D.convertWork;
+  d.job = { kind, car, progress: 0, need, ...(furnishStep ? { furnishStep } : {}), paid: { wood: wood0 - d.wood, scrap: scrap0 - d.scrap, parts: parts0 - d.parts } };
   journal(g, `공방 개조 줄에 올렸다: ${jobTitle(kind, car)}.`);
   return true;
 }
@@ -330,6 +357,7 @@ export function cancelJob(g: Game): boolean {
   const job = d.job!;
   d.wood += job.paid!.wood;
   d.scrap += job.paid!.scrap;
+  d.parts += job.paid!.parts ?? 0;
   d.job = null;
   journal(g, `공방 개조 줄에서 내렸다: ${jobTitle(job.kind, job.car)}.`);
   return true;
@@ -337,13 +365,54 @@ export function cancelJob(g: Game): boolean {
 
 export function jobTitle(kind: ModKind, car: string): string {
   const name = CAR_NAME[car] ?? car;
-  return kind === 'insulate' ? `${name} 단열` : kind === 'armor' ? `${name} 장갑` : `${name}을(를) 온실로`;
+  return kind === 'insulate' ? `${name} 단열` : kind === 'armor' ? `${name} 장갑` : kind === 'furnish' ? `${name} 살림` : `${name}을(를) 온실로`;
 }
 
 export const CAR_NAME: Record<string, string> = {
   tail1: '꼬리칸 1', tail2: '꼬리칸 2', tail3: '꼬리칸 3', cold: '냉동칸', store: '창고칸', medtech: '의무칸', dining: '식당칸',
   guard: '경비대칸', captain: '열차장실', front: '앞칸', workshop: '공방칸', engine: '기관실',
 };
+
+function mutableFurnish(g: Game, car: string) {
+  const states = dom(g).furnish ??= {};
+  return states[car] ??= furnishOf(g, car);
+}
+
+/** 단은 내려가지 않고, 처음 닿은 단마다 한 번만 관계와 일지를 남긴다. */
+function updateFurnish(g: Game, car: string): void {
+  const f = mutableFurnish(g, car);
+  f.work = f.jobs.length as FurnishTier;
+  f.furnPts = Math.min(D.furnishFurnitureCap, f.items.reduce((sum, item) => sum + FURNITURE_SIZE[item.size].points, 0));
+  const score = furnishScore(g, car);
+  const reached = FURNISH_STEPS.filter(n => score >= D.furnishThreshold[n]).at(-1) ?? 0;
+  f.tier = Math.max(f.tier, f.best, reached) as FurnishTier;
+  const c = CAR_COMM[car];
+  for (const n of FURNISH_STEPS.filter(n => n > f.best && n <= f.tier)) {
+    bumpRel(g, c, D.furnishRel * n / COMM_CARS[c], 'furnish');
+    const change = ({ 1: '벽을 맞추고 잠자리를 손봤다', 2: '선반과 식탁이 들어섰다', 3: '붙박이 침대가 들어섰다' } as const)[n];
+    journal(g, `${CAR_NAME[car]}에 살림 ${n}단: ${change}. ${COMM_NAME[c === 'tail' ? 'front' : 'tail']}에서 그 소리를 들었다.`, 'good');
+  }
+  f.best = f.tier;
+}
+
+export function placeFurniture(g: Game, car: string, kind: FurnitureKind): JobCheck {
+  if (!g.dom || !FURNISH_CARS.some(c => c === car)) return { ok: false, why: '살림은 사람이 사는 객차 여섯 칸만' };
+  if (!Object.hasOwn(FURNITURE, kind)) return { ok: false, why: '알 수 없는 가구' };
+  const { size } = FURNITURE[kind];
+  if (furnishOf(g, car).items.filter(item => item.size === size).length >= FURNITURE_SIZE[size].slots) return { ok: false, why: '이 크기 가구를 놓을 자리가 없다' };
+  mutableFurnish(g, car).items.push({ kind, size });
+  updateFurnish(g, car);
+  refreshSit(g);
+  return { ok: true };
+}
+
+export function removeFurniture(g: Game, car: string, index: number): JobCheck {
+  if (!g.dom || !FURNISH_CARS.some(c => c === car) || !Number.isInteger(index) || index < 0 || index >= furnishOf(g, car).items.length) return { ok: false, why: '그 자리에 가구가 없다' };
+  mutableFurnish(g, car).items.splice(index, 1);
+  updateFurnish(g, car);
+  refreshSit(g);
+  return { ok: true };
+}
 
 function completeJob(g: Game): void {
   const d = dom(g);
@@ -356,6 +425,10 @@ function completeJob(g: Game): void {
   } else if (job.kind === 'armor') {
     d.armored.push(job.car);
     journal(g, `${CAR_NAME[job.car]}에 철판을 댔다.`, 'good');
+  } else if (job.kind === 'furnish') {
+    const f = mutableFurnish(g, job.car);
+    if (job.furnishStep && !f.jobs.includes(job.furnishStep)) f.jobs.push(job.furnishStep);
+    updateFurnish(g, job.car);
   } else {
     convertGreenhouse(g, job.car);
   }

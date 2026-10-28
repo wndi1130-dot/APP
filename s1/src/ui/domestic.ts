@@ -4,7 +4,7 @@ import {
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, cancelOpen, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workBonus, workPower, workshopChief, workshopState, zoneAt, enableArrivals, enableClimate, enableDark, enableDeathWeight, enableDisasters, enableEventPack, seasonAct, useSeasonAct, josa, PLACES, crisisNow, hangWhy, SYM,
-  gearOwned, gearTaken, lureBlock, techShown, techVariants,
+  gearOwned, gearTaken, lureBlock, techShown, techVariants, furnishOf, furnishCost, nextFurnishWork,
 } from '../game';
 import { copyText } from './clip';
 
@@ -352,6 +352,7 @@ export function workshopBoard(view: View, car: CarDef): HTMLElement {
 const MOD_KINDS: { k: ModKind; name: string; cost: string }[] = [
   { k: 'insulate', name: '단열', cost: `목재 ${D.insulateWood}` },
   { k: 'armor', name: '장갑', cost: `고철 ${D.armorScrap}` },
+  { k: 'furnish', name: '살림', cost: '칸·단마다' },
 ];
 
 /** 칸 판 「개조」 덩이의 칩(설계 4부 5-5): 그 칸에 올릴 수 있는 개조와 드는 값. 끝난 것은 done, 못 올리면 까닭이 붙는다. 기관차에는 없다. */
@@ -359,6 +360,17 @@ export function carModChips(g: Game, car: string): { k: ModKind; name: string; c
   const d = g.dom;
   if (!d || !CAR_COMM[car] || car === 'engine') return [];
   return MOD_KINDS.map(({ k, name, cost }) => {
+    if (k === 'furnish') {
+      const tier = furnishOf(g, car).tier;
+      const step = nextFurnishWork(g, car);
+      const value = step ? furnishCost(step) : null;
+      const chk = jobCheck(g, k, car);
+      return {
+        k, name: tier >= 3 ? '살림 3단' : `살림 ${tier}단 → ${tier + 1}단`,
+        cost: value ? `목재 ${value.wood} · 고철 ${value.scrap}${value.parts ? ` · 부품 ${value.parts}` : ''} · 일 ${value.work}` : '끝남',
+        done: tier >= 3, ok: tier < 3 && chk.ok, why: tier >= 3 ? undefined : chk.why,
+      };
+    }
     const done = (k === 'insulate' ? d.insulated : d.armored).includes(car);
     const chk = jobCheck(g, k, car);
     // 단열은 얻는 것과 치르는 것을 숫자로 보인다: 하기 전엔 이 칸에 들 값(고르는 칩의 풍선), 한 뒤엔 지금 듣는 값(칸 창 줄)(결정 217·225).
@@ -388,7 +400,8 @@ function modifyView(view: View): HTMLElement {
       cancelOpen(g) ? h('button', { class: 'chip', 'data-action': 'dom-job-cancel', 'aria-label': '개조 줄에서 내리기' }, '내리기') : null,
       h('small', { class: 'sub num' }, workText(g))),
     MOD_KINDS.map(({ k, name, cost }) => {
-      const done = (c: string) => (k === 'insulate' ? d.insulated : d.armored).includes(c);
+      const chip = (c: string) => carModChips(g, c).find(x => x.k === k)!;
+      const done = (c: string) => chip(c).done;
       // 칸마다 같은 까닭(아직 모른다, 재료가 모자라다, 줄이 찼다)은 줄 머리에 한 번만 적는다.
       const open = cars.filter(c => !done(c));
       const why = open.length ? jobCheck(g, k, open[0]).why : undefined;
@@ -398,8 +411,8 @@ function modifyView(view: View): HTMLElement {
         h('span', { class: 'dom-mod__cars' }, cars.map(c => h('button', {
           class: cx('chip', done(c) && 'is-done', c === here && 'is-here'), 'data-action': 'dom-job', 'data-kind': k, 'data-car': c,
           disabled: done(c) || !jobCheck(g, k, c).ok, 'aria-label': `${jobTitle(k, c)}${done(c) ? ' 끝남' : ''}`,
-          title: k === 'insulate' ? (done(c) ? insulateCarNote(g, c) : insulateNumbers(c)) : '',
-        }, done(c) ? icon('check') : null, CAR_NAME[c] ?? c))));
+          title: k === 'furnish' ? `${chip(c).cost}${chip(c).why ? ` · ${chip(c).why}` : ''}` : k === 'insulate' ? (done(c) ? insulateCarNote(g, c) : insulateNumbers(c)) : '',
+        }, done(c) ? icon('check') : null, CAR_NAME[c] ?? c, k === 'furnish' ? ` · ${chip(c).name}` : null))));
     }));
 }
 

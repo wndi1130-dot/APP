@@ -3,8 +3,8 @@ import type { Comm, Trait } from '../data';
 import { addCard, createGame, drawPerson, isGone, lawActive, pick, situation } from '../state';
 import { hash } from '../omens';
 import type { Card, Game } from '../state';
-import { CARS0, D, FIELDS, SPECIALISTS, TECHS, ZONE0 } from './data';
-import type { Field, TechDef, TechId, Variant, Zone } from './data';
+import { CARS0, D, FIELDS, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, SPECIALISTS, TECHS, ZONE0 } from './data';
+import type { Field, FurnitureKind, FurnitureSize, FurnishStep, FurnishTier, TechDef, TechId, Variant, Zone } from './data';
 import type { PotState } from './pot';
 
 // S1c 내정 상태. S1a 판(Game)에 dom 하나를 더해 켠다(S1 기획서 19장의 기능 플래그). dom이 없으면 S1a 그대로다.
@@ -74,9 +74,18 @@ export interface TechState {
   pending?: boolean;
 }
 
-export type ModKind = 'insulate' | 'armor' | 'convert';
+export type ModKind = 'insulate' | 'armor' | 'convert' | 'furnish';
 /** paid: 시작할 때 낸 자재. 일이 하나도 안 됐을 때 거두면 그대로 돌려준다(cancelJob). 옛 저장 판에는 없다. */
-export interface ModJob { kind: ModKind; car: string; progress: number; need: number; paid?: { wood: number; scrap: number } }
+export interface ModJob { kind: ModKind; car: string; progress: number; need: number; furnishStep?: FurnishStep; paid?: { wood: number; scrap: number; parts?: number } }
+export interface FurnishState {
+  /** 끝낸 작업 수(0~3). 가구로 1단을 대신할 수 있어 작업 번호도 따로 남긴다. */
+  work: FurnishTier;
+  jobs: FurnishStep[];
+  furnPts: number;
+  tier: FurnishTier;
+  best: FurnishTier;
+  items: { kind: FurnitureKind; size: FurnitureSize }[];
+}
 export type Task = 'parts' | 'restore' | 'modify';
 export type Penalty = { kind: 'coal' | 'haul'; until: number };
 
@@ -114,6 +123,8 @@ export interface DomState {
   job: ModJob | null;
   insulated: string[];
   armored: string[];
+  /** 없는 키는 빈 살림(옛 저장). 기관실·덧단 객차는 이번 범위 밖이다. */
+  furnish?: Record<string, FurnishState>;
   greenhouse: string | null;
   /** 꼬리 끝에 붙인 칸 */
   extraCars: ('store' | 'coach')[];
@@ -236,7 +247,7 @@ export function enableDomestic(g: Game): void {
     frags: { engine: 1, med: 1, craft: 0, radio: 0, expedition: 0 },
     manuals: { engine: false, med: false, craft: false, radio: false, expedition: false },
     target: D.target0, order: ['parts', 'restore', 'modify'], techs: {}, restoring: null, offered: [], job: null,
-    insulated: [], armored: [], greenhouse: null, extraCars: [],
+    insulated: [], armored: [], furnish: {}, greenhouse: null, extraCars: [],
     people, nextPersonId: people.length + 1, countdown: {}, hotWater: D.hotWater0, lice: {}, typhus: [], bedding: {},
     penalties: [], sabotage: {}, grants: [], stoker: null, stalled: false,
     flags: { otherApprentice: false, irreplaceable: false, lice: false },
@@ -284,6 +295,7 @@ export function migrateDomestic(g: Game): void {
   d.penalties ??= [];
   d.grants ??= [];
   d.extraCars ??= [];
+  d.furnish ??= {};
   d.bedOrder ??= null;
   d.fullRule ??= null;
   d.bury ??= false;
@@ -336,6 +348,24 @@ export function techUsable(g: Game, id: TechId): boolean {
   return !!st && (st.stage === 'done' || st.stage === 'defective');
 }
 
+/** 읽는 것만으로 옛 저장에 값을 쓰지 않는다. */
+export function furnishOf(g: Game, car: string): FurnishState {
+  return g.dom?.furnish?.[car] ?? { work: 0, jobs: [], furnPts: 0, tier: 0, best: 0, items: [] };
+}
+
+export function furnishScore(g: Game, car: string): number {
+  const f = furnishOf(g, car);
+  return f.jobs.reduce((sum, n) => sum + FURNISH_WORK[n].points, 0) + Math.min(f.furnPts, D.furnishFurnitureCap);
+}
+
+/** 현재 단의 다음 작업부터. 가구를 뺀 뒤에는 아직 안 한 낮은 작업으로 부족한 점수를 채울 수 있다. */
+export function nextFurnishWork(g: Game, car: string): FurnishStep | undefined {
+  const f = furnishOf(g, car);
+  if (f.tier >= 3) return undefined;
+  const next = (f.tier + 1) as FurnishStep;
+  return !f.jobs.includes(next) ? next : FURNISH_STEPS.find(n => n <= next && !f.jobs.includes(n));
+}
+
 /**
  * 기술을 '채택'했나(「고른 복원」 약속의 이행 기준, A01): 완성판이고(결함판은 안 친다), 꺼 두지 않았고, 추인 대기가 아니고,
  * 칸에 놓는 기술(온실칸·단열·장갑)은 한 칸 이상에 실제로 놓았다.
@@ -347,6 +377,9 @@ export function techAdopted(g: Game, id: TechId): boolean {
   if (id === 'm4') return d.greenhouse !== null;
   if (id === 'e5') return d.insulated.length > 0;
   if (id === 'w3') return d.armored.length > 0;
+  // x4의 만들기는 S2 몫이라 S1에서는 완성판을 사용할 수 있으면 채택. w5는 실제 목공 작업까지 본다.
+  if (id === 'x4') return techMult(g, id) > 0;
+  if (id === 'w5') return techMult(g, id) > 0 && FURNISH_CARS.some(car => furnishOf(g, car).jobs.some(n => n >= 2));
   return true;
 }
 

@@ -27,6 +27,10 @@ export const D = {
    * Warm: 다 단열했을 때 온기 +, Heat: 다 단열했을 때 덜 드는 난방 석탄의 비율, Crowd: 단열한 칸마다 오르는 과밀, Lice: 이가 돌 확률에 붙는 배수(1 + Lice × 몫),
    * QuotaHalf: 켜면 「난방 배당」이 서 있는 동안 새 온기 이득이 반이다(지금은 꺼 둔다. 겹쳐 쌓아도 지나치지 않다). 폰으로 해 보고 이 줄만 고친다. */
   insulateWarm: 6, insulateHeat: 0.3, insulateCrowd: 2, insulateLice: 1, insulateQuotaHalf: false,
+  // 살림(결정 486·489): 천은 S1에서 목재로 바꾼다. 단은 유지하고 난로는 칸마다 큰 하나만 센다.
+  furnishClothWood: 0, furnishFurnitureCap: 4, furnishThreshold: [0, 3, 8, 15],
+  furnishWarm: [0, 1, 1, 2], furnishCrowd: -0.5, furnishRel: 2,
+  furnishGapMin: 1, furnishGapMax: 2, furnishGapRel: 0.5, furnishGapCap: 2, furnishPianoRel: 0.3,
   /** 「난방 배당」이 서 있는 동안(결정 230·231·240·276, domestic/heat_alloc.ts): 정산마다 꼬리칸·의무진 관계 −Rel, 온기가 Warm 아래인 칸(꼬리칸·의무진·경비대)마다 Death의 확률로 어른 한 사람이 죽는다. Rel·Death가 0이면 옛 동작. */
   heatAllocRel: 2, heatAllocWarm: 45, heatAllocDeath: 0.10,
   armorWork: 4, armorScrap: 12, armorExposure: 10,
@@ -128,10 +132,10 @@ export const BYPRODUCT: Record<string, Byproduct> = {
   office: { scrap: 1, wood: 3, frag: 0.4, branches: ['radio'], core: 0 },
 };
 
-// ---- 기술 21개(7.3, 정찰 장비 r4·w4는 결정 371) ----
+// ---- 기술 23개(7.3, 정찰 장비 r4·w4는 결정 371, 운반·살림 x4·w5는 결정 486) ----
 export type TechId =
   | 'e1' | 'e2' | 'e3' | 'e4' | 'e5' | 'm1' | 'm2' | 'm3' | 'm4' | 'm5'
-  | 'w1' | 'w2' | 'w3' | 'w4' | 'r1' | 'r2' | 'r3' | 'r4' | 'x1' | 'x2' | 'x3';
+  | 'w1' | 'w2' | 'w3' | 'w4' | 'w5' | 'r1' | 'r2' | 'r3' | 'r4' | 'x1' | 'x2' | 'x3' | 'x4';
 export type Variant = 'a' | 'b';
 export interface Upkeep { parts?: number; coal?: number; wood?: number; scrap?: number }
 export interface VariantDef {
@@ -197,6 +201,7 @@ export const TECHS: Record<TechId, TechDef> = {
   w3: T({ id: 'w3', branch: 'craft', tier: 3, name: '장갑 객차', effect: '장갑 개조가 열린다(칸마다 고철 12). 경비대칸이면 노출 −10', upkeep: { parts: 0.5 }, like: ['guard'], dislike: ['tail'] }),
   // 정찰 장비(결정 371): 정찰조가 돌아온 정차에서 태엽 깡통을 반대편에 걸어 망자를 끈다. 걸 때마다 부품이 든다.
   w4: T({ id: 'w4', branch: 'craft', tier: 0, name: '태엽 소리 미끼', effect: '정찰 뒤 미끼를 걸면 바깥 기척이 한 단계 내려간다(한 번에 부품 1)', like: ['tail'], adapt: { parts: 1, wood: 2 } }),
+  w5: T({ id: 'w5', branch: 'craft', tier: 0, name: '객차 목공', effect: '살림 2단(갖춤)을 연다. 3단(북유럽식)은 공구 수리도 써야 한다', like: ['front'], adapt: { parts: 1, wood: 4 } }),
   r1: T({ id: 'r1', branch: 'radio', tier: 1, name: '단거리 무전', effect: '정차 사망 ×0.85', like: ['guard'] }),
   r2: T({
     id: 'r2', branch: 'radio', tier: 2, name: '무전의 쓰임', effect: '변형 둘 중 하나', upkeep: { parts: 0.25 },
@@ -214,7 +219,7 @@ export const TECHS: Record<TechId, TechDef> = {
       b: { name: '철도 수신호', effect: '정찰조 2명 → 1명(표결 빠짐 한 명). 혼자라 정찰조 위험 ×2', upkeep: {}, like: ['tail'], dislike: [], label: '수신호를 맞춘다', say: '한 명만 들어가라. 나머지는 깃발만 본다!' },
     },
   }),
-  x1: T({ id: 'x1', branch: 'expedition', tier: 1, name: '짐 꾸리기·방한 장비', effect: "아동 노동에 '짐 꾸리기만' 변형이 열린다(아이들은 내리지 않는다)", like: ['tail'] }),
+  x1: T({ id: 'x1', branch: 'expedition', tier: 1, name: '짐 꾸리기·방한 장비', effect: "아동 노동에 '짐 꾸리기만' 변형이 열린다(아이들은 내리지 않는다). 공방에서 썰매·들것을 만든다(S2)", like: ['tail'] }),
   // 변형(결정 371): 페달은 조용히 조금, 발동기는 시끄럽게 많이 정찰 산출 깎임을 덜어 준다. 변형이 없는 옛 저장은 페달로 읽는다(scout_gear.ts).
   x2: T({
     id: 'x2', branch: 'expedition', tier: 2, name: '핸드카 정찰', effect: '정차마다 장소 후보가 둘', upkeep: { parts: 0.25 }, like: ['guard'],
@@ -224,11 +229,17 @@ export const TECHS: Record<TechId, TechDef> = {
     },
   }),
   x3: T({ id: 'x3', branch: 'expedition', tier: 3, name: '궤도 모터카', effect: '지나쳐도 짧게의 절반을 얻는다(석탄 1)', upkeep: { parts: 0.5 }, like: ['guard'], dislike: ['engine'] }),
+  x4: T({ id: 'x4', branch: 'expedition', tier: 2, name: '운반 수레', effect: '공방 만들기: 손수레·긴 썰매·쇠 날(S2)', like: ['tail'] }),
 };
 export const TECH_IDS = Object.keys(TECHS) as TechId[];
 
-/** 같은 가지 안의 선행조건(7.1): 2단계는 1단계, 3단계는 2단계 하나. */
+/** 갈라진 연구 줄로 3단계의 선행을 우회하지 않는다(결정 486, 설계 1.1). */
+export const PREREQ: Partial<Record<TechId, TechId[]>> = {
+  x2: ['x1'], x4: ['x1'], x3: ['x2'], w2: ['w1'], w3: ['w2'],
+};
+/** 표가 없는 가지는 기존 셈: 같은 가지에서 한 단 아래 기술 하나. */
 export function prereqs(id: TechId): TechId[] {
+  if (PREREQ[id]) return [...PREREQ[id]];
   const def = TECHS[id];
   if (def.tier <= 1) return [];
   return TECH_IDS.filter(t => TECHS[t].branch === def.branch && TECHS[t].tier === def.tier - 1);
@@ -269,6 +280,34 @@ export const ZONE_GREEN: Record<Zone, number> = { front: 3, middle: 2.25, back: 
 export const CAR_COMM: Record<string, Comm> = { tail1: 'tail', tail2: 'tail', tail3: 'tail', medtech: 'medtech', guard: 'guard', front: 'front', engine: 'engine' };
 /** 공동체가 사는 칸 수(온기 효과를 칸 수로 나눈다, 4.5) */
 export const COMM_CARS: Record<Comm, number> = { tail: 3, medtech: 1, guard: 1, front: 1, engine: 1 };
+
+// 살림의 값 표(설계 2.1~2.3). 자재 표는 천을 보존하고 S1 지불 때만 목재로 셈한다.
+export const FURNISH_CARS = ['tail1', 'tail2', 'tail3', 'medtech', 'guard', 'front'] as const;
+export type FurnishCar = typeof FURNISH_CARS[number];
+export type FurnishTier = 0 | 1 | 2 | 3;
+export type FurnishStep = Exclude<FurnishTier, 0>;
+export const FURNISH_STEPS: FurnishStep[] = [1, 2, 3];
+export const FURNISH_WORK: Record<FurnishStep, { wood: number; scrap: number; cloth: number; parts: number; work: number; points: number }> = {
+  1: { wood: 1, scrap: 3, cloth: 1, parts: 0, work: 1, points: 3 },
+  2: { wood: 1, scrap: 6, cloth: 2, parts: 0, work: 3, points: 5 },
+  3: { wood: 2, scrap: 8, cloth: 2, parts: 2, work: 4, points: 7 },
+};
+export const FURNITURE_SIZE = {
+  small: { slots: 4, points: 1, crowd: 0 },
+  medium: { slots: 2, points: 2, crowd: 0.5 },
+  large: { slots: 1, points: 3, crowd: 1.5 },
+} as const;
+export type FurnitureSize = keyof typeof FURNITURE_SIZE;
+const furniture = (size: FurnitureSize, warm = 0, crowd = 0, piano = false) => ({ size, warm, crowd, piano });
+export const FURNITURE = {
+  chair: furniture('small'), side_table: furniture('small'), small_shelf: furniture('small'),
+  oil_lamp: furniture('small'), small_box: furniture('small'), frame: furniture('small'),
+  drawer: furniture('medium'), bed_frame: furniture('medium', 0, -1), table: furniture('medium'),
+  bookshelf: furniture('medium'), small_stove: furniture('medium', 2),
+  wardrobe: furniture('large'), piano: furniture('large', 0, 0, true), cupboard: furniture('large'),
+  iron_stove: furniture('large', 4), safe: furniture('large'),
+} as const;
+export type FurnitureKind = keyof typeof FURNITURE;
 
 /** 온실을 들일 때 내줄 수 있는 칸(4.4). 산출은 칸 값이 아니라 구역 값(ZONE_GREEN) × 칸 몸체(GREEN_BODY)로 낸다. */
 /** 온실로 내줄 수 있는 칸: 창고칸뿐이다. 사람이 사는 칸(앞칸·꼬리칸)은 내주지 않고(금지선, 2026-10-25 코디네이터),

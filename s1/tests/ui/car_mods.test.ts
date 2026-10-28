@@ -5,12 +5,13 @@ import { carModChips } from '../../src/ui/domestic';
 // 칸 판 「개조」 덩이(설계 4부 5-5): 그 칸에 올릴 수 있는 개조만 칩으로, 못 올리면 까닭과 드는 값이 보인다.
 
 describe('칸 판의 개조 칩', () => {
-  it('사람 사는 칸에는 단열과 장갑이 드는 값과 함께 뜬다', () => {
+  it('사람 사는 칸에는 단열·장갑·살림이 드는 값과 함께 뜬다', () => {
     const g = createS1cGame('mods');
     const chips = carModChips(g, 'tail1');
-    expect(chips.map(c => c.name)).toEqual(['단열', '장갑']);
+    expect(chips.map(c => c.name)).toEqual(['단열', '장갑', '살림 0단 → 1단']);
     expect(chips[0].cost).toBe(`목재 ${D.insulateWood}`);
     expect(chips[1].cost).toBe(`고철 ${D.armorScrap}`);
+    expect(chips[2].cost).toBe('목재 1 · 고철 3 · 일 1');
   });
 
   it('규칙이 막으면 칩도 막히고 까닭이 같다', () => {
