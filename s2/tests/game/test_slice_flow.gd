@@ -44,6 +44,80 @@ func _texts(f) -> Array:
 	return out
 
 
+## GUI positions stay local while the pointer and the moving plate are in viewport px.
+func _plate_gesture(flow: SliceFlow, id: String, movement: Vector2, use_touch: bool) -> void:
+	flow._process(0.0)
+	var plate: Control = flow.plates.get_node("Plate_" + id) as Control
+	var plate_transform: Transform2D = plate.get_global_transform_with_canvas()
+	var start_local: Vector2 = plate.size * 0.5
+	var end_view: Vector2 = plate_transform * start_local + movement
+	var local_movement: Vector2 = plate_transform.affine_inverse().basis_xform(movement)
+	if use_touch:
+		var touch_down: InputEventScreenTouch = InputEventScreenTouch.new()
+		touch_down.index = 0
+		touch_down.position = start_local
+		touch_down.pressed = true
+		plate.gui_input.emit(touch_down)
+		var touch_drag: InputEventScreenDrag = InputEventScreenDrag.new()
+		touch_drag.index = 0
+		touch_drag.position = start_local + local_movement
+		touch_drag.relative = local_movement
+		plate.gui_input.emit(touch_drag)
+		flow._process(0.0)
+		var touch_up: InputEventScreenTouch = InputEventScreenTouch.new()
+		touch_up.index = 0
+		touch_up.position = plate.get_global_transform_with_canvas().affine_inverse() * end_view
+		touch_up.pressed = false
+		plate.gui_input.emit(touch_up)
+	else:
+		var mouse_down: InputEventMouseButton = InputEventMouseButton.new()
+		mouse_down.button_index = MOUSE_BUTTON_LEFT
+		mouse_down.position = start_local
+		mouse_down.pressed = true
+		plate.gui_input.emit(mouse_down)
+		var mouse_drag: InputEventMouseMotion = InputEventMouseMotion.new()
+		mouse_drag.button_mask = MOUSE_BUTTON_MASK_LEFT
+		mouse_drag.position = start_local + local_movement
+		mouse_drag.relative = local_movement
+		plate.gui_input.emit(mouse_drag)
+		flow._process(0.0)
+		var mouse_up: InputEventMouseButton = InputEventMouseButton.new()
+		mouse_up.button_index = MOUSE_BUTTON_LEFT
+		mouse_up.position = plate.get_global_transform_with_canvas().affine_inverse() * end_view
+		mouse_up.pressed = false
+		plate.gui_input.emit(mouse_up)
+
+
+func test_plate_drags_do_not_select_but_short_taps_do() -> void:
+	var flow: SliceFlow = _flow()
+	await wait_process_frames(2)
+	flow._select("")
+	for use_touch: bool in [false, true]:
+		var before: float = float(flow.train.cam_x)
+		_plate_gesture(flow, SliceFlow.FIRST_CAR, Vector2(30.0, 0.0), use_touch)
+		assert_eq(flow.sel, "", "30 px is a drag")
+		assert_lt(float(flow.train.cam_x), before, "a drag on a plate reaches the train")
+		_plate_gesture(flow, SliceFlow.FIRST_CAR, Vector2(3.0, 4.0), use_touch)
+		assert_eq(flow.sel, SliceFlow.FIRST_CAR, "5 px is still a tap")
+		flow._select("")
+
+
+func test_diag_selection_uses_the_covered_pane_width_and_clears_it() -> void:
+	var flow: SliceFlow = _flow()
+	await wait_process_frames(2)
+	flow.train.set_view_mode("diag")
+	flow._select(SliceFlow.FIRST_CAR)
+	var pane_rect: Rect2 = flow.pane.get_global_rect()
+	var covered_px: float = flow.get_viewport().get_visible_rect().size.x - pane_rect.position.x
+	assert_gt(pane_rect.size.x, 0.0)
+	assert_almost_eq(float(flow.train.pane_px), covered_px, 0.001)
+	assert_eq(str(flow.train.zoom), "near")
+	flow._select("")
+	assert_eq(float(flow.train.pane_px), 0.0)
+	assert_eq(str(flow.train.zoom), "wide")
+	assert_eq(float(flow.train.camera.h_offset), 0.0)
+
+
 func test_the_steps_come_in_the_slice_order_with_the_train_behind_them() -> void:
 	var f = _flow()
 	var seen: Array = []

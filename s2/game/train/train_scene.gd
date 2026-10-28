@@ -113,6 +113,12 @@ const CAM_FAR: float = 24.0
 const CAM_PITCH: float = -8.0
 const CAM_BACK: float = 30.0
 const CAM_LOOK_Y: float = -0.3          # below the floor: the panel covers the bottom
+const DIAG_YAW: float = 45.0
+const DIAG_PITCH: float = 35.0
+const DIAG_DIST: float = 30.0
+const DIAG_LOOK_Y: float = 0.9
+const DIAG_WIDE: float = 22.8192
+const DIAG_NEAR: float = 11.9801
 
 var rules: Dictionary = {}
 var opts: Dictionary = {}               # seed: int, panel: bool, rules_before: the values last shown (people react to the change)
@@ -125,6 +131,9 @@ var people: Node3D
 var panel: CanvasLayer
 var cam_x: float = CAR_LENGTH * 0.5
 var zoomed_out: bool = false
+var view_mode: String = "section"
+var zoom: String = "wide"
+var pane_px: float = 0.0
 var clock: float = 0.0
 var _hold_from: float = 0.0             # the council room along the train while the vote is called
 var _hold_to: float = 0.0
@@ -140,11 +149,14 @@ var music: MusicPlayer                  # the faint train piece by the train's s
 
 func _ready() -> void:
 	rng.seed = int(opts.get("seed", 1))
+	var initial_mode: String = str(opts.get("view_mode", "section"))
+	view_mode = initial_mode if initial_mode in ["diag", "section"] else "section"
 	life.setup(self)
 	if rules.is_empty():
 		rules = Rules.load_default()
 	problems = Rules.check(rules)
 	_build_world()
+	get_viewport().size_changed.connect(_place_camera)
 	if problems.is_empty():
 		_build_train()
 		life.build_outside()
@@ -334,16 +346,34 @@ func scroll(metres: float) -> void:
 	_place_camera()
 
 
-func focus_car(id: String) -> void:
+func focus_car(id: String, near: bool = false) -> void:
 	var c := car(id)
 	if c.is_empty():
 		return
 	cam_x = float(c["x0"]) + CAR_LENGTH * 0.5
+	if view_mode == "diag":
+		zoom = "near" if near else "wide"
 	_place_camera()
 
 
 func toggle_zoom() -> void:
-	zoomed_out = not zoomed_out
+	if view_mode == "diag":
+		zoom = "near" if zoom == "wide" else "wide"
+	else:
+		zoomed_out = not zoomed_out
+	_place_camera()
+
+
+func set_view_mode(mode: String) -> void:
+	if mode not in ["diag", "section"]:
+		return
+	view_mode = mode
+	# Next: switch the shell top, front walls and backdrop here too.
+	_place_camera()
+
+
+func set_pane(px: float) -> void:
+	pane_px = maxf(px, 0.0)
 	_place_camera()
 
 
@@ -371,17 +401,28 @@ func values_text(c: Dictionary) -> String:
 	return " · ".join(parts)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if camera == null:
+func drag(relative: Vector2) -> void:
+	if camera == null or not camera.is_inside_tree():
 		return
-	var dx: float = 0.0
+	if view_mode == "diag":
+		var anchor: Vector3 = Vector3(cam_x, DIAG_LOOK_Y, 0.0)
+		var q: Vector2 = camera.unproject_position(anchor + Vector3.RIGHT) - camera.unproject_position(anchor)
+		if q.length_squared() <= 0.000001:
+			return
+		scroll(-relative.dot(q) / q.length_squared())
+	else:
+		scroll(-relative.x * camera.size / maxf(get_viewport().get_visible_rect().size.y, 1.0))
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	var relative: Vector2 = Vector2.ZERO
 	if event is InputEventScreenDrag:
-		dx = event.relative.x
+		relative = event.relative
 	elif event is InputEventMouseMotion and not DisplayServer.is_touchscreen_available() \
 			and (event.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
-		dx = event.relative.x
-	if dx != 0.0:
-		scroll(-dx * camera.size / maxf(get_viewport().get_visible_rect().size.y, 1.0))
+		relative = event.relative
+	if relative != Vector2.ZERO:
+		drag(relative)
 
 
 ## What has a car reseated at once even while the room goes first: the car
@@ -1015,10 +1056,25 @@ func _build_world() -> void:
 func _place_camera() -> void:
 	if camera == null:
 		return
+	if view_mode == "diag":
+		camera.keep_aspect = Camera3D.KEEP_HEIGHT
+		camera.size = DIAG_NEAR if zoom == "near" else DIAG_WIDE
+		var diag_yaw: float = deg_to_rad(DIAG_YAW)
+		var diag_pitch: float = deg_to_rad(DIAG_PITCH)
+		var anchor: Vector3 = Vector3(cam_x, DIAG_LOOK_Y, 0.0)
+		var direction: Vector3 = Vector3(sin(diag_yaw) * cos(diag_pitch), sin(diag_pitch), cos(diag_yaw) * cos(diag_pitch))
+		camera.position = anchor + direction * DIAG_DIST
+		camera.basis = Basis.looking_at(anchor - camera.position, Vector3.UP)
+		var view_h: float = 1.0
+		if is_inside_tree():
+			view_h = maxf(get_viewport().get_visible_rect().size.y, 1.0)
+		camera.h_offset = (pane_px / 2.0) * camera.size / view_h
+		return
 	var pitch := deg_to_rad(CAM_PITCH)
 	camera.size = CAM_FAR if zoomed_out else CAM_NEAR
 	camera.rotation = Vector3(pitch, 0, 0)
 	camera.position = Vector3(cam_x, CAM_LOOK_Y, 0) + Vector3(0, -sin(pitch), cos(pitch)) * CAM_BACK
+	camera.h_offset = 0.0
 
 
 func _build_train() -> void:

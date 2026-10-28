@@ -122,6 +122,7 @@ const FIRST_CAR := "tail1"
 ## The picked car sits in the middle of what the pane leaves clear: 159 mockup
 ## px left of the screen's middle (k3_views.js vHome, 844 − 318 over two).
 const PANE_SHIFT_CSS: float = 159.0
+const PLATE_TAP_SLOP: float = 12.0       # viewport px, even while the plate moves
 ## Metres of the dining car's floor and roof's surroundings kept in view behind
 ## the special session.
 const COUNCIL_ROOM_MARGIN: float = 0.35
@@ -174,6 +175,10 @@ var home: Control = null           # the train's own screen on the train steps: 
 var pane: Control = null           # the picked car's pane (car_pane.gd)
 var bar: Control = null            # the keys along the bottom (home_bar.gd)
 var sel: String = ""               # the picked car's id, "" with the pane folded
+var _plate_press_id: String = ""
+var _plate_press_pos: Vector2 = Vector2.ZERO
+var _plate_pointer: int = -1         # mouse, or the touch index
+var _plate_dragged: bool = false
 var shop: Control = null           # the workshop's pane where the car's stands (workshop_pane.gd)
 var shop_was: String = ""          # the car picked before the workshop or the refit pane came up
 var mods: Control = null           # the refit pane, where the workshop's stands (mods_pane.gd)
@@ -1053,12 +1058,53 @@ func _plate(name_label: Label3D) -> Control:
 	return row
 
 
-## A tap let go on a plate picks its car.
+## A tap picks the car; a drag begun on its plate still moves the train.
 func _plate_input(e: InputEvent, id: String) -> void:
-	var up_click: bool = e is InputEventMouseButton and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and not e.is_pressed()
-	var up_touch: bool = e is InputEventScreenTouch and not e.is_pressed()
-	if up_click or up_touch:
-		_select(id)
+	var point: Vector2 = Vector2.ZERO
+	var relative: Vector2 = Vector2.ZERO
+	var pointer: int = -1
+	var pressed: bool = false
+	var released: bool = false
+	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
+		point = e.position
+		pressed = e.pressed
+		released = not e.pressed
+	elif e is InputEventScreenTouch:
+		point = e.position
+		pointer = e.index
+		pressed = e.pressed
+		released = not e.pressed
+	elif e is InputEventScreenDrag:
+		point = e.position
+		relative = e.relative
+		pointer = e.index
+	elif e is InputEventMouseMotion and (e.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
+		point = e.position
+		relative = e.relative
+	else:
+		return
+	# gui_input positions are local to a plate that moves with the camera.
+	var plate_node: Control = plates.get_node_or_null("Plate_" + id) as Control if is_instance_valid(plates) else null
+	if plate_node != null:
+		var plate_transform: Transform2D = plate_node.get_global_transform_with_canvas()
+		point = plate_transform * point
+		relative = plate_transform.basis_xform(relative)
+	if pressed:
+		# A new press starts over, so a let-go lost to a rebuilt plate cannot hold the next taps.
+		_plate_press_id = id
+		_plate_press_pos = point
+		_plate_pointer = pointer
+		_plate_dragged = false
+		return
+	if _plate_press_id != id or _plate_pointer != pointer:
+		return
+	_plate_dragged = _plate_dragged or _plate_press_pos.distance_to(point) > PLATE_TAP_SLOP
+	if released:
+		_plate_press_id = ""
+		if not _plate_dragged:
+			_select(id)
+	elif relative != Vector2.ZERO and is_instance_valid(train):
+		train.drag(relative)
 
 
 ## A carriage's name plate (시안 .plate): a dark enamel plate, its name between
@@ -1177,6 +1223,18 @@ func _select(id: String) -> void:
 		return
 	var at: String = sel if sel != "" else was
 	if at == "":
+		return
+	if str(train.get("view_mode")) == "diag":
+		if sel != "":
+			train.focus_car(at, true)
+			var pane_rect: Rect2 = pane.get_global_rect()
+			var covered_px: float = get_viewport().get_visible_rect().size.x - pane_rect.position.x
+			if pane_rect.size.x == 0.0:
+				covered_px = CarPane.CSS_SIZE.x * UiFonts.K
+			train.set_pane(covered_px)
+		else:
+			train.focus_car(at, false)
+			train.set_pane(0.0)
 		return
 	train.focus_car(at)
 	if sel != "":
