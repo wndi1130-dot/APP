@@ -583,7 +583,10 @@ static func _forced(b, s: Dictionary, activity: String, t: float) -> String:
 		"mourn":
 			return "t_fold"
 		"watch":
-			return "t_lantern" if String(s["layout"]) == "guard" else ""
+			if String(s["layout"]) != "guard":
+				return ""
+			# A sentry short of relief gets their breath back between turns (train_schedule.gd).
+			return "t_crouch" if gesture == "catch_breath" else "t_lantern"
 	match gesture:
 		Gesture.BOWL_SIT:
 			return "t_eat"

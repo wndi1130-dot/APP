@@ -5,8 +5,9 @@ const Catalog = preload("res://game/train/train_catalog.gd")
 const Look = preload("res://game/train/train_look.gd")
 const SeasonTable = preload("res://game/season_table.gd")
 ## Whose hands a car's work places stand for (train_hands.gd jobs, carry_people 3.6):
-## the engine crew's shovels are the firebox shifts, the workshop's bench the repairs.
-const JOB_OF := {"engine_room": "stoker", "technical": "repair"}
+## the engine crew's shovels are the firebox shifts, the workshop's bench the repairs,
+## the guard car's lanterns at the windows the roof watch.
+const JOB_OF := {"engine_room": "stoker", "technical": "repair", "guard": "watch"}
 ## How short of hands a job may be before its second work place, then its first,
 ## stands empty (train_hands.gd short: 0 none missing .. 1 nobody at it).
 const SECOND_GONE: float = 0.5
@@ -45,6 +46,8 @@ static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
 	var short: Dictionary = (hands as Dictionary).get("short", {}) if hands is Dictionary else {}
 	var job: String = String(JOB_OF.get(Catalog.layout_id(car), ""))
 	var job_short: float = clampf(float(short.get(job, 0.0)), 0.0, 1.0) if job != "" else 0.0
+	# Every car's stove is kept by the stove hands, whichever car it is in.
+	var stove_short: float = clampf(float(short.get("stove", 0.0)), 0.0, 1.0)
 	var c := {
 		"car_id": String(car.get("id", "")), "layout": Catalog.layout_id(car),
 		"warmth": warm, "ration": ration, "crowding": float(sit[2]), "exposure": float(sit[3]),
@@ -58,11 +61,15 @@ static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
 		"food": food, "coal": fuel, "medicine": float(train.get("med", 20)) > 0,
 		"goods": float(train.get("lux", 0)) > 0,
 		"patients": patients > 0, "patient_count": patients,
-		"stove": fuel and warm >= Look.WARM_FREEZING and stage < 4 and not burning,
+		# Nobody left to keep the stoves leaves no place at them; half of them missing, room for one (train_places.gd).
+		"stove": fuel and warm >= Look.WARM_FREEZING and stage < 4 and not burning and stove_short < FIRST_GONE,
+		"stove_half": stove_short >= SECOND_GONE,
 		"meal": food and not council and bool(view.get("meal_time", true)) and peaceful,
 		"work": work,
 		# A short job leaves its work places empty, the second then the first; the ones left get their breath back.
-		"job_short": job_short, "work_first": work and job_short < FIRST_GONE, "work_second": work and job_short < SECOND_GONE,
+		"hands_job": job, "job_short": job_short, "work_first": work and job_short < FIRST_GONE, "work_second": work and job_short < SECOND_GONE,
+		# The watch keeps its posts day and night, so they do not wait for work time.
+		"post_first": job_short < FIRST_GONE, "post_second": job_short < SECOND_GONE,
 		"social": not council and float(train.get("fear", 0)) < Look.FEAR_FROZEN and peaceful,
 		"gather": stage >= 2 and stage <= 4 and not council and not burning,
 		"memorial": (bool(view.get("memorial", false)) or (laws.has("night_of_names") and night)) and not council and peaceful,
