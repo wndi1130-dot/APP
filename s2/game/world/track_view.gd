@@ -67,11 +67,13 @@ static func lines(y0: float, y1: float) -> Array[float]:
 	return out
 
 
-## 지도 밖 선로 사각형(x 방향만)을 지도 안과 같은 줄기 꼴로.
-static func outside_runs(rects: Array) -> Array:
+## 지도 밖 선로 사각형(x 방향만)을 지도 안과 같은 줄기 꼴로. 방향은 모양(가로·세로 길이)이 아니라
+## 놓인 쪽으로 가른다: 지도 왼쪽(x ≤ 0)·오른쪽(x ≥ 지도 폭) 밖의 사각형만 x 방향이다 — 띠가 길이보다
+## 넓거나(동·서) 길이보다 긴(남·북) 지도에서도 잘못 고르지 않게(edge_band.gd run_rect는 쪽을 넘기지 않는다).
+static func outside_runs(rects: Array, map_width: float) -> Array:
 	var out: Array = []
 	for r: Rect2 in rects:
-		if r.size.x < r.size.y:
+		if r.end.x > 0.0 and r.position.x < map_width:
 			continue
 		for z in lines(r.position.y, r.end.y):
 			out.append({"x0": r.position.x, "x1": r.end.x, "z": z})
@@ -79,9 +81,10 @@ static func outside_runs(rects: Array) -> Array:
 
 
 ## 건널목(지도 data["rail_crossings"], 칸 단위 Rect2i — x 폭 = 길이 선로를 건너는 폭, y = 그 RAIL 띠 줄)을
-## 지나는 선로 줄기 토막 [{"x0", "x1", "z"}].
+## 지나는 선로 줄기 토막 [{"x0", "x1", "z"}]. 겹치거나 맞닿은 건널목은 한 줄기에서 한 토막으로 합쳐
+## 판자가 두 벌 깔리지 않는다.
 static func crossing_runs(line_runs: Array, crossings: Array) -> Array:
-	var out: Array = []
+	var by_z: Dictionary = {}
 	for r: Rect2i in crossings:
 		for run: Dictionary in line_runs:
 			var z := float(run["z"])
@@ -90,7 +93,24 @@ static func crossing_runs(line_runs: Array, crossings: Array) -> Array:
 			var x0 := maxf(float(run["x0"]), float(r.position.x))
 			var x1 := minf(float(run["x1"]), float(r.end.x))
 			if x1 > x0:
-				out.append({"x0": x0, "x1": x1, "z": z})
+				if not by_z.has(z):
+					by_z[z] = []
+				(by_z[z] as Array).append(Vector2(x0, x1))
+	var out: Array = []
+	var zs: Array = by_z.keys()
+	zs.sort()
+	for z: float in zs:
+		var spans: Array = by_z[z]
+		spans.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+		var at: Vector2 = spans[0]
+		for i in range(1, spans.size()):
+			var next: Vector2 = spans[i]
+			if next.x <= at.y:
+				at.y = maxf(at.y, next.y)
+			else:
+				out.append({"x0": at.x, "x1": at.y, "z": z})
+				at = next
+		out.append({"x0": at.x, "x1": at.y, "z": z})
 	return out
 
 
@@ -129,7 +149,7 @@ static func build(parent: Node3D, grid: FieldGrid, material: Material, outside: 
 	root.name = "Track"
 	parent.add_child(root)
 	var inside := runs(grid)
-	for line: Array in [["TrackMap", inside], ["TrackOutside", outside_runs(outside)]]:
+	for line: Array in [["TrackMap", inside], ["TrackOutside", outside_runs(outside, float(grid.width))]]:
 		var node := _instances(String(line[0]), line[1], material)
 		if node != null:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

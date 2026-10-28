@@ -149,3 +149,19 @@ func test_a_stop_brings_its_fragments_and_cores_to_the_stores() -> void:
 		var h := {"dom": before.duplicate(true)}
 		assert_false(TrainDom.take_extras(h, bad), str(bad))
 		assert_eq(h["dom"], before, "nothing changed for " + str(bad))
+
+
+func test_lures_are_a_store_amount() -> void:
+	assert_true(TrainDom.AMOUNTS.has("lures"))
+	assert_eq(TrainDom.empty()["lures"], 0)
+	assert_eq(TrainDom.start()["lures"], 0)
+	var g: Dictionary = {}
+	TrainDom.ensure(g)
+	assert_eq(g["dom"]["lures"], 0)
+	assert_true(TrainDom.is_store({"lures": 3}))
+	assert_true(TrainDom.is_store({"lures": 0.5}), "the usual amount contract")
+	assert_false(TrainDom.is_store({"lures": -1}))
+	assert_false(TrainDom.is_store({"lures": "1"}))
+	g["dom"]["lures"] = 3
+	TrainDom.ensure(g)
+	assert_eq(g["dom"]["lures"], 3, "existing stores stay intact")

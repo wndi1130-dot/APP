@@ -15,7 +15,7 @@ const Weapons = preload("res://game/sim/weapons.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 
-const AMOUNTS: Array[String] = ["scrap", "wood", "parts", "cores", "cloth", "ammo_pistol", "ammo_shell", "ammo_craft"]
+const AMOUNTS: Array[String] = ["scrap", "wood", "parts", "cores", "cloth", "ammo_pistol", "ammo_shell", "ammo_craft", "lures"]
 ## S1's Field, the receipt's FRAGMENT_KINDS.
 const FIELDS: Array[String] = ["engine", "med", "craft", "radio", "expedition"]
 ## What the wardrobe holds (decision 443, card E 가): the outer things only, one wardrobe for
