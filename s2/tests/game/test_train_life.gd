@@ -59,6 +59,169 @@ func test_a_walker_reserves_a_named_activity_instead_of_only_random_pacing() -> 
 	assert_true(saw_arrival)
 
 
+func test_every_living_layout_defines_in_car_look_targets() -> void:
+	var living: Array[String] = []
+	for layout_id in Catalog.data()["layouts"]:
+		var layout: Dictionary = Catalog.data()["layouts"][layout_id]
+		if layout["spots"].is_empty():
+			continue
+		living.append(String(layout_id))
+		for spot in layout["spots"]:
+			var label: String = "%s/%s" % [layout_id, spot["id"]]
+			assert_true(spot.has("look_at"), label)
+			var focus: Variant = spot.get("look_at", null)
+			if focus is String:
+				assert_eq(focus, "partner", label)
+				assert_eq(spot["anchors"].size(), 2, label)
+			elif focus is Array:
+				var points: Array = focus if not focus.is_empty() and focus[0] is Array else [focus]
+				if points.size() > 1:
+					assert_eq(points.size(), spot["anchors"].size(), label)
+				for point in points:
+					assert_eq(point.size(), 2, label)
+					assert_true(is_finite(float(point[0])) and is_finite(float(point[1])), label)
+					assert_between(float(point[0]), 0.0, Scene.CAR_LENGTH, label)
+					assert_between(float(point[1]), -1.4, 1.4, label)
+			else:
+				assert_true(focus is float or focus is int, label)
+				assert_eq(float(focus), 0.0, label)
+	living.sort()
+	assert_eq(living, ["captain", "coach", "dining", "engine_room", "front", "guard", "medical", "technical"])
+
+
+func test_stove_spots_form_a_staggered_front_semicircle() -> void:
+	var count: int = 0
+	for layout in Catalog.data()["layouts"].values():
+		for spot in layout["spots"]:
+			if spot["id"] != "stove_side":
+				continue
+			count += 1
+			var stove: Dictionary = layout["props"].filter(func(p): return p["id"] == "stove")[0]
+			var center := Vector2(float(stove["at"][0]), float(stove["at"][2]))
+			assert_eq(spot["look_at"], [center.x, center.y])
+			var depths: Array[float] = []
+			for anchor in spot["anchors"]:
+				var at := Vector2(float(anchor[0]), float(anchor[2]))
+				assert_between(at.distance_to(center), 0.7, 0.85)
+				assert_gte(at.y, center.y, "leave the bench side clear")
+				for depth in depths:
+					assert_gt(absf(at.y - depth), 0.2, "the pair has visible depth")
+				depths.append(at.y)
+	assert_eq(count, 7)
+
+
+func test_each_window_anchor_looks_straight_back() -> void:
+	var s = _scene()
+	for layout in Catalog.data()["layouts"].values():
+		for source in layout["spots"]:
+			if source["id"] not in ["window", "window_b"]:
+				continue
+			var spot: Dictionary = source.duplicate(true)
+			spot["x0"] = 117.0
+			for index in spot["anchors"].size():
+				var at: Vector3 = Catalog.vector(spot["anchors"][index]) + Vector3(117.0, 0, 0)
+				var yaw: float = s.life._spot_facing(spot, index, at)
+				assert_almost_eq(absf(yaw), PI, 0.001)
+
+
+func test_stove_window_and_partner_arrivals_face_targets_in_car_space() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	var id: int = b.get_instance_id()
+	var a: Dictionary = s.life.actors[id]
+	var targets: Dictionary = {"stove_side": Vector2(7.85, -0.4), "window": Vector2(5.0, -1.4), "door_tail": Vector2(1.7, 0.65)}
+	assert_ne(float(c["x0"]), 0.0, "include the car offset")
+	for spot_name in targets:
+		s.life.places.release(id)
+		var spot_id: String = "guard/" + String(spot_name)
+		s.life.places.spots[spot_id]["open"] = true
+		assert_true(s.life.places.reserve(id, spot_id))
+		a["activity"] = s.life.places.spots[spot_id]["activity"]
+		var target: Vector3 = s.life.places.target(id)
+		var focus: Vector2 = targets[spot_name]
+		var toward := Vector3(float(c["x0"]) + focus.x - target.x, 0, focus.y - target.z).normalized()
+		s.life._route(b, target)
+		for _step in 4:
+			if s.life.walk(b, 100.0):
+				break
+		assert_eq(b.position, target)
+		assert_true(b.basis.z.is_equal_approx(toward), String(spot_name))
+		b.rotation.y = 0.3
+		s.life.arrived(b)
+		assert_true(b.basis.z.is_equal_approx(toward), "arrived: " + String(spot_name))
+		assert_almost_eq(float(b.get_meta("life_facing")), float(b.rotation.y), 0.001)
+		b.goal_x = target.x
+		b.rotation.y = 0.3
+		assert_true(s.life.walk(b, 0.1), "body walk fallback")
+		assert_true(b.basis.z.is_equal_approx(toward))
+		a["waypoints"] = [b.position]
+		b.rotation.y = 0.3
+		assert_true(s.life.walk(b, 0.1), "already reached waypoint")
+		assert_true(b.basis.z.is_equal_approx(toward))
+
+
+func test_partner_facing_uses_both_reserved_anchors_and_missing_target_is_zero() -> void:
+	var s = _scene()
+	for spot_name in ["door_tail", "door_front"]:
+		var spot: Dictionary = s.life.places.spots["guard/" + spot_name]
+		for index in 2:
+			var at: Vector3 = Catalog.vector(spot["anchors"][index])
+			var other: Vector3 = Catalog.vector(spot["anchors"][1 - index])
+			var expected: float = atan2(other.x - at.x, other.z - at.z)
+			at.x += float(spot["x0"])
+			assert_almost_eq(s.life._spot_facing(spot, index, at), expected, 0.001)
+	assert_eq(s.life._spot_facing({}, 0, Vector3(91, 0, -0.85)), 0.0)
+
+
+func test_show_body_does_not_overwrite_an_active_gestures_facing() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	var id: int = b.get_instance_id()
+	s.life.places.release(id)
+	assert_true(s.life.places.reserve(id, "guard/window"))
+	s.life.actors[id]["activity"] = "watch"
+	b.position = s.life.places.target(id)
+	s.life.arrived(b)
+	b.state = "wait"
+	b.gesture = "arms_crossed"
+	b.rotation.y = 0.42
+	for now in [0.0, 1.0, 3.0]:
+		s.clock = now
+		s.life.show_body(c, b)
+		assert_almost_eq(float(b.rotation.y), 0.42, 0.001)
+
+
+func test_standing_spots_and_knots_have_no_camera_facing_line_of_three() -> void:
+	var s = _scene()
+	for layout_id in Catalog.data()["layouts"]:
+		var layout: Dictionary = Catalog.data()["layouts"][layout_id]
+		if layout["spots"].is_empty():
+			continue
+		var front: Array[Vector3] = []
+		for spot in layout["spots"]:
+			if spot["activity"] in ["rest", "sleep", "heal", "mend", "read", "eat"]:
+				continue
+			for index in spot["anchors"].size():
+				var at: Vector3 = Catalog.vector(spot["anchors"][index])
+				var yaw: float = s.life._spot_facing(spot, index, at)
+				if absf(wrapf(yaw, -PI, PI)) < PI / 6.0:
+					front.append(at)
+		# The council count also covers the smaller everyday crowds.
+		for index in int(s.Look.DINING_SESSION):
+			if absf(s._knot_facing(index)) < PI / 6.0:
+				front.append(s._knot_place(index))
+		front.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.x < b.x)
+		for first in front.size():
+			for second in range(first + 1, front.size()):
+				for third in range(second + 1, front.size()):
+					var low: float = minf(front[first].z, minf(front[second].z, front[third].z))
+					var high: float = maxf(front[first].z, maxf(front[second].z, front[third].z))
+					var close: bool = front[second].x - front[first].x <= 1.5 and front[third].x - front[second].x <= 1.5
+					assert_false(close and high - low <= 0.20001, "%s: %s" % [layout_id, [front[first], front[second], front[third]]])
+
+
 func test_guard_watch_faces_the_window_after_arrival() -> void:
 	var s = _scene()
 	var c: Dictionary = s.car("guard")

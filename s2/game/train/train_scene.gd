@@ -515,14 +515,14 @@ func _seat_rows(c: Dictionary, rows: Array, gather: bool) -> void:
 				var g: Dictionary = gestures[standing]
 				var pair_of: String = String(gestures[0]["name"])
 				var wide: float = float(Gesture.PAIR_GAP.get(pair_of, KNOT_STEP)) - KNOT_STEP if standing < KNOT_SIZE else 0.0
-				# One who shows a second value comes out from behind the pair and stands beside it.
+				# A second value stands beside the pair, still one step deeper.
 				var whose: String = String(g["of"])
 				var aside: bool = whose != "" and whose != value
 				_sit_down(c, b, x0, _knot_place(standing, wide, aside), "stand", false, false)
-				b.rotation.y = _knot_facing(standing)
+				b.rotation.y = _knot_facing(standing, wide, aside)
 				b.gesture = g["name"]
 				b.gesture_role = int(g["role"])
-				b.gesture_facing = toward_captain if whose == "resent" else 0.0
+				b.gesture_facing = toward_captain if whose == "resent" else _knot_gesture_facing(b.gesture, standing, wide, aside)
 				if b.gesture != "":
 					_show_gesture(c, b)
 				standing += 1
@@ -641,7 +641,7 @@ func _idle(c: Dictionary, b: Node3D) -> void:
 		return
 	if b.state == "wait" and b.gesture == "":
 		b.gesture = b.idle_gesture
-		b.gesture_facing = 0.0
+		b.gesture_facing = b.rotation.y
 		_show_gesture(c, b)
 	elif b.state != "wait" and b.gesture == b.idle_gesture:
 		# One sent off on a trip has already turned to walk this step: it keeps that facing.
@@ -725,7 +725,7 @@ func _step_council(c: Dictionary, delta: float) -> void:
 ## Where in the car the k-th of those standing about stands: knots of three,
 ## by the tail-end doorway and the front-end one in turn. `wide` sets the
 ## first two of a knot that much further apart. `aside` brings the third out
-## from behind them: a step beyond the second, on the same line.
+## from behind them: a step beyond the second, with depth kept.
 func _knot_place(k: int, wide: float = 0.0, aside: bool = false) -> Vector3:
 	var knot: int = k / KNOT_SIZE
 	var member: int = k % KNOT_SIZE
@@ -738,17 +738,24 @@ func _knot_place(k: int, wide: float = 0.0, aside: bool = false) -> Vector3:
 	elif member == 2:
 		along += KNOT_STEP + wide + KNOT_STEP
 	var x: float = along if knot % 2 == 0 else CAR_LENGTH - along
-	return Vector3(x, 0, KNOT_Z - (KNOT_DEPTH if behind else 0.0))
+	return Vector3(x, 0, KNOT_Z - (KNOT_DEPTH if member == 2 else 0.0))
 
 
 ## The three of a knot face one another.
-func _knot_facing(k: int) -> float:
+func _knot_facing(k: int, wide: float = 0.0, aside: bool = false) -> float:
 	var knot: int = k / KNOT_SIZE
 	var member: int = k % KNOT_SIZE
 	if member == 2:
-		return 0.0
+		var center: Vector3 = (_knot_place(k - 2, wide) + _knot_place(k - 1, wide)) * 0.5
+		var toward: Vector3 = center - _knot_place(k, wide, aside)
+		return atan2(toward.x, toward.z)
 	var toward_front: bool = (member == 0) == (knot % 2 == 0)
 	return PI * 0.5 if toward_front else -PI * 0.5
+
+
+func _knot_gesture_facing(gesture_name: String, k: int, wide: float = 0.0, aside: bool = false) -> float:
+	# Only argue supplies the pair's base yaw; whisper and native pairs need it.
+	return 0.0 if gesture_name == Gesture.ARGUE else _knot_facing(k, wide, aside)
 
 
 ## The lamp, the stove and the window frost follow the car's mood and warmth.

@@ -752,6 +752,48 @@ func test_the_infirmary_whispers_with_its_heads_closer() -> void:
 	assert_eq(pair[0].gesture_role, 0)
 	assert_eq(pair[1].gesture_role, 1)
 	assert_almost_eq(pair[1].position.x - pair[0].position.x, float(Gesture.PAIR_GAP[Gesture.WHISPER]), 0.01)
+	assert_almost_eq(float(pair[0].gesture_facing), PI * 0.5, 0.001)
+	assert_almost_eq(float(pair[1].gesture_facing), -PI * 0.5, 0.001)
+
+
+func test_only_argue_supplies_the_knot_pairs_base_turn() -> void:
+	var s = _scene()
+	for member in 2:
+		assert_eq(s._knot_gesture_facing(Gesture.ARGUE, member), 0.0)
+		var expected: float = PI * 0.5 if member == 0 else -PI * 0.5
+		for gesture_name in ["", Gesture.WHISPER, Gesture.ARMS_CROSSED, "warm_hands_stand", "shove_body", "grab_collar", "help_up"]:
+			assert_almost_eq(s._knot_gesture_facing(gesture_name, member), expected, 0.001, gesture_name)
+
+
+func test_aside_thirds_keep_depth_and_face_the_pair_at_both_doors() -> void:
+	var s = _scene()
+	for member in [2, 5]:
+		for wide in [0.0, 0.4]:
+			var first: Vector3 = s._knot_place(member - 2, wide)
+			var second: Vector3 = s._knot_place(member - 1, wide)
+			var third: Vector3 = s._knot_place(member, wide, true)
+			assert_almost_eq(first.z - third.z, float(s.KNOT_DEPTH), 0.001)
+			assert_gt(first.z - third.z, 0.2)
+			var toward: Vector3 = ((first + second) * 0.5 - third).normalized()
+			var yaw: float = s._knot_facing(member, wide, true)
+			assert_true(Vector3(sin(yaw), 0, cos(yaw)).is_equal_approx(toward))
+			assert_almost_eq(s._knot_gesture_facing(Gesture.WHISPER, member, wide, true), yaw, 0.001)
+
+
+func test_idle_gesture_keeps_the_arrival_facing() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	b.state = "wait"
+	b.gesture = ""
+	b.idle_gesture = Gesture.RUB_STAMP
+	b.rotation.y = 1.2
+	s._idle(c, b)
+	assert_almost_eq(float(b.gesture_facing), 1.2, 0.001)
+	for now in [0.0, 0.5, 1.0, 2.0]:
+		s.clock = now
+		s._show_gesture(c, b)
+		assert_almost_eq(float(b.rotation.y), 1.2, 0.001)
 
 
 func test_a_gesturing_body_shows_both_its_arm_boxes() -> void:
@@ -1188,7 +1230,7 @@ func test_the_one_with_folded_arms_half_turns_to_the_captains_car_and_the_pair_d
 	assert_almost_eq(float(folded[0].rotation.y), side * s.RESENT_TURN, 0.01)
 
 
-func test_the_one_with_folded_arms_stands_beside_the_pair_not_behind_it() -> void:
+func test_the_one_with_folded_arms_stands_beside_the_pair_with_depth() -> void:
 	var s = _tense_and_resentful()
 	var folded := _doing(s, "tail1", Gesture.ARMS_CROSSED)
 	var pair := _doing(s, "tail1", Gesture.ARGUE)
@@ -1196,7 +1238,7 @@ func test_the_one_with_folded_arms_stands_beside_the_pair_not_behind_it() -> voi
 	assert_eq(pair.size(), 2)
 	var second = pair.filter(func(b) -> bool: return b.gesture_role == 1)[0]
 	for b in pair:
-		assert_almost_eq(float(folded[0].position.z), float(b.position.z), 0.001)
+		assert_almost_eq(float(folded[0].position.z), float(b.position.z) - float(s.KNOT_DEPTH), 0.001)
 	assert_almost_eq(float(folded[0].position.x) - float(second.position.x), float(s.KNOT_STEP), 0.01)
 
 

@@ -292,13 +292,13 @@ func walk(body: Node3D, delta: float) -> bool:
 	if a.is_empty() or (a["waypoints"] as Array).is_empty():
 		var done: bool = body.walk(delta)
 		if done:
-			_face_window(body)
+			_face_spot(body)
 		return done
 	while not a["waypoints"].is_empty() and body.position.is_equal_approx(a["waypoints"][0]):
 		a["waypoints"].pop_front()
 	if a["waypoints"].is_empty():
 		body.set_pose("sit" if body.position.y > 0.0 else "stand", false)
-		_face_window(body)
+		_face_spot(body)
 		return true
 	var target: Vector3 = a["waypoints"][0]
 	var toward: Vector3 = target - body.position
@@ -312,16 +312,44 @@ func walk(body: Node3D, delta: float) -> bool:
 		a["waypoints"].pop_front()
 		if a["waypoints"].is_empty():
 			body.set_pose("sit" if body.position.y > 0.0 else "stand", false)
-			body.rotation.y = 0.0
-			_face_window(body)
+			_face_spot(body)
 			return true
 	return false
 
 
-func _face_window(body: Node3D) -> void:
-	var spot: Dictionary = places.spots.get(places.bookings.get(body.get_instance_id(), ""), {})
-	if spot.get("activity", "") == "watch" and contexts.get(spot.get("car", ""), {}).get("layout", "") == "guard":
-		body.rotation.y = PI
+func _face_spot(body: Node3D) -> void:
+	var id: int = body.get_instance_id()
+	var spot: Dictionary = places.spots.get(places.bookings.get(id, ""), {})
+	var member: Dictionary = spot.get("members", {}).get(id, {})
+	body.rotation.y = _spot_facing(spot, int(member.get("anchor", 0)), body.position)
+	# A new arrival also resets a repeated motion's stored base facing.
+	body.set_meta("life_facing", body.rotation.y)
+
+
+func _spot_facing(spot: Dictionary, anchor: int, at: Vector3) -> float:
+	var focus: Variant = spot.get("look_at", 0)
+	var target: Vector2
+	if focus is Array:
+		var point: Array = focus
+		# Windows at different anchors each look straight through their pane.
+		if not point.is_empty() and point[0] is Array:
+			if anchor < 0 or anchor >= point.size():
+				return 0.0
+			point = point[anchor]
+		if point.size() != 2:
+			return 0.0
+		target = Vector2(float(point[0]), float(point[1]))
+	elif focus is String and focus == "partner":
+		var anchors: Array = spot.get("anchors", [])
+		if anchors.size() < 2:
+			return 0.0
+		var other: Array = anchors[(anchor + 1) % anchors.size()]
+		target = Vector2(float(other[0]), float(other[2]))
+	else:
+		return 0.0
+	var local := Vector2(at.x - float(spot.get("x0", 0.0)), at.z)
+	var toward: Vector2 = target - local
+	return 0.0 if toward.is_zero_approx() else atan2(toward.x, toward.y)
 
 
 func _hold_time(spot: Dictionary, activity: String) -> float:
@@ -347,6 +375,7 @@ func arrived(body: Node3D) -> void:
 		body.set_pose(previous["pose"], body.huddled, body.bowed)
 		a["waypoints"] = []
 		a.erase("restore")
+		_face_spot(body)
 		return
 	if places.bookings.has(id):
 		var spot: Dictionary = places.spots.get(places.bookings[id], {})
@@ -356,12 +385,12 @@ func arrived(body: Node3D) -> void:
 	if places.arrive(id):
 		var s: Dictionary = places.spots[places.bookings[id]]
 		body.timer = _hold_time(s, String(a["activity"]))
-		_face_window(body)
+		_face_spot(body)
 		var context: Dictionary = contexts[s["car"]]
 		a["requested"] = Schedule.gesture(a["activity"], context, a["traits"], int(a["turn"]))
 		if a["activity"] in ["sleep", "heal", "mourn"]:
 			body.idle_gesture = ""
-			Motion.Backend.show(body, "", 0.0)
+			Motion.Backend.show(body, "", 0.0, 0, body.rotation.y)
 			a["distraction"] = ""
 		if a.get("evacuating", false):
 			# The destination represents the safe crowd; do not stack every proxy there.
@@ -480,7 +509,6 @@ func show_body(c: Dictionary, body: Node3D) -> void:
 			requested = a["distraction"]
 		if requested != "":
 			Motion.show(body, requested, host.clock, int(a["turn"]) % 2)
-	_face_window(body)
 
 
 func start_interaction(kind: String, car_id: String) -> bool:
