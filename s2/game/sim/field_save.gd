@@ -146,7 +146,8 @@ static func from_json(text: String) -> Dictionary:
 		z["id"] = int(z["id"])
 		z["horde"] = int(z["horde"])
 	for g in d.get("ground_items", []):
-		g["n"] = int(g["n"])
+		# A crew carrier's dropped load keeps its part (field_work.gd drop_load); other items count whole.
+		g["n"] = float(g["n"]) if g.get("crew_drop", false) else int(g["n"])
 		# An arrow saved before it took the stock's name (decision 426).
 		if g.get("id") == "arrow":
 			g["id"] = "ammo_craft"

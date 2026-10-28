@@ -582,6 +582,14 @@ func test_a_save_while_the_crew_is_out_makes_the_same_crew_again_on_resume() -> 
 	assert_eq(resumed.work.members("work_site").size(), 6)
 
 
+func test_a_part_load_of_wood_dropped_by_the_crew_keeps_its_part_through_a_save() -> void:
+	game.ground_items.append({"pos": Vector3(1, 0, 1), "id": "wood", "n": 0.5, "crew_drop": true})
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	var drops: Array = (saved["ground_items"] as Array).filter(func(g: Dictionary) -> bool: return g.get("crew_drop", false))
+	assert_eq(drops.size(), 1)
+	assert_almost_eq(float(drops[0]["n"]), 0.5, 0.001)
+
+
 func test_a_contract_with_no_work_crew_sends_nobody() -> void:
 	_advance(1.0)
 	game.opts["departure"] = {"version": 2, "roster": [], "workCrew": []}
