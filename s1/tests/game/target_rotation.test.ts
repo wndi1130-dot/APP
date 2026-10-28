@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createGame, enableClimate, forecast } from '../../src/game';
 import type { Game, LootKey, PromiseState } from '../../src/game';
-import { ROTATE_BY_PLACE, ROTATE_GUARD, noteTarget, suggestTarget, targetCandidates } from '../../src/game/turn';
+import { ROTATE_GUARD, noteTarget, suggestTarget, targetCandidates } from '../../src/game/turn';
 import { stageAt } from '../../src/game/climate';
 
-// 결정 482(469 V1): 정차마다 노리는 갈래를 열차 상태·계절·이야기로 돌린다.
+// 결정 482·484(469 V1): 정차마다 노리는 갈래를 열차 상태·계절·이야기로 돌린다.
 const LOOT: Record<LootKey, number> = { coal: 40, food: 40, medicine: 30, luxury: 5, symbol: 5, secret: 5 };
 
 /** 식량이 석탄보다 모자라되, ROTATE_GUARD 구간 치보다는 많이 남은 판. */
@@ -16,8 +16,8 @@ function hungry(): Game {
   return g;
 }
 
-describe('노리는 갈래 돌리기(결정 482)', () => {
-  it('같은 갈래가 세 번째 연속이 되면 다음 갈래로 넘긴다', () => {
+describe('노리는 갈래 돌리기(결정 482·484)', () => {
+  it('같은 갈래가 세 번째 연속이 되면 그 장소에 가장 많은 다른 것으로 넘긴다', () => {
     const g = hungry();
     expect(suggestTarget(g, LOOT)).toBe('food');
     noteTarget(g, 'food');
@@ -30,18 +30,25 @@ describe('노리는 갈래 돌리기(결정 482)', () => {
     expect(suggestTarget(g, LOOT)).toBe('food');
   });
 
-  it('처음 갈래가 모자라면(ROTATE_GUARD 구간 치 아래) 넘기지 않는다', () => {
+  it('처음 갈래가 8구간 치 밑이면 넘기지 않는다', () => {
+    expect(ROTATE_GUARD).toBe(8);
     const g = hungry();
     g.food = Math.max(0, ROTATE_GUARD * forecast(g).food - 1);
     g.targetRun = { target: 'food', n: 2 };
     expect(suggestTarget(g, LOOT)).toBe('food');
   });
 
-  it('병원에서 세 번째 식량은 장소 몫으로만 넘어간다', () => {
+  it('병원에서 세 번째 식량은 의약품으로, 교회에선 상징물로 넘어간다', () => {
     const g = hungry();
-    const hospital: Record<LootKey, number> = { coal: 0, food: 10, medicine: 55, luxury: 0, symbol: 10, secret: 25 };
     g.targetRun = { target: 'food', n: 2 };
-    expect(suggestTarget(g, hospital)).toBe(ROTATE_BY_PLACE ? 'medicine' : 'food');
+    expect(suggestTarget(g, { coal: 0, food: 10, medicine: 55, luxury: 0, symbol: 10, secret: 25 })).toBe('medicine');
+    expect(suggestTarget(g, { coal: 0, food: 10, medicine: 0, luxury: 10, symbol: 60, secret: 20 })).toBe('symbol');
+  });
+
+  it('넘길 것이 그 장소에 없으면 그대로 둔다(주택가)', () => {
+    const g = hungry();
+    g.targetRun = { target: 'food', n: 2 };
+    expect(suggestTarget(g, { coal: 5, food: 35, medicine: 10, luxury: 20, symbol: 20, secret: 10 })).toBe('food');
   });
 
   it('지나친 정차는 줄을 끊지도 늘리지도 않는다', () => {

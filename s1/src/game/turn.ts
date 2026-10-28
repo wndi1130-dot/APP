@@ -379,13 +379,10 @@ export function targetCandidates(g: Game, loot: Record<LootKey, number>): LootKe
   return [...new Set([...front, ...sorted])].filter(k => loot[k] > 0);
 }
 
-/** 결정 482: 세 번째 연속은 처음 갈래가 이만큼 구간 치 예고보다 많이 남았을 때만 넘긴다(482 글은 2). */
-export const ROTATE_GUARD = 2;
-/** 결정 482: 세 번째 연속이 넘어갈 갈래. false = 다음 후보 중 그 장소에 25 이상 있는 것(482 글 그대로),
- * true = 그 장소에 25 이상 있는 다른 것 중 가장 많은 것(s3-link 물음 카드 2026-10-28 가). */
-export const ROTATE_BY_PLACE: boolean = false;
+/** 세 번째 연속은 처음 갈래가 열차에 이만큼 구간 치 예고보다 많이 남았을 때만 넘긴다(결정 484, 482 글의 2에서 바뀜). */
+export const ROTATE_GUARD = 8;
 
-/** 결정 482: 남은 양이 ROTATE_GUARD 구간 치 예고보다 적은 갈래(석탄·식량만). 이 갈래는 세 번째 연속이어도 넘기지 않는다. */
+/** 결정 482·484: 남은 양이 ROTATE_GUARD 구간 치 예고보다 적은 갈래(석탄·식량만). 이 갈래는 세 번째 연속이어도 넘기지 않는다. */
 export function targetCritical(g: Game, k: LootKey): boolean {
   const f = forecast(g);
   if (k === 'coal') return g.coal < ROTATE_GUARD * f.coal;
@@ -393,24 +390,22 @@ export function targetCritical(g: Game, k: LootKey): boolean {
   return false;
 }
 
-/** 결정 482: 처음 갈래 first의 세 번째 연속이 넘어갈 갈래. 없으면 undefined(ROTATE_BY_PLACE 참고). */
-export function rotateTo(cands: LootKey[], loot: Record<LootKey, number>, first: LootKey): LootKey | undefined {
-  if (ROTATE_BY_PLACE) {
-    let best: LootKey | undefined;
-    for (const k of LOOT_KEYS) if (k !== first && loot[k] >= 25 && (best === undefined || loot[k] > loot[best])) best = k;
-    return best;
-  }
-  return cands.find(k => k !== first && loot[k] >= 25);
+/** 처음 갈래 first의 세 번째 연속이 넘어갈 갈래: 그 장소에 25 이상 있는 다른 것 중 가장 많은 것(병원 의약품·교회 상징물·
+ * 관청 기밀, 결정 484). 같으면 LOOT_KEYS 차례로 앞의 것. 없으면 undefined. */
+export function rotateTo(loot: Record<LootKey, number>, first: LootKey): LootKey | undefined {
+  let best: LootKey | undefined;
+  for (const k of LOOT_KEYS) if (k !== first && loot[k] >= 25 && (best === undefined || loot[k] > loot[best])) best = k;
+  return best;
 }
 
 /** 정차마다 처음 노리는 갈래(플레이어가 정차 카드에서 바꿀 수 있다). 후보 중 그 장소에 25 이상 있는 첫 갈래, 없으면 예전대로
  * 석탄·식량 중 하나. 그 갈래가 사람을 내보낸 정차의 세 번째 연속이 되면 rotateTo로 넘긴다 — 처음 갈래가 모자라면
- * (targetCritical) 넘기지 않는다(결정 482). */
+ * (targetCritical) 넘기지 않는다(결정 482·484). */
 export function suggestTarget(g: Game, loot: Record<LootKey, number>): LootKey {
   const cands = targetCandidates(g, loot);
   const first = cands.find(k => loot[k] >= 25) ?? (loot.coal / (g.coal + 1) > loot.food / (g.food + 1) ? 'coal' : 'food');
   const run = g.targetRun;
-  if (run && run.target === first && run.n >= 2 && !targetCritical(g, first)) return rotateTo(cands, loot, first) ?? first;
+  if (run && run.target === first && run.n >= 2 && !targetCritical(g, first)) return rotateTo(loot, first) ?? first;
   return first;
 }
 

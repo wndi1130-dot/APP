@@ -114,12 +114,9 @@ static func pick_place(g: Dictionary, t: Dictionary, exclude: String = "") -> Di
 		if r * total < acc: return p
 	return candidates[-1] if not candidates.is_empty() else t["PLACES"][0]
 
-## Decision 482: a third run in a row hands over only while the first kind has at least this many stretches' forecast left
-## (482 as written: 2).
-const ROTATE_GUARD: float = 2
-## Decision 482: what a third run in a row hands over to. false = the next candidate the place has 25 of (482 as written);
-## true = the other kind the place holds most of, 25 or more (s3-link question card 2026-10-28, option 가).
-const ROTATE_BY_PLACE: bool = false
+## A third run in a row hands over only while the first kind has at least this many stretches' forecast left on the train
+## (decision 484; 482 as written had 2). S1 ROTATE_GUARD.
+const ROTATE_GUARD: float = 8
 
 
 ## Target order (decision 482, 469 V1; S1 targetCandidates): coal first when the season's cold steps up after this stretch, then
@@ -145,7 +142,7 @@ static func target_candidates(g: Dictionary, t: Dictionary, loot: Dictionary) ->
 	return out
 
 
-## Decision 482: a kind with less than ROTATE_GUARD stretches' forecast left (coal and food only) is never rotated away.
+## Decisions 482/484: a kind with less than ROTATE_GUARD stretches' forecast left (coal and food only) is never rotated away.
 static func target_critical(g: Dictionary, t: Dictionary, key: String) -> bool:
 	var f: Dictionary = Turn.forecast(g, t)
 	if key == "coal": return float(g["coal"]) < ROTATE_GUARD * float(f["coal"])
@@ -153,21 +150,18 @@ static func target_critical(g: Dictionary, t: Dictionary, key: String) -> bool:
 	return false
 
 
-## Decision 482: the kind a third run in a row on `first` hands over to, "" when there is none (see ROTATE_BY_PLACE).
-static func rotate_to(t: Dictionary, cands: Array, loot: Dictionary, first: String) -> String:
+## The kind a third run in a row on `first` hands over to: the other kind the place holds most of, 25 or more (hospital medicine,
+## church symbol, office secret; decision 484), the earlier in LOOT_KEYS on a tie. "" when there is none. S1 rotateTo.
+static func rotate_to(t: Dictionary, loot: Dictionary, first: String) -> String:
 	var best: String = ""
-	if ROTATE_BY_PLACE:
-		for key: String in t["LOOT_KEYS"]:
-			if key != first and float(loot[key]) >= 25 and (best == "" or float(loot[key]) > float(loot[best])): best = key
-		return best
-	for key: String in cands:
-		if key != first and float(loot[key]) >= 25: return key
+	for key: String in t["LOOT_KEYS"]:
+		if key != first and float(loot[key]) >= 25 and (best == "" or float(loot[key]) > float(loot[best])): best = key
 	return best
 
 
 ## The kind a stop aims at first (the stop card can change it; S1 suggestTarget): the first candidate the place has 25 of, else
 ## coal or food as before. When that would be the third dispatched stop in a row on one kind, the next candidate takes over —
-## unless the first is short (target_critical, decision 482).
+## unless the first is short (target_critical, decisions 482/484).
 static func suggest_target(g: Dictionary, t: Dictionary, loot: Dictionary) -> String:
 	var cands: Array = target_candidates(g, t, loot)
 	var first: String = ""
@@ -179,7 +173,7 @@ static func suggest_target(g: Dictionary, t: Dictionary, loot: Dictionary) -> St
 		first = "coal" if float(loot["coal"]) / (float(g["coal"]) + 1) > float(loot["food"]) / (float(g["food"]) + 1) else "food"
 	var run: Variant = g.get("targetRun")
 	if run is Dictionary and run["target"] == first and int(run["n"]) >= 2 and not target_critical(g, t, first):
-		var second: String = rotate_to(t, cands, loot, first)
+		var second: String = rotate_to(t, loot, first)
 		if second != "": return second
 	return first
 

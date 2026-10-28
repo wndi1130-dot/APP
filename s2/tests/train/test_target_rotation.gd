@@ -1,5 +1,5 @@
 extends "res://addons/gut/test.gd"
-## Decision 482 (469 V1): the kind a stop aims at first turns with the train's state, the season and the
+## Decisions 482/484 (469 V1): the kind a stop aims at first turns with the train's state, the season and the
 ## promise ledger (turn_travel.gd suggest_target, the same rules as s1 turn.ts suggestTarget).
 
 const Travel = preload("res://game/train/turn/turn_travel.gd")
@@ -31,7 +31,7 @@ func _hungry() -> Dictionary:
 	return g
 
 
-func test_a_third_run_in_a_row_hands_over_to_the_next_kind() -> void:
+func test_a_third_run_in_a_row_hands_over_to_what_the_place_holds_most() -> void:
 	var t: Dictionary = _data["tables"]
 	var g: Dictionary = _hungry()
 	assert_eq(Travel.suggest_target(g, t, LOOT), "food")
@@ -45,23 +45,28 @@ func test_a_third_run_in_a_row_hands_over_to_the_next_kind() -> void:
 	assert_eq(Travel.suggest_target(g, t, LOOT), "food")
 
 
-func test_a_kind_running_short_is_not_handed_over() -> void:
+func test_a_kind_under_eight_stretches_is_not_handed_over() -> void:
 	var t: Dictionary = _data["tables"]
+	assert_eq(Travel.ROTATE_GUARD, 8.0)
 	var g: Dictionary = _hungry()
 	g["food"] = maxf(0.0, Travel.ROTATE_GUARD * float(TrainTurn.forecast(g, t)["food"]) - 1.0)
 	g["targetRun"] = {"target": "food", "n": 2}
 	assert_eq(Travel.suggest_target(g, t, LOOT), "food")
 
 
-func test_a_hospital_hands_food_over_only_by_what_the_place_holds() -> void:
+func test_a_hospital_hands_food_over_to_medicine_and_a_church_to_its_symbol() -> void:
 	var t: Dictionary = _data["tables"]
 	var g: Dictionary = _hungry()
-	var hospital: Dictionary = {"coal": 0, "food": 10, "medicine": 55, "luxury": 0, "symbol": 10, "secret": 25}
 	g["targetRun"] = {"target": "food", "n": 2}
-	if Travel.ROTATE_BY_PLACE:
-		assert_eq(Travel.suggest_target(g, t, hospital), "medicine", "장소에 가장 많은 다른 것")
-	else:
-		assert_eq(Travel.suggest_target(g, t, hospital), "food", "482 그대로: 다음 후보가 이 장소에 25 이상 없으면 그대로")
+	assert_eq(Travel.suggest_target(g, t, {"coal": 0, "food": 10, "medicine": 55, "luxury": 0, "symbol": 10, "secret": 25}), "medicine")
+	assert_eq(Travel.suggest_target(g, t, {"coal": 0, "food": 10, "medicine": 0, "luxury": 10, "symbol": 60, "secret": 20}), "symbol")
+
+
+func test_nothing_to_hand_over_keeps_the_kind() -> void:
+	var t: Dictionary = _data["tables"]
+	var g: Dictionary = _hungry()
+	g["targetRun"] = {"target": "food", "n": 2}
+	assert_eq(Travel.suggest_target(g, t, {"coal": 5, "food": 35, "medicine": 10, "luxury": 20, "symbol": 20, "secret": 10}), "food", "주택가")
 
 
 func test_a_passed_stop_neither_breaks_nor_extends_the_run() -> void:
