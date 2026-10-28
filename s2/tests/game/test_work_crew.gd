@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const FieldWork = preload("res://game/field_work.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const FieldSave = preload("res://game/sim/field_save.gd")
 
 class CountReceipt extends "res://game/sim/receipt.gd":
 	var sent_calls: Dictionary = {}
@@ -554,3 +555,59 @@ func test_budget_counts_wagons_once_salvage_wood_and_five_other_job_amounts() ->
 	assert_eq(FieldWork.budget(data), {"coal": 6.5, "wood": 6.0})
 	assert_eq(FieldWork.WOOD_TABLE, {"freight": 2, "houses": 5, "hospital": 1, "factory": 1, "church": 3, "office": 3})
 	assert_eq(FieldWork.BUDGET_SLACK, 0.1)
+
+
+func test_a_save_while_the_crew_is_out_makes_the_same_crew_again_on_resume() -> void:
+	_send()
+	_advance(1.0)
+	var pids: Array = []
+	for p in game.crew:
+		pids.append(p.pid)
+	pids.sort()
+	assert_eq(pids.size(), 6)
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	var resumed: FieldGame = FieldGame.new()
+	resumed.opts = FieldSave.resume_opts(saved)
+	add_child_autofree(resumed)
+	resumed.set_process(false)
+	var back: Array = []
+	for p in resumed.crew:
+		assert_not_null(p)
+		if p != null:
+			assert_true(resumed.people.has(p))
+			back.append(p.pid)
+	back.sort()
+	assert_eq(back, pids)
+	assert_eq(resumed.work.phase(), game.work.phase())
+	assert_eq(resumed.work.members("work_site").size(), 6)
+
+
+func test_a_contract_with_no_work_crew_sends_nobody() -> void:
+	_advance(1.0)
+	game.opts["departure"] = {"version": 2, "roster": [], "workCrew": []}
+	assert_false(game.work.start())
+	assert_eq(_radio(), FieldWork.SPEAKER + ": 지금 내보낼 일꾼이 없다.")
+	assert_eq(game.crew.size(), 0)
+
+
+func test_no_escort_to_stand_guard_sends_nobody() -> void:
+	_advance(1.0)
+	for row: Dictionary in FieldWork.DEFAULT_ROWS:
+		if row["role"] == "escort":
+			var p = game.make_person(row, game.work.door_of("work_site"))
+			p.body.downed = true
+			game.crew.append(p)
+	assert_false(game.work.start())
+	assert_eq(_radio(), FieldWork.SPEAKER + ": 지켜 줄 호위가 없다. 지금은 못 내보낸다.")
+	assert_eq(game.work.phase(), "open")
+
+
+func test_every_carrier_down_for_ten_seconds_calls_the_crew_back() -> void:
+	_send()
+	for p in _role("worker"):
+		p.body.downed = true
+	_advance(FieldWork.NO_HANDS_S - 1.0)
+	assert_ne(game.work.phase(), "retreat")
+	_advance(1.0)
+	assert_eq(game.work.phase(), "retreat")
+	assert_eq(game.work.sites["work_site"]["why"], "no_hands")

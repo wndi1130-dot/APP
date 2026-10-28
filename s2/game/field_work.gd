@@ -23,6 +23,8 @@ const HOLD_N: int = 4
 const HOLD_CLEAR_S: float = 5.0
 const OVERFLOW_S: float = 20.0
 const OVERFLOW_MULT: int = 2
+## Every carrier out dead or down this long, none still to come down: the crew comes back.
+const NO_HANDS_S: float = 10.0
 const HOLD_SHARE: float = 0.4
 const WORKER_BACK_R: float = 8.0
 const WORKER_RUN_R: float = 3.0
@@ -232,6 +234,7 @@ func _tick(id: String) -> void:
 		for p in members(id):
 			if p.role == "worker" and (not p.is_alive() or p.body.downed):
 				drop_load(p)
+		state["no_hands_s"] = float(state.get("no_hands_s", 0.0)) + TICK_S if _no_hands(id) else 0.0
 		var why: String = _trouble(id, safe)
 		if why != "":
 			retreat(id, why)
@@ -353,10 +356,27 @@ func blocked_reason(safe: Dictionary) -> String:
 
 
 ## Rows retain their order within each role. Existing people never get copied.
-func _rows(id: String) -> Array:
+## The rows the train can send: the contract's work crew. A contract's empty crew sends nobody; the
+## default crew is only for a stop played off the contract.
+func _source() -> Array:
 	var source: Array = game.work_rows()
-	if source.is_empty():
-		source = DEFAULT_ROWS
+	return DEFAULT_ROWS if source.is_empty() and not game.contract_on() else source
+
+
+## A stop resumed from a save made while the crew was out (field_save.gd apply): the field makes only the
+## squad at start, so each crew member the save carries is made again before it is reconnected.
+func remake(saved: Array) -> void:
+	var rows: Dictionary = {}
+	for row: Dictionary in _source():
+		rows[String(row["id"])] = row
+	for row: Dictionary in saved:
+		var pid: String = String(row.get("pid", ""))
+		if rows.has(pid) and _person(pid) == null:
+			game.crew.append(game.make_person(rows[pid], Vector3.ZERO))
+
+
+func _rows(id: String) -> Array:
+	var source: Array = _source()
 	var out: Array = []
 	for role: String in ["worker", "escort"]:
 		var left: int = int(job(id)["carriers" if role == "worker" else "escorts"])
@@ -430,6 +450,10 @@ func start(id: String = "work_site") -> bool:
 	if workers.is_empty():
 		game.set_radio(SPEAKER + ": 지금 내보낼 일꾼이 없다.", "reply")
 		return false
+	# Escorts come down first (decision 486): with none to stand guard, nobody goes.
+	if escorts.is_empty():
+		game.set_radio(SPEAKER + ": 지켜 줄 호위가 없다. 지금은 못 내보낸다.", "reply")
+		return false
 	if _outside_people() + rows.size() + _pending_people() > game.ALLY_CAP:
 		game.hud.toast("사람이 너무 많음")
 		return false
@@ -444,6 +468,7 @@ func start(id: String = "work_site") -> bool:
 		state["roster"].append(String(row["id"]))
 	state["depart_at"] = elapsed + ESCORT_LEAD
 	state["noise_s"] = 0.0
+	state["no_hands_s"] = 0.0
 	game.actions.work_started = true
 	game.ai.crew_recalled = false
 	for i in escorts.size():
@@ -509,7 +534,8 @@ func members(id: String) -> Array:
 
 
 ## Why the crew must come back at once, or "": called back, eight awake by the site, someone
-## grabbed, an escort dead or downed (not one who slipped and gets straight up again).
+## grabbed, an escort dead or downed (not one who slipped and gets straight up again), or every
+## carrier out dead or down for NO_HANDS_S.
 func _trouble(id: String, safe: Dictionary) -> String:
 	if game.ai.crew_recalled:
 		return "recalled"
@@ -522,7 +548,23 @@ func _trouble(id: String, safe: Dictionary) -> String:
 			return "grabbed"
 		if p.role == "escort" and (not p.is_alive() or p.body.downed):
 			return "escort_down"
+	if float(_site(id).get("no_hands_s", 0.0)) >= NO_HANDS_S:
+		return "no_hands"
 	return ""
+
+
+## Carriers are out (not back aboard) and none of them is up: dead or down. False while some are still to come down.
+func _no_hands(id: String) -> bool:
+	if not _site(id)["pending"].is_empty():
+		return false
+	var out: int = 0
+	for p in members(id):
+		if p.role != "worker" or p.brain.get("boarded", false):
+			continue
+		out += 1
+		if p.is_alive() and not p.body.downed:
+			return false
+	return out > 0
 
 
 func _cancel_workers(id: String) -> void:

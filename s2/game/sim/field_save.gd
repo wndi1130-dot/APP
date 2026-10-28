@@ -228,6 +228,9 @@ static func apply(game, save: Dictionary) -> void:
 	game.begin_resume()
 	game.clock.elapsed = float(save["clock"]["elapsed"])
 	game.clock.speed = float(save["clock"]["speed"])
+	# The work crew is made during play (field_work.gd): each member a save carries is made again first.
+	if game.get("work") != null:
+		game.work.remake(save.get("people", []))
 	for row: Dictionary in save.get("people", []):
 		for p in game.people:
 			if p.pid == String(row["pid"]):
