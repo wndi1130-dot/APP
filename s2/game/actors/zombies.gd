@@ -1138,12 +1138,19 @@ func shoved_k(z: Dictionary) -> float:
 
 
 ## Where a body is seen (decision 474 J2: a blow is judged there): stumbling
-## back from a shove it is still on its way (draw_pos), and holding someone it
-## is drawn GRAB_BACK further off them (render).
+## back from a shove it is still on its way (draw_pos), holding someone it is
+## drawn GRAB_BACK further off them (render), and one on the ground is struck
+## on its upper body, LYING_HIT toward its head, which lies off to the side it
+## went over (decision 487: not the head itself, 0.75 m off, which lies away
+## from whoever felled it, out among the rest).
 func seen_pos(z: Dictionary) -> Vector3:
 	var pos := draw_pos(z)
 	if z["state"] == "grab" and shoved_k(z) >= 1.0:
 		pos -= Basis(Vector3.UP, z["angle"]) * Vector3(0, 0, GRAB_BACK)
+	elif (z["state"] == "downed" or z["state"] == "rising") and not z["crawl"]:
+		var down := DeadPose.down_k(z)
+		var turn: float = float(DeadPose.sprawl(float(z["phase"]))["turn"]) * down
+		pos += Basis(Vector3.UP, float(z["angle"]) + turn) * Vector3(0, 0, DeadPose.fall_side(z) * LYING_HIT * down)
 	return pos
 
 
@@ -1186,6 +1193,7 @@ func kill(z: Dictionary) -> void:
 const REACH_LEAN: float = 0.25
 const HOLD_LEAN: float = 0.12                # holding on it hangs less far in than it bent to bite
 const GRAB_BACK: float = 0.15                # drawn this much further off the one it holds, metres
+const LYING_HIT: float = 0.4                 # one lying flat is struck this far from its place toward its head: the chest, metres
 const TUG: Vector2 = Vector2(0.08, 0.06)       # forward and sideways, radians
 const TUG_HZ: float = 2.2
 

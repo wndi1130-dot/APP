@@ -150,40 +150,43 @@ func _counter(game, counts: Dictionary) -> bool:
 		return true
 	var reach: float = float(Weapons.get_data(p.weapon_id()).get("reach", 0.9)) + combat.MELEE_SLACK
 	if not p.target_zombie.is_empty():
-		if p.target_zombie["state"] != "dead" and p.position.distance_to(p.target_zombie["pos"]) <= reach:
+		if p.target_zombie["state"] != "dead" and p.position.distance_to(game.zombies.seen_pos(p.target_zombie)) <= reach:
 			return true
 		combat.stop_fight(p)
+	# Measured to where each one is seen, as the rules judge a blow (decision 474 J2).
 	var up: Array = []
-	var rising: Dictionary = {}
-	var lying: Dictionary = {}
-	for z in game.zombies.in_radius(p.position, maxf(reach, combat.SHOVE_REACH)):
+	var rising: Array = []
+	var lying: Array = []
+	for z in game.zombies.in_radius(p.position, maxf(reach, combat.SHOVE_REACH) + 1.0):
 		if combat.melee_blocked(p, z["pos"]):
 			continue
-		var d: float = p.position.distance_to(z["pos"])
+		var d: float = p.position.distance_to(game.zombies.seen_pos(z))
+		if d > maxf(reach, combat.SHOVE_REACH):
+			continue
 		match String(z["state"]):
 			"dead", "frozen":
 				pass
 			"rising":
-				if d <= reach and (rising.is_empty() or d < p.position.distance_to(rising["pos"])):
-					rising = z
+				if d <= reach and (rising.is_empty() or d < rising[1]):
+					rising = [z, d]
 			"downed":
-				if d <= reach and (lying.is_empty() or d < p.position.distance_to(lying["pos"])):
-					lying = z
+				if d <= reach and (lying.is_empty() or d < lying[1]):
+					lying = [z, d]
 			_:
-				up.append(z)
-	up.sort_custom(func(a, b): return p.position.distance_to(a["pos"]) < p.position.distance_to(b["pos"]))
-	if up.size() == 1 and p.position.distance_to(up[0]["pos"]) <= combat.SHOVE_REACH:
-		p.face_point(up[0]["pos"])
+				up.append([z, d])
+	up.sort_custom(func(a, b): return a[1] < b[1])
+	if up.size() == 1 and up[0][1] <= combat.SHOVE_REACH:
+		p.face_point(game.zombies.seen_pos(up[0][0]))
 		combat.start_shove(p)
 		counts["bot_shoves"] += 1
-	elif up.size() > 1 and p.position.distance_to(up[0]["pos"]) <= reach:
-		combat.fight(p, up[0], false)
+	elif up.size() > 1 and up[0][1] <= reach:
+		combat.fight(p, up[0][0], false)
 		counts["bot_swings"] += 1
 	elif up.is_empty() and not rising.is_empty():
-		combat.fight(p, rising, false)
+		combat.fight(p, rising[0], false)
 		counts["bot_swings"] += 1
 	elif up.is_empty() and not lying.is_empty():
-		combat.fight(p, lying, false)
+		combat.fight(p, lying[0], false)
 		counts["bot_finishes"] += 1
 	else:
 		return false
