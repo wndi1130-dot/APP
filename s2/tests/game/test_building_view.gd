@@ -490,3 +490,94 @@ func test_turning_the_setting_off_draws_grey_boxes() -> void:
 	assert_null(view.buildings)
 	assert_false(view.door_nodes.is_empty(), "회색 상자가 문을 그린다")
 	assert_false(view.wall_nodes.is_empty())
+
+
+## ㄱ자 단층 건물(8×3 위 칸 + 3×5 아래 칸), 오르는 옥상이라 맨 위가 평지붕.
+func _l_block(stove: bool = false) -> Dictionary:
+	var g := FieldGrid.new(14, 14)
+	var a := Rect2i(2, 2, 8, 3)
+	var b := Rect2i(2, 5, 3, 5)
+	var cells := {}
+	for r: Rect2i in [a, b]:
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				cells[Vector2i(x, y)] = true
+	for c: Vector2i in cells:
+		g.building[g.index(c)] = 0
+		for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			if not cells.has(c + d):
+				g.set_solid(c, S.WALL)
+	_door(g, Vector2i(6, 4))
+	var stoves := [{"building": 0, "cell": Vector2i(3, 7)}] if stove else []
+	return {"grid": g, "levels": {0: g}, "buildings": [{"id": 0, "name": "창고", "rect": a}, {"id": 0, "name": "창고", "rect": b}],
+		"upper_rects": [], "stoves": stoves, "stairs": [], "rooftops": [{"building": 0}]}
+
+
+func _roofs_of(p: Dictionary, id: String) -> Array:
+	var out := []
+	for row: Dictionary in p["roofs"]:
+		if row["b"] == 0 and row["id"] == id:
+			out.append(row["xf"])
+	return out
+
+
+func test_an_l_shaped_flat_roof_meets_itself_without_a_gap_or_inner_parapets() -> void:
+	var p := BuildingView.plan(_l_block())
+	var slabs := _roofs_of(p, "roof_flat")
+	assert_eq(slabs.size(), 3, "긴 변이 반만 옆 조각에 닿는 곳에서 잘린 세 조각")
+	# 조각끼리 맞닿은 변은 틈 없이 만난다(예전에는 바깥벽 안쪽으로 0.275씩 줄어 0.55 틈). ㄱ자 안쪽 모서리
+	# (x 5·z 5)의 벽 바깥면 너머 네모는 어느 판도 덮지 않는다.
+	var boxes := []
+	var south_edges := []
+	for xf: Transform3D in slabs:
+		var half := xf.basis.get_scale() * 0.5
+		boxes.append(Rect2(xf.origin.x - half.x, xf.origin.z - half.z, half.x * 2.0, half.z * 2.0))
+		south_edges.append(snappedf(xf.origin.z + half.z, 0.001))
+	assert_true(south_edges.has(5.0), "윗줄 서쪽 조각이 아랫줄 조각과 z 5에서 만난다 %s" % [south_edges])
+	for at: Vector2 in [Vector2(4.6, 3.5), Vector2(4.9, 3.5), Vector2(3.5, 4.99), Vector2(3.5, 5.01), Vector2(4.6, 4.9)]:
+		assert_true(boxes.any(func(box: Rect2) -> bool: return box.has_point(at)), "이음 자리를 판이 덮는다 %s %s" % [at, boxes])
+	assert_false(boxes.any(func(box: Rect2) -> bool: return box.has_point(Vector2(4.86, 4.86))), "안쪽 모서리 바깥 네모는 비운다 %s" % [boxes])
+	for i in range(boxes.size()):
+		for j in range(i + 1, boxes.size()):
+			assert_lt((boxes[i] as Rect2).intersection(boxes[j]).get_area(), 0.0001, "판끼리 겹치지 않는다")
+	var parapets := _roofs_of(p, "roof_parapet")
+	assert_eq(parapets.size(), 8, "바깥 변에만 낮은 벽(안쪽 이음에는 없음)")
+	for xf: Transform3D in parapets:
+		assert_gt(xf.basis.get_scale().x, 0.0, "낮은 벽 길이가 0 밑으로 뒤집히지 않는다")
+		var o := xf.origin
+		assert_false(o.x < 5.0 and absf(o.z - 5.0) < 0.6, "윗줄과 아랫줄 사이 안쪽 이음에 낮은 벽 없음 %s" % o)
+		assert_false(absf(o.x - 5.0) < 0.6 and o.z > 2.6 and o.z < 4.9, "윗줄 두 조각 사이 이음에 낮은 벽 없음 %s" % o)
+
+
+func test_a_one_cell_deep_flat_piece_keeps_its_parapets_the_right_way_round() -> void:
+	var g := FieldGrid.new(14, 8)
+	_walls(g, Rect2i(2, 2, 8, 1))
+	_door(g, Vector2i(5, 2))
+	var p := BuildingView.plan({"grid": g, "levels": {0: g}, "buildings": [{"id": 0, "name": "창고", "rect": Rect2i(2, 2, 8, 1)}],
+		"upper_rects": [], "stoves": [], "stairs": [], "rooftops": [{"building": 0}]})
+	for xf: Transform3D in _roofs_of(p, "roof_parapet"):
+		assert_gt(xf.basis.get_scale().x, 0.0)
+	assert_eq(_roofs_of(p, "roof_parapet").size(), 2, "깊이 한 칸이면 가로 벽 둘이 끝까지 덮는다")
+
+
+func test_a_flat_only_building_with_a_stove_gets_its_chimney() -> void:
+	assert_eq(_roofs_of(BuildingView.plan(_l_block(true)), "chimney").size(), 1, "난로가 있으면 꼴과 상관없이 굴뚝")
+	var chimney: Transform3D = _roofs_of(BuildingView.plan(_l_block(true)), "chimney")[0]
+	assert_almost_eq(chimney.origin.x, 3.5, 0.001, "난로 칸 위")
+	assert_almost_eq(chimney.origin.z, 7.5, 0.001)
+	assert_almost_eq(chimney.origin.y, BuildingView.LEVEL_H, 0.1, "평지붕 위")
+	assert_eq(_roofs_of(BuildingView.plan(_l_block()), "chimney").size(), 0, "난로 없는 창고는 굴뚝 없음")
+
+
+func test_rows_of_one_building_give_one_form_in_any_order() -> void:
+	var looks := []
+	for order: Array in [[0, 1], [1, 0]]:
+		var g := FieldGrid.new(40, 16)
+		_walls(g, Rect2i(2, 2, 8, 6))
+		_door(g, Vector2i(5, 7))
+		var rows := [{"id": 0, "name": "조립 공장", "rect": Rect2i(2, 2, 8, 6)}, {"id": 0, "name": "조립 공장", "rect": Rect2i(12, 2, 16, 10)}]
+		var data := {"grid": g, "levels": {0: g}, "buildings": [rows[order[0]], rows[order[1]]], "upper_rects": [],
+			"stoves": [], "stairs": [], "place_id": "factory_02"}
+		looks.append(BuildingView.plan(data)["looks"][0]["roof"])
+	assert_eq(looks[0], looks[1], "줄 순서가 꼴을 바꾸지 않는다")
+	assert_eq(looks[0], "flat", "두 줄의 넓이 합(208칸)으로 큰 공장")

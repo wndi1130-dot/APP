@@ -107,7 +107,8 @@ static func pick(row: Dictionary, place_id: String, paint: Color, levels: int = 
 	elif pitch == 1.0 and use in LOW_USES and region in ["rail_works", "mountain_works", "bare_line"]:
 		pitch = LOW
 	out["pitch"] = pitch
-	var cells := (row["rect"] as Rect2i).get_area() if row.get("rect") is Rect2i else 0
+	# 넓이: 건물이 여러 줄이면 building_view가 줄들의 합을 "cells"로 넘긴다.
+	var cells := int(row.get("cells", (row["rect"] as Rect2i).get_area() if row.get("rect") is Rect2i else 0))
 	if use == "clinic" or (use == "works" and cells >= FLAT_WORKS_CELLS) or (use == "shop" and region == "town" and levels >= 2):
 		out["roof"] = "flat"
 	return out

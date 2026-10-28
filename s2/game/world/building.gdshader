@@ -106,8 +106,10 @@ const vec3 BEADBOARD = vec3(0.70, 0.76, 0.80);
 const vec3 CURTAINS[6] =vec3[6](vec3(0.52, 0.30, 0.22), vec3(0.70, 0.56, 0.26), vec3(0.31, 0.45, 0.31), vec3(0.75, 0.70, 0.58), vec3(0.31, 0.37, 0.52), vec3(0.80, 0.79, 0.75));
 
 // 줄눈이나 판자 틈: 무늬 칸 가장자리 폭 w(칸 비율)를 화면 크기에 맞춰 부드럽게.
-float seam(vec2 f, vec2 w) {
-	vec2 aa = fwidth(f) + 1e-4;
+// u는 되감기 전 좌표: 칸 경계에서 fract가 1에서 0으로 뛰어도 화면 폭(fwidth)이 튀지 않게.
+float seam(vec2 u, vec2 w) {
+	vec2 f = fract(u);
+	vec2 aa = fwidth(u) + 1e-4;
 	vec2 e = smoothstep(w - aa, w + aa, f) * (vec2(1.0) - smoothstep(vec2(1.0) - aa, vec2(1.0), f));
 	return 1.0 - e.x * e.y;
 }
@@ -119,12 +121,12 @@ vec3 wall_skin(int kind, vec3 tint, vec2 fp, float big, float fine) {
 		vec2 bc = fp / vec2(0.5, 0.18);
 		bc.x += 0.5 * mod(floor(bc.y), 2.0);
 		vec3 c = tint * (0.84 + 0.26 * fx_hash(floor(bc))) * (0.94 + 0.1 * big);
-		return mix(vec3(0.62, 0.60, 0.56) * 0.85, c, 1.0 - seam(fract(bc), vec2(0.05, 0.11)));
+		return mix(vec3(0.62, 0.60, 0.56) * 0.85, c, 1.0 - seam(bc, vec2(0.05, 0.11)));
 	}
 	if (kind == 2) {
 		float k = floor(fp.x / 0.3);
 		vec3 c = tint * (0.86 + 0.22 * fx_hash(vec2(k, 3.0))) * (0.92 + 0.12 * fx_vnoise(vec2(k * 5.0, fp.y * 1.5)));
-		return c * (1.0 - 0.4 * seam(vec2(fract(fp.x / 0.3), 0.5), vec2(0.07, 0.0)));
+		return c * (1.0 - 0.4 * seam(vec2(fp.x / 0.3, 0.5), vec2(0.07, 0.0)));
 	}
 	if (kind == 3) {
 		float k = floor(fp.y / 0.25);
@@ -168,7 +170,7 @@ vec3 wall_paper(vec3 paper, int motif, vec2 fp, float fine) {
 vec3 wall_boards(vec3 wood, float run, float rise, float top, float w) {
 	float k = floor(run / w);
 	vec3 c = wood * (0.88 + 0.16 * fx_hash(vec2(k, 5.0))) * (0.94 + 0.08 * fx_vnoise(vec2(k * 3.0, rise * 6.0)));
-	c *= 1.0 - 0.3 * seam(vec2(fract(run / w), 0.5), vec2(0.06, 0.0));
+	c *= 1.0 - 0.3 * seam(vec2(run / w, 0.5), vec2(0.06, 0.0));
 	return mix(c, wood * 0.74, step(top - 0.06, rise) * step(rise, top));
 }
 
@@ -197,7 +199,7 @@ vec3 room_wall(int kind, int region, int roll, vec2 fp, float rise, float big, f
 		float top = kind == 2 ? 1.2 : 1.5;
 		vec2 tc = vec2(fp.x, rise) / 0.15;
 		vec3 tile = (kind == 2 ? KITCHEN_TILES[roll] : BATH_TILES[roll]) * (0.95 + 0.07 * fx_hash(floor(tc)));
-		tile *= 1.0 - 0.22 * seam(fract(tc), vec2(0.05, 0.05));
+		tile *= 1.0 - 0.22 * seam(tc, vec2(0.05, 0.05));
 		vec3 upper = (kind == 2 ? KITCHEN_PAINTS[roll] : vec3(0.78, 0.76, 0.70)) * (0.95 + 0.06 * fine);
 		c = rise < top ? tile : upper;
 		c = mix(c, vec3(0.42, 0.44, 0.43), step(top, rise) * (1.0 - step(top + 0.04, rise)));
@@ -302,7 +304,7 @@ void fragment() {
 		vec2 bc = fp / vec2(0.5, 0.18);
 		bc.x += 0.5 * mod(floor(bc.y), 2.0);
 		vec3 brick = brick_color * (0.82 + 0.3 * fx_hash(floor(bc)));
-		brick = mix(stone_color * 0.95, brick, 1.0 - seam(fract(bc), vec2(0.05, 0.11)));
+		brick = mix(stone_color * 0.95, brick, 1.0 - seam(bc, vec2(0.05, 0.11)));
 		// 칠이 떨어진 자리는 물이 닿는 곳(결정 476 대각뷰): 기단 위 1 m 남짓은 이어진 때와 함께
 		// 군데군데, 그 위는 손바닥만 한 조각만 드물게. 대각뷰에서 벽이 화면의 큰 몫이 되자 1 m 넘는
 		// 얼룩이 위장 무늬로 읽혔다. 벽돌도 집 칠처럼 색 보정을 덜 받아 회색 구멍으로 뜨지 않게 한다.
@@ -321,7 +323,7 @@ void fragment() {
 			vec2 sc = fp / vec2(0.55, 0.25);
 			sc.x += 0.37 * mod(floor(sc.y), 2.0);
 			vec3 stone = stone_color * (0.8 + 0.3 * fx_hash(floor(sc)));
-			base = mix(stone_color * 0.6, stone, 1.0 - seam(fract(sc), vec2(0.04, 0.08)));
+			base = mix(stone_color * 0.6, stone, 1.0 - seam(sc, vec2(0.04, 0.08)));
 		}
 		lively = house_colour * exposed;
 		if (exposed < 0.5 && up < 0.5 && building_id >= 0.0) {
@@ -349,18 +351,18 @@ void fragment() {
 		// 석재: 큰 돌과 줄눈.
 		vec2 sc = (up > 0.5 ? w_pos.xz : fp) / vec2(0.55, 0.3);
 		sc.x += 0.5 * mod(floor(sc.y), 2.0);
-		base = stone_color * (0.84 + 0.26 * fx_hash(floor(sc))) * (1.0 - 0.3 * seam(fract(sc), vec2(0.04, 0.07)));
+		base = stone_color * (0.84 + 0.26 * fx_hash(floor(sc))) * (1.0 - 0.3 * seam(sc, vec2(0.04, 0.07)));
 		porous = 0.4;
 	} else if (zone == 2) {
 		// 나무: 판자 틈과 결.
 		float k = (up > 0.5 ? w_pos.x : run) / 0.16;
 		base = wood_color * (0.8 + 0.3 * fx_hash(vec2(floor(k), 3.0)));
-		base *= (1.0 - 0.35 * seam(vec2(fract(k), 0.5), vec2(0.07, 0.0))) * (0.9 + 0.15 * fx_vnoise(vec2(k * 2.0, w_pos.y * 9.0)));
+		base *= (1.0 - 0.35 * seam(vec2(k, 0.5), vec2(0.07, 0.0))) * (0.9 + 0.15 * fx_vnoise(vec2(k * 2.0, w_pos.y * 9.0)));
 		porous = 0.8;
 		if (exposed > 0.5 && up < 0.5 && accent.a > 0.0) {
 			// 바깥 나무에 남은 칠: 결 따라 벗겨져 나무가 드러난다.
 			float peel = smoothstep(0.45, 0.6, fx_fbm2(vec2(k * 0.7, w_pos.y * 2.3) + building_id) + (1.0 - accent.a) * 0.5);
-			vec3 painted = accent.rgb * (0.88 + 0.16 * big) * (1.0 - 0.2 * seam(vec2(fract(k), 0.5), vec2(0.07, 0.0)));
+			vec3 painted = accent.rgb * (0.88 + 0.16 * big) * (1.0 - 0.2 * seam(vec2(k, 0.5), vec2(0.07, 0.0)));
 			base = mix(painted, base, peel);
 			lively = 1.0 - peel;
 		}
@@ -391,13 +393,13 @@ void fragment() {
 			vec2 fc = w_pos.xz / vec2(0.95, 3.0);
 			fc.y += 0.37 * fx_hash(vec2(floor(fc.x), 5.0));
 			base = slate_color * 1.05 * (0.92 + 0.12 * fx_hash(floor(fc))) * (0.9 + 0.18 * big);
-			base *= 1.0 - 0.12 * seam(vec2(fract(fc.x), 0.5), vec2(0.03, 0.0));
+			base *= 1.0 - 0.12 * seam(vec2(fc.x, 0.5), vec2(0.03, 0.0));
 			lively = 0.0;
 		} else {
 			float ax = abs(n.x) > abs(n.z) ? w_pos.z : w_pos.x;
 			vec2 tc = vec2(ax / 0.32, w_pos.y / 0.15);
 			tc.x += 0.5 * mod(floor(tc.y), 2.0);
-			base = roof * (0.84 + 0.28 * fx_hash(floor(tc))) * (1.0 - 0.4 * seam(fract(tc), vec2(0.05, 0.16)));
+			base = roof * (0.84 + 0.28 * fx_hash(floor(tc))) * (1.0 - 0.4 * seam(tc, vec2(0.05, 0.16)));
 		}
 		porous = 0.5;
 	} else {
