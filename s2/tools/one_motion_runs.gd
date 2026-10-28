@@ -285,6 +285,8 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 		row["contacts"] = game.combat.contacts.duplicate(true)
 		row["crowd_most"] = int(game.combat.crowd_most)
 		row["crowd_falls"] = int(game.combat.get("crowd_falls") if game.combat.get("crowd_falls") != null else 0)
+	if game.combat.get("melee_tally") != null:
+		row["melee"] = game.combat.melee_tally.duplicate()
 	row["bites_player"] = bites_player
 	row["grabs_player"] = grabs_player
 	game.free()

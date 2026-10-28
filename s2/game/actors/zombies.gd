@@ -1137,6 +1137,16 @@ func shoved_k(z: Dictionary) -> float:
 	return 1.0 - (1.0 - k) * (1.0 - k)
 
 
+## Where a body is seen (decision 474 J2: a blow is judged there): stumbling
+## back from a shove it is still on its way (draw_pos), and holding someone it
+## is drawn GRAB_BACK further off them (render).
+func seen_pos(z: Dictionary) -> Vector3:
+	var pos := draw_pos(z)
+	if z["state"] == "grab" and shoved_k(z) >= 1.0:
+		pos -= Basis(Vector3.UP, z["angle"]) * Vector3(0, 0, GRAB_BACK)
+	return pos
+
+
 func draw_pos(z: Dictionary) -> Vector3:
 	var k := shoved_k(z)
 	if k >= 1.0:

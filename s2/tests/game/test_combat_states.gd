@@ -183,3 +183,23 @@ func _blow_tag() -> String:
 		if s["tag"] == "melee" or s["tag"] == "blow":
 			return String(s["tag"])
 	return ""
+
+func test_a_shoved_body_is_struck_where_it_is_seen() -> void:
+	# Decision 474 J2: the shove puts it 1.3 m off at once for the rules, but it
+	# is drawn stumbling there for SHOVED_TIME; a blow is judged where it is drawn.
+	_hand("knife")
+	var z := _body_at("chase", 0.9)
+	game.zombies.release(z, p.position, false)
+	assert_gt(z["pos"].distance_to(p.position), 2.0, "the rules have it out of reach")
+	assert_almost_eq(game.zombies.seen_pos(z).distance_to(p.position), 0.9, 0.01, "it is seen where it stood")
+	assert_true(game.combat._strike_reaches(p, z), "a blow reaches it there")
+	z["shoved_t"] = 0.0   # the stumble played out
+	assert_false(game.combat._strike_reaches(p, z), "drawn where the shove put it, it is out of reach")
+
+
+func test_one_holding_someone_is_struck_where_it_is_drawn() -> void:
+	var z := _body_at("grab", 1.0)
+	z["angle"] = -PI / 2.0   # facing the player, to the west
+	var seen: Vector3 = game.zombies.seen_pos(z)
+	assert_almost_eq(seen.x - z["pos"].x, game.zombies.GRAB_BACK, 0.01, "drawn GRAB_BACK further off its victim")
+	assert_almost_eq(seen.z, z["pos"].z, 0.01)
