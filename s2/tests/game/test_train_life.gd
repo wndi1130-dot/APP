@@ -59,6 +59,147 @@ func test_a_walker_reserves_a_named_activity_instead_of_only_random_pacing() -> 
 	assert_true(saw_arrival)
 
 
+func test_guard_watch_faces_the_window_after_arrival() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	var id: int = b.get_instance_id()
+	var a: Dictionary = s.life.actors[id]
+	s.life.places.release(id)
+	assert_true(s.life.places.reserve(id, "guard/window"))
+	a["activity"] = "watch"
+	var target: Vector3 = s.life.places.target(id)
+	s.life._route(b, target)
+	for _step in 4:
+		if s.life.walk(b, 100.0):
+			break
+	assert_eq(b.position, target)
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD))
+	s.life.arrived(b)
+	b.state = "wait"
+	b.gesture = ""
+	a["distraction"] = ""
+	for now in [0.0, 1.0, 3.0, 6.0]:
+		s.clock = now
+		s.life.show_body(c, b)
+		assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD), "window_watch cannot turn the sentry back to the camera")
+	b.rotation.y = 0.0
+	assert_true(s.life.walk(b, 0.1), "the body walk fallback also arrives")
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD))
+	a["waypoints"] = [b.position]
+	b.rotation.y = 0.0
+	assert_true(s.life.walk(b, 0.1), "an already reached waypoint also arrives")
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD))
+	s.life.places.release(id)
+	assert_true(s.life.walk(b, 0.1))
+	assert_almost_eq(float(b.rotation.y), 0.0, 0.001, "ordinary arrivals still face the camera")
+
+
+func test_seated_distractions_do_not_stand_the_body_up() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	var a: Dictionary = s.life.actors[b.get_instance_id()]
+	b.state = "wait"
+	b.gesture = ""
+	for pose in ["sit", "floor"]:
+		var requested: String = "sit_bench" if pose == "sit" else "sit_floor"
+		a["requested"] = requested
+		for distraction in ["cough", "catch_breath", "look_around", "stretch_tired", "rub_stamp"]:
+			b.set_pose(pose, false)
+			a["distraction"] = distraction
+			s.life.show_body(c, b)
+			assert_eq(b.pose, pose, distraction)
+			assert_eq(a["requested"], requested)
+			assert_eq(b.get_meta("life_motion")["requested"], requested)
+
+
+func test_standing_distractions_still_run() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	var a: Dictionary = s.life.actors[b.get_instance_id()]
+	b.state = "wait"
+	b.gesture = ""
+	b.set_pose("stand", false)
+	a["requested"] = "window_watch"
+	a["distraction"] = "cough"
+	s.life.show_body(c, b)
+	assert_eq(b.pose, "stand")
+	assert_eq(b.get_meta("life_motion")["requested"], "cough")
+	assert_eq(a["requested"], "window_watch")
+
+
+func test_only_resting_activities_have_a_thirty_second_hold_floor() -> void:
+	var s = _scene()
+	var b: Node3D = s.car("guard")["bodies"][0]
+	var id: int = b.get_instance_id()
+	var a: Dictionary = s.life.actors[id]
+	s.life.places.release(id)
+	assert_true(s.life.places.reserve(id, "guard/bench"))
+	var spot: Dictionary = s.life.places.spots["guard/bench"]
+	spot["hold"] = [1.0, 2.0]
+	assert_eq(float(Catalog.tuning("min_hold")), 30.0)
+	for activity in ["rest", "watch", "warm", "chat", "read", "mend", "sleep"]:
+		a["activity"] = activity
+		s.life.arrived(b)
+		assert_gte(float(b.timer), 30.0, activity)
+	for activity in ["work", "eat", "gather", "refuge", "heal", "session"]:
+		a["activity"] = activity
+		s.life.arrived(b)
+		assert_between(float(b.timer), 1.0, 2.0, activity)
+	spot["hold"] = [45.0, 45.0]
+	a["activity"] = "rest"
+	s.life.arrived(b)
+	assert_eq(float(b.timer), 45.0, "longer holds are preserved")
+
+
+func test_reselecting_the_same_rest_anchor_keeps_pose_and_motion() -> void:
+	for activity in ["rest", "sleep"]:
+		var s = _scene()
+		if activity == "sleep":
+			s.set_value("view.daytime", "night")
+		var c: Dictionary = s.car("guard")
+		var b: Node3D = c["bodies"][0]
+		var id: int = b.get_instance_id()
+		var a: Dictionary = s.life.actors[id]
+		for other in c["bodies"]:
+			other.visible = other == b
+		var spot_id: String = "guard/bench" if activity == "rest" else "guard/bunk"
+		s.life.places.release(id)
+		assert_true(s.life.places.reserve(id, spot_id))
+		b.position = s.life.places.target(id)
+		b.state = "wait"
+		b.gesture = ""
+		b.set_pose("sit", false)
+		a["activity"] = activity
+		a["state"] = "idle" if activity == "rest" else "sleep"
+		a["preferred"] = [activity]
+		a["requested"] = "sit_bench" if activity == "rest" else "lie_bunk"
+		a["distraction"] = ""
+		assert_true(s.life.places.arrive(id))
+		b.timer = 0.0
+		var at: Vector3 = b.position
+		var requested: String = a["requested"]
+		var movement: int = s.life._serial
+		assert_true(s.life.choose_local(c, b))
+		assert_eq(b.state, "wait")
+		assert_eq(b.pose, "sit")
+		assert_eq(b.position, at)
+		assert_eq(a["requested"], requested)
+		assert_eq(a["waypoints"], [])
+		assert_eq(s.life._serial, movement, "no route was made")
+		assert_eq(s.life.places.present(spot_id), 1)
+		assert_gte(float(b.timer), 30.0)
+		s.life.show_body(c, b)
+		assert_eq(b.pose, "sit")
+		b.position.x += 0.2
+		assert_true(s.life.choose_local(c, b))
+		assert_eq(b.state, "pace", "the same place still needs a route from elsewhere")
+		assert_false(a["waypoints"].is_empty())
+		assert_gt(s.life._serial, movement)
+
+
 func test_coal_food_medicine_and_insulation_change_only_their_display() -> void:
 	var s = _scene()
 	assert_true(s.set_value("train.coal", 0))
@@ -788,7 +929,7 @@ func test_a_hungry_car_alone_does_not_crouch_the_sentry_or_the_stoker() -> void:
 	var b = s.car("guard")["bodies"][0]
 	b.gesture = "catch_breath"
 	b.pose = "stand"
-	assert_eq(View._forced(b, {"layout": "guard", "job_short": 0.0}, "watch", 0.0), "t_lantern", "hungry, the lantern stays up")
+	assert_eq(View._forced(b, {"layout": "guard", "job_short": 0.0}, "watch", 0.0), "t_fold", "hunger alone leaves the sentry standing with folded arms")
 	assert_eq(View._forced(b, {"layout": "guard", "job_short": 0.6}, "watch", 0.0), "t_crouch", "short of relief, the sentry crouches")
 	assert_eq(View._forced(b, {"layout": "engine_room", "job_short": 0.0}, "work", 0.0), "t_shovel")
 	assert_eq(View._forced(b, {"layout": "engine_room", "job_short": 0.6}, "work", 0.0), "t_crouch")

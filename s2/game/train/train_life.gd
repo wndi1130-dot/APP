@@ -220,6 +220,8 @@ func choose_local(c: Dictionary, body: Node3D) -> bool:
 	if moving_count(c["id"]) >= int(Catalog.tuning("max_movers")):
 		body.timer = float(Catalog.tuning("tick"))
 		return true
+	var previous: String = String(places.bookings.get(id, ""))
+	var previous_requested: String = a["requested"]
 	places.release(id)
 	a["requested"] = ""
 	var preferred: Array = Schedule.ranked(a["preferred"], a["state"], contexts[c["id"]])
@@ -240,6 +242,11 @@ func choose_local(c: Dictionary, body: Node3D) -> bool:
 		return false
 	a["turn"] = int(a["turn"]) + 1
 	a["activity"] = places.spots[choice]["activity"]
+	if choice == previous and body.position.is_equal_approx(places.target(id)):
+		places.arrive(id)
+		a["requested"] = previous_requested
+		body.timer = _hold_time(places.spots[choice], String(a["activity"]))
+		return true
 	_route(body, places.target(id))
 	body.state = "pace"
 	return true
@@ -283,11 +290,15 @@ func reserve_trip(body: Node3D, to: Dictionary, row: Dictionary, goal_x: float) 
 func walk(body: Node3D, delta: float) -> bool:
 	var a: Dictionary = actors.get(body.get_instance_id(), {})
 	if a.is_empty() or (a["waypoints"] as Array).is_empty():
-		return body.walk(delta)
+		var done: bool = body.walk(delta)
+		if done:
+			_face_window(body)
+		return done
 	while not a["waypoints"].is_empty() and body.position.is_equal_approx(a["waypoints"][0]):
 		a["waypoints"].pop_front()
 	if a["waypoints"].is_empty():
 		body.set_pose("sit" if body.position.y > 0.0 else "stand", false)
+		_face_window(body)
 		return true
 	var target: Vector3 = a["waypoints"][0]
 	var toward: Vector3 = target - body.position
@@ -302,8 +313,22 @@ func walk(body: Node3D, delta: float) -> bool:
 		if a["waypoints"].is_empty():
 			body.set_pose("sit" if body.position.y > 0.0 else "stand", false)
 			body.rotation.y = 0.0
+			_face_window(body)
 			return true
 	return false
+
+
+func _face_window(body: Node3D) -> void:
+	var spot: Dictionary = places.spots.get(places.bookings.get(body.get_instance_id(), ""), {})
+	if spot.get("activity", "") == "watch" and contexts.get(spot.get("car", ""), {}).get("layout", "") == "guard":
+		body.rotation.y = PI
+
+
+func _hold_time(spot: Dictionary, activity: String) -> float:
+	var seconds: float = host.rng.randf_range(float(spot["hold"][0]), float(spot["hold"][1]))
+	if activity in ["rest", "watch", "warm", "chat", "read", "mend", "sleep"]:
+		seconds = maxf(seconds, float(Catalog.tuning("min_hold")))
+	return seconds
 
 
 func arrived(body: Node3D) -> void:
@@ -330,7 +355,8 @@ func arrived(body: Node3D) -> void:
 			return
 	if places.arrive(id):
 		var s: Dictionary = places.spots[places.bookings[id]]
-		body.timer = host.rng.randf_range(float(s["hold"][0]), float(s["hold"][1]))
+		body.timer = _hold_time(s, String(a["activity"]))
+		_face_window(body)
 		var context: Dictionary = contexts[s["car"]]
 		a["requested"] = Schedule.gesture(a["activity"], context, a["traits"], int(a["turn"]))
 		if a["activity"] in ["sleep", "heal", "mourn"]:
@@ -446,11 +472,15 @@ func show_body(c: Dictionary, body: Node3D) -> void:
 			Motion.show(body, requested, scene.elapsed, scene.role(id), scene.phase)
 		return
 	# Existing cold/hunger/fear/resentment gestures retain their precedence.
-	if body.gesture != "" or body.state not in ["wait", "visit"]:
+	if body.state not in ["wait", "visit"]:
 		return
-	var requested: String = a["distraction"] if a["distraction"] != "" else a["requested"]
-	if requested != "":
-		Motion.show(body, requested, host.clock, int(a["turn"]) % 2)
+	if body.gesture == "":
+		var requested: String = a["requested"]
+		if a["distraction"] != "" and body.pose not in ["sit", "floor"]:
+			requested = a["distraction"]
+		if requested != "":
+			Motion.show(body, requested, host.clock, int(a["turn"]) % 2)
+	_face_window(body)
 
 
 func start_interaction(kind: String, car_id: String) -> bool:

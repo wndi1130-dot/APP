@@ -3,6 +3,7 @@
   "note": "모든 새 치수·정원·초·문턱·인원·배치는 첫 값(가안). 화면만 바꾸며 놀이 규칙과 정산에는 쓰지 않는다. 기존 기색의 값은 train_look.gd에 둔다.",
   "tuning": {
     "tick": 0.25,
+    "min_hold": 30,
     "max_movers": 4,
     "interaction_limit": 1,
     "distraction_every": [

@@ -46,7 +46,7 @@ func test_what_the_scene_and_the_life_plan_decide_comes_first() -> void:
 	assert_eq(View.want_for(_body("stand", Gesture.ARMS_CROSSED), _state(), "", 1), "t_fold")
 	assert_eq(View.want_for(_body("stand", Gesture.RUB_STAMP), _state(), "", 1), "t_shiver")
 	assert_has(["t_talk", "t_no"], View.want_for(_body("stand", Gesture.ARGUE), _state(), "", 1), "tension argues")
-	assert_eq(View.want_for(_body("stand"), _state({"layout": "guard"}), "watch", 1), "t_lantern", "the guard keeps watch")
+	assert_eq(View.want_for(_body("stand"), _state({"layout": "guard"}), "watch", 1), "t_fold", "the guard keeps watch with folded arms")
 	assert_eq(View.want_for(_body("floor"), _state(), "warm", 1), "t_warm_hands", "hands out to the stove")
 	assert_eq(View.want_for(_body("sit"), _state(), "heal", 1), "t_lie")
 	assert_eq(View.want_for(_body("stand"), _state(), "cook", 1), "t_stir")
@@ -57,6 +57,27 @@ func test_what_the_scene_and_the_life_plan_decide_comes_first() -> void:
 	assert_eq(View.want_for(huddled, _state({"cold": true}), "", 1), "t_sit_huddle")
 	for clip in ["t_walk", "t_shiver", "t_cough", "t_eat", "t_fold", "t_lantern", "t_warm_hands", "t_lie", "t_stir", "t_kneel_work", "t_sit_huddle", "t_shovel"]:
 		assert_has(TrainClips.names(), clip)
+
+
+func test_guard_watch_keeps_the_window_facing_in_the_draw_transform() -> void:
+	var view: Node3D = autofree(View.new())
+	var b: Node3D = _body_in_tree("stand")
+	b.rotation.y = PI
+	var state: Dictionary = _state({"layout": "guard"})
+	var clip: String = View.want_for(b, state, "watch", 1)
+	assert_eq(clip, "t_fold")
+	var at: Transform3D = view.place_of(b, clip, state)
+	assert_true(at.basis.z.is_equal_approx(Vector3.FORWARD), "the body's front faces the back wall")
+
+
+func test_guard_standing_weights_never_raise_an_empty_lantern() -> void:
+	var b: Node3D = _body_in_tree("stand")
+	var me: Dictionary = View.traits_of(5)
+	for night in [false, true]:
+		var state: Dictionary = _state({"layout": "guard", "night": night,
+			"marks": [{"kind": "party_out", "sign": 1, "size": 1.0}]})
+		assert_eq(float(View._base_weights("stand", b, state, me)["t_lantern"]), 0.0)
+		assert_eq(float(View.weights_for("stand", b, state, me)["t_lantern"]), 0.0, "an event cannot restore the empty-handed clip")
 
 
 ## Every clip the picks can give is a baked one.
@@ -261,6 +282,77 @@ func test_people_are_taken_in_seat_order() -> void:
 		list.append(b)
 	var ordered: Array = View.in_seat_order(list)
 	assert_eq(ordered.map(func(b): return b.position.x), [1.0, 3.0, 5.0])
+
+
+func test_only_lap_gun_receivers_can_choose_gun_cleaning() -> void:
+	var list: Array = []
+	for x in [5.0, 1.0, 3.0]:
+		var b: Node3D = _body_in_tree("sit")
+		b.position.x = x
+		list.append(b)
+	var ordered: Array = View.in_seat_order(list)
+	var state: Dictionary = _state({"layout": "guard"})
+	var armed: Array = View.lap_gun_receivers(ordered, state)
+	assert_eq(armed, [ordered[0], ordered[1]])
+	var cleaning: int = 0
+	for b in ordered:
+		var me: Dictionary = View.traits_of(5).merged({"lap_gun": armed.has(b)})
+		assert_eq(float(View.weights_for("sit", b, state, me)["t_gun_clean"]), 1.5 if armed.has(b) else 0.0)
+		for key in range(100, 160):
+			var clip: String = View.want_for(b, state, "", key, 3.0, {"lap_gun": armed.has(b)})
+			if armed.has(b):
+				cleaning += int(clip == "t_gun_clean")
+			else:
+				assert_ne(clip, "t_gun_clean")
+	assert_gt(cleaning, 0, "an armed guard still has the cleaning motion")
+	assert_eq(View.lap_gun_receivers(ordered, state, 0), [], "the shared pool is exhausted")
+	assert_eq(View.lap_gun_receivers(ordered, _state()), [], "other cars do not receive these guns")
+	ordered[0].visible = false
+	ordered[1].pose = "floor"
+	assert_eq(View.lap_gun_receivers(ordered, state), [ordered[2]])
+
+
+func test_losing_a_lap_gun_ends_cleaning_without_a_delay_or_blend() -> void:
+	var view: Node3D = autofree(View.new())
+	var b: Node3D = _body("sit")
+	assert_eq(view.shown_for(b, "t_gun_clean", 0.0, true), "t_gun_clean")
+	view.people[b]["mix"] = {"old_clip": "t_gun_clean"}
+	assert_eq(view.shown_for(b, "t_sit", 0.01, false), "t_sit")
+	assert_eq(view.people[b]["mix"], {})
+	assert_eq(view.shown_for(b, "t_gun_clean", 0.02, false), "t_sit")
+
+
+func test_lap_gun_draws_follow_the_receivers_before_clips_are_chosen() -> void:
+	var s := Scene.new()
+	s.rules = Rules.load_default()
+	s.opts = {"seed": 7, "panel": false}
+	add_child_autofree(s)
+	if s.people_view == null or s.people_view.guns == null:
+		pass_test("no baked people or no gun here")
+		return
+	var c: Dictionary = s.car("guard")
+	s.camera.position.x = float(c["x0"]) + Scene.CAR_LENGTH * 0.5
+	var ordered: Array = View.in_seat_order(c["bodies"])
+	s.people_view.people.clear()
+	for b in ordered:
+		b.visible = true
+		b.pose = "sit"
+		b.gesture = ""
+		b.act = ""
+		b.seat = -1
+		s.life.actors[b.get_instance_id()]["activity"] = ""
+		s.people_view.shown_for(b, "t_gun_clean", s.clock, true)
+	s.people_view._process(0.0)
+	assert_eq(s.people_view.guns.multimesh.visible_instance_count, View.LAP_GUNS)
+	for i in ordered.size():
+		var b: Node3D = ordered[i]
+		if i < View.LAP_GUNS:
+			assert_eq(s.people_view.drawn[b], "t_gun_clean")
+			var at: Transform3D = s.people_view.place_of(b, "t_gun_clean", {})
+			var gun: Transform3D = s.people_view.guns.multimesh.get_instance_transform(i)
+			assert_true(gun.origin.is_equal_approx(at * View.LAP_AT))
+		else:
+			assert_ne(s.people_view.drawn[b], "t_gun_clean")
 
 
 ## A guard car: at most LAP_GUNS guns lie across knees, one draw for all.
