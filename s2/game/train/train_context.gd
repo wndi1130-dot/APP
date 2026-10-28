@@ -68,8 +68,8 @@ static func read(rules: Dictionary, car: Dictionary) -> Dictionary:
 		"work": work,
 		# A short job leaves its work places empty, the second then the first; the ones left get their breath back.
 		"hands_job": job, "job_short": job_short, "work_first": work and job_short < FIRST_GONE, "work_second": work and job_short < SECOND_GONE,
-		# The watch keeps its posts day and night, so they do not wait for work time.
-		"post_first": job_short < FIRST_GONE, "post_second": job_short < SECOND_GONE,
+		# The watch keeps its posts day and night, so they do not wait for work time; a burning car opens none.
+		"post_first": job_short < FIRST_GONE and not burning, "post_second": job_short < SECOND_GONE and not burning,
 		"social": not council and float(train.get("fear", 0)) < Look.FEAR_FROZEN and peaceful,
 		"gather": stage >= 2 and stage <= 4 and not council and not burning,
 		"memorial": (bool(view.get("memorial", false)) or (laws.has("night_of_names") and night)) and not council and peaceful,
