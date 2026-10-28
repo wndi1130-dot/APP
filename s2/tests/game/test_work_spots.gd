@@ -82,15 +82,16 @@ func test_depot_segments_are_sparse_repeatable_pairs() -> void:
 			if pair.size() != 2:
 				continue
 			for seg: int in pair:
-				assert_between(seg - block * 9, 0, 8)
+				assert_between(seg - block * 9, 1, 7)
 				if previous >= 0:
+					assert_gte(seg - previous, 3, "three or more apart across blocks too")
 					all_total += float(seg - previous)
 					all_count += 1
 				previous = seg
-			assert_between(pair[1] - pair[0], 3, 8)
+			assert_between(pair[1] - pair[0], 3, 6)
 			within_total += float(pair[1] - pair[0])
 			within_count += 1
-	assert_between(within_total / float(maxi(1, within_count)), 4.0, 5.0)
+	assert_between(within_total / float(maxi(1, within_count)), 3.5, 4.5)
 	assert_between(all_total / float(maxi(1, all_count)), 4.0, 5.0)
 
 

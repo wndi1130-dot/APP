@@ -1468,9 +1468,9 @@ func allies_alive() -> Array:
 
 ## What the stop loader makes ahead from a map off the main thread (stop_loader.gd
 ## make_ready): the building plan, the ground's details or arrays, the floors' arrays,
-## the rooms' finish.
+## the rooms' finish, the walk from the train and the trees to fell (work_spots.gd).
 const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground_arrays", "_ground_key",
-	"_floor_arrays", "_floor_keys", "_room_finish"]
+	"_floor_arrays", "_floor_keys", "_room_finish", "_walk_field", "_walk_key", "fell_groves"]
 
 
 ## The side path on a map built here or handed over (side_path.gd). The loader puts it

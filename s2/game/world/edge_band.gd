@@ -965,7 +965,11 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		spots.append(s["at"] as Vector3)
 	counts["sound_spots"] = spots
 	counts["rail_runs"] = rail_runs
-	var groves: Array = data.get("fell_groves", []) as Array
+	# The band's groves are this build's: a band drawn again replaces them.
+	var groves: Array = []
+	for grove: Dictionary in data.get("fell_groves", []) as Array:
+		if not bool(grove.get("edge", false)):
+			groves.append(grove)
 	groves.append_array(fell_groves(g, p, data))
 	data["fell_groves"] = groves
 	return counts

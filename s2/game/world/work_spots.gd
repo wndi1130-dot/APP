@@ -39,10 +39,12 @@ static func dress(data: Dictionary, seg: int, run_seed: int) -> void:
 
 
 ## Pick uniformly from the valid ordered pairs, without retries or shared state.
+## Both stand in a block's stretches 1..7, so the last of one block and the first
+## of the next are three or more apart as well.
 static func depot_segments(run_seed: int, block: int) -> Array[int]:
 	var pairs: Array[Vector2i] = []
-	for first: int in range(BLOCK_SEGMENTS - 3):
-		for second: int in range(first + 3, BLOCK_SEGMENTS):
+	for first: int in range(1, BLOCK_SEGMENTS - 4):
+		for second: int in range(first + 3, BLOCK_SEGMENTS - 1):
 			pairs.append(Vector2i(first, second))
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = hash("%d:food:%d" % [run_seed, block])
