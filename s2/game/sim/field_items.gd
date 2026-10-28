@@ -77,7 +77,7 @@ const ITEMS: Dictionary = {
 	"springs": {"name": "용수철 한 줌", "icon": "it_spring", "weight": 0.3, "stock": "parts", "melt": 0.25, "group": "material"},
 	"wire_coil": {"name": "전선 뭉치", "icon": "it_wire", "weight": 0.5, "stock": "parts", "melt": 0.25, "group": "material"},
 	# A bigger pack, worn at once if it is bigger than the one on the back.
-	"found_big_pack": {"name": "큰 배낭", "icon": "inv", "weight": 1.0, "group": "bag", "bag": "big_pack", "keep": true},
+	"found_big_pack": {"name": "큰 배낭", "icon": "pack", "weight": 1.0, "group": "bag", "bag": "big_pack", "keep": true},
 	# ---- 나단계 (decision 423 cards 10·11, P22)
 	# What is left of an opened tin: thrown, it rattles where it lands (a lure).
 	"can_empty": {"name": "빈 깡통", "icon": "it_can", "weight": 0.2, "group": "tool", "throw": true, "stays": true},
