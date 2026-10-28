@@ -5,6 +5,14 @@ extends RefCounted
 
 const Uses = preload("res://game/world/building_uses.gd")
 
+## 읍내 칠 정본(선형 값, 괄호는 sRGB). building_view.PAINTS와 칠 번호가 같은 표 크기를 따른다.
+const TOWN_PAINTS: Array[Color] = [
+	Color(0.67, 0.57, 0.37), Color(0.71, 0.54, 0.21),   # (0.84, 0.78, 0.64) (0.86, 0.76, 0.50)
+	Color(0.39, 0.48, 0.32), Color(0.34, 0.45, 0.57),   # (0.66, 0.72, 0.60) (0.62, 0.70, 0.78)
+	Color(0.60, 0.60, 0.55), Color(0.67, 0.37, 0.25),   # (0.80, 0.80, 0.77) (0.84, 0.64, 0.54)
+	Color(0.45, 0.20, 0.13), Color(0.27, 0.45, 0.45),   # (0.70, 0.48, 0.40) (0.56, 0.70, 0.70)
+]
+
 ## 벽 재질(building.gdshader wall_kind; PLINTH를 더하면 땅층 아래 0.6 m 돌 기단 띠).
 const RENDER := 0
 const BRICK := 1
@@ -90,7 +98,7 @@ static func pick(row: Dictionary, place_id: String, paint: Color, levels: int = 
 	var out := {"use": use, "region": region, "wall": "render", "wall_kind": float(RENDER), "paint": paint,
 		"roof": "gable", "silhouette": "gable", "candidates": ["gable"], "pitch": 1.0,
 		"chimney": use in CHIMNEY_USES, "dormers": 0, "dormer_roll": 0,
-		"palette": "town", "paint_index": int(((b * 2654435761 + 40503) & 0xffffffff) >> 8) % 8}
+		"palette": "town", "paint_index": int(((b * 2654435761 + 40503) & 0xffffffff) >> 8) % TOWN_PAINTS.size()}
 	if not WALLS.has(region):
 		return out
 	var table: Dictionary = WALLS[region]
@@ -126,7 +134,9 @@ static func pick(row: Dictionary, place_id: String, paint: Color, levels: int = 
 		out["roof"] = "flat"
 	var candidates: Array[String] = silhouettes(use, region, cells, levels, String(out["roof"]) == "flat")
 	out["candidates"] = candidates
-	out["silhouette"] = candidates[(h >> 3) % candidates.size()]
+	# 곱 해시의 윗자리를 후보 수 비율로 나눈다(⌊n·h/2³²⌋). 낮은 비트나 비트 하나는 연속 번호에서
+	# 거의 안 바뀌어 이웃 몇 채가 한 꼴로 뭉친다.
+	out["silhouette"] = candidates[((h >> 16) * candidates.size()) >> 16]
 	var rect: Rect2i = row["rect"] if row.get("rect") is Rect2i else Rect2i()
 	if use in DORMER_USES and maxi(rect.size.x, rect.size.y) >= 8:
 		out["dormer_roll"] = (h >> 21) % 4

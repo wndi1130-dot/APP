@@ -126,6 +126,17 @@ func test_silhouette_candidates_follow_use_region_and_size() -> void:
 	assert_eq(BuildingForms.pick(shed, "houses_01", PAINT)["silhouette"], "shed")
 
 
+func test_two_candidate_regions_mix_every_eight_consecutive_ids() -> void:
+	for place: String in ["factory_01", "lodge_01", "lake_01", "bare_line_01"]:
+		for first: int in range(64):
+			var seen: Dictionary = {}
+			for b: int in range(first, first + 8):
+				var look: Dictionary = BuildingForms.pick(_row("살림집", Vector2i(8, 6), b), place, PAINT)
+				assert_eq((look["candidates"] as Array).size(), 2)
+				seen[look["silhouette"]] = true
+			assert_eq(seen.size(), 2, "%s 번호 %d부터 여덟 채에 두 꼴 모두" % [place, first])
+
+
 func test_home_pitch_is_a_stable_roll_on_the_existing_table() -> void:
 	for sample: Array in [["houses_01", 1.0], ["factory_01", 1.0], ["lodge_01", 1.7], ["bare_line_01", 0.75]]:
 		var seen: Dictionary = {}

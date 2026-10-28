@@ -37,6 +37,10 @@ const LOOK_RADIUS: float = 24.0
 const ROOF_EAVE: float = 0.3       # building_kit.py EAVE, 경간 배율 전
 const MANSARD_LOW: float = 1.7320508  # tan 60°
 const MANSARD_UP: float = 0.3639702   # tan 20°
+const DORMER_PEAK: float = 1.0 + 0.65 * ROOF_TAN + 0.06  # 함석 덮개 포함, building_kit.py와 같음
+const DORMER_BACK: float = DORMER_PEAK / ROOF_TAN + 0.1
+const DORMER_REAR: float = DORMER_BACK + 0.1  # 원점에서 뒤 처마 끝까지, across의 최솟값
+const DORMER_FRONT: float = 0.25
 const FADE_S: float = 0.15         # 들고 날 때 점박이(3.4, 가안)
 const HOLE_R: float = 3.5          # 가림 구멍 반지름(3.3, 가안)
 const NEAR_R: float = 10.0         # 둘레 건물: 지붕·위층을 걷고 플레이어 층을 여는 거리(칸, 결정 476)
@@ -48,7 +52,7 @@ const PIECES: Array[String] = [
 	"int_wall", "int_wall_cut", "int_door", "roof_gable", "roof_gable_end", "roof_flat",
 	"roof_parapet", "chimney", "stair_steep", "stair_well", "window_boards", "ladder",
 	"roof_hip_end", "roof_half_hip_end", "roof_half_hip_wall", "roof_mansard", "roof_mansard_end",
-	"roof_shed", "roof_shed_side", "roof_dormer",
+	"roof_shed", "roof_shed_wall", "roof_shed_side", "roof_dormer",
 ]
 const NORTH := Vector2i(0, -1)
 const SOUTH := Vector2i(0, 1)
@@ -57,14 +61,9 @@ const WEST := Vector2i(-1, 0)
 const DIRS: Array[Vector2i] = [NORTH, EAST, SOUTH, WEST]
 const DIAGS: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, 1), Vector2i(-1, 1), Vector2i(-1, -1)]
 ## 벽면 칠 갈래(rgb, 셰이더가 선형 값으로 그대로 씀). 결정 469 C1: 회색 넷(결정 408)에서
-## 바랜 집 칠 여덟으로 — 크림·버터·세이지·흐린 파랑·회백·살구·벽돌·청회. 괄호는 sRGB. 가장 밝은
+## 바랜 집 칠 여덟으로 — 크림·버터·세이지·흐린 파랑·회백·살구·벽돌·청회. 가장 밝은
 ## 채널을 0.6(sRGB 0.8) 안팎에 두어 그늘진 벽이 V 0.15 밑으로 꺼지지 않게 한다.
-const PAINTS: Array[Color] = [
-	Color(0.67, 0.57, 0.37), Color(0.71, 0.54, 0.21),   # (0.84, 0.78, 0.64) (0.86, 0.76, 0.50)
-	Color(0.39, 0.48, 0.32), Color(0.34, 0.45, 0.57),   # (0.66, 0.72, 0.60) (0.62, 0.70, 0.78)
-	Color(0.60, 0.60, 0.55), Color(0.67, 0.37, 0.25),   # (0.80, 0.80, 0.77) (0.84, 0.64, 0.54)
-	Color(0.45, 0.20, 0.13), Color(0.27, 0.45, 0.45),   # (0.70, 0.48, 0.40) (0.56, 0.70, 0.70)
-]
+const PAINTS: Array[Color] = BuildingForms.TOWN_PAINTS
 ## 지붕 색 갈래 수(셰이더 ROOFS: 슬레이트·기와·짙은 초록·갈색 널).
 const ROOF_KINDS: int = 4
 ## 생활 색(사용자 2026-10-24, 분위기 틀): 바깥 문짝·덧문·창틀에 남은 칠, a는 남은 정도
@@ -348,7 +347,9 @@ static func plan(data: Dictionary) -> Dictionary:
 		var row: Dictionary = _form_row(data, b)
 		out["row_groups"][b] = row.get("row_group")
 		var look: Dictionary = BuildingForms.pick(row, String(data.get("place_id", "")), paint_for(b), storeys)
-		for roof: Dictionary in data.get("rooftops", []):
+		for roof in data.get("rooftops", []):
+			if not roof is Dictionary:
+				continue
 			if int(roof.get("building", -1)) == b:
 				look["roof"] = "flat"
 				look["silhouette"] = "flat"
@@ -372,7 +373,9 @@ static func _form_row(data: Dictionary, b: int) -> Dictionary:
 	var cells: int = 0
 	var best_key: String = ""
 	var found: bool = false
-	for row: Dictionary in data.get("buildings", []):
+	for row in data.get("buildings", []):
+		if not row is Dictionary:
+			continue
 		if int(row.get("id", -1)) != b:
 			continue
 		var r: Rect2i = row["rect"] if row.get("rect") is Rect2i else Rect2i()
@@ -460,12 +463,16 @@ static func _look_conflicts(looks: Dictionary, neighbours: Dictionary, accepted:
 ## 건물마다 살필 범위. 실제 칸은 wall_rects의 선언된 사각형 안에서만 고른다.
 static func _areas(data: Dictionary, levels: Dictionary) -> Dictionary:
 	var areas: Dictionary = {}
-	for row: Dictionary in data.get("buildings", []):
+	for row in data.get("buildings", []):
+		if not row is Dictionary:
+			continue
 		var b := int(row.get("id", -1))
 		var r: Variant = row.get("rect")
 		if b >= 0 and r is Rect2i:
 			areas[b] = (areas[b] as Rect2i).merge(r) if areas.has(b) else r
-	for row: Dictionary in data.get("upper_rects", []):
+	for row in data.get("upper_rects", []):
+		if not row is Dictionary:
+			continue
 		var b := int(row.get("building", -1))
 		if b >= 0 and row.get("rect") is Rect2i:
 			areas[b] = (areas[b] as Rect2i).merge(row["rect"]) if areas.has(b) else row["rect"]
@@ -483,15 +490,21 @@ static func _areas(data: Dictionary, levels: Dictionary) -> Dictionary:
 
 ## 건물 번호만 붙은 산 덩어리는 문·창·방이 있는 건물로 취급하지 않는다.
 static func has_interior(data: Dictionary, grids: Dictionary, b: int) -> bool:
-	for row: Dictionary in data.get("buildings", []):
+	for row in data.get("buildings", []):
+		if not row is Dictionary:
+			continue
 		if int(row.get("id", -1)) == b and not row.get("rooms", []).is_empty():
 			return true
-	for room: Dictionary in data.get("rooms", []):
+	for room in data.get("rooms", []):
+		if not room is Dictionary:
+			continue
 		if int(room.get("building", -1)) == b:
 			return true
 	for lg: FieldGrid in grids.values():
 		for openings: Dictionary in [lg.doors, lg.windows]:
-			for row: Dictionary in openings.values():
+			for row in openings.values():
+				if not row is Dictionary:
+					continue
 				if int(row.get("building", -1)) == b:
 					return true
 	return false
@@ -501,11 +514,15 @@ static func has_interior(data: Dictionary, grids: Dictionary, b: int) -> bool:
 static func wall_rects(data: Dictionary, b: int, lv: int, fallback: Rect2i) -> Array[Rect2i]:
 	var rects: Array[Rect2i] = []
 	if lv > 0:
-		for row: Dictionary in data.get("upper_rects", []):
+		for row in data.get("upper_rects", []):
+			if not row is Dictionary:
+				continue
 			if int(row.get("building", -1)) == b and int(row.get("level", lv)) == lv:
 				rects.append(row["rect"])
 	if rects.is_empty():
-		for row: Dictionary in data.get("buildings", []):
+		for row in data.get("buildings", []):
+			if not row is Dictionary:
+				continue
 			if int(row.get("id", -1)) == b and row.get("rect") is Rect2i:
 				rects.append(row["rect"])
 	# 예전의 작은 시험 지도처럼 건물 표 자체가 없을 때만 격자 범위를 쓴다.
@@ -883,6 +900,9 @@ static func _plan_gable(out: Dictionary, r: Rect2i, top: float, b: int, pitch: f
 	if body > 0.001:
 		out["roofs"].append({"id": body_id, "xf": _xf(Vector3(mid.x, top, mid.y), yaw, Vector3(body, k * pitch, k)),
 			"b": b, "pitch": pitch, "silhouette": silhouette})
+	if silhouette == "shed":
+		out["roofs"].append({"id": "roof_shed_wall", "xf": _xf(Vector3(mid.x, top, mid.y), yaw,
+			Vector3(wall_length, k * pitch, k)), "b": b})
 	var axis: Vector2 = Vector2(cos(yaw), -sin(yaw))
 	if silhouette in ["hip", "half_hip"]:
 		var cap_id: String = "roof_hip_end" if silhouette == "hip" else "roof_half_hip_end"
@@ -951,12 +971,12 @@ static func _plan_dormers(out: Dictionary, g: Dictionary, b: int, wanted: int, c
 	if g["silhouette"] == "mansard":
 		across = minf(across, _mansard_break().x * float(g["k"]) - 0.2)
 		slope = MANSARD_UP
-	# 뒤 볼 1.3 m가 용마루를 넘거나 꺾임에 걸치는 좁은 면에는 놓지 않는다.
-	if across < 1.4 or span * 0.5 - across < 0.25:
+	# 덮개까지 묻힌 뒤 처마가 용마루를 넘지 않아야 한다. 맨사드도 높이와 물매가 함께 줄어든다.
+	if across < DORMER_REAR or span * 0.5 - across < 0.25:
 		return 0
 	var limit: float = (float(g["length"]) - 2.0 * OVERHANG) * 0.5 - 1.0
 	if g["silhouette"] == "hip":
-		limit = minf(limit, float(g["body"]) * 0.5 + float(g["cap_run"]) * (across - 1.3) / \
+		limit = minf(limit, float(g["body"]) * 0.5 + float(g["cap_run"]) * (across - DORMER_REAR) / \
 			(float(g["k"]) * (ROOF_SPAN * 0.5 + ROOF_EAVE)) - 0.8)
 	if limit < 0.0:
 		return 0
@@ -966,8 +986,10 @@ static func _plan_dormers(out: Dictionary, g: Dictionary, b: int, wanted: int, c
 	var placed: int = 0
 	for i: int in range(count):
 		var along: float = 0.0 if count == 1 else lerpf(-limit, limit, float(i) / float(count - 1))
-		# 작은 박공 폭 1.5 m, 굴뚝 덮개 폭 0.72 m와 볼 깊이를 함께 피한다.
-		if chimney.x != INF and absf(chimney.x - along) < 1.2 and absf(chimney.y - side * (across - 0.6)) < 1.25:
+		# 박공 폭 1.5 m와 앞/뒤 처마 전체 깊이, 굴뚝 덮개 반폭 0.36 m + 여유를 피한다.
+		var chimney_across: float = side * chimney.y
+		if chimney.x != INF and absf(chimney.x - along) < 1.2 and \
+				chimney_across > across - DORMER_REAR - 0.4 and chimney_across < across + DORMER_FRONT + 0.4:
 			continue
 		var at: Vector2 = _roof_world(g, Vector2(along, side * across))
 		var yaw: float = float(g["yaw"]) + (PI if side < 0.0 else 0.0)
