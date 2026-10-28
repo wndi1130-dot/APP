@@ -25,6 +25,15 @@ const MAX_CM: float = 80.0
 const COVER_MAX: float = 0.95
 const COVER_SCALE_CM: float = 13.5
 
+## The stretches before the stop (decision 474 N2, the departure's pastWeather):
+## each one's weather lays or eats snow for this many hours at its own
+## temperature, and the snow of an older one counts this much less a stretch
+## back (it settles, blows off, thaws at noon). Winter stops then lie over 7 cm
+## in about 6 of 10 on the route samples (the climate alone: 4 of 10, every run
+## the same).
+const PAST_HOURS: float = 8.0
+const PAST_KEEP: float = 0.7
+
 ## Total depth on undisturbed ground.
 var depth_cm: float = 0.0
 ## New snow on top of the old crust: what a storm laid just before arrival
@@ -42,6 +51,19 @@ func _init(season := DEFAULT_SEASON, open_ground := false, storm_cm := 0.0, star
 	var old := start_cm if start_cm >= 0.0 else float(row[1 if open_ground else 0])
 	fresh_cm = clampf(storm_cm, 0.0, MAX_CM)
 	depth_cm = minf(old + fresh_cm, MAX_CM)
+
+
+## The old snow on arrival after the stretches before it: base_cm is the
+## climate's depth here; past is oldest first, {"weather": S2 weather id,
+## "temp": that stretch's temperature in C}. The newest counts in full.
+static func after_past(base_cm: float, past: Array) -> float:
+	var depth := base_cm
+	var keep := 1.0
+	for i in range(past.size() - 1, -1, -1):
+		var row: Dictionary = past[i]
+		depth += rate_cm_h([String(row["weather"])], float(row["temp"])) * PAST_HOURS * keep
+		keep *= PAST_KEEP
+	return clampf(depth, 0.0, MAX_CM)
 
 
 ## Net change in cm per hour for this weather. Snow kinds only lay snow at or

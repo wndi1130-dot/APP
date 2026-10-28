@@ -44,6 +44,7 @@ const Weather = preload("res://game/sim/weather.gd")
 const SmellRules = preload("res://game/sim/smell_rules.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
 const NightLights = preload("res://game/world/night_lights.gd")
 const NightLightView = preload("res://game/world/night_light_view.gd")
@@ -436,6 +437,12 @@ func _ready() -> void:
 		season_name = Atmosphere.season_at(act, float(opts.get("act_progress", 0.0)), String(opts.get("cold_scheme", "")))
 	var season := season_name if storm.is_empty() else SnowCover.DEFAULT_SEASON
 	var old_cm := Atmosphere.cold_key(cold, "snow_cm", 1 if open_ground else 0, side) if storm.is_empty() else -1.0
+	# The stretches before it laid snow or ate it (decision 474 N2, the departure's pastWeather).
+	if storm.is_empty() and opts.get("departure") is Dictionary and (opts["departure"] as Dictionary).get("pastWeather") is Array:
+		var past: Array = []
+		for row: Dictionary in opts["departure"]["pastWeather"]:
+			past.append({"weather": String(row["weather"]), "temp": float(SeasonTable.row(int(row["seg"])).get("temp", 0.0))})
+		old_cm = SnowCover.after_past(old_cm, past)
 	snow_cover = SnowCover.new(season, open_ground, float(opts.get("storm_cm", storm.get("storm_cm", 0.0))), old_cm)
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
