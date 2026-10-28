@@ -596,6 +596,15 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 ## overcast noon, 0.14 against 0.38 at night). Never flatter than a clear day.
 const TONE_CONTRAST := 1.2
 const TONE_CONTRAST_DIM := 1.38
+## Dusk spreads them further again (decision 471 B1): the low sun lights the
+## pale faces and leaves the rest in shade, and the screen measured a flat middle
+## (p5 0.13, p95 0.44 at an overcast dusk against the reference's 0.03 and 0.52).
+## It turns about the hour's grey, which at dusk sits at the picture's mean.
+const TONE_CONTRAST_DUSK := 0.35
+## Under a grey dusk sky the picture the player sees (the sight mask on) sits
+## under the hour's grey, so the spread would sink it: the grey drops this much
+## there, and the play view keeps its mean (decision 470: not darker).
+const TONE_PIVOT_DUSK_GREY := 0.04
 ## The view fill: in the diagonal view (decision 476) the walls turned from the
 ## sun fill much of the screen, and lit by the fill alone they fell under the
 ## grade to black (V 0.01; the reference reads both wall faces at 0.45~0.6;
@@ -618,19 +627,19 @@ const EXPOSURE := 1.8
 
 
 ## The colour grade (WorldEnvironment adjustments): a tone turned about the
-## hour's grey (contrast 1.2, more under a grey sky and at night); weather and
+## hour's grey (contrast 1.2, more under a grey sky, at dusk and at night); weather and
 ## hour change the saturation; shadows lean to the fill's hue, lights to the sun's.
 static func grade(l: Dictionary) -> Dictionary:
 	var w: Dictionary = l["weights"]
 	var veil := float(l["veil"])
-	var spread := lerpf(TONE_CONTRAST, TONE_CONTRAST_DIM, maxf(veil, float(w["night"])))
+	var spread := lerpf(TONE_CONTRAST, TONE_CONTRAST_DIM, maxf(veil, float(w["night"]))) * (1.0 + TONE_CONTRAST_DUSK * float(w["dusk"]))
 	# A grey sky takes a tenth of the colour, no more: the grey is in the
 	# materials already, and 0.8 left an overcast day near colourless.
 	var sat := lerpf(1.0, 0.9, veil) * lerpf(1.0, 0.72, float(w["night"]))
 	sat *= 1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - veil)
 	# Godot multiplies the brightness, then turns the contrast about 0.5 (sRGB):
 	# 0.5 + k(b·c − 0.5) is the line spread·(c − pivot) + pivot when these hold.
-	var pivot := lerpf(TONE_PIVOT_NIGHT, TONE_PIVOT_DAY, float(l["lum"]))
+	var pivot := lerpf(TONE_PIVOT_NIGHT, TONE_PIVOT_DAY, float(l["lum"])) - TONE_PIVOT_DUSK_GREY * float(w["dusk"]) * veil
 	var k := 1.0 + 2.0 * pivot * (spread - 1.0)
 	return {
 		"saturation": sat,
