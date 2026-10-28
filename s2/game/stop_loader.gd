@@ -16,6 +16,7 @@ const BuildingView = preload("res://game/world/building_view.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const RoomFinish = preload("res://game/world/room_finish.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
+const WorkSpots = preload("res://game/world/work_spots.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
@@ -196,6 +197,9 @@ static func make_ready(script: Script, run_seed: int) -> Dictionary:
 	d["_floor_keys"] = keys
 	d["_room_finish"] = RoomFinish.build(d)
 	d["_edge_plan"] = EdgeBand.plan_ahead(d)
+	# The walk from the train doors and the clumps of trees to fell (work_spots.gd);
+	# the field's dress adds the stretch's food depot from the same walk.
+	WorkSpots.dress(d, -1, run_seed)
 	return d
 
 
