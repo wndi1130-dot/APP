@@ -63,7 +63,9 @@ const OPENS: Array = [
 ]
 ## Every effect of these is on a law (7.3): without the law there is no use for
 ## them. E4 and M5 have effects outside a law and are not here.
-const LAW_ONLY_TECHS: Array[String] = ["e1", "e2", "e3", "e5", "m2", "m3"]
+const LAW_ONLY_TECHS: Array[String] = ["e1", "e2", "e3", "e5", "m2", "m3", "x1"]
+## S1 S2_CRAFT_TECHS: S2 making opens with these; their use line says 법 쓸모.
+const S2_CRAFT_TECHS: Array[String] = ["x1", "x4", "w2", "w4"]
 
 
 static func _active(g: Dictionary, law: String) -> bool:
@@ -267,7 +269,7 @@ static func use_line(g: Dictionary, tech: String, variant: Variant = null) -> St
 			if not parts.has(part): parts.append(part)
 	if parts.is_empty():
 		return ""
-	return "%s: %s%s" % ["쓸모" if LAW_ONLY_TECHS.has(tech) else "법 쓸모", ", ".join(parts), "(지금 서 있다)" if law_standing(g, tech, variant) else "(지금은 없다)"]
+	return "%s: %s%s" % ["쓸모" if LAW_ONLY_TECHS.has(tech) and not S2_CRAFT_TECHS.has(tech) else "법 쓸모", ", ".join(parts), "(지금 서 있다)" if law_standing(g, tech, variant) else "(지금은 없다)"]
 
 
 static func _tech_name(t: Dictionary) -> String:

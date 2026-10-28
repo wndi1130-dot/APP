@@ -289,7 +289,7 @@ export function jobCheck(g: Game, kind: ModKind, car: string, step?: FurnishStep
     if (f.tier < n - 1) return { ok: false, why: `살림 ${n - 1}단부터` };
     if (n === 2 && !d.insulated.includes(car)) return { ok: false, why: '이 칸 단열부터' };
     if (n >= 2 && techMult(g, 'w5') <= 0) return { ok: false, why: '객차 목공을 사용해야 한다' };
-    if (n === 3 && !techUsable(g, 'w1')) return { ok: false, why: '공구 수리부터' };
+    if (n === 3 && techMult(g, 'w1') <= 0) return { ok: false, why: '공구 수리부터' };
     const cost = furnishCost(n);
     if (d.wood < cost.wood) return { ok: false, why: `목재 ${cost.wood}이 든다` };
     if (d.scrap < cost.scrap) return { ok: false, why: `고철 ${cost.scrap}이 든다` };

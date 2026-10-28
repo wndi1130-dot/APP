@@ -33,7 +33,8 @@ func before_all() -> void:
 
 
 func test_x1_has_workshop_use_outside_law() -> void:
-	assert_false(LawTech.LAW_ONLY_TECHS.has("x1"))
+	# S1 keeps x1 law-only for the bot and the chief; its use line still says 법 쓸모 (S2 making).
+	assert_true(LawTech.LAW_ONLY_TECHS.has("x1"))
 	assert_true(LawTech.use_line({"passed": {}}, "x1").begins_with("법 쓸모: "))
 	assert_true(LawTech.use_line({"passed": {}}, "e1").begins_with("쓸모: "))
 

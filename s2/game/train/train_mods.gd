@@ -88,7 +88,7 @@ static func job_check(g: Dictionary, kind: String, car: String, step: Variant = 
 			return {"ok": false, "why": "이 칸 단열부터"}
 		if n >= 2 and TrainResearch.mult(g, {}, "w5") <= 0.0:
 			return {"ok": false, "why": "객차 목공을 사용해야 한다"}
-		if n == 3 and not TrainResearch.usable(g, {}, "w1"):
+		if n == 3 and TrainResearch.mult(g, {}, "w1") <= 0.0:
 			return {"ok": false, "why": "공구 수리부터"}
 		var cost: Dictionary = furnish_cost(n)
 		for key: String in ["wood", "scrap", "parts", "cloth"]:

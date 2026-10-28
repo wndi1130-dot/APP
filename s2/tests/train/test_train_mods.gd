@@ -143,6 +143,8 @@ func test_furnish_three_thresholds_research_gates_and_permanent_tiers() -> void:
 	assert_eq([Mods.furnish_score(g, "tail1"), Mods.furnish_of(g, "tail1")["tier"]], [8, 2])
 	assert_eq(Mods.job_check(g, "furnish", "tail1")["why"], "공구 수리부터")
 	g["dom"]["techs"]["w1"] = {"stage": "done", "defect": false, "need": 3, "progress": 3, "off": true}
+	assert_eq(Mods.job_check(g, "furnish", "tail1")["why"], "공구 수리부터", "the third tier needs 공구 수리 in use, not only restored")
+	g["dom"]["techs"]["w1"]["off"] = false
 	_finish_furnish(g, "tail1", 3)
 	assert_eq([Mods.furnish_score(g, "tail1"), Mods.furnish_of(g, "tail1")["tier"]], [15, 3])
 	assert_almost_eq(g["comms"]["tail"]["rel"], 4.0, 1e-9, "first tiers give (2 + 4 + 6) / 3")

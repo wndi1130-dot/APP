@@ -279,12 +279,18 @@ describe('연구 줄과 채택', () => {
     expect(prereqs('e4')).toEqual(['e2', 'e3']);
   });
 
-  it('x1은 법 기술 목록 밖이고 법 쓸모를 별도로 보여 준다', () => {
+  it('x1은 S1에서 법 기술이라 봇·공방장은 법 없이 안 사고, 쓸모 줄은 법 쓸모로 단다(S2 공방 썰매·들것)', () => {
     const g = fresh();
-    expect(LAW_ONLY_TECHS).not.toContain('x1');
-    expect(usefulVariant(g, 'x1')).toBeUndefined();
+    expect(LAW_ONLY_TECHS).toContain('x1');
+    expect(usefulVariant(g, 'x1')).toBeNull();
     expect(techUseLine(g, 'x1')).toMatch(/^법 쓸모:/);
     expect(techUseLine(g, 'e1')).toMatch(/^쓸모:/);
+  });
+
+  it('w5·x4는 S1 봇·공방장이 고를 쓸모가 없다(살림은 플레이어·재기 도구, 운반 도구는 S2 공방)', () => {
+    const g = fresh();
+    expect(usefulVariant(g, 'w5')).toBeNull();
+    expect(usefulVariant(g, 'x4')).toBeNull();
   });
 
   it('x4는 완성판 사용, w5는 실제 2단 작업 뒤 채택으로 친다', () => {
