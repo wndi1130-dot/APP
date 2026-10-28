@@ -623,12 +623,19 @@ func _plain(b: Node3D) -> void:
 	# away, and the life motion forgotten so the next one turns from the new seat.
 	var drawn: Dictionary = b.get_meta("life_motion", {})
 	if b.gesture != "" or String(drawn.get("gesture", "")) != "":
-		Gesture.show(b, "", 0.0)
+		# A life gesture comes off at the facing it turned from: one who stays put is
+		# not swung round to the screen.
+		var facing: float = 0.0 if b.gesture != "" else float(b.get_meta("life_facing", b.rotation.y))
+		Gesture.show(b, "", 0.0, 0, facing)
 		_show_prop(b, {})
 		b.gesture = ""
 		b.gesture_facing = 0.0
 	b.remove_meta("life_motion")
 	b.remove_meta("life_turned")
+	b.remove_meta("life_rest_pose")
+	var actor: Dictionary = life.actors.get(b.get_instance_id(), {})
+	if not actor.is_empty():
+		actor["motion"] = ""
 
 
 ## Draw the gesture a body is in, at the car's own beat. The gesture turns

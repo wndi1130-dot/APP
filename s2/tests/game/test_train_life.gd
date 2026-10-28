@@ -1359,6 +1359,44 @@ func test_a_return_from_a_scene_or_a_fire_faces_the_way_it_sat() -> void:
 	assert_gt(checked, 0)
 
 
+func test_a_distraction_or_a_borrowed_slump_never_drops_one_on_their_feet() -> void:
+	# catch_breath borrows a slump to the floor. As a distraction on one standing it sat
+	# them down; the next frame, on the floor, the distraction was skipped and the
+	# request stood them up again, and so on every frame; or, under window_watch, they
+	# stayed on the floor for the whole hold.
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = _at_window(s)
+	var a: Dictionary = s.life.actors[b.get_instance_id()]
+	for requested in ["rub_stamp", "window_watch", "catch_breath"]:
+		a["requested"] = requested
+		a["distraction"] = "catch_breath"
+		for i in 5:
+			s.clock += 0.1
+			s.life.show_body(c, b)
+			assert_eq(b.pose, "stand", "%s with catch_breath, frame %d" % [requested, i])
+		a["distraction"] = ""
+		s.clock += 0.1
+		s.life.show_body(c, b)
+		assert_eq(b.pose, "stand", "%s once the distraction is over" % requested)
+
+
+func test_reseating_one_who_stays_put_keeps_the_way_they_faced() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = _at_window(s)
+	var a: Dictionary = s.life.actors[b.get_instance_id()]
+	a["requested"] = "look_around"
+	s.clock = 10.0
+	s.life.show_body(c, b)
+	s.clock = 11.0
+	s.life.show_body(c, b)
+	assert_gt(absf(angle_difference(PI, b.rotation.y)), 1.0, "a second in, it has turned to look")
+	s._plain(b)
+	assert_almost_eq(angle_difference(PI, b.rotation.y), 0.0, 0.001, "back to the pane, not swung round to the screen")
+	assert_eq(String(a["motion"]), "", "the next look starts afresh")
+
+
 func test_reseating_takes_a_life_gestures_arms_off() -> void:
 	var s = _scene()
 	var c: Dictionary = s.car("guard")

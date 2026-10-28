@@ -724,6 +724,28 @@ func test_a_seated_body_keeps_its_pose_under_a_borrowed_or_unknown_name() -> voi
 	assert_eq(b.pose, "stand")
 
 
+func test_the_place_pose_and_which_names_keep_it() -> void:
+	var b = TrainBody.new()
+	add_child_autofree(b)
+	b.setup("c1", 2)
+	b.set_pose("stand", false)
+	assert_eq(MotionContract.rest_pose(b), "stand")
+	b.set_meta("life_rest_pose", "sit")
+	assert_eq(MotionContract.rest_pose(b), "sit", "the place's pose, not the one a gesture left")
+	assert_eq(MotionContract.rest_pose(b, "sit_floor"), "floor", "a name that means a pose wins")
+	assert_true(MotionContract.keeps_pose("", "sit"))
+	assert_true(MotionContract.keeps_pose("unknown_clip", "stand"))
+	assert_true(MotionContract.keeps_pose("look_around", "stand"))
+	assert_false(MotionContract.keeps_pose("look_around", "sit"), "turn_about stands one up")
+	assert_false(MotionContract.keeps_pose("catch_breath", "stand"), "slump drops one to the floor")
+	assert_true(MotionContract.keeps_pose("sit_floor", "floor"))
+	assert_false(MotionContract.keeps_pose("sit_floor", "stand"))
+	# A borrowed slump is not drawn on one whose place is on their feet.
+	b.set_meta("life_rest_pose", "stand")
+	assert_eq(MotionContract.show(b, "catch_breath", 1.0, 0)["gesture"], "")
+	assert_eq(b.pose, "stand")
+
+
 func test_the_bunk_breath_lies_like_the_bunk() -> void:
 	# The breath of lie_bunk's loop matched the sitting breaths first: every loop the
 	# body sat up and turned a quarter round off the bunk and back.

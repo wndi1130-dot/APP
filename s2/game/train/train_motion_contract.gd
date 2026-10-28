@@ -40,9 +40,11 @@ static func resolve(requested: String, script: Script = Backend) -> Dictionary:
 static func show(body: Node3D, requested: String, time: float, role: int = 0, phase: String = "loop") -> Dictionary:
 	var resolved := resolve(requested)
 	var facing: float = _base_facing(body)
-	# A borrowed old gesture brings its own base pose: on a body that sits or is on
-	# the floor in another pose it stood it up or dropped it, so it is not drawn.
-	if bool(resolved["fallback"]) and String(resolved["gesture"]) != "" and _moves_seated(body, String(resolved["gesture"])):
+	var rest: String = rest_pose(body, requested)
+	# A borrowed old gesture brings its own base pose: where that is not the pose the
+	# body's place gives it, it stood the body up, sat it down or dropped it to the
+	# floor, so it is not drawn.
+	if bool(resolved["fallback"]) and String(resolved["gesture"]) != "" and _moves_off(String(resolved["gesture"]), rest):
 		resolved["gesture"] = ""
 	body.set_meta("life_motion", resolved)
 	body.set_meta("life_phase", phase)
@@ -56,12 +58,16 @@ static func show(body: Node3D, requested: String, time: float, role: int = 0, ph
 			Backend.show(body, name, time, role, facing)
 	else:
 		Backend.show(body, "", 0.0, 0, facing)
-		# Only a name that means a pose changes it; "" or any other name takes the
-		# gesture's arms and turn off and keeps the pose the body is in.
+		# Only a name that means a pose changes it, and the place's pose with it; "" or
+		# any other name takes the gesture's arms and turn off and puts the body back in
+		# its place's pose.
 		if SEATED.has(requested) or FLOOR.has(requested):
 			body.set_pose(resolved["pose"], false)
+			body.set_meta("life_rest_pose", String(resolved["pose"]))
 		elif BOWED.has(requested):
-			body.set_pose(String(body.pose), bool(body.huddled), true)
+			body.set_pose(rest, bool(body.huddled), true)
+		elif String(body.pose) != rest:
+			body.set_pose(rest, false)
 	_turned(body)
 	return resolved
 
@@ -88,13 +94,41 @@ static func _turned(body: Node3D) -> void:
 	body.set_meta("life_turned_at", body.position)
 
 
+## The pose a body's place gives it: the one a requested name means, else the one
+## the life side set where the body arrived or came back, else the one it is in.
+## Gestures change body.pose as they draw, so it is not read off that alone.
+static func rest_pose(body: Node3D, requested: String = "") -> String:
+	if FLOOR.has(requested):
+		return "floor"
+	if SEATED.has(requested):
+		return "sit"
+	if body.has_meta("life_rest_pose"):
+		return String(body.get_meta("life_rest_pose"))
+	return String(body.pose)
+
+
+## True when drawing `requested` leaves a body in `pose`: nothing drawn, an upper
+## body clip, or a gesture whose base is that pose.
+static func keeps_pose(requested: String, pose: String) -> bool:
+	if FLOOR.has(requested):
+		return pose == "floor"
+	if SEATED.has(requested):
+		return pose == "sit"
+	var name: String = String(resolve(requested)["gesture"])
+	if name == "":
+		return true
+	var row: Dictionary = Backend.spec(name)
+	if not row.is_empty() and bool(row.get("upper", false)):
+		return true
+	return String(Backend.base_of(name)["base"]) == pose
+
+
 ## True when an old gesture with no keyed clip (Backend.show() sets its base
-## pose) would put a body that sits or is on the floor into another pose.
-static func _moves_seated(body: Node3D, name: String) -> bool:
+## pose) would put a body into another pose than `pose`.
+static func _moves_off(name: String, pose: String) -> bool:
 	if not Backend.spec(name).is_empty():
 		return false
-	var pose: String = String(body.pose)
-	return pose in ["sit", "floor"] and String(Backend.base_of(name)["base"]) != pose
+	return String(Backend.base_of(name)["base"]) != pose
 
 
 ## A caller-owned display run. The game chooses when a motion may start or stop;
