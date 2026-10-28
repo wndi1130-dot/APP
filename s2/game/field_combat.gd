@@ -306,7 +306,8 @@ func _pursue_zombie(p, delta: float) -> void:
 		return
 	var wid: String = p.weapon_id()
 	var reach: float = float(W.get_data(wid).get("reach", 0.9)) if not W.is_ranged(wid) else 0.9
-	var d: float = p.position.distance_to(z["pos"])
+	var seen: Vector3 = game.zombies.seen_pos(z)   # judged where it is seen (decision 474 J2)
+	var d: float = p.position.distance_to(seen)
 	# Shut off by a wall or a whole window: no swing, walk round instead.
 	if d > reach + MELEE_SLACK or melee_blocked(p, z["pos"]):
 		p.brain["repath_t"] = float(p.brain.get("repath_t", 0.0)) - delta
@@ -318,7 +319,7 @@ func _pursue_zombie(p, delta: float) -> void:
 			p.go_to(path, p.running)
 		return
 	p.stop()
-	p.face_point(z["pos"])
+	p.face_point(seen)
 	# A body turns at a pace; swing only once it faces the target.
 	if p != game.player and not p.turned_to(deg_to_rad(ALLY_TURN_DEG)):
 		return
@@ -550,7 +551,7 @@ func _in_arc(p):
 	var rows: Array = []
 	for z in game.zombies.list:
 		if String(z["state"]) != "dead":
-			rows.append([z, z["pos"]])
+			rows.append([z, game.zombies.seen_pos(z)])
 	for r in game.raiders:
 		if hostile(r):
 			rows.append([r, r.position])
@@ -682,7 +683,7 @@ func _strike_reaches(p, at) -> bool:
 	if at is Dictionary:
 		if not game.zombies.list.has(at) or String(at["state"]) == "dead":
 			return false
-		pos = at["pos"]
+		pos = game.zombies.seen_pos(at)
 	else:
 		if at == null or not is_instance_valid(at) or not at.is_alive():
 			return false
