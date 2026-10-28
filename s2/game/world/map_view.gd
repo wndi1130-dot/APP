@@ -447,6 +447,21 @@ func update_tracks(changed: Dictionary) -> void:
 ## reveal: how far a lamp's pool out of doors shows through the sight mask
 ## (0 by day, 1 at night, decision 474 B9). floor_level: the player's floor,
 ## whose floor the lamps light besides the ground.
+## Out of doors by day the sight mask is round and soft about the eye (decision
+## 491): where the eye stands (x z), the sight's reach in metres, how much day there
+## is (0 leaves the cells to rule, as at night and indoors) and the floor out there.
+## The buildings' outside faces and roofs take the same.
+func set_sight_round(eye: Vector2, reach: float, day: float, floor_level: float) -> void:
+	var mats: Array = [material]
+	if buildings != null and buildings.get("material") is ShaderMaterial:
+		mats.append(buildings.material)
+	for m: ShaderMaterial in mats:
+		m.set_shader_parameter("eye_xz", eye)
+		m.set_shader_parameter("eye_r", reach)
+		m.set_shader_parameter("round_day", clampf(day, 0.0, 1.0))
+		m.set_shader_parameter("round_floor", floor_level)
+
+
 func set_lamp_gain(gain: float, reveal: float = 0.0, floor_level: int = 0) -> void:
 	material.set_shader_parameter("lamp_gain", clampf(gain, 0.0, 1.0))
 	material.set_shader_parameter("lamp_reveal", clampf(reveal, 0.0, 1.0))

@@ -959,6 +959,27 @@ func set_screen_lift(lift: float) -> void:
 	environment.adjustment_color_correction = tex
 
 
+## Out of doors by day the sight mask is one soft ring round the eye (decision 491:
+## the sight cone's straight sides drew a bright wedge); the rules' sight is as it
+## was. Its reach is the sight's; at night the cells rule again. Dawn and dusk
+## (daylight about 0.5) are fully round too: only the last of the dusk blends.
+func _set_sight_round() -> void:
+	var day: float
+	if atmo.has("lum"):
+		day = clampf(inverse_lerp(0.09, 1.0, float(atmo["lum"])), 0.0, 1.0)
+	else:
+		day = 1.0 - clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
+	day = smoothstep(0.15, 0.45, day)
+	var eye := Vector2(player.position.x, player.position.z)
+	# The same reach as _refresh_vision's: upstairs sees farther, a cellar nearer.
+	var lv := level_of(player.position)
+	var base := SIGHT_UPSTAIRS if lv > 0 else (SIGHT_CELLAR if lv < 0 else SIGHT_RADIUS)
+	var reach := maxf(float(base) * (eye_mult() if lv >= 0 else 1.0), 1.0)
+	view.set_sight_round(eye, reach, day, FxState.SIGHT_OUT_DAY)
+	if map_edge != null:
+		map_edge.set_sight_round(eye, reach, day, FxState.SIGHT_OUT_DAY)
+
+
 ## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
 func _update_light() -> void:
 	if storm.is_empty():
@@ -2937,6 +2958,7 @@ func _update_camera(delta: float) -> void:
 	if map_edge != null:
 		map_edge.set_eye(player.position)
 		map_edge.set_room(_open_room())
+	_set_sight_round()
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
 	var back := cam_back() * 60.0
 	# A blow's kick moves the eye, not the place it follows (hit_feel.gd).
