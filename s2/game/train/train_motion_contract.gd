@@ -3,9 +3,10 @@ extends RefCounted
 
 const Backend = preload("res://game/train/train_gesture.gd")
 const LEGACY := ["argue", "whisper", "turn_about", "arms_crossed", "back_turned", "hug_knees", "slump", "drag_walk", "bowl_sit", "rub_stamp"]
+## window_watch borrows a gesture that keeps the body facing its pane.
 const FALLBACK := {
 	"chat_talk": "whisper", "chat_listen": "whisper", "look_around": "turn_about",
-	"window_watch": "turn_about", "stand_point": "argue", "fist_raise": "argue",
+	"window_watch": "arms_crossed", "stand_point": "argue", "fist_raise": "argue",
 	"shove_body": "argue", "bang_object": "argue", "stomp": "rub_stamp",
 	"wave_hat": "arms_crossed", "wave_paper": "arms_crossed", "bang_table": "argue",
 	"eat_bowl": "bowl_sit", "drink_cup": "bowl_sit", "catch_breath": "slump",
@@ -14,6 +15,8 @@ const FALLBACK := {
 }
 const SEATED := ["sit_bench", "lie_bunk", "sleep_lean_wall", "read_book", "mend_cloth", "tend_sick"]
 const FLOOR := ["sit_floor", "kneel", "mourn_kneel", "child_draw_floor"]
+## Names that bow the head where the body already is, without naming a pose.
+const BOWED := ["head_down", "mourn_stand", "hat_off"]
 
 
 static func has_method_on(script: Script, method: String) -> bool:
@@ -37,6 +40,10 @@ static func resolve(requested: String, script: Script = Backend) -> Dictionary:
 static func show(body: Node3D, requested: String, time: float, role: int = 0, phase: String = "loop") -> Dictionary:
 	var resolved := resolve(requested)
 	var facing: float = _base_facing(body)
+	# A borrowed old gesture brings its own base pose: on a body that sits or is on
+	# the floor in another pose it stood it up or dropped it, so it is not drawn.
+	if bool(resolved["fallback"]) and String(resolved["gesture"]) != "" and _moves_seated(body, String(resolved["gesture"])):
+		resolved["gesture"] = ""
 	body.set_meta("life_motion", resolved)
 	body.set_meta("life_phase", phase)
 	if String(resolved["gesture"]) != "":
@@ -49,7 +56,12 @@ static func show(body: Node3D, requested: String, time: float, role: int = 0, ph
 			Backend.show(body, name, time, role, facing)
 	else:
 		Backend.show(body, "", 0.0, 0, facing)
-		body.set_pose(resolved["pose"], false, requested in ["head_down", "mourn_stand", "hat_off"])
+		# Only a name that means a pose changes it; "" or any other name takes the
+		# gesture's arms and turn off and keeps the pose the body is in.
+		if SEATED.has(requested) or FLOOR.has(requested):
+			body.set_pose(resolved["pose"], false)
+		elif BOWED.has(requested):
+			body.set_pose(String(body.pose), bool(body.huddled), true)
 	_turned(body)
 	return resolved
 
@@ -74,6 +86,15 @@ static func _base_facing(body: Node3D) -> float:
 static func _turned(body: Node3D) -> void:
 	body.set_meta("life_turned", body.rotation.y)
 	body.set_meta("life_turned_at", body.position)
+
+
+## True when an old gesture with no keyed clip (Backend.show() sets its base
+## pose) would put a body that sits or is on the floor into another pose.
+static func _moves_seated(body: Node3D, name: String) -> bool:
+	if not Backend.spec(name).is_empty():
+		return false
+	var pose: String = String(body.pose)
+	return pose in ["sit", "floor"] and String(Backend.base_of(name)["base"]) != pose
 
 
 ## A caller-owned display run. The game chooses when a motion may start or stop;

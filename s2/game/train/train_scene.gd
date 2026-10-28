@@ -619,11 +619,16 @@ func _plain(b: Node3D) -> void:
 	b.seat = -1
 	b.act = ""
 	b.idle_gesture = ""
-	if b.gesture != "":
+	# A value gesture and a life gesture come off one way: arms hidden, prop put
+	# away, and the life motion forgotten so the next one turns from the new seat.
+	var drawn: Dictionary = b.get_meta("life_motion", {})
+	if b.gesture != "" or String(drawn.get("gesture", "")) != "":
 		Gesture.show(b, "", 0.0)
 		_show_prop(b, {})
 		b.gesture = ""
 		b.gesture_facing = 0.0
+	b.remove_meta("life_motion")
+	b.remove_meta("life_turned")
 
 
 ## Draw the gesture a body is in, at the car's own beat. The gesture turns

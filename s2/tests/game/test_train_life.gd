@@ -1233,3 +1233,116 @@ func test_a_display_only_change_lets_a_cleanup_finish_and_clear_the_props() -> v
 	assert_eq(s.life.interactions.get("tail1"), job, "물품 값만 바뀌면 치우기가 이어진다")
 	_advance(s, 50)
 	assert_false(room.traces["sacks"]["overturned"], "끝까지 치우면 넘어진 짐이 정리된다")
+
+
+## A guard arrived at the window and standing there, facing the pane (PI).
+func _at_window(s) -> Node3D:
+	var b: Node3D = s.car("guard")["bodies"][0]
+	var id: int = b.get_instance_id()
+	s.life.places.release(id)
+	assert_true(s.life.places.reserve(id, "guard/window"))
+	s.life.actors[id]["activity"] = "watch"
+	b.position = s.life.places.target(id)
+	b.set_pose("stand", false)
+	s.life.arrived(b)
+	b.state = "wait"
+	b.gesture = ""
+	s.life.actors[id]["distraction"] = ""
+	return b
+
+
+func test_a_life_gesture_starts_at_its_first_frame_and_comes_off_at_its_base_facing() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = _at_window(s)
+	var a: Dictionary = s.life.actors[b.get_instance_id()]
+	a["turn"] = 1
+	a["requested"] = "look_around"
+	s.clock = 1000.0
+	s.life.show_body(c, b)
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD), "the look round starts facing the pane, whatever the clock")
+	s.clock = 1001.0
+	s.life.show_body(c, b)
+	assert_gt(absf(angle_difference(PI, b.rotation.y)), 1.0, "a second in, it has turned to look")
+	a["requested"] = ""
+	s.life.show_body(c, b)
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD), "an emptied request turns it back once")
+	assert_eq(b.pose, "stand")
+	for arm in b.get_meta("gesture_arms"):
+		assert_false(arm.visible)
+	a["requested"] = "look_around"
+	s.clock = 1002.0
+	s.life.show_body(c, b)
+	s.clock = 1003.0
+	s.life.show_body(c, b)
+	assert_gt(absf(angle_difference(PI, b.rotation.y)), 1.0)
+	s.life._route(b, b.position + Vector3(1.0, 0, 0))
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD), "a route sets off from the base facing")
+
+
+func test_a_value_gesture_keeps_its_body_from_a_shared_scene_gesture() -> void:
+	var s = _scene()
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	var pair = s.life.interactions["medtech"]
+	for m in pair.members:
+		pair.arrive(int(m["actor"]))
+	var id: int = pair.members[0]["actor"]
+	var b: Node3D = s.life.actors[id]["body"]
+	assert_ne(String(pair.gesture(id)), "")
+	b.state = "wait"
+	b.gesture = "arms_crossed"
+	b.rotation.y = 0.42
+	s.life.show_body(s.car("medtech"), b)
+	assert_almost_eq(float(b.rotation.y), 0.42, 0.001, "one body, one owner: the value gesture")
+	assert_eq(b.get_meta("life_motion")["requested"], "")
+	b.gesture = ""
+	s.life.show_body(s.car("medtech"), b)
+	assert_eq(b.get_meta("life_motion")["requested"], pair.gesture(id))
+
+
+func test_a_return_from_a_scene_or_a_fire_faces_the_way_it_sat() -> void:
+	var s = _scene()
+	for car_id in ["medtech", "tail1"]:
+		for body in s.car(car_id)["bodies"]:
+			body.gesture = ""
+			body.rotation.y = 0.7
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	var ids: Array = s.life.interactions["medtech"].members.map(func(m): return m["actor"])
+	var seated: Array = []
+	for id in ids:
+		if s.life.actors[id]["before_interaction"]["state"] == "seat":
+			seated.append(id)
+		s.life.actors[id]["body"].rotation.y = 2.0
+	assert_false(seated.is_empty())
+	s.life._finish("medtech", true)
+	for id in seated:
+		var b: Node3D = s.life.actors[id]["body"]
+		assert_eq(b.state, "seat")
+		assert_almost_eq(float(b.rotation.y), 0.7, 0.001, "back on its seat facing the way it sat")
+	var checked: int = 0
+	for a in _start_fire(s, "tail1"):
+		# One on its feet when the fire starts has no seat facing to keep.
+		if not a["before_evacuation"].has("facing"):
+			continue
+		var b: Node3D = a["body"]
+		assert_almost_eq(float(a["before_evacuation"]["facing"]), 0.7, 0.001)
+		b.rotation.y = 2.0
+		b.visible = false
+		assert_true(s.life._end_evacuation(b.get_instance_id()))
+		assert_almost_eq(float(b.rotation.y), 0.7, 0.001, "back from the fire facing the way it sat")
+		checked += 1
+	assert_gt(checked, 0)
+
+
+func test_reseating_takes_a_life_gestures_arms_off() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = _at_window(s)
+	s.life.actors[b.get_instance_id()]["requested"] = "look_around"
+	s.life.show_body(c, b)
+	var arms: Array = b.get_meta("gesture_arms")
+	assert_true(arms[0].visible, "the life gesture shows its arms")
+	s._sit_down(c, b, float(c["x0"]), b.slot - Vector3(float(c["x0"]), 0, 0), "sit", false, false)
+	for arm in arms:
+		assert_false(arm.visible, "a reseat takes them off as it does a value gesture's")
+	assert_false(b.has_meta("life_motion"))

@@ -695,3 +695,45 @@ func test_a_borrowed_gesture_turns_from_the_seat_every_frame_and_does_not_wind_u
 	b.rotation.y = drawn
 	MotionContract.show(b, "", 0.0)
 	assert_almost_eq(angle_difference(drawn, b.rotation.y), 0.0, 0.001)
+
+
+func test_a_seated_body_keeps_its_pose_under_a_borrowed_or_unknown_name() -> void:
+	# A borrowed old gesture brings its own base pose (look_around borrows turn_about,
+	# catch_breath slump): on a bench or the floor it stood the body up or dropped it.
+	var b = TrainBody.new()
+	add_child_autofree(b)
+	b.setup("c1", 2)
+	for pose in ["sit", "floor"]:
+		for requested in ["look_around", "chat_talk", "window_watch", "catch_breath", "", "unknown_clip", "head_down"]:
+			if pose == "floor" and requested == "catch_breath":
+				continue
+			b.set_pose(pose, false)
+			b.rotation.y = 0.3
+			var height: float = b.body_mesh.position.y
+			MotionContract.show(b, requested, 1.0, 0)
+			var what: String = "%s on %s" % [requested, pose]
+			assert_eq(b.pose, pose, what)
+			assert_almost_eq(float(b.body_mesh.position.y), height, 0.001, what)
+			assert_almost_eq(angle_difference(0.3, b.rotation.y), 0.0, 0.001, what)
+			for arm in b.get_meta(Gesture.ARMS_META):
+				assert_false(arm.visible, what)
+	assert_true(b.bowed, "head_down still bows the head where the body is")
+	# On its feet the borrowed gesture still runs.
+	b.set_pose("stand", false)
+	assert_eq(MotionContract.show(b, "look_around", 1.0, 0)["gesture"], "turn_about")
+	assert_eq(b.pose, "stand")
+
+
+func test_the_bunk_breath_lies_like_the_bunk() -> void:
+	# The breath of lie_bunk's loop matched the sitting breaths first: every loop the
+	# body sat up and turned a quarter round off the bunk and back.
+	var flat: Dictionary = Gesture._visual("lie_bunk", "bunk", 0, false, "stand")
+	var breath: Dictionary = Gesture._visual("lie_bunk", "bunk_breathe", 0, false, "stand")
+	for key in ["turn", "lean"]:
+		assert_almost_eq(float(breath[key]), float(flat[key]), 0.001, key)
+	assert_true((breath["head_pos"] as Vector3).is_equal_approx(flat["head_pos"]))
+	assert_gt(float((breath["head"] as Vector3).y), 0.0, "the breath rides on top")
+	var length: float = float(Gesture.spec("lie_bunk")["length"]["loop"])
+	for i in 11:
+		var d: Dictionary = Gesture.phase_at("lie_bunk", "loop", length * float(i) / 10.0)
+		assert_almost_eq(float(d["turn"]), PI * 0.5, 0.001, "loop at %d/10" % i)

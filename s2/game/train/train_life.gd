@@ -375,7 +375,10 @@ func arrived(body: Node3D) -> void:
 		body.set_pose(previous["pose"], body.huddled, body.bowed)
 		a["waypoints"] = []
 		a.erase("restore")
-		_face_spot(body)
+		if previous.has("facing"):
+			_face_saved(body, previous)
+		else:
+			_face_spot(body)
 		return
 	if places.bookings.has(id):
 		var spot: Dictionary = places.spots.get(places.bookings[id], {})
@@ -493,22 +496,36 @@ func show_body(c: Dictionary, body: Node3D) -> void:
 	var a: Dictionary = actors[id]
 	if contexts[c["id"]]["voting"] or (host._hold_to > host._hold_from and body.position.x >= host._hold_from and body.position.x <= host._hold_to):
 		return
+	# Existing cold/hunger/fear/resentment gestures retain their precedence: a body
+	# the scene draws one on is not drawn here too, not even by a shared scene.
+	if body.gesture != "":
+		return
 	var room: String = a["interaction"]
 	if room != "" and interactions.has(room):
 		var scene = interactions[room]
-		var requested: String = scene.gesture(id)
-		if requested != "" and body.state not in ["pace", "out", "back"]:
-			Motion.show(body, requested, scene.elapsed, scene.role(id), scene.phase)
+		if body.state not in ["pace", "out", "back"]:
+			_show_motion(body, String(scene.gesture(id)), scene.elapsed, scene.role(id), scene.phase)
 		return
-	# Existing cold/hunger/fear/resentment gestures retain their precedence.
 	if body.state not in ["wait", "visit"]:
 		return
-	if body.gesture == "":
-		var requested: String = a["requested"]
-		if a["distraction"] != "" and body.pose not in ["sit", "floor"]:
-			requested = a["distraction"]
-		if requested != "":
-			Motion.show(body, requested, host.clock, int(a["turn"]) % 2)
+	var requested: String = a["requested"]
+	if a["distraction"] != "" and body.pose not in ["sit", "floor"]:
+		requested = a["distraction"]
+	# Each one's motion runs from when that one started it, not from the shared
+	# clock: a look round starts facing ahead and a one-off at its first frame.
+	if requested != String(a.get("motion", "")):
+		a["motion"] = requested
+		a["motion_since"] = host.clock
+	_show_motion(body, requested, host.clock - float(a.get("motion_since", host.clock)), 0)
+
+
+## Draws a life motion. Once the request has gone empty, a motion still shown is
+## taken off once: arms hidden, back to the facing it turned from, the pose kept.
+func _show_motion(body: Node3D, requested: String, time: float, role: int, phase: String = "loop") -> void:
+	if requested != "":
+		Motion.show(body, requested, time, role, phase)
+	elif body.has_meta("life_motion") and String(body.get_meta("life_motion")["requested"]) != "":
+		Motion.show(body, "", 0.0)
 
 
 func start_interaction(kind: String, car_id: String) -> bool:
@@ -592,7 +609,7 @@ func start_interaction(kind: String, car_id: String) -> bool:
 		a["interaction"] = car_id
 		a["state"] = _interaction_state(kind)
 		a["event"] = "invited"
-		a["before_interaction"] = {"state": b.state, "slot": b.slot, "pose": b.pose, "position": b.position}
+		a["before_interaction"] = _snapshot(b)
 		if not fixed:
 			_route(b, places.target(id))
 			b.state = "pace"
@@ -642,7 +659,7 @@ func _finish(car_id: String, instant: bool = false) -> void:
 		a["event"] = "scene_finished"
 		a["requested"] = ""
 		a["waypoints"] = []
-		Motion.Backend.show(b, "", 0.0, 0, b.rotation.y)
+		Motion.show(b, "", 0.0)
 		var previous: Dictionary = a.get("before_interaction", {})
 		a.erase("before_interaction")
 		if previous.get("state", "wait") == "seat":
@@ -651,6 +668,7 @@ func _finish(car_id: String, instant: bool = false) -> void:
 				b.position = previous["position"]
 				b.slot = previous["slot"]
 				b.set_pose(previous["pose"], b.huddled, b.bowed)
+				_face_saved(b, previous)
 			else:
 				a["restore"] = previous
 				_route(b, previous["position"])
@@ -663,6 +681,23 @@ func _finish(car_id: String, instant: bool = false) -> void:
 			rooms[car_id].cleanup()
 		_cleanup.erase(car_id)
 	interactions.erase(car_id)
+
+
+## Where a body is before a scene or a fire moves it, and the way it faces
+## before any gesture turns it, so a return can face it that way again.
+func _snapshot(b: Node3D) -> Dictionary:
+	return {"state": b.state, "slot": b.slot, "pose": b.pose, "position": b.position, "facing": _facing_of(b)}
+
+
+func _facing_of(b: Node3D) -> float:
+	return float(b.gesture_facing) if b.gesture != "" else Motion._base_facing(b)
+
+
+## Faces a body the way its snapshot saw it; its next gesture turns from there.
+func _face_saved(body: Node3D, previous: Dictionary) -> void:
+	if previous.has("facing"):
+		body.rotation.y = float(previous["facing"])
+		body.set_meta("life_facing", body.rotation.y)
 
 
 func _pair_ready(spot_id: String) -> void:
@@ -692,7 +727,7 @@ func _pair_ready(spot_id: String) -> void:
 		a["interaction"] = car_id
 		a["state"] = "call" if b.state == "visit" and b.errand.get("id", "") == "call" else _interaction_state(kind)
 		a["event"] = "partners_arrived"
-		a["before_interaction"] = {"state": b.state, "slot": b.slot, "pose": b.pose, "position": b.position}
+		a["before_interaction"] = _snapshot(b)
 		_serial += 1
 		a["movement"] = _serial
 		scene.invite(id, i)
@@ -707,7 +742,9 @@ func _route(body: Node3D, target: Vector3) -> void:
 	a["movement"] = _serial
 	a["waypoints"] = [Vector3(body.position.x, 0, host.AISLE_Z), Vector3(target.x, 0, host.AISLE_Z), target]
 	body.goal_x = target.x
-	Motion.Backend.show(body, "", 0.0, 0, body.rotation.y)
+	# It sets off from the facing a gesture turned from; the next motion starts afresh.
+	Motion.show(body, "", 0.0)
+	a["motion"] = ""
 
 
 func _interaction_state(kind: String) -> String:
@@ -779,6 +816,7 @@ func _end_evacuation(id: int, restore_home: bool = true) -> bool:
 			b.position = previous["position"]
 			b.state = "seat"
 			b.set_pose(previous["pose"], b.huddled, b.bowed)
+			_face_saved(b, previous)
 		else:
 			a["restore"] = previous
 			_route(b, previous["position"])
@@ -807,6 +845,8 @@ func _evacuate(c: Dictionary) -> void:
 		var id: int = b.get_instance_id()
 		var previous: Dictionary = a.get("restore", a.get("before_interaction", {}))
 		var home: Dictionary = {"state": "seat", "position": b.slot, "slot": b.slot, "pose": b.pose}
+		if b.state == "seat":
+			home["facing"] = _facing_of(b)
 		if previous.get("state", "") == "seat":
 			home = previous.duplicate(true)
 		# 피난처를 먼저 잡는다. 어느 곳도 못 잡으면 하던 일과 예약을 그대로 두고 다음 틱에 다시 본다.
