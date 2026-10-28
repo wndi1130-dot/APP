@@ -239,13 +239,16 @@ const BOTTLE_CHANCE: float = 0.40       # one broken bottle in a washroom, a bed
 ## family after it is seen, as it was or moved in), a stop with a garage
 ## (garage_fuel), a stop with a stopped machine in it (core_scene: a core left in it,
 ## core_scenes.gd P_CORE, decisions 474 S3·442 — of seven, since a run has seven or so),
-## or a stop (pan, bottle). The state
+## a house with a bathroom (house_med: _house_med), or a stop (pan, bottle). The state
 ## handed in and out is {id: {n, k, seen, hit}}; one of another n or k starts a new batch.
 const DECKS: Dictionary = {
 	"food_shop": [10, 0.7], "pharmacy": [10, 0.7],
 	"garage_fuel": [10, FUEL_CHANCE], "pan": [10, PAN_CHANCE], "bottle": [10, BOTTLE_CHANCE],
-	"core_scene": [7, 0.15],
+	"core_scene": [7, 0.15], "house_med": [10, 0.3],
 }
+## Which family gives up a bundle to a house's medicine (_house_med): the most held, and
+## of equals the first here.
+const HOUSE_MED_FROM: Array[String] = ["food", "lux", "wood", "scrap", "cloth", "small"]
 ## Things lying under the snow out of doors, shown only to one close by
 ## (field_game.glint_reach): how many a stop, and what they are.
 const GLINTS: int = 6
@@ -540,6 +543,7 @@ static func dress(data: Dictionary, seed: int, deck: Dictionary = {}) -> Diction
 	report["promised"] = _keep_promises(containers, buildings, by_building, seed, decks, not deck.is_empty())
 	for b: int in by_building:
 		report["moved"] += _deal(containers, by_building[b], _rng(seed, "deal:%d" % b))
+	report["house_med"] = _house_med(containers, buildings, by_building, seed, decks)
 	# 1b. The rare store, if the stop has one, is filled anew (its own dice).
 	_rare_store(containers, buildings, place_kind, seed, report)
 	# 2. Every bundle gets its name; boxes of one room split the themes (THEMES).
@@ -862,6 +866,78 @@ static func _put_fit(containers: Dictionary, ids: Array, item: String, family: S
 			break
 	(containers[to]["items"] as Array).append(item)
 	(report["finds"] as Array).append([item, to])
+
+
+## Now and then the bathroom cabinet of a house holds medicine (decision 442 card): of the
+## houses with a bathroom, exactly k of n by the house_med deck have one of their bundles,
+## of the family they hold most (HOUSE_MED_FROM), become a box of medicine, put in a
+## bathroom box with the medicine cabinet's pull (FURNITURE_PULL) — so the stop holds as
+## many bundles as before. A house already holding medicine counts as one that has it;
+## a house with nothing to give is not looked at. Its own dice. Returns the houses changed.
+static func _house_med(containers: Dictionary, buildings: Array, by_building: Dictionary, seed: int, decks: Dictionary) -> int:
+	var rng := _rng(seed, "house_med")
+	var all: Array = by_building.keys()
+	all.sort()
+	var changed := 0
+	for b: int in all:
+		var ids: Array = by_building[b]
+		if _building_kind_of(buildings, containers[ids[0]]) != "house":
+			continue
+		var bath: Array = ids.filter(func(id: String) -> bool: return room_of(containers[id]) == "bathroom")
+		if bath.is_empty():
+			continue
+		var roll := rng.randf()
+		if _held(containers, ids, "med") > 0:
+			deck_count(decks, "house_med", true)
+			continue
+		var give := _most_held_bundle(containers, ids)
+		if give.is_empty() or not _look(decks, "house_med", roll):
+			continue
+		var left: Array = (containers[give[0]]["items"] as Array).duplicate()
+		left.remove_at(int(give[1]))
+		containers[give[0]]["items"] = left
+		var room: Array = []
+		for id: String in bath:
+			var c: Dictionary = containers[id]
+			if (c["items"] as Array).size() < CAP and _dealt_load(c) + NAMED_MOST <= Carry.box_limit(c):
+				room.append(id)
+		if room.is_empty():
+			room = bath
+		var total := 0.0
+		for id: String in room:
+			total += _pull(containers[id], "med")
+		var at := rng.randf() * total
+		var to: String = room[room.size() - 1]
+		for id: String in room:
+			at -= _pull(containers[id], "med")
+			if at < 0.0:
+				to = id
+				break
+		containers[to]["items"] = (containers[to]["items"] as Array) + ["med_box"]
+		changed += 1
+	return changed
+
+
+## [box, index] of a bundle of the family these boxes hold most (HOUSE_MED_FROM), or [].
+static func _most_held_bundle(containers: Dictionary, ids: Array) -> Array:
+	var best := ""
+	var most := 0
+	for family: String in HOUSE_MED_FROM:
+		var n := 0
+		for id: String in ids:
+			for item in containers[id]["items"]:
+				n += int(String(FAMILY.get(String(item), "")) == family)
+		if n > most:
+			best = family
+			most = n
+	if best == "":
+		return []
+	for id: String in ids:
+		var items: Array = containers[id]["items"]
+		for i in range(items.size()):
+			if String(FAMILY.get(String(items[i]), "")) == best:
+				return [id, i]
+	return []
 
 
 static func _put(containers: Dictionary, ids: Array, item: String, rng: RandomNumberGenerator, report: Dictionary) -> void:
