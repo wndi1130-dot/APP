@@ -59,6 +59,313 @@ func test_a_walker_reserves_a_named_activity_instead_of_only_random_pacing() -> 
 	assert_true(saw_arrival)
 
 
+func test_every_living_layout_defines_in_car_look_targets() -> void:
+	var living: Array[String] = []
+	for layout_id in Catalog.data()["layouts"]:
+		var layout: Dictionary = Catalog.data()["layouts"][layout_id]
+		if layout["spots"].is_empty():
+			continue
+		living.append(String(layout_id))
+		for spot in layout["spots"]:
+			var label: String = "%s/%s" % [layout_id, spot["id"]]
+			assert_true(spot.has("look_at"), label)
+			var focus: Variant = spot.get("look_at", null)
+			if focus is String:
+				assert_eq(focus, "partner", label)
+				assert_eq(spot["anchors"].size(), 2, label)
+			elif focus is Array:
+				var points: Array = focus if not focus.is_empty() and focus[0] is Array else [focus]
+				if points.size() > 1:
+					assert_eq(points.size(), spot["anchors"].size(), label)
+				for point in points:
+					assert_eq(point.size(), 2, label)
+					assert_true(is_finite(float(point[0])) and is_finite(float(point[1])), label)
+					assert_between(float(point[0]), 0.0, Scene.CAR_LENGTH, label)
+					assert_between(float(point[1]), -1.4, 1.4, label)
+			else:
+				assert_true(focus is float or focus is int, label)
+				assert_eq(float(focus), 0.0, label)
+	living.sort()
+	assert_eq(living, ["captain", "coach", "dining", "engine_room", "front", "guard", "medical", "technical"])
+
+
+func test_stove_spots_form_a_staggered_front_semicircle() -> void:
+	var count: int = 0
+	for layout in Catalog.data()["layouts"].values():
+		for spot in layout["spots"]:
+			if spot["id"] != "stove_side":
+				continue
+			count += 1
+			var stove: Dictionary = layout["props"].filter(func(p): return p["id"] == "stove")[0]
+			var center := Vector2(float(stove["at"][0]), float(stove["at"][2]))
+			var focus: Array = spot["look_at"]
+			assert_eq(focus.size(), 2)
+			assert_almost_eq(float(focus[0]), center.x, 0.001)
+			assert_almost_eq(float(focus[1]), center.y, 0.001)
+			var depths: Array[float] = []
+			for anchor in spot["anchors"]:
+				var at := Vector2(float(anchor[0]), float(anchor[2]))
+				assert_between(at.distance_to(center), 0.7, 0.85)
+				assert_gte(at.y, center.y, "leave the bench side clear")
+				for depth in depths:
+					assert_gt(absf(at.y - depth), 0.2, "the pair has visible depth")
+				depths.append(at.y)
+	assert_eq(count, 7)
+
+
+func test_each_window_anchor_looks_straight_back() -> void:
+	var s = _scene()
+	for layout in Catalog.data()["layouts"].values():
+		for source in layout["spots"]:
+			if source["id"] not in ["window", "window_b"]:
+				continue
+			var spot: Dictionary = source.duplicate(true)
+			spot["x0"] = 117.0
+			for index in spot["anchors"].size():
+				var at: Vector3 = Catalog.vector(spot["anchors"][index]) + Vector3(117.0, 0, 0)
+				var yaw: float = s.life._spot_facing(spot, index, at)
+				assert_almost_eq(absf(yaw), PI, 0.001)
+
+
+func test_stove_window_and_partner_arrivals_face_targets_in_car_space() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	var id: int = b.get_instance_id()
+	var a: Dictionary = s.life.actors[id]
+	var targets: Dictionary = {"stove_side": Vector2(7.85, -0.4), "window": Vector2(5.0, -1.4), "door_tail": Vector2(1.7, 0.65)}
+	assert_ne(float(c["x0"]), 0.0, "include the car offset")
+	for spot_name in targets:
+		s.life.places.release(id)
+		var spot_id: String = "guard/" + String(spot_name)
+		s.life.places.spots[spot_id]["open"] = true
+		assert_true(s.life.places.reserve(id, spot_id))
+		a["activity"] = s.life.places.spots[spot_id]["activity"]
+		var target: Vector3 = s.life.places.target(id)
+		var focus: Vector2 = targets[spot_name]
+		var toward := Vector3(float(c["x0"]) + focus.x - target.x, 0, focus.y - target.z).normalized()
+		s.life._route(b, target)
+		for _step in 4:
+			if s.life.walk(b, 100.0):
+				break
+		assert_eq(b.position, target)
+		assert_true(b.basis.z.is_equal_approx(toward), String(spot_name))
+		b.rotation.y = 0.3
+		s.life.arrived(b)
+		assert_true(b.basis.z.is_equal_approx(toward), "arrived: " + String(spot_name))
+		assert_almost_eq(float(b.get_meta("life_facing")), float(b.rotation.y), 0.001)
+		b.goal_x = target.x
+		b.rotation.y = 0.3
+		assert_true(s.life.walk(b, 0.1), "body walk fallback")
+		assert_true(b.basis.z.is_equal_approx(toward))
+		a["waypoints"] = [b.position]
+		b.rotation.y = 0.3
+		assert_true(s.life.walk(b, 0.1), "already reached waypoint")
+		assert_true(b.basis.z.is_equal_approx(toward))
+
+
+func test_partner_facing_uses_both_reserved_anchors_and_missing_target_is_zero() -> void:
+	var s = _scene()
+	for spot_name in ["door_tail", "door_front"]:
+		var spot: Dictionary = s.life.places.spots["guard/" + spot_name]
+		for index in 2:
+			var at: Vector3 = Catalog.vector(spot["anchors"][index])
+			var other: Vector3 = Catalog.vector(spot["anchors"][1 - index])
+			var expected: float = atan2(other.x - at.x, other.z - at.z)
+			at.x += float(spot["x0"])
+			assert_almost_eq(s.life._spot_facing(spot, index, at), expected, 0.001)
+	assert_eq(s.life._spot_facing({}, 0, Vector3(91, 0, -0.85)), 0.0)
+
+
+func test_show_body_does_not_overwrite_an_active_gestures_facing() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	var id: int = b.get_instance_id()
+	s.life.places.release(id)
+	assert_true(s.life.places.reserve(id, "guard/window"))
+	s.life.actors[id]["activity"] = "watch"
+	b.position = s.life.places.target(id)
+	s.life.arrived(b)
+	b.state = "wait"
+	b.gesture = "arms_crossed"
+	b.rotation.y = 0.42
+	for now in [0.0, 1.0, 3.0]:
+		s.clock = now
+		s.life.show_body(c, b)
+		assert_almost_eq(float(b.rotation.y), 0.42, 0.001)
+
+
+func test_standing_spots_and_knots_have_no_camera_facing_line_of_three() -> void:
+	var s = _scene()
+	for layout_id in Catalog.data()["layouts"]:
+		var layout: Dictionary = Catalog.data()["layouts"][layout_id]
+		if layout["spots"].is_empty():
+			continue
+		var front: Array[Vector3] = []
+		for spot in layout["spots"]:
+			if spot["activity"] in ["rest", "sleep", "heal", "mend", "read", "eat"]:
+				continue
+			for index in spot["anchors"].size():
+				var at: Vector3 = Catalog.vector(spot["anchors"][index])
+				var yaw: float = s.life._spot_facing(spot, index, at)
+				if absf(wrapf(yaw, -PI, PI)) < PI / 6.0:
+					front.append(at)
+		# The council count also covers the smaller everyday crowds.
+		for index in int(s.Look.DINING_SESSION):
+			if absf(s._knot_facing(index)) < PI / 6.0:
+				front.append(s._knot_place(index))
+		front.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.x < b.x)
+		for first in front.size():
+			for second in range(first + 1, front.size()):
+				for third in range(second + 1, front.size()):
+					var low: float = minf(front[first].z, minf(front[second].z, front[third].z))
+					var high: float = maxf(front[first].z, maxf(front[second].z, front[third].z))
+					var close: bool = front[second].x - front[first].x <= 1.5 and front[third].x - front[second].x <= 1.5
+					assert_false(close and high - low <= 0.20001, "%s: %s" % [layout_id, [front[first], front[second], front[third]]])
+
+
+func test_guard_watch_faces_the_window_after_arrival() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	var id: int = b.get_instance_id()
+	var a: Dictionary = s.life.actors[id]
+	s.life.places.release(id)
+	assert_true(s.life.places.reserve(id, "guard/window"))
+	a["activity"] = "watch"
+	var target: Vector3 = s.life.places.target(id)
+	s.life._route(b, target)
+	for _step in 4:
+		if s.life.walk(b, 100.0):
+			break
+	assert_eq(b.position, target)
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD))
+	s.life.arrived(b)
+	b.state = "wait"
+	b.gesture = ""
+	a["distraction"] = ""
+	for now in [0.0, 1.0, 3.0, 6.0]:
+		s.clock = now
+		s.life.show_body(c, b)
+		assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD), "window_watch cannot turn the sentry back to the camera")
+	b.rotation.y = 0.0
+	assert_true(s.life.walk(b, 0.1), "the body walk fallback also arrives")
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD))
+	a["waypoints"] = [b.position]
+	b.rotation.y = 0.0
+	assert_true(s.life.walk(b, 0.1), "an already reached waypoint also arrives")
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD))
+	s.life.places.release(id)
+	assert_true(s.life.walk(b, 0.1))
+	assert_almost_eq(float(b.rotation.y), 0.0, 0.001, "ordinary arrivals still face the camera")
+
+
+func test_seated_distractions_do_not_stand_the_body_up() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	var a: Dictionary = s.life.actors[b.get_instance_id()]
+	b.state = "wait"
+	b.gesture = ""
+	for pose in ["sit", "floor"]:
+		var requested: String = "sit_bench" if pose == "sit" else "sit_floor"
+		a["requested"] = requested
+		for distraction in ["cough", "catch_breath", "look_around", "stretch_tired", "rub_stamp"]:
+			b.set_pose(pose, false)
+			a["distraction"] = distraction
+			s.life.show_body(c, b)
+			assert_eq(b.pose, pose, distraction)
+			assert_eq(a["requested"], requested)
+			assert_eq(b.get_meta("life_motion")["requested"], requested)
+
+
+func test_standing_distractions_still_run() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = c["bodies"][0]
+	var a: Dictionary = s.life.actors[b.get_instance_id()]
+	b.state = "wait"
+	b.gesture = ""
+	b.set_pose("stand", false)
+	a["requested"] = "window_watch"
+	a["distraction"] = "cough"
+	s.life.show_body(c, b)
+	assert_eq(b.pose, "stand")
+	assert_eq(b.get_meta("life_motion")["requested"], "cough")
+	assert_eq(a["requested"], "window_watch")
+
+
+func test_only_resting_activities_have_a_thirty_second_hold_floor() -> void:
+	var s = _scene()
+	var b: Node3D = s.car("guard")["bodies"][0]
+	var id: int = b.get_instance_id()
+	var a: Dictionary = s.life.actors[id]
+	s.life.places.release(id)
+	assert_true(s.life.places.reserve(id, "guard/bench"))
+	var spot: Dictionary = s.life.places.spots["guard/bench"]
+	spot["hold"] = [1.0, 2.0]
+	assert_eq(float(Catalog.tuning("min_hold")), 30.0)
+	for activity in ["rest", "watch", "warm", "chat", "read", "mend", "sleep"]:
+		a["activity"] = activity
+		s.life.arrived(b)
+		assert_gte(float(b.timer), 30.0, activity)
+	for activity in ["work", "eat", "gather", "refuge", "heal", "session"]:
+		a["activity"] = activity
+		s.life.arrived(b)
+		assert_between(float(b.timer), 1.0, 2.0, activity)
+	spot["hold"] = [45.0, 45.0]
+	a["activity"] = "rest"
+	s.life.arrived(b)
+	assert_eq(float(b.timer), 45.0, "longer holds are preserved")
+
+
+func test_reselecting_the_same_rest_anchor_keeps_pose_and_motion() -> void:
+	for activity in ["rest", "sleep"]:
+		var s = _scene()
+		if activity == "sleep":
+			s.set_value("view.daytime", "night")
+		var c: Dictionary = s.car("guard")
+		var b: Node3D = c["bodies"][0]
+		var id: int = b.get_instance_id()
+		var a: Dictionary = s.life.actors[id]
+		for other in c["bodies"]:
+			other.visible = other == b
+		var spot_id: String = "guard/bench" if activity == "rest" else "guard/bunk"
+		s.life.places.release(id)
+		assert_true(s.life.places.reserve(id, spot_id))
+		b.position = s.life.places.target(id)
+		b.state = "wait"
+		b.gesture = ""
+		b.set_pose("sit", false)
+		a["activity"] = activity
+		a["state"] = "idle" if activity == "rest" else "sleep"
+		a["preferred"] = [activity]
+		a["requested"] = "sit_bench" if activity == "rest" else "lie_bunk"
+		a["distraction"] = ""
+		assert_true(s.life.places.arrive(id))
+		b.timer = 0.0
+		var at: Vector3 = b.position
+		var requested: String = a["requested"]
+		var movement: int = s.life._serial
+		assert_true(s.life.choose_local(c, b))
+		assert_eq(b.state, "wait")
+		assert_eq(b.pose, "sit")
+		assert_eq(b.position, at)
+		assert_eq(a["requested"], requested)
+		assert_eq(a["waypoints"], [])
+		assert_eq(s.life._serial, movement, "no route was made")
+		assert_eq(s.life.places.present(spot_id), 1)
+		assert_gte(float(b.timer), 30.0)
+		s.life.show_body(c, b)
+		assert_eq(b.pose, "sit")
+		b.position.x += 0.2
+		assert_true(s.life.choose_local(c, b))
+		assert_eq(b.state, "pace", "the same place still needs a route from elsewhere")
+		assert_false(a["waypoints"].is_empty())
+		assert_gt(s.life._serial, movement)
+
+
 func test_coal_food_medicine_and_insulation_change_only_their_display() -> void:
 	var s = _scene()
 	assert_true(s.set_value("train.coal", 0))
@@ -806,7 +1113,7 @@ func test_a_hungry_car_alone_does_not_crouch_the_sentry_or_the_stoker() -> void:
 	var b = s.car("guard")["bodies"][0]
 	b.gesture = "catch_breath"
 	b.pose = "stand"
-	assert_eq(View._forced(b, {"layout": "guard", "job_short": 0.0}, "watch", 0.0), "t_lantern", "hungry, the lantern stays up")
+	assert_eq(View._forced(b, {"layout": "guard", "job_short": 0.0}, "watch", 0.0), "t_fold", "hunger alone leaves the sentry standing with folded arms")
 	assert_eq(View._forced(b, {"layout": "guard", "job_short": 0.6}, "watch", 0.0), "t_crouch", "short of relief, the sentry crouches")
 	assert_eq(View._forced(b, {"layout": "engine_room", "job_short": 0.0}, "work", 0.0), "t_shovel")
 	assert_eq(View._forced(b, {"layout": "engine_room", "job_short": 0.6}, "work", 0.0), "t_crouch")
@@ -947,3 +1254,176 @@ func test_a_display_only_change_lets_a_cleanup_finish_and_clear_the_props() -> v
 	assert_eq(s.life.interactions.get("tail1"), job, "물품 값만 바뀌면 치우기가 이어진다")
 	_advance(s, 50)
 	assert_false(room.traces["sacks"]["overturned"], "끝까지 치우면 넘어진 짐이 정리된다")
+
+
+## A guard arrived at the window and standing there, facing the pane (PI).
+func _at_window(s) -> Node3D:
+	var b: Node3D = s.car("guard")["bodies"][0]
+	var id: int = b.get_instance_id()
+	s.life.places.release(id)
+	assert_true(s.life.places.reserve(id, "guard/window"))
+	s.life.actors[id]["activity"] = "watch"
+	b.position = s.life.places.target(id)
+	b.set_pose("stand", false)
+	s.life.arrived(b)
+	b.state = "wait"
+	b.gesture = ""
+	s.life.actors[id]["distraction"] = ""
+	return b
+
+
+func test_a_life_gesture_starts_at_its_first_frame_and_comes_off_at_its_base_facing() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = _at_window(s)
+	var a: Dictionary = s.life.actors[b.get_instance_id()]
+	a["turn"] = 1
+	a["requested"] = "look_around"
+	s.clock = 1000.0
+	s.life.show_body(c, b)
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD), "the look round starts facing the pane, whatever the clock")
+	s.clock = 1001.0
+	s.life.show_body(c, b)
+	assert_gt(absf(angle_difference(PI, b.rotation.y)), 1.0, "a second in, it has turned to look")
+	a["requested"] = ""
+	s.life.show_body(c, b)
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD), "an emptied request turns it back once")
+	assert_eq(b.pose, "stand")
+	for arm in b.get_meta("gesture_arms"):
+		assert_false(arm.visible)
+	a["requested"] = "look_around"
+	s.clock = 1002.0
+	s.life.show_body(c, b)
+	s.clock = 1003.0
+	s.life.show_body(c, b)
+	assert_gt(absf(angle_difference(PI, b.rotation.y)), 1.0)
+	s.life._route(b, b.position + Vector3(1.0, 0, 0))
+	assert_true(b.basis.z.is_equal_approx(Vector3.FORWARD), "a route sets off from the base facing")
+
+
+func test_a_value_gesture_keeps_its_body_from_a_shared_scene_gesture() -> void:
+	var s = _scene()
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	var pair = s.life.interactions["medtech"]
+	for m in pair.members:
+		pair.arrive(int(m["actor"]))
+	var id: int = pair.members[0]["actor"]
+	var b: Node3D = s.life.actors[id]["body"]
+	assert_ne(String(pair.gesture(id)), "")
+	b.state = "wait"
+	b.gesture = "arms_crossed"
+	b.rotation.y = 0.42
+	s.life.show_body(s.car("medtech"), b)
+	assert_almost_eq(float(b.rotation.y), 0.42, 0.001, "one body, one owner: the value gesture")
+	assert_eq(b.get_meta("life_motion")["requested"], "")
+	b.gesture = ""
+	s.life.show_body(s.car("medtech"), b)
+	assert_eq(b.get_meta("life_motion")["requested"], pair.gesture(id))
+
+
+func test_a_return_from_a_scene_or_a_fire_faces_the_way_it_sat() -> void:
+	var s = _scene()
+	for car_id in ["medtech", "tail1"]:
+		for body in s.car(car_id)["bodies"]:
+			body.gesture = ""
+			body.rotation.y = 0.7
+	# Invitations go down the car's list: a well grown-up on a seat goes first, so one
+	# of the pair comes back to a seat.
+	var med: Array = s.car("medtech")["bodies"]
+	var on_seat: Node3D = null
+	for body in med:
+		var traits: Dictionary = s.life.actors[body.get_instance_id()]["traits"]
+		if body.state == "seat" and not traits.get("child", false) and not traits.get("sick", false) and not traits.get("injured", false):
+			on_seat = body
+			break
+	assert_not_null(on_seat, "a well grown-up of medtech sits")
+	med.erase(on_seat)
+	med.push_front(on_seat)
+	assert_true(s.life.start_interaction("chat", "medtech"), s.life.last_failure)
+	var ids: Array = s.life.interactions["medtech"].members.map(func(m): return m["actor"])
+	var seated: Array = []
+	for id in ids:
+		if s.life.actors[id]["before_interaction"]["state"] == "seat":
+			seated.append(id)
+		s.life.actors[id]["body"].rotation.y = 2.0
+	assert_false(seated.is_empty())
+	s.life._finish("medtech", true)
+	for id in seated:
+		var b: Node3D = s.life.actors[id]["body"]
+		assert_eq(b.state, "seat")
+		assert_almost_eq(float(b.rotation.y), 0.7, 0.001, "back on its seat facing the way it sat")
+	# The fire moves a few at a time from the front of the car's list: one on a seat goes first.
+	var tail: Array = s.car("tail1")["bodies"]
+	var sitter: Node3D = null
+	for body in tail:
+		if body.state == "seat":
+			sitter = body
+			break
+	assert_not_null(sitter, "someone of tail1 sits")
+	tail.erase(sitter)
+	tail.push_front(sitter)
+	var checked: int = 0
+	for a in _start_fire(s, "tail1"):
+		# One on its feet when the fire starts has no seat facing to keep.
+		if not a["before_evacuation"].has("facing"):
+			continue
+		var b: Node3D = a["body"]
+		assert_almost_eq(float(a["before_evacuation"]["facing"]), 0.7, 0.001)
+		b.rotation.y = 2.0
+		b.visible = false
+		assert_true(s.life._end_evacuation(b.get_instance_id()))
+		assert_almost_eq(float(b.rotation.y), 0.7, 0.001, "back from the fire facing the way it sat")
+		checked += 1
+	assert_gt(checked, 0)
+
+
+func test_a_distraction_never_drops_one_on_their_feet() -> void:
+	# catch_breath borrows a slump to the floor. As a distraction on one standing it sat
+	# them down; the next frame, on the floor, the distraction was skipped and the
+	# request stood them up again, and so on every frame (rub_stamp); or, under
+	# window_watch, they stayed on the floor for the whole hold.
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = _at_window(s)
+	var a: Dictionary = s.life.actors[b.get_instance_id()]
+	for requested in ["rub_stamp", "window_watch"]:
+		a["requested"] = requested
+		a["distraction"] = "catch_breath"
+		for i in 5:
+			s.clock += 0.1
+			s.life.show_body(c, b)
+			assert_eq(b.pose, "stand", "%s with catch_breath, frame %d" % [requested, i])
+		a["distraction"] = ""
+		s.clock += 0.1
+		s.life.show_body(c, b)
+		assert_eq(b.pose, "stand", "%s once the distraction is over" % requested)
+
+
+func test_reseating_one_who_stays_put_keeps_the_way_they_faced() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = _at_window(s)
+	var a: Dictionary = s.life.actors[b.get_instance_id()]
+	a["requested"] = "look_around"
+	s.clock = 10.0
+	s.life.show_body(c, b)
+	s.clock = 11.0
+	s.life.show_body(c, b)
+	assert_gt(absf(angle_difference(PI, b.rotation.y)), 1.0, "a second in, it has turned to look")
+	s._plain(b)
+	assert_almost_eq(angle_difference(PI, b.rotation.y), 0.0, 0.001, "back to the pane, not swung round to the screen")
+	assert_eq(String(a["motion"]), "", "the next look starts afresh")
+
+
+func test_reseating_takes_a_life_gestures_arms_off() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("guard")
+	var b: Node3D = _at_window(s)
+	s.life.actors[b.get_instance_id()]["requested"] = "look_around"
+	s.life.show_body(c, b)
+	var arms: Array = b.get_meta("gesture_arms")
+	assert_true(arms[0].visible, "the life gesture shows its arms")
+	s._sit_down(c, b, float(c["x0"]), b.slot - Vector3(float(c["x0"]), 0, 0), "sit", false, false)
+	for arm in arms:
+		assert_false(arm.visible, "a reseat takes them off as it does a value gesture's")
+	assert_false(b.has_meta("life_motion"))

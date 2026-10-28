@@ -1,0 +1,984 @@
+{
+  "assets": {
+    "wardrobe": {
+      "path": "res://models/props_stop01/wardrobe.glb",
+      "source": "poly_haven",
+      "source_ids": [
+        "painted_wooden_cabinet_02"
+      ],
+      "source_objects": {
+        "painted_wooden_cabinet_02": [
+          "painted_wooden_cabinet_02",
+          "painted_wooden_cabinet_02_door"
+        ]
+      },
+      "primitive_parts": [],
+      "size_m": [
+        1.22,
+        1.9,
+        0.6
+      ],
+      "chosen_size_m": [
+        1.22,
+        1.9,
+        0.6
+      ],
+      "body_press": {
+        "saturation": 0.6,
+        "value": 0.85
+      },
+      "triangle_limit": 700,
+      "triangle_estimate_max": 440,
+      "note": "몸체 앞에 원본 문짝을 길게 맞춘 두 벌(한 벌 좌우 반전). 원본 서랍은 생략. 깊이 .60 m의 두 문 옷장",
+      "before": {
+        "lod0_tris": 1454,
+        "bytes": 333820,
+        "sha256": "387660a603e1177988772c0352c94cb4e06908a79f5039a869f6494c656b01eb",
+        "materials": 1,
+        "textures": 1
+      },
+      "bake_status": "baked",
+      "recipe_revision": 2,
+      "source_script": "tools/blender/props_stop01_cc0.py",
+      "rect_modal": [
+        2,
+        1
+      ],
+      "rect_fit_m": [
+        2,
+        1
+      ],
+      "rect_modal_count": 396,
+      "rect_samples": 396,
+      "rect_histogram": {
+        "2x1": 396
+      },
+      "kind_counts": {
+        "wardrobe": 396
+      },
+      "map_count": 6,
+      "rect_basis": "observed_static_literals",
+      "lod0_tris": 422,
+      "bytes": 37920,
+      "sha256": "b7447ecefce937d1e1f2f69b7fda501f4a1f789aed3709225cfd5448ea86089c",
+      "bounds_m": [
+        [
+          -0.6100000143051147,
+          0.0,
+          -0.29999998211860657
+        ],
+        [
+          0.6100000143051147,
+          1.9000000953674316,
+          0.29999998211860657
+        ]
+      ],
+      "height_m": 1.9000000953674316,
+      "mask_counts": {
+        "body": 588,
+        "trim": 678,
+        "keep": 0
+      },
+      "mask_ratio": {
+        "body": 0.46445497630331756,
+        "trim": 0.5355450236966824,
+        "keep": 0.0
+      },
+      "mask_basis": "indexed_triangle_corners",
+      "mask_alpha_verified": true
+    },
+    "shop_shelf": {
+      "path": "res://models/props_stop01/shop_shelf.glb",
+      "source": "blender_primitives",
+      "source_ids": [],
+      "source_objects": {},
+      "primitive_parts": [
+        "straight_sides",
+        "four_shelves",
+        "back",
+        "price_strips",
+        "empty_cans",
+        "boxes"
+      ],
+      "size_m": [
+        2.08,
+        1.6,
+        0.5
+      ],
+      "chosen_size_m": [
+        2.08,
+        1.6,
+        0.5
+      ],
+      "body_press": null,
+      "triangle_limit": 500,
+      "triangle_estimate_max": 300,
+      "note": "기본 도형: 곧은 옆판·네 판·뒤판·가격표 띠. 빈 깡통 둘과 상자 넷은 keep 마스크",
+      "before": {
+        "lod0_tris": 1454,
+        "bytes": 389168,
+        "sha256": "87fce29de09948ec101f88a44dfcb2ff356d189abcfddc2e4705acec3384b5ad",
+        "materials": 1,
+        "textures": 1
+      },
+      "bake_status": "baked",
+      "recipe_revision": 2,
+      "source_script": "tools/blender/props_stop01_cc0.py",
+      "rect_modal": [
+        3,
+        1
+      ],
+      "rect_fit_m": [
+        3,
+        1
+      ],
+      "rect_modal_count": 1214,
+      "rect_samples": 1396,
+      "rect_histogram": {
+        "1x2": 7,
+        "1x3": 2,
+        "1x4": 10,
+        "3x1": 1214,
+        "4x1": 163
+      },
+      "kind_counts": {
+        "display_shelf": 173,
+        "jar_shelf": 142,
+        "shelf": 1081
+      },
+      "map_count": 32,
+      "rect_basis": "observed_static_literals",
+      "lod0_tris": 300,
+      "bytes": 21540,
+      "sha256": "506642fd8969b623242444d4dd86d0064018c8fc76dbb8477238fba38b7a9ba6",
+      "bounds_m": [
+        [
+          -1.0399999618530273,
+          0.0,
+          -0.25
+        ],
+        [
+          1.0399999618530273,
+          1.600000023841858,
+          0.25
+        ]
+      ],
+      "height_m": 1.600000023841858,
+      "mask_counts": {
+        "body": 252,
+        "trim": 144,
+        "keep": 504
+      },
+      "mask_ratio": {
+        "body": 0.28,
+        "trim": 0.16,
+        "keep": 0.56
+      },
+      "mask_basis": "indexed_triangle_corners",
+      "mask_alpha_verified": true
+    },
+    "bookcase": {
+      "path": "res://models/props_stop01/bookcase.glb",
+      "source": [
+        "poly_haven",
+        "blender_primitives"
+      ],
+      "source_ids": [
+        "wooden_bookshelf_worn"
+      ],
+      "source_objects": {
+        "wooden_bookshelf_worn": [
+          "wooden_bookshelf_worn"
+        ]
+      },
+      "primitive_parts": [
+        "seeded_books"
+      ],
+      "size_m": [
+        1.4,
+        1.9,
+        0.56
+      ],
+      "chosen_size_m": [
+        1.4,
+        1.9,
+        0.56
+      ],
+      "body_press": {
+        "saturation": 0.6,
+        "value": 0.85
+      },
+      "triangle_limit": 700,
+      "triangle_estimate_max": 696,
+      "note": "원본 선반을 보존하고 지지면마다 서 있는 책 무리·누운 책·빈 틈. 책 18권, 씨앗 1017, 탁한 다섯 색, keep 마스크",
+      "before": {
+        "lod0_tris": 1455,
+        "bytes": 438228,
+        "sha256": "3bee35fd55fda73c1fd87d3df0362ffa70a5ce27d72f24c11bc918ce2c128bf7",
+        "materials": 1,
+        "textures": 1
+      },
+      "bake_status": "baked",
+      "recipe_revision": 2,
+      "source_script": "tools/blender/props_stop01_cc0.py",
+      "rect_modal": [
+        2,
+        1
+      ],
+      "rect_fit_m": [
+        2,
+        1
+      ],
+      "rect_modal_count": 529,
+      "rect_samples": 529,
+      "rect_histogram": {
+        "2x1": 529
+      },
+      "kind_counts": {
+        "bookcase": 2,
+        "file_cabinet": 527
+      },
+      "map_count": 13,
+      "rect_basis": "observed_static_literals",
+      "lod0_tris": 680,
+      "bytes": 62632,
+      "sha256": "4ede24308f7df72322a63e6869b5a79d24bde68e492c8c93aa11e02d2e5d64aa",
+      "bounds_m": [
+        [
+          -0.699999988079071,
+          0.0,
+          -0.2800000011920929
+        ],
+        [
+          0.699999988079071,
+          1.899999976158142,
+          0.2800000011920929
+        ]
+      ],
+      "height_m": 1.899999976158142,
+      "mask_counts": {
+        "body": 630,
+        "trim": 762,
+        "keep": 648
+      },
+      "mask_ratio": {
+        "body": 0.3088235294117647,
+        "trim": 0.3735294117647059,
+        "keep": 0.3176470588235294
+      },
+      "mask_basis": "indexed_triangle_corners",
+      "mask_alpha_verified": true
+    },
+    "dining_set": {
+      "path": "res://models/props_stop01/dining_set.glb",
+      "source": "poly_haven",
+      "source_ids": [
+        "painted_wooden_chair_01",
+        "painted_wooden_table"
+      ],
+      "source_objects": {
+        "painted_wooden_table": [
+          "painted_wooden_table"
+        ],
+        "painted_wooden_chair_01": [
+          "painted_wooden_chair_01"
+        ]
+      },
+      "primitive_parts": [],
+      "size_m": [
+        1.6,
+        0.88,
+        1.8
+      ],
+      "chosen_size_m": [
+        1.6,
+        0.88,
+        1.8
+      ],
+      "body_press": {
+        "saturation": 0.6,
+        "value": 0.85
+      },
+      "triangle_limit": 700,
+      "triangle_estimate_max": 480,
+      "note": "식탁 하나·서로 마주 보는 의자 둘. 상판 .76 m, 등받이 .88 m",
+      "before": {
+        "lod0_tris": 1455,
+        "bytes": 369640,
+        "sha256": "07f8e7bbfaa33a2520035009bf7576298cb55cf9594260f4b136fa08ba2259ab",
+        "materials": 1,
+        "textures": 1
+      },
+      "bake_status": "baked",
+      "recipe_revision": 2,
+      "source_script": "tools/blender/props_stop01_cc0.py",
+      "rect_modal": [
+        2,
+        2
+      ],
+      "rect_fit_m": [
+        2,
+        2
+      ],
+      "rect_modal_count": 226,
+      "rect_samples": 226,
+      "rect_histogram": {
+        "2x2": 226
+      },
+      "kind_counts": {
+        "dining_set": 226
+      },
+      "map_count": 6,
+      "rect_basis": "observed_static_literals",
+      "lod0_tris": 450,
+      "bytes": 40968,
+      "sha256": "907abcefbd0023dfd0ced10f86662f417116a59451359ccb800a336c4b1dac7e",
+      "bounds_m": [
+        [
+          -0.800000011920929,
+          0.0,
+          -0.8999999761581421
+        ],
+        [
+          0.800000011920929,
+          0.8799999952316284,
+          0.8999999761581421
+        ]
+      ],
+      "height_m": 0.8799999952316284,
+      "mask_counts": {
+        "body": 597,
+        "trim": 753,
+        "keep": 0
+      },
+      "mask_ratio": {
+        "body": 0.44222222222222224,
+        "trim": 0.5577777777777778,
+        "keep": 0.0
+      },
+      "mask_basis": "indexed_triangle_corners",
+      "mask_alpha_verified": true
+    },
+    "table_overturned": {
+      "path": "res://models/props_stop01/table_overturned.glb",
+      "source": "poly_haven",
+      "source_ids": [
+        "painted_wooden_table"
+      ],
+      "source_objects": {
+        "painted_wooden_table": [
+          "painted_wooden_table"
+        ]
+      },
+      "primitive_parts": [],
+      "size_m": [
+        0.76,
+        0.82,
+        1.6
+      ],
+      "chosen_size_m": [
+        0.76,
+        0.82,
+        1.6
+      ],
+      "body_press": {
+        "saturation": 0.6,
+        "value": 0.85
+      },
+      "triangle_limit": 700,
+      "triangle_estimate_max": 240,
+      "note": "식탁과 같은 원본·색·치수의 상을 90도 옆으로 눕힘",
+      "before": {
+        "lod0_tris": 1454,
+        "bytes": 311100,
+        "sha256": "2f433a638f5999fb0a447d875668398a7e83ac6c5fd87530547fe014f5fd3475",
+        "materials": 1,
+        "textures": 1
+      },
+      "bake_status": "baked",
+      "recipe_revision": 2,
+      "source_script": "tools/blender/props_stop01_cc0.py",
+      "rect_modal": null,
+      "rect_fit_m": [
+        1,
+        2
+      ],
+      "rect_modal_count": 0,
+      "rect_samples": 0,
+      "rect_histogram": {},
+      "kind_counts": {},
+      "map_count": 0,
+      "rect_basis": "assumed_no_rect_samples",
+      "lod0_tris": 232,
+      "bytes": 18740,
+      "sha256": "5ffe5531f9aed4afe47568581c6943d251554ea1eadff0fbfa3e40d8e2af374b",
+      "bounds_m": [
+        [
+          -0.3799999952316284,
+          0.0,
+          -0.800000011920929
+        ],
+        [
+          0.3799999952316284,
+          0.8199999928474426,
+          0.800000011920929
+        ]
+      ],
+      "height_m": 0.8199999928474426,
+      "mask_counts": {
+        "body": 141,
+        "trim": 555,
+        "keep": 0
+      },
+      "mask_ratio": {
+        "body": 0.2025862068965517,
+        "trim": 0.7974137931034483,
+        "keep": 0.0
+      },
+      "mask_basis": "indexed_triangle_corners",
+      "mask_alpha_verified": true
+    },
+    "workbench": {
+      "path": "res://models/props_stop01/workbench.glb",
+      "source": "blender_primitives",
+      "source_ids": [],
+      "source_objects": {},
+      "primitive_parts": [
+        "four_plank_top",
+        "four_legs",
+        "lower_shelf",
+        "vise",
+        "hammer",
+        "hand_plane"
+      ],
+      "size_m": [
+        1.75,
+        0.9,
+        0.86
+      ],
+      "chosen_size_m": [
+        1.75,
+        0.9,
+        0.86
+      ],
+      "body_press": null,
+      "triangle_limit": 500,
+      "triangle_estimate_max": 288,
+      "note": "기본 도형: 틈 있는 두꺼운 상판 네 장·네 다리·아래 선반·끝 바이스·망치·대패. 어두운 나무 두 톤과 회색 쇠",
+      "before": {
+        "lod0_tris": 1454,
+        "bytes": 339316,
+        "sha256": "9600d8e3fc9b2437db16f60590a1ce3e4cc10108a4ee0bae776cbab592c330fc",
+        "materials": 1,
+        "textures": 1
+      },
+      "bake_status": "baked",
+      "recipe_revision": 2,
+      "source_script": "tools/blender/props_stop01_cc0.py",
+      "rect_modal": [
+        3,
+        1
+      ],
+      "rect_fit_m": [
+        3,
+        1
+      ],
+      "rect_modal_count": 207,
+      "rect_samples": 226,
+      "rect_histogram": {
+        "2x1": 19,
+        "3x1": 207
+      },
+      "kind_counts": {
+        "tool_bench": 226
+      },
+      "map_count": 32,
+      "rect_basis": "observed_static_literals",
+      "lod0_tris": 288,
+      "bytes": 21148,
+      "sha256": "3a5b3daef8536c488be1cf60054ca5d8a956bd11de5033df9a91f0bbfc4f4ca5",
+      "bounds_m": [
+        [
+          -0.875,
+          0.0,
+          -0.4300000071525574
+        ],
+        [
+          0.875,
+          0.8999999761581421,
+          0.4300000071525574
+        ]
+      ],
+      "height_m": 0.8999999761581421,
+      "mask_counts": {
+        "body": 504,
+        "trim": 180,
+        "keep": 180
+      },
+      "mask_ratio": {
+        "body": 0.5833333333333334,
+        "trim": 0.20833333333333334,
+        "keep": 0.20833333333333334
+      },
+      "mask_basis": "indexed_triangle_corners",
+      "mask_alpha_verified": true
+    },
+    "office_desk": {
+      "path": "res://models/props_stop01/office_desk.glb",
+      "source": [
+        "poly_haven",
+        "blender_primitives"
+      ],
+      "source_ids": [
+        "WoodenTable_01"
+      ],
+      "source_objects": {
+        "WoodenTable_01": [
+          "WoodenTable_01"
+        ]
+      },
+      "primitive_parts": [
+        "three_drawer_pedestal",
+        "handles"
+      ],
+      "size_m": [
+        1.4,
+        0.77,
+        0.75
+      ],
+      "chosen_size_m": [
+        1.4,
+        0.77,
+        0.75
+      ],
+      "body_press": {
+        "saturation": 0.6,
+        "value": 0.85
+      },
+      "triangle_limit": 600,
+      "triangle_estimate_max": 504,
+      "note": "원본 상판·다리 보존. 한쪽 아래 기본 도형 서랍 받침(서랍 셋·손잡이) 추가",
+      "before": {
+        "lod0_tris": 1454,
+        "bytes": 320244,
+        "sha256": "f32c516bc27036aeb94aa85d7897c64ad0f99c88f7418f370fe99a13c054facf",
+        "materials": 1,
+        "textures": 1
+      },
+      "bake_status": "baked",
+      "recipe_revision": 2,
+      "source_script": "tools/blender/props_stop01_cc0.py",
+      "rect_modal": [
+        2,
+        1
+      ],
+      "rect_fit_m": [
+        2,
+        1
+      ],
+      "rect_modal_count": 985,
+      "rect_samples": 985,
+      "rect_histogram": {
+        "2x1": 985
+      },
+      "kind_counts": {
+        "desk": 855,
+        "typewriter_desk": 130
+      },
+      "map_count": 29,
+      "rect_basis": "observed_static_literals",
+      "lod0_tris": 490,
+      "bytes": 43840,
+      "sha256": "68b2de50f6458ab59f377e92f5df9bf97fc6f4c04cfa7a608b45ee96984fa94d",
+      "bounds_m": [
+        [
+          -0.699999988079071,
+          0.0,
+          -0.375
+        ],
+        [
+          0.699999988079071,
+          0.7699999809265137,
+          0.375
+        ]
+      ],
+      "height_m": 0.7699999809265137,
+      "mask_counts": {
+        "body": 1362,
+        "trim": 108,
+        "keep": 0
+      },
+      "mask_ratio": {
+        "body": 0.926530612244898,
+        "trim": 0.07346938775510205,
+        "keep": 0.0
+      },
+      "mask_basis": "indexed_triangle_corners",
+      "mask_alpha_verified": true
+    },
+    "iron_bed": {
+      "path": "res://models/props_stop01/iron_bed.glb",
+      "source": "blender_primitives",
+      "source_ids": [],
+      "source_objects": {},
+      "primitive_parts": [
+        "frame",
+        "mattress",
+        "blanket"
+      ],
+      "size_m": [
+        1.92,
+        1.04,
+        0.94
+      ],
+      "chosen_size_m": [
+        1.92,
+        1.04,
+        0.94
+      ],
+      "body_press": null,
+      "triangle_limit": 700,
+      "triangle_estimate_max": 264,
+      "note": "Blender 기본 도형 철 침대: 머리·발 판(기둥·가로대·살), 옆 가로대, 매트리스와 덮은 담요. 긴 축 X, 긴 옆면 앞 +Z",
+      "before": {
+        "lod0_tris": 1455,
+        "bytes": 395728,
+        "sha256": "019bfb0229e0c922063a3a939d77680f434ab8787858c5f7cdd035511a0f1bc7",
+        "materials": 1,
+        "textures": 1
+      },
+      "bake_status": "baked",
+      "recipe_revision": 2,
+      "source_script": "tools/blender/props_stop01_cc0.py",
+      "rect_modal": [
+        2,
+        1
+      ],
+      "rect_fit_m": [
+        2,
+        1
+      ],
+      "rect_modal_count": 744,
+      "rect_samples": 744,
+      "rect_histogram": {
+        "2x1": 744
+      },
+      "kind_counts": {
+        "bed": 744
+      },
+      "map_count": 28,
+      "rect_basis": "observed_static_literals",
+      "lod0_tris": 264,
+      "bytes": 19492,
+      "sha256": "82dbae59b95ce7e82b5001d4f172b45862ab6c375ba3ba7f0d9b99a755b7f46b",
+      "bounds_m": [
+        [
+          -0.9599999785423279,
+          0.0,
+          -0.4699999988079071
+        ],
+        [
+          0.9599999785423279,
+          1.0399999618530273,
+          0.4699999988079071
+        ]
+      ],
+      "height_m": 1.0399999618530273,
+      "mask_counts": {
+        "body": 360,
+        "trim": 360,
+        "keep": 72
+      },
+      "mask_ratio": {
+        "body": 0.45454545454545453,
+        "trim": 0.45454545454545453,
+        "keep": 0.09090909090909091
+      },
+      "mask_basis": "indexed_triangle_corners",
+      "mask_alpha_verified": true
+    },
+    "drawer_chest_spilled": {
+      "path": "res://models/props_stop01/drawer_chest_spilled.glb",
+      "source": [
+        "poly_haven",
+        "blender_primitives"
+      ],
+      "source_ids": [
+        "vintage_wooden_drawer_01"
+      ],
+      "source_objects": {
+        "vintage_wooden_drawer_01": [
+          "vintage_wooden_drawer_01_body",
+          "vintage_wooden_drawer_01_drawer01",
+          "vintage_wooden_drawer_01_drawer02",
+          "vintage_wooden_drawer_01_drawer03",
+          "vintage_wooden_drawer_01_drawer04",
+          "vintage_wooden_drawer_01_drawer05",
+          "vintage_wooden_drawer_01_drawer06"
+        ]
+      },
+      "primitive_parts": [
+        "scattered_paper"
+      ],
+      "size_m": [
+        0.9,
+        1.0,
+        0.86
+      ],
+      "chosen_size_m": [
+        0.9,
+        1.0,
+        0.86
+      ],
+      "body_press": {
+        "saturation": 0.6,
+        "value": 0.85
+      },
+      "triangle_limit": 700,
+      "triangle_estimate_max": 538,
+      "note": "원본 몸체·서랍 재사용. 가운데 위 02는 깊이의 절반만큼 열고, 아래 05는 바닥에서 18도 기울임. 종이 네 장 추가, .90×.86 m 안",
+      "before": {
+        "lod0_tris": 1455,
+        "bytes": 369124,
+        "sha256": "a8a14cddfc728a68ef91f213914288dd447a334c1d6dbdb2495a00252f20d6a5",
+        "materials": 1,
+        "textures": 1
+      },
+      "bake_status": "baked",
+      "recipe_revision": 2,
+      "source_script": "tools/blender/props_stop01_cc0.py",
+      "rect_modal": null,
+      "rect_fit_m": [
+        1,
+        1
+      ],
+      "rect_modal_count": 0,
+      "rect_samples": 0,
+      "rect_histogram": {},
+      "kind_counts": {},
+      "map_count": 0,
+      "rect_basis": "assumed_no_rect_samples",
+      "lod0_tris": 517,
+      "bytes": 51140,
+      "sha256": "e909edd297a9ca4ff757ca685aeca8c36ccb4e9975f92eb88457e67692d57542",
+      "bounds_m": [
+        [
+          -0.45000001788139343,
+          0.0,
+          -0.429999977350235
+        ],
+        [
+          0.45000001788139343,
+          1.0,
+          0.429999977350235
+        ]
+      ],
+      "height_m": 1.0,
+      "mask_counts": {
+        "body": 936,
+        "trim": 471,
+        "keep": 144
+      },
+      "mask_ratio": {
+        "body": 0.6034816247582205,
+        "trim": 0.3036750483558994,
+        "keep": 0.09284332688588008
+      },
+      "mask_basis": "indexed_triangle_corners",
+      "mask_alpha_verified": true
+    },
+    "toolbox": {
+      "path": "res://models/props_stop01/toolbox.glb",
+      "source": "blender_primitives",
+      "source_ids": [],
+      "source_objects": {},
+      "primitive_parts": [
+        "open_body",
+        "hinged_lid",
+        "tray",
+        "black_handle",
+        "two_tools"
+      ],
+      "size_m": [
+        0.38,
+        0.4,
+        0.35
+      ],
+      "chosen_size_m": [
+        0.38,
+        0.4,
+        0.35
+      ],
+      "body_press": null,
+      "triangle_limit": 200,
+      "triangle_estimate_max": 192,
+      "note": "기본 도형: 빈 몸통·뒤로 110도 열린 뚜껑·안쪽 쟁반·튀어나온 공구 둘. 바랜 빨강 몸체·검은 쇠 손잡이, 열린 전체 치수",
+      "before": {
+        "lod0_tris": 382,
+        "bytes": 88348,
+        "sha256": "985ef3879e3746f7c4a8f9b99ef6e2c668f03b9ebced14125d9e0c8af7d730b6",
+        "materials": 1,
+        "textures": 1
+      },
+      "bake_status": "baked",
+      "recipe_revision": 2,
+      "source_script": "tools/blender/props_stop01_cc0.py",
+      "rect_modal": null,
+      "rect_fit_m": [
+        1,
+        1
+      ],
+      "rect_modal_count": 0,
+      "rect_samples": 0,
+      "rect_histogram": {},
+      "kind_counts": {},
+      "map_count": 0,
+      "rect_basis": "assumed_no_rect_samples",
+      "lod0_tris": 192,
+      "bytes": 14580,
+      "sha256": "daba151793ef5f3349c84ee53a7ad74ef7fed8c2132267e75bda25b96e37dd16",
+      "bounds_m": [
+        [
+          -0.1899999976158142,
+          0.0,
+          -0.17499999701976776
+        ],
+        [
+          0.1899999976158142,
+          0.4000000059604645,
+          0.17499999701976776
+        ]
+      ],
+      "height_m": 0.4000000059604645,
+      "mask_counts": {
+        "body": 216,
+        "trim": 216,
+        "keep": 144
+      },
+      "mask_ratio": {
+        "body": 0.375,
+        "trim": 0.375,
+        "keep": 0.25
+      },
+      "mask_basis": "indexed_triangle_corners",
+      "mask_alpha_verified": true
+    }
+  },
+  "schema_version": 1,
+  "date": "2026-10-29",
+  "source_script": "tools/blender/props_stop01_cc0.py",
+  "triangle_limit": 700,
+  "census_file_count": 81,
+  "grade": {
+    "saturation": 0.45,
+    "value": 0.82,
+    "cool": [
+      0.78,
+      0.85,
+      0.95
+    ],
+    "cool_mix": 0.35
+  },
+  "graded_targets": {
+    "cream": [
+      0.56,
+      0.54,
+      0.46
+    ],
+    "sage": [
+      0.38,
+      0.46,
+      0.37
+    ],
+    "blue": [
+      0.34,
+      0.44,
+      0.52
+    ],
+    "brick": [
+      0.28,
+      0.2,
+      0.17
+    ],
+    "walnut": [
+      0.11,
+      0.09,
+      0.072
+    ],
+    "oak": [
+      0.12,
+      0.1,
+      0.078
+    ],
+    "moss": [
+      0.23,
+      0.32,
+      0.23
+    ],
+    "iron": [
+      0.14,
+      0.16,
+      0.175
+    ],
+    "steel": [
+      0.26,
+      0.285,
+      0.3
+    ],
+    "linen": [
+      0.65,
+      0.65,
+      0.59
+    ]
+  },
+  "mask_values": {
+    "body": 1.0,
+    "trim": 0.5,
+    "keep": 0.0
+  },
+  "staged": false,
+  "godot_test": "pass 17/17 test_props_stop01_cc0+test_prop_kinds (2026-10-29)",
+  "visual_check": "coord review 가구다듬기_20261029 (room before/after, tint sets, old/new models)",
+  "missing": [],
+  "complete": true,
+  "recipe_revision": 2,
+  "triangle_budgets": {
+    "workbench": 500,
+    "bookcase": 700,
+    "drawer_chest_spilled": 700,
+    "shop_shelf": 500,
+    "toolbox": 200,
+    "office_desk": 600
+  },
+  "book_seed": 1017,
+  "import_check": "pass (godot --import, 2026-10-29)",
+  "pending": [],
+  "bake_status": "baked",
+  "body_press": {
+    "wardrobe": {
+      "saturation": 0.6,
+      "value": 0.85
+    },
+    "dining_set": {
+      "saturation": 0.6,
+      "value": 0.85
+    },
+    "table_overturned": {
+      "saturation": 0.6,
+      "value": 0.85
+    },
+    "office_desk": {
+      "saturation": 0.6,
+      "value": 0.85
+    },
+    "bookcase": {
+      "saturation": 0.6,
+      "value": 0.85
+    },
+    "drawer_chest_spilled": {
+      "saturation": 0.6,
+      "value": 0.85
+    }
+  },
+  "body_press_basis": "srgb_hsv_after_existing_palette_tint_body_only"
+}
