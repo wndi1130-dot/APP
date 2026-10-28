@@ -515,6 +515,8 @@ func _ready() -> void:
 	view = MapView.new()
 	add_child(view)
 	view.pace = pace
+	# The woods past the edge grow as the stretch's region band does (edge_band.look_of).
+	data["region_band"] = region
 	await view.setup(data)
 	# A stop the route marks no_fire (RouteStops.dress, s3-link) gets its lights
 	# planned again without fires (decision 471 B4).
