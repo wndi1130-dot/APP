@@ -212,6 +212,8 @@ func _trial(id: String, run_seed: int) -> Dictionary:
 			var key: String = "t_" + String(event["ev"])
 			if event["site"] == "work_site" and row.has(key) and float(row[key]) < 0.0:
 				row[key] = float(event["t"])
+				if key == "t_retreat":
+					row["why"] = String(game.work.sites.get("work_site", {}).get("why", ""))
 			event_at += 1
 		row["_end_t"] = now
 		row["player_dead"] = not game.player.is_alive()

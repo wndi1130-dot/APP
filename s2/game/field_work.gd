@@ -230,8 +230,9 @@ func _tick(id: String) -> void:
 		for p in members(id):
 			if p.role == "worker" and (not p.is_alive() or p.body.downed):
 				drop_load(p)
-		if game.ai.crew_recalled or int(safe["near_awake"]) >= HOLD_N * OVERFLOW_MULT or _crew_in_trouble(id):
-			retreat(id)
+		var why: String = _trouble(id, safe)
+		if why != "":
+			retreat(id, why)
 		elif stage == "working" and int(safe["near_awake"]) >= HOLD_N:
 			state["phase"] = "hold"
 			state["hold_s"] = 0.0
@@ -250,7 +251,7 @@ func _tick(id: String) -> void:
 				state["phase"] = "working"
 				_event(id, "resume")
 			elif float(state["hold_s"]) >= OVERFLOW_S:
-				retreat(id)
+				retreat(id, "held")
 		if phase(id) == "working":
 			_release_workers(id)
 			if _finished(id):
@@ -486,7 +487,7 @@ func _release_workers(id: String) -> void:
 	if pending.is_empty() or elapsed < float(state["depart_at"]):
 		return
 	if _outside_people() + pending.size() + _pending_people(id) > game.ALLY_CAP:
-		retreat(id)
+		retreat(id, "cap")
 		return
 	for i in pending.size():
 		_disembark(id, pending[i], i)
@@ -505,14 +506,21 @@ func members(id: String) -> Array:
 	return out
 
 
-func _crew_in_trouble(id: String) -> bool:
+## Why the crew must come back at once, or "": called back, eight awake by the site, someone
+## grabbed, an escort dead or downed (not one who slipped and gets straight up again).
+func _trouble(id: String, safe: Dictionary) -> String:
+	if game.ai.crew_recalled:
+		return "recalled"
+	if int(safe["near_awake"]) >= HOLD_N * OVERFLOW_MULT:
+		return "eight"
 	for p in members(id):
 		if p.brain.get("boarded", false):
 			continue
-		# An escort dead or downed, not one who slipped and gets straight up again.
-		if not p.grabbers.is_empty() or (p.role == "escort" and (not p.is_alive() or p.body.downed)):
-			return true
-	return false
+		if not p.grabbers.is_empty():
+			return "grabbed"
+		if p.role == "escort" and (not p.is_alive() or p.body.downed):
+			return "escort_down"
+	return ""
 
 
 func _cancel_workers(id: String) -> void:
@@ -522,11 +530,12 @@ func _cancel_workers(id: String) -> void:
 			p.stop()
 
 
-func retreat(id: String) -> void:
+func retreat(id: String, why: String = "") -> void:
 	var state: Dictionary = _site(id)
 	if phase(id) == "retreat":
 		return
 	state["phase"] = "retreat"
+	state["why"] = why
 	state["pending"].clear()
 	_cancel_workers(id)
 	for p in members(id):
