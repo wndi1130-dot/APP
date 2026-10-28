@@ -52,7 +52,8 @@ func test_a_row_of_counters_opens_the_one_pressed_at_its_front_and_top() -> void
 			var o: Vector2i = game.data["containers"][other]["cell"]
 			if other != id and absi(o.x - c.x) + absi(o.y - c.y) == 1:
 				side.append(other)
-		if side.size() >= 3:
+		# A row with a counter whose floor point no other box is drawn over (the floor press below).
+		if side.size() >= 3 and side.any(func(s: String) -> bool: return not _box_on_camera_side(game.data["containers"][s])):
 			row = side
 			break
 	assert_eq(row.size(), 3, "houses_01 has a row of counters")
@@ -74,12 +75,14 @@ func test_a_row_of_counters_opens_the_one_pressed_at_its_front_and_top() -> void
 	assert_gt(floors, 0, "some counter of the row is pressed at its floor")
 
 
-## Another box on the next cell east or south (the camera stands south-east, CAM_YAW).
+## Another box up to two cells east and south (the camera stands south-east, CAM_YAW): a cupboard
+## or wardrobe two cells off is drawn over this one's floor point as a piece beside it is.
 func _box_on_camera_side(c: Dictionary) -> bool:
 	var at: Vector2i = c["cell"]
 	for id in game.data["containers"]:
 		var o: Dictionary = game.data["containers"][id]
-		if int(o.get("level", 0)) == int(c.get("level", 0)) and (o["cell"] == at + Vector2i.RIGHT or o["cell"] == at + Vector2i.DOWN):
+		var off: Vector2i = o["cell"] - at
+		if int(o.get("level", 0)) == int(c.get("level", 0)) and off != Vector2i.ZERO and off.x >= 0 and off.y >= 0 and off.x <= 2 and off.y <= 2:
 			return true
 	return false
 
