@@ -15,6 +15,7 @@ const EdgeBand = preload("res://game/world/edge_band.gd")
 const TrackView = preload("res://game/world/track_view.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
+const FurnitureTints = preload("res://game/world/furniture_tints.gd")
 const ObjectRules = preload("res://game/sim/object_rules.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const S = FieldGrid.Solid
@@ -1506,6 +1507,9 @@ func _build_props() -> void:
 		if not prop_batches.has(path):
 			prop_batches[path] = {"items": [], "nodes": {}, "tiles": {}}
 		var item: Dictionary = {"xf": xf, "rect": r, "level": lv, "building": b, "prop": prop, "remembered": false}
+		if FurnitureTints.applies(path):
+			# 한 집 가구는 한 칠 판(줄의 tint, 없으면 건물 번호, 둘 다 없으면 칸).
+			item["tint"] = FurnitureTints.pick(prop, r.position, b)
 		prop_batches[path]["items"].append(item)
 		_index_prop(prop_batches[path], item)
 		if lv == 0:
@@ -1518,6 +1522,9 @@ func _build_props() -> void:
 		for lod: int in meshes:
 			var mm := MultiMesh.new()
 			mm.transform_format = MultiMesh.TRANSFORM_3D
+			if FurnitureTints.applies(path):
+				mm.use_custom_data = true
+				FurnitureTints.dress(meshes[lod])
 			mm.mesh = meshes[lod]
 			mm.instance_count = batch["items"].size()
 			mm.visible_instance_count = 0
@@ -1602,6 +1609,8 @@ func _add_object_batch(prop: Dictionary, path: String) -> void:
 	var batch: Dictionary = prop_batches[path]
 	var item: Dictionary = {"prop": prop, "rect": prop["rect"], "level": int(prop.get("level", 0)),
 		"building": int(prop.get("building", -1)), "xf": _object_transform(prop, path), "remembered": false}
+	if FurnitureTints.applies(path):
+		item["tint"] = FurnitureTints.pick(prop, (prop["rect"] as Rect2i).position, int(item["building"]))
 	batch["items"].append(item)
 	_index_prop(batch, item)
 	var meshes := PropModels.batch_meshes(path)
@@ -1611,6 +1620,9 @@ func _add_object_batch(prop: Dictionary, path: String) -> void:
 			node.name = "Object_%s_LOD%d" % [path.get_file().get_basename(), lod]
 			node.multimesh = MultiMesh.new()
 			node.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+			if FurnitureTints.applies(path):
+				node.multimesh.use_custom_data = true
+				FurnitureTints.dress(meshes[lod])
 			node.multimesh.mesh = meshes[lod]
 			add_child(node)
 			batch["nodes"][lod] = node
@@ -1828,6 +1840,8 @@ func refresh_props(camera: Camera3D = null) -> void:
 			var lod := 1 if distance >= PROP_LOD_DISTANCE and batch["nodes"].has(1) else 0
 			var node: MultiMeshInstance3D = batch["nodes"][lod]
 			node.multimesh.set_instance_transform(counts[lod], xf)
+			if node.multimesh.use_custom_data:
+				node.multimesh.set_instance_custom_data(counts[lod], Color(float(int(item.get("tint", -1)) + 1), 0.0, 0.0, 0.0))
 			counts[lod] += 1
 		for lod: int in batch["nodes"]:
 			batch["nodes"][lod].multimesh.visible_instance_count = counts[lod]
