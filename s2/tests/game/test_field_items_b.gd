@@ -361,3 +361,16 @@ func test_the_car_of_one_who_saw_it_minds_it_on_the_train() -> void:
 	var d: float = float(after["g"]["comms"]["medtech"]["rel"]) - float(plain["g"]["comms"]["medtech"]["rel"])
 	assert_almost_eq(d, -1.0, 0.0001, "once a return, however many saw it")
 	assert_almost_eq(float(after["g"]["comms"]["guard"]["rel"]), float(plain["g"]["comms"]["guard"]["rel"]), 0.0001)
+
+
+func test_the_car_never_hears_of_it_when_the_one_who_saw_it_stays_out() -> void:
+	var tables := V.tables()
+	var departure := V.departure("departure_prologue")
+	var receipt: Dictionary = V.receipt("case3_nosymbol_kept").duplicate(true)
+	receipt["people"]["leftBehind"] = ["p_122"]
+	var start: Dictionary = V.cases()[0]["start"]
+	var plain := FieldReturn.apply_field_return(start, tables, departure, receipt)
+	var seen: Dictionary = receipt.duplicate(true)
+	(seen["witnessed"] as Array).append({"who": "p_151", "what": "body_search", "where": "x", "when": "D1 10:00", "why": "searched_the_dead", "witnesses": ["p_122"], "template": "body_search"})
+	var after := FieldReturn.apply_field_return(start, tables, departure, seen)
+	assert_almost_eq(float(after["g"]["comms"]["medtech"]["rel"]), float(plain["g"]["comms"]["medtech"]["rel"]), 0.0001)

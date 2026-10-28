@@ -2,8 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { createGame } from '../../src/game/state';
+import { createGame, isGone, PROFILES } from '../../src/game/state';
 import type { Game } from '../../src/game/state';
+import { crewNames } from '../../src/game/turn';
+import { COMM_NAME } from '../../src/game/data';
 import { enableDomestic } from '../../src/game/domestic/state';
 import {
   applyFieldReturn, BODY_SEARCH_REL, checkDeparture, chooseSymbolUse, decodeFieldReceipt, judgePromises, matchDeparture, symbolOptions,
@@ -200,6 +202,43 @@ describe('필드 영수증 판 4: 판에 반영', () => {
     const other = createGame(SEED);
     applyFieldReturn(other, dep(), { ...r, witnessed: [{ ...row('p_151', ['p_122']), template: 'something_else' }] });
     expect(other.comms.medtech.rel).toBe(control.comms.medtech.rel);
+  });
+
+  it('시체 뒤지기를 본 사람이 돌아오지 못하면 그 칸은 모른다', () => {
+    const r = read<FieldReceipt>('case3_nosymbol_kept.json');
+    const people = { ...r.people, leftBehind: ['p_122'] };
+    const row = { who: 'p_151', what: 'body_search', where: 'first_leg_01_sulechow', when: 'D1 10:00', why: 'searched_the_dead', witnesses: ['p_122'], template: 'body_search' };
+    const control = createGame(SEED);
+    applyFieldReturn(control, dep(), { ...r, people });
+    const g = createGame(SEED);
+    applyFieldReturn(g, dep(), { ...r, people, witnessed: [row] });
+    expect(g.comms.medtech.rel).toBe(control.comms.medtech.rel);
+  });
+
+  it('필드에 남거나 사라진 사람은 떠난 사람 명단에도 들어 다음 작업조에 다시 뽑히지 않는다', () => {
+    const r = read<FieldReceipt>('case3_nosymbol_kept.json');
+    const name = (id: string) => PROFILES.find(p => p.id === id)!.name;
+    const g = createGame(SEED);
+    expect(crewNames(g, 'medtech', PROFILES.length)).toContain(name('p_122'));
+    applyFieldReturn(g, dep(), { ...r, people: { ...r.people, leftBehind: ['p_122'], missing: ['p_152'] } });
+    expect(g.left).toEqual([name('p_122'), name('p_152')]);
+    expect(isGone(g, name('p_122'))).toBe(true);
+    expect(crewNames(g, 'medtech', PROFILES.length)).not.toContain(name('p_122'));
+    expect(crewNames(g, 'guard', PROFILES.length)).not.toContain(name('p_152'));
+  });
+
+  it('앞서 남겨졌던 사람이 살아서 구해져 오면 떠난 사람 명단에서 빠지고 칸 인원으로 돌아온다', () => {
+    const r = read<FieldReceipt>('case3_nosymbol_kept.json');
+    const who = PROFILES.find(p => p.id === r.people.rescued[0])!;
+    const control = createGame(SEED);
+    applyFieldReturn(control, dep(), r);
+    const g = createGame(SEED);
+    g.left = [who.name];
+    applyFieldReturn(g, dep(), r);
+    expect(g.left).toEqual([]);
+    expect(isGone(g, who.name)).toBe(false);
+    expect(g.comms[who.community].pop).toBe(control.comms[who.community].pop + 1);
+    expect(g.fieldReturns!.records[0].lines.map(l => l.text)).toContain(`${COMM_NAME[who.community]} ${who.name}이(가) 살아서 다시 열차에 올랐다.`);
   });
 
   it('천·부품도 영수증으로 온다: 부품은 내정 그릇에 더하고 천은 계약만 지난다(결정 426 D②)', () => {
