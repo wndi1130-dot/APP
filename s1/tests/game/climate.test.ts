@@ -140,8 +140,9 @@ describe('climate', () => {
     const up = at('cl-lines-3', 3);
     go(up);
     expect(texts(up)).toContain('바깥 5°. 모든 칸 온기 +5, 난방 석탄 ×0.8.');
-    // 한 판 안에서 날씨 글의 인칭이 번갈아 든다(CLIMATE_LINES는 [1인칭, 3인칭] 쌍을 이어 붙인 것)
-    const { g: p } = playGame('cl-voice', { s1c: false, policy: 'caretaker', dom: 'idle', climate: true });
+    // 한 판 안에서 날씨 글의 인칭이 번갈아 든다(CLIMATE_LINES는 [1인칭, 3인칭] 쌍을 이어 붙인 것).
+    // 끝까지 가는 판이어야 단계 바뀜이 셋 넘게 든다: 'cl-voice'는 결정 484 넘김 뒤 16구간 반란으로 끝나서 'cl-voice-1'(완주, 글 넷)
+    const { g: p } = playGame('cl-voice-1', { s1c: false, policy: 'caretaker', dom: 'idle', climate: true });
     const voices = p.journal.filter(j => CLIMATE_LINES.includes(j.text)).map(j => CLIMATE_LINES.indexOf(j.text) % 2);
     expect(voices.length).toBeGreaterThanOrEqual(3);
     for (let k = 1; k < voices.length; k += 1) expect(voices[k]).not.toBe(voices[k - 1]);

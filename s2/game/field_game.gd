@@ -1456,20 +1456,23 @@ func allies_alive() -> Array:
 # ---------------------------------------------------------------- levels
 
 ## What the stop loader makes ahead from a map off the main thread (stop_loader.gd
-## _build_off_thread): the building plan, the ground's details, the rooms' finish.
-const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_room_finish"]
+## make_ready): the building plan, the ground's details or arrays, the floors' arrays,
+## the rooms' finish.
+const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground_arrays", "_ground_key",
+	"_floor_arrays", "_floor_keys", "_room_finish"]
 
 
-## The side path on a map built here or handed over (side_path.gd). It can grow the
-## map, shift it and put its store on it, so what the loader made ahead from the map
-## as it was no longer fits: dropped, made again from the map as it is now.
+## The side path on a map built here or handed over (side_path.gd). The loader puts it
+## on when it knows the field's seed (stop_loader.gd make_ready); else it goes on here,
+## and as it can grow the map, shift it and put its store on it, what the loader made
+## ahead from the map as it was no longer fits: dropped first (a shift would move it
+## all), made again from the map as it is now.
 static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
-	var had := map.has("side_path")
-	var out := SidePath.add(map, run_seed)
-	if out.has("side_path") and not had:
+	var place_id := String(map.get("place_id", ""))
+	if not map.has("side_path") and place_id not in ["", SidePath.FIRST_STOP] and SidePath.rolls(place_id, run_seed):
 		for key in AHEAD_KEYS:
-			out.erase(key)
-	return out
+			map.erase(key)
+	return SidePath.add(map, run_seed)
 
 
 ## The map the field stands on. Everything that reads the ground goes through

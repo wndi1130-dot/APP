@@ -710,6 +710,7 @@ static func _close_field_stop(g: Dictionary, t: Dictionary, departure: Dictionar
 		got.append("%s %d" % [t["LOOT_NAME"][key], int(gains[key])])  # the ledger's amounts are whole (stop_receipt.ts)
 	_journal(g, "%s에 %s 머물렀다(필드 %d명). %s." % [place["name"], t["STAY"][stop["stay"]]["name"], (receipt["people"]["sent"] as Array).size(), ", ".join(got) if not got.is_empty() else "빈손"])
 	adv._check_stop_promises(g, t, stop["target"], gains)
+	adv._note_target(g, stop["target"])
 
 
 ## Bodies gone through in the field (decision 423 card 12, the same values as

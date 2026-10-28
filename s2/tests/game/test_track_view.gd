@@ -80,6 +80,49 @@ func test_one_piece_mesh_inside_and_outside_with_the_map_material() -> void:
 	assert_eq(TrackView.build(autofree(Node3D.new()), FieldGrid.new(8, 8), material).get_child_count(), 0, "no rails, nothing drawn")
 
 
+func test_a_crossing_boards_only_the_lines_its_road_crosses() -> void:
+	var found := TrackView.runs(_grid())
+	# A road over the main line, one over both side-by-side lines running past their east end, one over bare ground.
+	var on := TrackView.crossing_runs(found, [Rect2i(5, 0, 3, 5), Rect2i(8, 6, 4, 6), Rect2i(16, 5, 2, 3)])
+	assert_eq(on.size(), 3)
+	assert_eq(_span(on, 2.5), [5.0, 8.0])
+	assert_eq(_span(on, 7.5), [8.0, 10.0], "cut where the rails end")
+	assert_eq(_span(on, 10.5), [8.0, 10.0])
+	assert_eq(TrackView.crossing_runs(found, []), [], "no crossing in the map, no boards")
+
+
+func test_boards_lie_between_and_beside_the_rails_just_under_their_tops() -> void:
+	var rail_in := TrackView.GAUGE_HALF - TrackView.RAIL.z * 0.5
+	var rail_out := TrackView.GAUGE_HALF + TrackView.RAIL.z * 0.5
+	for span: Array in TrackView.board_spans():
+		var a := absf(float(span[0]))
+		var b := absf(float(span[1]))
+		var lo := minf(a, b) if signf(float(span[0])) == signf(float(span[1])) else 0.0
+		var hi := maxf(a, b)
+		assert_true(hi <= rail_in - 0.05 or lo >= rail_out, "no board over a rail or its flangeway: %s" % [span])
+	var m := TrackView.crossing_mesh([{"x0": 5.0, "x1": 8.0, "z": 2.5}])
+	var box := m.get_aabb()
+	assert_almost_eq(box.end.y, TrackView.RAIL_TOP - 0.01, 0.0001, "the rails stand proud of the boards")
+	assert_almost_eq(box.position.y, TrackView.SLEEPER_Y + TrackView.SLEEPER.y * 0.5, 0.0001, "laid on the sleepers")
+	assert_almost_eq(box.position.x, 5.0, 0.0001)
+	assert_almost_eq(box.end.x, 8.0, 0.0001)
+	assert_almost_eq(box.get_center().z, 2.5, 0.0001)
+	assert_lte(box.size.z, TrackView.SLEEPER.z + 0.2)
+	assert_eq(m.get_faces().size() / 3, 9 * 10, "nine boards, a box each without a bottom")
+	assert_null(TrackView.crossing_mesh([]))
+
+
+func test_the_boards_are_one_more_shadowless_mesh_only_where_a_road_crosses() -> void:
+	var material := StandardMaterial3D.new()
+	var root := TrackView.build(autofree(Node3D.new()), _grid(), material, [], [Rect2i(5, 0, 3, 5)])
+	assert_eq(root.get_child_count(), 2)
+	var boards: MeshInstance3D = root.get_node("TrackCrossings")
+	assert_eq(boards.material_override, material, "seen, remembered and snowed on like the ground")
+	assert_eq(boards.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	assert_false(TrackView.build(autofree(Node3D.new()), _grid(), material).has_node("TrackCrossings"), "no crossing, no draw call")
+	assert_false(TrackView.build(autofree(Node3D.new()), _grid(), material, [], [Rect2i(16, 5, 2, 3)]).has_node("TrackCrossings"), "a road over bare ground lays nothing")
+
+
 func test_trains_and_wagons_stand_on_the_rail_tops() -> void:
 	var g := _grid()
 	assert_almost_eq(TrackView.height_under(g, Rect2i(0, 1, 16, 3)), TrackView.RAIL_TOP, 0.0001)

@@ -15,7 +15,8 @@ const FIRES: Array[String] = ["campfire", "barrel_fire"]
 ## off the floors under a roof.
 const LIGHT: Dictionary = {
 	"campfire": {"strength": 1.0, "falls": 0.9, "reach": 6.0, "outdoor": true},
-	"barrel_fire": {"strength": 1.0, "falls": 0.8, "reach": 5.0, "outdoor": true},
+	# A burn barrel throws about a campfire's light (decision 471 B1: at 5 m its pool was too small to read).
+	"barrel_fire": {"strength": 1.0, "falls": 0.9, "reach": 6.0, "outdoor": true},
 	"headlights": {"strength": 0.9, "falls": 0.75, "reach": 9.0, "outdoor": true},
 	"candle": {"strength": 0.6, "falls": 0.45, "reach": 2.5, "outdoor": false},
 }

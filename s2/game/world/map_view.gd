@@ -119,6 +119,9 @@ var label_nodes: Array = []             # [Label3D, cell]
 ## Set by a staged stop (field_game.gd): setup then waits a frame between
 ## pieces (build_pace.gd). Null: all of it in one call.
 var pace = null
+## The ground and the floors (by level) were laid from the stop loader's arrays (2a).
+var ground_from_loader: bool = false
+var floor_from_loader: Dictionary = {}
 
 
 func setup(map_data: Dictionary) -> void:
@@ -154,8 +157,8 @@ func setup(map_data: Dictionary) -> void:
 	await _build_ground()
 	# 지도 칸 밖: 숲 띠·눈둑·밖으로 이어지는 길과 선로(edge_band.gd, 결정 448 17번).
 	edge_band = EdgeBand.build(level_roots[0], grid, data, material, FLOOR_COLORS)
-	# 선로 칸의 침목과 레일, 지도 밖으로 이어지는 것까지(track_view.gd, 결정 476).
-	TrackView.build(level_roots[0], grid, material, edge_band.get("rail_runs", []))
+	# 선로 칸의 침목과 레일, 지도 밖으로 이어지는 것까지, 건널목 판자(track_view.gd, 결정 476·M1).
+	TrackView.build(level_roots[0], grid, material, edge_band.get("rail_runs", []), data.get("rail_crossings", []))
 	_build_walls()
 	await BuildPace.rest(pace)
 	await _build_props()
@@ -1100,52 +1103,115 @@ static func box(st: SurfaceTool, size: Vector3, at: Vector3, color: Color) -> vo
 			st.add_vertex(at + v[idx])
 
 
+## The ground's tiles are worked out from the map alone (2a), so the stop loader's
+## worker makes them ahead (stop_loader.gd make_ready): `data["_ground_arrays"]`, one
+## SurfaceTool.commit_to_arrays() a tile, with `_ground_key` the map they fit. Here only
+## the meshes and nodes are made; a map without them, or changed since, is worked out
+## here, a row a piece, the same way.
 func _build_ground() -> void:
-	# The ground is laid in tiles, so what is off the screen is not drawn.
-	var tools: Dictionary = {}
-	# One answer a corner, shared by the cells that meet there.
-	var banks := PackedVector2Array()
-	for y in range(grid.height + 1):
-		for x in range(grid.width + 1):
-			banks.append(drift_uv(grid, Vector2i(x, y)))
+	var arrays: Dictionary = {}
+	ground_from_loader = data.get("_ground_arrays") is Dictionary and data.get("_ground_key") == ground_key(grid)
+	if ground_from_loader:
+		arrays = data["_ground_arrays"]
+	else:
+		var banks := PackedVector2Array()
+		for y in range(grid.height + 1):
+			ground_bank_row(grid, y, banks)
+			await BuildPace.rest(pace)
+		var details: PackedFloat32Array = data["_ground_details"] if data.get("_ground_details") is PackedFloat32Array else ground_details(grid)
 		await BuildPace.rest(pace)
-	# Worked out with the map off the main thread when it was (stop_loader.gd).
-	var details: PackedFloat32Array = data["_ground_details"] if data.get("_ground_details") is PackedFloat32Array else ground_details(grid)
-	data.erase("_ground_details")   # read once; not kept with the map
-	await BuildPace.rest(pace)
-	for y in range(grid.height):
-		await BuildPace.rest(pace)
-		for x in range(grid.width):
-			var c := Vector2i(x, y)
-			var tile := c / TILE
-			if not tools.has(tile):
-				tools[tile] = _begin()
-			var st: SurfaceTool = tools[tile]
-			var f := grid.floor_at(c)
-			# One colour a kind: the shader gives the grain (no cell checker, 결정 469 C4).
-			var color := FLOOR_COLORS[f]
-			color.a = sky_alpha(grid, c)
-			var a := Vector3(x, 0, y)
-			var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
-			var cell_detail: float = details[grid.index(c)]
-			for idx in [0, 1, 2, 0, 2, 3]:
-				var corner := Vector2i(int(quad[idx].x), int(quad[idx].z))
-				st.set_color(color)
-				st.set_normal(Vector3.UP)
-				st.set_uv(banks[corner.y * (grid.width + 1) + corner.x])
-				# The floor kind for world_vis bare_ground (0: not ground), and what is
-				# drawn on it: open grass takes the soil weight of its corner (smooth),
-				# every other cell its own code (ground_details).
-				var detail := cell_detail
-				if cell_detail == 0.0 and (f == F.SNOW or f == F.DEEP_SNOW):
-					detail = details[grid.width * grid.height + corner.y * (grid.width + 1) + corner.x]
-				st.set_uv2(Vector2(f + 1, detail))
-				st.add_vertex(quad[idx])
-	for tile in tools:
+		var tools: Dictionary = {}
+		for y in range(grid.height):
+			await BuildPace.rest(pace)
+			ground_row(grid, details, banks, y, tools)
+		for tile in tools:
+			arrays[tile] = (tools[tile] as SurfaceTool).commit_to_arrays()
+	# Read once; not kept with the map.
+	for key: String in ["_ground_details", "_ground_arrays", "_ground_key"]:
+		data.erase(key)
+	for tile in arrays:
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays[tile])
 		var node := _mesh_node()
-		node.mesh = tools[tile].commit()
+		node.mesh = mesh
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		await BuildPace.rest(pace)
+
+
+## Every tile of the ground's arrays at once (the loader's worker): {tile: arrays}.
+static func ground_arrays(g: FieldGrid, details: PackedFloat32Array) -> Dictionary:
+	var banks := PackedVector2Array()
+	for y in range(g.height + 1):
+		ground_bank_row(g, y, banks)
+	var tools: Dictionary = {}
+	for y in range(g.height):
+		ground_row(g, details, banks, y, tools)
+	var out: Dictionary = {}
+	for tile in tools:
+		out[tile] = (tools[tile] as SurfaceTool).commit_to_arrays()
+	return out
+
+
+## The map a set of ground arrays fits: its size, floors and buildings and what stands
+## out of doors (ground_details reads walls, doors and windows only there). Furniture
+## the field paints in a room after the loader (room_stories.gd) changes none of it.
+static func ground_key(g: FieldGrid) -> Array:
+	var outdoors := PackedInt32Array()
+	outdoors.resize(g.solid.size())
+	for i in g.solid.size():
+		if g.building[i] < 0:
+			outdoors[i] = g.solid[i]
+	return [g.width, g.height, hash(g.floor), hash(g.building), hash(outdoors)]
+
+
+## The map an upper floor's or the cellar's floor arrays fit: its size, floors and
+## which cells have a floor laid (level_floor_row).
+static func floor_key(lg: FieldGrid) -> Array:
+	var laid := PackedByteArray()
+	laid.resize(lg.solid.size())
+	for i in lg.solid.size():
+		var kind: int = lg.solid[i]
+		laid[i] = 0 if kind == S.AIR or (kind == S.BLOCK and lg.building[i] < 0) else 1
+	return [lg.width, lg.height, hash(lg.floor), hash(laid)]
+
+
+## One answer a corner, shared by the cells that meet there: corner row y.
+static func ground_bank_row(g: FieldGrid, y: int, banks: PackedVector2Array) -> void:
+	for x in range(g.width + 1):
+		banks.append(drift_uv(g, Vector2i(x, y)))
+
+
+## Row y of the ground into its tiles' SurfaceTools (laid in tiles, so what is off the
+## screen is not drawn).
+static func ground_row(g: FieldGrid, details: PackedFloat32Array, banks: PackedVector2Array, y: int, tools: Dictionary) -> void:
+	for x in range(g.width):
+		var c := Vector2i(x, y)
+		var tile := c / TILE
+		if not tools.has(tile):
+			var begun := SurfaceTool.new()
+			begun.begin(Mesh.PRIMITIVE_TRIANGLES)
+			tools[tile] = begun
+		var st: SurfaceTool = tools[tile]
+		var f := g.floor_at(c)
+		# One colour a kind: the shader gives the grain (no cell checker, 결정 469 C4).
+		var color := FLOOR_COLORS[f]
+		color.a = sky_alpha(g, c)
+		var a := Vector3(x, 0, y)
+		var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
+		var cell_detail: float = details[g.index(c)]
+		for idx in [0, 1, 2, 0, 2, 3]:
+			var corner := Vector2i(int(quad[idx].x), int(quad[idx].z))
+			st.set_color(color)
+			st.set_normal(Vector3.UP)
+			st.set_uv(banks[corner.y * (g.width + 1) + corner.x])
+			# The floor kind for world_vis bare_ground (0: not ground), and what is
+			# drawn on it: open grass takes the soil weight of its corner (smooth),
+			# every other cell its own code (ground_details).
+			var detail := cell_detail
+			if cell_detail == 0.0 and (f == F.SNOW or f == F.DEEP_SNOW):
+				detail = details[g.width * g.height + corner.y * (g.width + 1) + corner.x]
+			st.set_uv2(Vector2(f + 1, detail))
+			st.add_vertex(quad[idx])
 
 
 func _build_walls() -> void:
@@ -1739,6 +1805,51 @@ func _build_lights() -> void:
 ## (so the player's own can be cut down), window frames. The walls are built
 ## from their own floor up and the node is lifted, so cutting them down
 ## (a scale in y) leaves them standing on that floor, not sunk under it.
+## Row y of an upper floor's or the cellar's floor cells into their tiles' SurfaceTools.
+static func level_floor_row(lg: FieldGrid, lv: int, y: int, floors: Dictionary) -> void:
+	var y0 := lv * LEVEL_H
+	for x in range(lg.width):
+		var c := Vector2i(x, y)
+		var kind := lg.solid_at(c)
+		if kind == S.AIR or (kind == S.BLOCK and lg.building_at(c) < 0):
+			continue
+		var tile := c / TILE
+		if not floors.has(tile):
+			var begun := SurfaceTool.new()
+			begun.begin(Mesh.PRIMITIVE_TRIANGLES)
+			floors[tile] = begun
+		var floor_st: SurfaceTool = floors[tile]
+		var color := FLOOR_COLORS[lg.floor_at(c)]
+		var n := (float((x * 73 + y * 37) % 11) / 11.0 - 0.5) * 0.035
+		color = Color(color.r + n, color.g + n, color.b + n)
+		color.a = 0.0   # upper floors and the cellar are all under a roof
+		var a := Vector3(x, y0, y)
+		var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
+		for idx in [0, 1, 2, 0, 2, 3]:
+			floor_st.set_color(color)
+			floor_st.set_normal(Vector3.UP)
+			floor_st.add_vertex(quad[idx])
+
+
+## Every floor but the ground's at once (the loader's worker): {lv: {tile: arrays}},
+## with the maps they fit in `keys` ({lv: ground_key}).
+static func level_floor_arrays(levels_of: Dictionary, keys: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for lv in levels_of:
+		if int(lv) == 0:
+			continue
+		var lg: FieldGrid = levels_of[lv]
+		var floors: Dictionary = {}
+		for y in range(lg.height):
+			level_floor_row(lg, int(lv), y, floors)
+		var tiles: Dictionary = {}
+		for tile in floors:
+			tiles[tile] = (floors[tile] as SurfaceTool).commit_to_arrays()
+		out[lv] = tiles
+		keys[lv] = floor_key(lg)
+	return out
+
+
 func _build_level(lv: int) -> void:
 	var lg: FieldGrid = levels[lv]
 	var y0 := lv * LEVEL_H
@@ -1749,24 +1860,20 @@ func _build_level(lv: int) -> void:
 		tools[b] = _begin()
 		for r: Rect2i in runs[b]:
 			box(tools[b], Vector3(r.size.x, WALL_H, r.size.y), Vector3(r.position.x + r.size.x * 0.5, WALL_H * 0.5, r.position.y + r.size.y * 0.5), Color(0.55, 0.53, 0.5))
+	# The floors, made ahead by the stop loader's worker when they still fit (2a,
+	# as the ground), else here row by row the same way.
+	var ahead: Dictionary = data.get("_floor_arrays", {}).get(lv, {})
+	var ahead_fits: bool = not ahead.is_empty() and data.get("_floor_keys", {}).get(lv) == floor_key(lg)
+	if ahead_fits:
+		floor_from_loader[lv] = true
 	for y in range(lg.height):
 		await BuildPace.rest(pace)
+		if not ahead_fits:
+			level_floor_row(lg, lv, y, floors)
+		# The windows hang on how the building draws (building_view.gd): here.
 		for x in range(lg.width):
 			var c := Vector2i(x, y)
 			var kind := lg.solid_at(c)
-			if kind == S.AIR or (kind == S.BLOCK and lg.building_at(c) < 0):
-				continue
-			var floor_st: SurfaceTool = _tile_tool(floors, c)
-			var color := FLOOR_COLORS[lg.floor_at(c)]
-			var n := (float((x * 73 + y * 37) % 11) / 11.0 - 0.5) * 0.035
-			color = Color(color.r + n, color.g + n, color.b + n)
-			color.a = 0.0   # upper floors and the cellar are all under a roof
-			var a := Vector3(x, y0, y)
-			var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
-			for idx in [0, 1, 2, 0, 2, 3]:
-				floor_st.set_color(color)
-				floor_st.set_normal(Vector3.UP)
-				floor_st.add_vertex(quad[idx])
 			var b := lg.building_at(c)
 			if kind == S.WINDOW and (buildings == null or not buildings.draws_cell(c, lv)):
 				if not tools.has(b):
@@ -1776,9 +1883,21 @@ func _build_level(lv: int) -> void:
 				box(tools[b], size, Vector3(x + 0.5, 0.43, y + 0.5), Color(0.4, 0.4, 0.42))
 				box(tools[b], Vector3(1.0, 0.9, 0.08) if horizontal else Vector3(0.08, 0.9, 1.0), Vector3(x + 0.5, 1.3, y + 0.5), Color(0.62, 0.72, 0.78))
 				box(tools[b], size * Vector3(1, 0.12, 1), Vector3(x + 0.5, WALL_H - 0.05, y + 0.5), Color(0.4, 0.4, 0.42))
-	for tile in floors:
+	var floor_arrays: Dictionary = ahead if ahead_fits else {}
+	# Read once; not kept with the map.
+	for key: String in ["_floor_arrays", "_floor_keys"]:
+		if data.get(key) is Dictionary:
+			(data[key] as Dictionary).erase(lv)
+			if (data[key] as Dictionary).is_empty():
+				data.erase(key)
+	if not ahead_fits:
+		for tile in floors:
+			floor_arrays[tile] = (floors[tile] as SurfaceTool).commit_to_arrays()
+	for tile in floor_arrays:
+		var mesh := ArrayMesh.new()
+		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, floor_arrays[tile])
 		var floor_node := _mesh_node(lv)
-		floor_node.mesh = floors[tile].commit()
+		floor_node.mesh = mesh
 		floor_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		await BuildPace.rest(pace)
 	for b in tools:

@@ -11,7 +11,7 @@ import { PROLOGUE } from './prologue';
 import { hangWhy, hangSymbol } from './domestic/symbols';
 import { journal, PROFILES, situation, storyOf } from './state';
 import type { Game, LootDeck, Phase } from './state';
-import { breakPromise, burnPyre, checkStopPromises, crewAwayOf, crewRest, keepPromise } from './turn';
+import { breakPromise, burnPyre, checkStopPromises, crewAwayOf, crewRest, keepPromise, noteTarget } from './turn';
 import { noteBroken } from './council_log';
 import { canonical, decodeReceipt, v3Schema } from './stop_receipt';
 import type { StopReceipt } from './stop_receipt';
@@ -516,6 +516,7 @@ function closeFieldStop(g: Game, departure: AnyDeparture, r: FieldReceipt): void
   const got = (Object.keys(gains) as LootKey[]).map(k => `${LOOT_NAME[k]} ${gains[k]}`).join(', ');
   journal(g, `${place.name}에 ${STAY[stop.stay].name} 머물렀다(필드 ${r.people.sent.length}명). ${got || '빈손'}.`);
   checkStopPromises(g, stop.target, gains);
+  noteTarget(g, stop.target);
 }
 
 /**
