@@ -49,6 +49,18 @@ func test_a_view_lays_the_loaders_arrays_and_works_out_a_changed_map_again() -> 
 	for key: String in ["_ground_arrays", "_ground_key", "_floor_arrays", "_floor_keys"]:
 		assert_false(d.has(key), "%s is read once, not kept with the map" % key)
 	var laid: int = v.level_roots[0].get_child_count()
+	# Furniture painted in a room after the loader (room_stories.gd _paint): the ground
+	# does not read it, so the arrays still fit.
+	var furnished := _ready_map(-1)
+	var fg: FieldGrid = furnished["grid"]
+	for i in fg.solid.size():
+		if fg.building[i] >= 0 and fg.solid[i] == FieldGrid.Solid.NONE:
+			fg.solid[i] = FieldGrid.Solid.BLOCK
+			break
+	var in_room = MapView.new()
+	add_child_autofree(in_room)
+	await in_room.setup(furnished)
+	assert_true(in_room.ground_from_loader, "a room's furniture leaves the ground's arrays fitting")
 	# One cell changed after the arrays were made: the ground is worked out again here.
 	var changed := _ready_map(-1)
 	var g: FieldGrid = changed["grid"]

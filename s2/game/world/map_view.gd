@@ -1152,9 +1152,27 @@ static func ground_arrays(g: FieldGrid, details: PackedFloat32Array) -> Dictiona
 	return out
 
 
-## The map a set of ground or floor arrays was worked out from: its size and cells.
+## The map a set of ground arrays fits: its size, floors and buildings and what stands
+## out of doors (ground_details reads walls, doors and windows only there). Furniture
+## the field paints in a room after the loader (room_stories.gd) changes none of it.
 static func ground_key(g: FieldGrid) -> Array:
-	return [g.width, g.height, hash(g.floor), hash(g.solid), hash(g.building)]
+	var outdoors := PackedInt32Array()
+	outdoors.resize(g.solid.size())
+	for i in g.solid.size():
+		if g.building[i] < 0:
+			outdoors[i] = g.solid[i]
+	return [g.width, g.height, hash(g.floor), hash(g.building), hash(outdoors)]
+
+
+## The map an upper floor's or the cellar's floor arrays fit: its size, floors and
+## which cells have a floor laid (level_floor_row).
+static func floor_key(lg: FieldGrid) -> Array:
+	var laid := PackedByteArray()
+	laid.resize(lg.solid.size())
+	for i in lg.solid.size():
+		var kind: int = lg.solid[i]
+		laid[i] = 0 if kind == S.AIR or (kind == S.BLOCK and lg.building[i] < 0) else 1
+	return [lg.width, lg.height, hash(lg.floor), hash(laid)]
 
 
 ## One answer a corner, shared by the cells that meet there: corner row y.
@@ -1828,7 +1846,7 @@ static func level_floor_arrays(levels_of: Dictionary, keys: Dictionary) -> Dicti
 		for tile in floors:
 			tiles[tile] = (floors[tile] as SurfaceTool).commit_to_arrays()
 		out[lv] = tiles
-		keys[lv] = ground_key(lg)
+		keys[lv] = floor_key(lg)
 	return out
 
 
@@ -1845,7 +1863,7 @@ func _build_level(lv: int) -> void:
 	# The floors, made ahead by the stop loader's worker when they still fit (2a,
 	# as the ground), else here row by row the same way.
 	var ahead: Dictionary = data.get("_floor_arrays", {}).get(lv, {})
-	var ahead_fits: bool = not ahead.is_empty() and data.get("_floor_keys", {}).get(lv) == ground_key(lg)
+	var ahead_fits: bool = not ahead.is_empty() and data.get("_floor_keys", {}).get(lv) == floor_key(lg)
 	if ahead_fits:
 		floor_from_loader[lv] = true
 	for y in range(lg.height):
