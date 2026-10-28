@@ -156,7 +156,7 @@ func setup(map_data: Dictionary) -> void:
 	await BuildPace.rest(pace)
 	await _build_ground()
 	# 지도 칸 밖: 숲 띠·눈둑·밖으로 이어지는 길과 선로(edge_band.gd, 결정 448 17번).
-	edge_band = EdgeBand.build(level_roots[0], grid, data, material, FLOOR_COLORS)
+	edge_band = await EdgeBand.build(level_roots[0], grid, data, material, FLOOR_COLORS, pace)
 	# 선로 칸의 침목과 레일, 지도 밖으로 이어지는 것까지, 건널목 판자(track_view.gd, 결정 476·M1).
 	TrackView.build(level_roots[0], grid, material, edge_band.get("rail_runs", []), data.get("rail_crossings", []))
 	_build_walls()
