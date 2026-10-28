@@ -29,7 +29,7 @@ import bmesh
 import bpy
 from mathutils import Vector
 
-SCRIPT_VERSION = 1
+SCRIPT_VERSION = 2
 
 # 격자 (s2/game/world/map_view.gd LEVEL_H·CUT_H와 같다)
 H = 3.0          # 층 바닥에서 윗층 바닥까지
@@ -51,6 +51,9 @@ PITCH = 35.0
 SPAN = 10.0
 EAVE = 0.3
 ROOF_T = 0.12
+# 맨사드도 중앙 높이는 35° 박공과 같다. 아래 60°·위 20°의 교점을 역산한다.
+MANSARD_LOW = math.tan(math.radians(60.0))
+MANSARD_UP = math.tan(math.radians(20.0))
 
 ZONES = {"wall": 0, "stone": 1, "wood": 2, "glass": 3, "roof": 4, "metal": 5}
 ZONE_NAMES = {"wall": "벽면", "stone": "석재(기단·띠·창턱·모서리돌)", "wood": "나무",
@@ -482,6 +485,165 @@ def roof_gable_end(p):
         p.box((-w / 2.0, w / 2.0), (YO - 0.035, YO - 0.004), (z - 0.03, z + 0.03), "wood", 1, sides="yzZ")
 
 
+def _roof_skin(p, pts, eaves=()):
+    """평면 한 장: 지붕 겉/나무 밑, 지정한 가장자리만 나무 두께로 닫는다."""
+    verts = [Vector(v) for v in pts]
+    normal = (verts[1] - verts[0]).cross(verts[2] - verts[0])
+    if normal.z < 0.0:
+        normal = -normal
+    tv = ROOF_T / math.cos(math.radians(PITCH))
+    lower = [v - Vector((0.0, 0.0, tv)) for v in verts]
+    p.face(verts, "roof", 1, normal)
+    p.face(lower, "wood", 0, -normal)
+    for i in eaves:
+        j = (i + 1) % len(verts)
+        edge = verts[j] - verts[i]
+        outward = Vector((edge.y, -edge.x, 0.0))
+        # pts의 감김과 무관하게, 면 가운데에서 가장자리 쪽을 바깥으로 잡는다.
+        middle = sum(verts, Vector()) / len(verts)
+        if outward.dot((verts[i] + verts[j]) * 0.5 - middle) < 0.0:
+            outward = -outward
+        p.face([verts[i], verts[j], lower[j], lower[i]], "wood", 1, outward)
+
+
+def _ridge_cap(p, start, end, width=0.08):
+    """수평·비스듬한 용마루의 좁은 함석 덮개(6 삼각형)."""
+    a, b = Vector(start), Vector(end)
+    d = b - a
+    side = Vector((-d.y, d.x, 0.0)).normalized() * width
+    peak = Vector((0.0, 0.0, 0.06))
+    lip = Vector((0.0, 0.0, 0.015))
+    for sign in (-1.0, 1.0):
+        pts = [a + side * sign + lip, b + side * sign + lip, b + peak, a + peak]
+        normal = (pts[1] - pts[0]).cross(pts[2] - pts[0])
+        if normal.z < 0.0:
+            normal = -normal
+        p.face(pts, "metal", 1, normal)
+    for tip, direction in ((a, -d), (b, d)):
+        pts = [tip - side + lip, tip + side + lip, tip + peak]
+        normal = (pts[1] - pts[0]).cross(pts[2] - pts[0])
+        if normal.dot(direction) < 0.0:
+            normal = -normal
+        p.face(pts, "metal", 1, normal)
+
+
+def roof_hip_end(p):
+    # +X로 향한 반 피라미드. X=0의 용마루 끝에 몸통을 붙이고 X=5.3이 처마 끝.
+    # Y 처마는 기존 박공과 같다. plan이 끝의 X만 줄여 짧은 평면도 빈틈 없이 덮는다.
+    ye = SPAN / 2.0 + EAVE
+    ze = -EAVE * math.tan(math.radians(PITCH))
+    tip = (0.0, 0.0, roof_rise())
+    for sy in (-1.0, 1.0):
+        _roof_skin(p, [tip, (0.0, sy * ye, ze), (ye, sy * ye, ze)], (1,))
+        _ridge_cap(p, tip, (ye, sy * ye, ze))
+    _roof_skin(p, [tip, (ye, -ye, ze), (ye, ye, ze)], (1,))
+
+
+def roof_half_hip_end(p):
+    # 박공 위쪽 1/3만 접는다. 나머지 두 경사면도 포함하므로 몸통과 겹치지 않는다.
+    run = SPAN / 6.0
+    ye = SPAN / 2.0 + EAVE
+    ze = -EAVE * math.tan(math.radians(PITCH))
+    zcut = roof_rise() * 2.0 / 3.0
+    tip = (0.0, 0.0, roof_rise())
+    for sy in (-1.0, 1.0):
+        _roof_skin(p, [tip, (0.0, sy * ye, ze), (run, sy * ye, ze), (run, sy * run, zcut)], (1, 2))
+        _ridge_cap(p, tip, (run, sy * run, zcut))
+    _roof_skin(p, [tip, (run, -run, zcut), (run, run, zcut)], (1,))
+
+
+def _end_profile(p, profile, back_exposed=0):
+    # local X는 경간, -Y는 바깥. 삼각/사다리꼴/오각형 모두 같은 벽 두께 규약.
+    p.face([(x, YO, z) for x, z in profile], "wall", 1, (0.0, -1.0, 0.0))
+    p.face([(x, YI, z) for x, z in profile], "wall", back_exposed, (0.0, 1.0, 0.0))
+    for i, (x, z) in enumerate(profile):
+        nx, nz = profile[(i + 1) % len(profile)]
+        p.face([(x, YO, z), (nx, YO, nz), (nx, YI, nz), (x, YI, z)],
+               "wall", 0, (nz - z, 0.0, x - nx))
+
+
+def roof_half_hip_wall(p):
+    tv = ROOF_T / math.cos(math.radians(PITCH))
+    half = SPAN / 2.0 - tv / math.tan(math.radians(PITCH))
+    cut = SPAN / 6.0
+    _end_profile(p, [(-half, 0.0), (half, 0.0), (cut, roof_rise() * 2.0 / 3.0 - tv),
+                     (-cut, roof_rise() * 2.0 / 3.0 - tv)])
+
+
+def mansard_break():
+    lower_run = (roof_rise() - SPAN / 2.0 * MANSARD_UP) / (MANSARD_LOW - MANSARD_UP)
+    return SPAN / 2.0 - lower_run, lower_run * MANSARD_LOW
+
+
+def roof_mansard(p):
+    by, bz = mansard_break()
+    profile = [(0.0, roof_rise()), (by, bz), (SPAN / 2.0 + EAVE, -EAVE * MANSARD_LOW)]
+    for sy in (-1.0, 1.0):
+        for i in range(2):
+            ya, za = profile[i]
+            yb, zb = profile[i + 1]
+            _roof_skin(p, [(-0.5, sy * ya, za), (0.5, sy * ya, za),
+                           (0.5, sy * yb, zb), (-0.5, sy * yb, zb)], (1, 2, 3) if i == 1 else (1, 3))
+    _ridge_cap(p, (-0.5, 0.0, roof_rise()), (0.5, 0.0, roof_rise()), 0.15)
+
+
+def roof_mansard_end(p):
+    by, bz = mansard_break()
+    tv = ROOF_T / math.cos(math.radians(PITCH))
+    half = SPAN / 2.0 - tv / MANSARD_LOW
+    _end_profile(p, [(-half, 0.0), (half, 0.0), (by, bz - tv),
+                     (0.0, roof_rise() - tv), (-by, bz - tv)])
+
+
+def roof_shed(p):
+    # 높은 쪽은 Blender +Y = Godot 북쪽(-Z). 경간 10 m 전체에 기준 물매 35°.
+    tan_p = math.tan(math.radians(PITCH))
+    ye = SPAN / 2.0 + EAVE
+    _roof_skin(p, [(-0.5, -ye, -EAVE * tan_p), (0.5, -ye, -EAVE * tan_p),
+                   (0.5, ye, (SPAN + EAVE) * tan_p), (-0.5, ye, (SPAN + EAVE) * tan_p)], (0, 1, 2, 3))
+    high = SPAN * tan_p - ROOF_T / math.cos(math.radians(PITCH))
+    outer, inner = SPAN / 2.0, SPAN / 2.0 - TE
+    inside_high = high - TE * tan_p
+    p.rect("y", outer, (-0.5, 0.5), (0.0, high), "wall", 1, 1)
+    p.rect("y", inner, (-0.5, 0.5), (0.0, inside_high), "wall", 0, -1)
+    p.face([(-0.5, inner, inside_high), (0.5, inner, inside_high),
+            (0.5, outer, high), (-0.5, outer, high)], "wall", 0, (0.0, -tan_p, 1.0))
+    for sx in (-0.5, 0.5):
+        p.face([(sx, inner, 0.0), (sx, outer, 0.0), (sx, outer, high), (sx, inner, inside_high)],
+               "wall", 1, (1.0 if sx > 0.0 else -1.0, 0.0, 0.0))
+
+
+def roof_shed_side(p):
+    tv = ROOF_T / math.cos(math.radians(PITCH))
+    tan_p = math.tan(math.radians(PITCH))
+    # 양 끝에서 같은 방향으로 놓는다. 두 면 모두 바깥 벽 비트로 닫는다.
+    _end_profile(p, [(-SPAN / 2.0 + tv / tan_p, 0.0), (SPAN / 2.0, 0.0),
+                     (SPAN / 2.0, SPAN * tan_p - tv)], back_exposed=1)
+
+
+def roof_dormer(p):
+    # 앞(-Y)의 지붕 면을 원점으로 한다. 밑은 35° 경사 아래로 0.15 m 묻힌다.
+    tan_p = math.tan(math.radians(PITCH))
+    front, back, half, eave = -0.15, 1.2, 0.65, 1.0
+    peak = eave + half * tan_p
+    for sx in (-1.0, 1.0):
+        p.face([(sx * half, front, front * tan_p - 0.15), (sx * half, back, back * tan_p - 0.15),
+                (sx * half, back, eave), (sx * half, front, eave)], "wall", 1, (sx, 0.0, 0.0))
+        _roof_skin(p, [(0.0, front - 0.1, peak), (0.0, back + 0.1, peak),
+                       (sx * (half + 0.1), back + 0.1, eave - 0.1 * tan_p),
+                       (sx * (half + 0.1), front - 0.1, eave - 0.1 * tan_p)], (1, 2, 3))
+    for y, sign in ((front, -1), (back, 1)):
+        bottom = y * tan_p - 0.15
+        p.face([(-half, y, bottom), (half, y, bottom), (half, y, eave),
+                (0.0, y, peak), (-half, y, eave)], "wall", 1, (0.0, sign, 0.0))
+    p.rect("y", front - 0.002, (-0.43, 0.43), (0.16, 0.85), "glass", 1, -1)
+    for x0, x1 in ((-0.49, -0.43), (0.43, 0.49)):
+        p.box((x0, x1), (front - 0.05, front), (0.10, 0.91), "wood", 1, sides="yxXZ")
+    for z0, z1 in ((0.10, 0.16), (0.85, 0.91)):
+        p.box((-0.43, 0.43), (front - 0.05, front), (z0, z1), "wood", 1, sides="yzZ")
+    _ridge_cap(p, (0.0, front - 0.1, peak), (0.0, back + 0.1, peak))
+
+
 def roof_flat(p):
     p.rect("z", 0.0, (-0.5, 0.5), (-0.5, 0.5), "roof", 1, 1)
 
@@ -597,6 +759,14 @@ PIECES = [
     ("door_leaf_cut", door_leaf_cut, "state", "none", "hinge", "free", False, 12, "턱 높이 문짝"),
     ("roof_gable", roof_gable, "roof", "span", "wall_top", "free", False, 28, "박공지붕(경사 둘, 처마, 용마루 덮개)"),
     ("roof_gable_end", roof_gable_end, "roof", "span_xz", "wall_top", "free", False, 80, "박공 끝 삼각 벽과 다락 환기창"),
+    ("roof_hip_end", roof_hip_end, "roof", "hip_end", "ridge_end", "free", False, 40, "모임 끝 반 피라미드(+X 바깥)"),
+    ("roof_half_hip_end", roof_half_hip_end, "roof", "hip_end", "ridge_end", "free", False, 48, "박공 위 1/3을 접은 반모임 끝"),
+    ("roof_half_hip_wall", roof_half_hip_wall, "roof", "span_xz", "wall_top", "free", False, 16, "반모임 아래 사다리꼴 벽"),
+    ("roof_mansard", roof_mansard, "roof", "span", "wall_top", "free", False, 56, "아래 60°·위 20° 꺾인 지붕"),
+    ("roof_mansard_end", roof_mansard_end, "roof", "span_xz", "wall_top", "free", False, 20, "맨사드 끝 오각 벽"),
+    ("roof_shed", roof_shed, "roof", "span", "wall_top", "free", False, 24, "북쪽 높은 벽을 포함한 35° 외쪽 지붕"),
+    ("roof_shed_side", roof_shed_side, "roof", "span_xz", "wall_top", "free", False, 12, "외쪽 지붕 옆 삼각 벽"),
+    ("roof_dormer", roof_dormer, "roof", "dormer", "roof_surface", "free", False, 100, "작은 박공·앞 유리·옆 볼이 있는 지붕창"),
     ("roof_flat", roof_flat, "roof", "xy", "wall_top", "free", True, 4, "평지붕 면"),
     ("roof_parapet", roof_parapet, "roof", "x", "wall_top", "free", True, 8, "평지붕 둘레 낮은 벽"),
     ("chimney", chimney, "roof", "none", "roof_base", "free", True, 40, "굴뚝 몸통과 덮개돌"),
@@ -606,10 +776,12 @@ PIECES = [
 ]
 
 STRETCH_NAMES = {"none": "그대로", "x": "X로 줄 길이", "xy": "X·Y로", "span": "X 길이, Y·Z 경간 배율",
-                 "span_xz": "X·Z 경간 배율"}
+                 "span_xz": "X·Z 경간 배율", "hip_end": "X 끝 길이, Y·Z 경간 배율",
+                 "dormer": "Z는 앉는 면 물매 배율"}
 ORIGIN_NAMES = {"cell_floor": "칸 가운데 바닥", "hinge": "경첩 줄 바닥", "slot": "판자 가운데",
                 "run_end": "줄 끝 칸 경계 바닥",
-                "wall_top": "벽 꼭대기 가운데", "roof_base": "굴뚝 밑 가운데"}
+                "wall_top": "벽 꼭대기 가운데", "roof_base": "굴뚝 밑 가운데",
+                "ridge_end": "용마루 끝 아래 벽 높이", "roof_surface": "앞창 밑 지붕 면"}
 
 
 def export(piece, path):
@@ -662,6 +834,12 @@ def write_readme(path, book, rows):
     w("- 박공지붕은 경간 %.0f m로 만들었다. X는 지붕 길이만큼 늘이고, Y와 Z는 같은 배율"
       "(경간 ÷ %.0f)로 바꾸면 경사 %.0f°가 그대로다. 처마 내밈(%.1f m)과 지붕 두께도 같은 배율로 바뀐다. "
       "박공 끝 벽은 X와 Z를 같은 배율로 바꾼다." % (SPAN, SPAN, PITCH, EAVE))
+    w("- 2가: 모임 끝은 +X를 바깥으로, X=0을 몸통 끝에 붙인다(5 m + 처마 0.3 m). 반모임 끝 길이는 "
+      "10/6 m이며 아래 벽은 따로다. 몸통 길이에서 끝 둘의 길이를 뺀다. 짧은 모임은 끝 둘만 쓴다.")
+    w("- 맨사드는 아래 60°·위 20°이고 중앙 높이는 기준 박공과 같다. 외쪽은 북쪽(-Z)이 높은 "
+      "한 면과 높은 벽, 옆 삼각 벽 둘이다. 모든 지붕 높이에 pitch 배율을 더 곱한다.")
+    w("- 지붕창은 앞창 밑 지붕 면이 원점, +Z가 바깥이다(Godot 축). 경사 35° 기준으로 밑을 "
+      "묻혔다. 앉는 경사의 탄젠트/기준 탄젠트만큼 높이를 늘린다. 굴뚝과 함께 건물 지붕에 굽는다.")
     w("- 그림자는 바깥 무리와 지붕만 드리운다(3번 이식).")
     w("")
     w("## 칠 구역")
@@ -764,7 +942,9 @@ def main():
                  "plinth_m": PL_H, "band_m": [BAND, H], "sill_m": SILL, "head_m": HEAD,
                  "window_w_m": WIN_W, "door_m": [DOOR_W, DOOR_H]},
         "roof": {"pitch_deg": PITCH, "nominal_span_m": SPAN, "eave_m": EAVE, "thickness_m": ROOF_T,
-                 "rise_m": round(roof_rise(), 4)},
+                 "rise_m": round(roof_rise(), 4), "hip_end_run_m": SPAN / 2.0 + EAVE,
+                 "half_hip_end_run_m": SPAN / 6.0, "mansard_pitch_deg": [60.0, 20.0],
+                 "mansard_break_m": list(mansard_break()), "shed_rise_m": 2.0 * roof_rise()},
         "zones": ZONES,
         "colour_encoding": "r = 1자리, g = 2자리, b = 4자리 비트, a = 날씨 받음",
         "hinge_m": [-DOOR_W / 2.0, 0.0, 0.0],
