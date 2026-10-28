@@ -137,6 +137,9 @@ export function topBar(view: View): HTMLElement {
       resource('food', '식량', g.food, -f.food, fx),
       resource('med', '의약품', g.med, undefined, fx),
       resource('lux', '사치품', g.lux, undefined, fx),
+      g.supOn ? h('div', { class: 'res', 'data-resource': 'sup', 'aria-label': `생필품 ${fmt(g.sup ?? 0)}` },
+        icon('sup', 'res__icon res__icon--sup'),
+        h('div', { class: 'res__body' }, h('b', { class: 'num' }, fmt(g.sup ?? 0)), h('span', { class: 'res__delta' }, '생필품'))) : null,
       domesticResource(view)));
 }
 
