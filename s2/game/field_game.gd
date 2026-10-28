@@ -66,6 +66,7 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const StormLook = preload("res://fx/storm_look.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const BreathFx = preload("res://fx/breath_fx.gd")
+const BloodFx = preload("res://fx/blood_fx.gd")
 const AllyLines = preload("res://game/sim/ally_lines.gd")
 const LeaveScene = preload("res://game/ui/leave_scene.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
@@ -396,6 +397,7 @@ var screen_lift: float = 0.0
 const SCREEN_LIFT_MAX: float = 0.2
 var atmo_min: float = -INF
 var breath: Node3D
+var blood_fx: Node3D                  # drops and marks off a blow (decision 444 D, view only)
 ## Frost creeping in at the screen's edges on cold nights (plain stops; a storm has its own).
 var cold_frost: Control
 var cold_frost_mat: ShaderMaterial
@@ -537,6 +539,10 @@ func _ready() -> void:
 	map_edge = MapEdge.new()
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
+	blood_fx = BloodFx.new()
+	add_child(blood_fx)
+	blood_fx.begin_stop(int(opts.get("seed", 1)))
+	blood_fx.set_sight(view.vis_texture, Vector2(view.grid.width, view.grid.height))
 	ripples = SoundRipple.new()
 	add_child(ripples)
 	map_edge.set_fog(fx_light["fog_color"])

@@ -632,9 +632,9 @@ func stomp(p, z: Dictionary) -> void:
 	p.body.add_fatigue(STOMP_FATIGUE)
 	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
 	z["stomped"] = int(z.get("stomped", 0)) + 1
-	game.feel.stomped(p, z["pos"], int(z["stomped"]) >= STOMPS_TO_END)
 	var seen: Vector3 = game.zombies.seen_pos(z)
 	var ended: bool = int(z["stomped"]) >= STOMPS_TO_END
+	game.feel.stomped(p, seen, ended)
 	if ended:
 		_kill(p, z, "")
 	_struck(p, seen, "stomp", "boot", "downed", "finish" if ended else "body", -1)
@@ -660,7 +660,7 @@ func _strike(p, at) -> void:
 		var was: String = at["state"]
 		swing(p, at)
 		var now_state: String = at["state"]
-		game.feel.landed(p, at["pos"], wid, now_state != was and (now_state == "dead" or now_state == "downed"))
+		game.feel.landed(p, game.zombies.seen_pos(at), wid, now_state != was and (now_state == "dead" or now_state == "downed"), was == "downed" or was == "rising")
 	else:
 		swing_person(p, at)
 
@@ -1344,13 +1344,19 @@ func fire(p, at: Vector3, target = null) -> String:
 		return "shot"
 	var hit := false
 	if target is Dictionary and not target.is_empty():
+		var was: String = target["state"]
 		hit = _shoot_zombie(p, target, d, radius, dist)
+		if hit:
+			_shot_bleeds(p, target, was)
 	elif target != null and not (target is Dictionary):
 		hit = _shoot_person(p, target, radius)
 	else:
 		var z: Dictionary = game.zombies.nearest(at, 0.8, true, true)
 		if not z.is_empty():
+			var was: String = z["state"]
 			hit = _shoot_zombie(p, z, d, radius, dist)
+			if hit:
+				_shot_bleeds(p, z, was)
 	var lands: Vector3 = end
 	if not hit:
 		# The miss lands somewhere past the target: a small sound over there, and the arrow with it.
@@ -1421,6 +1427,7 @@ func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) 
 		var by: String = Wear.shot_in(worn, "torso", held, rng)
 		if held:
 			z["stun"] = 0.3
+			z["round_held"] = true   # no blood (_shot_bleeds)
 			_toast(p, "%s 탄을 막았다." % _subject(by))
 			return true
 		if rng.randf() < float(d["body_knockdown"]):
@@ -1433,6 +1440,16 @@ func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) 
 
 ## What hit one of the dead (a round, shot, an arrow) went through its clothes
 ## there, holing each layer as on the living (clothing.md 3.3). No dice.
+## A round that went in shows on the body (hit_feel.gd shot_in); one a vest
+## held does not.
+func _shot_bleeds(p, z: Dictionary, was: String) -> void:
+	if z.has("round_held"):
+		z.erase("round_held")
+		return
+	var now_state: String = z["state"]
+	game.feel.shot_in(p, game.zombies.seen_pos(z), now_state != was and (now_state == "dead" or now_state == "downed"), was == "downed" or was == "rising")
+
+
 func _shot_through(z: Dictionary, zone: String) -> void:
 	Wear.shot_in(game.zombies.worn_of(z), "head_neck" if zone == "head" else "torso", false, game.rng)
 
