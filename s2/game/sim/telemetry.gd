@@ -147,7 +147,7 @@ func to_dict() -> Dictionary:
 		"noise": noise_out,
 		"hordes": horde_out,
 		"injuries": injury_out,
-		"work_events": work_events.duplicate(true),
+		"workEvents": work_events.duplicate(true),
 		"ammo": ammo_used.duplicate(),
 		"trackDead": track_dead.duplicate(),
 		"rests": rest_out,
