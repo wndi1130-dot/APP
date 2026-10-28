@@ -22,7 +22,7 @@ import bmesh
 import bpy
 from mathutils import Vector
 
-SCRIPT_VERSION = 2   # 2: 둥근 지붕 매끈하게, 연결막을 완충기 끝까지(대각뷰, 결정 476)
+SCRIPT_VERSION = 3   # 2: 둥근 지붕 매끈하게, 연결막을 완충기 끝까지(대각뷰, 결정 476) · 3: 유리 빛줄, 바퀴 면 밝게(점검 6·8)
 ATLAS = 256
 CELL = 32
 # sRGB 0..255. 흰 눈 바탕에서 튀지 않게 어둡고 차갑게(셰이더가 채도를 다시 누른다).
@@ -39,6 +39,8 @@ PALETTE = {
     "curtain": (166, 160, 144), "curtain_red": (108, 56, 48),
     "brass": (140, 112, 58), "black": (20, 20, 22), "bellows": (36, 34, 32),
     "leaf": (58, 84, 52), "inside": (22, 20, 19), "crate": (124, 100, 72), "sack": (132, 120, 98),
+    # 유리에 비낀 하늘(끝에 더해 앞 칸 자리는 그대로)
+    "glass_hi": (84, 98, 108),
 }
 NAMES = list(PALETTE)
 assert len(NAMES) <= (ATLAS // CELL) ** 2
@@ -162,6 +164,16 @@ def roof(p, x0, x1, colour, steps, z_half=1.44, eave=EAVE_Y, peak=PEAK_Y, under=
             p.face(ring, cap_colour or colour, (xs, 0, 0))
 
 
+def glass_streak(p, a, b, ya, yb, z, zs, inner):
+    """유리창에 비낀 하늘빛 줄 하나(대각뷰에서 유리가 평평한 남색 판으로 읽혔다, 점검 6).
+    유리 바로 앞 2 mm(LOD1은 1 mm)라 저녁 창빛 판·커튼·판자가 그 앞을 가린다. 문·온실 유리는 뺀다."""
+    if inner not in ("glass", "glass_warm"):
+        return
+    w = b - a
+    yl, yh = ya + 0.05, yb - 0.05
+    p.face([(a + 0.14 * w, yl, z), (a + 0.32 * w, yl, z), (a + 0.58 * w, yh, z), (a + 0.40 * w, yh, z)], "glass_hi", (0, 0, zs))
+
+
 def side_wall(p, zs, openings, colour, y0=FLOOR_Y, y1=EAVE_Y, depth=0.06, detail=True):
     """옆벽 한 면(z = zs*BODY_Z). openings: [(x0, x1, ya, yb, inner_colour)] 사람 키 높이의 창·문 구멍.
     구멍마다 벽은 띠로 나뉘고, 안쪽 면은 depth만큼 들어가 있다(LOD0은 구멍 둘레 면까지)."""
@@ -173,6 +185,7 @@ def side_wall(p, zs, openings, colour, y0=FLOOR_Y, y1=EAVE_Y, depth=0.06, detail
         zf = zs * (BODY_Z + 0.003)
         for (a, b, ya, yb, inner) in xs:
             p.face([(a, ya, zf), (b, ya, zf), (b, yb, zf), (a, yb, zf)], inner, (0, 0, zs))
+            glass_streak(p, a, b, ya, yb, zs * (BODY_Z + 0.004), zs, inner)
         return
     # 구멍이 없는 띠: 구멍 사이 기둥, 구멍 위·아래 띠
     cuts = [-BODY_X]
@@ -191,6 +204,7 @@ def side_wall(p, zs, openings, colour, y0=FLOOR_Y, y1=EAVE_Y, depth=0.06, detail
             p.face([(a, yb, z), (b, yb, z), (b, y1, z), (a, y1, z)], colour, (0, 0, zs))
         zi = zs * (BODY_Z - depth)
         p.face([(a, ya, zi), (b, ya, zi), (b, yb, zi), (a, yb, zi)], inner, (0, 0, zs))
+        glass_streak(p, a, b, ya, yb, zs * (BODY_Z - depth + 0.002), zs, inner)
         # 구멍 둘레(위·아래·양옆), 아래는 창턱 색
         p.face([(a, ya, zi), (b, ya, zi), (b, ya, z), (a, ya, z)], "iron_worn", (0, 1, 0))
         p.face([(a, yb, zi), (b, yb, zi), (b, yb, z), (a, yb, z)], colour, (0, -1, 0))
@@ -262,11 +276,13 @@ def bogie(p, cx, detail=True):
     for ax in (cx - AXLE_GAP, cx + AXLE_GAP):
         for zs in (1, -1):
             z0, z1 = sorted((zs * (WHEEL_Z - 0.06), zs * (WHEEL_Z + 0.06)))
-            p.cyl((ax, WHEEL_R, z0), (ax, WHEEL_R, z1), WHEEL_R, "iron", sides, cap_colour="iron_worn")
+            # 바퀴 면은 밝은 쇠, 굴대 머리는 어둡게: 줌 24에서 옆틀·축상자 아래로 둥근 바퀴가
+            # 검은 띠에 묻혀 안 읽혔다(대각뷰 점검 8).
+            p.cyl((ax, WHEEL_R, z0), (ax, WHEEL_R, z1), WHEEL_R, "iron", sides, cap_colour="steel")
             if detail:
                 # 바퀴 가운데 굴대 머리(옆에서 둥근 점)
                 za, zb = sorted((zs * (WHEEL_Z + 0.06), zs * (WHEEL_Z + 0.10)))
-                p.cyl((ax, WHEEL_R, za), (ax, WHEEL_R, zb), 0.12, "steel", 6)
+                p.cyl((ax, WHEEL_R, za), (ax, WHEEL_R, zb), 0.12, "iron", 6)
         if detail:
             p.cyl((ax, WHEEL_R, -WHEEL_Z), (ax, WHEEL_R, WHEEL_Z), 0.06, "iron", 6, caps=False)
     for zs in (1, -1):
@@ -322,6 +338,31 @@ def windows_row(count, width, x_from=-6.1, x_to=6.1, ya=1.62, yb=2.32, inner="gl
         a = x_from + i * (width + gap)
         out.append([a, a + width, ya, yb, inner])
     return out
+
+
+# 객차 유리창 줄(한쪽 면, 양옆 같음). 짓기(build_*)와 대응표 "windows"(필드 저녁 창빛 자리,
+# train_model_kit)가 이 표를 같이 읽어 창과 빛이 어긋나지 않는다. 커튼·판자 장식은 저마다의 줄을 쓴다.
+COACH_WINDOWS = {
+    "coach_worn": dict(count=8, width=0.9, x_from=-5.9, x_to=5.9),
+    "coach_clean": dict(count=9, width=0.95, x_from=-6.0, x_to=6.0, ya=1.6, yb=2.36),
+    "coach_chief": dict(count=5, width=1.45, x_from=-5.6, x_to=5.6, ya=1.6, yb=2.36, inner="glass_warm"),
+    "coach_medic": dict(count=7, width=1.0),
+}
+GLASS_Y = 1.62        # 온실칸 유리 띠 아래 끝(그 위 0.32 m는 안쪽 화분 잎 줄)
+GLASS_TOP = 2.48
+
+
+def window_lights(pid):
+    """대응표 "windows": 저녁에 빛이 드는 유리 자리 [x0, x1, y0, y1](한쪽 면, 모델 m).
+    온실칸은 긴 유리 띠 하나에서 화분 잎 줄 위만 밝힌다(잎 면과 겹치지 않게)."""
+    if pid == "coach_glass":
+        return [[round(-BODY_X + 0.35, 4), round(BODY_X - 0.35, 4), round(GLASS_Y + 0.34, 4), round(GLASS_TOP - 0.02, 4)]]
+    return [[round(w[0], 4), round(w[1], 4), w[2], w[3]] for w in windows_row(**COACH_WINDOWS[pid])]
+
+
+def write_windows(book):
+    for pid in list(COACH_WINDOWS) + ["coach_glass"]:
+        book["assets"][pid]["windows"] = window_lights(pid)
 
 
 # ---------------------------------------------------------------- 객차
@@ -446,16 +487,16 @@ def medic_extras(p, detail):
 
 def glass_coach(p, detail):
     """온실칸: 나무 아래 판, 위는 유리 벽(세로 살), 지붕 가운데 유리 등."""
-    y_glass = 1.62
+    y_glass = GLASS_Y
     for zs in (1, -1):
-        holes = [[-BODY_X + 0.35, BODY_X - 0.35, y_glass, 2.48, "glass_green"]]
+        holes = [[-BODY_X + 0.35, BODY_X - 0.35, y_glass, GLASS_TOP, "glass_green"]]
         side_wall(p, zs, holes, "plank", detail=detail)
         if detail:
             z0, z1 = sorted((zs * (BODY_Z - 0.065), zs * (BODY_Z - 0.01)))
             n = 14
             for i in range(1, n):
                 x = -BODY_X + 0.35 + (2 * (BODY_X - 0.35)) * i / n
-                p.box((x - 0.03, x + 0.03), (y_glass, 2.48), (z0, z1), "plank_dark", skip=("-y", "+y"))
+                p.box((x - 0.03, x + 0.03), (y_glass, GLASS_TOP), (z0, z1), "plank_dark", skip=("-y", "+y"))
             # 안쪽 화분 줄(유리 아래쪽 어두운 잎)
             zi = zs * (BODY_Z - 0.055)
             for i in range(0, n, 2):
@@ -529,23 +570,23 @@ def freight(p, detail):
 
 def build_worn(p, d):
     coach(p, d, "green", body_low="green_dark", roof_col="roof",
-          wins=windows_row(8, 0.9, x_from=-5.9, x_to=5.9), extras=worn_extras, vents=(-4.6, -0.9, 1.6, 4.6), door_col="green_faded")
+          wins=windows_row(**COACH_WINDOWS["coach_worn"]), extras=worn_extras, vents=(-4.6, -0.9, 1.6, 4.6), door_col="green_faded")
 
 
 def build_clean(p, d):
     coach(p, d, "maroon", body_low="maroon_dark", roof_col="roof",
-          wins=windows_row(9, 0.95, x_from=-6.0, x_to=6.0, ya=1.6, yb=2.36), belt="cream", door_col="maroon_dark")
+          wins=windows_row(**COACH_WINDOWS["coach_clean"]), belt="cream", door_col="maroon_dark")
 
 
 def build_chief(p, d):
     coach(p, d, "blue", body_low="blue_dark", roof_col="roof_dark",
-          wins=windows_row(5, 1.45, x_from=-5.6, x_to=5.6, ya=1.6, yb=2.36, inner="glass_warm"), belt="brass",
+          wins=windows_row(**COACH_WINDOWS["coach_chief"]), belt="brass",
           extras=chief_extras, vents=(-3.0, 0.0, 3.0), door_col="blue_dark")
 
 
 def build_medic(p, d):
     coach(p, d, "cream", body_low="grey", roof_col="roof",
-          wins=windows_row(7, 1.0), extras=medic_extras, vents=(-4.5, -2.0, 2.0, 4.5), door_col="grey")
+          wins=windows_row(**COACH_WINDOWS["coach_medic"]), extras=medic_extras, vents=(-4.5, -2.0, 2.0, 4.5), door_col="grey")
 
 
 # ---------------------------------------------------------------- 옆 선로 화차·타는 문(대각뷰, 결정 476)
@@ -819,6 +860,7 @@ def update_catalog(repo, rows):
         if r["id"] == "coach_medic":
             # 지붕 부품(연통) 자리: 새 지붕 꼭대기
             a["attachment_sites"]["roof_clear"]["position"] = [0, PEAK_Y, 0]
+    write_windows(book)
     path.write_text(json.dumps(book, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -827,9 +869,14 @@ def main():
     parser.add_argument("--repo", required=True)
     parser.add_argument("--preview", action="store_true")
     parser.add_argument("--out", default="")
+    parser.add_argument("--windows-only", action="store_true", help="굽지 않고 대응표의 창 자리만 다시 쓴다")
     args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
     repo = Path(args.repo).resolve()
     out_dir = repo / "s2/models/train_exterior"
+    if args.windows_only:
+        update_catalog(repo, [])
+        print("TRAIN_EXTERIOR windows written", flush=True)
+        return
     if args.preview:
         preview(out_dir, Path(args.out) if args.out else repo / "s2/.godot/train_exterior_work")
         return

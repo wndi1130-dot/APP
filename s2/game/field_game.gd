@@ -45,6 +45,8 @@ const SmellRules = preload("res://game/sim/smell_rules.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const SnowCover = preload("res://game/sim/snow_cover.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
+const NightLights = preload("res://game/world/night_lights.gd")
+const NightLightView = preload("res://game/world/night_light_view.gd")
 const SnowTracks = preload("res://game/sim/snow_tracks.gd")
 const SoundRipple = preload("res://game/world/sound_ripple.gd")
 ## The squad's sounds whose reach shows on the ground (decision 471 H1): a door kicked in,
@@ -183,6 +185,7 @@ var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upsta
 var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
 var map_edge: MapEdge                   # ground and fog past the map's edge (fx/map_edge.gd)
+var night_view: NightLightView          # the hearts of the lights people left (decision 471 B4)
 var zombies: Zombies
 var camera: Camera3D
 var environment: Environment
@@ -384,6 +387,12 @@ var season_name: String = ""
 var sky_photo: String = ""
 var look_hour: float = -1.0
 var atmo: Dictionary = {}
+## The player's brightness from the settings (decision 471 B5), -0.2..0.2; 0 is
+## the picture as made, and the night's dark is set there. It bends the dark end
+## of the grade's curve like a gamma. Only the play flow sets it
+## (set_screen_lift): a field the tools, measures and bots make stays at 0.
+var screen_lift: float = 0.0
+const SCREEN_LIFT_MAX: float = 0.2
 var atmo_min: float = -INF
 var breath: Node3D
 ## Frost creeping in at the screen's edges on cold nights (plain stops; a storm has its own).
@@ -436,7 +445,7 @@ func _ready() -> void:
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
-	_take_map(SidePath.add(stop_map, rng.seed))
+	_take_map(with_side_path(stop_map, rng.seed))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
 	if opts.get("departure") is Dictionary:
@@ -507,6 +516,14 @@ func _ready() -> void:
 	add_child(view)
 	view.pace = pace
 	await view.setup(data)
+	# A stop the route marks no_fire (RouteStops.dress, s3-link) gets its lights
+	# planned again without fires (decision 471 B4).
+	if data.get("no_fire", false):
+		NightLights.replan(data)
+	night_view = NightLightView.new()
+	night_view.name = "NightLights"
+	add_child(night_view)
+	night_view.build(data)
 	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
 	map_edge = MapEdge.new()
 	add_child(map_edge)
@@ -701,13 +718,16 @@ func lamp_cells(sight: Dictionary = {}) -> Dictionary:
 	var key := LampLight.on_key(lights, now, fire, raid)
 	if key != lamp_key:
 		lamp_key = key
-		lamp_fixed = LampLight.fixed_cells(lights, grid.width, grid.height, now, fire, raid)
+		lamp_fixed = LampLight.fixed_cells(lights, grid.width, grid.height, now, fire, raid, grid)
 		for kind in ["car_window", "firebox", "hideout"]:
 			var on := false
 			for l in lights:
 				if l["kind"] == kind and LampLight.is_on(l, now, fire, raid):
 					on = true
 			view.set_light_on(kind, on)
+		for l: Dictionary in lights:
+			if NightLights.KINDS.has(String(l["kind"])):
+				night_view.set_on(String(l["id"]), LampLight.is_on(l, now, fire, raid))
 	var cells := lamp_fixed.duplicate()
 	var dark := clock.is_dark()
 	for p in people:
@@ -715,7 +735,21 @@ func lamp_cells(sight: Dictionary = {}) -> Dictionary:
 			continue
 		var only: Dictionary = sight if p == player else {}
 		LampLight.stamp(cells, grid.width, grid.height, FieldGrid.cell_of(p.position), Vector2i.ZERO, float(p.lamp["strength"]), float(p.lamp["reach"]), only)
+		if p == player:
+			_stamp_beam(cells)
 	return cells
+
+
+## The chief's torch throws a beam ahead beside the lantern (decision 471 B4),
+## not through walls. Its cells count as lamp light, so it also lets the eye
+## further into a dark room along it (decision 439 card 1).
+func _stamp_beam(cells: Dictionary) -> void:
+	var b: Dictionary = LampLight.BEAM
+	var ahead := Vector2(sin(player.facing), cos(player.facing))
+	var origin := FieldGrid.cell_of(player.position)
+	var reach := float(b["reach"])
+	var los := grid_at(player.position).visible_cells(origin, int(ceil(reach)), ahead, cos(deg_to_rad(float(b["half_deg"]))), 0.0)
+	LampLight.beam(cells, grid.width, grid.height, origin, ahead, float(b["strength"]), reach, float(b["half_deg"]), los)
 
 
 ## The chief's lantern is a real light, so people and the dead near it are lit
@@ -726,7 +760,8 @@ func _update_lantern(delta: float) -> void:
 	lantern.position = player.position + Vector3(0, 1.4, 0)
 	lantern.light_energy = float(player.lamp.get("strength", 1.0)) * (1.0 - 0.3 * lamp_pulse)
 	var night := maxf(clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0), float(storm.get("lamp_gain", 0.0)))
-	view.set_lamp_gain(lerpf(LAMP_GAIN_DAY, 1.0, night))
+	# The pools show through the mask in full from sunset (night 0.5 at 15:45).
+	view.set_lamp_gain(lerpf(LAMP_GAIN_DAY, 1.0, night), clampf(night * 2.0, 0.0, 1.0), level_of(player.position))
 
 
 ## Whoever crossed into a new outdoor ground cell leaves a mark: people (deeper
@@ -878,8 +913,33 @@ func _apply_grade(g: Dictionary) -> void:
 	var shadow: Color = Color(0.3, 0.3, 0.3).lerp(Color(g["shadow"]) * (0.3 / maxf(Color(g["shadow"]).v, 0.05)), k * 0.35)
 	var lit: Color = Color(0.85, 0.85, 0.85).lerp(Color(g["light"]) * (0.85 / maxf(Color(g["light"]).v, 0.05)), k * 0.3)
 	var gr := tex.gradient
-	gr.offsets = PackedFloat32Array([0.0, 0.3, 0.85, 1.0])
+	# The player's brightness reads the input as x^(1/(1+lift)): each stop moves to o^(1+lift).
+	var bend := 1.0 + screen_lift
+	gr.offsets = PackedFloat32Array([0.0, pow(0.3, bend), pow(0.85, bend), 1.0])
 	gr.colors = PackedColorArray([Color(0, 0, 0), shadow, lit, Color(1, 1, 1)])
+
+
+## The player's brightness (decision 471 B5), from the settings row. A storm
+## stage has no grade of its own, so the brightness alone bends its curve.
+func set_screen_lift(lift: float) -> void:
+	screen_lift = clampf(lift, -SCREEN_LIFT_MAX, SCREEN_LIFT_MAX)
+	if environment == null:
+		return
+	if storm.is_empty() and atmo.has("grade"):
+		_apply_grade(atmo["grade"])
+		return
+	environment.adjustment_enabled = screen_lift != 0.0
+	if not environment.adjustment_enabled:
+		return
+	environment.adjustment_saturation = 1.0
+	environment.adjustment_contrast = 1.0
+	environment.adjustment_brightness = 1.0
+	var tex := GradientTexture1D.new()
+	tex.width = 64
+	tex.gradient = Gradient.new()
+	tex.gradient.offsets = PackedFloat32Array([0.0, pow(0.5, 1.0 + screen_lift), 1.0])
+	tex.gradient.colors = PackedColorArray([Color(0, 0, 0), Color(0.5, 0.5, 0.5), Color(1, 1, 1)])
+	environment.adjustment_color_correction = tex
 
 
 ## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
@@ -921,6 +981,9 @@ func _build_world() -> void:
 		sun.rotation_degrees = Vector3(float(fx_light["sun_pitch"]), float(fx_light["sun_yaw"]), 0.0)
 		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_apply_grade(atmo["grade"])
+	elif screen_lift != 0.0:
+		# A brightness handed over before the world was built.
+		set_screen_lift(screen_lift)
 	sun.directional_shadow_max_distance = 60.0
 	add_child(sun)
 	view_fill = DirectionalLight3D.new()
@@ -1391,6 +1454,23 @@ func allies_alive() -> Array:
 
 
 # ---------------------------------------------------------------- levels
+
+## What the stop loader makes ahead from a map off the main thread (stop_loader.gd
+## _build_off_thread): the building plan, the ground's details, the rooms' finish.
+const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_room_finish"]
+
+
+## The side path on a map built here or handed over (side_path.gd). It can grow the
+## map, shift it and put its store on it, so what the loader made ahead from the map
+## as it was no longer fits: dropped, made again from the map as it is now.
+static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
+	var had := map.has("side_path")
+	var out := SidePath.add(map, run_seed)
+	if out.has("side_path") and not had:
+		for key in AHEAD_KEYS:
+			out.erase(key)
+	return out
+
 
 ## The map the field stands on. Everything that reads the ground goes through
 ## these four, so a stop of several joined maps can hand over a new one here.
@@ -2288,8 +2368,9 @@ func _update_night(delta: float) -> void:
 
 
 ## The lanterns go out and on together, the chief's and everyone's (user 2026-10-10).
+## They start lit: a stop reached after dark asks before the people are made.
 func lamps_on() -> bool:
-	return player.lamp_on
+	return player == null or player.lamp_on
 
 
 func set_lamps(on: bool) -> void:
@@ -2690,8 +2771,18 @@ func _refresh_vision() -> void:
 		return
 	view.set_mask_enabled(true)
 	var forward := Vector2.ZERO if tower else Vector2(sin(player.facing), cos(player.facing))
-	var result := lg.visible_cells(origin, radius, forward, VIEW_CONE_COS, NEAR_SIGHT)
+	# At night the eye still sees, past its short reach and out to the day's,
+	# what a light shows it with no wall between (decision 479): the dead by a
+	# fire, the ground in the torch's beam.
+	var lit_far := lv >= 0 and clock.is_dark() and radius < base
+	var result := lg.visible_cells(origin, base if lit_far else radius, forward, VIEW_CONE_COS, NEAR_SIGHT)
 	lit_now = lamp_cells(result)
+	if lit_far:
+		var near2 := radius * radius
+		for i: int in result.keys():
+			var c := Vector2i(i % lg.width, i / lg.width)
+			if Vector2(c - origin).length_squared() > near2 and int(lit_now.get(i, 0)) < BuildingRules.LIT_MIN:
+				result.erase(i)
 	# Indoors after dark the eye reaches into an unlit room only as far as in a cellar.
 	if lv >= 0 and clock.is_dark():
 		var reach2 := BuildingRules.DARK_SIGHT * BuildingRules.DARK_SIGHT

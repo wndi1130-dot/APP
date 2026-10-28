@@ -2,7 +2,9 @@ extends RefCounted
 ## Warm light on the ground (weather_fx 12장): which lights are on and which
 ## cells they reach. Pure rules, no scene. The view writes the result into the
 ## spare channel of the sight texture, so the number of lights costs nothing.
-## Picture only: no game rule reads these cells.
+## Besides the picture only the eye reads them: a lit room is not dark
+## (decision 439 card 1), and at night a lit cell in plain view is seen past
+## the short reach (decision 479). The dead, mates and raiders never do.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
@@ -15,6 +17,8 @@ const WINDOW_REACH := Vector2(6.0, 1.5)   # cells into the room at 14:50, at sun
 const WINDOW_FACING := 0.25   # how square to the sun a window must look to let it in
 const WINDOW_HALF_WIDTH := 0.6   # metres either side of the sun's line through the window
 const WINDOW_TEXELS := 4   # window light texels a cell side, so a slanting patch keeps its edges
+## The chief's torch beam ahead of the lantern (decision 471 B4: 12~15 m, 50~60 degrees).
+const BEAM := {"strength": 0.6, "reach": 13.0, "half_deg": 27.0}
 
 
 ## Is this light (a row of SulehufMap data["lights"]) on?
@@ -45,7 +49,9 @@ static func falloff(offset: Vector2i, side: Vector2i, strength: float, reach: fl
 
 ## Add one light to cells (cell index -> byte 0..255); the brighter light wins.
 ## only: if given, a set of cell indexes the light may reach (line of sight).
-static func stamp(cells: Dictionary, width: int, height: int, at: Vector2i, side: Vector2i, strength: float, reach: float, only: Dictionary = {}) -> void:
+## outdoors: if given, a light out of doors that stays off the floors under
+## this grid's roofs (a fire in the yard does not light the room past the wall).
+static func stamp(cells: Dictionary, width: int, height: int, at: Vector2i, side: Vector2i, strength: float, reach: float, only: Dictionary = {}, outdoors: FieldGrid = null) -> void:
 	var r := int(ceil(reach))
 	for dy in range(-r, r + 1):
 		var y := at.y + dy
@@ -61,18 +67,54 @@ static func stamp(cells: Dictionary, width: int, height: int, at: Vector2i, side
 			var i := y * width + x
 			if not only.is_empty() and not only.has(i):
 				continue
+			if outdoors != null and outdoors.indoor(Vector2i(x, y)):
+				continue
 			var b := int(round(v * 255.0))
 			if b > int(cells.get(i, 0)):
 				cells[i] = b
 
 
-## Every fixed light that is on, stamped with what falls on the floor.
-static func fixed_cells(lights: Array, width: int, height: int, game_minutes: float, tower_fire: bool, raiders_in: bool) -> Dictionary:
+## Every fixed light that is on, stamped with what falls on the floor. A row
+## marked "outdoor" keeps off the floors under grid's roofs.
+static func fixed_cells(lights: Array, width: int, height: int, game_minutes: float, tower_fire: bool, raiders_in: bool, grid: FieldGrid = null) -> Dictionary:
 	var cells: Dictionary = {}
 	for l in lights:
 		if is_on(l, game_minutes, tower_fire, raiders_in):
-			stamp(cells, width, height, l["cell"], l.get("side", Vector2i.ZERO), float(l.get("falls", l.get("strength", 0.0))), float(l.get("reach", 0.0)))
+			stamp(cells, width, height, l["cell"], l.get("side", Vector2i.ZERO), float(l.get("falls", l.get("strength", 0.0))), float(l.get("reach", 0.0)), {}, grid if bool(l.get("outdoor", false)) else null)
 	return cells
+
+
+## The chief's torch (decision 471 B4): light thrown ahead in a cone beside the
+## lantern's circle, strong along its middle and soft at its edges, none at
+## reach. only: the cells the beam may reach (line of sight, as stamp).
+static func beam(cells: Dictionary, width: int, height: int, at: Vector2i, ahead: Vector2, strength: float, reach: float, half_deg: float, only: Dictionary = {}) -> void:
+	if ahead.length_squared() < 0.0001 or reach <= 0.0 or strength <= 0.0:
+		return
+	var dir := ahead.normalized()
+	var half_cos := cos(deg_to_rad(half_deg))
+	var r := int(ceil(reach))
+	for dy in range(-r, r + 1):
+		var y := at.y + dy
+		if y < 0 or y >= height:
+			continue
+		for dx in range(-r, r + 1):
+			var x := at.x + dx
+			if x < 0 or x >= width:
+				continue
+			var o := Vector2(dx, dy)
+			var d := o.length()
+			if d < 0.5 or d >= reach:
+				continue
+			var c := o.dot(dir) / d
+			if c < half_cos:
+				continue
+			var i := y * width + x
+			if not only.is_empty() and not only.has(i):
+				continue
+			var v := strength * (1.0 - d / reach) * smoothstep(half_cos, lerpf(half_cos, 1.0, 0.4), c)
+			var b := int(round(clampf(v, 0.0, 1.0) * 255.0))
+			if b > int(cells.get(i, 0)):
+				cells[i] = b
 
 
 ## Ids of the lights that are on, as one string: the fixed cells only need

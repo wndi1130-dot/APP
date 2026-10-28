@@ -161,7 +161,7 @@ func test_the_ration_cut_demand_is_drawn() -> void:
 func test_a_kind_not_drawn_hands_back_the_rule_error() -> void:
 	if _data.is_empty(): return
 	var g: Dictionary = _case(str(_data["cases"][0]["name"]))[0]
-	g["cards"] = [{"uid": 77, "kind": "strike", "comm": "tail"}]
+	g["cards"] = [{"uid": 77, "kind": "trip_depart", "comm": "tail"}]
 	var c = TurnCard.new()
 	var got: Array = []
 	c.chose.connect(func(next: Dictionary) -> void: got.append(next))

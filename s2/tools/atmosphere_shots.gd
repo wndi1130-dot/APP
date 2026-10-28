@@ -8,8 +8,11 @@ extends SceneTree
 ##   --region=K1 --place=<map id> --edge (the field at the map's west edge)
 ##   --ref (only the three reference scenes, REF_SCENES)
 ##   --indoor (the field shots from inside a building, its walls cut away)
+##   --near (the thickest cluster of buildings from outside: the player out of their roof-lifting reach)
+##   --roofs (every roof on: the view's lifting round the camera's focus held off, for a look at forms)
 ## Writes <what>_<stage>_<band>_<weather>.jpg and index.json (what each cell drew).
 
+const BuildingView = preload("res://game/world/building_view.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
@@ -51,6 +54,14 @@ var mask := false
 var edge := false
 ## --indoor: the field shots from inside a building, as the indoor reference scene stands.
 var indoor := false
+## --near: the thickest cluster of buildings seen from outside. Buildings within NEAR_R of the
+## player lift their roofs (결정 476), so the player stands on the nearest open cell out of that
+## reach, the camera turned to the cluster (결정 478: the same buildings before and after, every group).
+var near := false
+## --roofs: hold off the roof lifting round the camera's focus (building_view NEAR_R, 결정 476) so a
+## before/after of the buildings' forms shows their roofs, and the see-through hole round the focus
+## with them; the game itself lifts them near the focus.
+var roofs := false
 ## The reference scenes the look (mood) and the materials (art3d) both judge by
 ## (색감 루프, 2026-10-26): late autumn K1, a street at midday under overcast,
 ## indoors at dusk by a curtained window, a rainy night. The rules clock is the
@@ -107,6 +118,10 @@ func _run() -> void:
 			edge = true
 		elif a == "--indoor":
 			indoor = true
+		elif a == "--near":
+			near = true
+		elif a == "--roofs":
+			roofs = true
 		elif a == "--ref":
 			ref = true
 	DirAccess.make_dir_recursive_absolute(out)
@@ -166,6 +181,13 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 	game.cam_push = Vector3(0, 0, 16)
 	if edge:
 		game.cam_push = Vector3(2.0 - game.player.position.x, 0, 16)
+	if near and scene.is_empty():
+		var aim := cluster_middle(game.view.data)
+		var bv = game.view.buildings
+		var at := far_cell(game.view.grid, bv.footprints if bv != null else {}, aim, BuildingView.NEAR_R + 0.5)
+		if at.x >= 0:
+			game.player.position = FieldGrid.center(at)
+			game.cam_push = Vector3(aim.x - game.player.position.x, 0, aim.y - game.player.position.z)
 	if bool(scene.get("indoor", indoor)):
 		# Inside by a curtained window, the walls cut away round the player.
 		var at := indoor_cell(game.view.grid)
@@ -194,6 +216,13 @@ func _field_shot(tag: String, c: float, side: float, hour: float, band: String, 
 		game.view.show_levels(0)
 		game.view.cut_away(b, 0)
 		game._update_camera(1.0)
+	if roofs and game.view.buildings != null and not bool(scene.get("indoor", indoor)):
+		var bv = game.view.buildings
+		bv.set_process(false)
+		bv._instant = true
+		bv.near = {}
+		bv._apply()
+		bv.material.set_shader_parameter("hole_strength", 0.0)
 	game._update_light()
 	# Cloud shadows drift with the shader clock, so two runs of one clear scene laid
 	# them in different places: hold them still for a before/after of the same spot.
@@ -225,6 +254,63 @@ static func indoor_cell(g: FieldGrid) -> Vector2i:
 				if g.inside(c) and g.building_at(c) == int(win["building"]) and g.solid_at(c) == FieldGrid.Solid.NONE:
 					return c
 	return Vector2i(-1, -1)
+
+
+## The middle of the thickest cluster of buildings: the building with the most others whose
+## middles lie within 22 m of its own (ties: the bigger cluster area), averaged over them.
+## Vector2.INF when the map has no buildings.
+static func cluster_middle(data: Dictionary) -> Vector2:
+	var mids: Array[Vector2] = []
+	var areas: Array[int] = []
+	for row: Dictionary in data.get("buildings", []):
+		if row.get("rect") is Rect2i:
+			var r: Rect2i = row["rect"]
+			mids.append(Vector2(r.position) + Vector2(r.size) * 0.5)
+			areas.append(r.get_area())
+	var best := Vector2.INF
+	var best_key := Vector2i(-1, -1)
+	for i in range(mids.size()):
+		var sum := Vector2.ZERO
+		var n := 0
+		var area := 0
+		for j in range(mids.size()):
+			if mids[i].distance_to(mids[j]) <= 22.0:
+				sum += mids[j]
+				n += 1
+				area += areas[j]
+		if Vector2i(n, area) > best_key:
+			best_key = Vector2i(n, area)
+			best = sum / float(n)
+	return best
+
+
+## The open cell out of doors nearest `aim` that is more than `reach` from every building's
+## footprint, the camera's side (south-east) first among equals. (-1, -1) when none.
+static func far_cell(g: FieldGrid, footprints: Dictionary, aim: Vector2, reach: float) -> Vector2i:
+	if aim == Vector2.INF:
+		return Vector2i(-1, -1)
+	var best := Vector2i(-1, -1)
+	var best_key := INF
+	for y in range(g.height):
+		for x in range(g.width):
+			var c := Vector2i(x, y)
+			if g.building_at(c) >= 0 or g.solid_at(c) != FieldGrid.Solid.NONE:
+				continue
+			var key := Vector2(c).distance_to(aim) - 0.01 * float(c.x + c.y - int(aim.x + aim.y))
+			if key >= best_key:
+				continue
+			var clear := true
+			for b: int in footprints:
+				var r: Rect2i = footprints[b]
+				var dx := maxi(maxi(r.position.x - c.x, c.x - (r.end.x - 1)), 0)
+				var dy := maxi(maxi(r.position.y - c.y, c.y - (r.end.y - 1)), 0)
+				if Vector2(dx, dy).length() <= reach:
+					clear = false
+					break
+			if clear:
+				best = c
+				best_key = key
+	return best
 
 
 func _travel_shot(tag: String, c: float, side: float, hour: float, w: String) -> void:

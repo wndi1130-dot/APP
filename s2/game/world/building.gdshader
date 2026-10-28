@@ -44,6 +44,9 @@ uniform float open_building = -1.0;
 instance uniform float fade = 0.0;
 instance uniform vec2 seen_fixed = vec2(-1.0, -1.0);
 instance uniform vec4 paint = vec4(0.58, 0.55, 0.50, 0.0);
+// 바깥벽 재질(결정 478 1가, building_forms.gd): 0 회칠, 1 벽돌, 2 세로 판자, 3 가로 판자, 4 통나무,
+// 5 골함석. 8을 더하면 땅층 아래 돌 기단 띠.
+instance uniform float wall_kind = 0.0;
 instance uniform float building_id = -1.0;
 // 생활 색(사용자 2026-10-24, 분위기 틀): 바깥 나무(문짝·덧문·창틀)에 남은 칠(rgb)과
 // 남은 정도(a). 회벽의 안쪽 면은 벽지, 커튼(천 구역 6)은 건물·층마다 다른 색이다.
@@ -59,14 +62,17 @@ varying vec3 w_nrm;
 
 void vertex() {
 	w_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	w_nrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	// 박공을 물매로 높이만 늘리므로(결정 478) 법선은 늘림을 거슬러 바로잡는다.
+	w_nrm = normalize(MODEL_NORMAL_MATRIX * NORMAL);
 }
 
 // 지붕 색 갈래(결정 469 C1, sRGB — 쓸 때 선형으로): 슬레이트·바랜 기와·짙은 초록·갈색 널.
 // 명암: 지붕은 아스팔트보다 밝고 보도와 비슷한 가운데 단. 옛 칠(슬레이트 0.52~0.58)보다 밝기를
 // 15% 안팎 올린다 — 맑은 초겨울 낮엔 해를 등진 비탈이 하늘빛만 받아, 옛 기와 칠도 V 0.15 밑이었다
 // (어두운 칸 6% 넘음, 결정 470).
-const vec3 ROOFS[4] = vec3[4](vec3(0.56, 0.59, 0.65), vec3(0.72, 0.50, 0.40), vec3(0.50, 0.63, 0.52), vec3(0.65, 0.55, 0.44));
+// 4~7은 지역 판(결정 478): 짙은 슬레이트·녹슨 함석·짙은 널·회색 함석. 같은 밝기 단을 지킨다.
+const vec3 ROOFS[8] = vec3[8](vec3(0.56, 0.59, 0.65), vec3(0.72, 0.50, 0.40), vec3(0.50, 0.63, 0.52), vec3(0.65, 0.55, 0.44),
+	vec3(0.50, 0.52, 0.56), vec3(0.66, 0.48, 0.38), vec3(0.58, 0.49, 0.40), vec3(0.62, 0.63, 0.64));
 // 바깥벽 칠과 지붕은 집마다 굴린 색이라 모델 색 보정을 이만큼 덜 받는다(생활 색과 같은 길).
 uniform float house_colour : hint_range(0.0, 1.0) = 0.8;
 
@@ -86,6 +92,35 @@ float seam(vec2 f, vec2 w) {
 	vec2 aa = fwidth(f) + 1e-4;
 	vec2 e = smoothstep(w - aa, w + aa, f) * (vec2(1.0) - smoothstep(vec2(1.0) - aa, vec2(1.0), f));
 	return 1.0 - e.x * e.y;
+}
+
+// 바깥벽 재질의 무늬(결정 478 1가). 색은 paint(집 칠과 같은 색 보정 길). 무늬 크기는 지금 벽돌
+// 무늬처럼 대각뷰 거리에서 읽히게 실물보다 조금 크다.
+vec3 wall_skin(int kind, vec3 tint, vec2 fp, float big, float fine) {
+	if (kind == 1) {
+		vec2 bc = fp / vec2(0.5, 0.18);
+		bc.x += 0.5 * mod(floor(bc.y), 2.0);
+		vec3 c = tint * (0.84 + 0.26 * fx_hash(floor(bc))) * (0.94 + 0.1 * big);
+		return mix(vec3(0.62, 0.60, 0.56) * 0.85, c, 1.0 - seam(fract(bc), vec2(0.05, 0.11)));
+	}
+	if (kind == 2) {
+		float k = floor(fp.x / 0.3);
+		vec3 c = tint * (0.86 + 0.22 * fx_hash(vec2(k, 3.0))) * (0.92 + 0.12 * fx_vnoise(vec2(k * 5.0, fp.y * 1.5)));
+		return c * (1.0 - 0.4 * seam(vec2(fract(fp.x / 0.3), 0.5), vec2(0.07, 0.0)));
+	}
+	if (kind == 3) {
+		float k = floor(fp.y / 0.25);
+		vec3 c = tint * (0.9 + 0.12 * fx_hash(vec2(3.0, k))) * (0.95 + 0.06 * fine);
+		return c * mix(0.74, 1.0, smoothstep(0.0, 0.3, fract(fp.y / 0.25)));
+	}
+	if (kind == 4) {
+		float k = floor(fp.y / 0.3);
+		vec3 c = tint * (0.86 + 0.2 * fx_hash(vec2(k, 7.0))) * (0.92 + 0.12 * fx_vnoise(vec2(fp.x * 0.8, k * 3.0)));
+		return c * (0.72 + 0.28 * sin(3.14159 * fract(fp.y / 0.3)));
+	}
+	float rib = 0.5 + 0.5 * sin(fp.x / 0.2 * 6.28318);
+	vec3 c = tint * (0.86 + 0.16 * rib) * (0.95 + 0.06 * fine);
+	return mix(c, vec3(0.45, 0.31, 0.23), 0.35 * smoothstep(0.6, 0.85, fx_vnoise(vec2(fp.x * 2.5, fp.y * 0.2))));
 }
 
 void fragment() {
@@ -139,7 +174,19 @@ void fragment() {
 		float flake = smoothstep(mix(0.78, 0.7, damp), mix(0.82, 0.76, damp), fx_fbm2(fp * 2.2 + vec2(7.3, 1.9)));
 		float bare = max(flake, smoothstep(0.6, 0.68, fx_fbm2(fp * 1.3 + vec2(2.1, 5.7))) * damp);
 		bare *= exposed * (1.0 - up);
-		base = mix(base, brick, bare);
+		int skin = int(wall_kind + 0.5);
+		if ((skin & 7) > 0 && exposed > 0.5 && up < 0.5) {
+			base = wall_skin(skin & 7, paint.rgb, fp, big, fine);
+		} else {
+			base = mix(base, brick, bare);
+		}
+		if (skin >= 8 && exposed > 0.5 && up < 0.5 && w_pos.y < 0.75) {
+			// 돌 기단 띠: 거친 돌 줄.
+			vec2 sc = fp / vec2(0.55, 0.25);
+			sc.x += 0.37 * mod(floor(sc.y), 2.0);
+			vec3 stone = stone_color * (0.8 + 0.3 * fx_hash(floor(sc)));
+			base = mix(stone_color * 0.6, stone, 1.0 - seam(fract(sc), vec2(0.04, 0.08)));
+		}
 		lively = house_colour * exposed;
 		if (exposed < 0.5 && up < 0.5 && building_id >= 0.0) {
 			// 안쪽 벽: 건물·층마다 바랜 벽지(세로 줄이나 잔무늬), 군데군데 뜯겨 밝은 회벽이 드러남.
@@ -210,7 +257,7 @@ void fragment() {
 		lively = 0.8;
 	} else if (zone == 4) {
 		// 지붕: 높이로 줄을 긋고 용마루 쪽으로 엇갈린 이음.
-		vec3 roof = ROOFS[clamp(int(paint.a + 0.5), 0, 3)];
+		vec3 roof = ROOFS[clamp(int(paint.a + 0.5), 0, 7)];
 		roof = mix(roof / 12.92, pow((roof + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), roof));
 		lively = house_colour * 0.75;
 		if (up > 0.97) {

@@ -43,18 +43,27 @@ func test_bite_location_distribution() -> void:
 	assert_between(n["leg"] / 4000.0, 0.12, 0.18)
 
 
+## A hand seen coming (decision 474 J1): grab GRAB_SEEN, scratch SCRATCH_SEEN, the
+## rest snaps at air; one unseen grabs GRAB_UNSEEN and otherwise scratches.
 func test_attack_outcome_distribution_and_coat() -> void:
 	var r := _rng(11)
-	var n := {"grab": 0, "scratch": 0, "blocked": 0}
+	var n := {"grab": 0, "scratch": 0, "blocked": 0, "miss": 0}
 	for _i in range(4000):
 		n[G.attack_outcome(r, 0.0)] += 1
 	assert_eq(n["blocked"], 0)
-	assert_between(n["grab"] / 4000.0, 0.62, 0.68)
+	assert_between(n["grab"] / 4000.0, G.GRAB_SEEN - 0.03, G.GRAB_SEEN + 0.03)
+	assert_between(n["scratch"] / 4000.0, G.SCRATCH_SEEN - 0.03, G.SCRATCH_SEEN + 0.03)
+	r = _rng(14)
+	var u := {"grab": 0, "scratch": 0, "blocked": 0, "miss": 0}
+	for _i in range(4000):
+		u[G.attack_outcome(r, 0.0, false)] += 1
+	assert_between(u["grab"] / 4000.0, G.GRAB_UNSEEN - 0.02, G.GRAB_UNSEEN + 0.02)
+	assert_eq(u["miss"], 0, "an unseen hand never snaps at air")
 	r = _rng(12)
-	n = {"grab": 0, "scratch": 0, "blocked": 0}
+	n = {"grab": 0, "scratch": 0, "blocked": 0, "miss": 0}
 	for _i in range(4000):
 		n[G.attack_outcome(r, 0.5)] += 1
-	assert_between(n["grab"] / 4000.0, 0.62, 0.68)
+	assert_between(n["grab"] / 4000.0, G.GRAB_SEEN - 0.03, G.GRAB_SEEN + 0.03)
 	assert_between(float(n["blocked"]) / float(n["blocked"] + n["scratch"]), 0.45, 0.55)
 	r = _rng(13)
 	for _i in range(200):

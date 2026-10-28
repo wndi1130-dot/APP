@@ -32,6 +32,7 @@ const Paper = preload("res://game/ui/paper_parts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
 const InventoryPane = preload("res://game/ui/inventory_pane.gd")
 const SoundRows = preload("res://game/ui/sound_rows.gd")
+const ScreenLift = preload("res://game/ui/screen_lift.gd")
 const TypeLine = preload("res://game/ui/type_line.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
@@ -2381,6 +2382,7 @@ func settings_panel() -> void:
 	cells.add_child(GlassPane.cell("상태 아이콘", String(STATUS_SIZE_NAMES[status_diameter()]), _set_status_size))
 	pane.body.add_child(cells)
 	pane.body.add_child(SoundRows.make())   # 전체·음악·효과·목소리 (결정 448)
+	pane.body.add_child(ScreenLift.make(game))   # 밝기 (결정 471 B5)
 
 
 func _set_status_size() -> void:
@@ -4644,7 +4646,7 @@ func _draw_overlay() -> void:
 				overlay.draw_colored_polygon(PackedVector2Array([m + Vector2(-7, -10), m + Vector2(7, -10), m + Vector2(0, 0)]), Color(1, 0.75, 0.4, 0.9))
 	# What the auto aim has settled on.
 	if auto_aim and aim_target != null:
-		var at: Vector3 = aim_target["pos"] if aim_target is Dictionary else aim_target.position
+		var at: Vector3 = game.zombies.seen_pos(aim_target) if aim_target is Dictionary else aim_target.position
 		var c := _project(at + Vector3(0, 1.0, 0))
 		overlay.draw_arc(c, 22.0, 0, TAU, 24, Color(1, 0.9, 0.7, 0.9), 2.5)
 	# Aim circle: big when raised, shrinks while still (field_unified 10).

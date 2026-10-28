@@ -2911,14 +2911,9 @@
               4.5,
               0,
               0.05
-            ],
-            [
-              5.6,
-              0,
-              0.05
             ]
           ],
-          "capacity": 2,
+          "capacity": 1,
           "hold": [
             8,
             15
@@ -2927,7 +2922,28 @@
             0,
             0
           ],
-          "when": "work"
+          "when": "work_first"
+        },
+        {
+          "id": "work_b",
+          "activity": "work",
+          "anchors": [
+            [
+              5.6,
+              0,
+              0.05
+            ]
+          ],
+          "capacity": 1,
+          "hold": [
+            8,
+            15
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "work_second"
         },
         {
           "id": "handoff",
@@ -3166,14 +3182,9 @@
               5,
               0,
               -0.45
-            ],
-            [
-              11,
-              0,
-              -0.45
             ]
           ],
-          "capacity": 2,
+          "capacity": 1,
           "hold": [
             7,
             13
@@ -3182,7 +3193,28 @@
             0,
             0
           ],
-          "when": "always"
+          "when": "post_first"
+        },
+        {
+          "id": "window_b",
+          "activity": "watch",
+          "anchors": [
+            [
+              11,
+              0,
+              -0.45
+            ]
+          ],
+          "capacity": 1,
+          "hold": [
+            7,
+            13
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "post_second"
         },
         {
           "id": "door_tail",
@@ -4430,14 +4462,9 @@
               13.4,
               0,
               0.1
-            ],
-            [
-              14.1,
-              0,
-              0.4
             ]
           ],
-          "capacity": 2,
+          "capacity": 1,
           "hold": [
             8,
             15
@@ -4446,7 +4473,28 @@
             0,
             0
           ],
-          "when": "work"
+          "when": "work_first"
+        },
+        {
+          "id": "work_b",
+          "activity": "work",
+          "anchors": [
+            [
+              14.1,
+              0,
+              0.4
+            ]
+          ],
+          "capacity": 1,
+          "hold": [
+            8,
+            15
+          ],
+          "cycle": [
+            0,
+            0
+          ],
+          "when": "work_second"
         }
       ]
     },

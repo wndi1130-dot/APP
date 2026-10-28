@@ -5,6 +5,9 @@ const Grid = preload("res://game/world/field_grid.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
 const FieldGame = preload("res://game/field_game.gd")
+const BuildingView = preload("res://game/world/building_view.gd")
+const MapView = preload("res://game/world/map_view.gd")
+const RoomFinish = preload("res://game/world/room_finish.gd")
 const S = Grid.Solid
 const PLACE := "houses_01"
 
@@ -182,3 +185,27 @@ func test_a_map_handed_over_built_gets_the_same_way_as_one_built_in_the_field() 
 	assert_true(game.data.has("side_path"), "the loader's map gets its side path")
 	if game.data.has("side_path"):
 		assert_eq(game.data["side_path"]["door"], found[1]["side_path"]["door"])
+
+
+## 정차 연출 로더는 지도와 함께 건물 계획·땅 무늬·방 마감을 미리 지어 넘긴다. 필드가 붙인 샛길은 지도를
+## 넓히고 창고를 더하므로(탄광 1은 동쪽으로 넓어짐), 샛길 전 지도로 지은 그것들은 버리고 다시 짓는다.
+func test_a_side_path_drops_what_the_loader_made_ahead_from_the_map_as_it_was() -> void:
+	var found := _with_path("mine_01")
+	var s: int = found[0]
+	assert_gt(s, 0)
+	var handed := Maps.build("mine_01")
+	handed["_building_plan"] = BuildingView.plan(handed)
+	handed["_ground_details"] = MapView.ground_details(handed["grid"])
+	handed["_room_finish"] = RoomFinish.build(handed)
+	var d := FieldGame.with_side_path(handed, s)
+	assert_true(d.has("side_path"))
+	for key in FieldGame.AHEAD_KEYS:
+		assert_false(d.has(key), "%s made from the map before its side path is dropped" % key)
+	# No side path rolled: what was made ahead still fits and is kept.
+	for other in range(1, 200):
+		if SidePath.rolls("mine_01", other):
+			continue
+		var kept := Maps.build("mine_01")
+		kept["_ground_details"] = MapView.ground_details(kept["grid"])
+		assert_true(FieldGame.with_side_path(kept, other).has("_ground_details"))
+		break

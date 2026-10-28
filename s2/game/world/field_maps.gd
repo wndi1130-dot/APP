@@ -17,6 +17,7 @@ const RoofRules = preload("res://game/world/roof_rules.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const MapRing = preload("res://game/world/map_ring.gd")
 const RoomSplit = preload("res://game/world/room_split.gd")
+const NightLights = preload("res://game/world/night_lights.gd")
 
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
@@ -169,6 +170,10 @@ static func build_from(script: Script) -> Dictionary:
 				g.refresh_paths()
 	# Every window's latch and curtain, fixed per map and window (J08).
 	BuildingRules.dress_windows(data)
+	# Lights people left in town, after the curtains so a candle keeps off a
+	# drawn one (decision 471 B4). A map's own rows of those kinds win.
+	if script.resource_path.begins_with(MAP_DIR):
+		NightLights.plan(data)
 	# Cells the field steers by. What the map names is kept; the rest is worked
 	# out from its train and its edges.
 	var worked: Dictionary = anchors(data)

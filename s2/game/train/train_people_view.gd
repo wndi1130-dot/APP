@@ -567,6 +567,9 @@ static func _forced(b, s: Dictionary, activity: String, t: float) -> String:
 		"serve", "eat":
 			return "t_eat"
 		"work":
+			# Getting their breath back between turns at a job short of hands (train_schedule.gd).
+			if gesture == "catch_breath":
+				return "t_crouch"
 			# Coal and the firebox are shovelled; the rest is knelt at.
 			return "t_shovel" if pose == "stand" and String(s["layout"]) in ["technical", "tender", "loco", "engine_room"] else "t_kneel_work"
 		"clean":
@@ -580,7 +583,10 @@ static func _forced(b, s: Dictionary, activity: String, t: float) -> String:
 		"mourn":
 			return "t_fold"
 		"watch":
-			return "t_lantern" if String(s["layout"]) == "guard" else ""
+			if String(s["layout"]) != "guard":
+				return ""
+			# A sentry short of relief gets their breath back between turns (train_schedule.gd).
+			return "t_crouch" if gesture == "catch_breath" else "t_lantern"
 	match gesture:
 		Gesture.BOWL_SIT:
 			return "t_eat"

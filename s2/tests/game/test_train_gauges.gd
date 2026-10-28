@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
 func test_the_strip_says_the_trains_numbers() -> void:
@@ -50,6 +51,58 @@ func test_a_stock_three_stretches_from_empty_is_short() -> void:
 func test_numbers_are_whole_or_to_one_place() -> void:
 	assert_eq(TrainGauges._num(10.0), "10")
 	assert_eq(TrainGauges._num(8.5), "8.5")
+
+
+## The slice's first board (climate on, 첫 추위, stretch 1, no weather yet).
+func _start() -> Array:
+	var d: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://game/train/slice_start.json"))
+	return [(d["state"] as Dictionary).duplicate(true), d["tables"]]
+
+
+func test_the_thermometer_reads_the_trains_climate() -> void:
+	var s: Array = _start()
+	var g: Dictionary = s[0]
+	var t: Dictionary = s[1]
+	var o: Dictionary = TrainGauges.model(g, t)["outside"]
+	assert_eq([o["name"], o["text"], o["freezing"]], ["첫 추위", "−3°", false], "stretch 1's midday, no weather")
+	g["stop"] = {"weather": "snow"}
+	assert_eq(TrainGauges.model(g, t)["outside"]["text"], "−5°", "snow takes two more")
+	g["stop"] = null
+	g["lastStop"] = {"weather": "sleet"}
+	assert_eq(TrainGauges.model(g, t)["outside"]["text"], "2°", "between stops the last stop's weather")
+	g["freeze"] = 1
+	assert_true(bool(TrainGauges.model(g, t)["outside"]["freezing"]), "a frozen track")
+	g["climate"] = false
+	assert_null(TrainGauges.model(g, t)["outside"], "climate off: no thermometer")
+
+
+func test_the_column_stands_by_the_stages() -> void:
+	var temps: Array = _start()[1]["CL"]["temp"]
+	assert_almost_eq(TrainGauges.ot_fill(temps, float(temps[0])), 0.9, 0.001, "the warmest stage at the top tick")
+	assert_almost_eq(TrainGauges.ot_fill(temps, float(temps[temps.size() - 1])), 0.29, 0.001, "the coldest at the bottom tick")
+	assert_gt(TrainGauges.ot_fill(temps, -3.0), TrainGauges.ot_fill(temps, -15.0), "colder stands lower")
+	assert_almost_eq(TrainGauges.ot_fill(temps, -80.0), 0.18, 0.001, "never under the bulb")
+	assert_eq([TrainGauges.deg(-3.0), TrainGauges.deg(5.0), TrainGauges.deg(0.0)], ["−3°", "5°", "0°"])
+
+
+func test_the_thermometer_sits_after_tension() -> void:
+	var s: Array = _start()
+	s[0]["freeze"] = 1
+	var strip = TrainGauges.new()
+	strip.g = s[0]
+	strip.t = s[1]
+	add_child_autofree(strip)
+	var o: Control = strip.find_child("Outside", true, false)
+	assert_not_null(o)
+	assert_not_null(o.find_child("Frozen", true, false), "the snow mark while frozen")
+	var tension: Control = strip.find_child("MeterTension", true, false)
+	assert_almost_eq(o.position.x - (tension.position.x + tension.size.x), 10.0 * UiFonts.K, 0.01, "10 after tension")
+	var frozen_w: float = o.size.x
+	s[0]["freeze"] = 0
+	strip.refresh(s[0], s[1])
+	o = strip.find_child("Outside", true, false)
+	assert_null(o.find_child("Frozen", true, false))
+	assert_almost_eq(o.size.x, frozen_w, 0.01, "the snow mark sits on the bulb and takes no width")
 
 
 func test_while_a_sheet_is_up_only_what_it_is_about_stays_lit() -> void:
