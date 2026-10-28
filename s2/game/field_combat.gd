@@ -88,6 +88,11 @@ var contacts := {"seen": {"reach": 0, "grab": 0, "held_off": 0, "scratch": 0, "b
 	"unseen": {"reach": 0, "grab": 0, "held_off": 0, "scratch": 0, "blocked": 0, "miss": 0, "bite": 0, "fall": 0},
 	"down": {"reach": 0, "grab": 0, "held_off": 0, "scratch": 0, "blocked": 0, "miss": 0, "bite": 0, "fall": 0}}
 var crowd_falls: int = 0
+## Melee blows at the dead, for the 40 runs (decision 474 J2): swung; landed
+## on one; missed it as the blow came round; swung at air; and of the landed,
+## heads ended, heads knocked down, bodies knocked down, bodies held (stunned).
+var melee_tally := {"swung": 0, "landed": 0, "missed": 0, "air": 0,
+	"head_kill": 0, "head_down": 0, "body_down": 0, "body_stun": 0}
 ## Not put down by a crowd again before this (decision 474 J1: up and clear first).
 const CROWD_FALL_META: StringName = &"crowd_fall_until"
 var crowd_most: int = 0   # the most dead on one person as a hand reached (crowd_at)
@@ -483,6 +488,7 @@ func start_swing(p, at) -> void:
 	p.strike_kind = "stomp" if stomp_it else "swing"
 	if not stomp_it:
 		game.feel.swing(p, p.weapon_id())
+		melee_tally["swung"] += 1
 	var windup: float = (STOMP_WINDUP if stomp_it else W.melee_windup(p.weapon_id())) / float(p.mults()["swing"])
 	if windup <= 0.0:
 		_strike(p, at)
@@ -621,6 +627,7 @@ func _strike(p, at) -> void:
 	if at is Dictionary and at.is_empty():
 		at = _in_arc(p)
 		if at == null:
+			melee_tally["air"] += 1
 			_swing_empty(p)
 			return
 	if at is Dictionary:
@@ -650,6 +657,8 @@ func _land_strike(p) -> void:
 	# An air swing (strike_at {}) finds what it lands on as it lands (_strike).
 	var air: bool = at is Dictionary and at.is_empty()
 	if stopped or not (air or (_stomp_reaches(p, at) if stomp_it else _strike_reaches(p, at))):
+		if not stomp_it:
+			melee_tally["missed"] += 1
 		p.swing_t = WHIFF_RECOVER
 		return
 	if stomp_it:
@@ -727,6 +736,7 @@ func swing(p, z: Dictionary) -> void:
 		_kill(p, z, "뒤에서 조용히 끝냈다")
 		return
 	var downed: bool = state == "downed"
+	melee_tally["landed"] += 1
 	# The state of the hand and its strength against the weapon's weight (decisions '근접 타수').
 	var odds: Dictionary = W.melee_odds(wid, int(p.skills["melee"]), downed, from_back, float(m.get("melee_hit", 1.0)), int(p.skills.get("strength", 5)))
 	var head: float = odds["head"]
@@ -734,18 +744,23 @@ func swing(p, z: Dictionary) -> void:
 		head *= 0.5
 	if rng.randf() < head:
 		if rng.randf() < float(d["head_kill"]) or downed:
+			melee_tally["head_kill"] += 1
 			_kill(p, z, "")
 		else:
+			melee_tally["head_down"] += 1
 			game.zombies.knock_down(z)
 		return
 	# Body hit: the thick coat of a 껴입은 자 stops blades (zombies.md).
 	if z["kind"] == "clothed" and blade:
 		z["stun"] = 0.3
+		melee_tally["body_stun"] += 1
 		_toast(p, "두꺼운 옷에 날이 막혔다.")
 		return
 	if rng.randf() < float(odds["knockdown"]):
+		melee_tally["body_down"] += 1
 		game.zombies.knock_down(z)
 	else:
+		melee_tally["body_stun"] += 1
 		z["stun"] = BODY_STUN
 		z["hit_hold"] = BODY_STUN   # the picture holds its struck pose as long (dead_body.gd)
 		_push(z, p.position, 0.3)
