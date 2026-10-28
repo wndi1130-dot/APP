@@ -19,7 +19,7 @@ rect 가운데 바닥에 놓는다. 기본 앞은 +Z, 위는 +Y. facing 0~3은 +
 | `desk` | 서랍 둘 달린 나무 책상 | 2×1 | 0.75 | 1293/1297 | 288/600 | 2×0.75×1 | 21088 | rect 가운데 바닥, facing |
 | `barrel` | 쇠 테 둘을 두른 나무 통 | 1×1 | 0.9 | 1310/1321 | 488/600 | 1×0.9×1 | 33448 | rect 가운데 바닥, facing |
 | `bed` | 낮은 침대와 얇은 침구 | 2×1 | 0.5 | 1142/1144 | 276/600 | 2×0.5×1 | 20244 | rect 가운데 바닥, facing |
-| `bare_tree` | 잎 없이 위로 뻗는 좁은 나무 | 1×1 | 5.2 | 1235/1235 | 376/600 | 1×5.2×1 | 26604 | rect 가운데 바닥, facing |
+| `bare_tree` | 눈 조금 얹은 좁은 맨가지 활엽(Quaternius CommonTree_Dead_Snow_3, CC0) | 1×1 | 5.2 | 1235/1235 | 426/600 | 1.106×5.2×1.4088 | 44476 | rect 가운데 바닥, facing |
 | `crate_stack` | 상자 셋을 두 단으로 쌓음 | 2×2 | 1.25 | 706/726 | 468/600 | 2×1.25×2 | 33700 | rect 가운데 바닥, facing |
 | `sack_pile` | 무표식 저장 자루 넷 | 2×2 | 0.85 | 527/536 | 512/600 | 2×0.85×2 | 45500 | rect 가운데 바닥, facing |
 | `file_cabinet` | 서랍 넷 철제 서류함 | 2×1 | 1.3 | 527/527 | 384/600 | 2×1.3×1 | 27836 | rect 가운데 바닥, facing |
@@ -42,7 +42,7 @@ rect 가운데 바닥에 놓는다. 기본 앞은 +Z, 위는 +Y. facing 0~3은 +
 | `desk` | `6bce09810d3c33b6146fd8f40a7027ce9980c981d8203a15622715ef46516a6f` |
 | `barrel` | `440ded97a8f9aca4aa4b6705f1e630c4ab9980388259c9709fbf62fcd420f207` |
 | `bed` | `99df235b655efe35411efb61ed9f60d66296e05642ddebea038c6e526aff263a` |
-| `bare_tree` | `c354c893f97cf9dcd0981ee00a4c688a07443a983685200afa5f440fda18c2f5` |
+| `bare_tree` | `5b988c03399beb7cb4679cf16273c105c89007712f9032a224a05ba5c2e7e23c` |
 | `crate_stack` | `4aa6d7a131dd705c5b7a2d794e39f56313ff5e79aeddaab319dd9acabc6d73f8` |
 | `sack_pile` | `504c2a96c7ae3532ecc927811152cb72765bbf8a95125cb2fc619b5a790e6e7a` |
 | `file_cabinet` | `be90670796b7c67812a42df4d01006bb64853e36db6802bcdf7eb0989878fca7` |

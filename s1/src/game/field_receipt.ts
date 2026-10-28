@@ -10,7 +10,7 @@ import type { Comm, LootKey } from './data';
 import { onDeath } from './death';
 import { PROLOGUE } from './prologue';
 import { hangWhy, hangSymbol } from './domestic/symbols';
-import { journal, PROFILES, situation, storyOf } from './state';
+import { isGone, journal, PROFILES, situation, storyOf } from './state';
 import type { Game, LootDeck, Phase } from './state';
 import { breakPromise, burnPyre, checkStopPromises, crewAwayOf, crewRest, keepPromise, noteTarget } from './turn';
 import { noteBroken } from './council_log';
@@ -434,6 +434,14 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
     lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.join(', ')}이(가) 필드에 남았다.` });
     journal(g, `${names.join(', ')}이(가) 필드에 남았다. 열차는 그들 없이 떠났다.`, 'dark');
   }
+  // 앞 정차에 남았다가 살아서 구해져 돌아온 사람: 떠난 사람 명단에서 빼고 칸 인원으로 돌린다(서막 「기다렸다 태운다」와 같은 꼴).
+  const rejoined = returnedOf(r).filter(p => p !== CAPTAIN_ID && r.people.rescued.includes(p) && (g.left ?? []).includes(personOf(departure, p).name));
+  for (const [c, names] of byComm(departure, rejoined)) {
+    g.left = (g.left ?? []).filter(n => !names.includes(n));
+    g.comms[c].pop += names.length;
+    lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.join(', ')}이(가) 살아서 다시 열차에 올랐다.` });
+    journal(g, `${names.join(', ')}이(가) 살아서 다시 열차에 올랐다.`, 'good');
+  }
 
   // 약속: 지킴·어김은 기존 약속 규칙의 값을 그대로 쓴다(서막 어김은 신임 −4·관계 −10, 결정 184·저장소 119).
   // 알 수 없음은 신임·관계에 닿지 않고 일지 한 줄만 남는다(결정 304).
@@ -463,6 +471,12 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   bodySearches(g, departure, r);
   residentScenes(g, departure, r);
   RETURN_HOOK.after?.(g, departure, r); // 사람 기억(memory.ts): 그 정차에서 사람마다 겪거나 본 일
+  // 남겨지거나 사라진 사람은 떠난 사람 명단에도 넣는다: 다음 작업조와 열차 사람 판정(isGone)이 인구와 같은 사람을 본다.
+  // 사람 기억이 이번 귀환의 가족을 찾은 뒤에 넣는다. 열차장은 넣지 않고, 칸 대표여도 자리는 그대로다(남겨진 대표를 잇는 규칙이 아직 없다).
+  for (const pid of lost) {
+    const name = personOf(departure, pid).name;
+    if (pid !== CAPTAIN_ID && !isGone(g, name)) (g.left ??= []).push(name);
+  }
   closeFieldStop(g, departure, r);
   if (r.symbol) {
     lines.push({ k: 'symbol', comm: r.symbol.groupId, text: `${COMM_NAME[r.symbol.groupId]}의 상징물을 가져왔다. 쓰임을 고른다.` });
@@ -487,7 +501,8 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
  */
 function closeFieldStop(g: Game, departure: AnyDeparture, r: FieldReceipt): void {
   const stop = g.stop;
-  if (g.phase !== 'stop' || !stop || stop.done) return;
+  // 지난 구간에 나간 출발의 늦은 영수증은 물자·사람만 반영하고, 지금 정차를 닫거나 노린 갈래 줄에 세지 않는다.
+  if (g.phase !== 'stop' || !stop || stop.done || departure.segment !== g.seg) return;
   stop.done = true;
   burnPyre(g);
   const back = new Set(returnedOf(r));
@@ -551,12 +566,13 @@ function residentScenes(g: Game, departure: AnyDeparture, r: FieldReceipt): void
 }
 
 function bodySearches(g: Game, departure: AnyDeparture, r: FieldReceipt): void {
+  const back = new Set(returnedOf(r));
   const minded = new Set<Comm>();
   for (const row of r.witnessed) {
     if (row.template !== 'body_search' || !Array.isArray(row.witnesses)) continue;
     for (const w of row.witnesses as unknown[]) {
       const pid = typeof w === 'string' ? w : (w as { person?: unknown } | null)?.person;
-      if (typeof pid !== 'string') continue;
+      if (typeof pid !== 'string' || !back.has(pid)) continue;
       const c = departurePeople(departure).find(x => x.id === pid)?.comm;
       if (!c || minded.has(c)) continue;
       minded.add(c);
