@@ -21,6 +21,7 @@ const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
+const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
@@ -28,7 +29,7 @@ const CSS_SIZE := Vector2(330, 286)
 ## The stores and their marks (hud_icons.gd).
 const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"], ["cloth", "it_cloth"]]
 const ICON: Dictionary = {"scrap": "it_nails", "wood": "it_plank", "parts": "gear", "cloth": "it_cloth"}
-## Rows: the parts first, then the things to make (train_workshop.gd ORDER).
+## Rows: the parts first, then the open recipes (train_workshop.gd shown).
 const ROW_TOP: float = 66.0
 const ROW_H: float = 54.0
 ## A key: 44 tall (81 game px, over the 48 dp of field_hud.gd MIN_TOUCH).
@@ -58,17 +59,18 @@ static func model(g0: Dictionary) -> Dictionary:
 	var tgt: int = TrainWorkshop.target(g0) if not dom.is_empty() else TrainWorkshop.TARGET0
 	var now: Dictionary = TrainWorkshop.now(g0)
 	var rows: Array = []
-	for id: String in TrainWorkshop.ORDER:
+	for id: String in TrainWorkshop.shown(g0):
 		var r: Dictionary = TrainWorkshop.RECIPES[id]
 		var cost: Array = []
 		var rc: Dictionary = r["cost"]
 		for key: String in rc:
 			cost.append({"key": key, "icon": ICON.get(key, ""), "n": float(rc[key]), "short": float(dom.get(key, 0)) < float(rc[key])})
 		var on_line: bool = String(now["id"]) == id
-		# How many the train holds: in the armory or the wardrobe, wherever the field put them too;
-		# the cores in the stores, the field's and the workshop's alike.
-		var have: int = int(float(dom.get("cores", 0))) if String(r["to"]) == "cores" else 0
-		var held: Variant = null if String(r["to"]) == "cores" else dom.get("wardrobe" if String(r["to"]) == "wardrobe" else "armory")
+		# Count stores directly; equipment stays in the armory or the wardrobe.
+		var to: String = String(r["to"])
+		var amount: bool = TrainDom.AMOUNTS.has(to)
+		var have: int = int(float(dom.get(to, 0))) if amount else 0
+		var held: Variant = null if amount else dom.get("wardrobe" if to == "wardrobe" else "armory")
 		if held is Array:
 			for it: Variant in held:
 				if it is Dictionary and String((it as Dictionary).get("id", "")) == id:
