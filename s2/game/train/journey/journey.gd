@@ -120,11 +120,12 @@ func _process(delta: float) -> void:
 		step(minf(delta, 0.1))
 
 
-## Whether the train's screen is the diagonal one (train_scene view_mode).
+## Whether the train's screen is the diagonal one (train_scene view_mode; str(), as a
+## train scene without it gives null and String(null) is no call).
 func shown() -> bool:
 	if _opts.has("view"):
-		return String(_opts["view"]) == "diag"
-	return host != null and String(host.get("view_mode")) == "diag"
+		return str(_opts["view"]) == "diag"
+	return host != null and str(host.get("view_mode")) == "diag"
 
 
 ## The land as far as the train and past it, at once: nothing is laid in sight.

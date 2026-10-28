@@ -322,9 +322,26 @@ func _run_stop() -> void:
 	var started: int = Time.get_ticks_msec()
 	var sent: bool = false
 	var shots: Dictionary = {}
+	# Where the time goes: each beat's start (s from 「정차 고르기」) and the heavy frames.
+	var beats: Array = []
+	var frame_last: int = Time.get_ticks_usec()
+	var frame_worst: float = 0.0
+	var over_50: int = 0
+	var over_100: int = 0
 	flow.go(flow._index_of("stop_pick"))
 	while Time.get_ticks_msec() - started < 120000:
 		await process_frame
+		var frame_now: int = Time.get_ticks_usec()
+		var frame_ms: float = float(frame_now - frame_last) / 1000.0
+		frame_last = frame_now
+		frame_worst = maxf(frame_worst, frame_ms)
+		over_50 += 1 if frame_ms > 50.0 else 0
+		over_100 += 1 if frame_ms > 100.0 else 0
+		var cin_now = flow.get("cinema")
+		if cin_now != null and is_instance_valid(cin_now):
+			var b_now: String = String(cin_now.beat)
+			if beats.is_empty() or String(beats[-1][0]) != b_now:
+				beats.append([b_now, snappedf(float(Time.get_ticks_msec() - started) / 1000.0, 0.01)])
 		var img: Image = root.get_viewport().get_texture().get_image()
 		img.resize(64, 30, Image.INTERPOLATE_BILINEAR)
 		var sum: float = 0.0
@@ -365,7 +382,8 @@ func _run_stop() -> void:
 				await process_frame
 			break
 	results["stop"] = {"frames": lums.size(), "black_frames": black_total, "longest_black_run": worst_run,
-		"min_lum": lums.min() if not lums.is_empty() else -1.0, "seconds": float(Time.get_ticks_msec() - started) / 1000.0}
+		"min_lum": lums.min() if not lums.is_empty() else -1.0, "seconds": float(Time.get_ticks_msec() - started) / 1000.0,
+		"frame_ms_worst": frame_worst, "frames_over_50ms": over_50, "frames_over_100ms": over_100, "beats": beats}
 	print("STOP ", results["stop"])
 	var f := FileAccess.open(out.path_join("stop_lum_%s_%s.json" % ["firs" if no_kit else "kit", tag]), FileAccess.WRITE)
 	if f != null:
