@@ -197,6 +197,13 @@ static func _check_stop_promises(g: Dictionary, t: Dictionary, target: Variant, 
 		elif verdict == -1: Field._break_promise(g, t, comm, str(promise["label"]))
 
 
+## Counts the kind a dispatched stop aimed at into the run (decision 482, S1 noteTarget). Passed stops never call it.
+static func _note_target(g: Dictionary, target: Variant) -> void:
+	if not target is String or target == "": return
+	var run: Variant = g.get("targetRun")
+	g["targetRun"] = {"target": target, "n": int(run["n"]) + 1} if run is Dictionary and run["target"] == target else {"target": target, "n": 1}
+
+
 static func resolve_stop(g0: Dictionary, t: Dictionary, go: bool = true) -> Dictionary:
 	if not g0.get("stop") is Dictionary or bool(g0["stop"].get("done", false)): return g0.duplicate(true)
 	if not State.is_s1a(g0): return _unported(g0, "resolveStop: S1a only")
@@ -314,4 +321,5 @@ static func resolve_stop(g0: Dictionary, t: Dictionary, go: bool = true) -> Dict
 	if int(g["seg"]) - int(event_log.get("bitten", {}).get("seg", -99)) >= 3 and not hurt.is_empty() and _rnd(g) < 0.35:
 		Turn._card(g, {"kind": "bitten", "comm": comm, "who": hurt[0]})
 	_check_stop_promises(g, t, stop["target"], gains)
+	_note_target(g, stop["target"])
 	return g

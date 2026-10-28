@@ -465,6 +465,8 @@ export interface Game {
   lastCrew?: Comm;
   /** 지난 구간의 정차. 출발을 미룬 날 이번 정차가 없으면 이걸 한 번 더 뒤진다(결정 332) */
   lastStop?: StopState | null;
+  /** 결정 482: 사람을 내보낸 정차가 연달아 노린 갈래와 그 수. 지나친 정차는 줄을 끊지 않는다. 한 번도 안 내보낸 판엔 없다 */
+  targetRun?: { target: LootKey; n: number };
   /** 필드(S2)에서 직접 뛰고 돌아온 귀환 기록(field_receipt.ts). 직접 영수증이 들어온 판에만 있고, 주사위 정차만 도는 판엔 없다 */
   fieldReturns?: FieldReturns;
   /** 갈래별 보장 몫(덱)의 자리(결정 474 S1): 필드 정차가 쓴 뒤 영수증으로 돌아오고 다음 출발 계약에 실린다. 필드 정차가 없던 판엔 없다 */
