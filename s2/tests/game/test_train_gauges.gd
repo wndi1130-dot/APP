@@ -7,6 +7,7 @@ const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 
 
 func test_the_strip_says_the_trains_numbers() -> void:
@@ -186,3 +187,79 @@ func test_a_narrow_band_packs_the_left_gauges() -> void:
 	assert_almost_eq(trust.size.x, 104.0 * k, 0.01, "wide bars")
 	o = strip.find_child("Outside", true, false)
 	assert_not_null(o.find_child("Stage", true, false), "the stage's name on a wide band")
+
+
+## 결정 483: the slip says how the reading is made and the heating coal's
+## multiple, in the board's own numbers.
+func test_the_slip_says_how_the_reading_is_made() -> void:
+	var s: Array = _start()
+	var g: Dictionary = s[0]
+	var t: Dictionary = s[1]
+	var o: Dictionary = TrainGauges.model(g, t)["outside"]
+	assert_eq(TrainGauges.why_text(o, t), "바깥 −3° = 첫 추위 −3° | 난방 석탄 ×0.9", "no weather yet: no weather part")
+	g["stop"] = {"weather": "snow"}
+	o = TrainGauges.model(g, t)["outside"]
+	assert_eq(TrainGauges.why_text(o, t), "바깥 −5° = 첫 추위 −3° · 눈 −2° | 난방 석탄 ×0.9")
+	assert_eq(float(o["base"]), TrainClimate.seg_temp(t, int(g["seg"])), "the stretch's midday")
+	assert_eq(float(o["base"]) + float(o["weather_temp"]), float(o["temp"]), "the parts make the reading")
+	assert_eq(float(o["mult"]), TrainClimate.temp_mult(g, t), "the multiple heat_cost takes")
+	assert_eq(TrainGauges.why_text(o, t), "바깥 %s = 첫 추위 %s · 눈 %s | 난방 석탄 ×%s" % [TrainGauges.deg(float(o["temp"])),
+		TrainGauges.deg(float(o["base"])), TrainGauges.sdeg(float(o["weather_temp"])), TrainClimate._js(TrainClimate.temp_mult(g, t))])
+
+
+## 결정 351 under 483: the slip tells nothing ahead — on stretch 16 (늦가을,
+## 17 turns 첫 추위) neither the next stage nor the next stretch's temperature.
+func test_the_slip_tells_nothing_ahead() -> void:
+	var s: Array = _start()
+	var g: Dictionary = s[0]
+	var t: Dictionary = s[1]
+	g["seg"] = 16
+	g["outside"] = 0
+	g["stop"] = {"weather": "clear"}
+	assert_eq(TrainClimate.stage_at(t, 17), 1, "the stage turns on the next stretch")
+	var o: Dictionary = TrainGauges.model(g, t)["outside"]
+	var text: String = TrainGauges.why_text(o, t)
+	assert_eq(String(o["name"]), "늦가을")
+	assert_false(text.contains("첫 추위"), "not the next stage: " + text)
+	var ahead: float = TrainClimate.seg_temp(t, 17)
+	if not is_equal_approx(ahead, float(o["base"])) and not is_equal_approx(ahead, float(o["temp"])):
+		assert_false(text.contains(" " + TrainGauges.deg(ahead)), "not the next stretch's temperature: " + text)
+
+
+func test_a_press_on_the_thermometer_puts_up_its_slip() -> void:
+	var s: Array = _start()
+	var strip = TrainGauges.new()
+	strip.g = s[0]
+	strip.t = s[1]
+	add_child_autofree(strip)
+	(strip.find_child("Tap_outside", true, false) as Button).pressed.emit()
+	assert_not_null(strip.find_child("Why", true, false), "a press puts it up")
+	strip.set_focus(["coal"])
+	assert_not_null(strip.find_child("Why", true, false), "a sheet's focus keeps it up")
+	(strip.find_child("Tap_outside", true, false) as Button).pressed.emit()
+	assert_null(strip.find_child("Why", true, false), "a press again folds it")
+	(strip.find_child("Tap_outside", true, false) as Button).pressed.emit()
+	assert_not_null(strip.find_child("Why", true, false))
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = Vector2(20, 700)
+	strip._input(press)
+	assert_null(strip.find_child("Why", true, false), "a press off it folds it")
+
+
+func test_the_slip_stays_on_a_narrow_screen() -> void:
+	var s: Array = _start()
+	s[0]["stop"] = {"weather": "cold_front"}
+	var strip = TrainGauges.new()
+	strip.g = s[0]
+	strip.t = s[1]
+	add_child_autofree(strip)
+	strip.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	strip.size = Vector2(1280, TrainGauges.BAND_H)
+	strip._lay_out()
+	(strip.find_child("Tap_outside", true, false) as Button).pressed.emit()
+	var why: Control = strip.find_child("Why", true, false)
+	assert_not_null(why)
+	assert_gte(why.position.x, 0.0, "in from the left")
+	assert_lte(why.position.x + why.size.x, 1280.0, "in from the right")

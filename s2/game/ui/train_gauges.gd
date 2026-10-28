@@ -30,8 +30,10 @@ extends Control
 ## fades to a third and loses most of its colour (.hud--top .is-dim).
 ##
 ## Coal and food are keys: a press asks for what a stretch costs and why
-## (`stock_pressed`, the slice opens cost_pane.gd; J12). Nothing else takes a
-## press.
+## (`stock_pressed`, the slice opens cost_pane.gd; J12). The thermometer is a
+## key too: a press puts up its slip, how the reading is made and the heating
+## coal's multiple (결정 483); a press on it again or anywhere off the slip
+## folds it. Nothing else takes a press.
 
 ## A stock among TAPPABLE pressed: "coal" or "food".
 signal stock_pressed(id: String)
@@ -141,6 +143,12 @@ const METER_W: float = 104.0
 const METER_W_NARROW: float = 66.0
 ## The 위험 tag's glow, which the narrow band's lamp casts too.
 const TAG_GLOW := Color(242 / 255.0, 166 / 255.0, 60 / 255.0, 0.7)
+## The thermometer's slip (.why · .why--cold): its ink, the marks between its
+## parts, the cold of its mark; how long it takes to come up.
+const WHY_INK := Color("231a12")
+const WHY_MARK := Color(35 / 255.0, 26 / 255.0, 18 / 255.0, 0.72)
+const WHY_ICON := Color("5f7383")
+const WHY_IN_S: float = 0.26
 
 var g: Dictionary = {}
 var t: Dictionary = {}
@@ -154,6 +162,8 @@ var _narrow: bool = false
 var _ot_last: Variant = null
 var _ot_plan: Dictionary = {}
 var _ot_t0: int = 0
+## The thermometer's slip is up (결정 483).
+var _why_open: bool = false
 
 
 ## What the strip says for state `g0` (tests read this; the strip draws it).
@@ -214,6 +224,34 @@ static func _num(x: float) -> String:
 ## A temperature as the thermometer writes it: −3°, 5° (tfmt).
 static func deg(x: float) -> String:
 	return ("−" if x < 0.0 else "") + _num(absf(x)) + "°"
+
+
+## What a weather adds, signed: −2°, +5°, +0° (dfmt).
+static func sdeg(x: float) -> String:
+	return ("−" if x < 0.0 else "+") + _num(absf(x)) + "°"
+
+
+## The thermometer's slip as one line (결정 483, otempWhy): the reading = the
+## stage and the stretch's midday · the weather and what it adds | the heating
+## coal's multiple — 「바깥 −5° = 첫 추위 −3° · 눈 −2° | 난방 석탄 ×0.9」. No
+## weather, no weather part. Only what is now (결정 351: nothing ahead).
+static func why_text(o: Dictionary, t0: Dictionary) -> String:
+	var s: String = ""
+	for p: Array in why_parts(o, t0):
+		s += " %s " % p[0] if p[1] == "mark" else String(p[0]) + (" " if p[1] == "word" else "")
+	return s.strip_edges()
+
+
+## The slip's parts in order, [text, kind]: "word", "num", "bold" (the reading
+## and the multiple) or "mark" (= · |).
+static func why_parts(o: Dictionary, t0: Dictionary) -> Array:
+	var parts: Array = [["바깥", "word"], [deg(float(o["temp"])), "bold"], ["=", "mark"], [String(o["name"]), "word"], [deg(float(o["base"])), "num"]]
+	var w: String = String(o["weather"])
+	if w != "":
+		var names: Dictionary = t0.get("WEATHER_NAME", {})
+		parts.append_array([["·", "mark"], [String(names.get(w, w)), "word"], [sdeg(float(o["weather_temp"])), "num"]])
+	parts.append_array([["|", "mark"], ["난방 석탄", "word"], ["×" + TrainClimate._js(float(o["mult"])), "bold"]])
+	return parts
 
 
 ## Where the column's head stands in the tube for `temp` (0–1): the warmest
@@ -351,6 +389,9 @@ func refresh(g0: Dictionary, t0: Dictionary) -> void:
 		right.add_child(_stock(s))
 	_parts.add_child(right)
 	_lay_out()
+	if _why_open:
+		# Drawn again with the band (a sheet's focus, a new reading): the slip stays, its numbers now.
+		_show_why(false)
 
 
 ## Light only `ids` (empty: all) and draw again.
@@ -537,6 +578,13 @@ func _lay_out() -> void:
 		tension.position = Vector2((12.0 + mw + 10.0) * k, 0)
 	if outside:
 		outside.position = Vector2((12.0 + mw + 10.0 + mw + 10.0) * k, 0)
+	var why: Control = _parts.get_node_or_null("Why")
+	if why and outside:
+		# 52 down, its middle under the thermometer's as far as 8 in from either edge.
+		var half: float = why.size.x / k * 0.5
+		var mid: float = (outside.position.x + outside.size.x * 0.5) / k
+		mid = clampf(mid, half + 8.0, maxf(half + 8.0, size.x / k - half - 8.0))
+		why.position = Vector2((mid - half) * k, 52.0 * k)
 	if mood:
 		mood.position = Vector2(size.x * 0.5 - 8.0 * k - mood.size.x * 0.5, 1.0 * k)
 	if right:
@@ -938,7 +986,8 @@ func _medal(icon: String, color: Color, at_css: Vector2, dim: bool) -> Control:
 ## The outside thermometer (.otemp, 48 high): the glass at the left (a tube
 ## 10 × 32 from 5 down with its bulb, frost round it on a 28 × 50 board), the
 ## temperature on a baseline at 25 and the stage's name at 40 from 23 in, a
-## snow mark on the bulb, glowing cold, while the track is frozen. It only shows.
+## snow mark on the bulb, glowing cold, while the track is frozen. The whole of
+## it is the slip's key (Tap_outside, 결정 483).
 ## A narrow band drops the name and sets the number at 31, the middle. Its
 ## parts show where a roll has got to (_ot_state); _process moves them on.
 func _outside(o: Dictionary) -> Control:
@@ -995,7 +1044,140 @@ func _outside(o: Dictionary) -> Control:
 	var w_css: float = 23.0 + words_w + 2.0
 	c.custom_minimum_size = Vector2(w_css if _narrow else maxf(w_css, 58.0), 48.0) * k
 	c.size = c.custom_minimum_size
+	# The whole thermometer, 48 high, is the slip's key (결정 483).
+	var tap := Button.new()
+	tap.name = "Tap_outside"
+	tap.flat = true
+	tap.focus_mode = Control.FOCUS_NONE
+	for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
+		tap.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tap.pressed.connect(_toggle_why)
+	c.add_child(tap)
 	return c
+
+
+## The thermometer pressed: its slip up, or folded if it was.
+func _toggle_why() -> void:
+	if _why_open:
+		_fold_why()
+		return
+	_why_open = true
+	_show_why(true)
+
+
+## Fold the slip. Only the slip goes, so a press that folded it still reaches
+## the key it was on.
+func _fold_why() -> void:
+	_why_open = false
+	if _parts == null:
+		return
+	var w: Node = _parts.get_node_or_null("Why")
+	if w != null:
+		_parts.remove_child(w)
+		w.queue_free()
+
+
+## Put the slip up off the reading (the last model's outside), `fresh` coming
+## up as .why's whyIn does; laid out under the thermometer.
+func _show_why(fresh: bool) -> void:
+	if _parts == null or not (_ot_last is Dictionary) or _parts.get_node_or_null("Outside") == null:
+		_why_open = false
+		return
+	var old: Node = _parts.get_node_or_null("Why")
+	if old != null:
+		_parts.remove_child(old)
+		old.queue_free()
+	var w: Control = _why(_ot_last)
+	_parts.add_child(w)
+	_lay_out()
+	if fresh:
+		# whyIn: up 6 from under, from 0.9, in from nothing, with a little bounce.
+		var k: float = UiFonts.K
+		var at: Vector2 = w.position
+		w.position = at + Vector2(0.0, 6.0) * k
+		w.scale = Vector2(0.9, 0.9)
+		w.modulate.a = 0.0
+		var tw := w.create_tween().set_parallel(true).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(w, "position", at, WHY_IN_S)
+		tw.tween_property(w, "scale", Vector2.ONE, WHY_IN_S)
+		tw.tween_property(w, "modulate:a", 1.0, WHY_IN_S).set_trans(Tween.TRANS_LINEAR)
+
+
+## The slip (.why · .why--cold, 결정 483): paper 28 high tilted −1.5° with its
+## shade under it; the cold mark, then why_parts in ink — words 500, the reading
+## and the multiple 600, the marks fainter with 3 either side — 5 between each,
+## 8 in at the left and 11 at the right. _lay_out puts it.
+func _why(o: Dictionary) -> Control:
+	var k: float = UiFonts.K
+	var c := Control.new()
+	c.name = "Why"
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var body := Control.new()
+	body.name = "Paper"
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	c.add_child(body)
+	var mark := TextureRect.new()
+	var px: int = int(round(13.0 * k))
+	mark.texture = HudIcons.texture("temp", px, WHY_ICON, 2.2, HudIcons.CUT_PAPER)
+	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mark.size = Vector2(px, px)
+	mark.position = Vector2(8.0, (28.0 - 13.0) * 0.5) * k
+	c.add_child(mark)
+	var x: float = 8.0 + 13.0
+	for p: Array in why_parts(o, t):
+		var kind: String = String(p[1])
+		var l: Label
+		if kind == "mark":
+			l = _label(String(p[0]), UiFonts.WORD, 500, 12.0, WHY_MARK, 0.48)
+		elif kind == "word":
+			l = _label(String(p[0]), UiFonts.WORD, 500, 12.0, WHY_INK, 0.48)
+		else:
+			l = _label(String(p[0]), UiFonts.NUMBER, 600 if kind == "bold" else 500, 12.0, WHY_INK, 0.48)
+		c.add_child(l)
+		x += 5.0 + (3.0 if kind == "mark" else 0.0)
+		_sit(l, x, 18.5)
+		x += _text_w(l) + (3.0 if kind == "mark" else 0.0)
+	c.size = Vector2(x + 11.0, 28.0) * k
+	c.pivot_offset = c.size * 0.5
+	c.rotation_degrees = -1.5
+	body.size = c.size
+	body.draw.connect(func() -> void:
+		GlassParts.shadow(body, Rect2(Vector2.ZERO, body.size), 0.0, 4.0 * k, 10.0 * k, Color(0, 0, 0, 0.6))
+		var r := Rect2(Vector2.ZERO, body.size)
+		var pts := PackedVector2Array([r.position, Vector2(r.end.x, 0.0), r.end, Vector2(0.0, r.end.y)])
+		body.draw_colored_polygon(pts, GlassParts.PAPER)
+		var uvs := PackedVector2Array()
+		for q in pts:
+			uvs.append(q / (GlassParts.PAPER_TILE * k))
+		body.draw_polygon(pts, PackedColorArray([Color.WHITE, Color.WHITE, Color.WHITE, Color.WHITE]), uvs, GlassParts.PAPER_TEX))
+	return c
+
+
+## A press off the slip and the thermometer folds the slip, and goes on to what
+## it was on (결정 483).
+func _input(event: InputEvent) -> void:
+	if not _why_open or _parts == null:
+		return
+	var at := Vector2.INF
+	if event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			at = mb.position
+	elif event is InputEventScreenTouch:
+		var st: InputEventScreenTouch = event
+		if st.pressed:
+			at = st.position
+	if at == Vector2.INF:
+		return
+	for id: String in ["Why", "Outside"]:
+		var c: Control = _parts.get_node_or_null(id)
+		if c != null and c.get_global_rect().has_point(at):
+			return
+	_fold_why()
 
 
 ## The glass as the thermometer shows now (_ot_state): the stage's colours and
