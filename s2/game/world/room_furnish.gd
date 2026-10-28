@@ -2094,7 +2094,7 @@ const SPARE: Dictionary = {
 	"bathroom": {"medicine_cabinet": true, "washstand": true, "towel_shelf": true, "waste_bin": true},
 	"bedroom": {"nightstand": true, "dresser": true, "wardrobe": true, "blanket_chest": true, "bookcase": true, "side_table": true},
 }
-const SPARE_MOST: Dictionary = {"kitchen": KITCHEN_MOST, "bathroom": 3, "bedroom": 2}
+const SPARE_MOST: Dictionary = {"kitchen": KITCHEN_MOST, "bathroom": 3, "bedroom": 1}
 ## Seconds to search one of those (card L, decision 442): half a map box's 4, so opening all
 ## of a stop's adds some 36 s, not 73 (after the box-size factor: cupboard 1.5 s, counter 2 s).
 const KITCHEN_SEARCH: float = 2.0
