@@ -5,7 +5,7 @@ import { budgetNextSeg } from './budget';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { AR, arrivalsAfterStop, arrivalsArrive, arrivalsAway, arrivalsSettle, arrivalsTravel } from './arrivals';
 import { crewShortNow, crewShortSpent, deathEmergCost } from './death_weight';
-import { climateDepart, climateSettle, freezeCoal, freezeDepart, freezeFood, tempMult } from './climate';
+import { climateDepart, climateSettle, freezeCoal, freezeDepart, freezeFood, stageAt, tempMult } from './climate';
 import { CALM, calmCoal, calmNight, calmSettle, calmTension, potRunning } from './calm';
 import { bump, bumpParts, bumpRel, put } from './ledger';
 import { drawTravelEvent } from './cards';
@@ -362,12 +362,62 @@ export function stopCrew(g: Game): string[] {
   return names;
 }
 
-function suggestTarget(g: Game, loot: Record<LootKey, number>): LootKey {
+/** 노리는 갈래의 후보 차례(결정 482, 469 V1): 계절 추위가 앞 구간에서 오르면 석탄, 약속 장부에 걸린 갈래를 앞에 두고,
+ * 그 뒤로 열차가 모자란 차례(석탄·식량, 의약품은 8 아래일 때만). 그 장소에 하나도 없는 갈래는 뺀다. */
+export function targetCandidates(g: Game, loot: Record<LootKey, number>): LootKey[] {
   const need: Partial<Record<LootKey, number>> = { coal: g.coal / 252, food: g.food / 240 };
   if (g.med < 8) need.medicine = g.med / 20;
   const sorted = (Object.keys(need) as LootKey[]).sort((a, b) => (need[a] ?? 1) - (need[b] ?? 1));
-  for (const k of sorted) if (loot[k] >= 25) return k;
-  return loot.coal / (g.coal + 1) > loot.food / (g.food + 1) ? 'coal' : 'food';
+  const front: LootKey[] = [];
+  if (g.climate && stageAt(g.seg + 1) > stageAt(g.seg)) front.push('coal');
+  for (const c of COMMS) {
+    const p = g.comms[c].promise;
+    if (!p || p.due < g.seg) continue;
+    if (p.kind === 'fetch') front.push(FETCH_WANT[c].target);
+    else if (p.cond.kind === 'target' && p.cond.target) front.push(p.cond.target);
+  }
+  return [...new Set([...front, ...sorted])].filter(k => loot[k] > 0);
+}
+
+/** 결정 482: 세 번째 연속은 처음 갈래가 이만큼 구간 치 예고보다 많이 남았을 때만 넘긴다(482 글은 2). */
+export const ROTATE_GUARD = 2;
+/** 결정 482: 세 번째 연속이 넘어갈 갈래. false = 다음 후보 중 그 장소에 25 이상 있는 것(482 글 그대로),
+ * true = 그 장소에 25 이상 있는 다른 것 중 가장 많은 것(s3-link 물음 카드 2026-10-28 가). */
+export const ROTATE_BY_PLACE: boolean = false;
+
+/** 결정 482: 남은 양이 ROTATE_GUARD 구간 치 예고보다 적은 갈래(석탄·식량만). 이 갈래는 세 번째 연속이어도 넘기지 않는다. */
+export function targetCritical(g: Game, k: LootKey): boolean {
+  const f = forecast(g);
+  if (k === 'coal') return g.coal < ROTATE_GUARD * f.coal;
+  if (k === 'food') return g.food < ROTATE_GUARD * f.food;
+  return false;
+}
+
+/** 결정 482: 처음 갈래 first의 세 번째 연속이 넘어갈 갈래. 없으면 undefined(ROTATE_BY_PLACE 참고). */
+export function rotateTo(cands: LootKey[], loot: Record<LootKey, number>, first: LootKey): LootKey | undefined {
+  if (ROTATE_BY_PLACE) {
+    let best: LootKey | undefined;
+    for (const k of LOOT_KEYS) if (k !== first && loot[k] >= 25 && (best === undefined || loot[k] > loot[best])) best = k;
+    return best;
+  }
+  return cands.find(k => k !== first && loot[k] >= 25);
+}
+
+/** 정차마다 처음 노리는 갈래(플레이어가 정차 카드에서 바꿀 수 있다). 후보 중 그 장소에 25 이상 있는 첫 갈래, 없으면 예전대로
+ * 석탄·식량 중 하나. 그 갈래가 사람을 내보낸 정차의 세 번째 연속이 되면 rotateTo로 넘긴다 — 처음 갈래가 모자라면
+ * (targetCritical) 넘기지 않는다(결정 482). */
+export function suggestTarget(g: Game, loot: Record<LootKey, number>): LootKey {
+  const cands = targetCandidates(g, loot);
+  const first = cands.find(k => loot[k] >= 25) ?? (loot.coal / (g.coal + 1) > loot.food / (g.food + 1) ? 'coal' : 'food');
+  const run = g.targetRun;
+  if (run && run.target === first && run.n >= 2 && !targetCritical(g, first)) return rotateTo(cands, loot, first) ?? first;
+  return first;
+}
+
+/** 사람을 내보낸 정차가 노린 갈래를 줄에 센다(결정 482). 지나친 정차는 부르지 않는다. */
+export function noteTarget(g: Game, target: LootKey | null): void {
+  if (!target) return;
+  g.targetRun = g.targetRun?.target === target ? { target, n: g.targetRun.n + 1 } : { target, n: 1 };
 }
 
 /** 이 구간의 정차 장소를 뽑는다(결정 136). 묶음의 무게로 뽑고, 풀어 주는 구간이면 그 목록에서 뽑는다. 주사위는 한 번만 굴린다(뒤의 주사위 순서가 안 밀리게).
@@ -759,6 +809,7 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
   if (since('rescue') >= 4 && rnd(g) < P.rescueRate && !arrived && !trail) addCard(g, { kind: 'rescue', comm: stop.crewComm, who: returned[0] });
   if (since('bitten') >= 3 && injuredOnly.length > 0 && rnd(g) < 0.35) addCard(g, { kind: 'bitten', comm: stop.crewComm, who: injuredOnly[0] });
   checkStopPromises(g, stop.target, gains);
+  noteTarget(g, stop.target);
   return stop.result;
 }
 
