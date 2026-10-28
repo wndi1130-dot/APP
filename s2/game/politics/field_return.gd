@@ -589,6 +589,23 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		g["comms"][comm]["pop"] = maxi(1, int(g["comms"][comm]["pop"]) - names.size())
 		lines.append({"k": "people", "comm": comm, "text": "%s %s이(가) 필드에 남았다." % [t["COMM_NAME"][comm], ", ".join(names)]})
 		_journal(g, "%s이(가) 필드에 남았다. 열차는 그들 없이 떠났다." % ", ".join(names), "dark")
+	# Left at an earlier stop and rescued alive this time: off the left list and back into the car's
+	# count (as the prologue's waiting for them does; s1 field_receipt.ts rejoined).
+	var rejoined: Array = []
+	for person_id: String in returned_of(receipt):
+		if person_id != FieldDeparture.CAPTAIN_ID and (receipt["people"]["rescued"] as Array).has(person_id) and (g.get("left", []) as Array).has(_person_of(t, departure, person_id)["name"]):
+			rejoined.append(person_id)
+	var rejoined_by_comm := _by_comm(t, departure, rejoined)
+	for comm: String in rejoined_by_comm:
+		var names: Array = rejoined_by_comm[comm]
+		var still_left: Array = []
+		for name: Variant in g.get("left", []):
+			if not names.has(name):
+				still_left.append(name)
+		g["left"] = still_left
+		g["comms"][comm]["pop"] = int(g["comms"][comm]["pop"]) + names.size()
+		lines.append({"k": "people", "comm": comm, "text": "%s %s이(가) 살아서 다시 열차에 올랐다." % [t["COMM_NAME"][comm], ", ".join(names)]})
+		_journal(g, "%s이(가) 살아서 다시 열차에 올랐다." % ", ".join(names), "good")
 	for verdict: Dictionary in verdicts:
 		var spec: Dictionary = {}
 		for promise: Dictionary in departure["promises"]:
@@ -624,6 +641,15 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	_resident_scenes(g, departure, receipt)
 	# Each person's own memory of the stop (person_memory.gd, s1 memory.ts on RETURN_HOOK).
 	PersonMemory.from_return(g, t, departure, receipt, returned_of(receipt))
+	# Left behind or missing: on the left list as well, so the next crew and the train's
+	# is_gone see the same people as the count. After the memories have found this return's
+	# kin. Not the captain; a car's rep keeps the seat (no rule yet for a rep left behind).
+	for person_id: String in lost_ids:
+		var name: String = _person_of(t, departure, person_id)["name"]
+		if person_id != FieldDeparture.CAPTAIN_ID and not TrainState.is_gone(g, name):
+			if not g.get("left") is Array:
+				g["left"] = []
+			(g["left"] as Array).append(name)
 	_close_field_stop(g, t, departure, receipt)
 	if receipt["symbol"] is Dictionary:
 		var comm: String = receipt["symbol"]["groupId"]
@@ -660,7 +686,9 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 ## back, the cars that rest, the stop's promises.
 static func _close_field_stop(g: Dictionary, t: Dictionary, departure: Dictionary, receipt: Dictionary) -> void:
 	var stop: Variant = g.get("stop")
-	if g["phase"] != "stop" or not stop is Dictionary or bool(stop["done"]):
+	# A late receipt from a departure of an earlier stretch brings its goods and people only:
+	# it neither closes the stop the train stands at now nor counts toward the aimed-at run.
+	if g["phase"] != "stop" or not stop is Dictionary or bool(stop["done"]) or int(departure["segment"]) != int(g["seg"]):
 		return
 	# Loaded when called: train_advance.gd preloads this file.
 	var adv: GDScript = load("res://game/train/train_advance.gd")
@@ -745,12 +773,15 @@ static func _resident_scenes(g: Dictionary, departure: Dictionary, receipt: Dict
 
 
 static func _body_searches(g: Dictionary, departure: Dictionary, receipt: Dictionary) -> void:
+	var back: Array = returned_of(receipt)
 	var minded: Dictionary = {}
 	for row: Dictionary in receipt.get("witnessed", []):
 		if String(row.get("template", "")) != "body_search":
 			continue
 		for w: Variant in row.get("witnesses", []):
 			var pid: String = String(w) if w is String else String((w as Dictionary).get("person", ""))
+			if not back.has(pid):
+				continue
 			for r: Dictionary in FieldDeparture.people_of(departure):
 				var comm: String = String(r.get("comm", ""))
 				if String(r.get("id", "")) != pid or minded.has(comm):

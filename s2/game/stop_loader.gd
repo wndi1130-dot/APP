@@ -15,6 +15,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const RoomFinish = preload("res://game/world/room_finish.gd")
+const EdgeBand = preload("res://game/world/edge_band.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
@@ -179,7 +180,8 @@ static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, va
 ## first (side_path.gd: the same way the field would put it on, and it can grow and
 ## shift the map); then from the map as it now is the plan of its buildings
 ## (building_view.gd), the ground's and the floors' arrays (map_view.gd, 2a) with the
-## maps they fit, and the rooms' finish (room_finish.gd). Data only, no nodes.
+## maps they fit, the rooms' finish (room_finish.gd) and the plan of the woods round
+## the map (edge_band.gd plan_ahead). Data only, no nodes.
 static func make_ready(script: Script, run_seed: int) -> Dictionary:
 	var d: Dictionary = FieldMaps.build_from(script)
 	if run_seed >= 0:
@@ -193,6 +195,7 @@ static func make_ready(script: Script, run_seed: int) -> Dictionary:
 	d["_floor_arrays"] = MapView.level_floor_arrays(d.get("levels", {}), keys)
 	d["_floor_keys"] = keys
 	d["_room_finish"] = RoomFinish.build(d)
+	d["_edge_plan"] = EdgeBand.plan_ahead(d)
 	return d
 
 

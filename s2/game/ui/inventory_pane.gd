@@ -69,7 +69,7 @@ static func open(hud, want: Dictionary) -> void:
 	var all := places(game, p)
 	var at := chosen(all, want)
 	hud.inv_near = at
-	var pane = hud._open_pane(String(Carry.BAGS[p.bag]["name"]), "%.1f / %.0f · %s" % [p.weight(), p.carry_limit(), Carry.STATE_NAMES[p.carry_state()]], "inv", PANE_W)
+	var pane = hud._open_pane(String(Carry.BAGS[p.bag]["name"]), "%.1f / %.0f · %s" % [p.weight(), p.carry_limit(), Carry.STATE_NAMES[p.carry_state()]], "pack", PANE_W)
 	var sides := GlassPane.row()
 	sides.add_theme_constant_override("separation", GlassPane.px(16.0))
 	pane.body.add_child(sides)

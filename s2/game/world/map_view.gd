@@ -15,6 +15,7 @@ const PropKinds = preload("res://game/world/prop_kinds.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const TrackView = preload("res://game/world/track_view.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
+const BuildingUses = preload("res://game/world/building_uses.gd")
 const ObjectRules = preload("res://game/sim/object_rules.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const S = FieldGrid.Solid
@@ -157,7 +158,7 @@ func setup(map_data: Dictionary) -> void:
 	await BuildPace.rest(pace)
 	await _build_ground()
 	# 지도 칸 밖: 숲 띠·눈둑·밖으로 이어지는 길과 선로(edge_band.gd, 결정 448 17번).
-	edge_band = EdgeBand.build(level_roots[0], grid, data, material, FLOOR_COLORS)
+	edge_band = await EdgeBand.build(level_roots[0], grid, data, material, FLOOR_COLORS, pace)
 	# 선로 칸의 침목과 레일, 지도 밖으로 이어지는 것까지, 건널목 판자(track_view.gd, 결정 476·M1).
 	TrackView.build(level_roots[0], grid, material, edge_band.get("rail_runs", []), data.get("rail_crossings", []))
 	_build_walls()
@@ -1252,6 +1253,93 @@ static func train_heading(d: Dictionary) -> float:
 	return 1.0
 
 
+## The trees standing on the map's tree cells (data["trees"]) are models chosen by the
+## place (결정 478: map group -> region; user 10-28 「나무도 빠르게 바꿔야」): spruce in
+## the forest and mountain stops, willow by water, leafless broadleaf, street and fruit
+## trees in town. The cells and their solids stay as they are; with no model a tree is
+## the grey trunk and box crown as before. Each model is made on a one-cell footprint,
+## so its crown is widened by its spread, as the woods past the edge (edge_band.gd).
+const TREE_SPRUCE := "res://models/props_field/spruce.glb"
+const TREE_BARE := "res://models/props_common/bare_tree.glb"
+const TREE_WILLOW := "res://models/props_field/bare_willow.glb"
+const TREE_STREET := "res://models/props_field/street_tree.glb"
+const TREE_ORCHARD := "res://models/props_field/bare_orchard_tree.glb"
+## Shares of each model by region; a map with no group is mixed as the rail works.
+const TREE_WOODS: Array = [[TREE_SPRUCE, 0.7], [TREE_BARE, 0.2], [TREE_WILLOW, 0.1]]
+const TREE_MIX: Dictionary = {
+	"town": [[TREE_BARE, 0.45], [TREE_STREET, 0.25], [TREE_SPRUCE, 0.2], [TREE_ORCHARD, 0.1]],
+	"rail_works": [[TREE_BARE, 0.5], [TREE_SPRUCE, 0.35], [TREE_WILLOW, 0.15]],
+	"waterside": [[TREE_SPRUCE, 0.55], [TREE_WILLOW, 0.25], [TREE_BARE, 0.2]],
+	"mountain_works": TREE_WOODS, "high_mountain": TREE_WOODS, "bare_line": TREE_WOODS,
+}
+## Height range (m) and crown spread of each model.
+const TREE_SIZE: Dictionary = {
+	TREE_SPRUCE: [4.0, 6.0, 1.7], TREE_BARE: [4.5, 6.5, 1.8], TREE_WILLOW: [4.0, 5.5, 1.8],
+	TREE_STREET: [4.5, 6.0, 1.8], TREE_ORCHARD: [2.6, 3.6, 1.8],
+}
+## Tree models go in pieces this many cells a side, fewer than the ground's tiles.
+const TREE_PIECE: int = TILE * 2
+
+
+## The tree on cell `c` of `place_id`'s map: {model, at, yaw, height, spread}, the same
+## every time. Off the middle of its cell by a little, so a row of tree cells is no row.
+static func tree_plant(place_id: String, c: Vector2i) -> Dictionary:
+	var mix: Array = TREE_MIX.get(BuildingUses.region_of(place_id), TREE_MIX["rail_works"])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("%s:tree:%d:%d" % [place_id, c.x, c.y])
+	var pick := rng.randf()
+	var model: String = mix[-1][0]
+	for row: Array in mix:
+		pick -= float(row[1])
+		if pick < 0.0:
+			model = row[0]
+			break
+	var size: Array = TREE_SIZE[model]
+	var at := FieldGrid.center(c) + Vector3(rng.randf_range(-0.2, 0.2), 0, rng.randf_range(-0.2, 0.2))
+	return {"model": model, "at": at, "yaw": rng.randf() * TAU, "height": rng.randf_range(size[0], size[1]), "spread": float(size[2])}
+
+
+## One MultiMesh per tree model and TREE_PIECE square; they throw shadows as the
+## box trees did. Returns the trees that had no model, for the grey boxes.
+func _build_tree_models(cells: Array) -> Array:
+	var place_id := String(data.get("place_id", ""))
+	var meshes: Dictionary = {}
+	var pieces: Dictionary = {}
+	var left: Array = []
+	for c: Vector2i in cells:
+		var plant := tree_plant(place_id, c)
+		var path := String(plant["model"])
+		if not meshes.has(path):
+			var ok := PropModels.enabled() and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty()
+			meshes[path] = PropModels.batch_meshes(path)[0] if ok else null
+		if meshes[path] == null:
+			left.append(c)
+			continue
+		var piece := c / TREE_PIECE
+		var key := "%s|%d|%d" % [path, piece.x, piece.y]
+		if not pieces.has(key):
+			pieces[key] = []
+		(pieces[key] as Array).append(plant)
+	for key: String in pieces:
+		var list: Array = pieces[key]
+		var mesh: Mesh = meshes[String(key.get_slice("|", 0))]
+		var mesh_h := maxf(mesh.get_aabb().size.y, 0.01)
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh
+		mm.instance_count = list.size()
+		for i in list.size():
+			var plant: Dictionary = list[i]
+			var up := float(plant["height"]) / mesh_h
+			var across := up * float(plant["spread"])
+			mm.set_instance_transform(i, Transform3D(Basis(Vector3.UP, float(plant["yaw"])).scaled(Vector3(across, up, across)), plant["at"]))
+		var node := MultiMeshInstance3D.new()
+		node.name = "Trees_%s_%s_%s" % [key.get_slice("|", 0).get_file().get_basename(), key.get_slice("|", 1), key.get_slice("|", 2)]
+		node.multimesh = mm
+		level_roots[0].add_child(node)
+	return left
+
+
 func _build_blocks() -> void:
 	var st := _begin()
 	# Train: four cars and the engine at the east end; dark so the platform reads.
@@ -1328,9 +1416,11 @@ func _build_blocks() -> void:
 		# as it lies, a run of cells a box, so nothing that stops you is unseen.
 		for r in outdoor_block_runs(grid, data):
 			box(_tile_tool(tools, r.position), Vector3(r.size.x, OUTDOOR_BLOCK_H, 1), Vector3(r.position.x + r.size.x * 0.5, OUTDOOR_BLOCK_H * 0.5, r.position.y + 0.5), Color(0.44, 0.43, 0.42))
+	var tree_cells: Array = []
 	for c in data["trees"]:
-		if modelled_prop_cells.has(c):
-			continue
+		if not modelled_prop_cells.has(c):
+			tree_cells.append(c)
+	for c in _build_tree_models(tree_cells):
 		box(_tile_tool(tools, c), Vector3(0.5, 2.5, 0.5), FieldGrid.center(c) + Vector3(0, 1.25, 0), Color(0.3, 0.26, 0.22))
 		box(_tile_tool(tools, c), Vector3(2.2, 1.8, 2.2), FieldGrid.center(c) + Vector3(0, 3.0, 0), Color(0.62, 0.66, 0.66))
 	for r in data["low_blocks"]:

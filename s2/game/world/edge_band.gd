@@ -11,6 +11,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
+const BuildPace = preload("res://game/world/build_pace.gd")
 const F = FieldGrid.Floor
 
 ## Metres of woods drawn outside each edge, independent of the camera's reach.
@@ -201,6 +202,22 @@ static func look_of(data: Dictionary) -> Dictionary:
 	return {"profile": profile, "conifer": conifer, "forest": float(band["forest"])}
 
 
+## Everything plan() reads: of the map only its size and where roads and rails cross
+## its edges, of the data only the place (seed) and the region band (look).
+static func plan_key(g: FieldGrid, seed: int, look: Dictionary) -> Dictionary:
+	return {"size": Vector2i(g.width, g.height), "openings": openings(g), "seed": seed, "look": look}
+
+
+## The plan made ahead off the main thread (stop_loader.make_ready), with the key it
+## was made from: {key, plan}. build() uses it only while the key still fits; a field
+## given another region band than the loader saw plans again on the main thread.
+static func plan_ahead(d: Dictionary) -> Dictionary:
+	var g: FieldGrid = d["grid"]
+	var seed := seed_of(d)
+	var look := look_of(d)
+	return {"key": plan_key(g, seed, look), "plan": plan(g, seed, look)}
+
+
 ## Where a road or the rails cross an edge: {"side": 0 west 1 east 2 north 3 south,
 ## "from", "to" (cells along the edge, to inclusive), "floor"}.
 static func openings(g: FieldGrid) -> Array:
@@ -214,7 +231,9 @@ static func openings(g: FieldGrid) -> Array:
 			if i < n:
 				var c := _edge_cell(g, side, i)
 				var kind := g.floor_at(c)
-				if (kind == F.ROAD or kind == F.RAIL) and g.people_can_walk(c):
+				# Rails as the map draws them (track_view.gd runs: the rail floor alone), so the
+				# rails out of the map meet those in it even where a car stands on the last cell.
+				if kind == F.RAIL or (kind == F.ROAD and g.people_can_walk(c)):
 					f = kind
 			if f != run_floor:
 				if run_from >= 0 and (run_floor == F.RAIL or i - run_from <= ROAD_WIDEST):
@@ -748,9 +767,17 @@ static func _chunk(at: Vector3) -> Vector2i:
 
 ## Draw the band under `parent` (the ground level's root): the road and rail runs
 ## in the map's own material, trees and blocks as models. Returns counts for the
-## build log and the tests.
-static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Material, colors: Array) -> Dictionary:
-	var p := plan(g, seed_of(data), look_of(data))
+## build log and the tests. With a staged build's `pace` it rests between pieces
+## (build_pace.gd), so a stop being made ready never stops the screen for the woods.
+static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Material, colors: Array, pace = null) -> Dictionary:
+	var seed := seed_of(data)
+	var look := look_of(data)
+	# The plan made ahead on the stop loader's worker (plan_ahead), read once, when it
+	# was made from the same inputs; else made here, on the main thread.
+	var ahead: Dictionary = data.get("_edge_plan", {})
+	data.erase("_edge_plan")
+	var planned_ahead: bool = not ahead.is_empty() and ahead["key"] == plan_key(g, seed, look)
+	var p: Dictionary = (ahead["plan"] as Dictionary) if planned_ahead else plan(g, seed, look)
 	var root := Node3D.new()
 	root.name = "EdgeBand"
 	parent.add_child(root)
@@ -777,6 +804,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		ground_node.material_override = material
 		ground_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(ground_node)
+	await BuildPace.rest(pace)
 	# Trees and what grows under them. Only the first rows' spruce throw a shadow, on the
 	# ground people walk (SHADE_DEPTH): they go in CHUNK pieces here. Every other plant
 	# throws none and is batched with the far ground by model in its larger pieces
@@ -834,6 +862,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		if parts[3] == "1":
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(node)
+		await BuildPace.rest(pace)
 	var traces := 0
 	for gl: Dictionary in p["glades"]:
 		for t: Dictionary in gl["props"]:
@@ -860,8 +889,9 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 			node.material_override = material
 		node.transform = Transform3D(Basis(Vector3.UP, float(b["yaw"])), b["at"])
 		root.add_child(node)
-	var counts := {"trees": (p["trees"] as Array).size(), "blocks": (p["blocks"] as Array).size(), "glades": (p["glades"] as Array).size(), "traces": traces, "chunks": groups.size(), "runs": (p["runs"] as Array).size()}
-	counts.merge(_build_far(root, g, p, material, colors, with_far))
+	var counts := {"trees": (p["trees"] as Array).size(), "blocks": (p["blocks"] as Array).size(), "glades": (p["glades"] as Array).size(), "traces": traces, "chunks": groups.size(), "runs": (p["runs"] as Array).size(), "planned_ahead": planned_ahead}
+	await BuildPace.rest(pace)
+	counts.merge(await _build_far(root, g, p, material, colors, with_far, pace))
 	# Where the danger past the woods is heard (field_audio.gd, the edge bed).
 	var spots: Array[Vector3] = []
 	for s: Dictionary in p["sounds"]:
@@ -874,7 +904,8 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 ## One MultiMesh per model and large chunk, plus one shared terrain/house mesh
 ## per chunk. No colliders, audio players or placeholder boxes for missing art.
 ## `plants`: the band's woods that throw no shadow, batched with these by model.
-static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Material, colors: Array, plants: Array = []) -> Dictionary:
+## Rests between pieces with a staged build's `pace`, as build() does.
+static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Material, colors: Array, plants: Array = [], pace = null) -> Dictionary:
 	var root := Node3D.new()
 	root.name = "Far"
 	parent.add_child(root)
@@ -918,6 +949,7 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(node)
 		prop_count += instances.size()
+		await BuildPace.rest(pace)
 	for plot: Dictionary in p["fields"]:
 		var rect := plot["rect"] as Rect2
 		if String(plot["kind"]) == "bank":
@@ -966,7 +998,10 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 		node.material_override = material
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(node)
-	return {"far": prop_count, "houses": house_count, "fields": (p["fields"] as Array).size(), "tracks": (p["tracks"] as Array).size(), "sounds": (p["sounds"] as Array).size()}
+		await BuildPace.rest(pace)
+	# far_pieces: every piece drawn out there (each model's batches and the ground), for
+	# comparing what the band costs to draw beside chunks (the band's own pieces).
+	return {"far": prop_count, "far_pieces": root.get_child_count(), "houses": house_count, "fields": (p["fields"] as Array).size(), "tracks": (p["tracks"] as Array).size(), "sounds": (p["sounds"] as Array).size()}
 
 
 ## Match the ground outside the blend without depending on map_view (which

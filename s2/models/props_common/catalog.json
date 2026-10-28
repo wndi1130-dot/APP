@@ -320,7 +320,7 @@
       "status": "ready",
       "path": "res://models/props_common/bare_tree.glb",
       "category": "prop",
-      "use": "잎 없이 위로 뻗는 좁은 나무",
+      "use": "눈 조금 얹은 좁은 맨가지 활엽(Quaternius CommonTree_Dead_Snow_3, CC0)",
       "stretch": "xz_after_facing",
       "origin": "cell_floor",
       "height": "free",
@@ -332,32 +332,33 @@
       "height_m": 5.2,
       "modal_rect_count": 1235,
       "source_rect_count": 1235,
-      "lod0_tris": 376,
+      "lod0_tris": 426,
       "triangle_limit": 600,
       "dimensions_m": [
-        1.0,
+        1.106,
         5.2,
-        1.0
+        1.4088
       ],
       "bounds_m": [
         [
-          -0.5,
+          -0.917,
           0.0,
-          -0.5
+          -0.5598
         ],
         [
-          0.5,
+          0.189,
           5.2,
-          0.5
+          0.849
         ]
       ],
       "colours": [
         "bark",
-        "snow",
-        "worn_wood"
+        "snow"
       ],
-      "bytes": 26604,
-      "sha256": "c354c893f97cf9dcd0981ee00a4c688a07443a983685200afa5f440fda18c2f5"
+      "bytes": 44476,
+      "sha256": "5b988c03399beb7cb4679cf16273c105c89007712f9032a224a05ba5c2e7e23c",
+      "source_asset": "눈 조금 얹은 좁은 맨가지 활엽(Quaternius CommonTree_Dead_Snow_3, CC0)",
+      "source_script": "tools/blender/props_field_street.py"
     },
     "crate_stack": {
       "status": "ready",

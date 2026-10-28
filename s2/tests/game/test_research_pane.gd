@@ -322,3 +322,24 @@ func test_a_stood_down_technology_runs_again_from_its_row() -> void:
 	_key(p2, "Key_e2").pressed.emit()
 	assert_false(bool(g["dom"]["techs"]["e2"]["off"]), "it runs again")
 	assert_eq(float(g["dom"]["parts"]), 1.0)
+
+
+func test_w4_row_names_the_clockwork_lure_without_scouting() -> void:
+	var g: Dictionary = _game()
+	g["dom"]["techs"]["w4"] = {"stage": "done", "defect": false, "progress": 3.0, "need": 3.0}
+	assert_eq(_row(ResearchPane.model(g), "w4").get("effect"), "태엽 미끼")
+	var p: Control = _pane(g)
+	await wait_process_frames(1)
+	var effect: Label = p.find_child("Effect_w4", true, false) as Label
+	assert_not_null(effect)
+	if effect != null:
+		assert_eq(effect.text, "태엽 미끼")
+	assert_null(_key(p, "Key_w4"))
+
+
+func test_w2_variants_name_their_workshop_recipes() -> void:
+	var g: Dictionary = _ready_for_w2()
+	g["dom"]["techs"]["w2"] = {"stage": "done", "defect": false, "progress": 6.0, "need": 6.0, "variant": "a"}
+	assert_eq(_row(ResearchPane.model(g), "w2").get("effect"), "고철로 권총탄")
+	g["dom"]["techs"]["w2"]["variant"] = "b"
+	assert_eq(_row(ResearchPane.model(g), "w2").get("effect"), "화살 깎기")

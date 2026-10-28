@@ -162,7 +162,7 @@ func test_the_band_is_built_under_the_ground_level() -> void:
 	var g := _grid()
 	var root := Node3D.new()
 	add_child_autofree(root)
-	var counts := EdgeBand.build(root, g, {"place_id": "test"}, StandardMaterial3D.new(), [Color.WHITE, Color.GRAY, Color.GRAY, Color.GRAY, Color.DIM_GRAY, Color.WHITE, Color.WHITE, Color.GRAY])
+	var counts: Dictionary = await EdgeBand.build(root, g, {"place_id": "test"}, StandardMaterial3D.new(), [Color.WHITE, Color.GRAY, Color.GRAY, Color.GRAY, Color.DIM_GRAY, Color.WHITE, Color.WHITE, Color.GRAY])
 	var band := root.get_node("EdgeBand")
 	assert_not_null(band)
 	assert_not_null(band.get_node("Runs"), "the road and rail runs out of the map")
@@ -176,6 +176,7 @@ func test_the_band_is_built_under_the_ground_level() -> void:
 	assert_gt(int(counts["trees"]), 0)
 	assert_gt(int(counts["chunks"]), 4, "the woods are cut in pieces so those off screen are not drawn")
 	var far_root := band.get_node("Far")
+	assert_eq(int(counts["far_pieces"]), far_root.get_child_count(), "every far piece counted, batches and ground")
 	var props := 0
 	for child in far_root.get_children():
 		var geometry := child as GeometryInstance3D
@@ -413,7 +414,7 @@ func test_missing_far_models_are_skipped_without_a_placeholder() -> void:
 	add_child_autofree(root)
 	var planned := {"far": [{"at": Vector3(-30, 0, 10), "yaw": 0.0, "scale": Vector3.ONE, "model": "res://models/props_field/missing_far_test.glb"}],
 		"fields": [], "tracks": [], "sounds": []}
-	var counts := EdgeBand._build_far(root, FieldGrid.new(2, 2), planned, StandardMaterial3D.new(), [Color.WHITE])
+	var counts: Dictionary = await EdgeBand._build_far(root, FieldGrid.new(2, 2), planned, StandardMaterial3D.new(), [Color.WHITE])
 	assert_eq(int(counts["far"]), 0)
 	assert_eq(root.get_node("Far").get_child_count(), 0, "a missing model adds no grey geometry")
 
@@ -466,23 +467,22 @@ func test_forest_stops_grow_dense_spruce_woods_and_towns_thin_fruit_and_street_t
 
 
 func test_deep_spruce_crowns_meet_and_the_woods_go_on_past_the_band() -> void:
-	var mesh := EdgeBand._model_mesh(EdgeBand.SPRUCE)
-	if mesh == null:
-		pass_test("no spruce model here")
-		return
 	var w := _woods("lodge_01", 9)
 	var g: FieldGrid = w["g"]
-	var across := mesh.get_aabb().size.x / mesh.get_aabb().size.y
-	var deep := 0
-	var narrow := 0
-	for t: Dictionary in w["plan"]["trees"]:
-		var at: Vector3 = t["at"]
-		if String(t["model"]) == EdgeBand.SPRUCE and EdgeBand.outside(g, at.x, at.z) > EdgeBand.INNER_ROW + EdgeBand.CANOPY_RAMP:
-			deep += 1
-			if float(t["height"]) * float(t["spread"]) * across <= float(EdgeBand.PROFILES["dense"]["canopy"]):
-				narrow += 1
-	assert_gt(deep, 200)
-	assert_eq(narrow, 0, "deep crowns are wider than the gap between trunks")
+	# The crowns need the model's own width; the rest is the plan's and runs without it.
+	var mesh := EdgeBand._model_mesh(EdgeBand.SPRUCE)
+	if mesh != null:
+		var across := mesh.get_aabb().size.x / mesh.get_aabb().size.y
+		var deep := 0
+		var narrow := 0
+		for t: Dictionary in w["plan"]["trees"]:
+			var at: Vector3 = t["at"]
+			if String(t["model"]) == EdgeBand.SPRUCE and EdgeBand.outside(g, at.x, at.z) > EdgeBand.INNER_ROW + EdgeBand.CANOPY_RAMP:
+				deep += 1
+				if float(t["height"]) * float(t["spread"]) * across <= float(EdgeBand.PROFILES["dense"]["canopy"]):
+					narrow += 1
+		assert_gt(deep, 200)
+		assert_eq(narrow, 0, "deep crowns are wider than the gap between trunks")
 	# Out to FAR_WOODS the woods go on; the few groves further out are as before.
 	var woods := 0
 	for item: Dictionary in w["plan"]["far"]:
@@ -508,3 +508,38 @@ func test_the_region_band_sets_the_share_of_spruce_never_below_the_body() -> voi
 	var mixed := _woods("sawmill_01", 4, "K6")["plan"]["trees"] as Array
 	assert_eq(pine.size(), mixed.size(), "the band stands where it did; only what grows there follows the band")
 	assert_eq((pine[0] as Dictionary)["at"], (mixed[0] as Dictionary)["at"])
+
+
+func test_the_plan_made_ahead_is_used_while_it_fits() -> void:
+	var g := _grid()
+	var data := {"place_id": "sawmill_01", "grid": g}
+	var ahead := EdgeBand.plan_ahead(data)
+	assert_eq(ahead["plan"], EdgeBand.plan(g, EdgeBand.seed_of(data), EdgeBand.look_of(data)), "the same plan the main thread would make")
+	var colors := [Color.WHITE, Color.GRAY, Color.GRAY, Color.GRAY, Color.DIM_GRAY, Color.WHITE, Color.WHITE, Color.GRAY]
+	var built := {}
+	for way: String in ["fresh", "ahead", "other_band"]:
+		var d := data.duplicate()
+		if way != "fresh":
+			d["_edge_plan"] = ahead
+		if way == "other_band":
+			d["region_band"] = "K4"
+		var root := Node3D.new()
+		add_child_autofree(root)
+		var counts: Dictionary = await EdgeBand.build(root, g, d, StandardMaterial3D.new(), colors)
+		assert_false(d.has("_edge_plan"), "read once, not kept with the map (%s)" % way)
+		assert_eq(bool(counts["planned_ahead"]), way == "ahead", way)
+		counts.erase("planned_ahead")
+		counts["children"] = root.get_node("EdgeBand").get_child_count()
+		built[way] = counts
+	assert_eq(built["ahead"], built["fresh"], "the band built from the plan made ahead is the band built here")
+	assert_ne(built["other_band"]["far"], 0)
+
+
+func test_rails_run_out_where_the_map_draws_them_even_under_a_car() -> void:
+	var g := _grid()
+	g.set_solid(Vector2i(0, 20), FieldGrid.Solid.BLOCK)
+	g.set_solid(Vector2i(g.width - 1, 20), FieldGrid.Solid.BLOCK)
+	var rails := EdgeBand.openings(g).filter(func(r): return int(r["floor"]) == F.RAIL)
+	assert_eq(rails.size(), 2, "west and east, though their last cells cannot be walked")
+	for run: Dictionary in rails:
+		assert_eq([int(run["from"]), int(run["to"])], [20, 20], "the whole rail, as track_view.gd draws it in the map")
