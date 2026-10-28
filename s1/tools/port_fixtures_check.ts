@@ -12,6 +12,9 @@ const S1_DIR = resolve(import.meta.dirname, '..');
 const ROOT = resolve(S1_DIR, '..');
 const TRAIN = 's2/tests/fixtures/train';
 const SHOW = 10;  // 파일마다 찍는 다른 칸 수
+// 소수 끝자리(1 ULP 안팎)는 OS마다 Math 결과가 달라 같은 값으로 본다. 윈도에서 뽑은 train 표본을 CI 리눅스가
+// 다시 뽑으면 stopRisk의 lam·pDeath 45칸이 끝자리만 달랐다(10-28). S2 맞대기 시험도 소수 일부는 오차를 두고 견준다.
+const EPS = 1e-12;
 
 // [도구, 인자, 그 도구가 쓰는 표본(저장소 뿌리 기준)]
 const TOOLS: [string, string[], string[]][] = [
@@ -40,14 +43,17 @@ function short(v: unknown): string {
   return s.length > 80 ? `${s.slice(0, 77)}...` : s;
 }
 
-function diffs(a: unknown, b: unknown, at: string, out: string[]): void {
+function diffs(a: unknown, b: unknown, at: string, out: string[], noise: { n: number }): void {
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) out.push(`${at} 길이: ${a.length} → ${b.length}`);
-    for (let i = 0; i < Math.min(a.length, b.length); i++) diffs(a[i], b[i], `${at}/${i}`, out);
+    for (let i = 0; i < Math.min(a.length, b.length); i++) diffs(a[i], b[i], `${at}/${i}`, out, noise);
   } else if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
     const x = a as Record<string, unknown>;
     const y = b as Record<string, unknown>;
-    for (const k of [...new Set([...Object.keys(x), ...Object.keys(y)])].sort()) diffs(x[k], y[k], `${at}/${k}`, out);
+    for (const k of [...new Set([...Object.keys(x), ...Object.keys(y)])].sort()) diffs(x[k], y[k], `${at}/${k}`, out, noise);
+  } else if (typeof a === 'number' && typeof b === 'number' && a !== b
+    && Math.abs(a - b) <= EPS * Math.max(1, Math.abs(a), Math.abs(b))) {
+    noise.n++;
   } else if (JSON.stringify(a) !== JSON.stringify(b)) {
     out.push(`${at}: ${short(a)} → ${short(b)}`);
   }
@@ -89,9 +95,14 @@ async function main(): Promise<void> {
   for (const [f, old] of before) {
     const now = text(f);
     if (now === old) continue;
-    bad++;
     const found: string[] = [];
-    try { diffs(JSON.parse(old || 'null'), JSON.parse(now), '', found); } catch { found.push('(JSON으로 못 읽음)'); }
+    const noise = { n: 0 };
+    try { diffs(JSON.parse(old || 'null'), JSON.parse(now), '', found, noise); } catch { found.push('(JSON으로 못 읽음)'); }
+    if (!found.length) {
+      console.log(`${f}: 소수 끝자리만 ${noise.n}칸 다름 — 같은 값으로 봄`);
+      continue;
+    }
+    bad++;
     console.log(`\n✗ ${f}: 지금 S1 코드로 뽑은 값과 다름 — 다른 칸 ${found.length}`);
     for (const line of found.slice(0, SHOW)) console.log(`  ${line}`);
     if (found.length > SHOW) console.log(`  … ${found.length - SHOW}칸 더`);
