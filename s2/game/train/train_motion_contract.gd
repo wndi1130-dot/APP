@@ -56,19 +56,24 @@ static func show(body: Node3D, requested: String, time: float, role: int = 0, ph
 
 ## The facing a gesture turns the body from. Each frame draws the gesture's own
 ## turn on top of it, so it is read off the body only when something else has
-## turned the body since this file last did (a walk, a seat, the scene): read off
-## a body a gesture still held turned, that turn was added again every frame, and
-## a seated body spun round and sat on facing wherever it had stopped.
+## turned or moved the body since this file last did (a walk, a seat, the scene):
+## read off a body a gesture still held turned, that turn was added again every
+## frame, and a seated body spun round and sat on facing wherever it had stopped.
+## A body set down somewhere else counts as turned even when its new facing
+## happens to be the one last drawn.
 static func _base_facing(body: Node3D) -> float:
 	var ours: bool = body.has_meta("life_turned") and is_equal_approx(body.rotation.y, float(body.get_meta("life_turned")))
+	if ours:
+		ours = (body.position as Vector3).is_equal_approx(body.get_meta("life_turned_at"))
 	if not ours or not body.has_meta("life_facing"):
 		body.set_meta("life_facing", body.rotation.y)
 	return float(body.get_meta("life_facing"))
 
 
-## Where this file last left the body facing, for _base_facing.
+## Where this file last left the body facing, and where the body stood, for _base_facing.
 static func _turned(body: Node3D) -> void:
 	body.set_meta("life_turned", body.rotation.y)
+	body.set_meta("life_turned_at", body.position)
 
 
 ## A caller-owned display run. The game chooses when a motion may start or stop;

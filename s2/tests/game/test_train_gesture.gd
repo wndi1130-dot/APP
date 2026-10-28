@@ -651,21 +651,20 @@ func test_old_names_are_offered_only_while_the_backend_draws_them() -> void:
 
 
 func test_a_borrowed_gesture_turns_from_the_seat_every_frame_and_does_not_wind_up() -> void:
-	# look_around has no clip of its own and borrows turn_about, a quarter round
-	# and back. Drawn every frame, it turns from the facing the body had before it,
-	# not from where the last frame left it: added up frame on frame, a body
-	# waiting on its bench spun round and sat down again facing anywhere.
+	# turn_about (which look_around borrows while it has no clip of its own) turns
+	# a quarter round and back. Drawn every frame, it turns from the facing the body
+	# had before it, not from where the last frame left it: added up frame on frame,
+	# a body waiting on its bench spun round and sat down again facing anywhere.
 	var b = TrainBody.new()
 	add_child_autofree(b)
 	b.setup("c1", 2)
 	b.rotation.y = 0.3
-	assert_eq(MotionContract.resolve("look_around")["gesture"], Gesture.TURN_ABOUT)
 	var worst: float = 0.0
 	var widest: float = 0.0
 	var widest_t: float = 0.0
 	var t: float = 0.0
 	while t < Gesture.ABOUT_ROUND * 2.0:
-		MotionContract.show(b, "look_around", t, 0)
+		MotionContract.show(b, Gesture.TURN_ABOUT, t, 0)
 		var own: float = float(Gesture.at(Gesture.TURN_ABOUT, t, 0)["turn"])
 		worst = maxf(worst, absf(angle_difference(0.3 + own, b.rotation.y)))
 		if absf(own) > widest:
@@ -676,13 +675,23 @@ func test_a_borrowed_gesture_turns_from_the_seat_every_frame_and_does_not_wind_u
 	assert_gt(widest, 1.0, "it still turns to look")
 	# Stopped while turned furthest, and even passed straight to another borrowed
 	# gesture, it is back where it sat once nothing is drawn.
-	MotionContract.show(b, "look_around", widest_t, 0)
-	MotionContract.show(b, "chat_talk", widest_t, 0)
+	MotionContract.show(b, Gesture.TURN_ABOUT, widest_t, 0)
+	MotionContract.show(b, Gesture.WHISPER, widest_t, 0)
 	MotionContract.show(b, "", 0.0)
 	assert_almost_eq(angle_difference(0.3, b.rotation.y), 0.0, 0.001)
 	# Something else that turns the body (a walk, a seat) is where the next one turns from.
 	b.rotation.y = 1.2
-	MotionContract.show(b, "look_around", widest_t, 0)
+	MotionContract.show(b, Gesture.TURN_ABOUT, widest_t, 0)
 	assert_almost_eq(angle_difference(1.2 + float(Gesture.at(Gesture.TURN_ABOUT, widest_t, 0)["turn"]), b.rotation.y), 0.0, 0.001)
 	MotionContract.show(b, "", 0.0)
 	assert_almost_eq(angle_difference(1.2, b.rotation.y), 0.0, 0.001)
+	# Set down somewhere else facing exactly the way it was last drawn (a quarter
+	# round from -PI/2 is 0, the facing most places give), it keeps that new facing.
+	b.rotation.y = -PI * 0.5
+	MotionContract.show(b, "", 0.0)
+	MotionContract.show(b, Gesture.TURN_ABOUT, widest_t, 0)
+	var drawn: float = b.rotation.y
+	b.position += Vector3(1.5, 0.0, 0.0)
+	b.rotation.y = drawn
+	MotionContract.show(b, "", 0.0)
+	assert_almost_eq(angle_difference(drawn, b.rotation.y), 0.0, 0.001)
