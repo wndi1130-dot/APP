@@ -36,24 +36,44 @@ static func resolve(requested: String, script: Script = Backend) -> Dictionary:
 
 static func show(body: Node3D, requested: String, time: float, role: int = 0, phase: String = "loop") -> Dictionary:
 	var resolved := resolve(requested)
-	var before: Dictionary = body.get_meta("life_motion", {})
-	if String(before.get("gesture", "")) != String(resolved["gesture"]):
-		body.set_meta("life_facing", body.rotation.y)
+	var facing: float = _base_facing(body)
 	body.set_meta("life_motion", resolved)
 	body.set_meta("life_phase", phase)
-	var facing: float = body.rotation.y
 	if String(resolved["gesture"]) != "":
 		var name: String = resolved["gesture"]
 		if bool(resolved["native"]) and not Backend.spec(name).is_empty():
 			var row: Dictionary = Backend.spec(name)
 			var part: String = phase if row["stages"].has(phase) else ("once" if row["kind"] == "once" else "loop")
-			Backend.show_phase(body, name, part, time, role, float(body.get_meta("life_facing", facing)), false, String(body.pose))
+			Backend.show_phase(body, name, part, time, role, facing, false, String(body.pose))
 		else:
 			Backend.show(body, name, time, role, facing)
 	else:
 		Backend.show(body, "", 0.0, 0, facing)
 		body.set_pose(resolved["pose"], false, requested in ["head_down", "mourn_stand", "hat_off"])
+	_turned(body)
 	return resolved
+
+
+## The facing a gesture turns the body from. Each frame draws the gesture's own
+## turn on top of it, so it is read off the body only when something else has
+## turned or moved the body since this file last did (a walk, a seat, the scene):
+## read off a body a gesture still held turned, that turn was added again every
+## frame, and a seated body spun round and sat on facing wherever it had stopped.
+## A body set down somewhere else counts as turned even when its new facing
+## happens to be the one last drawn.
+static func _base_facing(body: Node3D) -> float:
+	var ours: bool = body.has_meta("life_turned") and is_equal_approx(body.rotation.y, float(body.get_meta("life_turned")))
+	if ours:
+		ours = (body.position as Vector3).is_equal_approx(body.get_meta("life_turned_at"))
+	if not ours or not body.has_meta("life_facing"):
+		body.set_meta("life_facing", body.rotation.y)
+	return float(body.get_meta("life_facing"))
+
+
+## Where this file last left the body facing, and where the body stood, for _base_facing.
+static func _turned(body: Node3D) -> void:
+	body.set_meta("life_turned", body.rotation.y)
+	body.set_meta("life_turned_at", body.position)
 
 
 ## A caller-owned display run. The game chooses when a motion may start or stop;
@@ -71,7 +91,7 @@ static func start(body: Node3D, requested: String, run_id: int, role: int = 0, c
 	if not player.begin(name, role, run_id, String(body.pose), context):
 		return false
 	body.set_meta("life_player", player)
-	body.set_meta("life_facing", body.rotation.y)
+	_base_facing(body)
 	body.set_meta("life_motion", resolved)
 	body.set_meta("life_phase", player.segment)
 	return true
@@ -119,10 +139,12 @@ static func step(body: Node3D, delta: float, confirmed: bool = false) -> Diction
 		var pose: String = player._exit_base
 		body.set_pose(pose, false)
 		Backend.show(body, "", 0.0, 0, float(body.get_meta("life_facing", body.rotation.y)))
+		_turned(body)
 		body.remove_meta("life_player")
 		return {"phase": "done", "run_id": player.run_id}
 	var rendered: Dictionary = player.frame(confirmed)
 	Backend.show_sample(body, rendered, float(body.get_meta("life_facing", body.rotation.y)))
+	_turned(body)
 	player.observed(rendered)
 	return {"phase": phase, "run_id": player.run_id}
 
@@ -165,6 +187,8 @@ static func show_shove_pair(a: Node3D, b: Node3D, time: float, confirmed: bool =
 	b.set_meta("life_facing", float(joined["facings"][1]))
 	Backend.show_sample(a, joined["roles"][0], joined["facings"][0])
 	Backend.show_sample(b, joined["roles"][1], joined["facings"][1])
+	_turned(a)
+	_turned(b)
 	a.get_meta("life_player").observed(joined["roles"][0], time)
 	b.get_meta("life_player").observed(joined["roles"][1], time)
 	return true
