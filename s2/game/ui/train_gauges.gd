@@ -22,7 +22,7 @@ extends Control
 ## breathes a puff of cold, flashes white as it passes a stage's tick while
 ## the name is stamped anew, and the change floats up under it.
 ##
-## On a band under 800 of the mockup's px (a 16:9 screen) the bars narrow to
+## On a band under 840 of the mockup's px (16:9 and the like) the bars narrow to
 ## 66, 주의 · 위험 is a lamp by the number and the thermometer keeps only its
 ## number.
 ##
@@ -136,9 +136,11 @@ const OT_FLASH_GLOW := Color(196 / 255.0, 230 / 255.0, 252 / 255.0, 0.85)
 const OT_STAMP_INK := Color("f2f9fd")
 const OT_PUFF := Color(222 / 255.0, 238 / 255.0, 250 / 255.0, 0.55)
 const OT_DELTA_INK := Color("d6e9f6")
-## A band narrower than this (mockup px: a 16:9 screen) narrows the bars from
-## METER_W to METER_W_NARROW.
-const NARROW_CSS: float = 800.0
+## A band narrower than this (mockup px) narrows the bars from METER_W to
+## METER_W_NARROW. The wide thermometer may end near 307 (a three-syllable stage
+## and a two-figure frost with their spacing) and the mood starts at
+## width / 2 − 111, so under 840 they would meet; a 19.5:9 phone (844) stays wide.
+const NARROW_CSS: float = 840.0
 const METER_W: float = 104.0
 const METER_W_NARROW: float = 66.0
 ## The 위험 tag's glow, which the narrow band's lamp casts too.
@@ -177,11 +179,13 @@ static func model(g0: Dictionary, t0: Dictionary) -> Dictionary:
 	var stand: Dictionary = TrainTurn.standings(g0, t0)
 	var stocks: Array = []
 	for s: Array in STOCKS:
-		var n: int = int(round(float(g0.get(s[0], 0))))
+		# The stretches it lasts come off the store as it is; only the number shown is whole.
+		var have: float = float(g0.get(s[0], 0))
+		var n: int = int(round(have))
 		var entry := {"id": s[0], "icon": s[1], "word": s[2], "n": n, "line": "", "per": "", "left": -1, "short": false}
 		if cost.has(s[0]) and float(cost[s[0]]) > 0.0:
 			var per: float = float(cost[s[0]])
-			var left: int = int(floor(float(n) / per))
+			var left: int = int(floor(have / per))
 			entry["per"] = "−" + _num(per)
 			entry["left"] = left
 			entry["line"] = "−%s · %d구간" % [_num(per), left]
@@ -514,17 +518,20 @@ func _ot_apply(c: Control, s: Dictionary) -> void:
 	if glass != null:
 		glass.position = Vector2(-4.0 + float(s["shiver"]), 0.0) * k
 		glass.queue_redraw()
+	var grew: bool = false
 	var num: Label = c.get_node_or_null("Temp")
 	if num != null:
 		num.add_theme_color_override("font_color", tone(OT_COLS[st][2], dim))
 		if num.text != String(s["text"]):
 			num.text = String(s["text"])
 			_sit(num, 23.0, 31.0 if _narrow else 25.0)
+			grew = true
 	var word: Label = c.get_node_or_null("Stage")
 	if word != null:
 		if word.text != String(s["name"]):
 			word.text = String(s["name"])
 			_sit(word, 23.0, 40.0)
+			grew = true
 		# is-new: stamped from 1.6 at the left middle with a bounce, in from
 		# nothing (whole by 60 %), from near white to the stage's ink.
 		var base: Color = OT_COLD_WORD if st >= 4 else INK2
@@ -538,6 +545,8 @@ func _ot_apply(c: Control, s: Dictionary) -> void:
 		word.add_theme_color_override("font_color", tone(ink, dim))
 		word.pivot_offset = Vector2(0.0, word.size.y * 0.5)
 		word.scale = Vector2(grow, grow)
+	if grew:
+		_fit_outside(c)
 	var dl: Label = c.get_node_or_null("OtDelta")
 	if dl != null:
 		var dp: float = float(s["delta_p"])
@@ -1013,13 +1022,11 @@ func _outside(o: Dictionary) -> Control:
 	num.name = "Temp"
 	c.add_child(num)
 	_sit(num, 23.0, 31.0 if _narrow else 25.0)
-	var words_w: float = _text_w(num)
 	if not _narrow:
 		var word := _label(String(s["name"]), UiFonts.WORD, 400, 12.0, tone(OT_COLD_WORD if st >= 4 else INK2, dim), 0.96)
 		word.name = "Stage"
 		c.add_child(word)
 		_sit(word, 23.0, 40.0)
-		words_w = maxf(words_w, _text_w(word))
 	if String(s["delta_text"]) != "":
 		# odelta: the change floats up under the glass, centred 12 in, from 44.
 		var dl := _label(String(s["delta_text"]), UiFonts.NUMBER, 600, 16.0, tone(OT_DELTA_INK, dim))
@@ -1047,10 +1054,7 @@ func _outside(o: Dictionary) -> Control:
 		mark.position = Vector2(10.0 - 5.5, 37.0 - 5.5) * k
 		mark.tooltip_text = "선로 결빙"
 		c.add_child(mark)
-	# Narrow: just the number (no 58 at least), so the thermometer ends before the mood.
-	var w_css: float = 23.0 + words_w + 2.0
-	c.custom_minimum_size = Vector2(w_css if _narrow else maxf(w_css, 58.0), 48.0) * k
-	c.size = c.custom_minimum_size
+	_fit_outside(c)
 	# The whole thermometer, 48 high, is the slip's key (결정 483).
 	var tap := Button.new()
 	tap.name = "Tap_outside"
@@ -1062,6 +1066,21 @@ func _outside(o: Dictionary) -> Control:
 	tap.pressed.connect(_toggle_why)
 	c.add_child(tap)
 	return c
+
+
+## The thermometer as wide as its words now, their spacing too (2 after the
+## longer; a wide band keeps 58 at least, a narrow one just the number), its key
+## with it. Again whenever a roll changes the words, so a longer number never
+## runs past it toward the mood.
+func _fit_outside(c: Control) -> void:
+	var right: float = 0.0
+	for id: String in ["Temp", "Stage"]:
+		var l: Control = c.get_node_or_null(id)
+		if l != null:
+			right = maxf(right, l.position.x + l.size.x)
+	var w_css: float = right / UiFonts.K + 2.0
+	c.custom_minimum_size = Vector2(w_css if _narrow else maxf(w_css, 58.0), 48.0) * UiFonts.K
+	c.size = c.custom_minimum_size
 
 
 ## The thermometer pressed: its slip up, or folded if it was.
