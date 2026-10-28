@@ -162,7 +162,7 @@ func test_spec_returns_independent_nested_lamps_and_window() -> void:
 	assert_eq(fresh_lamps.size(), 3)
 	if not fresh_lamps.is_empty():
 		var fresh_first: Dictionary = fresh_lamps[0]
-		assert_almost_eq(float(fresh_first["energy"]), 1.0, EPSILON)
+		assert_almost_eq(float(fresh_first["energy"]), 1.15, EPSILON)
 	var fresh_window: Dictionary = fresh["window"]
 	assert_almost_eq(float(fresh_window["energy"]), 0.12, EPSILON)
 

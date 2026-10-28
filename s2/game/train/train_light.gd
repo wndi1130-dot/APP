@@ -16,9 +16,9 @@ const STAGES: Array[Dictionary] = [
 		"night": {
 			"lamps": [
 				{"at": Vector3(0.5, 0.95, -0.6), "kind": "candle", "kelvin": 1850.0,
-					"energy": 0.45, "range": 3.5, "shadow": true, "sway": 0.3},
+					"energy": 0.35, "range": 3.5, "shadow": true, "sway": 0.3},
 				{"at": Vector3(0.22, 0.8, -0.7), "kind": "candle", "kelvin": 1850.0,
-					"energy": 0.35, "range": 3.0, "shadow": false, "sway": 0.3},
+					"energy": 0.25, "range": 3.0, "shadow": false, "sway": 0.3},
 			],
 			"window": {"kelvin": 9000.0, "energy": 0.08, "range": 4.0},
 		},
@@ -29,7 +29,7 @@ const STAGES: Array[Dictionary] = [
 				{"at": Vector3(0.22, 0.8, -0.7), "kind": "candle", "kelvin": 1850.0,
 					"energy": 0.0, "range": 3.0, "shadow": false, "sway": 0.3},
 			],
-			"window": {"kelvin": 7000.0, "energy": 0.6, "range": 4.0},
+			"window": {"kelvin": 7000.0, "energy": 0.5, "range": 4.0},
 		},
 	},
 	{
@@ -58,11 +58,11 @@ const STAGES: Array[Dictionary] = [
 		"night": {
 			"lamps": [
 				{"at": Vector3(0.5, 2.0, 0.0), "kind": "kerosene", "kelvin": 2200.0,
-					"energy": 1.0, "range": 7.0, "shadow": true, "sway": 0.6},
+					"energy": 1.15, "range": 7.0, "shadow": true, "sway": 0.6},
 				{"at": Vector3(0.18, 1.9, -0.3), "kind": "kerosene", "kelvin": 2200.0,
-					"energy": 0.8, "range": 6.0, "shadow": false, "sway": 0.4},
+					"energy": 0.9, "range": 6.0, "shadow": false, "sway": 0.4},
 				{"at": Vector3(0.82, 1.2, -0.9), "kind": "kerosene", "kelvin": 2100.0,
-					"energy": 0.5, "range": 4.0, "shadow": false, "sway": 0.0},
+					"energy": 0.6, "range": 4.0, "shadow": false, "sway": 0.0},
 			],
 			"window": {"kelvin": 6000.0, "energy": 0.12, "range": 4.5},
 		},
@@ -83,26 +83,26 @@ const STAGES: Array[Dictionary] = [
 		"night": {
 			"lamps": [
 				{"at": Vector3(0.5, 2.05, 0.0), "kind": "electric", "kelvin": 2700.0,
-					"energy": 1.1, "range": 8.0, "shadow": true, "sway": 0.0},
+					"energy": 1.45, "range": 8.0, "shadow": true, "sway": 0.0},
 				{"at": Vector3(0.2, 1.7, -1.1), "kind": "electric", "kelvin": 2700.0,
-					"energy": 0.6, "range": 5.0, "shadow": false, "sway": 0.0},
+					"energy": 0.8, "range": 5.0, "shadow": false, "sway": 0.0},
 				{"at": Vector3(0.8, 1.7, -1.1), "kind": "electric", "kelvin": 2700.0,
-					"energy": 0.6, "range": 5.0, "shadow": false, "sway": 0.0},
+					"energy": 0.8, "range": 5.0, "shadow": false, "sway": 0.0},
 				{"at": Vector3(0.35, 1.0, -0.6), "kind": "electric", "kelvin": 2500.0,
-					"energy": 0.45, "range": 3.5, "shadow": false, "sway": 0.0},
+					"energy": 0.6, "range": 3.5, "shadow": false, "sway": 0.0},
 			],
 			"window": {"kelvin": 9000.0, "energy": 0.15, "range": 5.0},
 		},
 		"day": {
 			"lamps": [
 				{"at": Vector3(0.5, 2.05, 0.0), "kind": "electric", "kelvin": 2700.0,
-					"energy": 0.35, "range": 8.0, "shadow": true, "sway": 0.0},
+					"energy": 0.5, "range": 8.0, "shadow": true, "sway": 0.0},
 				{"at": Vector3(0.2, 1.7, -1.1), "kind": "electric", "kelvin": 2700.0,
 					"energy": 0.0, "range": 5.0, "shadow": false, "sway": 0.0},
 				{"at": Vector3(0.8, 1.7, -1.1), "kind": "electric", "kelvin": 2700.0,
 					"energy": 0.0, "range": 5.0, "shadow": false, "sway": 0.0},
 				{"at": Vector3(0.35, 1.0, -0.6), "kind": "electric", "kelvin": 2500.0,
-					"energy": 0.2, "range": 3.5, "shadow": false, "sway": 0.0},
+					"energy": 0.3, "range": 3.5, "shadow": false, "sway": 0.0},
 			],
 			"window": {"kelvin": 6500.0, "energy": 1.1, "range": 5.0},
 		},
