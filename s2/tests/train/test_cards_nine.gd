@@ -210,3 +210,35 @@ func test_a_corpse_bite_is_cut_only_while_the_window_is_open() -> void:
 	g["hiddenBites"][0]["at"] = g["seg"]
 	var cut := _pick(g, 0)
 	assert_eq((cut["hiddenBites"] as Array).size(), 0)
+
+
+## A way the rule shuts says why on the paper, as S1's card does (card.ts):
+## the guard who will not go keeps 「경비대가 따르지 않는다」 on the last
+## chance and on a protest, not an empty reason over a dead key.
+func test_a_way_the_rule_shuts_keeps_why() -> void:
+	var g := _board()
+	g["comms"]["guard"]["rel"] = -50
+	for kind: String in ["tension_crisis", "protest"]:
+		g["cards"] = []
+		C.card(g, {"kind": kind, "comm": "tail"})
+		var v: Dictionary = CardText.view(g, _data["tables"], g["cards"][0])
+		var shut: Array = (v["choices"] as Array).filter(func(c: Dictionary) -> bool: return c["disabled"] != "")
+		assert_eq(shut.size(), 1, kind)
+		assert_eq(shut[0]["disabled"], "경비대가 따르지 않는다", kind)
+
+
+## The last chance, a protest and a riot read S1's words: the tail's leader
+## brings them, and a riot that has caught fire says so.
+func test_the_ladder_papers_read_s1_s_words() -> void:
+	var g := _board()
+	C.card(g, {"kind": "tension_crisis", "comm": "tail"})
+	var v: Dictionary = CardText.view(g, _data["tables"], g["cards"][0])
+	assert_string_starts_with(String(v["body"]), "칸마다 사람들이 모였다.")
+	assert_not_null(v["speaker"], "the tail's leader brings it")
+	assert_eq(v["choices"][2]["say"], "(열차장은 아무 말도 하지 않는다.)")
+	g["cards"] = []
+	C.card(g, {"kind": "protest", "comm": "tail", "text": "riot"})
+	g["riot"] = {"fire": ["tail1"]}
+	var riot: Dictionary = CardText.view(g, _data["tables"], g["cards"][0])
+	assert_eq(riot["title"], "난장판")
+	assert_eq(riot["body"], "싸움이 번졌다. 물건이 날고 어른들이 쓰러진다. 불이 붙었다. 사람들은 걸어서 옆 칸으로 옮겨 간다.")

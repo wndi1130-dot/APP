@@ -22,7 +22,7 @@ import bmesh
 import bpy
 from mathutils import Vector
 
-SCRIPT_VERSION = 2   # 2: 둥근 지붕 매끈하게, 연결막을 완충기 끝까지(대각뷰, 결정 476)
+SCRIPT_VERSION = 3   # 2: 둥근 지붕 매끈하게, 연결막을 완충기 끝까지(대각뷰, 결정 476) · 3: 유리 빛줄, 바퀴 면 밝게(점검 6·8)
 ATLAS = 256
 CELL = 32
 # sRGB 0..255. 흰 눈 바탕에서 튀지 않게 어둡고 차갑게(셰이더가 채도를 다시 누른다).
@@ -39,6 +39,8 @@ PALETTE = {
     "curtain": (166, 160, 144), "curtain_red": (108, 56, 48),
     "brass": (140, 112, 58), "black": (20, 20, 22), "bellows": (36, 34, 32),
     "leaf": (58, 84, 52), "inside": (22, 20, 19), "crate": (124, 100, 72), "sack": (132, 120, 98),
+    # 유리에 비낀 하늘(끝에 더해 앞 칸 자리는 그대로)
+    "glass_hi": (84, 98, 108),
 }
 NAMES = list(PALETTE)
 assert len(NAMES) <= (ATLAS // CELL) ** 2
@@ -162,6 +164,16 @@ def roof(p, x0, x1, colour, steps, z_half=1.44, eave=EAVE_Y, peak=PEAK_Y, under=
             p.face(ring, cap_colour or colour, (xs, 0, 0))
 
 
+def glass_streak(p, a, b, ya, yb, z, zs, inner):
+    """유리창에 비낀 하늘빛 줄 하나(대각뷰에서 유리가 평평한 남색 판으로 읽혔다, 점검 6).
+    유리 바로 앞 2 mm(LOD1은 1 mm)라 저녁 창빛 판·커튼·판자가 그 앞을 가린다. 문·온실 유리는 뺀다."""
+    if inner not in ("glass", "glass_warm"):
+        return
+    w = b - a
+    yl, yh = ya + 0.05, yb - 0.05
+    p.face([(a + 0.14 * w, yl, z), (a + 0.32 * w, yl, z), (a + 0.58 * w, yh, z), (a + 0.40 * w, yh, z)], "glass_hi", (0, 0, zs))
+
+
 def side_wall(p, zs, openings, colour, y0=FLOOR_Y, y1=EAVE_Y, depth=0.06, detail=True):
     """옆벽 한 면(z = zs*BODY_Z). openings: [(x0, x1, ya, yb, inner_colour)] 사람 키 높이의 창·문 구멍.
     구멍마다 벽은 띠로 나뉘고, 안쪽 면은 depth만큼 들어가 있다(LOD0은 구멍 둘레 면까지)."""
@@ -173,6 +185,7 @@ def side_wall(p, zs, openings, colour, y0=FLOOR_Y, y1=EAVE_Y, depth=0.06, detail
         zf = zs * (BODY_Z + 0.003)
         for (a, b, ya, yb, inner) in xs:
             p.face([(a, ya, zf), (b, ya, zf), (b, yb, zf), (a, yb, zf)], inner, (0, 0, zs))
+            glass_streak(p, a, b, ya, yb, zs * (BODY_Z + 0.004), zs, inner)
         return
     # 구멍이 없는 띠: 구멍 사이 기둥, 구멍 위·아래 띠
     cuts = [-BODY_X]
@@ -191,6 +204,7 @@ def side_wall(p, zs, openings, colour, y0=FLOOR_Y, y1=EAVE_Y, depth=0.06, detail
             p.face([(a, yb, z), (b, yb, z), (b, y1, z), (a, y1, z)], colour, (0, 0, zs))
         zi = zs * (BODY_Z - depth)
         p.face([(a, ya, zi), (b, ya, zi), (b, yb, zi), (a, yb, zi)], inner, (0, 0, zs))
+        glass_streak(p, a, b, ya, yb, zs * (BODY_Z - depth + 0.002), zs, inner)
         # 구멍 둘레(위·아래·양옆), 아래는 창턱 색
         p.face([(a, ya, zi), (b, ya, zi), (b, ya, z), (a, ya, z)], "iron_worn", (0, 1, 0))
         p.face([(a, yb, zi), (b, yb, zi), (b, yb, z), (a, yb, z)], colour, (0, -1, 0))
@@ -262,11 +276,13 @@ def bogie(p, cx, detail=True):
     for ax in (cx - AXLE_GAP, cx + AXLE_GAP):
         for zs in (1, -1):
             z0, z1 = sorted((zs * (WHEEL_Z - 0.06), zs * (WHEEL_Z + 0.06)))
-            p.cyl((ax, WHEEL_R, z0), (ax, WHEEL_R, z1), WHEEL_R, "iron", sides, cap_colour="iron_worn")
+            # 바퀴 면은 밝은 쇠, 굴대 머리는 어둡게: 줌 24에서 옆틀·축상자 아래로 둥근 바퀴가
+            # 검은 띠에 묻혀 안 읽혔다(대각뷰 점검 8).
+            p.cyl((ax, WHEEL_R, z0), (ax, WHEEL_R, z1), WHEEL_R, "iron", sides, cap_colour="steel")
             if detail:
                 # 바퀴 가운데 굴대 머리(옆에서 둥근 점)
                 za, zb = sorted((zs * (WHEEL_Z + 0.06), zs * (WHEEL_Z + 0.10)))
-                p.cyl((ax, WHEEL_R, za), (ax, WHEEL_R, zb), 0.12, "steel", 6)
+                p.cyl((ax, WHEEL_R, za), (ax, WHEEL_R, zb), 0.12, "iron", 6)
         if detail:
             p.cyl((ax, WHEEL_R, -WHEEL_Z), (ax, WHEEL_R, WHEEL_Z), 0.06, "iron", 6, caps=False)
     for zs in (1, -1):
