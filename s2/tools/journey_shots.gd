@@ -9,8 +9,11 @@ extends SceneTree
 ## run of black frames (the stop scene's hand-over).
 ##   godot --path s2 --resolution 1688x780 -s res://tools/journey_shots.gd -- --out=<folder> [--tag=1688] [--stop [--no-kit]]
 ## --no-kit: the stop scene's own corridor of firs and poles (the before of the hand-over).
+## --lit: the views lit by the stretch's own daylight (Atmosphere.light of its look, as
+## the stop scene lights its world) — a preview: the train screen's own light is mood's.
 
 const Journey = preload("res://game/train/journey/journey.gd")
+const Atmosphere = preload("res://fx/atmosphere.gd")
 const CUT_H: float = 2.2
 const WALL_H: float = 0.9
 const YAW: float = 45.0
@@ -57,6 +60,7 @@ var out := ""
 var tag := "1688"
 var stop_mode := false
 var no_kit := false
+var lit := false
 var flow = null
 var t = null
 var cam: Camera3D = null
@@ -80,6 +84,8 @@ func _initialize() -> void:
 			stop_mode = true
 		elif a == "--no-kit":
 			no_kit = true
+		elif a == "--lit":
+			lit = true
 	DirAccess.make_dir_recursive_absolute(out)
 	if stop_mode:
 		_run_stop()
@@ -97,6 +103,8 @@ func _run_views() -> void:
 	t = flow.train
 	cam = t.camera
 	_diagonal()
+	if lit:
+		_daylight(flow.outside.look if flow.outside != null else {})
 	journey = Journey.attach(t, t, flow.outside.look if flow.outside != null else {}, 1, {"seed": 1, "remember": false, "running": true})
 	journey.calm = true
 	await create_timer(2.0).timeout
@@ -273,6 +281,27 @@ func _diagonal() -> void:
 	print("DIAG anchor=%s size=%.2f h_off=%.2f floor_y=%.2f" % [str(anchor), cam.size, cam.h_offset, floor_y])
 
 
+## The stretch's daylight over the train scene's own (a preview, see --lit).
+func _daylight(look: Dictionary) -> void:
+	if look.is_empty():
+		return
+	var light: Dictionary = Atmosphere.light(look)
+	for n in t.find_children("*", "WorldEnvironment", true, false):
+		var env: Environment = (n as WorldEnvironment).environment
+		env.ambient_light_color = light["ambient_color"]
+		env.ambient_light_energy = float(light["ambient_energy"]) * 1.15
+		env.background_color = Color(light["fog_color"]).darkened(0.3)
+		env.tonemap_exposure = Atmosphere.EXPOSURE
+	var sun := DirectionalLight3D.new()
+	sun.rotation_degrees = Vector3(float(light["sun_pitch"]), float(light["sun_yaw"]), 0.0)
+	sun.light_color = light["sun_color"]
+	sun.light_energy = light["sun_energy"]
+	sun.shadow_enabled = true
+	sun.directional_shadow_max_distance = 90.0
+	t.add_child(sun)
+	print("LIT sun=%s energy=%.2f ambient=%.2f" % [str(sun.rotation_degrees), sun.light_energy, float(light["ambient_energy"])])
+
+
 # ---------------------------------------------------------------- the stop hand-over
 
 ## From 「정차 고르기」 on the train to the field standing: every frame's mean
@@ -311,6 +340,9 @@ func _run_stop() -> void:
 		else:
 			black_run = 0
 		var cin = flow.get("cinema")
+		# The tool's window may not have the focus: the scene would hold where it is (J03).
+		if cin != null and is_instance_valid(cin) and bool(cin.get("paused")):
+			cin.call("_pause", false)
 		# The same moments with and without the kit: on the roof as it runs, and slowing for the stop.
 		if cin != null and is_instance_valid(cin):
 			for want: Array in [["run", 1.4], ["near", 2.0]]:
@@ -319,6 +351,11 @@ func _run_stop() -> void:
 					shots[key] = true
 					var shot: Image = root.get_viewport().get_texture().get_image()
 					shot.save_png(out.path_join("stop_%s_%s_%s.png" % [key, "firs" if no_kit else "kit", tag]))
+					# The stop scene draws in its own viewport: the frame's totals count both.
+					results["at_" + key] = {
+						"draw_calls": RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+						"primitives": RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME),
+						"fps": Engine.get_frames_per_second()}
 		if not sent and cin != null and is_instance_valid(cin) and String(cin.beat) == "hold":
 			await create_timer(1.2).timeout
 			flow._send_crew()
@@ -332,7 +369,7 @@ func _run_stop() -> void:
 	print("STOP ", results["stop"])
 	var f := FileAccess.open(out.path_join("stop_lum_%s_%s.json" % ["firs" if no_kit else "kit", tag]), FileAccess.WRITE)
 	if f != null:
-		f.store_string(JSON.stringify({"summary": results["stop"], "lum": lums}))
+		f.store_string(JSON.stringify({"summary": results["stop"], "run": results.get("at_run", {}), "near": results.get("at_near", {}), "lum": lums}))
 		f.close()
 	print("DONE")
 	quit()

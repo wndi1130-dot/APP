@@ -13,9 +13,11 @@ extends RefCounted
 ## A tier's chance that a scene is in a stretch pass at all (7b 드묾 단계, 가안).
 const TIERS: Dictionary = {"common": 1.0, "occasional": 0.3, "rare": 0.09, "very_rare": 0.01}
 ## Seconds from one event's end to the next one's start, skewed to the short end
-## so the gaps do not keep a beat (gauge: spread 0.3~0.7, never under 30 s).
-const GAP := Vector2(45.0, 150.0)
-const GAP_SKEW: float = 1.6
+## so the gaps do not keep a beat (gauge: spread 0.3~0.7, never under 30 s). About
+## a minute and a half on average; now and then one close behind, now and then a
+## long quiet (spread about 0.5 over half an hour).
+const GAP := Vector2(35.0, 210.0)
+const GAP_SKEW: float = 2.4
 ## The first event of a stretch waits this long after the land starts running.
 const FIRST := Vector2(20.0, 45.0)
 ## A card just put away: the next event waits this much more (not the moment it closes).
