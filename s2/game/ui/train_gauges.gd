@@ -42,6 +42,7 @@ signal stock_pressed(id: String)
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
+const UiBake = preload("res://game/ui/ui_bake.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
 const CostPane = preload("res://game/ui/cost_pane.gd")
@@ -833,12 +834,20 @@ func _draw_lamp(ci: Control, lv: int, dim: bool) -> void:
 	var k: float = UiFonts.K
 	var mid: Vector2 = ci.size * 0.5
 	var r: float = 4.0 * k
+	var batch := UiBake.Batch.new()
 	if lv > 1:
 		GlassParts.glow_ring(ci, mid, r, 4.0 * k, tone(TAG_GLOW, dim))
-		ci.draw_circle(mid, r, tone(TAG_INK, dim), true, -1.0, true)
-		ci.draw_arc(mid, r - 1.0 * k, 0.0, TAU, 32, tone(WARN, dim), 2.0 * k, true)
+		batch.circle(mid, r, tone(TAG_INK, dim))
+		batch.arc(mid, r - 1.0 * k, 0.0, TAU, 32, tone(WARN, dim), 2.0 * k)
 	else:
-		ci.draw_circle(mid, r, tone(WARN, dim), true, -1.0, true)
+		batch.circle(mid, r, tone(WARN, dim))
+	batch.draw(ci)
+
+
+static func meter_fill_rect(full_w: float, value: float) -> Rect2:
+	var k: float = UiFonts.K
+	var width: float = full_w * clampf(value / 100.0, 0.0, 1.0)
+	return Rect2(0, 36.0 * k, maxf(width, 8.0 * k), 8.0 * k) if width > 0.5 else Rect2()
 
 
 func _draw_meter(ci: Control, key: String, n: int, lv: int, dim: bool, mw: float) -> void:
@@ -860,6 +869,7 @@ func _draw_meter(ci: Control, key: String, n: int, lv: int, dim: bool, mw: float
 	_round_rect(ci, bar, r, tone(WELL, dim))
 	ci.draw_rect(Rect2(bar.position.x + r, bar.position.y, bar.size.x - r * 2.0, 1.0 * k), tone(Color(0, 0, 0, 0.3), dim))
 	var at: float = w * clampf(n / 100.0, 0.0, 1.0)
+	var fill: Rect2 = meter_fill_rect(w, n)
 	if key == "trust":
 		# Dry earth's fine cracks along the whole well; the grass over its share.
 		_tile_cracks(ci, bar, tone(CRACK_TILE, dim))
@@ -869,13 +879,13 @@ func _draw_meter(ci: Control, key: String, n: int, lv: int, dim: bool, mw: float
 		elif lv == 2:
 			grass = TRUST.lerp(DRY, 0.76)
 		if at > 0.5:
-			_round_rect(ci, Rect2(bar.position, Vector2(maxf(at, r * 2.0), bar.size.y)), r, tone(grass, dim))
+			_round_rect(ci, fill, r, tone(grass, dim))
 			if lv == 2:
 				_tile_cracks(ci, Rect2(bar.position, Vector2(at, bar.size.y)), tone(CRACK_DARK, dim))
 	else:
 		# Coal to fire across the gauge's width, lit up to the value.
 		if at > 0.5:
-			_heat_rect(ci, Rect2(bar.position, Vector2(maxf(at, r * 2.0), bar.size.y)), w, r, dim, lv == 2)
+			_heat_rect(ci, fill, w, r, dim, lv == 2)
 		_glass_cracks(ci, n, lv, dim, mw / CK_W)
 
 
@@ -892,13 +902,15 @@ func _round_rect(ci: CanvasItem, rect: Rect2, radius: float, col: Color) -> void
 func _tile_cracks(ci: CanvasItem, rect: Rect2, col: Color) -> void:
 	var k: float = UiFonts.K
 	var x0: float = rect.position.x
+	var batch := UiBake.Batch.new()
 	while x0 < rect.end.x:
 		for path: Array in TILE_CRACKS:
 			var pts := PackedVector2Array()
 			for p: Vector2 in path:
 				pts.append(Vector2(minf(x0 + p.x * k, rect.end.x), rect.position.y + p.y * k))
-			ci.draw_polyline(pts, col, 0.9 * k * 0.6, true)
+			batch.polyline(pts, PackedColorArray([col]), 0.9 * k * 0.6)
 		x0 += 24.0 * k
+	batch.draw(ci)
 
 
 ## The heat's gradient over the gauge's whole width, clipped to the lit share.
@@ -910,6 +922,12 @@ func _heat_rect(ci: CanvasItem, rect: Rect2, full_w: float, radius: float, dim: 
 		halo.shadow_size = int(round(7.0 * UiFonts.K * 0.6))
 		halo.set_corner_radius_all(int(round(radius)))
 		ci.draw_style_box(halo, rect)
+	heat_geometry(rect, full_w, radius, dim).draw(ci)
+
+
+## Unlike a lever's lamp, heat samples the entire bar's fixed colour interval.
+static func heat_geometry(rect: Rect2, full_w: float, radius: float, dim: bool) -> UiBake.Batch:
+	var batch := UiBake.Batch.new()
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	# Top edge left → right, then bottom edge right → left, rounding both ends.
@@ -917,10 +935,11 @@ func _heat_rect(ci: CanvasItem, rect: Rect2, full_w: float, radius: float, dim: 
 	for p: Vector2 in outline:
 		pts.append(p)
 		cols.append(tone(_heat_at(p.x / full_w), dim))
-	ci.draw_polygon(pts, cols)
+	batch.polygon(pts, cols)
 	pts.append(pts[0])
 	cols.append(cols[0])
-	ci.draw_polyline_colors(pts, cols, 1.0, true)
+	batch.polyline(pts, cols, 1.0)
+	return batch
 
 
 static func _heat_at(f: float) -> Color:
@@ -969,24 +988,26 @@ func _glass_cracks(ci: CanvasItem, n: int, lv: int, dim: bool, sx: float) -> voi
 	var k: float = UiFonts.K
 	var origin := Vector2(0, 0)
 	var squeeze := Vector2(sx, 1.0)
+	var batch := UiBake.Batch.new()
 	for tier in range(1, tiers + 1):
 		for path: Array in _tier_paths(tier):
 			var pts := PackedVector2Array()
 			for p: Vector2 in path:
 				pts.append(origin + p * squeeze * k)
 			if lv == 2:
-				ci.draw_polyline(pts, tone(Color(228 / 255.0, 123 / 255.0, 60 / 255.0, 0.36), dim), 2.6 * k * 0.7, true)
+				batch.polyline(pts, PackedColorArray([tone(Color(228 / 255.0, 123 / 255.0, 60 / 255.0, 0.36), dim)]), 2.6 * k * 0.7)
 			var shade := PackedVector2Array()
 			for p: Vector2 in pts:
 				shade.append(p + Vector2(0.7, 0.7) * k)
-			ci.draw_polyline(shade, tone(Color(0, 0, 0, 0.6), dim), 1.2 * k * 0.6, true)
-			ci.draw_polyline(pts, tone(Color(232 / 255.0, 240 / 255.0, 245 / 255.0, 0.66), dim), 0.9 * k * 0.6, true)
+			batch.polyline(shade, PackedColorArray([tone(Color(0, 0, 0, 0.6), dim)]), 1.2 * k * 0.6)
+			batch.polyline(pts, PackedColorArray([tone(Color(232 / 255.0, 240 / 255.0, 245 / 255.0, 0.66), dim)]), 0.9 * k * 0.6)
 		if tier == 3:
 			var x: float = 70.0 / 100.0 * CK_W
 			var chip := PackedVector2Array([Vector2(x - 2, CK_Y - 1), Vector2(x + 1.5, CK_Y - 3.5), Vector2(x + 2.5, CK_Y + 0.5)])
 			for i in chip.size():
 				chip[i] = origin + chip[i] * squeeze * k
-			ci.draw_colored_polygon(chip, tone(Color(232 / 255.0, 240 / 255.0, 245 / 255.0, 0.18), dim))
+			batch.polygon(chip, PackedColorArray([tone(Color(232 / 255.0, 240 / 255.0, 245 / 255.0, 0.18), dim)]))
+	batch.draw(ci)
 
 
 ## The cracks of one layer (k3g_fx.js ckTierPaths): the same seeded walk as the
@@ -1027,6 +1048,16 @@ static func _crack_line(rng: Array, x: float, y: float, a: float, length: float,
 
 ## Unrest | support (.mood, 206 × 50): a medal each side (44), between them
 ## the seats in numbers over one bar split three ways with the half marked.
+static func standing_fills(bar_size: Vector2, unrest: int, neutral: int, support: int) -> Array[Rect2]:
+	var gap: float = 2.0 * UiFonts.K
+	var room: float = bar_size.x - gap * 2.0
+	var total: float = float(maxi(1, unrest + neutral + support))
+	var a: float = room * unrest / total
+	var b: float = room * support / total
+	var m: float = room - a - b
+	return [Rect2(0, 0, a, bar_size.y), Rect2(a + gap, 0, m, bar_size.y), Rect2(bar_size.x - b, 0, b, bar_size.y)]
+
+
 func _standing(unrest: int, neutral: int, support: int) -> Control:
 	var dim: bool = _dim("mood")
 	var k: float = UiFonts.K
@@ -1050,24 +1081,19 @@ func _standing(unrest: int, neutral: int, support: int) -> Control:
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.position = Vector2(x0, 33.0) * k
 	bar.size = Vector2(112, 8) * k
-	var total: float = float(maxi(1, unrest + neutral + support))
 	bar.draw.connect(func() -> void:
 		var w: float = bar.size.x
 		var h: float = bar.size.y
-		var gap: float = 2.0 * k
-		var room: float = w - gap * 2.0
-		var a: float = room * unrest / total
-		var b: float = room * support / total
-		var m: float = room - a - b
+		var fills: Array[Rect2] = standing_fills(bar.size, unrest, neutral, support)
 		var rr: float = 4.0 * k
 		# A faint drop under the three (0 1px 2px .4), then each with its light along the top.
 		_split_round(bar, Rect2(0, 1.0 * k, w, h), rr, tone(Color(0, 0, 0, 0.3), dim), true, true)
-		if a > 0.5:
-			_v_grad(bar, Rect2(0, 0, a, h), rr, true, false, tone(RED_L, dim), tone(RED, dim))
-		if m > 0.5:
-			_split_round(bar, Rect2(a + gap, 0, m, h), rr, tone(MID, dim), false, false)
-		if b > 0.5:
-			_v_grad(bar, Rect2(w - b, 0, b, h), rr, false, true, tone(SKY_L, dim), tone(SKY, dim))
+		if fills[0].size.x > 0.5:
+			_v_grad(bar, fills[0], rr, true, false, tone(RED_L, dim), tone(RED, dim))
+		if fills[1].size.x > 0.5:
+			_split_round(bar, fills[1], rr, tone(MID, dim), false, false)
+		if fills[2].size.x > 0.5:
+			_v_grad(bar, fills[2], rr, false, true, tone(SKY_L, dim), tone(SKY, dim))
 		bar.draw_rect(Rect2(rr, 0, w - rr * 2.0, 1.0 * k * 0.6), tone(Color(1, 1, 1, 0.25), dim))
 		# The half mark: a majority is past it.
 		var mark := StyleBoxFlat.new()
@@ -1094,6 +1120,7 @@ func _split_round(ci: CanvasItem, rect: Rect2, r: float, col: Color, left: bool,
 
 ## A rect with a top-to-bottom gradient, rounded at the ends asked for.
 func _v_grad(ci: CanvasItem, rect: Rect2, r: float, left: bool, right: bool, top: Color, bot: Color) -> void:
+	var batch := UiBake.Batch.new()
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var n: int = 6
@@ -1115,12 +1142,13 @@ func _v_grad(ci: CanvasItem, rect: Rect2, r: float, left: bool, right: bool, top
 			pts.append(sharp[i])
 	for p in pts:
 		cols.append(top.lerp(bot, (p.y - rect.position.y) / maxf(rect.size.y, 0.001)))
-	ci.draw_polygon(pts, cols)
+	batch.polygon(pts, cols)
 	var ring := pts.duplicate()
 	var ring_c := cols.duplicate()
 	ring.append(pts[0])
 	ring_c.append(cols[0])
-	ci.draw_polyline_colors(ring, ring_c, 1.0, true)
+	batch.polyline(ring, ring_c, 1.0)
+	batch.draw(ci)
 
 
 ## A matte medal (.med, 44): a disc 38 across, its mark at 22 in the 2판 (glass_parts.gd).
@@ -1447,24 +1475,28 @@ func _draw_outside(ci: Control, o: Dictionary, dim: bool) -> void:
 	sb.set_border_width_all(int(round(1.5 * k)))
 	sb.border_color = rim
 	ci.draw_style_box(sb, tube)
-	GlassParts.grad_rect(ci, tube.grow(-1.5 * k), 3.0 * k, [[0.0, tone(Color(1, 1, 1, 0.08), dim)], [0.45, Color(1, 1, 1, 0)], [1.0, tone(Color(0, 0, 0, 0.28), dim)]])
+	var liquid := UiBake.Batch.new()
+	GlassParts.gradient(liquid, tube.grow(-1.5 * k), 3.0 * k, [[0.0, tone(Color(1, 1, 1, 0.08), dim)], [0.45, Color(1, 1, 1, 0)], [1.0, tone(Color(0, 0, 0, 0.28), dim)]])
 	# The column, foot to head, round at the top.
 	var h: float = tube.size.y * float(s["fill"])
 	var r: float = 2.5 * k
 	var col := Rect2(tube.position.x + 2.5 * k, tube.end.y - h, 5.0 * k, h)
-	ci.draw_polygon(PackedVector2Array([Vector2(col.position.x, col.position.y + r), Vector2(col.end.x, col.position.y + r), col.end, Vector2(col.position.x, col.end.y)]),
+	liquid.polygon(PackedVector2Array([Vector2(col.position.x, col.position.y + r), Vector2(col.end.x, col.position.y + r), col.end, Vector2(col.position.x, col.end.y)]),
 		PackedColorArray([head, head, foot, foot]))
-	ci.draw_circle(Vector2(col.get_center().x, col.position.y + r), r, head, true, -1.0, true)
+	liquid.circle(Vector2(col.get_center().x, col.position.y + r), r, head)
 	# The bulb over the column's foot: a drop shade, the rim, its colour lit up and left.
 	var bulb := Vector2(14.0 * k, 37.0 * k)
 	if bool(o["freezing"]):
+		liquid.draw(ci)
+		liquid = UiBake.Batch.new()
 		GlassParts.glow_ring(ci, bulb, 8.5 * k, 6.0 * k, tone(OT_FROZEN_GLOW, dim))
-	ci.draw_circle(bulb + Vector2(0.0, 1.0) * k, 8.5 * k, tone(Color(0, 0, 0, 0.35), dim), true, -1.0, true)
-	ci.draw_circle(bulb, 8.5 * k, rim, true, -1.0, true)
+	liquid.circle(bulb + Vector2(0.0, 1.0) * k, 8.5 * k, tone(Color(0, 0, 0, 0.35), dim))
+	liquid.circle(bulb, 8.5 * k, rim)
 	var lit := bulb + Vector2(-1.4, -1.96) * k
 	for i in 7:
 		var f: float = float(i) / 6.0
-		ci.draw_circle(bulb.lerp(lit, f), 7.0 * k * (1.0 - f * 0.85), foot.lerp(head, f), true, -1.0, true)
+		liquid.circle(bulb.lerp(lit, f), 7.0 * k * (1.0 - f * 0.85), foot.lerp(head, f))
+	liquid.draw(ci)
 	# A tick at each stage's temperature, long and short by turns ending long at the coldest.
 	var ticks: Array = o["ticks"]
 	for i in ticks.size():
@@ -1482,8 +1514,10 @@ func _draw_outside(ci: Control, o: Dictionary, dim: bool) -> void:
 
 ## A puff of cold: six discs one in another, so it is thickest at the middle.
 func _puff(ci: Control, mid: Vector2, radius: float, col: Color) -> void:
+	var batch := UiBake.Batch.new()
 	for i in 6:
-		ci.draw_circle(mid, radius * (1.0 - float(i) / 6.0), Color(col, col.a * 0.25), true, -1.0, true)
+		batch.circle(mid, radius * (1.0 - float(i) / 6.0), Color(col, col.a * 0.25))
+	batch.draw(ci)
 
 
 ## Frost round the tube (otTex's ferns, the same seed): from its two sides and
