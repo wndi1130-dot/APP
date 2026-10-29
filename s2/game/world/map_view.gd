@@ -32,6 +32,7 @@ const FxState = preload("res://fx/fx_state.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const ParticlePool = preload("res://fx/particle_pool.gd")
 const PUFF_SHADER = preload("res://fx/shaders/blood_burst.gdshader")
+const CONTACT_SHADER = preload("res://fx/shaders/contact_shade.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
 const GroundLook = preload("res://game/world/ground_look.gd")
@@ -97,8 +98,9 @@ var container_nodes: Dictionary = {} # id -> Node3D, only containers with a Prop
 var container_chunks: Dictionary = {} # Vector3i(tile x, tile y, level) -> {node, ids}
 var _container_chunk: Dictionary = {} # id -> chunk key
 var _container_batching: bool = false
-var ground_nodes: Dictionary = {}       # level -> MeshInstance3D (what lies on the ground, ground_look.gd)
+var ground_nodes: Dictionary = {}       # level -> MeshInstance3D (what lies on the ground, ground_look.gd; its rims a child "Rim")
 var _ground_sig: int = 0
+var _rim_material: ShaderMaterial = null
 var spot_nodes: Dictionary = {}
 var stove_nodes: Array = []
 var manhole_nodes: Dictionary = {}
@@ -744,26 +746,64 @@ func _empty_corners(st: SurfaceTool, at: Vector3) -> void:
 
 
 ## What lies on the ground (game.ground_items, shapes from ground_look.gd): one
-## mesh a level, made again only when the list has changed.
+## mesh a level, made again only when the list has changed; under it the things'
+## dark rims (ground_look.rim), a child mesh drawn with contact_shade.gdshader.
 func update_ground(items: Array) -> void:
 	var sig := items.hash()
 	if sig == _ground_sig or level_roots.is_empty():
 		return
 	_ground_sig = sig
 	var tools: Dictionary = {}
+	var rims: Dictionary = {}
 	for piece: Dictionary in GroundLook.pieces(items):
 		var lv: int = piece["lv"]
 		if not level_roots.has(lv):
 			continue
 		if not tools.has(lv):
 			tools[lv] = _begin()
+			rims[lv] = _begin()
 		box(tools[lv], piece["size"], piece["at"], piece["color"])
+		_rim_quad(rims[lv], GroundLook.rim(piece))
 	for lv in ground_nodes:
 		ground_nodes[lv].mesh = null
+		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = null
 	for lv in tools:
 		if not ground_nodes.has(lv):
 			ground_nodes[lv] = _mesh_node(lv)
+			var rim_node := MeshInstance3D.new()
+			rim_node.name = "Rim"
+			rim_node.material_override = _contact_material()
+			rim_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			ground_nodes[lv].add_child(rim_node)
 		ground_nodes[lv].mesh = tools[lv].commit()
+		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = rims[lv].commit()
+
+
+## One rim quad (ground_look.rim) flat on the floor: the thing's share of it and
+## the strength go in the vertex colour (contact_shade.gdshader).
+static func _rim_quad(st: SurfaceTool, rim: Dictionary) -> void:
+	var at: Vector3 = rim["at"]
+	var h: Vector2 = (rim["size"] as Vector2) * 0.5
+	var inner: Vector2 = rim["inner"]
+	var c := Color(inner.x, inner.y, GroundLook.RIM_STRENGTH)
+	var corners := [Vector3(-h.x, 0, -h.y), Vector3(h.x, 0, -h.y), Vector3(h.x, 0, h.y), Vector3(-h.x, 0, h.y)]
+	var uvs := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+	for idx in [0, 1, 2, 0, 2, 3]:
+		st.set_color(c)
+		st.set_uv(uvs[idx])
+		st.set_normal(Vector3.UP)
+		st.add_vertex(at + corners[idx])
+
+
+## The rims' material: a crisp core, then the last pixel smoothed; first of the
+## see-through things, so rain, snow and blood draw over it.
+func _contact_material() -> ShaderMaterial:
+	if _rim_material == null:
+		_rim_material = ShaderMaterial.new()
+		_rim_material.shader = CONTACT_SHADER
+		_rim_material.set_shader_parameter("core", 0.6)
+		_rim_material.render_priority = Material.RENDER_PRIORITY_MIN
+	return _rim_material
 
 
 func update_spot(id: String) -> void:
