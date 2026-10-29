@@ -25,9 +25,9 @@ const SPREAD: float = 0.3
 
 ## Kind -> [size (x, y, z: the long side along x), colour as seen (sRGB)].
 ## Dark, muted greys and browns, no bright ones (white snow and pale floors
-## round them). world_vis.gdshader takes a vertex colour as linear, so pieces()
-## turns these into linear; written as they are, the check shots lost them on
-## the floorboards.
+## round them). world_vis.gdshader reads a vertex colour as sRGB and makes it
+## linear itself (floor_to_linear, as it does the floors), so pieces() hands
+## these over as they are; made linear here as well, they were darkened twice.
 const LOOKS: Dictionary = {
 	"weapon": [Vector3(0.75, 0.06, 0.1), Color(0.2, 0.2, 0.21)],
 	"garment": [Vector3(0.5, 0.04, 0.38), Color(0.25, 0.26, 0.29)],
@@ -98,7 +98,7 @@ static func pieces(items: Array) -> Array:
 		# Vertex alpha 0 reads as under a roof in world_vis.gdshader: no snow,
 		# rain or ground grain over it, so a grey thing does not go white and
 		# vanish (what lies buried shines instead, decision 423 (11)).
-		var color: Color = (look[1] as Color).srgb_to_linear()
+		var color: Color = look[1]
 		color.a = 0.0
 		out.append({"lv": lv, "size": size, "at": at + Vector3(0, size.y / 2.0, 0), "color": color})
 	return out
