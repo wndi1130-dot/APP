@@ -243,3 +243,18 @@ func test_the_scene_wears_the_weather_the_field_opens_with() -> void:
 	assert_almost_eq(float(field.fx_params["fx_snow"]), float(autumn.fx["fx_snow"]), 0.001)
 	assert_almost_eq(float(field.fx_params["fx_wet"]), float(autumn.fx["fx_wet"]), 0.001)
 	assert_almost_eq(float(field.atmo["sun_pitch"]), float(autumn.look["sun_pitch"]), 0.001)
+
+func test_the_sidings_wagons_are_the_field_s_models_and_none_is_closed() -> void:
+	var c = _scene()
+	_run_to(c, "hold")
+	assert_not_null(c.station.get_node_or_null("WagonModels"), "the sidings' wagons come from the field's model kit")
+	var wagons: Array = _data()["wagons"]
+	assert_gt(wagons.size(), 0, "the stop has wagons on its sidings")
+	for w: Dictionary in wagons:
+		var empty: Dictionary = w.duplicate()
+		empty["coal"] = 0.0
+		var r: Rect2i = w["rect"]
+		for part: Array in StopCinema.open_wagon_parts(empty):
+			var size: Vector3 = part[0]
+			if size.x > r.size.x * 0.5 and size.z > r.size.y * 0.5:
+				assert_lte((part[1] as Vector3).y + size.y * 0.5, 1.0, "a wagon the kit has no model for is open on top")
