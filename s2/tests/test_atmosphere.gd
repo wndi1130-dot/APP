@@ -692,3 +692,90 @@ func test_the_ground_reads_its_photo_grain_once() -> void:
 	var code := FileAccess.get_file_as_string("res://game/world/world_vis.gdshader")
 	assert_eq(code.count("texture(fx_ground"), 1)
 	assert_false(code.contains("hint_screen_texture"))
+
+
+# -------------------------------------------------------- region-band looks
+
+func test_region_looks_match_the_twelve_bands_and_stay_in_range() -> void:
+	assert_eq(Atmosphere.REGION_LOOK.size(), 12)
+	var look_keys: Array = Atmosphere.REGION_LOOK.keys()
+	var region_keys: Array = Atmosphere.REGIONS.keys()
+	look_keys.sort()
+	region_keys.sort()
+	assert_eq_deep(look_keys, region_keys)
+	for key: String in Atmosphere.REGION_LOOK:
+		var rl: Dictionary = Atmosphere.REGION_LOOK[key]
+		var saturation: float = float(rl["sat"])
+		var haze: float = float(rl["haze"])
+		assert_true(saturation >= 0.8 and saturation <= 1.1, "%s saturation" % key)
+		assert_true(haze >= -0.06 and haze <= 0.1, "%s haze" % key)
+		for tint_key: String in ["light", "shade"]:
+			var tint: Color = rl[tint_key]
+			for channel: float in [tint.r, tint.g, tint.b]:
+				assert_true(channel >= 0.85 and channel <= 1.15, "%s %s channels" % [key, tint_key])
+
+
+func test_region_looks_keep_linear_luminance_and_light_energy() -> void:
+	for pair: Array in [["K1", "K11"], ["K3", "K9"]]:
+		var a: Dictionary = Atmosphere.look(12.0, ["clear"], String(pair[0]), 1.0)
+		var b: Dictionary = Atmosphere.look(12.0, ["clear"], String(pair[1]), 1.0)
+		for key: String in ["sun_color", "ambient_color"]:
+			var a_color: Color = a[key]
+			var b_color: Color = b[key]
+			assert_almost_eq(a_color.srgb_to_linear().get_luminance(), b_color.srgb_to_linear().get_luminance(), 0.005, "%s %s luminance" % [pair, key])
+		for key: String in ["sun_energy", "ambient_energy"]:
+			assert_almost_eq(float(a[key]), float(b[key]), 0.0001, "%s %s energy" % [pair, key])
+
+
+func _region_rgb_distance(a: Color, b: Color) -> float:
+	return maxf(absf(a.r - b.r), maxf(absf(a.g - b.g), absf(a.b - b.b)))
+
+
+func test_neighbouring_region_looks_have_distinct_light_colours() -> void:
+	for i: int in range(1, 12):
+		var a_key: String = "K%d" % i
+		var b_key: String = "K%d" % (i + 1)
+		var a: Dictionary = Atmosphere.look(12.0, ["clear"], a_key, 1.0)
+		var b: Dictionary = Atmosphere.look(12.0, ["clear"], b_key, 1.0)
+		var a_sun: Color = a["sun_color"]
+		var b_sun: Color = b["sun_color"]
+		var a_ambient: Color = a["ambient_color"]
+		var b_ambient: Color = b["ambient_color"]
+		var distance: float = maxf(_region_rgb_distance(a_sun, b_sun), _region_rgb_distance(a_ambient, b_ambient))
+		assert_gt(distance, 0.004, "%s and %s differ" % [a_key, b_key])
+
+
+func test_region_looks_have_the_requested_warm_cool_and_saturation_order() -> void:
+	var coast: Dictionary = Atmosphere.look(12.0, ["clear"], "K11", 1.0)
+	var city: Dictionary = Atmosphere.look(12.0, ["clear"], "K9", 1.0)
+	var plain: Dictionary = Atmosphere.look(12.0, ["clear"], "K1", 1.0)
+	var pines: Dictionary = Atmosphere.look(12.0, ["clear"], "K4", 1.0)
+	var coast_sun: Color = coast["sun_color"]
+	var city_sun: Color = city["sun_color"]
+	var city_ambient: Color = city["ambient_color"]
+	var plain_ambient: Color = plain["ambient_color"]
+	assert_gt(coast_sun.r / coast_sun.b, city_sun.r / city_sun.b, "K11 sunlight is warmer than K9")
+	assert_gt(city_ambient.b / city_ambient.r, plain_ambient.b / plain_ambient.r, "K9 shade is cooler than K1")
+	var city_grade: Dictionary = city["grade"]
+	var pines_grade: Dictionary = pines["grade"]
+	assert_lt(float(city_grade["saturation"]), float(pines_grade["saturation"]), "K9 is less saturated than K4")
+
+
+func test_region_sunlight_differs_less_at_night_than_at_noon() -> void:
+	var day_coast: Color = Atmosphere.look(12.0, ["clear"], "K11", 1.0)["sun_color"]
+	var day_city: Color = Atmosphere.look(12.0, ["clear"], "K9", 1.0)["sun_color"]
+	var night_coast: Color = Atmosphere.look(23.0, ["clear"], "K11", 1.0)["sun_color"]
+	var night_city: Color = Atmosphere.look(23.0, ["clear"], "K9", 1.0)["sun_color"]
+	assert_lt(_region_rgb_distance(night_coast, night_city), _region_rgb_distance(day_coast, day_city), "night keeps only 30 percent of the regional tint")
+
+
+func test_region_look_normalises_names_and_returns_an_independent_copy() -> void:
+	var expected: Dictionary = Atmosphere.region_look("K11")
+	var alias: Dictionary = Atmosphere.region_look("region_11")
+	assert_eq_deep(alias, expected)
+	alias["light"] = Color(0.0, 0.0, 0.0)
+	alias["shade"] = Color(0.0, 0.0, 0.0)
+	alias["sat"] = 0.0
+	alias["haze"] = 1.0
+	assert_eq_deep(Atmosphere.region_look("K11"), expected)
+	assert_eq_deep(Atmosphere.region_look("region_11"), expected)

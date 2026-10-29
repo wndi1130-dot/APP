@@ -1,0 +1,569 @@
+{
+  "version": 2,
+  "generator": "tools/blender/props_field_trees.py",
+  "source": "quaternius_nature + kenney_nature_kit",
+  "sources": {
+    "quaternius_nature": {
+      "name": "Quaternius Ultimate Nature Pack",
+      "license": "CC0-1.0"
+    },
+    "kenney_nature_kit": {
+      "name": "Kenney Nature Kit 2.1",
+      "license": "CC0-1.0"
+    }
+  },
+  "axis": "+Y 위, 원점은 밑동 가운데",
+  "colour_encoding": "linear RGBA, alpha 1",
+  "palette": {
+    "needle": [
+      0.035,
+      0.064,
+      0.058
+    ],
+    "needle_dark": [
+      0.028,
+      0.055,
+      0.05
+    ],
+    "bark": [
+      0.075,
+      0.06,
+      0.05
+    ],
+    "birch": [
+      0.6,
+      0.6,
+      0.56
+    ],
+    "birch_mark": [
+      0.07,
+      0.07,
+      0.065
+    ],
+    "juniper": [
+      0.07,
+      0.1,
+      0.08
+    ],
+    "dry_leaf": [
+      0.26,
+      0.15,
+      0.08
+    ],
+    "fern": [
+      0.33,
+      0.2,
+      0.09
+    ],
+    "snow": [
+      0.84,
+      0.88,
+      0.9
+    ]
+  },
+  "needle_luminance_range": [
+    0.04,
+    0.08
+  ],
+  "jitter": 0.12,
+  "snow": {
+    "normal_from": 0.55,
+    "normal_full": 0.85,
+    "max_mix": 0.8,
+    "face_share": 0.22
+  },
+  "assets": {
+    "spruce_tall": {
+      "path": "res://models/props_field/spruce_tall.glb",
+      "status": "ready",
+      "lod0_tris": 520,
+      "triangle_min": 400,
+      "triangle_limit": 600,
+      "triangle_target": 520,
+      "bytes": 54068,
+      "sha256": "9767daca527bc10bc0864c0916cfe91dbc0725a9f37e415beb1eab9d53b23ee6",
+      "bounds_godot": [
+        [
+          -2.5348,
+          0.0,
+          -2.5107
+        ],
+        [
+          1.9787,
+          11.0,
+          2.437
+        ]
+      ],
+      "height_m": 11.0,
+      "width_m": 4.95,
+      "source": "quaternius_nature",
+      "source_asset": "PineTree_2.fbx",
+      "planned_foliage_layers": 4,
+      "foliage_layers": 4,
+      "width_scale": 0.82,
+      "stem_compress": 1.0,
+      "snow_twin_of": null,
+      "colours": [
+        "bark",
+        "needle_dark"
+      ]
+    },
+    "spruce_tall_snow": {
+      "path": "res://models/props_field/spruce_tall_snow.glb",
+      "status": "ready",
+      "lod0_tris": 520,
+      "triangle_min": 400,
+      "triangle_limit": 600,
+      "triangle_target": 520,
+      "bytes": 54076,
+      "sha256": "aaaa1075d8d52722114f833f2219a06239028fa02fdeca369f0dc34e1cd43ae0",
+      "bounds_godot": [
+        [
+          -2.5348,
+          0.0,
+          -2.5107
+        ],
+        [
+          1.9787,
+          11.0,
+          2.437
+        ]
+      ],
+      "height_m": 11.0,
+      "width_m": 4.95,
+      "source": "quaternius_nature",
+      "source_asset": "PineTree_2.fbx",
+      "planned_foliage_layers": 4,
+      "foliage_layers": 4,
+      "width_scale": 0.82,
+      "stem_compress": 1.0,
+      "snow_twin_of": "spruce_tall",
+      "colours": [
+        "bark",
+        "needle_dark",
+        "snow"
+      ]
+    },
+    "spruce_mid": {
+      "path": "res://models/props_field/spruce_mid.glb",
+      "status": "ready",
+      "lod0_tris": 520,
+      "triangle_min": 400,
+      "triangle_limit": 600,
+      "triangle_target": 520,
+      "bytes": 54048,
+      "sha256": "5e59e11f3dd62a55d49aa00c361c284643fea7038a42991f8d508921c79c2990",
+      "bounds_godot": [
+        [
+          -1.5716,
+          0.0,
+          -1.6618
+        ],
+        [
+          2.8205,
+          7.5,
+          2.3003
+        ]
+      ],
+      "height_m": 7.5,
+      "width_m": 4.39,
+      "source": "quaternius_nature",
+      "source_asset": "PineTree_3.fbx",
+      "planned_foliage_layers": 6,
+      "foliage_layers": 6,
+      "width_scale": 0.9,
+      "stem_compress": 1.0,
+      "snow_twin_of": null,
+      "colours": [
+        "bark",
+        "needle"
+      ]
+    },
+    "spruce_mid_snow": {
+      "path": "res://models/props_field/spruce_mid_snow.glb",
+      "status": "ready",
+      "lod0_tris": 520,
+      "triangle_min": 400,
+      "triangle_limit": 600,
+      "triangle_target": 520,
+      "bytes": 54060,
+      "sha256": "e43464eed6042c1698fa5c3ed260ac4476ce0087e1c60e9a3fd89d20b7343acb",
+      "bounds_godot": [
+        [
+          -1.5716,
+          0.0,
+          -1.6618
+        ],
+        [
+          2.8205,
+          7.5,
+          2.3003
+        ]
+      ],
+      "height_m": 7.5,
+      "width_m": 4.39,
+      "source": "quaternius_nature",
+      "source_asset": "PineTree_3.fbx",
+      "planned_foliage_layers": 6,
+      "foliage_layers": 6,
+      "width_scale": 0.9,
+      "stem_compress": 1.0,
+      "snow_twin_of": "spruce_mid",
+      "colours": [
+        "bark",
+        "needle",
+        "snow"
+      ]
+    },
+    "spruce_round": {
+      "path": "res://models/props_field/spruce_round.glb",
+      "status": "ready",
+      "lod0_tris": 520,
+      "triangle_min": 400,
+      "triangle_limit": 600,
+      "triangle_target": 520,
+      "bytes": 54048,
+      "sha256": "05fb396e7b4e784b816cb38bde10b682bd86e5dbce66fc3f06686f5c0607264d",
+      "bounds_godot": [
+        [
+          -2.242,
+          0.0,
+          -1.9535
+        ],
+        [
+          2.5308,
+          6.0,
+          2.443
+        ]
+      ],
+      "height_m": 6.0,
+      "width_m": 4.77,
+      "source": "quaternius_nature",
+      "source_asset": "PineTree_1.fbx",
+      "planned_foliage_layers": 5,
+      "foliage_layers": 5,
+      "width_scale": 1.1,
+      "stem_compress": 1.0,
+      "snow_twin_of": null,
+      "colours": [
+        "bark",
+        "needle"
+      ]
+    },
+    "spruce_round_snow": {
+      "path": "res://models/props_field/spruce_round_snow.glb",
+      "status": "ready",
+      "lod0_tris": 520,
+      "triangle_min": 400,
+      "triangle_limit": 600,
+      "triangle_target": 520,
+      "bytes": 54060,
+      "sha256": "ecc911e6a59df3a7c85849414402457ea90d95acff97424130d46ea809fe9c6c",
+      "bounds_godot": [
+        [
+          -2.242,
+          0.0,
+          -1.9535
+        ],
+        [
+          2.5308,
+          6.0,
+          2.443
+        ]
+      ],
+      "height_m": 6.0,
+      "width_m": 4.77,
+      "source": "quaternius_nature",
+      "source_asset": "PineTree_1.fbx",
+      "planned_foliage_layers": 5,
+      "foliage_layers": 5,
+      "width_scale": 1.1,
+      "stem_compress": 1.0,
+      "snow_twin_of": "spruce_round",
+      "colours": [
+        "bark",
+        "needle",
+        "snow"
+      ]
+    },
+    "spruce_young": {
+      "path": "res://models/props_field/spruce_young.glb",
+      "status": "ready",
+      "lod0_tris": 300,
+      "triangle_min": 200,
+      "triangle_limit": 400,
+      "triangle_target": 300,
+      "bytes": 31624,
+      "sha256": "75c1f71f92eb57061b4e90c2a179f8e18c8271cde3675a41fbb14cd81a571301",
+      "bounds_godot": [
+        [
+          -0.7196,
+          0.0,
+          -0.7829
+        ],
+        [
+          0.8,
+          2.6,
+          0.8315
+        ]
+      ],
+      "height_m": 2.6,
+      "width_m": 1.61,
+      "source": "quaternius_nature",
+      "source_asset": "PineTree_1.fbx",
+      "planned_foliage_layers": 3,
+      "foliage_layers": 3,
+      "width_scale": 0.9,
+      "stem_compress": 0.35,
+      "snow_twin_of": null,
+      "colours": [
+        "bark",
+        "needle"
+      ]
+    },
+    "spruce_young_snow": {
+      "path": "res://models/props_field/spruce_young_snow.glb",
+      "status": "ready",
+      "lod0_tris": 300,
+      "triangle_min": 200,
+      "triangle_limit": 400,
+      "triangle_target": 300,
+      "bytes": 31632,
+      "sha256": "ca095d68b39922cb82146f35346d9a2ea3cbfd18a4e3ff72e0ff896348630d92",
+      "bounds_godot": [
+        [
+          -0.7196,
+          0.0,
+          -0.7829
+        ],
+        [
+          0.8,
+          2.6,
+          0.8315
+        ]
+      ],
+      "height_m": 2.6,
+      "width_m": 1.61,
+      "source": "quaternius_nature",
+      "source_asset": "PineTree_1.fbx",
+      "planned_foliage_layers": 3,
+      "foliage_layers": 3,
+      "width_scale": 0.9,
+      "stem_compress": 0.35,
+      "snow_twin_of": "spruce_young",
+      "colours": [
+        "bark",
+        "needle",
+        "snow"
+      ]
+    },
+    "spruce_far": {
+      "path": "res://models/props_field/spruce_far.glb",
+      "status": "ready",
+      "lod0_tris": 96,
+      "triangle_min": 80,
+      "triangle_limit": 100,
+      "triangle_target": 96,
+      "bytes": 10788,
+      "sha256": "b68b99447501f86ef76fc150a469a05859cbcab6f6573c7efb47bb3d70b55498",
+      "bounds_godot": [
+        [
+          -2.0442,
+          0.0,
+          -2.0852
+        ],
+        [
+          1.7516,
+          9.0,
+          1.9916
+        ]
+      ],
+      "height_m": 9.0,
+      "width_m": 4.08,
+      "source": "quaternius_nature",
+      "source_asset": "PineTree_2.fbx",
+      "planned_foliage_layers": 4,
+      "foliage_layers": 4,
+      "width_scale": 0.82,
+      "stem_compress": 1.0,
+      "snow_twin_of": null,
+      "colours": [
+        "bark",
+        "needle_dark"
+      ]
+    },
+    "spruce_far_snow": {
+      "path": "res://models/props_field/spruce_far_snow.glb",
+      "status": "ready",
+      "lod0_tris": 96,
+      "triangle_min": 80,
+      "triangle_limit": 100,
+      "triangle_target": 96,
+      "bytes": 10796,
+      "sha256": "2ec89dda4c54f4e73d530f75c59882075fa72cfebbe01c51566cca227cc5f7e4",
+      "bounds_godot": [
+        [
+          -2.0442,
+          0.0,
+          -2.0852
+        ],
+        [
+          1.7516,
+          9.0,
+          1.9916
+        ]
+      ],
+      "height_m": 9.0,
+      "width_m": 4.08,
+      "source": "quaternius_nature",
+      "source_asset": "PineTree_2.fbx",
+      "planned_foliage_layers": 4,
+      "foliage_layers": 4,
+      "width_scale": 0.82,
+      "stem_compress": 1.0,
+      "snow_twin_of": "spruce_far",
+      "colours": [
+        "bark",
+        "needle_dark",
+        "snow"
+      ]
+    },
+    "bush_juniper": {
+      "path": "res://models/props_field/bush_juniper.glb",
+      "status": "ready",
+      "lod0_tris": 82,
+      "triangle_min": 1,
+      "triangle_limit": 200,
+      "triangle_target": null,
+      "bytes": 9380,
+      "sha256": "715f1d3c45e74a393be8a70fcca46124d6db3281b4729ce9bee081f4e2e9503c",
+      "bounds_godot": [
+        [
+          -0.2889,
+          0.0,
+          -0.3336
+        ],
+        [
+          0.2889,
+          1.1,
+          0.3336
+        ]
+      ],
+      "height_m": 1.1,
+      "width_m": 0.67,
+      "source": "kenney_nature_kit",
+      "source_asset": "tree_pineGroundA.glb",
+      "planned_foliage_layers": 0,
+      "foliage_layers": 0,
+      "width_scale": 1.0,
+      "stem_compress": 1.0,
+      "snow_twin_of": null,
+      "colours": [
+        "juniper"
+      ]
+    },
+    "bush_dry": {
+      "path": "res://models/props_field/bush_dry.glb",
+      "status": "ready",
+      "lod0_tris": 52,
+      "triangle_min": 1,
+      "triangle_limit": 200,
+      "triangle_target": null,
+      "bytes": 6312,
+      "sha256": "da1790e5e15642703889f82d606b36f4d1e53d1e203997686231d8fa75379068",
+      "bounds_godot": [
+        [
+          -0.7523,
+          0.0,
+          -0.7523
+        ],
+        [
+          0.7523,
+          0.9,
+          0.7523
+        ]
+      ],
+      "height_m": 0.9,
+      "width_m": 1.5,
+      "source": "kenney_nature_kit",
+      "source_asset": "plant_bushDetailed.glb",
+      "planned_foliage_layers": 0,
+      "foliage_layers": 0,
+      "width_scale": 1.0,
+      "stem_compress": 1.0,
+      "snow_twin_of": null,
+      "colours": [
+        "dry_leaf"
+      ]
+    },
+    "fern_dry": {
+      "path": "res://models/props_field/fern_dry.glb",
+      "status": "ready",
+      "lod0_tris": 21,
+      "triangle_min": 1,
+      "triangle_limit": 200,
+      "triangle_target": null,
+      "bytes": 3144,
+      "sha256": "c928954176094aff7ab8cf2b93509ca4c2da81fbf68640ef0848452460f40944",
+      "bounds_godot": [
+        [
+          -0.7223,
+          0.0,
+          -0.8341
+        ],
+        [
+          0.7223,
+          0.6,
+          0.8341
+        ]
+      ],
+      "height_m": 0.6,
+      "width_m": 1.67,
+      "source": "kenney_nature_kit",
+      "source_asset": "plant_bushLargeTriangle.glb",
+      "planned_foliage_layers": 0,
+      "foliage_layers": 0,
+      "width_scale": 1.0,
+      "stem_compress": 1.0,
+      "snow_twin_of": null,
+      "colours": [
+        "fern"
+      ]
+    },
+    "birch_bare": {
+      "path": "res://models/props_field/birch_bare.glb",
+      "status": "ready",
+      "lod0_tris": 520,
+      "triangle_min": 1,
+      "triangle_limit": 599,
+      "triangle_target": 520,
+      "bytes": 54044,
+      "sha256": "44086fc2288d9af4688b022e0e6e77a7e239e75ba8d94ffddb3348cfcbdfcd77",
+      "bounds_godot": [
+        [
+          -0.4344,
+          0.0,
+          -4.5635
+        ],
+        [
+          1.0596,
+          7.0,
+          0.4986
+        ]
+      ],
+      "height_m": 7.0,
+      "width_m": 5.06,
+      "source": "quaternius_nature",
+      "source_asset": "BirchTree_Dead_Snow_1.fbx",
+      "planned_foliage_layers": 0,
+      "foliage_layers": 0,
+      "width_scale": 1.0,
+      "stem_compress": 1.0,
+      "snow_twin_of": null,
+      "colours": [
+        "birch",
+        "birch_mark"
+      ]
+    }
+  }
+}

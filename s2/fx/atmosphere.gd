@@ -221,6 +221,23 @@ const REGIONS: Dictionary = {
 	"K11": {"name": "포어포메른 늪과 보덴 해안", "forest": 0.15, "conifer": 0.5, "birch": 0.4, "water": 0.85, "town": 0.25, "hills": 0.0, "spire": 0.55, "silo": 0.1, "wind": 0.9, "mist": 0.65, "open": true, "poles": "catenary"},
 	"K12": {"name": "뤼겐", "forest": 0.35, "conifer": 0.85, "birch": 0.2, "water": 0.9, "town": 0.2, "hills": 0.2, "spire": 0.3, "silo": 0.0, "wind": 0.9, "mist": 0.5, "open": true, "poles": "catenary"},
 }
+
+# Region-band hue, saturation and haze (decision 494); keep the light's luminance.
+# K1 is the reference: the user's low cold sun (2026-10-17) stays as it is there.
+const REGION_LOOK: Dictionary = {
+	"K1": {"light": Color(1.0, 1.0, 1.0), "shade": Color(1.0, 1.0, 1.0), "sat": 1.0, "haze": 0.0},
+	"K2": {"light": Color(1.02, 1.04, 0.92), "shade": Color(0.95, 1.04, 0.97), "sat": 0.88, "haze": 0.08},
+	"K3": {"light": Color(0.97, 1.0, 1.05), "shade": Color(0.92, 0.98, 1.08), "sat": 1.03, "haze": -0.03},
+	"K4": {"light": Color(1.06, 1.03, 0.9), "shade": Color(0.97, 1.03, 0.97), "sat": 1.02, "haze": -0.04},
+	"K5": {"light": Color(1.02, 1.0, 0.97), "shade": Color(1.01, 0.98, 0.99), "sat": 0.9, "haze": 0.02},
+	"K6": {"light": Color(0.99, 1.0, 1.02), "shade": Color(0.95, 1.0, 1.05), "sat": 0.86, "haze": 0.06},
+	"K7": {"light": Color(1.06, 1.02, 0.9), "shade": Color(1.0, 0.99, 0.96), "sat": 0.95, "haze": -0.02},
+	"K8": {"light": Color(1.03, 0.99, 0.96), "shade": Color(1.02, 0.96, 1.04), "sat": 0.96, "haze": 0.02},
+	"K9": {"light": Color(0.98, 1.0, 1.03), "shade": Color(0.94, 0.98, 1.06), "sat": 0.85, "haze": 0.02},
+	"K10": {"light": Color(1.01, 1.02, 0.97), "shade": Color(0.95, 1.03, 1.0), "sat": 0.96, "haze": 0.02},
+	"K11": {"light": Color(1.07, 1.02, 0.88), "shade": Color(0.9, 0.98, 1.1), "sat": 1.0, "haze": 0.03},
+	"K12": {"light": Color(0.99, 1.01, 1.05), "shade": Color(1.03, 0.99, 0.97), "sat": 0.92, "haze": 0.04},
+}
 const DEFAULT_REGION := "K1"
 
 
@@ -234,6 +251,11 @@ static func region_key(name: String) -> String:
 
 static func region(name: String) -> Dictionary:
 	return REGIONS[region_key(name)]
+
+
+static func region_look(name: String) -> Dictionary:
+	var row: Dictionary = REGION_LOOK[region_key(name)]
+	return row.duplicate(true)
 
 
 # ------------------------------------------------------------------ the light
@@ -438,6 +460,24 @@ static func _keep_lum(c: Color, like: Color) -> Color:
 	return Color(out.r, out.g, out.b, c.a)
 
 
+## Tint in linear space, restore luminance in either direction, then fit the gamut.
+static func _tint_keep(c: Color, t: Color, k: float) -> Color:
+	var linear: Color = c.srgb_to_linear()
+	var luminance: float = linear.get_luminance()
+	if luminance <= 0.0001:
+		return c
+	linear = Color(
+		linear.r * lerpf(1.0, t.r, k),
+		linear.g * lerpf(1.0, t.g, k),
+		linear.b * lerpf(1.0, t.b, k),
+		c.a
+	)
+	var scale: float = luminance / linear.get_luminance()
+	scale = minf(scale, 1.0 / maxf(linear.r, maxf(linear.g, linear.b)))
+	var out: Color = Color(linear.r * scale, linear.g * scale, linear.b * scale, c.a).linear_to_srgb()
+	return Color(out.r, out.g, out.b, c.a)
+
+
 ## How bright the band is, for veils and haze (night dark, day full).
 static func _band_lum(w: Dictionary) -> float:
 	return float(w["night"]) * 0.09 + float(w["dawn"]) * 0.6 + float(w["day"]) * 1.0 + float(w["dusk"]) * 0.55
@@ -487,6 +527,7 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 		fill = 1.0
 		sun_k = 1.0
 	haze = clampf(haze + float(reg["mist"]) * 0.15 * (1.0 - float(w["day"]) * 0.5), 0.0, 1.0)
+	haze = clampf(haze + float(region_look(region_name)["haze"]), 0.0, 1.0)
 	var lum := _band_lum(w)
 	var zenith := _mix_bands(w, c, "zenith")
 	var horizon := _mix_bands(w, c, "horizon")
@@ -516,6 +557,12 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	var veil_tint := veil_color.lerp(_grey_like(veil_color), night_part)
 	ambient = _keep_lum(ambient.lerp(veil_tint * 0.9, veil * 0.6), ambient)
 	sun = _keep_lum(sun.lerp(veil_tint.lerp(sun, 0.5), veil * 0.5), sun)
+	# The region band's light (decision 494): hue and saturation, never the brightness;
+	# the night keeps a third of it (its grey stays near neutral).
+	var rl: Dictionary = region_look(region_name)
+	var region_k: float = 1.0 - 0.7 * night_part
+	sun = _tint_keep(sun, rl["light"], region_k)
+	ambient = _tint_keep(ambient, rl["shade"], region_k)
 	# Never flatter than 16 degrees: the oblique field must still read its ground.
 	var light_pitch := -clampf(angles.x, 16.0, 60.0)
 	var light_yaw := angles.y
@@ -561,6 +608,7 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	var out := {
 		"hour": fposmod(hour, 24.0), "band": band_of(hour, c, side), "weights": w,
 		"cold": c, "side": side, "season": String(more.get("season", season_for(c, side))), "temp_c": temp, "region": region_key(region_name),
+		"region_sat": float(rl["sat"]),
 		"sunrise": sun_times(c, side).x, "sunset": sun_times(c, side).y,
 		"sun_height": angles.x, "sun_azimuth": angles.y,
 		"sun_pitch": light_pitch, "sun_yaw": light_yaw,
@@ -637,6 +685,7 @@ static func grade(l: Dictionary) -> Dictionary:
 	# materials already, and 0.8 left an overcast day near colourless.
 	var sat := lerpf(1.0, 0.9, veil) * lerpf(1.0, 0.72, float(w["night"]))
 	sat *= 1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - veil)
+	sat *= float(l.get("region_sat", 1.0))
 	# Godot multiplies the brightness, then turns the contrast about 0.5 (sRGB):
 	# 0.5 + k(b·c − 0.5) is the line spread·(c − pivot) + pivot when these hold.
 	var pivot := lerpf(TONE_PIVOT_NIGHT, TONE_PIVOT_DAY, float(l["lum"])) - TONE_PIVOT_DUSK_GREY * float(w["dusk"]) * veil

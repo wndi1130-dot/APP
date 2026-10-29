@@ -1,10 +1,11 @@
 import { COMMS, LAWS } from '../data';
 import type { Comm, LawId, LawRes } from '../data';
 import { lawActive } from '../state';
+import { bumpRel } from '../ledger';
 import type { Game } from '../state';
-import { CAR_COMM, COMM_CARS, D, TECHS } from './data';
+import { CAR_COMM, COMM_CARS, D, FURNISH_CARS, FURNITURE, FURNITURE_SIZE, TECHS } from './data';
 import type { TechId, Variant } from './data';
-import { techMult, variantMult } from './state';
+import { furnishOf, techMult, variantMult } from './state';
 
 // 기술은 자원을 아끼지 않고 법을 바꾼다(s1c_domestic 7.3, 2026-10-07 사용자 카드 답). 어느 기술이 어느 법을 바꾸는지와 숫자는
 // 내정 스레드 제안이다. 바꾸는 방식은 셋:
@@ -78,6 +79,40 @@ export function lawTechSit(g: Game, sit: Record<Comm, [number, number, number, n
     if (n === 0) continue;
     sit[c][0] += D.insulateWarm * insulatedShare(g, c) * half;
     sit[c][2] += D.insulateCrowd * n;
+  }
+  for (const car of FURNISH_CARS) {
+    const c = CAR_COMM[car];
+    const f = furnishOf(g, car);
+    const warm = Math.max(D.furnishWarm[f.tier], ...f.items.map(item => FURNITURE[item.kind].warm));
+    sit[c][0] += warm / COMM_CARS[c];
+    sit[c][2] += D.furnishCrowd * f.tier + f.items.reduce((sum, item) => sum + FURNITURE_SIZE[item.size].crowd + FURNITURE[item.kind].crowd, 0);
+  }
+}
+
+/** 비교 불만의 예정 몫. 인구 0·기관실은 기준과 피해 쪽 모두에서 뺀다. */
+export function furnishComparison(g: Game): Record<Comm, number> {
+  const out = Object.fromEntries(COMMS.map(c => [c, 0])) as Record<Comm, number>;
+  if (!g.dom) return out;
+  const active = COMMS.filter(c => c !== 'engine' && g.comms[c].pop > 0);
+  const mean = (c: Comm) => FURNISH_CARS.filter(car => CAR_COMM[car] === c).reduce((sum, car) => sum + furnishOf(g, car).tier, 0) / COMM_CARS[c];
+  for (const c of active) {
+    const gap = Math.max(0, ...active.filter(other => other !== c).map(mean)) - mean(c);
+    if (gap >= D.furnishGapMin) out[c] = -D.furnishGapRel * Math.min(gap, D.furnishGapMax);
+  }
+  const loss = -Object.values(out).reduce((sum, n) => sum + n, 0);
+  if (loss > D.furnishGapCap) for (const c of active) out[c] *= D.furnishGapCap / loss;
+  return out;
+}
+
+/** 정산마다 비교 불만과 공동체당 피아노 하나. 관계 변화는 기존 까닭 장부에 남긴다. */
+export function furnishTick(g: Game): void {
+  if (!g.dom) return;
+  const comparison = furnishComparison(g);
+  for (const c of COMMS) {
+    bumpRel(g, c, comparison[c], 'furnish');
+    if (c !== 'engine' && g.comms[c].pop > 0 && FURNISH_CARS.some(car => CAR_COMM[car] === c && furnishOf(g, car).items.some(item => FURNITURE[item.kind].piano))) {
+      bumpRel(g, c, D.furnishPianoRel, 'furnish');
+    }
   }
 }
 
@@ -160,11 +195,16 @@ export function techLaws(tech: TechId, variant?: Variant): LawId[] {
 
 /** 효과가 모두 법에 걸린 기술(7.3). 그 법이 없으면 사도 쓸 데가 없다. E4(대체 화부)·M5(이)는 법 밖 효과가 있어 빠진다. */
 export const LAW_ONLY_TECHS: TechId[] = ['e1', 'e2', 'e3', 'e5', 'm2', 'm3', 'x1'];
+/** S2 공방 만들기가 열리는 기술(결정 449·486). S1에서는 법 쪽만 보이지만, 쓸모 줄은 「법 쓸모」로 단다. */
+export const S2_CRAFT_TECHS: TechId[] = ['x1', 'x4', 'w2', 'w4'];
+/** S1에서 봇·공방장이 고를 쓸모가 없는 기술(결정 486): 살림은 플레이어와 재기 도구가, 운반 도구는 S2 공방이 쓴다. */
+export const S1_IDLE_TECHS: TechId[] = ['w5', 'x4'];
 
 /** 이 기술을 복원할 때 쓸 변형. 법에만 걸린 기술이면 서 있는 법 쪽 변형(변형이 없으면 undefined), 그 법이 하나도 없으면 null(복원할 쓸모가 없다).
  *  법과 상관없는 기술이면 첫 변형을 돌려주고 고르는 쪽(방침·봇)이 따로 정한다. 3단계 공방장(6.4, 2f1f64e)과 봇이 같이 쓴다. */
 export function usefulVariant(g: Game, tech: TechId): Variant | undefined | null {
   const vs: (Variant | undefined)[] = TECHS[tech].variants ? ['a', 'b'] : [undefined];
+  if (S1_IDLE_TECHS.includes(tech)) return null;
   if (!LAW_ONLY_TECHS.includes(tech)) return vs[0];
   // 변형 없는 기술은 찾아도 undefined다. 찾은 것과 못 찾은 것(null)을 가른다(K01 6).
   const i = vs.findIndex(v => techLaws(tech, v).some(l => lawActive(g, l)));
@@ -179,7 +219,7 @@ export function techUseLine(g: Game, tech: TechId, variant?: Variant): string | 
   ];
   if (parts.length === 0) return null;
   const now = techLaws(tech, variant).some(l => lawActive(g, l));
-  return `쓸모: ${[...new Set(parts)].join(', ')}${now ? '(지금 서 있다)' : '(지금은 없다)'}`;
+  return `${LAW_ONLY_TECHS.includes(tech) && !S2_CRAFT_TECHS.includes(tech) ? '쓸모' : '법 쓸모'}: ${[...new Set(parts)].join(', ')}${now ? '(지금 서 있다)' : '(지금은 없다)'}`;
 }
 
 /** 지금 쓸 수 있는 기술이 이 법을 어떻게 바꾸는지(법 미리보기 끝에 붙는 줄). */
