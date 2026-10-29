@@ -92,6 +92,40 @@ func test_the_bank_rows_are_drift_uv_at_every_corner() -> void:
 	assert_gt(banked, 0, "the map has corners where snow banks up")
 
 
+func test_the_bank_rows_and_tiles_hold_on_every_kind_of_cell() -> void:
+	# Each solid kind, a door in a wall, a window, a building's floor and the map's edge,
+	# on a map one cell wider than a tile (a cut tile on each axis).
+	var g := FieldGrid.new(MapView.TILE + 1, 12)
+	var kinds: Array[int] = []
+	for kind: int in FieldGrid.Solid.values():
+		kinds.append(kind)
+	for x in range(g.width):
+		g.set_solid(Vector2i(x, 1), kinds[x % kinds.size()])
+		g.set_solid(Vector2i(x, 4), FieldGrid.Solid.WALL if x % 4 != 1 else FieldGrid.Solid.DOOR)
+		g.floor[g.index(Vector2i(x, 7))] = x % FieldGrid.Floor.size()
+	g.set_solid(Vector2i(0, 0), FieldGrid.Solid.WINDOW)
+	g.set_solid(Vector2i(g.width - 1, g.height - 1), FieldGrid.Solid.WALL)
+	for y in range(8, 11):
+		for x in range(5, 12):
+			g.building[g.index(Vector2i(x, y))] = 3
+	g.set_solid(Vector2i(8, 10), FieldGrid.Solid.DOOR)
+	var banks := PackedVector2Array()
+	for y in range(g.height + 1):
+		MapView.ground_bank_row(g, y, banks)
+	var wrong := 0
+	for y in range(g.height + 1):
+		for x in range(g.width + 1):
+			if banks[y * (g.width + 1) + x] != MapView.drift_uv(g, Vector2i(x, y)):
+				wrong += 1
+	assert_eq(wrong, 0, "every corner as drift_uv answers it")
+	var details := MapView.ground_details(g)
+	var ahead := MapView.ground_arrays(g, details)
+	var laid := _surface_tool_ground(g, details)
+	assert_eq(ahead.keys(), laid.keys())
+	for tile in laid:
+		assert_eq(ahead[tile], laid[tile], "tile %s as the SurfaceTool laid it" % tile)
+
+
 func test_a_view_lays_the_loaders_arrays_and_works_out_a_changed_map_again() -> void:
 	var d := _ready_map(-1)
 	var floors: Array = (d["_floor_arrays"] as Dictionary).keys()

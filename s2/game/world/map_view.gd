@@ -1155,9 +1155,10 @@ static func box(st: SurfaceTool, size: Vector3, at: Vector3, color: Color) -> vo
 
 ## The ground's tiles are worked out from the map alone (2a), so the stop loader's
 ## worker makes them ahead (stop_loader.gd make_ready): `data["_ground_arrays"]`, one
-## SurfaceTool.commit_to_arrays() a tile, with `_ground_key` the map they fit. Here only
-## the meshes and nodes are made; a map without them, or changed since, is worked out
-## here, a row a piece, the same way.
+## ground_tile a tile, with `_ground_key` the map they fit. Here only the meshes and
+## nodes are made; a map without them, or changed since, is worked out here the same
+## way, resting a row of banks and a tile at a time (a tile now takes less than one
+## row of cells did through a SurfaceTool).
 func _build_ground() -> void:
 	var arrays: Dictionary = {}
 	ground_from_loader = data.get("_ground_arrays") is Dictionary and data.get("_ground_key") == ground_key(grid)
@@ -1219,7 +1220,8 @@ static func floor_key(lg: FieldGrid) -> Array:
 
 
 ## One answer a corner, shared by the cells that meet there: corner row y. drift_uv
-## over the plain arrays (a call a corner was most of the ground's time).
+## over the plain arrays (a call a corner was most of the ground's time): change the
+## two together (test_ground_arrays holds them to the same answer).
 static func ground_bank_row(g: FieldGrid, y: int, banks: PackedVector2Array) -> void:
 	var w := g.width
 	var so := g.solid
@@ -1294,7 +1296,7 @@ static func ground_tile(g: FieldGrid, details: PackedFloat32Array, banks: Packed
 			var f := fl[i]
 			# One colour a kind: the shader gives the grain (no cell checker, 결정 469 C4).
 			var color := FLOOR_COLORS[f]
-			color.a = 0.0 if bu[i] >= 0 else 1.0
+			color.a = 0.0 if bu[i] >= 0 else 1.0  # sky_alpha
 			# The corners a, east, south-east, south; the triangles a, east, south-east and
 			# a, south-east, south.
 			var k0 := y * bw + x
