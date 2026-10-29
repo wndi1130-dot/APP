@@ -2105,8 +2105,8 @@ func _move_person(p: Person, delta: float) -> void:
 			var off: float = absf(angle_difference(p.look, way))
 			var share: float = MoveRules.heading_share(off)
 			# Decision 486: only a fresh, opted-in follow path gets a slow turning step.
-			if share <= 0.0 and _follows(p) and off < deg_to_rad(MoveRules.FOLLOW_TURN_STOP_DEG):
-				share = MoveRules.FOLLOW_TURN_FLOOR
+			if share < MoveRules.FOLLOW_TURN_FLOOR and _follows(p) and off < deg_to_rad(MoveRules.FOLLOW_TURN_STOP_DEG):
+				share = maxf(share, MoveRules.FOLLOW_TURN_FLOOR)
 			spd *= share
 		p.facing = face
 		if spd <= 0.0:
