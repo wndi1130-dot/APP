@@ -51,3 +51,25 @@ func test_on_a_narrow_screen_the_paper_stops_short_of_the_car_pane() -> void:
 	await get_tree().process_frame
 	var sheet: Control = f.paper.sheet
 	assert_lte(sheet.position.x + sheet.size.x, words_x, "the paper ends before the pane's words at %d wide" % int(screen * UiFonts.K))
+
+
+## Folded to its edge (결정 508) the paper makes room: the picked car moves into the
+## middle of what the edge and the car pane leave. The main key opens it again, as it
+## is what holds the train; gone, the room goes back.
+func test_a_folded_paper_makes_room_for_the_picked_car() -> void:
+	var f = _flow()
+	await get_tree().process_frame
+	f.train.set_view_mode("diag")
+	f._select(SliceFlow.FIRST_CAR)
+	assert_eq(float(f.train.pane_left_px), 0.0, "an open paper moves nothing")
+	var right: float = float(f.train.pane_px)
+	f.paper.set_folded(true)
+	assert_almost_eq(float(f.train.pane_left_px), float(f.paper.folded_edge()), 0.001)
+	assert_almost_eq(float(f.train.pane_px), right, 0.001, "the car pane's room as it was")
+	f.train_on()
+	assert_eq(f.current(), "train", "the main key goes nowhere with the paper waiting")
+	assert_false(bool(f.paper.folded), "and opens the folded paper")
+	assert_eq(float(f.train.pane_left_px), 0.0)
+	f.paper.set_folded(true)
+	f._drop_paper()
+	assert_eq(float(f.train.pane_left_px), 0.0, "gone, the room goes back")

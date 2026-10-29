@@ -712,13 +712,40 @@ func _show_paper() -> void:
 	layer.add_child(c)
 	c.show_card(train_g, train_t, int((train_g["cards"] as Array)[0]["uid"]))
 	c.chose.connect(_paper_chosen)
+	c.fold_changed.connect(_paper_folded)
 	paper = c
 
 
 func _drop_paper() -> void:
+	var was_folded: bool = is_instance_valid(paper) and (paper as TurnCard).folded
 	if is_instance_valid(paper):
 		paper.queue_free()
 	paper = null
+	# The room its edge took goes back to the picked car.
+	if was_folded:
+		_paper_folded(false)
+
+
+## The paper folded to its edge or opened again (결정 508): the picked car moves into
+## the middle of what the edge and the car pane leave clear.
+func _paper_folded(_folded: bool) -> void:
+	if sel == "" or not is_instance_valid(pane) or not is_instance_valid(train) or train.camera == null:
+		return
+	if str(train.get("view_mode")) == "diag":
+		_set_cover()
+
+
+## The diagonal camera's cover: the car pane's width at the right, a folded paper's
+## edge at the left.
+func _set_cover() -> void:
+	var pane_rect: Rect2 = pane.get_global_rect()
+	var covered_px: float = get_viewport().get_visible_rect().size.x - pane_rect.position.x
+	if pane_rect.size.x == 0.0:
+		covered_px = CarPane.CSS_SIZE.x * UiFonts.K
+	var left_px: float = 0.0
+	if is_instance_valid(paper) and (paper as TurnCard).folded:
+		left_px = (paper as TurnCard).folded_edge()
+	train.set_pane(covered_px, left_px)
 
 
 ## A way chosen on the paper: the board it gives back, then the next paper, and once
@@ -749,6 +776,8 @@ func train_on() -> void:
 	if papers_of(train_g):
 		going = true
 		if is_instance_valid(paper):
+			# A folded paper comes open: it is what holds the train.
+			(paper as TurnCard).set_folded(false)
 			UiDeny.shake(paper)
 		return
 	var id := current()
@@ -1272,11 +1301,7 @@ func _select(id: String) -> void:
 	if str(train.get("view_mode")) == "diag":
 		if sel != "":
 			train.focus_car(at, true)
-			var pane_rect: Rect2 = pane.get_global_rect()
-			var covered_px: float = get_viewport().get_visible_rect().size.x - pane_rect.position.x
-			if pane_rect.size.x == 0.0:
-				covered_px = CarPane.CSS_SIZE.x * UiFonts.K
-			train.set_pane(covered_px)
+			_set_cover()
 		else:
 			train.focus_car(at, false)
 			train.set_pane(0.0)

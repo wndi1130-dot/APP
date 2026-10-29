@@ -217,6 +217,40 @@ func test_a_long_card_is_cut_wider_a_short_one_is_not() -> void:
 	assert_eq(long.sheet.modulate.a, 1.0)
 
 
+## Folded to the left only its edge stays in sight, and a press there opens it
+## again, never a way under it; a new card comes open (결정 508).
+func test_a_folded_card_leaves_its_edge_and_opens_from_it() -> void:
+	if _data.is_empty(): return
+	var g: Dictionary = _case("bitten/card-0/6/0/first")[0]
+	var c := _card(g)
+	await _settled(c)
+	var got: Array = []
+	var folds: Array = []
+	c.chose.connect(func(next: Dictionary) -> void: got.append(next))
+	c.fold_changed.connect(func(on: bool) -> void: folds.append(on))
+	var open := c.sheet.get_node("Open") as Button
+	assert_false(open.visible, "open, the ways take their presses")
+	(c.sheet.get_node("Fold") as Button).pressed.emit()
+	assert_true(c.folded)
+	await get_tree().create_timer(TurnCard.FOLD_S + 0.1).timeout
+	var edge: float = TurnCard.TAB * UiFonts.K
+	assert_almost_eq(c.sheet.position.x + c.sheet.size.x, edge, 0.5, "only its edge in sight")
+	assert_almost_eq(c.folded_edge(), edge, 0.5)
+	assert_true(open.visible)
+	assert_false(c.sheet.inner.visible, "no cut-off words on the edge")
+	assert_eq(open.get_index(), c.sheet.get_child_count() - 1, "the open key lies over all else on the sheet")
+	assert_eq(open.size, c.sheet.size, "over the whole edge in sight")
+	open.pressed.emit()
+	assert_false(c.folded)
+	assert_true(c.sheet.inner.visible)
+	assert_eq(got.size(), 0, "a press on the edge answers nothing")
+	assert_eq(folds, [true, false])
+	c.set_folded(true)
+	c.show_card(g, _data["tables"])
+	assert_false(c.folded, "a new card comes open")
+	assert_almost_eq(c.sheet.position.x, TurnCard.SHEET_AT.x * UiFonts.K, 0.5)
+
+
 ## Wait for the card's fit to settle (a few frames).
 func _settled(c: Control) -> void:
 	for i: int in 40:
