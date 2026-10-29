@@ -715,7 +715,8 @@ func _window_between(p, z_at: float) -> Dictionary:
 func test_an_axe_does_not_swing_through_a_whole_window() -> void:
 	var p = game.player
 	p.hands = [{"id": "axe", "quality": "factory", "condition": 0.9, "loaded": 0}]
-	var z := _window_between(p, 1.7)
+	p.position.x += 0.4   # near the window's side, so one past it is inside an axe's 1.45
+	var z := _window_between(p, 1.4)
 	p.target_zombie = z
 	game.combat.update(0.02)
 	assert_eq(p.swing_t, 0.0, "glass is in the way")
