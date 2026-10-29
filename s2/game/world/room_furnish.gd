@@ -731,8 +731,9 @@ const PALETTE: Dictionary = {
 		{"kind": "dresser", "size": Vector2i(2, 1), "chance": 0.8, "holds": true, "at": "wall"},
 		{"kind": "wardrobe", "size": Vector2i(2, 1), "chance": 0.6, "holds": true, "at": "wall"},
 		{"kind": "chair", "size": Vector2i(1, 1), "chance": 0.5, "at": "wall"},
-		# 침대 머리 곁 협탁, 반쯤은 양쪽에 짝으로(사용자 10-28 「짝 가구」).
-		{"kind": "nightstand", "size": Vector2i(1, 1), "chance": 0.5, "holds": true, "at": "wall", "near": "bed_head", "copies": 2},
+		# 침대 머리(베개 쪽) 곁 협탁 하나(_bedside). 긴 변을 벽에 댄 침대는 베개 양쪽이 다 트이지 않아
+		# 짝(사용자 10-28 「짝 가구」)은 서지 않는다.
+		{"kind": "nightstand", "size": Vector2i(1, 1), "chance": 0.5, "holds": true, "at": "wall", "near": "bed_head"},
 	],
 	"kitchen": [
 		# 난로·싱크·조리대는 _kitchen_run에서 한 줄로 먼저 놓는다.
@@ -1257,8 +1258,8 @@ static func _palette_for(cls: String, area: int, rng: RandomNumberGenerator) -> 
 	var repeats := clampi(int(ceil(float(area) / typical)) - 1, 0, 5)
 	for cycle in range(repeats):
 		for original: Dictionary in selected:
-			# One of these to a room: a second stove, workbench or car is not more of the room.
-			if original["kind"] in ["cold_stove", "radio_set", "nightstand", "side_table", "workbench", "car", "hay_cart", "farm_cart"]:
+			# One of these to a room: a second stove, workbench, car or bed is not more of the room.
+			if original["kind"] in ["cold_stove", "radio_set", "nightstand", "side_table", "workbench", "car", "hay_cart", "farm_cart", "bed"]:
 				continue
 			var item := original.duplicate()
 			item["need"] = false
@@ -1357,6 +1358,28 @@ static func _facing_from_back(back: Vector2i) -> int:
 	return 1
 
 
+## 침대 모형의 베개 쪽 끝 칸. 침대 모형은 머리가 -X이고 facing만큼 돈다(prop_fit.footprint):
+## 0은 왼쪽 끝, 1은 위 끝, 2는 오른쪽 끝, 3은 아래 끝.
+static func bed_head(r: Rect2i, facing: int) -> Vector2i:
+	match posmod(facing, 4):
+		2:
+			return Vector2i(r.end.x - 1, r.position.y)
+		3:
+			return Vector2i(r.position.x, r.end.y - 1)
+	return r.position
+
+
+## 협탁 자리: 베개 쪽 끝 너머 벽을 따라 한 칸. 그 끝이 벽에 닿았으면(구석 침대) 그 벽에 붙여
+## 베개 옆 한 칸. 발치나 침대 앞 가운데에는 서지 않는다.
+static func _bedside(g: FieldGrid, of: PackedInt32Array, ri: int, r: Rect2i, facing: int) -> Vector2i:
+	var head := bed_head(r, facing)
+	var foot := r.end - Vector2i.ONE if head == r.position else r.position
+	var beyond := head + (head - foot).sign()
+	if _at(g, of, beyond) == ri:
+		return beyond
+	return head + [Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1), Vector2i(1, 0)][posmod(facing, 4)]
+
+
 ## 가구 칸 가운데 4이웃이 걸어서 닿는 칸(seen)인 것, 옛 칸에 가까운 것. 없으면 (-1, -1).
 static func _front_cell(r: Rect2i, seen: Dictionary, old: Vector2i) -> Vector2i:
 	var best := Vector2i(-1, -1)
@@ -1425,7 +1448,7 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 							fits = false
 				if not fits:
 					continue
-				if item.get("near", "") == "bed_head" and (item.get("near_cells", []).is_empty() or _dist_to(r, item["near_cells"]) != 1):
+				if item.get("near", "") == "bed_head" and not item.get("near_cells", []).has(r.position):
 					continue
 				# 네 변이 벽인지 한 번씩. 긴 변(정사각이면 아무 변)이 벽이면 등을 댈 수 있다.
 				var backs: Array[Vector2i] = []
@@ -1596,6 +1619,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 	var dropped_ground: Array = []
 	var new_ground: Array = []
 	var added: Array = []
+	var tint_of: Dictionary = {}  # 방 안 지도 가구 줄 번호 -> 그 집 칠 판
 	var lvs: Array = levels.keys()
 	lvs.sort()
 	data["density_classes"] = plan["classes"]
@@ -1619,6 +1643,9 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 				if not in_room.has(ri):
 					in_room[ri] = []
 				in_room[ri].append(i)
+				tint_of[i] = tint_for(place, int(map["rooms"][ri]["building"]))
+			elif g.building_at(rect.position + rect.size / 2) >= 0:
+				tint_of[i] = tint_for(place, g.building_at(rect.position + rect.size / 2))
 		var box_room: Dictionary = {}  # 방 번호 -> [상자 id]
 		for id: String in box_ids:
 			var box: Dictionary = containers[id]
@@ -1754,11 +1781,16 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 			for item: Dictionary in items:
 				if covered.has(item["kind"]) or (item.get("fill", false) and used >= target):
 					continue
-				if item.get("near", "") in ["bed_head", "desk"]:
+				if item.get("near", "") == "desk":
 					item["near_cells"] = []
 					for pl: Dictionary in placed:
-						if pl["item"]["kind"] == ("bed" if item["near"] == "bed_head" else "desk"):
+						if pl["item"]["kind"] == "desk":
 							item["near_cells"].append((pl["rect"] as Rect2i).position)
+				elif item.get("near", "") == "bed_head":
+					item["near_cells"] = []
+					for pl: Dictionary in placed:
+						if pl["item"]["kind"] == "bed":
+							item["near_cells"].append(_bedside(g, of, ri, pl["rect"], int(pl["facing"])))
 				var need: bool = item.get("need", false)
 				if need and item.get("holds", false) and kept_holder and cls in ["storage", "store", "shop", "work", "garage", "barn"]:
 					need = false
@@ -1917,7 +1949,12 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 	var out: Array = []
 	for i in range(props.size()):
 		if not drop.has(i):
-			out.append(props[i])
+			# 지도가 둔 가구도 그 집의 새 가구와 한 칠 판(map_view의 FurnitureTints.pick은 tint를 먼저 읽는다).
+			var row: Dictionary = props[i]
+			if tint_of.has(i) and not row.has("tint"):
+				row = row.duplicate()
+				row["tint"] = tint_of[i]
+			out.append(row)
 	out.append_array(added)
 	data["props"] = out
 	if not dropped_ground.is_empty():
@@ -1930,8 +1967,6 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 	return stats
 
 
-## 후보 가운데 pick 번째를 먼저, 나머지는 차례로 세워 보고 길이 남는 첫 자리. 그 자리는 칸을 막고
-## rects에 든 채로 돌려준다. 없으면 빈 사전(칸과 rects는 처음 그대로).
 ## 깔개 하나(room_finish 깔개 칸): 침대는 양옆으로 한 칸씩 넓게 그 밑에, 식탁은 둘레 한 칸 넓게,
 ## 거실은 낮은 탁자 둘레, 없으면 방 가운데. 방 칸을 벗어나는 줄은 깎고, 2×2보다 작으면 깔지 않는다.
 ## 납작해서 길·문 앞을 막지 않는다(걷는 길 검사 밖). 계단 칸은 덮지 않는다. {} 이면 없음.
@@ -1988,6 +2023,8 @@ static func _lay_rug(cls: String, cells: Array[Vector2i], placed: Array, stairs:
 	return {"rect": rug, "look": 1 + int(weaves[(salt >> 16) % weaves.size()]) * 32 + (salt >> 20) % 32}
 
 
+## 후보 가운데 pick 번째를 먼저, 나머지는 차례로 세워 보고 길이 남는 첫 자리. 그 자리는 칸을 막고
+## rects에 든 채로 돌려준다. 없으면 빈 사전(칸과 rects는 처음 그대로).
 static func _first_open(g: FieldGrid, of: PackedInt32Array, ri: int, keys: Dictionary, before: Dictionary, guard: Array,
 		rects: Array, cands: Array, pick: int) -> Dictionary:
 	var tries: Array = [cands[pick]]

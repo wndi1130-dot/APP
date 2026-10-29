@@ -34,6 +34,8 @@ static func apply(data: Dictionary, form: String, run_seed: int, target_m: float
 		# The train keeps its row, so it can stand no nearer than the village's row.
 		if target_m >= 0.0 and target_m < absf(_row_gap(data)):
 			push_warning("stop form edge: %.0f m is nearer than the village's row, the stop stays a city one" % target_m)
+			# What was asked, so the loader's map and the field's agree it is done (FieldGame.shape_stop).
+			data["stop_form_asked"] = form
 			form = "city"
 		else:
 			out = _edge(data, run_seed, target_m)

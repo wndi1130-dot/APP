@@ -13,7 +13,7 @@ var _bad: Array[String] = []
 func before_all() -> void:
 	_data = JSON.parse_string(FileAccess.get_file_as_string(PATH))
 	assert_eq(_data.get("format"), "tech-vectors-v1")
-	assert_eq((_data["cases"] as Array).size(), (_data["seeds"] as Array).size() * 8 * 23)
+	assert_eq((_data["cases"] as Array).size(), (_data["seeds"] as Array).size() * 8 * 26)
 
 
 func test_furnish_and_transport_research_do_not_bypass_the_main_branch() -> void:
