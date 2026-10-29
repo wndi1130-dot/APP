@@ -219,6 +219,21 @@ describe('생필품 공방: 일·고철·상한', () => {
     expect(made).toEqual([[1, true]]);
   });
 
+  it('세운 연구는 효과를 멈춘다: w8을 세우면 좋은 물건 대신 생필품, w6을 세우면 만들지 않는다', () => {
+    const g = ready(200);
+    done(g, 'w8');
+    applyStep(g, { a: 'dom-sup-fine', d: { on: '1' } });
+    g.dom!.techs.w8!.off = true;
+    work(g, 2);
+    expect(g.supFine ?? 0).toBe(0);
+    expect(g.sup).toBeCloseTo(1);
+    const h = ready(200);
+    h.dom!.techs.w6!.off = true;
+    work(h, 2);
+    expect(h.sup).toBe(0);
+    expect(h.dom!.supWork ?? 0).toBe(0);
+  });
+
   it('앞으로 옮긴 생필품 일이 그 정산의 개조 진행을 늦춘다', () => {
     const last = ready();
     last.dom!.order = ['modify', 'restore', 'sup'];

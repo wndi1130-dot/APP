@@ -16,7 +16,7 @@ function workText(g: Game): string {
 }
 
 function supFineToggle(g: Game): Node | null {
-  if (!g.supOn || !techUsable(g, 'w8')) return null;
+  if (!g.supOn || techMult(g, 'w8') <= 0) return null;
   const on = !!g.dom?.supFineOn;
   return h('button', {
     class: cx('chip', on && 'is-on'), 'data-action': 'dom-sup-fine', 'data-on': on ? '0' : '1',

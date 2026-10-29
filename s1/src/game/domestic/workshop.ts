@@ -512,9 +512,9 @@ export function setFullRule(g: Game, rule: 'parts' | 'dump' | 'aisle'): void {
 // ---- 공방 한 구간(6.3) ----
 function suppliesRecipe(g: Game) {
   const d = dom(g);
-  const variant = techUsable(g, 'w7') ? d.techs.w7?.variant : undefined;
+  const variant = techMult(g, 'w7') > 0 ? d.techs.w7?.variant : undefined;
   const mult = variant ? SUP_MAKE.variants[variant] : undefined;
-  const fine = !!d.supFineOn && techUsable(g, 'w8');
+  const fine = !!d.supFineOn && techMult(g, 'w8') > 0;
   return {
     fine, amount: fine ? 1 : mult?.yield ?? 1,
     work: SUP_MAKE.supMakeWork * (mult?.work ?? 1),
@@ -552,7 +552,7 @@ export function runWorkshop(g: Game): { used: number; did: string[] } {
         }
       }
       if (made > 0) did.push(`부품 ${made}`);
-    } else if (task === 'sup' && g.supOn && techUsable(g, 'w6')) {
+    } else if (task === 'sup' && g.supOn && techMult(g, 'w6') > 0) {
       const recipe = suppliesRecipe(g);
       const cap = SUP_MAKE.supMakeCap * suppliesNeed(g);
       let made = 0;
@@ -602,7 +602,7 @@ export function workshopState(g: Game): { now: string; mode: 'work' | 'idle' | '
       if (d.scrap >= D.partScrap && d.wood >= D.partWood) return { now: '부품 만들기', mode: 'work' };
       if (!d.restoring && !d.job) return { now: '부품 재료가 모자라다', mode: 'short' };
     }
-    if (task === 'sup' && g.supOn && techUsable(g, 'w6')) {
+    if (task === 'sup' && g.supOn && techMult(g, 'w6') > 0) {
       const recipe = suppliesRecipe(g);
       const amount = Math.min(recipe.amount, SUP_MAKE.supMakeCap * suppliesNeed(g));
       if (amount > 1e-9) {
@@ -625,7 +625,7 @@ export function setTarget(g: Game, v: number): void {
 }
 
 export function setSupFine(g: Game, on: boolean): boolean {
-  if (!g.supOn || !g.dom || !techUsable(g, 'w8')) return false;
+  if (!g.supOn || !g.dom || techMult(g, 'w8') <= 0) return false;
   g.dom.supFineOn = on;
   return true;
 }
