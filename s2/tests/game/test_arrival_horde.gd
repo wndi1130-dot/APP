@@ -262,6 +262,21 @@ func test_remote_fills_none_and_edge_fills_half_rounded_down() -> void:
 	assert_eq(edge.train_guard.filled, floori(float(ArrivalHorde.band(String(edge.data["place_kind"]))[0]) * 0.5))
 
 
+## Decision 416 (코디 10-29): what the brakes bring is fought in the stand's first minutes,
+## and that noise brings the first horde no sooner than the window's end.
+func test_noise_in_the_arrival_window_brings_no_horde_before_it_ends() -> void:
+	var game = _game()
+	assert_almost_eq(game.director.quiet_until, ArrivalHorde.WINDOW_S, 0.001)
+	game.director.add_noise(1000, 10.0)
+	assert_almost_eq(game.director.next_arrival, ArrivalHorde.WINDOW_S, 0.001, "pulled no further than the window's end")
+	var late = _game()
+	late.director.add_noise(1000, ArrivalHorde.WINDOW_S + 10.0)
+	assert_almost_eq(late.director.next_arrival, ArrivalHorde.WINDOW_S + 10.0, 0.001, "after it: down to now, as before")
+	var off = _game({"arrival_horde": false})
+	off.director.add_noise(1000, 10.0)
+	assert_almost_eq(off.director.next_arrival, 10.0, 0.001, "no brakes heard: as before")
+
+
 func test_it_pulls_no_horde_earlier_and_tells_nobody_where_the_squad_is() -> void:
 	var game = _game()
 	assert_eq(game.director.next_arrival, HordeDirector.FIRST_INTERVAL)

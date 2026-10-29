@@ -65,6 +65,10 @@ func brake() -> void:
 		return
 	done = true
 	spot = FieldGrid.center(game.data["anchors"]["whistle"])
+	# Decision 416: the brakes call the dead but bring no horde sooner (the first interval
+	# counts them), and the fight they bring is theirs too, so no noise in the window
+	# brings the first horde before it ends; after it noise pulls as before.
+	game.director.quiet_until = maxf(game.director.quiet_until, game.clock.elapsed + ArrivalHorde.WINDOW_S)
 	game.make_sound(spot, ArrivalHorde.LEVEL, "train_brake")
 	# Everyone the brakes called comes, however far: a sewer by the engine rings them through the map.
 	for z in game.zombies.list:
