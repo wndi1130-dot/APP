@@ -45,7 +45,7 @@ sulehuf의 가구 수납은 cell만 있어 rect 표본이 없다. 침대는 긴 
 `pick(row, cell)`은 tint 번호의 양의 나머지 → building 번호 해시 → 둘 다 없을 때 cell 해시 순서다. 해시는 PCG로 섞은 뒤 판을 고른다(`roll`). 같은 건물은 같은 판을 고른다.
 `dress()`가 색을 `srgb_to_linear()`로 바꿔 재질 값 tint_sets_body·tint_sets_trim에 넣고, 판 번호 + 1은 MultiMesh 사용자 자료로 간다. a는 각각의 세기다.
 정점 알파 ≥0.75는 몸체, 0.25≤알파<0.75는 테두리, 나머지는 보존한다. use_vertex_color일 때만 적용한다.
-칠 RGB에 바탕색의 선형 밝기 / 모형 몸체·테두리 평균 밝기(tint_ref, paint_ref) 비(0~1.6)를 곱해 결의 명암만 남기고, 칠이 남긴 바탕도 판 밝기로 맞춘다. 판 번호가 없으면 기존 경로가 그대로다.
+칠 밝기는 판 밝기 × (모형 몸체·테두리 평균 밝기 tint_ref / 0.18)^0.25이고 테두리는 몸체의 0.5~1배다(paint_ref, TINT_KEEP). 결은 바탕 밝기 / 평균 비(0~1.6)로 남고, 칠이 남긴 바탕도 같은 밝기로 맞춘다. 판 번호가 없으면 기존 경로가 그대로다.
 지도·room_*.gd·map_view.gd·prop_fit.gd·prop_models.gd 연결은 이 작업 범위 밖이다. 이 체크아웃의 room_furnish에는 TINT_SETS가 없다.
 
 ## 몸체 색 누르기
