@@ -170,6 +170,35 @@ func refresh_paths() -> void:
 	revision += 1
 
 
+## Whether every cell's walk caches are up to date (refresh_paths ran).
+func paths_ready() -> bool:
+	return _walk_ready
+
+
+## The path grids from walk caches already right for every cell (a grid grown from one
+## whose caches were, map_shift.gd): each grid filled one way in a call and only the cells
+## the other way set, the deep snow's weight likewise. The same end as refresh_paths,
+## without every cell's checks again.
+func adopt_paths() -> void:
+	for pair: Array in [[people_path, walk_people], [dead_path, walk_dead]]:
+		var path: AStarGrid2D = pair[0]
+		var walk: PackedByteArray = pair[1]
+		var open: bool = walk.count(1) * 2 >= walk.size()
+		path.fill_solid_region(path.region, not open)
+		var other: int = 0 if open else 1
+		var i: int = walk.find(other)
+		while i >= 0:
+			path.set_point_solid(Vector2i(i % width, i / width), open)
+			i = walk.find(other, i + 1)
+	people_path.fill_weight_scale_region(people_path.region, 1.0)
+	var deep: int = floor.find(Floor.DEEP_SNOW)
+	while deep >= 0:
+		people_path.set_point_weight_scale(Vector2i(deep % width, deep / width), 1.6)
+		deep = floor.find(Floor.DEEP_SNOW, deep + 1)
+	_walk_ready = true
+	revision += 1
+
+
 func _cache_cell(c: Vector2i) -> void:
 	var i := index(c)
 	opq[i] = 1 if _opaque_now(c) else 0

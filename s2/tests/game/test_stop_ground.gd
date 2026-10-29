@@ -488,3 +488,27 @@ func test_both_directions_move_only_train_attachments_and_extend_open_rows() -> 
 		assert_eq(was["train"], train)
 		assert_eq(was["grid"].solid, old_solid)
 		assert_eq(was["grid"].floor, old_floor)
+
+
+## Every cell's walk caches and both path grids' points (solid, weight), to compare.
+static func _paths_of(g: FieldGrid) -> Array:
+	var points := PackedFloat32Array()
+	for y in range(g.height):
+		for x in range(g.width):
+			var c := Vector2i(x, y)
+			points.append(1.0 if g.people_path.is_point_solid(c) else 0.0)
+			points.append(1.0 if g.dead_path.is_point_solid(c) else 0.0)
+			points.append(g.people_path.get_point_weight_scale(c))
+	return [g.opq.duplicate(), g.walk_people.duplicate(), g.walk_dead.duplicate(), points]
+
+
+## An edge stop refreshes only the cells it changed (the footprints and the trees) on paths
+## carried over from the town: every floor ends as a full refresh would leave it.
+func test_edge_paths_are_a_full_refresh_on_every_floor() -> void:
+	for place: String in PLACES + ["first_leg_01_sulechow"]:
+		var now: Dictionary = StopGround.apply(_map(place), "edge", 71, 200.0)
+		for lv in now["levels"]:
+			var g: FieldGrid = now["levels"][lv]
+			var kept := _paths_of(g)
+			g.refresh_paths()
+			assert_eq(kept, _paths_of(g), "%s level %d" % [place, lv])

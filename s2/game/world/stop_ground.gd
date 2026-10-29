@@ -101,8 +101,10 @@ static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionar
 	var was_anchors: Dictionary = data.get("anchors", {})
 	for key: String in was_anchors:
 		own[key] = not was_worked.has(key) or was_anchors[key] != was_worked[key]
-	# grow refreshes the other floors; the ground is refreshed once, after the train moves.
-	var out: Dictionary = MapShift.grow(data, left, 0, length - left, 0, false)
+	# A finished map's paths are right: grow carries every floor's over (map_shift.gd), and
+	# after the train moves only the cells whose solid changed are refreshed (_move_train,
+	# _add_trees).
+	var out: Dictionary = MapShift.grow(data, left, 0, length - left, 0, true, true)
 	# Its size is a Vector2i too: grow can shift a stale cache key into a match.
 	out.erase("_edge_plan")
 	var g: FieldGrid = out["grid"]
@@ -113,7 +115,11 @@ static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionar
 	var moved_out: Dictionary = _move_entries_out(out, old_border, new_border)
 	_move_train(out, Vector2i(dx, 0))
 	_add_trees(out, added, rng)
-	g.refresh_paths()
+	# The old and new footprints and the trees: none is deep snow before or after, so the
+	# weights stand.
+	var was_at: Rect2i = Rect2i((data["train"] as Rect2i).position + Vector2i(left, 0), (data["train"] as Rect2i).size)
+	for c: Vector2i in _cells(was_at) + _cells(out["train"]) + out["trees"]:
+		g.refresh_cell(c)
 	out["boarding"] = [out["platform"]] + FieldMaps.side_strips(out, out["platform"])
 	out["unloading"] = [out["unload"]] + FieldMaps.side_strips(out, out["unload"])
 	var anchors: Dictionary = out.get("anchors", {})
@@ -135,6 +141,15 @@ static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionar
 	elif worked.has("flee_exit"):
 		anchors["flee_exit"] = worked["flee_exit"]
 	out["anchors"] = anchors
+	return out
+
+
+## Every cell of `r`, in the grid's own order.
+static func _cells(r: Rect2i) -> Array:
+	var out: Array = []
+	for y: int in range(r.position.y, r.end.y):
+		for x: int in range(r.position.x, r.end.x):
+			out.append(Vector2i(x, y))
 	return out
 
 
