@@ -1,5 +1,5 @@
 extends "res://addons/gut/test.gd"
-## The brakes are a sound the dead hear (decision 416, gap audit J04): those
+## The brakes are a sound the dead hear (decision 494): those
 ## within its reach come to the train in the first minutes and the train
 ## holds them; it pulls no horde earlier, and skipping the scene of the train
 ## rolling in changes nothing.
@@ -29,19 +29,195 @@ func _run(game, seconds: float, step: float = 0.1) -> void:
 		t += step
 
 
-func test_the_dead_within_its_reach_turn_for_the_train_and_the_rest_do_not() -> void:
+func test_nearby_dead_come_and_all_arrivals_are_inside_far_reach() -> void:
 	var game = _game()
 	var g = game.train_guard
 	assert_true(g.done)
 	var reach: float = ArrivalHorde.reach(game.weather.sound_mult(false))
+	var far: float = ArrivalHorde.far_reach(game.weather.sound_mult(false))
 	assert_gt(g.heard, 0, "the first leg's yard has dead by its engine")
 	for z in game.zombies.list:
 		var d: float = (z["pos"] as Vector3).distance_to(g.spot)
 		if z.get("arrival", false):
-			assert_lte(d, reach + 0.01)
+			assert_lt(d, far)
 			assert_eq(z["state"], "investigate")
 		elif z["state"] == "wander" and game.level_of(z["pos"]) == 0:
 			assert_gt(d, reach, "one within reach on the ground that did not hear it")
+
+
+func _brake_game(form: String = "remote"):
+	var game = _game({"place": "bare_line_01", "arrival_horde": false, "arrive": false, "weather": ["clear"], "stop_form": form})
+	game.zombies.list.clear()
+	game.zombies.next_id = 1
+	game.pending_spawn.clear()
+	game.weather.wind = 0.0
+	return game
+
+
+func _dead_at(game, d: float, state: String = "wander", level: int = 0) -> Dictionary:
+	var spot := FieldGrid.center(game.data["anchors"]["whistle"])
+	var z: Dictionary = game.zombies.spawn("frozen" if state == "frozen" else "dead", spot + Vector3(d, game.level_y(level), 0.0))
+	z["state"] = state
+	return z
+
+
+func test_chance_fades_linearly_and_weather_scales_both_ends() -> void:
+	assert_eq(ArrivalHorde.reach(), 35.0)
+	assert_eq(ArrivalHorde.far_reach(), 250.0)
+	for mult in [0.5, 1.0, 1.5]:
+		assert_eq(ArrivalHorde.chance(35.0 * mult, mult), 1.0)
+		assert_almost_eq(ArrivalHorde.chance(142.5 * mult, mult), 0.5, 0.0001)
+		assert_eq(ArrivalHorde.chance(250.0 * mult, mult), 0.0)
+		assert_eq(ArrivalHorde.chance(251.0 * mult, mult), 0.0)
+	for id in range(1, 101):
+		assert_true(ArrivalHorde.attracted(35.0, 7, id))
+		assert_false(ArrivalHorde.attracted(250.0, 7, id))
+
+
+func test_nearby_dead_ignore_the_cap_and_the_far_boundary_calls_none() -> void:
+	var game = _brake_game()
+	var most := ArrivalHorde.cap(game.journey_progress)
+	var nearby: Array = []
+	for i in range(most + 2):
+		nearby.append(_dead_at(game, 10.0 + i))
+	var blocked := _dead_at(game, 50.0)
+	var edge := _dead_at(game, ArrivalHorde.FAR_M)
+	var outside := _dead_at(game, ArrivalHorde.FAR_M + 1.0, "investigate")
+	outside["target"] = FieldGrid.center(game.data["anchors"]["whistle"])
+	var before := [blocked.duplicate(true), edge.duplicate(true), outside.duplicate(true)]
+	var frozen := _dead_at(game, 10.0, "frozen")
+	game.train_guard.brake()
+	for z: Dictionary in nearby:
+		assert_true(z.get("arrival", false))
+		assert_eq(z["state"], "investigate")
+	assert_eq(game.train_guard.heard, most + 2)
+	assert_eq([blocked, edge, outside], before)
+	assert_eq(frozen["state"], "waking", "nearby frozen dead still wake")
+	assert_eq(game.train_guard.filled, 0)
+	assert_eq(game.train_guard.fill_due.size(), 0)
+
+
+func test_the_cap_grows_along_the_journey_from_eight_to_thirty() -> void:
+	assert_eq(ArrivalHorde.cap(0.0), 8, "the first stop: as many as before")
+	assert_eq(ArrivalHorde.cap(0.5), 19)
+	assert_eq(ArrivalHorde.cap(1.0), 30, "the journey's end")
+	assert_eq(ArrivalHorde.cap(2.0), 30, "never over thirty")
+	var game = _game({"place": "bare_line_01", "arrival_horde": false, "arrive": false, "act": "act2", "act_progress": 0.5})
+	assert_almost_eq(game.journey_progress, 0.625, 0.0001, "two acts done and half the third of four")
+	assert_eq(ArrivalHorde.cap(game.journey_progress), 22)
+
+
+func test_far_boundary_is_silent_with_room_under_the_cap() -> void:
+	var game = _brake_game()
+	_dead_at(game, ArrivalHorde.FAR_M)
+	_dead_at(game, ArrivalHorde.FAR_M + 1.0)
+	var before: Array = game.zombies.list.duplicate(true)
+	game.train_guard.brake()
+	assert_eq(game.train_guard.heard, 0)
+	assert_eq(game.zombies.list, before)
+
+
+func test_far_calls_repeat_by_seed_and_id_and_leave_misses_unchanged() -> void:
+	var a = _brake_game()
+	var b = _brake_game()
+	for i in range(80):
+		_dead_at(a, 142.5)
+		_dead_at(b, 142.5)
+	var before: Array = a.zombies.list.duplicate(true)
+	b.zombies.list.reverse()
+	for i in range(17):
+		b.rng.randf()
+	a.train_guard.brake()
+	b.train_guard.brake()
+	assert_gt(a.train_guard.heard, 0)
+	assert_lte(a.train_guard.heard, ArrivalHorde.cap(a.journey_progress))
+	assert_eq(a.train_guard.heard, b.train_guard.heard)
+	assert_eq(a.ledger.history.size(), 1)
+	assert_eq(a.ledger.by_action["train_brake"]["reactions"], 0, "far calls stay out of the sound ledger")
+	assert_eq(a.ledger.by_action["train_brake"]["max_radius"], ArrivalHorde.reach())
+	for i in range(a.zombies.list.size()):
+		var z: Dictionary = a.zombies.list[i]
+		var other: Dictionary = b.zombies.find(int(z["id"]))
+		assert_eq(z.get("arrival", false), other.get("arrival", false))
+		assert_eq(z["target"], other["target"])
+		if not z.get("arrival", false):
+			assert_eq(z, before[i], "a missed roll or a full cap changes nothing")
+
+
+## Choose successful rolls so this test isolates distance and id ordering.
+func _willing(game, d: float, first_id: int) -> Dictionary:
+	var z := _dead_at(game, d)
+	var id := first_id
+	while not ArrivalHorde.attracted(d, game.rng.seed, id):
+		id += 1
+	z["id"] = id
+	return z
+
+
+func test_far_cap_takes_nearer_dead_then_lower_ids() -> void:
+	var game = _brake_game()
+	var most := ArrivalHorde.cap(game.journey_progress)
+	for i in range(most - 2):
+		_dead_at(game, 10.0)
+	var farther := _willing(game, 90.0, 100)
+	var first := _willing(game, 50.0, int(farther["id"]) + 1)
+	var second := _willing(game, 50.0, int(first["id"]) + 1)
+	var third := _willing(game, 50.0, int(second["id"]) + 1)
+	game.zombies.list.reverse()
+	game.train_guard.brake()
+	assert_eq(game.train_guard.heard, most)
+	assert_true(first.get("arrival", false))
+	assert_true(second.get("arrival", false))
+	assert_false(third.get("arrival", false))
+	assert_false(farther.get("arrival", false))
+
+
+func test_far_hearing_keeps_ignored_states_frozen_bodies_and_other_floors() -> void:
+	var game = _brake_game()
+	for state in ["dead", "rising", "downed", "grab", "attack", "climb", "tell", "waking", "chase", "frozen"]:
+		_dead_at(game, 50.0, state)
+	_dead_at(game, 100.0, "wander", 2)
+	var loud := _dead_at(game, 50.0, "investigate")
+	loud["clue"] = SimNoise.Level.VERY_LOUD
+	loud["target"] = loud["pos"] + Vector3(10.0, 0.0, 0.0)
+	var missed := _dead_at(game, 142.5)
+	while ArrivalHorde.attracted(142.5, game.rng.seed, int(missed["id"])):
+		missed["id"] += 1
+	var before: Array = game.zombies.list.duplicate(true)
+	game.train_guard.brake()
+	assert_eq(game.zombies.list, before)
+	assert_eq(game.train_guard.heard, 0)
+
+
+func test_far_hearing_uses_the_floor_gate_of_hear_and_no_wind_as_the_near_brake() -> void:
+	var game = _brake_game()
+	var spot := FieldGrid.center(game.data["anchors"]["whistle"])
+	var z := _dead_at(game, 180.0, "wander", 1)
+	var d: float = spot.distance_to(z["pos"])
+	while not ArrivalHorde.attracted(d, game.rng.seed, int(z["id"])):
+		z["id"] += 1
+	assert_false(game.zombies.can_hear(z, spot, ArrivalHorde.FAR_M), "a floor between halves the far reach")
+	game.weather.wind = 1.0
+	game.weather.wind_dir = Vector2(1.0, 0.0)
+	var before := z.duplicate(true)
+	game.train_guard.brake()
+	assert_false(z.get("arrival", false), "the wind carries the brakes no farther, as for the near ones")
+	assert_eq(z, before)
+
+
+func test_remote_fills_none_and_edge_fills_half_rounded_down() -> void:
+	for kind in ["houses", "mine", "unknown"]:
+		var least := int(ArrivalHorde.band(kind)[0])
+		var half := floori(float(least) * 0.5)
+		assert_eq(ArrivalHorde.fill(0, kind, "remote"), 0)
+		assert_eq(ArrivalHorde.auto_bodies(kind, "remote").size(), 0)
+		assert_eq(ArrivalHorde.fill(0, kind, "edge"), half)
+		assert_eq(ArrivalHorde.fill(1, kind, "edge"), maxi(half - 1, 0))
+		assert_eq(ArrivalHorde.auto_bodies(kind, "edge").size(), half)
+		assert_eq(ArrivalHorde.fill(0, kind), least)
+	var edge = _brake_game("edge")
+	edge.train_guard.brake()
+	assert_eq(edge.train_guard.filled, floori(float(ArrivalHorde.band(String(edge.data["place_kind"]))[0]) * 0.5))
 
 
 func test_it_pulls_no_horde_earlier_and_tells_nobody_where_the_squad_is() -> void:

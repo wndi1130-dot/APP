@@ -1,6 +1,6 @@
 extends RefCounted
 ## The brakes as a sound of the field and the train holding what they bring
-## (decision 416; the rules in sim/arrival_horde.gd and sim/train_guard.gd).
+## (decision 494; the rules in sim/arrival_horde.gd and sim/train_guard.gd).
 ##
 ## The sound is made once, as the stop's clock starts (field_game _ready),
 ## whether the train is seen rolling in or not: the scene only shows it, so a
@@ -65,15 +65,50 @@ func brake() -> void:
 		return
 	done = true
 	spot = FieldGrid.center(game.data["anchors"]["whistle"])
+	var sound_mult: float = game.weather.sound_mult(false)
+	var near := ArrivalHorde.reach(sound_mult)
 	game.make_sound(spot, ArrivalHorde.LEVEL, "train_brake")
 	for z in game.zombies.list:
-		if z["state"] == "investigate" and (z["target"] as Vector3).distance_to(spot) < 0.01:
-			z["arrival"] = true
-			z["target"] = place_for(int(z["id"]))
-			heard += 1
-	filled = ArrivalHorde.fill(heard, String(game.data["place_kind"]))
+		if (z["pos"] as Vector3).distance_to(spot) <= near and z["state"] == "investigate" and (z["target"] as Vector3).distance_to(spot) < 0.01:
+			_arrive(z)
+	_call_far(sound_mult)
+	filled = ArrivalHorde.fill(heard, String(game.data["place_kind"]), game.stop_form)
 	for i in range(filled):
 		fill_due.append({"t": ArrivalHorde.FILL_GAP_S * float(i), "i": i})
+
+
+## The fading pull past the near reach (decision 494): nearest first while the most allows, each by its own
+## roll; the same hearing as the near ones (no wind, as make_sound), and only one that comes is changed.
+func _call_far(sound_mult: float) -> void:
+	var most := ArrivalHorde.cap(game.journey_progress)
+	if most >= 0 and heard >= most:
+		return
+	var near := ArrivalHorde.reach(sound_mult)
+	var far := ArrivalHorde.far_reach(sound_mult)
+	var candidates: Array = []
+	for z: Dictionary in game.zombies.list:
+		var d: float = (z["pos"] as Vector3).distance_to(spot)
+		if d <= near or d >= far or z["state"] == "frozen":
+			continue
+		if game.zombies.can_hear(z, spot, far):
+			candidates.append({"z": z, "d": d})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if float(a["d"]) == float(b["d"]):
+			return int(a["z"]["id"]) < int(b["z"]["id"])
+		return float(a["d"]) < float(b["d"]))
+	for row: Dictionary in candidates:
+		if most >= 0 and heard >= most:
+			break
+		var z: Dictionary = row["z"]
+		if ArrivalHorde.attracted(float(row["d"]), game.rng.seed, int(z["id"]), sound_mult):
+			if game.zombies.hear_one(z, spot, ArrivalHorde.LEVEL):
+				_arrive(z)
+
+
+func _arrive(z: Dictionary) -> void:
+	z["arrival"] = true
+	z["target"] = place_for(int(z["id"]))
+	heard += 1
 
 
 ## A stop come back to mid-play: the brakes were heard before it was left.

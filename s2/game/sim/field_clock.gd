@@ -20,6 +20,8 @@ const ARRIVALS: Array = [[0.40, 540, 590], [0.35, 600, 750], [0.20, 780, 860], [
 var speed: float = 1.0
 ## Field seconds since arrival (speed already applied).
 var elapsed: float = 0.0
+var safe_sec: float = SAFE_SEC
+var limit_sec: float = LIMIT_SEC
 ## This stop's arrival in game minutes (a stop's opts "arrive_min"; else 10:30).
 var arrive_min: float = float(ARRIVE_MIN)
 
@@ -71,11 +73,11 @@ func sun_fraction() -> float:
 
 
 func past_safe() -> bool:
-	return elapsed >= SAFE_SEC
+	return elapsed >= safe_sec
 
 
 func past_limit() -> bool:
-	return elapsed >= LIMIT_SEC
+	return elapsed >= limit_sec
 
 
 func stay_game_minutes() -> int:
