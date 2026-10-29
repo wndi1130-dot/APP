@@ -25,6 +25,14 @@ const TAKE_PER_WEIGHT := 0.6
 const TAKE_MOST := 2.0
 
 
+## Whether the dead hear the rummage (card R3 가, decision 469): only a big box's, one
+## that takes the big three seconds to look into — its first sound and one every
+## SEARCH_NOISE_EVERY after. Smaller furniture and what stands open are opened and
+## shut with a sound for the ear alone (field_audio.gd box_sound).
+static func rummage_heard(c: Dictionary) -> bool:
+	return box_seconds(c) >= float(SIZE_SECONDS[Carry.BOX_BIG])
+
+
 static func seconds(base: float, skill: int) -> float:
 	return maxf(base, 0.0) / (1.0 + SKILL_STEP * maxi(skill, 0))
 
