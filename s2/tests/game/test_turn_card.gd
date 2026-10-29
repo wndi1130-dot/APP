@@ -243,12 +243,69 @@ func test_a_folded_card_leaves_its_edge_and_opens_from_it() -> void:
 	open.pressed.emit()
 	assert_false(c.folded)
 	assert_true(c.sheet.inner.visible)
-	assert_eq(got.size(), 0, "a press on the edge answers nothing")
+	assert_true(open.visible, "till it has lain open the paper is still the open key")
+	open.pressed.emit()
+	assert_eq(got.size(), 0, "a press on the edge answers nothing, nor a second tap of it")
 	assert_eq(folds, [true, false])
+	await get_tree().create_timer(TurnCard.FOLD_S + TurnCard.OPEN_GUARD + 0.1).timeout
+	assert_false(open.visible, "lain open, the ways take their presses")
 	c.set_folded(true)
 	c.show_card(g, _data["tables"])
 	assert_false(c.folded, "a new card comes open")
 	assert_almost_eq(c.sheet.position.x, TurnCard.SHEET_AT.x * UiFonts.K, 0.5)
+
+
+## A real tap on the folded edge reaches the open key, not the way under it; a
+## heavy way armed before the fold comes back unarmed; a paper cut wider while
+## folded stays bare on its edge.
+func test_the_folded_edge_takes_a_real_tap_and_keeps_nothing_armed() -> void:
+	if _data.is_empty(): return
+	var c := _card(_case("bitten/card-0/6/0/first")[0])
+	await _settled(c)
+	var got: Array = []
+	c.chose.connect(func(next: Dictionary) -> void: got.append(next))
+	_key(c, 3).pressed.emit()
+	assert_not_null(c.find_child("Confirm", true, false), "armed")
+	c.set_folded(true)
+	await _settled(c)
+	await get_tree().create_timer(TurnCard.FOLD_S + 0.1).timeout
+	assert_null(c.find_child("Confirm", true, false), "folding lets the heavy way go")
+	# What a tap on the edge in sight lands on: the topmost control there, picked as the
+	# GUI picks (last child first, rotation and all).
+	for y_share: float in [0.1, 0.45, 0.6, 0.9]:
+		var at := Vector2(TurnCard.TAB * UiFonts.K * 0.5, c.sheet.global_position.y + c.sheet.size.y * y_share)
+		var hit := _top_at(c, at)
+		assert_not_null(hit)
+		if hit != null:
+			assert_eq(String(hit.name), "Open", "a tap on the edge at %.2f lands on the open key" % y_share)
+	(c.sheet.get_node("Open") as Button).pressed.emit()
+	assert_false(c.folded, "a tap on the edge opens it")
+	assert_eq(got.size(), 0, "and answers nothing")
+	var long := _card(_case("ration_cut/card-0/6/first")[0])
+	long.set_folded(true)
+	await _settled(long)
+	assert_gt(long.sheet.size.x / UiFonts.K, 446.0, "cut wider while folded")
+	assert_false(long.sheet.inner.visible, "its edge stays bare")
+	assert_true((long.sheet.get_node("Open") as Control).visible)
+
+
+## The control a press at `at` (view px) goes to under `n`: children drawn later first,
+## only shown ones that take the mouse, each tested in its own (rotated) frame.
+func _top_at(n: Node, at: Vector2) -> Control:
+	for i: int in range(n.get_child_count() - 1, -1, -1):
+		var child := n.get_child(i)
+		if child is CanvasItem and not (child as CanvasItem).visible:
+			continue
+		var hit := _top_at(child, at)
+		if hit != null:
+			return hit
+	if n is Control:
+		var ctl := n as Control
+		if ctl.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+			var local: Vector2 = ctl.get_global_transform().affine_inverse() * at
+			if Rect2(Vector2.ZERO, ctl.size).has_point(local):
+				return ctl
+	return null
 
 
 ## Wait for the card's fit to settle (a few frames).

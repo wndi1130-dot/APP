@@ -63,6 +63,9 @@ const SETTLE: int = 2
 const TAB: float = 60.0
 const FOLD_KEY_H: float = 56.0
 const FOLD_S: float = 0.22
+## Opened again, the paper still takes presses as the open key this much longer (s):
+## a second tap of a double tap opens nothing more, never a way that came under it.
+const OPEN_GUARD: float = 0.15
 ## The black stone (.sayb>s): 13 across, 8 in from the right and 13 down.
 const STONE_AT := Vector2(14.5, 19.5)
 ## Ways that leave someone behind take two presses (k3b_views.js 「무거운 선택지」).
@@ -98,6 +101,7 @@ var _settle: int = 0
 ## Folded off to the left with only TAB of it in sight.
 var folded: bool = false
 var _fold_tween: Tween
+var _opening: bool = false
 
 
 ## What the card says for card `uid0` in state `g0` (tests read this; the card
@@ -185,6 +189,7 @@ func show_card(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> void:
 	uid = uid0
 	_armed = -1
 	folded = false
+	_opening = false
 	if _fold_tween != null:
 		_fold_tween.kill()
 	_w = PaperSheet.SIZE.x if fit_w <= 0.0 else minf(PaperSheet.SIZE.x, fit_w)
@@ -199,13 +204,29 @@ func set_folded(on: bool) -> void:
 	if on == folded:
 		return
 	folded = on
+	_opening = false
+	if on and _armed >= 0:
+		# A heavy way armed before the fold is not left armed under the edge.
+		_armed = -1
+		_fill()
 	if sheet != null:
+		_opening = not on
 		_mark_fold()
 		if _fold_tween != null:
 			_fold_tween.kill()
 		_fold_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		_fold_tween.tween_property(sheet, "position", _lie(), FOLD_S)
+		if _opening:
+			_fold_tween.tween_interval(OPEN_GUARD)
+			_fold_tween.tween_callback(_opened)
 	fold_changed.emit(folded)
+
+
+## Lain open: the ways take their presses again.
+func _opened() -> void:
+	_opening = false
+	if sheet != null:
+		_mark_fold()
 
 
 ## The right edge a folded paper leaves in sight, in the view's px.
@@ -223,7 +244,7 @@ func _lie() -> Vector2:
 
 ## Folded, the edge in sight is bare paper with its mark: no cut-off words on it.
 func _mark_fold() -> void:
-	(sheet.get_node("Open") as Control).visible = folded
+	(sheet.get_node("Open") as Control).visible = folded or _opening
 	(sheet.get_node("Fold") as Control).queue_redraw()
 	(sheet as PaperSheet).inner.visible = not folded
 
@@ -236,6 +257,7 @@ func _sheet() -> void:
 		# A new sheet lies where the fold has it; no slide is left on the old one.
 		if _fold_tween != null:
 			_fold_tween.kill()
+		_opening = false
 		remove_child(sheet)
 		sheet.queue_free()
 	var paper = PaperSheet.new(Vector2(_w, PaperSheet.SIZE.y))
@@ -251,6 +273,7 @@ func _sheet() -> void:
 	paper.inner.add_child(body)
 	paper.add_child(_fold_key(paper))
 	paper.add_child(_open_key())
+	_mark_fold()
 
 
 ## The fold key in the paper's right margin, level with the title: 「‹」 open, 「›」 folded.
