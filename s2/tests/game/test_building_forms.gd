@@ -17,6 +17,8 @@ func test_an_unknown_map_keeps_todays_look() -> void:
 	assert_eq(look["wall_kind"], 0.0)
 	assert_eq(look["paint"], PAINT, "the paint roll building_view gave, roof colour and all")
 	assert_eq(look["roof"], "gable")
+	assert_eq(look["silhouette"], "gable")
+	assert_eq(look["dormers"], 0)
 	assert_eq(look["pitch"], 1.0)
 	assert_true(look["chimney"], "a house has its chimney anywhere")
 
@@ -84,3 +86,92 @@ func test_the_head_word_names_the_use() -> void:
 	assert_eq(use.call("양치기 집"), "home")
 	assert_eq(use.call("갱구 관리동"), "headframe")
 	assert_eq(Uses.use_of({"name": "농가", "role": "store"}), "home", "role store is read by name")
+
+
+func test_silhouette_candidates_follow_use_region_and_size() -> void:
+	# 이름, 지도, 바닥 크기, 층, 후보(순서도 이웃 조정 계약).
+	var cases: Array = [
+		["살림집", "houses_01", Vector2i(8, 6), 1, ["gable", "hip", "half_hip"]],
+		["살림집", "houses_01", Vector2i(10, 8), 2, ["gable", "hip", "half_hip", "mansard"]],
+		["살림집", "houses_01", Vector2i(8, 6), 2, ["gable", "hip", "half_hip"]],
+		["살림집", "factory_01", Vector2i(8, 6), 1, ["gable", "half_hip"]],
+		["살림집", "lodge_01", Vector2i(8, 6), 1, ["gable", "half_hip"]],
+		["산장 본채", "lodge_01", Vector2i(12, 8), 2, ["gable", "half_hip"]],
+		["호숫가 집", "lake_01", Vector2i(8, 6), 1, ["gable", "hip"]],
+		["살림집", "bare_line_01", Vector2i(8, 6), 1, ["gable", "shed"]],
+		["살림집", "mine_01", Vector2i(8, 6), 1, ["gable"]],
+		["마을 회관", "houses_01", Vector2i(12, 8), 1, ["hip", "mansard"]],
+		["시청 본관", "office_01", Vector2i(12, 8), 2, ["hip", "mansard"]],
+		["교회 본당", "church_01", Vector2i(12, 8), 1, ["gable"]],
+		["내과동", "hospital_01", Vector2i(12, 8), 1, ["flat"]],
+		["헛간", "houses_01", Vector2i(12, 8), 1, ["mansard"]],
+		["공구 창고", "factory_01", Vector2i(6, 5), 1, ["shed"]],
+		["공구 창고", "factory_01", Vector2i(6, 6), 1, ["gable"]],
+		["차고", "factory_01", Vector2i(6, 5), 1, ["shed"]],
+		["차고", "factory_01", Vector2i(12, 8), 1, ["gable"]],
+		["우물 정자", "houses_01", Vector2i(6, 5), 1, ["shed"]],
+		["조립 공장", "factory_01", Vector2i(12, 8), 1, ["gable"]],
+		["조립 공장", "factory_01", Vector2i(16, 10), 1, ["flat"]],
+	]
+	for sample: Array in cases:
+		var seen: Dictionary = {}
+		for b: int in range(192):
+			var look: Dictionary = BuildingForms.pick(_row(sample[0], sample[2], b), sample[1], PAINT, int(sample[3]))
+			assert_eq(look["candidates"], sample[4], "%s %s" % [sample[0], sample[1]])
+			assert_true(look["silhouette"] in sample[4])
+			assert_eq(look["roof"], "flat" if sample[4] == ["flat"] else "gable", "기존 roof 계약")
+			seen[look["silhouette"]] = true
+		assert_eq(seen.size(), (sample[4] as Array).size(), "번호 해시가 모든 후보에 닿는다")
+	var shed: Dictionary = {"id": 3, "role": "shed", "name": "바깥 창고", "rect": Rect2i(0, 0, 6, 5)}
+	assert_eq(BuildingForms.pick(shed, "houses_01", PAINT)["silhouette"], "shed")
+
+
+func test_two_candidate_regions_mix_every_eight_consecutive_ids() -> void:
+	for place: String in ["factory_01", "lodge_01", "lake_01", "bare_line_01"]:
+		for first: int in range(64):
+			var seen: Dictionary = {}
+			for b: int in range(first, first + 8):
+				var look: Dictionary = BuildingForms.pick(_row("살림집", Vector2i(8, 6), b), place, PAINT)
+				assert_eq((look["candidates"] as Array).size(), 2)
+				seen[look["silhouette"]] = true
+			assert_eq(seen.size(), 2, "%s 번호 %d부터 여덟 채에 두 꼴 모두" % [place, first])
+
+
+func test_home_pitch_is_a_stable_roll_on_the_existing_table() -> void:
+	for sample: Array in [["houses_01", 1.0], ["factory_01", 1.0], ["lodge_01", 1.7], ["bare_line_01", 0.75]]:
+		var seen: Dictionary = {}
+		for b: int in range(128):
+			var row: Dictionary = _row("살림집", Vector2i(8, 6), b)
+			var look: Dictionary = BuildingForms.pick(row, sample[0], PAINT)
+			var ratio: float = float(look["pitch"]) / float(sample[1])
+			var matched: bool = false
+			for factor: float in BuildingForms.HOME_PITCHES:
+				matched = matched or is_equal_approx(ratio, factor)
+			assert_true(matched)
+			seen[snappedf(ratio, 0.01)] = true
+			assert_eq(look, BuildingForms.pick(row, sample[0], PAINT))
+		assert_eq(seen.size(), 4)
+
+
+func test_dormer_rolls_obey_use_shape_length_and_upper_floor_bias() -> void:
+	var one_total: int = 0
+	var two_total: int = 0
+	for b: int in range(192):
+		var row: Dictionary = _row("살림집", Vector2i(8, 8), b)
+		var one: Dictionary = BuildingForms.pick(row, "houses_01", PAINT, 1)
+		var two: Dictionary = BuildingForms.pick(row, "houses_01", PAINT, 2)
+		for look: Dictionary in [one, two]:
+			assert_between(int(look["dormers"]), 0, 3)
+			if String(look["silhouette"]) not in BuildingForms.DORMER_ROOFS:
+				assert_eq(look["dormers"], 0)
+		one_total += int(one["dormers"])
+		two_total += int(two["dormers"])
+		assert_eq(BuildingForms.pick(_row("살림집", Vector2i(7, 7), b), "houses_01", PAINT, 2)["dormers"], 0)
+		assert_eq(BuildingForms.pick(_row("헛간", Vector2i(12, 8), b), "houses_01", PAINT)["dormers"], 0)
+		for map_id: String in ["", "test_map"]:
+			var legacy: Dictionary = BuildingForms.pick(row, map_id, PAINT, 2)
+			assert_eq(legacy["silhouette"], "gable")
+			assert_eq(legacy["dormers"], 0)
+			assert_eq(legacy["pitch"], 1.0)
+	assert_gt(one_total, 0)
+	assert_gt(two_total, one_total, "위층 있는 집에 지붕창을 더 자주")

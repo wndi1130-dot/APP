@@ -402,6 +402,15 @@ void fragment() {
 			base = roof * (0.84 + 0.28 * fx_hash(floor(tc))) * (1.0 - 0.4 * seam(tc, vec2(0.05, 0.16)));
 		}
 		porous = 0.5;
+	} else if (zone == 7) {
+		// 지붕 덮개(building_kit cap: 모임 모서리·맨사드·지붕창 용마루): 그 집 지붕 색을 조금 어둡게.
+		// 함석 색이면 모임 지붕 네 모서리가 짙은 선으로 읽혔다(코디 10-29).
+		vec3 roof = ROOFS[clamp(int(paint.a + 0.5), 0, 7)];
+		roof = mix(roof / 12.92, pow((roof + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), roof));
+		base = roof * 0.72 * (0.9 + 0.15 * big);
+		lively = house_colour * 0.75;
+		rough = 0.8;
+		porous = 0.5;
 	} else {
 		base = metal_color * (0.8 + 0.3 * big);
 		rough = 0.5;
