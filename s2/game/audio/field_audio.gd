@@ -227,7 +227,8 @@ const BLOW_DULL_PITCH: float = 0.92   # a dull weapon, lower (and through the du
 const BLOW_DOWN_PITCH: float = 0.94   # one that is down, lower
 const BLOW_SAME_M: float = 2.0        # hit_* this near a blow in the same frame is that blow
 ## Melee blows ("melee", "fight") are not here: hit_feel.gd voices them by
-## the weapon (a miss, the swing alone), where any of these files would do.
+## the weapon (a miss: the swing and a short breath of air, blow_miss, no
+## hit_*), where any of these files would do.
 const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fall", "impact", "ladder", "bell", "train_guard"]
 
 static var last_bed: String = ""       # the bed the last stop had: the next takes another
