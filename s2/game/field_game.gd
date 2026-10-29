@@ -10,6 +10,7 @@ signal built
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
+const StopForm = preload("res://game/world/stop_form.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const WoodsShade = preload("res://fx/woods_shade.gd")
@@ -457,6 +458,11 @@ func _ready() -> void:
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+	var form: String = String(opts.get("stop_form", ""))
+	if not form.is_empty() and form != String(stop_map.get("stop_form", "")):
+		for key: String in AHEAD_KEYS:
+			stop_map.erase(key)
+		stop_map = StopForm.apply(stop_map, form, rng.seed, float(opts.get("stop_form_m", -1.0)))
 	_take_map(with_side_path(stop_map, rng.seed))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
