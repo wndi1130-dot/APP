@@ -4,6 +4,7 @@ extends GutTest
 const DecorGrid = preload("res://game/train/decor_grid.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
 const Rules = preload("res://game/train/train_rules.gd")
+const Scene = preload("res://game/train/train_scene.gd")
 const DRESSED: Array[String] = ["tail1", "tail2", "tail3", "medtech", "guard", "front", "captain", "dining"]
 
 
@@ -24,7 +25,9 @@ func test_the_table_is_what_the_layouts_say() -> void:
 		assert_false(kept.is_empty(), id + " is in the table")
 		if kept.is_empty():
 			continue
-		# The table names the layout the game gives the car.
+		# The table names the layout the game gives the car (a car missing from the rules fails here,
+		# not into the tail cars' default layout).
+		assert_false(_def(id).is_empty(), id + " is a car in the rules")
 		assert_eq(String(kept["layout"]), Catalog.layout_id(_def(id)), id + ": its layout")
 		var got: Dictionary = DecorGrid.cells_of(Catalog.layout(_def(id))["props"], id)
 		var hint := id + ": run tools/decor_cells.py after moving a layout row"
@@ -45,6 +48,30 @@ func test_the_walking_line_and_the_door_ways_stay_clear() -> void:
 			if z0 < DecorGrid.DOOR_Z.y and z0 + DecorGrid.CELL > DecorGrid.DOOR_Z.x:
 				for ix: int in [0, DecorGrid.NX - 1]:
 					assert_ne(String(floor_rows[iz])[ix], ".", "%s: the door's way at (%d, %d)" % [id, ix, iz])
+
+
+## Where the people walk (train_scene.gd AISLE_Z) there is 0.5 m between the things behind the line
+## and the first cell a thing may be put in, in every column but the door's ways. Worked from the rows'
+## boxes, not from the marks (the dining car's bench reaches into the walking row: the row before it walks).
+func test_the_walking_line_keeps_half_a_metre_clear() -> void:
+	var aisle: float = Scene.AISLE_Z
+	assert_eq(DecorGrid.AISLE_Z, aisle, "the grid walks where the people walk")
+	for id: String in DRESSED:
+		var floor_rows: Array = DecorGrid.of(id)["floor"]
+		var rows := DecorGrid.rows_for(Catalog.layout(_def(id))["props"], id)
+		for ix in range(1, DecorGrid.NX - 1):
+			var x0: float = DecorGrid.X0 + ix * DecorGrid.CELL
+			var behind: float = DecorGrid.Z0 + DecorGrid.WALK_ROW * DecorGrid.CELL
+			for row: Dictionary in rows:
+				var b := DecorGrid.bounds(row)
+				if DecorGrid.on_floor(row) and float(b[3]) < aisle and float(b[0]) < x0 + DecorGrid.CELL and float(b[1]) > x0:
+					behind = maxf(behind, float(b[3]))
+			# The first row past the walking row a thing may go in.
+			var open_z: float = DecorGrid.Z0 + DecorGrid.NZ * DecorGrid.CELL
+			for iz in range(DecorGrid.NZ - 1, DecorGrid.WALK_ROW, -1):
+				if String(floor_rows[iz])[ix] == ".":
+					open_z = DecorGrid.Z0 + iz * DecorGrid.CELL
+			assert_gte(open_z - behind, 0.5 - 0.000001, "%s: column %d walks %.2f m" % [id, ix, open_z - behind])
 
 
 func test_a_point_finds_its_floor_cell() -> void:

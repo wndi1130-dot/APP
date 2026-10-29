@@ -56,22 +56,22 @@
     "D.............................D"
    ],
    "back_wall": ".GGG#######GG#####GG#######GGG#",
-   "end_walls": "#...",
+   "end_walls": "....",
    "floor_free": 76,
-   "wall_free": 4
+   "wall_free": 5
   },
   "medtech": {
    "layout": "medical",
    "floor": [
     "##############################.",
     ".####.########SS#############..",
-    "D..........#......###.........D",
+    "D..........#......##..........D",
     "DWWWWWWWWWWWWWWWWWWWWWWWWWWWWWD",
     "D.............................D"
    ],
    "back_wall": "#GGGGG.#.GGGGG...GGGGG...GGGGG#",
    "end_walls": "....",
-   "floor_free": 59,
+   "floor_free": 60,
    "wall_free": 12
   },
   "guard": {
@@ -123,12 +123,12 @@
     ".###########################...",
     "D..#########################..D",
     "DWWW######################WWWWD",
-    "D.............................D"
+    "D...WWWWWWWWWWWWWWWWWWWWWWW...D"
    ],
    "back_wall": ".####G.#.GGGGG.#.GGGGG.#.GGGG##",
-   "end_walls": "..#.",
-   "floor_free": 37,
-   "wall_free": 10
+   "end_walls": "....",
+   "floor_free": 14,
+   "wall_free": 11
   }
  }
 }
