@@ -195,12 +195,17 @@ const OWN_WORK: Dictionary = {
 # across; an axe comes down from overhead, then chops in from the side; the
 # rest swing across, back the other way, then come down from overhead.
 # A blow at a body on the ground is struck down in front of the feet, and a
-# stomp drives the heel into it.
+# stomp drives the heel into it. The way back across lands a third of the way
+# in, where its tip crosses the front (J2 ③: at 0.45 it was 0.9 m off to the side).
 const OWN_BLOWS: Dictionary = {
-	"one": [["p_swing_one", 0.45], ["p_swing_back", 0.45], ["p_swing_axe", 0.45]],
+	"one": [["p_swing_one", 0.45], ["p_swing_back", 0.33], ["p_swing_axe", 0.45]],
 	"axe": [["p_swing_axe", 0.45], ["p_chop_side", 0.16, 0.45]],
 	"stab": [["p_stab", 0.35], ["p_swing_one", 0.45]],
 	"floor": [["p_floor_strike", 0.5]], "stomp": [["p_stomp", 0.5]]}
+# The ways whose tip goes past to one side of where the body faces turn the body
+# that far toward it as they land (radians; J2 ③ measured the stab 30 and the
+# blow from overhead 20 degrees off), so the blow is seen to meet the body it hits.
+const OWN_BLOW_AIM: Dictionary = {"p_stab": 0.53, "p_swing_axe": 0.35}
 # A blow drawn back within this long of the last one ending goes on to the next
 # way; after a longer rest it starts again from the first.
 const CHAIN_GAP: float = 1.0
@@ -778,6 +783,7 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 			note["blow_on"] = false
 			note["blow_drawing"] = false
 			note["blow_end"] = t
+			note.erase("blow_aim")
 			p.remove_meta(Pose.BLOW_WAY)
 		return Vector2(0.0, -1.0)
 	# A new blow is drawn back: on to the next way if it follows on from the last.
@@ -808,6 +814,8 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 	var lands: float = way[1]
 	var ends: float = way[2] if way.size() > 2 else 1.0
 	var r: float = lands + (ends - lands) * float(sw[1]) if sw[2] else lands * float(sw[0])
+	note["blow_aim"] = float(OWN_BLOW_AIM.get(String(way[0]), 0.0))
+	note["blow_r"] = Vector3(r, lands, ends)
 	return Vector2(r, clip)
 
 
@@ -1246,9 +1254,20 @@ static func lean_of(p, note: Dictionary) -> Basis:
 		if thrown != OWN_BITTEN_FRONT and thrown != OWN_BITTEN_BACK:   # those throw it themselves
 			pitch += lean * from.y
 		roll += absf(lean) * HURT_SIDE_ROLL * -from.x
+	var aim := float(note.get("blow_aim", 0.0))
+	if aim != 0.0:
+		turn += aim * blow_aim_k(note.get("blow_r", Vector3(0.0, 1.0, 1.0)))
 	if pitch == 0.0 and roll == 0.0 and turn == 0.0:
 		return Basis()
 	return Basis(Vector3.UP, turn) * Basis(Vector3.RIGHT, pitch) * Basis(Vector3.BACK, roll)
+
+
+## How far in a blow's aim turn is (0..1) at r = (share of the way, where it
+## lands, where the way back stops): in over the draw-back, out after it lands.
+static func blow_aim_k(r: Vector3) -> float:
+	if r.x <= r.y:
+		return smoothstep(0.0, r.y, r.x)
+	return 1.0 - smoothstep(r.y, r.z, r.x)
 
 
 ## An own motion that plays once, from the frame it was started in; `key` is
