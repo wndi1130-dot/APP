@@ -159,3 +159,27 @@ func test_the_dress_is_one_mesh_a_car_where_its_rows_say_seen_up_close() -> void
 	s.set_view_mode("section")
 	s.toggle_zoom()
 	assert_true(guard.visible, "the side view shows them at either zoom")
+
+
+func test_the_lamp_leaves_a_warm_pool_on_the_floor_up_close() -> void:
+	var s: Scene = _scene({"view_mode": "diag"})
+	for c: Dictionary in s.cars:
+		var pool: MeshInstance3D = c.get("lamp_pool")
+		assert_not_null(pool, String(c["id"]) + " has a pool under its lamp")
+		if pool == null:
+			continue
+		var lamp: OmniLight3D = c["lamp"]
+		assert_almost_eq(pool.position.x, lamp.position.x, 0.06, String(c["id"]) + ": under the lamp along the car")
+		assert_almost_eq(pool.position.z, lamp.position.z, 0.001, String(c["id"]) + ": under the lamp across")
+		assert_lt(pool.position.y, 0.05, "on the floor")
+		assert_eq(pool.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		var strength: float = pool.get_instance_shader_parameter("pool_strength")
+		assert_almost_eq(strength, sqrt(lamp.light_energy) * Scene.LAMP_POOL_GAIN, 0.001, "follows the lamp")
+		if lamp.light_energy > 0.0:
+			assert_gt(strength, 0.0, "the day's low lamp still leaves a faint pool")
+	var guard: Dictionary = s.cars.filter(func(c: Dictionary) -> bool: return c["id"] == "guard")[0]
+	assert_false((guard["lamp_pool"] as MeshInstance3D).visible, "the first wide diagonal leaves it out")
+	s.focus_car("guard", false)
+	assert_false((guard["lamp_pool"] as MeshInstance3D).visible, "the wide diagonal leaves it out with the dress")
+	s.focus_car("guard", true)
+	assert_true((guard["lamp_pool"] as MeshInstance3D).visible, "up close it shows")
