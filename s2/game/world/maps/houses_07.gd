@@ -14,10 +14,19 @@ const FIRST_ENTRY: String = "west_bank"
 
 # 모든 자리는 바깥 띠를 더하기 전 칸이다. 강은 바깥 띠(map_ring.gd edge_water)에서도 끝까지 이어진다.
 # 한 칸 집은 방 하나짜리 5×5 집으로 잡았다. 길 길이는 같은 출발·도착 칸의 네 방향 이동 수다.
-# 지도 상자는 houses_06의 연면적 9874칸·151개를 따라 연면적 4581칸에 70개다. 묶음은 houses 01~06이
-# 정차마다 주는 몫(169~270, 평균 216)에 맞춰 집·헛간 상자마다 둘(먹을 것·널빤지), 선창 창고 열둘, 다리 끝 다섯으로 199다.
-# 연립은 집집마다 방 이름표(_unit_hints)로 부엌·침실·욕실 가구를 받아 여닫는 자리가 서고, 동쪽 연립은 지도 상자
-# 없이 그 자리만 더해 상자 하나당 묶음을 houses 01~06의 범위(0.46~0.70)에 가깝게 맞춘다.
+# 지도 상자는 houses_06의 연면적 9874칸·151개를 따라 연면적 4581칸에 70개, 동쪽 연립에 열을 더해 80개다.
+# 묶음은 houses 01~06이 정차마다 주는 몫(169~270, 평균 216)에 맞춰 199다: 집·헛간 상자마다 둘(먹을 것·널빤지),
+# 선창 창고 여덟(WAREHOUSE_BOX), 다리 끝 다섯, 동쪽 연립 스물(창고에서 덜어 온 몫, EAST_ROW_BOXES).
+# 연립은 집집마다 방 이름표(_unit_hints)로 부엌·침실·욕실 가구를 받아 여닫는 자리가 서고, 동쪽 연립은 그 자리를 더해
+# 상자 하나당 묶음을 houses 01~06의 범위(0.46~0.70)에 가깝게 맞춘다. 정차를 차릴 때 물건은 같은 건물 상자끼리만
+# 옮겨 담기므로 연립마다 물건을 두어 통째로 빈 건물이 없게 한다.
+## 선창 창고 상자 하나: 가장 값진 자리라 상자당 물건이 다음 건물의 두 배 넘는다. 처음 열둘에서 상자마다 먹을 것 둘·
+## 고철 하나·널빤지 하나를 동쪽 연립으로 덜었다(코디 판단 442, 10-30: 지도 물건 합 그대로, 연립 넷 모두에 물건).
+const WAREHOUSE_BOX: Array[String] = ["food_pack", "food_pack", "food_pack", "food_pack", "med_box", "med_box", "bandage", "scrap"]
+## 동쪽 연립 지도 상자 열(층마다 4·3·3): 창고에서 덜어 온 먹을 것 열·고철 다섯·널빤지 다섯.
+const EAST_ROW_BOXES: Array = [["food_pack", "scrap"], ["food_pack", "plank"], ["food_pack", "scrap"], ["food_pack", "plank"],
+	["food_pack", "scrap"], ["food_pack", "plank"], ["food_pack", "scrap"], ["food_pack", "plank"], ["food_pack", "scrap"],
+	["food_pack", "plank"]]
 # 다리 소품은 길게 늘어나지 않으므로 난간과 트러스를 나누어 이어 놓는다.
 const PLAN: Dictionary = {
 	"train": [42, 24, 80, 3],
@@ -56,7 +65,7 @@ const PLAN: Dictionary = {
 		{"name": "역사", "rect": [76, 7, 24, 12], "top": 1, "basement": false, "role": "office", "id": 9, "stock": ["desk", "file_cabinet", "shelf"], "door": [88, 18], "boxes_per_floor": 4},
 		{"name": "장작 헛간", "rect": [13, 12, 14, 10], "top": 1, "basement": false, "role": "shed", "id": 10, "stock": ["sack_pile", "shelf"], "door": [20, 21], "boxes_per_floor": 2},
 		{"name": "선로 헛간", "rect": [143, 20, 16, 11], "top": 1, "basement": false, "role": "shed", "id": 11, "stock": ["crate_stack", "shelf"], "door": [150, 30], "boxes_per_floor": 2},
-		{"name": "동쪽 연립", "rect": [146, 95, 24, 15], "top": 3, "basement": false, "role": "home", "id": 12, "row_group": "houses_07:연립", "door": [158, 95], "boxes_per_floor": 0}
+		{"name": "동쪽 연립", "rect": [146, 95, 24, 15], "top": 3, "basement": false, "role": "home", "id": 12, "row_group": "houses_07:연립", "door": [158, 95], "boxes_per_floor": [4, 3, 3]}
 	],
 	"props": [
 		{"kind": "water", "rect": [0, 46, 80, 14], "solid": "low", "facing": 0, "note": "서쪽 깊은 물", "level": 0},
@@ -275,13 +284,21 @@ static func _building_boxes(data: Dictionary, row: Dictionary, lv: int) -> void:
 		Vector2i(r.position.x + 2, r.position.y + int(r.size.y / 2)),
 		Vector2i(r.end.x - 3, r.position.y + int(r.size.y / 2))
 	]
-	for n in range(int(row["boxes_per_floor"])):
+	# 층마다 수가 다르면(동쪽 연립) 줄로 적는다. first는 그 건물에서 이 층 앞까지 놓은 상자 수.
+	var counts: Variant = row["boxes_per_floor"]
+	var first := 0
+	if counts is Array:
+		for k in range(lv):
+			first += int(counts[k])
+	for n in range(int(counts[lv]) if counts is Array else int(counts)):
 		var suffix: String = "창고 상자"
 		if row["role"] == "home" and lv >= 0:
 			suffix = "살림방 상자" if n % 2 == 0 else "부엌 상자"
 		var items: Array = ["food_pack", "plank"]
 		if int(row["id"]) == 8:
-			items = ["food_pack", "food_pack", "food_pack", "food_pack", "food_pack", "food_pack", "med_box", "med_box", "bandage", "scrap", "scrap", "plank"]
+			items = WAREHOUSE_BOX
+		elif int(row["id"]) == 12:
+			items = EAST_ROW_BOXES[first + n]
 		var id: String = "cache_%d_%d_%d" % [row["id"], lv, n]
 		_box(data, id, String(row["name"]) + " " + suffix, cells[n], int(row["id"]), lv, items)
 

@@ -186,6 +186,28 @@ func test_row_houses_split_every_floor_into_two_homes() -> void:
 	assert_eq(rows, 4)
 
 
+## 정차를 차릴 때 물건은 같은 건물 상자끼리만 옮겨 담긴다: 연립마다 지도 물건이 있고(통째로 빈 건물 없음),
+## 선창 창고는 상자당 물건이 다음 건물의 두 배를 넘는 가장 값진 자리다(코디 판단 442, 10-30).
+func test_every_row_house_holds_things_and_the_warehouse_leads() -> void:
+	var per: Dictionary = {}  # 건물 -> [상자, 물건]
+	for box: Dictionary in _d["containers"].values():
+		var b := int(box.get("building", -1))
+		if b < 0:
+			continue
+		var pb: Array = per.get_or_add(b, [0, 0])
+		pb[0] += 1
+		pb[1] += (box.get("items", []) as Array).size()
+	var best_other := 0.0
+	for row: Dictionary in _d["buildings"]:
+		var pb: Array = per.get(int(row["id"]), [0, 0])
+		if row.has("row_group"):
+			assert_gt(int(pb[1]), 0, "%s에 물건" % row["name"])
+		if int(row["id"]) != 8 and int(pb[0]) > 0:
+			best_other = maxf(best_other, float(pb[1]) / pb[0])
+	var wh: Array = per[8]
+	assert_gte(float(wh[1]) / wh[0], 2.0 * best_other, "선창 창고 상자당 물건")
+
+
 ## 같은 셈의 상자 몫: 상자 하나당 묶음이 houses 01~06(0.46~0.70, 10-29 잰 값)의 +25% 안이고, 연립은 층마다
 ## 두 집 모두 부엌 여닫는 자리가 선다(방 이름표가 없으면 이름에 「집」이 없는 연립은 방 갈래를 못 물려받는다).
 func test_boxes_keep_the_houses_share() -> void:
