@@ -156,12 +156,12 @@ var _down_seen: Dictionary = {}
 var _follow_trail := PackedVector3Array()
 var _follow_head: int = 0
 var _follow_count: int = 0
-var _follow_last := Vector3.INF
+var _follow_last := Vector3.ZERO   # read only once the trail has a point (saved: no INF)
 var _follow_rest: float = 0.0
 var _follow_distance: float = 0.0
 var _follow_door_at: float = -INF
 var _follow_door_id: int = 0
-var _follow_cell := Vector3i(-1, -1, -1)
+var _follow_cell := Vector3(-1, -1, -1)   # cell x, y and level; a Vector3 so the field save keeps it
 var _follow_order: Array = []
 
 
@@ -784,7 +784,10 @@ func _keep_formation(p) -> void:
 		role = "aside"
 	var mates := _follow_mates()
 	var spot := _follow_spot(p, mates, fwd, right)
-	p.brain["follow_slot"] = spot
+	if spot.is_finite():
+		p.brain["follow_slot"] = spot
+	else:
+		p.brain.erase("follow_slot")   # saved with the brain: never an INF
 	var look := fwd
 	if _chief_still >= LOOK_STILL_S:
 		look = _look_out(p, role, fwd, right)
@@ -865,7 +868,7 @@ func _record_follow() -> void:
 			_follow_rest = FOLLOW_TRAIL_STEP - step + left
 	_follow_last = at
 	var cell := FieldGrid.cell_of(at)
-	var key := Vector3i(cell.x, cell.y, game.level_of(at))
+	var key := Vector3(cell.x, cell.y, game.level_of(at))
 	if key != _follow_cell and game.grid_at(at).doors.has(cell):
 		_follow_door_id += 1
 		_follow_door_at = _follow_distance
@@ -931,6 +934,10 @@ func _follow_spot(p, mates: Array, fwd: Vector3, right: Vector3) -> Vector3:
 				chosen = spot
 				claimed.append(spot)
 				break
+		# Every candidate taken or walled off: still go behind the player rather than stand far off.
+		if not chosen.is_finite():
+			chosen = game.walkable_near(game.player.position - fwd * near, false, 1)
+			claimed.append(chosen)
 		if q == p:
 			return chosen
 	return Vector3.INF
