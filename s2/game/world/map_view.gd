@@ -1109,6 +1109,24 @@ static func drift_uv(g: FieldGrid, corner: Vector2i) -> Vector2:
 	return Vector2(signi(side.x), signi(side.y)) if open else Vector2.ZERO
 
 
+## A wagon the model kit has none for, as [size, centre, colour] boxes: a floor on its wheels and four
+## low sides, open on top, its coal heaped inside a little over the sides. No closed wagon (map brief,
+## ban list); the field's map and the stop scene both draw it so.
+static func open_wagon_parts(w: Dictionary) -> Array:
+	var r: Rect2i = w["rect"]
+	var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
+	var lx: float = r.size.x - 0.2
+	var lz: float = r.size.y - 0.2
+	var body := Color(0.33, 0.3, 0.28)
+	var out: Array = [[Vector3(lx, 0.3, lz), mid + Vector3(0, 0.75, 0), body]]
+	for s: float in [-1.0, 1.0]:
+		out.append([Vector3(lx, 1.0, 0.12), mid + Vector3(0, 1.4, s * (lz - 0.12) * 0.5), body])
+		out.append([Vector3(0.12, 1.0, lz), mid + Vector3(s * (lx - 0.12) * 0.5, 1.4, 0), body])
+	if float(w.get("coal", 0.0)) > 0.0:
+		out.append([Vector3(lx - 0.6, 1.1, lz - 0.6), mid + Vector3(0, 1.45, 0), Color(0.12, 0.12, 0.13)])
+	return out
+
+
 static func box(st: SurfaceTool, size: Vector3, at: Vector3, color: Color) -> void:
 	var h := size * 0.5
 	var faces := [
@@ -1404,16 +1422,11 @@ func _build_blocks() -> void:
 		if light_nodes.has(kind):
 			light_nodes[kind].position.y = train_node.position.y
 	await BuildPace.rest(pace)
-	# Wagons on the sidings: the kit's models, a box only where it has none.
+	# Wagons on the sidings: the kit's models, an open box only where it has none.
 	var wagon_models := TrainModels.attach_wagons(level_roots[0], data["wagons"], TrackView.wagon_heights(grid, data["wagons"]))
 	for index: int in wagon_models.get_meta("fallback_wagons", []):
-		var w: Dictionary = data["wagons"][index]
-		var r: Rect2i = w["rect"]
-		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
-		box(st, Vector3(r.size.x - 0.2, 1.9, r.size.y - 0.2), mid + Vector3(0, 0.95, 0), Color(0.33, 0.3, 0.28))
-		if w["coal"] > 0.0:
-			box(st, Vector3(r.size.x - 0.8, 0.5, r.size.y - 0.8), mid + Vector3(0, 2.05, 0), Color(0.12, 0.12, 0.13))
-			box(st, Vector3(r.size.x - 1.2, 0.12, r.size.y - 1.2), mid + Vector3(0, 2.35, 0), Color(0.9, 0.92, 0.95))
+		for part: Array in open_wagon_parts(data["wagons"][index]):
+			box(st, part[0], part[1], part[2])
 	if data["spots"].has("water_tower"):
 		# The first stop: the blocked cells in its north-west corner are the water tower.
 		for y in range(mini(14, grid.height)):
