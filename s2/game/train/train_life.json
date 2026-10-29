@@ -67,6 +67,20 @@
   },
   "layouts": {
     "coach": {
+      "furniture_slots": [
+        {
+          "x": 14.62,
+          "z": -0.47,
+          "w": 0.8,
+          "d": 0.5
+        },
+        {
+          "x": 15.47,
+          "z": -0.37,
+          "w": 0.8,
+          "d": 0.5
+        }
+      ],
       "label": "판자를 덧댄 낡은 3등 객차",
       "props": [
         {
@@ -710,6 +724,20 @@
       ]
     },
     "front": {
+      "furniture_slots": [
+        {
+          "x": 14.62,
+          "z": -0.47,
+          "w": 0.8,
+          "d": 0.5
+        },
+        {
+          "x": 15.47,
+          "z": -0.37,
+          "w": 0.8,
+          "d": 0.5
+        }
+      ],
       "label": "앞칸",
       "props": [
         {
@@ -1180,6 +1208,20 @@
       ]
     },
     "medical": {
+      "furniture_slots": [
+        {
+          "x": 14.66,
+          "z": -0.17,
+          "w": 0.8,
+          "d": 0.5
+        },
+        {
+          "x": 15.48,
+          "z": -0.48,
+          "w": 0.8,
+          "d": 0.5
+        }
+      ],
       "label": "의무칸",
       "props": [
         {
@@ -1756,6 +1798,7 @@
       ]
     },
     "dining": {
+      "furniture_slots": [],
       "label": "식당칸·의회·교실 한쪽",
       "props": [
         {
@@ -2466,6 +2509,7 @@
       ]
     },
     "technical": {
+      "furniture_slots": [],
       "label": "기술칸·공방",
       "props": [
         {
@@ -3118,6 +3162,20 @@
       ]
     },
     "guard": {
+      "furniture_slots": [
+        {
+          "x": 14.67,
+          "z": -0.23,
+          "w": 0.8,
+          "d": 0.5
+        },
+        {
+          "x": 15.49,
+          "z": -0.24,
+          "w": 0.8,
+          "d": 0.5
+        }
+      ],
       "label": "경비대칸의 생활 자리",
       "props": [
         {
@@ -3564,6 +3622,20 @@
       ]
     },
     "captain": {
+      "furniture_slots": [
+        {
+          "x": 6.74,
+          "z": -0.1,
+          "w": 0.8,
+          "d": 0.5
+        },
+        {
+          "x": 14.79,
+          "z": -0.29,
+          "w": 0.8,
+          "d": 0.5
+        }
+      ],
       "label": "열차장실",
       "props": [
         {
@@ -3986,6 +4058,7 @@
       ]
     },
     "freight": {
+      "furniture_slots": [],
       "label": "짐 전용 화차",
       "storage_only": true,
       "props": [
@@ -4188,6 +4261,7 @@
       "spots": []
     },
     "tender": {
+      "furniture_slots": [],
       "label": "석탄 전용 탄수차",
       "storage_only": true,
       "props": [
@@ -4212,6 +4286,20 @@
       "spots": []
     },
     "engine_room": {
+      "furniture_slots": [
+        {
+          "x": 14.32,
+          "z": -0.45,
+          "w": 0.8,
+          "d": 0.5
+        },
+        {
+          "x": 15.22,
+          "z": -0.33,
+          "w": 0.8,
+          "d": 0.5
+        }
+      ],
       "label": "기관실 사람들의 생활 칸(교대 침상, 앞쪽 끝 삽질 자리)",
       "props": [
         {
@@ -4722,6 +4810,7 @@
       ]
     },
     "cold": {
+      "furniture_slots": [],
       "label": "앞 담요 궤·뒤 안치 자리(걷어 둔 담요 커튼)",
       "storage_only": true,
       "look_warmth": 10,
@@ -4860,6 +4949,7 @@
       "spots": []
     },
     "loco": {
+      "furniture_slots": [],
       "label": "기관차 설비",
       "storage_only": true,
       "props": [

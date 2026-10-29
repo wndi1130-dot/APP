@@ -1,19 +1,22 @@
 {
   "version": 1,
   "script": "tools/blender/train_shell.py",
-  "script_version": 2,
+  "script_version": 3,
   "blender": "4.5.10 LTS",
   "axis": "X 칸 길이 0..16, +Y 위(바닥 윗면 0), +Z 열린 앞(카메라 쪽)",
   "texture": [
     256,
     256
   ],
+  "cut_y_m": 2.2,
   "triangle_limit": 3000,
   "assets": {
     "shell_plain": {
-      "tris": 1418,
-      "bytes": 96696,
-      "sha256": "b7efd3111a391a00b508b5bd49df87fc6f73d75820f909871c1962d9326c2a13",
+      "tris_low": 1036,
+      "tris_top": 398,
+      "tris": 1434,
+      "bytes": 98588,
+      "sha256": "57626e1b354324d961137bf3ed14557806ed24d3ea4ab0617799b842ed6e607c",
       "bounds_m": [
         [
           -0.5,
@@ -26,12 +29,17 @@
           1.52
         ]
       ],
+      "surface_area_before_m2": 231.27608149927,
+      "surface_area_m2": 231.2760813732533,
+      "surface_area_delta_pct": -5.448755890924417e-08,
       "use": "낡은 3등 객차(꼬리·경비·공방·화차 등)"
     },
     "shell_clean": {
-      "tris": 1418,
-      "bytes": 96696,
-      "sha256": "c86f85e9afbd91da19442c4e1083a295a43e8e8fd7c3864df6e44e439bbceba4",
+      "tris_low": 1036,
+      "tris_top": 398,
+      "tris": 1434,
+      "bytes": 98588,
+      "sha256": "ec72732043d6a9aaeeeac831cecd4f4aa3608260e7007bdf8312bcfb61d27d80",
       "bounds_m": [
         [
           -0.5,
@@ -44,12 +52,17 @@
           1.52
         ]
       ],
+      "surface_area_before_m2": 231.27608149927,
+      "surface_area_m2": 231.2760813732533,
+      "surface_area_delta_pct": -5.448755890924417e-08,
       "use": "칠이 남은 객차(앞칸·식당)"
     },
     "shell_chief": {
-      "tris": 1498,
-      "bytes": 102296,
-      "sha256": "449aa5c174e31874e4253d518c912569d757f70995661c0737447de5920feaae",
+      "tris_low": 1116,
+      "tris_top": 398,
+      "tris": 1514,
+      "bytes": 104188,
+      "sha256": "af15f2931d7a3a4fdcda04d0e57e50c8825639b169f75494a8693533e97528fb",
       "bounds_m": [
         [
           -0.5,
@@ -62,12 +75,17 @@
           1.52
         ]
       ],
+      "surface_area_before_m2": 233.1200797525107,
+      "surface_area_m2": 233.12007962649415,
+      "surface_area_delta_pct": -5.405649261547296e-08,
       "use": "열차장실, 짙은 나무 판과 접힌 붉은 커튼"
     },
     "shell_medic": {
-      "tris": 1392,
-      "bytes": 94876,
-      "sha256": "3fea2bc8bb2626b678d0bdd48c976ca23797c0d53e5db47fff52e4e196cfc214",
+      "tris_low": 1076,
+      "tris_top": 332,
+      "tris": 1408,
+      "bytes": 96764,
+      "sha256": "061144fe9d46b9950e6cb1e36d45605638cf3a85bce0481a19db37abef47c253",
       "bounds_m": [
         [
           -0.5,
@@ -80,12 +98,17 @@
           1.52
         ]
       ],
+      "surface_area_before_m2": 230.71545767996292,
+      "surface_area_m2": 230.7154575539462,
+      "surface_area_delta_pct": -5.4619975209391214e-08,
       "use": "의무칸, 흰 벽과 반쯤 친 커튼. 붉은 십자 없음"
     },
     "shell_engine": {
-      "tris": 1254,
-      "bytes": 85220,
-      "sha256": "17bb248407393df986ad5fe319fb86891120b98df03d3a2270bc64f8e8bf17e4",
+      "tris_low": 952,
+      "tris_top": 354,
+      "tris": 1306,
+      "bytes": 89628,
+      "sha256": "9de1b82058bdf205037eb9bac797aa52bbac4061cc95c178f8ed8bcf313bb160",
       "bounds_m": [
         [
           -0.5,
@@ -98,6 +121,9 @@
           1.52
         ]
       ],
+      "surface_area_before_m2": 230.05846022188942,
+      "surface_area_m2": 230.05846009444076,
+      "surface_area_delta_pct": -5.5398374776416404e-08,
       "use": "기관차·탄수차, 쇠판 벽과 운전실 창 하나"
     }
   }

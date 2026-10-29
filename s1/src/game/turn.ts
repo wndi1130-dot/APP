@@ -988,7 +988,7 @@ function biteTick(g: Game): void {
   g.hiddenBites = keep;
 }
 
-/** 식량이 0이어도 사람들은 얼마간 버틴다. 버틴 구간이 길어지면 굶어 죽는 사람이 나온다(제안, 프로스트펑크식). */
+/** 식량이 0이어도 사람들은 얼마간 버틴다. 버틴 구간이 길어지면 굶어 죽는 사람이 나온다(제안, 참고 게임 2식). */
 export const HUNGER_GRACE = 3;
 
 export function hungerTick(g: Game, notes: string[]): void {

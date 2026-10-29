@@ -357,7 +357,7 @@ export function aiAgendaPick(g: Game, options: readonly LawAgenda[]): { c: Comm;
 /** 의회를 연 직후와 표결 뒤에 부를 다른 묶음의 훅(S1b 재판·불신임, dark/hooks.ts가 등록한다). */
 export const COUNCIL_HOOKS: { open?: (g: Game) => void; vote?: (g: Game, agenda: Agenda, r: VoteResult) => void }[] = [];
 
-/** S1c가 채우는 「고른 복원」 제안(프펑2식: 세력이 구체적인 항목을 내놓는다). pick이 null이면 그 조건은 협상 목록에 오르지 않는다. */
+/** S1c가 채우는 「고른 복원」 제안(참고 게임 2(2편)식: 세력이 구체적인 항목을 내놓는다). pick이 null이면 그 조건은 협상 목록에 오르지 않는다. */
 export const RESEARCH_OFFER: { pick?: (g: Game) => { id: string; title: string } | null; made?: (g: Game, id: string) => void } = {};
 
 export function openCouncil(g: Game, emergency = false): void {
