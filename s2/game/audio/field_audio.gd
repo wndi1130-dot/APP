@@ -1067,20 +1067,21 @@ func _tick_spots(at: Vector3, lin: float, gust_now: float, delta: float) -> void
 
 ## How open to the wind the player is here, 0..1: 1 outdoors; indoors by the
 ## air between here and the nearest open door or broken or open window and by
-## the nearest outside wall (exposure), at most INDOOR_OPEN, a cellar
-## CELLAR_SHARE of it. Read again only when the cell, the floor or a door or
-## window changes.
+## the nearest outside wall (exposure), at most INDOOR_OPEN. A cellar has no
+## openings of its own: it hears CELLAR_SHARE of the ground floor above it. Read
+## again only when the cell, the floor or a door or window changes.
 func openness_at(at: Vector3) -> float:
-	var g = game.grid_at(at)
-	var cell: Vector2i = game.FieldGrid.cell_of(at)
-	if not g.indoor(cell):
-		return 1.0
 	var level: int = game.level_of(at)
+	var g = game.grid if level < 0 else game.grid_at(at)
+	var cell: Vector2i = game.FieldGrid.cell_of(at)
+	var share: float = CELLAR_SHARE if level < 0 else 1.0
+	if not g.indoor(cell):
+		return share
 	var key: Array = [level, cell, g.revision]
 	if key == expose_key:
 		return expose_last
 	expose_key = key
-	expose_last = INDOOR_OPEN * exposure(open_distance(g, cell), wall_distance(g, cell)) * (CELLAR_SHARE if level < 0 else 1.0)
+	expose_last = INDOOR_OPEN * exposure(open_distance(g, cell), wall_distance(g, cell)) * share
 	return expose_last
 
 

@@ -145,6 +145,26 @@ func test_an_open_door_lets_the_wind_into_a_house_on_the_map() -> void:
 	assert_eq(a.openness_at(game.lift(way[1], 0)), 1.0, "outside, all of it")
 
 
+func test_a_cellar_hears_a_little_of_the_floor_above() -> void:
+	var way: Array = _door_way()
+	assert_false(way.is_empty(), "the map has a door into a building with floor behind it")
+	if way.is_empty():
+		return
+	var a = game.audio
+	var g = game.grid
+	var door: Vector2i = way[0]
+	_seal(int(g.doors[door].get("building", -1)))
+	g.doors[door]["state"] = "open"
+	g.revision += 1
+	var above: float = a.openness_at(game.lift(way[3], 0))
+	var below: Vector3 = game.lift(way[3], -1)
+	assert_eq(game.level_of(below), -1, "a place in the cellar")
+	var down: float = a.openness_at(below)
+	assert_almost_eq(down, FieldAudio.CELLAR_SHARE * above, 0.0001, "the floor above's, a little")
+	assert_gt(down, 0.0, "an open door upstairs is heard down there")
+	assert_almost_eq(a.openness_at(game.lift(way[1], -1)), FieldAudio.CELLAR_SHARE, 0.0001, "under open ground, the most a cellar hears")
+
+
 func test_walking_in_through_the_door_the_wind_fades_and_its_bus_closes_in() -> void:
 	var way: Array = _door_way()
 	assert_false(way.is_empty(), "the map has a door into a building with floor behind it")
@@ -170,6 +190,8 @@ func test_walking_in_through_the_door_the_wind_fades_and_its_bus_closes_in() -> 
 		a._tick_wind(outside, FRAME)
 	var out_db: float = a.bed_db()
 	assert_gt(a.wind_cut, 19000.0, "outdoors the bus takes nothing off")
+	var low := AudioServer.get_bus_effect(i, 0) as AudioEffectLowPassFilter
+	assert_almost_eq(low.cutoff_hz, a.wind_cut, 0.5, "the bus's own low-pass is what is heard")
 	var was: float = out_db
 	var worst: float = 0.0
 	for k in range(150):
@@ -180,6 +202,7 @@ func test_walking_in_through_the_door_the_wind_fades_and_its_bus_closes_in() -> 
 	assert_lt(worst, 1.5, "walking in, no frame steps the wind (the rule before: 9.1 dB at the door)")
 	assert_lt(a.bed_db(), out_db - 2.0, "two in, it is lower")
 	assert_lt(a.wind_cut, 8000.0, "and more muffled")
+	assert_almost_eq(low.cutoff_hz, a.wind_cut, 0.5)
 	for k in range(90):
 		a._tick_wind(outside, FRAME)
 	assert_gt(a.wind_cut, 19000.0, "back out, it opens again")
