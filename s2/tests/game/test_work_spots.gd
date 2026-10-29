@@ -5,6 +5,7 @@ const EdgeBand = preload("res://game/world/edge_band.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const RUN_SEED: int = 731
 
 
@@ -330,3 +331,117 @@ func test_edge_groves_keep_the_inner_trees_and_their_plan_indices() -> void:
 	assert_eq(g.solid, solids)
 	assert_eq(g.floor, floors)
 	assert_eq(p, plan_before, "the rendered plan is untouched")
+
+
+func _wood_site(data: Dictionary) -> Dictionary:
+	return (data.get("spots", {}) as Dictionary).get("work_site", {}) as Dictionary
+
+
+func test_houses_get_wood_only_where_the_salvage_leaves_a_crew_load() -> void:
+	# Salvage holds 4 of the houses' 5 on 01 to 06: what is left is less than one load.
+	for id: String in ["houses_01", "houses_02", "houses_03", "houses_04", "houses_05", "houses_06"]:
+		var data: Dictionary = _map(id)
+		var before: Dictionary = _wood_site(data).duplicate()
+		_dress_unchanged(data, -1)
+		assert_eq(_wood_site(data), before, id + " keeps its site as built, with no job")
+	var houses: Dictionary = _map("houses_07")
+	assert_true(_wood_site(houses).is_empty(), "the river village has no site of its own")
+	_dress_unchanged(houses, -1)
+	var site: Dictionary = _wood_site(houses)
+	assert_eq(String(site.get("job", "")), "wood_stack", "it loads stacked wood")
+	var g: FieldGrid = houses["grid"] as FieldGrid
+	assert_true(g.people_can_walk(site["cell"]), "the crew works from a walkable cell")
+	assert_between(WorkSpots.reach(houses, site["cell"]), WorkSpots.JOB_MIN_M, WorkSpots.JOB_PATH_M, "a short walk out from a door")
+	assert_between(WorkSpots.crew_walk(houses, site["cell"]), 0.0, WorkSpots.JOB_PATH_M, "and so is the crew's own walk")
+	var table: float = float(FieldWork.WOOD_TABLE["houses"])
+	assert_almost_eq(float(FieldWork.budget(houses)["wood"]), table, 0.001, "the stop sums to the table")
+	WorkSpots.dress(houses, -1, RUN_SEED)
+	assert_eq(_wood_site(houses), site, "a second dress keeps the site")
+
+
+func test_wood_job_takes_an_outdoor_pile_out_from_the_platform() -> void:
+	var data: Dictionary = _small_data()
+	var g: FieldGrid = data["grid"] as FieldGrid
+	data["place_kind"] = "houses"
+	data["spots"] = {"salvage_0": {"kind": "salvage", "material": "wood", "amount": 1, "cell": Vector2i(5, 30)}}
+	data["props"] = [
+		{"kind": "firewood_pile", "rect": Rect2i(30, 25, 2, 1), "level": 0},
+		{"kind": "lumber_stack", "rect": Rect2i(10, 30, 2, 1), "level": 1},
+		{"kind": "firewood_rick", "rect": Rect2i(52, 30, 2, 1), "level": 0},
+		{"kind": "lumber_stack", "rect": Rect2i(50, 25, 2, 1), "level": 0},
+	]
+	# The rick stands in a shed: out of doors comes first, however far.
+	for y: int in range(28, 34):
+		for x: int in range(48, 58):
+			g.building[g.index(Vector2i(x, y))] = 7
+	_dress_unchanged(data, -1)
+	var site: Dictionary = _wood_site(data)
+	assert_eq(String(site["name"]), "목재 더미 작업 구역", "the pile 3 m out is the platform's, the rick indoors")
+	assert_false(Rect2i(50, 25, 2, 1).has_point(site["cell"]))
+	assert_true(Rect2i(50, 25, 2, 1).grow(1).has_point(site["cell"]), "the crew works beside the pile")
+	assert_gte(WorkSpots.reach(data, site["cell"]), WorkSpots.JOB_MIN_M)
+	assert_almost_eq(float(site["amount"]), float(FieldWork.WOOD_TABLE["houses"]) - 1.0, 0.001, "the salvage counts first")
+	assert_almost_eq(float(site["amount"]), 4.0, 0.001, "one load for the four carriers is enough")
+	assert_eq(String(site["state"]), "closed")
+
+
+func test_wood_job_keeps_a_near_site_and_leaves_other_places_and_jobs() -> void:
+	var data: Dictionary = _small_data()
+	data["place_kind"] = "houses"
+	data["spots"] = {"work_site": {"kind": "work_site", "name": "목공방 작업 구역", "state": "closed",
+		"cell": Vector2i(40, 30), "zone_rect": Rect2i(36, 28, 8, 4)}}
+	data["props"] = [{"kind": "lumber_stack", "rect": Rect2i(50, 25, 2, 1), "level": 0}]
+	_dress_unchanged(data, -1)
+	var site: Dictionary = _wood_site(data)
+	assert_eq(site["cell"], Vector2i(40, 30), "a site within the walk stays")
+	assert_eq(String(site["name"]), "목공방 작업 구역")
+	assert_eq(String(site["job"]), "wood_stack")
+	var church: Dictionary = _small_data()
+	church["place_kind"] = "church"
+	church["props"] = data["props"]
+	_dress_unchanged(church, -1)
+	assert_true(_wood_site(church).is_empty(), "a table of 3 is less than one crew load")
+	var lodge: Dictionary = _small_data()
+	lodge["place_kind"] = "lodge"
+	lodge["props"] = data["props"]
+	_dress_unchanged(lodge, -1)
+	assert_true(_wood_site(lodge).is_empty(), "a place off the wood table gets no job")
+	var tree: Dictionary = _small_data()
+	tree["place_kind"] = "houses"
+	tree["spots"] = {"work_site": {"kind": "work_site", "cell": Vector2i(40, 30), "job": "tree", "amount": 3.0}}
+	tree["props"] = data["props"]
+	_dress_unchanged(tree, -1)
+	assert_eq(String(_wood_site(tree)["job"]), "tree", "a map's own job is kept")
+	var full: Dictionary = _small_data()
+	full["place_kind"] = "houses"
+	full["spots"] = {"salvage_0": {"kind": "salvage", "material": "wood", "amount": 2}}
+	full["props"] = data["props"]
+	_dress_unchanged(full, -1)
+	assert_true(_wood_site(full).is_empty(), "3 left after the salvage is less than one load")
+	var bare: Dictionary = _small_data()
+	bare["place_kind"] = "houses"
+	_dress_unchanged(bare, -1)
+	assert_true(_wood_site(bare).is_empty(), "no pile, no site")
+
+
+func test_wood_job_measures_the_walk_from_the_door_the_crew_leaves_by() -> void:
+	var g: FieldGrid = FieldGrid.new(120, 60)
+	# A wall between the door nearest the pile in a line and the pile, open only at the far end.
+	for x: int in range(119):
+		g.set_solid(Vector2i(x, 20), FieldGrid.Solid.WALL)
+	g.refresh_paths()
+	var near_door: Vector2i = Vector2i(60, 10)
+	var far_door: Vector2i = Vector2i(20, 30)
+	var data: Dictionary = {"grid": g, "place_kind": "houses", "spots": {},
+		"train_doors": {"lower": [near_door, far_door]}, "spawns": {"train_door": [near_door, far_door]},
+		"props": [{"kind": "lumber_stack", "rect": Rect2i(60, 30, 2, 1), "level": 0}]}
+	assert_between(WorkSpots.reach(data, Vector2i(59, 30)), 0.0, WorkSpots.JOB_PATH_M, "on foot from the far door it is near")
+	assert_gt(WorkSpots.crew_walk(data, Vector2i(59, 30)), WorkSpots.JOB_PATH_M, "the crew leaves by the door above the wall")
+	_dress_unchanged(data, -1)
+	assert_true(_wood_site(data).is_empty(), "a pile the crew walks round the wall to is not a site")
+	data["spawns"] = {"train_door": [far_door]}
+	assert_almost_eq(WorkSpots.crew_walk(data, far_door + Vector2i(0, 1)), 1.0, 0.001)
+	_dress_unchanged(data, -1)
+	var site: Dictionary = _wood_site(data)
+	assert_eq(String(site.get("job", "")), "wood_stack", "from the door below the wall it is a site")
+	assert_between(WorkSpots.crew_walk(data, site["cell"]), 0.0, WorkSpots.JOB_PATH_M)

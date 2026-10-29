@@ -6,6 +6,7 @@ extends SceneTree
 
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const FieldWork = preload("res://game/field_work.gd")
+const WorkSpots = preload("res://game/world/work_spots.gd")
 const PILOT_EVERY: float = 0.25
 const PILOT_EXTRA_R: float = 5.0
 const QUICK_S: float = 60.0
@@ -88,6 +89,8 @@ func _run() -> void:
 	if budget_only:
 		for id: String in FieldMaps.ids():
 			var data: Dictionary = FieldMaps.build(id)
+			# The jobs the stop's dress puts on a map without coal wagons (work_spots.gd) count too.
+			WorkSpots.dress(data, -1, 1)
 			var budget: Dictionary = FieldWork.budget(data)
 			var place: String = String(data.get("place_kind", ""))
 			if not _record({"map": id, "place": place, "coal": budget["coal"], "wood": budget["wood"],
