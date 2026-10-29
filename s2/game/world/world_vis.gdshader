@@ -149,11 +149,15 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 		// as before, the hue of dry grass and soil (결정 469 C1).
 		vec3 grass = mix(DRY_GRASS, OLD_GREEN, smoothstep(0.35, 0.75, fx_vnoise(p * 0.45 + 9.0)));
 		if (ground_layers_on) {
-			// Decision 499: late autumn keeps a faded olive green in drifts through the dry grass, and it
-			// dries back as the cold comes (fx_cold.x: late autumn 0~0.4, early winter 0.4~0.85).
+			// Decision 499: late autumn keeps a faded olive green in drifts through the dry grass, and all the
+			// green (these drifts, the old faded ones and the photo's) dries back as the cold comes (fx_cold.x:
+			// late autumn 0~0.4, early winter 0.4~0.85), so early winter reads as dry grass.
 			float late = 1.0 - smoothstep(0.1, 0.45, fx_cold.x);
+			float dry = smoothstep(0.3, 0.6, fx_cold.x);
 			grass = mix(grass, LATE_GREEN, late * smoothstep(0.3, 0.55, fx_vnoise(p * 0.21 + vec2(4.1, 17.3))));
+			grass = mix(grass, DRY_GRASS, dry);
 			vec4 grass_detail = ground_layer(layers.w, p, dx, dy);
+			grass_detail.rgb = mix(grass_detail.rgb, vec3(dot(grass_detail.rgb, vec3(0.2126, 0.7152, 0.0722))), dry);
 			vec4 soil_detail = ground_layer(6, p, dx, dy);
 			// Decision 496: interpolated corner soil is only a gentle bias. Height
 			// and world-space noise place the edge, without thresholding that bias.
