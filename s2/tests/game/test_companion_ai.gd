@@ -131,13 +131,14 @@ func test_walking_the_strongest_blade_goes_ahead_and_the_bow_keeps_back() -> voi
 	for q in game.squad:
 		if q.pid == "p_tail_tomasz":
 			game.ai._keep_formation(q)
-			var dest: Vector3 = q.brain["dest"]
-			assert_gt((dest - game.player.position).dot(fwd), 1.5, "walks ahead of the chief")
+			# Its place, not where it walks: that leads with the chief's pace (decision 486).
+			var slot: Vector3 = q.brain["follow_slot"]
+			assert_gt((slot - game.player.position).dot(fwd), 1.5, "walks ahead of the chief")
 			# The chief's gun comes up: out of the way.
 			game.player.aim.start("pistol", {})
-			q.brain.erase("dest")
+			q.brain.erase("follow_slot")
 			game.ai._keep_formation(q)
-			assert_lt((q.brain["dest"] - game.player.position).dot(fwd), 0.5, "steps aside")
+			assert_lt((q.brain["follow_slot"] - game.player.position).dot(fwd), 0.5, "steps aside")
 
 
 func test_the_rear_one_holds_the_door_the_chief_went_in_by() -> void:
@@ -401,6 +402,8 @@ func test_the_chief_stopped_each_looks_its_own_way() -> void:
 	_start()
 	var fwd := Vector3(1, 0, 0)
 	var right := Vector3(0, 0, -1)
+	# Straight overhead there is no camera side to turn from (decision 486).
+	game.camera.global_position = ally.global_position + Vector3(0, 30, 0)
 	var a: Vector3 = game.ai._look_out(ally, "point", fwd, right)
 	var b: Vector3 = game.ai._look_out(ally, "rear", fwd, right)
 	var c: Vector3 = game.ai._look_out(ally, "aside", fwd, right)
