@@ -1127,6 +1127,8 @@ function checkDuePromises(g: Game): void {
     else if (p.cond.kind === 'keep_ration') ok = s.ration >= (p.baseline ?? 0);
     else if (p.cond.kind === 'give_med') { ok = g.med >= (p.cond.amount ?? 0); if (ok) bump(g, 'med', -(p.cond.amount ?? 0), 'promise'); }
     else if (p.cond.kind === 'give_lux') { ok = g.lux >= (p.cond.amount ?? 0); if (ok) bump(g, 'lux', -(p.cond.amount ?? 0), 'promise'); }
+    else if (p.cond.kind === 'give_sup') { ok = !!g.supOn && (g.sup ?? 0) >= (p.cond.amount ?? 0); if (ok) bump(g, 'sup', -(p.cond.amount ?? 0), 'promise'); }
+    else if (p.cond.kind === 'give_fine') { ok = !!g.supOn && (g.supFine ?? 0) >= (p.cond.amount ?? 0); if (ok) g.supFine = (g.supFine ?? 0) - (p.cond.amount ?? 0); }
     if (ok) keepPromise(g, c); else breakPromise(g, c);
   }
 }

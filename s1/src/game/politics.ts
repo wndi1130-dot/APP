@@ -5,6 +5,7 @@ import type { Comm, ConditionDef, Crisis, LawId } from './data';
 import { calmEnact, calmRepeal } from './calm';
 import { noteRelief } from './wounds';
 import { bump, bumpRel } from './ledger';
+import { suppliesAsks } from './supplies';
 import { josa } from './josa';
 import { needOf } from './needs';
 import { mourners } from './people';
@@ -532,7 +533,7 @@ export function bribePrice(g: Game, c: Comm): number {
 /** 공개 협상 조건 셋: 처지가 가장 나쁜 쪽, 그 집단의 것 하나, 공통 하나. 회기마다 같은 판이면 같다. */
 export function openConditions(g: Game, c: Comm): ConditionDef[] {
   // 연구 우선권은 의무진이 구체적인 기술을 제안으로 내놓는다. 지금 완성판을 시작할 수 있는 기술이 없으면 목록에 오르지 않는다.
-  const pool = CONDITIONS[c].filter(x => !x.s1c || !!g.dom).flatMap(x => {
+  const pool = CONDITIONS[c].filter(x => (!x.s1c || !!g.dom) && (!x.sup || suppliesAsks(g))).flatMap(x => {
     if (x.kind !== 'research_pick') return [x];
     const offer = RESEARCH_OFFER.pick?.(g);
     return offer ? [{ ...x, label: `${x.label}: ${offer.title}` }] : [];
