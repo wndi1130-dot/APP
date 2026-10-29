@@ -317,6 +317,27 @@ func test_the_lamp_eases_to_the_moods_light_and_sways_within_its_reach() -> void
 	assert_lt(lamp.light_color.r, (calm["lamp_color"] as Color).r)
 
 
+func test_nightfall_eases_the_lamp_and_darkens_the_air() -> void:
+	var s = _scene()
+	var c: Dictionary = s.car("medtech")
+	var lamp: OmniLight3D = c["lamp"]
+	s.set_train("fear", 70.0)
+	for i in 100:
+		s.step(0.1)
+	var color: Color = lamp.light_color
+	var energy: float = lamp.light_energy
+	s.set_value("view.daytime", "night")
+	assert_eq(lamp.light_color, color, "the hour does not flash the lamp's colour")
+	assert_eq(lamp.light_energy, energy, "nor its strength at once")
+	var night: Dictionary = TrainLight.target(TrainLight.stage_of(c), "night", Look.mood_look(String(c["mood"])))
+	for i in 100:
+		s.step(0.1)
+	assert_almost_eq(lamp.light_energy, float(night["lamp_energy"]), 0.01, "the night's lamp, eased")
+	var air: Dictionary = TrainLight.world("night")
+	assert_almost_eq(s.world_env.ambient_light_energy, float(air["ambient_energy"]), 0.001)
+	assert_almost_eq(s.fill_light.light_energy, float(air["fill_energy"]), 0.001)
+
+
 func test_the_stove_burns_with_the_cars_warmth_and_frost_takes_the_glass() -> void:
 	var s = _scene()
 	var c: Dictionary = s.car("front")

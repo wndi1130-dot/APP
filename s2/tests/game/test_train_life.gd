@@ -7,6 +7,8 @@ const Context = preload("res://game/train/train_context.gd")
 const Body = preload("res://game/train/train_body.gd")
 const SeasonTable = preload("res://game/season_table.gd")
 const Schedule = preload("res://game/train/train_schedule.gd")
+const TrainLight = preload("res://game/train/train_light.gd")
+const Look = preload("res://game/train/train_look.gd")
 
 
 func _scene(panel: bool = false):
@@ -400,9 +402,12 @@ func test_night_and_stop_change_lamps_and_route_metadata_stays_outside_politics(
 	var s = _scene()
 	var lamp: float = s.car("front")["lamp_energy"]
 	s.set_value("view.daytime", "night")
-	# The light board lights the lamp at night (train_light.gd: kerosene up, candles on).
-	assert_gt(float(s.car("front")["lamp_energy"]), lamp)
-	assert_eq(String(s.car("front")["light_daytime"]), "night")
+	# The light board lights the lamp at night (train_light.gd: kerosene up, candles on),
+	# and nothing else dims it by the hour.
+	var c: Dictionary = s.car("front")
+	assert_gt(float(c["lamp_energy"]), lamp)
+	var aim: Dictionary = TrainLight.target(TrainLight.stage_of(c), "night", Look.mood_look(String(c["mood"])))
+	assert_almost_eq(float(c["lamp_energy"]), float(aim["lamp_energy"]), 0.001)
 	s.set_value("view.motion", "stopped")
 	assert_eq(float(s.car("front")["lamp_sway"]), 0.0)
 	s.set_value("train.seg", 9)

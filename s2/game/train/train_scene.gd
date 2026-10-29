@@ -563,7 +563,7 @@ func _seat_car(c: Dictionary, reseat: bool = true) -> void:
 	c["mood"] = m
 	if reseat:
 		_seat_bodies(c, comm, n, w, m, look)
-	# 등불은 생활 쪽이 밤·정차에 맞춰 곱하므로 다시 앉히지 않는 칸도 매번 바탕값부터 칠한다.
+	# 등불은 빛 판이 낮밤을, 생활 쪽이 정차·출발 흔들림을 덧칠하므로 다시 앉히지 않는 칸도 매번 바탕값부터 칠한다.
 	_dress_car(c, w, look)
 	_dress_backdrop()
 	(c["values"] as Label3D).text = values_text(c)
@@ -897,12 +897,10 @@ func _knot_gesture_facing(gesture_name: String, k: int, wide: float = 0.0, aside
 
 ## The lamp, the stove and the window frost follow the car's mood and warmth.
 func _dress_car(c: Dictionary, w: float, look: Dictionary) -> void:
-	var stage: int = TrainLight.stage_of(c)
+	# The hour's colour and strength reach the lamp only through this aim, eased like the
+	# mood's: setting its colour outright would flash every car when the hour turns.
 	var daytime: String = TrainLight.daytime_of(rules.get("view", {}))
-	if String(c.get("light_daytime", "")) != daytime:
-		TrainLight.apply_daytime([c["lamp"]] + (c["lamps"] as Array), c["windows"], stage, daytime)
-		c["light_daytime"] = daytime
-	var aim: Dictionary = TrainLight.target(stage, daytime, look)
+	var aim: Dictionary = TrainLight.target(TrainLight.stage_of(c), daytime, look)
 	c["lamp_color"] = aim["lamp_color"]
 	c["lamp_energy"] = float(aim["lamp_energy"])
 	c["lamp_sway"] = float(aim["lamp_sway"])
@@ -943,8 +941,7 @@ func _show_room(c: Dictionary) -> void:
 		shell_material.albedo_color = Color(base.r * warm.r * shade, base.g * warm.g * shade, base.b * warm.b * shade, base.a)
 	if c.has("stove_light"):
 		var burn: float = float(vis["burn"])
-		var stove_share: float = float(TrainLight.spec(TrainLight.stage_of(c), TrainLight.daytime_of(rules.get("view", {})))["stove"])
-		(c["stove_light"] as OmniLight3D).light_energy = STOVE_ENERGY * burn * stove_share
+		(c["stove_light"] as OmniLight3D).light_energy = STOVE_ENERGY * burn * float(c["stove_share"])
 		(c["steam"] as GPUParticles3D).emitting = burn >= Look.STOVE_STEAM_FROM
 
 
@@ -1393,13 +1390,16 @@ func _shell_box(c: Dictionary, size: Vector3, at: Vector3, color: Color) -> void
 
 
 func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: float) -> void:
+	var stage: int = TrainLight.stage_of(c)
+	var daytime: String = TrainLight.daytime_of(rules.get("view", {}))
+	# The stage's share of the stove, the same by day and night; read once, as the lamp's place.
+	c["stove_share"] = float(TrainLight.spec(stage, daytime)["stove"])
 	life.add_car(c)
 	# The car's lamp by its home stage and the hour (train_light.gd, 결정 486), easing toward
 	# the mood. One lamp a car and no shadow on the phone: a swaying lamp's shadow is drawn
 	# again every frame (+29k primitives on the first diagonal screen), and the second lamp and
 	# the window glow added no draw call but 39 lights over the train's 24.
-	var daytime: String = TrainLight.daytime_of(rules.get("view", {}))
-	var lamps: Array[OmniLight3D] = TrainLight.build(node, l, TrainLight.stage_of(c), daytime)
+	var lamps: Array[OmniLight3D] = TrainLight.build(node, l, stage, daytime)
 	var lamp: OmniLight3D = lamps[0]
 	lamp.shadow_enabled = false
 	for extra: OmniLight3D in lamps.slice(1):
@@ -1407,9 +1407,6 @@ func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: 
 	for i: int in TrainLight.WINDOW_SHARES.size():
 		node.get_node("Window%d" % i).free()
 	c["lamp"] = lamp
-	c["lamps"] = []
-	c["windows"] = []
-	c["light_daytime"] = daytime
 	c["lamp_color"] = lamp.light_color
 	c["lamp_energy"] = lamp.light_energy
 	c["lamp_sway"] = 1.0
