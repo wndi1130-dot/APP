@@ -1,5 +1,6 @@
 extends RefCounted
-## Put the train beyond the village, keeping the finished town intact.
+## Put the train beyond the village, keeping the finished town intact: the ground of
+## decision 494's stop forms (the clock and arrivals of a form are game/sim/stop_form.gd).
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
@@ -7,24 +8,35 @@ const MapShift = preload("res://game/world/map_shift.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const END_GAP: int = 12
 const TREE_STEP: int = 9
-const TRAIN_ANCHORS: Array[String] = ["horde_home", "horde_home_upper", "whistle", "engine", "flee_exit"]
+## Anchors the train carries. One the map set itself moves with the train; one worked
+## out from the train is worked out again.
+const TRAIN_ANCHORS: Array[String] = ["horde_home", "horde_home_upper", "whistle", "engine"]
+## The lights the train gives itself (the maps' cars and cab).
+const TRAIN_LIGHTS: Array[String] = ["car_window", "firebox"]
+## A siding's work yard is its map, as it is; a remote halt's ground is not built yet.
+const FORMS: Array[String] = ["city", "edge", "remote", "siding"]
 
 
 static func apply(data: Dictionary, form: String, run_seed: int, target_m: float = -1.0) -> Dictionary:
-	if form.is_empty():
+	if form.is_empty() or form == String(data.get("stop_form", "")):
 		return data
-	if form != "city" and form != "edge":
+	if form not in FORMS:
 		push_warning("unknown stop form '%s'" % form)
 		return data
-	if form == "edge" and data.get("stop_form", "") == "edge":
+	if form == "remote":
+		push_warning("stop form remote: its ground is not built yet, the map stands as it is")
 		return data
-	# The train keeps its row, so it can stand no nearer than the village's row.
-	if form == "edge" and target_m >= 0.0 and target_m < absf(_row_gap(data)):
-		push_warning("stop form edge: %.0f m is nearer than the village's row" % target_m)
+	if String(data.get("stop_form", "")) == "edge":
+		push_warning("stop form %s: the map already stands as an edge stop" % form)
 		return data
 	var out: Dictionary = data
 	if form == "edge":
-		out = _edge(data, run_seed, target_m)
+		# The train keeps its row, so it can stand no nearer than the village's row.
+		if target_m >= 0.0 and target_m < absf(_row_gap(data)):
+			push_warning("stop form edge: %.0f m is nearer than the village's row, the stop stays a city one" % target_m)
+			form = "city"
+		else:
+			out = _edge(data, run_seed, target_m)
 	_set_village(out, form)
 	return out
 
@@ -55,9 +67,14 @@ static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionar
 	var center: Vector2 = Vector2(train.position) + Vector2(train.size) * 0.5
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = hash("%d:stop_form:%s" % [run_seed, String(data.get("place_id", ""))])
-	var distance: float = target_m if target_m >= 0.0 else rng.randf_range(150.0, 300.0)
-	var direction: int = 1 if middle.x <= center.x else -1
 	var dy: float = center.y - middle.y
+	# A seeded walk-off is never nearer than the village's row either.
+	var lowest: float = maxf(150.0, absf(dy) + 1.0)
+	var highest: float = maxf(lowest, 300.0)
+	if target_m < 0.0 and lowest > 300.0:
+		push_warning("stop form edge: the village's row is %.0f m off the train's" % absf(dy))
+	var distance: float = target_m if target_m >= 0.0 else rng.randf_range(lowest, highest)
+	var direction: int = 1 if middle.x <= center.x else -1
 	var along: float = sqrt(maxf(0.0, distance * distance - dy * dy))
 	var empty_length: int = 0
 	if data.get("buildings", []).is_empty():
@@ -67,33 +84,54 @@ static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionar
 	var x: int = roundi(middle.x + float(direction) * along - float(train.size.x) * 0.5)
 	if target_m < 0.0:
 		var rounded: float = Vector2(float(x) + float(train.size.x) * 0.5 - middle.x, dy).length()
-		if rounded < 150.0:
+		if rounded < lowest:
 			x += direction
-		elif rounded > 300.0:
+		elif rounded > highest:
 			x -= direction
 	var dx: int = x - train.position.x
 	var length: int = maxi(1, x + train.size.x + END_GAP - old.width) if direction > 0 else maxi(1, END_GAP - x)
 	if empty_length > 0:
 		length = empty_length
 	var left: int = length if direction < 0 else 0
+	# Which anchors the map set itself, told apart from the worked-out ones on the map as it was.
+	var own: Dictionary = {}
+	var was_worked: Dictionary = FieldMaps.anchors(data)
+	var was_anchors: Dictionary = data.get("anchors", {})
+	for key: String in was_anchors:
+		own[key] = not was_worked.has(key) or was_anchors[key] != was_worked[key]
 	# grow refreshes the other floors; the ground is refreshed once, after the train moves.
 	var out: Dictionary = MapShift.grow(data, left, 0, length - left, 0, false)
 	# Its size is a Vector2i too: grow can shift a stale cache key into a match.
 	out.erase("_edge_plan")
+	var g: FieldGrid = out["grid"]
 	var added: Rect2i = Rect2i(0 if left > 0 else old.width, 0, length, old.height)
-	_extend_ground(out["grid"], old, added, 0 if left > 0 else old.width - 1)
+	var old_border: int = left if left > 0 else old.width - 1
+	var new_border: int = 0 if left > 0 else g.width - 1
+	_extend_ground(g, old, added, 0 if left > 0 else old.width - 1)
+	var moved_out: Dictionary = _move_entries_out(out, old_border, new_border)
 	_move_train(out, Vector2i(dx, 0))
 	_add_trees(out, added, rng)
-	(out["grid"] as FieldGrid).refresh_paths()
+	g.refresh_paths()
 	out["boarding"] = [out["platform"]] + FieldMaps.side_strips(out, out["platform"])
 	out["unloading"] = [out["unload"]] + FieldMaps.side_strips(out, out["unload"])
 	var anchors: Dictionary = out.get("anchors", {})
 	var worked: Dictionary = FieldMaps.anchors(out)
 	for key: String in TRAIN_ANCHORS:
-		if worked.has(key):
+		if own.get(key, false):
+			anchors[key] += Vector2i(dx, 0)
+		elif worked.has(key):
 			anchors[key] = worked[key]
 		else:
 			anchors.erase(key)
+	# A way out the map set goes out with its entry; a worked-out one is worked out again.
+	if own.get("flee_exit", false):
+		var flee: Vector2i = anchors["flee_exit"]
+		if moved_out.has(flee):
+			anchors["flee_exit"] = moved_out[flee]
+		elif flee.x == old_border:
+			anchors["flee_exit"] = Vector2i(new_border, flee.y)
+	elif worked.has("flee_exit"):
+		anchors["flee_exit"] = worked["flee_exit"]
 	out["anchors"] = anchors
 	return out
 
@@ -106,6 +144,22 @@ static func _extend_ground(g: FieldGrid, old: FieldGrid, added: Rect2i, edge_x: 
 			continue
 		for x: int in range(added.position.x, added.end.x):
 			g.floor[g.index(Vector2i(x, y))] = floor_kind
+
+
+## The dead still come from beyond the map (map_ring.gd does the same): a ground entry on
+## the grown side's old border moves straight out to the new one. Old cell -> new cell.
+static func _move_entries_out(data: Dictionary, old_border: int, new_border: int) -> Dictionary:
+	var moved: Dictionary = {}
+	for id in data.get("entries", {}):
+		if data.get("manholes", {}).has(id) or int(data.get("entry_levels", {}).get(id, 0)) != 0:
+			continue
+		var cells: Array = data["entries"][id]
+		for i: int in range(cells.size()):
+			var c: Vector2i = cells[i]
+			if c.x == old_border:
+				moved[c] = Vector2i(new_border, c.y)
+				cells[i] = moved[c]
+	return moved
 
 
 static func _move_train(data: Dictionary, offset: Vector2i) -> void:
@@ -142,13 +196,26 @@ static func _move_train(data: Dictionary, offset: Vector2i) -> void:
 	var spawns: Dictionary = data.get("spawns", {})
 	for key: String in ["train_door", "squad"]:
 		_move_cells(spawns.get(key, []), offset)
+	# The platform by the train goes with it, its painted floor too.
+	var platform_cells: Dictionary = {}
 	for key: String in ["platform", "unload"]:
 		var rect: Rect2i = data.get(key, train.grow(FieldMaps.BY_TRAIN))
 		if rect.intersects(train.grow(3)):
+			for y: int in range(rect.position.y, rect.end.y):
+				for x: int in range(rect.position.x, rect.end.x):
+					var c: Vector2i = Vector2i(x, y)
+					if g.inside(c) and g.floor_at(c) == FieldGrid.Floor.PLATFORM:
+						platform_cells[c] = true
 			rect.position += offset
 		data[key] = rect
+	for c: Vector2i in platform_cells:
+		g.floor[g.index(c)] = FieldGrid.Floor.SNOW
+	for c: Vector2i in platform_cells:
+		var to: Vector2i = c + offset
+		if g.inside(to) and g.solid_at(to) == FieldGrid.Solid.NONE and g.floor_at(to) != FieldGrid.Floor.RAIL:
+			g.floor[g.index(to)] = FieldGrid.Floor.PLATFORM
 	for light: Dictionary in data.get("lights", []):
-		if int(light.get("level", 0)) == 0 and train.grow(1).has_point(light["cell"]):
+		if String(light.get("kind", "")) in TRAIN_LIGHTS or (int(light.get("level", 0)) == 0 and train.has_point(light["cell"])):
 			light["cell"] += offset
 	var slots: Array = data.get("barricade_slots", [])
 	for i: int in range(slots.size()):
@@ -217,12 +284,29 @@ static func _tree_clear(data: Dictionary, added: Rect2i, c: Vector2i, rail_rows:
 	return true
 
 
+## The keys other strands read: the form, the village's cell and the walk there from the
+## train doors. The cell is the outdoor one nearest the buildings' middle that the doors
+## reach on foot within 600 m (the middle itself often falls in a big hall or a locked
+## yard); with none, the middle's own cell and -1 m.
 static func _set_village(data: Dictionary, form: String) -> void:
 	var g: FieldGrid = data["grid"]
 	var middle: Vector2 = village_middle(data)
-	var c: Vector2i = g.nearest_walkable(Vector2i(floori(middle.x), floori(middle.y)), false, 12)
 	var field: PackedInt32Array = WorkSpots.walk_field(data, 600.0)
-	var steps: int = field[g.index(c)] if g.inside(c) else -1
+	var best: Vector2i = Vector2i(-1, -1)
+	var best_d: float = INF
+	for y: int in range(g.height):
+		for x: int in range(g.width):
+			var i: int = y * g.width + x
+			if field[i] < 0 or g.building[i] >= 0:
+				continue
+			var d: float = Vector2(float(x) + 0.5, float(y) + 0.5).distance_squared_to(middle)
+			if d < best_d:
+				best_d = d
+				best = Vector2i(x, y)
 	data["stop_form"] = form
-	data["village_middle"] = c
-	data["walk_to_village_m"] = -1.0 if steps < 0 else float(steps) / float(WorkSpots.STEP)
+	if best.x < 0:
+		data["village_middle"] = Vector2i(floori(middle.x), floori(middle.y))
+		data["walk_to_village_m"] = -1.0
+	else:
+		data["village_middle"] = best
+		data["walk_to_village_m"] = float(field[g.index(best)]) / float(WorkSpots.STEP)

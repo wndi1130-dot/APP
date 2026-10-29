@@ -10,7 +10,7 @@ signal built
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
-const StopForm = preload("res://game/world/stop_form.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const WoodsShade = preload("res://fx/woods_shade.gd")
@@ -458,11 +458,8 @@ func _ready() -> void:
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
-	var form: String = String(opts.get("stop_form", ""))
-	if not form.is_empty() and form != String(stop_map.get("stop_form", "")):
-		for key: String in AHEAD_KEYS:
-			stop_map.erase(key)
-		stop_map = StopForm.apply(stop_map, form, rng.seed, float(opts.get("stop_form_m", -1.0)))
+	stop_map = shape_stop(stop_map, String(opts.get("stop_form", "")), rng.seed, float(opts.get("stop_form_m", -1.0)),
+		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	_take_map(with_side_path(stop_map, rng.seed))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
@@ -1507,6 +1504,21 @@ func allies_alive() -> Array:
 ## the rooms' finish, the walk from the train and the trees to fell (work_spots.gd).
 const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground_arrays", "_ground_key",
 	"_floor_arrays", "_floor_keys", "_room_finish", "_walk_field", "_walk_key", "fell_groves"]
+
+
+## The ground of the stop's form (stop_ground.gd), put on before the side path
+## (with_side_path). An edge stop grows and shifts the map, so what the loader made
+## ahead from it is dropped first, and a map handed over with its side path already on
+## is built again bare by `fresh`; a city or siding stop keeps all of it.
+static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable) -> Dictionary:
+	if form.is_empty() or form == String(map.get("stop_form", "")):
+		return map
+	if form == "edge":
+		if map.has("side_path"):
+			map = fresh.call()
+		for key in AHEAD_KEYS:
+			map.erase(key)
+	return StopGround.apply(map, form, run_seed, target_m)
 
 
 ## The side path on a map built here or handed over (side_path.gd). The loader puts it
