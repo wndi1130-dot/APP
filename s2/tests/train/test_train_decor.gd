@@ -31,6 +31,9 @@ func _fresh() -> Dictionary:
 	g["sup"] = 20.0
 	g["ledger"] = []
 	g["journal"] = []
+	# The table points carry no draw state or card list; a save read and the draw check need both.
+	g["rng"] = {"state": 1}
+	if not g.has("cards"): g["cards"] = []
 	return g
 
 
