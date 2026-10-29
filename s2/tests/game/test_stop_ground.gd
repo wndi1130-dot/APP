@@ -310,6 +310,8 @@ func test_edge_nearer_than_the_village_row_warns_and_stays_a_city_stop() -> void
 	assert_gt(gap, 1.0, "the village sits off the train's row")
 	assert_true(is_same(StopGround.apply(was, "edge", 71, gap - 1.0), was))
 	assert_eq(was["stop_form"], "city")
+	assert_eq(was["stop_form_asked"], "edge", "what was asked stays, so it is not put on again")
+	assert_true(is_same(FieldGame.shape_stop(was, "edge", 71, gap - 1.0, func() -> Dictionary: return {}), was))
 	assert_true(is_same(was["grid"], grid))
 	assert_eq(was["train"], train)
 	assert_push_warning_count(1)

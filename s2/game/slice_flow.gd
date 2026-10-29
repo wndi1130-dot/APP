@@ -306,7 +306,7 @@ func go(i: int) -> void:
 	# The next stop is known on the train: its map is made ready off the main
 	# thread while the train runs.
 	if id == "train" and _cinema_on():
-		loader.prepare(_field_place(), int(opts.get("seed", 1)))
+		loader.prepare(_field_place(), int(opts.get("seed", 1)), String(opts.get("stop_form", "")), float(opts.get("stop_form_m", -1.0)))
 	if id == "stop_pick" and _cinema_on():
 		_show_stop_cinema()
 		return
@@ -411,7 +411,7 @@ func _show_stop_cinema() -> void:
 	for p in plates.get_children():
 		plates.remove_child(p)
 		p.queue_free()
-	loader.prepare(_field_place(), int(opts.get("seed", 1)))
+	loader.prepare(_field_place(), int(opts.get("seed", 1)), String(opts.get("stop_form", "")), float(opts.get("stop_form_m", -1.0)))
 	# Its own scene (scenes/stop_cinema.tscn), so the train and the weather can be dressed there.
 	var c = STOP_CINEMA_SCENE.instantiate()
 	c.name = "StopCinema"
@@ -1526,6 +1526,11 @@ func _field_opts() -> Dictionary:
 	o["laws"] = (train_g.get("passed", {}) as Dictionary).keys()
 	if opts.has("place"):
 		o["place"] = String(opts["place"])
+	# A stop form asked of the slice (stop_ground.gd, a test switch for now): the loader
+	# makes the map in it, off the main thread (prepare), and the field keeps it.
+	for key: String in ["stop_form", "stop_form_m"]:
+		if opts.has(key):
+			o[key] = opts[key]
 	return o
 
 
