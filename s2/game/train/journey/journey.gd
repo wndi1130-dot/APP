@@ -47,6 +47,8 @@ const REBASE_M: float = 2000.0
 ## How far past the camera's middle the land may be in sight (the wide diagonal view
 ## sees about 22 m ahead, 36 m through the pane): a new window's land begins past it.
 const SIGHT_M: float = 40.0
+## What a frame may spend making the pieces worked out into nodes (Kit.make).
+const MAKE_BUDGET_USEC: int = 6000
 
 var host: Node3D                    # the train scene (train_scene.gd)
 var look: Dictionary = {}
@@ -77,6 +79,16 @@ var _chunk_i: int = 0
 var _opts: Dictionary = {}
 var _seen_cfg: Dictionary = {}
 var _filled: bool = false
+## Pieces worked out ahead on a worker (journey_kit.gd plan), oldest first:
+## {s0, s1, kind, task, box}. laid_to is where those made reach, _planned_to where
+## those worked out reach.
+var _planned: Array = []
+var _planned_to: float = -MARGIN
+## The land has reached past the train once since it was first shown: till then it
+## stays hidden (train_scene's snow sheet covers, giving way to a Journey shown).
+var _shown_once: bool = false
+## Work the pieces out here on the main thread as they are needed (o.sync).
+var _sync: bool = false
 
 
 static func enabled() -> bool:
@@ -86,7 +98,8 @@ static func enabled() -> bool:
 ## Hang the land beside the train scene `train_scene` under `parent`, for stretch
 ## `stretch` in the stretch's `l` look. o: seed (int), band (else the season table's),
 ## remember (keep what was seen over runs, default true), view ("diag" stands in for
-## the train's view_mode: tools, tests), running (stands in for the train's).
+## the train's view_mode: tools, tests), running (stands in for the train's), sync
+## (the pieces worked out on the main thread: the tools' before).
 static func attach(parent: Node, train_scene: Node3D, l: Dictionary, stretch: int, o: Dictionary = {}) -> Node3D:
 	var j = load("res://game/train/journey/journey.gd").new()
 	j.host = train_scene
@@ -107,20 +120,33 @@ func _ready() -> void:
 	if bool(_opts.get("remember", true)):
 		_seen_cfg = _load_seen()
 	director.setup(hash([seed_value, seg, "events"]), _seen_cfg)
+	_sync = bool(_opts.get("sync", false))
 	land = Node3D.new()
 	land.name = "Land"
 	add_child(land)
 	_build_track()
 	speed = RUN_SPEED if _running() else 0.0
-	visible = shown()
-	if visible:
+	visible = false
+	if shown():
 		_fill()
 
 
 func _process(delta: float) -> void:
-	visible = shown()
-	if visible:
-		step(minf(delta, 0.1))
+	if not shown():
+		visible = false
+		return
+	if not _filled:
+		_fill()
+	if not _shown_once:
+		# First shown: the pieces are being worked out; the land shows once it reaches
+		# past the train, never half laid.
+		_make_planned(MAKE_BUDGET_USEC)
+		if laid_to < travelled + _train_length() + MARGIN:
+			visible = false
+			return
+		_shown_once = true
+	visible = true
+	step(minf(delta, 0.1))
 
 
 ## Whether the train's screen is the diagonal one (train_scene view_mode; str(), as a
@@ -131,11 +157,12 @@ func shown() -> bool:
 	return host != null and str(host.get("view_mode")) == "diag"
 
 
-## The land as far as the train and past it, at once: nothing is laid in sight.
+## The land as far as the train and past it, worked out at once (on workers, side by
+## side) and made as each is done. The kit's models are read first, here.
 func _fill() -> void:
 	_filled = true
-	while laid_to < _front():
-		_lay_one()
+	Kit.warm()
+	_plan_to(_front())
 
 
 ## One tick (the tests call it straight).
@@ -151,8 +178,13 @@ func step(delta: float) -> void:
 		_rebase()
 	land.position.x = _base - travelled
 	sleepers.position.x = -fposmod(travelled, SLEEPER_STEP)
-	if laid_to < _front():
-		_lay_one()
+	_plan_to(_front())
+	_make_planned(MAKE_BUDGET_USEC)
+	# Never short of land past the train: wait for the next piece worked out (at the run
+	# speed AHEAD_M is worked out well before it is needed; a test stepping straight
+	# through waits here).
+	while laid_to < travelled + _train_length() + MARGIN and not _planned.is_empty():
+		_make_next(true)
 	while not chunks.is_empty() and float(chunks[0]["s1"]) - travelled < -MARGIN - CHUNK_M:
 		(chunks[0]["node"] as Node3D).queue_free()
 		chunks.pop_front()
@@ -169,11 +201,13 @@ func next_window() -> void:
 	window_i += 1
 	if not _filled:
 		return
+	_drop_planned()
 	var keep_to: float = travelled + _cam_x() + SIGHT_M
 	while chunks.size() > 1 and float(chunks[-1]["s0"]) >= keep_to:
 		var c: Dictionary = chunks.pop_back()
 		(c["node"] as Node3D).queue_free()
 		laid_to = float(c["s0"])
+	_planned_to = laid_to
 	_section_end = laid_to
 
 
@@ -189,8 +223,8 @@ func handoff() -> Dictionary:
 	if not _filled:
 		return {}
 	return {"band": band, "window": window().duplicate(), "seed": hash([int(_opts.get("seed", 1)), seg, "corridor"]),
-		"history": seq.history.duplicate(true), "at": laid_to / RUN_SPEED, "look": look,
-		"section": _section.duplicate(), "section_left_m": maxf(_section_end - laid_to, 0.0), "chunk": _chunk_i}
+		"history": seq.history.duplicate(true), "at": _planned_to / RUN_SPEED, "look": look,
+		"section": _section.duplicate(), "section_left_m": maxf(_section_end - _planned_to, 0.0), "chunk": _chunk_i}
 
 
 ## The kind of land at route metre `s` ("" none laid there).
@@ -198,6 +232,9 @@ func kind_at(s: float) -> String:
 	for c: Dictionary in chunks:
 		if s >= float(c["s0"]) and s < float(c["s1"]):
 			return String(c["kind"])
+	for p: Dictionary in _planned:
+		if s >= float(p["s0"]) and s < float(p["s1"]):
+			return String(p["kind"])
 	return String(_section.get("kind", ""))
 
 
@@ -221,21 +258,76 @@ func _front() -> float:
 	return travelled + _train_length() + MARGIN + AHEAD_M
 
 
-func _lay_one() -> void:
-	if laid_to >= _section_end:
+func _plan_to(to: float) -> void:
+	while _planned_to < to:
+		_plan_one()
+
+
+## The next piece's place, kind and dressing, chosen here in order (so the land is the
+## same however the workers keep time), worked out on a worker.
+func _plan_one() -> void:
+	if _planned_to >= _section_end:
 		_next_section()
-	var s0: float = laid_to
+	var s0: float = _planned_to
 	var s1: float = minf(s0 + CHUNK_M, _section_end)
 	if _section_end - s1 < CHUNK_M * 0.35:
 		s1 = _section_end
 	var w: Dictionary = window()
 	var kind: String = String(_section.get("kind", "plain"))
-	var node: Node3D = Kit.build(kind, s0, s1, _section, look, {"ground": true, "neutral": bool(w.get("neutral", false)), "chunk": _chunk_i})
-	node.position.x = s0 - _base
-	land.add_child(node)
-	chunks.append({"node": node, "s0": s0, "s1": s1, "kind": kind})
-	laid_to = s1
+	# The worker reads copies of its own (the host may change its look meanwhile).
+	var args: Array = [kind, s0, s1, _section.duplicate(true), look.duplicate(true), {"ground": true, "neutral": bool(w.get("neutral", false)), "chunk": _chunk_i}]
+	var box: Dictionary = {}
+	var task: int = -1
+	if _sync:
+		_plan_off_thread(box, args)
+	else:
+		task = WorkerThreadPool.add_task(_plan_off_thread.bind(box, args), false, "journey piece")
+	_planned.append({"s0": s0, "s1": s1, "kind": kind, "task": task, "box": box})
+	_planned_to = s1
 	_chunk_i += 1
+
+
+## On the worker: the piece as data (journey_kit.gd plan), nothing in the scene tree.
+static func _plan_off_thread(box: Dictionary, args: Array) -> void:
+	box["plan"] = Kit.plan(String(args[0]), float(args[1]), float(args[2]), args[3], args[4], args[5])
+
+
+## The pieces worked out, made and laid in order while `budget_usec` lasts.
+func _make_planned(budget_usec: int) -> void:
+	var from: int = Time.get_ticks_usec()
+	while not _planned.is_empty() and Time.get_ticks_usec() - from < budget_usec:
+		if not _make_next(false):
+			return
+
+
+## The oldest piece worked out, made and laid; `wait`: till its worker is done.
+func _make_next(wait: bool) -> bool:
+	var p: Dictionary = _planned[0]
+	var task: int = int(p["task"])
+	if task >= 0:
+		if not wait and not WorkerThreadPool.is_task_completed(task):
+			return false
+		WorkerThreadPool.wait_for_task_completion(task)
+	_planned.pop_front()
+	var node: Node3D = Kit.make(p["box"]["plan"])
+	node.position.x = float(p["s0"]) - _base
+	land.add_child(node)
+	chunks.append({"node": node, "s0": p["s0"], "s1": p["s1"], "kind": p["kind"]})
+	laid_to = float(p["s1"])
+	return true
+
+
+## The pieces worked out and not laid yet go (their workers finish first).
+func _drop_planned() -> void:
+	for p: Dictionary in _planned:
+		if int(p["task"]) >= 0:
+			WorkerThreadPool.wait_for_task_completion(int(p["task"]))
+	_planned.clear()
+
+
+func _exit_tree() -> void:
+	# A worker still on a piece finishes before the land goes.
+	_drop_planned()
 
 
 func _next_section() -> void:
@@ -243,10 +335,10 @@ func _next_section() -> void:
 	if kinds.is_empty():
 		_section = {"kind": "plain", "len_s": 60.0, "seed": 0, "mirror": false}
 	else:
-		_section = seq.next(laid_to / RUN_SPEED, kinds)
+		_section = seq.next(_planned_to / RUN_SPEED, kinds)
 	if not bool(_section.get("extend", false)):
 		_chunk_i = 0
-	_section_end = laid_to + float(_section["len_s"]) * RUN_SPEED
+	_section_end = _planned_to + float(_section["len_s"]) * RUN_SPEED
 
 
 func _rebase() -> void:

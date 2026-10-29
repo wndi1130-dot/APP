@@ -13,6 +13,8 @@ extends SceneTree
 ## the stop scene lights its world) — a preview: the train screen's own light is mood's.
 ## --long=<s>: after the before/after, the frame times over <s> seconds with the land
 ## running, the frames a piece was laid in apart (one every 15 s: 150 frames miss them).
+## --enter: the side view going over to the diagonal one (as train-3d's view_mode does)
+## a second in: the frames from the switch, and how many till the land is shown.
 
 const Journey = preload("res://game/train/journey/journey.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
@@ -64,6 +66,7 @@ var stop_mode := false
 var no_kit := false
 var lit := false
 var long_s := 0.0
+var enter_mode := false
 var flow = null
 var t = null
 var cam: Camera3D = null
@@ -91,6 +94,8 @@ func _initialize() -> void:
 			lit = true
 		elif a.begins_with("--long="):
 			long_s = float(a.substr(7))
+		elif a == "--enter":
+			enter_mode = true
 	DirAccess.make_dir_recursive_absolute(out)
 	if stop_mode:
 		_run_stop()
@@ -110,8 +115,15 @@ func _run_views() -> void:
 	_diagonal()
 	if lit:
 		_daylight(flow.outside.look if flow.outside != null else {})
-	journey = Journey.attach(t, t, flow.outside.look if flow.outside != null else {}, 1, {"seed": 1, "remember": false, "running": true, "view": "diag"})
+	journey = Journey.attach(t, t, flow.outside.look if flow.outside != null else {}, 1,
+		{"seed": 1, "remember": false, "running": true, "view": "side" if enter_mode else "diag"})
 	journey.calm = true
+	if enter_mode:
+		await _measure_enter()
+		_save()
+		print("DONE")
+		quit()
+		return
 	await create_timer(2.0).timeout
 	_show(false)
 	await _shot("before_diag")
@@ -193,6 +205,31 @@ func _measure(key: String) -> void:
 		"journey_chunks": (journey.get("chunks") as Array).size() if journey != null else 0,
 	}
 	print("PERF ", key, " ", results[key])
+
+
+## The side view gone over to the diagonal one: each frame's time from the switch, the
+## worst, and the frames till the land is shown.
+func _measure_enter() -> void:
+	await create_timer(1.0).timeout
+	(journey.get("_opts") as Dictionary)["view"] = "diag"
+	var frames: Array = []
+	var shown_at: int = -1
+	var last: int = Time.get_ticks_usec()
+	for i in 120:
+		await process_frame
+		var now: int = Time.get_ticks_usec()
+		frames.append(snappedf(float(now - last) / 1000.0, 0.1))
+		last = now
+		if shown_at < 0 and journey.visible:
+			shown_at = i + 1
+	var worst: float = 0.0
+	for ms: float in frames:
+		worst = maxf(worst, ms)
+	results["enter"] = {"first_frames_ms": frames.slice(0, 12), "worst_ms": worst,
+		"over_33ms": frames.filter(func(x: float) -> bool: return x > 33.4).size(),
+		"over_50ms": frames.filter(func(x: float) -> bool: return x > 50.0).size(),
+		"shown_after_frames": shown_at, "chunks": (journey.get("chunks") as Array).size()}
+	print("ENTER ", results["enter"])
 
 
 ## The frame times over `seconds` with the land running: the frames a piece was laid
