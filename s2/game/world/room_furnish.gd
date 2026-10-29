@@ -899,6 +899,12 @@ const LAYOUT_CLASSES: Dictionary = {"bed": true, "living": true, "kitchen": true
 const ANCHOR_KINDS: Dictionary = {"bed": true, "settee": true, "wardrobe": true, "dresser": true, "bookcase": true, "bathtub": true}
 const LEAN_BONUS := 1.5
 const GRAIN := 0.6
+## _roll 쓰임 번호(점검 L3): 배치 틀의 기댈 벽, 부엌 줄의 난로 끝, 깔개의 깔림·무늬·결.
+const ROLL_BACK := 1
+const ROLL_RUN_END := 2
+const ROLL_RUG := 3
+const ROLL_WEAVE := 4
+const ROLL_RUG_LOOK := 5
 ## 깔개(room_finish 깔개 칸): 방 갈래마다 깔릴 몫과 고르는 무늬(셰이더 room_rug_finish의 0~6).
 const RUG_CHANCE: Dictionary = {"bed": 0.55, "living": 0.8, "dining": 0.9}
 const RUG_WEAVES: Dictionary = {"bed": [0, 2, 3, 6], "living": [1, 3, 4, 5, 0], "dining": [1, 5, 0]}
@@ -1502,6 +1508,18 @@ static func _grain(r: Rect2i, salt: int) -> float:
 	return float(hash([r.position.x, r.position.y, r.size.x, r.size.y, salt]) % 1000) / 1000.0
 
 
+## 방의 배치 틀 씨앗. rng와 따로라 묶음 고르기·목표 몫은 바꾸지 않는다.
+static func look_seed_of(place: String, building: int, lv: int, ri: int) -> int:
+	return ("%s|%d|%d|%d|look" % [place, building, lv, ri]).hash() & 0x7fffffff
+
+
+## 배치 틀·깔개의 굴림 하나(0 이상): 씨앗과 쓰임 번호(ROLL_*)를 PCG로 섞는다. String.hash()(djb2)의
+## 비트를 잘라 쓰면 방 번호가 1 늘 때 낮은 비트도 1씩 늘어 이웃 방이 기댈 벽을 차례로 돌고, 쓰임끼리
+## 같은 비트를 나눠 써서 서로 따라간다.
+static func _roll(base: int, purpose: int) -> int:
+	return int(rand_from_seed(hash([base, purpose]))[0])
+
+
 ## 점수 높은 것, 같으면 위·왼쪽·넓은 것이 앞. 위 몇 개만 남긴다.
 static func _ahead(a: Dictionary, b: Dictionary) -> bool:
 	if a["score"] != b["score"]:
@@ -1585,9 +1603,10 @@ static func _kitchen_run(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arr
 				rects.append(Rect2i(c, Vector2i.ONE))
 			if _still_open(g, of, ri, keys, before, rects + guard):
 				var out: Array = []
+				# 난로와 개수대는 방마다 어느 끝에 설지 굴린다.
+				var flip := salt >= 0 and _roll(salt, ROLL_RUN_END) & 1 == 1
 				for i in range(line.size()):
-					# 난로와 개수대는 방마다 어느 끝에 설지 굴린다.
-					var at := line.size() - 1 - i if salt >= 0 and (salt >> 4) & 1 == 1 else i
+					var at := line.size() - 1 - i if flip else i
 					var kind: String = "cold_stove" if at == 0 else ("sink" if at == line.size() - 1 else "counter")
 					var r: Rect2i = rects[i]
 					var facing := 0
@@ -1731,8 +1750,8 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 			var rng := RandomNumberGenerator.new()
 			rng.seed = ("%s|%d|%d|%d" % [place, int(room["building"]), lv, ri]).hash()
 			# 배치 틀: rng를 쓰지 않아 묶음 고르기·목표 몫은 그대로다.
-			var look_seed: int = ("%s|%d|%d|%d|look" % [place, int(room["building"]), lv, ri]).hash() & 0x7fffffff
-			var taste: Dictionary = {"back": DIRS[look_seed & 3], "salt": look_seed} if LAYOUT_CLASSES.has(cls) else {}
+			var look_seed := look_seed_of(place, int(room["building"]), lv, ri)
+			var taste: Dictionary = {"back": DIRS[_roll(look_seed, ROLL_BACK) % DIRS.size()], "salt": look_seed} if LAYOUT_CLASSES.has(cls) else {}
 			var area := cells.size()
 			var used := 0
 			for c: Vector2i in taken:
@@ -1973,7 +1992,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 ## 거실은 낮은 탁자 둘레, 없으면 방 가운데. 방 칸을 벗어나는 줄은 깎고, 2×2보다 작으면 깔지 않는다.
 ## 납작해서 길·문 앞을 막지 않는다(걷는 길 검사 밖). 계단 칸은 덮지 않는다. {} 이면 없음.
 static func _lay_rug(cls: String, cells: Array[Vector2i], placed: Array, stairs: Dictionary, salt: int) -> Dictionary:
-	if float((salt >> 6) % 1000) / 1000.0 >= float(RUG_CHANCE.get(cls, 0.0)):
+	if float(_roll(salt, ROLL_RUG) % 1000) / 1000.0 >= float(RUG_CHANCE.get(cls, 0.0)):
 		return {}
 	var inside: Dictionary = {}
 	var lo := cells[0]
@@ -2022,7 +2041,7 @@ static func _lay_rug(cls: String, cells: Array[Vector2i], placed: Array, stairs:
 			if not inside.has(Vector2i(x, y)):
 				return {}
 	var weaves: Array = RUG_WEAVES[cls]
-	return {"rect": rug, "look": 1 + int(weaves[(salt >> 16) % weaves.size()]) * 32 + (salt >> 20) % 32}
+	return {"rect": rug, "look": 1 + int(weaves[_roll(salt, ROLL_WEAVE) % weaves.size()]) * 32 + _roll(salt, ROLL_RUG_LOOK) % 32}
 
 
 ## 후보 가운데 pick 번째를 먼저, 나머지는 차례로 세워 보고 길이 남는 첫 자리. 그 자리는 칸을 막고

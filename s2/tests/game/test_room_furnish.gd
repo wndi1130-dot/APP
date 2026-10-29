@@ -561,14 +561,42 @@ func test_a_rug_lies_under_the_bed_inside_the_room() -> void:
 		for x in range(5):
 			cells.append(Vector2i(x, y))
 	var placed := [{"item": {"kind": "bed"}, "rect": Rect2i(1, 1, 2, 1), "facing": 0}]
-	var rug := RoomFurnish._lay_rug("bed", cells, placed, {}, 0)
+	var lies := _rug_salt("bed", true)
+	var rug := RoomFurnish._lay_rug("bed", cells, placed, {}, lies)
 	assert_eq(rug.get("rect"), Rect2i(1, 0, 2, 3), "the bed's width, a cell more on either long side")
 	assert_between(int(rug.get("look", 0)), 1, 224)
 	var by_wall := [{"item": {"kind": "bed"}, "rect": Rect2i(1, 0, 2, 1), "facing": 0}]
-	assert_eq(RoomFurnish._lay_rug("bed", cells, by_wall, {}, 0).get("rect"), Rect2i(1, 0, 2, 2), "trimmed at the wall")
-	assert_true(RoomFurnish._lay_rug("bed", cells, by_wall, {Vector2i(2, 1): true}, 0).is_empty(), "never over the stairs")
-	assert_true(RoomFurnish._lay_rug("bed", cells, placed, {}, 600 << 6).is_empty(), "not every bedroom has one")
-	assert_true(RoomFurnish._lay_rug("kitchen", cells, placed, {}, 0).is_empty(), "no rug in a kitchen")
+	assert_eq(RoomFurnish._lay_rug("bed", cells, by_wall, {}, lies).get("rect"), Rect2i(1, 0, 2, 2), "trimmed at the wall")
+	assert_true(RoomFurnish._lay_rug("bed", cells, by_wall, {Vector2i(2, 1): true}, lies).is_empty(), "never over the stairs")
+	assert_true(RoomFurnish._lay_rug("bed", cells, placed, {}, _rug_salt("bed", false)).is_empty(), "not every bedroom has one")
+	assert_true(RoomFurnish._lay_rug("kitchen", cells, placed, {}, lies).is_empty(), "no rug in a kitchen")
+
+
+## 깔개 굴림이 want(깔림·안 깔림)로 나오는 첫 씨앗.
+func _rug_salt(cls: String, want: bool) -> int:
+	for s in range(1000):
+		if (float(RoomFurnish._roll(s, RoomFurnish.ROLL_RUG) % 1000) / 1000.0 < float(RoomFurnish.RUG_CHANCE[cls])) == want:
+			return s
+	return -1
+
+
+## 점검 L3: 기댈 벽·깔개는 방 번호를 따라 차례로 돌지 않는다(씨앗 비트를 잘라 쓰지 않고 섞어 고른다).
+func test_lean_walls_and_rugs_do_not_step_with_the_room_number() -> void:
+	var steps := 0
+	var backs: Dictionary = {}
+	var rugs := 0
+	var prev := -1
+	for ri in range(40):
+		var s := RoomFurnish.look_seed_of("houses_01", 3, 0, ri)
+		var back := RoomFurnish._roll(s, RoomFurnish.ROLL_BACK) % 4
+		backs[back] = int(backs.get(back, 0)) + 1
+		if prev >= 0 and back == (prev + 1) % 4:
+			steps += 1
+		prev = back
+		rugs += int(RoomFurnish._roll(s, RoomFurnish.ROLL_RUG) % 1000 < 550)
+	assert_eq(backs.size(), 4, "all four walls lean: %s" % str(backs))
+	assert_lt(steps, 20, "the lean wall does not step round the room once per room number: %d of 39" % steps)
+	assert_between(rugs, 12, 32, "about half the bedrooms have a rug")
 
 
 ## 배치 틀(사용자 10-28 「가구배치가 단조로우면 안돼」): 한 동네의 침실들에서 침대가 한 구석으로 몰리지 않는다.
