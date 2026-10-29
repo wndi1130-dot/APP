@@ -48,17 +48,33 @@ func test_the_steps_come_in_the_slice_order_with_the_train_behind_them() -> void
 	var f = _flow()
 	var seen: Array = []
 	var phases: Array = []
+	var bands: Array = []
 	while true:
 		seen.append(f.current())
 		phases.append(f.train.phase() if f.train != null else "")
+		bands.append(String(f.train.rules["view"]["region"]) if f.train != null else "")
 		assert_true(f.panel.visible or f.card != null, f.current() + " has its panel or its screen")
 		if f.current() == "end":
 			break
 		f.next()
 	assert_eq(seen, ["train", "stop_pick", "receipt", "council", "travel", "arrive", "end"], "the field is skipped here")
 	assert_eq(phases, ["travel", "stop", "settle", "council", "travel", "stop", "end"])
+	# The field's map is the first stop's own (K1) and the second station the stop after it (K3).
+	assert_eq(bands, ["K1", "K1", "K1", "K1", "K3", "K3", "K3"], "running: the band of the stop ahead; standing: the stop's own")
 	assert_eq(String(f.card.name), "EndCard")
 	assert_eq(f.card.go_key.text, "처음으로", "the main key draws its own arrow")
+
+
+func test_field_opts_carry_the_band_of_the_steps_stop() -> void:
+	var f = _flow()
+	for row: Array in [["stop_pick", "K1"], ["field", "K1"], ["arrive", "K3"]]:
+		f.step = f._index_of(String(row[0]))
+		assert_eq(f._field_opts()["region"], row[1], "the first stop's own map: " + String(row[0]))
+	# A map any stop may use takes the band of the stop its stretch reaches.
+	var any = _flow({"place": "houses_01"})
+	for row: Array in [["stop_pick", "K3"], ["arrive", "K4"]]:
+		any.step = any._index_of(String(row[0]))
+		assert_eq(any._field_opts()["region"], row[1], "a shared map: " + String(row[0]))
 
 
 func test_the_second_station_is_its_sheet_and_the_end_the_long_sheet() -> void:

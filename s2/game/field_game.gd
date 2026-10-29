@@ -18,6 +18,7 @@ const SidePath = preload("res://game/world/side_path.gd")
 const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const RouteStops = preload("res://game/train/route_stops.gd")
+const RouteBands = preload("res://game/train/route_bands.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -429,7 +430,16 @@ func _ready() -> void:
 	weather = Weather.new(storm.get("rules", opts.get("weather", ["fog", "snow"])), OutsideTemp.of(opts, cold, side), Vector2(1, 0.2), 0.4)
 	# Picture inputs for the storm stops (weather_fx 14장): rules still read weather.
 	look_kinds = opts.get("look", storm.get("kinds", weather.kinds))
-	region = Atmosphere.region_key(String(opts.get("region", Atmosphere.DEFAULT_REGION)))
+	# The stop's band (decision 494): a stop's own map shows its own stop's band on any
+	# stretch, any other map the band of the departure's stretch; a bare start the default.
+	var map_id := FieldMaps.resolve(String(opts.get("place", "")))
+	var departure_seg := int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else 0
+	if opts.has("region"):
+		region = Atmosphere.region_key(String(opts["region"]))
+	elif opts.get("departure") is Dictionary or not RouteBands.place_stop(map_id).is_empty():
+		region = RouteBands.band_of(map_id, act, departure_seg, float(opts.get("act_progress", 0.0)))
+	else:
+		region = Atmosphere.DEFAULT_REGION
 	look_hour = float(opts.get("look_hour", -1.0))
 	# Lying snow on arrival follows the cold, deeper stop by stop (picture: nothing
 	# in the rules reads it). A storm stop keeps its season's depth.
@@ -452,7 +462,7 @@ func _ready() -> void:
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
-	place = FieldMaps.resolve(String(opts.get("place", "")))
+	place = map_id
 	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
