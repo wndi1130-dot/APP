@@ -32,6 +32,11 @@ describe('생필품 이름을 댄 공개 협상', () => {
       const off = Array.from({ length: 20 }, (_, i) => { g.session = i; return openConditions(g, c); });
       expect(off.flat().some(x => x.sup)).toBe(false);
       enableSupplies(g);
+      if (kind === 'give_fine') {
+        // 좋은 물건을 얻을 길(w8)도 쥔 몫도 없으면 내걸지 않는다.
+        expect(Array.from({ length: 20 }, (_, i) => { g.session = i; return openConditions(g, c); }).flat().some(x => x.sup)).toBe(false);
+        g.supFine = 1;
+      }
       const on = Array.from({ length: 20 }, (_, i) => { g.session = i; return openConditions(g, c); });
       expect(on.flat()).toContainEqual({ kind, label, amount, now: false, sup: true });
       expect(on.every(xs => xs.length === 3)).toBe(true);

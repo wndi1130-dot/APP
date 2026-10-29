@@ -14,7 +14,7 @@ import { loadContentEvents } from './content_fs';
 loadContentEvents();
 
 import { enableSupplies, suppliesAsks, suppliesNeed, SUPPLIES_BOT } from '../src/game/supplies';
-import { moveTask } from '../src/game/domestic/workshop';
+import { moveTask, setSupFine } from '../src/game/domestic/workshop';
 
 export type S1aPolicy = 'caretaker' | 'first';
 /** S1b 카드 고르기. kind: 선을 넘지 않는다(경비, 재판, 지킨다, 근신). blind: kind와 같지만 징후를 모른 척한다.
@@ -205,6 +205,11 @@ export function scoreChoice(g: Game, ch: Choice): number {
 const lawVariant = usefulVariant;
 
 /** 만드는 팔의 개입은 봇에서만 정한다. 부품보다 앞설 필요가 없으면 그 순서는 지킨다. */
+/** 좋은 물건이 없고 생필품이 기한 몫을 넘게 남을 때만 이번 공방 일이 좋은 물건을 만든다. */
+export function fineWhenSpare(g: Game): void {
+  setSupFine(g, (g.supFine ?? 0) < 1 && (g.sup ?? 0) >= suppliesNeed(g) * P.promiseSegments);
+}
+
 export function suppliesFirst(g: Game): void {
   const d = g.dom;
   if (!g.supOn || !d) return;
@@ -319,6 +324,9 @@ export function council(g: Game, opts: BotOptions, tally?: Record<string, number
   if (opts.policy === 'caretaker') {
     const a = currentAgenda(g)!;
     if (expected(blocs(g, a, c.deals)).mean < agendaNeed(a) + 3) {
+      // 이미 걸린 생필품 약속(기한에 낸다)과 이번 회기에 고른 몫을 빼고 판단한다.
+      let held = COMMS.reduce((sum, k) => sum + (g.comms[k].promise?.cond.kind === 'give_sup' ? g.comms[k].promise!.cond.amount ?? 0 : 0), 0);
+      let heldFine = COMMS.reduce((sum, k) => sum + (g.comms[k].promise?.cond.kind === 'give_fine' ? g.comms[k].promise!.cond.amount ?? 0 : 0), 0);
       for (const k of COMMS) {
         const tool = (opts.dealTools ?? ['open'])
           .find(t => toolStatus(g, k, t).ok && (t !== 'persuade' || persuadeChance(g, k, a) >= (opts.persuadeAt ?? 0)));
@@ -327,8 +335,9 @@ export function council(g: Game, opts: BotOptions, tally?: Record<string, number
           if (conditions.length) opts.probe?.onOpenConditions?.(g, k, conditions);
           // 지킬 수 있을 때만 생필품 조건을 고른다: 기한까지 쓸 몫을 남기고도 낼 수 있어야(사람도 재고를 보고 고른다).
           const sup = conditions.findIndex(x => x.sup && (x.kind === 'give_fine'
-            ? (g.supFine ?? 0) >= (x.amount ?? 0)
-            : (g.sup ?? 0) >= (x.amount ?? 0) + suppliesNeed(g) * P.promiseSegments));
+            ? (g.supFine ?? 0) >= heldFine + (x.amount ?? 0)
+            : (g.sup ?? 0) >= held + (x.amount ?? 0) + suppliesNeed(g) * P.promiseSegments));
+          if (sup >= 0) { if (conditions[sup].kind === 'give_fine') heldFine += conditions[sup].amount ?? 0; else held += conditions[sup].amount ?? 0; }
           makeDeal(g, k, tool, Math.max(0, sup));
         }
       }
@@ -472,7 +481,13 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   if (opts.deathWeight) enableDeathWeight(g);
   if (opts.climate) enableClimate(g);
   if (opts.sup) enableSupplies(g);
-  if (g.supOn && (opts.supMake || opts.supAsk !== undefined)) SUPPLIES_BOT.set(g, { make: opts.supMake ?? 'last', ask: opts.supAsk, ...(opts.supMake === 'first' ? { beforeWork: suppliesFirst } : {}) });
+  if (g.supOn && (opts.supMake || opts.supAsk !== undefined)) {
+    const make = opts.supMake ?? 'last';
+    // 부탁·거래를 쓰는 판에서 공방이 생필품을 만들면, 좋은 물건이 떨어졌을 때만 한 개씩 만든다(w8이 서야 켜진다).
+    const fine = opts.supAsk !== false && make !== 'none';
+    const beforeWork = make === 'first' || fine ? (x: Game) => { if (make === 'first') suppliesFirst(x); if (fine) fineWhenSpare(x); } : undefined;
+    SUPPLIES_BOT.set(g, { make, ask: opts.supAsk, ...(beforeWork ? { beforeWork } : {}) });
+  }
   if (opts.scoutGear) enableScoutGear(g);
   for (const [id, variant] of opts.gearTechs ?? []) if (g.dom) g.dom.techs[id] = { stage: 'done', defect: false, progress: 3, need: 3, ...(variant ? { variant } : {}) };
   if (opts.budget) enableBudget(g);
