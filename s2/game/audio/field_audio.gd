@@ -71,6 +71,26 @@ const LID_STANDIN: String = "metal"    # the impact file that stands in for it
 ## and high. Until a file is in its group it is the impact set's wood, pitched well down.
 const CREAK_VOICE: Array = ["floor_creak", 0.35, 0.45, 0.55]
 const CREAK_STANDIN: String = "wooden"
+## A step by the floor underfoot (FieldGrid.Floor: SNOW, ROAD, PLATFORM, WOOD,
+## RAIL, DEEP_SNOW, ICE, GRAVEL): the groups to try in turn, loudness and pitch.
+## Rails are on ballast; deep snow is the snow, lower and muffled (as the dead
+## hear it, FieldGrid.FLOOR_SOUND). A group with
+## no files yet falls to the next, and in the end to the snow there always was.
+const STEP_FLOORS: Array = [
+	[["step_snow"], 1.0, 1.0],
+	[["step_concrete", "step_snow"], 1.0, 1.0],
+	[["step_concrete", "step_snow"], 1.0, 1.0],
+	[["step_wood", "step_snow"], 1.0, 1.0],
+	[["step_gravel", "step_snow"], 1.1, 1.0],
+	[["step_snow"], 0.8, 0.88],
+	[["step_ice", "step_concrete", "step_snow"], 0.9, 1.08],
+	[["step_gravel", "step_snow"], 1.0, 1.0],
+]
+## Glass on the floor crunching under a step: group, loudness, pitch low and
+## high; until it has files, the impact set's glass, quiet and high.
+const STEP_GLASS: Array = ["step_glass", 0.25, 1.2, 1.4]
+const GLASS_STANDIN: String = "glass"
+const STEPS_KEPT: int = 256            # steps remembered (tests); older ones go
 ## The rasp of one of the dead that is about to run (lunger_rules): the group
 ## its file goes in, how loud, heard to this many metres, and the pitch of the
 ## moan that stands in for it. First values.
@@ -271,6 +291,8 @@ var last_tag_group: String = ""        # what the last make_sound played (tests)
 var held: bool = false                 # the depart note is up
 var departing: bool = false            # '떠난다' plays its own whistle
 var played: Array = []                 # groups played, in order (tests)
+var steps: Array = []                  # the player's steps heard [group, file] (tests)
+var step_last: Dictionary = {}         # step group -> the file it played last
 var door_creaks: Array = []             # building doors beaten on: true when it was about to give (tests)
 
 ## The music steps aside for a sound that matters (the music frame's ducking
@@ -317,6 +339,10 @@ func setup(field_game) -> void:
 		p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
 		add_child(p)
 		slots.append({"player": p, "z": {}, "wait": randf_range(0.5, 3.0)})
+	for row: Array in STEP_FLOORS:
+		for step_group: String in row[0]:
+			if not lib.has(step_group):
+				lib[step_group] = _load_group(step_group)
 	bed = _loop_player("horde_bed")
 	edge_bed = _loop_player("horde_bed")
 	edge_bed.bus = "SFX_FAR" if AudioServer.get_bus_index("SFX_FAR") >= 0 else "SFX"
@@ -1513,9 +1539,33 @@ func _building_door_bang(at: Vector3, level: int) -> bool:
 	return true
 
 
+## The player's own step, by what is underfoot (FieldGrid.Floor): its own
+## group, or down the row to one that has files (snow at the last); glass on
+## the floor crunches over it. Never the same file twice running.
 func footstep(at: Vector3, running: bool) -> void:
-	if has("step_snow"):
-		_one_shot("step_snow", at, 0.5 if running else 0.3, randf_range(0.9, 1.1))
+	var g = game.grid_at(at)
+	var cell: Vector2i = game.FieldGrid.cell_of(at)
+	var kind: int = g.floor_at(cell)
+	var row: Array = STEP_FLOORS[kind] if kind >= 0 and kind < STEP_FLOORS.size() else STEP_FLOORS[0]
+	var group: String = ""
+	for try_group: String in row[0]:
+		if not lib.has(try_group):
+			lib[try_group] = _load_group(try_group)
+		if has(try_group):
+			group = try_group
+			break
+	if group != "":
+		var count: int = (lib[group] as Array).size()
+		var pick: int = randi() % count
+		if count > 1 and pick == int(step_last.get(group, -1)):
+			pick = (pick + 1 + randi() % (count - 1)) % count
+		step_last[group] = pick
+		steps.append([group, pick])
+		if steps.size() > STEPS_KEPT:
+			steps = steps.slice(steps.size() - STEPS_KEPT)
+		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]), randf_range(0.9, 1.1) * float(row[2]), lib[group][pick])
+	if g.floor_glass.has(cell):
+		_voice_or_standin(STEP_GLASS, GLASS_STANDIN, at)
 
 
 ## The bus a sound from here goes through: plain, or duller through a wall.

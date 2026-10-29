@@ -13,6 +13,10 @@ extends SceneTree
 ## the stop scene lights its world) — a preview: the train screen's own light is mood's.
 ## --long=<s>: after the before/after, the frame times over <s> seconds with the land
 ## running, the frames a piece was laid in apart (one every 15 s: 150 frames miss them).
+## --enter[=<s>]: the side view going over to the diagonal one (as train-3d's view_mode
+## does) <s> seconds (1 by default; 0: the diagonal view from the start) after the land is
+## hung: the frames before the switch (the kit's models read a model a frame) and from
+## it, and how many till the land is shown.
 
 const Journey = preload("res://game/train/journey/journey.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
@@ -64,6 +68,8 @@ var stop_mode := false
 var no_kit := false
 var lit := false
 var long_s := 0.0
+var enter_mode := false
+var enter_s := 1.0
 var flow = null
 var t = null
 var cam: Camera3D = null
@@ -91,6 +97,10 @@ func _initialize() -> void:
 			lit = true
 		elif a.begins_with("--long="):
 			long_s = float(a.substr(7))
+		elif a == "--enter" or a.begins_with("--enter="):
+			enter_mode = true
+			if a.begins_with("--enter="):
+				enter_s = float(a.substr(8))
 	DirAccess.make_dir_recursive_absolute(out)
 	if stop_mode:
 		_run_stop()
@@ -110,9 +120,21 @@ func _run_views() -> void:
 	_diagonal()
 	if lit:
 		_daylight(flow.outside.look if flow.outside != null else {})
-	journey = Journey.attach(t, t, flow.outside.look if flow.outside != null else {}, 1, {"seed": 1, "remember": false, "running": true, "view": "diag"})
+	journey = Journey.attach(t, t, flow.outside.look if flow.outside != null else {}, 1,
+		{"seed": 1, "remember": false, "running": true, "view": "side" if enter_mode else "diag"})
 	journey.calm = true
-	await create_timer(2.0).timeout
+	if enter_mode:
+		await _measure_enter()
+		_save()
+		print("DONE")
+		quit()
+		return
+	# Till the land is shown (the kit's models are read first, a model a frame), at most 10 s.
+	var hung: int = Time.get_ticks_msec()
+	while not journey.visible and Time.get_ticks_msec() - hung < 10000:
+		await process_frame
+	print("SHOWN after %.2f s" % (float(Time.get_ticks_msec() - hung) / 1000.0))
+	await create_timer(1.0).timeout
 	_show(false)
 	await _shot("before_diag")
 	await _measure("before")
@@ -193,6 +215,53 @@ func _measure(key: String) -> void:
 		"journey_chunks": (journey.get("chunks") as Array).size() if journey != null else 0,
 	}
 	print("PERF ", key, " ", results[key])
+
+
+## The side view gone over to the diagonal one: each frame's time from the switch, the
+## worst, and the frames till the land is shown.
+func _measure_enter() -> void:
+	var Kit = load("res://game/train/journey/journey_kit.gd")
+	var has_warm: bool = false
+	for m: Dictionary in Kit.get_script_method_list():
+		if String(m["name"]) == "warmed":
+			has_warm = true
+	var before: Array = []
+	var warmed_at: int = -1
+	var t0: int = Time.get_ticks_usec()
+	var prev: int = t0
+	while float(Time.get_ticks_usec() - t0) / 1000000.0 < enter_s:
+		await process_frame
+		var at: int = Time.get_ticks_usec()
+		before.append(snappedf(float(at - prev) / 1000.0, 0.1))
+		prev = at
+		if has_warm and warmed_at < 0 and bool(Kit.call("warmed")):
+			warmed_at = before.size()
+	var bworst: float = 0.0
+	for ms: float in before:
+		bworst = maxf(bworst, ms)
+	results["before_switch"] = {"seconds": enter_s, "frames": before.size(), "worst_ms": bworst,
+		"over_50ms": before.filter(func(x: float) -> bool: return x > 50.0).size(),
+		"models_read_by_frame": warmed_at}
+	print("HUNG ", results["before_switch"])
+	(journey.get("_opts") as Dictionary)["view"] = "diag"
+	var frames: Array = []
+	var shown_at: int = -1
+	var last: int = Time.get_ticks_usec()
+	for i in 120:
+		await process_frame
+		var now: int = Time.get_ticks_usec()
+		frames.append(snappedf(float(now - last) / 1000.0, 0.1))
+		last = now
+		if shown_at < 0 and journey.visible:
+			shown_at = i + 1
+	var worst: float = 0.0
+	for ms: float in frames:
+		worst = maxf(worst, ms)
+	results["enter"] = {"first_frames_ms": frames.slice(0, 12), "worst_ms": worst,
+		"over_33ms": frames.filter(func(x: float) -> bool: return x > 33.4).size(),
+		"over_50ms": frames.filter(func(x: float) -> bool: return x > 50.0).size(),
+		"shown_after_frames": shown_at, "chunks": (journey.get("chunks") as Array).size()}
+	print("ENTER ", results["enter"])
 
 
 ## The frame times over `seconds` with the land running: the frames a piece was laid
