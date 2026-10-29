@@ -33,7 +33,8 @@ extends Control
 ## (`stock_pressed`, the slice opens cost_pane.gd; J12). The thermometer is a
 ## key too: a press puts up its slip, how the reading is made and the heating
 ## coal's multiple (결정 483); a press on it again or anywhere off the slip
-## folds it. Nothing else takes a press.
+## folds it. Trust and tension open the same paper slip with the last settle's
+## causes and the changes since it (결정 502). Only one slip stays open.
 
 ## A stock among TAPPABLE pressed: "coal" or "food".
 signal stock_pressed(id: String)
@@ -43,6 +44,7 @@ const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
+const CostPane = preload("res://game/ui/cost_pane.gd")
 const EDGE_TOP := preload("res://game/ui/tex/edge_top.png")
 
 ## The band (48) and how far its soot smokes down (92), in game px.
@@ -74,6 +76,22 @@ const SHORT_LEFT: int = 3
 const STOCKS: Array = [["coal", "coal", "석탄"], ["food", "food", "식량"], ["med", "med", "의약품"], ["lux", "lux", "사치품"]]
 ## The stocks whose press opens what a stretch costs (cost_pane.gd).
 const TAPPABLE: Array = ["coal", "food"]
+## train_turn.gd meters writes these in order, or just drift for falling tension.
+const METER_SETTLE: Dictionary = {
+	"trust": ["mood"],
+	"tension": ["mood", "short", "law", "calm.pot", "calm.ledger", "cast"],
+}
+## S1 why_names.ts, only meter causes not already named by CostPane.WHY_NAME.
+## S1's card has no fixed name; the retained ledger has no card title either.
+const METER_WHY_NAME: Dictionary = {
+	"mood": "집단들의 마음", "short": "석탄이나 식량이 바닥남", "law": "법이 낳는 긴장",
+	"drift": "쌓인 불만과 두려움", "calm.ledger": "벽 장부", "calm.night": "떠난 사람의 밤",
+	"cast": "열차 방송", "card": "서류 선택", "need": "들어주지 않은 요구", "promise": "약속",
+	"corpse": "시신", "birth": "아이가 태어남", "leak": "들통난 거래", "deal": "거래",
+	"vote": "의회 표결", "strike": "일손을 놓음",
+}
+const METER_OTHER_BELOW: float = 0.5
+const METER_NO_CHANGE := "지난 정산 뒤 바뀐 것 없음"
 ## The trust well's cracks: one 24 × 8 tile, repeated (c9.css).
 const TILE_CRACKS: Array = [
 	[Vector2(0, 3.4), Vector2(3.6, 2.5), Vector2(6.4, 4.7), Vector2(10.2, 3.9), Vector2(13.4, 1.3), Vector2(17, 3.7), Vector2(21, 2.9), Vector2(24, 3.4)],
@@ -167,8 +185,9 @@ var _narrow: bool = false
 var _ot_last: Variant = null
 var _ot_plan: Dictionary = {}
 var _ot_t0: int = 0
-## The thermometer's slip is up (결정 483).
+## One shared slip: outside (483), trust or tension (502).
 var _why_open: bool = false
+var _why_key: String = "outside"
 
 
 ## What the strip says for state `g0` (tests read this; the strip draws it).
@@ -259,6 +278,90 @@ static func why_parts(o: Dictionary, t0: Dictionary) -> Array:
 		parts.append_array([["·", "mark"], [String(names.get(w, w)), "word"], [sdeg(float(o["weather_temp"])), "num"]])
 	parts.append_array([["|", "mark"], ["난방 석탄", "word"], ["×" + TrainClimate._js(float(o["mult"])), "bold"]])
 	return parts
+
+
+## The newest retained meter-settle block and everything after it. As in
+## CostPane.settle_rows, other keys, unknown causes and repeats end a block.
+## The order also separates adjacent blocks whose zero shares were not noted.
+## drift is a whole settle on its own. No marker retained: read the retained
+## changes only; the 64-row ledger cannot reconstruct rows it already dropped.
+static func meter_since_settle(g0: Dictionary, key: String) -> Array:
+	var ledger: Variant = g0.get("ledger")
+	if not ledger is Array or not METER_SETTLE.has(key):
+		return []
+	var whys: Array = METER_SETTLE[key]
+	var start: int = -1
+	for i in range(ledger.size() - 1, -1, -1):
+		var row: Variant = ledger[i]
+		if key == "tension" and CostPane._in_block(row, key, ["drift"], {}):
+			start = i
+			break
+		if CostPane._in_block(row, key, whys, {}):
+			start = i
+			var seen: Dictionary = {String(row["why"]): true}
+			var order: int = whys.find(String(row["why"]))
+			while start > 0 and CostPane._in_block(ledger[start - 1], key, whys, seen):
+				var why: String = String(ledger[start - 1]["why"])
+				var previous: int = whys.find(why)
+				if previous >= order:
+					break
+				start -= 1
+				order = previous
+				seen[why] = true
+			break
+	var out: Array = []
+	for i in range(maxi(0, start), ledger.size()):
+		var row: Variant = ledger[i]
+		if row is Dictionary and String(row.get("k", "")) == key:
+			out.append(row)
+	return out
+
+
+## The paper's numbers stay unrounded. Nine displayed places keep even 64
+## displayed shares within 1e-6 of their sum; _num's one place is for the HUD.
+static func meter_num(v: float) -> String:
+	if absf(v) < 0.0000000005:
+		return "0"
+	return ("%.9f" % v).rstrip("0").trim_suffix(".").replace("-", "−")
+
+
+static func meter_signed(v: float) -> String:
+	return ("−" if v < -0.0000000005 else "+") + meter_num(absf(v))
+
+
+## Group first, then put causes below 0.5 into one 기타 (even when they cancel).
+## Sort the resulting rows, including 기타, by absolute share, ties by key.
+static func meter_why_model(g0: Dictionary, key: String) -> Dictionary:
+	var entries: Array = meter_since_settle(g0, key)
+	var sums: Dictionary = {}
+	var total: float = 0.0
+	for entry: Dictionary in entries:
+		var why: String = String(entry.get("why", ""))
+		var d: float = float(entry.get("d", 0.0))
+		sums[why] = float(sums.get(why, 0.0)) + d
+		total += d
+	var rows: Array = []
+	var other: float = 0.0
+	var has_other: bool = false
+	for why: String in sums:
+		var d: float = float(sums[why])
+		if absf(d) < METER_OTHER_BELOW:
+			other += d
+			has_other = true
+		else:
+			var word: String = String(CostPane.WHY_NAME.get(why, METER_WHY_NAME.get(why, "구간 정산")))
+			rows.append({"why": why, "word": word, "d": d})
+	if has_other:
+		rows.append({"why": "other", "word": "기타", "d": other})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return String(a["why"]) < String(b["why"]) if absf(float(a["d"])) == absf(float(b["d"])) else absf(float(a["d"])) > absf(float(b["d"])))
+	for row: Dictionary in rows:
+		row["text"] = "%s %s" % [row["word"], meter_signed(float(row["d"]))]
+	var now: float = float(g0.get(key, 0.0))
+	var before: float = now - total
+	var head: String = METER_NO_CHANGE if entries.is_empty() else "지난 정산 뒤 %s %s → %s (%s)" % [
+		"신임" if key == "trust" else "긴장", meter_num(before), meter_num(now), meter_signed(total)]
+	return {"key": key, "before": before, "now": now, "total": total, "head": head, "rows": rows}
 
 
 ## Where the column's head stands in the tube for `temp` (0–1): the warmest
@@ -591,12 +694,18 @@ func _lay_out() -> void:
 	if outside:
 		outside.position = Vector2((12.0 + mw + 10.0 + mw + 10.0) * k, 0)
 	var why: Control = _parts.get_node_or_null("Why")
-	if why and outside:
-		# 52 down, its middle under the thermometer's as far as 8 in from either edge.
-		var half: float = why.size.x / k * 0.5
-		var mid: float = (outside.position.x + outside.size.x * 0.5) / k
-		mid = clampf(mid, half + 8.0, maxf(half + 8.0, size.x / k - half - 8.0))
-		why.position = Vector2((mid - half) * k, 52.0 * k)
+	var anchor: Control = _why_anchor()
+	if why and anchor:
+		if _why_key != "outside" and why.get_meta("band_width", -1.0) != size.x:
+			_show_why(false)
+			return
+		# Include the tilted paper's corners, not just its unrotated rectangle.
+		var extent: Vector2 = Vector2(absf(cos(why.rotation)) * why.size.x + absf(sin(why.rotation)) * why.size.y,
+			absf(sin(why.rotation)) * why.size.x + absf(cos(why.rotation)) * why.size.y) * 0.5
+		var mid: float = anchor.position.x + anchor.size.x * 0.5
+		var width: float = minf(size.x, get_viewport_rect().size.x)
+		mid = clampf(mid, extent.x + 8.0 * k, maxf(extent.x + 8.0 * k, width - extent.x - 8.0 * k))
+		why.position = Vector2(mid - why.size.x * 0.5, 52.0 * k + extent.y - why.size.y * 0.5)
 	if mood:
 		mood.position = Vector2(size.x * 0.5 - 8.0 * k - mood.size.x * 0.5, 1.0 * k)
 	if right:
@@ -677,6 +786,17 @@ func _meter(key: String, word: String, n: int, lv: int) -> Control:
 		c.add_child(tag)
 		tag.size = tag.get_combined_minimum_size()
 		tag.position = Vector2(c.size.x - tag.size.x, (19.0 - 9.0) * UiFonts.K)
+	# Like the stock keys: the entire bar's 48 dp height, even on a narrow band.
+	var tap := Button.new()
+	tap.name = "Tap_" + key
+	tap.flat = true
+	tap.focus_mode = Control.FOCUS_NONE
+	tap.tooltip_text = word + " · 지난 정산의 까닭"
+	for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
+		tap.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tap.pressed.connect(_toggle_why.bind(key))
+	c.add_child(tap)
 	return c
 
 
@@ -1083,11 +1203,12 @@ func _fit_outside(c: Control) -> void:
 	c.size = c.custom_minimum_size
 
 
-## The thermometer pressed: its slip up, or folded if it was.
-func _toggle_why() -> void:
-	if _why_open:
+## A gauge pressed: fold its own slip, or replace the other gauge's slip.
+func _toggle_why(key: String = "outside") -> void:
+	if _why_open and _why_key == key:
 		_fold_why()
 		return
+	_why_key = key
 	_why_open = true
 	_show_why(true)
 
@@ -1104,17 +1225,23 @@ func _fold_why() -> void:
 		w.queue_free()
 
 
-## Put the slip up off the reading (the last model's outside), `fresh` coming
-## up as .why's whyIn does; laid out under the thermometer.
+func _why_anchor() -> Control:
+	if _parts == null:
+		return null
+	var names := {"outside": "Outside", "trust": "MeterTrust", "tension": "MeterTension"}
+	return _parts.get_node_or_null(String(names.get(_why_key, "Outside")))
+
+
+## Put the chosen gauge's slip up, `fresh` coming up as .why's whyIn does.
 func _show_why(fresh: bool) -> void:
-	if _parts == null or not (_ot_last is Dictionary) or _parts.get_node_or_null("Outside") == null:
+	if _why_anchor() == null or (_why_key == "outside" and not (_ot_last is Dictionary)):
 		_why_open = false
 		return
 	var old: Node = _parts.get_node_or_null("Why")
 	if old != null:
 		_parts.remove_child(old)
 		old.queue_free()
-	var w: Control = _why(_ot_last)
+	var w: Control = _why(_ot_last) if _why_key == "outside" else _meter_why(_why_key)
 	_parts.add_child(w)
 	_lay_out()
 	if fresh:
@@ -1136,16 +1263,7 @@ func _show_why(fresh: bool) -> void:
 ## 8 in at the left and 11 at the right. _lay_out puts it.
 func _why(o: Dictionary) -> Control:
 	var k: float = UiFonts.K
-	var c := Control.new()
-	c.name = "Why"
-	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Over what the slice lays after the band (the train's paper card).
-	c.z_index = OVER_PAPERS
-	var body := Control.new()
-	body.name = "Paper"
-	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	body.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	c.add_child(body)
+	var c: Control = _slip_paper()
 	var mark := TextureRect.new()
 	var px: int = int(round(13.0 * k))
 	mark.texture = HudIcons.texture("temp", px, WHY_ICON, 2.2, HudIcons.CUT_PAPER)
@@ -1172,7 +1290,79 @@ func _why(o: Dictionary) -> Control:
 	c.size = Vector2(x + 11.0, 28.0) * k
 	c.pivot_offset = c.size * 0.5
 	c.rotation_degrees = -1.5
-	body.size = c.size
+	return c
+
+
+## Shared paper and ink with the thermometer, below the pressed bar. Long
+## ledgers scroll inside the paper; neither its size nor its words leave it.
+func _meter_why(key: String) -> Control:
+	var k: float = UiFonts.K
+	var m: Dictionary = meter_why_model(g, key)
+	var c: Control = _slip_paper()
+	c.set_meta("band_width", size.x)
+	c.set_meta("key", key)
+	var width: float = minf(440.0 * k, minf(size.x, get_viewport_rect().size.x) - 32.0 * k)
+	width = maxf(1.0, width)
+	var scroll := ScrollContainer.new()
+	scroll.name = "SlipScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.position = Vector2(11.0, 7.0) * k
+	c.add_child(scroll)
+	var lines := VBoxContainer.new()
+	lines.name = "SlipRows"
+	lines.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lines.add_theme_constant_override("separation", int(4.0 * k))
+	scroll.add_child(lines)
+	var texts: Array = [m["head"]]
+	for row: Dictionary in m["rows"]:
+		texts.append(row["text"])
+	var height: float = 14.0 * k
+	for i in texts.size():
+		var label := _label(String(texts[i]), UiFonts.NUMBER, 600 if i == 0 else 500, 12.0, WHY_INK, 0.48)
+		label.name = "Head" if i == 0 else "Cause_" + String(m["rows"][i - 1]["why"])
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.size.x = maxf(1.0, width - 38.0 * k)
+		lines.add_child(label)
+		height += label.get_combined_minimum_size().y + (4.0 * k if i > 0 else 0.0)
+	c.size = Vector2(width, minf(height, maxf(1.0, get_viewport_rect().size.y - 84.0 * k)))
+	scroll.size = Vector2(maxf(1.0, width - 22.0 * k), maxf(1.0, c.size.y - 14.0 * k))
+	c.pivot_offset = c.size * 0.5
+	c.rotation_degrees = -1.5
+	# Font/theme and wrapping finish after entering the tree. Use that actual
+	# height too, so a short ledger never acquires an unnecessary scrollbar.
+	lines.minimum_size_changed.connect(_fit_meter_why.bind(c))
+	_fit_meter_why.call_deferred(c)
+	return c
+
+
+func _fit_meter_why(c: Control) -> void:
+	if not is_instance_valid(c) or not c.is_inside_tree():
+		return
+	var k: float = UiFonts.K
+	var scroll: ScrollContainer = c.get_node("SlipScroll")
+	var lines: VBoxContainer = scroll.get_node("SlipRows")
+	var height: float = minf(ceilf(lines.get_combined_minimum_size().y) + 14.0 * k + 1.0,
+		maxf(1.0, get_viewport_rect().size.y - 84.0 * k))
+	if is_equal_approx(c.size.y, height):
+		return
+	c.size.y = height
+	scroll.size.y = maxf(1.0, height - 14.0 * k)
+	c.pivot_offset = c.size * 0.5
+	_lay_out()
+
+
+func _slip_paper() -> Control:
+	var k: float = UiFonts.K
+	var c := Control.new()
+	c.name = "Why"
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.z_index = OVER_PAPERS
+	var body := Control.new()
+	body.name = "Paper"
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	c.add_child(body)
 	body.draw.connect(func() -> void:
 		GlassParts.shadow(body, Rect2(Vector2.ZERO, body.size), 0.0, 4.0 * k, 10.0 * k, Color(0, 0, 0, 0.6))
 		var r := Rect2(Vector2.ZERO, body.size)
@@ -1185,7 +1375,7 @@ func _why(o: Dictionary) -> Control:
 	return c
 
 
-## A press off the slip and the thermometer folds the slip, and goes on to what
+## A press off the slip and its gauge folds the slip, and goes on to what
 ## it was on (결정 483).
 func _input(event: InputEvent) -> void:
 	if not _why_open or _parts == null:
@@ -1201,9 +1391,8 @@ func _input(event: InputEvent) -> void:
 			at = st.position
 	if at == Vector2.INF:
 		return
-	for id: String in ["Why", "Outside"]:
-		var c: Control = _parts.get_node_or_null(id)
-		if c != null and c.get_global_rect().has_point(at):
+	for c: Control in [_parts.get_node_or_null("Why"), _why_anchor()]:
+		if c != null and Rect2(Vector2.ZERO, c.size).has_point(c.get_global_transform_with_canvas().affine_inverse() * at):
 			return
 	_fold_why()
 
