@@ -130,11 +130,14 @@ func _ready() -> void:
 	_build_track()
 	speed = RUN_SPEED if _running() else 0.0
 	visible = false
-	if shown():
-		_fill()
 
 
 func _process(delta: float) -> void:
+	# The kit's models are read a model a frame from when the land is hung, seen or not
+	# (one can take 90 ms): the first diagonal view then does not read them all at once.
+	if not Kit.warm_step(MAKE_BUDGET_USEC):
+		visible = false
+		return
 	if not shown():
 		visible = false
 		return
@@ -225,6 +228,10 @@ func window() -> Dictionary:
 ## laid and what is left of it (its next piece), the look. {} when none was laid (the
 ## side-on screen): the stop scene then goes by the stretch.
 func handoff() -> Dictionary:
+	# Asked before the land was first laid (a stop straight after the diagonal view came
+	# up): laid now, at once; the stop's own turn covers it.
+	if not _filled and shown():
+		_fill()
 	if not _filled:
 		return {}
 	return {"band": band, "window": window().duplicate(), "seed": hash([int(_opts.get("seed", 1)), seg, "corridor"]),

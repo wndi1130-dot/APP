@@ -88,15 +88,30 @@ static var _meshes: Dictionary = {}
 static var _heights: Dictionary = {}
 
 
-## Read every model of the kit once on the main thread, its mesh and its height, so a
-## plan() worked out on a worker only reads (a worker loading meshes into _meshes while
-## the stop scene lays the same kit on the main thread would race). Cheap once done.
-static func warm() -> void:
+## Read the kit's models on the main thread, each one's mesh and height, a model at a
+## time while `budget_usec` lasts (below 0: all); true once all are read. A plan() on a
+## worker then only reads (a worker loading meshes into _meshes while the stop scene
+## lays the same kit here would race): only the main thread writes _heights, and a
+## journey sends no plan() to a worker before this is done. Cheap once done.
+static func warm_step(budget_usec: int) -> bool:
+	var from: int = Time.get_ticks_usec()
 	for model: String in TALL:
 		if _heights.has(model):
 			continue
+		if budget_usec >= 0 and Time.get_ticks_usec() - from >= budget_usec:
+			return false
 		var mesh: Mesh = mesh_of(model)
 		_heights[model] = mesh.get_aabb().size.y if mesh != null else NAN
+	return true
+
+
+## All the kit's models read at once.
+static func warm() -> void:
+	warm_step(-1)
+
+
+static func warmed() -> bool:
+	return _heights.size() >= TALL.size()
 
 
 ## How white and wet the stretch's look lays the ground (as outside_view.gd reads it).

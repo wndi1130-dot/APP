@@ -153,6 +153,18 @@ func test_a_piece_worked_out_on_a_worker_is_the_piece_worked_out_here() -> void:
 		assert_almost_eq(packed[i], want[i], 0.0001, "float %d of the 3x4 matrix" % i)
 
 
+## A stop straight after the diagonal view came up, before the land was first laid:
+## the stop scene still goes on with the train screen's land.
+func test_a_stop_before_the_land_is_first_laid_still_hands_it_over() -> void:
+	var host := FakeTrain.new()
+	host.view_mode = "diag"
+	add_child_autofree(host)
+	var j: Node3D = Journey.attach(host, host, LOOK, 1, {"seed": 6, "remember": false})
+	var h: Dictionary = j.handoff()
+	assert_false(h.is_empty(), "handed over though nothing was laid yet")
+	assert_true(h.has("section") and h.has("history"))
+
+
 ## A window change while the land is first being worked out, before it is shown: worked
 ## out again for the new window, and shown.
 func test_a_window_change_before_the_land_is_shown_still_shows_it() -> void:
