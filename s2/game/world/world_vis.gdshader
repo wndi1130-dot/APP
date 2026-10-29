@@ -157,7 +157,8 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 			grass = mix(grass, LATE_GREEN, late * smoothstep(0.3, 0.55, fx_vnoise(p * 0.21 + vec2(4.1, 17.3))));
 			grass = mix(grass, DRY_GRASS, dry);
 			vec4 grass_detail = ground_layer(layers.w, p, dx, dy);
-			grass_detail.rgb = mix(grass_detail.rgb, vec3(dot(grass_detail.rgb, vec3(0.2126, 0.7152, 0.0722))), dry);
+			// The photo's moss greens are fresher than faded grass: a third of the way to its lightness always.
+			grass_detail.rgb = mix(grass_detail.rgb, vec3(dot(grass_detail.rgb, vec3(0.2126, 0.7152, 0.0722))), max(dry, 0.35));
 			vec4 soil_detail = ground_layer(6, p, dx, dy);
 			// Decision 496: interpolated corner soil is only a gentle bias. Height
 			// and world-space noise place the edge, without thresholding that bias.
