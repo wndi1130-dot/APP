@@ -757,3 +757,41 @@ func test_a_blizzard_comes_in_with_a_howl_of_a_new_shape_each_time() -> void:
 	var howls: int = a.gust_log.filter(func(g): return g[5]).size()
 	a._tick_wind(game.player.position, 0.1)
 	assert_eq(a.gust_log.filter(func(g): return g[5]).size(), howls, "it howls once as the stop comes in, not over and over")
+
+
+# The player's step is heard by what is underfoot (user 2026-10-29, the
+# reference's footsteps by floor): a floor's own group once it has files, down
+# its row to the snow until then; glass on the floor crunches over it; never
+# the same file twice running.
+func test_a_step_is_heard_by_the_floor_underfoot() -> void:
+	var a = game.audio
+	var FG = game.FieldGrid
+	var g = game.grid
+	var at: Vector3 = game.player.position
+	var cell: Vector2i = FG.cell_of(at)
+	var was: int = g.floor_at(cell)
+	a.lib["step_wood"] = [_tone(), _tone(), _tone()]
+	a.lib["step_gravel"] = []
+	g.floor[g.index(cell)] = FG.Floor.WOOD
+	var n: int = a.steps.size()
+	for k in range(200):
+		a.footstep(at, k % 3 == 0)
+	var again := 0
+	for k in range(n + 1, a.steps.size()):
+		assert_eq(a.steps[k][0], "step_wood", "a wooden floor is heard as wood")
+		if a.steps[k][1] == a.steps[k - 1][1]:
+			again += 1
+	assert_eq(again, 0, "no file twice running")
+	# Rails and gravel with no files of their own yet: the snow there always was.
+	for kind in [FG.Floor.RAIL, FG.Floor.GRAVEL, FG.Floor.SNOW, FG.Floor.DEEP_SNOW]:
+		g.floor[g.index(cell)] = kind
+		a.footstep(at, false)
+		assert_eq(a.steps.back()[0], "step_snow", "falls to the snow (floor %d)" % kind)
+	assert_eq(a.STEP_FLOORS.size(), FG.Floor.size(), "a row for every floor")
+	# Glass on the floor crunches over the step.
+	g.floor_glass[cell] = cell
+	a.footstep(at, false)
+	assert_true(a.played.has("step_glass"), "glass underfoot")
+	g.floor_glass.erase(cell)
+	g.floor[g.index(cell)] = was
+
