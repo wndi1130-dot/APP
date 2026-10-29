@@ -189,6 +189,30 @@ func test_diag_pane_recomputes_after_resize_scroll_and_layout() -> void:
 	assert_almost_eq(projected.y, 360.0, 1.0)
 
 
+func test_a_resize_keeps_a_section_frame_set_by_hand() -> void:
+	# The council frames the dining car close by hand (slice_flow _frame_dining_car).
+	var train_scene: Scene = _scene({"view_mode": "section"})
+	var cam: Camera3D = train_scene.camera
+	cam.size = 4.2
+	cam.position.y += 1.5
+	var framed: Vector3 = cam.position
+	var viewport: SubViewport = train_scene.get_viewport() as SubViewport
+	viewport.size = Vector2i(1280, 720)
+	assert_almost_eq(cam.size, 4.2, 0.0001, "a window resize does not undo the council's frame")
+	assert_eq(cam.position, framed)
+
+
+func test_the_diag_pane_offset_is_none_outside_the_tree() -> void:
+	var train_scene: Scene = Scene.new()
+	autofree(train_scene)
+	var cam: Camera3D = Camera3D.new()
+	train_scene.add_child(cam)
+	train_scene.camera = cam
+	train_scene.set_view_mode("diag")
+	train_scene.set_pane(420.0)
+	assert_eq(cam.h_offset, 0.0, "no view to measure the pane against")
+
+
 func _assert_shell_view(train_scene: Scene, diagonal: bool) -> void:
 	var pipe_count: int = 0
 	for c: Dictionary in train_scene.cars:

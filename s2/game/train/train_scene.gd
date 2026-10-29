@@ -169,7 +169,7 @@ func _ready() -> void:
 		rules = Rules.load_default()
 	problems = Rules.check(rules)
 	_build_world()
-	get_viewport().size_changed.connect(_place_camera)
+	get_viewport().size_changed.connect(_on_view_resized)
 	if problems.is_empty():
 		_build_train()
 		life.build_outside()
@@ -1144,6 +1144,13 @@ func _build_world() -> void:
 	_font.font_names = PackedStringArray(["Pretendard", "Noto Sans CJK KR", "Noto Sans KR", "Droid Sans Fallback", "sans-serif"])
 
 
+## Only the diagonal camera goes by the window's pixels (the pane's share); the side
+## view keeps its frame through a resize, as the council's close dining car is set by hand.
+func _on_view_resized() -> void:
+	if view_mode == "diag":
+		_place_camera()
+
+
 func _place_camera() -> void:
 	if camera == null:
 		return
@@ -1156,10 +1163,11 @@ func _place_camera() -> void:
 		var direction: Vector3 = Vector3(sin(diag_yaw) * cos(diag_pitch), sin(diag_pitch), cos(diag_yaw) * cos(diag_pitch))
 		camera.position = anchor + direction * DIAG_DIST
 		camera.basis = Basis.looking_at(anchor - camera.position, Vector3.UP)
-		var view_h: float = 1.0
+		# The pane's share is in pixels of the view: none to go by outside the tree.
+		camera.h_offset = 0.0
 		if is_inside_tree():
-			view_h = maxf(get_viewport().get_visible_rect().size.y, 1.0)
-		camera.h_offset = (pane_px / 2.0) * camera.size / view_h
+			var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
+			camera.h_offset = (pane_px / 2.0) * camera.size / view_h
 		return
 	var pitch := deg_to_rad(CAM_PITCH)
 	camera.size = CAM_FAR if zoomed_out else CAM_NEAR
