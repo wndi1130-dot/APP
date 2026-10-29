@@ -67,7 +67,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var echo: String = " 지난번 일 때문에 다들 상처부터 본다." if _was(past, "hide") else (" 지난번 역에 두고 온 사람을 다들 기억한다." if _was(past, "leave") else "")
 			out["speaker"] = {"name": str(card.get("who", "수색대원")), "role": String(t["COMM_NAME"][c])}
 			out["focus"] = c
-			out["body"] = "%s이(가) %s 물렸다. 수색대가 열차장의 말을 기다린다. 감염 창이 닫히기 전에 잘라야 한다.%s" % [str(card.get("who", "대원")), parts[1], echo]
+			out["body"] = "%s이(가) %s 물렸다. \"열차장…\" 수색대가 열차장의 말을 기다린다. \"감염 창이 닫히기 전에 잘라야 합니다.\"%s" % [str(card.get("who", "대원")), parts[1], echo]
 			says = ["지금 %s 잘라라! 망설이면 늦는다." % parts[1],
 				"지난번엔 운이 좋았다. 이번에도 감아서 태워라." if _was(past, "hide") else "아무도 못 본 거다. %s에 붕대를 감고 태워라." % parts[0],
 				"물린 사람은 못 태운다. 미안하다고 전해라."]
