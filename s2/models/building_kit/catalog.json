@@ -49,7 +49,8 @@
     "wood": 2,
     "glass": 3,
     "roof": 4,
-    "metal": 5
+    "metal": 5,
+    "cap": 7
   },
   "colour_encoding": "r = 1자리, g = 2자리, b = 4자리 비트, a = 날씨 받음",
   "hinge_m": [
@@ -1053,10 +1054,10 @@
       "zones": [
         2,
         4,
-        5
+        7
       ],
       "bytes": 3024,
-      "sha256": "2ef1b31778cce400aae280e09e7bac17e72915e53d8fb24066977fbdfe800c8c"
+      "sha256": "2b81c9ae6ea602f57175d6d30b3b23f958b159d653b4c1a4905d264ce449be91"
     },
     "roof_half_hip_end": {
       "status": "ready",
@@ -1089,10 +1090,10 @@
       "zones": [
         2,
         4,
-        5
+        7
       ],
       "bytes": 3468,
-      "sha256": "c90a5711af7c13b1231df99ecd89fbbd380355f96741b06c2f59801ace5edef4"
+      "sha256": "3b10776647c07c6cf045e3f397c1c4144aad437e2e8bc23bceec126cd38158e2"
     },
     "roof_half_hip_wall": {
       "status": "ready",
@@ -1159,10 +1160,10 @@
       "zones": [
         2,
         4,
-        5
+        7
       ],
       "bytes": 4000,
-      "sha256": "c50ca03cf6e4a8d1c3a0ebb72e925d6c12e1b2a758515e68249f69ce20222629"
+      "sha256": "a2c11dc74b1d241de5455884c203aac45f332cfe9ea3be618a66142030daeac6"
     },
     "roof_mansard_end": {
       "status": "ready",
@@ -1334,10 +1335,10 @@
         2,
         3,
         4,
-        5
+        7
       ],
       "bytes": 5612,
-      "sha256": "e9084fb63c091db28b12667e708523f8a6c97620e7263128fad882f99ae26268"
+      "sha256": "c4b965e4521c8ac2e6425fda1941fbb4d04e6e6b021f9efe66f5e1df1ac38c57"
     },
     "roof_flat": {
       "status": "ready",

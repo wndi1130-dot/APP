@@ -34,6 +34,7 @@ blender -b --factory-startup -P tools/blender/building_kit.py -- --repo .
 | 3 | 유리 | 1 1 0 |
 | 4 | 지붕 | 0 0 1 |
 | 5 | 쇠붙이 | 1 0 1 |
+| 7 | 지붕 덮개(모임 모서리·맨사드·지붕창 용마루) | 1 1 1 |
 
 ## 조각 42개
 

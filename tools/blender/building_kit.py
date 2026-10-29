@@ -59,9 +59,9 @@ DORMER_PEAK = 1.0 + 0.65 * math.tan(math.radians(PITCH)) + 0.06
 DORMER_BACK = DORMER_PEAK / math.tan(math.radians(PITCH)) + 0.1
 DORMER_REAR = DORMER_BACK + 0.1
 
-ZONES = {"wall": 0, "stone": 1, "wood": 2, "glass": 3, "roof": 4, "metal": 5}
+ZONES = {"wall": 0, "stone": 1, "wood": 2, "glass": 3, "roof": 4, "metal": 5, "cap": 7}
 ZONE_NAMES = {"wall": "벽면", "stone": "석재(기단·띠·창턱·모서리돌)", "wood": "나무",
-              "glass": "유리", "roof": "지붕", "metal": "쇠붙이"}
+              "glass": "유리", "roof": "지붕", "metal": "쇠붙이", "cap": "지붕 덮개(모임 모서리·맨사드·지붕창 용마루)"}
 
 # 첫 정차 지도 열한 채의 바깥 껍데기 수(지하 빼고). 3번 이식 전 어림에만 쓴다.
 SULEHUF_COUNTS = {"wall_runs": 197, "windows": 81, "outer_doors": 18,
@@ -511,7 +511,8 @@ def _roof_skin(p, pts, eaves=()):
 
 
 def _ridge_cap(p, start, end, width=0.08):
-    """수평·비스듬한 용마루의 좁은 함석 덮개(6 삼각형)."""
+    """수평·비스듬한 용마루의 좁은 덮개(6 삼각형). 지붕 색을 조금 어둡게 칠하는 cap 구역:
+    함석(metal)이면 모임 모서리가 줌 24·36에서 짙은 선으로 읽혔다(코디 10-29)."""
     a, b = Vector(start), Vector(end)
     d = b - a
     side = Vector((-d.y, d.x, 0.0)).normalized() * width
@@ -522,13 +523,13 @@ def _ridge_cap(p, start, end, width=0.08):
         normal = (pts[1] - pts[0]).cross(pts[2] - pts[0])
         if normal.z < 0.0:
             normal = -normal
-        p.face(pts, "metal", 1, normal)
+        p.face(pts, "cap", 1, normal)
     for tip, direction in ((a, -d), (b, d)):
         pts = [tip - side + lip, tip + side + lip, tip + peak]
         normal = (pts[1] - pts[0]).cross(pts[2] - pts[0])
         if normal.dot(direction) < 0.0:
             normal = -normal
-        p.face(pts, "metal", 1, normal)
+        p.face(pts, "cap", 1, normal)
 
 
 def roof_hip_end(p):
