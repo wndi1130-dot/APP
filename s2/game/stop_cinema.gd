@@ -122,6 +122,9 @@ const CORRIDOR_STEP: float = 60.0
 
 ## The stop's map (stop_loader.gd), {} till it is known; set_map hands it over.
 var data: Dictionary = {}
+## The land on the way in (journey_corridor.gd: the kit the train's screen lays, its
+## order going on, 결정 495 4절); null keeps the firs and poles of _lay_corridor.
+var corridor_kit: RefCounted = null
 ## Seen whole before (SEEN_FILE): a tap then goes to the next beat.
 var seen: bool = false
 ## Write SEEN_FILE once it has been seen whole (off in tests).
@@ -710,9 +713,24 @@ func _build_station() -> void:
 ## poles on the far side, trees and drifts out from the line, sleepers under it.
 ## Nothing is laid where the stop's own place begins.
 func _lay_corridor(to: float) -> void:
+	var laid: int = 0
 	while _corridor_to < minf(to, _corridor_stop):
 		var x0: float = _corridor_to
 		var x1: float = minf(x0 + CORRIDOR_STEP, _corridor_stop)
+		if corridor_kit != null:
+			# A few pieces a frame, from just behind the train on (journey_corridor.gd).
+			if x0 < corridor_kit.FIRST_X:
+				_corridor_to = corridor_kit.FIRST_X
+				continue
+			if laid >= corridor_kit.PER_FRAME:
+				break
+			corridor_kit.lay(world, x0, x1, white, wet)
+			_sleepers(x0, x1)
+			_corridor_to = x1
+			laid += 1
+			if x1 >= _corridor_stop:
+				break
+			continue
 		var rng := RandomNumberGenerator.new()
 		rng.seed = 7919 + int(floor(x0))
 		var st := SurfaceTool.new()

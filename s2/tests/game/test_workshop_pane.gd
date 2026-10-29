@@ -31,6 +31,28 @@ func _key(p: Control, key_name: String) -> Button:
 	return p.find_child(key_name, true, false) as Button
 
 
+func test_transport_recipes_use_existing_rows_counts_and_cap_tooltips() -> void:
+	var g: Dictionary = _game()
+	for id: String in ["x1", "x4"]:
+		g["dom"]["techs"][id] = {"stage": "done", "defect": false, "progress": 6, "need": 6}
+	g["dom"].merge({"sleds": 1, "long_sleds": 1, "stretchers": 1, "carts": 1, "runners": 2}, true)
+	var ids: Array = ["sled", "stretcher", "cart", "long_sled", "runner"]
+	var rows: Array = WorkshopPane.model(g)["rows"].filter(func(r: Dictionary) -> bool: return ids.has(r["id"]))
+	assert_eq(rows.map(func(r: Dictionary) -> String: return r["id"]), ids)
+	assert_eq(rows.map(func(r: Dictionary) -> String: return r["name"]), ["썰매", "들것", "손수레", "긴 썰매", "쇠 날"])
+	var p := _pane(g)
+	await wait_process_frames(1)
+	for row: Dictionary in rows:
+		var key: Button = _key(p, "Key_" + String(row["id"]))
+		assert_not_null(key)
+		assert_eq(key.tooltip_text, row["why"])
+		assert_ne(row["why"], "")
+		key.pressed.emit()
+		assert_null(g["dom"].get("make"))
+	assert_eq((p.find_child("Have_runner", true, false) as Label).text, "×2")
+	await wait_process_frames(1)
+
+
 func test_the_model_reads_the_stores_and_the_things_to_make() -> void:
 	var m: Dictionary = WorkshopPane.model(_game())
 	var ns: Array = []

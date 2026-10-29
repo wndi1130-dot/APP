@@ -797,3 +797,106 @@ func test_a_step_is_heard_by_the_floor_underfoot() -> void:
 	g.floor_glass.erase(cell)
 	g.floor[g.index(cell)] = was
 
+
+# A blow on one of the dead (user 2026-10-28: 「좀비 때릴때마다 … 사운드 이펙트가
+# 있어야돼 / 무기마다 달라야되고 / 상태에 따라 달라져야돼」): every blow the
+# combat can tell is heard in layers of its own, each of three to five files;
+# the weapon, what came of it and the weapon's state each change it.
+func test_every_blow_the_combat_can_tell_is_heard_in_layers_of_its_own() -> void:
+	var a = game.audio
+	var empty := 0
+	var cells: Dictionary = {}
+	var tried := 0
+	for w in ["knife", "crowbar", "axe", "frying_pan", "broken_bottle", "wood_stake", "", "boot", "pistol"]:
+		for target in ["standing", "downed", "frozen", "rising", ""]:
+			for result in ["body", "head", "finish", "blocked", "shatter", "stuck", "miss"]:
+				for edge in [-1, 0, 1, 2]:
+					tried += 1
+					var layers: Array = a.blow_layers({"weapon": w, "target": target, "result": result, "edge": edge})
+					if layers.is_empty():
+						empty += 1
+					var key: Array = []
+					for l in layers:
+						if (a.lib.get(l[0], []) as Array).size() < 3:
+							empty += 1
+						key.append([l[0], snappedf(float(l[2]), 0.01)])
+					cells[str(key)] = true
+	assert_eq(empty, 0, "no blow without its layers, no layer with fewer than three files")
+	for g in a.GROUPS:
+		if String(g).begins_with("blow_"):
+			assert_between((a.lib[g] as Array).size(), 3, 5, g)
+	var body := {"result": "body", "target": "standing", "edge": 0}
+	var by_weapon: Dictionary = {}
+	for w in ["knife", "crowbar", "axe", "frying_pan", "wood_stake", "", "boot"]:
+		var info := body.duplicate()
+		info["weapon"] = w
+		by_weapon[a.blow_layers(info)[0][0]] = true
+	assert_eq(by_weapon.size(), 7, "each kind of weapon its own body hit")
+	var head: Array = a.blow_layers({"weapon": "crowbar", "result": "head", "target": "standing", "edge": 0})
+	var down: Array = a.blow_layers({"weapon": "crowbar", "result": "finish", "target": "downed", "edge": 0})
+	var dull: Array = a.blow_layers({"weapon": "crowbar", "result": "body", "target": "standing", "edge": 1})
+	var giving: Array = a.blow_layers({"weapon": "crowbar", "result": "body", "target": "standing", "edge": 2})
+	assert_true(str(head).contains("blow_head"), "a head giving")
+	assert_true(str(down).contains("blow_finish") and str(down).contains("blow_ground"), "the end of one that is down, on the ground")
+	assert_lt(float(dull[0][2]), 1.0, "a dull weapon lower")
+	assert_true(str(giving).contains("blow_breaking"), "a weapon about to give")
+	assert_eq(a.blow_layers({"weapon": "knife", "result": "miss", "target": ""})[0][0], "blow_miss", "a miss is air")
+	gut.p("blows: %d told, %d kinds heard, %d empty" % [tried, cells.size(), empty])
+
+
+# No file of a layer twice running, however fast the blows come; each a
+# little higher or lower, louder or softer.
+func test_no_blow_file_twice_running() -> void:
+	var a = game.audio
+	var at: Vector3 = game.player.position + Vector3(1.0, 0, 0)
+	var weapons: Array = ["knife", "crowbar", "axe", "frying_pan", "broken_bottle", "wood_stake", "", "boot"]
+	var results: Array = ["body", "head", "finish", "blocked", "shatter", "stuck", "miss"]
+	var targets: Array = ["standing", "downed", "frozen", "rising"]
+	for i in range(600):
+		a.blow({"weapon": weapons[randi() % weapons.size()], "target": targets[randi() % targets.size()],
+			"result": results[randi() % results.size()], "edge": randi_range(-1, 2), "at": at, "by_player": true})
+	var last: Dictionary = {}
+	var again := 0
+	for e in a.blow_log:
+		if last.get(e[0], -1) == e[1]:
+			again += 1
+		last[e[0]] = e[1]
+	assert_gt(a.blow_log.size(), 600, "layers heard")
+	assert_eq(again, 0, "no file twice running in a layer")
+	gut.p("600 blows: %d layers, %d files twice running" % [a.blow_log.size(), again])
+
+
+# Told by the combat, a blow on one of the dead is heard by its layers alone:
+# the old hit_* at the same place in the same frame is listed, not played, and
+# one that went first (a stomp is felt before it is told) is stopped. A door or
+# a person struck (told by no one) is heard as ever.
+func test_a_told_blow_takes_the_place_of_the_old_hit() -> void:
+	var a = game.audio
+	if game.combat.has_signal("struck"):
+		assert_true(a.blow_wired, "the ear listens to the combat")
+		var n: int = a.blow_log.size()
+		game.combat.struck.emit({"weapon": "axe", "target": "standing", "result": "head", "edge": 0, "at": game.player.position, "by_player": true})
+		assert_gt(a.blow_log.size(), n, "told, heard")
+	a.blow_wired = true
+	var at: Vector3 = game.player.position + Vector3(1.0, 0, 0)
+	a.blow({"weapon": "crowbar", "target": "standing", "result": "body", "edge": 0, "at": at})
+	var mark: Array = a.hit_mark.duplicate()
+	a.feel_sound("hit_blunt", at, 0.85, 40.0)
+	assert_true(a.played.has("hit_blunt"), "listed")
+	assert_eq(a.hit_mark, mark, "not played over the blow")
+	var door: Vector3 = game.player.position + Vector3(0, 0, 6.0)
+	a.feel_sound("hit_blunt", door, 0.85, 40.0)
+	assert_eq(a.hit_mark[1], door, "a door struck is heard")
+	var foot: Vector3 = game.player.position + Vector3(0, 0, -3.0)
+	var stopped: int = a.hits_stopped
+	a.feel_sound("hit_stomp", foot, 0.85, 40.0)
+	assert_eq(a.hit_mark[1], foot)
+	a.blow({"weapon": "boot", "target": "downed", "result": "body", "edge": -1, "at": foot})
+	assert_eq(a.hits_stopped, stopped + 1, "the stomp felt before it was told is stopped")
+	assert_eq(int(a.hit_mark[0]), -1, "and let go of")
+	a.blow({"weapon": "axe", "target": "downed", "result": "finish", "edge": 0, "at": foot})
+	assert_eq(a.hits_stopped, stopped + 1, "a second blow there in the same frame stops nothing")
+	# Only the base hit of a dull weapon goes through the duller bus.
+	a.blow({"weapon": "crowbar", "target": "standing", "result": "head", "edge": 1, "at": at})   # near enough never to be behind a wall
+	assert_eq(a.last_bus, "SFX", "the head giving is heard as it is")
+

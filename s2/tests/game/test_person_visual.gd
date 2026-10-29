@@ -262,6 +262,29 @@ func test_a_blow_is_the_living_own_swing() -> void:
 	assert_true(PersonVisual.is_own(note))
 
 
+# J2 ③: the stab's tip goes past to one side of the way the body faces; the body
+# turns that far toward it as the blow lands, and back once it is over.
+func test_a_blow_that_goes_past_to_one_side_turns_the_body_to_it() -> void:
+	var own := _own()
+	var p := _person()
+	var note := {}
+	p.hands = [{"id": "knife", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	p.strike_kind = "swing"
+	p.strike_at = {"state": "chase"}
+	p.strike_total = 0.4
+	p.strike_t = 0.4
+	PersonVisual.blow_of(p, own, note, 0.0)
+	assert_eq(PersonVisual.lean_of(p, note), Basis(), "drawn back from the start: square")
+	p.strike_t = 0.0
+	p.swing_t = 0.3
+	PersonVisual.blow_of(p, own, note, 0.4)
+	var turned: Vector3 = PersonVisual.lean_of(p, note) * Vector3.BACK
+	assert_almost_eq(Vector3.BACK.signed_angle_to(turned, Vector3.UP), float(PersonVisual.OWN_BLOW_AIM["p_stab"]), 0.01, "turned to the stab as it lands")
+	p.swing_t = 0.0
+	PersonVisual.blow_of(p, own, note, 0.8)
+	assert_eq(PersonVisual.lean_of(p, note), Basis(), "the blow over: square again")
+
+
 # Blow after blow goes through each weapon's ways, so the same one is not seen
 # twice running; after a rest the next starts again from the first.
 func test_blow_after_blow_goes_through_the_ways() -> void:

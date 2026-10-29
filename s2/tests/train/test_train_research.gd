@@ -13,7 +13,18 @@ var _bad: Array[String] = []
 func before_all() -> void:
 	_data = JSON.parse_string(FileAccess.get_file_as_string(PATH))
 	assert_eq(_data.get("format"), "tech-vectors-v1")
-	assert_eq((_data["cases"] as Array).size(), (_data["seeds"] as Array).size() * 8 * 21)
+	assert_eq((_data["cases"] as Array).size(), (_data["seeds"] as Array).size() * 8 * 23)
+
+
+func test_furnish_and_transport_research_do_not_bypass_the_main_branch() -> void:
+	assert_eq(Research.prereqs("x4"), ["x1"] as Array[String])
+	assert_eq(Research.prereqs("x3"), ["x2"] as Array[String])
+	assert_eq(Research.prereqs("w3"), ["w2"] as Array[String])
+	assert_eq(Research.prereqs("w5"), [] as Array[String])
+	assert_eq(Research.TECHS["w5"]["tier"], 0)
+	assert_eq(Research.TECHS["w5"]["adapt"], {"parts": 1, "wood": 4})
+	assert_true(Research.visible({}).has("w5"))
+	assert_true(Research.visible({}).has("x4"))
 
 
 func before_each() -> void:
