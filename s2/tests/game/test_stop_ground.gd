@@ -507,6 +507,7 @@ static func _paths_of(g: FieldGrid) -> Array:
 func test_edge_paths_are_a_full_refresh_on_every_floor() -> void:
 	for place: String in PLACES + ["first_leg_01_sulechow"]:
 		var now: Dictionary = StopGround.apply(_map(place), "edge", 71, 200.0)
+		assert_eq(now["stop_form"], "edge", place + ": the ground did grow")
 		for lv in now["levels"]:
 			var g: FieldGrid = now["levels"][lv]
 			var kept := _paths_of(g)

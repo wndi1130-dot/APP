@@ -113,12 +113,11 @@ static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionar
 	var new_border: int = 0 if left > 0 else g.width - 1
 	_extend_ground(g, old, added, 0 if left > 0 else old.width - 1)
 	var moved_out: Dictionary = _move_entries_out(out, old_border, new_border)
-	_move_train(out, Vector2i(dx, 0))
+	var floored: Array = _move_train(out, Vector2i(dx, 0))
 	_add_trees(out, added, rng)
-	# The old and new footprints and the trees: none is deep snow before or after, so the
-	# weights stand.
+	# The old and new footprints, the trees and the platform's moved floor.
 	var was_at: Rect2i = Rect2i((data["train"] as Rect2i).position + Vector2i(left, 0), (data["train"] as Rect2i).size)
-	for c: Vector2i in _cells(was_at) + _cells(out["train"]) + out["trees"]:
+	for c: Vector2i in _cells(was_at) + _cells(out["train"]) + out["trees"] + floored:
 		g.refresh_cell(c)
 	out["boarding"] = [out["platform"]] + FieldMaps.side_strips(out, out["platform"])
 	out["unloading"] = [out["unload"]] + FieldMaps.side_strips(out, out["unload"])
@@ -179,7 +178,9 @@ static func _move_entries_out(data: Dictionary, old_border: int, new_border: int
 	return moved
 
 
-static func _move_train(data: Dictionary, offset: Vector2i) -> void:
+## Moves the train and what it carries; returns the cells whose floor it repainted (the
+## platform's, old and new).
+static func _move_train(data: Dictionary, offset: Vector2i) -> Array:
 	var g: FieldGrid = data["grid"]
 	var train: Rect2i = data["train"]
 	var moved: Rect2i = Rect2i(train.position + offset, train.size)
@@ -225,12 +226,15 @@ static func _move_train(data: Dictionary, offset: Vector2i) -> void:
 						platform_cells[c] = true
 			rect.position += offset
 		data[key] = rect
+	var floored: Array = []
 	for c: Vector2i in platform_cells:
 		g.floor[g.index(c)] = FieldGrid.Floor.SNOW
+		floored.append(c)
 	for c: Vector2i in platform_cells:
 		var to: Vector2i = c + offset
 		if g.inside(to) and g.solid_at(to) == FieldGrid.Solid.NONE and g.floor_at(to) != FieldGrid.Floor.RAIL:
 			g.floor[g.index(to)] = FieldGrid.Floor.PLATFORM
+			floored.append(to)
 	for light: Dictionary in data.get("lights", []):
 		if String(light.get("kind", "")) in TRAIN_LIGHTS or (int(light.get("level", 0)) == 0 and train.has_point(light["cell"])):
 			light["cell"] += offset
@@ -240,6 +244,7 @@ static func _move_train(data: Dictionary, offset: Vector2i) -> void:
 			slots[i] += offset
 	for crossing: Dictionary in data.get("crossings", []):
 		_move_cells(crossing["cells"], offset)
+	return floored
 
 
 ## The uncovered track on this row is the ground beneath the train.

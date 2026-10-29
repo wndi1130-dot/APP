@@ -170,7 +170,9 @@ func refresh_paths() -> void:
 	revision += 1
 
 
-## Whether every cell's walk caches are up to date (refresh_paths ran).
+## Whether refresh_paths has run on this grid at least once. Not that every cell's caches
+## are right now: solids written after it (set_solid, a map still being built) leave them as
+## they were. Only a caller who knows that vouches for it (MapShift.grow carry_paths).
 func paths_ready() -> bool:
 	return _walk_ready
 
@@ -209,6 +211,8 @@ func _cache_cell(c: Vector2i) -> void:
 func refresh_cell(c: Vector2i) -> void:
 	if inside(c):
 		_cache_cell(c)
+		# Its floor may have changed too (a platform moved, a ditch filled): the weight as refresh_paths sets it.
+		people_path.set_point_weight_scale(c, 1.6 if floor[index(c)] == Floor.DEEP_SNOW else 1.0)
 	people_path.set_point_solid(c, not people_can_walk(c))
 	dead_path.set_point_solid(c, not dead_can_walk(c))
 	revision += 1
