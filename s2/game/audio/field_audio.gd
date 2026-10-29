@@ -64,6 +64,14 @@ const DOOR_VOICES: Dictionary = {
 	"break": ["door_break", 1.0, 0.95, 1.05],
 }
 const DOOR_BLOWS: Array[String] = ["door", "low", "wall"]
+## A building's door turned by a hand (field_actions _set_door), for the
+## player's ear only: no rule hears it, so no make_sound tag and no noise.gd
+## SOURCES row (as a box's opening and shutting). Group, loudness, pitch low
+## and high, and the impact file that stands in until a file is in its group.
+const DOOR_TURN: Dictionary = {
+	"open": ["door_open", 0.45, 0.78, 0.86, "wooden"],
+	"closed": ["door_close", 0.55, 0.66, 0.74, "wooden"],
+}
 ## A manhole lid dragged aside by one of the dead coming up (decision 422 M9):
 ## group, loudness, pitch low and high. Until a file is in its group it is the
 ## impact set's iron, pitched down.
@@ -1584,6 +1592,15 @@ func door(kind: String, at: Vector3, level: int) -> void:
 		loud *= clampf(0.35 + 0.2 * level, 0.3, 1.0)
 	var d: float = at.distance_to(game.player.position)
 	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])), null, _bus_at(at))
+
+
+## A building's door opened or shut by someone (state "open" or "closed"), heard
+## from the door, in the player's room when it is one of the room's doors.
+func door_turn(c: Vector2i, state: String) -> void:
+	if quiet or game == null or game.player == null or not DOOR_TURN.has(state):
+		return
+	var voice: Array = DOOR_TURN[state]
+	_voice_or_standin(voice, String(voice[4]), game.FieldGrid.center(c))
 
 
 ## A loose board creaking, for the player's ear (the rule sound is field_game's

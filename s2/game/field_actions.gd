@@ -416,6 +416,8 @@ func _set_door(c: Vector2i, state: String, p = null, pried: bool = false) -> voi
 				return
 	game.grid.set_door_state(c, state)
 	game.view.update_door(c)
+	if game.audio != null:
+		game.audio.door_turn(c, state)   # the ear's; no rule hears a door turned
 	_check_raider_door(c)
 	# Pried open is broken into (J17); opened with its key, or as it was, is not.
 	if pried and state == "open":
