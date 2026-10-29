@@ -113,9 +113,107 @@ func test_on_the_side_on_screen_it_waits_unseen_and_lays_nothing() -> void:
 	assert_eq(j.chunks.size(), 0, "nothing laid where it is not seen")
 	assert_true(j.handoff().is_empty(), "the stop scene then goes by the stretch")
 	host.view_mode = "diag"
-	await wait_process_frames(3)
-	assert_true(j.visible)
+	await wait_until(func() -> bool: return j.visible, 5.0)
+	assert_true(j.visible, "shown once the land worked out reaches past the train")
+	assert_gte(j.laid_to - j.travelled, host.train_length() + Journey.MARGIN)
 	assert_gt(j.chunks.size(), 2, "the diagonal view on: the land laid round the train")
+
+
+## The kit's pieces as data on a worker (Kit.plan) are the pieces worked out here,
+## and their buffers lay each instance as MultiMesh.set_instance_transform would.
+func test_a_piece_worked_out_on_a_worker_is_the_piece_worked_out_here() -> void:
+	Kit.warm()
+	for kind: String in ["wood", "lake", "field", "village"]:
+		var sec: Dictionary = {"seed": 77, "mirror": true}
+		var here: Dictionary = Kit.plan(kind, 240.0, 360.0, sec, LOOK, {"chunk": 2})
+		var box: Dictionary = {}
+		var task: int = WorkerThreadPool.add_task(func() -> void: box["plan"] = Kit.plan(kind, 240.0, 360.0, sec, LOOK, {"chunk": 2}))
+		WorkerThreadPool.wait_for_task_completion(task)
+		var there: Dictionary = box["plan"]
+		assert_eq((there["props"] as Dictionary).keys(), (here["props"] as Dictionary).keys(), kind + ": the same models a block")
+		for key: String in here["props"]:
+			assert_eq(there["props"][key]["buffer"], here["props"][key]["buffer"], "%s %s: the same places" % [kind, key])
+		assert_eq(there["ground"], here["ground"], kind + ": the same ground")
+		assert_eq(int(there["houses"]), int(here["houses"]))
+	var t := Transform3D(Basis(Vector3.UP, 0.7).scaled(Vector3(1.3, 1.3, 1.3)) * Basis(Vector3.RIGHT, 0.02), Vector3(12.5, -0.85, -18.0))
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	# A mesh, as the kit's have: a drawing renderer will not keep a MultiMesh with none.
+	mm.mesh = BoxMesh.new()
+	mm.instance_count = 1
+	mm.set_instance_transform(0, t)
+	var want: PackedFloat32Array = mm.buffer
+	gut.p("MultiMesh buffer read back: %d floats" % want.size())
+	if want.is_empty():
+		pass_test("this renderer keeps no MultiMesh buffer to read back (headless): the places above still match")
+		return
+	var packed: PackedFloat32Array = Kit._prop_buffers({"props": {"spruce|0": [t]}})["spruce|0"]["buffer"]
+	assert_eq(packed.size(), want.size())
+	for i in want.size():
+		assert_almost_eq(packed[i], want[i], 0.0001, "float %d of the 3x4 matrix" % i)
+
+
+## A stop straight after the diagonal view came up, before the land was first laid:
+## the stop scene still goes on with the train screen's land.
+func test_a_stop_before_the_land_is_first_laid_still_hands_it_over() -> void:
+	var host := FakeTrain.new()
+	host.view_mode = "diag"
+	add_child_autofree(host)
+	var j: Node3D = Journey.attach(host, host, LOOK, 1, {"seed": 6, "remember": false})
+	var h: Dictionary = j.handoff()
+	assert_false(h.is_empty(), "handed over though nothing was laid yet")
+	assert_true(h.has("section") and h.has("history"))
+
+
+## A window change while the land is first being worked out, before it is shown: worked
+## out again for the new window, and shown.
+func test_a_window_change_before_the_land_is_shown_still_shows_it() -> void:
+	var host := FakeTrain.new()
+	host.view_mode = "section"
+	add_child_autofree(host)
+	var j: Node3D = Journey.attach(host, host, LOOK, 1, {"seed": 4, "remember": false})
+	await wait_process_frames(2)
+	host.view_mode = "diag"
+	j.call("_fill")
+	j.next_window()
+	assert_false(j.visible)
+	await wait_until(func() -> bool: return j.visible, 5.0)
+	assert_true(j.visible, "shown after the window change")
+	assert_gte(j.laid_to - j.travelled, host.train_length() + Journey.MARGIN)
+
+
+## Worked out on workers or here, the same land in the same order.
+func test_the_land_worked_out_ahead_is_the_land_laid_here() -> void:
+	var lands: Array = []
+	for sync: bool in [true, false]:
+		var host := FakeTrain.new()
+		add_child_autofree(host)
+		var j: Node3D = Journey.attach(host, host, LOOK, 1, {"seed": 21, "remember": false, "sync": sync})
+		j.calm = true
+		var laid: Array = []
+		for i in 2400:
+			j.step(0.1)
+			_note_laid(j, laid)
+		# What a worker is still on is made too (stepped straight through, the last may not
+		# be done): both have worked out as far.
+		while not j._planned.is_empty():
+			j._make_next(true)
+		_note_laid(j, laid)
+		var last_s1: float = -INF
+		for c: Dictionary in j.chunks:
+			if last_s1 > -INF:
+				assert_almost_eq(float(c["s0"]), last_s1, 0.001, "no gap and no overlap between pieces")
+			last_s1 = float(c["s1"])
+		lands.append(laid)
+	assert_gt((lands[1] as Array).size(), 10)
+	assert_eq(lands[0], lands[1])
+
+
+static func _note_laid(j: Node3D, laid: Array) -> void:
+	for c: Dictionary in j.chunks:
+		var row: String = "%d %d %s %s" % [int(c["s0"]), int(c["s1"]), String(c["kind"]), String((c["node"] as Node3D).name)]
+		if not laid.has(row):
+			laid.append(row)
 
 
 func test_no_event_while_a_card_is_up_and_some_when_not() -> void:
