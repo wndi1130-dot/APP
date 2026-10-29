@@ -29,6 +29,7 @@ const HordeDirector = preload("res://game/sim/horde_director.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
 const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldTrainGuard = preload("res://game/field_train_guard.gd")
 const FieldAlarms = preload("res://game/field_alarms.gd")
@@ -229,6 +230,7 @@ var combat: Combat
 var feel: HitFeel                      # a blow's hold, shake, buzz and sound (view only)
 var ai: AI
 var actions: Actions
+var work: FieldWork
 var hud: Hud
 var audio: FieldAudio
 var music: MusicPlayer                  # background music (briefs/bgm.md); silent with no files
@@ -563,6 +565,7 @@ func _ready() -> void:
 	feel = HitFeel.new(self)
 	ai = AI.new(self)
 	actions = Actions.new(self)
+	work = FieldWork.new(self)
 	await BuildPace.heavy(pace)
 	await _spawn_people()
 	residents.place()
@@ -1837,6 +1840,7 @@ func _step(delta: float) -> void:
 	_read_side_note()
 	_land_lures()
 	actions.update(delta)
+	work.update(delta)
 	holdout.tick(delta)
 	residents.tick(delta)
 	holdout.watch(delta)
@@ -3270,7 +3274,7 @@ func finish(reason: String) -> void:
 		receipt.set_extras(int(extras.get("symbolCount", 0)), Array(extras.get("fragments", [])) + fragments, CoreScenes.count(so_far["items"]["gained"]))
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
-	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
+	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0)) + actions.wood_delivered
 	stock["cloth"] = float(stock.get("cloth", 0.0)) - cloth_start
 	# Ammo is the pool plus what sits in the guns: rounds fired from a magazine
 	# count, and so do the ones in a gun that stays behind with its carrier.

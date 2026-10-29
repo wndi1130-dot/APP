@@ -6,6 +6,7 @@ extends Node3D
 ## player climbs to them, and the cellar shows alone.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
@@ -774,8 +775,14 @@ func update_spot(id: String) -> void:
 			box(st, Vector3(0.06, 3.2, 0.06), at + Vector3(-0.28, 1.6, -0.3), Color(0.5, 0.42, 0.3))
 			box(st, Vector3(0.06, 3.2, 0.06), at + Vector3(0.28, 1.6, -0.3), Color(0.5, 0.42, 0.3))
 		"work_site":
-			var color := Color(0.45, 0.45, 0.45) if spot["state"] == "closed" else Color(0.8, 0.7, 0.35)
+			var color: Color = Color(0.9, 0.76, 0.4) if spot["state"] == "ready" else Color(0.45, 0.45, 0.45)
 			box(st, Vector3(1.2, 0.05, 1.2), at + Vector3(0, 0.03, 0), color)
+			var filled: int = clampi(roundi(float(spot.get("work_share", 0.0)) * FieldWork.SHARE_CELLS), 0, FieldWork.SHARE_CELLS)
+			for i in FieldWork.SHARE_CELLS:
+				var angle: float = float(i) * TAU / FieldWork.SHARE_CELLS
+				var offset: Vector3 = Vector3(cos(angle), 0.0, sin(angle)) * 0.95
+				var tint: Color = Color(0.95, 0.6, 0.18) if i < filled else Color(0.24, 0.23, 0.21)
+				box(st, Vector3(0.22, 0.05, 0.22), at + offset + Vector3(0, 0.04, 0), tint)
 		"inspect":
 			# A thing to look at for this stop's goal: a post, paler once seen.
 			var post := Color(0.42, 0.42, 0.44) if spot["state"] != "seen" else Color(0.7, 0.7, 0.66)
