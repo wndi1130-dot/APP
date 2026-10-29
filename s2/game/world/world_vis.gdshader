@@ -172,7 +172,7 @@ const vec3 GREY_BOARD = vec3(0.60, 0.56, 0.49);
 const vec3 PINE_BOARD = vec3(0.68, 0.55, 0.38);
 const vec3 OAK_BLOCK = vec3(0.66, 0.56, 0.42);
 // How far an unseen room's floor keeps its own lightness, from the plain floor's (0) to its own (1).
-const float UNSEEN_FOLLOW = 0.5;
+const float UNSEEN_FOLLOW = 0.25;
 
 // Seam strength left as a pixel covers `size` (1 near, 0 once a seam is under a fifth of a pixel).
 float seam_k(vec2 px, float size) {
@@ -586,7 +586,7 @@ void fragment() {
 				tone = mix(tone, rug_tone, on);
 			}
 			// Out of sight the finish keeps its hue and half its pattern, and its lightness goes
-			// halfway (UNSEEN_FOLLOW) to a shade under the plain floor (the kind's colour, WOOD
+			// three quarters of the way (1 - UNSEEN_FOLLOW) to a shade under the plain floor (the kind's colour, WOOD
 			// V 0.40) as the mask leaves it (`dimmed` below, in linear: 0.6 grey + 0.4 brightest
 			// channel): the unseen rooms are 89 % of a house's floor (mood B1), so a light tile stays
 			// lighter than a dark board there too, and the boxes' floor mats (map_view _bake_container)
