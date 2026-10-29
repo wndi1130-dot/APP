@@ -1,9 +1,10 @@
 extends "res://addons/gut/test.gd"
-## The dead in sight are heard walking (field_audio _tick_feet; user 2026-10-24:
-## only the dead the player can see are heard):
-## the nearest few that move, by the floor under them, a stride drawn new for
-## every step so their feet keep no beat. Standing, crawling, far or out of
-## sight, no step. Only the player's ear: nothing in the rules hears it.
+## The dead in sight are heard walking (field_audio _tick_feet; 결정 509, user
+## 2026-10-24: only the dead the player can see are heard): the nearest few
+## that move, by the floor under them, a stride drawn new for every step so
+## their feet keep no beat. Standing, crawling, far or out of sight, no step.
+## An ally's feet are heard too, softer; a raider's not. Only the player's
+## ear: nothing in the rules hears it.
 
 const FieldGame = preload("res://game/field_game.gd")
 
@@ -198,3 +199,27 @@ func test_its_gait_follows_what_it_is_doing() -> void:
 		var g: Dictionary = a.DEAD_GAITS[gait]
 		assert_true(float(g["loud"]) <= 0.3, "never louder than the player's walk")
 		assert_true(float(g["pitch"][1]) <= 0.9, "never above the player's own feet")
+
+
+# An ally's feet (squad or crew) are heard too, softer than the player's own;
+# a raider's or a stranger's stay unheard (field_game _footsteps).
+func test_an_allys_steps_are_heard_softer_and_a_raiders_not_at_all() -> void:
+	var a = game.audio
+	var mate = game.squad[1]
+	assert_eq(String(mate.team), "squad")
+	mate.position = game.player.position + Vector3(3, 0, 0)
+	var cell: Vector2i = game.FieldGrid.cell_of(mate.position)
+	game._footsteps(mate, 0.1, cell, 2.0)
+	assert_gt(a.company_steps.size(), 0, "an ally walking near is heard")
+	assert_eq(a.steps.size(), 0, "not as the player's own")
+	var o: AudioStreamPlayer3D = a.feet[(a.feet_n - 1) % a.feet.size()]
+	var row: Array = a._step_group(mate.position)[1]
+	assert_lt(o.volume_db, a._db(0.3 * float(row[1])), "softer than the player's own walk")
+	var heard: int = a.company_steps.size()
+	for team: String in ["raider", "survivor"]:
+		mate.team = team
+		game._footsteps(mate, 0.1, cell, 2.0)
+		assert_eq(a.company_steps.size(), heard, team + ": unheard")
+	mate.team = "squad"
+	a.company_step(game.player.position + Vector3(a.DEAD_STEP_RANGE + 1.0, 0, 0), false)
+	assert_eq(a.company_steps.size(), heard, "past the range, no step")
