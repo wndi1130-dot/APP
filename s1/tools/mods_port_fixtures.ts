@@ -17,6 +17,9 @@ import { createS1cGame, furnishOf, furnishScore, nextFurnishWork } from '../src/
 import { refreshSit } from '../src/game/domestic/sit';
 import { insulatedShare, insulateCarNote, insulateNumbers, insulatePickLine, furnishComparison, furnishTick } from '../src/game/domestic/lawtech';
 import { cancelJob, cancelOpen, CAR_NAME, jobCheck, jobTitle, runWorkshop, startJob, workPower, furnishCost, placeFurniture, removeFurniture } from '../src/game/domestic/workshop';
+import { DECOR, DECOR_CARS, DECOR_SLOT_TABLE, DECOR_SLOTS, FURNISH_WALL_MAX, FURNISH_FLOOR_MAX,
+  canPlace, decorCrowd, decorItems, migrateDecor, move, place, readStore, receiveDecor, reconcileStore, rotate, slotsOpen, takeBack } from '../src/game/domestic/decor';
+import type { DecorAt, DecorRes, DecorSpot } from '../src/game/domestic/decor';
 
 const FORMAT = 'mods-vectors-v1';
 const seeds = ['mods-0', 'mods-1'];
@@ -168,6 +171,7 @@ type FurnishOp = { op: 'check' | 'start' | 'cancel' | 'run' | 'place' | 'remove'
 function furnishBase(): Game {
   const g = prepare(createGame('furnish-oracle'), 0);
   const d = g.dom!;
+  receiveDecor(g, Object.keys(FURNITURE).flatMap(kind => Array<string>(20).fill(kind)));
   d.wood = 100; d.scrap = 100; d.parts = 30; d.insulated = [...FURNISH_CARS];
   for (const id of ['w1', 'w5'] as const) d.techs[id] = { stage: 'done', defect: false, progress: 3, need: 3 };
   for (const p of d.people) p.skill = 2;
@@ -179,10 +183,10 @@ function furnishState(g: Game) {
   const s = state(g);
   return { ...s, ledger: clone(g.ledger ?? []),
     comms: byComm(c => ({ ...s.comms[c], rel: g.comms[c].rel })),
-    dom: { ...s.dom!, furnish: clone(g.dom!.furnish ?? {}) } };
+    dom: { ...s.dom!, furnish: clone(g.dom!.furnish ?? {}), store: clone(g.dom!.store ?? {}) } };
 }
 function furnishOwned(g: Game) {
-  return clone({ ...owned(g), parts: g.dom!.parts, furnish: g.dom!.furnish ?? {},
+  return clone({ ...owned(g), parts: g.dom!.parts, furnish: g.dom!.furnish ?? {}, store: g.dom!.store ?? {},
     rel: byComm(c => g.comms[c].rel), ledger: g.ledger ?? [] });
 }
 function furnishApply(g: Game, op: FurnishOp): unknown {
@@ -264,18 +268,106 @@ for (const tier of [1, 2, 3]) for (const population of ['all', 'front-empty', 't
   g.comms.tail.rel = 99.9; g.comms.medtech.rel = -99.9;
   furnishCase(`comparison-${tier}-${population}`, g, [{ op: 'tick' }, { op: 'tick' }]);
 }
+// The same operation inputs replay in S2; snapshots include ownership and per-car capacity.
+type DecorOp = { op: 'receive' | 'canPlace' | 'place' | 'move' | 'rotate' | 'takeBack' | 'spend' | 'read' | 'reconcile' | 'migrate';
+  car?: string; kind?: string; spot?: DecorSpot; at?: DecorAt; rot?: number; on?: number; i?: number;
+  gained?: string[]; res?: DecorRes; amount?: number };
+function decorBase(): Game {
+  const g = furnishBase();
+  g.dom!.store = {}; g.food = 40; g.med = 20; g.lux = 40; g.sup = 20;
+  return g;
+}
+function decorState(g: Game) { return { ...furnishState(g), food: g.food, med: g.med, lux: g.lux, sup: g.sup }; }
+function decorOwned(g: Game) {
+  return clone({ furnish: g.dom!.furnish ?? {}, store: g.dom!.store ?? {}, food: g.food, med: g.med, lux: g.lux, sup: g.sup,
+    rel: byComm(c => g.comms[c].rel), ledger: g.ledger ?? [],
+    slots: Object.fromEntries(DECOR_CARS.map(car => [car, slotsOpen(g, car)])),
+    crowd: Object.fromEntries(DECOR_CARS.map(car => [car, decorCrowd(decorItems(g, car))])) });
+}
+function decorApply(g: Game, op: DecorOp): unknown {
+  switch (op.op) {
+    case 'receive': receiveDecor(g, op.gained!); return null;
+    case 'canPlace': return canPlace(g, op.car!, op.kind!, op.spot!, op.at, op.rot, op.on);
+    case 'place': return place(g, op.car!, op.kind!, op.spot!, op.at, op.rot, op.on);
+    case 'move': return move(g, op.car!, op.i!, op.at!, op.rot);
+    case 'rotate': return rotate(g, op.car!, op.i!, op.rot!);
+    case 'takeBack': return takeBack(g, op.car!, op.i!);
+    case 'spend': g[op.res!] = (g[op.res!] ?? 0) - op.amount!; return null;
+    case 'read': return readStore(g);
+    case 'reconcile': reconcileStore(g); return null;
+    case 'migrate': migrateDecor(g); return null;
+  }
+}
+const decorCases: { name: string; state: ReturnType<typeof decorState>; steps: unknown[] }[] = [];
+function decorCase(name: string, g: Game, ops: DecorOp[]) {
+  const state = clone(decorState(g));
+  if (!Object.hasOwn(g.dom!, 'store')) Reflect.deleteProperty(state.dom, 'store');
+  const steps = ops.map(op => { const result = decorApply(g, op); return clone({ ...op, result, after: decorOwned(g) }); });
+  decorCases.push({ name, state, steps });
+}
+const decorSlots: unknown[] = [];
+for (const car of DECOR_CARS) for (const tier of [0, 1, 2, 3]) {
+  const g = atTier(DECOR_SLOT_TABLE[car] === 'tier' ? car : 'tail2', tier);
+  g.dom!.store = {};
+  for (const surface of [false, true]) {
+    if (surface) { receiveDecor(g, ['side_table']); place(g, car, 'side_table', 'floor'); }
+    decorSlots.push(clone({ car, tier, surface, state: decorState(g), open: slotsOpen(g, car) }));
+  }
+}
+decorCase('ownership-and-parent-indices', decorBase(), [
+  { op: 'place', car: 'front', kind: 'chair', spot: 'floor' },
+  { op: 'receive', gained: ['chair', 'side_table', 'table', 'record', 'record', 'record', 'can_beans', 'unknown'] },
+  { op: 'place', car: 'engine', kind: 'chair', spot: 'floor' },
+  { op: 'place', car: 'front', kind: 'chair', spot: 'floor', at: [0, 0], rot: 0 },
+  { op: 'place', car: 'front', kind: 'side_table', spot: 'floor', at: [0, 0] },
+  { op: 'place', car: 'front', kind: 'record', spot: 'surface', on: 1, at: [0, 0] },
+  { op: 'place', car: 'front', kind: 'record', spot: 'surface', on: 1, at: [1, 0] },
+  { op: 'place', car: 'front', kind: 'record', spot: 'surface', on: 1 },
+  { op: 'place', car: 'front', kind: 'table', spot: 'floor' },
+  { op: 'place', car: 'front', kind: 'can_beans', spot: 'surface', on: 4, at: [0, 0], rot: 1 },
+  { op: 'move', car: 'front', i: 0, at: [999, -7], rot: 2 },
+  { op: 'rotate', car: 'front', i: 0, rot: 3 },
+  { op: 'rotate', car: 'front', i: 0, rot: 4 },
+  { op: 'takeBack', car: 'front', i: 0 },
+  { op: 'takeBack', car: 'front', i: 0 },
+  { op: 'takeBack', car: 'front', i: 0 },
+  { op: 'takeBack', car: 'front', i: -1 },
+]);
+const tagsGame = atTier('front', 1); tagsGame.dom!.store = {}; tagsGame.lux = 4; tagsGame.sup = 0;
+decorCase('newest-tags-melt-across-kinds', tagsGame, [
+  { op: 'receive', gained: ['painting', 'record', 'rare_violin'] },
+  { op: 'place', car: 'front', kind: 'rare_violin', spot: 'wall', at: [31, 1] },
+  { op: 'spend', res: 'lux', amount: 0.5 }, { op: 'read' },
+  { op: 'spend', res: 'lux', amount: 1.5 }, { op: 'reconcile' },
+  { op: 'takeBack', car: 'front', i: 0 }, { op: 'read' },
+]);
+for (const car of ['captain', 'dining']) decorCase(`common-${car}`, decorBase(), [
+  { op: 'receive', gained: ['piano', 'side_table', 'can_meat', 'jar_cabbage', 'jar_jam', 'bottle_spirit', 'rare_wine_case'] },
+  { op: 'place', car, kind: 'piano', spot: 'floor' }, { op: 'place', car, kind: 'side_table', spot: 'floor' },
+  { op: 'place', car, kind: 'can_meat', spot: 'surface', on: 1 },
+  { op: 'place', car, kind: 'jar_cabbage', spot: 'surface', on: 1 },
+  { op: 'place', car, kind: 'jar_jam', spot: 'surface', on: 1 }, { op: 'takeBack', car, i: 1 },
+  { op: 'takeBack', car, i: 0 },
+]);
+const oldDecor = decorBase(); delete oldDecor.dom!.store;
+oldDecor.dom!.furnish = { front: { work: 0, jobs: [], furnPts: 1, tier: 0, best: 0, items: [{ kind: 'frame', size: 'small' }] } };
+decorCase('legacy-unpositioned', oldDecor, [{ op: 'migrate' }, { op: 'read' }, { op: 'takeBack', car: 'front', i: 0 }]);
+
 const dKeys = ['insulateWork', 'insulateWood', 'insulateWarm', 'insulateHeat', 'insulateCrowd', 'insulateQuotaHalf',
   'furnishClothWood', 'furnishFurnitureCap', 'furnishThreshold', 'furnishWarm', 'furnishCrowd', 'furnishRel',
   'furnishGapMin', 'furnishGapMax', 'furnishGapRel', 'furnishGapCap', 'furnishPianoRel'] as const;
 const output = { format: FORMAT, seeds, checkpoints, profiles,
   scope: 'Played S1a + neutralized S1c dom; modify-only order, no work debt, no other law-tech relief; no climate/hygiene/UI',
   tables: { COMMS, P, HANDS, CAR_COMM, COMM_CARS, CAR_NAME, HEAT_QUOTA_MATS: LAWS.heat_quota.mats,
-    D: Object.fromEntries(dKeys.map(k => [k, D[k]])), FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE_SIZE, FURNITURE },
+    D: Object.fromEntries(dKeys.map(k => [k, D[k]])), FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE_SIZE, FURNITURE: DECOR },
   furnish: { costs: FURNISH_STEPS.map(step => ({ step, cost: furnishCost(step) })), cases: furnishCases },
+  decor: { tables: { DECOR, DECOR_CARS, DECOR_SLOT_TABLE, DECOR_SLOTS, FURNISH_WALL_MAX, FURNISH_FLOOR_MAX }, slots: decorSlots, cases: decorCases },
   pickLine: insulatePickLine(), legacy, cases };
 const out = resolve(process.argv.find(a => a.endsWith('.json')) ?? '../s2/tests/fixtures/train/mods_vectors.json');
 const text = JSON.stringify(output) + '\n';
 if (Buffer.byteLength(text) >= 5_000_000) throw new Error('Fixture exceeds 5 MB');
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, text);
-console.log(JSON.stringify({ format: FORMAT, cases: cases.length, bytes: Buffer.byteLength(text), out }));
+console.log(JSON.stringify({ format: FORMAT, cases: cases.length, furnishCases: furnishCases.length,
+  furnishSteps: furnishCases.reduce<number>((sum, row) => sum + (row as { steps: unknown[] }).steps.length, 0),
+  decorSlots: decorSlots.length, decorCases: decorCases.length, decorSteps: decorCases.reduce((sum, row) => sum + row.steps.length, 0), bytes: Buffer.byteLength(text), out }));

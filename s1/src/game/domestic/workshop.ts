@@ -3,7 +3,8 @@ import { COMM_NAME, COMMS } from '../data';
 import type { Comm } from '../data';
 import { clamp, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
-import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE, FURNITURE_SIZE, GREEN_BODY, SUPPLIES_TECHS, TECHS, TECH_IDS, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
+import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE, GREEN_BODY, SUPPLIES_TECHS, TECHS, TECH_IDS, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
+import { DECOR, furniturePoints, place, takeBack } from './decor';
 import type { FurnitureKind, FurnishStep, FurnishTier, TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
 import { refreshSit } from './sit';
@@ -381,14 +382,17 @@ export const CAR_NAME: Record<string, string> = {
 
 function mutableFurnish(g: Game, car: string) {
   const states = dom(g).furnish ??= {};
-  return states[car] ??= furnishOf(g, car);
+  const f = furnishOf(g, car);
+  states[car] = f;
+  return f;
 }
 
 /** 단은 내려가지 않고, 처음 닿은 단마다 한 번만 관계와 일지를 남긴다. */
-function updateFurnish(g: Game, car: string): void {
+export function updateFurnish(g: Game, car: string): void {
+  if (!FURNISH_CARS.some(c => c === car)) return;
   const f = mutableFurnish(g, car);
   f.work = f.jobs.length as FurnishTier;
-  f.furnPts = Math.min(D.furnishFurnitureCap, f.items.reduce((sum, item) => sum + FURNITURE_SIZE[item.size].points, 0));
+  f.furnPts = Math.min(D.furnishFurnitureCap, furniturePoints(f.items));
   const score = furnishScore(g, car);
   const reached = FURNISH_STEPS.filter(n => score >= D.furnishThreshold[n]).at(-1) ?? 0;
   f.tier = Math.max(f.tier, f.best, reached) as FurnishTier;
@@ -402,22 +406,12 @@ function updateFurnish(g: Game, car: string): void {
 }
 
 export function placeFurniture(g: Game, car: string, kind: FurnitureKind): JobCheck {
-  if (!g.dom || !FURNISH_CARS.some(c => c === car)) return { ok: false, why: '살림은 사람이 사는 객차 여섯 칸만' };
   if (!Object.hasOwn(FURNITURE, kind)) return { ok: false, why: '알 수 없는 가구' };
-  const { size } = FURNITURE[kind];
-  if (furnishOf(g, car).items.filter(item => item.size === size).length >= FURNITURE_SIZE[size].slots) return { ok: false, why: '이 크기 가구를 놓을 자리가 없다' };
-  mutableFurnish(g, car).items.push({ kind, size });
-  updateFurnish(g, car);
-  refreshSit(g);
-  return { ok: true };
+  return place(g, car, kind, DECOR[kind].spot);
 }
 
 export function removeFurniture(g: Game, car: string, index: number): JobCheck {
-  if (!g.dom || !FURNISH_CARS.some(c => c === car) || !Number.isInteger(index) || index < 0 || index >= furnishOf(g, car).items.length) return { ok: false, why: '그 자리에 가구가 없다' };
-  mutableFurnish(g, car).items.splice(index, 1);
-  updateFurnish(g, car);
-  refreshSit(g);
-  return { ok: true };
+  return takeBack(g, car, index);
 }
 
 function completeJob(g: Game): void {

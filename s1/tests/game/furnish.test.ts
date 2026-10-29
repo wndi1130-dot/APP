@@ -6,10 +6,12 @@ import {
   restoreCost, runWorkshop, startJob, techAdopted, techUseLine, TECH_IDS, TECHS, usefulVariant, zeroSit,
 } from '../../src/game';
 import type { FurnitureKind, Game, TechId } from '../../src/game';
+import { DECOR, receiveDecor } from '../../src/game/domestic/decor';
 
 function fresh(): Game {
   const g = createS1cGame('furnish-test');
   Object.assign(g.dom!, { wood: 200, scrap: 200, parts: 30, target: 0, order: ['modify'] });
+  receiveDecor(g, Object.keys(DECOR).filter(kind => DECOR[kind as keyof typeof DECOR].furniture).flatMap(kind => Array<string>(20).fill(kind)));
   return g;
 }
 function done(g: Game, id: TechId, defective = false): void {
@@ -125,15 +127,15 @@ describe('살림 작업과 가구', () => {
     }
   });
 
-  it('가구는 크기별 작은 4·중간 2·큰 1 자리이고 넘치면 바꾸지 않는다', () => {
-    const g = fresh();
-    for (const [kind, count] of [['chair', 4], ['table', 2], ['wardrobe', 1]] as const) {
-      for (let i = 0; i < count; i += 1) place(g, 'front', kind);
+  it('가구는 크기와 관계없이 바닥 자리 하나를 쓰며 1단의 14개를 넘기지 못한다', () => {
+    for (const kind of ['chair', 'table', 'wardrobe'] as const) {
+      const g = fresh();
+      for (let i = 0; i < 14; i += 1) place(g, 'front', kind);
       const before = JSON.stringify(g.dom!.furnish);
       expect(placeFurniture(g, 'front', kind).ok).toBe(false);
       expect(JSON.stringify(g.dom!.furnish)).toBe(before);
+      expect(furnishOf(g, 'front').items).toHaveLength(14);
     }
-    expect(furnishOf(g, 'front').items).toHaveLength(7);
   });
 
   it('가구는 4점까지만 세므로 2단 작업을 건너뛰지 못한다', () => {

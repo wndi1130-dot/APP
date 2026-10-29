@@ -4,7 +4,9 @@ import { addCard, createGame, drawPerson, isGone, lawActive, pick, situation } f
 import { hash } from '../omens';
 import type { Card, Game } from '../state';
 import { CARS0, D, FIELDS, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, SPECIALISTS, TECHS, ZONE0 } from './data';
-import type { Field, FurnitureKind, FurnitureSize, FurnishStep, FurnishTier, TechDef, TechId, Variant, Zone } from './data';
+import type { Field, FurnishStep, FurnishTier, TechDef, TechId, Variant, Zone } from './data';
+import { migrateDecor } from './decor';
+import type { DecorCarState, DecorItem, DecorStore } from './decor';
 import type { PotState } from './pot';
 
 // S1c 내정 상태. S1a 판(Game)에 dom 하나를 더해 켠다(S1 기획서 19장의 기능 플래그). dom이 없으면 S1a 그대로다.
@@ -84,7 +86,7 @@ export interface FurnishState {
   furnPts: number;
   tier: FurnishTier;
   best: FurnishTier;
-  items: { kind: FurnitureKind; size: FurnitureSize }[];
+  items: DecorItem[];
 }
 export type Task = 'parts' | 'restore' | 'modify' | 'sup';
 export type Penalty = { kind: 'coal' | 'haul'; until: number };
@@ -128,7 +130,9 @@ export interface DomState {
   insulated: string[];
   armored: string[];
   /** 없는 키는 빈 살림(옛 저장). 기관실·덧단 객차는 이번 범위 밖이다. */
-  furnish?: Record<string, FurnishState>;
+  furnish?: Record<string, FurnishState | DecorCarState>;
+  /** 열차 공용 꾸미기 창고. 겸용 물건의 숫자는 Game에 있고 여기는 이름표만 둔다. */
+  store?: DecorStore;
   greenhouse: string | null;
   /** 꼬리 끝에 붙인 칸 */
   extraCars: ('store' | 'coach')[];
@@ -251,7 +255,7 @@ export function enableDomestic(g: Game): void {
     frags: { engine: 1, med: 1, craft: 0, radio: 0, expedition: 0 },
     manuals: { engine: false, med: false, craft: false, radio: false, expedition: false },
     target: D.target0, order: ['parts', 'restore', 'modify'], techs: {}, restoring: null, offered: [], job: null,
-    insulated: [], armored: [], furnish: {}, greenhouse: null, extraCars: [],
+    insulated: [], armored: [], furnish: {}, store: {}, greenhouse: null, extraCars: [],
     people, nextPersonId: people.length + 1, countdown: {}, hotWater: D.hotWater0, lice: {}, typhus: [], bedding: {},
     penalties: [], sabotage: {}, grants: [], stoker: null, stalled: false,
     flags: { otherApprentice: false, irreplaceable: false, lice: false },
@@ -300,6 +304,7 @@ export function migrateDomestic(g: Game): void {
   d.grants ??= [];
   d.extraCars ??= [];
   d.furnish ??= {};
+  migrateDecor(g);
   d.bedOrder ??= null;
   d.fullRule ??= null;
   d.bury ??= false;
@@ -354,7 +359,8 @@ export function techUsable(g: Game, id: TechId): boolean {
 
 /** 읽는 것만으로 옛 저장에 값을 쓰지 않는다. */
 export function furnishOf(g: Game, car: string): FurnishState {
-  return g.dom?.furnish?.[car] ?? { work: 0, jobs: [], furnPts: 0, tier: 0, best: 0, items: [] };
+  const f = g.dom?.furnish?.[car];
+  return f && 'tier' in f ? f : { work: 0, jobs: [], furnPts: 0, tier: 0, best: 0, items: f?.items ?? [] };
 }
 
 export function furnishScore(g: Game, car: string): number {

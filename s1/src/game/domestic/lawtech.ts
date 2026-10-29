@@ -3,7 +3,8 @@ import type { Comm, LawId, LawRes } from '../data';
 import { lawActive } from '../state';
 import { bumpRel } from '../ledger';
 import type { Game } from '../state';
-import { CAR_COMM, COMM_CARS, D, FURNISH_CARS, FURNITURE, FURNITURE_SIZE, SUPPLIES_TECHS, TECHS } from './data';
+import { CAR_COMM, COMM_CARS, D, FURNISH_CARS, SUPPLIES_TECHS, TECHS } from './data';
+import { DECOR as FURNITURE, decorCrowd } from './decor';
 import { SUPPLIES_BOT } from '../supplies';
 import type { TechId, Variant } from './data';
 import { furnishOf, techMult, variantMult } from './state';
@@ -86,7 +87,7 @@ export function lawTechSit(g: Game, sit: Record<Comm, [number, number, number, n
     const f = furnishOf(g, car);
     const warm = Math.max(D.furnishWarm[f.tier], ...f.items.map(item => FURNITURE[item.kind].warm));
     sit[c][0] += warm / COMM_CARS[c];
-    sit[c][2] += D.furnishCrowd * f.tier + f.items.reduce((sum, item) => sum + FURNITURE_SIZE[item.size].crowd + FURNITURE[item.kind].crowd, 0);
+    sit[c][2] += D.furnishCrowd * f.tier + decorCrowd(f.items);
   }
 }
 

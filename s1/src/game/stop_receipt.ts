@@ -4,6 +4,8 @@ import placeSchema from '../../schema/place.schema.json';
 import chronicleSchema from '../../schema/chronicle.schema.json';
 import receiptSchema from '../../schema/receipt.schema.json';
 import { FIELDS } from './domestic/data';
+import { isDecorKind, receiveDecor } from './domestic/decor';
+import type { DecorStore } from './domestic/decor';
 import type { Field } from './domestic/data';
 import { receiveDocument } from './info_documents';
 import type { InfoDocument, RecurringRoles } from './info_documents';
@@ -58,6 +60,7 @@ export interface NormalizedStopResult {
 }
 /** 기존 판에 연결하기 전의 독립 장부다. 피해·장소·약속은 결과에 원형대로 남긴다. */
 export interface StopLedger {
+  dom?: { store?: DecorStore };
   stock: Partial<Record<StockKey, number>>;
   documents: InfoDocument[];
   fragments: Record<Field, number>;
@@ -217,6 +220,11 @@ export function applyStopResult(ledger: StopLedger, input: unknown, request: Sto
     if (index >= 0) next.items.splice(index, 1);
   }
   next.items.push(...receipt.items.gained);
+  if (next.dom || receipt.items.gained.some(isDecorKind)) {
+    next.dom ??= {};
+    receiveDecor({ dom: next.dom, food: next.stock.food ?? 0, med: next.stock.medicine ?? 0,
+      lux: next.stock.luxury ?? 0, sup: next.stock.supplies ?? 0 }, receipt.items.gained);
+  }
   Object.defineProperty(next.receipts, result.receiptId, { value: result.fingerprint, enumerable: true, configurable: true, writable: true });
   Object.defineProperty(next.stops, result.stopId, { value: result.receiptId, enumerable: true, configurable: true, writable: true });
   Object.defineProperty(next.results, result.receiptId, { value: result, enumerable: true, configurable: true, writable: true });
