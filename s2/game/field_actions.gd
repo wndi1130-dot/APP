@@ -58,6 +58,10 @@ const Wear = preload("res://game/sim/wear.gd")
 ## seconds of hammering, and gives the door three more blows to break; a
 ## stake is whittled from a plank in six.
 const KEY_TIME: float = 1.5
+## A door that will not give, met on the way (open_door_on_way), is told again
+## (its note and its sound) only after this many ms: walking into it asks every
+## frame (field_game _drive).
+const SHUT_TELL_MS: int = 800
 const BOARD_TIME: float = 8.0
 const BOARD_HP: int = 3
 const STAKE_TIME: float = 6.0
@@ -84,6 +88,8 @@ var dig_noise_t: float = 0.0
 var unload_t: float = 0.0
 ## Short-lived reservations, separate from saved AI state. No actor or callback is retained.
 var ongoing: Dictionary = {}
+## A door's no told on the way: "x,y,why" -> Time ms it was told (SHUT_TELL_MS).
+var shut_told: Dictionary = {}
 ## A work of the hands the player asked for while in a blow or a shove waits
 ## here and is done once as soon as the blow is over (decision 420: one body
 ## does one thing at a time). Short-lived, never saved.
@@ -338,18 +344,14 @@ func open_door_on_way(p, c: Vector2i) -> void:
 	if BuildingRules.planks_total(door) > 0:
 		p.stop()
 		if p == game.player:
-			game.hud.toast("판자로 막혀 있다")
-			if game.audio != null:
-				game.audio.shut_fast(c, "boarded")   # the ear's thud
+			_tell_shut(c, "boarded", "판자로 막혀 있다")
 		return
 	if door["state"] == "locked":
 		p.stop()
 		if has_key(p, c):
 			unlock_with_key(p, c)
 		elif p == game.player:
-			game.hud.toast("잠김")
-			if game.audio != null:
-				game.audio.shut_fast(c, "locked")   # the ear's rattle
+			_tell_shut(c, "locked", "잠김")
 		return
 	if not DoorRules.can_toggle(door, "open"):
 		return
@@ -357,6 +359,20 @@ func open_door_on_way(p, c: Vector2i) -> void:
 	var keep: PackedVector3Array = p.path.duplicate()
 	var run: bool = p.running
 	_begin_work(p, "door", "문", DOOR_TIME, _door_on_way_done.bind(p, c, keep, run), "door", c, FieldGrid.center(c))
+
+
+## The player told on the way that this door will not give ("boarded" or
+## "locked"): its note and the ear's sound (field_audio shut_fast), once in
+## SHUT_TELL_MS for the same door and reason.
+func _tell_shut(c: Vector2i, why: String, note: String) -> void:
+	var key := "%d,%d,%s" % [c.x, c.y, why]
+	var now_ms: int = Time.get_ticks_msec()
+	if now_ms - int(shut_told.get(key, -SHUT_TELL_MS)) < SHUT_TELL_MS:
+		return
+	shut_told[key] = now_ms
+	game.hud.toast(note)
+	if game.audio != null:
+		game.audio.shut_fast(c, why)
 
 
 func _door_on_way_done(p, c: Vector2i, keep: PackedVector3Array, run: bool) -> void:
