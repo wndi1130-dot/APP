@@ -639,7 +639,7 @@ function baseView(g: Game, card: Card): CardView {
       return {
         title: '물렸다', speaker: { name: card.who ?? '수색대원', role: COMM_NAME[c] }, focus: c, required: true, key: 'bitten',
         // 첫 줄: 정하는 건 열차장이다(물린 사람이 스스로 정한 일이 아니다, 정치 디테일 조사 안 3).
-        body: `${card.who ?? '대원'}이(가) ${partObj} 물렸다. 수색대가 열차장의 말을 기다린다. 감염 창이 닫히기 전에 잘라야 한다.${echo}`,
+        body: `${card.who ?? '대원'}이(가) ${partObj} 물렸다. "열차장…" 수색대가 열차장의 말을 기다린다. "감염 창이 닫히기 전에 잘라야 합니다."${echo}`,
         choices: withAfford(g, [
           { id: 'cut', label: `${partObj} 자른다`, say: `지금 ${partObj} 잘라라! 망설이면 늦는다.`, effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'rel', c, v: 2 }], witness: true },
           { id: 'hide', label: '숨겨 준다', say: was(past, 'hide') ? '지난번엔 운이 좋았다. 이번에도 감아서 태워라.' : `아무도 못 본 거다. ${part}에 붕대를 감고 태워라.`, effs: [], special: 'hide_bite', witness: true },
