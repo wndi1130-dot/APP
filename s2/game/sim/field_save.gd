@@ -316,6 +316,12 @@ static func _runtime(game) -> Dictionary:
 		out["levels"][level] = level_state
 	for id in game.data.get("spots", {}):
 		out["spots"][id] = _record(game, game.data["spots"][id])
+	# Coal dug from a wagon (field_ai.gd _dug, field_work.gd) is in the map's own rows, which a
+	# restart builds afresh: each wagon's coal, in the map's order.
+	var wagon_coal: Array = []
+	for wagon: Dictionary in game.data.get("wagons", []):
+		wagon_coal.append(float(wagon.get("coal", 0.0)))
+	out["wagon_coal"] = wagon_coal
 	return out
 
 
@@ -495,6 +501,10 @@ static func _apply_exact(game, save: Dictionary) -> void:
 				into.erase(id)
 		for id in rows:
 			into[id] = (rows[id] as Dictionary).duplicate(true)
+	var wagons: Array = game.data.get("wagons", [])
+	var wagon_coal: Array = runtime.get("wagon_coal", [])
+	for i in mini(wagons.size(), wagon_coal.size()):
+		wagons[i]["coal"] = float(wagon_coal[i])
 	for level in runtime["levels"]:
 		var grid = game.levels[level]
 		var row: Dictionary = runtime["levels"][level]

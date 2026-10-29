@@ -639,7 +639,7 @@ function baseView(g: Game, card: Card): CardView {
       return {
         title: '물렸다', speaker: { name: card.who ?? '수색대원', role: COMM_NAME[c] }, focus: c, required: true, key: 'bitten',
         // 첫 줄: 정하는 건 열차장이다(물린 사람이 스스로 정한 일이 아니다, 정치 디테일 조사 안 3).
-        body: `${card.who ?? '대원'}이(가) ${partObj} 물렸다. 수색대가 열차장의 말을 기다린다. 감염 창이 닫히기 전에 잘라야 한다.${echo}`,
+        body: `${card.who ?? '대원'}이(가) ${partObj} 물렸다. "열차장…" 수색대가 열차장의 말을 기다린다. "감염 창이 닫히기 전에 잘라야 합니다."${echo}`,
         choices: withAfford(g, [
           { id: 'cut', label: `${partObj} 자른다`, say: `지금 ${partObj} 잘라라! 망설이면 늦는다.`, effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'rel', c, v: 2 }], witness: true },
           { id: 'hide', label: '숨겨 준다', say: was(past, 'hide') ? '지난번엔 운이 좋았다. 이번에도 감아서 태워라.' : `아무도 못 본 거다. ${part}에 붕대를 감고 태워라.`, effs: [], special: 'hide_bite', witness: true },
@@ -722,7 +722,7 @@ function baseView(g: Game, card: Card): CardView {
       // 결과 아크(정치 흐름 3.4): 같은 칸과의 약속을 두 번 어기면 그 칸 대표가 장부를 들고 온다. 한 번 더 어기면 공개 협상이 닫힌다(council_log.ts).
       return {
         title: '약속 장부', speaker: leader(g, c), focus: c, required: true,
-        body: `${leader(g, c).name}이(가) 열차장이 어긴 약속 둘을 적은 종이를 내밀었다. 한 번 더 어기면 ${COMM_NAME[c]}은(는) 약속을 받지 않는다.`,
+        body: `${leader(g, c).name}이(가) 열차장이 어긴 약속 둘을 적은 종이를 내밀었다. "${LEDGER_SAY[c]}"`,
         choices: withAfford(g, [
           { label: '사과하고 갚는다', say: '내 잘못이다. 지금 갚겠다.', effs: [{ t: 'lux', v: -3 }, { t: 'rel', c, v: 8 }] },
           { label: '물리친다', say: '지난 일이다. 앞을 보자.', effs: [{ t: 'rel', c, v: -5 }], special: 'ledger_refuse' },
@@ -870,6 +870,15 @@ const DEMAND_AGAIN: Record<Comm, { heat: string[]; ration: string[] }> = {
   guard: { heat: ['지난번 거절, 대원들도 들었다. 다시 묻는다.', '한 번은 물러났다. 이번엔 올려 달라.', '회기 전까지다. 대원들이 뒤에 서 있다.'], ration: ['그릇 그대로 가져왔다. 다시 묻는다.', '그때는 그냥 복귀했다. 이번엔 대원 몫을 채워 달라.', '회기 전까지다. 그릇은 여기 두고 간다.'] },
   front: { heat: ['지난번 답은 들었습니다. 오늘 답은 다르길 바랍니다.', '한 번은 사정이 있으셨겠지요. 이번엔 믿겠습니다.', '회기 전까지입니다. 지난번처럼은 곤란합니다.'], ration: ['이 그릇, 지난번 그대로입니다. 셈이 안 맞지요.', '그릇이 말라붙었습니다. 한 번은 채워 주셔야지요.', '회기 전까지입니다. 빈 그릇은 회기에서 보여 드리지요.'] },
   engine: { heat: ['지난번 그 답으로는 불이 안 든다.', '불 앞은 아직 차다. 삽 쥘 만큼만 올려 달라.', '보일러는 거절을 모른다. 회기 전에 답 달라.'], ration: ['지난번 그릇 그대로다. 화부들이 지켜본다.', '빈손으로 한 번 갔다. 삽질할 만큼만 채워 달라.', '회기 전에 답 달라. 빈 그릇으로 불 못 땐다.'] },
+};
+
+/** 약속 장부 카드에서 칸 대표가 직접 하는 경고 — 한 번 더 어기면 그 칸은 약속을 받지 않는다는 규칙 사실을 칸 말투로(s1_content_guide 2장). */
+const LEDGER_SAY: Record<Comm, string> = {
+  tail: '한 번만 더 어겨 봐라. 꼬리칸은 다시는 약속 안 받는다.',
+  medtech: '어긴 게 둘이다. 셋째면 기술·의무진은 약속을 받지 않는다.',
+  guard: '두 번이다. 한 번 더면 경비대는 약속을 안 받는다.',
+  front: '두 번은 넘어갔습니다. 한 번 더 어기시면 앞칸은 약속을 받지 않겠습니다.',
+  engine: '두 번 샜다. 한 번 더 새면 기관실은 약속을 안 받는다.',
 };
 
 // 두 번째부터는 다른 부탁이 온다.

@@ -401,8 +401,8 @@ func test_params_are_every_global_and_keep_the_haze_grey() -> void:
 
 func test_the_sight_mask_leaves_the_day_readable() -> void:
 	# Ground out of sight stays readable by day and sinks after dark (469 D3):
-	# never seen 0.55 and seen before 0.75 at noon; dimmed less at night (0.60,
-	# 0.78), where the dark is the night's own.
+	# never seen 0.70 and seen before 0.85 at noon; dimmed less at night (0.80,
+	# 0.90), where the dark is the night's own.
 	var t := Atmosphere.sun_times(0.0)
 	var day: Vector2 = Atmosphere.params(Atmosphere.look(12.0, ["overcast"], "K1", 0.0))["fx_sight"]
 	var dusk: Vector2 = Atmosphere.params(Atmosphere.look(t.y - 0.4, ["clear"], "K1", 0.0))["fx_sight"]
