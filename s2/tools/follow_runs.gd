@@ -5,6 +5,9 @@ extends SceneTree
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const LEG_SECONDS := 40.0
+## The narrow leg starts where the building leg ended, often 60 m or more from the corridor: at 40 s
+## seven of ten runs were still walking up to it (decision 486, round 5), so it gets room to cross it.
+const NARROW_SECONDS := 90.0
 const STAND_SECONDS := 6.0
 const REACHED_M := 0.15
 const STUCK_MOVE_M := 0.15
@@ -42,7 +45,7 @@ func _run() -> void:
 		"face_camera_axis": "horizontal camera basis.z; legacy face_camera remains position based",
 		"engine": Engine.get_version_info()["string"],
 		"field_ai_sha256": FileAccess.get_sha256("res://game/field_ai.gd"),
-		"leg_limit_seconds": LEG_SECONDS, "stand_seconds": STAND_SECONDS,
+		"leg_limit_seconds": LEG_SECONDS, "narrow_limit_seconds": NARROW_SECONDS, "stand_seconds": STAND_SECONDS,
 		"stuck_seconds": STUCK_SECONDS, "stuck_move_per_think_m": STUCK_MOVE_M,
 		"route_rng": "independent; seed = trial seed; plan before stepping",
 		"p95": "nearest_rank; pooled samples",
@@ -324,6 +327,7 @@ func _narrow_leg(game, from: Vector3) -> Dictionary:
 		if _reachable(game, from, points[0]) and _reachable(game, points[0], points[1]):
 			var leg := _move_leg("narrow", points)
 			leg["narrow_cells"] = candidate["length"]
+			leg["seconds"] = NARROW_SECONDS
 			return leg
 	return _skip_leg("narrow", "no_reachable_corridor_3_cells_long_at_most_2_wide")
 
@@ -628,7 +632,7 @@ func _run_leg_body(game, leg: Dictionary, observers: Array, clock: Dictionary) -
 	var waypoint := 0
 	var needs_path := true
 	var delta := 1.0 / hz
-	var limit := roundi((STAND_SECONDS if standing else LEG_SECONDS) * hz)
+	var limit := roundi((STAND_SECONDS if standing else float(leg.get("seconds", LEG_SECONDS))) * hz)
 	for tick in range(limit):
 		if not standing and needs_path:
 			while waypoint < leg["points"].size() and game.player.position.distance_to(leg["points"][waypoint]) <= REACHED_M:
