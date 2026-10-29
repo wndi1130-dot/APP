@@ -10,6 +10,7 @@ var zones: Dictionary = {}  # zone -> {"enter": Array[float], "seconds": float},
 var noise_curve: Array[Array] = []  # [t, total]; only when the total changes
 var hordes: Array[Dictionary] = []
 var injuries: Array[Dictionary] = []
+var work_events: Array[Dictionary] = []
 var ammo_used: Dictionary = {}
 var carry_seconds: float = 0.0
 ## Walking dead on the main track at departure, each side of the train
@@ -59,6 +60,11 @@ func horde(t: float, index: int, size: int, entry: String) -> void:
 
 func injury(t: float, who: String, kind: String) -> void:
 	injuries.append({"t": t, "who": who, "kind": kind})
+
+
+## The crew's calls and changes of state, in field seconds.
+func work_event(t: float, site: String, ev: String) -> void:
+	work_events.append({"t": t, "site": site, "ev": ev})
 
 
 ## Rounds/shells spent; non-positive counts are ignored.
@@ -141,6 +147,7 @@ func to_dict() -> Dictionary:
 		"noise": noise_out,
 		"hordes": horde_out,
 		"injuries": injury_out,
+		"workEvents": work_events.duplicate(true),
 		"ammo": ammo_used.duplicate(),
 		"trackDead": track_dead.duplicate(),
 		"rests": rest_out,

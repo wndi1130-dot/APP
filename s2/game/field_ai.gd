@@ -17,8 +17,9 @@ const THREAT_R: float = 3.0
 const COVER_R: float = 11.0
 const RAIDER_SIGHT: float = 22.0
 const NOTICE_TIME: float = 1.5
-const DIG_TIME: float = 45.0
-const TRIP_COAL: float = 0.25
+const FieldWork = preload("res://game/field_work.gd")
+const DIG_TIME: float = FieldWork.DIG_TIME
+const TRIP_COAL: float = FieldWork.TRIP_COAL
 ## Something behind a person (outside +-BEHIND_DEG of facing) and farther than
 ## BEHIND_NEAR is noticed only after it has stayed there BEHIND_NOTICE (0.5..1.0 s per person).
 const BEHIND_DEG: float = 100.0
@@ -1169,72 +1170,22 @@ func _boarded(p, door: Vector3) -> void:
 
 # ---------------------------------------------------------------- work crew
 
-func _crew(p, delta: float, think: bool) -> void:
-	if crew_recalled or p.brain.get("job", "") == "home":
-		var doors: Array = game.data["spawns"]["train_door"]
-		var door := FieldGrid.center(doors[mini(1, doors.size() - 1)])
-		if p.position.distance_to(door) > 1.5:
-			if think:
-				_walk(p, door, true)
-		else:
-			p.brain["boarded"] = true
-			p.visible = false
-			p.position = door + Vector3(0, -50, 0)
+func _crew(p, _delta: float, think: bool) -> void:
+	if game.work.crew_step(p, think):
 		return
-	if p.role == "escort":
-		if think:
-			_escort(p)
-		return
-	if not think:
-		return
-	var threat := _threat_near(p, 6.0)
-	if not threat.is_empty():
-		# Carriers run for the platform and wait there until it is clear.
-		p.cancel_action()
-		p.brain["fleeing"] = true
-		if threat["pos"].distance_to(p.position) < 1.2:
-			game.combat.shove(p)
-		_walk(p, FieldGrid.center(Vector2i(int(p.position.x), 8)), true)
-		return
-	p.brain["fleeing"] = false
-	if p.action != "":
-		return
-	var job: String = p.brain.get("job", "dig")
-	if job == "repair":
-		var to = game.mission_play.repair_step(p)
-		if to != null:
-			_walk(p, to, false)
-		return
-	if job == "dig":
-		var wagon: Dictionary = _wagon_with_coal()
-		if wagon.is_empty():
-			p.brain["job"] = "home"
-			return
-		var at := FieldGrid.center(wagon["work"]) + Vector3(game.rng.randf_range(-1.5, 1.5), 0, 0.2)
-		if p.position.distance_to(FieldGrid.center(wagon["work"])) > 2.2:
-			_walk(p, at, false)
-			return
-		p.start_action("dig", "곡괭이질", DIG_TIME, _dug.bind(p))
-		return
-	if job == "carry":
-		var drop := FieldGrid.center(Vector2i(clampi(int(p.position.x), 17, 96), 6))
-		if p.position.distance_to(drop) > 1.0:
-			_walk(p, drop, false)
-			return
-		game.actions.coal_delivered += float(p.brain.get("load", 0.0))
-		game.telemetry.trip()
-		game.mission_play.loaded()
-		p.brain["load"] = 0.0
-		p.brain["job"] = "dig"
+	if p.role == "escort" and think:
+		_escort(p)
 
 
+## Existing wagon tasks use the same coal amount and hauling multipliers.
 func _dug(p) -> void:
-	var w: Dictionary = _wagon_with_coal()
-	if w.is_empty():
+	var wagon: Dictionary = _wagon_with_coal()
+	if wagon.is_empty():
 		return
-	var take := minf(TRIP_COAL * game.mission_play.load_mult() * game.haul_mult(), float(w["coal"]))
-	w["coal"] = float(w["coal"]) - take
+	var take: float = minf(TRIP_COAL * game.mission_play.load_mult() * game.haul_mult(), float(wagon["coal"]))
+	wagon["coal"] = float(wagon["coal"]) - take
 	p.brain["load"] = take
+	p.brain["load_kind"] = "coal"
 	p.brain["job"] = "carry"
 
 
@@ -1247,10 +1198,10 @@ func _wagon_with_coal() -> Dictionary:
 
 ## Escorts guard the carriers. Attitude says how far they go out; fire
 ## permission says whether they may shoot (s2_station 2.4).
-func _escort(p) -> void:
+func _escort(p, falling_back: bool = false) -> void:
 	if _hold_swing(p):
 		return
-	var site: Vector3 = FieldGrid.center(game.data["spots"]["work_site"]["cell"])
+	var site: Vector3 = p.position if falling_back else game.work.position_of(String(p.brain.get("work_site", "work_site")))
 	var reach: float = {"aggressive": 12.0, "defensive": 6.0, "neutral": 2.0}.get(crew_attitude, 6.0)
 	var threat: Dictionary = {}
 	var best := 999.0
@@ -1273,6 +1224,8 @@ func _escort(p) -> void:
 			p.aim.stop()
 		p.target_zombie = {}
 		var post: Vector3 = site + Vector3(-4.0 if p.brain.get("side", 0) == 0 else 4.0, 0, 1.5)
+		if falling_back:
+			post = game.work.door_of(String(p.brain.get("work_site", "work_site")))
 		if p.position.distance_to(post) > 1.5:
 			_walk(p, post, false)
 		return

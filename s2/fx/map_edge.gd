@@ -109,6 +109,19 @@ func set_field_fog(amount: float, sight_m: float, light: Dictionary) -> void:
 	field_mat.set_shader_parameter("fog_light", fog_light(light))
 
 
+## The sight mask's round day ring (map_view.set_sight_round, decision 491) on the
+## fog sheets past the edge, so they dim as the ground beneath them does; the
+## foggy day's layer over the field takes the same floor past sight.
+func set_sight_round(eye: Vector2, reach: float, day: float, floor_level: float) -> void:
+	for m in fog_mats:
+		m.set_shader_parameter("eye_xz", eye)
+		m.set_shader_parameter("eye_r", reach)
+		m.set_shader_parameter("round_day", clampf(day, 0.0, 1.0))
+		m.set_shader_parameter("round_floor", floor_level)
+	field_mat.set_shader_parameter("round_day", clampf(day, 0.0, 1.0))
+	field_mat.set_shader_parameter("round_floor", floor_level)
+
+
 ## Where the eye stands (the player): the fog over the field thins round it.
 func set_eye(at: Vector3) -> void:
 	if field.visible:

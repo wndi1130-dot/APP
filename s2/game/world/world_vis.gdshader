@@ -26,6 +26,16 @@ uniform float lamp_floor = 0.0;
 uniform sampler2D win : hint_default_black, filter_linear, repeat_disable;
 uniform vec3 win_color : source_color = vec3(1.0, 0.5, 0.28);
 uniform float win_gain = 1.0;
+// Out of doors by day the sight mask is round and soft about the eye (decision
+// 491): the sight cone's straight sides drew a bright wedge on open ground.
+// round_day 0 (night, or never set) leaves the cells to rule, as indoors always.
+uniform vec2 eye_xz = vec2(-1000.0);
+uniform float eye_r = 18.0;
+uniform float round_day = 0.0;
+uniform float round_floor = 0.95;
+// Where the round falloff starts and ends, in sight radii.
+const float ROUND_IN = 0.4;
+const float ROUND_OUT = 1.3;
 
 varying vec3 world_pos;
 varying vec3 world_nrm;
@@ -145,24 +155,39 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain) {
 	return colour;
 }
 
-// Room floors by kind and the house's roll (room_finish, 결정 469 C3), sRGB like the
-// floor kinds. Varnished boards (linear albedo 0.2~0.3) in bedrooms and living rooms,
-// linoleum or quarry tile in kitchens, small glazed tile in bathrooms (0.4~0.6;
-// docs/art/material_values.md). The one plain WOOD (V 0.40) left the rooms the cut-away
-// opens below the brightness line (V 0.36) once the day fill lit the walls (mood).
-const vec3 HONEY_BOARD = vec3(0.58, 0.46, 0.32);
-const vec3 WALNUT_BOARD = vec3(0.50, 0.38, 0.27);
-const vec3 GREY_BOARD = vec3(0.56, 0.52, 0.45);
+// Room floors by kind, the house's roll and the region (room_finish, 결정 469 C3, 사용자 10-28
+// 「바닥재질도 방마다 다르게」), sRGB like the floor kinds. Each kind has its own family so the room
+// next door reads apart at a glance: carpet or boards in bedrooms, parquet in living and dining
+// rooms, linoleum or tile in kitchens, small tile in bathrooms, patterned tile, terrazzo or stone in
+// halls, concrete or rough planks in store rooms. Within the measured ranges (linear albedo:
+// varnished boards 0.1~0.3, linoleum 0.2~0.5, glazed tile 0.5~0.75; docs/art/material_values.md),
+// the darkest wood at linear 0.18: the plain WOOD (V 0.40) left the cut-away rooms below the
+// brightness line (V 0.36), and a house's floor held it at 0.368 against the reference's 0.495
+// (mood B1 10-28: the floor is what falls short, the dark checker and dark boards most). Patterns
+// are drawn a little larger than life so they read from the slanted view, and their seams fade to
+// the mean as a pixel grows (no shimmer far out).
+const vec3 HONEY_BOARD = vec3(0.64, 0.52, 0.37);
+const vec3 WALNUT_BOARD = vec3(0.56, 0.43, 0.31);
+const vec3 GREY_BOARD = vec3(0.60, 0.56, 0.49);
+const vec3 PINE_BOARD = vec3(0.68, 0.55, 0.38);
+const vec3 OAK_BLOCK = vec3(0.66, 0.56, 0.42);
+// How far an unseen room's floor keeps its own lightness, from the plain floor's (0) to its own (1).
+const float UNSEEN_FOLLOW = 0.5;
 
-// Boards 0.16 m wide along x, ends staggered on a 1.9 m run, a shade apart each.
-vec3 room_boards(vec3 tone, vec2 p, vec2 px) {
-	float k = floor(p.y / 0.16);
+// Seam strength left as a pixel covers `size` (1 near, 0 once a seam is under a fifth of a pixel).
+float seam_k(vec2 px, float size) {
+	return 1.0 - smoothstep(0.08, 0.3, max(px.x, px.y) / size);
+}
+
+// Boards `w` wide along x, ends staggered on a 1.9 m run, a shade apart each.
+vec3 room_boards(vec3 tone, vec2 p, vec2 px, float w) {
+	float k = floor(p.y / w);
 	float run = p.x + fx_hash(vec2(k, 13.0)) * 1.9;
 	vec3 c = tone * (0.88 + 0.2 * fx_hash(vec2(k, floor(run / 1.9))));
 	c *= 0.94 + 0.08 * fx_vnoise(vec2(run * 3.0, k * 7.0));
-	float side = band((fract(p.y / 0.16 + 0.5) - 0.5) * 0.16, 0.005, px.y + 1e-4);
+	float side = band((fract(p.y / w + 0.5) - 0.5) * w, 0.005, px.y + 1e-4);
 	float end = band((fract(run / 1.9 + 0.5) - 0.5) * 1.9, 0.005, px.x + 1e-4);
-	return c * (1.0 - 0.3 * max(side, end));
+	return c * (1.0 - 0.3 * max(side, end) * seam_k(px, w));
 }
 
 // Square tiles `size` across, a shade apart, in grout; two colours in a checker.
@@ -171,39 +196,333 @@ vec3 room_tiles(vec3 a, vec3 b, vec3 grout, vec2 p, vec2 px, float size) {
 	vec3 c = mod(cell.x + cell.y, 2.0) > 0.5 ? b : a;
 	c *= 0.95 + 0.08 * fx_hash(cell);
 	vec2 d = (fract(p / size + 0.5) - 0.5) * size;
-	return mix(c, grout, max(band(d.x, 0.006, px.x + 1e-4), band(d.y, 0.006, px.y + 1e-4)));
+	float g = max(band(d.x, 0.006, px.x + 1e-4), band(d.y, 0.006, px.y + 1e-4)) * seam_k(px, size);
+	return mix(c, grout, g);
+}
+
+// Parquet in a herringbone: columns `col` wide, slats at 45 degrees leaning the other way in
+// every other column, the next column's slats half a slat on.
+vec3 room_herring(vec3 tone, vec2 p, vec2 px, float col, float slat) {
+	float ci = floor(p.x / col);
+	float lean = mod(ci, 2.0) > 0.5 ? -1.0 : 1.0;
+	float x = p.x - ci * col;
+	float t = (p.y + lean * x + ci * 0.5 * slat) / slat;
+	float k = floor(t);
+	vec3 c = tone * (0.86 + 0.22 * fx_hash(vec2(ci, k)));
+	c *= 0.95 + 0.07 * fx_vnoise(vec2(t * 0.7, x * 6.0 + ci * 3.0));
+	float a = px.x + px.y + 1e-4;
+	float s = max(band((fract(t + 0.5) - 0.5) * slat * 0.7071, 0.005, a * 0.7071),
+		band((fract(p.x / col + 0.5) - 0.5) * col, 0.005, px.x + 1e-4));
+	return c * (1.0 - 0.32 * s * seam_k(px, slat));
+}
+
+// Basket weave: squares `size` across of three slats, turned a quarter in a checker.
+vec3 room_basket(vec3 tone, vec2 p, vec2 px, float size) {
+	vec2 cell = floor(p / size);
+	vec2 f = fract(p / size);
+	bool turn = mod(cell.x + cell.y, 2.0) > 0.5;
+	float across = (turn ? f.x : f.y) * 3.0;
+	float k = floor(across);
+	vec3 c = tone * (0.86 + 0.22 * fx_hash(cell * 3.0 + vec2(k, turn ? 1.0 : 0.0)));
+	c *= 0.95 + 0.07 * fx_vnoise((turn ? p.yx : p) * vec2(4.0, 12.0));
+	float sl = band((fract(across + 0.5) - 0.5) * size / 3.0, 0.004, (turn ? px.x : px.y) + 1e-4);
+	vec2 d = (fract(p / size + 0.5) - 0.5) * size;
+	float sq = max(band(d.x, 0.005, px.x + 1e-4), band(d.y, 0.005, px.y + 1e-4));
+	return c * (1.0 - 0.3 * max(sl, sq) * seam_k(px, size / 3.0));
+}
+
+// Fitted carpet: no seams, a soft pile that mottles and a lighter worn path here and there.
+vec3 room_carpet(vec3 tone, vec2 p) {
+	vec3 c = tone * (0.93 + 0.12 * fx_vnoise(p * 1.4 + 4.0));
+	c *= 0.96 + 0.06 * fx_vnoise(p * 7.0);
+	return mix(c, c * 1.1 + 0.02, smoothstep(0.62, 0.8, fx_fbm2(p * 0.6 + 2.0)) * 0.6);
+}
+
+// Chips in a ground (terrazzo, speckled linoleum): dark and light flecks `size` across.
+vec3 room_flecks(vec3 tone, vec3 dark, vec3 light, vec2 p, float size) {
+	vec3 c = tone * (0.95 + 0.07 * fx_vnoise(p * 0.9));
+	float n = fx_vnoise(p / size);
+	float m = fx_vnoise(p / size + 17.0);
+	c = mix(c, dark, smoothstep(0.78, 0.84, n) * 0.8);
+	return mix(c, light, smoothstep(0.8, 0.86, m) * 0.7);
+}
+
+// Patterned (encaustic) tiles: a lozenge of `b` in each square of `a`, a thin rim of `b`.
+vec3 room_lozenge(vec3 a, vec3 b, vec3 grout, vec2 p, vec2 px, float size) {
+	vec2 cell = floor(p / size);
+	vec2 l = fract(p / size) - 0.5;
+	float k = seam_k(px, size * 0.3);
+	float loz = 1.0 - smoothstep(0.26, 0.29, abs(l.x) + abs(l.y));
+	float rim = max(band(abs(l.x) - 0.42, 0.02, 0.02), band(abs(l.y) - 0.42, 0.02, 0.02));
+	vec3 c = mix(a, b, (0.5 + 0.5 * k) * max(loz, rim * step(abs(l.x), 0.43) * step(abs(l.y), 0.43)));
+	c *= 0.95 + 0.07 * fx_hash(cell);
+	vec2 d = (fract(p / size + 0.5) - 0.5) * size;
+	return mix(c, grout, max(band(d.x, 0.006, px.x + 1e-4), band(d.y, 0.006, px.y + 1e-4)) * seam_k(px, size));
+}
+
+// Small hexagons `size` across, in grout.
+vec3 room_hex(vec3 tone, vec3 grout, vec2 p, vec2 px, float size) {
+	vec2 q = p / size;
+	vec2 r = vec2(1.0, 1.7320508);
+	vec2 h = r * 0.5;
+	vec2 a = mod(q, r) - h;
+	vec2 b = mod(q - h, r) - h;
+	vec2 g = dot(a, a) < dot(b, b) ? a : b;
+	vec2 id = q - g;
+	vec2 ag = abs(g);
+	float e = 0.5 - max(dot(ag, normalize(r)), ag.x);
+	vec3 c = tone * (0.95 + 0.07 * fx_hash(floor(id * 2.0)));
+	return mix(c, grout, band(e, 0.04, (px.x + px.y) / size + 1e-4) * seam_k(px, size));
+}
+
+// Stone flags in rows, each row's stones their own length and shade.
+vec3 room_flags(vec3 tone, vec3 joint, vec2 p, vec2 px) {
+	float row = floor(p.y / 0.55);
+	float len = 0.6 + 0.4 * fx_hash(vec2(row, 3.0));
+	float run = p.x + fx_hash(vec2(row, 9.0)) * len;
+	float k = floor(run / len);
+	vec3 c = tone * (0.86 + 0.22 * fx_hash(vec2(row, k))) * (0.94 + 0.1 * fx_vnoise(p * 2.5));
+	float s = max(band((fract(p.y / 0.55 + 0.5) - 0.5) * 0.55, 0.012, px.y + 1e-4),
+		band((fract(run / len + 0.5) - 0.5) * len, 0.012, px.x + 1e-4));
+	return mix(c, joint, s * seam_k(px, 0.55));
+}
+
+// Bricks laid flat in a stretcher bond, 0.3 by 0.15.
+vec3 room_bricks(vec3 tone, vec3 joint, vec2 p, vec2 px) {
+	vec2 bc = p / vec2(0.3, 0.15);
+	bc.x += 0.5 * mod(floor(bc.y), 2.0);
+	vec3 c = tone * (0.84 + 0.26 * fx_hash(floor(bc)));
+	vec2 d = (fract(bc + 0.5) - 0.5) * vec2(0.3, 0.15);
+	float s = max(band(d.x, 0.008, px.x + 1e-4), band(d.y, 0.008, px.y + 1e-4));
+	return mix(c, joint, s * seam_k(px, 0.15));
+}
+
+// Concrete screed: broad damp patches, a few hairline cracks, a stain.
+vec3 room_screed(vec3 tone, vec2 p, vec2 px) {
+	vec3 c = tone * (0.9 + 0.16 * fx_fbm2(p * 0.5 + 6.0)) * (0.96 + 0.06 * fx_vnoise(p * 5.0));
+	float vein = fx_vnoise(p * 0.8 + 3.0) - 0.5;
+	c *= 1.0 - 0.2 * band(vein, 0.01, fwidth(vein) + 1e-4) * smoothstep(0.6, 0.72, fx_vnoise(p * 0.35));
+	return c * (1.0 - 0.12 * smoothstep(0.66, 0.8, fx_fbm2(p * 0.4 + 1.0)));
+}
+
+// Painted boards, the paint worn through to the wood along the run.
+vec3 room_painted(vec3 paint, vec3 wood, vec2 p, vec2 px, float w) {
+	vec3 b = room_boards(paint, p, px, w);
+	float worn = smoothstep(0.55, 0.75, fx_fbm2(vec2(p.x * 0.8, floor(p.y / w) * 1.7)));
+	return mix(b, room_boards(wood, p, px, w), worn * 0.7);
+}
+
+// The region's grading (결정 478 지역 무리): the rail works sooty and greyer, the mountain works and
+// the high mountain resin-warm, the waterside bleached cool, the bare line plain. Lightness kept.
+vec3 room_grade(vec3 c, int region) {
+	vec3 grey = vec3(dot(c, vec3(0.3, 0.59, 0.11)));
+	if (region == 1) {
+		return mix(c, grey, 0.22);
+	} else if (region == 2 || region == 3) {
+		return c * vec3(1.04, 1.0, 0.92);
+	} else if (region == 4) {
+		return mix(c, grey, 0.15) * vec3(0.98, 1.01, 1.05);
+	} else if (region == 5) {
+		return mix(c, grey, 0.32);
+	}
+	return c;
 }
 
 // `tone` is the finish's mean colour, to scale the whole of it (pattern and all).
 vec3 room_floor(int code, vec2 p, vec2 px, out vec3 tone) {
-	int kind = code & 7;
-	int roll = code >> 3;
-	if (kind == 3) {
+	int kind = room_kind(code);
+	int region = room_region(code);
+	int roll = room_roll(code);
+	// The mountain regions lay wide pine planks where the town lays narrow boards.
+	bool hills = region == 2 || region == 3;
+	float plank = hills ? 0.24 : 0.16;
+	vec3 wood = hills ? PINE_BOARD : HONEY_BOARD;
+	vec3 c;
+	if (kind == 1) {
+		// Bedrooms: fitted carpet in three of five houses (rose, sage, slate blue), boards, painted boards.
+		if (roll == 0 || roll == 1 || roll == 3) {
+			tone = roll == 0 ? vec3(0.66, 0.51, 0.49) : (roll == 1 ? vec3(0.57, 0.61, 0.51) : vec3(0.51, 0.56, 0.63));
+			c = room_carpet(tone, p);
+		} else if (roll == 2) {
+			tone = wood;
+			c = room_boards(tone, p, px, plank);
+		} else {
+			// Ox red, or the waterside's grey-blue.
+			tone = region == 4 ? vec3(0.60, 0.66, 0.70) : vec3(0.64, 0.46, 0.40);
+			c = room_painted(tone, wood, p, px, plank);
+		}
+	} else if (kind == 4 || kind == 6) {
+		// Living and dining rooms: parquet (herringbone, basket weave), boards, oatmeal carpet;
+		// dining rooms swap the carpet for terracotta tile.
+		if (roll == 0 || roll == 1) {
+			tone = roll == 0 ? vec3(0.66, 0.53, 0.37) : WALNUT_BOARD;
+			c = room_herring(tone, p, px, 0.6, 0.2);
+		} else if (roll == 2) {
+			tone = OAK_BLOCK;
+			c = room_basket(tone, p, px, 0.54);
+		} else if (roll == 3) {
+			tone = kind == 6 ? wood : (hills ? PINE_BOARD : GREY_BOARD);
+			c = room_boards(tone, p, px, plank);
+		} else if (kind == 6) {
+			tone = vec3(0.68, 0.49, 0.38);
+			c = room_tiles(tone, tone * 0.94, vec3(0.58, 0.53, 0.48), p, px, 0.3);
+		} else {
+			tone = vec3(0.66, 0.60, 0.51);
+			c = room_carpet(tone, p);
+		}
+	} else if (kind == 2) {
+		// Kitchens: linoleum checkers, quarry tile, speckled linoleum, a tile laid on the diagonal.
+		if (roll == 0) {
+			vec3 cream = vec3(0.76, 0.72, 0.60);
+			vec3 sage = vec3(0.57, 0.64, 0.56);
+			tone = 0.5 * (cream + sage);
+			c = room_tiles(cream, sage, vec3(0.62, 0.62, 0.56), p, px, 0.33);
+		} else if (roll == 1) {
+			tone = vec3(0.68, 0.48, 0.36);
+			c = room_tiles(tone, tone, vec3(0.56, 0.51, 0.46), p, px, 0.3);
+		} else if (roll == 2) {
+			tone = vec3(0.74, 0.70, 0.55);
+			c = room_flecks(tone, vec3(0.45, 0.43, 0.36), vec3(0.86, 0.84, 0.76), p, 0.08);
+		} else if (roll == 3) {
+			vec3 cream = vec3(0.78, 0.76, 0.70);
+			vec3 slate = vec3(0.54, 0.55, 0.56);
+			tone = 0.5 * (cream + slate);
+			vec2 q = vec2(p.x + p.y, p.x - p.y) * 0.7071;
+			c = room_tiles(cream, slate, vec3(0.60, 0.60, 0.57), q, px * 1.4142, 0.34);
+		} else {
+			vec3 cream = vec3(0.74, 0.72, 0.64);
+			vec3 blue = vec3(0.56, 0.64, 0.72);
+			tone = 0.5 * (cream + blue);
+			c = room_tiles(cream, blue, vec3(0.60, 0.60, 0.57), p, px, 0.33);
+		}
+	} else if (kind == 3) {
+		// Bathrooms: small glazed tile, white, blue, cream and sage, hexagons, pink.
 		if (roll == 0) {
 			tone = vec3(0.76, 0.75, 0.71);
-			return room_tiles(tone, tone, vec3(0.56, 0.56, 0.53), p, px, 0.15);
+			c = room_tiles(tone, tone, vec3(0.56, 0.56, 0.53), p, px, 0.15);
 		} else if (roll == 1) {
 			tone = vec3(0.62, 0.68, 0.71);
-			return room_tiles(tone, tone, vec3(0.50, 0.52, 0.53), p, px, 0.15);
+			c = room_tiles(tone, tone, vec3(0.50, 0.52, 0.53), p, px, 0.15);
+		} else if (roll == 2) {
+			vec3 cream = vec3(0.74, 0.72, 0.64);
+			vec3 sage = vec3(0.55, 0.62, 0.56);
+			tone = 0.5 * (cream + sage);
+			c = room_tiles(cream, sage, vec3(0.52, 0.52, 0.49), p, px, 0.2);
+		} else if (roll == 3) {
+			tone = vec3(0.78, 0.77, 0.74);
+			c = room_hex(tone, vec3(0.55, 0.55, 0.53), p, px, 0.2);
+		} else {
+			tone = vec3(0.76, 0.64, 0.62);
+			c = room_tiles(tone, tone, vec3(0.58, 0.54, 0.52), p, px, 0.15);
 		}
-		vec3 cream = vec3(0.74, 0.72, 0.64);
-		vec3 sage = vec3(0.55, 0.62, 0.56);
-		tone = 0.5 * (cream + sage);
-		return room_tiles(cream, sage, vec3(0.52, 0.52, 0.49), p, px, 0.2);
+	} else if (kind == 5) {
+		// Halls: patterned tile, terrazzo, long walnut boards, stone flags, a muted checker.
+		if (roll == 0) {
+			vec3 cream = vec3(0.74, 0.70, 0.60);
+			vec3 clay = vec3(0.60, 0.40, 0.32);
+			tone = mix(cream, clay, 0.3);
+			c = room_lozenge(cream, clay, vec3(0.56, 0.54, 0.50), p, px, 0.4);
+		} else if (roll == 1) {
+			tone = vec3(0.67, 0.65, 0.60);
+			c = room_flecks(tone, vec3(0.40, 0.38, 0.36), vec3(0.82, 0.78, 0.70), p, 0.06);
+		} else if (roll == 2) {
+			tone = WALNUT_BOARD;
+			c = room_boards(tone, p, px, plank);
+		} else if (roll == 3) {
+			tone = vec3(0.62, 0.60, 0.56);
+			c = room_flags(tone, vec3(0.46, 0.45, 0.42), p, px);
+		} else {
+			vec3 cream = vec3(0.76, 0.74, 0.67);
+			vec3 slate = vec3(0.54, 0.54, 0.53);
+			tone = 0.5 * (cream + slate);
+			c = room_tiles(cream, slate, vec3(0.58, 0.58, 0.55), p, px, 0.4);
+		}
+	} else if (kind == 7) {
+		// Store rooms: concrete, rough planks, brick pavers, painted concrete, worn linoleum.
+		if (roll == 0) {
+			tone = vec3(0.62, 0.61, 0.58);
+			c = room_screed(tone, p, px);
+		} else if (roll == 1) {
+			tone = vec3(0.61, 0.53, 0.42);
+			c = room_boards(tone, p, px, 0.24);
+		} else if (roll == 2) {
+			tone = vec3(0.66, 0.48, 0.40);
+			c = room_bricks(tone, vec3(0.56, 0.54, 0.50), p, px);
+		} else if (roll == 3) {
+			tone = vec3(0.56, 0.61, 0.57);
+			c = room_screed(tone, p, px);
+		} else {
+			tone = vec3(0.64, 0.56, 0.47);
+			c = room_carpet(tone, p * 0.5);
+		}
+	} else {
+		tone = wood;
+		c = room_boards(tone, p, px, plank);
 	}
-	if (kind == 2 && roll == 0) {
-		// Linoleum laid in a checker: its seams barely show.
-		vec3 cream = vec3(0.72, 0.68, 0.56);
-		vec3 sage = vec3(0.48, 0.55, 0.48);
-		tone = 0.5 * (cream + sage);
-		return room_tiles(cream, sage, vec3(0.58, 0.58, 0.52), p, px, 0.33);
+	tone = room_grade(tone, region);
+	return room_grade(c, region);
+}
+
+// Rugs (room_furnish data.rugs, room_finish's right half): a field in one of eight colours, a
+// border in one of four, inset from the rug's cells and drawn in one of seven weaves. Kept off the
+// box mats' tan and the searched grey so a rug never reads as a box (map_view _bake_container).
+const vec3 RUG_FIELD[8] = vec3[8](vec3(0.66, 0.38, 0.34), vec3(0.44, 0.48, 0.60), vec3(0.45, 0.55, 0.45), vec3(0.60, 0.45, 0.53),
+	vec3(0.42, 0.58, 0.58), vec3(0.54, 0.62, 0.70), vec3(0.78, 0.74, 0.64), vec3(0.74, 0.54, 0.52));
+const vec3 RUG_BORDER[4] = vec3[4](vec3(0.78, 0.74, 0.64), vec3(0.46, 0.22, 0.20), vec3(0.26, 0.30, 0.40), vec3(0.32, 0.32, 0.27));
+const float RUG_INSET = 0.14;
+
+// Returns how much of the rug covers this point (0 off it), its colour in `rug` and mean in `tone`.
+float room_rug_finish(int look, float edge, vec2 p, vec2 px, out vec3 rug, out vec3 tone) {
+	int weave = (look - 1) / 32;
+	int way = (look - 1) % 32;
+	vec3 field = RUG_FIELD[way % 8];
+	vec3 rim = RUG_BORDER[way / 8];
+	if (distance(field, rim) < 0.15) {
+		rim = RUG_BORDER[(way / 8 + 1) % 4];
 	}
-	if (kind == 2 && roll == 1) {
-		tone = vec3(0.64, 0.43, 0.32);
-		return room_tiles(tone, tone, vec3(0.52, 0.47, 0.42), p, px, 0.3);
+	float a = 0.01 + max(px.x, px.y);
+	float on = smoothstep(RUG_INSET - a, RUG_INSET + a, edge);
+	float in_rim = 1.0 - smoothstep(RUG_INSET + 0.13 - a, RUG_INSET + 0.13 + a, edge);
+	vec2 q = p;
+	vec3 c = field;
+	float k = seam_k(px, 0.12);
+	if (weave == 1) {
+		// Diamond lattice in the border colour.
+		vec2 l = fract(vec2(q.x + q.y, q.x - q.y) * 0.7071 / 0.35) - 0.5;
+		c = mix(field, rim, band(min(abs(l.x), abs(l.y)), 0.06, 0.03) * 0.6 * k);
+	} else if (weave == 2) {
+		// Rag rug: bands of the field, the border colour and cream across x.
+		float s = floor(q.x / 0.12);
+		float h = fx_hash(vec2(s, float(way)));
+		c = h < 0.45 ? field : (h < 0.75 ? mix(field, rim, 0.6) : mix(field, RUG_BORDER[0], 0.55));
+		c *= 0.92 + 0.12 * fx_vnoise(q * vec2(3.0, 14.0));
+	} else if (weave == 3) {
+		// A field of small rosettes.
+		vec2 l = fract(q / 0.4) - 0.5;
+		c = mix(field, rim, (1.0 - smoothstep(0.08, 0.12, length(l))) * 0.7 * k);
+	} else if (weave == 4) {
+		// Large checks of the field and a shade of it.
+		vec2 cell = floor(q / 0.5);
+		c = mod(cell.x + cell.y, 2.0) > 0.5 ? field * 0.86 : field;
+	} else if (weave == 5) {
+		// Plaid: crossing bands of the border colour.
+		vec2 l = abs(fract(q / 0.6) - 0.5);
+		float bandk = max(smoothstep(0.38, 0.42, l.x), smoothstep(0.38, 0.42, l.y));
+		c = mix(field, rim, bandk * 0.55 * k);
+	} else if (weave == 6) {
+		// Braided ovals: rings from the rug's edge inward.
+		float r = fract((edge - RUG_INSET) / 0.09);
+		float h = fx_hash(vec2(floor((edge - RUG_INSET) / 0.09), float(way)));
+		c = (h < 0.5 ? field : mix(field, rim, 0.55)) * (0.9 + 0.12 * smoothstep(0.2, 0.5, abs(r - 0.5)) * k);
 	}
-	tone = (kind == 2 || roll == 0) ? HONEY_BOARD : (roll == 1 ? WALNUT_BOARD : GREY_BOARD);
-	return room_boards(tone, p, px);
+	// Woollen pile and a little wear.
+	c *= 0.93 + 0.1 * fx_vnoise(q * 6.0);
+	c = mix(c, rim, in_rim);
+	// The fringe: a thin line just inside the border.
+	c = mix(c, RUG_BORDER[0], band(edge - RUG_INSET - 0.13, 0.012, a) * 0.5 * k);
+	rug = c;
+	tone = mix(field, rim, 0.25);
+	return on;
 }
 
 void vertex() {
@@ -256,17 +575,29 @@ void fragment() {
 		if (rc > 0) {
 			vec3 tone;
 			vec3 finish = room_floor(rc, world_pos.xz, room_px, tone);
-			// Out of sight the finish keeps its hue and half its pattern, a shade under the plain
-			// floor (the kind's colour, WOOD V 0.40) as the mask leaves it (`dimmed` below, in
-			// linear: 0.6 grey + 0.4 brightest channel), so the boxes' floor mats (map_view
-			// _bake_container) stand out of an unseen room as they did, and it sinks no deeper.
+			// A rug laid in the room (room_furnish), over the floor's finish.
+			float rug_edge;
+			int look = room_rug(world_pos.xz, world_pos.y + 0.05, map_size, rug_edge);
+			if (look > 0) {
+				vec3 rug;
+				vec3 rug_tone;
+				float on = room_rug_finish(look, rug_edge, world_pos.xz, room_px, rug, rug_tone);
+				finish = mix(finish, rug, on);
+				tone = mix(tone, rug_tone, on);
+			}
+			// Out of sight the finish keeps its hue and half its pattern, and its lightness goes
+			// halfway (UNSEEN_FOLLOW) to a shade under the plain floor (the kind's colour, WOOD
+			// V 0.40) as the mask leaves it (`dimmed` below, in linear: 0.6 grey + 0.4 brightest
+			// channel): the unseen rooms are 89 % of a house's floor (mood B1), so a light tile stays
+			// lighter than a dark board there too, and the boxes' floor mats (map_view _bake_container)
+			// still stand above the floor round them.
 			float away = (1.0 - cell.r) * clamp(mask_on, 0.0, 1.0);
 			vec3 luma = vec3(0.3, 0.59, 0.11);
 			vec3 was_l = floor_to_linear(base);
 			vec3 tone_l = floor_to_linear(tone);
 			float was = 0.6 * dot(was_l, luma) + 0.4 * max(was_l.r, max(was_l.g, was_l.b));
 			float as_seen = 0.6 * dot(tone_l, luma) + 0.4 * max(tone_l.r, max(tone_l.g, tone_l.b));
-			unseen_k = mix(1.0, 0.93 * was / max(as_seen, 0.001), away);
+			unseen_k = mix(1.0, 0.93 * mix(was, as_seen, UNSEEN_FOLLOW) / max(as_seen, 0.001), away);
 			base = mix(finish, tone, 0.5 * away);
 		}
 	}
@@ -323,10 +654,26 @@ void fragment() {
 	float lamp_here = max(step(-0.5, world_pos.y) * (1.0 - step(1.0, world_pos.y)), 1.0 - step(1.0, abs(world_pos.y - lamp_floor)));
 	float reveal = max(seen.r, smoothstep(0.08, 0.24, cell.b) * lamp_reveal * sky * lamp_here);
 	// Seen now: full. Seen before: dim memory. Never seen: dark but readable.
-	float lit = mix(1.0, max(reveal, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
+	float floor_k = mix(fx_sight.x, fx_sight.y, seen.g);
+	float round_k = clamp(round_day, 0.0, 1.0) * sky;
+	// Between dusk and night the floor comes up first and the round shape takes over
+	// after, so the cone's side never stands out at half strength by the eye.
+	float round_floor_k = smoothstep(0.0, 0.5, round_k);
+	float pool_seen = seen.r;
+	if (round_k > 0.001) {
+		float near = 1.0 - smoothstep(eye_r * ROUND_IN, eye_r * ROUND_OUT, distance(world_pos.xz, eye_xz));
+		float lamp_seen = smoothstep(0.08, 0.24, cell.b) * lamp_reveal * lamp_here;
+		reveal = mix(reveal, max(near, lamp_seen), smoothstep(0.5, 1.0, round_k));
+		pool_seen = mix(pool_seen, near, smoothstep(0.5, 1.0, round_k));
+		// One floor out there, no trail where the eye has been.
+		floor_k = mix(floor_k, round_floor, round_floor_k);
+	}
+	float lit = mix(1.0, max(reveal, floor_k), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
 	// The memory's grey only where the mask is drawn: with it off all is in sight.
-	vec3 dimmed = mix(vec3(grey), base, mix(1.0, reveal * 0.6 + 0.4, clamp(mask_on, 0.0, 1.0)));
+	// Out of doors by day the colour goes less (0.9 kept, not 0.4).
+	float keep = mix(reveal * 0.6 + 0.4, reveal * 0.1 + 0.9, round_floor_k);
+	vec3 dimmed = mix(vec3(grey), base, mix(1.0, keep, clamp(mask_on, 0.0, 1.0)));
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
 	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;
 	ROUGHNESS = mix(1.0, 0.4, wet * (1.0 - cover));
@@ -336,7 +683,7 @@ void fragment() {
 	}
 	// A lamp out of sight still shows faintly, so mates can be found in the dark.
 	float lamp = cell.b * lamp_gain * lamp_here * mix(0.4, 1.0, reveal) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
-	float pool = texture(win, uv).r * win_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0))
+	float pool = texture(win, uv).r * win_gain * mix(0.4, 1.0, pool_seen) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0))
 		* smoothstep(0.6, 0.9, up) * step(-0.5, world_pos.y) * (1.0 - step(1.0, world_pos.y));
 	EMISSION = (lamp_color * lamp + win_color * pool) * (0.25 + 0.75 * grey);
 }

@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const W = preload("res://game/sim/weapons.gd")
+const AimModel = preload("res://game/sim/aim_model.gd")
 
 const TRIES: int = 400
 
@@ -143,3 +144,20 @@ func test_an_arrow_lands_and_is_picked_up_as_a_crafted_round() -> void:
 	game.actions._auto_pickup()
 	assert_eq(game.ground_items.size(), 0, "the arrow is gone")
 	assert_eq(int(game.ammo["craft"]), before + 1, "and counts as a crafted round")
+
+
+func test_a_round_that_leaves_one_standing_holds_it_as_long_as_a_blow() -> void:
+	# Decision 474 J2: one reckoning of the body for blows and rounds. A round in
+	# the body that does not put the dead down holds it BODY_STUN, as a blow does.
+	for id in ["pistol", "shotgun"]:
+		var d: Dictionary = W.get_data(id)
+		var held := 0
+		for i in 80:
+			var z := _body_at(6.0)
+			z["stun"] = 0.0
+			game.combat._shoot_zombie(p, z, d, AimModel.BODY_R * 0.99, 6.0)
+			if String(z["state"]) == "wander" and float(z["stun"]) > 0.0 and not z.has("round_held"):
+				assert_almost_eq(float(z["stun"]), game.combat.BODY_STUN, 0.001, id)
+				held += 1
+			game.zombies.list.erase(z)
+		assert_gt(held, 0, id + ": some rounds leave one standing")

@@ -50,7 +50,8 @@ const BEHIND_COS: float = -0.3
 const MELEE_SLACK: float = 0.15          # a blow lands this far past the weapon's reach
 ## A body hit that leaves the dead on its feet holds it this long (decision 473
 ## W2: 0.6 s before; the reference game's struck dead reel some 1.6-1.8 s,
-## half of that for a crowd that comes on in numbers).
+## half of that for a crowd that comes on in numbers). A round in the body is
+## reckoned the same as a blow (decision 474 J2: 0.5 s before).
 const BODY_STUN: float = 0.9
 ## How loud a melee blow on the dead is (decision 473 W3: quiet before; the
 ## reference game's blows carry 8 tiles), under its own tag "blow" that carries
@@ -1409,7 +1410,7 @@ func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) 
 			else:
 				game.zombies.knock_down(z)
 		else:
-			z["stun"] = 0.5
+			z["stun"] = BODY_STUN
 		return true
 	var zone: String = AimModel.roll(rng, radius)
 	if zone == "head":
@@ -1433,7 +1434,7 @@ func _shoot_zombie(p, z: Dictionary, d: Dictionary, radius: float, dist: float) 
 		if rng.randf() < float(d["body_knockdown"]):
 			game.zombies.knock_down(z)
 		else:
-			z["stun"] = 0.5
+			z["stun"] = BODY_STUN
 		return true
 	return false
 

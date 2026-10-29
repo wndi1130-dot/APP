@@ -29,6 +29,7 @@ const HordeDirector = preload("res://game/sim/horde_director.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
 const Telemetry = preload("res://game/sim/telemetry.gd")
 const FieldMission = preload("res://game/field_mission.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldTrainGuard = preload("res://game/field_train_guard.gd")
 const FieldAlarms = preload("res://game/field_alarms.gd")
@@ -229,6 +230,7 @@ var combat: Combat
 var feel: HitFeel                      # a blow's hold, shake, buzz and sound (view only)
 var ai: AI
 var actions: Actions
+var work: FieldWork
 var hud: Hud
 var audio: FieldAudio
 var music: MusicPlayer                  # background music (briefs/bgm.md); silent with no files
@@ -563,6 +565,7 @@ func _ready() -> void:
 	feel = HitFeel.new(self)
 	ai = AI.new(self)
 	actions = Actions.new(self)
+	work = FieldWork.new(self)
 	await BuildPace.heavy(pace)
 	await _spawn_people()
 	residents.place()
@@ -957,6 +960,27 @@ func set_screen_lift(lift: float) -> void:
 	tex.gradient.offsets = PackedFloat32Array([0.0, pow(0.5, 1.0 + screen_lift), 1.0])
 	tex.gradient.colors = PackedColorArray([Color(0, 0, 0), Color(0.5, 0.5, 0.5), Color(1, 1, 1)])
 	environment.adjustment_color_correction = tex
+
+
+## Out of doors by day the sight mask is one soft ring round the eye (decision 491:
+## the sight cone's straight sides drew a bright wedge); the rules' sight is as it
+## was. Its reach is the sight's; at night the cells rule again. Dawn and dusk
+## (daylight about 0.5) are fully round too: only the last of the dusk blends.
+func _set_sight_round() -> void:
+	var day: float
+	if atmo.has("lum"):
+		day = clampf(inverse_lerp(0.09, 1.0, float(atmo["lum"])), 0.0, 1.0)
+	else:
+		day = 1.0 - clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
+	day = smoothstep(0.15, 0.45, day)
+	var eye := Vector2(player.position.x, player.position.z)
+	# The same reach as _refresh_vision's: upstairs sees farther, a cellar nearer.
+	var lv := level_of(player.position)
+	var base := SIGHT_UPSTAIRS if lv > 0 else (SIGHT_CELLAR if lv < 0 else SIGHT_RADIUS)
+	var reach := maxf(float(base) * (eye_mult() if lv >= 0 else 1.0), 1.0)
+	view.set_sight_round(eye, reach, day, FxState.SIGHT_OUT_DAY)
+	if map_edge != null:
+		map_edge.set_sight_round(eye, reach, day, FxState.SIGHT_OUT_DAY)
 
 
 ## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
@@ -1816,6 +1840,7 @@ func _step(delta: float) -> void:
 	_read_side_note()
 	_land_lures()
 	actions.update(delta)
+	work.update(delta)
 	holdout.tick(delta)
 	residents.tick(delta)
 	holdout.watch(delta)
@@ -2937,6 +2962,7 @@ func _update_camera(delta: float) -> void:
 	if map_edge != null:
 		map_edge.set_eye(player.position)
 		map_edge.set_room(_open_room())
+	_set_sight_round()
 	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
 	var back := cam_back() * 60.0
 	# A blow's kick moves the eye, not the place it follows (hit_feel.gd).
@@ -3248,7 +3274,7 @@ func finish(reason: String) -> void:
 		receipt.set_extras(int(extras.get("symbolCount", 0)), Array(extras.get("fragments", [])) + fragments, CoreScenes.count(so_far["items"]["gained"]))
 	stock["coal"] = float(stock.get("coal", 0.0)) + actions.coal_delivered - actions.coal_spent - int(holdout.cost_paid["coal"])
 	stock["scrap"] = float(stock.get("scrap", 0.0)) + float(unloaded.get("scrap", 0))
-	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0))
+	stock["wood"] = float(stock.get("wood", 0.0)) + float(unloaded.get("wood", 0)) + actions.wood_delivered
 	stock["cloth"] = float(stock.get("cloth", 0.0)) - cloth_start
 	# Ammo is the pool plus what sits in the guns: rounds fired from a magazine
 	# count, and so do the ones in a gun that stays behind with its carrier.

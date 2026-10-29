@@ -6,6 +6,7 @@ extends Node3D
 ## player climbs to them, and the cellar shows alone.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
@@ -15,6 +16,7 @@ const EdgeBand = preload("res://game/world/edge_band.gd")
 const TrackView = preload("res://game/world/track_view.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
+const FurnitureTints = preload("res://game/world/furniture_tints.gd")
 const ObjectRules = preload("res://game/sim/object_rules.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const S = FieldGrid.Solid
@@ -447,6 +449,21 @@ func update_tracks(changed: Dictionary) -> void:
 ## reveal: how far a lamp's pool out of doors shows through the sight mask
 ## (0 by day, 1 at night, decision 474 B9). floor_level: the player's floor,
 ## whose floor the lamps light besides the ground.
+## Out of doors by day the sight mask is round and soft about the eye (decision
+## 491): where the eye stands (x z), the sight's reach in metres, how much day there
+## is (0 leaves the cells to rule, as at night and indoors) and the floor out there.
+## The buildings' outside faces and roofs take the same.
+func set_sight_round(eye: Vector2, reach: float, day: float, floor_level: float) -> void:
+	var mats: Array = [material]
+	if buildings != null and buildings.get("material") is ShaderMaterial:
+		mats.append(buildings.material)
+	for m: ShaderMaterial in mats:
+		m.set_shader_parameter("eye_xz", eye)
+		m.set_shader_parameter("eye_r", reach)
+		m.set_shader_parameter("round_day", clampf(day, 0.0, 1.0))
+		m.set_shader_parameter("round_floor", floor_level)
+
+
 func set_lamp_gain(gain: float, reveal: float = 0.0, floor_level: int = 0) -> void:
 	material.set_shader_parameter("lamp_gain", clampf(gain, 0.0, 1.0))
 	material.set_shader_parameter("lamp_reveal", clampf(reveal, 0.0, 1.0))
@@ -758,8 +775,14 @@ func update_spot(id: String) -> void:
 			box(st, Vector3(0.06, 3.2, 0.06), at + Vector3(-0.28, 1.6, -0.3), Color(0.5, 0.42, 0.3))
 			box(st, Vector3(0.06, 3.2, 0.06), at + Vector3(0.28, 1.6, -0.3), Color(0.5, 0.42, 0.3))
 		"work_site":
-			var color := Color(0.45, 0.45, 0.45) if spot["state"] == "closed" else Color(0.8, 0.7, 0.35)
+			var color: Color = Color(0.9, 0.76, 0.4) if spot["state"] == "ready" else Color(0.45, 0.45, 0.45)
 			box(st, Vector3(1.2, 0.05, 1.2), at + Vector3(0, 0.03, 0), color)
+			var filled: int = clampi(roundi(float(spot.get("work_share", 0.0)) * FieldWork.SHARE_CELLS), 0, FieldWork.SHARE_CELLS)
+			for i in FieldWork.SHARE_CELLS:
+				var angle: float = float(i) * TAU / FieldWork.SHARE_CELLS
+				var offset: Vector3 = Vector3(cos(angle), 0.0, sin(angle)) * 0.95
+				var tint: Color = Color(0.95, 0.6, 0.18) if i < filled else Color(0.24, 0.23, 0.21)
+				box(st, Vector3(0.22, 0.05, 0.22), at + offset + Vector3(0, 0.04, 0), tint)
 		"inspect":
 			# A thing to look at for this stop's goal: a post, paler once seen.
 			var post := Color(0.42, 0.42, 0.44) if spot["state"] != "seen" else Color(0.7, 0.7, 0.66)
@@ -1086,6 +1109,24 @@ static func drift_uv(g: FieldGrid, corner: Vector2i) -> Vector2:
 	return Vector2(signi(side.x), signi(side.y)) if open else Vector2.ZERO
 
 
+## A wagon the model kit has none for, as [size, centre, colour] boxes: a floor on its wheels and four
+## low sides, open on top, its coal heaped inside a little over the sides. No closed wagon (map brief,
+## ban list); the field's map and the stop scene both draw it so.
+static func open_wagon_parts(w: Dictionary) -> Array:
+	var r: Rect2i = w["rect"]
+	var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
+	var lx: float = r.size.x - 0.2
+	var lz: float = r.size.y - 0.2
+	var body := Color(0.33, 0.3, 0.28)
+	var out: Array = [[Vector3(lx, 0.3, lz), mid + Vector3(0, 0.75, 0), body]]
+	for s: float in [-1.0, 1.0]:
+		out.append([Vector3(lx, 1.0, 0.12), mid + Vector3(0, 1.4, s * (lz - 0.12) * 0.5), body])
+		out.append([Vector3(0.12, 1.0, lz), mid + Vector3(s * (lx - 0.12) * 0.5, 1.4, 0), body])
+	if float(w.get("coal", 0.0)) > 0.0:
+		out.append([Vector3(lx - 0.6, 1.1, lz - 0.6), mid + Vector3(0, 1.45, 0), Color(0.12, 0.12, 0.13)])
+	return out
+
+
 static func box(st: SurfaceTool, size: Vector3, at: Vector3, color: Color) -> void:
 	var h := size * 0.5
 	var faces := [
@@ -1381,16 +1422,11 @@ func _build_blocks() -> void:
 		if light_nodes.has(kind):
 			light_nodes[kind].position.y = train_node.position.y
 	await BuildPace.rest(pace)
-	# Wagons on the sidings: the kit's models, a box only where it has none.
+	# Wagons on the sidings: the kit's models, an open box only where it has none.
 	var wagon_models := TrainModels.attach_wagons(level_roots[0], data["wagons"], TrackView.wagon_heights(grid, data["wagons"]))
 	for index: int in wagon_models.get_meta("fallback_wagons", []):
-		var w: Dictionary = data["wagons"][index]
-		var r: Rect2i = w["rect"]
-		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
-		box(st, Vector3(r.size.x - 0.2, 1.9, r.size.y - 0.2), mid + Vector3(0, 0.95, 0), Color(0.33, 0.3, 0.28))
-		if w["coal"] > 0.0:
-			box(st, Vector3(r.size.x - 0.8, 0.5, r.size.y - 0.8), mid + Vector3(0, 2.05, 0), Color(0.12, 0.12, 0.13))
-			box(st, Vector3(r.size.x - 1.2, 0.12, r.size.y - 1.2), mid + Vector3(0, 2.35, 0), Color(0.9, 0.92, 0.95))
+		for part: Array in open_wagon_parts(data["wagons"][index]):
+			box(st, part[0], part[1], part[2])
 	if data["spots"].has("water_tower"):
 		# The first stop: the blocked cells in its north-west corner are the water tower.
 		for y in range(mini(14, grid.height)):
@@ -1491,6 +1527,9 @@ func _build_props() -> void:
 		if not prop_batches.has(path):
 			prop_batches[path] = {"items": [], "nodes": {}, "tiles": {}}
 		var item: Dictionary = {"xf": xf, "rect": r, "level": lv, "building": b, "prop": prop, "remembered": false}
+		if FurnitureTints.applies(path):
+			# 한 집 가구는 한 칠 판(줄의 tint, 없으면 건물 번호, 둘 다 없으면 칸).
+			item["tint"] = FurnitureTints.pick(prop, r.position, b)
 		prop_batches[path]["items"].append(item)
 		_index_prop(prop_batches[path], item)
 		if lv == 0:
@@ -1503,6 +1542,9 @@ func _build_props() -> void:
 		for lod: int in meshes:
 			var mm := MultiMesh.new()
 			mm.transform_format = MultiMesh.TRANSFORM_3D
+			if FurnitureTints.applies(path):
+				mm.use_custom_data = true
+				FurnitureTints.dress(meshes[lod])
 			mm.mesh = meshes[lod]
 			mm.instance_count = batch["items"].size()
 			mm.visible_instance_count = 0
@@ -1587,6 +1629,8 @@ func _add_object_batch(prop: Dictionary, path: String) -> void:
 	var batch: Dictionary = prop_batches[path]
 	var item: Dictionary = {"prop": prop, "rect": prop["rect"], "level": int(prop.get("level", 0)),
 		"building": int(prop.get("building", -1)), "xf": _object_transform(prop, path), "remembered": false}
+	if FurnitureTints.applies(path):
+		item["tint"] = FurnitureTints.pick(prop, (prop["rect"] as Rect2i).position, int(item["building"]))
 	batch["items"].append(item)
 	_index_prop(batch, item)
 	var meshes := PropModels.batch_meshes(path)
@@ -1596,6 +1640,9 @@ func _add_object_batch(prop: Dictionary, path: String) -> void:
 			node.name = "Object_%s_LOD%d" % [path.get_file().get_basename(), lod]
 			node.multimesh = MultiMesh.new()
 			node.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+			if FurnitureTints.applies(path):
+				node.multimesh.use_custom_data = true
+				FurnitureTints.dress(meshes[lod])
 			node.multimesh.mesh = meshes[lod]
 			add_child(node)
 			batch["nodes"][lod] = node
@@ -1813,6 +1860,8 @@ func refresh_props(camera: Camera3D = null) -> void:
 			var lod := 1 if distance >= PROP_LOD_DISTANCE and batch["nodes"].has(1) else 0
 			var node: MultiMeshInstance3D = batch["nodes"][lod]
 			node.multimesh.set_instance_transform(counts[lod], xf)
+			if node.multimesh.use_custom_data:
+				node.multimesh.set_instance_custom_data(counts[lod], Color(float(int(item.get("tint", -1)) + 1), 0.0, 0.0, 0.0))
 			counts[lod] += 1
 		for lod: int in batch["nodes"]:
 			batch["nodes"][lod].multimesh.visible_instance_count = counts[lod]

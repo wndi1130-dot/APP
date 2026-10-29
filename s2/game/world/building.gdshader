@@ -38,6 +38,13 @@ uniform vec3 cam_back = vec3(0.0, 0.788, 0.616);
 uniform vec4 open_rect = vec4(0.0);
 uniform float open_floor = -1000.0;
 uniform float open_building = -1.0;
+// 바깥 면·지붕의 시야 가림은 낮엔 사람 둘레로 둥글고 부드럽게(world_vis와 같은 값, 결정 491).
+uniform vec2 eye_xz = vec2(-1000.0);
+uniform float eye_r = 18.0;
+uniform float round_day = 0.0;
+uniform float round_floor = 0.95;
+const float ROUND_IN = 0.4;
+const float ROUND_OUT = 1.3;
 
 // 노드마다: 점박이로 사라짐(0 다 보임, 1 다 사라짐), 고정 시야(x < 0이면 칸에서 읽음),
 // 벽면 칠(rgb)과 지붕 색 갈래(a: ROOFS 번호), 건물 번호.
@@ -78,18 +85,31 @@ uniform float house_colour : hint_range(0.0, 1.0) = 0.8;
 
 // 벽지·커튼 색(바랜 것만). 건물·층의 번호로 고른다.
 const vec3 PAPERS[5] = vec3[5](vec3(0.60, 0.46, 0.43), vec3(0.50, 0.56, 0.46), vec3(0.66, 0.56, 0.38), vec3(0.48, 0.52, 0.58), vec3(0.72, 0.68, 0.56));
-// 살림방 벽(room_finish, 결정 469 C3, 선형): 침실·거실 벽지 셋씩, 부엌 윗벽 칠 셋, 욕실 타일 셋.
-// 흰 칠 반사율 0.8을 넘지 않게. 옛 벽지(PAPERS, 선형 밝기 0.50~0.68)보다 한 단 밝다 — 잘라 보이기로
-// 드러난 방이 밝기 줄(V 0.36) 밑이었다(mood, 낮 채움빛).
-const vec3 BED_PAPERS[3] = vec3[3](vec3(0.70, 0.56, 0.52), vec3(0.76, 0.70, 0.56), vec3(0.60, 0.66, 0.55));
-const vec3 LIVING_PAPERS[3] = vec3[3](vec3(0.74, 0.62, 0.42), vec3(0.52, 0.62, 0.50), vec3(0.56, 0.62, 0.70));
-const vec3 KITCHEN_PAINTS[3] = vec3[3](vec3(0.78, 0.74, 0.62), vec3(0.66, 0.74, 0.62), vec3(0.80, 0.74, 0.52));
-const vec3 BATH_TILES[3] = vec3[3](vec3(0.80, 0.80, 0.77), vec3(0.62, 0.72, 0.76), vec3(0.64, 0.74, 0.66));
+// 살림방 벽(room_finish, 결정 469 C3, 사용자 10-28 「색깔도 다양하게」, 선형): 갈래마다 다섯 판, 판마다
+// 칠과 무늬(0 민, 1 세로 줄, 2 잔꽃, 3 다마스크). 흰 칠 반사율 0.8을 넘지 않고, 옛 벽지(PAPERS, 선형
+// 밝기 0.50~0.68)보다 한 단 밝다 — 잘라 보이기로 드러난 방이 밝기 줄(V 0.36) 밑이었다(mood, 낮 채움빛).
+// 판벽(나무 허리·온 벽)은 선형 밝기 0.5 밑으로 내려가지 않는다.
+const vec3 BED_PAPERS[5] = vec3[5](vec3(0.70, 0.56, 0.52), vec3(0.76, 0.70, 0.56), vec3(0.60, 0.66, 0.55), vec3(0.60, 0.66, 0.74), vec3(0.68, 0.60, 0.68));
+const int BED_MOTIF[5] = int[5](2, 2, 1, 2, 3);
+const vec3 LIVING_PAPERS[5] = vec3[5](vec3(0.74, 0.62, 0.42), vec3(0.52, 0.62, 0.50), vec3(0.56, 0.62, 0.70), vec3(0.72, 0.56, 0.46), vec3(0.78, 0.72, 0.60));
+const int LIVING_MOTIF[5] = int[5](1, 1, 3, 2, 0);
+const vec3 KITCHEN_PAINTS[5] = vec3[5](vec3(0.78, 0.74, 0.62), vec3(0.66, 0.74, 0.62), vec3(0.80, 0.74, 0.52), vec3(0.66, 0.72, 0.78), vec3(0.80, 0.68, 0.58));
+const vec3 KITCHEN_TILES[5] = vec3[5](vec3(0.78, 0.78, 0.74), vec3(0.78, 0.78, 0.74), vec3(0.78, 0.74, 0.62), vec3(0.62, 0.70, 0.62), vec3(0.66, 0.72, 0.78));
+const vec3 BATH_TILES[5] = vec3[5](vec3(0.80, 0.80, 0.77), vec3(0.62, 0.72, 0.76), vec3(0.64, 0.74, 0.66), vec3(0.78, 0.78, 0.74), vec3(0.78, 0.66, 0.64));
+const vec3 HALL_PAPERS[5] = vec3[5](vec3(0.60, 0.66, 0.55), vec3(0.74, 0.62, 0.42), vec3(0.66, 0.66, 0.64), vec3(0.68, 0.52, 0.50), vec3(0.78, 0.72, 0.60));
+const vec3 DINING_PAPERS[5] = vec3[5](vec3(0.50, 0.60, 0.50), vec3(0.68, 0.50, 0.48), vec3(0.74, 0.64, 0.44), vec3(0.56, 0.62, 0.72), vec3(0.78, 0.72, 0.60));
+const vec3 STORE_PAINTS[5] = vec3[5](vec3(0.74, 0.72, 0.68), vec3(0.54, 0.64, 0.54), vec3(0.64, 0.54, 0.44), vec3(0.64, 0.66, 0.66), vec3(0.72, 0.70, 0.64));
+// 나무 허리·판벽: 니스 칠 참나무, 산골의 소나무, 물가의 흰 칠 널.
+const vec3 OAK_DADO = vec3(0.64, 0.50, 0.34);
+const vec3 PINE_WALL = vec3(0.70, 0.54, 0.36);
+const vec3 BEADBOARD = vec3(0.70, 0.76, 0.80);
 const vec3 CURTAINS[6] =vec3[6](vec3(0.52, 0.30, 0.22), vec3(0.70, 0.56, 0.26), vec3(0.31, 0.45, 0.31), vec3(0.75, 0.70, 0.58), vec3(0.31, 0.37, 0.52), vec3(0.80, 0.79, 0.75));
 
 // 줄눈이나 판자 틈: 무늬 칸 가장자리 폭 w(칸 비율)를 화면 크기에 맞춰 부드럽게.
-float seam(vec2 f, vec2 w) {
-	vec2 aa = fwidth(f) + 1e-4;
+// u는 되감기 전 좌표: 칸 경계에서 fract가 1에서 0으로 뛰어도 화면 폭(fwidth)이 튀지 않게.
+float seam(vec2 u, vec2 w) {
+	vec2 f = fract(u);
+	vec2 aa = fwidth(u) + 1e-4;
 	vec2 e = smoothstep(w - aa, w + aa, f) * (vec2(1.0) - smoothstep(vec2(1.0) - aa, vec2(1.0), f));
 	return 1.0 - e.x * e.y;
 }
@@ -101,12 +121,12 @@ vec3 wall_skin(int kind, vec3 tint, vec2 fp, float big, float fine) {
 		vec2 bc = fp / vec2(0.5, 0.18);
 		bc.x += 0.5 * mod(floor(bc.y), 2.0);
 		vec3 c = tint * (0.84 + 0.26 * fx_hash(floor(bc))) * (0.94 + 0.1 * big);
-		return mix(vec3(0.62, 0.60, 0.56) * 0.85, c, 1.0 - seam(fract(bc), vec2(0.05, 0.11)));
+		return mix(vec3(0.62, 0.60, 0.56) * 0.85, c, 1.0 - seam(bc, vec2(0.05, 0.11)));
 	}
 	if (kind == 2) {
 		float k = floor(fp.x / 0.3);
 		vec3 c = tint * (0.86 + 0.22 * fx_hash(vec2(k, 3.0))) * (0.92 + 0.12 * fx_vnoise(vec2(k * 5.0, fp.y * 1.5)));
-		return c * (1.0 - 0.4 * seam(vec2(fract(fp.x / 0.3), 0.5), vec2(0.07, 0.0)));
+		return c * (1.0 - 0.4 * seam(vec2(fp.x / 0.3, 0.5), vec2(0.07, 0.0)));
 	}
 	if (kind == 3) {
 		float k = floor(fp.y / 0.25);
@@ -121,6 +141,124 @@ vec3 wall_skin(int kind, vec3 tint, vec2 fp, float big, float fine) {
 	float rib = 0.5 + 0.5 * sin(fp.x / 0.2 * 6.28318);
 	vec3 c = tint * (0.86 + 0.16 * rib) * (0.95 + 0.06 * fine);
 	return mix(c, vec3(0.45, 0.31, 0.23), 0.35 * smoothstep(0.6, 0.85, fx_vnoise(vec2(fp.x * 2.5, fp.y * 0.2))));
+}
+
+// 벽지 무늬: 바탕 `paper`에 무늬 `motif`(0 민, 1 세로 줄, 2 잔꽃, 3 다마스크). 대각뷰에서 읽히게 실물보다 크다.
+vec3 wall_paper(vec3 paper, int motif, vec2 fp, float fine) {
+	if (motif == 1) {
+		return paper * (0.9 + 0.12 * smoothstep(0.35, 0.5, abs(fract(fp.x * 2.4) - 0.5)));
+	}
+	if (motif == 2) {
+		vec2 g = fp / vec2(0.2, 0.24);
+		g.x += 0.5 * mod(floor(g.y), 2.0);
+		vec2 l = fract(g) - 0.5;
+		float m = 1.0 - smoothstep(0.1, 0.17, length(l * vec2(1.0, 1.2)));
+		return paper * (0.97 + 0.04 * fine) * (1.0 - 0.14 * m);
+	}
+	if (motif == 3) {
+		vec2 g = fp / vec2(0.36, 0.48);
+		g.x += 0.5 * mod(floor(g.y), 2.0);
+		vec2 l = abs(fract(g) - 0.5);
+		float d = l.x * 1.3 + l.y;
+		float m = smoothstep(0.3, 0.34, d) * (1.0 - smoothstep(0.38, 0.42, d)) + (1.0 - smoothstep(0.1, 0.14, d));
+		return paper * (0.94 + 0.1 * m);
+	}
+	return paper * (0.95 + 0.06 * fine);
+}
+
+// 세로 널 판벽(높이 `top`까지): 널 폭 `w`, 널마다 한 끗 다른 결, 위 끝에 짙은 갓 띠 6 cm.
+vec3 wall_boards(vec3 wood, float run, float rise, float top, float w) {
+	float k = floor(run / w);
+	vec3 c = wood * (0.88 + 0.16 * fx_hash(vec2(k, 5.0))) * (0.94 + 0.08 * fx_vnoise(vec2(k * 3.0, rise * 6.0)));
+	c *= 1.0 - 0.3 * seam(vec2(run / w, 0.5), vec2(0.06, 0.0));
+	return mix(c, wood * 0.74, step(top - 0.06, rise) * step(rise, top));
+}
+
+// 지역의 빛깔(결정 478 지역 무리): 철도 공업지는 그을려 잿빛, 산골은 송진 빛, 물가는 바래 차갑고, 빈 선로는 수수하다.
+vec3 wall_grade(vec3 c, int region) {
+	vec3 grey = vec3(dot(c, vec3(0.2126, 0.7152, 0.0722)));
+	if (region == 1) {
+		return mix(c, grey, 0.22);
+	} else if (region == 2 || region == 3) {
+		return c * vec3(1.03, 1.0, 0.93);
+	} else if (region == 4) {
+		return mix(c, grey, 0.15) * vec3(0.98, 1.01, 1.04);
+	} else if (region == 5) {
+		return mix(c, grey, 0.3);
+	}
+	return c;
+}
+
+// 살림방 벽 하나(room_finish 갈래·판·지역). `torn`은 벽지가 뜯겨 회벽이 드러난 정도, `lively`는 생활 색 몫.
+vec3 room_wall(int kind, int region, int roll, vec2 fp, float rise, float big, float fine, float torn, vec3 plaster, inout float lively) {
+	bool hills = region == 2 || region == 3;
+	vec3 c;
+	float papered = 1.0;
+	if (kind == 2 || kind == 3) {
+		// 부엌은 1.2 m, 욕실은 1.5 m까지 15 cm 타일, 그 위 끝에 짙은 띠 4 cm, 위는 칠.
+		float top = kind == 2 ? 1.2 : 1.5;
+		vec2 tc = vec2(fp.x, rise) / 0.15;
+		vec3 tile = (kind == 2 ? KITCHEN_TILES[roll] : BATH_TILES[roll]) * (0.95 + 0.07 * fx_hash(floor(tc)));
+		tile *= 1.0 - 0.22 * seam(tc, vec2(0.05, 0.05));
+		vec3 upper = (kind == 2 ? KITCHEN_PAINTS[roll] : vec3(0.78, 0.76, 0.70)) * (0.95 + 0.06 * fine);
+		c = rise < top ? tile : upper;
+		c = mix(c, vec3(0.42, 0.44, 0.43), step(top, rise) * (1.0 - step(top + 0.04, rise)));
+		lively = 0.8;
+		return wall_grade(c, region);
+	}
+	if (kind == 7) {
+		// 창고: 흰 회칠, 아래 1.2 m만 기름칠(초록·밤색), 잿빛 칠. 무늬 없이 얼룩만.
+		vec3 coat = STORE_PAINTS[roll];
+		vec3 wash = vec3(0.72, 0.70, 0.66);
+		c = (roll == 1 || roll == 2) && rise >= 1.2 ? wash : coat;
+		c = mix(c, c * 0.7, step(1.18, rise) * step(rise, 1.22) * float(roll == 1 || roll == 2));
+		c *= (0.88 + 0.18 * big) * (0.95 + 0.06 * fine);
+		lively = 0.5;
+		return wall_grade(c, region);
+	}
+	if (hills && roll >= 3 && (kind == 1 || kind == 4 || kind == 6)) {
+		// 산골 집의 방은 다섯에 둘이 온 벽 소나무 널.
+		lively = 0.8;
+		return wall_grade(wall_boards(PINE_WALL, fp.x, rise, 99.0, 0.18), region);
+	}
+	if (region == 4 && roll == 4 && kind == 1) {
+		// 물가의 침실: 흰 칠 널벽.
+		lively = 0.8;
+		return wall_grade(wall_boards(BEADBOARD, fp.x, rise, 99.0, 0.1), region);
+	}
+	vec3 paper;
+	int motif = 0;
+	float dado = 0.0;
+	if (kind == 1) {
+		paper = BED_PAPERS[roll];
+		motif = BED_MOTIF[roll];
+	} else if (kind == 4) {
+		paper = LIVING_PAPERS[roll];
+		motif = LIVING_MOTIF[roll];
+		// 판 3은 나무 허리, 판 4는 그림 띠.
+		dado = roll == 3 ? 0.9 : 0.0;
+	} else if (kind == 5) {
+		paper = HALL_PAPERS[roll];
+		motif = roll % 2 == 0 ? 1 : 2;
+		dado = 0.9;
+	} else {
+		paper = DINING_PAPERS[roll];
+		motif = 3;
+		dado = 0.95;
+	}
+	c = wall_paper(paper, motif, fp, fine) * (0.9 + 0.1 * big);
+	c = mix(c, plaster, torn);
+	if (kind == 4 && roll == 4) {
+		// 그림 띠: 2.3 m에 짙은 나무 띠 3 cm.
+		c = mix(c, OAK_DADO * 0.8, step(2.3, rise) * step(rise, 2.33));
+	}
+	if (dado > 0.0 && rise < dado) {
+		// 나무 허리(철도 공업지는 짙은 초록 기름칠 허리).
+		c = region == 1 ? vec3(0.50, 0.60, 0.52) * (0.92 + 0.12 * big) : wall_boards(OAK_DADO, fp.x, rise, dado, 0.14);
+		papered = 0.0;
+	}
+	lively = mix(0.8, 1.0 - torn, papered);
+	return wall_grade(c, region);
 }
 
 void fragment() {
@@ -166,7 +304,7 @@ void fragment() {
 		vec2 bc = fp / vec2(0.5, 0.18);
 		bc.x += 0.5 * mod(floor(bc.y), 2.0);
 		vec3 brick = brick_color * (0.82 + 0.3 * fx_hash(floor(bc)));
-		brick = mix(stone_color * 0.95, brick, 1.0 - seam(fract(bc), vec2(0.05, 0.11)));
+		brick = mix(stone_color * 0.95, brick, 1.0 - seam(bc, vec2(0.05, 0.11)));
 		// 칠이 떨어진 자리는 물이 닿는 곳(결정 476 대각뷰): 기단 위 1 m 남짓은 이어진 때와 함께
 		// 군데군데, 그 위는 손바닥만 한 조각만 드물게. 대각뷰에서 벽이 화면의 큰 몫이 되자 1 m 넘는
 		// 얼룩이 위장 무늬로 읽혔다. 벽돌도 집 칠처럼 색 보정을 덜 받아 회색 구멍으로 뜨지 않게 한다.
@@ -185,56 +323,46 @@ void fragment() {
 			vec2 sc = fp / vec2(0.55, 0.25);
 			sc.x += 0.37 * mod(floor(sc.y), 2.0);
 			vec3 stone = stone_color * (0.8 + 0.3 * fx_hash(floor(sc)));
-			base = mix(stone_color * 0.6, stone, 1.0 - seam(fract(sc), vec2(0.04, 0.08)));
+			base = mix(stone_color * 0.6, stone, 1.0 - seam(sc, vec2(0.04, 0.08)));
 		}
 		lively = house_colour * exposed;
 		if (exposed < 0.5 && up < 0.5 && building_id >= 0.0) {
 			// 안쪽 벽: 건물·층마다 바랜 벽지(세로 줄이나 잔무늬), 군데군데 뜯겨 밝은 회벽이 드러남.
 			// 뜯긴 자리에 바깥 칠을 보이면 짙은 칠 집의 방이 위장 무늬가 된다.
-			// 살림방은 갈래·판대로(room_finish): 침실은 잔무늬, 거실은 세로 줄 벽지, 부엌·욕실은
-			// 아래에 타일 허리. 그 밖의 방은 건물·층마다 굴린 벽지 그대로.
+			// 살림방은 갈래·판·지역대로(room_finish, room_wall). 그 밖의 방은 건물·층마다 굴린 벽지 그대로.
 			int rc = room_code(w_pos.xz + n.xz * 0.55, w_pos.y - 0.01, map_size);
-			int kind = rc & 7;
-			int roll = clamp(rc >> 3, 0, 2);
-			float pick = fx_hash(vec2(building_id, floor(w_pos.y / level_h) + 3.0));
-			vec3 paper = kind == 1 ? BED_PAPERS[roll] : (kind == 4 ? LIVING_PAPERS[roll] : PAPERS[int(pick * 4.99)]);
-			bool striped = kind == 4 || (kind != 1 && pick > 0.5);
-			float stripe = striped ? smoothstep(0.35, 0.5, abs(fract(run * 2.4) - 0.5)) : smoothstep(0.62, 0.8, fx_vnoise(fp * 7.0));
-			paper *= 0.9 + 0.12 * stripe;
+			int kind = room_kind(rc);
 			float torn = smoothstep(0.68, 0.74, fx_fbm2(fp * 2.0 + vec2(building_id, 2.0)));
 			// 석회 회벽(반사율 0.6 안팎, 선형). 벽지(PAPERS, 선형)보다 조금 밝아 뜯긴 자리가 읽힌다.
 			vec3 plaster = vec3(0.66, 0.64, 0.60) * (0.92 + 0.1 * fine);
-			base = mix(paper * (0.9 + 0.1 * big), plaster, torn);
-			lively = 1.0 - torn;
-			if (kind == 2 || kind == 3) {
-				// 부엌은 1.2 m, 욕실은 1.5 m까지 15 cm 타일, 그 위 끝에 짙은 띠 4 cm, 위는 칠.
+			if (kind == 0) {
+				float pick = fx_hash(vec2(building_id, floor(w_pos.y / level_h) + 3.0));
+				vec3 paper = PAPERS[int(pick * 4.99)];
+				float stripe = pick > 0.5 ? smoothstep(0.35, 0.5, abs(fract(run * 2.4) - 0.5)) : smoothstep(0.62, 0.8, fx_vnoise(fp * 7.0));
+				paper *= 0.9 + 0.12 * stripe;
+				base = mix(paper * (0.9 + 0.1 * big), plaster, torn);
+				lively = 1.0 - torn;
+			} else {
 				float rise = w_pos.y - floor((w_pos.y - 0.01) / level_h) * level_h;
-				float top = kind == 2 ? 1.2 : 1.5;
-				vec2 tc = vec2(run, rise) / 0.15;
-				vec3 tile = (kind == 2 ? vec3(0.78, 0.78, 0.74) : BATH_TILES[roll]) * (0.95 + 0.07 * fx_hash(floor(tc)));
-				tile *= 1.0 - 0.22 * seam(fract(tc), vec2(0.05, 0.05));
-				vec3 upper = (kind == 2 ? KITCHEN_PAINTS[roll] : vec3(0.78, 0.76, 0.70)) * (0.95 + 0.06 * fine);
-				base = rise < top ? tile : upper;
-				base = mix(base, vec3(0.42, 0.44, 0.43), step(top, rise) * (1.0 - step(top + 0.04, rise)));
-				lively = 0.8;
+				base = room_wall(kind, room_region(rc), room_roll(rc), fp, rise, big, fine, torn, plaster, lively);
 			}
 		}
 	} else if (zone == 1) {
 		// 석재: 큰 돌과 줄눈.
 		vec2 sc = (up > 0.5 ? w_pos.xz : fp) / vec2(0.55, 0.3);
 		sc.x += 0.5 * mod(floor(sc.y), 2.0);
-		base = stone_color * (0.84 + 0.26 * fx_hash(floor(sc))) * (1.0 - 0.3 * seam(fract(sc), vec2(0.04, 0.07)));
+		base = stone_color * (0.84 + 0.26 * fx_hash(floor(sc))) * (1.0 - 0.3 * seam(sc, vec2(0.04, 0.07)));
 		porous = 0.4;
 	} else if (zone == 2) {
 		// 나무: 판자 틈과 결.
 		float k = (up > 0.5 ? w_pos.x : run) / 0.16;
 		base = wood_color * (0.8 + 0.3 * fx_hash(vec2(floor(k), 3.0)));
-		base *= (1.0 - 0.35 * seam(vec2(fract(k), 0.5), vec2(0.07, 0.0))) * (0.9 + 0.15 * fx_vnoise(vec2(k * 2.0, w_pos.y * 9.0)));
+		base *= (1.0 - 0.35 * seam(vec2(k, 0.5), vec2(0.07, 0.0))) * (0.9 + 0.15 * fx_vnoise(vec2(k * 2.0, w_pos.y * 9.0)));
 		porous = 0.8;
 		if (exposed > 0.5 && up < 0.5 && accent.a > 0.0) {
 			// 바깥 나무에 남은 칠: 결 따라 벗겨져 나무가 드러난다.
 			float peel = smoothstep(0.45, 0.6, fx_fbm2(vec2(k * 0.7, w_pos.y * 2.3) + building_id) + (1.0 - accent.a) * 0.5);
-			vec3 painted = accent.rgb * (0.88 + 0.16 * big) * (1.0 - 0.2 * seam(vec2(fract(k), 0.5), vec2(0.07, 0.0)));
+			vec3 painted = accent.rgb * (0.88 + 0.16 * big) * (1.0 - 0.2 * seam(vec2(k, 0.5), vec2(0.07, 0.0)));
 			base = mix(painted, base, peel);
 			lively = 1.0 - peel;
 		}
@@ -265,14 +393,23 @@ void fragment() {
 			vec2 fc = w_pos.xz / vec2(0.95, 3.0);
 			fc.y += 0.37 * fx_hash(vec2(floor(fc.x), 5.0));
 			base = slate_color * 1.05 * (0.92 + 0.12 * fx_hash(floor(fc))) * (0.9 + 0.18 * big);
-			base *= 1.0 - 0.12 * seam(vec2(fract(fc.x), 0.5), vec2(0.03, 0.0));
+			base *= 1.0 - 0.12 * seam(vec2(fc.x, 0.5), vec2(0.03, 0.0));
 			lively = 0.0;
 		} else {
 			float ax = abs(n.x) > abs(n.z) ? w_pos.z : w_pos.x;
 			vec2 tc = vec2(ax / 0.32, w_pos.y / 0.15);
 			tc.x += 0.5 * mod(floor(tc.y), 2.0);
-			base = roof * (0.84 + 0.28 * fx_hash(floor(tc))) * (1.0 - 0.4 * seam(fract(tc), vec2(0.05, 0.16)));
+			base = roof * (0.84 + 0.28 * fx_hash(floor(tc))) * (1.0 - 0.4 * seam(tc, vec2(0.05, 0.16)));
 		}
+		porous = 0.5;
+	} else if (zone == 7) {
+		// 지붕 덮개(building_kit cap: 모임 모서리·맨사드·지붕창 용마루): 그 집 지붕 색을 조금 어둡게.
+		// 함석 색이면 모임 지붕 네 모서리가 짙은 선으로 읽혔다(코디 10-29).
+		vec3 roof = ROOFS[clamp(int(paint.a + 0.5), 0, 7)];
+		roof = mix(roof / 12.92, pow((roof + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), roof));
+		base = roof * 0.72 * (0.9 + 0.15 * big);
+		lively = house_colour * 0.75;
+		rough = 0.8;
 		porous = 0.5;
 	} else {
 		base = metal_color * (0.8 + 0.3 * big);
@@ -321,14 +458,25 @@ void fragment() {
 	// 시야 가림(world_vis와 같은 셈). 지붕은 건물마다 고정 시야를 받는다(바깥벽 칸의 값).
 	vec4 cell = texture(vis, (w_pos.xz - n.xz * 0.1) / map_size);
 	vec2 seen = seen_fixed.x >= 0.0 ? seen_fixed : cell.rg;
-	float lit = mix(1.0, max(seen.r, mix(fx_sight.x, fx_sight.y, seen.g)), mask_on);
+	float reveal = seen.r;
+	float floor_k = mix(fx_sight.x, fx_sight.y, seen.g);
+	float round_k = clamp(round_day, 0.0, 1.0) * exposed;
+	// 해 질 녘과 밤 사이엔 바닥 값을 먼저 올리고 둥근 꼴은 뒤에 — 원뿔 옆선이 반쯤 남지 않게(world_vis와 같다).
+	float round_floor_k = smoothstep(0.0, 0.5, round_k);
+	if (round_k > 0.001) {
+		float near = 1.0 - smoothstep(eye_r * ROUND_IN, eye_r * ROUND_OUT, distance(w_pos.xz, eye_xz));
+		reveal = mix(reveal, near, smoothstep(0.5, 1.0, round_k));
+		floor_k = mix(floor_k, round_floor, round_floor_k);
+	}
+	float lit = mix(1.0, max(reveal, floor_k), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
-	// 기억의 회색도 가림이 켜졌을 때만(가림을 끄면 모두 보이는 것과 같다).
-	vec3 dimmed = mix(vec3(grey), base, mix(1.0, seen.r * 0.6 + 0.4, clamp(mask_on, 0.0, 1.0)));
+	// 기억의 회색도 가림이 켜졌을 때만(가림을 끄면 모두 보이는 것과 같다). 낮 바깥은 색을 덜 뺀다.
+	float keep = mix(reveal * 0.6 + 0.4, reveal * 0.1 + 0.9, round_floor_k);
+	vec3 dimmed = mix(vec3(grey), base, mix(1.0, keep, clamp(mask_on, 0.0, 1.0)));
 	dimmed *= mix(1.0, indoor_dark, (1.0 - exposed) * (1.0 - clamp(cell.b * 2.0, 0.0, 1.0)));
 	ALBEDO = fx_photo(dimmed, fx_fade) * lit;
 	ROUGHNESS = rough;
 	METALLIC = metal * (1.0 - cover);
-	float lamp = cell.b * lamp_gain * mix(0.4, 1.0, seen.r) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
+	float lamp = cell.b * lamp_gain * mix(0.4, 1.0, reveal) * (1.0 - 0.5 * clamp(fx_fade, 0.0, 1.0));
 	EMISSION = lamp_color * (0.25 + 0.75 * grey) * lamp;
 }

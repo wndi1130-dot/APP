@@ -75,6 +75,7 @@ const AMMO_ITEMS: Dictionary = {"ammo_pistol": ["pistol", 6], "ammo_shell": ["sh
 
 var game
 var coal_delivered: float = 0.0
+var wood_delivered: float = 0.0
 var coal_spent: float = 0.0
 var work_started: bool = false
 var fire_left: float = 0.0
@@ -225,7 +226,6 @@ func _finished_work(p, action: String) -> bool:
 
 func update(delta: float) -> void:
 	_tower(delta)
-	_dig_noise(delta)
 	_ladder_falls()
 	_crossing_falls()
 	_after_blows()
@@ -1513,10 +1513,11 @@ func spot_default(p, id: String, verb: String) -> void:
 		"conveyor":
 			game.mission_play.conveyor_card(p)
 		"work_site":
-			if work_started:
+			if game.work.phase(id) in ["working", "hold", "retreat"]:
+				game.work.active_site = id
 				game.hud.work_panel()
 			else:
-				start_work(p)
+				start_work(p, id)
 		"core":
 			core_scene(p, id)
 
@@ -1856,60 +1857,22 @@ func site_clear() -> bool:
 	return true
 
 
-## Coal work site: four carriers and two escorts come down from the train.
-func start_work(p) -> void:
+## The train's safety call opens the work site; its escort comes down first.
+func start_work(_p, id: String = "work_site") -> void:
 	if not game.mission_play.crew_allowed():
 		game.hud.toast("살피기만 · 작업조 안 부름")
 		return
-	if not site_clear():
-		game.hud.toast("측선에 망자")
+	if not game.work.start(id):
 		return
-	if game.allies_alive().size() + 6 > game.ALLY_CAP:
-		game.hud.toast("사람이 너무 많음")
-		return
-	work_started = true
-	var spot: Dictionary = game.data["spots"]["work_site"]
-	spot["state"] = "open"
-	game.view.update_spot("work_site")
-	var doors: Array = game.data["spawns"]["train_door"]
-	var rows: Array = game.work_rows()
-	if rows.is_empty():
-		rows = [
-		{"id": "s2_crew_01", "name": "운송조 1", "role": "worker", "skills": {"strength": 6, "melee": 1, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
-		{"id": "s2_crew_02", "name": "운송조 2", "role": "worker", "skills": {"strength": 6, "melee": 1, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
-		{"id": "s2_crew_03", "name": "운송조 3", "role": "worker", "skills": {"strength": 5, "melee": 1, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
-		{"id": "s2_crew_04", "name": "운송조 4", "role": "worker", "skills": {"strength": 7, "melee": 2, "shooting": 0, "stealth": 1, "search": 1}, "hands": []},
-		{"id": "s2_escort_01", "name": "호위조 1", "role": "escort", "skills": {"strength": 6, "melee": 3, "shooting": 3, "stealth": 1, "search": 1}, "hands": [["shotgun", "factory", 0.8], ["crowbar", "factory", 0.9]]},
-		{"id": "s2_escort_02", "name": "호위조 2", "role": "escort", "skills": {"strength": 6, "melee": 4, "shooting": 1, "stealth": 1, "search": 1}, "hands": [["axe", "factory", 0.9]]},
-		]
-	for i in range(rows.size()):
-		var c: Vector2i = doors[i % doors.size()]
-		var q = game.make_person(rows[i], FieldGrid.center(c) + Vector3(game.rng.randf_range(-0.5, 0.5), 0, 0.3))
-		q.brain = {"job": "dig", "side": i % 2}
-		game.crew.append(q)
-		game.receipt.person("sent", q.pid)
-	game.set_radio("기관사: 작업조 내려간다. 석탄을 퍼 오게 지켜라.", "reply")
-	if game.mission_play.crew_down(p):
-		return
-	game.hud.work_panel()
+	# A depot's crew comes down to the conveyor card (field_mission.gd crew_down) instead of the panel, as before.
+	if game.mission_play.mission.kind != "depot":
+		game.hud.work_panel()
 
 
-## Pickaxes ring once a minute while anyone is digging (wakes the frozen ones).
+## Called by the work clock once a second, using the site's job template.
 func _dig_noise(delta: float) -> void:
-	if not work_started:
-		return
-	if game.mission_play.belt_noise(delta):
-		return
-	var digging := false
-	for p in game.crew:
-		if p.is_alive() and p.action == "dig":
-			digging = true
-	if not digging:
-		return
-	dig_noise_t -= delta
-	if dig_noise_t <= 0.0:
-		dig_noise_t = 60.0
-		game.make_sound(FieldGrid.center(game.data["spots"]["work_site"]["cell"]), SimNoise.Level.NORMAL, "pickaxe")
+	if work_started:
+		game.work.noise(delta, game.mission_play.belt_noise(delta))
 
 
 func coal_left() -> float:
@@ -2383,13 +2346,20 @@ func _near_things(p) -> Array:
 			var spot: Dictionary = game.data["spots"][id]
 			var at := FieldGrid.center(spot["cell"])
 			var d: float = at.distance_to(p.position)
+			if spot["kind"] == "work_site" and d < NEAR_USE + 0.5:
+				var working: bool = game.work.phase(String(id)) in ["working", "hold", "retreat"]
+				if game.work.phase(String(id)) != "done":
+					rows.append([d, "작업조" if working else "작업 시작", go_and_do.bind(p, "spot", id, at), working or spot["state"] == "ready"])
 			var usable: bool = spot["kind"] in ["ladder", "water_tower", "salvage", "inspect", "deep", "conveyor"] or spot["kind"] == "core" and spot["state"] != "taken"
 			if d < NEAR_USE + 0.5 and usable:
 				rows.append([d, spot["name"], go_and_do.bind(p, "spot", id, at)])
 	rows.sort_custom(func(a, b): return a[0] < b[0])
 	var out: Array = []
 	for row in rows.slice(0, 2):
-		out.append({"label": row[1], "call": row[2]})
+		var choice: Dictionary = {"label": row[1], "call": row[2]}
+		if row.size() > 3:
+			choice["work_ready"] = row[3]
+		out.append(choice)
 	return out
 
 

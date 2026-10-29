@@ -6,6 +6,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const Stamina = preload("res://game/sim/stamina.gd")
 const StatusArt = preload("res://game/ui/status_art.gd")
+const FieldWork = preload("res://game/field_work.gd")
 
 
 func _game(laws: Array) -> Node:
@@ -14,6 +15,17 @@ func _game(laws: Array) -> Node:
 	add_child_autofree(game)
 	game.set_process(false)
 	return game
+
+
+## Decision 486: at a clear site the first press has the train offer, the second sends the
+## escort, and the carriers follow FieldWork.ESCORT_LEAD later.
+func _call_crew(game) -> void:
+	var at: Vector3 = game.player.position
+	game.player.position = game.work.position_of("work_site")
+	game.actions.start_work(game.player)
+	game.actions.start_work(game.player)
+	game.player.position = at
+	game.work.update(FieldWork.ESCORT_LEAD)
 
 
 func test_the_value_is_the_listed_one() -> void:
@@ -93,7 +105,7 @@ func test_under_the_law_a_carrier_takes_less_coal_a_trip() -> void:
 	for laws: Array in [[], ["emergency_ration"]]:
 		var game = _game(laws)
 		game.zombies.list.clear()
-		game.actions.start_work(game.player)
+		_call_crew(game)
 		assert_true(game.actions.work_started)
 		var w: Dictionary = game.ai._wagon_with_coal()
 		assert_false(w.is_empty(), "a wagon to dig")
@@ -106,7 +118,7 @@ func test_under_the_law_a_carrier_takes_less_coal_a_trip() -> void:
 func test_the_crews_chip_and_the_work_pane_show_the_law_and_why() -> void:
 	var game = _game(["emergency_ration"])
 	game.zombies.list.clear()
-	game.actions.start_work(game.player)
+	_call_crew(game)
 	game.hud._tick_allies()
 	assert_not_null(game.hud.crew_button.icon, "the law's picture on the crew's chip")
 	game.hud.work_panel()
@@ -119,6 +131,6 @@ func test_the_crews_chip_and_the_work_pane_show_the_law_and_why() -> void:
 	game.hud._close_modal()
 	var plain = _game([])
 	plain.zombies.list.clear()
-	plain.actions.start_work(plain.player)
+	_call_crew(plain)
 	plain.hud._tick_allies()
 	assert_null(plain.hud.crew_button.icon, "no law, no picture")

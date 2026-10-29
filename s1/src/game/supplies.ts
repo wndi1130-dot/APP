@@ -1,6 +1,6 @@
 import { COMMS, P } from './data';
 import type { Comm } from './data';
-import { handsOffered } from './hands';
+import { handsWill, workShare } from './hands';
 import { bump, bumpRel } from './ledger';
 import { lawActive } from './state';
 import type { Game } from './state';
@@ -36,6 +36,11 @@ export function suppliesNeed(g: Game): number {
   return COMMS.reduce((sum, c) => sum + Math.max(0, g.comms[c].pop) / 100 * P.supPer100, 0);
 }
 
+/** 충족률은 백만분의 일로 맞춘다: 기여 배급의 뺄셈 오차가 정확히 절반을 0.4999…로 만들어 위생 문턱을 넘지 않게(PR 969 점검). */
+const coverOf = (got: number, own: number): number => Math.round(got / own * 1e6) / 1e6;
+/** 넉넉함 비교의 허용 오차: 필요량의 세 배를 채우면 쓴 뒤 0.5999…가 남는다. */
+const SUP_EPS = 1e-9;
+
 /** 위생 정산 전에 이번 구간의 몫을 남긴다. 난수를 뽑지 않는다. */
 export function suppliesUse(g: Game): SuppliesTurn | undefined {
   if (!g.supOn) return;
@@ -45,22 +50,23 @@ export function suppliesUse(g: Game): SuppliesTurn | undefined {
   const use = Math.min(Math.max(0, g.sup ?? 0), need);
   const cover: Partial<Record<Comm, number>> = {};
   if (!lawActive(g, 'contribution_ration') || use === need) {
-    for (const c of living) cover[c] = need > 0 ? use / need : 1;
+    for (const c of living) cover[c] = need > 0 ? coverOf(use, need) : 1;
   } else {
-    // handsNow와 같은 실제 일손: 인구·자리비움·일할 나이·손을 내는 뜻을 모두 반영한다.
-    const ranked = living.map(c => ({ c, hands: handsOffered(g, c) }))
+    // 일을 낸 손: 인구 × 일할 나이 몫 × 손을 내는 뜻. 정산 때 쉬러 돌아온 작업조(away)도 그 구간 일을 낸 사람이라
+    // 빼지 않는다(handsOffered는 지금 자리에 있는 손만 세서, 방금 정차에 나간 칸이 뒤로 밀렸다 — PR 969 점검).
+    const ranked = living.map(c => ({ c, hands: Math.max(0, g.comms[c].pop) * workShare(c) * handsWill(g, c) }))
       .sort((a, b) => b.hands - a.hands || COMMS.indexOf(a.c) - COMMS.indexOf(b.c));
     let left = use;
     for (const { c } of ranked) {
       const own = g.comms[c].pop / 100 * P.supPer100;
       const got = Math.min(left, own);
-      cover[c] = got / own;
+      cover[c] = coverOf(got, own);
       left = Math.max(0, left - got);
     }
   }
   bump(g, 'sup', -use, 'sup.use');
   g.supCover = cover;
-  const turn = { need, use, cover, plenty: need > 0 && (g.sup ?? 0) >= P.supPlentyNeeds * need };
+  const turn = { need, use, cover, plenty: need > 0 && (g.sup ?? 0) >= P.supPlentyNeeds * need - SUP_EPS };
   SUPPLIES_PROBE.afterUse?.(g, turn);
   return turn;
 }

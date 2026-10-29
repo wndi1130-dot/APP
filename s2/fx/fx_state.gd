@@ -85,6 +85,10 @@ const KIND_TINT: Dictionary = {
 ## dark cells at 0.24, against the reference's 67%; decision 469 D3).
 const SIGHT_DAY := Vector2(0.55, 0.75)
 const SIGHT_NIGHT := Vector2(0.60, 0.78)
+## By day out of doors the mask is one soft ring round the eye instead (decision
+## 491, 「특정 부분만 밝은 건 별로, 한결같이」): beyond it the ground keeps this
+## much, the same everywhere, so no wedge of the sight cone and no trail shows.
+const SIGHT_OUT_DAY := 0.95
 
 
 ## The sight mask's floors at this much daylight (0 night .. 1 full day).
