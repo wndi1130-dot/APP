@@ -87,7 +87,7 @@ const DOOR_HP: int = 24           # three of the dead through one in about ten s
 const WALL_HP: int = 12
 const BANG_EVERY: float = 1.3     # one of the dead, one blow: as on a house door
 const REACH: float = 1.6
-## User decision 314 (as in Zomboid build 42): a blow wears the door (or its
+## User decision 314 (as in reference game 1): a blow wears the door (or its
 ## wall) only when the one striking has another of the dead this near, itself
 ## counted; one alone just knocks (the sound stays). Draft values: 1.5 cells, 2.
 const CROWD_R: float = 1.5
