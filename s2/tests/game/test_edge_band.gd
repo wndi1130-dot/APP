@@ -3,6 +3,7 @@ extends "res://addons/gut/test.gd"
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
+const BuildPace = preload("res://game/world/build_pace.gd")
 const F = FieldGrid.Floor
 
 
@@ -543,3 +544,25 @@ func test_rails_run_out_where_the_map_draws_them_even_under_a_car() -> void:
 	assert_eq(rails.size(), 2, "west and east, though their last cells cannot be walked")
 	for run: Dictionary in rails:
 		assert_eq([int(run["from"]), int(run["to"])], [20, 20], "the whole rail, as track_view.gd draws it in the map")
+
+
+## A staged build rests between pieces; when the map it builds for is torn down while it
+## rests (the stop left), it stops there: nothing is made after, nothing left without a parent.
+func test_a_band_whose_map_is_torn_down_while_it_rests_makes_nothing_more() -> void:
+	var g := _grid()
+	var parent := Node3D.new()
+	add_child(parent)
+	var pace := BuildPace.new(get_tree(), true)
+	pace.budget_usec = 0
+	var orphans := Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)
+	var done := [false]
+	var run := func() -> void:
+		await EdgeBand.build(parent, g, {"place_id": "test"}, StandardMaterial3D.new(), [Color.WHITE, Color.GRAY, Color.GRAY, Color.GRAY, Color.DIM_GRAY, Color.WHITE, Color.WHITE, Color.GRAY], pace)
+		done[0] = true
+	run.call()
+	assert_false(done[0], "the build rests before its woods")
+	parent.free()
+	for i in 30:
+		await get_tree().process_frame
+	assert_true(done[0], "the build ended instead of building on a freed root")
+	assert_eq(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT), orphans, "no piece left without a parent")
