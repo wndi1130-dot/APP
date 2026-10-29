@@ -53,12 +53,12 @@ describe('달리는 배경', () => {
     expect(SEASON_ROWS).toHaveLength(24);
     expect(SEASON_ROWS.every(row => /^K[1-6]$/.test(row.region))).toBe(true);
     expect(SEASON_ROWS.map(row => row.region)).toEqual([
-      ...Array(4).fill('K1'), ...Array(5).fill('K2'), 'K3', ...Array(4).fill('K4'), ...Array(4).fill('K5'), ...Array(6).fill('K6'),
+      ...Array(5).fill('K1'), ...Array(4).fill('K2'), 'K3', ...Array(4).fill('K4'), ...Array(4).fill('K5'), ...Array(6).fill('K6'),
     ]);
   });
 
   it.each([
-    [5, 'k2', 'wet', true], [17, 'k5', 'frost', true], [22, 'k6', 'snow', false],
+    [6, 'k2', 'wet', true], [17, 'k5', 'frost', true], [22, 'k6', 'snow', false],
   ] as const)('기온 켠 판 %i구간의 지역·땅·잎을 계절표에서 읽는다', (seg, kit, ground, leaves) => {
     const g = createS1cGame('bg-season');
     g.climate = true;
@@ -104,7 +104,7 @@ describe('달리는 배경', () => {
     vi.stubGlobal('document', { createElement: () => new TestNode() });
     const g = createS1cGame('bg-dom');
     g.stop = null;
-    g.seg = 5;
+    g.seg = 6;
     g.climate = true;
     const sky = backdropEl(g, false, 0) as unknown as TestNode;
     expect(sky.attrs.class).toBe('sky sky--overcast sky--kit-k2 sky--ground-wet sky--falls-none has-leaves');
@@ -120,7 +120,7 @@ describe('달리는 배경', () => {
     expect(old.attrs.style).toBe(sky.attrs.style);
     // 앱을 다시 열어 정차 날씨를 못 본 채 달려도 마지막 정차(lastStop)의 하늘이 이어진다.
     g.climate = true;
-    g.seg = 5;
+    g.seg = 6;
     g.lastStop = { ...(g.lastStop ?? {}), weather: 'sleet' } as NonNullable<typeof g.lastStop>;
     expect((backdropEl(g, false, 0) as unknown as TestNode).attrs.class).toBe('sky sky--sleet sky--kit-k2 sky--ground-wet sky--falls-rain has-leaves');
   });
