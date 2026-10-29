@@ -226,17 +226,17 @@ const REGIONS: Dictionary = {
 # K1 is the reference: the user's low cold sun (2026-10-17) stays as it is there.
 const REGION_LOOK: Dictionary = {
 	"K1": {"light": Color(1.0, 1.0, 1.0), "shade": Color(1.0, 1.0, 1.0), "sat": 1.0, "haze": 0.0},
-	"K2": {"light": Color(0.99, 1.02, 0.97), "shade": Color(0.95, 1.02, 1.0), "sat": 0.88, "haze": 0.08},
+	"K2": {"light": Color(1.01, 1.03, 0.94), "shade": Color(0.96, 1.03, 0.98), "sat": 0.88, "haze": 0.08},
 	"K3": {"light": Color(0.97, 1.0, 1.05), "shade": Color(0.92, 0.98, 1.08), "sat": 1.03, "haze": -0.03},
 	"K4": {"light": Color(1.06, 1.03, 0.9), "shade": Color(0.97, 1.03, 0.97), "sat": 1.02, "haze": -0.04},
-	"K5": {"light": Color(1.04, 1.02, 0.93), "shade": Color(0.97, 1.02, 0.99), "sat": 0.98, "haze": 0.0},
-	"K6": {"light": Color(1.03, 1.0, 0.95), "shade": Color(0.98, 0.99, 1.03), "sat": 0.92, "haze": 0.04},
-	"K7": {"light": Color(1.03, 1.01, 0.94), "shade": Color(1.0, 1.0, 1.0), "sat": 0.9, "haze": 0.0},
+	"K5": {"light": Color(1.02, 1.0, 0.97), "shade": Color(1.01, 0.98, 0.99), "sat": 0.9, "haze": 0.02},
+	"K6": {"light": Color(0.99, 1.0, 1.02), "shade": Color(0.95, 1.0, 1.05), "sat": 0.86, "haze": 0.06},
+	"K7": {"light": Color(1.06, 1.02, 0.9), "shade": Color(1.0, 0.99, 0.96), "sat": 0.95, "haze": -0.02},
 	"K8": {"light": Color(1.03, 0.99, 0.96), "shade": Color(1.02, 0.96, 1.04), "sat": 0.96, "haze": 0.02},
 	"K9": {"light": Color(0.98, 1.0, 1.03), "shade": Color(0.94, 0.98, 1.06), "sat": 0.85, "haze": 0.02},
-	"K10": {"light": Color(1.04, 1.0, 0.94), "shade": Color(0.92, 0.97, 1.1), "sat": 1.0, "haze": 0.02},
+	"K10": {"light": Color(1.04, 1.0, 0.94), "shade": Color(0.95, 1.03, 1.0), "sat": 1.02, "haze": 0.02},
 	"K11": {"light": Color(1.07, 1.02, 0.88), "shade": Color(0.93, 0.99, 1.07), "sat": 1.0, "haze": 0.03},
-	"K12": {"light": Color(1.0, 1.01, 1.03), "shade": Color(0.94, 0.99, 1.06), "sat": 0.93, "haze": 0.02},
+	"K12": {"light": Color(0.99, 1.01, 1.05), "shade": Color(0.97, 1.0, 1.03), "sat": 0.9, "haze": 0.04},
 }
 const DEFAULT_REGION := "K1"
 
