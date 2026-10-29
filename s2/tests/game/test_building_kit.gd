@@ -152,7 +152,8 @@ func test_pieces_keep_grid_heights_spans_and_cell_footprint() -> void:
 
 
 func test_vertex_colours_hold_only_zone_bits_and_weather_flag() -> void:
-	var zone_count: int = _catalog()["zones"].size()
+	# 장부에 있는 구역 번호만(6은 building_view의 커튼 몫이라 조각엔 없고, 지붕 덮개 cap은 7).
+	var known: Array = (_catalog()["zones"] as Dictionary).values().map(func(z: Variant) -> int: return int(z))
 	for id: String in _catalog()["assets"]:
 		var seen: Dictionary = {}
 		var bad := 0
@@ -167,7 +168,7 @@ func test_vertex_colours_hold_only_zone_bits_and_weather_flag() -> void:
 		zones.sort()
 		assert_eq(zones, (_asset(id)["zones"] as Array).map(func(z: Variant) -> int: return int(z)), "%s 칠 구역" % id)
 		for z: int in zones:
-			assert_lt(z, zone_count, "%s 구역 번호 %d" % [id, z])
+			assert_true(known.has(z), "%s 구역 번호 %d" % [id, z])
 
 
 func test_every_face_winds_toward_its_normal() -> void:
