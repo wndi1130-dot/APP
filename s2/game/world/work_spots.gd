@@ -3,7 +3,17 @@ extends RefCounted
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const MAX_PATH_M: float = 90.0
+## Places whose work site loads stacked wood (decision 486): the houses first, the other
+## places without coal wagons once the crew runs pass there as well.
+const WOOD_JOB_PLACES: Array[String] = ["houses"]
+const JOB_PATH_M: float = 60.0
+## A pile nearer the doors than this stands at the platform's edge (houses_03 has two, 3 and
+## 7 m out), where the crew would not go out at all: taken only when no farther pile is in reach.
+const JOB_MIN_M: float = 15.0
+const WOOD_PILES: Dictionary = {"firewood_pile": "장작 더미", "lumber_stack": "목재 더미",
+	"firewood_stack": "장작 더미", "firewood_rick": "장작 단", "sleeper_stack": "침목 더미"}
 const BLOCK_SEGMENTS: int = 9
 const GROVE_LIMIT: int = 3
 ## Field steps in fifths of a metre: 7/5 is within 1% of a diagonal's root two.
@@ -26,6 +36,7 @@ static func dress(data: Dictionary, seg: int, run_seed: int) -> void:
 	if not has_inner:
 		groves.append_array(_map_groves(data, field))
 	data["fell_groves"] = groves
+	_wood_job(data, field)
 	if seg < 0 or not depot_segments(run_seed, floori(float(seg) / float(BLOCK_SEGMENTS))).has(seg):
 		return
 	var sites: Array = data.get("work_sites", []) as Array
@@ -250,6 +261,67 @@ static func _nearer(a: Dictionary, b: Dictionary) -> bool:
 	if float(a["path_m"]) == float(b["path_m"]):
 		return int(a["order"]) < int(b["order"])
 	return float(a["path_m"]) < float(b["path_m"])
+
+
+## A place without coal wagons gets stacked wood at its work site: what the place's wood
+## table leaves after the map's salvage (FieldWork.budget), so the stop's sum is the table's.
+## The map's own site stays where the crew walks to it within JOB_PATH_M; else, or with
+## none, the site moves beside the nearest wood pile. A site with a job already is kept.
+static func _wood_job(data: Dictionary, field: PackedInt32Array) -> void:
+	var place: String = String(data.get("place_kind", ""))
+	if not WOOD_JOB_PLACES.has(place) or FieldWork.wagon_coal(data) > FieldWork.EMPTY:
+		return
+	var spots: Dictionary = data.get("spots", {}) as Dictionary
+	var site: Dictionary = spots.get("work_site", {}) as Dictionary
+	if site.has("job"):
+		return
+	var amount: float = float(FieldWork.WOOD_TABLE.get(place, 0)) - float(FieldWork.budget(data)["wood"])
+	if amount <= FieldWork.EMPTY:
+		return
+	var g: FieldGrid = data["grid"] as FieldGrid
+	var path_m: float = _metres(field, g, site["cell"]) if site.has("cell") else -1.0
+	if path_m < 0.0 or path_m > JOB_PATH_M:
+		var pile: Dictionary = _wood_pile(data, field)
+		if pile.is_empty():
+			return
+		site = {"kind": "work_site", "name": pile["name"], "state": "closed",
+			"cell": pile["cell"], "zone_rect": pile["zone"]}
+	site["job"] = "wood_stack"
+	site["amount"] = amount
+	spots["work_site"] = site
+	data["spots"] = spots
+
+
+## The walkable cell beside a ground-floor wood pile that is best to work from: out of doors
+## first, then JOB_MIN_M or more on foot, then room in its row for four carriers two metres
+## apart, then the shorter walk. Empty when no pile is within JOB_PATH_M.
+static func _wood_pile(data: Dictionary, field: PackedInt32Array) -> Dictionary:
+	var g: FieldGrid = data["grid"] as FieldGrid
+	var best: Dictionary = {}
+	var best_rank: float = INF
+	for prop: Dictionary in data.get("props", []) as Array:
+		var kind: String = String(prop.get("kind", ""))
+		if not WOOD_PILES.has(kind) or int(prop.get("level", 0)) != 0:
+			continue
+		var rect: Rect2i = prop["rect"] as Rect2i
+		for y: int in range(rect.position.y - 1, rect.end.y + 1):
+			for x: int in range(rect.position.x - 1, rect.end.x + 1):
+				var cell: Vector2i = Vector2i(x, y)
+				var metres: float = _metres(field, g, cell)
+				if rect.has_point(cell) or metres < 0.0 or metres > JOB_PATH_M:
+					continue
+				var room: int = 0
+				for dx: int in range(-2, 3):
+					if g.people_can_walk(cell + Vector2i(dx, 0)):
+						room += 1
+				# Each rule outweighs every later one: the walk stays under 100 m.
+				var rank: float = (2000.0 if g.indoor(cell) else 0.0) + (1000.0 if metres < JOB_MIN_M else 0.0) \
+					+ 100.0 * (5 - room) + metres
+				if rank < best_rank:
+					best_rank = rank
+					best = {"cell": cell, "name": String(WOOD_PILES[kind]) + " 작업 구역",
+						"zone": rect.grow(2).intersection(Rect2i(0, 0, g.width, g.height))}
+	return best
 
 
 static func _food_site(data: Dictionary, seg: int, run_seed: int, field: PackedInt32Array) -> Dictionary:
