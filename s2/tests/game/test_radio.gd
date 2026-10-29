@@ -154,3 +154,11 @@ func test_a_horde_coming_in_near_you_is_called_and_rings_loud() -> void:
 	game._tick_radio(game.RADIO_HISS + 0.01)
 	assert_true(game.radio.contains("기관사"))
 	assert_eq(game.radio_rings[-1]["r"], game.RADIO_RING_URGENT)
+
+
+## The driver forecasts to the chief politely; up the signal box the same
+## no-more line is the chief's own reading, plain (decisions 486).
+func test_the_driver_says_there_are_no_more_politely() -> void:
+	game.director.budget_left = 0
+	assert_eq(game.driver_forecast(0.0, 0), "더 오는 기척은 없습니다.")
+	assert_eq(game.director.forecast(0.0, 1, game.clock), "더 오는 기척은 없다.", "from the signal box")
