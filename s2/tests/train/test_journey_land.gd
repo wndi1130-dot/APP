@@ -153,6 +153,23 @@ func test_a_piece_worked_out_on_a_worker_is_the_piece_worked_out_here() -> void:
 		assert_almost_eq(packed[i], want[i], 0.0001, "float %d of the 3x4 matrix" % i)
 
 
+## A window change while the land is first being worked out, before it is shown: worked
+## out again for the new window, and shown.
+func test_a_window_change_before_the_land_is_shown_still_shows_it() -> void:
+	var host := FakeTrain.new()
+	host.view_mode = "section"
+	add_child_autofree(host)
+	var j: Node3D = Journey.attach(host, host, LOOK, 1, {"seed": 4, "remember": false})
+	await wait_process_frames(2)
+	host.view_mode = "diag"
+	j.call("_fill")
+	j.next_window()
+	assert_false(j.visible)
+	await wait_until(func() -> bool: return j.visible, 5.0)
+	assert_true(j.visible, "shown after the window change")
+	assert_gte(j.laid_to - j.travelled, host.train_length() + Journey.MARGIN)
+
+
 ## Worked out on workers or here, the same land in the same order.
 func test_the_land_worked_out_ahead_is_the_land_laid_here() -> void:
 	var lands: Array = []

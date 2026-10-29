@@ -89,6 +89,9 @@ var _planned_to: float = -MARGIN
 var _shown_once: bool = false
 ## Work the pieces out here on the main thread as they are needed (o.sync).
 var _sync: bool = false
+## Workers of pieces let go (a window change) still running: reaped once done, so the
+## main thread never waits on them.
+var _stale: Array = []
 
 
 static func enabled() -> bool:
@@ -139,7 +142,8 @@ func _process(delta: float) -> void:
 		_fill()
 	if not _shown_once:
 		# First shown: the pieces are being worked out; the land shows once it reaches
-		# past the train, never half laid.
+		# past the train, never half laid (worked out again if a window change let them go).
+		_plan_to(_front())
 		_make_planned(MAKE_BUDGET_USEC)
 		if laid_to < travelled + _train_length() + MARGIN:
 			visible = false
@@ -180,6 +184,7 @@ func step(delta: float) -> void:
 	sleepers.position.x = -fposmod(travelled, SLEEPER_STEP)
 	_plan_to(_front())
 	_make_planned(MAKE_BUDGET_USEC)
+	_reap()
 	# Never short of land past the train: wait for the next piece worked out (at the run
 	# speed AHEAD_M is worked out well before it is needed; a test stepping straight
 	# through waits here).
@@ -317,17 +322,30 @@ func _make_next(wait: bool) -> bool:
 	return true
 
 
-## The pieces worked out and not laid yet go (their workers finish first).
+## The pieces worked out and not laid yet go; what is planned starts again where the
+## land laid ends. Their workers still running are reaped later (_reap).
 func _drop_planned() -> void:
 	for p: Dictionary in _planned:
 		if int(p["task"]) >= 0:
-			WorkerThreadPool.wait_for_task_completion(int(p["task"]))
+			_stale.append(int(p["task"]))
 	_planned.clear()
+	_planned_to = laid_to
+	_reap()
+
+
+func _reap() -> void:
+	for task: int in _stale.duplicate():
+		if WorkerThreadPool.is_task_completed(task):
+			WorkerThreadPool.wait_for_task_completion(task)
+			_stale.erase(task)
 
 
 func _exit_tree() -> void:
 	# A worker still on a piece finishes before the land goes.
 	_drop_planned()
+	for task: int in _stale:
+		WorkerThreadPool.wait_for_task_completion(task)
+	_stale.clear()
 
 
 func _next_section() -> void:
