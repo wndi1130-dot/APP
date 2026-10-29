@@ -59,9 +59,9 @@ const Wear = preload("res://game/sim/wear.gd")
 ## stake is whittled from a plank in six.
 const KEY_TIME: float = 1.5
 ## A door that will not give, met on the way (open_door_on_way), is told again
-## (its note and its sound) only after this many ms: walking into it asks every
-## frame (field_game _drive).
-const SHUT_TELL_MS: int = 800
+## (its note and its sound) only after this many seconds of the field's clock:
+## walking into it asks every frame (field_game _drive).
+const SHUT_TELL_S: float = 0.8
 const BOARD_TIME: float = 8.0
 const BOARD_HP: int = 3
 const STAKE_TIME: float = 6.0
@@ -88,7 +88,7 @@ var dig_noise_t: float = 0.0
 var unload_t: float = 0.0
 ## Short-lived reservations, separate from saved AI state. No actor or callback is retained.
 var ongoing: Dictionary = {}
-## A door's no told on the way: "x,y,why" -> Time ms it was told (SHUT_TELL_MS).
+## A door's no told on the way: "x,y,why" -> the field's clock when it was told (SHUT_TELL_S).
 var shut_told: Dictionary = {}
 ## A work of the hands the player asked for while in a blow or a shove waits
 ## here and is done once as soon as the blow is over (decision 420: one body
@@ -363,13 +363,13 @@ func open_door_on_way(p, c: Vector2i) -> void:
 
 ## The player told on the way that this door will not give ("boarded" or
 ## "locked"): its note and the ear's sound (field_audio shut_fast), once in
-## SHUT_TELL_MS for the same door and reason.
+## SHUT_TELL_S for the same door and reason.
 func _tell_shut(c: Vector2i, why: String, note: String) -> void:
 	var key := "%d,%d,%s" % [c.x, c.y, why]
-	var now_ms: int = Time.get_ticks_msec()
-	if now_ms - int(shut_told.get(key, -SHUT_TELL_MS)) < SHUT_TELL_MS:
+	var now: float = float(game.clock.elapsed)
+	if now - float(shut_told.get(key, -SHUT_TELL_S)) < SHUT_TELL_S:
 		return
-	shut_told[key] = now_ms
+	shut_told[key] = now
 	game.hud.toast(note)
 	if game.audio != null:
 		game.audio.shut_fast(c, why)

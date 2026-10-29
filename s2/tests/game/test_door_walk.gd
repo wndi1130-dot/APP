@@ -2,8 +2,9 @@ extends "res://addons/gut/test.gd"
 ## Walking into a locked door is as a tap on it (field_game _meets_door,
 ## field_actions open_door_on_way; the coordinator's call of 2026-10-30): with
 ## its key the walk opens it, with no sound the dead hear (P12); without,
-## 「잠김」 and the ear's rattle — once, however long the stick is held
-## against it, as for a boarded one. A companion's way goes round as before.
+## 「잠김」 and the ear's rattle — once in SHUT_TELL_S of the field's clock,
+## not once a frame the stick is held against it, as for a boarded one. A
+## companion's way goes round as before.
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
@@ -77,7 +78,15 @@ func test_walking_into_a_locked_door_with_its_key_opens_it_quietly() -> void:
 	p.add_item(FieldItems.key_for(int(game.grid.doors[c]["building"])))
 	var a = game.audio
 	a.played.clear()
-	_walk(60)   # three seconds: up to it, the key's turn, and on
+	# Three seconds of the stick held at it: up to it, the key's turn, and on.
+	var turns := 0
+	var was := ""
+	for i in range(60):
+		game._update_person(p, 0.05)
+		if String(p.action) == "door" and was != "door":
+			turns += 1
+		was = String(p.action)
+	assert_eq(turns, 1, "the key's turn begins once, not over again while the stick is held")
 	assert_eq(String(game.grid.doors[c]["state"]), "open", "the walk opened it with its key")
 	assert_eq(_notes("잠김"), 0, "nothing to say")
 	assert_false(a.played.has("door_locked"))
