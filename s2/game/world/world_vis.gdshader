@@ -673,9 +673,11 @@ void fragment() {
 		base = mix(base, bare_ground(kind, ground_detail, base, world_pos.xz, grain, ground_dx, ground_dy), bare_k);
 	}
 	// A furnished room's floor under its roof (room_finish; 0 elsewhere keeps the kind's colour).
+	// The floor itself only, at a storey's height: what lies on it (a coat, a map, the empty mark)
+	// is under the roof and faces up as well, and keeps its own colour.
 	vec2 room_px = fwidth(world_pos.xz);
 	float unseen_k = 1.0;
-	if (sky < 0.5 && up > 0.9) {
+	if (sky < 0.5 && up > 0.9 && abs(world_pos.y - 3.0 * round(world_pos.y / 3.0)) < 0.003) {
 		int rc = room_code(world_pos.xz, world_pos.y + 0.05, map_size);
 		if (rc > 0) {
 			vec3 tone;
