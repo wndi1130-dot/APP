@@ -401,6 +401,8 @@ var pick_t: float = 0.0
 var crowd: float = 0.0                 # weighted dead near the player (for the bed)
 var last_tag_group: String = ""        # what the last make_sound played (tests)
 var tag_knocks: int = 0                # TAG_VOICES sounds played (tests)
+var hammering: Dictionary = {}         # place (dm) -> the hammer's knock chain there (_hammer): one a place
+var hammer_chains: int = 0             # knock chains begun, each its own number
 var held: bool = false                 # the depart note is up
 var departing: bool = false            # '떠난다' plays its own whistle
 var played: Array = []                 # groups played, in order (tests)
@@ -1931,7 +1933,10 @@ func on_sound(at: Vector3, level: int, tag: String) -> void:
 		last_tag_group = String(TAG_VOICES[tag][0])
 		var loud_tag: float = clampf(0.35 + 0.2 * level, 0.3, 1.0)
 		if tag == "hammer":
-			_hammer(at, loud_tag)
+			var place := Vector3i((at * 10.0).round())
+			hammer_chains += 1
+			hammering[place] = hammer_chains
+			_hammer(at, loud_tag, place, hammer_chains)
 		else:
 			_tag_voice(TAG_VOICES[tag], at, loud_tag * clampf(1.0 - at.distance_to(game.player.position) / 60.0, 0.0, 1.0))
 		return
@@ -1988,13 +1993,20 @@ func _tag_knock(v: Array, at: Vector3, lin: float) -> void:
 ## Nails going in: a knock now and again for as long as the boarding at `at`
 ## (the work the rule sound started) goes on, then no more — not on through
 ## another work of the hands after it. Each knock as loud as the player hears
-## it from where they are then.
-func _hammer(at: Vector3, loud: float) -> void:
+## it from where they are then. One chain a place (hammering): a boarding
+## begun again there before the next knock knocks at once as its own chain,
+## and the old one stops at its next turn, so it is never twice the pace.
+func _hammer(at: Vector3, loud: float, place: Vector3i, chain: int) -> void:
+	if int(hammering.get(place, 0)) != chain:
+		return
 	if game == null or game.ended or not _boarding_at(at):
+		hammering.erase(place)
 		return
 	_tag_knock(TAG_VOICES["hammer"], at, loud * clampf(1.0 - at.distance_to(game.player.position) / 60.0, 0.0, 1.0))
 	if is_inside_tree():
-		get_tree().create_timer(randf_range(float(HAMMER_GAP[0]), float(HAMMER_GAP[1])), false).timeout.connect(_hammer.bind(at, loud))
+		get_tree().create_timer(randf_range(float(HAMMER_GAP[0]), float(HAMMER_GAP[1])), false).timeout.connect(_hammer.bind(at, loud, place, chain))
+	else:
+		hammering.erase(place)
 
 
 ## Someone is at the boarding of the door or window at `at` (field_actions
