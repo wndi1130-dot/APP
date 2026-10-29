@@ -8,14 +8,16 @@ shader_type spatial;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap, repeat_enable, hint_default_white;
 uniform vec4 albedo : source_color = vec4(1.0);
 uniform bool use_vertex_color = false;
-// Per-instance paint: linear RGB, alpha = strength. Zero leaves the old path intact.
-instance uniform vec4 tint_body = vec4(0.0);
-instance uniform vec4 tint_trim = vec4(0.0);
-// Furniture paint sets (furniture_tints.gd). Batched props (MultiMesh) carry
-// set number + 1 in INSTANCE_CUSTOM.r; 0 means no paint.
+// Furniture paint sets (furniture_tints.gd): linear RGB, alpha = strength. Batched
+// props (MultiMesh) carry set number + 1 in INSTANCE_CUSTOM.r; 0 means no paint.
 uniform bool tint_from_custom = false;
 uniform vec4 tint_sets_body[4];
 uniform vec4 tint_sets_trim[4];
+// Mean linear luminance of the body (x) and trim (y) the paint covers, measured
+// per model (furniture_tints.gd paint_ref), so the paint keeps the grain but only
+// a quarter power of the model's own brightness (TINT_KEEP).
+uniform vec2 tint_ref = vec2(0.18);
+const float TINT_KEEP = 0.25;
 uniform float roughness_base : hint_range(0.0, 1.0) = 0.9;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0;
 // How much water darkens it: cloth, wood and brick high, metal and glass low.
@@ -53,22 +55,37 @@ void fragment() {
 	if (use_vertex_color) {
 		base *= COLOR.rgb;
 		vec4 paint = vec4(0.0);
-		vec4 body = tint_body;
-		vec4 trim = tint_trim;
+		vec4 body = vec4(0.0);
+		vec4 trim = vec4(0.0);
 		int set_index = int(v_tint_set + 0.5) - 1;
-		if (body.a <= 0.0 && set_index >= 0 && set_index < 4) {
+		if (set_index >= 0 && set_index < 4) {
 			body = tint_sets_body[set_index];
 			trim = tint_sets_trim[set_index];
 		}
+		float ref = tint_ref.y;
 		if (COLOR.a >= 0.75) {
 			paint = body;
+			ref = tint_ref.x;
 		} else if (COLOR.a >= 0.25) {
 			paint = trim;
 		}
 		if (paint.a > 0.0) {
-			// Preserve grain/shading relative to 18% linear grey; keep deep shadows.
-			float shade = clamp(dot(base, vec3(0.2126, 0.7152, 0.0722)) / 0.18, 0.0, 2.0);
-			base = mix(base, paint.rgb * shade, clamp(paint.a, 0.0, 1.0));
+			// The set's brightness times a quarter power of the part's own mean against 18% grey:
+			// light wood a little lighter, dark iron a little darker, never white or black. Trim
+			// stays darker than the body but keeps half its brightness, so a model that is mostly
+			// trim still reads on a dark floor. Grain and shading are relative to the part's own
+			// mean (deep shadows stay, highlights stop at 1.6), and the share the paint leaves
+			// keeps the model's hue at the same brightness.
+			vec3 lw = vec3(0.2126, 0.7152, 0.0722);
+			float r = max(ref, 0.004);
+			float want = dot(paint.rgb, lw) * pow(r / 0.18, TINT_KEEP);
+			if (COLOR.a < 0.75) {
+				float body_want = dot(body.rgb, lw) * pow(max(tint_ref.x, 0.004) / 0.18, TINT_KEEP);
+				want = clamp(want, 0.5 * body_want, body_want);
+			}
+			float shade = clamp(dot(base, lw) / r, 0.0, 1.6);
+			float k = want / max(dot(paint.rgb, lw), 0.0001);
+			base = mix(base * (want / r), paint.rgb * (k * shade), clamp(paint.a, 0.0, 1.0));
 		}
 	}
 	base = fx_model_grade(base, grade_saturation, grade_value, grade_cool, grade_cool_mix);
