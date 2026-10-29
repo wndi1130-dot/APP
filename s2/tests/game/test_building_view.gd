@@ -4,6 +4,8 @@ extends "res://addons/gut/test.gd"
 ## 회색 상자로 돌아가는 것을 본다.
 
 const BuildingView = preload("res://game/world/building_view.gd")
+const BuildingForms = preload("res://game/world/building_forms.gd")
+const BuildingCensus = preload("res://tools/building_census.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const SulehufMap = preload("res://game/world/sulehuf_map.gd")
@@ -513,10 +515,10 @@ func _l_block(stove: bool = false) -> Dictionary:
 		"upper_rects": [], "stoves": stoves, "stairs": [], "rooftops": [{"building": 0}]}
 
 
-func _roofs_of(p: Dictionary, id: String) -> Array:
+func _roofs_of(p: Dictionary, id: String, b: int = 0) -> Array:
 	var out := []
 	for row: Dictionary in p["roofs"]:
-		if row["b"] == 0 and row["id"] == id:
+		if row["b"] == b and row["id"] == id:
 			out.append(row["xf"])
 	return out
 
@@ -581,3 +583,407 @@ func test_rows_of_one_building_give_one_form_in_any_order() -> void:
 		looks.append(BuildingView.plan(data)["looks"][0]["roof"])
 	assert_eq(looks[0], looks[1], "줄 순서가 꼴을 바꾸지 않는다")
 	assert_eq(looks[0], "flat", "두 줄의 넓이 합(208칸)으로 큰 공장")
+
+
+func test_non_dictionary_building_rows_are_ignored() -> void:
+	var data: Dictionary = _shed(true)
+	data["rooms"] = []
+	data["rooftops"] = []
+	var clean: Dictionary = BuildingView.plan(data)
+	for key: String in ["buildings", "upper_rects", "rooms", "rooftops"]:
+		data[key].push_front(null)
+		data[key].append("not a row")
+		data[key].append(7)
+	assert_eq(BuildingView.plan(data), clean, "입력 표의 사전 아닌 줄은 배치에 영향을 주지 않는다")
+
+
+func test_town_paint_indices_follow_the_shared_palette() -> void:
+	assert_eq(BuildingView.PAINTS, BuildingForms.TOWN_PAINTS)
+	for b: int in range(32):
+		var paint: Color = BuildingView.paint_for(b)
+		var look: Dictionary = BuildingForms.pick({"id": b, "name": "살림집"}, "houses_01", paint)
+		var expected: Color = BuildingView.PAINTS[int(look["paint_index"])]
+		expected.a = paint.a
+		assert_eq(paint, expected)
+
+
+func _roof_case(shape: String, name: String = "살림집", size: Vector2i = Vector2i(14, 8), want_dormer: bool = false) -> Dictionary:
+	var r: Rect2i = Rect2i(Vector2i(2, 2), size)
+	var chosen: int = -1
+	for b: int in range(512):
+		var row: Dictionary = {"id": b, "name": name, "rect": r}
+		var look: Dictionary = BuildingForms.pick(row, "houses_01", BuildingView.paint_for(b))
+		if look["silhouette"] == shape and (not want_dormer or int(look["dormers"]) > 0):
+			chosen = b
+			break
+	assert_gte(chosen, 0, "표의 후보에서 표본 번호를 찾는다")
+	var grid: FieldGrid = FieldGrid.new(size.x + 5, size.y + 5)
+	_walls(grid, r)
+	for y: int in range(r.position.y, r.end.y):
+		for x: int in range(r.position.x, r.end.x):
+			grid.building[grid.index(Vector2i(x, y))] = chosen
+	var door: Vector2i = Vector2i(r.position.x + 2, r.end.y - 1)
+	_door(grid, door)
+	grid.doors[door]["building"] = chosen
+	return {"grid": grid, "levels": {0: grid}, "place_id": "houses_01",
+		"buildings": [{"id": chosen, "name": name, "rect": r}], "stoves": [], "stairs": []}
+
+
+func test_hip_roof_uses_two_caps_and_shortens_the_gable_body() -> void:
+	var data: Dictionary = _roof_case("hip")
+	var b: int = int(data["buildings"][0]["id"])
+	var p: Dictionary = BuildingView.plan(data)
+	assert_eq(_roof_ids(p, b).count("roof_hip_end"), 2)
+	assert_false(_roof_ids(p, b).has("roof_gable_end"))
+	var bodies: Array = _roofs_of(p, "roof_gable", b)
+	assert_eq(bodies.size(), 1)
+	if bodies.size() != 1:
+		return
+	var body: Transform3D = bodies[0]
+	assert_almost_eq(body.basis.get_scale().x, 14.0 - 8.0, 0.001, "몸통은 길이에서 경간을 뺀 만큼")
+	var caps: Array = _roofs_of(p, "roof_hip_end", b)
+	for cap: Transform3D in caps:
+		assert_almost_eq(cap.basis.get_scale().y, body.basis.get_scale().y, 0.001)
+		assert_almost_eq(cap.basis.get_scale().z, body.basis.get_scale().z, 0.001)
+		assert_almost_eq(absf(cap.origin.x - body.origin.x), 3.0, 0.001, "용마루 끝끼리 맞닿는다")
+	for size: Vector2i in [Vector2i(8, 8), Vector2i(8, 10)]:
+		var square: Dictionary = _roof_case("hip", "살림집", size)
+		var square_id: int = int(square["buildings"][0]["id"])
+		var pyramid: Dictionary = BuildingView.plan(square)
+		assert_eq(_roof_ids(pyramid, square_id).count("roof_hip_end"), 2)
+		assert_false(_roof_ids(pyramid, square_id).has("roof_gable"), "길이 <= 경간이면 끝 둘만으로 피라미드")
+	var rotated: Dictionary = _roof_case("hip", "살림집", Vector2i(8, 14))
+	var rotated_id: int = int(rotated["buildings"][0]["id"])
+	var turned: Dictionary = BuildingView.plan(rotated)
+	var rotated_body: Transform3D = _roofs_of(turned, "roof_gable", rotated_id)[0]
+	assert_almost_eq(rotated_body.basis.get_euler().y, PI * 0.5, 0.001)
+	assert_almost_eq(rotated_body.basis.get_scale().x, 6.0, 0.001)
+
+
+func test_shed_and_half_hip_have_only_their_own_end_walls() -> void:
+	var data: Dictionary = _roof_case("shed", "차고", Vector2i(6, 5))
+	var b: int = int(data["buildings"][0]["id"])
+	var p: Dictionary = BuildingView.plan(data)
+	assert_eq(_roof_ids(p, b).count("roof_shed"), 1)
+	assert_eq(_roof_ids(p, b).count("roof_shed_wall"), 1)
+	assert_eq(_roof_ids(p, b).count("roof_shed_side"), 2)
+	assert_false(_roof_ids(p, b).has("roof_gable_end"))
+	assert_false(_roof_ids(p, b).has("roof_gable"))
+	var shed: Transform3D = _roofs_of(p, "roof_shed", b)[0]
+	assert_almost_eq(shed.basis.get_euler().y, 0.0, 0.001, "독립 외쪽은 북쪽이 높다")
+	data = _roof_case("half_hip")
+	b = int(data["buildings"][0]["id"])
+	p = BuildingView.plan(data)
+	assert_eq(_roof_ids(p, b).count("roof_half_hip_end"), 2)
+	assert_eq(_roof_ids(p, b).count("roof_half_hip_wall"), 2)
+	assert_false(_roof_ids(p, b).has("roof_gable_end"), "위 1/3까지 올라간 박공 벽을 남기지 않는다")
+
+
+func test_shed_high_wall_stops_at_wall_length_in_both_orientations() -> void:
+	for size: Vector2i in [Vector2i(6, 5), Vector2i(5, 6)]:
+		for center: Vector2 in [Vector2(INF, INF), Vector2(100.0, 100.0)]:
+			var p: Dictionary = {"roofs": []}
+			var g: Dictionary = BuildingView._plan_gable(p, Rect2i(Vector2i(2, 2), size), 3.0, 0, 1.0, "shed", center)
+			var wall: Transform3D = _roofs_of(p, "roof_shed_wall", 0)[0]
+			var roof: Transform3D = _roofs_of(p, "roof_shed", 0)[0]
+			var wall_length: float = float(maxi(size.x, size.y)) - 2.0 * BuildingView.FACE_IN
+			assert_almost_eq(wall.basis.get_scale().x, wall_length, 0.001)
+			assert_almost_eq(roof.basis.get_scale().x - wall.basis.get_scale().x, 2.0 * BuildingView.OVERHANG, 0.001)
+			for end: float in [-0.5, 0.5]:
+				var at: Vector3 = wall * Vector3(end, 0.0, -5.0)
+				var local: Vector2 = BuildingView._roof_local(g, Vector2(at.x, at.z))
+				assert_lte(absf(local.x), wall_length * 0.5 + 0.001, "높은 벽은 처마 끝까지 늘어나지 않는다")
+
+
+func test_hip_and_mansard_chimney_bases_follow_the_actual_roof_plane() -> void:
+	for shape: String in ["hip", "mansard"]:
+		var data: Dictionary = _roof_case(shape, "헛간" if shape == "mansard" else "살림집")
+		var b: int = int(data["buildings"][0]["id"])
+		var r: Rect2i = data["buildings"][0]["rect"]
+		# 모임의 끝 경사가 옆 경사보다 낮은 곳: 예전 박공 식이면 공중에 뜨는 표본.
+		data["stoves"] = [{"building": b, "cell": Vector2i(r.end.x - 2, r.position.y + 2)}]
+		var p: Dictionary = BuildingView.plan(data)
+		var chimneys: Array = _roofs_of(p, "chimney", b)
+		assert_eq(chimneys.size(), 1)
+		if chimneys.size() != 1:
+			continue
+		var chimney: Transform3D = chimneys[0]
+		var k: float = (float(r.size.y) - 2.0 * BuildingView.FACE_IN) / BuildingView.ROOF_SPAN
+		var pitch: float = float(p["looks"][b]["pitch"])
+		var center: Vector2 = Vector2(r.position) + Vector2(r.size) * 0.5
+		var cross: float = absf(chimney.origin.z - center.y)
+		var rise: float = k * BuildingView.ROOF_RISE
+		var height: float = rise - cross * tan(deg_to_rad(20.0))
+		if shape == "hip":
+			var body: float = float(r.size.x - r.size.y)
+			var run: float = (float(r.size.y) - 2.0 * BuildingView.FACE_IN + 2.0 * BuildingView.OVERHANG) * 0.5
+			var from_tip: float = maxf(0.0, absf(chimney.origin.x - center.x) - body * 0.5)
+			var end_height: float = rise - from_tip / run * k * (BuildingView.ROOF_RISE + BuildingView.ROOF_EAVE * BuildingView.ROOF_TAN)
+			height = minf(rise - cross * BuildingView.ROOF_TAN, end_height)
+		var surface: float = BuildingView.LEVEL_H + pitch * height
+		assert_almost_eq(chimney.origin.y, surface, 0.2, "%s 굴뚝 밑은 지붕 면에 묻힌다" % shape)
+
+
+func _matching_home_ids() -> Array[int]:
+	var buckets: Dictionary = {}
+	for b: int in range(4096):
+		var row: Dictionary = {"id": b, "name": "살림집", "rect": Rect2i(2, 2, 8, 6)}
+		var signature: String = BuildingForms.signature(BuildingForms.pick(row, "houses_01", BuildingView.paint_for(b)))
+		if not buckets.has(signature):
+			buckets[signature] = []
+		buckets[signature].append(b)
+		if (buckets[signature] as Array).size() == 5:
+			var result: Array[int] = []
+			result.assign(buckets[signature])
+			return result
+	assert_true(false, "같은 초기 꼴 다섯 채의 번호를 찾는다")
+	return []
+
+
+func _five_homes(joined: bool = false) -> Dictionary:
+	var ids: Array[int] = _matching_home_ids()
+	var grid: FieldGrid = FieldGrid.new(60, 12)
+	var rows: Array = []
+	for i: int in range(ids.size()):
+		var r: Rect2i = Rect2i(2 + i * 10, 2, 8, 6)
+		_walls(grid, r)
+		for y: int in range(r.position.y, r.end.y):
+			for x: int in range(r.position.x, r.end.x):
+				grid.building[grid.index(Vector2i(x, y))] = ids[i]
+		var door: Vector2i = Vector2i(r.position.x + 2, r.end.y - 1)
+		_door(grid, door)
+		grid.doors[door]["building"] = ids[i]
+		var row: Dictionary = {"id": ids[i], "name": "살림집", "rect": r}
+		if joined:
+			row["row_group"] = "terrace-a"
+		rows.append(row)
+	return {"grid": grid, "levels": {0: grid}, "buildings": rows, "place_id": "houses_01", "stoves": [], "stairs": []}
+
+
+func _same_neighbours(p: Dictionary, b: int) -> int:
+	var r: Rect2i = p["footprints"][b]
+	var center: Vector2 = Vector2(r.position) + Vector2(r.size) * 0.5
+	var signature: String = BuildingForms.signature(p["looks"][b])
+	var count: int = 0
+	for other: int in p["looks"]:
+		if other == b or BuildingForms.signature(p["looks"][other]) != signature:
+			continue
+		var q: Rect2i = p["footprints"][other]
+		if center.distance_to(Vector2(q.position) + Vector2(q.size) * 0.5) <= 24.0:
+			count += 1
+	return count
+
+
+func test_five_matching_homes_avoid_near_repeats_deterministically() -> void:
+	var data: Dictionary = _five_homes()
+	var p: Dictionary = BuildingView.plan(data)
+	assert_eq(p["looks"].size(), 5)
+	var changed: int = 0
+	for row: Dictionary in data["buildings"]:
+		var b: int = int(row["id"])
+		var initial: Dictionary = BuildingForms.pick(row, "houses_01", BuildingView.paint_for(b))
+		changed += 1 if BuildingForms.signature(initial) != BuildingForms.signature(p["looks"][b]) else 0
+		assert_lte(_same_neighbours(p, b), 2, "24 m 안 같은 서명 이웃은 둘 이하")
+		assert_eq(p["looks"][b]["paint_index"], initial["paint_index"], "이 표본은 실루엣만 돌려 풀린다")
+	assert_gt(changed, 0, "원래부터 다른 꼴인 표본으로 통과시키지 않는다")
+	data["buildings"].reverse()
+	var reversed: Dictionary = BuildingView.plan(data)
+	assert_eq(p["looks"], reversed["looks"])
+	assert_eq(p["roofs"], reversed["roofs"])
+
+
+func _look_neighbourhood(template: Dictionary, centres: Array[Vector2i]) -> Dictionary:
+	var p: Dictionary = {"looks": {}, "footprints": {}, "row_groups": {}}
+	for b: int in range(centres.size()):
+		p["looks"][b] = template.duplicate(true)
+		p["footprints"][b] = Rect2i(centres[b] - Vector2i.ONE, Vector2i(2, 2))
+		p["row_groups"][b] = null
+	return p
+
+
+func test_star_neighbours_rotate_a_shape_because_of_the_centres_overflow() -> void:
+	var original: Dictionary = BuildingForms.pick({"id": 0, "name": "살림집", "rect": Rect2i(0, 0, 8, 6)},
+		"houses_01", BuildingView.paint_for(0))
+	var centres: Array[Vector2i] = [Vector2i.ZERO, Vector2i(-20, 0), Vector2i(20, 0), Vector2i(0, -20), Vector2i(0, 20)]
+	var p: Dictionary = _look_neighbourhood(original, centres)
+	var neighbours: Dictionary = {0: [1, 2, 3, 4], 1: [0], 2: [0], 3: [0], 4: [0]}
+	for a: int in range(1, centres.size()):
+		assert_lte(Vector2(centres[a]).length(), BuildingView.LOOK_RADIUS)
+		for b: int in range(a + 1, centres.size()):
+			assert_gt(Vector2(centres[a]).distance_to(Vector2(centres[b])), BuildingView.LOOK_RADIUS)
+	assert_eq(BuildingView._look_conflicts(p["looks"], neighbours, {0: true, 1: true, 2: true}, 3, original), 1,
+		"자기 이웃은 하나뿐: 가운데 창에 네 번째를 더하는 overflow만 벌점")
+	var ids: Array[int] = [0, 1, 2, 3, 4]
+	BuildingView._avoid_near_looks(p, ids)
+	assert_ne(p["looks"][3]["silhouette"], original["silhouette"], "overflow가 실제 꼴을 돌린다")
+	for b: int in ids:
+		assert_eq(p["looks"][b]["paint_index"], original["paint_index"])
+		assert_eq(p["looks"][b]["neighbor_conflicts"], 0)
+		assert_lte(_same_neighbours(p, b), 2)
+
+
+func test_dense_single_shape_barns_cycle_paint_and_report_exhausted_candidates() -> void:
+	var original: Dictionary = BuildingForms.pick({"id": 0, "name": "헛간", "rect": Rect2i(0, 0, 8, 6)},
+		"houses_01", BuildingView.paint_for(0))
+	assert_eq(original["candidates"], ["mansard"])
+	assert_eq((BuildingForms.PALETTES[original["palette"]] as Array).size(), 2)
+	var centres: Array[Vector2i] = [Vector2i(0, 0), Vector2i(3, 0), Vector2i(6, 0), Vector2i(9, 0), Vector2i(12, 0), Vector2i(15, 0)]
+	var p: Dictionary = _look_neighbourhood(original, centres)
+	var ids: Array[int] = [0, 1, 2, 3, 4, 5]
+	BuildingView._avoid_near_looks(p, ids)
+	var paints: Dictionary = {}
+	var unresolved: int = 0
+	for b: int in ids:
+		var look: Dictionary = p["looks"][b]
+		assert_eq(look["silhouette"], "mansard", "후보 소진에도 용도 밖 꼴은 넣지 않는다")
+		paints[look["paint_index"]] = true
+		var expected: Color = (BuildingForms.PALETTES[look["palette"]][int(look["paint_index"])] as Color).srgb_to_linear()
+		expected.a = (original["paint"] as Color).a
+		assert_eq(look["paint"], expected)
+		unresolved += 1 if int(look["neighbor_conflicts"]) > 0 else 0
+	assert_eq(paints.size(), 2, "실루엣 하나를 다 쓰면 칠을 돌린다")
+	assert_gt(unresolved, 0, "모든 후보 소진을 neighbor_conflicts에 남긴다")
+
+
+func test_row_group_exempts_matching_homes_without_exempting_missing_groups() -> void:
+	var data: Dictionary = _five_homes(true)
+	var p: Dictionary = BuildingView.plan(data)
+	var most: int = 0
+	for row: Dictionary in data["buildings"]:
+		var b: int = int(row["id"])
+		var initial: Dictionary = BuildingForms.pick(row, "houses_01", BuildingView.paint_for(b))
+		assert_eq(BuildingForms.signature(p["looks"][b]), BuildingForms.signature(initial))
+		most = maxi(most, _same_neighbours(p, b))
+	assert_gt(most, 2, "연립 예외가 실제로 같은 꼴을 보존한다")
+	assert_false(BuildingForms.same_row_group(null, null))
+	assert_false(BuildingForms.same_row_group("", ""))
+	assert_false(BuildingForms.same_row_group("terrace-a", "terrace-b"))
+	assert_true(BuildingForms.same_row_group(0, 0), "숫자 row_group 0도 명시된 무리")
+	assert_false(BuildingForms.same_row_group(0, "0"), "서로 다른 자료형을 합치지 않는다")
+
+
+func test_census_reads_actual_dormers_and_row_group_exemption() -> void:
+	for joined: bool in [false, true]:
+		var data: Dictionary = _five_homes(joined)
+		var p: Dictionary = BuildingView.plan(data)
+		var rows: Array = BuildingCensus.rows_of("houses_01", data, p)
+		var metrics: Dictionary = BuildingCensus.roof_metrics(rows)
+		assert_eq(rows.size(), 5)
+		assert_eq(metrics["status"], "collected")
+		assert_lte(int(metrics["near_same_max"]), 0 if joined else 2)
+		assert_eq(metrics["near_same_ge3_buildings"], 0)
+		assert_gte(float(metrics["map_form_median"]), 1.0)
+		for row: Dictionary in rows:
+			assert_eq(int(row["dormers"]), _roofs_of(p, "roof_dormer", int(row["b"])).size())
+	assert_eq(BuildingCensus.roof_metrics([{"map": "old", "b": 0}])["status"], "not_collected")
+
+
+func test_narrow_homes_drop_their_requested_dormers() -> void:
+	for short_side: int in [5, 6, 7]:
+		for shape: String in ["gable", "hip"]:
+			var data: Dictionary = _roof_case(shape, "살림집", Vector2i(8, short_side), true)
+			var row: Dictionary = data["buildings"][0]
+			var b: int = int(row["id"])
+			assert_gt(int(BuildingForms.pick(row, "houses_01", BuildingView.paint_for(b))["dormers"]), 0)
+			var p: Dictionary = BuildingView.plan(data)
+			assert_eq(_roofs_of(p, "roof_dormer", b).size(), 0, "짧은 변 5~7칸 집의 돌출 지붕창을 막는다")
+			assert_eq(p["looks"][b]["dormers"], 0, "현황 셈에도 실제 배치 수 0")
+
+
+func test_dormer_peaks_and_backs_fit_narrow_and_wide_homes() -> void:
+	var peak: float = 1.0 + 0.65 * tan(deg_to_rad(35.0)) + 0.06
+	var back: float = peak / tan(deg_to_rad(35.0)) + 0.1
+	for size: Vector2i in [Vector2i(8, 6), Vector2i(14, 8), Vector2i(6, 8), Vector2i(8, 14)]:
+		for shape: String in ["gable", "hip", "mansard"]:
+			for pitch: float in [0.85, 1.0, 1.3, 1.7]:
+				var p: Dictionary = {"roofs": []}
+				var g: Dictionary = BuildingView._plan_gable(p, Rect2i(Vector2i(2, 2), size), 3.0, 0, pitch, shape)
+				var count: int = BuildingView._plan_dormers(p, g, 0, 3, Vector2(INF, INF))
+				# 용마루 방향 규칙(가로가 세로의 0.75배 이상이면 가로)에 따라 6×8은 경간이 8칸 쪽이다.
+				if float(g["span"]) * 0.32 < BuildingView.DORMER_REAR:
+					assert_eq(count, 0, "경간이 좁은 8×6 집에는 지붕창을 놓지 않는다")
+				elif mini(size.x, size.y) == 8:
+					assert_gt(count, 0, "14×8에서는 꼭대기 검사 표본을 실제로 만든다")
+				for dormer: Transform3D in _roofs_of(p, "roof_dormer", 0):
+					var local: Vector2 = BuildingView._roof_local(g, Vector2(dormer.origin.x, dormer.origin.z))
+					var ridge: Vector2 = BuildingView._roof_world(g, Vector2(local.x, 0.0))
+					var tip: Vector3 = dormer * Vector3(0.0, peak, 0.0)
+					assert_lte(tip.y, BuildingView._roof_height(g, ridge) + 0.001, "덮개 꼭대기까지 용마루 아래")
+					var rear: Vector3 = dormer * Vector3(0.0, peak, -back)
+					assert_lte(rear.y, BuildingView._roof_height(g, Vector2(rear.x, rear.z)) + 0.001, "뒤 박공과 덮개가 본 지붕에 묻힌다")
+
+
+func test_dormers_reject_the_roof_just_below_the_full_rear_depth() -> void:
+	var minimum: float = (1.0 + 0.65 * tan(deg_to_rad(35.0)) + 0.06) / tan(deg_to_rad(35.0)) + 0.2
+	for shape: String in ["gable", "hip", "mansard"]:
+		for delta: float in [-0.001, 0.001]:
+			var p: Dictionary = {"roofs": []}
+			var g: Dictionary = BuildingView._plan_gable(p, Rect2i(2, 2, 14, 8), 3.0, 0, 1.0, shape)
+			g["span"] = (minimum + delta) / 0.32
+			g["k"] = float(g["span"]) / BuildingView.ROOF_SPAN
+			var count: int = BuildingView._plan_dormers(p, g, 0, 1, Vector2(INF, INF))
+			assert_eq(count, 0 if delta < 0.0 else 1, "뒤 처마 끝 깊이 문턱: %s" % shape)
+
+
+func test_dormers_sit_on_the_slope_and_keep_clear_of_the_chimney() -> void:
+	for shape: String in ["gable", "hip", "mansard"]:
+		var data: Dictionary = _roof_case(shape, "시청 본관" if shape == "mansard" else "살림집", Vector2i(14, 8), true)
+		var b: int = int(data["buildings"][0]["id"])
+		data["stoves"] = [{"building": b, "cell": Vector2i(10, 5)}]
+		var p: Dictionary = BuildingView.plan(data)
+		var dormers: Array = _roofs_of(p, "roof_dormer", b)
+		assert_gt(dormers.size(), 0)
+		assert_lte(dormers.size(), 3)
+		assert_eq(dormers.size(), int(p["looks"][b]["dormers"]))
+		var chimney: Transform3D = _roofs_of(p, "chimney", b)[0]
+		var pitch: float = float(p["looks"][b]["pitch"])
+		var k: float = (8.0 - 2.0 * BuildingView.FACE_IN) / BuildingView.ROOF_SPAN
+		var slope: float = tan(deg_to_rad(20.0 if shape == "mansard" else 35.0))
+		for dormer: Transform3D in dormers:
+			var surface: float = BuildingView.LEVEL_H + pitch * (k * BuildingView.ROOF_RISE - absf(dormer.origin.z - 6.0) * slope)
+			assert_almost_eq(dormer.origin.y, surface, 0.002)
+			assert_gt(Vector2(dormer.origin.x, dormer.origin.z).distance_to(Vector2(chimney.origin.x, chimney.origin.z)), 1.2)
+		assert_eq(_pieces(p, "roof_dormer").size(), 0, "지붕창도 roofs 한 경로로 굽는다")
+
+
+func test_new_roofs_bake_to_one_node_and_follow_cut_away_and_near() -> void:
+	# 새 GLB 굽기·가져오기 뒤 실행한다. 시야 구멍은 같은 건물 셰이더를 사용한다.
+	for shape: String in ["hip", "half_hip", "mansard", "shed"]:
+		var data: Dictionary = _roof_case(shape, "차고" if shape == "shed" else ("헛간" if shape == "mansard" else "살림집"),
+			Vector2i(6, 5) if shape == "shed" else Vector2i(14, 8))
+		var b: int = int(data["buildings"][0]["id"])
+		var kit: Node3D = _kit(data)
+		assert_eq(kit.roofs.size(), 1)
+		var roof: MeshInstance3D = kit.roofs[b]
+		assert_eq(roof.mesh.get_surface_count(), 1, "한 지붕 메시·재질")
+		assert_eq(roof.material_override, kit.material, "시야 가림 구멍을 쓰는 공용 셰이더")
+		kit.show_levels(0)
+		_stand_at(kit, Vector2i(100, 100))
+		kit.cut_away(b, 0)
+		_settle(kit)
+		assert_false(roof.visible)
+		kit.cut_away(-1, 0)
+		_stand_at(kit, Vector2i(100, 100))
+		assert_true(roof.visible)
+		var r: Rect2i = data["buildings"][0]["rect"]
+		_stand_at(kit, Vector2i(r.position.x + 2, r.end.y + 1))
+		assert_false(roof.visible, "가까이 가면 새 지붕과 끝 벽도 함께 걷는다")
+		assert_eq(roof.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_ON, "새 지붕도 박공처럼 그림자를 드리운다")
+
+
+func test_census_measures_map_median_and_crowded_windows() -> void:
+	var rows: Array = []
+	for b: int in range(4):
+		rows.append({"map": "a", "b": b, "center": [float(b * 10), 0.0], "silhouette": "gable",
+			"signature": "same", "form_combo": "gable|normal|render|0"})
+	rows.append({"map": "b", "b": 0, "center": [0.0, 0.0], "silhouette": "gable", "signature": "first", "form_combo": "gable|normal|render|0"})
+	rows.append({"map": "b", "b": 1, "center": [10.0, 0.0], "silhouette": "hip", "signature": "second", "form_combo": "hip|normal|render|1"})
+	var metrics: Dictionary = BuildingCensus.roof_metrics(rows)
+	assert_eq(metrics["silhouette_count"], 2)
+	assert_almost_eq(float(metrics["dominant_silhouette_share"]), 5.0 / 6.0, 0.001)
+	assert_eq(metrics["map_form_median"], 1.5)
+	assert_eq(metrics["map_form_min"], 1)
+	assert_eq(metrics["near_same_max"], 3)
+	assert_eq(metrics["near_same_ge3_buildings"], 2)
+	# 한 용도의 줄만 모아도 다른 용도의 이웃을 잃지 않는다.
+	assert_eq(BuildingCensus.roof_metrics([rows[1]], rows)["near_same_max"], 3)

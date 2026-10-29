@@ -29,7 +29,8 @@ const CSS_SIZE := Vector2(330, 286)
 ## The stores and their marks (hud_icons.gd).
 const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"], ["cloth", "it_cloth"]]
 const ICON: Dictionary = {"scrap": "it_nails", "wood": "it_plank", "parts": "gear", "cloth": "it_cloth"}
-## Rows: the parts first, then the open recipes (train_workshop.gd shown).
+## Rows: parts, then open recipes, including x1/x4's five transport tools.
+## Caps stay visible through the existing row's why tooltip and dimmed key.
 const ROW_TOP: float = 66.0
 const ROW_H: float = 54.0
 ## A key: 44 tall (81 game px, over the 48 dp of field_hud.gd MIN_TOUCH).
@@ -59,7 +60,12 @@ static func model(g0: Dictionary) -> Dictionary:
 	var tgt: int = TrainWorkshop.target(g0) if not dom.is_empty() else TrainWorkshop.TARGET0
 	var now: Dictionary = TrainWorkshop.now(g0)
 	var rows: Array = []
-	for id: String in TrainWorkshop.shown(g0):
+	var listed: Array[String] = TrainWorkshop.shown(g0)
+	for id: String in TrainWorkshop.ORDER:
+		# The thing on the line keeps its row (its progress and its take-back key)
+		# even after its technique stops: the line still holds it and every other key waits on it.
+		if not listed.has(id) and String(now["id"]) != id:
+			continue
 		var r: Dictionary = TrainWorkshop.RECIPES[id]
 		var cost: Array = []
 		var rc: Dictionary = r["cost"]

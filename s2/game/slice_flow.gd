@@ -34,6 +34,7 @@ extends Node
 const FieldGame = preload("res://game/field_game.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
+const RouteBands = preload("res://game/train/route_bands.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
@@ -68,6 +69,8 @@ const StopCinema = preload("res://game/stop_cinema.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
+const Journey = preload("res://game/train/journey/journey.gd")
+const Corridor = preload("res://game/train/journey/journey_corridor.gd")
 const PaperMotion = preload("res://game/ui/paper_motion.gd")
 const STOP_CINEMA_SCENE := preload("res://scenes/stop_cinema.tscn")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
@@ -181,6 +184,9 @@ var research: Control = null       # the research pane, where the workshop's sta
 var cost: Control = null           # what a stretch costs and why, where the rooms stand (cost_pane.gd)
 var shop_seg: int = -1             # the stretch the workshop last worked (once each leaving)
 var outside: MeshInstance3D = null  # the world outside the train (fx/outside_view.gd)
+## The land going by outside the train (결정 495, journey/journey.gd): shown on the
+## diagonal view only (train_scene view_mode); visuals/journey_enabled turns it off.
+var journey: Node3D = null
 ## The stop seen from the train (결정 421-3): the scene from the roof to the
 ## look down (stop_cinema.gd), the field made ready under it (stop_loader.gd),
 ## and that field, built and standing still, till the field step shows it.
@@ -381,6 +387,16 @@ func _field_place() -> String:
 	return String(opts.get("place", ""))
 
 
+## The band of the slice's stop on stretch `seg` (decision 494). The field's map, when it is a
+## stop's own map (the first stop's, which the slice plays on FIRST_SEG), is that stop, and
+## the stops after it count on from there; any other map takes the stretch's stop.
+func _stop_band(seg: int) -> String:
+	var own: Array = RouteBands.place_stop(FieldMaps.resolve(_field_place()))
+	if own.is_empty():
+		return RouteBands.stop_band("prologue", seg)
+	return RouteBands.stop_band(String(own[0]), int(own[1]) + seg - FIRST_SEG)
+
+
 ## 「정차 고르기」: the roof of the running train, not the card at once. The
 ## card comes up with the station behind it (card_time).
 func _show_stop_cinema() -> void:
@@ -398,6 +414,8 @@ func _show_stop_cinema() -> void:
 	c.remember = not opts.has("cinema_seen")
 	# The weather the field will open with, worn by the scene over it.
 	c.stop_opts = _field_opts()
+	# The same land on the way in as went by on the train's screen (결정 495 4절).
+	c.corridor_kit = Corridor.make(journey.handoff() if is_instance_valid(journey) else {}, maxi(1, int(STEPS[step][2]) - 1), int(opts.get("seed", 1)))
 	if loader.has_data():
 		c.data = loader.data
 	else:
@@ -701,6 +719,9 @@ func _drop_paper() -> void:
 ## none waits the train goes on if the main key was pulled. A way the port does not
 ## take yet is said and its card put aside, so the slice goes on.
 func _paper_chosen(g: Dictionary) -> void:
+	# 7b 「키트가 바뀌는 때」: a card done, the land outside moves on to its next window.
+	if is_instance_valid(journey):
+		journey.next_window()
 	if g.has("_turn_port_error"):
 		push_warning("slice: paper put aside, " + String(g["_turn_port_error"]))
 		var uid: int = int((train_g["cards"] as Array)[0]["uid"])
@@ -914,6 +935,7 @@ func _show_train(phase: String, seg: int) -> void:
 	var rules: Dictionary = TrainRules.load_default()
 	rules["train"]["phase"] = phase
 	rules["train"]["seg"] = seg
+	rules["view"]["region"] = _stop_band(seg + 1 if phase == "travel" else seg)
 	for c: String in (rules.get("comms", {}) as Dictionary).keys():
 		if (train_g.get("comms", {}) as Dictionary).has(c):
 			var sit: Array = St.situation(train_g, train_t, c)
@@ -938,6 +960,9 @@ func _show_train(phase: String, seg: int) -> void:
 	var cam: Camera3D = train.get("camera")
 	if cam != null:
 		outside = OutsideView.attach(cam, look, phase == "travel")
+	journey = null
+	if Journey.enabled():
+		journey = Journey.attach(train, train, look, seg, {"seed": int(opts.get("seed", 1))})
 	weather.falls = "none" if String(look["falls"]) == "none" else String(look["falls"])
 	weather.drift_on = int(look["snow_level"]) > 0
 	weather.light = clampf(float(look["lum"]) * 0.85 + 0.15, 0.2, 1.0)
@@ -1092,6 +1117,8 @@ func _enamel(name_label: Label3D) -> Control:
 
 func _process(_delta: float) -> void:
 	marks.queue_redraw()
+	if is_instance_valid(journey):
+		journey.quiet = _journey_quiet()
 	# Under the stop scene: the snow over the screen runs with the train, and
 	# the field is built in longer slices once the camera is at rest.
 	if is_instance_valid(cinema):
@@ -1117,6 +1144,17 @@ func _process(_delta: float) -> void:
 		var s: Vector2 = cam.unproject_position(at)
 		p.size = p.get_combined_minimum_size()
 		p.position = s - p.size * 0.5
+
+
+## A decision card or a room's pane is up: the land outside goes on, but no new
+## outside event begins (presentation_motion.md 7b: they never get in the way of reading).
+func _journey_quiet() -> bool:
+	if is_instance_valid(paper) or (card != null and card != home):
+		return true
+	for p: Variant in [shop, research, mods, cost]:
+		if is_instance_valid(p) and (p as CanvasItem).visible:
+			return true
+	return false
 
 
 ## The train's own screen: the picked car's pane at the right under the
@@ -1400,6 +1438,7 @@ func _field_opts() -> Dictionary:
 	# building it from the pick gives the same).
 	o["act"] = "prologue"
 	o["act_progress"] = prologue_progress(int(STEPS[step][2]))
+	o["region"] = _stop_band(int(STEPS[step][2]))
 	# A look asked of the slice for check shots (opts "look", as outside_look
 	# reads it) is the stop's as well: the train, the stop scene and the field alike.
 	var want: Dictionary = opts.get("look", {})

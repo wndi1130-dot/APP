@@ -25,6 +25,30 @@ func _pane(g: Dictionary, t: Dictionary) -> Control:
 	return pane
 
 
+func test_furnish_tier_name_sits_beside_the_car_name() -> void:
+	var sample: Array = StopPickCard.sample()
+	var g: Dictionary = sample[0]
+	var t: Dictionary = sample[1]
+	g["dom"] = TrainDom.start()
+	g["dom"].merge({"wood": 50, "scrap": 50, "cloth": 10, "insulated": ["tail1"]}, true)
+	for id: String in ["w1", "w5"]:
+		g["dom"]["techs"][id] = {"stage": "done", "defect": false, "progress": 3, "need": 3}
+	var p := _pane(g, t)
+	for tier: int in 4:
+		if tier > 0:
+			assert_true(TrainMods.start_job(g, "furnish", "tail1", tier))
+			TrainMods.advance_job(g, 20.0)
+			p.refresh(g, t)
+		await wait_process_frames(1)
+		var label := p.find_child("Furnish", true, false) as Label
+		var name_label := p.find_child("Name", true, false) as Label
+		assert_eq(label.text, ["누더기", "손봄", "갖춤", "북유럽식"][tier])
+		assert_gt(label.position.x, name_label.position.x + name_label.size.x)
+		assert_lte(label.position.x + label.size.x, (p.find_child("Fold", true, false) as Button).position.x)
+	var engine := {"id": "engine", "comm": "engine", "name": "기관실"}
+	assert_eq(CarPane.model(g, t, engine)["furnish"], "")
+
+
 func test_the_pane_says_the_cars_own_numbers() -> void:
 	var s: Array = StopPickCard.sample()
 	var g: Dictionary = s[0]

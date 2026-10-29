@@ -801,7 +801,8 @@ export function resolveStop(g: Game, go: boolean): StopResult | null {
     // 맡긴 수색의 고정 덤은 체류와 무관하게 +1. 감축법의 산출 벌은 덤에도 붙는다.
     const cut = lawActive(g, 'emergency_ration') ? lawTechRes(g, 'emergency_ration').haulMult ?? 1 : 1;
     addSupplies(g, P.supSearch * cut, 'sup.search');
-    notes.push(`생필품 ${Math.round((g.sup ?? 0) - beforeSup)}을(를) 실어 왔다.`);
+    const gotSup = Math.round((g.sup ?? 0) - beforeSup);
+    if (gotSup > 0) notes.push(`생필품 ${gotSup}을(를) 실어 왔다.`);
   }
   notes.push(...domesticStop(g, false, dead.length)); // S1c 내정 훅
   stop.result = { passed: false, gains, injured: injuredOnly, dead, notes };
@@ -987,7 +988,7 @@ function biteTick(g: Game): void {
   g.hiddenBites = keep;
 }
 
-/** 식량이 0이어도 사람들은 얼마간 버틴다. 버틴 구간이 길어지면 굶어 죽는 사람이 나온다(제안, 프로스트펑크식). */
+/** 식량이 0이어도 사람들은 얼마간 버틴다. 버틴 구간이 길어지면 굶어 죽는 사람이 나온다(제안, 참고 게임 2식). */
 export const HUNGER_GRACE = 3;
 
 export function hungerTick(g: Game, notes: string[]): void {

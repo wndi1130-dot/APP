@@ -86,8 +86,8 @@ const PORTRAIT_W: float = 290.0
 ## px from the icons, from the squad's orders, from one line to the next and
 ## from the right thumb's pads under it.
 const MESSAGE_GAP: float = 10.0
-# State icons: a column down the right edge, under the zoom keys, as in Project
-# Zomboid (field_system 82). Build 116 (user): at 58x38 with 15pt words nobody
+# State icons: a column down the right edge, under the zoom keys, as in reference
+# game 1 (field_system 82). Build 116 (user): at 58x38 with 15pt words nobody
 # saw them. User 2026-10-12: pictures, not words: a round plate each
 # (status_art.gd), 72 across ('a little smaller' than the 80 first tried), or
 # 64 or 80 from the settings.
@@ -2027,9 +2027,10 @@ func _tick_allies() -> void:
 		for c in game.crew:
 			if c.is_alive():
 				alive += 1
-		crew_button.text = "작업조 %d\n석탄 %.1f" % [alive, game.actions.coal_delivered]
+		var coal: bool = game.work.job(game.work.active_site)["yield"] == "coal"
+		crew_button.text = "작업조 %d\n%s %.1f" % [alive, "석탄" if coal else "목재", game.actions.coal_delivered if coal else game.actions.wood_delivered]
 		# The ration law's picture on the chip: the crew hauls less a trip (decision 430 ②).
-		crew_button.icon = StatusArt.texture("ration", false, false, STATUS_ART_SIZE) if game.haul_mult() < 1.0 else null
+		crew_button.icon = StatusArt.texture("ration", false, false, STATUS_ART_SIZE) if game.haul_mult() < 1.0 and coal else null
 	_place_allies()
 
 
@@ -2187,6 +2188,7 @@ func _rebuild_context(p) -> void:
 	var more: int = context_rows.size() - 1
 	var first: String = String(context_rows[0]["label"])
 	context_button.tooltip_text = first
+	context_button.modulate = Color.WHITE if context_rows[0].get("work_ready", true) else Color(0.5, 0.5, 0.5)
 	var count: String = "+%d" % more if more > 0 else ""
 	if context_more.text != count:
 		context_more.text = count
@@ -2341,7 +2343,9 @@ func offer(list: Array) -> void:
 	for c in offer_box.get_children():
 		c.queue_free()
 	for row in list:
-		offer_box.add_child(_offer_key(row["label"], _offer_pick.bind(row["call"]), Vector2(180, 72)))
+		var key: Button = _offer_key(row["label"], _offer_pick.bind(row["call"]), Vector2(180, 72))
+		key.modulate = Color.WHITE if row.get("work_ready", true) else Color(0.5, 0.5, 0.5)
+		offer_box.add_child(key)
 	offer_box.add_child(_offer_key("그만", _offer_pick.bind(Callable()), Vector2(100, 72), true))
 
 
@@ -3258,8 +3262,14 @@ func _command(p, cmd: String, close: bool = true) -> void:
 
 ## Work crew settings: attitude and fire permission per crew (s2_station 2.4).
 func work_panel() -> void:
-	var pane := _open_pane("석탄 작업", "남은 석탄 %.1f · 실은 석탄 %.1f" % [game.actions.coal_left(), game.actions.coal_delivered], "coal")
-	if game.haul_mult() < 1.0:
+	var site: String = game.work.active_site
+	var template: Dictionary = game.work.job(site)
+	var coal: bool = template["yield"] == "coal"
+	var title: String = "석탄 작업" if coal else String(template["name"])
+	var cargo: String = "석탄" if coal else "목재"
+	var delivered: float = game.actions.coal_delivered if coal else game.actions.wood_delivered
+	var pane := _open_pane(title, "남은 %s %.1f · 실은 %s %.1f" % [cargo, game.work.remaining(site), cargo, delivered], "coal" if coal else "wood")
+	if game.haul_mult() < 1.0 and coal:
 		var why := GlassPane.row()
 		why.name = "RationHaul"
 		var art := TextureRect.new()

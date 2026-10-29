@@ -836,6 +836,8 @@ static func _chunk(at: Vector3) -> Vector2i:
 ## in the map's own material, trees and blocks as models. Returns counts for the
 ## build log and the tests. With a staged build's `pace` it rests between pieces
 ## (build_pace.gd), so a stop being made ready never stops the screen for the woods.
+## A map torn down while it rests (the stop left) is not built on: the band stops
+## there and makes nothing more.
 static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Material, colors: Array, pace = null) -> Dictionary:
 	var seed := seed_of(data)
 	var look := look_of(data)
@@ -872,6 +874,8 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		ground_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(ground_node)
 	await BuildPace.rest(pace)
+	if not is_instance_valid(root):
+		return {}
 	# Trees and what grows under them. Only the first rows' spruce throw a shadow, on the
 	# ground people walk (SHADE_DEPTH): they go in CHUNK pieces here. Every other plant
 	# throws none and is batched with the far ground by model in its larger pieces
@@ -930,6 +934,8 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(node)
 		await BuildPace.rest(pace)
+		if not is_instance_valid(root):
+			return {}
 	var traces := 0
 	for gl: Dictionary in p["glades"]:
 		for t: Dictionary in gl["props"]:
@@ -958,6 +964,8 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		root.add_child(node)
 	var counts := {"trees": (p["trees"] as Array).size(), "blocks": (p["blocks"] as Array).size(), "glades": (p["glades"] as Array).size(), "traces": traces, "chunks": groups.size(), "runs": (p["runs"] as Array).size(), "planned_ahead": planned_ahead}
 	await BuildPace.rest(pace)
+	if not is_instance_valid(root):
+		return {}
 	counts.merge(await _build_far(root, g, p, material, colors, with_far, pace))
 	# Where the danger past the woods is heard (field_audio.gd, the edge bed).
 	var spots: Array[Vector3] = []
@@ -1024,6 +1032,8 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 		root.add_child(node)
 		prop_count += instances.size()
 		await BuildPace.rest(pace)
+		if not is_instance_valid(root):
+			return {}
 	for plot: Dictionary in p["fields"]:
 		var rect := plot["rect"] as Rect2
 		if String(plot["kind"]) == "bank":
@@ -1073,6 +1083,8 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		root.add_child(node)
 		await BuildPace.rest(pace)
+		if not is_instance_valid(root):
+			return {}
 	# far_pieces: every piece drawn out there (each model's batches and the ground), for
 	# comparing what the band costs to draw beside chunks (the band's own pieces).
 	return {"far": prop_count, "far_pieces": root.get_child_count(), "houses": house_count, "fields": (p["fields"] as Array).size(), "tracks": (p["tracks"] as Array).size(), "sounds": (p["sounds"] as Array).size()}

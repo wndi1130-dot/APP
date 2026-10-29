@@ -33,6 +33,14 @@ const ROOF_TAN: float = 0.7002075  # tan 35°
 const OVERHANG: float = 0.25       # 박공 끝 내밈
 const FLAT_LIFT: float = 0.02      # 평지붕을 벽 윗면보다 띄워 겹친 면이 깜박이지 않게
 const CHIMNEY_BACK: float = 0.8    # 굴뚝을 용마루에서 북쪽 경사로 물린 거리
+const LOOK_RADIUS: float = 24.0
+const ROOF_EAVE: float = 0.3       # building_kit.py EAVE, 경간 배율 전
+const MANSARD_LOW: float = 1.7320508  # tan 60°
+const MANSARD_UP: float = 0.3639702   # tan 20°
+const DORMER_PEAK: float = 1.0 + 0.65 * ROOF_TAN + 0.06  # 함석 덮개 포함, building_kit.py와 같음
+const DORMER_BACK: float = DORMER_PEAK / ROOF_TAN + 0.1
+const DORMER_REAR: float = DORMER_BACK + 0.1  # 원점에서 뒤 처마 끝까지, across의 최솟값
+const DORMER_FRONT: float = 0.25
 const FADE_S: float = 0.15         # 들고 날 때 점박이(3.4, 가안)
 const HOLE_R: float = 3.5          # 가림 구멍 반지름(3.3, 가안)
 const NEAR_R: float = 10.0         # 둘레 건물: 지붕·위층을 걷고 플레이어 층을 여는 거리(칸, 결정 476)
@@ -43,6 +51,8 @@ const PIECES: Array[String] = [
 	"ext_door", "door_leaf", "door_leaf_broken", "door_leaf_cut", "door_frame_cut",
 	"int_wall", "int_wall_cut", "int_door", "roof_gable", "roof_gable_end", "roof_flat",
 	"roof_parapet", "chimney", "stair_steep", "stair_well", "window_boards", "ladder",
+	"roof_hip_end", "roof_half_hip_end", "roof_half_hip_wall", "roof_mansard", "roof_mansard_end",
+	"roof_shed", "roof_shed_wall", "roof_shed_side", "roof_dormer",
 ]
 const NORTH := Vector2i(0, -1)
 const SOUTH := Vector2i(0, 1)
@@ -51,14 +61,9 @@ const WEST := Vector2i(-1, 0)
 const DIRS: Array[Vector2i] = [NORTH, EAST, SOUTH, WEST]
 const DIAGS: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, 1), Vector2i(-1, 1), Vector2i(-1, -1)]
 ## 벽면 칠 갈래(rgb, 셰이더가 선형 값으로 그대로 씀). 결정 469 C1: 회색 넷(결정 408)에서
-## 바랜 집 칠 여덟으로 — 크림·버터·세이지·흐린 파랑·회백·살구·벽돌·청회. 괄호는 sRGB. 가장 밝은
+## 바랜 집 칠 여덟으로 — 크림·버터·세이지·흐린 파랑·회백·살구·벽돌·청회. 가장 밝은
 ## 채널을 0.6(sRGB 0.8) 안팎에 두어 그늘진 벽이 V 0.15 밑으로 꺼지지 않게 한다.
-const PAINTS: Array[Color] = [
-	Color(0.67, 0.57, 0.37), Color(0.71, 0.54, 0.21),   # (0.84, 0.78, 0.64) (0.86, 0.76, 0.50)
-	Color(0.39, 0.48, 0.32), Color(0.34, 0.45, 0.57),   # (0.66, 0.72, 0.60) (0.62, 0.70, 0.78)
-	Color(0.60, 0.60, 0.55), Color(0.67, 0.37, 0.25),   # (0.80, 0.80, 0.77) (0.84, 0.64, 0.54)
-	Color(0.45, 0.20, 0.13), Color(0.27, 0.45, 0.45),   # (0.70, 0.48, 0.40) (0.56, 0.70, 0.70)
-]
+const PAINTS: Array[Color] = BuildingForms.TOWN_PAINTS
 ## 지붕 색 갈래 수(셰이더 ROOFS: 슬레이트·기와·짙은 초록·갈색 널).
 const ROOF_KINDS: int = 4
 ## 생활 색(사용자 2026-10-24, 분위기 틀): 바깥 문짝·덧문·창틀에 남은 칠, a는 남은 정도
@@ -315,32 +320,159 @@ static func cut_line(kind: Dictionary) -> bool:
 ## roofs: {"id", "xf"(세계 기준), "b"}, doors·windows: {"cell", "lv", "b", "line", "yaw"}
 static func plan(data: Dictionary) -> Dictionary:
 	var out := {"pieces": [], "roofs": [], "doors": [], "windows": [], "outer": {}, "outer_doors": {}, "footprints": {}, "kinds": {},
-		"looks": {}}
+		"looks": {}, "row_groups": {}}
 	var levels: Dictionary = data.get("levels", {0: data["grid"]})
 	var areas := _areas(data, levels)
 	var lvs: Array = levels.keys()
 	lvs.sort()
-	for b: int in areas:
+	var ids: Array = areas.keys()
+	ids.sort()
+	var active: Array[int] = []
+	var prints_by_building: Dictionary = {}
+	# 첫 판: 모든 건물의 바닥·꼴을 먼저 확정한다. 입력 줄/Dictionary 삽입 순서와 무관하다.
+	for b: int in ids:
 		if not has_interior(data, levels, b):
 			continue
+		active.append(b)
+		var prints: Dictionary = {}
+		var storeys: int = 0
+		for lv: int in lvs:
+			if lv >= 0:
+				prints[lv] = _footprint(levels[lv], b, areas[b], wall_rects(data, b, lv, areas[b]))
+				if not (prints[lv] as Dictionary).is_empty():
+					storeys += 1
+		prints_by_building[b] = prints
+		if prints.has(0) and not (prints[0] as Dictionary).is_empty():
+			out["footprints"][b] = _bounds(prints[0])
+		var row: Dictionary = _form_row(data, b)
+		out["row_groups"][b] = row.get("row_group")
+		var look: Dictionary = BuildingForms.pick(row, String(data.get("place_id", "")), paint_for(b), storeys)
+		for roof in data.get("rooftops", []):
+			if not roof is Dictionary:
+				continue
+			if int(roof.get("building", -1)) == b:
+				look["roof"] = "flat"
+				look["silhouette"] = "flat"
+				look["candidates"] = ["flat"]
+				look["dormers"] = 0
+		out["looks"][b] = look
+	_avoid_near_looks(out, active)
+	for b: int in active:
 		var area: Rect2i = areas[b]
 		out["outer"][b] = {}
 		for lv: int in lvs:
 			_plan_level(out, levels[lv], lv, b, area, wall_rects(data, b, lv, area))
-		_plan_roofs(out, data, levels, lvs, b, area)
+		_plan_roofs(out, data, prints_by_building[b], b, area)
 	_plan_stairs(out, data, levels)
 	return out
+
+
+## 여러 사각형으로 된 한 건물: 가장 큰 줄을 대표로, 넓이는 합으로(1가 계약).
+static func _form_row(data: Dictionary, b: int) -> Dictionary:
+	var best: Dictionary = {"id": b}
+	var cells: int = 0
+	var best_key: String = ""
+	var found: bool = false
+	for row in data.get("buildings", []):
+		if not row is Dictionary:
+			continue
+		if int(row.get("id", -1)) != b:
+			continue
+		var r: Rect2i = row["rect"] if row.get("rect") is Rect2i else Rect2i()
+		var old: Rect2i = best["rect"] if best.get("rect") is Rect2i else Rect2i()
+		var key: String = "%d:%d|%s|%s|%s" % [r.size.x, r.size.y, row.get("name", ""), row.get("role", ""), row.get("row_group", "")]
+		cells += r.get_area()
+		if not found or r.get_area() > old.get_area() or (r.get_area() == old.get_area() and \
+				(r.position.y < old.position.y or (r.position.y == old.position.y and \
+				(r.position.x < old.position.x or (r.position.x == old.position.x and key < best_key))))):
+			best = row
+			best_key = key
+			found = true
+	best = best.duplicate()
+	best["cells"] = cells
+	return best
+
+
+## 이미 고른 이웃 둘과 같으면 실루엣, 이어서 같은 색 판의 다음 칠로 돌린다.
+## 새 건물이 이전 이웃의 24 m 창을 세 채 초과로 만드는 경우도 함께 막는다.
+static func _avoid_near_looks(out: Dictionary, ids: Array[int]) -> void:
+	var neighbours: Dictionary = {}
+	for b: int in ids:
+		neighbours[b] = []
+		if not out["footprints"].has(b):
+			continue
+		var r: Rect2i = out["footprints"][b]
+		var center: Vector2 = Vector2(r.position) + Vector2(r.size) * 0.5
+		for other: int in ids:
+			if other == b or not out["footprints"].has(other) or BuildingForms.same_row_group(out["row_groups"][b], out["row_groups"][other]):
+				continue
+			var q: Rect2i = out["footprints"][other]
+			if center.distance_to(Vector2(q.position) + Vector2(q.size) * 0.5) <= LOOK_RADIUS:
+				neighbours[b].append(other)
+	var accepted: Dictionary = {}
+	for b: int in ids:
+		var original: Dictionary = out["looks"][b]
+		var best: Dictionary = original
+		var score: int = _look_conflicts(out["looks"], neighbours, accepted, b, original)
+		if score > 0 and BuildingForms.WALLS.has(String(original["region"])):
+			var candidates: Array = original["candidates"]
+			var start: int = candidates.find(original["silhouette"])
+			var palette: String = original["palette"]
+			var colours: Array = PAINTS if palette == "town" else BuildingForms.PALETTES[palette]
+			for colour_step: int in range(colours.size()):
+				for shape_step: int in range(candidates.size()):
+					var trial: Dictionary = original.duplicate()
+					trial["silhouette"] = candidates[(start + shape_step) % candidates.size()]
+					trial["paint_index"] = (int(original["paint_index"]) + colour_step) % colours.size()
+					if colour_step > 0:
+						var colour: Color = colours[int(trial["paint_index"])]
+						if palette != "town":
+							colour = colour.srgb_to_linear()
+						colour.a = (original["paint"] as Color).a
+						trial["paint"] = colour
+					trial["dormers"] = BuildingForms.dormers_for(trial)
+					var trial_score: int = _look_conflicts(out["looks"], neighbours, accepted, b, trial)
+					if trial_score < score:
+						best = trial
+						score = trial_score
+					if score == 0:
+						break
+				if score == 0:
+					break
+		best["neighbor_conflicts"] = score  # 유한 후보를 다 쓴 밀집 지도도 셈에서 드러나게 한다.
+		out["looks"][b] = best
+		accepted[b] = true
+
+
+static func _look_conflicts(looks: Dictionary, neighbours: Dictionary, accepted: Dictionary, b: int, trial: Dictionary) -> int:
+	var signature: String = BuildingForms.signature(trial)
+	var own: int = 0
+	var overflow: int = 0
+	for other: int in neighbours[b]:
+		if not accepted.has(other) or BuildingForms.signature(looks[other]) != signature:
+			continue
+		own += 1
+		var count: int = 1  # 지금 추가할 b
+		for near_id: int in neighbours[other]:
+			if accepted.has(near_id) and BuildingForms.signature(looks[near_id]) == signature:
+				count += 1
+		overflow += maxi(0, count - 2)
+	return maxi(0, own - 1) + overflow
 
 
 ## 건물마다 살필 범위. 실제 칸은 wall_rects의 선언된 사각형 안에서만 고른다.
 static func _areas(data: Dictionary, levels: Dictionary) -> Dictionary:
 	var areas: Dictionary = {}
-	for row: Dictionary in data.get("buildings", []):
+	for row in data.get("buildings", []):
+		if not row is Dictionary:
+			continue
 		var b := int(row.get("id", -1))
 		var r: Variant = row.get("rect")
 		if b >= 0 and r is Rect2i:
 			areas[b] = (areas[b] as Rect2i).merge(r) if areas.has(b) else r
-	for row: Dictionary in data.get("upper_rects", []):
+	for row in data.get("upper_rects", []):
+		if not row is Dictionary:
+			continue
 		var b := int(row.get("building", -1))
 		if b >= 0 and row.get("rect") is Rect2i:
 			areas[b] = (areas[b] as Rect2i).merge(row["rect"]) if areas.has(b) else row["rect"]
@@ -358,15 +490,21 @@ static func _areas(data: Dictionary, levels: Dictionary) -> Dictionary:
 
 ## 건물 번호만 붙은 산 덩어리는 문·창·방이 있는 건물로 취급하지 않는다.
 static func has_interior(data: Dictionary, grids: Dictionary, b: int) -> bool:
-	for row: Dictionary in data.get("buildings", []):
+	for row in data.get("buildings", []):
+		if not row is Dictionary:
+			continue
 		if int(row.get("id", -1)) == b and not row.get("rooms", []).is_empty():
 			return true
-	for room: Dictionary in data.get("rooms", []):
+	for room in data.get("rooms", []):
+		if not room is Dictionary:
+			continue
 		if int(room.get("building", -1)) == b:
 			return true
 	for lg: FieldGrid in grids.values():
 		for openings: Dictionary in [lg.doors, lg.windows]:
-			for row: Dictionary in openings.values():
+			for row in openings.values():
+				if not row is Dictionary:
+					continue
 				if int(row.get("building", -1)) == b:
 					return true
 	return false
@@ -376,11 +514,15 @@ static func has_interior(data: Dictionary, grids: Dictionary, b: int) -> bool:
 static func wall_rects(data: Dictionary, b: int, lv: int, fallback: Rect2i) -> Array[Rect2i]:
 	var rects: Array[Rect2i] = []
 	if lv > 0:
-		for row: Dictionary in data.get("upper_rects", []):
+		for row in data.get("upper_rects", []):
+			if not row is Dictionary:
+				continue
 			if int(row.get("building", -1)) == b and int(row.get("level", lv)) == lv:
 				rects.append(row["rect"])
 	if rects.is_empty():
-		for row: Dictionary in data.get("buildings", []):
+		for row in data.get("buildings", []):
+			if not row is Dictionary:
+				continue
 			if int(row.get("id", -1)) == b and row.get("rect") is Rect2i:
 				rects.append(row["rect"])
 	# 예전의 작은 시험 지도처럼 건물 표 자체가 없을 때만 격자 범위를 쓴다.
@@ -573,42 +715,11 @@ static func _run_xf(n: Vector2i, line: int, run: Vector2i) -> Transform3D:
 
 ## 지붕: 층마다 그 층에는 있고 위층에는 없는 칸을 사각형으로 덮는다. 더 높은 쪽에
 ## 붙은 사각형은 평지붕(역사·화물 창고의 낮은 쪽), 홀로 선 사각형은 박공지붕이다.
-static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, lvs: Array, b: int, area: Rect2i) -> void:
-	var prints: Dictionary = {}
-	for lv: int in lvs:
-		if lv >= 0:
-			prints[lv] = _footprint(levels[lv], b, area, wall_rects(data, b, lv, area))
-	if prints.has(0) and not prints[0].is_empty():
-		out["footprints"][b] = _bounds(prints[0])
-	# 꼴(결정 478 1가): 용도·지역으로 벽 재질·색·지붕(박공 물매·평지붕)·굴뚝.
-	# 한 건물이 여러 줄(사각형 여럿)이면 가장 큰 줄의 이름으로, 넓이는 줄들의 합으로 고른다(줄 순서와 상관없이).
-	var row_b: Dictionary = {"id": b}
-	var found := false
-	var cells := 0
-	for row: Variant in data.get("buildings", []):
-		if not (row is Dictionary and int(row.get("id", -1)) == b):
-			continue
-		var r: Rect2i = row["rect"] if row.get("rect") is Rect2i else Rect2i()
-		var best: Rect2i = row_b["rect"] if row_b.get("rect") is Rect2i else Rect2i()
-		cells += r.get_area()
-		if not found or r.get_area() > best.get_area() or (r.get_area() == best.get_area() \
-				and (r.position.y < best.position.y or (r.position.y == best.position.y and r.position.x < best.position.x))):
-			row_b = row
-			found = true
-	if found:
-		row_b = row_b.duplicate()
-		row_b["cells"] = cells
-	var storeys := 0
-	for lv: int in prints:
-		if not (prints[lv] as Dictionary).is_empty():
-			storeys += 1
-	var look := BuildingForms.pick(row_b, String(data.get("place_id", "")), paint_for(b), storeys)
-	out["looks"][b] = look
+static func _plan_roofs(out: Dictionary, data: Dictionary, prints: Dictionary, b: int, area: Rect2i) -> void:
+	var look: Dictionary = out["looks"][b]
 	var gables: Array = []
 	# 오르는 옥상으로 고른 건물(roof_rules.gd)과 꼴이 평지붕인 건물은 맨 위도 낮은 담을 두른 평지붕이다.
 	var flat_top: bool = String(look["roof"]) == "flat"
-	for row: Variant in data.get("rooftops", []):
-		flat_top = flat_top or (row is Dictionary and int(row.get("building", -1)) == b)
 	var flat_tops: Array = []
 	for lv: int in prints:
 		var here: Dictionary = prints[lv]
@@ -623,7 +734,9 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 			if _touches(r, above) or (flat_top and above.is_empty()):
 				flats.append(r)
 			else:
-				gables.append(_plan_gable(out, r, top, b, float(look["pitch"])))
+				var shape: String = "gable" if look["silhouette"] == "flat" else String(look["silhouette"])
+				gables.append(_plan_gable(out, r, top, b, float(look["pitch"]), shape,
+					Vector2(area.position) + Vector2(area.size) * 0.5))
 		# 같은 높이 평지붕 조각끼리 맞닿은 변은 한 지붕으로 잇는다(틈·안쪽 낮은 벽 없이).
 		var level_flat: Dictionary = {}
 		for r: Rect2i in flats:
@@ -633,26 +746,31 @@ static func _plan_roofs(out: Dictionary, data: Dictionary, levels: Dictionary, l
 		for r: Rect2i in flats:
 			for piece: Rect2i in _split_flat(r, above, level_flat):
 				flat_tops.append(_plan_flat(out, piece, top, above, level_flat, b))
-	if not (bool(look["chimney"]) or _chimney_wanted(data, b)):
-		return
+	var chimney_wanted: bool = bool(look["chimney"]) or _chimney_wanted(data, b)
 	if gables.is_empty():
-		_plan_flat_chimney(out, data, flat_tops, b)
+		if chimney_wanted:
+			_plan_flat_chimney(out, data, flat_tops, b)
+		look["dormers"] = 0
 		return
-	# 굴뚝은 가장 높은 박공에 하나: 난로가 그 지붕 밑에 있으면 그 위, 없으면 가운데에서 조금 비켜.
-	gables.sort_custom(func(p: Dictionary, q: Dictionary) -> bool: return p["top"] > q["top"])
+	# 굴뚝·지붕창은 가장 높은, 그중 가장 큰 사각형 하나에만 둔다.
+	gables.sort_custom(func(p: Dictionary, q: Dictionary) -> bool:
+		return float(p["top"]) > float(q["top"]) if p["top"] != q["top"] else (p["rect"] as Rect2i).get_area() > (q["rect"] as Rect2i).get_area())
 	var g: Dictionary = gables[0]
 	var r: Rect2i = g["rect"]
-	var spot := Vector2(r.position.x + r.size.x * 0.5 + 1.5, r.position.y + r.size.y * 0.5)
-	for stove: Dictionary in data.get("stoves", []):
-		var sc: Vector2i = stove.get("cell", Vector2i(-1, -1))
-		if int(stove.get("building", -1)) == b and r.has_point(sc):
-			spot = Vector2(sc.x + 0.5, sc.y + 0.5)
-	var along_x: bool = g["along_x"]
-	var ridge: Vector2 = g["ridge"]
-	var at := Vector2(spot.x, ridge.y - CHIMNEY_BACK) if along_x else Vector2(ridge.x + CHIMNEY_BACK, spot.y)
-	at = Vector2(clampf(at.x, r.position.x + 1.0, r.end.x - 1.0), clampf(at.y, r.position.y + 1.0, r.end.y - 1.0))
-	var base: float = g["top"] + g["pitch"] * (g["k"] * ROOF_RISE - CHIMNEY_BACK * ROOF_TAN) - 0.15
-	out["roofs"].append({"id": "chimney", "xf": _xf(Vector3(at.x, base, at.y), 0.0), "b": b})
+	var chimney_at: Vector2 = Vector2(INF, INF)
+	if chimney_wanted:
+		var spot: Vector2 = Vector2(r.position.x + r.size.x * 0.5 + 1.5, r.position.y + r.size.y * 0.5)
+		for stove: Dictionary in data.get("stoves", []):
+			var sc: Vector2i = stove.get("cell", Vector2i(-1, -1))
+			if int(stove.get("building", -1)) == b and r.has_point(sc):
+				spot = Vector2(sc.x + 0.5, sc.y + 0.5)
+		var ridge: Vector2 = g["ridge"]
+		chimney_at = Vector2(spot.x, ridge.y - CHIMNEY_BACK) if bool(g["along_x"]) else Vector2(ridge.x + CHIMNEY_BACK, spot.y)
+		chimney_at = Vector2(clampf(chimney_at.x, r.position.x + 1.0, r.end.x - 1.0) if r.size.x >= 2 else ridge.x,
+			clampf(chimney_at.y, r.position.y + 1.0, r.end.y - 1.0) if r.size.y >= 2 else ridge.y)
+		var base: float = _roof_height(g, chimney_at) - 0.15
+		out["roofs"].append({"id": "chimney", "xf": _xf(Vector3(chimney_at.x, base, chimney_at.y), 0.0), "b": b})
+	look["dormers"] = _plan_dormers(out, g, b, int(look["dormers"]), chimney_at)
 
 
 ## 박공 없이 평지붕만인 건물의 굴뚝: 가장 높은 평지붕 조각에서 난로 위, 없으면 가장 큰 조각 가운데에서 조금 비켜.
@@ -753,25 +871,132 @@ static func _touches(r: Rect2i, cells: Dictionary) -> bool:
 
 
 ## pitch: 물매 배수(1 = 35°, building_forms.gd). 높이만 늘려 같은 조각을 쓴다.
-static func _plan_gable(out: Dictionary, r: Rect2i, top: float, b: int, pitch: float = 1.0) -> Dictionary:
-	var along_x := r.size.x >= int(r.size.y * 0.75)
-	var span := float(r.size.y if along_x else r.size.x) - 2.0 * FACE_IN
-	var length := float(r.size.x if along_x else r.size.y) - 2.0 * FACE_IN + 2.0 * OVERHANG
-	var k := span / ROOF_SPAN
-	var mid := Vector2(r.position.x + r.size.x * 0.5, r.position.y + r.size.y * 0.5)
-	out["roofs"].append({"id": "roof_gable", "xf": _xf(Vector3(mid.x, top, mid.y), 0.0 if along_x else PI * 0.5, Vector3(length, k * pitch, k)), "b": b,
-		"pitch": pitch})
-	for side in [-1, 1]:
-		var at: Vector3
-		var n: Vector2i
-		if along_x:
-			at = Vector3(r.position.x + 0.5 if side < 0 else r.end.x - 0.5, top, mid.y)
-			n = Vector2i(side, 0)
-		else:
-			at = Vector3(mid.x, top, r.position.y + 0.5 if side < 0 else r.end.y - 0.5)
-			n = Vector2i(0, side)
-		out["roofs"].append({"id": "roof_gable_end", "xf": _xf(at, yaw_of(n), Vector3(k, k * pitch, 1)), "b": b})
-	return {"rect": r, "top": top, "k": k, "pitch": pitch, "along_x": along_x, "ridge": mid}
+static func _plan_gable(out: Dictionary, r: Rect2i, top: float, b: int, pitch: float = 1.0,
+		silhouette: String = "gable", main_center: Vector2 = Vector2(INF, INF)) -> Dictionary:
+	# 박공 계열의 기존 방향을 보존한다. 경간보다 짧은 모임은 끝 둘을 눌러 덮는다.
+	# 외쪽만 실제 긴 변을 높은 벽 방향으로 쓴다.
+	var along_x: bool = r.size.x >= r.size.y if silhouette == "shed" else r.size.x >= int(r.size.y * 0.75)
+	var span: float = float(r.size.y if along_x else r.size.x) - 2.0 * FACE_IN
+	var wall_length: float = float(r.size.x if along_x else r.size.y) - 2.0 * FACE_IN
+	var length: float = wall_length + 2.0 * OVERHANG
+	if silhouette == "half_hip":
+		length = wall_length  # 접힌 끝과 아래 벽의 윗변을 같은 평면에서 잇는다(측면 처마는 유지).
+	var k: float = span / ROOF_SPAN
+	var mid: Vector2 = Vector2(r.position) + Vector2(r.size) * 0.5
+	var yaw: float = 0.0 if along_x else PI * 0.5
+	if silhouette == "shed" and main_center.x != INF:
+		# 긴 변을 따라 높은 벽. 별채는 본채 쪽, 독립 건물은 북쪽(남북 길이면 서쪽).
+		var high: Vector2 = Vector2(-sin(yaw), -cos(yaw))
+		if (main_center - mid).dot(high) < -0.1:
+			yaw += PI
+	var body: float = length
+	var cap_run: float = 0.0
+	if silhouette in ["hip", "half_hip"]:
+		body = maxf(0.0, wall_length - span * (1.0 if silhouette == "hip" else 1.0 / 3.0))
+		cap_run = (length - body) * 0.5
+	var g: Dictionary = {"rect": r, "top": top, "k": k, "pitch": pitch, "along_x": along_x, "ridge": mid,
+		"silhouette": silhouette, "yaw": yaw, "span": span, "length": length, "body": body, "cap_run": cap_run}
+	var body_id: String = "roof_mansard" if silhouette == "mansard" else ("roof_shed" if silhouette == "shed" else "roof_gable")
+	if body > 0.001:
+		out["roofs"].append({"id": body_id, "xf": _xf(Vector3(mid.x, top, mid.y), yaw, Vector3(body, k * pitch, k)),
+			"b": b, "pitch": pitch, "silhouette": silhouette})
+	if silhouette == "shed":
+		out["roofs"].append({"id": "roof_shed_wall", "xf": _xf(Vector3(mid.x, top, mid.y), yaw,
+			Vector3(wall_length, k * pitch, k)), "b": b})
+	var axis: Vector2 = Vector2(cos(yaw), -sin(yaw))
+	if silhouette in ["hip", "half_hip"]:
+		var cap_id: String = "roof_hip_end" if silhouette == "hip" else "roof_half_hip_end"
+		var nominal_run: float = ROOF_SPAN * 0.5 + ROOF_EAVE if silhouette == "hip" else ROOF_SPAN / 6.0
+		for side: int in [-1, 1]:
+			var pos: Vector2 = mid + axis * (float(side) * body * 0.5)
+			out["roofs"].append({"id": cap_id, "xf": _xf(Vector3(pos.x, top, pos.y), yaw + (PI if side < 0 else 0.0),
+				Vector3(cap_run / nominal_run, k * pitch, k)), "b": b, "pitch": pitch, "silhouette": silhouette})
+	if silhouette != "hip":
+		var wall_id: String = "roof_gable_end"
+		if silhouette == "half_hip":
+			wall_id = "roof_half_hip_wall"
+		elif silhouette == "mansard":
+			wall_id = "roof_mansard_end"
+		elif silhouette == "shed":
+			wall_id = "roof_shed_side"
+		for side: int in [-1, 1]:
+			var pos: Vector2 = mid + axis * (float(side) * (wall_length - EXT_T) * 0.5)
+			var wall_yaw: float = yaw + PI * 0.5 if silhouette == "shed" else yaw + float(side) * PI * 0.5
+			out["roofs"].append({"id": wall_id, "xf": _xf(Vector3(pos.x, top, pos.y), wall_yaw, Vector3(k, k * pitch, 1.0)), "b": b})
+	return g
+
+
+## 지붕 기준 좌표: x 용마루 길이, y 경간(남쪽 양수). 회전된 지붕도 같은 높이 식을 쓴다.
+static func _roof_local(g: Dictionary, at: Vector2) -> Vector2:
+	var delta: Vector2 = at - (g["ridge"] as Vector2)
+	var yaw: float = float(g["yaw"])
+	return Vector2(delta.dot(Vector2(cos(yaw), -sin(yaw))), delta.dot(Vector2(sin(yaw), cos(yaw))))
+
+
+static func _roof_world(g: Dictionary, at: Vector2) -> Vector2:
+	var yaw: float = float(g["yaw"])
+	return (g["ridge"] as Vector2) + Vector2(cos(yaw), -sin(yaw)) * at.x + Vector2(sin(yaw), cos(yaw)) * at.y
+
+
+static func _mansard_break() -> Vector2:
+	var run: float = (ROOF_RISE - ROOF_SPAN * 0.5 * MANSARD_UP) / (MANSARD_LOW - MANSARD_UP)
+	return Vector2(ROOF_SPAN * 0.5 - run, run * MANSARD_LOW)
+
+
+## building_kit.py의 겉면(덮개 제외)과 같은 식. 굴뚝 밑과 지붕창 원점이 함께 쓴다.
+static func _roof_height(g: Dictionary, at: Vector2) -> float:
+	var local: Vector2 = _roof_local(g, at)
+	var k: float = float(g["k"])
+	var cross: float = absf(local.y) / k
+	var height: float = ROOF_RISE - cross * ROOF_TAN
+	match String(g["silhouette"]):
+		"hip", "half_hip":
+			var run: float = maxf(0.0, absf(local.x) - float(g["body"]) * 0.5)
+			var drop: float = ROOF_RISE + ROOF_EAVE * ROOF_TAN if g["silhouette"] == "hip" else ROOF_RISE / 3.0
+			height = minf(height, ROOF_RISE - run / float(g["cap_run"]) * drop)
+		"mansard":
+			var bend: Vector2 = _mansard_break()
+			height = ROOF_RISE - cross * MANSARD_UP if cross <= bend.x else (ROOF_SPAN * 0.5 - cross) * MANSARD_LOW
+		"shed":
+			height = (ROOF_SPAN * 0.5 - local.y / k) * ROOF_TAN
+	return float(g["top"]) + k * float(g["pitch"]) * height
+
+
+static func _plan_dormers(out: Dictionary, g: Dictionary, b: int, wanted: int, chimney_at: Vector2) -> int:
+	if wanted == 0 or String(g["silhouette"]) not in BuildingForms.DORMER_ROOFS:
+		return 0
+	var span: float = float(g["span"])
+	var across: float = span * 0.32
+	var slope: float = ROOF_TAN
+	if g["silhouette"] == "mansard":
+		across = minf(across, _mansard_break().x * float(g["k"]) - 0.2)
+		slope = MANSARD_UP
+	# 덮개까지 묻힌 뒤 처마가 용마루를 넘지 않아야 한다. 맨사드도 높이와 물매가 함께 줄어든다.
+	if across < DORMER_REAR or span * 0.5 - across < 0.25:
+		return 0
+	var limit: float = (float(g["length"]) - 2.0 * OVERHANG) * 0.5 - 1.0
+	if g["silhouette"] == "hip":
+		limit = minf(limit, float(g["body"]) * 0.5 + float(g["cap_run"]) * (across - DORMER_REAR) / \
+			(float(g["k"]) * (ROOF_SPAN * 0.5 + ROOF_EAVE)) - 0.8)
+	if limit < 0.0:
+		return 0
+	var count: int = mini(wanted, 1 + floori(limit * 2.0 / 1.7))
+	var chimney: Vector2 = _roof_local(g, chimney_at) if chimney_at.x != INF else Vector2(INF, INF)
+	var side: float = -1.0 if chimney.x != INF and chimney.y > 0.0 else 1.0
+	var placed: int = 0
+	for i: int in range(count):
+		var along: float = 0.0 if count == 1 else lerpf(-limit, limit, float(i) / float(count - 1))
+		# 박공 폭 1.5 m와 앞/뒤 처마 전체 깊이, 굴뚝 덮개 반폭 0.36 m + 여유를 피한다.
+		var chimney_across: float = side * chimney.y
+		if chimney.x != INF and absf(chimney.x - along) < 1.2 and \
+				chimney_across > across - DORMER_REAR - 0.4 and chimney_across < across + DORMER_FRONT + 0.4:
+			continue
+		var at: Vector2 = _roof_world(g, Vector2(along, side * across))
+		var yaw: float = float(g["yaw"]) + (PI if side < 0.0 else 0.0)
+		out["roofs"].append({"id": "roof_dormer", "xf": _xf(Vector3(at.x, _roof_height(g, at), at.y), yaw,
+			Vector3(1.0, float(g["pitch"]) * slope / ROOF_TAN, 1.0)), "b": b})
+		placed += 1
+	return placed
 
 
 ## 평지붕 칸 하나의 이음: 2 높은 쪽 벽, 1 같은 높이 평지붕, 0 바깥.

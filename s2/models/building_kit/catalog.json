@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "script_version": 1,
+  "script_version": 2,
   "blender": "4.5.10 LTS",
   "mode_setting": "visuals/building_models_enabled",
   "grid": {
@@ -27,7 +27,21 @@
     "nominal_span_m": 10.0,
     "eave_m": 0.3,
     "thickness_m": 0.12,
-    "rise_m": 3.501
+    "rise_m": 3.501,
+    "hip_end_run_m": 5.3,
+    "half_hip_end_run_m": 1.6666666666666667,
+    "mansard_pitch_deg": [
+      60.0,
+      20.0
+    ],
+    "mansard_break_m": [
+      3.7711348640387494,
+      2.1284568511349216
+    ],
+    "shed_rise_m": 7.002075382097097,
+    "dormer_peak_m": 1.5151348998363114,
+    "dormer_back_m": 2.263836887146642,
+    "dormer_rear_m": 2.363836887146642
   },
   "zones": {
     "wall": 0,
@@ -35,7 +49,8 @@
     "wood": 2,
     "glass": 3,
     "roof": 4,
-    "metal": 5
+    "metal": 5,
+    "cap": 7
   },
   "colour_encoding": "r = 1자리, g = 2자리, b = 4자리 비트, a = 날씨 받음",
   "hinge_m": [
@@ -1007,6 +1022,323 @@
       ],
       "bytes": 5284,
       "sha256": "d6fd5444776b096ed7d556cd4fd53d680d0f714657a7d91e28d4f25ed30a09f2"
+    },
+    "roof_hip_end": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_hip_end.glb",
+      "category": "roof",
+      "use": "모임 끝 반 피라미드(+X 바깥)",
+      "stretch": "hip_end",
+      "origin": "ridge_end",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 24,
+      "triangle_limit": 40,
+      "dimensions_m": [
+        5.4132,
+        3.9176,
+        10.7132
+      ],
+      "bounds_m": [
+        [
+          -0.0566,
+          -0.3566,
+          -5.3566
+        ],
+        [
+          5.3566,
+          3.561,
+          5.3566
+        ]
+      ],
+      "zones": [
+        2,
+        4,
+        7
+      ],
+      "bytes": 3024,
+      "sha256": "2b81c9ae6ea602f57175d6d30b3b23f958b159d653b4c1a4905d264ce449be91"
+    },
+    "roof_half_hip_end": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_half_hip_end.glb",
+      "category": "roof",
+      "use": "박공 위 1/3을 접은 반모임 끝",
+      "stretch": "hip_end",
+      "origin": "ridge_end",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 32,
+      "triangle_limit": 48,
+      "dimensions_m": [
+        1.7798,
+        3.9176,
+        10.6
+      ],
+      "bounds_m": [
+        [
+          -0.0566,
+          -0.3566,
+          -5.3
+        ],
+        [
+          1.7232,
+          3.561,
+          5.3
+        ]
+      ],
+      "zones": [
+        2,
+        4,
+        7
+      ],
+      "bytes": 3468,
+      "sha256": "3b10776647c07c6cf045e3f397c1c4144aad437e2e8bc23bceec126cd38158e2"
+    },
+    "roof_half_hip_wall": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_half_hip_wall.glb",
+      "category": "roof",
+      "use": "반모임 아래 사다리꼴 벽",
+      "stretch": "span_xz",
+      "origin": "wall_top",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 12,
+      "triangle_limit": 16,
+      "dimensions_m": [
+        9.5816,
+        2.1875,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          -4.7908,
+          0.0,
+          -0.225
+        ],
+        [
+          4.7908,
+          2.1875,
+          0.225
+        ]
+      ],
+      "zones": [
+        0
+      ],
+      "bytes": 1856,
+      "sha256": "cff7bf26002484b9f09d1f93bd5c15237650176d7c31304d7e421e5e36480e3d"
+    },
+    "roof_mansard": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_mansard.glb",
+      "category": "roof",
+      "use": "아래 60°·위 20° 꺾인 지붕",
+      "stretch": "span",
+      "origin": "wall_top",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 42,
+      "triangle_limit": 56,
+      "dimensions_m": [
+        1.0,
+        4.2271,
+        10.6
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          -0.6661,
+          -5.3
+        ],
+        [
+          0.5,
+          3.561,
+          5.3
+        ]
+      ],
+      "zones": [
+        2,
+        4,
+        7
+      ],
+      "bytes": 4000,
+      "sha256": "a2c11dc74b1d241de5455884c203aac45f332cfe9ea3be618a66142030daeac6"
+    },
+    "roof_mansard_end": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_mansard_end.glb",
+      "category": "roof",
+      "use": "맨사드 끝 오각 벽",
+      "stretch": "span_xz",
+      "origin": "wall_top",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 16,
+      "triangle_limit": 20,
+      "dimensions_m": [
+        9.8308,
+        3.3545,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          -4.9154,
+          0.0,
+          -0.225
+        ],
+        [
+          4.9154,
+          3.3545,
+          0.225
+        ]
+      ],
+      "zones": [
+        0
+      ],
+      "bytes": 2068,
+      "sha256": "19dea648c89111d3bd49d91d1a450c1e08964b72f0821d240a306a3258aa7e63"
+    },
+    "roof_shed": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_shed.glb",
+      "category": "roof",
+      "use": "35° 외쪽 지붕 면(높은 벽 별도)",
+      "stretch": "span",
+      "origin": "wall_top",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 12,
+      "triangle_limit": 24,
+      "dimensions_m": [
+        1.0,
+        7.5687,
+        10.6
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          -0.3566,
+          -5.3
+        ],
+        [
+          0.5,
+          7.2121,
+          5.3
+        ]
+      ],
+      "zones": [
+        2,
+        4
+      ],
+      "bytes": 1824,
+      "sha256": "be9619b3cc3be78a8a3f73843db7f6703483bf1db05802f38f2e1a27225eba03"
+    },
+    "roof_shed_wall": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_shed_wall.glb",
+      "category": "roof",
+      "use": "처마 내밈 없이 벽 길이로 늘리는 외쪽 높은 벽",
+      "stretch": "span",
+      "origin": "wall_top",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 10,
+      "triangle_limit": 12,
+      "dimensions_m": [
+        1.0,
+        6.8556,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          -0.5,
+          0.0,
+          -5.0
+        ],
+        [
+          0.5,
+          6.8556,
+          -4.55
+        ]
+      ],
+      "zones": [
+        0
+      ],
+      "bytes": 1660,
+      "sha256": "c405dd479ba8637108351bbce983812058a41f15cce86bcd53575eca5b68a744"
+    },
+    "roof_shed_side": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_shed_side.glb",
+      "category": "roof",
+      "use": "외쪽 지붕 옆 삼각 벽",
+      "stretch": "span_xz",
+      "origin": "wall_top",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 6,
+      "triangle_limit": 12,
+      "dimensions_m": [
+        9.3408,
+        6.5405,
+        0.45
+      ],
+      "bounds_m": [
+        [
+          -4.7908,
+          0.0,
+          -0.225
+        ],
+        [
+          4.55,
+          6.5405,
+          0.225
+        ]
+      ],
+      "zones": [
+        0
+      ],
+      "bytes": 1492,
+      "sha256": "dfafa6ca2d684c7a3547b5190ebb4584cc0633e21130dc2c0ca7f29119fa1b2b"
+    },
+    "roof_dormer": {
+      "status": "ready",
+      "path": "res://models/building_kit/roof_dormer.glb",
+      "category": "roof",
+      "use": "작은 박공·앞 유리·옆 볼이 있는 지붕창",
+      "stretch": "dormer",
+      "origin": "roof_surface",
+      "height": "free",
+      "fits_cell": false,
+      "lod0_tris": 66,
+      "triangle_limit": 100,
+      "dimensions_m": [
+        1.5,
+        1.7701,
+        2.6138
+      ],
+      "bounds_m": [
+        [
+          -0.75,
+          -0.255,
+          -2.3638
+        ],
+        [
+          0.75,
+          1.5151,
+          0.25
+        ]
+      ],
+      "zones": [
+        0,
+        2,
+        3,
+        4,
+        7
+      ],
+      "bytes": 5612,
+      "sha256": "c4b965e4521c8ac2e6425fda1941fbb4d04e6e6b021f9efe66f5e1df1ac38c57"
     },
     "roof_flat": {
       "status": "ready",

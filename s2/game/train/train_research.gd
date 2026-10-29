@@ -6,7 +6,7 @@ const TrainHands = preload("res://game/train/train_hands.gd")
 ## Decision 446: the technologies whose effect runs on S2's train. The law ones
 ## (train_lawtech.gd) are here; M2 and M3 wait for M1 (their tier's way in, its
 ## wound and typhus effects not on S2 yet), E4 and M5 for their effects outside a law.
-const VISIBLE: Array[String] = ["e1", "e2", "e3", "e5", "w1", "x1", "w2", "w4"]
+const VISIBLE: Array[String] = ["e1", "e2", "e3", "e5", "w1", "x1", "w2", "w4", "w5", "x4"]
 ## Decision 449: W4 makes workshop lures without scouting.
 const S2_OPEN_GEAR: Array[String] = ["w4"]
 
@@ -296,6 +296,12 @@ const TECHS: Dictionary = {
 			"wood": 2
 		}
 	},
+	"w5": {
+		"upkeep": {}, "like": ["front"], "dislike": [],
+		"id": "w5", "branch": "craft", "tier": 0, "name": "객차 목공",
+		"effect": "살림 2단(갖춤)을 연다. 3단(북유럽식)은 공구 수리도 써야 한다",
+		"adapt": {"parts": 1, "wood": 4}
+	},
 	"r1": {
 		"upkeep": {},
 		"like": [
@@ -412,7 +418,7 @@ const TECHS: Dictionary = {
 		"branch": "expedition",
 		"tier": 1,
 		"name": "짐 꾸리기·방한 장비",
-		"effect": "아동 노동에 '짐 꾸리기만' 변형이 열린다(아이들은 내리지 않는다)"
+		"effect": "아동 노동에 '짐 꾸리기만' 변형이 열린다(아이들은 내리지 않는다). 공방에서 썰매·들것을 만든다(S2)"
 	},
 	"x2": {
 		"upkeep": {
@@ -473,8 +479,14 @@ const TECHS: Dictionary = {
 		"tier": 3,
 		"name": "궤도 모터카",
 		"effect": "지나쳐도 짧게의 절반을 얻는다(석탄 1)"
+	},
+	"x4": {
+		"upkeep": {}, "like": ["tail"], "dislike": [],
+		"id": "x4", "branch": "expedition", "tier": 2, "name": "운반 수레",
+		"effect": "공방 만들기: 손수레·긴 썰매·쇠 날(S2)"
 	}
 }
+const PREREQ: Dictionary = {"x2": ["x1"], "x4": ["x1"], "x3": ["x2"], "w2": ["w1"], "w3": ["w2"]}
 const D: Dictionary = {
 	"restoreWork": [
 		3,
@@ -642,6 +654,10 @@ static func visible(g: Dictionary, _t: Dictionary = {}) -> Array[String]:
 
 
 static func prereqs(id: String) -> Array[String]:
+	if PREREQ.has(id):
+		var specified: Array[String] = []
+		specified.assign(PREREQ[id])
+		return specified
 	var def: Dictionary = TECHS[id]
 	var out: Array[String] = []
 	if int(def["tier"]) <= 1:
