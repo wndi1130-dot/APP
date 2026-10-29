@@ -1632,7 +1632,9 @@ func _escort(p, falling_back: bool = false) -> void:
 
 
 ## Decision 486 (2): posted with nothing on the crew, the escort keeps its back
-## to the work and watches outward, the way the dead come, in a slow sweep.
+## to the work and watches outward, the way the dead come, in a slow sweep;
+## (6) as the companions, never into the screen: the sweep stops at the edge of
+## the camera's cone (the camera is orthographic, so that is one way for all).
 func _escort_watch(p, site: Vector3) -> void:
 	var out: Vector3 = p.position - site
 	out.y = 0.0
@@ -1640,7 +1642,15 @@ func _escort_watch(p, site: Vector3) -> void:
 		out = Vector3(-1.0 if p.brain.get("side", 0) == 0 else 1.0, 0.0, 0.0)
 	var k: int = maxi(game.crew.find(p), 0)
 	var sweep: float = sin(game.clock.elapsed * 0.5 + float(k) * 2.1) * deg_to_rad(LOOK_SWEEP_DEG)
-	p.face_point(p.position + out.normalized().rotated(Vector3.UP, sweep) * 10.0)
+	var look: Vector3 = out.normalized().rotated(Vector3.UP, sweep)
+	var screen: Vector3 = game.cam_back()
+	screen.y = 0.0
+	screen = screen.normalized()
+	var offset: float = angle_difference(atan2(screen.x, screen.z), atan2(look.x, look.z))
+	var limit: float = deg_to_rad(LOOK_CAMERA_DEG)
+	if absf(offset) < limit:
+		look = screen.rotated(Vector3.UP, limit * (-1.0 if offset < 0.0 else 1.0))
+	p.face_point(p.position + look * 10.0)
 
 
 # ---------------------------------------------------------------- raiders

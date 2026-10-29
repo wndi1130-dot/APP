@@ -452,7 +452,10 @@ func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 			game.clock.elapsed += 0.5
 			game.ai._crew(guard, 0.1, true)
 			var look := Vector3(sin(guard.facing), 0.0, cos(guard.facing))
-			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 120.0, "watching outward, the work behind")
+			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 60.0, "watching outward, the work behind")
+			var screen: Vector3 = game.cam_back()
+			screen.y = 0.0
+			assert_gt(rad_to_deg(look.angle_to(screen)), game.ai.LOOK_CAMERA_DEG - 0.5, "never into the screen")
 
 
 func _cycle(id: String) -> void:
