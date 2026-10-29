@@ -66,6 +66,20 @@ func test_a_room_is_its_floor_within_its_walls_and_open_doors() -> void:
 	assert_true(FieldAudio.room_of(g, Vector2i(0, 0)).is_empty(), "outdoors there is no room")
 
 
+func test_a_room_hears_its_furniture_and_shut_door_but_not_the_ground_outside() -> void:
+	var g := _room()
+	var chest := Vector2i(3, 3)
+	g.solid[g.index(chest)] = Grid.Solid.BLOCK   # a piece of furniture
+	var a = game.audio
+	a.room_cells = FieldAudio.room_of(g, Vector2i(4, 4))
+	a.room_key = [0, Vector2i(4, 4), g.revision]
+	assert_false(a.room_cells.has(chest), "the air does not pass the furniture")
+	assert_true(a.in_room(Grid.center(chest)), "but a lid opened on it is the room's sound")
+	assert_true(a.in_room(Grid.center(Vector2i(1, 4))), "and so is the shut door's")
+	assert_false(a.in_room(Grid.center(Vector2i(0, 4))), "the ground outside the shut door is not")
+	assert_false(a.in_room(game.lift(chest, 1)), "nor the floor above")
+
+
 func test_a_bigger_room_has_a_bigger_longer_reverb() -> void:
 	var closet: Dictionary = FieldAudio.room_reverb(9.0)
 	var kitchen: Dictionary = FieldAudio.room_reverb(25.0)

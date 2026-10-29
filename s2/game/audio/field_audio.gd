@@ -557,9 +557,19 @@ func _tick_room(at: Vector3) -> void:
 	verb.predelay_msec = float(r["predelay"])
 
 
-## A sound from `at` is in the player's room.
+## A sound from `at` is in the player's room: on its floor or at its edge (a
+## piece of furniture, a shut door or window of it — cells the air does not
+## pass, so not in room_cells, but a room's own sounds).
 func in_room(at: Vector3) -> bool:
-	return not room_cells.is_empty() and game.level_of(at) == int(room_key[0]) and room_cells.has(game.FieldGrid.cell_of(at))
+	if room_cells.is_empty() or game.level_of(at) != int(room_key[0]):
+		return false
+	var c: Vector2i = game.FieldGrid.cell_of(at)
+	if room_cells.has(c):
+		return true
+	for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if room_cells.has(c + d):
+			return true
+	return false
 
 
 ## The band a moan this far away is heard in: [from, pitch, bus].
