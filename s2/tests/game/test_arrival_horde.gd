@@ -82,8 +82,9 @@ func test_nearby_dead_ignore_the_cap_and_the_far_boundary_calls_none() -> void:
 		nearby.append(_dead_at(game, 10.0 + i))
 	var blocked := _dead_at(game, 50.0)
 	var edge := _dead_at(game, ArrivalHorde.FAR_M)
+	# Past the far reach and walking to another sound: not the brakes' to bring.
 	var outside := _dead_at(game, ArrivalHorde.FAR_M + 1.0, "investigate")
-	outside["target"] = FieldGrid.center(game.data["anchors"]["whistle"])
+	outside["target"] = outside["pos"] + Vector3(10.0, 0.0, 0.0)
 	var before := [blocked.duplicate(true), edge.duplicate(true), outside.duplicate(true)]
 	var frozen := _dead_at(game, 10.0, "frozen")
 	game.train_guard.brake()
@@ -203,6 +204,37 @@ func test_far_hearing_uses_the_floor_gate_of_hear_and_no_wind_as_the_near_brake(
 	game.train_guard.brake()
 	assert_false(z.get("arrival", false), "the wind carries the brakes no farther, as for the near ones")
 	assert_eq(z, before)
+
+
+func test_everyone_the_brakes_called_comes_however_far() -> void:
+	var game = _brake_game()
+	var spot := FieldGrid.center(game.data["anchors"]["whistle"])
+	# As if a sewer by the engine had rung the brakes through the map: called at 120 m.
+	var z := _dead_at(game, 120.0, "investigate")
+	z["target"] = spot
+	z["clue"] = SimNoise.Level.VERY_LOUD
+	game.train_guard.brake()
+	assert_true(z.get("arrival", false), "called by the brakes: the guards' to put down")
+
+
+func test_upstairs_the_pull_fades_by_the_same_rule_from_half_the_reach() -> void:
+	var game = _brake_game()
+	var z := _dead_at(game, 20.0, "wander", 1)
+	var d: float = FieldGrid.center(game.data["anchors"]["whistle"]).distance_to(z["pos"])
+	while not ArrivalHorde.attracted(d, game.rng.seed, int(z["id"]), 0.5):
+		z["id"] += 1
+	game.train_guard.brake()
+	assert_true(z.get("arrival", false), "a floor up, 20 m off: past the halved near reach, still pulled")
+	assert_almost_eq(ArrivalHorde.chance(20.0, 0.5), (125.0 - 20.0) / (125.0 - 17.5), 0.0001)
+	assert_gt(ArrivalHorde.chance(20.0, 0.5), ArrivalHorde.chance(36.0, 0.5), "nearer upstairs is likelier, never the other way")
+
+
+func test_a_remote_halt_with_none_heard_fills_none() -> void:
+	var game = _brake_game("remote")
+	game.train_guard.brake()
+	assert_eq(game.train_guard.heard, 0)
+	assert_eq(game.train_guard.filled, 0)
+	assert_eq(TrainGuard.auto("houses", 2, 7, "remote")["killed"], 0, "nobody out at a remote halt: no bodies at the train")
 
 
 func test_remote_fills_none_and_edge_fills_half_rounded_down() -> void:

@@ -65,13 +65,12 @@ func brake() -> void:
 		return
 	done = true
 	spot = FieldGrid.center(game.data["anchors"]["whistle"])
-	var sound_mult: float = game.weather.sound_mult(false)
-	var near := ArrivalHorde.reach(sound_mult)
 	game.make_sound(spot, ArrivalHorde.LEVEL, "train_brake")
+	# Everyone the brakes called comes, however far: a sewer by the engine rings them through the map.
 	for z in game.zombies.list:
-		if (z["pos"] as Vector3).distance_to(spot) <= near and z["state"] == "investigate" and (z["target"] as Vector3).distance_to(spot) < 0.01:
+		if z["state"] == "investigate" and (z["target"] as Vector3).distance_to(spot) < 0.01:
 			_arrive(z)
-	_call_far(sound_mult)
+	_call_far(game.weather.sound_mult(false))
 	filled = ArrivalHorde.fill(heard, String(game.data["place_kind"]), game.stop_form)
 	for i in range(filled):
 		fill_due.append({"t": ArrivalHorde.FILL_GAP_S * float(i), "i": i})
@@ -83,15 +82,17 @@ func _call_far(sound_mult: float) -> void:
 	var most := ArrivalHorde.cap(game.journey_progress)
 	if most >= 0 and heard >= most:
 		return
-	var near := ArrivalHorde.reach(sound_mult)
-	var far := ArrivalHorde.far_reach(sound_mult)
 	var candidates: Array = []
 	for z: Dictionary in game.zombies.list:
-		var d: float = (z["pos"] as Vector3).distance_to(spot)
-		if d <= near or d >= far or z["state"] == "frozen":
+		if z.get("arrival", false) or z["state"] == "frozen":
 			continue
-		if game.zombies.can_hear(z, spot, far):
-			candidates.append({"z": z, "d": d})
+		# Every floor between halves the reach, the near one and the far one alike (as hear()).
+		var mult: float = sound_mult * pow(0.5, absi(game.level_of(spot) - game.level_of(z["pos"])))
+		var d: float = (z["pos"] as Vector3).distance_to(spot)
+		if d <= ArrivalHorde.reach(mult) or d >= ArrivalHorde.far_reach(mult):
+			continue
+		if game.zombies.can_hear(z, spot, ArrivalHorde.far_reach(sound_mult)):
+			candidates.append({"z": z, "d": d, "mult": mult})
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if float(a["d"]) == float(b["d"]):
 			return int(a["z"]["id"]) < int(b["z"]["id"])
@@ -100,7 +101,7 @@ func _call_far(sound_mult: float) -> void:
 		if most >= 0 and heard >= most:
 			break
 		var z: Dictionary = row["z"]
-		if ArrivalHorde.attracted(float(row["d"]), game.rng.seed, int(z["id"]), sound_mult):
+		if ArrivalHorde.attracted(float(row["d"]), game.rng.seed, int(z["id"]), float(row["mult"])):
 			if game.zombies.hear_one(z, spot, ArrivalHorde.LEVEL):
 				_arrive(z)
 

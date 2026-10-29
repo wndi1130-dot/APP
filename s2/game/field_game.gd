@@ -1522,8 +1522,6 @@ static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 	return SidePath.add(map, run_seed)
 
 
-## The map the field stands on. Everything that reads the ground goes through
-## these four, so a stop of several joined maps can hand over a new one here.
 ## Reapply derived times after a saved stop is restored (decision 494).
 func set_stop_form(form: String) -> void:
 	stop_form = StopForm.resolve({"stop_form": form}, String(data["place_kind"]))
@@ -1535,6 +1533,8 @@ func set_stop_form(form: String) -> void:
 		music.director.safe_sec = clock.safe_sec
 
 
+## The map the field stands on. Everything that reads the ground goes through
+## these four, so a stop of several joined maps can hand over a new one here.
 func _take_map(d: Dictionary) -> void:
 	data = d
 	grid = data["grid"]
