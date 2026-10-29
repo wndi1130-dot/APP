@@ -71,6 +71,52 @@ func test_one_left_earlier_and_rescued_alive_comes_off_the_list_and_back_into_th
 	assert_eq(int(g["comms"]["tail"]["pop"]), int(control["comms"]["tail"]["pop"]) + 1)
 
 
+## One the floor of one kept on the count when left is not added again when rescued (s1 leftShort).
+func test_one_the_floor_kept_on_the_count_is_not_counted_back_when_rescued() -> void:
+	var row: Dictionary = _contracts()[0]
+	var receipt: Dictionary = (row["receipt"] as Dictionary).duplicate(true)
+	var who: Dictionary = {}
+	for p: Dictionary in _tables["PROFILES"]:
+		if p["community"] == "tail" and not (receipt["people"]["sent"] as Array).has(p["id"]):
+			who = p
+			break
+	receipt["people"]["rescued"] = [who["id"]]
+	var control: Dictionary = FieldReturn.apply_field_return(row["state"], _tables, row["departure"], receipt)["g"]
+	var state: Dictionary = (row["state"] as Dictionary).duplicate(true)
+	state["left"] = [who["name"]]
+	state["leftShort"] = {"tail": 1}
+	var g: Dictionary = FieldReturn.apply_field_return(state, _tables, row["departure"], receipt)["g"]
+	assert_eq(g["left"], [])
+	assert_eq(int(g["comms"]["tail"]["pop"]), int(control["comms"]["tail"]["pop"]), "not added again")
+	assert_false(g.has("leftShort"))
+
+
+## Left and missing at once is one person: taken off the count once; a car down to one notes the rest.
+func test_one_in_both_lists_is_taken_off_once_and_the_floor_notes_the_rest() -> void:
+	var row: Dictionary = _contracts()[0]
+	var pick: Dictionary = {}
+	for person: Dictionary in row["departure"]["roster"]:
+		if person["id"] != FieldDeparture.CAPTAIN_ID:
+			pick = person
+			break
+	var comm: String = pick["comm"]
+	var receipt: Dictionary = (row["receipt"] as Dictionary).duplicate(true)
+	receipt["people"]["dead"] = []
+	receipt["people"]["leftBehind"] = [pick["id"]]
+	receipt["people"]["missing"] = [pick["id"]]
+	for pop: int in [5, 1]:
+		var state: Dictionary = (row["state"] as Dictionary).duplicate(true)
+		state["comms"][comm]["pop"] = pop
+		var result: Dictionary = FieldReturn.apply_field_return(state, _tables, row["departure"], receipt)
+		assert_eq(result["status"], "applied")
+		var g: Dictionary = result["g"]
+		assert_eq(int(g["comms"][comm]["pop"]), maxi(1, pop - 1), "pop %d" % pop)
+		if pop == 1:
+			assert_eq(int(g["leftShort"][comm]), 1, "held at one by the floor")
+		else:
+			assert_false(g.has("leftShort"))
+
+
 func test_the_fixture_has_six_contracts() -> void:
 	assert_eq(_contracts().size(), 6, "three seeds, with and without the domestic rules")
 
