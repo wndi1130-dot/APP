@@ -12,12 +12,12 @@
 // arrival.state는 S1이 달린 결과를 입력으로 준다.
 // open의 보통 안건(agendaOptions)도 정치 전체 이식 밖이라 입력(regular)으로 준다: 회기를 연 직후(회기 수 +1, 적의 시계 +1 뒤) 값이다.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   advance, agendaOptions, blocs, castVote, cloneGame, COMM_NAME, COMMS, CORPSE_LAWS, createGame, expected, FAMILIES, IDEO, LAW_VARIANT_OF, LAWS, P,
-  CREW, CREW_COST, FETCH_WANT, LOOT_NAME, PLACES, PROFILES, PROLOGUE, resolveStop, REST_FLOOR, stance, STAGES, STAY, voiceOf,
+  CREW, CREW_COST, drawPerson, FETCH_WANT, LOOT_NAME, PLACES, PROFILES, PROLOGUE, REP_AGE, resolveStop, REST_FLOOR, stance, STAGES, STAY, TRAIT_BAN, TRAITS, voiceOf,
 } from '../src/game';
 import type { Game } from '../src/game';
 import { applyFieldReturn, chooseSymbolUse, FIELD, snapshot, symbolOptions } from '../src/game/field_receipt';
@@ -221,6 +221,37 @@ function nextFieldStepPeek(g: Game): string {
   return nextFieldStep(cloneGame(g));
 }
 
+/** 사용자 답 2026-10-29: S1a 대표와 후임 후보가 함께 남겨진 귀환. */
+function repLeftCase(seed: string) {
+  // 다른 사례처럼 첫 정차를 지난 판에서 시작한다(다친 사람 장부가 이미 있는 판).
+  const g = startGame(seed);
+  const comm = 'engine';
+  const s = g.comms[comm];
+  const old = s.leader;
+  const probe = cloneGame(g);
+  probe.left = [old.name];
+  const companion = drawPerson(probe, comm, REP_AGE[comm]);
+  old.traitShown = 2;
+  s.sick = { since: g.seg, rep: { ...old } };
+  s.debt = true;
+  s.promise = { kind: 'open', cond: { kind: 'skip_dispatch', label: '파견 제외', now: false }, label: '파견 제외', due: g.seg + 1, madeSession: 0 };
+  const sent = [old.personId, companion.id];
+  const departure: FieldDeparture = {
+    ...read<FieldDeparture>('departure_prologue'), segment: g.seg, domestic: false, promises: [],
+    roster: sent.map(id => ({ id, comm })),
+  };
+  const receipt: FieldReceipt = {
+    ...read<FieldReceipt>('case3_nosymbol_kept'), stock: {}, fieldPromises: [],
+    people: { sent, injured: [], bitten: [], dead: [], leftBehind: [old.personId], missing: [companion.id], rescued: [] },
+  };
+  const state = plain(g);
+  const applied = applyFieldReturn(g, departure, receipt);
+  const apply = { status: applied.status, record: plain(applied.record), after: plain(g) };
+  const again = applyFieldReturn(g, departure, receipt);
+  const duplicate = { status: again.status, record: plain(again.record), after: plain(g) };
+  return { seed, comm, state, departure, receipt, apply, duplicate };
+}
+
 function main(): void {
   const out = process.argv[2] ? resolve(process.argv[2]) : resolve(here, '../../s2/tests/game/fixtures/field_port/field_vectors.json');
   const cases = [];
@@ -229,6 +260,8 @@ function main(): void {
   const memories = SEEDS.map(memoryCase);
   const tables = {
     COMMS, COMM_NAME, P, STAGES, IDEO, LAWS, LAW_VARIANT_OF, CORPSE_LAWS, PROLOGUE, FIELD,
+    // 남겨진 대표 승계: 실제 열차 slice_start.json과 같은 표.
+    REP_AGE, TRAITS, TRAIT_BAN,
     // 필드가 다녀온 정차를 닫는 셈(closeFieldStop)이 읽는 표.
     STAY, PLACES, LOOT_NAME, REST_FLOOR, CREW, CREW_COST, FETCH_WANT,
     PROFILES: PROFILES.map(p => ({ id: p.id, name: p.name, community: p.community, age: p.age })),
@@ -244,13 +277,15 @@ function main(): void {
     cases,
     contracts,
     memories,
+    repLeft: repLeftCase(SEEDS[0]),
     voices: Object.fromEntries(PROFILES.map(p => [p.id, voiceOf(p.id)])),
   };
   mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, `${JSON.stringify(file)}\n`);
+  const eol = existsSync(out) && readFileSync(out, 'utf8').endsWith('\r\n') ? '\r\n' : '\n';
+  writeFileSync(out, `${JSON.stringify(file)}${eol}`);
   const votes = cases.reduce((n, c) => n + c.votes.length, 0);
   const arrivals = cases.filter(c => c.arrival).length;
-  console.log(`${out}: 사례 ${cases.length}, 표결 ${votes}, 도착 ${arrivals}, 계약 ${contracts.length}, 기억 ${memories.length}, ${Buffer.byteLength(JSON.stringify(file))}바이트`);
+  console.log(`${out}: 사례 ${cases.length}, 표결 ${votes}, 도착 ${arrivals}, 계약 ${contracts.length}, 기억 ${memories.length}, 대표 승계 1, ${Buffer.byteLength(JSON.stringify(file))}바이트`);
 }
 
 main();

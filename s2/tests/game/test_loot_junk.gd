@@ -192,7 +192,9 @@ func test_a_looted_house_tips_its_odds_and_ends_onto_its_floors() -> void:
 	for id: String in d["containers"]:
 		var box: Dictionary = d["containers"][id]
 		if _in(d, box) == b and box.get("searched", false) and (box.get("items", []) as Array).is_empty():
-			emptied[LootJunk._cell(box["cell"])] = int(box.get("level", 0))
+			# By cell and floor: two floors' boxes can share a cell (a counter over a counter).
+			var bc := LootJunk._cell(box["cell"])
+			emptied[Vector3i(bc.x, bc.y, int(box.get("level", 0)))] = true
 	var loose := LootJunk.spill_looted(d, [{"story": "looted", "building": b}], 5)
 	assert_eq(loose.size(), mini(LootJunk.SPILL_MOST, emptied.size()), "one by each emptied box, at most four")
 	assert_eq(_all_things(d, loose), before, "nothing added or taken (양 그대로)")
@@ -205,8 +207,8 @@ func test_a_looted_house_tips_its_odds_and_ends_onto_its_floors() -> void:
 		assert_eq(grid.building_at(cell), b, "inside the house")
 		assert_true(grid.indoor(cell) and grid.people_can_walk(cell) and not grid.doors.has(cell), "on a floor one can stand on")
 		var by_box := false
-		for c: Vector2i in emptied:
-			if emptied[c] == lv and absi(c.x - cell.x) + absi(c.y - cell.y) == 1:
+		for c: Vector3i in emptied:
+			if c.z == lv and absi(c.x - cell.x) + absi(c.y - cell.y) == 1:
 				by_box = true
 		assert_true(by_box, "beside a box that was emptied")
 	for item in bundles:

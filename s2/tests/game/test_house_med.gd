@@ -93,3 +93,22 @@ func test_no_bathroom_or_no_house_is_not_looked_at() -> void:
 func test_the_deck_is_listed() -> void:
 	assert_eq(LootDress.DECKS["house_med"], [10, 0.3])
 	assert_eq(LootDress.HOUSE_MED_FROM[0], "food")
+
+
+func test_full_bathroom_boxes_take_no_medicine_and_the_house_is_not_looked_at() -> void:
+	# Every bathroom box full (ref-ops check, decision 485): the house keeps what it holds, no
+	# box goes over CAP, and the deck does not count it, so the next ten houses still get three.
+	var decks := {}
+	for stop in range(10):
+		var boxes := _house()
+		for id: String in ["m", "w"]:
+			for i in range(LootDress.CAP):
+				(boxes[id]["items"] as Array).append("wrist_watch")
+		var before := boxes.duplicate(true)
+		assert_eq(LootDress._house_med(boxes, BUILDINGS, {0: boxes.keys()}, 100 + stop, decks), 0)
+		assert_eq(boxes, before, "nothing moved")
+	var got := 0
+	for stop in range(10):
+		var boxes := _house()
+		got += LootDress._house_med(boxes, BUILDINGS, {0: boxes.keys()}, 100 + stop, decks)
+	assert_eq(got, 3, "the full houses were not counted")

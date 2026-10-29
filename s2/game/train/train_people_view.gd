@@ -294,6 +294,7 @@ func _process(_delta: float) -> void:
 	shivers.clear()
 	var seen: Dictionary = {}
 	var gun_count := 0
+	var gun_slots: int = LAP_GUNS
 	var wanted: Array = []                # the blankets wanted this frame: the bodies under each
 	var cars_seen: Dictionary = {}
 	for c in scene.cars:
@@ -304,6 +305,8 @@ func _process(_delta: float) -> void:
 		var last_x := -1000.0
 		var last_pose := ""
 		var ordered := in_seat_order(c["bodies"])
+		var armed: Array = lap_gun_receivers(ordered, state, gun_slots) if guns != null else []
+		gun_slots -= armed.size()
 		var under: Dictionary = {}
 		for group in blanket_groups(_bench_rows(ordered, state, now), state):
 			var members: Array = group.map(func(i): return ordered[i])
@@ -321,6 +324,8 @@ func _process(_delta: float) -> void:
 			var key: int = absi(b.get_instance_id())
 			var life: Dictionary = scene.life.actors.get(b.get_instance_id(), {})
 			var traits: Dictionary = life.get("traits", {})
+			var has_lap_gun: bool = armed.has(b)
+			traits = traits.merged({"lap_gun": has_lap_gun})
 			if under.has(b):
 				traits = traits.merged({"blanket": true})
 			if reacting.has(b):
@@ -331,7 +336,7 @@ func _process(_delta: float) -> void:
 			last_want = want
 			last_x = x
 			last_pose = String(b.pose)
-			var clip := shown_for(b, want, now)
+			var clip := shown_for(b, want, now, has_lap_gun)
 			var rec: Dictionary = people[b]
 			if not rec.has("wears") or not bodies.has(String(rec["wears"])):
 				rec["wears"] = _available(body_for(String(state["layout"]), String(traits.get("role", "")), at_work, key, prev), key)
@@ -361,7 +366,7 @@ func _process(_delta: float) -> void:
 				var mouth = MOUTH.get(clip, MOUTH_STANDING if String(b.pose) == "stand" else null)
 				if mouth != null:
 					heads.append(place_of(b, clip, state) * Vector3(mouth))
-			if guns != null and gun_count < LAP_GUNS and String(state["layout"]) == "guard" and clip in ["t_sit", "t_gun_clean"] and String(b.pose) == "sit":
+			if guns != null and has_lap_gun and clip in ["t_sit", "t_gun_clean"] and String(b.pose) == "sit":
 				var at: Transform3D = place_of(b, clip, state)
 				guns.multimesh.set_instance_transform(gun_count, at * Transform3D(Basis(Vector3.UP, PI * 0.5), LAP_AT))
 				gun_count += 1
@@ -431,6 +436,19 @@ static func in_seat_order(list: Array) -> Array:
 	var out: Array = list.filter(func(b): return is_instance_valid(b))
 	out.sort_custom(func(a, b): return a.global_position.x < b.global_position.x)
 	return out
+
+
+## Reserve the shared guns in seat order before choosing any clips.
+static func lap_gun_receivers(ordered: Array, s: Dictionary, limit: int = LAP_GUNS) -> Array:
+	var receivers: Array = []
+	if String(s["layout"]) != "guard":
+		return receivers
+	for b in ordered:
+		if receivers.size() >= limit:
+			break
+		if b.visible and String(b.pose) == "sit" and int(b.seat) < 0:
+			receivers.append(b)
+	return receivers
 
 
 ## One multimesh of the gun that lies across a guard's knees (one draw for all).
@@ -540,6 +558,7 @@ static func want_for(b, s: Dictionary, activity: String, key: int, t: float = 0.
 	me["ill"] = bool(life.get("sick", false)) or bool(life.get("injured", false))
 	me["child"] = bool(life.get("child", false))
 	me["role"] = String(life.get("role", ""))
+	me["lap_gun"] = bool(life.get("lap_gun", false))
 	var round_no: int = int(floor((t + float(me["offset"])) / float(me["hold"])))
 	var weights := weights_for(pose, b, s, me)
 	# Not the same as the one beside at the same moment (talk is done together):
@@ -589,8 +608,8 @@ static func _forced(b, s: Dictionary, activity: String, t: float) -> String:
 			if String(s["layout"]) != "guard":
 				return ""
 			# A sentry short of relief gets their breath back between turns (train_schedule.gd);
-			# a hungry car's catch_breath alone keeps the lantern up.
-			return "t_crouch" if gesture == "catch_breath" and float(s.get("job_short", 0.0)) > 0.0 else "t_lantern"
+			# hunger alone leaves them standing with folded arms.
+			return "t_crouch" if gesture == "catch_breath" and float(s.get("job_short", 0.0)) > 0.0 else "t_fold"
 	match gesture:
 		Gesture.BOWL_SIT:
 			return "t_eat"
@@ -634,6 +653,10 @@ static func weights_for(pose: String, b, s: Dictionary, me: Dictionary) -> Dicti
 		for clip in add:
 			if weights.has(clip):
 				weights[clip] = maxf(float(weights[clip]) + float(add[clip]) * scale, 0.0)
+	# No lantern is drawn in a hand yet, so an event's mark (party_out) cannot bring
+	# the empty-handed lantern back in any car.
+	if weights.has("t_lantern"):
+		weights["t_lantern"] = 0.0
 	return weights
 
 
@@ -661,7 +684,7 @@ static func _base_weights(pose: String, b, s: Dictionary, me: Dictionary) -> Dic
 			return {
 				"t_sit": 2.0 + (0.8 if guard else 0.0),
 				# A guard looks the gun on the knees over; a calm car mends and reads.
-				"t_gun_clean": 1.5 if guard and not s["night"] else 0.0,
+				"t_gun_clean": 1.5 if guard and me.get("lap_gun", false) and not s["night"] else 0.0,
 				"t_handwork": (1.0 if calm else 0.2) if not guard and not me.get("child", false) else 0.0,
 				"t_sit_talk": (1.6 if talker else 0.25) + (2.0 if hothead else 0.0) + (1.0 if calm else 0.0) + (1.2 if layout == "dining" else 0.0),
 				"t_sit_huddle": (4.0 if chilled else 0.0) + (1.5 if sick else 0.0) + (2.0 if afraid else 0.0),
@@ -685,7 +708,7 @@ static func _base_weights(pose: String, b, s: Dictionary, me: Dictionary) -> Dic
 		"t_cough": 5.0 if sick else 0.0,
 		"t_talk": (2.5 if hothead else (0.8 if talker else 0.0)) + (0.8 if calm and talker else 0.0),
 		"t_no": 1.5 if hothead else 0.0,
-		"t_lantern": (5.0 if s["night"] else 1.5) if guard else 0.0,
+		"t_lantern": 0.0,
 		"t_stir": 3.0 if role == "cook" and layout == "dining" else 0.0,
 		# The cook hands the bowls round at a meal; one cold by the stove reaches to it.
 		"t_pass": 2.0 if role == "cook" and layout == "dining" and s.get("meal", false) else 0.0,
@@ -725,13 +748,24 @@ static func scene_beat(b) -> String:
 ## scene moved the body (scene_beat), or a gesture is on, it is taken at once;
 ## otherwise after the person's own delay, through a joining motion when BRIDGES
 ## has one. This is the one place a change of the car's state reaches the look.
-func shown_for(b, want: String, now: float) -> String:
+func shown_for(b, want: String, now: float, lap_gun: bool = false) -> String:
+	if want == "t_gun_clean" and not lap_gun:
+		want = "t_sit"
 	var key: int = absi(b.get_instance_id())
 	var beat := scene_beat(b)
 	if not people.has(b):
-		people[b] = {"shown": want, "want": want, "want_since": now, "beat": beat, "bridge_until": -1.0, "after": "", "mix": {}}
+		people[b] = {"shown": want, "want": want, "want_since": now, "beat": beat, "bridge_until": -1.0, "after": "", "mix": {}, "lap_gun": lap_gun}
 		return want
 	var rec: Dictionary = people[b]
+	# A gun changing hands cannot leave a delayed or blended cleaning motion.
+	if not lap_gun and (bool(rec.get("lap_gun", false)) or String(rec["shown"]) == "t_gun_clean"):
+		rec["shown"] = want
+		rec["want"] = want
+		rec["want_since"] = now
+		rec["bridge_until"] = -1.0
+		rec["after"] = ""
+		rec["mix"] = {}
+	rec["lap_gun"] = lap_gun
 	if beat != String(rec["beat"]) or String(b.gesture) != "" or String(b.act) != "":
 		rec["shown"] = want
 		rec["want"] = want

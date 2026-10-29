@@ -11,10 +11,14 @@ extends RefCounted
 ##   haptic   a short buzz on a phone with it (Input.vibrate_handheld)
 ##   sound    a whoosh as the weapon comes round, then a blunt, an edged or a
 ##            stamping blow where it lands (field_audio groups swing_*, hit_*)
+##   blood    drops thrown the way the blow went and a mark where each lands,
+##            a pool under one that goes down (blood_fx.gd, decision 444 D);
+##            its own dice, never the field's
 ## The reference game has no hitstop or shake: its blows are felt through
 ## their sound and a long stagger. These are ours, for a phone.
 
 const W = preload("res://game/sim/weapons.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 
 ## Seconds the field holds for a blow: by the weapon's weight (knife 0.045,
 ## crowbar 0.06, hatchet 0.075), more if the body goes down.
@@ -59,6 +63,10 @@ const BLOW_LOUD: float = 0.85
 const BLOW_REACH: float = 40.0
 ## From this weight a weapon swings with the heavy whoosh.
 const HEAVY_KG: float = 2.0
+## Where on a body the blood comes off: a standing one high on it, one on the
+## ground just off the floor, where a blow is judged on it (seen_pos).
+const BLEED_HIGH: float = 1.35
+const BLEED_LOW: float = 0.2
 
 var game
 var hold_t: float = 0.0          # seconds the field still holds
@@ -116,12 +124,14 @@ func swing(p, weapon_id: String) -> void:
 	_sound("swing_heavy" if heavy else "swing_light", p.position, SWING_LOUD, SWING_REACH)
 
 
-## A melee blow landed on a body at `at`; felled: it went down or died.
-func landed(p, at: Vector3, weapon_id: String, felled: bool) -> void:
+## A melee blow landed on a body at `at` (where it is seen, on the ground);
+## felled: it went down or died; low: it was on the ground already.
+func landed(p, at: Vector3, weapon_id: String, felled: bool, low: bool = false) -> void:
 	var d: Dictionary = W.get_data(weapon_id)
 	if d.get("kind", "") != "melee":
 		return
 	_sound("hit_blade" if bool(d.get("blade", false)) else "hit_blunt", at, BLOW_LOUD, BLOW_REACH)
+	_bleed(p, at, "slash" if bool(d.get("blade", false)) else "blunt", 0.6 + 0.2 * float(d.get("weight", 1.0)), felled, low)
 	if p != game.player:
 		return
 	var kg: float = float(d.get("weight", 1.0))
@@ -134,6 +144,7 @@ func landed(p, at: Vector3, weapon_id: String, felled: bool) -> void:
 ## A boot came down on a body on the ground.
 func stomped(p, at: Vector3, ended_it: bool) -> void:
 	_sound("hit_stomp", at, BLOW_LOUD, BLOW_REACH)
+	_bleed(p, at, "blunt", 0.7, ended_it, true)
 	if p != game.player:
 		return
 	_hold(STOP_STOMP + (STOP_FELLED if ended_it else 0.0))
@@ -162,12 +173,33 @@ func bitten(p, blocked: bool) -> void:
 	_buzz(float(BUZZ_BITTEN[0]) * k, float(BUZZ_BITTEN[1]) * k)
 
 
+## A round went into a body at `at` (where it is seen, on the ground).
+func shot_in(p, at: Vector3, felled: bool, low: bool) -> void:
+	_bleed(p, at, "firearm", 1.0, felled, low)
+
+
 ## The player's own shot: the camera kicks back from where it went.
 func shot(p, weapon_id: String, at: Vector3) -> void:
 	if p != game.player:
 		return
 	_kick(p.position - at, float(SHAKE_SHOT.get(weapon_id, 0.004)))
 	_buzz(float(BUZZ_SHOT[0]), float(BUZZ_SHOT[1]))
+
+
+## Blood off a body at `at` the way the blow went (blood_fx.gd). Its dice
+## are its own: the rules' run is the same with or without it.
+func _bleed(p, at: Vector3, kind: String, strength: float, felled: bool, low: bool) -> void:
+	var fx = game.get("blood_fx")
+	if fx == null:
+		return
+	var cell := FieldGrid.cell_of(at)
+	var snow: bool = game.level_of(at) == 0 and game.grid.inside(cell) and not game.grid.indoor(cell)
+	var contact := {"position": at + Vector3(0, 0.02, 0), "snow": snow}
+	var from := at + Vector3(0, BLEED_LOW if low else BLEED_HIGH, 0)
+	if felled:
+		fx.death(from, at - p.position, kind, contact)
+	else:
+		fx.hit(from, at - p.position, strength, kind, contact)
 
 
 func _hold(seconds: float) -> void:

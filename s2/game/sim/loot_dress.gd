@@ -600,18 +600,31 @@ static func _deal(containers: Dictionary, ids: Array, rng: RandomNumberGenerator
 				keep.append(item)
 		containers[id]["items"] = keep
 	var moved := 0
-	var shares: Dictionary = {}   # family -> {box: its share of its room's draw}
 	for row: Array in pool:
 		var family: String = FAMILY[row[0]]
-		if not shares.has(family):
-			shares[family] = _room_shares(containers, ids, family)
+		# Each box that can still take it draws AFFINITY for its room, the room's boxes that can
+		# splitting that by their furniture's pull (FURNITURE_PULL, as _room_shares): a full
+		# wardrobe leaves its room's draw to the room's other boxes, not to other rooms.
+		var open: Array = []
+		var count: Dictionary = {}
+		var sum: Dictionary = {}
+		for id: String in ids:
+			var c: Dictionary = containers[id]
+			var can: bool = (c["items"] as Array).size() < CAP and _dealt_load(c) + _dealt_weight(row[0]) <= Carry.box_limit(c)
+			open.append(can)
+			if can:
+				var key := _room_key(c)
+				count[key] = int(count.get(key, 0)) + 1
+				sum[key] = float(sum.get(key, 0.0)) + _pull(c, family)
 		var total := 0.0
 		var weights: Array = []
-		for id: String in ids:
+		for i in range(ids.size()):
 			var w := 0.0
-			var c: Dictionary = containers[id]
-			if (c["items"] as Array).size() < CAP and _dealt_load(c) + _dealt_weight(row[0]) <= Carry.box_limit(c):
-				w = float(AFFINITY[room_of(c)][family]) * float(shares[family][id])
+			if open[i]:
+				var c: Dictionary = containers[ids[i]]
+				var key := _room_key(c)
+				var share := _pull(c, family) * float(count[key]) / float(sum[key])
+				w = float(AFFINITY[room_of(c)][family]) * share
 			weights.append(w)
 			total += w
 		var to: String = row[1]
@@ -873,7 +886,9 @@ static func _put_fit(containers: Dictionary, ids: Array, item: String, family: S
 ## of the family they hold most (HOUSE_MED_FROM), become a box of medicine, put in a
 ## bathroom box with the medicine cabinet's pull (FURNITURE_PULL) — so the stop holds as
 ## many bundles as before. A house already holding medicine counts as one that has it;
-## a house with nothing to give is not looked at. Its own dice. Returns the houses changed.
+## a house with nothing to give, or no bathroom box with room for it, is not looked at.
+## Its own dice, two for every house with a bathroom whatever comes of it, so one house's
+## lot never moves the next one's. Returns the houses changed.
 static func _house_med(containers: Dictionary, buildings: Array, by_building: Dictionary, seed: int, decks: Dictionary) -> int:
 	var rng := _rng(seed, "house_med")
 	var all: Array = by_building.keys()
@@ -887,13 +902,15 @@ static func _house_med(containers: Dictionary, buildings: Array, by_building: Di
 		if bath.is_empty():
 			continue
 		var roll := rng.randf()
+		var pick := rng.randf()
 		if _held(containers, ids, "med") > 0:
 			deck_count(decks, "house_med", true)
 			continue
 		var give := _most_held_bundle(containers, ids)
-		if give.is_empty() or not _look(decks, "house_med", roll):
+		if give.is_empty():
 			continue
-		var left: Array = (containers[give[0]]["items"] as Array).duplicate()
+		var had: Array = containers[give[0]]["items"]
+		var left: Array = had.duplicate()
 		left.remove_at(int(give[1]))
 		containers[give[0]]["items"] = left
 		var room: Array = []
@@ -901,12 +918,13 @@ static func _house_med(containers: Dictionary, buildings: Array, by_building: Di
 			var c: Dictionary = containers[id]
 			if (c["items"] as Array).size() < CAP and _dealt_load(c) + NAMED_MOST <= Carry.box_limit(c):
 				room.append(id)
-		if room.is_empty():
-			room = bath
+		if room.is_empty() or not _look(decks, "house_med", roll):
+			containers[give[0]]["items"] = had
+			continue
 		var total := 0.0
 		for id: String in room:
 			total += _pull(containers[id], "med")
-		var at := rng.randf() * total
+		var at := pick * total
 		var to: String = room[room.size() - 1]
 		for id: String in room:
 			at -= _pull(containers[id], "med")
