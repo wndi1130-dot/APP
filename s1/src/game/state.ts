@@ -314,6 +314,7 @@ export interface Game {
   /** 생필품(결정 490). 켜지 않은 판에는 재고·이번 정산의 배급 몫도 없다. */
   supOn?: boolean;
   sup?: number;
+  supFine?: number;
   supCover?: Partial<Record<Comm, number>>;
   trust: number;
   tension: number;

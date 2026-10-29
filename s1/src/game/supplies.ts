@@ -10,7 +10,19 @@ export const SUP_YIELD: Readonly<Record<string, number>> = Object.freeze({
   houses: 5, church: 2, office: 2, hospital: 2, freight: 1, factory: 1,
 });
 
-export type SuppliesSource = 'stop.loot' | 'sup.search' | 'field.loot';
+/** 결정 490 둘째 PR의 제안 값. 공방 생산량은 실수로 셈한다. */
+export const SUP_MAKE = {
+  supMakeWork: 0.5, supMakeScrap: 1, supMakeCap: 0.25, fineScrap: 2,
+  variants: { a: { work: 0.7, scrap: 1.25, yield: 1 }, b: { work: 1.3, scrap: 1.5, yield: 1.5 } },
+};
+
+/** 봇만 거는 판별 정책. 저장 상태와 난수에 넣지 않고 일반 판에는 없다. */
+export const SUPPLIES_BOT = new WeakMap<Game, {
+  make: 'none' | 'last' | 'first';
+  beforeWork?: (g: Game) => void;
+}>();
+
+export type SuppliesSource = 'stop.loot' | 'sup.search' | 'field.loot' | 'sup.make';
 export interface SuppliesTurn {
   need: number;
   use: number;
@@ -23,6 +35,9 @@ export const SUPPLIES_PROBE: {
   beforeUse?: (g: Game, need: number) => void;
   afterUse?: (g: Game, turn: SuppliesTurn) => void;
   onGain?: (g: Game, amount: number, source: SuppliesSource) => void;
+  /** 좋은 물건도 포함한 공방 산출. onGain은 실제 생필품 입고만 센다. */
+  onMake?: (g: Game, amount: number, fine: boolean) => void;
+  onRestore?: (g: Game) => void;
 } = {};
 
 /** 정찰 장비·기온과 같은 명시적 켜기. 기본 판은 이 함수를 부르지 않는다. */

@@ -261,8 +261,8 @@ describe('살림 처지와 정치', () => {
 });
 
 describe('연구 줄과 채택', () => {
-  it('기술은 23개이며 x4는 2단, w5는 목재 4·부품 1의 0단 적응이다', () => {
-    expect(TECH_IDS).toHaveLength(23);
+  it('기술은 26개이며 x4는 2단, w5는 목재 4·부품 1의 0단 적응이다', () => {
+    expect(TECH_IDS).toHaveLength(26);
     expect(restoreCost('x4')).toMatchObject({ wood: 10, scrap: 4, frags: 2, work: 6 });
     expect(TECHS.w5).toMatchObject({ tier: 0, adapt: { parts: 1, wood: 4 } });
     expect(restoreCost('w5')).toMatchObject({ wood: 4, parts: 1, scrap: 0, frags: 0, defectFrags: 0, core: 0 });

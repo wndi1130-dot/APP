@@ -18,6 +18,7 @@ export const WHY_NAME: Record<string, string> = {
   wash: '씻을 물이 모자람',
   sup: '생필품 배급',
   'sup.use': '생필품 사용',
+  'sup.make': '공방 생필품 만들기',
   'sup.search': '맡긴 수색의 생필품 덤',
   knowhow: '기술 물려주기',
   tech: '기술 되살리기',
