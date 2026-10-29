@@ -11,7 +11,7 @@ extends RefCounted
 ## not a case or a bundle set down; med is a bottle and a bandage roll, aim has
 ## its ticks on one axis only, inv is a grid, fetch a box with no handle).
 ## Every line is drawn at LINE of the width asked for (user 2026-10-18: the
-## lines were too heavy next to Frostpunk's), so the mockup's widths stay at
+## lines were too heavy next to reference game 2's), so the mockup's widths stay at
 ## the call sites. Crouch is a figure down on one knee, its back bent and its
 ## head low, a hand on the other knee (the same day: the user's own drawing,
 ## the first of four, traced into one line like the others).

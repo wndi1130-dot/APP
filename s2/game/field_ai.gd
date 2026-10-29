@@ -262,7 +262,7 @@ func _walk(p, to: Vector3, run: bool = false) -> void:
 
 
 ## On the way and not getting anywhere (a wall corner, someone in the way):
-## drop the path so the next walk finds a new one (zomboid mod lesson: a
+## drop the path so the next walk finds a new one (reference game 1 mod lesson: a
 ## watchdog, not a companion running on the spot).
 func _watch_stuck(p) -> void:
 	if p.path.is_empty() or p.action != "":
@@ -337,7 +337,7 @@ func _use_bandage(giver, who, n: int) -> void:
 
 ## A companion thinks for itself (decision 406): what is after us comes first,
 ## then the order, then keeping beside the chief. Threat always outranks a job
-## (zomboid mod lesson: workers that let themselves be eaten mid-task).
+## (reference game 1 mod lesson: workers that let themselves be eaten mid-task).
 func _companion(p) -> void:
 	if _hold_swing(p):
 		return

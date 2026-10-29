@@ -268,7 +268,7 @@ export function domesticPromiseMade(g: Game): void {
 }
 
 /** 기술·의무진이 제안하는 다음 복원 대상: 그들이 원하는 것 중 지금 완성판을 바로 시작할 수 있는 것(A02: 잠긴 R3나 선행·숙련이 모자란 것은 고르지 않고,
- * 프펑2식으로 지킬 수 없는 제안은 내놓지 않는다: 조각·부품·목재가 모자라거나 공방이 차 있으면 후보가 아니다). 없으면 null이고 그 조건은 협상 목록에서 빠진다. */
+ * 참고 게임 2(2편)식으로 지킬 수 없는 제안은 내놓지 않는다: 조각·부품·목재가 모자라거나 공방이 차 있으면 후보가 아니다). 없으면 null이고 그 조건은 협상 목록에서 빠진다. */
 export function researchChoice(g: Game): TechId | null {
   const d = g.dom;
   if (!d) return null;

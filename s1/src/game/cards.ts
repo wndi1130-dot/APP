@@ -34,7 +34,7 @@ export interface Choice {
   id?: PickId;
   /** 무엇을 하는지 짧게. 일지에 남는다 */
   label: string;
-  /** 카드에 보이는 열차장의 말(프로스트펑크식 선택지, 2026-10-07 사용자). 없으면 label을 보인다 */
+  /** 카드에 보이는 열차장의 말(참고 게임 2식 선택지, 2026-10-07 사용자). 없으면 label을 보인다 */
   say?: string;
   effs: Eff[];
   /** 효과 말고 따로 처리하는 일 */
@@ -132,7 +132,7 @@ export function withAfford(g: Game, choices: Choice[]): Choice[] {
 
 // ---- 이동 사건(브리프 9장의 묶음에서 고른 것) ----
 // 같은 사건이 다시 나올 수 있지만, 지난번 고른 것과 지금 처지에 따라 본문과 대가가 달라진다(2026-10-07 사용자 후기:
-// 프로스트펑크처럼 발생은 하되 세부가 달라져야 한다). 한 사건은 다섯 구간 안에 다시 나오지 않는다.
+// 참고 게임 2처럼 발생은 하되 세부가 달라져야 한다). 한 사건은 다섯 구간 안에 다시 나오지 않는다.
 interface TravelEvent { id: string; when: (g: Game) => boolean; /** 처지 압박의 원값(1 + 문턱까지 거리/20). drawTravelEvent가 1~DRAW.pressMax로 자른다. 없으면 1 */ pressure?: (g: Game) => number; /** 기본 무게(드문 사건 0.5, 모자란 자원을 주는 사건은 올린다). 없으면 1 */ base?: () => number; view: (g: Game, past: EventMemo | undefined) => CardView }
 
 /**
@@ -363,7 +363,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
 
 /** 다섯 구간 안에 나왔던 사건은 다시 고르지 않는다. */
 export const EVENT_COOLDOWN = 5;
-/** 한 사건의 사슬은 세 박자(도입, 압력, 결말)까지(프로스트펑크 사건 사슬 조사, 2026-10-07). */
+/** 한 사건의 사슬은 세 박자(도입, 압력, 결말)까지(참고 게임 2 사건 사슬 조사, 2026-10-07). */
 export const EVENT_CHAIN_MAX = 3;
 
 /** 사건 재등장 상태 키: 화자들, 자원 띠, 꼬리칸 처지 띠, 법. 이 중 하나라도 바뀌어야 같은 사건이 다시 열린다. */
@@ -736,7 +736,7 @@ function baseView(g: Game, card: Card): CardView {
       };
     }
     case 'need_warn': {
-      // 법 요구 예고. 약속하면 기한이 한 구간 늘고, 어기면 신임을 크게 잃는다(프로스트펑크 1식, 2026-10-07 사용자 카드 '약속 넣기').
+      // 법 요구 예고. 약속하면 기한이 한 구간 늘고, 어기면 신임을 크게 잃는다(참고 게임 2식, 2026-10-07 사용자 카드 '약속 넣기').
       const def = NEEDS[card.text as NeedId];
       if (!def) break;
       return {

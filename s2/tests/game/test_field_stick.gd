@@ -1084,7 +1084,7 @@ func test_dragging_off_the_aim_pad_onto_an_enemy_takes_that_one() -> void:
 	hud._auto_aim_end(pad)
 
 
-## Decision 405 (as in Zomboid): with nothing picked the shot still goes
+## Decision 405 (as in reference game 1): with nothing picked the shot still goes
 ## where the gun points (it was: no shot at all).
 func test_holding_the_aim_pad_with_no_one_about_fires_where_it_points() -> void:
 	_gun()
