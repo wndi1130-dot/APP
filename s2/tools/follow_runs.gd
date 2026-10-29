@@ -1,6 +1,6 @@
 extends SceneTree
 ## Decision 486: observe follow failures before changing the rules.
-## --seeds 1:10 --hz 30 --label before
+## --seeds 1:10 --hz 30 --label before [--follow-walk-turn]
 ## Like one_motion_runs: raw resources in memory, manual fixed _step, no saves.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -22,6 +22,7 @@ var hz := 30
 var seed_first := 1
 var seed_last := 10
 var label := "before"
+var follow_walk_turn: bool = false
 
 
 func _initialize() -> void:
@@ -34,6 +35,11 @@ func _run() -> void:
 		return
 	print(JSON.stringify({"kind": "config", "label": label,
 		"seeds": [seed_first, seed_last], "hz": hz,
+		"follow_walk_turn": follow_walk_turn,
+		"stop_reason_method": "observed state at moving true->false; not a mover event log",
+		"stop_context_key": "leg|reason|queue/formation|corner/straight",
+		"player_reversal": "successive nonzero displacement directions have dot < -0.5",
+		"face_camera_axis": "horizontal camera basis.z; legacy face_camera remains position based",
 		"engine": Engine.get_version_info()["string"],
 		"field_ai_sha256": FileAccess.get_sha256("res://game/field_ai.gd"),
 		"leg_limit_seconds": LEG_SECONDS, "stand_seconds": STAND_SECONDS,
@@ -142,10 +148,15 @@ func _cache_raw(folder: String) -> void:
 
 func _arguments() -> bool:
 	var args := OS.get_cmdline_user_args()
-	if args.size() % 2 != 0:
-		push_error("Every argument requires a value.")
-		return false
-	for i in range(0, args.size(), 2):
+	var i: int = 0
+	while i < args.size():
+		if args[i] == "--follow-walk-turn":
+			follow_walk_turn = true
+			i += 1
+			continue
+		if i + 1 >= args.size():
+			push_error("Missing argument value: " + args[i])
+			return false
 		var value := args[i + 1]
 		match args[i]:
 			"--hz":
@@ -162,6 +173,7 @@ func _arguments() -> bool:
 			_:
 				push_error("Unknown argument: " + args[i])
 				return false
+		i += 2
 	return hz > 0 and seed_last >= seed_first
 
 
@@ -340,7 +352,9 @@ func _new_metrics() -> Dictionary:
 		"jam_count": 0, "jam_s": 0.0, "jam_excess_s": 0.0, "hold_excluded_s": 0.0,
 		"overlap_s": 0.0, "block_s": 0.0, "moving_changes": 0, "running_changes": 0,
 		"state_changes": 0, "jump": 0, "camera_s": 0.0, "camera_eligible_s": 0.0,
-		"observed_s": 0.0}
+		"observed_s": 0.0, "stop_reasons": {}, "stop_contexts": {},
+		"narrow_away_values": [], "narrow_away_max": 0.0, "narrow_outside_s": 0.0,
+		"camera_axis_s": 0.0, "camera_axis_eligible_s": 0.0}
 
 
 func _new_observer(game, mate) -> Dictionary:
@@ -355,7 +369,7 @@ func _snapshot(game, observers: Array, delta: float) -> Array:
 		var p = observers[i]["person"]
 		var think_left: float = p.brain.get("think_t", game.ai.THINK * float(i) / 3.0)
 		rows.append({"at": p.position, "moving": p.moving, "running": p.running,
-			"path": not p.path.is_empty(), "action": p.action,
+			"path": not p.path.is_empty(), "path_points": p.path.size(), "action": p.action,
 			"think_due": think_left - delta <= 0.0})
 	return rows
 
@@ -418,8 +432,77 @@ func _observe_door(game, observer: Dictionary, delta: float) -> void:
 			m["jam_s"] += delta
 
 
+## Decision 486: duplicate the projection here so observation cannot change AI state.
+func _trail_projection(game, at: Vector3) -> Dictionary:
+	var newer: Vector3 = game.player.position
+	var walked: float = 0.0
+	var best: float = INF
+	var back: float = 0.0
+	var trail: PackedVector3Array = game.ai._follow_trail
+	for i in range(game.ai._follow_count):
+		var older: Vector3 = trail[(game.ai._follow_head - 1 - i + trail.size()) % trail.size()]
+		var way: Vector3 = older - newer
+		var length: float = way.length()
+		if length > 0.001 and game.level_of(at) == game.level_of(newer) and game.level_of(newer) == game.level_of(older):
+			var share: float = clampf((at - newer).dot(way) / way.length_squared(), 0.0, 1.0)
+			var distance: float = at.distance_squared_to(newer + way * share)
+			if distance < best:
+				best = distance
+				back = walked + length * share
+		walked += length
+		newer = older
+	if best == INF:
+		var fwd: Vector3 = Vector3(sin(game.player.facing), 0, cos(game.player.facing))
+		if game.player.moving and game.player.drive_speed > 0.0 and game.player.drive_dir.length_squared() > 0.0001:
+			fwd = Vector3(game.player.drive_dir.x, 0, game.player.drive_dir.z).normalized()
+		elif game.player.moving:
+			for point: Vector3 in game.player.path:
+				var way: Vector3 = point - game.player.position
+				way.y = 0.0
+				if way.length() > 0.12:
+					fwd = way.normalized()
+					break
+		back = (game.player.position - at).dot(fwd)
+		best = at.distance_squared_to(game.player.position - fwd * back)
+	return {"back": back, "away": sqrt(best)}
+
+
+## Decision 486: a corner flag means there is a walkable neighbour on both axes.
+func _corner_cell(game) -> bool:
+	var grid = game.grid_at(game.player.position)
+	var cell: Vector2i = FieldGrid.cell_of(game.player.position)
+	return (grid.people_can_walk(cell + Vector2i.LEFT) or grid.people_can_walk(cell + Vector2i.RIGHT)) \
+		and (grid.people_can_walk(cell + Vector2i.UP) or grid.people_can_walk(cell + Vector2i.DOWN))
+
+
+func _stop_reason(game, p, before: Dictionary) -> String:
+	if game.combat.feet_held(p):
+		return "feet_held"
+	if not p.path.is_empty():
+		return "turn_stop"
+	if bool(p.brain.get("follow_waiting", false)) or bool(p.brain.get("follow_gap_waiting", false)):
+		return "queue_wait"
+	var slot: Variant = p.brain.get("follow_slot")
+	if not game.player.moving and slot is Vector3 and p.position.distance_to(slot) <= 0.3:
+		return "settled"
+	if int(before["path_points"]) == 1:
+		return "path_end"
+	return "no_path"
+
+
 func _sample(game, observers: Array, before: Array, player_before: Vector3, clock: Dictionary, delta: float) -> void:
 	var player = game.player
+	var motion: Dictionary = clock["player_motion"]
+	if bool(clock["player_was_moving"]) != player.moving:
+		motion["moving_changes"] += 1
+	var step: Vector3 = player.position - player_before
+	step.y = 0.0
+	if step.length_squared() > 0.000001:
+		var last: Vector3 = clock["player_last_direction"]
+		if last != Vector3.ZERO and last.dot(step.normalized()) < -0.5:
+			motion["reversals"] += 1
+		clock["player_last_direction"] = step.normalized()
+	var corner: bool = _corner_cell(game)
 	clock["still_s"] = 0.0 if player.moving else float(clock["still_s"]) + delta
 	var forward: Vector3 = player.position - player_before
 	forward.y = 0.0
@@ -464,6 +547,19 @@ func _sample(game, observers: Array, before: Array, player_before: Vector3, cloc
 			m["overlap_s"] += delta
 		if bool(old["moving"]) != p.moving:
 			m["moving_changes"] += 1
+			if not p.moving:
+				var reason: String = _stop_reason(game, p, old)
+				var context: String = "%s|%s|%s|%s" % [clock["leg"], reason,
+					"queue" if bool(p.brain.get("follow_queue", false)) else "formation",
+					"corner" if corner else "straight"]
+				m["stop_reasons"][reason] = int(m["stop_reasons"].get(reason, 0)) + 1
+				m["stop_contexts"][context] = int(m["stop_contexts"].get(context, 0)) + 1
+		if clock["leg"] == "narrow":
+			var away: float = float(_trail_projection(game, p.position)["away"])
+			m["narrow_away_values"].append(away)
+			m["narrow_away_max"] = maxf(float(m["narrow_away_max"]), away)
+			if away > 1.0:
+				m["narrow_outside_s"] += delta
 		if bool(old["running"]) != p.running:
 			m["running_changes"] += 1
 		if bool(old["moving"]) != p.moving or bool(old["running"]) != p.running:
@@ -471,6 +567,13 @@ func _sample(game, observers: Array, before: Array, player_before: Vector3, cloc
 		if p.position.distance_to(old["at"]) > 1.0:
 			m["jump"] += 1
 		if float(clock["still_s"]) > STILL_SECONDS + 0.000001 and game.camera != null:
+			var camera_axis: Vector3 = game.camera.global_transform.basis.z
+			camera_axis.y = 0.0
+			if camera_axis.length_squared() > 0.000001:
+				m["camera_axis_eligible_s"] += delta
+				var axis_angle: float = p.look if p.turn_rate > 0.0 else p.facing
+				if Vector3(sin(axis_angle), 0, cos(axis_angle)).dot(camera_axis.normalized()) >= cos(deg_to_rad(45.0)):
+					m["camera_axis_s"] += delta
 			var to_camera: Vector3 = game.camera.global_position - p.global_position
 			to_camera.y = 0.0
 			if to_camera.length_squared() > 0.000001:
@@ -485,6 +588,27 @@ func _sample(game, observers: Array, before: Array, player_before: Vector3, cloc
 
 
 func _run_leg(game, leg: Dictionary, observers: Array, clock: Dictionary) -> Dictionary:
+	# Decision 486: keep per-leg diagnostics without changing whole-trial accumulators.
+	var prior: Array = []
+	for observer: Dictionary in observers:
+		prior.append(observer["metrics"])
+		observer["metrics"] = _new_metrics()
+	clock["leg"] = leg["name"]
+	clock["player_motion"] = {"moving_changes": 0, "reversals": 0}
+	clock["player_last_direction"] = Vector3.ZERO
+	var row: Dictionary = _run_leg_body(game, leg, observers, clock)
+	var combined: Dictionary = _new_metrics()
+	for i in range(observers.size()):
+		var metrics: Dictionary = observers[i]["metrics"]
+		_merge_metrics(combined, metrics)
+		_merge_metrics(prior[i], metrics)
+		observers[i]["metrics"] = prior[i]
+	row["metrics"] = _metrics_row(combined, float(row["seconds"]))
+	row["player_motion"] = clock["player_motion"]
+	return row
+
+
+func _run_leg_body(game, leg: Dictionary, observers: Array, clock: Dictionary) -> Dictionary:
 	var row := {"name": leg["name"], "seconds": 0.0, "state": "completed", "waypoints": []}
 	for point: Vector3 in leg["points"]:
 		row["waypoints"].append(_xyz(point))
@@ -522,6 +646,7 @@ func _run_leg(game, leg: Dictionary, observers: Array, clock: Dictionary) -> Dic
 		game.train_guard.fill_due.clear()
 		var before := _snapshot(game, observers, delta)
 		var player_before: Vector3 = game.player.position
+		clock["player_was_moving"] = game.player.moving
 		game._step(delta)
 		# Later systems may queue a horde after _update_spawns; it must stay empty too.
 		game.pending_spawn.clear()
@@ -555,7 +680,7 @@ func _run_leg(game, leg: Dictionary, observers: Array, clock: Dictionary) -> Dic
 
 func _trial(run_seed: int, total: Dictionary, by_mate: Dictionary) -> Dictionary:
 	var game = game_script.new()
-	game.opts = {"seed": run_seed, "raiders": false, "auto_pause": false}
+	game.opts = {"seed": run_seed, "raiders": false, "auto_pause": false, "follow_walk_turn": follow_walk_turn}
 	root.add_child(game)
 	game.set_process(false)
 	game.process_mode = Node.PROCESS_MODE_DISABLED
@@ -613,10 +738,13 @@ func _trial(run_seed: int, total: Dictionary, by_mate: Dictionary) -> Dictionary
 
 func _merge_metrics(into: Dictionary, source: Dictionary) -> void:
 	for key in source:
-		if key == "lag_values":
+		if key in ["lag_values", "narrow_away_values"]:
 			into[key].append_array(source[key])
-		elif key == "lag_max":
+		elif key in ["lag_max", "narrow_away_max"]:
 			into[key] = maxf(into[key], source[key])
+		elif key in ["stop_reasons", "stop_contexts"]:
+			for name: String in source[key]:
+				into[key][name] = int(into[key].get(name, 0)) + int(source[key][name])
 		else:
 			into[key] += source[key]
 
@@ -630,7 +758,22 @@ func _metrics_row(m: Dictionary, duration: float) -> Dictionary:
 	distances.sort()
 	var n := distances.size()
 	var changes: int = m["moving_changes"] + m["running_changes"]
+	var away: Array = m["narrow_away_values"].duplicate()
+	away.sort()
+	var reason_rows: Dictionary = {}
+	for reason: String in ["turn_stop", "path_end", "queue_wait", "settled", "no_path", "feet_held"]:
+		var count: int = int(m["stop_reasons"].get(reason, 0))
+		reason_rows[reason] = {"count": count, "per_mate_minute": _ratio(count * 60.0, m["observed_s"])}
+	var ai_stops: int = int(m["stop_reasons"].get("queue_wait", 0)) + int(m["stop_reasons"].get("settled", 0))
+	reason_rows["ai_stop"] = {"count": ai_stops, "per_mate_minute": _ratio(ai_stops * 60.0, m["observed_s"])}
 	return {"observed_mate_seconds": m["observed_s"],
+		"stop_reasons": reason_rows, "stop_contexts": m["stop_contexts"],
+		"narrow_away": {"samples": away.size(),
+			"p95_m": away[ceili(0.95 * away.size()) - 1] if not away.is_empty() else null,
+			"max_m": m["narrow_away_max"] if not away.is_empty() else null,
+			"over_1_m_person_seconds": m["narrow_outside_s"]},
+		"face_camera_axis": {"person_seconds": m["camera_axis_s"], "eligible_person_seconds": m["camera_axis_eligible_s"],
+			"fraction": _ratio(m["camera_axis_s"], m["camera_axis_eligible_s"])},
 		"lag": {"mean_m": _ratio(m["lag_sum"], n),
 			"p95_m": distances[ceili(0.95 * n) - 1] if n > 0 else null,
 			"max_m": m["lag_max"] if n > 0 else null, "samples": n,

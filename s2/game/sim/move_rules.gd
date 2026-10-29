@@ -19,6 +19,8 @@ const FREE_DEG: float = 25.0
 const STILL_DEG: float = 90.0
 const BACKPEDAL: float = 2.1    # m/s stepping back with the face to them: a walk, never a run (1.3 fell behind the hurrying dead)
 const FACE_HOLD: float = 0.5    # seconds a face to them holds after the AI last asked for it
+const FOLLOW_TURN_FLOOR: float = 0.3   # Decision 486: opt-in pace while a follower turns.
+const FOLLOW_TURN_STOP_DEG: float = 135.0
 
 
 ## The share of its pace a body walks at with its drawn body `off` radians from the way.

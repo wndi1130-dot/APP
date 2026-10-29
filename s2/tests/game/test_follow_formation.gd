@@ -6,6 +6,24 @@ const FieldAi = preload("res://game/field_ai.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
+const MoveRules = preload("res://game/sim/move_rules.gd")
+const Person = preload("res://game/actors/person.gd")
+
+class CountingAi:
+	extends FieldAi
+	var narrow_calls: int = 0
+	var queue_calls: int = 0
+
+	func _init(field_game) -> void:
+		super(field_game)
+
+	func _follow_narrow(fwd: Vector3) -> bool:
+		narrow_calls += 1
+		return super._follow_narrow(fwd)
+
+	func _follow_queue_mates(eligible: Array) -> Array:
+		queue_calls += 1
+		return super._follow_queue_mates(eligible)
 
 class CountingGame:
 	extends FieldGame
@@ -32,6 +50,7 @@ func _start() -> void:
 	game.grid = FieldGrid.new(40, 40)
 	game.levels = {0: game.grid}
 	game.grid.refresh_paths()
+	game.ai = CountingAi.new(game)
 	game.player.position = Vector3(20.5, 0, 20.5)
 	game.player.facing = PI * 0.5
 	game.player.stop()
@@ -42,6 +61,7 @@ func _start() -> void:
 			continue
 		q.stop()
 		q.brain.clear()
+		q.brain["follow_t"] = game.clock.elapsed
 		q.command = "follow"
 		q.running = false
 		mates[game.ai._role(q)] = q
@@ -112,6 +132,7 @@ func test_idle_watch_stays_outside_the_camera_cone_after_the_sweep() -> void:
 	var before_rng: int = game.rng.state
 	for camera_way in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
 		game.camera.global_position = p.global_position + camera_way * 20.0 + Vector3.UP * 50.0
+		game.camera.look_at(p.global_position, Vector3.UP)
 		for time in [0.0, 1.5, 3.0, 6.0, 12.0]:
 			game.clock.elapsed = time
 			for role in ["point", "side", "rear", "aside"]:
@@ -145,6 +166,7 @@ func test_door_trail_uses_arc_gap_wait_hysteresis_and_five_metres_to_release() -
 		game.player.position = Vector3(8.5 + i * 0.6, 0, 20.5)
 		game.ai._record_follow()
 	p.position = game.player.position - Vector3.RIGHT * 2.5
+	game.ai._refresh_follow_queue()
 	game.ai._keep_formation(p)
 	assert_true(p.brain["follow_queue"])
 	assert_lt((p.brain["dest"] - game.player.position).x, 0.0, "the point joins behind the chief")
@@ -167,6 +189,7 @@ func test_door_trail_uses_arc_gap_wait_hysteresis_and_five_metres_to_release() -
 	assert_true(p.brain["follow_queue"], "standing near a recent door does not age it out")
 	game.player.position += Vector3.RIGHT * 5.1
 	game.ai._record_follow()
+	game.ai._refresh_follow_queue()
 	game.ai._keep_formation(p)
 	assert_false(p.brain["follow_queue"], "five metres of travel releases an open exit")
 	# Decision 486: a hairpin's chord is short, but its trail still leaves room to walk.
@@ -192,6 +215,7 @@ func test_two_cell_corridor_is_narrow_but_three_cells_are_not() -> void:
 	mates["side"].position = Vector3(16.5, 0, 20.5)
 	mates["rear"].position = Vector3(14.5, 0, 20.5)
 	game.player.moving = true
+	game.ai._refresh_follow_queue()
 	game.ai._keep_formation(mates["side"])
 	assert_true(mates["side"].brain["follow_queue"])
 	assert_false(mates["side"].path.is_empty())
@@ -333,6 +357,481 @@ func test_a_save_without_the_follow_fields_resumes_and_follows_again() -> void:
 		assert_true(slot is Vector3 and (slot as Vector3).is_finite(), "the point picks a slot again")
 		picked += 1
 	assert_eq(picked, 1)
+
+
+## Decision 486: controlled movement uses real turns and paths, with staggered follow thinks.
+func _follow_tick(delta: float) -> Dictionary:
+	game.clock.elapsed += delta
+	game._turn_people(delta)
+	game._move_person(game.player, delta)
+	var moved: Dictionary = {}
+	for p in mates.values():
+		game._move_person(p, delta)
+		moved[p.pid] = {"moving": p.moving, "has_path": not p.path.is_empty()}
+	game.ai._chief_still = 0.0 if game.player.moving else game.ai._chief_still + delta
+	game.ai._record_follow()
+	game.ai.think_t -= delta
+	if game.ai.think_t <= 0.0:
+		game.ai.think_t += FieldAi.THINK
+		game.ai._refresh_follow_queue()
+	for p in mates.values():
+		p.brain["think_t"] = float(p.brain.get("think_t", 0.0)) - delta
+		if float(p.brain["think_t"]) <= 0.0:
+			p.brain["think_t"] += FieldAi.THINK
+			game.ai._keep_formation(p)
+	return moved
+
+
+func _queue_scene(run: bool = false) -> void:
+	_start()
+	for x in range(1, 39):
+		game.grid.set_solid(Vector2i(x, 19), FieldGrid.Solid.WALL)
+		game.grid.set_solid(Vector2i(x, 22), FieldGrid.Solid.WALL)
+	game.grid.refresh_paths()
+	for p in game.squad:
+		p.body = Person.BodyState.new()
+		p.items.clear()
+		p.hands.clear()
+		p.worn = Person.Wear.outfit(Person.Wear.DEFAULT)
+		p.heat.heat = 100.0
+		p.heat.wet = 0.0
+		p.hunger_level = 0
+		p.sore_level = 0
+		p.panic = 0.0
+		p.facing = PI * 0.5
+		p.look = p.facing
+		p.turn_rate = deg_to_rad(400.0)
+		p.running = run
+	for i in range(21):
+		game.player.position = Vector3(2.5 + float(i) * 0.6, 0, 20.5)
+		game.ai._record_follow()
+	game.player.go_to(PackedVector3Array([Vector3(37.5, 0, 20.5)]), run)
+	game.player.moving = true
+	var speed: float = game.player.speed(game.grid.floor_at(FieldGrid.cell_of(game.player.position)))
+	var gap: float = FieldAi.FOLLOW_QUEUE_GAP + speed * FieldAi.FOLLOW_QUEUE_GAP_S + 0.3
+	for i in range(3):
+		var p = mates[["point", "side", "rear"][i]]
+		p.position = game.player.position - Vector3.RIGHT * gap * float(i + 1)
+		p.brain["think_t"] = FieldAi.THINK * float(i) / 3.0
+		assert_almost_eq(p.speed(game.grid.floor_at(FieldGrid.cell_of(p.position))), speed, 0.00001)
+	game.ai._refresh_follow_queue()
+	for p in mates.values():
+		game.ai._keep_formation(p)
+
+
+func test_queue_resume_never_walks_back() -> void:
+	_queue_scene()
+	var p = mates["point"]
+	p.position = game.player.position - Vector3.RIGHT * 0.85
+	p.stop()
+	var start: Vector3 = p.position
+	var rng_before: int = game.rng.state
+	game.ai._keep_formation(p)
+	assert_true(p.path.is_empty(), "wait for the moving gap instead of reversing")
+	var turn_stops: int = 0
+	var backsteps: float = 0.0
+	for tick in range(30):
+		# Decision 486: remove the chief's advance from back-distance before checking reversal.
+		var progress: float = game.ai._follow_distance - float(game.ai._follow_projection(p.position)["back"])
+		var moved: Dictionary = _follow_tick(1.0 / 30.0)
+		var next_progress: float = game.ai._follow_distance - float(game.ai._follow_projection(p.position)["back"])
+		backsteps += maxf(0.0, progress - next_progress)
+		if bool(moved[p.pid]["has_path"]) and not bool(moved[p.pid]["moving"]):
+			turn_stops += 1
+		for target: Vector3 in p.path:
+			assert_gte(target.x + 0.05, p.position.x, "all restart targets stay ahead")
+	assert_lte(backsteps, 0.05)
+	assert_gt(p.position.x, start.x, "the queue resumes within one second")
+	assert_eq(turn_stops, 0)
+	assert_eq(game.rng.state, rng_before)
+
+
+func test_queue_route_keeps_slack_at_equal_speed() -> void:
+	for run: bool in [false, true]:
+		_queue_scene(run)
+		var changes: Array[int] = [0, 0, 0]
+		var empty_frames: Array[int] = [0, 0, 0]
+		var previous: Array[bool] = [false, false, false]
+		for tick in range(120):
+			_follow_tick(1.0 / 30.0)
+			for i in range(3):
+				var p = mates[["point", "side", "rear"][i]]
+				if tick >= 30:
+					if p.moving != previous[i]:
+						changes[i] += 1
+					if p.path.is_empty():
+						empty_frames[i] += 1
+				previous[i] = p.moving
+		assert_eq(changes, [0, 0, 0], "equal pace stays continuous after warmup")
+		assert_eq(empty_frames, [0, 0, 0], "the line retains slack between staggered thinks")
+
+
+func test_leader_turn_is_not_a_stop() -> void:
+	_queue_scene()
+	var leader = mates["point"]
+	var p = mates["side"]
+	p.position = leader.position - Vector3.RIGHT * 0.85
+	leader.path = PackedVector3Array([leader.position + Vector3.RIGHT * 2.0])
+	leader.moving = false
+	assert_false(game.ai._follow_wait(p, leader), "a turning predecessor still has a live path")
+	assert_eq(float(p.brain["follow_lead_still"]), 0.0)
+	leader.stop()
+	assert_false(game.ai._follow_wait(p, leader), "one think is shorter than the still delay")
+	assert_true(game.ai._follow_wait(p, leader), "a real stop enters the existing 0.9 m wait")
+	p.position = leader.position - Vector3.RIGHT * 1.2
+	assert_true(game.ai._follow_wait(p, leader))
+	p.position = leader.position - Vector3.RIGHT * 1.5
+	assert_false(game.ai._follow_wait(p, leader))
+	game.player.stop()
+	game.player.drive_speed = 1.0
+	assert_true(game.ai._follow_going(game.player), "stick motion is also going")
+
+
+func test_queue_holds_through_corner() -> void:
+	_queue_scene()
+	for x in range(40):
+		for z in range(40):
+			var open: bool = (x >= 1 and x <= 23 and z in [20, 21]) or (x in [22, 23] and z >= 20 and z <= 35)
+			game.grid.set_solid(Vector2i(x, z), FieldGrid.Solid.NONE if open else FieldGrid.Solid.WALL)
+	game.grid.refresh_paths()
+	game.player.go_to(PackedVector3Array([Vector3(22.5, 0, 20.5), Vector3(22.5, 0, 34.5)]))
+	var order: Array = game.ai._follow_order.duplicate()
+	var max_away: float = 0.0
+	for tick in range(240):
+		_follow_tick(1.0 / 30.0)
+		assert_true(game.ai._follow_queue_on)
+		assert_eq(game.ai._follow_order, order)
+		for p in mates.values():
+			max_away = maxf(max_away, float(game.ai._follow_projection(p.position)["away"]))
+	assert_gt(game.player.position.z, 22.5, "the chief has turned the corner")
+	assert_lte(max_away, 0.8, "the line stays near the trail around the bend")
+	# Decision 486: test the exact release distance on open ground after the narrow sample.
+	game.grid = FieldGrid.new(40, 40)
+	game.levels = {0: game.grid}
+	game.grid.refresh_paths()
+	game.ai._follow_distance = game.ai._follow_narrow_at + 3.99
+	game.ai._refresh_follow_queue()
+	assert_true(game.ai._follow_queue_on)
+	assert_eq(game.ai._follow_order, order)
+	game.ai._follow_distance = game.ai._follow_narrow_at + 4.0
+	game.ai._refresh_follow_queue()
+	assert_false(game.ai._follow_queue_on)
+	assert_true(game.ai._follow_order.is_empty())
+	for p in mates.values():
+		assert_false(p.brain.has("follow_waiting"))
+
+
+func test_queue_mode_same_for_all_mates() -> void:
+	_queue_scene()
+	var ai = game.ai as CountingAi
+	var narrow_before: int = ai.narrow_calls
+	var order_before: int = ai.queue_calls
+	var order: Array = ai._follow_order.duplicate()
+	game.player.facing = 0.0
+	for role in ["rear", "point", "side"]:
+		game.clock.elapsed += 0.05
+		ai._keep_formation(mates[role])
+		assert_true(mates[role].brain["follow_queue"])
+	assert_eq(ai.narrow_calls, narrow_before, "individual thinks never inspect the narrow cell")
+	assert_eq(ai.queue_calls, order_before, "individual thinks never reorder the line")
+	assert_eq(ai._follow_order, order)
+	ai.think_t = 0.0
+	ai.update(0.01)
+	assert_eq(ai.narrow_calls, narrow_before + 1, "one common think performs one inspection")
+	assert_eq(ai.queue_calls, order_before + 1, "one common think updates order once")
+	ai.update(0.01)
+	assert_eq(ai.narrow_calls, narrow_before + 1)
+	assert_eq(ai.queue_calls, order_before + 1)
+
+
+func test_queue_skips_busy_mate() -> void:
+	_queue_scene()
+	var busy = mates["point"]
+	var p = mates["side"]
+	busy.stop()
+	busy.action = "search"
+	assert_eq(game.ai._follow_leader(p), game.player, "skip work even before the common refresh")
+	game.ai._refresh_follow_queue()
+	assert_false(game.ai._follow_order.has(busy))
+	assert_false(game.ai._follow_mates().has(busy))
+	game.ai._keep_formation(p)
+	assert_false(p.path.is_empty())
+	assert_false(bool(p.brain.get("follow_waiting", false)))
+	assert_gt(p.path[-1].x, busy.position.x)
+	busy.cancel_action()
+	busy.brain["follow_t"] = game.clock.elapsed - FieldAi.THINK * 2.0
+	assert_false(game.ai._follow_mates().has(busy), "a stale combat or work path is not a follow candidate")
+
+
+func test_door_queue_releases_when_chief_still() -> void:
+	_start()
+	game.ai._follow_door_id = 1
+	game.ai._follow_door_at = 0.0
+	game.ai._follow_distance = 2.0
+	game.player.moving = true
+	game.ai._refresh_follow_queue()
+	assert_true(game.ai._follow_queue_on)
+	game.player.stop()
+	game.ai._chief_still = FieldAi.LOOK_STILL_S - 0.01
+	game.ai._refresh_follow_queue()
+	assert_true(game.ai._follow_queue_on)
+	game.ai._chief_still = FieldAi.LOOK_STILL_S
+	game.ai._refresh_follow_queue()
+	assert_false(game.ai._follow_queue_on)
+	game.ai._keep_formation(mates["point"])
+	assert_false(mates["point"].brain["follow_queue"])
+	assert_between(mates["point"].brain["follow_slot"].distance_to(game.player.position), 1.5, 2.5)
+
+
+func test_follow_keys_reset_on_return() -> void:
+	_start()
+	var p = mates["side"]
+	p.brain.merge({"follow_running": true, "follow_waiting": true, "follow_queue": true,
+		"follow_lead_still": 2.0, "follow_settled": true, "follow_walk_t": 0.0}, true)
+	game.clock.elapsed = 2.0
+	p.position = game.player.position + Vector3(0.5, 0, -2.0)
+	game.ai._keep_formation(p)
+	assert_false(p.running)
+	assert_false(bool(p.brain.get("follow_running", false)))
+	assert_false(p.brain.has("follow_waiting"))
+	assert_false(p.brain.has("follow_lead_still"))
+	assert_false(p.brain.has("follow_settled"))
+	# Decision 486: leaving follow clears the marker in the same AI turn.
+	p.command = "wait"
+	p.brain["think_t"] = 0.0
+	game.clock.elapsed += 0.1
+	game.ai.update(0.01)
+	for key: String in ["follow_t", "follow_walk_t", "follow_running", "follow_waiting", "follow_queue", "follow_lead_still"]:
+		assert_false(p.brain.has(key))
+	p.command = "follow"
+	game.ai._keep_formation(p)
+	assert_false(p.running)
+
+
+func _turn_trace(p, enabled: bool, marked: bool, off: float = 120.0) -> Array[Vector3]:
+	var origin: Vector3 = Vector3(20.5, 0, 20.5)
+	p.position = origin
+	p.look = PI * 0.5 - deg_to_rad(off)
+	p.facing = p.look
+	p.turn_rate = deg_to_rad(400.0)
+	p.running = false
+	p.brain.erase("face_hold")
+	p.brain.erase("face_hold_t")
+	p.brain.erase("follow_walk_t")
+	if marked:
+		p.brain["follow_walk_t"] = game.clock.elapsed
+	p.go_to(PackedVector3Array([origin + Vector3.RIGHT * 5.0]))
+	game.opts["follow_walk_turn"] = enabled
+	var trace: Array[Vector3] = []
+	for tick in range(12):
+		game._move_person(p, 1.0 / 30.0)
+		trace.append(p.position)
+		p.turn_tick(1.0 / 30.0)
+	return trace
+
+
+func test_follow_turn_floor_only_followers() -> void:
+	_start()
+	var p = mates["side"]
+	assert_false(bool(game.opts.get("follow_walk_turn", false)))
+	var old_trace: Array[Vector3] = _turn_trace(p, false, false)
+	assert_eq(_turn_trace(p, false, true), old_trace, "the disabled option preserves the complete old position trace")
+	assert_eq(_turn_trace(p, true, false), old_trace, "an unmarked companion keeps the old turn")
+	var walking: Array[Vector3] = _turn_trace(p, true, true)
+	var speed: float = p.speed(game.grid.floor_at(Vector2i(20, 20)))
+	assert_almost_eq(walking[0].x - 20.5, speed * MoveRules.FOLLOW_TURN_FLOOR / 30.0, 0.00001)
+	assert_eq(walking[0].z, 20.5, "movement still follows the path, not the shown heading")
+	for team: String in ["crew", "raider"]:
+		p.team = team
+		assert_eq(_turn_trace(p, true, true), old_trace, "other people ignore even a stale copied marker")
+	p.team = "squad"
+	assert_eq(_turn_trace(game.player, true, true), _turn_trace(game.player, false, true))
+	assert_eq(_turn_trace(p, true, true, 135.0)[0], Vector3(20.5, 0, 20.5))
+	assert_eq(_turn_trace(p, true, true, 180.0)[0], Vector3(20.5, 0, 20.5))
+	p.brain["follow_walk_t"] = game.clock.elapsed - 0.5
+	assert_false(game._follows(p), "the marker expires at two thinks")
+	p.look = -PI * 0.5
+	var at: Vector3 = p.position
+	game._move_person(p, 0.1)
+	assert_eq(p.position, at)
+	p.brain["follow_walk_t"] = game.clock.elapsed
+	p.action = "search"
+	assert_false(game._follows(p))
+	p.action = ""
+	p.command = "wait"
+	assert_false(game._follows(p))
+
+
+func test_follow_turn_option_preserves_zombie_movement() -> void:
+	_start()
+	var z: Dictionary = game.zombies.spawn("dead", Vector3(10.5, 0, 10.5))
+	z["state"] = "investigate"
+	z["target"] = Vector3(18.5, 0, 10.5)
+	z["path"] = PackedVector3Array([Vector3(18.5, 0, 10.5)])
+	z["turn_t"] = 0.0
+	for tick in range(30):
+		var before: Dictionary = z.duplicate(true)
+		var rng_before: int = game.rng.state
+		game.opts["follow_walk_turn"] = false
+		game.zombies._move(z, 1.0 / 30.0)
+		var expected: Dictionary = z.duplicate(true)
+		var expected_rng: int = game.rng.state
+		z.clear()
+		z.merge(before, true)
+		game.rng.state = rng_before
+		game.opts["follow_walk_turn"] = true
+		game.zombies._move(z, 1.0 / 30.0)
+		assert_eq(z, expected, "the zombie mover is independent of this option")
+		assert_eq(game.rng.state, expected_rng)
+
+
+func test_follow_decisions_never_move_bodies_or_draw_game_rng() -> void:
+	_queue_scene()
+	var before_rng: int = game.rng.state
+	var positions: Array[Vector3] = []
+	for p in game.squad:
+		positions.append(p.position)
+	for attempt in range(4):
+		game.ai._refresh_follow_queue()
+		for p in mates.values():
+			game.ai._keep_formation(p)
+	for i in range(game.squad.size()):
+		assert_eq(game.squad[i].position, positions[i])
+	assert_eq(game.rng.state, before_rng)
+	var p = mates["point"]
+	p.go_to(PackedVector3Array([p.position + Vector3.RIGHT]))
+	game.ai._follow_walk(p, PackedVector3Array())
+	assert_true(p.path.is_empty(), "a failed search never keeps a stale route")
+	assert_false(p.brain.has("follow_walk_t"))
+
+
+func test_follow_slot_reuse_and_camera_zoom_are_stable() -> void:
+	_start()
+	var p = mates["side"]
+	game.ai._keep_formation(p)
+	var slot: Vector3 = p.brain["follow_slot"]
+	game.player.position += Vector3.RIGHT * 0.1
+	game.ai._keep_formation(p)
+	assert_eq(p.brain["follow_slot"], slot, "a valid idle slot is reused")
+	var gaze: Vector3 = game.ai._look_out(p, "side", Vector3.RIGHT, Vector3.FORWARD)
+	game.camera.position += Vector3(100, 30, -70)
+	game.camera.size *= 2.0
+	assert_eq(game.ai._look_out(p, "side", Vector3.RIGHT, Vector3.FORWARD), gaze, "translation and zoom cannot change a watch")
+
+
+func test_short_shuffle_watch_has_no_expiry_gap_and_preserves_combat_hold() -> void:
+	_start()
+	var p = mates["side"]
+	p.path = PackedVector3Array([p.position + Vector3.RIGHT * 0.8])
+	for tick in range(4):
+		game.clock.elapsed += FieldAi.THINK
+		game.ai._follow_release_watch(p)
+		game.ai._follow_watch(p, Vector3.LEFT)
+		assert_eq(float(p.brain["face_hold_t"]), game.clock.elapsed)
+		assert_lt(FieldAi.THINK + 1.0 / 30.0, MoveRules.FACE_HOLD)
+	var combat_hold: Vector3 = p.position + Vector3.BACK * 3.0
+	p.brain["face_hold"] = combat_hold
+	p.brain["face_hold_t"] = game.clock.elapsed
+	game.ai._follow_release_watch(p)
+	assert_eq(p.brain["face_hold"], combat_hold)
+	game.ai._follow_watch(p, Vector3.LEFT)
+	assert_eq(p.brain["face_hold"], combat_hold)
+	p.brain.erase("face_hold")
+	p.brain.erase("face_hold_t")
+	p.path = PackedVector3Array([p.position + Vector3.RIGHT * (FieldAi.FOLLOW_SHUFFLE + 0.1)])
+	game.ai._follow_watch(p, Vector3.LEFT)
+	assert_false(p.brain.has("face_hold"))
+
+
+func test_stand_no_jitter_after_walk() -> void:
+	_start()
+	game.player.position = Vector3(8.5, 0, 20.5)
+	# Decision 486: start settled, take a short walk, then exercise the idle shuffle for six seconds.
+	for i in range(3):
+		var p = mates[["point", "side", "rear"][i]]
+		p.position = game.ai._follow_spot(p, game.ai._follow_mates(), Vector3.RIGHT, Vector3.FORWARD)
+		p.look = PI * 0.5
+		p.facing = p.look
+		p.brain["think_t"] = FieldAi.THINK * float(i) / 3.0
+	game.player.go_to(PackedVector3Array([Vector3(30.5, 0, 20.5)]))
+	game.player.moving = true
+	for p in mates.values():
+		game.ai._keep_formation(p)
+	for tick in range(30):
+		_follow_tick(1.0 / 30.0)
+	game.player.stop()
+	var changes: Array[int] = [0, 0, 0]
+	var previous: Array[bool] = [true, true, true]
+	var camera_frames: int = 0
+	for tick in range(180):
+		_follow_tick(1.0 / 30.0)
+		for i in range(3):
+			var p = mates[["point", "side", "rear"][i]]
+			if p.moving != previous[i]:
+				changes[i] += 1
+			previous[i] = p.moving
+			if tick > 90 and p.path.is_empty():
+				var camera_way: Vector3 = game.camera.global_transform.basis.z
+				camera_way.y = 0.0
+				if Vector3(sin(p.look), 0, cos(p.look)).dot(camera_way.normalized()) > 0.5:
+					camera_frames += 1
+	for count: int in changes:
+		assert_lte(count, 2)
+	assert_eq(camera_frames, 0)
+	for p in mates.values():
+		assert_true(p.path.is_empty())
+
+
+func _assert_follow_value(value: Variant) -> void:
+	assert_false(value is Vector3i)
+	if value is Vector3 or value is Vector2:
+		assert_true(value.is_finite())
+	elif value is float:
+		assert_true(is_finite(value))
+	elif value is Dictionary:
+		for child: Variant in value.values():
+			_assert_follow_value(child)
+	elif value is Array:
+		for child: Variant in value:
+			_assert_follow_value(child)
+
+
+func test_follow_state_saves_finite() -> void:
+	var first = _field({"follow_walk_turn": true})
+	first.player.moving = true
+	first.ai._record_follow()
+	for p in first.squad:
+		if p != first.player:
+			p.command = "follow"
+			first.ai._keep_formation(p)
+			first.ai._follow_wait(p, first.player)
+	first.player.stop()
+	for p in first.squad:
+		if p != first.player:
+			first.ai._follow_walk(p, PackedVector3Array([p.position + Vector3.RIGHT * 0.5]))
+			first.ai._follow_watch(p, Vector3.LEFT)
+			p.brain["follow_gap_waiting"] = false
+	first.ai._follow_queue_on = true
+	first.ai._follow_narrow_at = 2.0
+	first.ai._follow_queue_mates(first.ai._follow_mates())
+	var before: Dictionary = FieldSave.capture(first)
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(before))
+	assert_false(saved.is_empty(), "all follow fields survive the real field-save codec")
+	var resumed = _field(FieldSave.resume_opts(saved))
+	assert_true(bool(resumed.opts.get("follow_walk_turn", false)))
+	assert_eq(resumed.ai._follow_queue_on, first.ai._follow_queue_on)
+	assert_eq(resumed.ai._follow_narrow_at, first.ai._follow_narrow_at)
+	for i in range(first.ai._follow_order.size()):
+		assert_eq(resumed.ai._follow_order[i].pid, first.ai._follow_order[i].pid)
+	for i in range(first.squad.size()):
+		var p = first.squad[i]
+		for key: String in p.brain:
+			if key.begins_with("follow_"):
+				_assert_follow_value(p.brain[key])
+				assert_eq(resumed.squad[i].brain.get(key), p.brain[key], "round-trip " + key)
+	var ai_state: Dictionary = saved["runtime"]["components"]["ai"]
+	_assert_follow_value(ai_state["_follow_queue_on"])
+	_assert_follow_value(ai_state["_follow_narrow_at"])
 
 
 func _field(extra: Dictionary = {}):

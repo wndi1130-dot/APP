@@ -8,6 +8,7 @@ const W = preload("res://game/sim/weapons.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const FieldCombat = preload("res://game/field_combat.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
+const MoveRules = preload("res://game/sim/move_rules.gd")
 
 const FOLLOW_OFFSETS: Array = [Vector2(-1.3, -1.2), Vector2(1.3, -1.2), Vector2(0.0, -2.4)]
 const THINK: float = 0.25
@@ -106,6 +107,7 @@ const FOLLOW_RUN_OFF: float = 2.5
 const FOLLOW_ROOM: float = 0.95
 const FOLLOW_SLOT_STEP: float = 1.0
 const FOLLOW_SETTLE: float = 0.3
+const FOLLOW_SHUFFLE: float = 1.2   # Decision 486: watch only during a short idle adjustment.
 const FOLLOW_WALK_MIN: float = 2.0
 const FOLLOW_WALK_MAX: float = 4.0
 const FOLLOW_SIDE_MAX: float = 3.0
@@ -119,9 +121,13 @@ const FOLLOW_TRAIL_CAP: int = 64
 const FOLLOW_QUEUE_GAP: float = 1.25
 const FOLLOW_QUEUE_WAIT: float = 0.9
 const FOLLOW_QUEUE_RESUME: float = 1.45
+const FOLLOW_QUEUE_LEAD_S: float = 0.5   # Decision 486: lead along the trail.
+const FOLLOW_QUEUE_GAP_S: float = 0.2
+const FOLLOW_LEADER_STILL: float = 0.3
 const FOLLOW_DOOR_RECENT: float = 5.0
 const FOLLOW_NARROW_SCAN: int = 3
 const FOLLOW_NARROW_WIDTH: int = 2
+const FOLLOW_NARROW_HOLD: float = 4.0   # Decision 486: keep the line past a corner.
 const LOOK_CAMERA_DEG: float = 60.0
 
 var game
@@ -163,6 +169,8 @@ var _follow_door_at: float = -INF
 var _follow_door_id: int = 0
 var _follow_cell := Vector3(-1, -1, -1)   # cell x, y and level; a Vector3 so the field save keeps it
 var _follow_order: Array = []
+var _follow_queue_on: bool = false
+var _follow_narrow_at: float = -FOLLOW_NARROW_HOLD
 
 
 func _init(field_game) -> void:
@@ -181,6 +189,7 @@ func update(delta: float) -> void:
 	if think:
 		think_t = THINK
 		_track_door()
+		_refresh_follow_queue()
 		_call_down()
 	# Each companion thinks every THINK, but not all on the same frame: the
 	# three are spread over the THINK so no one frame carries all of them.
@@ -203,6 +212,10 @@ func update(delta: float) -> void:
 			if not _live_on:
 				_gather_live()
 			_companion(p)
+			if float(p.brain.get("follow_t", -INF)) != game.clock.elapsed:
+				_clear_follow_latches(p)
+				_follow_release_watch(p)
+				p.brain.erase("follow_t")
 	_live_on = false
 	_live = []
 	_roles = {}
@@ -760,6 +773,13 @@ func _quiet_bow(p) -> bool:
 ## side one beside, the rear behind. Inside a building the rear one holds the
 ## door he came in by. Standing, they keep close round him.
 func _keep_formation(p) -> void:
+	# Decision 486: stale follow latches must not survive a different task.
+	if game.clock.elapsed - float(p.brain.get("follow_t", -INF)) >= THINK * 2.0:
+		_clear_follow_latches(p)
+	_follow_release_watch(p)
+	p.brain.erase("follow_walk_t")
+	p.brain.erase("follow_gap_waiting")
+	p.brain["follow_t"] = game.clock.elapsed
 	var player = game.player
 	var role := _role(p)
 	var fwd := _follow_forward()
@@ -789,21 +809,32 @@ func _keep_formation(p) -> void:
 	else:
 		p.brain.erase("follow_slot")   # saved with the brain: never an INF
 	var look := fwd
-	if _chief_still >= LOOK_STILL_S:
+	if not walking:
 		look = _look_out(p, role, fwd, right)
 	if _follow_queueing(p, spot, fwd):
-		var queue := _follow_queue_mates(mates)
-		var order := maxi(queue.find(p), 0)
-		var leader = player if order == 0 else queue[order - 1]
+		var leader = _follow_leader(p)
 		if _follow_wait(p, leader):
 			p.stop()
 			if not walking:
 				p.face_point(p.position + look)
 			return
-		var gap: float = _follow_projection(leader.position)["back"] + FOLLOW_QUEUE_GAP
+		var leader_back: float = float(_follow_projection(leader.position)["back"])
+		var going: bool = _follow_going(leader)
+		var leader_speed: float = leader.speed(game.grid_at(leader.position).floor_at(FieldGrid.cell_of(leader.position))) if going else 0.0
+		var gap: float = leader_back + FOLLOW_QUEUE_GAP + leader_speed * FOLLOW_QUEUE_GAP_S
+		# Decision 486: let the gap open without ever sending a restart behind the body.
+		if float(_follow_projection(p.position)["back"]) < gap:
+			p.brain["follow_gap_waiting"] = true
+			p.stop()
+			return
 		var route := _follow_queue_path(p, gap, fwd)
+		if going and not route.is_empty():
+			var own_speed: float = p.speed(game.grid_at(p.position).floor_at(FieldGrid.cell_of(p.position)))
+			var lead: Vector3 = _follow_trail_at(maxf(leader_back + FOLLOW_QUEUE_WAIT, gap - own_speed * FOLLOW_QUEUE_LEAD_S))
+			if _follow_clear(route[-1], lead):
+				route.append(lead)
 		route = _follow_leave_room(p, route, leader)
-		_follow_walk(p, route)
+		_follow_walk(p, route, leader)
 		if not walking and p.path.is_empty():
 			p.face_point(p.position + look)
 		return
@@ -825,7 +856,9 @@ func _keep_formation(p) -> void:
 				route = PackedVector3Array([goal])
 			else:
 				route.append(goal)
-	_follow_walk(p, route)
+	_follow_walk(p, route, null, fwd if walking else Vector3.ZERO)
+	if not walking:
+		_follow_watch(p, look)
 
 
 ## Decision 486: read motion rather than aim; a raised gun can face across the walk.
@@ -886,9 +919,16 @@ func _follow_mates() -> Array:
 	var mates: Array = []
 	for role in ["point", "side", "rear"]:
 		for q in game.squad:
-			if q != game.player and q.is_alive() and not q.body.downed and q.command in ["follow", "cover"] and not q.brain.get("boarded", false) and _role(q) == role:
+			if _follow_active(q) and _role(q) == role:
 				mates.append(q)
 	return mates
+
+
+## Decision 486: busy and stale companions release both their slot and their place in line.
+func _follow_active(p) -> bool:
+	return p != game.player and p.is_alive() and p.can_act() and not p.body.downed \
+		and p.command in ["follow", "cover"] and p.action == "" and not p.brain.get("boarded", false) \
+		and game.clock.elapsed - float(p.brain.get("follow_t", -INF)) < THINK * 2.0
 
 
 func _follow_spot(p, mates: Array, fwd: Vector3, right: Vector3) -> Vector3:
@@ -912,35 +952,58 @@ func _follow_spot(p, mates: Array, fwd: Vector3, right: Vector3) -> Vector3:
 			"rear": off = Vector2(0.0, -FOLLOW_REAR_BACK) if walking else FOLLOW_IDLE_REAR
 			_: off = FOLLOW_SIDE if walking else FOLLOW_IDLE_SIDE
 		var chosen := Vector3.INF
-		for shift in [0, 1, -1, 2, -2, 3, -3, 4, -4]:
-			var offset := right * (off.x + float(shift) * FOLLOW_SLOT_STEP) + fwd * off.y
-			offset = offset.normalized() * clampf(offset.length(), near, far)
-			var spot: Vector3 = game.walkable_near(game.player.position + offset, false, 1)
-			var rel: Vector3 = spot - game.player.position
-			if rel.length() < near - FOLLOW_EPS or rel.length() > far + FOLLOW_EPS or not game.grid_at(spot).people_can_walk(FieldGrid.cell_of(spot)):
-				continue
-			if walking and role == "point" and (absf(rel.dot(right)) < FOLLOW_POINT_CLEAR - FOLLOW_EPS or rel.dot(fwd) <= 0.0):
-				continue
-			if walking and role == "rear" and rel.dot(fwd) > -FOLLOW_REAR_BACK + FOLLOW_EPS:
-				continue
-			var free := rel.length() > FOLLOW_ROOM
-			for other in game.squad:
-				if other != q and other.is_alive() and spot.distance_to(other.position) <= FOLLOW_ROOM:
-					free = false
-			for prior in claimed:
-				if spot.distance_to(prior) <= FOLLOW_ROOM:
-					free = false
-			if free:
-				chosen = spot
-				claimed.append(spot)
-				break
+		# Decision 486: reuse a valid role slot before searching sideways again.
+		if q.brain.get("follow_slot_role", "") == role and q.brain.get("follow_slot_walking", not walking) == walking:
+			var saved: Vector2 = q.brain.get("follow_offset", Vector2.ZERO)
+			var prior: Vector3 = q.brain.get("follow_slot", Vector3.INF)
+			if walking and prior.is_finite():
+				prior = game.player.position + right * saved.x + fwd * saved.y
+			if _follow_slot_free(q, prior, claimed, role, near, far, fwd, right):
+				chosen = prior
+		if not chosen.is_finite():
+			for shift in [0, 1, -1, 2, -2, 3, -3, 4, -4]:
+				var offset: Vector3 = right * (off.x + float(shift) * FOLLOW_SLOT_STEP) + fwd * off.y
+				offset = offset.normalized() * clampf(offset.length(), near, far)
+				var spot: Vector3 = game.walkable_near(game.player.position + offset, false, 1)
+				if _follow_slot_free(q, spot, claimed, role, near, far, fwd, right):
+					chosen = spot
+					break
 		# Every candidate taken or walled off: still go behind the player rather than stand far off.
 		if not chosen.is_finite():
 			chosen = game.walkable_near(game.player.position - fwd * near, false, 1)
+		if chosen.is_finite():
 			claimed.append(chosen)
+			q.brain["follow_slot"] = chosen
+			var rel: Vector3 = chosen - game.player.position
+			q.brain["follow_offset"] = Vector2(rel.dot(right), rel.dot(fwd))
+			q.brain["follow_slot_role"] = role
+			q.brain["follow_slot_walking"] = walking
+		else:
+			q.brain.erase("follow_slot")
 		if q == p:
 			return chosen
 	return Vector3.INF
+
+
+## Decision 486: saved slots obey the same role, wall and body bounds as new slots.
+func _follow_slot_free(p, spot: Vector3, claimed: Array[Vector3], role: String, near: float, far: float, fwd: Vector3, right: Vector3) -> bool:
+	if not spot.is_finite() or not game.grid_at(spot).people_can_walk(FieldGrid.cell_of(spot)):
+		return false
+	var rel: Vector3 = spot - game.player.position
+	if rel.length() < near - FOLLOW_EPS or rel.length() > far + FOLLOW_EPS:
+		return false
+	if game.player.moving:
+		if role == "point" and (absf(rel.dot(right)) < FOLLOW_POINT_CLEAR - FOLLOW_EPS or rel.dot(fwd) <= 0.0):
+			return false
+		if role == "rear" and rel.dot(fwd) > -FOLLOW_REAR_BACK + FOLLOW_EPS:
+			return false
+	for other in game.squad:
+		if other != p and other.is_alive() and spot.distance_to(other.position) <= FOLLOW_ROOM:
+			return false
+	for prior: Vector3 in claimed:
+		if spot.distance_to(prior) <= FOLLOW_ROOM:
+			return false
+	return true
 
 
 ## Decision 486: inspect only the nearby wall pair across the direction of travel.
@@ -975,15 +1038,35 @@ func _follow_clear(from: Vector3, to: Vector3) -> bool:
 	return grid.people_can_walk(b) and grid.body_line_clear(a, b) and game.sight_clear(from, to) and grid.clear_walk(a, b, false)
 
 
-## Decision 486: a blocked slot needs a detour, not a queue across open ground.
-func _follow_queueing(p, _spot: Vector3, fwd: Vector3) -> bool:
-	var door := _follow_door_id > 0 and _follow_distance - _follow_door_at <= FOLLOW_DOOR_RECENT
-	var queue := door or _follow_narrow(fwd)
-	if not queue:
-		p.brain.erase("follow_waiting")
+## Decision 486: one common think owns the narrow decision and the queue order.
+func _refresh_follow_queue() -> void:
+	var narrow: bool = _follow_narrow(_follow_forward())
+	if narrow:
+		_follow_narrow_at = _follow_distance
+	var door: bool = _follow_door_id > 0 and _follow_distance - _follow_door_at <= FOLLOW_DOOR_RECENT
+	var queue: bool = _chief_still < LOOK_STILL_S and (door or narrow or _follow_distance - _follow_narrow_at < FOLLOW_NARROW_HOLD)
+	if _follow_queue_on and not queue:
 		_follow_order.clear()
-	p.brain["follow_queue"] = queue
-	return queue
+		for q in game.squad:
+			q.brain.erase("follow_waiting")
+	_follow_queue_on = queue
+	if queue:
+		_follow_queue_mates(_follow_mates())
+
+
+func _follow_queueing(p, _spot: Vector3, _fwd: Vector3) -> bool:
+	p.brain["follow_queue"] = _follow_queue_on
+	return _follow_queue_on
+
+
+## Decision 486: a predecessor can start work between the common think and this one's turn.
+func _follow_leader(p):
+	var order: int = _follow_order.find(p)
+	for i in range(order - 1, -1, -1):
+		var leader = _follow_order[i]
+		if _follow_active(leader):
+			return leader
+	return game.player
 
 
 ## Decision 486: compare distance along the trail, including bends, not a chord across them.
@@ -1033,13 +1116,20 @@ func _follow_queue_mates(mates: Array) -> Array:
 	return _follow_order
 
 
+## Decision 486: a body turning into a live path is still going.
+func _follow_going(leader) -> bool:
+	return leader.moving or not leader.path.is_empty() or (leader == game.player and leader.drive_speed > 0.0)
+
+
 func _follow_wait(p, leader) -> bool:
 	var here := _follow_projection(p.position)
 	var gap: float = float(here["back"]) - float(_follow_projection(leader.position)["back"])
 	var waiting: bool = p.brain.get("follow_waiting", false)
-	if leader.moving or float(here["away"]) > FOLLOW_ROOM:
+	var still: float = 0.0 if _follow_going(leader) else float(p.brain.get("follow_lead_still", 0.0)) + THINK
+	p.brain["follow_lead_still"] = still
+	if _follow_going(leader) or float(here["away"]) > FOLLOW_ROOM:
 		waiting = false
-	elif gap < FOLLOW_QUEUE_WAIT:
+	elif gap < FOLLOW_QUEUE_WAIT and still >= FOLLOW_LEADER_STILL:
 		waiting = true
 	elif gap > FOLLOW_QUEUE_RESUME:
 		waiting = false
@@ -1058,24 +1148,25 @@ func _follow_path(from: Vector3, to: Vector3) -> PackedVector3Array:
 
 ## Decision 486: join the recent trail behind the assigned gap, then follow it forward.
 func _follow_queue_path(p, gap: float, fwd: Vector3) -> PackedVector3Array:
+	var own_back: float = float(_follow_projection(p.position)["back"])
+	if own_back < gap:
+		return PackedVector3Array()
 	if _follow_count == 0:
 		return _follow_path(p.position, game.player.position - fwd * gap)
-	var back: Array[Vector3] = []
+	var back: Array[Vector3] = [_follow_trail_at(gap)]
 	var newer: Vector3 = game.player.position
-	var left := gap
+	var walked: float = 0.0
 	for i in range(_follow_count):
-		var older := _follow_trail[(_follow_head - 1 - i + FOLLOW_TRAIL_CAP) % FOLLOW_TRAIL_CAP]
-		var length := newer.distance_to(older)
-		if back.is_empty():
-			if length >= left and length > 0.0001:
-				back.append(newer.lerp(older, left / length) if game.level_of(newer) == game.level_of(older) else older)
-			else:
-				left -= length
-		if not back.is_empty() and back[-1].distance_to(older) > 0.05:
+		var older: Vector3 = _follow_trail[(_follow_head - 1 - i + FOLLOW_TRAIL_CAP) % FOLLOW_TRAIL_CAP]
+		walked += newer.distance_to(older)
+		if walked >= own_back:
+			var join_at: Vector3 = _follow_trail_at(own_back)
+			if back[-1].distance_to(join_at) > 0.05:
+				back.append(join_at)
+			break
+		if walked > gap and back[-1].distance_to(older) > 0.05:
 			back.append(older)
 		newer = older
-	if back.is_empty():
-		back.append(newer)
 	var join := 0
 	for i in range(1, back.size()):
 		if p.position.distance_squared_to(back[i]) < p.position.distance_squared_to(back[join]):
@@ -1093,6 +1184,22 @@ func _follow_queue_path(p, gap: float, fwd: Vector3) -> PackedVector3Array:
 			# Decision 486: a changed door or wall gets one fresh route, not a search per crumb.
 			return _follow_path(p.position, back[0])
 	return route
+
+
+## Decision 486: interpolate only along the chief's trail, including floor changes.
+func _follow_trail_at(back: float) -> Vector3:
+	var newer: Vector3 = game.player.position
+	if _follow_count == 0:
+		return newer - _follow_forward() * maxf(back, 0.0)
+	var left: float = maxf(back, 0.0)
+	for i in range(_follow_count):
+		var older: Vector3 = _follow_trail[(_follow_head - 1 - i + FOLLOW_TRAIL_CAP) % FOLLOW_TRAIL_CAP]
+		var length: float = newer.distance_to(older)
+		if length >= left and length > 0.0001:
+			return newer.lerp(older, left / length) if game.level_of(newer) == game.level_of(older) else older
+		left -= length
+		newer = older
+	return newer
 
 
 ## Decision 486: clip the queue's path before the predecessor, including between thinks.
@@ -1120,11 +1227,12 @@ func _follow_leave_room(p, route: PackedVector3Array, leader) -> PackedVector3Ar
 	return out
 
 
-func _follow_walk(p, route: PackedVector3Array) -> void:
+func _follow_walk(p, route: PackedVector3Array, leader = null, fwd: Vector3 = Vector3.ZERO) -> void:
 	# Decision 486: refresh before arrival and update pace even when the goal hardly changed.
 	while not route.is_empty() and p.position.distance_to(route[0]) < 0.12:
 		route.remove_at(0)
 	if route.is_empty():
+		p.brain.erase("follow_walk_t")
 		p.stop()
 		return
 	var goal := route[-1]
@@ -1134,9 +1242,69 @@ func _follow_walk(p, route: PackedVector3Array) -> void:
 		run = true
 	elif gap < FOLLOW_RUN_OFF:
 		run = false
+	p.running = game.player.running or run
+	if leader != null and _follow_going(leader):
+		var leader_speed: float = leader.speed(game.grid_at(leader.position).floor_at(FieldGrid.cell_of(leader.position)))
+		var own_speed: float = p.speed(game.grid_at(p.position).floor_at(FieldGrid.cell_of(p.position)))
+		if own_speed > leader_speed + FOLLOW_EPS:
+			p.running = false
+			run = false
 	p.brain["follow_running"] = run
-	p.brain["dest"] = goal
-	p.go_to(route, game.player.running or run)
+	if leader == null and game.player.moving and fwd != Vector3.ZERO:
+		route = _follow_buffer(p, route, fwd)
+	p.brain["dest"] = route[-1]
+	p.brain["follow_walk_t"] = game.clock.elapsed
+	p.go_to(route, p.running)
+
+
+## Decision 486: two thinks of slack, after choosing the actual pace; formation only.
+func _follow_buffer(p, route: PackedVector3Array, fwd: Vector3) -> PackedVector3Array:
+	if route.is_empty():
+		return route
+	var speed: float = p.speed(game.grid_at(p.position).floor_at(FieldGrid.cell_of(p.position)))
+	var buffer: float = speed * FOLLOW_BUFFER_S + FOLLOW_PATH_NEAR
+	var remaining: float = _follow_remaining(p.position, route)
+	if remaining < buffer:
+		var extra: Vector3 = route[-1] + fwd * (buffer - remaining)
+		if _follow_clear(route[-1], extra):
+			route.append(extra)
+	return route
+
+
+func _follow_remaining(at: Vector3, route: PackedVector3Array) -> float:
+	var distance: float = 0.0
+	for next: Vector3 in route:
+		distance += at.distance_to(next)
+		at = next
+	return distance
+
+
+func _clear_follow_latches(p) -> void:
+	for key: String in ["follow_running", "follow_waiting", "follow_queue", "follow_lead_still", "follow_settled", "follow_walk_t", "follow_gap_waiting"]:
+		p.brain.erase(key)
+
+
+## Decision 486: release only our own watch, preserving a combat hold that replaced it.
+func _follow_release_watch(p) -> void:
+	if p.brain.has("follow_watch") and p.brain.get("face_hold") == p.brain["follow_watch"] and p.brain.get("face_hold_t") == p.brain.get("follow_watch_t"):
+		p.brain.erase("face_hold")
+		p.brain.erase("face_hold_t")
+	p.brain.erase("follow_watch")
+	p.brain.erase("follow_watch_t")
+
+
+## Decision 486: renew a short shuffle's watch for the full hold, without a think-boundary gap.
+func _follow_watch(p, look: Vector3) -> void:
+	if p.path.is_empty() or _follow_remaining(p.position, p.path) > FOLLOW_SHUFFLE:
+		return
+	if p.brain.get("face_hold") is Vector3 and game.clock.elapsed - float(p.brain.get("face_hold_t", -INF)) < MoveRules.FACE_HOLD:
+		return
+	var watch: Vector3 = p.position + look
+	p.brain["face_hold"] = watch
+	p.brain["face_hold_t"] = game.clock.elapsed
+	p.brain["follow_watch"] = watch
+	p.brain["follow_watch_t"] = game.clock.elapsed
+	p.face_point(watch)
 
 
 ## Where p keeps watch while the chief stands: the front one ahead, the side
@@ -1157,12 +1325,12 @@ func _look_out(p, role: String, fwd: Vector3, right: Vector3) -> Vector3:
 	var look := base.rotated(Vector3.UP, sweep)
 	# Decision 486: keep the slow sweep, but turn its result to the nearest camera-cone edge.
 	if game.camera != null:
-		var camera_way: Vector3 = game.camera.global_position - p.global_position
+		var camera_way: Vector3 = game.camera.global_transform.basis.z
 		camera_way.y = 0.0
 		if camera_way.length_squared() > 0.0001:
 			camera_way = camera_way.normalized()
 			var offset := angle_difference(atan2(camera_way.x, camera_way.z), atan2(look.x, look.z))
-			var limit := deg_to_rad(LOOK_CAMERA_DEG)
+			var limit: float = deg_to_rad(LOOK_CAMERA_DEG + 5.0)
 			if absf(offset) < limit:
 				look = camera_way.rotated(Vector3.UP, limit * (-1.0 if offset < 0.0 else 1.0))
 	return look

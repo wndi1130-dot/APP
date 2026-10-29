@@ -2102,7 +2102,12 @@ func _move_person(p: Person, delta: float) -> void:
 			if absf(angle_difference(face, way)) > PI * 0.5:
 				spd = minf(spd, MoveRules.BACKPEDAL)   # none runs backwards
 		elif p.turn_rate > 0.0:
-			spd *= MoveRules.heading_share(absf(angle_difference(p.look, way)))
+			var off: float = absf(angle_difference(p.look, way))
+			var share: float = MoveRules.heading_share(off)
+			# Decision 486: only a fresh, opted-in follow path gets a slow turning step.
+			if share <= 0.0 and _follows(p) and off < deg_to_rad(MoveRules.FOLLOW_TURN_STOP_DEG):
+				share = MoveRules.FOLLOW_TURN_FLOOR
+			spd *= share
 		p.facing = face
 		if spd <= 0.0:
 			p.moving = false   # a half turn is made standing, not gliding off the other way meanwhile
@@ -2127,6 +2132,16 @@ func _move_person(p: Person, delta: float) -> void:
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
+
+
+## Decision 486: two AI thinks; work, combat, door duty and expired markers keep their old move.
+func _follows(p: Person) -> bool:
+	if not bool(opts.get("follow_walk_turn", false)) or p == player or p.team != "squad" or not squad.has(p):
+		return false
+	if not p.is_alive() or not p.can_act() or p.command not in ["follow", "cover"] or p.action != "":
+		return false
+	var age: float = clock.elapsed - float(p.brain.get("follow_walk_t", -INF))
+	return age >= 0.0 and age < AI.THINK * 2.0
 
 
 func _slide(at: Vector3, step: Vector3) -> Vector3:
