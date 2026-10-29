@@ -611,7 +611,7 @@ func _ready() -> void:
 	add_child(music)
 	music.setup("field", self)
 	await BuildPace.rest(pace)
-	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
+	set_radio("기관사: " + driver_forecast(0.0, 0) + lid_tip(), "say")
 	if holdout.feel_line() != "":
 		audio.chief_feel(holdout.feel_number())
 	if mission_play.active():
@@ -2320,7 +2320,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 		level = SimNoise.clamp_level(level + 1)
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
-			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
+			set_radio("기관사: 굴 쪽이 울립니다. 다음 것들은 %s에서 나옵니다." % director.name_of(hole), "info", entry_pos(hole))
 	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false) * SimNoise.reach(tag)
 	var reacted: int = zombies.hear(at, level, radius)
 	ledger.observe(level, tag, radius, reacted)
@@ -2489,7 +2489,7 @@ func _update_hordes(delta: float) -> void:
 		director.noticed(now)
 	elif director.update_lost(now):
 		telemetry.lost_at(now)
-		set_radio("기관사: 놓친 것 같다. 다음 것들이 늦어진다. 숨 돌려라.")
+		set_radio("기관사: 놓친 것 같습니다. 다음 것들이 늦어집니다. 숨 돌리십시오.")
 	var h := director.update(now)
 	if not h.is_empty():
 		_start_horde(h)
@@ -2513,7 +2513,7 @@ func _update_hordes(delta: float) -> void:
 					recent += 1
 			director.horde_cleared(now, recent)
 			telemetry.rest(now, director.rest_until)
-			set_radio("기관사: 한 무리 지나갔다. " + director.forecast(now, forecast_precision, clock) + lid_tip())
+			set_radio("기관사: 한 무리 지나갔습니다. " + driver_forecast(now, forecast_precision) + lid_tip())
 
 
 ## Is anything after the squad right now (chasing, or already at someone)?
@@ -2656,7 +2656,7 @@ func _update_spawns(delta: float) -> void:
 	if forecast_t > 0.0:
 		forecast_t -= delta
 		if forecast_t <= 0.0:
-			set_radio("기관사: " + director.forecast(now, forecast_precision, clock) + lid_tip())
+			set_radio("기관사: " + driver_forecast(now, forecast_precision) + lid_tip())
 	deaf_t = maxf(0.0, deaf_t - delta)
 
 
@@ -2667,13 +2667,22 @@ func _someone_near(at: Vector3, r: float) -> bool:
 	return false
 
 
+## The driver's forecast, said to the chief politely like the user's own line
+## for him (decisions 486). horde_director words it so, but its no-more line
+## stays plain for the signal box and a roof, so the driver's is said here.
+func driver_forecast(now: float, precision: int) -> String:
+	if director.is_exhausted():
+		return "더 오는 기척은 없습니다."
+	return director.forecast(now, precision, clock)
+
+
 ## Once per field, when the next wave comes up the open street manhole: how to
 ## shut it (H3 2026-10-09: the player never found that it can be shut).
 func lid_tip() -> String:
 	if lid_tip_told or not FieldMaps.lid(director.next_entry) or not director.is_open(director.next_entry) or director.is_exhausted():
 		return ""
 	lid_tip_told = true
-	return " 맨홀은 판자나 고철로 누르면 막힌다."
+	return " 맨홀은 판자나 고철로 누르면 막힙니다."
 
 
 ## Out of a sewer hole a body climbs: straight up out of a lid or a drain,
@@ -3116,7 +3125,7 @@ func _check_end() -> void:
 		return
 	if clock.past_safe() and not safe_warned:
 		safe_warned = true
-		set_radio("기관사: 이제 떠나야 한다. 오래는 못 기다린다.", "must")
+		set_radio("기관사: 이제 떠나야 합니다. 오래는 못 기다립니다.", "must")
 
 
 ## Walking dead on the main track (rows 1-3, ground level) west and east of
