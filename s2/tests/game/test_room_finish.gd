@@ -158,6 +158,22 @@ func test_store_rooms_and_halls_only_in_homes() -> void:
 	assert_eq(_code(img2, Vector2i(7, 3), 0), 0, "no home, no hall")
 
 
+## 살림집 지하의 가구 없는 좁은 통로는 복도(벽지·나무 허리)가 아니다.
+func test_no_hall_below_ground() -> void:
+	var data := _house()
+	data["levels"][-1] = data["levels"][1]
+	data["levels"].erase(1)
+	for lv: int in [0, -1]:
+		var g: FieldGrid = data["levels"][lv]
+		for y in range(2, 5):
+			g.set_solid(Vector2i(7, y), S.WALL)
+		g.set_solid(Vector2i(7, 3), S.DOOR)
+	data["props"] = [_prop("toilet", Rect2i(2, 2, 1, 1), 0)]
+	var img := RoomFinish.build(data)
+	assert_eq(_code(img, Vector2i(6, 3), 0) % 8, RoomFinish.HALL, "a bare room one cell wide on the ground")
+	assert_eq(_code(img, Vector2i(6, 3), 2), 0, "the same room in the cellar")
+
+
 ## 깔개(room_furnish data.rugs)는 그림 오른쪽 절반의 같은 칸에 look 값으로.
 func test_rugs_go_in_the_right_half() -> void:
 	var data := _house()
