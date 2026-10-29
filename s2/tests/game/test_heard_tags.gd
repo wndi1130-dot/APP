@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 ## lamp's light) stays silent.
 
 const FieldGame = preload("res://game/field_game.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 
 var game
@@ -52,21 +53,54 @@ func test_a_can_bashed_open_is_two_knocks() -> void:
 	assert_eq(a.tag_knocks - n, 2, "the second a moment after")
 
 
+## `who` at a building's door, shut and bare, with a plank and nails: its
+## boarding begun (field_actions board_door, whose rule sound is "hammer").
+func _board(who) -> Vector3:
+	for c: Vector2i in game.grid.doors:
+		if int(game.grid.doors[c].get("building", -1)) < 0:
+			continue
+		game.grid.set_door_state(c, "closed")
+		who.position = FieldGrid.center(c) + Vector3(0.8, 0, 0)
+		who.stop()
+		who.add_item("plank")
+		who.add_item("nails")
+		game.actions.board_door(who, c)
+		return FieldGrid.center(c)
+	return Vector3.INF
+
+
 func test_the_hammer_knocks_while_the_boarding_lasts_then_stops() -> void:
 	var a = game.audio
 	var p = game.player
-	var at: Vector3 = p.position + Vector3(0.8, 0, 0)
-	p.action = "craft"
 	var n: int = a.tag_knocks
-	a.on_sound(at, SimNoise.Level.NORMAL, "hammer")
+	var at := _board(p)
+	assert_eq(String(p.action), "craft", "the boarding begun")
 	assert_eq(a.tag_knocks - n, 1, "a knock at once")
 	await wait_seconds(2.0)
 	var during: int = a.tag_knocks - n
 	assert_gt(during, 2, "knock after knock")
 	assert_lt(during, 7, "not a drum roll")
-	p.action = ""
+	p.cancel_action()
+	game.actions.validate_work(p)
 	await wait_seconds(1.0)
 	assert_eq(a.tag_knocks - n, during, "the boarding over, no more")
-	# Nobody at a work there: not a knock.
+	# The same hands at another work there (a stake whittled): not the hammer's.
+	p.action = "craft"
 	a.on_sound(at, SimNoise.Level.NORMAL, "hammer")
-	assert_eq(a.tag_knocks - n, during)
+	await wait_seconds(1.0)
+	assert_eq(a.tag_knocks - n, during, "another work of the hands is no hammering")
+
+
+func test_the_hammer_is_softer_once_the_player_walks_off() -> void:
+	var a = game.audio
+	var q = game.squad[0]
+	var at := _board(q)
+	assert_eq(String(q.action), "craft", "a companion at the boarding")
+	game.player.position = at + Vector3(1.5, 0, 0)
+	await wait_seconds(0.8)
+	assert_not_null(a.last_shot)
+	var near_db: float = a.last_shot.volume_db
+	game.player.position = at + Vector3(30, 0, 0)
+	await wait_seconds(0.8)
+	assert_not_null(a.last_shot)
+	assert_lt(a.last_shot.volume_db, near_db - 3.0, "farther off, softer: each knock heard from where the player is then")

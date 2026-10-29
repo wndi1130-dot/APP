@@ -345,7 +345,7 @@ const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salv
 ## else a stand-in — the impact file whose name begins so, or with "@" a group
 ## of its own — pitch low and high, how many times and that far apart (s), and
 ## how much of a stand-in group's file is heard (s; 0 = all). First values.
-## The hammer knocks for as long as someone near is at the boarding (_hammer).
+## The hammer knocks for as long as that boarding goes on (_hammer).
 const TAG_VOICES: Dictionary = {
 	"hammer": ["hammer", "metal", 0.95, 1.1, 1, 0.0, 0.0],
 	"latch": ["latch", "metal", 1.3, 1.45, 1, 0.0, 0.0],
@@ -355,7 +355,6 @@ const TAG_VOICES: Dictionary = {
 	"bow": ["bow_shot", "@swing_light", 1.2, 1.35, 1, 0.0, 0.0],
 }
 const HAMMER_GAP: Array = [0.42, 0.7]  # s between two knocks, low and high
-const HAMMER_NEAR: float = 2.0         # m: someone this near at a "craft" work is still hammering
 
 static var last_bed: String = ""       # the bed the last stop had: the next takes another
 var game
@@ -1930,12 +1929,11 @@ func on_sound(at: Vector3, level: int, tag: String) -> void:
 		group = "impact"
 	elif TAG_VOICES.has(tag):
 		last_tag_group = String(TAG_VOICES[tag][0])
-		var near: float = at.distance_to(game.player.position)
-		var lin_tag: float = clampf(0.35 + 0.2 * level, 0.3, 1.0) * clampf(1.0 - near / 60.0, 0.0, 1.0)
+		var loud_tag: float = clampf(0.35 + 0.2 * level, 0.3, 1.0)
 		if tag == "hammer":
-			_hammer(at, lin_tag)
+			_hammer(at, loud_tag)
 		else:
-			_tag_voice(TAG_VOICES[tag], at, lin_tag)
+			_tag_voice(TAG_VOICES[tag], at, loud_tag * clampf(1.0 - at.distance_to(game.player.position) / 60.0, 0.0, 1.0))
 		return
 	last_tag_group = group
 	if group == "" or not has(group):
@@ -1987,21 +1985,31 @@ func _tag_knock(v: Array, at: Vector3, lin: float) -> void:
 			return
 
 
-## Nails going in: a knock now and again for as long as someone near `at` is
-## at a "craft" work (the boarding the rule sound started), then no more.
-func _hammer(at: Vector3, lin: float) -> void:
-	if game == null or game.ended:
+## Nails going in: a knock now and again for as long as the boarding at `at`
+## (the work the rule sound started) goes on, then no more — not on through
+## another work of the hands after it. Each knock as loud as the player hears
+## it from where they are then.
+func _hammer(at: Vector3, loud: float) -> void:
+	if game == null or game.ended or not _boarding_at(at):
 		return
-	var busy := false
-	for person in game.people:
-		if person.is_alive() and String(person.action) == "craft" and person.position.distance_to(at) < HAMMER_NEAR:
-			busy = true
-			break
-	if not busy:
-		return
-	_tag_knock(TAG_VOICES["hammer"], at, lin)
+	_tag_knock(TAG_VOICES["hammer"], at, loud * clampf(1.0 - at.distance_to(game.player.position) / 60.0, 0.0, 1.0))
 	if is_inside_tree():
-		get_tree().create_timer(randf_range(float(HAMMER_GAP[0]), float(HAMMER_GAP[1])), false).timeout.connect(_hammer.bind(at, lin))
+		get_tree().create_timer(randf_range(float(HAMMER_GAP[0]), float(HAMMER_GAP[1])), false).timeout.connect(_hammer.bind(at, loud))
+
+
+## Someone is at the boarding of the door or window at `at` (field_actions
+## board_door / board_window: a "craft" work of that kind there).
+func _boarding_at(at: Vector3) -> bool:
+	for person in game.people:
+		if not person.is_alive() or String(person.action) != "craft":
+			continue
+		var work: Dictionary = game.actions.ongoing.get(person.get_instance_id(), {})
+		if not ["door", "window"].has(String(work.get("kind", ""))):
+			continue
+		var spot: Vector3 = work["at"]
+		if spot.distance_to(at) < 0.5:
+			return true
+	return false
 
 
 ## A building's alarm (J17): loudness, and how far the player hears it.
