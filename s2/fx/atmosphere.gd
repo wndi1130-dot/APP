@@ -223,8 +223,9 @@ const REGIONS: Dictionary = {
 }
 
 # Region-band hue, saturation and haze (decision 494); keep the light's luminance.
+# K1 is the reference: the user's low cold sun (2026-10-17) stays as it is there.
 const REGION_LOOK: Dictionary = {
-	"K1": {"light": Color(1.05, 1.0, 0.92), "shade": Color(1.02, 0.99, 0.97), "sat": 0.95, "haze": 0.03},
+	"K1": {"light": Color(1.0, 1.0, 1.0), "shade": Color(1.0, 1.0, 1.0), "sat": 1.0, "haze": 0.0},
 	"K2": {"light": Color(0.99, 1.02, 0.97), "shade": Color(0.95, 1.02, 1.0), "sat": 0.88, "haze": 0.08},
 	"K3": {"light": Color(0.97, 1.0, 1.05), "shade": Color(0.92, 0.98, 1.08), "sat": 1.03, "haze": -0.03},
 	"K4": {"light": Color(1.06, 1.03, 0.9), "shade": Color(0.97, 1.03, 0.97), "sat": 1.02, "haze": -0.04},
