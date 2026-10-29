@@ -429,9 +429,14 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
     journal(g, `${name}이(가) 물린 채 돌아왔다. 아는 사람은 수색대뿐이다.`, 'dark');
     lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${name}이(가) 물린 채 돌아왔다. 2구간 안에 드러나거나 일어난다.` });
   }
-  const lost = [...r.people.leftBehind, ...r.people.missing].filter(p => !r.people.dead.includes(p));
+  // 남겨짐과 사라짐에 함께 든 사람은 한 번만 센다(묶음 점검 L2).
+  const lost = [...new Set([...r.people.leftBehind, ...r.people.missing])].filter(p => !r.people.dead.includes(p));
   for (const [c, names] of byComm(departure, lost)) {
-    g.comms[c].pop = Math.max(1, g.comms[c].pop - names.length);
+    const had = g.comms[c].pop;
+    g.comms[c].pop = Math.max(1, had - names.length);
+    // 하한 1에 막혀 빼지 못한 몫은 적어 두고, 구조되어 돌아올 때 그만큼은 다시 더하지 않는다(명단과 인구를 맞춘다, 묶음 점검 M1).
+    const short = names.length - Math.max(0, had - g.comms[c].pop);
+    if (short > 0) (g.leftShort ??= {})[c] = (g.leftShort[c] ?? 0) + short;
     lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.join(', ')}이(가) 필드에 남았다.` });
     journal(g, `${names.join(', ')}이(가) 필드에 남았다. 열차는 그들 없이 떠났다.`, 'dark');
   }
@@ -439,7 +444,13 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   const rejoined = returnedOf(r).filter(p => p !== CAPTAIN_ID && r.people.rescued.includes(p) && (g.left ?? []).includes(personOf(departure, p).name));
   for (const [c, names] of byComm(departure, rejoined)) {
     g.left = (g.left ?? []).filter(n => !names.includes(n));
-    g.comms[c].pop += names.length;
+    const owed = Math.min(names.length, g.leftShort?.[c] ?? 0);
+    g.comms[c].pop += names.length - owed;
+    if (owed > 0) {
+      g.leftShort![c] = g.leftShort![c]! - owed;
+      if (g.leftShort![c] === 0) delete g.leftShort![c];
+      if (Object.keys(g.leftShort!).length === 0) delete g.leftShort;
+    }
     lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.join(', ')}이(가) 살아서 다시 열차에 올랐다.` });
     journal(g, `${names.join(', ')}이(가) 살아서 다시 열차에 올랐다.`, 'good');
   }

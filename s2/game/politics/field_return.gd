@@ -73,7 +73,15 @@ static func _pick(g: Dictionary, items: Array) -> Variant:
 	return items[int(floorf(float(draw[0]) * items.size()))]
 
 
+## The dark board's own draw (s1 dark/state.ts dr, dpick).
+static func _dpick(g: Dictionary, items: Array) -> Variant:
+	var draw := Rng.next(int(g["dark"]["rng"]["state"]))
+	g["dark"]["rng"]["state"] = int(draw[1])
+	return items[int(floorf(float(draw[0]) * items.size()))]
+
+
 ## S1a succession (사용자 답 2026-10-29). Keep drawPerson's ordered pool and fallback.
+## On a dark board the new rep's trait is the dark board's draw (s1 repGone, succeedRep).
 static func _succeed_rep(g: Dictionary, t: Dictionary, comm: String) -> void:
 	var state: Dictionary = g["comms"][comm]
 	var ages: Array = t["REP_AGE"][comm]
@@ -95,7 +103,7 @@ static func _succeed_rep(g: Dictionary, t: Dictionary, comm: String) -> void:
 			traits.append(trait_id)
 	state["leader"] = {
 		"personId": person["id"], "name": person["name"], "age": person["age"],
-		"trait": _pick(g, traits), "traitShown": 0,
+		"trait": _dpick(g, traits) if g.get("dark") is Dictionary else _pick(g, traits), "traitShown": 0,
 	}
 	state.erase("sick")
 	state["debt"] = false
@@ -613,17 +621,26 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		(g["hiddenBites"] as Array).append({"who": who["name"], "comm": who["comm"], "at": g["seg"], "due": int(g["seg"]) + 2})
 		_journal(g, "%s이(가) 물린 채 돌아왔다. 아는 사람은 수색대뿐이다." % who["name"], "dark")
 		lines.append({"k": "people", "comm": who["comm"], "text": "%s %s이(가) 물린 채 돌아왔다. 2구간 안에 드러나거나 일어난다." % [t["COMM_NAME"][who["comm"]], who["name"]]})
+	# One in both lists is counted once (s1 the same).
 	var lost_ids: Array = []
 	for person_id: String in receipt["people"]["leftBehind"]:
-		if not (receipt["people"]["dead"] as Array).has(person_id):
+		if not (receipt["people"]["dead"] as Array).has(person_id) and not lost_ids.has(person_id):
 			lost_ids.append(person_id)
 	for person_id: String in receipt["people"]["missing"]:
-		if not (receipt["people"]["dead"] as Array).has(person_id):
+		if not (receipt["people"]["dead"] as Array).has(person_id) and not lost_ids.has(person_id):
 			lost_ids.append(person_id)
 	var lost_by_comm := _by_comm(t, departure, lost_ids)
 	for comm: String in lost_by_comm:
 		var names: Array = lost_by_comm[comm]
-		g["comms"][comm]["pop"] = maxi(1, int(g["comms"][comm]["pop"]) - names.size())
+		var had := int(g["comms"][comm]["pop"])
+		g["comms"][comm]["pop"] = maxi(1, had - names.size())
+		# Those the floor of one kept on the count are noted, and not added again if they are
+		# rescued (the left list and the count agree; s1 leftShort).
+		var short := names.size() - maxi(0, had - int(g["comms"][comm]["pop"]))
+		if short > 0:
+			if not g.get("leftShort") is Dictionary:
+				g["leftShort"] = {}
+			g["leftShort"][comm] = int(g["leftShort"].get(comm, 0)) + short
 		lines.append({"k": "people", "comm": comm, "text": "%s %s이(가) 필드에 남았다." % [t["COMM_NAME"][comm], ", ".join(names)]})
 		_journal(g, "%s이(가) 필드에 남았다. 열차는 그들 없이 떠났다." % ", ".join(names), "dark")
 	# Left at an earlier stop and rescued alive this time: off the left list and back into the car's
@@ -640,7 +657,14 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 			if not names.has(name):
 				still_left.append(name)
 		g["left"] = still_left
-		g["comms"][comm]["pop"] = int(g["comms"][comm]["pop"]) + names.size()
+		var owed := mini(names.size(), int((g.get("leftShort", {}) as Dictionary).get(comm, 0)))
+		g["comms"][comm]["pop"] = int(g["comms"][comm]["pop"]) + names.size() - owed
+		if owed > 0:
+			g["leftShort"][comm] = int(g["leftShort"][comm]) - owed
+			if int(g["leftShort"][comm]) == 0:
+				(g["leftShort"] as Dictionary).erase(comm)
+			if (g["leftShort"] as Dictionary).is_empty():
+				g.erase("leftShort")
 		lines.append({"k": "people", "comm": comm, "text": "%s %s이(가) 살아서 다시 열차에 올랐다." % [t["COMM_NAME"][comm], ", ".join(names)]})
 		_journal(g, "%s이(가) 살아서 다시 열차에 올랐다." % ", ".join(names), "good")
 	for verdict: Dictionary in verdicts:

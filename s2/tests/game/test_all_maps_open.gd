@@ -15,7 +15,7 @@ const REQUIRED := [
 
 func test_registry_has_eighty_field_maps_and_the_first_stop() -> void:
 	var ids := FieldMaps.ids()
-	assert_eq(ids.size(), 81)
+	assert_eq(ids.size(), 82)
 	assert_has(ids, FieldMaps.DEFAULT_PLACE)
 	var unique: Dictionary = {}
 	for id in ids:

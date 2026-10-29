@@ -5,6 +5,7 @@ const V = preload("res://tests/politics/field_vectors.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
+const Rng = preload("res://game/politics/rng.gd")
 
 var _tables: Dictionary
 
@@ -59,6 +60,27 @@ func test_left_representative_and_companion_match_s1_including_rng_and_journal()
 	assert_eq(again["status"], row["duplicate"]["status"])
 	assert_eq(V.diff(row["duplicate"]["record"], again["record"]), "")
 	assert_eq(V.diff(row["duplicate"]["after"], again["g"]), "", "duplicate return consumes no RNG")
+
+
+## A dark board draws the new rep's trait from its own stream (s1 repGone, succeedRep dpick);
+## the person is the main stream's draw as on a plain board.
+func test_on_a_dark_board_the_trait_is_the_dark_boards_draw() -> void:
+	var row := _case()
+	var comm: String = row["comm"]
+	var old_trait: String = row["state"]["comms"][comm]["leader"]["trait"]
+	var main_before := int(row["state"]["rng"]["state"])
+	row["state"]["dark"] = {"rng": {"state": 12345}}
+	var g: Dictionary = _apply(row)["g"]
+	var traits: Array = []
+	for trait_id: String in _tables["TRAITS"]:
+		if trait_id != _tables["TRAIT_BAN"].get(comm) and trait_id != old_trait:
+			traits.append(trait_id)
+	var draw: Array = Rng.next(12345)
+	assert_eq(g["comms"][comm]["leader"]["trait"], traits[int(floorf(float(draw[0]) * traits.size()))])
+	assert_eq(int(g["dark"]["rng"]["state"]), int(draw[1]))
+	assert_eq(int(g["rng"]["state"]), int(Rng.next(main_before)[1]), "the main stream draws the person only")
+	var plain: Dictionary = _apply(_case())["g"]
+	assert_eq(g["comms"][comm]["leader"]["personId"], plain["comms"][comm]["leader"]["personId"])
 
 
 func test_missing_representative_also_succeeds() -> void:

@@ -91,7 +91,7 @@ static func _rng(place_id: String, run_seed: int) -> RandomNumberGenerator:
 
 ## 끝에서 틈 자리를 훑어, 걷는 시간이 맞는 곳 가운데 하나. 오른쪽·아래를 열차에서 먼 쪽부터
 ## 보고, 둘 다 없으면 위·왼쪽을 먼 쪽부터 본다. 틈 바로 앞(옛 지도 끝 칸 GAP개)은 걸을 수 있는
-## 바깥 땅이어야 한다.
+## 바깥 땅이어야 한다. 지도가 이름 붙인 강이 닿는 끝은 보지 않는다(띠가 강 끝을 돌아가는 길이 된다).
 static func pick(data: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	var g: FieldGrid = data["grid"]
 	var dist := _walk_from_train(data, g)
@@ -101,6 +101,8 @@ static func pick(data: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 	var sides := [1, 2] if g.width - at.x >= g.height - at.y else [2, 1]
 	sides.append_array([3, 0] if at.x >= at.y else [0, 3])
 	for side: int in sides:
+		if _river_reaches(data, g, side):
+			continue
 		var length := g.height if side % 2 == 1 else g.width
 		var ways := _entry_lanes(data, g, side)
 		var found: Array = []
@@ -130,6 +132,14 @@ static func pick(data: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 		if not found.is_empty():
 			return found[rng.randi_range(0, found.size() - 1)]
 	return {}
+
+
+## 지도가 이름 붙인 강(`edge_water`, 바깥 띠를 붙이면 map_ring.gd가 새 끝까지 늘림)이 그 끝에 닿는가.
+static func _river_reaches(data: Dictionary, g: FieldGrid, side: int) -> bool:
+	for r: Rect2i in data.get("edge_water", []):
+		if [r.position.y == 0, r.end.x == g.width, r.end.y == g.height, r.position.x == 0][side]:
+			return true
+	return false
 
 
 ## 그 끝에 선 무리 들어오는 칸(entries)의 u. 띠를 붙이면 새 끝으로 옮긴다.
