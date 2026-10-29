@@ -463,7 +463,8 @@ static func _keep_lum(c: Color, like: Color) -> Color:
 	return Color(out.r, out.g, out.b, c.a)
 
 
-## Tint in linear space, restore luminance in either direction, then fit the gamut.
+## Tint in linear space, restore luminance in either direction, then fit the gamut
+## (look() gives back as energy what the fit takes from a sun already at full red).
 static func _tint_keep(c: Color, t: Color, k: float) -> Color:
 	var linear: Color = c.srgb_to_linear()
 	var luminance: float = linear.get_luminance()
@@ -564,8 +565,12 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	# the night keeps a third of it (its grey stays near neutral).
 	var rl: Dictionary = region_look(region_name)
 	var region_k: float = 1.0 - 0.7 * night_part
+	var sun_lum := _lin_lum(sun)
+	var ambient_lum := _lin_lum(ambient)
 	sun = _tint_keep(sun, rl["light"], region_k)
 	ambient = _tint_keep(ambient, rl["shade"], region_k)
+	sun_energy *= sun_lum / maxf(_lin_lum(sun), 0.0001)
+	ambient_energy *= ambient_lum / maxf(_lin_lum(ambient), 0.0001)
 	# Never flatter than 16 degrees: the oblique field must still read its ground.
 	var light_pitch := -clampf(angles.x, 16.0, 60.0)
 	var light_yaw := angles.y
