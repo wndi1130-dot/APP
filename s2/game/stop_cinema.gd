@@ -22,6 +22,7 @@ signal card_time
 signal done(how: String)           # "sent" or "passed"
 
 const TrainModels = preload("res://game/world/train_model_kit.gd")
+const TrackView = preload("res://game/world/track_view.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
@@ -678,12 +679,13 @@ func _build_station() -> void:
 				break
 		_building(st, lamps, b, floors)
 		lit = lit or bool(b.get("warm", false))
-	for w in data.get("wagons", []):
-		var r: Rect2i = w["rect"]
-		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
-		MapView.box(st, Vector3(r.size.x - 0.2, 1.9, r.size.y - 0.2), mid + Vector3(0, 0.95, 0), Color(0.33, 0.3, 0.28))
-		if float(w.get("coal", 0.0)) > 0.0:
-			MapView.box(st, Vector3(r.size.x - 0.8, 0.5, r.size.y - 0.8), mid + Vector3(0, 2.05, 0), Color(0.12, 0.12, 0.13))
+	# Wagons on the sidings: the field's own models (map_view.gd), open, flat or tender as the field
+	# shows them; an open box only where the kit has none. No closed wagon (map brief, ban list).
+	var wagons: Array = data.get("wagons", [])
+	var wagon_models := TrainModels.attach_wagons(station, wagons, TrackView.wagon_heights(g, wagons))
+	for index: int in wagon_models.get_meta("fallback_wagons", []):
+		for part: Array in open_wagon_parts(wagons[index]):
+			MapView.box(st, part[0], part[1], part[2])
 	for c in data.get("trees", []):
 		_tree(st, FieldGrid.center(c))
 	for r in data.get("low_blocks", []):
@@ -777,6 +779,23 @@ func _tree(st: SurfaceTool, at: Vector3) -> void:
 	MapView.box(st, Vector3(2.6, 1.3, 2.6), at + Vector3(0, 1.9, 0), FIR.darkened(0.08).lerp(Color(0.33, 0.37, 0.36), white))
 	MapView.box(st, Vector3(1.9, 1.2, 1.9), at + Vector3(0, 3.0, 0), crown.darkened(0.25))
 	MapView.box(st, Vector3(1.1, 1.1, 1.1), at + Vector3(0, 4.0, 0), crown)
+
+
+## A wagon the model kit has none for, as [size, centre, colour] boxes: a floor on its wheels and four
+## low sides, open on top, its coal heaped inside a little over the sides.
+static func open_wagon_parts(w: Dictionary) -> Array:
+	var r: Rect2i = w["rect"]
+	var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
+	var lx: float = r.size.x - 0.2
+	var lz: float = r.size.y - 0.2
+	var body := Color(0.33, 0.3, 0.28)
+	var out: Array = [[Vector3(lx, 0.3, lz), mid + Vector3(0, 0.75, 0), body]]
+	for s: float in [-1.0, 1.0]:
+		out.append([Vector3(lx, 1.0, 0.12), mid + Vector3(0, 1.4, s * (lz - 0.12) * 0.5), body])
+		out.append([Vector3(0.12, 1.0, lz), mid + Vector3(s * (lx - 0.12) * 0.5, 1.4, 0), body])
+	if float(w.get("coal", 0.0)) > 0.0:
+		out.append([Vector3(lx - 0.6, 1.1, lz - 0.6), mid + Vector3(0, 1.45, 0), Color(0.12, 0.12, 0.13)])
+	return out
 
 
 ## A building as one block of its own paint (building_view.gd paint_for, a little
