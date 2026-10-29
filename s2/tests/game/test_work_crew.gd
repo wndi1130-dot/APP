@@ -5,6 +5,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const FieldWork = preload("res://game/field_work.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const ArrivalHorde = preload("res://game/sim/arrival_horde.gd")
 
 class CountReceipt extends "res://game/sim/receipt.gd":
 	var sent_calls: Dictionary = {}
@@ -59,17 +60,17 @@ func _spawn(at: Vector3, state: String = "wander", kind: String = "dead") -> Dic
 	return z
 
 
-func _outer() -> Vector3:
+func _outer(reach: float = 35.0) -> Vector3:
 	var path: PackedVector3Array = game.work.route("work_site")
 	for direction: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
-		var at: Vector3 = _at() + direction * 35.0
+		var at: Vector3 = _at() + direction * reach
 		var clear: bool = true
 		for cell: Vector3 in path:
 			if at.distance_to(cell) <= FieldWork.PATH_R + 1.0:
 				clear = false
 		if clear:
 			return at
-	return _at() + Vector3(35, 0, 0)
+	return _at() + Vector3(reach, 0, 0)
 
 
 func _ring(cleared: int) -> void:
@@ -203,6 +204,39 @@ func test_smoothed_path_segments_are_checked_between_their_endpoints() -> void:
 	assert_eq(int(safe["path_awake"]), 1)
 	assert_gt(float(safe["share"]), FieldWork.CLEAR_SHARE)
 	assert_false(bool(safe["open"]))
+
+
+## Decision 486: while the brakes' dead are still coming the button waits, said once, and it
+## opens when they are dealt with.
+func test_the_button_waits_while_the_brakes_dead_are_coming() -> void:
+	var z: Dictionary = _spawn(_outer(FieldWork.RING_R + 20.0), "investigate")
+	z["arrival"] = true
+	assert_true(game.work.safety()["open"], "off the ring and the walk: only the arrival holds it")
+	_advance(1.0)
+	assert_true(game.work.arriving())
+	assert_eq(_radio(), FieldWork.ARRIVAL_LINE)
+	assert_ne(game.data["spots"]["work_site"]["state"], "ready")
+	game.radio_wait.clear()
+	game.actions.start_work(game.player)
+	assert_eq(_radio(), FieldWork.ARRIVAL_LINE, "a press says why, every time")
+	assert_eq(game.crew.size(), 0)
+	game.radio_wait.clear()
+	_advance(3.0)
+	assert_eq(_radio(), "", "the train says it once")
+	assert_eq(_events(), ["seen"] as Array[String], "still shut")
+	z["state"] = "dead"
+	_advance(1.0)
+	assert_eq(_radio(), "기관사: 이 정도면 이제 거의 안전한 것 같습니다. 작업조 내보낼까요?")
+	assert_eq(game.data["spots"]["work_site"]["state"], "ready")
+
+
+func test_past_the_arrival_window_a_late_one_no_longer_holds_the_button() -> void:
+	var z: Dictionary = _spawn(_outer(FieldWork.RING_R + 20.0), "investigate")
+	z["arrival"] = true
+	game.clock.elapsed = ArrivalHorde.WINDOW_S + 1.0
+	assert_false(game.work.arriving(), "a straggler is one of the stop's dead now")
+	_advance(1.0)
+	assert_eq(game.data["spots"]["work_site"]["state"], "ready")
 
 
 func test_initially_empty_site_starts_with_the_open_call() -> void:
@@ -460,10 +494,39 @@ func _cycle(id: String) -> void:
 	assert_almost_eq(game.work.remaining(), before - float(template["trip"]), 0.0001)
 	worker.position = game.work.door_of("work_site")
 	if id == "coal_wagon":
-		worker.position = FieldGrid.center(Vector2i(clampi(int(worker.position.x), FieldWork.COAL_DROP_MIN_X, FieldWork.COAL_DROP_MAX_X), FieldWork.COAL_DROP_ROW))
+		worker.position = game.work.coal_drop(worker)
 	game.ai._crew(worker, 0.1, true)
 	var delivered: float = game.actions.coal_delivered if template["yield"] == "coal" else game.actions.wood_delivered
 	assert_almost_eq(delivered, float(template["trip"]), 0.0001)
+
+
+## Decision 486 N1: coal goes down beside the train wherever the map's ring has moved it, at the
+## carrier's own x (the old fixed row 6 was 70 rows off on a grown map).
+func test_coal_goes_down_beside_the_train_where_the_map_puts_it() -> void:
+	_job("coal_wagon")
+	_send()
+	var worker: Variant = _role("worker")[0]
+	game.data["train"] = Rect2i(46, 76, 80, 3)
+	worker.position = Vector3(121.4, 0.0, 93.5)
+	assert_eq(FieldGrid.cell_of(game.work.coal_drop(worker)), Vector2i(121, 81))
+	worker.position = Vector3(140.0, 0.0, 93.5)
+	assert_eq(FieldGrid.cell_of(game.work.coal_drop(worker)), Vector2i(126, 81), "kept to the train's length")
+
+
+## Each worker digs at its own place along the wagon, two metres apart to either hand of the work
+## cell and within the wagon's length (on this map the work cell is mid-wagon).
+func test_workers_dig_at_their_own_places_along_the_wagon() -> void:
+	_job("coal_wagon")
+	_send()
+	var wagon: Dictionary = game.ai._wagon_with_coal()
+	var spots: Array[Vector3] = []
+	for p in _role("worker"):
+		spots.append(game.work._work_spot(p, "work_site", wagon))
+	assert_eq(spots.size(), 4)
+	for i in spots.size():
+		for j in range(i + 1, spots.size()):
+			assert_gt(spots[i].distance_to(spots[j]), 1.5, "no two at one place")
+		assert_lt(spots[i].distance_to(FieldGrid.center(wagon["work"])), (wagon["rect"] as Rect2i).size.x + 0.5)
 
 
 func test_coal_wagon_cycle() -> void:

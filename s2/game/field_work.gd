@@ -4,6 +4,7 @@ extends RefCounted
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
+const ArrivalHorde = preload("res://game/sim/arrival_horde.gd")
 
 const TICK_S: float = 1.0
 const RING_R: float = 40.0
@@ -18,6 +19,8 @@ const SEEN_BESIDE_R: float = 3.0
 const RADIO_EVERY: float = 60.0
 ## Who speaks the crew's radio lines: the engineer for now, changed here alone.
 const SPEAKER: String = "기관사"
+## Said once while the brakes' dead keep the button off (decision 486).
+const ARRIVAL_LINE: String = SPEAKER + ": 제동 소리에 몰려오는 것들부터 막겠습니다. 그다음에 작업조 내보내겠습니다."
 const ESCORT_LEAD: float = 3.0
 const HOLD_N: int = 4
 const HOLD_CLEAR_S: float = 5.0
@@ -38,9 +41,12 @@ const DIG_TIME: float = 45.0
 const TRIP_COAL: float = 0.25
 const EMPTY: float = 0.001
 const SHARE_CELLS: int = 8
-const COAL_DROP_MIN_X: int = 17
-const COAL_DROP_MAX_X: int = 96
-const COAL_DROP_ROW: int = 6
+## Coal goes down this many rows out from the train's side, at the carrier's own x along it.
+const COAL_DROP_OUT: int = 2
+## Workers dig this far apart along a coal wagon's side, and spread this far either side of
+## any other site: each at its own place, so a carrier is not in the way of one at work.
+const WORK_GAP: float = 2.0
+const SITE_SPREAD: float = 1.5
 const BUDGET_SLACK: float = 0.1
 const WOOD_TABLE: Dictionary = {"freight": 2, "houses": 5, "hospital": 1,
 	"factory": 1, "church": 3, "office": 3}
@@ -135,6 +141,17 @@ static func wagon_coal(data: Dictionary) -> float:
 
 func awake(z: Dictionary) -> bool:
 	return not DECORATION.has(String(z.get("kind", ""))) and game.zombies.active(z) and z["state"] != "downed"
+
+
+## The brakes' dead are still coming to the train (decision 486): in the arrival window one
+## of them is still up, so the guards are on them first and the button waits.
+func arriving() -> bool:
+	if game.clock.elapsed > ArrivalHorde.WINDOW_S:
+		return false
+	for z: Dictionary in game.zombies.list:
+		if z.get("arrival", false) and awake(z):
+			return true
+	return false
 
 
 ## Check the stretches between smoothed path points too. Bodies stay in the ring.
@@ -283,19 +300,24 @@ func _tick(id: String) -> void:
 		if distance <= SEE_R and (distance <= SEEN_BESIDE_R or game.sight_clear(game.player.position, position_of(id))):
 			state["seen"] = true
 			_event(id, "seen")
-			if safe["open"]:
+			if safe["open"] and not arriving():
 				_open(id)
 			else:
 				state["phase"] = "closed"
 				state["warned"] = true
 				state["warn_share"] = float(safe["share"])
-				if float(safe["share"]) >= CLEAR_SHARE:
+				if safe["open"]:
+					_arrival_wait(id)
+				elif float(safe["share"]) >= CLEAR_SHARE:
 					game.set_radio(blocked_reason(safe), "reply")
 				else:
 					game.set_radio(SPEAKER + ": 저기 %s 일터가 보입니다. 둘레에 망자가 %s 있어 아직 못 내보냅니다." % [job(id)["name"], game.director.size_word(int(safe["total"]) - int(safe["cleared"]))], "reply")
-	elif safe["open"]:
+	elif safe["open"] and not arriving():
 		if stage != "open":
 			_open(id)
+	elif safe["open"]:
+		_arrival_wait(id)
+		state["phase"] = "half" if state["half"] else "closed"
 	elif stage != "open" and state["warned"] and not state["half"] and float(safe["share"]) >= CLEAR_SHARE / 2.0 \
 			and float(safe["share"]) > float(state.get("warn_share", 0.0)):
 		# Half way to the share the train asks for, and more cleared than when it first said no.
@@ -306,6 +328,14 @@ func _tick(id: String) -> void:
 	else:
 		state["phase"] = "half" if state["half"] else "closed"
 	_paint(id, safe)
+
+
+## Cleared enough, but the brakes' dead are still coming: the button stays off, said once.
+func _arrival_wait(id: String) -> void:
+	var state: Dictionary = _site(id)
+	if not state.get("arrival_said", false):
+		state["arrival_said"] = true
+		game.set_radio(ARRIVAL_LINE, "reply")
 
 
 func _open(id: String) -> void:
@@ -430,11 +460,13 @@ func start(id: String = "work_site") -> bool:
 	if phase(id) in ["working", "hold", "retreat", "done"]:
 		return false
 	var safe: Dictionary = safety(id)
-	if not safe["open"]:
+	if not safe["open"] or arriving():
 		if phase(id) == "open":
 			state["phase"] = "closed"
 		_paint(id, safe)
-		game.set_radio(blocked_reason(safe), "reply")
+		if safe["open"]:
+			state["arrival_said"] = true
+		game.set_radio(ARRIVAL_LINE if safe["open"] else blocked_reason(safe), "reply")
 		return false
 	if phase(id) != "open":
 		_tick(id)
@@ -624,6 +656,7 @@ func drop_load(p) -> void:
 		dropped.append({"pos": p.position, "kind": kind, "n": n})
 	p.brain["load"] = 0.0
 	p.brain["job"] = "dig"
+	p.brain.erase("coal_drop")
 
 
 func _erase_same(rows: Array, row: Dictionary) -> void:
@@ -727,7 +760,7 @@ func crew_step(p, think: bool) -> bool:
 	var wagon: Dictionary = game.ai._wagon_with_coal() if job_id(id) == "coal_wagon" else {}
 	if remaining(id) <= EMPTY or (job_id(id) == "coal_wagon" and wagon.is_empty()):
 		return true
-	var at: Vector3 = (FieldGrid.center(wagon["work"]) if not wagon.is_empty() else position_of(id)) + _spread(p, 1.5)
+	var at: Vector3 = _work_spot(p, id, wagon)
 	if p.position.distance_to(at) > WORK_R:
 		game.ai._walk(p, at, false)
 		return true
@@ -736,6 +769,33 @@ func crew_step(p, think: bool) -> bool:
 	if elapsed >= float(p.brain["work_wait"]):
 		p.start_action("dig", String(job(id)["verb"]), float(job(id)["work_s"]), _worked.bind(p, id))
 	return true
+
+
+## Where this worker digs: its own place by its turn in the crew (no dice) — along a coal wagon's
+## side from its work cell, a WORK_GAP step at a time to either hand within the wagon's length,
+## or spread across any other site.
+func _work_spot(p, id: String, wagon: Dictionary) -> Vector3:
+	var workers: Array = []
+	for q in members(id):
+		if q.role == "worker":
+			workers.append(q)
+	var i: int = maxi(workers.find(p), 0)
+	var at: Vector3
+	if wagon.is_empty():
+		var t: float = float(i) / float(workers.size() - 1) if workers.size() > 1 else 0.5
+		at = position_of(id) + Vector3(lerpf(-SITE_SPREAD, SITE_SPREAD, t), 0.0, 0.0)
+	else:
+		var rect: Rect2i = wagon["rect"]
+		at = FieldGrid.center(wagon["work"])
+		var places: Array[float] = []
+		for k in range(rect.size.x + 1):
+			for step: int in ([k, -k] if k > 0 else [0]):
+				var x: float = at.x + WORK_GAP * float(step)
+				if x >= float(rect.position.x) + 0.5 and x <= float(rect.end.x) - 0.5:
+					places.append(x)
+		if not places.is_empty():
+			at.x = places[i % places.size()]
+	return game.walkable_near(at)
 
 
 ## A small fixed offset per person (from the pid, no dice) so a crew does not stand in one spot.
@@ -808,10 +868,21 @@ func _worked(p, id: String) -> void:
 	p.brain["job"] = "carry"
 
 
+## Beside the train at the carrier's own x, counted from the train itself: a map grown round its
+## edges (map_ring.gd) moves the train, and fixed cells had left the drop at the old row.
+func coal_drop(p) -> Vector3:
+	var train: Rect2i = game.data["train"]
+	return FieldGrid.center(Vector2i(clampi(int(p.position.x), train.position.x + 1, train.end.x), train.end.y + COAL_DROP_OUT))
+
+
 func _deliver(p, id: String) -> void:
 	var drop: Vector3 = door_of(id)
 	if job_id(id) == "coal_wagon":
-		drop = FieldGrid.center(Vector2i(clampi(int(p.position.x), COAL_DROP_MIN_X, COAL_DROP_MAX_X), COAL_DROP_ROW))
+		# Taken where the load is picked up, so the carrier's own steps do not move it and send
+		# it looking for the way again.
+		if not (p.brain.get("coal_drop") is Vector3):
+			p.brain["coal_drop"] = coal_drop(p)
+		drop = p.brain["coal_drop"]
 	if p.position.distance_to(drop) > DROP_R:
 		game.ai._walk(p, drop, false)
 		return
@@ -823,6 +894,7 @@ func _deliver(p, id: String) -> void:
 	game.telemetry.trip()
 	p.brain["load"] = 0.0
 	p.brain["job"] = "dig"
+	p.brain.erase("coal_drop")
 
 
 func noise(delta: float, belt: bool = false) -> void:
