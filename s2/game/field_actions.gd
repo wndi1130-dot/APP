@@ -817,6 +817,8 @@ func _set_window_open(c: Vector2i, open: bool) -> void:
 	game.grid.refresh_cell(c)
 	game.view.update_window(c)
 	_note_cold(c)
+	if game.audio != null:
+		game.audio.window_turn(c, "open" if open else "closed")   # the ear's; no rule hears a window turned
 
 
 ## Draw or open a window's curtain: at once and quiet; drawn, nobody sees
@@ -838,6 +840,8 @@ func _curtain_set(p, c: Vector2i, to: String) -> void:
 	w["curtain"] = to
 	game.grid.refresh_cell(c)
 	game.view.update_window(c)
+	if game.audio != null:
+		game.audio.window_turn(c, "curtain")   # the ear's; quiet to the rules
 
 
 ## The player who broke it is asked at once: the glass out first, or straight through.
