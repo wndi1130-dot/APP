@@ -291,6 +291,24 @@ const BLOW_SAME_M: float = 2.0        # hit_* this near a blow in the same frame
 ## the weapon (a miss: the swing and a short breath of air, blow_miss, no
 ## hit_*), where any of these files would do.
 const IMPACT_TAGS: Array[String] = ["kick", "glass", "pry", "bang", "lid", "salvage", "pickaxe", "fall", "impact", "ladder", "bell", "train_guard"]
+## Sounds the dead hear that had none for the ear (on_sound: what the dead
+## can hear, the player hears too): nails hammered in (boarding), a window's
+## latch worked at, a can bashed open, a thrown lure coming down, a clock
+## ringing in a pack, a bow loosed. Each: its own group once it has files,
+## else a stand-in — the impact file whose name begins so, or with "@" a group
+## of its own — pitch low and high, how many times and that far apart (s), and
+## how much of a stand-in group's file is heard (s; 0 = all). First values.
+## The hammer knocks for as long as someone near is at the boarding (_hammer).
+const TAG_VOICES: Dictionary = {
+	"hammer": ["hammer", "metal", 0.95, 1.1, 1, 0.0, 0.0],
+	"latch": ["latch", "metal", 1.3, 1.45, 1, 0.0, 0.0],
+	"can_bash": ["can_bash", "metal", 0.82, 0.92, 2, 0.22, 0.0],
+	"lure": ["lure_land", "metal", 1.2, 1.4, 1, 0.0, 0.0],
+	"alarm": ["alarm_clock", "@building_alarm", 1.45, 1.55, 1, 0.0, 1.2],
+	"bow": ["bow_shot", "@swing_light", 1.2, 1.35, 1, 0.0, 0.0],
+}
+const HAMMER_GAP: Array = [0.42, 0.7]  # s between two knocks, low and high
+const HAMMER_NEAR: float = 2.0         # m: someone this near at a "craft" work is still hammering
 
 static var last_bed: String = ""       # the bed the last stop had: the next takes another
 var game
@@ -336,6 +354,7 @@ var seen_at: Dictionary = {}           # zombie id -> heard_t it was last in sig
 var pick_t: float = 0.0
 var crowd: float = 0.0                 # weighted dead near the player (for the bed)
 var last_tag_group: String = ""        # what the last make_sound played (tests)
+var tag_knocks: int = 0                # TAG_VOICES sounds played (tests)
 var held: bool = false                 # the depart note is up
 var departing: bool = false            # '떠난다' plays its own whistle
 var played: Array = []                 # groups played, in order (tests)
@@ -1796,6 +1815,15 @@ func on_sound(at: Vector3, level: int, tag: String) -> void:
 		group = "gun" if has("gun") else "impact"
 	elif IMPACT_TAGS.has(tag):
 		group = "impact"
+	elif TAG_VOICES.has(tag):
+		last_tag_group = String(TAG_VOICES[tag][0])
+		var near: float = at.distance_to(game.player.position)
+		var lin_tag: float = clampf(0.35 + 0.2 * level, 0.3, 1.0) * clampf(1.0 - near / 60.0, 0.0, 1.0)
+		if tag == "hammer":
+			_hammer(at, lin_tag)
+		else:
+			_tag_voice(TAG_VOICES[tag], at, lin_tag)
+		return
 	last_tag_group = group
 	if group == "" or not has(group):
 		return
@@ -1808,6 +1836,59 @@ func on_sound(at: Vector3, level: int, tag: String) -> void:
 	if level >= SimNoise.Level.LOUD and lin > 0.01:
 		hush.emit("near", HUSH_LOUD_S)
 	_one_shot(group, at, lin, 0.7 if tag == "gun" and group == "impact" else randf_range(0.9, 1.1), null, "SFX" if group == "whistle" else _bus_at(at))
+
+
+## One of TAG_VOICES heard from `at` at on_sound's loudness, as many times as
+## it says, that far apart.
+func _tag_voice(v: Array, at: Vector3, lin: float) -> void:
+	_tag_knock(v, at, lin)
+	for i in range(1, int(v[4])):
+		if is_inside_tree():
+			get_tree().create_timer(float(v[5]) * i, false).timeout.connect(_tag_knock.bind(v, at, lin))
+		else:
+			_tag_knock(v, at, lin)
+
+
+## One sound of a TAG_VOICES row: its group's file, or its stand-in's.
+func _tag_knock(v: Array, at: Vector3, lin: float) -> void:
+	if game == null or game.ended:
+		return
+	var group: String = v[0]
+	if not lib.has(group):
+		lib[group] = _load_group(group)
+	var pitch := randf_range(float(v[2]), float(v[3]))
+	tag_knocks += 1
+	if has(group):
+		_one_shot(group, at, lin, pitch, null, _bus_at(at))
+		return
+	var stand: String = v[1]
+	if stand.begins_with("@"):
+		var own: String = stand.substr(1)
+		var pick: int = _fresh_file(own)
+		if pick >= 0:
+			_one_shot(own, at, lin, pitch, lib[own][pick], _bus_at(at), float(v[6]))
+		return
+	for s: AudioStream in lib.get("impact", []):
+		if s.resource_path.get_file().begins_with(stand):
+			_one_shot("impact", at, lin, pitch, s, _bus_at(at))
+			return
+
+
+## Nails going in: a knock now and again for as long as someone near `at` is
+## at a "craft" work (the boarding the rule sound started), then no more.
+func _hammer(at: Vector3, lin: float) -> void:
+	if game == null or game.ended:
+		return
+	var busy := false
+	for person in game.people:
+		if person.is_alive() and String(person.action) == "craft" and person.position.distance_to(at) < HAMMER_NEAR:
+			busy = true
+			break
+	if not busy:
+		return
+	_tag_knock(TAG_VOICES["hammer"], at, lin)
+	if is_inside_tree():
+		get_tree().create_timer(randf_range(float(HAMMER_GAP[0]), float(HAMMER_GAP[1])), false).timeout.connect(_hammer.bind(at, lin))
 
 
 ## A building's alarm (J17): loudness, and how far the player hears it.
