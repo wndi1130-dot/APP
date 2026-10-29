@@ -22,6 +22,7 @@ signal card_time
 signal done(how: String)           # "sent" or "passed"
 
 const TrainModels = preload("res://game/world/train_model_kit.gd")
+const TrackView = preload("res://game/world/track_view.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
@@ -122,6 +123,9 @@ const CORRIDOR_STEP: float = 60.0
 
 ## The stop's map (stop_loader.gd), {} till it is known; set_map hands it over.
 var data: Dictionary = {}
+## The land on the way in (journey_corridor.gd: the kit the train's screen lays, its
+## order going on, 결정 495 4절); null keeps the firs and poles of _lay_corridor.
+var corridor_kit: RefCounted = null
 ## Seen whole before (SEEN_FILE): a tap then goes to the next beat.
 var seen: bool = false
 ## Write SEEN_FILE once it has been seen whole (off in tests).
@@ -675,12 +679,12 @@ func _build_station() -> void:
 				break
 		_building(st, lamps, b, floors)
 		lit = lit or bool(b.get("warm", false))
-	for w in data.get("wagons", []):
-		var r: Rect2i = w["rect"]
-		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
-		MapView.box(st, Vector3(r.size.x - 0.2, 1.9, r.size.y - 0.2), mid + Vector3(0, 0.95, 0), Color(0.33, 0.3, 0.28))
-		if float(w.get("coal", 0.0)) > 0.0:
-			MapView.box(st, Vector3(r.size.x - 0.8, 0.5, r.size.y - 0.8), mid + Vector3(0, 2.05, 0), Color(0.12, 0.12, 0.13))
+	# Wagons on the sidings: the field's own models and, where the kit has none, its open box (map_view.gd).
+	var wagons: Array = data.get("wagons", [])
+	var wagon_models := TrainModels.attach_wagons(station, wagons, TrackView.wagon_heights(g, wagons))
+	for index: int in wagon_models.get_meta("fallback_wagons", []):
+		for part: Array in MapView.open_wagon_parts(wagons[index]):
+			MapView.box(st, part[0], part[1], part[2])
 	for c in data.get("trees", []):
 		_tree(st, FieldGrid.center(c))
 	for r in data.get("low_blocks", []):
@@ -710,9 +714,24 @@ func _build_station() -> void:
 ## poles on the far side, trees and drifts out from the line, sleepers under it.
 ## Nothing is laid where the stop's own place begins.
 func _lay_corridor(to: float) -> void:
+	var laid: int = 0
 	while _corridor_to < minf(to, _corridor_stop):
 		var x0: float = _corridor_to
 		var x1: float = minf(x0 + CORRIDOR_STEP, _corridor_stop)
+		if corridor_kit != null:
+			# A few pieces a frame, from just behind the train on (journey_corridor.gd).
+			if x0 < corridor_kit.FIRST_X:
+				_corridor_to = corridor_kit.FIRST_X
+				continue
+			if laid >= corridor_kit.PER_FRAME:
+				break
+			corridor_kit.lay(world, x0, x1, white, wet)
+			_sleepers(x0, x1)
+			_corridor_to = x1
+			laid += 1
+			if x1 >= _corridor_stop:
+				break
+			continue
 		var rng := RandomNumberGenerator.new()
 		rng.seed = 7919 + int(floor(x0))
 		var st := SurfaceTool.new()

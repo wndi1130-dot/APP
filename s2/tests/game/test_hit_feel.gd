@@ -1,7 +1,8 @@
 extends "res://addons/gut/test.gd"
 ## Decision 444 (전투 손맛 C): a blow is felt. The field holds a moment as the
 ## player's own blow lands, the camera kicks the way it went and settles, the
-## phone buzzes, and the blow sounds by the weapon; a miss is the swing alone.
+## phone buzzes, and the blow sounds by the weapon; a miss is the swing and a short breath
+## of air (blow_miss), no hit_*.
 ## None of it is read back by the rules (hit_feel.gd).
 
 const FieldGame = preload("res://game/field_game.gd")

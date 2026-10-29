@@ -47,7 +47,7 @@ const GAME_FIELDS: Array[String] = [
 	"glass_warned", "player_downed_t", "spotted_events", "unseen_rattle", "lid_tip_told", "roof_seen",
 	"seen_now", "seen_memory", "vis_t", "cam_focus", "cam_push", "cam_size",
 ]
-const COMPONENTS: Array[String] = ["director", "ledger", "mission_play", "holdout", "actions", "ai", "combat", "lines", "weather", "telemetry", "train_guard"]
+const COMPONENTS: Array[String] = ["director", "ledger", "mission_play", "holdout", "actions", "ai", "combat", "lines", "weather", "telemetry", "train_guard", "work"]
 ## "dead_eaten_seconds" is EatRules.EATEN_META (결정 441 (3)).
 const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow_way", "pose_care", "pose_swing", "dead_eaten_seconds"]
 
@@ -146,7 +146,8 @@ static func from_json(text: String) -> Dictionary:
 		z["id"] = int(z["id"])
 		z["horde"] = int(z["horde"])
 	for g in d.get("ground_items", []):
-		g["n"] = int(g["n"])
+		# A crew carrier's dropped load keeps its part (field_work.gd drop_load); other items count whole.
+		g["n"] = float(g["n"]) if g.get("crew_drop", false) else int(g["n"])
 		# An arrow saved before it took the stock's name (decision 426).
 		if g.get("id") == "arrow":
 			g["id"] = "ammo_craft"
@@ -228,6 +229,9 @@ static func apply(game, save: Dictionary) -> void:
 	game.begin_resume()
 	game.clock.elapsed = float(save["clock"]["elapsed"])
 	game.clock.speed = float(save["clock"]["speed"])
+	# The work crew is made during play (field_work.gd): each member a save carries is made again first.
+	if game.get("work") != null:
+		game.work.remake(save.get("people", []))
 	for row: Dictionary in save.get("people", []):
 		for p in game.people:
 			if p.pid == String(row["pid"]):

@@ -12,6 +12,20 @@ const FV = preload("res://tests/politics/field_vectors.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 
 
+func test_transport_stocks_and_empty_furnish_keep_the_store_contract() -> void:
+	var d: Dictionary = TrainDom.start()
+	assert_eq(d["furnish"], {})
+	for key: String in ["sleds", "stretchers", "carts", "long_sleds", "runners"]:
+		assert_eq(d[key], 0)
+		assert_true(TrainDom.is_store({key: 1}))
+		assert_false(TrainDom.is_store({key: -1}))
+		assert_false(TrainDom.is_store({key: "1"}))
+	for id: String in ["w5", "x4"]:
+		d["techs"][id] = {"stage": "done", "defect": false, "progress": 3, "need": 3}
+	assert_true(St.is_s1a({"dom": d}))
+	assert_true(TrainDom.is_store({"furnish": {}}))
+
+
 func test_the_empty_stores_hold_every_amount_at_zero() -> void:
 	var d: Dictionary = TrainDom.empty()
 	assert_true(TrainDom.is_store(d))

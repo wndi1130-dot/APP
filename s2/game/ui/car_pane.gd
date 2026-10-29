@@ -98,6 +98,7 @@ static func model(g0: Dictionary, t0: Dictionary, car0: Dictionary) -> Dictionar
 	var names: Dictionary = t0.get("COMM_NAME", {})
 	return {
 		"name": String(car0.get("name", names.get(c, c))),
+		"furnish": TrainMods.FURNISH_NAMES[int(TrainMods.furnish_of(g0, String(car0.get("id", "")))["tier"])] if TrainMods.FURNISH_CARS.has(String(car0.get("id", ""))) else "",
 		"comm": c,
 		"pop": pop,
 		"hands_line": TrainHands.shortage_line(g0, t0, true),
@@ -209,6 +210,11 @@ func _head(m: Dictionary) -> void:
 	var name := UiFonts.label(String(m["name"]), UiFonts.WORD, 500, 18.0, INK, 2.16)
 	name.name = "Name"
 	_text(name, 44.0, 27.0)
+	if String(m["furnish"]) != "":
+		var tier := UiFonts.label(String(m["furnish"]), UiFonts.WORD, 400, 12.0, INK2, 0.52)
+		tier.name = "Furnish"
+		_add(tier)
+		GlassParts.put_on(tier, name.position.x + GlassParts.text_w(name) + 10.0 * k, 27.0 * k)
 	# The people as their mark and count, then the stage (결정 417: no 「명 · 관계」).
 	_add(_mark("people", 14.0, Vector2(44.0, 33.0), INK2))
 	var pop := UiFonts.label(str(m["pop"]), UiFonts.NUMBER, 400, 15.0, INK, 0.225)

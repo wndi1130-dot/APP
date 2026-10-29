@@ -10,7 +10,7 @@ import type { Field, TechId } from './data';
 import { doBury, extraCarCoal, rollUsefulCar, thawMult } from './cars';
 import { delegateTick, overreachTick } from './delegate';
 import { hotWaterCoal, hygieneTick } from './hygiene';
-import { lawTechCoal, lawTechFood, lawTechRes } from './lawtech';
+import { furnishTick, lawTechCoal, lawTechFood, lawTechRes } from './lawtech';
 import { elderTick } from './elder';
 import { symbolTick } from './symbols';
 import './pipe';
@@ -218,6 +218,7 @@ export function domesticSettle(g: Game, notes: string[]): void {
   payUpkeep(g);
   const ws = runWorkshop(g);
   if (ws.did.length) notes.push(`공방: ${ws.did.join(', ')}.`);
+  furnishTick(g);
   knowledgeTick(g);
   elderTick(g);
   hygieneTick(g, notes);

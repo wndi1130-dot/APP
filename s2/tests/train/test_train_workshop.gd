@@ -10,6 +10,110 @@ const TrainResearch = preload("res://game/train/train_research.gd")
 const St = preload("res://game/train/train_state.gd")
 
 
+func _transport_game() -> Dictionary:
+	var g: Dictionary = _game({"wood": 100.0, "scrap": 100.0, "parts": 20.0, "cloth": 10.0, "target": 0})
+	for id: String in ["x1", "x4"]:
+		g["dom"]["techs"][id] = {"stage": "done", "defect": false, "progress": 6, "need": 6}
+	return g
+
+
+func test_five_transport_tools_pay_the_design_cost_and_enter_their_stores() -> void:
+	var rows: Array = [
+		["sled", "sleds", {"wood": 2.0, "scrap": 1.0}, 1.0],
+		["stretcher", "stretchers", {"wood": 2.0, "cloth": 1.0}, 1.0],
+		["cart", "carts", {"wood": 3.0, "scrap": 2.0, "parts": 1.0}, 2.0],
+		["long_sled", "long_sleds", {"wood": 4.0, "scrap": 1.0}, 2.0],
+		["runner", "runners", {"scrap": 2.0}, 1.0],
+	]
+	for row: Array in rows:
+		var g: Dictionary = _transport_game()
+		if row[0] == "runner":
+			g["dom"]["sleds"] = 1
+		var before: Dictionary = g["dom"].duplicate(true)
+		assert_true(TrainWorkshop.start(g, row[0]), row[0])
+		assert_eq(g["dom"]["make"]["paid"], row[2])
+		assert_eq(g["dom"]["make"]["need"], row[3])
+		for key: String in row[2]:
+			assert_eq(float(g["dom"][key]), float(before[key]) - float(row[2][key]), row[0] + " " + key)
+		assert_true(TrainDom.is_store(g["dom"]))
+		var out: Dictionary = TrainWorkshop.run(g)
+		assert_eq(out["made"], [row[0]])
+		assert_eq(float(out["used"]), row[3])
+		assert_eq(float(g["dom"][row[1]]), 1.0)
+		assert_null(g["dom"]["make"])
+		assert_true(TrainDom.is_store(g["dom"]))
+
+
+func test_transport_caps_share_sled_places_and_count_runners_per_sled() -> void:
+	for order: Array in [["sled", "sled"], ["sled", "long_sled"], ["long_sled", "sled"], ["long_sled", "long_sled"]]:
+		var g: Dictionary = _transport_game()
+		for id: String in order:
+			assert_true(TrainWorkshop.start(g, id))
+			TrainWorkshop.run(g)
+		var before: Dictionary = g.duplicate(true)
+		for id: String in ["sled", "long_sled"]:
+			assert_eq(TrainWorkshop.why_not(g, id), "썰매 자리는 둘까지")
+			assert_false(TrainWorkshop.start(g, id))
+		assert_eq(g, before, "full sled places never spend stores")
+	for id: String in ["stretcher", "cart"]:
+		var g: Dictionary = _transport_game()
+		assert_true(TrainWorkshop.start(g, id))
+		TrainWorkshop.run(g)
+		assert_false(TrainWorkshop.start(g, id))
+	var g: Dictionary = _transport_game()
+	assert_false(TrainWorkshop.start(g, "runner"), "no sled to fit")
+	for sled: String in ["sled", "long_sled"]:
+		assert_true(TrainWorkshop.start(g, sled))
+		TrainWorkshop.run(g)
+		assert_true(TrainWorkshop.start(g, "runner"))
+		TrainWorkshop.run(g)
+		assert_false(TrainWorkshop.start(g, "runner"), "one per sled")
+	assert_eq(float(g["dom"]["runners"]), 2.0)
+
+
+func test_transport_research_gates_and_defective_x4_only_allow_cart() -> void:
+	var g: Dictionary = _game({"wood": 100, "scrap": 100, "parts": 20, "cloth": 10})
+	for id: String in ["sled", "stretcher", "cart", "long_sled", "runner"]:
+		assert_false(TrainWorkshop.shown(g).has(id))
+		assert_false(TrainWorkshop.start(g, id))
+	g = _transport_game()
+	for id: String in ["x1", "x4"]:
+		g["dom"]["techs"][id]["stage"] = "defective"
+		g["dom"]["techs"][id]["defect"] = true
+	for id: String in ["sled", "stretcher", "cart"]:
+		assert_true(TrainWorkshop.shown(g).has(id))
+	for id: String in ["long_sled", "runner"]:
+		assert_false(TrainWorkshop.shown(g).has(id))
+		assert_false(TrainWorkshop.start(g, id))
+	g["dom"]["techs"]["x4"]["stage"] = "done"
+	g["dom"]["techs"]["x4"]["defect"] = false
+	g["dom"]["techs"]["x4"]["starved"] = true
+	assert_true(TrainWorkshop.shown(g).has("long_sled"), "starved finished research is still usable")
+	g["dom"]["techs"]["x1"]["off"] = true
+	g["dom"]["techs"]["x4"]["off"] = true
+	for id: String in ["sled", "stretcher", "cart", "long_sled", "runner"]:
+		assert_false(TrainWorkshop.start(g, id))
+	g = _transport_game()
+	g["dom"]["experts"] = []
+	assert_false(TrainWorkshop.shown(g).has("cart"), "knowledge is required")
+	g = _transport_game()
+	g["dom"]["techs"]["x1"]["stage"] = "restoring"
+	assert_false(TrainWorkshop.start(g, "sled"))
+
+
+func test_transport_before_work_refunds_real_cloth_and_shares_one_line() -> void:
+	var g: Dictionary = _transport_game()
+	assert_true(TrainWorkshop.start(g, "stretcher"))
+	assert_eq(float(g["dom"]["cloth"]), 9.0)
+	assert_false(TrainWorkshop.start(g, "sled"))
+	assert_true(TrainWorkshop.cancel(g))
+	assert_eq(float(g["dom"]["cloth"]), 10.0)
+	assert_eq(float(g["dom"]["wood"]), 100.0)
+	assert_true(TrainWorkshop.start(g, "cart"))
+	g["dom"]["make"]["progress"] = 0.25
+	assert_false(TrainWorkshop.cancel(g))
+
+
 func _game(stores: Dictionary = {}) -> Dictionary:
 	var dom: Dictionary = TrainDom.start()
 	for key: String in stores:
