@@ -773,9 +773,9 @@ func _blocked(c: Dictionary, except: Array) -> Array:
 	return positions
 
 
+## The hour's lamps are the light board's (train_light.gd: lit at night, low by day);
+## here only the train's motion sways them and the coal keeps the stove.
 func _apply_light(c: Dictionary, context: Dictionary) -> void:
-	if context["night"]:
-		c["lamp_energy"] = float(c["lamp_energy"]) * float(Catalog.tuning("night_lamp"))
 	if context["motion"] == "stopped":
 		c["lamp_sway"] = float(Catalog.tuning("stopped_sway"))
 	elif context["motion"] == "departing":

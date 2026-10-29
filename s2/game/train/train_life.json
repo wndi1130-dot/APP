@@ -14,7 +14,6 @@
     "invite_timeout": 24,
     "stage_protest": 75,
     "resource_low": 1,
-    "night_lamp": 0.82,
     "stopped_sway": 0,
     "departing_sway": 1.2,
     "fire_mark_size": [

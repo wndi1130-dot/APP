@@ -642,8 +642,21 @@ void fragment() {
 	float trodden = (1.0 - cell.a) * sky * smoothstep(0.6, 0.9, up);
 	float drift = fx_fbm2(world_pos.xz * 0.35);
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
-	float cover = smoothstep(0.6, 0.9, up) * clamp(fx_snow * (0.6 + 0.8 * drift), 0.0, 1.0);
-	cover *= 0.75 * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
+	float cover = 0.0;
+	// Warped 0.15/m patches leave dark gaps; skip the new noise without snow.
+	if (fx_snow > 0.01) {
+		vec2 patch_p = world_pos.xz * 0.15;
+		vec2 warp = vec2(fx_vnoise(patch_p * 0.5 + vec2(17.1, 9.2)),
+			fx_vnoise(patch_p * 0.5 + vec2(3.7, 23.6))) - vec2(0.5);
+		// A finer octave breaks the round value-noise blobs into ragged drifts.
+		float snow_patch = 0.72 * fx_vnoise(patch_p + 0.7 * warp) + 0.28 * fx_vnoise(patch_p * 3.1 + 1.4 * warp + vec2(5.3, 11.9));
+		// Pixel width, at least 0.02, keeps the edge firm without shimmer.
+		float patch_w = max(fwidth(snow_patch), 0.02);
+		// Half the noise range at snow 0.5; every patch is filled by 0.95.
+		float snow_t = mix(1.0 + patch_w, -patch_w, smoothstep(0.05, 0.95, fx_snow));
+		cover = 0.9 * smoothstep(snow_t - patch_w, snow_t + patch_w, snow_patch);
+	}
+	cover *= smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	// The photo grain, one fetch for all four; its strength wanders so the
 	// 2.6 m tile does not read as a grid. Grit on bare ground, wet soil as it wets.
 	vec4 grain = texture(fx_ground, world_pos.xz * (1.0 / 2.6));
@@ -653,9 +666,8 @@ void fragment() {
 	vec2 ground_dy = dFdy(world_pos.xz);
 	float ground_k = smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
 	float wander = 0.55 + 0.9 * fx_vnoise(world_pos.xz * 0.13 + 7.0);
-	// The kind's bare look on open flat ground, gone back to the floor's own colour
-	// as snow comes (the gates above keep reading the floor's own colour).
-	float bare_k = sky * smoothstep(0.6, 0.9, up) * (1.0 - smoothstep(0.25, 0.8, fx_snow));
+	// Keep the kind's dark bare look in snow gaps, even in deep winter.
+	float bare_k = sky * smoothstep(0.6, 0.9, up);
 	int kind = int(ground_kind + 0.5) - 1;
 	if (ground_kind > 0.5 && bare_k > 0.001) {
 		base = mix(base, bare_ground(kind, ground_detail, base, world_pos.xz, grain, ground_dx, ground_dy), bare_k);
@@ -699,9 +711,16 @@ void fragment() {
 	// Laid surfaces (road, platform, pavement) take less of the soil's blotches.
 	// Less on bare ground than under snow, so the blotches do not break the forms nor
 	// sink grass in a shadow under V 0.15 (결정 470 dark share).
-	float laid = (kind == 1 || kind == 2 || ground_detail < -0.5) ? (ground_layers_on && kind != 2 ? 0.15 : 0.35) : (kind == 0 || kind == 5) ? (ground_layers_on ? 0.3 : 0.45) : 1.0;
+	bool paved = kind == 1 || kind == 2 || ground_detail < -0.5;
+	float laid = paved ? (ground_layers_on && kind != 2 ? 0.15 : 0.35) : (kind == 0 || kind == 5) ? (ground_layers_on ? 0.3 : 0.45) : 1.0;
 	base *= 1.0 + (soil - 0.5) * 1.3 * ground_k * wander * mix(1.0, laid, bare_k);
 	base *= 1.0 - 0.35 * wet;
+	// Cleared paving keeps 25% of cover; exposed wet ground darkens up to 20%.
+	// Apply before the bank so sheltered piles and footsteps still read.
+	if (paved) {
+		cover *= 0.25;
+		base *= 1.0 - 0.2 * clamp(fx_snow, 0.0, 1.0) * bare_k;
+	}
 	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));
 	cover *= 1.0 - 0.9 * trodden;
 	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);

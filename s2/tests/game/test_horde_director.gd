@@ -235,14 +235,14 @@ func test_call_range_mult() -> void:
 func test_forecast_basic_bands() -> void:
 	var h = _make()
 	var c = FieldClock.new()
-	assert_eq(h.forecast(0.0, 0, c), "동쪽 선로 끝으로 온다, 한 시간쯤.")
+	assert_eq(h.forecast(0.0, 0, c), "동쪽 선로 끝으로 옵니다, 한 시간쯤.")
 	# 50 game min = 200 s before arrival.
-	assert_eq(h.forecast(70.0, 0, c), "동쪽 선로 끝으로 온다, 한 시간쯤.")
-	assert_eq(h.forecast(70.1, 0, c), "동쪽 선로 끝으로 온다, 반 시간쯤.")
+	assert_eq(h.forecast(70.0, 0, c), "동쪽 선로 끝으로 옵니다, 한 시간쯤.")
+	assert_eq(h.forecast(70.1, 0, c), "동쪽 선로 끝으로 옵니다, 반 시간쯤.")
 	# 25 game min = 100 s before arrival.
-	assert_eq(h.forecast(170.0, 0, c), "동쪽 선로 끝으로 온다, 반 시간쯤.")
-	assert_eq(h.forecast(170.1, 0, c), "동쪽 선로 끝으로 온다, 곧.")
-	assert_eq(h.forecast(300.0, 0, c), "동쪽 선로 끝으로 온다, 곧.", "overdue")
+	assert_eq(h.forecast(170.0, 0, c), "동쪽 선로 끝으로 옵니다, 반 시간쯤.")
+	assert_eq(h.forecast(170.1, 0, c), "동쪽 선로 끝으로 옵니다, 곧.")
+	assert_eq(h.forecast(300.0, 0, c), "동쪽 선로 끝으로 옵니다, 곧.", "overdue")
 
 
 func test_forecast_precise() -> void:
@@ -332,7 +332,7 @@ func test_call_from_sewer_only() -> void:
 func test_sewer_forecast_phrase() -> void:
 	var h = _make()
 	h.call_from("culvert")
-	assert_eq(h.forecast(0.0, 0, FieldClock.new()), "급수탑 밑 암거에서 올라온다, 한 시간쯤.")
+	assert_eq(h.forecast(0.0, 0, FieldClock.new()), "급수탑 밑 암거에서 올라옵니다, 한 시간쯤.")
 	assert_eq(h.forecast(0.0, 1, FieldClock.new()), "급수탑 밑 암거, 11:45쯤, 여섯 남짓.")
 
 
@@ -412,7 +412,7 @@ func test_another_map_gives_its_own_ways_in() -> void:
 	assert_true(h.sewer("drain"))
 	assert_false(h.sewer("adit"))
 	assert_false(h.is_open("culvert"), "the first stop's ways are not this map's")
-	assert_string_contains(h.forecast(0.0, 0, null), "갱도 입구 쪽에서 온다")
+	assert_string_contains(h.forecast(0.0, 0, null), "갱도 입구 쪽에서 옵니다")
 	var seen: Dictionary = {}
 	for i in range(60):
 		var got: Dictionary = h.update(h.next_arrival)

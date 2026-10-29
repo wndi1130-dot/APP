@@ -613,12 +613,12 @@ function baseView(g: Game, card: Card): CardView {
       const past = memo(g, 'rescue');
       const n = past?.n ?? 0;
       const who = [
-        '역사 안에 다친 사람 둘이 있다. 데려가 달라고 한다.',
-        '역사 구석에 노인과 소년이 있다. 소년은 노인을 업고 여기까지 왔다고 한다.',
-        '플랫폼 끝에 여자 하나가 앉아 있다. 다리를 다쳤고, 아이를 안고 있다.',
-        '대합실 의자 밑에서 남자 하나가 기어 나왔다. 기관사였다고 한다. 손이 떨린다.',
+        '역사 안에 다친 사람 둘이 있다. "데려가 주세요. 걸을 수는 있어요."',
+        '역사 구석에 노인과 소년이 있다. "할아버지를 업고 여기까지 왔어요. 같이 가게 해 주세요."',
+        '플랫폼 끝에 여자 하나가 앉아 있다. 다리를 다쳤고, 아이를 안고 있다. "아이만이라도 태워 주세요."',
+        '대합실 의자 밑에서 남자 하나가 기어 나왔다. 손이 떨린다. "기관사였어요. 불은 아직 땔 줄 알아요."',
       ][n % 4];
-      const echo = was(past, 'leave') || was(past, 'leave_law') ? ' 수색대가 이번엔 먼저 묻는다. 또 두고 가느냐고.'
+      const echo = was(past, 'leave') || was(past, 'leave_law') ? ' 수색대가 이번엔 먼저 묻는다. "또 두고 갑니까?"'
         : was(past, 'take_in') ? ` 지난번 데려온 사람들로 꼬리칸 과밀이 ${Math.round(situation(g, 'tail')[2])}이다.` : ' 꼬리칸은 이미 꽉 찼다.';
       return {
         title: '부상자', speaker: { name: card.who ?? '수색대', role: '수색대' }, required: true, key: 'rescue',

@@ -289,7 +289,8 @@ const WARM_BANDS: Dictionary = {
 	# Late autumn's night fill a shade over the winter's (the same neutral grey): with no
 	# snow to give the moon back, the bare ground under a clear sky kept three quarters of
 	# the first stop under V 0.15 (decision 470 night line: 0.70 at most; reference 0.67).
-	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.312, 0.307, 0.300)},
+	# Raised again after the ground layers (decision 496) darkened the bare ground: 0.312 → 0.345.
+	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.345, 0.340, 0.333)},
 	"dawn": {"zenith": Color(0.30, 0.31, 0.38), "horizon": Color(0.88, 0.66, 0.50), "ambient": Color(0.52, 0.50, 0.52)},
 	# Late autumn's day sun a neutral, faintly green white (decision 499): the old warm
 	# (0.96, 0.92, 0.82) turned the faded grass yellow under a clear sky (a green share of
