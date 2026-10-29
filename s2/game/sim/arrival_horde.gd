@@ -18,6 +18,7 @@ extends RefCounted
 
 const SimNoise = preload("res://game/sim/noise.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 
 const LEVEL := SimNoise.Level.LOUD
 ## Where the pull has faded to nothing: full within reach(), none past this.
@@ -36,6 +37,10 @@ const OTHER_SIZE := [2, 4]
 ## (decision 498): a straight line from the first stop to the end.
 const CAP_FIRST := 8
 const CAP_LAST := 30
+## Where that line starts: the first leg's first stop stands at 54 km, in the season
+## table's fifth stretch of 13 km (decision 494), and is as far along the journey as
+## that stretch is into the prologue.
+const FIRST_SEG := 5
 ## The first minutes: one of them that gets to the train later than this is
 ## no longer the guards' (they are back inside), it is one of the stop's dead.
 const WINDOW_S := 180.0
@@ -61,9 +66,17 @@ static func fill(heard: int, kind: String, form: String = "city") -> int:
 	return maxi(least - maxi(heard, 0), 0)
 
 
-## The far pull's cap at `progress` (0 the first stop, 1 the journey's end), never over CAP_LAST.
+## How far along the journey (field_game.journey_progress) the first stop stands: its
+## stretch's share of the prologue, the first of the four acts (Atmosphere.ACTS).
+static func first_progress() -> float:
+	return SeasonTable.seg_progress(FIRST_SEG) / 4.0
+
+
+## The far pull's cap at `progress` (field_game.journey_progress): CAP_FIRST at the first
+## stop and before it, CAP_LAST at the journey's end, a straight line between.
 static func cap(progress: float) -> int:
-	return roundi(lerpf(float(CAP_FIRST), float(CAP_LAST), clampf(progress, 0.0, 1.0)))
+	var first := first_progress()
+	return roundi(lerpf(float(CAP_FIRST), float(CAP_LAST), clampf((progress - first) / (1.0 - first), 0.0, 1.0)))
 
 
 ## How far the brakes reach: loud, out of doors, by the weather (as any sound).

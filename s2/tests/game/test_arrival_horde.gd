@@ -9,6 +9,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const ArrivalHorde = preload("res://game/sim/arrival_horde.gd")
+const SeasonTable = preload("res://game/season_table.gd")
 const TrainGuard = preload("res://game/sim/train_guard.gd")
 
 
@@ -98,14 +99,23 @@ func test_nearby_dead_ignore_the_cap_and_the_far_boundary_calls_none() -> void:
 	assert_eq(game.train_guard.fill_due.size(), 0)
 
 
+## Decision 498 (코디 10-29): the line's zero is the first stop's own place along the
+## journey (its season stretch), not the journey's start.
 func test_the_cap_grows_along_the_journey_from_eight_to_thirty() -> void:
-	assert_eq(ArrivalHorde.cap(0.0), 8, "the first stop: as many as before")
-	assert_eq(ArrivalHorde.cap(0.5), 19)
+	assert_almost_eq(ArrivalHorde.first_progress(), 1.0 / 23.0, 0.000001, "the fifth of 24 stretches, in the first of four acts")
+	assert_eq(ArrivalHorde.cap(ArrivalHorde.first_progress()), 8, "the first stop: as many as before")
+	assert_eq(ArrivalHorde.cap(0.0), 8, "before it no fewer")
+	# The first leg's stops stand on the table's stretches 5, 10, 11, 13 and 23 (54-287 km).
+	var caps: Array = []
+	for row: int in [5, 10, 11, 13, 23]:
+		caps.append(ArrivalHorde.cap(SeasonTable.seg_progress(row) / 4.0))
+	assert_eq(caps, [8, 9, 10, 10, 13])
+	assert_eq(ArrivalHorde.cap(0.5), 19, "the second act sets out")
 	assert_eq(ArrivalHorde.cap(1.0), 30, "the journey's end")
 	assert_eq(ArrivalHorde.cap(2.0), 30, "never over thirty")
 	var game = _game({"place": "bare_line_01", "arrival_horde": false, "arrive": false, "act": "act2", "act_progress": 0.5})
 	assert_almost_eq(game.journey_progress, 0.625, 0.0001, "two acts done and half the third of four")
-	assert_eq(ArrivalHorde.cap(game.journey_progress), 22)
+	assert_eq(ArrivalHorde.cap(game.journey_progress), 21)
 
 
 func test_far_boundary_is_silent_with_room_under_the_cap() -> void:
