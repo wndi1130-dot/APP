@@ -168,7 +168,7 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 			vec4 soil_detail = ground_layer(6, p, dx, dy);
 			// Decision 496: interpolated corner soil is only a gentle bias. Height
 			// and world-space noise place the edge, without thresholding that bias.
-			float bias = (clamp(detail, 0.0, 1.0) - 0.5) * 0.45;
+			float bias = (clamp(detail, 0.0, 1.0) - 0.5) * 0.3;
 			float edge = (soil_detail.a - grass_detail.a) * 0.75 + (patch - 0.5) * 0.45;
 			edge += (fx_vnoise(p * 0.8 + vec2(19.1, 3.7)) - 0.5) * 0.15 + bias;
 			float aa = 0.08 + min(0.12, max(px.x, px.y) * 0.15);
