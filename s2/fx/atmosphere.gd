@@ -235,7 +235,7 @@ const REGION_LOOK: Dictionary = {
 	"K8": {"light": Color(1.03, 0.99, 0.96), "shade": Color(1.02, 0.96, 1.04), "sat": 0.96, "haze": 0.02},
 	"K9": {"light": Color(0.98, 1.0, 1.03), "shade": Color(0.94, 0.98, 1.06), "sat": 0.85, "haze": 0.02},
 	"K10": {"light": Color(1.01, 1.02, 0.97), "shade": Color(0.95, 1.03, 1.0), "sat": 0.96, "haze": 0.02},
-	"K11": {"light": Color(1.07, 1.02, 0.88), "shade": Color(0.93, 0.99, 1.07), "sat": 1.0, "haze": 0.03},
+	"K11": {"light": Color(1.07, 1.02, 0.88), "shade": Color(0.9, 0.98, 1.1), "sat": 1.0, "haze": 0.03},
 	"K12": {"light": Color(0.99, 1.01, 1.05), "shade": Color(1.03, 0.99, 0.97), "sat": 0.92, "haze": 0.04},
 }
 const DEFAULT_REGION := "K1"
