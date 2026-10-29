@@ -1521,7 +1521,7 @@ const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground
 ## ahead from it is dropped first, and a map handed over with its side path already on
 ## is built again bare by `fresh`; a city or siding stop keeps all of it.
 static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable) -> Dictionary:
-	if form.is_empty() or form == String(map.get("stop_form", "")):
+	if form.is_empty() or form == String(map.get("stop_form", "")) or form == String(map.get("stop_form_asked", "")):
 		return map
 	if form == "edge":
 		if map.has("side_path"):
