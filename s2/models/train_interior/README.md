@@ -118,7 +118,7 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 
 ## 공개 3D로 바꾼 것
 
-`tools/blender/train_interior_swap.py`(공개 3D)와 `tools/blender/train_ice_chest.py`(얼음 상자)가 위 표의 같은 경로를 덮어쓰고, `tools/blender/train_car_dress.py`(찬 칸·꼬리칸·운전실 꾸밈)가 새 경로를 더한다. 전체 삼각형: 6676.
+`tools/blender/train_interior_swap.py`(공개 3D)와 `tools/blender/train_ice_chest.py`(얼음 상자)가 위 표의 같은 경로를 덮어쓰고, `tools/blender/train_car_dress.py`(찬 칸·꼬리칸·운전실 꾸밈)가 새 경로를 더한다. 전체 삼각형: 7430. `tools/blender/train_car_layers.py`(사는 칸 세 겹 꾸밈: 천장·벽·바닥 열 가지)도 새 경로를 더한다.
 
 | 이름 | 원본 | 크기 | 삼각형 | 색 | sha256 |
 |---|---|---|---:|---|---|
@@ -133,3 +133,13 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 | laundry_line | 손으로 만듦(tools/blender/train_car_dress.py) | 3×0.61×0.01 | 68 | blanket_stripe, cloth, cloth_blue, cloth_faded, paper_aged, wood_worn | 208cd57d14fe8ae1821a768110eabb0e08ee7eaf6a67fe70e06844c9329800d2 |
 | patch_boards | 손으로 만듦(tools/blender/train_car_dress.py) | 1.46×0.88×0.05 | 108 | iron, wood, wood_dark, wood_worn | a7a11c42b690ec8aca725eab0b742f7ac312c7fd98e308d82052aac181982e6a |
 | coal_heap | 손으로 만듦(tools/blender/train_car_dress.py) | 2.4×0.63×1.1 | 100 | iron, soot | 109a1fab0042fcc7e770f07caf67a4734aa9bab00fca52de9637582203339a50 |
+| hang_lamp | 손으로 만듦(tools/blender/train_car_layers.py) | 0.13×0.32×0.13 | 100 | brass, brass_dark, glass_warm, iron | e9b5d79607c6298c1f8f7bbd7878dc6c7ade333513f1982136acb4ef3dd60baa |
+| drying_line | 손으로 만듦(tools/blender/train_car_layers.py) | 1.21×0.42×0.01 | 68 | blanket_stripe, cloth_faded, iron, rope, wool_dark | 766d50f6b7378f30acd2f90cd80914fd1a57d73108ebffa5c051426cdd21e350 |
+| hang_pot | 손으로 만듦(tools/blender/train_car_layers.py) | 0.28×0.48×0.24 | 80 | iron, iron_worn | e73b04b1fbe264827072e2c95915c81a7d541a8211cd25af960c9272cbe15234 |
+| coat_hook | 손으로 만듦(tools/blender/train_car_layers.py) | 0.8×0.86×0.13 | 128 | blanket_stripe, wood_dark, wood_worn, wool, wool_dark, wool_moss | 53d8d225b64a3833d6d999c07b3822685112e9635935f426f35876cd18593c0c |
+| wall_notes | 손으로 만듦(tools/blender/train_car_layers.py) | 0.68×0.46×0.02 | 22 | cloth_faded, paper, paper_aged, wood_worn | 1b504788f08cdc231d301178c5c35a2ae666a471dabaa5f12bd1beb6e5b6061c |
+| wall_rack | 손으로 만듦(tools/blender/train_car_layers.py) | 0.72×0.32×0.18 | 112 | glass_dark, iron_worn, wood, wood_dark | e2791ce6e4645d86fb176245fce4bdb73e58722bcabf05d47d43e25a5480acbb |
+| rug | 손으로 만듦(tools/blender/train_car_layers.py) | 1.6×0.01×0.9 | 16 | blanket_stripe, wool, wool_dark | 0dbb14593f7b75e1e7cb7d786ac25d4329539e4593b19bf4f9e05e0cbd4f269a |
+| bucket | 손으로 만듦(tools/blender/train_car_layers.py) | 0.29×0.38×0.29 | 68 | iron, iron_worn | 61f97fff872a0d7abdcb4821f39761ac8034d9d28b3a771c2ee66b4e2a1bdd4b |
+| firewood | 손으로 만듦(tools/blender/train_car_layers.py) | 0.42×0.2×0.5 | 80 | wood, wood_worn | 15b35dbda9eee7e311c8079adbe7c84a9323bb7f255ada7244e0da296048d91b |
+| basket | 손으로 만듦(tools/blender/train_car_layers.py) | 0.36×0.33×0.26 | 80 | cloth_faded, wood, wood_dark, wood_worn | d2d4a4416904cad785d7929ae740e9bf468fefaee7b2af074cc10a0d7ad66917 |

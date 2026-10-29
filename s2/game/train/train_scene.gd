@@ -410,6 +410,14 @@ func _apply_shell_view(c: Dictionary) -> void:
 		(c["front_wall"] as MeshInstance3D).visible = diagonal
 	for prop: Dictionary in c.get("high_props", []):
 		(prop["node"] as Node3D).transform = prop["diag"] if diagonal else prop["section"]
+	_show_dress(c)
+
+
+## A car's small things (train_interior.gd dress) show up close and on the side view, not on
+## the wide diagonal, where the draw budget is already spent (결정 505 잰 값).
+func _show_dress(c: Dictionary) -> void:
+	if life.rooms.has(c["id"]):
+		life.rooms[c["id"]].show_dress(view_mode != "diag" or zoom == "near")
 
 
 ## The snow sheet under the diagonal view gives way only to the land outside once it
@@ -1160,6 +1168,8 @@ func _on_view_resized() -> void:
 func _place_camera() -> void:
 	if camera == null:
 		return
+	for c: Dictionary in cars:
+		_show_dress(c)
 	if view_mode == "diag":
 		camera.keep_aspect = Camera3D.KEEP_HEIGHT
 		camera.size = DIAG_NEAR if zoom == "near" else DIAG_WIDE

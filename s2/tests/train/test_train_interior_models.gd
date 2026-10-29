@@ -13,6 +13,9 @@ const EXPECTED := [
 	"cupboard", "wood_chair",
 	# 찬 칸·꼬리칸 꾸밈(tools/blender/train_car_dress.py).
 	"blanket_stack", "lantern_off", "blanket_curtain", "laundry_line", "patch_boards", "coal_heap",
+	# 사는 칸 세 겹 꾸밈(tools/blender/train_car_layers.py).
+	"hang_lamp", "drying_line", "hang_pot", "coat_hook", "wall_notes", "wall_rack",
+	"rug", "bucket", "firewood", "basket",
 ]
 
 

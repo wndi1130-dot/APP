@@ -196,7 +196,8 @@
           ],
           "yaw": 0,
           "material": "cloth",
-          "trace": true
+          "trace": true,
+          "layer": "floor"
         },
         {
           "id": "insulation",
@@ -317,7 +318,8 @@
           "material": "cloth",
           "cars": [
             "tail1"
-          ]
+          ],
+          "layer": "ceiling"
         },
         {
           "id": "patched_window",
@@ -336,7 +338,8 @@
           "material": "wood",
           "cars": [
             "tail2"
-          ]
+          ],
+          "layer": "wall"
         },
         {
           "id": "corner_cupboard",
@@ -355,7 +358,8 @@
           "material": "wood",
           "cars": [
             "tail3"
-          ]
+          ],
+          "layer": "floor"
         },
         {
           "id": "wall_shelf",
@@ -374,7 +378,8 @@
           "material": "wood",
           "cars": [
             "tail3"
-          ]
+          ],
+          "layer": "wall"
         },
         {
           "id": "shelf_bowls",
@@ -391,6 +396,387 @@
           ],
           "yaw": 0,
           "material": "wood",
+          "cars": [
+            "tail3"
+          ],
+          "layer": "wall"
+        },
+        {
+          "id": "dress_hang_lamp_tail1",
+          "model": "hang_lamp",
+          "at": [
+            8.0,
+            2.02,
+            0.0
+          ],
+          "size": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true,
+          "cars": [
+            "tail1"
+          ]
+        },
+        {
+          "id": "dress_hang_pot_tail1",
+          "model": "hang_pot",
+          "at": [
+            8.45,
+            1.86,
+            -0.65
+          ],
+          "size": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true,
+          "cars": [
+            "tail1"
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tail1",
+          "model": "coat_hook",
+          "at": [
+            8.0,
+            1.45,
+            -1.235
+          ],
+          "size": [
+            0.8,
+            0.86,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail1"
+          ]
+        },
+        {
+          "id": "dress_wall_rack_tail1",
+          "model": "wall_rack",
+          "at": [
+            15.25,
+            1.58,
+            -1.21
+          ],
+          "size": [
+            0.72,
+            0.32,
+            0.18
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail1"
+          ]
+        },
+        {
+          "id": "dress_wall_notes_tail1",
+          "model": "wall_notes",
+          "at": [
+            0.75,
+            1.53,
+            -1.29
+          ],
+          "size": [
+            0.68,
+            0.46,
+            0.02
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail1"
+          ]
+        },
+        {
+          "id": "dress_rug_tail1",
+          "model": "rug",
+          "at": [
+            4.0,
+            0.005,
+            0.45
+          ],
+          "size": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true,
+          "cars": [
+            "tail1"
+          ]
+        },
+        {
+          "id": "dress_firewood_tail1",
+          "model": "firewood",
+          "at": [
+            9.25,
+            0.1,
+            -0.5
+          ],
+          "size": [
+            0.42,
+            0.2,
+            0.5
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true,
+          "cars": [
+            "tail1"
+          ]
+        },
+        {
+          "id": "dress_hang_lamp_tail2",
+          "model": "hang_lamp",
+          "at": [
+            8.0,
+            2.02,
+            0.0
+          ],
+          "size": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true,
+          "cars": [
+            "tail2"
+          ]
+        },
+        {
+          "id": "dress_hang_pot_tail2",
+          "model": "hang_pot",
+          "at": [
+            7.25,
+            1.86,
+            -0.65
+          ],
+          "size": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true,
+          "cars": [
+            "tail2"
+          ]
+        },
+        {
+          "id": "dress_drying_line_tail2",
+          "model": "drying_line",
+          "at": [
+            2.0,
+            1.91,
+            -0.6
+          ],
+          "size": [
+            1.21,
+            0.42,
+            0.01
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true,
+          "cars": [
+            "tail2"
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tail2",
+          "model": "coat_hook",
+          "at": [
+            8.0,
+            1.45,
+            -1.235
+          ],
+          "size": [
+            0.8,
+            0.86,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail2"
+          ]
+        },
+        {
+          "id": "dress_wall_rack_tail2",
+          "model": "wall_rack",
+          "at": [
+            15.25,
+            1.58,
+            -1.21
+          ],
+          "size": [
+            0.72,
+            0.32,
+            0.18
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail2"
+          ]
+        },
+        {
+          "id": "dress_rug_tail2",
+          "model": "rug",
+          "at": [
+            11.5,
+            0.005,
+            0.45
+          ],
+          "size": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true,
+          "cars": [
+            "tail2"
+          ]
+        },
+        {
+          "id": "dress_firewood_tail2",
+          "model": "firewood",
+          "at": [
+            9.25,
+            0.1,
+            -0.5
+          ],
+          "size": [
+            0.42,
+            0.2,
+            0.5
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true,
+          "cars": [
+            "tail2"
+          ]
+        },
+        {
+          "id": "dress_hang_lamp_tail3",
+          "model": "hang_lamp",
+          "at": [
+            8.0,
+            2.02,
+            0.0
+          ],
+          "size": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true,
+          "cars": [
+            "tail3"
+          ]
+        },
+        {
+          "id": "dress_hang_pot_tail3",
+          "model": "hang_pot",
+          "at": [
+            8.75,
+            1.86,
+            -0.8
+          ],
+          "size": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true,
+          "cars": [
+            "tail3"
+          ]
+        },
+        {
+          "id": "dress_drying_line_tail3",
+          "model": "drying_line",
+          "at": [
+            2.0,
+            1.91,
+            -0.6
+          ],
+          "size": [
+            1.21,
+            0.42,
+            0.01
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true,
+          "cars": [
+            "tail3"
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tail3",
+          "model": "coat_hook",
+          "at": [
+            15.25,
+            1.45,
+            -1.235
+          ],
+          "size": [
+            0.8,
+            0.86,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail3"
+          ]
+        },
+        {
+          "id": "dress_rug_tail3",
+          "model": "rug",
+          "at": [
+            2.5,
+            0.005,
+            0.45
+          ],
+          "size": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true,
           "cars": [
             "tail3"
           ]
@@ -786,7 +1172,8 @@
             0.35
           ],
           "yaw": 0,
-          "material": "wood"
+          "material": "wood",
+          "layer": "floor"
         },
         {
           "id": "book",
@@ -888,6 +1275,142 @@
           "yaw": 0,
           "material": "cloth",
           "when": "crowd3"
+        },
+        {
+          "id": "dress_hang_lamp",
+          "model": "hang_lamp",
+          "at": [
+            8.0,
+            2.02,
+            0.0
+          ],
+          "size": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_hang_pot",
+          "model": "hang_pot",
+          "at": [
+            6.95,
+            1.86,
+            -0.8
+          ],
+          "size": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_drying_line",
+          "model": "drying_line",
+          "at": [
+            12.0,
+            1.91,
+            -0.95
+          ],
+          "size": [
+            1.21,
+            0.42,
+            0.01
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_coat_hook",
+          "model": "coat_hook",
+          "at": [
+            12.0,
+            1.45,
+            -1.235
+          ],
+          "size": [
+            0.8,
+            0.86,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_wall_rack",
+          "model": "wall_rack",
+          "at": [
+            8.0,
+            1.58,
+            -1.21
+          ],
+          "size": [
+            0.72,
+            0.32,
+            0.18
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_wall_notes",
+          "model": "wall_notes",
+          "at": [
+            4.0,
+            1.53,
+            -1.29
+          ],
+          "size": [
+            0.68,
+            0.46,
+            0.02
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_rug",
+          "model": "rug",
+          "at": [
+            10.0,
+            0.005,
+            0.45
+          ],
+          "size": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
+        },
+        {
+          "id": "dress_firewood",
+          "model": "firewood",
+          "at": [
+            9.25,
+            0.1,
+            -0.5
+          ],
+          "size": [
+            0.42,
+            0.2,
+            0.5
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
         }
       ],
       "spots": [
@@ -1401,6 +1924,159 @@
           "yaw": 0,
           "material": "cloth",
           "when": "crowd2"
+        },
+        {
+          "id": "dress_hang_lamp",
+          "model": "hang_lamp",
+          "at": [
+            8.0,
+            2.02,
+            0.0
+          ],
+          "size": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_hang_pot",
+          "model": "hang_pot",
+          "at": [
+            7.25,
+            1.86,
+            -0.9
+          ],
+          "size": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_drying_line",
+          "model": "drying_line",
+          "at": [
+            14.0,
+            1.91,
+            -0.95
+          ],
+          "size": [
+            1.21,
+            0.42,
+            0.01
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_coat_hook",
+          "model": "coat_hook",
+          "at": [
+            0.75,
+            1.45,
+            -1.235
+          ],
+          "size": [
+            0.8,
+            0.86,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_wall_rack",
+          "model": "wall_rack",
+          "at": [
+            15.25,
+            1.58,
+            -1.21
+          ],
+          "size": [
+            0.72,
+            0.32,
+            0.18
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_wall_notes",
+          "model": "wall_notes",
+          "at": [
+            4.0,
+            1.53,
+            -1.29
+          ],
+          "size": [
+            0.68,
+            0.46,
+            0.02
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_rug",
+          "model": "rug",
+          "at": [
+            13.0,
+            0.005,
+            0.45
+          ],
+          "size": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
+        },
+        {
+          "id": "dress_bucket",
+          "model": "bucket",
+          "at": [
+            6.0,
+            0.19,
+            0.05
+          ],
+          "size": [
+            0.29,
+            0.38,
+            0.29
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
+        },
+        {
+          "id": "dress_basket",
+          "model": "basket",
+          "at": [
+            10.0,
+            0.165,
+            0.05
+          ],
+          "size": [
+            0.36,
+            0.33,
+            0.26
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
         }
       ],
       "spots": [
@@ -2065,7 +2741,144 @@
             0.38
           ],
           "yaw": 0,
-          "material": "wood"
+          "material": "wood",
+          "layer": "floor"
+        },
+        {
+          "id": "dress_hang_lamp",
+          "model": "hang_lamp",
+          "at": [
+            8.0,
+            2.02,
+            0.0
+          ],
+          "size": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_hang_pot",
+          "model": "hang_pot",
+          "at": [
+            1.05,
+            1.86,
+            -1.15
+          ],
+          "size": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_drying_line",
+          "model": "drying_line",
+          "at": [
+            7.0,
+            1.91,
+            -0.95
+          ],
+          "size": [
+            1.21,
+            0.42,
+            0.01
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_coat_hook",
+          "model": "coat_hook",
+          "at": [
+            8.0,
+            1.45,
+            -1.235
+          ],
+          "size": [
+            0.8,
+            0.86,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_wall_rack",
+          "model": "wall_rack",
+          "at": [
+            4.0,
+            1.58,
+            -1.21
+          ],
+          "size": [
+            0.72,
+            0.32,
+            0.18
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_wall_notes",
+          "model": "wall_notes",
+          "at": [
+            12.0,
+            1.53,
+            -1.29
+          ],
+          "size": [
+            0.68,
+            0.46,
+            0.02
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_rug",
+          "model": "rug",
+          "at": [
+            1.75,
+            0.005,
+            0.55
+          ],
+          "size": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
+        },
+        {
+          "id": "dress_bucket",
+          "model": "bucket",
+          "at": [
+            0.5,
+            0.19,
+            -0.5
+          ],
+          "size": [
+            0.29,
+            0.38,
+            0.29
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
         }
       ],
       "spots": [
@@ -2592,7 +3405,8 @@
           ],
           "yaw": 0,
           "material": "wood",
-          "trace": true
+          "trace": true,
+          "layer": "floor"
         },
         {
           "id": "second_bench",
@@ -2626,7 +3440,8 @@
           ],
           "yaw": 0,
           "material": "wood",
-          "when": "always"
+          "when": "always",
+          "layer": "wall"
         },
         {
           "id": "shelf_tools",
@@ -2660,7 +3475,8 @@
           ],
           "yaw": 0,
           "material": "cloth",
-          "when": "always"
+          "when": "always",
+          "layer": "floor"
         },
         {
           "id": "parts_cupboard",
@@ -2676,7 +3492,8 @@
             0.38
           ],
           "yaw": 0,
-          "material": "wood"
+          "material": "wood",
+          "layer": "floor"
         },
         {
           "id": "tool_board",
@@ -2747,7 +3564,8 @@
           ],
           "yaw": 0,
           "material": "iron",
-          "when": "always"
+          "when": "always",
+          "layer": "floor"
         },
         {
           "id": "part_crate",
@@ -2764,7 +3582,110 @@
           ],
           "yaw": 0,
           "material": "wood",
-          "when": "always"
+          "when": "always",
+          "layer": "floor"
+        },
+        {
+          "id": "dress_hang_lamp",
+          "model": "hang_lamp",
+          "at": [
+            8.0,
+            2.02,
+            0.0
+          ],
+          "size": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_hang_pot",
+          "model": "hang_pot",
+          "at": [
+            7.25,
+            1.86,
+            -0.65
+          ],
+          "size": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_drying_line",
+          "model": "drying_line",
+          "at": [
+            9.0,
+            1.91,
+            -0.95
+          ],
+          "size": [
+            1.21,
+            0.42,
+            0.01
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_coat_hook",
+          "model": "coat_hook",
+          "at": [
+            0.75,
+            1.45,
+            -1.235
+          ],
+          "size": [
+            0.8,
+            0.86,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_wall_rack",
+          "model": "wall_rack",
+          "at": [
+            12.0,
+            1.58,
+            -1.21
+          ],
+          "size": [
+            0.72,
+            0.32,
+            0.18
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_rug",
+          "model": "rug",
+          "at": [
+            11.5,
+            0.005,
+            0.45
+          ],
+          "size": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
         }
       ],
       "spots": [
@@ -3224,7 +4145,8 @@
             0.3
           ],
           "yaw": 0,
-          "material": "wood"
+          "material": "wood",
+          "layer": "wall"
         },
         {
           "id": "gear_crates",
@@ -3241,7 +4163,8 @@
           ],
           "yaw": 0,
           "material": "wood",
-          "when": "always"
+          "when": "always",
+          "layer": "floor"
         },
         {
           "id": "folded_blanket",
@@ -3310,6 +4233,125 @@
           "yaw": 0,
           "material": "cloth",
           "when": "crowd3"
+        },
+        {
+          "id": "dress_hang_lamp",
+          "model": "hang_lamp",
+          "at": [
+            8.0,
+            2.02,
+            0.0
+          ],
+          "size": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_hang_pot",
+          "model": "hang_pot",
+          "at": [
+            8.75,
+            1.86,
+            -0.8
+          ],
+          "size": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_drying_line",
+          "model": "drying_line",
+          "at": [
+            4.0,
+            1.91,
+            -0.95
+          ],
+          "size": [
+            1.21,
+            0.42,
+            0.01
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_coat_hook",
+          "model": "coat_hook",
+          "at": [
+            15.25,
+            1.45,
+            -1.235
+          ],
+          "size": [
+            0.8,
+            0.86,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_wall_rack",
+          "model": "wall_rack",
+          "at": [
+            0.75,
+            1.58,
+            -1.21
+          ],
+          "size": [
+            0.72,
+            0.32,
+            0.18
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_rug",
+          "model": "rug",
+          "at": [
+            6.0,
+            0.005,
+            0.45
+          ],
+          "size": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
+        },
+        {
+          "id": "dress_firewood",
+          "model": "firewood",
+          "at": [
+            9.25,
+            0.1,
+            -0.5
+          ],
+          "size": [
+            0.42,
+            0.2,
+            0.5
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
         }
       ],
       "spots": [
@@ -3733,7 +4775,8 @@
           ],
           "yaw": 0,
           "material": "wood",
-          "when": "always"
+          "when": "always",
+          "layer": "wall"
         },
         {
           "id": "log_books",
@@ -3750,7 +4793,8 @@
           ],
           "yaw": 0,
           "material": "paper",
-          "when": "always"
+          "when": "always",
+          "layer": "wall"
         },
         {
           "id": "spare_chair",
@@ -3766,7 +4810,110 @@
             0.54
           ],
           "yaw": -0.9,
-          "material": "wood"
+          "material": "wood",
+          "layer": "floor"
+        },
+        {
+          "id": "dress_hang_lamp",
+          "model": "hang_lamp",
+          "at": [
+            8.0,
+            2.02,
+            0.0
+          ],
+          "size": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_hang_pot",
+          "model": "hang_pot",
+          "at": [
+            1.05,
+            1.86,
+            -1.15
+          ],
+          "size": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_drying_line",
+          "model": "drying_line",
+          "at": [
+            6.0,
+            1.91,
+            -0.95
+          ],
+          "size": [
+            1.21,
+            0.42,
+            0.01
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_coat_hook",
+          "model": "coat_hook",
+          "at": [
+            15.25,
+            1.45,
+            -1.235
+          ],
+          "size": [
+            0.8,
+            0.86,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_rug",
+          "model": "rug",
+          "at": [
+            2.5,
+            0.005,
+            0.45
+          ],
+          "size": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
+        },
+        {
+          "id": "dress_firewood",
+          "model": "firewood",
+          "at": [
+            9.25,
+            0.1,
+            -0.5
+          ],
+          "size": [
+            0.42,
+            0.2,
+            0.5
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
         }
       ],
       "spots": [
@@ -4433,7 +5580,8 @@
           ],
           "yaw": 0,
           "material": "wood",
-          "when": "always"
+          "when": "always",
+          "layer": "floor"
         },
         {
           "id": "under_sacks",
@@ -4468,6 +5616,142 @@
           "yaw": 0,
           "material": "cloth",
           "when": "crowd3"
+        },
+        {
+          "id": "dress_hang_lamp",
+          "model": "hang_lamp",
+          "at": [
+            8.0,
+            2.02,
+            0.0
+          ],
+          "size": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_hang_pot",
+          "model": "hang_pot",
+          "at": [
+            7.25,
+            1.86,
+            -0.9
+          ],
+          "size": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_drying_line",
+          "model": "drying_line",
+          "at": [
+            2.0,
+            1.91,
+            -0.6
+          ],
+          "size": [
+            1.21,
+            0.42,
+            0.01
+          ],
+          "yaw": 0,
+          "layer": "ceiling",
+          "dress": true
+        },
+        {
+          "id": "dress_coat_hook",
+          "model": "coat_hook",
+          "at": [
+            15.25,
+            1.45,
+            -1.235
+          ],
+          "size": [
+            0.8,
+            0.86,
+            0.13
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_wall_rack",
+          "model": "wall_rack",
+          "at": [
+            0.75,
+            1.58,
+            -1.21
+          ],
+          "size": [
+            0.72,
+            0.32,
+            0.18
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_wall_notes",
+          "model": "wall_notes",
+          "at": [
+            8.0,
+            1.53,
+            -1.29
+          ],
+          "size": [
+            0.68,
+            0.46,
+            0.02
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true
+        },
+        {
+          "id": "dress_rug",
+          "model": "rug",
+          "at": [
+            13.0,
+            0.005,
+            0.45
+          ],
+          "size": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
+        },
+        {
+          "id": "dress_firewood",
+          "model": "firewood",
+          "at": [
+            6.75,
+            0.1,
+            -0.5
+          ],
+          "size": [
+            0.42,
+            0.2,
+            0.5
+          ],
+          "yaw": 0,
+          "layer": "floor",
+          "dress": true
         }
       ],
       "spots": [
