@@ -734,7 +734,7 @@ func crew_step(p, think: bool) -> bool:
 	p.brain["fleeing"] = false
 	if phase(id) == "hold":
 		p.cancel_action()
-		game.ai._walk(p, hold_position(id), true)
+		game.ai._walk(p, _hold_spot(p, id), true)
 		return true
 	if phase(id) != "working" or p.action != "":
 		return true
@@ -771,20 +771,40 @@ func crew_step(p, think: bool) -> bool:
 	return true
 
 
+## This worker's turn among the site's workers and how many there are: (turn, count).
+func _turn(p, id: String) -> Vector2i:
+	var n: int = 0
+	var i: int = 0
+	for q in members(id):
+		if q.role == "worker":
+			if q == p:
+				i = n
+			n += 1
+	return Vector2i(i, n)
+
+
+## Across SITE_SPREAD either side by turn: no two of the crew are sent to one point, where they
+## would push one another off it and walk back to it again.
+func _side(p, id: String) -> Vector3:
+	var turn: Vector2i = _turn(p, id)
+	var t: float = float(turn.x) / float(turn.y - 1) if turn.y > 1 else 0.5
+	return Vector3(lerpf(-SITE_SPREAD, SITE_SPREAD, t), 0.0, 0.0)
+
+
+## Where this worker waits out a hold: by the hold position, at its own place.
+func _hold_spot(p, id: String) -> Vector3:
+	return game.walkable_near(hold_position(id) + _side(p, id))
+
+
 ## Where this worker digs: its own place by its turn in the crew (no dice) — along a coal wagon's
 ## side from its work cell, a WORK_GAP step at a time to either hand within the wagon's length,
 ## or spread across any other site.
 func _work_spot(p, id: String, wagon: Dictionary) -> Vector3:
-	var workers: Array = []
-	for q in members(id):
-		if q.role == "worker":
-			workers.append(q)
-	var i: int = maxi(workers.find(p), 0)
 	var at: Vector3
 	if wagon.is_empty():
-		var t: float = float(i) / float(workers.size() - 1) if workers.size() > 1 else 0.5
-		at = position_of(id) + Vector3(lerpf(-SITE_SPREAD, SITE_SPREAD, t), 0.0, 0.0)
+		at = position_of(id) + _side(p, id)
 	else:
+		var i: int = _turn(p, id).x
 		var rect: Rect2i = wagon["rect"]
 		at = FieldGrid.center(wagon["work"])
 		var places: Array[float] = []
@@ -824,7 +844,7 @@ func _behind_escort(p, threat: Dictionary, id: String) -> Vector3:
 			nearest = escort
 			distance = p.position.distance_to(escort.position)
 	if nearest == null:
-		return hold_position(id)
+		return _hold_spot(p, id)
 	var away: Vector3 = nearest.position - Vector3(threat["pos"])
 	away.y = 0.0
 	if away.length_squared() <= EMPTY:

@@ -352,7 +352,16 @@ func test_hold_retreat_dropped_load_and_same_people_on_the_next_dispatch() -> vo
 	assert_eq(game.work.phase(), "hold")
 	assert_eq(_radio(), "기관사: 작업조 잠깐 멈춰. 호위가 막는다.")
 	game.ai._crew(worker, 0.1, true)
-	assert_eq(worker.brain["dest"], game.work.hold_position("work_site"))
+	assert_eq(worker.brain["dest"], game.work._hold_spot(worker, "work_site"))
+	# Each waits by the hold position at its own place (decision 486 N1: four sent to one point
+	# pushed one another off it and walked back to it again).
+	var holds: Array[Vector3] = []
+	for p in _role("worker"):
+		holds.append(game.work._hold_spot(p, "work_site"))
+	for i in holds.size():
+		assert_lt(holds[i].distance_to(game.work.hold_position("work_site")), FieldWork.SITE_SPREAD + 1.0)
+		for j in range(i + 1, holds.size()):
+			assert_gt(holds[i].distance_to(holds[j]), 0.5, "no two wait on one point")
 	_advance(19.0)
 	assert_eq(game.work.phase(), "hold")
 	_advance(1.0)
