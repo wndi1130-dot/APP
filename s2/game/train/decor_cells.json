@@ -123,11 +123,11 @@
     ".###########################...",
     "D..#########################..D",
     "DWWW######################WWWWD",
-    "D...WWWWWWWWWWWWWWWWWWWWWWW...D"
+    "D..WWWWWWWWWWWWWWWWWWWWWWWW...D"
    ],
    "back_wall": ".####G.#.GGGGG.#.GGGGG.#.GGGG##",
    "end_walls": "....",
-   "floor_free": 14,
+   "floor_free": 13,
    "wall_free": 11
   }
  }

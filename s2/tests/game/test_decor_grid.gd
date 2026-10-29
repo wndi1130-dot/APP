@@ -74,6 +74,32 @@ func test_the_walking_line_keeps_half_a_metre_clear() -> void:
 			assert_gte(open_z - behind, 0.5 - 0.000001, "%s: column %d walks %.2f m" % [id, ix, open_z - behind])
 
 
+## The way from door to door joins four ways only (코디 10-30: no step across a table's corner):
+## from the door's way at one end the walked cells reach the other end's.
+func test_the_way_goes_door_to_door_four_ways() -> void:
+	for id: String in DRESSED:
+		var floor_rows: Array = DecorGrid.of(id)["floor"]
+		var seen := {}
+		var todo: Array[Vector2i] = []
+		for iz in DecorGrid.NZ:
+			if String(floor_rows[iz])[0] in ["D", "W"]:
+				todo.append(Vector2i(0, iz))
+		while not todo.is_empty():
+			var at: Vector2i = todo.pop_back()
+			if seen.has(at):
+				continue
+			seen[at] = true
+			for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var next: Vector2i = at + step
+				var inside: bool = next.x >= 0 and next.x < DecorGrid.NX and next.y >= 0 and next.y < DecorGrid.NZ
+				if inside and String(floor_rows[next.y])[next.x] in ["D", "W"]:
+					todo.append(next)
+		var reached := false
+		for iz in DecorGrid.NZ:
+			reached = reached or seen.has(Vector2i(DecorGrid.NX - 1, iz))
+		assert_true(reached, id + ": the walked cells join the two doors four ways")
+
+
 func test_a_point_finds_its_floor_cell() -> void:
 	for ix: int in [0, 7, 15, DecorGrid.NX - 1]:
 		for iz in DecorGrid.NZ:

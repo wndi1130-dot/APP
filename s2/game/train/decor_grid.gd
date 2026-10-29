@@ -14,7 +14,7 @@ const X0: float = 0.25
 const Z0: float = -1.25
 const WALK_ROW: int = 3
 ## The walking line keeps this much from the edge of the things behind it: where a thing reaches into
-## its row (the dining car's bench before the table) the row before it walks too.
+## its row (the dining car's bench before the table) the row before it walks too, joined to z3 four ways.
 const WALK_WIDTH: float = 0.5
 ## Where the train's people walk (train_scene.gd AISLE_Z): things whose edge stops short of it are behind the line.
 const AISLE_Z: float = 0.65
@@ -135,6 +135,24 @@ static func cells_of(rows: Array, car_id: String) -> Dictionary:
 			var z0: float = Z0 + iz * CELL
 			if (iz == WALK_ROW or z0 < float(reach[ix]) + WALK_WIDTH - EPS) and grid[iz][ix] == ".":
 				grid[iz][ix] = "W"
+	# The way walks four ways, never across a corner (코디 10-30): a run of a row past z3 walked for a
+	# thing reaching into z3 joins z3 in its own end column, or else the column beside it walks that row too.
+	for iz in range(WALK_ROW + 1, NZ):
+		var ix := 0
+		while ix < NX:
+			if grid[iz][ix] != "W":
+				ix += 1
+				continue
+			var a := ix
+			while ix < NX and grid[iz][ix] == "W":
+				ix += 1
+			var b := ix - 1
+			for pair: Array in [[a, a - 1], [b, b + 1]]:
+				var end: int = pair[0]
+				var side: int = pair[1]
+				if not (String(grid[iz - 1][end]) in ["W", "D"]) and side >= 0 and side < NX and grid[iz][side] == ".":
+					grid[iz][side] = "W"
+					ix = maxi(ix, side + 1)
 	var back := ""
 	for ix in NX:
 		var x0: float = X0 + ix * CELL

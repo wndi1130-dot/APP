@@ -9,7 +9,8 @@ A floor cell is blocked when a thing standing on the floor (its bottom under 0.4
 tenth of it; a rug or bedding laid flat (3 cm or less) blocks nothing. The first and last columns in
 front of the end doors are the door's way, and the row z3 is the walking line from door to door. Where
 a thing on the back side reaches into that row (the dining car's bench before its table), the walking
-line keeps its 0.5 m from that thing's edge, so the row before it is the walking line there too.
+line keeps its 0.5 m from that thing's edge, so the row before it is the walking line there too, and
+it joins z3 four ways (a step down in a column where both rows are clear, never across a corner).
 A wall cell: G a window, # something already hung there (its bottom 0.6 m up or more) or a thing
 standing against that wall that rises above a wall place's foot (1.15 m), . a wall place. The end walls:
 the two cells behind each door's way, left then right. Ties (a footprint covering just a tenth of a
@@ -126,6 +127,23 @@ def car_cells(rows):
             z0 = Z0 + iz * CELL
             if (iz == WALK_ROW or z0 < reach[ix] + WALK_WIDTH - EPS) and grid[iz][ix] == ".":
                 grid[iz][ix] = "W"
+    # The way walks four ways, never across a corner (코디 10-30, the decorating rules' path check): a run
+    # of a row past z3 walked for a thing reaching into z3 joins z3 in its own end column, or else the
+    # column beside it walks that row too, so the people step down where both rows are clear.
+    for iz in range(WALK_ROW + 1, NZ):
+        ix = 0
+        while ix < NX:
+            if grid[iz][ix] != "W":
+                ix += 1
+                continue
+            a = ix
+            while ix < NX and grid[iz][ix] == "W":
+                ix += 1
+            b = ix - 1
+            for end, side in ((a, a - 1), (b, b + 1)):
+                if grid[iz - 1][end] not in "WD" and 0 <= side < NX and grid[iz][side] == ".":
+                    grid[iz][side] = "W"
+                    ix = max(ix, side + 1)
     back = []
     for ix in range(NX):
         x0 = X0 + ix * CELL
