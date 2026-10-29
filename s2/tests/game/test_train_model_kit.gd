@@ -569,3 +569,16 @@ func test_no_cutaway_body_is_drawn_whole_in_the_home_cutaway() -> void:
 		assert_false(key.begins_with(bodies[0] + ":"), key)
 	assert_true(marked._batches.has(bodies[0] + ":0:false:0") or marked._batches.keys().any(func(k: String) -> bool: return k.begins_with(bodies[0] + ":0:false:")), "drawn whole")
 	assert_eq(marked.get_meta("model_count"), plain.get_meta("model_count"))
+
+
+## 비(mood 10-30): 칠한 쇠인 열차 몸·쇠 조각은 물을 먹지 않아 젖어도 거의 어두워지지 않고,
+## 창을 막은 판자만 나무 몫으로 젖는다.
+func test_painted_metal_barely_darkens_in_rain_and_planks_soak() -> void:
+	for id: String in Kit.catalog()["assets"].keys():
+		var library: Array = Kit.asset_meshes(id)
+		for lod: int in 2:
+			for row: Dictionary in library[lod]:
+				var paint: ShaderMaterial = row["material"]
+				var want: float = Kit.WOOD_POROSITY if Kit.WOOD_PARTS.has(id) else Kit.PAINTED_POROSITY
+				assert_almost_eq(float(paint.get_shader_parameter("porosity")), want, 0.001, id)
+	assert_lt(Kit.PAINTED_POROSITY, 0.25, "painted metal: in the rain it loses no more than about a tenth")

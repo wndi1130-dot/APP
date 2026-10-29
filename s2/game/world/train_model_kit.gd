@@ -38,6 +38,12 @@ const WINDOW_GLOW_LOW := 0.55
 const WINDOW_GLOW_HIGH := 0.8
 ## 온실칸 긴 유리 띠는 작은 창보다 훨씬 넓어 같은 밝기면 띠 하나가 화면을 차지한다. 이만큼 낮춘다.
 const WINDOW_GLOW_DIM := {"coach_glass": 0.6}
+## 비에 젖어 어두워지는 몫(weathered.gdshader porosity, 기본 0.6은 흙·나무 몫). 열차 몸과 쇠 조각은 칠한
+## 쇠라 물을 먹지 않는다: 0.6이면 첫 정차 비에 지붕·화차 옆면이 27 % 어두워져 낮 V 0.157 밑으로 갔다
+## (mood 10-30). 창을 막은 판자만 나무 몫을 둔다.
+const PAINTED_POROSITY := 0.15
+const WOOD_POROSITY := 0.6
+const WOOD_PARTS := ["plank_band", "plank_patches"]
 const RULE_KEYS := ["kinds", "site", "requires", "forbids"]
 static var _catalog: Dictionary = {}
 static var _libraries: Dictionary = {}
@@ -448,7 +454,7 @@ static func asset_meshes(id: String) -> Array:
 	if scene == null:
 		return rows
 	var source := scene.instantiate()
-	_collect(source, Transform3D.IDENTITY, rows)
+	_collect(source, Transform3D.IDENTITY, rows, WOOD_POROSITY if WOOD_PARTS.has(id) else PAINTED_POROSITY)
 	source.free()
 	if rows[1].is_empty() and asset["category"] == "parts":
 		rows[1] = rows[0]
@@ -456,12 +462,13 @@ static func asset_meshes(id: String) -> Array:
 	return rows
 
 
-static func _collect(node: Node, parent_transform: Transform3D, rows: Array) -> void:
+static func _collect(node: Node, parent_transform: Transform3D, rows: Array, porosity: float) -> void:
 	var transform: Transform3D = parent_transform * node.transform if node is Node3D else parent_transform
 	if node is MeshInstance3D and node.mesh != null:
 		var lod := 1 if str(node.name).ends_with("_LOD1") else 0
 		var material := ShaderMaterial.new()
 		material.shader = Weathered
+		material.set_shader_parameter("porosity", porosity)
 		var source: Material = node.get_active_material(0)
 		if source is StandardMaterial3D:
 			if source.albedo_texture != null:
@@ -477,7 +484,7 @@ static func _collect(node: Node, parent_transform: Transform3D, rows: Array) -> 
 			material.set_shader_parameter("albedo", source.albedo_color)
 		rows[lod].append({"mesh": node.mesh, "transform": transform, "material": material})
 	for child in node.get_children():
-		_collect(child, transform, rows)
+		_collect(child, transform, rows, porosity)
 
 
 static func cutaway_mesh(id: String, lod: int, row: Dictionary) -> Mesh:
