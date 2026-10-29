@@ -352,6 +352,7 @@ func test_houses_get_wood_only_where_the_salvage_leaves_a_crew_load() -> void:
 	var g: FieldGrid = houses["grid"] as FieldGrid
 	assert_true(g.people_can_walk(site["cell"]), "the crew works from a walkable cell")
 	assert_between(WorkSpots.reach(houses, site["cell"]), WorkSpots.JOB_MIN_M, WorkSpots.JOB_PATH_M, "a short walk out from a door")
+	assert_between(WorkSpots.crew_walk(houses, site["cell"]), 0.0, WorkSpots.JOB_PATH_M, "and so is the crew's own walk")
 	var table: float = float(FieldWork.WOOD_TABLE["houses"])
 	assert_almost_eq(float(FieldWork.budget(houses)["wood"]), table, 0.001, "the stop sums to the table")
 	WorkSpots.dress(houses, -1, RUN_SEED)
@@ -421,3 +422,26 @@ func test_wood_job_keeps_a_near_site_and_leaves_other_places_and_jobs() -> void:
 	bare["place_kind"] = "houses"
 	_dress_unchanged(bare, -1)
 	assert_true(_wood_site(bare).is_empty(), "no pile, no site")
+
+
+func test_wood_job_measures_the_walk_from_the_door_the_crew_leaves_by() -> void:
+	var g: FieldGrid = FieldGrid.new(120, 60)
+	# A wall between the door nearest the pile in a line and the pile, open only at the far end.
+	for x: int in range(119):
+		g.set_solid(Vector2i(x, 20), FieldGrid.Solid.WALL)
+	g.refresh_paths()
+	var near_door: Vector2i = Vector2i(60, 10)
+	var far_door: Vector2i = Vector2i(20, 30)
+	var data: Dictionary = {"grid": g, "place_kind": "houses", "spots": {},
+		"train_doors": {"lower": [near_door, far_door]}, "spawns": {"train_door": [near_door, far_door]},
+		"props": [{"kind": "lumber_stack", "rect": Rect2i(60, 30, 2, 1), "level": 0}]}
+	assert_between(WorkSpots.reach(data, Vector2i(59, 30)), 0.0, WorkSpots.JOB_PATH_M, "on foot from the far door it is near")
+	assert_gt(WorkSpots.crew_walk(data, Vector2i(59, 30)), WorkSpots.JOB_PATH_M, "the crew leaves by the door above the wall")
+	_dress_unchanged(data, -1)
+	assert_true(_wood_site(data).is_empty(), "a pile the crew walks round the wall to is not a site")
+	data["spawns"] = {"train_door": [far_door]}
+	assert_almost_eq(WorkSpots.crew_walk(data, far_door + Vector2i(0, 1)), 1.0, 0.001)
+	_dress_unchanged(data, -1)
+	var site: Dictionary = _wood_site(data)
+	assert_eq(String(site.get("job", "")), "wood_stack", "from the door below the wall it is a site")
+	assert_between(WorkSpots.crew_walk(data, site["cell"]), 0.0, WorkSpots.JOB_PATH_M)

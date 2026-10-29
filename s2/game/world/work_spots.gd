@@ -279,26 +279,58 @@ static func _wood_job(data: Dictionary, field: PackedInt32Array) -> void:
 	if amount < float(stack["carriers"]) * float(stack["trip"]) - FieldWork.EMPTY:
 		return
 	var g: FieldGrid = data["grid"] as FieldGrid
-	var path_m: float = _metres(field, g, site["cell"]) if site.has("cell") else -1.0
-	if path_m < 0.0 or path_m > JOB_PATH_M:
+	var walk: float = crew_walk(data, site["cell"]) if site.has("cell") else -1.0
+	if walk < 0.0 or walk > JOB_PATH_M:
 		var pile: Dictionary = _wood_pile(data, field)
 		if pile.is_empty():
 			return
-		site = {"kind": "work_site", "name": pile["name"], "state": "closed",
-			"cell": pile["cell"], "zone_rect": pile["zone"]}
+		site = site.duplicate() if not site.is_empty() else {"kind": "work_site", "state": "closed"}
+		site["name"] = pile["name"]
+		site["cell"] = pile["cell"]
+		site["zone_rect"] = pile["zone"]
 	site["job"] = "wood_stack"
 	site["amount"] = amount
 	spots["work_site"] = site
 	data["spots"] = spots
 
 
-## The walkable cell beside a ground-floor wood pile that is best to work from: out of doors
-## first, then JOB_MIN_M or more on foot, then room in its row for four carriers two metres
-## apart, then the shorter walk. Empty when no pile is within JOB_PATH_M.
+## The crew's walk to `cell` as field_work.gd route() makes it: from the train door nearest
+## in a straight line, by find_path, to the walkable cell nearest `cell`. -1 when that walk
+## does not get there.
+static func crew_walk(data: Dictionary, cell: Vector2i) -> float:
+	var g: FieldGrid = data.get("grid") as FieldGrid
+	var doors: Array = (data.get("spawns", {}) as Dictionary).get("train_door", []) as Array
+	if doors.is_empty():
+		doors = _train_doors(data)
+	if g == null or doors.is_empty():
+		return -1.0
+	var at: Vector3 = FieldGrid.center(cell)
+	var door: Vector3 = FieldGrid.center(doors[0])
+	for c: Vector2i in doors:
+		if FieldGrid.center(c).distance_to(at) < door.distance_to(at):
+			door = FieldGrid.center(c)
+	var goal: Vector2i = g.nearest_walkable(cell)
+	if not g.people_can_walk(goal):
+		return -1.0
+	var path: PackedVector3Array = g.find_path(door, at)
+	if path.is_empty():
+		# find_path drops its start cell: an empty path stands on the goal or found no way.
+		return door.distance_to(at) if g.nearest_walkable(FieldGrid.cell_of(door), false, 2) == goal else -1.0
+	if FieldGrid.cell_of(path[-1]) != goal:
+		return -1.0
+	var metres: float = door.distance_to(path[0]) + path[-1].distance_to(at)
+	for i: int in range(1, path.size()):
+		metres += path[i - 1].distance_to(path[i])
+	return metres
+
+
+## The walkable cell beside a ground-floor wood pile that is best to work from, among those the
+## crew walks to within JOB_PATH_M: out of doors first, then JOB_MIN_M or more on foot, then
+## room in its row and its column for the carriers spread a metre and a half either way, then
+## the shorter walk. Empty when none is left.
 static func _wood_pile(data: Dictionary, field: PackedInt32Array) -> Dictionary:
 	var g: FieldGrid = data["grid"] as FieldGrid
-	var best: Dictionary = {}
-	var best_rank: float = INF
+	var candidates: Array[Dictionary] = []
 	for prop: Dictionary in data.get("props", []) as Array:
 		var kind: String = String(prop.get("kind", ""))
 		if not WOOD_PILES.has(kind) or int(prop.get("level", 0)) != 0:
@@ -310,18 +342,29 @@ static func _wood_pile(data: Dictionary, field: PackedInt32Array) -> Dictionary:
 				var metres: float = _metres(field, g, cell)
 				if rect.has_point(cell) or metres < 0.0 or metres > JOB_PATH_M:
 					continue
-				var room: int = 0
-				for dx: int in range(-2, 3):
-					if g.people_can_walk(cell + Vector2i(dx, 0)):
-						room += 1
-				# Each rule outweighs every later one: the walk stays under 100 m.
-				var rank: float = (2000.0 if g.indoor(cell) else 0.0) + (1000.0 if metres < JOB_MIN_M else 0.0) \
-					+ 100.0 * (5 - room) + metres
-				if rank < best_rank:
-					best_rank = rank
-					best = {"cell": cell, "name": String(WOOD_PILES[kind]) + " 작업 구역",
-						"zone": rect.grow(2).intersection(Rect2i(0, 0, g.width, g.height))}
-	return best
+				var room: int = maxi(_run(g, cell, Vector2i.RIGHT), _run(g, cell, Vector2i.DOWN))
+				candidates.append({"rank": [1 if g.indoor(cell) else 0, 1 if metres < JOB_MIN_M else 0, -room,
+					metres, candidates.size()], "cell": cell, "name": String(WOOD_PILES[kind]) + " 작업 구역",
+					"zone": rect.grow(2).intersection(Rect2i(0, 0, g.width, g.height))})
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["rank"] as Array) < (b["rank"] as Array))
+	# The field's walk takes the nearest door on foot; the crew leaves by the nearest in a line.
+	for candidate: Dictionary in candidates:
+		var walk: float = crew_walk(data, candidate["cell"])
+		if walk >= 0.0 and walk <= JOB_PATH_M:
+			candidate.erase("rank")
+			return candidate
+	return {}
+
+
+## Walkable cells in an unbroken line through `cell` along `axis`, two each way at most.
+static func _run(g: FieldGrid, cell: Vector2i, axis: Vector2i) -> int:
+	var n: int = 1
+	for side: int in [-1, 1]:
+		for step: int in range(1, 3):
+			if not g.people_can_walk(cell + axis * step * side):
+				break
+			n += 1
+	return n
 
 
 static func _food_site(data: Dictionary, seg: int, run_seed: int, field: PackedInt32Array) -> Dictionary:
