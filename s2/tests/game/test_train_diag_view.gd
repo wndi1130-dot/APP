@@ -100,7 +100,7 @@ func test_diag_unfocus_restores_wide_and_clears_the_pane() -> void:
 
 
 func test_section_keeps_its_camera_and_drag() -> void:
-	var train_scene: Scene = _scene()
+	var train_scene: Scene = _scene({"view_mode": "section"})
 	var cam: Camera3D = train_scene.camera
 	assert_eq(train_scene.view_mode, "section")
 	assert_eq(cam.size, Scene.CAM_NEAR)
@@ -149,14 +149,14 @@ func test_missing_camera_accepts_drag_pane_and_view_mode() -> void:
 
 func test_view_mode_accepts_only_diag_and_section() -> void:
 	var train_scene: Scene = _scene({"view_mode": "unknown"})
-	assert_eq(train_scene.view_mode, "section")
-	train_scene.set_view_mode("diag")
-	train_scene.set_view_mode("unknown")
-	assert_eq(train_scene.view_mode, "diag")
-	assert_almost_eq(train_scene.camera.size, Scene.DIAG_WIDE, 0.0001)
+	assert_eq(train_scene.view_mode, "diag", "an unknown name falls back to the default")
 	train_scene.set_view_mode("section")
+	train_scene.set_view_mode("unknown")
 	assert_eq(train_scene.view_mode, "section")
 	assert_eq(train_scene.camera.size, Scene.CAM_NEAR)
+	train_scene.set_view_mode("diag")
+	assert_eq(train_scene.view_mode, "diag")
+	assert_almost_eq(train_scene.camera.size, Scene.DIAG_WIDE, 0.0001)
 
 
 func test_diag_pose_can_be_set_outside_the_tree() -> void:
@@ -269,7 +269,7 @@ func _assert_front_view(train_scene: Scene, diagonal: bool) -> void:
 
 
 func test_diag_switches_front_walls_backdrop_and_side_rail() -> void:
-	var train_scene: Scene = _scene()
+	var train_scene: Scene = _scene({"view_mode": "section"})
 	_assert_front_view(train_scene, false)
 	train_scene.set_view_mode("diag")
 	_assert_front_view(train_scene, true)
@@ -279,7 +279,7 @@ func test_diag_switches_front_walls_backdrop_and_side_rail() -> void:
 	_assert_front_view(train_scene, false)
 
 
-func test_diag_snow_yields_to_a_journey_even_when_it_is_hidden() -> void:
+func test_diag_snow_covers_till_the_journey_shows() -> void:
 	var train_scene: Scene = _scene({"view_mode": "diag"})
 	var ground: MeshInstance3D = train_scene.snow_ground
 	assert_true(ground.visible)
@@ -298,15 +298,27 @@ func test_diag_snow_yields_to_a_journey_even_when_it_is_hidden() -> void:
 	journey.visible = false
 	train_scene.add_child(journey)
 	train_scene._process(0.0)
-	assert_false(ground.visible, "presence, not visibility, owns the ground")
+	assert_true(ground.visible, "the snow covers while the land is still being laid")
+	journey.visible = true
+	assert_false(ground.visible, "gives way the moment the land shows, no frame with both")
 	train_scene.set_view_mode("section")
 	train_scene.set_view_mode("diag")
 	assert_false(ground.visible, "no overlap on the mode change")
+	journey.visible = false
+	assert_true(ground.visible, "covers again when the land hides (a window change)")
 	journey.free()
 	train_scene._process(0.0)
 	assert_true(ground.visible)
 	train_scene.set_view_mode("section")
 	assert_false(ground.visible)
+
+
+func test_the_train_opens_on_the_diagonal_view() -> void:
+	var train_scene: Scene = _scene()
+	assert_eq(train_scene.view_mode, "diag", "no view_mode given: the inside from above (결정 486)")
+	assert_almost_eq(train_scene.camera.size, Scene.DIAG_WIDE, 0.0001)
+	assert_true(train_scene.snow_ground.visible)
+	assert_false(train_scene.backdrop.visible)
 
 
 func _assert_shell_shade(selected: Dictionary, other: Dictionary, shade: float) -> void:
@@ -375,7 +387,7 @@ func test_highlight_and_ground_follow_a_rebuilt_layout() -> void:
 
 
 func test_box_shell_highlight_restores_the_section_palette() -> void:
-	var train_scene: Scene = _scene()
+	var train_scene: Scene = _scene({"view_mode": "section"})
 	for variant: String in ["plain", "clean", "chief", "medic", "engine"]:
 		train_scene._shells[Scene.SHELL_ROOT % variant] = null
 	train_scene._rebuild_layout()
@@ -430,7 +442,7 @@ func _prop_bounds(prop_node: Node3D) -> AABB:
 
 
 func test_diag_lowers_laundry_and_shortens_curtain_then_restores_both() -> void:
-	var train_scene: Scene = _scene()
+	var train_scene: Scene = _scene({"view_mode": "section"})
 	var laundry: Node3D = train_scene.life.rooms["tail1"].props["laundry"]
 	var curtain: Node3D = train_scene.life.rooms["cold"].props["curtain"]
 	var laundry_original: Transform3D = laundry.transform

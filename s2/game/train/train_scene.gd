@@ -140,7 +140,7 @@ var people: Node3D
 var panel: CanvasLayer
 var cam_x: float = CAR_LENGTH * 0.5
 var zoomed_out: bool = false
-var view_mode: String = "section"
+var view_mode: String = "diag"            # the inside seen from above at an angle (결정 486); the council keeps "section"
 var zoom: String = "wide"
 var pane_px: float = 0.0
 var clock: float = 0.0
@@ -162,8 +162,8 @@ var music: MusicPlayer                  # the faint train piece by the train's s
 
 func _ready() -> void:
 	rng.seed = int(opts.get("seed", 1))
-	var initial_mode: String = str(opts.get("view_mode", "section"))
-	view_mode = initial_mode if initial_mode in ["diag", "section"] else "section"
+	var initial_mode: String = str(opts.get("view_mode", "diag"))
+	view_mode = initial_mode if initial_mode in ["diag", "section"] else "diag"
 	life.setup(self)
 	if rules.is_empty():
 		rules = Rules.load_default()
@@ -409,9 +409,15 @@ func _apply_shell_view(c: Dictionary) -> void:
 		(prop["node"] as Node3D).transform = prop["diag"] if diagonal else prop["section"]
 
 
+## The snow sheet under the diagonal view gives way only to the land outside once it
+## shows (journey.gd hangs hidden and stays so till its land reaches past the train).
 func _update_snow_ground() -> void:
 	if is_instance_valid(snow_ground):
-		snow_ground.visible = view_mode == "diag" and get_node_or_null("Journey") == null
+		var land: Node3D = get_node_or_null("Journey") as Node3D
+		# Told when it shows or hides: no frame with both under the train.
+		if land != null and not land.visibility_changed.is_connected(_update_snow_ground):
+			land.visibility_changed.connect(_update_snow_ground)
+		snow_ground.visible = view_mode == "diag" and (land == null or not land.visible)
 
 
 func highlight(id: String) -> void:
