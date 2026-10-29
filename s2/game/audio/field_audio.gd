@@ -80,6 +80,16 @@ const DOOR_TURN: Dictionary = {
 const DOOR_KEY: Array = ["door_unlock", 0.25, 1.6, 1.8, "metal"]
 const DOOR_KEY_HUSH: float = 0.5
 const DOOR_KEY_LAG: float = 0.18
+## A building's window opened or shut, or its curtain drawn or opened, by
+## someone (field_actions _set_window_open, _curtain_set): the player's ear
+## only, as DOOR_TURN. Until a file is in its group the stand-in is the impact
+## file whose name begins so, or with "@" a group of its own (a curtain: cloth
+## swung through the air, low). First values.
+const WINDOW_TURN: Dictionary = {
+	"open": ["window_open", 0.3, 1.15, 1.3, "wooden"],
+	"closed": ["window_close", 0.4, 1.02, 1.12, "wooden"],
+	"curtain": ["curtain", 0.25, 0.7, 0.8, "@swing_light"],
+}
 ## A door or a window that will not give to the player's hand, as the note
 ## says so (field_actions): a locked door rattles in its frame, a boarded one
 ## thuds against its planks. The player's ear only, as DOOR_TURN.
@@ -1691,6 +1701,15 @@ func _key_door_goes(c: Vector2i, soft: Array, at: Vector3) -> void:
 	_voice_or_standin(soft, String(soft[4]), at)
 
 
+## A building's window opened or shut by someone ("open", "closed"), or its
+## curtain drawn or opened ("curtain"), heard from the window.
+func window_turn(c: Vector2i, what: String) -> void:
+	if quiet or game == null or game.player == null or not WINDOW_TURN.has(what):
+		return
+	var voice: Array = WINDOW_TURN[what]
+	_voice_or_standin(voice, String(voice[4]), game.FieldGrid.center(c))
+
+
 ## A door or a window that would not give to the player's hand (SHUT_FAST:
 ## "locked" or "boarded"), heard from it; once in SHUT_FAST_GAP_MS for the
 ## same one and reason.
@@ -1719,7 +1738,8 @@ func lid_scrape(at: Vector3) -> void:
 
 
 ## A one-shot of its own group [group, loudness, pitch low, pitch high], or, until that
-## group has a file, the impact file whose name begins with `standin`.
+## group has a file, the impact file whose name begins with `standin` (with
+## "@": a file of that group of its own).
 func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var group: String = voice[0]
 	if not lib.has(group):
@@ -1730,6 +1750,14 @@ func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var pitch := randf_range(float(voice[2]), float(voice[3]))
 	if has(group):
 		_one_shot(group, at, lin, pitch, null, _bus_at(at))
+		return
+	if standin.begins_with("@"):
+		var own: String = standin.substr(1)
+		if not lib.has(own):
+			lib[own] = _load_group(own)
+		var pick: int = _fresh_file(own)
+		if pick >= 0:
+			_one_shot(own, at, lin, pitch, lib[own][pick], _bus_at(at))
 		return
 	for s: AudioStream in lib.get("impact", []):
 		if s.resource_path.get_file().begins_with(standin):

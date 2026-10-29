@@ -1615,6 +1615,8 @@ func _escort(p, falling_back: bool = false) -> void:
 			post = game.work.door_of(String(p.brain.get("work_site", "work_site")))
 		if p.position.distance_to(post) > 1.5:
 			_walk(p, post, false)
+		elif not falling_back and p.path.is_empty():
+			_escort_watch(p, site)
 		return
 	var dist: float = p.position.distance_to(threat["pos"])
 	var may_shoot: bool = crew_fire == "free" or (crew_fire == "threat" and best < 5.0)
@@ -1627,6 +1629,18 @@ func _escort(p, falling_back: bool = false) -> void:
 	if dist <= game.combat.melee_range(p) and not game.combat.melee_blocked(p, threat["pos"]):
 		p.stop()
 	game.combat.melee_target(p, threat, true)
+
+
+## Decision 486 (2): posted with nothing on the crew, the escort keeps its back
+## to the work and watches outward, the way the dead come, in a slow sweep.
+func _escort_watch(p, site: Vector3) -> void:
+	var out: Vector3 = p.position - site
+	out.y = 0.0
+	if out.length_squared() < 0.01:
+		out = Vector3(-1.0 if p.brain.get("side", 0) == 0 else 1.0, 0.0, 0.0)
+	var k: int = maxi(game.crew.find(p), 0)
+	var sweep: float = sin(game.clock.elapsed * 0.5 + float(k) * 2.1) * deg_to_rad(LOOK_SWEEP_DEG)
+	p.face_point(p.position + out.normalized().rotated(Vector3.UP, sweep) * 10.0)
 
 
 # ---------------------------------------------------------------- raiders
