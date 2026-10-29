@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 
 const Scene = preload("res://game/train/train_scene.gd")
 const Rules = preload("res://game/train/train_rules.gd")
+const Interior = preload("res://game/train/train_interior.gd")
 
 
 func _scene(extra: Dictionary = {}) -> Scene:
@@ -244,3 +245,212 @@ func test_box_shell_fallback_hides_upper_walls_and_roof_in_diag() -> void:
 	_assert_shell_view(train_scene, true)
 	train_scene.set_view_mode("section")
 	_assert_shell_view(train_scene, false)
+
+
+func _assert_front_view(train_scene: Scene, diagonal: bool) -> void:
+	assert_eq(train_scene.backdrop.visible, not diagonal)
+	assert_eq(train_scene.side_rail.visible, not diagonal)
+	for c: Dictionary in train_scene.cars:
+		var front: MeshInstance3D = c["front_wall"]
+		assert_eq(front.visible, diagonal, c["id"])
+		# Its own plain material among the car's, so the warmth and the shade reach it
+		# without the shell's atlas stretched over a box.
+		var front_material: StandardMaterial3D = front.material_override as StandardMaterial3D
+		assert_true((c["shell_mats"] as Array).has(front_material))
+		assert_ne(front_material, c.get("shell_mat"))
+		assert_null(front_material.albedo_texture)
+		var box: AABB = front.transform * front.get_aabb()
+		assert_almost_eq(box.position.y, 0.0, 0.0001)
+		assert_almost_eq(box.end.y, 0.9, 0.0001)
+		assert_almost_eq(box.position.x, 0.1, 0.0001)
+		assert_almost_eq(box.end.x, 15.9, 0.0001)
+		assert_almost_eq(front.position.z, 1.40, 0.0001)
+		assert_almost_eq(box.size.z, 0.06, 0.0001)
+
+
+func test_diag_switches_front_walls_backdrop_and_side_rail() -> void:
+	var train_scene: Scene = _scene()
+	_assert_front_view(train_scene, false)
+	train_scene.set_view_mode("diag")
+	_assert_front_view(train_scene, true)
+	train_scene._rebuild_layout()
+	_assert_front_view(train_scene, true)
+	train_scene.set_view_mode("section")
+	_assert_front_view(train_scene, false)
+
+
+func test_diag_snow_yields_to_a_journey_even_when_it_is_hidden() -> void:
+	var train_scene: Scene = _scene({"view_mode": "diag"})
+	var ground: MeshInstance3D = train_scene.snow_ground
+	assert_true(ground.visible)
+	var bounds: AABB = ground.transform * ground.get_aabb()
+	assert_almost_eq(bounds.position.x, -60.0, 0.0001)
+	assert_almost_eq(bounds.end.x, train_scene.train_length() + 60.0, 0.0001)
+	assert_almost_eq(bounds.position.y, -1.46, 0.0001)
+	assert_almost_eq(bounds.position.z, -46.0, 0.0001)
+	assert_almost_eq(bounds.end.z, 46.0, 0.0001)
+	var snow: StandardMaterial3D = ground.material_override as StandardMaterial3D
+	assert_eq(snow.albedo_color, Color(0.72, 0.76, 0.82))
+	assert_eq(snow.roughness, 1.0)
+	assert_eq(snow.shading_mode, BaseMaterial3D.SHADING_MODE_PER_PIXEL)
+	var journey: Node3D = Node3D.new()
+	journey.name = "Journey"
+	journey.visible = false
+	train_scene.add_child(journey)
+	train_scene._process(0.0)
+	assert_false(ground.visible, "presence, not visibility, owns the ground")
+	train_scene.set_view_mode("section")
+	train_scene.set_view_mode("diag")
+	assert_false(ground.visible, "no overlap on the mode change")
+	journey.free()
+	train_scene._process(0.0)
+	assert_true(ground.visible)
+	train_scene.set_view_mode("section")
+	assert_false(ground.visible)
+
+
+func _assert_shell_shade(selected: Dictionary, other: Dictionary, shade: float) -> void:
+	var selected_mats: Array = selected["shell_mats"]
+	var other_mats: Array = other["shell_mats"]
+	assert_eq(other_mats.size(), selected_mats.size())
+	for material_index: int in mini(selected_mats.size(), other_mats.size()):
+		var lit: Color = (selected_mats[material_index] as StandardMaterial3D).albedo_color
+		var expected: Color = Color(lit.r * shade, lit.g * shade, lit.b * shade, lit.a)
+		assert_true((other_mats[material_index] as StandardMaterial3D).albedo_color.is_equal_approx(expected))
+
+
+func test_highlight_moves_one_band_and_keeps_the_warmth_multiplier() -> void:
+	var train_scene: Scene = _scene({"view_mode": "diag"})
+	var selected: Dictionary = train_scene.car("tail1")
+	var other: Dictionary = train_scene.car("tail2")
+	var band: MeshInstance3D = train_scene.highlight_band
+	var ring: Mesh = band.mesh
+	assert_false(band.visible)
+	train_scene.highlight("tail1")
+	assert_true(band.visible)
+	assert_eq(band.transform, (selected["node"] as Node3D).transform)
+	assert_eq((band.material_override as StandardMaterial3D).shading_mode, BaseMaterial3D.SHADING_MODE_UNSHADED)
+	# The outline runs along the wall tops: the front wall's at 0.9 m, the cut ones at 2.2 m.
+	var bounds: AABB = band.get_aabb()
+	assert_almost_eq(bounds.position.x, 0.0, 0.0001)
+	assert_almost_eq(bounds.end.x, Scene.CAR_LENGTH, 0.0001)
+	assert_almost_eq(bounds.position.y, 0.905, 0.0001)
+	assert_almost_eq(bounds.end.y, Scene.SHELL_CUT_Y + 0.005, 0.0001)
+	assert_almost_eq(bounds.position.z, -1.44, 0.0001)
+	assert_almost_eq(bounds.end.z, 1.50, 0.0001)
+	_assert_shell_shade(selected, other, 0.6)
+	train_scene.highlight("tail1")
+	_assert_shell_shade(selected, other, 0.6)
+	var before_warmth: Color = (selected["shell_mats"][0] as StandardMaterial3D).albedo_color
+	assert_true(train_scene.set_sit("tail", 0, 90.0))
+	assert_ne((selected["shell_mats"][0] as StandardMaterial3D).albedo_color, before_warmth)
+	_assert_shell_shade(selected, other, 0.6)
+	train_scene.highlight("tail2")
+	assert_eq(train_scene.highlight_band, band)
+	assert_eq(band.mesh, ring)
+	assert_eq(band.transform, (other["node"] as Node3D).transform)
+	_assert_shell_shade(other, selected, 0.6)
+	train_scene.highlight("")
+	assert_false(band.visible)
+	_assert_shell_shade(selected, other, 1.0)
+	train_scene.highlight("tail1")
+	train_scene.set_view_mode("section")
+	assert_false(band.visible)
+	_assert_shell_shade(selected, other, 1.0)
+	for c: Dictionary in train_scene.cars:
+		assert_false(bool(c["dimmed"]), c["id"])
+
+
+func test_highlight_and_ground_follow_a_rebuilt_layout() -> void:
+	var train_scene: Scene = _scene({"view_mode": "diag"})
+	train_scene.highlight("tail1")
+	train_scene.rules["cars"].append({"id": "tail_extra", "kind": "comm", "comm": "tail", "name": "꼬리칸"})
+	train_scene.apply_rules()
+	var chosen: Dictionary = train_scene.car("tail1")
+	assert_true(train_scene.highlight_band.visible)
+	assert_eq(train_scene.highlight_band.transform, (chosen["node"] as Node3D).transform)
+	_assert_shell_shade(chosen, train_scene.car("tail_extra"), 0.6)
+	assert_almost_eq((train_scene.snow_ground.mesh as PlaneMesh).size.x, train_scene.train_length() + 120.0, 0.001)
+	_assert_front_view(train_scene, true)
+
+
+func test_box_shell_highlight_restores_the_section_palette() -> void:
+	var train_scene: Scene = _scene()
+	for variant: String in ["plain", "clean", "chief", "medic", "engine"]:
+		train_scene._shells[Scene.SHELL_ROOT % variant] = null
+	train_scene._rebuild_layout()
+	train_scene.apply_rules()
+	var other: Dictionary = train_scene.car("tail2")
+	var original_colors: Array[Color] = []
+	for shell_material: StandardMaterial3D in other["shell_mats"]:
+		original_colors.append(shell_material.albedo_color)
+	train_scene.set_view_mode("diag")
+	train_scene.highlight("tail1")
+	for material_index: int in original_colors.size():
+		var dimmed: StandardMaterial3D = other["shell_mats"][material_index]
+		var lit: Color = original_colors[material_index]
+		assert_true(dimmed.albedo_color.is_equal_approx(Color(lit.r * 0.6, lit.g * 0.6, lit.b * 0.6, lit.a)))
+	train_scene.set_view_mode("section")
+	for material_index: int in original_colors.size():
+		var restored: StandardMaterial3D = other["shell_mats"][material_index]
+		assert_eq(restored.albedo_color, original_colors[material_index])
+
+
+func test_car_screen_polygon_is_convex_and_contains_the_car_center() -> void:
+	var train_scene: Scene = _scene({"view_mode": "diag"})
+	train_scene.focus_car("dining")
+	train_scene.set_pane(420.0)
+	var polygon: PackedVector2Array = train_scene.car_screen_polygon("dining")
+	assert_gte(polygon.size(), 3)
+	if polygon.size() < 3:
+		return
+	var orientation: float = 0.0
+	for corner: int in polygon.size():
+		var a: Vector2 = polygon[corner]
+		var b: Vector2 = polygon[(corner + 1) % polygon.size()]
+		var next: Vector2 = polygon[(corner + 2) % polygon.size()]
+		var turn: float = (b - a).cross(next - b)
+		assert_gt(absf(turn), 0.0001)
+		if orientation == 0.0:
+			orientation = signf(turn)
+		assert_eq(signf(turn), orientation)
+	var car_node: Node3D = train_scene.car("dining")["node"]
+	var center: Vector2 = train_scene.camera.unproject_position(car_node.to_global(Vector3(8.0, 1.0, 0.02)))
+	assert_true(Geometry2D.is_point_in_polygon(center, polygon))
+	assert_true(train_scene.car_screen_polygon("missing").is_empty())
+	var saved_camera: Camera3D = train_scene.camera
+	train_scene.camera = null
+	assert_true(train_scene.car_screen_polygon("dining").is_empty())
+	train_scene.camera = saved_camera
+
+
+func _prop_bounds(prop_node: Node3D) -> AABB:
+	var local_box: AABB = (prop_node as MeshInstance3D).get_aabb() if prop_node is MeshInstance3D else Interior._bounds_of(prop_node)
+	return prop_node.transform * local_box
+
+
+func test_diag_lowers_laundry_and_shortens_curtain_then_restores_both() -> void:
+	var train_scene: Scene = _scene()
+	var laundry: Node3D = train_scene.life.rooms["tail1"].props["laundry"]
+	var curtain: Node3D = train_scene.life.rooms["cold"].props["curtain"]
+	var laundry_original: Transform3D = laundry.transform
+	var curtain_original: Transform3D = curtain.transform
+	var laundry_box: AABB = _prop_bounds(laundry)
+	var curtain_box: AABB = _prop_bounds(curtain)
+	assert_gt(laundry_box.end.y, 2.2)
+	assert_gt(curtain_box.end.y, 2.2)
+	for _round: int in range(2):
+		train_scene.set_view_mode("diag")
+		var lowered: AABB = _prop_bounds(laundry)
+		var shortened: AABB = _prop_bounds(curtain)
+		assert_almost_eq(lowered.end.y, 2.15, 0.01)
+		assert_almost_eq(shortened.end.y, 2.15, 0.01)
+		assert_eq(laundry.transform.basis, laundry_original.basis)
+		assert_almost_eq(shortened.position.y, curtain_box.position.y, 0.0001)
+		assert_almost_eq(shortened.size.x, curtain_box.size.x, 0.0001)
+		assert_almost_eq(shortened.size.z, curtain_box.size.z, 0.0001)
+		train_scene.set_view_mode("section")
+		assert_eq(laundry.transform, laundry_original)
+		assert_eq(curtain.transform, curtain_original)
+		assert_eq(_prop_bounds(laundry), laundry_box)
+		assert_eq(_prop_bounds(curtain), curtain_box)

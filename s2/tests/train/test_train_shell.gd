@@ -109,13 +109,22 @@ func test_a_cold_car_looks_bluer_than_a_warm_one() -> void:
 	var s: Scene = _scene()
 	assert_true(s.set_sit("tail", 0, 85.0))
 	var warm: Color = s.car("tail1")["shell_mat"].albedo_color
-	for shell_material: StandardMaterial3D in s.car("tail1")["shell_mats"]:
-		assert_eq(shell_material.albedo_color, warm)
+	_assert_tinted(s.car("tail1"), warm)
 	assert_true(s.set_sit("tail", 0, 15.0))
 	var cold: Color = s.car("tail1")["shell_mat"].albedo_color
-	for shell_material: StandardMaterial3D in s.car("tail1")["shell_mats"]:
-		assert_eq(shell_material.albedo_color, cold)
+	_assert_tinted(s.car("tail1"), cold)
 	assert_gt(cold.b - cold.r, warm.b - warm.r)
+
+
+## Every piece of the car's shell takes the tint: the atlas pieces as it is, a plain
+## piece (the diagonal view's front wall) over its own colour.
+func _assert_tinted(c: Dictionary, tint: Color) -> void:
+	var materials: Array = c["shell_mats"]
+	for material_index: int in materials.size():
+		var shell_material: StandardMaterial3D = materials[material_index]
+		var base: Color = Color.WHITE if shell_material.albedo_texture != null else c["shell_colors"][material_index]
+		var expected: Color = Color(base.r * tint.r, base.g * tint.g, base.b * tint.b, base.a)
+		assert_true(shell_material.albedo_color.is_equal_approx(expected), String(c["id"]))
 
 
 func test_shell_fragments_share_the_car_materials() -> void:
@@ -124,7 +133,9 @@ func test_shell_fragments_share_the_car_materials() -> void:
 	for c: Dictionary in s.cars:
 		var shell: Node = (c["node"] as Node3D).get_node("Shell")
 		var materials: Array = c["shell_mats"]
-		assert_eq(materials.size(), 1, c["id"])
+		# One atlas material for the shell's pieces, and the front wall's own plain one.
+		assert_eq(materials.size(), 2, c["id"])
+		assert_true(materials.has((c["front_wall"] as MeshInstance3D).material_override), c["id"])
 		for shell_material: Material in materials:
 			assert_false(car_materials.has(shell_material), "each car owns its tint")
 			car_materials.append(shell_material)

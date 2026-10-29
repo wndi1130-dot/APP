@@ -118,6 +118,77 @@ func test_diag_selection_uses_the_covered_pane_width_and_clears_it() -> void:
 	assert_eq(float(flow.train.camera.h_offset), 0.0)
 
 
+func test_diag_nameplates_use_the_front_lower_corner() -> void:
+	var flow: SliceFlow = _flow()
+	await wait_process_frames(2)
+	flow.train.set_view_mode("diag")
+	flow.train.focus_car(SliceFlow.FIRST_CAR)
+	flow._process(0.0)
+	assert_false(flow.outside.visible)
+	assert_gt(flow.plates.get_child_count(), 0)
+	var cam: Camera3D = flow.train.camera
+	for plate: Control in flow.plates.get_children():
+		var car_node: Node3D = plate.get_meta("car")
+		var anchor: Vector3 = car_node.to_global(Vector3(float(plate.get_meta("x")), -0.45, 1.40))
+		var expected: Vector2 = cam.unproject_position(anchor)
+		var center: Vector2 = plate.position + plate.size * 0.5
+		assert_almost_eq(center.x, expected.x, 2.0)
+		assert_almost_eq(center.y, expected.y, 2.0)
+	flow.train.set_view_mode("section")
+	flow._process(0.0)
+	assert_true(flow.outside.visible)
+	var first_plate: Control = flow.plates.get_child(0) as Control
+	var first_car: Node3D = first_plate.get_meta("car")
+	var section_anchor: Vector3 = first_car.to_global(Vector3(float(first_plate.get_meta("x")), -0.45, 0.0))
+	assert_true((first_plate.position + first_plate.size * 0.5).is_equal_approx(cam.unproject_position(section_anchor)))
+
+
+func test_diag_marks_highlight_without_drawing_2d_marks() -> void:
+	var flow: SliceFlow = _flow()
+	await wait_process_frames(2)
+	flow.train.set_view_mode("diag")
+	flow._select(SliceFlow.FIRST_CAR)
+	assert_eq(flow.card, flow.home)
+	# A direct call outside draw would report an error if it drew any 2D marks.
+	flow._draw_marks()
+	var band: MeshInstance3D = flow.train.highlight_band
+	assert_true(band.visible)
+	var chosen: Node3D = flow.train.car(SliceFlow.FIRST_CAR)["node"]
+	assert_eq(band.global_transform, chosen.global_transform)
+	flow._draw_marks()
+	assert_eq(flow.train.highlight_band, band)
+	flow.card = null
+	flow._draw_marks()
+	assert_false(band.visible)
+	flow.card = flow.home
+	flow._draw_marks()
+	assert_true(band.visible)
+	var other_card: Control = Control.new()
+	add_child_autofree(other_card)
+	flow.card = other_card
+	flow._draw_marks()
+	assert_false(band.visible)
+	flow.card = flow.home
+	flow._select("")
+	flow._draw_marks()
+	assert_false(band.visible)
+	for c: Dictionary in flow.train.cars:
+		assert_false(bool(c["dimmed"]))
+
+
+func test_council_builds_the_train_in_section_view() -> void:
+	var flow: SliceFlow = _flow()
+	await wait_process_frames(2)
+	flow.train.set_view_mode("diag")
+	flow.go(flow._index_of("council"))
+	assert_eq(flow.current(), "council")
+	assert_eq(flow.train.opts.get("view_mode"), "section", "set before the scene enters the tree")
+	assert_eq(flow.train.view_mode, "section")
+	assert_true(flow.outside.visible)
+	assert_false(flow.train.snow_ground.visible)
+	assert_false(flow.train.highlight_band.visible)
+
+
 func test_the_steps_come_in_the_slice_order_with_the_train_behind_them() -> void:
 	var f = _flow()
 	var seen: Array = []

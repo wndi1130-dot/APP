@@ -587,6 +587,7 @@ func _show_end(go_word: String) -> void:
 ## car's middle height. The session card takes the screen's touches, so
 ## nothing moves the camera off it.
 func _frame_dining_car() -> void:
+	# The council keeps the section view.
 	if not is_instance_valid(train) or train.camera == null:
 		return
 	for c: Dictionary in train.cars:
@@ -930,6 +931,8 @@ func _show_train(phase: String, seg: int) -> void:
 	rules["train"]["hands"] = (train_g["hands"] as Dictionary).duplicate(true) if train_g.get("hands") is Dictionary else {}
 	train = TRAIN_SCENE.instantiate()
 	train.opts = {"panel": false, "seed": int(opts.get("seed", 1))}
+	if phase == "council":
+		train.opts["view_mode"] = "section"
 	# The values last shown, so the people react to what changed since (train_people_view.gd).
 	if not last_rules.is_empty():
 		train.opts["rules_before"] = last_rules
@@ -943,6 +946,7 @@ func _show_train(phase: String, seg: int) -> void:
 	var cam: Camera3D = train.get("camera")
 	if cam != null:
 		outside = OutsideView.attach(cam, look, phase == "travel")
+		outside.visible = train.view_mode == "section"
 	weather.falls = "none" if String(look["falls"]) == "none" else String(look["falls"])
 	weather.drift_on = int(look["snow_level"]) > 0
 	weather.light = clampf(float(look["lum"]) * 0.85 + 0.15, 0.2, 1.0)
@@ -1145,6 +1149,8 @@ func _process(_delta: float) -> void:
 		var running: bool = absf(cinema.speed) > 1.0
 		if weather.moving != running:
 			weather.moving = running
+	if is_instance_valid(train) and is_instance_valid(outside):
+		outside.visible = train.view_mode == "section"
 	if not is_instance_valid(train) or plates.get_child_count() == 0:
 		return
 	var cam: Camera3D = train.get("camera")
@@ -1154,7 +1160,8 @@ func _process(_delta: float) -> void:
 		var car = p.get_meta("car")
 		if not is_instance_valid(car):
 			continue
-		var at: Vector3 = (car as Node3D).to_global(Vector3(float(p.get_meta("x")), -0.45, 0.0))
+		var front_z: float = 1.40 if train.view_mode == "diag" else 0.0
+		var at: Vector3 = (car as Node3D).to_global(Vector3(float(p.get_meta("x")), -0.45, front_z))
 		# Over another screen no plate; with a car picked only its own.
 		var shown: bool = card == null or card == home
 		if sel != "" and String(p.get_meta("id")) != sel:
@@ -1371,6 +1378,9 @@ func _set_lever(comm: String, which: String, value: int) -> void:
 
 ## The picked car's lamp-amber corners, and the shade over the cars not picked.
 func _draw_marks() -> void:
+	if is_instance_valid(train) and train.view_mode == "diag":
+		train.highlight(sel if (card != null and card == home) else "")
+		return
 	if sel == "" or card == null or card != home or not is_instance_valid(train) or train.camera == null:
 		return
 	var cam: Camera3D = train.camera
