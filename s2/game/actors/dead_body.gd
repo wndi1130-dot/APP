@@ -262,10 +262,17 @@ static func mixed(z: Dictionary, plain: Color) -> Color:
 	var scale: float = struck_scale(power)
 	if scale == 1.0:
 		return eased
+	# Decision 501: the blend into the blow finishes first (one mix slot), then the recoil eases in as long.
+	var ramp: float = 1.0
+	if z.has("body_changed"):
+		var blend: float = float(z.get("body_mix", MIX_TIME))
+		ramp = clampf((float(z["age"]) - float(z["body_changed"]) - blend) / maxf(blend, 0.001), 0.0, 1.0)
+	if ramp <= 0.0:
+		return eased
 	# Decision 501: mix the recoil, never its clock or the body's ground pose.
 	var recoil: float = 0.0 if scale < 1.0 else 0.22
 	var share: float = 1.0 - scale if scale < 1.0 else (scale - 1.0) * 4.0 * plain.r * (1.0 - plain.r)
-	return packed(plain, motion, frame_of(motion, recoil), roundf(share * MIX_STEPS))
+	return packed(plain, motion, frame_of(motion, recoil), roundf(share * ramp * MIX_STEPS))
 
 
 ## Decision 501: weak toward rest, strong toward the baked recoil's peak.

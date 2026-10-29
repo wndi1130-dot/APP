@@ -634,6 +634,26 @@ func test_hit_power_mixes_recoil_without_changing_its_duration() -> void:
 	DeadBody.table = prior
 
 
+func test_hit_power_waits_for_the_blend_into_the_blow() -> void:
+	var prior: Array = DeadBody.table
+	DeadBody.table = []
+	for clip: int in range(DeadBody.HIT_UPPER + 1):
+		DeadBody.table.append([clip * 12, 12, false, 0.4])
+	var plain: Color = Color(0.5, float(DeadBody.HIT_LEFT), 1.0, 1.0)
+	# The body was in another motion: the first frames blend into the blow as before, no pop.
+	var weak: Dictionary = {"age": 1.0, "body_motion": 0, "body_r": 0.3, "hit_power": 0.4}
+	var plain_body: Dictionary = {"age": 1.0, "body_motion": 0, "body_r": 0.3}
+	assert_eq(DeadBody.mixed(weak, plain), DeadBody.mixed(plain_body, plain), "the blend in is left alone")
+	var blend: float = float(weak["body_mix"])
+	weak["age"] = 1.0 + blend * 0.5
+	plain_body["age"] = weak["age"]
+	assert_eq(DeadBody.mixed(weak, plain), DeadBody.mixed(plain_body, plain), "still blending in")
+	weak["age"] = 1.0 + blend * 3.0
+	plain_body["age"] = weak["age"]
+	assert_ne(DeadBody.mixed(weak, plain), DeadBody.mixed(plain_body, plain), "then the weak recoil eases in")
+	DeadBody.table = prior
+
+
 func test_stomp_and_shove_read_body_before_their_fatigue() -> void:
 	game.opts["hit_power"] = true
 	_hand(p, "")
