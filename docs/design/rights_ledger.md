@@ -28,6 +28,7 @@
 
 | 자산 | 종류 | 출처 | 라이선스 | 조건 | 증빙 | 홍보 | 빌드 |
 |---|---|---|---|---|---|---|---|
+| 바깥 바닥 사진 결 8장: Road013A·Road012B·Concrete031·PavingStones136·Gravel041·Gravel043·Ground106·Ground037 (결정 496) | 그림·재질 | [ambientCG](https://ambientcg.com), 각 1K-JPG Color·Displacement | CC0 1.0, 발주 제공 라이선스(2026-10-29; 이 실행에서 웹 재확인하지 않음) | 표시 의무 없음. 원본 JPG·zip은 저장소 밖에 보관하고 빛 제거·축소·정규화한 `s2/fx/textures/ground/ground_layers.png`만 반입 | 원본 `C:\dev\zombie\assets_raw\ground_cc0\<id>\`; 층·원본 해시·가공 수치는 `s2/fx/textures/ground/ground_layers.json`, 도구는 `tools/ground/build_ground_array.py` | 가능(CC0) | S2 바깥 바닥 K1; Godot 가져오기·화면 검증 대기 |
 | Godot Engine 4.7.2 | 엔진 | [godotengine.org](https://godotengine.org) | MIT, 엔진에 든 제3자 구성요소 각자의 라이선스 | 출시판에 Godot 라이선스 고지와 제3자 고지를 넣는다([Complying with licenses](https://docs.godotengine.org/en/stable/about/complying_with_licenses.html)). 외부 에셋의 권리는 MIT가 풀어 주지 않는다 | 필요 없음 | 가능 | S2 |
 | 시스템 폰트 | 폰트 | 기기에 깔린 글꼴(S1a CSS의 system-ui 묶음, S2 `SystemFont`) | 기기 제공 | 빌드에 글꼴 파일이 들어가지 않는다. 화면이 기기마다 다르게 보일 뿐 권리 문제는 없다 | 필요 없음 | 스크린샷은 기기 글꼴로 찍힌다 | S1a 웹, S2 |
 | s2/fx 셰이더 묶음(11개와 fx_common) | 코드 | 이 저장소에서 새로 짬(셰이더와 화면 효과 스레드, 2026-10-09) | 저장소와 같음 | 남의 코드·그림 없음. 공개 셰이더를 들여오면 이 표에 따로 줄을 만든다 | 필요 없음 | 가능 | S2 |

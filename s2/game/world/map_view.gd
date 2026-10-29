@@ -28,6 +28,7 @@ const PROP_CULL_DISTANCE: float = 39.0
 const PROP_LOD_DISTANCE: float = 18.0
 const PROP_REFRESH_SECONDS: float = 0.1
 const FxState = preload("res://fx/fx_state.gd")
+const Atmosphere = preload("res://fx/atmosphere.gd")
 const ParticlePool = preload("res://fx/particle_pool.gd")
 const PUFF_SHADER = preload("res://fx/shaders/blood_burst.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
@@ -144,6 +145,9 @@ func setup(map_data: Dictionary) -> void:
 	material.set_shader_parameter("vis", vis_texture)
 	material.set_shader_parameter("map_size", Vector2(grid.width, grid.height))
 	material.set_shader_parameter("lamp_color", FxState.LAMP)
+	material.set_shader_parameter("ground_layers", preload("res://fx/textures/ground/ground_layers.png"))
+	material.set_shader_parameter("ground_layers_on", true)
+	material.set_shader_parameter("region_band", int(Atmosphere.region_key(str(data.get("region_band", Atmosphere.DEFAULT_REGION))).substr(1)))
 	win_image = Image.create(grid.width * LampLight.WINDOW_TEXELS, grid.height * LampLight.WINDOW_TEXELS, false, Image.FORMAT_R8)
 	win_texture = ImageTexture.create_from_image(win_image)
 	material.set_shader_parameter("win", win_texture)

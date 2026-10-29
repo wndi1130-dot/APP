@@ -1,0 +1,210 @@
+[
+  {
+    "index": 0,
+    "name": "asphalt",
+    "source_id": "Road013A",
+    "tile_m": 12.0,
+    "source_mean_srgb": [
+      0.23956889732368475,
+      0.23794217951329,
+      0.22909044004197063
+    ],
+    "output_mean_rgb": [
+      0.5000011818082097,
+      0.5000016754749246,
+      0.49999833948476313
+    ],
+    "seam_ratio": 1.0701230950855254,
+    "seam_ratio_rgb": 1.142480215554469,
+    "seam_ratio_alpha": 1.0031625315311925,
+    "height_percentiles": [
+      0.6453309500217438,
+      0.8585525000095368
+    ],
+    "license": "CC0 1.0, ambientCG",
+    "color_sha256": "03c36e7807d304b1d84fcc1d0348e4e3309dba03b6a1cf759699dc63690fa2bc",
+    "displacement_sha256": "3bdc6ebd30dd609ea6e2a0f882e590b7154b2becffe61d94dca36d3174d97afa"
+  },
+  {
+    "index": 1,
+    "name": "asphalt_patched",
+    "source_id": "Road012B",
+    "tile_m": 18.0,
+    "source_mean_srgb": [
+      0.25601731468610567,
+      0.25448004404680186,
+      0.24449551900334615
+    ],
+    "output_mean_rgb": [
+      0.49999911738379876,
+      0.49999931185855745,
+      0.5000000000000276
+    ],
+    "seam_ratio": 0.982891740503942,
+    "seam_ratio_rgb": 1.0912375312139688,
+    "seam_ratio_alpha": 0.8556597454789016,
+    "height_percentiles": [
+      0.5362943625450134,
+      0.8761727249622344
+    ],
+    "license": "CC0 1.0, ambientCG",
+    "color_sha256": "fd16138b8e4eed1db347a97f17957ebc7442fc41e444813e899e0de6db340317",
+    "displacement_sha256": "1984b357b7ca3c22c45484824bd8d78dec8c54eab00a7881f694cee57e6aac0d"
+  },
+  {
+    "index": 2,
+    "name": "concrete_road",
+    "source_id": "Concrete031",
+    "tile_m": 3.0,
+    "source_mean_srgb": [
+      0.3901018628911976,
+      0.37855966979488326,
+      0.3593053668140081
+    ],
+    "output_mean_rgb": [
+      0.4999995512121031,
+      0.4999981749291678,
+      0.49999699312099116
+    ],
+    "seam_ratio": 4.051417149783514,
+    "seam_ratio_rgb": 2.4183841982935137,
+    "seam_ratio_alpha": 5.459944470440326,
+    "height_percentiles": [
+      0.542036601305008,
+      0.7556581211090088
+    ],
+    "license": "CC0 1.0, ambientCG",
+    "color_sha256": "d374e274b7a000304e8530ad7171d534e7eb6b766c7a0038bfe8bd7e086d717e",
+    "displacement_sha256": "4eb07557e3070fab3a82416653af287c08de6c406a7b0608482eae720f4b691e"
+  },
+  {
+    "index": 3,
+    "name": "pavement",
+    "source_id": "PavingStones136",
+    "tile_m": 2.5,
+    "source_mean_srgb": [
+      0.6338271271913661,
+      0.5920012904071251,
+      0.45038631290076153
+    ],
+    "output_mean_rgb": [
+      0.499998848110677,
+      0.5000050413838393,
+      0.5000001047168353
+    ],
+    "seam_ratio": 6.542229885116819,
+    "seam_ratio_rgb": 3.0689137877908075,
+    "seam_ratio_alpha": 18.49115586172278,
+    "height_percentiles": [
+      0.3924402111768723,
+      0.6964312863349914
+    ],
+    "license": "CC0 1.0, ambientCG",
+    "color_sha256": "5291854f8a7fcf554f2e278e36426eee9de65dd71d93c7f837b2c3f80ca42cfa",
+    "displacement_sha256": "17b428addba6dd325eabfa04fe35c68aada687680bddc0df89126b1947d173dc"
+  },
+  {
+    "index": 4,
+    "name": "gravel",
+    "source_id": "Gravel041",
+    "tile_m": 1.5,
+    "source_mean_srgb": [
+      0.5541412989289303,
+      0.544728252933785,
+      0.4613672368665964
+    ],
+    "output_mean_rgb": [
+      0.5000010471718,
+      0.500001331404138,
+      0.49999967088887143
+    ],
+    "seam_ratio": 1.0771701015572879,
+    "seam_ratio_rgb": 1.1171785649551658,
+    "seam_ratio_alpha": 1.0122244501117645,
+    "height_percentiles": [
+      0.24776702940464018,
+      0.6832399988174438
+    ],
+    "license": "CC0 1.0, ambientCG",
+    "color_sha256": "644202d89ef946752773e5378bdfcd92b314201928f7c6b44001cb3711d3f53c",
+    "displacement_sha256": "5275a740d9a7d16beaa420d2c837b9b4ad574f06b6f6236528b162dc00791afb"
+  },
+  {
+    "index": 5,
+    "name": "ballast",
+    "source_id": "Gravel043",
+    "tile_m": 1.5,
+    "source_mean_srgb": [
+      0.4190201516251433,
+      0.4222805808581932,
+      0.4064628488884185
+    ],
+    "output_mean_rgb": [
+      0.49999887803021936,
+      0.4999989977069988,
+      0.49999418071673435
+    ],
+    "seam_ratio": 1.0587537808781515,
+    "seam_ratio_rgb": 1.0613507864417382,
+    "seam_ratio_alpha": 1.0547149672466722,
+    "height_percentiles": [
+      0.24258385717868805,
+      0.5110664725303647
+    ],
+    "license": "CC0 1.0, ambientCG",
+    "color_sha256": "8213c9929bcaa64cc1953c85bc2c87bc6e62a7f23c4b0109db52b07fb22a9203",
+    "displacement_sha256": "36c6facd71e46821d17329f6a0b03c2a91bb9b9721e762042acf4a45a52c8e9f"
+  },
+  {
+    "index": 6,
+    "name": "soil",
+    "source_id": "Ground106",
+    "tile_m": 3.0,
+    "source_mean_srgb": [
+      0.4623838424673184,
+      0.38290567585222646,
+      0.2815820619168818
+    ],
+    "output_mean_rgb": [
+      0.49999690336339375,
+      0.4999734467151104,
+      0.4999980103735907
+    ],
+    "seam_ratio": 1.0700126477214493,
+    "seam_ratio_rgb": 1.0915755317607987,
+    "seam_ratio_alpha": 1.0159998840251163,
+    "height_percentiles": [
+      0.4730217230319977,
+      0.7997063529491424
+    ],
+    "license": "CC0 1.0, ambientCG",
+    "color_sha256": "2d72b660e7dd604f2df359b33e3a2778c5398bf593df606e1c3a8031b4650d26",
+    "displacement_sha256": "620bdb0b951a1b70c59062268e18b48de0c6f032151ab48fa9303d427918bc9b"
+  },
+  {
+    "index": 7,
+    "name": "dry_grass",
+    "source_id": "Ground037",
+    "tile_m": 3.0,
+    "source_mean_srgb": [
+      0.597808205844957,
+      0.5755328571077976,
+      0.34326847300803376
+    ],
+    "output_mean_rgb": [
+      0.5000001047171801,
+      0.5000002842323465,
+      0.4999460407331916
+    ],
+    "seam_ratio": 1.0298208457635718,
+    "seam_ratio_rgb": 1.0112748658332078,
+    "seam_ratio_alpha": 1.102313042159075,
+    "height_percentiles": [
+      0.41555397510528563,
+      0.625835428237915
+    ],
+    "license": "CC0 1.0, ambientCG",
+    "color_sha256": "d92bec8a35b9cb16ec79b421ca0f572a7400286eae109beafa266629ef49a6cf",
+    "displacement_sha256": "bc102168f5d014ce208ed5c1d9140c39513d29303e1b3436cb06c92c7780e419"
+  }
+]
