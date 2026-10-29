@@ -186,3 +186,61 @@ func test_diag_pane_recomputes_after_resize_scroll_and_layout() -> void:
 	var projected: Vector2 = train_scene.camera.unproject_position(anchor)
 	assert_almost_eq(projected.x, (1280.0 - 420.0) / 2.0, 1.0)
 	assert_almost_eq(projected.y, 360.0, 1.0)
+
+
+func _assert_shell_view(train_scene: Scene, diagonal: bool) -> void:
+	var pipe_count: int = 0
+	for c: Dictionary in train_scene.cars:
+		var top_parts: Array = c["shell_top"]
+		assert_false(top_parts.is_empty(), c["id"])
+		for top_node: Node3D in top_parts:
+			assert_eq(top_node.visible, not diagonal, String(c["id"]) + "/" + String(top_node.name))
+		for shell_material: StandardMaterial3D in c["shell_mats"]:
+			assert_eq(shell_material.cull_mode, BaseMaterial3D.CULL_DISABLED if diagonal else BaseMaterial3D.CULL_BACK, c["id"])
+		if c.has("stove_light"):
+			pipe_count += 1
+			var car_node: Node3D = c["node"]
+			var pipe_top: MeshInstance3D = car_node.get_node("StovePipeTop") as MeshInstance3D
+			var pipe_low: MeshInstance3D = car_node.get_node("StovePipeLow") as MeshInstance3D
+			assert_true(top_parts.has(pipe_top), c["id"])
+			assert_true(pipe_low.visible)
+			assert_almost_eq(pipe_top.position.y - (pipe_top.mesh as BoxMesh).size.y * 0.5, Scene.SHELL_CUT_Y, 0.0001)
+			assert_almost_eq(pipe_low.position.y + (pipe_low.mesh as BoxMesh).size.y * 0.5, Scene.SHELL_CUT_Y, 0.0001)
+	assert_gt(pipe_count, 0)
+
+
+func test_diag_hides_shell_tops_and_stove_pipes_and_section_restores_them() -> void:
+	var train_scene: Scene = _scene({"view_mode": "section"})
+	_assert_shell_view(train_scene, false)
+	train_scene.set_view_mode("diag")
+	_assert_shell_view(train_scene, true)
+	train_scene.set_view_mode("section")
+	_assert_shell_view(train_scene, false)
+
+
+func test_diag_shell_state_survives_layout_rebuild() -> void:
+	var train_scene: Scene = _scene({"view_mode": "diag"})
+	_assert_shell_view(train_scene, true)
+	train_scene._rebuild_layout()
+	assert_eq(train_scene.view_mode, "diag")
+	_assert_shell_view(train_scene, true)
+	train_scene.set_view_mode("section")
+	_assert_shell_view(train_scene, false)
+
+
+func test_box_shell_fallback_hides_upper_walls_and_roof_in_diag() -> void:
+	var train_scene: Scene = _scene({"view_mode": "diag"})
+	for variant: String in ["plain", "clean", "chief", "medic", "engine"]:
+		train_scene._shells[Scene.SHELL_ROOT % variant] = null
+	train_scene._rebuild_layout()
+	for c: Dictionary in train_scene.cars:
+		assert_null((c["node"] as Node3D).get_node_or_null("Shell"))
+		assert_gte((c["shell_top"] as Array).size(), 8, c["id"])
+		assert_false((c["shell_mats"] as Array).is_empty(), c["id"])
+		for top_piece: MeshInstance3D in c["shell_top"]:
+			assert_gte(top_piece.position.y - (top_piece.mesh as BoxMesh).size.y * 0.5, Scene.SHELL_CUT_Y - 0.0001)
+			if top_piece.name != &"StovePipeTop":
+				assert_true((c["shell_mats"] as Array).has(top_piece.get_active_material(0)), c["id"])
+	_assert_shell_view(train_scene, true)
+	train_scene.set_view_mode("section")
+	_assert_shell_view(train_scene, false)
