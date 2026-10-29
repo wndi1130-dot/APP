@@ -16,25 +16,114 @@ func _ready_map(run_seed: int) -> Dictionary:
 	return StopLoader.make_ready(load(Maps.path_of(PLACE)), run_seed)
 
 
-func test_the_workers_ground_arrays_are_the_ones_laid_row_by_row() -> void:
+## The ground as a SurfaceTool lays it, row by row, a cell's corners one call after
+## another: what MapView wrote before it filled the arrays itself.
+func _surface_tool_ground(g: FieldGrid, details: PackedFloat32Array) -> Dictionary:
+	var banks := PackedVector2Array()
+	for y in range(g.height + 1):
+		for x in range(g.width + 1):
+			banks.append(MapView.drift_uv(g, Vector2i(x, y)))
+	var tools := {}
+	for y in range(g.height):
+		for x in range(g.width):
+			var c := Vector2i(x, y)
+			var tile := c / MapView.TILE
+			if not tools.has(tile):
+				var begun := SurfaceTool.new()
+				begun.begin(Mesh.PRIMITIVE_TRIANGLES)
+				tools[tile] = begun
+			var st: SurfaceTool = tools[tile]
+			var f := g.floor_at(c)
+			var color: Color = MapView.FLOOR_COLORS[f]
+			color.a = MapView.sky_alpha(g, c)
+			var a := Vector3(x, 0, y)
+			var quad := [a, a + Vector3(1, 0, 0), a + Vector3(1, 0, 1), a + Vector3(0, 0, 1)]
+			var cell_detail: float = details[g.index(c)]
+			for idx in [0, 1, 2, 0, 2, 3]:
+				var corner := Vector2i(int(quad[idx].x), int(quad[idx].z))
+				st.set_color(color)
+				st.set_normal(Vector3.UP)
+				st.set_uv(banks[corner.y * (g.width + 1) + corner.x])
+				var detail := cell_detail
+				if cell_detail == 0.0 and (f == FieldGrid.Floor.SNOW or f == FieldGrid.Floor.DEEP_SNOW):
+					detail = details[g.width * g.height + corner.y * (g.width + 1) + corner.x]
+				st.set_uv2(Vector2(f + 1, detail))
+				st.add_vertex(quad[idx])
+	var out := {}
+	for tile in tools:
+		out[tile] = (tools[tile] as SurfaceTool).commit_to_arrays()
+	return out
+
+
+func test_the_workers_ground_arrays_are_the_ones_a_surface_tool_lays() -> void:
 	var g: FieldGrid = Maps.build(PLACE)["grid"]
 	var details := MapView.ground_details(g)
 	var ahead := MapView.ground_arrays(g, details)
-	# The main thread's way (_build_ground on a map without them): banks, then rows.
-	var banks := PackedVector2Array()
-	for y in range(g.height + 1):
-		MapView.ground_bank_row(g, y, banks)
-	var tools := {}
-	for y in range(g.height):
-		MapView.ground_row(g, details, banks, y, tools)
-	assert_eq(ahead.keys(), tools.keys(), "the same tiles in the same order")
+	var laid := _surface_tool_ground(g, details)
+	assert_eq(ahead.keys(), laid.keys(), "the same tiles in the same order")
 	assert_eq(ahead.size(), ceili(g.width / float(MapView.TILE)) * ceili(g.height / float(MapView.TILE)))
 	var corners := 0
 	for tile in ahead:
-		assert_eq(ahead[tile], (tools[tile] as SurfaceTool).commit_to_arrays())
+		assert_eq(ahead[tile], laid[tile], "tile %s as the SurfaceTool laid it" % tile)
 		corners += (ahead[tile][Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
 	assert_eq(corners, g.width * g.height * 6, "six corners a cell, none left out")
 	assert_eq(ahead[Vector2i.ZERO][Mesh.ARRAY_TEX_UV2].size(), ahead[Vector2i.ZERO][Mesh.ARRAY_VERTEX].size(), "the floor kind rides in UV2")
+	for slot: int in Mesh.ARRAY_MAX:
+		var filled: bool = slot in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_COLOR, Mesh.ARRAY_TEX_UV, Mesh.ARRAY_TEX_UV2]
+		assert_eq(ahead[Vector2i.ZERO][slot] != null, filled, "slot %d" % slot)
+
+
+func test_the_bank_rows_are_drift_uv_at_every_corner() -> void:
+	var g: FieldGrid = Maps.build(PLACE)["grid"]
+	var banks := PackedVector2Array()
+	for y in range(g.height + 1):
+		MapView.ground_bank_row(g, y, banks)
+	assert_eq(banks.size(), (g.width + 1) * (g.height + 1))
+	var wrong := 0
+	var banked := 0
+	for y in range(g.height + 1):
+		for x in range(g.width + 1):
+			var want := MapView.drift_uv(g, Vector2i(x, y))
+			if banks[y * (g.width + 1) + x] != want:
+				wrong += 1
+			if want != Vector2.ZERO:
+				banked += 1
+	assert_eq(wrong, 0, "every corner as drift_uv answers it")
+	assert_gt(banked, 0, "the map has corners where snow banks up")
+
+
+func test_the_bank_rows_and_tiles_hold_on_every_kind_of_cell() -> void:
+	# Each solid kind, a door in a wall, a window, a building's floor and the map's edge,
+	# on a map one cell wider than a tile (a cut tile on each axis).
+	var g := FieldGrid.new(MapView.TILE + 1, 12)
+	var kinds: Array[int] = []
+	for kind: int in FieldGrid.Solid.values():
+		kinds.append(kind)
+	for x in range(g.width):
+		g.set_solid(Vector2i(x, 1), kinds[x % kinds.size()])
+		g.set_solid(Vector2i(x, 4), FieldGrid.Solid.WALL if x % 4 != 1 else FieldGrid.Solid.DOOR)
+		g.floor[g.index(Vector2i(x, 7))] = x % FieldGrid.Floor.size()
+	g.set_solid(Vector2i(0, 0), FieldGrid.Solid.WINDOW)
+	g.set_solid(Vector2i(g.width - 1, g.height - 1), FieldGrid.Solid.WALL)
+	for y in range(8, 11):
+		for x in range(5, 12):
+			g.building[g.index(Vector2i(x, y))] = 3
+	g.set_solid(Vector2i(8, 10), FieldGrid.Solid.DOOR)
+	var banks := PackedVector2Array()
+	for y in range(g.height + 1):
+		MapView.ground_bank_row(g, y, banks)
+	var wrong := 0
+	for y in range(g.height + 1):
+		for x in range(g.width + 1):
+			if banks[y * (g.width + 1) + x] != MapView.drift_uv(g, Vector2i(x, y)):
+				wrong += 1
+	assert_eq(wrong, 0, "every corner as drift_uv answers it")
+	var details := MapView.ground_details(g)
+	var ahead := MapView.ground_arrays(g, details)
+	var laid := _surface_tool_ground(g, details)
+	assert_eq(ahead.keys(), laid.keys())
+	for tile in laid:
+		assert_eq(ahead[tile], laid[tile], "tile %s as the SurfaceTool laid it" % tile)
 
 
 func test_a_view_lays_the_loaders_arrays_and_works_out_a_changed_map_again() -> void:
