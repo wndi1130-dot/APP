@@ -33,7 +33,8 @@ extends Control
 ## (`stock_pressed`, the slice opens cost_pane.gd; J12). The thermometer is a
 ## key too: a press puts up its slip, how the reading is made and the heating
 ## coal's multiple (결정 483); a press on it again or anywhere off the slip
-## folds it. Nothing else takes a press.
+## folds it. Trust and tension open the same paper slip with the last settle's
+## causes and the changes since it (결정 502). Only one slip stays open.
 
 ## A stock among TAPPABLE pressed: "coal" or "food".
 signal stock_pressed(id: String)
@@ -41,8 +42,10 @@ signal stock_pressed(id: String)
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
+const UiBake = preload("res://game/ui/ui_bake.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
+const CostPane = preload("res://game/ui/cost_pane.gd")
 const EDGE_TOP := preload("res://game/ui/tex/edge_top.png")
 
 ## The band (48) and how far its soot smokes down (92), in game px.
@@ -74,6 +77,24 @@ const SHORT_LEFT: int = 3
 const STOCKS: Array = [["coal", "coal", "석탄"], ["food", "food", "식량"], ["med", "med", "의약품"], ["lux", "lux", "사치품"]]
 ## The stocks whose press opens what a stretch costs (cost_pane.gd).
 const TAPPABLE: Array = ["coal", "food"]
+## train_turn.gd meters writes these in order, or just drift for falling tension.
+const METER_SETTLE: Dictionary = {
+	"trust": ["mood"],
+	"tension": ["mood", "short", "law", "calm.pot", "calm.ledger", "cast"],
+}
+## S1 why_names.ts, only meter causes not already named by CostPane.WHY_NAME.
+## S1's card has no fixed name; the retained ledger has no card title either.
+const METER_WHY_NAME: Dictionary = {
+	"mood": "집단들의 마음", "short": "석탄이나 식량이 바닥남", "law": "법이 낳는 긴장",
+	"drift": "쌓인 불만과 두려움", "calm.ledger": "벽 장부", "calm.night": "떠난 사람의 밤",
+	"cast": "열차 방송", "card": "서류 선택", "need": "들어주지 않은 요구", "promise": "약속",
+	"corpse": "시신", "birth": "아이가 태어남", "leak": "들통난 거래", "deal": "거래",
+	"vote": "의회 표결", "strike": "일손을 놓음",
+}
+const METER_OTHER_BELOW: float = 0.5
+const METER_NO_CHANGE := "지난 정산 뒤 바뀐 것 없음"
+## The meter slip's widest share of the screen (the car pane starts past it).
+const METER_WHY_SHARE := 0.55
 ## The trust well's cracks: one 24 × 8 tile, repeated (c9.css).
 const TILE_CRACKS: Array = [
 	[Vector2(0, 3.4), Vector2(3.6, 2.5), Vector2(6.4, 4.7), Vector2(10.2, 3.9), Vector2(13.4, 1.3), Vector2(17, 3.7), Vector2(21, 2.9), Vector2(24, 3.4)],
@@ -167,8 +188,9 @@ var _narrow: bool = false
 var _ot_last: Variant = null
 var _ot_plan: Dictionary = {}
 var _ot_t0: int = 0
-## The thermometer's slip is up (결정 483).
+## One shared slip: outside (483), trust or tension (502).
 var _why_open: bool = false
+var _why_key: String = "outside"
 
 
 ## What the strip says for state `g0` (tests read this; the strip draws it).
@@ -259,6 +281,103 @@ static func why_parts(o: Dictionary, t0: Dictionary) -> Array:
 		parts.append_array([["·", "mark"], [String(names.get(w, w)), "word"], [sdeg(float(o["weather_temp"])), "num"]])
 	parts.append_array([["|", "mark"], ["난방 석탄", "word"], ["×" + TrainClimate._js(float(o["mult"])), "bold"]])
 	return parts
+
+
+## The newest retained meter-settle block and everything after it. As in
+## CostPane.settle_rows, other keys, unknown causes and repeats end a block.
+## The order also separates adjacent blocks whose zero shares were not noted.
+## drift is a whole settle on its own. No marker retained: read the retained
+## changes only; the 64-row ledger cannot reconstruct rows it already dropped.
+static func meter_since_settle(g0: Dictionary, key: String) -> Array:
+	var ledger: Variant = g0.get("ledger")
+	if not ledger is Array or not METER_SETTLE.has(key):
+		return []
+	var whys: Array = METER_SETTLE[key]
+	var start: int = -1
+	for i in range(ledger.size() - 1, -1, -1):
+		var row: Variant = ledger[i]
+		if key == "tension" and CostPane._in_block(row, key, ["drift"], {}):
+			start = i
+			break
+		if CostPane._in_block(row, key, whys, {}):
+			start = i
+			var seen: Dictionary = {String(row["why"]): true}
+			var order: int = whys.find(String(row["why"]))
+			while start > 0 and CostPane._in_block(ledger[start - 1], key, whys, seen):
+				var why: String = String(ledger[start - 1]["why"])
+				var previous: int = whys.find(why)
+				if previous >= order:
+					break
+				start -= 1
+				order = previous
+				seen[why] = true
+			break
+	var out: Array = []
+	for i in range(maxi(0, start), ledger.size()):
+		var row: Variant = ledger[i]
+		if row is Dictionary and String(row.get("k", "")) == key:
+			out.append(row)
+	return out
+
+
+## The paper's numbers stay unrounded. Nine displayed places keep even 64
+## displayed shares within 1e-6 of their sum; _num's one place is for the HUD.
+## A slip number to one decimal, as the bars read: 50.084 → "50.1", −0.04 → "0".
+static func meter_num(v: float) -> String:
+	var r: float = snappedf(v, 0.1)
+	if absf(r) < 0.05:
+		return "0"
+	return _num(r).replace("-", "−")
+
+
+static func meter_signed(v: float) -> String:
+	return ("−" if snappedf(v, 0.1) < -0.05 else "+") + meter_num(absf(v))
+
+
+## Group first, then put causes below 0.5 into one 기타 (even when they cancel).
+## Sort the resulting rows, including 기타, by absolute share, ties by key.
+static func meter_why_model(g0: Dictionary, key: String) -> Dictionary:
+	var entries: Array = meter_since_settle(g0, key)
+	var sums: Dictionary = {}
+	var total: float = 0.0
+	for entry: Dictionary in entries:
+		var why: String = String(entry.get("why", ""))
+		var d: float = float(entry.get("d", 0.0))
+		sums[why] = float(sums.get(why, 0.0)) + d
+		total += d
+	var rows: Array = []
+	var other: float = 0.0
+	var has_other: bool = false
+	for why: String in sums:
+		var d: float = float(sums[why])
+		if absf(d) < METER_OTHER_BELOW:
+			other += d
+			has_other = true
+		else:
+			var word: String = String(CostPane.WHY_NAME.get(why, METER_WHY_NAME.get(why, "구간 정산")))
+			rows.append({"why": why, "word": word, "d": d})
+	if has_other:
+		rows.append({"why": "other", "word": "기타", "d": other})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return String(a["why"]) < String(b["why"]) if absf(float(a["d"])) == absf(float(b["d"])) else absf(float(a["d"])) > absf(float(b["d"])))
+	var now: float = float(g0.get(key, 0.0))
+	var before: float = now - total
+	# Shown to one decimal; what rounding leaves over goes on the biggest row, so
+	# the rows the player reads add up to the change the head shows.
+	var shown_before: float = snappedf(before, 0.1)
+	var shown_now: float = snappedf(now, 0.1)
+	var left: float = shown_now - shown_before
+	for row: Dictionary in rows:
+		row["shown"] = snappedf(float(row["d"]), 0.1)
+		left -= float(row["shown"])
+	if not rows.is_empty():
+		rows[0]["shown"] = snappedf(float(rows[0]["shown"]) + left, 0.1)
+	for row: Dictionary in rows:
+		row["text"] = "%s %s" % [row["word"], meter_signed(float(row["shown"]))]
+	# The two values read as the bar reads (whole numbers); the change and the rows keep one decimal.
+	var head: String = METER_NO_CHANGE if entries.is_empty() else "지난 정산 뒤 %s %d → %d (%s)" % [
+		"신임" if key == "trust" else "긴장", int(round(before)), int(round(now)), meter_signed(shown_now - shown_before)]
+	return {"key": key, "before": before, "now": now, "total": total, "head": head, "rows": rows}
 
 
 ## Where the column's head stands in the tube for `temp` (0–1): the warmest
@@ -591,12 +710,18 @@ func _lay_out() -> void:
 	if outside:
 		outside.position = Vector2((12.0 + mw + 10.0 + mw + 10.0) * k, 0)
 	var why: Control = _parts.get_node_or_null("Why")
-	if why and outside:
-		# 52 down, its middle under the thermometer's as far as 8 in from either edge.
-		var half: float = why.size.x / k * 0.5
-		var mid: float = (outside.position.x + outside.size.x * 0.5) / k
-		mid = clampf(mid, half + 8.0, maxf(half + 8.0, size.x / k - half - 8.0))
-		why.position = Vector2((mid - half) * k, 52.0 * k)
+	var anchor: Control = _why_anchor()
+	if why and anchor:
+		if _why_key != "outside" and why.get_meta("band_width", -1.0) != size.x:
+			_show_why(false)
+			return
+		# Include the tilted paper's corners, not just its unrotated rectangle.
+		var extent: Vector2 = Vector2(absf(cos(why.rotation)) * why.size.x + absf(sin(why.rotation)) * why.size.y,
+			absf(sin(why.rotation)) * why.size.x + absf(cos(why.rotation)) * why.size.y) * 0.5
+		var mid: float = anchor.position.x + anchor.size.x * 0.5
+		var width: float = minf(size.x, get_viewport_rect().size.x)
+		mid = clampf(mid, extent.x + 8.0 * k, maxf(extent.x + 8.0 * k, width - extent.x - 8.0 * k))
+		why.position = Vector2(mid - why.size.x * 0.5, 52.0 * k + extent.y - why.size.y * 0.5)
 	if mood:
 		mood.position = Vector2(size.x * 0.5 - 8.0 * k - mood.size.x * 0.5, 1.0 * k)
 	if right:
@@ -677,6 +802,17 @@ func _meter(key: String, word: String, n: int, lv: int) -> Control:
 		c.add_child(tag)
 		tag.size = tag.get_combined_minimum_size()
 		tag.position = Vector2(c.size.x - tag.size.x, (19.0 - 9.0) * UiFonts.K)
+	# Like the stock keys: the entire bar's 48 dp height, even on a narrow band.
+	var tap := Button.new()
+	tap.name = "Tap_" + key
+	tap.flat = true
+	tap.focus_mode = Control.FOCUS_NONE
+	tap.tooltip_text = word + " · 지난 정산의 까닭"
+	for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
+		tap.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	tap.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tap.pressed.connect(_toggle_why.bind(key))
+	c.add_child(tap)
 	return c
 
 
@@ -698,12 +834,20 @@ func _draw_lamp(ci: Control, lv: int, dim: bool) -> void:
 	var k: float = UiFonts.K
 	var mid: Vector2 = ci.size * 0.5
 	var r: float = 4.0 * k
+	var batch := UiBake.Batch.new()
 	if lv > 1:
 		GlassParts.glow_ring(ci, mid, r, 4.0 * k, tone(TAG_GLOW, dim))
-		ci.draw_circle(mid, r, tone(TAG_INK, dim), true, -1.0, true)
-		ci.draw_arc(mid, r - 1.0 * k, 0.0, TAU, 32, tone(WARN, dim), 2.0 * k, true)
+		batch.circle(mid, r, tone(TAG_INK, dim))
+		batch.arc(mid, r - 1.0 * k, 0.0, TAU, 32, tone(WARN, dim), 2.0 * k)
 	else:
-		ci.draw_circle(mid, r, tone(WARN, dim), true, -1.0, true)
+		batch.circle(mid, r, tone(WARN, dim))
+	batch.draw(ci)
+
+
+static func meter_fill_rect(full_w: float, value: float) -> Rect2:
+	var k: float = UiFonts.K
+	var width: float = full_w * clampf(value / 100.0, 0.0, 1.0)
+	return Rect2(0, 36.0 * k, maxf(width, 8.0 * k), 8.0 * k) if width > 0.5 else Rect2()
 
 
 func _draw_meter(ci: Control, key: String, n: int, lv: int, dim: bool, mw: float) -> void:
@@ -725,6 +869,7 @@ func _draw_meter(ci: Control, key: String, n: int, lv: int, dim: bool, mw: float
 	_round_rect(ci, bar, r, tone(WELL, dim))
 	ci.draw_rect(Rect2(bar.position.x + r, bar.position.y, bar.size.x - r * 2.0, 1.0 * k), tone(Color(0, 0, 0, 0.3), dim))
 	var at: float = w * clampf(n / 100.0, 0.0, 1.0)
+	var fill: Rect2 = meter_fill_rect(w, n)
 	if key == "trust":
 		# Dry earth's fine cracks along the whole well; the grass over its share.
 		_tile_cracks(ci, bar, tone(CRACK_TILE, dim))
@@ -734,13 +879,13 @@ func _draw_meter(ci: Control, key: String, n: int, lv: int, dim: bool, mw: float
 		elif lv == 2:
 			grass = TRUST.lerp(DRY, 0.76)
 		if at > 0.5:
-			_round_rect(ci, Rect2(bar.position, Vector2(maxf(at, r * 2.0), bar.size.y)), r, tone(grass, dim))
+			_round_rect(ci, fill, r, tone(grass, dim))
 			if lv == 2:
 				_tile_cracks(ci, Rect2(bar.position, Vector2(at, bar.size.y)), tone(CRACK_DARK, dim))
 	else:
 		# Coal to fire across the gauge's width, lit up to the value.
 		if at > 0.5:
-			_heat_rect(ci, Rect2(bar.position, Vector2(maxf(at, r * 2.0), bar.size.y)), w, r, dim, lv == 2)
+			_heat_rect(ci, fill, w, r, dim, lv == 2)
 		_glass_cracks(ci, n, lv, dim, mw / CK_W)
 
 
@@ -757,13 +902,15 @@ func _round_rect(ci: CanvasItem, rect: Rect2, radius: float, col: Color) -> void
 func _tile_cracks(ci: CanvasItem, rect: Rect2, col: Color) -> void:
 	var k: float = UiFonts.K
 	var x0: float = rect.position.x
+	var batch := UiBake.Batch.new()
 	while x0 < rect.end.x:
 		for path: Array in TILE_CRACKS:
 			var pts := PackedVector2Array()
 			for p: Vector2 in path:
 				pts.append(Vector2(minf(x0 + p.x * k, rect.end.x), rect.position.y + p.y * k))
-			ci.draw_polyline(pts, col, 0.9 * k * 0.6, true)
+			batch.polyline(pts, PackedColorArray([col]), 0.9 * k * 0.6)
 		x0 += 24.0 * k
+	batch.draw(ci)
 
 
 ## The heat's gradient over the gauge's whole width, clipped to the lit share.
@@ -775,6 +922,12 @@ func _heat_rect(ci: CanvasItem, rect: Rect2, full_w: float, radius: float, dim: 
 		halo.shadow_size = int(round(7.0 * UiFonts.K * 0.6))
 		halo.set_corner_radius_all(int(round(radius)))
 		ci.draw_style_box(halo, rect)
+	heat_geometry(rect, full_w, radius, dim).draw(ci)
+
+
+## Unlike a lever's lamp, heat samples the entire bar's fixed colour interval.
+static func heat_geometry(rect: Rect2, full_w: float, radius: float, dim: bool) -> UiBake.Batch:
+	var batch := UiBake.Batch.new()
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	# Top edge left → right, then bottom edge right → left, rounding both ends.
@@ -782,10 +935,11 @@ func _heat_rect(ci: CanvasItem, rect: Rect2, full_w: float, radius: float, dim: 
 	for p: Vector2 in outline:
 		pts.append(p)
 		cols.append(tone(_heat_at(p.x / full_w), dim))
-	ci.draw_polygon(pts, cols)
+	batch.polygon(pts, cols)
 	pts.append(pts[0])
 	cols.append(cols[0])
-	ci.draw_polyline_colors(pts, cols, 1.0, true)
+	batch.polyline(pts, cols, 1.0)
+	return batch
 
 
 static func _heat_at(f: float) -> Color:
@@ -834,24 +988,26 @@ func _glass_cracks(ci: CanvasItem, n: int, lv: int, dim: bool, sx: float) -> voi
 	var k: float = UiFonts.K
 	var origin := Vector2(0, 0)
 	var squeeze := Vector2(sx, 1.0)
+	var batch := UiBake.Batch.new()
 	for tier in range(1, tiers + 1):
 		for path: Array in _tier_paths(tier):
 			var pts := PackedVector2Array()
 			for p: Vector2 in path:
 				pts.append(origin + p * squeeze * k)
 			if lv == 2:
-				ci.draw_polyline(pts, tone(Color(228 / 255.0, 123 / 255.0, 60 / 255.0, 0.36), dim), 2.6 * k * 0.7, true)
+				batch.polyline(pts, PackedColorArray([tone(Color(228 / 255.0, 123 / 255.0, 60 / 255.0, 0.36), dim)]), 2.6 * k * 0.7)
 			var shade := PackedVector2Array()
 			for p: Vector2 in pts:
 				shade.append(p + Vector2(0.7, 0.7) * k)
-			ci.draw_polyline(shade, tone(Color(0, 0, 0, 0.6), dim), 1.2 * k * 0.6, true)
-			ci.draw_polyline(pts, tone(Color(232 / 255.0, 240 / 255.0, 245 / 255.0, 0.66), dim), 0.9 * k * 0.6, true)
+			batch.polyline(shade, PackedColorArray([tone(Color(0, 0, 0, 0.6), dim)]), 1.2 * k * 0.6)
+			batch.polyline(pts, PackedColorArray([tone(Color(232 / 255.0, 240 / 255.0, 245 / 255.0, 0.66), dim)]), 0.9 * k * 0.6)
 		if tier == 3:
 			var x: float = 70.0 / 100.0 * CK_W
 			var chip := PackedVector2Array([Vector2(x - 2, CK_Y - 1), Vector2(x + 1.5, CK_Y - 3.5), Vector2(x + 2.5, CK_Y + 0.5)])
 			for i in chip.size():
 				chip[i] = origin + chip[i] * squeeze * k
-			ci.draw_colored_polygon(chip, tone(Color(232 / 255.0, 240 / 255.0, 245 / 255.0, 0.18), dim))
+			batch.polygon(chip, PackedColorArray([tone(Color(232 / 255.0, 240 / 255.0, 245 / 255.0, 0.18), dim)]))
+	batch.draw(ci)
 
 
 ## The cracks of one layer (k3g_fx.js ckTierPaths): the same seeded walk as the
@@ -892,6 +1048,16 @@ static func _crack_line(rng: Array, x: float, y: float, a: float, length: float,
 
 ## Unrest | support (.mood, 206 × 50): a medal each side (44), between them
 ## the seats in numbers over one bar split three ways with the half marked.
+static func standing_fills(bar_size: Vector2, unrest: int, neutral: int, support: int) -> Array[Rect2]:
+	var gap: float = 2.0 * UiFonts.K
+	var room: float = bar_size.x - gap * 2.0
+	var total: float = float(maxi(1, unrest + neutral + support))
+	var a: float = room * unrest / total
+	var b: float = room * support / total
+	var m: float = room - a - b
+	return [Rect2(0, 0, a, bar_size.y), Rect2(a + gap, 0, m, bar_size.y), Rect2(bar_size.x - b, 0, b, bar_size.y)]
+
+
 func _standing(unrest: int, neutral: int, support: int) -> Control:
 	var dim: bool = _dim("mood")
 	var k: float = UiFonts.K
@@ -915,24 +1081,19 @@ func _standing(unrest: int, neutral: int, support: int) -> Control:
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bar.position = Vector2(x0, 33.0) * k
 	bar.size = Vector2(112, 8) * k
-	var total: float = float(maxi(1, unrest + neutral + support))
 	bar.draw.connect(func() -> void:
 		var w: float = bar.size.x
 		var h: float = bar.size.y
-		var gap: float = 2.0 * k
-		var room: float = w - gap * 2.0
-		var a: float = room * unrest / total
-		var b: float = room * support / total
-		var m: float = room - a - b
+		var fills: Array[Rect2] = standing_fills(bar.size, unrest, neutral, support)
 		var rr: float = 4.0 * k
 		# A faint drop under the three (0 1px 2px .4), then each with its light along the top.
 		_split_round(bar, Rect2(0, 1.0 * k, w, h), rr, tone(Color(0, 0, 0, 0.3), dim), true, true)
-		if a > 0.5:
-			_v_grad(bar, Rect2(0, 0, a, h), rr, true, false, tone(RED_L, dim), tone(RED, dim))
-		if m > 0.5:
-			_split_round(bar, Rect2(a + gap, 0, m, h), rr, tone(MID, dim), false, false)
-		if b > 0.5:
-			_v_grad(bar, Rect2(w - b, 0, b, h), rr, false, true, tone(SKY_L, dim), tone(SKY, dim))
+		if fills[0].size.x > 0.5:
+			_v_grad(bar, fills[0], rr, true, false, tone(RED_L, dim), tone(RED, dim))
+		if fills[1].size.x > 0.5:
+			_split_round(bar, fills[1], rr, tone(MID, dim), false, false)
+		if fills[2].size.x > 0.5:
+			_v_grad(bar, fills[2], rr, false, true, tone(SKY_L, dim), tone(SKY, dim))
 		bar.draw_rect(Rect2(rr, 0, w - rr * 2.0, 1.0 * k * 0.6), tone(Color(1, 1, 1, 0.25), dim))
 		# The half mark: a majority is past it.
 		var mark := StyleBoxFlat.new()
@@ -959,6 +1120,7 @@ func _split_round(ci: CanvasItem, rect: Rect2, r: float, col: Color, left: bool,
 
 ## A rect with a top-to-bottom gradient, rounded at the ends asked for.
 func _v_grad(ci: CanvasItem, rect: Rect2, r: float, left: bool, right: bool, top: Color, bot: Color) -> void:
+	var batch := UiBake.Batch.new()
 	var pts := PackedVector2Array()
 	var cols := PackedColorArray()
 	var n: int = 6
@@ -980,12 +1142,13 @@ func _v_grad(ci: CanvasItem, rect: Rect2, r: float, left: bool, right: bool, top
 			pts.append(sharp[i])
 	for p in pts:
 		cols.append(top.lerp(bot, (p.y - rect.position.y) / maxf(rect.size.y, 0.001)))
-	ci.draw_polygon(pts, cols)
+	batch.polygon(pts, cols)
 	var ring := pts.duplicate()
 	var ring_c := cols.duplicate()
 	ring.append(pts[0])
 	ring_c.append(cols[0])
-	ci.draw_polyline_colors(ring, ring_c, 1.0, true)
+	batch.polyline(ring, ring_c, 1.0)
+	batch.draw(ci)
 
 
 ## A matte medal (.med, 44): a disc 38 across, its mark at 22 in the 2판 (glass_parts.gd).
@@ -1083,11 +1246,12 @@ func _fit_outside(c: Control) -> void:
 	c.size = c.custom_minimum_size
 
 
-## The thermometer pressed: its slip up, or folded if it was.
-func _toggle_why() -> void:
-	if _why_open:
+## A gauge pressed: fold its own slip, or replace the other gauge's slip.
+func _toggle_why(key: String = "outside") -> void:
+	if _why_open and _why_key == key:
 		_fold_why()
 		return
+	_why_key = key
 	_why_open = true
 	_show_why(true)
 
@@ -1104,17 +1268,23 @@ func _fold_why() -> void:
 		w.queue_free()
 
 
-## Put the slip up off the reading (the last model's outside), `fresh` coming
-## up as .why's whyIn does; laid out under the thermometer.
+func _why_anchor() -> Control:
+	if _parts == null:
+		return null
+	var names := {"outside": "Outside", "trust": "MeterTrust", "tension": "MeterTension"}
+	return _parts.get_node_or_null(String(names.get(_why_key, "Outside")))
+
+
+## Put the chosen gauge's slip up, `fresh` coming up as .why's whyIn does.
 func _show_why(fresh: bool) -> void:
-	if _parts == null or not (_ot_last is Dictionary) or _parts.get_node_or_null("Outside") == null:
+	if _why_anchor() == null or (_why_key == "outside" and not (_ot_last is Dictionary)):
 		_why_open = false
 		return
 	var old: Node = _parts.get_node_or_null("Why")
 	if old != null:
 		_parts.remove_child(old)
 		old.queue_free()
-	var w: Control = _why(_ot_last)
+	var w: Control = _why(_ot_last) if _why_key == "outside" else _meter_why(_why_key)
 	_parts.add_child(w)
 	_lay_out()
 	if fresh:
@@ -1136,16 +1306,7 @@ func _show_why(fresh: bool) -> void:
 ## 8 in at the left and 11 at the right. _lay_out puts it.
 func _why(o: Dictionary) -> Control:
 	var k: float = UiFonts.K
-	var c := Control.new()
-	c.name = "Why"
-	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Over what the slice lays after the band (the train's paper card).
-	c.z_index = OVER_PAPERS
-	var body := Control.new()
-	body.name = "Paper"
-	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	body.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	c.add_child(body)
+	var c: Control = _slip_paper()
 	var mark := TextureRect.new()
 	var px: int = int(round(13.0 * k))
 	mark.texture = HudIcons.texture("temp", px, WHY_ICON, 2.2, HudIcons.CUT_PAPER)
@@ -1172,7 +1333,85 @@ func _why(o: Dictionary) -> Control:
 	c.size = Vector2(x + 11.0, 28.0) * k
 	c.pivot_offset = c.size * 0.5
 	c.rotation_degrees = -1.5
-	body.size = c.size
+	return c
+
+
+## Shared paper and ink with the thermometer, below the pressed bar. Long
+## ledgers scroll inside the paper; neither its size nor its words leave it.
+func _meter_why(key: String) -> Control:
+	var k: float = UiFonts.K
+	var m: Dictionary = meter_why_model(g, key)
+	var c: Control = _slip_paper()
+	c.set_meta("band_width", size.x)
+	c.set_meta("key", key)
+	var texts: Array = [m["head"]]
+	for row: Dictionary in m["rows"]:
+		texts.append(row["text"])
+	# As wide as its longest line, never past 440 (mockup px) nor past
+	# METER_WHY_SHARE of the screen, so it stays clear of the car pane at the right.
+	var natural: float = 0.0
+	for i in texts.size():
+		natural = maxf(natural, _text_w(_label(String(texts[i]), UiFonts.NUMBER, 600 if i == 0 else 500, 12.0, WHY_INK, 0.48)))
+	var room: float = minf(size.x, get_viewport_rect().size.x)
+	var width: float = minf(clampf(natural + 49.0, 160.0, 440.0) * k, minf(room * METER_WHY_SHARE, room - 32.0 * k))
+	width = maxf(1.0, width)
+	var scroll := ScrollContainer.new()
+	scroll.name = "SlipScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.position = Vector2(11.0, 7.0) * k
+	c.add_child(scroll)
+	var lines := VBoxContainer.new()
+	lines.name = "SlipRows"
+	lines.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lines.add_theme_constant_override("separation", int(4.0 * k))
+	scroll.add_child(lines)
+	var height: float = 14.0 * k
+	for i in texts.size():
+		var label := _label(String(texts[i]), UiFonts.NUMBER, 600 if i == 0 else 500, 12.0, WHY_INK, 0.48)
+		label.name = "Head" if i == 0 else "Cause_" + String(m["rows"][i - 1]["why"])
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.size.x = maxf(1.0, width - 38.0 * k)
+		lines.add_child(label)
+		height += label.get_combined_minimum_size().y + (4.0 * k if i > 0 else 0.0)
+	c.size = Vector2(width, minf(height, maxf(1.0, get_viewport_rect().size.y - 84.0 * k)))
+	scroll.size = Vector2(maxf(1.0, width - 22.0 * k), maxf(1.0, c.size.y - 14.0 * k))
+	c.pivot_offset = c.size * 0.5
+	c.rotation_degrees = -1.5
+	# Font/theme and wrapping finish after entering the tree. Use that actual
+	# height too, so a short ledger never acquires an unnecessary scrollbar.
+	lines.minimum_size_changed.connect(_fit_meter_why.bind(c))
+	_fit_meter_why.call_deferred(c)
+	return c
+
+
+func _fit_meter_why(c: Control) -> void:
+	if not is_instance_valid(c) or not c.is_inside_tree():
+		return
+	var k: float = UiFonts.K
+	var scroll: ScrollContainer = c.get_node("SlipScroll")
+	var lines: VBoxContainer = scroll.get_node("SlipRows")
+	var height: float = minf(ceilf(lines.get_combined_minimum_size().y) + 14.0 * k + 1.0,
+		maxf(1.0, get_viewport_rect().size.y - 84.0 * k))
+	if is_equal_approx(c.size.y, height):
+		return
+	c.size.y = height
+	scroll.size.y = maxf(1.0, height - 14.0 * k)
+	c.pivot_offset = c.size * 0.5
+	_lay_out()
+
+
+func _slip_paper() -> Control:
+	var k: float = UiFonts.K
+	var c := Control.new()
+	c.name = "Why"
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.z_index = OVER_PAPERS
+	var body := Control.new()
+	body.name = "Paper"
+	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	body.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	c.add_child(body)
 	body.draw.connect(func() -> void:
 		GlassParts.shadow(body, Rect2(Vector2.ZERO, body.size), 0.0, 4.0 * k, 10.0 * k, Color(0, 0, 0, 0.6))
 		var r := Rect2(Vector2.ZERO, body.size)
@@ -1185,7 +1424,7 @@ func _why(o: Dictionary) -> Control:
 	return c
 
 
-## A press off the slip and the thermometer folds the slip, and goes on to what
+## A press off the slip and its gauge folds the slip, and goes on to what
 ## it was on (결정 483).
 func _input(event: InputEvent) -> void:
 	if not _why_open or _parts == null:
@@ -1201,9 +1440,8 @@ func _input(event: InputEvent) -> void:
 			at = st.position
 	if at == Vector2.INF:
 		return
-	for id: String in ["Why", "Outside"]:
-		var c: Control = _parts.get_node_or_null(id)
-		if c != null and c.get_global_rect().has_point(at):
+	for c: Control in [_parts.get_node_or_null("Why"), _why_anchor()]:
+		if c != null and Rect2(Vector2.ZERO, c.size).has_point(c.get_global_transform_with_canvas().affine_inverse() * at):
 			return
 	_fold_why()
 
@@ -1237,24 +1475,28 @@ func _draw_outside(ci: Control, o: Dictionary, dim: bool) -> void:
 	sb.set_border_width_all(int(round(1.5 * k)))
 	sb.border_color = rim
 	ci.draw_style_box(sb, tube)
-	GlassParts.grad_rect(ci, tube.grow(-1.5 * k), 3.0 * k, [[0.0, tone(Color(1, 1, 1, 0.08), dim)], [0.45, Color(1, 1, 1, 0)], [1.0, tone(Color(0, 0, 0, 0.28), dim)]])
+	var liquid := UiBake.Batch.new()
+	GlassParts.gradient(liquid, tube.grow(-1.5 * k), 3.0 * k, [[0.0, tone(Color(1, 1, 1, 0.08), dim)], [0.45, Color(1, 1, 1, 0)], [1.0, tone(Color(0, 0, 0, 0.28), dim)]])
 	# The column, foot to head, round at the top.
 	var h: float = tube.size.y * float(s["fill"])
 	var r: float = 2.5 * k
 	var col := Rect2(tube.position.x + 2.5 * k, tube.end.y - h, 5.0 * k, h)
-	ci.draw_polygon(PackedVector2Array([Vector2(col.position.x, col.position.y + r), Vector2(col.end.x, col.position.y + r), col.end, Vector2(col.position.x, col.end.y)]),
+	liquid.polygon(PackedVector2Array([Vector2(col.position.x, col.position.y + r), Vector2(col.end.x, col.position.y + r), col.end, Vector2(col.position.x, col.end.y)]),
 		PackedColorArray([head, head, foot, foot]))
-	ci.draw_circle(Vector2(col.get_center().x, col.position.y + r), r, head, true, -1.0, true)
+	liquid.circle(Vector2(col.get_center().x, col.position.y + r), r, head)
 	# The bulb over the column's foot: a drop shade, the rim, its colour lit up and left.
 	var bulb := Vector2(14.0 * k, 37.0 * k)
 	if bool(o["freezing"]):
+		liquid.draw(ci)
+		liquid = UiBake.Batch.new()
 		GlassParts.glow_ring(ci, bulb, 8.5 * k, 6.0 * k, tone(OT_FROZEN_GLOW, dim))
-	ci.draw_circle(bulb + Vector2(0.0, 1.0) * k, 8.5 * k, tone(Color(0, 0, 0, 0.35), dim), true, -1.0, true)
-	ci.draw_circle(bulb, 8.5 * k, rim, true, -1.0, true)
+	liquid.circle(bulb + Vector2(0.0, 1.0) * k, 8.5 * k, tone(Color(0, 0, 0, 0.35), dim))
+	liquid.circle(bulb, 8.5 * k, rim)
 	var lit := bulb + Vector2(-1.4, -1.96) * k
 	for i in 7:
 		var f: float = float(i) / 6.0
-		ci.draw_circle(bulb.lerp(lit, f), 7.0 * k * (1.0 - f * 0.85), foot.lerp(head, f), true, -1.0, true)
+		liquid.circle(bulb.lerp(lit, f), 7.0 * k * (1.0 - f * 0.85), foot.lerp(head, f))
+	liquid.draw(ci)
 	# A tick at each stage's temperature, long and short by turns ending long at the coldest.
 	var ticks: Array = o["ticks"]
 	for i in ticks.size():
@@ -1272,8 +1514,10 @@ func _draw_outside(ci: Control, o: Dictionary, dim: bool) -> void:
 
 ## A puff of cold: six discs one in another, so it is thickest at the middle.
 func _puff(ci: Control, mid: Vector2, radius: float, col: Color) -> void:
+	var batch := UiBake.Batch.new()
 	for i in 6:
-		ci.draw_circle(mid, radius * (1.0 - float(i) / 6.0), Color(col, col.a * 0.25), true, -1.0, true)
+		batch.circle(mid, radius * (1.0 - float(i) / 6.0), Color(col, col.a * 0.25))
+	batch.draw(ci)
 
 
 ## Frost round the tube (otTex's ferns, the same seed): from its two sides and

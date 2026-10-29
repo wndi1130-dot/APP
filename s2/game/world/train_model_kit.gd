@@ -38,6 +38,31 @@ const WINDOW_GLOW_LOW := 0.55
 const WINDOW_GLOW_HIGH := 0.8
 ## 온실칸 긴 유리 띠는 작은 창보다 훨씬 넓어 같은 밝기면 띠 하나가 화면을 차지한다. 이만큼 낮춘다.
 const WINDOW_GLOW_DIM := {"coach_glass": 0.6}
+## 비에 젖어 어두워지는 몫(weathered.gdshader porosity — 기획서 weather_fx: 나무·천 0.6~0.8, 쇠·유리
+## 0.05~0.1). 모두 셰이더 기본 0.6(나무 몫)을 받아 첫 정차 비에 칠한 지붕·몸까지 27 % 어두워졌다(mood 10-30).
+## PALETTE_SOURCE로 만든 몸은 메시 하나·팔레트 한 장에 칠한 쇠·판자·방수포·유리가 섞여 있어 팔레트 칸마다
+## 값을 준다(PALETTE_NAMES는 그 스크립트의 PALETTE 차례, 8 × 8 칸의 왼쪽 위부터). 그 밖의 자산(기관차·
+## 탄수차·부품)은 자산마다 한 값: 칠한 쇠, 판자 부품 둘만 나무.
+const PALETTE_SOURCE := "tools/blender/train_exterior.py"
+const PALETTE_CELLS := 8
+const PALETTE_NAMES: Array[String] = [
+	"green", "green_dark", "green_faded", "maroon", "maroon_dark", "blue", "blue_dark", "cream", "grey",
+	"plank", "plank_dark", "plank_grey", "roof", "roof_dark", "roof_seam", "tarp",
+	"iron", "iron_worn", "rust", "steel", "glass", "glass_warm", "glass_green", "curtain", "curtain_red",
+	"brass", "black", "bellows", "leaf", "inside", "crate", "sack", "glass_hi",
+]
+const PALETTE_POROSITY := {
+	"green": 0.1, "green_dark": 0.1, "green_faded": 0.1, "maroon": 0.1, "maroon_dark": 0.1,
+	"blue": 0.1, "blue_dark": 0.1, "cream": 0.1, "grey": 0.1,
+	"plank": 0.6, "plank_dark": 0.6, "plank_grey": 0.6, "crate": 0.6,
+	"roof": 0.1, "roof_dark": 0.1, "roof_seam": 0.1, "tarp": 0.6,
+	"iron": 0.08, "iron_worn": 0.08, "steel": 0.08, "black": 0.08, "brass": 0.08, "rust": 0.2,
+	"glass": 0.05, "glass_warm": 0.05, "glass_green": 0.05, "glass_hi": 0.05,
+	"curtain": 0.7, "curtain_red": 0.7, "sack": 0.7, "bellows": 0.3, "leaf": 0.5, "inside": 0.1,
+}
+const METAL_POROSITY := 0.1
+const ASSET_POROSITY := {"plank_band": 0.6, "plank_patches": 0.6}
+static var _porosity_tex: ImageTexture
 const RULE_KEYS := ["kinds", "site", "requires", "forbids"]
 static var _catalog: Dictionary = {}
 static var _libraries: Dictionary = {}
@@ -448,7 +473,8 @@ static func asset_meshes(id: String) -> Array:
 	if scene == null:
 		return rows
 	var source := scene.instantiate()
-	_collect(source, Transform3D.IDENTITY, rows)
+	var by_palette: bool = String(asset.get("source", "")) == PALETTE_SOURCE
+	_collect(source, Transform3D.IDENTITY, rows, 1.0 if by_palette else float(ASSET_POROSITY.get(id, METAL_POROSITY)), by_palette)
 	source.free()
 	if rows[1].is_empty() and asset["category"] == "parts":
 		rows[1] = rows[0]
@@ -456,12 +482,27 @@ static func asset_meshes(id: String) -> Array:
 	return rows
 
 
-static func _collect(node: Node, parent_transform: Transform3D, rows: Array) -> void:
+## The palette's porosity, one pixel a cell where the palette has its colour (read by the same UV).
+static func porosity_texture() -> ImageTexture:
+	if _porosity_tex == null:
+		var image := Image.create(PALETTE_CELLS, PALETTE_CELLS, false, Image.FORMAT_L8)
+		image.fill(Color(METAL_POROSITY, METAL_POROSITY, METAL_POROSITY))
+		for i in PALETTE_NAMES.size():
+			var value: float = PALETTE_POROSITY[PALETTE_NAMES[i]]
+			image.set_pixel(i % PALETTE_CELLS, floori(float(i) / PALETTE_CELLS), Color(value, value, value))
+		_porosity_tex = ImageTexture.create_from_image(image)
+	return _porosity_tex
+
+
+static func _collect(node: Node, parent_transform: Transform3D, rows: Array, porosity: float, by_palette: bool) -> void:
 	var transform: Transform3D = parent_transform * node.transform if node is Node3D else parent_transform
 	if node is MeshInstance3D and node.mesh != null:
 		var lod := 1 if str(node.name).ends_with("_LOD1") else 0
 		var material := ShaderMaterial.new()
 		material.shader = Weathered
+		material.set_shader_parameter("porosity", porosity)
+		if by_palette:
+			material.set_shader_parameter("porosity_tex", porosity_texture())
 		var source: Material = node.get_active_material(0)
 		if source is StandardMaterial3D:
 			if source.albedo_texture != null:
@@ -477,7 +518,7 @@ static func _collect(node: Node, parent_transform: Transform3D, rows: Array) -> 
 			material.set_shader_parameter("albedo", source.albedo_color)
 		rows[lod].append({"mesh": node.mesh, "transform": transform, "material": material})
 	for child in node.get_children():
-		_collect(child, transform, rows)
+		_collect(child, transform, rows, porosity, by_palette)
 
 
 static func cutaway_mesh(id: String, lod: int, row: Dictionary) -> Mesh:

@@ -7,6 +7,7 @@ import { createGame, drawPerson, isGone, PROFILES } from '../../src/game/state';
 import type { Game } from '../../src/game/state';
 import { crewNames } from '../../src/game/turn';
 import { COMMS, COMM_NAME, REP_AGE, TRAIT_BAN } from '../../src/game/data';
+import type { Comm } from '../../src/game/data';
 import { nextRandom } from '../../src/core/rng';
 import { enableDark, repGone } from '../../src/game/dark/state';
 import { enableDomestic } from '../../src/game/domestic/state';
@@ -313,6 +314,37 @@ describe('필드에 남겨진 대표 승계(사용자 답 2026-10-29)', () => {
     const once = JSON.stringify(g);
     expect(applyFieldReturn(g, departure, receipt).status).toBe('duplicate');
     expect(JSON.stringify(g)).toBe(once);
+  });
+
+  /** 대표가 아닌 그 칸 사람 하나. */
+  const plainOf = (g: Game, c: Comm) => PROFILES.find(p => p.community === c && p.id !== g.comms[c].leader.personId)!;
+
+  it('남겨짐과 사라짐에 함께 든 사람은 인구에서 한 번만 빠진다(묶음 점검 L2)', () => {
+    const g = createGame(SEED);
+    const p = plainOf(g, 'medtech');
+    g.comms.medtech.pop = 5;
+    const { departure, receipt } = leftReturn(g, [p.id], [p.id]);
+    applyFieldReturn(g, { ...departure, roster: [departure.roster[0]] }, { ...receipt, people: { ...receipt.people, sent: [p.id] } });
+    expect(g.comms.medtech.pop).toBe(4);
+    expect(g.left).toEqual([p.name]);
+    expect(g.leftShort).toBeUndefined();
+  });
+
+  it('하한 1에 막혀 못 뺀 사람은 적어 두고, 구조되어 와도 그만큼은 다시 더하지 않는다(묶음 점검 M1)', () => {
+    const g = createGame(SEED);
+    const p = plainOf(g, 'medtech');
+    g.comms.medtech.pop = 1;
+    const out = leftReturn(g, [p.id]);
+    applyFieldReturn(g, out.departure, out.receipt);
+    expect(g.comms.medtech.pop).toBe(1);
+    expect(g.leftShort).toEqual({ medtech: 1 });
+    expect(g.left).toEqual([p.name]);
+    const back = leftReturn(g, []);
+    applyFieldReturn(g, { ...back.departure, departureId: 'dep_rescue_1', stopId: 'stop_rescue_1', roster: [{ ...out.departure.roster[0] }] },
+      { ...back.receipt, receiptId: 'ret_rescue_1', departureId: 'dep_rescue_1', stopId: 'stop_rescue_1', people: { ...back.receipt.people, sent: [p.id], rescued: [p.id] } });
+    expect(g.left).toEqual([]);
+    expect(g.comms.medtech.pop).toBe(1);
+    expect(g.leftShort).toBeUndefined();
   });
 
   /** 첫 정차에 선 판(target_rotation.test.ts와 같은 길). */

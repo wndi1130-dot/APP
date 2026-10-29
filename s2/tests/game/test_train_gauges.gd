@@ -323,3 +323,274 @@ func test_a_roll_to_a_longer_number_widens_the_thermometer() -> void:
 	assert_eq((temp as Label).text, "−15°")
 	assert_gte(o.size.x, temp.position.x + temp.size.x, "the number stays inside it")
 	assert_gt(o.size.x, before, "−3° grew to −15°")
+
+
+## 결정 502: old settles, the newest meter blocks, then choices and small causes.
+func _meter_fixture() -> Dictionary:
+	var state: Dictionary = _start()[0]
+	state["trust"] = 46.0
+	state["tension"] = 39.11
+	state["ledger"] = [
+		{"k": "trust", "d": -9.0, "why": "mood"},
+		{"k": "tension", "d": 9.0, "why": "mood"},
+		{"k": "tension", "d": 7.0, "why": "law"},
+		{"k": "coal", "d": -3.0, "why": "run"},
+		{"k": "trust", "d": -1.25, "why": "mood"},
+		{"k": "tension", "d": 3.2, "why": "mood"},
+		{"k": "tension", "d": 0.2, "why": "short"},
+		{"k": "tension", "d": -1.1, "why": "law"},
+		{"k": "tension", "d": -0.2, "why": "calm.pot"},
+		{"k": "tension", "d": 0.01, "why": "calm.ledger"},
+		{"k": "tension", "d": -4.0, "why": "card"},
+		{"k": "food", "d": -20.0, "why": "card"},
+		{"k": "tension", "d": 0.3, "why": "corpse"},
+		{"k": "tension", "d": 0.7, "why": "card"},
+		{"k": "trust", "d": -2.75, "why": "card"},
+		{"k": "trust", "d": 0.3, "why": "need"},
+		{"k": "trust", "d": -0.3, "why": "promise"},
+	]
+	return state
+
+
+func _meter_row(m: Dictionary, why: String) -> Dictionary:
+	for row: Dictionary in m["rows"]:
+		if row["why"] == why:
+			return row
+	return {}
+
+
+func _assert_meter_total(m: Dictionary, before: float, now: float) -> void:
+	var sum: float = 0.0
+	var shown: float = 0.0
+	for row: Dictionary in m["rows"]:
+		sum += float(row["d"])
+		var text: String = row["text"]
+		shown += text.get_slice(" ", text.get_slice_count(" ") - 1).replace("−", "-").to_float()
+	assert_almost_eq(float(m["before"]), before, 1e-6)
+	assert_almost_eq(float(m["now"]), now, 1e-6)
+	assert_almost_eq(float(m["total"]), now - before, 1e-6)
+	assert_almost_eq(sum, now - before, 1e-6, "all rows, including 기타, equal the actual change")
+	assert_almost_eq(shown, snappedf(now, 0.1) - snappedf(before, 0.1), 1e-6, "the displayed shares (one decimal) add up to the shown change")
+
+
+func test_meter_slips_read_the_latest_settle_and_later_choices() -> void:
+	var state: Dictionary = _meter_fixture()
+	var untouched: Dictionary = state.duplicate(true)
+	var trust: Dictionary = TrainGauges.meter_why_model(state, "trust")
+	var tension: Dictionary = TrainGauges.meter_why_model(state, "tension")
+	_assert_meter_total(trust, 50.0, 46.0)
+	_assert_meter_total(tension, 40.0, 39.11)
+	assert_eq(trust["head"], "지난 정산 뒤 신임 50 → 46 (−4)")
+	assert_eq(tension["head"], "지난 정산 뒤 긴장 40 → 39 (−0.9)", "values as the bar shows them, the change to one decimal")
+	assert_almost_eq(float(_meter_row(tension, "card")["d"]), -3.3, 1e-6, "two choices share one cause")
+	assert_almost_eq(float(_meter_row(tension, "other")["d"]), 0.31, 1e-6)
+	assert_eq(_meter_row(tension, "mood")["word"], "집단들의 마음", "S1's exact word")
+	assert_eq(state, untouched, "the paper never changes game state or ledger rows")
+
+
+func test_meter_slips_use_the_clamped_ledger_shares_without_rounding_them() -> void:
+	var common = load("res://game/train/turn/turn_common.gd")
+	var state := {"trust": 1.0, "tension": 98.0}
+	common.bump(state, "trust", -2.5, "mood")
+	common.bump_parts(state, "tension", 10.0, [["mood", 5.0], ["short", 5.0], ["law", -1.0], ["calm.pot", -1.0], ["cast", 0.0]])
+	common.bump(state, "tension", -1.234567891, "card")
+	_assert_meter_total(TrainGauges.meter_why_model(state, "trust"), 1.0, 0.0)
+	_assert_meter_total(TrainGauges.meter_why_model(state, "tension"), 98.0, float(state["tension"]))
+	assert_eq(TrainGauges.meter_signed(-1.234567891), "−1.2")
+	assert_eq(TrainGauges.meter_signed(0.0), "+0")
+	assert_eq(TrainGauges.meter_signed(0.084166667), "+0.1", "a slip never prints a long tail")
+
+
+func test_meter_slips_match_the_real_meter_settle_and_a_later_card() -> void:
+	var common = load("res://game/train/turn/turn_common.gd")
+	for hungry: bool in [false, true]:
+		var sample: Array = _start()
+		var before: Dictionary = sample[0]
+		before["ledger"] = []
+		if hungry:
+			before["food"] = 0.0
+			before["tension"] = 98.0
+			for comm: String in sample[1]["COMMS"]:
+				before["comms"][comm]["rel"] = -25.0
+		var after: Dictionary = TrainTurn.meters(before, sample[1])
+		for key: String in ["trust", "tension"]:
+			common.bump(after, key, -0.123456789, "card")
+			_assert_meter_total(TrainGauges.meter_why_model(after, key), float(before[key]), float(after[key]))
+
+
+func test_meter_causes_are_summed_before_the_half_point_threshold_and_sorted() -> void:
+	var state := {"trust": 49.9, "ledger": [
+		{"k": "trust", "d": -2.0, "why": "mood"},
+		{"k": "trust", "d": 0.3, "why": "need"}, {"k": "trust", "d": 0.3, "why": "need"},
+		{"k": "trust", "d": 0.5, "why": "card"}, {"k": "trust", "d": -0.5, "why": "promise"},
+		{"k": "trust", "d": 0.49, "why": "vote"}, {"k": "trust", "d": 0.49, "why": "deal"},
+		{"k": "trust", "d": 0.32, "why": "leak"},
+	]}
+	var m: Dictionary = TrainGauges.meter_why_model(state, "trust")
+	var rows: Array = m["rows"]
+	assert_eq(rows.map(func(r: Dictionary) -> String: return r["why"]), ["mood", "other", "need", "card", "promise"])
+	assert_almost_eq(float(_meter_row(m, "need")["d"]), 0.6, 1e-6, "two small changes become one named cause")
+	assert_almost_eq(float(_meter_row(m, "other")["d"]), 1.3, 1e-6, "기타 participates in the sort")
+	_assert_meter_total(m, 50.0, 49.9)
+
+
+func test_drift_is_a_whole_settle_and_adjacent_settles_do_not_join() -> void:
+	var state := {"tension": 20.0, "ledger": [
+		{"k": "tension", "d": 8.0, "why": "mood"}, {"k": "tension", "d": 2.0, "why": "law"},
+		{"k": "tension", "d": -2.0, "why": "drift"}, {"k": "tension", "d": 1.0, "why": "card"},
+	]}
+	_assert_meter_total(TrainGauges.meter_why_model(state, "tension"), 21.0, 20.0)
+	state["ledger"] = [
+		{"k": "tension", "d": 8.0, "why": "mood"}, {"k": "tension", "d": 2.0, "why": "law"},
+		{"k": "tension", "d": 0.8, "why": "mood"}, {"k": "tension", "d": 0.2, "why": "law"},
+		{"k": "tension", "d": -0.5, "why": "card"},
+	]
+	_assert_meter_total(TrainGauges.meter_why_model(state, "tension"), 19.5, 20.0)
+
+
+func test_no_meter_rows_say_nothing_changed_and_missing_markers_keep_retained_changes() -> void:
+	for ledger: Variant in [null, [], [{"k": "food", "d": -3.0, "why": "ration"}]]:
+		for key: String in ["trust", "tension"]:
+			var m: Dictionary = TrainGauges.meter_why_model({"ledger": ledger}, key)
+			assert_eq(m["head"], "지난 정산 뒤 바뀐 것 없음")
+			assert_eq(m["rows"], [])
+	var retained := {"trust": 46.0, "ledger": [{"k": "trust", "d": -4.0, "why": "card"}]}
+	_assert_meter_total(TrainGauges.meter_why_model(retained, "trust"), 50.0, 46.0)
+	var trust: Dictionary = TrainGauges.meter_why_model(_meter_fixture(), "trust")
+	assert_eq(_meter_row(trust, "other")["text"], "기타 +0", "opposite small shares are not silently dropped")
+
+
+func _meter_strip() -> Control:
+	var strip = TrainGauges.new()
+	strip.g = _meter_fixture()
+	strip.t = _start()[1]
+	add_child_autofree(strip)
+	return strip
+
+
+func _tap_meter(strip: Control, key: String) -> void:
+	(strip.find_child("Tap_" + key, true, false) as Button).pressed.emit()
+
+
+func test_meter_buttons_draw_the_model_have_finger_targets_and_toggle() -> void:
+	var strip: Control = _meter_strip()
+	for key: String in ["trust", "tension"]:
+		var tap: Button = strip.find_child("Tap_" + key, true, false)
+		assert_gte(tap.size.x, 48.0 * UiFonts.K)
+		assert_gte(tap.size.y, 48.0 * UiFonts.K)
+		_tap_meter(strip, key)
+		var why: Control = strip.find_child("Why", true, false)
+		assert_not_null(why)
+		assert_eq(why.z_index, TrainGauges.OVER_PAPERS)
+		var m: Dictionary = TrainGauges.meter_why_model(strip.g, key)
+		assert_eq((why.find_child("Head", true, false) as Label).text, m["head"])
+		for row: Dictionary in m["rows"]:
+			assert_eq((why.find_child("Cause_" + row["why"], true, false) as Label).text, row["text"])
+		await wait_process_frames(2)
+		var scroll: ScrollContainer = why.find_child("SlipScroll", true, false)
+		var lines: Control = why.find_child("SlipRows", true, false)
+		assert_lte(lines.size.y, scroll.size.y + 0.5, "a short ledger is fully visible without scrolling")
+		_tap_meter(strip, key)
+		assert_null(strip.find_child("Why", true, false), "the same key folds it")
+	strip.g.erase("ledger")
+	_tap_meter(strip, "trust")
+	assert_eq((strip.find_child("Head", true, false) as Label).text, "지난 정산 뒤 바뀐 것 없음")
+
+
+func test_meter_slips_share_one_place_with_the_thermometer_and_keep_focus() -> void:
+	var strip: Control = _meter_strip()
+	for key: String in ["outside", "tension", "trust", "outside", "trust", "tension"]:
+		_tap_meter(strip, key)
+		assert_eq(strip._why_key, key)
+		assert_eq(strip._parts.find_children("Why", "Control", false, false).size(), 1, "only one slip")
+	strip.set_focus(["coal"])
+	assert_eq(strip._why_key, "tension")
+	assert_not_null(strip.find_child("Why", true, false), "focus redraw keeps the selected slip")
+	assert_true(strip._dim("trust"))
+	assert_false(strip._dim("coal"))
+	strip.refresh(_start()[0], _start()[1])
+	assert_eq((strip.find_child("Head", true, false) as Label).text, TrainGauges.meter_why_model(strip.g, "tension")["head"])
+	strip.g["climate"] = false
+	strip.refresh(strip.g, strip.t)
+	assert_not_null(strip.find_child("Why", true, false), "meter slips also work without a thermometer")
+
+
+func test_mouse_and_touch_off_the_meter_slip_fold_it_but_inside_does_not() -> void:
+	var strip: Control = _meter_strip()
+	var mouse := InputEventMouseButton.new()
+	mouse.button_index = MOUSE_BUTTON_LEFT
+	mouse.pressed = true
+	for key: String in ["trust", "tension"]:
+		_tap_meter(strip, key)
+		var why: Control = strip.find_child("Why", true, false)
+		mouse.position = why.get_global_transform_with_canvas() * Vector2(2, 2)
+		strip._input(mouse)
+		assert_not_null(strip.find_child("Why", true, false), "inside tilted paper stays open")
+		var tap: Control = strip.find_child("Tap_" + key, true, false)
+		mouse.position = tap.get_global_rect().get_center()
+		strip._input(mouse)
+		assert_not_null(strip.find_child("Why", true, false), "the key handles its own toggle")
+		mouse.position = Vector2(10, 600)
+		strip._input(mouse)
+		assert_null(strip.find_child("Why", true, false), "outside mouse folds")
+		_tap_meter(strip, key)
+		var touch := InputEventScreenTouch.new()
+		touch.pressed = true
+		touch.position = Vector2(10, 600)
+		strip._input(touch)
+		assert_null(strip.find_child("Why", true, false), "outside touch folds")
+
+
+func test_meter_paper_corners_stay_inside_wide_and_narrow_screens() -> void:
+	# The 839 mockup-px threshold, both requested sizes, and still smaller bands.
+	for resolution: Vector2i in [Vector2i(1688, 780), Vector2i(1280, 720), Vector2i(int(839.0 * UiFonts.K), 720), Vector2i(800, 600), Vector2i(640, 390)]:
+		var viewport := SubViewport.new()
+		viewport.size = resolution
+		add_child_autofree(viewport)
+		var strip = TrainGauges.new()
+		strip.g = _meter_fixture()
+		strip.t = _start()[1]
+		viewport.add_child(strip)
+		await wait_process_frames(1)
+		for key: String in ["trust", "tension"]:
+			_tap_meter(strip, key)
+			# Complete the entrance before measuring the tilted paper's four corners.
+			await wait_seconds(0.35)
+			var why: Control = strip.find_child("Why", true, false)
+			for point: Vector2 in [Vector2.ZERO, Vector2(why.size.x, 0), why.size, Vector2(0, why.size.y)]:
+				var screen: Vector2 = why.get_global_transform_with_canvas() * point
+				assert_gte(screen.x, 0.0)
+				assert_lte(screen.x, float(resolution.x))
+				assert_gte(screen.y, TrainGauges.BAND_H, "paper is below the bar")
+				assert_lte(screen.y, float(resolution.y))
+			_tap_meter(strip, key)
+
+
+func test_a_long_meter_ledger_scrolls_inside_the_paper_and_reflows_on_resize() -> void:
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(1280, 720)
+	add_child_autofree(viewport)
+	var strip = TrainGauges.new()
+	strip.g = _meter_fixture()
+	strip.t = _start()[1]
+	viewport.add_child(strip)
+	strip.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	strip.size = Vector2(1280, TrainGauges.BAND_H)
+	strip.g["ledger"] = [{"k": "trust", "d": -1.0, "why": "mood"}]
+	for why: String in TrainGauges.METER_WHY_NAME:
+		if why != "mood":
+			strip.g["ledger"].append({"k": "trust", "d": 0.7, "why": why})
+	_tap_meter(strip, "trust")
+	await wait_process_frames(2)
+	var paper: Control = strip.find_child("Why", true, false)
+	var scroll: ScrollContainer = paper.find_child("SlipScroll", true, false)
+	var lines: Control = paper.find_child("SlipRows", true, false)
+	assert_gt(lines.size.y, scroll.size.y, "many causes scroll vertically")
+	assert_lte(lines.size.x, scroll.size.x, "words wrap inside the paper")
+	strip.size = Vector2(700, TrainGauges.BAND_H)
+	strip._lay_out()
+	await wait_process_frames(2)
+	paper = strip.find_child("Why", true, false)
+	assert_eq(paper.get_meta("band_width"), 700.0, "an open slip reflows after resize")
+	assert_lte(paper.size.x, 700.0)
+	assert_lte(paper.position.y + paper.size.y, strip.get_viewport_rect().size.y)

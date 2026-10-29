@@ -19,6 +19,7 @@ const DeadPose = preload("res://game/actors/dead_pose.gd")
 const EatRules = preload("res://game/sim/eat_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const StopForm = preload("res://game/sim/stop_form.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
@@ -78,6 +79,7 @@ static func capture(game) -> Dictionary:
 	var out: Dictionary = {
 		"version": VERSION, "kind": KIND,
 		"stop_id": stop_id, "place": game.place, "mission": game.mission,
+		"stop_form": game.stop_form,
 		"seed": int(game.rng.seed), "phase": "ended" if game.ended else "field", "end_reason": String(said.get("endReason", "")),
 		"saved_at": game.clock.label(), "clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
 		"player_pid": game.player.pid if game.player != null else "",
@@ -210,6 +212,8 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 	opts["seed"] = int(save.get("seed", 0))
 	opts["place"] = String(save.get("place", ""))
 	opts["mission"] = String(save.get("mission", ""))
+	if save.has("stop_form"):
+		opts["stop_form"] = save["stop_form"]
 	if not (save.get("departure", {}) as Dictionary).is_empty():
 		opts["departure"] = (save["departure"] as Dictionary).duplicate(true)
 	if String(save.get("receipt_id", "")) != "":
@@ -225,6 +229,7 @@ static func exact(save: Dictionary) -> bool:
 
 ## Version 2 reconnects existing identities before restoring their clocks or callbacks.
 static func apply(game, save: Dictionary) -> void:
+	var form := StopForm.resolve(save if save.has("stop_form") else game.opts, String(game.data["place_kind"]))
 	game.skip_arrival()
 	game.begin_resume()
 	game.clock.elapsed = float(save["clock"]["elapsed"])
@@ -246,6 +251,7 @@ static func apply(game, save: Dictionary) -> void:
 	game.actions.coal_spent = float(save["coal"]["spent"])
 	if exact(save):
 		_apply_exact(game, save)
+		game.set_stop_form(form)
 		return
 	var boxes: Dictionary = game.data.get("containers", {})
 	for id in save.get("containers", {}):
@@ -265,6 +271,7 @@ static func apply(game, save: Dictionary) -> void:
 	game.cam_focus = game.player.position
 	game._update_camera(1.0)
 	_refresh_restored_view(game)
+	game.set_stop_form(form)
 
 
 static func _put_person(p, row: Dictionary) -> void:
@@ -309,6 +316,12 @@ static func _runtime(game) -> Dictionary:
 		out["levels"][level] = level_state
 	for id in game.data.get("spots", {}):
 		out["spots"][id] = _record(game, game.data["spots"][id])
+	# Coal dug from a wagon (field_ai.gd _dug, field_work.gd) is in the map's own rows, which a
+	# restart builds afresh: each wagon's coal, in the map's order.
+	var wagon_coal: Array = []
+	for wagon: Dictionary in game.data.get("wagons", []):
+		wagon_coal.append(float(wagon.get("coal", 0.0)))
+	out["wagon_coal"] = wagon_coal
 	return out
 
 
@@ -488,6 +501,10 @@ static func _apply_exact(game, save: Dictionary) -> void:
 				into.erase(id)
 		for id in rows:
 			into[id] = (rows[id] as Dictionary).duplicate(true)
+	var wagons: Array = game.data.get("wagons", [])
+	var wagon_coal: Array = runtime.get("wagon_coal", [])
+	for i in mini(wagons.size(), wagon_coal.size()):
+		wagons[i]["coal"] = float(wagon_coal[i])
 	for level in runtime["levels"]:
 		var grid = game.levels[level]
 		var row: Dictionary = runtime["levels"][level]

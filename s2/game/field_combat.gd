@@ -15,6 +15,7 @@ const BodyState = preload("res://game/sim/body_state.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
 const Motion = preload("res://game/sim/motion.gd")
+const HitFeel = preload("res://game/hit_feel.gd")
 
 const SHOVE_REACH: float = 1.3
 const SHOVE_COS: float = 0.3
@@ -73,6 +74,8 @@ const ALLY_TURN_DEG: float = 35.0
 const BLOW_BREAKS: Array = ["search", "salvage", "pry", "kick", "glass", "lid", "snow", "fire", "craft", "rub", "splint", "treat", "eat", "wear", "take", "loot"]
 
 var game
+## Decision 501: only live inside _strike -> swing; empty between calls.
+var _blow_now: Dictionary = {}
 ## The player's shove pressed during a blow: it goes once the blow is over
 ## (decision 420). Short-lived, never saved.
 var shove_after: Dictionary = {}
@@ -110,6 +113,7 @@ var melee_tally := {"swung": 0, "landed": 0, "missed": 0, "air": 0,
 ##            1 dull, 2 about to break; -1 with no melee weapon
 ##   at       where the one struck is seen (seen_pos), or the air ahead
 ##   by_player  the player struck it
+##   power/tier/counter  decision 501: feel only; -1/-1/false when absent
 signal struck(info: Dictionary)
 ## Not put down by a crowd again before this (decision 474 J1: up and clear first).
 const CROWD_FALL_META: StringName = &"crowd_fall_until"
@@ -629,16 +633,19 @@ func stomps(p, at) -> bool:
 ## One stomp lands on a fallen one. It takes STOMPS_TO_END of them; what it
 ## has taken stays with it if it gets up meanwhile.
 func stomp(p, z: Dictionary) -> void:
+	var blow: Dictionary = _power_before(p, z, "stomp")
 	p.swing_t = STOMP_TIME / float(p.mults()["swing"])
 	p.body.add_fatigue(STOMP_FATIGUE)
 	game.make_sound(z["pos"], SimNoise.Level.QUIET, "melee", p)
 	z["stomped"] = int(z.get("stomped", 0)) + 1
 	var seen: Vector3 = game.zombies.seen_pos(z)
 	var ended: bool = int(z["stomped"]) >= STOMPS_TO_END
-	game.feel.stomped(p, seen, ended)
+	blow = HitFeel.resolved_power(blow, "finish" if ended else "body")
+	_note_power(z, blow)
+	game.feel.stomped(p, seen, ended, float(blow.get("q", -1.0)), int(blow.get("tier", -1)))
 	if ended:
 		_kill(p, z, "")
-	_struck(p, seen, "stomp", "boot", "downed", "finish" if ended else "body", -1)
+	_struck(p, seen, "stomp", "boot", "downed", "finish" if ended else "body", -1, blow)
 
 
 func _stomp_reaches(p, z: Dictionary) -> bool:
@@ -659,9 +666,15 @@ func _strike(p, at) -> void:
 		# Read before the blow: a weapon worn through by it leaves the hand.
 		var wid: String = p.weapon_id()
 		var was: String = at["state"]
+		_blow_now = _power_before(p, at, "swing")
+		# Decision 501 / M1: carry the result even when power is off.
+		_blow_now["result"] = ""
 		swing(p, at)
+		var blow: Dictionary = _blow_now
+		_blow_now = {}
+		_note_power(at, blow)
 		var now_state: String = at["state"]
-		game.feel.landed(p, game.zombies.seen_pos(at), wid, now_state != was and (now_state == "dead" or now_state == "downed"), was == "downed" or was == "rising")
+		game.feel.landed(p, game.zombies.seen_pos(at), wid, now_state != was and (now_state == "dead" or now_state == "downed"), was == "downed" or was == "rising", float(blow.get("q", -1.0)), int(blow.get("tier", -1)), blow.get("result", "") == "blocked")
 	else:
 		swing_person(p, at)
 
@@ -740,6 +753,7 @@ func swing(p, z: Dictionary) -> void:
 	z["hit_hold"] = 0.0   # a body hit below holds it longer (BODY_STUN)
 	z["hit_by"] = p.position
 	z["hit_way"] = String(p.get_meta(Pose.BLOW_WAY, ""))
+	z.erase("hit_power")   # Decision 501: a direct, unscaled swing has no old power.
 	var state: String = z["state"]
 	var seen: Vector3 = game.zombies.seen_pos(z)
 	var target := target_of(state)
@@ -845,9 +859,34 @@ func _edge_of(p) -> int:
 	return W.condition_level(float(p.hands[0]["condition"]))
 
 
-func _struck(p, at: Vector3, way: String, wid: String, target: String, result: String, edge: int) -> void:
+## Decision 501: all reads precede fatigue, wear, sound and the target's reaction.
+func _power_before(p, z: Dictionary, way: String, melee_hit: float = -1.0) -> Dictionary:
+	if not bool(game.opts.get("hit_power", true)):
+		return {}
+	var d: Dictionary = W.get_data(p.weapon_id())
+	if way == "swing" and d.get("kind", "") != "melee":
+		return {}
+	if melee_hit < 0.0:
+		melee_hit = HitFeel.body_melee(p.body, p.mult_ctx())
+	var counter: bool = HitFeel.countering(String(z["state"]), float(z.get("dash_t", 0.0)), p.position.distance_to(game.zombies.seen_pos(z)))
+	return HitFeel.blow_power(float(d.get("weight", 0.0)), int(p.skills.get("strength", 5)), melee_hit, p.body.breath_locked, behind(z, p.position), counter, _edge_of(p), way)
+
+
+## Decision 501: only the picture reads this optional saved field.
+func _note_power(z: Dictionary, blow: Dictionary) -> void:
+	if float(blow.get("power", -1.0)) >= 0.0:
+		z["hit_power"] = blow["power"]
+	else:
+		z.erase("hit_power")
+
+
+func _struck(p, at: Vector3, way: String, wid: String, target: String, result: String, edge: int, blow: Dictionary = {}) -> void:
+	if not _blow_now.is_empty() and way == "swing":
+		_blow_now = HitFeel.resolved_power(_blow_now, result)
+		blow = _blow_now
 	struck.emit({"way": way, "weapon": wid, "target": target, "result": result, "edge": edge,
-		"at": at, "by_player": p == game.player})
+		"at": at, "by_player": p == game.player, "power": float(blow.get("power", -1.0)),
+		"tier": int(blow.get("tier", -1)), "counter": bool(blow.get("counter", false))})
 
 
 ## A blow or a stomp that came round on no one: the one aimed at moved off.
@@ -920,6 +959,8 @@ func shove(p) -> void:
 		return
 	var rng: RandomNumberGenerator = game.rng
 	var m: Dictionary = p.mults()
+	# Decision 501: one body read before this shove spends fatigue.
+	var melee_hit: float = HitFeel.body_melee(p.body, p.mult_ctx()) if bool(game.opts.get("hit_power", true)) else -1.0
 	p.swing_t = SHOVE_TIME / float(m["swing"])
 	# Every shove is seen, the reflex ones (not drawn back first) too: the arms out and back.
 	p.lunge_t = SHOVE_LUNGE
@@ -940,12 +981,14 @@ func shove(p) -> void:
 		# Walls, shut doors and whole glass stop a shove too (a grabber is on you, so it counts).
 		if not grabbing and melee_blocked(p, z["pos"]):
 			continue
+		var blow: Dictionary = _power_before(p, z, "shove", melee_hit)
 		if grabbing:
 			p.release_grab(z)
 		var seen: Vector3 = game.zombies.seen_pos(z)
 		var target := target_of(String(z["state"]))
 		game.zombies.release(z, p.position, rng.randf() < SHOVE_KNOCK)
-		_struck(p, seen, "shove", p.weapon_id(), target, "body", -1)
+		_note_power(z, blow)
+		_struck(p, seen, "shove", p.weapon_id(), target, "body", -1, blow)
 		hit += 1
 	if hit == 0:
 		_struck(p, p.position + forward * SHOVE_REACH, "shove", p.weapon_id(), "", "miss", -1)

@@ -81,6 +81,26 @@ func test_safe_and_limit_boundaries() -> void:
 	assert_eq(c.label(), "D1 18:00")
 
 
+func test_each_clock_uses_its_own_safe_and_limit_values() -> void:
+	var remote = FieldClock.new()
+	var ordinary = FieldClock.new()
+	remote.safe_sec = 1800.0
+	remote.limit_sec = 2400.0
+	assert_eq(ordinary.safe_sec, FieldClock.SAFE_SEC)
+	assert_eq(ordinary.limit_sec, FieldClock.LIMIT_SEC)
+	remote.elapsed = 1799.99
+	assert_false(remote.past_safe())
+	remote.elapsed = 1800.0
+	assert_true(remote.past_safe())
+	assert_false(remote.past_limit())
+	ordinary.elapsed = remote.elapsed
+	assert_true(ordinary.past_limit())
+	remote.elapsed = 2399.99
+	assert_false(remote.past_limit())
+	remote.elapsed = 2400.0
+	assert_true(remote.past_limit())
+
+
 func test_minutes_label_of_other_times() -> void:
 	var c = FieldClock.new()
 	assert_eq(c.minutes_label(0.0), "D1 10:30")

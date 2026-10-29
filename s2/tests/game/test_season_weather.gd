@@ -82,20 +82,24 @@ func test_the_picture_edges_are_the_tables() -> void:
 
 
 ## 코디네이터 10-25: the stop scene, the field and the train wear the same
-## weather, and the field's air is the stretch's temperature (it was -14 C).
+## weather, and the field's air is the stretch's temperature (it was -14 C). Decision 494:
+## the slice's first stop stands at 54 km, on the table's fifth stretch.
 func test_the_slice_stop_wears_one_weather_on_the_train_the_scene_and_the_field() -> void:
 	var f = SliceFlow.new()
-	# Seed 13 draws sleet for the stop (stretch 2, -1 C; seed 12 is clear on the route's flow, 474 N2).
-	f.opts = {"skip_field": true, "seed": 13, "cinema": false}
+	# Seed 7 draws sleet for the stop (the fifth stretch, +6 C, so it falls as rain; the
+	# second stretch, the stop's row before, is fog on that seed: S1_DRAWS).
+	f.opts = {"skip_field": true, "seed": 7, "cinema": false}
 	add_child_autofree(f)
 	f.next()
 	assert_eq(f.current(), "stop_pick")
-	var w: Dictionary = f.stop_weather(2)
+	var at: int = f._season_seg(2)
+	assert_eq(at, 5, "the first stop's stretch of the table")
+	var w: Dictionary = f.stop_weather(at)
 	assert_eq(String(w["weather"]), "sleet")
 	var o: Dictionary = f._field_opts()
 	assert_eq(o["look"], w["look"], "the field and the scene get the table's weather")
 	assert_eq(o["weather"], w["rules"])
-	assert_eq(String(f.outside_look({}, 2)["falls"]), "sleet", "the train outside at the stop")
+	assert_eq(String(f.outside_look({}, at)["falls"]), "rain", "the train outside at the stop")
 	var scene: Dictionary = StopCinema.stop_look(o)
 	var field = FieldGame.new()
 	var fo: Dictionary = o.duplicate()
@@ -104,8 +108,8 @@ func test_the_slice_stop_wears_one_weather_on_the_train_the_scene_and_the_field(
 	add_child_autofree(field)
 	field.set_process(false)
 	assert_eq(field.look_kinds, w["look"])
-	assert_eq(field.weather.kinds, ["sleet"] as Array[String], "the rules fall as the picture does")
-	assert_almost_eq(field.weather.ambient_c, float(SeasonTable.row(2)["temp"]), 0.001, "the field's air is the stretch's")
+	assert_eq(field.weather.kinds, ["rain"] as Array[String], "the rules fall as the picture does")
+	assert_almost_eq(field.weather.ambient_c, float(SeasonTable.row(at)["temp"]), 0.001, "the field's air is the stretch's")
 	assert_almost_eq(OutsideTemp.of(o, field.cold, field.side), field.weather.ambient_c, 0.001, "the scene's air is the same")
 	assert_eq(String(field.atmo["falls"]), String(scene["look"]["falls"]), "the scene and the field: what falls")
 

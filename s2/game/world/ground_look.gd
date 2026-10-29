@@ -24,20 +24,23 @@ const PER_CELL: int = 3
 const SPREAD: float = 0.3
 
 ## Kind -> [size (x, y, z: the long side along x), colour as seen (sRGB)].
-## Dark, muted greys and browns, no bright ones (white snow and pale floors
-## round them). world_vis.gdshader takes a vertex colour as linear, so pieces()
-## turns these into linear; written as they are, the check shots lost them on
-## the floorboards.
+## Dark, muted greys and browns and one pale paper, none at the floors' own
+## middle greys: on a yard's dry grass, a street's asphalt, room boards (late
+## autumn and the dimmer deep winter) and deep snow each stands off the floor by
+## 0.085 or more of screen brightness (the furniture's gauge). world_vis.gdshader
+## reads a vertex colour as sRGB and makes it linear itself (floor_to_linear, as
+## it does the floors), so pieces() hands these over as they are; made linear
+## here as well, they were darkened twice and drawn near black.
 const LOOKS: Dictionary = {
 	"weapon": [Vector3(0.75, 0.06, 0.1), Color(0.2, 0.2, 0.21)],
-	"garment": [Vector3(0.5, 0.04, 0.38), Color(0.25, 0.26, 0.29)],
-	"cloth": [Vector3(0.3, 0.03, 0.24), Color(0.33, 0.32, 0.3)],
-	"paper": [Vector3(0.2, 0.01, 0.14), Color(0.52, 0.5, 0.45)],
-	"board": [Vector3(0.9, 0.04, 0.18), Color(0.36, 0.27, 0.18)],
-	"sack": [Vector3(0.34, 0.22, 0.26), Color(0.42, 0.36, 0.26)],
-	"small": [Vector3(0.2, 0.14, 0.2), Color(0.28, 0.28, 0.29)],
-	"crate": [Vector3(0.36, 0.24, 0.28), Color(0.34, 0.26, 0.17)],
-	"big": [Vector3(0.5, 0.34, 0.4), Color(0.3, 0.23, 0.15)],
+	"garment": [Vector3(0.5, 0.04, 0.38), Color(0.21, 0.22, 0.25)],
+	"cloth": [Vector3(0.3, 0.03, 0.24), Color(0.27, 0.26, 0.24)],
+	"paper": [Vector3(0.2, 0.01, 0.14), Color(0.6, 0.58, 0.52)],
+	"board": [Vector3(0.9, 0.04, 0.18), Color(0.31, 0.23, 0.15)],
+	"sack": [Vector3(0.34, 0.22, 0.26), Color(0.23, 0.19, 0.13)],
+	"small": [Vector3(0.2, 0.14, 0.2), Color(0.22, 0.22, 0.23)],
+	"crate": [Vector3(0.36, 0.24, 0.28), Color(0.29, 0.22, 0.14)],
+	"big": [Vector3(0.5, 0.34, 0.4), Color(0.26, 0.2, 0.13)],
 }
 const PAPER_IDS: Dictionary = {"document": true, "info_telegraph": true, "info_timetable": true}
 const CLOTH_IDS: Dictionary = {"cloth": true, "junk_rag": true, "bandage": true}
@@ -98,7 +101,7 @@ static func pieces(items: Array) -> Array:
 		# Vertex alpha 0 reads as under a roof in world_vis.gdshader: no snow,
 		# rain or ground grain over it, so a grey thing does not go white and
 		# vanish (what lies buried shines instead, decision 423 (11)).
-		var color: Color = (look[1] as Color).srgb_to_linear()
+		var color: Color = look[1]
 		color.a = 0.0
 		out.append({"lv": lv, "size": size, "at": at + Vector3(0, size.y / 2.0, 0), "color": color})
 	return out

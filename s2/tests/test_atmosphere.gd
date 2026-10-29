@@ -401,8 +401,8 @@ func test_params_are_every_global_and_keep_the_haze_grey() -> void:
 
 func test_the_sight_mask_leaves_the_day_readable() -> void:
 	# Ground out of sight stays readable by day and sinks after dark (469 D3):
-	# never seen 0.55 and seen before 0.75 at noon; dimmed less at night (0.60,
-	# 0.78), where the dark is the night's own.
+	# never seen 0.70 and seen before 0.85 at noon; dimmed less at night (0.80,
+	# 0.90), where the dark is the night's own.
 	var t := Atmosphere.sun_times(0.0)
 	var day: Vector2 = Atmosphere.params(Atmosphere.look(12.0, ["overcast"], "K1", 0.0))["fx_sight"]
 	var dusk: Vector2 = Atmosphere.params(Atmosphere.look(t.y - 0.4, ["clear"], "K1", 0.0))["fx_sight"]
@@ -725,6 +725,21 @@ func test_region_looks_keep_linear_luminance_and_light_energy() -> void:
 			assert_almost_eq(a_color.srgb_to_linear().get_luminance(), b_color.srgb_to_linear().get_luminance(), 0.005, "%s %s luminance" % [pair, key])
 		for key: String in ["sun_energy", "ambient_energy"]:
 			assert_almost_eq(float(a[key]), float(b[key]), 0.0001, "%s %s energy" % [pair, key])
+
+
+func test_region_looks_keep_the_light_of_a_sun_at_full_red() -> void:
+	# The dawn sun is already at full red, so a warm band's tint cannot keep its
+	# luminance in the colour alone (K11 lost 3.5 %): what the gamut takes comes
+	# back as energy, and every band lights the ground as K1 does (colour x energy).
+	for cold: float in [0.0, 1.0]:
+		for hour: float in [Atmosphere.sun_times(cold).x, 12.0]:
+			var plain: Dictionary = Atmosphere.look(hour, ["clear"], "K1", cold)
+			for i: int in range(2, 13):
+				var band: Dictionary = Atmosphere.look(hour, ["clear"], "K%d" % i, cold)
+				for pair: Array in [["sun_color", "sun_energy"], ["ambient_color", "ambient_energy"]]:
+					var want: float = Color(plain[pair[0]]).srgb_to_linear().get_luminance() * float(plain[pair[1]])
+					var got: float = Color(band[pair[0]]).srgb_to_linear().get_luminance() * float(band[pair[1]])
+					assert_almost_eq(got / maxf(want, 0.0001), 1.0, 0.002, "K%d %s at %.2f h, cold %s" % [i, pair[0], hour, cold])
 
 
 func _region_rgb_distance(a: Color, b: Color) -> float:

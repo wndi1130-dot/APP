@@ -14,6 +14,17 @@ func test_only_the_fifth_stop_keeps_fire_out() -> void:
 	assert_eq(with_flag, [5], "아일렌부르크 물데강 앞 화물 구내(첫 구간 다섯째 정차)만")
 
 
+## Decision 494: a first-leg stop reads the season table's stretch of 13 km it stands in
+## (counted up, as the journey map), not the row with its own number.
+func test_each_stop_reads_the_season_stretch_it_stands_in() -> void:
+	var rows: Array = []
+	for stop in range(1, 6):
+		rows.append(RouteStops.season_seg(stop))
+	assert_eq(rows, [5, 10, 11, 13, 23], "54·125·142·163·287 km")
+	assert_eq(RouteStops.season_seg(0), 5, "before the first: the first's")
+	assert_eq(RouteStops.season_seg(9), 23, "past the fifth: the fifth's")
+
+
 func test_the_stop_made_at_the_fifth_place_carries_it_on_its_map() -> void:
 	for place: String in ["freight_01", "freight_04", "factory_02"]:
 		assert_true(bool(_game(place, 5).data.get("no_fire", false)), place + ": 다섯째 정차면 어느 지도든 불 없음")

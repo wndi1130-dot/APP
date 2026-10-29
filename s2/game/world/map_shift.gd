@@ -86,7 +86,7 @@ static func _moved(v, rows: int, key: String):
 ## A direction stays a direction; dictionary keys and embedded positions move.
 ## refresh_ground false leaves the ground floor's paths to a caller that builds on it
 ## and refreshes once after (map_ring.gd, side_path.gd), as the other floors are refreshed here.
-static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int, refresh_ground: bool = true) -> Dictionary:
+static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int, refresh_ground: bool = true, carry_paths: bool = false) -> Dictionary:
 	assert(mini(mini(left, top), mini(right, bottom)) >= 0)
 	if left + top + right + bottom == 0:
 		return data
@@ -107,7 +107,22 @@ static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int,
 		n.doors = _offset(g.doors, offset, "")
 		n.windows = _offset(g.windows, offset, "")
 		n.floor_glass = _offset(g.floor_glass, offset, "")
-		if int(lv) != 0 or refresh_ground:
+		# A cell's walk caches read only the cell (its solid, door or window), so when the
+		# caller vouches every cell's caches are right (`carry_paths`: a finished map; a map
+		# still being built writes solids after a refresh) they move with their cells, the
+		# added band taking the empty kind's, and the path grids come from them in a few
+		# calls (FieldGrid.adopt_paths).
+		if carry_paths and g.paths_ready():
+			var band := FieldGrid.new(1, 1)
+			band.solid[0] = empty
+			band.floor[0] = FieldGrid.Floor.SNOW
+			band.refresh_paths()
+			n.opq = _rows(g.opq, g.width, band.opq[0], left, top, right, bottom)
+			n.walk_people = _rows(g.walk_people, g.width, band.walk_people[0], left, top, right, bottom)
+			n.walk_dead = _rows(g.walk_dead, g.width, band.walk_dead[0], left, top, right, bottom)
+			if int(lv) != 0 or refresh_ground:
+				n.adopt_paths()
+		elif int(lv) != 0 or refresh_ground:
 			n.refresh_paths()
 		n.revision = g.revision
 		levels[lv] = n

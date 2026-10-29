@@ -569,3 +569,56 @@ func test_no_cutaway_body_is_drawn_whole_in_the_home_cutaway() -> void:
 		assert_false(key.begins_with(bodies[0] + ":"), key)
 	assert_true(marked._batches.has(bodies[0] + ":0:false:0") or marked._batches.keys().any(func(k: String) -> bool: return k.begins_with(bodies[0] + ":0:false:")), "drawn whole")
 	assert_eq(marked.get_meta("model_count"), plain.get_meta("model_count"))
+
+
+## 비(mood 10-30, 기획서 weather_fx: 나무·천 0.6~0.8, 쇠·유리 0.05~0.1): 팔레트로 칠한 몸은 칸마다 젖는
+## 몫이 다르다 — 판자·방수포는 젖어 어두워지고 칠한 쇠·지붕·유리는 거의 그대로다.
+func test_rain_darkens_wood_and_cloth_but_not_painted_metal_or_glass() -> void:
+	# The kit's palette order is the modelling script's.
+	var script_path: String = ProjectSettings.globalize_path("res://").path_join("../tools/blender/train_exterior.py")
+	var source := FileAccess.get_file_as_string(script_path)
+	assert_false(source.is_empty(), "the modelling script is read")
+	var block := source.substr(source.find("PALETTE = {"))
+	block = block.substr(0, block.find("\n}"))
+	var names: Array[String] = []
+	for found in RegEx.create_from_string("\"(\\w+)\": \\(").search_all(block):
+		names.append(found.get_string(1))
+	assert_eq(names, Kit.PALETTE_NAMES, "the palette's names in the script's order")
+	# Each cell sits where coach_worn's own palette has its colour (sRGB bytes from the script).
+	var paint: ShaderMaterial = Kit.asset_meshes("coach_worn")[0][0]["material"]
+	var palette: Image = (paint.get_shader_parameter("albedo_tex") as Texture2D).get_image()
+	if palette.is_compressed():
+		palette.decompress()
+	for colour: Array in [["plank", 112, 88, 64], ["iron", 38, 38, 40], ["glass", 30, 38, 46], ["tarp", 102, 98, 78]]:
+		var i: int = Kit.PALETTE_NAMES.find(colour[0])
+		var cell: Color = palette.get_pixel((i % 8) * 32 + 16, floori(i / 8.0) * 32 + 16)
+		assert_eq([cell.r8, cell.g8, cell.b8], [colour[1], colour[2], colour[3]], String(colour[0]) + "'s cell in the palette")
+	# Read back from the porosity image, against values written here, not the kit's own table.
+	var porous: Image = Kit.porosity_texture().get_image()
+	var expect := {
+		"plank": [0.6, 0.8], "plank_dark": [0.6, 0.8], "plank_grey": [0.6, 0.8], "crate": [0.6, 0.8], "tarp": [0.6, 0.8],
+		"green": [0.05, 0.1], "maroon": [0.05, 0.1], "blue": [0.05, 0.1], "roof": [0.05, 0.1], "roof_dark": [0.05, 0.1],
+		"iron": [0.05, 0.1], "steel": [0.05, 0.1], "glass": [0.0, 0.05], "glass_hi": [0.0, 0.05],
+	}
+	for cell_name: String in expect:
+		var i: int = Kit.PALETTE_NAMES.find(cell_name)
+		var value: float = porous.get_pixel(i % 8, floori(i / 8.0)).r
+		assert_between(value, float(expect[cell_name][0]) - 0.005, float(expect[cell_name][1]) + 0.005, cell_name)
+	# Every ready asset has meshes, and every material carries its porosity.
+	var assets: Dictionary = Kit.catalog()["assets"]
+	for id: String in assets:
+		if String(assets[id].get("status", "")) != "ready":
+			continue
+		var library: Array = Kit.asset_meshes(id)
+		assert_gt((library[0] as Array).size(), 0, id + " has meshes")
+		var by_palette: bool = String(assets[id].get("source", "")) == "tools/blender/train_exterior.py"
+		for lod: int in 2:
+			for row: Dictionary in library[lod]:
+				var material: ShaderMaterial = row["material"]
+				if by_palette:
+					assert_eq(material.get_shader_parameter("porosity_tex"), Kit.porosity_texture(), id)
+					assert_almost_eq(float(material.get_shader_parameter("porosity")), 1.0, 0.001, id)
+				else:
+					assert_null(material.get_shader_parameter("porosity_tex"), id)
+					var want: float = 0.6 if id in ["plank_band", "plank_patches"] else 0.1
+					assert_almost_eq(float(material.get_shader_parameter("porosity")), want, 0.001, id)

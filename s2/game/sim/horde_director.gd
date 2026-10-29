@@ -34,7 +34,8 @@ const ENTRIES := ["culvert", "manhole", "east_track", "north_road", "south_road"
 const ENTRY_WEIGHTS := {"culvert": 0.25, "manhole": 0.15, "east_track": 0.2, "north_road": 0.1, "south_road": 0.075, "cellar": 0.15, "east_road": 0.075}
 const SEWERS := ["culvert", "manhole", "cellar"]
 const ENTRY_NAMES := {"culvert": "급수탑 밑 암거", "manhole": "거리 맨홀", "east_track": "동쪽 선로 끝", "north_road": "북쪽 길", "south_road": "남쪽 길", "cellar": "공동주택 지하실 배수구", "east_road": "남동쪽 길"}
-const ENTRY_PHRASES := {"culvert": "급수탑 밑 암거에서 올라온다", "manhole": "거리 맨홀에서 올라온다", "east_track": "동쪽 선로 끝으로 온다", "north_road": "북쪽 길로 온다", "south_road": "남쪽 길로 온다", "cellar": "공동주택 지하실에서 올라온다", "east_road": "남동쪽 길로 온다"}
+## Said by the driver to the chief, so polite (field_game.driver_forecast).
+const ENTRY_PHRASES := {"culvert": "급수탑 밑 암거에서 올라옵니다", "manhole": "거리 맨홀에서 올라옵니다", "east_track": "동쪽 선로 끝으로 옵니다", "north_road": "북쪽 길로 옵니다", "south_road": "남쪽 길로 옵니다", "cellar": "공동주택 지하실에서 올라옵니다", "east_road": "남동쪽 길로 옵니다"}
 const FIRST_ENTRY := "east_track"
 
 ## Forecast bands, in game minutes left.
@@ -42,6 +43,7 @@ const HOUR_MIN := 50.0
 const HALF_MIN := 25.0
 
 var next_arrival: float = FIRST_INTERVAL
+var limit_sec: float = FieldClock.LIMIT_SEC
 ## Hordes arrived so far.
 var index: int = 0
 var last_arrival: float = -INF
@@ -185,7 +187,6 @@ func pressure(now: float) -> float:
 	return clampf(1.0 - seconds_to_next(now) / interval, 0.0, 1.0)
 
 
-## Calling range grows with time on the field: 1.0 -> 1.6 at 1800 s.
 ## Take the ways in from a map's data: "entries" (name -> cells) with, where
 ## the map gives them, "entry_weights", "entry_names" and "first_entry"; the
 ## holes of "manholes" are its sewers. Left out: every way weighs the same and
@@ -227,8 +228,9 @@ func sewer(entry: String) -> bool:
 	return sewers.has(entry)
 
 
+## Calling range reaches 1.6 at this stop's limit.
 func call_range_mult(now: float) -> float:
-	return 1.0 + CALL_RANGE_GROWTH * clampf(now / FieldClock.LIMIT_SEC, 0.0, 1.0)
+	return 1.0 + CALL_RANGE_GROWTH * clampf(now / limit_sec, 0.0, 1.0)
 
 
 ## Radio forecast. precision 0: direction + rough time. 1 (signal box): direction, time to 15 min, size.
@@ -243,7 +245,7 @@ func forecast(now: float, precision: int, clock) -> String:
 			when = "한 시간쯤"
 		elif left_min >= HALF_MIN:
 			when = "반 시간쯤"
-		return "%s, %s." % [phrases.get(next_entry, where + ("에서 온다" if where.ends_with("쪽") else " 쪽에서 온다")), when]
+		return "%s, %s." % [phrases.get(next_entry, where + ("에서 옵니다" if where.ends_with("쪽") else " 쪽에서 옵니다")), when]
 	var at_min: float = _arrival_minutes(maxf(next_arrival, now), clock)
 	var rounded: int = roundi(at_min / 15.0) * 15
 	var hh: int = floori(rounded / 60.0) % 24

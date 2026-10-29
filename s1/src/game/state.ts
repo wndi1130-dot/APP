@@ -314,6 +314,7 @@ export interface Game {
   /** 생필품(결정 490). 켜지 않은 판에는 재고·이번 정산의 배급 몫도 없다. */
   supOn?: boolean;
   sup?: number;
+  supFine?: number;
   supCover?: Partial<Record<Comm, number>>;
   trust: number;
   tension: number;
@@ -424,6 +425,8 @@ export interface Game {
   elderHeld?: { who: string; comm: Comm; at: number; until: number } | null;
   /** 스스로 열차에서 내린 사람 */
   left?: string[];
+  /** 필드에 남겨질 때 칸 인구 하한 1에 막혀 빼지 못한 수(칸별). 그 사람이 구조되어 돌아오면 그만큼은 다시 더하지 않는다. */
+  leftShort?: Partial<Record<Comm, number>>;
   /** 승강장에 남은 사람(출발 확인 쪽지, presentation_motion 5b.5). near면 쪽지 첫 줄에 '무리가 가깝다'. 출발하면 비운다 */
   platform?: { names: string[]; near: boolean };
   /** 두고 떠난 사람의 흔적(결정 425 카드 3, prologue.ts): 뒤 정차에 한 번 보이고 다시 태울 길이 한 번 열린다. shown이면 다시 안 뜬다 */

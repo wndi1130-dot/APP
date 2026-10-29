@@ -29,6 +29,7 @@ const PROP_CULL_DISTANCE: float = 39.0
 const PROP_LOD_DISTANCE: float = 18.0
 const PROP_REFRESH_SECONDS: float = 0.1
 const FxState = preload("res://fx/fx_state.gd")
+const Atmosphere = preload("res://fx/atmosphere.gd")
 const ParticlePool = preload("res://fx/particle_pool.gd")
 const PUFF_SHADER = preload("res://fx/shaders/blood_burst.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
@@ -145,6 +146,9 @@ func setup(map_data: Dictionary) -> void:
 	material.set_shader_parameter("vis", vis_texture)
 	material.set_shader_parameter("map_size", Vector2(grid.width, grid.height))
 	material.set_shader_parameter("lamp_color", FxState.LAMP)
+	material.set_shader_parameter("ground_layers", preload("res://fx/textures/ground/ground_layers.png"))
+	material.set_shader_parameter("ground_layers_on", true)
+	material.set_shader_parameter("region_band", int(Atmosphere.region_key(str(data.get("region_band", Atmosphere.DEFAULT_REGION))).substr(1)))
 	win_image = Image.create(grid.width * LampLight.WINDOW_TEXELS, grid.height * LampLight.WINDOW_TEXELS, false, Image.FORMAT_R8)
 	win_texture = ImageTexture.create_from_image(win_image)
 	material.set_shader_parameter("win", win_texture)
@@ -722,12 +726,16 @@ func _bake_container(st: SurfaceTool, id: String) -> void:
 
 
 ## The empty mark's four corners round a box's cell, a cold pale grey low on the
-## floor (a stand-in; art3d gives it its look). Vertex colours are linear here.
-const EMPTY_MARK := Color(0.70, 0.74, 0.80)
+## floor (a stand-in; art3d gives it its look). Vertex colours are sRGB here, as
+## the floors' are (world_vis.gdshader makes them linear). Alpha 0: no snow, rain
+## or ground grain over it (that shader reads vertex alpha as open to the sky), so
+## the mark reads the same in every season, indoors and out, as the things on
+## the ground do (decision 472).
+const EMPTY_MARK := Color(0.58, 0.62, 0.70, 0.0)
 
 
 func _empty_corners(st: SurfaceTool, at: Vector3) -> void:
-	var c := EMPTY_MARK.srgb_to_linear()
+	var c := EMPTY_MARK
 	for sx: float in [-1.0, 1.0]:
 		for sz: float in [-1.0, 1.0]:
 			var corner := at + Vector3(sx * 0.42, 0.012, sz * 0.42)

@@ -172,7 +172,7 @@ func _mark(goal: String, part: String) -> void:
 	game.hud.toast(mission.progress_line(goal))
 	if mission.all_done() and not was_done:
 		# Told, not ended: leaving is still the player's call.
-		game.set_radio("기관사: 볼 것은 다 본 모양이군. 떠날 때는 자네가 정하게.", "reply")
+		game.set_radio("기관사: 볼 것은 다 본 것 같습니다. 떠날 때는 말씀만 하십시오.", "reply")
 
 
 # ---------------------------------------------------------------- loading yard
@@ -270,7 +270,7 @@ func _repaired(_p) -> void:
 			q.brain["job"] = "dig"
 	mission.mark("repair", "running", game.clock.elapsed)
 	belt_noise_t = 0.0
-	game.set_radio("기관사: 컨베이어가 돈다. 이제 빨리 실린다.", "reply")
+	game.set_radio("기관사: 컨베이어가 돕니다. 이제 빨리 실립니다.", "reply")
 
 
 ## The running belt is heard in place of the pickaxes. True while it runs.
@@ -289,7 +289,7 @@ func loaded() -> void:
 	if mission.kind != "depot":
 		return
 	if mission.fill("load", game.actions.coal_delivered, game.clock.elapsed):
-		game.set_radio("기관사: 실을 만큼 실었다. 떠날 때는 자네가 정하게.", "reply")
+		game.set_radio("기관사: 실을 만큼 실었습니다. 떠날 때는 말씀만 하십시오.", "reply")
 
 
 ## The train leaves (or the stop is lost): how each goal stood goes on record.
