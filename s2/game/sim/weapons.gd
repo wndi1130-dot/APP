@@ -16,9 +16,11 @@ const DATA: Dictionary = {
 		"reach": 1.15, "swing": 0.6, "windup": 0.18, "head_base": 0.28, "head_kill": 0.6, "knockdown": 0.5,
 		"blade": false, "fatigue": 0.006, "wear": 0.0014, "pry": true, "feet_from": 0.1, "gap": 0.25,
 	},
+	# reach: as far as the drawn blade where the rules land the blow from
+	# overhead (1.31 m, J2 ③); it was 1.6.
 	"axe": {
 		"name": "손도끼", "kind": "melee", "hands": 1, "weight": 3.0, "sound": 0,
-		"reach": 1.6, "swing": 0.9, "windup": 0.30, "head_base": 0.32, "head_kill": 0.9, "knockdown": 0.6,
+		"reach": 1.3, "swing": 0.9, "windup": 0.30, "head_base": 0.32, "head_kill": 0.9, "knockdown": 0.6,
 		"blade": true, "fatigue": 0.012, "wear": 0.006, "pry": false, "feet_from": 0.1, "gap": 0.3,
 	},
 	"pistol": {
