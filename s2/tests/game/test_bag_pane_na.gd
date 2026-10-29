@@ -669,6 +669,30 @@ func test_walking_off_a_box_drops_its_place_and_shows_the_bag() -> void:
 	hud._close_modal()
 
 
+## An empty box's mark sits inside its key with the name, at the screen's edge:
+## a short name whole, a long fallback giving up its last letters.
+func test_the_empty_mark_stays_inside_its_key() -> void:
+	for name_and_kind: Array in [["서랍장", "dresser"], ["오래된 나무 궤짝", "no_such_furniture"]]:
+		var game = _game()
+		var hud = game.hud
+		var id: String = _box(game, [])
+		var c: Dictionary = game.data["containers"][id]
+		c["name"] = name_and_kind[0]
+		c["furniture"] = name_and_kind[1]
+		hud.loot(id)
+		await _layout()
+		var key: Button = _tab(hud, "box", id)
+		var edge: Rect2 = key.get_global_rect()
+		var mark: Label = null
+		for word: Label in key.find_children("*", "Label", true, false):
+			if word.text == "·빈":
+				mark = word
+			assert_gte(word.get_global_rect().position.x, edge.position.x - 0.5, "%s: %s starts inside the key" % [name_and_kind[0], word.text])
+			assert_lte(word.get_global_rect().end.x, edge.end.x + 0.5, "%s: %s ends inside the key" % [name_and_kind[0], word.text])
+		assert_not_null(mark, "the empty box is marked")
+		hud._close_modal()
+
+
 ## The bag pane's shade lies under the pane alone; other panes keep the full shade.
 func test_the_bag_shade_leaves_the_left_clear() -> void:
 	var game = _game()

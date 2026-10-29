@@ -313,14 +313,21 @@ static func _place_key(hud, icon: String, word: String, on: bool, empty: bool, c
 	return b
 
 
-## Keep the empty suffix visible even when a four-letter fallback is clipped.
+## Keep the empty suffix visible even when a four-letter fallback is clipped: the
+## name and the mark sit together in the middle of the key, inside its edge (the
+## rail stands at the screen's edge), the name giving up its last letters first.
 static func _column_word(label: Label, ink: Color) -> Control:
 	var row := GlassPane.row()
 	row.add_theme_constant_override("separation", 0)
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(label)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	var suffix := _label("·빈", 10.0, ink)
 	suffix.clip_text = false
+	var font: Font = UiFonts.face(UiFonts.WORD, 500, 0.2)
+	var px: int = UiFonts.size(10.0)
+	var room: float = UiFonts.px(PLACE_H - 2.0) - font.get_string_size("·빈", HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	label.custom_minimum_size.x = minf(ceilf(font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x), maxf(room, 0.0))
+	row.add_child(label)
 	row.add_child(suffix)
 	return row
 
