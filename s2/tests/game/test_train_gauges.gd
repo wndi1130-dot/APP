@@ -370,7 +370,7 @@ func _assert_meter_total(m: Dictionary, before: float, now: float) -> void:
 	assert_almost_eq(float(m["now"]), now, 1e-6)
 	assert_almost_eq(float(m["total"]), now - before, 1e-6)
 	assert_almost_eq(sum, now - before, 1e-6, "all rows, including 기타, equal the actual change")
-	assert_almost_eq(shown, now - before, 1e-6, "the displayed shares also add up")
+	assert_almost_eq(shown, snappedf(now, 0.1) - snappedf(before, 0.1), 1e-6, "the displayed shares (one decimal) add up to the shown change")
 
 
 func test_meter_slips_read_the_latest_settle_and_later_choices() -> void:
@@ -381,7 +381,7 @@ func test_meter_slips_read_the_latest_settle_and_later_choices() -> void:
 	_assert_meter_total(trust, 50.0, 46.0)
 	_assert_meter_total(tension, 40.0, 39.11)
 	assert_eq(trust["head"], "지난 정산 뒤 신임 50 → 46 (−4)")
-	assert_eq(tension["head"], "지난 정산 뒤 긴장 40 → 39.11 (−0.89)")
+	assert_eq(tension["head"], "지난 정산 뒤 긴장 40 → 39.1 (−0.9)")
 	assert_almost_eq(float(_meter_row(tension, "card")["d"]), -3.3, 1e-6, "two choices share one cause")
 	assert_almost_eq(float(_meter_row(tension, "other")["d"]), 0.31, 1e-6)
 	assert_eq(_meter_row(tension, "mood")["word"], "집단들의 마음", "S1's exact word")
@@ -396,8 +396,9 @@ func test_meter_slips_use_the_clamped_ledger_shares_without_rounding_them() -> v
 	common.bump(state, "tension", -1.234567891, "card")
 	_assert_meter_total(TrainGauges.meter_why_model(state, "trust"), 1.0, 0.0)
 	_assert_meter_total(TrainGauges.meter_why_model(state, "tension"), 98.0, float(state["tension"]))
-	assert_eq(TrainGauges.meter_signed(-1.234567891), "−1.234567891")
+	assert_eq(TrainGauges.meter_signed(-1.234567891), "−1.2")
 	assert_eq(TrainGauges.meter_signed(0.0), "+0")
+	assert_eq(TrainGauges.meter_signed(0.084166667), "+0.1", "a slip never prints a long tail")
 
 
 func test_meter_slips_match_the_real_meter_settle_and_a_later_card() -> void:

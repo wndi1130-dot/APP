@@ -319,14 +319,16 @@ static func meter_since_settle(g0: Dictionary, key: String) -> Array:
 
 ## The paper's numbers stay unrounded. Nine displayed places keep even 64
 ## displayed shares within 1e-6 of their sum; _num's one place is for the HUD.
+## A slip number to one decimal, as the bars read: 50.084 → "50.1", −0.04 → "0".
 static func meter_num(v: float) -> String:
-	if absf(v) < 0.0000000005:
+	var r: float = snappedf(v, 0.1)
+	if absf(r) < 0.05:
 		return "0"
-	return ("%.9f" % v).rstrip("0").trim_suffix(".").replace("-", "−")
+	return _num(r).replace("-", "−")
 
 
 static func meter_signed(v: float) -> String:
-	return ("−" if v < -0.0000000005 else "+") + meter_num(absf(v))
+	return ("−" if snappedf(v, 0.1) < -0.05 else "+") + meter_num(absf(v))
 
 
 ## Group first, then put causes below 0.5 into one 기타 (even when they cancel).
@@ -355,12 +357,22 @@ static func meter_why_model(g0: Dictionary, key: String) -> Dictionary:
 		rows.append({"why": "other", "word": "기타", "d": other})
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return String(a["why"]) < String(b["why"]) if absf(float(a["d"])) == absf(float(b["d"])) else absf(float(a["d"])) > absf(float(b["d"])))
-	for row: Dictionary in rows:
-		row["text"] = "%s %s" % [row["word"], meter_signed(float(row["d"]))]
 	var now: float = float(g0.get(key, 0.0))
 	var before: float = now - total
+	# Shown to one decimal; what rounding leaves over goes on the biggest row, so
+	# the rows the player reads add up to the change the head shows.
+	var shown_before: float = snappedf(before, 0.1)
+	var shown_now: float = snappedf(now, 0.1)
+	var left: float = shown_now - shown_before
+	for row: Dictionary in rows:
+		row["shown"] = snappedf(float(row["d"]), 0.1)
+		left -= float(row["shown"])
+	if not rows.is_empty():
+		rows[0]["shown"] = snappedf(float(rows[0]["shown"]) + left, 0.1)
+	for row: Dictionary in rows:
+		row["text"] = "%s %s" % [row["word"], meter_signed(float(row["shown"]))]
 	var head: String = METER_NO_CHANGE if entries.is_empty() else "지난 정산 뒤 %s %s → %s (%s)" % [
-		"신임" if key == "trust" else "긴장", meter_num(before), meter_num(now), meter_signed(total)]
+		"신임" if key == "trust" else "긴장", meter_num(shown_before), meter_num(shown_now), meter_signed(shown_now - shown_before)]
 	return {"key": key, "before": before, "now": now, "total": total, "head": head, "rows": rows}
 
 
