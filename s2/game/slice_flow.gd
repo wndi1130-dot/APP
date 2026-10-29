@@ -402,9 +402,11 @@ func _stop_band(seg: int) -> String:
 
 
 ## The season table's stretch that stop stands on (route_stops.gd): the stop's weather and
-## cold, not those of the table's row with the stretch's number.
+## cold, not those of the table's row with the stretch's number. Before the first stop (the
+## train setting out on the first stretch) it is the table's first stretch, the start.
 func _season_seg(seg: int) -> int:
-	return RouteStops.season_seg(_stop_of(seg))
+	var stop := _stop_of(seg)
+	return 1 if stop < 1 else RouteStops.season_seg(stop)
 
 
 ## 「정차 고르기」: the roof of the running train, not the card at once. The
@@ -965,8 +967,9 @@ func _show_train(phase: String, seg: int) -> void:
 	add_child(train)
 	stage = train
 	# The world outside by the hour, the weather, the region and the cold
-	# (the atmosphere frame); the snow over it falls as that look says.
-	var look := outside_look(rules, _season_seg(seg + 1 if phase == "travel" else seg))
+	# (the atmosphere frame); the snow over it falls as that look says. On the run the
+	# sky is the one the train left (the stop behind it, or the start), the land ahead's.
+	var look := outside_look(rules, _season_seg(seg))
 	var cam: Camera3D = train.get("camera")
 	if cam != null:
 		outside = OutsideView.attach(cam, look, phase == "travel")

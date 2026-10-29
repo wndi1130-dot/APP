@@ -23,7 +23,7 @@
     { "seg": 2, "region": "K1", "temp": -1, "stage": 1, "season": "late_autumn", "night_freeze": true, "snow": false, "blizzard": false, "note": "이른 한파가 풀려 간다" },
     { "seg": 3, "region": "K1", "temp": 5, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "늦가을: 비·안개·단풍" },
     { "seg": 4, "region": "K1", "temp": 6, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
-    { "seg": 5, "region": "K1", "temp": 6, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
+    { "seg": 5, "region": "K2", "temp": 6, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
     { "seg": 6, "region": "K2", "temp": 5, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
     { "seg": 7, "region": "K2", "temp": 5, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
     { "seg": 8, "region": "K2", "temp": 4, "stage": 0, "season": "late_autumn", "night_freeze": false, "snow": false, "blizzard": false, "note": "" },
