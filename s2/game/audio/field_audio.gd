@@ -72,6 +72,31 @@ const DOOR_TURN: Dictionary = {
 	"open": ["door_open", 0.45, 0.78, 0.86, "wooden"],
 	"closed": ["door_close", 0.55, 0.66, 0.74, "wooden"],
 }
+## A key turned in a locked door (field_actions _key_opened, P12): a small
+## click, then the door going quietly, softer than a door opened by hand, so
+## the player does not take it for a noise the dead heard (they hear none).
+## The click's group and stand-in as DOOR_TURN's; the door's loudness times
+## DOOR_KEY_HUSH, DOOR_KEY_LAG s after the click. First values.
+const DOOR_KEY: Array = ["door_unlock", 0.25, 1.6, 1.8, "metal"]
+const DOOR_KEY_HUSH: float = 0.5
+const DOOR_KEY_LAG: float = 0.18
+## A door or a window that will not give to the player's hand, as the note
+## says so (field_actions): a locked door rattles in its frame, a boarded one
+## thuds against its planks. The player's ear only, as DOOR_TURN.
+const SHUT_FAST: Dictionary = {
+	"locked": ["door_locked", 0.4, 0.92, 1.02, "wooden"],
+	"boarded": ["boarded", 0.4, 0.6, 0.7, "slam"],
+}
+## The same door (or window) for the same reason is heard again only after
+## this many ms: a stick held against it asks every frame (field_game _drive).
+const SHUT_FAST_GAP_MS: int = 800
+## A bite on someone (hit_feel bitten): until its files are in, a blow's
+## stand-in layer, its group and pitch low and high; the coat taking it
+## (bite_blocked) is a duller thud.
+const FEEL_STANDINS: Dictionary = {
+	"bite": ["blow_cut", 0.78, 0.88],
+	"bite_blocked": ["blow_thud", 1.05, 1.15],
+}
 ## A manhole lid dragged aside by one of the dead coming up (decision 422 M9):
 ## group, loudness, pitch low and high. Until a file is in its group it is the
 ## impact set's iron, pitched down.
@@ -342,6 +367,7 @@ var played: Array = []                 # groups played, in order (tests)
 var steps: Array = []                  # the player's steps heard [group, file] (tests)
 var step_last: Dictionary = {}         # step group -> the file it played last
 var door_creaks: Array = []             # building doors beaten on: true when it was about to give (tests)
+var shut_heard: Dictionary = {}        # "x,y,why" -> Time ms a door's no was last heard (SHUT_FAST_GAP_MS)
 
 ## The music steps aside for a sound that matters (the music frame's ducking
 ## connects here; nothing in the rules reads it). kind: "brake" (the train
@@ -1596,10 +1622,44 @@ func door(kind: String, at: Vector3, level: int) -> void:
 
 ## A building's door opened or shut by someone (state "open" or "closed"), heard
 ## from the door, in the player's room when it is one of the room's doors.
-func door_turn(c: Vector2i, state: String) -> void:
+## by_key: opened with its key (DOOR_KEY), the click and then the door, softer.
+func door_turn(c: Vector2i, state: String, by_key: bool = false) -> void:
 	if quiet or game == null or game.player == null or not DOOR_TURN.has(state):
 		return
 	var voice: Array = DOOR_TURN[state]
+	var at: Vector3 = game.FieldGrid.center(c)
+	if not by_key:
+		_voice_or_standin(voice, String(voice[4]), at)
+		return
+	_voice_or_standin(DOOR_KEY, String(DOOR_KEY[4]), at)
+	var soft: Array = voice.duplicate()
+	soft[1] = float(voice[1]) * DOOR_KEY_HUSH
+	if is_inside_tree():
+		get_tree().create_timer(DOOR_KEY_LAG, false).timeout.connect(_key_door_goes.bind(c, soft, at))
+	else:
+		_key_door_goes(c, soft, at)
+
+
+## The door a key turned goes, a moment after the click: not if the stop
+## has ended or the door is shut again meanwhile.
+func _key_door_goes(c: Vector2i, soft: Array, at: Vector3) -> void:
+	if game == null or game.ended or String((game.grid.doors.get(c, {}) as Dictionary).get("state", "")) != "open":
+		return
+	_voice_or_standin(soft, String(soft[4]), at)
+
+
+## A door or a window that would not give to the player's hand (SHUT_FAST:
+## "locked" or "boarded"), heard from it; once in SHUT_FAST_GAP_MS for the
+## same one and reason.
+func shut_fast(c: Vector2i, why: String) -> void:
+	if quiet or game == null or game.player == null or not SHUT_FAST.has(why):
+		return
+	var key := "%d,%d,%s" % [c.x, c.y, why]
+	var now_ms: int = Time.get_ticks_msec()
+	if now_ms - int(shut_heard.get(key, -SHUT_FAST_GAP_MS)) < SHUT_FAST_GAP_MS:
+		return
+	shut_heard[key] = now_ms
+	var voice: Array = SHUT_FAST[why]
 	_voice_or_standin(voice, String(voice[4]), game.FieldGrid.center(c))
 
 
@@ -1684,7 +1744,17 @@ func feel_sound(group: String, at: Vector3, loud: float, reach: float) -> void:
 	if hit and _same_blow(blow_mark, at):
 		return
 	var d: float = at.distance_to(game.player.position)
-	_one_shot(group, at, loud * clampf(1.0 - d / reach, 0.0, 1.0), randf_range(0.92, 1.08), null, _bus_at(at))
+	var lin: float = loud * clampf(1.0 - d / reach, 0.0, 1.0)
+	if not lib.has(group):
+		lib[group] = _load_group(group)
+	if not has(group) and FEEL_STANDINS.has(group):
+		# Until its files are in, a blow's layer stands in for it.
+		var stand: Array = FEEL_STANDINS[group]
+		var pick: int = _fresh_file(String(stand[0]))
+		if pick >= 0:
+			_one_shot(String(stand[0]), at, lin, randf_range(float(stand[1]), float(stand[2])), lib[String(stand[0])][pick], _bus_at(at))
+		return
+	_one_shot(group, at, lin, randf_range(0.92, 1.08), null, _bus_at(at))
 	if hit and last_shot != null:
 		hit_mark = [Engine.get_process_frames(), at, last_shot, int(last_shot.get_meta("cut", 0))]
 
