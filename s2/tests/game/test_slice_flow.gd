@@ -222,6 +222,17 @@ func test_field_opts_carry_the_band_of_the_steps_stop() -> void:
 		assert_eq(any._field_opts()["region"], row[1], "a shared map: " + String(row[0]))
 
 
+## Decision 494: the stop's weather and cold are those of the season table's stretch it stands
+## in (the first stop at 54 km: the fifth stretch), not the row with the slice's stretch number.
+func test_field_opts_read_the_season_stretch_of_the_steps_stop() -> void:
+	var f = _flow()
+	for row: Array in [["stop_pick", 5], ["field", 5], ["arrive", 10]]:
+		f.step = f._index_of(String(row[0]))
+		var o: Dictionary = f._field_opts()
+		assert_almost_eq(float(o["act_progress"]), SliceFlow.prologue_progress(int(row[1])), 0.0001, String(row[0]))
+		assert_eq(o["weather"], f.stop_weather(int(row[1]))["rules"], String(row[0]))
+
+
 func test_the_second_station_is_its_sheet_and_the_end_the_long_sheet() -> void:
 	var f = _flow()
 	f.go(f._index_of("arrive"))
