@@ -18,6 +18,7 @@ const RoomFinish = preload("res://game/world/room_finish.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const SidePath = preload("res://game/world/side_path.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 ## The dead's stand-in bodies at the field's own count (field_game.gd opts
@@ -33,6 +34,10 @@ const BUDGET_RESTING_USEC: int = 30000
 var place: String = ""
 ## The field seed the map is made for (-1: none known, the field puts the side path on).
 var seed_for: int = -1
+## The stop's form the map is made in (stop_ground.gd; "" as the map is) and the edge's
+## walk-off asked for (-1: the seed's).
+var form_for: String = ""
+var form_m_for: float = -1.0
 var data: Dictionary = {}
 var vat: Dictionary = {}
 var field: Node = null
@@ -58,13 +63,17 @@ func _ready() -> void:
 
 ## Start on the map of `place_id` (the default map when there is none), with the
 ## field's seed when it is known (its side path is then put on the map here; -1: the
-## field puts it on). The same place and seed again keeps what is under way.
-func prepare(place_id: String, run_seed: int = -1) -> void:
+## field puts it on), in the stop's form when it is known (its ground then goes on
+## here, off the main thread, before the side path). The same place, seed and form
+## again keeps what is under way.
+func prepare(place_id: String, run_seed: int = -1, form: String = "", form_m: float = -1.0) -> void:
 	var id: String = FieldMaps.resolve(place_id)
-	if _state != "idle" and id == place and run_seed == seed_for:
+	if _state != "idle" and id == place and run_seed == seed_for and form == form_for and form_m == form_m_for:
 		return
 	place = id
 	seed_for = run_seed
+	form_for = form
+	form_m_for = form_m
 	data = {}
 	_path = FieldMaps.path_of(place)
 	_data_from = Time.get_ticks_usec()
@@ -90,10 +99,13 @@ func build_field(parent: Node, opts: Dictionary) -> void:
 	# before the field is (never a whole map built in one frame). One made with no
 	# seed has no side path yet: the field puts it on (field_game.gd with_side_path).
 	var want: int = int(opts["seed"]) if opts.has("seed") else -1
+	# So is one made in another form than the field's, so its ground goes on off the main thread too.
+	var form := String(opts.get("stop_form", ""))
+	var form_m := float(opts.get("stop_form_m", -1.0))
 	if _state == "idle":
-		prepare(String(opts.get("place", "")), want)
-	elif seed_for >= 0 and want != seed_for:
-		prepare(place, want)
+		prepare(String(opts.get("place", "")), want, form, form_m)
+	elif (seed_for >= 0 and want != seed_for) or form != form_for or form_m != form_m_for:
+		prepare(place, want, form, form_m)
 	if not has_data():
 		await data_ready
 	var o: Dictionary = opts.duplicate()
@@ -165,26 +177,30 @@ func _process(_delta: float) -> void:
 func _start_task(script: Script) -> void:
 	_box = {}
 	_state = "building"
-	_task = WorkerThreadPool.add_task(_build_off_thread.bind(_box, script, seed_for, VAT_VERTICES if vat.is_empty() else 0), false, "stop map")
+	_task = WorkerThreadPool.add_task(_build_off_thread.bind(_box, script, seed_for, form_for, form_m_for, VAT_VERTICES if vat.is_empty() else 0), false, "stop map")
 	set_process(true)
 
 
 ## On the worker: the map and what is made ahead from it (make_ready), nothing in
 ## the scene tree.
-static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, vat_vertices: int) -> void:
-	box["data"] = make_ready(script, run_seed)
+static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, form: String, form_m: float, vat_vertices: int) -> void:
+	box["data"] = make_ready(script, run_seed, form, form_m)
 	if vat_vertices > 0:
 		box["vat"] = VatBaker.build(vat_vertices)
 
 
-## The map script's static build; with the field's seed, the side path put on it
-## first (side_path.gd: the same way the field would put it on, and it can grow and
-## shift the map); then from the map as it now is the plan of its buildings
+## The map script's static build; in the stop's form, its ground (stop_ground.gd: an
+## edge stop grows the map out along the track); with the field's seed, the side path
+## put on it next (side_path.gd: the same way the field would put it on, and it can grow
+## and shift the map; FieldGame.shape_stop keeps the same order); then from the map as it
+## now is the plan of its buildings
 ## (building_view.gd), the ground's and the floors' arrays (map_view.gd, 2a) with the
 ## maps they fit, the rooms' finish (room_finish.gd) and the plan of the woods round
 ## the map (edge_band.gd plan_ahead). Data only, no nodes.
-static func make_ready(script: Script, run_seed: int) -> Dictionary:
+static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0) -> Dictionary:
 	var d: Dictionary = FieldMaps.build_from(script)
+	if not form.is_empty():
+		d = StopGround.apply(d, form, run_seed, form_m)
 	if run_seed >= 0:
 		d = SidePath.add(d, run_seed)
 		d["_side_seed"] = run_seed
