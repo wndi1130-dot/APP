@@ -14,6 +14,7 @@ const Body = preload("res://game/train/train_body.gd")
 const HandPanel = preload("res://game/train/train_panel.gd")
 const Gesture = preload("res://game/train/train_gesture.gd")
 const Life = preload("res://game/train/train_life.gd")
+const Interior = preload("res://game/train/train_interior.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
 const PeopleView = preload("res://game/train/train_people_view.gd")
 const MusicPlayer = preload("res://game/audio/music_player.gd")
@@ -27,6 +28,7 @@ const SHELL_ROOT := "res://models/train_shell/shell_%s.glb"
 ## 기관차·탄수차는 객차 창·나무 벽 대신 쇠판 벽(운전실 창 하나) 껍데기(열세 칸 점검, 2026-10-27).
 const SHELL_OF := {"front": "clean", "dining": "clean", "captain": "chief", "medical": "medic", "loco": "engine", "tender": "engine"}
 const SHELL_GLASS_Z: float = -1.40       # the glass sits in the shell's window reveal
+const SHELL_CUT_Y: float = 2.2
 ## How warm or cold a car's walls look (tint on the shell, no new light).
 const SHELL_COLD := Color(0.66, 0.74, 0.92)
 const SHELL_WARM := Color(1.0, 0.93, 0.84)
@@ -42,6 +44,13 @@ const CAR_WIDTH: float = 2.8
 const CAR_HEIGHT: float = 3.0
 const CAR_GAP: float = 1.0
 const WALL: float = 0.1
+const FRONT_Z: float = 1.40
+## The low front wall of the diagonal view takes the colour of each shell's lower walls
+## (tools/blender/train_shell.py palette); a box mesh cannot take the shell's atlas.
+const FRONT_WALL_COLORS := {"plain": Color8(104, 82, 60), "clean": Color8(112, 76, 50),
+	"chief": Color8(78, 52, 36), "medic": Color8(118, 132, 118), "engine": Color8(66, 64, 60)}
+const DIAG_PROP_TOP: float = 2.15
+const CAR_SCREEN_BOUNDS: AABB = AABB(Vector3(0.0, -0.2, -1.42), Vector3(CAR_LENGTH, 2.4, 2.88))
 ## Across the car: the bench under the far wall, the floor in front of it, the
 ## aisle nearest the open side. The end doors stand open on the aisle.
 const BENCH_Z: float = -0.85
@@ -113,6 +122,12 @@ const CAM_FAR: float = 24.0
 const CAM_PITCH: float = -8.0
 const CAM_BACK: float = 30.0
 const CAM_LOOK_Y: float = -0.3          # below the floor: the panel covers the bottom
+const DIAG_YAW: float = 45.0
+const DIAG_PITCH: float = 35.0
+const DIAG_DIST: float = 30.0
+const DIAG_LOOK_Y: float = 0.9
+const DIAG_WIDE: float = 22.8192
+const DIAG_NEAR: float = 11.9801
 
 var rules: Dictionary = {}
 var opts: Dictionary = {}               # seed: int, panel: bool, rules_before: the values last shown (people react to the change)
@@ -125,6 +140,9 @@ var people: Node3D
 var panel: CanvasLayer
 var cam_x: float = CAR_LENGTH * 0.5
 var zoomed_out: bool = false
+var view_mode: String = "diag"            # the inside seen from above at an angle (결정 486); the council keeps "section"
+var zoom: String = "wide"
+var pane_px: float = 0.0
 var clock: float = 0.0
 var _hold_from: float = 0.0             # the council room along the train while the vote is called
 var _hold_to: float = 0.0
@@ -132,6 +150,10 @@ var _mats: Dictionary = {}
 var _font: SystemFont
 var _shells: Dictionary = {}
 var backdrop: MeshInstance3D
+var side_rail: MeshInstance3D
+var snow_ground: MeshInstance3D
+var highlight_band: MeshInstance3D
+var _highlight_id: String = ""
 var people_view: Node3D                  # the baked bodies drawn over the stand-in capsules
 var _scroll: float = 0.0
 var life = Life.new()
@@ -140,11 +162,14 @@ var music: MusicPlayer                  # the faint train piece by the train's s
 
 func _ready() -> void:
 	rng.seed = int(opts.get("seed", 1))
+	var initial_mode: String = str(opts.get("view_mode", "diag"))
+	view_mode = initial_mode if initial_mode in ["diag", "section"] else "diag"
 	life.setup(self)
 	if rules.is_empty():
 		rules = Rules.load_default()
 	problems = Rules.check(rules)
 	_build_world()
+	get_viewport().size_changed.connect(_on_view_resized)
 	if problems.is_empty():
 		_build_train()
 		life.build_outside()
@@ -165,6 +190,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_update_snow_ground()
 	step(delta)
 	music.tick(delta)
 
@@ -334,16 +360,102 @@ func scroll(metres: float) -> void:
 	_place_camera()
 
 
-func focus_car(id: String) -> void:
+func focus_car(id: String, near: bool = false) -> void:
 	var c := car(id)
 	if c.is_empty():
 		return
 	cam_x = float(c["x0"]) + CAR_LENGTH * 0.5
+	if view_mode == "diag":
+		zoom = "near" if near else "wide"
 	_place_camera()
 
 
 func toggle_zoom() -> void:
-	zoomed_out = not zoomed_out
+	if view_mode == "diag":
+		zoom = "near" if zoom == "wide" else "wide"
+	else:
+		zoomed_out = not zoomed_out
+	_place_camera()
+
+
+func set_view_mode(mode: String) -> void:
+	if mode not in ["diag", "section"]:
+		return
+	view_mode = mode
+	_apply_view()
+	_place_camera()
+
+
+func _apply_view() -> void:
+	for c: Dictionary in cars:
+		_apply_shell_view(c)
+	if is_instance_valid(backdrop):
+		backdrop.visible = view_mode == "section"
+	if is_instance_valid(side_rail):
+		side_rail.visible = view_mode == "section"
+	_update_snow_ground()
+	_apply_highlight()
+
+
+func _apply_shell_view(c: Dictionary) -> void:
+	var diagonal: bool = view_mode == "diag"
+	for top_node: Node3D in c.get("shell_top", []):
+		top_node.visible = not diagonal
+	for shell_material: StandardMaterial3D in c.get("shell_mats", []):
+		shell_material.cull_mode = BaseMaterial3D.CULL_DISABLED if diagonal else BaseMaterial3D.CULL_BACK
+	if c.has("front_wall"):
+		(c["front_wall"] as MeshInstance3D).visible = diagonal
+	for prop: Dictionary in c.get("high_props", []):
+		(prop["node"] as Node3D).transform = prop["diag"] if diagonal else prop["section"]
+
+
+## The snow sheet under the diagonal view gives way only to the land outside once it
+## shows (journey.gd hangs hidden and stays so till its land reaches past the train).
+func _update_snow_ground() -> void:
+	if is_instance_valid(snow_ground):
+		var land: Node3D = get_node_or_null("Journey") as Node3D
+		# Told when it shows or hides: no frame with both under the train.
+		if land != null and not land.visibility_changed.is_connected(_update_snow_ground):
+			land.visibility_changed.connect(_update_snow_ground)
+		snow_ground.visible = view_mode == "diag" and (land == null or not land.visible)
+
+
+func highlight(id: String) -> void:
+	if id == _highlight_id:
+		return
+	_highlight_id = id
+	_apply_highlight()
+
+
+func _apply_highlight() -> void:
+	var chosen: Dictionary = car(_highlight_id) if view_mode == "diag" else {}
+	if is_instance_valid(highlight_band):
+		highlight_band.visible = not chosen.is_empty()
+		if not chosen.is_empty():
+			highlight_band.transform = (chosen["node"] as Node3D).transform
+	for c: Dictionary in cars:
+		c["dimmed"] = not chosen.is_empty() and c["id"] != _highlight_id
+		if c.has("room_vis"):
+			_show_room(c)
+
+
+func car_screen_polygon(id: String) -> PackedVector2Array:
+	var c: Dictionary = car(id)
+	if camera == null or not camera.is_inside_tree() or c.is_empty():
+		return PackedVector2Array()
+	var car_node: Node3D = c["node"]
+	var points: PackedVector2Array = PackedVector2Array()
+	for corner: int in range(8):
+		points.append(camera.unproject_position(car_node.to_global(CAR_SCREEN_BOUNDS.get_endpoint(corner))))
+	var hull: PackedVector2Array = Geometry2D.convex_hull(points)
+	# Geometry2D closes the hull; callers only need its distinct corners.
+	if hull.size() > 1 and hull[0].is_equal_approx(hull[hull.size() - 1]):
+		hull.remove_at(hull.size() - 1)
+	return hull
+
+
+func set_pane(px: float) -> void:
+	pane_px = maxf(px, 0.0)
 	_place_camera()
 
 
@@ -371,17 +483,28 @@ func values_text(c: Dictionary) -> String:
 	return " · ".join(parts)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if camera == null:
+func drag(relative: Vector2) -> void:
+	if camera == null or not camera.is_inside_tree():
 		return
-	var dx: float = 0.0
+	if view_mode == "diag":
+		var anchor: Vector3 = Vector3(cam_x, DIAG_LOOK_Y, 0.0)
+		var q: Vector2 = camera.unproject_position(anchor + Vector3.RIGHT) - camera.unproject_position(anchor)
+		if q.length_squared() <= 0.000001:
+			return
+		scroll(-relative.dot(q) / q.length_squared())
+	else:
+		scroll(-relative.x * camera.size / maxf(get_viewport().get_visible_rect().size.y, 1.0))
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	var relative: Vector2 = Vector2.ZERO
 	if event is InputEventScreenDrag:
-		dx = event.relative.x
+		relative = event.relative
 	elif event is InputEventMouseMotion and not DisplayServer.is_touchscreen_available() \
 			and (event.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
-		dx = event.relative.x
-	if dx != 0.0:
-		scroll(-dx * camera.size / maxf(get_viewport().get_visible_rect().size.y, 1.0))
+		relative = event.relative
+	if relative != Vector2.ZERO:
+		drag(relative)
 
 
 ## What has a car reseated at once even while the room goes first: the car
@@ -797,9 +920,18 @@ static func _room_look(w: float) -> Dictionary:
 func _show_room(c: Dictionary) -> void:
 	var vis: Dictionary = c["room_vis"]
 	(c["glass"] as ShaderMaterial).set_shader_parameter("cold_car", float(vis["frost"]))
-	if c.has("shell_mat"):
-		# Cold walls go blue-grey, a warm car's go a little amber.
-		(c["shell_mat"] as StandardMaterial3D).albedo_color = SHELL_COLD.lerp(SHELL_WARM, float(vis["walls"]))
+	# Cold walls go blue-grey, a warm car's go a little amber.
+	var shade: float = 0.6 if bool(c.get("dimmed", false)) else 1.0
+	var warm: Color = SHELL_COLD.lerp(SHELL_WARM, float(vis["walls"])) if c.has("shell_mat") else Color.WHITE
+	var shell_materials: Array = c["shell_mats"]
+	var bases: Array = c.get("shell_colors", [])
+	for material_index: int in shell_materials.size():
+		var shell_material: StandardMaterial3D = shell_materials[material_index]
+		# The atlas carries a model's colours; a plain piece keeps its own under the tint.
+		var base: Color = Color.WHITE
+		if shell_material.albedo_texture == null and material_index < bases.size():
+			base = bases[material_index]
+		shell_material.albedo_color = Color(base.r * warm.r * shade, base.g * warm.g * shade, base.b * warm.b * shade, base.a)
 	if c.has("stove_light"):
 		var burn: float = float(vis["burn"])
 		(c["stove_light"] as OmniLight3D).light_energy = STOVE_ENERGY * burn
@@ -1012,13 +1144,36 @@ func _build_world() -> void:
 	_font.font_names = PackedStringArray(["Pretendard", "Noto Sans CJK KR", "Noto Sans KR", "Droid Sans Fallback", "sans-serif"])
 
 
+## Only the diagonal camera goes by the window's pixels (the pane's share); the side
+## view keeps its frame through a resize, as the council's close dining car is set by hand.
+func _on_view_resized() -> void:
+	if view_mode == "diag":
+		_place_camera()
+
+
 func _place_camera() -> void:
 	if camera == null:
+		return
+	if view_mode == "diag":
+		camera.keep_aspect = Camera3D.KEEP_HEIGHT
+		camera.size = DIAG_NEAR if zoom == "near" else DIAG_WIDE
+		var diag_yaw: float = deg_to_rad(DIAG_YAW)
+		var diag_pitch: float = deg_to_rad(DIAG_PITCH)
+		var anchor: Vector3 = Vector3(cam_x, DIAG_LOOK_Y, 0.0)
+		var direction: Vector3 = Vector3(sin(diag_yaw) * cos(diag_pitch), sin(diag_pitch), cos(diag_yaw) * cos(diag_pitch))
+		camera.position = anchor + direction * DIAG_DIST
+		camera.basis = Basis.looking_at(anchor - camera.position, Vector3.UP)
+		# The pane's share is in pixels of the view: none to go by outside the tree.
+		camera.h_offset = 0.0
+		if is_inside_tree():
+			var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
+			camera.h_offset = (pane_px / 2.0) * camera.size / view_h
 		return
 	var pitch := deg_to_rad(CAM_PITCH)
 	camera.size = CAM_FAR if zoomed_out else CAM_NEAR
 	camera.rotation = Vector3(pitch, 0, 0)
 	camera.position = Vector3(cam_x, CAM_LOOK_Y, 0) + Vector3(0, -sin(pitch), cos(pitch)) * CAM_BACK
+	camera.h_offset = 0.0
 
 
 func _build_train() -> void:
@@ -1043,8 +1198,12 @@ func _build_train() -> void:
 		}
 		_build_car(c, i < defs.size() - 1)
 		cars.append(c)
-	_box(train, Vector3(train_length() + 6.0, 0.12, 0.1), Vector3(train_length() * 0.5, -1.5, CAR_WIDTH * 0.5 - 0.3), Color(0.3, 0.3, 0.32))
+	side_rail = _box(train, Vector3(train_length() + 6.0, 0.12, 0.1), Vector3(train_length() * 0.5, -1.5, CAR_WIDTH * 0.5 - 0.3), Color(0.3, 0.3, 0.32))
+	side_rail.name = "SideRail"
 	_build_backdrop()
+	_build_snow_ground()
+	_build_highlight()
+	_apply_view()
 
 
 func _build_car(c: Dictionary, gangway: bool) -> void:
@@ -1061,7 +1220,7 @@ func _build_car(c: Dictionary, gangway: bool) -> void:
 		node.add_child(shell)
 		glass_z = SHELL_GLASS_Z
 	else:
-		_build_car_boxes(node, gangway)
+		_build_car_boxes(c, gangway)
 	# Windows: the field's glass, so frost grows in from the frame as the car cools.
 	var glass := ShaderMaterial.new()
 	glass.shader = GlassShader
@@ -1080,27 +1239,148 @@ func _build_car(c: Dictionary, gangway: bool) -> void:
 	if gangway:
 		_box(node, Vector3(CAR_GAP, 0.1, DOOR_TO - DOOR_FROM + 0.2), Vector3(l + CAR_GAP * 0.5, -0.05, (DOOR_FROM + DOOR_TO) * 0.5), steel)
 	_build_car_rest(c, node, def, l, h)
+	_build_front_wall(c)
+	_remember_high_props(c)
+	_apply_shell_view(c)
+
+
+func _build_front_wall(c: Dictionary) -> void:
+	var variant: String = String(SHELL_OF.get(Catalog.layout_id(c["def"]), "plain")) if c.has("shell_mat") else "plain"
+	var color: Color = FRONT_WALL_COLORS.get(variant, FRONT_WALL_COLORS["plain"])
+	var wall_material: StandardMaterial3D = _mat(color).duplicate() as StandardMaterial3D
+	wall_material.roughness = 1.0
+	c["shell_mats"].append(wall_material)
+	c["shell_colors"].append(color)
+	var wall_band: MeshInstance3D = _box(c["node"], Vector3(CAR_LENGTH - 2.0 * WALL, 0.9, 0.06),
+		Vector3(CAR_LENGTH * 0.5, 0.45, FRONT_Z), color)
+	wall_band.name = "FrontWall"
+	wall_band.material_override = wall_material
+	c["front_wall"] = wall_band
+
+
+func _remember_high_props(c: Dictionary) -> void:
+	c["high_props"] = []
+	var prop_nodes: Dictionary = life.rooms[c["id"]].props
+	for prop_id: String in prop_nodes:
+		var prop_node: Node3D = prop_nodes[prop_id]
+		var local_box: AABB = (prop_node as MeshInstance3D).get_aabb() if prop_node is MeshInstance3D else Interior._bounds_of(prop_node)
+		var box: AABB = prop_node.transform * local_box
+		if box.end.y <= SHELL_CUT_Y or box.size.y <= 0.0:
+			continue
+		var original: Transform3D = prop_node.transform
+		var lowered: Transform3D = original
+		if String(prop_node.get_meta("model_key", "")) == "laundry_line" or box.position.y >= DIAG_PROP_TOP:
+			lowered.origin.y += DIAG_PROP_TOP - box.end.y
+		else:
+			var height_scale: float = (DIAG_PROP_TOP - box.position.y) / box.size.y
+			lowered = Transform3D(Basis.from_scale(Vector3(1.0, height_scale, 1.0)),
+				Vector3(0.0, box.position.y * (1.0 - height_scale), 0.0)) * original
+		c["high_props"].append({"node": prop_node, "section": original, "diag": lowered})
+
+
+func _build_snow_ground() -> void:
+	snow_ground = MeshInstance3D.new()
+	snow_ground.name = "SnowGround"
+	var plane: PlaneMesh = PlaneMesh.new()
+	plane.size = Vector2(train_length() + 120.0, 92.0)
+	snow_ground.mesh = plane
+	snow_ground.position = Vector3(train_length() * 0.5, -1.46, 0.0)
+	var snow: StandardMaterial3D = StandardMaterial3D.new()
+	snow.albedo_color = Color(0.72, 0.76, 0.82)
+	snow.roughness = 1.0
+	snow_ground.material_override = snow
+	train.add_child(snow_ground)
+
+
+## An amber outline along the cut tops of the picked car's walls: from above the floor's
+## edge hides behind the front wall and under the benches, the wall tops do not.
+func _build_highlight() -> void:
+	var l: float = CAR_LENGTH
+	var top: float = SHELL_CUT_Y + 0.005
+	var low: float = 0.905
+	var quads: Array = [
+		# the back wall's top, the front wall's top, the two end walls' tops
+		[Vector3(0.0, top, -1.44), Vector3(l, top, -1.44), Vector3(l, top, -1.28), Vector3(0.0, top, -1.28)],
+		[Vector3(0.0, low, 1.36), Vector3(l, low, 1.36), Vector3(l, low, 1.50), Vector3(0.0, low, 1.50)],
+		[Vector3(0.0, top, -1.44), Vector3(0.12, top, -1.44), Vector3(0.12, top, 1.36), Vector3(0.0, top, 1.36)],
+		[Vector3(l - 0.12, top, -1.44), Vector3(l, top, -1.44), Vector3(l, top, 1.36), Vector3(l - 0.12, top, 1.36)],
+		# the front corners, from the front wall up to the end walls' tops
+		[Vector3(0.0, low, 1.50), Vector3(0.12, low, 1.50), Vector3(0.12, top, 1.50), Vector3(0.0, top, 1.50)],
+		[Vector3(l - 0.12, low, 1.50), Vector3(l, low, 1.50), Vector3(l, top, 1.50), Vector3(l - 0.12, top, 1.50)],
+	]
+	var vertices: PackedVector3Array = PackedVector3Array()
+	var indices: PackedInt32Array = PackedInt32Array()
+	for quad: Array in quads:
+		var first: int = vertices.size()
+		for corner: Vector3 in quad:
+			vertices.append(corner)
+		indices.append_array([first, first + 1, first + 2, first, first + 2, first + 3])
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var ring: ArrayMesh = ArrayMesh.new()
+	ring.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var glow: StandardMaterial3D = StandardMaterial3D.new()
+	glow.albedo_color = Color(0.95, 0.65, 0.24)
+	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.cull_mode = BaseMaterial3D.CULL_DISABLED
+	highlight_band = MeshInstance3D.new()
+	highlight_band.name = "Highlight"
+	highlight_band.mesh = ring
+	highlight_band.material_override = glow
+	highlight_band.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	highlight_band.visible = false
+	train.add_child(highlight_band)
 
 
 ## The stand-in car when the shell model is missing: boxes for the floor, the
 ## back wall, the roof, the end walls with a doorway, the underframe and the bogies.
-func _build_car_boxes(node: Node3D, _gangway: bool) -> void:
+func _build_car_boxes(c: Dictionary, _gangway: bool) -> void:
 	var steel := Color(0.2, 0.2, 0.21)
 	var wood := Color(0.3, 0.25, 0.2)
 	var l := CAR_LENGTH
 	var w := CAR_WIDTH
 	var h := CAR_HEIGHT
-	_box(node, Vector3(l, 0.15, w), Vector3(l * 0.5, -0.075, 0), wood)
-	_box(node, Vector3(l, h, WALL), Vector3(l * 0.5, h * 0.5, -w * 0.5), wood.darkened(0.2))
-	_box(node, Vector3(l + 0.2, 0.15, w + 0.2), Vector3(l * 0.5, h + 0.075, 0), steel)
+	_shell_box(c, Vector3(l, 0.15, w), Vector3(l * 0.5, -0.075, 0), wood)
+	_shell_box(c, Vector3(l, h, WALL), Vector3(l * 0.5, h * 0.5, -w * 0.5), wood.darkened(0.2))
+	_shell_box(c, Vector3(l + 0.2, 0.15, w + 0.2), Vector3(l * 0.5, h + 0.075, 0), steel)
 	# End walls with an open doorway on the aisle.
 	for x in [0.0, l]:
-		_box(node, Vector3(WALL, h, DOOR_FROM + w * 0.5), Vector3(x, h * 0.5, (DOOR_FROM - w * 0.5) * 0.5), wood.darkened(0.3))
-		_box(node, Vector3(WALL, h, w * 0.5 - DOOR_TO), Vector3(x, h * 0.5, (DOOR_TO + w * 0.5) * 0.5), wood.darkened(0.3))
-		_box(node, Vector3(WALL, h - DOOR_HEIGHT, DOOR_TO - DOOR_FROM), Vector3(x, DOOR_HEIGHT + (h - DOOR_HEIGHT) * 0.5, (DOOR_FROM + DOOR_TO) * 0.5), wood.darkened(0.3))
-	_box(node, Vector3(l, 0.45, w - 0.4), Vector3(l * 0.5, -0.45, 0), steel.darkened(0.2))
+		_shell_box(c, Vector3(WALL, h, DOOR_FROM + w * 0.5), Vector3(x, h * 0.5, (DOOR_FROM - w * 0.5) * 0.5), wood.darkened(0.3))
+		_shell_box(c, Vector3(WALL, h, w * 0.5 - DOOR_TO), Vector3(x, h * 0.5, (DOOR_TO + w * 0.5) * 0.5), wood.darkened(0.3))
+		_shell_box(c, Vector3(WALL, h - DOOR_HEIGHT, DOOR_TO - DOOR_FROM), Vector3(x, DOOR_HEIGHT + (h - DOOR_HEIGHT) * 0.5, (DOOR_FROM + DOOR_TO) * 0.5), wood.darkened(0.3))
+	_shell_box(c, Vector3(l, 0.45, w - 0.4), Vector3(l * 0.5, -0.45, 0), steel.darkened(0.2))
 	for x in [2.2, 3.6, l - 3.6, l - 2.2]:
-		_box(node, Vector3(0.9, 0.9, 0.15), Vector3(x, -1.0, w * 0.5 - 0.3), steel.darkened(0.4))
+		_shell_box(c, Vector3(0.9, 0.9, 0.15), Vector3(x, -1.0, w * 0.5 - 0.3), steel.darkened(0.4))
+
+
+func _shell_box(c: Dictionary, size: Vector3, at: Vector3, color: Color) -> void:
+	var node: Node3D = c["node"]
+	var box_material: StandardMaterial3D = null
+	for candidate: StandardMaterial3D in c["shell_mats"]:
+		if candidate.albedo_color == color:
+			box_material = candidate
+			break
+	if box_material == null:
+		box_material = _mat(color).duplicate() as StandardMaterial3D
+		c["shell_mats"].append(box_material)
+		c["shell_colors"].append(color)
+	var bottom: float = at.y - size.y * 0.5
+	var upper: float = at.y + size.y * 0.5
+	if bottom < SHELL_CUT_Y and upper > SHELL_CUT_Y:
+		var low_size: Vector3 = Vector3(size.x, SHELL_CUT_Y - bottom, size.z)
+		var low_piece: MeshInstance3D = _box(node, low_size, Vector3(at.x, (bottom + SHELL_CUT_Y) * 0.5, at.z), color)
+		low_piece.material_override = box_material
+		var top_size: Vector3 = Vector3(size.x, upper - SHELL_CUT_Y, size.z)
+		var top_piece: MeshInstance3D = _box(node, top_size, Vector3(at.x, (SHELL_CUT_Y + upper) * 0.5, at.z), color)
+		top_piece.material_override = box_material
+		c["shell_top"].append(top_piece)
+	else:
+		var box_piece: MeshInstance3D = _box(node, size, at, color)
+		box_piece.material_override = box_material
+		if bottom >= SHELL_CUT_Y:
+			c["shell_top"].append(box_piece)
 
 
 func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: float) -> void:
@@ -1127,6 +1407,10 @@ func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: 
 ## The shell model of this car's kind, with a material of its own so the
 ## warmth can tint it; null when the file is missing.
 func _shell(c: Dictionary) -> Node3D:
+	c["shell_mats"] = []
+	c["shell_colors"] = []                  # each material's own colour, under the warmth tint
+	c["shell_top"] = []
+	c.erase("shell_mat")
 	var variant: String = String(SHELL_OF.get(Catalog.layout_id(c["def"]), "plain"))
 	var path := SHELL_ROOT % variant
 	if not _shells.has(path):
@@ -1136,13 +1420,25 @@ func _shell(c: Dictionary) -> Node3D:
 		return null
 	var shell := (packed as PackedScene).instantiate() as Node3D
 	shell.name = "Shell"
-	for mesh_node in shell.find_children("*", "MeshInstance3D", true, false):
-		var source := (mesh_node as MeshInstance3D).get_active_material(0) as StandardMaterial3D
-		if source != null:
-			var mat := source.duplicate() as StandardMaterial3D
-			mat.roughness = 1.0
-			(mesh_node as MeshInstance3D).material_override = mat
-			c["shell_mat"] = mat
+	var duplicates: Dictionary = {}
+	for mesh_node: Node in shell.find_children("*", "MeshInstance3D", true, false):
+		var shell_mesh: MeshInstance3D = mesh_node as MeshInstance3D
+		if shell_mesh.name == &"top":
+			c["shell_top"].append(shell_mesh)
+		for surface_index: int in shell_mesh.mesh.get_surface_count():
+			var source: StandardMaterial3D = shell_mesh.get_active_material(surface_index) as StandardMaterial3D
+			if source == null:
+				continue
+			if not duplicates.has(source):
+				var clone: StandardMaterial3D = source.duplicate() as StandardMaterial3D
+				clone.roughness = 1.0
+				duplicates[source] = clone
+				c["shell_mats"].append(clone)
+				c["shell_colors"].append(clone.albedo_color)
+			var shell_material: StandardMaterial3D = duplicates[source]
+			shell_mesh.set_surface_override_material(surface_index, shell_material)
+			if shell_mesh.name == &"low" and surface_index == 0:
+				c["shell_mat"] = shell_material
 	return shell
 
 
@@ -1229,7 +1525,16 @@ func _build_stove(c: Dictionary, at: Vector3) -> void:
 		node.add_child(stove)
 	else:
 		_box(node, Vector3(0.4, 0.7, 0.4), at + Vector3(0, 0.35, 0), iron)
-	_box(node, Vector3(0.1, CAR_HEIGHT - 0.7, 0.1), at + Vector3(0, 0.7 + (CAR_HEIGHT - 0.7) * 0.5, -0.1), iron)
+	var pipe_bottom: float = at.y + 0.7
+	var pipe_end: float = at.y + CAR_HEIGHT
+	var pipe_low: MeshInstance3D = _box(node, Vector3(0.1, SHELL_CUT_Y - pipe_bottom, 0.1),
+		Vector3(at.x, (pipe_bottom + SHELL_CUT_Y) * 0.5, at.z - 0.1), iron)
+	pipe_low.name = "StovePipeLow"
+	var pipe_top: MeshInstance3D = _box(node, Vector3(0.1, pipe_end - SHELL_CUT_Y, 0.1),
+		Vector3(at.x, (SHELL_CUT_Y + pipe_end) * 0.5, at.z - 0.1), iron)
+	pipe_top.name = "StovePipeTop"
+	pipe_top.visible = view_mode != "diag"
+	c["shell_top"].append(pipe_top)
 	var glow := OmniLight3D.new()
 	glow.light_color = STOVE_COLOR
 	glow.light_energy = 0.0

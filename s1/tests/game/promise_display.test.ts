@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createGame, createS1cGame, domesticPromiseMade, isStopPromise, P, promiseWhen, researchPromise, resolveStop } from '../../src/game';
 import type { Comm, Game, LootKey } from '../../src/game';
 
-// 프펑2식 이식 1단계: 약속의 남은 때를 보이고, 확인할 파견이 없던 「다음 파견에서 제외」는 지킨 것으로 치지 않고 다음 정차로 미룬다.
+// 참고 게임 2(2편)식 이식 1단계: 약속의 남은 때를 보이고, 확인할 파견이 없던 「다음 파견에서 제외」는 지킨 것으로 치지 않고 다음 정차로 미룬다.
 
 function skipPromise(g: Game): void {
   const cond = { kind: 'skip_dispatch' as const, label: '다음 파견에서 제외', now: false };

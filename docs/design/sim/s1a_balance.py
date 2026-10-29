@@ -47,7 +47,7 @@ COH0 = dict(tail=0.55, engine=0.85, guard=0.80, medtech=0.70, front=0.65)
 IDEO = dict(tail=(1, -1, -1), engine=(-1, 1, 1), guard=(-1, 1, 0), medtech=(0, -1, 1), front=(-1, -1, 1))
 OPPOSITE = dict(tail='front', front='tail', engine='medtech', medtech='engine', guard='tail')
 
-# 법 (2026-10-07 개정). 프로스트펑크식: 모두에게 좋은 법은 자원이 많이 들고, 살리는 법은 다수가 싫어한다.
+# 법 (2026-10-07 개정). 참고 게임 2식: 모두에게 좋은 법은 자원이 많이 들고, 살리는 법은 다수가 싫어한다.
 # kind 일반/통치, axes (배급, 권위, 기술), mats 처지 변화 (온기, 배급, 과밀, 노출), rels 통과 때 관계 변화,
 # like 처지 밖의 선호(입장 점수에 더함), res 자원 효과, crisis 위기 때 강제 안건이 되는 자원, open 열림 조건
 def d(**kw):

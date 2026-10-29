@@ -1,5 +1,5 @@
 extends "res://addons/gut/test.gd"
-## Decision 405 (as in Zomboid): the attack pad swings even with nobody in
+## Decision 405 (as in reference game 1): the attack pad swings even with nobody in
 ## reach. The blow comes round all the same and lands on whatever is in its
 ## arc by then; with nothing there it only tires the arm and swishes.
 

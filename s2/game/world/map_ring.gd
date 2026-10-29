@@ -93,6 +93,35 @@ static func add(original: Dictionary) -> Dictionary:
 	for x in range(old.width):
 		_extend(rg, old, Vector2i(x, 0), Rect2i(x + width, 0, 1, width), roads)
 		_extend(rg, old, Vector2i(x, old.height - 1), Rect2i(x + width, inner.end.y, 1, width), roads)
+	# A river the map names (edge_water) runs on to the new edge as it lies at the old one, its
+	# frozen bank and its deep water, so the ring road does not walk round it. Laid before the
+	# lots and trees, which stand only on clear snow.
+	var water: Array[Rect2i] = []
+	for r: Rect2i in original.get("edge_water", []):
+		for y in range(r.position.y, r.end.y):
+			if r.position.x == 0:
+				_run_water(rg, old, Vector2i(0, y), Rect2i(0, y + width, width, 1), water)
+			if r.end.x == old.width:
+				_run_water(rg, old, Vector2i(old.width - 1, y), Rect2i(inner.end.x, y + width, width, 1), water)
+		for x in range(r.position.x, r.end.x):
+			if r.position.y == 0:
+				_run_water(rg, old, Vector2i(x, 0), Rect2i(x + width, 0, 1, width), water)
+			if r.end.y == old.height:
+				_run_water(rg, old, Vector2i(x, old.height - 1), Rect2i(x + width, inner.end.y, 1, width), water)
+	for r in _merge_runs(water):
+		ring["props"].append({"kind": "water", "rect": r, "solid": "low", "facing": 0, "level": 0})
+		ring["low_blocks"].append(r)
+	# The named rects too, at the grown map's cells and out to the new edge: side_path.gd keeps
+	# its strip off an edge the river reaches, where it would walk round the river's end.
+	var reaches: Array[Rect2i] = []
+	for r: Rect2i in original.get("edge_water", []):
+		var x0 := 0 if r.position.x == 0 else r.position.x + width
+		var y0 := 0 if r.position.y == 0 else r.position.y + width
+		var x1 := g.width if r.end.x == old.width else r.end.x + width
+		var y1 := g.height if r.end.y == old.height else r.end.y + width
+		reaches.append(Rect2i(x0, y0, x1 - x0, y1 - y0))
+	if not reaches.is_empty():
+		data["edge_water"] = reaches
 	var next_id := 0
 	for b: Dictionary in data.get("buildings", []):
 		next_id = maxi(next_id, int(b["id"]) + 1)
@@ -242,6 +271,38 @@ static func _extend(g: FieldGrid, old: FieldGrid, c: Vector2i, r: Rect2i, roads:
 	if floor_kind == F.RAIL or (floor_kind == F.ROAD and old.people_can_walk(c)):
 		_paint_floor(g, r, floor_kind)
 		roads.append(r)
+
+
+## One edge cell of a named river: its ice runs on over `r`, and deep water (the low water
+## blocks) blocks it as it does inside.
+static func _run_water(g: FieldGrid, old: FieldGrid, c: Vector2i, r: Rect2i, deep: Array[Rect2i]) -> void:
+	if old.floor_at(c) != F.ICE:
+		return
+	var low := old.solid_at(c) == S.LOW
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			var at := Vector2i(x, y)
+			g.floor[g.index(at)] = F.ICE
+			g.set_solid(at, S.LOW if low else S.NONE)
+	if low:
+		deep.append(r)
+
+
+## Rows (or columns) of deep water laid one by one, joined where they lie side by side.
+static func _merge_runs(runs: Array[Rect2i]) -> Array[Rect2i]:
+	var out: Array[Rect2i] = []
+	for r in runs:
+		var joined := false
+		for i in range(out.size()):
+			var o := out[i]
+			if (o.position.x == r.position.x and o.size.x == r.size.x and o.end.y == r.position.y) \
+					or (o.position.y == r.position.y and o.size.y == r.size.y and o.end.x == r.position.x):
+				out[i] = o.merge(r)
+				joined = true
+				break
+		if not joined:
+			out.append(r)
+	return out
 
 
 static func _clear(g: FieldGrid, r: Rect2i, inner: Rect2i, lots: Array[Rect2i]) -> bool:

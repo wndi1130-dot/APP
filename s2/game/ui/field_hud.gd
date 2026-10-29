@@ -86,8 +86,8 @@ const PORTRAIT_W: float = 290.0
 ## px from the icons, from the squad's orders, from one line to the next and
 ## from the right thumb's pads under it.
 const MESSAGE_GAP: float = 10.0
-# State icons: a column down the right edge, under the zoom keys, as in Project
-# Zomboid (field_system 82). Build 116 (user): at 58x38 with 15pt words nobody
+# State icons: a column down the right edge, under the zoom keys, as in reference
+# game 1 (field_system 82). Build 116 (user): at 58x38 with 15pt words nobody
 # saw them. User 2026-10-12: pictures, not words: a round plate each
 # (status_art.gd), 72 across ('a little smaller' than the 80 first tried), or
 # 64 or 80 from the settings.

@@ -60,7 +60,12 @@ static func model(g0: Dictionary) -> Dictionary:
 	var tgt: int = TrainWorkshop.target(g0) if not dom.is_empty() else TrainWorkshop.TARGET0
 	var now: Dictionary = TrainWorkshop.now(g0)
 	var rows: Array = []
-	for id: String in TrainWorkshop.shown(g0):
+	var listed: Array[String] = TrainWorkshop.shown(g0)
+	for id: String in TrainWorkshop.ORDER:
+		# The thing on the line keeps its row (its progress and its take-back key)
+		# even after its technique stops: the line still holds it and every other key waits on it.
+		if not listed.has(id) and String(now["id"]) != id:
+			continue
 		var r: Dictionary = TrainWorkshop.RECIPES[id]
 		var cost: Array = []
 		var rc: Dictionary = r["cost"]
