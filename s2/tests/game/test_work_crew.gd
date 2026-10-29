@@ -413,7 +413,7 @@ func test_a_slipping_escort_does_not_call_retreat() -> void:
 func test_half_is_said_only_after_more_is_cleared_than_at_first_sight() -> void:
 	_ring(4)
 	_advance(1.0)
-	assert_true(_radio().contains("아직 사람 못 내보내"))
+	assert_true(_radio().contains("아직 못 내보냅니다"))
 	_advance(1.0)
 	assert_eq(_events(), ["seen"] as Array[String])
 	game.zombies.list[4]["state"] = "dead"
