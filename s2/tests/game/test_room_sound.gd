@@ -120,3 +120,17 @@ func test_inside_a_house_its_sounds_go_through_the_room_and_outside_they_do_not(
 	assert_true(a.room_cells.is_empty(), "outdoors, no room")
 	a.footstep(outside, false)
 	assert_eq(a.last_bus, "SFX", "a step outdoors is dry")
+	# One of the dead about to run, in the room with the player and outside it.
+	game.player.position = inside
+	a._tick_room(inside)
+	a.lunge_tell(game.lift(way[2], 0))
+	assert_eq(a.last_bus, FieldAudio.ROOM_BUS, "its rasp in the room is heard in the room")
+	# A dull crowbar's blow in the room: duller, and still the room's.
+	var d: int = AudioServer.get_bus_index(FieldAudio.ROOM_DULL_BUS)
+	assert_true(d >= 0, "the room has a dull bus too")
+	assert_eq(AudioServer.get_bus_send(d), StringName(FieldAudio.ROOM_BUS), "sent into the room")
+	a.blow({"at": game.lift(way[2], 0), "weapon": "crowbar", "target": "standing", "result": "body", "edge": 1})
+	assert_eq(a.last_bus, FieldAudio.ROOM_DULL_BUS, "a dull weapon's own hit in the room")
+	var away: Vector2i = way[1] * 2 - way[0]   # two cells out from the door
+	a.lunge_tell(game.lift(away, 0))
+	assert_eq(a.last_bus, "SFX", "from out in the street it is not")

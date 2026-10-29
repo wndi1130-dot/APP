@@ -121,6 +121,7 @@ const DULL_BUSES: Dictionary = {"SFX_MID": 2400.0, "SFX_FAR": 900.0}   # low-pas
 ## reverb sized by that floor (ROOM_AREA m², a closet to a hall), sent to SFX.
 ## Outdoors, and from behind a wall, there is no tail. Nothing in the rules hears it.
 const ROOM_BUS: String = "ROOM"
+const ROOM_DULL_BUS: String = "ROOM_MID"
 const ROOM_AREA: Array = [9.0, 300.0]       # m² of floor: a closet .. a hall
 const ROOM_SIZE: Array = [0.2, 0.7]         # the reverb's room_size, small .. large
 const ROOM_DAMP: Array = [0.75, 0.4]
@@ -486,19 +487,28 @@ static func _ensure_wind_bus() -> void:
 	AudioServer.add_bus_effect(i, low)
 
 
-## The room's bus: a reverb (set to the player's room by _tick_room), sent to SFX.
+## The room's bus: a reverb (set to the player's room by _tick_room), sent to SFX;
+## and ROOM_MID, as dull as SFX_MID and sent into the room (a dull weapon's own
+## hit in the player's room: duller, and still the room's).
 static func _ensure_room_bus() -> void:
-	if AudioServer.get_bus_index(ROOM_BUS) >= 0:
-		return
-	AudioServer.add_bus()
-	var i := AudioServer.bus_count - 1
-	AudioServer.set_bus_name(i, ROOM_BUS)
-	AudioServer.set_bus_send(i, "SFX")
-	var verb := AudioEffectReverb.new()
-	verb.dry = 1.0
-	verb.spread = 0.8
-	verb.hipass = 0.25   # no boom from the low end, which a phone cannot play anyway
-	AudioServer.add_bus_effect(i, verb)
+	if AudioServer.get_bus_index(ROOM_BUS) < 0:
+		AudioServer.add_bus()
+		var i := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(i, ROOM_BUS)
+		AudioServer.set_bus_send(i, "SFX")
+		var verb := AudioEffectReverb.new()
+		verb.dry = 1.0
+		verb.spread = 0.8
+		verb.hipass = 0.25   # no boom from the low end, which a phone cannot play anyway
+		AudioServer.add_bus_effect(i, verb)
+	if AudioServer.get_bus_index(ROOM_DULL_BUS) < 0:
+		AudioServer.add_bus()
+		var d := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(d, ROOM_DULL_BUS)
+		AudioServer.set_bus_send(d, ROOM_BUS)
+		var low := AudioEffectLowPassFilter.new()
+		low.cutoff_hz = float(DULL_BUSES["SFX_MID"])
+		AudioServer.add_bus_effect(d, low)
 
 
 ## The player's room from indoor cell c: the floor of the same building the air
@@ -949,7 +959,8 @@ func _fall_voice(z: Dictionary, at: Vector3) -> void:
 	var i := _next_file(String(v["kind"]), -1)
 	var band: Array = moan_band(d)
 	said.append([int(z["id"]), "fall", i])
-	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], String(band[2]), float(row["cut"]))
+	var bus: String = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
+	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], bus, float(row["cut"]))
 
 
 # ---------------------------------------------------------------- wind
@@ -1640,7 +1651,7 @@ func lunge_tell(at: Vector3) -> void:
 	played.append(TELL_GROUP)
 	var own: bool = has(TELL_GROUP)
 	var d: float = at.distance_to(game.player.position)
-	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH)
+	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH, null, ROOM_BUS if in_room(at) else "SFX")
 
 
 ## A blow's own sound (hit_feel.gd), heard to `reach` m and duller through a
@@ -1722,7 +1733,7 @@ func blow(info: Dictionary) -> void:
 	var near: float = clampf(1.0 - d / BLOW_REACH, 0.0, 1.0)
 	var plain: String = _bus_at(at)
 	# A dull weapon's own hit is duller; what came of it is heard as it is.
-	var dull: String = "SFX_MID" if int(info.get("edge", -1)) >= 1 else plain
+	var dull: String = (ROOM_DULL_BUS if plain == ROOM_BUS else "SFX_MID") if int(info.get("edge", -1)) >= 1 else plain
 	var layers: Array = blow_layers(info)
 	for i in layers.size():
 		var layer: Array = layers[i]
