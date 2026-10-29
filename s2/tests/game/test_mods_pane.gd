@@ -48,13 +48,47 @@ func _word(b: Button) -> String:
 
 func test_the_rows_are_this_trains_lived_in_cars_with_s1s_numbers() -> void:
 	var m: Dictionary = ModsPane.model(_game())
-	assert_eq(m["rows"].map(func(r: Dictionary) -> String: return r["id"]), ["tail3", "tail2", "tail1", "medtech", "guard", "front", "engine"],
+	var insulation: Array = m["rows"].filter(func(r: Dictionary) -> bool: return r["kind"] == "insulate")
+	assert_eq(insulation.map(func(r: Dictionary) -> String: return r["id"]), ["tail3", "tail2", "tail1", "medtech", "guard", "front", "engine"],
 		"the default train's cars the people live in, in train order (not the dining car, the captain's or the workshop)")
-	for r: Dictionary in m["rows"]:
+	for r: Dictionary in insulation:
 		assert_eq(r["gain"], TrainMods.insulate_numbers(r["id"]))
 		assert_eq([r["word"], r["can"]], ["단열", true])
 	assert_eq(m["rows"][0]["gain"], "온기 +2, 난방 −1할, 과밀 +2", "one of the tail's three cars")
 	assert_eq(m["need"], "")
+
+
+func test_furnish_row_shows_the_score_after_a_job_that_will_not_reach_the_next_tier() -> void:
+	var g: Dictionary = _game()
+	g["dom"]["furnish"] = {"front": {"work": 0, "jobs": [], "furnPts": 0, "tier": 1, "best": 1, "items": []}}
+	var row: Dictionary = (ModsPane.model(g)["rows"] as Array).filter(func(r: Dictionary) -> bool: return r["id"] == "furnish_front")[0]
+	assert_eq(row["gain"], "살림 1단 · 작업 뒤 점수 5/8")
+
+
+func test_furnish_rows_show_each_cars_next_tier_and_pay_and_refund_cloth() -> void:
+	var g: Dictionary = _game()
+	var rows: Array = ModsPane.model(g)["rows"].filter(func(r: Dictionary) -> bool: return r["kind"] == "furnish")
+	assert_eq(rows.size(), 6)
+	assert_eq(rows.map(func(r: Dictionary) -> String: return r["car"]), ["tail3", "tail2", "tail1", "medtech", "guard", "front"])
+	var p := _pane(g)
+	await wait_process_frames(1)
+	var key: Button = _key(p, "Key_furnish_front")
+	assert_eq((p.find_child("Gain_furnish_front", true, false) as Label).text, "살림 0단 → 1단")
+	assert_eq(key.tooltip_text, "목재 1 · 고철 3 · 일 1", "the first tier needs no cloth")
+	assert_null(_key(p, "Key_furnish_engine"))
+	g["dom"]["cloth"] = 2
+	p.show_state(g)
+	await wait_process_frames(1)
+	_key(p, "Key_furnish_front").pressed.emit()
+	assert_eq(g["dom"]["job"]["kind"], "furnish")
+	assert_eq(float(g["dom"]["cloth"]), 2.0)
+	await wait_process_frames(1)
+	assert_not_null(p.find_child("Progress_furnish_front", true, false))
+	assert_null(p.find_child("Progress_front", true, false), "insulation row is not this job")
+	assert_eq(_word(_key(p, "Key_furnish_front")), "취소")
+	_key(p, "Key_furnish_front").pressed.emit()
+	assert_null(g["dom"]["job"])
+	assert_eq([float(g["dom"]["wood"]), float(g["dom"]["scrap"]), float(g["dom"]["cloth"])], [10.0, 10.0, 2.0])
 
 
 ## Seven lived-in cars do not fit under the stores: the pane stays the car

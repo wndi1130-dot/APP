@@ -20,13 +20,15 @@ extends RefCounted
 ##
 ## Decision 449 adds W2's rounds/arrows and W4's lures to the stores.
 ## Their costs, work and counts are new values (decision 442, the PR's table).
+## Decision 486 adds X1's sled/stretcher and X4's cart/long sled/runners,
+## with the shared two-sled limit. These recipes stop at the train's stores.
 ##
-## The work is shared: parts, the making line, restoration, then insulation.
+## The work is shared: parts, the making line, restoration, then refits.
 ## Making a thing slows a refit (decision 070); the order is fixed in S2.
 ##
 ## A stretch (`stretch`) is S1 domesticSettle's order: the running technologies
 ## take their upkeep from the stores first (payUpkeep), then the workshop works
-## (`run`, S1 runWorkshop). One the stores cannot keep runs at half that
+## (`run`, S1 runWorkshop), then furnishing's comparison/piano tick. One the stores cannot keep runs at half that
 ## stretch (train_research.gd pay_upkeep, mult). S1's 「부품이 모자란다」 card is
 ## not here yet: S2 runs on, as that card's 「그냥 달린다」.
 
@@ -63,8 +65,13 @@ const RECIPES: Dictionary = {
 	"rounds": {"name": "권총탄 한 줌", "cost": {"scrap": 2}, "work": 1.0, "to": "ammo_pistol", "n": 6, "needs": {"tech": "w2", "variant": "a"}},
 	"arrows": {"name": "화살 묶음", "cost": {"wood": 2}, "work": 1.0, "to": "ammo_craft", "n": 3, "needs": {"tech": "w2", "variant": "b"}},
 	"lure": {"name": "태엽 미끼", "cost": {"parts": 1}, "work": 1.0, "to": "lures", "n": 1, "needs": {"tech": "w4"}},
+	"sled": {"name": "썰매", "cost": {"wood": 2, "scrap": 1}, "work": 1.0, "to": "sleds", "n": 1, "needs": {"tech": "x1"}},
+	"stretcher": {"name": "들것", "cost": {"wood": 2, "cloth": 1}, "work": 1.0, "to": "stretchers", "n": 1, "needs": {"tech": "x1"}},
+	"cart": {"name": "손수레", "cost": {"wood": 3, "scrap": 2, "parts": 1}, "work": 2.0, "to": "carts", "n": 1, "needs": {"tech": "x4"}},
+	"long_sled": {"name": "긴 썰매", "cost": {"wood": 4, "scrap": 1}, "work": 2.0, "to": "long_sleds", "n": 1, "needs": {"tech": "x4", "complete": true}},
+	"runner": {"name": "쇠 날", "cost": {"scrap": 2}, "work": 1.0, "to": "runners", "n": 1, "needs": {"tech": "x4", "complete": true}},
 }
-const ORDER: Array[String] = ["bow", "crowbar", "coat_long", "core_remake", "rounds", "arrows", "lure"]
+const ORDER: Array[String] = ["bow", "crowbar", "coat_long", "core_remake", "rounds", "arrows", "lure", "sled", "stretcher", "cart", "long_sled", "runner"]
 
 
 ## Decision 446: show only recipes the train can use now, in their usual order.
@@ -76,6 +83,8 @@ static func shown(g: Dictionary) -> Array[String]:
 			out.append(id)
 			continue
 		var tech: String = String(needs["tech"])
+		if bool(needs.get("complete", false)) and g.get("dom", {}).get("techs", {}).get(tech, {}).get("stage") != "done":
+			continue
 		var effect: float = TrainLawTech.variant_mult(g, tech, String(needs["variant"])) if needs.has("variant") else TrainResearch.mult(g, {}, tech)
 		if effect > 0.0:
 			out.append(id)
@@ -112,6 +121,13 @@ static func why_not(g: Dictionary, id: String) -> String:
 	var dom: Dictionary = g.get("dom", {})
 	if dom.get("make") != null:
 		return "다른 것을 만드는 중"
+	var sleds: float = float(dom.get("sleds", 0)) + float(dom.get("long_sleds", 0))
+	if id in ["sled", "long_sled"] and sleds >= 2.0:
+		return "썰매 자리는 둘까지"
+	if id in ["stretcher", "cart"] and float(dom.get(RECIPES[id]["to"], 0)) >= 1.0:
+		return "%s은 하나까지" % String(RECIPES[id]["name"])
+	if id == "runner" and float(dom.get("runners", 0)) >= sleds:
+		return "쇠 날은 썰매·긴 썰매마다 하나"
 	var cost: Dictionary = RECIPES[id]["cost"]
 	for key: String in cost:
 		var short: float = float(cost[key]) - float(dom.get(key, 0))
@@ -155,6 +171,7 @@ static func stretch(g: Dictionary) -> Dictionary:
 	TrainDom.ensure(g)
 	var starved: Array[String] = TrainResearch.pay_upkeep(g)
 	var out: Dictionary = run(g)
+	TrainLawTech.furnish_tick(g)
 	out["starved"] = starved
 	return out
 
