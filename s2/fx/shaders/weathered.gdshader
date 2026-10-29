@@ -69,9 +69,13 @@ void fragment() {
 			paint = trim;
 		}
 		if (paint.a > 0.0) {
-			// Preserve grain/shading relative to the part's own mean; keep deep shadows.
-			float shade = clamp(dot(base, vec3(0.2126, 0.7152, 0.0722)) / max(ref, 0.02), 0.0, 1.6);
-			base = mix(base, paint.rgb * shade, clamp(paint.a, 0.0, 1.0));
+			// Grain and shading relative to the part's own mean (deep shadows stay, highlights
+			// stop at 1.6); the share the paint leaves keeps the model's hue at the paint's
+			// brightness, so every model takes a set at the set's brightness.
+			vec3 lw = vec3(0.2126, 0.7152, 0.0722);
+			float r = max(ref, 0.004);
+			float shade = clamp(dot(base, lw) / r, 0.0, 1.6);
+			base = mix(base * (dot(paint.rgb, lw) / r), paint.rgb * shade, clamp(paint.a, 0.0, 1.0));
 		}
 	}
 	base = fx_model_grade(base, grade_saturation, grade_value, grade_cool, grade_cool_mix);

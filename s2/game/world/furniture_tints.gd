@@ -21,15 +21,20 @@ const KINDS: Array[String] = ["wardrobe", "shop_shelf", "bookcase", "dining_set"
 
 
 ## 줄의 "tint"가 먼저, 다음은 건물 번호(줄의 "building", 없으면 놓인 자리의 건물), 둘 다 없을 때만 칸.
-## 해시 아래 두 비트는 번호 자릿수 합으로 정해져 위 비트로 고른다(room_finish와 같이).
 static func pick(row: Dictionary, cell: Vector2i, building: int = -1) -> int:
 	if row.has("tint"):
 		return posmod(int(row["tint"]), SETS.size())
 	if row.has("building"):
 		building = int(row["building"])
 	if building >= 0:
-		return posmod(("building:%d" % building).hash() >> 9, SETS.size())
-	return posmod(("cell:%d:%d" % [cell.x, cell.y]).hash() >> 9, SETS.size())
+		return roll("building:%d" % building)
+	return roll("cell:%d:%d" % [cell.x, cell.y])
+
+
+## 글 열쇠로 판 번호를 굴린다. String.hash()(djb2)는 끝 글자가 바뀌면 값이 그만큼만 바뀌어 아래
+## 비트는 번호 자릿수 합, 위 비트는 거의 그대로라, PCG로 섞은 뒤 고른다(room_furnish.tint_for와 같이).
+static func roll(key: String) -> int:
+	return int(rand_from_seed(key.hash())[0]) % SETS.size()
 
 
 static func applies(path: String) -> bool:
@@ -57,9 +62,12 @@ static func dress(mesh: Mesh) -> void:
 
 
 ## 칠할 몸체(정점색 알파 0.75 이상)와 테두리(0.25~0.75)의 넓이 평균 선형 밝기(재질 albedo 포함).
-## 셰이더는 칠 색에 「바탕 밝기 / 이 값」을 곱해 결만 남기므로, 밝은 원목 모형과 어두운 쇠 모형이
-## 같은 판을 같은 밝기로 받는다. 칠할 곳이 없는 칸은 예전 기준 0.18.
+## 셰이더는 칠 색에 「바탕 밝기 / 이 값」을 곱해 결만 남기고 칠이 남긴 바탕도 판 밝기로 맞추므로,
+## 밝은 원목 모형과 어두운 쇠 모형이 같은 판을 같은 밝기로 받는다. 칠할 곳이 없는 칸은 예전 기준
+## 0.18. 묶음 메시는 정차마다 다시 쓰여 메시 메타에 한 번만 잰다.
 static func paint_ref(mesh: Mesh) -> Vector2:
+	if mesh.has_meta("paint_ref"):
+		return mesh.get_meta("paint_ref")
 	var sums := [0.0, 0.0]
 	var areas := [0.0, 0.0]
 	for surface in range(mesh.get_surface_count()):
@@ -85,4 +93,6 @@ static func paint_ref(mesh: Mesh) -> Vector2:
 			var area := (verts[i1] - verts[i0]).cross(verts[i2] - verts[i0]).length() * 0.5
 			sums[part] += area * (0.2126 * c.r * tint.r + 0.7152 * c.g * tint.g + 0.0722 * c.b * tint.b)
 			areas[part] += area
-	return Vector2(sums[0] / areas[0] if areas[0] > 0.0 else 0.18, sums[1] / areas[1] if areas[1] > 0.0 else 0.18)
+	var ref := Vector2(sums[0] / areas[0] if areas[0] > 0.0 else 0.18, sums[1] / areas[1] if areas[1] > 0.0 else 0.18)
+	mesh.set_meta("paint_ref", ref)
+	return ref

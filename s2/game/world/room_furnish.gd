@@ -1491,9 +1491,10 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 
 
 ## 그 집 가구의 색 판 번호(0~TINT_SETS-1). 지도와 건물로 정해져 판마다 같다.
-## 해시 아래 두 비트는 건물 번호 자릿수 합으로 정해져 위 비트로 고른다(room_finish와 같이).
+## String.hash()(djb2)는 번호가 1 바뀌면 값이 고정 간격만 바뀌어 판이 차례로 돌거나 몰리므로,
+## PCG로 섞은 뒤 고른다(furniture_tints.roll과 같이).
 static func tint_for(place: String, building: int) -> int:
-	return (("%s|%d|tint" % [place, building]).hash() >> 9) % TINT_SETS
+	return int(rand_from_seed(("%s|%d|tint" % [place, building]).hash())[0]) % TINT_SETS
 
 
 ## 방의 결: 자리(꼴과 칸)마다 0~1의 정해진 값. 같은 방은 늘 같다.

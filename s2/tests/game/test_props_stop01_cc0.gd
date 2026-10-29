@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 const KIT_DIR: String = "res://models/props_stop01"
 const FurnitureTints = preload("res://game/world/furniture_tints.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
+const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const BUDGETS: Dictionary = {
 	"workbench": 500, "bookcase": 700, "drawer_chest_spilled": 700,
 	"shop_shelf": 500, "toolbox": 200, "office_desk": 600,
@@ -311,6 +312,29 @@ func test_furniture_tint_pick_falls_back_to_repeatable_cells() -> void:
 		assert_eq(FurnitureTints.pick({}, cell), expected, "같은 칸 재호출")
 		assert_eq(FurnitureTints.pick({"kind": "workbench"}, cell), expected, "무관한 열은 해시에 섞지 않음")
 	assert_gt(seen.size(), 1, "칸 해시가 상수가 아님")
+
+
+## 판 고르기(#985 점검 L3): 이어진 건물 번호도 판을 고르게 나눠 받는다. 해시를 그대로 자르면
+## 판이 번호 차례대로 돌거나(아래 비트) 몇 채씩 몰린다(위 비트).
+func test_furniture_tint_roll_spreads_neighbouring_buildings() -> void:
+	for source: String in ["pick", "tint_for"]:
+		var counts := [0, 0, 0, 0]
+		var steps := 0
+		var run := 0
+		var longest := 0
+		var last := -1
+		for b in range(64):
+			var t: int = FurnitureTints.pick({"building": b}, Vector2i.ZERO) if source == "pick" else RoomFurnish.tint_for("houses_01", b)
+			counts[t] += 1
+			run = run + 1 if t == last else 1
+			longest = maxi(longest, run)
+			if last >= 0 and t == posmod(last + 1, 4):
+				steps += 1
+			last = t
+		for c: int in counts:
+			assert_between(c, 8, 26, "%s 판마다 몫 %s" % [source, str(counts)])
+		assert_lte(longest, 5, "%s 같은 판이 이어진 길이" % source)
+		assert_lt(steps, 40, "%s 판이 번호 차례로 돌지 않음(+1 걸음 %d/63)" % [source, steps])
 
 
 func test_furniture_tint_placed_building_and_batch_paths() -> void:
