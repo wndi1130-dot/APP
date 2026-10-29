@@ -559,8 +559,8 @@ function baseView(g: Game, card: Card): CardView {
       return {
         title: '감축 배급 요구', speaker: leader(g, 'tail'), focus: 'tail', required: true, key: 'ration_cut',
         body: past
-          ? `감축법이 다시 섰다. 꼬리칸 대표가 지난번 답을 기억하고 왔다. 꼬리칸 배급 ${r}.`
-          : `비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. 제일 적게 받는 칸에서 또 깎으면 그건 고르게 줄이는 게 아니라고 한다. 꼬리칸 배급 ${r}.`,
+          ? `감축법이 다시 섰다. 꼬리칸 대표가 왔다. "지난번 답, 우리는 기억한다." 꼬리칸 배급 ${r}.`
+          : `비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. "제일 적게 받는 우리한테서 또 깎으면, 그게 고르게 줄이는 거냐." 꼬리칸 배급 ${r}.`,
         choices: withAfford(g, [
           { id: 'cut_spare_tail', label: '꼬리칸은 뺀다', say: '꼬리칸 그릇은 그대로 둔다. 나머지 칸이 줄인다.', special: 'cut_spare_tail',
             effs: [{ t: 'rel', c: 'tail', v: k.spareRel.tail }, { t: 'rel', c: 'front', v: k.spareRel.front }],
