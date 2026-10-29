@@ -87,7 +87,7 @@ const DOOR_HP: int = 24           # three of the dead through one in about ten s
 const WALL_HP: int = 12
 const BANG_EVERY: float = 1.3     # one of the dead, one blow: as on a house door
 const REACH: float = 1.6
-## User decision 314 (as in Zomboid build 42): a blow wears the door (or its
+## User decision 314 (as in reference game 1): a blow wears the door (or its
 ## wall) only when the one striking has another of the dead this near, itself
 ## counted; one alone just knocks (the sound stays). Draft values: 1.5 cells, 2.
 const CROWD_R: float = 1.5
@@ -419,7 +419,7 @@ func tick(delta: float) -> void:
 			calling = false
 			# The train does not go without its chief: the call is lost.
 			if not game.aboard(game.player):
-				game.set_radio("기관사: 열차장이 안 탔다. 못 떠난다.", "must")
+				game.set_radio("기관사: 열차장님이 안 타셨습니다. 못 떠납니다.", "must")
 			else:
 				leaving_early()
 				game.audio.depart()
@@ -459,7 +459,7 @@ func tick(delta: float) -> void:
 		# Those still held at the ways in by the cap turn back with it.
 		game.pending_spawn.clear()
 		game.director.next_arrival = maxf(game.director.next_arrival, game.director.quiet_until)
-		game.set_radio("기관사: 채비 끝났다! 말만 하면 떠난다.", "must")
+		game.set_radio("기관사: 채비 끝났습니다! 말씀만 하시면 떠납니다.", "must")
 		game.shout_nearest(game.player.position, "ready", INF, null, true)
 
 
