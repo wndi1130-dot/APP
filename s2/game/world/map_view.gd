@@ -727,8 +727,9 @@ func _bake_container(st: SurfaceTool, id: String) -> void:
 
 ## The empty mark's four corners round a box's cell, a cold pale grey low on the
 ## floor (a stand-in; art3d gives it its look). Vertex colours are sRGB here, as
-## the floors' are (world_vis.gdshader makes them linear).
-const EMPTY_MARK := Color(0.70, 0.74, 0.80)
+## the floors' are (world_vis.gdshader makes them linear); this grey is the one
+## the mark has shown so far, when it was made linear twice (decision 472).
+const EMPTY_MARK := Color(0.45, 0.51, 0.60)
 
 
 func _empty_corners(st: SurfaceTool, at: Vector3) -> void:
