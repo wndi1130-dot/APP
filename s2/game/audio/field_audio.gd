@@ -1362,9 +1362,11 @@ const BOX_GAP_MS: int = 500
 var box_quiet_until: int = 0
 
 
-## Box `c` sounds `what` ("open", "close", "put", "take"); false when its kind has no such
-## sound or an opening or shutting comes too soon after the last.
+## Box `c` sounds `what` ("open", "close", "put", "take"); false when it is no box on the
+## map, its kind has no such sound or an opening or shutting comes too soon after the last.
 func box_sound(c: Dictionary, what: String) -> bool:
+	if not c.has("cell"):
+		return false
 	var voice: Array = BOX_RUSTLE.get(what, [])
 	if voice.is_empty():
 		var kind := String(BOX_KIND.get(String(c.get("furniture", "")), ""))

@@ -83,6 +83,7 @@ static func open(hud, want: Dictionary) -> void:
 	# Once more after the first layout, should a row have grown with its width.
 	_fit_screen.call_deferred(pane, sides)
 	hud.run_while_taking()
+	hud.box_pane = hud.modal
 	hud.box_shown_now(String(at.get("id", "")) if String(at.get("kind", "")) == "box" else "")
 
 

@@ -429,8 +429,10 @@ var inv_sort: String = "weight"
 ## goes on under the pane until the thing is out; and the bar on its row.
 var taking_box: String = ""
 var take_bar: ProgressBar
-## The box the pane last opened with its sound (card R3 가, box_shown_now).
+## The box the pane last opened with its sound (card R3 가, box_shown_now), and the shade
+## that pane stood on: another panel in its place shuts the box at once.
 var box_shown: String = ""
+var box_pane: Control = null
 var modal_slows: bool = false     # the panel up slows the field instead of stopping it
 var status_pads: Array = []        # the state icons, most urgent first
 var leaving: Dictionary = {}       # the beat as a held train leaves: {"result", "t", "veil", "words"}
@@ -1551,7 +1553,7 @@ func tick(delta: float) -> void:
 	_tick_portrait(p)
 	_tick_allies()
 	_tick_take()
-	if box_shown != "" and not modal_open:
+	if box_shown != "" and (not modal_open or not is_instance_valid(box_pane) or modal != box_pane):
 		box_shown_now("")
 	_tick_grab(p, delta)
 	_tick_toasts(delta)
@@ -2951,7 +2953,7 @@ func box_shown_now(id: String) -> void:
 	if game.audio == null:
 		return
 	var boxes: Dictionary = game.data["containers"]
-	if id != "" and game.audio.box_sound(boxes.get(id, {}), "open"):
+	if id != "" and boxes.has(id) and game.audio.box_sound(boxes[id], "open"):
 		return
 	if was != "" and boxes.has(was):
 		game.audio.box_sound(boxes[was], "close")

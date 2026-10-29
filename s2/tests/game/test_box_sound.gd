@@ -124,3 +124,66 @@ func test_taking_sounds_once_as_it_starts_and_putting_each_time() -> void:
 	var m: int = a.played.size()
 	assert_true(game.actions.store(p, id, "bandage"))
 	assert_eq(_since(game, m), ["box_put"])
+
+
+func test_taking_one_sounds_once() -> void:
+	var game = _game()
+	var p = game.player
+	var a = game.audio
+	p.items.clear()
+	var id := _box(game, "dresser", ["food_pack"], true)
+	var n: int = a.played.size()
+	game.actions.take(p, id, 0)
+	assert_eq(p.action, "take")
+	assert_eq(_since(game, n), ["box_take"])
+
+
+## The four are for the ear: nothing the dead hear is made, and the impact file that stands
+## in for an empty group is what plays.
+func test_the_box_sounds_are_no_world_sound_and_a_stand_in_plays() -> void:
+	var game = _game()
+	var a = game.audio
+	var c: Dictionary = game.data["containers"][_box(game, "dresser")]
+	game.sounds.clear()
+	for what: String in ["open", "close", "put", "take"]:
+		a.box_quiet_until = 0
+		assert_true(a.box_sound(c, what), what)
+	assert_eq(game.sounds.size(), 0, "nothing the dead hear")
+	a.box_quiet_until = 0
+	assert_true(a.box_sound(c, "open"))
+	assert_not_null(a.last_shot, "the stand-in is heard")
+	if a.last_shot != null:
+		assert_true(a.last_shot.stream.resource_path.get_file().begins_with("wooden"), "a drawer stands in with wood")
+	assert_false(a.box_sound({}, "open"), "no box on the map, no sound")
+
+
+func test_another_panel_in_its_place_shuts_the_box() -> void:
+	var game = _game()
+	var hud = game.hud
+	var a = game.audio
+	var id := _box(game, "dresser", ["food_pack"], true)
+	a.box_quiet_until = 0
+	hud.loot(id)
+	var n: int = a.played.size()
+	a.box_quiet_until = 0
+	hud._open_pane("다른 창")
+	hud.tick(0.016)
+	assert_eq(_since(game, n), ["box_close_drawer"], "the pane gone under another: the box shuts at once")
+	assert_eq(hud.box_shown, "")
+	hud.box_shown_now("no_such_box")
+	hud.box_shown_now("")
+	assert_eq(_since(game, n), ["box_close_drawer"], "a box not on the map sounds nothing")
+
+
+func test_from_the_box_to_the_ground_the_box_shuts() -> void:
+	var game = _game()
+	var hud = game.hud
+	var a = game.audio
+	var id := _box(game, "dresser", ["food_pack"], true)
+	a.box_quiet_until = 0
+	hud.loot(id)
+	var n: int = a.played.size()
+	a.box_quiet_until = 0
+	hud._inv_place({"kind": "ground", "id": "", "name": "바닥"})
+	assert_eq(_since(game, n), ["box_close_drawer"], "the ground has no lid")
+	assert_eq(hud.box_shown, "")
