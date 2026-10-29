@@ -34,6 +34,7 @@ extends Node
 const FieldGame = preload("res://game/field_game.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
+const RouteBands = preload("res://game/train/route_bands.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
@@ -384,6 +385,16 @@ func _cinema_on() -> bool:
 ## The place of the slice's field (FieldMaps; "" is its default, Sulechów).
 func _field_place() -> String:
 	return String(opts.get("place", ""))
+
+
+## The band of the slice's stop on stretch `seg` (decision 494). The field's map, when it is a
+## stop's own map (the first stop's, which the slice plays on FIRST_SEG), is that stop, and
+## the stops after it count on from there; any other map takes the stretch's stop.
+func _stop_band(seg: int) -> String:
+	var own: Array = RouteBands.place_stop(FieldMaps.resolve(_field_place()))
+	if own.is_empty():
+		return RouteBands.stop_band("prologue", seg)
+	return RouteBands.stop_band(String(own[0]), int(own[1]) + seg - FIRST_SEG)
 
 
 ## 「정차 고르기」: the roof of the running train, not the card at once. The
@@ -924,6 +935,7 @@ func _show_train(phase: String, seg: int) -> void:
 	var rules: Dictionary = TrainRules.load_default()
 	rules["train"]["phase"] = phase
 	rules["train"]["seg"] = seg
+	rules["view"]["region"] = _stop_band(seg + 1 if phase == "travel" else seg)
 	for c: String in (rules.get("comms", {}) as Dictionary).keys():
 		if (train_g.get("comms", {}) as Dictionary).has(c):
 			var sit: Array = St.situation(train_g, train_t, c)
@@ -1426,6 +1438,7 @@ func _field_opts() -> Dictionary:
 	# building it from the pick gives the same).
 	o["act"] = "prologue"
 	o["act_progress"] = prologue_progress(int(STEPS[step][2]))
+	o["region"] = _stop_band(int(STEPS[step][2]))
 	# A look asked of the slice for check shots (opts "look", as outside_look
 	# reads it) is the stop's as well: the train, the stop scene and the field alike.
 	var want: Dictionary = opts.get("look", {})
