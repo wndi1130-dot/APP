@@ -88,3 +88,34 @@ func test_the_field_plays_on_a_pushed_down_map() -> void:
 	assert_gt(game.zombies.list.filter(func(z: Dictionary) -> bool: return int(z.get("horde", -1)) == 0).size(), 0, "a horde comes in over the new ground")
 	game.finish("departed")
 	assert_true(game.ended)
+
+
+## Every cell's walk caches and both path grids' points (solid, weight), to compare.
+static func _paths_of(g: FieldGrid) -> Array:
+	var points := PackedFloat32Array()
+	for y in range(g.height):
+		for x in range(g.width):
+			var c := Vector2i(x, y)
+			points.append(1.0 if g.people_path.is_point_solid(c) else 0.0)
+			points.append(1.0 if g.dead_path.is_point_solid(c) else 0.0)
+			points.append(g.people_path.get_point_weight_scale(c))
+	return [g.opq.duplicate(), g.walk_people.duplicate(), g.walk_dead.duplicate(), points]
+
+
+## A finished map's paths are right on every floor; carried over (each cell's caches read
+## only the cell, the band added round them the empty kind's) they are what a refresh makes.
+func test_grown_paths_are_carried_over_as_a_refresh_would_make_them() -> void:
+	var was: Dictionary = FieldMaps.build("houses_01")
+	for lv in was["levels"]:
+		var g: FieldGrid = was["levels"][lv]
+		var built := _paths_of(g)
+		g.refresh_paths()
+		assert_eq(built, _paths_of(g), "level %d of the finished map is right as built" % lv)
+	for sides: Array in [[30, 0, 0, 7], [0, 12, 25, 0]]:
+		var now: Dictionary = MapShift.grow(was, sides[0], sides[1], sides[2], sides[3], true, true)
+		for lv in now["levels"]:
+			var g: FieldGrid = now["levels"][lv]
+			assert_true(g.paths_ready(), "level %d" % lv)
+			var carried := _paths_of(g)
+			g.refresh_paths()
+			assert_eq(carried, _paths_of(g), "level %d grown %s: carried paths are a refresh's" % [lv, str(sides)])
