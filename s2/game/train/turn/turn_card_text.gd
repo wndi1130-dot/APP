@@ -49,7 +49,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["speaker"] = _leader(g, t, "tail")
 			out["focus"] = "tail"
 			out["body"] = ("감축법이 다시 섰다. 꼬리칸 대표가 지난번 답을 기억하고 왔다. 꼬리칸 배급 %d." % r) if past != null \
-				else ("비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. 제일 적게 받는 칸에서 또 깎으면 그건 고르게가 아니라고 한다. 꼬리칸 배급 %d." % r)
+				else ("비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. 제일 적게 받는 칸에서 또 깎으면 그건 고르게 줄이는 게 아니라고 한다. 꼬리칸 배급 %d." % r)
 			says = ["꼬리칸 그릇은 그대로 둔다. 나머지 칸이 줄인다.", "앞칸이 한 단 더 줄인다. 꼬리칸 몫은 거기서 나온다.", "예외는 없다. 모두 같이 줄인다."]
 			why = ["아끼는 식량이 구간마다 %s로 준다." % _num(-float(k["spareFood"])),
 				"앞칸 배급 처지는 모두 −%s까지 내려간다. 아끼는 식량은 그대로다." % _num(2.0 * float(k["sit"])), ""]
@@ -86,7 +86,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var who: Dictionary = _leader(g, t, c)
 			out["speaker"] = who
 			out["focus"] = c
-			out["body"] = "%s이(가) 어긴 약속 둘을 적은 종이를 내밀었다. 한 번 더 어기면 %s은(는) 열차장의 약속을 받지 않는다." % [who["name"], t["COMM_NAME"][c]]
+			out["body"] = "%s이(가) 열차장이 어긴 약속 둘을 적은 종이를 내밀었다. 한 번 더 어기면 %s은(는) 약속을 받지 않는다." % [who["name"], t["COMM_NAME"][c]]
 			says = ["내 잘못이다. 지금 갚겠다.", "지난 일이다. 앞을 보자."]
 		"need_warn":
 			var def: Dictionary = t["NEEDS"][card["text"]]
@@ -136,14 +136,14 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 		"leash":
 			out["speaker"] = _leader(g, t, c)
 			out["focus"] = c
-			out["body"] = "%s이(가) 스스로 비밀을 털어놓고 열차장이 협박했다고 말했다." % g["comms"][c]["leader"]["name"]
+			out["body"] = "%s이(가) 제 비밀을 털어놓고 열차장이 그걸로 협박했다고 말했다." % g["comms"][c]["leader"]["name"]
 			says = ["제 입으로 털어놨으면 됐다. 더 할 말 없다."]
 		"bite_found":
 			# S1 cards.ts bite_found: the medic brings it; a corpse's bite is no hidden one, so no word of the captain hiding it.
 			out["speaker"] = _leader(g, t, "medtech")
 			out["focus"] = c
 			if card.get("text") == "corpse":
-				out["body"] = "%s이(가) 두었던 시신에게 물렸다." % str(card.get("who", "그 사람"))
+				out["body"] = "남겨 두었던 시신에게 %s이(가) 물렸다." % str(card.get("who", "그 사람"))
 				says = ["아직 늦지 않았다. 의무칸으로 옮겨 잘라라!", "빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.", "일어나기 전에 끝내라. 가족은 뒤로 물려라."]
 			else:
 				out["body"] = ("%s %s의 붕대 아래가 검게 부었다. 자르기엔 늦었다. 열차장이 숨겨 줬다는 말이 벌써 돈다." % [str(card.get("text", "")), str(card.get("who", "대원"))]).strip_edges()
@@ -182,7 +182,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["speaker"] = _leader(g, t, "medtech")
 			out["focus"] = c
 			out["body"] = "%s에서 %s의 아이가 나온다. %s" % [t["COMM_NAME"][c], mother, "거긴 너무 춥다." if cold else "칸은 그럭저럭 따뜻하다."]
-			says = ["의무칸을 비워라. 아이는 따뜻한 데서 나온다.", "옮길 틈이 없다. 거기서 받아라."]
+			says = ["의무칸을 비워라. 아이는 따뜻한 데서 받는다.", "옮길 틈이 없다. 거기서 받아라."]
 		"naming":
 			var mother: String = str(card.get("who", ""))
 			out["speaker"] = {"name": mother, "role": String(t["COMM_NAME"][c]), "comm": c}
@@ -193,7 +193,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			# S1 cards.ts tension_crisis: the ladder's last rung, the tail's leader brings it.
 			out["speaker"] = _leader(g, t, "tail")
 			out["focus"] = "tail"
-			out["body"] = "칸마다 사람들이 모였다. 통로마다 막아선 사람들이 거래를 끊었다. 오늘 밤을 넘기지 못할 수도 있다."
+			out["body"] = "칸마다 사람들이 모였다. 통로를 막아서고 거래도 끊었다. 오늘 밤을 넘기지 못할 수도 있다."
 			says = ["경비대, 통로를 비워라. 손은 쓰지 마라.", "창고를 열어라! 오늘 밤은 모두 배불리 먹는다.", "(열차장은 아무 말도 하지 않는다.)"]
 		"protest":
 			# S1 cards.ts protest: a protest, or a riot (text "riot") with fire when it has caught.
@@ -400,7 +400,7 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 			out["body"] = _again(past, "급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 %d 남았다." % coal, {
 				"burn_melt": "급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 %d 남았다." % coal,
 				"snow_melt": "급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 이번에도 자기들이냐고 묻는다.",
-				"hold_on": "보일러 물이 바닥 근처다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.",
+				"hold_on": "보일러 물이 거의 바닥났다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.",
 			}, "급수탑이 또 얼었다.")
 			says.append_array(["물 없는 보일러는 고철이다. 석탄을 태워서라도 녹여라!",
 				("%s%s 한 번 더 한다. 장갑은 앞칸에서 걷어 줘라." % [name, _iga(name)]) if _was(past, "snow_melt") else ("%s%s 양동이를 들어라. 눈을 퍼다 녹인다." % [name, _josa(name, "은/는")]),

@@ -267,7 +267,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
         body: again(past, `급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 ${Math.round(g.coal)} 남았다.`, {
           burn_melt: `급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 ${Math.round(g.coal)} 남았다.`,
           snow_melt: '급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 이번에도 자기들이냐고 묻는다.',
-          hold_on: '보일러 물이 바닥 근처다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.',
+          hold_on: '보일러 물이 거의 바닥났다. 지난번처럼 버티면 관이 탈 수 있다고 기관사가 말한다.',
         }, '급수탑이 또 얼었다.'),
         choices: [
           { id: 'burn_melt', label: '불을 피워 녹인다', say: '물 없는 보일러는 고철이다. 석탄을 태워서라도 녹여라!', effs: [{ t: 'coal', v: -3 }] },
@@ -559,7 +559,7 @@ function baseView(g: Game, card: Card): CardView {
         title: '감축 배급 요구', speaker: leader(g, 'tail'), focus: 'tail', required: true, key: 'ration_cut',
         body: past
           ? `감축법이 다시 섰다. 꼬리칸 대표가 지난번 답을 기억하고 왔다. 꼬리칸 배급 ${r}.`
-          : `비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. 제일 적게 받는 칸에서 또 깎으면 그건 고르게가 아니라고 한다. 꼬리칸 배급 ${r}.`,
+          : `비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. 제일 적게 받는 칸에서 또 깎으면 그건 고르게 줄이는 게 아니라고 한다. 꼬리칸 배급 ${r}.`,
         choices: withAfford(g, [
           { id: 'cut_spare_tail', label: '꼬리칸은 뺀다', say: '꼬리칸 그릇은 그대로 둔다. 나머지 칸이 줄인다.', special: 'cut_spare_tail',
             effs: [{ t: 'rel', c: 'tail', v: k.spareRel.tail }, { t: 'rel', c: 'front', v: k.spareRel.front }],
@@ -652,7 +652,7 @@ function baseView(g: Game, card: Card): CardView {
       // 칸 안에 두었던 시신에게 물렸다(S1b, K02 1). 숨긴 일이 아니니 '열차장이 숨겼다'는 말과 신임 벌점은 없다.
       if (card.text === 'corpse') return {
         title: '시신에게 물렸다', speaker: leader(g, 'medtech'), focus: c, required: true, key: 'bite_corpse',
-        body: `${card.who ?? '그 사람'}이(가) 두었던 시신에게 물렸다.`,
+        body: `남겨 두었던 시신에게 ${card.who ?? '그 사람'}이(가) 물렸다.`,
         choices: withAfford(g, [
           { label: '의무칸에서 자른다', say: '아직 늦지 않았다. 의무칸으로 옮겨 잘라라!', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }], special: 'bite_cut',
             ...(canCut ? {} : { disabled: '감염 창이 닫혔다' }) },
@@ -676,7 +676,7 @@ function baseView(g: Game, card: Card): CardView {
       const refused = why ? { disabled: why } : {};
       return {
         title: '마지막 기회', speaker: leader(g, 'tail'), focus: 'tail', required: true,
-        body: '칸마다 사람들이 모였다. 통로마다 막아선 사람들이 거래를 끊었다. 오늘 밤을 넘기지 못할 수도 있다.',
+        body: '칸마다 사람들이 모였다. 통로를 막아서고 거래도 끊었다. 오늘 밤을 넘기지 못할 수도 있다.',
         choices: withAfford(g, [
           { label: '경비대를 푼다', say: '경비대, 통로를 비워라. 손은 쓰지 마라.', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'crisis_guard', ...refused },
           { label: '창고를 연다', say: '창고를 열어라! 오늘 밤은 모두 배불리 먹는다.', effs: [{ t: 'food', v: -15 }, { t: 'coal', v: -10 }, { t: 'rel', c: 'tail', v: 8 }], special: 'crisis_yield' },
@@ -721,7 +721,7 @@ function baseView(g: Game, card: Card): CardView {
       // 결과 아크(정치 흐름 3.4): 같은 칸과의 약속을 두 번 어기면 그 칸 대표가 장부를 들고 온다. 한 번 더 어기면 공개 협상이 닫힌다(council_log.ts).
       return {
         title: '약속 장부', speaker: leader(g, c), focus: c, required: true,
-        body: `${leader(g, c).name}이(가) 어긴 약속 둘을 적은 종이를 내밀었다. 한 번 더 어기면 ${COMM_NAME[c]}은(는) 열차장의 약속을 받지 않는다.`,
+        body: `${leader(g, c).name}이(가) 열차장이 어긴 약속 둘을 적은 종이를 내밀었다. 한 번 더 어기면 ${COMM_NAME[c]}은(는) 약속을 받지 않는다.`,
         choices: withAfford(g, [
           { label: '사과하고 갚는다', say: '내 잘못이다. 지금 갚겠다.', effs: [{ t: 'lux', v: -3 }, { t: 'rel', c, v: 8 }] },
           { label: '물리친다', say: '지난 일이다. 앞을 보자.', effs: [{ t: 'rel', c, v: -5 }], special: 'ledger_refuse' },
@@ -731,7 +731,7 @@ function baseView(g: Game, card: Card): CardView {
     case 'leash': {
       return {
         title: '목줄이 끊겼다', speaker: leader(g, c), focus: c, required: true,
-        body: `${g.comms[c].leader.name}이(가) 스스로 비밀을 털어놓고 열차장이 협박했다고 말했다.`,
+        body: `${g.comms[c].leader.name}이(가) 제 비밀을 털어놓고 열차장이 그걸로 협박했다고 말했다.`,
         choices: [{ label: '알았다', say: '제 입으로 털어놨으면 됐다. 더 할 말 없다.', effs: [] }],
       };
     }
@@ -828,7 +828,7 @@ function baseView(g: Game, card: Card): CardView {
         title: '아이가 나온다', speaker: leader(g, 'medtech'), focus: c, required: true,
         body: `${COMM_NAME[c]}에서 ${mother}의 아이가 나온다. ${cold ? '거긴 너무 춥다.' : '칸은 그럭저럭 따뜻하다.'}`,
         choices: withAfford(g, [
-          { label: '의무칸으로 옮긴다', say: '의무칸을 비워라. 아이는 따뜻한 데서 나온다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
+          { label: '의무칸으로 옮긴다', say: '의무칸을 비워라. 아이는 따뜻한 데서 받는다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
           { label: '그 칸에서 낳는다', say: '옮길 틈이 없다. 거기서 받아라.', effs: [], special: cold ? 'birth_weak' : 'birth_ok' },
         ]),
       };
