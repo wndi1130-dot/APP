@@ -70,6 +70,14 @@ func _board(who) -> Vector2i:
 	return Vector2i(-1, -1)
 
 
+## One of the squad who is not the player (the player is game.squad[0]).
+func _companion():
+	for s in game.squad:
+		if s != game.player:
+			return s
+	return null
+
+
 func test_the_hammer_knocks_while_the_boarding_lasts_then_stops() -> void:
 	var a = game.audio
 	var p = game.player
@@ -113,7 +121,8 @@ func test_a_boarding_begun_again_at_once_knocks_as_one_hammer() -> void:
 
 func test_the_hammer_is_softer_once_the_player_walks_off() -> void:
 	var a = game.audio
-	var q = game.squad[0]
+	var q = _companion()
+	assert_not_null(q, "a companion in the squad")
 	var at := FieldGrid.center(_board(q))
 	assert_eq(String(q.action), "craft", "a companion at the boarding")
 	game.player.position = at + Vector3(1.5, 0, 0)
