@@ -5,9 +5,6 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
 const FieldWork = preload("res://game/field_work.gd")
 const MAX_PATH_M: float = 90.0
-## Places whose work site loads stacked wood (decision 486): the houses first, the other
-## places without coal wagons once the crew runs pass there as well.
-const WOOD_JOB_PLACES: Array[String] = ["houses"]
 const JOB_PATH_M: float = 60.0
 ## A pile nearer the doors than this stands at the platform's edge (houses_03 has two, 3 and
 ## 7 m out), where the crew would not go out at all: taken only when no farther pile is in reach.
@@ -263,20 +260,23 @@ static func _nearer(a: Dictionary, b: Dictionary) -> bool:
 	return float(a["path_m"]) < float(b["path_m"])
 
 
-## A place without coal wagons gets stacked wood at its work site: what the place's wood
-## table leaves after the map's salvage (FieldWork.budget), so the stop's sum is the table's.
-## The map's own site stays where the crew walks to it within JOB_PATH_M; else, or with
-## none, the site moves beside the nearest wood pile. A site with a job already is kept.
+## A place in the wood table without coal wagons gets stacked wood at its work site: what
+## the table leaves after the map's salvage (FieldWork.budget), so the stop's sum is the
+## table's. Less than one load for the whole crew leaves no job: the key would send four
+## carriers and an escort for a plank (decision 442). The map's own site stays where the
+## crew walks to it within JOB_PATH_M; else, or with none, the site moves beside the
+## nearest wood pile. A site with a job already is kept.
 static func _wood_job(data: Dictionary, field: PackedInt32Array) -> void:
 	var place: String = String(data.get("place_kind", ""))
-	if not WOOD_JOB_PLACES.has(place) or FieldWork.wagon_coal(data) > FieldWork.EMPTY:
+	if not FieldWork.WOOD_TABLE.has(place) or FieldWork.wagon_coal(data) > FieldWork.EMPTY:
 		return
 	var spots: Dictionary = data.get("spots", {}) as Dictionary
 	var site: Dictionary = spots.get("work_site", {}) as Dictionary
 	if site.has("job"):
 		return
 	var amount: float = float(FieldWork.WOOD_TABLE.get(place, 0)) - float(FieldWork.budget(data)["wood"])
-	if amount <= FieldWork.EMPTY:
+	var stack: Dictionary = FieldWork.JOBS["wood_stack"]
+	if amount < float(stack["carriers"]) * float(stack["trip"]) - FieldWork.EMPTY:
 		return
 	var g: FieldGrid = data["grid"] as FieldGrid
 	var path_m: float = _metres(field, g, site["cell"]) if site.has("cell") else -1.0
