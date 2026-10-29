@@ -1,0 +1,134 @@
+{
+ "cell_m": 0.5,
+ "origin": [
+  0.25,
+  -1.25
+ ],
+ "cells": [
+  31,
+  5
+ ],
+ "walk_row": 3,
+ "marks": {
+  ".": "free",
+  "#": "a thing",
+  "S": "the stove",
+  "D": "a door's way",
+  "W": "the walking line",
+  "G": "a window"
+ },
+ "cars": {
+  "tail1": {
+   "layout": "coach",
+   "floor": [
+    "###############################",
+    "##.####.......SS.......####...#",
+    "D..........#..................D",
+    "DWWWWWWWWWWWWWWWWWWWWWWWWWWWWWD",
+    "D.............................D"
+   ],
+   "back_wall": "#GGG#######GGG.#.GGG#######GGG#",
+   "end_walls": "....",
+   "floor_free": 75,
+   "wall_free": 6
+  },
+  "tail2": {
+   "layout": "coach",
+   "floor": [
+    "###############################",
+    "##.####.......SS.......####...#",
+    "D..........#..................D",
+    "DWWWWWWWWWWWWWWWWWWWWWWWWWWWWWD",
+    "D.............................D"
+   ],
+   "back_wall": ".GGG#######GGG.#.##########GGG#",
+   "end_walls": "....",
+   "floor_free": 75,
+   "wall_free": 7
+  },
+  "tail3": {
+   "layout": "coach",
+   "floor": [
+    "###############################",
+    "##.####.......SS.......####...#",
+    "D.............................D",
+    "DWWWWWWWWWWWWWWWWWWWWWWWWWWWWWD",
+    "D.............................D"
+   ],
+   "back_wall": ".GGG#######GG#####GG#######GGG#",
+   "end_walls": "#...",
+   "floor_free": 76,
+   "wall_free": 4
+  },
+  "medtech": {
+   "layout": "medical",
+   "floor": [
+    "##############################.",
+    ".####.########SS#############..",
+    "D..........#......###.........D",
+    "DWWWWWWWWWWWWWWWWWWWWWWWWWWWWWD",
+    "D.............................D"
+   ],
+   "back_wall": "#GGGGG.#.GGGGG...GGGGG...GGGGG#",
+   "end_walls": "....",
+   "floor_free": 59,
+   "wall_free": 12
+  },
+  "guard": {
+   "layout": "guard",
+   "floor": [
+    ".#############################.",
+    "...####.....##SS...........###.",
+    "D.............................D",
+    "DWWWWWWWWWWWWWWWWWWWWWWWWWWWWWD",
+    "D.............................D"
+   ],
+   "back_wall": "#GGGGG...GGGGG...GGGG#####GGGG#",
+   "end_walls": "....",
+   "floor_free": 80,
+   "wall_free": 10
+  },
+  "front": {
+   "layout": "front",
+   "floor": [
+    ".##############################",
+    "...####.......SS......###.....#",
+    "D..........##.........###.....D",
+    "DWWWWWWWWWWWWWWWWWWWWWWWWWWWWWD",
+    "D.............................D"
+   ],
+   "back_wall": ".GGGGG.#.GGGGG.#.GGGGG.#.GGGGG.",
+   "end_walls": "....",
+   "floor_free": 75,
+   "wall_free": 12
+  },
+  "captain": {
+   "layout": "captain",
+   "floor": [
+    "S##############################",
+    "..............###.............#",
+    "D.............###.............D",
+    "DWWWWWWWWWWWWWWWWWWWWWWWWWWWWWD",
+    "D.............................D"
+   ],
+   "back_wall": "##GGGG...GGGGG...GGGGG#####GGG.",
+   "end_walls": "....",
+   "floor_free": 82,
+   "wall_free": 11
+  },
+  "dining": {
+   "layout": "dining",
+   "floor": [
+    "S##############################",
+    ".###########################...",
+    "D..#########################..D",
+    "DWWW######################WWWWD",
+    "D.............................D"
+   ],
+   "back_wall": ".####G.#.GGGGG.#.GGGGG.#.GGGG##",
+   "end_walls": "..#.",
+   "floor_free": 37,
+   "wall_free": 10
+  }
+ }
+}
