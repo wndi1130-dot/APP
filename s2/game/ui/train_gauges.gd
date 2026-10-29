@@ -92,6 +92,8 @@ const METER_WHY_NAME: Dictionary = {
 }
 const METER_OTHER_BELOW: float = 0.5
 const METER_NO_CHANGE := "지난 정산 뒤 바뀐 것 없음"
+## The meter slip's widest share of the screen (the car pane starts past it).
+const METER_WHY_SHARE := 0.55
 ## The trust well's cracks: one 24 × 8 tile, repeated (c9.css).
 const TILE_CRACKS: Array = [
 	[Vector2(0, 3.4), Vector2(3.6, 2.5), Vector2(6.4, 4.7), Vector2(10.2, 3.9), Vector2(13.4, 1.3), Vector2(17, 3.7), Vector2(21, 2.9), Vector2(24, 3.4)],
@@ -371,8 +373,9 @@ static func meter_why_model(g0: Dictionary, key: String) -> Dictionary:
 		rows[0]["shown"] = snappedf(float(rows[0]["shown"]) + left, 0.1)
 	for row: Dictionary in rows:
 		row["text"] = "%s %s" % [row["word"], meter_signed(float(row["shown"]))]
-	var head: String = METER_NO_CHANGE if entries.is_empty() else "지난 정산 뒤 %s %s → %s (%s)" % [
-		"신임" if key == "trust" else "긴장", meter_num(shown_before), meter_num(shown_now), meter_signed(shown_now - shown_before)]
+	# The two values read as the bar reads (whole numbers); the change and the rows keep one decimal.
+	var head: String = METER_NO_CHANGE if entries.is_empty() else "지난 정산 뒤 %s %d → %d (%s)" % [
+		"신임" if key == "trust" else "긴장", int(round(before)), int(round(now)), meter_signed(shown_now - shown_before)]
 	return {"key": key, "before": before, "now": now, "total": total, "head": head, "rows": rows}
 
 
@@ -1313,7 +1316,16 @@ func _meter_why(key: String) -> Control:
 	var c: Control = _slip_paper()
 	c.set_meta("band_width", size.x)
 	c.set_meta("key", key)
-	var width: float = minf(440.0 * k, minf(size.x, get_viewport_rect().size.x) - 32.0 * k)
+	var texts: Array = [m["head"]]
+	for row: Dictionary in m["rows"]:
+		texts.append(row["text"])
+	# As wide as its longest line, never past 440 (mockup px) nor past
+	# METER_WHY_SHARE of the screen, so it stays clear of the car pane at the right.
+	var natural: float = 0.0
+	for i in texts.size():
+		natural = maxf(natural, _text_w(_label(String(texts[i]), UiFonts.NUMBER, 600 if i == 0 else 500, 12.0, WHY_INK, 0.48)))
+	var room: float = minf(size.x, get_viewport_rect().size.x)
+	var width: float = minf(clampf(natural + 49.0, 160.0, 440.0) * k, minf(room * METER_WHY_SHARE, room - 32.0 * k))
 	width = maxf(1.0, width)
 	var scroll := ScrollContainer.new()
 	scroll.name = "SlipScroll"
@@ -1325,9 +1337,6 @@ func _meter_why(key: String) -> Control:
 	lines.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lines.add_theme_constant_override("separation", int(4.0 * k))
 	scroll.add_child(lines)
-	var texts: Array = [m["head"]]
-	for row: Dictionary in m["rows"]:
-		texts.append(row["text"])
 	var height: float = 14.0 * k
 	for i in texts.size():
 		var label := _label(String(texts[i]), UiFonts.NUMBER, 600 if i == 0 else 500, 12.0, WHY_INK, 0.48)

@@ -381,7 +381,7 @@ func test_meter_slips_read_the_latest_settle_and_later_choices() -> void:
 	_assert_meter_total(trust, 50.0, 46.0)
 	_assert_meter_total(tension, 40.0, 39.11)
 	assert_eq(trust["head"], "지난 정산 뒤 신임 50 → 46 (−4)")
-	assert_eq(tension["head"], "지난 정산 뒤 긴장 40 → 39.1 (−0.9)")
+	assert_eq(tension["head"], "지난 정산 뒤 긴장 40 → 39 (−0.9)", "values as the bar shows them, the change to one decimal")
 	assert_almost_eq(float(_meter_row(tension, "card")["d"]), -3.3, 1e-6, "two choices share one cause")
 	assert_almost_eq(float(_meter_row(tension, "other")["d"]), 0.31, 1e-6)
 	assert_eq(_meter_row(tension, "mood")["word"], "집단들의 마음", "S1's exact word")
