@@ -352,7 +352,7 @@ function choose(g: Game, card: Card, ch: Choice): void {
     }
     case 'dark:call': {
       const e = signEmbers(g, card)[0];
-      if (e && !g.cards.some(k => k.kind === 'demand')) darkCard(g, { kind: 'demand', comm: e.who }, false);
+      if (e && !g.cards.some(k => k.kind === 'demand') && !(g.lateOn && g.lateCards?.some(k => k.kind === 'demand'))) darkCard(g, { kind: 'demand', comm: e.who }, false);
       break;
     }
     case 'dark:armory:on': d.armory = true; break;

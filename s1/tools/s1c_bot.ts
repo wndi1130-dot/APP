@@ -14,6 +14,7 @@ import { loadContentEvents } from './content_fs';
 loadContentEvents();
 
 import { enableSupplies, SUPPLIES_BOT } from '../src/game/supplies';
+import { enableLate } from '../src/game/late';
 import { moveTask } from '../src/game/domestic/workshop';
 
 export type S1aPolicy = 'caretaker' | 'first';
@@ -28,6 +29,13 @@ export type DomPolicy = 'engaged' | 'idle';
 /** 솥 정책. thin·mixed: 늘 그 방식. thin_low·mixed_low: 식량이 POT_LOW 아래일 때만(아니면 그대로). mixed_once: mixed_low와 같되 한 번 들키면 다시 섞지 않는다. */
 export type PotPolicy = 'thin' | 'mixed' | 'thin_low' | 'mixed_low' | 'mixed_once';
 export const POT_LOW = 50;
+
+export interface BotOptions {
+  /** 서류 미루기(결정 514). 기준 봇은 켜도 later를 고르지 않는다. */
+  late?: boolean;
+  /** later가 있으면 늘 고른다. 미루기도 함께 켠다. */
+  lateAlways?: boolean;
+}
 
 /** 측정용 훅(tools/tension_probe.ts). 판의 결과를 바꾸지 않고 읽기만 한다. */
 export interface BotProbe {
@@ -466,6 +474,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   if (opts.scoutGear) enableScoutGear(g);
   for (const [id, variant] of opts.gearTechs ?? []) if (g.dom) g.dom.techs[id] = { stage: 'done', defect: false, progress: 3, need: 3, ...(variant ? { variant } : {}) };
   if (opts.budget) enableBudget(g);
+  if (opts.late || opts.lateAlways) enableLate(g);
   if (opts.eventPack) enableEventPack(g);
   if (!opts.noPrologue) startPrologue(g);
   const seen = new Set<number>();
@@ -572,14 +581,14 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
       }
       else if (card.kind === 'protest') idx = protestPick(card, view, !!opts.riotNone);
       else if (opts.pickRule && (card.kind === 'travel' || card.kind === CONTENT_CARD_KIND)) {
-        const open = view.choices.map((c, i) => ({ c, i })).filter(x => !x.c.disabled).map(x => x.i);
+        const open = view.choices.map((c, i) => ({ c, i })).filter(x => !x.c.disabled && x.c.id !== 'later').map(x => x.i);
         idx = opts.pickRule === 'second' ? (open[1] ?? open[0]) : open[Math.floor(pickRand() * open.length)];
       }
-      else if (!opts.scoreCards) idx = view.choices.findIndex(c => !c.disabled);
+      else if (!opts.scoreCards) idx = view.choices.findIndex(c => !c.disabled && c.id !== 'later');
       else {
         let best = -1e9;
         idx = 0;
-        view.choices.forEach((c, i) => { if (c.disabled) return; const s = scoreChoice(g, c); if (s > best) { best = s; idx = i; } });
+        view.choices.forEach((c, i) => { if (c.disabled || c.id === 'later') return; const s = scoreChoice(g, c); if (s > best) { best = s; idx = i; } });
       }
       // 멈춘 열차(구현명세 가 7절): 수색대가 열려 있으면 수색대, 없으면 열차장이 직접 간다. 안 보내는 길은 둘 다 막혔을 때만.
       if (card.kind === 'trip_depart' || card.kind === 'trip_lost') {
@@ -588,10 +597,14 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
         if (go !== undefined) idx = go;
       }
       if (opts.forcePick) {
-        const f = opts.forcePick(g, card, view, view.choices.map((c, i) => ({ c, i })).filter(x => !x.c.disabled).map(x => x.i));
+        const f = opts.forcePick(g, card, view, view.choices.map((c, i) => ({ c, i })).filter(x => !x.c.disabled && x.c.id !== 'later').map(x => x.i));
         if (f !== undefined) idx = f;
       }
       const segAtPick = g.seg;
+      if (opts.lateAlways) {
+        const later = view.choices.findIndex(c => c.id === 'later' && !c.disabled);
+        if (later >= 0) idx = later;
+      }
       opts.probe?.beforePick?.(g, card, view, idx);
       if (!chooseCard(g, card.uid, idx)) throw new Error(`카드를 못 골랐다: ${card.kind} ${idx}`);
       opts.probe?.afterPick?.(g, card);
