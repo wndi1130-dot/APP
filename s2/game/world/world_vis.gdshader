@@ -75,8 +75,9 @@ const vec3 ASPHALT = vec3(0.37, 0.37, 0.38);
 const vec3 CONCRETE = vec3(0.76, 0.75, 0.72);
 const vec3 LINE_PAINT = vec3(0.76, 0.64, 0.30);
 const vec3 GRAVEL = vec3(0.55, 0.52, 0.47);
-// Faded olive grass of late autumn (decision 499): hue about 90 degrees, the dry grass's lightness.
-const vec3 LATE_GREEN = vec3(0.47, 0.54, 0.35);
+// Faded olive grass of late autumn (decision 499): grey olive, hue 90 degrees and saturation 0.23,
+// at the dry grass's lightness (linear 0.215 to its 0.22).
+const vec3 LATE_GREEN = vec3(0.46, 0.52, 0.40);
 
 // Decision 496: metres per layer; the K1 row is road, patch, pavement, grass.
 // Later bands add rows here. Until then every band uses the K1 materials.
