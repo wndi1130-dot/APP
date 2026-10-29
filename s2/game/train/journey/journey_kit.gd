@@ -83,6 +83,35 @@ const WATER := Color(0.08, 0.1, 0.12)
 const ICE := Color(0.52, 0.57, 0.6)
 
 static var _meshes: Dictionary = {}
+## Each model's height in its mesh (AABB y, NAN without the file), read on the main
+## thread by warm(): plan() on a worker reads only this.
+static var _heights: Dictionary = {}
+
+
+## Read the kit's models on the main thread, each one's mesh and height, a model at a
+## time while `budget_usec` lasts (below 0: all); true once all are read. A plan() on a
+## worker then only reads (a worker loading meshes into _meshes while the stop scene
+## lays the same kit here would race): only the main thread writes _heights, and a
+## journey sends no plan() to a worker before this is done. Cheap once done.
+static func warm_step(budget_usec: int) -> bool:
+	var from: int = Time.get_ticks_usec()
+	for model: String in TALL:
+		if _heights.has(model):
+			continue
+		if budget_usec >= 0 and Time.get_ticks_usec() - from >= budget_usec:
+			return false
+		var mesh: Mesh = mesh_of(model)
+		_heights[model] = mesh.get_aabb().size.y if mesh != null else NAN
+	return true
+
+
+## All the kit's models read at once.
+static func warm() -> void:
+	warm_step(-1)
+
+
+static func warmed() -> bool:
+	return _heights.size() >= TALL.size()
 
 
 ## How white and wet the stretch's look lays the ground (as outside_view.gd reads it).
@@ -104,8 +133,14 @@ static func weather_of(look: Dictionary) -> Dictionary:
 ## far (the woods and tree lines out to FAR_W too: a camera that sees the horizon),
 ## near_clear (how far out the camera's side keeps low, NEAR_CLEAR by default).
 static func build(kind: String, s0: float, s1: float, section: Dictionary, look: Dictionary, opts: Dictionary = {}) -> Node3D:
-	var root := Node3D.new()
-	root.name = "Land_%s_%d" % [kind, int(s0)]
+	return make(plan(kind, s0, s1, section, look, opts))
+
+
+## The piece worked out as data only, the same as build lays it but with no node, mesh
+## or server call, so a worker thread can work it out ahead: its surfaces as SurfaceTool
+## arrays, what stands as a MultiMesh buffer a model a block, what was built. warm()
+## first, on the main thread.
+static func plan(kind: String, s0: float, s1: float, section: Dictionary, look: Dictionary, opts: Dictionary = {}) -> Dictionary:
 	var w: Dictionary = weather_of(look)
 	if opts.has("white"):
 		w["white"] = float(opts["white"])
@@ -134,27 +169,48 @@ static func build(kind: String, s0: float, s1: float, section: Dictionary, look:
 	_poles(p)
 	if bool(opts.get("far", false)):
 		_far_band(p)
+	# What was built, for the tests (a neutral piece has none).
+	var out := {"name": "Land_%s_%d" % [kind, int(s0)], "houses": int(p["houses"]), "churches": int(p["churches"]),
+		"shadow": bool(opts.get("cast_shadow", false))}
 	if bool(opts.get("ground", true)):
-		_ground(root, p)
+		out["ground"] = _ground_arrays(p)
 	elif not (p["roads"] as Array).is_empty():
 		# On another scene's ground (the stop scene's): its roads only, laid on it.
 		var st := SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		for r: Dictionary in p["roads"]:
 			_road(st, p, r)
-		var roads := _mesh_node(st)
+		out["roads"] = st.commit_to_arrays()
+	if not (p["lake"] as Dictionary).is_empty():
+		out["water"] = _water_plan(p)
+	if bool(p["built"]):
+		out["built"] = (p["build"] as SurfaceTool).commit_to_arrays()
+	out["props"] = _prop_buffers(p)
+	return out
+
+
+## The piece's nodes from its plan (the main thread): the surfaces' meshes, a MultiMesh
+## a model a block.
+static func make(pl: Dictionary) -> Node3D:
+	var root := Node3D.new()
+	root.name = String(pl["name"])
+	if pl.has("ground"):
+		var ground := _array_node(pl["ground"])
+		ground.name = "Ground"
+		root.add_child(ground)
+	elif pl.has("roads"):
+		var roads := _array_node(pl["roads"])
 		roads.name = "Roads"
 		root.add_child(roads)
-	if not (p["lake"] as Dictionary).is_empty():
-		_water(root, p)
-	if bool(p["built"]):
-		var mi := _mesh_node(p["build"] as SurfaceTool)
+	if pl.has("water"):
+		root.add_child(_water_node(pl["water"]))
+	if pl.has("built"):
+		var mi := _array_node(pl["built"])
 		mi.name = "Built"
 		root.add_child(mi)
-	_commit_props(root, p, bool(opts.get("cast_shadow", false)))
-	# What was built, for the tests (a neutral piece has none).
-	root.set_meta("houses", int(p["houses"]))
-	root.set_meta("churches", int(p["churches"]))
+	_commit_buffers(root, pl["props"], bool(pl["shadow"]))
+	root.set_meta("houses", int(pl["houses"]))
+	root.set_meta("churches", int(pl["churches"]))
 	return root
 
 
@@ -392,10 +448,19 @@ static func _put_t(p: Dictionary, model: String, t: Transform3D) -> void:
 
 
 static func _scale_of(model: String, tall: float) -> float:
-	var mesh: Mesh = mesh_of(model)
-	if mesh == null:
+	var h: float = NAN
+	if _heights.has(model):
+		h = float(_heights[model])
+	elif OS.get_thread_caller_id() == OS.get_main_thread_id():
+		# Not warmed: read the mesh now (the main thread only).
+		var mesh: Mesh = mesh_of(model)
+		h = mesh.get_aabb().size.y if mesh != null else NAN
+	else:
+		# A worker cannot read a mesh: a model TALL lacks stands unscaled.
+		push_warning("journey_kit: %s not warmed (TALL), laid unscaled" % model)
+	if is_nan(h):
 		return 1.0
-	return tall / maxf(mesh.get_aabb().size.y, 0.01)
+	return tall / maxf(h, 0.01)
 
 
 static func path_of(model: String) -> String:
@@ -415,20 +480,48 @@ static func mesh_of(model: String) -> Mesh:
 	return mesh
 
 
-static func _commit_props(root: Node3D, p: Dictionary, shadow: bool) -> void:
+## What stands, a model a block, as MultiMesh buffers (TRANSFORM_3D: a 3x4 matrix by
+## rows, twelve floats an instance).
+static func _prop_buffers(p: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
 	var props: Dictionary = p["props"]
+	for key: String in props:
+		var list: Array = props[key]
+		if list.is_empty():
+			continue
+		var buf := PackedFloat32Array()
+		buf.resize(list.size() * 12)
+		var i: int = 0
+		for t: Transform3D in list:
+			var b: Basis = t.basis
+			buf[i] = b.x.x
+			buf[i + 1] = b.y.x
+			buf[i + 2] = b.z.x
+			buf[i + 3] = t.origin.x
+			buf[i + 4] = b.x.y
+			buf[i + 5] = b.y.y
+			buf[i + 6] = b.z.y
+			buf[i + 7] = t.origin.y
+			buf[i + 8] = b.x.z
+			buf[i + 9] = b.y.z
+			buf[i + 10] = b.z.z
+			buf[i + 11] = t.origin.z
+			i += 12
+		out[key] = {"count": list.size(), "buffer": buf}
+	return out
+
+
+static func _commit_buffers(root: Node3D, props: Dictionary, shadow: bool) -> void:
 	for key: String in props:
 		var model: String = key.split("|")[0].trim_suffix("_far")
 		var mesh: Mesh = mesh_of(model)
-		var list: Array = props[key]
-		if mesh == null or list.is_empty():
+		if mesh == null:
 			continue
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.mesh = mesh
-		mm.instance_count = list.size()
-		for i in list.size():
-			mm.set_instance_transform(i, list[i])
+		mm.instance_count = int(props[key]["count"])
+		mm.buffer = props[key]["buffer"]
 		var node := MultiMeshInstance3D.new()
 		node.name = key.replace("|", "_")
 		node.multimesh = mm
@@ -575,7 +668,7 @@ static func _shore_at(p: Dictionary, x: float) -> float:
 
 ## The bank under the line and the land each side: ballast, the bank's slope, the
 ## drain, then the land of this kind rising and falling a little; roads laid on it.
-static func _ground(root: Node3D, p: Dictionary) -> void:
+static func _ground_arrays(p: Dictionary) -> Array:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var length: float = p["len"]
@@ -609,9 +702,7 @@ static func _ground(root: Node3D, p: Dictionary) -> void:
 			_tri_colors(st, a, c, d)
 	for r: Dictionary in p["roads"]:
 		_road(st, p, r)
-	var node := _mesh_node(st)
-	node.name = "Ground"
-	root.add_child(node)
+	return st.commit_to_arrays()
 
 
 ## [position, colour] of the ground at x, z.
@@ -681,7 +772,7 @@ static func _road(st: SurfaceTool, p: Dictionary, r: Dictionary) -> void:
 
 
 ## The lake's water: open and dark, or iced over and dusted where the cold has frozen it.
-static func _water(root: Node3D, p: Dictionary) -> void:
+static func _water_plan(p: Dictionary) -> Dictionary:
 	var l: Dictionary = p["lake"]
 	var side: float = float(l["side"])
 	var length: float = p["len"]
@@ -704,17 +795,23 @@ static func _water(root: Node3D, p: Dictionary) -> void:
 			_quad(st, a, d, e, b, c)
 		else:
 			_quad(st, a, b, e, d, c)
+	return {"arrays": st.commit_to_arrays(), "iced": iced}
+
+
+static func _water_node(water: Dictionary) -> MeshInstance3D:
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, water["arrays"])
 	var node := MeshInstance3D.new()
 	node.name = "Water"
-	node.mesh = st.commit()
+	node.mesh = mesh
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
 	mat.vertex_color_is_srgb = true
-	mat.roughness = lerpf(0.12, 0.55, iced)
+	mat.roughness = lerpf(0.12, 0.55, float(water["iced"]))
 	mat.metallic_specular = 0.6
 	node.material_override = mat
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(node)
+	return node
 
 
 # ---------------------------------------------------------------- mesh helpers
@@ -732,9 +829,11 @@ static func _tone(p: Dictionary, base: Color, cover: float, more_wet: float = 0.
 	return bare.lerp(Color(snowy.r, snowy.g, snowy.b), 0.75 * white).linear_to_srgb()
 
 
-static func _mesh_node(st: SurfaceTool) -> MeshInstance3D:
+static func _array_node(arrays: Array) -> MeshInstance3D:
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	var node := MeshInstance3D.new()
-	node.mesh = st.commit()
+	node.mesh = mesh
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
 	# sRGB numbers, as the field's floors and the stop scene's ground (mood C9).
