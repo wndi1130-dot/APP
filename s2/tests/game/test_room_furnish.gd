@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
+const FurnitureTints = preload("res://game/world/furniture_tints.gd")
 const S = FieldGrid.Solid
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
@@ -622,3 +623,46 @@ func test_one_house_one_tint_and_houses_differ() -> void:
 	for b: int in by_house:
 		sets[by_house[b]] = true
 	assert_gt(sets.size(), 1, "houses roll their own sets: %s" % str(by_house))
+
+
+## 지도가 둔 가구도 그 집의 새 가구와 같은 판으로 그린다(map_view는 FurnitureTints.pick으로 고른다).
+func test_kept_furniture_takes_its_houses_tint() -> void:
+	var d := FieldMaps.build("houses_01")
+	var levels: Dictionary = d.get("levels", {0: d["grid"]})
+	var set_of: Dictionary = {}
+	for p: Dictionary in d["props"]:
+		if p.has("counter_run"):
+			set_of[int(p["building"])] = int(p["tint"])
+	var kept := 0
+	for p: Dictionary in d["props"]:
+		if p.has("counter_run") or not p.get("rect") is Rect2i:
+			continue
+		var r: Rect2i = p["rect"]
+		var g: FieldGrid = levels.get(int(p.get("level", 0)), d["grid"])
+		var b := g.building_at(r.position + r.size / 2)
+		if set_of.has(b):
+			assert_eq(FurnitureTints.pick(p, r.position, b), set_of[b], "%s in house %d" % [p.get("kind", ""), b])
+			kept += 1
+	assert_gt(kept, 0, "houses_01 keeps some of its map's furniture in furnished houses")
+
+
+## 새 협탁은 그 집 침대의 베개 쪽 끝 곁에만 선다(발치나 침대 앞 가운데가 아니다).
+func test_nightstands_stand_by_the_pillow() -> void:
+	var stands := 0
+	for map_name: String in ["houses_01", "houses_02"]:
+		var d := FieldMaps.build(map_name)
+		var heads: Dictionary = {}  # "층:건물" -> [베개 칸]
+		for p: Dictionary in d["props"]:
+			if p.get("kind", "") == "bed" and p.has("counter_run"):
+				var key := "%d:%d" % [int(p.get("level", 0)), int(p["building"])]
+				heads.get_or_add(key, []).append(RoomFurnish.bed_head(p["rect"], int(p["facing"])))
+		for p: Dictionary in d["props"]:
+			if p.get("kind", "") != "nightstand" or not p.has("counter_run"):
+				continue
+			var at: Vector2i = (p["rect"] as Rect2i).position
+			var by_pillow := false
+			for h: Vector2i in heads.get("%d:%d" % [int(p.get("level", 0)), int(p["building"])], []):
+				by_pillow = by_pillow or absi(at.x - h.x) + absi(at.y - h.y) == 1
+			assert_true(by_pillow, "%s: the nightstand at %s stands by a pillow" % [map_name, str(at)])
+			stands += 1
+	assert_gt(stands, 2, "nightstands still stand")
