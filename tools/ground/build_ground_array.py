@@ -26,7 +26,7 @@ LAYERS = (
     ("pavement", "PavingStones136", 2.5),
     ("gravel", "Gravel041", 1.5),
     ("ballast", "Gravel043", 1.5),
-    ("soil", "Ground106", 3.0),
+    ("soil", "Ground106", 3.55),  # not the grass's 3 m: their height difference must not repeat
     ("dry_grass", "Ground037", 3.0),
 )
 SIZE = 512
@@ -113,7 +113,7 @@ def build_layer(src: Path, index: int) -> tuple[np.ndarray, dict]:
     rgba = np.rint(np.dstack((rgb_out, alpha)) * 255.0).astype(np.uint8)
     quantized = rgba.astype(np.float64) / 255.0
     output_mean = quantized[:, :, :3].mean(axis=(0, 1))
-    if np.any(np.abs(output_mean - 0.5) > 0.03):
+    if np.any(np.abs(output_mean - 0.5) > 0.005):
         raise ValueError(f"F-NORMALIZATION: {source_id}: {output_mean.tolist()}")
     ratio = seam_ratio(quantized)
     row = {

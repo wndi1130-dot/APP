@@ -159,7 +159,7 @@
     "index": 6,
     "name": "soil",
     "source_id": "Ground106",
-    "tile_m": 3.0,
+    "tile_m": 3.55,
     "source_mean_srgb": [
       0.4623838424673184,
       0.38290567585222646,

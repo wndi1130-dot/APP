@@ -11,7 +11,7 @@ const EXPECTED := [
 	["pavement", "PavingStones136", 2.5],
 	["gravel", "Gravel041", 1.5],
 	["ballast", "Gravel043", 1.5],
-	["soil", "Ground106", 3.0],
+	["soil", "Ground106", 3.55],
 	["dry_grass", "Ground037", 3.0],
 ]
 
@@ -66,10 +66,11 @@ func test_shader_exposes_the_three_ground_uniforms() -> void:
 
 
 func test_room_floor_and_sight_lines_stay_in_place() -> void:
+	# Only that they are still there: their exact lines belong to the room-finish and sight work.
 	var source := FileAccess.get_file_as_string(SHADER_PATH)
-	assert_true(source.contains("vec3 room_floor(int code, vec2 p, vec2 px, out vec3 tone) {"))
-	assert_true(source.contains("\t\t\tvec3 finish = room_floor(rc, world_pos.xz, room_px, tone);"))
-	assert_true(source.contains("\tfloat lit = mix(1.0, max(reveal, floor_k), mask_on);"))
+	assert_true(source.contains("vec3 room_floor("))
+	assert_true(source.contains("= room_floor(rc, world_pos.xz"))
+	assert_true(source.contains("float lit ="))
 
 
 func test_png_rgb_means_are_half_strength_in_each_layer() -> void:
@@ -85,13 +86,15 @@ func test_png_rgb_means_are_half_strength_in_each_layer() -> void:
 	image.convert(Image.FORMAT_RGBA8)
 	var bytes := image.get_data()
 	var pixels := 512 * 512
+	# Every fourth pixel: a quarter of the loop, the same mean within a few thousandths.
+	var step := 4
 	for layer in EXPECTED.size():
 		var sum := Vector3i.ZERO
 		var first := layer * pixels * 4
-		for offset in range(first, first + pixels * 4, 4):
+		for offset in range(first, first + pixels * 4, 4 * step):
 			sum.x += bytes[offset]
 			sum.y += bytes[offset + 1]
 			sum.z += bytes[offset + 2]
 		for channel in 3:
-			var mean := float(sum[channel]) / float(pixels * 255)
-			assert_almost_eq(mean, 0.5, 0.03, "%s channel %d" % [EXPECTED[layer][0], channel])
+			var mean := float(sum[channel]) / float(pixels / step * 255)
+			assert_almost_eq(mean, 0.5, 0.005, "%s channel %d" % [EXPECTED[layer][0], channel])

@@ -83,7 +83,9 @@ const vec3 LATE_GREEN = vec3(0.46, 0.52, 0.40);
 // Later bands add rows here. Until then every band uses the K1 materials.
 // The two asphalt photos hold their pattern three times over each way, so one
 // tile spans three 4 m (6 m) patterns rather than repeating every 1.3 m (2 m).
-const float GROUND_TILE_M[8] = float[8](12.0, 18.0, 3.0, 2.5, 1.5, 1.5, 3.0, 3.0);
+// Soil and grass take different sizes, so their height difference (which places
+// the grass's bare patches) does not repeat every tile.
+const float GROUND_TILE_M[8] = float[8](12.0, 18.0, 3.0, 2.5, 1.5, 1.5, 3.55, 3.0);
 const ivec4 GROUND_BAND_LAYERS[1] = ivec4[1](ivec4(0, 1, 3, 7));
 // The second read's turn (37 degrees) and scale (2.7 times larger).
 const mat2 GROUND_TURN = mat2(vec2(0.79863551, 0.60181502), vec2(-0.60181502, 0.79863551)) / 2.7;
@@ -91,8 +93,9 @@ const mat2 GROUND_TURN = mat2(vec2(0.79863551, 0.60181502), vec2(-0.60181502, 0.
 // Two reads per layer, at most two layers per fragment. Both projections are
 // continuous in world space. Loose layers take the second tile 2.7 times larger,
 // turned 37 degrees; the laid slabs (2 concrete, 3 pavement) would show their joints
-// twice that way, so theirs is turned half round and moved by whole slabs, on the
-// same joint lattice (concrete's lattice is the tile, the pavement's a quarter of it).
+// twice that way, so theirs is only moved by whole slabs (a quarter tile each way:
+// both photos lay their joints on a quarter-tile lattice), which keeps the joints
+// on the same lines whatever their phase in the texels.
 // The callers sit in per-kind branches, so the gradients come in from the
 // fragment (dx, dy: of p) and the reads take explicit gradients.
 vec4 ground_layer(int layer, vec2 p, vec2 dx, vec2 dy) {
@@ -101,9 +104,9 @@ vec4 ground_layer(int layer, vec2 p, vec2 dx, vec2 dy) {
 	vec2 qx = dx / m;
 	vec2 qy = dy / m;
 	bool slabbed = layer == 2 || layer == 3;
-	vec2 turned = slabbed ? (layer == 3 ? vec2(0.5, 0.25) : vec2(0.0)) - q : GROUND_TURN * q + vec2(0.37, 0.61);
+	vec2 turned = slabbed ? q + vec2(0.25, 0.25) : GROUND_TURN * q + vec2(0.37, 0.61);
 	vec4 a = textureGrad(ground_layers, vec3(q, float(layer)), qx, qy);
-	vec4 b = textureGrad(ground_layers, vec3(turned, float(layer)), slabbed ? -qx : GROUND_TURN * qx, slabbed ? -qy : GROUND_TURN * qy);
+	vec4 b = textureGrad(ground_layers, vec3(turned, float(layer)), slabbed ? qx : GROUND_TURN * qx, slabbed ? qy : GROUND_TURN * qy);
 	float blend = smoothstep(0.25, 0.75, fx_vnoise(p / 9.0 + vec2(13.7, 2.3)));
 	vec4 detail = mix(a, b, blend);
 	return vec4(detail.rgb * 2.0, detail.a);
@@ -136,10 +139,8 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 			// Pavement beside a street: slabs across its run, grit in the joints.
 			int along = int(-detail + 0.5) - 1;
 			if (ground_layers_on) {
-				// Along z the slabs turn a quarter, and the gradients with them.
-				bool turn = along == 1;
-				return CONCRETE * ground_layer(layers.z, turn ? vec2(p.y, -p.x) : p,
-					turn ? vec2(dx.y, -dx.x) : dx, turn ? vec2(dy.y, -dy.x) : dy).rgb;
+				// Square slabs, laid the same way along x and z, so they run on round a corner.
+				return CONCRETE * ground_layer(layers.z, p, dx, dy).rgb;
 			}
 			return slabs(CONCRETE, p, px, along > 1 ? 2 : along, 1.25) * (0.94 + 0.1 * grain.a);
 		}
@@ -152,9 +153,13 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 		if (ground_layers_on) {
 			// Decision 499: late autumn keeps a faded olive green in drifts through the dry grass, and all the
 			// green (these drifts, the old faded ones and the photo's) dries back as the cold comes (fx_cold.x:
-			// late autumn 0~0.4, early winter 0.4~0.85), so early winter reads as dry grass.
-			float late = 1.0 - smoothstep(0.1, 0.45, fx_cold.x);
-			float dry = smoothstep(0.3, 0.6, fx_cold.x);
+			// late autumn 0~0.4, early winter 0.4~0.85), so early winter reads as dry grass. fx_cold.w is the
+			// leaf left on the trees, 1 in late autumn and 0 all through the spring side (Atmosphere
+			// AUTUMN_KEYS, SPRING_KEYS): the green comes only on the autumn side, and the thaw's grass stays
+			// as dry as the winter left it.
+			float autumn = smoothstep(0.0, 0.2, fx_cold.w);
+			float late = (1.0 - smoothstep(0.1, 0.45, fx_cold.x)) * autumn;
+			float dry = max(smoothstep(0.3, 0.6, fx_cold.x), 1.0 - autumn);
 			grass = mix(grass, LATE_GREEN, late * smoothstep(0.3, 0.55, fx_vnoise(p * 0.21 + vec2(4.1, 17.3))));
 			grass = mix(grass, DRY_GRASS, dry);
 			vec4 grass_detail = ground_layer(layers.w, p, dx, dy);
@@ -163,7 +168,7 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 			vec4 soil_detail = ground_layer(6, p, dx, dy);
 			// Decision 496: interpolated corner soil is only a gentle bias. Height
 			// and world-space noise place the edge, without thresholding that bias.
-			float bias = (clamp(detail, 0.0, 1.0) - 0.5) * 0.3;
+			float bias = (clamp(detail, 0.0, 1.0) - 0.5) * 0.45;
 			float edge = (soil_detail.a - grass_detail.a) * 0.75 + (patch - 0.5) * 0.45;
 			edge += (fx_vnoise(p * 0.8 + vec2(19.1, 3.7)) - 0.5) * 0.15 + bias;
 			float aa = 0.08 + min(0.12, max(px.x, px.y) * 0.15);
@@ -217,14 +222,9 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 	} else if (kind == 2) {
 		int bits = int(detail + 0.5);
 		int along = (bits & 16) != 0 ? 0 : (bits & 32) != 0 ? 1 : 2;
-		vec3 c;
-		if (ground_layers_on) {
-			bool turn = along == 1;
-			c = CONCRETE * 1.04 * ground_layer(2, turn ? vec2(p.y, -p.x) : p,
-				turn ? vec2(dx.y, -dx.x) : dx, turn ? vec2(dy.y, -dy.x) : dy).rgb;
-		} else {
-			c = slabs(CONCRETE * 1.04, p, px, along, 3.0) * (0.95 + 0.08 * grain.a);
-		}
+		// The platform keeps its long cast slabs with the joints across its run (결정 469 C4):
+		// the concrete photo is laid in small squares (decision 496 waits for a long-slab one).
+		vec3 c = slabs(CONCRETE * 1.04, p, px, along, 3.0) * (0.95 + 0.08 * grain.a);
 		// The stripe a step back from the edge over the rails, and its coping.
 		float edge = 1.0;
 		edge = (bits & 1) != 0 ? min(edge, f.y) : edge;
@@ -699,7 +699,7 @@ void fragment() {
 	// Laid surfaces (road, platform, pavement) take less of the soil's blotches.
 	// Less on bare ground than under snow, so the blotches do not break the forms nor
 	// sink grass in a shadow under V 0.15 (결정 470 dark share).
-	float laid = (kind == 1 || kind == 2 || ground_detail < -0.5) ? (ground_layers_on ? 0.15 : 0.35) : (kind == 0 || kind == 5) ? (ground_layers_on ? 0.3 : 0.45) : 1.0;
+	float laid = (kind == 1 || kind == 2 || ground_detail < -0.5) ? (ground_layers_on && kind != 2 ? 0.15 : 0.35) : (kind == 0 || kind == 5) ? (ground_layers_on ? 0.3 : 0.45) : 1.0;
 	base *= 1.0 + (soil - 0.5) * 1.3 * ground_k * wander * mix(1.0, laid, bare_k);
 	base *= 1.0 - 0.35 * wet;
 	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));

@@ -4,6 +4,15 @@
                                                           cells of the same floor kind, against mid-cell lines
   python ground_gauge.py repeat <shot.png> <cells.json>   pattern repeats: autocorrelation peaks of the
                                                           high-passed open ground
+  python ground_gauge.py phase  <shot.png> <cells.json>   cell-edge strength on grass: the brightness gradient
+                                                          by position across the cell, at the edge (+-1/26 cell)
+                                                          over the cell's mean, along x and z (1.0 = no line)
+
+The cells json comes from a straight-down shot (orthographic, zoom 24, 780 px tall): "centre" (world x, z of the
+image centre), "zoom", "size", and "cells" [x, y, floor kind, building (-1 outdoors), ground code], the ground code
+being MapView.ground_details' cell value (open ground: 0 grass, below -0.5 pavement). Without the code, open ground
+stays one kind. seams and repeat also count the photo slabs' joints on pavement and roads (a 0.625 m and 0.75 m
+lattice), so read them by kind; phase reads grass only.
 """
 import json
 import sys
@@ -133,5 +142,32 @@ def repeat(png, cj):
                       "strongest": peaks[:6]}, ensure_ascii=False))
 
 
+def phase(png, cj, bins=13):
+    _, grey, p, cells, u_of, v_of = load(png, cj)
+    h, w = grey.shape
+    meta = json.load(open(cj, encoding="utf-8"))
+    cx, cz = meta["centre"]
+    gx = np.abs(np.roll(grey, -1, 1) - np.roll(grey, 1, 1))
+    gy = np.abs(np.roll(grey, -1, 0) - np.roll(grey, 1, 0))
+    uu, vv = np.meshgrid(np.arange(w), np.arange(h))
+    mx = (uu - w / 2.0) / p + cx
+    mz = (vv - h / 2.0) / p + cz
+    ix, iz = np.floor(mx).astype(int), np.floor(mz).astype(int)
+    grass = np.zeros_like(grey, dtype=bool)
+    for (x, y), (k, b) in cells.items():
+        if k == "GRASS" and b < 0:
+            grass |= (ix == x) & (iz == y)
+    if not grass.any():
+        print(json.dumps({"shot": png, "grass_px": 0}, ensure_ascii=False))
+        return
+    out = {}
+    for name, g, frac in (("x", gx, mx - ix), ("z", gy, mz - iz)):
+        b = np.minimum((((frac + 0.5 / bins) % 1.0) * bins).astype(int), bins - 1)
+        prof = np.array([g[grass & (b == k)].mean() for k in range(bins)])
+        out[name] = round(float(prof[0] / prof.mean()), 3)
+    print(json.dumps({"shot": png, "grass_px": int(grass.sum()), "edge_x": out["x"], "edge_z": out["z"]},
+                     ensure_ascii=False))
+
+
 if __name__ == "__main__":
-    {"seams": seams, "repeat": repeat}[sys.argv[1]](sys.argv[2], sys.argv[3])
+    {"seams": seams, "repeat": repeat, "phase": phase}[sys.argv[1]](sys.argv[2], sys.argv[3])
