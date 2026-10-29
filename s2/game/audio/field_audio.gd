@@ -365,6 +365,7 @@ var steps: Array = []                  # the player's steps heard [group, file] 
 var step_last: Dictionary = {}         # step group -> the file it played last
 var feet: Array = []                   # AudioStreamPlayer3D the steps of others go out on
 var feet_n: int = 0                    # those steps played (which of feet is next)
+var feet_strides: int = 0              # strides the voiced dead have gone, heard or not (tests)
 var dead_steps: Array = []             # the dead's steps heard [zombie id, group, file] (tests)
 var dead_step_last: Dictionary = {}    # step group -> the file a dead's step played last
 var company_steps: Array = []          # allies' steps heard [group, file] (tests)
@@ -785,6 +786,8 @@ func tick(delta: float) -> void:
 	if pick_t <= 0.0:
 		pick_t = 0.4
 		_assign_moans(at)
+	for s in slots:
+		_move_feet(s)   # all of them first: who walks is known alike when each steps
 	for s in slots:
 		_tick_slot(s, at, delta)
 	_tick_falls(at)
@@ -1902,18 +1905,31 @@ func _step_group(at: Vector3) -> Array:
 	return ["", row]
 
 
+## Where one voiced body's feet have got to since the last tick: how far it
+## went, and whether it walks in sight (a crawler, a jump or a body the player
+## no longer sees does not, though its voice lingers a moment: VOICE_KEEP).
+func _move_feet(s: Dictionary) -> void:
+	var z: Dictionary = s["z"]
+	if z.is_empty():
+		s["feet_moving"] = false
+		return
+	var now: Vector3 = z["pos"]
+	var was: Vector3 = s.get("feet_at", now)
+	s["feet_at"] = now
+	var gone: float = Vector2(now.x - was.x, now.z - was.z).length()
+	s["feet_gone"] = gone
+	s["feet_moving"] = gone > 0.0005 and gone <= DEAD_STEP_JUMP and not bool(z.get("crawl", false)) and in_view(now)
+
+
 ## One of the voiced dead walking (DEAD_GAITS): a step each time it has gone
 ## a stride, the stride drawn new for every step. Heard from DEAD_STEP_RANGE
 ## in, and only from the DEAD_STEPPERS nearest; a crawler, a jump or a body
 ## standing still makes none. Never the same file twice running.
 func _tick_feet(s: Dictionary, z: Dictionary, d: float) -> void:
-	var now: Vector3 = z["pos"]
-	var was: Vector3 = s.get("feet_at", now)
-	s["feet_at"] = now
-	var gone: float = Vector2(now.x - was.x, now.z - was.z).length()
-	s["feet_moving"] = gone > 0.0005 and gone <= DEAD_STEP_JUMP and not bool(z.get("crawl", false))
-	if feet.is_empty() or not bool(s["feet_moving"]):
+	if feet.is_empty() or not bool(s.get("feet_moving", false)):
 		return
+	var now: Vector3 = z["pos"]
+	var gone: float = float(s.get("feet_gone", 0.0))
 	var gait: Dictionary = DEAD_GAITS[gait_of(String(z["state"]))]
 	var stride: Array = gait["stride"]
 	if not s.has("feet_left"):
@@ -1922,6 +1938,7 @@ func _tick_feet(s: Dictionary, z: Dictionary, d: float) -> void:
 	if float(s["feet_left"]) > 0.0:
 		return
 	s["feet_left"] = randf_range(float(stride[0]), float(stride[1]))
+	feet_strides += 1
 	if d >= DEAD_STEP_RANGE or randf() < float(gait["skip"]) or _nearer_feet(z, d) >= DEAD_STEPPERS:
 		return
 	var found: Array = _step_group(now)

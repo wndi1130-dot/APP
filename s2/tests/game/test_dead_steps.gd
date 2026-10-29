@@ -138,10 +138,16 @@ func test_the_dead_out_of_sight_walk_silently() -> void:
 	game.player.facing = -PI * 0.5
 	game._refresh_vision()
 	assert_false(a.in_view(seen["pos"]))
-	_walk(seen, int(ceilf((a.VOICE_KEEP + 0.5) / 0.1)), Vector3.ZERO)
 	var n: int = _steps_of(seen).size()
+	# A good stride's walking while its voice lingers (VOICE_KEEP): no step.
+	_walk(seen, 8, Vector3(-0.12, 0, 0))
+	var kept := false
+	for sl: Dictionary in a.slots:
+		kept = kept or (not (sl["z"] as Dictionary).is_empty() and int(sl["z"]["id"]) == int(seen["id"]))
+	assert_true(kept, "its voice is still held a moment")
+	assert_eq(_steps_of(seen).size(), n, "but its feet are silent at once out of sight")
 	_walk(seen, 40, Vector3(-0.05, 0, 0))
-	assert_eq(_steps_of(seen).size(), n, "out of sight its feet fall silent")
+	assert_eq(_steps_of(seen).size(), n, "and stay so")
 
 
 func test_a_crawler_makes_no_step_nor_does_one_past_the_range() -> void:
@@ -159,12 +165,35 @@ func test_a_crawler_makes_no_step_nor_does_one_past_the_range() -> void:
 	var s := {"z": far}
 	for i in range(40):
 		far["pos"] += Vector3(-0.05, 0, 0)
+		a._move_feet(s)
 		a._tick_feet(s, far, a.DEAD_STEP_RANGE + 1.0)
 	assert_eq(_steps_of(far).size(), 0, "past the range, no step")
 	for i in range(40):
 		far["pos"] += Vector3(-0.05, 0, 0)
+		a._move_feet(s)
 		a._tick_feet(s, far, 5.0)
 	assert_gt(_steps_of(far).size(), 0, "inside it, steps")
+
+
+func test_a_shambler_drags_some_steps_silently_and_a_runner_none() -> void:
+	_look_east_from(_open_spot(14, 1))
+	var a = game.audio
+	var z: Dictionary = game.zombies.spawn("dead", game.player.position + Vector3(6, 0, 0))
+	var s := {"z": z}
+	for gait: Array in [["wander", 0.3], ["dash", 0.0]]:
+		z["state"] = gait[0]
+		var strides: int = a.feet_strides
+		var heard: int = a.dead_steps.size()
+		# To and fro on the spot, a tenth of a metre a tick: 120 m of walking.
+		for i in range(1200):
+			z["pos"] += Vector3(0.1 if i % 2 == 0 else -0.1, 0, 0)
+			a._move_feet(s)
+			a._tick_feet(s, z, 5.0)
+		strides = a.feet_strides - strides
+		heard = a.dead_steps.size() - heard
+		assert_gt(strides, 80, String(gait[0]) + ": many strides")
+		var silent: float = 1.0 - float(heard) / float(strides)
+		assert_almost_eq(silent, float(gait[1]), 0.12, String(gait[0]) + ": the share of strides with no sound")
 
 
 func test_only_the_nearest_few_are_heard_stepping() -> void:
