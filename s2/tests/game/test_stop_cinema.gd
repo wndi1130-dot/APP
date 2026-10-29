@@ -9,6 +9,7 @@ const StopCinema = preload("res://game/stop_cinema.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
+const MapView = preload("res://game/world/map_view.gd")
 
 const TICK: float = 0.05
 
@@ -254,7 +255,7 @@ func test_the_sidings_wagons_are_the_field_s_models_and_none_is_closed() -> void
 		var empty: Dictionary = w.duplicate()
 		empty["coal"] = 0.0
 		var r: Rect2i = w["rect"]
-		for part: Array in StopCinema.open_wagon_parts(empty):
+		for part: Array in MapView.open_wagon_parts(empty):
 			var size: Vector3 = part[0]
 			if size.x > r.size.x * 0.5 and size.z > r.size.y * 0.5:
 				assert_lte((part[1] as Vector3).y + size.y * 0.5, 1.0, "a wagon the kit has no model for is open on top")
