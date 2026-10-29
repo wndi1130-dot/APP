@@ -7,7 +7,7 @@ blender -b --factory-startup --python-exit-code 1 -P tools/blender/props_stop01_
 발자국 가운데·바닥 원점에 맞춤 → 단일 메시 GLB → 실제 바이트를 읽어 장부.
 위 +Y, 앞 +Z, 등 -Z(Godot). Blender에서는 Z가 위, -Y가 앞이다.
 Col.a: 몸체 1, 테두리·손잡이·쇠붙이 .5, 책·종이·상품·공구·천 0.
-weathered의 tint_body/tint_trim은 instance uniform이며 기본 세기 0이다.
+weathered는 판 넷(tint_sets_body/trim)을 재질 값으로, 판 번호를 MultiMesh 사용자 자료로 받는다(furniture_tints.gd dress).
 --out은 검수용 폴더다. 장부 path는 최종 res:// 경로이며 게임으로 복사는 하지 않는다.
 이번 발주의 Blender·Godot·시각 검사는 not_run. 이 파일을 import하여 시험하지 않는다.
 """
@@ -889,9 +889,9 @@ def write_books(out_dir, book):
     lines += ["## 칠 판과 셰이더 칠 칸", "",
               "`res://game/world/furniture_tints.gd`는 body·trim 두 sRGB 색을 가진 4판이다. 모든 색은 HSV 채도 <0.45, 밝기 <0.75다.",
               "`pick(row, cell)`은 tint 번호의 양의 나머지 → building 번호 해시 → 둘 다 없을 때 cell 해시 순서다. 같은 건물은 같은 판을 고른다.",
-              "연결 담당은 색을 `srgb_to_linear()`로 바꾸고 MeshInstance3D의 `set_instance_shader_parameter`로 tint_body·tint_trim을 넣는다. a는 각각의 세기다.",
+              "`dress()`가 색을 `srgb_to_linear()`로 바꿔 재질 값 tint_sets_body·tint_sets_trim에 넣고, 판 번호 + 1은 MultiMesh 사용자 자료로 간다. a는 각각의 세기다.",
               "정점 알파 ≥0.75는 몸체, 0.25≤알파<0.75는 테두리, 나머지는 보존한다. use_vertex_color일 때만 적용한다.",
-              "칠 RGB에 바탕색의 선형 밝기 / 0.18 비(0~2)를 곱해 결의 명암을 남긴다. 두 칸의 기본 a=0이면 기존 경로가 그대로다.",
+              "칠 RGB에 바탕색의 선형 밝기 / 모형 몸체·테두리 평균 밝기(tint_ref, paint_ref) 비(0~1.6)를 곱해 결의 명암만 남긴다. 판 번호가 없으면 기존 경로가 그대로다.",
               "지도·room_*.gd·map_view.gd·prop_fit.gd·prop_models.gd 연결은 이 작업 범위 밖이다. 이 체크아웃의 room_furnish에는 TINT_SETS가 없다.", "",
               "## 몸체 색 누르기", "",
               "기존 코드가 원본색을 그대로 복사하지 않고 tint()로 지정 색에 맞추므로, 현재 칠 결과의 sRGB HSV를 기준으로 누른다.",

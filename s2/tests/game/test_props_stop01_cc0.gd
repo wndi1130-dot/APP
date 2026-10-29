@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 
 const KIT_DIR: String = "res://models/props_stop01"
 const FurnitureTints = preload("res://game/world/furniture_tints.gd")
+const PropModels = preload("res://game/world/prop_models.gd")
 const BUDGETS: Dictionary = {
 	"workbench": 500, "bookcase": 700, "drawer_chest_spilled": 700,
 	"shop_shelf": 500, "toolbox": 200, "office_desk": 600,
@@ -338,3 +339,21 @@ func test_furniture_tint_dress_loads_the_sets_on_the_batch_material() -> void:
 	var first: Color = (FurnitureTints.SETS[0]["body"] as Color).srgb_to_linear()
 	assert_almost_eq((body[0] as Vector4).x, first.r, 0.0001, "선형으로 옮긴 판 색")
 	assert_almost_eq((body[0] as Vector4).w, FurnitureTints.BODY_STRENGTH, 0.0001)
+	assert_eq(material.get_shader_parameter("tint_ref"), Vector2(0.18, 0.18), "칠 마스크 없는 메시는 예전 기준")
+
+
+## 칠 밝기 기준(#985 점검 M3): 모형마다 몸체·테두리의 넓이 평균 밝기를 재어 재질에 싣는다.
+## 예전 식(바탕 밝기 / 0.18)은 밝은 원목 모형을 흰색으로 띄우고 어두운 모형을 검게 눌렀다.
+func test_furniture_paint_ref_is_each_models_own_mean() -> void:
+	for kind: String in FurnitureTints.KINDS:
+		var meshes := PropModels.batch_meshes("%s/%s.glb" % [KIT_DIR, kind])
+		assert_true(meshes.has(0), kind + " 묶음 메시")
+		if not meshes.has(0):
+			continue
+		var mesh: Mesh = meshes[0]
+		var ref := FurnitureTints.paint_ref(mesh)
+		assert_between(ref.x, 0.01, 1.0, kind + " 몸체 평균 밝기")
+		assert_between(ref.y, 0.01, 1.0, kind + " 테두리 평균 밝기")
+		FurnitureTints.dress(mesh)
+		var material := mesh.surface_get_material(0) as ShaderMaterial
+		assert_eq(material.get_shader_parameter("tint_ref"), ref, kind + " 재질에 실린 기준")
