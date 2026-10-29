@@ -183,7 +183,25 @@ func test_row_houses_split_every_floor_into_two_homes() -> void:
 			for room: Dictionary in RoomFurnish.rooms_of(_d["levels"][lv])["rooms"]:
 				rooms += 1 if int(room["building"]) == int(row["id"]) else 0
 			assert_gte(rooms, 6, "%s %d층: 집 둘 × 방 셋" % [row["name"], lv])
-	assert_eq(rows, 3)
+	assert_eq(rows, 4)
+
+
+## 같은 셈의 상자 몫: 상자 하나당 묶음이 houses 01~06(0.46~0.70, 10-29 잰 값)의 +25% 안이고, 연립은 층마다
+## 두 집 모두 부엌 여닫는 자리가 선다(방 이름표가 없으면 이름에 「집」이 없는 연립은 방 갈래를 못 물려받는다).
+func test_boxes_keep_the_houses_share() -> void:
+	var d := FieldMaps.build("houses_07")
+	var bundles := 0
+	var kitchens: Dictionary = {}
+	for id: String in d["containers"]:
+		var box: Dictionary = d["containers"][id]
+		bundles += (box.get("items", []) as Array).size()
+		if id.begins_with("kitchen_"):
+			var b := int(box.get("building", -1))
+			kitchens[b] = int(kitchens.get(b, 0)) + 1
+	assert_between(float(bundles) / d["containers"].size(), 0.46, 0.875, "상자 %d · 묶음 %d" % [d["containers"].size(), bundles])
+	for row: Dictionary in d["buildings"]:
+		if row.has("row_group"):
+			assert_gte(int(kitchens.get(int(row["id"]), 0)), 2 * int(row["top"]), "%s 부엌 자리" % row["name"])
 
 
 func test_every_box_is_reached_from_the_train_across_floors() -> void:

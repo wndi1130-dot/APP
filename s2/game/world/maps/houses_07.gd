@@ -14,8 +14,10 @@ const FIRST_ENTRY: String = "west_bank"
 
 # 모든 자리는 바깥 띠를 더하기 전 칸이다. 강은 바깥 띠(map_ring.gd edge_water)에서도 끝까지 이어진다.
 # 한 칸 집은 방 하나짜리 5×5 집으로 잡았다. 길 길이는 같은 출발·도착 칸의 네 방향 이동 수다.
-# 상자 밀도는 houses_06의 연면적 9874칸·151개를 따라 연면적 4581칸에 70개다. 묶음은 houses 01~06이
+# 지도 상자는 houses_06의 연면적 9874칸·151개를 따라 연면적 4581칸에 70개다. 묶음은 houses 01~06이
 # 정차마다 주는 몫(169~270, 평균 216)에 맞춰 집·헛간 상자마다 둘(먹을 것·널빤지), 선창 창고 열둘, 다리 끝 다섯으로 199다.
+# 연립은 집집마다 방 이름표(_unit_hints)로 부엌·침실·욕실 가구를 받아 여닫는 자리가 서고, 동쪽 연립은 지도 상자
+# 없이 그 자리만 더해 상자 하나당 묶음을 houses 01~06의 범위(0.46~0.70)에 가깝게 맞춘다.
 # 다리 소품은 길게 늘어나지 않으므로 난간과 트러스를 나누어 이어 놓는다.
 const PLAN: Dictionary = {
 	"train": [42, 24, 80, 3],
@@ -53,7 +55,8 @@ const PLAN: Dictionary = {
 		{"name": "선창 창고", "rect": [145, 67, 24, 16], "top": 1, "basement": false, "role": "shed", "id": 8, "main": true, "stock": ["crate_stack", "sack_pile", "shelf"], "door": [157, 67], "boxes_per_floor": 5},
 		{"name": "역사", "rect": [76, 7, 24, 12], "top": 1, "basement": false, "role": "office", "id": 9, "stock": ["desk", "file_cabinet", "shelf"], "door": [88, 18], "boxes_per_floor": 4},
 		{"name": "장작 헛간", "rect": [13, 12, 14, 10], "top": 1, "basement": false, "role": "shed", "id": 10, "stock": ["sack_pile", "shelf"], "door": [20, 21], "boxes_per_floor": 2},
-		{"name": "선로 헛간", "rect": [143, 20, 16, 11], "top": 1, "basement": false, "role": "shed", "id": 11, "stock": ["crate_stack", "shelf"], "door": [150, 30], "boxes_per_floor": 2}
+		{"name": "선로 헛간", "rect": [143, 20, 16, 11], "top": 1, "basement": false, "role": "shed", "id": 11, "stock": ["crate_stack", "shelf"], "door": [150, 30], "boxes_per_floor": 2},
+		{"name": "동쪽 연립", "rect": [146, 95, 24, 15], "top": 3, "basement": false, "role": "home", "id": 12, "row_group": "houses_07:연립", "door": [158, 95], "boxes_per_floor": 0}
 	],
 	"props": [
 		{"kind": "water", "rect": [0, 46, 80, 14], "solid": "low", "facing": 0, "note": "서쪽 깊은 물", "level": 0},
@@ -193,6 +196,7 @@ static func _building(data: Dictionary, row: Dictionary) -> void:
 		var cuts: Array[Vector2i] = []
 		if lv >= 0 and row.has("row_group"):
 			cuts = _row_units(g, r, id)
+			_unit_hints(data, r, lv)
 		if lv >= 0:
 			_windows(g, r, id, _cell(row["door"]), cuts, 3 if row["role"] in ["home", "office"] else 6)
 		_building_boxes(data, row, lv)
@@ -224,6 +228,20 @@ static func _row_units(g: FieldGrid, r: Rect2i, id: int) -> Array[Vector2i]:
 	var cuts: Array[Vector2i] = [Vector2i(mid, y0), Vector2i(mid, r.end.y - 1), Vector2i(x0, back), Vector2i(r.end.x - 1, back),
 		Vector2i(x0 + 6, r.end.y - 1), Vector2i(x0 + 17, r.end.y - 1)]
 	return cuts
+
+
+## 연립 한 층 두 집의 방 이름(숨은 이름표, room_furnish가 읽는다): 앞 큰 방은 부엌(방 나누기가 거실·방을
+## 떼어 낸다), 뒤 방은 바깥쪽이 침실, 가운데 벽 쪽이 욕실. 이름에 「집」이 없는 연립은 이름표가 없으면
+## 방 갈래를 물려받지 못해 가구도 여닫는 자리도 없이 남는다.
+static func _unit_hints(data: Dictionary, r: Rect2i, lv: int) -> void:
+	var x0 := r.position.x
+	var y0 := r.position.y
+	var mid := x0 + int(r.size.x / 2) - 1
+	var hints: Array = data.get_or_add("_room_hints", [])
+	for spot: Array in [[Vector2i(x0 + 5, y0 + 5), "부엌"], [Vector2i(mid + 5, y0 + 5), "부엌"],
+			[Vector2i(x0 + 3, y0 + 10), "침실"], [Vector2i(x0 + 8, y0 + 10), "욕실"],
+			[Vector2i(mid + 3, y0 + 10), "욕실"], [Vector2i(x0 + 20, y0 + 10), "침실"]]:
+		hints.append({"text": spot[1], "cell": spot[0], "level": lv})
 
 
 ## 바깥벽 창: 네 벽에 `step`칸마다, 모서리·문·안벽이 만나는 칸과 그 곁은 비운다.
