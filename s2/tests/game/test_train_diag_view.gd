@@ -52,6 +52,21 @@ func test_diag_pane_centers_the_anchor() -> void:
 		assert_almost_eq(projected.y, view_size.y / 2.0, 1.0)
 
 
+## A folded paper's edge at the left (결정 508): the anchor sits in the middle of what
+## the edge and the pane leave.
+func test_diag_folded_paper_edge_shifts_the_anchor_right() -> void:
+	var train_scene: Scene = _scene({"view_mode": "diag"})
+	var view_size: Vector2 = train_scene.get_viewport().get_visible_rect().size
+	train_scene.focus_car("dining", true)
+	train_scene.set_pane(420.0, 110.0)
+	assert_eq(train_scene.pane_left_px, 110.0)
+	var anchor: Vector3 = Vector3(train_scene.cam_x, Scene.DIAG_LOOK_Y, 0.0)
+	var projected: Vector2 = train_scene.camera.unproject_position(anchor)
+	assert_almost_eq(projected.x, (110.0 + view_size.x - 420.0) / 2.0, 1.0)
+	train_scene.set_pane(420.0)
+	assert_eq(train_scene.pane_left_px, 0.0, "the right pane alone clears the edge")
+
+
 func test_diag_drag_follows_only_the_projected_train_axis() -> void:
 	var train_scene: Scene = _scene({"view_mode": "diag"})
 	train_scene.focus_car("dining")

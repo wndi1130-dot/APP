@@ -35,8 +35,8 @@ func test_the_shining_ones_are_left_to_their_light() -> void:
 	var out: Array = GroundLook.pieces(items)
 	assert_eq(out.size(), 1)
 	var c: Color = out[0]["color"]
-	var seen: Color = (GroundLook.LOOKS["board"][1] as Color).srgb_to_linear()
-	assert_almost_eq(c.r, seen.r, 0.0001, "the shader takes it as linear")
+	var seen: Color = GroundLook.LOOKS["board"][1]
+	assert_almost_eq(c.r, seen.r, 0.0001, "as seen (sRGB): the world shader makes it linear")
 	assert_almost_eq(c.b, seen.b, 0.0001)
 	assert_eq(c.a, 0.0, "no snow laid over it in the world shader")
 

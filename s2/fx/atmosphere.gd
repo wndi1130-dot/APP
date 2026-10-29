@@ -319,7 +319,11 @@ const WEATHER: Dictionary = {
 	"snow": {"cloud": 0.92, "sun": 0.42, "fill": 1.2, "veil": 0.82, "veil_color": Color(0.58, 0.61, 0.66), "haze": 0.6, "fall": 0.55},
 	"blizzard": {"cloud": 1.0, "sun": 0.16, "fill": 0.95, "veil": 0.93, "veil_color": Color(0.70, 0.73, 0.77), "haze": 0.95, "fall": 1.0},
 	"sleet": {"cloud": 0.96, "sun": 0.32, "fill": 1.15, "veil": 0.86, "veil_color": Color(0.44, 0.46, 0.48), "haze": 0.55, "fall": 0.6},
-	"rain": {"cloud": 0.96, "sun": 0.3, "fill": 1.1, "veil": 0.86, "veil_color": Color(0.40, 0.43, 0.46), "haze": 0.55, "fall": 0.7},
+	# Rain is the first stop's weather (late autumn +6 C): the fill makes up at dusk
+	# and night what the wet ground and models take (by day the closed sky's give-back
+	# sets the light), and the veil a grey near the overcast's (decision 470: dusk V
+	# 0.211 and night dark share 0.76 missed the lines 0.25 and 0.70).
+	"rain": {"cloud": 0.96, "sun": 0.3, "fill": 1.45, "veil": 0.86, "veil_color": Color(0.48, 0.51, 0.54), "haze": 0.55, "fall": 0.7},
 }
 
 ## Photo skies (CC0, Poly Haven, 사용자 10-25 공개 자산 먼저; made by tools/atmo_textures.gd from

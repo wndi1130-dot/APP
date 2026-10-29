@@ -233,6 +233,7 @@ func struck_door(p, at: Vector3, weapon_id: String) -> void:
 
 ## A bite landed on the player (blocked: the coat took it).
 func bitten(p, blocked: bool) -> void:
+	_sound("bite_blocked" if blocked else "bite", p.position, BLOW_LOUD * (0.6 if blocked else 1.0), BLOW_REACH)
 	if p != game.player:
 		return
 	var k: float = 0.5 if blocked else 1.0

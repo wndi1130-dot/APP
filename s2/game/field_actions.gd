@@ -339,6 +339,8 @@ func open_door_on_way(p, c: Vector2i) -> void:
 		p.stop()
 		if p == game.player:
 			game.hud.toast("판자로 막혀 있다")
+			if game.audio != null:
+				game.audio.shut_fast(c, "boarded")   # the ear's thud
 		return
 	if door["state"] == "locked":
 		p.stop()
@@ -346,6 +348,8 @@ func open_door_on_way(p, c: Vector2i) -> void:
 			unlock_with_key(p, c)
 		elif p == game.player:
 			game.hud.toast("잠김")
+			if game.audio != null:
+				game.audio.shut_fast(c, "locked")   # the ear's rattle
 		return
 	if not DoorRules.can_toggle(door, "open"):
 		return
@@ -377,6 +381,8 @@ func door_default(p, c: Vector2i, verb: String) -> void:
 		elif p == game.player:
 			var mine: int = BuildingRules.planks(door, game.grid.face_toward(c, p.position))
 			game.hud.toast("판자로 막혀 있다 · 쇠지렛대 없음" if mine > 0 else "안쪽이 판자로 막혀 있다")
+			if game.audio != null:
+				game.audio.shut_fast(c, "boarded")
 			if mine == 0:
 				game.hud.offer([{"label": "문 차기", "call": kick_door.bind(p, c)}])
 		return
@@ -400,6 +406,8 @@ func door_default(p, c: Vector2i, verb: String) -> void:
 					pry_door(p, c)
 				elif p == game.player:
 					game.hud.toast("잠김")
+					if game.audio != null:
+						game.audio.shut_fast(c, "locked")
 
 
 func _set_door(c: Vector2i, state: String, p = null, pried: bool = false) -> void:
@@ -440,8 +448,9 @@ func has_key(p, c: Vector2i) -> bool:
 	return int(p.items.get(FieldItems.key_for(int(door.get("building", -1))), 0)) > 0
 
 
-## A key opens a locked door quickly and makes no sound (P12: the reward for
-## going through the dead of the house).
+## A key opens a locked door quickly and with no sound the dead hear (P12:
+## the reward for going through the dead of the house); the player hears only
+## a small click and the door going quietly (field_audio door_turn by_key).
 func unlock_with_key(p, c: Vector2i) -> void:
 	if not _can_start(p, FieldGrid.center(c), true):
 		return
@@ -455,6 +464,8 @@ func _key_opened(p, c: Vector2i) -> void:
 		return
 	game.grid.set_door_state(c, "open")
 	game.view.update_door(c)
+	if game.audio != null:
+		game.audio.door_turn(c, "open", true)   # the ear's small click; none the dead hear (P12)
 	_check_raider_door(c)
 
 
@@ -709,6 +720,8 @@ func window_default(p, c: Vector2i, verb: String) -> void:
 		game.hud.offer(rows)
 	elif BuildingRules.planks_total(w) > 0:
 		game.hud.toast("판자로 막혀 있다")
+		if game.audio != null:
+			game.audio.shut_fast(c, "boarded")
 
 
 ## The choices at a window for the player, most useful first, at most four.

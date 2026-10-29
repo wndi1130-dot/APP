@@ -87,6 +87,12 @@ const STOVE_MODEL := "res://models/train_interior/stove.glb"
 const STOVE_ENERGY: float = 1.1
 const LAMP_SWAY: float = 0.05           # metres, with the train's rocking
 const LAMP_EASE: float = 1.5            # a mood comes on over a second or so
+## The warm pool the lamp leaves on the floor (lamp_pool.gdshader, 코디 10-30): read as a lamp
+## from above, where the light itself is not seen. Strength is the square root of the lamp's
+## energy times this, so the day's low lamp (0.2) still leaves a faint pool and the night's a clear one.
+const LAMP_POOL_SHADER = preload("res://game/train/lamp_pool.gdshader")
+const LAMP_POOL_SIZE := Vector2(2.6, 2.2)
+const LAMP_POOL_GAIN: float = 0.15
 ## The room before the people (user decision 2026-10-25): when a car's state
 ## changes, its stove fire turns first (over STOVE_SHARE of room_ease), then the
 ## walls and the window frost (the rest of it), and the people are reseated only
@@ -144,12 +150,14 @@ var zoomed_out: bool = false
 var view_mode: String = "diag"            # the inside seen from above at an angle (결정 486); the council keeps "section"
 var zoom: String = "wide"
 var pane_px: float = 0.0
+var pane_left_px: float = 0.0           # a folded paper's edge at the left (결정 508)
 var clock: float = 0.0
 var _hold_from: float = 0.0             # the council room along the train while the vote is called
 var _hold_to: float = 0.0
 var _mats: Dictionary = {}
 var _font: SystemFont
 var _shells: Dictionary = {}
+var _pool_quad: PlaneMesh
 var backdrop: MeshInstance3D
 var side_rail: MeshInstance3D
 var snow_ground: MeshInstance3D
@@ -410,6 +418,35 @@ func _apply_shell_view(c: Dictionary) -> void:
 		(c["front_wall"] as MeshInstance3D).visible = diagonal
 	for prop: Dictionary in c.get("high_props", []):
 		(prop["node"] as Node3D).transform = prop["diag"] if diagonal else prop["section"]
+	_show_dress(c)
+
+
+## A car's small things (train_interior.gd dress) show up close and on the side view, not on
+## the wide diagonal, where the draw budget is already spent (결정 505 잰 값).
+func _show_dress(c: Dictionary) -> void:
+	var near: bool = view_mode != "diag" or zoom == "near"
+	if life.rooms.has(c["id"]):
+		life.rooms[c["id"]].show_dress(near)
+	if c.get("lamp_pool") != null:
+		(c["lamp_pool"] as MeshInstance3D).visible = near
+
+
+## One quad on the floor under the lamp's resting place, added over the floor (no shadow, no light).
+## Every car shares the quad and its material; the lamp's colour reaches each as instance values.
+func _lamp_pool(node: Node3D, at: Vector3) -> MeshInstance3D:
+	if _pool_quad == null:
+		_pool_quad = PlaneMesh.new()
+		_pool_quad.size = LAMP_POOL_SIZE
+		var mat := ShaderMaterial.new()
+		mat.shader = LAMP_POOL_SHADER
+		_pool_quad.material = mat
+	var pool := MeshInstance3D.new()
+	pool.name = "LampPool"
+	pool.mesh = _pool_quad
+	pool.position = Vector3(at.x, 0.02, at.z)
+	pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.add_child(pool)
+	return pool
 
 
 ## The snow sheet under the diagonal view gives way only to the land outside once it
@@ -457,8 +494,11 @@ func car_screen_polygon(id: String) -> PackedVector2Array:
 	return hull
 
 
-func set_pane(px: float) -> void:
+## What the screen's own panes keep covered, in its px: the car pane at the right and a
+## folded paper's edge at the left; the diagonal camera puts the car in the middle of the rest.
+func set_pane(px: float, left_px: float = 0.0) -> void:
 	pane_px = maxf(px, 0.0)
+	pane_left_px = maxf(left_px, 0.0)
 	_place_camera()
 
 
@@ -980,6 +1020,17 @@ func _step_lamp(c: Dictionary, delta: float) -> void:
 	lamp.light_color = lamp.light_color.lerp(c["lamp_color"], ease_by)
 	lamp.light_energy = lerpf(lamp.light_energy, float(c["lamp_energy"]), ease_by)
 	lamp.position.x = CAR_LENGTH * 0.5 + sin(clock * 1.3 + float(c["index"])) * LAMP_SWAY * float(c["lamp_sway"])
+	_tint_pool(c)
+
+
+## The pool under the lamp takes the lamp's colour and strength as they ease.
+func _tint_pool(c: Dictionary) -> void:
+	var pool: MeshInstance3D = c.get("lamp_pool")
+	if pool == null:
+		return
+	var lamp: OmniLight3D = c["lamp"]
+	pool.set_instance_shader_parameter("pool_color", lamp.light_color)
+	pool.set_instance_shader_parameter("pool_strength", sqrt(maxf(lamp.light_energy, 0.0)) * LAMP_POOL_GAIN)
 
 
 func _sit_down(c: Dictionary, b: Node3D, x0: float, at: Vector3, pose: String, huddled: bool, bowed: bool) -> void:
@@ -1160,6 +1211,8 @@ func _on_view_resized() -> void:
 func _place_camera() -> void:
 	if camera == null:
 		return
+	for c: Dictionary in cars:
+		_show_dress(c)
 	if view_mode == "diag":
 		camera.keep_aspect = Camera3D.KEEP_HEIGHT
 		camera.size = DIAG_NEAR if zoom == "near" else DIAG_WIDE
@@ -1173,7 +1226,7 @@ func _place_camera() -> void:
 		camera.h_offset = 0.0
 		if is_inside_tree():
 			var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
-			camera.h_offset = (pane_px / 2.0) * camera.size / view_h
+			camera.h_offset = ((pane_px - pane_left_px) / 2.0) * camera.size / view_h
 		return
 	var pitch := deg_to_rad(CAM_PITCH)
 	camera.size = CAM_FAR if zoomed_out else CAM_NEAR
@@ -1410,6 +1463,8 @@ func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: 
 	c["lamp_color"] = lamp.light_color
 	c["lamp_energy"] = lamp.light_energy
 	c["lamp_sway"] = 1.0
+	c["lamp_pool"] = _lamp_pool(node, lamp.position)
+	_tint_pool(c)
 	c["name"] = _label(node, String(def.get("name", def["id"])), Vector3(l * 0.5, h + 1.2, 0), 72, Color(0.93, 0.91, 0.86))
 	c["values"] = _label(node, "", Vector3(l * 0.5, h + 0.55, 0), 44, Color(0.7, 0.7, 0.68))
 	# The car's numbers are not on the everyday screen (decisions.md 「평소 화면에는

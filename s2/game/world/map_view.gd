@@ -726,12 +726,16 @@ func _bake_container(st: SurfaceTool, id: String) -> void:
 
 
 ## The empty mark's four corners round a box's cell, a cold pale grey low on the
-## floor (a stand-in; art3d gives it its look). Vertex colours are linear here.
-const EMPTY_MARK := Color(0.70, 0.74, 0.80)
+## floor (a stand-in; art3d gives it its look). Vertex colours are sRGB here, as
+## the floors' are (world_vis.gdshader makes them linear). Alpha 0: no snow, rain
+## or ground grain over it (that shader reads vertex alpha as open to the sky), so
+## the mark reads the same in every season, indoors and out, as the things on
+## the ground do (decision 472).
+const EMPTY_MARK := Color(0.58, 0.62, 0.70, 0.0)
 
 
 func _empty_corners(st: SurfaceTool, at: Vector3) -> void:
-	var c := EMPTY_MARK.srgb_to_linear()
+	var c := EMPTY_MARK
 	for sx: float in [-1.0, 1.0]:
 		for sz: float in [-1.0, 1.0]:
 			var corner := at + Vector3(sx * 0.42, 0.012, sz * 0.42)
