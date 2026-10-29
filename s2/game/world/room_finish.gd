@@ -146,7 +146,8 @@ static func build(data: Dictionary) -> Image:
 			var cls := int(best[ri][0]) if best.has(ri) else 0
 			if not homes.has(b):
 				cls = cls if HOME_KINDS.has(cls) else 0
-			elif cls == 0 and _hall(g, room["cells"]):
+			elif cls == 0 and lv >= 0 and _hall(g, room["cells"]):
+				# 복도 벽지·나무 허리는 땅 위 층만: 지하의 가구 없는 통로는 받지 않는다.
 				cls = HALL
 			if cls == 0:
 				continue

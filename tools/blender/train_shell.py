@@ -1,8 +1,8 @@
-"""내정 화면(train.tscn)의 칸 껍데기 네 벌. Blender 헤드리스, 외부 자원 없이 작은 색 그림 한 장.
+"""내정 화면(train.tscn)의 칸 껍데기 다섯 벌. Blender 헤드리스, 외부 자원 없이 작은 색 그림 한 장.
 
 blender -b --factory-startup -P tools/blender/train_shell.py -- --repo .
 
-train_scene.gd가 상자로 짓던 바닥·뒷벽·끝벽·지붕·창틀·차대·대차를 한 메시로 바꾼다.
+train_scene.gd가 상자로 짓던 바닥·뒷벽·끝벽·지붕·창틀·차대·대차를 low·top 두 메시로 바꾼다.
 좌표는 칸 하나의 지역 좌표(train_scene.gd와 같다): X 0..16 길이, Y 위(바닥 윗면 0), Z 뒤벽 -1.4 .. 열린 앞 +1.4.
 카메라는 +Z에서 본다. 그래서 앞에서 보이는 면만 짓는다(뒷벽 바깥, 끝벽 바깥은 없다).
 창 구멍(x 2·6·10·14 가운데, 폭 1.6, 높이 1.3..2.2)은 코드의 창유리 셰이더 판이 채운다.
@@ -21,10 +21,11 @@ import bmesh
 import bpy
 from mathutils import Vector
 
-SCRIPT_VERSION = 2   # 2: 기관차·탄수차 쇠판 벽 갈래(engine)
+SCRIPT_VERSION = 3   # 3: 바닥 위 2.2 m에서 low·top 분할
 ATLAS = 256
 CELL = 32
 TRIANGLE_LIMIT = 3000
+CUT_Y = 2.2
 PALETTE = {
     "wall_green": (92, 100, 92), "plank": (104, 82, 60), "plank_dark": (70, 54, 40), "plank_worn": (122, 100, 76),
     "floor": (88, 70, 52), "floor_dark": (66, 52, 40),
@@ -136,6 +137,24 @@ class Piece:
         if any(f.calc_area() < 1e-11 for f in self.bm.faces):
             raise ValueError("퇴화 삼각형: " + self.pid)
         return len(self.bm.faces)
+
+    def split(self):
+        # Blender의 Z가 Godot의 +Y다. 절단면을 새로 막지 않는다.
+        bmesh.ops.bisect_plane(self.bm,
+            geom=list(self.bm.verts) + list(self.bm.edges) + list(self.bm.faces),
+            dist=1e-7, plane_co=(0, 0, CUT_Y), plane_no=(0, 0, 1))
+        pieces = {}
+        for name in ("low", "top"):
+            part = Piece(name)
+            part.bm.free()
+            part.bm = self.bm.copy()
+            part.uv = part.bm.loops.layers.uv.active
+            # 면 위에 놓인 수평 면은 low에만 둔다.
+            discard = [f for f in part.bm.faces
+                       if (f.calc_center_median().z <= CUT_Y + 1e-7) != (name == "low")]
+            bmesh.ops.delete(part.bm, geom=discard, context="FACES")
+            pieces[name] = part
+        return pieces
 
 
 def openings(v=None):
@@ -347,41 +366,113 @@ def material(img):
     return mat
 
 
-def export(pid, piece, mat, path):
-    mesh = bpy.data.meshes.new(pid)
-    obj = None
+def export(pieces, mat, path):
+    meshes, objects = [], []
     try:
-        piece.bm.to_mesh(mesh)
-        mesh.materials.append(mat)
-        obj = bpy.data.objects.new(pid, mesh)
-        bpy.context.scene.collection.objects.link(obj)
+        for name, piece in pieces.items():
+            mesh = bpy.data.meshes.new(name)
+            meshes.append(mesh)
+            piece.bm.to_mesh(mesh)
+            mesh.materials.append(mat)
+            obj = bpy.data.objects.new(name, mesh)
+            objects.append(obj)
+            bpy.context.scene.collection.objects.link(obj)
         for other in bpy.context.scene.objects:
-            other.select_set(other == obj)
-        bpy.context.view_layer.objects.active = obj
+            other.select_set(other in objects)
+        bpy.context.view_layer.objects.active = objects[0]
         bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", use_selection=True,
             export_yup=True, export_apply=False, export_materials="EXPORT", export_texcoords=True,
             export_normals=True, export_tangents=False, export_vertex_color="NONE",
             export_extras=False, export_animations=False, export_image_format="AUTO")
     finally:
-        if obj is not None:
+        for obj in objects:
             bpy.data.objects.remove(obj, do_unlink=True)
-        bpy.data.meshes.remove(mesh)
+        for mesh in meshes:
+            bpy.data.meshes.remove(mesh)
 
 
-def check_glb(path, tris):
+def glb_stats(path):
     data = path.read_bytes()
     magic, version, length = struct.unpack_from("<4sII", data)
     chunk_length, chunk_type = struct.unpack_from("<II", data, 12)
     if (magic, version, length, chunk_type) != (b"glTF", 2, len(data), 0x4E4F534A):
         raise ValueError("GLB 머리 검사 실패")
     book = json.loads(data[20:20 + chunk_length])
-    if len(book.get("meshes", [])) != 1 or len(book.get("images", [])) != 1:
-        raise ValueError("메시 하나·그림 하나 검사 실패")
-    prim = book["meshes"][0]["primitives"][0]
-    if book["accessors"][prim["indices"]]["count"] // 3 != tris:
-        raise ValueError("삼각형 수 검사 실패")
-    pos = book["accessors"][prim["attributes"]["POSITION"]]
-    return len(data), hashlib.sha256(data).hexdigest(), [[round(v, 4) for v in pos["min"]], [round(v, 4) for v in pos["max"]]]
+    if len(book.get("images", [])) != 1 or len(book.get("materials", [])) != 1:
+        raise ValueError("그림 하나·재질 하나 검사 실패")
+    binary_length, binary_type = struct.unpack_from("<II", data, 20 + chunk_length)
+    if binary_type != 0x004E4942 or 28 + chunk_length + binary_length != len(data):
+        raise ValueError("GLB 바이너리 검사 실패")
+    binary = data[28 + chunk_length:]
+
+    def accessor(index):
+        spec = book["accessors"][index]
+        view = book["bufferViews"][spec["bufferView"]]
+        count = {"SCALAR": 1, "VEC2": 2, "VEC3": 3}[spec["type"]]
+        fmt = "<" + {5121: "B", 5123: "H", 5125: "I", 5126: "f"}[spec["componentType"]] * count
+        stride = view.get("byteStride", struct.calcsize(fmt))
+        offset = view.get("byteOffset", 0) + spec.get("byteOffset", 0)
+        return [struct.unpack_from(fmt, binary, offset + i * stride) for i in range(spec["count"])]
+
+    meshes, uv_areas, points = {}, {}, []
+    for mesh in book["meshes"]:
+        if len(mesh["primitives"]) != 1 or mesh["name"] in meshes:
+            raise ValueError("메시 표면·이름 검사 실패")
+        prim = mesh["primitives"][0]
+        if prim.get("mode", 4) != 4 or prim.get("material") != 0:
+            raise ValueError("삼각형·공유 재질 검사 실패")
+        positions = accessor(prim["attributes"]["POSITION"])
+        uvs = accessor(prim["attributes"]["TEXCOORD_0"])
+        indices = [row[0] for row in accessor(prim["indices"])]
+        if len(indices) % 3 != 0 or not positions:
+            raise ValueError("삼각형 인덱스 검사 실패")
+        area = 0.0
+        for i in range(0, len(indices), 3):
+            ids = indices[i:i + 3]
+            colour_uv = tuple(round(v, 6) for v in uvs[ids[0]])
+            if any(tuple(round(v, 6) for v in uvs[j]) != colour_uv for j in ids):
+                raise ValueError("색 칸 UV 검사 실패")
+            a, b, c = (Vector(positions[j]) for j in ids)
+            triangle_area = (b - a).cross(c - a).length * 0.5
+            if triangle_area < 1e-11:
+                raise ValueError("GLB 퇴화 삼각형")
+            area += triangle_area
+            uv_areas[colour_uv] = uv_areas.get(colour_uv, 0.0) + triangle_area
+        meshes[mesh["name"]] = {"tris": len(indices) // 3, "area": area,
+                                "y_min": min(p[1] for p in positions), "y_max": max(p[1] for p in positions)}
+        points.extend(positions)
+    for node in book["nodes"]:
+        if any(key in node for key in ("matrix", "translation", "rotation", "scale")):
+            raise ValueError("GLB 지역 좌표 변환 검사 실패")
+    image_view = book["bufferViews"][book["images"][0]["bufferView"]]
+    image_offset = image_view.get("byteOffset", 0)
+    image_data = binary[image_offset:image_offset + image_view["byteLength"]]
+    return {"meshes": meshes, "uv_areas": uv_areas, "area": sum(m["area"] for m in meshes.values()),
+            "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+            "image_sha256": hashlib.sha256(image_data).hexdigest(),
+            "bounds_m": [[round(fn(p[i] for p in points), 4) for i in range(3)] for fn in (min, max)]}
+
+
+def check_glb(path, tris, before):
+    stats = glb_stats(path)
+    if set(stats["meshes"]) != {"low", "top"}:
+        raise ValueError("low·top 메시 둘 검사 실패")
+    for name, count in tris.items():
+        if stats["meshes"][name]["tris"] != count:
+            raise ValueError("삼각형 수 검사 실패: " + name)
+    if stats["meshes"]["low"]["y_max"] > CUT_Y + 0.0001 or stats["meshes"]["top"]["y_min"] < CUT_Y - 0.0001:
+        raise ValueError("Godot +Y 절단 높이 검사 실패")
+    if before is not None:
+        if abs(stats["area"] / before["area"] - 1.0) > 0.001:
+            raise ValueError("겉넓이 0.1% 검사 실패")
+        if stats["image_sha256"] != before["image_sha256"] or stats["bounds_m"] != before["bounds_m"]:
+            raise ValueError("색 그림·외곽 범위 보존 검사 실패")
+        if stats["uv_areas"].keys() != before["uv_areas"].keys():
+            raise ValueError("색 칸 목록 보존 검사 실패")
+        for uv, area in before["uv_areas"].items():
+            if abs(stats["uv_areas"][uv] / area - 1.0) > 0.001:
+                raise ValueError("색 칸별 겉넓이 보존 검사 실패")
+    return stats
 
 
 def main():
@@ -397,21 +488,35 @@ def main():
     for name, v in VARIANTS.items():
         pid = "shell_" + name
         piece = Piece(pid)
+        pieces = {}
         try:
-            build(piece, v)
-            tris = piece.fin()
-            if tris > TRIANGLE_LIMIT:
-                raise ValueError("삼각형 상한 초과 %d" % tris)
             path = out_dir / (pid + ".glb")
-            export(pid, piece, mat, path)
-            size, digest, bounds = check_glb(path, tris)
-            rows[pid] = {"tris": tris, "bytes": size, "sha256": digest, "bounds_m": bounds, "use": v["note"]}
-            print("TRAIN_SHELL_READY %s tris=%d bytes=%d bounds=%s" % (pid, tris, size, bounds), flush=True)
+            before = glb_stats(path) if path.exists() else None
+            build(piece, v)
+            pieces = piece.split()
+            tris = {key: part.fin() for key, part in pieces.items()}
+            total = sum(tris.values())
+            if total > TRIANGLE_LIMIT:
+                raise ValueError("삼각형 상한 초과 %d" % total)
+            export(pieces, mat, path)
+            stats = check_glb(path, tris, before)
+            old_area = before["area"] if before is not None else stats["area"]
+            change = (stats["area"] / old_area - 1.0) * 100.0
+            rows[pid] = {"tris_low": tris["low"], "tris_top": tris["top"], "tris": total,
+                         "bytes": stats["bytes"], "sha256": stats["sha256"], "bounds_m": stats["bounds_m"],
+                         "surface_area_before_m2": old_area, "surface_area_m2": stats["area"],
+                         "surface_area_delta_pct": change, "use": v["note"]}
+            print("TRAIN_SHELL_READY %s tris_low=%d tris_top=%d tris=%d bytes=%d bounds=%s" %
+                  (pid, tris["low"], tris["top"], total, stats["bytes"], stats["bounds_m"]), flush=True)
+            print("TRAIN_SHELL_SURFACE %s before=%.9f after=%.9f delta_pct=%.9f uv=unchanged" %
+                  (pid, old_area, stats["area"], change), flush=True)
         finally:
+            for part in pieces.values():
+                part.bm.free()
             piece.bm.free()
     book = {"version": 1, "script": "tools/blender/train_shell.py", "script_version": SCRIPT_VERSION,
             "blender": bpy.app.version_string, "axis": "X 칸 길이 0..16, +Y 위(바닥 윗면 0), +Z 열린 앞(카메라 쪽)",
-            "texture": [ATLAS, ATLAS], "triangle_limit": TRIANGLE_LIMIT, "assets": rows}
+            "texture": [ATLAS, ATLAS], "cut_y_m": CUT_Y, "triangle_limit": TRIANGLE_LIMIT, "assets": rows}
     (out_dir / "catalog.json").write_text(json.dumps(book, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print("TRAIN_SHELL %d ready" % len(rows), flush=True)
 

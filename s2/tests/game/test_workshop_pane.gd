@@ -1,7 +1,8 @@
 extends "res://addons/gut/test.gd"
 ## The workshop's pane (workshop_pane.gd, decision 426 PR 3): what it reads off
 ## the stores, keys a finger can take (48 dp), a short store in red with no
-## sentence, a press that puts a thing on the line and one that takes it back;
+## sentence, a press that puts a thing on the line and one that takes it back
+## (its row stays while it is on the line, even when its technique stops);
 ## and the bottom bar's 공방 room opening it while the other rooms stay 「준비 중」.
 
 const WorkshopPane = preload("res://game/ui/workshop_pane.gd")
@@ -207,3 +208,24 @@ func test_research_recipe_rows_count_their_store_amounts() -> void:
 	assert_eq(amounts.get("arrows"), 9)
 	assert_eq(amounts.get("lure"), 2)
 	assert_false(amounts.has("rounds"))
+
+
+func test_the_thing_on_the_line_keeps_its_row_when_its_way_stops() -> void:
+	var g: Dictionary = _game()
+	g["dom"]["techs"]["w2"] = {"stage": "done", "defect": false, "progress": 6.0, "need": 6.0, "variant": "a"}
+	var p: Control = _pane(g)
+	await wait_frames(1)
+	_key(p, "Key_rounds").pressed.emit()
+	assert_eq(String((TrainWorkshop.line(g) as Dictionary)["id"]), "rounds")
+	g["dom"]["techs"]["w2"]["off"] = true
+	assert_false(TrainWorkshop.shown(g).has("rounds"), "the stopped way is off the list of things to make")
+	p.show_state(g)
+	await wait_frames(1)
+	assert_not_null(p.find_child("Name_rounds", true, false), "but the thing on the line keeps its row")
+	assert_not_null(p.find_child("Progress_rounds", true, false))
+	assert_null(p.find_child("Name_arrows", true, false))
+	_key(p, "Key_rounds").pressed.emit()
+	assert_null(TrainWorkshop.line(g), "nothing done yet: it can be taken back")
+	p.show_state(g)
+	await wait_frames(1)
+	assert_null(p.find_child("Name_rounds", true, false), "off the line, the stopped way's row goes")

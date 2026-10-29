@@ -292,7 +292,7 @@ func _tick(id: String) -> void:
 				if float(safe["share"]) >= CLEAR_SHARE:
 					game.set_radio(blocked_reason(safe), "reply")
 				else:
-					game.set_radio(SPEAKER + ": 저기 %s 보이네. 근데 둘레에 망자가 %s — 아직 사람 못 내보내." % [job(id)["name"], game.director.size_word(int(safe["total"]) - int(safe["cleared"]))], "reply")
+					game.set_radio(SPEAKER + ": 저기 %s 일터가 보입니다. 둘레에 망자가 %s 있어 아직 못 내보냅니다." % [job(id)["name"], game.director.size_word(int(safe["total"]) - int(safe["cleared"]))], "reply")
 	elif safe["open"]:
 		if stage != "open":
 			_open(id)
@@ -302,7 +302,7 @@ func _tick(id: String) -> void:
 		state["half"] = true
 		state["phase"] = "half"
 		_event(id, "half")
-		game.set_radio(SPEAKER + ": 좀 줄었어. 조금만 더 치워 주면 내보낼게.", "reply")
+		game.set_radio(SPEAKER + ": 좀 줄었습니다. 조금만 더 치우면 내보내겠습니다.", "reply")
 	else:
 		state["phase"] = "half" if state["half"] else "closed"
 	_paint(id, safe)
@@ -348,11 +348,11 @@ func _number(n: int) -> String:
 
 func blocked_reason(safe: Dictionary) -> String:
 	if int(safe["path_awake"]) > 0:
-		return SPEAKER + ": 열차에서 거기까지 길에 망자가 %s." % _number(int(safe["path_awake"]))
+		return SPEAKER + ": 열차에서 거기까지 길에 망자가 %s 있습니다." % _number(int(safe["path_awake"]))
 	if int(safe["near_awake"]) > 0:
-		return SPEAKER + ": 일터 바로 곁에 깨어 있는 놈이 %s." % _number(int(safe["near_awake"]))
+		return SPEAKER + ": 일터 바로 곁에 깨어 있는 놈이 %s 있습니다." % _number(int(safe["near_awake"]))
 	var left: int = maxi(ceili(float(safe["total"]) * CLEAR_SHARE) - int(safe["cleared"]), 0)
-	return SPEAKER + ": 둘레에 아직 %s." % _number(left)
+	return SPEAKER + ": 둘레에 아직 %s 남았습니다." % _number(left)
 
 
 ## Rows retain their order within each role. Existing people never get copied.
@@ -448,11 +448,11 @@ func start(id: String = "work_site") -> bool:
 		else:
 			escorts.append(row)
 	if workers.is_empty():
-		game.set_radio(SPEAKER + ": 지금 내보낼 일꾼이 없다.", "reply")
+		game.set_radio(SPEAKER + ": 지금 내보낼 일꾼이 없습니다.", "reply")
 		return false
 	# Escorts come down first (decision 486): with none to stand guard, nobody goes.
 	if escorts.is_empty():
-		game.set_radio(SPEAKER + ": 지켜 줄 호위가 없다. 지금은 못 내보낸다.", "reply")
+		game.set_radio(SPEAKER + ": 지켜 줄 호위가 없습니다. 지금은 못 내보냅니다.", "reply")
 		return false
 	if _outside_people() + rows.size() + _pending_people() > game.ALLY_CAP:
 		game.hud.toast("사람이 너무 많음")
@@ -474,7 +474,7 @@ func start(id: String = "work_site") -> bool:
 	for i in escorts.size():
 		_disembark(id, escorts[i], i)
 	_paint(id, safe)
-	game.set_radio(SPEAKER + ": 작업조 내려간다. %s 지켜라." % job(id)["name"], "reply")
+	game.set_radio(SPEAKER + ": 작업조 내려간다. 호위는 %s 일터를 지켜라." % job(id)["name"], "reply")
 	return true
 
 

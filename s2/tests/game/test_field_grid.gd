@@ -219,3 +219,45 @@ func test_who_carries_a_lantern_and_when_it_is_lit() -> void:
 	assert_false(made["chief"].lamp_lit(false))
 	assert_true(made["chief"].lamp_lit(true))
 	assert_true(made["chief"].lamp_lit(false, true))
+
+
+## Path grids made from right caches (adopt_paths) are refresh_paths': walls, a locked and an
+## open door, a ditch of deep snow, on a mostly open grid and a mostly walled one.
+func test_adopted_paths_are_a_refresh() -> void:
+	for walled: bool in [false, true]:
+		var g := FieldGrid.new(30, 20)
+		for y in range(g.height):
+			for x in range(g.width):
+				if walled and (x + y) % 5 != 0:
+					g.set_solid(Vector2i(x, y), S.WALL)
+		for x in range(4, 12):
+			g.set_solid(Vector2i(x, 3), S.NONE)
+			g.floor[g.index(Vector2i(x, 3))] = FieldGrid.Floor.DEEP_SNOW
+		g.set_solid(Vector2i(2, 2), S.DOOR)
+		g.doors[Vector2i(2, 2)] = {"state": "locked"}
+		g.set_solid(Vector2i(3, 2), S.DOOR)
+		g.doors[Vector2i(3, 2)] = {"state": "open"}
+		g.refresh_paths()
+		var want := _points(g)
+		var h := FieldGrid.new(30, 20)
+		h.solid = g.solid.duplicate()
+		h.floor = g.floor.duplicate()
+		h.doors = g.doors.duplicate(true)
+		h.opq = g.opq.duplicate()
+		h.walk_people = g.walk_people.duplicate()
+		h.walk_dead = g.walk_dead.duplicate()
+		h.adopt_paths()
+		assert_true(h.paths_ready())
+		assert_eq(_points(h), want, "walled %s" % walled)
+		assert_almost_eq(h.people_path.get_point_weight_scale(Vector2i(5, 3)), 1.6, 0.0001, "the ditch weighs as refreshed")
+
+
+func _points(g: FieldGrid) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	for y in range(g.height):
+		for x in range(g.width):
+			var c := Vector2i(x, y)
+			out.append(1.0 if g.people_path.is_point_solid(c) else 0.0)
+			out.append(1.0 if g.dead_path.is_point_solid(c) else 0.0)
+			out.append(g.people_path.get_point_weight_scale(c))
+	return out

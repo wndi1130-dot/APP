@@ -286,9 +286,16 @@ const BANDS: Dictionary = {
 }
 ## The same bands at the warmest: softer, greener fill and a warmer day sun.
 const WARM_BANDS: Dictionary = {
-	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.272, 0.268, 0.262)},
+	# Late autumn's night fill a shade over the winter's (the same neutral grey): with no
+	# snow to give the moon back, the bare ground under a clear sky kept three quarters of
+	# the first stop under V 0.15 (decision 470 night line: 0.70 at most; reference 0.67).
+	# Raised again after the ground layers (decision 496) darkened the bare ground: 0.312 → 0.345.
+	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.345, 0.340, 0.333)},
 	"dawn": {"zenith": Color(0.30, 0.31, 0.38), "horizon": Color(0.88, 0.66, 0.50), "ambient": Color(0.52, 0.50, 0.52)},
-	"day": {"zenith": Color(0.50, 0.56, 0.62), "horizon": Color(0.78, 0.78, 0.74), "sun": Color(0.96, 0.92, 0.82), "ambient": Color(0.54, 0.57, 0.54)},
+	# Late autumn's day sun a neutral, faintly green white (decision 499): the old warm
+	# (0.96, 0.92, 0.82) turned the faded grass yellow under a clear sky (a green share of
+	# 0.04 at the first stop against 0.15~0.25); the warmth stays at dawn and dusk.
+	"day": {"zenith": Color(0.50, 0.56, 0.62), "horizon": Color(0.78, 0.78, 0.74), "sun": Color(0.88, 0.90, 0.88), "ambient": Color(0.54, 0.57, 0.54)},
 	# Late autumn's low sun is warmer than winter's, as the reference's season
 	# palette has it (fall dusk far more orange than winter dusk): more colour
 	# (saturation 0.55 against 0.45) at the same brightness, but kept amber (hue
@@ -312,7 +319,11 @@ const WEATHER: Dictionary = {
 	"snow": {"cloud": 0.92, "sun": 0.42, "fill": 1.2, "veil": 0.82, "veil_color": Color(0.58, 0.61, 0.66), "haze": 0.6, "fall": 0.55},
 	"blizzard": {"cloud": 1.0, "sun": 0.16, "fill": 0.95, "veil": 0.93, "veil_color": Color(0.70, 0.73, 0.77), "haze": 0.95, "fall": 1.0},
 	"sleet": {"cloud": 0.96, "sun": 0.32, "fill": 1.15, "veil": 0.86, "veil_color": Color(0.44, 0.46, 0.48), "haze": 0.55, "fall": 0.6},
-	"rain": {"cloud": 0.96, "sun": 0.3, "fill": 1.1, "veil": 0.86, "veil_color": Color(0.40, 0.43, 0.46), "haze": 0.55, "fall": 0.7},
+	# Rain is the first stop's weather (late autumn +6 C): the fill makes up at dusk
+	# and night what the wet ground and models take (by day the closed sky's give-back
+	# sets the light), and the veil a grey near the overcast's (decision 470: dusk V
+	# 0.211 and night dark share 0.76 missed the lines 0.25 and 0.70).
+	"rain": {"cloud": 0.96, "sun": 0.3, "fill": 1.45, "veil": 0.86, "veil_color": Color(0.48, 0.51, 0.54), "haze": 0.55, "fall": 0.7},
 }
 
 ## Photo skies (CC0, Poly Haven, 사용자 10-25 공개 자산 먼저; made by tools/atmo_textures.gd from
@@ -460,7 +471,8 @@ static func _keep_lum(c: Color, like: Color) -> Color:
 	return Color(out.r, out.g, out.b, c.a)
 
 
-## Tint in linear space, restore luminance in either direction, then fit the gamut.
+## Tint in linear space, restore luminance in either direction, then fit the gamut
+## (look() gives back as energy what the fit takes from a sun already at full red).
 static func _tint_keep(c: Color, t: Color, k: float) -> Color:
 	var linear: Color = c.srgb_to_linear()
 	var luminance: float = linear.get_luminance()
@@ -561,8 +573,12 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	# the night keeps a third of it (its grey stays near neutral).
 	var rl: Dictionary = region_look(region_name)
 	var region_k: float = 1.0 - 0.7 * night_part
+	var sun_lum := _lin_lum(sun)
+	var ambient_lum := _lin_lum(ambient)
 	sun = _tint_keep(sun, rl["light"], region_k)
 	ambient = _tint_keep(ambient, rl["shade"], region_k)
+	sun_energy *= sun_lum / maxf(_lin_lum(sun), 0.0001)
+	ambient_energy *= ambient_lum / maxf(_lin_lum(ambient), 0.0001)
 	# Never flatter than 16 degrees: the oblique field must still read its ground.
 	var light_pitch := -clampf(angles.x, 16.0, 60.0)
 	var light_yaw := angles.y

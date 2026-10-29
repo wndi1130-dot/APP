@@ -87,7 +87,7 @@
   "godot_material": "built-in StandardMaterial3D, vertex colour enabled on import; no material file",
   "triangle_limit": 600,
   "total_triangle_limit": 8000,
-  "total_triangles": 6676,
+  "total_triangles": 7570,
   "assets": {
     "bench": {
       "status": "ready",
@@ -2334,6 +2334,751 @@
       "sha256": "109a1fab0042fcc7e770f07caf67a4734aa9bab00fca52de9637582203339a50",
       "source_asset": "손으로 만듦(tools/blender/train_car_dress.py)",
       "palette_extra": {}
+    },
+    "hang_lamp": {
+      "status": "ready",
+      "path": "res://models/train_interior/hang_lamp.glb",
+      "reference_size_m": [
+        0.13,
+        0.32,
+        0.13
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.13,
+        0.32,
+        0.13
+      ],
+      "bounds_m": [
+        [
+          -0.065,
+          -0.16,
+          -0.065
+        ],
+        [
+          0.065,
+          0.16,
+          0.065
+        ]
+      ],
+      "use": "사는 칸 가운데 천장(첫 등 자리, 높이 1.86~2.18 m): 막대 고리에 건 석유등",
+      "lod0_tris": 100,
+      "colours": [
+        "brass",
+        "brass_dark",
+        "glass_warm",
+        "iron"
+      ],
+      "bytes": 7776,
+      "sha256": "e9b5d79607c6298c1f8f7bbd7878dc6c7ade333513f1982136acb4ef3dd60baa",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {
+        "glass_warm": [
+          0.78,
+          0.55,
+          0.28
+        ]
+      }
+    },
+    "drying_line": {
+      "status": "ready",
+      "path": "res://models/train_interior/drying_line.glb",
+      "reference_size_m": [
+        2.41,
+        0.42,
+        0.01
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            2.41,
+            0.42,
+            0.01
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        2.41,
+        0.42,
+        0.01
+      ],
+      "bounds_m": [
+        [
+          -1.205,
+          -0.21,
+          -0.005
+        ],
+        [
+          1.205,
+          0.21,
+          0.005
+        ]
+      ],
+      "use": "사는 칸 의자 위 천장: 칸 길이로 건 2.4 m 줄과 빛바랜 천 다섯(파랑·크림·줄무늬·이끼·회색)",
+      "lod0_tris": 80,
+      "colours": [
+        "blanket_stripe",
+        "cloth_blue",
+        "cloth_faded",
+        "iron",
+        "rope",
+        "slate_faded",
+        "wool_moss"
+      ],
+      "bytes": 6640,
+      "sha256": "dfb4f0e9a3ae0d9237a217ec69a08be2be241844a0648f3dbec5b02be807b1d3",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {
+        "blanket_stripe": [
+          0.22,
+          0.15,
+          0.13
+        ],
+        "cloth_blue": [
+          0.2,
+          0.25,
+          0.3
+        ],
+        "rope": [
+          0.34,
+          0.29,
+          0.22
+        ],
+        "wool_moss": [
+          0.2,
+          0.22,
+          0.19
+        ],
+        "slate_faded": [
+          0.3,
+          0.32,
+          0.34
+        ]
+      }
+    },
+    "hang_pot": {
+      "status": "ready",
+      "path": "res://models/train_interior/hang_pot.glb",
+      "reference_size_m": [
+        0.28,
+        0.48,
+        0.24
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.28,
+            0.48,
+            0.24
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.28,
+        0.48,
+        0.24
+      ],
+      "bounds_m": [
+        [
+          -0.14,
+          -0.24,
+          -0.12
+        ],
+        [
+          0.14,
+          0.24,
+          0.12
+        ]
+      ],
+      "use": "사는 칸 난로 옆 천장: 막대 고리에 건 작은 냄비",
+      "lod0_tris": 80,
+      "colours": [
+        "iron",
+        "iron_worn"
+      ],
+      "bytes": 6504,
+      "sha256": "e73b04b1fbe264827072e2c95915c81a7d541a8211cd25af960c9272cbe15234",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {}
+    },
+    "coat_hook": {
+      "status": "ready",
+      "path": "res://models/train_interior/coat_hook.glb",
+      "reference_size_m": [
+        0.5,
+        0.88,
+        0.1
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.5,
+            0.88,
+            0.1
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.5,
+        0.88,
+        0.1
+      ],
+      "bounds_m": [
+        [
+          -0.25,
+          -0.44,
+          -0.05
+        ],
+        [
+          0.25,
+          0.44,
+          0.05
+        ]
+      ],
+      "use": "사는 칸 뒷벽(벽 자리 한 칸 0.5 m): 밝은 뒤판에 어두운 외투 하나·목도리",
+      "lod0_tris": 84,
+      "colours": [
+        "blanket_stripe",
+        "soot",
+        "wood_dark",
+        "wood_worn",
+        "wool_dark"
+      ],
+      "bytes": 6884,
+      "sha256": "18ce2e3f0515fcd31ffd14de3a1b78b0cfd9167e64e004b5253b3d7db0d7d1e8",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {
+        "blanket_stripe": [
+          0.22,
+          0.15,
+          0.13
+        ],
+        "wool_dark": [
+          0.21,
+          0.2,
+          0.19
+        ]
+      }
+    },
+    "wall_notes": {
+      "status": "ready",
+      "path": "res://models/train_interior/wall_notes.glb",
+      "reference_size_m": [
+        0.48,
+        0.46,
+        0.02
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.48,
+            0.46,
+            0.02
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.48,
+        0.46,
+        0.02
+      ],
+      "bounds_m": [
+        [
+          -0.24,
+          -0.23,
+          -0.01
+        ],
+        [
+          0.24,
+          0.23,
+          0.01
+        ]
+      ],
+      "use": "사는 칸 뒷벽(벽 자리 한 칸 0.5 m): 쪽지 다섯을 꽂은 밝은 판",
+      "lod0_tris": 22,
+      "colours": [
+        "cloth_faded",
+        "paper",
+        "paper_aged",
+        "wood_worn"
+      ],
+      "bytes": 2572,
+      "sha256": "2d975abcd1088ef3a80948607ab67eabea1a1c5d846c5a4ebe72cfa5128d2cfa",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {}
+    },
+    "wall_rack": {
+      "status": "ready",
+      "path": "res://models/train_interior/wall_rack.glb",
+      "reference_size_m": [
+        0.48,
+        0.4,
+        0.18
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.48,
+            0.4,
+            0.18
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.48,
+        0.4,
+        0.18
+      ],
+      "bounds_m": [
+        [
+          -0.24,
+          -0.2,
+          -0.09
+        ],
+        [
+          0.24,
+          0.2,
+          0.09
+        ]
+      ],
+      "use": "사는 칸 뒷벽(벽 자리 한 칸 0.5 m): 밝은 뒤판과 병 둘·깡통 하나를 얹은 작은 선반",
+      "lod0_tris": 124,
+      "colours": [
+        "glass_dark",
+        "iron",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 9460,
+      "sha256": "e0fc3e59563a899d05982656e677ccebd58716193f66c5141181749fef836514",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {
+        "glass_dark": [
+          0.1,
+          0.12,
+          0.13
+        ]
+      }
+    },
+    "rug": {
+      "status": "ready",
+      "path": "res://models/train_interior/rug.glb",
+      "reference_size_m": [
+        1.6,
+        0.01,
+        0.9
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            1.6,
+            0.01,
+            0.9
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        1.6,
+        0.01,
+        0.9
+      ],
+      "bounds_m": [
+        [
+          -0.8,
+          -0.005,
+          -0.45
+        ],
+        [
+          0.8,
+          0.005,
+          0.45
+        ]
+      ],
+      "use": "사는 칸 바닥: 해진 줄무늬 깔개(1 cm)",
+      "lod0_tris": 16,
+      "colours": [
+        "blanket_stripe",
+        "wool",
+        "wool_dark"
+      ],
+      "bytes": 2132,
+      "sha256": "0dbb14593f7b75e1e7cb7d786ac25d4329539e4593b19bf4f9e05e0cbd4f269a",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {
+        "blanket_stripe": [
+          0.22,
+          0.15,
+          0.13
+        ],
+        "wool": [
+          0.26,
+          0.24,
+          0.22
+        ],
+        "wool_dark": [
+          0.21,
+          0.2,
+          0.19
+        ]
+      }
+    },
+    "bucket": {
+      "status": "ready",
+      "path": "res://models/train_interior/bucket.glb",
+      "reference_size_m": [
+        0.29,
+        0.38,
+        0.29
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.29,
+            0.38,
+            0.29
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.29,
+        0.38,
+        0.29
+      ],
+      "bounds_m": [
+        [
+          -0.145,
+          -0.19,
+          -0.145
+        ],
+        [
+          0.145,
+          0.19,
+          0.145
+        ]
+      ],
+      "use": "사는 칸 바닥: 손잡이 달린 쇠 양동이",
+      "lod0_tris": 68,
+      "colours": [
+        "iron",
+        "iron_worn"
+      ],
+      "bytes": 5788,
+      "sha256": "61f97fff872a0d7abdcb4821f39761ac8034d9d28b3a771c2ee66b4e2a1bdd4b",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {}
+    },
+    "firewood": {
+      "status": "ready",
+      "path": "res://models/train_interior/firewood.glb",
+      "reference_size_m": [
+        0.42,
+        0.2,
+        0.5
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.42,
+            0.2,
+            0.5
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.42,
+        0.2,
+        0.5
+      ],
+      "bounds_m": [
+        [
+          -0.21,
+          -0.1,
+          -0.25
+        ],
+        [
+          0.21,
+          0.1,
+          0.25
+        ]
+      ],
+      "use": "사는 칸 난로 옆 바닥: 쪼갠 장작 다섯",
+      "lod0_tris": 80,
+      "colours": [
+        "wood",
+        "wood_worn"
+      ],
+      "bytes": 6284,
+      "sha256": "15b35dbda9eee7e311c8079adbe7c84a9323bb7f255ada7244e0da296048d91b",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {}
+    },
+    "basket": {
+      "status": "ready",
+      "path": "res://models/train_interior/basket.glb",
+      "reference_size_m": [
+        0.36,
+        0.33,
+        0.26
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.36,
+            0.33,
+            0.26
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.36,
+        0.33,
+        0.26
+      ],
+      "bounds_m": [
+        [
+          -0.18,
+          -0.165,
+          -0.13
+        ],
+        [
+          0.18,
+          0.165,
+          0.13
+        ]
+      ],
+      "use": "사는 칸 바닥: 천을 덮은 손바구니",
+      "lod0_tris": 80,
+      "colours": [
+        "cloth_faded",
+        "wood",
+        "wood_dark",
+        "wood_worn"
+      ],
+      "bytes": 7396,
+      "sha256": "d2d4a4416904cad785d7929ae740e9bf468fefaee7b2af074cc10a0d7ad66917",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {}
+    },
+    "drying_line_b": {
+      "status": "ready",
+      "path": "res://models/train_interior/drying_line_b.glb",
+      "reference_size_m": [
+        2.41,
+        0.42,
+        0.01
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            2.41,
+            0.42,
+            0.01
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        2.41,
+        0.42,
+        0.01
+      ],
+      "bounds_m": [
+        [
+          -1.205,
+          -0.21,
+          -0.005
+        ],
+        [
+          1.205,
+          0.21,
+          0.005
+        ]
+      ],
+      "use": "사는 칸 의자 위 천장: 칸 길이로 건 2.4 m 줄과 빛바랜 천 다섯(녹·황토·크림·회색·줄무늬)",
+      "lod0_tris": 80,
+      "colours": [
+        "blanket_stripe",
+        "cloth_faded",
+        "iron",
+        "ochre_faded",
+        "rope",
+        "rust_faded",
+        "slate_faded"
+      ],
+      "bytes": 6644,
+      "sha256": "693df4bbd426de63f172766e08951bd0edaadb1cba6c9b975d68dae3ca1cd2af",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {
+        "blanket_stripe": [
+          0.22,
+          0.15,
+          0.13
+        ],
+        "rope": [
+          0.34,
+          0.29,
+          0.22
+        ],
+        "rust_faded": [
+          0.36,
+          0.19,
+          0.13
+        ],
+        "ochre_faded": [
+          0.44,
+          0.35,
+          0.18
+        ],
+        "slate_faded": [
+          0.3,
+          0.32,
+          0.34
+        ]
+      }
+    },
+    "drying_line_c": {
+      "status": "ready",
+      "path": "res://models/train_interior/drying_line_c.glb",
+      "reference_size_m": [
+        2.41,
+        0.42,
+        0.01
+      ],
+      "origin": "box_center",
+      "triangle_limit": 600,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            2.41,
+            0.42,
+            0.01
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        2.41,
+        0.42,
+        0.01
+      ],
+      "bounds_m": [
+        [
+          -1.205,
+          -0.21,
+          -0.005
+        ],
+        [
+          1.205,
+          0.21,
+          0.005
+        ]
+      ],
+      "use": "사는 칸 의자 위 천장: 칸 길이로 건 2.4 m 줄과 빛바랜 천 다섯(이끼·파랑·녹·크림·황토)",
+      "lod0_tris": 80,
+      "colours": [
+        "cloth_blue",
+        "cloth_faded",
+        "iron",
+        "ochre_faded",
+        "rope",
+        "rust_faded",
+        "wool_moss"
+      ],
+      "bytes": 6644,
+      "sha256": "0c0ac7437161e7e302cc03356056d82cb66a7e972db43ad0b3c36e2966e07579",
+      "source_asset": "손으로 만듦(tools/blender/train_car_layers.py)",
+      "palette_extra": {
+        "cloth_blue": [
+          0.2,
+          0.25,
+          0.3
+        ],
+        "rope": [
+          0.34,
+          0.29,
+          0.22
+        ],
+        "wool_moss": [
+          0.2,
+          0.22,
+          0.19
+        ],
+        "rust_faded": [
+          0.36,
+          0.19,
+          0.13
+        ],
+        "ochre_faded": [
+          0.44,
+          0.35,
+          0.18
+        ]
+      }
     }
   },
   "failures": [],

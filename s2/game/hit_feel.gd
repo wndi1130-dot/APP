@@ -79,6 +79,67 @@ func _init(field_game) -> void:
 	game = field_game
 
 
+## Decision 501: read only the body's penalties, without coat or weather.
+static func body_melee(body, ctx: Dictionary) -> float:
+	var bare: Dictionary = ctx.duplicate()
+	bare["heavy_coat"] = false
+	bare["cold_level"] = 0
+	var mults: Dictionary = body.multipliers(bare)
+	return float(mults.get("melee_hit", 1.0))
+
+
+## Decision 501: a rush is chase with a live dash, not chase alone.
+static func countering(state: String, dash_t: float, distance: float) -> bool:
+	return distance <= 1.2 and (state in ["attack", "tell", "grab"] or (state == "chase" and dash_t > 0.0))
+
+
+## Decision 501: P carries weight; Q scales effects that already carry it.
+static func blow_power(kg: float, strength: int, melee_hit: float, breath_locked: bool = false, from_back: bool = false, counter: bool = false, edge: int = -1, way: String = "swing") -> Dictionary:
+	var s: float = clampf(1.0 + 0.06 * (strength - 5), 0.88, 1.12)
+	var w: float = clampf(0.35 + 0.25 * kg, 0.4, 1.2)
+	var e: float = 1.0
+	if way == "stomp" or way == "shove":
+		w = 0.75 if way == "stomp" else 0.6
+	else:
+		s *= clampf(1.0 - 0.12 * maxf(0.0, 2.0 * kg + 1.0 - strength), 0.6, 1.0)
+		e = 0.9 if edge == 1 else (0.8 if edge == 2 else 1.0)
+	var b: float = 0.25 + 0.75 * clampf(melee_hit, 0.0, 1.0)
+	var q: float = s * b * (0.8 if breath_locked else 1.0) * (1.2 if counter else 1.0) * (1.1 if from_back else 1.0) * e
+	var power: float = clampf(w * q, 0.2, 1.5)
+	return {"power": power, "q": q, "tier": power_tier(power), "counter": counter}
+
+
+static func power_tier(power: float) -> int:
+	return 0 if power < 0.55 else (1 if power < 0.95 else 2)
+
+
+## Decision 501: the outcome changes P and its tier, never Q or the input.
+static func resolved_power(blow: Dictionary, result: String) -> Dictionary:
+	var out: Dictionary = blow.duplicate()
+	out["result"] = result
+	var power: float = float(out.get("power", -1.0))
+	if power >= 0.0:
+		if result == "finish" or result == "shatter":
+			power = maxf(power, 0.95)
+		elif result == "blocked":
+			power = minf(power, 0.5)
+		out["power"] = power
+		out["tier"] = power_tier(power)
+	return out
+
+
+static func effect_scale(q: float) -> float:
+	return clampf(q, 0.5, 1.4) if q >= 0.0 else 1.0
+
+
+## Decision 501: old calls keep their exact seconds; weak blows last two frames.
+static func stop_seconds(seconds: float, q: float, tier: int) -> float:
+	if q < 0.0:
+		return seconds
+	var frames: float = roundf(seconds * effect_scale(q) * 60.0)
+	return maxf(2.0 if tier == 0 else 0.0, frames) / 60.0
+
+
 ## The field holds still this frame (field_game skips the rules' step).
 func holding() -> bool:
 	return hold_t > 0.0
@@ -126,30 +187,38 @@ func swing(p, weapon_id: String) -> void:
 
 ## A melee blow landed on a body at `at` (where it is seen, on the ground);
 ## felled: it went down or died; low: it was on the ground already.
-func landed(p, at: Vector3, weapon_id: String, felled: bool, low: bool = false) -> void:
+func landed(p, at: Vector3, weapon_id: String, felled: bool, low: bool = false, q: float = -1.0, tier: int = -1, blocked: bool = false) -> void:
 	var d: Dictionary = W.get_data(weapon_id)
 	if d.get("kind", "") != "melee":
 		return
 	_sound("hit_blade" if bool(d.get("blade", false)) else "hit_blunt", at, BLOW_LOUD, BLOW_REACH)
-	_bleed(p, at, "slash" if bool(d.get("blade", false)) else "blunt", 0.6 + 0.2 * float(d.get("weight", 1.0)), felled, low)
+	var k: float = effect_scale(q)
+	if not blocked:
+		_bleed(p, at, "slash" if bool(d.get("blade", false)) else "blunt", (0.6 + 0.2 * float(d.get("weight", 1.0))) * k, felled, low, k if q >= 0.0 else -1.0)
 	if p != game.player:
 		return
 	var kg: float = float(d.get("weight", 1.0))
 	var more: float = 1.0 if felled else 0.0
-	_hold(STOP_BASE + STOP_PER_KG * kg + STOP_FELLED * more)
-	_kick(at - p.position, SHAKE_BASE + SHAKE_PER_KG * kg + SHAKE_FELLED * more)
-	_buzz(BUZZ_BASE_MS + BUZZ_PER_KG_MS * kg + BUZZ_FELLED_MS * more, clampf(0.35 + 0.15 * kg, 0.0, 1.0))
+	# Decision 501 / M1: cloth takes the edge; only a small hold and kick.
+	if blocked:
+		_hold(stop_seconds(STOP_BASE + STOP_PER_KG * kg, 0.5, 0))
+		_kick(at - p.position, (SHAKE_BASE + SHAKE_PER_KG * kg) * 0.5)
+		return
+	_hold(stop_seconds(STOP_BASE + STOP_PER_KG * kg + STOP_FELLED * more, q, tier))
+	_kick(at - p.position, (SHAKE_BASE + SHAKE_PER_KG * kg + SHAKE_FELLED * more) * k)
+	_buzz((BUZZ_BASE_MS + BUZZ_PER_KG_MS * kg + BUZZ_FELLED_MS * more) * k, clampf(clampf(0.35 + 0.15 * kg, 0.0, 1.0) * k, 0.0, 1.0))
 
 
 ## A boot came down on a body on the ground.
-func stomped(p, at: Vector3, ended_it: bool) -> void:
+func stomped(p, at: Vector3, ended_it: bool, q: float = -1.0, tier: int = -1) -> void:
 	_sound("hit_stomp", at, BLOW_LOUD, BLOW_REACH)
-	_bleed(p, at, "blunt", 0.7, ended_it, true)
+	var k: float = effect_scale(q)
+	_bleed(p, at, "blunt", 0.7 * k, ended_it, true, k if q >= 0.0 else -1.0)
 	if p != game.player:
 		return
-	_hold(STOP_STOMP + (STOP_FELLED if ended_it else 0.0))
-	_kick(at - p.position, SHAKE_BASE + (SHAKE_FELLED if ended_it else 0.0))
-	_buzz(BUZZ_BASE_MS + (BUZZ_FELLED_MS if ended_it else 0.0), 0.5)
+	_hold(stop_seconds(STOP_STOMP + (STOP_FELLED if ended_it else 0.0), q, tier))
+	_kick(at - p.position, (SHAKE_BASE + (SHAKE_FELLED if ended_it else 0.0)) * k)
+	_buzz((BUZZ_BASE_MS + (BUZZ_FELLED_MS if ended_it else 0.0)) * k, clampf(0.5 * k, 0.0, 1.0))
 
 
 ## A swing met a shut door.
@@ -164,6 +233,7 @@ func struck_door(p, at: Vector3, weapon_id: String) -> void:
 
 ## A bite landed on the player (blocked: the coat took it).
 func bitten(p, blocked: bool) -> void:
+	_sound("bite_blocked" if blocked else "bite", p.position, BLOW_LOUD * (0.6 if blocked else 1.0), BLOW_REACH)
 	if p != game.player:
 		return
 	var k: float = 0.5 if blocked else 1.0
@@ -188,7 +258,7 @@ func shot(p, weapon_id: String, at: Vector3) -> void:
 
 ## Blood off a body at `at` the way the blow went (blood_fx.gd). Its dice
 ## are its own: the rules' run is the same with or without it.
-func _bleed(p, at: Vector3, kind: String, strength: float, felled: bool, low: bool) -> void:
+func _bleed(p, at: Vector3, kind: String, strength: float, felled: bool, low: bool, death_scale: float = -1.0) -> void:
 	var fx = game.get("blood_fx")
 	if fx == null:
 		return
@@ -197,7 +267,12 @@ func _bleed(p, at: Vector3, kind: String, strength: float, felled: bool, low: bo
 	var contact := {"position": at + Vector3(0, 0.02, 0), "snow": snow}
 	var from := at + Vector3(0, BLEED_LOW if low else BLEED_HIGH, 0)
 	if felled:
-		fx.death(from, at - p.position, kind, contact)
+		if death_scale < 0.0:
+			fx.death(from, at - p.position, kind, contact)
+		else:
+			# Decision 501: keep death's pool, scale its spray without new dice.
+			fx.hit(from, at - p.position, 1.6 * death_scale, kind, contact)
+			fx.pool(contact["position"], snow)
 	else:
 		fx.hit(from, at - p.position, strength, kind, contact)
 

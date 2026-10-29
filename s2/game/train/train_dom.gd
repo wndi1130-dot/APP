@@ -97,7 +97,7 @@ const START_EXPERTS: Array = [
 		"skill": 2
 	}
 ]
-const TECH_IDS: Array[String] = ["e1", "e2", "e3", "e4", "e5", "m1", "m2", "m3", "m4", "m5", "w1", "w2", "w3", "w4", "w5", "r1", "r2", "r3", "r4", "x1", "x2", "x3", "x4"]
+const TECH_IDS: Array[String] = ["e1", "e2", "e3", "e4", "e5", "m1", "m2", "m3", "m4", "m5", "w1", "w2", "w3", "w4", "w5", "w6", "w7", "w8", "r1", "r2", "r3", "r4", "x1", "x2", "x3", "x4"]
 
 
 ## Empty stores: every amount 0, no fragments, nothing in the armory or the wardrobe.

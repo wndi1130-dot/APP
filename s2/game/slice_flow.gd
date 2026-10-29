@@ -34,6 +34,8 @@ extends Node
 const FieldGame = preload("res://game/field_game.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
+const RouteBands = preload("res://game/train/route_bands.gd")
+const RouteStops = preload("res://game/train/route_stops.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
@@ -124,6 +126,7 @@ const FIRST_CAR := "tail1"
 ## The picked car sits in the middle of what the pane leaves clear: 159 mockup
 ## px left of the screen's middle (k3_views.js vHome, 844 − 318 over two).
 const PANE_SHIFT_CSS: float = 159.0
+const PLATE_TAP_SLOP: float = 12.0       # viewport px, even while the plate moves
 ## Metres of the dining car's floor and roof's surroundings kept in view behind
 ## the special session.
 const COUNCIL_ROOM_MARGIN: float = 0.35
@@ -176,6 +179,10 @@ var home: Control = null           # the train's own screen on the train steps: 
 var pane: Control = null           # the picked car's pane (car_pane.gd)
 var bar: Control = null            # the keys along the bottom (home_bar.gd)
 var sel: String = ""               # the picked car's id, "" with the pane folded
+var _plate_press_id: String = ""
+var _plate_press_pos: Vector2 = Vector2.ZERO
+var _plate_pointer: int = -1         # mouse, or the touch index
+var _plate_dragged: bool = false
 var shop: Control = null           # the workshop's pane where the car's stands (workshop_pane.gd)
 var shop_was: String = ""          # the car picked before the workshop or the refit pane came up
 var mods: Control = null           # the refit pane, where the workshop's stands (mods_pane.gd)
@@ -300,7 +307,7 @@ func go(i: int) -> void:
 	# The next stop is known on the train: its map is made ready off the main
 	# thread while the train runs.
 	if id == "train" and _cinema_on():
-		loader.prepare(_field_place(), int(opts.get("seed", 1)))
+		loader.prepare(_field_place(), int(opts.get("seed", 1)), String(opts.get("stop_form", "")), float(opts.get("stop_form_m", -1.0)))
 	if id == "stop_pick" and _cinema_on():
 		_show_stop_cinema()
 		return
@@ -386,6 +393,27 @@ func _field_place() -> String:
 	return String(opts.get("place", ""))
 
 
+## The first leg's stop the slice is at on stretch `seg` (decision 494). The field's map, when
+## it is a stop's own map (the first stop's, which the slice plays on FIRST_SEG), is that
+## stop, and the stops after it count on from there; any other map takes the stretch's stop.
+func _stop_of(seg: int) -> int:
+	var own: Array = RouteBands.place_stop(FieldMaps.resolve(_field_place()))
+	return seg if own.is_empty() else int(own[1]) + seg - FIRST_SEG
+
+
+## That stop's band.
+func _stop_band(seg: int) -> String:
+	return RouteBands.stop_band("prologue", _stop_of(seg))
+
+
+## The season table's stretch that stop stands on (route_stops.gd): the stop's weather and
+## cold, not those of the table's row with the stretch's number. Before the first stop (the
+## train setting out on the first stretch) it is the table's first stretch, the start.
+func _season_seg(seg: int) -> int:
+	var stop := _stop_of(seg)
+	return 1 if stop < 1 else RouteStops.season_seg(stop)
+
+
 ## 「정차 고르기」: the roof of the running train, not the card at once. The
 ## card comes up with the station behind it (card_time).
 func _show_stop_cinema() -> void:
@@ -395,7 +423,7 @@ func _show_stop_cinema() -> void:
 	for p in plates.get_children():
 		plates.remove_child(p)
 		p.queue_free()
-	loader.prepare(_field_place(), int(opts.get("seed", 1)))
+	loader.prepare(_field_place(), int(opts.get("seed", 1)), String(opts.get("stop_form", "")), float(opts.get("stop_form_m", -1.0)))
 	# Its own scene (scenes/stop_cinema.tscn), so the train and the weather can be dressed there.
 	var c = STOP_CINEMA_SCENE.instantiate()
 	c.name = "StopCinema"
@@ -589,6 +617,7 @@ func _show_end(go_word: String) -> void:
 ## car's middle height. The session card takes the screen's touches, so
 ## nothing moves the camera off it.
 func _frame_dining_car() -> void:
+	# The council keeps the section view.
 	if not is_instance_valid(train) or train.camera == null:
 		return
 	for c: Dictionary in train.cars:
@@ -695,13 +724,40 @@ func _show_paper() -> void:
 	layer.add_child(c)
 	c.show_card(train_g, train_t, int((train_g["cards"] as Array)[0]["uid"]))
 	c.chose.connect(_paper_chosen)
+	c.fold_changed.connect(_paper_folded)
 	paper = c
 
 
 func _drop_paper() -> void:
+	var was_folded: bool = is_instance_valid(paper) and (paper as TurnCard).folded
 	if is_instance_valid(paper):
 		paper.queue_free()
 	paper = null
+	# The room its edge took goes back to the picked car.
+	if was_folded:
+		_paper_folded(false)
+
+
+## The paper folded to its edge or opened again (결정 508): the picked car moves into
+## the middle of what the edge and the car pane leave clear.
+func _paper_folded(_folded: bool) -> void:
+	if sel == "" or not is_instance_valid(pane) or not is_instance_valid(train) or train.camera == null:
+		return
+	if str(train.get("view_mode")) == "diag":
+		_set_cover()
+
+
+## The diagonal camera's cover: the car pane's width at the right, a folded paper's
+## edge at the left.
+func _set_cover() -> void:
+	var pane_rect: Rect2 = pane.get_global_rect()
+	var covered_px: float = get_viewport().get_visible_rect().size.x - pane_rect.position.x
+	if pane_rect.size.x == 0.0:
+		covered_px = CarPane.CSS_SIZE.x * UiFonts.K
+	var left_px: float = 0.0
+	if is_instance_valid(paper) and (paper as TurnCard).folded:
+		left_px = (paper as TurnCard).folded_edge()
+	train.set_pane(covered_px, left_px)
 
 
 ## A way chosen on the paper: the board it gives back, then the next paper, and once
@@ -732,6 +788,8 @@ func train_on() -> void:
 	if papers_of(train_g):
 		going = true
 		if is_instance_valid(paper):
+			# A folded paper comes open: it is what holds the train.
+			(paper as TurnCard).set_folded(false)
 			UiDeny.shake(paper)
 		return
 	var id := current()
@@ -924,6 +982,7 @@ func _show_train(phase: String, seg: int) -> void:
 	var rules: Dictionary = TrainRules.load_default()
 	rules["train"]["phase"] = phase
 	rules["train"]["seg"] = seg
+	rules["view"]["region"] = _stop_band(seg + 1 if phase == "travel" else seg)
 	for c: String in (rules.get("comms", {}) as Dictionary).keys():
 		if (train_g.get("comms", {}) as Dictionary).has(c):
 			var sit: Array = St.situation(train_g, train_t, c)
@@ -935,6 +994,8 @@ func _show_train(phase: String, seg: int) -> void:
 	rules["train"]["hands"] = (train_g["hands"] as Dictionary).duplicate(true) if train_g.get("hands") is Dictionary else {}
 	train = TRAIN_SCENE.instantiate()
 	train.opts = {"panel": false, "seed": int(opts.get("seed", 1))}
+	if phase == "council":
+		train.opts["view_mode"] = "section"
 	# The values last shown, so the people react to what changed since (train_people_view.gd).
 	if not last_rules.is_empty():
 		train.opts["rules_before"] = last_rules
@@ -943,11 +1004,13 @@ func _show_train(phase: String, seg: int) -> void:
 	add_child(train)
 	stage = train
 	# The world outside by the hour, the weather, the region and the cold
-	# (the atmosphere frame); the snow over it falls as that look says.
-	var look := outside_look(rules, seg)
+	# (the atmosphere frame); the snow over it falls as that look says. On the run the
+	# sky is the one the train left (the stop behind it, or the start), the land ahead's.
+	var look := outside_look(rules, _season_seg(seg))
 	var cam: Camera3D = train.get("camera")
 	if cam != null:
 		outside = OutsideView.attach(cam, look, phase == "travel")
+		outside.visible = train.view_mode == "section"
 	journey = null
 	if Journey.enabled():
 		journey = Journey.attach(train, train, look, seg, {"seed": int(opts.get("seed", 1))})
@@ -996,7 +1059,7 @@ func next_stop_line() -> String:
 	if String(STEPS[step][0]) != "train" or step + 1 >= STEPS.size():
 		return ""
 	var at := int(opts.get("arrive_min", TrainStop.arrival_min(String(train_g.get("seed", "")), int(train_g.get("seg", 1)))))
-	var w: Dictionary = stop_weather(int(STEPS[step + 1][2]))
+	var w: Dictionary = stop_weather(_season_seg(int(STEPS[step + 1][2])))
 	var word: String = "비" if String(w["falls"]) == "rain" else String(WEATHER_WORD.get(String(w["weather"]), String(w["weather"])))
 	return "%02d:%02d 도착 · %s" % [floori(at / 60.0), at % 60, word]
 
@@ -1066,12 +1129,53 @@ func _plate(name_label: Label3D) -> Control:
 	return row
 
 
-## A tap let go on a plate picks its car.
+## A tap picks the car; a drag begun on its plate still moves the train.
 func _plate_input(e: InputEvent, id: String) -> void:
-	var up_click: bool = e is InputEventMouseButton and (e as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT and not e.is_pressed()
-	var up_touch: bool = e is InputEventScreenTouch and not e.is_pressed()
-	if up_click or up_touch:
-		_select(id)
+	var point: Vector2 = Vector2.ZERO
+	var relative: Vector2 = Vector2.ZERO
+	var pointer: int = -1
+	var pressed: bool = false
+	var released: bool = false
+	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
+		point = e.position
+		pressed = e.pressed
+		released = not e.pressed
+	elif e is InputEventScreenTouch:
+		point = e.position
+		pointer = e.index
+		pressed = e.pressed
+		released = not e.pressed
+	elif e is InputEventScreenDrag:
+		point = e.position
+		relative = e.relative
+		pointer = e.index
+	elif e is InputEventMouseMotion and (e.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
+		point = e.position
+		relative = e.relative
+	else:
+		return
+	# gui_input positions are local to a plate that moves with the camera.
+	var plate_node: Control = plates.get_node_or_null("Plate_" + id) as Control if is_instance_valid(plates) else null
+	if plate_node != null:
+		var plate_transform: Transform2D = plate_node.get_global_transform_with_canvas()
+		point = plate_transform * point
+		relative = plate_transform.basis_xform(relative)
+	if pressed:
+		# A new press starts over, so a let-go lost to a rebuilt plate cannot hold the next taps.
+		_plate_press_id = id
+		_plate_press_pos = point
+		_plate_pointer = pointer
+		_plate_dragged = false
+		return
+	if _plate_press_id != id or _plate_pointer != pointer:
+		return
+	_plate_dragged = _plate_dragged or _plate_press_pos.distance_to(point) > PLATE_TAP_SLOP
+	if released:
+		_plate_press_id = ""
+		if not _plate_dragged:
+			_select(id)
+	elif relative != Vector2.ZERO and is_instance_valid(train):
+		train.drag(relative)
 
 
 ## A carriage's name plate (시안 .plate): a dark enamel plate, its name between
@@ -1114,6 +1218,8 @@ func _process(_delta: float) -> void:
 		var running: bool = absf(cinema.speed) > 1.0
 		if weather.moving != running:
 			weather.moving = running
+	if is_instance_valid(train) and is_instance_valid(outside):
+		outside.visible = train.view_mode == "section"
 	if not is_instance_valid(train) or plates.get_child_count() == 0:
 		return
 	var cam: Camera3D = train.get("camera")
@@ -1123,7 +1229,8 @@ func _process(_delta: float) -> void:
 		var car = p.get_meta("car")
 		if not is_instance_valid(car):
 			continue
-		var at: Vector3 = (car as Node3D).to_global(Vector3(float(p.get_meta("x")), -0.45, 0.0))
+		var front_z: float = 1.40 if train.view_mode == "diag" else 0.0
+		var at: Vector3 = (car as Node3D).to_global(Vector3(float(p.get_meta("x")), -0.45, front_z))
 		# Over another screen no plate; with a car picked only its own.
 		var shown: bool = card == null or card == home
 		if sel != "" and String(p.get_meta("id")) != sel:
@@ -1203,6 +1310,14 @@ func _select(id: String) -> void:
 		return
 	var at: String = sel if sel != "" else was
 	if at == "":
+		return
+	if str(train.get("view_mode")) == "diag":
+		if sel != "":
+			train.focus_car(at, true)
+			_set_cover()
+		else:
+			train.focus_car(at, false)
+			train.set_pane(0.0)
 		return
 	train.focus_car(at)
 	if sel != "":
@@ -1339,6 +1454,9 @@ func _set_lever(comm: String, which: String, value: int) -> void:
 
 ## The picked car's lamp-amber corners, and the shade over the cars not picked.
 func _draw_marks() -> void:
+	if is_instance_valid(train) and train.view_mode == "diag":
+		train.highlight(sel if (card != null and card == home) else "")
+		return
 	if sel == "" or card == null or card != home or not is_instance_valid(train) or train.camera == null:
 		return
 	var cam: Camera3D = train.camera
@@ -1425,14 +1543,15 @@ func _field_opts() -> Dictionary:
 	# here (the stop pick and the field are the same stretch, so the stop scene
 	# building it from the pick gives the same).
 	o["act"] = "prologue"
-	o["act_progress"] = prologue_progress(int(STEPS[step][2]))
+	o["act_progress"] = prologue_progress(_season_seg(int(STEPS[step][2])))
+	o["region"] = _stop_band(int(STEPS[step][2]))
 	# A look asked of the slice for check shots (opts "look", as outside_look
 	# reads it) is the stop's as well: the train, the stop scene and the field alike.
 	var want: Dictionary = opts.get("look", {})
 	if want.has("cold"):
 		o["cold"] = float(want["cold"])
 	# The stop's weather from the season table: the rules' kinds and the picture's.
-	var w := stop_weather(int(STEPS[step][2]))
+	var w := stop_weather(_season_seg(int(STEPS[step][2])))
 	o["weather"] = w["rules"]
 	o["look"] = w["look"]
 	if want.has("kinds"):
@@ -1445,6 +1564,11 @@ func _field_opts() -> Dictionary:
 	o["laws"] = (train_g.get("passed", {}) as Dictionary).keys()
 	if opts.has("place"):
 		o["place"] = String(opts["place"])
+	# A stop form asked of the slice (stop_ground.gd, a test switch for now): the loader
+	# makes the map in it, off the main thread (prepare), and the field keeps it.
+	for key: String in ["stop_form", "stop_form_m"]:
+		if opts.has(key):
+			o[key] = opts[key]
 	return o
 
 

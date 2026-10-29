@@ -50,6 +50,7 @@ var quiet_until: float = 0.0
 var cue_until: float = -1.0          # a cue (return, loss) plays out before anything else
 var scene_t: float = 0.0
 var music_t: float = 0.0
+var safe_sec: float = SAFE_STAY
 var stage: int = 0                   # the threat stage the music follows
 var stage_since: float = 0.0
 var next_down: float = -1.0          # when the next step down is due, -1 while not going down
@@ -187,7 +188,7 @@ func _threat(s: Dictionary, rising: bool) -> void:
 func _may_explore(s: Dictionary, length: float) -> bool:
 	if (s.get("weathers", []) as Array).has("blizzard"):
 		return false
-	return music_t + length <= MAX_SHARE * maxf(scene_t + length, SAFE_STAY)
+	return music_t + length <= MAX_SHARE * maxf(scene_t + length, safe_sec)
 
 
 func _train(s: Dictionary) -> void:

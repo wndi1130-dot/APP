@@ -135,7 +135,7 @@ export const BYPRODUCT: Record<string, Byproduct> = {
 // ---- 기술 23개(7.3, 정찰 장비 r4·w4는 결정 371, 운반·살림 x4·w5는 결정 486) ----
 export type TechId =
   | 'e1' | 'e2' | 'e3' | 'e4' | 'e5' | 'm1' | 'm2' | 'm3' | 'm4' | 'm5'
-  | 'w1' | 'w2' | 'w3' | 'w4' | 'w5' | 'r1' | 'r2' | 'r3' | 'r4' | 'x1' | 'x2' | 'x3' | 'x4';
+  | 'w1' | 'w2' | 'w3' | 'w4' | 'w5' | 'w6' | 'w7' | 'w8' | 'r1' | 'r2' | 'r3' | 'r4' | 'x1' | 'x2' | 'x3' | 'x4';
 export type Variant = 'a' | 'b';
 export interface Upkeep { parts?: number; coal?: number; wood?: number; scrap?: number }
 export interface VariantDef {
@@ -202,6 +202,15 @@ export const TECHS: Record<TechId, TechDef> = {
   // 정찰 장비(결정 371): 정찰조가 돌아온 정차에서 태엽 깡통을 반대편에 걸어 망자를 끈다. 걸 때마다 부품이 든다.
   w4: T({ id: 'w4', branch: 'craft', tier: 0, name: '태엽 소리 미끼', effect: '정찰 뒤 미끼를 걸면 바깥 기척이 한 단계 내려간다(한 번에 부품 1)', like: ['tail'], adapt: { parts: 1, wood: 2 } }),
   w5: T({ id: 'w5', branch: 'craft', tier: 0, name: '객차 목공', effect: '살림 2단(갖춤)을 연다. 3단(북유럽식)은 공구 수리도 써야 한다', like: ['front'], adapt: { parts: 1, wood: 4 } }),
+  w6: T({ id: 'w6', branch: 'craft', tier: 1, name: '생활 공방', effect: '공방 일에 생필품 만들기가 열린다', like: ['tail'] }),
+  w7: T({
+    id: 'w7', branch: 'craft', tier: 2, name: '손놀림', effect: '변형 둘 중 하나',
+    variants: {
+      a: { name: '빠른 손', effect: '생필품 만들기 일 −30%, 고철 +25%', upkeep: {}, like: ['medtech'], dislike: [], label: '빠르게 만든다', say: '손을 빨리 놀려라. 기다리는 칸이 많다!' },
+      b: { name: '꼼꼼한 손', effect: '생필품 만들기 일 +30%, 고철 +50%, 생필품 1.5몫', upkeep: {}, like: ['tail'], dislike: ['guard'], label: '꼼꼼하게 만든다', say: '조금 더 손봐라. 한 번 만들 때 넉넉히!' },
+    },
+  }),
+  w8: T({ id: 'w8', branch: 'craft', tier: 3, name: '좋은 물건', effect: '같은 일과 고철 두 배로 좋은 물건을 만든다', upkeep: { parts: 0.25 }, like: ['front'], dislike: ['tail'] }),
   r1: T({ id: 'r1', branch: 'radio', tier: 1, name: '단거리 무전', effect: '정차 사망 ×0.85', like: ['guard'] }),
   r2: T({
     id: 'r2', branch: 'radio', tier: 2, name: '무전의 쓰임', effect: '변형 둘 중 하나', upkeep: { parts: 0.25 },
@@ -232,10 +241,11 @@ export const TECHS: Record<TechId, TechDef> = {
   x4: T({ id: 'x4', branch: 'expedition', tier: 2, name: '운반 수레', effect: '공방 만들기: 손수레·긴 썰매·쇠 날(S2)', like: ['tail'] }),
 };
 export const TECH_IDS = Object.keys(TECHS) as TechId[];
+export const SUPPLIES_TECHS: TechId[] = ['w6', 'w7', 'w8'];
 
 /** 갈라진 연구 줄로 3단계의 선행을 우회하지 않는다(결정 486, 설계 1.1). */
 export const PREREQ: Partial<Record<TechId, TechId[]>> = {
-  x2: ['x1'], x4: ['x1'], x3: ['x2'], w2: ['w1'], w3: ['w2'],
+  x2: ['x1'], x4: ['x1'], x3: ['x2'], w2: ['w1'], w3: ['w2'], w7: ['w6'], w8: ['w7'],
 };
 /** 표가 없는 가지는 기존 셈: 같은 가지에서 한 단 아래 기술 하나. */
 export function prereqs(id: TechId): TechId[] {

@@ -24,6 +24,7 @@ signal confirmed
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
+const UiBake = preload("res://game/ui/ui_bake.gd")
 const SHADER := preload("res://game/ui/lever_face.gdshader")
 
 const CSS_SIZE := Vector2(148, 48)
@@ -370,11 +371,13 @@ func _draw_house() -> void:
 			GlassParts.round_rect(ci, lr.grow(grow), 1.0 * kk + grow, Color(LAMP, lamp_a * 0.12))
 		GlassParts.round_rect(ci, lr, 1.0 * kk, Color(LAMP, lamp_a))
 	# The rod: from the pivot (17, 36) up when the lever is up, down when it is down.
+	var rod := UiBake.Batch.new()
 	var len_css: float = TRAVEL * absf(k)
 	if len_css > 0.3:
 		var top: float = 36.0 - TRAVEL * k if k > 0.0 else 36.0
-		GlassParts.grad_rect(ci, Rect2(Vector2(14.5, top) * kk, Vector2(5.0, len_css) * kk), 2.5 * kk, ROD)
-	_disc(ci, Vector2(17, 36) * kk, 5.0 * kk, Vector2(-1.0, -1.2) * kk, 8.63 * kk, HUB, Color(0, 0, 0, 0.6))
+		GlassParts.gradient(rod, Rect2(Vector2(14.5, top) * kk, Vector2(5.0, len_css) * kk), 2.5 * kk, ROD)
+	_disc(rod, Vector2(17, 36) * kk, 5.0 * kk, Vector2(-1.0, -1.2) * kk, 8.63 * kk, HUB, Color(0, 0, 0, 0.6))
+	rod.draw(ci)
 	# The grip rides down with the lever and grows toward the eye in the middle.
 	var s: float = 1.0 + (1.0 - k * k) * 0.16
 	var at := Vector2(17.0, 11.0 + (1.0 - k) * TRAVEL) * kk
@@ -407,8 +410,8 @@ func _draw_house() -> void:
 
 ## A disc lit from `focus` off its centre (radial-gradient(circle at …)):
 ## rings of colour out to `reach` from the focus, and its shadow under it.
-func _disc(ci: CanvasItem, c: Vector2, r: float, focus: Vector2, reach: float, stops: Array, shade: Color) -> void:
-	ci.draw_circle(c + Vector2(0, 1.0 * UiFonts.K), r + 0.8 * UiFonts.K, Color(shade, shade.a * 0.5), true, -1.0, true)
+func _disc(batch: UiBake.Batch, c: Vector2, r: float, focus: Vector2, reach: float, stops: Array, shade: Color) -> void:
+	batch.circle(c + Vector2(0, 1.0 * UiFonts.K), r + 0.8 * UiFonts.K, Color(shade, shade.a * 0.5))
 	var rings: int = 5
 	var seg: int = 28
 	var f0: Vector2 = c + focus
@@ -421,7 +424,7 @@ func _disc(ci: CanvasItem, c: Vector2, r: float, focus: Vector2, reach: float, s
 			var p: Vector2 = c + Vector2(cos(a), sin(a)) * rr
 			pts.append(p)
 			cols.append(GlassParts.grad_at(stops, p.distance_to(f0) / reach))
-		ci.draw_polygon(pts, cols)
+		batch.polygon(pts, cols)
 
 
 static func _ease_out(f: float) -> float:

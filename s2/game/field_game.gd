@@ -10,6 +10,7 @@ signal built
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const WoodsShade = preload("res://fx/woods_shade.gd")
@@ -18,11 +19,13 @@ const SidePath = preload("res://game/world/side_path.gd")
 const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const RouteStops = preload("res://game/train/route_stops.gd")
+const RouteBands = preload("res://game/train/route_bands.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
+const StopForm = preload("res://game/sim/stop_form.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const NoiseLedger = preload("res://game/sim/noise_ledger.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
@@ -100,7 +103,7 @@ const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
 const NEAR_SIGHT: float = 2.0         # heard from behind (body_injury 8.3)
-const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (zomboid-like)
+const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (like reference game 1)
 const SEWER_CLEAR: float = 6.0          # no one climbs out within this of a person (field_unified 6)
 const BLOOD_SCENT_R: float = 12.0       # excessive blood smell event radius (body_injury 8.1)
 const CULVERT_WIDTH: int = 2            # dead out of a culvert at once; every other way lets one out
@@ -169,6 +172,10 @@ const ALARM_RINGS: int = 4
 const ALARM_EVERY: float = 2.0
 
 var opts: Dictionary = {}
+var stop_form: String = "city"
+## How far along the journey this stop is: 0 at the prologue's start, 1 at the third act's end
+## (the acts in order, each its act_progress; decision 498's arrival cap grows with it).
+var journey_progress: float = 0.0
 ## What this stop is for (opts["mission"]; content_variety_first_build 2부):
 ## "" is the stop as it always was, "survey" the track office, "depot" the
 ## loading yard. Anything else is read as "". With "" nothing is written that
@@ -422,6 +429,7 @@ func _ready() -> void:
 	# looks like the stage; without one the stop is as before.
 	storm = StormLook.look(String(opts.get("storm", "")))
 	var act := String(opts.get("act", "prologue"))
+	journey_progress = clampf((float(maxi(Atmosphere.ACTS.find(act), 0)) + clampf(float(opts.get("act_progress", 0.0)), 0.0, 1.0)) / float(Atmosphere.ACTS.size()), 0.0, 1.0)
 	cold = clampf(float(opts.get("cold", Atmosphere.cold_for(act, float(opts.get("act_progress", 0.0)), String(opts.get("cold_scheme", ""))))), 0.0, 1.0)
 	side = clampf(float(opts.get("side", Atmosphere.side_for(act, String(opts.get("cold_scheme", ""))))), 0.0, 1.0)
 	# The rules' air is the stretch's (outside_temp.gd): what falls, the body's
@@ -429,7 +437,16 @@ func _ready() -> void:
 	weather = Weather.new(storm.get("rules", opts.get("weather", ["fog", "snow"])), OutsideTemp.of(opts, cold, side), Vector2(1, 0.2), 0.4)
 	# Picture inputs for the storm stops (weather_fx 14장): rules still read weather.
 	look_kinds = opts.get("look", storm.get("kinds", weather.kinds))
-	region = Atmosphere.region_key(String(opts.get("region", Atmosphere.DEFAULT_REGION)))
+	# The stop's band (decision 494): a stop's own map shows its own stop's band on any
+	# stretch, any other map the band of the departure's stretch; a bare start the default.
+	var map_id := FieldMaps.resolve(String(opts.get("place", "")))
+	var departure_seg := int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else 0
+	if opts.has("region"):
+		region = Atmosphere.region_key(String(opts["region"]))
+	elif opts.get("departure") is Dictionary or not RouteBands.place_stop(map_id).is_empty():
+		region = RouteBands.band_of(map_id, act, departure_seg, float(opts.get("act_progress", 0.0)))
+	else:
+		region = Atmosphere.DEFAULT_REGION
 	look_hour = float(opts.get("look_hour", -1.0))
 	# Lying snow on arrival follows the cold, deeper stop by stop (picture: nothing
 	# in the rules reads it). A storm stop keeps its season's depth.
@@ -452,12 +469,15 @@ func _ready() -> void:
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
-	place = FieldMaps.resolve(String(opts.get("place", "")))
+	place = map_id
 	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+	stop_map = shape_stop(stop_map, String(opts.get("stop_form", "")), rng.seed, float(opts.get("stop_form_m", -1.0)),
+		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	_take_map(with_side_path(stop_map, rng.seed))
+	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
 	if opts.get("departure") is Dictionary:
@@ -479,6 +499,7 @@ func _ready() -> void:
 	# Its own dice, so eating and the watches move nothing else of the run.
 	eat_rng.seed = ("%d:eat" % rng.seed).hash()
 	director = HordeDirector.new(rng)
+	director.limit_sec = clock.limit_sec
 	director.use_map(data)
 	if opts.has("budget"):
 		director.budget_left = int(opts["budget"])
@@ -595,10 +616,11 @@ func _ready() -> void:
 	add_child(audio)
 	audio.setup(self)
 	music = MusicPlayer.new()
+	music.director.safe_sec = clock.safe_sec
 	add_child(music)
 	music.setup("field", self)
 	await BuildPace.rest(pace)
-	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
+	set_radio("기관사: " + driver_forecast(0.0, 0) + lid_tip(), "say")
 	if holdout.feel_line() != "":
 		audio.chief_feel(holdout.feel_number())
 	if mission_play.active():
@@ -1503,6 +1525,21 @@ const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground
 	"_floor_arrays", "_floor_keys", "_room_finish", "_walk_field", "_walk_key", "fell_groves"]
 
 
+## The ground of the stop's form (stop_ground.gd), put on before the side path
+## (with_side_path). An edge stop grows and shifts the map, so what the loader made
+## ahead from it is dropped first, and a map handed over with its side path already on
+## is built again bare by `fresh`; a city or siding stop keeps all of it.
+static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable) -> Dictionary:
+	if form.is_empty() or form == String(map.get("stop_form", "")) or form == String(map.get("stop_form_asked", "")):
+		return map
+	if form == "edge":
+		if map.has("side_path"):
+			map = fresh.call()
+		for key in AHEAD_KEYS:
+			map.erase(key)
+	return StopGround.apply(map, form, run_seed, target_m)
+
+
 ## The side path on a map built here or handed over (side_path.gd). The loader puts it
 ## on when it knows the field's seed (stop_loader.gd make_ready); else it goes on here,
 ## and as it can grow the map, shift it and put its store on it, what the loader made
@@ -1514,6 +1551,17 @@ static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 		for key in AHEAD_KEYS:
 			map.erase(key)
 	return SidePath.add(map, run_seed)
+
+
+## Reapply derived times after a saved stop is restored (decision 494).
+func set_stop_form(form: String) -> void:
+	stop_form = StopForm.resolve({"stop_form": form}, String(data["place_kind"]))
+	clock.safe_sec = StopForm.safe_sec(stop_form)
+	clock.limit_sec = StopForm.limit_sec(stop_form)
+	if director != null:
+		director.limit_sec = clock.limit_sec
+	if music != null:
+		music.director.safe_sec = clock.safe_sec
 
 
 ## The map the field stands on. Everything that reads the ground goes through
@@ -2142,8 +2190,11 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 		ledger.observe(level, "run" if running else ("crouch" if p.crouched else "walk"), r, reacted)
 		if running:
 			_ripple_run(p, r)
-		if p == player and audio != null:
-			audio.footstep(p.position, running)
+		if audio != null:
+			if p == player:
+				audio.footstep(p.position, running)
+			elif p.team == "squad" or p.team == "crew":
+				audio.company_step(p.position, running)   # the ear's; a raider's or a stranger's feet stay unheard
 		_wake_frozen_near(p)
 		_floor_creak(p, cell)
 	if running:
@@ -2292,7 +2343,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 		level = SimNoise.clamp_level(level + 1)
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
-			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
+			set_radio("기관사: 굴 쪽이 울립니다. 다음 것들은 %s에서 나옵니다." % director.name_of(hole), "info", entry_pos(hole))
 	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false) * SimNoise.reach(tag)
 	var reacted: int = zombies.hear(at, level, radius)
 	ledger.observe(level, tag, radius, reacted)
@@ -2461,7 +2512,7 @@ func _update_hordes(delta: float) -> void:
 		director.noticed(now)
 	elif director.update_lost(now):
 		telemetry.lost_at(now)
-		set_radio("기관사: 놓친 것 같다. 다음 것들이 늦어진다. 숨 돌려라.")
+		set_radio("기관사: 놓친 것 같습니다. 다음 것들이 늦어집니다. 숨 돌리십시오.")
 	var h := director.update(now)
 	if not h.is_empty():
 		_start_horde(h)
@@ -2485,7 +2536,7 @@ func _update_hordes(delta: float) -> void:
 					recent += 1
 			director.horde_cleared(now, recent)
 			telemetry.rest(now, director.rest_until)
-			set_radio("기관사: 한 무리 지나갔다. " + director.forecast(now, forecast_precision, clock) + lid_tip())
+			set_radio("기관사: 한 무리 지나갔습니다. " + driver_forecast(now, forecast_precision) + lid_tip())
 
 
 ## Is anything after the squad right now (chasing, or already at someone)?
@@ -2628,7 +2679,7 @@ func _update_spawns(delta: float) -> void:
 	if forecast_t > 0.0:
 		forecast_t -= delta
 		if forecast_t <= 0.0:
-			set_radio("기관사: " + director.forecast(now, forecast_precision, clock) + lid_tip())
+			set_radio("기관사: " + driver_forecast(now, forecast_precision) + lid_tip())
 	deaf_t = maxf(0.0, deaf_t - delta)
 
 
@@ -2639,13 +2690,22 @@ func _someone_near(at: Vector3, r: float) -> bool:
 	return false
 
 
+## The driver's forecast, said to the chief politely like the user's own line
+## for him (decisions 486). horde_director words it so, but its no-more line
+## stays plain for the signal box and a roof, so the driver's is said here.
+func driver_forecast(now: float, precision: int) -> String:
+	if director.is_exhausted():
+		return "더 오는 기척은 없습니다."
+	return director.forecast(now, precision, clock)
+
+
 ## Once per field, when the next wave comes up the open street manhole: how to
 ## shut it (H3 2026-10-09: the player never found that it can be shut).
 func lid_tip() -> String:
 	if lid_tip_told or not FieldMaps.lid(director.next_entry) or not director.is_open(director.next_entry) or director.is_exhausted():
 		return ""
 	lid_tip_told = true
-	return " 맨홀은 판자나 고철로 누르면 막힌다."
+	return " 맨홀은 판자나 고철로 누르면 막힙니다."
 
 
 ## Out of a sewer hole a body climbs: straight up out of a lid or a drain,
@@ -3088,7 +3148,7 @@ func _check_end() -> void:
 		return
 	if clock.past_safe() and not safe_warned:
 		safe_warned = true
-		set_radio("기관사: 이제 떠나야 한다. 오래는 못 기다린다.", "must")
+		set_radio("기관사: 이제 떠나야 합니다. 오래는 못 기다립니다.", "must")
 
 
 ## Walking dead on the main track (rows 1-3, ground level) west and east of

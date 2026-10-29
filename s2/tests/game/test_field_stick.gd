@@ -715,7 +715,8 @@ func _window_between(p, z_at: float) -> Dictionary:
 func test_an_axe_does_not_swing_through_a_whole_window() -> void:
 	var p = game.player
 	p.hands = [{"id": "axe", "quality": "factory", "condition": 0.9, "loaded": 0}]
-	var z := _window_between(p, 1.7)
+	p.position.x += 0.4   # near the window's side, so one past it is inside an axe's 1.45
+	var z := _window_between(p, 1.4)
 	p.target_zombie = z
 	game.combat.update(0.02)
 	assert_eq(p.swing_t, 0.0, "glass is in the way")
@@ -985,9 +986,9 @@ func test_a_shove_still_frees_a_grabber_even_if_a_wall_cell_is_beside_it() -> vo
 
 func test_the_flanker_names_its_target_only_inside_the_axe_reach() -> void:
 	var p = game.player
-	var near = _raider(p.position + Vector3(1.6, 0, 0))
+	var near = _raider(p.position + Vector3(1.3, 0, 0))
 	game.ai._raider_fight(near, p, true)
-	assert_eq(near.target_person, p, "1.6 m is inside an axe's 1.75")
+	assert_eq(near.target_person, p, "1.3 m is inside an axe's 1.45")
 	var far = _raider(p.position + Vector3(0, 0, 2.0))
 	game.ai._raider_fight(far, p, true)
 	assert_null(far.target_person, "2.0 m is not: no target to set and clear")
@@ -1084,7 +1085,7 @@ func test_dragging_off_the_aim_pad_onto_an_enemy_takes_that_one() -> void:
 	hud._auto_aim_end(pad)
 
 
-## Decision 405 (as in Zomboid): with nothing picked the shot still goes
+## Decision 405 (as in reference game 1): with nothing picked the shot still goes
 ## where the gun points (it was: no shot at all).
 func test_holding_the_aim_pad_with_no_one_about_fires_where_it_points() -> void:
 	_gun()

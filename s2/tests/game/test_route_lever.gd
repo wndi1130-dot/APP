@@ -18,7 +18,7 @@ func test_the_lever_shows_the_stop_ahead_and_the_stop_keeps_it() -> void:
 	var line: String = f.next_stop_line()
 	assert_true(f.bar.main_key is LeverKey, "before the stop the main key is the departure lever")
 	assert_eq(f.bar.lever_small, line, "its small line is the stop ahead")
-	var w: Dictionary = f.stop_weather(2)
+	var w: Dictionary = f.stop_weather(f._season_seg(2))
 	var word: String = "비" if String(w["falls"]) == "rain" else String(SliceFlow.WEATHER_WORD[String(w["weather"])])
 	f.next()
 	assert_eq(f.current(), "stop_pick")

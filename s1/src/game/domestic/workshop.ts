@@ -3,7 +3,7 @@ import { COMM_NAME, COMMS } from '../data';
 import type { Comm } from '../data';
 import { clamp, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
-import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE, FURNITURE_SIZE, GREEN_BODY, TECHS, TECH_IDS, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
+import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE, FURNITURE_SIZE, GREEN_BODY, SUPPLIES_TECHS, TECHS, TECH_IDS, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
 import type { FurnitureKind, FurnishStep, FurnishTier, TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
 import { refreshSit } from './sit';
@@ -12,6 +12,7 @@ import { saveRestore, workBonus } from './classroom';
 import { handsWorkMult } from '../hands';
 import { domCard, furnishOf, furnishScore, nextFurnishWork, secondPath, techMult, techUsable, techVariants, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
+import { addSupplies, SUP_MAKE, SUPPLIES_BOT, SUPPLIES_PROBE, suppliesNeed } from '../supplies';
 
 // 공방(6장): 작업량, 일 목록, 목표치와 우선순위, 복원(7장), 유지비(7.4), 고장(6.5), 개조(4.4).
 // 공방은 정산 때 목표치와 우선순위대로 저절로 돈다. 플레이어는 바꾸고 싶을 때만 손댄다(3장).
@@ -83,7 +84,7 @@ export const GEAR_TECHS: TechId[] = ['r4', 'w4'];
 
 /** 이 판의 기술 화면에 보이는 기술. 정찰 장비를 켜지 않은 판에는 r4·w4가 없다 */
 export function techShown(g: Game, id: TechId): boolean {
-  return !GEAR_TECHS.includes(id) || !!g.gearOn;
+  return (!GEAR_TECHS.includes(id) || !!g.gearOn) && (!SUPPLIES_TECHS.includes(id) || !!g.supOn);
 }
 
 /** 지금 이 기술의 복원을 시작할 수 없게 막는 까닭(재료·조각·공방 사정은 빼고, 조건 자체를 본다). 막힌 데가 없으면 undefined. */
@@ -91,7 +92,7 @@ export function restoreBlock(g: Game, id: TechId): string | undefined {
   const d = dom(g);
   const def = TECHS[id];
   if (d.techs[id]) return '이미 손댔다';
-  if (NOT_YET.includes(id) || (GEAR_TECHS.includes(id) && !g.gearOn)) return '아직 이 열차에서 못 쓴다';
+  if (NOT_YET.includes(id) || !techShown(g, id)) return '아직 이 열차에서 못 쓴다';
   const pre = prereqs(id);
   if (pre.length > 0 && !pre.some(p => techUsable(g, p))) return `${TECHS[pre[0]].name}부터`;
   if (topSkill(g, def.branch) < skillNeed(id) && !secondPath(g, id)) {
@@ -249,6 +250,11 @@ export function completeRestore(g: Game, id: TechId): void {
     return;
   }
   st.stage = st.defect ? 'defective' : 'done';
+  if (g.supOn && id === 'w6' && !d.order.includes('sup')) {
+    d.order.push('sup');
+    SUPPLIES_PROBE.onRestore?.(g);
+    SUPPLIES_BOT.get(g)?.beforeWork?.(g);
+  }
   const def = TECHS[id];
   const sides = techRelSides(id, st.variant);
   d.stats.restored += 1;
@@ -504,15 +510,32 @@ export function setFullRule(g: Game, rule: 'parts' | 'dump' | 'aisle'): void {
 }
 
 // ---- 공방 한 구간(6.3) ----
+function suppliesRecipe(g: Game) {
+  const d = dom(g);
+  const variant = techMult(g, 'w7') > 0 ? d.techs.w7?.variant : undefined;
+  const mult = variant ? SUP_MAKE.variants[variant] : undefined;
+  const fine = !!d.supFineOn && techMult(g, 'w8') > 0;
+  return {
+    fine, amount: fine ? 1 : mult?.yield ?? 1,
+    work: SUP_MAKE.supMakeWork * (mult?.work ?? 1),
+    scrap: SUP_MAKE.supMakeScrap * (mult?.scrap ?? 1) * (fine ? SUP_MAKE.fineScrap : 1),
+  };
+}
+
 export function runWorkshop(g: Game): { used: number; did: string[] } {
   const d = dom(g);
+  if (g.supOn) SUPPLIES_BOT.get(g)?.beforeWork?.(g);
   let w = workPower(g) - d.workDebt;
   d.workDebt = 0;
   if (w < 0) { d.workDebt = -w; w = 0; }
   const start = w;
   const did: string[] = [];
-  for (const task of d.order) {
-    if (w <= 0) break;
+  // w6이 이 정산에 끝나 새 일이 붙거나 봇이 앞으로 옮겨도 이미 한 일을 다시 하지 않는다.
+  const visited = new Set<Task>();
+  while (w > 0) {
+    const task = d.order.find(t => !visited.has(t));
+    if (!task) break;
+    visited.add(task);
     if (task === 'parts') {
       let made = 0;
       while (w > 0 && d.parts < d.target && d.scrap >= D.partScrap && d.wood >= D.partWood) {
@@ -529,6 +552,29 @@ export function runWorkshop(g: Game): { used: number; did: string[] } {
         }
       }
       if (made > 0) did.push(`부품 ${made}`);
+    } else if (task === 'sup' && g.supOn && techMult(g, 'w6') > 0) {
+      const recipe = suppliesRecipe(g);
+      const cap = SUP_MAKE.supMakeCap * suppliesNeed(g);
+      let made = 0;
+      while (w > 0 && cap - made > 1e-9) {
+        const amount = Math.min(recipe.amount, cap - made);
+        const fraction = amount / recipe.amount;
+        const need = recipe.work * fraction;
+        const scrap = recipe.scrap * fraction;
+        if (d.scrap < scrap - 1e-9) break;
+        const progress = d.supWork ?? 0;
+        const spend = Math.min(w, Math.max(0, need - progress));
+        d.supWork = progress + spend;
+        w -= spend;
+        if (d.supWork < need - 1e-9) break;
+        d.supWork = Math.max(0, d.supWork - need);
+        d.scrap = Math.max(0, d.scrap - scrap);
+        if (recipe.fine) g.supFine = (g.supFine ?? 0) + amount;
+        else addSupplies(g, amount, 'sup.make');
+        made += amount;
+        SUPPLIES_PROBE.onMake?.(g, amount, recipe.fine);
+      }
+      if (made > 0) did.push(`${recipe.fine ? '좋은 물건' : '생필품'} ${made}`);
     } else if (task === 'restore' && d.restoring) {
       const id = d.restoring;
       const st = d.techs[id]!;
@@ -556,6 +602,14 @@ export function workshopState(g: Game): { now: string; mode: 'work' | 'idle' | '
       if (d.scrap >= D.partScrap && d.wood >= D.partWood) return { now: '부품 만들기', mode: 'work' };
       if (!d.restoring && !d.job) return { now: '부품 재료가 모자라다', mode: 'short' };
     }
+    if (task === 'sup' && g.supOn && techMult(g, 'w6') > 0) {
+      const recipe = suppliesRecipe(g);
+      const amount = Math.min(recipe.amount, SUP_MAKE.supMakeCap * suppliesNeed(g));
+      if (amount > 1e-9) {
+        if (d.scrap >= recipe.scrap * amount / recipe.amount - 1e-9) return { now: '생필품 만들기', mode: 'work' };
+        if (!d.restoring && !d.job) return { now: '생필품 고철이 모자라다', mode: 'short' };
+      }
+    }
     if (task === 'restore' && d.restoring) {
       const st = d.techs[d.restoring];
       if (st?.pending && st.progress >= st.need - 1e-9) return { now: '배관 추인을 기다린다', mode: 'idle' };
@@ -568,6 +622,12 @@ export function workshopState(g: Game): { now: string; mode: 'work' | 'idle' | '
 
 export function setTarget(g: Game, v: number): void {
   dom(g).target = clamp(Math.round(v), 0, D.targetMax);
+}
+
+export function setSupFine(g: Game, on: boolean): boolean {
+  if (!g.supOn || !g.dom || techMult(g, 'w8') <= 0) return false;
+  g.dom.supFineOn = on;
+  return true;
 }
 
 export function moveTask(g: Game, task: Task, step: -1 | 1): void {

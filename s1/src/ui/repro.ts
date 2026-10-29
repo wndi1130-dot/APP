@@ -1,7 +1,7 @@
 import {
   COMMS, COMM_NAME, PHASE_NAME, viewCard, CREW_COMMS, LOOT_KEYS, canLift, liftMartial, advance, applyMove, callEmergency, cancelRestore, castVote, chooseCard, cutComm, delegateStatus, makeDeal,
   drain, migrateDark, migrateDomestic, migrateEventPicks, moveTask, requestApprentice, requestManual, sendStop, restartTech, setAgenda, setSpace, setAutoLevers, setBury, setDelegate,
-  setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setPot, setLever, setStop, setTarget, takeAltPlace, toggleGear, hangLure, startFinish, startJob, cancelJob, startRestore, supportComm, uniqueAction, logCardPick,
+  setEscort, setFullRule, hangSymbol, hangWhy, unhangSymbol, setHotWater, setPot, setLever, setStop, setTarget, setSupFine, takeAltPlace, toggleGear, hangLure, startFinish, startJob, cancelJob, startRestore, supportComm, uniqueAction, logCardPick,
 } from '../game';
 import type { Comm, Field, Game, LedgerRow, LootKey, ModKind, StayId, Task, TechId, Variant, WhySys } from '../game';
 import type { PotMode } from '../game';
@@ -186,6 +186,7 @@ function runStep(g: Game, s: Step): string | null {
     case 'dom-finish': return startFinish(g, d.id as TechId) ? null : '지금은 고칠 수 없다';
     case 'dom-restart': restartTech(g, d.id as TechId); return null;
     case 'dom-order': moveTask(g, d.task as Task, d.step === '-1' ? -1 : 1); return null;
+    case 'dom-sup-fine': return setSupFine(g, d.on === '1') ? null : '좋은 물건 복원 뒤에 켤 수 있다';
     case 'dom-delegate':
       return setDelegate(g, d.on === '1', (d.policy || undefined) as 'ours' | 'neutral' | undefined) ? null : delegateStatus(g).why ?? '맡길 수 없다';
     case 'dom-apprentice': return requestApprentice(g, d.field as Field) ? '견습생 후보 서류가 쌓였다.' : '가르칠 사람이 없거나 서류가 이미 있다.';
