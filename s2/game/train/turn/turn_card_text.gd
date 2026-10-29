@@ -462,6 +462,24 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 				"거부는 없다. 지붕이 비면 다 같이 죽는다." if _was(past, "hold_post") else ("경계는 줄이지 않는다. 장갑을 두 겹 껴라." if frost else "경계는 줄이지 않는다. 젖은 옷은 교대 때마다 갈아입어라.")])
 
 
+## 요구 카드에서 칸 대표가 직접 하는 말: [보통, 좋음(관계 15 이상), 나쁨(관계 -15 이하)]. S1 cards.ts DEMAND_SAY와 같다.
+const DEMAND_SAY: Dictionary = {
+	"tail": {"heat": ["우리 칸 난로부터 올려 줘. 손이 굳어서 삽을 못 쥔다.", "한 눈금만 올려 줘. 우린 받은 건 갚는다.", "다음 회기 전까지 올려 줘. 우리도 오래는 못 참는다."], "ration": ["우리도 빈속으론 못 버틴다. 그릇 좀 제대로 채워 줘.", "한 국자만 더 부탁하자. 우린 빚진 건 안 잊는다.", "다음 회기 전까지 채워 줘. 우린 빈 그릇 들고 또 오기 싫다."]},
+	"medtech": {"heat": ["이 온기면 의무칸 침상부터 찬다.", "조금만 올려 달라. 동상 환자를 받기 전에.", "다음 회기 전까지다. 그 뒤엔 동상 환자 수를 센다."], "ration": ["반 그릇이면 상처가 안 아문다. 다음은 열병이다.", "조금 더 채워 달라. 아픈 사람 몫부터 부탁한다.", "다음 회기 전까지 채워 달라. 그 뒤엔 의무칸이 감당 못 한다."]},
+	"guard": {"heat": ["초소가 언다. 손가락이 방아쇠에 안 붙는다. 올려 달라.", "대원들 입김이 하얗다. 한 단만 부탁한다.", "야간 보초가 한계다. 다음 회기 전까지 답 달라."], "ration": ["대원들 그릇이 반이다. 보초 서다 쓰러진다. 올려 달라.", "대원 몫만 채워 달라. 보초는 빈속으로 못 선다.", "다음 회기 전까지 답 달라. 대원들이 기다린다."]},
+	"front": {"heat": ["온기가 이래서는 손님을 못 받습니다. 조금만 올려 주시지요.", "한 눈금이면 충분합니다. 앞칸은 받은 것을 잊지 않지요.", "다음 회기 전까지 답을 주시지요. 표는 그 뒤에 셈하겠습니다."], "ration": ["반 그릇이라. 몫을 다시 셈해 보셨으면 합니다.", "조금만 더 얹어 주시면, 그 몫은 기억해 두겠습니다.", "회기 전까지 채워 주시지요. 아니면 그 몫은 회기에서 따지겠습니다."]},
+	"engine": {"heat": ["손이 곱으면 불이 늦게 든다. 기관차는 기다려 주지 않는다.", "불 앞 한 단만. 손을 녹여야 삽이 든다.", "다음 회기 전에 답 달라. 식은 손으로는 보일러 못 지킨다."], "ration": ["삽질은 배로 먹는다. 반 그릇으로는 불이 안 산다.", "화부들 몫만 더 달라. 불은 우리가 지킨다.", "다음 회기 전에 채워 달라. 빈속으로 삽 든 놈은 오래 못 간다."]},
+}
+## 거절당한 뒤 다시 온 요구 때 대표의 말(차례는 DEMAND_SAY와 같다).
+const DEMAND_AGAIN: Dictionary = {
+	"tail": {"heat": ["지난번엔 그냥 갔지. 이번엔 같이 왔다.", "한 번은 참았다. 이번엔 우리 난로 좀 올려 줘.", "회기 전까지다. 이번엔 안 물러난다."], "ration": ["이 그릇, 지난번 그대로다. 채워서 돌려줘.", "우리 그릇 씻을 일 좀 만들어 줘.", "또 빈 그릇이다. 회기 전까지 우리 몫 채워 줘."]},
+	"medtech": {"heat": ["지난번 답은 기록해 뒀다. 다시 묻는다.", "다시 왔다. 손끝이 하얘지기 전에 한 단만.", "또 거절하면 다음은 동상이다. 회기 전까지 답 달라."], "ration": ["지난번 그릇 그대로다. 환자 몫부터 비었다.", "이번엔 채워 달라. 의무칸이 버틸 만큼만.", "또 비우면 열병을 못 막는다. 회기 전까지 채워 달라."]},
+	"guard": {"heat": ["지난번 거절, 대원들도 들었다. 다시 묻는다.", "한 번은 물러났다. 이번엔 올려 달라.", "회기 전까지다. 대원들이 뒤에 서 있다."], "ration": ["그릇 그대로 가져왔다. 다시 묻는다.", "그때는 그냥 복귀했다. 이번엔 대원 몫을 채워 달라.", "회기 전까지다. 그릇은 여기 두고 간다."]},
+	"front": {"heat": ["지난번 답은 들었습니다. 오늘 답은 다르길 바랍니다.", "한 번은 사정이 있으셨겠지요. 이번엔 믿겠습니다.", "회기 전까지입니다. 지난번처럼은 곤란합니다."], "ration": ["이 그릇, 지난번 그대로입니다. 셈이 안 맞지요.", "그릇이 말라붙었습니다. 한 번은 채워 주셔야지요.", "회기 전까지입니다. 빈 그릇은 회기에서 보여 드리지요."]},
+	"engine": {"heat": ["지난번 그 답으로는 불이 안 든다.", "불 앞은 아직 차다. 삽 쥘 만큼만 올려 달라.", "보일러는 거절을 모른다. 회기 전에 답 달라."], "ration": ["지난번 그릇 그대로다. 화부들이 지켜본다.", "빈손으로 한 번 갔다. 삽질할 만큼만 채워 달라.", "회기 전에 답 달라. 빈 그릇으로 불 못 땐다."]},
+}
+
+
 static func _demand(g: Dictionary, t: Dictionary, c: String, out: Dictionary, says: Array) -> void:
 	var sit: Array = St.situation(g, t, c)
 	var name: String = String(t["COMM_NAME"][c])
@@ -470,7 +488,7 @@ static func _demand(g: Dictionary, t: Dictionary, c: String, out: Dictionary, sa
 		var ex: int = _round(float(sit[3]))
 		out["speaker"] = _leader(g, t, "engine")
 		out["focus"] = "engine"
-		out["body"] = _again(past, "화부들이 교대 없이 삽질을 한 지 오래다. 위험 노출 %d. 교대를 늘려 달라고 한다." % ex, {
+		out["body"] = _again(past, "화부들이 교대 없이 삽질을 한 지 오래다. 위험 노출 %d. \"화부들 손이 떨린다. 교대를 늘려 달라.\"" % ex, {
 			"refuse": "화부들이 다시 왔다. 이번엔 수석 기관사도 함께다. 위험 노출 %d." % ex,
 			"shift_apprentice": "붙여 준 견습생 하나가 화상을 입었다. 화부들이 교대를 다시 요구한다. 위험 노출 %d." % ex,
 			"shift_more": "늘린 교대로도 모자란다. 석탄이 줄수록 삽질은 늘었다. 위험 노출 %d." % ex,
@@ -482,15 +500,19 @@ static func _demand(g: Dictionary, t: Dictionary, c: String, out: Dictionary, sa
 	var s: Dictionary = g["comms"][c]
 	var heat: bool = String(out["title"]) == "난방 요구"
 	var past: Variant = _memo(g, "demand:" + c)
-	var first: String = ("%s 온기 %d. 밤마다 사람들이 서로 붙어 잔다. 난방을 올려 달라고 한다." % [name, _round(float(sit[0]))]) if heat \
-		else ("%s 배급 %d. 그릇이 반만 찬다. 배급을 올려 달라고 한다." % [name, _round(float(sit[1]))])
-	var refused: String = ("%s 대표가 또 왔다. 이번엔 뒤에 칸 사람 몇이 서 있다. 온기 %d." % [name, _round(float(sit[0]))]) if heat \
-		else ("%s 대표가 빈 그릇을 들고 왔다. 지난번 거절한 날부터 그릇을 씻지 않았다고 한다. 배급 %d." % [name, _round(float(sit[1]))])
 	var rel: float = float(s["rel"])
-	var tone: String = "말투는 부탁에 가깝다." if rel >= 15 else ("답은 다음 회기 전까지 달라고 못 박는다." if rel <= -15 else "")
+	# 같은 요구라도 관계에 따라 대표의 말이 다르다: 보통·좋음·나쁨(S1 cards.ts와 같다).
+	var mood: int = 1 if rel >= 15 else (2 if rel <= -15 else 0)
+	var need: String = "heat" if heat else "ration"
+	var say: String = String(DEMAND_SAY[c][need][mood])
+	var again: String = String(DEMAND_AGAIN[c][need][mood])
+	var first: String = ("%s 온기 %d. 밤마다 사람들이 서로 붙어 잔다. \"%s\"" % [name, _round(float(sit[0])), say]) if heat \
+		else ("%s 배급 %d. 그릇이 반만 찬다. \"%s\"" % [name, _round(float(sit[1])), say])
+	var refused: String = ("%s 대표가 또 왔다. 이번엔 뒤에 칸 사람 몇이 서 있다. 온기 %d. \"%s\"" % [name, _round(float(sit[0])), again]) if heat \
+		else ("%s 대표가 빈 그릇을 들고 왔다. 지난번 거절한 날부터 그릇을 씻지 않았다고 한다. 배급 %d. \"%s\"" % [name, _round(float(sit[1])), again])
 	out["speaker"] = _leader(g, t, c)
 	out["focus"] = c
-	out["body"] = ("%s %s" % [refused if _was(past, "refuse") else first, tone]).strip_edges()
+	out["body"] = refused if _was(past, "refuse") else first
 	says.append_array([
 		("%s 난로를 올려라. 밤에 얼어 죽는 사람은 없어야 한다." % name) if heat else ("%s 그릇을 채워라. 빈 그릇으로는 일 못 한다." % name),
 		"사람을 몰고 와도 석탄은 늘지 않는다." if _was(past, "refuse") else ("다들 붙어 자기는 마찬가지다. 지금은 안 된다." if heat else "모두 반 그릇이다. 더 나올 데가 없다.")])
@@ -501,14 +523,14 @@ static func _rescue(g: Dictionary, t: Dictionary, card: Dictionary, out: Diction
 	var past: Variant = _memo(g, "rescue")
 	var n: int = int(past.get("n", 0)) if past is Dictionary else 0
 	var who: String = [
-		"역사 안에 다친 사람 둘이 있다. 데려가 달라고 한다.",
-		"역사 구석에 노인과 소년이 있다. 소년은 노인을 업고 여기까지 왔다고 한다.",
-		"플랫폼 끝에 여자 하나가 앉아 있다. 다리를 다쳤고, 아이를 안고 있다.",
-		"대합실 의자 밑에서 남자 하나가 기어 나왔다. 기관사였다고 한다. 손이 떨린다.",
+		"역사 안에 다친 사람 둘이 있다. \"데려가 주세요. 걸을 수는 있어요.\"",
+		"역사 구석에 노인과 소년이 있다. \"할아버지를 업고 여기까지 왔어요. 같이 가게 해 주세요.\"",
+		"플랫폼 끝에 여자 하나가 앉아 있다. 다리를 다쳤고, 아이를 안고 있다. \"아이만이라도 태워 주세요.\"",
+		"대합실 의자 밑에서 남자 하나가 기어 나왔다. 손이 떨린다. \"기관사였어요. 불은 아직 땔 줄 알아요.\"",
 	][n % 4]
 	var echo: String = " 꼬리칸은 이미 꽉 찼다."
 	if _was(past, "leave") or _was(past, "leave_law"):
-		echo = " 수색대가 이번엔 먼저 묻는다. 또 두고 가느냐고."
+		echo = " 수색대가 이번엔 먼저 묻는다. \"또 두고 갑니까?\""
 	elif _was(past, "take_in"):
 		echo = " 지난번 데려온 사람들로 꼬리칸 과밀이 %d이다." % _round(float(St.situation(g, t, "tail")[2]))
 	out["speaker"] = {"name": str(card.get("who", "수색대")), "role": "수색대"}

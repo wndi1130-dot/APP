@@ -313,45 +313,51 @@ func find(id: int) -> Dictionary:
 func hear(at: Vector3, level: int, radius: float, wind = null) -> int:
 	var reacted := 0
 	for z in list:
-		var state: String = z["state"]
-		if state == "dead" or state == "rising" or state == "downed" or state == "grab" or state == "attack" or state == "climb" or state == "tell":
-			continue
-		var d: float = at.distance_to(z["pos"])
-		var reach := radius
-		if wind != null:
-			reach *= float(wind.downwind(at, z["pos"]))
-		# Every floor between halves what comes through it.
-		var floors: int = absi(game.level_of(at) - game.level_of(z["pos"]))
-		if floors > 0:
-			reach *= pow(0.5, floors)
-		if d > reach:
-			continue
-		if state == "frozen":
-			if level >= SimNoise.Level.NORMAL:
-				wake(z)
-				reacted += 1
-			continue
-		if state == "waking" or state == "chase":
-			continue
-		if level == SimNoise.Level.QUIET:
-			z["angle"] = atan2(at.x - z["pos"].x, at.z - z["pos"].z)
-			continue
-		# A fainter sound does not pull one already walking to a louder one.
-		if (state == "investigate" or state == "horde") and level < int(z.get("clue", 0)) and z["pos"].distance_to(z["target"]) > 1.2:
-			continue
-		# Idle dead first turn toward the noise, then set off (no instant lock-on).
-		if state == "wander" or state == "search" or state == "eat":
-			z["turn_t"] = game.rng.randf_range(0.4, 0.9)
-		z["clue"] = level
-		z["clue_kind"] = "sound"
-		z["clue_left"] = SimNoise.LINGER[level]
-		z["state"] = "investigate"
-		z["target"] = at
-		z["linger"] = SimNoise.LINGER[level]
-		z["speed"] = SPEED_HURRY if level >= SimNoise.Level.LOUD else SPEED_SHAMBLE
-		z["path_t"] = 0.0
-		reacted += 1
+		if can_hear(z, at, radius, wind) and hear_one(z, at, level):
+			reacted += 1
 	return reacted
+
+
+## Shared hearing gate; checking it never changes a body (decision 494).
+func can_hear(z: Dictionary, at: Vector3, radius: float, wind = null) -> bool:
+	if z["state"] in ["dead", "rising", "downed", "grab", "attack", "climb", "tell", "waking", "chase"]:
+		return false
+	var reach := radius
+	if wind != null:
+		reach *= float(wind.downwind(at, z["pos"]))
+	# Every floor between halves what comes through it.
+	var floors: int = absi(game.level_of(at) - game.level_of(z["pos"]))
+	if floors > 0:
+		reach *= pow(0.5, floors)
+	return at.distance_to(z["pos"]) <= reach
+
+
+## React only after a sound passes its hearing gate.
+func hear_one(z: Dictionary, at: Vector3, level: int) -> bool:
+	var state: String = z["state"]
+	if state == "frozen":
+		if level >= SimNoise.Level.NORMAL:
+			wake(z)
+			return true
+		return false
+	if level == SimNoise.Level.QUIET:
+		z["angle"] = atan2(at.x - z["pos"].x, at.z - z["pos"].z)
+		return false
+	# A fainter sound does not pull one already walking to a louder one.
+	if (state == "investigate" or state == "horde") and level < int(z.get("clue", 0)) and z["pos"].distance_to(z["target"]) > 1.2:
+		return false
+	# Idle dead first turn toward the noise, then set off (no instant lock-on).
+	if state == "wander" or state == "search" or state == "eat":
+		z["turn_t"] = game.rng.randf_range(0.4, 0.9)
+	z["clue"] = level
+	z["clue_kind"] = "sound"
+	z["clue_left"] = SimNoise.LINGER[level]
+	z["state"] = "investigate"
+	z["target"] = at
+	z["linger"] = SimNoise.LINGER[level]
+	z["speed"] = SPEED_HURRY if level >= SimNoise.Level.LOUD else SPEED_SHAMBLE
+	z["path_t"] = 0.0
+	return true
 
 
 ## Excessive blood (body_injury 8.1): a smell event, separate from sound. The

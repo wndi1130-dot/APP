@@ -168,8 +168,8 @@ static func defense(result: Dictionary, ids: Array, seed: int) -> Variant:
 
 ## A stop nobody goes out on: the same defence of the bodies its kind of
 ## place would send (arrival_horde.gd). Its receipt is written with write().
-static func auto(kind: String, hands: int, seed: int) -> Dictionary:
-	return resolve(ArrivalHorde.auto_bodies(kind), hands, seed)
+static func auto(kind: String, hands: int, seed: int, form: String = "city") -> Dictionary:
+	return resolve(ArrivalHorde.auto_bodies(kind, form), hands, seed)
 
 
 static func _roll(seed: int, id: int, salt: int) -> float:

@@ -7,6 +7,8 @@ const Context = preload("res://game/train/train_context.gd")
 const Body = preload("res://game/train/train_body.gd")
 const SeasonTable = preload("res://game/season_table.gd")
 const Schedule = preload("res://game/train/train_schedule.gd")
+const TrainLight = preload("res://game/train/train_light.gd")
+const Look = preload("res://game/train/train_look.gd")
 
 
 func _scene(panel: bool = false):
@@ -400,7 +402,12 @@ func test_night_and_stop_change_lamps_and_route_metadata_stays_outside_politics(
 	var s = _scene()
 	var lamp: float = s.car("front")["lamp_energy"]
 	s.set_value("view.daytime", "night")
-	assert_lt(float(s.car("front")["lamp_energy"]), lamp)
+	# The light board lights the lamp at night (train_light.gd: kerosene up, candles on),
+	# and nothing else dims it by the hour.
+	var c: Dictionary = s.car("front")
+	assert_gt(float(c["lamp_energy"]), lamp)
+	var aim: Dictionary = TrainLight.target(TrainLight.stage_of(c), "night", Look.mood_look(String(c["mood"])))
+	assert_almost_eq(float(c["lamp_energy"]), float(aim["lamp_energy"]), 0.001)
 	s.set_value("view.motion", "stopped")
 	assert_eq(float(s.car("front")["lamp_sway"]), 0.0)
 	s.set_value("train.seg", 9)
@@ -660,6 +667,8 @@ func test_placeholder_node_budget_adds_no_new_lights() -> void:
 	# A stove stands where people live; cars only for goods, coal or the dead have none.
 	var stoves: int = s.cars.filter(func(c): return not bool(Catalog.layout(c["def"]).get("storage_only", false))).size()
 	assert_eq(lights, 1 + s.cars.size() + stoves, "sun, each car's own lamp and a stove where people live (13 cars: 23)")
+	for c: Dictionary in s.cars:
+		assert_false((c["lamp"] as OmniLight3D).shadow_enabled, "a swaying lamp's shadow would be drawn again every frame: " + String(c["id"]))
 	print("TRAIN_NODE_BUDGET=" + JSON.stringify({"nodes": count, "lights": lights, "people": s.people.get_child_count(), "furniture_roots": s.life.rooms.size(), "outside_nodes": 4}))
 
 

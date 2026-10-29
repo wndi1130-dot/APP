@@ -64,6 +64,14 @@ const DOOR_VOICES: Dictionary = {
 	"break": ["door_break", 1.0, 0.95, 1.05],
 }
 const DOOR_BLOWS: Array[String] = ["door", "low", "wall"]
+## A building's door turned by a hand (field_actions _set_door), for the
+## player's ear only: no rule hears it, so no make_sound tag and no noise.gd
+## SOURCES row (as a box's opening and shutting). Group, loudness, pitch low
+## and high, and the impact file that stands in until a file is in its group.
+const DOOR_TURN: Dictionary = {
+	"open": ["door_open", 0.45, 0.78, 0.86, "wooden"],
+	"closed": ["door_close", 0.55, 0.66, 0.74, "wooden"],
+}
 ## A manhole lid dragged aside by one of the dead coming up (decision 422 M9):
 ## group, loudness, pitch low and high. Until a file is in its group it is the
 ## impact set's iron, pitched down.
@@ -115,6 +123,19 @@ const MOAN_RANGE: float = 25.0
 ## goes through this bus. The two far buses are SFX with a low-pass on them.
 const MOAN_BANDS: Array = [[0.0, 1.0, "SFX"], [8.0, 0.9, "SFX_MID"], [16.0, 0.75, "SFX_FAR"]]
 const DULL_BUSES: Dictionary = {"SFX_MID": 2400.0, "SFX_FAR": 900.0}   # low-pass cutoff, Hz
+## Inside, the player hears the room (the reference's sound takes the room's
+## size into its reverb): a sound made in the player's own room (room_of: its
+## floor reached through open doors, within one building) goes through ROOM, a
+## reverb sized by that floor (ROOM_AREA m², a closet to a hall), sent to SFX.
+## Outdoors, and from behind a wall, there is no tail. Nothing in the rules hears it.
+const ROOM_BUS: String = "ROOM"
+const ROOM_DULL_BUS: String = "ROOM_MID"
+const ROOM_AREA: Array = [9.0, 300.0]       # m² of floor: a closet .. a hall
+const ROOM_SIZE: Array = [0.2, 0.7]         # the reverb's room_size, small .. large
+const ROOM_DAMP: Array = [0.75, 0.4]
+const ROOM_WET: Array = [0.1, 0.28]
+const ROOM_PREDELAY: Array = [8.0, 35.0]    # ms
+const ROOM_LOOK: int = 400                  # cells of floor counted at most
 ## Past the map's edge the danger is heard, not walled off: a few places past the
 ## woods (EdgeBand.build's sound_spots) keep a far, dull horde bed going, louder as
 ## the player walks toward the nearest, gone this far from it.
@@ -299,6 +320,9 @@ var openness: float = -1.0             # how open to the wind the player is, as 
 var expose_key: Array = []             # [level, cell, grid revision] it was last read at
 var expose_last: float = 1.0
 var wind_cut: float = 20000.0          # the WIND bus's low-pass now, Hz (tests)
+var room_cells: Dictionary = {}        # the player's room: cell -> true (empty outdoors)
+var room_key: Array = []               # [level, cell, grid revision] it was found at
+var room_area: float = 0.0             # m² of it (tests)
 var slots: Array = []                  # {"player": AudioStreamPlayer3D, "z": Dictionary, "wait": float}
 var bed: AudioStreamPlayer
 var edge_bed: AudioStreamPlayer        # the danger past the map's edge (_tick_edge)
@@ -356,6 +380,7 @@ func setup(field_game) -> void:
 	game = field_game
 	_ensure_bus()
 	_ensure_wind_bus()
+	_ensure_room_bus()
 	for g in GROUPS:
 		lib[g] = _load_group(g)
 	for i in range(MOAN_SLOTS):
@@ -468,6 +493,101 @@ static func _ensure_wind_bus() -> void:
 	var low := AudioEffectLowPassFilter.new()
 	low.cutoff_hz = float(WIND_CUT[1])
 	AudioServer.add_bus_effect(i, low)
+
+
+## The room's bus: a reverb (set to the player's room by _tick_room), sent to SFX;
+## and ROOM_MID, as dull as SFX_MID and sent into the room (a dull weapon's own
+## hit in the player's room: duller, and still the room's).
+static func _ensure_room_bus() -> void:
+	if AudioServer.get_bus_index(ROOM_BUS) < 0:
+		AudioServer.add_bus()
+		var i := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(i, ROOM_BUS)
+		AudioServer.set_bus_send(i, "SFX")
+		var verb := AudioEffectReverb.new()
+		verb.dry = 1.0
+		verb.spread = 0.8
+		verb.hipass = 0.25   # no boom from the low end, which a phone cannot play anyway
+		AudioServer.add_bus_effect(i, verb)
+	if AudioServer.get_bus_index(ROOM_DULL_BUS) < 0:
+		AudioServer.add_bus()
+		var d := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(d, ROOM_DULL_BUS)
+		AudioServer.set_bus_send(d, ROOM_BUS)
+		var low := AudioEffectLowPassFilter.new()
+		low.cutoff_hz = float(DULL_BUSES["SFX_MID"])
+		AudioServer.add_bus_effect(d, low)
+
+
+## The player's room from indoor cell c: the floor of the same building the air
+## goes through (air_passes: open doors join rooms), up to ROOM_LOOK cells.
+static func room_of(g, c: Vector2i) -> Dictionary:
+	var b: int = g.building_at(c)
+	var cells: Dictionary = {c: true}
+	if b < 0:
+		return {}
+	var front: Array[Vector2i] = [c]
+	while not front.is_empty() and cells.size() < ROOM_LOOK:
+		var next: Array[Vector2i] = []
+		for p: Vector2i in front:
+			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var q: Vector2i = p + d
+				if cells.has(q) or not g.inside(q) or g.building_at(q) != b or not air_passes(g, q):
+					continue
+				cells[q] = true
+				next.append(q)
+		front = next
+	return cells
+
+
+## The reverb for a room of `area` m² of floor: room_size, damping, wet and
+## predelay (ms), from a closet's to a hall's by the floor's log.
+static func room_reverb(area: float) -> Dictionary:
+	var k: float = clampf(log(maxf(area, 1.0) / float(ROOM_AREA[0])) / log(float(ROOM_AREA[1]) / float(ROOM_AREA[0])), 0.0, 1.0)
+	return {"size": lerpf(float(ROOM_SIZE[0]), float(ROOM_SIZE[1]), k), "damp": lerpf(float(ROOM_DAMP[0]), float(ROOM_DAMP[1]), k),
+		"wet": lerpf(float(ROOM_WET[0]), float(ROOM_WET[1]), k), "predelay": lerpf(float(ROOM_PREDELAY[0]), float(ROOM_PREDELAY[1]), k)}
+
+
+## Find the player's room again when the cell, the floor or a door changes, and
+## set the ROOM bus's reverb to it.
+func _tick_room(at: Vector3) -> void:
+	var g = game.grid_at(at)
+	var cell: Vector2i = game.FieldGrid.cell_of(at)
+	var key: Array = [game.level_of(at), cell, g.revision]
+	if key == room_key:
+		return
+	if not room_key.is_empty() and room_cells.has(cell) and key[0] == room_key[0] and key[2] == room_key[2]:
+		room_key = key   # a step within the same room
+		return
+	room_key = key
+	room_cells = room_of(g, cell) if g.indoor(cell) else {}
+	room_area = float(room_cells.size())
+	var i := AudioServer.get_bus_index(ROOM_BUS)
+	if room_cells.is_empty() or i < 0 or AudioServer.get_bus_effect_count(i) == 0:
+		return
+	var verb := AudioServer.get_bus_effect(i, 0) as AudioEffectReverb
+	if verb == null:
+		return
+	var r: Dictionary = room_reverb(room_area)
+	verb.room_size = float(r["size"])
+	verb.damping = float(r["damp"])
+	verb.wet = float(r["wet"])
+	verb.predelay_msec = float(r["predelay"])
+
+
+## A sound from `at` is in the player's room: on its floor or at its edge (a
+## piece of furniture, a shut door or window of it — cells the air does not
+## pass, so not in room_cells, but a room's own sounds).
+func in_room(at: Vector3) -> bool:
+	if room_cells.is_empty() or game.level_of(at) != int(room_key[0]):
+		return false
+	var c: Vector2i = game.FieldGrid.cell_of(at)
+	if room_cells.has(c):
+		return true
+	for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		if room_cells.has(c + d):
+			return true
+	return false
 
 
 ## The band a moan this far away is heard in: [from, pitch, bus].
@@ -617,6 +737,7 @@ func tick(delta: float) -> void:
 		for g: Dictionary in gusts:
 			(g["player"] as AudioStreamPlayer).volume_db = -80.0
 		return
+	_tick_room(at)
 	if held:
 		# The note is up: the bed stays where it was, lower; nothing new starts.
 		for s in slots:
@@ -790,7 +911,7 @@ func _say(s: Dictionary, z: Dictionary, what: String, d: float) -> void:
 	s["wait"] = randf_range(float(row["gap"][0]), float(row["gap"][1]))
 	p.stream = lib["moan"][i]
 	p.pitch_scale = float(v["pitch"]) * float(row["pitch"]) * float(band[1]) * randf_range(0.97, 1.03)
-	p.bus = String(band[2])
+	p.bus = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
 	p.volume_db = _db(clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0) * float(s["loud"]))
 	p.play()
 	said.append([int(z["id"]), what, i])
@@ -846,7 +967,8 @@ func _fall_voice(z: Dictionary, at: Vector3) -> void:
 	var i := _next_file(String(v["kind"]), -1)
 	var band: Array = moan_band(d)
 	said.append([int(z["id"]), "fall", i])
-	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], String(band[2]), float(row["cut"]))
+	var bus: String = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
+	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], bus, float(row["cut"]))
 
 
 # ---------------------------------------------------------------- wind
@@ -1472,6 +1594,15 @@ func door(kind: String, at: Vector3, level: int) -> void:
 	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])), null, _bus_at(at))
 
 
+## A building's door opened or shut by someone (state "open" or "closed"), heard
+## from the door, in the player's room when it is one of the room's doors.
+func door_turn(c: Vector2i, state: String) -> void:
+	if quiet or game == null or game.player == null or not DOOR_TURN.has(state):
+		return
+	var voice: Array = DOOR_TURN[state]
+	_voice_or_standin(voice, String(voice[4]), game.FieldGrid.center(c))
+
+
 ## A loose board creaking, for the player's ear (the rule sound is field_game's
 ## "floor_creak"): its own group once there is one, else the impact set's wood.
 func floor_creak(at: Vector3) -> void:
@@ -1537,7 +1668,7 @@ func lunge_tell(at: Vector3) -> void:
 	played.append(TELL_GROUP)
 	var own: bool = has(TELL_GROUP)
 	var d: float = at.distance_to(game.player.position)
-	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH)
+	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH, null, ROOM_BUS if in_room(at) else "SFX")
 
 
 ## A blow's own sound (hit_feel.gd), heard to `reach` m and duller through a
@@ -1619,7 +1750,7 @@ func blow(info: Dictionary) -> void:
 	var near: float = clampf(1.0 - d / BLOW_REACH, 0.0, 1.0)
 	var plain: String = _bus_at(at)
 	# A dull weapon's own hit is duller; what came of it is heard as it is.
-	var dull: String = "SFX_MID" if int(info.get("edge", -1)) >= 1 else plain
+	var dull: String = (ROOM_DULL_BUS if plain == ROOM_BUS else "SFX_MID") if int(info.get("edge", -1)) >= 1 else plain
 	var layers: Array = blow_layers(info)
 	for i in layers.size():
 		var layer: Array = layers[i]
@@ -1723,14 +1854,17 @@ func footstep(at: Vector3, running: bool) -> void:
 		steps.append([group, pick])
 		if steps.size() > STEPS_KEPT:
 			steps = steps.slice(steps.size() - STEPS_KEPT)
-		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]), randf_range(0.9, 1.1) * float(row[2]), lib[group][pick])
+		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]), randf_range(0.9, 1.1) * float(row[2]), lib[group][pick], _bus_at(at))
 	if g.floor_glass.has(cell):
 		_voice_or_standin(STEP_GLASS, GLASS_STANDIN, at)
 
 
-## The bus a sound from here goes through: plain, or duller through a wall.
+## The bus a sound from here goes through: duller through a wall, the room's
+## reverb in the player's own room, else plain.
 func _bus_at(at: Vector3) -> String:
-	return "SFX_MID" if through_wall(at) else "SFX"
+	if through_wall(at):
+		return "SFX_MID"
+	return ROOM_BUS if in_room(at) else "SFX"
 
 
 ## cut > 0: only that many seconds of it are heard, then it fades out fast.

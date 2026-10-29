@@ -35,6 +35,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
 const RouteBands = preload("res://game/train/route_bands.gd")
+const RouteStops = preload("res://game/train/route_stops.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
@@ -392,14 +393,25 @@ func _field_place() -> String:
 	return String(opts.get("place", ""))
 
 
-## The band of the slice's stop on stretch `seg` (decision 494). The field's map, when it is a
-## stop's own map (the first stop's, which the slice plays on FIRST_SEG), is that stop, and
-## the stops after it count on from there; any other map takes the stretch's stop.
-func _stop_band(seg: int) -> String:
+## The first leg's stop the slice is at on stretch `seg` (decision 494). The field's map, when
+## it is a stop's own map (the first stop's, which the slice plays on FIRST_SEG), is that
+## stop, and the stops after it count on from there; any other map takes the stretch's stop.
+func _stop_of(seg: int) -> int:
 	var own: Array = RouteBands.place_stop(FieldMaps.resolve(_field_place()))
-	if own.is_empty():
-		return RouteBands.stop_band("prologue", seg)
-	return RouteBands.stop_band(String(own[0]), int(own[1]) + seg - FIRST_SEG)
+	return seg if own.is_empty() else int(own[1]) + seg - FIRST_SEG
+
+
+## That stop's band.
+func _stop_band(seg: int) -> String:
+	return RouteBands.stop_band("prologue", _stop_of(seg))
+
+
+## The season table's stretch that stop stands on (route_stops.gd): the stop's weather and
+## cold, not those of the table's row with the stretch's number. Before the first stop (the
+## train setting out on the first stretch) it is the table's first stretch, the start.
+func _season_seg(seg: int) -> int:
+	var stop := _stop_of(seg)
+	return 1 if stop < 1 else RouteStops.season_seg(stop)
 
 
 ## 「정차 고르기」: the roof of the running train, not the card at once. The
@@ -992,8 +1004,9 @@ func _show_train(phase: String, seg: int) -> void:
 	add_child(train)
 	stage = train
 	# The world outside by the hour, the weather, the region and the cold
-	# (the atmosphere frame); the snow over it falls as that look says.
-	var look := outside_look(rules, seg)
+	# (the atmosphere frame); the snow over it falls as that look says. On the run the
+	# sky is the one the train left (the stop behind it, or the start), the land ahead's.
+	var look := outside_look(rules, _season_seg(seg))
 	var cam: Camera3D = train.get("camera")
 	if cam != null:
 		outside = OutsideView.attach(cam, look, phase == "travel")
@@ -1046,7 +1059,7 @@ func next_stop_line() -> String:
 	if String(STEPS[step][0]) != "train" or step + 1 >= STEPS.size():
 		return ""
 	var at := int(opts.get("arrive_min", TrainStop.arrival_min(String(train_g.get("seed", "")), int(train_g.get("seg", 1)))))
-	var w: Dictionary = stop_weather(int(STEPS[step + 1][2]))
+	var w: Dictionary = stop_weather(_season_seg(int(STEPS[step + 1][2])))
 	var word: String = "비" if String(w["falls"]) == "rain" else String(WEATHER_WORD.get(String(w["weather"]), String(w["weather"])))
 	return "%02d:%02d 도착 · %s" % [floori(at / 60.0), at % 60, word]
 
@@ -1530,7 +1543,7 @@ func _field_opts() -> Dictionary:
 	# here (the stop pick and the field are the same stretch, so the stop scene
 	# building it from the pick gives the same).
 	o["act"] = "prologue"
-	o["act_progress"] = prologue_progress(int(STEPS[step][2]))
+	o["act_progress"] = prologue_progress(_season_seg(int(STEPS[step][2])))
 	o["region"] = _stop_band(int(STEPS[step][2]))
 	# A look asked of the slice for check shots (opts "look", as outside_look
 	# reads it) is the stop's as well: the train, the stop scene and the field alike.
@@ -1538,7 +1551,7 @@ func _field_opts() -> Dictionary:
 	if want.has("cold"):
 		o["cold"] = float(want["cold"])
 	# The stop's weather from the season table: the rules' kinds and the picture's.
-	var w := stop_weather(int(STEPS[step][2]))
+	var w := stop_weather(_season_seg(int(STEPS[step][2])))
 	o["weather"] = w["rules"]
 	o["look"] = w["look"]
 	if want.has("kinds"):

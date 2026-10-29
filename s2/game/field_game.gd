@@ -25,6 +25,7 @@ const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
+const StopForm = preload("res://game/sim/stop_form.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const NoiseLedger = preload("res://game/sim/noise_ledger.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
@@ -171,6 +172,10 @@ const ALARM_RINGS: int = 4
 const ALARM_EVERY: float = 2.0
 
 var opts: Dictionary = {}
+var stop_form: String = "city"
+## How far along the journey this stop is: 0 at the prologue's start, 1 at the third act's end
+## (the acts in order, each its act_progress; decision 498's arrival cap grows with it).
+var journey_progress: float = 0.0
 ## What this stop is for (opts["mission"]; content_variety_first_build 2부):
 ## "" is the stop as it always was, "survey" the track office, "depot" the
 ## loading yard. Anything else is read as "". With "" nothing is written that
@@ -424,6 +429,7 @@ func _ready() -> void:
 	# looks like the stage; without one the stop is as before.
 	storm = StormLook.look(String(opts.get("storm", "")))
 	var act := String(opts.get("act", "prologue"))
+	journey_progress = clampf((float(maxi(Atmosphere.ACTS.find(act), 0)) + clampf(float(opts.get("act_progress", 0.0)), 0.0, 1.0)) / float(Atmosphere.ACTS.size()), 0.0, 1.0)
 	cold = clampf(float(opts.get("cold", Atmosphere.cold_for(act, float(opts.get("act_progress", 0.0)), String(opts.get("cold_scheme", ""))))), 0.0, 1.0)
 	side = clampf(float(opts.get("side", Atmosphere.side_for(act, String(opts.get("cold_scheme", ""))))), 0.0, 1.0)
 	# The rules' air is the stretch's (outside_temp.gd): what falls, the body's
@@ -471,6 +477,7 @@ func _ready() -> void:
 	stop_map = shape_stop(stop_map, String(opts.get("stop_form", "")), rng.seed, float(opts.get("stop_form_m", -1.0)),
 		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	_take_map(with_side_path(stop_map, rng.seed))
+	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
 	if opts.get("departure") is Dictionary:
@@ -492,6 +499,7 @@ func _ready() -> void:
 	# Its own dice, so eating and the watches move nothing else of the run.
 	eat_rng.seed = ("%d:eat" % rng.seed).hash()
 	director = HordeDirector.new(rng)
+	director.limit_sec = clock.limit_sec
 	director.use_map(data)
 	if opts.has("budget"):
 		director.budget_left = int(opts["budget"])
@@ -608,10 +616,11 @@ func _ready() -> void:
 	add_child(audio)
 	audio.setup(self)
 	music = MusicPlayer.new()
+	music.director.safe_sec = clock.safe_sec
 	add_child(music)
 	music.setup("field", self)
 	await BuildPace.rest(pace)
-	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
+	set_radio("기관사: " + driver_forecast(0.0, 0) + lid_tip(), "say")
 	if holdout.feel_line() != "":
 		audio.chief_feel(holdout.feel_number())
 	if mission_play.active():
@@ -1544,6 +1553,17 @@ static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 	return SidePath.add(map, run_seed)
 
 
+## Reapply derived times after a saved stop is restored (decision 494).
+func set_stop_form(form: String) -> void:
+	stop_form = StopForm.resolve({"stop_form": form}, String(data["place_kind"]))
+	clock.safe_sec = StopForm.safe_sec(stop_form)
+	clock.limit_sec = StopForm.limit_sec(stop_form)
+	if director != null:
+		director.limit_sec = clock.limit_sec
+	if music != null:
+		music.director.safe_sec = clock.safe_sec
+
+
 ## The map the field stands on. Everything that reads the ground goes through
 ## these four, so a stop of several joined maps can hand over a new one here.
 func _take_map(d: Dictionary) -> void:
@@ -2320,7 +2340,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 		level = SimNoise.clamp_level(level + 1)
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
-			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
+			set_radio("기관사: 굴 쪽이 울립니다. 다음 것들은 %s에서 나옵니다." % director.name_of(hole), "info", entry_pos(hole))
 	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false) * SimNoise.reach(tag)
 	var reacted: int = zombies.hear(at, level, radius)
 	ledger.observe(level, tag, radius, reacted)
@@ -2489,7 +2509,7 @@ func _update_hordes(delta: float) -> void:
 		director.noticed(now)
 	elif director.update_lost(now):
 		telemetry.lost_at(now)
-		set_radio("기관사: 놓친 것 같다. 다음 것들이 늦어진다. 숨 돌려라.")
+		set_radio("기관사: 놓친 것 같습니다. 다음 것들이 늦어집니다. 숨 돌리십시오.")
 	var h := director.update(now)
 	if not h.is_empty():
 		_start_horde(h)
@@ -2513,7 +2533,7 @@ func _update_hordes(delta: float) -> void:
 					recent += 1
 			director.horde_cleared(now, recent)
 			telemetry.rest(now, director.rest_until)
-			set_radio("기관사: 한 무리 지나갔다. " + director.forecast(now, forecast_precision, clock) + lid_tip())
+			set_radio("기관사: 한 무리 지나갔습니다. " + driver_forecast(now, forecast_precision) + lid_tip())
 
 
 ## Is anything after the squad right now (chasing, or already at someone)?
@@ -2656,7 +2676,7 @@ func _update_spawns(delta: float) -> void:
 	if forecast_t > 0.0:
 		forecast_t -= delta
 		if forecast_t <= 0.0:
-			set_radio("기관사: " + director.forecast(now, forecast_precision, clock) + lid_tip())
+			set_radio("기관사: " + driver_forecast(now, forecast_precision) + lid_tip())
 	deaf_t = maxf(0.0, deaf_t - delta)
 
 
@@ -2667,13 +2687,22 @@ func _someone_near(at: Vector3, r: float) -> bool:
 	return false
 
 
+## The driver's forecast, said to the chief politely like the user's own line
+## for him (decisions 486). horde_director words it so, but its no-more line
+## stays plain for the signal box and a roof, so the driver's is said here.
+func driver_forecast(now: float, precision: int) -> String:
+	if director.is_exhausted():
+		return "더 오는 기척은 없습니다."
+	return director.forecast(now, precision, clock)
+
+
 ## Once per field, when the next wave comes up the open street manhole: how to
 ## shut it (H3 2026-10-09: the player never found that it can be shut).
 func lid_tip() -> String:
 	if lid_tip_told or not FieldMaps.lid(director.next_entry) or not director.is_open(director.next_entry) or director.is_exhausted():
 		return ""
 	lid_tip_told = true
-	return " 맨홀은 판자나 고철로 누르면 막힌다."
+	return " 맨홀은 판자나 고철로 누르면 막힙니다."
 
 
 ## Out of a sewer hole a body climbs: straight up out of a lid or a drain,
@@ -3116,7 +3145,7 @@ func _check_end() -> void:
 		return
 	if clock.past_safe() and not safe_warned:
 		safe_warned = true
-		set_radio("기관사: 이제 떠나야 한다. 오래는 못 기다린다.", "must")
+		set_radio("기관사: 이제 떠나야 합니다. 오래는 못 기다립니다.", "must")
 
 
 ## Walking dead on the main track (rows 1-3, ground level) west and east of
