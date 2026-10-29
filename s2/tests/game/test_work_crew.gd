@@ -177,11 +177,11 @@ func test_waking_on_the_door_path_blocks_and_path_is_cached_for_ten_seconds() ->
 func test_radio_seen_then_half_then_open_uses_the_exact_lines() -> void:
 	_ring(0)
 	_advance(1.0)
-	assert_eq(_radio(), "기관사: 저기 석탄 화차 보이네. 근데 둘레에 망자가 열 남짓 — 아직 사람 못 내보내.")
+	assert_eq(_radio(), "기관사: 저기 석탄 화차 일터가 보입니다. 둘레에 망자가 열 남짓 있어 아직 못 내보냅니다.")
 	for i in 4:
 		game.zombies.list[i]["state"] = "dead"
 	_advance(1.0)
-	assert_eq(_radio(), "기관사: 좀 줄었어. 조금만 더 치워 주면 내보낼게.")
+	assert_eq(_radio(), "기관사: 좀 줄었습니다. 조금만 더 치우면 내보내겠습니다.")
 	for i in 7:
 		game.zombies.list[i]["state"] = "downed"
 	_advance(1.0)
@@ -223,12 +223,12 @@ func test_a_press_before_the_first_call_only_opens_the_button() -> void:
 func test_closed_button_says_one_reason_and_sends_nobody() -> void:
 	_spawn(game.work.door_of("work_site"))
 	game.actions.start_work(game.player)
-	assert_eq(_radio(), "기관사: 열차에서 거기까지 길에 망자가 하나.")
+	assert_eq(_radio(), "기관사: 열차에서 거기까지 길에 망자가 하나 있습니다.")
 	assert_eq(game.crew.size(), 0)
 	assert_eq(game.receipt.to_dict()["people"]["sent"].size(), 0)
-	assert_eq(game.work.blocked_reason({"path_awake": 0, "near_awake": 2}), "기관사: 일터 바로 곁에 깨어 있는 놈이 둘.")
-	assert_eq(game.work.blocked_reason({"path_awake": 0, "near_awake": 0, "total": 10, "cleared": 6}), "기관사: 둘레에 아직 하나.")
-	assert_eq(game.work.blocked_reason({"path_awake": 11}), "기관사: 열차에서 거기까지 길에 망자가 열 남짓.")
+	assert_eq(game.work.blocked_reason({"path_awake": 0, "near_awake": 2}), "기관사: 일터 바로 곁에 깨어 있는 놈이 둘 있습니다.")
+	assert_eq(game.work.blocked_reason({"path_awake": 0, "near_awake": 0, "total": 10, "cleared": 6}), "기관사: 둘레에 아직 하나 남았습니다.")
+	assert_eq(game.work.blocked_reason({"path_awake": 11}), "기관사: 열차에서 거기까지 길에 망자가 열 남짓 있습니다.")
 
 
 func test_open_call_is_not_repeated_until_sixty_seconds_have_passed() -> void:
@@ -255,7 +255,7 @@ func test_coal_wagon_escorts_land_three_seconds_before_four_workers() -> void:
 	game.actions.start_work(game.player)
 	assert_eq(_role("escort").size(), 2)
 	assert_eq(_role("worker").size(), 0)
-	assert_eq(_radio(), "기관사: 작업조 내려간다. 석탄 화차 지켜라.")
+	assert_eq(_radio(), "기관사: 작업조 내려간다. 호위는 석탄 화차 일터를 지켜라.")
 	_advance(2.0)
 	assert_eq(_role("worker").size(), 0)
 	_advance(1.0)
@@ -418,7 +418,7 @@ func test_half_is_said_only_after_more_is_cleared_than_at_first_sight() -> void:
 	assert_eq(_events(), ["seen"] as Array[String])
 	game.zombies.list[4]["state"] = "dead"
 	_advance(1.0)
-	assert_eq(_radio(), "기관사: 좀 줄었어. 조금만 더 치워 주면 내보낼게.")
+	assert_eq(_radio(), "기관사: 좀 줄었습니다. 조금만 더 치우면 내보내겠습니다.")
 
 
 func test_worker_backs_behind_escort_at_eight_and_drops_at_three_metres() -> void:
@@ -594,7 +594,7 @@ func test_a_contract_with_no_work_crew_sends_nobody() -> void:
 	_advance(1.0)
 	game.opts["departure"] = {"version": 2, "roster": [], "workCrew": []}
 	assert_false(game.work.start())
-	assert_eq(_radio(), FieldWork.SPEAKER + ": 지금 내보낼 일꾼이 없다.")
+	assert_eq(_radio(), FieldWork.SPEAKER + ": 지금 내보낼 일꾼이 없습니다.")
 	assert_eq(game.crew.size(), 0)
 
 
@@ -606,7 +606,7 @@ func test_no_escort_to_stand_guard_sends_nobody() -> void:
 			p.body.downed = true
 			game.crew.append(p)
 	assert_false(game.work.start())
-	assert_eq(_radio(), FieldWork.SPEAKER + ": 지켜 줄 호위가 없다. 지금은 못 내보낸다.")
+	assert_eq(_radio(), FieldWork.SPEAKER + ": 지켜 줄 호위가 없습니다. 지금은 못 내보냅니다.")
 	assert_eq(game.work.phase(), "open")
 
 

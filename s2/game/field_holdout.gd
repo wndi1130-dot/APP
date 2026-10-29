@@ -419,7 +419,7 @@ func tick(delta: float) -> void:
 			calling = false
 			# The train does not go without its chief: the call is lost.
 			if not game.aboard(game.player):
-				game.set_radio("기관사: 열차장이 안 탔다. 못 떠난다.", "must")
+				game.set_radio("기관사: 열차장님이 안 타셨습니다. 못 떠납니다.", "must")
 			else:
 				leaving_early()
 				game.audio.depart()
@@ -459,7 +459,7 @@ func tick(delta: float) -> void:
 		# Those still held at the ways in by the cap turn back with it.
 		game.pending_spawn.clear()
 		game.director.next_arrival = maxf(game.director.next_arrival, game.director.quiet_until)
-		game.set_radio("기관사: 채비 끝났다! 말만 하면 떠난다.", "must")
+		game.set_radio("기관사: 채비 끝났습니다! 말씀만 하시면 떠납니다.", "must")
 		game.shout_nearest(game.player.position, "ready", INF, null, true)
 
 
