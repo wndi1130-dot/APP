@@ -400,7 +400,7 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 			out["body"] = _again(past, "급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 %d 남았다." % coal, {
 				"burn_melt": "급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 %d 남았다." % coal,
 				"snow_melt": "급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 묻는다. \"이번에도 우리냐?\"",
-				"hold_on": "보일러 물이 거의 바닥났다. 수석 기관사가 말한다. \"지난번처럼 버티면 관이 탄다.\"",
+				"hold_on": "보일러 물이 거의 바닥났다. 수석 기관사가 말한다. \"지난번처럼 버티면 보일러 관이 탑니다.\"",
 			}, "급수탑이 또 얼었다.")
 			says.append_array(["물 없는 보일러는 고철이다. 석탄을 태워서라도 녹여라!",
 				("%s%s 한 번 더 한다. 장갑은 앞칸에서 걷어 줘라." % [name, _iga(name)]) if _was(past, "snow_melt") else ("%s%s 양동이를 들어라. 눈을 퍼다 녹인다." % [name, _josa(name, "은/는")]),
