@@ -48,8 +48,8 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var k: Dictionary = t["RATION_CUT"]
 			out["speaker"] = _leader(g, t, "tail")
 			out["focus"] = "tail"
-			out["body"] = ("감축법이 다시 섰다. 꼬리칸 대표가 지난번 답을 기억하고 왔다. 꼬리칸 배급 %d." % r) if past != null \
-				else ("비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. 제일 적게 받는 칸에서 또 깎으면 그건 고르게 줄이는 게 아니라고 한다. 꼬리칸 배급 %d." % r)
+			out["body"] = ("감축법이 다시 섰다. 꼬리칸 대표가 왔다. \"지난번 답, 우리는 기억한다.\" 꼬리칸 배급 %d." % r) if past != null \
+				else ("비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. \"제일 적게 받는 우리한테서 또 깎으면, 그게 고르게 줄이는 거냐.\" 꼬리칸 배급 %d." % r)
 			says = ["꼬리칸 그릇은 그대로 둔다. 나머지 칸이 줄인다.", "앞칸이 한 단 더 줄인다. 꼬리칸 몫은 거기서 나온다.", "예외는 없다. 모두 같이 줄인다."]
 			why = ["아끼는 식량이 구간마다 %s로 준다." % _num(-float(k["spareFood"])),
 				"앞칸 배급 처지는 모두 −%s까지 내려간다. 아끼는 식량은 그대로다." % _num(2.0 * float(k["sit"])), ""]
@@ -67,7 +67,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var echo: String = " 지난번 일 때문에 다들 상처부터 본다." if _was(past, "hide") else (" 지난번 역에 두고 온 사람을 다들 기억한다." if _was(past, "leave") else "")
 			out["speaker"] = {"name": str(card.get("who", "수색대원")), "role": String(t["COMM_NAME"][c])}
 			out["focus"] = c
-			out["body"] = "%s이(가) %s 물렸다. 수색대가 열차장의 말을 기다린다. 감염 창이 닫히기 전에 잘라야 한다.%s" % [str(card.get("who", "대원")), parts[1], echo]
+			out["body"] = "%s이(가) %s 물렸다. \"열차장…\" 수색대가 열차장의 말을 기다린다. \"감염 창이 닫히기 전에 잘라야 합니다.\"%s" % [str(card.get("who", "대원")), parts[1], echo]
 			says = ["지금 %s 잘라라! 망설이면 늦는다." % parts[1],
 				"지난번엔 운이 좋았다. 이번에도 감아서 태워라." if _was(past, "hide") else "아무도 못 본 거다. %s에 붕대를 감고 태워라." % parts[0],
 				"물린 사람은 못 태운다. 미안하다고 전해라."]

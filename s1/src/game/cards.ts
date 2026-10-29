@@ -559,8 +559,8 @@ function baseView(g: Game, card: Card): CardView {
       return {
         title: '감축 배급 요구', speaker: leader(g, 'tail'), focus: 'tail', required: true, key: 'ration_cut',
         body: past
-          ? `감축법이 다시 섰다. 꼬리칸 대표가 지난번 답을 기억하고 왔다. 꼬리칸 배급 ${r}.`
-          : `비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. 제일 적게 받는 칸에서 또 깎으면 그건 고르게 줄이는 게 아니라고 한다. 꼬리칸 배급 ${r}.`,
+          ? `감축법이 다시 섰다. 꼬리칸 대표가 왔다. "지난번 답, 우리는 기억한다." 꼬리칸 배급 ${r}.`
+          : `비상식량감축법이 섰다. 꼬리칸 대표가 빈 그릇을 들고 왔다. "제일 적게 받는 우리한테서 또 깎으면, 그게 고르게 줄이는 거냐." 꼬리칸 배급 ${r}.`,
         choices: withAfford(g, [
           { id: 'cut_spare_tail', label: '꼬리칸은 뺀다', say: '꼬리칸 그릇은 그대로 둔다. 나머지 칸이 줄인다.', special: 'cut_spare_tail',
             effs: [{ t: 'rel', c: 'tail', v: k.spareRel.tail }, { t: 'rel', c: 'front', v: k.spareRel.front }],
@@ -639,7 +639,7 @@ function baseView(g: Game, card: Card): CardView {
       return {
         title: '물렸다', speaker: { name: card.who ?? '수색대원', role: COMM_NAME[c] }, focus: c, required: true, key: 'bitten',
         // 첫 줄: 정하는 건 열차장이다(물린 사람이 스스로 정한 일이 아니다, 정치 디테일 조사 안 3).
-        body: `${card.who ?? '대원'}이(가) ${partObj} 물렸다. 수색대가 열차장의 말을 기다린다. 감염 창이 닫히기 전에 잘라야 한다.${echo}`,
+        body: `${card.who ?? '대원'}이(가) ${partObj} 물렸다. "열차장…" 수색대가 열차장의 말을 기다린다. "감염 창이 닫히기 전에 잘라야 합니다."${echo}`,
         choices: withAfford(g, [
           { id: 'cut', label: `${partObj} 자른다`, say: `지금 ${partObj} 잘라라! 망설이면 늦는다.`, effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'rel', c, v: 2 }], witness: true },
           { id: 'hide', label: '숨겨 준다', say: was(past, 'hide') ? '지난번엔 운이 좋았다. 이번에도 감아서 태워라.' : `아무도 못 본 거다. ${part}에 붕대를 감고 태워라.`, effs: [], special: 'hide_bite', witness: true },
