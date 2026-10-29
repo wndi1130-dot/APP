@@ -262,7 +262,22 @@ static func is_furnish(v: Variant) -> bool:
 		if slots[expected] > TrainMods.FURNITURE_SIZE[expected]["slots"]:
 			return false
 		points += int(TrainMods.FURNITURE_SIZE[expected]["points"])
-	return int(v["furnPts"]) == mini(points, int(TrainMods.D["furnishFurnitureCap"]))
+	if int(v["furnPts"]) != mini(points, int(TrainMods.D["furnishFurnitureCap"])):
+		return false
+	# The kept tier lies between what the current score reaches and what the done jobs
+	# with full furniture could ever have reached (tier 3 with no work is not a save).
+	var job_pts: int = 0
+	for n: int in jobs:
+		job_pts += int(TrainMods.FURNISH_WORK[n]["points"])
+	var low: int = 0
+	var high: int = 0
+	for n: int in TrainMods.FURNISH_STEPS:
+		var need: int = int(TrainMods.D["furnishThreshold"][n])
+		if job_pts + int(v["furnPts"]) >= need:
+			low = n
+		if job_pts + int(TrainMods.D["furnishFurnitureCap"]) >= need:
+			high = n
+	return int(v["tier"]) >= low and int(v["tier"]) <= high
 
 
 static func is_expert(v: Variant) -> bool:
