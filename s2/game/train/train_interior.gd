@@ -82,10 +82,12 @@ func _build_dress(list: Array) -> void:
 	for row: Dictionary in list:
 		var mesh := _dress_mesh(String(row["model"]))
 		if mesh == null:
+			push_warning("train_interior: dress model missing, row left out: " + String(row["id"]))
 			continue
 		var reserved := Catalog.vector(row["size"])
 		var box := mesh.get_aabb()
-		var k: float = reserved.y / box.size.y if box.size.y > 0.0 else 1.0
+		# The same fit as a prop's (_fit_to): made smaller to its box's height, bigger only by `grow`.
+		var k: float = minf(maxf(float(row.get("grow", 1.0)), 1.0), reserved.y / box.size.y) if box.size.y > 0.0 else 1.0
 		var at := Catalog.vector(row["at"])
 		var place := Transform3D(Basis(Vector3.UP, float(row["yaw"])).scaled(Vector3.ONE * k),
 			Vector3(at.x, at.y - reserved.y * 0.5 - box.position.y * k, at.z))
