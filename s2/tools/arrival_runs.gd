@@ -4,6 +4,7 @@ extends SceneTree
 ## (opts "arrival_horde" false: the brakes heard by nobody) and after.
 ## godot --headless --path s2 -s res://tools/arrival_runs.gd -- --seeds 1:10 --seconds 300 --hz 5 --places freight_01,houses_01,mine_01
 ## Prints one tab-separated row a run and a summary a place and phase.
+## --act act3 --act-progress 1.0: how far along the journey (decision 498's cap); --form remote: the stop's form.
 ## --census: instead, every map's dead within the brakes' reach of its engine
 ## against its kind's most (arrival_horde.gd SIZE).
 
@@ -17,6 +18,9 @@ var seed_last := 10
 var seconds := 300.0
 var hz := 5
 var places: Array = ["first_leg_01_sulechow", "houses_01", "mine_02"]
+var act := "prologue"
+var act_progress := 0.0
+var form := ""
 
 
 func _initialize() -> void:
@@ -41,6 +45,12 @@ func _run() -> void:
 				hz = int(args[i + 1])
 			"--places":
 				places = Array(args[i + 1].split(","))
+			"--act":
+				act = args[i + 1]
+			"--act-progress":
+				act_progress = float(args[i + 1])
+			"--form":
+				form = args[i + 1]
 	print("place\tphase\tseed\theard\tfilled\tcame\tfirst_at_train\tby_guards\tby_squad\ttook\thurt\tfirst_horde\tsquad_hurt")
 	for place in places:
 		for phase in ["before", "after"]:
@@ -66,7 +76,10 @@ func _run() -> void:
 
 func _trial(place: String, phase: String, s: int) -> Dictionary:
 	var game = FieldGame.new()
-	game.opts = {"seed": s, "raiders": false, "auto_pause": false, "place": place, "arrive": false, "arrival_horde": phase == "after"}
+	game.opts = {"seed": s, "raiders": false, "auto_pause": false, "place": place, "arrive": false, "arrival_horde": phase == "after",
+		"act": act, "act_progress": act_progress}
+	if form != "":
+		game.opts["stop_form"] = form
 	root.add_child(game)
 	game.set_process(false)
 	var step := 1.0 / float(hz)

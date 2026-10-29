@@ -25,6 +25,7 @@ const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
+const StopForm = preload("res://game/sim/stop_form.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const NoiseLedger = preload("res://game/sim/noise_ledger.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
@@ -171,6 +172,10 @@ const ALARM_RINGS: int = 4
 const ALARM_EVERY: float = 2.0
 
 var opts: Dictionary = {}
+var stop_form: String = "city"
+## How far along the journey this stop is: 0 at the prologue's start, 1 at the third act's end
+## (the acts in order, each its act_progress; decision 498's arrival cap grows with it).
+var journey_progress: float = 0.0
 ## What this stop is for (opts["mission"]; content_variety_first_build 2부):
 ## "" is the stop as it always was, "survey" the track office, "depot" the
 ## loading yard. Anything else is read as "". With "" nothing is written that
@@ -424,6 +429,7 @@ func _ready() -> void:
 	# looks like the stage; without one the stop is as before.
 	storm = StormLook.look(String(opts.get("storm", "")))
 	var act := String(opts.get("act", "prologue"))
+	journey_progress = clampf((float(maxi(Atmosphere.ACTS.find(act), 0)) + clampf(float(opts.get("act_progress", 0.0)), 0.0, 1.0)) / float(Atmosphere.ACTS.size()), 0.0, 1.0)
 	cold = clampf(float(opts.get("cold", Atmosphere.cold_for(act, float(opts.get("act_progress", 0.0)), String(opts.get("cold_scheme", ""))))), 0.0, 1.0)
 	side = clampf(float(opts.get("side", Atmosphere.side_for(act, String(opts.get("cold_scheme", ""))))), 0.0, 1.0)
 	# The rules' air is the stretch's (outside_temp.gd): what falls, the body's
@@ -471,6 +477,7 @@ func _ready() -> void:
 	stop_map = shape_stop(stop_map, String(opts.get("stop_form", "")), rng.seed, float(opts.get("stop_form_m", -1.0)),
 		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	_take_map(with_side_path(stop_map, rng.seed))
+	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
 	if opts.get("departure") is Dictionary:
@@ -492,6 +499,7 @@ func _ready() -> void:
 	# Its own dice, so eating and the watches move nothing else of the run.
 	eat_rng.seed = ("%d:eat" % rng.seed).hash()
 	director = HordeDirector.new(rng)
+	director.limit_sec = clock.limit_sec
 	director.use_map(data)
 	if opts.has("budget"):
 		director.budget_left = int(opts["budget"])
@@ -608,6 +616,7 @@ func _ready() -> void:
 	add_child(audio)
 	audio.setup(self)
 	music = MusicPlayer.new()
+	music.director.safe_sec = clock.safe_sec
 	add_child(music)
 	music.setup("field", self)
 	await BuildPace.rest(pace)
@@ -1542,6 +1551,17 @@ static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 		for key in AHEAD_KEYS:
 			map.erase(key)
 	return SidePath.add(map, run_seed)
+
+
+## Reapply derived times after a saved stop is restored (decision 494).
+func set_stop_form(form: String) -> void:
+	stop_form = StopForm.resolve({"stop_form": form}, String(data["place_kind"]))
+	clock.safe_sec = StopForm.safe_sec(stop_form)
+	clock.limit_sec = StopForm.limit_sec(stop_form)
+	if director != null:
+		director.limit_sec = clock.limit_sec
+	if music != null:
+		music.director.safe_sec = clock.safe_sec
 
 
 ## The map the field stands on. Everything that reads the ground goes through

@@ -42,6 +42,7 @@ const HOUR_MIN := 50.0
 const HALF_MIN := 25.0
 
 var next_arrival: float = FIRST_INTERVAL
+var limit_sec: float = FieldClock.LIMIT_SEC
 ## Hordes arrived so far.
 var index: int = 0
 var last_arrival: float = -INF
@@ -185,7 +186,6 @@ func pressure(now: float) -> float:
 	return clampf(1.0 - seconds_to_next(now) / interval, 0.0, 1.0)
 
 
-## Calling range grows with time on the field: 1.0 -> 1.6 at 1800 s.
 ## Take the ways in from a map's data: "entries" (name -> cells) with, where
 ## the map gives them, "entry_weights", "entry_names" and "first_entry"; the
 ## holes of "manholes" are its sewers. Left out: every way weighs the same and
@@ -227,8 +227,9 @@ func sewer(entry: String) -> bool:
 	return sewers.has(entry)
 
 
+## Calling range reaches 1.6 at this stop's limit.
 func call_range_mult(now: float) -> float:
-	return 1.0 + CALL_RANGE_GROWTH * clampf(now / FieldClock.LIMIT_SEC, 0.0, 1.0)
+	return 1.0 + CALL_RANGE_GROWTH * clampf(now / limit_sec, 0.0, 1.0)
 
 
 ## Radio forecast. precision 0: direction + rough time. 1 (signal box): direction, time to 15 min, size.
