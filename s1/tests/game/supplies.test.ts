@@ -5,7 +5,7 @@ import { bump, bumpParts, put } from '../../src/game/ledger';
 import { applyFieldReturn, decodeFieldReceipt } from '../../src/game/field_receipt';
 import type { FieldDeparture, FieldReceipt } from '../../src/game/field_receipt';
 import { hygieneScore, hygieneWhy } from '../../src/game/domestic/hygiene';
-import { addSupplies, enableSupplies, SUP_YIELD, SUPPLIES_PROBE, suppliesNeed, suppliesRelations, suppliesUse } from '../../src/game/supplies';
+import { addSupplies, enableSupplies, SUP_YIELD, SUPPLIES_PROBE, suppliesHygieneShort, suppliesNeed, suppliesRelations, suppliesUse } from '../../src/game/supplies';
 import { playGame } from '../../tools/s1c_bot';
 import type { BotOptions } from '../../tools/s1c_bot';
 
@@ -140,6 +140,19 @@ describe('생필품: 소비와 배급', () => {
     expect(g.sup).toBe(0);
   });
 
+  it('기여 배급에서 정확히 절반을 받은 칸은 뺄셈 오차로 위생 벌을 받지 않는다', () => {
+    const g = enabled();
+    for (const c of COMMS) g.comms[c].pop = 0;
+    Object.assign(g.comms.tail, { pop: 30, away: 0 });
+    Object.assign(g.comms.engine, { pop: 10, away: 0 });
+    g.passed.contribution_ration = 1;
+    g.sup = 0.7; // 0.7 − 0.6은 0.09999…라 그대로 나누면 0.4999…가 된다.
+    suppliesUse(g);
+    expect(g.supCover?.tail).toBe(1);
+    expect(g.supCover?.engine).toBe(0.5);
+    expect(suppliesHygieneShort(g, 'engine')).toBe(false);
+  });
+
   it('기여 배급 나눔은 난수를 쓰지 않고 같은 판이면 같은 몫이다', () => {
     const a = enabled(), b = enabled();
     for (const g of [a, b]) { g.passed.contribution_ration = 1; g.sup = 1.8; }
@@ -216,6 +229,10 @@ describe('생필품: 관계·위생·요구', () => {
     for (const c of COMMS) expect(g.comms[c].rel).toBeCloseTo(20 + P.supPlentyRel, 9);
     g.sup = 11.999;
     expect(suppliesUse(g)?.plenty).toBe(false);
+    for (const c of COMMS) g.comms[c].pop = 0;
+    g.comms.tail.pop = 15; // 필요량 0.3: 세 배를 채우면 쓴 뒤 0.5999…가 남아도 두 구간분이다.
+    g.sup = (1 + P.supPlentyNeeds) * suppliesNeed(g);
+    expect(suppliesUse(g)?.plenty).toBe(true);
   });
 
   it('요구를 낸 칸에만 demandCool을 +2 하고, 매 정산마다 계속 늘리지 않는다', () => {
