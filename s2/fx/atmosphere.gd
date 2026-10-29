@@ -286,7 +286,10 @@ const BANDS: Dictionary = {
 }
 ## The same bands at the warmest: softer, greener fill and a warmer day sun.
 const WARM_BANDS: Dictionary = {
-	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.272, 0.268, 0.262)},
+	# Late autumn's night fill a shade over the winter's (the same neutral grey): with no
+	# snow to give the moon back, the bare ground under a clear sky kept three quarters of
+	# the first stop under V 0.15 (decision 470 night line: 0.70 at most; reference 0.67).
+	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.312, 0.307, 0.300)},
 	"dawn": {"zenith": Color(0.30, 0.31, 0.38), "horizon": Color(0.88, 0.66, 0.50), "ambient": Color(0.52, 0.50, 0.52)},
 	"day": {"zenith": Color(0.50, 0.56, 0.62), "horizon": Color(0.78, 0.78, 0.74), "sun": Color(0.96, 0.92, 0.82), "ambient": Color(0.54, 0.57, 0.54)},
 	# Late autumn's low sun is warmer than winter's, as the reference's season
