@@ -20,6 +20,7 @@ signal folded
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
+const UiBake = preload("res://game/ui/ui_bake.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const St = preload("res://game/train/train_state.gd")
@@ -296,8 +297,10 @@ func _thermo(m: Dictionary) -> void:
 		if cold:
 			# 0 0 8px rgba(194,204,212,.45), round the bulb's edge.
 			GlassParts.glow_ring(c, bulb, 11.0 * k, 8.0 * k, Color(COLDZ, 0.45))
-		c.draw_circle(bulb, 11.0 * k, WELL, true, -1.0, true)
-		c.draw_circle(bulb, 7.0 * k, fill, true, -1.0, true))
+		var circles := UiBake.Batch.new()
+		circles.circle(bulb, 11.0 * k, WELL)
+		circles.circle(bulb, 7.0 * k, fill)
+		circles.draw(c))
 	_add(c)
 	var was: float = float(c.get_meta("warm"))
 	if not is_equal_approx(was, float(warm)):
@@ -340,15 +343,20 @@ func _stats(m: Dictionary) -> void:
 		bar.draw.connect(func() -> void:
 			var r: float = 3.0 * k
 			GlassParts.round_rect(bar, Rect2(Vector2.ZERO, bar.size), r, WELL)
-			var w: float = bar.size.x * clampf(n / 100.0, 0.0, 1.0)
-			if w > 0.5:
-				GlassParts.round_rect(bar, Rect2(0, 0, maxf(w, r * 2.0), bar.size.y), r, ACCENT if bad else FILL)
+			var fill: Rect2 = stat_fill_rect(bar.size, n)
+			if fill.size.x > 0.5:
+				GlassParts.round_rect(bar, fill, r, ACCENT if bad else FILL)
 			GlassParts.round_rect(bar, Rect2(bar.size.x * mark / 100.0 - 1.0 * k, -4.0 * k, 2.0 * k, 14.0 * k), 1.0 * k, ACCENT))
 		_add(bar)
 		var num := UiFonts.label(str(s["n"]), UiFonts.NUMBER, 500, 17.0, ACCENT if bad else INK, 0.255)
 		num.name = "Value_" + String(s["word"])
 		_text(num, 0.0, top + 15.5)
 		num.position.x = 316.0 * k - GlassParts.text_w(num)
+
+
+static func stat_fill_rect(bar_size: Vector2, value: float) -> Rect2:
+	var width: float = bar_size.x * clampf(value / 100.0, 0.0, 1.0)
+	return Rect2(0, 0, maxf(width, 6.0 * UiFonts.K), bar_size.y) if width > 0.5 else Rect2()
 
 
 ## An icon of `css` at `at` (pane px), in `color`; nothing for an empty id.
@@ -442,14 +450,24 @@ func _lever(lv: Dictionary, top: float, comm: String) -> void:
 ## The slot (.lever__slot): a sunk groove, a dot at each step (dim under a
 ## law's floor), the lamp fill from the left to the knob, the brass knob with
 ## its grip lines.
+static func slot_geometry(width: float, at: float) -> Dictionary:
+	var k: float = UiFonts.K
+	var cell: float = width / STEPS
+	return {"cell": cell,
+		"fill": Rect2(4.0 * k, 19.0 * k, (at + 0.5) * cell - 4.0 * k, 6.0 * k),
+		"knob": Rect2(cell * (at + 0.5) - 13.0 * k, 5.0 * k, 26.0 * k, 34.0 * k)}
+
+
 func _draw_slot(slot: Control, floor_step: int) -> void:
 	var k: float = UiFonts.K
 	var w: float = slot.size.x
 	var at: float = float(slot.get_meta("at"))
+	var geometry: Dictionary = slot_geometry(w, at)
 	var groove := Rect2(2.0 * k, 17.0 * k, w - 4.0 * k, 10.0 * k)
 	GlassParts.round_rect(slot, groove, 5.0 * k, WELL)
+	var base := UiBake.Batch.new()
 	# inset 0 1px 3px rgba(0,0,0,.55), 0 1px 0 rgba(255,255,255,.12)
-	slot.draw_rect(Rect2(groove.position.x + 5.0 * k, groove.position.y + 0.5 * k, groove.size.x - 10.0 * k, 1.5 * k), Color(0, 0, 0, 0.3))
+	base.rect(Rect2(groove.position.x + 5.0 * k, groove.position.y + 0.5 * k, groove.size.x - 10.0 * k, 1.5 * k), Color(0, 0, 0, 0.3))
 	# The light hair (0 1px 0) along the groove's foot, round its ends.
 	var rim := PackedVector2Array()
 	var rr: float = groove.size.y * 0.5
@@ -460,24 +478,27 @@ func _draw_slot(slot: Control, floor_step: int) -> void:
 	for j in 7:
 		var a: float = lerpf(PI * 0.5, PI * 0.15, float(j) / 6.0)
 		rim.append(Vector2(groove.end.x - rr, cy) + Vector2(cos(a), sin(a)) * rr)
-	slot.draw_polyline(rim, Color(1, 1, 1, 0.12), 1.0 * k, true)
-	var cell: float = w / STEPS
-	var fill_w: float = (at + 0.5) * cell - 4.0 * k
-	if fill_w > 0.5:
-		GlassParts.grad_rect(slot, Rect2(4.0 * k, 19.0 * k, fill_w, 6.0 * k), 3.0 * k, [[0.0, LAMP3], [1.0, ACCENT]])
+	base.polyline(rim, PackedColorArray([Color(1, 1, 1, 0.12)]), 1.0 * k)
+	var cell: float = float(geometry["cell"])
+	var fill: Rect2 = geometry["fill"]
+	if fill.size.x > 0.5:
+		GlassParts.gradient(base, fill, 3.0 * k, [[0.0, LAMP3], [1.0, ACCENT]])
 	# The steps' dots come after the fill in the slot, so they show on it.
 	for i in STEPS:
 		var dot: Color = INK3 if i >= floor_step else Color(INK3.r, INK3.g, INK3.b, INK3.a * 0.36)
-		slot.draw_circle(Vector2(cell * (i + 0.5), 22.0 * k), 3.0 * k, dot, true, -1.0, true)
-	var knob := Rect2(cell * (at + 0.5) - 13.0 * k, 5.0 * k, 26.0 * k, 34.0 * k)
+		base.circle(Vector2(cell * (i + 0.5), 22.0 * k), 3.0 * k, dot)
+	base.draw(slot)
+	var knob: Rect2 = geometry["knob"]
 	# 0 3px 6px rgba(0,0,0,.7)
 	GlassParts.shadow(slot, knob, 5.0 * k, 3.0 * k, 6.0 * k * 0.6, Color(0, 0, 0, 0.55))
-	GlassParts.grad_rect(slot, knob, 5.0 * k, BRASS)
+	var metal := UiBake.Batch.new()
+	GlassParts.gradient(metal, knob, 5.0 * k, BRASS)
 	# The grip: 1 px of shade every 4 px over 18 px from 9 down.
 	var y: float = knob.position.y + 27.0 * k - 1.0 * k
 	while y >= knob.position.y + 9.0 * k:
-		slot.draw_rect(Rect2(knob.position.x + 1.0 * k, y, knob.size.x - 2.0 * k, 1.0 * k), Color(0, 0, 0, 0.2))
+		metal.rect(Rect2(knob.position.x + 1.0 * k, y, knob.size.x - 2.0 * k, 1.0 * k), Color(0, 0, 0, 0.2))
 		y -= 4.0 * k
 	# inset 0 1px 0 rgba(255,255,255,.5), inset 0 -2px 0 rgba(0,0,0,.3)
-	slot.draw_rect(Rect2(knob.position.x + 3.0 * k, knob.position.y, knob.size.x - 6.0 * k, 1.0 * k), Color(1, 1, 1, 0.5))
-	slot.draw_rect(Rect2(knob.position.x + 3.0 * k, knob.end.y - 2.0 * k, knob.size.x - 6.0 * k, 2.0 * k), Color(0, 0, 0, 0.3))
+	metal.rect(Rect2(knob.position.x + 3.0 * k, knob.position.y, knob.size.x - 6.0 * k, 1.0 * k), Color(1, 1, 1, 0.5))
+	metal.rect(Rect2(knob.position.x + 3.0 * k, knob.end.y - 2.0 * k, knob.size.x - 6.0 * k, 2.0 * k), Color(0, 0, 0, 0.3))
+	metal.draw(slot)

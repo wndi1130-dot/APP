@@ -144,6 +144,7 @@ var zoomed_out: bool = false
 var view_mode: String = "diag"            # the inside seen from above at an angle (결정 486); the council keeps "section"
 var zoom: String = "wide"
 var pane_px: float = 0.0
+var pane_left_px: float = 0.0           # a folded paper's edge at the left (결정 508)
 var clock: float = 0.0
 var _hold_from: float = 0.0             # the council room along the train while the vote is called
 var _hold_to: float = 0.0
@@ -457,8 +458,11 @@ func car_screen_polygon(id: String) -> PackedVector2Array:
 	return hull
 
 
-func set_pane(px: float) -> void:
+## What the screen's own panes keep covered, in its px: the car pane at the right and a
+## folded paper's edge at the left; the diagonal camera puts the car in the middle of the rest.
+func set_pane(px: float, left_px: float = 0.0) -> void:
 	pane_px = maxf(px, 0.0)
+	pane_left_px = maxf(left_px, 0.0)
 	_place_camera()
 
 
@@ -1173,7 +1177,7 @@ func _place_camera() -> void:
 		camera.h_offset = 0.0
 		if is_inside_tree():
 			var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
-			camera.h_offset = (pane_px / 2.0) * camera.size / view_h
+			camera.h_offset = ((pane_px - pane_left_px) / 2.0) * camera.size / view_h
 		return
 	var pitch := deg_to_rad(CAM_PITCH)
 	camera.size = CAM_FAR if zoomed_out else CAM_NEAR

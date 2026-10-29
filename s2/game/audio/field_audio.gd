@@ -126,6 +126,28 @@ const STEP_FLOORS: Array = [
 const STEP_GLASS: Array = ["step_glass", 0.25, 1.2, 1.4]
 const GLASS_STANDIN: String = "glass"
 const STEPS_KEPT: int = 256            # steps remembered (tests); older ones go
+## The dead in sight are heard walking, as they are heard speaking (결정 509,
+## user 2026-10-24: only the dead the player can see; out of sight their feet
+## are silent too): the nearest few of the voiced dead that move, by the floor under them,
+## softer and lower than the player's own. Each step comes after a stride drawn
+## new for it, and a shambling one now and then drags without a sound, so the
+## feet keep no beat (user 2026-10-24: 「규칙적이니까 귀가피곤함」). A crawler
+## makes no step. Heard only; nothing in the rules hears it.
+const DEAD_STEP_RANGE: float = 12.0    # m: no step heard from farther (an ally's too)
+const DEAD_STEPPERS: int = 3           # at most this many of the dead are heard stepping
+const DEAD_STEP_JUMP: float = 2.0      # m in one tick: a jump (a stair, a spawn), not a walk
+## An ally's step (squad or crew, field_game _footsteps) is the player's own,
+## this much softer; a raider's or a stranger's feet stay unheard.
+const COMPANY_STEP_LOUD: float = 0.7
+const FEET_PLAYERS: int = 5            # players the steps of others than the player go out on
+## By its gait: stride in m (low, high), loudness, the share of steps without a
+## sound, and pitch (low, high; times its floor's) — never above the player's
+## lowest (0.9), so the ear tells their feet from its own. First values.
+const DEAD_GAITS: Dictionary = {
+	"shamble": {"stride": [0.45, 0.8], "loud": 0.16, "skip": 0.3, "pitch": [0.72, 0.86]},
+	"chase": {"stride": [0.6, 0.9], "loud": 0.22, "skip": 0.12, "pitch": [0.78, 0.88]},
+	"dash": {"stride": [0.9, 1.3], "loud": 0.3, "skip": 0.0, "pitch": [0.82, 0.9]},
+}
 ## The rasp of one of the dead that is about to run (lunger_rules): the group
 ## its file goes in, how loud, heard to this many metres, and the pitch of the
 ## moan that stands in for it. First values.
@@ -366,6 +388,13 @@ var departing: bool = false            # '떠난다' plays its own whistle
 var played: Array = []                 # groups played, in order (tests)
 var steps: Array = []                  # the player's steps heard [group, file] (tests)
 var step_last: Dictionary = {}         # step group -> the file it played last
+var feet: Array = []                   # AudioStreamPlayer3D the steps of others go out on
+var feet_n: int = 0                    # those steps played (which of feet is next)
+var feet_strides: int = 0              # strides the voiced dead have gone, heard or not (tests)
+var dead_steps: Array = []             # the dead's steps heard [zombie id, group, file] (tests)
+var dead_step_last: Dictionary = {}    # step group -> the file a dead's step played last
+var company_steps: Array = []          # allies' steps heard [group, file] (tests)
+var company_step_last: Dictionary = {} # step group -> the file an ally's step played last
 var door_creaks: Array = []             # building doors beaten on: true when it was about to give (tests)
 var shut_heard: Dictionary = {}        # "x,y,why" -> Time ms a door's no was last heard (SHUT_FAST_GAP_MS)
 
@@ -484,6 +513,13 @@ func setup(field_game) -> void:
 		o.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
 		add_child(o)
 		one_shots.append(o)
+	# Others' feet have players of their own: a step never cuts a blow short.
+	for i in range(FEET_PLAYERS):
+		var f := AudioStreamPlayer3D.new()
+		f.bus = "SFX"
+		f.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
+		add_child(f)
+		feet.append(f)
 
 
 func has(group: String) -> bool:
@@ -777,6 +813,8 @@ func tick(delta: float) -> void:
 		pick_t = 0.4
 		_assign_moans(at)
 	for s in slots:
+		_move_feet(s)   # all of them first: who walks is known alike when each steps
+	for s in slots:
 		_tick_slot(s, at, delta)
 	_tick_falls(at)
 	# The mass: one bed scaled by how many dead are near and how near.
@@ -863,6 +901,10 @@ func _assign_moans(at: Vector3) -> void:
 		s["z"] = z
 		s["was"] = ""
 		s["stun"] = float(z.get("stun", 0.0))
+		# Its feet start where it is, part way through a stride.
+		s["feet_at"] = z["pos"]
+		s["feet_left"] = randf_range(0.0, float(DEAD_GAITS["shamble"]["stride"][1]))
+		s["feet_moving"] = false
 
 
 ## The voice of one of the dead: its kind and its own pitch, the same every
@@ -953,6 +995,7 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 		return
 	p.position = z["pos"]
 	var d: float = z["pos"].distance_to(at)
+	_tick_feet(s, z, d)
 	var row := says_for(String(z["state"]))
 	# A short call (a bite, a grunt) ends after its length, fading out fast.
 	if float(s.get("cut", 0.0)) > 0.0:
@@ -1906,27 +1949,153 @@ func _building_door_bang(at: Vector3, level: int) -> bool:
 func footstep(at: Vector3, running: bool) -> void:
 	var g = game.grid_at(at)
 	var cell: Vector2i = game.FieldGrid.cell_of(at)
-	var kind: int = g.floor_at(cell)
-	var row: Array = STEP_FLOORS[kind] if kind >= 0 and kind < STEP_FLOORS.size() else STEP_FLOORS[0]
-	var group: String = ""
-	for try_group: String in row[0]:
-		if not lib.has(try_group):
-			lib[try_group] = _load_group(try_group)
-		if has(try_group):
-			group = try_group
-			break
+	var found: Array = _step_group(at)
+	var group: String = found[0]
+	var row: Array = found[1]
 	if group != "":
-		var count: int = (lib[group] as Array).size()
-		var pick: int = randi() % count
-		if count > 1 and pick == int(step_last.get(group, -1)):
-			pick = (pick + 1 + randi() % (count - 1)) % count
-		step_last[group] = pick
+		var pick: int = _other_than(group, step_last)
 		steps.append([group, pick])
 		if steps.size() > STEPS_KEPT:
 			steps = steps.slice(steps.size() - STEPS_KEPT)
 		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]), randf_range(0.9, 1.1) * float(row[2]), lib[group][pick], _bus_at(at))
 	if g.floor_glass.has(cell):
 		_voice_or_standin(STEP_GLASS, GLASS_STANDIN, at)
+
+
+## The step group for the floor at `at` and its row of STEP_FLOORS: the first
+## of the row's groups that has files ("" when none has).
+func _step_group(at: Vector3) -> Array:
+	var kind: int = game.grid_at(at).floor_at(game.FieldGrid.cell_of(at))
+	var row: Array = STEP_FLOORS[kind] if kind >= 0 and kind < STEP_FLOORS.size() else STEP_FLOORS[0]
+	for try_group: String in row[0]:
+		if not lib.has(try_group):
+			lib[try_group] = _load_group(try_group)
+		if has(try_group):
+			return [try_group, row]
+	return ["", row]
+
+
+## Where one voiced body's feet have got to since the last tick: how far it
+## went, and whether it walks in sight (a crawler, a jump or a body the player
+## no longer sees does not, though its voice lingers a moment: VOICE_KEEP).
+func _move_feet(s: Dictionary) -> void:
+	var z: Dictionary = s["z"]
+	if z.is_empty():
+		s["feet_moving"] = false
+		return
+	var now: Vector3 = z["pos"]
+	var was: Vector3 = s.get("feet_at", now)
+	s["feet_at"] = now
+	var gone: float = Vector2(now.x - was.x, now.z - was.z).length()
+	s["feet_gone"] = gone
+	s["feet_moving"] = gone > 0.0005 and gone <= DEAD_STEP_JUMP and not bool(z.get("crawl", false)) and in_view(now)
+
+
+## One of the voiced dead walking (DEAD_GAITS): a step each time it has gone
+## a stride, the stride drawn new for every step. Heard from DEAD_STEP_RANGE
+## in, and only from the DEAD_STEPPERS nearest; a crawler, a jump or a body
+## standing still makes none. Never the same file twice running.
+func _tick_feet(s: Dictionary, z: Dictionary, d: float) -> void:
+	if feet.is_empty() or not bool(s.get("feet_moving", false)):
+		return
+	var now: Vector3 = z["pos"]
+	var gone: float = float(s.get("feet_gone", 0.0))
+	var gait: Dictionary = DEAD_GAITS[gait_of(String(z["state"]))]
+	var stride: Array = gait["stride"]
+	if not s.has("feet_left"):
+		s["feet_left"] = randf_range(0.0, float(stride[1]))
+	s["feet_left"] = float(s["feet_left"]) - gone
+	if float(s["feet_left"]) > 0.0:
+		return
+	s["feet_left"] = randf_range(float(stride[0]), float(stride[1]))
+	feet_strides += 1
+	if d >= DEAD_STEP_RANGE or randf() < float(gait["skip"]) or _nearer_feet(z, d) >= DEAD_STEPPERS:
+		return
+	var found: Array = _step_group(now)
+	var group: String = found[0]
+	if group == "":
+		return
+	var row: Array = found[1]
+	var pick: int = _other_than(group, dead_step_last)
+	if not _foot(group, pick, now, float(gait["loud"]) * float(row[1]) * (1.0 - d / DEAD_STEP_RANGE),
+			randf_range(float(gait["pitch"][0]), float(gait["pitch"][1])) * float(row[2])):
+		return
+	dead_steps.append([int(z["id"]), group, pick])
+	if dead_steps.size() > STEPS_KEPT:
+		dead_steps = dead_steps.slice(dead_steps.size() - STEPS_KEPT)
+
+
+## An ally's step (squad or crew, from field_game _footsteps): by the floor
+## rows the player's own go by, COMPANY_STEP_LOUD of theirs, heard from
+## DEAD_STEP_RANGE in and duller through a wall. Its run of files is its own,
+## so the player's own never repeats for it.
+func company_step(at: Vector3, running: bool) -> void:
+	if game == null or game.player == null:
+		return
+	var d: float = at.distance_to(game.player.position)
+	if d >= DEAD_STEP_RANGE:
+		return
+	var found: Array = _step_group(at)
+	var group: String = found[0]
+	if group == "":
+		return
+	var row: Array = found[1]
+	var pick: int = _other_than(group, company_step_last)
+	if not _foot(group, pick, at, (0.5 if running else 0.3) * COMPANY_STEP_LOUD * float(row[1]) * (1.0 - d / DEAD_STEP_RANGE),
+			randf_range(0.9, 1.1) * float(row[2])):
+		return
+	company_steps.append([group, pick])
+	if company_steps.size() > STEPS_KEPT:
+		company_steps = company_steps.slice(company_steps.size() - STEPS_KEPT)
+
+
+## A file of the group other than the one `last` says it played last, and
+## noted there as the last now.
+func _other_than(group: String, last: Dictionary) -> int:
+	var count: int = (lib[group] as Array).size()
+	var pick: int = randi() % count
+	if count > 1 and pick == int(last.get(group, -1)):
+		pick = (pick + 1 + randi() % (count - 1)) % count
+	last[group] = pick
+	return pick
+
+
+## One step of someone else on the next of the feet players (false: too faint
+## to play, or no players).
+func _foot(group: String, pick: int, at: Vector3, lin: float, pitch: float) -> bool:
+	if feet.is_empty() or lin <= 0.01:
+		return false
+	var o: AudioStreamPlayer3D = feet[feet_n % feet.size()]
+	feet_n += 1
+	o.bus = _bus_at(at)
+	o.position = at
+	o.stream = lib[group][pick]
+	o.volume_db = _db(lin)
+	o.pitch_scale = pitch
+	o.play()
+	return true
+
+
+## How one of the dead walks, by what it is doing: running at you, after you
+## (or at you), or shambling.
+static func gait_of(state: String) -> String:
+	if state == "dash":
+		return "dash"
+	return "shamble" if says_for(state) == "idle" else "chase"
+
+
+## How many of the other voiced dead walking (as of their last tick) are
+## nearer than d.
+func _nearer_feet(z: Dictionary, d: float) -> int:
+	var n := 0
+	var at: Vector3 = game.player.position
+	for s in slots:
+		var other: Dictionary = s["z"]
+		if other.is_empty() or int(other["id"]) == int(z["id"]) or not bool(s.get("feet_moving", false)):
+			continue
+		if other["pos"].distance_to(at) < d:
+			n += 1
+	return n
 
 
 ## The bus a sound from here goes through: duller through a wall, the room's

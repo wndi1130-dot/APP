@@ -1,6 +1,6 @@
 extends RefCounted
-## 한 집이 함께 쓰는 네 가지 칠 판. 값은 sRGB이며 연결하는 쪽에서 srgb_to_linear()를 쓴다.
-## tint_body/tint_trim의 rgb는 선형, a는 칠 세기다. 판 수는 방 꾸밈(room_furnish TINT_SETS)과 같다.
+## 한 집이 함께 쓰는 네 가지 칠 판. 값은 sRGB이며 dress()가 srgb_to_linear()로 바꿔 싣는다.
+## 셰이더 tint_sets_body/trim의 rgb는 선형, a는 칠 세기다. 판 수는 방 꾸밈(room_furnish TINT_SETS)과 같다.
 
 const SETS: Array[Dictionary] = [
 	# 바랜 회청 몸체와 검은 쇠 테두리.
@@ -27,8 +27,14 @@ static func pick(row: Dictionary, cell: Vector2i, building: int = -1) -> int:
 	if row.has("building"):
 		building = int(row["building"])
 	if building >= 0:
-		return posmod(("building:%d" % building).hash(), SETS.size())
-	return posmod(("cell:%d:%d" % [cell.x, cell.y]).hash(), SETS.size())
+		return roll("building:%d" % building)
+	return roll("cell:%d:%d" % [cell.x, cell.y])
+
+
+## 글 열쇠로 판 번호를 굴린다. String.hash()(djb2)는 끝 글자가 바뀌면 값이 그만큼만 바뀌어 아래
+## 비트는 번호 자릿수 합, 위 비트는 거의 그대로라, PCG로 섞은 뒤 고른다(room_furnish.tint_for와 같이).
+static func roll(key: String) -> int:
+	return int(rand_from_seed(key.hash())[0]) % SETS.size()
 
 
 static func applies(path: String) -> bool:
@@ -44,6 +50,7 @@ static func dress(mesh: Mesh) -> void:
 		var t: Color = (row["trim"] as Color).srgb_to_linear()
 		body.append(Vector4(b.r, b.g, b.b, BODY_STRENGTH))
 		trim.append(Vector4(t.r, t.g, t.b, TRIM_STRENGTH))
+	var ref := paint_ref(mesh)
 	for surface in range(mesh.get_surface_count()):
 		var material := mesh.surface_get_material(surface) as ShaderMaterial
 		if material == null:
@@ -51,3 +58,42 @@ static func dress(mesh: Mesh) -> void:
 		material.set_shader_parameter("tint_from_custom", true)
 		material.set_shader_parameter("tint_sets_body", body)
 		material.set_shader_parameter("tint_sets_trim", trim)
+		material.set_shader_parameter("tint_ref", ref)
+
+
+## 칠할 몸체(정점색 알파 0.75 이상)와 테두리(0.25~0.75)의 넓이 평균 선형 밝기(재질 albedo 포함).
+## 셰이더는 결을 이 값에 견줘 남기고, 밝기는 판 밝기 × (이 값 / 0.18)의 4분의 1제곱으로 맞춘다
+## (TINT_KEEP): 밝은 원목은 조금 밝게, 어두운 쇠는 조금 어둡게 남되 흰색으로 뜨거나 검게 눌리지
+## 않는다. 테두리는 몸체보다 어둡되 몸체의 절반 밑으로는 안 내려간다. 칠할 곳이 없는 칸은 예전
+## 기준 0.18. 묶음 메시는 정차마다 다시 쓰여 메시 메타에 한 번만 잰다.
+static func paint_ref(mesh: Mesh) -> Vector2:
+	if mesh.has_meta("paint_ref"):
+		return mesh.get_meta("paint_ref")
+	var sums := [0.0, 0.0]
+	var areas := [0.0, 0.0]
+	for surface in range(mesh.get_surface_count()):
+		var arrays := mesh.surface_get_arrays(surface)
+		var colors = arrays[Mesh.ARRAY_COLOR]
+		if colors == null:
+			continue
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var index = arrays[Mesh.ARRAY_INDEX]
+		var tint := Color(1, 1, 1)
+		var material := mesh.surface_get_material(surface) as ShaderMaterial
+		if material != null and material.get_shader_parameter("albedo") is Color:
+			tint = (material.get_shader_parameter("albedo") as Color).srgb_to_linear()
+		var count: int = index.size() if index != null else verts.size()
+		for t in range(0, count - 2, 3):
+			var i0: int = index[t] if index != null else t
+			var i1: int = index[t + 1] if index != null else t + 1
+			var i2: int = index[t + 2] if index != null else t + 2
+			var c: Color = (colors[i0] + colors[i1] + colors[i2]) / 3.0
+			var part := 0 if c.a >= 0.75 else (1 if c.a >= 0.25 else -1)
+			if part < 0:
+				continue
+			var area := (verts[i1] - verts[i0]).cross(verts[i2] - verts[i0]).length() * 0.5
+			sums[part] += area * (0.2126 * c.r * tint.r + 0.7152 * c.g * tint.g + 0.0722 * c.b * tint.b)
+			areas[part] += area
+	var ref := Vector2(sums[0] / areas[0] if areas[0] > 0.0 else 0.18, sums[1] / areas[1] if areas[1] > 0.0 else 0.18)
+	mesh.set_meta("paint_ref", ref)
+	return ref

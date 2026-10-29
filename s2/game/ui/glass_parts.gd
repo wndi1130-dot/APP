@@ -7,6 +7,7 @@ extends RefCounted
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
+const UiBake = preload("res://game/ui/ui_bake.gd")
 const TypeLine = preload("res://game/ui/type_line.gd")
 const PAPER_TEX := preload("res://game/ui/tex/paper.png")
 
@@ -50,19 +51,7 @@ static func medal(icon: String, color: Color, box_css: float = 44.0, disc_css: f
 	var bot: Color = tone(MEDAL_BOT, dim)
 	var ring: Color = tone(RING, dim)
 	m.draw.connect(func() -> void:
-		var c: Vector2 = m.size * 0.5
-		# 0 1px 3px rgba(0,0,0,.45): a soft shadow a little low.
-		for i in 3:
-			m.draw_circle(c + Vector2(0, 1.0 * k), r + float(3 - i) * k, shades[i], true, -1.0, true)
-		var pts := PackedVector2Array()
-		var cols := PackedColorArray()
-		for i in 48:
-			var a: float = TAU * float(i) / 48.0
-			var p: Vector2 = c + Vector2(cos(a), sin(a)) * r
-			pts.append(p)
-			cols.append(top.lerp(bot, (p.y - (c.y - r)) / (r * 2.0)))
-		m.draw_polygon(pts, cols)
-		m.draw_arc(c, r - 1.0 * k, 0.0, TAU, 64, ring, 2.0 * k, true))
+		UiBake.medal(m.size, r, k, dim, PackedColorArray([shades[0], shades[1], shades[2], top, bot, ring])).draw(m))
 	var mark := TextureRect.new()
 	mark.name = "Mark"
 	var px: int = int(round(icon_css * k))
@@ -167,6 +156,14 @@ static func grad_at(stops: Array, f: float) -> Color:
 ## strips, each its own two colours, so no triangle spans a stop; a soft edge
 ## round the outside.
 static func grad_rect(ci: CanvasItem, rect: Rect2, radius: float, stops: Array) -> void:
+	var batch := UiBake.Batch.new()
+	gradient(batch, rect, radius, stops)
+	batch.draw(ci)
+
+
+## Append the existing strips and their feather to a larger ordered batch.
+## This stays live geometry: the colour interval is the current rect's width.
+static func gradient(batch: UiBake.Batch, rect: Rect2, radius: float, stops: Array) -> void:
 	if rect.size.x <= 0.5 or rect.size.y <= 0.5:
 		return
 	var r: float = minf(radius, minf(rect.size.x, rect.size.y) * 0.5)
@@ -178,7 +175,7 @@ static func grad_rect(ci: CanvasItem, rect: Rect2, radius: float, stops: Array) 
 		var x: float = rect.position.x + rect.size.x * float(i) / float(n)
 		var y: Vector2 = _span(rect, r, x)
 		var col: Color = grad_at(stops, float(i) / float(n))
-		ci.draw_polygon(PackedVector2Array([Vector2(prev_x, prev_y.x), Vector2(x, y.x), Vector2(x, y.y), Vector2(prev_x, prev_y.y)]), PackedColorArray([prev_c, col, col, prev_c]))
+		batch.polygon(PackedVector2Array([Vector2(prev_x, prev_y.x), Vector2(x, y.x), Vector2(x, y.y), Vector2(prev_x, prev_y.y)]), PackedColorArray([prev_c, col, col, prev_c]))
 		prev_x = x
 		prev_y = y
 		prev_c = col
@@ -188,7 +185,7 @@ static func grad_rect(ci: CanvasItem, rect: Rect2, radius: float, stops: Array) 
 		ring_c.append(grad_at(stops, (p.x - rect.position.x) / rect.size.x))
 	ring.append(ring[0])
 	ring_c.append(ring_c[0])
-	ci.draw_polyline_colors(ring, ring_c, 1.0, true)
+	batch.polyline(ring, ring_c, 1.0)
 
 
 ## How far up and down a rect with corners of `r` reaches at `x`.
@@ -281,14 +278,16 @@ static func paper_tag(word: String, icon: String = "snow", tilt: float = -2.0) -
 		var s: Vector2 = body.size
 		var tip: float = 6.0 * k
 		var pts := PackedVector2Array([Vector2(tip, 0), Vector2(s.x, 0), Vector2(s.x, s.y), Vector2(tip, s.y), Vector2(0, s.y * 0.5)])
+		var paper := UiBake.Batch.new()
 		# 0 1px 2px rgba(0,0,0,.6) under the cut shape.
 		for i in 2:
 			var d: float = (1.0 + 0.6 * i) * k
 			var under := PackedVector2Array()
 			for p in pts:
 				under.append(p + Vector2(0, d))
-			body.draw_colored_polygon(under, Color(0, 0, 0, 0.3 - 0.12 * i))
-		body.draw_colored_polygon(pts, PAPER)
+			paper.polygon(under, PackedColorArray([Color(0, 0, 0, 0.3 - 0.12 * i)]))
+		paper.polygon(pts, PackedColorArray([PAPER]))
+		paper.draw(body)
 		var uvs := PackedVector2Array()
 		for p in pts:
 			uvs.append(p / (PAPER_TILE * k))

@@ -2200,8 +2200,11 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 		ledger.observe(level, "run" if running else ("crouch" if p.crouched else "walk"), r, reacted)
 		if running:
 			_ripple_run(p, r)
-		if p == player and audio != null:
-			audio.footstep(p.position, running)
+		if audio != null:
+			if p == player:
+				audio.footstep(p.position, running)
+			elif p.team == "squad" or p.team == "crew":
+				audio.company_step(p.position, running)   # the ear's; a raider's or a stranger's feet stay unheard
 		_wake_frozen_near(p)
 		_floor_creak(p, cell)
 	if running:

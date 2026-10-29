@@ -15,7 +15,9 @@ extends Control
 ## decision card (field_hud.gd card), the scene is in pen, in print when pen
 ## would not fit over the ways, and never pushes them off the sheet; when print
 ## would not fit either, the paper is cut wider (the leave strip's 「cut to its
-## lines」), up to WIDE. The sheet shows once it has settled.
+## lines」), up to WIDE. The sheet shows once it has settled. Folded to the left
+## (결정 508) only its right edge stays in sight and a press there opens it
+## again, never a way under it; a new card comes open.
 ##
 ## The words are S1's (turn/turn_card_text.gd); the card only reads. A press
 ## hands on the state train_advance.gd choose_card gives back as `chose`, a
@@ -24,6 +26,7 @@ extends Control
 ## error at once. Measured part by part (the mockup's px × ui_fonts.gd K).
 
 signal chose(g: Dictionary)
+signal fold_changed(folded: bool)
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
@@ -54,6 +57,15 @@ const WIDEN: float = 47.0
 const WIDE: float = 540.0
 ## Frames a layout takes to settle (wrapped words find their lines).
 const SETTLE: int = 2
+## Folded, the paper keeps TAB of its right edge in sight (≈110 px on the 720-high
+## view, 결정 508). Its fold key is the right margin (PaperSheet.INSET_R) for
+## FOLD_KEY_H, level with the title; it slides either way in FOLD_S.
+const TAB: float = 60.0
+const FOLD_KEY_H: float = 56.0
+const FOLD_S: float = 0.22
+## Opened again, the paper still takes presses as the open key this much longer (s):
+## a second tap of a double tap opens nothing more, never a way that came under it.
+const OPEN_GUARD: float = 0.15
 ## The black stone (.sayb>s): 13 across, 8 in from the right and 13 down.
 const STONE_AT := Vector2(14.5, 19.5)
 ## Ways that leave someone behind take two presses (k3b_views.js 「무거운 선택지」).
@@ -86,6 +98,10 @@ var fit_w: float = 0.0
 ## The paper's width in mockup px, and frames left before the fit is looked at.
 var _w: float = PaperSheet.SIZE.x
 var _settle: int = 0
+## Folded off to the left with only TAB of it in sight.
+var folded: bool = false
+var _fold_tween: Tween
+var _opening: bool = false
 
 
 ## What the card says for card `uid0` in state `g0` (tests read this; the card
@@ -172,8 +188,65 @@ func show_card(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> void:
 	t = t0
 	uid = uid0
 	_armed = -1
+	folded = false
+	_opening = false
+	if _fold_tween != null:
+		_fold_tween.kill()
 	_w = PaperSheet.SIZE.x if fit_w <= 0.0 else minf(PaperSheet.SIZE.x, fit_w)
 	_fill()
+	if sheet != null:
+		sheet.position = _lie()
+		_mark_fold()
+
+
+## Fold the paper off to the left with its edge left in sight (결정 508), or open it again.
+func set_folded(on: bool) -> void:
+	if on == folded:
+		return
+	folded = on
+	_opening = false
+	if on and _armed >= 0:
+		# A heavy way armed before the fold is not left armed under the edge.
+		_armed = -1
+		_fill()
+	if sheet != null:
+		_opening = not on
+		_mark_fold()
+		if _fold_tween != null:
+			_fold_tween.kill()
+		_fold_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_fold_tween.tween_property(sheet, "position", _lie(), FOLD_S)
+		if _opening:
+			_fold_tween.tween_interval(OPEN_GUARD)
+			_fold_tween.tween_callback(_opened)
+	fold_changed.emit(folded)
+
+
+## Lain open: the ways take their presses again.
+func _opened() -> void:
+	_opening = false
+	if sheet != null:
+		_mark_fold()
+
+
+## The right edge a folded paper leaves in sight, in the view's px.
+func folded_edge() -> float:
+	return global_position.x + TAB * UiFonts.K
+
+
+## Where the sheet lies: as the mockup lays it, or folded with TAB of it in sight.
+func _lie() -> Vector2:
+	var at := SHEET_AT * UiFonts.K
+	if folded:
+		at.x = (TAB - _w) * UiFonts.K
+	return at
+
+
+## Folded, the edge in sight is bare paper with its mark: no cut-off words on it.
+func _mark_fold() -> void:
+	(sheet.get_node("Open") as Control).visible = folded or _opening
+	(sheet.get_node("Fold") as Control).queue_redraw()
+	(sheet as PaperSheet).inner.visible = not folded
 
 
 ## The paper `_w` wide, new when its width changes.
@@ -181,11 +254,15 @@ func _sheet() -> void:
 	if sheet != null and is_equal_approx(sheet.size.x, _w * UiFonts.K):
 		return
 	if sheet != null:
+		# A new sheet lies where the fold has it; no slide is left on the old one.
+		if _fold_tween != null:
+			_fold_tween.kill()
+		_opening = false
 		remove_child(sheet)
 		sheet.queue_free()
 	var paper = PaperSheet.new(Vector2(_w, PaperSheet.SIZE.y))
 	paper.name = "Sheet"
-	paper.position = SHEET_AT * UiFonts.K
+	paper.position = _lie()
 	sheet = paper
 	add_child(paper)
 	body = VBoxContainer.new()
@@ -194,6 +271,41 @@ func _sheet() -> void:
 	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	paper.inner.add_child(body)
+	paper.add_child(_fold_key(paper))
+	paper.add_child(_open_key())
+	_mark_fold()
+
+
+## The fold key in the paper's right margin, level with the title: 「‹」 open, 「›」 folded.
+func _fold_key(paper: Control) -> Button:
+	var k: float = UiFonts.K
+	var key := Button.new()
+	key.name = "Fold"
+	key.focus_mode = Control.FOCUS_NONE
+	for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
+		key.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	key.position = Vector2(paper.size.x - PaperSheet.INSET_R * k, 0.0)
+	key.size = Vector2(PaperSheet.INSET_R, FOLD_KEY_H) * k
+	key.draw.connect(func() -> void:
+		var px: float = 16.0 * k
+		var mark := HudIcons.texture("fwd" if folded else "back", int(round(px)), Paper.INK2, 2.2, HudIcons.CUT_PAPER)
+		key.draw_texture_rect(mark, Rect2((key.size - Vector2(px, px)) * 0.5, Vector2(px, px)), false))
+	key.pressed.connect(set_folded.bind(true))
+	return key
+
+
+## Folded, the whole paper is one key that opens it: over all else on the sheet, so a
+## press on the edge in sight never reaches a way or its black stone.
+func _open_key() -> Button:
+	var key := Button.new()
+	key.name = "Open"
+	key.focus_mode = Control.FOCUS_NONE
+	for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
+		key.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	key.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	key.visible = folded
+	key.pressed.connect(set_folded.bind(false))
+	return key
 
 
 func _fill() -> void:
