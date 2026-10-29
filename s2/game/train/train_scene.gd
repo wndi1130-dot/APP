@@ -10,6 +10,7 @@ signal rules_applied
 
 const Rules = preload("res://game/train/train_rules.gd")
 const Look = preload("res://game/train/train_look.gd")
+const TrainLight = preload("res://game/train/train_light.gd")
 const Body = preload("res://game/train/train_body.gd")
 const HandPanel = preload("res://game/train/train_panel.gd")
 const Gesture = preload("res://game/train/train_gesture.gd")
@@ -152,6 +153,8 @@ var _shells: Dictionary = {}
 var backdrop: MeshInstance3D
 var side_rail: MeshInstance3D
 var snow_ground: MeshInstance3D
+var world_env: Environment
+var fill_light: DirectionalLight3D
 var highlight_band: MeshInstance3D
 var _highlight_id: String = ""
 var people_view: Node3D                  # the baked bodies drawn over the stand-in capsules
@@ -894,9 +897,15 @@ func _knot_gesture_facing(gesture_name: String, k: int, wide: float = 0.0, aside
 
 ## The lamp, the stove and the window frost follow the car's mood and warmth.
 func _dress_car(c: Dictionary, w: float, look: Dictionary) -> void:
-	c["lamp_color"] = look["lamp"]
-	c["lamp_energy"] = float(look["energy"])
-	c["lamp_sway"] = float(look["sway"])
+	var stage: int = TrainLight.stage_of(c)
+	var daytime: String = TrainLight.daytime_of(rules.get("view", {}))
+	if String(c.get("light_daytime", "")) != daytime:
+		TrainLight.apply_daytime([c["lamp"]] + (c["lamps"] as Array), c["windows"], stage, daytime)
+		c["light_daytime"] = daytime
+	var aim: Dictionary = TrainLight.target(stage, daytime, look)
+	c["lamp_color"] = aim["lamp_color"]
+	c["lamp_energy"] = float(aim["lamp_energy"])
+	c["lamp_sway"] = float(aim["lamp_sway"])
 	if room_ease <= 0.0 or not c.has("room_w"):
 		c["room_w"] = w
 		c["room_to"] = w
@@ -934,7 +943,8 @@ func _show_room(c: Dictionary) -> void:
 		shell_material.albedo_color = Color(base.r * warm.r * shade, base.g * warm.g * shade, base.b * warm.b * shade, base.a)
 	if c.has("stove_light"):
 		var burn: float = float(vis["burn"])
-		(c["stove_light"] as OmniLight3D).light_energy = STOVE_ENERGY * burn
+		var stove_share: float = float(TrainLight.spec(TrainLight.stage_of(c), TrainLight.daytime_of(rules.get("view", {})))["stove"])
+		(c["stove_light"] as OmniLight3D).light_energy = STOVE_ENERGY * burn * stove_share
 		(c["steam"] as GPUParticles3D).emitting = burn >= Look.STOVE_STEAM_FROM
 
 
@@ -1123,16 +1133,15 @@ func _build_world() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.04, 0.045, 0.06)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.55, 0.6, 0.72)
-	env.ambient_light_energy = 0.35
 	world.environment = env
 	add_child(world)
+	world_env = env
 	# A faint cold fill from the open side, so a body in the aisle is not a black shape.
 	var fill := DirectionalLight3D.new()
-	fill.light_color = Color(0.62, 0.7, 0.86)
-	fill.light_energy = 0.3
 	fill.rotation_degrees = Vector3(-25, 0, 0)
 	add_child(fill)
+	fill_light = fill
+	_dress_world_light()
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.near = 0.1
@@ -1385,14 +1394,22 @@ func _shell_box(c: Dictionary, size: Vector3, at: Vector3, color: Color) -> void
 
 func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: float) -> void:
 	life.add_car(c)
-	var calm := Look.mood_look("calm")
-	var lamp := OmniLight3D.new()
-	lamp.light_color = calm["lamp"]
-	lamp.light_energy = float(calm["energy"])
-	lamp.omni_range = 9.0
-	lamp.position = Vector3(l * 0.5, h - 0.5, 0.3)
-	node.add_child(lamp)
+	# The car's lamp by its home stage and the hour (train_light.gd, 결정 486), easing toward
+	# the mood. One lamp a car and no shadow on the phone: a swaying lamp's shadow is drawn
+	# again every frame (+29k primitives on the first diagonal screen), and the second lamp and
+	# the window glow added no draw call but 39 lights over the train's 24.
+	var daytime: String = TrainLight.daytime_of(rules.get("view", {}))
+	var lamps: Array[OmniLight3D] = TrainLight.build(node, l, TrainLight.stage_of(c), daytime)
+	var lamp: OmniLight3D = lamps[0]
+	lamp.shadow_enabled = false
+	for extra: OmniLight3D in lamps.slice(1):
+		extra.free()
+	for i: int in TrainLight.WINDOW_SHARES.size():
+		node.get_node("Window%d" % i).free()
 	c["lamp"] = lamp
+	c["lamps"] = []
+	c["windows"] = []
+	c["light_daytime"] = daytime
 	c["lamp_color"] = lamp.light_color
 	c["lamp_energy"] = lamp.light_energy
 	c["lamp_sway"] = 1.0
@@ -1487,8 +1504,20 @@ func _build_backdrop() -> void:
 	_dress_backdrop()
 
 
+## The air round the cars by the hour (train_light.gd world): ambient and the cold fill.
+func _dress_world_light() -> void:
+	var air: Dictionary = TrainLight.world(TrainLight.daytime_of(rules.get("view", {})))
+	if world_env != null:
+		world_env.ambient_light_color = air["ambient_color"]
+		world_env.ambient_light_energy = float(air["ambient_energy"])
+	if is_instance_valid(fill_light):
+		fill_light.light_color = air["fill_color"]
+		fill_light.light_energy = float(air["fill_energy"])
+
+
 ## Night darkens the card; the land goes by only while the train runs.
 func _dress_backdrop() -> void:
+	_dress_world_light()
 	if backdrop == null:
 		return
 	var view: Dictionary = rules.get("view", {})

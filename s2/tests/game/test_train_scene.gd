@@ -9,6 +9,7 @@ const Scene = preload("res://game/train/train_scene.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const Gesture = preload("res://game/train/train_gesture.gd")
 const Look = preload("res://game/train/train_look.gd")
+const TrainLight = preload("res://game/train/train_light.gd")
 const Body = preload("res://game/train/train_body.gd")
 const HandPanel = preload("res://game/train/train_panel.gd")
 const Boot = preload("res://game/boot.gd")
@@ -301,16 +302,19 @@ func test_the_lamp_eases_to_the_moods_light_and_sways_within_its_reach() -> void
 	var s = _scene()
 	var c: Dictionary = s.car("medtech")
 	var lamp: OmniLight3D = c["lamp"]
-	var calm: Dictionary = Look.mood_look("calm")
-	var frozen: Dictionary = Look.mood_look("frozen")
+	# The mood's light over the car's light board (train_light.gd target): its stage and hour.
+	var stage: int = TrainLight.stage_of(c)
+	var daytime: String = TrainLight.daytime_of(s.rules.get("view", {}))
+	var calm: Dictionary = TrainLight.target(stage, daytime, Look.mood_look("calm"))
+	var frozen: Dictionary = TrainLight.target(stage, daytime, Look.mood_look("frozen"))
 	s.set_train("fear", 70.0)
-	assert_almost_eq(lamp.light_energy, float(calm["energy"]), 0.001, "not at once")
+	assert_almost_eq(lamp.light_energy, float(calm["lamp_energy"]), 0.001, "not at once")
 	for i in 100:
 		s.step(0.1)
-		assert_lte(absf(lamp.position.x - Scene.CAR_LENGTH * 0.5), Scene.LAMP_SWAY * float(frozen["sway"]) + 0.001)
-	assert_almost_eq(lamp.light_energy, float(frozen["energy"]), 0.01)
-	assert_almost_eq(lamp.light_color.b, (frozen["lamp"] as Color).b, 0.01, "a colder light")
-	assert_lt(lamp.light_color.r, (calm["lamp"] as Color).r)
+		assert_lte(absf(lamp.position.x - Scene.CAR_LENGTH * 0.5), Scene.LAMP_SWAY * float(frozen["lamp_sway"]) + 0.001)
+	assert_almost_eq(lamp.light_energy, float(frozen["lamp_energy"]), 0.01)
+	assert_almost_eq(lamp.light_color.b, (frozen["lamp_color"] as Color).b, 0.01, "a colder light")
+	assert_lt(lamp.light_color.r, (calm["lamp_color"] as Color).r)
 
 
 func test_the_stove_burns_with_the_cars_warmth_and_frost_takes_the_glass() -> void:

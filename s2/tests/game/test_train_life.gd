@@ -400,7 +400,9 @@ func test_night_and_stop_change_lamps_and_route_metadata_stays_outside_politics(
 	var s = _scene()
 	var lamp: float = s.car("front")["lamp_energy"]
 	s.set_value("view.daytime", "night")
-	assert_lt(float(s.car("front")["lamp_energy"]), lamp)
+	# The light board lights the lamp at night (train_light.gd: kerosene up, candles on).
+	assert_gt(float(s.car("front")["lamp_energy"]), lamp)
+	assert_eq(String(s.car("front")["light_daytime"]), "night")
 	s.set_value("view.motion", "stopped")
 	assert_eq(float(s.car("front")["lamp_sway"]), 0.0)
 	s.set_value("train.seg", 9)
@@ -660,6 +662,8 @@ func test_placeholder_node_budget_adds_no_new_lights() -> void:
 	# A stove stands where people live; cars only for goods, coal or the dead have none.
 	var stoves: int = s.cars.filter(func(c): return not bool(Catalog.layout(c["def"]).get("storage_only", false))).size()
 	assert_eq(lights, 1 + s.cars.size() + stoves, "sun, each car's own lamp and a stove where people live (13 cars: 23)")
+	for c: Dictionary in s.cars:
+		assert_false((c["lamp"] as OmniLight3D).shadow_enabled, "a swaying lamp's shadow would be drawn again every frame: " + String(c["id"]))
 	print("TRAIN_NODE_BUDGET=" + JSON.stringify({"nodes": count, "lights": lights, "people": s.people.get_child_count(), "furniture_roots": s.life.rooms.size(), "outside_nodes": 4}))
 
 
