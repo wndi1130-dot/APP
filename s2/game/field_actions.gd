@@ -1637,7 +1637,7 @@ func _thawed() -> void:
 	var tower: Dictionary = game.data["spots"]["water_tower"]
 	tower["state"] = "thawed"
 	game.view.update_spot("water_tower")
-	game.set_radio("기관사: 급수탑 물이 나온다. 넣는다.", "reply")
+	game.set_radio("기관사: 급수탑 물이 나옵니다. 넣겠습니다.", "reply")
 
 
 func _tower(delta: float) -> void:
