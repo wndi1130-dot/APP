@@ -80,6 +80,16 @@ const DOOR_TURN: Dictionary = {
 const DOOR_KEY: Array = ["door_unlock", 0.25, 1.6, 1.8, "metal"]
 const DOOR_KEY_HUSH: float = 0.5
 const DOOR_KEY_LAG: float = 0.18
+## A building's window opened or shut, or its curtain drawn or opened, by
+## someone (field_actions _set_window_open, _curtain_set): the player's ear
+## only, as DOOR_TURN. Until a file is in its group the stand-in is the impact
+## file whose name begins so, or with "@" a group of its own (a curtain: cloth
+## swung through the air, low). First values.
+const WINDOW_TURN: Dictionary = {
+	"open": ["window_open", 0.3, 1.15, 1.3, "wooden"],
+	"closed": ["window_close", 0.4, 1.02, 1.12, "wooden"],
+	"curtain": ["curtain", 0.25, 0.7, 0.8, "@swing_light"],
+}
 ## A door or a window that will not give to the player's hand, as the note
 ## says so (field_actions): a locked door rattles in its frame, a boarded one
 ## thuds against its planks. The player's ear only, as DOOR_TURN.
@@ -1691,6 +1701,15 @@ func _key_door_goes(c: Vector2i, soft: Array, at: Vector3) -> void:
 	_voice_or_standin(soft, String(soft[4]), at)
 
 
+## A building's window opened or shut by someone ("open", "closed"), or its
+## curtain drawn or opened ("curtain"), heard from the window.
+func window_turn(c: Vector2i, what: String) -> void:
+	if quiet or game == null or game.player == null or not WINDOW_TURN.has(what):
+		return
+	var voice: Array = WINDOW_TURN[what]
+	_voice_or_standin(voice, String(voice[4]), game.FieldGrid.center(c))
+
+
 ## A door or a window that would not give to the player's hand (SHUT_FAST:
 ## "locked" or "boarded"), heard from it; once in SHUT_FAST_GAP_MS for the
 ## same one and reason.
@@ -1718,8 +1737,63 @@ func lid_scrape(at: Vector3) -> void:
 	_voice_or_standin(LID_VOICE, LID_STANDIN, at)
 
 
+## A piece of furniture opened, shut, put into and taken from (card R3 가, decision 469;
+## reference 8: four sounds a container): for the player's ear only — no rule hears it,
+## so no make_sound tag and no noise.gd SOURCES row. Its kind by its furniture; one not
+## listed (open shelves, racks, a bench, a bin) opens and shuts with no sound.
+const BOX_KIND: Dictionary = {
+	"": "lid", "crate_stack": "lid", "tin_crate": "lid", "part_crate": "lid", "ammo_crate": "lid",
+	"relief_crate": "lid", "blanket_crate": "lid", "blanket_chest": "lid", "parish_chest": "lid",
+	"vestry_chest": "lid", "conductor_log_chest": "lid", "ration_ledger_chest": "lid",
+	"medicine_crate": "lid", "cask_stack": "lid", "freezer_chest": "lid", "tool_chest": "lid",
+	"nightstand": "drawer", "side_table": "drawer", "dresser": "drawer", "desk": "drawer",
+	"typewriter_desk": "drawer", "office_desk": "drawer", "file_cabinet": "drawer", "map_cabinet": "drawer",
+	"drawer_chest_spilled": "drawer", "counter": "drawer", "shop_counter": "drawer",
+	"service_counter": "drawer", "checkout": "drawer",
+	"wardrobe": "door", "cupboard": "door", "medicine_cabinet": "door", "washstand": "door",
+	"glass_cabinet": "door", "office_cabinet": "door",
+	"toolbox": "metal", "strongbox": "metal",
+}
+## Each kind's opening and shutting: group, loudness, pitch low and high, and the impact
+## file that stands in until a file is in its group. First values, quiet — a hand's work.
+const BOX_VOICES: Dictionary = {
+	"lid": {"open": ["box_open_lid", 0.35, 0.95, 1.05, "wooden"], "close": ["box_close_lid", 0.4, 0.8, 0.9, "wooden"]},
+	"drawer": {"open": ["box_open_drawer", 0.3, 1.3, 1.45, "wooden"], "close": ["box_close_drawer", 0.35, 1.1, 1.2, "wooden"]},
+	"door": {"open": ["box_open_door", 0.3, 0.7, 0.8, "wooden"], "close": ["box_close_door", 0.35, 0.9, 1.0, "wooden"]},
+	"metal": {"open": ["box_open_metal", 0.3, 1.2, 1.3, "metal"], "close": ["box_close_metal", 0.35, 1.0, 1.1, "metal"]},
+}
+## A thing going in or coming out, whatever the furniture.
+const BOX_RUSTLE: Dictionary = {"put": ["box_put", 0.25, 1.5, 1.7, "hit"], "take": ["box_take", 0.25, 1.7, 1.9, "hit"]}
+## Opening and shutting come no closer than this (reference 8's 0.5), so flicking through a
+## room's boxes never piles them up. Real time: the pane holds the field still.
+const BOX_GAP_MS: int = 500
+var box_quiet_until: int = 0
+
+
+## Box `c` sounds `what` ("open", "close", "put", "take"); false when it is no box on the
+## map, its kind has no such sound or an opening or shutting comes too soon after the last.
+func box_sound(c: Dictionary, what: String) -> bool:
+	if not c.has("cell"):
+		return false
+	var voice: Array = BOX_RUSTLE.get(what, [])
+	if voice.is_empty():
+		var kind := String(BOX_KIND.get(String(c.get("furniture", "")), ""))
+		if kind == "" or not (BOX_VOICES[kind] as Dictionary).has(what):
+			return false
+		var now := Time.get_ticks_msec()
+		if now < box_quiet_until:
+			return false
+		box_quiet_until = now + BOX_GAP_MS
+		voice = BOX_VOICES[kind][what]
+	if not lib.has("impact"):
+		lib["impact"] = _load_group("impact")
+	_voice_or_standin(voice, String(voice[4]), game.actions._container_at(c))
+	return true
+
+
 ## A one-shot of its own group [group, loudness, pitch low, pitch high], or, until that
-## group has a file, the impact file whose name begins with `standin`.
+## group has a file, the impact file whose name begins with `standin` (with
+## "@": a file of that group of its own).
 func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var group: String = voice[0]
 	if not lib.has(group):
@@ -1730,6 +1804,14 @@ func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var pitch := randf_range(float(voice[2]), float(voice[3]))
 	if has(group):
 		_one_shot(group, at, lin, pitch, null, _bus_at(at))
+		return
+	if standin.begins_with("@"):
+		var own: String = standin.substr(1)
+		if not lib.has(own):
+			lib[own] = _load_group(own)
+		var pick: int = _fresh_file(own)
+		if pick >= 0:
+			_one_shot(own, at, lin, pitch, lib[own][pick], _bus_at(at))
 		return
 	for s: AudioStream in lib.get("impact", []):
 		if s.resource_path.get_file().begins_with(standin):
