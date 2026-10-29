@@ -442,6 +442,19 @@ func test_worker_backs_behind_escort_at_eight_and_drops_at_three_metres() -> voi
 	assert_eq(worker.brain["dest"], game.work.door_of("work_site"))
 
 
+func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
+	_send()
+	for guard in _role("escort"):
+		guard.position = _at() + Vector3(-4.0 if guard.brain.get("side", 0) == 0 else 4.0, 0, 1.5)
+		guard.stop()
+		guard.face_point(_at())
+		for i in 12:
+			game.clock.elapsed += 0.5
+			game.ai._crew(guard, 0.1, true)
+			var look := Vector3(sin(guard.facing), 0.0, cos(guard.facing))
+			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 120.0, "watching outward, the work behind")
+
+
 func _cycle(id: String) -> void:
 	_job(id)
 	_send()
