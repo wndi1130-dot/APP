@@ -4,7 +4,7 @@ import { lawActive } from '../state';
 import { bumpRel } from '../ledger';
 import type { Game } from '../state';
 import { CAR_COMM, COMM_CARS, D, FURNISH_CARS, SUPPLIES_TECHS, TECHS } from './data';
-import { DECOR as FURNITURE, decorCrowd } from './decor';
+import { DECOR as FURNITURE, decorCrowd } from './decor_data';
 import { SUPPLIES_BOT } from '../supplies';
 import type { TechId, Variant } from './data';
 import { furnishOf, techMult, variantMult } from './state';

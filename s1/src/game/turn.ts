@@ -38,7 +38,7 @@ import { insulatedShare, lawTechRes } from './domestic/lawtech';
 import { personById, techMult } from './domestic/state';
 import { childHaul, childSettle, countHands, handsNote } from './domestic/classroom';
 import { heatAllocSettle } from './domestic/heat_alloc';
-import { reconcileStore } from './domestic/decor';
+import { reconcileStore } from './domestic/decor_data';
 import { applyScoutGear, effThreat, scoutHaulNow, scoutNowText, scoutPlan, threatStep } from './domestic/scout_gear';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)

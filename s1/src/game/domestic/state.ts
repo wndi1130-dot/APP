@@ -5,8 +5,8 @@ import { hash } from '../omens';
 import type { Card, Game } from '../state';
 import { CARS0, D, FIELDS, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, SPECIALISTS, TECHS, ZONE0 } from './data';
 import type { Field, FurnishStep, FurnishTier, TechDef, TechId, Variant, Zone } from './data';
-import { migrateDecor } from './decor';
-import type { DecorCarState, DecorItem, DecorStore } from './decor';
+import { migrateDecor } from './decor_data';
+import type { DecorCarState, DecorItem, DecorStore } from './decor_data';
 import type { PotState } from './pot';
 
 // S1c 내정 상태. S1a 판(Game)에 dom 하나를 더해 켠다(S1 기획서 19장의 기능 플래그). dom이 없으면 S1a 그대로다.

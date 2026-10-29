@@ -5,7 +5,7 @@ import chronicleSchema from '../../schema/chronicle.schema.json';
 import receiptSchema from '../../schema/receipt.schema.json';
 import { bump, bumpRel } from './ledger';
 import { addSupplies } from './supplies';
-import { receiveDecor } from './domestic/decor';
+import { receiveDecor } from './domestic/decor_data';
 import { COMMS, COMM_NAME, LOOT_NAME, PLACES, REP_AGE, STAY, TRAIT_BAN, TRAITS } from './data';
 import type { Comm, LootKey } from './data';
 import { onDeath } from './death';

@@ -16,9 +16,9 @@ import type { FurnishStep, FurnitureKind } from '../src/game/domestic/data';
 import { createS1cGame, furnishOf, furnishScore, nextFurnishWork } from '../src/game/domestic/state';
 import { refreshSit } from '../src/game/domestic/sit';
 import { insulatedShare, insulateCarNote, insulateNumbers, insulatePickLine, furnishComparison, furnishTick } from '../src/game/domestic/lawtech';
-import { cancelJob, cancelOpen, CAR_NAME, jobCheck, jobTitle, runWorkshop, startJob, workPower, furnishCost, placeFurniture, removeFurniture } from '../src/game/domestic/workshop';
+import { cancelJob, cancelOpen, CAR_NAME, jobCheck, jobTitle, runWorkshop, startJob, workPower, furnishCost } from '../src/game/domestic/workshop';
 import { DECOR, DECOR_CARS, DECOR_SLOT_TABLE, DECOR_SLOTS, FURNISH_WALL_MAX, FURNISH_FLOOR_MAX,
-  canPlace, decorCrowd, decorItems, migrateDecor, move, place, readStore, receiveDecor, reconcileStore, rotate, slotsOpen, takeBack } from '../src/game/domestic/decor';
+  canPlace, decorCrowd, decorItems, migrateDecor, move, place, placeFurniture, readStore, receiveDecor, reconcileStore, removeFurniture, rotate, slotsOpen, takeBack } from '../src/game/domestic/decor';
 import type { DecorAt, DecorRes, DecorSpot } from '../src/game/domestic/decor';
 
 const FORMAT = 'mods-vectors-v1';

@@ -4,7 +4,7 @@ import placeSchema from '../../schema/place.schema.json';
 import chronicleSchema from '../../schema/chronicle.schema.json';
 import receiptSchema from '../../schema/receipt.schema.json';
 import { FIELDS } from './domestic/data';
-import { isDecorKind, receiveDecor } from './domestic/decor';
+import { isDecorKind, receiveDecor } from './domestic/decor_data';
 import type { DecorStore } from './domestic/decor';
 import type { Field } from './domestic/data';
 import { receiveDocument } from './info_documents';

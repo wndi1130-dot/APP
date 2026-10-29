@@ -3,9 +3,9 @@ import { COMM_NAME, COMMS } from '../data';
 import type { Comm } from '../data';
 import { clamp, journal, lawActive, rnd } from '../state';
 import type { Game } from '../state';
-import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE, GREEN_BODY, SUPPLIES_TECHS, TECHS, TECH_IDS, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
-import { DECOR, furniturePoints, place, takeBack } from './decor';
-import type { FurnitureKind, FurnishStep, FurnishTier, TechId, Upkeep, Variant } from './data';
+import { BRANCH_NAME, COMM_CARS, CAR_COMM, D, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, GREEN_BODY, SUPPLIES_TECHS, TECHS, TECH_IDS, ZONE_GREEN, ZONE_WORK, prereqs, skillNeed } from './data';
+import { furniturePoints } from './decor_data';
+import type { FurnishStep, FurnishTier, TechId, Upkeep, Variant } from './data';
 import { lawTechNews } from './lawtech';
 import { refreshSit } from './sit';
 import { locoAutoRepairParts, locoOf, locoRepairParts } from '../loco';
@@ -403,15 +403,6 @@ export function updateFurnish(g: Game, car: string): void {
     journal(g, `${CAR_NAME[car]}에 살림 ${n}단: ${change}. ${COMM_NAME[c === 'tail' ? 'front' : 'tail']}에서 그 소리를 들었다.`, 'good');
   }
   f.best = f.tier;
-}
-
-export function placeFurniture(g: Game, car: string, kind: FurnitureKind): JobCheck {
-  if (!Object.hasOwn(FURNITURE, kind)) return { ok: false, why: '알 수 없는 가구' };
-  return place(g, car, kind, DECOR[kind].spot);
-}
-
-export function removeFurniture(g: Game, car: string, index: number): JobCheck {
-  return takeBack(g, car, index);
 }
 
 function completeJob(g: Game): void {
