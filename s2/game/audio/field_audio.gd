@@ -87,6 +87,9 @@ const SHUT_FAST: Dictionary = {
 	"locked": ["door_locked", 0.4, 0.92, 1.02, "wooden"],
 	"boarded": ["boarded", 0.4, 0.6, 0.7, "slam"],
 }
+## The same door (or window) for the same reason is heard again only after
+## this many ms: a stick held against it asks every frame (field_game _drive).
+const SHUT_FAST_GAP_MS: int = 800
 ## A bite on someone (hit_feel bitten): until its files are in, a blow's
 ## stand-in layer, its group and pitch low and high; the coat taking it
 ## (bite_blocked) is a duller thud.
@@ -364,6 +367,7 @@ var played: Array = []                 # groups played, in order (tests)
 var steps: Array = []                  # the player's steps heard [group, file] (tests)
 var step_last: Dictionary = {}         # step group -> the file it played last
 var door_creaks: Array = []             # building doors beaten on: true when it was about to give (tests)
+var shut_heard: Dictionary = {}        # "x,y,why" -> Time ms a door's no was last heard (SHUT_FAST_GAP_MS)
 
 ## The music steps aside for a sound that matters (the music frame's ducking
 ## connects here; nothing in the rules reads it). kind: "brake" (the train
@@ -1631,16 +1635,30 @@ func door_turn(c: Vector2i, state: String, by_key: bool = false) -> void:
 	var soft: Array = voice.duplicate()
 	soft[1] = float(voice[1]) * DOOR_KEY_HUSH
 	if is_inside_tree():
-		get_tree().create_timer(DOOR_KEY_LAG, false).timeout.connect(_voice_or_standin.bind(soft, String(soft[4]), at))
+		get_tree().create_timer(DOOR_KEY_LAG, false).timeout.connect(_key_door_goes.bind(c, soft, at))
 	else:
-		_voice_or_standin(soft, String(soft[4]), at)
+		_key_door_goes(c, soft, at)
+
+
+## The door a key turned goes, a moment after the click: not if the stop
+## has ended or the door is shut again meanwhile.
+func _key_door_goes(c: Vector2i, soft: Array, at: Vector3) -> void:
+	if game == null or game.ended or String((game.grid.doors.get(c, {}) as Dictionary).get("state", "")) != "open":
+		return
+	_voice_or_standin(soft, String(soft[4]), at)
 
 
 ## A door or a window that would not give to the player's hand (SHUT_FAST:
-## "locked" or "boarded"), heard from it.
+## "locked" or "boarded"), heard from it; once in SHUT_FAST_GAP_MS for the
+## same one and reason.
 func shut_fast(c: Vector2i, why: String) -> void:
 	if quiet or game == null or game.player == null or not SHUT_FAST.has(why):
 		return
+	var key := "%d,%d,%s" % [c.x, c.y, why]
+	var now_ms: int = Time.get_ticks_msec()
+	if now_ms - int(shut_heard.get(key, -SHUT_FAST_GAP_MS)) < SHUT_FAST_GAP_MS:
+		return
+	shut_heard[key] = now_ms
 	var voice: Array = SHUT_FAST[why]
 	_voice_or_standin(voice, String(voice[4]), game.FieldGrid.center(c))
 

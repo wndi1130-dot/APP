@@ -63,6 +63,7 @@ func test_a_key_clicks_and_the_door_goes_softer_than_by_hand_and_the_dead_hear_n
 	_finish(p)
 	assert_eq(String(game.grid.doors[c]["state"]), "open", "the key opened it")
 	assert_true(a.played.has("door_unlock"), "the key's click")
+	assert_true(a.last_shot.stream.resource_path.get_file().begins_with(String(a.DOOR_KEY[4])), "played: the impact set's iron stands in")
 	assert_false(a.played.has("door_open"), "the door a moment after")
 	await wait_seconds(a.DOOR_KEY_LAG + 0.15)
 	assert_true(a.played.has("door_open"), "then the door")
@@ -83,21 +84,30 @@ func test_a_locked_door_rattles_and_a_boarded_one_thuds_at_the_players_hand() ->
 	assert_true(a.played.has("door_locked"), "no key, no bar: it rattles")
 	a.played.clear()
 	game.actions.open_door_on_way(p, c)
-	assert_true(a.played.has("door_locked"), "walked into on the way too")
+	assert_false(a.played.has("door_locked"), "asked again at once: not again")
+	a.shut_heard.clear()   # as though the gap had gone by
+	game.actions.open_door_on_way(p, c)
+	assert_true(a.played.has("door_locked"), "the way's own check rattles it too")
 	BuildingRules.add_plank(game.grid.doors[c], 0)
 	BuildingRules.add_plank(game.grid.doors[c], 1)
 	a.played.clear()
 	game.actions.door_default(p, c, "")
 	assert_true(a.played.has("boarded"), "boarded: it thuds")
 	assert_false(a.played.has("door_locked"))
+	# A stick held against it asks every frame (field_game _drive): one thud.
+	a.shut_heard.clear()
 	a.played.clear()
-	game.actions.open_door_on_way(p, c)
-	assert_true(a.played.has("boarded"), "walked into on the way too")
+	for i in range(10):
+		game.actions.open_door_on_way(p, c)
+	assert_eq(a.played.count("boarded"), 1, "held against it, it thuds once")
 	assert_eq(game.ledger.sound_events, heard, "nothing the dead hear")
 	assert_eq(a.last_tag_group, "none")
 	# Until their files are in, the impact set's wood and slam stand in.
 	for why: String in a.SHUT_FAST:
+		a.shut_heard.clear()
+		a.last_shot = null
 		a.shut_fast(c, why)
+		assert_not_null(a.last_shot, why + ": played")
 		assert_true(a.last_shot.stream.resource_path.get_file().begins_with(String(a.SHUT_FAST[why][4])), why)
 
 
@@ -120,3 +130,23 @@ func test_a_bite_is_heard_and_one_the_coat_took_is_softer() -> void:
 	a.played.clear()
 	game.feel.bitten(mate, false)
 	assert_true(a.played.has("bite"), "a companion's bite is heard")
+	assert_almost_eq(a.last_shot.position.distance_to(mate.position), 0.0, 0.001, "played where it is")
+	assert_gt(a.last_shot.volume_db, -79.0)
+
+
+func test_a_key_door_shut_again_or_a_stop_ended_meanwhile_makes_no_late_sound() -> void:
+	var c := _at_locked_door()
+	assert_ne(c, Vector2i(-1, -1))
+	var a = game.audio
+	var soft: Array = (a.DOOR_TURN["open"] as Array).duplicate()
+	a.played.clear()
+	game.grid.set_door_state(c, "closed")
+	a._key_door_goes(c, soft, FieldGrid.center(c))
+	assert_false(a.played.has("door_open"), "shut again: no late door")
+	game.grid.set_door_state(c, "open")
+	game.ended = true
+	a._key_door_goes(c, soft, FieldGrid.center(c))
+	assert_false(a.played.has("door_open"), "the stop over: none either")
+	game.ended = false
+	a._key_door_goes(c, soft, FieldGrid.center(c))
+	assert_true(a.played.has("door_open"), "else it goes")
