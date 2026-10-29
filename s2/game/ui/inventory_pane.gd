@@ -18,8 +18,11 @@ const ROW_H: float = 34.0
 const KEY_H: float = 36.0
 const PLACE_H: float = 46.0
 const LIST_MAX: float = 190.0
-## The places rail shows every place until the screen runs out (then it scrolls).
-const RAIL_MAX: float = 1000.0
+## The places rail shows five keys at most (the bag and four places, 46 css each
+## with 4 between — coordinator 10-30, the second check's L13), then it scrolls,
+## fading at its foot while more lie below (MORE_H); a short screen cuts it sooner.
+const RAIL_MAX: float = PLACE_H * 5.0 + 4.0 * 4.0
+const MORE_H: float = 16.0
 const ITEM_ICON: float = 15.0
 const PIXEL_BASE: float = 32.0
 const FOOT_GAP: float = 8.0
@@ -138,7 +141,7 @@ static func open(hud, want: Dictionary) -> void:
 	rail.name = "PlaceScroll"
 	rail.custom_minimum_size.x = UiFonts.px(PLACE_H)
 	rail.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	layout.add_child(rail)
+	layout.add_child(_rail_with_more(rail))
 	# A lambda, not _fit_screen.bind(): bound callables of one function compare
 	# equal whatever they bind, so a pane laid over the last would clash with it.
 	# It holds the pane weakly: a deferred fit may land after the pane is freed.
@@ -172,6 +175,49 @@ static func open(hud, want: Dictionary) -> void:
 	hud.run_while_taking()
 	hud.box_pane = hud.modal
 	hud.box_shown_now(String(at.get("id", "")) if not bag and String(at.get("kind", "")) == "box" else "")
+	hud.dim_under_bag()
+
+
+## The places rail in a holder whose foot fades while more places lie below
+## (scrolled to the end, or all of them showing, it does not).
+static func _rail_with_more(rail: ScrollContainer) -> Control:
+	var holder := MarginContainer.new()
+	holder.name = "PlaceRail"
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	holder.add_child(rail)
+	var ramp := Gradient.new()
+	var under: Color = GlassPane.BACKING[0][1]
+	ramp.set_color(0, Color(under, 0.0))
+	ramp.set_color(1, Color(under, 0.92))
+	var shade := GradientTexture2D.new()
+	shade.gradient = ramp
+	shade.fill_from = Vector2(0.5, 0.0)
+	shade.fill_to = Vector2(0.5, 1.0)
+	shade.width = 4
+	shade.height = 32
+	var more := TextureRect.new()
+	more.name = "PlaceMore"
+	more.texture = shade
+	more.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	more.stretch_mode = TextureRect.STRETCH_SCALE
+	more.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	more.custom_minimum_size.y = UiFonts.px(MORE_H)
+	more.size_flags_vertical = Control.SIZE_SHRINK_END
+	more.visible = false
+	holder.add_child(more)
+	# Weakly held, as the fit: a range change may come after the pane is freed.
+	var rail_ref: WeakRef = weakref(rail)
+	var more_ref: WeakRef = weakref(more)
+	var show_more := func(_value: float = 0.0) -> void:
+		var strip := rail_ref.get_ref() as ScrollContainer
+		var mark := more_ref.get_ref() as Control
+		if strip != null and mark != null:
+			var bar: VScrollBar = strip.get_v_scroll_bar()
+			mark.visible = bar.max_value - bar.page > bar.value + 1.0
+	rail.get_v_scroll_bar().changed.connect(show_more)
+	rail.get_v_scroll_bar().value_changed.connect(show_more)
+	return holder
 
 
 ## The sketch's 30-high head; the fold touch extends one css above and below.
@@ -225,7 +271,7 @@ static func _fit_screen(pane: Control, main: Control, rail: ScrollContainer) -> 
 			var scroll := child as ScrollContainer
 			var rows := scroll.get_child(0) as Control
 			scroll.custom_minimum_size.y = minf(rows.get_combined_minimum_size().y, UiFonts.px(LIST_MAX))
-	rail.custom_minimum_size.y = (rail.get_child(0) as Control).get_combined_minimum_size().y
+	rail.custom_minimum_size.y = minf((rail.get_child(0) as Control).get_combined_minimum_size().y, UiFonts.px(RAIL_MAX))
 	var layout := main.get_parent() as Control
 	var room: float = pane.get_viewport_rect().size.y - pane.position.y - UiFonts.px(FOOT_GAP)
 	var fits: float = room - (pane.get_combined_minimum_size().y - layout.get_combined_minimum_size().y)

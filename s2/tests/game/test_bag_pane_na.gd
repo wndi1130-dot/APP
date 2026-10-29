@@ -330,7 +330,51 @@ func test_a_short_list_still_shows_every_place() -> void:
 	assert_eq(places.get_child_count(), 5, "the bag, three boxes and the ground")
 	var need: float = places.get_combined_minimum_size().y
 	assert_gte(rail.size.y + 0.5, need, "rail %.1f px for places %.1f px" % [rail.size.y, need])
+	assert_false(game.hud.modal.find_child("PlaceMore", true, false).visible, "five keys all show: no fade")
 	game.hud._close_modal()
+
+
+## The places rail stands five keys high at most and scrolls past them, its foot
+## faded while more lie below; scrolled to the end, no fade (coordinator 10-30).
+func test_the_places_rail_stops_at_five_keys_and_fades_while_more_lie_below() -> void:
+	var game = _game()
+	var hud = game.hud
+	var id: String = _box(game, ["food_pack"])
+	var c: Dictionary = game.data["containers"][id]
+	for i in range(6):
+		game.data["containers"]["na_more_%d" % i] = c.duplicate(true)
+	hud.loot(id)
+	await _layout()
+	var places: Control = hud.modal.find_child("Places", true, false)
+	var rail := hud.modal.find_child("PlaceScroll", true, false) as ScrollContainer
+	var more := hud.modal.find_child("PlaceMore", true, false) as Control
+	assert_eq(places.get_child_count(), 9, "the bag, seven boxes and the ground")
+	assert_lte(rail.custom_minimum_size.y, UiFonts.px(InventoryPane.RAIL_MAX) + 0.5, "five keys high at most")
+	assert_lt(rail.size.y + 0.5, places.get_combined_minimum_size().y, "the rail scrolls the rest")
+	assert_true(more.visible, "the foot fades while more lie below")
+	rail.scroll_vertical = 100000
+	assert_false(more.visible, "scrolled to the end, no fade")
+	hud._close_modal()
+
+
+## Under the bag pane RUN still answers (the dead come, one runs) and the rest of
+## the HUD sleeps, dimmed; the pane put away wakes it (coordinator 10-30).
+func test_run_answers_and_the_rest_sleeps_dimmed_under_the_pane() -> void:
+	var game = _game()
+	var hud = game.hud
+	hud.loot(_box(game))
+	await _layout()
+	assert_almost_eq(hud.run_button.modulate.a, 1.0, 0.001, "RUN stays bright")
+	assert_lt(hud.portrait.modulate.a, 0.5, "the portrait sleeps, dimmed")
+	var was: bool = hud.run_button.button_pressed
+	var at: Vector2 = hud.run_button.get_global_rect().get_center()
+	_touch(hud, at, true)
+	_touch(hud, at, false)
+	assert_ne(hud.run_button.button_pressed, was, "RUN toggles under the pane")
+	assert_eq(hud.stick_index, -1, "and plants no stick")
+	assert_true(hud.modal_open, "the pane stays up")
+	hud._close_modal()
+	assert_almost_eq(hud.portrait.modulate.a, 1.0, 0.001, "the pane put away wakes it")
 
 
 ## The bag key over another pane opens on the bag, not on the last place's tab.
@@ -666,6 +710,10 @@ func test_walking_off_a_box_drops_its_place_and_shows_the_bag() -> void:
 	assert_null(_tab(hud, "box", id), "the box left behind is off the rail")
 	assert_eq(hud.inv_view, "bag")
 	assert_not_null(hud.modal.find_child("Bag", true, false))
+	# Its destination falls to the floor, not on its own to the train's hold
+	# though it is near now: a thing loaded there cannot come back from here.
+	assert_not_null(_tab(hud, "train"), "the train's hold is near")
+	assert_eq(String(hud.inv_near.get("kind", "")), "ground", "the destination falls to the floor")
 	hud._close_modal()
 
 

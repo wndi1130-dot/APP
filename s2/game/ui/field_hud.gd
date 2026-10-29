@@ -432,6 +432,10 @@ var item_px_override: Dictionary = {}
 ## The places the bag pane listed when it was laid (InventoryPane.place_keys): a
 ## walk with the pane up that changes them lays it again.
 var bag_places: Array = []
+## What sleeps under the bag pane, each with the alpha it had: [CanvasItem, a].
+var bag_dimmed: Array = []
+## How far a key that sleeps under the bag pane fades (its alpha times this).
+const BAG_DIM: float = 0.38
 ## The box shown while the player takes a thing out of it (card R1 가): the field
 ## goes on under the pane until the thing is out; and the bar on its row.
 var taking_box: String = ""
@@ -2519,6 +2523,7 @@ func _close_modal() -> void:
 		return
 	# A thing still coming out goes on in the field (field_actions.gd take).
 	taking_box = ""
+	_wake_under_bag()
 	if modal != null:
 		modal.queue_free()
 		modal = null
@@ -2527,6 +2532,28 @@ func _close_modal() -> void:
 		game.slow = 1.0
 		modal_slows = false
 		modal_open = false
+
+
+## Under the bag pane (decision 488, coordinator 10-30) the stick, RUN and the lamp
+## listen; every other key on the open left half sleeps, dimmed so it reads as
+## asleep, and wakes with the pane put away. Words (toasts, the radio line) and
+## what draws the stick stay as they are. Called each time the pane is laid.
+func dim_under_bag() -> void:
+	_wake_under_bag()
+	var awake: Array = [modal, touch, overlay, pause_veil, map_stamp, toast_box, radio_pill, run_button, lamp_button]
+	for c: Node in root.get_children():
+		if c is CanvasItem and not awake.has(c):
+			var item := c as CanvasItem
+			bag_dimmed.append([item, item.modulate.a])
+			item.modulate.a *= BAG_DIM
+
+
+func _wake_under_bag() -> void:
+	for pair: Array in bag_dimmed:
+		if is_instance_valid(pair[0]):
+			var item: CanvasItem = pair[0]
+			item.modulate.a = float(pair[1])
+	bag_dimmed = []
 
 
 func show_resume() -> void:
@@ -3007,14 +3034,17 @@ func _bag_places_moved() -> void:
 
 
 ## Lay the bag pane again where it is; a place shown that is no longer near hands
-## over to the bag tab (its destination falls to the first place, as on opening).
-## The places keep their order and the lists their scroll; the field goes on
-## without a frame's stop.
+## over to the bag tab. A destination walked away from falls to the floor, never
+## on its own to the train's hold: a thing loaded there cannot be taken back from
+## this pane (coordinator 10-30). The places keep their order and the lists their
+## scroll; the field goes on without a frame's stop.
 func _lay_bag_again() -> void:
-	var near: Array = InventoryPane.place_keys(InventoryPane.places(game, game.player))
-	if inv_view == "near" and not near.has(InventoryPane.place_key(inv_near)):
-		inv_view = "bag"
 	var kept: Dictionary = _bag_scrolls()
+	var near: Array = InventoryPane.place_keys(InventoryPane.places(game, game.player))
+	if not near.has(InventoryPane.place_key(inv_near)):
+		if inv_view == "near":
+			inv_view = "bag"
+		inv_near = {"kind": "ground", "id": ""}
 	InventoryPane.open(self, inv_near)
 	_bag_scrolls_back(kept)
 	_bag_pause(game.player)
@@ -3033,10 +3063,11 @@ func _bag_scrolls() -> Dictionary:
 
 ## Back where they were once the new pane is laid out (a scroll set before its
 ## rows are sized falls to the top): the places rail always, the item list while
-## it shows the same tab and place.
+## it shows the same rows (the bag tab whatever its destination, a place's tab
+## for that place).
 func _bag_scrolls_back(kept: Dictionary) -> void:
 	var pane: Control = box_pane
-	var same: bool = kept["view"] == inv_view and kept["at"] == InventoryPane.place_key(inv_near)
+	var same: bool = kept["view"] == inv_view and (inv_view == "bag" or kept["at"] == InventoryPane.place_key(inv_near))
 	var back := func() -> void:
 		if not is_instance_valid(pane) or modal != pane:
 			return
@@ -3941,6 +3972,13 @@ func _bag_stick(event: InputEvent) -> bool:
 			var list: ScrollContainer = under["scroll"]
 			fingers[index] = {"kind": "button", "button": under["button"], "start": pos, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false}
 			return true
+		# RUN and the lamp over the stick answer under the pane too (decision 488:
+		# when the dead come one runs); the rest of the HUD sleeps there, dimmed.
+		for key: Button in [run_button, lamp_button]:
+			if key.is_visible_in_tree() and touch_rect(key).has_point(pos):
+				fingers[index] = {"kind": "pad", "pad": key, "start": pos, "ms": Time.get_ticks_msec()}
+				_pad_down(key, pos)
+				return true
 		if _by_stick_keys(pos):
 			return true
 		if not _stick_down(index, pos):
