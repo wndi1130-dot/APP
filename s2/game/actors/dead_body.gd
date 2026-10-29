@@ -254,7 +254,23 @@ static func mix_time(motion: int) -> float:
 ## no baked folder's table is known. What it was last drawn as is noted on the
 ## body itself, under names the rules do not use.
 static func mixed(z: Dictionary, plain: Color) -> Color:
-	return mix_from(z, plain, float(z["age"]), table)
+	var eased: Color = mix_from(z, plain, float(z["age"]), table)
+	var power: float = float(z.get("hit_power", -1.0))
+	var motion: int = int(plain.g)
+	if power < 0.0 or motion < HIT_LEFT or motion > HIT_UPPER or motion >= table.size():
+		return eased
+	var scale: float = struck_scale(power)
+	if scale == 1.0:
+		return eased
+	# Decision 501: mix the recoil, never its clock or the body's ground pose.
+	var recoil: float = 0.0 if scale < 1.0 else 0.22
+	var share: float = 1.0 - scale if scale < 1.0 else (scale - 1.0) * 4.0 * plain.r * (1.0 - plain.r)
+	return packed(plain, motion, frame_of(motion, recoil), roundf(share * MIX_STEPS))
+
+
+## Decision 501: weak toward rest, strong toward the baked recoil's peak.
+static func struck_scale(power: float) -> float:
+	return 0.6 if power >= 0.0 and power < 0.55 else (1.2 if power >= 0.95 else 1.0)
 
 
 ## The easing itself, for any body: `note` keeps what it was last drawn as,

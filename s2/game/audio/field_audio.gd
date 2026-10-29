@@ -1428,6 +1428,11 @@ static func blow_layers(info: Dictionary) -> Array:
 	if target == "downed":
 		pitch *= BLOW_DOWN_PITCH
 	var out: Array = [[family, float(BLOW_UNDER.get(result, 1.0)), pitch]]
+	# Decision 501: only the body's first layer follows the blow's tier.
+	var tier: int = int(info.get("tier", -1))
+	if tier == 0 or tier == 2:
+		out[0][1] *= 0.6 if tier == 0 else 1.12
+		out[0][2] *= 1.1 if tier == 0 else 0.95
 	if BLOW_LAYER.has(result):
 		out.append([BLOW_LAYER[result], 0.9, 1.0])
 	if target == "frozen" and result != "shatter" and result != "stuck":
