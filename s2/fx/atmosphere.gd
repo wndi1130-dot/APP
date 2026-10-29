@@ -286,7 +286,10 @@ const BANDS: Dictionary = {
 }
 ## The same bands at the warmest: softer, greener fill and a warmer day sun.
 const WARM_BANDS: Dictionary = {
-	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.272, 0.268, 0.262)},
+	# Late autumn's night fill a shade over the winter's (the same neutral grey): with no
+	# snow to give the moon back, the bare ground under a clear sky kept three quarters of
+	# the first stop under V 0.15 (decision 470 night line: 0.70 at most; reference 0.67).
+	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.312, 0.307, 0.300)},
 	"dawn": {"zenith": Color(0.30, 0.31, 0.38), "horizon": Color(0.88, 0.66, 0.50), "ambient": Color(0.52, 0.50, 0.52)},
 	"day": {"zenith": Color(0.50, 0.56, 0.62), "horizon": Color(0.78, 0.78, 0.74), "sun": Color(0.96, 0.92, 0.82), "ambient": Color(0.54, 0.57, 0.54)},
 	# Late autumn's low sun is warmer than winter's, as the reference's season
@@ -460,7 +463,8 @@ static func _keep_lum(c: Color, like: Color) -> Color:
 	return Color(out.r, out.g, out.b, c.a)
 
 
-## Tint in linear space, restore luminance in either direction, then fit the gamut.
+## Tint in linear space, restore luminance in either direction, then fit the gamut
+## (look() gives back as energy what the fit takes from a sun already at full red).
 static func _tint_keep(c: Color, t: Color, k: float) -> Color:
 	var linear: Color = c.srgb_to_linear()
 	var luminance: float = linear.get_luminance()
@@ -561,8 +565,12 @@ static func look(hour: float, kinds: Array, region_name := DEFAULT_REGION, cold 
 	# the night keeps a third of it (its grey stays near neutral).
 	var rl: Dictionary = region_look(region_name)
 	var region_k: float = 1.0 - 0.7 * night_part
+	var sun_lum := _lin_lum(sun)
+	var ambient_lum := _lin_lum(ambient)
 	sun = _tint_keep(sun, rl["light"], region_k)
 	ambient = _tint_keep(ambient, rl["shade"], region_k)
+	sun_energy *= sun_lum / maxf(_lin_lum(sun), 0.0001)
+	ambient_energy *= ambient_lum / maxf(_lin_lum(ambient), 0.0001)
 	# Never flatter than 16 degrees: the oblique field must still read its ground.
 	var light_pitch := -clampf(angles.x, 16.0, 60.0)
 	var light_yaw := angles.y

@@ -11,6 +11,15 @@ const Gesture = preload("res://game/train/train_gesture.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 
 
+class ProjectionTrain:
+	extends "res://game/train/train_scene.gd"
+	var screen_projections: int = 0
+
+	func car_screen_polygon(id: String) -> PackedVector2Array:
+		screen_projections += 1
+		return super.car_screen_polygon(id)
+
+
 func _state(over: Dictionary = {}) -> Dictionary:
 	var s := {"layout": "coach", "warmth": 60.0, "cold": false, "freezing": false, "exposure": 0.0, "night": false, "stove_x": 7.85, "ration": 70.0, "crowding": 40.0, "tension": 0.0, "fear": 0.0, "resent": false, "meal": false}
 	s.merge(over, true)
@@ -551,3 +560,146 @@ func test_only_the_cars_on_the_screen_are_drawn() -> void:
 	view._process(0.016)
 	assert_true(view.on_screen(far), "scrolled to")
 	assert_false(view.on_screen(s.car("tail1")))
+
+
+func _diag_people_scene(baked: bool) -> ProjectionTrain:
+	var viewport: SubViewport = SubViewport.new()
+	viewport.size = Vector2i(1280, 720)
+	viewport.own_world_3d = true
+	add_child_autofree(viewport)
+	var train_scene: ProjectionTrain = ProjectionTrain.new()
+	train_scene.rules = Rules.load_default()
+	for extra_car: int in range(6):
+		train_scene.rules["cars"].append({"id": "tail_diag%d" % extra_car, "kind": "comm", "comm": "tail", "name": "꼬리칸"})
+	train_scene.opts = {"seed": 7, "panel": false, "baked_people": baked, "view_mode": "diag"}
+	viewport.add_child(train_scene)
+	train_scene.focus_car("tail1", true)
+	return train_scene
+
+
+func _projected_car_bounds(train_scene: Scene, c: Dictionary) -> Rect2:
+	var cam: Camera3D = train_scene.camera
+	var car_node: Node3D = c["node"]
+	var bounds: Rect2 = Rect2(cam.unproject_position(car_node.to_global(Vector3(0.0, -0.2, -1.42))), Vector2.ZERO)
+	for local_x: float in [0.0, 16.0]:
+		for local_y: float in [-0.2, 2.2]:
+			for local_z: float in [-1.42, 1.46]:
+				bounds = bounds.expand(cam.unproject_position(car_node.to_global(Vector3(local_x, local_y, local_z))))
+	return bounds
+
+
+func _draw_contains(view: View, body_node: Node3D) -> bool:
+	if not view.worn.has(body_node) or not view.drawn.has(body_node):
+		return false
+	var folder: String = view.worn[body_node]
+	var draw: MultiMeshInstance3D = view.bodies[folder]["draw"]
+	var expected: Transform3D = view.place_of(body_node, String(view.drawn[body_node]), {})
+	for instance_index: int in draw.multimesh.visible_instance_count:
+		if draw.multimesh.get_instance_transform(instance_index).is_equal_approx(expected):
+			return true
+	return false
+
+
+func _assert_diag_people_visible(train_scene: Scene, view: View) -> void:
+	view._process(0.016)
+	var cam: Camera3D = train_scene.camera
+	var screen: Rect2 = cam.get_viewport().get_visible_rect()
+	var padded: Rect2 = screen.grow(2.0 * screen.size.y / cam.size)
+	var expected_count: int = 0
+	var visible_people: int = 0
+	var culled_people: int = 0
+	# A headless run's renderer gives instance transforms back as zero, so which body an
+	# instance draws is read back only with a real one; headless keeps the car and count checks.
+	var readable: bool = DisplayServer.get_name() != "headless"
+	for c: Dictionary in train_scene.cars:
+		var expected_car: bool = padded.intersects(_projected_car_bounds(train_scene, c), true)
+		assert_eq(view.on_screen(c), expected_car, c["id"])
+		for body_node: Node3D in c["bodies"]:
+			if not body_node.visible:
+				continue
+			expected_count += int(expected_car)
+			var foot: Vector3 = body_node.global_position
+			var head: Vector3 = foot + Vector3(0.0, 1.75, 0.0)
+			var foot_visible: bool = not cam.is_position_behind(foot) and screen.has_point(cam.unproject_position(foot))
+			var head_visible: bool = not cam.is_position_behind(head) and screen.has_point(cam.unproject_position(head))
+			if foot_visible or head_visible:
+				visible_people += 1
+				assert_true(view.on_screen(c), "a visible foot or head keeps its car drawn: " + String(c["id"]))
+				if readable:
+					assert_true(_draw_contains(view, body_node), "a visible foot or head must be drawn: " + String(c["id"]))
+			if not expected_car:
+				culled_people += 1
+				if readable:
+					assert_false(_draw_contains(view, body_node), "the distant car is not drawn")
+				assert_true(view.people.has(body_node), "off-screen animation state still advances")
+				assert_true(view.drawn.has(body_node), "off-screen clips are still chosen")
+	var actual_count: int = 0
+	for draw: MultiMeshInstance3D in view.draws:
+		actual_count += draw.multimesh.visible_instance_count
+	assert_eq(actual_count, expected_count)
+	assert_gt(visible_people, 0, "the independent point oracle sees people")
+	assert_gt(culled_people, 0, "the view leaves distant people out")
+
+
+func test_diag_culls_distant_people_but_keeps_every_visible_foot_or_head() -> void:
+	var train_scene: ProjectionTrain = _diag_people_scene(true)
+	var view: View = train_scene.people_view as View
+	if view == null:
+		pending("baked people are unavailable")
+		return
+	_assert_diag_people_visible(train_scene, view)
+	train_scene.focus_car("dining", false)
+	train_scene.set_pane(420.0)
+	_assert_diag_people_visible(train_scene, view)
+	var viewport: SubViewport = train_scene.get_viewport() as SubViewport
+	viewport.size = Vector2i(960, 600)
+	train_scene.focus_car("tail_diag5", true)
+	train_scene.step(0.1)
+	_assert_diag_people_visible(train_scene, view)
+
+
+func test_diag_culling_reuses_projections_until_view_or_layout_changes() -> void:
+	var train_scene: ProjectionTrain = _diag_people_scene(false)
+	var view: View = View.new()
+	autofree(view)
+	view.scene = train_scene
+	var c: Dictionary = train_scene.car("tail1")
+	view.on_screen(c)
+	var projections: int = train_scene.screen_projections
+	view.on_screen(c)
+	train_scene.set_sit("tail", 0, 60.0)
+	view.on_screen(c)
+	assert_eq(train_scene.screen_projections, projections, "no projection for an unchanged view or a warmth change")
+	var cam: Camera3D = train_scene.camera
+	cam.position.y += 0.5
+	view.on_screen(c)
+	projections += 1
+	assert_eq(train_scene.screen_projections, projections)
+	cam.size += 1.0
+	view.on_screen(c)
+	projections += 1
+	assert_eq(train_scene.screen_projections, projections)
+	cam.h_offset += 2.0
+	view.on_screen(c)
+	projections += 1
+	assert_eq(train_scene.screen_projections, projections)
+	var viewport: SubViewport = train_scene.get_viewport() as SubViewport
+	viewport.size = Vector2i(960, 600)
+	view.on_screen(c)
+	projections += 1
+	assert_eq(train_scene.screen_projections, projections)
+	var car_node: Node3D = c["node"]
+	car_node.position.x += 3.0
+	c["x0"] = car_node.position.x
+	view.on_screen(c)
+	projections += 1
+	assert_eq(train_scene.screen_projections, projections)
+	train_scene._rebuild_layout()
+	view.on_screen(train_scene.car("tail1"))
+	projections += 1
+	assert_eq(train_scene.screen_projections, projections, "replacement nodes invalidate the old layout")
+	view.on_screen(train_scene.car("tail1"))
+	assert_eq(train_scene.screen_projections, projections)
+	train_scene.camera = null
+	assert_true(view.on_screen(train_scene.car("tail_diag5")), "no camera draws every car")
+	train_scene.camera = cam

@@ -14,6 +14,15 @@ function workText(g: Game): string {
   const bonus = workBonus(g);
   return bonus > 0 ? `작업 ${total.toFixed(1)}/구간 (공방장 ${(total - bonus).toFixed(1)}, 수업 +${bonus})` : `작업 ${total.toFixed(1)}/구간`;
 }
+
+function supFineToggle(g: Game): Node | null {
+  if (!g.supOn || techMult(g, 'w8') <= 0) return null;
+  const on = !!g.dom?.supFineOn;
+  return h('button', {
+    class: cx('chip', on && 'is-on'), 'data-action': 'dom-sup-fine', 'data-on': on ? '0' : '1',
+    'aria-pressed': on ? 'true' : 'false', title: '같은 일과 고철 두 배로 좋은 물건을 만든다.',
+  }, `좋은 물건 ${on ? '켬' : '끔'}`);
+}
 import type { Comm, DomPerson, Field, Game, GearKey, ModKind, PotMode, SeasonAct, Task, TechId, Upkeep, Variant } from '../game';
 import { P, isSessionSeg, potMult, potView } from '../game';
 import { cx, h, raw, s } from './dom';
@@ -191,7 +200,7 @@ function workshopPop(view: View, car: CarDef, inPanel = false): HTMLElement {
   const tier = delegateTier(g);
   const open = domUi(view.ui).ws ?? null;
   const empty = (t: Task) => (t === 'restore' && !d.restoring) || (t === 'modify' && !d.job);
-  const taskName = (t: Task) => t === 'parts' ? '부품' : t === 'restore' ? '복원' : '개조';
+  const taskName = (t: Task) => t === 'sup' ? '생필품 만들기' : t === 'parts' ? '부품' : t === 'restore' ? '복원' : '개조';
   const lockTarget = d.delegate.on;
   const lockOrder = d.delegate.on && tier >= 2;
   const jobs = jobItems(g);
@@ -224,6 +233,7 @@ function workshopPop(view: View, car: CarDef, inPanel = false): HTMLElement {
     h('div', { class: 'dom-row' },
       fold('order', h('span', { class: 'sub' }, '차례 '),
         ...d.order.flatMap((t, i) => [i ? ' › ' : null, h('span', { class: cx(empty(t) && 'is-dim') }, taskName(t))])),
+      supFineToggle(g),
       jobs.length ? h('button', { class: 'chip', 'data-action': 'dom-tab', 'data-tab': 'modify' }, '개조…', h('small', { class: 'num' }, ` ${jobs.length}`)) : null),
     open === 'order' ? h('ol', { class: 'dom-order dom-fold' }, d.order.map((t, i) => h('li', null,
       h('span', { class: 'num' }, i + 1),
@@ -293,7 +303,7 @@ export function workshopBoard(view: View, car: CarDef): HTMLElement {
   const tier = delegateTier(g);
   const open = domUi(view.ui).ws ?? null;
   const empty = (t: Task) => (t === 'restore' && !d.restoring) || (t === 'modify' && !d.job);
-  const taskName = (t: Task) => t === 'parts' ? '부품' : t === 'restore' ? '복원' : '개조';
+  const taskName = (t: Task) => t === 'sup' ? '생필품 만들기' : t === 'parts' ? '부품' : t === 'restore' ? '복원' : '개조';
   const lockOrder = d.delegate.on && tier >= 2;
   const blk = (title: string, mod: string, ...kids: (Node | null)[]) => h('div', { class: `tblk wsb__${mod}` }, h('span', { class: 'tblk__title' }, title), ...kids);
   const fold = (which: NonNullable<DomUi['ws']>, ...kids: (Node | string | null)[]) => h('button', {
@@ -335,6 +345,7 @@ export function workshopBoard(view: View, car: CarDef): HTMLElement {
     h('div', { class: 'wsb__foot' },
       fold('order', h('span', { class: 'sub' }, '차례 '),
         ...d.order.flatMap((t, i) => [i ? ' › ' : null, h('span', { class: cx(empty(t) && 'is-dim') }, taskName(t))])),
+      supFineToggle(g),
       d.delegate.on ? h('button', { class: 'chip is-on', 'data-action': 'dom-delegate', 'data-on': '0' }, '맡김 · 거둔다')
         : ds.ok ? fold('delegate', '맡기기')
           : h('button', { class: 'chip', disabled: true, title: ds.why ?? '' }, '맡기기'),
@@ -1385,6 +1396,7 @@ export function handleDomestic(action: string, data: DOMStringMap, ctx: DomCtx):
     case 'dom-finish':
     case 'dom-restart':
     case 'dom-order':
+    case 'dom-sup-fine':
     case 'dom-delegate':
     case 'dom-apprentice':
     case 'dom-manual':
