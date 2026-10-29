@@ -5,6 +5,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const FieldAi = preload("res://game/field_ai.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 
 class CountingGame:
 	extends FieldGame
@@ -302,11 +303,14 @@ func test_straight_walk_keeps_moving_between_thinks_and_settles_when_the_chief_s
 ## Decision 486: a save written before these fields (no `_follow_*` on the AI, no `follow_*` in a
 ## brain) resumes without errors, the trail starts afresh, and the point picks a slot again.
 func test_a_save_without_the_follow_fields_resumes_and_follows_again() -> void:
-	_start()
-	game.player.moving = true
-	for q in mates.values():
-		game.ai._keep_formation(q)
-	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	# A whole map both times (the small floor of _start does not round-trip through a save).
+	var first = _field()
+	first.player.moving = true
+	for q in first.squad:
+		if q != first.player:
+			q.command = "follow"
+			first.ai._keep_formation(q)
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
 	var ai: Dictionary = saved["runtime"]["components"]["ai"]
 	for key in ai.keys():
 		if String(key).begins_with("_follow"):
@@ -317,10 +321,7 @@ func test_a_save_without_the_follow_fields_resumes_and_follows_again() -> void:
 		for key in brain.keys():
 			if String(key).begins_with("follow_"):
 				brain.erase(key)
-	var resumed = FieldGame.new()
-	resumed.opts = FieldSave.resume_opts(saved)
-	add_child_autofree(resumed)
-	resumed.set_process(false)
+	var resumed = _field(FieldSave.resume_opts(saved))
 	assert_eq(resumed.ai._follow_count, 0, "an old save starts the trail afresh")
 	resumed.player.moving = true
 	var picked: int = 0
@@ -332,3 +333,13 @@ func test_a_save_without_the_follow_fields_resumes_and_follows_again() -> void:
 		assert_true(slot is Vector3 and (slot as Vector3).is_finite(), "the point picks a slot again")
 		picked += 1
 	assert_eq(picked, 1)
+
+
+func _field(extra: Dictionary = {}):
+	var g = FieldGame.new()
+	g.opts = {"seed": 11, "raiders": false, "auto_pause": false, "arrive": false}
+	g.opts.merge(extra, true)
+	g.map_script = BareLine
+	add_child_autofree(g)
+	g.set_process(false)
+	return g
