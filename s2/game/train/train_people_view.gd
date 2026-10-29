@@ -50,6 +50,8 @@ const Look = preload("res://game/train/train_look.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const Smoke = preload("res://fx/smoke.gd")
+## The bodies' shader while a car is decorated (decor_view.gd): the same, seen through by `fade`.
+const FADED_SHADER = preload("res://game/train/people_faded.gdshader")
 
 const SETTING: String = "visuals/baked_people_enabled"   # the field's switch (person_visual.gd)
 const MAX_PEOPLE: int = 240
@@ -281,6 +283,25 @@ func setup(train_scene) -> void:
 
 func is_worn() -> bool:
 	return not draws.is_empty()
+
+
+## Decorating a car: everyone drawn here seen through (fade 0..1), and as before at 0. The bodies
+## take the faded shader (a node's transparency does not reach their own shader); the guns and the
+## blankets, plain materials, the node's transparency.
+func set_faded(fade: float) -> void:
+	for draw: MultiMeshInstance3D in draws:
+		var mat := draw.material_override as ShaderMaterial
+		if fade > 0.0:
+			if not draw.has_meta("shader_before"):
+				draw.set_meta("shader_before", mat.shader)
+			mat.shader = FADED_SHADER
+			mat.set_shader_parameter("fade", fade)
+		elif draw.has_meta("shader_before"):
+			mat.shader = draw.get_meta("shader_before")
+			draw.remove_meta("shader_before")
+	for extra in blankets + [guns]:
+		if extra is GeometryInstance3D:
+			(extra as GeometryInstance3D).transparency = fade
 
 
 func _process(_delta: float) -> void:
