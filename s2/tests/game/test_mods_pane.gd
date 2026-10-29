@@ -58,6 +58,13 @@ func test_the_rows_are_this_trains_lived_in_cars_with_s1s_numbers() -> void:
 	assert_eq(m["need"], "")
 
 
+func test_furnish_row_shows_the_score_after_a_job_that_will_not_reach_the_next_tier() -> void:
+	var g: Dictionary = _game()
+	g["dom"]["furnish"] = {"front": {"work": 0, "jobs": [], "furnPts": 0, "tier": 1, "best": 1, "items": []}}
+	var row: Dictionary = (ModsPane.model(g)["rows"] as Array).filter(func(r: Dictionary) -> bool: return r["id"] == "furnish_front")[0]
+	assert_eq(row["gain"], "살림 1단 · 작업 뒤 점수 5/8")
+
+
 func test_furnish_rows_show_each_cars_next_tier_and_pay_and_refund_cloth() -> void:
 	var g: Dictionary = _game()
 	var rows: Array = ModsPane.model(g)["rows"].filter(func(r: Dictionary) -> bool: return r["kind"] == "furnish")
@@ -67,16 +74,14 @@ func test_furnish_rows_show_each_cars_next_tier_and_pay_and_refund_cloth() -> vo
 	await wait_process_frames(1)
 	var key: Button = _key(p, "Key_furnish_front")
 	assert_eq((p.find_child("Gain_furnish_front", true, false) as Label).text, "살림 0단 → 1단")
-	assert_almost_eq(key.modulate.a, UiDeny.DIM, 1e-6)
-	assert_string_contains(key.tooltip_text, "목재 1 · 고철 3 · 천 1 · 일 1")
-	assert_string_contains(key.tooltip_text, "천 1이 든다")
+	assert_eq(key.tooltip_text, "목재 1 · 고철 3 · 일 1", "the first tier needs no cloth")
 	assert_null(_key(p, "Key_furnish_engine"))
 	g["dom"]["cloth"] = 2
 	p.show_state(g)
 	await wait_process_frames(1)
 	_key(p, "Key_furnish_front").pressed.emit()
 	assert_eq(g["dom"]["job"]["kind"], "furnish")
-	assert_eq(float(g["dom"]["cloth"]), 1.0)
+	assert_eq(float(g["dom"]["cloth"]), 2.0)
 	await wait_process_frames(1)
 	assert_not_null(p.find_child("Progress_furnish_front", true, false))
 	assert_null(p.find_child("Progress_front", true, false), "insulation row is not this job")

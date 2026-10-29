@@ -121,10 +121,21 @@ static func _furnish_row(g0: Dictionary, car: Dictionary) -> Dictionary:
 	if why != "":
 		tooltip += ("\n" if tooltip != "" else "") + why
 	return {"id": "furnish_" + id, "car": id, "kind": "furnish", "name": String(car["name"]),
-		"done": tier >= 3, "on_line": on_line, "gain": "살림 %d단 → %d단" % [tier, tier + 1] if tier < 3 else "살림 3단 · 북유럽식",
+		"done": tier >= 3, "on_line": on_line, "gain": _furnish_gain(g0, id, tier, step),
 		"word": "취소" if on_line else ("살림" if tier < 3 else ""), "can": can, "why": tooltip,
 		"share": float(job["progress"]) / maxf(1.0, float(job["need"])) if on_line else 0.0,
 		"cost": {"key": "wood", "icon": "it_plank", "n": float(cost.get("wood", 0)), "short": float(dom.get("wood", 0)) < float(cost.get("wood", 0))}}
+
+
+## S1 carModChips: a job that will not reach the next tier shows the score after it.
+static func _furnish_gain(g: Dictionary, car: String, tier: int, step: int) -> String:
+	if tier >= 3:
+		return "살림 3단 · 북유럽식"
+	if TrainMods.FURNISH_WORK.has(step):
+		var after: Dictionary = TrainMods.furnish_after(g, car, step)
+		if int(after["tier"]) <= tier:
+			return "살림 %d단 · 작업 뒤 점수 %d/%d" % [tier, int(after["score"]), int(TrainMods.D["furnishThreshold"][tier + 1])]
+	return "살림 %d단 → %d단" % [tier, tier + 1]
 
 
 static func css_size(rows: int) -> Vector2:

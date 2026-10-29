@@ -358,6 +358,13 @@ export function furnishScore(g: Game, car: string): number {
   return f.jobs.reduce((sum, n) => sum + FURNISH_WORK[n].points, 0) + Math.min(f.furnPts, D.furnishFurnitureCap);
 }
 
+/** 그 작업을 마친 뒤의 점수와 단. 가구를 뺀 칸은 작업을 마쳐도 다음 단에 못 닿을 수 있다(화면 글이 앞질러 말하지 않게). */
+export function furnishAfter(g: Game, car: string, step: FurnishStep): { score: number; tier: number } {
+  const score = furnishScore(g, car) + FURNISH_WORK[step].points;
+  const reached = FURNISH_STEPS.reduce((t, n) => (score >= D.furnishThreshold[n] ? n : t), 0);
+  return { score, tier: Math.max(furnishOf(g, car).tier, reached) };
+}
+
 /** 현재 단의 다음 작업부터. 가구를 뺀 뒤에는 아직 안 한 낮은 작업으로 부족한 점수를 채울 수 있다. */
 export function nextFurnishWork(g: Game, car: string): FurnishStep | undefined {
   const f = furnishOf(g, car);

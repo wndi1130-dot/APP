@@ -4,7 +4,7 @@ import {
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, cancelOpen, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
   workBonus, workPower, workshopChief, workshopState, zoneAt, enableArrivals, enableClimate, enableDark, enableDeathWeight, enableDisasters, enableEventPack, seasonAct, useSeasonAct, josa, PLACES, crisisNow, hangWhy, SYM,
-  gearOwned, gearTaken, lureBlock, techShown, techVariants, furnishOf, furnishCost, nextFurnishWork,
+  gearOwned, gearTaken, lureBlock, techShown, techVariants, furnishAfter, furnishOf, furnishCost, nextFurnishWork,
 } from '../game';
 import { copyText } from './clip';
 
@@ -365,8 +365,10 @@ export function carModChips(g: Game, car: string): { k: ModKind; name: string; c
       const step = nextFurnishWork(g, car);
       const value = step ? furnishCost(step) : null;
       const chk = jobCheck(g, k, car);
+      const after = step ? furnishAfter(g, car, step) : null;
       return {
-        k, name: tier >= 3 ? '살림 3단' : `살림 ${tier}단 → ${tier + 1}단`,
+        k, name: tier >= 3 ? '살림 3단' : after && after.tier <= tier
+          ? `살림 ${tier}단 · 작업 뒤 점수 ${after.score}/${D.furnishThreshold[tier + 1]}` : `살림 ${tier}단 → ${tier + 1}단`,
         cost: value ? `목재 ${value.wood} · 고철 ${value.scrap}${value.parts ? ` · 부품 ${value.parts}` : ''} · 일 ${value.work}` : '끝남',
         done: tier >= 3, ok: tier < 3 && chk.ok, why: tier >= 3 ? undefined : chk.why,
       };

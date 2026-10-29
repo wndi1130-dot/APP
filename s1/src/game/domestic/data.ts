@@ -288,7 +288,7 @@ export type FurnishTier = 0 | 1 | 2 | 3;
 export type FurnishStep = Exclude<FurnishTier, 0>;
 export const FURNISH_STEPS: FurnishStep[] = [1, 2, 3];
 export const FURNISH_WORK: Record<FurnishStep, { wood: number; scrap: number; cloth: number; parts: number; work: number; points: number }> = {
-  1: { wood: 1, scrap: 3, cloth: 1, parts: 0, work: 1, points: 3 },
+  1: { wood: 1, scrap: 3, cloth: 0, parts: 0, work: 1, points: 3 },
   2: { wood: 1, scrap: 6, cloth: 2, parts: 0, work: 3, points: 5 },
   3: { wood: 2, scrap: 8, cloth: 2, parts: 2, work: 4, points: 7 },
 };

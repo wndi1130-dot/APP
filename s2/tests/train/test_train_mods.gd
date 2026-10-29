@@ -159,17 +159,21 @@ func test_furnish_three_thresholds_research_gates_and_permanent_tiers() -> void:
 
 func test_furnish_cloth_and_recorded_four_store_refund() -> void:
 	var g: Dictionary = _furnish_game()
-	g["dom"]["cloth"] = 0
+	assert_eq(int(Mods.furnish_cost(1)["cloth"]), 0, "the first tier needs no cloth, so it does not compete with stretchers")
+	_finish_furnish(g, "front", 1)
+	g["dom"]["insulated"] = ["front"]
+	g["dom"]["techs"]["w5"] = {"stage": "done", "defect": false, "need": 3, "progress": 3}
+	g["dom"]["cloth"] = 1.0
 	var before: Dictionary = g.duplicate(true)
-	assert_eq(Mods.job_check(g, "furnish", "front")["why"], "천 1이 든다")
+	assert_eq(Mods.job_check(g, "furnish", "front")["why"], "천 2이 든다")
 	assert_false(Mods.start_job(g, "furnish", "front"))
 	assert_eq(g, before)
-	g["dom"]["cloth"] = 3.0
+	g["dom"]["cloth"] = 4.0
 	assert_true(Mods.start_job(g, "furnish", "front"))
-	assert_eq(g["dom"]["job"]["paid"], {"wood": 1.0, "scrap": 3.0, "parts": 0.0, "cloth": 1.0})
+	assert_eq(g["dom"]["job"]["paid"], {"wood": 1.0, "scrap": 6.0, "parts": 0.0, "cloth": 2.0})
 	g["dom"]["job"]["paid"] = {"wood": 0.25, "scrap": 1.5, "parts": 0.75, "cloth": 0.5}
 	assert_true(Mods.cancel_job(g))
-	assert_eq([g["dom"]["wood"], g["dom"]["scrap"], g["dom"]["parts"], g["dom"]["cloth"]], [99.25, 98.5, 20.75, 2.5])
+	assert_eq([g["dom"]["wood"], g["dom"]["scrap"], g["dom"]["parts"], g["dom"]["cloth"]], [98.25, 92.5, 20.75, 2.5])
 	assert_true(Mods.start_job(g, "furnish", "front"))
 	Mods.advance_job(g, 0.25)
 	before = g.duplicate(true)

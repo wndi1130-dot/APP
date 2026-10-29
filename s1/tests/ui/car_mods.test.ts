@@ -14,6 +14,14 @@ describe('칸 판의 개조 칩', () => {
     expect(chips[2].cost).toBe('목재 1 · 고철 3 · 일 1');
   });
 
+  it('가구를 뺀 칸은 작업을 마쳐도 다음 단에 못 닿으면 작업 뒤 점수를 보인다', () => {
+    const g = createS1cGame('mods');
+    g.dom!.furnish = { tail1: { work: 0, jobs: [], furnPts: 0, tier: 1, best: 1, items: [] } };
+    g.dom!.insulated.push('tail1');
+    // 다음 작업은 2단 일(5점) — 점수 5는 2단 문턱 8에 못 닿는다.
+    expect(carModChips(g, 'tail1')[2].name).toBe('살림 1단 · 작업 뒤 점수 5/8');
+  });
+
   it('규칙이 막으면 칩도 막히고 까닭이 같다', () => {
     const g = createS1cGame('mods');
     for (const c of carModChips(g, 'tail1')) {
