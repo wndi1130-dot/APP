@@ -727,6 +727,21 @@ func test_region_looks_keep_linear_luminance_and_light_energy() -> void:
 			assert_almost_eq(float(a[key]), float(b[key]), 0.0001, "%s %s energy" % [pair, key])
 
 
+func test_region_looks_keep_the_light_of_a_sun_at_full_red() -> void:
+	# The dawn sun is already at full red, so a warm band's tint cannot keep its
+	# luminance in the colour alone (K11 lost 3.5 %): what the gamut takes comes
+	# back as energy, and every band lights the ground as K1 does (colour x energy).
+	for cold: float in [0.0, 1.0]:
+		for hour: float in [Atmosphere.sun_times(cold).x, 12.0]:
+			var plain: Dictionary = Atmosphere.look(hour, ["clear"], "K1", cold)
+			for i: int in range(2, 13):
+				var band: Dictionary = Atmosphere.look(hour, ["clear"], "K%d" % i, cold)
+				for pair: Array in [["sun_color", "sun_energy"], ["ambient_color", "ambient_energy"]]:
+					var want: float = Color(plain[pair[0]]).srgb_to_linear().get_luminance() * float(plain[pair[1]])
+					var got: float = Color(band[pair[0]]).srgb_to_linear().get_luminance() * float(band[pair[1]])
+					assert_almost_eq(got / maxf(want, 0.0001), 1.0, 0.002, "K%d %s at %.2f h, cold %s" % [i, pair[0], hour, cold])
+
+
 func _region_rgb_distance(a: Color, b: Color) -> float:
 	return maxf(absf(a.r - b.r), maxf(absf(a.g - b.g), absf(a.b - b.b)))
 

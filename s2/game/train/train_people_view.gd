@@ -212,6 +212,8 @@ var heard: Array = []                     # every event taken, in order
 var scenes: Dictionary = {}               # car id -> {kind, from, until, picks: {body: clip}}
 var marks: Dictionary = {}                # car id -> [{kind, sign, size, until (day)}]
 var _seen_rules: Dictionary = {}          # the rules as they were, for events_between
+var _screen_view: Array = []
+var _screen_cars: Dictionary = {}
 
 
 static func enabled() -> bool:
@@ -393,6 +395,28 @@ func on_screen(c: Dictionary) -> bool:
 	if cam == null or not cam.is_inside_tree():
 		return true
 	var view: Vector2 = cam.get_viewport().get_visible_rect().size
+	if scene.view_mode == "diag":
+		var view_key: Array = [cam.get_instance_id(), cam.global_transform, cam.size,
+			cam.h_offset, cam.v_offset, cam.projection, cam.keep_aspect, view]
+		if view_key != _screen_view:
+			_screen_view = view_key
+			_screen_cars.clear()
+		var car_node: Node3D = c["node"]
+		var car_key: Array = [car_node.get_instance_id(), car_node.global_transform, c["x0"]]
+		var car_id: String = String(c["id"])
+		var cached: Dictionary = _screen_cars.get(car_id, {})
+		if cached.get("key", []) != car_key:
+			var points: PackedVector2Array = scene.car_screen_polygon(car_id)
+			var shown: bool = true
+			if not points.is_empty():
+				var bounds: Rect2 = Rect2(points[0], Vector2.ZERO)
+				for point: Vector2 in points:
+					bounds = bounds.expand(point)
+				var margin_px: float = SIGHT_MARGIN * view.y / maxf(cam.size, 0.001)
+				shown = Rect2(Vector2.ZERO, view).grow(margin_px).intersects(bounds, true)
+			cached = {"key": car_key, "shown": shown}
+			_screen_cars[car_id] = cached
+		return bool(cached["shown"])
 	var half: float = cam.size * 0.5 * (view.x / maxf(view.y, 1.0)) if cam.keep_aspect == Camera3D.KEEP_HEIGHT else cam.size * 0.5
 	var x0: float = float(c["x0"])
 	var x1: float = x0 + scene.CAR_LENGTH

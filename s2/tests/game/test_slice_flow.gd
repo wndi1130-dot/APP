@@ -44,21 +44,182 @@ func _texts(f) -> Array:
 	return out
 
 
+## GUI positions stay local while the pointer and the moving plate are in viewport px.
+func _plate_gesture(flow: SliceFlow, id: String, movement: Vector2, use_touch: bool) -> void:
+	flow._process(0.0)
+	var plate: Control = flow.plates.get_node("Plate_" + id) as Control
+	var plate_transform: Transform2D = plate.get_global_transform_with_canvas()
+	var start_local: Vector2 = plate.size * 0.5
+	var end_view: Vector2 = plate_transform * start_local + movement
+	var local_movement: Vector2 = plate_transform.affine_inverse().basis_xform(movement)
+	if use_touch:
+		var touch_down: InputEventScreenTouch = InputEventScreenTouch.new()
+		touch_down.index = 0
+		touch_down.position = start_local
+		touch_down.pressed = true
+		plate.gui_input.emit(touch_down)
+		var touch_drag: InputEventScreenDrag = InputEventScreenDrag.new()
+		touch_drag.index = 0
+		touch_drag.position = start_local + local_movement
+		touch_drag.relative = local_movement
+		plate.gui_input.emit(touch_drag)
+		flow._process(0.0)
+		var touch_up: InputEventScreenTouch = InputEventScreenTouch.new()
+		touch_up.index = 0
+		touch_up.position = plate.get_global_transform_with_canvas().affine_inverse() * end_view
+		touch_up.pressed = false
+		plate.gui_input.emit(touch_up)
+	else:
+		var mouse_down: InputEventMouseButton = InputEventMouseButton.new()
+		mouse_down.button_index = MOUSE_BUTTON_LEFT
+		mouse_down.position = start_local
+		mouse_down.pressed = true
+		plate.gui_input.emit(mouse_down)
+		var mouse_drag: InputEventMouseMotion = InputEventMouseMotion.new()
+		mouse_drag.button_mask = MOUSE_BUTTON_MASK_LEFT
+		mouse_drag.position = start_local + local_movement
+		mouse_drag.relative = local_movement
+		plate.gui_input.emit(mouse_drag)
+		flow._process(0.0)
+		var mouse_up: InputEventMouseButton = InputEventMouseButton.new()
+		mouse_up.button_index = MOUSE_BUTTON_LEFT
+		mouse_up.position = plate.get_global_transform_with_canvas().affine_inverse() * end_view
+		mouse_up.pressed = false
+		plate.gui_input.emit(mouse_up)
+
+
+func test_plate_drags_do_not_select_but_short_taps_do() -> void:
+	var flow: SliceFlow = _flow()
+	await wait_process_frames(2)
+	flow._select("")
+	for use_touch: bool in [false, true]:
+		var before: float = float(flow.train.cam_x)
+		_plate_gesture(flow, SliceFlow.FIRST_CAR, Vector2(30.0, 0.0), use_touch)
+		assert_eq(flow.sel, "", "30 px is a drag")
+		assert_lt(float(flow.train.cam_x), before, "a drag on a plate reaches the train")
+		_plate_gesture(flow, SliceFlow.FIRST_CAR, Vector2(3.0, 4.0), use_touch)
+		assert_eq(flow.sel, SliceFlow.FIRST_CAR, "5 px is still a tap")
+		flow._select("")
+
+
+func test_diag_selection_uses_the_covered_pane_width_and_clears_it() -> void:
+	var flow: SliceFlow = _flow()
+	await wait_process_frames(2)
+	flow.train.set_view_mode("diag")
+	flow._select(SliceFlow.FIRST_CAR)
+	var pane_rect: Rect2 = flow.pane.get_global_rect()
+	var covered_px: float = flow.get_viewport().get_visible_rect().size.x - pane_rect.position.x
+	assert_gt(pane_rect.size.x, 0.0)
+	assert_almost_eq(float(flow.train.pane_px), covered_px, 0.001)
+	assert_eq(str(flow.train.zoom), "near")
+	flow._select("")
+	assert_eq(float(flow.train.pane_px), 0.0)
+	assert_eq(str(flow.train.zoom), "wide")
+	assert_eq(float(flow.train.camera.h_offset), 0.0)
+
+
+func test_diag_nameplates_use_the_front_lower_corner() -> void:
+	var flow: SliceFlow = _flow()
+	await wait_process_frames(2)
+	flow.train.set_view_mode("diag")
+	flow.train.focus_car(SliceFlow.FIRST_CAR)
+	flow._process(0.0)
+	assert_false(flow.outside.visible)
+	assert_gt(flow.plates.get_child_count(), 0)
+	var cam: Camera3D = flow.train.camera
+	for plate: Control in flow.plates.get_children():
+		var car_node: Node3D = plate.get_meta("car")
+		var anchor: Vector3 = car_node.to_global(Vector3(float(plate.get_meta("x")), -0.45, 1.40))
+		var expected: Vector2 = cam.unproject_position(anchor)
+		var center: Vector2 = plate.position + plate.size * 0.5
+		assert_almost_eq(center.x, expected.x, 2.0)
+		assert_almost_eq(center.y, expected.y, 2.0)
+	flow.train.set_view_mode("section")
+	flow._process(0.0)
+	assert_true(flow.outside.visible)
+	var first_plate: Control = flow.plates.get_child(0) as Control
+	var first_car: Node3D = first_plate.get_meta("car")
+	var section_anchor: Vector3 = first_car.to_global(Vector3(float(first_plate.get_meta("x")), -0.45, 0.0))
+	assert_true((first_plate.position + first_plate.size * 0.5).is_equal_approx(cam.unproject_position(section_anchor)))
+
+
+func test_diag_marks_highlight_without_drawing_2d_marks() -> void:
+	var flow: SliceFlow = _flow()
+	await wait_process_frames(2)
+	flow.train.set_view_mode("diag")
+	flow._select(SliceFlow.FIRST_CAR)
+	assert_eq(flow.card, flow.home)
+	# A direct call outside draw would report an error if it drew any 2D marks.
+	flow._draw_marks()
+	var band: MeshInstance3D = flow.train.highlight_band
+	assert_true(band.visible)
+	var chosen: Node3D = flow.train.car(SliceFlow.FIRST_CAR)["node"]
+	assert_eq(band.global_transform, chosen.global_transform)
+	flow._draw_marks()
+	assert_eq(flow.train.highlight_band, band)
+	flow.card = null
+	flow._draw_marks()
+	assert_false(band.visible)
+	flow.card = flow.home
+	flow._draw_marks()
+	assert_true(band.visible)
+	var other_card: Control = Control.new()
+	add_child_autofree(other_card)
+	flow.card = other_card
+	flow._draw_marks()
+	assert_false(band.visible)
+	flow.card = flow.home
+	flow._select("")
+	flow._draw_marks()
+	assert_false(band.visible)
+	for c: Dictionary in flow.train.cars:
+		assert_false(bool(c["dimmed"]))
+
+
+func test_council_builds_the_train_in_section_view() -> void:
+	var flow: SliceFlow = _flow()
+	await wait_process_frames(2)
+	flow.train.set_view_mode("diag")
+	flow.go(flow._index_of("council"))
+	assert_eq(flow.current(), "council")
+	assert_eq(flow.train.opts.get("view_mode"), "section", "set before the scene enters the tree")
+	assert_eq(flow.train.view_mode, "section")
+	assert_true(flow.outside.visible)
+	assert_false(flow.train.snow_ground.visible)
+	assert_false(flow.train.highlight_band.visible)
+
+
 func test_the_steps_come_in_the_slice_order_with_the_train_behind_them() -> void:
 	var f = _flow()
 	var seen: Array = []
 	var phases: Array = []
+	var bands: Array = []
 	while true:
 		seen.append(f.current())
 		phases.append(f.train.phase() if f.train != null else "")
+		bands.append(String(f.train.rules["view"]["region"]) if f.train != null else "")
 		assert_true(f.panel.visible or f.card != null, f.current() + " has its panel or its screen")
 		if f.current() == "end":
 			break
 		f.next()
 	assert_eq(seen, ["train", "stop_pick", "receipt", "council", "travel", "arrive", "end"], "the field is skipped here")
 	assert_eq(phases, ["travel", "stop", "settle", "council", "travel", "stop", "end"])
+	# The field's map is the first stop's own (K1) and the second station the stop after it (K3).
+	assert_eq(bands, ["K1", "K1", "K1", "K1", "K3", "K3", "K3"], "running: the band of the stop ahead; standing: the stop's own")
 	assert_eq(String(f.card.name), "EndCard")
 	assert_eq(f.card.go_key.text, "처음으로", "the main key draws its own arrow")
+
+
+func test_field_opts_carry_the_band_of_the_steps_stop() -> void:
+	var f = _flow()
+	for row: Array in [["stop_pick", "K1"], ["field", "K1"], ["arrive", "K3"]]:
+		f.step = f._index_of(String(row[0]))
+		assert_eq(f._field_opts()["region"], row[1], "the first stop's own map: " + String(row[0]))
+	# A map any stop may use takes the band of the stop its stretch reaches.
+	var any = _flow({"place": "houses_01"})
+	for row: Array in [["stop_pick", "K3"], ["arrive", "K4"]]:
+		any.step = any._index_of(String(row[0]))
+		assert_eq(any._field_opts()["region"], row[1], "a shared map: " + String(row[0]))
 
 
 func test_the_second_station_is_its_sheet_and_the_end_the_long_sheet() -> void:

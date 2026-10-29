@@ -1,5 +1,5 @@
 extends RefCounted
-## Odds and ends in the boxes (decision 444, 차이 목록 5; coord\review\좀보이드_잡동사니_대조_20261026.md):
+## Odds and ends in the boxes (decision 444, 차이 목록 5):
 ## before the bundles are dealt, each box indoors gets a little of what people
 ## leave about, from its room's rows. Each row is its own roll (not one picked
 ## from the table), at most JUNK_MOST a box, on dice of its own, so nothing

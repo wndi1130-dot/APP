@@ -86,7 +86,7 @@ export interface FurnishState {
   best: FurnishTier;
   items: { kind: FurnitureKind; size: FurnitureSize }[];
 }
-export type Task = 'parts' | 'restore' | 'modify';
+export type Task = 'parts' | 'restore' | 'modify' | 'sup';
 export type Penalty = { kind: 'coal' | 'haul'; until: number };
 
 /** ms: 내정 화면이 열려 있던 시간. all: 화면과 상관없이 그 구간에 앱을 보고 있던 시간(12.1 구간 전체, 참고 값).
@@ -108,6 +108,10 @@ export interface DomState {
   parts: number;
   /** 다음 부품까지 쌓인 작업 */
   partWork: number;
+  /** 생활 공방의 다음 생산까지 쌓인 일. 꺼진 판과 옛 저장에는 만들지 않는다. */
+  supWork?: number;
+  /** 좋은 물건 만들기. 없으면 끔이며 w8 복원 뒤에만 쓴다. */
+  supFineOn?: boolean;
   cores: number;
   frags: Record<Field, number>;
   /** 조각·코어를 얻은 자리(최근 FINDS_MAX줄). 옛 저장 판에는 없다. */

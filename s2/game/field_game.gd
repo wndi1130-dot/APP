@@ -10,6 +10,7 @@ signal built
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const WoodsShade = preload("res://fx/woods_shade.gd")
@@ -18,6 +19,7 @@ const SidePath = preload("res://game/world/side_path.gd")
 const SideNote = preload("res://game/sim/side_note.gd")
 const CoreScenes = preload("res://game/world/core_scenes.gd")
 const RouteStops = preload("res://game/train/route_stops.gd")
+const RouteBands = preload("res://game/train/route_bands.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -100,7 +102,7 @@ const SIGHT_RADIUS: int = 18
 const SIGHT_UPSTAIRS: int = 30
 const SIGHT_CELLAR: int = 7             # a dark cellar: you see what is near
 const NEAR_SIGHT: float = 2.0         # heard from behind (body_injury 8.3)
-const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (zomboid-like)
+const VIEW_CONE_COS: float = 0.17       # about 160 degrees ahead (like reference game 1)
 const SEWER_CLEAR: float = 6.0          # no one climbs out within this of a person (field_unified 6)
 const BLOOD_SCENT_R: float = 12.0       # excessive blood smell event radius (body_injury 8.1)
 const CULVERT_WIDTH: int = 2            # dead out of a culvert at once; every other way lets one out
@@ -429,7 +431,16 @@ func _ready() -> void:
 	weather = Weather.new(storm.get("rules", opts.get("weather", ["fog", "snow"])), OutsideTemp.of(opts, cold, side), Vector2(1, 0.2), 0.4)
 	# Picture inputs for the storm stops (weather_fx 14장): rules still read weather.
 	look_kinds = opts.get("look", storm.get("kinds", weather.kinds))
-	region = Atmosphere.region_key(String(opts.get("region", Atmosphere.DEFAULT_REGION)))
+	# The stop's band (decision 494): a stop's own map shows its own stop's band on any
+	# stretch, any other map the band of the departure's stretch; a bare start the default.
+	var map_id := FieldMaps.resolve(String(opts.get("place", "")))
+	var departure_seg := int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else 0
+	if opts.has("region"):
+		region = Atmosphere.region_key(String(opts["region"]))
+	elif opts.get("departure") is Dictionary or not RouteBands.place_stop(map_id).is_empty():
+		region = RouteBands.band_of(map_id, act, departure_seg, float(opts.get("act_progress", 0.0)))
+	else:
+		region = Atmosphere.DEFAULT_REGION
 	look_hour = float(opts.get("look_hour", -1.0))
 	# Lying snow on arrival follows the cold, deeper stop by stop (picture: nothing
 	# in the rules reads it). A storm stop keeps its season's depth.
@@ -452,11 +463,13 @@ func _ready() -> void:
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
 	Engine.max_fps = int(opts.get("fps_cap", 60))
-	place = FieldMaps.resolve(String(opts.get("place", "")))
+	place = map_id
 	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+	stop_map = shape_stop(stop_map, String(opts.get("stop_form", "")), rng.seed, float(opts.get("stop_form_m", -1.0)),
+		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	_take_map(with_side_path(stop_map, rng.seed))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
@@ -1501,6 +1514,21 @@ func allies_alive() -> Array:
 ## the rooms' finish, the walk from the train and the trees to fell (work_spots.gd).
 const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground_arrays", "_ground_key",
 	"_floor_arrays", "_floor_keys", "_room_finish", "_walk_field", "_walk_key", "fell_groves"]
+
+
+## The ground of the stop's form (stop_ground.gd), put on before the side path
+## (with_side_path). An edge stop grows and shifts the map, so what the loader made
+## ahead from it is dropped first, and a map handed over with its side path already on
+## is built again bare by `fresh`; a city or siding stop keeps all of it.
+static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable) -> Dictionary:
+	if form.is_empty() or form == String(map.get("stop_form", "")):
+		return map
+	if form == "edge":
+		if map.has("side_path"):
+			map = fresh.call()
+		for key in AHEAD_KEYS:
+			map.erase(key)
+	return StopGround.apply(map, form, run_seed, target_m)
 
 
 ## The side path on a map built here or handed over (side_path.gd). The loader puts it

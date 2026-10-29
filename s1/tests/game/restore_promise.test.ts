@@ -157,7 +157,7 @@ describe('A01 채택 기준(사용자 2026-10-10 「완성하고 채택까지」
   });
 });
 
-describe('프펑2식 제안: 의무진은 완성판을 지금 시작할 수 있는 기술만 내놓는다', () => {
+describe('참고 게임 2(2편)식 제안: 의무진은 완성판을 지금 시작할 수 있는 기술만 내놓는다', () => {
   function council(seed: string, set?: (g: Game) => void): Game {
     const g = createS1cGame(seed);
     set?.(g);

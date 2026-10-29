@@ -302,6 +302,26 @@ const TECHS: Dictionary = {
 		"effect": "살림 2단(갖춤)을 연다. 3단(북유럽식)은 공구 수리도 써야 한다",
 		"adapt": {"parts": 1, "wood": 4}
 	},
+	"w6": {
+		"upkeep": {}, "like": ["tail"], "dislike": [],
+		"id": "w6", "branch": "craft", "tier": 1, "name": "생활 공방",
+		"effect": "공방 일에 생필품 만들기가 열린다"
+	},
+	"w7": {
+		"upkeep": {}, "like": [], "dislike": [],
+		"id": "w7", "branch": "craft", "tier": 2, "name": "손놀림", "effect": "변형 둘 중 하나",
+		"variants": {
+			"a": {"name": "빠른 손", "effect": "생필품 만들기 일 −30%, 고철 +25%", "upkeep": {}, "like": ["medtech"], "dislike": [],
+				"label": "빠르게 만든다", "say": "손을 빨리 놀려라. 기다리는 칸이 많다!"},
+			"b": {"name": "꼼꼼한 손", "effect": "생필품 만들기 일 +30%, 고철 +50%, 생필품 1.5몫", "upkeep": {}, "like": ["tail"], "dislike": ["guard"],
+				"label": "꼼꼼하게 만든다", "say": "조금 더 손봐라. 한 번 만들 때 넉넉히!"}
+		}
+	},
+	"w8": {
+		"upkeep": {"parts": 0.25}, "like": ["front"], "dislike": ["tail"],
+		"id": "w8", "branch": "craft", "tier": 3, "name": "좋은 물건",
+		"effect": "같은 일과 고철 두 배로 좋은 물건을 만든다"
+	},
 	"r1": {
 		"upkeep": {},
 		"like": [
@@ -486,7 +506,7 @@ const TECHS: Dictionary = {
 		"effect": "공방 만들기: 손수레·긴 썰매·쇠 날(S2)"
 	}
 }
-const PREREQ: Dictionary = {"x2": ["x1"], "x4": ["x1"], "x3": ["x2"], "w2": ["w1"], "w3": ["w2"]}
+const PREREQ: Dictionary = {"x2": ["x1"], "x4": ["x1"], "x3": ["x2"], "w2": ["w1"], "w3": ["w2"], "w7": ["w6"], "w8": ["w7"]}
 const D: Dictionary = {
 	"restoreWork": [
 		3,
@@ -583,6 +603,9 @@ const GEAR_TECHS: Array = [
 	"w4"
 ]
 # END S1 TABLES
+## Decision 490: the supplies techs (S1 data.ts SUPPLIES_TECHS) stand only on a
+## board with supplies on; elsewhere they are hidden and blocked like gear.
+const SUPPLIES_TECHS: Array = ["w6", "w7", "w8"]
 
 
 static func _dom(g: Dictionary) -> Dictionary:
@@ -638,6 +661,8 @@ static func mult(g: Dictionary, t: Dictionary, id: String) -> float:
 static func visible_techs(g: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	for id: String in TECHS:
+		if SUPPLIES_TECHS.has(id) and not bool(g.get("supOn", false)):
+			continue
 		if not GEAR_TECHS.has(id) or S2_OPEN_GEAR.has(id) or bool(g.get("gearOn", false)):
 			out.append(id)
 	return out
@@ -685,7 +710,8 @@ static func restore_block(g: Dictionary, id: String) -> Variant:
 	if d.get("techs", {}).has(id):
 		return "이미 손댔다"
 	var needs_gear: bool = GEAR_TECHS.has(id) and not S2_OPEN_GEAR.has(id)
-	if NOT_YET.has(id) or (needs_gear and not bool(g.get("gearOn", false))):
+	var needs_sup: bool = SUPPLIES_TECHS.has(id) and not bool(g.get("supOn", false))
+	if NOT_YET.has(id) or (needs_gear and not bool(g.get("gearOn", false))) or needs_sup:
 		return "아직 이 열차에서 못 쓴다"
 	var pre: Array[String] = prereqs(id)
 	var known: bool = false

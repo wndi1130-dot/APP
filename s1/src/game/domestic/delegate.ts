@@ -9,6 +9,7 @@ import { domCard, living, techVariants } from './state';
 import type { DomPerson, DomState } from './state';
 import { LAW_ONLY_TECHS, usefulVariant } from './lawtech';
 import { jobCheck, restoreCheck, restoreCost, startJob, startRestore, techSides, variantParts } from './workshop';
+import { SUPPLIES_BOT } from '../supplies';
 
 // 간부에게 맡기기(6.4). S1c에서 새로 여는 것은 공방장 하나다(의무장·기관장·경비대장은 S1c 이후).
 // 열리는 조건: 정차 6번을 지남 + 공방장이 사는 공동체(기술·의무진)가 호의 이상이고 적의가 없음. 인구 조건은 S1에서 뺐다(6.4 짚을 점).
@@ -70,6 +71,7 @@ export function chiefPick(g: Game): TechId | null {
   const trait = chief?.trait;
   const ready = TECH_IDS.filter(id => !restoreCheck(g, id).full && usefulVariant(g, id) !== null);
   if (ready.length === 0) return null;
+  if (g.supOn && SUPPLIES_BOT.get(g)?.make === 'first' && ready.includes('w6')) return 'w6';
   const wants: Comm[] = trait === 'family' ? ['medtech'] : trait === 'ambition' ? ['guard']
     : d.delegate.policy === 'ours' ? friendly(g)
       : [[...COMMS].sort((a, b) => situation(g, a)[0] + situation(g, a)[1] - situation(g, b)[0] - situation(g, b)[1])[0]];
@@ -99,7 +101,11 @@ export function delegateTick(g: Game): void {
   const tier = delegateTier(g);
   const coward = chief?.trait === 'fear';
   d.target = coward ? 8 : 5;
-  if (tier >= 2) d.order = coward ? ['parts', 'restore', 'modify'] : ['restore', 'parts', 'modify'];
+  if (tier >= 2) {
+    const supAt = g.supOn ? d.order.indexOf('sup') : -1;
+    d.order = coward ? ['parts', 'restore', 'modify'] : ['restore', 'parts', 'modify'];
+    if (supAt >= 0) d.order.splice(Math.min(supAt, d.order.length), 0, 'sup');
+  }
   if (tier >= 3 && !d.restoring) {
     const id = chiefPick(g);
     if (id) {
