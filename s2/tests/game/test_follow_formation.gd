@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const FieldAi = preload("res://game/field_ai.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const FieldSave = preload("res://game/sim/field_save.gd")
 
 class CountingGame:
 	extends FieldGame
@@ -296,3 +297,38 @@ func test_straight_walk_keeps_moving_between_thinks_and_settles_when_the_chief_s
 		assert_false(p.moving)
 		assert_true(p.path.is_empty())
 		assert_lte(p.position.distance_to(p.brain["follow_slot"]), FieldAi.FOLLOW_SETTLE)
+
+
+## Decision 486: a save written before these fields (no `_follow_*` on the AI, no `follow_*` in a
+## brain) resumes without errors, the trail starts afresh, and the point picks a slot again.
+func test_a_save_without_the_follow_fields_resumes_and_follows_again() -> void:
+	_start()
+	game.player.moving = true
+	for q in mates.values():
+		game.ai._keep_formation(q)
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	var ai: Dictionary = saved["runtime"]["components"]["ai"]
+	for key in ai.keys():
+		if String(key).begins_with("_follow"):
+			ai.erase(key)
+	for row: Dictionary in saved["people"]:
+		var state: Dictionary = row.get("state", {})
+		var brain: Dictionary = state.get("brain", {})
+		for key in brain.keys():
+			if String(key).begins_with("follow_"):
+				brain.erase(key)
+	var resumed = FieldGame.new()
+	resumed.opts = FieldSave.resume_opts(saved)
+	add_child_autofree(resumed)
+	resumed.set_process(false)
+	assert_eq(resumed.ai._follow_count, 0, "an old save starts the trail afresh")
+	resumed.player.moving = true
+	var picked: int = 0
+	for q in resumed.squad:
+		if q == resumed.player or q.command != "follow" or resumed.ai._role(q) != "point":
+			continue
+		resumed.ai._keep_formation(q)
+		var slot: Variant = q.brain.get("follow_slot")
+		assert_true(slot is Vector3 and (slot as Vector3).is_finite(), "the point picks a slot again")
+		picked += 1
+	assert_eq(picked, 1)
