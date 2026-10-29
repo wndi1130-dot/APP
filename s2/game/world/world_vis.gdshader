@@ -714,7 +714,9 @@ void fragment() {
 	bool paved = kind == 1 || kind == 2 || ground_detail < -0.5;
 	float laid = paved ? (ground_layers_on && kind != 2 ? 0.15 : 0.35) : (kind == 0 || kind == 5) ? (ground_layers_on ? 0.3 : 0.45) : 1.0;
 	base *= 1.0 + (soil - 0.5) * 1.3 * ground_k * wander * mix(1.0, laid, bare_k);
-	base *= 1.0 - 0.35 * wet;
+	// The wet soil above already darkens in blotches; this is the even rest
+	// (0.35 sank a rainy noon under V 0.36, decision 470).
+	base *= 1.0 - 0.2 * wet;
 	// Cleared paving keeps 25% of cover; exposed wet ground darkens up to 20%.
 	// Apply before the bank so sheltered piles and footsteps still read.
 	if (paved) {
