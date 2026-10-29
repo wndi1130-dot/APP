@@ -777,6 +777,8 @@ func test_a_step_is_heard_by_the_floor_underfoot() -> void:
 	for k in range(200):
 		a.footstep(at, k % 3 == 0)
 	var again := 0
+	assert_lte(a.steps.size(), a.STEPS_KEPT, "only the last few steps kept")
+	n = maxi(0, a.steps.size() - 199)
 	for k in range(n + 1, a.steps.size()):
 		assert_eq(a.steps[k][0], "step_wood", "a wooden floor is heard as wood")
 		if a.steps[k][1] == a.steps[k - 1][1]:

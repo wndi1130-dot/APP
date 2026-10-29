@@ -68,7 +68,8 @@ const CREAK_VOICE: Array = ["floor_creak", 0.35, 0.45, 0.55]
 const CREAK_STANDIN: String = "wooden"
 ## A step by the floor underfoot (FieldGrid.Floor: SNOW, ROAD, PLATFORM, WOOD,
 ## RAIL, DEEP_SNOW, ICE, GRAVEL): the groups to try in turn, loudness and pitch.
-## Rails are on ballast; deep snow is the snow, lower and heavier. A group with
+## Rails are on ballast; deep snow is the snow, lower and muffled (as the dead
+## hear it, FieldGrid.FLOOR_SOUND). A group with
 ## no files yet falls to the next, and in the end to the snow there always was.
 const STEP_FLOORS: Array = [
 	[["step_snow"], 1.0, 1.0],
@@ -76,7 +77,7 @@ const STEP_FLOORS: Array = [
 	[["step_concrete", "step_snow"], 1.0, 1.0],
 	[["step_wood", "step_snow"], 1.0, 1.0],
 	[["step_gravel", "step_snow"], 1.1, 1.0],
-	[["step_snow"], 1.15, 0.88],
+	[["step_snow"], 0.8, 0.88],
 	[["step_ice", "step_concrete", "step_snow"], 0.9, 1.08],
 	[["step_gravel", "step_snow"], 1.0, 1.0],
 ]
@@ -84,6 +85,7 @@ const STEP_FLOORS: Array = [
 ## high; until it has files, the impact set's glass, quiet and high.
 const STEP_GLASS: Array = ["step_glass", 0.25, 1.2, 1.4]
 const GLASS_STANDIN: String = "glass"
+const STEPS_KEPT: int = 256            # steps remembered (tests); older ones go
 ## The rasp of one of the dead that is about to run (lunger_rules): the group
 ## its file goes in, how loud, heard to this many metres, and the pitch of the
 ## moan that stands in for it. First values.
@@ -304,6 +306,10 @@ func setup(field_game) -> void:
 		p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
 		add_child(p)
 		slots.append({"player": p, "z": {}, "wait": randf_range(0.5, 3.0)})
+	for row: Array in STEP_FLOORS:
+		for step_group: String in row[0]:
+			if not lib.has(step_group):
+				lib[step_group] = _load_group(step_group)
 	bed = _loop_player("horde_bed")
 	edge_bed = _loop_player("horde_bed")
 	edge_bed.bus = "SFX_FAR" if AudioServer.get_bus_index("SFX_FAR") >= 0 else "SFX"
@@ -1427,6 +1433,8 @@ func footstep(at: Vector3, running: bool) -> void:
 			pick = (pick + 1 + randi() % (count - 1)) % count
 		step_last[group] = pick
 		steps.append([group, pick])
+		if steps.size() > STEPS_KEPT:
+			steps = steps.slice(steps.size() - STEPS_KEPT)
 		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]), randf_range(0.9, 1.1) * float(row[2]), lib[group][pick])
 	if g.floor_glass.has(cell):
 		_voice_or_standin(STEP_GLASS, GLASS_STANDIN, at)
