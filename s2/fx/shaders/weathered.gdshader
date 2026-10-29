@@ -22,6 +22,9 @@ uniform float roughness_base : hint_range(0.0, 1.0) = 0.9;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0;
 // How much water darkens it: cloth, wood and brick high, metal and glass low.
 uniform float porosity : hint_range(0.0, 1.0) = 0.6;
+// Porosity by the palette cell under UV, times `porosity`, for a model whose one mesh mixes wood,
+// cloth and metal (the train's palette, train_model_kit.gd). White leaves `porosity` as it is.
+uniform sampler2D porosity_tex : filter_nearest, hint_default_white;
 // 0 for undersides, interiors and anything a roof covers.
 uniform float snow_catch : hint_range(0.0, 1.0) = 1.0;
 uniform float rime_catch : hint_range(0.0, 1.0) = 1.0;
@@ -100,7 +103,7 @@ void fragment() {
 
 	// Wet: porous things darken, everything loses roughness.
 	float wet = clamp(fx_wet, 0.0, 1.0) * open;
-	base *= mix(1.0, 0.55, porosity * wet);
+	base *= mix(1.0, 0.55, porosity * texture(porosity_tex, UV).r * wet);
 	rough = mix(rough, min(rough, 0.35), wet * 0.8);
 	float pool = puddles * wet * smoothstep(0.66, 0.74, fx_fbm2(w_pos.xz * 0.5)) * smoothstep(0.9, 0.98, up);
 	base = mix(base, base * 0.75, pool);
