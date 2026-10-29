@@ -21,7 +21,8 @@ extends Node3D
 ##              and the weapon's own state (blow, BLOW_FAMILY)
 ##   gun        shots (falls back to impact, lower)
 ##   step_snow  the player's footsteps
-##   wind       outdoor bed, wandering, with gusts over it (WIND_DRIFT, _gust)
+##   wind       outdoor bed, wandering, with gusts over it (WIND_DRIFT, _gust);
+##              indoors heard through the building (openness_at, the WIND bus)
 ##   train_idle the waiting engine, placed on the train
 ##   whistle    departure
 ##   pen        the pen stroke when '떠난다' is pressed
@@ -37,6 +38,7 @@ const DeadPose = preload("res://game/actors/dead_pose.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const W = preload("res://game/sim/weapons.gd")
+const Grid = preload("res://game/world/field_grid.gd")
 
 const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking"]
 ## One of the dead going down is heard in four beats, as it is drawn (the
@@ -226,6 +228,24 @@ const SPOT_MIN_WIND: float = 0.3
 const SPOT_INDOOR: float = 0.15
 const SPOT_LOOK: float = 0.5          # s between looks for the nearest places
 const SPOT_REREAD: float = 4.0        # s between readings of the map (the ring grows)
+## Indoors the wind is heard through the building, not cut to a third at the
+## door (user 2026-10-28: 「싸구려겜같음」; the reference's wind follows being
+## inside and the nearest outside wall): loud and open in a doorway or by a
+## broken window, lower and more muffled the more air there is between the
+## player and the nearest opening (OPEN_REACH), a little nearer an outside wall
+## (WALL_REACH, WALL_SHARE), and only a little in a cellar. Going in or out it
+## follows over WIND_IN_TAU, never in one step. It goes through a bus of its own
+## (WIND, sent to SFX) whose low-pass closes in with it (WIND_CUT).
+const WIND_BUS: String = "WIND"
+const OPEN_REACH: float = 7.0         # m of air from an opening to where its wind is gone
+const WALL_REACH: float = 4.0         # m from an outside wall to where its wind is gone
+const WALL_SHARE: float = 0.35        # what a wall lets through, of an opening's
+const INDOOR_OPEN: float = 0.8        # openness in a doorway (outdoors 1, deep inside 0)
+const INDOOR_LOW: float = 0.12        # the bed's level deep inside, of outdoors'
+const CELLAR_SHARE: float = 0.3       # a cellar is this open, of the floor above
+const WIND_IN_TAU: float = 0.18       # s: going in or out, the wind follows this fast
+const WIND_CUT: Array = [450.0, 20000.0]   # Hz: the low-pass deep inside, outdoors
+const EXPOSE_LOOK: int = 9            # cells of air searched for an opening
 ## A blow on one of the dead (user 2026-10-28: 「좀비 때릴때마다 … 사운드
 ## 이펙트가 있어야돼 / 무기마다 달라야되고 / 상태에 따라 달라져야돼」): the
 ## combat tells each (`struck`: weapon, target, result, edge) and it is heard
@@ -275,6 +295,10 @@ var hit_mark: Array = [-1, Vector3.ZERO, null, 0]  # frame, place, player and it
 var hits_stopped: int = 0              # hit_* stopped for a blow told after them (tests)
 var last_shot: AudioStreamPlayer3D     # the player the last one-shot went out on (null: none)
 var wind_clock_ms: int = -1            # real time of the last wind tick (WIND_STOOD_S)
+var openness: float = -1.0             # how open to the wind the player is, as heard (-1: not yet)
+var expose_key: Array = []             # [level, cell, grid revision] it was last read at
+var expose_last: float = 1.0
+var wind_cut: float = 20000.0          # the WIND bus's low-pass now, Hz (tests)
 var slots: Array = []                  # {"player": AudioStreamPlayer3D, "z": Dictionary, "wait": float}
 var bed: AudioStreamPlayer
 var edge_bed: AudioStreamPlayer        # the danger past the map's edge (_tick_edge)
@@ -331,6 +355,7 @@ var fall_last: Dictionary = {}         # group -> field time it last played
 func setup(field_game) -> void:
 	game = field_game
 	_ensure_bus()
+	_ensure_wind_bus()
 	for g in GROUPS:
 		lib[g] = _load_group(g)
 	for i in range(MOAN_SLOTS):
@@ -355,7 +380,7 @@ func setup(field_game) -> void:
 	bed_kin = kin_beds(beds.keys(), bed_name, game.weather.kinds, wind_strength(), _open_ground())
 	for i in range(2):
 		var b := AudioStreamPlayer.new()
-		b.bus = "SFX"
+		b.bus = WIND_BUS
 		b.volume_db = -80.0
 		add_child(b)
 		bed_players.append(b)
@@ -364,7 +389,7 @@ func setup(field_game) -> void:
 		_next_piece()
 	for kind in SPOTS:
 		var s := AudioStreamPlayer3D.new()
-		s.bus = "SFX"
+		s.bus = WIND_BUS
 		s.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
 		s.volume_db = -80.0
 		add_child(s)
@@ -383,7 +408,7 @@ func setup(field_game) -> void:
 	howl_wait = randf_range(float(FIRST_AFTER[0]), float(FIRST_AFTER[1]))
 	for i in range(GUSTS):
 		var g := AudioStreamPlayer.new()
-		g.bus = "SFX"
+		g.bus = WIND_BUS
 		g.volume_db = -80.0
 		add_child(g)
 		gusts.append({"player": g, "t": 0.0, "len": 0.0})
@@ -429,6 +454,20 @@ static func _ensure_bus() -> void:
 		var low := AudioEffectLowPassFilter.new()
 		low.cutoff_hz = float(DULL_BUSES[dull])
 		AudioServer.add_bus_effect(d, low)
+
+
+## The wind's own bus: sent to SFX (so it ducks with the rest), a low-pass on it
+## that openness moves (_set_wind_cut).
+static func _ensure_wind_bus() -> void:
+	if AudioServer.get_bus_index(WIND_BUS) >= 0:
+		return
+	AudioServer.add_bus()
+	var i := AudioServer.bus_count - 1
+	AudioServer.set_bus_name(i, WIND_BUS)
+	AudioServer.set_bus_send(i, "SFX")
+	var low := AudioEffectLowPassFilter.new()
+	low.cutoff_hz = float(WIND_CUT[1])
+	AudioServer.add_bus_effect(i, low)
 
 
 ## The band a moan this far away is heard in: [from, pitch, bus].
@@ -1026,14 +1065,129 @@ func _tick_spots(at: Vector3, lin: float, gust_now: float, delta: float) -> void
 		s.volume_db = move_toward(s.volume_db, want, 60.0 * delta)
 
 
+## How open to the wind the player is here, 0..1: 1 outdoors; indoors by the
+## air between here and the nearest open door or broken or open window and by
+## the nearest outside wall (exposure), at most INDOOR_OPEN, a cellar
+## CELLAR_SHARE of it. Read again only when the cell, the floor or a door or
+## window changes.
+func openness_at(at: Vector3) -> float:
+	var g = game.grid_at(at)
+	var cell: Vector2i = game.FieldGrid.cell_of(at)
+	if not g.indoor(cell):
+		return 1.0
+	var level: int = game.level_of(at)
+	var key: Array = [level, cell, g.revision]
+	if key == expose_key:
+		return expose_last
+	expose_key = key
+	expose_last = INDOOR_OPEN * exposure(open_distance(g, cell), wall_distance(g, cell)) * (CELLAR_SHARE if level < 0 else 1.0)
+	return expose_last
+
+
+## The wind's reach indoors, 0..1, from an opening `d_open` m of air away and
+## an outside wall `d_wall` m away (INF: none near).
+static func exposure(d_open: float, d_wall: float) -> float:
+	var e_open: float = clampf(1.0 - (d_open - 1.0) / OPEN_REACH, 0.0, 1.0)
+	var e_wall: float = clampf(1.0 - (d_wall - 1.0) / WALL_REACH, 0.0, 1.0)
+	return maxf(e_open, WALL_SHARE * e_wall)
+
+
+## Air goes through cell c: open ground, floor, the air outside an upper floor,
+## an open or broken door, an open or broken window with no planks on it.
+static func air_passes(g, c: Vector2i) -> bool:
+	var s: int = g.solid_at(c)
+	if s == Grid.Solid.NONE or s == Grid.Solid.LOW or s == Grid.Solid.AIR:
+		return true
+	if s == Grid.Solid.DOOR:
+		var d: Dictionary = g.doors.get(c, {})
+		return String(d.get("state", "closed")) in ["open", "broken"]
+	if s == Grid.Solid.WINDOW:
+		var w: Dictionary = g.windows.get(c, {})
+		return Grid.BuildingRules.window_passable(w)
+	return false
+
+
+## Steps of air (m) from indoor cell c to the outside, through cells the air
+## goes through; INF when no way out is within EXPOSE_LOOK.
+static func open_distance(g, c: Vector2i) -> float:
+	var seen: Dictionary = {c: true}
+	var front: Array[Vector2i] = [c]
+	for step in range(1, EXPOSE_LOOK + 1):
+		var next: Array[Vector2i] = []
+		for p: Vector2i in front:
+			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var q: Vector2i = p + d
+				if seen.has(q) or not g.inside(q) or not air_passes(g, q):
+					continue
+				if not g.indoor(q):
+					return float(step)
+				seen[q] = true
+				next.append(q)
+		front = next
+		if front.is_empty():
+			break
+	return INF
+
+
+## Metres from indoor cell c to the nearest outside wall: a wall with open air
+## outside it, within WALL_REACH and a cell over; INF when none.
+static func wall_distance(g, c: Vector2i) -> float:
+	var best := INF
+	var r: int = ceili(WALL_REACH) + 1
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var q: Vector2i = c + Vector2i(dx, dy)
+			if not g.inside(q) or g.solid_at(q) != Grid.Solid.WALL:
+				continue
+			var far: float = Vector2(dx, dy).length()
+			if far >= best:
+				continue
+			for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var o: Vector2i = q + d
+				if g.inside(o) and not g.indoor(o) and air_passes(g, o):
+					best = far
+					break
+	return best
+
+
+## The bed's level at openness o (0 deep inside, 1 outdoors), of outdoors'.
+static func indoor_gain(o: float) -> float:
+	return lerpf(INDOOR_LOW, 1.0, clampf(o, 0.0, 1.0))
+
+
+## The WIND bus's low-pass at openness o, Hz: wide open outdoors, closing in
+## the deeper inside.
+static func wind_cutoff(o: float) -> float:
+	var k: float = pow(clampf(o, 0.0, 1.0), 1.5)
+	return float(WIND_CUT[0]) * pow(float(WIND_CUT[1]) / float(WIND_CUT[0]), k)
+
+
+## The openness heard after `delta` s, following `target` (WIND_IN_TAU).
+static func follow_open(now: float, target: float, delta: float) -> float:
+	return target + (now - target) * exp(-maxf(delta, 0.0) / WIND_IN_TAU)
+
+
+func _set_wind_cut(hz: float) -> void:
+	wind_cut = hz
+	var i := AudioServer.get_bus_index(WIND_BUS)
+	if i < 0 or AudioServer.get_bus_effect_count(i) == 0:
+		return
+	var low := AudioServer.get_bus_effect(i, 0) as AudioEffectLowPassFilter
+	if low != null:
+		low.cutoff_hz = hz
+
+
 func _tick_wind(at: Vector3, delta: float) -> void:
 	wind_t += delta
 	wind_up += delta
-	var outdoor: bool = not game.grid_at(at).indoor(game.FieldGrid.cell_of(at))
+	# In or out: the wind follows, heard through the building (openness_at).
+	var open_now: float = openness_at(at)
+	openness = open_now if openness < 0.0 else follow_open(openness, open_now, delta)
+	_set_wind_cut(wind_cutoff(openness))
 	var base: float = 0.25 + 0.5 * wind_strength()
 	# Getting down: the wind comes up from nothing, not on at once.
 	var up: float = smoothstep(0.0, 1.0, clampf(wind_up / wind_in, 0.0, 1.0))
-	var level: float = base * (1.0 if outdoor else 0.35) * up
+	var level: float = base * indoor_gain(openness) * up
 	# The bed wanders on a slow noise: no two stretches alike, no beat to it.
 	var n: float = drift.get_noise_1d(wind_t)
 	var n2: float = drift.get_noise_1d(wind_t + 977.0)
@@ -1046,7 +1200,7 @@ func _tick_wind(at: Vector3, delta: float) -> void:
 		if float(g["len"]) > 0.0:
 			gust_now = maxf(gust_now, float(g["peak"]) * float(g.get("env", 0.0)))
 	wind_level = clampf(wind_strength() * (1.0 + WIND_DRIFT * n) * (1.0 + 0.6 * gust_now), 0.0, 1.0)
-	_tick_spots(at, base * (1.0 if outdoor else SPOT_INDOOR) * up, gust_now, delta)
+	_tick_spots(at, base * lerpf(SPOT_INDOOR, 1.0, openness) * up, gust_now, delta)
 	# Once the train stands (not under the brakes of its coming in), and its
 	# own few seconds after (FIRST_AFTER), never the moment one gets down.
 	if not howled and game.arrive_t < 0.0 and game.weather.kinds.has("blizzard"):
