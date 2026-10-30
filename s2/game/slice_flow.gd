@@ -1356,7 +1356,8 @@ func open_decor(id: String) -> bool:
 		return false
 	decor_id = id
 	_decor_hidden.clear()
-	for n in [gauges, plates, marks, home, paper, next_button, soot_bot]:
+	# The snow over the screen too: with the roof off it would fall inside the car.
+	for n in [gauges, plates, marks, home, paper, next_button, soot_bot, weather]:
 		if is_instance_valid(n) and n is CanvasItem and (n as CanvasItem).visible:
 			(n as CanvasItem).visible = false
 			_decor_hidden.append(n)

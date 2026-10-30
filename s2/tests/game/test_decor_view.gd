@@ -152,14 +152,16 @@ func test_the_flow_opens_a_car_to_decorate_and_brings_the_train_back() -> void:
 	assert_true(is_instance_valid(f.paper), "the first run brings a paper")
 	assert_false(f.open_decor("guard"), "not while a paper is open to choose on")
 	f.paper.set_folded(true)
+	var weather_was: bool = f.weather.visible
 	assert_true(f.open_decor("guard"))
 	assert_eq(f.train.decorating(), "guard")
-	for n: CanvasItem in [f.gauges, f.plates, f.home]:
+	for n: CanvasItem in [f.gauges, f.plates, f.home, f.weather]:
 		if is_instance_valid(n):
 			assert_false(n.visible, "%s away while decorating" % n.name)
 	assert_false(f.open_decor("tail1"), "one car at a time")
 	f.leave_decor()
 	assert_eq(f.train.decorating(), "")
+	assert_eq(f.weather.visible, weather_was, "the snow back as it was")
 	for n: CanvasItem in [f.gauges, f.plates, f.home]:
 		if is_instance_valid(n):
 			assert_true(n.visible, "%s back" % n.name)
