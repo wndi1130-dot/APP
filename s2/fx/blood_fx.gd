@@ -117,6 +117,7 @@ func set_sight(vis: Texture2D, map_size: Vector2) -> void:
 
 ## A hit. `contact` may hold "position" (the floor under the body; its y is where
 ## drops land), "snow", and "wall_position"/"wall_normal" for a wall beside it.
+## An optional "can_land" callable checks each drop's landing position once.
 func hit(world_pos: Vector3, direction: Vector3, strength: float = 1.0, kind: String = "blunt", contact: Dictionary = {}) -> Dictionary:
 	if FxState.blood_level == FxState.BloodLevel.OFF or strength <= 0.0:
 		return {}
@@ -147,6 +148,7 @@ func hit(world_pos: Vector3, direction: Vector3, strength: float = 1.0, kind: St
 			"pos": world_pos + Vector3(rng.randf_range(-0.06, 0.06), rng.randf_range(-0.05, 0.08), rng.randf_range(-0.06, 0.06)),
 			"vel": dir * speed + Vector3.UP * rng.randf_range(0.2, 1.6),
 			"floor": floor_y, "land": has_floor, "snow": snow,
+			"can_land": contact.get("can_land", Callable()),
 			"size": rng.randf_range(0.022, 0.045), "mark": rng.randf_range(0.07, 0.14), "seed": rng.randf(),
 		})
 		made += 1
@@ -269,6 +271,11 @@ func _land(d: Dictionary) -> void:
 	var flat := Vector3(vel.x, 0.0, vel.z)
 	var speed := flat.length()
 	var at := Vector3(d["pos"].x, d["floor"], d["pos"].z)
+	var can_land: Callable = d.get("can_land", Callable())
+	if can_land.is_valid() and not bool(can_land.call(at)):
+		# Spend _write's floor angle so later sprays keep the same dice.
+		_rng.randf_range(0.0, TAU)
+		return
 	var width := float(d["mark"]) * 1.6 * sqrt(FxState.blood_scale())
 	var stretch := 1.0 + minf(speed * 0.35, 1.4)
 	_write(at, Vector3.UP, Vector2(width * stretch, width), flat, Kind.DROP, bool(d["snow"]), 0.85, float(d["seed"]))
