@@ -139,10 +139,12 @@ func test_children_things_stay_in_homes_farms_fishing_houses_and_schools() -> vo
 		{"name": "주택"}, {"name": "농가"}, {"name": "낚시 오두막"},
 		{"name": "작은 학교"}, {"name": "산골 분교"}, {"name": "기계 공장"},
 		{"name": "강변 여관"}, {"name": "주택", "loot_kind": "workshop"},
-		{"name": "기계 공장", "loot_kind": "house"},
+		{"name": "기계 공장", "loot_kind": "house"}, {"name": "간호 기숙사"},
 	]
-	var allowed: Array[bool] = [true, true, true, true, true, false, false, false, true]
+	var allowed: Array[bool] = [true, true, true, true, true, false, false, false, true, false]
 	var found := 0
+	var found_in: Array[int] = []
+	found_in.resize(buildings.size())
 	for seed in range(1, 81):
 		var boxes := {}
 		var rooms := {}
@@ -158,7 +160,12 @@ func test_children_things_stay_in_homes_farms_fishing_houses_and_schools() -> vo
 				if item in ["toy", "child_clothes"]:
 					assert_true(allowed[int(c["building"])], id)
 					found += 1
+					found_in[int(c["building"])] += 1
 	assert_gt(found, 0, "children's things were exercised")
+	# Each place that may hold them does, each on its own (a school's too, not only a house's).
+	for b in range(buildings.size()):
+		if allowed[b]:
+			assert_gt(found_in[b], 0, String(buildings[b]["name"]))
 
 
 func test_a_full_box_takes_no_supplies_past_what_it_holds() -> void:
@@ -288,4 +295,5 @@ func _kids_building(buildings: Array, c: Dictionary) -> bool:
 		return false
 	var kind := LootDress._building_kind_of(buildings, c)
 	var name := String(buildings[b].get("name", ""))
-	return kind in ["house", "farm", "fish"] or name.contains("학교") or name.contains("분교")
+	var stay := String(buildings[b].get("stay_kind", LootSupplies.stay_kind(name)))
+	return (kind in ["house", "farm", "fish"] and stay != "inn") or stay == "school"

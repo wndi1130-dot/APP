@@ -9,7 +9,7 @@ const Carry = preload("res://game/sim/carry.gd")
 ## read is "storage", so a school's unnamed rooms take the "school" rows there.
 const ROWS: Dictionary = {
 	"bathroom": [["toilet_paper", 0.30, "any"], ["soap", 0.25, "any"], ["razor", 0.10, "lived"]],
-	"bedroom": [["old_clothes", 0.10, "lived"], ["book", 0.08, "lived"], ["candle", 0.06, "lived"], ["sewing_kit", 0.05, "home"], ["child_clothes", 0.04, "home"], ["toy", 0.04, "kids"]],
+	"bedroom": [["old_clothes", 0.10, "lived"], ["book", 0.08, "lived"], ["candle", 0.06, "lived"], ["sewing_kit", 0.05, "home"], ["child_clothes", 0.04, "kids"], ["toy", 0.04, "kids"]],
 	"kitchen": [["candle", 0.03, "lived"], ["soap", 0.02, "lived"]],
 	"pantry": [["candle", 0.05, "lived"]],
 	"shop": [["toilet_paper", 0.10, "shop"], ["soap", 0.10, "shop"], ["candle", 0.08, "shop"], ["razor", 0.05, "shop"], ["sewing_kit", 0.04, "shop"]],
@@ -90,7 +90,8 @@ static func _fits(where: String, kind: String, stay: String) -> bool:
 		"lived":
 			return HOME_KINDS.has(kind) or stay != ""
 		"kids":
-			return HOME_KINDS.has(kind) or stay == "school"
+			# A dormitory reads as a house by its name and as an inn by its stay key: grown-ups only.
+			return (HOME_KINDS.has(kind) and stay != "inn") or stay == "school"
 		"school":
 			return stay == "school"
 		"shop":
