@@ -1,5 +1,6 @@
 import { guardRefuses, ladderGuard, ladderIgnore, ladderYield, riotEnd, riotFell } from './riot';
 import { bump, bumpRel, put } from './ledger';
+import { suppliesAsks } from './supplies';
 import { freezeTrackBoost, seasonHolds } from './climate';
 import { handsTrackBoost } from './hands';
 import { noteInjury, noteRelief } from './wounds';
@@ -23,7 +24,7 @@ import type { Card, EventMemo, Game } from './state';
 // 고르는 즉시 생기는 정치 변화만 보여 준다(decisions.md 화면과 연출). 문장은 자리표시다.
 
 export type Eff =
-  | { t: 'coal' | 'food' | 'med' | 'lux' | 'trust' | 'tension' | 'fear' | 'injured'; v: number }
+  | { t: 'coal' | 'food' | 'med' | 'lux' | 'sup' | 'supFine' | 'trust' | 'tension' | 'fear' | 'injured'; v: number }
   | { t: 'rel' | 'fervor' | 'pop'; c: Comm; v: number }
   | { t: 'base'; c: Comm; i: 0 | 1 | 2 | 3; v: number }
   | { t: 'lever'; c: Comm; which: 'heat' | 'ration'; v: number }
@@ -72,6 +73,7 @@ export interface CardView {
 
 const RES_NAME: Record<string, string> = {
   coal: '석탄', food: '식량', med: '의약품', lux: '사치품', trust: '신임', tension: '긴장', fear: '공포', injured: '부상자',
+  sup: '생필품', supFine: '좋은 물건',
 };
 const BASE_NAME = ['온기', '배급', '과밀', '노출'];
 
@@ -83,7 +85,7 @@ function sign(v: number): string {
 export function costLines(choice: Choice): string[] {
   const out: string[] = [];
   for (const e of choice.effs) {
-    if (e.t === 'coal' || e.t === 'food' || e.t === 'med' || e.t === 'lux' || e.t === 'injured') out.push(`${RES_NAME[e.t]} ${sign(e.v)}`);
+    if (e.t === 'coal' || e.t === 'food' || e.t === 'med' || e.t === 'lux' || e.t === 'sup' || e.t === 'supFine' || e.t === 'injured') out.push(`${RES_NAME[e.t]} ${sign(e.v)}`);
     else if (e.t === 'base') out.push(`${COMM_NAME[e.c]} ${BASE_NAME[e.i]} ${sign(e.v)}`);
     else if (e.t === 'lever') out.push(`${COMM_NAME[e.c]} ${e.which === 'heat' ? '난방' : '배급'} ${sign(e.v)}`);
     else if (e.t === 'pop') out.push(`${COMM_NAME[e.c]} ${sign(e.v)}명`);
@@ -124,6 +126,8 @@ export function affordable(g: Game, effs: Eff[]): string | undefined {
     if (e.t === 'food' && e.v < 0 && g.food < -e.v) return '식량이 모자라다';
     if (e.t === 'med' && e.v < 0 && g.med < -e.v) return '의약품이 모자라다';
     if (e.t === 'lux' && e.v < 0 && g.lux < -e.v) return '사치품이 모자라다';
+    if (e.t === 'sup' && e.v < 0 && (g.sup ?? 0) < -e.v) return '생필품이 모자라다';
+    if (e.t === 'supFine' && e.v < 0 && (g.supFine ?? 0) < -e.v) return '좋은 물건이 모자라다';
     if (e.t === 'lever' && e.v > 0 && (e.which === 'heat' ? g.comms[e.c].heat : g.comms[e.c].ration) >= 4) return '이미 최대다';
   }
   return undefined;
@@ -155,6 +159,7 @@ const PICKS = {
   shift_more: '교대를 늘린다', shift_apprentice: '견습생을 붙인다',
   heat_up: '난방을 올린다', ration_up: '배급을 올린다',
   grant: '들어준다', refuse: '거절한다',
+  grant_fine: '좋은 물건으로 들어준다',
   leave_law: '법대로 두고 온다', take_in: '데려온다', supplies_only: '물자만 받는다', leave: '두고 온다',
   cut: '자른다', hide: '숨겨 준다',
   // 사람이 들어오는 사건(arrival_cards.ts). 옛 라벨이 없는 새 선택지라 라벨은 지금 글이다
@@ -269,7 +274,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       return {
         title: '얼어붙은 급수탑', speaker: leader(g, 'engine'), focus: 'engine', required: true,
         body: again(past, `급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 ${Math.round(g.coal)} 남았다.`, {
-          burn_melt: `급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 ${Math.round(g.coal)} 남았다.`,
+          burn_melt: `급수탑이 또 얼었다. 화부들은 아직 그 얘기다. "지난번 녹이느라 태운 석탄이면 한참 달렸다." 석탄은 ${Math.round(g.coal)} 남았다.`,
           snow_melt: '급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 묻는다. "이번에도 우리냐?"',
           hold_on: '보일러 물이 거의 바닥났다. 수석 기관사가 말한다. "지난번처럼 버티면 보일러 관이 탑니다."',
         }, '급수탑이 또 얼었다.'),
@@ -287,7 +292,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: '눈더미', speaker: leader(g, 'engine'), focus: 'engine', required: true,
       body: again(past, '선로가 눈더미에 묻혔다. 삽이 열두 자루 있다.', {
-        dig_all: '또 눈더미다. 지난번 함께 판 일을 사람들이 아직 말한다. 앞칸 몇은 벌써 삽을 들었다.',
+        dig_all: '또 눈더미다. 사람들이 지난번 일을 아직 말한다. "다 같이 파면 금방 끝난다." 앞칸 몇은 벌써 삽을 들었다.',
         dig_tail: '또 눈더미다. 꼬리칸 사람들이 삽을 내려놓고 앉아 있다. "이번엔 앞칸 차례다."',
         plow: '또 눈더미다. 지난번 밀어붙인 뒤로 앞바퀴에서 쇳소리가 난다.',
       }, '선로가 또 눈에 묻혔다.'),
@@ -314,7 +319,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: past ? '열병이 번진다' : '아이 열병', speaker: leader(g, 'medtech'), focus: 'medtech', required: true,
       body: again(past, '꼬리칸 아이 셋이 열이 난다. "해열제는 상자에 있다. 꺼낼지 정해 달라."', {
-        med_use: `이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. 의약품은 ${Math.round(g.med)} 남았다.`,
+        med_use: `이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. "그 집 애만 애냐." 의약품은 ${Math.round(g.med)} 남았다.`,
         med_save: '지난번 약을 못 받은 아이가 아직 열이 안 내렸다. 엄마가 의무칸 문 앞을 떠나지 않는다. "우리 애 차례는 언제냐."',
       }, '아이들이 또 열이 난다.'),
       choices: [
@@ -347,13 +352,13 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
         body: frost
           ? again(past, '지붕 경계를 서던 대원 둘이 동상을 입었다. "교대를 줄여 달라."', {
             hold_post: '지난번 지붕에 섰던 대원 하나가 발가락 둘을 잃었다. 경비대장이 말한다. "지붕 교대는 이제 못 선다."',
-            watch_less: '경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 동상을 입었다.',
-            guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 바람은 여전히 살을 엔다.',
+            watch_less: '경계를 줄인 그 밤을 두고 말이 많다. "지붕 위로 뭔가 지나갔다." 대원들이 다시 동상을 입었다.',
+            guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. "그 칸 난로는 밤새 벌겋더라." 그런데 지붕 위 바람은 여전히 살을 엔다.',
           }, '지붕 경계 대원들이 또 동상을 입었다.')
           : again(past, '지붕 경계를 서던 대원 둘이 찬비에 흠뻑 젖어 이가 맞부딪힌다. "교대를 줄여 달라."', {
             hold_post: '지난번 지붕에 섰던 대원 하나가 열이 올라 일어나지 못한다. 경비대장이 말한다. "지붕 교대는 이제 못 선다."',
-            watch_less: '경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 젖은 채 떨었다.',
-            guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 찬비는 그대로다.',
+            watch_less: '경계를 줄인 그 밤을 두고 말이 많다. "지붕 위로 뭔가 지나갔다." 대원들이 다시 젖은 채 떨었다.',
+            guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. "그 칸 난로는 밤새 벌겋더라." 그런데 지붕 위 찬비는 그대로다.',
           }, '지붕 경계 대원들이 또 젖은 채 떨었다.'),
         choices: [
           { id: 'guard_heat', label: '경비대 난방을 올린다', say: '경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.', effs: [{ t: 'lever', c: 'guard', which: 'heat', v: 1 }, { t: 'rel', c: 'guard', v: 3 }] },
@@ -580,11 +585,16 @@ function baseView(g: Game, card: Card): CardView {
     }
     case 'favor': {
       const past = memo(g, `favor:${c}`);
-      const fav = past ? FAVORS_AGAIN[c] : FAVORS[c];
+      const sup = suppliesAsks(g);
+      const fav = past ? FAVORS_AGAIN[c] : (sup && FAVORS_SUP[c]) || FAVORS[c];
+      const fine: Choice[] = sup && (g.supFine ?? 0) >= 1 ? [
+        { id: 'grant_fine', label: '좋은 물건으로 들어준다', effs: [{ t: 'supFine', v: -1 }, { t: 'debt', c }, { t: 'rel', c, v: 2 }], special: 'favor_risk' },
+      ] : [];
       return {
         title: '사적인 부탁', speaker: leader(g, c), focus: c, required: true, body: fav.body, key: `favor:${c}`,
         choices: withAfford(g, [
           { id: 'grant', label: '들어준다', say: past ? '이번까지다. 다음은 없다.' : '들어주지. 대신 이 일은 기억해 둬라.', effs: [...fav.cost, { t: 'debt', c }], special: 'favor_risk' },
+          ...fine,
           { id: 'refuse', label: '거절한다', say: past ? '한 번 들어줬다고 버릇이 되면 안 된다.' : '사사로운 부탁은 받지 않는다.', effs: [{ t: 'rel', c, v: past ? -4 : -3 }] },
         ]),
       };
@@ -895,6 +905,11 @@ const FAVORS_AGAIN: Record<Comm, { body: string; cost: Eff[] }> = {
   engine: { body: '"그 견습생, 쓸 만하다. 하나 더." 수석 기관사가 이번엔 이름까지 적어 왔다.', cost: [{ t: 'rel', c: 'tail', v: -3 }] },
 };
 
+const FAVORS_SUP: Partial<Record<Comm, { body: string; cost: Eff[] }>> = {
+  tail: { body: '"아이들 겨울옷이 모자라다. 두 벌만."', cost: [{ t: 'sup', v: -2 }] },
+  medtech: { body: '"비누가 없어 손을 못 씻는다. 한 상자만."', cost: [{ t: 'sup', v: -1 }] },
+};
+
 const FAVORS: Record<Comm, { body: string; cost: Eff[] }> = {
   tail: { body: '"아들이 기침을 한다. 의무칸 침상 하나만." 대표가 처음으로 사적인 부탁을 한다.', cost: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 2, v: 3 }] },
   medtech: { body: '"동생이 앞칸 빈자리에 갈 수 있게 해 달라." 아무도 모르게.', cost: [{ t: 'base', c: 'front', i: 2, v: 3 }] },
@@ -927,6 +942,8 @@ export function applyEffs(g: Game, effs: readonly Eff[], from: WoundFrom = 'stop
       case 'food': bump(g, 'food', e.v, 'card'); break;
       case 'med': bump(g, 'med', e.v, 'card', { floor0: true }); break;
       case 'lux': bump(g, 'lux', e.v, 'card', { floor0: true }); break;
+      case 'sup': bump(g, 'sup', e.v, 'card'); break;
+      case 'supFine': if (g.supOn) g.supFine = Math.max(0, (g.supFine ?? 0) + e.v); break;
       case 'trust': bump(g, 'trust', e.v, 'card'); break;
       case 'tension': bump(g, 'tension', e.v, 'card'); break;
       case 'fear': g.fear = clamp(g.fear + e.v, 0, 100); break;

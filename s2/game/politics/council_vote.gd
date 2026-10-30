@@ -638,11 +638,11 @@ static func tool_status(g: Dictionary, t: Dictionary, comm: String, tool: String
 
 
 ## S1 openConditions: the car's worst-off ask, one of its own and one common,
-## the same within a session. S1c's conditions stay off (a dom of stores is S1a).
+## the same within a session. S1c and supplies conditions stay off in S2.
 static func open_conditions(g: Dictionary, t: Dictionary, comm: String) -> Array:
 	var pool: Array = []
 	for cond: Dictionary in t["CONDITIONS"][comm]:
-		if not bool(cond.get("s1c", false)):
+		if not bool(cond.get("s1c", false)) and not bool(cond.get("sup", false)):
 			pool.append(cond)
 	var sit: Array[float] = St.situation(g, t, comm)
 	var want := "relocate" if comm == "tail" and sit[2] >= 70.0 else ("heat" if sit[0] < sit[1] else "ration")
