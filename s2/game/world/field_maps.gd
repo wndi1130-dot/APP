@@ -104,7 +104,11 @@ static func build(place_id: String) -> Dictionary:
 static func build_from(script: Script) -> Dictionary:
 	# A stop map is finished as it is, then grows its outer village (map_ring.gd).
 	if MapRing.enabled(script):
-		return MapRing.build(script, build_from)
+		var grown := MapRing.build(script, build_from)
+		# The lights people left, planned again on the grown map: its outer
+		# village gets them too, as many as the whole map's area (T0-9).
+		NightLights.replan(grown)
+		return grown
 	var data: Dictionary = script.build()
 	var consts: Dictionary = script.get_script_constant_map()
 	if not data.has("place_id"):

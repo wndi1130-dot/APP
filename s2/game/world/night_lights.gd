@@ -1,10 +1,10 @@
 extends RefCounted
 ## Lights people left in a town at night (decision 471 B4): a fire in a drum,
 ## a campfire by a woodpile, a candle in a window, a car's headlights with
-## battery left. Three to six a map, spread out, chosen from what the map
-## already has, so the dark has a few warm places to steer by; a big map gets
-## more, by its area. A couple go first in the ring round the stop the first
-## screen looks at. A map whose own light rows already name one of these kinds
+## battery left. Three to six a map, a big one up to twelve by its area,
+## spread out, chosen from what the map already has, so the dark has a few warm
+## places to steer by. A couple go first where the crew steps down, on the
+## first screen. A map whose own light rows already name one of these kinds
 ## keeps its own and gets none.
 ## A map marked no_fire gets no fires. No smoke anywhere: a flame is a glow.
 
@@ -29,11 +29,12 @@ const MOST := 6
 ## (T0-9, mood 10-30). Each kind's own most grows with it.
 const AREA_PER_MOST := 25000.0
 const MOST_BIG := 12
-## The ring round the stop (metres from the train) where at most RING_MOST go
-## first, so the first screen at night has a warm place or two; the rest spread.
-const RING_NEAR := 30.0
-const RING_FAR := 60.0
-const RING_MOST := 2
+## Round where the crew steps down (metres from the middle of the squad's
+## cells) at most FIRST_MOST go first, so the first screen at night has a warm
+## place or two; the rest spread. The play camera shows about 26 m either side
+## and 21 m up and down there (zoom 24, a phone held wide).
+const FIRST_REACH := 22.0
+const FIRST_MOST := 2
 const SPREAD := 10.0   # cells at least between two of them
 const TRAIN_GAP := 6   # cells kept clear of the train (it has its own lights)
 const ON_MIN := 890    # they show as the light goes (decision 210)
@@ -65,15 +66,16 @@ static func plan(data: Dictionary) -> int:
 		cap[kind] = ceili(float(MOST_OF[kind]) * most / MOST)
 	var picked: Array = []
 	var took: Dictionary = {}
+	var step := _step_down(data)
 	for kind: String in KINDS:
-		if picked.size() >= RING_MOST:
+		if picked.size() >= FIRST_MOST or step.x < 0.0:
 			break
 		if not pools.has(kind):
 			continue
 		var pool: Array = pools[kind]
 		for i in range(pool.size() - 1, -1, -1):
 			var row: Dictionary = pool[i]
-			if _in_ring(data, row["cell"]) and _far(picked, row["cell"]):
+			if (Vector2(row["cell"]) + Vector2(0.5, 0.5)).distance_to(step) <= FIRST_REACH and _far(picked, row["cell"]):
 				row["kind"] = kind
 				picked.append(row)
 				took[kind] = 1
@@ -115,16 +117,15 @@ static func most_for(grid: FieldGrid) -> int:
 	return clampi(roundi(grid.width * grid.height / AREA_PER_MOST * MOST), MOST, MOST_BIG)
 
 
-## In the ring round the stop: this far from the train's nearest cell.
-static func _in_ring(data: Dictionary, c: Vector2i) -> bool:
-	var train: Variant = data.get("train")
-	if not (train is Rect2i):
-		return false
-	var r := train as Rect2i
-	var dx := maxi(maxi(r.position.x - c.x, 0), c.x - (r.end.x - 1))
-	var dy := maxi(maxi(r.position.y - c.y, 0), c.y - (r.end.y - 1))
-	var d := Vector2(dx, dy).length()
-	return d >= RING_NEAR and d <= RING_FAR
+## Where the crew steps down: the middle of the squad's cells, or (-1, -1).
+static func _step_down(data: Dictionary) -> Vector2:
+	var cells: Array = data.get("spawns", {}).get("squad", [])
+	if cells.is_empty():
+		return Vector2(-1, -1)
+	var at := Vector2.ZERO
+	for c: Vector2i in cells:
+		at += Vector2(c) + Vector2(0.5, 0.5)
+	return at / cells.size()
 
 
 ## Open ground out of doors, clear of the train.
