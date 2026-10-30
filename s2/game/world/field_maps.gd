@@ -12,6 +12,7 @@ extends RefCounted
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
+const RoomDecor = preload("res://game/world/room_decor.gd")
 const YardDress = preload("res://game/world/yard_dress.gd")
 const CellarRules = preload("res://game/world/cellar_rules.gd")
 const RoofRules = preload("res://game/world/roof_rules.gd")
@@ -162,6 +163,7 @@ static func build_from(script: Script) -> Dictionary:
 		data["room_stats"]["boxes_moved"] = RoomFurnish.boxes_into_furniture(data)
 		# A box in a piece whose name says another room takes the piece's name (the bag's tab).
 		data["room_stats"]["boxes_renamed"] = RoomFurnish.name_boxes_by_furniture(data)
+		data["room_stats"]["decor"] = RoomDecor.dress(data)
 		data["yard_stats"] = YardDress.dress(data)
 		# Low cellar windows at the foot of the walls show a cellar from outside.
 		data["cellar_windows"] = CellarRules.windows(data)
