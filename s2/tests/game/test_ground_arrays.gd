@@ -157,11 +157,49 @@ func test_the_workers_floor_arrays_are_the_ones_laid_row_by_row() -> void:
 		var laid := _row_floors(levels_of)
 		assert_gt(laid.size(), 0, "floors above or below the ground")
 		assert_eq(ahead.keys(), laid.keys())
+		var tiles := 0
+		for lv in laid:
+			tiles += (laid[lv] as Dictionary).size()
+		assert_gt(tiles, 0, "some floor is laid")
 		for lv in laid:
 			assert_eq((ahead[lv] as Dictionary).keys(), (laid[lv] as Dictionary).keys(), "level %d: the same tiles in the same order" % lv)
 			for tile in laid[lv]:
 				assert_eq(ahead[lv][tile], laid[lv][tile], "level %d tile %s as the rows laid it" % [lv, tile])
 			assert_eq(keys[lv], MapView.floor_key(levels_of[lv]))
+
+
+func test_the_floor_tiles_hold_on_every_kind_of_cell() -> void:
+	# One cell wider and taller than a tile: a cut tile on each side, its floor only at the
+	# far corner. Every solid kind, with and without a building; a level laying no floor.
+	var size := Vector2i(MapView.TILE + 1, MapView.TILE + 1)
+	var upper := FieldGrid.new(size.x, size.y)
+	upper.solid.fill(FieldGrid.Solid.AIR)
+	var kinds: Array[int] = []
+	for kind: int in FieldGrid.Solid.values():
+		kinds.append(kind)
+	for x in range(MapView.TILE):
+		upper.solid[upper.index(Vector2i(x, 3))] = kinds[x % kinds.size()]
+		upper.solid[upper.index(Vector2i(x, 5))] = kinds[x % kinds.size()]
+		upper.building[upper.index(Vector2i(x, 5))] = 2
+		upper.floor[upper.index(Vector2i(x, 3))] = x % FieldGrid.Floor.size()
+	upper.solid[upper.index(size - Vector2i.ONE)] = FieldGrid.Solid.NONE
+	var empty := FieldGrid.new(size.x, size.y)
+	empty.solid.fill(FieldGrid.Solid.AIR)
+	var cellar := FieldGrid.new(size.x, size.y)
+	cellar.solid.fill(FieldGrid.Solid.BLOCK)
+	for x in range(4, 9):
+		cellar.building[cellar.index(Vector2i(x, MapView.TILE))] = 5
+	var levels_of := {0: FieldGrid.new(size.x, size.y), 1: upper, 2: empty, -1: cellar}
+	var ahead := MapView.level_floor_arrays(levels_of, {})
+	var laid := _row_floors(levels_of)
+	assert_eq(ahead.keys(), laid.keys())
+	assert_true((ahead[2] as Dictionary).is_empty(), "a level of air lays nothing")
+	assert_true((ahead[1] as Dictionary).has(Vector2i(1, 1)), "the cut corner tile is laid")
+	assert_eq((ahead[-1] as Dictionary).keys(), [Vector2i(0, 1)], "the cellar's floor only under its building")
+	for lv in laid:
+		assert_eq((ahead[lv] as Dictionary).keys(), (laid[lv] as Dictionary).keys(), "level %d: the same tiles in the same order" % lv)
+		for tile in laid[lv]:
+			assert_eq(ahead[lv][tile], laid[lv][tile], "level %d tile %s as the rows laid it" % [lv, tile])
 
 
 func test_a_view_lays_the_loaders_arrays_and_works_out_a_changed_map_again() -> void:

@@ -2080,7 +2080,9 @@ static func level_floor_arrays(levels_of: Dictionary, keys: Dictionary) -> Dicti
 ## An upper floor's or the cellar's tiles at once: what level_floor_row gives row by row
 ## through SurfaceTools (the same arrays, the tiles in the order the rows first reach
 ## them), written straight into the arrays over the plain cells. An edge stop's floors
-## are mostly air beyond the old map: a call a cell was most of their time.
+## are mostly air beyond the old map: a call a cell was most of their time. Which cells
+## lay a floor, and how, is said here and in level_floor_row (and floor_key): change them
+## together (test_ground_arrays holds the two to the same arrays).
 static func level_floor_tiles(lg: FieldGrid, lv: int) -> Dictionary:
 	var w := lg.width
 	var h := lg.height
