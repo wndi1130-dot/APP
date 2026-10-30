@@ -5,6 +5,9 @@ const StopForm = preload("res://game/sim/stop_form.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
+const RouteBands = preload("res://game/train/route_bands.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
 
 
 func _game(extra: Dictionary = {}):
@@ -33,6 +36,45 @@ func test_valid_opts_win_and_bad_values_use_the_place() -> void:
 		assert_eq(StopForm.resolve({"stop_form": bad}, "mine"), "siding")
 		assert_eq(StopForm.resolve({"stop_form": bad}, "houses"), "city")
 	assert_eq(StopForm.resolve({"departure": {"stop_form": "remote"}}, "houses"), "city")
+
+
+## The route's 25 direct stops (decision 494's table): 10 city, 6 edge, 5 remote, 4 siding;
+## the other stops give none. The first leg's five, and past its ends the nearest one.
+func test_the_routes_direct_stops_and_their_forms() -> void:
+	var count := {}
+	var none := 0
+	for act: String in StopForm.ROUTE:
+		var forms: Array = StopForm.ROUTE[act]
+		for i in range(forms.size()):
+			var form := StopForm.on_route(act, i + 1)
+			assert_eq(form, String(forms[i]), "%s %d" % [act, i + 1])
+			if form.is_empty():
+				none += 1
+			else:
+				assert_true(StopForm.VALUES.has(form), form)
+				count[form] = int(count.get(form, 0)) + 1
+	assert_eq_deep(count, {"city": 10, "edge": 6, "remote": 5, "siding": 4})
+	assert_eq(none, 10)
+	assert_eq(StopForm.ROUTE.keys(), RouteBands.BANDS.keys(), "the acts the bands keep")
+	for act: String in StopForm.ROUTE:
+		assert_eq((StopForm.ROUTE[act] as Array).size(), (RouteBands.BANDS[act] as Array).size(), "%s: a form for each stop with a band" % act)
+	assert_eq(StopForm.ROUTE["prologue"], ["city", "edge", "siding", "city", "city"])
+	assert_eq(StopForm.on_route("prologue", 0), "city", "before the first stop: the first")
+	assert_eq(StopForm.on_route("prologue", 9), "city", "past the fifth: the fifth")
+	assert_eq(StopForm.on_route("act1", 0), "")
+	assert_eq(StopForm.on_route("act1", 13), "")
+	assert_eq(StopForm.on_route("unknown", 1), "")
+
+
+## A map the loader made in the route's city form comes to the field done: shape_stop hands
+## it back as it is, nothing worked out again on the main thread.
+func test_a_map_made_in_its_form_is_not_shaped_again() -> void:
+	var map: Dictionary = StopGround.apply(FieldMaps.build_from(BareLine), "city", 7)
+	assert_eq(map["stop_form"], "city")
+	var fresh := func() -> Dictionary:
+		fail_test("built again")
+		return {}
+	assert_true(is_same(FieldGame.shape_stop(map, "city", 7, -1.0, fresh), map))
 
 
 func test_times_and_fill_shares() -> void:

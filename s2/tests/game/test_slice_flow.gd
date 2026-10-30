@@ -222,6 +222,29 @@ func test_field_opts_carry_the_band_of_the_steps_stop() -> void:
 		assert_eq(any._field_opts()["region"], row[1], "a shared map: " + String(row[0]))
 
 
+## Decision 494: the field goes out in its stop's form on the route, and the map made ready
+## while the train runs is made in it. The first stop's own map is the first stop, a city one;
+## a map any stop may use is the stretch's stop (the second: an edge stop, the third: a siding).
+## A form asked of the slice wins; a stop the route gives none leaves it to the place.
+func test_field_opts_and_the_ready_map_carry_the_routes_stop_form() -> void:
+	var f = _flow()
+	f.step = f._index_of("field")
+	assert_eq(f._field_opts()["stop_form"], "city", "the first stop's own map")
+	assert_eq(f._stop_form(SliceFlow._field_seg()), "city", "made ready as it")
+	var any = _flow({"place": "houses_01"})
+	for row: Array in [["field", "edge"], ["arrive", "siding"]]:
+		any.step = any._index_of(String(row[0]))
+		assert_eq(any._field_opts()["stop_form"], row[1], "a shared map: " + String(row[0]))
+	assert_eq(any._stop_form(SliceFlow._field_seg()), "edge", "the map made ready on the train is the field's stop's")
+	var asked = _flow({"place": "houses_01", "stop_form": "remote", "stop_form_m": 500.0})
+	asked.step = asked._index_of("field")
+	assert_eq(asked._field_opts()["stop_form"], "remote", "asked of the slice")
+	assert_eq(asked._field_opts()["stop_form_m"], 500.0)
+	var none = _flow({"place": "houses_01", "stop_form": ""})
+	none.step = none._index_of("field")
+	assert_false(none._field_opts().has("stop_form"), "an empty form leaves it to the place")
+
+
 ## Decision 494: the stop's weather and cold are those of the season table's stretch it stands
 ## in (the first stop at 54 km: the fifth stretch), not the row with the slice's stretch number.
 func test_field_opts_read_the_season_stretch_of_the_steps_stop() -> void:
