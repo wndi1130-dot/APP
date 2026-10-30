@@ -32,6 +32,7 @@ const FxState = preload("res://fx/fx_state.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const ParticlePool = preload("res://fx/particle_pool.gd")
 const PUFF_SHADER = preload("res://fx/shaders/blood_burst.gdshader")
+const CONTACT_SHADER = preload("res://fx/shaders/contact_shade.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
 const GroundLook = preload("res://game/world/ground_look.gd")
@@ -97,8 +98,9 @@ var container_nodes: Dictionary = {} # id -> Node3D, only containers with a Prop
 var container_chunks: Dictionary = {} # Vector3i(tile x, tile y, level) -> {node, ids}
 var _container_chunk: Dictionary = {} # id -> chunk key
 var _container_batching: bool = false
-var ground_nodes: Dictionary = {}       # level -> MeshInstance3D (what lies on the ground, ground_look.gd)
+var ground_nodes: Dictionary = {}       # level -> MeshInstance3D (what lies on the ground, ground_look.gd; its rims a child "Rim")
 var _ground_sig: int = 0
+var _rim_material: ShaderMaterial = null
 var spot_nodes: Dictionary = {}
 var stove_nodes: Array = []
 var manhole_nodes: Dictionary = {}
@@ -744,26 +746,64 @@ func _empty_corners(st: SurfaceTool, at: Vector3) -> void:
 
 
 ## What lies on the ground (game.ground_items, shapes from ground_look.gd): one
-## mesh a level, made again only when the list has changed.
+## mesh a level, made again only when the list has changed; under it the things'
+## dark rims (ground_look.rim), a child mesh drawn with contact_shade.gdshader.
 func update_ground(items: Array) -> void:
 	var sig := items.hash()
 	if sig == _ground_sig or level_roots.is_empty():
 		return
 	_ground_sig = sig
 	var tools: Dictionary = {}
+	var rims: Dictionary = {}
 	for piece: Dictionary in GroundLook.pieces(items):
 		var lv: int = piece["lv"]
 		if not level_roots.has(lv):
 			continue
 		if not tools.has(lv):
 			tools[lv] = _begin()
+			rims[lv] = _begin()
 		box(tools[lv], piece["size"], piece["at"], piece["color"])
+		_rim_quad(rims[lv], GroundLook.rim(piece))
 	for lv in ground_nodes:
 		ground_nodes[lv].mesh = null
+		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = null
 	for lv in tools:
 		if not ground_nodes.has(lv):
 			ground_nodes[lv] = _mesh_node(lv)
+			var rim_node := MeshInstance3D.new()
+			rim_node.name = "Rim"
+			rim_node.material_override = _contact_material()
+			rim_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			ground_nodes[lv].add_child(rim_node)
 		ground_nodes[lv].mesh = tools[lv].commit()
+		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = rims[lv].commit()
+
+
+## One rim quad (ground_look.rim) flat on the floor: the thing's share of it and
+## the strength go in the vertex colour (contact_shade.gdshader).
+static func _rim_quad(st: SurfaceTool, rim: Dictionary) -> void:
+	var at: Vector3 = rim["at"]
+	var h: Vector2 = (rim["size"] as Vector2) * 0.5
+	var inner: Vector2 = rim["inner"]
+	var c := Color(inner.x, inner.y, GroundLook.RIM_STRENGTH)
+	var corners := [Vector3(-h.x, 0, -h.y), Vector3(h.x, 0, -h.y), Vector3(h.x, 0, h.y), Vector3(-h.x, 0, h.y)]
+	var uvs := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+	for idx in [0, 1, 2, 0, 2, 3]:
+		st.set_color(c)
+		st.set_uv(uvs[idx])
+		st.set_normal(Vector3.UP)
+		st.add_vertex(at + corners[idx])
+
+
+## The rims' material: a crisp core, then the last pixel smoothed; first of the
+## see-through things, so rain, snow and blood draw over it.
+func _contact_material() -> ShaderMaterial:
+	if _rim_material == null:
+		_rim_material = ShaderMaterial.new()
+		_rim_material.shader = CONTACT_SHADER
+		_rim_material.set_shader_parameter("core", 0.6)
+		_rim_material.render_priority = Material.RENDER_PRIORITY_MIN
+	return _rim_material
 
 
 func update_spot(id: String) -> void:
@@ -2072,14 +2112,78 @@ static func level_floor_arrays(levels_of: Dictionary, keys: Dictionary) -> Dicti
 		if int(lv) == 0:
 			continue
 		var lg: FieldGrid = levels_of[lv]
-		var floors: Dictionary = {}
-		for y in range(lg.height):
-			level_floor_row(lg, int(lv), y, floors)
-		var tiles: Dictionary = {}
-		for tile in floors:
-			tiles[tile] = (floors[tile] as SurfaceTool).commit_to_arrays()
-		out[lv] = tiles
+		out[lv] = level_floor_tiles(lg, int(lv))
 		keys[lv] = floor_key(lg)
+	return out
+
+
+## An upper floor's or the cellar's tiles at once: what level_floor_row gives row by row
+## through SurfaceTools (the same arrays, the tiles in the order the rows first reach
+## them), written straight into the arrays over the plain cells. An edge stop's floors
+## are mostly air beyond the old map: a call a cell was most of their time. Which cells
+## lay a floor, and how, is said here and in level_floor_row (and floor_key): change them
+## together (test_ground_arrays holds the two to the same arrays).
+static func level_floor_tiles(lg: FieldGrid, lv: int) -> Dictionary:
+	var w := lg.width
+	var h := lg.height
+	var so := lg.solid
+	var bu := lg.building
+	var fl := lg.floor
+	var tiles_x := ceili(w / float(TILE))
+	# The cells each tile lays, and the tiles in the order a row-by-row walk meets them.
+	var counts := PackedInt32Array()
+	counts.resize(tiles_x * ceili(h / float(TILE)))
+	var order: Array[Vector2i] = []
+	for y in h:
+		var row := y * w
+		var ty := y / TILE
+		for x in w:
+			var kind := so[row + x]
+			if kind == S.AIR or (kind == S.BLOCK and bu[row + x] < 0):
+				continue
+			var t := ty * tiles_x + x / TILE
+			if counts[t] == 0:
+				order.append(Vector2i(x / TILE, ty))
+			counts[t] += 1
+	var y0 := lv * LEVEL_H
+	var out: Dictionary = {}
+	for tile in order:
+		var n := counts[tile.y * tiles_x + tile.x] * 6
+		var verts := PackedVector3Array()
+		verts.resize(n)
+		var normals := PackedVector3Array()
+		normals.resize(n)
+		normals.fill(Vector3.UP)
+		var colors := PackedColorArray()
+		colors.resize(n)
+		var at := 0
+		for y in range(tile.y * TILE, mini((tile.y + 1) * TILE, h)):
+			for x in range(tile.x * TILE, mini((tile.x + 1) * TILE, w)):
+				var i := y * w + x
+				var kind := so[i]
+				if kind == S.AIR or (kind == S.BLOCK and bu[i] < 0):
+					continue
+				var color := FLOOR_COLORS[fl[i]]
+				var tint := (float((x * 73 + y * 37) % 11) / 11.0 - 0.5) * 0.035
+				# Upper floors and the cellar are all under a roof (alpha 0).
+				color = Color(color.r + tint, color.g + tint, color.b + tint, 0.0)
+				var p0 := Vector3(x, y0, y)
+				var p2 := Vector3(x + 1, y0, y + 1)
+				verts[at] = p0
+				verts[at + 1] = Vector3(x + 1, y0, y)
+				verts[at + 2] = p2
+				verts[at + 3] = p0
+				verts[at + 4] = p2
+				verts[at + 5] = Vector3(x, y0, y + 1)
+				for j in 6:
+					colors[at + j] = color
+				at += 6
+		var arrays: Array = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = verts
+		arrays[Mesh.ARRAY_NORMAL] = normals
+		arrays[Mesh.ARRAY_COLOR] = colors
+		out[tile] = arrays
 	return out
 
 

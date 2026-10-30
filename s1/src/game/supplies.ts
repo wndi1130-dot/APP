@@ -19,8 +19,14 @@ export const SUP_MAKE = {
 /** 봇만 거는 판별 정책. 저장 상태와 난수에 넣지 않고 일반 판에는 없다. */
 export const SUPPLIES_BOT = new WeakMap<Game, {
   make: 'none' | 'last' | 'first';
+  /** 셋째 PR 전 규칙을 재는 대조군만 false. 일반 판에는 이 정책이 없다. */
+  ask?: boolean;
   beforeWork?: (g: Game) => void;
 }>();
+
+export function suppliesAsks(g: Game): boolean {
+  return !!g.supOn && SUPPLIES_BOT.get(g)?.ask !== false;
+}
 
 export type SuppliesSource = 'stop.loot' | 'sup.search' | 'field.loot' | 'sup.make';
 export interface SuppliesTurn {

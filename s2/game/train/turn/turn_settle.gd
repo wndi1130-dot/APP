@@ -13,6 +13,7 @@ const Agenda = preload("res://game/politics/council_agenda.gd")
 const Vote = preload("res://game/politics/council_vote.gd")
 const Ladder = preload("res://game/train/turn/turn_ladder.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
+const TrainDecor = preload("res://game/train/train_decor.gd")
 
 static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	if g0.get("stranded") != null: return C.unsupported(g0, "settle: stranded/trip")
@@ -68,6 +69,8 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	if g["phase"] == "end": return C.unsupported(g0, "settle: finish lookback")
 	# S1 disasterSettle stands here (no disasters in S2), then climateSettle: a frozen stretch goes by.
 	TrainClimate.settle(g, t)
+	# decor.ts reconcileStore: the dual-use tags melt, newest first, by what the settlement spent.
+	TrainDecor.reconcile_store(g)
 	Care.lookback(g)
 	var receipt: Dictionary = {"rel": {}, "notes": notes}
 	for key: String in ["coal", "food", "med", "trust", "tension"]: receipt[key] = float(g[key]) - float(before[key])

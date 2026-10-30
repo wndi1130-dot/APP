@@ -3,6 +3,7 @@ extends RefCounted
 ## Starts pay once; only untouched jobs refund the recorded payment.
 
 const TrainResearch = preload("res://game/train/train_research.gd")
+const TrainDecor = preload("res://game/train/train_decor.gd")
 const D: Dictionary = {
 	"insulateWork": 3, "insulateWood": 8, "insulateWarm": 6,
 	"insulateHeat": 0.3, "insulateCrowd": 2, "insulateQuotaHalf": false,
@@ -24,24 +25,7 @@ const FURNITURE_SIZE: Dictionary = {
 	"medium": {"slots": 2, "points": 2, "crowd": 0.5},
 	"large": {"slots": 1, "points": 3, "crowd": 1.5},
 }
-const FURNITURE: Dictionary = {
-	"chair": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
-	"side_table": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
-	"small_shelf": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
-	"oil_lamp": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
-	"small_box": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
-	"frame": {"size": "small", "warm": 0, "crowd": 0, "piano": false},
-	"drawer": {"size": "medium", "warm": 0, "crowd": 0, "piano": false},
-	"bed_frame": {"size": "medium", "warm": 0, "crowd": -1, "piano": false},
-	"table": {"size": "medium", "warm": 0, "crowd": 0, "piano": false},
-	"bookshelf": {"size": "medium", "warm": 0, "crowd": 0, "piano": false},
-	"small_stove": {"size": "medium", "warm": 2, "crowd": 0, "piano": false},
-	"wardrobe": {"size": "large", "warm": 0, "crowd": 0, "piano": false},
-	"piano": {"size": "large", "warm": 0, "crowd": 0, "piano": true},
-	"cupboard": {"size": "large", "warm": 0, "crowd": 0, "piano": false},
-	"iron_stove": {"size": "large", "warm": 4, "crowd": 0, "piano": false},
-	"safe": {"size": "large", "warm": 0, "crowd": 0, "piano": false},
-}
+const FURNITURE: Dictionary = TrainDecor.DECOR
 const CAR_COMM: Dictionary = {
 	"tail1": "tail", "tail2": "tail", "tail3": "tail", "medtech": "medtech",
 	"guard": "guard", "front": "front", "engine": "engine",
@@ -247,8 +231,12 @@ static func job_title(kind: String, car: String) -> String:
 
 
 ## S1 furnishOf: reading an older save never adds a key to it.
+## The captain's and dining cars keep only {items}; they read like an untouched car around those items.
 static func furnish_of(g: Dictionary, car: String) -> Dictionary:
-	return _dom(g).get("furnish", {}).get(car, {"work": 0, "jobs": [], "furnPts": 0, "tier": 0, "best": 0, "items": []})
+	var f: Variant = _dom(g).get("furnish", {}).get(car)
+	if f is Dictionary and f.has("tier"):
+		return f
+	return {"work": 0, "jobs": [], "furnPts": 0, "tier": 0, "best": 0, "items": f.get("items", []) if f is Dictionary else []}
 
 
 static func furnish_score(g: Dictionary, car: String) -> int:
@@ -323,9 +311,7 @@ static func _bump_furnish_rel(g: Dictionary, c: String, delta: float) -> void:
 static func _update_furnish(g: Dictionary, car: String) -> void:
 	var f: Dictionary = _mutable_furnish(g, car)
 	f["work"] = f["jobs"].size()
-	var points: int = 0
-	for item: Dictionary in f["items"]:
-		points += int(FURNITURE_SIZE[item["size"]]["points"])
+	var points: int = TrainDecor.furniture_points(f["items"])
 	f["furnPts"] = mini(int(D["furnishFurnitureCap"]), points)
 	var score: int = furnish_score(g, car)
 	var reached: int = 0
@@ -343,29 +329,108 @@ static func _update_furnish(g: Dictionary, car: String) -> void:
 
 
 static func place_furniture(g: Dictionary, car: String, kind: String) -> Dictionary:
-	if not g.get("dom") is Dictionary or not FURNISH_CARS.has(car):
-		return {"ok": false, "why": "살림은 사람이 사는 객차 여섯 칸만"}
-	if not FURNITURE.has(kind):
+	if not FURNITURE.has(kind) or not FURNITURE[kind]["furniture"]:
 		return {"ok": false, "why": "알 수 없는 가구"}
-	var size: String = FURNITURE[kind]["size"]
-	var count: int = 0
-	for item: Dictionary in furnish_of(g, car)["items"]:
-		count += int(item["size"] == size)
-	if count >= int(FURNITURE_SIZE[size]["slots"]):
-		return {"ok": false, "why": "이 크기 가구를 놓을 자리가 없다"}
-	_mutable_furnish(g, car)["items"].append({"kind": kind, "size": size})
-	_update_furnish(g, car)
-	# S2 reads situation directly from the state, so no refreshSit cache.
-	return {"ok": true}
+	return place(g, car, kind, FURNITURE[kind]["spot"])
 
 
 static func remove_furniture(g: Dictionary, car: String, index: Variant) -> Dictionary:
-	if not g.get("dom") is Dictionary or not FURNISH_CARS.has(car) or not (index is int or index is float):
-		return {"ok": false, "why": "그 자리에 가구가 없다"}
-	if not is_finite(float(index)) or float(index) != floorf(float(index)) or float(index) < 0.0 or float(index) >= furnish_of(g, car)["items"].size():
-		return {"ok": false, "why": "그 자리에 가구가 없다"}
-	_mutable_furnish(g, car)["items"].remove_at(int(index))
-	_update_furnish(g, car)
+	return take_back(g, car, index)
+
+
+static func can_place(g: Dictionary, car: String, kind: String, spot: String, at: Variant = null, rot: Variant = null, on: Variant = null) -> Dictionary:
+	return TrainDecor.can_place(g, car, kind, spot, at, rot, on)
+
+
+static func slots_open(g: Dictionary, car: String) -> Dictionary:
+	return TrainDecor.slots_open(g, car)
+
+
+static func place(g: Dictionary, car: String, kind: String, spot: String, at: Variant = null, rot: Variant = null, on: Variant = null) -> Dictionary:
+	var check: Dictionary = can_place(g, car, kind, spot, at, rot, on)
+	if not check["ok"]:
+		return check
+	var def: Dictionary = TrainDecor.DECOR[kind]
+	var store: Dictionary = g["dom"]["store"]
+	var entry: Dictionary = store[kind]
+	var item: Dictionary = {"kind": kind, "size": def["size"], "spot": spot}
+	if at != null: item["at"] = at.duplicate()
+	if rot != null: item["rot"] = rot
+	if on != null: item["on"] = on
+	if def.has("res"):
+		var tag: Dictionary = TrainDecor.oldest(entry)
+		g[def["res"]] = float(g.get(def["res"], 0)) - float(tag["v"])
+		item["v"] = tag["v"]
+		entry["tags"].erase(tag)
+	entry["n"] -= 1
+	if entry["n"] == 0:
+		store.erase(kind)
+	if FURNISH_CARS.has(car):
+		_mutable_furnish(g, car)["items"].append(item)
+		_update_furnish(g, car)
+	else:
+		var d: Dictionary = g["dom"]
+		if not d.has("furnish"): d["furnish"] = {}
+		if not d["furnish"].has(car): d["furnish"][car] = {"items": []}
+		d["furnish"][car]["items"].append(item)
+	return {"ok": true}
+
+
+static func _placed(g: Dictionary, car: String, index: Variant) -> Dictionary:
+	if not g.get("dom") is Dictionary or not TrainDecor.DECOR_CARS.has(car) or not TrainDecor.integer(index):
+		return {}
+	var items: Array = TrainDecor.items_of(g, car)
+	return items[int(index)] if float(index) < items.size() else {}
+
+
+static func move(g: Dictionary, car: String, index: Variant, at: Variant, rot: Variant = null) -> Dictionary:
+	var item: Dictionary = _placed(g, car, index)
+	if item.is_empty():
+		return {"ok": false, "why": "그 자리에 물건이 없다"}
+	if at == null or not TrainDecor.valid_at(at) or not TrainDecor.valid_rot(rot):
+		return {"ok": false, "why": "자리나 회전 값이 올바르지 않다"}
+	item["at"] = at.duplicate()
+	if rot != null: item["rot"] = rot
+	return {"ok": true}
+
+
+static func rotate(g: Dictionary, car: String, index: Variant, rot: Variant) -> Dictionary:
+	var item: Dictionary = _placed(g, car, index)
+	if item.is_empty():
+		return {"ok": false, "why": "그 자리에 물건이 없다"}
+	if rot == null or not TrainDecor.valid_rot(rot):
+		return {"ok": false, "why": "자리나 회전 값이 올바르지 않다"}
+	item["rot"] = rot
+	return {"ok": true}
+
+
+static func take_back(g: Dictionary, car: String, index: Variant) -> Dictionary:
+	var item: Dictionary = _placed(g, car, index)
+	if item.is_empty():
+		return {"ok": false, "why": "그 자리에 물건이 없다"}
+	var items: Array = TrainDecor.items_of(g, car)
+	var store: Dictionary = TrainDecor.read_store(g)
+	var removed: Array = []
+	for j: int in items.size():
+		if TrainDecor.spot_of(items[j]) == "surface" and items[j].get("on") == index:
+			removed.append(j)
+	removed.append(int(index))
+	for j: int in removed:
+		var row: Dictionary = items[j]
+		var def: Dictionary = TrainDecor.DECOR[row["kind"]]
+		if def.has("res") and row.has("v"):
+			g[def["res"]] = float(g.get(def["res"], 0)) + float(row["v"])
+		TrainDecor.add_stored(store, row["kind"], row.get("v") if def.has("res") else null)
+	var remap: Dictionary = {}
+	var kept: Array = []
+	for j: int in items.size():
+		if not removed.has(j):
+			remap[j] = kept.size()
+			kept.append(items[j])
+	for row: Dictionary in kept:
+		if row.has("on"): row["on"] = remap[int(row["on"])]
+	g["dom"]["furnish"][car]["items"] = kept
+	if FURNISH_CARS.has(car): _update_furnish(g, car)
 	return {"ok": true}
 
 

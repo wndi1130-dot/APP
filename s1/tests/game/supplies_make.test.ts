@@ -93,7 +93,7 @@ describe('생필품 공방: 켬과 연구', () => {
     const g = fresh();
     expect(usefulVariant(g, 'w6')).toBeUndefined();
     expect(usefulVariant(g, 'w7')).toBe('a');
-    expect(usefulVariant(g, 'w8')).toBeNull();
+    expect(usefulVariant(g, 'w8')).toBeUndefined();
     for (const v of Object.values(TECHS.w7.variants!)) {
       expect([...v.label].length).toBeLessThanOrEqual(15);
       expect([...v.say].length).toBeLessThanOrEqual(40);
