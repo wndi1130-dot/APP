@@ -58,6 +58,11 @@ describe('꾸밈 여섯 몫', () => {
       putItems(g, 'front', kinds.slice(0, 20).map(k => item(k)));
       expect(decorParts(g, 'front')[0]).toBe(20 / 22);
     } finally { for (let i = 0; i < 10; i++) delete table['test_kind_' + i]; }
+    try {
+      table.test_kind_0 = DECOR.chair; // 26 kinds: floor(20.8) = 20, so 20 placed kinds are a full share
+      putItems(g, 'front', kinds.slice(0, 20).map(k => item(k)));
+      expect(decorParts(g, 'front')[0]).toBe(1);
+    } finally { delete table.test_kind_0; }
   });
   it.each(DECOR_CARS)('%s 바닥·벽은 칸 최대에서 자른 줄을 쓴다', car => {
     const g = fresh();
@@ -116,6 +121,7 @@ describe('정산 사기·처음 80%', () => {
   it.each(FURNISH_CARS)('%s 몫은 공동체 칸 수로 나눈다', car => {
     const g = fresh(); decorated(g, car); furnishTick(g);
     for (const c of COMMS) expect(g.comms[c].rel).toBeCloseTo(c === CAR_COMM[car] ? 1 / COMM_CARS[c] : 0, 12);
+    expect(g.ledger!.some(row => row.k === 'rel:' + CAR_COMM[car])).toBe(true);
     expect(g.ledger!.every(row => row.why === 'furnish')).toBe(true);
   });
   it.each([[1, 0.1], [24, 0.2], [66, 0.3]])('식당 작은 물건 %s개: 단 조건 없이 공동체마다 %s', (small, reward) => {
@@ -160,12 +166,17 @@ describe('정산 사기·처음 80%', () => {
     expect(g.journal[0].text).toBe(FURNISH80.dining.journal + ' 「' + FURNISH80.dining.say[mood] + '」');
   });
   it('옛 저장은 decor80=[]로 읽고 버전·RNG를 유지하며 새 기록도 다시 읽는다', () => {
+    expect(SAVE_VERSION).toBe(1);
     const g = fresh(); g.version = SAVE_VERSION; delete g.dom!.decor80;
     const old = readSave(JSON.parse(JSON.stringify(g))); expect(old.ok).toBe(true);
     if (!old.ok) return;
     expect(old.g.dom!.decor80).toEqual([]); expect(old.g.rng).toEqual(g.rng); expect(old.g.version).toBe(SAVE_VERSION);
     decorated(old.g, 'front'); furnishTick(old.g);
     const again = readSave(JSON.parse(JSON.stringify(old.g))); expect(again.ok).toBe(true);
-    if (again.ok) { expect(again.g.dom!.decor80).toEqual(['front']); expect(decorItems(again.g, 'front')).toEqual(decorItems(old.g, 'front')); }
+    if (again.ok) {
+      expect(again.g.dom!.decor80).toEqual(['front']); expect(decorItems(again.g, 'front')).toEqual(decorItems(old.g, 'front'));
+      const lines = again.g.journal.length;
+      furnishTick(again.g); expect(again.g.journal).toHaveLength(lines);
+    }
   });
 });
