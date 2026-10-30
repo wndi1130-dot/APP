@@ -353,6 +353,55 @@ const oldDecor = decorBase(); delete oldDecor.dom!.store;
 oldDecor.dom!.furnish = { front: { work: 0, jobs: [], furnPts: 1, tier: 0, best: 0, items: [{ kind: 'frame', size: 'small' }] } };
 decorCase('legacy-unpositioned', oldDecor, [{ op: 'migrate' }, { op: 'read' }, { op: 'takeBack', car: 'front', i: 0 }]);
 
+// Append new cases after all existing inputs so prepare's shared RNG keeps their seeds stable.
+furnishCase('furniture-rewards-once-after-each-tier-drops', furnishBase(), [
+  { op: 'place', car: 'front', kind: 'piano' },
+  ...FURNISH_STEPS.flatMap(step => [
+    ...(step > 1 ? [{ op: 'start', car: 'front', step }, { op: 'run' }] as FurnishOp[] : []),
+    { op: 'remove', car: 'front', index: 0 }, { op: 'place', car: 'front', kind: 'piano' },
+  ] as FurnishOp[]),
+]);
+
+const blockedWall = decorBase();
+blockedWall.lux = DECOR.painting.v! + DECOR.rare_violin.v!;
+decorCase('tier-drop-wall-keeps-unreconciled-stock', blockedWall, [
+  { op: 'receive', gained: ['piano', 'painting', 'rare_violin'] },
+  { op: 'place', car: 'front', kind: 'piano', spot: 'floor' },
+  { op: 'place', car: 'front', kind: 'painting', spot: 'wall' },
+  { op: 'spend', res: 'lux', amount: DECOR.rare_violin.v! },
+  { op: 'takeBack', car: 'front', i: 0 }, { op: 'takeBack', car: 'front', i: 1 },
+  { op: 'takeBack', car: 'front', i: 0 }, { op: 'place', car: 'front', kind: 'piano', spot: 'floor' },
+]);
+for (const overflow of [false, true]) decorCase(`tier-drop-cascade-${overflow ? 'blocked-per-parent' : 'fits'}`, decorBase(), [
+  { op: 'receive', gained: ['cupboard', 'side_table', ...(overflow ? ['side_table'] : []),
+    ...Array<string>(4).fill('can_beans'), ...Array<string>(overflow ? 3 : 2).fill('record')] },
+  { op: 'place', car: 'front', kind: 'cupboard', spot: 'floor' },
+  { op: 'place', car: 'front', kind: 'side_table', spot: 'floor' },
+  ...(overflow ? [{ op: 'place', car: 'front', kind: 'side_table', spot: 'floor' }] as DecorOp[] : []),
+  ...Array.from({ length: 4 }, (): DecorOp => ({ op: 'place', car: 'front', kind: 'can_beans', spot: 'surface', on: 0 })),
+  ...Array.from({ length: overflow ? 3 : 2 }, (): DecorOp => ({ op: 'place', car: 'front', kind: 'record', spot: 'surface', on: 1 })),
+  { op: 'takeBack', car: 'front', i: 0 },
+]);
+for (const car of ['captain', 'dining']) for (const spot of ['floor', 'wall', 'surface']) {
+  const kinds = spot === 'floor' ? Array<string>(9).fill('chair') : spot === 'wall' ? ['painting'] : ['side_table', 'record', 'record', 'record'];
+  decorCase(`common-tier-drop-${car}-${spot}`, decorBase(), [
+    { op: 'receive', gained: ['piano', ...kinds] },
+    { op: 'place', car: 'front', kind: 'piano', spot: 'floor' },
+    ...kinds.map((kind): DecorOp => ({ op: 'place', car, kind, spot: DECOR[kind as keyof typeof DECOR].spot,
+      ...(kind === 'record' ? { on: 0 } : {}) })),
+    { op: 'takeBack', car: 'front', i: 0 },
+  ]);
+}
+for (const best of [undefined, 0, 1]) {
+  const old = decorBase();
+  old.dom!.furnish!.front = { work: 0, jobs: [], furnPts: 0, tier: 1, best: 1, items: [] };
+  if (best === undefined) Reflect.deleteProperty(old.dom!.furnish!.front, 'best');
+  else old.dom!.furnish!.front.best = best as 0 | 1;
+  decorCase(`legacy-reward-best-${best ?? 'missing'}`, old, [{ op: 'migrate' }, { op: 'migrate' },
+    { op: 'receive', gained: ['chair', 'piano'] }, { op: 'place', car: 'front', kind: 'chair', spot: 'floor' },
+    { op: 'takeBack', car: 'front', i: 0 }, { op: 'place', car: 'front', kind: 'piano', spot: 'floor' }]);
+}
+
 const dKeys = ['insulateWork', 'insulateWood', 'insulateWarm', 'insulateHeat', 'insulateCrowd', 'insulateQuotaHalf',
   'furnishClothWood', 'furnishFurnitureCap', 'furnishThreshold', 'furnishWarm', 'furnishCrowd', 'furnishRel',
   'furnishGapMin', 'furnishGapMax', 'furnishGapRel', 'furnishGapCap', 'furnishPianoRel'] as const;

@@ -80,6 +80,23 @@ static func slots_open(g: Dictionary, car: String) -> Dictionary:
 	return result
 
 
+static func slots_fit(car: String, items: Array, tier: int) -> bool:
+	var slots: Dictionary = DECOR_SLOTS[tier]
+	var floor_used: int = 0
+	var wall_used: int = 0
+	var surfaces: Dictionary = {}
+	for item: Dictionary in items:
+		match spot_of(item):
+			"floor": floor_used += 1
+			"wall": wall_used += 1
+			"surface":
+				var on: int = int(item["on"])
+				surfaces[on] = int(surfaces.get(on, 0)) + 1
+				if int(surfaces[on]) > int(slots["surface"]):
+					return false
+	return floor_used <= mini(int(slots["floor"]), int(FURNISH_FLOOR_MAX[car])) and wall_used <= mini(int(slots["wall"]), int(FURNISH_WALL_MAX[car]))
+
+
 ## The resource numbers have already been credited by the receipt owner.
 static func receive_decor(g: Dictionary, gained: Array) -> void:
 	if not g.get("dom") is Dictionary:
@@ -289,6 +306,8 @@ static func migrate(g: Dictionary) -> void:
 		for state: Variant in d["furnish"].values():
 			if not state is Dictionary or not state.get("items") is Array:
 				continue
+			if state.has("tier"):
+				state["best"] = maxi(int(state.get("best", state["tier"])), int(state["tier"]))
 			for item: Variant in state["items"]:
 				if item is Dictionary and DECOR.has(item.get("kind")) and not item.has("spot"):
 					item["spot"] = DECOR[item["kind"]]["spot"]

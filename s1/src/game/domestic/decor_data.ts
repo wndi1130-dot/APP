@@ -115,8 +115,11 @@ export function receiveDecor(g: DecorStock, gained: readonly string[]): void {
 export function migrateDecor(g: Game): void {
   if (!g.dom) return;
   g.dom.store ??= {};
-  for (const f of Object.values(g.dom.furnish ?? {})) for (const item of f.items) {
-    if (isDecorKind(item.kind)) item.spot ??= DECOR[item.kind].spot;
+  for (const f of Object.values(g.dom.furnish ?? {})) {
+    if ('tier' in f) f.best = Math.max(f.best ?? f.tier, f.tier) as typeof f.tier;
+    for (const item of f.items) {
+      if (isDecorKind(item.kind)) item.spot ??= DECOR[item.kind].spot;
+    }
   }
   reconcileStore(g);
 }
