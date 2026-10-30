@@ -774,7 +774,7 @@ function baseView(g: Game, card: Card): CardView {
       // 곁에 부모 한쪽이 살아 있으면 그 부모가 키우고, 나머지 갈래는 그 손을 덜어 주는 쪽이다(triage N7).
       const oc = other?.community ?? c;
       const choices: Choice[] = other
-        ? [{ label: '곁의 부모가 키운다', say: `${other.name}${iga(other.name)} 키운다. 칸이 손을 보태라!`, effs: [{ t: 'base', c: oc, i: 1, v: -1 }, { t: 'rel', c: oc, v: 2 }], special: 'orphan_parent' }]
+        ? [{ label: '곁의 부모가 키운다', say: `${other.name}이(가) 키운다. 칸이 손을 보태라!`, effs: [{ t: 'base', c: oc, i: 1, v: -1 }, { t: 'rel', c: oc, v: 2 }], special: 'orphan_parent' }]
         : [{ label: '같은 칸이 돌본다', say: '이 칸의 아이다. 이 칸이 함께 키운다.', effs: [{ t: 'base', c, i: 1, v: -2 }], special: 'orphan_same' }];
       if (c !== 'front') choices.push({ label: '앞칸 집에 맡긴다', say: other ? `밤엔 앞칸 빈 침대에서 재워라. ${other.name}도 자야 한다.` : '앞칸에 빈 침대가 있다. 거기서 자게 해라.', effs: [{ t: 'base', c: 'front', i: 2, v: 1 }, { t: 'rel', c, v: 4 }, { t: 'rel', c: 'front', v: -4 }], special: 'orphan_front' });
       if (c !== 'medtech') choices.push({ label: '의무칸에 둔다', say: other ? `낮엔 의무진이 맡아라. ${other.name}의 손을 덜어 줘라.` : '의무진이 맡아라. 아플 때 제일 가깝다.', effs: [{ t: 'base', c: 'medtech', i: 3, v: 2 }, { t: 'rel', c: 'medtech', v: -2 }, { t: 'trust', v: 1 }], special: 'orphan_med' });

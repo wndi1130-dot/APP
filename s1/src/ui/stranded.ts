@@ -5,7 +5,7 @@ import { icon } from './icons';
 import { fmt } from './common';
 import type { View } from './common';
 import { portrait } from './widgets';
-import { nameBtn } from './names';
+import { nameBtn, shortText } from './names';
 import './stranded.css';
 
 // 멈춘 열차 화면(결정 094, 구현명세 가 5.10): 석탄 0으로 선 동안 홈 화면이 이 판으로 바뀐다.
@@ -171,7 +171,7 @@ export function strandedBoard(view: View): HTMLElement | null {
         st.captainAway ? h('span', { class: 'strs__away' }, '열차장이 없다') : null,
         h('button', { class: 'chip strs__see', 'data-action': 'str-train' }, icon('people'), '열차 단면')),
       track(st, tv, !!st.trip?.leaderGoes),
-      last ? h('p', { class: 'strs__log' }, last.text) : null),
+      last ? h('p', { class: 'strs__log' }, shortText(last.text)) : null),
     h('div', { class: 'strs__body' }, costBlock(g), cartBlock(g, st, tv)));
 }
 
