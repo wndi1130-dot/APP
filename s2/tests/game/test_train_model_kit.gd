@@ -617,7 +617,9 @@ func test_rain_darkens_wood_and_cloth_but_not_painted_metal_or_glass() -> void:
 				var material: ShaderMaterial = row["material"]
 				if by_palette:
 					assert_eq(material.get_shader_parameter("porosity_tex"), Kit.porosity_texture(), id)
-					assert_almost_eq(float(material.get_shader_parameter("porosity")), 1.0, 0.001, id)
+					# Side-track wagons' boards are tarred: their palette takes less water (coaches as painted).
+					var want_scale: float = 0.4 if id.begins_with("wagon_") else 1.0
+					assert_almost_eq(float(material.get_shader_parameter("porosity")), want_scale, 0.001, id)
 				else:
 					assert_null(material.get_shader_parameter("porosity_tex"), id)
 					var want: float = 0.6 if id in ["plank_band", "plank_patches"] else 0.1

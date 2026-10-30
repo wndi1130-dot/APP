@@ -62,6 +62,9 @@ const PALETTE_POROSITY := {
 }
 const METAL_POROSITY := 0.1
 const ASSET_POROSITY := {"plank_band": 0.6, "plank_patches": 0.6}
+## 옆 선로 화차는 타르 먹인 판자라 물을 덜 먹는다: 팔레트 칸 값에 이만큼 곱한다. 첫 정차 비 낮에 화차
+## 끝벽·탄수차 판자가 젖어 어두운 칸으로 떨어졌다(mood 10-30, 줄 0.06). 같은 칸을 쓰는 열차 객차 벽은 그대로.
+const WAGON_POROSITY := {"wagon_coal": 0.4, "wagon_open": 0.4, "wagon_flat": 0.4, "wagon_tender": 0.4}
 static var _porosity_tex: ImageTexture
 const RULE_KEYS := ["kinds", "site", "requires", "forbids"]
 static var _catalog: Dictionary = {}
@@ -474,7 +477,8 @@ static func asset_meshes(id: String) -> Array:
 		return rows
 	var source := scene.instantiate()
 	var by_palette: bool = String(asset.get("source", "")) == PALETTE_SOURCE
-	_collect(source, Transform3D.IDENTITY, rows, 1.0 if by_palette else float(ASSET_POROSITY.get(id, METAL_POROSITY)), by_palette)
+	var porosity: float = float(WAGON_POROSITY.get(id, 1.0)) if by_palette else float(ASSET_POROSITY.get(id, METAL_POROSITY))
+	_collect(source, Transform3D.IDENTITY, rows, porosity, by_palette)
 	source.free()
 	if rows[1].is_empty() and asset["category"] == "parts":
 		rows[1] = rows[0]
