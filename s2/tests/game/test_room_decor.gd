@@ -218,3 +218,37 @@ func test_wall_hangings_sit_on_the_inner_wall_face() -> void:
 	bld[2 * 8 + 3] = -1
 	g.building = bld
 	assert_almost_eq(MapView.wall_face(g, Vector2i(3, 3), Vector2i(0, -1), 2), 0.775, 0.0001, "벽 너머가 밖이면 바깥벽")
+
+
+func test_plants_widen_one_step_at_a_time() -> void:
+	# 작은 고정 방(벽 안 5×5): 빈 바닥이 있으면 빈 바닥, 다 깔개면 깔개 위, 다 가구 앞이면 그 앞,
+	# 상자·여는 자리만 남으면 아무 단계에서도 안 선다.
+	var g := FieldGrid.new(7, 7)
+	var bld := PackedInt32Array()
+	bld.resize(49)
+	bld.fill(0)
+	g.building = bld
+	for y in range(7):
+		for x in range(7):
+			if x == 0 or y == 0 or x == 6 or y == 6:
+				g.set_solid(Vector2i(x, y), FieldGrid.Solid.WALL)
+	var map := RoomFurnish.rooms_of(g)
+	var of: PackedInt32Array = map["of"]
+	var ri := RoomFurnish._at(g, of, Vector2i(3, 3))
+	var cells: Array[Vector2i] = map["rooms"][ri]["cells"]
+	assert_eq(cells.size(), 25)
+	var only_rug := {Vector2i(1, 1): RoomDecor.AVOID_RUG}
+	var free_pick := RoomDecor._plant(g, of, ri, cells, {}, only_rug, {}, 7, 0)
+	assert_false(free_pick.is_empty())
+	assert_ne(free_pick["cell"], Vector2i(1, 1), "빈 바닥이 있으면 깔개 칸을 안 고른다")
+	for why: int in [RoomDecor.AVOID_RUG, RoomDecor.AVOID_FRONT, RoomDecor.AVOID_HOLDER_FRONT, RoomDecor.AVOID_TAKEN]:
+		var all: Dictionary = {}
+		for c in cells:
+			all[c] = why
+		var opened := -1
+		for step in range(RoomDecor.PLANT_STEPS):
+			if not RoomDecor._plant(g, of, ri, cells, {}, all, {}, 7, step).is_empty():
+				opened = step
+				break
+		var want: int = {RoomDecor.AVOID_RUG: 1, RoomDecor.AVOID_FRONT: 2, RoomDecor.AVOID_HOLDER_FRONT: -1, RoomDecor.AVOID_TAKEN: -1}[why]
+		assert_eq(opened, want, "까닭 %d은 단계 %d에서 처음 열림" % [why, want])

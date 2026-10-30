@@ -157,18 +157,30 @@ static func _walls(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vec
 		for c in cells:
 			if RoomFurnish._wall_side(g, of, ri, Rect2i(c, Vector2i.ONE), BACKS[facing]):
 				line[c] = true
+		# 이어진 벽 구간마다 한 번만 끝을 찾아 칸마다 [구간 안 자리, 구간 길이]를 둔다(칸마다 다시 찾으면 긴 벽에서 제곱).
+		var spot: Dictionary = {}
+		for c: Vector2i in line:
+			if spot.has(c):
+				continue
+			var start := c
+			while line.has(start - along):
+				start -= along
+			var run: Array[Vector2i] = []
+			var e := start
+			while line.has(e):
+				run.append(e)
+				e += along
+			for i in range(run.size()):
+				spot[run[i]] = Vector2i(i, run.size())
 		for c: Vector2i in line:
 			var tall := false
 			for p: Dictionary in cover.get(c, []):
 				tall = tall or RoomFurnish.TALL_KINDS.has(String(p.get("kind", "")))
 			if tall or stairs.has(c):
 				continue
-			var lo := 0
-			var hi := 0
-			while line.has(c - along * (lo + 1)):
-				lo += 1
-			while line.has(c + along * (hi + 1)):
-				hi += 1
+			var at: Vector2i = spot[c]
+			var lo := at.x
+			var hi := at.y - 1 - at.x
 			out.append({"cell": c, "facing": facing, "middle": 1.0 / (1.0 + absf(float(hi - lo)) / 2.0)})
 	return out
 
