@@ -2027,6 +2027,16 @@ func _update_person(p: Person, delta: float) -> void:
 		_move_person(p, delta)
 
 
+## A door a walk stops at to deal with on the way (field_actions
+## open_door_on_way): a shut one, and for the player a locked one too, as a
+## tap on it would — the key opens it, else 「잠김」 (the coordinator's call
+## under decision 442, 2026-10-30). A companion's way goes round a locked
+## door as before.
+func _meets_door(p: Person, door: Dictionary) -> bool:
+	var state := String(door.get("state", ""))
+	return state == "closed" or (state == "locked" and p == player)
+
+
 ## Left-thumb walking (field_unified 10, user 17:32): the direction follows
 ## the thumb at once; the body takes a moment to get going and to stop, more
 ## so loaded, worn out or on ice. A hard turn at a run drops to a walk first.
@@ -2066,7 +2076,7 @@ func _drive(p: Person, delta: float) -> void:
 	var step := p.drive_dir * p.drive_speed * delta
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
-	if lg == grid and grid.doors.has(dc) and grid.doors[dc]["state"] == "closed":
+	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
 		p.drive_speed = 0.0
 		actions.open_door_on_way(p, dc)
 		return
@@ -2130,7 +2140,7 @@ func _move_person(p: Person, delta: float) -> void:
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
-	if lg == grid and grid.doors.has(dc) and grid.doors[dc]["state"] == "closed":
+	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
 		actions.open_door_on_way(p, dc)
 		return
 	if lg.blocks_body(dc):

@@ -3,6 +3,7 @@ extends RefCounted
 ## slot; the original is never deleted by load_slot.
 
 const SAVE_VERSION := 1
+const TrainDecor = preload("res://game/train/train_decor.gd")
 const DEFAULT_PATH := "user://s1a_game_v2.json"
 const DEFAULT_BROKEN_PATH := "user://s1a_game_broken.json"
 const PHASES := ["prep", "travel", "stop", "council", "settle", "end"]
@@ -48,6 +49,7 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 
 
 static func fill_defaults(g: Dictionary) -> void:
+	TrainDecor.migrate(g)
 	if not g.has("eventLog") or g["eventLog"] == null:
 		g["eventLog"] = {}
 	if not g.has("needs") or g["needs"] == null:

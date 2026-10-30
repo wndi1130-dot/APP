@@ -80,6 +80,10 @@ void vertex() {
 // 4~7은 지역 판(결정 478): 짙은 슬레이트·녹슨 함석·짙은 널·회색 함석. 같은 밝기 단을 지킨다.
 const vec3 ROOFS[8] = vec3[8](vec3(0.56, 0.59, 0.65), vec3(0.72, 0.50, 0.40), vec3(0.50, 0.63, 0.52), vec3(0.65, 0.55, 0.44),
 	vec3(0.50, 0.52, 0.56), vec3(0.66, 0.48, 0.38), vec3(0.58, 0.49, 0.40), vec3(0.62, 0.63, 0.64));
+// 젖으면 어두워지는 정도(다공성)를 지붕 갈래마다(ROOFS와 같은 번호): 물을 거의 안 먹는 슬레이트·칠한 지붕·
+// 함석은 낮게, 바랜 기와와 나무 널은 높게. 한 값(0.5)이던 때는 비 오는 낮 슬레이트 지붕이 어두운 칸으로
+// 떨어졌다(mood #1079, 결정 470). 평지붕 루핑은 슬레이트와 같이 낮게.
+const float ROOF_POROUS[8] = float[8](0.25, 0.65, 0.2, 0.7, 0.25, 0.35, 0.7, 0.1);
 // 바깥벽 칠과 지붕은 집마다 굴린 색이라 모델 색 보정을 이만큼 덜 받는다(생활 색과 같은 길).
 uniform float house_colour : hint_range(0.0, 1.0) = 0.8;
 
@@ -401,7 +405,7 @@ void fragment() {
 			tc.x += 0.5 * mod(floor(tc.y), 2.0);
 			base = roof * (0.84 + 0.28 * fx_hash(floor(tc))) * (1.0 - 0.4 * seam(tc, vec2(0.05, 0.16)));
 		}
-		porous = 0.5;
+		porous = up > 0.97 ? 0.25 : ROOF_POROUS[clamp(int(paint.a + 0.5), 0, 7)];
 	} else if (zone == 7) {
 		// 지붕 덮개(building_kit cap: 모임 모서리·맨사드·지붕창 용마루): 그 집 지붕 색을 조금 어둡게.
 		// 함석 색이면 모임 지붕 네 모서리가 짙은 선으로 읽혔다(코디 10-29).
@@ -410,7 +414,7 @@ void fragment() {
 		base = roof * 0.72 * (0.9 + 0.15 * big);
 		lively = house_colour * 0.75;
 		rough = 0.8;
-		porous = 0.5;
+		porous = ROOF_POROUS[clamp(int(paint.a + 0.5), 0, 7)];
 	} else {
 		base = metal_color * (0.8 + 0.3 * big);
 		rough = 0.5;

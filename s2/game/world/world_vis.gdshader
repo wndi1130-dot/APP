@@ -673,9 +673,11 @@ void fragment() {
 		base = mix(base, bare_ground(kind, ground_detail, base, world_pos.xz, grain, ground_dx, ground_dy), bare_k);
 	}
 	// A furnished room's floor under its roof (room_finish; 0 elsewhere keeps the kind's colour).
+	// The floor itself only, at a storey's height: what lies on it (a coat, a map, the empty mark)
+	// is under the roof and faces up as well, and keeps its own colour.
 	vec2 room_px = fwidth(world_pos.xz);
 	float unseen_k = 1.0;
-	if (sky < 0.5 && up > 0.9) {
+	if (sky < 0.5 && up > 0.9 && abs(world_pos.y - 3.0 * round(world_pos.y / 3.0)) < 0.003) {
 		int rc = room_code(world_pos.xz, world_pos.y + 0.05, map_size);
 		if (rc > 0) {
 			vec3 tone;
@@ -785,8 +787,10 @@ void fragment() {
 	float lit = mix(1.0, max(reveal, floor_k), mask_on);
 	float grey = dot(base, vec3(0.3, 0.59, 0.11));
 	// The memory's grey only where the mask is drawn: with it off all is in sight.
-	// Out of doors by day the colour goes less (0.9 kept, not 0.4).
-	float keep = mix(reveal * 0.6 + 0.4, reveal * 0.1 + 0.9, round_floor_k);
+	// Out of doors by day the colour goes less (0.9 kept, not 0.2). Out of sight
+	// keeps a fifth of its colour: with the floors lifted (fx_sight 0.80 at night)
+	// the grey is what tells an unseen room from a seen one.
+	float keep = mix(reveal * 0.8 + 0.2, reveal * 0.1 + 0.9, round_floor_k);
 	vec3 dimmed = mix(vec3(grey), base, mix(1.0, keep, clamp(mask_on, 0.0, 1.0)));
 	// Tactical pause (fx_fade) fades the world before the sight mask darkens it.
 	ALBEDO = fx_photo(mix(dimmed, vec3(0.86, 0.88, 0.9), frost), fx_fade) * lit;

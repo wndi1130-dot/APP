@@ -3,7 +3,8 @@ import type { Comm, LawId, LawRes } from '../data';
 import { lawActive } from '../state';
 import { bumpRel } from '../ledger';
 import type { Game } from '../state';
-import { CAR_COMM, COMM_CARS, D, FURNISH_CARS, FURNITURE, FURNITURE_SIZE, SUPPLIES_TECHS, TECHS } from './data';
+import { CAR_COMM, COMM_CARS, D, FURNISH_CARS, SUPPLIES_TECHS, TECHS } from './data';
+import { DECOR as FURNITURE, decorCrowd } from './decor_data';
 import { SUPPLIES_BOT } from '../supplies';
 import type { TechId, Variant } from './data';
 import { furnishOf, techMult, variantMult } from './state';
@@ -86,7 +87,7 @@ export function lawTechSit(g: Game, sit: Record<Comm, [number, number, number, n
     const f = furnishOf(g, car);
     const warm = Math.max(D.furnishWarm[f.tier], ...f.items.map(item => FURNITURE[item.kind].warm));
     sit[c][0] += warm / COMM_CARS[c];
-    sit[c][2] += D.furnishCrowd * f.tier + f.items.reduce((sum, item) => sum + FURNITURE_SIZE[item.size].crowd + FURNITURE[item.kind].crowd, 0);
+    sit[c][2] += D.furnishCrowd * f.tier + decorCrowd(f.items);
   }
 }
 
@@ -199,12 +200,13 @@ export const LAW_ONLY_TECHS: TechId[] = ['e1', 'e2', 'e3', 'e5', 'm2', 'm3', 'x1
 /** S2 공방 만들기가 열리는 기술(결정 449·486). S1에서는 법 쪽만 보이지만, 쓸모 줄은 「법 쓸모」로 단다. */
 export const S2_CRAFT_TECHS: TechId[] = ['x1', 'x4', 'w2', 'w4'];
 /** S1에서 봇·공방장이 고를 쓸모가 없는 기술(결정 486): 살림은 플레이어와 재기 도구가, 운반 도구는 S2 공방이 쓴다. */
-export const S1_IDLE_TECHS: TechId[] = ['w5', 'x4', 'w8'];
+export const S1_IDLE_TECHS: TechId[] = ['w5', 'x4'];
 
 /** 이 기술을 복원할 때 쓸 변형. 법에만 걸린 기술이면 서 있는 법 쪽 변형(변형이 없으면 undefined), 그 법이 하나도 없으면 null(복원할 쓸모가 없다).
  *  법과 상관없는 기술이면 첫 변형을 돌려주고 고르는 쪽(방침·봇)이 따로 정한다. 3단계 공방장(6.4, 2f1f64e)과 봇이 같이 쓴다. */
 export function usefulVariant(g: Game, tech: TechId): Variant | undefined | null {
   if (SUPPLIES_TECHS.includes(tech) && (!g.supOn || SUPPLIES_BOT.get(g)?.make === 'none')) return null;
+  if (tech === 'w8' && SUPPLIES_BOT.get(g)?.ask === false) return null;
   const vs: (Variant | undefined)[] = TECHS[tech].variants ? ['a', 'b'] : [undefined];
   if (S1_IDLE_TECHS.includes(tech)) return null;
   if (!LAW_ONLY_TECHS.includes(tech)) return vs[0];

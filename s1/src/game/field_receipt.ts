@@ -5,6 +5,7 @@ import chronicleSchema from '../../schema/chronicle.schema.json';
 import receiptSchema from '../../schema/receipt.schema.json';
 import { bump, bumpRel } from './ledger';
 import { addSupplies } from './supplies';
+import { receiveDecor } from './domestic/decor_data';
 import { COMMS, COMM_NAME, LOOT_NAME, PLACES, REP_AGE, STAY, TRAIT_BAN, TRAITS } from './data';
 import type { Comm, LootKey } from './data';
 import { onDeath } from './death';
@@ -387,6 +388,7 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
     if (s.parts) g.dom.parts = Math.max(0, g.dom.parts + s.parts);
     // 천(cloth)은 S1 내정 그릇에 칸이 없다: 받기만 하고 S2 열차(train_dom.gd)가 담는다(결정 426 D②).
   }
+  receiveDecor(g, r.items.gained);
   // 덱의 자리(결정 474 S1): 필드가 쓴 뒤 자리를 그대로 들고 다음 정차 계약에 싣는다 — 정차를 넘어 n곳마다 정확히 k곳.
   if (r.version === 5 && r.lootDeck) g.lootDeck = structuredClone(r.lootDeck);
   const got = ([['coal', '석탄'], ['food', '식량'], ['medicine', '의약품'], ['luxury', '사치품'], ['supplies', '생필품'], ['wood', '목재'], ['scrap', '고철'], ['parts', '부품']] as const)

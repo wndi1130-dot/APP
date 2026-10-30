@@ -499,12 +499,13 @@ export const SECRET_POOL: { text: string; weight: 1 | 2 | 3 }[] = [
 // ---- 공개 협상 조건(브리프 3.2) ----
 export type ConditionKind =
   | 'heat' | 'ration' | 'relocate' | 'skip_dispatch' | 'front_levy' | 'shift' | 'target' | 'give_med' | 'give_lux'
-  | 'keep_ration' | 'agenda' | 'cut'
+  | 'keep_ration' | 'agenda' | 'cut' | 'give_sup' | 'give_fine'
   // S1c 조건 둘(s1a_politics_numbers 3.2, s1c_domestic 9.2)
   | 'apprentice_pick' | 'research_pick';
 export interface ConditionDef {
   kind: ConditionKind; label: string; /** 지금 바로 치르는 조건인가 */ now: boolean; target?: LootKey; amount?: number;
   /** S1c를 켠 판에서만 내건다 */ s1c?: boolean;
+  /** 생필품을 켠 판에서만 내건다 */ sup?: true;
 }
 export const CONDITIONS: Record<Comm, ConditionDef[]> = {
   tail: [
@@ -513,28 +514,33 @@ export const CONDITIONS: Record<Comm, ConditionDef[]> = {
     { kind: 'relocate', label: '칸 재배치(과밀 −15)', now: true },
     { kind: 'skip_dispatch', label: '다음 파견에서 제외', now: false },
     { kind: 'front_levy', label: '앞칸 사치품 3 공출', now: true },
+    { kind: 'give_sup', label: '아이들 겨울옷', now: false, amount: 2, sup: true },
   ],
   engine: [
     { kind: 'ration', label: '기관실 배급 +1', now: false },
     { kind: 'shift', label: '화부 교대 늘리기', now: true },
     { kind: 'target', label: '다음 정차는 석탄', now: false, target: 'coal' },
     { kind: 'apprentice_pick', label: '견습생 선발권', now: false, s1c: true },
+    { kind: 'give_sup', label: '장갑·헌 옷', now: false, amount: 1, sup: true },
   ],
   guard: [
     { kind: 'give_med', label: '장비: 의약품 3', now: false, amount: 3 },
     { kind: 'ration', label: '경비대 배급 +1', now: false },
     { kind: 'target', label: '다음 정차는 식량', now: false, target: 'food' },
+    { kind: 'give_sup', label: '면도칼·헌 옷', now: false, amount: 1, sup: true },
   ],
   medtech: [
     { kind: 'give_med', label: '의약품 5', now: false, amount: 5 },
     { kind: 'heat', label: '의무칸 난방 +1', now: false },
     { kind: 'target', label: '다음 정차는 의약품', now: false, target: 'medicine' },
     { kind: 'research_pick', label: '연구 우선권', now: false, s1c: true },
+    { kind: 'give_sup', label: '비누·휴지', now: false, amount: 2, sup: true },
   ],
   front: [
     { kind: 'give_lux', label: '사치품 3', now: false, amount: 3 },
     { kind: 'keep_ration', label: '앞칸 배급 유지', now: false },
     { kind: 'target', label: '다음 정차는 사치품', now: false, target: 'luxury' },
+    { kind: 'give_fine', label: '책 한 권(좋은 물건)', now: false, amount: 1, sup: true },
   ],
 };
 export const COMMON_CONDITIONS: ConditionDef[] = [

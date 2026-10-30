@@ -67,7 +67,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var echo: String = " 지난번 일 때문에 다들 상처부터 본다." if _was(past, "hide") else (" 지난번 역에 두고 온 사람을 다들 기억한다." if _was(past, "leave") else "")
 			out["speaker"] = {"name": str(card.get("who", "수색대원")), "role": String(t["COMM_NAME"][c])}
 			out["focus"] = c
-			out["body"] = "%s이(가) %s 물렸다. 수색대가 열차장의 말을 기다린다. 감염 창이 닫히기 전에 잘라야 한다.%s" % [str(card.get("who", "대원")), parts[1], echo]
+			out["body"] = "%s이(가) %s 물렸다. \"열차장…\" 수색대가 열차장의 말을 기다린다. \"감염 창이 닫히기 전에 잘라야 합니다.\"%s" % [str(card.get("who", "대원")), parts[1], echo]
 			says = ["지금 %s 잘라라! 망설이면 늦는다." % parts[1],
 				"지난번엔 운이 좋았다. 이번에도 감아서 태워라." if _was(past, "hide") else "아무도 못 본 거다. %s에 붕대를 감고 태워라." % parts[0],
 				"물린 사람은 못 태운다. 미안하다고 전해라."]
@@ -86,7 +86,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var who: Dictionary = _leader(g, t, c)
 			out["speaker"] = who
 			out["focus"] = c
-			out["body"] = "%s이(가) 열차장이 어긴 약속 둘을 적은 종이를 내밀었다. 한 번 더 어기면 %s은(는) 약속을 받지 않는다." % [who["name"], t["COMM_NAME"][c]]
+			out["body"] = "%s이(가) 열차장이 어긴 약속 둘을 적은 종이를 내밀었다. \"%s\"" % [who["name"], LEDGER_SAY[c]]
 			says = ["내 잘못이다. 지금 갚겠다.", "지난 일이다. 앞을 보자."]
 		"need_warn":
 			var def: Dictionary = t["NEEDS"][card["text"]]
@@ -398,7 +398,7 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 			out["speaker"] = _leader(g, t, "engine")
 			out["focus"] = "engine"
 			out["body"] = _again(past, "급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 %d 남았다." % coal, {
-				"burn_melt": "급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 %d 남았다." % coal,
+				"burn_melt": "급수탑이 또 얼었다. 화부들은 아직 그 얘기다. \"지난번 녹이느라 태운 석탄이면 한참 달렸다.\" 석탄은 %d 남았다." % coal,
 				"snow_melt": "급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 묻는다. \"이번에도 우리냐?\"",
 				"hold_on": "보일러 물이 거의 바닥났다. 수석 기관사가 말한다. \"지난번처럼 버티면 보일러 관이 탑니다.\"",
 			}, "급수탑이 또 얼었다.")
@@ -409,7 +409,7 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 			out["speaker"] = _leader(g, t, "engine")
 			out["focus"] = "engine"
 			out["body"] = _again(past, "선로가 눈더미에 묻혔다. 삽이 열두 자루 있다.", {
-				"dig_all": "또 눈더미다. 지난번 함께 판 일을 사람들이 아직 말한다. 앞칸 몇은 벌써 삽을 들었다.",
+				"dig_all": "또 눈더미다. 사람들이 지난번 일을 아직 말한다. \"다 같이 파면 금방 끝난다.\" 앞칸 몇은 벌써 삽을 들었다.",
 				"dig_tail": "또 눈더미다. 꼬리칸 사람들이 삽을 내려놓고 앉아 있다. \"이번엔 앞칸 차례다.\"",
 				"plow": "또 눈더미다. 지난번 밀어붙인 뒤로 앞바퀴에서 쇳소리가 난다.",
 			}, "선로가 또 눈에 묻혔다.")
@@ -424,7 +424,7 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 			out["speaker"] = _leader(g, t, "medtech")
 			out["focus"] = "medtech"
 			out["body"] = _again(past, "꼬리칸 아이 셋이 열이 난다. \"해열제는 상자에 있다. 꺼낼지 정해 달라.\"", {
-				"med_use": "이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. 의약품은 %d 남았다." % _round(float(g["med"])),
+				"med_use": "이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. \"그 집 애만 애냐.\" 의약품은 %d 남았다." % _round(float(g["med"])),
 				"med_save": "지난번 약을 못 받은 아이가 아직 열이 안 내렸다. 엄마가 의무칸 문 앞을 떠나지 않는다. \"우리 애 차례는 언제냐.\"",
 			}, "아이들이 또 열이 난다.")
 			says.append_array(["의약품은 약자의 것이다. 아이들에게 먼저 써라!",
@@ -449,14 +449,14 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 			if frost:
 				out["body"] = _again(past, "지붕 경계를 서던 대원 둘이 동상을 입었다. \"교대를 줄여 달라.\"", {
 					"hold_post": "지난번 지붕에 섰던 대원 하나가 발가락 둘을 잃었다. 경비대장이 말한다. \"지붕 교대는 이제 못 선다.\"",
-					"watch_less": "경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 동상을 입었다.",
-					"guard_heat": "경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 바람은 여전히 살을 엔다.",
+					"watch_less": "경계를 줄인 그 밤을 두고 말이 많다. \"지붕 위로 뭔가 지나갔다.\" 대원들이 다시 동상을 입었다.",
+					"guard_heat": "경비칸이 따뜻해지자 다른 칸이 수군댄다. \"그 칸 난로는 밤새 벌겋더라.\" 그런데 지붕 위 바람은 여전히 살을 엔다.",
 				}, "지붕 경계 대원들이 또 동상을 입었다.")
 			else:
 				out["body"] = _again(past, "지붕 경계를 서던 대원 둘이 찬비에 흠뻑 젖어 이가 맞부딪힌다. \"교대를 줄여 달라.\"", {
 					"hold_post": "지난번 지붕에 섰던 대원 하나가 열이 올라 일어나지 못한다. 경비대장이 말한다. \"지붕 교대는 이제 못 선다.\"",
-					"watch_less": "경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 젖은 채 떨었다.",
-					"guard_heat": "경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 찬비는 그대로다.",
+					"watch_less": "경계를 줄인 그 밤을 두고 말이 많다. \"지붕 위로 뭔가 지나갔다.\" 대원들이 다시 젖은 채 떨었다.",
+					"guard_heat": "경비칸이 따뜻해지자 다른 칸이 수군댄다. \"그 칸 난로는 밤새 벌겋더라.\" 그런데 지붕 위 찬비는 그대로다.",
 				}, "지붕 경계 대원들이 또 젖은 채 떨었다.")
 			says.append_array(["경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.", "얼어 죽은 보초는 아무것도 못 본다. 지붕에서 내려와라.",
 				"거부는 없다. 지붕이 비면 다 같이 죽는다." if _was(past, "hold_post") else ("경계는 줄이지 않는다. 장갑을 두 겹 껴라." if frost else "경계는 줄이지 않는다. 젖은 옷은 교대 때마다 갈아입어라.")])
@@ -477,6 +477,14 @@ const DEMAND_AGAIN: Dictionary = {
 	"guard": {"heat": ["지난번 거절, 대원들도 들었다. 다시 묻는다.", "한 번은 물러났다. 이번엔 올려 달라.", "회기 전까지다. 대원들이 뒤에 서 있다."], "ration": ["그릇 그대로 가져왔다. 다시 묻는다.", "그때는 그냥 복귀했다. 이번엔 대원 몫을 채워 달라.", "회기 전까지다. 그릇은 여기 두고 간다."]},
 	"front": {"heat": ["지난번 답은 들었습니다. 오늘 답은 다르길 바랍니다.", "한 번은 사정이 있으셨겠지요. 이번엔 믿겠습니다.", "회기 전까지입니다. 지난번처럼은 곤란합니다."], "ration": ["이 그릇, 지난번 그대로입니다. 셈이 안 맞지요.", "그릇이 말라붙었습니다. 한 번은 채워 주셔야지요.", "회기 전까지입니다. 빈 그릇은 회기에서 보여 드리지요."]},
 	"engine": {"heat": ["지난번 그 답으로는 불이 안 든다.", "불 앞은 아직 차다. 삽 쥘 만큼만 올려 달라.", "보일러는 거절을 모른다. 회기 전에 답 달라."], "ration": ["지난번 그릇 그대로다. 화부들이 지켜본다.", "빈손으로 한 번 갔다. 삽질할 만큼만 채워 달라.", "회기 전에 답 달라. 빈 그릇으로 불 못 땐다."]},
+}
+## 약속 장부 카드에서 칸 대표가 직접 하는 경고(S1 cards.ts LEDGER_SAY와 같다).
+const LEDGER_SAY: Dictionary = {
+	"tail": "한 번만 더 어겨 봐라. 꼬리칸은 다시는 약속 안 받는다.",
+	"medtech": "어긴 게 둘이다. 셋째면 기술·의무진은 약속을 받지 않는다.",
+	"guard": "두 번이다. 한 번 더면 경비대는 약속을 안 받는다.",
+	"front": "두 번은 넘어갔습니다. 한 번 더 어기시면 앞칸은 약속을 받지 않겠습니다.",
+	"engine": "두 번 샜다. 한 번 더 새면 기관실은 약속을 안 받는다.",
 }
 
 

@@ -86,6 +86,7 @@ func test_a_locked_door_rattles_and_a_boarded_one_thuds_at_the_players_hand() ->
 	game.actions.open_door_on_way(p, c)
 	assert_false(a.played.has("door_locked"), "asked again at once: not again")
 	a.shut_heard.clear()   # as though the gap had gone by
+	game.actions.shut_told.clear()
 	game.actions.open_door_on_way(p, c)
 	assert_true(a.played.has("door_locked"), "the way's own check rattles it too")
 	BuildingRules.add_plank(game.grid.doors[c], 0)
@@ -96,6 +97,7 @@ func test_a_locked_door_rattles_and_a_boarded_one_thuds_at_the_players_hand() ->
 	assert_false(a.played.has("door_locked"))
 	# A stick held against it asks every frame (field_game _drive): one thud.
 	a.shut_heard.clear()
+	game.actions.shut_told.clear()
 	a.played.clear()
 	for i in range(10):
 		game.actions.open_door_on_way(p, c)

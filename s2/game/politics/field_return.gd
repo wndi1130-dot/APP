@@ -10,6 +10,7 @@ const TrainState = preload("res://game/train/train_state.gd")
 const TrainStop = preload("res://game/train/train_stop.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
+const TrainDecor = preload("res://game/train/train_decor.gd")
 const TurnDeath = preload("res://game/train/turn/turn_death.gd")
 const PersonMemory = preload("res://game/politics/person_memory.gd")
 const CouncilLog = preload("res://game/politics/council_log.gd")
@@ -569,6 +570,7 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		for key: String in ["wood", "scrap", "cloth", "parts"]:
 			if float(stock.get(key, 0)) != 0.0:
 				g["dom"][key] = maxf(0.0, float(g["dom"].get(key, 0)) + float(stock[key]))
+	TrainDecor.receive_receipt(g, receipt)
 	# The decks' places (decision 474 S1): what the field left them at rides to the next contract.
 	if int(receipt["version"]) == 5 and receipt.get("lootDeck") is Dictionary:
 		g["lootDeck"] = (receipt["lootDeck"] as Dictionary).duplicate(true)
