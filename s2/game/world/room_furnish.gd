@@ -1319,7 +1319,8 @@ static func _narrow(cells: Array[Vector2i]) -> bool:
 	return mini(hi.x - lo.x + 1, hi.y - lo.y + 1) <= 2
 
 
-## 비울 칸: "all"은 아무것도, "tall"은 큰 가구만 못 놓는다.
+## 비울 칸: "all"은 아무것도, "tall"은 큰 가구만 못 놓는다. 머리를 벽에 댄 침대가 서면 furnish_rooms가 베개
+## 양옆에 "stand"(협탁만)를 더한다.
 static func _forbidden(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i], stairs: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	# 9칸 이하 방(욕실·벽장·찬방)과 폭 두 칸 방(좁은 부엌)은 문 안쪽 1칸만: 2칸이면 욕실에
@@ -1439,10 +1440,11 @@ static func _wide_bedroom(cells: Array[Vector2i]) -> bool:
 
 ## 홑침대 둘을 둘 침실("층:방" -> true): 이 지도에서 가구를 놓는 침실 수의 TWIN_SHARE(반올림)만큼, 짧은 변이
 ## 넓은 방부터, 같으면 씨앗을 섞은 굴림 차례로. 짧은 변이 WIDE_BED_SIDE보다 좁은 방은 머리-벽 침대 둘이 서지
-## 않아 고르지 않는다.
+## 않아 고르지 않는다. 첫 바퀴는 한 건물 한 층에 하나씩(같은 꼴 방이 줄지은 연립·위층 숙소에 몰리지 않게),
+## 모자라면 둘째 바퀴에서 채운다.
 static func _twin_rooms(data: Dictionary, plan: Dictionary, levels: Dictionary, place: String) -> Dictionary:
 	var count := 0
-	var wide: Array = []  # [짧은 변, 굴림, "층:방"]
+	var wide: Array = []  # [짧은 변, 굴림, "층:방", "건물:층"]
 	for lv: int in levels:
 		var g: FieldGrid = levels[lv]
 		var map := _rooms(data, lv, g)
@@ -1454,11 +1456,20 @@ static func _twin_rooms(data: Dictionary, plan: Dictionary, levels: Dictionary, 
 			count += 1
 			var side := _short_side(cells)
 			if side >= WIDE_BED_SIDE:
-				wide.append([side, _roll(look_seed_of(place, int(map["rooms"][ri]["building"]), lv, ri), ROLL_TWIN), key])
+				var bid := int(map["rooms"][ri]["building"])
+				wide.append([side, _roll(look_seed_of(place, bid, lv, ri), ROLL_TWIN), key, "%d:%d" % [bid, lv]])
 	wide.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0] or (a[0] == b[0] and a[1] < b[1]))
+	var quota := mini(roundi(count * TWIN_SHARE), wide.size())
 	var out: Dictionary = {}
-	for k in range(mini(roundi(count * TWIN_SHARE), wide.size())):
-		out[wide[k][2]] = true
+	var floors: Dictionary = {}
+	for spread: bool in [true, false]:
+		for row: Array in wide:
+			if out.size() >= quota:
+				return out
+			if out.has(row[2]) or (spread and floors.has(row[3])):
+				continue
+			out[row[2]] = true
+			floors[row[3]] = true
 	return out
 
 
@@ -1586,7 +1597,8 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 					for xx in range(r.position.x, r.end.x):
 						var c := Vector2i(xx, yy)
 						var f: String = forbid.get(c, "")
-						if _at(g, of, c) != ri or g.solid_at(c) != S.NONE or taken.has(c) or f == "all" or (tall and f == "tall"):
+						if _at(g, of, c) != ri or g.solid_at(c) != S.NONE or taken.has(c) or f == "all" or (tall and f == "tall") \
+								or (f == "stand" and item.get("near", "") != "bed_head"):
 							fits = false
 						elif box_at.has(c) and not holds:
 							fits = false
@@ -2020,6 +2032,10 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 							placed.append({"item": v, "rect": r, "facing": cand["facing"]})
 							if cand.has("head"):
 								placed[-1]["head"] = cand["head"]
+								# 베개 양옆 두 칸은 협탁 자리로 남긴다(다른 가구·채우기가 먼저 차지하지 않게).
+								for side_c: Vector2i in _bedsides(g, of, ri, r, int(cand["facing"]), true):
+									if forbid.get(side_c, "") != "all":
+										forbid[side_c] = "stand"
 							for y in range(r.position.y, r.end.y):
 								for x in range(r.position.x, r.end.x):
 									taken[Vector2i(x, y)] = true
