@@ -19,15 +19,16 @@ const ROUTE: Dictionary = {
 }
 
 
-## The form the route gives stop `stop` of `act` ("" when it gives none). A first-leg stop past
-## its ends reads the nearest one, as its band and season do (route_bands.gd, route_stops.gd).
+## The form the route gives stop `stop` of `act` ("" when it gives none). Before the first leg's
+## first stop (the train setting out) there is no stop; past its fifth a stop reads the fifth's,
+## as its band and season do (route_bands.gd, route_stops.gd).
 static func on_route(act: String, stop: int) -> String:
-	if not ROUTE.has(act):
+	if not ROUTE.has(act) or stop < 1:
 		return ""
 	var forms: Array = ROUTE[act]
 	if act == "prologue":
-		stop = clampi(stop, 1, forms.size())
-	elif stop < 1 or stop > forms.size():
+		stop = mini(stop, forms.size())
+	elif stop > forms.size():
 		return ""
 	return String(forms[stop - 1])
 

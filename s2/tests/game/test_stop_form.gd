@@ -39,7 +39,7 @@ func test_valid_opts_win_and_bad_values_use_the_place() -> void:
 
 
 ## The route's 25 direct stops (decision 494's table): 10 city, 6 edge, 5 remote, 4 siding;
-## the other stops give none. The first leg's five, and past its ends the nearest one.
+## the other stops give none. The first leg's five: none before the first, the fifth's past it.
 func test_the_routes_direct_stops_and_their_forms() -> void:
 	var count := {}
 	var none := 0
@@ -59,7 +59,8 @@ func test_the_routes_direct_stops_and_their_forms() -> void:
 	for act: String in StopForm.ROUTE:
 		assert_eq((StopForm.ROUTE[act] as Array).size(), (RouteBands.BANDS[act] as Array).size(), "%s: a form for each stop with a band" % act)
 	assert_eq(StopForm.ROUTE["prologue"], ["city", "edge", "siding", "city", "city"])
-	assert_eq(StopForm.on_route("prologue", 0), "city", "before the first stop: the first")
+	assert_eq(StopForm.on_route("prologue", 0), "", "before the first stop: none, the place's")
+	assert_eq(StopForm.on_route("prologue", -2), "")
 	assert_eq(StopForm.on_route("prologue", 9), "city", "past the fifth: the fifth")
 	assert_eq(StopForm.on_route("act1", 0), "")
 	assert_eq(StopForm.on_route("act1", 13), "")
