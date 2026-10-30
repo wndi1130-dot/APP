@@ -37,7 +37,9 @@ const BOARD_R: float = 1.5
 const WORK_R: float = 2.2
 const DROP_R: float = 1.0
 const BOARD_BELOW: float = 50.0
-const DIG_TIME: float = 45.0
+## The crew's pick at a coal wagon: half the speed it was (decision 520), so a stop's coal stays in its plan
+## although the key lights early.
+const DIG_TIME: float = 90.0
 const TRIP_COAL: float = 0.25
 const EMPTY: float = 0.001
 const SHARE_CELLS: int = 8

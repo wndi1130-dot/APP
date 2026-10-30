@@ -122,7 +122,7 @@ func test_six_job_crews_and_house_buildings() -> void:
 	for id: String in expected:
 		assert_eq([FieldWork.JOBS[id]["carriers"], FieldWork.JOBS[id]["escorts"]], expected[id], id)
 	assert_eq(FieldWork.JOBS["house"]["buildings"], ["log_cabin", "wood_shed", "barn"])
-	assert_eq(float(FieldWork.JOBS["coal_wagon"]["work_s"]), 45.0)
+	assert_eq(float(FieldWork.JOBS["coal_wagon"]["work_s"]), 90.0)
 	assert_eq(float(FieldWork.JOBS["coal_wagon"]["trip"]), 0.25)
 
 
