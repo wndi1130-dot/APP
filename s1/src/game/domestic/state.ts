@@ -133,6 +133,8 @@ export interface DomState {
   furnish?: Record<string, FurnishState | DecorCarState>;
   /** 열차 공용 꾸미기 창고. 겸용 물건의 숫자는 Game에 있고 여기는 이름표만 둔다. */
   store?: DecorStore;
+  /** Cars whose first 80% decoration was observed at settlement (absent in old saves). */
+  decor80?: string[];
   greenhouse: string | null;
   /** 꼬리 끝에 붙인 칸 */
   extraCars: ('store' | 'coach')[];

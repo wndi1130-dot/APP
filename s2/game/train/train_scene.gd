@@ -16,6 +16,8 @@ const HandPanel = preload("res://game/train/train_panel.gd")
 const Gesture = preload("res://game/train/train_gesture.gd")
 const Life = preload("res://game/train/train_life.gd")
 const Interior = preload("res://game/train/train_interior.gd")
+const DecorView = preload("res://game/train/decor_view.gd")
+const DecorGrid = preload("res://game/train/decor_grid.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
 const PeopleView = preload("res://game/train/train_people_view.gd")
 const MusicPlayer = preload("res://game/audio/music_player.gd")
@@ -168,6 +170,7 @@ var _highlight_id: String = ""
 var people_view: Node3D                  # the baked bodies drawn over the stand-in capsules
 var _scroll: float = 0.0
 var life = Life.new()
+var decor = null                         # the decorating view (decor_view.gd) while a car is decorated
 var music: MusicPlayer                  # the faint train piece by the train's state (briefs/bgm.md 3.1)
 
 
@@ -381,6 +384,53 @@ func focus_car(id: String, near: bool = false) -> void:
 	_place_camera()
 
 
+## Decorating a car (결정 506·510·511, decor_view.gd): its own camera, the grid over its floor and
+## its people seen through. Only the cars the decor table has; false for any other, and while the
+## council sits. The strip, the rules and when it may open are the domestic side's (decor_strip.gd).
+func enter_decor(id: String) -> bool:
+	if decor != null:
+		exit_decor()
+	var c := car(id)
+	if c.is_empty() or DecorGrid.of(id).is_empty() or phase() == "council":
+		return false
+	var view = DecorView.new()
+	if not view.enter(self, c):
+		return false
+	decor = view
+	cam_x = float(c["x0"]) + CAR_LENGTH * 0.5
+	_apply_view()
+	_place_camera()
+	return true
+
+
+## Back to the train as it was: its camera, the front wall, the people and no grid.
+func exit_decor() -> void:
+	if decor == null:
+		return
+	decor.exit(self)
+	decor = null
+	if camera != null:
+		camera.v_offset = 0.0
+	_apply_view()
+	_place_camera()
+
+
+## The car being decorated, or "".
+func decorating() -> String:
+	return String(decor.car.get("id", "")) if decor != null else ""
+
+
+## The place under a point of the screen while decorating ({spot, at} as decor_cells.json counts), or {}.
+func decor_pick(screen: Vector2) -> Dictionary:
+	return decor.pick(self, screen) if decor != null else {}
+
+
+## The place a thing is held over: green where it may go, red where not; spot "" hides it.
+func decor_hover(spot: String, at: Array = [], ok: bool = true) -> void:
+	if decor != null:
+		decor.hover(spot, at, ok)
+
+
 func toggle_zoom() -> void:
 	if view_mode == "diag":
 		zoom = "near" if zoom == "wide" else "wide"
@@ -409,13 +459,14 @@ func _apply_view() -> void:
 
 
 func _apply_shell_view(c: Dictionary) -> void:
-	var diagonal: bool = view_mode == "diag"
+	# Decorating looks down into the car from either view, so its shell is cut as on the diagonal.
+	var diagonal: bool = view_mode == "diag" or decor != null
 	for top_node: Node3D in c.get("shell_top", []):
 		top_node.visible = not diagonal
 	for shell_material: StandardMaterial3D in c.get("shell_mats", []):
 		shell_material.cull_mode = BaseMaterial3D.CULL_DISABLED if diagonal else BaseMaterial3D.CULL_BACK
 	if c.has("front_wall"):
-		(c["front_wall"] as MeshInstance3D).visible = diagonal
+		(c["front_wall"] as MeshInstance3D).visible = diagonal and not (decor != null and c["id"] == decor.car.get("id"))
 	for prop: Dictionary in c.get("high_props", []):
 		(prop["node"] as Node3D).transform = prop["diag"] if diagonal else prop["section"]
 	_show_dress(c)
@@ -424,7 +475,7 @@ func _apply_shell_view(c: Dictionary) -> void:
 ## A car's small things (train_interior.gd dress) show up close and on the side view, not on
 ## the wide diagonal, where the draw budget is already spent (결정 505 잰 값).
 func _show_dress(c: Dictionary) -> void:
-	var near: bool = view_mode != "diag" or zoom == "near"
+	var near: bool = decor != null or view_mode != "diag" or zoom == "near"
 	if life.rooms.has(c["id"]):
 		life.rooms[c["id"]].show_dress(near)
 	if c.get("lamp_pool") != null:
@@ -469,12 +520,14 @@ func highlight(id: String) -> void:
 
 func _apply_highlight() -> void:
 	var chosen: Dictionary = car(_highlight_id) if view_mode == "diag" else {}
+	if decor != null:
+		chosen = decor.car
 	if is_instance_valid(highlight_band):
-		highlight_band.visible = not chosen.is_empty()
+		highlight_band.visible = not chosen.is_empty() and decor == null
 		if not chosen.is_empty():
 			highlight_band.transform = (chosen["node"] as Node3D).transform
 	for c: Dictionary in cars:
-		c["dimmed"] = not chosen.is_empty() and c["id"] != _highlight_id
+		c["dimmed"] = not chosen.is_empty() and c["id"] != chosen["id"]
 		if c.has("room_vis"):
 			_show_room(c)
 
@@ -527,7 +580,7 @@ func values_text(c: Dictionary) -> String:
 
 
 func drag(relative: Vector2) -> void:
-	if camera == null or not camera.is_inside_tree():
+	if camera == null or not camera.is_inside_tree() or decor != null:
 		return
 	if view_mode == "diag":
 		var anchor: Vector3 = Vector3(cam_x, DIAG_LOOK_Y, 0.0)
@@ -1201,10 +1254,11 @@ func _build_world() -> void:
 	_font.font_names = PackedStringArray(["Pretendard", "Noto Sans CJK KR", "Noto Sans KR", "Droid Sans Fallback", "sans-serif"])
 
 
-## Only the diagonal camera goes by the window's pixels (the pane's share); the side
-## view keeps its frame through a resize, as the council's close dining car is set by hand.
+## Only the diagonal and the decorating camera go by the window's pixels (the pane's share, the
+## band over the strip); the side view keeps its frame through a resize, as the council's close
+## dining car is set by hand.
 func _on_view_resized() -> void:
-	if view_mode == "diag":
+	if view_mode == "diag" or decor != null:
 		_place_camera()
 
 
@@ -1213,6 +1267,9 @@ func _place_camera() -> void:
 		return
 	for c: Dictionary in cars:
 		_show_dress(c)
+	if decor != null:
+		decor.place_camera(self)
+		return
 	if view_mode == "diag":
 		camera.keep_aspect = Camera3D.KEEP_HEIGHT
 		camera.size = DIAG_NEAR if zoom == "near" else DIAG_WIDE
