@@ -620,6 +620,70 @@ func test_push_spots_require_same_floor_clear_cell_and_clear_corner() -> void:
 	_count(game.combat.melee_tally, "b_wall", 1)
 
 
+func test_diagonal_push_crossing_one_wall_clips_only_with_hit_wall() -> void:
+	for mask: int in [1, 2]:
+		var field: FieldGame = _field(_options(mask))
+		var who: Variant = field.player
+		var start: Vector3 = Vector3(60.9, 0, 7.9)
+		var direction: Vector3 = Vector3(3, 0, 2).normalized()
+		var wall_on: bool = mask == 2
+		who.position = start - direction * 0.8
+		var z: Dictionary = _dead(field, who)
+		z["pos"] = start
+		field.grid.set_solid(Vector2i(61, 7), FieldGrid.Solid.WALL)
+		assert_false(field.grid.blocks_body(Vector2i(60, 8)))
+		assert_false(field.grid.blocks_body(FieldGrid.cell_of(start + direction * 0.3)))
+		var dice_before: int = field.rng.state
+		var pushed: Dictionary = field.combat._push_b(z, who.position, 0.3, wall_on)
+		assert_true(pushed["wall"], "the segment crosses the single blocked side cell")
+		assert_almost_eq(float(pushed["moved"]), 0.1 if wall_on else 0.0, EPS)
+		assert_eq(field.rng.state, dice_before, "cell walking consumes no rule dice")
+		z["pos"] = start
+		var heard: Array = _trace(field)
+		_body(field, who, z)
+		assert_almost_eq(start.distance_to(z["pos"]), 0.1 if wall_on else 0.0, EPS)
+		assert_eq(FieldGrid.cell_of(z["pos"]), FieldGrid.cell_of(start))
+		assert_eq(heard[0].has("wall"), wall_on)
+		if wall_on:
+			assert_true(heard[0]["wall"])
+			_count(field.combat.melee_tally, "b_wall", 1)
+		else:
+			assert_eq(z["pos"], start)
+			_count(field.combat.melee_tally, "b_push", 0)
+		field.free()
+
+
+func test_diagonal_push_five_centimeters_from_corner_stays_clear() -> void:
+	# Perpendicular distance from this line to the corner is 0.05 m.
+	var start: Vector3 = Vector3(60.9, 0, 7.9 + sqrt(2.0) * 0.05)
+	var direction: Vector3 = Vector3(1, 0, 1).normalized()
+	var finish: Vector3 = start + direction * 0.3
+	game.grid.set_solid(Vector2i(61, 7), FieldGrid.Solid.WALL)
+	assert_eq(FieldGrid.cell_of(start), Vector2i(60, 7))
+	assert_eq(FieldGrid.cell_of(finish), Vector2i(61, 8))
+	assert_true(Combat.line_cells_clear(game.grid, start, finish))
+	assert_true(Combat.line_cells_clear(game.grid, finish, start))
+	assert_true(game.combat._push_spot_ok(start, finish))
+	for wall_on: bool in [false, true]:
+		var z: Dictionary = {"pos": start}
+		var pushed: Dictionary = game.combat._push_b(z, start - direction, 0.3, wall_on)
+		assert_false(pushed["wall"])
+		assert_almost_eq(float(pushed["moved"]), 0.3, EPS)
+		assert_almost_eq(z["pos"].distance_to(finish), 0.0, EPS)
+
+
+func test_line_cells_clear_rejects_either_side_of_an_exact_corner() -> void:
+	var start: Vector3 = Vector3(60.75, 0, 7.75)
+	var finish: Vector3 = Vector3(61.25, 0, 8.25)
+	assert_true(Combat.line_cells_clear(game.grid, start, finish))
+	for side: Vector2i in [Vector2i(61, 7), Vector2i(60, 8)]:
+		game.grid.set_solid(side, FieldGrid.Solid.WALL)
+		assert_false(Combat.line_cells_clear(game.grid, start, finish))
+		assert_false(Combat.line_cells_clear(game.grid, finish, start))
+		assert_false(game.combat._push_spot_ok(start, finish))
+		game.grid.set_solid(side, FieldGrid.Solid.NONE)
+
+
 func test_zero_horizontal_direction_does_not_move_or_claim_an_event() -> void:
 	game.opts.merge(_options(7), true)
 	var z: Dictionary = _dead(game, p, 0.0, "chase")

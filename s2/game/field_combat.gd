@@ -1073,8 +1073,41 @@ static func push_distance(k: float, q: float) -> float:
 	return clampf(PUSH_BASE * k * clampf(q, PUSH_Q_MIN, PUSH_Q_MAX), PUSH_MIN, PUSH_MAX)
 
 
+## Walk the segment's cells in boundary order, including exact corner contacts.
+static func line_cells_clear(grid: FieldGrid, from: Vector3, to: Vector3) -> bool:
+	var cell: Vector2i = FieldGrid.cell_of(from)
+	var last: Vector2i = FieldGrid.cell_of(to)
+	var dx: float = to.x - from.x
+	var dz: float = to.z - from.z
+	var step_x: int = 1 if dx > 0.0 else -1
+	var step_z: int = 1 if dz > 0.0 else -1
+	if grid.blocks_body(cell):
+		return false
+	while cell != last:
+		if cell.x == last.x:
+			cell.y += step_z
+		elif cell.y == last.y:
+			cell.x += step_x
+		else:
+			var edge_x: float = float(cell.x + 1 if step_x > 0 else cell.x)
+			var edge_z: float = float(cell.y + 1 if step_z > 0 else cell.y)
+			var cross_x: float = absf(edge_x - from.x) * absf(dz)
+			var cross_z: float = absf(edge_z - from.z) * absf(dx)
+			if cross_x < cross_z:
+				cell.x += step_x
+			elif cross_z < cross_x:
+				cell.y += step_z
+			else:
+				if grid.blocks_body(cell + Vector2i(step_x, 0)) or grid.blocks_body(cell + Vector2i(0, step_z)):
+					return false
+				cell += Vector2i(step_x, step_z)
+		if grid.blocks_body(cell):
+			return false
+	return true
+
+
 func _push_spot_ok(from: Vector3, to: Vector3) -> bool:
-	return game.level_of(to) == game.level_of(from) and not game.grid_at(to).blocks_body(FieldGrid.cell_of(to)) and game.grid_at(from).body_line_clear(FieldGrid.cell_of(from), FieldGrid.cell_of(to))
+	return game.level_of(to) == game.level_of(from) and not game.grid_at(to).blocks_body(FieldGrid.cell_of(to)) and line_cells_clear(game.grid_at(from), from, to)
 
 
 func _push_b(z: Dictionary, from: Vector3, dist: float, hit_wall: bool) -> Dictionary:
