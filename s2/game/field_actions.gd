@@ -833,6 +833,8 @@ func _set_window_open(c: Vector2i, open: bool) -> void:
 	game.grid.refresh_cell(c)
 	game.view.update_window(c)
 	_note_cold(c)
+	if game.audio != null:
+		game.audio.window_turn(c, "open" if open else "closed")   # the ear's; no rule hears a window turned
 
 
 ## Draw or open a window's curtain: at once and quiet; drawn, nobody sees
@@ -854,6 +856,8 @@ func _curtain_set(p, c: Vector2i, to: String) -> void:
 	w["curtain"] = to
 	game.grid.refresh_cell(c)
 	game.view.update_window(c)
+	if game.audio != null:
+		game.audio.window_turn(c, "curtain")   # the ear's; quiet to the rules
 
 
 ## The player who broke it is asked at once: the glass out first, or straight through.
@@ -980,6 +984,8 @@ func vault_window(p, c: Vector2i) -> void:
 	if not can_vault_window(p, c):
 		return
 	var w: Dictionary = game.grid.windows[c]
+	if game.audio != null:
+		game.audio.window_vault(c, WindowRules.can_clear(w))   # the ear's; climbing through is quiet to the rules
 	if game.rng.randf() < WindowRules.cross_cut_chance(w, p.gloves):
 		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
 		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
@@ -1036,9 +1042,11 @@ func search(p, id: String) -> void:
 	if not _begin_work(p, "search", "뒤지기", search_time(p, c), _search_work_done.bind(p, id), "container", id, _container_at(c)):
 		return
 	game.shout(p, "search_start")
-	# The first rummage is heard at once, then one every SEARCH_NOISE_EVERY (user decision 407 B4).
+	# The first rummage is heard at once, then one every SEARCH_NOISE_EVERY (user decision 407 B4)
+	# — a big box's only (card R3 가, SearchRules.rummage_heard).
 	p.action_noise_t = 0.0
-	game.make_sound(_container_at(c), SimNoise.Level.QUIET, "search", p)
+	if SearchRules.rummage_heard(c):
+		game.make_sound(_container_at(c), SimNoise.Level.QUIET, "search", p)
 
 
 func _unlock(id: String, p = null) -> void:
@@ -1052,7 +1060,7 @@ func _unlock(id: String, p = null) -> void:
 
 ## Called each frame of a container search: the quiet rummage when it is due.
 func search_noise(p, delta: float) -> void:
-	if p.action != "search" or p.action_busy.is_empty():
+	if p.action != "search" or p.action_busy.is_empty() or not SearchRules.rummage_heard(p.action_busy):
 		return
 	p.action_noise_t += delta
 	if p.action_noise_t < SEARCH_NOISE_EVERY:
@@ -1126,7 +1134,8 @@ func take(p, id: String, index: int, asked: bool = false) -> void:
 		dress(p, game.ground_items.size() - 1)
 		game.view.update_container(id)
 		return
-	_begin_take(p, id, item)
+	if _begin_take(p, id, item) and p == game.player and game.audio != null:
+		game.audio.box_sound(c, "take")
 
 
 ## 「모두 담기」: everything but clothes, the heaviest first, one after another,
@@ -1144,6 +1153,9 @@ func take_all(p, id: String) -> void:
 		return
 	take_queue[p.get_instance_id()] = {"box": id, "left": left}
 	_take_next(p, id)
+	# One sound as the taking starts, however many come out (card R3 가).
+	if p == game.player and p.action == "take" and game.audio != null:
+		game.audio.box_sound(c, "take")
 
 
 ## The seconds 「모두 담기」 would take from this box (the pane shows them).
@@ -2500,6 +2512,8 @@ func store(p, box: String, id: String) -> bool:
 	for i in n:
 		c["items"].append(id)
 	game.view.update_container(box)
+	if p == game.player and game.audio != null:
+		game.audio.box_sound(c, "put")
 	return true
 
 

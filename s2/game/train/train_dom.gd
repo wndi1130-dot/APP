@@ -14,6 +14,7 @@ extends RefCounted
 const Weapons = preload("res://game/sim/weapons.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
+const TrainDecor = preload("res://game/train/train_decor.gd")
 
 const AMOUNTS: Array[String] = ["scrap", "wood", "parts", "cores", "cloth", "ammo_pistol", "ammo_shell", "ammo_craft", "lures", "sleds", "stretchers", "carts", "long_sleds", "runners"]
 ## S1's Field, the receipt's FRAGMENT_KINDS.
@@ -105,7 +106,7 @@ static func empty() -> Dictionary:
 	var frags := {}
 	for f: String in FIELDS:
 		frags[f] = 0
-	var d := {"frags": frags, "armory": [], "wardrobe": [], "furnish": {}}
+	var d := {"frags": frags, "armory": [], "wardrobe": [], "furnish": {}, "store": {}}
 	for key: String in AMOUNTS:
 		d[key] = 0
 	return d
@@ -178,11 +179,14 @@ static func is_store(dom: Variant) -> bool:
 				if not car is String or not TrainMods.CAR_COMM.has(car) or seen.has(car):
 					return false
 				seen[car] = true
+		elif key == "store":
+			if not TrainDecor.is_inventory(v):
+				return false
 		elif key == "furnish":
 			if not v is Dictionary:
 				return false
 			for car: Variant in v:
-				if not TrainMods.FURNISH_CARS.has(car) or not is_furnish(v[car]):
+				if not TrainDecor.DECOR_CARS.has(car) or not is_furnish(v[car], car):
 					return false
 		elif key == "job":
 			if v != null and not is_job(v):
@@ -234,8 +238,10 @@ static func is_job(v: Variant) -> bool:
 
 
 ## A per-car furnishing record. Tiers survive removed furniture; the current
-## points must still describe the items actually placed, with their size caps.
-static func is_furnish(v: Variant) -> bool:
+## points still describe furniture, while old unpositioned items remain readable.
+static func is_furnish(v: Variant, car: String = "front") -> bool:
+	if car in ["captain", "dining"]:
+		return v is Dictionary and v.size() == 1 and TrainDecor.is_items(v.get("items"))
 	if not v is Dictionary or v.size() != 6 or not v.has_all(["work", "jobs", "furnPts", "tier", "best", "items"]):
 		return false
 	for key: String in ["work", "furnPts", "tier", "best"]:
@@ -250,18 +256,9 @@ static func is_furnish(v: Variant) -> bool:
 		if not TrainMods.is_furnish_step(n) or jobs.has(int(n)):
 			return false
 		jobs[int(n)] = true
-	var slots := {"small": 0, "medium": 0, "large": 0}
-	var points: int = 0
-	for item: Variant in v["items"]:
-		if not item is Dictionary or item.size() != 2 or not TrainMods.FURNITURE.has(item.get("kind")):
-			return false
-		var expected: String = TrainMods.FURNITURE[item["kind"]]["size"]
-		if item.get("size") != expected:
-			return false
-		slots[expected] += 1
-		if slots[expected] > TrainMods.FURNITURE_SIZE[expected]["slots"]:
-			return false
-		points += int(TrainMods.FURNITURE_SIZE[expected]["points"])
+	if not TrainDecor.is_items(v["items"]):
+		return false
+	var points: int = TrainDecor.furniture_points(v["items"])
 	if int(v["furnPts"]) != mini(points, int(TrainMods.D["furnishFurnitureCap"])):
 		return false
 	# The kept tier lies between what the current score reaches and what the done jobs
