@@ -74,11 +74,13 @@ function returnView(g: Game, card: Card): CardView {
 function lostView(g: Game, card: Card): CardView {
   const c = card.comm ?? 'tail';
   const n = (card.who ?? '').split(',').filter(Boolean).length;
+  // 일지 줄은 종이에 적힌 사람을 가리킨다. 이름 칸이 빈 옛 저장이면 수동차를 가리킨다.
+  const gone = n > 0 ? `${n}명을` : '수동차를';
   return {
     title: '돌아오지 않았다', speaker: speaker(g, c), focus: c, required: true,
     body: `돌아올 날이 지났다. 선로 끝에 아무것도 없다. ${COMM_NAME[c]} 대표가 종이에 적어 둔 이름 ${n}개를 일지에 옮긴다. ${supportLineText(g)}`,
     choices: sendChoices(g, '다시 보낸다', '기다린다', '(열차장은 종이의 이름을 본다.)', 0,
-      '돌아오지 않은 수동차를 찾으러 수색대를 다시 보냈다.', '돌아오지 않은 수동차를 찾으러 직접 나섰다.', '돌아오지 않은 수동차를 더 기다리기로 했다.'),
+      `돌아오지 않은 ${gone} 찾으러 수색대를 다시 보냈다.`, `돌아오지 않은 ${gone} 찾으러 직접 나섰다.`, `돌아오지 않은 ${gone} 더 기다리기로 했다.`),
   };
 }
 
