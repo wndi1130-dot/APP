@@ -1,4 +1,4 @@
-import { COMMS, COMM_NAME, PROFILES, REP_ROLE, TRAIT_NAME, currentAgenda, relationLine, stance } from '../game';
+import { COMMS, COMM_NAME, PROFILES, REP_ROLE, TRAIT_NAME, currentAgenda, relationLine, settleJosa, stance } from '../game';
 import type { Comm, Game } from '../game';
 import { cx, h } from './dom';
 import { portrait } from './widgets';
@@ -46,7 +46,8 @@ export function shownName(name: string): string {
 
 /** 문장 안의 전체 이름을 이름만으로 줄인다(일지, 카드 본문, 알림). */
 export function shortText(text: string): string {
-  return FULL_NAMES.length ? text.replace(NAME_RE, m => shownName(m)) : text;
+  const shortened = FULL_NAMES.length ? text.replace(NAME_RE, m => shownName(m)) : text;
+  return settleJosa(shortened);
 }
 
 /** 누르면 그 사람 정보가 뜨는 이름. */
