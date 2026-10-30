@@ -153,8 +153,9 @@ vec3 flat_layer(int layer, vec2 p, vec2 dx, vec2 dy) {
 }
 
 // Trench repairs square to the grid (the streets run along x or z): about one 4 m square in
-// six holds a patch 1.2 to 3.2 m by 0.8 to 2.4 m. x: inside (edges smoothed over a pixel),
-// y: its sealed seam.
+// six holds a patch 1.2 to 3.2 m by 0.8 to 2.4 m, kept 0.15 m off the square's sides so its
+// seam and smoothing never reach the next square (which only reads its own hash).
+// x: inside (edges smoothed over a pixel), y: its sealed seam.
 vec2 repair_patch(vec2 p, vec2 px) {
 	vec2 cell = floor(p / 4.0);
 	if (fx_hash(cell + vec2(31.7, 7.3)) > 0.17) {
@@ -162,7 +163,7 @@ vec2 repair_patch(vec2 p, vec2 px) {
 	}
 	vec2 size = vec2(1.2 + 2.0 * fx_hash(cell + vec2(3.1, 9.9)), 0.8 + 1.6 * fx_hash(cell + vec2(17.5, 2.2)));
 	size = fx_hash(cell + vec2(5.5, 5.5)) < 0.5 ? size : size.yx;
-	vec2 lo = cell * 4.0 + (vec2(4.0) - size) * vec2(fx_hash(cell + vec2(1.3, 4.4)), fx_hash(cell + vec2(8.8, 0.6)));
+	vec2 lo = cell * 4.0 + 0.15 + (vec2(3.7) - size) * vec2(fx_hash(cell + vec2(1.3, 4.4)), fx_hash(cell + vec2(8.8, 0.6)));
 	vec2 d = max(lo - p, p - (lo + size));
 	float out_d = max(d.x, d.y);
 	float aa = max(px.x, px.y) + 1e-4;
@@ -241,10 +242,13 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 		if (ground_layers_on) {
 			// One even grey with its fine grain (T0-4): the photos' broad clouds taken out, the
 			// repairs as squared trench patches of the second asphalt, a shade darker, sealed round.
-			vec3 worn = flat_layer(layers.x, p, dx, dy);
-			vec3 patched = flat_layer(layers.y, p, dx, dy) * 0.93;
+			// The second asphalt is read only inside a patch (about one square in six).
 			vec2 repair = repair_patch(p, px);
-			c = ASPHALT * mix(worn, patched, repair.x) * (1.0 - 0.22 * repair.y);
+			vec3 worn = flat_layer(layers.x, p, dx, dy);
+			if (repair.x > 0.0) {
+				worn = mix(worn, flat_layer(layers.y, p, dx, dy) * 0.93, repair.x);
+			}
+			c = ASPHALT * worn * (1.0 - 0.22 * repair.y);
 		} else {
 			// Aged asphalt: wide worn patches, a few cracks.
 			c = ASPHALT * (0.9 + 0.18 * fx_fbm2(p * 0.18 + 11.0)) * (0.96 + 0.08 * fx_vnoise(p * 3.7));
