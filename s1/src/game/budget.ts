@@ -143,8 +143,8 @@ export function gradeOf(kind: string): Grade {
 }
 
 /** card.ask를 빼고 미룰 수 있는 카드인가 */
-function deferrable(c: Card): boolean {
-  return !(c.ask && BUDGET.askExempt) && gradeOf(c.kind) >= 3;
+function deferrable(g: Game, c: Card): boolean {
+  return !(g.lateOn && (c.late ?? 0) > 0) && !(c.ask && BUDGET.askExempt) && gradeOf(c.kind) >= 3;
 }
 
 /** 일지에 쓸 카드 이름. cards.ts가 viewCard 제목으로 채운다(import 순환을 피한다). */
@@ -205,7 +205,7 @@ export function budgetPass(g: Game): void {
     let at = -1;
     let worst = 2;
     g.cards.forEach((c, i) => {
-      if (!deferrable(c)) return;
+      if (!deferrable(g, c)) return;
       const gr = gradeOf(c.kind);
       if (gr >= worst) { worst = gr; at = i; }
     });

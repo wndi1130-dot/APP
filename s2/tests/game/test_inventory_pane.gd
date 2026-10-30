@@ -1,7 +1,6 @@
 extends "res://addons/gut/test.gd"
-## The bag and what is near on one glass (decision 448-1): a press on a row moves
-## it across to the place chosen at the right; a box searched, the ground and the
-## train's hold are the places.
+## The bag and the selected place have separate tabs (decision 488). A press
+## still moves a thing to the remembered box, ground or train's hold.
 
 const FieldGame = preload("res://game/field_game.gd")
 const InventoryPane = preload("res://game/ui/inventory_pane.gd")
@@ -36,7 +35,7 @@ func _at_a_box(game) -> String:
 	return ""
 
 
-func test_the_bag_and_what_is_near_side_by_side() -> void:
+func test_the_bag_and_what_is_near_have_separate_tabs() -> void:
 	var game = _game()
 	var p = game.player
 	var box := _at_a_box(game)
@@ -44,11 +43,13 @@ func test_the_bag_and_what_is_near_side_by_side() -> void:
 	p.add_item("scrap", 1)
 	game.hud.bag_panel()
 	var places: Array = _texts(game.hud, "Places")
-	assert_has(places, String(game.data["containers"][box]["name"]))
+	var place_ids: Array = game.hud.modal.find_child("Places", true, false).get_children().map(func(b) -> String: return String(b.get_meta("place_id")) if b.has_meta("place_id") else "")
+	assert_has(place_ids, box)
 	assert_has(places, "바닥")
-	assert_false(places.has("열차 짐칸"), "the hold only by the train")
+	assert_false(places.has("열차"), "the hold only by the train")
 	assert_eq(String(game.hud.inv_near["kind"]), "box", "a box near comes first away from the train")
 	assert_false(_texts(game.hud, "Bag").is_empty(), "the bag's rows")
+	game.hud._inv_place({"kind": "box", "id": box})
 	assert_eq(_texts(game.hud, "Near").size(), 1, "the box's one thing")
 	game.hud._close_modal()
 
@@ -128,6 +129,7 @@ func test_a_box_takes_from_the_bag_only_up_to_its_limit() -> void:
 	game.hud._inv_put("scrap")
 	assert_eq(c["items"].count("scrap"), 1, "one more fits")
 	assert_eq(_box_load_text(game.hud), "담긴 무게 6.0 / 6")
+	game.hud._inv_bag()
 	for b in game.hud.modal.find_child("Bag", true, false).find_children("*", "Button", true, false):
 		if String(b.text).begins_with(game.item_name("scrap")):
 			assert_true(b.disabled, "no room for the second")

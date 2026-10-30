@@ -34,6 +34,7 @@ export * from './disaster_cards';
 export * from './death_weight';
 export * from './death_cards';
 export * from './budget';
+export { enableLate } from './late';
 export * from './event_pack';
 export * from './stranded';
 export * from './loco';
