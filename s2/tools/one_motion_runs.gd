@@ -13,6 +13,9 @@ const WALK_CELLS := [Vector2i(80, 12), Vector2i(90, 32), Vector2i(60, 40),
 	Vector2i(30, 32), Vector2i(30, 12), Vector2i(50, 6)]
 ## How often the player looks round, as a thumb on the pad would.
 const REACT_S := 0.25
+## A lying one this far past the reach, with none on its feet near, is stepped
+## up to and finished, as a thumb would (coordinator 10-29, after the axe 1.3 m).
+const FINISH_STEP := 0.6
 const Weapons = preload("res://game/sim/weapons.gd")
 
 var keep: Array = []
@@ -130,12 +133,23 @@ static func _striking(p) -> bool:
 	return p.swing_t > 0.0 or p.strike_t > 0.0 or p.shove_t > 0.0
 
 
+## One on its feet within `radius` of p, not behind a wall: no step to finish then.
+static func _stands_near(game, p, radius: float) -> bool:
+	for z in game.zombies.in_radius(p.position, radius + 1.0):
+		if String(z["state"]) in ["dead", "frozen", "rising", "downed"] or game.combat.melee_blocked(p, z["pos"]):
+			continue
+		if p.position.distance_to(game.zombies.seen_pos(z)) <= radius:
+			return true
+	return false
+
+
 ## The player at the pad, fighting back what is on it (the plain melee loop):
 ## grabbed, it shoves free; one dead on its feet in reach, it shoves it (one
 ## alone is put down, then finished on the ground, never swung at on its
 ## feet); two or more, it swings at the nearest; none standing, it ends a
-## rising one or one lying in reach. It never walks after one: a target that
-## drifts out of reach is let go. No dice of its own (game.rng only), so seeds
+## rising one or one lying in reach, or steps up to one lying just past it
+## (FINISH_STEP) when none stands near. Otherwise it never walks after one: a
+## target that drifts out of reach is let go. No dice of its own (game.rng only), so seeds
 ## still repeat. True while there is a fight at hand: the walk waits for it.
 func _counter(game, counts: Dictionary) -> bool:
 	var p = game.player
@@ -150,18 +164,24 @@ func _counter(game, counts: Dictionary) -> bool:
 		return true
 	var reach: float = float(Weapons.get_data(p.weapon_id()).get("reach", 0.9)) + combat.MELEE_SLACK
 	if not p.target_zombie.is_empty():
-		if p.target_zombie["state"] != "dead" and p.position.distance_to(game.zombies.seen_pos(p.target_zombie)) <= reach:
+		var held: Dictionary = p.target_zombie
+		var td: float = p.position.distance_to(game.zombies.seen_pos(held))
+		if held["state"] != "dead" and td <= reach:
+			return true
+		if held["state"] == "downed" and td <= reach + FINISH_STEP and not _stands_near(game, p, maxf(reach, combat.SHOVE_REACH) + FINISH_STEP):
 			return true
 		combat.stop_fight(p)
 	# Measured to where each one is seen, as the rules judge a blow (decision 474 J2).
+	var near: float = maxf(reach, combat.SHOVE_REACH)
 	var up: Array = []
 	var rising: Array = []
 	var lying: Array = []
-	for z in game.zombies.in_radius(p.position, maxf(reach, combat.SHOVE_REACH) + 1.0):
+	var stood_near := false   # one on its feet within a step past the usual look
+	for z in game.zombies.in_radius(p.position, near + FINISH_STEP + 1.0):
 		if combat.melee_blocked(p, z["pos"]):
 			continue
 		var d: float = p.position.distance_to(game.zombies.seen_pos(z))
-		if d > maxf(reach, combat.SHOVE_REACH):
+		if d > near + FINISH_STEP:
 			continue
 		match String(z["state"]):
 			"dead", "frozen":
@@ -170,10 +190,13 @@ func _counter(game, counts: Dictionary) -> bool:
 				if d <= reach and (rising.is_empty() or d < rising[1]):
 					rising = [z, d]
 			"downed":
-				if d <= reach and (lying.is_empty() or d < lying[1]):
+				if d <= reach + FINISH_STEP and (lying.is_empty() or d < lying[1]):
 					lying = [z, d]
 			_:
-				up.append([z, d])
+				if d <= near:
+					up.append([z, d])
+				else:
+					stood_near = true
 	up.sort_custom(func(a, b): return a[1] < b[1])
 	if up.size() == 1 and up[0][1] <= combat.SHOVE_REACH:
 		p.face_point(game.zombies.seen_pos(up[0][0]))
@@ -185,9 +208,11 @@ func _counter(game, counts: Dictionary) -> bool:
 	elif up.is_empty() and not rising.is_empty():
 		combat.fight(p, rising[0], false)
 		counts["bot_swings"] += 1
-	elif up.is_empty() and not lying.is_empty():
-		combat.fight(p, lying[0], false)
+	elif up.is_empty() and not lying.is_empty() and (lying[1] <= reach or not stood_near):
+		combat.fight(p, lying[0], false)   # past the reach the fight walks the step
 		counts["bot_finishes"] += 1
+		if lying[1] > reach:
+			counts["bot_steps"] += 1
 	else:
 		return false
 	return true
@@ -217,7 +242,7 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 	for z in game.zombies.list:
 		if z["state"] in ["dead", "downed", "rising"]:
 			initially_fallen[z["id"]] = true
-	var counts := {"bot_shoves": 0, "bot_swings": 0, "bot_finishes": 0, "bot_frees": 0}
+	var counts := {"bot_shoves": 0, "bot_swings": 0, "bot_finishes": 0, "bot_frees": 0, "bot_steps": 0}
 	var react := maxi(1, roundi(REACT_S * hz))
 	var clock := Time.get_ticks_usec()
 	var beset := false                # a fight at hand: the walk waits for it
