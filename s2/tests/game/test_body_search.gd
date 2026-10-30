@@ -222,7 +222,8 @@ func test_the_frozen_and_the_padded_take_longer_than_a_plain_body() -> void:
 
 
 func test_searching_a_container_is_heard_once_at_once_and_every_four_seconds() -> void:
-	# User decision 407 B4: quiet (3 m, indoors 1.5 m) every four seconds of the search.
+	# User decision 407 B4: quiet (3 m, indoors 1.5 m) every four seconds of the search —
+	# a big box's only (card R3 가, decision 469): this one a wardrobe, three seconds to look into.
 	_start()
 	var id := ""
 	for key in game.data["containers"]:
@@ -233,6 +234,7 @@ func test_searching_a_container_is_heard_once_at_once_and_every_four_seconds() -
 	assert_ne(id, "")
 	# A search starts only within reach of the box: stand on its cell first.
 	var box: Dictionary = game.data["containers"][id]
+	box["furniture"] = "wardrobe"
 	p.position = game.lift(box["cell"], int(box.get("level", 0)))
 	game.sounds.clear()
 	game.actions.search(p, id)

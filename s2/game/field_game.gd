@@ -620,7 +620,7 @@ func _ready() -> void:
 	add_child(music)
 	music.setup("field", self)
 	await BuildPace.rest(pace)
-	set_radio("기관사: " + director.forecast(0.0, 0, clock) + lid_tip(), "say")
+	set_radio("기관사: " + driver_forecast(0.0, 0) + lid_tip(), "say")
 	if holdout.feel_line() != "":
 		audio.chief_feel(holdout.feel_number())
 	if mission_play.active():
@@ -2027,6 +2027,16 @@ func _update_person(p: Person, delta: float) -> void:
 		_move_person(p, delta)
 
 
+## A door a walk stops at to deal with on the way (field_actions
+## open_door_on_way): a shut one, and for the player a locked one too, as a
+## tap on it would — the key opens it, else 「잠김」 (the coordinator's call
+## under decision 442, 2026-10-30). A companion's way goes round a locked
+## door as before.
+func _meets_door(p: Person, door: Dictionary) -> bool:
+	var state := String(door.get("state", ""))
+	return state == "closed" or (state == "locked" and p == player)
+
+
 ## Left-thumb walking (field_unified 10, user 17:32): the direction follows
 ## the thumb at once; the body takes a moment to get going and to stop, more
 ## so loaded, worn out or on ice. A hard turn at a run drops to a walk first.
@@ -2066,7 +2076,7 @@ func _drive(p: Person, delta: float) -> void:
 	var step := p.drive_dir * p.drive_speed * delta
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
-	if lg == grid and grid.doors.has(dc) and grid.doors[dc]["state"] == "closed":
+	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
 		p.drive_speed = 0.0
 		actions.open_door_on_way(p, dc)
 		return
@@ -2130,7 +2140,7 @@ func _move_person(p: Person, delta: float) -> void:
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
-	if lg == grid and grid.doors.has(dc) and grid.doors[dc]["state"] == "closed":
+	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
 		actions.open_door_on_way(p, dc)
 		return
 	if lg.blocks_body(dc):
@@ -2190,8 +2200,11 @@ func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> v
 		ledger.observe(level, "run" if running else ("crouch" if p.crouched else "walk"), r, reacted)
 		if running:
 			_ripple_run(p, r)
-		if p == player and audio != null:
-			audio.footstep(p.position, running)
+		if audio != null:
+			if p == player:
+				audio.footstep(p.position, running)
+			elif p.team == "squad" or p.team == "crew":
+				audio.company_step(p.position, running)   # the ear's; a raider's or a stranger's feet stay unheard
 		_wake_frozen_near(p)
 		_floor_creak(p, cell)
 	if running:
@@ -2340,7 +2353,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 		level = SimNoise.clamp_level(level + 1)
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
-			set_radio("기관사: 굴 쪽이 울린다. 다음 것들은 %s에서 나온다." % director.name_of(hole), "info", entry_pos(hole))
+			set_radio("기관사: 굴 쪽이 울립니다. 다음 것들은 %s에서 나옵니다." % director.name_of(hole), "info", entry_pos(hole))
 	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false) * SimNoise.reach(tag)
 	var reacted: int = zombies.hear(at, level, radius)
 	ledger.observe(level, tag, radius, reacted)
@@ -2509,7 +2522,7 @@ func _update_hordes(delta: float) -> void:
 		director.noticed(now)
 	elif director.update_lost(now):
 		telemetry.lost_at(now)
-		set_radio("기관사: 놓친 것 같다. 다음 것들이 늦어진다. 숨 돌려라.")
+		set_radio("기관사: 놓친 것 같습니다. 다음 것들이 늦어집니다. 숨 돌리십시오.")
 	var h := director.update(now)
 	if not h.is_empty():
 		_start_horde(h)
@@ -2533,7 +2546,7 @@ func _update_hordes(delta: float) -> void:
 					recent += 1
 			director.horde_cleared(now, recent)
 			telemetry.rest(now, director.rest_until)
-			set_radio("기관사: 한 무리 지나갔다. " + director.forecast(now, forecast_precision, clock) + lid_tip())
+			set_radio("기관사: 한 무리 지나갔습니다. " + driver_forecast(now, forecast_precision) + lid_tip())
 
 
 ## Is anything after the squad right now (chasing, or already at someone)?
@@ -2676,7 +2689,7 @@ func _update_spawns(delta: float) -> void:
 	if forecast_t > 0.0:
 		forecast_t -= delta
 		if forecast_t <= 0.0:
-			set_radio("기관사: " + director.forecast(now, forecast_precision, clock) + lid_tip())
+			set_radio("기관사: " + driver_forecast(now, forecast_precision) + lid_tip())
 	deaf_t = maxf(0.0, deaf_t - delta)
 
 
@@ -2687,13 +2700,22 @@ func _someone_near(at: Vector3, r: float) -> bool:
 	return false
 
 
+## The driver's forecast, said to the chief politely like the user's own line
+## for him (decisions 486). horde_director words it so, but its no-more line
+## stays plain for the signal box and a roof, so the driver's is said here.
+func driver_forecast(now: float, precision: int) -> String:
+	if director.is_exhausted():
+		return "더 오는 기척은 없습니다."
+	return director.forecast(now, precision, clock)
+
+
 ## Once per field, when the next wave comes up the open street manhole: how to
 ## shut it (H3 2026-10-09: the player never found that it can be shut).
 func lid_tip() -> String:
 	if lid_tip_told or not FieldMaps.lid(director.next_entry) or not director.is_open(director.next_entry) or director.is_exhausted():
 		return ""
 	lid_tip_told = true
-	return " 맨홀은 판자나 고철로 누르면 막힌다."
+	return " 맨홀은 판자나 고철로 누르면 막힙니다."
 
 
 ## Out of a sewer hole a body climbs: straight up out of a lid or a drain,
@@ -3136,7 +3158,7 @@ func _check_end() -> void:
 		return
 	if clock.past_safe() and not safe_warned:
 		safe_warned = true
-		set_radio("기관사: 이제 떠나야 한다. 오래는 못 기다린다.", "must")
+		set_radio("기관사: 이제 떠나야 합니다. 오래는 못 기다립니다.", "must")
 
 
 ## Walking dead on the main track (rows 1-3, ground level) west and east of

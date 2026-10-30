@@ -12,16 +12,26 @@ var props: Dictionary = {}
 var rows: Dictionary = {}
 var traces: Dictionary = {}
 var fire_mark: MeshInstance3D
+## The car's dress: the small things its layout marks "dress" (tools/blender/train_car_layers.py,
+## the floor, the wall and the ceiling of a lived car) drawn as one mesh with one vertex-colour
+## material, so they cost one draw call however many there are (결정 505 잰 값).
+var dress: MeshInstance3D
 var _materials: Dictionary = {}
+static var _dress_meshes: Dictionary = {}
+static var _dress_material: StandardMaterial3D
 
 
 func build(parent: Node3D, car: Dictionary, stove_builder: Callable) -> void:
 	root = Node3D.new()
 	root.name = "Interior"
 	parent.add_child(root)
+	var dress_rows: Array = []
 	for row in Catalog.layout(car)["props"]:
 		# A row kept for some cars only: the three tail cars share a layout and each has one thing of its own.
 		if row.has("cars") and not (row["cars"] as Array).has(String(car.get("id", ""))):
+			continue
+		if bool(row.get("dress", false)):
+			dress_rows.append(row)
 			continue
 		var at := Catalog.vector(row["at"])
 		if row.get("system", "") == "stove":
@@ -61,6 +71,70 @@ func build(parent: Node3D, car: Dictionary, stove_builder: Callable) -> void:
 	fire_mark.position = Catalog.vector(Catalog.tuning("fire_mark_at"))
 	fire_mark.visible = false
 	root.add_child(fire_mark)
+	_build_dress(dress_rows)
+
+
+## Each dress row's model stands where its row keeps it, as a prop would (_fit_to), all in one mesh.
+func _build_dress(list: Array) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var laid := 0
+	for row: Dictionary in list:
+		var mesh := _dress_mesh(String(row["model"]))
+		if mesh == null:
+			push_warning("train_interior: dress model missing, row left out: " + String(row["id"]))
+			continue
+		var reserved := Catalog.vector(row["size"])
+		var box := mesh.get_aabb()
+		# The same fit as a prop's (_fit_to): made smaller to its box's height, bigger only by `grow`.
+		var k: float = minf(maxf(float(row.get("grow", 1.0)), 1.0), reserved.y / box.size.y) if box.size.y > 0.0 else 1.0
+		var at := Catalog.vector(row["at"])
+		var place := Transform3D(Basis(Vector3.UP, float(row["yaw"])).scaled(Vector3.ONE * k),
+			Vector3(at.x, at.y - reserved.y * 0.5 - box.position.y * k, at.z))
+		st.append_from(mesh, 0, place)
+		laid += 1
+	if laid == 0:
+		return
+	dress = MeshInstance3D.new()
+	dress.name = "Dress"
+	dress.mesh = st.commit()
+	dress.material_override = _dress_paint()
+	dress.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(dress)
+
+
+## Up close the dress shows; on the wide view it is left out, as the budget there is spent.
+func show_dress(on: bool) -> void:
+	if dress != null:
+		dress.visible = on
+
+
+static func _dress_mesh(model: String) -> Mesh:
+	if not _dress_meshes.has(model):
+		var mesh: Mesh = null
+		var path := MODEL_ROOT + model + ".glb"
+		if model.is_valid_identifier() and ResourceLoader.exists(path):
+			var packed = load(path)
+			if packed is PackedScene:
+				var node := (packed as PackedScene).instantiate()
+				var found: Array = node.find_children("*", "MeshInstance3D", true, false)
+				if node is MeshInstance3D:
+					found.push_front(node)
+				if not found.is_empty():
+					mesh = (found[0] as MeshInstance3D).mesh
+				node.free()
+		_dress_meshes[model] = mesh
+	return _dress_meshes[model]
+
+
+## The kit's colours are in the vertices, linear (train_interior.py's import script does the same).
+static func _dress_paint() -> StandardMaterial3D:
+	if _dress_material == null:
+		_dress_material = StandardMaterial3D.new()
+		_dress_material.vertex_color_use_as_albedo = true
+		_dress_material.vertex_color_is_srgb = false
+		_dress_material.roughness = 1.0
+	return _dress_material
 
 
 func apply(c: Dictionary) -> void:

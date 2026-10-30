@@ -289,7 +289,8 @@ const WARM_BANDS: Dictionary = {
 	# Late autumn's night fill a shade over the winter's (the same neutral grey): with no
 	# snow to give the moon back, the bare ground under a clear sky kept three quarters of
 	# the first stop under V 0.15 (decision 470 night line: 0.70 at most; reference 0.67).
-	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.312, 0.307, 0.300)},
+	# Raised again after the ground layers (decision 496) darkened the bare ground: 0.312 → 0.345.
+	"night": {"zenith": Color(0.04, 0.045, 0.06), "horizon": Color(0.08, 0.085, 0.095), "ambient": Color(0.345, 0.340, 0.333)},
 	"dawn": {"zenith": Color(0.30, 0.31, 0.38), "horizon": Color(0.88, 0.66, 0.50), "ambient": Color(0.52, 0.50, 0.52)},
 	# Late autumn's day sun a neutral, faintly green white (decision 499): the old warm
 	# (0.96, 0.92, 0.82) turned the faded grass yellow under a clear sky (a green share of
@@ -318,7 +319,11 @@ const WEATHER: Dictionary = {
 	"snow": {"cloud": 0.92, "sun": 0.42, "fill": 1.2, "veil": 0.82, "veil_color": Color(0.58, 0.61, 0.66), "haze": 0.6, "fall": 0.55},
 	"blizzard": {"cloud": 1.0, "sun": 0.16, "fill": 0.95, "veil": 0.93, "veil_color": Color(0.70, 0.73, 0.77), "haze": 0.95, "fall": 1.0},
 	"sleet": {"cloud": 0.96, "sun": 0.32, "fill": 1.15, "veil": 0.86, "veil_color": Color(0.44, 0.46, 0.48), "haze": 0.55, "fall": 0.6},
-	"rain": {"cloud": 0.96, "sun": 0.3, "fill": 1.1, "veil": 0.86, "veil_color": Color(0.40, 0.43, 0.46), "haze": 0.55, "fall": 0.7},
+	# Rain is the first stop's weather (late autumn +6 C): the fill makes up at dusk
+	# and night what the wet ground and models take (by day the closed sky's give-back
+	# sets the light), and the veil a grey near the overcast's (decision 470: dusk V
+	# 0.211 and night dark share 0.76 missed the lines 0.25 and 0.70).
+	"rain": {"cloud": 0.96, "sun": 0.3, "fill": 1.45, "veil": 0.86, "veil_color": Color(0.48, 0.51, 0.54), "haze": 0.55, "fall": 0.7},
 }
 
 ## Photo skies (CC0, Poly Haven, 사용자 10-25 공개 자산 먼저; made by tools/atmo_textures.gd from

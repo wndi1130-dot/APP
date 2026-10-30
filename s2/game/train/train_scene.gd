@@ -10,6 +10,7 @@ signal rules_applied
 
 const Rules = preload("res://game/train/train_rules.gd")
 const Look = preload("res://game/train/train_look.gd")
+const TrainLight = preload("res://game/train/train_light.gd")
 const Body = preload("res://game/train/train_body.gd")
 const HandPanel = preload("res://game/train/train_panel.gd")
 const Gesture = preload("res://game/train/train_gesture.gd")
@@ -86,6 +87,12 @@ const STOVE_MODEL := "res://models/train_interior/stove.glb"
 const STOVE_ENERGY: float = 1.1
 const LAMP_SWAY: float = 0.05           # metres, with the train's rocking
 const LAMP_EASE: float = 1.5            # a mood comes on over a second or so
+## The warm pool the lamp leaves on the floor (lamp_pool.gdshader, 코디 10-30): read as a lamp
+## from above, where the light itself is not seen. Strength is the square root of the lamp's
+## energy times this, so the day's low lamp (0.2) still leaves a faint pool and the night's a clear one.
+const LAMP_POOL_SHADER = preload("res://game/train/lamp_pool.gdshader")
+const LAMP_POOL_SIZE := Vector2(2.6, 2.2)
+const LAMP_POOL_GAIN: float = 0.15
 ## The room before the people (user decision 2026-10-25): when a car's state
 ## changes, its stove fire turns first (over STOVE_SHARE of room_ease), then the
 ## walls and the window frost (the rest of it), and the people are reseated only
@@ -143,15 +150,19 @@ var zoomed_out: bool = false
 var view_mode: String = "diag"            # the inside seen from above at an angle (결정 486); the council keeps "section"
 var zoom: String = "wide"
 var pane_px: float = 0.0
+var pane_left_px: float = 0.0           # a folded paper's edge at the left (결정 508)
 var clock: float = 0.0
 var _hold_from: float = 0.0             # the council room along the train while the vote is called
 var _hold_to: float = 0.0
 var _mats: Dictionary = {}
 var _font: SystemFont
 var _shells: Dictionary = {}
+var _pool_quad: PlaneMesh
 var backdrop: MeshInstance3D
 var side_rail: MeshInstance3D
 var snow_ground: MeshInstance3D
+var world_env: Environment
+var fill_light: DirectionalLight3D
 var highlight_band: MeshInstance3D
 var _highlight_id: String = ""
 var people_view: Node3D                  # the baked bodies drawn over the stand-in capsules
@@ -407,6 +418,35 @@ func _apply_shell_view(c: Dictionary) -> void:
 		(c["front_wall"] as MeshInstance3D).visible = diagonal
 	for prop: Dictionary in c.get("high_props", []):
 		(prop["node"] as Node3D).transform = prop["diag"] if diagonal else prop["section"]
+	_show_dress(c)
+
+
+## A car's small things (train_interior.gd dress) show up close and on the side view, not on
+## the wide diagonal, where the draw budget is already spent (결정 505 잰 값).
+func _show_dress(c: Dictionary) -> void:
+	var near: bool = view_mode != "diag" or zoom == "near"
+	if life.rooms.has(c["id"]):
+		life.rooms[c["id"]].show_dress(near)
+	if c.get("lamp_pool") != null:
+		(c["lamp_pool"] as MeshInstance3D).visible = near
+
+
+## One quad on the floor under the lamp's resting place, added over the floor (no shadow, no light).
+## Every car shares the quad and its material; the lamp's colour reaches each as instance values.
+func _lamp_pool(node: Node3D, at: Vector3) -> MeshInstance3D:
+	if _pool_quad == null:
+		_pool_quad = PlaneMesh.new()
+		_pool_quad.size = LAMP_POOL_SIZE
+		var mat := ShaderMaterial.new()
+		mat.shader = LAMP_POOL_SHADER
+		_pool_quad.material = mat
+	var pool := MeshInstance3D.new()
+	pool.name = "LampPool"
+	pool.mesh = _pool_quad
+	pool.position = Vector3(at.x, 0.02, at.z)
+	pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.add_child(pool)
+	return pool
 
 
 ## The snow sheet under the diagonal view gives way only to the land outside once it
@@ -454,8 +494,11 @@ func car_screen_polygon(id: String) -> PackedVector2Array:
 	return hull
 
 
-func set_pane(px: float) -> void:
+## What the screen's own panes keep covered, in its px: the car pane at the right and a
+## folded paper's edge at the left; the diagonal camera puts the car in the middle of the rest.
+func set_pane(px: float, left_px: float = 0.0) -> void:
 	pane_px = maxf(px, 0.0)
+	pane_left_px = maxf(left_px, 0.0)
 	_place_camera()
 
 
@@ -560,7 +603,7 @@ func _seat_car(c: Dictionary, reseat: bool = true) -> void:
 	c["mood"] = m
 	if reseat:
 		_seat_bodies(c, comm, n, w, m, look)
-	# 등불은 생활 쪽이 밤·정차에 맞춰 곱하므로 다시 앉히지 않는 칸도 매번 바탕값부터 칠한다.
+	# 등불은 빛 판이 낮밤을, 생활 쪽이 정차·출발 흔들림을 덧칠하므로 다시 앉히지 않는 칸도 매번 바탕값부터 칠한다.
 	_dress_car(c, w, look)
 	_dress_backdrop()
 	(c["values"] as Label3D).text = values_text(c)
@@ -894,9 +937,13 @@ func _knot_gesture_facing(gesture_name: String, k: int, wide: float = 0.0, aside
 
 ## The lamp, the stove and the window frost follow the car's mood and warmth.
 func _dress_car(c: Dictionary, w: float, look: Dictionary) -> void:
-	c["lamp_color"] = look["lamp"]
-	c["lamp_energy"] = float(look["energy"])
-	c["lamp_sway"] = float(look["sway"])
+	# The hour's colour and strength reach the lamp only through this aim, eased like the
+	# mood's: setting its colour outright would flash every car when the hour turns.
+	var daytime: String = TrainLight.daytime_of(rules.get("view", {}))
+	var aim: Dictionary = TrainLight.target(TrainLight.stage_of(c), daytime, look)
+	c["lamp_color"] = aim["lamp_color"]
+	c["lamp_energy"] = float(aim["lamp_energy"])
+	c["lamp_sway"] = float(aim["lamp_sway"])
 	if room_ease <= 0.0 or not c.has("room_w"):
 		c["room_w"] = w
 		c["room_to"] = w
@@ -934,7 +981,7 @@ func _show_room(c: Dictionary) -> void:
 		shell_material.albedo_color = Color(base.r * warm.r * shade, base.g * warm.g * shade, base.b * warm.b * shade, base.a)
 	if c.has("stove_light"):
 		var burn: float = float(vis["burn"])
-		(c["stove_light"] as OmniLight3D).light_energy = STOVE_ENERGY * burn
+		(c["stove_light"] as OmniLight3D).light_energy = STOVE_ENERGY * burn * float(c["stove_share"])
 		(c["steam"] as GPUParticles3D).emitting = burn >= Look.STOVE_STEAM_FROM
 
 
@@ -973,6 +1020,17 @@ func _step_lamp(c: Dictionary, delta: float) -> void:
 	lamp.light_color = lamp.light_color.lerp(c["lamp_color"], ease_by)
 	lamp.light_energy = lerpf(lamp.light_energy, float(c["lamp_energy"]), ease_by)
 	lamp.position.x = CAR_LENGTH * 0.5 + sin(clock * 1.3 + float(c["index"])) * LAMP_SWAY * float(c["lamp_sway"])
+	_tint_pool(c)
+
+
+## The pool under the lamp takes the lamp's colour and strength as they ease.
+func _tint_pool(c: Dictionary) -> void:
+	var pool: MeshInstance3D = c.get("lamp_pool")
+	if pool == null:
+		return
+	var lamp: OmniLight3D = c["lamp"]
+	pool.set_instance_shader_parameter("pool_color", lamp.light_color)
+	pool.set_instance_shader_parameter("pool_strength", sqrt(maxf(lamp.light_energy, 0.0)) * LAMP_POOL_GAIN)
 
 
 func _sit_down(c: Dictionary, b: Node3D, x0: float, at: Vector3, pose: String, huddled: bool, bowed: bool) -> void:
@@ -1123,16 +1181,15 @@ func _build_world() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.04, 0.045, 0.06)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.55, 0.6, 0.72)
-	env.ambient_light_energy = 0.35
 	world.environment = env
 	add_child(world)
+	world_env = env
 	# A faint cold fill from the open side, so a body in the aisle is not a black shape.
 	var fill := DirectionalLight3D.new()
-	fill.light_color = Color(0.62, 0.7, 0.86)
-	fill.light_energy = 0.3
 	fill.rotation_degrees = Vector3(-25, 0, 0)
 	add_child(fill)
+	fill_light = fill
+	_dress_world_light()
 	camera = Camera3D.new()
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
 	camera.near = 0.1
@@ -1154,6 +1211,8 @@ func _on_view_resized() -> void:
 func _place_camera() -> void:
 	if camera == null:
 		return
+	for c: Dictionary in cars:
+		_show_dress(c)
 	if view_mode == "diag":
 		camera.keep_aspect = Camera3D.KEEP_HEIGHT
 		camera.size = DIAG_NEAR if zoom == "near" else DIAG_WIDE
@@ -1167,7 +1226,7 @@ func _place_camera() -> void:
 		camera.h_offset = 0.0
 		if is_inside_tree():
 			var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
-			camera.h_offset = (pane_px / 2.0) * camera.size / view_h
+			camera.h_offset = ((pane_px - pane_left_px) / 2.0) * camera.size / view_h
 		return
 	var pitch := deg_to_rad(CAM_PITCH)
 	camera.size = CAM_FAR if zoomed_out else CAM_NEAR
@@ -1384,18 +1443,28 @@ func _shell_box(c: Dictionary, size: Vector3, at: Vector3, color: Color) -> void
 
 
 func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: float) -> void:
+	var stage: int = TrainLight.stage_of(c)
+	var daytime: String = TrainLight.daytime_of(rules.get("view", {}))
+	# The stage's share of the stove, the same by day and night; read once, as the lamp's place.
+	c["stove_share"] = float(TrainLight.spec(stage, daytime)["stove"])
 	life.add_car(c)
-	var calm := Look.mood_look("calm")
-	var lamp := OmniLight3D.new()
-	lamp.light_color = calm["lamp"]
-	lamp.light_energy = float(calm["energy"])
-	lamp.omni_range = 9.0
-	lamp.position = Vector3(l * 0.5, h - 0.5, 0.3)
-	node.add_child(lamp)
+	# The car's lamp by its home stage and the hour (train_light.gd, 결정 486), easing toward
+	# the mood. One lamp a car and no shadow on the phone: a swaying lamp's shadow is drawn
+	# again every frame (+29k primitives on the first diagonal screen), and the second lamp and
+	# the window glow added no draw call but 39 lights over the train's 24.
+	var lamps: Array[OmniLight3D] = TrainLight.build(node, l, stage, daytime)
+	var lamp: OmniLight3D = lamps[0]
+	lamp.shadow_enabled = false
+	for extra: OmniLight3D in lamps.slice(1):
+		extra.free()
+	for i: int in TrainLight.WINDOW_SHARES.size():
+		node.get_node("Window%d" % i).free()
 	c["lamp"] = lamp
 	c["lamp_color"] = lamp.light_color
 	c["lamp_energy"] = lamp.light_energy
 	c["lamp_sway"] = 1.0
+	c["lamp_pool"] = _lamp_pool(node, lamp.position)
+	_tint_pool(c)
 	c["name"] = _label(node, String(def.get("name", def["id"])), Vector3(l * 0.5, h + 1.2, 0), 72, Color(0.93, 0.91, 0.86))
 	c["values"] = _label(node, "", Vector3(l * 0.5, h + 0.55, 0), 44, Color(0.7, 0.7, 0.68))
 	# The car's numbers are not on the everyday screen (decisions.md 「평소 화면에는
@@ -1487,8 +1556,20 @@ func _build_backdrop() -> void:
 	_dress_backdrop()
 
 
+## The air round the cars by the hour (train_light.gd world): ambient and the cold fill.
+func _dress_world_light() -> void:
+	var air: Dictionary = TrainLight.world(TrainLight.daytime_of(rules.get("view", {})))
+	if world_env != null:
+		world_env.ambient_light_color = air["ambient_color"]
+		world_env.ambient_light_energy = float(air["ambient_energy"])
+	if is_instance_valid(fill_light):
+		fill_light.light_color = air["fill_color"]
+		fill_light.light_energy = float(air["fill_energy"])
+
+
 ## Night darkens the card; the land goes by only while the train runs.
 func _dress_backdrop() -> void:
+	_dress_world_light()
 	if backdrop == null:
 		return
 	var view: Dictionary = rules.get("view", {})

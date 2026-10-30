@@ -64,6 +64,49 @@ const DOOR_VOICES: Dictionary = {
 	"break": ["door_break", 1.0, 0.95, 1.05],
 }
 const DOOR_BLOWS: Array[String] = ["door", "low", "wall"]
+## A building's door turned by a hand (field_actions _set_door), for the
+## player's ear only: no rule hears it, so no make_sound tag and no noise.gd
+## SOURCES row (as a box's opening and shutting). Group, loudness, pitch low
+## and high, and the impact file that stands in until a file is in its group.
+const DOOR_TURN: Dictionary = {
+	"open": ["door_open", 0.45, 0.78, 0.86, "wooden"],
+	"closed": ["door_close", 0.55, 0.66, 0.74, "wooden"],
+}
+## A key turned in a locked door (field_actions _key_opened, P12): a small
+## click, then the door going quietly, softer than a door opened by hand, so
+## the player does not take it for a noise the dead heard (they hear none).
+## The click's group and stand-in as DOOR_TURN's; the door's loudness times
+## DOOR_KEY_HUSH, DOOR_KEY_LAG s after the click. First values.
+const DOOR_KEY: Array = ["door_unlock", 0.25, 1.6, 1.8, "metal"]
+const DOOR_KEY_HUSH: float = 0.5
+const DOOR_KEY_LAG: float = 0.18
+## A building's window opened or shut, or its curtain drawn or opened, by
+## someone (field_actions _set_window_open, _curtain_set): the player's ear
+## only, as DOOR_TURN. Until a file is in its group the stand-in is the impact
+## file whose name begins so, or with "@" a group of its own (a curtain: cloth
+## swung through the air, low). First values.
+const WINDOW_TURN: Dictionary = {
+	"open": ["window_open", 0.3, 1.15, 1.3, "wooden"],
+	"closed": ["window_close", 0.4, 1.02, 1.12, "wooden"],
+	"curtain": ["curtain", 0.25, 0.7, 0.8, "@swing_light"],
+}
+## A door or a window that will not give to the player's hand, as the note
+## says so (field_actions): a locked door rattles in its frame, a boarded one
+## thuds against its planks. The player's ear only, as DOOR_TURN.
+const SHUT_FAST: Dictionary = {
+	"locked": ["door_locked", 0.4, 0.92, 1.02, "wooden"],
+	"boarded": ["boarded", 0.4, 0.6, 0.7, "slam"],
+}
+## The same door (or window) for the same reason is heard again only after
+## this many ms: a stick held against it asks every frame (field_game _drive).
+const SHUT_FAST_GAP_MS: int = 800
+## A bite on someone (hit_feel bitten): until its files are in, a blow's
+## stand-in layer, its group and pitch low and high; the coat taking it
+## (bite_blocked) is a duller thud.
+const FEEL_STANDINS: Dictionary = {
+	"bite": ["blow_cut", 0.78, 0.88],
+	"bite_blocked": ["blow_thud", 1.05, 1.15],
+}
 ## A manhole lid dragged aside by one of the dead coming up (decision 422 M9):
 ## group, loudness, pitch low and high. Until a file is in its group it is the
 ## impact set's iron, pitched down.
@@ -93,6 +136,28 @@ const STEP_FLOORS: Array = [
 const STEP_GLASS: Array = ["step_glass", 0.25, 1.2, 1.4]
 const GLASS_STANDIN: String = "glass"
 const STEPS_KEPT: int = 256            # steps remembered (tests); older ones go
+## The dead in sight are heard walking, as they are heard speaking (결정 509,
+## user 2026-10-24: only the dead the player can see; out of sight their feet
+## are silent too): the nearest few of the voiced dead that move, by the floor under them,
+## softer and lower than the player's own. Each step comes after a stride drawn
+## new for it, and a shambling one now and then drags without a sound, so the
+## feet keep no beat (user 2026-10-24: 「규칙적이니까 귀가피곤함」). A crawler
+## makes no step. Heard only; nothing in the rules hears it.
+const DEAD_STEP_RANGE: float = 12.0    # m: no step heard from farther (an ally's too)
+const DEAD_STEPPERS: int = 3           # at most this many of the dead are heard stepping
+const DEAD_STEP_JUMP: float = 2.0      # m in one tick: a jump (a stair, a spawn), not a walk
+## An ally's step (squad or crew, field_game _footsteps) is the player's own,
+## this much softer; a raider's or a stranger's feet stay unheard.
+const COMPANY_STEP_LOUD: float = 0.7
+const FEET_PLAYERS: int = 5            # players the steps of others than the player go out on
+## By its gait: stride in m (low, high), loudness, the share of steps without a
+## sound, and pitch (low, high; times its floor's) — never above the player's
+## lowest (0.9), so the ear tells their feet from its own. First values.
+const DEAD_GAITS: Dictionary = {
+	"shamble": {"stride": [0.45, 0.8], "loud": 0.16, "skip": 0.3, "pitch": [0.72, 0.86]},
+	"chase": {"stride": [0.6, 0.9], "loud": 0.22, "skip": 0.12, "pitch": [0.78, 0.88]},
+	"dash": {"stride": [0.9, 1.3], "loud": 0.3, "skip": 0.0, "pitch": [0.82, 0.9]},
+}
 ## The rasp of one of the dead that is about to run (lunger_rules): the group
 ## its file goes in, how loud, heard to this many metres, and the pitch of the
 ## moan that stands in for it. First values.
@@ -121,6 +186,7 @@ const DULL_BUSES: Dictionary = {"SFX_MID": 2400.0, "SFX_FAR": 900.0}   # low-pas
 ## reverb sized by that floor (ROOM_AREA m², a closet to a hall), sent to SFX.
 ## Outdoors, and from behind a wall, there is no tail. Nothing in the rules hears it.
 const ROOM_BUS: String = "ROOM"
+const ROOM_DULL_BUS: String = "ROOM_MID"
 const ROOM_AREA: Array = [9.0, 300.0]       # m² of floor: a closet .. a hall
 const ROOM_SIZE: Array = [0.2, 0.7]         # the reverb's room_size, small .. large
 const ROOM_DAMP: Array = [0.75, 0.4]
@@ -332,7 +398,15 @@ var departing: bool = false            # '떠난다' plays its own whistle
 var played: Array = []                 # groups played, in order (tests)
 var steps: Array = []                  # the player's steps heard [group, file] (tests)
 var step_last: Dictionary = {}         # step group -> the file it played last
+var feet: Array = []                   # AudioStreamPlayer3D the steps of others go out on
+var feet_n: int = 0                    # those steps played (which of feet is next)
+var feet_strides: int = 0              # strides the voiced dead have gone, heard or not (tests)
+var dead_steps: Array = []             # the dead's steps heard [zombie id, group, file] (tests)
+var dead_step_last: Dictionary = {}    # step group -> the file a dead's step played last
+var company_steps: Array = []          # allies' steps heard [group, file] (tests)
+var company_step_last: Dictionary = {} # step group -> the file an ally's step played last
 var door_creaks: Array = []             # building doors beaten on: true when it was about to give (tests)
+var shut_heard: Dictionary = {}        # "x,y,why" -> Time ms a door's no was last heard (SHUT_FAST_GAP_MS)
 
 ## The music steps aside for a sound that matters (the music frame's ducking
 ## connects here; nothing in the rules reads it). kind: "brake" (the train
@@ -449,6 +523,13 @@ func setup(field_game) -> void:
 		o.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
 		add_child(o)
 		one_shots.append(o)
+	# Others' feet have players of their own: a step never cuts a blow short.
+	for i in range(FEET_PLAYERS):
+		var f := AudioStreamPlayer3D.new()
+		f.bus = "SFX"
+		f.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
+		add_child(f)
+		feet.append(f)
 
 
 func has(group: String) -> bool:
@@ -486,19 +567,28 @@ static func _ensure_wind_bus() -> void:
 	AudioServer.add_bus_effect(i, low)
 
 
-## The room's bus: a reverb (set to the player's room by _tick_room), sent to SFX.
+## The room's bus: a reverb (set to the player's room by _tick_room), sent to SFX;
+## and ROOM_MID, as dull as SFX_MID and sent into the room (a dull weapon's own
+## hit in the player's room: duller, and still the room's).
 static func _ensure_room_bus() -> void:
-	if AudioServer.get_bus_index(ROOM_BUS) >= 0:
-		return
-	AudioServer.add_bus()
-	var i := AudioServer.bus_count - 1
-	AudioServer.set_bus_name(i, ROOM_BUS)
-	AudioServer.set_bus_send(i, "SFX")
-	var verb := AudioEffectReverb.new()
-	verb.dry = 1.0
-	verb.spread = 0.8
-	verb.hipass = 0.25   # no boom from the low end, which a phone cannot play anyway
-	AudioServer.add_bus_effect(i, verb)
+	if AudioServer.get_bus_index(ROOM_BUS) < 0:
+		AudioServer.add_bus()
+		var i := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(i, ROOM_BUS)
+		AudioServer.set_bus_send(i, "SFX")
+		var verb := AudioEffectReverb.new()
+		verb.dry = 1.0
+		verb.spread = 0.8
+		verb.hipass = 0.25   # no boom from the low end, which a phone cannot play anyway
+		AudioServer.add_bus_effect(i, verb)
+	if AudioServer.get_bus_index(ROOM_DULL_BUS) < 0:
+		AudioServer.add_bus()
+		var d := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(d, ROOM_DULL_BUS)
+		AudioServer.set_bus_send(d, ROOM_BUS)
+		var low := AudioEffectLowPassFilter.new()
+		low.cutoff_hz = float(DULL_BUSES["SFX_MID"])
+		AudioServer.add_bus_effect(d, low)
 
 
 ## The player's room from indoor cell c: the floor of the same building the air
@@ -733,6 +823,8 @@ func tick(delta: float) -> void:
 		pick_t = 0.4
 		_assign_moans(at)
 	for s in slots:
+		_move_feet(s)   # all of them first: who walks is known alike when each steps
+	for s in slots:
 		_tick_slot(s, at, delta)
 	_tick_falls(at)
 	# The mass: one bed scaled by how many dead are near and how near.
@@ -819,6 +911,10 @@ func _assign_moans(at: Vector3) -> void:
 		s["z"] = z
 		s["was"] = ""
 		s["stun"] = float(z.get("stun", 0.0))
+		# Its feet start where it is, part way through a stride.
+		s["feet_at"] = z["pos"]
+		s["feet_left"] = randf_range(0.0, float(DEAD_GAITS["shamble"]["stride"][1]))
+		s["feet_moving"] = false
 
 
 ## The voice of one of the dead: its kind and its own pitch, the same every
@@ -909,6 +1005,7 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 		return
 	p.position = z["pos"]
 	var d: float = z["pos"].distance_to(at)
+	_tick_feet(s, z, d)
 	var row := says_for(String(z["state"]))
 	# A short call (a bite, a grunt) ends after its length, fading out fast.
 	if float(s.get("cut", 0.0)) > 0.0:
@@ -949,7 +1046,8 @@ func _fall_voice(z: Dictionary, at: Vector3) -> void:
 	var i := _next_file(String(v["kind"]), -1)
 	var band: Array = moan_band(d)
 	said.append([int(z["id"]), "fall", i])
-	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], String(band[2]), float(row["cut"]))
+	var bus: String = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
+	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], bus, float(row["cut"]))
 
 
 # ---------------------------------------------------------------- wind
@@ -1575,6 +1673,58 @@ func door(kind: String, at: Vector3, level: int) -> void:
 	_one_shot(group if has(group) else "impact", at, loud * clampf(1.0 - d / 60.0, 0.0, 1.0), randf_range(float(v[2]), float(v[3])), null, _bus_at(at))
 
 
+## A building's door opened or shut by someone (state "open" or "closed"), heard
+## from the door, in the player's room when it is one of the room's doors.
+## by_key: opened with its key (DOOR_KEY), the click and then the door, softer.
+func door_turn(c: Vector2i, state: String, by_key: bool = false) -> void:
+	if quiet or game == null or game.player == null or not DOOR_TURN.has(state):
+		return
+	var voice: Array = DOOR_TURN[state]
+	var at: Vector3 = game.FieldGrid.center(c)
+	if not by_key:
+		_voice_or_standin(voice, String(voice[4]), at)
+		return
+	_voice_or_standin(DOOR_KEY, String(DOOR_KEY[4]), at)
+	var soft: Array = voice.duplicate()
+	soft[1] = float(voice[1]) * DOOR_KEY_HUSH
+	if is_inside_tree():
+		get_tree().create_timer(DOOR_KEY_LAG, false).timeout.connect(_key_door_goes.bind(c, soft, at))
+	else:
+		_key_door_goes(c, soft, at)
+
+
+## The door a key turned goes, a moment after the click: not if the stop
+## has ended or the door is shut again meanwhile.
+func _key_door_goes(c: Vector2i, soft: Array, at: Vector3) -> void:
+	if game == null or game.ended or String((game.grid.doors.get(c, {}) as Dictionary).get("state", "")) != "open":
+		return
+	_voice_or_standin(soft, String(soft[4]), at)
+
+
+## A building's window opened or shut by someone ("open", "closed"), or its
+## curtain drawn or opened ("curtain"), heard from the window.
+func window_turn(c: Vector2i, what: String) -> void:
+	if quiet or game == null or game.player == null or not WINDOW_TURN.has(what):
+		return
+	var voice: Array = WINDOW_TURN[what]
+	_voice_or_standin(voice, String(voice[4]), game.FieldGrid.center(c))
+
+
+## A door or a window that would not give to the player's hand (SHUT_FAST:
+## "locked" or "boarded"), heard from it; once in SHUT_FAST_GAP_MS for the
+## same one and reason.
+func shut_fast(c: Vector2i, why: String) -> void:
+	if quiet or game == null or game.player == null or not SHUT_FAST.has(why):
+		return
+	var key := "%d,%d,%s" % [c.x, c.y, why]
+	var now_ms: int = Time.get_ticks_msec()
+	if now_ms - int(shut_heard.get(key, -SHUT_FAST_GAP_MS)) < SHUT_FAST_GAP_MS:
+		return
+	shut_heard[key] = now_ms
+	var voice: Array = SHUT_FAST[why]
+	_voice_or_standin(voice, String(voice[4]), game.FieldGrid.center(c))
+
+
 ## A loose board creaking, for the player's ear (the rule sound is field_game's
 ## "floor_creak"): its own group once there is one, else the impact set's wood.
 func floor_creak(at: Vector3) -> void:
@@ -1587,8 +1737,63 @@ func lid_scrape(at: Vector3) -> void:
 	_voice_or_standin(LID_VOICE, LID_STANDIN, at)
 
 
+## A piece of furniture opened, shut, put into and taken from (card R3 가, decision 469;
+## reference 8: four sounds a container): for the player's ear only — no rule hears it,
+## so no make_sound tag and no noise.gd SOURCES row. Its kind by its furniture; one not
+## listed (open shelves, racks, a bench, a bin) opens and shuts with no sound.
+const BOX_KIND: Dictionary = {
+	"": "lid", "crate_stack": "lid", "tin_crate": "lid", "part_crate": "lid", "ammo_crate": "lid",
+	"relief_crate": "lid", "blanket_crate": "lid", "blanket_chest": "lid", "parish_chest": "lid",
+	"vestry_chest": "lid", "conductor_log_chest": "lid", "ration_ledger_chest": "lid",
+	"medicine_crate": "lid", "cask_stack": "lid", "freezer_chest": "lid", "tool_chest": "lid",
+	"nightstand": "drawer", "side_table": "drawer", "dresser": "drawer", "desk": "drawer",
+	"typewriter_desk": "drawer", "office_desk": "drawer", "file_cabinet": "drawer", "map_cabinet": "drawer",
+	"drawer_chest_spilled": "drawer", "counter": "drawer", "shop_counter": "drawer",
+	"service_counter": "drawer", "checkout": "drawer",
+	"wardrobe": "door", "cupboard": "door", "medicine_cabinet": "door", "washstand": "door",
+	"glass_cabinet": "door", "office_cabinet": "door",
+	"toolbox": "metal", "strongbox": "metal",
+}
+## Each kind's opening and shutting: group, loudness, pitch low and high, and the impact
+## file that stands in until a file is in its group. First values, quiet — a hand's work.
+const BOX_VOICES: Dictionary = {
+	"lid": {"open": ["box_open_lid", 0.35, 0.95, 1.05, "wooden"], "close": ["box_close_lid", 0.4, 0.8, 0.9, "wooden"]},
+	"drawer": {"open": ["box_open_drawer", 0.3, 1.3, 1.45, "wooden"], "close": ["box_close_drawer", 0.35, 1.1, 1.2, "wooden"]},
+	"door": {"open": ["box_open_door", 0.3, 0.7, 0.8, "wooden"], "close": ["box_close_door", 0.35, 0.9, 1.0, "wooden"]},
+	"metal": {"open": ["box_open_metal", 0.3, 1.2, 1.3, "metal"], "close": ["box_close_metal", 0.35, 1.0, 1.1, "metal"]},
+}
+## A thing going in or coming out, whatever the furniture.
+const BOX_RUSTLE: Dictionary = {"put": ["box_put", 0.25, 1.5, 1.7, "hit"], "take": ["box_take", 0.25, 1.7, 1.9, "hit"]}
+## Opening and shutting come no closer than this (reference 8's 0.5), so flicking through a
+## room's boxes never piles them up. Real time: the pane holds the field still.
+const BOX_GAP_MS: int = 500
+var box_quiet_until: int = 0
+
+
+## Box `c` sounds `what` ("open", "close", "put", "take"); false when it is no box on the
+## map, its kind has no such sound or an opening or shutting comes too soon after the last.
+func box_sound(c: Dictionary, what: String) -> bool:
+	if not c.has("cell"):
+		return false
+	var voice: Array = BOX_RUSTLE.get(what, [])
+	if voice.is_empty():
+		var kind := String(BOX_KIND.get(String(c.get("furniture", "")), ""))
+		if kind == "" or not (BOX_VOICES[kind] as Dictionary).has(what):
+			return false
+		var now := Time.get_ticks_msec()
+		if now < box_quiet_until:
+			return false
+		box_quiet_until = now + BOX_GAP_MS
+		voice = BOX_VOICES[kind][what]
+	if not lib.has("impact"):
+		lib["impact"] = _load_group("impact")
+	_voice_or_standin(voice, String(voice[4]), game.actions._container_at(c))
+	return true
+
+
 ## A one-shot of its own group [group, loudness, pitch low, pitch high], or, until that
-## group has a file, the impact file whose name begins with `standin`.
+## group has a file, the impact file whose name begins with `standin` (with
+## "@": a file of that group of its own).
 func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var group: String = voice[0]
 	if not lib.has(group):
@@ -1599,6 +1804,14 @@ func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var pitch := randf_range(float(voice[2]), float(voice[3]))
 	if has(group):
 		_one_shot(group, at, lin, pitch, null, _bus_at(at))
+		return
+	if standin.begins_with("@"):
+		var own: String = standin.substr(1)
+		if not lib.has(own):
+			lib[own] = _load_group(own)
+		var pick: int = _fresh_file(own)
+		if pick >= 0:
+			_one_shot(own, at, lin, pitch, lib[own][pick], _bus_at(at))
 		return
 	for s: AudioStream in lib.get("impact", []):
 		if s.resource_path.get_file().begins_with(standin):
@@ -1640,7 +1853,7 @@ func lunge_tell(at: Vector3) -> void:
 	played.append(TELL_GROUP)
 	var own: bool = has(TELL_GROUP)
 	var d: float = at.distance_to(game.player.position)
-	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH)
+	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH, null, ROOM_BUS if in_room(at) else "SFX")
 
 
 ## A blow's own sound (hit_feel.gd), heard to `reach` m and duller through a
@@ -1656,7 +1869,17 @@ func feel_sound(group: String, at: Vector3, loud: float, reach: float) -> void:
 	if hit and _same_blow(blow_mark, at):
 		return
 	var d: float = at.distance_to(game.player.position)
-	_one_shot(group, at, loud * clampf(1.0 - d / reach, 0.0, 1.0), randf_range(0.92, 1.08), null, _bus_at(at))
+	var lin: float = loud * clampf(1.0 - d / reach, 0.0, 1.0)
+	if not lib.has(group):
+		lib[group] = _load_group(group)
+	if not has(group) and FEEL_STANDINS.has(group):
+		# Until its files are in, a blow's layer stands in for it.
+		var stand: Array = FEEL_STANDINS[group]
+		var pick: int = _fresh_file(String(stand[0]))
+		if pick >= 0:
+			_one_shot(String(stand[0]), at, lin, randf_range(float(stand[1]), float(stand[2])), lib[String(stand[0])][pick], _bus_at(at))
+		return
+	_one_shot(group, at, lin, randf_range(0.92, 1.08), null, _bus_at(at))
 	if hit and last_shot != null:
 		hit_mark = [Engine.get_process_frames(), at, last_shot, int(last_shot.get_meta("cut", 0))]
 
@@ -1722,7 +1945,7 @@ func blow(info: Dictionary) -> void:
 	var near: float = clampf(1.0 - d / BLOW_REACH, 0.0, 1.0)
 	var plain: String = _bus_at(at)
 	# A dull weapon's own hit is duller; what came of it is heard as it is.
-	var dull: String = "SFX_MID" if int(info.get("edge", -1)) >= 1 else plain
+	var dull: String = (ROOM_DULL_BUS if plain == ROOM_BUS else "SFX_MID") if int(info.get("edge", -1)) >= 1 else plain
 	var layers: Array = blow_layers(info)
 	for i in layers.size():
 		var layer: Array = layers[i]
@@ -1808,27 +2031,153 @@ func _building_door_bang(at: Vector3, level: int) -> bool:
 func footstep(at: Vector3, running: bool) -> void:
 	var g = game.grid_at(at)
 	var cell: Vector2i = game.FieldGrid.cell_of(at)
-	var kind: int = g.floor_at(cell)
-	var row: Array = STEP_FLOORS[kind] if kind >= 0 and kind < STEP_FLOORS.size() else STEP_FLOORS[0]
-	var group: String = ""
-	for try_group: String in row[0]:
-		if not lib.has(try_group):
-			lib[try_group] = _load_group(try_group)
-		if has(try_group):
-			group = try_group
-			break
+	var found: Array = _step_group(at)
+	var group: String = found[0]
+	var row: Array = found[1]
 	if group != "":
-		var count: int = (lib[group] as Array).size()
-		var pick: int = randi() % count
-		if count > 1 and pick == int(step_last.get(group, -1)):
-			pick = (pick + 1 + randi() % (count - 1)) % count
-		step_last[group] = pick
+		var pick: int = _other_than(group, step_last)
 		steps.append([group, pick])
 		if steps.size() > STEPS_KEPT:
 			steps = steps.slice(steps.size() - STEPS_KEPT)
 		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]), randf_range(0.9, 1.1) * float(row[2]), lib[group][pick], _bus_at(at))
 	if g.floor_glass.has(cell):
 		_voice_or_standin(STEP_GLASS, GLASS_STANDIN, at)
+
+
+## The step group for the floor at `at` and its row of STEP_FLOORS: the first
+## of the row's groups that has files ("" when none has).
+func _step_group(at: Vector3) -> Array:
+	var kind: int = game.grid_at(at).floor_at(game.FieldGrid.cell_of(at))
+	var row: Array = STEP_FLOORS[kind] if kind >= 0 and kind < STEP_FLOORS.size() else STEP_FLOORS[0]
+	for try_group: String in row[0]:
+		if not lib.has(try_group):
+			lib[try_group] = _load_group(try_group)
+		if has(try_group):
+			return [try_group, row]
+	return ["", row]
+
+
+## Where one voiced body's feet have got to since the last tick: how far it
+## went, and whether it walks in sight (a crawler, a jump or a body the player
+## no longer sees does not, though its voice lingers a moment: VOICE_KEEP).
+func _move_feet(s: Dictionary) -> void:
+	var z: Dictionary = s["z"]
+	if z.is_empty():
+		s["feet_moving"] = false
+		return
+	var now: Vector3 = z["pos"]
+	var was: Vector3 = s.get("feet_at", now)
+	s["feet_at"] = now
+	var gone: float = Vector2(now.x - was.x, now.z - was.z).length()
+	s["feet_gone"] = gone
+	s["feet_moving"] = gone > 0.0005 and gone <= DEAD_STEP_JUMP and not bool(z.get("crawl", false)) and in_view(now)
+
+
+## One of the voiced dead walking (DEAD_GAITS): a step each time it has gone
+## a stride, the stride drawn new for every step. Heard from DEAD_STEP_RANGE
+## in, and only from the DEAD_STEPPERS nearest; a crawler, a jump or a body
+## standing still makes none. Never the same file twice running.
+func _tick_feet(s: Dictionary, z: Dictionary, d: float) -> void:
+	if feet.is_empty() or not bool(s.get("feet_moving", false)):
+		return
+	var now: Vector3 = z["pos"]
+	var gone: float = float(s.get("feet_gone", 0.0))
+	var gait: Dictionary = DEAD_GAITS[gait_of(String(z["state"]))]
+	var stride: Array = gait["stride"]
+	if not s.has("feet_left"):
+		s["feet_left"] = randf_range(0.0, float(stride[1]))
+	s["feet_left"] = float(s["feet_left"]) - gone
+	if float(s["feet_left"]) > 0.0:
+		return
+	s["feet_left"] = randf_range(float(stride[0]), float(stride[1]))
+	feet_strides += 1
+	if d >= DEAD_STEP_RANGE or randf() < float(gait["skip"]) or _nearer_feet(z, d) >= DEAD_STEPPERS:
+		return
+	var found: Array = _step_group(now)
+	var group: String = found[0]
+	if group == "":
+		return
+	var row: Array = found[1]
+	var pick: int = _other_than(group, dead_step_last)
+	if not _foot(group, pick, now, float(gait["loud"]) * float(row[1]) * (1.0 - d / DEAD_STEP_RANGE),
+			randf_range(float(gait["pitch"][0]), float(gait["pitch"][1])) * float(row[2])):
+		return
+	dead_steps.append([int(z["id"]), group, pick])
+	if dead_steps.size() > STEPS_KEPT:
+		dead_steps = dead_steps.slice(dead_steps.size() - STEPS_KEPT)
+
+
+## An ally's step (squad or crew, from field_game _footsteps): by the floor
+## rows the player's own go by, COMPANY_STEP_LOUD of theirs, heard from
+## DEAD_STEP_RANGE in and duller through a wall. Its run of files is its own,
+## so the player's own never repeats for it.
+func company_step(at: Vector3, running: bool) -> void:
+	if game == null or game.player == null:
+		return
+	var d: float = at.distance_to(game.player.position)
+	if d >= DEAD_STEP_RANGE:
+		return
+	var found: Array = _step_group(at)
+	var group: String = found[0]
+	if group == "":
+		return
+	var row: Array = found[1]
+	var pick: int = _other_than(group, company_step_last)
+	if not _foot(group, pick, at, (0.5 if running else 0.3) * COMPANY_STEP_LOUD * float(row[1]) * (1.0 - d / DEAD_STEP_RANGE),
+			randf_range(0.9, 1.1) * float(row[2])):
+		return
+	company_steps.append([group, pick])
+	if company_steps.size() > STEPS_KEPT:
+		company_steps = company_steps.slice(company_steps.size() - STEPS_KEPT)
+
+
+## A file of the group other than the one `last` says it played last, and
+## noted there as the last now.
+func _other_than(group: String, last: Dictionary) -> int:
+	var count: int = (lib[group] as Array).size()
+	var pick: int = randi() % count
+	if count > 1 and pick == int(last.get(group, -1)):
+		pick = (pick + 1 + randi() % (count - 1)) % count
+	last[group] = pick
+	return pick
+
+
+## One step of someone else on the next of the feet players (false: too faint
+## to play, or no players).
+func _foot(group: String, pick: int, at: Vector3, lin: float, pitch: float) -> bool:
+	if feet.is_empty() or lin <= 0.01:
+		return false
+	var o: AudioStreamPlayer3D = feet[feet_n % feet.size()]
+	feet_n += 1
+	o.bus = _bus_at(at)
+	o.position = at
+	o.stream = lib[group][pick]
+	o.volume_db = _db(lin)
+	o.pitch_scale = pitch
+	o.play()
+	return true
+
+
+## How one of the dead walks, by what it is doing: running at you, after you
+## (or at you), or shambling.
+static func gait_of(state: String) -> String:
+	if state == "dash":
+		return "dash"
+	return "shamble" if says_for(state) == "idle" else "chase"
+
+
+## How many of the other voiced dead walking (as of their last tick) are
+## nearer than d.
+func _nearer_feet(z: Dictionary, d: float) -> int:
+	var n := 0
+	var at: Vector3 = game.player.position
+	for s in slots:
+		var other: Dictionary = s["z"]
+		if other.is_empty() or int(other["id"]) == int(z["id"]) or not bool(s.get("feet_moving", false)):
+			continue
+		if other["pos"].distance_to(at) < d:
+			n += 1
+	return n
 
 
 ## The bus a sound from here goes through: duller through a wall, the room's

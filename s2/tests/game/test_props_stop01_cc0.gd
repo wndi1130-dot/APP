@@ -4,6 +4,8 @@ extends "res://addons/gut/test.gd"
 
 const KIT_DIR: String = "res://models/props_stop01"
 const FurnitureTints = preload("res://game/world/furniture_tints.gd")
+const PropModels = preload("res://game/world/prop_models.gd")
+const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const BUDGETS: Dictionary = {
 	"workbench": 500, "bookcase": 700, "drawer_chest_spilled": 700,
 	"shop_shelf": 500, "toolbox": 200, "office_desk": 600,
@@ -312,6 +314,29 @@ func test_furniture_tint_pick_falls_back_to_repeatable_cells() -> void:
 	assert_gt(seen.size(), 1, "칸 해시가 상수가 아님")
 
 
+## 판 고르기(#985 점검 L3): 이어진 건물 번호도 판을 고르게 나눠 받는다. 해시를 그대로 자르면
+## 판이 번호 차례대로 돌거나(아래 비트) 몇 채씩 몰린다(위 비트).
+func test_furniture_tint_roll_spreads_neighbouring_buildings() -> void:
+	for source: String in ["pick", "tint_for"]:
+		var counts := [0, 0, 0, 0]
+		var steps := 0
+		var run := 0
+		var longest := 0
+		var last := -1
+		for b in range(64):
+			var t: int = FurnitureTints.pick({"building": b}, Vector2i.ZERO) if source == "pick" else RoomFurnish.tint_for("houses_01", b)
+			counts[t] += 1
+			run = run + 1 if t == last else 1
+			longest = maxi(longest, run)
+			if last >= 0 and t == posmod(last + 1, 4):
+				steps += 1
+			last = t
+		for c: int in counts:
+			assert_between(c, 8, 26, "%s 판마다 몫 %s" % [source, str(counts)])
+		assert_lte(longest, 5, "%s 같은 판이 이어진 길이" % source)
+		assert_lt(steps, 40, "%s 판이 번호 차례로 돌지 않음(+1 걸음 %d/63)" % [source, steps])
+
+
 func test_furniture_tint_placed_building_and_batch_paths() -> void:
 	# 줄에 building이 없으면 놓인 자리의 건물 번호로 줄의 building과 같은 판을 고른다.
 	for building: int in [0, 5, 83]:
@@ -338,3 +363,21 @@ func test_furniture_tint_dress_loads_the_sets_on_the_batch_material() -> void:
 	var first: Color = (FurnitureTints.SETS[0]["body"] as Color).srgb_to_linear()
 	assert_almost_eq((body[0] as Vector4).x, first.r, 0.0001, "선형으로 옮긴 판 색")
 	assert_almost_eq((body[0] as Vector4).w, FurnitureTints.BODY_STRENGTH, 0.0001)
+	assert_eq(material.get_shader_parameter("tint_ref"), Vector2(0.18, 0.18), "칠 마스크 없는 메시는 예전 기준")
+
+
+## 칠 밝기 기준(#985 점검 M3): 모형마다 몸체·테두리의 넓이 평균 밝기를 재어 재질에 싣는다.
+## 예전 식(바탕 밝기 / 0.18)은 밝은 원목 모형을 흰색으로 띄우고 어두운 모형을 검게 눌렀다.
+func test_furniture_paint_ref_is_each_models_own_mean() -> void:
+	for kind: String in FurnitureTints.KINDS:
+		var meshes := PropModels.batch_meshes("%s/%s.glb" % [KIT_DIR, kind])
+		assert_true(meshes.has(0), kind + " 묶음 메시")
+		if not meshes.has(0):
+			continue
+		var mesh: Mesh = meshes[0]
+		var ref := FurnitureTints.paint_ref(mesh)
+		assert_between(ref.x, 0.01, 1.0, kind + " 몸체 평균 밝기")
+		assert_between(ref.y, 0.01, 1.0, kind + " 테두리 평균 밝기")
+		FurnitureTints.dress(mesh)
+		var material := mesh.surface_get_material(0) as ShaderMaterial
+		assert_eq(material.get_shader_parameter("tint_ref"), ref, kind + " 재질에 실린 기준")

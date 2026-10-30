@@ -58,6 +58,10 @@ const Wear = preload("res://game/sim/wear.gd")
 ## seconds of hammering, and gives the door three more blows to break; a
 ## stake is whittled from a plank in six.
 const KEY_TIME: float = 1.5
+## A door that will not give, met on the way (open_door_on_way), is told again
+## (its note and its sound) only after this many seconds of the field's clock:
+## walking into it asks every frame (field_game _drive).
+const SHUT_TELL_S: float = 0.8
 const BOARD_TIME: float = 8.0
 const BOARD_HP: int = 3
 const STAKE_TIME: float = 6.0
@@ -84,6 +88,8 @@ var dig_noise_t: float = 0.0
 var unload_t: float = 0.0
 ## Short-lived reservations, separate from saved AI state. No actor or callback is retained.
 var ongoing: Dictionary = {}
+## A door's no told on the way: "x,y,why" -> the field's clock when it was told (SHUT_TELL_S).
+var shut_told: Dictionary = {}
 ## A work of the hands the player asked for while in a blow or a shove waits
 ## here and is done once as soon as the blow is over (decision 420: one body
 ## does one thing at a time). Short-lived, never saved.
@@ -338,14 +344,14 @@ func open_door_on_way(p, c: Vector2i) -> void:
 	if BuildingRules.planks_total(door) > 0:
 		p.stop()
 		if p == game.player:
-			game.hud.toast("판자로 막혀 있다")
+			_tell_shut(c, "boarded", "판자로 막혀 있다")
 		return
 	if door["state"] == "locked":
 		p.stop()
 		if has_key(p, c):
 			unlock_with_key(p, c)
 		elif p == game.player:
-			game.hud.toast("잠김")
+			_tell_shut(c, "locked", "잠김")
 		return
 	if not DoorRules.can_toggle(door, "open"):
 		return
@@ -353,6 +359,20 @@ func open_door_on_way(p, c: Vector2i) -> void:
 	var keep: PackedVector3Array = p.path.duplicate()
 	var run: bool = p.running
 	_begin_work(p, "door", "문", DOOR_TIME, _door_on_way_done.bind(p, c, keep, run), "door", c, FieldGrid.center(c))
+
+
+## The player told on the way that this door will not give ("boarded" or
+## "locked"): its note and the ear's sound (field_audio shut_fast), once in
+## SHUT_TELL_S for the same door and reason.
+func _tell_shut(c: Vector2i, why: String, note: String) -> void:
+	var key := "%d,%d,%s" % [c.x, c.y, why]
+	var now: float = float(game.clock.elapsed)
+	if now - float(shut_told.get(key, -SHUT_TELL_S)) < SHUT_TELL_S:
+		return
+	shut_told[key] = now
+	game.hud.toast(note)
+	if game.audio != null:
+		game.audio.shut_fast(c, why)
 
 
 func _door_on_way_done(p, c: Vector2i, keep: PackedVector3Array, run: bool) -> void:
@@ -377,6 +397,8 @@ func door_default(p, c: Vector2i, verb: String) -> void:
 		elif p == game.player:
 			var mine: int = BuildingRules.planks(door, game.grid.face_toward(c, p.position))
 			game.hud.toast("판자로 막혀 있다 · 쇠지렛대 없음" if mine > 0 else "안쪽이 판자로 막혀 있다")
+			if game.audio != null:
+				game.audio.shut_fast(c, "boarded")
 			if mine == 0:
 				game.hud.offer([{"label": "문 차기", "call": kick_door.bind(p, c)}])
 		return
@@ -400,6 +422,8 @@ func door_default(p, c: Vector2i, verb: String) -> void:
 					pry_door(p, c)
 				elif p == game.player:
 					game.hud.toast("잠김")
+					if game.audio != null:
+						game.audio.shut_fast(c, "locked")
 
 
 func _set_door(c: Vector2i, state: String, p = null, pried: bool = false) -> void:
@@ -416,6 +440,8 @@ func _set_door(c: Vector2i, state: String, p = null, pried: bool = false) -> voi
 				return
 	game.grid.set_door_state(c, state)
 	game.view.update_door(c)
+	if game.audio != null:
+		game.audio.door_turn(c, state)   # the ear's; no rule hears a door turned
 	_check_raider_door(c)
 	# Pried open is broken into (J17); opened with its key, or as it was, is not.
 	if pried and state == "open":
@@ -438,8 +464,9 @@ func has_key(p, c: Vector2i) -> bool:
 	return int(p.items.get(FieldItems.key_for(int(door.get("building", -1))), 0)) > 0
 
 
-## A key opens a locked door quickly and makes no sound (P12: the reward for
-## going through the dead of the house).
+## A key opens a locked door quickly and with no sound the dead hear (P12:
+## the reward for going through the dead of the house); the player hears only
+## a small click and the door going quietly (field_audio door_turn by_key).
 func unlock_with_key(p, c: Vector2i) -> void:
 	if not _can_start(p, FieldGrid.center(c), true):
 		return
@@ -453,6 +480,8 @@ func _key_opened(p, c: Vector2i) -> void:
 		return
 	game.grid.set_door_state(c, "open")
 	game.view.update_door(c)
+	if game.audio != null:
+		game.audio.door_turn(c, "open", true)   # the ear's small click; none the dead hear (P12)
 	_check_raider_door(c)
 
 
@@ -707,6 +736,8 @@ func window_default(p, c: Vector2i, verb: String) -> void:
 		game.hud.offer(rows)
 	elif BuildingRules.planks_total(w) > 0:
 		game.hud.toast("판자로 막혀 있다")
+		if game.audio != null:
+			game.audio.shut_fast(c, "boarded")
 
 
 ## The choices at a window for the player, most useful first, at most four.
@@ -802,6 +833,8 @@ func _set_window_open(c: Vector2i, open: bool) -> void:
 	game.grid.refresh_cell(c)
 	game.view.update_window(c)
 	_note_cold(c)
+	if game.audio != null:
+		game.audio.window_turn(c, "open" if open else "closed")   # the ear's; no rule hears a window turned
 
 
 ## Draw or open a window's curtain: at once and quiet; drawn, nobody sees
@@ -823,6 +856,8 @@ func _curtain_set(p, c: Vector2i, to: String) -> void:
 	w["curtain"] = to
 	game.grid.refresh_cell(c)
 	game.view.update_window(c)
+	if game.audio != null:
+		game.audio.window_turn(c, "curtain")   # the ear's; quiet to the rules
 
 
 ## The player who broke it is asked at once: the glass out first, or straight through.
@@ -1005,9 +1040,11 @@ func search(p, id: String) -> void:
 	if not _begin_work(p, "search", "뒤지기", search_time(p, c), _search_work_done.bind(p, id), "container", id, _container_at(c)):
 		return
 	game.shout(p, "search_start")
-	# The first rummage is heard at once, then one every SEARCH_NOISE_EVERY (user decision 407 B4).
+	# The first rummage is heard at once, then one every SEARCH_NOISE_EVERY (user decision 407 B4)
+	# — a big box's only (card R3 가, SearchRules.rummage_heard).
 	p.action_noise_t = 0.0
-	game.make_sound(_container_at(c), SimNoise.Level.QUIET, "search", p)
+	if SearchRules.rummage_heard(c):
+		game.make_sound(_container_at(c), SimNoise.Level.QUIET, "search", p)
 
 
 func _unlock(id: String, p = null) -> void:
@@ -1021,7 +1058,7 @@ func _unlock(id: String, p = null) -> void:
 
 ## Called each frame of a container search: the quiet rummage when it is due.
 func search_noise(p, delta: float) -> void:
-	if p.action != "search" or p.action_busy.is_empty():
+	if p.action != "search" or p.action_busy.is_empty() or not SearchRules.rummage_heard(p.action_busy):
 		return
 	p.action_noise_t += delta
 	if p.action_noise_t < SEARCH_NOISE_EVERY:
@@ -1095,7 +1132,8 @@ func take(p, id: String, index: int, asked: bool = false) -> void:
 		dress(p, game.ground_items.size() - 1)
 		game.view.update_container(id)
 		return
-	_begin_take(p, id, item)
+	if _begin_take(p, id, item) and p == game.player and game.audio != null:
+		game.audio.box_sound(c, "take")
 
 
 ## 「모두 담기」: everything but clothes, the heaviest first, one after another,
@@ -1113,6 +1151,9 @@ func take_all(p, id: String) -> void:
 		return
 	take_queue[p.get_instance_id()] = {"box": id, "left": left}
 	_take_next(p, id)
+	# One sound as the taking starts, however many come out (card R3 가).
+	if p == game.player and p.action == "take" and game.audio != null:
+		game.audio.box_sound(c, "take")
 
 
 ## The seconds 「모두 담기」 would take from this box (the pane shows them).
@@ -2469,6 +2510,8 @@ func store(p, box: String, id: String) -> bool:
 	for i in n:
 		c["items"].append(id)
 	game.view.update_container(box)
+	if p == game.player and game.audio != null:
+		game.audio.box_sound(c, "put")
 	return true
 
 

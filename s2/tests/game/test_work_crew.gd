@@ -485,6 +485,19 @@ func test_worker_backs_behind_escort_at_eight_and_drops_at_three_metres() -> voi
 	assert_eq(worker.brain["dest"], game.work.door_of("work_site"))
 
 
+func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
+	_send()
+	for guard in _role("escort"):
+		guard.position = _at() + Vector3(-4.0 if guard.brain.get("side", 0) == 0 else 4.0, 0, 1.5)
+		guard.stop()
+		guard.face_point(_at())
+		for i in 12:
+			game.clock.elapsed += 0.5
+			game.ai._crew(guard, 0.1, true)
+			var look := Vector3(sin(guard.facing), 0.0, cos(guard.facing))
+			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 120.0, "watching outward, the work behind")
+
+
 func _cycle(id: String) -> void:
 	_job(id)
 	_send()
@@ -660,6 +673,40 @@ func test_a_part_load_of_wood_dropped_by_the_crew_keeps_its_part_through_a_save(
 	var drops: Array = (saved["ground_items"] as Array).filter(func(g: Dictionary) -> bool: return g.get("crew_drop", false))
 	assert_eq(drops.size(), 1)
 	assert_almost_eq(float(drops[0]["n"]), 0.5, 0.001)
+
+
+## A restart builds the map again: coal dug from a wagon must not be back in it after one.
+func _wagons_kept_through_a_save() -> void:
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	var resumed: FieldGame = FieldGame.new()
+	resumed.opts = FieldSave.resume_opts(saved)
+	add_child_autofree(resumed)
+	resumed.set_process(false)
+	assert_eq(resumed.data["wagons"].size(), game.data["wagons"].size())
+	for i in mini(resumed.data["wagons"].size(), game.data["wagons"].size()):
+		assert_almost_eq(float(resumed.data["wagons"][i]["coal"]), float(game.data["wagons"][i]["coal"]), 0.0001)
+
+
+func test_coal_the_crew_dug_stays_out_of_the_wagon_through_a_save() -> void:
+	_send()
+	assert_eq(game.work.phase(), "working")
+	var before: float = FieldWork.wagon_coal(game.data)
+	game.work._worked(_role("worker")[0], "work_site")
+	assert_lt(FieldWork.wagon_coal(game.data), before, "the dig took coal from a wagon")
+	_wagons_kept_through_a_save()
+
+
+func test_coal_a_squad_mate_dug_stays_out_of_the_wagon_through_a_save() -> void:
+	var mate: Variant = null
+	for p in game.squad:
+		if p != game.player:
+			mate = p
+			break
+	assert_not_null(mate)
+	var before: float = FieldWork.wagon_coal(game.data)
+	game.ai._dug(mate)
+	assert_lt(FieldWork.wagon_coal(game.data), before, "the dig took coal from a wagon")
+	_wagons_kept_through_a_save()
 
 
 func test_a_contract_with_no_work_crew_sends_nobody() -> void:

@@ -34,7 +34,8 @@ const ENTRIES := ["culvert", "manhole", "east_track", "north_road", "south_road"
 const ENTRY_WEIGHTS := {"culvert": 0.25, "manhole": 0.15, "east_track": 0.2, "north_road": 0.1, "south_road": 0.075, "cellar": 0.15, "east_road": 0.075}
 const SEWERS := ["culvert", "manhole", "cellar"]
 const ENTRY_NAMES := {"culvert": "급수탑 밑 암거", "manhole": "거리 맨홀", "east_track": "동쪽 선로 끝", "north_road": "북쪽 길", "south_road": "남쪽 길", "cellar": "공동주택 지하실 배수구", "east_road": "남동쪽 길"}
-const ENTRY_PHRASES := {"culvert": "급수탑 밑 암거에서 올라온다", "manhole": "거리 맨홀에서 올라온다", "east_track": "동쪽 선로 끝으로 온다", "north_road": "북쪽 길로 온다", "south_road": "남쪽 길로 온다", "cellar": "공동주택 지하실에서 올라온다", "east_road": "남동쪽 길로 온다"}
+## Said by the driver to the chief, so polite (field_game.driver_forecast).
+const ENTRY_PHRASES := {"culvert": "급수탑 밑 암거에서 올라옵니다", "manhole": "거리 맨홀에서 올라옵니다", "east_track": "동쪽 선로 끝으로 옵니다", "north_road": "북쪽 길로 옵니다", "south_road": "남쪽 길로 옵니다", "cellar": "공동주택 지하실에서 올라옵니다", "east_road": "남동쪽 길로 옵니다"}
 const FIRST_ENTRY := "east_track"
 
 ## Forecast bands, in game minutes left.
@@ -244,7 +245,7 @@ func forecast(now: float, precision: int, clock) -> String:
 			when = "한 시간쯤"
 		elif left_min >= HALF_MIN:
 			when = "반 시간쯤"
-		return "%s, %s." % [phrases.get(next_entry, where + ("에서 온다" if where.ends_with("쪽") else " 쪽에서 온다")), when]
+		return "%s, %s." % [phrases.get(next_entry, where + ("에서 옵니다" if where.ends_with("쪽") else " 쪽에서 옵니다")), when]
 	var at_min: float = _arrival_minutes(maxf(next_arrival, now), clock)
 	var rounded: int = roundi(at_min / 15.0) * 15
 	var hh: int = floori(rounded / 60.0) % 24
