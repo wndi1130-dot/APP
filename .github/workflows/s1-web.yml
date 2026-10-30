@@ -87,7 +87,9 @@ jobs:
   screen-smoke:
     # 빌드한 화면을 가로 844×390으로 한 판 넘기며 넘침·잘림·작은 글자를 검사한다(tools/screenshots.cjs).
     needs: test-and-build
-    runs-on: ubuntu-latest
+    # ubuntu-latest가 26.04로 바뀐 뒤(2026-10-30) playwright 1.56.1이 그 OS의 꾸러미를 못 깐다.
+    # 아래 캐시 키(noble)와 맞춰 24.04에 묶는다. playwright를 올릴 때 이 줄도 같이 본다.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
