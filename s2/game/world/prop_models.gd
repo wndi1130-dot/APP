@@ -7,6 +7,8 @@ extends RefCounted
 const Weathered = preload("res://fx/shaders/weathered.gdshader")
 const DIR := "res://models/props_stop01/"
 const MODE_SETTING := "visuals/prop_models_enabled"
+## How much darker a model is at the floor it stands on (weathered.gdshader contact_dark, T0-6).
+const CONTACT_DARK: float = 0.35
 
 ## container id -> model file. Kinds follow the container's name (책상 desk,
 ## 선반 shelf, 옷장·사물함 wardrobe, 부엌 dining set, 찬장 bookcase-like
@@ -139,6 +141,8 @@ static func _collect(node: Node, parent_transform: Transform3D, found: Array, lo
 		material.shader = Weathered
 		# Indoors: no snow or rime on the furniture.
 		material.set_shader_parameter("sheltered", 1.0)
+		# Its foot darker where it stands on the floor (T0-6), with the contact shade round it.
+		material.set_shader_parameter("contact_dark", CONTACT_DARK)
 		var source: Material = node.get_active_material(0)
 		if source is StandardMaterial3D:
 			if source.albedo_texture != null:

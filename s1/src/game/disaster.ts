@@ -134,7 +134,7 @@ export function disasterSettle(g: Game): void {
       if (v) {
         d.died = true;
         g.disasterDeaths = (g.disasterDeaths ?? 0) + 1;
-        journal(g, `예고를 듣고도 그냥 갔다. ${v.person.name}${josa(v.person.name, '이/가')} 밤사이 얼어 숨졌다.`, 'bad');
+        journal(g, `예고를 듣고도 그냥 갔다. ${v.person.name}이(가) 밤사이 얼어 숨졌다.`, 'bad');
         // 열차장이 알고 고른 결과라 죄책감 쪽 'warned'로 남긴다(death.ts). 그 뒤는 다른 죽음과 같은 길(유품 카드, 시신 처리)이다.
         onDeath(g, v.comm, [v.person.name], 'warned');
       }

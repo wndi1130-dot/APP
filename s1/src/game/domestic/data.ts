@@ -31,6 +31,12 @@ export const D = {
   furnishClothWood: 0, furnishFurnitureCap: 4, furnishThreshold: [0, 3, 8, 15],
   furnishWarm: [0, 1, 1, 2], furnishCrowd: -0.5, furnishRel: 2,
   furnishGapMin: 1, furnishGapMax: 2, furnishGapRel: 0.5, furnishGapCap: 2, furnishPianoRel: 0.3,
+  decorKindMax: 22, decorKindShare: 0.8, decorFloorTarget: 25, decorWallTarget: 8,
+  decorSurfaceTarget: 0.8, decorSmallTarget: 66, decorLightTarget: 2,
+  decorThresholds: [0.5, 0.8, 1], decorEpsilon: 1e-9,
+  decorRel: [0.3, 0.6, 1.0], diningDecorRel: [0.1, 0.2, 0.3],
+  // cards.ts demand voices; disembark.ts trust mood (low is strictly below 25).
+  decorVoiceRelGood: 15, decorVoiceRelBad: -15, decorVoiceTrustGood: 70, decorVoiceTrustLow: 25,
   /** 「난방 배당」이 서 있는 동안(결정 230·231·240·276, domestic/heat_alloc.ts): 정산마다 꼬리칸·의무진 관계 −Rel, 온기가 Warm 아래인 칸(꼬리칸·의무진·경비대)마다 Death의 확률로 어른 한 사람이 죽는다. Rel·Death가 0이면 옛 동작. */
   heatAllocRel: 2, heatAllocWarm: 45, heatAllocDeath: 0.10,
   armorWork: 4, armorScrap: 12, armorExposure: 10,

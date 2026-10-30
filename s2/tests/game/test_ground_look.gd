@@ -6,6 +6,7 @@ const GroundLook = preload("res://game/world/ground_look.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const TwoLids = preload("res://tests/game/fixtures/two_lids_map.gd")
+const MapView = preload("res://game/world/map_view.gd")
 
 
 func test_each_thing_has_a_shape_of_its_kind() -> void:
@@ -88,6 +89,23 @@ func test_each_thing_has_a_dark_rim_round_it_on_its_floor() -> void:
 	assert_almost_eq(rim["inner"].y * rim["size"].y, size.z, 0.0001)
 
 
+func _rim_alphas(rim: Dictionary) -> Array:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	MapView._rim_quad(st, rim)
+	return Array(st.commit().surface_get_arrays(0)[Mesh.ARRAY_COLOR]).map(func(c: Color) -> float: return c.a)
+
+
+func test_a_rim_under_a_roof_says_so_in_its_alpha() -> void:
+	# contact_shade lightens a rim on snow out of doors only (alpha 1); under a roof (0) no snow lies
+	# on the floor, so the rim keeps its strength in deep winter too.
+	var piece: Dictionary = GroundLook.pieces([{"pos": Vector3(4.5, 0.0, 4.5), "id": "cloth", "n": 1}])[0]
+	var rim: Dictionary = GroundLook.rim(piece)
+	assert_eq(_rim_alphas(rim), [1.0, 1.0, 1.0, 1.0, 1.0, 1.0], "open to the sky unless told")
+	rim["sky"] = 0.0
+	assert_eq(_rim_alphas(rim), [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "under a roof")
+
+
 func test_a_thing_put_down_shows_on_the_map_and_goes_when_picked_up() -> void:
 	var game = FieldGame.new()
 	game.opts = {"seed": 4, "auto_pause": false}
@@ -102,6 +120,10 @@ func test_a_thing_put_down_shows_on_the_map_and_goes_when_picked_up() -> void:
 	assert_true(game.view.ground_nodes.has(0))
 	assert_not_null(game.view.ground_nodes[0].mesh, "a plank put down is seen where it lies")
 	assert_not_null((game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D).mesh, "on its dark rim")
+	var sky := MapView.sky_alpha(game.view.grid, FieldGrid.cell_of(p.position + Vector3(0.4, 0, 0.4)))
+	var rim_mesh: Mesh = (game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D).mesh
+	for c: Color in rim_mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]:
+		assert_eq(c.a, sky, "open to the sky or under a roof, as the floor it lies on")
 	game.ground_items.clear()
 	game._update_zone(0.1)
 	assert_null(game.view.ground_nodes[0].mesh, "picked up, it is gone")

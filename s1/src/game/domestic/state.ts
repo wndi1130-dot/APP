@@ -5,7 +5,7 @@ import { hash } from '../omens';
 import type { Card, Game } from '../state';
 import { CARS0, D, FIELDS, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, SPECIALISTS, TECHS, ZONE0 } from './data';
 import type { Field, FurnishStep, FurnishTier, TechDef, TechId, Variant, Zone } from './data';
-import { migrateDecor } from './decor_data';
+import { furniturePoints, migrateDecor } from './decor_data';
 import type { DecorCarState, DecorItem, DecorStore } from './decor_data';
 import type { PotState } from './pot';
 
@@ -133,6 +133,8 @@ export interface DomState {
   furnish?: Record<string, FurnishState | DecorCarState>;
   /** 열차 공용 꾸미기 창고. 겸용 물건의 숫자는 Game에 있고 여기는 이름표만 둔다. */
   store?: DecorStore;
+  /** Cars whose first 80% decoration was observed at settlement (absent in old saves). */
+  decor80?: string[];
   greenhouse: string | null;
   /** 꼬리 끝에 붙인 칸 */
   extraCars: ('store' | 'coach')[];
@@ -363,9 +365,16 @@ export function furnishOf(g: Game, car: string): FurnishState {
   return f && 'tier' in f ? f : { work: 0, jobs: [], furnPts: 0, tier: 0, best: 0, items: f?.items ?? [] };
 }
 
-export function furnishScore(g: Game, car: string): number {
+export function furnishScore(g: Game, car: string, items?: readonly DecorItem[]): number {
   const f = furnishOf(g, car);
-  return f.jobs.reduce((sum, n) => sum + FURNISH_WORK[n].points, 0) + Math.min(f.furnPts, D.furnishFurnitureCap);
+  const points = items === undefined ? f.furnPts : furniturePoints(items);
+  return f.jobs.reduce((sum, n) => sum + FURNISH_WORK[n].points, 0) + Math.min(points, D.furnishFurnitureCap);
+}
+
+/** Completed jobs are never removed, so their points also preserve the work-only tier (517). */
+export function furnishTier(g: Game, car: string, items: readonly DecorItem[] = furnishOf(g, car).items): FurnishTier {
+  const score = furnishScore(g, car, items);
+  return FURNISH_STEPS.filter(n => score >= D.furnishThreshold[n]).at(-1) ?? 0;
 }
 
 /** 그 작업을 마친 뒤의 점수와 단. 가구를 뺀 칸은 작업을 마쳐도 다음 단에 못 닿을 수 있다(화면 글이 앞질러 말하지 않게). */
