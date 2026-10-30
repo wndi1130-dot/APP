@@ -104,6 +104,9 @@ const FOLLOW_BUFFER_S: float = 0.6
 const FOLLOW_PATH_NEAR: float = 0.12
 const FOLLOW_RUN_ON: float = 4.5
 const FOLLOW_RUN_OFF: float = 2.5
+const FOLLOW_RUN_ON_SLOT: float = 3.0   # Decision 486: formation pace uses the slot, not its lead.
+const FOLLOW_RUN_OFF_SLOT: float = 1.0
+const FOLLOW_FWD_TURN_DEG_S: float = 270.0   # Decision 486: one shared formation turn per think.
 const FOLLOW_ROOM: float = 0.95
 const FOLLOW_SLOT_STEP: float = 1.0
 const FOLLOW_SETTLE: float = 0.3
@@ -172,10 +175,22 @@ var _follow_cell := Vector3(-1, -1, -1)   # cell x, y and level; a Vector3 so th
 var _follow_order: Array = []
 var _follow_queue_on: bool = false
 var _follow_narrow_at: float = -FOLLOW_NARROW_HOLD
+var _follow_fwd: Vector3 = Vector3.ZERO   # Decision 486: finite, save-safe formation axis.
 
 
 func _init(field_game) -> void:
 	game = field_game
+	_r5("")
+
+
+## Decision 486: consume test options into metadata, outside the saved script state and opts.
+func _r5(step: String) -> bool:
+	if game.opts.has("follow_ablate"):
+		var steps: Variant = game.opts["follow_ablate"]
+		set_meta("follow_ablate", steps.duplicate() if steps is Array else [])
+		game.opts.erase("follow_ablate")
+	var disabled: Array = get_meta("follow_ablate", [])
+	return not disabled.has(step)
 
 
 func update(delta: float) -> void:
@@ -190,6 +205,7 @@ func update(delta: float) -> void:
 	if think:
 		think_t = THINK
 		_track_door()
+		_refresh_follow_axis()
 		_refresh_follow_queue()
 		_call_down()
 	# Each companion thinks every THINK, but not all on the same frame: the
@@ -782,7 +798,7 @@ func _keep_formation(p) -> void:
 	p.brain["follow_t"] = game.clock.elapsed
 	var player = game.player
 	var role := _role(p)
-	var fwd := _follow_forward()
+	var fwd: Vector3 = _follow_axis()
 	var right := Vector3(fwd.z, 0, -fwd.x)
 	var walking: bool = player.moving
 	p.crouched = player.crouched
@@ -811,7 +827,8 @@ func _keep_formation(p) -> void:
 	var look := fwd
 	if not walking:
 		look = _look_out(p, role, fwd, right)
-	if _follow_queueing(p, spot, fwd):
+	var queue_fwd: Vector3 = _follow_forward()
+	if _follow_queueing(p, spot, queue_fwd):
 		var leader = _follow_leader(p)
 		if _follow_wait(p, leader):
 			p.stop()
@@ -829,14 +846,20 @@ func _keep_formation(p) -> void:
 		if own_back < (gap if waiting else stop_gap):
 			p.brain["follow_gap_waiting"] = true
 			p.stop()
+			if _r5("1b") and not walking:
+				p.face_point(p.position + look)
 			return
 		p.brain.erase("follow_gap_waiting")
 		var route: PackedVector3Array
 		if own_back < gap:
 			# Decision 486: keep walking forward inside the band, without a running lead.
-			route = _follow_queue_path(p, leader_back + FOLLOW_QUEUE_WAIT, fwd)
+			var own_speed: float = p.speed(game.grid_at(p.position).floor_at(FieldGrid.cell_of(p.position)))
+			if _r5("6") and not p.path.is_empty() and _follow_remaining(p.position, p.path) >= own_speed * THINK:
+				route = p.path.duplicate()
+			else:
+				route = _follow_queue_path(p, leader_back + FOLLOW_QUEUE_WAIT, queue_fwd)
 		else:
-			route = _follow_queue_path(p, gap, fwd)
+			route = _follow_queue_path(p, gap, queue_fwd)
 			if going and not route.is_empty():
 				var own_speed: float = p.speed(game.grid_at(p.position).floor_at(FieldGrid.cell_of(p.position)))
 				var lead: Vector3 = _follow_trail_at(maxf(leader_back + FOLLOW_QUEUE_WAIT, gap - own_speed * FOLLOW_QUEUE_LEAD_S))
@@ -868,7 +891,7 @@ func _keep_formation(p) -> void:
 				route = PackedVector3Array([goal])
 			else:
 				route.append(goal)
-	_follow_walk(p, route, null, fwd if walking else Vector3.ZERO)
+	_follow_walk(p, route, null, fwd if walking else Vector3.ZERO, p.position.distance_to(spot))
 	if not walking:
 		_follow_watch(p, look)
 
@@ -885,6 +908,26 @@ func _follow_forward() -> Vector3:
 			if way.length() > 0.12:
 				return way.normalized()
 	return Vector3(sin(player.facing), 0, cos(player.facing))
+
+
+## Decision 486: only the common think advances the formation axis; the queue reads raw motion.
+func _refresh_follow_axis() -> void:
+	if not _r5("2a"):
+		return
+	var target: Vector3 = _follow_forward()
+	if not target.is_finite():
+		_follow_fwd = Vector3.ZERO
+		return
+	if not _follow_fwd.is_finite() or _follow_fwd == Vector3.ZERO or not game.player.moving:
+		_follow_fwd = target
+		return
+	var turn: float = _follow_fwd.signed_angle_to(target, Vector3.UP)
+	var limit: float = deg_to_rad(FOLLOW_FWD_TURN_DEG_S) * THINK
+	_follow_fwd = _follow_fwd.rotated(Vector3.UP, clampf(turn, -limit, limit)).normalized()
+
+
+func _follow_axis() -> Vector3:
+	return _follow_fwd if _r5("2a") and _follow_fwd.is_finite() and _follow_fwd != Vector3.ZERO else _follow_forward()
 
 
 ## Decision 486: interpolate fixed spacing without consuming the game's random stream.
@@ -994,11 +1037,16 @@ func _follow_spot(p, mates: Array, fwd: Vector3, right: Vector3) -> Vector3:
 		if chosen.is_finite():
 			claimed.append(chosen)
 			q.brain["follow_slot"] = chosen
-			if not fallback:
+			if not fallback and (not _r5("4a") or chosen == base_spot):
 				var rel: Vector3 = chosen - game.player.position
 				q.brain["follow_offset"] = Vector2(rel.dot(right), rel.dot(fwd))
 				q.brain["follow_slot_role"] = role
 				q.brain["follow_slot_walking"] = walking
+			elif _r5("4a"):
+				# Decision 486: shifted and fallback slots last only for this think.
+				q.brain.erase("follow_offset")
+				q.brain.erase("follow_slot_role")
+				q.brain.erase("follow_slot_walking")
 		else:
 			q.brain.erase("follow_slot")
 		if q == p:
@@ -1065,8 +1113,10 @@ func _refresh_follow_queue() -> void:
 	if narrow:
 		_follow_narrow_at = _follow_distance
 	var door: bool = _follow_door_id > 0 and _follow_distance - _follow_door_at <= FOLLOW_DOOR_RECENT
-	# Decision 486: standing releases a door queue, but not a narrow passage or its hold.
-	var queue: bool = (door and _chief_still < LOOK_STILL_S) or narrow or _follow_distance - _follow_narrow_at < FOLLOW_NARROW_HOLD
+	# Decision 486: standing releases the distance hold, but not a narrow passage itself.
+	var still: bool = _chief_still < LOOK_STILL_S
+	var hold: bool = _follow_distance - _follow_narrow_at < FOLLOW_NARROW_HOLD
+	var queue: bool = (door and still) or narrow or (hold and (still or not _r5("1a")))
 	if _follow_queue_on and not queue:
 		_follow_order.clear()
 		for q in game.squad:
@@ -1264,7 +1314,7 @@ func _follow_leave_room(p, route: PackedVector3Array, leader) -> PackedVector3Ar
 	return out
 
 
-func _follow_walk(p, route: PackedVector3Array, leader = null, fwd: Vector3 = Vector3.ZERO) -> void:
+func _follow_walk(p, route: PackedVector3Array, leader = null, fwd: Vector3 = Vector3.ZERO, run_gap: float = -1.0) -> void:
 	# Decision 486: refresh before arrival and update pace even when the goal hardly changed.
 	while not route.is_empty() and p.position.distance_to(route[0]) < 0.12:
 		route.remove_at(0)
@@ -1274,10 +1324,14 @@ func _follow_walk(p, route: PackedVector3Array, leader = null, fwd: Vector3 = Ve
 		return
 	var goal := route[-1]
 	var gap: float = p.position.distance_to(goal)
+	var slot_pace: bool = leader == null and run_gap >= 0.0 and _r5("3")
+	var pace_gap: float = run_gap if slot_pace else gap
+	var run_on: float = FOLLOW_RUN_ON_SLOT if slot_pace else FOLLOW_RUN_ON
+	var run_off: float = FOLLOW_RUN_OFF_SLOT if slot_pace else FOLLOW_RUN_OFF
 	var run: bool = p.brain.get("follow_running", false)
-	if gap > FOLLOW_RUN_ON:
+	if pace_gap > run_on:
 		run = true
-	elif gap < FOLLOW_RUN_OFF:
+	elif pace_gap < run_off:
 		run = false
 	p.running = game.player.running or run
 	if leader != null and _follow_going(leader) and gap < FOLLOW_RUN_OFF:

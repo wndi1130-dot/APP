@@ -1,6 +1,6 @@
 extends SceneTree
 ## Decision 486: observe follow failures before changing the rules.
-## --seeds 1:10 --hz 30 --label before [--follow-walk-turn]
+## --seeds 1:10 --hz 30 --label before [--follow-walk-turn] [--ablate 2a,3]
 ## Like one_motion_runs: raw resources in memory, manual fixed _step, no saves.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -26,6 +26,7 @@ var seed_first := 1
 var seed_last := 10
 var label := "before"
 var follow_walk_turn: bool = false
+var follow_ablate: Array[String] = []   # Decision 486: listed R5 steps use their R4 branch.
 
 
 func _initialize() -> void:
@@ -39,8 +40,14 @@ func _run() -> void:
 	print(JSON.stringify({"kind": "config", "label": label,
 		"seeds": [seed_first, seed_last], "hz": hz,
 		"follow_walk_turn": follow_walk_turn,
+		"follow_ablate": follow_ablate,
 		"stop_reason_method": "observed state at moving true->false; not a mover event log",
 		"stop_context_key": "leg|reason|queue/formation|corner/straight",
+		"stop_turning_key": "leg|reason|queue/formation|turning/steady",
+		"turning_method": "nonzero player displacement directions differ by >30 degrees within 0.5 seconds",
+		"dest_jump_m_method": "latest think destination versus previous think; bins [0,0.5),[0.5,1),[1,2),[2,4),[4,inf),unknown",
+		"running_change_causes_key": "player_changed/other|queue/formation; same sampled tick",
+		"narrow_parts_method": "waypoint index 0 is approach; later indices are corridor; original narrow retained",
 		"player_reversal": "successive nonzero displacement directions have dot < -0.5",
 		"face_camera_axis": "horizontal camera basis.z; legacy face_camera remains position based",
 		"engine": Engine.get_version_info()["string"],
@@ -162,6 +169,14 @@ func _arguments() -> bool:
 			return false
 		var value := args[i + 1]
 		match args[i]:
+			"--ablate":
+				for item: String in value.split(",", false):
+					var step: String = item.strip_edges()
+					if step not in ["1a", "1b", "2a", "3", "4a", "6"]:
+						push_error("Unknown ablation step: " + step)
+						return false
+					if not follow_ablate.has(step):
+						follow_ablate.append(step)
 			"--hz":
 				if not value.is_valid_int():
 					return false
@@ -350,21 +365,35 @@ func _plan(game, run_seed: int) -> Array:
 		building, narrow, {"name": "stand_2", "stand": true, "points": []}]
 
 
-func _new_metrics() -> Dictionary:
+func _new_metrics(game = null) -> Dictionary:
 	return {"lag_values": [], "lag_sum": 0.0, "lag_max": 0.0, "moving_s": 0.0,
 		"over_6_s": 0.0, "walk_s": 0.0, "fan_s": 0.0, "stuck": 0,
-		"jam_count": 0, "jam_s": 0.0, "jam_excess_s": 0.0, "hold_excluded_s": 0.0,
+		"jam_count": 0, "jam_s": 0.0, "jam_excess_s": 0.0,
+		"hold_excluded_s": 0.0 if game == null or (game.ai.has_method("_pick_role") and game.ai.has_method("_holds_door")) else null,
 		"overlap_s": 0.0, "block_s": 0.0, "moving_changes": 0, "running_changes": 0,
 		"state_changes": 0, "jump": 0, "camera_s": 0.0, "camera_eligible_s": 0.0,
 		"observed_s": 0.0, "stop_reasons": {}, "stop_contexts": {},
-		"narrow_away_values": [], "narrow_away_max": 0.0, "narrow_outside_s": 0.0,
+		"stop_turning": {}, "turning_s": 0.0, "dest_jump_m": {}, "running_change_causes": {},
+		"trail_available": game == null or _has_follow_trail(game),
+		"narrow_away_values": [], "narrow_away_max": 0.0,
+		"narrow_outside_s": 0.0 if game == null or _has_follow_trail(game) else null,
 		"camera_axis_s": 0.0, "camera_axis_eligible_s": 0.0}
 
 
 func _new_observer(game, mate) -> Dictionary:
-	return {"person": mate, "role": game.ai._pick_role(mate), "metrics": _new_metrics(),
+	return {"person": mate, "role": _observed_role(game, mate), "metrics": _new_metrics(game),
+		"dest_at_think": mate.brain.get("dest"), "dest_jump_m": null,
 		"stuck_at": mate.position, "stuck_s": 0.0,
 		"jam_cell": Vector2i(-1, -1), "jam_at": mate.position, "jam_s": 0.0, "jam_active": false}
+
+
+## Decision 486: absent historical AI observations stay null, never guessed.
+func _observed_role(game, p) -> Variant:
+	return game.ai._pick_role(p) if game.ai.has_method("_pick_role") else null
+
+
+func _has_follow_trail(game) -> bool:
+	return "_follow_trail" in game.ai and "_follow_count" in game.ai and "_follow_head" in game.ai
 
 
 func _snapshot(game, observers: Array, delta: float) -> Array:
@@ -413,7 +442,7 @@ func _observe_door(game, observer: Dictionary, delta: float) -> void:
 					if distance <= nearest:
 						nearest = distance
 						cell = c
-	if cell.x >= 0 and game.ai._pick_role(p) == "rear" and game.ai._holds_door(p):
+	if cell.x >= 0 and game.ai.has_method("_holds_door") and _observed_role(game, p) == "rear" and game.ai._holds_door(p):
 		m["hold_excluded_s"] += delta
 		cell = Vector2i(-1, -1)
 	if cell.x < 0 or cell != observer["jam_cell"] or p.position.distance_to(observer["jam_at"]) > JAM_MOVE_M:
@@ -438,6 +467,8 @@ func _observe_door(game, observer: Dictionary, delta: float) -> void:
 
 ## Decision 486: duplicate the projection here so observation cannot change AI state.
 func _trail_projection(game, at: Vector3) -> Dictionary:
+	if not _has_follow_trail(game):
+		return {"back": null, "away": null}
 	var newer: Vector3 = game.player.position
 	var walked: float = 0.0
 	var best: float = INF
@@ -494,6 +525,38 @@ func _stop_reason(game, p, before: Dictionary) -> String:
 	return "no_path"
 
 
+## Decision 486: displacement history is observer state, independent of AI and RNG.
+func _turning(clock: Dictionary, step: Vector3, delta: float) -> bool:
+	var now: float = float(clock.get("motion_s", 0.0)) + delta
+	clock["motion_s"] = now
+	var history: Array = clock.get("direction_history", [])
+	while not history.is_empty() and now - float(history[0]["t"]) > 0.5 + 0.000001:
+		history.pop_front()
+	if step.length_squared() > 0.000001:
+		history.append({"t": now, "direction": step.normalized()})
+	clock["direction_history"] = history
+	for i in range(history.size()):
+		var prior: Vector3 = history[i]["direction"]
+		for j in range(i + 1, history.size()):
+			var later: Vector3 = history[j]["direction"]
+			if prior.dot(later) < cos(deg_to_rad(30.0)):
+				return true
+	return false
+
+
+func _dest_jump_bin(value: Variant) -> String:
+	if value == null:
+		return "unknown"
+	var jump: float = float(value)
+	if jump < 0.5:
+		return "lt_0.5"
+	if jump < 1.0:
+		return "0.5_1"
+	if jump < 2.0:
+		return "1_2"
+	return "2_4" if jump < 4.0 else "ge_4"
+
+
 func _sample(game, observers: Array, before: Array, player_before: Vector3, clock: Dictionary, delta: float) -> void:
 	var player = game.player
 	var motion: Dictionary = clock["player_motion"]
@@ -501,6 +564,10 @@ func _sample(game, observers: Array, before: Array, player_before: Vector3, cloc
 		motion["moving_changes"] += 1
 	var step: Vector3 = player.position - player_before
 	step.y = 0.0
+	var turning: bool = _turning(clock, step, delta)
+	clock["turning"] = turning
+	var player_run_changed: bool = bool(clock.get("player_last_running", false)) != player.running
+	clock["player_last_running"] = player.running
 	if step.length_squared() > 0.000001:
 		var last: Vector3 = clock["player_last_direction"]
 		if last != Vector3.ZERO and last.dot(step.normalized()) < -0.5:
@@ -525,12 +592,24 @@ func _sample(game, observers: Array, before: Array, player_before: Vector3, cloc
 				clock["pair_overlap_s"] += delta
 	if overlaps.has(player):
 		clock["player_overlap_s"] += delta
+	if clock["leg"] == "narrow":
+		clock["narrow_parts"][clock["narrow_part"]]["seconds"] += delta
 	for i in range(observers.size()):
 		var o: Dictionary = observers[i]
 		var p = o["person"]
-		var m: Dictionary = o["metrics"]
+		# Decision 486: measure once, then merge the same tick into total and narrow part.
+		var accumulated: Dictionary = o["metrics"]
+		var m: Dictionary = _new_metrics(game)
+		o["metrics"] = m
 		var old: Dictionary = before[i]
+		if bool(old["think_due"]):
+			var dest: Variant = p.brain.get("dest")
+			var prior_dest: Variant = o["dest_at_think"]
+			o["dest_jump_m"] = dest.distance_to(prior_dest) if dest is Vector3 and prior_dest is Vector3 and dest.is_finite() and prior_dest.is_finite() else null
+			o["dest_at_think"] = dest
 		m["observed_s"] += delta
+		if turning:
+			m["turning_s"] += delta
 		var distance: float = p.position.distance_to(player.position)
 		if player.moving:
 			m["lag_values"].append(distance)
@@ -558,14 +637,25 @@ func _sample(game, observers: Array, before: Array, player_before: Vector3, cloc
 					"corner" if corner else "straight"]
 				m["stop_reasons"][reason] = int(m["stop_reasons"].get(reason, 0)) + 1
 				m["stop_contexts"][context] = int(m["stop_contexts"].get(context, 0)) + 1
+				var turn_context: String = "%s|%s|%s|%s" % [clock["leg"], reason,
+					"queue" if bool(p.brain.get("follow_queue", false)) else "formation",
+					"turning" if turning else "steady"]
+				m["stop_turning"][turn_context] = 1
+				if reason == "turn_stop":
+					m["dest_jump_m"][_dest_jump_bin(o["dest_jump_m"])] = 1
 		if clock["leg"] == "narrow":
-			var away: float = float(_trail_projection(game, p.position)["away"])
-			m["narrow_away_values"].append(away)
-			m["narrow_away_max"] = maxf(float(m["narrow_away_max"]), away)
-			if away > 1.0:
-				m["narrow_outside_s"] += delta
+			var projected: Variant = _trail_projection(game, p.position)["away"]
+			if projected != null:
+				var away: float = float(projected)
+				m["narrow_away_values"].append(away)
+				m["narrow_away_max"] = maxf(float(m["narrow_away_max"]), away)
+				if away > 1.0:
+					m["narrow_outside_s"] += delta
 		if bool(old["running"]) != p.running:
 			m["running_changes"] += 1
+			var cause: String = "%s|%s" % ["player_changed" if player_run_changed else "other",
+				"queue" if bool(p.brain.get("follow_queue", false)) else "formation"]
+			m["running_change_causes"][cause] = 1
 		if bool(old["moving"]) != p.moving or bool(old["running"]) != p.running:
 			m["state_changes"] += 1
 		if p.position.distance_to(old["at"]) > 1.0:
@@ -589,6 +679,10 @@ func _sample(game, observers: Array, before: Array, player_before: Vector3, cloc
 					m["camera_s"] += delta
 		_observe_stuck(game, o, old)
 		_observe_door(game, o, delta)
+		_merge_metrics(accumulated, m)
+		if clock["leg"] == "narrow":
+			_merge_metrics(clock["narrow_parts"][clock["narrow_part"]]["mates"][p.pid], m)
+		o["metrics"] = accumulated
 
 
 func _run_leg(game, leg: Dictionary, observers: Array, clock: Dictionary) -> Dictionary:
@@ -596,8 +690,15 @@ func _run_leg(game, leg: Dictionary, observers: Array, clock: Dictionary) -> Dic
 	var prior: Array = []
 	for observer: Dictionary in observers:
 		prior.append(observer["metrics"])
-		observer["metrics"] = _new_metrics()
+		observer["metrics"] = _new_metrics(game)
 	clock["leg"] = leg["name"]
+	if leg["name"] == "narrow":
+		clock["narrow_parts"] = {}
+		for part: String in ["narrow_approach", "narrow_corridor"]:
+			var metrics: Dictionary = {}
+			for observer: Dictionary in observers:
+				metrics[observer["person"].pid] = _new_metrics(game)
+			clock["narrow_parts"][part] = {"seconds": 0.0, "mates": metrics}
 	clock["player_motion"] = {"moving_changes": 0, "reversals": 0}
 	clock["player_last_direction"] = Vector3.ZERO
 	var row: Dictionary = _run_leg_body(game, leg, observers, clock)
@@ -609,6 +710,18 @@ func _run_leg(game, leg: Dictionary, observers: Array, clock: Dictionary) -> Dic
 		observers[i]["metrics"] = prior[i]
 	row["metrics"] = _metrics_row(combined, float(row["seconds"]))
 	row["player_motion"] = clock["player_motion"]
+	if leg["name"] == "narrow":
+		for part: String in ["narrow_approach", "narrow_corridor"]:
+			var section: Dictionary = clock["narrow_parts"][part]
+			var metrics: Dictionary = _new_metrics(game)
+			var people: Array = []
+			for observer: Dictionary in observers:
+				var mate_metrics: Dictionary = section["mates"][observer["person"].pid]
+				_merge_metrics(metrics, mate_metrics)
+				var mate_row: Dictionary = _metrics_row(mate_metrics, float(section["seconds"]))
+				mate_row.merge({"id": observer["person"].pid, "role": observer["role"]})
+				people.append(mate_row)
+			row[part] = {"seconds": section["seconds"], "metrics": _metrics_row(metrics, float(section["seconds"])), "per_mate": people}
 	return row
 
 
@@ -651,6 +764,8 @@ func _run_leg_body(game, leg: Dictionary, observers: Array, clock: Dictionary) -
 		var before := _snapshot(game, observers, delta)
 		var player_before: Vector3 = game.player.position
 		clock["player_was_moving"] = game.player.moving
+		if leg["name"] == "narrow":
+			clock["narrow_part"] = "narrow_approach" if waypoint == 0 else "narrow_corridor"
 		game._step(delta)
 		# Later systems may queue a horde after _update_spawns; it must stay empty too.
 		game.pending_spawn.clear()
@@ -684,7 +799,8 @@ func _run_leg_body(game, leg: Dictionary, observers: Array, clock: Dictionary) -
 
 func _trial(run_seed: int, total: Dictionary, by_mate: Dictionary) -> Dictionary:
 	var game = game_script.new()
-	game.opts = {"seed": run_seed, "raiders": false, "auto_pause": false, "follow_walk_turn": follow_walk_turn}
+	game.opts = {"seed": run_seed, "raiders": false, "auto_pause": false, "follow_walk_turn": follow_walk_turn,
+		"follow_ablate": follow_ablate.duplicate()}
 	root.add_child(game)
 	game.set_process(false)
 	game.process_mode = Node.PROCESS_MODE_DISABLED
@@ -742,11 +858,15 @@ func _trial(run_seed: int, total: Dictionary, by_mate: Dictionary) -> Dictionary
 
 func _merge_metrics(into: Dictionary, source: Dictionary) -> void:
 	for key in source:
-		if key in ["lag_values", "narrow_away_values"]:
+		if source[key] == null or into[key] == null:
+			into[key] = null
+		elif key == "trail_available":
+			into[key] = bool(into[key]) and bool(source[key])
+		elif key in ["lag_values", "narrow_away_values"]:
 			into[key].append_array(source[key])
 		elif key in ["lag_max", "narrow_away_max"]:
 			into[key] = maxf(into[key], source[key])
-		elif key in ["stop_reasons", "stop_contexts"]:
+		elif key in ["stop_reasons", "stop_contexts", "stop_turning", "dest_jump_m", "running_change_causes"]:
 			for name: String in source[key]:
 				into[key][name] = int(into[key].get(name, 0)) + int(source[key][name])
 		else:
@@ -770,9 +890,17 @@ func _metrics_row(m: Dictionary, duration: float) -> Dictionary:
 		reason_rows[reason] = {"count": count, "per_mate_minute": _ratio(count * 60.0, m["observed_s"])}
 	var ai_stops: int = int(m["stop_reasons"].get("queue_wait", 0)) + int(m["stop_reasons"].get("settled", 0))
 	reason_rows["ai_stop"] = {"count": ai_stops, "per_mate_minute": _ratio(ai_stops * 60.0, m["observed_s"])}
+	var jumps: Dictionary = {}
+	for bin: String in ["lt_0.5", "0.5_1", "1_2", "2_4", "ge_4", "unknown"]:
+		jumps[bin] = int(m["dest_jump_m"].get(bin, 0))
+	var running_causes: Dictionary = {}
+	for cause: String in ["player_changed|queue", "player_changed|formation", "other|queue", "other|formation"]:
+		running_causes[cause] = int(m["running_change_causes"].get(cause, 0))
 	return {"observed_mate_seconds": m["observed_s"],
 		"stop_reasons": reason_rows, "stop_contexts": m["stop_contexts"],
-		"narrow_away": {"samples": away.size(),
+		"turning": {"person_seconds": m["turning_s"]}, "stop_turning": m["stop_turning"],
+		"dest_jump_m": jumps, "running_change_causes": running_causes,
+		"narrow_away": {"samples": away.size() if bool(m["trail_available"]) else null,
 			"p95_m": away[ceili(0.95 * away.size()) - 1] if not away.is_empty() else null,
 			"max_m": m["narrow_away_max"] if not away.is_empty() else null,
 			"over_1_m_person_seconds": m["narrow_outside_s"]},
