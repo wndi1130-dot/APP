@@ -38,6 +38,7 @@ import { insulatedShare, lawTechRes } from './domestic/lawtech';
 import { personById, techMult } from './domestic/state';
 import { childHaul, childSettle, countHands, handsNote } from './domestic/classroom';
 import { heatAllocSettle } from './domestic/heat_alloc';
+import { reconcileStore } from './domestic/decor_data';
 import { applyScoutGear, effThreat, scoutHaulNow, scoutNowText, scoutPlan, threatStep } from './domestic/scout_gear';
 // S1b 어두운 길 훅(dark/hooks.ts). g.dark가 없으면 아무 일도 안 한다.
 import './decree'; // 비상대권 중 카드의 '포고로 정한다'(모든 판, 불러오면 등록된다)
@@ -942,6 +943,7 @@ function settle(g: Game): void {
   if (g.phase !== 'end') checkEnd(g); // 정산 도중 쿠데타로 이미 끝났으면 다른 끝이 덮지 않는다
   if (g.phase !== 'end') disasterSettle(g);
   if (g.phase !== 'end') climateSettle(g);
+  reconcileStore(g); // 겸용 물건 이름표: 정산에서 쓴 만큼 새것부터 녹는다
   trackLookback(g);
   g.lastSettle = {
     coal: g.coal - before.coal, food: g.food - before.food, med: g.med - before.med,

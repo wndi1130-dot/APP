@@ -3,6 +3,7 @@ export * from './data';
 export * from './state';
 export * from './sit';
 export * from './workshop';
+export { placeFurniture, removeFurniture } from './decor';
 export * from './knowledge';
 export * from './hygiene';
 export * from './pot';

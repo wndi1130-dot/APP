@@ -131,7 +131,7 @@ function run(arm: Arm, seed: string): Row {
       madeShare: needTotal > 0 ? made / needTotal : null,
       madeUsedShare: usedTotal > 0 ? made / usedTotal : null,
       insulatedCars: g.dom?.insulated.length ?? 0,
-      furnishJobs: Object.values(g.dom?.furnish ?? {}).reduce((sum, f) => sum + f.jobs.length, 0),
+      furnishJobs: Object.values(g.dom?.furnish ?? {}).reduce((sum, f) => sum + ('jobs' in f ? f.jobs.length : 0), 0),
       w6RestoredSeg,
     };
   } finally {

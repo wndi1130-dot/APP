@@ -135,7 +135,7 @@ static func sit(g: Dictionary, c: String) -> Array[float]:
 		for item: Dictionary in f["items"]:
 			var furniture: Dictionary = TrainMods.FURNITURE[item["kind"]]
 			warm = maxf(warm, float(furniture["warm"]))
-			crowd += float(TrainMods.FURNITURE_SIZE[item["size"]]["crowd"]) + float(furniture["crowd"])
+			crowd += TrainMods.TrainDecor.decor_crowd([item])
 		out[0] += warm / float(TrainMods.COMM_CARS[c])
 		out[2] += crowd
 	return out
