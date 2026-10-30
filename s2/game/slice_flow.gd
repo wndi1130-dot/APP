@@ -50,6 +50,8 @@ const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const CarPane = preload("res://game/ui/car_pane.gd")
+const DecorPane = preload("res://game/ui/decor_pane.gd")
+const DecorUiData = preload("res://game/ui/decor_ui_data.gd")
 const CostPane = preload("res://game/ui/cost_pane.gd")
 const HomeBar = preload("res://game/ui/home_bar.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
@@ -181,6 +183,7 @@ var pane: Control = null           # the picked car's pane (car_pane.gd)
 var bar: Control = null            # the keys along the bottom (home_bar.gd)
 var sel: String = ""               # the picked car's id, "" with the pane folded
 var decor_id: String = ""          # the car being decorated (open_decor), "" when none
+var decor_pane: Control = null
 var _decor_hidden: Array = []      # what open_decor put away, to bring back
 var _plate_press_id: String = ""
 var _plate_press_pos: Vector2 = Vector2.ZERO
@@ -272,6 +275,8 @@ func current() -> String:
 
 
 func go(i: int) -> void:
+	if decor_id != "":
+		leave_decor()
 	step = i
 	var id: String = STEPS[i][0]
 	_ensure_board(id)
@@ -729,6 +734,7 @@ func _show_paper() -> void:
 	c.chose.connect(_paper_chosen)
 	c.fold_changed.connect(_paper_folded)
 	paper = c
+	_update_decor_lock()
 
 
 func _drop_paper() -> void:
@@ -736,6 +742,7 @@ func _drop_paper() -> void:
 	if is_instance_valid(paper):
 		paper.queue_free()
 	paper = null
+	_update_decor_lock()
 	# The room its edge took goes back to the picked car.
 	if was_folded:
 		_paper_folded(false)
@@ -744,10 +751,17 @@ func _drop_paper() -> void:
 ## The paper folded to its edge or opened again (결정 508): the picked car moves into
 ## the middle of what the edge and the car pane leave clear.
 func _paper_folded(_folded: bool) -> void:
+	_update_decor_lock()
 	if sel == "" or not is_instance_valid(pane) or not is_instance_valid(train) or train.camera == null:
 		return
 	if str(train.get("view_mode")) == "diag":
 		_set_cover()
+
+
+func _update_decor_lock() -> void:
+	if is_instance_valid(pane):
+		pane.choosing_paper = is_instance_valid(paper) and not (paper as TurnCard).folded
+		pane.refresh(train_g, train_t)
 
 
 ## The diagonal camera's cover: the car pane's width at the right, a folded paper's
@@ -1249,6 +1263,8 @@ func _process(_delta: float) -> void:
 ## A decision card or a room's pane is up: the land outside goes on, but no new
 ## outside event begins (presentation_motion.md 7b: they never get in the way of reading).
 func _journey_quiet() -> bool:
+	if decor_id != "":
+		return true
 	if is_instance_valid(paper) or (card != null and card != home):
 		return true
 	for p: Variant in [shop, research, mods, cost]:
@@ -1269,6 +1285,7 @@ func _show_home(word: String) -> void:
 	p.name = "CarPane"
 	p.lever_set.connect(_set_lever)
 	p.folded.connect(_select.bind(""))
+	p.decor_pressed.connect(open_decor)
 	h.add_child(p)
 	p.pin(TrainGauges.BAND_H)
 	var b = HomeBar.new()
@@ -1310,6 +1327,7 @@ func _select(id: String) -> void:
 		return
 	pane.visible = sel != "" and _shows_pane(def)
 	if pane.visible:
+		pane.choosing_paper = is_instance_valid(paper) and not (paper as TurnCard).folded
 		pane.show_car(def, train_g, train_t)
 	if not is_instance_valid(train) or train.camera == null:
 		return
@@ -1325,31 +1343,31 @@ func _select(id: String) -> void:
 			train.set_pane(0.0)
 		return
 	train.focus_car(at)
-	# Room is made for the pane only when one shows (a decorated car with no people has none yet).
+	# The two common cars use the same glass with just its header.
 	if sel != "" and pane.visible:
 		var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
 		train.scroll(UiFonts.px(PANE_SHIFT_CSS) * train.camera.size / view_h)
 
 
-## A car with no people of its own that is still decorated (결정 511·513: the captain's and the
-## dining car) is picked as the others; its pane is the domestic side's small one once car_pane.gd
-## draws it (its SMALL_PANE), and till then none.
+## The two common cars are picked like the living cars (결정 511·513).
 func _decor_car(id: String) -> bool:
 	return id != "" and not DecorGrid.of(id).is_empty()
 
 
 func _shows_pane(def: Dictionary) -> bool:
-	return _has_people(def) or (CarPane as Script).get_script_constant_map().has("SMALL_PANE")
+	return _has_people(def) or String(def.get("id", "")) in ["captain", "dining"]
 
 
 ## Decorating a car (결정 506·510·511, train_scene.gd enter_decor): the train shows it alone with
 ## its grid, and the gauges, the plates, the keys, the pane and a folded paper go away till
 ## leave_decor. Not while a paper card is open to choose on, nor for a car the decor table has not.
-## The strip of things, the title and the exit are the domestic side's (decor_strip.gd, decor_hud.gd).
+## The strip, title, exit and gestures belong to decor_pane.gd.
 func open_decor(id: String) -> bool:
 	if not is_instance_valid(train) or decor_id != "":
 		return false
 	if is_instance_valid(paper) and not (paper as TurnCard).folded:
+		return false
+	if DecorUiData.lock_reason(train_g, false) != "":
 		return false
 	_put_rooms_away()
 	if not train.enter_decor(id):
@@ -1361,6 +1379,14 @@ func open_decor(id: String) -> bool:
 		if is_instance_valid(n) and n is CanvasItem and (n as CanvasItem).visible:
 			(n as CanvasItem).visible = false
 			_decor_hidden.append(n)
+	var ui := DecorPane.new()
+	ui.g = train_g
+	ui.car_id = id
+	ui.train = train
+	ui.leave_requested.connect(leave_decor)
+	ui.changed.connect(_decor_changed)
+	layer.add_child(ui)
+	decor_pane = ui
 	return true
 
 
@@ -1370,13 +1396,33 @@ func leave_decor() -> void:
 		return
 	var id: String = decor_id
 	decor_id = ""
+	if is_instance_valid(decor_pane):
+		decor_pane.hide()
+		decor_pane.queue_free()
+	decor_pane = null
 	if is_instance_valid(train):
 		train.exit_decor()
+		_sync_decor_situation()
 	for n in _decor_hidden:
 		if is_instance_valid(n):
 			(n as CanvasItem).visible = true
 	_decor_hidden.clear()
 	_select(id)
+
+
+func _decor_changed() -> void:
+	_room_changed()
+	if is_instance_valid(pane):
+		pane.refresh(train_g, train_t)
+
+
+## Reseating while editing would replace the people that the 3D view faded.
+## Apply the resulting situation after its own exit restores the people.
+func _sync_decor_situation() -> void:
+	if is_instance_valid(train):
+		for comm: String in train_g.get("comms", {}):
+			var sit: Array = St.situation(train_g, train_t, comm)
+			train.set_comm(comm, "sit", [sit[0], sit[1], sit[2], sit[3]])
 
 
 ## A room on the bottom bar with a screen of its own (home_bar.gd open_rooms).

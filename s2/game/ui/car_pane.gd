@@ -16,6 +16,7 @@ extends Control
 
 signal lever_set(comm: String, which: String, step: int)
 signal folded
+signal decor_pressed(car_id: String)
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
@@ -27,10 +28,13 @@ const St = preload("res://game/train/train_state.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
+const TrainDecor = preload("res://game/train/train_decor.gd")
+const DecorUiData = preload("res://game/ui/decor_ui_data.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
 const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
 const CSS_SIZE := Vector2(330, 286)
+const SMALL_PANE := Vector2(330, 76)
 ## The car's warmth threshold (k3_views.js carStat, s1 ui/home.ts): below it the car is cold.
 const COLD: float = 45.0
 ## The bars: word, situation index, mark, and whether below the mark is the
@@ -66,6 +70,8 @@ var t: Dictionary = {}
 ## The picked carriage: its id, comm and name (train_rules.json cars).
 var car: Dictionary = {}
 var _parts: Control
+var decor_block: String = ""
+var choosing_paper: bool = true
 ## The lever just moved and the step it left, so its knob slides from there.
 var _moved: Array = []
 ## The warmth last drawn per comm, so the thermometer rises from it.
@@ -76,6 +82,10 @@ var _warm_was: Dictionary = {}
 ## pane draws it). Empty when the carriage has no people of its own.
 static func model(g0: Dictionary, t0: Dictionary, car0: Dictionary) -> Dictionary:
 	var c: String = String(car0.get("comm", ""))
+	var id: String = String(car0.get("id", ""))
+	if id in ["captain", "dining"] and not g0.is_empty():
+		return {"name": String(car0.get("name", TrainMods.CAR_NAME[id])), "small": true,
+			"decor": true, "percent": DecorUiData.percent(g0, id), "lock": DecorUiData.lock_reason(g0)}
 	if g0.is_empty() or t0.is_empty() or c == "" or not (g0.get("comms", {}) as Dictionary).has(c):
 		return {}
 	var s: Dictionary = g0["comms"][c]
@@ -98,6 +108,9 @@ static func model(g0: Dictionary, t0: Dictionary, car0: Dictionary) -> Dictionar
 	var food: float = float(pop) * float(ration) * float(p["foodPerPersonLever"])
 	var names: Dictionary = t0.get("COMM_NAME", {})
 	return {
+		"small": false, "decor": TrainDecor.DECOR_CARS.has(id),
+		"percent": DecorUiData.percent(g0, id) if TrainDecor.DECOR_CARS.has(id) else 0,
+		"lock": DecorUiData.lock_reason(g0),
 		"name": String(car0.get("name", names.get(c, c))),
 		"furnish": TrainMods.FURNISH_NAMES[int(TrainMods.furnish_of(g0, String(car0.get("id", "")))["tier"])] if TrainMods.FURNISH_CARS.has(String(car0.get("id", ""))) else "",
 		"comm": c,
@@ -171,6 +184,7 @@ func refresh(g0: Dictionary, t0: Dictionary) -> void:
 	g = g0
 	t = t0
 	_draw_all()
+	offset_bottom = offset_top + (SMALL_PANE.y if car.get("id", "") in ["captain", "dining"] else CSS_SIZE.y) * UiFonts.K
 
 
 func _draw_all() -> void:
@@ -182,7 +196,16 @@ func _draw_all() -> void:
 	var m: Dictionary = model(g, t, car)
 	if m.is_empty():
 		return
+	m["lock"] = DecorUiData.lock_reason(g, choosing_paper)
+	if bool(m["small"]):
+		var name_label := UiFonts.label(String(m["name"]), UiFonts.WORD, 500, 18.0, INK, 2.16)
+		name_label.name = "Name"
+		_text(name_label, 44.0, 27.0)
+		_decor_head(m, 44.0)
+		return
 	_head(m)
+	if bool(m["decor"]):
+		_decor_head(m, 157.0)
 	_thermo(m)
 	_stats(m)
 	for i in 2:
@@ -226,7 +249,11 @@ func _head(m: Dictionary) -> void:
 	stage.name = "Stage"
 	_add(stage)
 	GlassParts.put_on(stage, pop.position.x + GlassParts.text_w(pop), GlassParts.base_of(pop))
-	if not String(m["hands_line"]).is_empty():
+	if bool(m["decor"]):
+		stage.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		stage.clip_text = true
+		stage.size.x = maxf(1.0, 153.0 * k - stage.position.x)
+	if not String(m["hands_line"]).is_empty() and String(m["lock"]) == "" and decor_block == "":
 		var hands := UiFonts.label(String(m["hands_line"]), UiFonts.WORD, 400, 11.0, INK2, 0.0)
 		hands.name = "HandsShortage"
 		hands.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -253,6 +280,50 @@ func _head(m: Dictionary) -> void:
 	fold.add_child(word)
 	# On the line its ink sits on in the mockup, 26.5 down.
 	GlassParts.put_on(word, mark.position.x - 3.0 * k - GlassParts.text_w(word), 26.5 * k)
+
+
+func _decor_head(m: Dictionary, x: float) -> void:
+	var k: float = UiFonts.K
+	var percent := UiFonts.label("꾸밈 %d%%" % int(m["percent"]), UiFonts.NUMBER, 500, 12.0, INK2)
+	percent.name = "DecorPercent"
+	_text(percent, x, 46.0)
+	var why: String = decor_block if decor_block != "" else String(m["lock"])
+	var button := Button.new()
+	button.name = "DecorButton"
+	button.text = "꾸미기"
+	button.position = Vector2(236.0, 33.0) * k
+	button.size = Vector2(74.0, 21.0) * k
+	button.focus_mode = Control.FOCUS_NONE
+	button.disabled = why != ""
+	UiFonts.style(button, UiFonts.WORD, 500, 11.5, Color("f7e6b4"), 0.46)
+	var box := StyleBoxFlat.new()
+	box.bg_color = Color("2a200f")
+	box.border_color = Color("caa45c")
+	box.set_border_width_all(int(round(1.5 * k)))
+	box.set_corner_radius_all(int(round(11.0 * k)))
+	box.content_margin_left = 25.0 * k
+	box.content_margin_right = 8.0 * k
+	for state: String in ["normal", "hover", "pressed", "disabled"]:
+		button.add_theme_stylebox_override(state, box)
+	button.modulate.a = 0.45 if button.disabled else 1.0
+	button.pressed.connect(func() -> void:
+		if not button.disabled:
+			decor_pressed.emit(String(car["id"])))
+	_add(button)
+	var house := UiBake.Batch.new()
+	for stroke: Array in [
+		[Vector2(2, 14), Vector2(14, 14)],
+		[Vector2(4, 14), Vector2(4, 8), Vector2(8, 4), Vector2(12, 8), Vector2(12, 14)],
+		[Vector2(7, 14), Vector2(7, 11), Vector2(9, 11), Vector2(9, 14)],
+	]:
+		var line := PackedVector2Array()
+		for point: Vector2 in stroke: line.append((point + Vector2(7, 1.5)) * k)
+		house.polyline(line, PackedColorArray([Color("f7e6b4")]), 1.5 * k)
+	button.draw.connect(func() -> void: house.draw(button))
+	if why != "":
+		var reason := UiFonts.label(why, UiFonts.WORD, 400, 10.0, INK2)
+		reason.name = "DecorLock"
+		_text(reason, 44.0, 69.0 if bool(m["small"]) else 64.0)
 
 
 ## The thermometer (.thermo 74 × 78 at 44, 75): a well 12 wide with the cold
