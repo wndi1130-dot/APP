@@ -114,9 +114,9 @@ static func pieces(items: Array) -> Array:
 ## From above it is the outline of the flat things (a coat, a map, a knife) and
 ## the contact line of the taller ones, so a dark thing still stands off a
 ## street's grey asphalt at a phone's size; the things keep their colours (LOOKS).
-const RIM: float = 0.09
+const RIM: float = 0.1
 const RIM_LIFT: float = 0.004
-const RIM_STRENGTH: float = 0.75
+const RIM_STRENGTH: float = 0.8
 
 
 ## The rim under one of pieces()'s boxes: {"lv", "at" (centre, on the floor),
