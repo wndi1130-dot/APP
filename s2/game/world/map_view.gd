@@ -100,7 +100,9 @@ var _container_chunk: Dictionary = {} # id -> chunk key
 var _container_batching: bool = false
 var ground_nodes: Dictionary = {}       # level -> MeshInstance3D (what lies on the ground, ground_look.gd; its rims a child "Rim")
 var _ground_sig: int = 0
-var _rim_material: ShaderMaterial = null
+var _contact_materials: Dictionary = {}   # "rim" / "prop" / "box" -> ShaderMaterial (contact_shade.gdshader)
+## Every prop's contact shade (T0-6) in one MultiMesh, filled with the props in refresh_props.
+var prop_shades: MultiMeshInstance3D = null
 var spot_nodes: Dictionary = {}
 var stove_nodes: Array = []
 var manhole_nodes: Dictionary = {}
@@ -636,6 +638,7 @@ func add_container(id: String) -> void:
 	if PropModels.attach(holder, id, at, String(box_data.get("name", ""))):
 		level_roots[lv].add_child(holder)
 		container_nodes[id] = holder
+		_shade_container(holder)
 	else:
 		holder.free()
 	var key: Vector3i = _container_key(box_data)
@@ -710,7 +713,7 @@ func _bake_container_chunk(key: Vector3i) -> void:
 	if marked and rim_node == null:
 		rim_node = MeshInstance3D.new()
 		rim_node.name = "Rim"
-		rim_node.material_override = _contact_material()
+		rim_node.material_override = _contact_material("rim")
 		rim_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		node.add_child(rim_node)
 	if rim_node != null:
@@ -808,7 +811,7 @@ func update_ground(items: Array) -> void:
 			ground_nodes[lv] = _mesh_node(lv)
 			var rim_node := MeshInstance3D.new()
 			rim_node.name = "Rim"
-			rim_node.material_override = _contact_material()
+			rim_node.material_override = _contact_material("rim")
 			rim_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			ground_nodes[lv].add_child(rim_node)
 		ground_nodes[lv].mesh = tools[lv].commit()
@@ -819,11 +822,11 @@ func update_ground(items: Array) -> void:
 ## strength and whether it lies open to the sky (rim "sky", 1 if not given; 0
 ## under a roof, as the floors' vertex alpha) go in the vertex colour
 ## (contact_shade.gdshader keeps it full indoors whatever the season).
-static func _rim_quad(st: SurfaceTool, rim: Dictionary) -> void:
+static func _rim_quad(st: SurfaceTool, rim: Dictionary, strength: float = GroundLook.RIM_STRENGTH) -> void:
 	var at: Vector3 = rim["at"]
 	var h: Vector2 = (rim["size"] as Vector2) * 0.5
 	var inner: Vector2 = rim["inner"]
-	var c := Color(inner.x, inner.y, GroundLook.RIM_STRENGTH, float(rim.get("sky", 1.0)))
+	var c := Color(inner.x, inner.y, strength, float(rim.get("sky", 1.0)))
 	var corners := [Vector3(-h.x, 0, -h.y), Vector3(h.x, 0, -h.y), Vector3(h.x, 0, h.y), Vector3(-h.x, 0, h.y)]
 	var uvs := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
 	for idx in [0, 1, 2, 0, 2, 3]:
@@ -833,15 +836,19 @@ static func _rim_quad(st: SurfaceTool, rim: Dictionary) -> void:
 		st.add_vertex(at + corners[idx])
 
 
-## The rims' material: a crisp core, then the last pixel smoothed; first of the
-## see-through things, so rain, snow and blood draw over it.
-func _contact_material() -> ShaderMaterial:
-	if _rim_material == null:
-		_rim_material = ShaderMaterial.new()
-		_rim_material.shader = CONTACT_SHADER
-		_rim_material.set_shader_parameter("core", 0.6)
-		_rim_material.render_priority = Material.RENDER_PRIORITY_MIN
-	return _rim_material
+## The contact shades' materials: "rim" round the things on the ground (a crisp
+## core, then the last pixel smoothed), "prop" for the props' MultiMesh and "box"
+## under a container's own model (soft from the footprint out). First of the
+## see-through things, so rain, snow and blood draw over them.
+func _contact_material(kind: String) -> ShaderMaterial:
+	if not _contact_materials.has(kind):
+		var m := ShaderMaterial.new()
+		m.shader = CONTACT_SHADER
+		m.set_shader_parameter("core", 0.6 if kind == "rim" else 0.0)
+		m.set_shader_parameter("per_instance", kind == "prop")
+		m.render_priority = Material.RENDER_PRIORITY_MIN
+		_contact_materials[kind] = m
+	return _contact_materials[kind]
 
 
 func update_spot(id: String) -> void:
@@ -1726,6 +1733,7 @@ func _build_props() -> void:
 			add_child(node)
 			batch["nodes"][lod] = node
 		await BuildPace.rest(pace)
+	_make_prop_shades()
 
 
 static func _interactive_prop(kind: String) -> bool:
@@ -1777,6 +1785,7 @@ func update_prop(prop: Dictionary, removed: bool = false) -> void:
 				var rect: Rect2i = prop["rect"] as Rect2i
 				item["rect"] = prop["rect"]
 				item["xf"] = _object_transform(prop, path)
+				item.erase("shade")
 				item["level"] = lv
 				item["building"] = int(prop.get("building", lg.building_at(rect.get_center())))
 				item["remembered"] = false
@@ -2013,7 +2022,16 @@ func refresh_props(camera: Camera3D = null) -> void:
 	var eye := camera.global_position
 	var ray := -camera.global_transform.basis.z
 	var near := _near_prop_tiles(eye, ray) if _prop_tile_culling else {}
-	for batch: Dictionary in prop_batches.values():
+	var shades: MultiMesh = prop_shades.multimesh if prop_shades != null else null
+	var shaded := 0
+	if shades != null:
+		var total := 0
+		for batch: Dictionary in prop_batches.values():
+			total += (batch["items"] as Array).size()
+		if shades.instance_count < total:
+			shades.instance_count = total
+	for path: String in prop_batches:
+		var batch: Dictionary = prop_batches[path]
 		var counts := {0: 0, 1: 0}
 		for item: Dictionary in _prop_items_in(batch, near):
 			var lv: int = item["level"]
@@ -2035,8 +2053,153 @@ func refresh_props(camera: Camera3D = null) -> void:
 			if node.multimesh.use_custom_data:
 				node.multimesh.set_instance_custom_data(counts[lod], Color(float(int(item.get("tint", -1)) + 1), 0.0, 0.0, 0.0))
 			counts[lod] += 1
+			if shades != null:
+				if not item.has("shade"):
+					item["shade"] = _prop_shade(path, item)
+				var shade: Dictionary = item["shade"]
+				if not shade.is_empty():
+					shades.set_instance_transform(shaded, shade["xf"])
+					shades.set_instance_custom_data(shaded, shade["foot"])
+					shaded += 1
 		for lod: int in batch["nodes"]:
 			batch["nodes"][lod].multimesh.visible_instance_count = counts[lod]
+	if shades != null:
+		shades.visible_instance_count = shaded
+
+
+## Contact shade under the props (T0-6): how far it reaches past a prop's footprint
+## (metres; more for a taller one) and how dark it is at the footprint (more for a
+## taller one, contact_shade.gdshader).
+const SHADE_MARGIN: float = 0.12
+const SHADE_MARGIN_PER_M: float = 0.2
+const SHADE_MARGIN_MAX: float = 0.35
+const SHADE_STRENGTH: float = 0.35
+const SHADE_STRENGTH_TALL: float = 0.5
+## Raised this far over its floor or more, a model hangs on a wall or stands on something: no shade.
+const SHADE_FLOOR_GAP: float = 0.05
+
+
+## One MultiMesh for every prop's shade: a flat quad (x and z from -0.5 to 0.5,
+## UV across it), no shadow, drawn first of the see-through things.
+func _make_prop_shades() -> void:
+	var st := _begin()
+	var corners := [Vector3(-0.5, 0, -0.5), Vector3(0.5, 0, -0.5), Vector3(0.5, 0, 0.5), Vector3(-0.5, 0, 0.5)]
+	var uvs := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+	for idx in [0, 1, 2, 0, 2, 3]:
+		st.set_uv(uvs[idx])
+		st.set_normal(Vector3.UP)
+		st.add_vertex(corners[idx])
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = st.commit()
+	mm.visible_instance_count = 0
+	prop_shades = MultiMeshInstance3D.new()
+	prop_shades.name = "ContactProps"
+	prop_shades.multimesh = mm
+	prop_shades.material_override = _contact_material("prop")
+	prop_shades.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# The quads are set every refresh: one box round the whole map and its storeys.
+	prop_shades.custom_aabb = AABB(Vector3(0, -LEVEL_H - 1.0, 0), Vector3(grid.width, LEVEL_H * 4.0 + 2.0, grid.height))
+	add_child(prop_shades)
+
+
+## A prop's shade as placed (item["xf"]): {"xf" (the quad, its height the strength), "foot" (the
+## footprint's rect in the quad)}. The footprint is the model's box as placed (turned in quarter
+## turns, or laid down if fallen, so it stays square to the map); the margin stops at the side of its
+## cells where a wall, anything solid or another building stands, so no shade shows through a wall.
+## {} for a model that does not stand on its floor.
+func _prop_shade(path: String, item: Dictionary) -> Dictionary:
+	var meshes := PropModels.batch_meshes(path)
+	if meshes.is_empty():
+		return {}
+	var placed: AABB = (item["xf"] as Transform3D) * meshes[0].get_aabb()
+	var lo := placed.position
+	var hi := placed.end
+	var lv: int = item["level"]
+	var floor_y := lv * LEVEL_H
+	var prop: Dictionary = item.get("prop", {})
+	if lo.y > floor_y + SHADE_FLOOR_GAP or String(prop.get("mount", "")) == "wall" or not levels.has(lv):
+		return {}
+	var tall := clampf(hi.y - floor_y, 0.0, 2.0)
+	var margin := minf(SHADE_MARGIN + SHADE_MARGIN_PER_M * tall, SHADE_MARGIN_MAX)
+	var r: Rect2i = item["rect"]
+	var lg: FieldGrid = levels[lv]
+	var b: int = item["building"]
+	var x0 := lo.x - margin
+	var x1 := hi.x + margin
+	var z0 := lo.z - margin
+	var z1 := hi.z + margin
+	if _shade_stops(lg, r, Vector2i(-1, 0), b):
+		x0 = maxf(x0, minf(lo.x, r.position.x))
+	if _shade_stops(lg, r, Vector2i(1, 0), b):
+		x1 = minf(x1, maxf(hi.x, r.end.x))
+	if _shade_stops(lg, r, Vector2i(0, -1), b):
+		z0 = maxf(z0, minf(lo.z, r.position.y))
+	if _shade_stops(lg, r, Vector2i(0, 1), b):
+		z1 = minf(z1, maxf(hi.z, r.end.y))
+	var w := x1 - x0
+	var d := z1 - z0
+	var strength := lerpf(SHADE_STRENGTH, SHADE_STRENGTH_TALL, clampf(tall / 1.5, 0.0, 1.0))
+	var quad := Transform3D(Basis.from_scale(Vector3(w, strength, d)), Vector3((x0 + x1) * 0.5, floor_y + 0.006, (z0 + z1) * 0.5))
+	var foot := Color((lo.x - x0) / w, (lo.z - z0) / d, (hi.x - x0) / w, (hi.z - z0) / d)
+	return {"xf": quad, "foot": foot}
+
+
+## A container's own model (PropModels.attach) gets the props' contact shade too:
+## one quad under the model's box, a child of its "Prop" node so it moves with it.
+func _shade_container(holder: Node3D) -> void:
+	var prop := holder.get_node_or_null("Prop") as Node3D
+	if prop == null:
+		return
+	var box := AABB()
+	var found := false
+	for child in prop.get_children():
+		var mesh_node := child as MeshInstance3D
+		if mesh_node == null or mesh_node.mesh == null:
+			continue
+		var part: AABB = mesh_node.transform * mesh_node.mesh.get_aabb()
+		box = box.merge(part) if found else part
+		found = true
+	if not found or box.position.y > SHADE_FLOOR_GAP:
+		return
+	var tall := clampf(box.end.y, 0.0, 2.0)
+	var margin := minf(SHADE_MARGIN + SHADE_MARGIN_PER_M * tall, SHADE_MARGIN_MAX)
+	var outer := Vector2(box.size.x + 2.0 * margin, box.size.z + 2.0 * margin)
+	var st := _begin()
+	var centre := box.get_center()
+	_rim_quad(st, {"at": Vector3(centre.x, 0.006, centre.z), "size": outer,
+		"inner": Vector2(box.size.x / outer.x, box.size.z / outer.y)},
+		lerpf(SHADE_STRENGTH, SHADE_STRENGTH_TALL, clampf(tall / 1.5, 0.0, 1.0)))
+	var shade := MeshInstance3D.new()
+	shade.name = "ContactShade"
+	shade.mesh = st.commit()
+	shade.material_override = _contact_material("box")
+	shade.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	prop.add_child(shade)
+
+
+## Does a side of a prop's cells (`side`: the way out) meet a wall, anything solid
+## or another building's cell?
+static func _shade_stops(lg: FieldGrid, r: Rect2i, side: Vector2i, building: int) -> bool:
+	var cells: Array[Vector2i] = []
+	if side.x != 0:
+		var x := r.position.x - 1 if side.x < 0 else r.end.x
+		for y in range(r.position.y, r.end.y):
+			cells.append(Vector2i(x, y))
+	else:
+		var y := r.position.y - 1 if side.y < 0 else r.end.y
+		for x in range(r.position.x, r.end.x):
+			cells.append(Vector2i(x, y))
+	for c in cells:
+		if not lg.inside(c):
+			return true
+		var s := lg.solid_at(c)
+		if s != FieldGrid.Solid.NONE and s != FieldGrid.Solid.LOW:
+			return true
+		if lg.building_at(c) != building:
+			return true
+	return false
 
 
 func _refresh_object_details() -> void:
