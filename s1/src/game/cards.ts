@@ -309,7 +309,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       title: '측선의 탄수차', focus: 'engine', required: true,
       body: past ? '측선에 또 버려진 탄수차가 있다. 이번엔 문짝마다 손톱자국이 나 있다.' : '측선에 버려진 탄수차가 서 있다. 안에 석탄이 보인다. 주위가 너무 조용하다.',
       choices: [
-        { id: 'tender_take', label: '석탄을 옮긴다', log: '측선에 버려진 탄수차의 석탄을 옮겼다.', say: past ? '자국은 오래된 거다. 빨리 옮기고 빠진다!' : '조용하면 좋은 거다. 다 옮겨라, 서둘러!', effs: [{ t: 'coal', v: 8 }], special: 'risk_injury' },
+        { id: 'tender_take', label: '석탄을 옮긴다', log: '측선에 버려진 탄수차에서 석탄을 퍼 왔다.', say: past ? '자국은 오래된 거다. 빨리 옮기고 빠진다!' : '조용하면 좋은 거다. 다 옮겨라, 서둘러!', effs: [{ t: 'coal', v: 8 }], special: 'risk_injury' },
         { id: 'tender_pass', label: '지나친다', log: '측선에 버려진 탄수차를 손대지 않고 지나쳤다.', say: '너무 조용하다. 손대지 말고 지나간다.', effs: [] },
       ],
     }),

@@ -63,7 +63,7 @@ static func travel_view(g: Dictionary, t: Dictionary, id: String) -> Dictionary:
 		"abandoned_tender":
 			title = "측선의 탄수차"
 			choices = [choice("tender_take", "석탄을 옮긴다", [["coal", 8]], "risk_injury"), choice("tender_pass", "지나친다", [])]
-			choices[0]["log"] = "측선에 버려진 탄수차의 석탄을 옮겼다."
+			choices[0]["log"] = "측선에 버려진 탄수차에서 석탄을 퍼 왔다."
 			choices[1]["log"] = "측선에 버려진 탄수차를 손대지 않고 지나쳤다."
 		"sick_child":
 			title = "아이 열병" if past.is_empty() else "열병이 번진다"
