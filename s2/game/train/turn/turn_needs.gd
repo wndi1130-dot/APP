@@ -56,7 +56,7 @@ static func tick(g: Dictionary, t: Dictionary, notes: Array) -> void:
 		if state == null:
 			g["needs"][id] = {"since": g["seg"], "due": int(g["seg"]) + int(t["NEED_GRACE"]), "hits": 0}
 			if not g.has("needAsked"): g["needAsked"] = {}
-			C.card(g, {"kind": "need_warn", "text": id, "n": g["needAsked"].get(id, 0)})
+			C.card(g, {"kind": "need_warn", "text": id, "n": g["needAsked"].get(id, 0)}, t)
 			g["needAsked"][id] = int(g["needAsked"].get(id, 0)) + 1
 			C.journal(g, "%s이 필요하다는 목소리가 커진다(%d구간 안에)." % [def["title"], int(t["NEED_GRACE"])], "bad")
 			continue
@@ -71,7 +71,7 @@ static func tick(g: Dictionary, t: Dictionary, notes: Array) -> void:
 		else: C.bump_rel(g, "guard" if id == "corpse" else "medtech", -(3 + hits), "need")
 		C.bump(g, "tension", 2 if id == "med" else 3, "need")
 		var line: String = hit(g, t, id, hits)
-		if hits == 0: C.card(g, {"kind": "info", "who": "기한이 지났다", "text": line + " 법을 정할 때까지 손해가 이어진다."})
+		if hits == 0: C.card(g, {"kind": "info", "who": "기한이 지났다", "text": line + " 법을 정할 때까지 손해가 이어진다."}, t)
 		state["hits"] = hits + 1
 		C.bump(g, "trust", -2, "need")
 		notes.append(line)

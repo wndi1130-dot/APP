@@ -645,6 +645,7 @@ static func start_board() -> Array:
 	if not d is Dictionary or not d.get("state") is Dictionary or not d.get("tables") is Dictionary:
 		push_error("slice: the start board does not read")
 		return [{}, {}]
+	d["state"]["lateOn"] = true
 	return [d["state"], d["tables"]]
 
 

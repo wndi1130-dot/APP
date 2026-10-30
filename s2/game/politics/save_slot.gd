@@ -4,6 +4,7 @@ extends RefCounted
 
 const SAVE_VERSION := 1
 const TrainDecor = preload("res://game/train/train_decor.gd")
+const Late = preload("res://game/train/turn/turn_late.gd")
 const DEFAULT_PATH := "user://s1a_game_v2.json"
 const DEFAULT_BROKEN_PATH := "user://s1a_game_broken.json"
 const PHASES := ["prep", "travel", "stop", "council", "settle", "end"]
@@ -41,6 +42,20 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 		return "내정 칸이 이상하다"
 	if g.has("deferred") and g["deferred"] != null and not g["deferred"] is Array:
 		return "미뤄 둔 카드 목록이 이상하다"
+	if g.has("lateOn") and not g["lateOn"] is bool:
+		return "서류 미루기 켜짐 값이 이상하다"
+	if g.has("lateCards") and not g["lateCards"] is Array:
+		return "미룬 서류 목록이 이상하다"
+	for key: String in ["cards", "lateCards", "deferred"]:
+		for card: Variant in g.get(key, []) if g.get(key) is Array else []:
+			if not card is Dictionary: return "서류 카드가 이상하다"
+			if card.has("late") and (not _is_number(card["late"]) or float(card["late"]) != floorf(float(card["late"])) or float(card["late"]) < 0 or float(card["late"]) > Late.LATE.max):
+				return "서류 미룬 횟수가 이상하다"
+			if key == "lateCards":
+				if Late.kind(card) == "" or not _is_number(card.get("uid")) or float(card["uid"]) != floorf(float(card["uid"])) or float(card["uid"]) < 1:
+					return "미룬 서류 카드가 이상하다"
+				if card.get("comm") != null and not (t["COMMS"] as Array).has(card["comm"]): return "미룬 서류 칸이 이상하다"
+				if card.get("who") != null and not card["who"] is String: return "미룬 서류 대표가 이상하다"
 	if g.has("fieldReturns") and g["fieldReturns"] != null:
 		var field_returns: Variant = g["fieldReturns"]
 		if not (field_returns is Dictionary) or not (field_returns.get("applied") is Dictionary) or not (field_returns.get("records") is Array):
@@ -50,6 +65,8 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 
 static func fill_defaults(g: Dictionary) -> void:
 	TrainDecor.migrate(g)
+	if not g.has("lateOn"): g["lateOn"] = false
+	if not g.has("lateCards"): g["lateCards"] = []
 	if not g.has("eventLog") or g["eventLog"] == null:
 		g["eventLog"] = {}
 	if not g.has("needs") or g["needs"] == null:

@@ -90,6 +90,7 @@ var t: Dictionary = {}
 var uid: int = -1
 var sheet: Control
 var body: VBoxContainer
+var _overflow: ScrollContainer
 var _armed: int = -1
 ## The widest the holder lets the paper be, mockup px (0: as drawn, cut wider up to
 ## WIDE): on a narrow screen it stops short of what stands at its right, and the
@@ -135,13 +136,16 @@ static func model(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> Dictionary:
 			fx = []
 		choices.append({
 			"n": i + 1, "id": String(ch["id"]),
+			"label": String(ch["label"]), "lateUrgent": v.has("late") and int(v["lateLeft"]) == 1,
 			"say": UiFonts.josa(say if say != "" else String(ch["label"])),
 			"effects": fx, "off": String(ch["disabled"]), "why": why,
 			"heavy": HEAVY_IDS.has(String(ch["id"])),
 		})
 	return {"uid": int(card["uid"]), "at": cards.find(card) + 1, "count": cards.size(), "witness": witness,
 		"title": UiFonts.josa(String(v["title"])), "name": name, "role": role, "bust": bust,
-		"body": UiFonts.josa(String(v["body"])), "choices": choices}
+		"body": UiFonts.josa(String(v["body"])), "choices": choices,
+		"late": int(v.get("late", 0)), "lateLeft": int(v.get("lateLeft", 0)),
+		"lateLine": "미룬 지 %d차례 · 남은 %d차례" % [int(v["late"]), int(v["lateLeft"])] if int(v.get("late", 0)) > 0 else ""}
 
 
 ## What a way costs now, as the line under it reads, in the order S1 lists
@@ -251,6 +255,7 @@ func _mark_fold() -> void:
 
 ## The paper `_w` wide, new when its width changes.
 func _sheet() -> void:
+	_overflow = null
 	if sheet != null and is_equal_approx(sheet.size.x, _w * UiFonts.K):
 		return
 	if sheet != null:
@@ -357,6 +362,28 @@ func _process(_delta: float) -> void:
 			_w = minf(widest, _w + WIDEN)
 			_fill()
 			return
+	# A returned paper can have four full ways. Keep its words and row sizes;
+	# once the existing print/widen rules run out, use the same scroll as Said.
+	if _overflow == null and (body.get_combined_minimum_size().y > sheet.inner.size.y + 0.5 or (scene != null and scene.get_combined_minimum_size().y > said.size.y + 0.5)):
+		_overflow = ScrollContainer.new()
+		_overflow.name = "Overflow"
+		_overflow.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_overflow.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+		_overflow.mouse_filter = Control.MOUSE_FILTER_PASS
+		_overflow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		sheet.inner.remove_child(body)
+		sheet.inner.add_child(_overflow)
+		body.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		body.custom_minimum_size.x = sheet.inner.size.x
+		_overflow.add_child(body)
+		if scene != null:
+			said.custom_minimum_size.y = scene.get_combined_minimum_size().y
+			(said as ScrollContainer).vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+			said.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_settle = SETTLE
+		set_process(true)
+		return
 	sheet.modulate.a = 1.0
 
 
@@ -411,6 +438,11 @@ func _top(m: Dictionary) -> void:
 			role.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			who.add_child(role)
 		words.add_child(who)
+	if String(m["lateLine"]) != "":
+		var late_line := _lines(String(m["lateLine"]), UiFonts.WORD, 12.0, SCENE_LINE)
+		late_line.name = "Late"
+		late_line.modulate = RED if int(m["lateLeft"]) == 1 else Paper.INK2
+		words.add_child(late_line)
 	var said := ScrollContainer.new()
 	said.name = "Said"
 	said.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -475,7 +507,7 @@ func _say(ch: Dictionary, at: int) -> Control:
 	row.custom_minimum_size = Vector2(0, SAY_H * k)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = ARMED if armed else Color(0, 0, 0, 0)
-	sb.border_color = Paper.TRACK
+	sb.border_color = RED if bool(ch.get("lateUrgent", false)) else Paper.TRACK
 	sb.border_width_top = int(round(2.0 * k))
 	row.add_theme_stylebox_override("panel", sb)
 	var pad := MarginContainer.new()
@@ -501,7 +533,8 @@ func _say(ch: Dictionary, at: int) -> Control:
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.add_child(col)
 	var wide: float = UiFonts.px(_w - PaperSheet.INSET_L - PaperSheet.INSET_R - 4.0 - NUM_W - (26.0 if heavy else 6.0))
-	var q := Paper.ink(UiFonts.keep_all("「%s」" % String(ch["say"])), UiFonts.WORD, 500, 14.0)
+	var words: String = (String(ch["label"]) + "\n" if ch["id"] == "later" else "") + "「%s」" % String(ch["say"])
+	var q := Paper.ink(UiFonts.keep_all(words), UiFonts.WORD, 500, 14.0)
 	q.name = "Quote"
 	q.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	q.custom_minimum_size = Vector2(wide, 22.0 * k)

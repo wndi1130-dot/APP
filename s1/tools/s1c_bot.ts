@@ -31,7 +31,7 @@ export type PotPolicy = 'thin' | 'mixed' | 'thin_low' | 'mixed_low' | 'mixed_onc
 export const POT_LOW = 50;
 
 export interface BotOptions {
-  /** 서류 미루기(결정 514). 기준 봇은 켜도 later를 고르지 않는다. */
+  /** 서류 미루기(결정 514). 실제 새 판처럼 기본 켬, false는 전후 비교용. 기준 봇은 later를 고르지 않는다. */
   late?: boolean;
   /** later가 있으면 늘 고른다. 미루기도 함께 켠다. */
   lateAlways?: boolean;
@@ -499,7 +499,7 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   if (opts.scoutGear) enableScoutGear(g);
   for (const [id, variant] of opts.gearTechs ?? []) if (g.dom) g.dom.techs[id] = { stage: 'done', defect: false, progress: 3, need: 3, ...(variant ? { variant } : {}) };
   if (opts.budget) enableBudget(g);
-  if (opts.late || opts.lateAlways) enableLate(g);
+  if (opts.late !== false || opts.lateAlways) enableLate(g);
   if (opts.eventPack) enableEventPack(g);
   if (!opts.noPrologue) startPrologue(g);
   const seen = new Set<number>();

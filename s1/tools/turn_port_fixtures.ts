@@ -11,6 +11,8 @@ import { onDeath } from '../src/game/death';
 import type { DeathCause } from '../src/game/death';
 import type { Comm } from '../src/game/data';
 import { addWound, woundTick } from '../src/game/wounds';
+import { lateNextSeg } from '../src/game/late';
+import { readSave } from '../src/ui/repro';
 
 const SEEDS = ['slice-seed-a', 'train-0', 'train-1', 'train-2'];
 const MAX_STEPS = 30;
@@ -67,7 +69,8 @@ function play(seed: string, limit: number, climate = false, setup?: (g: Game) =>
 }
 
 type PartAction = Action | { kind: 'death'; comm: Comm; names: string[]; cause: DeathCause; witness: boolean; quiet: boolean }
-  | { kind: 'wound_tick'; medMult: number };
+  | { kind: 'wound_tick'; medMult: number } | { kind: 'late_next' | 'read_save' | 'repeal_ration' | 'draw_event' | 'budget_pass' | 'budget_next' }
+  | { kind: 'add_card'; card: Omit<S1.Card, 'uid'> };
 
 function partVectors(runs: ReturnType<typeof play>[]) {
   const parts: { name: string; action: PartAction; before: Game; after: Game; notes?: string[] }[] = [];
@@ -132,6 +135,95 @@ function partVectors(runs: ReturnType<typeof play>[]) {
     else { g.passed.child_labor = 0; g.passed.edu_letters = 0; }
     add(`stop/${mode}`, g, { kind: 'resolve_stop', go: true }, () => { S1.resolveStop(g, true); });
   }
+  // 결정 514: 기존 입력 뒤에 미룸, 실제 복귀, 다시 미룸, 기한 초과를 같은 상태로 잇는다.
+  const templates: Omit<S1.Card, 'uid'>[] = S1.COMMS.flatMap(comm => [
+    { kind: 'demand', comm }, { kind: 'favor', comm }, { kind: 'promise_ledger', comm },
+  ]);
+  templates.push({ kind: 'ration_cut' }, { kind: 'travel', text: 'front_curtain' });
+  for (const patch of templates) {
+    const g = S1.createGame(`turn-late-${patch.kind}-${patch.comm ?? 'tail'}`);
+    S1.enableLate(g); g.phase = 'settle'; g.seg = 3; g.passed.emergency_ration = 1;
+    for (const c of S1.COMMS) { g.comms[c].heat = 0; g.comms[c].ration = 0; }
+    const card: S1.Card = { uid: g.nextCardUid++, ...patch };
+    g.cards = [card];
+    const tag = `late/${patch.kind}/${patch.comm ?? 'tail'}`;
+    for (let n = 0; n <= 2; n++) {
+      const index = S1.viewCard(g, g.cards[0]).choices.findIndex(c => c.id === 'later');
+      add(`${tag}/defer-${n + 1}`, g, { kind: 'choose_card', uid: card.uid, index }, () => { S1.chooseCard(g, card.uid, index); });
+      if (n < 2) {
+        g.phase = 'settle';
+        add(`${tag}/return-${n + 1}`, g, { kind: 'advance' }, () => { S1.advance(g); });
+      }
+    }
+  }
+  for (const kind of ['rescue', 'bitten', 'info']) {
+    const g = S1.createGame('turn-late-unsupported'); S1.enableLate(g);
+    const card = { uid: g.nextCardUid++, kind, comm: 'tail' as const }; g.cards = [card];
+    const index = S1.viewCard(g, card).choices.length;
+    add(`late/unsupported/${kind}`, g, { kind: 'choose_card', uid: card.uid, index }, () => { S1.chooseCard(g, card.uid, index); });
+  }
+  for (const mode of ['old', 'held'] as const) {
+    const g = S1.createGame(`turn-late-save-${mode}`);
+    if (mode === 'held') {
+      S1.enableLate(g);
+      g.lateCards = [{ uid: g.nextCardUid++, kind: 'favor', comm: 'front', late: 1, who: g.comms.front.leader.personId }];
+      g.cards = [{ uid: g.nextCardUid++, kind: 'promise_ledger', comm: 'tail', late: 2 }];
+    }
+    add(`late/save/${mode}`, g, { kind: 'read_save' }, () => {
+      const read = readSave(plain(g)); if (!read.ok) throw new Error(read.why);
+      Object.assign(g, read.g);
+    });
+  }
+  for (const mode of ['gone', 'former', 'law-down', 'answered', 'duplicate', 'order'] as const) {
+    const g = S1.createGame(`turn-late-return-${mode}`); S1.enableLate(g);
+    g.lateCards = [{ uid: g.nextCardUid++, kind: 'favor', comm: 'front', late: 1, who: g.comms.front.leader.personId }];
+    if (mode === 'gone') g.comms.front.pop = 0;
+    if (mode === 'former') g.lateCards[0].who = 'former-rep';
+    if (mode === 'law-down' || mode === 'answered') g.lateCards[0] = { uid: 1, kind: 'ration_cut', late: 1 };
+    if (mode === 'answered') { g.passed.emergency_ration = 1; g.rationCut = { pick: 'refuse', base: {} }; }
+    if (mode === 'duplicate') g.cards = plain(g.lateCards);
+    if (mode === 'order') {
+      g.lateCards.push({ uid: g.nextCardUid++, kind: 'travel', text: 'front_curtain', late: 2 });
+      g.cards = [{ uid: g.nextCardUid++, kind: 'info' }];
+    }
+    add(`late/return/${mode}`, g, { kind: 'late_next' }, () => { lateNextSeg(g); });
+  }
+  const repeal = S1.createGame('turn-late-repeal'); S1.enableLate(repeal); S1.enactLaw(repeal, 'emergency_ration', []);
+  repeal.lateCards = [{ uid: repeal.nextCardUid++, kind: 'ration_cut', late: 1 }, { uid: repeal.nextCardUid++, kind: 'favor', comm: 'front', late: 1 }];
+  add('late/repeal', repeal, { kind: 'repeal_ration' }, () => { S1.repealLaw(repeal, 'emergency_ration'); });
+  for (let i = 0; i < 12; i++) {
+    const g = S1.createGame(`turn-late-dup-${i}`); S1.enableLate(g); g.phase = 'council';
+    for (const c of S1.COMMS) { g.comms[c].rel = 30; g.comms[c].demandCool = 0; g.comms[c].favorCool = 0; }
+    g.comms.tail.base[0] = -30;
+    g.lateCards = [{ uid: 900, kind: 'demand', comm: 'tail', late: 1 }, { uid: 901, kind: 'favor', comm: 'front', late: 1 }];
+    add(`late/settle-duplicate/${i}`, g, { kind: 'advance' }, () => { S1.advance(g); });
+    const travel = S1.createGame(`turn-late-travel-${i}`); S1.enableLate(travel);
+    travel.lateCards = [{ uid: 1, kind: 'travel', text: 'front_curtain', late: 1 }];
+    add(`late/travel-duplicate/${i}`, travel, { kind: 'draw_event' }, () => { S1.drawTravelEvent(travel); });
+  }
+  const budget = S1.createGame('turn-late-budget'); S1.enableLate(budget); S1.enableBudget(budget);
+  budget.phase = 'settle'; budget.seg = 3; budget.budget!.seg = 3; budget.budget!.picked = 2;
+  budget.cards = [{ uid: 1, kind: 'favor', comm: 'front' }, { uid: 2, kind: 'travel', text: 'front_curtain' }, { uid: 3, kind: 'keepsake', comm: 'tail', who: '한별' }];
+  budget.nextCardUid = 4;
+  add('late/budget/pick', budget, { kind: 'choose_card', uid: 1, index: 2 }, () => { S1.chooseCard(budget, 1, 2); });
+  add('late/budget/return-order', budget, { kind: 'advance' }, () => { S1.advance(budget); });
+  budget.budget!.picked = 99;
+  add('late/budget/protect-returned', budget, { kind: 'budget_pass' }, () => { S1.budgetPass(budget); });
+  const expired = S1.createGame('turn-late-budget-expiry'); S1.enableLate(expired); S1.enableBudget(expired);
+  expired.budget!.picked = 3;
+  expired.cards = [{ uid: 1, kind: 'favor', comm: 'front', late: 2 }, { uid: 2, kind: 'travel', text: 'front_curtain', pushed: 1 }];
+  expired.nextCardUid = 3;
+  add('late/budget/expiry', expired, { kind: 'choose_card', uid: 1, index: 2 }, () => { S1.chooseCard(expired, 1, 2); });
+  const merge = S1.createGame('turn-late-budget-merge'); S1.enableLate(merge); S1.enableBudget(merge);
+  merge.deferred = [{ uid: 1, kind: 'travel', text: 'front_curtain', n: 1, pushed: 1 }]; merge.nextCardUid = 2;
+  const replacement = { kind: 'travel', text: 'front_curtain', n: 2 };
+  add('late/budget/merge', merge, { kind: 'add_card', card: replacement }, () => { S1.addCard(merge, replacement); });
+  const dropped = S1.createGame('turn-late-budget-gone'); S1.enableLate(dropped); S1.enableBudget(dropped);
+  dropped.comms.guard.heat = 4; dropped.comms.guard.ration = 4;
+  dropped.deferred = [{ uid: 1, kind: 'demand', comm: 'guard', pushed: 1 }];
+  dropped.lateCards = [{ uid: 2, kind: 'demand', comm: 'guard', late: 1 }];
+  add('late/budget/gone', dropped, { kind: 'budget_next' }, () => { S1.budgetNextSeg(dropped); });
+  add('late/budget/gone-player', dropped, { kind: 'late_next' }, () => { lateNextSeg(dropped); });
   return parts;
 }
 

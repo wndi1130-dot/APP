@@ -33,6 +33,7 @@ static func draw_event(g: Dictionary, t: Dictionary) -> String:
 	var pool: Array = []
 	for id: String in ["tail_cold", "crowd_fight", "front_curtain", "water_tower", "snow_drift", "abandoned_tender", "sick_child", "ration_line", "guard_frost"]:
 		if not event_open(g, t, id) or g["recentEvents"].has(id): continue
+		if g.get("lateOn", false) and id == "front_curtain" and ((g.get("lateCards", []) as Array) + g["cards"]).any(func(card: Dictionary) -> bool: return card.get("kind") == "travel" and card.get("text") == id): continue
 		var memo: Dictionary = g.get("eventLog", {}).get(id, {})
 		if not memo.is_empty() and (int(g["seg"]) - int(memo["seg"]) < int(t["EVENT_COOLDOWN"]) or int(memo["n"]) >= int(t["EVENT_CHAIN_MAX"]) or memo.get("st") == key): continue
 		pool.append(id)
@@ -73,18 +74,18 @@ static func depart(g0: Dictionary, t: Dictionary) -> Dictionary:
 		if not bool(g["inStrike"]): g["strikes"] += 1
 		g["inStrike"] = true
 		g["lostSegments"] += 1
-		C.card(g, {"kind": "strike", "comm": "engine"})
+		C.card(g, {"kind": "strike", "comm": "engine"}, t)
 		C.journal(g, "기관실이 파업했다. 열차가 섰다.", "bad")
 		g["phase"] = "travel"
 		return g
 	g["inStrike"] = false
 	if int(g["seg"]) == 1 and g.get("story", {}).get("flags", {}).get("depot_promise", false):
-		C.card(g, {"kind": "pro_deal", "comm": "tail"})
+		C.card(g, {"kind": "pro_deal", "comm": "tail"}, t)
 		g["phase"] = "travel"
 		return g
 	if not People.recent(g, t):
 		var event: String = draw_event(g, t)
-		if event != "": C.card(g, {"kind": "travel", "text": event})
+		if event != "": C.card(g, {"kind": "travel", "text": event}, t)
 	g["phase"] = "travel"
 	return g
 

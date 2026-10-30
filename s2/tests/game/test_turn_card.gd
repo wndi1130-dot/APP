@@ -158,6 +158,40 @@ func test_the_ration_cut_demand_is_drawn() -> void:
 	assert_not_null(c.find_child("Why", true, false))
 
 
+func test_late_is_the_last_row_with_the_same_key_and_warning_rule() -> void:
+	if _data.is_empty(): return
+	var s: Array = _case("late/favor/front/1/base")
+	var c := _card(s[0])
+	await _settled(c)
+	var m: Dictionary = TurnCard.model(c.g, c.t)
+	assert_eq(m["lateLine"], "미룬 지 1차례 · 남은 1차례")
+	assert_eq(m["choices"][-1]["id"], "later")
+	assert_eq(m["choices"][-1]["label"], "나중에 정한다")
+	assert_eq(m["choices"][-1]["say"], "더 중요한 문제가 있다. 그 부탁은 나중에 듣겠다.")
+	var line := c.find_child("Late", true, false) as Label
+	assert_not_null(line)
+	assert_eq(line.text.replace("\u2060", ""), m["lateLine"])
+	var last := c.body.get_child(c.body.get_child_count() - 1) as PanelContainer
+	assert_eq(last.name, "Say_3")
+	var border := last.get_theme_stylebox("panel") as StyleBoxFlat
+	assert_eq(border.border_color, TurnCard.RED)
+	var got: Array = []
+	c.chose.connect(func(next: Dictionary) -> void: got.append(next))
+	_key(c, 3).pressed.emit()
+	assert_eq(got.size(), 1)
+	assert_eq(got[0]["cards"], [])
+	assert_eq(got[0]["lateCards"][0]["late"], 2)
+
+
+func test_late_warning_only_when_one_turn_is_left() -> void:
+	if _data.is_empty(): return
+	for n: int in [0, 2]:
+		var c := _card(_case("late/favor/front/%d/base" % n)[0])
+		var last := c.body.get_child(c.body.get_child_count() - 1) as PanelContainer
+		assert_ne((last.get_theme_stylebox("panel") as StyleBoxFlat).border_color, TurnCard.RED)
+		assert_eq(c.find_child("Late", true, false) != null, n > 0)
+
+
 func test_a_kind_not_drawn_hands_back_the_rule_error() -> void:
 	if _data.is_empty(): return
 	var g: Dictionary = _case(str(_data["cases"][0]["name"]))[0]
@@ -195,7 +229,17 @@ func test_every_kind_longest_card_stays_on_the_sheet() -> void:
 		for p: Control in c.body.get_children():
 			parts.append("%s %.0f" % [p.name, p.get_combined_minimum_size().y / UiFonts.K])
 		var at: String = "%s (%s)" % [kind, longest[kind][0]]
-		assert_lte(need, inner.size.y + 0.5, "%s: %.0f of %.0f | %s" % [at, need, inner.size.y, ", ".join(parts)])
+		var overflow := c.find_child("Overflow", true, false) as ScrollContainer
+		if overflow == null:
+			assert_lte(need, inner.size.y + 0.5, "%s: %.0f of %.0f | %s" % [at, need, inner.size.y, ", ".join(parts)])
+		else:
+			assert_true(str(longest[kind][0]).begins_with("late/"), at + ": existing cards keep their fit")
+			assert_lte(overflow.size.y, inner.size.y + 0.5, at + ": same paper height")
+			overflow.scroll_vertical = int(ceil(c.body.size.y))
+			await get_tree().process_frame
+			var last := c.body.get_child(c.body.get_child_count() - 1) as Control
+			assert_gt(overflow.scroll_vertical, 0, at + ": the whole paper scrolls")
+			assert_lte(c.body.position.y + last.position.y + last.size.y, overflow.size.y + 1.0, at + ": the final way is reachable")
 		var said := c.find_child("Said", true, false) as Control
 		var scene := c.find_child("Scene", true, false) as Control
 		assert_lte(scene.get_combined_minimum_size().y, said.size.y + 0.5, "%s: the scene is all there (%.0f in %.0f)" % [at, scene.get_combined_minimum_size().y, said.size.y])

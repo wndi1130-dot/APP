@@ -1,4 +1,5 @@
 extends RefCounted
+const Late = preload("res://game/train/turn/turn_late.gd")
 const C = preload("res://game/train/turn/turn_common.gd")
 const St = preload("res://game/train/train_state.gd")
 const Turn = preload("res://game/train/train_turn.gd")
@@ -148,7 +149,7 @@ static func hunger_tick(g: Dictionary, t: Dictionary, notes: Array) -> void:
 		return
 	g["hunger"] = int(g.get("hunger", 0)) + 1
 	if int(g["hunger"]) == 1:
-		C.card(g, {"kind": "info", "who": "식량이 떨어졌다", "text": "사람들은 허리띠를 졸라매고 버틴다. 3구간을 넘기면 굶어 죽는 사람이 나온다."})
+		C.card(g, {"kind": "info", "who": "식량이 떨어졌다", "text": "사람들은 허리띠를 졸라매고 버틴다. 3구간을 넘기면 굶어 죽는 사람이 나온다."}, t)
 	elif int(g["hunger"]) <= 3: notes.append("굶은 지 %d구간째다." % int(g["hunger"]))
 	else:
 		var victims: Array = People.pick_victims(g, t, 1, "hunger", g)
@@ -182,11 +183,11 @@ static func bite_tick(g: Dictionary, t: Dictionary) -> void:
 			continue
 		if not bool(b.get("found", false)) and (St.law_active(g, "patrol") or C.rnd(g) < 0.5):
 			b["found"] = true
-			C.card(g, {"kind": "bite_found", "comm": b["comm"], "who": b["who"], "text": "귀환 검사에서 드러났다." if St.law_active(g, "patrol") else "열이 오르는 걸 의무장이 알아챘다."})
+			C.card(g, {"kind": "bite_found", "comm": b["comm"], "who": b["who"], "text": "귀환 검사에서 드러났다." if St.law_active(g, "patrol") else "열이 오르는 걸 의무장이 알아챘다."}, t)
 		keep.append(b)
 	g["hiddenBites"] = keep
 
-static func leash_tick(g: Dictionary, _t: Dictionary) -> void:
+static func leash_tick(g: Dictionary, t: Dictionary) -> void:
 	var keep: Array = []
 	for leash: Dictionary in g["leashes"]:
 		var s: Dictionary = g["comms"][leash["comm"]]
@@ -194,7 +195,7 @@ static func leash_tick(g: Dictionary, _t: Dictionary) -> void:
 			C.bump_rel(g, leash["comm"], -(int(g["seg"]) - int(leash["since"])) * 3, "deal")
 			C.bump(g, "trust", -5, "deal")
 			Field._offend(g, leash["comm"])
-			C.card(g, {"kind": "leash", "comm": leash["comm"]})
+			C.card(g, {"kind": "leash", "comm": leash["comm"]}, t)
 			C.journal(g, "%s이(가) 목줄을 끊었다. 협박이 드러났다." % s["leader"]["name"], "bad")
 		else: keep.append(leash)
 	g["leashes"] = keep
@@ -213,8 +214,8 @@ static func ai_leaders(g: Dictionary, t: Dictionary) -> void:
 		if gap > worst_gap:
 			worst = comm
 			worst_gap = gap
-	if worst != "" and not C.has_card(g, "demand"):
-		C.card(g, {"kind": "demand", "comm": worst})
+	if worst != "" and not C.has_card(g, "demand") and not Late.pending(g, "demand"):
+		C.card(g, {"kind": "demand", "comm": worst}, t)
 		var seen: int = maxi(int(g.get("eventLog", {}).get("demand:" + worst, {}).get("n", 0)), int(g.get("eventLog", {}).get("demand:engine_shift", {}).get("n", 0)) if worst == "engine" else 0)
 		g["comms"][worst]["demandCool"] = 3 + mini(seen, 2) * 3
 		cards += 1
@@ -222,15 +223,15 @@ static func ai_leaders(g: Dictionary, t: Dictionary) -> void:
 	var engine_sit: Array = St.situation(g, t, "engine")
 	if int(engine["fervor"]) == 0 and float(engine["rel"]) <= -8 and (float(engine_sit[3]) > 50 or float(engine_sit[1]) < 45) and int(g["seg"]) - int(g["strikeWarned"]) >= 4 and cards < 2:
 		g["strikeWarned"] = g["seg"]
-		C.card(g, {"kind": "strike_warn", "comm": "engine"})
+		C.card(g, {"kind": "strike_warn", "comm": "engine"}, t)
 		cards += 1
 	for comm: String in t["COMMS"]:
 		var s: Dictionary = g["comms"][comm]
 		if int(s["favorCool"]) > 0:
 			s["favorCool"] -= 1
 			continue
-		if cards < 2 and float(s["rel"]) >= 15 and not bool(s["debt"]) and not C.has_card(g, "favor") and C.rnd(g) < 0.3:
-			C.card(g, {"kind": "favor", "comm": comm})
+		if cards < 2 and float(s["rel"]) >= 15 and not bool(s["debt"]) and not C.has_card(g, "favor") and not Late.pending(g, "favor") and C.rnd(g) < 0.3:
+			C.card(g, {"kind": "favor", "comm": comm}, t)
 			s["favorCool"] = 4
 			cards += 1
 	for i: int in t["COMMS"].size():
@@ -298,7 +299,7 @@ static func riot_tick(g: Dictionary, t: Dictionary, notes: Array) -> void:
 		notes.append("난장판이 이어진다.")
 		if not C.has_card(g, "protest"):
 			r["riotCards"] += 1
-			C.card(g, {"kind": "protest", "comm": "tail", "text": "riot"})
+			C.card(g, {"kind": "protest", "comm": "tail", "text": "riot"}, t)
 	else:
 		r["stage"] = 1 if now >= float(p["protestFrom"]) else 0
 		if int(r["spilled"]) > 0 and r["fire"].is_empty():
@@ -311,4 +312,4 @@ static func riot_tick(g: Dictionary, t: Dictionary, notes: Array) -> void:
 			r.erase("ignoredAt")
 		if ((prev < line and now >= line) or skipped or again) and not C.has_card(g, "protest"):
 			r["protests"] += 1
-			C.card(g, {"kind": "protest", "comm": "tail", "text": "protest"})
+			C.card(g, {"kind": "protest", "comm": "tail", "text": "protest"}, t)
