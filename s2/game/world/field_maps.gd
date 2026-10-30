@@ -105,9 +105,9 @@ static func build_from(script: Script) -> Dictionary:
 	# A stop map is finished as it is, then grows its outer village (map_ring.gd).
 	if MapRing.enabled(script):
 		var grown := MapRing.build(script, build_from)
-		# The lights people left, planned again on the grown map: its outer
-		# village gets them too, as many as the whole map's area (T0-9).
-		NightLights.replan(grown)
+		# The lights people left: the grown map's share by its whole area, the
+		# ones planned on the stop map kept where they are (T0-9).
+		NightLights.extend(grown)
 		return grown
 	var data: Dictionary = script.build()
 	var consts: Dictionary = script.get_script_constant_map()

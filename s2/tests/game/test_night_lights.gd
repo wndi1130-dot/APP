@@ -158,15 +158,16 @@ func test_the_first_screen_gets_none_to_two_as_the_map_dice_fall() -> void:
 	var first := Vector2i(52, 14)   # 16 m from where the crew steps down
 	var counts := {}
 	for i in 12:
-		var d := _yard(80, 80, FAR_DRUMS, first, "yard_%d" % i)
-		NightLights.plan(d)
+		# 3.2 ha: eight at most, three drums (two before, one more of its share).
+		var d := _yard(180, 180, FAR_DRUMS, first, "yard_%d" % i)
+		NightLights.replan(d)
 		var rows := _night_rows(d)
-		assert_eq(rows.size(), int(NightLights.MOST_OF["barrel_fire"]), "a small map: two drums")
+		assert_eq(rows.size(), 3, "yard_%d: three drums" % i)
 		var n := NightLights.first_count(d)
 		assert_between(n, 0, NightLights.FIRST_MOST)
 		counts[n] = true
 		if n > 0:
-			assert_true(_has_cell(rows, first), "yard_%d: the drum on the first screen goes first" % i)
+			assert_true(_has_cell(rows, first), "yard_%d: the drum on the first screen is lit" % i)
 	assert_true(counts.has(0) and counts.size() > 1, "some first screens dark, some lit: %s" % str(counts.keys()))
 
 
@@ -178,7 +179,7 @@ func test_the_first_screen_never_holds_more_than_two() -> void:
 		far.append(Vector2i(20 + i * 30, 150))
 	for i in 12:
 		var d := _yard(240, 210, far + near.slice(1), near[0], "crowd_%d" % i)
-		NightLights.plan(d)
+		NightLights.replan(d)
 		var on := 0
 		for l: Dictionary in _night_rows(d):
 			on += 1 if Vector2(l["cell"] - Vector2i(40, 4)).length() <= NightLights.FIRST_SCREEN else 0
@@ -188,8 +189,8 @@ func test_the_first_screen_never_holds_more_than_two() -> void:
 func test_two_of_a_kind_can_go_first() -> void:
 	var near := [Vector2i(52, 14), Vector2i(30, 16)]   # both 16 m from where the crew steps down
 	for i in 12:
-		var d := _yard(80, 80, FAR_DRUMS + [near[1]], near[0], "pair_%d" % i)
-		NightLights.plan(d)
+		var d := _yard(240, 210, FAR_DRUMS + [near[1]], near[0], "pair_%d" % i)
+		NightLights.replan(d)
 		var rows := _night_rows(d)
 		var lit := 0
 		for c: Vector2i in near:
@@ -197,17 +198,31 @@ func test_two_of_a_kind_can_go_first() -> void:
 		assert_gte(lit, NightLights.first_count(d), "pair_%d" % i)
 
 
-func test_a_drum_by_the_train_is_not_lit_and_the_lights_follow_a_moved_stop() -> void:
-	var d := _yard(80, 80, FAR_DRUMS, Vector2i(52, 5), "by_train")   # 4 cells off the train
-	NightLights.plan(d)
-	assert_false(_has_cell(_night_rows(d), Vector2i(52, 5)), "the train has its own lights")
+func test_a_big_map_adds_to_what_it_had_and_keeps_off_the_train() -> void:
+	var far: Array = []
+	for i in 8:
+		far.append(Vector2i(10 + i * 25, 120))
+	var d := _yard(240, 210, far, Vector2i(52, 5), "keeps")   # the last drum 4 cells off the train
+	d["lights"] = [{"id": "night_1_barrel_fire", "kind": "barrel_fire", "cell": far[3]}]
+	var added := NightLights.extend(d)
+	var rows := _night_rows(d)
+	assert_gt(added, 0, "a 5 ha map's share")
+	assert_true(_has_cell(rows, far[3]), "the light it had stays where it was")
+	assert_false(_has_cell(rows, Vector2i(52, 5)), "none added by the train: it has its own lights")
+	# A map's own rows of these kinds: it keeps them and gets none.
+	var own := _yard(240, 210, far, Vector2i(52, 5), "own")
+	own["lights"] = [{"id": "mine", "kind": "candle", "cell": Vector2i(9, 12)}]
+	assert_eq(NightLights.extend(own), 0)
+
+
+func test_the_lights_follow_a_moved_stop() -> void:
 	# A stop form moves the train and the crew (stop_ground.gd): planned again round them.
 	var lit_any := false
 	for i in 12:
-		var m := _yard(80, 80, FAR_DRUMS, Vector2i(52, 14), "moved_%d" % i)
-		NightLights.plan(m)
+		var m := _yard(240, 210, FAR_DRUMS, Vector2i(52, 14), "moved_%d" % i)
+		NightLights.replan(m)
 		m["spawns"] = {"squad": [Vector2i(29, 70)]}
-		m["train"] = Rect2i(0, 76, 80, 2)
+		m["train"] = Rect2i(0, 76, 240, 2)
 		NightLights.follow(m)
 		var near := 0
 		for l: Dictionary in _night_rows(m):
@@ -222,7 +237,7 @@ func test_a_big_map_lights_more_of_a_kind() -> void:
 	for i in 8:
 		far.append(Vector2i(10 + i * 25, 120))
 	var d := _yard(240, 210, far, Vector2i(120, 40), "big")
-	NightLights.plan(d)
+	NightLights.replan(d)
 	# 5 ha: twelve at most, a drum's two grow to four.
 	assert_eq(_night_rows(d).size(), 4)
 
