@@ -247,13 +247,19 @@ static func apply(game, save: Dictionary) -> void:
 	game.begin_resume()
 	game.clock.elapsed = float(save["clock"]["elapsed"])
 	game.clock.speed = float(save["clock"]["speed"])
+	var fits := exact(save) and _grid_sizes_match(game, save)
+	# One that does not fit a grown remote map was made while its ground stood unbuilt.
+	var moved: bool = not fits and game.data.has("stop_left")
+	var shift := _legacy_shift(game) if moved else Vector3.ZERO
 	# The work crew is made during play (field_work.gd): each member a save carries is made again first.
 	if game.get("work") != null:
 		game.work.remake(save.get("people", []))
 	for row: Dictionary in save.get("people", []):
 		for p in game.people:
 			if p.pid == String(row["pid"]):
-				_put_person(p, row)
+				_put_person(p, row, shift)
+				if moved:
+					p.position = _onto_open(game, p.position, false)
 	if exact(save):
 		game.ammo.clear()
 	_put_counts(game.ammo, save.get("ammo", {}))
@@ -263,7 +269,7 @@ static func apply(game, save: Dictionary) -> void:
 	game.actions.coal_delivered = float(save["coal"]["delivered"])
 	game.actions.coal_spent = float(save["coal"]["spent"])
 	if exact(save):
-		if _grid_sizes_match(game, save):
+		if fits:
 			_apply_exact(game, save)
 			game.set_stop_form(form)
 			return
@@ -279,8 +285,12 @@ static func apply(game, save: Dictionary) -> void:
 		if game.data["spots"].has(id):
 			game.data["spots"][id]["state"] = String(save["spots"][id])
 	game.ground_items = (save.get("ground_items", []) as Array).duplicate(true)
+	if moved:
+		for item: Dictionary in game.ground_items:
+			if item.get("pos") is Vector3:
+				item["pos"] = _onto_open(game, item["pos"] + shift, false)
 	game.decisions = (save.get("decisions", []) as Array).duplicate(true)
-	_put_zombies(game, save.get("zombies", []))
+	_put_zombies(game, save.get("zombies", []), shift, moved)
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	game.cam_focus = game.player.position
@@ -289,10 +299,33 @@ static func apply(game, save: Dictionary) -> void:
 	game.set_stop_form(form)
 
 
-static func _put_person(p, row: Dictionary) -> void:
+## How far an old remote save's cells moved when the ground grew west (stop_ground.gd
+## `stop_left`); a side path the grown map took on and the old one did not, or the other
+## way round, is not in it, so _onto_open still steps off what is not open.
+static func _legacy_shift(game) -> Vector3:
+	return Vector3(float(int(game.data.get("stop_left", 0))), 0.0, 0.0)
+
+
+## How far, in cells, a moved spot looks for open ground (a side path's strip is 14).
+const OPEN_REACH: int = 32
+
+
+## The open cell nearest `at` on its floor, or `at` when it is open: an old save's spot
+## can lie under the grown remote ground's deep forest.
+static func _onto_open(game, at: Vector3, for_dead: bool) -> Vector3:
+	var g: FieldGrid = game.levels.get(game.level_of(at), game.grid)
+	var c := FieldGrid.cell_of(at)
+	var open: bool = g.dead_can_walk(c) if for_dead else g.people_can_walk(c)
+	if open:
+		return at
+	var n := g.nearest_walkable(c, for_dead, OPEN_REACH)
+	return Vector3(float(n.x) + 0.5, at.y, float(n.y) + 0.5)
+
+
+static func _put_person(p, row: Dictionary, shift: Vector3 = Vector3.ZERO) -> void:
 	p.cancel_action()
 	p.stop()
-	p.position = row["pos"]
+	p.position = row["pos"] + shift
 	p.bag = String(row["bag"])
 	p.items = (row["items"] as Dictionary).duplicate(true)
 	# A save from before the three places has none: they keep what they put on.
@@ -634,12 +667,13 @@ static func _put_counts(into: Dictionary, counts: Dictionary) -> void:
 		into[id] = int(counts[id])
 
 
-static func _put_zombies(game, rows: Array) -> void:
+static func _put_zombies(game, rows: Array, shift: Vector3 = Vector3.ZERO, moved: bool = false) -> void:
 	var all = game.zombies
 	all.list.clear()
 	var top := 0
 	for row: Dictionary in rows:
-		var z: Dictionary = all.spawn(String(row["kind"]), row["pos"], {"horde": int(row.get("horde", -1)), "name": String(row.get("name", ""))})
+		var at: Vector3 = _onto_open(game, row["pos"] + shift, true) if moved else row["pos"]
+		var z: Dictionary = all.spawn(String(row["kind"]), at, {"horde": int(row.get("horde", -1)), "name": String(row.get("name", ""))})
 		var state := String(row["state"])
 		if state in ["downed", "dead"]:
 			DeadPose.mark_fall(z, game.people)  # lies as it fell, not standing
@@ -653,7 +687,7 @@ static func _put_zombies(game, rows: Array) -> void:
 		z["searched"] = bool(row.get("searched", false))
 		# Where it keeps to: its pockets and clothes are rolled by that place when first asked.
 		if row.get("home") is Vector3:
-			z["home"] = row["home"]
+			z["home"] = _onto_open(game, row["home"] + shift, true) if moved else row["home"]
 		if row.get("worn") is Dictionary:
 			z["worn"] = (row["worn"] as Dictionary).duplicate(true)
 			z["stripped"] = bool(row.get("stripped", false))

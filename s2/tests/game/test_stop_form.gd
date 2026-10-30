@@ -10,6 +10,7 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const RouteBands = preload("res://game/train/route_bands.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
+const MapShift = preload("res://game/world/map_shift.gd")
 
 
 func _game(extra: Dictionary = {}):
@@ -160,13 +161,48 @@ func test_remote_resumes_a_small_version_two_grid_through_legacy_restore() -> vo
 	assert_eq(back.stop_form, "remote")
 	assert_eq(back.clock.elapsed, 321.0, "the fallback still restores the saved clock")
 	assert_gt(back.grid.width, BareLine.WIDTH)
-	assert_eq(back.grid.height, BareLine.HEIGHT)
+	var fresh: FieldGame = _game({"stop_form": "remote"})
+	assert_eq(back.grid.width, fresh.grid.width, "the fallback stands on the ground a fresh remote stop gets")
+	assert_eq(back.grid.height, fresh.grid.height)
 	assert_eq(back.grid.solid.size(), back.grid.width * back.grid.height)
 	assert_eq(back.grid.walk_people.size(), back.grid.solid.size())
 	assert_eq(back.grid.walk_dead.size(), back.grid.solid.size())
 	assert_false(back.glass_warned, "the incompatible exact runtime was skipped")
 	assert_engine_error_count(0)
 	assert_push_warning_count(1)
+
+
+## BareLine with open ground east of it: its middle lies east of the train, so a remote
+## stop grows the map west and every old cell moves by the added width.
+func _west_line() -> Dictionary:
+	return MapShift.grow(BareLine.build(), 0, 0, 40, 0)
+
+
+func test_remote_legacy_restore_moves_people_with_the_old_cells() -> void:
+	var first: FieldGame = _game({"stop_form": "city", "map_data": _west_line()})
+	var cell: Vector2i = Vector2i(8, 22)
+	first.player.position = FieldGrid.center(cell)
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+	saved["stop_form"] = "remote"
+	var opts: Dictionary = FieldSave.resume_opts(saved)
+	opts["map_data"] = _west_line()
+	var back: FieldGame = _game(opts)
+	var left: int = int(back.data.get("stop_left", 0))
+	assert_gt(left, 0, "the remote ground grew west")
+	var now: Vector2i = FieldGrid.cell_of(back.player.position)
+	assert_eq(now, cell + Vector2i(left, 0), "the player stands where the old cell went")
+	assert_true(back.grid.people_can_walk(now), "not under the deep forest")
+
+
+func test_shape_stop_lets_the_field_judge_a_loader_wood_job_again() -> void:
+	var handed: Dictionary = BareLine.build()
+	handed["spots"] = {"work_site": {"kind": "work_site", "cell": Vector2i(20, 20), "state": "closed",
+		"job": "wood_stack", "amount": 40.0}}
+	var now: Dictionary = FieldGame.shape_stop(handed, "remote", 7, 600.0, func() -> Dictionary: return BareLine.build())
+	var site: Dictionary = now["spots"]["work_site"]
+	assert_false(site.has("job"), "the job judged from the old train doors is gone")
+	assert_false(site.has("amount"))
+	assert_true(site.has("cell"), "the site itself stays")
 
 
 func test_exact_grid_size_check_covers_every_saved_floor() -> void:

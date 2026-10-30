@@ -114,6 +114,10 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 	var out: Dictionary = MapShift.grow(data, left, 0, length - left, 0, true, true)
 	# Its size is a Vector2i too: grow can shift a stale cache key into a match.
 	out.erase("_edge_plan")
+	if band > 0:
+		# How far the old cells moved, for a save made while remote ground stood unbuilt
+		# (field_save.gd). An int, so no later shift moves it as it would a cell.
+		out["stop_left"] = left
 	var g: FieldGrid = out["grid"]
 	var added: Rect2i = Rect2i(0 if left > 0 else old.width, 0, length, old.height)
 	var old_border: int = left if left > 0 else old.width - 1

@@ -1543,6 +1543,11 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 			map = fresh.call()
 		for key in AHEAD_KEYS:
 			map.erase(key)
+		# The loader's wood job was judged from the old train doors: the field's dress
+		# judges it again from the moved ones (work_spots.gd keeps a site with a job).
+		var site: Dictionary = (map.get("spots", {}) as Dictionary).get("work_site", {}) as Dictionary
+		site.erase("job")
+		site.erase("amount")
 	return StopGround.apply(map, form, run_seed, target_m)
 
 
