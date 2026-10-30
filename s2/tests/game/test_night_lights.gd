@@ -225,9 +225,13 @@ func test_the_lights_follow_a_moved_stop() -> void:
 		m["train"] = Rect2i(0, 76, 240, 2)
 		NightLights.follow(m)
 		var near := 0
+		var on := 0
 		for l: Dictionary in _night_rows(m):
-			near += 1 if Vector2(l["cell"] - Vector2i(29, 70)).length() <= NightLights.FIRST_REACH else 0
-		assert_gte(near, NightLights.first_count(m), "moved_%d: the new first screen" % i)
+			var d: float = Vector2(l["cell"] - Vector2i(29, 70)).length()
+			near += 1 if d <= NightLights.FIRST_REACH else 0
+			on += 1 if d <= NightLights.FIRST_SCREEN else 0
+		# Lit as the dice fell, unless the lights it had already fill its far corners.
+		assert_true(near >= NightLights.first_count(m) or on >= NightLights.FIRST_MOST, "moved_%d: the new first screen" % i)
 		lit_any = lit_any or NightLights.first_count(m) > 0
 	assert_true(lit_any, "some map of 12 lights its first screen")
 

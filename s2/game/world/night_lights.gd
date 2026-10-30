@@ -90,10 +90,10 @@ static func extend(data: Dictionary) -> int:
 	var step := _step_down(data)
 	var want := first_count(data) if step.x >= 0.0 else 0
 	var more := true
-	while more and _on_first(picked, step) < want and picked.size() < most:
+	while more and _first_short(picked, step, want) and picked.size() < most:
 		more = false
 		for kind: String in FIRST_KINDS:
-			if _on_first(picked, step) >= want or picked.size() >= most:
+			if not _first_short(picked, step, want) or picked.size() >= most:
 				break
 			if not pools.has(kind) or int(took.get(kind, 0)) >= int(cap[kind]):
 				continue
@@ -179,12 +179,15 @@ static func _add_rows(lights: Array, rows: Array, before: int) -> void:
 		lights.append(light)
 
 
-## How many of these are on the first screen round where the crew steps down.
-static func _on_first(picked: Array, step: Vector2) -> int:
-	var n := 0
+## The first screen wants another: fewer than want round where the crew steps
+## down, and fewer than FIRST_MOST out to its far corners.
+static func _first_short(picked: Array, step: Vector2, want: int) -> bool:
+	var near := 0
+	var on := 0
 	for row: Dictionary in picked:
-		n += 1 if _within(step, row["cell"], FIRST_SCREEN) else 0
-	return n
+		near += 1 if _within(step, row["cell"], FIRST_REACH) else 0
+		on += 1 if _within(step, row["cell"], FIRST_SCREEN) else 0
+	return near < want and on < FIRST_MOST
 
 
 static func _within(step: Vector2, c: Vector2i, reach: float) -> bool:
