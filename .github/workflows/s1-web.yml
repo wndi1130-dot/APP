@@ -87,7 +87,8 @@ jobs:
   screen-smoke:
     # 빌드한 화면을 가로 844×390으로 한 판 넘기며 넘침·잘림·작은 글자를 검사한다(tools/screenshots.cjs).
     needs: test-and-build
-    runs-on: ubuntu-latest
+    # ubuntu-latest가 26.04로 넘어가자 Playwright가 chromium을 못 깐다(10-30) — 지원될 때까지 24.04에 묶는다.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
