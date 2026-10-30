@@ -201,6 +201,7 @@ func _draw_all() -> void:
 		var name_label := UiFonts.label(String(m["name"]), UiFonts.WORD, 500, 18.0, INK, 2.16)
 		name_label.name = "Name"
 		_text(name_label, 44.0, 27.0)
+		_fold_key()
 		_decor_head(m, 44.0)
 		return
 	_head(m)
@@ -258,6 +259,11 @@ func _head(m: Dictionary) -> void:
 		hands.name = "HandsShortage"
 		hands.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_text(hands, 44.0, 64.0)
+	_fold_key()
+
+
+func _fold_key() -> void:
+	var k: float = UiFonts.K
 	var fold := Button.new()
 	fold.name = "Fold"
 	fold.flat = true
@@ -265,7 +271,7 @@ func _head(m: Dictionary) -> void:
 	for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
 		fold.add_theme_stylebox_override(state, StyleBoxEmpty.new())
 	fold.position = Vector2(266.0, 0.0) * k
-	fold.size = Vector2(56.0, 44.0) * k
+	fold.size = Vector2(56.0, 32.0) * k
 	fold.pressed.connect(func() -> void: folded.emit())
 	_add(fold)
 	var mark := TextureRect.new()

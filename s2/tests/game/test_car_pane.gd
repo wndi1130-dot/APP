@@ -196,6 +196,21 @@ func test_fold_asks_to_fold() -> void:
 	assert_signal_emitted(pane, "folded")
 
 
+func test_common_car_fold_stays_in_header_and_away_from_decor_button() -> void:
+	var s: Array = StopPickCard.sample()
+	var pane := _pane(s[0], s[1])
+	watch_signals(pane)
+	for id: String in ["captain", "dining"]:
+		pane.show_car({"id": id}, s[0], s[1])
+		var fold := pane.find_child("Fold", true, false) as Button
+		var decor := pane.find_child("DecorButton", true, false) as Button
+		assert_not_null(fold)
+		assert_lte(fold.position.x + fold.size.x, CarPane.SMALL_PANE.x * UiFonts.K)
+		assert_false(Rect2(fold.position, fold.size).intersects(Rect2(decor.position, decor.size)), "separate touch targets")
+		fold.pressed.emit()
+		assert_signal_emitted(pane, "folded")
+
+
 func test_the_keys_stand_where_the_mockups_do() -> void:
 	var holder := Control.new()
 	holder.size = Vector2(844.0, 390.0) * UiFonts.K

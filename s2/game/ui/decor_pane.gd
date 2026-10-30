@@ -10,6 +10,7 @@ const Fonts = preload("res://game/ui/ui_fonts.gd")
 const Bake = preload("res://game/ui/ui_bake.gd")
 const Decor = preload("res://game/train/train_decor.gd")
 const Mods = preload("res://game/train/train_mods.gd")
+const Grid = preload("res://game/train/decor_grid.gd")
 const K: float = Fonts.K
 const TOP_CSS: float = 46.0
 const STORE_CSS: float = 134.0
@@ -88,6 +89,7 @@ func _ready() -> void:
 	add_child(_note)
 	resized.connect(_layout)
 	refresh()
+	_restore_positions()
 
 
 func show_car(g0: Dictionary, id: String, scene: Node) -> void:
@@ -95,6 +97,68 @@ func show_car(g0: Dictionary, id: String, scene: Node) -> void:
 	car_id = id
 	train = scene
 	refresh()
+	if is_node_ready(): _restore_positions()
+
+
+## S1 saves need not carry positions. Resolve them only when this S2 pane opens.
+## Existing cells stay put; supports precede surface items, both in saved order.
+func _restore_positions() -> void:
+	if car_id == "" or Grid.of(car_id).is_empty(): return
+	var repaired: bool = false
+	var returned: bool = false
+	for surface: bool in [false, true]:
+		var pending: Array = Decor.items_of(g, car_id).duplicate()
+		for item: Dictionary in pending:
+			if item.has("at") or (Decor.spot_of(item) == "surface") != surface: continue
+			var index: int = Decor.items_of(g, car_id).find(item)
+			if index < 0: continue # Its support may already have returned it.
+			var spot: String = Decor.spot_of(item)
+			var trial: Dictionary = _placement_trial(index)
+			var on: Variant = item.get("on")
+			if on != null and int(on) > index: on = int(on) - 1
+			var found: bool = false
+			for at: Array in _legacy_cells(spot):
+				var pick: Dictionary = {"spot": spot, "at": at}
+				if item.has("on"): pick["on"] = item["on"]
+				if placed_at(pick) >= 0: continue
+				if Mods.can_place(trial, car_id, item["kind"], spot, at, item.get("rot", 0), on)["ok"]:
+					item["at"] = at.duplicate()
+					found = true
+					repaired = true
+					break
+			if not found:
+				var result: Dictionary = Mods.take_back(g, car_id, index)
+				if result["ok"]:
+					returned = true
+					repaired = true
+				else:
+					show_note(String(result["why"]))
+	if repaired:
+		refresh()
+		changed.emit()
+	if returned: show_note("놓을 자리가 없어 창고로 옮겼어요.")
+
+
+## Floor rows then columns; back wall left to right, then each end wall;
+## surface slots left to right on the saved support. Only grid '.' cells are free.
+func _legacy_cells(spot: String) -> Array:
+	var cells: Dictionary = Grid.of(car_id)
+	var result: Array = []
+	match spot:
+		"floor":
+			for z: int in Grid.NZ:
+				for x: int in Grid.NX:
+					if cells["floor"][z][x] == ".": result.append([x, z])
+		"wall":
+			for x: int in Grid.NX:
+				if cells["back_wall"][x] == ".": result.append([x, -1])
+			for side: int in 2:
+				for z: int in 2:
+					if cells["end_walls"][side * 2 + z] == ".": result.append([-1 if side == 0 else Grid.NX, z])
+		"surface":
+			for x: int in int(Decor.DECOR_SLOTS[Decor.tier_of(g, car_id)]["surface"]):
+				result.append([x, 0])
+	return result
 
 
 func refresh() -> void:
@@ -344,10 +408,11 @@ func pointer_up(pos: Vector2, finger: int = -1) -> void:
 		if store_rect().has_point(pos):
 			if selected >= 0: return_selected()
 		else:
-			apply_drop(pick_at(pos))
+			apply_drop(_drop_pick(pos))
 	elif not dragging and _origin == "scene" and _candidate_index < 0:
 		selected = -1
 	_down = false
+	_finger = -1
 	_origin = ""
 	stop_drag()
 
@@ -385,26 +450,35 @@ func preview(pick: Dictionary) -> Dictionary:
 		return {"ok": false, "why": "이 물건을 놓는 면이 아니다"}
 	if item.get("on") != pick.get("on"):
 		return {"ok": false, "why": "다른 가구로 옮기려면 창고로 거둬 주세요."}
+	var on: Variant = pick.get("on")
+	if on != null and int(on) > selected: on = int(on) - 1
+	return Mods.can_place(_placement_trial(selected), car_id, drag_kind, pick["spot"], pick["at"], drag_rot, on)
+
+
+func _placement_trial(index: int) -> Dictionary:
+	var item: Dictionary = Decor.items_of(g, car_id)[index]
 	# A move does not consume another stock item or another slot. Check a detached copy.
 	var trial: Dictionary = {"dom": {
 		"furnish": g["dom"].get("furnish", {}).duplicate(true),
-		"store": g["dom"].get("store", {}).duplicate(true)}}
+		"store": {}}}
 	for resource: String in Data.RESOURCES:
 		trial[resource] = g.get(resource, 0.0)
 	var items: Array = Decor.items_of(trial, car_id)
-	items.remove_at(selected)
-	var on: Variant = pick.get("on")
-	if on != null and int(on) > selected: on = int(on) - 1
+	items.remove_at(index)
 	for other: Dictionary in items:
-		if other.has("on") and int(other["on"]) > selected: other["on"] -= 1
-	if item.has("v"): trial[Decor.DECOR[drag_kind]["res"]] += item["v"]
-	Decor.add_stored(trial["dom"]["store"], drag_kind, item.get("v"))
-	return Mods.can_place(trial, car_id, drag_kind, pick["spot"], pick["at"], drag_rot, on)
+		if other.has("on") and int(other["on"]) > index: other["on"] -= 1
+	if item.has("v"): trial[Decor.DECOR[item["kind"]]["res"]] += item["v"]
+	Decor.add_stored(trial["dom"]["store"], item["kind"], item.get("v"))
+	return trial
+
+
+func _drop_pick(pos: Vector2) -> Dictionary:
+	return {} if store_rect().has_point(pos) or pos.y < TOP_CSS * K else pick_at(pos)
 
 
 func _hover(pos: Vector2) -> void:
 	_ghost.position = pos - Vector2(31 * K, 62 * K + finger_lift())
-	var pick: Dictionary = {} if store_rect().has_point(pos) or pos.y < TOP_CSS * K else pick_at(pos)
+	var pick: Dictionary = _drop_pick(pos)
 	if is_instance_valid(train):
 		if pick.is_empty(): train.decor_hover("")
 		else: train.decor_hover(pick["spot"], pick["at"], bool(preview(pick)["ok"]))
@@ -418,9 +492,9 @@ func apply_drop(pick: Dictionary) -> bool:
 	return _result(result)
 
 
-func rotate_selected() -> void:
+func rotate_selected(direction: int = 1) -> void:
 	if selected < 0 or Decor.spot_of(Decor.items_of(g, car_id)[selected]) != "floor": return
-	drag_rot = (int(Decor.items_of(g, car_id)[selected].get("rot", 0)) + 1) % 4
+	drag_rot = posmod(int(Decor.items_of(g, car_id)[selected].get("rot", 0)) + direction, 4)
 	_result(Mods.rotate(g, car_id, selected, drag_rot))
 	if dragging: _hover(_pos)
 
@@ -451,6 +525,16 @@ func stop_drag() -> void:
 	_layout()
 
 
+func cancel_drag() -> void:
+	_down = false
+	_finger = -1
+	_origin = ""
+	_candidate_index = -1
+	_touches.clear()
+	selected = -1
+	stop_drag()
+
+
 func show_note(word: String) -> void:
 	note_text = word
 	note_left = NOTE_SECONDS
@@ -478,9 +562,7 @@ func _input(event: InputEvent) -> void:
 		var pos: Vector2 = get_global_transform_with_canvas().affine_inverse() * event.position
 		if event is InputEventScreenTouch:
 			if event.canceled:
-				_down = false
-				_touches.clear()
-				stop_drag()
+				cancel_drag()
 				get_viewport().set_input_as_handled()
 				return
 			if event.pressed:
@@ -491,13 +573,15 @@ func _input(event: InputEvent) -> void:
 				_touches.erase(event.index)
 				pointer_up(pos, event.index)
 		else:
+			if not _touches.has(event.index): return
 			_touches[event.index] = pos
-			if _touches.size() == 2 and selected >= 0:
+			pointer_move(pos, event.index)
+			if _down and dragging and _touches.size() == 2 and selected >= 0:
 				var angle: float = _touch_angle()
-				if absf(wrapf(angle - _twist, -PI, PI)) >= PI / 4:
-					rotate_selected()
+				var delta: float = wrapf(angle - _twist, -PI, PI)
+				if absf(delta) >= PI / 4:
+					rotate_selected(1 if delta > 0 else -1)
 					_twist = angle
-			else: pointer_move(pos, event.index)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton or event is InputEventMouseMotion:
 		# Touch already owns this gesture; ignore its emulated mouse events.

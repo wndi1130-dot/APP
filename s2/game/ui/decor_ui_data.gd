@@ -40,7 +40,7 @@ static func item_name(kind: String) -> String:
 
 
 static func number(value: float) -> String:
-	return ("%.1f" % snappedf(value, 0.1)).trim_suffix(".0")
+	return ("%.2f" % value).trim_suffix("0").trim_suffix("0").trim_suffix(".")
 
 
 static func in_tab(def: Dictionary, tab: int) -> bool:

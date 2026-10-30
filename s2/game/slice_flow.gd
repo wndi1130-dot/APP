@@ -361,6 +361,7 @@ func go(i: int) -> void:
 
 
 func next() -> void:
+	leave_decor()
 	if step + 1 >= STEPS.size():
 		get_tree().change_scene_to_file(BOOT_SCENE)
 		return
@@ -542,6 +543,7 @@ func _drop_cinema(id: String) -> void:
 func _let_stage_go(seconds: float) -> void:
 	if not is_instance_valid(stage):
 		return
+	leave_decor()
 	var old: Node = stage
 	stage = null
 	train = null
@@ -759,6 +761,8 @@ func _paper_folded(_folded: bool) -> void:
 
 
 func _update_decor_lock() -> void:
+	if decor_id != "" and (DecorUiData.lock_reason(train_g, false) != "" or (is_instance_valid(paper) and not (paper as TurnCard).folded)):
+		leave_decor()
 	if is_instance_valid(pane):
 		pane.choosing_paper = is_instance_valid(paper) and not (paper as TurnCard).folded
 		pane.refresh(train_g, train_t)
@@ -865,6 +869,7 @@ func _take(g: Dictionary) -> void:
 		port_error = String(g["_turn_port_error"])
 		push_error("slice: " + port_error)
 		return
+	leave_decor()
 	train_g = g
 	if is_instance_valid(gauges):
 		gauges.g = train_g
@@ -987,6 +992,7 @@ func _index_of(id: String) -> int:
 
 
 func _clear_stage() -> void:
+	leave_decor()
 	if is_instance_valid(stage):
 		stage.queue_free()
 	stage = null
@@ -998,6 +1004,7 @@ func _clear_stage() -> void:
 ## the slice's state has them (warmth, ration, crowding and exposure, head
 ## counts and relations), so the windows' frost and the pane say the same.
 func _show_train(phase: String, seg: int) -> void:
+	leave_decor()
 	var rules: Dictionary = TrainRules.load_default()
 	rules["train"]["phase"] = phase
 	rules["train"]["seg"] = seg
@@ -1192,7 +1199,7 @@ func _plate_input(e: InputEvent, id: String) -> void:
 	if released:
 		_plate_press_id = ""
 		if not _plate_dragged:
-			_select(id)
+			_select(id, true)
 	elif relative != Vector2.ZERO and is_instance_valid(train):
 		train.drag(relative)
 
@@ -1227,6 +1234,8 @@ func _enamel(name_label: Label3D) -> Control:
 
 
 func _process(_delta: float) -> void:
+	if decor_id != "" and (DecorUiData.lock_reason(train_g, false) != "" or (is_instance_valid(paper) and not (paper as TurnCard).folded)):
+		leave_decor()
 	marks.queue_redraw()
 	if is_instance_valid(journey):
 		journey.quiet = _journey_quiet()
@@ -1307,12 +1316,14 @@ func _show_home(word: String) -> void:
 	pane = p
 	bar = b
 	card = h
-	_select(FIRST_CAR)
+	_select(FIRST_CAR, false)
 
 
 ## Pick car `id` ("" folds the pane): its pane comes up and the camera moves
 ## it into the middle of what the pane leaves clear.
-func _select(id: String) -> void:
+func _select(id: String, toggle: bool = false) -> void:
+	if toggle and id == sel:
+		id = ""
 	# A car picked over the workshop or the refit pane puts it away.
 	if id != "":
 		_put_rooms_away()
@@ -1397,6 +1408,7 @@ func leave_decor() -> void:
 	var id: String = decor_id
 	decor_id = ""
 	if is_instance_valid(decor_pane):
+		decor_pane.cancel_drag()
 		decor_pane.hide()
 		decor_pane.queue_free()
 	decor_pane = null
@@ -1407,7 +1419,10 @@ func leave_decor() -> void:
 		if is_instance_valid(n):
 			(n as CanvasItem).visible = true
 	_decor_hidden.clear()
-	_select(id)
+	if is_instance_valid(paper):
+		paper.g = train_g
+		paper._fill()
+	_select(id, false)
 
 
 func _decor_changed() -> void:
@@ -1451,7 +1466,7 @@ func _open_workshop() -> void:
 
 func _close_room() -> void:
 	_put_rooms_away()
-	_select(shop_was)
+	_select(shop_was, false)
 
 
 ## The refit pane (mods_pane.gd) where the workshop's stands, with this
@@ -1540,6 +1555,7 @@ func _room_changed() -> void:
 
 ## A lever on the pane: set it in the slice's state and draw again what reads it.
 func _set_lever(comm: String, which: String, value: int) -> void:
+	leave_decor()
 	train_g = TrainTurn.set_lever(train_g, train_t, comm, which, float(value))
 	gauges.refresh(train_g, train_t)
 	if is_instance_valid(pane):
