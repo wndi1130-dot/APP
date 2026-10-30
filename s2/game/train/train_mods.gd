@@ -11,6 +11,11 @@ const D: Dictionary = {
 	"furnishWarm": [0, 1, 1, 2], "furnishCrowd": -0.5, "furnishRel": 2,
 	"furnishGapMin": 1, "furnishGapMax": 2, "furnishGapRel": 0.5,
 	"furnishGapCap": 2, "furnishPianoRel": 0.3,
+	"decorKindMax": 22, "decorKindShare": 0.8, "decorFloorTarget": 25, "decorWallTarget": 8,
+	"decorSurfaceTarget": 0.8, "decorSmallTarget": 66, "decorLightTarget": 2,
+	"decorThresholds": [0.5, 0.8, 1], "decorEpsilon": 1e-9,
+	"decorRel": [0.3, 0.6, 1.0], "diningDecorRel": [0.1, 0.2, 0.3],
+	"decorVoiceRelGood": 15, "decorVoiceRelBad": -15, "decorVoiceTrustGood": 70, "decorVoiceTrustLow": 25,
 }
 const FURNISH_CARS: Array[String] = ["tail1", "tail2", "tail3", "medtech", "guard", "front"]
 const FURNISH_STEPS: Array[int] = [1, 2, 3]

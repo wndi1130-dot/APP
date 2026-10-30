@@ -182,6 +182,14 @@ static func is_store(dom: Variant) -> bool:
 		elif key == "store":
 			if not TrainDecor.is_inventory(v):
 				return false
+		elif key == "decor80":
+			if not v is Array:
+				return false
+			var seen := {}
+			for car: Variant in v:
+				if not car is String or not TrainDecor.DECOR_CARS.has(car) or seen.has(car):
+					return false
+				seen[car] = true
 		elif key == "furnish":
 			if not v is Dictionary:
 				return false
