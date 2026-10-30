@@ -16,10 +16,12 @@ const WIDTH_M: float = 16.6
 ## What the camera looks at in the car's own space: its middle, a little over the floor.
 const LOOK := Vector3(8.0, 0.6, 0.0)
 ## The band the car sits in, in the mock-up's CSS px: under the exit and title row (46) and over
-## the store strip (134), and how far the car's walls rise above its floor's middle (31).
+## the store strip (134); the floor's middle sits this far under the band's middle so the walls rising
+## behind it fill the band, as the approved mock-up has it (decor_cam_1688.png: its grid lines at
+## 309, 349, 390, 431, 472 px of 780).
 const TOP_CSS: float = 46.0
 const BOTTOM_CSS: float = 134.0
-const WALLS_UP_CSS: float = 31.0
+const WALLS_UP_CSS: float = 17.0
 ## The people while a car is dressed: seen, but through (train_people_view.gd set_faded).
 const PEOPLE_FADE: float = 0.6
 ## Wall places: a square on the back wall's cell, this high. The camera looks straight along the car,
