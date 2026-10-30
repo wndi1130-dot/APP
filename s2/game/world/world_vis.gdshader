@@ -119,6 +119,17 @@ float band(float d, float w, float aa) {
 	return 1.0 - smoothstep(w - aa, w + aa, abs(d));
 }
 
+// How far a point of a road cell lies from the cell's kerb, in cells (1 with no kerb in the
+// cell): the kerb bits (1 north, 2 east, 4 south, 8 west) of the road's detail code.
+float kerb_distance(int bits, vec2 f) {
+	float edge = 1.0;
+	edge = (bits & 1) != 0 ? min(edge, f.y) : edge;
+	edge = (bits & 2) != 0 ? min(edge, 1.0 - f.x) : edge;
+	edge = (bits & 4) != 0 ? min(edge, 1.0 - f.y) : edge;
+	edge = (bits & 8) != 0 ? min(edge, f.x) : edge;
+	return edge;
+}
+
 // The same two reads at a fixed coarse level: what a layer holds at `lod` and wider, the
 // photo's broad clouds without its grain (flat_layer divides them out).
 vec3 ground_layer_lod(int layer, vec2 p, float lod) {
@@ -242,11 +253,7 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 			c *= 1.0 - 0.3 * crack;
 		}
 		// The kerb (light stone) and gutter (dark, silted) on the sides at open ground.
-		float edge = 1.0;
-		edge = (bits & 1) != 0 ? min(edge, f.y) : edge;
-		edge = (bits & 2) != 0 ? min(edge, 1.0 - f.x) : edge;
-		edge = (bits & 4) != 0 ? min(edge, 1.0 - f.y) : edge;
-		edge = (bits & 8) != 0 ? min(edge, f.x) : edge;
+		float edge = kerb_distance(bits, f);
 		c = mix(c, SOIL * 0.6, (1.0 - smoothstep(0.14, 0.34, edge)) * 0.45);
 		c = mix(c, CONCRETE * 0.92, 1.0 - smoothstep(0.1, 0.13, edge));
 		// A worn, dashed centre line.
@@ -798,6 +805,14 @@ void fragment() {
 		// a single leaf does not); the photo's leaves are the pattern inside,
 		// from dark brown to a dull orange.
 		float heap = smoothstep(0.5, 0.64, drift) * (0.6 + 0.4 * fx_vnoise(world_pos.xz * 1.1 + 3.0));
+		// A street's wheels sweep its leaf into the gutter (T0-4): on asphalt a drift lies only
+		// along the kerb, so the street reads as one grey and not as leaf blotches.
+		if (kind == 1 && ground_detail > -0.5) {
+			int road_bits = int(ground_detail + 0.5);
+			if ((road_bits & 512) == 0) {
+				heap *= 1.0 - smoothstep(0.2, 0.45, kerb_distance(road_bits, fract(world_pos.xz)));
+			}
+		}
 		float leaf = fx_cold.w * level_k * heap * (0.55 + 0.45 * smoothstep(0.4, 0.65, grain.g));
 		vec3 leaf_col = mix(vec3(0.24, 0.15, 0.08), vec3(0.55, 0.34, 0.15), clamp((grain.g - 0.3) * 1.8, 0.0, 1.0));
 		base = mix(base, leaf_col, leaf * 0.62);
