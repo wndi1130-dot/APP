@@ -279,13 +279,49 @@ func _bleed(p, at: Vector3, kind: String, strength: float, felled: bool, low: bo
 
 ## One check on landing, on the hit's floor, using the field's blocking rules.
 func _blood_can_land(to: Vector3, from: Vector3) -> bool:
+	if not is_instance_valid(game):
+		return false
 	var level: int = game.level_of(from)
 	if level != game.level_of(to) or not game.levels.has(level):
 		return false
 	var grid: FieldGrid = game.grid_at(from)
-	var a: Vector2i = FieldGrid.cell_of(from)
 	var b: Vector2i = FieldGrid.cell_of(to)
-	return not grid.blocks_body(b) and grid.body_line_clear(a, b) and grid.clear_walk(a, b, false)
+	# AIR has no floor and blocks_body rejects it, including upstairs.
+	if not grid.inside(b) or grid.blocks_body(b):
+		return false
+	return _blood_line_clear(grid, from, to)
+
+
+## Walk the actual segment through FieldGrid's 1m cells at the world origin.
+func _blood_line_clear(grid: FieldGrid, from: Vector3, to: Vector3) -> bool:
+	var cell: Vector2i = FieldGrid.cell_of(from)
+	var end: Vector2i = FieldGrid.cell_of(to)
+	var dx: float = to.x - from.x
+	var dz: float = to.z - from.z
+	var step: Vector2i = Vector2i(signi(end.x - cell.x), signi(end.y - cell.y))
+	while cell != end:
+		if cell.x == end.x:
+			cell.y += step.y
+		elif cell.y == end.y:
+			cell.x += step.x
+		else:
+			var edge_x: float = float(cell.x + (1 if step.x > 0 else 0))
+			var edge_z: float = float(cell.y + (1 if step.y > 0 else 0))
+			# Compare crossing times without division or accumulated rounding.
+			var cross_x: float = absf(edge_x - from.x) * absf(dz)
+			var cross_z: float = absf(edge_z - from.z) * absf(dx)
+			if cross_x < cross_z:
+				cell.x += step.x
+			elif cross_z < cross_x:
+				cell.y += step.y
+			else:
+				# A corner touches both side cells before entering the diagonal.
+				if grid.blocks_body(cell + Vector2i(step.x, 0)) or grid.blocks_body(cell + Vector2i(0, step.y)):
+					return false
+				cell += step
+		if grid.blocks_body(cell):
+			return false
+	return true
 
 
 func _hold(seconds: float) -> void:

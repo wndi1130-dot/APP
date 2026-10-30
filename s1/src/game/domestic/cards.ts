@@ -1,6 +1,5 @@
 import { locoRepairParts, locoVentCoal } from '../loco';
 import { COMM_NAME } from '../data';
-import { josa } from '../josa';
 import type { Comm } from '../data';
 import { CARD_EXTENSIONS } from '../cards';
 import type { CardView, Choice, Eff } from '../cards';
@@ -39,8 +38,7 @@ function chief(g: Game, f: Field): DomPerson | undefined {
 function typhusNames(g: Game, c: Comm, n: number): string {
   const names = (g.dom?.typhus ?? []).filter(t => t.comm === c).flatMap(t => t.patients);
   if (names.length === 0) return `${n}명이`;
-  const last = names[names.length - 1];
-  return `${names.join(', ')}${josa(last, '이/가')}`;
+  return `${names.join(', ')}이(가)`;
 }
 
 const rel = (c: Comm, v: number): Eff => ({ t: 'rel', c, v });
