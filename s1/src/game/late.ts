@@ -1,6 +1,7 @@
 import { COMM_NAME } from './data';
 import type { Comm } from './data';
 import { lawActive } from './state';
+import { gone } from './budget';
 import type { Card, Game } from './state';
 import type { CardView, Choice, Eff } from './cards';
 
@@ -130,11 +131,11 @@ export function lateLog(g: Game, card: Card): string {
   }
 }
 
-/** 다음 구간 처음. 처지나 여행 when을 다시 검사하지 않고 대상의 존속만 본다. */
+/** 다음 구간 처음. 여행 when은 다시 굴리지 않고, 대상이 없어졌거나 요구가 이미 풀렸으면(구간 예산의 gone과 같은 식) 버린다. */
 export function lateNextSeg(g: Game): void {
   if (!g.lateOn || !g.lateCards?.length) return;
   const back = g.lateCards.filter(card => {
-    if (!lateKind(card) || g.comms[lateComm(card)].pop <= 0) return false;
+    if (!lateKind(card) || g.comms[lateComm(card)].pop <= 0 || gone(g, card)) return false;
     if (card.kind === 'favor' && card.who && card.who !== g.comms[lateComm(card)].leader.personId) return false;
     if (card.kind === 'ration_cut' && (!lawActive(g, 'emergency_ration') || g.rationCut)) return false;
     return !g.cards.some(c => c.uid === card.uid);

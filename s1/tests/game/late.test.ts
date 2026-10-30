@@ -7,6 +7,7 @@ import {
 import type { Card, Choice, Eff, Game } from '../../src/game';
 import { growLateEff, LATE, lateComm, lateKind, lateLog, lateLoss, lateNextSeg, worstLateChoice } from '../../src/game/late';
 import { noteBroken } from '../../src/game/council_log';
+import { gone } from '../../src/game/budget';
 import { readSave } from '../../src/ui/repro';
 import { playGame } from '../../tools/s1c_bot';
 import type { BotOptions } from '../../tools/s1c_bot';
@@ -208,6 +209,17 @@ describe('보관·복귀·중복 방지', () => {
     expect(g.journal).toEqual(log);
   });
 
+  it('이미 풀린 요구는 구간 예산의 gone과 같은 식으로 버린다', () => {
+    const g = fresh();
+    const card: Card = { uid: 1, kind: 'demand', comm: 'guard', late: 1 };
+    g.comms.guard.heat = 4; g.comms.guard.ration = 4;
+    expect(gone(g, card)).toBe(true);
+    g.lateCards = [card];
+    lateNextSeg(g);
+    expect(g.cards).toEqual([]);
+    expect(g.lateCards).toEqual([]);
+  });
+
   it('부탁은 미룬 순간 대표 id를 보관하고 재활성화해도 보관함을 비우지 않는다', () => {
     const g = fresh();
     const card = add(g, { kind: 'favor', comm: 'front' });
@@ -277,8 +289,12 @@ describe('보관·복귀·중복 방지', () => {
       const off = createGame(`late-travel-${i}`);
       const on = cloneGame(off); enableLate(on);
       on.lateCards = [{ uid: 1, kind: 'travel', text: 'front_curtain', late: 1 }];
+      // 돌아와서 아직 답하지 않은 커튼 카드도 같은 사건을 다시 뽑지 않게 막는다.
+      const back = cloneGame(off); enableLate(back);
+      back.cards = [{ uid: 1, kind: 'travel', text: 'front_curtain', late: 1 }];
       if (drawTravelEvent(off) === 'front_curtain') seen++;
       expect(drawTravelEvent(on)).not.toBe('front_curtain');
+      expect(drawTravelEvent(back)).not.toBe('front_curtain');
     }
     expect(seen).toBeGreaterThan(0);
   });

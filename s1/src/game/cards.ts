@@ -446,7 +446,7 @@ export function drawTravelEvent(g: Game, extra: string[] = []): string | null {
   const log = g.eventLog ?? {};
   const st = eventStateKey(g);
   const open = (id: string) => {
-    if (g.lateOn && id === 'front_curtain' && g.lateCards?.some(c => c.kind === 'travel' && c.text === id)) return false;
+    if (g.lateOn && id === 'front_curtain' && [...(g.lateCards ?? []), ...g.cards].some(c => c.kind === 'travel' && c.text === id)) return false;
     const m = log[id];
     if (!m) return true;
     return g.seg - m.seg >= EVENT_COOLDOWN && m.n < EVENT_CHAIN_MAX && m.st !== st;
