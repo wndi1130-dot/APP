@@ -137,7 +137,7 @@ describe('꾸미기 자리와 조작', () => {
     takeBack(g, 'front', 0);
     expect(decorItems(g, 'front').map(i => i.kind)).toEqual(['table', 'record', 'record', 'record', 'record']);
     expect(decorItems(g, 'front').slice(1).every(i => i.on === 0)).toBe(true);
-    expect(g.food).toBe(food + DECOR.can_beans.v);
+    expect(g.food).toBe(food + DECOR.can_beans.v!);
     expect(readStore(g).can_beans.n).toBe(1);
     expect(slotsOpen(g, 'front').surface).toBe(0);
   });
