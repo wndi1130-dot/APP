@@ -21,8 +21,8 @@ NVIDIA 4종·Google 5종·Scenario 1종은 CC BY 4.0, 나머지 4종은 자체 �
 | `serving_bowl` | `Threshold_Porcelain_Serving_Bowl_Coupe_White` | Google LLC. / Google Scanned Objects Threshold_Porcelain_Serving_Bowl_Coupe_White, CC BY 4.0 | 144 / 150 | 0.069532 | 15716 | cfb6e8064d0722a6bcc60ec181180d9977abd5f1277686af512e5d55faf6c579 | ready |
 | `dinner_plate` | `Threshold_Dinner_Plate_Square_Rim_White_Porcelain` | Google LLC. / Google Scanned Objects Threshold_Dinner_Plate_Square_Rim_White_Porcelain, CC BY 4.0 | 77 / 80 | 0.037108 | 8880 | a2136059137cdc6306af59cd614f472046aaa3e502257b3d885fc87547f31909 | ready |
 | `yard_well` | `scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1` | Scenario scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1, CC BY 4.0 | 679 / 700 | 1.9 | 70284 | 0577493f63eac690345a6469ffbc7e3c895fd502b5e38880edc3e0607dfb9332 | ready |
-| `mailbox` | `mailbox` | 자체 제작, Blender 기본 도형 | 76 / 200 | 1.25 | 5868 | 2c33dcefb66853cf7df4b402c8fb572a22452f49cbe45463e49a790e988607d2 | ready |
-| `wall_poster` | `wall_poster` | 자체 제작, Blender 기본 도형 | 56 / 150 | 2.05 | 4440 | 3c19e8c7e57daa87701aad89fce98bbd5ed0e4cee862a6184aa24aede3a21ffc | ready |
+| `mailbox` | `mailbox` | 자체 제작, Blender 기본 도형 | 76 / 200 | 1.25 | 5868 | ba4341c961d75397b78a75ba7c5838e59f3035afcf07259b72220cdc653f45d9 | ready |
+| `wall_poster` | `wall_poster` | 자체 제작, Blender 기본 도형 | 57 / 150 | 2.05 | 4416 | b0fe2692ef294f54289e4aee08a0d06bc5c6258fa1827dc740c4163e963d6229 | ready |
 | `wall_clock` | `wall_clock` | 자체 제작, Blender 기본 도형 | 222 / 250 | 2.11 | 15680 | 4f0bcd4376658bd1a31a8d313998b58f8a393f432c066846d28b1a4f6f1acf62 | ready |
 | `bicycle` | `bicycle` | 자체 제작, Blender 기본 도형 | 544 / 600 | 0.26 | 39868 | 0fd880c72f8d72a7d5f9518b4041241352b70df268c29f0759dcf88a2358646e | ready |
 
@@ -47,7 +47,7 @@ weld 0.001 m 뒤 collapse, 안쪽 면 보호·공동 깊이 비교. 원본 실�
 USD는 실제 stage 단위 변환, OBJ는 Z 위. 주전자 재질 subset과 UV 밝기 영역으로 색을 나눈다.
 면별 밝기는 ±8% 안, 각진 음영. 지붕·통·자전거의 최종 윗면에만 눈을 섞는다.
 등급이 따뜻한 빨강에 못 닿아 우편함 깃발·포스터 녹·자전거 빨강은 닿는 가장 붉은 색으로 낮췄다(포스터 녹 = 우리 소품 rust).
-Scenario 라이선스는 허깅페이스 scenario-labs/3d-collection 목록의 그 줄 license 칸(cc-by-4.0)이고, 원본 GLB SHA-256이 목록 값과 같다.
+Scenario 라이선스는 허깅페이스 scenario-labs/3d-collection 목록의 그 줄 license 칸(cc-by-4.0)이고, 원본 GLB SHA-256이 목록 값과 같다(굽기 때 대조).
 wall_poster 밑면 1.20 m, wall_clock 중심 1.95 m. mailbox 통과 기둥은 0.04 m 겹친다.
 직접 만든 네 종에는 제3자 CC BY 고지를 붙이지 않는다.
 

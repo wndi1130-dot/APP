@@ -178,6 +178,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.6407,
+        0.6834,
+        0.7069
+      ],
+      "paint_count": 2,
+      "colour_mean_rgb": [
+        0.6389,
+        0.6814,
+        0.7049
+      ],
+      "colour_groups": 12,
       "source": {
         "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/kitchenware_kettle_r01/simready_usd/sm_kitchenware_kettle_r01_01.usd",
         "sha256": "0acf8cdb34d4e39555c10969c8326f1c2ca95df540725ba7c39ebd164044cc69",
@@ -264,6 +276,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.4702,
+        0.6559,
+        0.3439
+      ],
+      "paint_count": 2,
+      "colour_mean_rgb": [
+        0.4692,
+        0.6531,
+        0.3422
+      ],
+      "colour_groups": 7,
       "source": {
         "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/kitchenware_kettle_u01/simready_usd/sm_kitchenware_kettle_u01_01.usd",
         "sha256": "4799375dac58635d6b42a5c66354dd2cb1c45d48af57718e5f42f1a61b45d0b9",
@@ -349,6 +373,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.3435,
+        0.2237,
+        0.0766
+      ],
+      "paint_count": 1,
+      "colour_mean_rgb": [
+        0.3446,
+        0.2244,
+        0.0769
+      ],
+      "colour_groups": 4,
       "source": {
         "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/kitchenware_cuttingBoard_a01/simready_usd/sm_kitchenware_cuttingBoard_a01_01.usd",
         "sha256": "b0a6ba7bc30e8d8a16d240d41fff11788fd3b4bbad40640c69db42a116dce052",
@@ -430,6 +466,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.1168,
+        0.1902,
+        0.1497
+      ],
+      "paint_count": 2,
+      "colour_mean_rgb": [
+        0.1159,
+        0.1889,
+        0.1486
+      ],
+      "colour_groups": 3,
       "source": {
         "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/misc_glass_vase_a01/simready_usd/sm_misc_glass_vase_a01_01.usd",
         "sha256": "a3a34d595220d850324175d5c8d258c9805f759233eeb55d1988d2dd60043422",
@@ -542,6 +590,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.2625,
+        0.2681,
+        0.2479
+      ],
+      "paint_count": 2,
+      "colour_mean_rgb": [
+        0.2628,
+        0.2683,
+        0.248
+      ],
+      "colour_groups": 9,
       "source": {
         "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Crosley_Alarm_Clock_Vintage_Metal.zip",
         "sha256": "92157e1c23a00b7f4fb3f41df07eeae146be94b3861caddad820e409fe4937be",
@@ -635,6 +695,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.9711,
+        0.9582,
+        0.937
+      ],
+      "paint_count": 1,
+      "colour_mean_rgb": [
+        0.9636,
+        0.9508,
+        0.9297
+      ],
+      "colour_groups": 7,
       "source": {
         "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Porcelain_Coffee_Mug_All_Over_Bead_White.zip",
         "sha256": "dc34f175364540e239ae74f71e5b951a48aa99ccb48aaaf8c8c11771c5c56aa1",
@@ -1017,6 +1089,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.9711,
+        0.9582,
+        0.937
+      ],
+      "paint_count": 1,
+      "colour_mean_rgb": [
+        0.9549,
+        0.9422,
+        0.9213
+      ],
+      "colour_groups": 7,
       "source": {
         "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Porcelain_Teapot_White.zip",
         "sha256": "45c7f86892f983b59e28cfe80af5de473d7981bab321addae10bea7503e6b9cc",
@@ -1092,6 +1176,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.9711,
+        0.9582,
+        0.937
+      ],
+      "paint_count": 1,
+      "colour_mean_rgb": [
+        0.946,
+        0.9335,
+        0.9128
+      ],
+      "colour_groups": 7,
       "source": {
         "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Porcelain_Serving_Bowl_Coupe_White.zip",
         "sha256": "9f18958313212a56edb33948cf4ec89eae7bd7392293ab27a6ca50ba7ef14098",
@@ -1474,6 +1570,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.9711,
+        0.9582,
+        0.937
+      ],
+      "paint_count": 1,
+      "colour_mean_rgb": [
+        0.9654,
+        0.9526,
+        0.9314
+      ],
+      "colour_groups": 7,
       "source": {
         "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Dinner_Plate_Square_Rim_White_Porcelain.zip",
         "sha256": "e1dc5305e0651550f2d01cef1c390914c93849e2a44a2299f6db21d5208d6448",
@@ -1856,11 +1964,23 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.4429,
+        0.353,
+        0.2056
+      ],
+      "paint_count": 3,
+      "colour_mean_rgb": [
+        0.4435,
+        0.3535,
+        0.2059
+      ],
+      "colour_groups": 29,
       "source": {
         "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/scenario_3d/scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1/output.glb",
         "sha256": "d135957aef74d60a1d86b948f3d75ff83d36475c516be6c85d18ee404329eadc",
         "bytes": 11876160,
-        "license_verification": "provided_list_only; local_document_missing",
+        "license_verification": "list_row cc-by-4.0; sha256 matches list row",
         "meshes_imported": 1,
         "triangles_before": 96949,
         "dimensions_blender_m": [
@@ -1894,7 +2014,7 @@
       "triangle_limit": 200,
       "lod0_tris": 76,
       "bytes": 5868,
-      "sha256": "2c33dcefb66853cf7df4b402c8fb572a22452f49cbe45463e49a790e988607d2",
+      "sha256": "ba4341c961d75397b78a75ba7c5838e59f3035afcf07259b72220cdc653f45d9",
       "bounds_m": [
         [
           -0.1265,
@@ -1933,6 +2053,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.3181,
+        0.3037,
+        0.1776
+      ],
+      "paint_count": 3,
+      "colour_mean_rgb": [
+        0.3156,
+        0.3,
+        0.1755
+      ],
+      "colour_groups": 16,
       "source": {
         "procedural": true
       }
@@ -1951,9 +2083,9 @@
       "bottom_m": 1.2,
       "mount": "wall",
       "triangle_limit": 150,
-      "lod0_tris": 56,
-      "bytes": 4440,
-      "sha256": "3c19e8c7e57daa87701aad89fce98bbd5ed0e4cee862a6184aa24aede3a21ffc",
+      "lod0_tris": 57,
+      "bytes": 4416,
+      "sha256": "b0fe2692ef294f54289e4aee08a0d06bc5c6258fa1827dc740c4163e963d6229",
       "bounds_m": [
         [
           -0.3,
@@ -1992,6 +2124,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.4165,
+        0.3611,
+        0.2617
+      ],
+      "paint_count": 4,
+      "colour_mean_rgb": [
+        0.426,
+        0.3694,
+        0.2672
+      ],
+      "colour_groups": 8,
       "source": {
         "procedural": true
       }
@@ -2051,6 +2195,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.4309,
+        0.3313,
+        0.1649
+      ],
+      "paint_count": 3,
+      "colour_mean_rgb": [
+        0.4307,
+        0.3312,
+        0.1648
+      ],
+      "colour_groups": 11,
       "source": {
         "procedural": true
       }
@@ -2110,6 +2266,18 @@
         "visual_review": "not_verified",
         "pc_check_glb": "pass"
       },
+      "intended_mean_rgb": [
+        0.4276,
+        0.3827,
+        0.387
+      ],
+      "paint_count": 3,
+      "colour_mean_rgb": [
+        0.4288,
+        0.3805,
+        0.3841
+      ],
+      "colour_groups": 21,
       "source": {
         "procedural": true
       }

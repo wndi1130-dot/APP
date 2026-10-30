@@ -271,12 +271,24 @@ func test_imported_mesh_actual_triangles_colours_and_bounds() -> void:
 				assert_almost_eq(measured.position[axis], float(limits[0][axis]), EPS, kind + " 실제 최소")
 				assert_almost_eq(measured.end[axis], float(limits[1][axis]), EPS, kind + " 실제 최대")
 		var pale := 0
+		var sum := Vector3.ZERO
+		var groups := {}
 		for colour: Color in colours:
+			sum += Vector3(colour.r, colour.g, colour.b)
+			groups[Vector3i(roundi(colour.r * 20.0), roundi(colour.g * 20.0), roundi(colour.b * 20.0))] = true
 			assert_almost_eq(colour.a, 1.0, EPS, kind + " 불투명")
 			for c: float in [colour.r, colour.g, colour.b]:
 				assert_true(is_finite(c) and c >= -EPS and c <= 1.0 + EPS, kind + " 정점색 범위")
 			if colour.r > 0.99 and colour.g > 0.99 and colour.b > 0.99:
 				pale += 1
 		assert_lt(pale, colours.size(), kind + " 정점색이 모두 흰색이면 색을 잃은 것")
+		# The colours that came in are the ones painted: the mean near the intended one, as many groups as paints.
+		var mean := sum / maxf(float(colours.size()), 1.0)
+		var intended: Array = row.get("intended_mean_rgb", [])
+		assert_eq(intended.size(), 3, kind + " 칠한 평균 기록")
+		if intended.size() == 3:
+			for c in 3:
+				assert_almost_eq(mean[c], float(intended[c]), 0.06, kind + " 정점색 평균이 칠한 값")
+		assert_gte(groups.size(), int(row.get("paint_count", 1)), kind + " 칠 갈래 수")
 		root.free()
 

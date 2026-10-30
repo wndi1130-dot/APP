@@ -295,6 +295,7 @@ DESIGNS = json.loads(r'''
   "yard_well": {
     "source": "glb",
     "source_name": "scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1",
+    "source_sha256": "d135957aef74d60a1d86b948f3d75ff83d36475c516be6c85d18ee404329eadc",
     "limit": 700,
     "mount": "floor",
     "footprint": [
@@ -569,7 +570,9 @@ def write_books(repo, assets, verification):
               "USD는 실제 stage 단위 변환, OBJ는 Z 위. 주전자 재질 subset과 UV 밝기 영역으로 색을 나눈다.",
               "면별 밝기는 ±8% 안, 각진 음영. 지붕·통·자전거의 최종 윗면에만 눈을 섞는다.",
               "등급이 따뜻한 빨강에 못 닿아 우편함 깃발·포스터 녹·자전거 빨강은 닿는 가장 붉은 색으로 낮췄다(포스터 녹 = 우리 소품 rust).",
-              "Scenario 라이선스는 허깅페이스 scenario-labs/3d-collection 목록의 그 줄 license 칸(cc-by-4.0)이고, 원본 GLB SHA-256이 목록 값과 같다.",
+              ("Scenario 라이선스는 허깅페이스 scenario-labs/3d-collection 목록의 그 줄 license 칸(cc-by-4.0)이고, 원본 GLB SHA-256이 목록 값과 같다(굽기 때 대조)."
+               if (assets.get("yard_well", {}).get("source") or {}).get("license_verification", "").startswith("list_row")
+               else "Scenario 원본 해시 대조: 미확인(우물이 이 판에서 구워지지 않음)."),
               "wall_poster 밑면 1.20 m, wall_clock 중심 1.95 m. mailbox 통과 기둥은 0.04 m 겹친다.",
               "직접 만든 네 종에는 제3자 CC BY 고지를 붙이지 않는다.", "",
               "## 실행", "",
@@ -646,17 +649,24 @@ class Piece(pc.Piece):
 
     def finish_colours(self, snow=0.0):
         self.bm.normal_update()
+        total, count, paints = [0.0, 0.0, 0.0], 0, set()
         for face in self.bm.faces:
             target = GRADED_TARGETS[self.keys[face[self.paint]]]
             weight = snow * max(0.0, min(1.0, (face.normal.z - .55) / .35))
             target = tuple(a * (1 - weight) + b * weight for a, b in zip(target, GRADED_TARGETS["snow"]))
             base = inverse_grade(target)
+            paints.add(self.keys[face[self.paint]])
+            for i in range(3):
+                total[i] += base[i] * len(face.loops)
+            count += len(face.loops)
             at = face.calc_center_median()
             shade = 1 + .08 * math.sin(at.x * 37 + at.y * 19 + at.z * 29)
             shade = min(shade, 1.0 / max(base[:3]))
             for loop in face.loops:
                 loop[self.col] = (*(v * shade for v in base[:3]), 1.0)
             face.smooth = False
+        self.intended_rgb = [round(v / max(count, 1), 4) for v in total]
+        self.paint_count = len(paints)
 
 
 def unpack_obj(spec, work, digest):
@@ -937,7 +947,9 @@ def imported_piece(kind, spec, work):
         info["obj_up_axis"] = "Z"
     else:
         bpy.ops.import_scene.gltf(filepath=str(path))
-        info["license_verification"] = "provided_list_only; local_document_missing"
+        require(digest == spec["source_sha256"], "F-SOURCE-HASH",
+                f"원본 SHA-256 {digest[:12]}…이 목록 줄의 값 {spec['source_sha256'][:12]}…과 다름")
+        info["license_verification"] = "list_row cc-by-4.0; sha256 matches list row"
     obj, count = joined_mesh(kind)
     if spec.get("lay_flat"):
         # 모로 선 판(도마)은 위에서 보는 화면에서 금 하나로만 읽혀 눕힌다: 가장 얇은 가로축을 위로.
@@ -1051,7 +1063,7 @@ def mailbox(piece):
         outward = Vector(((a[0] + b[0]) / 2, 0, (a[1] + b[1]) / 2 - 1.13))
         piece.face([(a[0], -.24, a[1]), (b[0], -.24, b[1]),
                     (b[0], .24, b[1]), (a[0], .24, a[1])], "open_green", outward)
-    piece.box((.107, .119), (-.03, -.018), (1.10, 1.24), "open_flag_rust")
+    piece.box((.107, .119), (-.03, -.018), (1.10, 1.20), "open_flag_rust")
     piece.box((.107, .153), (-.03, -.018), (1.20, 1.24), "open_flag_rust")
 
 
@@ -1068,8 +1080,8 @@ def wall_poster(piece):
     def patch(points, colour, y):
         piece.face([(x, y, z) for x, z in points], "open_" + colour, (0, -1, 0))
 
-    patch([(-.26, 1.60), (-.08, 1.98), (.14, 1.60)], "bluegrey", -.0042)
-    patch([(-.03, 1.60), (.15, 1.93), (.27, 1.60)], "bluegrey", -.0042)
+    # Two peaks as one outline (no face over another in the same plane): the valley where their sides cross.
+    patch([(-.26, 1.60), (-.08, 1.98), (.0525, 1.7512), (.15, 1.93), (.27, 1.60)], "bluegrey", -.0042)
     patch([(-.13, 1.87), (-.08, 1.98), (-.02, 1.87), (-.07, 1.90)], "paper", -.0044)
     patch([(.10, 1.84), (.15, 1.93), (.19, 1.83), (.15, 1.86)], "paper", -.0044)
     patch([(-.26, 1.42), (.24, 1.42), (.24, 1.52), (-.26, 1.52)], "ink", -.0046)
@@ -1211,9 +1223,13 @@ def check_glb(path, tris, spec):
     validate_bounds(limits, spec)
     lo, hi = limits
     require(0 < tris <= spec["limit"], "F-TRIANGLES", "출력 삼각형 상한 실패")
+    used = sorted(set(indices))
+    mean = [round(sum(colours[i][c] for i in used) / len(used), 4) for c in range(3)]
+    groups = len({tuple(round(colours[i][c] * 20) for c in range(3)) for i in used})
     return dict(bytes=size, sha256=digest, bounds_m=[[round(v, 6) for v in row] for row in limits],
                 dimensions_m=[round(v, 6) for v in hi - lo],
-                height_m=round(hi.y, 6), bottom_m=round(lo.y, 6), lod0_tris=tris)
+                height_m=round(hi.y, 6), bottom_m=round(lo.y, 6), lod0_tris=tris,
+                colour_mean_rgb=mean, colour_groups=groups)
 
 
 def preview(repo, assets):
@@ -1357,6 +1373,8 @@ def main():
             else:
                 piece, source_info = imported_piece(kind, spec, work)
             tris = finish_piece(piece, spec)
+            row["intended_mean_rgb"] = piece.intended_rgb
+            row["paint_count"] = piece.paint_count
             stage = work / "staged" / (kind + ".glb")
             stage.parent.mkdir(parents=True, exist_ok=True)
             backup(stage, work)
@@ -1368,6 +1386,11 @@ def main():
             shutil.copy2(stage, landing)
             confirmed = check_glb(landing, tris, spec)
             require(result == confirmed, "F-COPY", "최종 파일과 검사한 파일 불일치")
+            # The exported colours must be the ones painted: within the ±8 % face shading of the intended mean,
+            # and at least as many colour groups as paints.
+            require(all(abs(a - b) <= .06 for a, b in zip(confirmed["colour_mean_rgb"], piece.intended_rgb))
+                    and confirmed["colour_groups"] >= piece.paint_count, "F-COLOUR",
+                    f'정점색 평균 {confirmed["colour_mean_rgb"]}·갈래 {confirmed["colour_groups"]}이 칠한 값 {piece.intended_rgb}·{piece.paint_count}와 다름')
             os.replace(landing, final)
             row.update(confirmed, status="ready", source=source_info)
             row["verification"].update(blender=bpy.app.version_string, glb="pass", pc_check_glb="pass")
