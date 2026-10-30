@@ -61,9 +61,10 @@ func test_catalog_and_all_slot_tables_match_s1() -> void:
 		surfaces += int(def["surface"])
 		assert_eq(def["model"], "")
 		if def.has("res"):
-			# bottle_spirit is an existing legacy STOCK_OF entry in field_game.gd.
+			# bottle_spirit is an existing legacy STOCK_OF entry in field_game.gd. The tag is exactly what the
+			# field credits — rounding it up would melt the piece on arrival.
 			var raw: float = 0.5 if kind == "bottle_spirit" else float(FieldItems.stock_of(kind)[1])
-			assert_eq(int(def["v"]), int(floorf(raw + 0.5)), kind)
+			assert_almost_eq(float(def["v"]), raw, 0.0001, kind)
 	assert_eq(furniture, 16)
 	assert_eq(surfaces, 6)
 	assert_eq(Decor.DECOR["frame"]["spot"], "wall")
