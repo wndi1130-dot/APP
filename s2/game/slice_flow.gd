@@ -61,6 +61,7 @@ const TrainStop = preload("res://game/train/train_stop.gd")
 const OutsideView = preload("res://fx/outside_view.gd")
 const St = preload("res://game/train/train_state.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
+const TrainDecor = preload("res://game/train/train_decor.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 const WorkshopPane = preload("res://game/ui/workshop_pane.gd")
@@ -992,6 +993,12 @@ func _show_train(phase: String, seg: int) -> void:
 	# The hands the stretch's settle left (turn_settle.gd: have, short by post, expose), so
 	# the cars look as many hands as there are (carry_people 3.6): empty posts when short.
 	rules["train"]["hands"] = (train_g["hands"] as Dictionary).duplicate(true) if train_g.get("hands") is Dictionary else {}
+	# Each furnished car's home stage (결정 486·517, train_decor.gd tier_of), so its light follows
+	# how it is kept: a new train's cars start in rags. The cars no one furnishes are left out.
+	var home: Dictionary = {}
+	for car_id: String in TrainDecor.DECOR_CARS:
+		home[car_id] = TrainDecor.tier_of(train_g, car_id)
+	rules["train"]["home"] = home
 	train = TRAIN_SCENE.instantiate()
 	train.opts = {"panel": false, "seed": int(opts.get("seed", 1))}
 	if phase == "council":
