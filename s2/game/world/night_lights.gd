@@ -30,11 +30,14 @@ const MOST := 6
 const AREA_PER_MOST := 25000.0
 const MOST_BIG := 12
 ## Round where the crew steps down (metres from the middle of the squad's
-## cells) at most FIRST_MOST go first, so the first screen at night has a warm
-## place or two; the rest spread. The play camera shows about 26 m either side
-## and 21 m up and down there (zoom 24, a phone held wide).
+## cells) none to FIRST_MOST go first, as the map's dice fall, so the first
+## screen at night often has a warm place or two; the rest spread. Only what
+## would be lit there anyway: a window's candle or a fire, not a car left on.
+## The play camera shows about 26 m either side and 21 m up and down there
+## (zoom 24, a phone held wide).
 const FIRST_REACH := 22.0
 const FIRST_MOST := 2
+const FIRST_KINDS: Array[String] = ["campfire", "barrel_fire", "candle"]
 const SPREAD := 10.0   # cells at least between two of them
 const TRAIN_GAP := 6   # cells kept clear of the train (it has its own lights)
 const ON_MIN := 890    # they show as the light goes (decision 210)
@@ -67,8 +70,9 @@ static func plan(data: Dictionary) -> int:
 	var picked: Array = []
 	var took: Dictionary = {}
 	var step := _step_down(data)
-	for kind: String in KINDS:
-		if picked.size() >= FIRST_MOST or step.x < 0.0:
+	var first := rng.randi_range(0, FIRST_MOST)
+	for kind: String in FIRST_KINDS:
+		if picked.size() >= first or step.x < 0.0:
 			break
 		if not pools.has(kind):
 			continue

@@ -151,15 +151,19 @@ func _yard(w: int, h: int, far: Array, first: Vector2i, place: String) -> Dictio
 		"train": Rect2i(0, 0, w, 2), "spawns": {"squad": [Vector2i(40, 4)]}}
 
 
-func test_a_drum_on_the_first_screen_goes_first() -> void:
+func test_a_drum_on_the_first_screen_mostly_goes_first() -> void:
 	var far := [Vector2i(5, 60), Vector2i(17, 60), Vector2i(29, 60), Vector2i(41, 60), Vector2i(53, 60)]
 	var first := Vector2i(52, 14)   # 16 m from where the crew steps down
-	for place in ["a", "b", "c", "d", "e", "f"]:
-		var d := _yard(80, 80, far, first, place)
+	var lit := 0
+	for i in 12:
+		var d := _yard(80, 80, far, first, "yard_%d" % i)
 		NightLights.plan(d)
 		var rows := _night_rows(d)
 		assert_eq(rows.size(), int(NightLights.MOST_OF["barrel_fire"]), "a small map: two drums")
-		assert_true(_has_cell(rows, first), "%s: the drum on the first screen is lit" % place)
+		lit += 1 if _has_cell(rows, first) else 0
+	# Two drums of six by chance would light it in one map of three; going
+	# first lights it in most, and the dice leave a few first screens dark.
+	assert_between(lit, 7, 11, "lit on the first screen in %d maps of 12" % lit)
 
 
 func test_a_big_map_lights_more_of_a_kind() -> void:
