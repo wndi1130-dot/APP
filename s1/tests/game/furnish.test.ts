@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cancelJob, COMMS, createS1cGame, FURNISH_CARS, FURNISH_WORK,
-  furnishComparison, furnishOf, furnishScore, furnishTick, jobCheck, jobTitle, LAW_ONLY_TECHS,
+  furnishComparison, furnishOf, furnishScore, furnishTick, jobCheck, jobTitle, LAW_ONLY_TECHS, nextFurnishWork,
   lawTechSit, migrateDomestic, placeFurniture, prereqs, PREREQ, refreshSit, removeFurniture, restoreBlock,
   restoreCost, runWorkshop, startJob, techAdopted, techUseLine, TECH_IDS, TECHS, usefulVariant, zeroSit,
 } from '../../src/game';
@@ -163,14 +163,14 @@ describe('살림 작업과 가구', () => {
     expect(g.comms.front.rel).toBe(rel);
   });
 
-  it('가구를 빼고 w5를 세워도 단은 유지되며 다시 놓아도 보너스가 없다', () => {
+  it('가구를 빼면 가구 단은 내려가며 w5를 세우고 다시 놓아도 보너스가 없다', () => {
     const g = fresh(); const before = g.comms.front.rel;
     place(g, 'front', 'wardrobe');
     expect(g.comms.front.rel - before).toBe(2);
     expect(removeFurniture(g, 'front', 0).ok).toBe(true);
     done(g, 'w5'); g.dom!.techs.w5!.off = true;
     expect(furnishScore(g, 'front')).toBe(0);
-    expect(furnishOf(g, 'front')).toMatchObject({ tier: 1, best: 1 });
+    expect(furnishOf(g, 'front')).toMatchObject({ tier: 0, best: 1 });
     place(g, 'front', 'wardrobe');
     expect(g.comms.front.rel - before).toBe(2);
     expect(removeFurniture(g, 'front', -1).ok).toBe(false);
@@ -184,17 +184,79 @@ describe('살림 작업과 가구', () => {
     done(g, 'w5'); g.dom!.insulated.push('front');
     startJob(g, 'furnish', 'front'); finish(g);
     removeFurniture(g, 'front', 0);
+    expect(furnishOf(g, 'front')).toMatchObject({ tier: 1, best: 2, jobs: [2] });
+    expect(nextFurnishWork(g, 'front')).toBe(1);
     done(g, 'w1');
     startJob(g, 'furnish', 'front'); finish(g);
-    expect(furnishScore(g, 'front')).toBe(12);
+    expect(furnishScore(g, 'front')).toBe(8);
     expect(furnishOf(g, 'front').tier).toBe(2);
     startJob(g, 'furnish', 'front'); finish(g);
     expect(furnishScore(g, 'front')).toBe(15);
     expect(furnishOf(g, 'front').tier).toBe(3);
   });
+
+  it.each([1, 2, 3])('작업 점수로 닿은 %i단은 가구를 거두어도 유지된다', n => {
+    const g = fresh(); level(g, 'front', n);
+    const jobs = [...furnishOf(g, 'front').jobs];
+    const rel = g.comms.front.rel;
+    const journal = structuredClone(g.journal);
+    place(g, 'front', 'piano');
+    expect(removeFurniture(g, 'front', 0)).toEqual({ ok: true });
+    expect(furnishOf(g, 'front')).toMatchObject({ tier: n, best: n, jobs, furnPts: 0 });
+    expect(g.comms.front.rel).toBe(rel);
+    expect(g.journal).toEqual(journal);
+  });
+
+  it('작업을 건너뛴 가구 단이 내려갔다 다시 올라도 각 단 보상과 일지는 한 번이다', () => {
+    const g = fresh(); const rel = g.comms.front.rel;
+    done(g, 'w5'); done(g, 'w1'); g.dom!.insulated.push('front');
+    place(g, 'front', 'piano');
+    for (const n of [1, 2, 3]) {
+      if (n > 1) { expect(startJob(g, 'furnish', 'front')).toBe(true); finish(g); }
+      const journal = structuredClone(g.journal);
+      const earned = g.comms.front.rel;
+      for (let repeat = 0; repeat < 2; repeat++) {
+        expect(removeFurniture(g, 'front', 0)).toEqual({ ok: true });
+        expect(furnishOf(g, 'front')).toMatchObject({ tier: n - 1, best: n });
+        place(g, 'front', 'piano');
+        expect(furnishOf(g, 'front')).toMatchObject({ tier: n, best: n });
+        expect(g.comms.front.rel).toBe(earned);
+        expect(g.journal).toEqual(journal);
+      }
+    }
+    expect(furnishOf(g, 'front').jobs).toEqual([2, 3]);
+    expect(g.comms.front.rel - rel).toBe(12);
+    expect(g.journal.filter(e => e.text.includes('그 소리를 들었다'))).toHaveLength(3);
+  });
+
+  it('한 가구를 여섯 칸에 돌려도 현재 단은 남지 않고 첫 보상만 칸마다 남는다', () => {
+    const g = fresh();
+    for (let repeat = 0; repeat < 2; repeat++) for (const car of FURNISH_CARS) {
+      place(g, car, 'piano');
+      expect(furnishOf(g, car)).toMatchObject({ tier: 1, best: 1 });
+      expect(removeFurniture(g, car, 0)).toEqual({ ok: true });
+      expect(furnishOf(g, car)).toMatchObject({ tier: 0, best: 1, jobs: [] });
+    }
+    expect(g.journal.filter(e => e.text.includes('그 소리를 들었다'))).toHaveLength(6);
+  });
 });
 
 describe('살림 처지와 정치', () => {
+  it('온기·과밀·비교는 가구를 거둔 현재 단으로 돌아간다', () => {
+    const g = fresh();
+    const before = zeroSit(); lawTechSit(g, before);
+    const comparison = furnishComparison(g);
+    place(g, 'front', 'piano');
+    const furnished = zeroSit(); lawTechSit(g, furnished);
+    expect(furnished.front[0] - before.front[0]).toBe(1);
+    expect(furnished.front[2] - before.front[2]).toBe(1);
+    expect(furnishComparison(g)).not.toEqual(comparison);
+    expect(removeFurniture(g, 'front', 0)).toEqual({ ok: true });
+    const after = zeroSit(); lawTechSit(g, after);
+    expect(after).toEqual(before);
+    expect(furnishComparison(g)).toEqual(comparison);
+    expect(furnishOf(g, 'front').best).toBe(1);
+  });
   it('처음 닿은 각 단의 보너스만 칸 수로 나눈다', () => {
     const g = fresh(); const r = g.comms.tail.rel;
     level(g, 'tail1', 3);

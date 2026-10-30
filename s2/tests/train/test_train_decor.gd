@@ -46,6 +46,112 @@ func _put(g: Dictionary, car: String, kind: String, on: Variant = null) -> void:
 	assert_eq(Mods.place(g, car, kind, Decor.DECOR[kind]["spot"], [2, 0], 0, on), {"ok": true})
 
 
+func test_residential_wall_overflow_keeps_even_unreconciled_stock_and_all_state() -> void:
+	var g: Dictionary = _fresh()
+	_put(g, "front", "piano")
+	_put(g, "front", "painting")
+	Decor.receive_decor(g, ["rare_violin"])
+	g["lux"] = 0.0
+	var before: Dictionary = g.duplicate(true)
+	assert_eq(Mods.take_back(g, "front", 0), {"ok": false, "why": "살림이 내려가면 자리가 모자란다. 다른 것부터 거둬라"})
+	assert_eq(g, before)
+	assert_true(Mods.take_back(g, "front", 1)["ok"])
+	assert_true(Mods.take_back(g, "front", 0)["ok"])
+	assert_eq(Mods.furnish_of(g, "front")["tier"], 0)
+	assert_eq(Mods.furnish_of(g, "front")["best"], 1)
+	assert_eq(Mods.slots_open(g, "front"), {"floor": 8, "wall": 0, "surface": 0})
+
+
+func test_surface_overflow_is_per_parent_and_failed_cascade_keeps_everything() -> void:
+	var g: Dictionary = _fresh()
+	_put(g, "front", "cupboard")
+	_put(g, "front", "side_table")
+	_put(g, "front", "side_table")
+	for _i: int in 4: _put(g, "front", "can_beans", 0)
+	for _i: int in 3: _put(g, "front", "record", 1)
+	var before: Dictionary = g.duplicate(true)
+	assert_eq(Mods.take_back(g, "front", 0), {"ok": false, "why": "살림이 내려가면 자리가 모자란다. 다른 것부터 거둬라"})
+	assert_eq(g, before)
+
+
+func test_cascade_is_excluded_before_capacity_check_and_remaining_indices_are_remapped() -> void:
+	var g: Dictionary = _fresh()
+	_put(g, "front", "cupboard")
+	_put(g, "front", "side_table")
+	for _i: int in 4: _put(g, "front", "can_beans", 0)
+	for _i: int in 2: _put(g, "front", "record", 1)
+	var food: float = g["food"]
+	assert_true(Mods.take_back(g, "front", 0)["ok"])
+	assert_eq(Mods.furnish_of(g, "front")["tier"], 0)
+	assert_eq(Mods.furnish_of(g, "front")["best"], 1)
+	assert_eq(Decor.items_of(g, "front").map(func(item: Dictionary) -> String: return item["kind"]), ["side_table", "record", "record"])
+	assert_eq(Decor.items_of(g, "front").slice(1).map(func(item: Dictionary) -> int: return item["on"]), [0, 0])
+	assert_eq(float(g["food"]), food + 4 * float(Decor.DECOR["can_beans"]["v"]))
+	assert_eq(Decor.read_store(g)["can_beans"]["n"], 4)
+	assert_eq(Mods.slots_open(g, "front")["surface"], 0)
+
+
+func test_common_tier_drop_checks_both_cars_floor_wall_and_each_surface() -> void:
+	for car: String in ["captain", "dining"]:
+		for spot: String in ["floor", "wall", "surface"]:
+			var g: Dictionary = _fresh()
+			_put(g, "front", "piano")
+			match spot:
+				"floor":
+					for _i: int in 9: _put(g, car, "chair")
+				"wall": _put(g, car, "painting")
+				"surface":
+					_put(g, car, "side_table")
+					for _i: int in 3: _put(g, car, "record", 0)
+			var before: Dictionary = g.duplicate(true)
+			assert_eq(Mods.take_back(g, "front", 0), {"ok": false, "why": "살림이 내려가면 자리가 모자란다. 다른 것부터 거둬라"}, car + " " + spot)
+			assert_eq(g, before)
+			assert_eq(Decor.common_tier(g), 1)
+
+
+func test_another_current_tier_keeps_common_capacity_until_the_last_car_drops() -> void:
+	var g: Dictionary = _fresh()
+	_put(g, "front", "piano")
+	_put(g, "tail1", "piano")
+	_put(g, "captain", "painting")
+	_put(g, "dining", "painting")
+	assert_true(Mods.take_back(g, "front", 0)["ok"])
+	assert_eq(Decor.common_tier(g), 1)
+	assert_false(Mods.take_back(g, "tail1", 0)["ok"])
+	assert_true(Mods.take_back(g, "captain", 0)["ok"])
+	assert_false(Mods.take_back(g, "tail1", 0)["ok"])
+	assert_true(Mods.take_back(g, "dining", 0)["ok"])
+	assert_true(Mods.take_back(g, "tail1", 0)["ok"])
+	assert_eq(Decor.common_tier(g), 0)
+	assert_eq(Mods.slots_open(g, "captain")["wall"], 0)
+	assert_eq(Mods.slots_open(g, "dining")["floor"], 8)
+
+
+func test_legacy_best_is_filled_without_recalculating_tier_on_load() -> void:
+	for best: Variant in [null, 0, 1]:
+		var g: Dictionary = _fresh()
+		g["version"] = Save.SAVE_VERSION
+		g["dom"]["furnish"]["front"] = {"work": 0, "jobs": [], "furnPts": 0, "tier": 1, "items": []}
+		if best != null: g["dom"]["furnish"]["front"]["best"] = best
+		var loaded: Dictionary = Save.read_save(g, TV.tables())
+		assert_true(loaded["ok"])
+		if not loaded["ok"]: continue
+		var restored: Dictionary = loaded["g"]
+		assert_eq(restored["version"], Save.SAVE_VERSION)
+		assert_eq(restored["rng"], g["rng"])
+		assert_eq(Mods.furnish_of(restored, "front")["tier"], 1)
+		assert_eq(Mods.furnish_of(restored, "front")["best"], 1)
+		assert_true(Dom.is_store(restored["dom"]))
+		var journal: Array = restored["journal"].duplicate(true)
+		var rel: float = restored["comms"]["front"]["rel"]
+		Mods._update_furnish(restored, "front")
+		assert_eq(Mods.furnish_of(restored, "front")["tier"], 0)
+		assert_eq(Mods.furnish_of(restored, "front")["best"], 1)
+		_put(restored, "front", "piano")
+		assert_eq(restored["comms"]["front"]["rel"], rel)
+		assert_eq(restored["journal"], journal)
+
+
 func test_catalog_and_all_slot_tables_match_s1() -> void:
 	var tables: Dictionary = _data["tables"]
 	var actual: Dictionary = {"DECOR": Decor.DECOR, "DECOR_CARS": Decor.DECOR_CARS, "DECOR_SLOT_TABLE": Decor.DECOR_SLOT_TABLE,

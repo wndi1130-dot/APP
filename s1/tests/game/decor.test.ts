@@ -5,7 +5,7 @@ import { FURNISH_CARS } from '../../src/game/domestic/data';
 import type { FurnishTier } from '../../src/game/domestic/data';
 import type { Game } from '../../src/game/state';
 import { lawTechSit } from '../../src/game/domestic/lawtech';
-import { jobCheck } from '../../src/game/domestic/workshop';
+import { jobCheck, updateFurnish } from '../../src/game/domestic/workshop';
 import { placeFurniture, removeFurniture } from '../../src/game/domestic/decor';
 import { applyFieldReturn } from '../../src/game/field_receipt';
 import type { FieldDeparture, FieldReceipt } from '../../src/game/field_receipt';
@@ -150,6 +150,97 @@ describe('꾸미기 자리와 조작', () => {
     expect(furnishOf(g, 'front')).toMatchObject({ furnPts: 4, tier: 1, work: 0, jobs: [] });
     expect(removeFurniture(g, 'front', 0).ok).toBe(true);
     expect(readStore(g).wardrobe.n).toBe(1);
+  });
+});
+
+describe('결정 517 거두기와 현재 단', () => {
+  const shortage = { ok: false, why: '살림이 내려가면 자리가 모자란다. 다른 것부터 거둬라' };
+
+  it('살림 칸 벽이 넘치면 이름표 정리도 하지 않고 판 전체를 보존한다', () => {
+    const g = fresh();
+    put(g, 'front', 'piano'); put(g, 'front', 'painting');
+    receiveDecor(g, ['rare_violin']); g.lux = 0;
+    const before = structuredClone(g);
+    expect(takeBack(g, 'front', 0)).toEqual(shortage);
+    expect(g).toEqual(before);
+    expect(takeBack(g, 'front', 1)).toEqual({ ok: true });
+    expect(takeBack(g, 'front', 0)).toEqual({ ok: true });
+    expect(furnishOf(g, 'front')).toMatchObject({ tier: 0, best: 1 });
+    expect(slotsOpen(g, 'front')).toEqual({ floor: 8, wall: 0, surface: 0 });
+  });
+
+  it('다른 면에 빈자리가 있어도 남은 한 가구 위가 넘치면 함께 회수할 물건까지 보존한다', () => {
+    const g = fresh();
+    put(g, 'front', 'cupboard'); put(g, 'front', 'side_table'); put(g, 'front', 'side_table');
+    for (let i = 0; i < 4; i++) put(g, 'front', 'can_beans', 0);
+    for (let i = 0; i < 3; i++) put(g, 'front', 'record', 1);
+    const before = structuredClone(g);
+    expect(takeBack(g, 'front', 0)).toEqual(shortage);
+    expect(g).toEqual(before);
+  });
+
+  it('면 가구와 함께 회수되는 물건을 뺀 뒤 남은 면이 꼭 차면 거두고 on을 다시 매긴다', () => {
+    const g = fresh();
+    put(g, 'front', 'cupboard'); put(g, 'front', 'side_table');
+    for (let i = 0; i < 4; i++) put(g, 'front', 'can_beans', 0);
+    for (let i = 0; i < 2; i++) put(g, 'front', 'record', 1);
+    const food = g.food;
+    expect(takeBack(g, 'front', 0)).toEqual({ ok: true });
+    expect(furnishOf(g, 'front')).toMatchObject({ tier: 0, best: 1, furnPts: 1 });
+    expect(decorItems(g, 'front').map(item => item.kind)).toEqual(['side_table', 'record', 'record']);
+    expect(decorItems(g, 'front').slice(1).map(item => item.on)).toEqual([0, 0]);
+    expect(g.food).toBe(food + 4 * DECOR.can_beans.v!);
+    expect(readStore(g).can_beans.n).toBe(4);
+    expect(slotsOpen(g, 'front').surface).toBe(0);
+  });
+
+  it.each(['captain', 'dining'].flatMap(car => ['floor', 'wall', 'surface'].map(spot => [car, spot])))('%s의 %s가 공통 단 하락으로 넘치면 거두지 않는다', (car, spot) => {
+    const g = fresh(); put(g, 'front', 'piano');
+    if (spot === 'floor') for (let i = 0; i < 9; i++) put(g, car, 'chair');
+    else if (spot === 'wall') put(g, car, 'painting');
+    else {
+      put(g, car, 'side_table');
+      for (let i = 0; i < 3; i++) put(g, car, 'record', 0);
+    }
+    const before = structuredClone(g);
+    expect(takeBack(g, 'front', 0)).toEqual(shortage);
+    expect(g).toEqual(before);
+    expect(commonTier(g)).toBe(1);
+  });
+
+  it('다른 살림 칸이 공통 단을 지키면 거두고 마지막 칸을 거둘 때 두 공통 칸을 검사한다', () => {
+    const g = fresh(); put(g, 'front', 'piano'); put(g, 'tail1', 'piano');
+    put(g, 'captain', 'painting'); put(g, 'dining', 'painting');
+    expect(takeBack(g, 'front', 0)).toEqual({ ok: true });
+    expect(commonTier(g)).toBe(1);
+    expect(takeBack(g, 'tail1', 0)).toEqual(shortage);
+    expect(takeBack(g, 'captain', 0)).toEqual({ ok: true });
+    expect(takeBack(g, 'tail1', 0)).toEqual(shortage);
+    expect(takeBack(g, 'dining', 0)).toEqual({ ok: true });
+    expect(takeBack(g, 'tail1', 0)).toEqual({ ok: true });
+    expect(commonTier(g)).toBe(0);
+    expect(slotsOpen(g, 'captain').wall).toBe(0);
+    expect(slotsOpen(g, 'dining').floor).toBe(8);
+  });
+
+  it.each([undefined, 0, 1] as const)('옛 저장 best=%s는 보상 이력만 채우고 다음 갱신까지 단과 RNG를 보존한다', best => {
+    const g = fresh();
+    g.version = SAVE_VERSION;
+    g.dom!.furnish!.front = { work: 0, jobs: [], furnPts: 0, tier: 1, best: best ?? 0, items: [] };
+    if (best === undefined) Reflect.deleteProperty(g.dom!.furnish!.front, 'best');
+    const loaded = readSave(JSON.parse(JSON.stringify(g)));
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.g.version).toBe(SAVE_VERSION);
+    expect(loaded.g.rng).toEqual(g.rng);
+    expect(furnishOf(loaded.g, 'front')).toMatchObject({ tier: 1, best: 1 });
+    const journal = structuredClone(loaded.g.journal);
+    const rel = loaded.g.comms.front.rel;
+    updateFurnish(loaded.g, 'front');
+    expect(furnishOf(loaded.g, 'front')).toMatchObject({ tier: 0, best: 1 });
+    put(loaded.g, 'front', 'piano');
+    expect(loaded.g.comms.front.rel).toBe(rel);
+    expect(loaded.g.journal).toEqual(journal);
   });
 });
 

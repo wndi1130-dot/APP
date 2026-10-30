@@ -163,6 +163,82 @@ func test_furnish_three_thresholds_research_gates_and_permanent_tiers() -> void:
 	assert_false(Mods.start_job(g, "furnish", "tail1"))
 
 
+func test_furniture_tiers_drop_but_each_tier_reward_and_journal_happen_once() -> void:
+	var g: Dictionary = _furnish_game()
+	g["dom"]["insulated"] = ["front"]
+	for tech: String in ["w5", "w1"]:
+		g["dom"]["techs"][tech] = {"stage": "done", "defect": false, "need": 3, "progress": 3}
+	assert_true(Mods.place_furniture(g, "front", "piano")["ok"])
+	for n: int in [1, 2, 3]:
+		if n > 1: _finish_furnish(g, "front", n)
+		var journal: Array = g.get("journal", []).duplicate(true)
+		var rel: float = g["comms"]["front"]["rel"]
+		for _repeat: int in 2:
+			assert_eq(Mods.remove_furniture(g, "front", 0), {"ok": true})
+			assert_eq(Mods.furnish_of(g, "front")["tier"], n - 1)
+			assert_eq(Mods.furnish_of(g, "front")["best"], n)
+			assert_true(Dom.is_furnish(Mods.furnish_of(g, "front")))
+			assert_eq(Mods.place_furniture(g, "front", "piano"), {"ok": true})
+			assert_eq(Mods.furnish_of(g, "front")["tier"], n)
+			assert_eq(g["comms"]["front"]["rel"], rel)
+			assert_eq(g["journal"], journal)
+	assert_eq(Mods.furnish_of(g, "front")["jobs"], [2, 3])
+	assert_eq(g["comms"]["front"]["rel"], 12.0)
+	assert_eq(g["journal"].filter(func(row: Dictionary) -> bool: return "그 소리를 들었다" in row["text"]).size(), 3)
+
+
+func test_work_only_tiers_survive_removal_at_all_three_levels() -> void:
+	for n: int in [1, 2, 3]:
+		var g: Dictionary = _furnish_game()
+		g["dom"]["insulated"] = ["front"]
+		for tech: String in ["w5", "w1"]:
+			g["dom"]["techs"][tech] = {"stage": "done", "defect": false, "need": 3, "progress": 3}
+		for step: int in range(1, n + 1): _finish_furnish(g, "front", step)
+		var journal: Array = g["journal"].duplicate(true)
+		var rel: float = g["comms"]["front"]["rel"]
+		assert_true(Mods.place_furniture(g, "front", "piano")["ok"])
+		assert_true(Mods.remove_furniture(g, "front", 0)["ok"])
+		assert_eq(Mods.furnish_of(g, "front")["tier"], n)
+		assert_eq(Mods.furnish_of(g, "front")["jobs"], range(1, n + 1))
+		assert_eq(g["comms"]["front"]["rel"], rel)
+		assert_eq(g["journal"], journal)
+
+
+func test_one_piece_rotated_through_all_six_cars_keeps_rewards_but_no_tiers() -> void:
+	var g: Dictionary = _furnish_game()
+	for _repeat: int in 2:
+		for car: String in Mods.FURNISH_CARS:
+			assert_true(Mods.place_furniture(g, car, "piano")["ok"])
+			assert_eq(Mods.furnish_of(g, car)["tier"], 1)
+			assert_true(Mods.remove_furniture(g, car, 0)["ok"])
+			assert_eq(Mods.furnish_of(g, car)["tier"], 0)
+			assert_eq(Mods.furnish_of(g, car)["best"], 1)
+	assert_eq(g["journal"].filter(func(row: Dictionary) -> bool: return "그 소리를 들었다" in row["text"]).size(), 6)
+
+
+func test_removal_restores_current_warmth_crowding_comparison_and_next_work() -> void:
+	var g: Dictionary = _furnish_game()
+	var sit: Array[float] = LawTech.sit(g, "front")
+	var comparison: Dictionary = LawTech.furnish_comparison(g)
+	assert_true(Mods.place_furniture(g, "front", "piano")["ok"])
+	assert_eq(LawTech.sit(g, "front")[0] - sit[0], 1.0)
+	assert_eq(LawTech.sit(g, "front")[2] - sit[2], 1.0)
+	assert_ne(LawTech.furnish_comparison(g), comparison)
+	assert_true(Mods.remove_furniture(g, "front", 0)["ok"])
+	assert_eq(LawTech.sit(g, "front"), sit)
+	assert_eq(LawTech.furnish_comparison(g), comparison)
+	g["dom"]["insulated"] = ["front"]
+	g["dom"]["techs"]["w5"] = {"stage": "done", "defect": false, "need": 3, "progress": 3}
+	assert_true(Mods.place_furniture(g, "front", "piano")["ok"])
+	_finish_furnish(g, "front", 2)
+	assert_true(Mods.remove_furniture(g, "front", 0)["ok"])
+	assert_eq(Mods.furnish_of(g, "front")["tier"], 1)
+	assert_eq(Mods.next_furnish_work(g, "front"), 1)
+	_finish_furnish(g, "front", 1)
+	assert_eq(Mods.furnish_score(g, "front"), 8)
+	assert_eq(Mods.furnish_of(g, "front")["tier"], 2)
+
+
 func test_furnish_cloth_and_recorded_four_store_refund() -> void:
 	var g: Dictionary = _furnish_game()
 	assert_eq(int(Mods.furnish_cost(1)["cloth"]), 0, "the first tier needs no cloth, so it does not compete with stretchers")
