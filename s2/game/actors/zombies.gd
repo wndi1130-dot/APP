@@ -839,6 +839,10 @@ func _run_down(z: Dictionary, delta: float) -> void:
 		z["spent_t"] = maxf(0.0, z["spent_t"] - delta)
 
 
+func end_dash(z: Dictionary) -> void:
+	_end_dash(z)
+
+
 func _end_dash(z: Dictionary) -> void:
 	z["dash_t"] = 0.0
 	z["spent_t"] = LungerRules.SPENT

@@ -54,6 +54,14 @@ const MELEE_SLACK: float = 0.15          # a blow lands this far past the weapon
 ## half of that for a crowd that comes on in numbers). A round in the body is
 ## reckoned the same as a blow (decision 474 J2: 0.5 s before).
 const BODY_STUN: float = 0.9
+const PUSH_BASE: float = 0.3
+const PUSH_MIN: float = 0.2
+const PUSH_MAX: float = 0.45
+const PUSH_Q_MIN: float = 0.85
+const PUSH_Q_MAX: float = 1.15
+const PUSH_STEP: float = 0.05
+const PUSH_K: Dictionary = {"broken_bottle": 0.7, "knife": 0.7, "wood_stake": 0.8,
+	"axe": 1.0, "frying_pan": 1.25, "crowbar": 1.25}
 ## How loud a melee blow on the dead is (decision 473 W3: quiet before; the
 ## reference game's blows carry 8 tiles), under its own tag "blow" that carries
 ## 0.75 of the level's radius (noise.gd). A quiet knife from behind stays quiet.
@@ -740,6 +748,18 @@ func swing(p, z: Dictionary) -> void:
 	if d.is_empty() or d.get("kind", "") != "melee":
 		shove(p)
 		return
+	var hit_push: bool = bool(game.opts.get("hit_push", false))
+	var hit_wall: bool = bool(game.opts.get("hit_wall", false))
+	var hit_counter: bool = bool(game.opts.get("hit_counter", false))
+	var state_b: String = ""
+	var counter_b: bool = false
+	var q_b: float = 1.0
+	if hit_push or hit_wall or hit_counter:
+		# Read once, before this blow spends fatigue or breaks the weapon.
+		state_b = String(z["state"])
+		var dash_b: float = float(z.get("dash_t", 0.0))
+		counter_b = hit_counter and state_b not in ["downed", "grab", "climb"] and HitFeel.countering(state_b, dash_b, p.position.distance_to(game.zombies.seen_pos(z)))
+		q_b = float(HitFeel.blow_power(float(d.get("weight", 0.0)), int(p.skills.get("strength", 5)), HitFeel.body_melee(p.body, p.mult_ctx()), p.body.breath_locked, behind(z, p.position), counter_b and hit_push, _edge_of(p), "swing")["q"])
 	var m: Dictionary = p.mults()
 	p.swing_t = float(d["swing"]) / float(m["swing"])
 	p.body.add_fatigue(float(d["fatigue"]) * BodyState.fatigue_mult({"carry_state": p.carry_state(), "cold_level": p.cold_level()}))
@@ -814,7 +834,29 @@ func swing(p, z: Dictionary) -> void:
 		melee_tally["body_stun"] += 1
 		z["stun"] = BODY_STUN
 		z["hit_hold"] = BODY_STUN   # the picture holds its struck pose as long (dead_body.gd)
-		_push(z, p.position, 0.3)
+		if not (hit_push or hit_wall or hit_counter) or state_b in ["downed", "grab", "climb"]:
+			_push(z, p.position, 0.3)
+		else:
+			var pushed_b: Dictionary = {}
+			if hit_push or hit_wall:
+				var distance_b: float = push_distance(push_k(wid), q_b) if hit_push else PUSH_BASE
+				pushed_b = _push_b(z, p.position, distance_b, hit_wall)
+				if hit_push and float(pushed_b["moved"]) > 0.0:
+					melee_tally["b_push"] = int(melee_tally.get("b_push", 0)) + 1
+				if hit_wall and bool(pushed_b["wall"]):
+					melee_tally["b_wall"] = int(melee_tally.get("b_wall", 0)) + 1
+			else:
+				_push(z, p.position, 0.3)
+			if counter_b:
+				if float(z.get("dash_t", 0.0)) > 0.0:
+					game.zombies.end_dash(z)
+					melee_tally["b_dash_cut"] = int(melee_tally.get("b_dash_cut", 0)) + 1
+				if z["state"] == "attack":
+					z["state"] = "chase"
+					melee_tally["b_counter_cut"] = int(melee_tally.get("b_counter_cut", 0)) + 1
+			if hit_wall:
+				_struck(p, seen, "swing", wid, target, "body", edge, {}, {"wall": bool(pushed_b["wall"])})
+				return
 	_struck(p, seen, "swing", wid, target, "body", edge)
 
 
@@ -880,10 +922,17 @@ func _note_power(z: Dictionary, blow: Dictionary) -> void:
 		z.erase("hit_power")
 
 
-func _struck(p, at: Vector3, way: String, wid: String, target: String, result: String, edge: int, blow: Dictionary = {}) -> void:
+func _struck(p, at: Vector3, way: String, wid: String, target: String, result: String, edge: int, blow: Dictionary = {}, extra: Dictionary = {}) -> void:
 	if not _blow_now.is_empty() and way == "swing":
 		_blow_now = HitFeel.resolved_power(_blow_now, result)
 		blow = _blow_now
+	if not extra.is_empty():
+		var info: Dictionary = {"way": way, "weapon": wid, "target": target, "result": result, "edge": edge,
+			"at": at, "by_player": p == game.player, "power": float(blow.get("power", -1.0)),
+			"tier": int(blow.get("tier", -1)), "counter": bool(blow.get("counter", false))}
+		info.merge(extra)
+		struck.emit(info)
+		return
 	struck.emit({"way": way, "weapon": wid, "target": target, "result": result, "edge": edge,
 		"at": at, "by_player": p == game.player, "power": float(blow.get("power", -1.0)),
 		"tier": int(blow.get("tier", -1)), "counter": bool(blow.get("counter", false))})
@@ -1014,6 +1063,45 @@ func break_grab(p) -> bool:
 		p.strike_total = 0.0
 		p.strike_at = null
 	return true
+
+
+static func push_k(weapon_id: String) -> float:
+	return float(PUSH_K.get(weapon_id, 1.0))
+
+
+static func push_distance(k: float, q: float) -> float:
+	return clampf(PUSH_BASE * k * clampf(q, PUSH_Q_MIN, PUSH_Q_MAX), PUSH_MIN, PUSH_MAX)
+
+
+func _push_spot_ok(from: Vector3, to: Vector3) -> bool:
+	return game.level_of(to) == game.level_of(from) and not game.grid_at(to).blocks_body(FieldGrid.cell_of(to)) and game.grid_at(from).body_line_clear(FieldGrid.cell_of(from), FieldGrid.cell_of(to))
+
+
+func _push_b(z: Dictionary, from: Vector3, dist: float, hit_wall: bool) -> Dictionary:
+	var start: Vector3 = z["pos"]
+	var away: Vector3 = start - from
+	away.y = 0
+	if away.length() < 0.01:
+		return {"moved": 0.0, "wall": false}
+	var direction: Vector3 = away.normalized()
+	var dest: Vector3 = start + direction * dist
+	var wall: bool = not _push_spot_ok(start, dest)
+	if wall:
+		dest = start
+		if hit_wall:
+			var shorter: float = maxf(PUSH_STEP, dist - PUSH_STEP)
+			while true:
+				var candidate: Vector3 = start + direction * shorter
+				if _push_spot_ok(start, candidate):
+					dest = candidate
+					break
+				if shorter <= PUSH_STEP:
+					break
+				shorter = maxf(PUSH_STEP, shorter - PUSH_STEP)
+	var moved: float = start.distance_to(dest)
+	if moved > 0.0:
+		z["pos"] = dest
+	return {"moved": moved, "wall": wall}
 
 
 func _push(z: Dictionary, from: Vector3, dist: float) -> void:

@@ -27,6 +27,8 @@ var seed_last := 20
 var modes: Array[String] = ["walk", "holdout"]
 var label := "after"
 var bot := "counter"
+var opt_keys: Array[String] = []   # --opts hit_push,hit_wall: game options turned on for every trial
+var weapon_fix := ""               # --weapon axe: every melee hand in the squad holds this weapon
 
 
 func _initialize() -> void:
@@ -114,6 +116,8 @@ func _arguments() -> bool:
 			"--seconds": seconds = value.to_float()
 			"--label": label = value
 			"--bot": bot = value
+			"--opts": opt_keys.assign(value.split(",", false))
+			"--weapon": weapon_fix = value
 			"--mode":
 				if value != "both":
 					modes.assign([value])
@@ -126,7 +130,8 @@ func _arguments() -> bool:
 				return false
 		i += 2
 	return hz > 0 and seconds > 0 and seed_last >= seed_first and bot in ["counter", "none"] \
-		and modes.all(func(m): return m in ["walk", "holdout"])
+		and modes.all(func(m): return m in ["walk", "holdout"]) \
+		and (weapon_fix == "" or String(Weapons.get_data(weapon_fix).get("kind", "")) == "melee")
 
 
 static func _striking(p) -> bool:
@@ -223,9 +228,16 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 	game.opts = {"seed": run_seed, "raiders": false, "auto_pause": false}
 	if mode == "holdout":
 		game.opts["holdout"] = "start"
+	for key: String in opt_keys:
+		game.opts[key] = true
 	root.add_child(game)
 	game.set_process(false)
 	game.process_mode = Node.PROCESS_MODE_DISABLED
+	# One weapon for every melee hand, so a weapon's rules are measured alone; guns stay.
+	if weapon_fix != "":
+		for p in game.squad:
+			if p.hands.size() > 0 and String(Weapons.get_data(p.weapon_id()).get("kind", "")) == "melee":
+				p.hands[0] = {"id": weapon_fix, "quality": "factory", "condition": 1.0, "loaded": 0}
 	var delta := 1.0 / hz
 	var ticks := roundi(seconds * hz)
 	var was: Dictionary = {}          # person -> [action, striking]
@@ -317,5 +329,7 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 		row["melee"] = game.combat.melee_tally.duplicate()
 	row["bites_player"] = bites_player
 	row["grabs_player"] = grabs_player
+	row["opts"] = opt_keys.duplicate()
+	row["weapon"] = weapon_fix
 	game.free()
 	return row
