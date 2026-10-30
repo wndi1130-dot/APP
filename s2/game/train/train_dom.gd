@@ -182,6 +182,14 @@ static func is_store(dom: Variant) -> bool:
 		elif key == "store":
 			if not TrainDecor.is_inventory(v):
 				return false
+		elif key == "decor80":
+			if not v is Array:
+				return false
+			var seen := {}
+			for car: Variant in v:
+				if not car is String or not TrainDecor.DECOR_CARS.has(car) or seen.has(car):
+					return false
+				seen[car] = true
 		elif key == "furnish":
 			if not v is Dictionary:
 				return false
@@ -237,8 +245,8 @@ static func is_job(v: Variant) -> bool:
 	return true
 
 
-## A per-car furnishing record. Tiers survive removed furniture; the current
-## points still describe furniture, while old unpositioned items remain readable.
+## A per-car furnishing record. The tier drops with removed furniture while best keeps
+## the highest rewarded tier (517); old saves may still hold a higher kept tier.
 static func is_furnish(v: Variant, car: String = "front") -> bool:
 	if car in ["captain", "dining"]:
 		return v is Dictionary and v.size() == 1 and TrainDecor.is_items(v.get("items"))
@@ -249,7 +257,7 @@ static func is_furnish(v: Variant, car: String = "front") -> bool:
 			return false
 		if float(v[key]) > (float(TrainMods.D["furnishFurnitureCap"]) if key == "furnPts" else 3.0):
 			return false
-	if not v["jobs"] is Array or not v["items"] is Array or int(v["work"]) != v["jobs"].size() or v["tier"] != v["best"]:
+	if not v["jobs"] is Array or not v["items"] is Array or int(v["work"]) != v["jobs"].size() or int(v["tier"]) > int(v["best"]):
 		return false
 	var jobs := {}
 	for n: Variant in v["jobs"]:
@@ -261,8 +269,9 @@ static func is_furnish(v: Variant, car: String = "front") -> bool:
 	var points: int = TrainDecor.furniture_points(v["items"])
 	if int(v["furnPts"]) != mini(points, int(TrainMods.D["furnishFurnitureCap"])):
 		return false
-	# The kept tier lies between what the current score reaches and what the done jobs
-	# with full furniture could ever have reached (tier 3 with no work is not a save).
+	# The tier lies between what the current score reaches and what the done jobs with
+	# full furniture could ever have reached (tier 3 with no work is not a save); best,
+	# once reached the same way, cannot pass that ceiling either.
 	var job_pts: int = 0
 	for n: int in jobs:
 		job_pts += int(TrainMods.FURNISH_WORK[n]["points"])
@@ -274,7 +283,7 @@ static func is_furnish(v: Variant, car: String = "front") -> bool:
 			low = n
 		if job_pts + int(TrainMods.D["furnishFurnitureCap"]) >= need:
 			high = n
-	return int(v["tier"]) >= low and int(v["tier"]) <= high
+	return int(v["tier"]) >= low and int(v["best"]) <= high
 
 
 static func is_expert(v: Variant) -> bool:

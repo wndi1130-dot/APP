@@ -154,20 +154,20 @@ func set_solid(c: Vector2i, kind: int) -> void:
 		opq[index(c)] = 1 if kind == Solid.WALL or kind == Solid.BLOCK or kind == Solid.DOOR else 0
 
 
+## Every cell's caches (_cache_cell), then both path grids from them (adopt_paths). A cell
+## that is not a door or window is read off its solid alone, and the path grids are filled
+## a call a way: setting every cell one by one took seconds on a town map's four floors.
 func refresh_paths() -> void:
-	for y in range(height):
-		for x in range(width):
-			var c := Vector2i(x, y)
-			_cache_cell(c)
-			people_path.set_point_solid(c, walk_people[y * width + x] == 0)
-			dead_path.set_point_solid(c, walk_dead[y * width + x] == 0)
-			# Deep snow and ice cost more so people route around them when cheap.
-			var cost := 1.0
-			if floor[index(c)] == Floor.DEEP_SNOW:
-				cost = 1.6
-			people_path.set_point_weight_scale(c, cost)
-	_walk_ready = true
-	revision += 1
+	for i in range(width * height):
+		var kind: int = solid[i]
+		if kind == Solid.DOOR or kind == Solid.WINDOW or kind > Solid.AIR:
+			_cache_cell(Vector2i(i % width, i / width))
+		else:
+			opq[i] = 1 if kind == Solid.WALL or kind == Solid.BLOCK else 0
+			var open: int = 1 if kind == Solid.NONE else 0
+			walk_people[i] = open
+			walk_dead[i] = open
+	adopt_paths()
 
 
 ## Whether refresh_paths has run on this grid at least once. Not that every cell's caches
@@ -177,10 +177,10 @@ func paths_ready() -> bool:
 	return _walk_ready
 
 
-## The path grids from walk caches already right for every cell (a grid grown from one
-## whose caches were, map_shift.gd): each grid filled one way in a call and only the cells
-## the other way set, the deep snow's weight likewise. The same end as refresh_paths,
-## without every cell's checks again.
+## The path grids from walk caches already right for every cell (refresh_paths, or a grid
+## grown from one whose caches were, map_shift.gd): each grid filled one way in a call and
+## only the cells the other way set, the deep snow's weight likewise (deep snow and ice cost
+## more, so people route round them when it is cheap).
 func adopt_paths() -> void:
 	for pair: Array in [[people_path, walk_people], [dead_path, walk_dead]]:
 		var path: AStarGrid2D = pair[0]

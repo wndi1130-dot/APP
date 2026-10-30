@@ -609,5 +609,6 @@ describe('J10 5~13: 문서 규칙', () => {
     const names = g.dom!.typhus[0].patients;
     const view = viewCard(g, g.cards.find(c => c.kind === 'dom:typhus')!);
     for (const n of names) expect(view.body).toContain(n);
+    expect(view.body).toContain(`${names.join(', ')}이(가) 열에 들떠`);
   });
 });

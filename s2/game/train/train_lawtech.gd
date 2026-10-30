@@ -13,6 +13,7 @@ extends RefCounted
 
 const TrainResearch = preload("res://game/train/train_research.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
+const TrainDecor = preload("res://game/train/train_decor.gd")
 
 ## S1 domestic/data.ts D: what a technology leaves of an ideal law's price.
 const D: Dictionary = {"m5TreatMed": 1.3, "e3aHeatCoal": 0.65, "iceBoxFood": 1.5}
@@ -172,11 +173,42 @@ static func furnish_comparison(g: Dictionary) -> Dictionary:
 	return out
 
 
-## Called after runWorkshop, once per settlement; a piano pays only once per
-## populated community, after comparison (same clamp and ledger order as S1).
+## Per-car decoration reward before the community share and relationship clamp.
+static func decor_rel_gain(g: Dictionary, car: String) -> float:
+	var band: int = TrainDecor.decor_band(TrainDecor.decor_percent(g, car))
+	if band < 0 or car == "captain": return 0.0
+	if car == "dining": return float(TrainMods.D["diningDecorRel"][band])
+	if not TrainMods.FURNISH_CARS.has(car): return 0.0
+	return float(TrainMods.D["decorRel"][band if TrainMods.furnish_of(g, car)["tier"] == 3 else 0])
+
+
+static func decor_voice(g: Dictionary, car: String) -> String:
+	if car == "captain": return ""
+	var mood: int = 0
+	if car == "dining":
+		var trust: float = float(g.get("trust", 0))
+		mood = 1 if trust >= float(TrainMods.D["decorVoiceTrustGood"]) else (2 if trust < float(TrainMods.D["decorVoiceTrustLow"]) else 0)
+	else:
+		var rel: float = float(g["comms"][TrainMods.CAR_COMM[car]]["rel"])
+		mood = 1 if rel >= float(TrainMods.D["decorVoiceRelGood"]) else (2 if rel <= float(TrainMods.D["decorVoiceRelBad"]) else 0)
+	return TrainDecor.FURNISH80[car]["say"][mood]
+
+
+static func _first_decor80(g: Dictionary) -> void:
+	var d: Dictionary = g["dom"]
+	for car: String in TrainDecor.DECOR_CARS:
+		if d.get("decor80", []).has(car) or TrainDecor.decor_band(TrainDecor.decor_percent(g, car)) < 1: continue
+		if not d.has("decor80"): d["decor80"] = []
+		d["decor80"].append(car)
+		var say: String = decor_voice(g, car)
+		TrainMods._journal(g, TrainDecor.FURNISH80[car]["journal"] + (" 「%s」" % say if say != "" else ""), "good")
+
+
+## S2 calls this from TrainWorkshop.stretch; keep S1's clamp and ledger order.
 static func furnish_tick(g: Dictionary) -> void:
 	if not g.get("dom") is Dictionary:
 		return
+	_first_decor80(g)
 	var comparison: Dictionary = furnish_comparison(g)
 	for c: String in comparison:
 		TrainMods._bump_furnish_rel(g, c, float(comparison[c]))
@@ -189,6 +221,13 @@ static func furnish_tick(g: Dictionary) -> void:
 					piano = piano or bool(TrainMods.FURNITURE[item["kind"]]["piano"])
 		if piano:
 			TrainMods._bump_furnish_rel(g, c, float(TrainMods.D["furnishPianoRel"]))
+	var dining: float = decor_rel_gain(g, "dining")
+	for car: String in TrainMods.FURNISH_CARS:
+		var c: String = TrainMods.CAR_COMM[car]
+		TrainMods._bump_furnish_rel(g, c, decor_rel_gain(g, car) / float(TrainMods.COMM_CARS[c]))
+	for car: String in TrainMods.FURNISH_CARS:
+		var c: String = TrainMods.CAR_COMM[car]
+		TrainMods._bump_furnish_rel(g, c, dining / float(TrainMods.COMM_CARS[c]))
 
 
 ## lawTechRes: a law's fixed effects as technology has bent them (M5: 모두를

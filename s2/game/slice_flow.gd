@@ -36,6 +36,7 @@ const FieldClock = preload("res://game/sim/field_clock.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
 const RouteBands = preload("res://game/train/route_bands.gd")
 const RouteStops = preload("res://game/train/route_stops.gd")
+const StopForm = preload("res://game/sim/stop_form.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
@@ -87,6 +88,7 @@ const TrainAdvance = preload("res://game/train/train_advance.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const FieldCouncil = preload("res://game/politics/field_council.gd")
 const CouncilAgenda = preload("res://game/politics/council_agenda.gd")
+const DecorGrid = preload("res://game/train/decor_grid.gd")
 ## The stretch the slice's train first runs (S1's slice: field_arrival.test.ts).
 const FIRST_SEG: int = 2
 ## Steps the train may take from the session to the second station before the slice gives up.
@@ -179,6 +181,8 @@ var home: Control = null           # the train's own screen on the train steps: 
 var pane: Control = null           # the picked car's pane (car_pane.gd)
 var bar: Control = null            # the keys along the bottom (home_bar.gd)
 var sel: String = ""               # the picked car's id, "" with the pane folded
+var decor_id: String = ""          # the car being decorated (open_decor), "" when none
+var _decor_hidden: Array = []      # what open_decor put away, to bring back
 var _plate_press_id: String = ""
 var _plate_press_pos: Vector2 = Vector2.ZERO
 var _plate_pointer: int = -1         # mouse, or the touch index
@@ -307,7 +311,7 @@ func go(i: int) -> void:
 	# The next stop is known on the train: its map is made ready off the main
 	# thread while the train runs.
 	if id == "train" and _cinema_on():
-		loader.prepare(_field_place(), int(opts.get("seed", 1)), String(opts.get("stop_form", "")), float(opts.get("stop_form_m", -1.0)))
+		loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)))
 	if id == "stop_pick" and _cinema_on():
 		_show_stop_cinema()
 		return
@@ -406,6 +410,22 @@ func _stop_band(seg: int) -> String:
 	return RouteBands.stop_band("prologue", _stop_of(seg))
 
 
+## That stop's form (stop_form.gd): one asked of the slice (opts "stop_form", a check switch),
+## else the route's; "" leaves it to the place.
+func _stop_form(seg: int) -> String:
+	if opts.has("stop_form"):
+		return String(opts["stop_form"])
+	return StopForm.on_route("prologue", _stop_of(seg))
+
+
+## The stretch of the slice's field step: the map made ready while the train runs is its stop's.
+static func _field_seg() -> int:
+	for row: Array in STEPS:
+		if row[0] == "field":
+			return int(row[2])
+	return FIRST_SEG
+
+
 ## The season table's stretch that stop stands on (route_stops.gd): the stop's weather and
 ## cold, not those of the table's row with the stretch's number. Before the first stop (the
 ## train setting out on the first stretch) it is the table's first stretch, the start.
@@ -423,7 +443,7 @@ func _show_stop_cinema() -> void:
 	for p in plates.get_children():
 		plates.remove_child(p)
 		p.queue_free()
-	loader.prepare(_field_place(), int(opts.get("seed", 1)), String(opts.get("stop_form", "")), float(opts.get("stop_form_m", -1.0)))
+	loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)))
 	# Its own scene (scenes/stop_cinema.tscn), so the train and the weather can be dressed there.
 	var c = STOP_CINEMA_SCENE.instantiate()
 	c.name = "StopCinema"
@@ -754,6 +774,8 @@ func _set_cover() -> void:
 	var covered_px: float = get_viewport().get_visible_rect().size.x - pane_rect.position.x
 	if pane_rect.size.x == 0.0:
 		covered_px = CarPane.CSS_SIZE.x * UiFonts.K
+	if not pane.visible:
+		covered_px = 0.0
 	var left_px: float = 0.0
 	if is_instance_valid(paper) and (paper as TurnCard).folded:
 		left_px = (paper as TurnCard).folded_edge()
@@ -1117,11 +1139,11 @@ func _plate(name_label: Label3D) -> Control:
 	row.set_meta("x", name_label.position.x)
 	row.set_meta("id", id)
 	row.add_child(_enamel(name_label))
-	if _has_people(def):
+	if _has_people(def) or _decor_car(id):
 		row.mouse_filter = Control.MOUSE_FILTER_STOP
 		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		row.gui_input.connect(_plate_input.bind(id))
-		if float(St.situation(train_g, train_t, String(def["comm"]))[0]) < CarPane.COLD:
+		if _has_people(def) and float(St.situation(train_g, train_t, String(def["comm"]))[0]) < CarPane.COLD:
 			# The snow mark alone: the frost says cold (결정 417).
 			var tag: Control = GlassParts.paper_tag("", "snow", -2.5)
 			tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1299,12 +1321,12 @@ func _select(id: String) -> void:
 	var def: Dictionary = {}
 	if id != "" and is_instance_valid(train):
 		def = (train.car(id) as Dictionary).get("def", {})
-	if _has_people(def):
+	if _has_people(def) or _decor_car(id):
 		sel = id
 	if not is_instance_valid(pane):
 		return
-	pane.visible = sel != ""
-	if sel != "":
+	pane.visible = sel != "" and _shows_pane(def)
+	if pane.visible:
 		pane.show_car(def, train_g, train_t)
 	if not is_instance_valid(train) or train.camera == null:
 		return
@@ -1320,9 +1342,58 @@ func _select(id: String) -> void:
 			train.set_pane(0.0)
 		return
 	train.focus_car(at)
-	if sel != "":
+	# Room is made for the pane only when one shows (a decorated car with no people has none yet).
+	if sel != "" and pane.visible:
 		var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
 		train.scroll(UiFonts.px(PANE_SHIFT_CSS) * train.camera.size / view_h)
+
+
+## A car with no people of its own that is still decorated (결정 511·513: the captain's and the
+## dining car) is picked as the others; its pane is the domestic side's small one once car_pane.gd
+## draws it (its SMALL_PANE), and till then none.
+func _decor_car(id: String) -> bool:
+	return id != "" and not DecorGrid.of(id).is_empty()
+
+
+func _shows_pane(def: Dictionary) -> bool:
+	return _has_people(def) or (CarPane as Script).get_script_constant_map().has("SMALL_PANE")
+
+
+## Decorating a car (결정 506·510·511, train_scene.gd enter_decor): the train shows it alone with
+## its grid, and the gauges, the plates, the keys, the pane and a folded paper go away till
+## leave_decor. Not while a paper card is open to choose on, nor for a car the decor table has not.
+## The strip of things, the title and the exit are the domestic side's (decor_strip.gd, decor_hud.gd).
+func open_decor(id: String) -> bool:
+	if not is_instance_valid(train) or decor_id != "":
+		return false
+	if is_instance_valid(paper) and not (paper as TurnCard).folded:
+		return false
+	_put_rooms_away()
+	if not train.enter_decor(id):
+		return false
+	decor_id = id
+	_decor_hidden.clear()
+	# The snow over the screen too: with the roof off it would fall inside the car.
+	for n in [gauges, plates, marks, home, paper, next_button, soot_bot, weather]:
+		if is_instance_valid(n) and n is CanvasItem and (n as CanvasItem).visible:
+			(n as CanvasItem).visible = false
+			_decor_hidden.append(n)
+	return true
+
+
+## Back from decorating: the train as it was, the screens put away come back, the car still picked.
+func leave_decor() -> void:
+	if decor_id == "":
+		return
+	var id: String = decor_id
+	decor_id = ""
+	if is_instance_valid(train):
+		train.exit_decor()
+	for n in _decor_hidden:
+		if is_instance_valid(n):
+			(n as CanvasItem).visible = true
+	_decor_hidden.clear()
+	_select(id)
 
 
 ## A room on the bottom bar with a screen of its own (home_bar.gd open_rooms).
@@ -1564,11 +1635,13 @@ func _field_opts() -> Dictionary:
 	o["laws"] = (train_g.get("passed", {}) as Dictionary).keys()
 	if opts.has("place"):
 		o["place"] = String(opts["place"])
-	# A stop form asked of the slice (stop_ground.gd, a test switch for now): the loader
-	# makes the map in it, off the main thread (prepare), and the field keeps it.
-	for key: String in ["stop_form", "stop_form_m"]:
-		if opts.has(key):
-			o[key] = opts[key]
+	# The stop's form (_stop_form, stop_ground.gd): the loader makes the map in it, off the
+	# main thread (prepare), and the field keeps it.
+	var form := _stop_form(int(STEPS[step][2]))
+	if not form.is_empty():
+		o["stop_form"] = form
+	if opts.has("stop_form_m"):
+		o["stop_form_m"] = opts["stop_form_m"]
 	return o
 
 
