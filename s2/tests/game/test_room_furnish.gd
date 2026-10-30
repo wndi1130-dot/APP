@@ -802,4 +802,4 @@ func test_nightstands_stand_by_the_pillow() -> void:
 	assert_gt(stands, 2, "nightstands still stand")
 	assert_gt(int(stats["head_beds"]), int(stats["wide_bedrooms"]) / 2, "most wide bedrooms lay the bed head to a wall: %s" % str(stats))
 	assert_gt(int(stats["stand_pairs"]), 0, "a head-to-wall bed gets a nightstand on both sides: %s" % str(stats))
-	assert_between(int(stats["twins"]), 1, roundi(int(stats["bedrooms"]) * RoomFurnish.TWIN_SHARE) + 1, "about 12% of the bedrooms have twin beds: %s" % str(stats))
+	assert_between(int(stats["twins"]), 1, roundi(int(stats["bedrooms"]) * RoomFurnish.TWIN_SHARE) + 1, "about 12%% of the bedrooms have twin beds: %s" % str(stats))
