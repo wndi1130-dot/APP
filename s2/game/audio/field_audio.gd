@@ -90,6 +90,13 @@ const WINDOW_TURN: Dictionary = {
 	"closed": ["window_close", 0.4, 1.02, 1.12, "wooden"],
 	"curtain": ["curtain", 0.25, 0.7, 0.8, "@swing_light"],
 }
+## Someone climbing through a window's frame (field_actions vault_window): the
+## player's ear only, as a window turned. Cloth dragged over the sill, and while
+## broken glass is still in the frame, the glass too. Rows as WINDOW_TURN's;
+## until their files are in, a light swing pitched low and the impact set's
+## glass, quiet and high. First values.
+const VAULT_VOICE: Array = ["window_vault", 0.3, 0.6, 0.7, "@swing_light"]
+const VAULT_GLASS: Array = ["window_vault_glass", 0.3, 1.25, 1.45, "glass"]
 ## A door or a window that will not give to the player's hand, as the note
 ## says so (field_actions): a locked door rattles in its frame, a boarded one
 ## thuds against its planks. The player's ear only, as DOOR_TURN.
@@ -1728,6 +1735,17 @@ func window_turn(c: Vector2i, what: String) -> void:
 		return
 	var voice: Array = WINDOW_TURN[what]
 	_voice_or_standin(voice, String(voice[4]), game.FieldGrid.center(c))
+
+
+## Someone climbing through the window at `c`, heard from it; `glass`: broken
+## glass still in its frame, heard too.
+func window_vault(c: Vector2i, glass: bool) -> void:
+	if quiet or game == null or game.player == null:
+		return
+	var at: Vector3 = game.FieldGrid.center(c)
+	_voice_or_standin(VAULT_VOICE, String(VAULT_VOICE[4]), at)
+	if glass:
+		_voice_or_standin(VAULT_GLASS, String(VAULT_GLASS[4]), at)
 
 
 ## A door or a window that would not give to the player's hand (SHUT_FAST:

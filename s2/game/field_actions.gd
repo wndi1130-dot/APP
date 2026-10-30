@@ -984,6 +984,8 @@ func vault_window(p, c: Vector2i) -> void:
 	if not can_vault_window(p, c):
 		return
 	var w: Dictionary = game.grid.windows[c]
+	if game.audio != null:
+		game.audio.window_vault(c, WindowRules.can_clear(w))   # the ear's; climbing through is quiet to the rules
 	if game.rng.randf() < WindowRules.cross_cut_chance(w, p.gloves):
 		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
 		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")
