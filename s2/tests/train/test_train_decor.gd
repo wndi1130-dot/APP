@@ -127,6 +127,18 @@ func test_another_current_tier_keeps_common_capacity_until_the_last_car_drops() 
 	assert_eq(Mods.slots_open(g, "dining")["floor"], 8)
 
 
+func test_a_legacy_kept_tier_is_not_a_drop_so_a_pointless_painting_comes_back() -> void:
+	var g: Dictionary = _fresh()
+	var paintings: Array = []
+	for k: int in 6:
+		paintings.append({"kind": "painting", "size": "small", "spot": "wall", "at": [k, -1], "rot": 0, "v": Decor.DECOR["painting"]["v"]})
+	g["dom"]["furnish"]["medtech"] = {"work": 1, "jobs": [2], "furnPts": 0, "tier": 2, "best": 2, "items": paintings}
+	assert_eq(Mods.take_back(g, "medtech", 0), {"ok": true})
+	assert_eq(Mods.furnish_of(g, "medtech")["tier"], 1)
+	assert_eq(Mods.furnish_of(g, "medtech")["best"], 2)
+	assert_eq(Decor.items_of(g, "medtech").size(), 5)
+
+
 func test_legacy_best_is_filled_without_recalculating_tier_on_load() -> void:
 	for best: Variant in [null, 0, 1]:
 		var g: Dictionary = _fresh()

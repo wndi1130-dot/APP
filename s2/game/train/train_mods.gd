@@ -434,13 +434,17 @@ static func take_back(g: Dictionary, car: String, index: Variant) -> Dictionary:
 			remap[j] = kept.size()
 			kept.append(items[j])
 	if FURNISH_CARS.has(car):
+		# A drop is measured against what the placed items reach now: an old save may still keep a higher tier.
 		var tier: int = furnish_tier(g, car, kept)
-		if tier < int(furnish_of(g, car)["tier"]):
+		if tier < furnish_tier(g, car, items):
 			var common: int = 0
+			var before: int = 0
 			for other: String in FURNISH_CARS:
-				common = maxi(common, tier if other == car else int(furnish_of(g, other)["tier"]))
+				var now: int = furnish_tier(g, other, TrainDecor.items_of(g, other))
+				before = maxi(before, now)
+				common = maxi(common, tier if other == car else now)
 			var fits: bool = TrainDecor.slots_fit(car, kept, tier)
-			if common < TrainDecor.common_tier(g):
+			if common < before:
 				for other: String in ["captain", "dining"]:
 					fits = fits and TrainDecor.slots_fit(other, TrainDecor.items_of(g, other), common)
 			if not fits:

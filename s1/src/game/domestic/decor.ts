@@ -122,10 +122,12 @@ export function takeBack(g: Game, car: string, i: number): DecorCheck {
   const removed = new Set([...children, i]);
   const kept = items.filter((_, j) => !removed.has(j));
   if (DECOR_SLOT_TABLE[car as DecorCar] === 'tier') {
+    // A drop is measured against what the placed items reach now: an old save may still keep a higher tier.
     const tier = furnishTier(g, car, kept);
-    if (tier < furnishOf(g, car).tier) {
-      const common = Math.max(...FURNISH_CARS.map(other => other === car ? tier : furnishOf(g, other).tier)) as FurnishTier;
-      if (!slotsFit(car, kept, tier) || (common < commonTier(g)
+    if (tier < furnishTier(g, car)) {
+      const now = FURNISH_CARS.map(other => furnishTier(g, other));
+      const common = Math.max(...FURNISH_CARS.map((other, k) => other === car ? tier : now[k])) as FurnishTier;
+      if (!slotsFit(car, kept, tier) || (common < Math.max(...now)
         && ['captain', 'dining'].some(other => !slotsFit(other, decorItems(g, other), common)))) {
         return fail('살림이 내려가면 자리가 모자란다. 다른 것부터 거둬라');
       }

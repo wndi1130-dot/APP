@@ -2112,14 +2112,78 @@ static func level_floor_arrays(levels_of: Dictionary, keys: Dictionary) -> Dicti
 		if int(lv) == 0:
 			continue
 		var lg: FieldGrid = levels_of[lv]
-		var floors: Dictionary = {}
-		for y in range(lg.height):
-			level_floor_row(lg, int(lv), y, floors)
-		var tiles: Dictionary = {}
-		for tile in floors:
-			tiles[tile] = (floors[tile] as SurfaceTool).commit_to_arrays()
-		out[lv] = tiles
+		out[lv] = level_floor_tiles(lg, int(lv))
 		keys[lv] = floor_key(lg)
+	return out
+
+
+## An upper floor's or the cellar's tiles at once: what level_floor_row gives row by row
+## through SurfaceTools (the same arrays, the tiles in the order the rows first reach
+## them), written straight into the arrays over the plain cells. An edge stop's floors
+## are mostly air beyond the old map: a call a cell was most of their time. Which cells
+## lay a floor, and how, is said here and in level_floor_row (and floor_key): change them
+## together (test_ground_arrays holds the two to the same arrays).
+static func level_floor_tiles(lg: FieldGrid, lv: int) -> Dictionary:
+	var w := lg.width
+	var h := lg.height
+	var so := lg.solid
+	var bu := lg.building
+	var fl := lg.floor
+	var tiles_x := ceili(w / float(TILE))
+	# The cells each tile lays, and the tiles in the order a row-by-row walk meets them.
+	var counts := PackedInt32Array()
+	counts.resize(tiles_x * ceili(h / float(TILE)))
+	var order: Array[Vector2i] = []
+	for y in h:
+		var row := y * w
+		var ty := y / TILE
+		for x in w:
+			var kind := so[row + x]
+			if kind == S.AIR or (kind == S.BLOCK and bu[row + x] < 0):
+				continue
+			var t := ty * tiles_x + x / TILE
+			if counts[t] == 0:
+				order.append(Vector2i(x / TILE, ty))
+			counts[t] += 1
+	var y0 := lv * LEVEL_H
+	var out: Dictionary = {}
+	for tile in order:
+		var n := counts[tile.y * tiles_x + tile.x] * 6
+		var verts := PackedVector3Array()
+		verts.resize(n)
+		var normals := PackedVector3Array()
+		normals.resize(n)
+		normals.fill(Vector3.UP)
+		var colors := PackedColorArray()
+		colors.resize(n)
+		var at := 0
+		for y in range(tile.y * TILE, mini((tile.y + 1) * TILE, h)):
+			for x in range(tile.x * TILE, mini((tile.x + 1) * TILE, w)):
+				var i := y * w + x
+				var kind := so[i]
+				if kind == S.AIR or (kind == S.BLOCK and bu[i] < 0):
+					continue
+				var color := FLOOR_COLORS[fl[i]]
+				var tint := (float((x * 73 + y * 37) % 11) / 11.0 - 0.5) * 0.035
+				# Upper floors and the cellar are all under a roof (alpha 0).
+				color = Color(color.r + tint, color.g + tint, color.b + tint, 0.0)
+				var p0 := Vector3(x, y0, y)
+				var p2 := Vector3(x + 1, y0, y + 1)
+				verts[at] = p0
+				verts[at + 1] = Vector3(x + 1, y0, y)
+				verts[at + 2] = p2
+				verts[at + 3] = p0
+				verts[at + 4] = p2
+				verts[at + 5] = Vector3(x, y0, y + 1)
+				for j in 6:
+					colors[at + j] = color
+				at += 6
+		var arrays: Array = []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX] = verts
+		arrays[Mesh.ARRAY_NORMAL] = normals
+		arrays[Mesh.ARRAY_COLOR] = colors
+		out[tile] = arrays
 	return out
 
 
