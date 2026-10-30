@@ -1,15 +1,16 @@
 // 결정 490 첫째 PR: 실제 S1a+S1c caretaker engaged 봇, 같은 sp-0… 시드.
-// 사용: npx tsx tools/supplies_sim.ts [판 수=300] [JSON 경로] [--arms=off,on,full]
+// 사용: npx tsx tools/supplies_sim.ts [판 수=300] [JSON 경로] [--arms=off,on,on3] [--baseline-off=SHA256] [--baseline-on=SHA256]
 // full은 쓰기 직전 (1 + supPlentyNeeds)×need까지 보충해, 쓴 뒤에도 늘 넉넉함(2×need)이 선다 — 「늘 손에 넣는 길」의 위 끝.
 import { writeFileSync } from 'node:fs';
-import { COMMS, P, seats, standings } from '../src/game';
+import { createHash } from 'node:crypto';
+import { COMMS, COMM_NAME, CONDITIONS, P, seats, standings } from '../src/game';
 import type { Comm, Game } from '../src/game';
 import { SUP_YIELD, SUP_MAKE, SUPPLIES_PROBE } from '../src/game/supplies';
 import type { SuppliesSource } from '../src/game/supplies';
 import { playGame } from './s1c_bot';
 import type { BotOptions } from './s1c_bot';
 
-const ARMS = ['off', 'on', 'full', 'none', 'make_last', 'make_first'] as const;
+const ARMS = ['off', 'on', 'on3', 'full', 'none', 'make_last', 'make_first'] as const;
 type Arm = typeof ARMS[number];
 const BASE: BotOptions = { s1c: true, policy: 'caretaker', dom: 'engaged' };
 const FULL_BEFORE_USE_NEEDS = 1 + P.supPlentyNeeds;
@@ -18,10 +19,16 @@ const flags = process.argv.slice(2).filter(a => a.startsWith('--'));
 const n = Number(args[0] ?? 300);
 const out = args[1];
 if (!Number.isSafeInteger(n) || n < 1) throw new Error('판 수는 1 이상의 정수여야 한다');
-if (args.length > 2 || flags.some(f => !f.startsWith('--arms=')) || flags.length > 1) {
+if (args.length > 2 || flags.some(f => !/^--(?:arms|baseline-off|baseline-on)=/.test(f))
+  || new Set(flags.map(f => f.split('=')[0])).size !== flags.length) {
   throw new Error(`사용: supplies_sim.ts [판 수=300] [JSON] [--arms=${ARMS.join(',')}]`);
 }
-const selected = flags[0]?.slice('--arms='.length).split(',') ?? ['off', 'on', 'full'];
+const selected = flags.find(f => f.startsWith('--arms='))?.slice('--arms='.length).split(',') ?? ['off', 'on', 'full'];
+const baselineOff = flags.find(f => f.startsWith('--baseline-off='))?.slice('--baseline-off='.length);
+const baselineOn = flags.find(f => f.startsWith('--baseline-on='))?.slice('--baseline-on='.length);
+for (const hash of [baselineOff, baselineOn]) {
+  if (hash !== undefined && !/^[a-f0-9]{64}$/.test(hash)) throw new Error('기준 해시는 소문자 SHA-256이어야 한다');
+}
 if (!selected.length || selected.some(a => !ARMS.includes(a as Arm)) || new Set(selected).size !== selected.length) {
   throw new Error(`--arms는 ${ARMS.join(',')} 중 겹치지 않게 고른다`);
 }
@@ -29,6 +36,7 @@ const arms = selected as Arm[];
 
 interface Row {
   seed: string;
+  stateHash: string;
   end: string;
   complete: boolean;
   settlements: number;
@@ -41,6 +49,7 @@ interface Row {
   typhus: boolean;
   coverageObservations: number;
   shortageObservations: number;
+  shortageSettlements: number;
   shortageShare: number | null;
   coverageSum: number;
   coverageMean: number | null;
@@ -57,6 +66,9 @@ interface Row {
   insulatedCars: number;
   furnishJobs: number;
   w6RestoredSeg: number | null;
+  asksOffered: number;
+  asks: Record<'give_sup' | 'give_fine', { made: number; kept: number; broken: number; pending: number; otherEnded: number }>;
+  favors: { offered: number; granted: number; fine: number; refused: number };
 }
 
 function run(arm: Arm, seed: string): Row {
@@ -64,6 +76,9 @@ function run(arm: Arm, seed: string): Row {
   let uses = 0;
   let observations = 0;
   let short = 0;
+  let shortageSettlements = 0;
+  let asksOffered = 0;
+  const favors = { offered: 0, granted: 0, fine: 0, refused: 0 };
   let coverageSum = 0;
   let plenty = 0;
   let injected = 0;
@@ -98,6 +113,7 @@ function run(arm: Arm, seed: string): Row {
       needTotal += turn.need;
       usedTotal += turn.use;
       if (turn.plenty) plenty += 1;
+      if (Object.values(turn.cover).some(f => f < 1)) shortageSettlements += 1;
       for (const f of Object.values(turn.cover)) {
         observations += 1;
         if (f < 1) short += 1;
@@ -108,20 +124,48 @@ function run(arm: Arm, seed: string): Row {
     SUPPLIES_PROBE.onMake = (_g, amount, fine) => { made += amount; if (fine) madeFine += amount; };
     SUPPLIES_PROBE.onRestore = g => { w6RestoredSeg ??= g.seg; };
     const supMake = arm === 'make_first' ? 'first' : arm === 'make_last' ? 'last' : 'none';
-    const { g } = playGame(seed, { ...BASE, sup: arm !== 'off', ...(arm !== 'off' ? { supMake } : {}), probe: {
-      beforePick: observeCards, afterPick: observeCards, beforePrep: observeCards, afterStop: observeCards,
+    const { g } = playGame(seed, { ...BASE, sup: arm !== 'off', ...(arm !== 'off' ? { supMake, supAsk: arm !== 'on' } : {}), probe: {
+      beforePick: (x, card, view, idx) => {
+        observeCards(x);
+        if (card.kind !== 'favor') return;
+        favors.offered += 1;
+        if (view.choices[idx].id === 'grant') favors.granted += 1;
+        if (view.choices[idx].id === 'grant_fine') favors.fine += 1;
+        if (view.choices[idx].id === 'refuse') favors.refused += 1;
+      },
+      onOpenConditions: (_g, _c, conditions) => { asksOffered += conditions.filter(x => x.sup).length; },
+      afterPick: observeCards, beforePrep: observeCards, afterStop: observeCards,
       onSettle: x => { settlements += 1; observeCards(x); },
     } });
     observeCards(g);
     if (!g.end) throw new Error(`${arm}/${seed}: 봇이 판 끝에 닿지 못했다`);
     if (arm !== 'off' && uses !== settlements) throw new Error(`${arm}/${seed}: 사용 ${uses}회와 정산 ${settlements}회가 다르다`);
     const seatMap = seats(g);
+    const asks: Row['asks'] = {
+      give_sup: { made: 0, kept: 0, broken: 0, pending: 0, otherEnded: 0 },
+      give_fine: { made: 0, kept: 0, broken: 0, pending: 0, otherEnded: 0 },
+    };
+    // 일지는 잘리지 않는다. 조건별 사실 문장만 세며, 지킨 뒤 붙는 대사는 세지 않는다.
+    for (const c of COMMS) for (const cond of CONDITIONS[c].filter(x => x.sup)) {
+      const tally = asks[cond.kind as keyof Row['asks']];
+      for (const { text } of g.journal) {
+        if (text.startsWith(`${COMM_NAME[c]}과(와) 공개 협상: ${cond.label}. `)) tally.made += 1;
+        if (text === `${COMM_NAME[c]}과(와)의 약속을 지켰다: ${cond.label}.`) tally.kept += 1;
+        if (text === `${COMM_NAME[c]}과(와)의 약속을 어겼다: ${cond.label}.`) tally.broken += 1;
+      }
+      if (g.comms[c].promise?.cond.kind === cond.kind) tally.pending += 1;
+    }
+    for (const tally of Object.values(asks)) {
+      tally.otherEnded = tally.made - tally.kept - tally.broken - tally.pending;
+      if (tally.otherEnded < 0) throw new Error(`${arm}/${seed}: 약속 집계가 중복됐다`);
+    }
     return {
-      seed, end: g.end, complete: g.end === 'complete', settlements,
+      seed, stateHash: createHash('sha256').update(JSON.stringify(g)).digest('hex'),
+      end: g.end, complete: g.end === 'complete', settlements, asksOffered, asks, favors,
       rel: Object.fromEntries(COMMS.map(c => [c, g.comms[c].rel])) as Record<Comm, number>,
       unrestNegativePct: COMMS.reduce((sum, c) => sum + (g.comms[c].rel < 0 ? seatMap[c] : 0), 0),
       unrestHudPct: standings(g).unrest, demand, lice, typhus: (g.dom?.stats.typhus ?? 0) > 0,
-      coverageObservations: observations, shortageObservations: short,
+      coverageObservations: observations, shortageObservations: short, shortageSettlements,
       shortageShare: observations ? short / observations : null, coverageSum,
       coverageMean: observations ? coverageSum / observations : null, plentySettlements: plenty,
       endSupplies: g.supOn ? g.sup ?? 0 : null,
@@ -162,13 +206,28 @@ function summarize(rows: Row[]) {
   const need = sum(r => r.needTotal);
   const used = sum(r => r.usedTotal);
   const restored = rows.filter(r => r.w6RestoredSeg !== null);
+  const asks = Object.fromEntries((['give_sup', 'give_fine'] as const).map(kind => [kind, {
+    made: sum(r => r.asks[kind].made), kept: sum(r => r.asks[kind].kept),
+    broken: sum(r => r.asks[kind].broken), pending: sum(r => r.asks[kind].pending),
+    otherEnded: sum(r => r.asks[kind].otherEnded),
+  }])) as Row['asks'];
+  const made = asks.give_sup.made + asks.give_fine.made;
+  const kept = asks.give_sup.kept + asks.give_fine.kept;
+  const broken = asks.give_sup.broken + asks.give_fine.broken;
   return {
+    stateHash: createHash('sha256').update(rows.map(r => `${r.stateHash}\n`).join('')).digest('hex'),
+    asksOffered: sum(r => r.asksOffered), asks, asksMade: made, asksMadeMean: made / rows.length,
+    asksKeptShare: kept + broken ? kept / (kept + broken) : null,
+    favors: { offered: sum(r => r.favors.offered), granted: sum(r => r.favors.granted),
+      fine: sum(r => r.favors.fine), refused: sum(r => r.favors.refused) },
     games: rows.length, wins, completeRate: wins / rows.length, completeWilson95: wilson95(wins, rows.length),
     settlementsMean: mean(r => r.settlements),
     relMean: Object.fromEntries(COMMS.map(c => [c, mean(r => r.rel[c])])) as Record<Comm, number>,
     unrestNegativePctMean: mean(r => r.unrestNegativePct), unrestHudPctMean: mean(r => r.unrestHudPct),
     demandMean: mean(r => r.demand), liceMean: mean(r => r.lice), typhusGames: sum(r => Number(r.typhus)),
     typhusRate: mean(r => Number(r.typhus)), coverageObservations: observations, shortageObservations: shortage,
+    shortageSettlements: sum(r => r.shortageSettlements),
+    shortageSettlementShare: observations ? sum(r => r.shortageSettlements) / sum(r => r.settlements) : null,
     // 공동체·정산을 한 표본으로 합쳐 계산한다. 수명이 다른 판을 같은 무게로 평균하지 않는다.
     shortageShare: observations ? shortage / observations : null,
     coverageMean: observations ? sum(r => r.coverageSum) / observations : null,
@@ -194,6 +253,16 @@ for (const arm of arms) {
 }
 const off = resultArms.off?.summary;
 const on = resultArms.on?.summary;
+const on3 = resultArms.on3?.summary;
+const askChecks = {
+  on3CompletionWithin3pp: on && on3 ? Math.abs(on3.completeRate - on.completeRate) <= 0.03 + 1e-9 : null,
+  on3AsksAtLeastPoint3AndKept50to90pct: on3?.asksKeptShare != null
+    ? on3.asksMadeMean >= 0.3 && on3.asksKeptShare >= 0.5 && on3.asksKeptShare <= 0.9 : null,
+  on3ShortageWithinPlus5pp: on?.shortageSettlementShare != null && on3?.shortageSettlementShare != null
+    ? on3.shortageSettlementShare - on.shortageSettlementShare <= 0.05 + 1e-9 : null,
+  offHashUnchanged: off && baselineOff ? off.stateHash === baselineOff : null,
+};
+const onBaselineMatches = on && baselineOn ? on.stateHash === baselineOn : null;
 const full = resultArms.full?.summary;
 const checks = {
   onCompletionWithin5pp: off && on ? on.completeRate - off.completeRate >= -0.05 : null,
@@ -212,12 +281,17 @@ const makeChecks = {
   makeFirstFewerInsulatedCars: first && last ? first.insulatedCarsMean < last.insulatedCarsMean : null,
 };
 const result = {
-  gamesPerArm: n, seedPrefix: 'sp-', bot: BASE, arms: resultArms, checks, makeChecks,
+  gamesPerArm: n, seedPrefix: 'sp-', bot: BASE, arms: resultArms, checks, makeChecks, askChecks,
+  baselineOff, baselineOn, onBaselineMatches,
   fullBeforeUseNeeds: FULL_BEFORE_USE_NEEDS,
   definitions: {
     complete: 'end === complete', demandAndLice: 'generated card UIDs, including unpicked final cards',
     unrestNegativePct: 'seats(g), relation < 0', unrestHudPct: 'standings(g).unrest, relation <= -15',
     shortage: 'f < 1, pooled living-community settlement observations', coverage: 'pooled mean of f; off is null',
+    shortageSettlements: 'at least one living community has f < 1; divided by all settlements (criterion 3)',
+    asks: 'offered counts visible supplies conditions when the bot negotiates; made/kept/broken count exact journal facts; kept share excludes pending and other-ended promises',
+    askArms: 'on: pre-third-PR rules, including old favors and idle w8; on3: new asks and prefer an offered supplies condition; both retain on supMake=none and the existing card policy',
+    stateHash: 'SHA-256 of newline-terminated per-game SHA-256(JSON.stringify(g)), in seed order; no state fields omitted',
     full: 'top up to (1 + supPlentyNeeds) * need immediately before use, so post-use plenty always holds',
     income: 'actual positive ledger change; excludes initial stock and simulated full top-ups',
     made: 'workshop output, including fine goods; excludes initial stock, loot and full top-ups',
@@ -234,6 +308,12 @@ const num = (v: number | null) => v === null ? '—' : v.toFixed(3);
 const pct = (v: number | null) => v === null ? '—' : `${(100 * v).toFixed(2)}%`;
 const cells: [string, (s: Summary) => string][] = [
   ['판 수', s => String(s.games)], ['완주 수', s => String(s.wins)], ['완주율', s => pct(s.completeRate)],
+  ['모자란 구간 수', s => String(s.shortageSettlements)], ['모자란 구간 몫', s => pct(s.shortageSettlementShare)],
+  ['생필품 조건 제시 수', s => String(s.asksOffered)], ['생필품 약속 성립 수', s => String(s.asksMade)],
+  ['판당 생필품 약속', s => num(s.asksMadeMean)], ['지킨 몫(정산된 약속)', s => pct(s.asksKeptShare)],
+  ...(['give_sup', 'give_fine'] as const).map(k => [`${k} 성립/지킴/깸/미결/기타종료`, (s: Summary) => Object.values(s.asks[k]).join('/')] as [string, (s: Summary) => string]),
+  ['부탁 제시/수락/좋은 물건/거절', s => Object.values(s.favors).join('/')],
+  ['전체 판 상태 SHA-256', s => s.stateHash],
   ['완주 Wilson 95%', s => s.completeWilson95.map(pct).join(' ~ ')], ['정산 수 평균', s => num(s.settlementsMean)],
   ...COMMS.map(c => [`끝 관계 ${c}`, (s: Summary) => num(s.relMean[c])] as [string, (s: Summary) => string]),
   ['불만 의석 % (관계 <0)', s => num(s.unrestNegativePctMean)], ['화면 불만 의석 % (관계 ≤−15)', s => num(s.unrestHudPctMean)],
@@ -256,5 +336,9 @@ Object.values(checks).forEach((v, i) => console.log(`| ${labels[i]} | ${v === nu
 console.log('\n| 공방 합격 기준 | 결과 |\n|---|---|');
 const makeLabels = ['① make_first 완주율 ≥ none −3%p', '② 만든 몫 ≤25% 및 none보다 모자람 감소', '③ make_first 완주율 ≤ none +6%p', '④ make_first 단열 칸 < make_last'];
 Object.values(makeChecks).forEach((v, i) => console.log(`| ${makeLabels[i]} | ${v === null ? '미측정(팔 없음)' : String(v)} |`));
+console.log('\n| 부탁·거래 합격 기준 | 결과 |\n|---|---|');
+const askLabels = ['① on3 완주율 on ±3%p', '② 판당 약속 ≥0.3 및 지킴 50~90%', '③ 모자람 구간 ≤ on +5%p', '④ off 수정 전 해시 일치'];
+Object.values(askChecks).forEach((v, i) => console.log(`| ${askLabels[i]} | ${v === null ? '미측정(팔·기준 없음)' : String(v)} |`));
+console.log(`on 수정 전 상태 해시 일치: ${onBaselineMatches === null ? '미측정' : onBaselineMatches}`);
 console.log('\nfull: 사용 직전 (1 + supPlentyNeeds)×need 보충(쓴 뒤 늘 넉넉). 불만은 관계 <0과 화면의 ≤−15를 나란히 표시.');
 if (out) writeFileSync(out, JSON.stringify(result, null, 2) + '\n', 'utf8');

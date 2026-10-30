@@ -4,17 +4,17 @@
 import {
   advance, canLift, enterMartial, liftMartial, autoLevers, lawFloor, blocs, castVote, chooseCard, COMMS, createGame, createS1cGame, currentAgenda, expected, freeTeacher,
   irreplaceable, knowers, LAWS, agendaNeed, isLawAgenda, makeDeal, manualWriter, primaryAction, startPrologue, requestApprentice, requestManual, resolveStop, setAgenda, setSpace, setStop, situation, CREW_COMMS, P, PLACES, sendScouts, stopRisk, crewEnoughCount,
-  setDelegate, delegateStatus, persuadeChance, toolStatus, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
+  setDelegate, delegateStatus, persuadeChance, toolStatus, openConditions, viewCard, FIELDS, TECH_IDS, TECHS, restoreCheck, startRestore, usefulVariant, enableDark,
   peopleCardRecent, CONTENT_CARD_KIND, enableClimate, enableScoutGear, hangLure, lureBlock, effThreat, enableDisasters, enableDeathWeight, enableArrivals, arrivedIn, setLever, enableBudget, heatCost, enableEventPack, potOf, setPot, setLoco, NEEDS, NEED_IDS, CL,
 } from '../src/game';
-import type { Card, CardView, Choice, Comm, DealTool, Eff, Game, LawId, LocoId, TechId, Variant } from '../src/game';
+import type { Card, CardView, Choice, Comm, ConditionDef, DealTool, Eff, Game, LawId, LocoId, TechId, Variant } from '../src/game';
 import { loadContentEvents } from './content_fs';
 
 // 콘텐츠 JSON 사건(data/events)도 봇 판에 섞는다.
 loadContentEvents();
 
-import { enableSupplies, SUPPLIES_BOT } from '../src/game/supplies';
-import { moveTask } from '../src/game/domestic/workshop';
+import { enableSupplies, suppliesAsks, suppliesNeed, SUPPLIES_BOT } from '../src/game/supplies';
+import { moveTask, setSupFine } from '../src/game/domestic/workshop';
 
 export type S1aPolicy = 'caretaker' | 'first';
 /** S1b 카드 고르기. kind: 선을 넘지 않는다(경비, 재판, 지킨다, 근신). blind: kind와 같지만 징후를 모른 척한다.
@@ -31,6 +31,8 @@ export const POT_LOW = 50;
 
 /** 측정용 훅(tools/tension_probe.ts). 판의 결과를 바꾸지 않고 읽기만 한다. */
 export interface BotProbe {
+  /** 표가 필요해 실제로 공개 협상을 고르는 순간의 조건 세 줄. */
+  onOpenConditions?: (g: Game, comm: Comm, conditions: ConditionDef[]) => void;
   /** 카드 하나를 고르기 직전과 직후 */
   beforePick?: (g: Game, card: Card, view: CardView, idx: number) => void;
   afterPick?: (g: Game, card: Card) => void;
@@ -43,7 +45,7 @@ export interface BotProbe {
   afterPrep?: (g: Game) => void;
 }
 
-export interface BotOptions { /** 생필품(결정 490)을 켠다. 기본 꺼짐 */ sup?: boolean; /** 생활 공방: 기본 last는 기존 선택·맨 뒤 차례, none은 고르지 않음, first는 w6·생산 우선 */ supMake?: 'none' | 'last' | 'first'; /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 죽음의 무게(death_weight.ts, 결정 353~355·367)를 켠다 */ deathWeight?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다, wait는 늘 출발을 미룬다(없으면 auto), read는 날씨를 읽는다(눈보라는 미루고 한파는 auto) */ prep?: 'auto' | 'never' | 'wait' | 'read'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number; /** 측정용(tools/pot_probe.ts): 식당칸 솥을 구간마다 이 정책대로 고른다. 없으면 솥을 건드리지 않는다 */ pot?: PotPolicy; /** 기관차를 정한다(결정 125). 없으면 기본(c3) */ loco?: LocoId; /** 사람이 들어오는 사건(arrivals.ts, 결정 352·369)을 켠다 */ arrivals?: boolean; /** 재기용(결정 369 2차): 돌봄 봇이 사람을 받은 칸의 레버를 사건에 맞춰 고른다(arrivalLevers) */ arrivalLevers?: boolean; /** 재기용(결정 369 3차): 봇이 당긴 공간 레버의 관계 깎임(당김·유지)을 되돌린다 */ freeSpace?: boolean; /** 재기용: 난장판 카드에서 늘 아무것도 안 한다(기본 꺼짐) */ riotNone?: boolean; /** 재기용(결정 341): 정차 인원 정책. 없으면 인원을 건드리지 않는다 */ crew?: CrewPolicy; /** 바깥 기온·결빙(climate.ts, 결정 370)을 켠다 */ climate?: boolean; /** 재기용(결정 384): 돌봄 봇이 autoLevers 대신 기온을 읽는 레버 규칙(climateLevers)을 쓴다. 기온 꺼진 판에서는 autoLevers와 같다 */ climateLevers?: boolean; /** 정찰 장비(domestic/scout_gear.ts, 결정 371)를 켠다 */ scoutGear?: boolean; /** 재기용: 시작에 완성판으로 박아 둘 기술(장비 효과만 보려고) */ gearTechs?: [TechId, Variant | undefined][]; /** 측정용(결정 091): 이 법이 안건 목록에 오르면 돌봄 봇이 늘 고르고 표를 산다 */ pushLaw?: LawId; /** 측정용(결정 433): 돌봄 봇이 표를 살 때 칸마다 이 차례로 쓸 수 있는 첫 수단을 쓴다. 없으면 공개 협상만(['open']) */ dealTools?: DealTool[]; /** 측정용(결정 433): 설득은 화면에 보이는 「될 듯」 확률이 이 값 이상일 때만 쓴다(없으면 늘) */ persuadeAt?: number }
+export interface BotOptions { /** 셋째 PR 전 대조군은 false. 기본은 켠 판의 부탁·거래를 쓴다 */ supAsk?: boolean; /** 생필품(결정 490)을 켠다. 기본 꺼짐 */ sup?: boolean; /** 생활 공방: 기본 last는 기존 선택·맨 뒤 차례, none은 고르지 않음, first는 w6·생산 우선 */ supMake?: 'none' | 'last' | 'first'; /** 측정 훅 */ probe?: BotProbe; /** 측정용 강제·개입(tools/measure_17_1.ts): 카드를 고르기 직전에 불린다. 숫자를 돌려주면 그 칸(열린 칸 번호가 아니라 view.choices 번호)을 고르고, 안 돌려주면 봇 규칙대로 간다. 안에서 g를 바꾸는 것도 이 도구 안에서만 쓴다 */ forcePick?: (g: Game, card: Card, view: CardView, open: number[]) => number | undefined; /** 이동·콘텐츠 사건에서 첫 칸 대신 둘째 칸(없으면 첫 칸)이나 안 막힌 칸 아무거나를 고른다(측정용. 난수는 판 시드에서 따로 뽑아 게임 난수를 안 건드린다) */ pickRule?: 'second' | 'random'; s1c: boolean; policy: S1aPolicy; dom: DomPolicy; /** 탐색용: S1a 카드를 효과 점수로 고른다 */ scoreCards?: boolean; /** 탐색용: 레버를 안 만진다 */ noLevers?: boolean; /** 탐색용: 의회는 첫 안건, 거래 없음 */ plainCouncil?: boolean; /** 서막 없이 바로 출발 전 운영(옛 판과 비교) */ noPrologue?: boolean; /** 탐색용: 서막 카드에서 고를 번호(약속, 수색, 첫 거래) */ prologuePicks?: [number, number, number]; /** S1b 어두운 길을 켠다 */ s1b?: DarkPolicy; /** 재난 시제품(눈보라·한파, disaster.ts)을 켠다 */ disasters?: boolean; /** 죽음의 무게(death_weight.ts, 결정 353~355·367)를 켠다 */ deathWeight?: boolean; /** 카드 구간 예산(budget.ts, 3.1)을 켠다: 한 구간에 고르는 카드 상한 BUDGET.perSeg */ budget?: boolean; /** 새 이동 사건 묶음(ev_b01_)과 가중 뽑기(event_pack.ts)를 켠다 */ eventPack?: boolean; /** 재난 대비 카드: auto는 돌봄이 석탄 30 이상이면 쌓아 두고 아니면 모아 잔다(첫 선택지 정책은 첫 칸), never는 늘 그냥 간다, wait는 늘 출발을 미룬다(없으면 auto), read는 날씨를 읽는다(눈보라는 미루고 한파는 auto) */ prep?: 'auto' | 'never' | 'wait' | 'read'; /** 탐색용: 이 구간부터 계엄을 한 번 강제로 세운다(문 extend). 비상대권이 안 열려 계엄 쪽 코드가 안 도는 걸 메우는 시험용 */ forceMartial?: number; /** 측정용(tools/pot_probe.ts): 식당칸 솥을 구간마다 이 정책대로 고른다. 없으면 솥을 건드리지 않는다 */ pot?: PotPolicy; /** 기관차를 정한다(결정 125). 없으면 기본(c3) */ loco?: LocoId; /** 사람이 들어오는 사건(arrivals.ts, 결정 352·369)을 켠다 */ arrivals?: boolean; /** 재기용(결정 369 2차): 돌봄 봇이 사람을 받은 칸의 레버를 사건에 맞춰 고른다(arrivalLevers) */ arrivalLevers?: boolean; /** 재기용(결정 369 3차): 봇이 당긴 공간 레버의 관계 깎임(당김·유지)을 되돌린다 */ freeSpace?: boolean; /** 재기용: 난장판 카드에서 늘 아무것도 안 한다(기본 꺼짐) */ riotNone?: boolean; /** 재기용(결정 341): 정차 인원 정책. 없으면 인원을 건드리지 않는다 */ crew?: CrewPolicy; /** 바깥 기온·결빙(climate.ts, 결정 370)을 켠다 */ climate?: boolean; /** 재기용(결정 384): 돌봄 봇이 autoLevers 대신 기온을 읽는 레버 규칙(climateLevers)을 쓴다. 기온 꺼진 판에서는 autoLevers와 같다 */ climateLevers?: boolean; /** 정찰 장비(domestic/scout_gear.ts, 결정 371)를 켠다 */ scoutGear?: boolean; /** 재기용: 시작에 완성판으로 박아 둘 기술(장비 효과만 보려고) */ gearTechs?: [TechId, Variant | undefined][]; /** 측정용(결정 091): 이 법이 안건 목록에 오르면 돌봄 봇이 늘 고르고 표를 산다 */ pushLaw?: LawId; /** 측정용(결정 433): 돌봄 봇이 표를 살 때 칸마다 이 차례로 쓸 수 있는 첫 수단을 쓴다. 없으면 공개 협상만(['open']) */ dealTools?: DealTool[]; /** 측정용(결정 433): 설득은 화면에 보이는 「될 듯」 확률이 이 값 이상일 때만 쓴다(없으면 늘) */ persuadeAt?: number }
 
 /** 정차 인원 정책(결정 341 재기, 명세 5장). P2·P4·P6·P8은 인원 고정(P4가 지금 봇과 같다), PN은 정찰 먼저 보내고 ceil(1.5×알맞은 인원)명(2~8,
  * 기척을 모르면 4명), PN1(표의 PN′, 결정 372 2차)은 정찰 먼저 보내고 ceil(알맞은 인원)명(2~8, 기척을 모르면 4명), PS4는 정찰 먼저 보내고 4명.
@@ -203,6 +205,11 @@ export function scoreChoice(g: Game, ch: Choice): number {
 const lawVariant = usefulVariant;
 
 /** 만드는 팔의 개입은 봇에서만 정한다. 부품보다 앞설 필요가 없으면 그 순서는 지킨다. */
+/** 좋은 물건이 없고 생필품이 기한 몫을 넘게 남을 때만 이번 공방 일이 좋은 물건을 만든다. */
+export function fineWhenSpare(g: Game): void {
+  setSupFine(g, (g.supFine ?? 0) < 1 && (g.sup ?? 0) >= suppliesNeed(g) * P.promiseSegments);
+}
+
 export function suppliesFirst(g: Game): void {
   const d = g.dom;
   if (!g.supOn || !d) return;
@@ -317,10 +324,22 @@ export function council(g: Game, opts: BotOptions, tally?: Record<string, number
   if (opts.policy === 'caretaker') {
     const a = currentAgenda(g)!;
     if (expected(blocs(g, a, c.deals)).mean < agendaNeed(a) + 3) {
+      // 이미 걸린 생필품 약속(기한에 낸다)과 이번 회기에 고른 몫을 빼고 판단한다.
+      let held = COMMS.reduce((sum, k) => sum + (g.comms[k].promise?.cond.kind === 'give_sup' ? g.comms[k].promise!.cond.amount ?? 0 : 0), 0);
+      let heldFine = COMMS.reduce((sum, k) => sum + (g.comms[k].promise?.cond.kind === 'give_fine' ? g.comms[k].promise!.cond.amount ?? 0 : 0), 0);
       for (const k of COMMS) {
         const tool = (opts.dealTools ?? ['open'])
           .find(t => toolStatus(g, k, t).ok && (t !== 'persuade' || persuadeChance(g, k, a) >= (opts.persuadeAt ?? 0)));
-        if (tool) makeDeal(g, k, tool, 0);
+        if (tool) {
+          const conditions = tool === 'open' && suppliesAsks(g) ? openConditions(g, k) : [];
+          if (conditions.length) opts.probe?.onOpenConditions?.(g, k, conditions);
+          // 지킬 수 있을 때만 생필품 조건을 고른다: 기한까지 쓸 몫을 남기고도 낼 수 있어야(사람도 재고를 보고 고른다).
+          const sup = conditions.findIndex(x => x.sup && (x.kind === 'give_fine'
+            ? (g.supFine ?? 0) >= heldFine + (x.amount ?? 0)
+            : (g.sup ?? 0) >= held + (x.amount ?? 0) + suppliesNeed(g) * P.promiseSegments));
+          if (sup >= 0) { if (conditions[sup].kind === 'give_fine') heldFine += conditions[sup].amount ?? 0; else held += conditions[sup].amount ?? 0; }
+          makeDeal(g, k, tool, Math.max(0, sup));
+        }
       }
     }
   }
@@ -462,7 +481,13 @@ export function playGame(seed: string, opts: BotOptions): { g: Game; m: GameMetr
   if (opts.deathWeight) enableDeathWeight(g);
   if (opts.climate) enableClimate(g);
   if (opts.sup) enableSupplies(g);
-  if (g.supOn && opts.supMake) SUPPLIES_BOT.set(g, { make: opts.supMake, ...(opts.supMake === 'first' ? { beforeWork: suppliesFirst } : {}) });
+  if (g.supOn && (opts.supMake || opts.supAsk !== undefined)) {
+    const make = opts.supMake ?? 'last';
+    // 부탁·거래를 쓰는 판에서 공방이 생필품을 만들면, 좋은 물건이 떨어졌을 때만 한 개씩 만든다(w8이 서야 켜진다).
+    const fine = opts.supAsk !== false && make !== 'none';
+    const beforeWork = make === 'first' || fine ? (x: Game) => { if (make === 'first') suppliesFirst(x); if (fine) fineWhenSpare(x); } : undefined;
+    SUPPLIES_BOT.set(g, { make, ask: opts.supAsk, ...(beforeWork ? { beforeWork } : {}) });
+  }
   if (opts.scoutGear) enableScoutGear(g);
   for (const [id, variant] of opts.gearTechs ?? []) if (g.dom) g.dom.techs[id] = { stage: 'done', defect: false, progress: 3, need: 3, ...(variant ? { variant } : {}) };
   if (opts.budget) enableBudget(g);
