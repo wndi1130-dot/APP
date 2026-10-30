@@ -137,7 +137,7 @@ describe('꾸미기 자리와 조작', () => {
     takeBack(g, 'front', 0);
     expect(decorItems(g, 'front').map(i => i.kind)).toEqual(['table', 'record', 'record', 'record', 'record']);
     expect(decorItems(g, 'front').slice(1).every(i => i.on === 0)).toBe(true);
-    expect(g.food).toBe(food + 1);
+    expect(g.food).toBe(food + DECOR.can_beans.v);
     expect(readStore(g).can_beans.n).toBe(1);
     expect(slotsOpen(g, 'front').surface).toBe(0);
   });
@@ -187,11 +187,11 @@ describe('꾸미기 이름표·영수증·저장', () => {
     g.lux = 4;
     receiveDecor(g, ['painting', 'record', 'rare_violin']);
     expect(place(g, 'front', 'rare_violin', 'wall').ok).toBe(true);
-    g.lux = 1.5;
+    g.lux = 1;
     const placed = structuredClone(decorItems(g, 'front'));
     const rng = structuredClone(g.rng);
     const store = readStore(g);
-    expect(store.painting.tags).toEqual([{ v: 1, at: 0 }]);
+    expect(store.painting.tags).toEqual([{ v: 0.75, at: 0 }]);
     expect(store.record).toBeUndefined();
     expect(decorItems(g, 'front')).toEqual(placed);
     g.lux = 0;
@@ -200,8 +200,8 @@ describe('꾸미기 이름표·영수증·저장', () => {
     expect(decorItems(g, 'front')).toEqual(placed);
     expect(g.rng).toEqual(rng);
     takeBack(g, 'front', 0);
-    expect(g.lux).toBe(2);
-    expect(readStore(g).rare_violin.tags![0].v).toBe(2);
+    expect(g.lux).toBe(1.5);
+    expect(readStore(g).rare_violin.tags![0].v).toBe(1.5);
   });
 
   it('필드 영수증은 DECOR id만 받고 숫자는 중복 지급하지 않으며 재적용도 한 번이다', () => {
@@ -225,7 +225,7 @@ describe('꾸미기 이름표·영수증·저장', () => {
     const ledger: StopLedger = { stock: {}, documents: [], fragments: { engine: 0, med: 0, craft: 0, radio: 0, expedition: 0 }, coreCount: 0, items: [], receipts: {}, stops: {}, results: {} };
     const request: StopRequest = { stopId: receipt.stopId, placeId: receipt.place.id, goal: receipt.goal.kind, required: receipt.goal.required, go: true, segment: 1, sentIds: receipt.people.sent };
     const applied = applyStopResult(ledger, receipt, request);
-    expect(applied.ledger.dom!.store).toEqual({ chair: { n: 1 }, record: { n: 1, tags: [{ v: 1, at: 0 }] } });
+    expect(applied.ledger.dom!.store).toEqual({ chair: { n: 1 }, record: { n: 1, tags: [{ v: 0.5, at: 0 }] } });
     expect(applied.ledger.stock.luxury).toBe(2);
     expect(ledger.dom).toBeUndefined();
     expect(applyStopResult(applied.ledger, receipt, request).status).toBe('duplicate');

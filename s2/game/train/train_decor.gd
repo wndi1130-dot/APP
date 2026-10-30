@@ -31,14 +31,14 @@ const DECOR: Dictionary = {
 	"cupboard": {"size": "large", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": ""},
 	"iron_stove": {"size": "large", "warm": 4, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": ""},
 	"safe": {"size": "large", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": ""},
-	"painting": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "wall", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 1},
-	"record": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 1},
-	"can_beans": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "food", "v": 1},
-	"can_meat": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "food", "v": 1},
-	"jar_cabbage": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "food", "v": 1},
-	"jar_jam": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "food", "v": 1},
-	"bottle_spirit": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 1},
-	"rare_violin": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "wall", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 2},
+	"painting": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "wall", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 0.75},
+	"record": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 0.5},
+	"can_beans": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "food", "v": 0.5},
+	"can_meat": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "food", "v": 0.5},
+	"jar_cabbage": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "food", "v": 0.5},
+	"jar_jam": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "food", "v": 0.5},
+	"bottle_spirit": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 0.5},
+	"rare_violin": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "wall", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 1.5},
 	"rare_wine_case": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 2},
 }
 const POINTS: Dictionary = {"small": 1, "medium": 2, "large": 3}
@@ -126,13 +126,13 @@ static func reconcile_store(g: Dictionary) -> void:
 	var store: Dictionary = g["dom"]["store"]
 	for res: String in ["lux", "food", "med", "sup"]:
 		var tags: Array = []
-		var total: int = 0
+		var total: float = 0.0
 		for kind: String in store:
 			if DECOR.has(kind) and DECOR[kind].get("res") == res:
 				var rows: Array = store[kind].get("tags", [])
 				for i: int in rows.size():
 					tags.append({"kind": kind, "tag": rows[i], "i": i})
-					total += int(rows[i]["v"])
+					total += float(rows[i]["v"])
 		tags.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 			if a["tag"]["at"] != b["tag"]["at"]: return a["tag"]["at"] > b["tag"]["at"]
 			if a["kind"] != b["kind"]: return a["kind"] < b["kind"]
@@ -143,7 +143,7 @@ static func reconcile_store(g: Dictionary) -> void:
 			var entry: Dictionary = store[row["kind"]]
 			entry["tags"].erase(row["tag"])
 			entry["n"] -= 1
-			total -= int(row["tag"]["v"])
+			total -= float(row["tag"]["v"])
 			if entry["n"] == 0:
 				store.erase(row["kind"])
 
@@ -159,6 +159,11 @@ static func read_store(g: Dictionary) -> Dictionary:
 
 static func integer(v: Variant, minimum: int = 0) -> bool:
 	return (v is int or v is float) and is_finite(float(v)) and float(v) == floorf(float(v)) and float(v) >= minimum and absf(float(v)) <= 9007199254740991.0
+
+
+## A tag carries what the field credited, so it may be a fraction (0.5, 0.75, 1.5).
+static func worth(v: Variant) -> bool:
+	return (v is int or v is float) and is_finite(float(v)) and float(v) > 0.0
 
 
 static func valid_at(at: Variant) -> bool:
@@ -237,7 +242,7 @@ static func is_inventory(v: Variant) -> bool:
 			if not entry.get("tags") is Array or entry["tags"].size() != int(entry["n"]):
 				return false
 			for tag: Variant in entry["tags"]:
-				if not tag is Dictionary or tag.size() != 2 or not integer(tag.get("v"), 1) or not integer(tag.get("at")):
+				if not tag is Dictionary or tag.size() != 2 or not worth(tag.get("v")) or not integer(tag.get("at")):
 					return false
 		elif entry.has("tags"):
 			return false
@@ -259,7 +264,7 @@ static func is_items(items: Variant) -> bool:
 		if (item.has("at") and item["at"] == null) or not valid_at(item.get("at")) or (item.has("rot") and item["rot"] == null) or not valid_rot(item.get("rot")):
 			return false
 		if def.has("res"):
-			if not integer(item.get("v"), 1):
+			if not worth(item.get("v")):
 				return false
 		elif item.has("v"):
 			return false

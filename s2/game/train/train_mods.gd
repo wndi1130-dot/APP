@@ -231,8 +231,12 @@ static func job_title(kind: String, car: String) -> String:
 
 
 ## S1 furnishOf: reading an older save never adds a key to it.
+## The captain's and dining cars keep only {items}; they read like an untouched car around those items.
 static func furnish_of(g: Dictionary, car: String) -> Dictionary:
-	return _dom(g).get("furnish", {}).get(car, {"work": 0, "jobs": [], "furnPts": 0, "tier": 0, "best": 0, "items": []})
+	var f: Variant = _dom(g).get("furnish", {}).get(car)
+	if f is Dictionary and f.has("tier"):
+		return f
+	return {"work": 0, "jobs": [], "furnPts": 0, "tier": 0, "best": 0, "items": f.get("items", []) if f is Dictionary else []}
 
 
 static func furnish_score(g: Dictionary, car: String) -> int:

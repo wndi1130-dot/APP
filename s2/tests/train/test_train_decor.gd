@@ -183,7 +183,7 @@ func test_surface_limits_and_parent_removal_remap_remaining_indices() -> void:
 	Mods.take_back(g, "front", 0)
 	assert_eq(Decor.items_of(g, "front").size(), 5)
 	for item: Dictionary in Decor.items_of(g, "front").slice(1): assert_eq(item["on"], 0)
-	assert_eq(float(g["food"]), food + 1.0)
+	assert_eq(float(g["food"]), food + float(Decor.DECOR["can_beans"]["v"]))
 	assert_eq(Decor.read_store(g)["can_beans"]["n"], 1)
 	assert_eq(Mods.slots_open(g, "front")["surface"], 0)
 	assert_true(Dom.is_store(g["dom"]))
@@ -226,11 +226,11 @@ func test_newest_tags_melt_across_kinds_but_placed_items_survive() -> void:
 	g["lux"] = 4.0
 	Decor.receive_decor(g, ["painting", "record", "rare_violin"])
 	assert_true(Mods.place(g, "front", "rare_violin", "wall")["ok"])
-	g["lux"] = 1.5
+	g["lux"] = 1.0
 	var placed: Array = Decor.items_of(g, "front").duplicate(true)
 	var rng: Dictionary = g["rng"].duplicate(true)
 	var store: Dictionary = Decor.read_store(g)
-	assert_eq(store["painting"]["tags"], [{"v": 1, "at": 0}])
+	assert_eq(store["painting"]["tags"], [{"v": 0.75, "at": 0}])
 	assert_false(store.has("record"))
 	assert_eq(Decor.items_of(g, "front"), placed)
 	g["lux"] = 0.0
@@ -239,8 +239,8 @@ func test_newest_tags_melt_across_kinds_but_placed_items_survive() -> void:
 	assert_eq(Decor.items_of(g, "front"), placed)
 	assert_eq(g["rng"], rng)
 	Mods.take_back(g, "front", 0)
-	assert_eq(float(g["lux"]), 2.0)
-	assert_eq(Decor.read_store(g)["rare_violin"]["tags"][0]["v"], 2)
+	assert_eq(float(g["lux"]), 1.5)
+	assert_eq(Decor.read_store(g)["rare_violin"]["tags"][0]["v"], 1.5)
 
 
 func test_receipt_gained_accepts_only_catalog_ids_without_crediting_numbers_twice() -> void:
@@ -255,6 +255,7 @@ func test_receipt_gained_accepts_only_catalog_ids_without_crediting_numbers_twic
 
 func test_old_save_migration_keeps_version_rng_tier_and_unassigned_coordinates() -> void:
 	var g: Dictionary = _fresh()
+	g["version"] = 1  # an old save carries its slot version; the table point does not
 	g["dom"].erase("store")
 	g["dom"]["furnish"] = {"front": {"work": 0, "jobs": [], "furnPts": 1, "tier": 0, "best": 0, "items": [{"kind": "frame", "size": "small"}]}}
 	assert_true(Dom.is_store(g["dom"]))
@@ -277,7 +278,7 @@ func test_save_contract_rejects_malformed_inventory_positions_and_surface_refere
 	for store: Variant in [[], {"missing": {"n": 1}}, {"chair": {"n": -1}}, {"chair": {"n": 0.5}},
 		{"chair": {"n": true}}, {"chair": {"n": 1, "tags": []}}, {"record": {"n": 1}},
 		{"record": {"n": 1, "tags": []}}, {"record": {"n": 1, "tags": [{"v": 0, "at": 0}]}},
-		{"record": {"n": 1, "tags": [{"v": 1.5, "at": 0}]}}, {"record": {"n": 1, "tags": [{"v": 1, "at": -1}]}}]:
+		{"record": {"n": 1, "tags": [{"v": -0.5, "at": 0}]}}, {"record": {"n": 1, "tags": [{"v": 1, "at": -1}]}}]:
 		assert_false(Dom.is_store({"store": store}), str(store))
 	var g: Dictionary = _fresh()
 	_tier(g, "front", 1)

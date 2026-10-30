@@ -23,9 +23,10 @@ const furniture = (kind: keyof typeof FURNITURE, spot: DecorSpot = 'floor', surf
   ({ ...FURNITURE[kind], spot, surface, furniture: true, model: '' });
 const find = (spot: DecorSpot, res: DecorRes, v: number): DecorDef =>
   ({ spot, size: 'small', surface: false, furniture: false, warm: 0, crowd: 0, piano: false, model: '',
-    ...(v >= 1 ? { res, v } : {}) });
+    ...(v > 0 ? { res, v } : {}) });
 
-/** FieldItems.stock_of + STATE_WORTH, rounded per object; bottle_spirit uses the field's legacy STOCK_OF. */
+/** FieldItems.stock_of + STATE_WORTH per object, as the field credits it — never rounded up, or a tag would be worth
+ *  more than what came in and melt on arrival. bottle_spirit uses the field's legacy STOCK_OF. */
 export const DECOR = {
   chair: furniture('chair'), side_table: furniture('side_table', 'floor', true),
   small_shelf: furniture('small_shelf', 'floor', true), oil_lamp: furniture('oil_lamp'),
@@ -34,10 +35,10 @@ export const DECOR = {
   table: furniture('table', 'floor', true), bookshelf: furniture('bookshelf', 'floor', true),
   small_stove: furniture('small_stove'), wardrobe: furniture('wardrobe'), piano: furniture('piano'),
   cupboard: furniture('cupboard', 'floor', true), iron_stove: furniture('iron_stove'), safe: furniture('safe'),
-  painting: find('wall', 'lux', 1), record: find('surface', 'lux', 1),
-  can_beans: find('surface', 'food', 1), can_meat: find('surface', 'food', 1),
-  jar_cabbage: find('surface', 'food', 1), jar_jam: find('surface', 'food', 1),
-  bottle_spirit: find('surface', 'lux', 1), rare_violin: find('wall', 'lux', 2),
+  painting: find('wall', 'lux', 0.75), record: find('surface', 'lux', 0.5),
+  can_beans: find('surface', 'food', 0.5), can_meat: find('surface', 'food', 0.5),
+  jar_cabbage: find('surface', 'food', 0.5), jar_jam: find('surface', 'food', 0.5),
+  bottle_spirit: find('surface', 'lux', 0.5), rare_violin: find('wall', 'lux', 1.5),
   rare_wine_case: find('surface', 'lux', 2),
 } satisfies Record<string, DecorDef>;
 export type DecorKind = keyof typeof DECOR;
