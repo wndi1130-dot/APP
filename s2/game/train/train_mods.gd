@@ -239,12 +239,23 @@ static func furnish_of(g: Dictionary, car: String) -> Dictionary:
 	return {"work": 0, "jobs": [], "furnPts": 0, "tier": 0, "best": 0, "items": f.get("items", []) if f is Dictionary else []}
 
 
-static func furnish_score(g: Dictionary, car: String) -> int:
+static func furnish_score(g: Dictionary, car: String, items: Variant = null) -> int:
 	var f: Dictionary = furnish_of(g, car)
-	var points: int = mini(int(f["furnPts"]), int(D["furnishFurnitureCap"]))
+	var furniture: int = int(f["furnPts"]) if items == null else TrainDecor.furniture_points(items)
+	var points: int = mini(furniture, int(D["furnishFurnitureCap"]))
 	for n: Variant in f["jobs"]:
 		points += int(FURNISH_WORK[int(n)]["points"])
 	return points
+
+
+## Completed jobs are never removed, so their points preserve the work-only tier (517).
+static func furnish_tier(g: Dictionary, car: String, items: Array) -> int:
+	var score: int = furnish_score(g, car, items)
+	var reached: int = 0
+	for n: int in FURNISH_STEPS:
+		if score >= int(D["furnishThreshold"][n]):
+			reached = n
+	return reached
 
 
 ## S1 furnishAfter: the score and tier once that job is done. A car whose furniture
@@ -287,6 +298,8 @@ static func _mutable_furnish(g: Dictionary, car: String) -> Dictionary:
 		d["furnish"] = {}
 	if not d["furnish"].has(car):
 		d["furnish"][car] = furnish_of(g, car)
+	var f: Dictionary = d["furnish"][car]
+	f["best"] = maxi(int(f.get("best", f["tier"])), int(f["tier"]))
 	return d["furnish"][car]
 
 
@@ -313,19 +326,14 @@ static func _update_furnish(g: Dictionary, car: String) -> void:
 	f["work"] = f["jobs"].size()
 	var points: int = TrainDecor.furniture_points(f["items"])
 	f["furnPts"] = mini(int(D["furnishFurnitureCap"]), points)
-	var score: int = furnish_score(g, car)
-	var reached: int = 0
-	for n: int in FURNISH_STEPS:
-		if score >= int(D["furnishThreshold"][n]):
-			reached = n
-	f["tier"] = maxi(maxi(int(f["tier"]), int(f["best"])), reached)
+	f["tier"] = furnish_tier(g, car, f["items"])
 	var c: String = CAR_COMM[car]
 	var changes: Dictionary = {1: "벽을 맞추고 잠자리를 손봤다", 2: "선반과 식탁이 들어섰다", 3: "붙박이 침대가 들어섰다"}
 	for n: int in FURNISH_STEPS:
 		if n > int(f["best"]) and n <= int(f["tier"]):
 			_bump_furnish_rel(g, c, float(D["furnishRel"]) * n / float(COMM_CARS[c]))
 			_journal(g, "%s에 살림 %d단: %s. %s에서 그 소리를 들었다." % [CAR_NAME[car], n, changes[n], "앞칸" if c == "tail" else "꼬리칸"], "good")
-	f["best"] = f["tier"]
+	f["best"] = maxi(int(f["best"]), int(f["tier"]))
 
 
 static func place_furniture(g: Dictionary, car: String, kind: String) -> Dictionary:
@@ -409,24 +417,41 @@ static func take_back(g: Dictionary, car: String, index: Variant) -> Dictionary:
 	if item.is_empty():
 		return {"ok": false, "why": "그 자리에 물건이 없다"}
 	var items: Array = TrainDecor.items_of(g, car)
-	var store: Dictionary = TrainDecor.read_store(g)
 	var removed: Array = []
 	for j: int in items.size():
 		if TrainDecor.spot_of(items[j]) == "surface" and items[j].get("on") == index:
 			removed.append(j)
 	removed.append(int(index))
-	for j: int in removed:
-		var row: Dictionary = items[j]
-		var def: Dictionary = TrainDecor.DECOR[row["kind"]]
-		if def.has("res") and row.has("v"):
-			g[def["res"]] = float(g.get(def["res"], 0)) + float(row["v"])
-		TrainDecor.add_stored(store, row["kind"], row.get("v") if def.has("res") else null)
 	var remap: Dictionary = {}
 	var kept: Array = []
 	for j: int in items.size():
 		if not removed.has(j):
 			remap[j] = kept.size()
 			kept.append(items[j])
+	if FURNISH_CARS.has(car):
+		# A drop is measured against what the placed items reach now: an old save may still keep a higher tier.
+		var tier: int = furnish_tier(g, car, kept)
+		if tier < furnish_tier(g, car, items):
+			var common: int = 0
+			var before: int = 0
+			for other: String in FURNISH_CARS:
+				var now: int = furnish_tier(g, other, TrainDecor.items_of(g, other))
+				before = maxi(before, now)
+				common = maxi(common, tier if other == car else now)
+			var fits: bool = TrainDecor.slots_fit(car, kept, tier)
+			if common < before:
+				for other: String in ["captain", "dining"]:
+					fits = fits and TrainDecor.slots_fit(other, TrainDecor.items_of(g, other), common)
+			if not fits:
+				return {"ok": false, "why": "살림이 내려가면 자리가 모자란다. 다른 것부터 거둬라"}
+	# A rejected removal must not even reconcile stored resource tags.
+	var store: Dictionary = TrainDecor.read_store(g)
+	for j: int in removed:
+		var row: Dictionary = items[j]
+		var def: Dictionary = TrainDecor.DECOR[row["kind"]]
+		if def.has("res") and row.has("v"):
+			g[def["res"]] = float(g.get(def["res"], 0)) + float(row["v"])
+		TrainDecor.add_stored(store, row["kind"], row.get("v") if def.has("res") else null)
 	for row: Dictionary in kept:
 		if row.has("on"): row["on"] = remap[int(row["on"])]
 	g["dom"]["furnish"][car]["items"] = kept
