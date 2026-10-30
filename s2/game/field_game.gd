@@ -146,6 +146,11 @@ const RADIO_NEAR_M: float = 60.0
 const LAMP_OFF_SIGHT: float = 0.42     # how far the eye reaches at night with the lanterns out (0.55 with them; 0.3 was too blind, build 89)
 const NIGHT_AMBIENT_MIN: float = 0.2
 const LAMP_GAIN_DAY: float = 0.25       # how much of the lamp light shows on the ground by day
+## How the chief's lantern falls off with distance (the OmniLight's attenuation):
+## the picture only, as what the eye sees and the lamp pools on the ground read
+## the lamp's own reach and strength. 0 keeps its light out to the edge of its
+## reach, so the pool round the crew is wide and soft, not a white spot (T0-9).
+const LANTERN_FALLOFF: float = 0.0
 ## The low sun through the windows (decision 474 B8): gold at 14:50, deep orange
 ## (about 22 degrees) by sunset. Never red: red is the colour of want (atmosphere 6).
 const WINDOW_GOLD := Color(1.0, 0.8, 0.52)
@@ -1058,6 +1063,7 @@ func _build_world() -> void:
 	_set_view_fill()
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
 	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
+	lantern.omni_attenuation = LANTERN_FALLOFF
 	lantern.visible = false
 	firebox = _warm_light(4.0, 0.8)
 	for l in data["lights"]:

@@ -148,6 +148,7 @@ func hit(world_pos: Vector3, direction: Vector3, strength: float = 1.0, kind: St
 			"pos": world_pos + Vector3(rng.randf_range(-0.06, 0.06), rng.randf_range(-0.05, 0.08), rng.randf_range(-0.06, 0.06)),
 			"vel": dir * speed + Vector3.UP * rng.randf_range(0.2, 1.6),
 			"floor": floor_y, "land": has_floor, "snow": snow,
+			"has_land_check": contact.has("can_land"),
 			"can_land": contact.get("can_land", Callable()),
 			"size": rng.randf_range(0.022, 0.045), "mark": rng.randf_range(0.07, 0.14), "seed": rng.randf(),
 		})
@@ -272,7 +273,8 @@ func _land(d: Dictionary) -> void:
 	var speed := flat.length()
 	var at := Vector3(d["pos"].x, d["floor"], d["pos"].z)
 	var can_land: Callable = d.get("can_land", Callable())
-	if can_land.is_valid() and not bool(can_land.call(at)):
+	var has_land_check: bool = bool(d.get("has_land_check", d.has("can_land")))
+	if has_land_check and (not can_land.is_valid() or not bool(can_land.call(at))):
 		# Spend _write's floor angle so later sprays keep the same dice.
 		_rng.randf_range(0.0, TAU)
 		return
