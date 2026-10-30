@@ -22,6 +22,9 @@ uniform float core : hint_range(0.0, 1.0) = 0.0;
 // What is left of the strength on deep snow (fx_snow 1), out of doors only: indoors no snow lies
 // on the floor, so a rim there keeps its strength in every season.
 uniform float snow_keep : hint_range(0.0, 1.0) = 0.5;
+// A quad cut at a wall on one side (a container's own model, map_view._shade_container): its
+// footprint rect (u0, v0, u1, v1) in CUSTOM0, the strength and the sky in the vertex colour.
+uniform bool rect_custom = false;
 
 varying vec4 foot;
 varying float strength;
@@ -35,7 +38,7 @@ void vertex() {
 		strength = h - (1.0 - sky);
 	} else {
 		vec2 h = clamp(COLOR.rg, vec2(0.0), vec2(0.98)) * 0.5;
-		foot = vec4(vec2(0.5) - h, vec2(0.5) + h);
+		foot = rect_custom ? CUSTOM0 : vec4(vec2(0.5) - h, vec2(0.5) + h);
 		strength = COLOR.b;
 		sky = COLOR.a;
 	}

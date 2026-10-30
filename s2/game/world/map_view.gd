@@ -638,7 +638,7 @@ func add_container(id: String) -> void:
 	if PropModels.attach(holder, id, at, String(box_data.get("name", ""))):
 		level_roots[lv].add_child(holder)
 		container_nodes[id] = holder
-		_shade_container(holder, sky_alpha(grid, box_data["cell"]) if lv == 0 else 0.0)
+		_shade_container(holder, box_data)
 	else:
 		holder.free()
 	var key: Vector3i = _container_key(box_data)
@@ -692,6 +692,7 @@ func update_container(id: String) -> void:
 		if holder.get_parent() != level_roots[key.z]:
 			holder.reparent(level_roots[key.z], false)
 		(holder.get_node("Prop") as Node3D).position = FieldGrid.center(box_data["cell"]) + Vector3(0, key.z * LEVEL_H, 0)
+		_shade_container(holder, box_data)
 	_bake_container_chunk(key)
 
 
@@ -846,6 +847,7 @@ func _contact_material(kind: String) -> ShaderMaterial:
 		m.shader = CONTACT_SHADER
 		m.set_shader_parameter("core", 0.6 if kind == "rim" else SHADE_CORE)
 		m.set_shader_parameter("per_instance", kind == "prop")
+		m.set_shader_parameter("rect_custom", kind == "box")
 		m.render_priority = Material.RENDER_PRIORITY_MIN
 		_contact_materials[kind] = m
 	return _contact_materials[kind]
@@ -2180,12 +2182,17 @@ static func _shade_foot(path: String, mesh: Mesh) -> AABB:
 
 
 ## A container's own model (PropModels.attach) gets the props' contact shade too:
-## one quad under the model's box, a child of its "Prop" node so it moves with it;
-## `sky` 0 under a roof (sky_alpha).
-func _shade_container(holder: Node3D, sky: float) -> void:
+## one quad under the model's box, a child of its "Prop" node (placed at its cell's
+## centre) so it moves with it, cut at the sides of its cell where a wall, anything
+## solid or another building stands, as _prop_shade cuts a prop's. Made again when
+## the box moves (update_container), open to the sky or not as its new cell.
+func _shade_container(holder: Node3D, box_data: Dictionary) -> void:
 	var prop := holder.get_node_or_null("Prop") as Node3D
 	if prop == null:
 		return
+	var old := prop.get_node_or_null("ContactShade")
+	if old != null:
+		old.free()
 	var box := AABB()
 	var found := false
 	for child in prop.get_children():
@@ -2199,12 +2206,42 @@ func _shade_container(holder: Node3D, sky: float) -> void:
 		return
 	var tall := clampf(box.end.y, 0.0, 2.0)
 	var margin := minf(SHADE_MARGIN + SHADE_MARGIN_PER_M * tall, SHADE_MARGIN_MAX)
-	var outer := Vector2(box.size.x + 2.0 * margin, box.size.z + 2.0 * margin)
+	var lo := box.position
+	var hi := box.end
+	var x0 := lo.x - margin
+	var x1 := hi.x + margin
+	var z0 := lo.z - margin
+	var z1 := hi.z + margin
+	var lv := int(box_data.get("level", 0))
+	var cell: Vector2i = box_data["cell"]
+	if levels.has(lv):
+		# The cell's sides in the Prop node's space: half a metre round its centre.
+		var lg: FieldGrid = levels[lv]
+		var r := Rect2i(cell, Vector2i.ONE)
+		var b := lg.building_at(cell)
+		if _shade_stops(lg, r, Vector2i(-1, 0), b):
+			x0 = maxf(x0, minf(lo.x, -0.5))
+		if _shade_stops(lg, r, Vector2i(1, 0), b):
+			x1 = minf(x1, maxf(hi.x, 0.5))
+		if _shade_stops(lg, r, Vector2i(0, -1), b):
+			z0 = maxf(z0, minf(lo.z, -0.5))
+		if _shade_stops(lg, r, Vector2i(0, 1), b):
+			z1 = minf(z1, maxf(hi.z, 0.5))
+	var w := x1 - x0
+	var d := z1 - z0
 	var st := _begin()
-	var centre := box.get_center()
-	_rim_quad(st, {"at": Vector3(centre.x, 0.006, centre.z), "size": outer,
-		"inner": Vector2(box.size.x / outer.x, box.size.z / outer.y), "sky": sky},
-		lerpf(SHADE_STRENGTH, SHADE_STRENGTH_TALL, clampf(tall / 1.5, 0.0, 1.0)))
+	st.set_custom_format(0, SurfaceTool.CUSTOM_RGBA_FLOAT)
+	var c := Color(0.0, 0.0, lerpf(SHADE_STRENGTH, SHADE_STRENGTH_TALL, clampf(tall / 1.5, 0.0, 1.0)),
+		sky_alpha(grid, cell) if lv == 0 else 0.0)
+	var foot := Color((lo.x - x0) / w, (lo.z - z0) / d, (hi.x - x0) / w, (hi.z - z0) / d)
+	var corners := [Vector3(x0, 0.006, z0), Vector3(x1, 0.006, z0), Vector3(x1, 0.006, z1), Vector3(x0, 0.006, z1)]
+	var uvs := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+	for idx in [0, 1, 2, 0, 2, 3]:
+		st.set_color(c)
+		st.set_custom(0, foot)
+		st.set_uv(uvs[idx])
+		st.set_normal(Vector3.UP)
+		st.add_vertex(corners[idx])
 	var shade := MeshInstance3D.new()
 	shade.name = "ContactShade"
 	shade.mesh = st.commit()

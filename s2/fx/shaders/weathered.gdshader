@@ -51,9 +51,13 @@ uniform float grade_cool_mix : hint_range(0.0, 1.0) = 0.35;
 varying vec3 w_pos;
 varying vec3 w_nrm;
 varying flat float v_tint_set;
+// The floor the model stands on: its own origin taken down to its storey (3 m), so a tall
+// tree's crown is not darkened where it passes the next storey's height.
+varying flat float v_floor;
 
 void vertex() {
 	w_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	v_floor = floor(MODEL_MATRIX[3].y / 3.0 + 0.02) * 3.0;
 	w_nrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	v_tint_set = tint_from_custom ? INSTANCE_CUSTOM.r : 0.0;
 }
@@ -102,7 +106,7 @@ void fragment() {
 	float n = fx_fbm2(w_pos.xz * 0.9 + w_pos.y * 0.37);
 	float rough = roughness_base;
 
-	float above_floor = w_pos.y - floor(w_pos.y / 3.0 + 0.02) * 3.0;
+	float above_floor = w_pos.y - v_floor;
 	base *= 1.0 - contact_dark * (1.0 - smoothstep(0.0, contact_height, above_floor));
 
 	// Soot and dirt: darker toward the ground, broken by noise.
