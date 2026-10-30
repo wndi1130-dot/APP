@@ -71,6 +71,8 @@ func test_two_way_particles_after_a_bracket_settle_by_the_word_before_it() -> vo
 	assert_eq(UiFonts.josa("블라스티밀 투레크(85)이(가) 굶어 죽었다"), "블라스티밀 투레크(85)가 굶어 죽었다")
 	assert_eq(UiFonts.josa("기관실(앞칸(둘))은(는)"), "기관실(앞칸(둘))은", "brackets inside brackets")
 	assert_eq(UiFonts.josa("기관실)이(가)"), "기관실)이(가)", "a closing bracket with no opening one stays")
+	assert_eq(UiFonts.josa("알리 슈테판(34)(기관실)이(가) 냈다"), "알리 슈테판(34)(기관실)이 냈다", "brackets one after another")
+	assert_eq(UiFonts.josa("기관실)(둘)이(가)"), "기관실)(둘)이(가)", "the first of two brackets has no opening one")
 
 
 func test_a_sheet_leans_from_its_bottom_left_and_writes_inside_its_margins() -> void:
