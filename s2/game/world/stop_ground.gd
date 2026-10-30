@@ -5,6 +5,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
+const NightLights = preload("res://game/world/night_lights.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const END_GAP: int = 12
 const TREE_STEP: int = 9
@@ -39,6 +40,8 @@ static func apply(data: Dictionary, form: String, run_seed: int, target_m: float
 			form = "city"
 		else:
 			out = _edge(data, run_seed, target_m)
+			# The lights people left, planned again round where the crew now steps down.
+			NightLights.follow(out)
 	_set_village(out, form)
 	return out
 

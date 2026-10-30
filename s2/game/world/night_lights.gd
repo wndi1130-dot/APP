@@ -70,22 +70,24 @@ static func plan(data: Dictionary) -> int:
 	var picked: Array = []
 	var took: Dictionary = {}
 	var step := _step_down(data)
-	var first := rng.randi_range(0, FIRST_MOST)
-	for kind: String in FIRST_KINDS:
-		if picked.size() >= first or step.x < 0.0:
-			break
-		if not pools.has(kind):
-			continue
-		var pool: Array = pools[kind]
-		for i in range(pool.size() - 1, -1, -1):
-			var row: Dictionary = pool[i]
-			if (Vector2(row["cell"]) + Vector2(0.5, 0.5)).distance_to(step) <= FIRST_REACH and _far(picked, row["cell"]):
-				row["kind"] = kind
-				picked.append(row)
-				took[kind] = 1
-				pool.remove_at(i)
-				break
+	var first := first_count(data) if step.x >= 0.0 else 0
 	var more := true
+	while more and picked.size() < first:
+		more = false
+		for kind: String in FIRST_KINDS:
+			if not pools.has(kind) or int(took.get(kind, 0)) >= int(cap[kind]) or picked.size() >= first:
+				continue
+			var pool: Array = pools[kind]
+			for i in range(pool.size() - 1, -1, -1):
+				var row: Dictionary = pool[i]
+				if (Vector2(row["cell"]) + Vector2(0.5, 0.5)).distance_to(step) <= FIRST_REACH and _far(picked, row["cell"]):
+					row["kind"] = kind
+					picked.append(row)
+					took[kind] = int(took.get(kind, 0)) + 1
+					pool.remove_at(i)
+					more = true
+					break
+	more = true
 	while more and picked.size() < most:
 		more = false
 		for kind: String in KINDS:
@@ -114,6 +116,22 @@ static func plan(data: Dictionary) -> int:
 static func replan(data: Dictionary) -> int:
 	data["lights"] = (data["lights"] as Array).filter(func(l: Dictionary) -> bool: return not String(l.get("id", "")).begins_with("night_"))
 	return plan(data)
+
+
+## Plan again where the planner's rows are, after the train and the crew were
+## moved (a stop form, stop_ground.gd): the first screen goes with them.
+static func follow(data: Dictionary) -> void:
+	for l: Dictionary in data.get("lights", []):
+		if String(l.get("id", "")).begins_with("night_"):
+			replan(data)
+			return
+
+
+## How many go first on the first screen: none to FIRST_MOST, by the map's own dice.
+static func first_count(data: Dictionary) -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([String(data.get("place_id", "")), "night_lights_first"])
+	return rng.randi_range(0, FIRST_MOST)
 
 
 ## How many lights a map of this size may get.
@@ -157,8 +175,10 @@ static func _props(data: Dictionary, grid: FieldGrid, kinds: Array) -> Array:
 ## burn barrel).
 static func _barrels(data: Dictionary, grid: FieldGrid) -> Array:
 	var out: Array = []
+	var train: Variant = data.get("train")
 	for r: Rect2i in _props(data, grid, ["barrel", "fuel_drum"]):
-		out.append({"cell": r.position})
+		if not (train is Rect2i and (train as Rect2i).grow(TRAIN_GAP).has_point(r.position)):
+			out.append({"cell": r.position})
 	return out
 
 
