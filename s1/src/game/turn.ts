@@ -2,6 +2,7 @@ import { riotTick } from './riot';
 import { addCard, COUNCIL_LINK, END_LINK } from './state';
 import { noteDrop, noteInjury, noteRelief, rebalanceBeds, reconcileRoster, woundTick } from './wounds';
 import { budgetNextSeg } from './budget';
+import { lateNextSeg } from './late';
 import { blizzardActive, disasterCoal, disasterDepart, disasterSettle } from './disaster';
 import { AR, arrivalsAfterStop, arrivalsArrive, arrivalsAway, arrivalsSettle, arrivalsTravel } from './arrivals';
 import { crewShortNow, crewShortSpent, deathEmergCost } from './death_weight';
@@ -1180,7 +1181,7 @@ function aiLeaders(g: Game, supPlenty = false): void {
       : (s.heat < 4 ? Math.max(0, 45 - w) : 0) + (s.ration < 4 ? Math.max(0, 45 - r) : 0);
     if (gap > worstGap) { worst = c; worstGap = gap; }
   }
-  if (worst && !g.cards.some(x => x.kind === 'demand')) {
+  if (worst && !g.cards.some(x => x.kind === 'demand') && !(g.lateOn && g.lateCards?.some(x => x.kind === 'demand'))) {
     addCard(g, { kind: 'demand', comm: worst });
     // 같은 요구를 여러 번 받았으면 다음 요구까지 조금 더 뜸하다.
     const seen = Math.max(g.eventLog?.[`demand:${worst}`]?.n ?? 0, worst === 'engine' ? g.eventLog?.['demand:engine_shift']?.n ?? 0 : 0);
@@ -1200,7 +1201,7 @@ function aiLeaders(g: Game, supPlenty = false): void {
   for (const c of COMMS) {
     const s = g.comms[c];
     if (s.favorCool > 0) { s.favorCool -= 1; continue; }
-    if (cards < 2 && s.rel >= 15 && !s.debt && !g.cards.some(x => x.kind === 'favor') && rnd(g) < 0.3) {
+    if (cards < 2 && s.rel >= 15 && !s.debt && !g.cards.some(x => x.kind === 'favor') && !(g.lateOn && g.lateCards?.some(x => x.kind === 'favor')) && rnd(g) < 0.3) {
       addCard(g, { kind: 'favor', comm: c });
       s.favorCool = 4;
       cards += 1;
@@ -1323,6 +1324,7 @@ function nextSegment(g: Game): void {
   g.lastStop = g.stop;
   g.stop = null;
   budgetNextSeg(g); // 구간 예산(budget.ts): 미뤄 둔 카드를 맨 앞으로 되돌린다. 꺼진 판은 아무 일도 안 한다
+  lateNextSeg(g);
   if (g.decreeLeft > 0) {
     g.decreeLeft -= 1;
     // S1b 판이면 대권이 끝나는 카드에서 고른 길(돌려준다·묻는다·연장한다)을 따른다. 아니면 S1a 그대로.

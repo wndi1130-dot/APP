@@ -16,6 +16,7 @@ import { BIRTH, ELDER_NIGHT, familyOf, recover, revertLater } from './people';
 import { NEED_GRACE, NEEDS } from './needs';
 import { BUDGET_TITLE, budgetPass, budgetPick } from './budget';
 import { applyRationCut, RATION_CUT } from './ration_cut';
+import { LATE, lateComm, lateLog, lateView, worstLateChoice } from './late';
 import type { NeedId } from './needs';
 import type { Card, EventMemo, Game } from './state';
 
@@ -66,6 +67,8 @@ export interface CardView {
   key?: string;
   /** 결정하는 순간에 보여 주는 얼굴과 이름(라이프치히 이탈) */
   faces?: string[];
+  late?: number;
+  lateLeft?: number;
 }
 
 const RES_NAME: Record<string, string> = {
@@ -166,6 +169,7 @@ const PICKS = {
   cut_spare_tail: '꼬리칸은 뺀다', cut_front_first: '앞칸이 먼저 낸다',
   // 두고 떠난 사람의 흔적(prologue.ts 'pro_trail', 결정 425 카드 3)
   trail_wait: '기다렸다 태운다', trail_note: '쪽지를 남긴다',
+  later: '나중에 정한다',
 } as const;
 export type PickId = keyof typeof PICKS;
 /** 옛 라벨 → id. 같은 id를 가리키던 옛 라벨이 둘 이상이면 여기 더한다(예전 급수탑은 '꼬리칸이 눈을 녹인다'였다) */
@@ -447,6 +451,7 @@ export function drawTravelEvent(g: Game, extra: string[] = []): string | null {
   const log = g.eventLog ?? {};
   const st = eventStateKey(g);
   const open = (id: string) => {
+    if (g.lateOn && id === 'front_curtain' && [...(g.lateCards ?? []), ...g.cards].some(c => c.kind === 'travel' && c.text === id)) return false;
     const m = log[id];
     if (!m) return true;
     return g.seg - m.seg >= EVENT_COOLDOWN && m.n < EVENT_CHAIN_MAX && m.st !== st;
@@ -491,7 +496,7 @@ export const VIEW_FILTERS: ViewFilter[] = [];
 export function viewCard(g: Game, card: Card): CardView {
   let v = baseView(g, card);
   for (const f of VIEW_FILTERS) v = f(g, card, v);
-  return guardCosts(g, v);
+  return guardCosts(g, lateView(g, card, v));
 }
 
 /** 확장 카드(내정·S1b)와 거르개가 더한 선택지까지 마지막에 값을 따진다(K01 9). chooseCard도 이 보기로 고르니 실행 직전 검사도 된다.
@@ -970,6 +975,29 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
   const view = viewCard(g, card);
   const choice = view.choices[index];
   if (!choice || choice.disabled) return false;
+  if (choice.special === 'late') {
+    if ((card.late ?? 0) < LATE.max) {
+      g.cards = g.cards.filter(x => x.uid !== uid);
+      budgetPick(g);
+      applyEffs(g, choice.effs);
+      (g.lateCards ??= []).push({ ...card, late: (card.late ?? 0) + 1,
+        ...(card.kind === 'favor' ? { who: card.who ?? g.comms[lateComm(card)].leader.personId } : {}) });
+      budgetPass(g);
+    } else {
+      const log = lateLog(g, card);
+      resolveCardChoice(g, card, view, worstLateChoice(view.choices, lateComm(card)));
+      applyEffs(g, choice.effs);
+      journal(g, log, 'bad');
+    }
+    return true;
+  }
+  resolveCardChoice(g, card, view, choice);
+  return true;
+}
+
+/** 보통 선택과 기한 초과가 효과·특수 처리·기억·일지를 함께 쓴다. */
+function resolveCardChoice(g: Game, card: Card, view: CardView, choice: Choice): void {
+  const uid = card.uid;
   g.cards = g.cards.filter(x => x.uid !== uid);
   budgetPick(g); // 구간 예산(budget.ts): 고른 수를 센다. 꺼진 판은 아무 일도 안 한다
   applyEffs(g, choice.effs, (choice.id && INJURY_FROM[choice.id]) || (choice.special === 'bite_cut' ? 'bite_cut' : 'stop'), card.comm);
@@ -1140,7 +1168,6 @@ export function chooseCard(g: Game, uid: number, index: number): boolean {
     }
   }
   budgetPass(g); // addCard를 안 거치고 맨 앞에 붙은 카드(출산 뒤 이름, 후속 사건)도 예산을 본다
-  return true;
 }
 
 BUDGET_TITLE.fn = (g, card) => viewCard(g, card).title;

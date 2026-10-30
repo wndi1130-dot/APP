@@ -161,6 +161,8 @@ export interface Card {
   vals?: Record<string, string>;
   /** 구간 예산(budget.ts)이 이 카드를 미룬 횟수. 미룬 적 없으면 없다 */
   pushed?: number;
+  /** 플레이어가 서류를 미룬 횟수(결정 514). 구간 예산과 별개다. */
+  late?: number;
   /** 플레이어가 단추로 직접 청한 서류(견습생·매뉴얼). 예산이 미루지 않는다. 예산을 켠 판에서만 붙는다 */
   ask?: boolean;
 }
@@ -540,6 +542,10 @@ export interface Game {
   budget?: BudgetState;
   /** 예산 때문에 미뤄 둔 카드. 다음 구간 처음에 맨 앞으로 돌아온다 */
   deferred?: Card[];
+  /** 서류 미루기를 켠 판. 옛 저장·꺼진 판에는 없다. */
+  lateOn?: boolean;
+  /** 플레이어가 미룬 서류. 다음 구간 처음에 먼저 돌아온다. */
+  lateCards?: Card[];
   /** 새 이동 사건 묶음과 가중 뽑기(event_pack.ts)가 켜진 판. 없으면 꺼진 판 */
   eventPack?: true;
   /** 사람이 들어오는 사건(arrivals.ts)이 켜진 판. 없으면 꺼진 판이다 */

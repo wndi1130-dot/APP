@@ -38,6 +38,7 @@ export function applyRationCut(g: Game, pick: RationCutPick): void {
 /** 법을 폐지할 때: 답이 더한 처지를 되돌리고, 아직 안 고른 요구 카드는 거둔다. */
 export function revertRationCut(g: Game): void {
   g.cards = g.cards.filter(card => card.kind !== 'ration_cut');
+  if (g.lateOn && g.lateCards) g.lateCards = g.lateCards.filter(card => card.kind !== 'ration_cut');
   const rc = g.rationCut;
   if (!rc) return;
   for (const [c, v] of Object.entries(rc.base) as [Comm, number][]) g.comms[c].base[1] -= v;
