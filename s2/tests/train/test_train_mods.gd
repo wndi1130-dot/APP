@@ -39,6 +39,7 @@ func _furnish_owned(g: Dictionary) -> Dictionary:
 		out["job"]["paid"].erase("cloth")
 	out["parts"] = g["dom"]["parts"]
 	out["furnish"] = g["dom"].get("furnish", {}).duplicate(true)
+	out["store"] = g["dom"].get("store", {}).duplicate(true)
 	out["rel"] = {}
 	for c: String in Mods.COMM_CARS:
 		out["rel"][c] = g["comms"][c]["rel"]
@@ -108,6 +109,11 @@ func test_furnish_sequences_match_s1_in_both_directions() -> void:
 
 func _furnish_game() -> Dictionary:
 	var g: Dictionary = _ready_game()
+	var gained: Array = []
+	for kind: String in Mods.FURNITURE:
+		if Mods.FURNITURE[kind]["furniture"]:
+			for _i: int in 20: gained.append(kind)
+	Mods.TrainDecor.receive_decor(g, gained)
 	g["dom"].merge({"wood": 100.0, "scrap": 100.0, "parts": 20.0, "cloth": 20.0, "target": 0}, true)
 	g["comms"] = {}
 	for c: String in Mods.COMM_CARS:
@@ -191,11 +197,14 @@ func test_furnish_contract_rejects_malformed_state_and_jobs() -> void:
 		{"jobs": [1.5], "work": 1}, {"jobs": [true], "work": 1}, {"jobs": ["1"], "work": 1},
 		{"furnPts": 4}, {"furnPts": NAN}, {"tier": -1}, {"tier": 4, "best": 4}, {"best": 0}, {"tier": 0.5},
 		{"items": [{"kind": "piano", "size": "small"}]}, {"items": [{"kind": "unknown", "size": "large"}]},
-		{"items": [{"kind": "piano", "size": "large"}, {"kind": "piano", "size": "large"}], "furnPts": 4}, {"extra": true},
+		{"extra": true},
 		{"tier": 3, "best": 3}, {"tier": 0, "best": 0}, {"jobs": [1, 2, 3], "work": 3}]:
 		var bad: Dictionary = valid.duplicate(true)
 		bad.merge(patch, true)
 		assert_false(Dom.is_store({"furnish": {"tail1": bad}}), str(patch))
+	var two_large: Dictionary = valid.duplicate(true)
+	two_large.merge({"items": [{"kind": "piano", "size": "large"}, {"kind": "piano", "size": "large"}], "furnPts": 4}, true)
+	assert_true(Dom.is_store({"furnish": {"tail1": two_large}}), "floor capacity replaces the old one-large cap")
 	var kept: Dictionary = valid.duplicate(true)
 	kept.merge({"items": [], "furnPts": 0}, true)
 	assert_true(Dom.is_furnish(kept), "a tier kept after the furniture left is a real save")

@@ -74,6 +74,20 @@ func test_it_lies_on_its_own_floor() -> void:
 	assert_eq(GroundLook.pieces(items).hash(), out.hash(), "the same list, the same spots")
 
 
+func test_each_thing_has_a_dark_rim_round_it_on_its_floor() -> void:
+	# T0-6: a quad a little wider than the thing, flat on the thing's own floor (contact_shade darkens it).
+	var piece: Dictionary = GroundLook.pieces([{"pos": Vector3(4.5, 3.0, 4.5), "id": "undershirt_wool", "n": 1}])[0]
+	var rim: Dictionary = GroundLook.rim(piece)
+	var size: Vector3 = piece["size"]
+	assert_eq(rim["lv"], piece["lv"])
+	assert_almost_eq(rim["size"].x, size.x + 2.0 * GroundLook.RIM, 0.0001, "wider on both sides")
+	assert_almost_eq(rim["size"].y, size.z + 2.0 * GroundLook.RIM, 0.0001)
+	assert_almost_eq(float(rim["at"].y), 3.0 + GroundLook.RIM_LIFT, 0.0001, "flat on the thing's own floor")
+	assert_true(GroundLook.RIM_LIFT < size.y, "under the thing's top, so the thing shows over it")
+	assert_almost_eq(rim["inner"].x * rim["size"].x, size.x, 0.0001, "the thing's share of the quad")
+	assert_almost_eq(rim["inner"].y * rim["size"].y, size.z, 0.0001)
+
+
 func test_a_thing_put_down_shows_on_the_map_and_goes_when_picked_up() -> void:
 	var game = FieldGame.new()
 	game.opts = {"seed": 4, "auto_pause": false}
@@ -87,6 +101,8 @@ func test_a_thing_put_down_shows_on_the_map_and_goes_when_picked_up() -> void:
 	game._update_zone(0.1)
 	assert_true(game.view.ground_nodes.has(0))
 	assert_not_null(game.view.ground_nodes[0].mesh, "a plank put down is seen where it lies")
+	assert_not_null((game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D).mesh, "on its dark rim")
 	game.ground_items.clear()
 	game._update_zone(0.1)
 	assert_null(game.view.ground_nodes[0].mesh, "picked up, it is gone")
+	assert_null((game.view.ground_nodes[0].get_node("Rim") as MeshInstance3D).mesh, "its rim with it")
