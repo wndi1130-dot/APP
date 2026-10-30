@@ -15,9 +15,9 @@ import { CAR_COMM, COMM_CARS, D, FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURN
 import type { FurnishStep, FurnitureKind } from '../src/game/domestic/data';
 import { createS1cGame, furnishOf, furnishScore, nextFurnishWork } from '../src/game/domestic/state';
 import { refreshSit } from '../src/game/domestic/sit';
-import { insulatedShare, insulateCarNote, insulateNumbers, insulatePickLine, furnishComparison, furnishTick } from '../src/game/domestic/lawtech';
+import { insulatedShare, insulateCarNote, insulateNumbers, insulatePickLine, furnishComparison, furnishTick, decorRelGain } from '../src/game/domestic/lawtech';
 import { cancelJob, cancelOpen, CAR_NAME, jobCheck, jobTitle, runWorkshop, startJob, workPower, furnishCost } from '../src/game/domestic/workshop';
-import { DECOR, DECOR_CARS, DECOR_SLOT_TABLE, DECOR_SLOTS, FURNISH_WALL_MAX, FURNISH_FLOOR_MAX,
+import { DECOR, DECOR_CARS, DECOR_SLOT_TABLE, DECOR_SLOTS, FURNISH_WALL_MAX, FURNISH_FLOOR_MAX, FURNISH80, decorBand, decorParts, decorPercent,
   canPlace, decorCrowd, decorItems, migrateDecor, move, place, placeFurniture, readStore, receiveDecor, reconcileStore, removeFurniture, rotate, slotsOpen, takeBack } from '../src/game/domestic/decor';
 import type { DecorAt, DecorRes, DecorSpot } from '../src/game/domestic/decor';
 
@@ -402,16 +402,80 @@ for (const best of [undefined, 0, 1]) {
     { op: 'takeBack', car: 'front', i: 0 }, { op: 'place', car: 'front', kind: 'piano', spot: 'floor' }]);
 }
 
+// Append effect inputs after every older case: the original RNG stream remains unchanged.
+function effectBase(): Game {
+  return { seg: 7, trust: 50, rng: { state: 1 }, journal: [], ledger: [],
+    comms: byComm(() => ({ rel: 0, pop: 10 })),
+    dom: { store: {}, furnish: Object.fromEntries(FURNISH_CARS.map(car => [car,
+      { work: 3, jobs: [1, 2, 3], furnPts: 0, tier: 3, best: 3, items: [] }])) },
+  } as unknown as Game;
+}
+function effectFill(g: Game, car: typeof DECOR_CARS[number], small: number): void {
+  const floors: (keyof typeof DECOR)[] = ['side_table', 'small_shelf', 'drawer', 'table', 'bookshelf', 'cupboard',
+    'oil_lamp', 'small_stove', 'chair', 'small_box'];
+  while (floors.length < Math.min(D.decorFloorTarget, FURNISH_FLOOR_MAX[car])) floors.push('side_table');
+  const mk = (kind: keyof typeof DECOR, on?: number) => ({ kind, size: DECOR[kind].size, spot: DECOR[kind].spot,
+    ...(on === undefined ? {} : { on }), ...(DECOR[kind].v ? { v: DECOR[kind].v } : {}) });
+  const items = floors.map(k => mk(k));
+  const surfaces = floors.flatMap((k, i) => DECOR[k].surface ? [i] : []);
+  const walls: (keyof typeof DECOR)[] = ['frame', 'painting', 'rare_violin'];
+  while (walls.length < Math.min(D.decorWallTarget, FURNISH_WALL_MAX[car])) walls.push('painting');
+  items.push(...walls.map(k => mk(k)));
+  const smallKinds = (Object.keys(DECOR) as (keyof typeof DECOR)[]).filter(k => DECOR[k].spot === 'surface');
+  for (let i = 0; i < small; i++) items.push(mk(smallKinds[i % smallKinds.length], surfaces[i % surfaces.length]));
+  if (DECOR_SLOT_TABLE[car] === 'tier') { furnishOf(g, car).items = items; furnishOf(g, car).furnPts = 4; }
+  else g.dom!.furnish![car] = { items };
+}
+function effectOwned(g: Game) {
+  return clone({ percent: Object.fromEntries(DECOR_CARS.map(car => [car, decorPercent(g, car)])),
+    parts: Object.fromEntries(DECOR_CARS.map(car => [car, decorParts(g, car)])),
+    gain: Object.fromEntries(DECOR_CARS.map(car => [car, decorRelGain(g, car)])),
+    rel: byComm(c => g.comms[c].rel), decor80: g.dom!.decor80 ?? [], journal: g.journal,
+    ledger: g.ledger ?? [], rng: g.rng });
+}
+const effectCases: unknown[] = [];
+function effectCase(name: string, g: Game): void {
+  const state = clone(g), before = effectOwned(g), items = clone(g.dom!.furnish);
+  furnishTick(g); const first = effectOwned(g);
+  for (const f of Object.values(g.dom!.furnish!)) f.items = [];
+  furnishTick(g); const below = effectOwned(g);
+  g.dom!.furnish = items; furnishTick(g);
+  effectCases.push({ name, state, before, first, below, again: effectOwned(g) });
+}
+for (const car of DECOR_CARS) for (const tier of [0, 1, 2, 3] as const) for (const small of [1, 24, 66]) {
+  const g = effectBase(); effectFill(g, car, small);
+  for (const resident of FURNISH_CARS) furnishOf(g, resident).tier = tier;
+  effectCase(car + '-tier-' + tier + '-small-' + small, g);
+}
+for (const car of DECOR_CARS.filter(c => c !== 'captain')) {
+  for (const value of car === 'dining' ? [24.999, 25, 50, 69.999, 70] : [-15, -14.999, 0, 14.999, 15]) {
+    const g = effectBase(); effectFill(g, car, 66);
+    if (car === 'dining') g.trust = value; else g.comms[CAR_COMM[car]].rel = value;
+    effectCase(car + '-voice-' + value, g);
+  }
+}
+for (const rel of [0, 99.95]) {
+  const g = effectBase();
+  for (const c of COMMS) g.comms[c].rel = rel;
+  for (const car of DECOR_CARS) effectFill(g, car, 66);
+  effectCase('all-cars-rel-' + rel, g);
+}
+const decorEffects = { voices: FURNISH80,
+  thresholds: D.decorThresholds.flatMap(line => [-2e-9, -0.5e-9, 0, 0.5e-9].map(offset => ({
+    percent: line + offset, band: decorBand(line + offset) }))), cases: effectCases };
+
 const dKeys = ['insulateWork', 'insulateWood', 'insulateWarm', 'insulateHeat', 'insulateCrowd', 'insulateQuotaHalf',
   'furnishClothWood', 'furnishFurnitureCap', 'furnishThreshold', 'furnishWarm', 'furnishCrowd', 'furnishRel',
-  'furnishGapMin', 'furnishGapMax', 'furnishGapRel', 'furnishGapCap', 'furnishPianoRel'] as const;
+  'furnishGapMin', 'furnishGapMax', 'furnishGapRel', 'furnishGapCap', 'furnishPianoRel',
+  'decorKindMax', 'decorKindShare', 'decorFloorTarget', 'decorWallTarget', 'decorSurfaceTarget', 'decorSmallTarget', 'decorLightTarget',
+  'decorThresholds', 'decorEpsilon', 'decorRel', 'diningDecorRel', 'decorVoiceRelGood', 'decorVoiceRelBad', 'decorVoiceTrustGood', 'decorVoiceTrustLow'] as const;
 const output = { format: FORMAT, seeds, checkpoints, profiles,
   scope: 'Played S1a + neutralized S1c dom; modify-only order, no work debt, no other law-tech relief; no climate/hygiene/UI',
   tables: { COMMS, P, HANDS, CAR_COMM, COMM_CARS, CAR_NAME, HEAT_QUOTA_MATS: LAWS.heat_quota.mats,
     D: Object.fromEntries(dKeys.map(k => [k, D[k]])), FURNISH_CARS, FURNISH_STEPS, FURNISH_WORK, FURNITURE_SIZE, FURNITURE: DECOR },
   furnish: { costs: FURNISH_STEPS.map(step => ({ step, cost: furnishCost(step) })), cases: furnishCases },
   decor: { tables: { DECOR, DECOR_CARS, DECOR_SLOT_TABLE, DECOR_SLOTS, FURNISH_WALL_MAX, FURNISH_FLOOR_MAX }, slots: decorSlots, cases: decorCases },
-  pickLine: insulatePickLine(), legacy, cases };
+  decorEffects, pickLine: insulatePickLine(), legacy, cases };
 const out = resolve(process.argv.find(a => a.endsWith('.json')) ?? '../s2/tests/fixtures/train/mods_vectors.json');
 const text = JSON.stringify(output) + '\n';
 if (Buffer.byteLength(text) >= 5_000_000) throw new Error('Fixture exceeds 5 MB');
@@ -419,4 +483,5 @@ mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, text);
 console.log(JSON.stringify({ format: FORMAT, cases: cases.length, furnishCases: furnishCases.length,
   furnishSteps: furnishCases.reduce<number>((sum, row) => sum + (row as { steps: unknown[] }).steps.length, 0),
-  decorSlots: decorSlots.length, decorCases: decorCases.length, decorSteps: decorCases.reduce((sum, row) => sum + row.steps.length, 0), bytes: Buffer.byteLength(text), out }));
+  decorSlots: decorSlots.length, decorCases: decorCases.length, decorSteps: decorCases.reduce((sum, row) => sum + row.steps.length, 0),
+  decorEffectCases: effectCases.length, bytes: Buffer.byteLength(text), out }));
