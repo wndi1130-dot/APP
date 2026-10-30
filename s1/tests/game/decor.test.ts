@@ -223,6 +223,15 @@ describe('결정 517 거두기와 현재 단', () => {
     expect(slotsOpen(g, 'dining').floor).toBe(8);
   });
 
+  it('옛 저장이 지킨 높은 단은 거두기 하락으로 세지 않아 점수 없는 그림도 거둔다', () => {
+    const g = fresh();
+    const paintings = Array.from({ length: 6 }, (_, k) => ({ kind: 'painting' as const, size: 'small' as const, spot: 'wall' as const, at: [k, -1] as [number, number], rot: 0, v: DECOR.painting.v }));
+    g.dom!.furnish!.medtech = { work: 1, jobs: [2], furnPts: 0, tier: 2, best: 2, items: paintings };
+    expect(takeBack(g, 'medtech', 0)).toEqual({ ok: true });
+    expect(furnishOf(g, 'medtech')).toMatchObject({ tier: 1, best: 2 });
+    expect(decorItems(g, 'medtech')).toHaveLength(5);
+  });
+
   it.each([undefined, 0, 1] as const)('옛 저장 best=%s는 보상 이력만 채우고 다음 갱신까지 단과 RNG를 보존한다', best => {
     const g = fresh();
     g.version = SAVE_VERSION;
