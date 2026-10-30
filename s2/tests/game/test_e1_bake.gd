@@ -262,6 +262,19 @@ func test_prop_shades_ride_with_the_props_and_stop_at_a_wall() -> void:
 	assert_eq(view.prop_shades.multimesh.visible_instance_count, 0, "unseen props, no shades")
 
 
+func test_a_prop_shade_goes_round_its_foot_not_its_crown() -> void:
+	# A bare tree: a thin trunk under a wide crown. Its shade is the trunk's, not a dark square
+	# under the whole crown.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for v: Vector3 in [Vector3(-0.1, 0, -0.1), Vector3(0.1, 0, -0.1), Vector3(0, 0, 0.1),
+			Vector3(-1.5, 3, -1.5), Vector3(1.5, 3, -1.5), Vector3(0, 3.5, 1.5)]:
+		st.add_vertex(v)
+	var foot: AABB = MapView._shade_foot("test://bare_tree", st.commit())
+	assert_almost_eq(foot.size.x, 0.2, 0.001, "the trunk's width")
+	assert_almost_eq(foot.size.z, 0.2, 0.001)
+
+
 func test_prop_memory_and_tile_membership_follow_moves_and_removal() -> void:
 	var view: MapView = _view()
 	var prop: Dictionary = _prop(view, Rect2i(2, 2, 2, 2), 0)

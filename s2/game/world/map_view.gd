@@ -2077,6 +2077,9 @@ const SHADE_STRENGTH: float = 0.5
 const SHADE_STRENGTH_TALL: float = 0.65
 ## How much of the margin keeps the full strength before it fades (contact_shade core).
 const SHADE_CORE: float = 0.2
+## A model's foot: its vertices this far over its lowest (_shade_foot).
+const SHADE_FOOT_H: float = 0.15
+static var _shade_feet: Dictionary = {}
 ## Raised this far over its floor or more, a model hangs on a wall or stands on something: no shade.
 const SHADE_FLOOR_GAP: float = 0.05
 
@@ -2116,7 +2119,9 @@ func _prop_shade(path: String, item: Dictionary) -> Dictionary:
 	var meshes := PropModels.batch_meshes(path)
 	if meshes.is_empty():
 		return {}
-	var placed: AABB = (item["xf"] as Transform3D) * meshes[0].get_aabb()
+	var xf: Transform3D = item["xf"]
+	var mesh: Mesh = meshes[0]
+	var placed: AABB = xf * mesh.get_aabb()
 	var lo := placed.position
 	var hi := placed.end
 	var lv: int = item["level"]
@@ -2125,6 +2130,11 @@ func _prop_shade(path: String, item: Dictionary) -> Dictionary:
 	if lo.y > floor_y + SHADE_FLOOR_GAP or String(prop.get("mount", "")) == "wall" or not levels.has(lv):
 		return {}
 	var tall := clampf(hi.y - floor_y, 0.0, 2.0)
+	if xf.basis.y.normalized().y > 0.9:
+		# Standing: round what touches the floor (a tree's trunk, a bench's legs), not its crown.
+		var foot: AABB = xf * _shade_foot(path, mesh)
+		lo = Vector3(foot.position.x, lo.y, foot.position.z)
+		hi = Vector3(foot.end.x, hi.y, foot.end.z)
 	var margin := minf(SHADE_MARGIN + SHADE_MARGIN_PER_M * tall, SHADE_MARGIN_MAX)
 	var r: Rect2i = item["rect"]
 	var lg: FieldGrid = levels[lv]
@@ -2148,6 +2158,25 @@ func _prop_shade(path: String, item: Dictionary) -> Dictionary:
 	var quad := Transform3D(Basis.from_scale(Vector3(w, strength + 1.0 - sky, d)), Vector3((x0 + x1) * 0.5, floor_y + 0.006, (z0 + z1) * 0.5))
 	var foot := Color((lo.x - x0) / w, (lo.z - z0) / d, (hi.x - x0) / w, (hi.z - z0) / d)
 	return {"xf": quad, "foot": foot}
+
+
+## What of a model stands on its floor: its vertices up to SHADE_FOOT_H over its
+## lowest, as a box in the model's space (the whole bottom of a box, the four legs
+## of a bench, only the trunk of a bare tree). Once per model file.
+static func _shade_foot(path: String, mesh: Mesh) -> AABB:
+	if _shade_feet.has(path):
+		return _shade_feet[path]
+	var whole := mesh.get_aabb()
+	var foot := whole
+	var found := false
+	for s in mesh.get_surface_count():
+		for v: Vector3 in mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]:
+			if v.y > whole.position.y + SHADE_FOOT_H:
+				continue
+			foot = foot.expand(v) if found else AABB(v, Vector3.ZERO)
+			found = true
+	_shade_feet[path] = foot
+	return foot
 
 
 ## A container's own model (PropModels.attach) gets the props' contact shade too:
