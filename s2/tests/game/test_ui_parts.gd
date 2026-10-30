@@ -61,6 +61,18 @@ func test_two_way_particles_settle_by_the_letter_before_them() -> void:
 	assert_eq(UiFonts.josa("A과(와)"), "A과(와)", "after anything else the two-way form stays")
 
 
+func test_two_way_particles_after_a_bracket_settle_by_the_word_before_it() -> void:
+	assert_eq(UiFonts.josa("블라스타 스트르나도바(기관실)이(가) 안건을 냈다"), "블라스타 스트르나도바(기관실)가 안건을 냈다")
+	assert_eq(UiFonts.josa("의무진(둘)이(가) 남았다"), "의무진(둘)이 남았다", "by 진, not by 둘")
+	assert_eq(UiFonts.josa("중환자 분류(기준)을(를) 올릴 때"), "중환자 분류(기준)를 올릴 때")
+	assert_eq(UiFonts.josa("중환자 분류(기준)(으)로 고쳤다"), "중환자 분류(기준)로 고쳤다")
+	assert_eq(UiFonts.josa("아동 노동(짐 꾸리기만)(으)로 고쳤다"), "아동 노동(짐 꾸리기만)으로 고쳤다")
+	assert_eq(UiFonts.josa("복사기(1)을(를)"), "복사기(1)를")
+	assert_eq(UiFonts.josa("블라스티밀 투레크(85)이(가) 굶어 죽었다"), "블라스티밀 투레크(85)가 굶어 죽었다")
+	assert_eq(UiFonts.josa("기관실(앞칸(둘))은(는)"), "기관실(앞칸(둘))은", "brackets inside brackets")
+	assert_eq(UiFonts.josa("기관실)이(가)"), "기관실)이(가)", "a closing bracket with no opening one stays")
+
+
 func test_a_sheet_leans_from_its_bottom_left_and_writes_inside_its_margins() -> void:
 	var s = PaperSheet.new()
 	add_child_autofree(s)

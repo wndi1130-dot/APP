@@ -565,6 +565,7 @@ func _hide_boxes(p) -> void:
 ## by the ground covered and a fall plays once from where it started. `own` is
 ## the living's own folder's motions: when y is one of those, is_own(note).
 static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Array = []) -> Vector2:
+	note.erase("blow_aim")   # Only a blow drawn this frame restores its turn.
 	var t: float = float(note.get("t", 0.0)) + delta
 	note["t"] = t
 	var at: Vector3 = p.global_position

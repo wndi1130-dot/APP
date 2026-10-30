@@ -264,7 +264,7 @@ func _bleed(p, at: Vector3, kind: String, strength: float, felled: bool, low: bo
 		return
 	var cell := FieldGrid.cell_of(at)
 	var snow: bool = game.level_of(at) == 0 and game.grid.inside(cell) and not game.grid.indoor(cell)
-	var contact := {"position": at + Vector3(0, 0.02, 0), "snow": snow}
+	var contact: Dictionary = {"position": at + Vector3(0, 0.02, 0), "snow": snow, "can_land": _blood_can_land.bind(at)}
 	var from := at + Vector3(0, BLEED_LOW if low else BLEED_HIGH, 0)
 	if felled:
 		if death_scale < 0.0:
@@ -275,6 +275,17 @@ func _bleed(p, at: Vector3, kind: String, strength: float, felled: bool, low: bo
 			fx.pool(contact["position"], snow)
 	else:
 		fx.hit(from, at - p.position, strength, kind, contact)
+
+
+## One check on landing, on the hit's floor, using the field's blocking rules.
+func _blood_can_land(to: Vector3, from: Vector3) -> bool:
+	var level: int = game.level_of(from)
+	if level != game.level_of(to) or not game.levels.has(level):
+		return false
+	var grid: FieldGrid = game.grid_at(from)
+	var a: Vector2i = FieldGrid.cell_of(from)
+	var b: Vector2i = FieldGrid.cell_of(to)
+	return not grid.blocks_body(b) and grid.body_line_clear(a, b) and grid.clear_walk(a, b, false)
 
 
 func _hold(seconds: float) -> void:
