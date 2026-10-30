@@ -2,7 +2,6 @@ import { bump, bumpRel } from './ledger';
 import { COMM_NAME, REP_ROLE } from './data';
 import { CARD_EXTENSIONS, withAfford } from './cards';
 import type { CardView, Choice } from './cards';
-import { josa } from './josa';
 import { addCard, isGone, journal, PROFILES, rnd, storyOf } from './state';
 import type { Card, Game } from './state';
 import { keepPromise, setLever } from './turn';
@@ -58,7 +57,7 @@ function range([lo, hi]: readonly [number, number], unit: string): string {
 /** '대표이름이/가' */
 function who(g: Game): string {
   const n = g.comms.tail.leader.name;
-  return n + josa(n, '이/가');
+  return `${n}이(가)`;
 }
 
 function speaker(g: Game): { name: string; role: string; comm: 'tail' } {
@@ -167,7 +166,7 @@ function prologueChoose(g: Game, card: Card, choice: Choice): void {
         g.comms.tail.pop = Math.max(1, g.comms.tail.pop - left);
         bumpRel(g, 'tail', PROLOGUE.leftRel, 'card');
         flags.depot_left_behind = true;
-        journal(g, `${names.join(', ')}${josa(names[names.length - 1] ?? '', '이/가')} 승강장에 남았다. 꼬리칸 사람들이 창에 붙어 그들을 봤다.`, 'dark');
+        journal(g, `${names.join(', ')}이(가) 승강장에 남았다. 꼬리칸 사람들이 창에 붙어 그들을 봤다.`, 'dark');
       } else {
         flags.depot_left_behind = false;
       }
@@ -199,7 +198,7 @@ function prologueChoose(g: Game, card: Card, choice: Choice): void {
       g.comms[t.comm].pop += back.length;
       bumpRel(g, t.comm, TRAIL.rel, 'card');
       flags.trail = 'back';
-      journal(g, `불을 지펴 두고 기다렸다. ${back.join(', ')}${josa(back[back.length - 1] ?? '', '이/가')} 선로를 따라 걸어와 다시 탔다.`, 'good');
+      journal(g, `불을 지펴 두고 기다렸다. ${back.join(', ')}이(가) 선로를 따라 걸어와 다시 탔다.`, 'good');
       return;
     }
     case 'pro_trail_note':

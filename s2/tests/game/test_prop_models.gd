@@ -60,6 +60,16 @@ func test_vertex_coloured_models_turn_the_shader_colour_on() -> void:
 	assert_ne(plain.get_shader_parameter("use_vertex_color"), true, "a plain model keeps the default")
 
 
+func test_every_model_darkens_at_the_foot_it_stands_on() -> void:
+	# T0-6: the foot of a model on its floor goes darker (weathered.gdshader contact_dark), so a pale
+	# box does not float over the floor; the shader leaves it off for anything else.
+	for coloured: bool in [true, false]:
+		var m := _collected_material(_triangle(coloured))
+		assert_almost_eq(float(m.get_shader_parameter("contact_dark")), Props.CONTACT_DARK, 0.0001)
+	assert_gt(Props.CONTACT_DARK, 0.2)
+	assert_lt(Props.CONTACT_DARK, 0.5, "darker, never black")
+
+
 func _triangle(coloured: bool) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)

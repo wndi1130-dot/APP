@@ -224,6 +224,57 @@ func test_prop_tiles_match_full_scan_instances_and_lods() -> void:
 	assert_lt(view._nearby_prop_items(batch, camera.global_position, -camera.global_transform.basis.z).size(), (batch["items"] as Array).size())
 
 
+func test_prop_shades_ride_with_the_props_and_stop_at_a_wall() -> void:
+	# T0-6: a contact shade a prop that stands on its floor, filled in the same pass as the props.
+	var view: MapView = _view()
+	view._make_prop_shades()
+	_prop(view, Rect2i(10, 10, 1, 1), 0)
+	_prop(view, Rect2i(20, 10, 1, 1), 0)
+	view.grid.set_solid(Vector2i(19, 10), FieldGrid.Solid.WALL)
+	var hung: Dictionary = _prop(view, Rect2i(30, 10, 1, 1), 0)
+	hung["mount"] = "wall"
+	view._props_mask_on = false
+	var camera: Camera3D = Camera3D.new()
+	add_child_autofree(camera)
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	var focus := Vector3(20, 0, 10.5)
+	camera.position = focus + Vector3(45, sqrt(2.0) * 45 * tan(deg_to_rad(35.0)), 45)
+	camera.look_at(focus)
+	camera.size = 36.0
+	view.refresh_props(camera)
+	assert_eq(view.prop_shades.multimesh.visible_instance_count, 2, "the two standing props, not the one on the wall")
+	assert_eq(view.prop_shades.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	var items: Array = view.prop_batches[TEST_PROP]["items"]
+	assert_true((items[2]["shade"] as Dictionary).is_empty(), "hung on a wall: no shade")
+	var open: Transform3D = items[0]["shade"]["xf"]
+	var walled: Transform3D = items[1]["shade"]["xf"]
+	assert_lt(open.origin.x - open.basis.x.x * 0.5, 10.0, "past its cell where the floor is open")
+	assert_almost_eq(walled.origin.x - walled.basis.x.x * 0.5, 20.0, 0.001, "not past the wall")
+	# Its height is the strength, one more under a roof (contact_shade keeps a roofed one full in snow).
+	var sky := MapView.sky_alpha(view.grid, Vector2i(10, 10))
+	assert_almost_eq(floorf(open.basis.y.length()), 1.0 - sky, 0.0001, "the roof flag")
+	assert_between(fmod(open.basis.y.length(), 1.0), MapView.SHADE_STRENGTH, MapView.SHADE_STRENGTH_TALL, "the strength")
+	var foot: Color = items[0]["shade"]["foot"]
+	for v: float in [foot.r, foot.g, foot.b, foot.a]:
+		assert_true(v >= 0.0 and v <= 1.0, "the footprint inside its quad")
+	view._props_mask_on = true
+	view.refresh_props(camera)
+	assert_eq(view.prop_shades.multimesh.visible_instance_count, 0, "unseen props, no shades")
+
+
+func test_a_prop_shade_goes_round_its_foot_not_its_crown() -> void:
+	# A bare tree: a thin trunk under a wide crown. Its shade is the trunk's, not a dark square
+	# under the whole crown.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for v: Vector3 in [Vector3(-0.1, 0, -0.1), Vector3(0.1, 0, -0.1), Vector3(0, 0, 0.1),
+			Vector3(-1.5, 3, -1.5), Vector3(1.5, 3, -1.5), Vector3(0, 3.5, 1.5)]:
+		st.add_vertex(v)
+	var foot: AABB = MapView._shade_foot("test://bare_tree", st.commit())
+	assert_almost_eq(foot.size.x, 0.2, 0.001, "the trunk's width")
+	assert_almost_eq(foot.size.z, 0.2, 0.001)
+
+
 func test_prop_memory_and_tile_membership_follow_moves_and_removal() -> void:
 	var view: MapView = _view()
 	var prop: Dictionary = _prop(view, Rect2i(2, 2, 2, 2), 0)

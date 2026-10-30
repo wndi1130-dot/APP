@@ -17,6 +17,13 @@ var fx: BloodFx
 var _blood_level: int
 
 
+class LandingCheck:
+	extends Node
+
+	func can_land(_at: Vector3) -> bool:
+		return true
+
+
 func before_each() -> void:
 	_blood_level = FxState.blood_level
 	FxState.set_blood_level(FxState.BloodLevel.NORMAL)
@@ -72,6 +79,121 @@ func _wall() -> void:
 	for z in range(GRID_SIZE):
 		game.grid.set_solid(Vector2i(WALL_X, z), FieldGrid.Solid.WALL)
 	game.grid.refresh_paths()
+
+
+func _land_fixed_drop(from: Vector3, to: Vector3) -> void:
+	fx._land({
+		"pos": to, "vel": to - from, "floor": to.y,
+		"snow": false, "mark": 0.1, "seed": 0.5,
+		"has_land_check": true, "can_land": game.feel._blood_can_land.bind(from),
+	})
+
+
+func test_the_real_segment_blocks_a_wall_missed_by_cell_centers() -> void:
+	game.grid.set_solid(Vector2i(9, 8), FieldGrid.Solid.WALL)
+	var from: Vector3 = Vector3(5.99, 0.0, 8.01)
+	var to: Vector3 = Vector3(9.70, 0.0, 9.01)
+	assert_false(game.feel._blood_can_land(to, from), "the segment crosses cell (9, 8)")
+	_land_fixed_drop(from, to)
+	assert_eq(_drop_spots().size(), 0, "the missed wall leaves no drop mark beyond it")
+
+
+func test_the_real_segment_keeps_a_drop_wrongly_blocked_by_cell_centers() -> void:
+	game.grid.set_solid(Vector2i(6, 8), FieldGrid.Solid.WALL)
+	var from: Vector3 = Vector3(5.90, 0.0, 8.99)
+	var to: Vector3 = Vector3(7.10, 0.0, 9.90)
+	assert_true(game.feel._blood_can_land(to, from), "the segment enters row 9 before column 6")
+	_land_fixed_drop(from, to)
+	assert_eq(_drop_spots().size(), 1, "a clear segment keeps its drop mark")
+
+
+func test_a_drop_tenth_of_a_metre_from_a_wall_can_land_on_its_own_side() -> void:
+	_wall()
+	var from: Vector3 = Vector3(5.90, 0.0, 8.10)
+	var to: Vector3 = Vector3(5.90, 0.0, 10.90)
+	assert_true(game.feel._blood_can_land(to, from), "a drop needs no walking width")
+	assert_true(game.feel._blood_can_land(from, to), "the reverse segment stays on the same side")
+	_land_fixed_drop(from, to)
+	assert_eq(_drop_spots().size(), 1, "a mark survives 0.1m from the wall")
+
+
+func test_an_exact_corner_checks_both_side_cells_in_every_direction() -> void:
+	var from: Vector3 = Vector3(8.5, 0.0, 8.5)
+	var start: Vector2i = FieldGrid.cell_of(from)
+	for step: Vector2i in [Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]:
+		var to: Vector3 = from + Vector3(step.x * 2.0, 0.0, step.y * 2.0)
+		assert_true(game.feel._blood_can_land(to, from), "an open diagonal is clear")
+		for side: Vector2i in [start + Vector2i(step.x, 0), start + Vector2i(0, step.y)]:
+			game.grid.set_solid(side, FieldGrid.Solid.WALL)
+			assert_false(game.feel._blood_can_land(to, from), "either side of the corner blocks the drop")
+			game.grid.set_solid(side, FieldGrid.Solid.NONE)
+
+
+func test_a_segment_just_clear_of_a_corner_is_not_widened() -> void:
+	game.grid.set_solid(Vector2i(6, 8), FieldGrid.Solid.WALL)
+	var from: Vector3 = Vector3(5.5, 0.0, 8.5)
+	var to: Vector3 = Vector3(7.5, 0.0, 10.500001)
+	assert_true(game.feel._blood_can_land(to, from), "near a corner is not an exact corner")
+	assert_true(game.feel._blood_can_land(from, to), "reverse traversal keeps the same narrow clearance")
+
+
+func test_the_start_cell_is_skipped_but_the_landing_cell_must_be_clear() -> void:
+	var from: Vector3 = Vector3(5.5, 0.0, 8.5)
+	var to: Vector3 = Vector3(7.5, 0.0, 8.5)
+	assert_true(game.feel._blood_can_land(from, from), "a stationary drop can land on clear floor")
+	game.grid.set_solid(FieldGrid.cell_of(from), FieldGrid.Solid.WALL)
+	assert_true(game.feel._blood_can_land(to, from), "the hit's cell is excluded from traversal")
+	assert_false(game.feel._blood_can_land(from, from), "even a stationary drop needs a clear landing cell")
+	assert_false(game.feel._blood_can_land(from, to), "the same wall blocks a landing in reverse")
+	assert_false(game.feel._blood_can_land(Vector3(GRID_SIZE, 0.0, 8.5), to), "outside the map has no floor")
+	assert_false(game.feel._blood_can_land(to + Vector3.UP * game.level_y(1), to), "a drop cannot land on another level")
+
+
+func test_an_open_map_keeps_the_same_marks_with_and_without_a_landing_check() -> void:
+	var contact: Dictionary = {"position": HIT_AT, "can_land": game.feel._blood_can_land.bind(HIT_AT)}
+	var checked_hit: Dictionary = fx.hit(HIT_AT + Vector3.UP, Vector3.RIGHT, 1.0, "firearm", contact)
+	var count: int = int(checked_hit["count"])
+	assert_gt(count, 0)
+	_settle()
+	var checked_spots: Array[Vector3] = _drop_spots()
+	var checked_rng_state: int = fx._rng.state
+	assert_eq(checked_spots.size(), count, "the checked open map keeps every drop")
+	fx.begin_stop(42)
+	var unchecked_hit: Dictionary = fx.hit(HIT_AT + Vector3.UP, Vector3.RIGHT, 1.0, "firearm", {"position": HIT_AT})
+	assert_eq(int(unchecked_hit["count"]), count, "both hits throw the same number of drops")
+	assert_eq(int(unchecked_hit["seed"]), int(checked_hit["seed"]), "both hits use the same effect seed")
+	_settle()
+	assert_eq(_drop_spots().size(), checked_spots.size(), "omitting the check keeps the same mark count")
+	assert_eq(_drop_spots(), checked_spots, "the surviving marks have the same positions")
+	assert_eq(fx._rng.state, checked_rng_state, "the check consumes no extra effect dice")
+
+
+func test_an_invalidated_landing_check_drops_marks_but_an_omitted_check_keeps_them() -> void:
+	var checker: LandingCheck = LandingCheck.new()
+	var can_land: Callable = checker.can_land
+	var contact: Dictionary = {"position": HIT_AT, "can_land": can_land}
+	var hit: Dictionary = fx.hit(HIT_AT + Vector3.UP, Vector3.RIGHT, 1.0, "firearm", contact)
+	var count: int = int(hit["count"])
+	assert_gt(count, 0)
+	assert_true(can_land.is_valid(), "the supplied check is valid when drops are made")
+	checker.free()
+	assert_false(can_land.is_valid(), "the check loses its owner before landing")
+	_settle()
+	assert_eq(_drop_spots().size(), 0, "a lost check cannot approve a mark")
+	var rejected_rng_state: int = fx._rng.state
+	fx.begin_stop(42)
+	var unchecked_hit: Dictionary = fx.hit(HIT_AT + Vector3.UP, Vector3.RIGHT, 1.0, "firearm", {"position": HIT_AT})
+	assert_eq(int(unchecked_hit["count"]), count, "omitting the check leaves the spray unchanged")
+	_settle()
+	assert_eq(_drop_spots().size(), count, "legacy callers without a check keep every mark")
+	assert_eq(fx._rng.state, rejected_rng_state, "rejected drops still spend one floor angle each")
+
+
+func test_an_explicit_empty_landing_check_is_not_an_omitted_check() -> void:
+	var hit: Dictionary = fx.hit(HIT_AT + Vector3.UP, Vector3.RIGHT, 1.0, "firearm", {"position": HIT_AT, "can_land": Callable()})
+	assert_gt(int(hit["count"]), 0)
+	_settle()
+	assert_eq(_drop_spots().size(), 0, "a supplied empty check cannot approve a mark")
 
 
 func test_a_thin_wall_stops_drop_marks_that_land_beyond_it_in_the_open() -> void:
