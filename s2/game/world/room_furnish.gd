@@ -1596,41 +1596,83 @@ static func _dist_to(r: Rect2i, cells: Array) -> int:
 	return best
 
 
-## 한 가구의 놓을 자리 후보. [{"rect", "facing", "score"}], 점수 높은 것부터.
-static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i], item: Dictionary,
-		forbid: Dictionary, taken: Dictionary, doors_in: Array, stove_cells: Array, box_at: Dictionary, k: int = TOP_CANDIDATES,
-		taste: Dictionary = {}) -> Array:
-	var size: Vector2i = item["size"]
-	var tall: bool = size.x * size.y >= 2 or TALL_KINDS.has(String(item["kind"]))
-	var holds: bool = item.get("holds", false)
-	var shapes: Array[Vector2i] = [size]
-	if size.x != size.y:
-		shapes.append(Vector2i(size.y, size.x))
+## 방 ri의 벽 표: 방 칸을 두른 네모(lo부터)를 한 칸 넓힌 칸마다 1이면 _wall_side의 벽(방 칸·문·창·걸을 수
+## 있는 칸이 아님). 방 하나를 채우는 동안 방 밖 칸은 바뀌지 않으니 방마다 한 번 만들어 _candidates에 넘긴다.
+static func _wall_mask(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i]) -> Dictionary:
 	var lo := cells[0]
 	var hi := cells[0]
 	for c in cells:
 		lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
 		hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
+	var ww := hi.x - lo.x + 3
+	var wh := hi.y - lo.y + 3
+	var wall := PackedByteArray()
+	wall.resize(ww * wh)
+	for y in range(wh):
+		for x in range(ww):
+			var c := Vector2i(lo.x - 1 + x, lo.y - 1 + y)
+			var open := _at(g, of, c) == ri or g.doors.has(c) or g.windows.has(c) or g.people_can_walk(c)
+			wall[y * ww + x] = 0 if open else 1
+	return {"lo": lo, "hi": hi, "ww": ww, "wall": wall}
+
+
+## 한 가구의 놓을 자리 후보. [{"rect", "facing", "score"}], 점수 높은 것부터.
+## 칸마다 설 수 있나(fit)를 먼저 한 번씩 표로 만들고, 벽인가는 방마다 만든 벽 표(wmask, 없으면 여기서 만듦)를
+## 읽는다(가구 놓기에서 가장 많이 도는 곳 — 같은 칸을 꼴·자리마다 다시 묻지 않게). 후보와 점수는 칸마다 묻던
+## 때와 같다.
+static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i], item: Dictionary,
+		forbid: Dictionary, taken: Dictionary, doors_in: Array, stove_cells: Array, box_at: Dictionary, k: int = TOP_CANDIDATES,
+		taste: Dictionary = {}, wmask: Dictionary = {}) -> Array:
+	var size: Vector2i = item["size"]
+	var kind := String(item["kind"])
+	var tall: bool = size.x * size.y >= 2 or TALL_KINDS.has(kind)
+	var holds: bool = item.get("holds", false)
+	var near: String = item.get("near", "")
+	var at: String = item.get("at", "wall")
+	var near_cells: Array = item.get("near_cells", [])
+	var corner: bool = item.get("corner", false)
+	var anchor := ANCHOR_KINDS.has(kind)
+	var shapes: Array[Vector2i] = [size]
+	if size.x != size.y:
+		shapes.append(Vector2i(size.y, size.x))
+	if wmask.is_empty():
+		wmask = _wall_mask(g, of, ri, cells)
+	var lo: Vector2i = wmask["lo"]
+	var hi: Vector2i = wmask["hi"]
+	var ww: int = wmask["ww"]
+	var wall: PackedByteArray = wmask["wall"]
+	# fit: 방 상자 칸마다 1이면 이 가구가 설 수 있다(방 칸만 보고, 방 밖 칸은 0).
+	var bw := hi.x - lo.x + 1
+	var bh := hi.y - lo.y + 1
+	var fit := PackedByteArray()
+	fit.resize(bw * bh)
+	var solid := g.solid
+	var gw := g.width
+	for c in cells:
+		if solid[c.y * gw + c.x] != S.NONE or taken.has(c) or (box_at.has(c) and not holds):
+			continue
+		var f: String = forbid.get(c, "")
+		if f == "all" or (tall and f == "tall") or (f == "stand" and near != "bed_head"):
+			continue
+		fit[(c.y - lo.y) * bw + c.x - lo.x] = 1
 	var out: Array = []
 	for shape in shapes:
 		for y in range(lo.y, hi.y - shape.y + 2):
 			for x in range(lo.x, hi.x - shape.x + 2):
-				var r := Rect2i(x, y, shape.x, shape.y)
 				var fits := true
-				for yy in range(r.position.y, r.end.y):
-					for xx in range(r.position.x, r.end.x):
-						var c := Vector2i(xx, yy)
-						var f: String = forbid.get(c, "")
-						if _at(g, of, c) != ri or g.solid_at(c) != S.NONE or taken.has(c) or f == "all" or (tall and f == "tall") \
-								or (f == "stand" and item.get("near", "") != "bed_head"):
+				for yy in range(y - lo.y, y - lo.y + shape.y):
+					for xx in range(x - lo.x, x - lo.x + shape.x):
+						if fit[yy * bw + xx] == 0:
 							fits = false
-						elif box_at.has(c) and not holds:
-							fits = false
+							break
+					if not fits:
+						break
 				if not fits:
 					continue
-				if item.get("near", "") == "bed_head" and not item.get("near_cells", []).has(r.position):
+				var r := Rect2i(x, y, shape.x, shape.y)
+				if near == "bed_head" and not near_cells.has(r.position):
 					continue
-				if item.get("at", "wall") == "head":
+				if at == "head":
 					var spot := _head_spot(g, of, ri, r, item, forbid, taken, doors_in, taste)
 					if not spot.is_empty():
 						_keep_top(out, spot, k)
@@ -1639,13 +1681,13 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 				var backs: Array[Vector2i] = []
 				var walls := 0
 				for d in DIRS:
-					if not _wall_side(g, of, ri, r, d):
+					if not _wall_side_in(wall, ww, lo, r, d):
 						continue
 					walls += 1
 					var long_side := (d.y != 0) == (r.size.x >= r.size.y)
 					if long_side or r.size.x == r.size.y:
 						backs.append(d)
-				if item.get("at", "wall") == "wall" and backs.is_empty():
+				if at == "wall" and backs.is_empty():
 					continue
 				var score := 0.0
 				var facing := 0
@@ -1653,14 +1695,14 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 					score += 3.0
 					facing = _facing_from_back(backs[0])
 				if walls >= 2:
-					score += 5.0 if item.get("corner", false) else 1.0
-				if item.get("at", "wall") == "mid" and walls == 0:
+					score += 5.0 if corner else 1.0
+				if at == "mid" and walls == 0:
 					score += 2.0
 				if not taste.is_empty():
-					if ANCHOR_KINDS.has(String(item["kind"])) and backs.has(taste["back"]):
+					if anchor and backs.has(taste["back"]):
 						score += LEAN_BONUS
 					score += GRAIN * _grain(r, int(taste["salt"]))
-				match item.get("near", ""):
+				match near:
 					"far_door":
 						score += 0.3 * _dist_to(r, doors_in)
 					"door":
@@ -1669,13 +1711,33 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 						if not stove_cells.is_empty():
 							score -= 0.5 * _dist_to(r, stove_cells)
 					"desk":
-						if not item.get("near_cells", []).is_empty():
-							score -= 2.0 * _dist_to(r, item["near_cells"])
+						if not near_cells.is_empty():
+							score -= 2.0 * _dist_to(r, near_cells)
 					"bed_head":
 						# 두 베개 곁인 칸(홑침대 둘 사이)이 먼저.
-						score += 2.0 * (item.get("near_cells", []).count(r.position) - 1)
+						score += 2.0 * (near_cells.count(r.position) - 1)
+				# 위 k개에 못 들 자리는 사전을 만들지 않고 넘긴다(_keep_top과 같은 차례로 견줌).
+				if out.size() >= k and not _beats(score, r, out[-1]):
+					continue
 				_keep_top(out, {"rect": r, "facing": facing, "score": score}, k)
 	return out
+
+
+## _wall_side를 _candidates의 wall 표로: 상자(lo부터)를 한 칸 넓힌 표에서 그 변 바로 밖 칸이 다 벽인가.
+static func _wall_side_in(wall: PackedByteArray, ww: int, lo: Vector2i, r: Rect2i, d: Vector2i) -> bool:
+	var x0 := r.position.x - lo.x + 1
+	var y0 := r.position.y - lo.y + 1
+	if d.x != 0:
+		var x := x0 + r.size.x if d.x > 0 else x0 - 1
+		for i in range(r.size.y):
+			if wall[(y0 + i) * ww + x] == 0:
+				return false
+	else:
+		var y := y0 + r.size.y if d.y > 0 else y0 - 1
+		for i in range(r.size.x):
+			if wall[y * ww + x0 + i] == 0:
+				return false
+	return true
 
 
 ## 그 집 가구의 색 판 번호(0~TINT_SETS-1). 지도와 건물로 정해져 판마다 같다.
@@ -1704,9 +1766,12 @@ static func _roll(base: int, purpose: int) -> int:
 
 ## 점수 높은 것, 같으면 위·왼쪽·넓은 것이 앞. 위 몇 개만 남긴다.
 static func _ahead(a: Dictionary, b: Dictionary) -> bool:
-	if a["score"] != b["score"]:
-		return a["score"] > b["score"]
-	var ra: Rect2i = a["rect"]
+	return _beats(a["score"], a["rect"], b)
+
+
+static func _beats(score: float, ra: Rect2i, b: Dictionary) -> bool:
+	if score != b["score"]:
+		return score > b["score"]
 	var rb: Rect2i = b["rect"]
 	if ra.position.y != rb.position.y:
 		return ra.position.y < rb.position.y
@@ -1930,6 +1995,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 			var before := _from_first(g, of, ri, keys)
 			var guard := _standing(g, of, ri, kept_rects, before)
 			var forbid := _forbidden(g, of, ri, cells, stairs)
+			var wmask := _wall_mask(g, of, ri, cells)
 			var rng := RandomNumberGenerator.new()
 			rng.seed = ("%s|%d|%d|%d" % [place, int(room["building"]), lv, ri]).hash()
 			# 배치 틀: rng를 쓰지 않아 묶음 고르기·목표 몫은 그대로다.
@@ -2037,7 +2103,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 						why = "space"
 						continue
 					var cands := _candidates(g, of, ri, cells, v, forbid, taken, keys["seeds"], stove_cells, box_at,
-						HEAD_CANDIDATES if v.get("at", "") == "head" else (TOP_CANDIDATES_NEED if need else TOP_CANDIDATES), taste)
+						HEAD_CANDIDATES if v.get("at", "") == "head" else (TOP_CANDIDATES_NEED if need else TOP_CANDIDATES), taste, wmask)
 					if cands.is_empty():
 						why = "spot"
 						continue
@@ -2111,7 +2177,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 						continue
 					var v: Dictionary = source.duplicate()
 					v["fill"] = true
-					var cands := _candidates(g, of, ri, cells, v, forbid, taken, keys["seeds"], stove_cells, box_at, TOP_CANDIDATES, taste)
+					var cands := _candidates(g, of, ri, cells, v, forbid, taken, keys["seeds"], stove_cells, box_at, TOP_CANDIDATES, taste, wmask)
 					var cand := {} if cands.is_empty() else _first_open(g, of, ri, keys, before, guard, rects, cands, rng.randi_range(0, mini(3, cands.size()) - 1))
 					if cand.is_empty():
 						stuck[kind] = true
