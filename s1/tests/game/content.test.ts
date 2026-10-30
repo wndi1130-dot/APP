@@ -46,6 +46,16 @@ describe('콘텐츠 사건', () => {
     expect(view.choices[1].witness).toBe(true);
   });
 
+  it('JSON 선택지의 log는 자리표시를 채워 넘기고, 없으면 log를 만들지 않는다', () => {
+    registerContentEvents([ev({ choices: ev().choices.map((ch, i) => i === 0 ? { ...ch, log: '{community}의 {person}에게 석탄을 나눴다.' } : ch) })]);
+    const g = createGame('content-choice-log');
+    addContentCard(g, 'ev_test_stove');
+    const card = g.cards[g.cards.length - 1];
+    const view = viewCard(g, card);
+    expect(view.choices[0].log).toBe(`꼬리칸의 ${card.vals!.person}에게 석탄을 나눴다.`);
+    expect(view.choices[1]).not.toHaveProperty('log');
+  });
+
   it('고르면 효과·깃발·미룬 후속이 돈다', () => {
     registerContentEvents([ev(), after]);
     const g = createGame('content-2');

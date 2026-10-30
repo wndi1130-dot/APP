@@ -14,25 +14,25 @@ function speaker(g: Game, c: Comm): { name: string; role: string; comm: Comm } {
 }
 
 /** 출발·재출발 선택지. 수색대는 지지가 문턱을 넘고 칸이 넷을 낼 때만, 「내가 간다」는 늘, 마지막은 보내지 않는 길. 첫 칸은 가는 길이다(봇이 첫 칸을 고른다). */
-function sendChoices(g: Game, crewLabel: string, waitLabel: string, waitSay: string, waitTension: number): Choice[] {
+function sendChoices(g: Game, crewLabel: string, waitLabel: string, waitSay: string, waitTension: number, crewLog: string, captainLog: string, waitLog: string): Choice[] {
   const out: Choice[] = [];
   const crew = crewAllowed(g) ? tripPlan(g, 'crew') : null;
   const cap = tripPlan(g, 'captain');
   if (crew) {
     out.push({
-      label: crewLabel, say: '살아서 돌아와라. 그것만 하면 된다.', effs: [], special: 'trip_go_crew',
+      label: crewLabel, log: crewLog, say: '살아서 돌아와라. 그것만 하면 된다.', effs: [], special: 'trip_go_crew',
       extra: [`${crew.total}턴 예정`, `식량 −${crew.food}`, `${COMM_NAME[crew.comm]} ${crew.names.length}명이 자리를 비운다`, `돌아오면 ${COMM_NAME[crew.comm]} 관계 +${P.tripRelCrew}`],
     });
   }
   if (cap) {
     const dep = deputyOf(g);
     out.push({
-      label: '내가 간다', say: `내가 간다. 돌아올 때까지 ${who(dep)} 맡는다.`, effs: [{ t: 'rel', c: dep, v: P.tripRelDeputy }], special: 'trip_go_captain',
+      label: '내가 간다', log: captainLog, say: `내가 간다. 돌아올 때까지 ${who(dep)} 맡는다.`, effs: [{ t: 'rel', c: dep, v: P.tripRelDeputy }], special: 'trip_go_captain',
       extra: [`${cap.total}턴 예정`, `식량 −${cap.food}`, '열차장이 없는 동안 회기가 닫힌다'],
     });
   }
   const wait: Eff[] = waitTension > 0 ? [{ t: 'tension', v: waitTension }] : [];
-  out.push({ label: waitLabel, say: waitSay, effs: wait, special: 'trip_stay' });
+  out.push({ label: waitLabel, log: waitLog, say: waitSay, effs: wait, special: 'trip_stay' });
   return out;
 }
 
@@ -46,7 +46,8 @@ function departView(g: Game): CardView {
     : `다음 역까지 ${km}km다. 수동차 하나, 자루 둘. 아무도 열차장 대신 가겠다고 나서지 않는다. ${supportLineText(g)}`;
   return {
     title: '수동차', speaker: speaker(g, c), body, focus: c, required: true,
-    choices: sendChoices(g, '수색대를 보낸다', '아직 안 보낸다', '하루만 더 본다.', P.tripWaitTension),
+    choices: sendChoices(g, '수색대를 보낸다', '아직 안 보낸다', '하루만 더 본다.', P.tripWaitTension,
+      '수동차에 수색대를 태워 보냈다.', '수동차에 직접 올랐다.', '수동차 출발을 미뤘다.'),
   };
 }
 
@@ -64,7 +65,7 @@ function returnView(g: Game, card: Card): CardView {
     title: '수동차가 돌아왔다', speaker: speaker(g, t.comm), focus: t.comm, required: true,
     body: `◂ 수동차가 어둠 속에서 나타났다. 자루 둘이 석탄으로 불룩하다. ${card.n ?? t.turn}턴 만이다.`,
     choices: [{
-      label: '불을 넣는다', effs, special: 'trip_fire',
+      label: '불을 넣는다', log: '돌아온 수동차의 석탄으로 불을 넣었다.', effs, special: 'trip_fire',
       say: t.leaderGoes ? '불을 넣어라. 내일 아침에 간다.' : `${who(t.comm)} 해냈다. 오늘은 그 칸부터 먹는다.`,
     }],
   };
@@ -76,7 +77,8 @@ function lostView(g: Game, card: Card): CardView {
   return {
     title: '돌아오지 않았다', speaker: speaker(g, c), focus: c, required: true,
     body: `돌아올 날이 지났다. 선로 끝에 아무것도 없다. ${COMM_NAME[c]} 대표가 종이에 적어 둔 이름 ${n}개를 일지에 옮긴다. ${supportLineText(g)}`,
-    choices: sendChoices(g, '다시 보낸다', '기다린다', '(열차장은 종이의 이름을 본다.)', 0),
+    choices: sendChoices(g, '다시 보낸다', '기다린다', '(열차장은 종이의 이름을 본다.)', 0,
+      '돌아오지 않은 수동차를 찾으러 수색대를 다시 보냈다.', '돌아오지 않은 수동차를 찾으러 직접 나섰다.', '돌아오지 않은 수동차를 더 기다리기로 했다.'),
   };
 }
 

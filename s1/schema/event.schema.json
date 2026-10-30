@@ -72,6 +72,9 @@
             "pattern": "^[^\\r\\n]+$",
             "description": "카드에 보이는 열차장의 말. 한두 문장. 효과와 비용은 넣지 않는다(2026-10-07 사용자)."
           },
+          "log": {
+            "type": "string"
+          },
           "why": {
             "type": "string",
             "maxLength": 100,
