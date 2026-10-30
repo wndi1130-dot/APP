@@ -210,8 +210,12 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			return {"title": "외투와 장화", "choices": keep}
 		"dom:short":
 			# S1 domestic/cards.ts dom:short (its upkeep half, train_research.gd pay_upkeep raises it).
-			return {"title": "부품이 모자란다", "key": "dom:short", "choices": [choice("", "하나를 세운다", [], "dom_short_stand"),
-				choice("", "그냥 달린다", [], "dom_short_go"), choice("", "목표치 +3", [], "dom_short_target")]}
+			var options: Array = [choice("", "하나를 세운다", [], "dom_short_stand"),
+				choice("", "그냥 달린다", [], "dom_short_go"), choice("", "목표치 +3", [], "dom_short_target")]
+			options[0]["log"] = "부품을 돌리려 기술 하나를 세우기로 했다."
+			options[1]["log"] = "부품이 모자라도 그대로 달리기로 했다."
+			options[2]["log"] = "부품 목표치를 높이기로 했다."
+			return {"title": "부품이 모자란다", "key": "dom:short", "choices": options}
 		"strike_warn":
 			# S1 cards.ts strike_warn: the engine warns before the fire goes out (turn_settle.gd raises it).
 			var options: Array = [choice("", "교대를 늘린다", [["coal", -float(t["P"]["shiftCoal"])], ["base", "engine", 3, -float(t["P"]["shiftRelief"])], ["rel", "engine", 6]]),
