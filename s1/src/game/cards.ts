@@ -270,7 +270,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
       return {
         title: '얼어붙은 급수탑', speaker: leader(g, 'engine'), focus: 'engine', required: true,
         body: again(past, `급수탑 관이 얼었다. 보일러 물이 반밖에 없다. 석탄은 ${Math.round(g.coal)} 남았다.`, {
-          burn_melt: `급수탑이 또 얼었다. 지난번 녹이느라 태운 석탄 얘기를 화부들이 아직 한다. 석탄은 ${Math.round(g.coal)} 남았다.`,
+          burn_melt: `급수탑이 또 얼었다. 화부들은 아직 그 얘기다. "지난번 녹이느라 태운 석탄이면 한참 달렸다." 석탄은 ${Math.round(g.coal)} 남았다.`,
           snow_melt: '급수탑이 또 얼었다. 지난번 양동이 일로 손이 다 튼 사람들이 묻는다. "이번에도 우리냐?"',
           hold_on: '보일러 물이 거의 바닥났다. 수석 기관사가 말한다. "지난번처럼 버티면 보일러 관이 탑니다."',
         }, '급수탑이 또 얼었다.'),
@@ -288,7 +288,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: '눈더미', speaker: leader(g, 'engine'), focus: 'engine', required: true,
       body: again(past, '선로가 눈더미에 묻혔다. 삽이 열두 자루 있다.', {
-        dig_all: '또 눈더미다. 지난번 함께 판 일을 사람들이 아직 말한다. 앞칸 몇은 벌써 삽을 들었다.',
+        dig_all: '또 눈더미다. 사람들이 지난번 일을 아직 말한다. "다 같이 파면 금방 끝난다." 앞칸 몇은 벌써 삽을 들었다.',
         dig_tail: '또 눈더미다. 꼬리칸 사람들이 삽을 내려놓고 앉아 있다. "이번엔 앞칸 차례다."',
         plow: '또 눈더미다. 지난번 밀어붙인 뒤로 앞바퀴에서 쇳소리가 난다.',
       }, '선로가 또 눈에 묻혔다.'),
@@ -315,7 +315,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: past ? '열병이 번진다' : '아이 열병', speaker: leader(g, 'medtech'), focus: 'medtech', required: true,
       body: again(past, '꼬리칸 아이 셋이 열이 난다. "해열제는 상자에 있다. 꺼낼지 정해 달라."', {
-        med_use: `이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. 의약품은 ${Math.round(g.med)} 남았다.`,
+        med_use: `이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. "그 집 애만 애냐." 의약품은 ${Math.round(g.med)} 남았다.`,
         med_save: '지난번 약을 못 받은 아이가 아직 열이 안 내렸다. 엄마가 의무칸 문 앞을 떠나지 않는다. "우리 애 차례는 언제냐."',
       }, '아이들이 또 열이 난다.'),
       choices: [
@@ -348,13 +348,13 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
         body: frost
           ? again(past, '지붕 경계를 서던 대원 둘이 동상을 입었다. "교대를 줄여 달라."', {
             hold_post: '지난번 지붕에 섰던 대원 하나가 발가락 둘을 잃었다. 경비대장이 말한다. "지붕 교대는 이제 못 선다."',
-            watch_less: '경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 동상을 입었다.',
-            guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 바람은 여전히 살을 엔다.',
+            watch_less: '경계를 줄인 그 밤을 두고 말이 많다. "지붕 위로 뭔가 지나갔다." 대원들이 다시 동상을 입었다.',
+            guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. "그 칸 난로는 밤새 벌겋더라." 그런데 지붕 위 바람은 여전히 살을 엔다.',
           }, '지붕 경계 대원들이 또 동상을 입었다.')
           : again(past, '지붕 경계를 서던 대원 둘이 찬비에 흠뻑 젖어 이가 맞부딪힌다. "교대를 줄여 달라."', {
             hold_post: '지난번 지붕에 섰던 대원 하나가 열이 올라 일어나지 못한다. 경비대장이 말한다. "지붕 교대는 이제 못 선다."',
-            watch_less: '경계를 줄인 밤, 지붕 위로 무언가 지나갔다는 말이 돈다. 대원들이 다시 젖은 채 떨었다.',
-            guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. 그런데 지붕 위 찬비는 그대로다.',
+            watch_less: '경계를 줄인 그 밤을 두고 말이 많다. "지붕 위로 뭔가 지나갔다." 대원들이 다시 젖은 채 떨었다.',
+            guard_heat: '경비칸이 따뜻해지자 다른 칸이 수군댄다. "그 칸 난로는 밤새 벌겋더라." 그런데 지붕 위 찬비는 그대로다.',
           }, '지붕 경계 대원들이 또 젖은 채 떨었다.'),
         choices: [
           { id: 'guard_heat', label: '경비대 난방을 올린다', say: '경비칸 난로에 석탄을 더 넣어라. 지키는 사람이 얼면 끝이다.', effs: [{ t: 'lever', c: 'guard', which: 'heat', v: 1 }, { t: 'rel', c: 'guard', v: 3 }] },
