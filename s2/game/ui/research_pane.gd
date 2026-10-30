@@ -108,7 +108,7 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 		"effect": _effect(id, st.get("variant")), "ways": [], "word": "", "can": false, "why": "", "cost": [],
 		"law": law_tag(id, st.get("variant")) if LAW_TAGGED.has(id) else "",
 		"law_on": LawTech.law_standing(g0, id, st.get("variant")),
-		"use": LawTech.use_line(g0, id, st.get("variant")) if LAW_TAGGED.has(id) else "",
+		"use": UiFonts.josa(LawTech.use_line(g0, id, st.get("variant"))) if LAW_TAGGED.has(id) else "",
 		# What it takes from the stores each stretch while it runs, and whether
 		# they could not pay it last stretch (it ran at half: Research.mult).
 		"upkeep": [], "starved": bool(st.get("starved", false)), "off": false,
@@ -409,7 +409,7 @@ func _ways(r: Dictionary, top: float) -> void:
 		_add(key)
 		key.position = Vector2(64.0 + (WAY_W + 4.0) * i, top + 5.0) * k
 		key.size = Vector2(WAY_W, KEY_H) * k
-		key.tooltip_text = LawTech.use_line(g, String(r["id"]), w["variant"])
+		key.tooltip_text = UiFonts.josa(LawTech.use_line(g, String(r["id"]), w["variant"]))
 		key.pressed.connect(func() -> void:
 			if not Research.start_restore(g, String(r["id"]), String(w["mode"]), w["variant"]):
 				UiDeny.shake(key)

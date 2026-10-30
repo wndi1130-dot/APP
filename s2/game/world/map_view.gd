@@ -700,12 +700,25 @@ func _bake_container_chunk(key: Vector3i) -> void:
 		container_chunks.erase(key)
 		return
 	var st: SurfaceTool = _begin()
+	var rims: SurfaceTool = _begin()
+	var marked := false
 	for id: String in chunk["ids"]:
-		_bake_container(st, id)
+		marked = _bake_container(st, rims, id) or marked
 	node.mesh = st.commit()
+	# The empty marks' dark rims, a child drawn with contact_shade (as update_ground's).
+	var rim_node := node.get_node_or_null("Rim") as MeshInstance3D
+	if marked and rim_node == null:
+		rim_node = MeshInstance3D.new()
+		rim_node.name = "Rim"
+		rim_node.material_override = _contact_material()
+		rim_node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		node.add_child(rim_node)
+	if rim_node != null:
+		rim_node.mesh = rims.commit() if marked else null
 
 
-func _bake_container(st: SurfaceTool, id: String) -> void:
+## One box into its chunk's mesh; true when it shows empty (its mark's rims went into `rims`).
+func _bake_container(st: SurfaceTool, rims: SurfaceTool, id: String) -> bool:
 	var box_data: Dictionary = data["containers"][id]
 	var at := FieldGrid.center(box_data["cell"]) + Vector3(0, int(box_data.get("level", 0)) * LEVEL_H, 0)
 	var color := Color(0.62, 0.5, 0.3) if not box_data["searched"] else Color(0.35, 0.32, 0.28)
@@ -725,6 +738,10 @@ func _bake_container(st: SurfaceTool, id: String) -> void:
 	# where the box does (the floor shown, the sight mask over it).
 	if SearchRules.shows_empty(box_data) and box_data["id"] != "bell":
 		_empty_corners(st, at)
+		var level := int(box_data.get("level", 0))
+		_empty_rims(rims, at, sky_alpha(grid, box_data["cell"]) if level == 0 else 0.0)
+		return true
+	return false
 
 
 ## The empty mark's four corners round a box's cell, a cold pale grey low on the
@@ -737,12 +754,29 @@ const EMPTY_MARK := Color(0.58, 0.62, 0.70, 0.0)
 
 
 func _empty_corners(st: SurfaceTool, at: Vector3) -> void:
-	var c := EMPTY_MARK
+	for bar: Array in _empty_bars(at):
+		box(st, bar[0], bar[1], EMPTY_MARK)
+
+
+## The mark's eight bars, [size, centre]: two at each corner of the box's cell.
+static func _empty_bars(at: Vector3) -> Array:
+	var out: Array = []
 	for sx: float in [-1.0, 1.0]:
 		for sz: float in [-1.0, 1.0]:
 			var corner := at + Vector3(sx * 0.42, 0.012, sz * 0.42)
-			box(st, Vector3(0.24, 0.015, 0.06), corner + Vector3(-sx * 0.09, 0, 0), c)
-			box(st, Vector3(0.06, 0.015, 0.24), corner + Vector3(0, 0, -sz * 0.09), c)
+			out.append([Vector3(0.24, 0.015, 0.06), corner + Vector3(-sx * 0.09, 0, 0)])
+			out.append([Vector3(0.06, 0.015, 0.24), corner + Vector3(0, 0, -sz * 0.09)])
+	return out
+
+
+## A dark rim round each of the mark's bars, as the ground things have (T0-6):
+## the pale bars alone sink into a pale floor (an oatmeal carpet at night 0.020
+## against loot-feel's 0.085), on their rims they stand off any of them.
+static func _empty_rims(st: SurfaceTool, at: Vector3, sky: float) -> void:
+	for bar: Array in _empty_bars(at):
+		var rim: Dictionary = GroundLook.rim({"lv": 0, "size": bar[0], "at": bar[1]})
+		rim["sky"] = sky
+		_rim_quad(st, rim)
 
 
 ## What lies on the ground (game.ground_items, shapes from ground_look.gd): one
@@ -763,7 +797,9 @@ func update_ground(items: Array) -> void:
 			tools[lv] = _begin()
 			rims[lv] = _begin()
 		box(tools[lv], piece["size"], piece["at"], piece["color"])
-		_rim_quad(rims[lv], GroundLook.rim(piece))
+		var rim: Dictionary = GroundLook.rim(piece)
+		rim["sky"] = sky_alpha(grid, FieldGrid.cell_of(piece["at"])) if lv == 0 else 0.0
+		_rim_quad(rims[lv], rim)
 	for lv in ground_nodes:
 		ground_nodes[lv].mesh = null
 		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = null
@@ -779,13 +815,15 @@ func update_ground(items: Array) -> void:
 		(ground_nodes[lv].get_node("Rim") as MeshInstance3D).mesh = rims[lv].commit()
 
 
-## One rim quad (ground_look.rim) flat on the floor: the thing's share of it and
-## the strength go in the vertex colour (contact_shade.gdshader).
+## One rim quad (ground_look.rim) flat on the floor: the thing's share of it, the
+## strength and whether it lies open to the sky (rim "sky", 1 if not given; 0
+## under a roof, as the floors' vertex alpha) go in the vertex colour
+## (contact_shade.gdshader keeps it full indoors whatever the season).
 static func _rim_quad(st: SurfaceTool, rim: Dictionary) -> void:
 	var at: Vector3 = rim["at"]
 	var h: Vector2 = (rim["size"] as Vector2) * 0.5
 	var inner: Vector2 = rim["inner"]
-	var c := Color(inner.x, inner.y, GroundLook.RIM_STRENGTH)
+	var c := Color(inner.x, inner.y, GroundLook.RIM_STRENGTH, float(rim.get("sky", 1.0)))
 	var corners := [Vector3(-h.x, 0, -h.y), Vector3(h.x, 0, -h.y), Vector3(h.x, 0, h.y), Vector3(-h.x, 0, h.y)]
 	var uvs := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
 	for idx in [0, 1, 2, 0, 2, 3]:

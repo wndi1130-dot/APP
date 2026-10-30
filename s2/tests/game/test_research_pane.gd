@@ -174,7 +174,8 @@ func test_a_working_technology_says_what_it_does_and_has_no_key() -> void:
 
 ## A technology that only bends a law names it at the right of its name: red
 ## with 없음 while it does not stand, dim ink once it does (S1 useTag); the
-## key's tooltip is its use line (train_lawtech.gd use_line).
+## key's tooltip is its use line (train_lawtech.gd use_line) with its particles
+## settled (UiFonts.josa).
 func test_a_law_technology_names_its_law_and_whether_it_stands() -> void:
 	var g := _game()
 	var p := _pane(g, ["e1"])
@@ -184,7 +185,7 @@ func test_a_law_technology_names_its_law_and_whether_it_stands() -> void:
 	assert_eq(tag.text, "눈 녹이기 당번 없음")
 	assert_eq(tag.get_theme_color("font_color"), ResearchPane.RED)
 	var key: Button = _key(p, "Key_e1")
-	assert_eq(key.tooltip_text, "쓸모: 눈 녹이기 당번이(가) 서 있을 때(지금은 없다)")
+	assert_eq(key.tooltip_text, "쓸모: 눈 녹이기 당번이 서 있을 때(지금은 없다)")
 	var name: Label = p.find_child("Name_e1", true, false)
 	assert_lt(name.position.x + name.size.x, tag.position.x, "the tag does not run over the name")
 	assert_lt(tag.position.x + tag.size.x, key.position.x, "nor under the key")

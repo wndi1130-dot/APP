@@ -10,18 +10,20 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_back;
 
 #include "res://fx/shaders/fx_common.gdshaderinc"
 
-// The footprint's share of the quad along its two sides (x, y) and the strength (z): a MultiMesh
+// The footprint's share of the quad along its two sides (x, y), the strength (z) and whether it lies
+// open to the sky (w: 1, or 0 under a roof, as the floors' vertex alpha in world_vis): a MultiMesh
 // row's custom data (per_instance) or the quad's vertex colour.
 uniform bool per_instance = false;
 // How much of the margin round the footprint keeps the full strength before it fades.
 uniform float core : hint_range(0.0, 1.0) = 0.0;
-// What is left of the strength on deep snow (fx_snow 1).
+// What is left of the strength on deep snow (fx_snow 1), out of doors only: indoors no snow lies
+// on the floor, so a rim there keeps its strength in every season.
 uniform float snow_keep : hint_range(0.0, 1.0) = 0.5;
 
-varying vec3 shade;
+varying vec4 shade;
 
 void vertex() {
-	shade = per_instance ? INSTANCE_CUSTOM.rgb : COLOR.rgb;
+	shade = per_instance ? INSTANCE_CUSTOM : COLOR;
 }
 
 void fragment() {
@@ -31,5 +33,5 @@ void fragment() {
 	float k = 1.0 - smoothstep(core, 1.0, d);
 	k *= 1.0 - smoothstep(1.0 - fwidth(d), 1.0, d);
 	ALBEDO = vec3(0.0);
-	ALPHA = shade.z * k * mix(1.0, snow_keep, clamp(fx_snow, 0.0, 1.0));
+	ALPHA = shade.z * k * mix(1.0, snow_keep, clamp(fx_snow, 0.0, 1.0) * shade.w);
 }

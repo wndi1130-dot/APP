@@ -252,6 +252,105 @@ func test_adopted_paths_are_a_refresh() -> void:
 		assert_almost_eq(h.people_path.get_point_weight_scale(Vector2i(5, 3)), 1.6, 0.0001, "the ditch weighs as refreshed")
 
 
+## refresh_paths as it was until 10-30: every cell's caches and both path points one by one.
+static func _refresh_cell_by_cell(g: FieldGrid) -> void:
+	for y in range(g.height):
+		for x in range(g.width):
+			var c := Vector2i(x, y)
+			g._cache_cell(c)
+			g.people_path.set_point_solid(c, g.walk_people[g.index(c)] == 0)
+			g.dead_path.set_point_solid(c, g.walk_dead[g.index(c)] == 0)
+			g.people_path.set_point_weight_scale(c, 1.6 if g.floor[g.index(c)] == FieldGrid.Floor.DEEP_SNOW else 1.0)
+
+
+## A grid with the same cells, doors and windows, its caches and path grids not yet made.
+static func _twin(g: FieldGrid) -> FieldGrid:
+	var h := FieldGrid.new(g.width, g.height)
+	h.solid = g.solid.duplicate()
+	h.floor = g.floor.duplicate()
+	h.doors = g.doors.duplicate(true)
+	h.windows = g.windows.duplicate(true)
+	return h
+
+
+## What refresh_paths leaves: sight and walk caches and both path grids, cell by cell.
+func _made(g: FieldGrid) -> Array:
+	return [g.opq, g.walk_people, g.walk_dead, _points(g)]
+
+
+## refresh_paths reads a cell off its solid and fills the path grids a call a way: every
+## solid kind, a door in each state and boarded, windows broken, open, shut, curtained and
+## boarded, deep snow, on an open grid and a walled one, and again after cells change on a
+## grid already refreshed, ends as the old cell-by-cell refresh did.
+func test_refresh_is_the_cell_by_cell_refresh() -> void:
+	for walled: bool in [false, true]:
+		var g := FieldGrid.new(24, 16)
+		for y in range(g.height):
+			for x in range(g.width):
+				if walled and (x * 3 + y) % 4 != 0:
+					g.set_solid(Vector2i(x, y), S.WALL)
+		var kinds := [S.NONE, S.WALL, S.BLOCK, S.LOW, S.AIR]
+		for k in range(kinds.size()):
+			g.set_solid(Vector2i(k, 1), kinds[k])
+		for k in range(4):
+			var d := Vector2i(k, 3)
+			g.set_solid(d, S.DOOR)
+			g.doors[d] = {"state": ["open", "closed", "locked", "broken"][k], "hp": 8, "building": 0}
+		g.set_solid(Vector2i(4, 3), S.DOOR)
+		g.doors[Vector2i(4, 3)] = {"state": "closed", "planks": [1, 0]}
+		var windows := [{"broken": true}, {"open": true}, {}, {"curtain": "closed"},
+			{"broken": true, "planks": [0, 1]}, {"planks": [3, 0]}]
+		for k in range(windows.size()):
+			var w := Vector2i(k, 5)
+			g.set_solid(w, S.WINDOW)
+			g.windows[w] = windows[k]
+		for x in range(6, 14):
+			g.set_solid(Vector2i(x, 7), S.NONE)
+			g.floor[g.index(Vector2i(x, 7))] = FieldGrid.Floor.DEEP_SNOW
+		var want := _twin(g)
+		_refresh_cell_by_cell(want)
+		var revision := g.revision
+		g.refresh_paths()
+		assert_eq(_made(g), _made(want), "walled %s" % walled)
+		assert_eq(g.revision, revision + 1, "one refresh, one revision")
+		assert_true(g.paths_ready())
+		# Cells change on a refreshed grid (a wall knocked out on the walled grid, one put up on
+		# both, a ditch dug, a door locked): the grids already filled are no head start, the end
+		# is still a whole refresh's.
+		g.solid[g.index(Vector2i(9, 10))] = S.NONE
+		g.solid[g.index(Vector2i(10, 10))] = S.WALL
+		g.floor[g.index(Vector2i(11, 10))] = FieldGrid.Floor.DEEP_SNOW
+		g.doors[Vector2i(0, 3)]["state"] = "locked"
+		g.refresh_paths()
+		want = _twin(g)
+		_refresh_cell_by_cell(want)
+		assert_eq(_made(g), _made(want), "walled %s, again after changes" % walled)
+		assert_eq(g.revision, revision + 2)
+		# The lower half turned the other way (the open grid walled, the walled one opened): the
+		# side the path grids are filled from flips.
+		for y in range(8, g.height):
+			for x in range(g.width):
+				g.solid[g.index(Vector2i(x, y))] = S.NONE if walled else S.WALL
+		g.refresh_paths()
+		want = _twin(g)
+		_refresh_cell_by_cell(want)
+		assert_eq(_made(g), _made(want), "walled %s, the other way round" % walled)
+		assert_eq(g.walk_people.count(1) * 2 >= g.walk_people.size(), walled, "the open side flipped")
+
+
+## The same on a real map's every floor, ground to cellar.
+func test_refresh_is_the_cell_by_cell_refresh_on_sulechow() -> void:
+	var data: Dictionary = SulehufMap.build()
+	var levels: Dictionary = data.get("levels", {0: data["grid"]})
+	assert_gt(levels.size(), 1, "the map has floors above or below")
+	for lv in levels:
+		var g: FieldGrid = levels[lv]
+		var want := _twin(g)
+		_refresh_cell_by_cell(want)
+		g.refresh_paths()
+		assert_eq(_made(g), _made(want), "level %d" % int(lv))
+
+
 func _points(g: FieldGrid) -> PackedFloat32Array:
 	var out := PackedFloat32Array()
 	for y in range(g.height):
