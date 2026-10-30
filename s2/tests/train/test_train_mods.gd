@@ -271,7 +271,7 @@ func test_furnish_contract_rejects_malformed_state_and_jobs() -> void:
 	assert_true(Dom.is_store({"job": {"kind": "insulate", "car": "tail1", "need": 3, "progress": 0, "paid": {"wood": 8, "scrap": 0, "parts": 0}}}))
 	for patch: Dictionary in [{"work": 1}, {"jobs": [1, 1], "work": 2}, {"jobs": [4], "work": 1},
 		{"jobs": [1.5], "work": 1}, {"jobs": [true], "work": 1}, {"jobs": ["1"], "work": 1},
-		{"furnPts": 4}, {"furnPts": NAN}, {"tier": -1}, {"tier": 4, "best": 4}, {"best": 0}, {"tier": 0.5},
+		{"furnPts": 4}, {"furnPts": NAN}, {"tier": -1}, {"tier": 4, "best": 4}, {"best": 0}, {"best": 2}, {"tier": 0.5},
 		{"items": [{"kind": "piano", "size": "small"}]}, {"items": [{"kind": "unknown", "size": "large"}]},
 		{"extra": true},
 		{"tier": 3, "best": 3}, {"tier": 0, "best": 0}, {"jobs": [1, 2, 3], "work": 3}]:
@@ -284,6 +284,9 @@ func test_furnish_contract_rejects_malformed_state_and_jobs() -> void:
 	var kept: Dictionary = valid.duplicate(true)
 	kept.merge({"items": [], "furnPts": 0}, true)
 	assert_true(Dom.is_furnish(kept), "a tier kept after the furniture left is a real save")
+	var dropped: Dictionary = kept.duplicate(true)
+	dropped.merge({"tier": 0, "best": 1}, true)
+	assert_true(Dom.is_furnish(dropped), "the tier drops with the furniture while best stays")
 	kept.merge({"jobs": [1, 2, 3], "work": 3, "tier": 3, "best": 3}, true)
 	assert_true(Dom.is_furnish(kept))
 	for key: String in valid:
