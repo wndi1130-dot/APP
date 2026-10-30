@@ -731,8 +731,8 @@ const PALETTE: Dictionary = {
 		{"kind": "dresser", "size": Vector2i(2, 1), "chance": 0.8, "holds": true, "at": "wall"},
 		{"kind": "wardrobe", "size": Vector2i(2, 1), "chance": 0.6, "holds": true, "at": "wall"},
 		{"kind": "chair", "size": Vector2i(1, 1), "chance": 0.5, "at": "wall"},
-		# 침대 머리(베개 쪽) 곁 협탁 하나(_bedside). 긴 변을 벽에 댄 침대는 베개 양쪽이 다 트이지 않아
-		# 짝(사용자 10-28 「짝 가구」)은 서지 않는다.
+		# 침대 머리(베개 쪽) 곁 협탁(_bedsides). 긴 변을 벽에 댄 침대는 베개 한쪽만 트여 하나, 넓은 침실에서
+		# 머리를 벽에 댄 침대는 베개 양옆에 짝(사용자 10-28 「짝 가구」)이 선다(_wide_bed_items).
 		{"kind": "nightstand", "size": Vector2i(1, 1), "chance": 0.5, "holds": true, "at": "wall", "near": "bed_head"},
 	],
 	"kitchen": [
@@ -899,6 +899,21 @@ const LAYOUT_CLASSES: Dictionary = {"bed": true, "living": true, "kitchen": true
 const ANCHOR_KINDS: Dictionary = {"bed": true, "settee": true, "wardrobe": true, "dresser": true, "bookcase": true, "bathtub": true}
 const LEAN_BONUS := 1.5
 const GRAIN := 0.6
+## _roll 쓰임 번호(점검 L3): 배치 틀의 기댈 벽, 부엌 줄의 난로 끝, 깔개의 깔림·무늬·결, 홑침대 둘.
+const ROLL_BACK := 1
+const ROLL_RUN_END := 2
+const ROLL_RUG := 3
+const ROLL_WEAVE := 4
+const ROLL_RUG_LOOK := 5
+const ROLL_TWIN := 6
+## 넓은 침실(짧은 변 WIDE_BED_SIDE칸 이상): 침대는 머리를 벽에 대는 자리부터 HEAD_CANDIDATES개까지 본다.
+## 베개 양옆이 트여 협탁이 짝으로 서고, 길 검사로 다 막히면 지금처럼 긴 변을 벽에 댄다.
+## 홑침대 둘(아이 방·손님 방)은 지도 침실 전체의 TWIN_SHARE를 짧은 변이 넓은 방부터 고른다(_twin_rooms, 코디
+## 10-30 07:1x). 참고 사본 방 꾸밈 표(loot-feel 10-30): 잘 자리 둘 이상인 방은 넓이로는 늘지 않고 짧은 변이
+## 4칸(하나인 방 3칸)이며, 아이 방 갈래가 없을 때 침실의 12%가 참고와 맞는다.
+const WIDE_BED_SIDE := 4
+const HEAD_CANDIDATES := 12
+const TWIN_SHARE := 0.12
 ## 깔개(room_finish 깔개 칸): 방 갈래마다 깔릴 몫과 고르는 무늬(셰이더 room_rug_finish의 0~6).
 const RUG_CHANCE: Dictionary = {"bed": 0.55, "living": 0.8, "dining": 0.9}
 const RUG_WEAVES: Dictionary = {"bed": [0, 2, 3, 6], "living": [1, 3, 4, 5, 0], "dining": [1, 5, 0]}
@@ -1304,7 +1319,8 @@ static func _narrow(cells: Array[Vector2i]) -> bool:
 	return mini(hi.x - lo.x + 1, hi.y - lo.y + 1) <= 2
 
 
-## 비울 칸: "all"은 아무것도, "tall"은 큰 가구만 못 놓는다.
+## 비울 칸: "all"은 아무것도, "tall"은 큰 가구만 못 놓는다. 머리를 벽에 댄 침대가 서면 furnish_rooms가 베개
+## 양옆에 "stand"(협탁만)를 더한다.
 static func _forbidden(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i], stairs: Dictionary) -> Dictionary:
 	var out: Dictionary = {}
 	# 9칸 이하 방(욕실·벽장·찬방)과 폭 두 칸 방(좁은 부엌)은 문 안쪽 1칸만: 2칸이면 욕실에
@@ -1380,6 +1396,169 @@ static func _bedside(g: FieldGrid, of: PackedInt32Array, ri: int, r: Rect2i, fac
 	return head + [Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1), Vector2i(1, 0)][posmod(facing, 4)]
 
 
+## 협탁 자리들. 머리를 벽에 댄 침대(head_wall)는 베개 칸 양옆(머리 벽을 따라) 가운데 방 안 칸, 아니면 _bedside 하나.
+static func _bedsides(g: FieldGrid, of: PackedInt32Array, ri: int, r: Rect2i, facing: int, head_wall: bool) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if not head_wall:
+		out.append(_bedside(g, of, ri, r, facing))
+		return out
+	var head := bed_head(r, facing)
+	var across := Vector2i(0, 1) if r.size.x > r.size.y else Vector2i(1, 0)
+	for c: Vector2i in [head - across, head + across]:
+		if _at(g, of, c) == ri:
+			out.append(c)
+	return out
+
+
+## 베개를 댄 벽 쪽 → 침대 facing(bed_head가 그 벽 앞 끝이 되게): 서 0, 북 1, 동 2, 남 3.
+static func _facing_from_head(d: Vector2i) -> int:
+	if d == Vector2i(-1, 0):
+		return 0
+	if d == Vector2i(0, -1):
+		return 1
+	if d == Vector2i(1, 0):
+		return 2
+	return 3
+
+
+## 칸들을 두른 네모의 짧은 변.
+static func _short_side(cells: Array[Vector2i]) -> int:
+	if cells.is_empty():
+		return 0
+	var lo := cells[0]
+	var hi := cells[0]
+	for c in cells:
+		lo = lo.min(c)
+		hi = hi.max(c)
+	return mini(hi.x - lo.x + 1, hi.y - lo.y + 1)
+
+
+## 침대 머리를 벽에 대고도 둘레가 남는 침실.
+static func _wide_bedroom(cells: Array[Vector2i]) -> bool:
+	return _short_side(cells) >= WIDE_BED_SIDE
+
+
+## 홑침대 둘을 둘 침실("층:방" -> true): 이 지도에서 가구를 놓는 침실 수의 TWIN_SHARE(반올림)만큼, 짧은 변이
+## 넓은 방부터, 같으면 씨앗을 섞은 굴림 차례로. 짧은 변이 WIDE_BED_SIDE보다 좁은 방은 머리-벽 침대 둘이 서지
+## 않아 고르지 않는다. 첫 바퀴는 한 건물 한 층에 하나씩(같은 꼴 방이 줄지은 연립·위층 숙소에 몰리지 않게),
+## 모자라면 둘째 바퀴에서 채운다.
+static func _twin_rooms(data: Dictionary, plan: Dictionary, levels: Dictionary, place: String) -> Dictionary:
+	var count := 0
+	var wide: Array = []  # [짧은 변, 굴림, "층:방", "건물:층"]
+	for lv: int in levels:
+		var g: FieldGrid = levels[lv]
+		var map := _rooms(data, lv, g)
+		for ri in range(map["rooms"].size()):
+			var key := "%d:%d" % [lv, ri]
+			var cells: Array[Vector2i] = map["rooms"][ri]["cells"]
+			if plan["classes"].get(key, "") != "bed" or cells.size() < ROOM_MIN_CELLS:
+				continue
+			count += 1
+			var side := _short_side(cells)
+			if side >= WIDE_BED_SIDE:
+				var bid := int(map["rooms"][ri]["building"])
+				wide.append([side, _roll(look_seed_of(place, bid, lv, ri), ROLL_TWIN), key, "%d:%d" % [bid, lv]])
+	wide.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0] or (a[0] == b[0] and a[1] < b[1]))
+	var quota := mini(roundi(count * TWIN_SHARE), wide.size())
+	var out: Dictionary = {}
+	var floors: Dictionary = {}
+	for spread: bool in [true, false]:
+		for row: Array in wide:
+			if out.size() >= quota:
+				return out
+			if out.has(row[2]) or (spread and floors.has(row[3])):
+				continue
+			out[row[2]] = true
+			floors[row[3]] = true
+	return out
+
+
+## 넓은 침실의 묶음: 침대는 머리-벽 자리부터(head_first), 협탁 뒤에 짝 하나(pair, 꼭 있을 것 아님).
+## twin이면(홑침대 둘) 첫 침대 바로 뒤에 둘째 침대(머리-벽 자리만)를 끼우고, 짝 대신 두 침대 사이에 협탁 하나
+## (굴림에 없었으면 더함, 코디 10-30 11:2x 「두 침대 방의 흔한 꼴」). 채우기(FILL)는 침대를 더하지 않아(ONE_PER_ROOM)
+## 여기서 끼운다.
+static func _wide_bed_items(items: Array, twin: bool) -> Array:
+	var out: Array = []
+	var stand := false
+	for item: Dictionary in items:
+		out.append(item)
+		if item["kind"] == "bed" and item.get("need", false):
+			item["head_first"] = true
+			if twin:
+				item["twin_room"] = true
+				out.append({"kind": "bed", "size": Vector2i(2, 1), "at": "head", "near": "twin", "twin": true, "twin_room": true})
+		elif item["kind"] == "nightstand" and not item.get("fill", false):
+			stand = true
+			if not twin:
+				var pair: Dictionary = item.duplicate()
+				pair["need"] = false
+				pair["pair"] = true
+				out.append(pair)
+	if twin and not stand:
+		out.append({"kind": "nightstand", "size": Vector2i(1, 1), "holds": true, "at": "wall", "near": "bed_head"})
+	return out
+
+
+## 그 칸에 가구가 설 수 있나(방 안, 빈칸, 안 쓴 칸, 비울 칸 아님; tall이면 창 앞도 아님).
+static func _free_cell(g: FieldGrid, of: PackedInt32Array, ri: int, c: Vector2i, taken: Dictionary, forbid: Dictionary,
+		tall: bool = false) -> bool:
+	var f: String = forbid.get(c, "")
+	return _at(g, of, c) == ri and g.solid_at(c) == S.NONE and not taken.has(c) and f != "all" and not (tall and f == "tall")
+
+
+## 머리-벽 자리 하나(r은 1×2·2×1 침대 꼴): 짧은 변 한쪽(베개 끝)이 벽이고 긴 두 변은 방으로 트인 꼴.
+## 베개 양옆이 비면(짝 협탁 자리) 점수를 더 준다. 홑침대 둘 방(twin_room)은 긴 변 한쪽이 옆벽에 닿아도 되고
+## (침대·협탁·침대 세 칸이 폭 4칸 방에 서게), 첫 침대는 같은 벽 한 칸 건너 둘째가 설 자리가 있는 곳이, 둘째는
+## 그 자리가 먼저. 그런 끝이 없으면 {}.
+static func _head_spot(g: FieldGrid, of: PackedInt32Array, ri: int, r: Rect2i, item: Dictionary, forbid: Dictionary,
+		taken: Dictionary, doors_in: Array, taste: Dictionary) -> Dictionary:
+	if r.size.x == r.size.y:
+		return {}
+	var along := Vector2i(1, 0) if r.size.x > r.size.y else Vector2i(0, 1)
+	var across := Vector2i(along.y, along.x)
+	var twin_room: bool = item.get("twin_room", false)
+	if int(_wall_side(g, of, ri, r, across)) + int(_wall_side(g, of, ri, r, -across)) > (1 if twin_room else 0):
+		return {}
+	var best: Dictionary = {}
+	for d: Vector2i in [-along, along]:
+		if not _wall_side(g, of, ri, r, d):
+			continue
+		var facing := _facing_from_head(d)
+		var head := bed_head(r, facing)
+		# 베개 양옆이 방 바닥이어야 한다(창이 난 벽은 _wall_side로는 벽이 아니라서 따로 본다).
+		var sides := int(_at(g, of, head - across) == ri) + int(_at(g, of, head + across) == ri)
+		if sides < (1 if twin_room else 2):
+			continue
+		var score := 3.0
+		for c: Vector2i in [head - across, head + across]:
+			if _free_cell(g, of, ri, c, taken, forbid):
+				score += 1.0
+		if twin_room and item.get("near", "") != "twin":
+			for s: int in [-1, 1]:
+				var h2 := head + across * (2 * s)
+				if _free_cell(g, of, ri, head + across * s, taken, forbid) and _free_cell(g, of, ri, h2, taken, forbid, true) \
+						and _free_cell(g, of, ri, h2 - d, taken, forbid, true):
+					score += 2.0
+					break
+		if not taste.is_empty():
+			if taste["back"] == d:
+				score += LEAN_BONUS
+			score += GRAIN * _grain(r, int(taste["salt"]))
+		match item.get("near", ""):
+			"far_door":
+				score += 0.3 * _dist_to(r, doors_in)
+			"twin":
+				var heads: Array = item.get("near_cells", [])
+				var dirs: Array = item.get("near_dirs", [])
+				for i in range(heads.size()):
+					if dirs[i] == d:
+						var gap: Vector2i = heads[i] - head
+						score += 3.0 if gap == across * 2 or gap == across * -2 else 1.0
+		if best.is_empty() or score > float(best["score"]):
+			best = {"rect": r, "facing": facing, "score": score, "head": d}
+	return best
+
+
 ## 가구 칸 가운데 4이웃이 걸어서 닿는 칸(seen)인 것, 옛 칸에 가까운 것. 없으면 (-1, -1).
 static func _front_cell(r: Rect2i, seen: Dictionary, old: Vector2i) -> Vector2i:
 	var best := Vector2i(-1, -1)
@@ -1417,50 +1596,98 @@ static func _dist_to(r: Rect2i, cells: Array) -> int:
 	return best
 
 
-## 한 가구의 놓을 자리 후보. [{"rect", "facing", "score"}], 점수 높은 것부터.
-static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i], item: Dictionary,
-		forbid: Dictionary, taken: Dictionary, doors_in: Array, stove_cells: Array, box_at: Dictionary, k: int = TOP_CANDIDATES,
-		taste: Dictionary = {}) -> Array:
-	var size: Vector2i = item["size"]
-	var tall: bool = size.x * size.y >= 2 or TALL_KINDS.has(String(item["kind"]))
-	var holds: bool = item.get("holds", false)
-	var shapes: Array[Vector2i] = [size]
-	if size.x != size.y:
-		shapes.append(Vector2i(size.y, size.x))
+## 방 ri의 벽 표: 방 칸을 두른 네모(lo부터)를 한 칸 넓힌 칸마다 1이면 _wall_side의 벽(방 칸·문·창·걸을 수
+## 있는 칸이 아님). 방 하나를 채우는 동안 방 밖 칸은 바뀌지 않으니 방마다 한 번 만들어 _candidates에 넘긴다.
+static func _wall_mask(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i]) -> Dictionary:
 	var lo := cells[0]
 	var hi := cells[0]
 	for c in cells:
 		lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
 		hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
+	var ww := hi.x - lo.x + 3
+	var wh := hi.y - lo.y + 3
+	var wall := PackedByteArray()
+	wall.resize(ww * wh)
+	for y in range(wh):
+		for x in range(ww):
+			var c := Vector2i(lo.x - 1 + x, lo.y - 1 + y)
+			var open := _at(g, of, c) == ri or g.doors.has(c) or g.windows.has(c) or g.people_can_walk(c)
+			wall[y * ww + x] = 0 if open else 1
+	return {"lo": lo, "hi": hi, "ww": ww, "wall": wall}
+
+
+## 한 가구의 놓을 자리 후보. [{"rect", "facing", "score"}], 점수 높은 것부터.
+## 칸마다 설 수 있나(fit)를 먼저 한 번씩 표로 만들고, 벽인가는 방마다 만든 벽 표(wmask, 없으면 여기서 만듦)를
+## 읽는다(가구 놓기에서 가장 많이 도는 곳 — 같은 칸을 꼴·자리마다 다시 묻지 않게). 후보와 점수는 칸마다 묻던
+## 때와 같다.
+static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vector2i], item: Dictionary,
+		forbid: Dictionary, taken: Dictionary, doors_in: Array, stove_cells: Array, box_at: Dictionary, k: int = TOP_CANDIDATES,
+		taste: Dictionary = {}, wmask: Dictionary = {}) -> Array:
+	var size: Vector2i = item["size"]
+	var kind := String(item["kind"])
+	var tall: bool = size.x * size.y >= 2 or TALL_KINDS.has(kind)
+	var holds: bool = item.get("holds", false)
+	var near: String = item.get("near", "")
+	var at: String = item.get("at", "wall")
+	var near_cells: Array = item.get("near_cells", [])
+	var corner: bool = item.get("corner", false)
+	var anchor := ANCHOR_KINDS.has(kind)
+	var shapes: Array[Vector2i] = [size]
+	if size.x != size.y:
+		shapes.append(Vector2i(size.y, size.x))
+	if wmask.is_empty():
+		wmask = _wall_mask(g, of, ri, cells)
+	var lo: Vector2i = wmask["lo"]
+	var hi: Vector2i = wmask["hi"]
+	var ww: int = wmask["ww"]
+	var wall: PackedByteArray = wmask["wall"]
+	# fit: 방 상자 칸마다 1이면 이 가구가 설 수 있다(방 칸만 보고, 방 밖 칸은 0).
+	var bw := hi.x - lo.x + 1
+	var bh := hi.y - lo.y + 1
+	var fit := PackedByteArray()
+	fit.resize(bw * bh)
+	var solid := g.solid
+	var gw := g.width
+	for c in cells:
+		if solid[c.y * gw + c.x] != S.NONE or taken.has(c) or (box_at.has(c) and not holds):
+			continue
+		var f: String = forbid.get(c, "")
+		if f == "all" or (tall and f == "tall") or (f == "stand" and near != "bed_head"):
+			continue
+		fit[(c.y - lo.y) * bw + c.x - lo.x] = 1
 	var out: Array = []
 	for shape in shapes:
 		for y in range(lo.y, hi.y - shape.y + 2):
 			for x in range(lo.x, hi.x - shape.x + 2):
-				var r := Rect2i(x, y, shape.x, shape.y)
 				var fits := true
-				for yy in range(r.position.y, r.end.y):
-					for xx in range(r.position.x, r.end.x):
-						var c := Vector2i(xx, yy)
-						var f: String = forbid.get(c, "")
-						if _at(g, of, c) != ri or g.solid_at(c) != S.NONE or taken.has(c) or f == "all" or (tall and f == "tall"):
+				for yy in range(y - lo.y, y - lo.y + shape.y):
+					for xx in range(x - lo.x, x - lo.x + shape.x):
+						if fit[yy * bw + xx] == 0:
 							fits = false
-						elif box_at.has(c) and not holds:
-							fits = false
+							break
+					if not fits:
+						break
 				if not fits:
 					continue
-				if item.get("near", "") == "bed_head" and not item.get("near_cells", []).has(r.position):
+				var r := Rect2i(x, y, shape.x, shape.y)
+				if near == "bed_head" and not near_cells.has(r.position):
+					continue
+				if at == "head":
+					var spot := _head_spot(g, of, ri, r, item, forbid, taken, doors_in, taste)
+					if not spot.is_empty():
+						_keep_top(out, spot, k)
 					continue
 				# 네 변이 벽인지 한 번씩. 긴 변(정사각이면 아무 변)이 벽이면 등을 댈 수 있다.
 				var backs: Array[Vector2i] = []
 				var walls := 0
 				for d in DIRS:
-					if not _wall_side(g, of, ri, r, d):
+					if not _wall_side_in(wall, ww, lo, r, d):
 						continue
 					walls += 1
 					var long_side := (d.y != 0) == (r.size.x >= r.size.y)
 					if long_side or r.size.x == r.size.y:
 						backs.append(d)
-				if item.get("at", "wall") == "wall" and backs.is_empty():
+				if at == "wall" and backs.is_empty():
 					continue
 				var score := 0.0
 				var facing := 0
@@ -1468,14 +1695,14 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 					score += 3.0
 					facing = _facing_from_back(backs[0])
 				if walls >= 2:
-					score += 5.0 if item.get("corner", false) else 1.0
-				if item.get("at", "wall") == "mid" and walls == 0:
+					score += 5.0 if corner else 1.0
+				if at == "mid" and walls == 0:
 					score += 2.0
 				if not taste.is_empty():
-					if ANCHOR_KINDS.has(String(item["kind"])) and backs.has(taste["back"]):
+					if anchor and backs.has(taste["back"]):
 						score += LEAN_BONUS
 					score += GRAIN * _grain(r, int(taste["salt"]))
-				match item.get("near", ""):
+				match near:
 					"far_door":
 						score += 0.3 * _dist_to(r, doors_in)
 					"door":
@@ -1484,10 +1711,33 @@ static func _candidates(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arra
 						if not stove_cells.is_empty():
 							score -= 0.5 * _dist_to(r, stove_cells)
 					"desk":
-						if not item.get("near_cells", []).is_empty():
-							score -= 2.0 * _dist_to(r, item["near_cells"])
+						if not near_cells.is_empty():
+							score -= 2.0 * _dist_to(r, near_cells)
+					"bed_head":
+						# 두 베개 곁인 칸(홑침대 둘 사이)이 먼저.
+						score += 2.0 * (near_cells.count(r.position) - 1)
+				# 위 k개에 못 들 자리는 사전을 만들지 않고 넘긴다(_keep_top과 같은 차례로 견줌).
+				if out.size() >= k and not _beats(score, r, out[-1]):
+					continue
 				_keep_top(out, {"rect": r, "facing": facing, "score": score}, k)
 	return out
+
+
+## _wall_side를 _candidates의 wall 표로: 상자(lo부터)를 한 칸 넓힌 표에서 그 변 바로 밖 칸이 다 벽인가.
+static func _wall_side_in(wall: PackedByteArray, ww: int, lo: Vector2i, r: Rect2i, d: Vector2i) -> bool:
+	var x0 := r.position.x - lo.x + 1
+	var y0 := r.position.y - lo.y + 1
+	if d.x != 0:
+		var x := x0 + r.size.x if d.x > 0 else x0 - 1
+		for i in range(r.size.y):
+			if wall[(y0 + i) * ww + x] == 0:
+				return false
+	else:
+		var y := y0 + r.size.y if d.y > 0 else y0 - 1
+		for i in range(r.size.x):
+			if wall[y * ww + x0 + i] == 0:
+				return false
+	return true
 
 
 ## 그 집 가구의 색 판 번호(0~TINT_SETS-1). 지도와 건물로 정해져 판마다 같다.
@@ -1502,11 +1752,26 @@ static func _grain(r: Rect2i, salt: int) -> float:
 	return float(hash([r.position.x, r.position.y, r.size.x, r.size.y, salt]) % 1000) / 1000.0
 
 
+## 방의 배치 틀 씨앗. rng와 따로라 묶음 고르기·목표 몫은 바꾸지 않는다.
+static func look_seed_of(place: String, building: int, lv: int, ri: int) -> int:
+	return ("%s|%d|%d|%d|look" % [place, building, lv, ri]).hash() & 0x7fffffff
+
+
+## 배치 틀·깔개의 굴림 하나(0 이상): 씨앗과 쓰임 번호(ROLL_*)를 PCG로 섞는다. String.hash()(djb2)의
+## 비트를 잘라 쓰면 방 번호가 1 늘 때 낮은 비트도 1씩 늘어 이웃 방이 기댈 벽을 차례로 돌고, 쓰임끼리
+## 같은 비트를 나눠 써서 서로 따라간다.
+static func _roll(base: int, purpose: int) -> int:
+	return int(rand_from_seed(hash([base, purpose]))[0])
+
+
 ## 점수 높은 것, 같으면 위·왼쪽·넓은 것이 앞. 위 몇 개만 남긴다.
 static func _ahead(a: Dictionary, b: Dictionary) -> bool:
-	if a["score"] != b["score"]:
-		return a["score"] > b["score"]
-	var ra: Rect2i = a["rect"]
+	return _beats(a["score"], a["rect"], b)
+
+
+static func _beats(score: float, ra: Rect2i, b: Dictionary) -> bool:
+	if score != b["score"]:
+		return score > b["score"]
 	var rb: Rect2i = b["rect"]
 	if ra.position.y != rb.position.y:
 		return ra.position.y < rb.position.y
@@ -1585,9 +1850,10 @@ static func _kitchen_run(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Arr
 				rects.append(Rect2i(c, Vector2i.ONE))
 			if _still_open(g, of, ri, keys, before, rects + guard):
 				var out: Array = []
+				# 난로와 개수대는 방마다 어느 끝에 설지 굴린다.
+				var flip := salt >= 0 and _roll(salt, ROLL_RUN_END) & 1 == 1
 				for i in range(line.size()):
-					# 난로와 개수대는 방마다 어느 끝에 설지 굴린다.
-					var at := line.size() - 1 - i if salt >= 0 and (salt >> 4) & 1 == 1 else i
+					var at := line.size() - 1 - i if flip else i
 					var kind: String = "cold_stove" if at == 0 else ("sink" if at == line.size() - 1 else "counter")
 					var r: Rect2i = rects[i]
 					var facing := 0
@@ -1626,6 +1892,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 	lvs.sort()
 	data["density_classes"] = plan["classes"]
 	data["density_baths"] = plan["baths"]
+	var twins := _twin_rooms(data, plan, levels, place)
 	for lv: int in lvs:
 		var g: FieldGrid = levels[lv]
 		var stairs: Dictionary = stairs_by.get(lv, {})
@@ -1728,11 +1995,12 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 			var before := _from_first(g, of, ri, keys)
 			var guard := _standing(g, of, ri, kept_rects, before)
 			var forbid := _forbidden(g, of, ri, cells, stairs)
+			var wmask := _wall_mask(g, of, ri, cells)
 			var rng := RandomNumberGenerator.new()
 			rng.seed = ("%s|%d|%d|%d" % [place, int(room["building"]), lv, ri]).hash()
 			# 배치 틀: rng를 쓰지 않아 묶음 고르기·목표 몫은 그대로다.
-			var look_seed: int = ("%s|%d|%d|%d|look" % [place, int(room["building"]), lv, ri]).hash() & 0x7fffffff
-			var taste: Dictionary = {"back": DIRS[look_seed & 3], "salt": look_seed} if LAYOUT_CLASSES.has(cls) else {}
+			var look_seed := look_seed_of(place, int(room["building"]), lv, ri)
+			var taste: Dictionary = {"back": DIRS[_roll(look_seed, ROLL_BACK) % DIRS.size()], "salt": look_seed} if LAYOUT_CLASSES.has(cls) else {}
 			var area := cells.size()
 			var used := 0
 			for c: Vector2i in taken:
@@ -1773,6 +2041,10 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 				if not drop.has(i):
 					covered[STANDS_FOR.get(kk, kk)] = true
 			var items := _palette_for(cls, area, rng)
+			# 넓은 침실: 침대는 머리-벽 자리부터, 협탁은 짝으로도, 굴림이 맞으면 홑침대 둘.
+			var wide: bool = cls == "bed" and _wide_bedroom(cells)
+			if wide:
+				items = _wide_bed_items(items, twins.has("%d:%d" % [lv, ri]))
 			# 부엌을 갈라 뗀 식당(room_split DINING)은 거실 묶음의 꼭 있을 가구 다음에 식탁을 꼭 둔다.
 			var dining: bool = cls == "living" and _named(String(labels.get(ri, "")), "식당")
 			if dining:
@@ -1792,12 +2064,25 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 					item["near_cells"] = []
 					for pl: Dictionary in placed:
 						if pl["item"]["kind"] == "bed":
-							item["near_cells"].append(_bedside(g, of, ri, pl["rect"], int(pl["facing"])))
+							item["near_cells"].append_array(_bedsides(g, of, ri, pl["rect"], int(pl["facing"]), pl.has("head")))
+				elif item.get("near", "") == "twin":
+					item["near_cells"] = []
+					item["near_dirs"] = []
+					for pl: Dictionary in placed:
+						if pl["item"]["kind"] == "bed":
+							item["near_cells"].append(bed_head(pl["rect"], int(pl["facing"])))
+							item["near_dirs"].append(pl.get("head", Vector2i.ZERO))
 				var need: bool = item.get("need", false)
 				if need and item.get("holds", false) and kept_holder and cls in ["storage", "store", "shop", "work", "garage", "barn"]:
 					need = false
 				# 꼭 있을 것은 자리가 없으면 한 칸씩 짧은 꼴로, 그래도 없으면 벽에서 떨어져서 찾는다.
 				var variants: Array = [item]
+				# 넓은 침실의 침대는 머리-벽 자리를 먼저 보고, 없으면 긴 변을 벽에.
+				if item.get("head_first", false):
+					var hv: Dictionary = item.duplicate()
+					hv["at"] = "head"
+					hv.erase("corner")
+					variants.push_front(hv)
 				if need:
 					var size0: Vector2i = item["size"]
 					var shortest := 2 if item["kind"] == "bed" else 1
@@ -1818,12 +2103,12 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 						why = "space"
 						continue
 					var cands := _candidates(g, of, ri, cells, v, forbid, taken, keys["seeds"], stove_cells, box_at,
-						TOP_CANDIDATES_NEED if need else TOP_CANDIDATES, taste)
+						HEAD_CANDIDATES if v.get("at", "") == "head" else (TOP_CANDIDATES_NEED if need else TOP_CANDIDATES), taste, wmask)
 					if cands.is_empty():
 						why = "spot"
 						continue
 					var tries: Array = []
-					var top := 1 if item.get("corner", false) else mini(3, cands.size())
+					var top := 1 if v.get("corner", false) else mini(3, cands.size())
 					var pick := rng.randi_range(0, top - 1)
 					tries.append(cands[pick])
 					for k in range(cands.size()):
@@ -1838,6 +2123,23 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 						if _still_open(g, of, ri, keys, before, rects + guard):
 							ok = true
 							placed.append({"item": v, "rect": r, "facing": cand["facing"]})
+							if cand.has("head"):
+								placed[-1]["head"] = cand["head"]
+								# 베개 양옆 두 칸은 협탁 자리로 남긴다(다른 가구·채우기가 먼저 차지하지 않게). 홑침대 둘 방은
+								# 둘째 침대가 선 뒤 두 베개 사이 한 칸만.
+								var keep: Array[Vector2i] = []
+								if not v.get("twin_room", false):
+									keep = _bedsides(g, of, ri, r, int(cand["facing"]), true)
+								elif v.get("twin", false):
+									var h2 := bed_head(r, int(cand["facing"]))
+									for pl0: Dictionary in placed.slice(0, placed.size() - 1):
+										if pl0["item"]["kind"] == "bed" and pl0.has("head"):
+											var h1 := bed_head(pl0["rect"], int(pl0["facing"]))
+											if (h2 - h1).length_squared() == 4 and (h1.x == h2.x or h1.y == h2.y):
+												keep.append((h1 + h2) / 2)
+								for side_c: Vector2i in keep:
+									if forbid.get(side_c, "") != "all":
+										forbid[side_c] = "stand"
 							for y in range(r.position.y, r.end.y):
 								for x in range(r.position.x, r.end.x):
 									taken[Vector2i(x, y)] = true
@@ -1875,7 +2177,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 						continue
 					var v: Dictionary = source.duplicate()
 					v["fill"] = true
-					var cands := _candidates(g, of, ri, cells, v, forbid, taken, keys["seeds"], stove_cells, box_at, TOP_CANDIDATES, taste)
+					var cands := _candidates(g, of, ri, cells, v, forbid, taken, keys["seeds"], stove_cells, box_at, TOP_CANDIDATES, taste, wmask)
 					var cand := {} if cands.is_empty() else _first_open(g, of, ri, keys, before, guard, rects, cands, rng.randi_range(0, mini(3, cands.size()) - 1))
 					if cand.is_empty():
 						stuck[kind] = true
@@ -1942,10 +2244,20 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 				# 식당 마감(room_finish DINING): 거실 묶음이라 rule만으로는 그냥 거실과 갈리지 않는다.
 				if dining:
 					added[-1]["dining"] = true
+				# 홑침대 둘의 둘째 침대(침실의 침대 수를 셀 때 가른다).
+				if pl["item"].get("twin", false):
+					added[-1]["twin"] = true
 				if lv == 0:
 					new_ground.append(r)
 			stats["rooms"] += 1
 			stats["placed"] += placed.size()
+			if cls == "bed":
+				stats["bedrooms"] = int(stats.get("bedrooms", 0)) + 1
+				stats["wide_bedrooms"] = int(stats.get("wide_bedrooms", 0)) + int(wide)
+				for pl: Dictionary in placed:
+					stats["head_beds"] = int(stats.get("head_beds", 0)) + int(pl["item"]["kind"] == "bed" and pl.has("head"))
+					stats["twins"] = int(stats.get("twins", 0)) + int(pl["item"].get("twin", false))
+					stats["stand_pairs"] = int(stats.get("stand_pairs", 0)) + int(pl["item"].get("pair", false))
 		if changed and not data.get("_defer_paths", false):
 			g.refresh_paths()
 	var out: Array = []
@@ -1973,7 +2285,7 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 ## 거실은 낮은 탁자 둘레, 없으면 방 가운데. 방 칸을 벗어나는 줄은 깎고, 2×2보다 작으면 깔지 않는다.
 ## 납작해서 길·문 앞을 막지 않는다(걷는 길 검사 밖). 계단 칸은 덮지 않는다. {} 이면 없음.
 static func _lay_rug(cls: String, cells: Array[Vector2i], placed: Array, stairs: Dictionary, salt: int) -> Dictionary:
-	if float((salt >> 6) % 1000) / 1000.0 >= float(RUG_CHANCE.get(cls, 0.0)):
+	if float(_roll(salt, ROLL_RUG) % 1000) / 1000.0 >= float(RUG_CHANCE.get(cls, 0.0)):
 		return {}
 	var inside: Dictionary = {}
 	var lo := cells[0]
@@ -2022,7 +2334,7 @@ static func _lay_rug(cls: String, cells: Array[Vector2i], placed: Array, stairs:
 			if not inside.has(Vector2i(x, y)):
 				return {}
 	var weaves: Array = RUG_WEAVES[cls]
-	return {"rect": rug, "look": 1 + int(weaves[(salt >> 16) % weaves.size()]) * 32 + (salt >> 20) % 32}
+	return {"rect": rug, "look": 1 + int(weaves[_roll(salt, ROLL_WEAVE) % weaves.size()]) * 32 + _roll(salt, ROLL_RUG_LOOK) % 32}
 
 
 ## 후보 가운데 pick 번째를 먼저, 나머지는 차례로 세워 보고 길이 남는 첫 자리. 그 자리는 칸을 막고

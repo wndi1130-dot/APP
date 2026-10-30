@@ -36,6 +36,7 @@ const FieldClock = preload("res://game/sim/field_clock.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
 const RouteBands = preload("res://game/train/route_bands.gd")
 const RouteStops = preload("res://game/train/route_stops.gd")
+const StopForm = preload("res://game/sim/stop_form.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
@@ -315,7 +316,7 @@ func go(i: int) -> void:
 	# The next stop is known on the train: its map is made ready off the main
 	# thread while the train runs.
 	if id == "train" and _cinema_on():
-		loader.prepare(_field_place(), int(opts.get("seed", 1)), String(opts.get("stop_form", "")), float(opts.get("stop_form_m", -1.0)))
+		loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)))
 	if id == "stop_pick" and _cinema_on():
 		_show_stop_cinema()
 		return
@@ -415,6 +416,22 @@ func _stop_band(seg: int) -> String:
 	return RouteBands.stop_band("prologue", _stop_of(seg))
 
 
+## That stop's form (stop_form.gd): one asked of the slice (opts "stop_form", a check switch),
+## else the route's; "" leaves it to the place.
+func _stop_form(seg: int) -> String:
+	if opts.has("stop_form"):
+		return String(opts["stop_form"])
+	return StopForm.on_route("prologue", _stop_of(seg))
+
+
+## The stretch of the slice's field step: the map made ready while the train runs is its stop's.
+static func _field_seg() -> int:
+	for row: Array in STEPS:
+		if row[0] == "field":
+			return int(row[2])
+	return FIRST_SEG
+
+
 ## The season table's stretch that stop stands on (route_stops.gd): the stop's weather and
 ## cold, not those of the table's row with the stretch's number. Before the first stop (the
 ## train setting out on the first stretch) it is the table's first stretch, the start.
@@ -432,7 +449,7 @@ func _show_stop_cinema() -> void:
 	for p in plates.get_children():
 		plates.remove_child(p)
 		p.queue_free()
-	loader.prepare(_field_place(), int(opts.get("seed", 1)), String(opts.get("stop_form", "")), float(opts.get("stop_form_m", -1.0)))
+	loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)))
 	# Its own scene (scenes/stop_cinema.tscn), so the train and the weather can be dressed there.
 	var c = STOP_CINEMA_SCENE.instantiate()
 	c.name = "StopCinema"
@@ -1680,11 +1697,13 @@ func _field_opts() -> Dictionary:
 	o["laws"] = (train_g.get("passed", {}) as Dictionary).keys()
 	if opts.has("place"):
 		o["place"] = String(opts["place"])
-	# A stop form asked of the slice (stop_ground.gd, a test switch for now): the loader
-	# makes the map in it, off the main thread (prepare), and the field keeps it.
-	for key: String in ["stop_form", "stop_form_m"]:
-		if opts.has(key):
-			o[key] = opts[key]
+	# The stop's form (_stop_form, stop_ground.gd): the loader makes the map in it, off the
+	# main thread (prepare), and the field keeps it.
+	var form := _stop_form(int(STEPS[step][2]))
+	if not form.is_empty():
+		o["stop_form"] = form
+	if opts.has("stop_form_m"):
+		o["stop_form_m"] = opts["stop_form_m"]
 	return o
 
 

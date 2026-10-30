@@ -12,6 +12,7 @@ const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 const Ladder = preload("res://game/train/turn/turn_ladder.gd")
 const TrainResearch = preload("res://game/train/train_research.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 
 static func choice(id: String, label: String, effs: Array, special: String = "", witness: bool = false) -> Dictionary:
 	return {"id": id, "label": label, "effs": effs, "special": special, "witness": witness}
@@ -26,12 +27,21 @@ static func travel_view(g: Dictionary, t: Dictionary, id: String) -> Dictionary:
 		"tail_cold":
 			title = "꺼진 난로" if past.is_empty() else "또 꺼진 난로"
 			choices = [choice("fuel_front", "앞칸 연료를 덜어 온다", [["base", "tail", 0, 5], ["base", "front", 0, -5], ["rel", "tail", 5], ["rel", "front", -(8 + 3 * n)]]), choice("blankets", "담요를 나눈다", [["lux", -(1 + n)], ["rel", "tail", 4]]), choice("endure", "참으라 한다", [["rel", "tail", -(5 + 3 * n)], ["tension", 2 + 2 * n]])]
+			choices[0]["log"] = "꼬리칸 난로가 꺼져 앞칸 연료를 덜어 왔다." if past.is_empty() else "꼬리칸 난로가 또 꺼져 앞칸 연료를 덜어 왔다."
+			choices[1]["log"] = "꼬리칸 난로가 꺼져 창고 담요를 나눴다." if past.is_empty() else "꼬리칸 난로가 또 꺼져 창고 담요를 다시 나눴다."
+			choices[2]["log"] = "꼬리칸 난로가 꺼졌어도 참으라고 했다." if past.is_empty() else "꼬리칸 난로가 또 꺼졌어도 버티라고 했다."
 		"crowd_fight":
 			title = "자리 싸움" if past.is_empty() else "또 자리 싸움"
 			choices = [choice("guard_break", "경비대가 말린다", [["rel", "tail", -(3 + 2 * n)], ["tension", -3], ["fear", 2]]), choice("widen", "칸을 넓혀 준다", [["base", "tail", 2, -5], ["base", "front", 2, 5], ["rel", "front", -5], ["rel", "tail", 3]]), choice("let_be", "내버려 둔다", [["injured", 1 if past.is_empty() else 2], ["tension", 4 + 2 * n]])]
+			choices[0]["log"] = "꼬리칸 자리 싸움을 경비대가 말렸다." if past.is_empty() else "또 붙은 자리 싸움을 경비대가 말렸다."
+			choices[1]["log"] = "앞칸 짐을 치워 꼬리칸에 누울 자리를 넓혔다." if past.is_empty() else "또 붙은 자리 싸움에 앞칸 짐을 치워 자리를 넓혔다."
+			choices[2]["log"] = "꼬리칸 자리 싸움을 내버려 뒀다." if past.is_empty() else "또 붙은 자리 싸움을 내버려 뒀다."
 		"front_curtain":
 			title = "앞칸의 커튼" if past.is_empty() else "다시 걸린 커튼"
 			choices = [choice("curtain_open", "커튼을 걷게 한다", [["rel", "front", -(6 + 2 * n)], ["rel", "tail", 4]]), choice("side_front", "앞칸 편을 든다", [["rel", "tail", -(4 + 3 * n)], ["rel", "front", 4]]), choice("call_reps", "대표 둘을 부른다", [["lux", -(1 + n)], ["tension", -2], ["trust", 1]])]
+			choices[0]["log"] = "앞칸 창의 커튼을 걷게 했다." if past.is_empty() else "다시 걸린 커튼을 걷게 했다."
+			choices[1]["log"] = "커튼 다툼에서 앞칸 편을 들었다." if past.is_empty() else "다시 걸린 커튼 다툼에서 앞칸 편을 들었다."
+			choices[2]["log"] = "커튼 일로 두 칸 대표를 열차장 식탁에 앉혔다." if past.is_empty() else "다시 걸린 커튼 일로 두 대표를 식탁에 불렀다."
 		"water_tower":
 			title = "얼어붙은 급수탑"
 			var sc: String = g.get("lastCrew", "tail")
@@ -39,27 +49,43 @@ static func travel_view(g: Dictionary, t: Dictionary, id: String) -> Dictionary:
 			var hold: Array = [["coal", -2], ["rel", "engine", -(4 + 2 * n)]]
 			if pick == "hold_on": hold.append(["base", "engine", 3, 6])
 			choices = [choice("burn_melt", "불을 피워 녹인다", [["coal", -3]]), choice("snow_melt", "눈을 녹인다", [["base", sc, 3, t["P"]["snowExposure"]], ["rel", sc, -(4 + 3 * n) + chore]]), choice("hold_on", "다음 역까지 버틴다", hold)]
+			choices[0]["log"] = "얼어붙은 급수탑을 석탄불로 녹였다."
+			choices[1]["log"] = "얼어붙은 급수탑 대신 눈을 퍼다 녹였다."
+			choices[2]["log"] = "얼어붙은 급수탑을 두고 물을 아끼며 떠났다."
 		"snow_drift":
 			title = "눈더미"
 			var tail: Array = [["rel", "tail", -(5 + 3 * n)]]
 			if pick == "dig_tail": tail.append(["tension", 3])
 			choices = [choice("dig_all", "모든 칸이 나눠 판다", [["food", -3], ["rel", "front", -1 if pick == "dig_all" else -3], ["tension", -1]]), choice("dig_tail", "꼬리칸이 판다", tail), choice("plow", "기관차로 밀어붙인다", [["coal", -(4 + n)], ["base", "engine", 3, 4 + 2 * n]])]
+			choices[0]["log"] = "선로를 묻은 눈더미를 모든 칸이 나눠 팠다."
+			choices[1]["log"] = "선로를 묻은 눈더미를 꼬리칸이 팠다."
+			choices[2]["log"] = "선로를 묻은 눈더미를 기관차로 밀고 나갔다."
 		"abandoned_tender":
 			title = "측선의 탄수차"
 			choices = [choice("tender_take", "석탄을 옮긴다", [["coal", 8]], "risk_injury"), choice("tender_pass", "지나친다", [])]
+			choices[0]["log"] = "측선에 버려진 탄수차에서 석탄을 퍼 왔다."
+			choices[1]["log"] = "측선에 버려진 탄수차를 손대지 않고 지나쳤다."
 		"sick_child":
 			title = "아이 열병" if past.is_empty() else "열병이 번진다"
 			var save: Array = [["rel", "tail", -(4 + 3 * n)], ["rel", "medtech", -2]]
 			if pick == "med_save": save.append(["trust", -2])
 			choices = [choice("med_use", "의약품을 쓴다", [["med", -3 if pick == "med_use" else -2], ["rel", "tail", 4], ["rel", "medtech", 2]]), choice("med_save", "아껴 둔다", save)]
+			choices[0]["log"] = "열이 난 아이들에게 의약품을 썼다." if past.is_empty() else "번지는 열병에 의약품을 썼다."
+			choices[1]["log"] = "아이들이 열이 나도 의약품은 아껴 뒀다." if past.is_empty() else "열병이 번져도 의약품은 아껴 뒀다."
 		"ration_line":
 			title = "배급 줄"
 			var guard: Array = [["fear", 3], ["rel", "tail", -3], ["rel", "guard", 2]]
 			if not past.is_empty(): guard.append(["tension", 2 * n])
 			choices = [choice("reshare", "다시 나눈다", [["food", -(4 + n)], ["rel", "tail", 3]]), choice("guard_line", "경비대를 세운다", guard)]
+			choices[0]["log"] = "빵이 떨어진 배급 줄 끝까지 다시 나눴다."
+			choices[1]["log"] = "배급 줄 옆에 경비대를 세웠다."
 		"guard_frost":
 			title = "동상"
+			var frost: bool = TrainClimate.holds(g, t, "frost")
 			choices = [choice("guard_heat", "경비대 난방을 올린다", [["lever", "guard", "heat", 1], ["rel", "guard", 3]]), choice("watch_less", "경계를 줄인다", [["rel", "guard", 2], ["tension", 2 + n]]), choice("hold_post", "그대로 선다", [["rel", "guard", -(5 + 4 * n)], ["injured", 1]])]
+			choices[0]["log"] = "보초가 동상을 입어 경비칸 난방을 올렸다." if frost else "보초가 찬비에 젖어 경비칸 난방을 올렸다."
+			choices[1]["log"] = "보초가 동상을 입어 지붕 경계를 줄였다." if frost else "보초가 찬비에 젖어 지붕 경계를 줄였다."
+			choices[2]["log"] = "보초가 동상을 입었어도 경계는 줄이지 않았다." if frost else "보초가 찬비에 젖었어도 경계는 줄이지 않았다."
 		_: return {}
 	return {"title": title, "key": id, "choices": choices}
 
@@ -74,44 +100,73 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var def: Dictionary = t["NEEDS"][card["text"]]
 			var promise: Dictionary = choice("", "약속한다", [], "need_promise")
 			promise["log"] = "%s을 정하겠다고 약속했다." % def["title"]
-			return {"title": "%s이 필요하다" % def["title"], "choices": [promise, choice("", "두고 본다", [])]}
+			var options: Array = [promise, choice("", "두고 본다", [])]
+			options[1]["log"] = "%s은(는) 두고 보기로 했다." % def["title"]
+			return {"title": "%s이 필요하다" % def["title"], "choices": options}
 		"demand":
 			var sit: Array = St.situation(g, t, comm)
 			if comm == "engine" and float(sit[3]) > 50:
 				var past: Dictionary = g.get("eventLog", {}).get("demand:engine_shift", {})
 				var n: int = mini(int(past.get("n", 0)), 3)
-				return {"title": "화부 교대" if past.is_empty() else "화부 교대, 다시", "key": "demand:engine_shift", "choices": [choice("shift_more", "교대를 늘린다", [["coal", -float(t["P"]["shiftCoal"])], ["base", "engine", 3, -float(t["P"]["shiftRelief"])], ["rel", "engine", 3]]), choice("shift_apprentice", "견습생을 붙인다", [["base", "engine", 3, -5], ["base", "tail", 3, 3], ["rel", "tail", -(2 + 2 * n)]]), choice("refuse", "거절한다", [["fervor", "engine", 1], ["rel", "engine", -(float(t["P"]["refuseRel"]) + 3 * n)]])]}
+				var shifts: Array = [choice("shift_more", "교대를 늘린다", [["coal", -float(t["P"]["shiftCoal"])], ["base", "engine", 3, -float(t["P"]["shiftRelief"])], ["rel", "engine", 3]]), choice("shift_apprentice", "견습생을 붙인다", [["base", "engine", 3, -5], ["base", "tail", 3, 3], ["rel", "tail", -(2 + 2 * n)]]), choice("refuse", "거절한다", [["fervor", "engine", 1], ["rel", "engine", -(float(t["P"]["refuseRel"]) + 3 * n)]])]
+				shifts[0]["log"] = "화부들의 요구대로 교대를 늘렸다." if past.is_empty() else "다시 온 화부들의 요구대로 교대를 늘렸다."
+				shifts[1]["log"] = "화부들에게 꼬리칸 견습생을 붙였다." if past.is_empty() else "다시 온 화부들에게 꼬리칸 견습생을 붙였다."
+				shifts[2]["log"] = "화부 교대 요구를 거절했다." if past.is_empty() else "다시 온 화부들의 교대 요구를 거절했다."
+				return {"title": "화부 교대" if past.is_empty() else "화부 교대, 다시", "key": "demand:engine_shift", "choices": shifts}
 			var which: String = "ration" if float(s["heat"]) >= 4 else ("heat" if float(s["ration"]) >= 4 or float(sit[0]) < float(sit[1]) else "ration")
 			var past: Dictionary = g.get("eventLog", {}).get("demand:" + comm, {})
 			var n: int = mini(int(past.get("n", 0)), 3) if past.get("pick") == "refuse" else 0
-			return {"title": "난방 요구" if which == "heat" else "배급 요구", "key": "demand:" + comm, "choices": [choice("heat_up" if which == "heat" else "ration_up", "난방을 올린다" if which == "heat" else "배급을 올린다", [["lever", comm, which, 1], ["rel", comm, 2]]), choice("refuse", "거절한다", [["fervor", comm, 1], ["rel", comm, -(float(t["P"]["refuseRel"]) + 3 * n)]])]}
+			var options: Array = [choice("heat_up" if which == "heat" else "ration_up", "난방을 올린다" if which == "heat" else "배급을 올린다", [["lever", comm, which, 1], ["rel", comm, 2]]), choice("refuse", "거절한다", [["fervor", comm, 1], ["rel", comm, -(float(t["P"]["refuseRel"]) + 3 * n)]])]
+			options[0]["log"] = ("%s의 요구대로 난방을 올렸다." if which == "heat" else "%s의 요구대로 배급을 올렸다.") % t["COMM_NAME"][comm]
+			options[1]["log"] = ("%s의 난방 요구를 거절했다." if which == "heat" else "%s의 배급 요구를 거절했다.") % t["COMM_NAME"][comm]
+			return {"title": "난방 요구" if which == "heat" else "배급 요구", "key": "demand:" + comm, "choices": options}
 		"favor":
 			var again: bool = g.get("eventLog", {}).has("favor:" + comm)
 			var costs: Dictionary = {"tail": [["med", -2], ["base", "medtech", 2, 3]], "medtech": [["rel", "front", -3]] if again else [["base", "front", 2, 3]], "guard": [["rel", "engine", -2], ["rel", "tail", -1]] if again else [["rel", "engine", -2]], "front": [["lux", -3 if again else -2]], "engine": [["rel", "tail", -3 if again else -2]]}
 			var cost: Array = costs[comm]
 			cost.append(["debt", comm])
-			return {"title": "사적인 부탁", "key": "favor:" + comm, "choices": [choice("grant", "들어준다", cost, "favor_risk"), choice("refuse", "거절한다", [["rel", comm, -4 if again else -3]])]}
+			var options: Array = [choice("grant", "들어준다", cost, "favor_risk"), choice("refuse", "거절한다", [["rel", comm, -4 if again else -3]])]
+			options[0]["log"] = "%s의 사적인 부탁을 들어줬다." % s["leader"]["name"]
+			options[1]["log"] = "%s의 사적인 부탁을 거절했다." % s["leader"]["name"]
+			return {"title": "사적인 부탁", "key": "favor:" + comm, "choices": options}
 		"rescue":
 			var options: Array = []
-			if g["passed"].has("no_outsiders"): options = [choice("leave_law", "법대로 두고 온다", [["trust", -1]], "", true)]
+			if g["passed"].has("no_outsiders"):
+				options = [choice("leave_law", "법대로 두고 온다", [["trust", -1]], "", true)]
+				options[0]["log"] = "부상자를 법대로 두고 왔다."
 			else:
 				var past: Dictionary = g.get("eventLog", {}).get("rescue", {})
 				var n: int = mini(int(past.get("n", 0)), 3) if past.get("pick") == "leave" else 0
 				options = [choice("take_in", "데려온다", [["pop", "tail", 2], ["base", "tail", 2, 3], ["injured", 1], ["rel", "medtech", 3]], "", true), choice("supplies_only", "물자만 받는다", [["food", 3], ["trust", -1], ["rel", "medtech", -3]], "", true), choice("leave", "두고 온다", [["trust", -(1 + n)], ["rel", "medtech", -3]], "", true)]
+				options[0]["log"] = "부상자를 열차에 태웠다."
+				options[1]["log"] = "부상자는 태우지 않고 물자만 받았다."
+				options[2]["log"] = "부상자를 두고 왔다."
 			return {"title": "부상자", "key": "rescue", "choices": options}
 		"bitten":
 			var part: String = ["팔을", "다리를", "손을"][int(card["uid"]) % 3]
-			return {"title": "물렸다", "key": "bitten", "choices": [choice("cut", part + " 자른다", [["med", -3], ["injured", 1], ["rel", comm, 2]], "", true), choice("hide", "숨겨 준다", [], "hide_bite", true), choice("leave", "두고 온다", [["rel", comm, -8], ["tension", 2]], "leave_bitten", true)]}
+			var who: String = str(card.get("who", "대원"))
+			var options: Array = [choice("cut", part + " 자른다", [["med", -3], ["injured", 1], ["rel", comm, 2]], "", true), choice("hide", "숨겨 준다", [], "hide_bite", true), choice("leave", "두고 온다", [["rel", comm, -8], ["tension", 2]], "leave_bitten", true)]
+			options[0]["log"] = "물린 %s의 %s 잘랐다." % [who, part]
+			options[1]["log"] = "물린 %s을(를) 숨겨 태웠다." % who
+			options[2]["log"] = "물린 %s을(를) 두고 왔다." % who
+			return {"title": "물렸다", "key": "bitten", "choices": options}
 		"ration_cut":
 			# The tail's demand after 비상식량감축법 stands (결정 091·430, turn_ration_cut.gd).
 			var k: Dictionary = t["RATION_CUT"]
-			return {"title": "감축 배급 요구", "key": "ration_cut", "choices": [
+			var options: Array = [
 				choice("cut_spare_tail", "꼬리칸은 뺀다", [["rel", "tail", k["spareRel"]["tail"]], ["rel", "front", k["spareRel"]["front"]]], "cut_spare_tail"),
 				choice("cut_front_first", "앞칸이 먼저 낸다", [["rel", "tail", k["frontRel"]["tail"]], ["rel", "front", k["frontRel"]["front"]]], "cut_front_first"),
-				choice("refuse", "거절한다", [["rel", "tail", k["refuseRel"]], ["tension", k["refuseTension"]]], "cut_refuse")]}
+				choice("refuse", "거절한다", [["rel", "tail", k["refuseRel"]], ["tension", k["refuseTension"]]], "cut_refuse")]
+			options[0]["log"] = "배급 감축에서 꼬리칸은 뺐다."
+			options[1]["log"] = "앞칸이 배급을 한 단 더 줄이게 했다."
+			options[2]["log"] = "배급 감축에 예외를 두지 않았다."
+			return {"title": "감축 배급 요구", "key": "ration_cut", "choices": options}
 		"promise_ledger":
 			# The result arc (council_log.gd): a second broken promise brings the car's ledger; a third closes open deals.
-			return {"title": "약속 장부", "choices": [choice("", "사과하고 갚는다", [["lux", -3], ["rel", comm, 8]]), choice("", "물리친다", [["rel", comm, -5]], "ledger_refuse")]}
+			var options: Array = [choice("", "사과하고 갚는다", [["lux", -3], ["rel", comm, 8]]), choice("", "물리친다", [["rel", comm, -5]], "ledger_refuse")]
+			options[0]["log"] = "어긴 약속을 %s에 사과하고 갚았다." % t["COMM_NAME"][comm]
+			options[1]["log"] = "%s이(가) 내민 약속 장부를 물리쳤다." % t["COMM_NAME"][comm]
+			return {"title": "약속 장부", "choices": options}
 		"tension_crisis":
 			# The ladder's last rung (정치 흐름 4.2): guard, yield, or nothing (the revolt end is not ported).
 			var refused: Variant = Ladder.guard_refuses(g)
@@ -131,9 +186,15 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 		"keepsake":
 			# S1 cards.ts keepsake (사람의 무게 A1(나)): the dead's coat and boots. One who died at a stop
 			# (text "field") left only the spare under the bunk.
+			var dead: String = str(card.get("who", ""))
+			var field: bool = card.get("text") == "field"
 			var keep: Array = [choice("", "그 칸에 나눈다", [["base", comm, 0, 2], ["rel", comm, 2]], "keep_share")]
-			if comm != "tail": keep.append(choice("", "꼬리칸에 보낸다", [["base", "tail", 0, 2], ["rel", comm, -3]], "keep_tail"))
-			keep.append(choice("", "그대로 둔다" if card.get("text") == "field" else "함께 보낸다", [["rel", comm, 4]]))
+			keep[0]["log"] = "%s의 외투와 장화를 그 칸에 나눴다." % dead
+			if comm != "tail":
+				keep.append(choice("", "꼬리칸에 보낸다", [["base", "tail", 0, 2], ["rel", comm, -3]], "keep_tail"))
+				keep[1]["log"] = "%s의 외투와 장화를 꼬리칸에 보냈다." % dead
+			keep.append(choice("", "그대로 둔다" if field else "함께 보낸다", [["rel", comm, 4]]))
+			keep[-1]["log"] = ("%s의 침상 밑 여벌은 그대로 뒀다." if field else "%s을(를) 보낼 때 외투와 장화도 함께 보냈다.") % dead
 			return {"title": "외투와 장화", "choices": keep}
 		"dom:short":
 			# S1 domestic/cards.ts dom:short (its upkeep half, train_research.gd pay_upkeep raises it).
@@ -199,7 +260,16 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			mine["log"] = "아이에게 열차장의 이름을 주었다."
 			return {"title": "아이의 이름", "choices": [choice("", "엄마가 짓는다", [["rel", comm, 3]]), choice("", "열차 이름을 준다", [], "name_train"), mine]}
 		"rep_sick":
-			return {"title": "대표가 앓는다", "choices": [choice("", "약을 보낸다", [["med", -2], ["rel", comm, 3]], "rep_heal"), choice("", "측근을 만난다", [], "proxy_meet"), choice("", "그냥 둔다", [])] if s.get("sick") is Dictionary else [choice("", "알았다", [])]}
+			var sick: bool = s.get("sick") is Dictionary
+			var rep: String = String(s["sick"]["rep"]["name"]) if sick else String(s["leader"]["name"])
+			var options: Array = [choice("", "약을 보낸다", [["med", -2], ["rel", comm, 3]], "rep_heal"), choice("", "측근을 만난다", [], "proxy_meet"), choice("", "그냥 둔다", [])] if sick else [choice("", "알았다", [])]
+			if sick:
+				options[0]["log"] = "앓는 %s에게 의무진의 약을 보냈다." % rep
+				options[1]["log"] = "%s 대신 나온다는 측근을 만났다." % rep
+				options[2]["log"] = "앓는 %s을(를) 그냥 뒀다." % rep
+			else:
+				options[0]["log"] = "%s이(가) 앓다가 일어났다." % rep
+			return {"title": "대표가 앓는다", "choices": options}
 	return {}
 
 static func affordable(g: Dictionary, effs: Array) -> bool:

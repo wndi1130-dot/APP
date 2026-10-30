@@ -119,6 +119,57 @@ float band(float d, float w, float aa) {
 	return 1.0 - smoothstep(w - aa, w + aa, abs(d));
 }
 
+// How far a point of a road cell lies from the cell's kerb, in cells (1 with no kerb in the
+// cell): the kerb bits (1 north, 2 east, 4 south, 8 west) of the road's detail code.
+float kerb_distance(int bits, vec2 f) {
+	float edge = 1.0;
+	edge = (bits & 1) != 0 ? min(edge, f.y) : edge;
+	edge = (bits & 2) != 0 ? min(edge, 1.0 - f.x) : edge;
+	edge = (bits & 4) != 0 ? min(edge, 1.0 - f.y) : edge;
+	edge = (bits & 8) != 0 ? min(edge, f.x) : edge;
+	return edge;
+}
+
+// The same two reads at a fixed coarse level: what a layer holds at `lod` and wider, the
+// photo's broad clouds without its grain (flat_layer divides them out).
+vec3 ground_layer_lod(int layer, vec2 p, float lod) {
+	float m = GROUND_TILE_M[layer];
+	vec2 q = p / m;
+	vec3 a = textureLod(ground_layers, vec3(q, float(layer)), lod).rgb;
+	// The second read's tile is 2.7 times larger: 1.43 levels finer for the same width in metres.
+	vec3 b = textureLod(ground_layers, vec3(GROUND_TURN * q + vec2(0.37, 0.61), float(layer)), max(lod - 1.43, 0.0)).rgb;
+	float blend = smoothstep(0.25, 0.75, fx_vnoise(p / 9.0 + vec2(13.7, 2.3)));
+	return mix(a, b, blend) * 2.0;
+}
+
+// A layer with its broad light and dark clouds taken out (T0-4): over its own read at
+// ROAD_FLAT_LOD (texels of about 1.5 m on the 12 m road tile), so the grit, ravels and cracks
+// stay and a dark cloud some metres wide does not; the hue stays the photo's.
+const float ROAD_FLAT_LOD = 6.0;
+vec3 flat_layer(int layer, vec2 p, vec2 dx, vec2 dy) {
+	vec3 fine = ground_layer(layer, p, dx, dy).rgb;
+	float broad = dot(ground_layer_lod(layer, p, ROAD_FLAT_LOD), vec3(0.299, 0.587, 0.114));
+	return fine / max(broad, 0.2);
+}
+
+// Trench repairs square to the grid (the streets run along x or z): about one 4 m square in
+// six holds a patch 1.2 to 3.2 m by 0.8 to 2.4 m, kept 0.15 m off the square's sides so its
+// seam and smoothing never reach the next square (which only reads its own hash).
+// x: inside (edges smoothed over a pixel), y: its sealed seam.
+vec2 repair_patch(vec2 p, vec2 px) {
+	vec2 cell = floor(p / 4.0);
+	if (fx_hash(cell + vec2(31.7, 7.3)) > 0.17) {
+		return vec2(0.0);
+	}
+	vec2 size = vec2(1.2 + 2.0 * fx_hash(cell + vec2(3.1, 9.9)), 0.8 + 1.6 * fx_hash(cell + vec2(17.5, 2.2)));
+	size = fx_hash(cell + vec2(5.5, 5.5)) < 0.5 ? size : size.yx;
+	vec2 lo = cell * 4.0 + 0.15 + (vec2(3.7) - size) * vec2(fx_hash(cell + vec2(1.3, 4.4)), fx_hash(cell + vec2(8.8, 0.6)));
+	vec2 d = max(lo - p, p - (lo + size));
+	float out_d = max(d.x, d.y);
+	float aa = max(px.x, px.y) + 1e-4;
+	return vec2(1.0 - smoothstep(-aa, aa, out_d), band(out_d, 0.035, aa));
+}
+
 // Concrete laid in slabs `size` long along `along` (0 x, 1 z, else none):
 // joints only across the run and faint, a few slabs a shade apart.
 vec3 slabs(vec3 c, vec2 p, vec2 px, int along, float size) {
@@ -189,11 +240,15 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 		}
 		vec3 c;
 		if (ground_layers_on) {
-			vec3 worn = ground_layer(layers.x, p, dx, dy).rgb;
-			vec3 patched = ground_layer(layers.y, p, dx, dy).rgb * 0.92;
-			// Broad repair patches cover about 35 percent; the photos carry the cracks.
-			float repair = smoothstep(0.52, 0.66, fx_vnoise(p / 11.0 + vec2(8.3, 21.7)));
-			c = ASPHALT * mix(worn, patched, repair);
+			// One even grey with its fine grain (T0-4): the photos' broad clouds taken out, the
+			// repairs as squared trench patches of the second asphalt, a shade darker, sealed round.
+			// The second asphalt is read only inside a patch (about one square in six).
+			vec2 repair = repair_patch(p, px);
+			vec3 worn = flat_layer(layers.x, p, dx, dy);
+			if (repair.x > 0.0) {
+				worn = mix(worn, flat_layer(layers.y, p, dx, dy) * 0.93, repair.x);
+			}
+			c = ASPHALT * worn * (1.0 - 0.22 * repair.y);
 		} else {
 			// Aged asphalt: wide worn patches, a few cracks.
 			c = ASPHALT * (0.9 + 0.18 * fx_fbm2(p * 0.18 + 11.0)) * (0.96 + 0.08 * fx_vnoise(p * 3.7));
@@ -202,11 +257,7 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 			c *= 1.0 - 0.3 * crack;
 		}
 		// The kerb (light stone) and gutter (dark, silted) on the sides at open ground.
-		float edge = 1.0;
-		edge = (bits & 1) != 0 ? min(edge, f.y) : edge;
-		edge = (bits & 2) != 0 ? min(edge, 1.0 - f.x) : edge;
-		edge = (bits & 4) != 0 ? min(edge, 1.0 - f.y) : edge;
-		edge = (bits & 8) != 0 ? min(edge, f.x) : edge;
+		float edge = kerb_distance(bits, f);
 		c = mix(c, SOIL * 0.6, (1.0 - smoothstep(0.14, 0.34, edge)) * 0.45);
 		c = mix(c, CONCRETE * 0.92, 1.0 - smoothstep(0.1, 0.13, edge));
 		// A worn, dashed centre line.
@@ -758,6 +809,14 @@ void fragment() {
 		// a single leaf does not); the photo's leaves are the pattern inside,
 		// from dark brown to a dull orange.
 		float heap = smoothstep(0.5, 0.64, drift) * (0.6 + 0.4 * fx_vnoise(world_pos.xz * 1.1 + 3.0));
+		// A street's wheels sweep its leaf into the gutter (T0-4): on asphalt a drift lies only
+		// along the kerb, so the street reads as one grey and not as leaf blotches.
+		if (kind == 1 && ground_detail > -0.5) {
+			int road_bits = int(ground_detail + 0.5);
+			if ((road_bits & 512) == 0) {
+				heap *= 1.0 - smoothstep(0.2, 0.45, kerb_distance(road_bits, fract(world_pos.xz)));
+			}
+		}
 		float leaf = fx_cold.w * level_k * heap * (0.55 + 0.45 * smoothstep(0.4, 0.65, grain.g));
 		vec3 leaf_col = mix(vec3(0.24, 0.15, 0.08), vec3(0.55, 0.34, 0.15), clamp((grain.g - 0.3) * 1.8, 0.0, 1.0));
 		base = mix(base, leaf_col, leaf * 0.62);

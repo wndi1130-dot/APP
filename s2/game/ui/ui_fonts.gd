@@ -103,20 +103,25 @@ static func josa(text: String) -> String:
 
 
 ## Where the word a particle settles by ends: `i` itself, or, when `i` is a
-## closing bracket, the letter before its opening one (-1 when it has none).
+## closing bracket, the letter before its opening one — past every bracket when
+## brackets follow one another (-1 when one has no opening bracket).
 static func _word_end(text: String, i: int) -> int:
-	if i < 0 or text[i] != ")":
-		return i
-	var depth: int = 0
-	while i >= 0:
-		if text[i] == ")":
-			depth += 1
-		elif text[i] == "(":
-			depth -= 1
-			if depth == 0:
-				return i - 1
-		i -= 1
-	return -1
+	while i >= 0 and text[i] == ")":
+		var depth: int = 0
+		var open: int = -1
+		while i >= 0:
+			if text[i] == ")":
+				depth += 1
+			elif text[i] == "(":
+				depth -= 1
+				if depth == 0:
+					open = i
+					break
+			i -= 1
+		if open < 0:
+			return -1
+		i = open - 1
+	return i
 
 
 ## The final consonant of a letter (0 for none, 8 for ㄹ), -1 when it is not
