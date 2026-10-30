@@ -1,6 +1,5 @@
 import { COMM_NAME } from './data';
 import type { Comm } from './data';
-import { josa } from './josa';
 import { lawActive } from './state';
 import type { Card, Game } from './state';
 import type { CardView, Choice, Eff } from './cards';
@@ -55,6 +54,7 @@ const LATER_SAY: Record<LateKind, string> = {
   front_curtain: '커튼 하나로 열차를 세울 수는 없다. 더 중요한 문제가 있다.',
 };
 
+// 이름 뒤 조사는 두 갈래 표기로 둔다: 화면이 이름을 줄인 뒤 받침을 보고 푼다(S1 shortText, S2 UiFonts.josa).
 function lateBody(g: Game, card: Card, v: CardView, kind: LateKind, late: number): string {
   if (!late) return v.body;
   const c = lateComm(card);
@@ -78,7 +78,7 @@ function lateBody(g: Game, card: Card, v: CardView, kind: LateKind, late: number
     case 'promise_ledger': {
       // 1차례 대표의 말은 본문 끝 따옴표 말(cards.ts LEDGER_SAY) 그대로, 두 번째부터 그 말을 바꾼다.
       const name = g.comms[c].leader.name;
-      head = twice ? `${name}${josa(name, '이/가')} 장부를 또 내밀었다.` : `${name}${josa(name, '이/가')} 미뤘던 장부를 다시 내밀었다.`;
+      head = twice ? `${name}이(가) 장부를 또 내밀었다.` : `${name}이(가) 미뤘던 장부를 다시 내밀었다.`;
       if (!twice) return `${head} ${v.body}`;
       say = c === 'front' ? '이번엔 회기 앞에서 펼치겠습니다.' : '이번엔 회기 앞에서 펼친다.';
       return /"[^\"]*"\s*$/.test(v.body) ? `${head} ${v.body.replace(/"[^\"]*"\s*$/, `"${say}"`)}` : `${head} ${v.body} "${say}"`;
@@ -121,9 +121,9 @@ export function lateLog(g: Game, card: Card): string {
   const comm = COMM_NAME[c];
   const name = g.comms[c].leader.name;
   switch (lateKind(card)) {
-    case 'demand': return `${comm}의 요구를 끝내 미뤘다. 답을 기다리던 ${comm}${josa(comm, '이/가')} 등을 돌렸다.`;
-    case 'favor': return `${name}의 부탁을 끝내 미뤘다. ${name}${josa(name, '은/는')} 다시 부탁하러 오지 않았다.`;
-    case 'promise_ledger': return `${comm}${josa(comm, '이/가')} 내민 장부를 끝내 펼치지 않았다. ${comm}${josa(comm, '은/는')} 그것을 물리친 것으로 기억한다.`;
+    case 'demand': return `${comm}의 요구를 끝내 미뤘다. 답을 기다리던 ${comm}이(가) 등을 돌렸다.`;
+    case 'favor': return `${name}의 부탁을 끝내 미뤘다. ${name}은(는) 다시 부탁하러 오지 않았다.`;
+    case 'promise_ledger': return `${comm}이(가) 내민 장부를 끝내 펼치지 않았다. ${comm}은(는) 그것을 물리친 것으로 기억한다.`;
     case 'ration_cut': return '감축 배급의 예외를 끝내 정하지 않았다. 꼬리칸 그릇부터 비었다.';
     case 'front_curtain': return '커튼 일을 끝내 미뤘다. 꼬리칸은 걸린 커튼을 열차장의 답으로 들었다.';
     default: return '';
