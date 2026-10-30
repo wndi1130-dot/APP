@@ -7,7 +7,7 @@ import { seasonHolds } from './climate';
 import type { SeasonNeed } from './climate';
 import { onDeath } from './death';
 import { inEventPack } from './event_pack';
-import { josa } from './josa';
+import { josa, settleJosa } from './josa';
 import { SPECIALISTS } from './domestic/data';
 import { CAR_COMM } from './domestic/data';
 import { domesticAide, living } from './domestic/state';
@@ -104,7 +104,7 @@ export const CONTENT_DEAL_KIND = 'content-deal';
 /** person.state away: 돌아오는 구간을 정하지 않은 떠남. 저장(JSON)에 Infinity를 못 써서 큰 수로 둔다 */
 const AWAY_FOREVER = 1e6;
 
-export { josa };
+export { josa, settleJosa };
 
 /** {name}[a/b]를 값과 조사로 채운다. 값이 없는 자리표시자는 그대로 둔다(사건이 뽑히기 전에 거른다). */
 export function fillText(text: string, values: Partial<Record<Placeholder, string>>): string {

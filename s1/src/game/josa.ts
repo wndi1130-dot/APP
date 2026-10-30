@@ -21,3 +21,29 @@ export function josa(word: string, pair: string): string {
   if (withFinal === '으로') return f === 'final' ? '으로' : '로';
   return f === 'none' ? without : withFinal;
 }
+
+const PARTICLES = [
+  ['과(와)', '과', '와'],
+  ['을(를)', '을', '를'],
+  ['이(가)', '이', '가'],
+  ['은(는)', '은', '는'],
+  ['(으)로', '으로', '로'],
+] as const;
+
+/** 두 갈래 조사 표기를 바로 앞 한글 음절이나 숫자의 받침에 맞게 푼다. */
+export function settleJosa(text: string): string {
+  let out = text;
+  for (const [both, withFinal, without] of PARTICLES) {
+    let at = out.indexOf(both);
+    while (at >= 0) {
+      let before = out[at - 1] ?? '';
+      // S2엔 없음 — S1은 겹치는 이름에 성 첫 글자와 점을 붙인다
+      if (before === '.' && /[가-힣]/.test(out[at - 2] ?? '')) before = out[at - 2];
+      let pick: string = both;
+      if (/[가-힣0-9]/.test(before)) pick = josa(before, `${withFinal}/${without}`);
+      out = out.slice(0, at) + pick + out.slice(at + both.length);
+      at = out.indexOf(both, at + pick.length);
+    }
+  }
+  return out;
+}
