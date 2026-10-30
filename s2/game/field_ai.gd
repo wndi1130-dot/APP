@@ -1649,7 +1649,10 @@ func _escort_watch(p, site: Vector3) -> void:
 	var offset: float = angle_difference(atan2(screen.x, screen.z), atan2(look.x, look.z))
 	var limit: float = deg_to_rad(LOOK_CAMERA_DEG)
 	if absf(offset) < limit:
-		look = screen.rotated(Vector3.UP, limit * (-1.0 if offset < 0.0 else 1.0))
+		# The edge is picked on the side the outward watch lies, not the swept look, so
+		# a sweep across the screen never flips the body through it.
+		var side: float = angle_difference(atan2(screen.x, screen.z), atan2(out.x, out.z))
+		look = screen.rotated(Vector3.UP, limit * (-1.0 if side < 0.0 else 1.0))
 	p.face_point(p.position + look * 10.0)
 
 

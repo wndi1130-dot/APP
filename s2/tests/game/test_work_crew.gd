@@ -448,14 +448,19 @@ func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 		guard.position = _at() + Vector3(-4.0 if guard.brain.get("side", 0) == 0 else 4.0, 0, 1.5)
 		guard.stop()
 		guard.face_point(_at())
-		for i in 12:
+		var before := INF
+		# A whole sweep (about 12.6 s): no step may jump, as a flip across the screen would.
+		for i in 26:
 			game.clock.elapsed += 0.5
 			game.ai._crew(guard, 0.1, true)
 			var look := Vector3(sin(guard.facing), 0.0, cos(guard.facing))
-			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 60.0, "watching outward, the work behind")
+			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 119.5, "watching outward, the work behind")
 			var screen: Vector3 = game.cam_back()
 			screen.y = 0.0
 			assert_gt(rad_to_deg(look.angle_to(screen)), game.ai.LOOK_CAMERA_DEG - 0.5, "never into the screen")
+			if before != INF:
+				assert_lt(rad_to_deg(absf(angle_difference(before, guard.facing))), 30.0, "the sweep turns slowly, never flips")
+			before = guard.facing
 
 
 func _cycle(id: String) -> void:
