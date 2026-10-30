@@ -250,6 +250,10 @@ func test_prop_shades_ride_with_the_props_and_stop_at_a_wall() -> void:
 	var walled: Transform3D = items[1]["shade"]["xf"]
 	assert_lt(open.origin.x - open.basis.x.x * 0.5, 10.0, "past its cell where the floor is open")
 	assert_almost_eq(walled.origin.x - walled.basis.x.x * 0.5, 20.0, 0.001, "not past the wall")
+	# Its height is the strength, one more under a roof (contact_shade keeps a roofed one full in snow).
+	var sky := MapView.sky_alpha(view.grid, Vector2i(10, 10))
+	assert_almost_eq(floorf(open.basis.y.length()), 1.0 - sky, 0.0001, "the roof flag")
+	assert_between(fmod(open.basis.y.length(), 1.0), MapView.SHADE_STRENGTH, MapView.SHADE_STRENGTH_TALL, "the strength")
 	var foot: Color = items[0]["shade"]["foot"]
 	for v: float in [foot.r, foot.g, foot.b, foot.a]:
 		assert_true(v >= 0.0 and v <= 1.0, "the footprint inside its quad")

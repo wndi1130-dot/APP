@@ -638,7 +638,7 @@ func add_container(id: String) -> void:
 	if PropModels.attach(holder, id, at, String(box_data.get("name", ""))):
 		level_roots[lv].add_child(holder)
 		container_nodes[id] = holder
-		_shade_container(holder)
+		_shade_container(holder, sky_alpha(grid, box_data["cell"]) if lv == 0 else 0.0)
 	else:
 		holder.free()
 	var key: Vector3i = _container_key(box_data)
@@ -844,7 +844,7 @@ func _contact_material(kind: String) -> ShaderMaterial:
 	if not _contact_materials.has(kind):
 		var m := ShaderMaterial.new()
 		m.shader = CONTACT_SHADER
-		m.set_shader_parameter("core", 0.6 if kind == "rim" else 0.0)
+		m.set_shader_parameter("core", 0.6 if kind == "rim" else SHADE_CORE)
 		m.set_shader_parameter("per_instance", kind == "prop")
 		m.render_priority = Material.RENDER_PRIORITY_MIN
 		_contact_materials[kind] = m
@@ -2070,11 +2070,13 @@ func refresh_props(camera: Camera3D = null) -> void:
 ## Contact shade under the props (T0-6): how far it reaches past a prop's footprint
 ## (metres; more for a taller one) and how dark it is at the footprint (more for a
 ## taller one, contact_shade.gdshader).
-const SHADE_MARGIN: float = 0.12
-const SHADE_MARGIN_PER_M: float = 0.2
-const SHADE_MARGIN_MAX: float = 0.35
-const SHADE_STRENGTH: float = 0.35
-const SHADE_STRENGTH_TALL: float = 0.5
+const SHADE_MARGIN: float = 0.2
+const SHADE_MARGIN_PER_M: float = 0.3
+const SHADE_MARGIN_MAX: float = 0.5
+const SHADE_STRENGTH: float = 0.5
+const SHADE_STRENGTH_TALL: float = 0.65
+## How much of the margin keeps the full strength before it fades (contact_shade core).
+const SHADE_CORE: float = 0.2
 ## Raised this far over its floor or more, a model hangs on a wall or stands on something: no shade.
 const SHADE_FLOOR_GAP: float = 0.05
 
@@ -2104,7 +2106,8 @@ func _make_prop_shades() -> void:
 	add_child(prop_shades)
 
 
-## A prop's shade as placed (item["xf"]): {"xf" (the quad, its height the strength), "foot" (the
+## A prop's shade as placed (item["xf"]): {"xf" (the quad, its height the strength and one more
+## under a roof, contact_shade.gdshader), "foot" (the
 ## footprint's rect in the quad)}. The footprint is the model's box as placed (turned in quarter
 ## turns, or laid down if fallen, so it stays square to the map); the margin stops at the side of its
 ## cells where a wall, anything solid or another building stands, so no shade shows through a wall.
@@ -2141,14 +2144,16 @@ func _prop_shade(path: String, item: Dictionary) -> Dictionary:
 	var w := x1 - x0
 	var d := z1 - z0
 	var strength := lerpf(SHADE_STRENGTH, SHADE_STRENGTH_TALL, clampf(tall / 1.5, 0.0, 1.0))
-	var quad := Transform3D(Basis.from_scale(Vector3(w, strength, d)), Vector3((x0 + x1) * 0.5, floor_y + 0.006, (z0 + z1) * 0.5))
+	var sky := sky_alpha(grid, r.position) if lv == 0 else 0.0
+	var quad := Transform3D(Basis.from_scale(Vector3(w, strength + 1.0 - sky, d)), Vector3((x0 + x1) * 0.5, floor_y + 0.006, (z0 + z1) * 0.5))
 	var foot := Color((lo.x - x0) / w, (lo.z - z0) / d, (hi.x - x0) / w, (hi.z - z0) / d)
 	return {"xf": quad, "foot": foot}
 
 
 ## A container's own model (PropModels.attach) gets the props' contact shade too:
-## one quad under the model's box, a child of its "Prop" node so it moves with it.
-func _shade_container(holder: Node3D) -> void:
+## one quad under the model's box, a child of its "Prop" node so it moves with it;
+## `sky` 0 under a roof (sky_alpha).
+func _shade_container(holder: Node3D, sky: float) -> void:
 	var prop := holder.get_node_or_null("Prop") as Node3D
 	if prop == null:
 		return
@@ -2169,7 +2174,7 @@ func _shade_container(holder: Node3D) -> void:
 	var st := _begin()
 	var centre := box.get_center()
 	_rim_quad(st, {"at": Vector3(centre.x, 0.006, centre.z), "size": outer,
-		"inner": Vector2(box.size.x / outer.x, box.size.z / outer.y)},
+		"inner": Vector2(box.size.x / outer.x, box.size.z / outer.y), "sky": sky},
 		lerpf(SHADE_STRENGTH, SHADE_STRENGTH_TALL, clampf(tall / 1.5, 0.0, 1.0)))
 	var shade := MeshInstance3D.new()
 	shade.name = "ContactShade"

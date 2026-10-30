@@ -31,6 +31,11 @@ uniform float rime_catch : hint_range(0.0, 1.0) = 1.0;
 // Dirt and soot rising from the ground (world metres).
 uniform float grime : hint_range(0.0, 1.0) = 0.0;
 uniform float grime_height = 0.8;
+// Contact (T0-6): the foot of a thing standing on a floor goes darker, most at the floor and gone by
+// contact_height above it (3 m storeys), so a pale box stands on its floor and does not float over
+// it. What stands on a table or hangs on a wall is clear of it. 0: off (prop_models.gd turns it on).
+uniform float contact_dark : hint_range(0.0, 1.0) = 0.0;
+uniform float contact_height = 0.3;
 // Flat ground only: let rain pool in low noise spots.
 uniform float puddles : hint_range(0.0, 1.0) = 0.0;
 // 1 indoors: no rain, snow or puddles reach it.
@@ -96,6 +101,9 @@ void fragment() {
 	float up = clamp(w_nrm.y, 0.0, 1.0);
 	float n = fx_fbm2(w_pos.xz * 0.9 + w_pos.y * 0.37);
 	float rough = roughness_base;
+
+	float above_floor = w_pos.y - floor(w_pos.y / 3.0 + 0.02) * 3.0;
+	base *= 1.0 - contact_dark * (1.0 - smoothstep(0.0, contact_height, above_floor));
 
 	// Soot and dirt: darker toward the ground, broken by noise.
 	float g = grime * (1.0 - smoothstep(0.0, grime_height, w_pos.y)) * (0.55 + 0.45 * n);
