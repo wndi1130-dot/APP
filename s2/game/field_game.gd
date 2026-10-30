@@ -1532,7 +1532,7 @@ const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground
 static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable) -> Dictionary:
 	if form.is_empty() or form == String(map.get("stop_form", "")) or form == String(map.get("stop_form_asked", "")):
 		return map
-	if form == "edge":
+	if form in ["edge", "remote"]:
 		if map.has("side_path"):
 			map = fresh.call()
 		for key in AHEAD_KEYS:

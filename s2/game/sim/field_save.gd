@@ -227,6 +227,19 @@ static func exact(save: Dictionary) -> bool:
 	return int(save.get("version", 1)) >= 2 and save.has("runtime")
 
 
+## Exact solids must fit every saved floor before any grid is replaced.
+static func _grid_sizes_match(game, save: Dictionary) -> bool:
+	var levels: Dictionary = save["runtime"].get("levels", {})
+	for level in levels:
+		if not game.levels.has(level):
+			return false
+		var grid: FieldGrid = game.levels[level]
+		var row: Dictionary = levels[level]
+		if row.get("solid", PackedByteArray()).size() != grid.width * grid.height:
+			return false
+	return true
+
+
 ## Version 2 reconnects existing identities before restoring their clocks or callbacks.
 static func apply(game, save: Dictionary) -> void:
 	var form := StopForm.resolve(save if save.has("stop_form") else game.opts, String(game.data["place_kind"]))
@@ -250,9 +263,11 @@ static func apply(game, save: Dictionary) -> void:
 	game.actions.coal_delivered = float(save["coal"]["delivered"])
 	game.actions.coal_spent = float(save["coal"]["spent"])
 	if exact(save):
-		_apply_exact(game, save)
-		game.set_stop_form(form)
-		return
+		if _grid_sizes_match(game, save):
+			_apply_exact(game, save)
+			game.set_stop_form(form)
+			return
+		push_warning("field save grid size changed; restoring legacy state")
 	var boxes: Dictionary = game.data.get("containers", {})
 	for id in save.get("containers", {}):
 		if boxes.has(id):  # a heap pulled together during the stop is not on the map yet

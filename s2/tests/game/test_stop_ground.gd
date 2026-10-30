@@ -525,6 +525,17 @@ func _remote_fixture(to_right: bool) -> Dictionary:
 	if not _built.has(key):
 		var was: Dictionary = MapShift.shift_rows(_small_map(to_right, 80), 40)
 		var g: FieldGrid = was["grid"]
+		# Rails 57..67 touch the train; rail 10 and road 110 are detached.
+		for y: int in [10, 57, 58, 59, 63, 64, 65, 66, 67, 110]:
+			for x: int in range(g.width):
+				var c: Vector2i = Vector2i(x, y)
+				if g.floor_at(c) != FieldGrid.Floor.PLATFORM:
+					g.floor[g.index(c)] = FieldGrid.Floor.ROAD if y == 110 else FieldGrid.Floor.RAIL
+		was["entries"]["west"].append(Vector2i(0, 110))
+		was["entries"]["east"].append(Vector2i(g.width - 1, 110))
+		var edge_x: int = g.width - 1 if to_right else 0
+		was["entries"]["rail_end"] = [Vector2i(edge_x, 60)]
+		was["anchors"]["flee_exit"] = Vector2i(edge_x, 110)
 		for lv: int in [-1, 1]:
 			var other: FieldGrid = FieldGrid.new(g.width, g.height)
 			other.solid.fill(FieldGrid.Solid.AIR if lv > 0 else FieldGrid.Solid.BLOCK)
@@ -598,11 +609,11 @@ func test_remote_forest_blocks_both_walkers_and_preserves_other_floors() -> void
 		var upper: FieldGrid = now["levels"][1]
 		var lower: FieldGrid = now["levels"][-1]
 		var added: Rect2i = _added_ground(was, now)
-		# Road row 45 minus 24, through the train's exclusive end 63 plus 24.
-		var strip: Rect2i = Rect2i(added.position.x, 21, added.size.x, 66)
+		# Touching rails 57..67, padded by 24: rows 33..91, 59 of 120 rows.
+		var strip: Rect2i = Rect2i(added.position.x, 33, added.size.x, 59)
 		var expected: Array[Rect2i] = [
-			Rect2i(added.position.x, 0, added.size.x, 21),
-			Rect2i(added.position.x, 87, added.size.x, g.height - 87)]
+			Rect2i(added.position.x, 0, added.size.x, 33),
+			Rect2i(added.position.x, 92, added.size.x, g.height - 92)]
 		assert_eq(now["deep_forest"], expected)
 		var closed: bool = true
 		var cached: bool = true
@@ -641,7 +652,7 @@ func test_remote_open_rows_join_the_old_map_and_doors_reach_village() -> void:
 		var edge_x: int = old.width - 1 if to_right else 0
 		var offset: Vector2i = _shift(was, now)
 		var joined: bool = true
-		for y: int in [45, 60, 61, 62]:
+		for y: int in [45, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67]:
 			var floor_kind: int = old.floor_at(Vector2i(edge_x, y))
 			var join: Vector2i = Vector2i(edge_x, y) + offset
 			joined = joined and g.floor_at(join) == floor_kind and g.people_can_walk(join)
@@ -650,7 +661,16 @@ func test_remote_open_rows_join_the_old_map_and_doors_reach_village() -> void:
 				joined = joined and g.floor_at(c) == floor_kind
 				if not train.has_point(c):
 					joined = joined and g.people_can_walk(c) and g.dead_can_walk(c)
-		assert_true(joined, "every continued rail and road row joins the old map")
+		assert_true(joined, "open rail and road rows inside the strip join the old map")
+		var ended: bool = true
+		for y: int in [10, 110]:
+			var join: Vector2i = Vector2i(edge_x, y) + offset
+			ended = ended and g.people_can_walk(join) and g.dead_can_walk(join)
+			for x: int in range(added.position.x, added.end.x):
+				var c: Vector2i = Vector2i(x, y)
+				ended = ended and _in_forest(now, c) and g.floor_at(c) == FieldGrid.Floor.SNOW \
+					and g.solid_at(c) == FieldGrid.Solid.BLOCK and not g.people_can_walk(c) and not g.dead_can_walk(c)
+		assert_true(ended, "detached rail and road rows end in snow-covered forest at the old border")
 		assert_eq(g.floor_at(Vector2i(added.position.x, 46)), FieldGrid.Floor.SNOW, "a walled road row is not continued")
 		_check_remote_village(now, "right" if to_right else "left")
 		var cell_center: Vector2 = Vector2(now["village_middle"]) + Vector2.ONE * 0.5
@@ -662,7 +682,7 @@ func test_remote_trees_are_sparse_inside_and_dense_only_at_forest_edge() -> void
 		var fixture: Dictionary = _remote_fixture(to_right)
 		var now: Dictionary = fixture["now"]
 		var added: Rect2i = _added_ground(fixture["was"], now)
-		var strip: Rect2i = Rect2i(added.position.x, 21, added.size.x, 66)
+		var strip: Rect2i = Rect2i(added.position.x, 33, added.size.x, 59)
 		var tree_props: Dictionary = {}
 		var dense_rows: Dictionary = {}
 		for prop: Dictionary in now["props"]:
@@ -709,6 +729,125 @@ func test_remote_trees_are_sparse_inside_and_dense_only_at_forest_edge() -> void
 			assert_between(added.end.x - 1 - int(row[-1]), 0, 2, "trees reach the far end")
 			for i: int in range(1, row.size()):
 				assert_between(int(row[i]) - int(row[i - 1]), 2, 3, "dense tree spacing")
+
+
+func test_remote_added_walkable_share_follows_the_strip_on_tall_maps() -> void:
+	# These finished maps have 205, 195, 200 and 100 rows. A strip around 50..60 m
+	# must stay below 60%; train solids and sparse trees take at most another 5%.
+	for place: String in ["houses_01", "church_01", "freight_01", FieldMaps.DEFAULT_PLACE]:
+		var was: Dictionary = _map(place)
+		var now: Dictionary = StopGround.apply(was, "remote", 71, 600.0)
+		var g: FieldGrid = now["grid"]
+		var added: Rect2i = _added_ground(was, now)
+		var forest_rows: int = 0
+		for rect: Rect2i in now["deep_forest"]:
+			forest_rows += rect.size.y
+		var strip_height: int = added.size.y - forest_rows
+		var walkable: int = 0
+		for y: int in range(added.position.y, added.end.y):
+			for x: int in range(added.position.x, added.end.x):
+				if g.people_can_walk(Vector2i(x, y)):
+					walkable += 1
+		var share: float = float(walkable) / float(added.size.x * added.size.y)
+		var strip_share: float = float(strip_height) / float(g.height)
+		assert_gt(forest_rows, 0, place + ": a taller map keeps nonempty forest")
+		assert_lt(strip_height, g.height, place)
+		assert_lt(strip_share, 0.60, place + ": detached rows do not widen the strip")
+		assert_lt(share, 0.60, place + ": added ground stays mostly forest")
+		assert_lte(share, strip_share, place + ": no walking outside the strip")
+		assert_gte(share, strip_share - 0.05, place + ": only train solids and sparse trees reduce walking")
+		var calculated: Vector2i = FieldMaps.anchors(now)["flee_exit"]
+		assert_true(g.people_can_walk(calculated), place + ": the calculated exit is walkable")
+		assert_false(_in_forest(now, calculated), place + ": the calculated exit avoids forest")
+
+
+func test_remote_entries_and_map_exit_outside_the_strip_stay_at_the_old_border() -> void:
+	for to_right: bool in [false, true]:
+		var fixture: Dictionary = _remote_fixture(to_right)
+		var was: Dictionary = fixture["was"]
+		var now: Dictionary = fixture["now"]
+		var g: FieldGrid = now["grid"]
+		var offset: Vector2i = _shift(was, now)
+		var id: String = "east" if to_right else "west"
+		var old_entry: Vector2i = was["entries"][id][1] + offset
+		var kept: Vector2i = now["entries"][id][1]
+		assert_eq(kept, old_entry, "the detached road entry stays in the old map")
+		assert_true(g.people_can_walk(kept) and g.dead_can_walk(kept))
+		assert_false(_in_forest(now, kept))
+		var next: Vector2i = kept + Vector2i.RIGHT * (1 if to_right else -1)
+		assert_true(_in_forest(now, next), "the next cell is already deep forest")
+		assert_eq(g.solid_at(next), FieldGrid.Solid.BLOCK)
+		assert_eq(g.floor_at(next), FieldGrid.Floor.SNOW)
+		assert_eq(now["anchors"]["flee_exit"], kept, "the map's own exit stays before the forest too")
+		var new_border: int = g.width - 1 if to_right else 0
+		for cell: Vector2i in [now["entries"][id][0], now["entries"]["rail_end"][0]]:
+			assert_eq(cell.x, new_border, "entries inside the strip still move out")
+			assert_true(g.people_can_walk(cell) and g.dead_can_walk(cell))
+			assert_false(_in_forest(now, cell))
+		assert_eq(now["entries"]["drain"][0], was["entries"]["drain"][0] + offset, "a manhole stays put")
+
+
+func test_remote_calculated_exit_is_rebuilt_on_a_walkable_border_cell() -> void:
+	for to_right: bool in [false, true]:
+		var was: Dictionary = _remote_fixture(to_right)["was"].duplicate(true)
+		was["anchors"].erase("flee_exit")
+		var now: Dictionary = StopGround.apply(was, "remote", 71, 600.0)
+		var g: FieldGrid = now["grid"]
+		var exit: Vector2i = now["anchors"]["flee_exit"]
+		assert_eq(exit, FieldMaps.anchors(now)["flee_exit"])
+		assert_true(g.people_can_walk(exit) and g.dead_can_walk(exit))
+		assert_false(_in_forest(now, exit))
+		assert_true(exit.x == 0 or exit.x == g.width - 1 or exit.y == 0 or exit.y == g.height - 1)
+
+
+func test_remote_core_stops_at_a_road_or_blocked_rail_above_touching_rails() -> void:
+	for solid: int in [FieldGrid.Solid.NONE, FieldGrid.Solid.WALL]:
+		var was: Dictionary = MapShift.shift_rows(_small_map(true, 80), 40)
+		var old: FieldGrid = was["grid"]
+		for y: int in range(20, 60):
+			old.floor[old.index(Vector2i(old.width - 1, y))] = FieldGrid.Floor.RAIL
+		var break_cell: Vector2i = Vector2i(old.width - 1, 56)
+		old.floor[old.index(break_cell)] = FieldGrid.Floor.ROAD if solid == FieldGrid.Solid.NONE else FieldGrid.Floor.RAIL
+		old.set_solid(break_cell, solid)
+		old.refresh_paths()
+		var now: Dictionary = StopGround.apply(was, "remote", 71, 600.0)
+		var added: Rect2i = _added_ground(was, now)
+		assert_eq(now["deep_forest"][0], Rect2i(added.position.x, 0, added.size.x, 33),
+			"the core stops at row 57, then gets 24 rows of padding")
+		assert_true(_in_forest(now, Vector2i(added.position.x, 20)), "rail beyond the break is detached")
+
+
+func test_remote_strip_covers_carried_attachments_before_adding_its_margin() -> void:
+	var was: Dictionary = MapShift.shift_rows(_small_map(true, 200), 40)
+	was["platform"] = Rect2i(36, 62, 8, 45)
+	was["unload"] = Rect2i(36, 40, 8, 22)
+	was["train_doors"]["upper"] = [Vector2i(39, 30)]
+	was["spawns"]["squad"] = [Vector2i(39, 110)]
+	was["spawns"]["train_door"] = [Vector2i(39, 115)]
+	was["spawns"]["dead_street"] = [Vector2i(10, 210)]
+	was["lights"].append({"kind": "car_window", "cell": Vector2i(38, 29), "level": 0})
+	was["lights"].append({"kind": "lamp", "cell": Vector2i(10, 200), "level": 0})
+	was["crossings"][0]["cells"].append(Vector2i(40, 125))
+	var now: Dictionary = StopGround.apply(was, "remote", 71, 600.0)
+	var added: Rect2i = _added_ground(was, now)
+	var train: Rect2i = now["train"]
+	var carried: Array = [now["barricade_slots"][0], now["lights"][-2]["cell"]]
+	for doors: Array in now["train_doors"].values():
+		carried.append_array(doors)
+	for key: String in ["train_door", "squad"]:
+		carried.append_array(now["spawns"][key])
+	for crossing: Dictionary in now["crossings"]:
+		carried.append_array(crossing["cells"])
+	for cell: Vector2i in carried:
+		assert_false(_in_forest(now, cell), "every carried cell stays inside the strip")
+	for rect: Rect2i in [now["platform"], now["unload"], train]:
+		assert_false(_in_forest(now, rect.position))
+		assert_false(_in_forest(now, rect.end - Vector2i.ONE))
+	# Car window row 29 and crossing row 125 set the core, not the town lamp or dead.
+	assert_true(_in_forest(now, Vector2i(added.position.x, 4)))
+	assert_false(_in_forest(now, Vector2i(added.position.x, 5)), "24 cells above the carried light")
+	assert_false(_in_forest(now, Vector2i(added.position.x, 149)), "24 cells below the carried crossing")
+	assert_true(_in_forest(now, Vector2i(added.position.x, 150)))
 
 
 func test_remote_is_idempotent() -> void:

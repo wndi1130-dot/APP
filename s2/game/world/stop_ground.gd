@@ -119,10 +119,13 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 	var old_border: int = left if left > 0 else old.width - 1
 	var new_border: int = 0 if left > 0 else g.width - 1
 	_extend_ground(g, old, added, 0 if left > 0 else old.width - 1)
-	var moved_out: Dictionary = _move_entries_out(out, old_border, new_border)
+	var strip: Rect2i = Rect2i()
+	if band > 0:
+		strip = _remote_strip(out, old, added, 0 if left > 0 else old.width - 1, band)
+	var moved_out: Dictionary = _move_entries_out(out, old_border, new_border, strip)
 	var floored: Array = _move_train(out, Vector2i(dx, 0))
 	if band > 0:
-		var strip: Rect2i = _remote_band(out, old, added, 0 if left > 0 else old.width - 1, band)
+		_remote_band(out, added, strip)
 		_add_trees(out, strip, rng)
 		_add_forest_trees(out, strip, rng)
 	else:
@@ -147,7 +150,7 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 		var flee: Vector2i = anchors["flee_exit"]
 		if moved_out.has(flee):
 			anchors["flee_exit"] = moved_out[flee]
-		elif flee.x == old_border:
+		elif flee.x == old_border and (band == 0 or (flee.y >= strip.position.y and flee.y < strip.end.y)):
 			anchors["flee_exit"] = Vector2i(new_border, flee.y)
 	elif worked.has("flee_exit"):
 		anchors["flee_exit"] = worked["flee_exit"]
@@ -164,21 +167,58 @@ static func _cells(r: Rect2i) -> Array:
 	return out
 
 
-## All continued rail and road rows, plus the train, share one open strip. Only the
-## added ground outside it becomes forest; grow's other floors stay as they were.
-static func _remote_band(data: Dictionary, old: FieldGrid, added: Rect2i, edge_x: int, band: int) -> Rect2i:
-	var g: FieldGrid = data["grid"]
+## Only open rail rows touching the train's rows widen the strip's core. The train's
+## carried cells and rectangles keep their rows too; detached roads and rails do not.
+static func _remote_strip(data: Dictionary, old: FieldGrid, added: Rect2i, edge_x: int, band: int) -> Rect2i:
 	var train: Rect2i = data["train"]
 	var top: int = train.position.y
 	var bottom: int = train.end.y
-	for y: int in range(old.height):
-		var edge: Vector2i = Vector2i(edge_x, y)
-		if old.solid_at(edge) == FieldGrid.Solid.NONE and old.floor_at(edge) in [FieldGrid.Floor.RAIL, FieldGrid.Floor.ROAD]:
-			top = mini(top, y)
-			bottom = maxi(bottom, y + 1)
+	while top > 0:
+		var edge: Vector2i = Vector2i(edge_x, top - 1)
+		if old.solid_at(edge) != FieldGrid.Solid.NONE or old.floor_at(edge) != FieldGrid.Floor.RAIL:
+			break
+		top -= 1
+	while bottom < old.height:
+		var edge: Vector2i = Vector2i(edge_x, bottom)
+		if old.solid_at(edge) != FieldGrid.Solid.NONE or old.floor_at(edge) != FieldGrid.Floor.RAIL:
+			break
+		bottom += 1
+	var rects: Array[Rect2i] = []
+	for car: Dictionary in data.get("train_cars", []):
+		rects.append(car["rect"])
+	for key: String in ["platform", "unload"]:
+		var rect: Rect2i = data.get(key, train.grow(FieldMaps.BY_TRAIN))
+		if rect.intersects(train.grow(3)):
+			rects.append(rect)
+	for rect: Rect2i in rects:
+		top = mini(top, rect.position.y)
+		bottom = maxi(bottom, rect.end.y)
+	var carried: Array = []
+	for doors: Array in data.get("train_doors", {}).values():
+		carried.append_array(doors)
+	for key: String in ["train_door", "squad"]:
+		carried.append_array(data.get("spawns", {}).get(key, []))
+	for light: Dictionary in data.get("lights", []):
+		if String(light.get("kind", "")) in TRAIN_LIGHTS or (int(light.get("level", 0)) == 0 and train.has_point(light["cell"])):
+			carried.append(light["cell"])
+	for cell: Vector2i in data.get("barricade_slots", []):
+		if train.grow(3).has_point(cell):
+			carried.append(cell)
+	for crossing: Dictionary in data.get("crossings", []):
+		carried.append_array(crossing["cells"])
+	for cell: Vector2i in carried:
+		top = mini(top, cell.y)
+		bottom = maxi(bottom, cell.y + 1)
 	top = maxi(added.position.y, top - band)
 	bottom = mini(added.end.y, bottom + band)
-	var strip: Rect2i = Rect2i(added.position.x, top, added.size.x, bottom - top)
+	return Rect2i(added.position.x, top, added.size.x, bottom - top)
+
+
+## Only the added ground outside the strip becomes forest; other floors stay intact.
+static func _remote_band(data: Dictionary, added: Rect2i, strip: Rect2i) -> void:
+	var g: FieldGrid = data["grid"]
+	var top: int = strip.position.y
+	var bottom: int = strip.end.y
 	var forest: Array[Rect2i] = []
 	if top > added.position.y:
 		forest.append(Rect2i(added.position, Vector2i(added.size.x, top - added.position.y)))
@@ -199,7 +239,6 @@ static func _remote_band(data: Dictionary, old: FieldGrid, added: Rect2i, edge_x
 		g.people_path.fill_solid_region(rect, true)
 		g.dead_path.fill_solid_region(rect, true)
 		g.revision += 1
-	return strip
 
 
 ## Only the first six metres of blocked forest carry trees, two or three cells apart.
@@ -235,8 +274,8 @@ static func _extend_ground(g: FieldGrid, old: FieldGrid, added: Rect2i, edge_x: 
 
 
 ## The dead still come from beyond the map (map_ring.gd does the same): a ground entry on
-## the grown side's old border moves straight out to the new one. Old cell -> new cell.
-static func _move_entries_out(data: Dictionary, old_border: int, new_border: int) -> Dictionary:
+## the grown side moves out, except where the remote forest starts. Old cell -> new cell.
+static func _move_entries_out(data: Dictionary, old_border: int, new_border: int, strip: Rect2i = Rect2i()) -> Dictionary:
 	var moved: Dictionary = {}
 	for id in data.get("entries", {}):
 		if data.get("manholes", {}).has(id) or int(data.get("entry_levels", {}).get(id, 0)) != 0:
@@ -244,7 +283,7 @@ static func _move_entries_out(data: Dictionary, old_border: int, new_border: int
 		var cells: Array = data["entries"][id]
 		for i: int in range(cells.size()):
 			var c: Vector2i = cells[i]
-			if c.x == old_border:
+			if c.x == old_border and (strip.size.y == 0 or (c.y >= strip.position.y and c.y < strip.end.y)):
 				moved[c] = Vector2i(new_border, c.y)
 				cells[i] = moved[c]
 	return moved
