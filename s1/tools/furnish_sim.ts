@@ -6,6 +6,7 @@ import {
   restoreCheck, startFinish, startJob, startRestore, techMult, techUsable,
 } from '../src/game';
 import type { Comm, FurnitureKind, FurnitureSize, Game } from '../src/game';
+import { receiveDecor } from '../src/game/domestic/decor';
 import { playGame } from './s1c_bot';
 
 const ARMS = ['none', 'front', 'tail', 'furn_only'] as const;
@@ -116,6 +117,7 @@ function run(seed: string, arm: Arm) {
         const kind = rolledFurniture(seed, stops++);
         if (kind && arm !== 'none') {
           furnitureArrived += 1;
+          receiveDecor(g, [kind]);
           if (ORDER[arm].some(car => placeFurniture(g, car, kind).ok)) furniturePlaced += 1;
         }
         policy(g);

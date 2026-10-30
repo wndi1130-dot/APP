@@ -105,3 +105,25 @@ static func pieces(items: Array) -> Array:
 		color.a = 0.0
 		out.append({"lv": lv, "size": size, "at": at + Vector3(0, size.y / 2.0, 0), "color": color})
 	return out
+
+
+## A dark rim round each thing (T0-6): a quad flat on its floor, RIM wider than
+## the thing on every side, that makes the floor there darker
+## (contact_shade.gdshader: black at RIM_STRENGTH over whatever the floor is, so
+## asphalt, boards and snow each go darker in their own colour, lighter on snow).
+## From above it is the outline of the flat things (a coat, a map, a knife) and
+## the contact line of the taller ones, so a dark thing still stands off a
+## street's grey asphalt at a phone's size; the things keep their colours (LOOKS).
+const RIM: float = 0.1
+const RIM_LIFT: float = 0.004
+const RIM_STRENGTH: float = 0.8
+
+
+## The rim under one of pieces()'s boxes: {"lv", "at" (centre, on the floor),
+## "size" (along x and z), "inner" (the thing's share of it along x and z)}.
+static func rim(piece: Dictionary) -> Dictionary:
+	var size: Vector3 = piece["size"]
+	var at: Vector3 = piece["at"]
+	var outer := Vector2(size.x + 2.0 * RIM, size.z + 2.0 * RIM)
+	return {"lv": piece["lv"], "at": Vector3(at.x, at.y - size.y / 2.0 + RIM_LIFT, at.z), "size": outer,
+		"inner": Vector2(size.x / outer.x, size.z / outer.y)}
