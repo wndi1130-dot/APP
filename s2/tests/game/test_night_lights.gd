@@ -127,7 +127,48 @@ func test_the_torch_throws_a_beam_ahead_not_behind_or_aside() -> void:
 
 func test_a_real_town_map_gets_its_night_lights() -> void:
 	var d := FieldMaps.build("houses_01")
-	assert_between(_night_rows(d).size(), 3, NightLights.MOST)
+	# A 4.7 ha town gets more than a small map's six (T0-9: one on screen in three at night before).
+	assert_between(_night_rows(d).size(), NightLights.MOST + 1, NightLights.most_for(d["grid"]))
+
+
+func test_the_most_grows_with_the_map_up_to_twelve() -> void:
+	assert_eq(NightLights.most_for(FieldGrid.new(60, 40)), NightLights.MOST, "a small map keeps six")
+	assert_eq(NightLights.most_for(FieldGrid.new(170, 100)), NightLights.MOST)
+	assert_eq(NightLights.most_for(FieldGrid.new(210, 146)), 7)
+	assert_eq(NightLights.most_for(FieldGrid.new(230, 205)), 11)
+	assert_eq(NightLights.most_for(FieldGrid.new(400, 400)), NightLights.MOST_BIG)
+
+
+## A wide yard with a train along the top: drums in a row near the train and
+## one alone in the ring round the stop.
+func _yard(w: int, h: int, near: Array, ring: Vector2i, place: String) -> Dictionary:
+	var g := FieldGrid.new(w, h)
+	var props := []
+	for c: Vector2i in near + [ring]:
+		props.append({"kind": "barrel", "rect": Rect2i(c, Vector2i.ONE), "level": 0})
+		g.set_solid(c, S.BLOCK)
+	return {"grid": g, "props": props, "buildings": [], "lights": [], "place_id": place, "train": Rect2i(0, 0, w, 2)}
+
+
+func test_a_drum_in_the_ring_round_the_stop_goes_first() -> void:
+	var near := [Vector2i(5, 15), Vector2i(17, 15), Vector2i(29, 15), Vector2i(41, 15), Vector2i(53, 15)]
+	var ring := Vector2i(65, 45)   # 44 m from the train
+	for place in ["a", "b", "c", "d", "e", "f"]:
+		var d := _yard(80, 80, near, ring, place)
+		NightLights.plan(d)
+		var rows := _night_rows(d)
+		assert_eq(rows.size(), int(NightLights.MOST_OF["barrel_fire"]), "a small map: two drums")
+		assert_true(_has_cell(rows, ring), "%s: the drum in the ring is lit" % place)
+
+
+func test_a_big_map_lights_more_of_a_kind() -> void:
+	var near: Array = []
+	for i in 8:
+		near.append(Vector2i(10 + i * 25, 120))
+	var d := _yard(240, 210, near, Vector2i(120, 40), "big")
+	NightLights.plan(d)
+	# 5 ha: twelve at most, a drum's two grow to four.
+	assert_eq(_night_rows(d).size(), 4)
 
 
 func test_the_view_lights_them_at_dusk_only() -> void:

@@ -2,8 +2,10 @@ extends RefCounted
 ## Lights people left in a town at night (decision 471 B4): a fire in a drum,
 ## a campfire by a woodpile, a candle in a window, a car's headlights with
 ## battery left. Three to six a map, spread out, chosen from what the map
-## already has, so the dark has a few warm places to steer by. A map whose own
-## light rows already name one of these kinds keeps its own and gets none.
+## already has, so the dark has a few warm places to steer by; a big map gets
+## more, by its area. A couple go first in the ring round the stop the first
+## screen looks at. A map whose own light rows already name one of these kinds
+## keeps its own and gets none.
 ## A map marked no_fire gets no fires. No smoke anywhere: a flame is a glow.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -22,6 +24,16 @@ const LIGHT: Dictionary = {
 }
 const MOST_OF: Dictionary = {"campfire": 1, "barrel_fire": 2, "headlights": 1, "candle": 2}
 const MOST := 6
+## A big map gets a share of six per this much ground (m², a cell a metre), up to
+## MOST_BIG: a 5 ha town's six lights left one on screen in three at night
+## (T0-9, mood 10-30). Each kind's own most grows with it.
+const AREA_PER_MOST := 25000.0
+const MOST_BIG := 12
+## The ring round the stop (metres from the train) where at most RING_MOST go
+## first, so the first screen at night has a warm place or two; the rest spread.
+const RING_NEAR := 30.0
+const RING_FAR := 60.0
+const RING_MOST := 2
 const SPREAD := 10.0   # cells at least between two of them
 const TRAIN_GAP := 6   # cells kept clear of the train (it has its own lights)
 const ON_MIN := 890    # they show as the light goes (decision 210)
@@ -47,13 +59,31 @@ static func plan(data: Dictionary) -> int:
 			pools.erase(kind)
 	for kind: String in pools:
 		_shuffle(pools[kind], rng)
+	var most := most_for(grid)
+	var cap := {}
+	for kind: String in KINDS:
+		cap[kind] = ceili(float(MOST_OF[kind]) * most / MOST)
 	var picked: Array = []
 	var took: Dictionary = {}
+	for kind: String in KINDS:
+		if picked.size() >= RING_MOST:
+			break
+		if not pools.has(kind):
+			continue
+		var pool: Array = pools[kind]
+		for i in range(pool.size() - 1, -1, -1):
+			var row: Dictionary = pool[i]
+			if _in_ring(data, row["cell"]) and _far(picked, row["cell"]):
+				row["kind"] = kind
+				picked.append(row)
+				took[kind] = 1
+				pool.remove_at(i)
+				break
 	var more := true
-	while more and picked.size() < MOST:
+	while more and picked.size() < most:
 		more = false
 		for kind: String in KINDS:
-			if not pools.has(kind) or int(took.get(kind, 0)) >= int(MOST_OF[kind]) or picked.size() >= MOST:
+			if not pools.has(kind) or int(took.get(kind, 0)) >= int(cap[kind]) or picked.size() >= most:
 				continue
 			var pool: Array = pools[kind]
 			while not pool.is_empty():
@@ -78,6 +108,23 @@ static func plan(data: Dictionary) -> int:
 static func replan(data: Dictionary) -> int:
 	data["lights"] = (data["lights"] as Array).filter(func(l: Dictionary) -> bool: return not String(l.get("id", "")).begins_with("night_"))
 	return plan(data)
+
+
+## How many lights a map of this size may get.
+static func most_for(grid: FieldGrid) -> int:
+	return clampi(roundi(grid.width * grid.height / AREA_PER_MOST * MOST), MOST, MOST_BIG)
+
+
+## In the ring round the stop: this far from the train's nearest cell.
+static func _in_ring(data: Dictionary, c: Vector2i) -> bool:
+	var train: Variant = data.get("train")
+	if not (train is Rect2i):
+		return false
+	var r := train as Rect2i
+	var dx := maxi(maxi(r.position.x - c.x, 0), c.x - (r.end.x - 1))
+	var dy := maxi(maxi(r.position.y - c.y, 0), c.y - (r.end.y - 1))
+	var d := Vector2(dx, dy).length()
+	return d >= RING_NEAR and d <= RING_FAR
 
 
 ## Open ground out of doors, clear of the train.
