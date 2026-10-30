@@ -6,6 +6,8 @@ const StopGround = preload("res://game/world/stop_ground.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
+const MapShift = preload("res://game/world/map_shift.gd")
+const MapView = preload("res://game/world/map_view.gd")
 const PLACES: Array[String] = ["houses_01", "freight_01"]
 static var _built: Dictionary = {}
 
@@ -276,7 +278,7 @@ func test_work_spots_can_dress_an_edge() -> void:
 		assert_eq(field.size(), g.width * g.height)
 
 
-func test_edge_is_idempotent_and_unknown_or_unbuilt_forms_only_warn() -> void:
+func test_edge_is_idempotent_and_unknown_or_changed_forms_only_warn() -> void:
 	for place: String in PLACES:
 		var now: Dictionary = _edge(place)
 		var train: Rect2i = now["train"]
@@ -288,7 +290,7 @@ func test_edge_is_idempotent_and_unknown_or_unbuilt_forms_only_warn() -> void:
 		var was: Dictionary = _map(place)
 		var keys: Array = was.keys()
 		assert_true(is_same(StopGround.apply(was, "unknown", 71), was))
-		assert_true(is_same(StopGround.apply(was, "remote", 71), was))
+		assert_true(is_same(StopGround.apply(now, "remote", 71), now))
 		assert_eq(was.keys(), keys)
 	# Three warnings a map: the count runs over the whole test.
 	assert_push_warning_count(3 * PLACES.size())
@@ -513,3 +515,280 @@ func test_edge_paths_are_a_full_refresh_on_every_floor() -> void:
 			var kept := _paths_of(g)
 			g.refresh_paths()
 			assert_eq(kept, _paths_of(g), "%s level %d" % [place, lv])
+
+
+
+## The existing hand map, moved down so both sides of the strip have deep forest.
+## Its continued road is row 45, its train rows 60..62; row 46 is walled at the edge.
+func _remote_fixture(to_right: bool) -> Dictionary:
+	var key: String = "remote_fixture:%s" % to_right
+	if not _built.has(key):
+		var was: Dictionary = MapShift.shift_rows(_small_map(to_right, 80), 40)
+		var g: FieldGrid = was["grid"]
+		for lv: int in [-1, 1]:
+			var other: FieldGrid = FieldGrid.new(g.width, g.height)
+			other.solid.fill(FieldGrid.Solid.AIR if lv > 0 else FieldGrid.Solid.BLOCK)
+			other.refresh_paths()
+			was["levels"][lv] = other
+		_built[key] = {"was": was, "now": StopGround.apply(was, "remote", 71, 600.0)}
+	return _built[key]
+
+
+func _added_ground(was: Dictionary, now: Dictionary) -> Rect2i:
+	var old: FieldGrid = was["grid"]
+	var g: FieldGrid = now["grid"]
+	var offset: Vector2i = _shift(was, now)
+	return Rect2i(0 if offset.x > 0 else old.width, 0, g.width - old.width, g.height)
+
+
+func _in_forest(data: Dictionary, cell: Vector2i) -> bool:
+	for rect: Rect2i in data.get("deep_forest", []):
+		if rect.has_point(cell):
+			return true
+	return false
+
+
+func _check_remote_village(now: Dictionary, label: String) -> void:
+	var g: FieldGrid = now["grid"]
+	var cell: Vector2i = now["village_middle"]
+	var field: PackedInt32Array = WorkSpots.walk_field(now, 1000.0)
+	assert_between(float(now["walk_to_village_m"]), 0.0, 1000.0, label)
+	assert_lt(g.building_at(cell), 0, label + ": outdoors")
+	assert_gte(field[g.index(cell)], 0, label + ": reached from the doors")
+	assert_eq(float(now["walk_to_village_m"]), float(field[g.index(cell)]) / float(WorkSpots.STEP), label)
+	var reached: bool = false
+	for doors: Array in now["train_doors"].values():
+		for door: Vector2i in doors:
+			if g.people_can_walk(door) and not g.people_path.get_id_path(door, cell).is_empty():
+				reached = true
+	assert_true(reached, label + ": the people's path also reaches the village")
+
+
+func test_remote_seeded_distances_and_walks_stay_in_range() -> void:
+	for place: String in PLACES:
+		for seed_value: int in [1, 8, 73, 1009]:
+			var now: Dictionary = StopGround.apply(_map(place), "remote", seed_value)
+			var label: String = "%s seed %d" % [place, seed_value]
+			var distance: float = _center(now["train"]).distance_to(StopGround.village_middle(now))
+			assert_between(distance, 400.0, 800.0, label)
+			assert_between(float(now["walk_to_village_m"]), 0.0, 1000.0, label)
+			assert_eq(now["stop_form"], "remote", label)
+
+
+func test_remote_target_distance_and_seed_repeat() -> void:
+	var was: Dictionary = _map("houses_01")
+	var first: Dictionary = StopGround.apply(was, "remote", 71, 600.0)
+	var again: Dictionary = StopGround.apply(was, "remote", 71, 600.0)
+	assert_between(_center(first["train"]).distance_to(StopGround.village_middle(first)), 599.0, 601.0)
+	assert_eq(first["train"], again["train"])
+	assert_eq(first["trees"], again["trees"])
+	assert_eq(first["props"], again["props"])
+	assert_eq(first["deep_forest"], again["deep_forest"])
+	assert_eq(first["grid"].solid, again["grid"].solid)
+	assert_eq(first["grid"].floor, again["grid"].floor)
+	_check_remote_village(first, "600 m")
+
+
+func test_remote_forest_blocks_both_walkers_and_preserves_other_floors() -> void:
+	for to_right: bool in [false, true]:
+		var fixture: Dictionary = _remote_fixture(to_right)
+		var was: Dictionary = fixture["was"]
+		var now: Dictionary = fixture["now"]
+		var g: FieldGrid = now["grid"]
+		var upper: FieldGrid = now["levels"][1]
+		var lower: FieldGrid = now["levels"][-1]
+		var added: Rect2i = _added_ground(was, now)
+		# Road row 45 minus 24, through the train's exclusive end 63 plus 24.
+		var strip: Rect2i = Rect2i(added.position.x, 21, added.size.x, 66)
+		var expected: Array[Rect2i] = [
+			Rect2i(added.position.x, 0, added.size.x, 21),
+			Rect2i(added.position.x, 87, added.size.x, g.height - 87)]
+		assert_eq(now["deep_forest"], expected)
+		var closed: bool = true
+		var cached: bool = true
+		var covered: bool = true
+		var other_floors: bool = true
+		var forest_cells: int = 0
+		for y: int in range(added.position.y, added.end.y):
+			for x: int in range(added.position.x, added.end.x):
+				var c: Vector2i = Vector2i(x, y)
+				covered = covered and _in_forest(now, c) == (not strip.has_point(c))
+				other_floors = other_floors and upper.solid_at(c) == FieldGrid.Solid.AIR and lower.solid_at(c) == FieldGrid.Solid.BLOCK
+				if strip.has_point(c):
+					continue
+				forest_cells += 1
+				var i: int = g.index(c)
+				closed = closed and g.solid_at(c) == FieldGrid.Solid.BLOCK and g.floor_at(c) == FieldGrid.Floor.SNOW and g.building_at(c) == -1
+				closed = closed and not g.people_can_walk(c) and not g.dead_can_walk(c)
+				cached = cached and g.walk_people[i] == 0 and g.walk_dead[i] == 0 and g.opq[i] == 1
+				cached = cached and g.people_path.is_point_solid(c) and g.dead_path.is_point_solid(c)
+		assert_gt(forest_cells, 0)
+		assert_true(closed, "every cell outside the strip blocks both walkers")
+		assert_true(cached, "both walk caches, both paths and sight agree with the forest")
+		assert_true(covered, "forest rectangles cover exactly the added ground outside the strip")
+		assert_true(other_floors, "grow's air above and rock below stay intact")
+
+
+func test_remote_open_rows_join_the_old_map_and_doors_reach_village() -> void:
+	for to_right: bool in [false, true]:
+		var fixture: Dictionary = _remote_fixture(to_right)
+		var was: Dictionary = fixture["was"]
+		var now: Dictionary = fixture["now"]
+		var old: FieldGrid = was["grid"]
+		var g: FieldGrid = now["grid"]
+		var added: Rect2i = _added_ground(was, now)
+		var train: Rect2i = now["train"]
+		var edge_x: int = old.width - 1 if to_right else 0
+		var offset: Vector2i = _shift(was, now)
+		var joined: bool = true
+		for y: int in [45, 60, 61, 62]:
+			var floor_kind: int = old.floor_at(Vector2i(edge_x, y))
+			var join: Vector2i = Vector2i(edge_x, y) + offset
+			joined = joined and g.floor_at(join) == floor_kind and g.people_can_walk(join)
+			for x: int in range(added.position.x, added.end.x):
+				var c: Vector2i = Vector2i(x, y)
+				joined = joined and g.floor_at(c) == floor_kind
+				if not train.has_point(c):
+					joined = joined and g.people_can_walk(c) and g.dead_can_walk(c)
+		assert_true(joined, "every continued rail and road row joins the old map")
+		assert_eq(g.floor_at(Vector2i(added.position.x, 46)), FieldGrid.Floor.SNOW, "a walled road row is not continued")
+		_check_remote_village(now, "right" if to_right else "left")
+		var cell_center: Vector2 = Vector2(now["village_middle"]) + Vector2.ONE * 0.5
+		assert_lte(cell_center.distance_to(StopGround.village_middle(now)), 1.0, "the doors reach the village itself")
+
+
+func test_remote_trees_are_sparse_inside_and_dense_only_at_forest_edge() -> void:
+	for to_right: bool in [false, true]:
+		var fixture: Dictionary = _remote_fixture(to_right)
+		var now: Dictionary = fixture["now"]
+		var added: Rect2i = _added_ground(fixture["was"], now)
+		var strip: Rect2i = Rect2i(added.position.x, 21, added.size.x, 66)
+		var tree_props: Dictionary = {}
+		var dense_rows: Dictionary = {}
+		for prop: Dictionary in now["props"]:
+			var rect: Rect2i = prop["rect"]
+			if added.has_point(rect.position):
+				tree_props[rect.position] = prop
+		var sparse: int = 0
+		var dense: int = 0
+		var placed: bool = true
+		var shallow: bool = true
+		for c: Vector2i in now["trees"]:
+			placed = placed and added.has_point(c) and tree_props.has(c)
+			if not tree_props.has(c):
+				continue
+			var prop: Dictionary = tree_props[c]
+			placed = placed and prop["rect"] == Rect2i(c, Vector2i.ONE) and int(prop["level"]) == 0
+			if strip.has_point(c):
+				sparse += 1
+				placed = placed and prop["kind"] == "bare_tree"
+			else:
+				dense += 1
+				var depth: int = strip.position.y - c.y if c.y < strip.position.y else c.y - strip.end.y + 1
+				shallow = shallow and _in_forest(now, c) and depth >= 1 and depth <= 6
+				placed = placed and prop["kind"] == "spruce"
+				if not dense_rows.has(c.y):
+					dense_rows[c.y] = []
+				(dense_rows[c.y] as Array).append(c.x)
+		assert_gt(sparse, 0, "the open strip keeps sparse trees")
+		assert_gt(dense, 0, "the forest edge has dense spruce")
+		assert_true(placed, "every new tree has a one-cell ground prop of the existing tree kind")
+		assert_true(shallow, "no tree is drawn beyond the first six metres of deep forest")
+		for rect: Rect2i in now["deep_forest"]:
+			var rows: Array[int] = []
+			for y: int in dense_rows:
+				if y >= rect.position.y and y < rect.end.y:
+					rows.append(y)
+			rows.sort()
+			assert_gte(rows.size(), 2, "each forest edge has at least two dense rows")
+			for i: int in range(1, rows.size()):
+				assert_between(rows[i] - rows[i - 1], 2, 3, "dense row spacing")
+		for row: Array in dense_rows.values():
+			row.sort()
+			assert_between(int(row[0]) - added.position.x, 0, 2, "seeded row start")
+			assert_between(added.end.x - 1 - int(row[-1]), 0, 2, "trees reach the far end")
+			for i: int in range(1, row.size()):
+				assert_between(int(row[i]) - int(row[i - 1]), 2, 3, "dense tree spacing")
+
+
+func test_remote_is_idempotent() -> void:
+	for to_right: bool in [false, true]:
+		var now: Dictionary = _remote_fixture(to_right)["now"]
+		var g: FieldGrid = now["grid"]
+		var train: Rect2i = now["train"]
+		var keys: Array = now.keys()
+		var trees: Array = now["trees"].duplicate()
+		var forest: Array = now["deep_forest"].duplicate()
+		var walk: float = float(now["walk_to_village_m"])
+		assert_eq(now["stop_form"], "remote")
+		assert_true(is_same(StopGround.apply(now, "remote", 999, 450.0), now))
+		assert_true(is_same(now["grid"], g))
+		assert_eq(now["train"], train)
+		assert_eq(now.keys(), keys)
+		assert_eq(now["trees"], trees)
+		assert_eq(now["deep_forest"], forest)
+		assert_eq(float(now["walk_to_village_m"]), walk)
+
+
+func test_remote_nearer_than_the_village_row_warns_and_stays_city() -> void:
+	var was: Dictionary = _small_map(true, 500, 450)
+	var g: FieldGrid = was["grid"]
+	var train: Rect2i = was["train"]
+	var gap: float = absf(_center(train).y - StopGround.village_middle(was).y)
+	assert_gt(gap, 400.0)
+	assert_true(is_same(StopGround.apply(was, "remote", 71, gap - 1.0), was))
+	assert_true(is_same(was["grid"], g))
+	assert_eq(was["train"], train)
+	assert_eq(was["stop_form"], "city")
+	assert_eq(was["stop_form_asked"], "remote")
+	assert_push_warning_count(1)
+
+
+func test_remote_walk_limit_reaches_village_at_eight_hundred_meters() -> void:
+	var now: Dictionary = StopGround.apply(_small_map(true), "remote", 71, 800.0)
+	_check_remote_village(now, "800 m")
+	assert_gt(float(now["walk_to_village_m"]), 600.0)
+	var cell_center: Vector2 = Vector2(now["village_middle"]) + Vector2.ONE * 0.5
+	assert_lte(cell_center.distance_to(StopGround.village_middle(now)), 1.0)
+
+
+func test_deep_forest_rectangles_are_skipped_by_outdoor_block_runs() -> void:
+	var data: Dictionary = _small_map(true, 80)
+	var g: FieldGrid = data["grid"]
+	var forest: Rect2i = Rect2i(2, 40, 5, 4)
+	var ordinary: Vector2i = Vector2i(10, 40)
+	for y: int in range(forest.position.y, forest.end.y):
+		for x: int in range(forest.position.x, forest.end.x):
+			g.set_solid(Vector2i(x, y), FieldGrid.Solid.BLOCK)
+	g.set_solid(ordinary, FieldGrid.Solid.BLOCK)
+	data["deep_forest"] = [forest]
+	var skipped: bool = true
+	var kept: bool = false
+	for run: Rect2i in MapView.outdoor_block_runs(g, data):
+		skipped = skipped and not run.intersects(forest)
+		kept = kept or run.has_point(ordinary)
+	assert_true(skipped, "deep forest does not become outdoor block boxes")
+	assert_true(kept, "ordinary outdoor blocks still draw")
+	data.erase("deep_forest")
+	var visible: bool = false
+	for run: Rect2i in MapView.outdoor_block_runs(g, data):
+		visible = visible or run.intersects(forest)
+	assert_true(visible, "maps without deep forest keep their block boxes")
+
+
+func test_city_edge_and_siding_do_not_gain_deep_forest() -> void:
+	for form: String in ["city", "edge", "siding"]:
+		var was: Dictionary = _small_map(true)
+		var g: FieldGrid = was["grid"]
+		var train: Rect2i = was["train"]
+		var solid: PackedByteArray = g.solid.duplicate()
+		var floor: PackedByteArray = g.floor.duplicate()
+		var now: Dictionary = StopGround.apply(was, form, 71, 200.0)
+		assert_false(now.has("deep_forest"), form)
+		assert_eq(now["stop_form"], form)
+		if form != "edge":
+			assert_true(is_same(now, was), form)
+			assert_true(is_same(now["grid"], g), form)
+			assert_eq(now["train"], train, form)
+			assert_eq(g.solid, solid, form)
+			assert_eq(g.floor, floor, form)

@@ -8,12 +8,14 @@ const MapShift = preload("res://game/world/map_shift.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const END_GAP: int = 12
 const TREE_STEP: int = 9
+const REMOTE_BAND: int = 24
+const REMOTE_FOREST_EDGE: int = 6
 ## Anchors the train carries. One the map set itself moves with the train; one worked
 ## out from the train is worked out again.
 const TRAIN_ANCHORS: Array[String] = ["horde_home", "horde_home_upper", "whistle", "engine"]
 ## The lights the train gives itself (the maps' cars and cab).
 const TRAIN_LIGHTS: Array[String] = ["car_window", "firebox"]
-## A siding's work yard is its map, as it is; a remote halt's ground is not built yet.
+## A siding's work yard is its map, as it is.
 const FORMS: Array[String] = ["city", "edge", "remote", "siding"]
 
 
@@ -23,22 +25,22 @@ static func apply(data: Dictionary, form: String, run_seed: int, target_m: float
 	if form not in FORMS:
 		push_warning("unknown stop form '%s'" % form)
 		return data
-	if form == "remote":
-		push_warning("stop form remote: its ground is not built yet, the map stands as it is")
-		return data
 	if String(data.get("stop_form", "")) == "edge":
 		push_warning("stop form %s: the map already stands as an edge stop" % form)
 		return data
+	if String(data.get("stop_form", "")) == "remote":
+		push_warning("stop form %s: the map already stands as a remote stop" % form)
+		return data
 	var out: Dictionary = data
-	if form == "edge":
+	if form in ["edge", "remote"]:
 		# The train keeps its row, so it can stand no nearer than the village's row.
 		if target_m >= 0.0 and target_m < absf(_row_gap(data)):
-			push_warning("stop form edge: %.0f m is nearer than the village's row, the stop stays a city one" % target_m)
+			push_warning("stop form %s: %.0f m is nearer than the village's row, the stop stays a city one" % [form, target_m])
 			# What was asked, so the loader's map and the field's agree it is done (FieldGame.shape_stop).
 			data["stop_form_asked"] = form
 			form = "city"
 		else:
-			out = _edge(data, run_seed, target_m)
+			out = _edge(data, run_seed, target_m) if form == "edge" else _outlying(data, run_seed, target_m, 400.0, 800.0, REMOTE_BAND)
 	_set_village(out, form)
 	return out
 
@@ -63,6 +65,11 @@ static func _row_gap(data: Dictionary) -> float:
 
 
 static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionary:
+	return _outlying(data, run_seed, target_m, 150.0, 300.0)
+
+
+## The same seeded train move for both outlying forms; only remote ground is narrowed.
+static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_m: float, maximum_m: float, band: int = 0) -> Dictionary:
 	var old: FieldGrid = data["grid"]
 	var train: Rect2i = data["train"]
 	var middle: Vector2 = village_middle(data)
@@ -71,10 +78,10 @@ static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionar
 	rng.seed = hash("%d:stop_form:%s" % [run_seed, String(data.get("place_id", ""))])
 	var dy: float = center.y - middle.y
 	# A seeded walk-off is never nearer than the village's row either.
-	var lowest: float = maxf(150.0, absf(dy) + 1.0)
-	var highest: float = maxf(lowest, 300.0)
-	if target_m < 0.0 and lowest > 300.0:
-		push_warning("stop form edge: the village's row is %.0f m off the train's" % absf(dy))
+	var lowest: float = maxf(minimum_m, absf(dy) + 1.0)
+	var highest: float = maxf(lowest, maximum_m)
+	if target_m < 0.0 and lowest > maximum_m:
+		push_warning("stop form %s: the village's row is %.0f m off the train's" % ["remote" if band > 0 else "edge", absf(dy)])
 	var distance: float = target_m if target_m >= 0.0 else rng.randf_range(lowest, highest)
 	var direction: int = 1 if middle.x <= center.x else -1
 	var along: float = sqrt(maxf(0.0, distance * distance - dy * dy))
@@ -114,7 +121,12 @@ static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionar
 	_extend_ground(g, old, added, 0 if left > 0 else old.width - 1)
 	var moved_out: Dictionary = _move_entries_out(out, old_border, new_border)
 	var floored: Array = _move_train(out, Vector2i(dx, 0))
-	_add_trees(out, added, rng)
+	if band > 0:
+		var strip: Rect2i = _remote_band(out, old, added, 0 if left > 0 else old.width - 1, band)
+		_add_trees(out, strip, rng)
+		_add_forest_trees(out, strip, rng)
+	else:
+		_add_trees(out, added, rng)
 	# The old and new footprints, the trees and the platform's moved floor.
 	var was_at: Rect2i = Rect2i((data["train"] as Rect2i).position + Vector2i(left, 0), (data["train"] as Rect2i).size)
 	for c: Vector2i in _cells(was_at) + _cells(out["train"]) + out["trees"] + floored:
@@ -150,6 +162,66 @@ static func _cells(r: Rect2i) -> Array:
 		for x: int in range(r.position.x, r.end.x):
 			out.append(Vector2i(x, y))
 	return out
+
+
+## All continued rail and road rows, plus the train, share one open strip. Only the
+## added ground outside it becomes forest; grow's other floors stay as they were.
+static func _remote_band(data: Dictionary, old: FieldGrid, added: Rect2i, edge_x: int, band: int) -> Rect2i:
+	var g: FieldGrid = data["grid"]
+	var train: Rect2i = data["train"]
+	var top: int = train.position.y
+	var bottom: int = train.end.y
+	for y: int in range(old.height):
+		var edge: Vector2i = Vector2i(edge_x, y)
+		if old.solid_at(edge) == FieldGrid.Solid.NONE and old.floor_at(edge) in [FieldGrid.Floor.RAIL, FieldGrid.Floor.ROAD]:
+			top = mini(top, y)
+			bottom = maxi(bottom, y + 1)
+	top = maxi(added.position.y, top - band)
+	bottom = mini(added.end.y, bottom + band)
+	var strip: Rect2i = Rect2i(added.position.x, top, added.size.x, bottom - top)
+	var forest: Array[Rect2i] = []
+	if top > added.position.y:
+		forest.append(Rect2i(added.position, Vector2i(added.size.x, top - added.position.y)))
+	if bottom < added.end.y:
+		forest.append(Rect2i(added.position.x, bottom, added.size.x, added.end.y - bottom))
+	data["deep_forest"] = forest
+	for rect: Rect2i in forest:
+		for y: int in range(rect.position.y, rect.end.y):
+			for x: int in range(rect.position.x, rect.end.x):
+				var i: int = y * g.width + x
+				g.solid[i] = FieldGrid.Solid.BLOCK
+				g.floor[i] = FieldGrid.Floor.SNOW
+				g.building[i] = -1
+				g.opq[i] = 1
+				g.walk_people[i] = 0
+				g.walk_dead[i] = 0
+		# These cells all changed the same way: keep both paths in step in one call.
+		g.people_path.fill_solid_region(rect, true)
+		g.dead_path.fill_solid_region(rect, true)
+		g.revision += 1
+	return strip
+
+
+## Only the first six metres of blocked forest carry trees, two or three cells apart.
+## Spruce is the existing field-tree model (PropKinds.candidates).
+static func _add_forest_trees(data: Dictionary, strip: Rect2i, rng: RandomNumberGenerator) -> void:
+	var trees: Array = data.get("trees", [])
+	var props: Array = data.get("props", [])
+	for rect: Rect2i in data.get("deep_forest", []):
+		var above: bool = rect.end.y == strip.position.y
+		var depth: int = mini(REMOTE_FOREST_EDGE, rect.size.y)
+		var row: int = rng.randi_range(0, 1)
+		while row < depth:
+			var y: int = rect.end.y - 1 - row if above else rect.position.y + row
+			var x: int = rect.position.x + rng.randi_range(0, 2)
+			while x < rect.end.x:
+				var c: Vector2i = Vector2i(x, y)
+				trees.append(c)
+				props.append({"kind": "spruce", "rect": Rect2i(c, Vector2i.ONE), "facing": rng.randi_range(0, 3), "level": 0})
+				x += rng.randi_range(2, 3)
+			row += rng.randi_range(2, 3)
+	data["trees"] = trees
+	data["props"] = props
 
 
 static func _extend_ground(g: FieldGrid, old: FieldGrid, added: Rect2i, edge_x: int) -> void:
@@ -308,12 +380,13 @@ static func _tree_clear(data: Dictionary, added: Rect2i, c: Vector2i, rail_rows:
 
 ## The keys other strands read: the form, the village's cell and the walk there from the
 ## train doors. The cell is the outdoor one nearest the buildings' middle that the doors
-## reach on foot within 600 m (the middle itself often falls in a big hall or a locked
+## reach on foot within the form's limit (the middle often falls in a hall or a locked
 ## yard); with none, the middle's own cell and -1 m.
 static func _set_village(data: Dictionary, form: String) -> void:
 	var g: FieldGrid = data["grid"]
 	var middle: Vector2 = village_middle(data)
-	var field: PackedInt32Array = WorkSpots.walk_field(data, 600.0)
+	var limit_m: float = 1000.0 if form == "remote" else 600.0
+	var field: PackedInt32Array = WorkSpots.walk_field(data, limit_m)
 	var best: Vector2i = Vector2i(-1, -1)
 	var best_d: float = INF
 	for y: int in range(g.height):
