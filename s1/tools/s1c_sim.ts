@@ -9,7 +9,7 @@
 import { writeFileSync } from 'node:fs';
 import { BUDGET, CL, CREW, D, DRAW, DZ, LOCO_IDS, TRAVEL_EVENTS, useSeasonAct } from '../src/game';
 import type { CrewCost, CrewCurve, CrewHaul, LawId, LocoId, SeasonAct, TechId, Variant } from '../src/game';
-import { playGame } from './s1c_bot';
+import { NEW_GAME_FLAGS, playGame } from './s1c_bot';
 import type { BotOptions, CrewPolicy, GameMetrics } from './s1c_bot';
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'));
@@ -50,8 +50,10 @@ if (actFlag) useSeasonAct(actFlag);
 const deathW = flags.includes('--death');
 const arrivals = flags.includes('--arrivals');
 const noLevers = flags.includes('--nolevers');
-// --climate-levers: 돌봄 봇이 기온을 읽는 레버 규칙을 쓴다(결정 384 재기, s1c_bot.ts climateLevers).
-const climateLevers = flags.includes('--climate-levers');
+// --climate-levers / --no-climate-levers: 기온을 읽는 레버 규칙을 켜거나 끈다(결정 384).
+// 결정 100의 새 자는 기본 켬. 옛 자와 다른 실행은 기존 기본값을 유지한다.
+if (flags.includes('--climate-levers') && flags.includes('--no-climate-levers')) throw new Error('기온 레버 켬/끔을 함께 지정할 수 없다');
+const climateLevers = flags.includes('--no-climate-levers') ? false : flags.includes('--climate-levers') ? true : undefined;
 // --push=법id: 돌봄 봇이 그 법을 안건에 오를 때마다 고른다(결정 091 '이 법을 늘 통과시키는 길' 재기)
 const pushLaw = flags.find(x => x.startsWith('--push='))?.slice(7) as LawId | undefined;
 const gearFlag = flags.find(x => x.startsWith('--gear='))?.slice(7);
@@ -94,10 +96,11 @@ if (locoFlag && !LOCO_IDS.includes(locoFlag)) throw new Error(`--loco는 ${LOCO_
 
 const RUNS: { name: string; opts: BotOptions }[] = [
   { name: 'S1a caretaker', opts: { s1c: false, policy: 'caretaker', dom: 'idle' } },
-  { name: 'S1a+S1c caretaker engaged', opts: { s1c: true, policy: 'caretaker', dom: 'engaged' } },
+  { name: 'S1a+S1c caretaker engaged', opts: { s1c: true, policy: 'caretaker', dom: 'engaged', ...NEW_GAME_FLAGS, climateLevers: true } },
   { name: 'S1a+S1c caretaker idle', opts: { s1c: true, policy: 'caretaker', dom: 'idle' } },
   { name: 'S1a first', opts: { s1c: false, policy: 'first', dom: 'idle' } },
-  { name: 'S1a+S1c first engaged', opts: { s1c: true, policy: 'first', dom: 'engaged' } },
+  { name: 'S1a+S1c first engaged', opts: { s1c: true, policy: 'first', dom: 'engaged', ...NEW_GAME_FLAGS } },
+  { name: 'S1a+S1c caretaker engaged (옛 자: 깃발 없음)', opts: { s1c: true, policy: 'caretaker', dom: 'engaged' } },
 ];
 
 const mean = (xs: number[]) => xs.reduce((s, x) => s + x, 0) / Math.max(1, xs.length);
@@ -158,9 +161,13 @@ function summarizeCrew(ms: GameMetrics[]) {
   };
 }
 
-function summarize(ms: GameMetrics[]) {
+function summarize(ms: GameMetrics[], options: BotOptions) {
   const ends: Record<string, number> = {};
   for (const m of ms) ends[m.end] = (ends[m.end] ?? 0) + 1;
+  const wins = ends.complete ?? 0, rate = wins / ms.length, z = 1.959963984540054;
+  const den = 1 + z * z / ms.length;
+  const center = (rate + z * z / (2 * ms.length)) / den;
+  const half = z * Math.sqrt(rate * (1 - rate) / ms.length + z * z / (4 * ms.length * ms.length)) / den;
   const kinds = new Set(ms.flatMap(m => Object.keys(m.cards)));
   const cardsPerGame = Object.fromEntries([...kinds].sort().map(k => [k, +mean(ms.map(m => m.cards[k] ?? 0)).toFixed(2)]));
   const dom = ms[0]?.dom ? Object.fromEntries((Object.keys(ms[0].dom!) as (keyof NonNullable<GameMetrics['dom']>)[])
@@ -169,6 +176,9 @@ function summarize(ms: GameMetrics[]) {
   for (const m of ms) for (const t of m.dom?.techs ?? []) techFreq[t] = (techFreq[t] ?? 0) + 1;
   return {
     games: ms.length,
+    options, // 이 실행의 실제 옵션. 맨 위 climate/disasters 등은 CLI 덮어쓰기 여부다.
+    completion: { wins, rate, wilson95: [center - half, center + half] },
+    endCounts: ends,
     ends: Object.fromEntries(Object.entries(ends).map(([k, v]) => [k, +(v / ms.length).toFixed(3)])),
     coalMin: +mean(ms.map(m => m.coalMin)).toFixed(1),
     foodMin: +mean(ms.map(m => m.foodMin)).toFixed(1),
@@ -243,18 +253,18 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
     ...(deathW ? { deathWeight: true } : {}),
     ...(arrivals ? { arrivals: true } : {}),
     ...(noLevers ? { noLevers: true } : {}),
-    ...(climateLevers ? { climateLevers: true } : {}),
+    ...(climateLevers !== undefined ? { climateLevers } : {}),
     ...(pushLaw ? { pushLaw } : {}),
     ...(locoFlag ? { loco: locoFlag } : {}),
     ...(gearFlag ? { scoutGear: gearFlag !== 'X0', gearTechs: GEAR_SETS[gearFlag] } : {}),
   };
   for (let i = 0; i < N; i += 1) ms.push(playGame(`sim-${i}`, opts).m);
-  out[run.name] = summarize(ms);
+  out[run.name] = summarize(ms, opts);
   // 봇이 5,000걸음 안에 끝을 못 내면 end가 'none'이 되고 완주·좌초 어느 쪽에도 안 잡힌다. 그런 판이 있으면 숨지 않게 알린다.
   const stuck = ms.filter(m => m.end === 'none').length;
   if (stuck) console.warn(`${run.name}: ${stuck}판이 5,000걸음 상한에 걸려 끝나지 않았다(end='none')`);
   const s = out[run.name];
-  console.log(`${run.name.padEnd(28)} 완주 ${(100 * (s.ends.complete ?? 0)).toFixed(0)}% 좌초 ${(100 * (s.ends.stranded ?? 0)).toFixed(0)}% `
+  console.log(`${run.name.padEnd(28)} 완주 ${(100 * s.completion.rate).toFixed(2)}% (${s.completion.wins}/${s.games}, Wilson 95% ${s.completion.wilson95.map(x => (100 * x).toFixed(2)).join('~')}%) 좌초 ${(100 * (s.ends.stranded ?? 0)).toFixed(0)}% `
     + `위기안건 ${s.forcedPerGame} 가혹법 ${s.harshPassed} 법 ${s.lawsPassed} 석탄최저 ${s.coalMin} 식량최저 ${s.foodMin} `
     + `석탄<30 ${s.coalUnder30} 식량<30 ${s.foodUnder30} 죽음 ${s.deaths} S1a카드 ${s.s1aCards} 내정카드 ${s.domCards}(${s.domCardsP10}~${s.domCardsP90})`);
   console.log(`${''.padEnd(28)} 재난(판당) 눈보라 ${s.disasters.blizzard} 한파 ${s.disasters.cold} · 재난사망 ${s.disasterDeaths} · 대비(석탄/모아잠/미룸/그냥) ${s.prep.coal}/${s.prep.huddle}/${s.prep.wait}/${s.prep.none} · 긴장 최고 ${s.tensionMax} 끝 ${s.tensionEnd} · 끝 온기 ${s.warmEnd}`);
