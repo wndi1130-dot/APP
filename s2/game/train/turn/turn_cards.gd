@@ -257,14 +257,14 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 				var cut: Dictionary = choice("", "의무칸에서 자른다", [["med", -3], ["injured", 1]], "bite_cut")
 				if bite.is_empty() or int(g["seg"]) > int(bite["at"]): cut["disabled"] = "감염 창이 닫혔다"
 				var corpse_choices: Array = [cut, choice("", "따로 눕힌다", [["tension", 2]], "bite_isolate"), choice("", "쏜다", [["fear", 3], ["rel", comm, -3]], "bite_shoot", true)]
-				corpse_choices[0]["log"] = "시신에 물린 %s의 물린 곳을 의무칸에서 잘랐다." % card["who"]
-				corpse_choices[1]["log"] = "시신에 물린 %s을(를) 따로 눕혔다." % card["who"]
-				corpse_choices[2]["log"] = "시신에 물린 %s을(를) 쐈다." % card["who"]
+				corpse_choices[0]["log"] = "시신에 물린 %s의 물린 곳을 의무칸에서 잘랐다." % str(card.get("who", "그 사람"))
+				corpse_choices[1]["log"] = "시신에 물린 %s을(를) 따로 눕혔다." % str(card.get("who", "그 사람"))
+				corpse_choices[2]["log"] = "시신에 물린 %s을(를) 쐈다." % str(card.get("who", "그 사람"))
 				return {"title": "시신에게 물렸다", "key": "bite_corpse", "choices": corpse_choices}
 			var bite_choices: Array = [choice("", "따로 눕힌다", [["trust", -5], ["tension", 2]], "bite_isolate"),
 				choice("", "쏜다", [["trust", -5], ["fear", 3], ["rel", comm, -3]], "bite_shoot", true)]
-			bite_choices[0]["log"] = "물림이 드러난 %s을(를) 따로 눕혔다." % card["who"]
-			bite_choices[1]["log"] = "물림이 드러난 %s을(를) 쐈다." % card["who"]
+			bite_choices[0]["log"] = "물림이 드러난 %s을(를) 따로 눕혔다." % str(card.get("who", "대원"))
+			bite_choices[1]["log"] = "물림이 드러난 %s을(를) 쐈다." % str(card.get("who", "대원"))
 			return {"title": "숨긴 물림이 드러났다", "key": "bite_found", "choices": bite_choices}
 		"orphan":
 			# S1 cards.ts orphan (사람의 무게 A1(가)): a parent who left children died. A living other

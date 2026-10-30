@@ -73,7 +73,11 @@
             "description": "카드에 보이는 열차장의 말. 한두 문장. 효과와 비용은 넣지 않는다(2026-10-07 사용자)."
           },
           "log": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40,
+            "pattern": "^[^\\s][^\\r\\n]*$",
+            "description": "고른 뒤 일지에 남는 지난 일 한 줄. 없으면 「제목: 라벨.」이 남는다."
           },
           "why": {
             "type": "string",

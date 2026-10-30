@@ -69,6 +69,15 @@ describe('length and count boundaries', () => {
     event.choices[0].label += '😀';
     expect(errors(event, 'event').map(item => item.path)).toEqual(expect.arrayContaining(['/body', '/choices/0/label']));
   });
+  it('limits a choice log to one non-blank line of 40 characters', () => {
+    const event = fixture('event');
+    event.choices[0].log = '가'.repeat(39) + '.';
+    expect(errors(event, 'event')).toEqual([]);
+    for (const bad of ['', ' 문을 닫았다.', '문을 닫았다.\n불을 껐다.', '가'.repeat(41)]) {
+      event.choices[0].log = bad;
+      expect(errors(event, 'event').map(item => item.path)).toContain('/choices/0/log');
+    }
+  });
   it.each([['character', 'bio', 3], ['secret', 'text', 2], ['event', 'body', 3]] as const)(
     '%s limits %s to %i sentences', (kind, key, max) => {
       const data = fixture(kind);

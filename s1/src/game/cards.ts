@@ -670,10 +670,10 @@ function baseView(g: Game, card: Card): CardView {
         title: '시신에게 물렸다', speaker: leader(g, 'medtech'), focus: c, required: true, key: 'bite_corpse',
         body: `남겨 두었던 시신에게 ${card.who ?? '그 사람'}이(가) 물렸다.`,
         choices: withAfford(g, [
-          { label: '의무칸에서 자른다', log: `시신에 물린 ${card.who}의 물린 곳을 의무칸에서 잘랐다.`, say: '아직 늦지 않았다. 의무칸으로 옮겨 잘라라!', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }], special: 'bite_cut',
+          { label: '의무칸에서 자른다', log: `시신에 물린 ${card.who ?? '그 사람'}의 물린 곳을 의무칸에서 잘랐다.`, say: '아직 늦지 않았다. 의무칸으로 옮겨 잘라라!', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }], special: 'bite_cut',
             ...(canCut ? {} : { disabled: '감염 창이 닫혔다' }) },
-          { label: '따로 눕힌다', log: `시신에 물린 ${card.who}을(를) 따로 눕혔다.`, say: '빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.', effs: [{ t: 'tension', v: 2 }], special: 'bite_isolate' },
-          { label: '쏜다', log: `시신에 물린 ${card.who}을(를) 쐈다.`, say: '일어나기 전에 끝내라. 가족은 뒤로 물려라.', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
+          { label: '따로 눕힌다', log: `시신에 물린 ${card.who ?? '그 사람'}을(를) 따로 눕혔다.`, say: '빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.', effs: [{ t: 'tension', v: 2 }], special: 'bite_isolate' },
+          { label: '쏜다', log: `시신에 물린 ${card.who ?? '그 사람'}을(를) 쐈다.`, say: '일어나기 전에 끝내라. 가족은 뒤로 물려라.', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
         ]),
       };
       // 숨긴 물림은 드러났을 땐 이미 늦어 자를 수 없다(2026-10-08 사용자 아침 목록 17번 '가'). 자르기는 데려오자마자 의무칸에서만 한다.
@@ -681,8 +681,8 @@ function baseView(g: Game, card: Card): CardView {
         title: '숨긴 물림이 드러났다', speaker: leader(g, 'medtech'), focus: c, required: true, key: 'bite_found',
         body: `${card.text ?? ''} ${card.who ?? '대원'}의 붕대 아래가 검게 부었다. 자르기엔 늦었다. 열차장이 숨겨 줬다는 말이 벌써 돈다.`.trim(),
         choices: withAfford(g, [
-          { label: '따로 눕힌다', log: `물림이 드러난 ${card.who}을(를) 따로 눕혔다.`, say: '빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.', effs: [{ t: 'trust', v: -5 }, { t: 'tension', v: 2 }], special: 'bite_isolate' },
-          { label: '쏜다', log: `물림이 드러난 ${card.who}을(를) 쐈다.`, say: '일어나기 전에 끝내라. 내가 숨긴 일이다, 내가 책임진다.', effs: [{ t: 'trust', v: -5 }, { t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
+          { label: '따로 눕힌다', log: `물림이 드러난 ${card.who ?? '대원'}을(를) 따로 눕혔다.`, say: '빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.', effs: [{ t: 'trust', v: -5 }, { t: 'tension', v: 2 }], special: 'bite_isolate' },
+          { label: '쏜다', log: `물림이 드러난 ${card.who ?? '대원'}을(를) 쐈다.`, say: '일어나기 전에 끝내라. 내가 숨긴 일이다, 내가 책임진다.', effs: [{ t: 'trust', v: -5 }, { t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
         ]),
       };
     }
