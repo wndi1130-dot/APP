@@ -244,7 +244,9 @@ for (const run of RUNS.filter(r => !only || r.name.includes(only) || !r.opts.s1c
   const ms: GameMetrics[] = [];
   const opts: BotOptions = {
     ...run.opts,
-    ...(disasters ? { disasters: true, prep: prepFlag as 'auto' | 'never' | 'wait' | 'read' | undefined } : {}),
+    ...(disasters ? { disasters: true } : {}),
+    // 재난이 켜진 실행이면 --prep을 넘긴다(새 자는 깃발로 재난을 켜므로 --disasters 없이도).
+    ...((disasters || run.opts.disasters) && prepFlag ? { prep: prepFlag as 'auto' | 'never' | 'wait' | 'read' } : {}),
     ...(budget ? { budget: true } : {}),
     ...(events ? { eventPack: true } : {}),
     ...(pickRule ? { pickRule: pickRule as 'second' | 'random' } : {}),
