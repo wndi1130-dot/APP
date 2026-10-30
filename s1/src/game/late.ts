@@ -47,14 +47,6 @@ const DEMAND_WORDS: Record<Comm, [string, string]> = {
   front: ['기다려 드렸습니다. 이번엔 답을 주셔야지요.', '두 번 기다려 드렸습니다. 세 번은 어렵겠습니다.'],
   engine: ['미룬 사이에 불이 한 번 꺼질 뻔했다. 답 달라.', '두 번 미뤘다. 불은 안 기다린다. 우리도 이제 안 기다린다.'],
 };
-/** T14 원문(7f5672b6). 꺼진 판의 약속 장부 본문은 그대로 둔다. */
-const LEDGER_SAY: Record<Comm, string> = {
-  tail: '한 번만 더 어겨 봐라. 꼬리칸은 다시는 약속 안 받는다.',
-  medtech: '어긴 게 둘이다. 셋째면 기술·의무진은 약속을 받지 않는다.',
-  guard: '두 번이다. 한 번 더면 경비대는 약속을 안 받는다.',
-  front: '두 번은 넘어갔습니다. 한 번 더 어기시면 앞칸은 약속을 받지 않겠습니다.',
-  engine: '두 번 샜다. 한 번 더 새면 기관실은 약속을 안 받는다.',
-};
 const LATER_SAY: Record<LateKind, string> = {
   demand: '지금은 재고할 문제가 아니다. 다음 회기에 다시 와라.',
   favor: '더 중요한 문제가 있다. 그 부탁은 나중에 듣겠다.',
@@ -84,14 +76,22 @@ function lateBody(g: Game, card: Card, v: CardView, kind: LateKind, late: number
         : (twice ? '두 번 미뤘다. 이번이 마지막으로 묻는 거다.' : '기다렸다. 이번엔 들어 줄 거냐.');
       break;
     case 'promise_ledger': {
+      // 1차례 대표의 말은 본문 끝 따옴표 말(cards.ts LEDGER_SAY) 그대로, 두 번째부터 그 말을 바꾼다.
       const name = g.comms[c].leader.name;
       head = twice ? `${name}${josa(name, '이/가')} 장부를 또 내밀었다.` : `${name}${josa(name, '이/가')} 미뤘던 장부를 다시 내밀었다.`;
-      say = twice ? (c === 'front' ? '이번엔 회기 앞에서 펼치겠습니다.' : '이번엔 회기 앞에서 펼친다.') : LEDGER_SAY[c];
-      break;
+      if (!twice) return `${head} ${v.body}`;
+      say = c === 'front' ? '이번엔 회기 앞에서 펼치겠습니다.' : '이번엔 회기 앞에서 펼친다.';
+      return /"[^\"]*"\s*$/.test(v.body) ? `${head} ${v.body.replace(/"[^\"]*"\s*$/, `"${say}"`)}` : `${head} ${v.body} "${say}"`;
     }
     case 'ration_cut':
-      head = twice ? '두 번 미룬 감축 배급 요구다.' : '미룬 감축 배급 요구다. 꼬리칸 대표가 빈 그릇을 다시 들고 왔다.';
-      say = twice ? '두 번 미뤘다. 우리 칸은 더 줄일 게 없다.' : '기다리라더니 그릇만 더 비었다.';
+      if (twice) {
+        // 두 번째부터는 대표의 말을 본문 첫 따옴표 말 자리에 바꿔 넣는다(요구 카드와 같은 꼴, 120자 안).
+        head = '두 번 미룬 감축 배급 요구다.';
+        say = '두 번 미뤘다. 우리 칸은 더 줄일 게 없다.';
+        return /"[^"]*"/.test(v.body) ? `${head} ${v.body.replace(/"[^"]*"/, `"${say}"`)}` : `${head} ${v.body} "${say}"`;
+      }
+      head = '미룬 감축 배급 요구다. 꼬리칸 대표가 빈 그릇을 다시 들고 왔다.';
+      say = '기다리라더니 그릇만 더 비었다.';
       break;
     case 'front_curtain':
       head = twice ? '두 번 미룬 커튼 일이다.' : '미뤘던 커튼 일이다. 커튼 앞에 모인 사람이 늘었다.';
