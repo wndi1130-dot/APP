@@ -37,6 +37,9 @@ const MOST_BIG := 12
 ## (zoom 24, a phone held wide).
 const FIRST_REACH := 22.0
 const FIRST_MOST := 2
+## The first screen's far corners from where the crew steps down: the rest keep
+## out of it once it holds FIRST_MOST, so the stop never looks dressed.
+const FIRST_SCREEN := 33.0
 const FIRST_KINDS: Array[String] = ["campfire", "barrel_fire", "candle"]
 const SPREAD := 10.0   # cells at least between two of them
 const TRAIN_GAP := 6   # cells kept clear of the train (it has its own lights)
@@ -96,7 +99,7 @@ static func plan(data: Dictionary) -> int:
 			var pool: Array = pools[kind]
 			while not pool.is_empty():
 				var row: Dictionary = pool.pop_back()
-				if _far(picked, row["cell"]):
+				if _far(picked, row["cell"]) and not (_on_first(step, row["cell"]) and _first_full(picked, step)):
 					row["kind"] = kind
 					picked.append(row)
 					took[kind] = int(took.get(kind, 0)) + 1
@@ -125,6 +128,18 @@ static func follow(data: Dictionary) -> void:
 		if String(l.get("id", "")).begins_with("night_"):
 			replan(data)
 			return
+
+
+## Within the first screen round where the crew steps down (none without a squad).
+static func _on_first(step: Vector2, c: Vector2i) -> bool:
+	return step.x >= 0.0 and (Vector2(c) + Vector2(0.5, 0.5)).distance_to(step) <= FIRST_SCREEN
+
+
+static func _first_full(picked: Array, step: Vector2) -> bool:
+	var n := 0
+	for row: Dictionary in picked:
+		n += 1 if _on_first(step, row["cell"]) else 0
+	return n >= FIRST_MOST
 
 
 ## How many go first on the first screen: none to FIRST_MOST, by the map's own dice.

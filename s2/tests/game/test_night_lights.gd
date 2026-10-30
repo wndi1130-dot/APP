@@ -170,6 +170,21 @@ func test_the_first_screen_gets_none_to_two_as_the_map_dice_fall() -> void:
 	assert_true(counts.has(0) and counts.size() > 1, "some first screens dark, some lit: %s" % str(counts.keys()))
 
 
+func test_the_first_screen_never_holds_more_than_two() -> void:
+	# A big yard (most twelve, four drums) with five drums round where the crew steps down.
+	var near := [Vector2i(30, 16), Vector2i(52, 14), Vector2i(62, 26), Vector2i(18, 26), Vector2i(40, 30)]
+	var far: Array = []
+	for i in 6:
+		far.append(Vector2i(20 + i * 30, 150))
+	for i in 12:
+		var d := _yard(240, 210, far + near.slice(1), near[0], "crowd_%d" % i)
+		NightLights.plan(d)
+		var on := 0
+		for l: Dictionary in _night_rows(d):
+			on += 1 if Vector2(l["cell"] - Vector2i(40, 4)).length() <= NightLights.FIRST_SCREEN else 0
+		assert_lte(on, NightLights.FIRST_MOST, "crowd_%d" % i)
+
+
 func test_two_of_a_kind_can_go_first() -> void:
 	var near := [Vector2i(52, 14), Vector2i(30, 16)]   # both 16 m from where the crew steps down
 	for i in 12:
