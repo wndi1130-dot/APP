@@ -1,0 +1,2150 @@
+{
+  "version": 1,
+  "batch": "open",
+  "expected_kinds": [
+    "kettle",
+    "kettle_enamel",
+    "cutting_board",
+    "vase",
+    "alarm_clock",
+    "mug",
+    "teapot",
+    "serving_bowl",
+    "dinner_plate",
+    "yard_well",
+    "mailbox",
+    "wall_poster",
+    "wall_clock",
+    "bicycle"
+  ],
+  "status": "ready",
+  "axis": "+Y up, +Z front",
+  "origin": "footprint_center_floor",
+  "grade": {
+    "saturation": 0.45,
+    "value": 0.82,
+    "cool": [
+      0.78,
+      0.85,
+      0.95
+    ],
+    "cool_mix": 0.35
+  },
+  "graded_palette_targets": {
+    "aluminium": [
+      0.54,
+      0.57,
+      0.6
+    ],
+    "dark": [
+      0.17,
+      0.18,
+      0.19
+    ],
+    "sage": [
+      0.46,
+      0.55,
+      0.45
+    ],
+    "wood": [
+      0.26,
+      0.225,
+      0.18
+    ],
+    "glass": [
+      0.12,
+      0.15,
+      0.14
+    ],
+    "cream": [
+      0.62,
+      0.6,
+      0.5
+    ],
+    "porcelain": [
+      0.735,
+      0.75,
+      0.77
+    ],
+    "stone": [
+      0.42,
+      0.42,
+      0.4
+    ],
+    "worn_wood": [
+      0.3,
+      0.27,
+      0.22
+    ],
+    "green": [
+      0.22,
+      0.3,
+      0.25
+    ],
+    "flag_rust": [
+      0.303,
+      0.213,
+      0.199
+    ],
+    "paper": [
+      0.55,
+      0.52,
+      0.44
+    ],
+    "bluegrey": [
+      0.3,
+      0.36,
+      0.42
+    ],
+    "ink": [
+      0.15,
+      0.15,
+      0.16
+    ],
+    "poster_rust": [
+      0.235,
+      0.188,
+      0.17
+    ],
+    "bike_red": [
+      0.348,
+      0.232,
+      0.215
+    ],
+    "tyre": [
+      0.1,
+      0.1,
+      0.11
+    ],
+    "snow": [
+      0.74,
+      0.77,
+      0.79
+    ]
+  },
+  "assets": {
+    "kettle": {
+      "path": "res://models/props_field/kettle.glb",
+      "status": "ready",
+      "source_name": "kitchenware_kettle_r01",
+      "source_credit": "NVIDIA SimReady kitchenware_kettle_r01, CC BY 4.0",
+      "license_path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/kitchenware_kettle_r01/.metadata/LICENSE.txt",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.235961,
+      "bottom_m": 0.0,
+      "mount": "top",
+      "triangle_limit": 250,
+      "lod0_tris": 242,
+      "bytes": 25700,
+      "sha256": "9f234500e722fa37e28f9ead32307cdaa3d84c566c3bcb662cac61194369cf01",
+      "bounds_m": [
+        [
+          -0.073187,
+          0.0,
+          -0.102939
+        ],
+        [
+          0.073187,
+          0.235961,
+          0.102939
+        ]
+      ],
+      "dimensions_m": [
+        0.146375,
+        0.235961,
+        0.205879
+      ],
+      "expected_dimensions_m": [
+        [
+          0.12,
+          0.12,
+          0.08
+        ],
+        [
+          0.5,
+          0.4,
+          0.4
+        ]
+      ],
+      "judgment": "금속 몸과 짙은 손잡이·꼭지, 꽃무늬 제거",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/kitchenware_kettle_r01/simready_usd/sm_kitchenware_kettle_r01_01.usd",
+        "sha256": "0acf8cdb34d4e39555c10969c8326f1c2ca95df540725ba7c39ebd164044cc69",
+        "bytes": 20158,
+        "usd": {
+          "meters_per_unit": 1.0,
+          "up_axis": "Z",
+          "stage_meshes": 0,
+          "unit_conversion_option": "apply_unit_conversion_scale",
+          "unit_conversion": true
+        },
+        "meshes_imported": 3,
+        "triangles_before": 76762,
+        "dimensions_blender_m": [
+          0.14639097452163696,
+          0.20903334021568298,
+          0.23973864316940308
+        ],
+        "materials": [
+          "m_opaque__metal__kettle_r01",
+          "m_opaque__metal__kettle_r01.001",
+          "m_opaque__plastic__kettle_r01",
+          "m_opaque__metal__kettle_r01.002",
+          "m_opaque__plastic__kettle_r01.001"
+        ],
+        "colour_faces": {
+          "aluminium": 224,
+          "dark": 18
+        }
+      }
+    },
+    "kettle_enamel": {
+      "path": "res://models/props_field/kettle_enamel.glb",
+      "status": "ready",
+      "source_name": "kitchenware_kettle_u01",
+      "source_credit": "NVIDIA SimReady kitchenware_kettle_u01, CC BY 4.0",
+      "license_path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/kitchenware_kettle_u01/.metadata/LICENSE.txt",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.238915,
+      "bottom_m": 0.0,
+      "mount": "top",
+      "triangle_limit": 250,
+      "lod0_tris": 242,
+      "bytes": 25712,
+      "sha256": "5d3ad0a901e50d640ac07715a9801acb85c33b7fed1556e6466fabac5f0fb28d",
+      "bounds_m": [
+        [
+          -0.102493,
+          0.0,
+          -0.121841
+        ],
+        [
+          0.102493,
+          0.238915,
+          0.121841
+        ]
+      ],
+      "dimensions_m": [
+        0.204987,
+        0.238915,
+        0.243682
+      ],
+      "expected_dimensions_m": [
+        [
+          0.12,
+          0.12,
+          0.08
+        ],
+        [
+          0.5,
+          0.4,
+          0.4
+        ]
+      ],
+      "judgment": "연녹 법랑 몸과 짙은 나무 손잡이",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/kitchenware_kettle_u01/simready_usd/sm_kitchenware_kettle_u01_01.usd",
+        "sha256": "4799375dac58635d6b42a5c66354dd2cb1c45d48af57718e5f42f1a61b45d0b9",
+        "bytes": 20085,
+        "usd": {
+          "meters_per_unit": 1.0,
+          "up_axis": "Z",
+          "stage_meshes": 0,
+          "unit_conversion_option": "apply_unit_conversion_scale",
+          "unit_conversion": true
+        },
+        "meshes_imported": 3,
+        "triangles_before": 82280,
+        "dimensions_blender_m": [
+          0.20154358446598053,
+          0.24469956755638123,
+          0.24077899754047394
+        ],
+        "materials": [
+          "m_opaque__metal__kettle_u01",
+          "m_opaque__metal__kettle_u01.001",
+          "m_opaque__wood__kettle_u01",
+          "m_opaque__metal__kettle_u01.002"
+        ],
+        "colour_faces": {
+          "sage": 216,
+          "wood": 26
+        }
+      }
+    },
+    "cutting_board": {
+      "path": "res://models/props_field/cutting_board.glb",
+      "status": "ready",
+      "source_name": "kitchenware_cuttingBoard_a01",
+      "source_credit": "NVIDIA SimReady kitchenware_cuttingBoard_a01, CC BY 4.0",
+      "license_path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/kitchenware_cuttingBoard_a01/.metadata/LICENSE.txt",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.014182,
+      "bottom_m": 0.0,
+      "mount": "top",
+      "triangle_limit": 80,
+      "lod0_tris": 76,
+      "bytes": 8780,
+      "sha256": "0d961e8e1d9a3d618e2f461b4c338d5dd5e7df0c4084f7eabcb306cfbb9dd30e",
+      "bounds_m": [
+        [
+          -0.199387,
+          0.0,
+          -0.106066
+        ],
+        [
+          0.199387,
+          0.014182,
+          0.106066
+        ]
+      ],
+      "dimensions_m": [
+        0.398774,
+        0.014182,
+        0.212131
+      ],
+      "expected_dimensions_m": [
+        [
+          0.3,
+          0.005,
+          0.15
+        ],
+        [
+          0.5,
+          0.04,
+          0.3
+        ]
+      ],
+      "judgment": "모로 선 원본을 눕힌 짙은 나무 도마(실측 유지)",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/kitchenware_cuttingBoard_a01/simready_usd/sm_kitchenware_cuttingBoard_a01_01.usd",
+        "sha256": "b0a6ba7bc30e8d8a16d240d41fff11788fd3b4bbad40640c69db42a116dce052",
+        "bytes": 22396,
+        "usd": {
+          "meters_per_unit": 1.0,
+          "up_axis": "Z",
+          "stage_meshes": 0,
+          "unit_conversion_option": "apply_unit_conversion_scale",
+          "unit_conversion": true
+        },
+        "meshes_imported": 1,
+        "triangles_before": 2360,
+        "dimensions_blender_m": [
+          0.4000000059604645,
+          0.2144961953163147,
+          0.014298593625426292
+        ],
+        "materials": [
+          "m_opaque__wood__cuttingBoard_a01"
+        ],
+        "colour_faces": {
+          "wood": 76
+        }
+      }
+    },
+    "vase": {
+      "path": "res://models/props_field/vase.glb",
+      "status": "ready",
+      "source_name": "misc_glass_vase_a01",
+      "source_credit": "NVIDIA SimReady misc_glass_vase_a01, CC BY 4.0",
+      "license_path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/misc_glass_vase_a01/.metadata/LICENSE.txt",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.203103,
+      "bottom_m": 0.0,
+      "mount": "top",
+      "triangle_limit": 120,
+      "lod0_tris": 108,
+      "bytes": 8312,
+      "sha256": "d3d76ec2978a4d1a759956b70c889d17c8d8c7d427ba9dc7dc4911df093ee58f",
+      "bounds_m": [
+        [
+          -0.041075,
+          0.0,
+          -0.041075
+        ],
+        [
+          0.041075,
+          0.203103,
+          0.041075
+        ]
+      ],
+      "dimensions_m": [
+        0.082149,
+        0.203103,
+        0.082149
+      ],
+      "expected_dimensions_m": [
+        [
+          0.04,
+          0.08,
+          0.04
+        ],
+        [
+          0.3,
+          0.6,
+          0.3
+        ]
+      ],
+      "judgment": "원본 윤곽을 높이 일곱 곳에서 재어 8면으로 돌린 불투명 짙은 병유리, 입구는 더 어둡게",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/nvidia_simready/misc_glass_vase_a01/simready_usd/sm_misc_glass_vase_a01_01.usd",
+        "sha256": "a3a34d595220d850324175d5c8d258c9805f759233eeb55d1988d2dd60043422",
+        "bytes": 21530,
+        "usd": {
+          "meters_per_unit": 1.0,
+          "up_axis": "Z",
+          "stage_meshes": 0,
+          "unit_conversion_option": "apply_unit_conversion_scale",
+          "unit_conversion": true
+        },
+        "meshes_imported": 1,
+        "triangles_before": 96472,
+        "dimensions_blender_m": [
+          0.08116649091243744,
+          0.08028440177440643,
+          0.203102707862854
+        ],
+        "materials": [
+          "m_trans__glass__clean_a01"
+        ],
+        "lathe_profile_m": [
+          [
+            0.0,
+            0.0411
+          ],
+          [
+            0.0305,
+            0.0407
+          ],
+          [
+            0.0711,
+            0.0394
+          ],
+          [
+            0.1117,
+            0.0376
+          ],
+          [
+            0.1523,
+            0.0325
+          ],
+          [
+            0.1828,
+            0.0318
+          ],
+          [
+            0.2031,
+            0.0348
+          ]
+        ],
+        "colour_faces": {
+          "glass": 49,
+          "tyre": 1
+        }
+      }
+    },
+    "alarm_clock": {
+      "path": "res://models/props_field/alarm_clock.glb",
+      "status": "ready",
+      "source_name": "Crosley_Alarm_Clock_Vintage_Metal",
+      "source_credit": "Google LLC. / Google Scanned Objects Crosley_Alarm_Clock_Vintage_Metal, CC BY 4.0",
+      "license_path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Crosley_Alarm_Clock_Vintage_Metal.zip!metadata.pbtxt",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.162254,
+      "bottom_m": 0.0,
+      "mount": "top",
+      "triangle_limit": 220,
+      "lod0_tris": 212,
+      "bytes": 22656,
+      "sha256": "9b9ee21984ae7b160f3fe59a47bee5a1d790aeff4df1710d1ed32ea074e85ed3",
+      "bounds_m": [
+        [
+          -0.053751,
+          0.0,
+          -0.026747
+        ],
+        [
+          0.053751,
+          0.162254,
+          0.026747
+        ]
+      ],
+      "dimensions_m": [
+        0.107503,
+        0.162254,
+        0.053494
+      ],
+      "expected_dimensions_m": [
+        [
+          0.09,
+          0.14,
+          0.04
+        ],
+        [
+          0.13,
+          0.19,
+          0.07
+        ]
+      ],
+      "judgment": "짙은 몸과 민무늬 크림 문자판, 글씨·상표 제거",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Crosley_Alarm_Clock_Vintage_Metal.zip",
+        "sha256": "92157e1c23a00b7f4fb3f41df07eeae146be94b3861caddad820e409fe4937be",
+        "bytes": 6754158,
+        "obj_up_axis": "Z",
+        "meshes_imported": 1,
+        "triangles_before": 10248,
+        "dimensions_blender_m": [
+          0.10946399718523026,
+          0.05402299761772156,
+          0.16228701174259186
+        ],
+        "materials": [
+          "material_0"
+        ],
+        "dial": {
+          "min": [
+            -0.04113199934363365,
+            -0.018802501261234283,
+            0.031331002712249756
+          ],
+          "max": [
+            0.03902199864387512,
+            -0.013976498506963253,
+            0.11015599966049194
+          ],
+          "turned_180": true,
+          "front_area_scores": [
+            0,
+            0.00227170320863479
+          ]
+        },
+        "colour_faces": {
+          "dark": 194,
+          "cream": 18
+        }
+      }
+    },
+    "mug": {
+      "path": "res://models/props_field/mug.glb",
+      "status": "ready",
+      "source_name": "Threshold_Porcelain_Coffee_Mug_All_Over_Bead_White",
+      "source_credit": "Google LLC. / Google Scanned Objects Threshold_Porcelain_Coffee_Mug_All_Over_Bead_White, CC BY 4.0",
+      "license_path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Porcelain_Coffee_Mug_All_Over_Bead_White.zip!metadata.pbtxt",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.11462,
+      "bottom_m": 0.0,
+      "mount": "top",
+      "triangle_limit": 120,
+      "lod0_tris": 115,
+      "bytes": 12744,
+      "sha256": "86b514e1877e2594c55c4b703c7f9064dff43b2fe08838cd52b12dd80707e1ec",
+      "bounds_m": [
+        [
+          -0.064474,
+          0.0,
+          -0.04875
+        ],
+        [
+          0.064474,
+          0.11462,
+          0.04875
+        ]
+      ],
+      "dimensions_m": [
+        0.128949,
+        0.11462,
+        0.0975
+      ],
+      "expected_dimensions_m": [
+        [
+          0.11,
+          0.095,
+          0.08
+        ],
+        [
+          0.15,
+          0.13,
+          0.12
+        ]
+      ],
+      "judgment": "손잡이와 안쪽 면을 살린 흰 자기 잔",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Porcelain_Coffee_Mug_All_Over_Bead_White.zip",
+        "sha256": "dc34f175364540e239ae74f71e5b951a48aa99ccb48aaaf8c8c11771c5c56aa1",
+        "bytes": 3048630,
+        "obj_up_axis": "Z",
+        "meshes_imported": 1,
+        "triangles_before": 16644,
+        "dimensions_blender_m": [
+          0.1307400017976761,
+          0.0965220034122467,
+          0.11462400108575821
+        ],
+        "materials": [
+          "material_0"
+        ],
+        "cavity": {
+          "before": [
+            {
+              "fx": 0.35,
+              "fy": 0.35,
+              "depth": 0.10384249687194824,
+              "wall": 0.005910130217671394
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.425,
+              "depth": 0.10390108823776245,
+              "wall": 0.005426792427897453
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.5,
+              "depth": 0.10359583795070648,
+              "wall": 0.005579989403486252
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.575,
+              "depth": 0.1033865213394165,
+              "wall": 0.005755459889769554
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.65,
+              "depth": 0.10357679426670074,
+              "wall": 0.005756339058279991
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.35,
+              "depth": 0.10375436395406723,
+              "wall": 0.006898978725075722
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.425,
+              "depth": 0.10378851741552353,
+              "wall": 0.005611009895801544
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.5,
+              "depth": 0.1036757081747055,
+              "wall": 0.0055303629487752914
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.575,
+              "depth": 0.10359218716621399,
+              "wall": 0.00560394674539566
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.65,
+              "depth": 0.10355494171380997,
+              "wall": 0.005844861268997192
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.35,
+              "depth": 0.10347077250480652,
+              "wall": 0.00735962949693203
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.425,
+              "depth": 0.10357769578695297,
+              "wall": 0.006115162745118141
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.5,
+              "depth": 0.10361548513174057,
+              "wall": 0.005925286561250687
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.575,
+              "depth": 0.10359310358762741,
+              "wall": 0.005914432927966118
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.65,
+              "depth": 0.10343781113624573,
+              "wall": 0.007320113480091095
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.35,
+              "depth": 0.0999593660235405,
+              "wall": 0.011684086173772812
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.425,
+              "depth": 0.10218312591314316,
+              "wall": 0.011784287169575691
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.5,
+              "depth": 0.10264873504638672,
+              "wall": 0.011341461911797523
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.575,
+              "depth": 0.1022188737988472,
+              "wall": 0.011878488585352898
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.65,
+              "depth": 0.10028901696205139,
+              "wall": 0.01160414144396782
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.35,
+              "depth": 0.07835022360086441,
+              "wall": 0.014649905264377594
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.425,
+              "depth": 0.08625931292772293,
+              "wall": 0.01259416714310646
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.5,
+              "depth": 0.08836200833320618,
+              "wall": 0.012481972575187683
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.575,
+              "depth": 0.08676125854253769,
+              "wall": 0.012380849570035934
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.65,
+              "depth": 0.07995754480361938,
+              "wall": 0.014545805752277374
+            }
+          ],
+          "after": [
+            {
+              "fx": 0.35,
+              "fy": 0.35,
+              "depth": 0.1031588688492775,
+              "wall": 0.008489102125167847
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.425,
+              "depth": 0.10326704382896423,
+              "wall": 0.008192356675863266
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.5,
+              "depth": 0.10337519645690918,
+              "wall": 0.010545028373599052
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.575,
+              "depth": 0.1032533124089241,
+              "wall": 0.01060674898326397
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.65,
+              "depth": 0.10307428985834122,
+              "wall": 0.010725608095526695
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.35,
+              "depth": 0.10248692333698273,
+              "wall": 0.008338535204529762
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.425,
+              "depth": 0.10259489715099335,
+              "wall": 0.009740997105836868
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.5,
+              "depth": 0.1027030497789383,
+              "wall": 0.011264489963650703
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.575,
+              "depth": 0.10281120240688324,
+              "wall": 0.011096172034740448
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.65,
+              "depth": 0.10291935503482819,
+              "wall": 0.010927855968475342
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.35,
+              "depth": 0.10200516879558563,
+              "wall": 0.010752532631158829
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.425,
+              "depth": 0.10192275047302246,
+              "wall": 0.01178598590195179
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.5,
+              "depth": 0.10203090310096741,
+              "wall": 0.011983949691057205
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.575,
+              "depth": 0.10213905572891235,
+              "wall": 0.011815633624792099
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.65,
+              "depth": 0.1022472083568573,
+              "wall": 0.011647315695881844
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.35,
+              "depth": 0.09423544257879257,
+              "wall": 0.012048985809087753
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.425,
+              "depth": 0.10134141892194748,
+              "wall": 0.012780910357832909
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.5,
+              "depth": 0.10135875642299652,
+              "wall": 0.010676583275198936
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.575,
+              "depth": 0.10066807270050049,
+              "wall": 0.00919073075056076
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.65,
+              "depth": 0.09246829897165298,
+              "wall": 0.015213973820209503
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.35,
+              "depth": 0.06470627337694168,
+              "wall": 0.021298497915267944
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.425,
+              "depth": 0.07897796481847763,
+              "wall": 0.020430248230695724
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.5,
+              "depth": 0.083226777613163,
+              "wall": 0.01941782608628273
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.575,
+              "depth": 0.07516603916883469,
+              "wall": 0.028162263333797455
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.65,
+              "depth": 0.06710529327392578,
+              "wall": 0.02763194963335991
+            }
+          ],
+          "matched": 25
+        },
+        "colour_faces": {
+          "porcelain": 115
+        }
+      }
+    },
+    "teapot": {
+      "path": "res://models/props_field/teapot.glb",
+      "status": "ready",
+      "source_name": "Threshold_Porcelain_Teapot_White",
+      "source_credit": "Google LLC. / Google Scanned Objects Threshold_Porcelain_Teapot_White, CC BY 4.0",
+      "license_path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Porcelain_Teapot_White.zip!metadata.pbtxt",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.134128,
+      "bottom_m": 0.0,
+      "mount": "top",
+      "triangle_limit": 250,
+      "lod0_tris": 242,
+      "bytes": 25700,
+      "sha256": "50d885b551001d45fbbf9fd1262a6f9336b0ca3e22790c00b4aeb892fb67babe",
+      "bounds_m": [
+        [
+          -0.093546,
+          0.0,
+          -0.091859
+        ],
+        [
+          0.093546,
+          0.134128,
+          0.091859
+        ]
+      ],
+      "dimensions_m": [
+        0.187093,
+        0.134128,
+        0.183718
+      ],
+      "expected_dimensions_m": [
+        [
+          0.16,
+          0.11,
+          0.16
+        ],
+        [
+          0.22,
+          0.16,
+          0.22
+        ]
+      ],
+      "judgment": "뚜껑·주둥이·손잡이를 살린 흰 자기 주전자",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Porcelain_Teapot_White.zip",
+        "sha256": "45c7f86892f983b59e28cfe80af5de473d7981bab321addae10bea7503e6b9cc",
+        "bytes": 3063446,
+        "obj_up_axis": "Z",
+        "meshes_imported": 1,
+        "triangles_before": 8324,
+        "dimensions_blender_m": [
+          0.1866859793663025,
+          0.18425901234149933,
+          0.1363449990749359
+        ],
+        "materials": [
+          "material_0"
+        ],
+        "colour_faces": {
+          "porcelain": 242
+        }
+      }
+    },
+    "serving_bowl": {
+      "path": "res://models/props_field/serving_bowl.glb",
+      "status": "ready",
+      "source_name": "Threshold_Porcelain_Serving_Bowl_Coupe_White",
+      "source_credit": "Google LLC. / Google Scanned Objects Threshold_Porcelain_Serving_Bowl_Coupe_White, CC BY 4.0",
+      "license_path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Porcelain_Serving_Bowl_Coupe_White.zip!metadata.pbtxt",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.069532,
+      "bottom_m": 0.0,
+      "mount": "top",
+      "triangle_limit": 150,
+      "lod0_tris": 144,
+      "bytes": 15716,
+      "sha256": "cfb6e8064d0722a6bcc60ec181180d9977abd5f1277686af512e5d55faf6c579",
+      "bounds_m": [
+        [
+          -0.100936,
+          0.0,
+          -0.104745
+        ],
+        [
+          0.100936,
+          0.069532,
+          0.104745
+        ]
+      ],
+      "dimensions_m": [
+        0.201873,
+        0.069532,
+        0.209491
+      ],
+      "expected_dimensions_m": [
+        [
+          0.18,
+          0.05,
+          0.18
+        ],
+        [
+          0.24,
+          0.09,
+          0.24
+        ]
+      ],
+      "judgment": "안쪽 바닥과 입구를 살린 흰 자기 큰 사발",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Porcelain_Serving_Bowl_Coupe_White.zip",
+        "sha256": "9f18958313212a56edb33948cf4ec89eae7bd7392293ab27a6ca50ba7ef14098",
+        "bytes": 3324041,
+        "obj_up_axis": "Z",
+        "meshes_imported": 1,
+        "triangles_before": 5946,
+        "dimensions_blender_m": [
+          0.2082339972257614,
+          0.20934100449085236,
+          0.06888299435377121
+        ],
+        "materials": [
+          "material_0"
+        ],
+        "cavity": {
+          "before": [
+            {
+              "fx": 0.35,
+              "fy": 0.35,
+              "depth": 0.05715915560722351,
+              "wall": 0.010858012363314629
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.425,
+              "depth": 0.0571950301527977,
+              "wall": 0.007273050025105476
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.5,
+              "depth": 0.057286106050014496,
+              "wall": 0.006440281867980957
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.575,
+              "depth": 0.057593896985054016,
+              "wall": 0.007382575422525406
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.65,
+              "depth": 0.0576893612742424,
+              "wall": 0.010267579928040504
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.35,
+              "depth": 0.05676237493753433,
+              "wall": 0.007337193936109543
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.425,
+              "depth": 0.056676194071769714,
+              "wall": 0.005838736891746521
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.5,
+              "depth": 0.056836485862731934,
+              "wall": 0.00559033639729023
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.575,
+              "depth": 0.05699735879898071,
+              "wall": 0.005938999354839325
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.65,
+              "depth": 0.057499513030052185,
+              "wall": 0.007558492943644524
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.35,
+              "depth": 0.05649401992559433,
+              "wall": 0.006595153361558914
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.425,
+              "depth": 0.05646190792322159,
+              "wall": 0.005695868283510208
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.5,
+              "depth": 0.05660775303840637,
+              "wall": 0.005774322897195816
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.575,
+              "depth": 0.056803517043590546,
+              "wall": 0.0057786013931035995
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.65,
+              "depth": 0.05717415362596512,
+              "wall": 0.006777297705411911
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.35,
+              "depth": 0.0565461665391922,
+              "wall": 0.0072529930621385574
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.425,
+              "depth": 0.05627000331878662,
+              "wall": 0.005863325670361519
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.5,
+              "depth": 0.0564250648021698,
+              "wall": 0.005710843950510025
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.575,
+              "depth": 0.05661267042160034,
+              "wall": 0.005959607660770416
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.65,
+              "depth": 0.05716465413570404,
+              "wall": 0.0076677072793245316
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.35,
+              "depth": 0.056607313454151154,
+              "wall": 0.011121422052383423
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.425,
+              "depth": 0.056485094130039215,
+              "wall": 0.007261306047439575
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.5,
+              "depth": 0.05644480139017105,
+              "wall": 0.006550135090947151
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.575,
+              "depth": 0.05678112059831619,
+              "wall": 0.007449643686413765
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.65,
+              "depth": 0.057108014822006226,
+              "wall": 0.010725511237978935
+            }
+          ],
+          "after": [
+            {
+              "fx": 0.35,
+              "fy": 0.35,
+              "depth": 0.05756482481956482,
+              "wall": 0.01068875566124916
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.425,
+              "depth": 0.05789706110954285,
+              "wall": 0.009931255131959915
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.5,
+              "depth": 0.05823817849159241,
+              "wall": 0.009684568271040916
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.575,
+              "depth": 0.058541685342788696,
+              "wall": 0.00964510440826416
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.65,
+              "depth": 0.058529049158096313,
+              "wall": 0.008260147646069527
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.35,
+              "depth": 0.057292431592941284,
+              "wall": 0.010456908494234085
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.425,
+              "depth": 0.05753004550933838,
+              "wall": 0.009361090138554573
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.5,
+              "depth": 0.05787000060081482,
+              "wall": 0.008554322645068169
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.575,
+              "depth": 0.058228060603141785,
+              "wall": 0.008290693163871765
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.65,
+              "depth": 0.05853196978569031,
+              "wall": 0.008720489218831062
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.35,
+              "depth": 0.05712617188692093,
+              "wall": 0.01011892780661583
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.425,
+              "depth": 0.05727149546146393,
+              "wall": 0.009115399792790413
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.5,
+              "depth": 0.057501837611198425,
+              "wall": 0.008026853203773499
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.575,
+              "depth": 0.057859890162944794,
+              "wall": 0.007160436362028122
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.65,
+              "depth": 0.05821794271469116,
+              "wall": 0.005311416462063789
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.35,
+              "depth": 0.057092174887657166,
+              "wall": 0.0105662252753973
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.425,
+              "depth": 0.05714665353298187,
+              "wall": 0.009394565597176552
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.5,
+              "depth": 0.05742999166250229,
+              "wall": 0.007994050160050392
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.575,
+              "depth": 0.05778661370277405,
+              "wall": 0.006520252674818039
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.65,
+              "depth": 0.05815143138170242,
+              "wall": 0.006242001429200172
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.35,
+              "depth": 0.057179808616638184,
+              "wall": 0.010392317548394203
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.425,
+              "depth": 0.05721709877252579,
+              "wall": 0.010089581832289696
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.5,
+              "depth": 0.05740891396999359,
+              "wall": 0.0087805837392807
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.575,
+              "depth": 0.057734012603759766,
+              "wall": 0.008820028975605965
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.65,
+              "depth": 0.05726621299982071,
+              "wall": 0.010275745764374733
+            }
+          ],
+          "matched": 25
+        },
+        "colour_faces": {
+          "porcelain": 144
+        }
+      }
+    },
+    "dinner_plate": {
+      "path": "res://models/props_field/dinner_plate.glb",
+      "status": "ready",
+      "source_name": "Threshold_Dinner_Plate_Square_Rim_White_Porcelain",
+      "source_credit": "Google LLC. / Google Scanned Objects Threshold_Dinner_Plate_Square_Rim_White_Porcelain, CC BY 4.0",
+      "license_path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Dinner_Plate_Square_Rim_White_Porcelain.zip!metadata.pbtxt",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 0.037108,
+      "bottom_m": 0.0,
+      "mount": "top",
+      "triangle_limit": 80,
+      "lod0_tris": 77,
+      "bytes": 8880,
+      "sha256": "a2136059137cdc6306af59cd614f472046aaa3e502257b3d885fc87547f31909",
+      "bounds_m": [
+        [
+          -0.133769,
+          0.0,
+          -0.135184
+        ],
+        [
+          0.133769,
+          0.037108,
+          0.135184
+        ]
+      ],
+      "dimensions_m": [
+        0.267537,
+        0.037108,
+        0.270369
+      ],
+      "expected_dimensions_m": [
+        [
+          0.24,
+          0.02,
+          0.24
+        ],
+        [
+          0.31,
+          0.055,
+          0.31
+        ]
+      ],
+      "judgment": "낮은 안쪽과 사각 테를 살린 흰 자기 접시",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/google_scanned_objects/Threshold_Dinner_Plate_Square_Rim_White_Porcelain.zip",
+        "sha256": "e1dc5305e0651550f2d01cef1c390914c93849e2a44a2299f6db21d5208d6448",
+        "bytes": 3476449,
+        "obj_up_axis": "Z",
+        "meshes_imported": 1,
+        "triangles_before": 4088,
+        "dimensions_blender_m": [
+          0.27096399664878845,
+          0.2735399901866913,
+          0.03890800103545189
+        ],
+        "materials": [
+          "material_0"
+        ],
+        "cavity": {
+          "before": [
+            {
+              "fx": 0.35,
+              "fy": 0.35,
+              "depth": 0.02960772067308426,
+              "wall": 0.006562367081642151
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.425,
+              "depth": 0.02977268025279045,
+              "wall": 0.007040033116936684
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.5,
+              "depth": 0.029892515391111374,
+              "wall": 0.007008427754044533
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.575,
+              "depth": 0.02988479658961296,
+              "wall": 0.007077595219016075
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.65,
+              "depth": 0.029821813106536865,
+              "wall": 0.0064096637070178986
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.35,
+              "depth": 0.029550068080425262,
+              "wall": 0.006388375535607338
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.425,
+              "depth": 0.029677696526050568,
+              "wall": 0.006130753085017204
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.5,
+              "depth": 0.029800545424222946,
+              "wall": 0.0061183590441942215
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.575,
+              "depth": 0.029767882078886032,
+              "wall": 0.006146706640720367
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.65,
+              "depth": 0.029688987880945206,
+              "wall": 0.00792982429265976
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.35,
+              "depth": 0.029446158558130264,
+              "wall": 0.006188444793224335
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.425,
+              "depth": 0.029597613960504532,
+              "wall": 0.00621393509209156
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.5,
+              "depth": 0.029666762799024582,
+              "wall": 0.006306156516075134
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.575,
+              "depth": 0.029632624238729477,
+              "wall": 0.006208769977092743
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.65,
+              "depth": 0.029566943645477295,
+              "wall": 0.007846668362617493
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.35,
+              "depth": 0.029205285012722015,
+              "wall": 0.0062360260635614395
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.425,
+              "depth": 0.029358379542827606,
+              "wall": 0.006049612537026405
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.5,
+              "depth": 0.02947717159986496,
+              "wall": 0.006160765886306763
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.575,
+              "depth": 0.029459550976753235,
+              "wall": 0.005995837971568108
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.65,
+              "depth": 0.029438674449920654,
+              "wall": 0.007632078602910042
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.35,
+              "depth": 0.028932254761457443,
+              "wall": 0.006255248561501503
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.425,
+              "depth": 0.029192406684160233,
+              "wall": 0.006591027602553368
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.5,
+              "depth": 0.02923039346933365,
+              "wall": 0.00662393681704998
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.575,
+              "depth": 0.029167965054512024,
+              "wall": 0.0067542195320129395
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.65,
+              "depth": 0.029052138328552246,
+              "wall": 0.00630560889840126
+            }
+          ],
+          "after": [
+            {
+              "fx": 0.35,
+              "fy": 0.35,
+              "depth": 0.028319861739873886,
+              "wall": 0.008262136951088905
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.425,
+              "depth": 0.028804630041122437,
+              "wall": 0.0078115202486515045
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.5,
+              "depth": 0.029061783105134964,
+              "wall": 0.007603628560900688
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.575,
+              "depth": 0.028977788984775543,
+              "wall": 0.007736876606941223
+            },
+            {
+              "fx": 0.35,
+              "fy": 0.65,
+              "depth": 0.028893794864416122,
+              "wall": 0.007870132103562355
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.35,
+              "depth": 0.028669297695159912,
+              "wall": 0.007639570161700249
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.425,
+              "depth": 0.028997112065553665,
+              "wall": 0.007393941283226013
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.5,
+              "depth": 0.028963889926671982,
+              "wall": 0.007479969412088394
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.575,
+              "depth": 0.028879892081022263,
+              "wall": 0.007616771385073662
+            },
+            {
+              "fx": 0.425,
+              "fy": 0.65,
+              "depth": 0.02879590168595314,
+              "wall": 0.007776046171784401
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.35,
+              "depth": 0.028547253459692,
+              "wall": 0.00748848170042038
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.425,
+              "depth": 0.028845760971307755,
+              "wall": 0.007271947339177132
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.5,
+              "depth": 0.02882581204175949,
+              "wall": 0.007344700396060944
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.575,
+              "depth": 0.02878199890255928,
+              "wall": 0.007466424256563187
+            },
+            {
+              "fx": 0.5,
+              "fy": 0.65,
+              "depth": 0.02869800105690956,
+              "wall": 0.007630765438079834
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.35,
+              "depth": 0.02841462939977646,
+              "wall": 0.007353048771619797
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.425,
+              "depth": 0.028694413602352142,
+              "wall": 0.007149949669837952
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.5,
+              "depth": 0.02867446467280388,
+              "wall": 0.0072470661252737045
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.575,
+              "depth": 0.028654515743255615,
+              "wall": 0.00735064409673214
+            },
+            {
+              "fx": 0.575,
+              "fy": 0.65,
+              "depth": 0.02846508100628853,
+              "wall": 0.007620504125952721
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.35,
+              "depth": 0.027878262102603912,
+              "wall": 0.007672050967812538
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.425,
+              "depth": 0.02566342055797577,
+              "wall": 0.009926456958055496
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.5,
+              "depth": 0.02607012540102005,
+              "wall": 0.009602965787053108
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.575,
+              "depth": 0.02647683396935463,
+              "wall": 0.009279472753405571
+            },
+            {
+              "fx": 0.65,
+              "fy": 0.65,
+              "depth": 0.02756667509675026,
+              "wall": 0.008272841572761536
+            }
+          ],
+          "matched": 25
+        },
+        "colour_faces": {
+          "porcelain": 77
+        }
+      }
+    },
+    "yard_well": {
+      "path": "res://models/props_field/yard_well.glb",
+      "status": "ready",
+      "source_name": "scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1",
+      "source_credit": "Scenario scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1, CC BY 4.0",
+      "license_path": "docs/design/rights_ledger.md#1 (제공 목록 근거, 로컬 라이선스 원문 없음)",
+      "footprint_m": [
+        2,
+        2
+      ],
+      "height_m": 1.9,
+      "bottom_m": 0.0,
+      "mount": "floor",
+      "triangle_limit": 700,
+      "lod0_tris": 679,
+      "bytes": 70284,
+      "sha256": "0577493f63eac690345a6469ffbc7e3c895fd502b5e38880edc3e0607dfb9332",
+      "bounds_m": [
+        [
+          -0.78862,
+          0.0,
+          -0.783817
+        ],
+        [
+          0.78862,
+          1.9,
+          0.783817
+        ]
+      ],
+      "dimensions_m": [
+        1.57724,
+        1.9,
+        1.567634
+      ],
+      "expected_dimensions_m": [
+        [
+          1.3,
+          1.8999,
+          1.3
+        ],
+        [
+          1.92,
+          1.9001,
+          1.92
+        ]
+      ],
+      "judgment": "돌·목재·바랜 지붕 널, 윗면에 옅은 눈",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "path": "C:/dev/zombie/assets_raw/빈곳채우기_20261030/scenario_3d/scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1/output.glb",
+        "sha256": "d135957aef74d60a1d86b948f3d75ff83d36475c516be6c85d18ee404329eadc",
+        "bytes": 11876160,
+        "license_verification": "provided_list_only; local_document_missing",
+        "meshes_imported": 1,
+        "triangles_before": 96949,
+        "dimensions_blender_m": [
+          1.57041597366333,
+          1.559495210647583,
+          1.9022021293640137
+        ],
+        "materials": [
+          "CustomMaterial"
+        ],
+        "colour_faces": {
+          "stone": 138,
+          "wood": 24,
+          "worn_wood": 517
+        }
+      }
+    },
+    "mailbox": {
+      "path": "res://models/props_field/mailbox.glb",
+      "status": "ready",
+      "source_name": "mailbox",
+      "source_credit": "자체 제작, Blender 기본 도형",
+      "license_path": "tools/blender/props_field_open.py (자체 제작)",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 1.25,
+      "bottom_m": 0.0,
+      "mount": "floor",
+      "triangle_limit": 200,
+      "lod0_tris": 76,
+      "bytes": 5868,
+      "sha256": "2c33dcefb66853cf7df4b402c8fb572a22452f49cbe45463e49a790e988607d2",
+      "bounds_m": [
+        [
+          -0.1265,
+          0.0,
+          -0.24
+        ],
+        [
+          0.1265,
+          1.25,
+          0.24
+        ]
+      ],
+      "dimensions_m": [
+        0.253,
+        1.25,
+        0.48
+      ],
+      "expected_dimensions_m": [
+        [
+          0.19,
+          1.2499,
+          0.47
+        ],
+        [
+          0.3,
+          1.2501,
+          0.49
+        ]
+      ],
+      "judgment": "나무 기둥과 반원 지붕 통, 작은 녹슨 깃발",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "procedural": true
+      }
+    },
+    "wall_poster": {
+      "path": "res://models/props_field/wall_poster.glb",
+      "status": "ready",
+      "source_name": "wall_poster",
+      "source_credit": "자체 제작, Blender 기본 도형",
+      "license_path": "tools/blender/props_field_open.py (자체 제작)",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 2.05,
+      "bottom_m": 1.2,
+      "mount": "wall",
+      "triangle_limit": 150,
+      "lod0_tris": 56,
+      "bytes": 4440,
+      "sha256": "3c19e8c7e57daa87701aad89fce98bbd5ed0e4cee862a6184aa24aede3a21ffc",
+      "bounds_m": [
+        [
+          -0.3,
+          1.2,
+          -0.005
+        ],
+        [
+          0.3,
+          2.05,
+          0.005
+        ]
+      ],
+      "dimensions_m": [
+        0.6,
+        0.85,
+        0.01
+      ],
+      "expected_dimensions_m": [
+        [
+          0.5999,
+          0.8499,
+          0.0099
+        ],
+        [
+          0.6001,
+          0.8501,
+          0.0101
+        ]
+      ],
+      "judgment": "찢긴 종이에 눈 덮인 산과 기차 색 조각, 글자 없음",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "procedural": true
+      }
+    },
+    "wall_clock": {
+      "path": "res://models/props_field/wall_clock.glb",
+      "status": "ready",
+      "source_name": "wall_clock",
+      "source_credit": "자체 제작, Blender 기본 도형",
+      "license_path": "tools/blender/props_field_open.py (자체 제작)",
+      "footprint_m": [
+        1,
+        1
+      ],
+      "height_m": 2.11,
+      "bottom_m": 1.79,
+      "mount": "wall",
+      "triangle_limit": 250,
+      "lod0_tris": 222,
+      "bytes": 15680,
+      "sha256": "4f0bcd4376658bd1a31a8d313998b58f8a393f432c066846d28b1a4f6f1acf62",
+      "bounds_m": [
+        [
+          -0.16,
+          1.79,
+          -0.025
+        ],
+        [
+          0.16,
+          2.11,
+          0.025
+        ]
+      ],
+      "dimensions_m": [
+        0.32,
+        0.32,
+        0.05
+      ],
+      "expected_dimensions_m": [
+        [
+          0.3199,
+          0.3199,
+          0.0499
+        ],
+        [
+          0.3201,
+          0.3201,
+          0.0501
+        ]
+      ],
+      "judgment": "나무 테·크림 문자판·눈금 12개·바늘 둘, 숫자 없음",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "procedural": true
+      }
+    },
+    "bicycle": {
+      "path": "res://models/props_field/bicycle.glb",
+      "status": "ready",
+      "source_name": "bicycle",
+      "source_credit": "자체 제작, Blender 기본 도형",
+      "license_path": "tools/blender/props_field_open.py (자체 제작)",
+      "footprint_m": [
+        2,
+        1
+      ],
+      "height_m": 0.26,
+      "bottom_m": 0.0,
+      "mount": "floor",
+      "triangle_limit": 600,
+      "lod0_tris": 544,
+      "bytes": 39868,
+      "sha256": "0fd880c72f8d72a7d5f9518b4041241352b70df268c29f0759dcf88a2358646e",
+      "bounds_m": [
+        [
+          -0.85,
+          0.0,
+          -0.437
+        ],
+        [
+          0.85,
+          0.26,
+          0.437
+        ]
+      ],
+      "dimensions_m": [
+        1.7,
+        0.26,
+        0.874
+      ],
+      "expected_dimensions_m": [
+        [
+          1.6999,
+          0.1,
+          0.65
+        ],
+        [
+          1.7001,
+          0.35,
+          0.96
+        ]
+      ],
+      "judgment": "길이 1.70 m, 지름 0.66 m 바퀴의 쓰러진 옛 자전거",
+      "verification": {
+        "blender": "4.5.10 LTS",
+        "glb": "pass",
+        "imports": "not_run",
+        "godot_tests": "not_run",
+        "visual_review": "not_verified",
+        "pc_check_glb": "pass"
+      },
+      "source": {
+        "procedural": true
+      }
+    }
+  },
+  "verification": {
+    "blender": "4.5.10 LTS",
+    "glb": "pass",
+    "workbench_render": {
+      "status": "pass",
+      "complete": true,
+      "shown_kinds": [
+        "kettle",
+        "kettle_enamel",
+        "cutting_board",
+        "vase",
+        "alarm_clock",
+        "mug",
+        "teapot",
+        "serving_bowl",
+        "dinner_plate",
+        "yard_well",
+        "mailbox",
+        "wall_poster",
+        "wall_clock",
+        "bicycle"
+      ],
+      "path": "tools/blender/_open_sheet.png",
+      "visual_review": "not_verified",
+      "azimuth": 45,
+      "elevation": 35,
+      "reference_height_m": 1.75
+    },
+    "visual_review": "not_verified",
+    "imports": "not_run: 별도 Godot 세션",
+    "godot_tests": "not_run: 별도 Godot 세션"
+  }
+}
