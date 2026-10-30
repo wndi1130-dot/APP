@@ -300,8 +300,16 @@ func set_faded(fade: float) -> void:
 			mat.shader = draw.get_meta("shader_before")
 			draw.remove_meta("shader_before")
 	for extra in blankets + [guns]:
-		if extra is GeometryInstance3D:
-			(extra as GeometryInstance3D).transparency = fade
+		if not extra is GeometryInstance3D:
+			continue
+		var geo := extra as GeometryInstance3D
+		if fade > 0.0:
+			if not geo.has_meta("transparency_before"):
+				geo.set_meta("transparency_before", geo.transparency)
+			geo.transparency = fade
+		elif geo.has_meta("transparency_before"):
+			geo.transparency = float(geo.get_meta("transparency_before"))
+			geo.remove_meta("transparency_before")
 
 
 func _process(_delta: float) -> void:

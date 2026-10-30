@@ -73,13 +73,17 @@ func enter(scene, c: Dictionary) -> bool:
 func exit(scene) -> void:
 	_fade_people(scene, false)
 	if is_instance_valid(marks):
+		# Out of the car at once, so a car opened again this frame takes the name back.
+		if marks.get_parent() != null:
+			marks.get_parent().remove_child(marks)
 		marks.queue_free()
 	marks = null
 	cursor = null
 	car = {}
 
 
-## The decorating camera, as the mock-up drew it, on the scene's own camera.
+## The decorating camera, as the mock-up drew it, on the scene's own camera: set in the car's own
+## space and carried out by its transform, so a car moved or turned in the train is seen the same.
 func place_camera(scene) -> void:
 	var cam: Camera3D = scene.camera
 	var node: Node3D = car["node"]
@@ -88,9 +92,10 @@ func place_camera(scene) -> void:
 	var pitch := deg_to_rad(PITCH)
 	cam.keep_aspect = Camera3D.KEEP_HEIGHT
 	cam.size = view.y / px_per_m
-	var anchor: Vector3 = node.to_global(LOOK)
-	cam.position = anchor + Vector3(0.0, sin(pitch), cos(pitch)) * 30.0
-	cam.basis = Basis.looking_at(anchor - cam.position, Vector3.UP)
+	var to_world: Transform3D = node.global_transform
+	var anchor: Vector3 = to_world * LOOK
+	var eye: Vector3 = to_world * (LOOK + Vector3(0.0, sin(pitch), cos(pitch)) * 30.0)
+	cam.global_transform = Transform3D(Basis.looking_at(anchor - eye, to_world.basis.y.normalized()), eye)
 	cam.h_offset = 0.0
 	var band_mid: float = (UiFonts.px(TOP_CSS) + view.y - UiFonts.px(BOTTOM_CSS)) * 0.5 + UiFonts.px(WALLS_UP_CSS)
 	cam.v_offset = (band_mid - view.y * 0.5) / px_per_m

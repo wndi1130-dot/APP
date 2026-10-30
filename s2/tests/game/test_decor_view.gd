@@ -95,6 +95,51 @@ func test_a_finger_finds_the_place_under_it() -> void:
 	assert_false(cursor.visible)
 
 
+## Opened again in the same frame (one car, another, the first again): the marks keep their name.
+func test_a_car_opened_again_at_once_keeps_its_marks() -> void:
+	var s := _scene()
+	assert_true(s.enter_decor("guard"))
+	assert_true(s.enter_decor("tail1"))
+	assert_true(s.enter_decor("guard"))
+	var node: Node3D = s.car("guard")["node"]
+	assert_not_null(node.get_node_or_null("DecorMarks/DecorCursor"), "the marks under their own name")
+	await wait_physics_frames(1)
+	assert_not_null(node.get_node_or_null("DecorMarks/DecorCursor"), "still there once the old ones are freed")
+	assert_null((s.car("tail1")["node"] as Node3D).get_node_or_null("DecorMarks"), "none left in the car between")
+
+
+## From the side view too: the shell cut as on the diagonal, and the camera kept to the window.
+func test_decorating_from_the_side_view_cuts_the_shell_and_follows_the_window() -> void:
+	var s := _scene()
+	s.set_view_mode("section")
+	assert_true(s.enter_decor("guard"))
+	var c: Dictionary = s.car("guard")
+	for top: Node3D in c.get("shell_top", []):
+		assert_false(top.visible, "the shell over 2.2 m away while decorating")
+	var viewport := s.get_viewport() as SubViewport
+	viewport.size = Vector2i(1280, 720)
+	await wait_physics_frames(1)
+	assert_almost_eq(s.camera.size, 720.0 / (1280.0 / DecorView.WIDTH_M), 0.01, "the car still fills the new width")
+	s.exit_decor()
+	for top: Node3D in c.get("shell_top", []):
+		assert_true(top.visible, "the side view's shell back")
+
+
+## A car turned or moved in the train is seen the same: its length across the screen, the finger right.
+func test_a_turned_car_is_seen_along_its_length() -> void:
+	var s := _scene()
+	var node: Node3D = s.car("guard")["node"]
+	node.rotation.y = PI * 0.5
+	node.position += Vector3(0.0, 0.0, 3.0)
+	assert_true(s.enter_decor("guard"))
+	var a: Vector2 = s.camera.unproject_position(node.to_global(Vector3(0.0, 0.0, 0.0)))
+	var b: Vector2 = s.camera.unproject_position(node.to_global(Vector3(16.0, 0.0, 0.0)))
+	assert_almost_eq(b.x - a.x, 1688.0 * 16.0 / DecorView.WIDTH_M, 2.0, "the car's length across the screen")
+	assert_almost_eq(b.y, a.y, 1.0, "level")
+	var at: Vector3 = DecorGrid.floor_center(15, 2) + Vector3(0.0, 0.012, 0.0)
+	assert_eq(s.decor_pick(s.camera.unproject_position(node.to_global(at))), {"spot": "floor", "at": [15, 2]})
+
+
 ## The slice's way in and out (slice_flow.gd open_decor, leave_decor): not over a paper open to choose
 ## on; the gauges, plates and keys away while decorating and back after, the car still picked. The
 ## captain's and the dining car, with no people of their own, are picked by their plates too (결정 513).

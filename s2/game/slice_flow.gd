@@ -1325,7 +1325,8 @@ func _select(id: String) -> void:
 			train.set_pane(0.0)
 		return
 	train.focus_car(at)
-	if sel != "":
+	# Room is made for the pane only when one shows (a decorated car with no people has none yet).
+	if sel != "" and pane.visible:
 		var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
 		train.scroll(UiFonts.px(PANE_SHIFT_CSS) * train.camera.size / view_h)
 

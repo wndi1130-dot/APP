@@ -459,7 +459,8 @@ func _apply_view() -> void:
 
 
 func _apply_shell_view(c: Dictionary) -> void:
-	var diagonal: bool = view_mode == "diag"
+	# Decorating looks down into the car from either view, so its shell is cut as on the diagonal.
+	var diagonal: bool = view_mode == "diag" or decor != null
 	for top_node: Node3D in c.get("shell_top", []):
 		top_node.visible = not diagonal
 	for shell_material: StandardMaterial3D in c.get("shell_mats", []):
@@ -1253,10 +1254,11 @@ func _build_world() -> void:
 	_font.font_names = PackedStringArray(["Pretendard", "Noto Sans CJK KR", "Noto Sans KR", "Droid Sans Fallback", "sans-serif"])
 
 
-## Only the diagonal camera goes by the window's pixels (the pane's share); the side
-## view keeps its frame through a resize, as the council's close dining car is set by hand.
+## Only the diagonal and the decorating camera go by the window's pixels (the pane's share, the
+## band over the strip); the side view keeps its frame through a resize, as the council's close
+## dining car is set by hand.
 func _on_view_resized() -> void:
-	if view_mode == "diag":
+	if view_mode == "diag" or decor != null:
 		_place_camera()
 
 
