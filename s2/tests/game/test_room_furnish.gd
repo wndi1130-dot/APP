@@ -287,6 +287,92 @@ func test_the_box_goes_into_a_holding_piece() -> void:
 	assert_eq(box["items"], ["plank"], "내용물 그대로")
 
 
+## 넓은 침실(짧은 변 4칸 이상): 침대는 머리를 벽에 대고 긴 두 변이 방으로 트인다. facing은 베개 쪽이라
+## 가로 침대는 0·2, 세로 침대는 1·3이고, 베개 양옆 두 칸(짝 협탁 자리)은 방 안이다.
+func test_a_wide_bedroom_lays_the_bed_head_to_a_wall() -> void:
+	var d := _bedroom()
+	var stats := RoomFurnish.furnish_rooms(d)
+	var g: FieldGrid = d["grid"]
+	var of: PackedInt32Array = RoomFurnish.rooms_of(g)["of"]
+	var beds := 0
+	for p: Dictionary in d["props"]:
+		if p["kind"] != "bed" or not p.has("counter_run") or p.get("twin", false):
+			continue
+		beds += 1
+		var r: Rect2i = p["rect"]
+		var facing := int(p["facing"])
+		assert_eq(r.size.x > r.size.y, facing % 2 == 0, "가로 침대는 facing 0·2, 세로는 1·3: %s %d" % [r, facing])
+		var head := RoomFurnish.bed_head(r, facing)
+		var foot := r.end - Vector2i.ONE if head == r.position else r.position
+		var ri := RoomFurnish._at(g, of, head)
+		assert_ne(RoomFurnish._at(g, of, head + (head - foot).sign()), ri, "베개 너머는 벽: %s" % r)
+		var across := Vector2i(0, 1) if r.size.x > r.size.y else Vector2i(1, 0)
+		for c: Vector2i in [head - across, head + across]:
+			assert_eq(RoomFurnish._at(g, of, c), ri, "베개 양옆은 방 안: %s" % c)
+	assert_eq(beds, 1)
+	assert_eq(int(stats.get("head_beds", 0)), 1 + int(_has_twin(d)), "stats count the head-to-wall beds")
+
+
+func _has_twin(d: Dictionary) -> bool:
+	for p: Dictionary in d["props"]:
+		if p.get("twin", false):
+			return true
+	return false
+
+
+## 머리-벽 자리 후보는 모두 facing이 꼴과 맞고 베개 칸 너머가 벽이며, 베개 양옆 두 칸이 협탁 자리다.
+func test_head_to_wall_spots_face_their_wall() -> void:
+	var d := _bedroom()
+	var g: FieldGrid = d["grid"]
+	var map := RoomFurnish.rooms_of(g)
+	var of: PackedInt32Array = map["of"]
+	var ri := RoomFurnish._at(g, of, Vector2i(4, 3))
+	var cells: Array[Vector2i] = map["rooms"][ri]["cells"]
+	var item := {"kind": "bed", "size": Vector2i(2, 1), "at": "head", "near": "far_door"}
+	var cands := RoomFurnish._candidates(g, of, ri, cells, item, {}, {}, [Vector2i(4, 5)], [], {}, 40)
+	assert_gt(cands.size(), 4, "a 6x4 bedroom has head-to-wall spots")
+	for cand: Dictionary in cands:
+		var r: Rect2i = cand["rect"]
+		var facing := int(cand["facing"])
+		assert_eq(r.size.x > r.size.y, facing % 2 == 0, "%s %d" % [r, facing])
+		var head := RoomFurnish.bed_head(r, facing)
+		assert_true(RoomFurnish._wall_side(g, of, ri, Rect2i(head, Vector2i.ONE), cand["head"]), "베개 쪽 끝이 벽: %s" % r)
+		assert_eq(RoomFurnish._bedsides(g, of, ri, r, facing, true).size(), 2, "베개 양옆 둘: %s" % r)
+
+
+## 좁은 침실(폭 3칸, 3×6 = 18칸): 침대는 지금처럼 긴 변을 벽에 댄다.
+func test_a_narrow_bedroom_keeps_the_bed_along_a_wall() -> void:
+	var g := FieldGrid.new(7, 10)
+	for y in range(10):
+		for x in range(7):
+			var c := Vector2i(x, y)
+			if x >= 1 and x <= 5 and y >= 1 and y <= 8:
+				g.building[g.index(c)] = 0
+				g.set_solid(c, S.WALL if x == 1 or x == 5 or y == 1 or y == 8 else S.NONE)
+	var door := Vector2i(3, 8)
+	g.set_solid(door, S.DOOR)
+	g.doors[door] = {"state": "closed", "hp": 8, "building": 0, "cell": door}
+	g.refresh_paths()
+	var d := {"grid": g, "levels": {0: g}, "stairs": [], "low_blocks": [], "place_id": "houses_99", "containers": {},
+		"props": [{"kind": "bed", "rect": Rect2i(2, 2, 2, 1), "solid": "none", "facing": 0, "note": "안방의 침대", "level": 0}]}
+	var stats := RoomFurnish.furnish_rooms(d)
+	assert_eq(int(stats.get("wide_bedrooms", 0)), 0)
+	var of: PackedInt32Array = RoomFurnish.rooms_of(g)["of"]
+	var beds := 0
+	for p: Dictionary in d["props"]:
+		if p["kind"] != "bed" or not p.has("counter_run"):
+			continue
+		beds += 1
+		var r: Rect2i = p["rect"]
+		var ri := RoomFurnish._at(g, of, r.position)
+		var along_wall := false
+		for dd in DIRS:
+			if ((dd.y != 0) == (r.size.x >= r.size.y)) and RoomFurnish._wall_side(g, of, ri, r, dd):
+				along_wall = true
+		assert_true(along_wall, "긴 변이 벽: %s" % r)
+	assert_eq(beds, 1)
+
+
 func test_same_seed_same_room_other_map_other_room() -> void:
 	var a := _bedroom()
 	var b := _bedroom()
@@ -561,14 +647,42 @@ func test_a_rug_lies_under_the_bed_inside_the_room() -> void:
 		for x in range(5):
 			cells.append(Vector2i(x, y))
 	var placed := [{"item": {"kind": "bed"}, "rect": Rect2i(1, 1, 2, 1), "facing": 0}]
-	var rug := RoomFurnish._lay_rug("bed", cells, placed, {}, 0)
+	var lies := _rug_salt("bed", true)
+	var rug := RoomFurnish._lay_rug("bed", cells, placed, {}, lies)
 	assert_eq(rug.get("rect"), Rect2i(1, 0, 2, 3), "the bed's width, a cell more on either long side")
 	assert_between(int(rug.get("look", 0)), 1, 224)
 	var by_wall := [{"item": {"kind": "bed"}, "rect": Rect2i(1, 0, 2, 1), "facing": 0}]
-	assert_eq(RoomFurnish._lay_rug("bed", cells, by_wall, {}, 0).get("rect"), Rect2i(1, 0, 2, 2), "trimmed at the wall")
-	assert_true(RoomFurnish._lay_rug("bed", cells, by_wall, {Vector2i(2, 1): true}, 0).is_empty(), "never over the stairs")
-	assert_true(RoomFurnish._lay_rug("bed", cells, placed, {}, 600 << 6).is_empty(), "not every bedroom has one")
-	assert_true(RoomFurnish._lay_rug("kitchen", cells, placed, {}, 0).is_empty(), "no rug in a kitchen")
+	assert_eq(RoomFurnish._lay_rug("bed", cells, by_wall, {}, lies).get("rect"), Rect2i(1, 0, 2, 2), "trimmed at the wall")
+	assert_true(RoomFurnish._lay_rug("bed", cells, by_wall, {Vector2i(2, 1): true}, lies).is_empty(), "never over the stairs")
+	assert_true(RoomFurnish._lay_rug("bed", cells, placed, {}, _rug_salt("bed", false)).is_empty(), "not every bedroom has one")
+	assert_true(RoomFurnish._lay_rug("kitchen", cells, placed, {}, lies).is_empty(), "no rug in a kitchen")
+
+
+## 깔개 굴림이 want(깔림·안 깔림)로 나오는 첫 씨앗.
+func _rug_salt(cls: String, want: bool) -> int:
+	for s in range(1000):
+		if (float(RoomFurnish._roll(s, RoomFurnish.ROLL_RUG) % 1000) / 1000.0 < float(RoomFurnish.RUG_CHANCE[cls])) == want:
+			return s
+	return -1
+
+
+## 점검 L3: 기댈 벽·깔개는 방 번호를 따라 차례로 돌지 않는다(씨앗 비트를 잘라 쓰지 않고 섞어 고른다).
+func test_lean_walls_and_rugs_do_not_step_with_the_room_number() -> void:
+	var steps := 0
+	var backs: Dictionary = {}
+	var rugs := 0
+	var prev := -1
+	for ri in range(40):
+		var s := RoomFurnish.look_seed_of("houses_01", 3, 0, ri)
+		var back := RoomFurnish._roll(s, RoomFurnish.ROLL_BACK) % 4
+		backs[back] = int(backs.get(back, 0)) + 1
+		if prev >= 0 and back == (prev + 1) % 4:
+			steps += 1
+		prev = back
+		rugs += int(RoomFurnish._roll(s, RoomFurnish.ROLL_RUG) % 1000 < 550)
+	assert_eq(backs.size(), 4, "all four walls lean: %s" % str(backs))
+	assert_lt(steps, 20, "the lean wall does not step round the room once per room number: %d of 39" % steps)
+	assert_between(rugs, 12, 32, "about half the bedrooms have a rug")
 
 
 ## 배치 틀(사용자 10-28 「가구배치가 단조로우면 안돼」): 한 동네의 침실들에서 침대가 한 구석으로 몰리지 않는다.
@@ -646,16 +760,36 @@ func test_kept_furniture_takes_its_houses_tint() -> void:
 	assert_gt(kept, 0, "houses_01 keeps some of its map's furniture in furnished houses")
 
 
-## 새 협탁은 그 집 침대의 베개 쪽 끝 곁에만 선다(발치나 침대 앞 가운데가 아니다).
+## 새 협탁은 그 집 침대의 베개 쪽 끝 곁에만 선다(발치나 침대 앞 가운데가 아니다). 넓은 침실은 침대 머리를
+## 벽에 대고 협탁이 짝으로도 서며, 침실의 12%쯤은 짧은 변이 넓은 방에서 홑침대 둘이다(방마다 침대는 하나,
+## 홑침대 둘 방만 둘).
 func test_nightstands_stand_by_the_pillow() -> void:
 	var stands := 0
+	var stats := {"bedrooms": 0, "wide_bedrooms": 0, "head_beds": 0, "twins": 0, "stand_pairs": 0}
 	for map_name: String in ["houses_01", "houses_02"]:
 		var d := FieldMaps.build(map_name)
+		for k: String in stats:
+			stats[k] = int(stats[k]) + int(d["room_stats"].get(k, 0))
 		var heads: Dictionary = {}  # "층:건물" -> [베개 칸]
+		var beds_in: Dictionary = {}  # "층:방" -> [침대 수, 둘째 침대 수]
+		var maps: Dictionary = {}
 		for p: Dictionary in d["props"]:
 			if p.get("kind", "") == "bed" and p.has("counter_run"):
-				var key := "%d:%d" % [int(p.get("level", 0)), int(p["building"])]
+				var lv := int(p.get("level", 0))
+				var key := "%d:%d" % [lv, int(p["building"])]
 				heads.get_or_add(key, []).append(RoomFurnish.bed_head(p["rect"], int(p["facing"])))
+				if not maps.has(lv):
+					maps[lv] = RoomFurnish.rooms_of(d["levels"][lv])
+				var room := "%d:%d" % [lv, RoomFurnish._at(d["levels"][lv], maps[lv]["of"], (p["rect"] as Rect2i).position)]
+				var n: Array = beds_in.get_or_add(room, [0, 0])
+				n[0] += 1
+				n[1] += int(p.get("twin", false))
+		for room: String in beds_in:
+			assert_eq(beds_in[room][0], 1 + beds_in[room][1], "%s room %s: one bed, two only with twin beds" % [map_name, room])
+			if beds_in[room][1] > 0:
+				var lv := int(room.get_slice(":", 0))
+				var cells: Array[Vector2i] = maps[lv]["rooms"][int(room.get_slice(":", 1))]["cells"]
+				assert_gte(RoomFurnish._short_side(cells), RoomFurnish.WIDE_BED_SIDE, "%s room %s: twin beds only in a wide room" % [map_name, room])
 		for p: Dictionary in d["props"]:
 			if p.get("kind", "") != "nightstand" or not p.has("counter_run"):
 				continue
@@ -666,3 +800,6 @@ func test_nightstands_stand_by_the_pillow() -> void:
 			assert_true(by_pillow, "%s: the nightstand at %s stands by a pillow" % [map_name, str(at)])
 			stands += 1
 	assert_gt(stands, 2, "nightstands still stand")
+	assert_gt(int(stats["head_beds"]), int(stats["wide_bedrooms"]) / 2, "most wide bedrooms lay the bed head to a wall: %s" % str(stats))
+	assert_gt(int(stats["stand_pairs"]), 0, "a head-to-wall bed gets a nightstand on both sides: %s" % str(stats))
+	assert_between(int(stats["twins"]), 1, roundi(int(stats["bedrooms"]) * RoomFurnish.TWIN_SHARE) + 1, "about 12%% of the bedrooms have twin beds: %s" % str(stats))

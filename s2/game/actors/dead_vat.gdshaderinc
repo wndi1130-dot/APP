@@ -30,6 +30,10 @@ uniform float clip_loop[128];
 uniform float bias = 0.5;
 // Seconds the field has stood paused (pause_veil.gd): the motions run on TIME - fx_still, so they hold.
 global uniform float fx_still;
+#ifdef FADED
+// The train's people while a car is decorated (people_faded.gdshader): seen, but through.
+uniform float fade : hint_range(0.0, 1.0) = 0.0;
+#endif
 uniform vec3 tint = vec3(0.5);
 // The bake moves vertices only, so a lying body keeps its standing normals.
 // On, the face normal is taken from the moved surface instead. Off until it
@@ -282,4 +286,7 @@ void fragment() {
 	}
 	ALBEDO = base * shade;
 	ROUGHNESS = 1.0;
+#ifdef FADED
+	ALPHA = 1.0 - fade;
+#endif
 }

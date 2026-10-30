@@ -165,7 +165,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["focus"] = c
 			out["body"] = ("%s이(가) 아이 %s을(를) 남겼다. 곁엔 %s뿐인데, 혼자서는 버거워 보인다. 칸이 열차장의 말을 기다린다." % [dead, kid_text, parent]) if not other.is_empty() \
 				else ("%s이(가) 아이 %s을(를) 남겼다. 이제 아무도 없다. 칸이 열차장의 말을 기다린다." % [dead, kid_text])
-			says = [("%s%s 키운다. 칸이 손을 보태라!" % [parent, _iga(parent)]) if not other.is_empty() else "이 칸의 아이다. 이 칸이 함께 키운다."]
+			says = [("%s이(가) 키운다. 칸이 손을 보태라!" % parent) if not other.is_empty() else "이 칸의 아이다. 이 칸이 함께 키운다."]
 			if c != "front": says.append(("밤엔 앞칸 빈 침대에서 재워라. %s도 자야 한다." % parent) if not other.is_empty() else "앞칸에 빈 침대가 있다. 거기서 자게 해라.")
 			if c != "medtech": says.append(("낮엔 의무진이 맡아라. %s의 손을 덜어 줘라." % parent) if not other.is_empty() else "의무진이 맡아라. 아플 때 제일 가깝다.")
 		"elder":

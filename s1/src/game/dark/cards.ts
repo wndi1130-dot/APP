@@ -20,7 +20,7 @@ import { fill, freeGuards, guarded, guardsOut, postGuard, signRead } from './emb
 import {
   afterOrder, answerThreat, dropOrder, exeOptions, exeVoice, METHOD, orderOpen, roleLine, setExe, setMethod, startOrder, successP,
 } from './order';
-import { adults, alive, commOf, darkCard, dpick, dr, eul, iga, nameOf, segFull } from './state';
+import { adults, alive, commOf, darkCard, dpick, dr, nameOf, segFull } from './state';
 import type { Ember, OrderExe, OrderMethod } from './state';
 
 // S1b 카드(13장). 본문과 대사는 자리표시이고 Gemini가 같은 결로 쓴다. 선을 넘는 선택지는 cross에 반응 한 줄(10.1)을 단다.
@@ -124,7 +124,7 @@ function view(g: Game, card: Card): CardView | null {
       const s = pcs?.sus.find(x => x.id === who);
       const pv = s ? punishPreview(s) : null;
       const proof = pv?.lv === 2 && pcs ? [`${COMM_NAME[pcs.victimComm]} 관계 +2`] : [];
-      const head = via === 'trial' ? `의회가 ${name}에게 유죄를 냈다. 벌은 열차장이 정한다.` : `경비대장이 ${name}${eul(name)} 데려왔다.`;
+      const head = via === 'trial' ? `의회가 ${name}에게 유죄를 냈다. 벌은 열차장이 정한다.` : `경비대장이 ${name}을(를) 데려왔다.`;
       return {
         title: `${name}의 벌`, speaker: via === 'trial' ? undefined : via === 'guard' ? rep(g, 'guard') : officer(g, [who]), focus: c, required: true,
         body: pv ? `${head}\n${pv.basis}` : head,
@@ -153,7 +153,7 @@ function view(g: Game, card: Card): CardView | null {
       const canTrial = !cs.promiseUsed;
       return {
         title: '사람들이 범인을 찾는다', speaker: rep(g, cs.victimComm), focus: cs.victimComm, required: true,
-        body: `${crowdLine(g, cs)} 사람들이 ${name}${eul(name)} 끌어내려 한다.${cries.length ? ` 사람들이 외친다. ${cries.map(x => `"${x}"`).join(' ')}` : ''}`, faces: [name],
+        body: `${crowdLine(g, cs)} 사람들이 ${name}을(를) 끌어내려 한다.${cries.length ? ` 사람들이 외친다. ${cries.map(x => `"${x}"`).join(' ')}` : ''}`, faces: [name],
         choices: [
           crossing(g, card, { label: '내준다', say: '그날 밤 거기 있던 건 그자뿐이다. 데려가라.', effs: [], special: 'dark:mob:give' }, t.id),
           { label: '지킨다', say: '아무도 손대지 마라. 경비대, 그 앞에 서라.', effs: [], special: 'dark:mob:protect', extra: ['경비대 노출 +5', `${COMM_NAME[cs.victimComm]} 관계 −5`, '공포 +3'] },
@@ -168,7 +168,7 @@ function view(g: Game, card: Card): CardView | null {
       const iname = nameOf(g, innocent);
       return {
         title: '드러나려는 일', speaker: officer(g), focus: c, required: true,
-        body: w && alive(g, w) ? `${nameOf(g, w)}${iga(nameOf(g, w))} ${iname}의 일을 두고 할 말이 있다고 한다. 내일 식당칸에서.` : `${iname}의 일을 두고 다른 말이 돈다.`,
+        body: w && alive(g, w) ? `${nameOf(g, w)}이(가) ${iname}의 일을 두고 할 말이 있다고 한다. 내일 식당칸에서.` : `${iname}의 일을 두고 다른 말이 돈다.`,
         choices: [
           { label: '말하게 둔다', say: '들어 보자. 틀렸으면 틀린 거다.', effs: [], special: 'dark:truth:let' },
           ...(w && orderOpen(g, w) ? [crossing(g, card, { label: '조용히 처리한다', say: '그 입을 닫게 해라.', effs: [], special: 'dark:truth:order', extra: [roleLine(g, w, 'truth')] }, w)] : []),
@@ -180,7 +180,7 @@ function view(g: Game, card: Card): CardView | null {
       const name = nameOf(g, who);
       return {
         title: '불신임 동의', speaker: rep(g, c), focus: c, required: true,
-        body: `${name}${iga(name)} 다음 회기에 열차장 불신임을 올리겠다고 한다. ${roleLine(g, who, 'hostile')}`,
+        body: `${name}이(가) 다음 회기에 열차장 불신임을 올리겠다고 한다. ${roleLine(g, who, 'hostile')}`,
         choices: [
           { label: '받는다', say: '올려라. 의회가 정하면 따른다.', effs: [], special: 'dark:hostile:let' },
           ...(orderOpen(g, who) ? [crossing(g, card, { label: '조용히 처리한다', say: '회기 전에 끝내라. 조용히.', effs: [], special: 'dark:hostile:order' }, who)] : []),
@@ -192,7 +192,7 @@ function view(g: Game, card: Card): CardView | null {
       const name = nameOf(g, who);
       return {
         title: '쥐고 있는 말', speaker: { name, role: COMM_NAME[c], comm: c }, focus: c, required: true,
-        body: `${name}${iga(name)} 찾아왔다. 그날 일을 아직 기억한다고 한다. 사치품 셋을 원한다.`,
+        body: `${name}이(가) 찾아왔다. 그날 일을 아직 기억한다고 한다. 사치품 셋을 원한다.`,
         choices: [
           { label: '들어준다', say: '원하는 걸 말해라. 이번 한 번이다.', effs: [], special: 'dark:threat:give', disabled: g.lux < 3 ? '사치품이 모자라다' : undefined, extra: ['사치품 −3'] },
           { label: '버틴다', say: '해 볼 테면 해 봐라.', effs: [], special: 'dark:threat:stand' },
@@ -241,7 +241,7 @@ function view(g: Game, card: Card): CardView | null {
       const seen = !hidden && !!card.text;
       return {
         title: '끝났다', focus: c, required: true,
-        body: `${name}${iga(name)} 죽었다.${hidden ? ' 사고라고 적혔다. 그래도 수사가 열린다.' : ` 수사가 열린다.${caughtLine}`}${kin ? ` ${kin}${iga(kin)} 식당칸 문가에 서 있다.` : ''}`,
+        body: `${name}이(가) 죽었다.${hidden ? ' 사고라고 적혔다. 그래도 수사가 열린다.' : ` 수사가 열린다.${caughtLine}`}${kin ? ` ${kin}이(가) 식당칸 문가에 서 있다.` : ''}`,
         ...(kin ? { faces: [kin] } : {}),
         choices: [
           // 들켜서 실행자가 붙잡혔으면 일지로는 못 덮는다. 경비대 입을 막는 값 오른 줄이 대신 나온다(제안, PR 41 리뷰).
@@ -259,7 +259,7 @@ function view(g: Game, card: Card): CardView | null {
       const again = d.practice !== null;
       return {
         title: '확인은 누가', speaker: rep(g, 'medtech'), focus: c, required: true,
-        body: again ? `${card.who ?? ''}의 확인을 두고 다시 묻는다. 지난번처럼 해도 되겠느냐고.` : `${COMM_NAME[c]}에서 ${card.who ?? '사람'}${iga(card.who ?? '사람')} 죽었다. 일어나기 전에 누가 확인할지 정해야 한다.`,
+        body: again ? `${card.who ?? ''}의 확인을 두고 다시 묻는다. 지난번처럼 해도 되겠느냐고.` : `${COMM_NAME[c]}에서 ${card.who ?? '사람'}이(가) 죽었다. 일어나기 전에 누가 확인할지 정해야 한다.`,
         choices: [
           { label: '경비대가 한다', say: '경비대 일이다. 총은 경비대에 있다.', effs: [], special: 'dark:rule:guard', extra: ['죽음마다 경비대 노출 +1, 관계 −2'] },
           { label: '의무진이 한다', say: '의무진이 마지막을 본다. 그게 맞다.', effs: [], special: 'dark:rule:medtech', extra: ['죽음마다 의무진 관계 −3'] },

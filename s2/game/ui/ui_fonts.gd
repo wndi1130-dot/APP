@@ -82,14 +82,16 @@ static func keep_all(text: String) -> String:
 ## 「은(는)」, 「(으)로」) settled by the letter before them as written Korean
 ## has it: 과·을·이·은·으로 after a final consonant, 와·를·가·는·로 after none,
 ## and 로 after ㄹ. A digit is read as its Korean number; after anything else
-## the two-way form stays.
+## the two-way form stays. After a closing bracket it goes by the word before
+## the bracket, which only adds to that word: 「블라스타(기관실)가」.
 static func josa(text: String) -> String:
 	var out: String = text
 	for p: Array in PARTICLES:
 		var both: String = p[0]
 		var at: int = out.find(both)
 		while at >= 0:
-			var tail: int = _tail(out.unicode_at(at - 1)) if at > 0 else -1
+			var end: int = _word_end(out, at - 1)
+			var tail: int = _tail(out.unicode_at(end)) if end >= 0 else -1
 			var pick: String = both
 			if tail == 0 or (tail == 8 and both == "(으)로"):
 				pick = p[2]
@@ -98,6 +100,28 @@ static func josa(text: String) -> String:
 			out = out.substr(0, at) + pick + out.substr(at + both.length())
 			at = out.find(both, at + pick.length())
 	return out
+
+
+## Where the word a particle settles by ends: `i` itself, or, when `i` is a
+## closing bracket, the letter before its opening one — past every bracket when
+## brackets follow one another (-1 when one has no opening bracket).
+static func _word_end(text: String, i: int) -> int:
+	while i >= 0 and text[i] == ")":
+		var depth: int = 0
+		var open: int = -1
+		while i >= 0:
+			if text[i] == ")":
+				depth += 1
+			elif text[i] == "(":
+				depth -= 1
+				if depth == 0:
+					open = i
+					break
+			i -= 1
+		if open < 0:
+			return -1
+		i = open - 1
+	return i
 
 
 ## The final consonant of a letter (0 for none, 8 for ㄹ), -1 when it is not

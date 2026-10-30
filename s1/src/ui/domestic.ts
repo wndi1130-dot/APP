@@ -31,7 +31,7 @@ import type { IconName } from './icons';
 import { CARS, fmt, signed } from './common';
 import type { CarDef, DomUi, Ui, View } from './common';
 import { bar, portrait, tip } from './widgets';
-import { nameBtn, shownName } from './names';
+import { nameBtn, shortText, shownName } from './names';
 import { plainData } from './repro';
 import { duoStates, tierCells } from './tech_pairs';
 import type { Step } from './repro';
@@ -893,7 +893,7 @@ function faces(cs: Comm[], g: Game): HTMLElement[] {
 /** 법에 걸린 기술의 쓸모 줄(7.3). 모르고 사는 함정을 막는다. */
 function useLine(g: Game, id: TechId, v?: Variant): HTMLElement | null {
   const line = techUseLine(g, id, v);
-  return line ? h('p', { class: 'dom-use' }, line) : null;
+  return line ? h('p', { class: 'dom-use' }, shortText(line)) : null;
 }
 function useTag(g: Game, id: TechId, v?: Variant): HTMLElement | null {
   const laws = techLaws(id, v);
@@ -957,7 +957,7 @@ function nodeDetail(g: Game, id: TechId, more = false): HTMLElement {
         v && def.variants ? h('span', null, eff(def.variants[v].effect), more ? h('span', { class: 'sub' }, ` · ${upkeepText(def.variants[v].upkeep)}`) : null) : null,
         h('span', { class: 'pol pol--gray' }, rel || '관계 안 움직임'),
         sameUse ? null : useTag(g, id, v),
-        use ? h('span', { class: 'dom-use' }, use) : null,
+        use ? h('span', { class: 'dom-use' }, shortText(use)) : null,
         h('span', { class: 'dom-vrow__acts' },
           h('button', {
             class: 'btn btn--dark btn--small', 'data-action': 'dom-restore', 'data-id': id, 'data-mode': 'full', 'data-variant': v ?? '', disabled: !!check.full, title: check.full ?? '',
