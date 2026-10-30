@@ -10,6 +10,10 @@ const LootTables = preload("res://game/sim/loot_tables.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const Carry = preload("res://game/sim/carry.gd")
+const FieldGame = preload("res://game/field_game.gd")
+const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
+const FieldDeparture = preload("res://game/politics/field_departure.gd")
+const V = preload("res://tests/politics/field_vectors.gd")
 
 ## houses_01: homes; office_01: a general store; church_06: the parish school.
 const MAPS: Array[String] = ["houses_01", "office_01", "church_06"]
@@ -101,7 +105,7 @@ func test_supplies_leave_every_other_item_and_report_field_unchanged() -> void:
 			new_report.erase("supplies")
 			assert_eq(JSON.stringify(new_report), JSON.stringify(old_report), "%s:%d: report" % [place, seed])
 	assert_gt(in_houses, 0, "supplies appear across the five house seeds")
-	gut.p("supplies in the parish school over five seeds: %d" % in_school)
+	assert_gt(in_school, 0, "and in the parish school (its unnamed rooms read as storage)")
 
 
 func test_the_same_seed_dresses_the_same_boxes() -> void:
@@ -202,6 +206,68 @@ func test_supplies_are_optional_integer_stock_on_the_receipt() -> void:
 	assert_eq(data["version"], 3)
 	assert_eq(data["stock"]["supplies"], 3)
 	assert_eq(Receipt.check(data), [] as Array[String])
+
+
+func test_the_stay_key_is_read_before_the_name() -> void:
+	# name_keys reads a school or an inn from the name once; renamed after, the key still holds.
+	var data := {"containers": {}, "buildings": [{"name": "작은 학교"}, {"name": "강변 여관"}, {"name": "주택"}]}
+	LootDress.name_keys(data)
+	assert_eq(data["buildings"][0]["stay_kind"], "school")
+	assert_eq(data["buildings"][1]["stay_kind"], "inn")
+	assert_eq(data["buildings"][2]["stay_kind"], "")
+	data["buildings"][0]["name"] = "창고"
+	# A key that says school wins over a name that says nothing, and an empty key over a school's name.
+	var buildings: Array = [data["buildings"][0], {"name": "작은 학교", "stay_kind": "", "loot_kind": ""}]
+	var keyed := 0
+	var named := 0
+	for seed in range(1, 161):
+		var boxes := {"a": {"building": 0, "items": []}, "b": {"building": 1, "items": []}}
+		LootSupplies.strew(boxes, seed, {"a": "storage", "b": "storage"}, buildings)
+		for item: String in boxes["a"]["items"]:
+			if item in ["book", "toy", "child_clothes"]:
+				keyed += 1
+		for item: String in boxes["b"]["items"]:
+			if item in ["toy", "child_clothes"]:
+				named += 1
+	assert_gt(keyed, 0, "the school rows follow the key")
+	assert_eq(named, 0, "not the name")
+
+
+func _contract_game(departure: Variant):
+	var game = FieldGame.new()
+	game.opts = {"seed": 4, "auto_pause": false, "raiders": false}
+	if departure is Dictionary:
+		game.opts["departure"] = departure
+	game.map_script = BareLine
+	add_child_autofree(game)
+	game.set_process(false)
+	return game
+
+
+func test_unloaded_supplies_melt_into_one_stock_rounded_once_a_stop() -> void:
+	# The train's contract makes the receipt v5; the stock is added up by key and rounded once
+	# (field_game.finish), so one cake of soap (0.25) is nothing and two are one.
+	for unloaded: Dictionary in [{"soap": 1}, {"soap": 2}, {"soap": 3}, {"book": 1, "soap": 3}, {"book": 3}]:
+		var d: Dictionary = FieldDeparture.build((V.data()["contracts"][0]["state"] as Dictionary).duplicate(true), V.tables(), {"placeId": "sulechow_station"})
+		var game = _contract_game(d)
+		for q in game.squad + game.crew:
+			q.items.clear()
+		game.unloaded = unloaded.duplicate()
+		game.finish("departed")
+		var r: Dictionary = JSON.parse_string(JSON.stringify(game.receipt.to_dict()))
+		var sum := 0.0
+		for id: String in unloaded:
+			sum += float(FieldItems.stock_of(id)[1]) * int(unloaded[id])
+		assert_gte(int(r["version"]), 3, str(unloaded))
+		assert_eq(int((r["stock"] as Dictionary).get("supplies", 0)), roundi(sum), "%s: %.2f rounded once" % [unloaded, sum])
+		assert_eq(Receipt.check(r), [] as Array[String], str(unloaded))
+	# Without the contract the receipt is a legacy one: taken, not written.
+	var plain = _contract_game(null)
+	for q in plain.squad + plain.crew:
+		q.items.clear()
+	plain.unloaded = {"book": 2}
+	plain.finish("departed")
+	assert_false((plain.receipt.to_dict()["stock"] as Dictionary).has("supplies"))
 
 
 func _supply_count(items: Array) -> int:

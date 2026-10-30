@@ -52,7 +52,13 @@ func _run() -> void:
 	var header: PackedStringArray = ["row", "map", "seed", "samples"]
 	for key: String in metrics:
 		header.append(key)
-	var lines: Array = [header]
+	# Rows are written as they come, so a run cut short by its time limit still leaves its seeds.
+	var out_path := String(options["out"])
+	var output := FileAccess.open(out_path, FileAccess.WRITE)
+	if output == null:
+		_fail("CSV를 열지 못했습니다: %s (%d)" % [out_path, FileAccess.get_open_error()])
+		return
+	output.store_csv_line(header)
 	var samples_by_map := {}
 	for place: String in maps:
 		var samples: Array = []
@@ -72,7 +78,8 @@ func _run() -> void:
 				_fail("생필품을 세지 못했습니다: %s:%d" % [place, seed])
 				return
 			samples.append(sample)
-			lines.append(_row("seed", place, str(seed), 1, sample, metrics))
+			output.store_csv_line(_row("seed", place, str(seed), 1, sample, metrics))
+			output.flush()
 		samples_by_map[place] = samples
 	# Summary rows follow all seed rows; even samples may have fractional medians.
 	for place: String in maps:
@@ -80,14 +87,7 @@ func _run() -> void:
 		var medians := {}
 		for key: String in metrics:
 			medians[key] = _median(samples, key)
-		lines.append(_row("median", place, "", samples.size(), medians, metrics))
-	var out_path := String(options["out"])
-	var output := FileAccess.open(out_path, FileAccess.WRITE)
-	if output == null:
-		_fail("CSV를 열지 못했습니다: %s (%d)" % [out_path, FileAccess.get_open_error()])
-		return
-	for line: PackedStringArray in lines:
-		output.store_csv_line(line)
+		output.store_csv_line(_row("median", place, "", samples.size(), medians, metrics))
 	output.flush()
 	var error := output.get_error()
 	output.close()
