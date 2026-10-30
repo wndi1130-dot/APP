@@ -9,6 +9,7 @@ const StopLoader = preload("res://game/stop_loader.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const PLACE := "mine_01"
 
 
@@ -124,6 +125,43 @@ func test_the_bank_rows_and_tiles_hold_on_every_kind_of_cell() -> void:
 	assert_eq(ahead.keys(), laid.keys())
 	for tile in laid:
 		assert_eq(ahead[tile], laid[tile], "tile %s as the SurfaceTool laid it" % tile)
+
+
+## The upper floors and the cellar as the view lays them when the loader's do not fit:
+## level_floor_row a row at a time, through SurfaceTools.
+func _row_floors(levels_of: Dictionary) -> Dictionary:
+	var out := {}
+	for lv in levels_of:
+		if int(lv) == 0:
+			continue
+		var lg: FieldGrid = levels_of[lv]
+		var floors := {}
+		for y in range(lg.height):
+			MapView.level_floor_row(lg, int(lv), y, floors)
+		var tiles := {}
+		for tile in floors:
+			tiles[tile] = (floors[tile] as SurfaceTool).commit_to_arrays()
+		out[lv] = tiles
+	return out
+
+
+func test_the_workers_floor_arrays_are_the_ones_laid_row_by_row() -> void:
+	# The first stop has four floors; as an edge stop they are mostly air beyond the old map.
+	var built: Dictionary = Maps.build("first_leg_01_sulechow")
+	var edge: Dictionary = StopGround.apply(Maps.build("first_leg_01_sulechow"), "edge", 7, 200.0)
+	assert_gt((edge["grid"] as FieldGrid).width, (built["grid"] as FieldGrid).width, "the edge stop is wider")
+	for data: Dictionary in [built, edge]:
+		var levels_of: Dictionary = data.get("levels", {})
+		var keys := {}
+		var ahead := MapView.level_floor_arrays(levels_of, keys)
+		var laid := _row_floors(levels_of)
+		assert_gt(laid.size(), 0, "floors above or below the ground")
+		assert_eq(ahead.keys(), laid.keys())
+		for lv in laid:
+			assert_eq((ahead[lv] as Dictionary).keys(), (laid[lv] as Dictionary).keys(), "level %d: the same tiles in the same order" % lv)
+			for tile in laid[lv]:
+				assert_eq(ahead[lv][tile], laid[lv][tile], "level %d tile %s as the rows laid it" % [lv, tile])
+			assert_eq(keys[lv], MapView.floor_key(levels_of[lv]))
 
 
 func test_a_view_lays_the_loaders_arrays_and_works_out_a_changed_map_again() -> void:
