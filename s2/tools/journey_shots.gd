@@ -400,7 +400,7 @@ func _daylight(look: Dictionary) -> void:
 		env.ambient_light_color = light["ambient_color"]
 		env.ambient_light_energy = float(light["ambient_energy"]) * 1.15
 		env.background_color = Color(light["fog_color"]).darkened(0.3)
-		env.tonemap_exposure = Atmosphere.EXPOSURE
+		env.tonemap_exposure = float(light.get("exposure", Atmosphere.EXPOSURE))
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(float(light["sun_pitch"]), float(light["sun_yaw"]), 0.0)
 	sun.light_color = light["sun_color"]

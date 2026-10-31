@@ -691,12 +691,14 @@ const EXPOSURE := 1.8
 ## A snowfield in the sun is the brightest thing the field shows, and the linear
 ## tonemap cut it to white (deep winter, clear noon: 55 % of the screen over V 0.85
 ## at the first stop and houses_04, against at most 16 % in the reference's pictures).
-## Where snow covers the ground (its cover between SNOW_EXPOSE_COVER's ends) and an
+## Where snow covers the ground (how white it lies, the field's fx_snow: 25 cm lying
+## is about 0.8, sim/snow_cover.gd; between SNOW_EXPOSE_COVER's ends) and an
 ## up-facing face takes more light than SNOW_LIGHT_MAX (sun and fill, the light's own
 ## units), the exposure comes down by that much, as an eye or a camera does on snow.
-## A grey snow day (about 0.25~0.28), patchy early snow and autumn keep EXPOSURE.
+## A grey snow day (about 0.25~0.28), patchy early snow, a thaw's thin snow and
+## autumn keep EXPOSURE.
 const SNOW_LIGHT_MAX := 0.34
-const SNOW_EXPOSE_COVER := Vector2(0.4, 0.9)
+const SNOW_EXPOSE_COVER := Vector2(0.4, 0.8)
 
 
 ## The colour grade (WorldEnvironment adjustments): a tone turned about the
@@ -740,7 +742,10 @@ const SKY_DOME_PITCH := -62.0
 const SKY_DOME_SHADOW := 0.5
 
 
-static func light(l: Dictionary) -> Dictionary:
+## ground_snow: how white the ground lies, 0..1 (the field's fx_snow, which follows
+## the snow lying and what falls or melts), for the exposure; below 0, the look's
+## snow level stands for it.
+static func light(l: Dictionary, ground_snow := -1.0) -> Dictionary:
 	var dome := smoothstep(0.45, 0.9, float(l["veil"])) * (1.0 - float(l["weights"]["night"]))
 	var fill := float(l["ambient_energy"])
 	var moved := fill * SKY_DOME_SHARE * dome
@@ -755,7 +760,8 @@ static func light(l: Dictionary) -> Dictionary:
 	if sun_part + dome_part > 0.001:
 		color = Color(l["sun_color"]).lerp(Color(l["ambient_color"]), dome_part / (sun_part + dome_part))
 	var up_light := (sun_part + dome_part) * sin(deg_to_rad(clampf(-pitch, 0.0, 90.0))) * _lin_lum(color) + (fill - moved) * _lin_lum(Color(l["ambient_color"]))
-	var snowed := smoothstep(SNOW_EXPOSE_COVER.x, SNOW_EXPOSE_COVER.y, FxState.snow_for_level(int(l["snow_level"])))
+	var cover := ground_snow if ground_snow >= 0.0 else FxState.snow_for_level(int(l["snow_level"]))
+	var snowed := smoothstep(SNOW_EXPOSE_COVER.x, SNOW_EXPOSE_COVER.y, cover)
 	var exposure := EXPOSURE * lerpf(1.0, minf(1.0, SNOW_LIGHT_MAX / maxf(up_light, 0.001)), snowed)
 	return {
 		"band": l["band"],

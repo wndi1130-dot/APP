@@ -681,8 +681,8 @@ func _apply_fx() -> void:
 		atmo_min = -INF
 		fx_params = Atmosphere.params(atmo, weather.wind_dir, snow_cover.cover())
 		FxState.apply(fx_params)
-		fx_light = Atmosphere.light(atmo)
-		fx_light_night = Atmosphere.light(atmosphere_at(0.0))
+		fx_light = Atmosphere.light(atmo, float(fx_params["fx_snow"]))
+		fx_light_night = Atmosphere.light(atmosphere_at(0.0), float(fx_params["fx_snow"]))
 		return
 	# A storm keeps its stage's light; the look is still made for breath and the like.
 	atmo = atmosphere_at(picture_hour())
@@ -892,7 +892,7 @@ func _update_atmosphere() -> void:
 		atmo_min = m
 		atmo = atmosphere_at(picture_hour())
 		_take_air()
-		fx_light = Atmosphere.light(atmo)
+		fx_light = Atmosphere.light(atmo, float(fx_params.get("fx_snow", -1.0)))
 		var p := Atmosphere.params(atmo, weather.wind_dir, float(fx_params.get("fx_snow", 0.0)))
 		var changed := {}
 		for key in ["fx_tint", "fx_sky", "fx_cloud", "fx_cold", "fx_frost", "fx_sight"]:

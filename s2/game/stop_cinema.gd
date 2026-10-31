@@ -452,7 +452,7 @@ func _build_world() -> void:
 	world = Node3D.new()
 	world.name = "World"
 	port.add_child(world)
-	var light: Dictionary = Atmosphere.light(look)
+	var light: Dictionary = Atmosphere.light(look, white)
 	var env := Environment.new()
 	# Dark and cold, as the field's air is (its background is the weather's tint, darkened).
 	var air: Color = Color(light["fog_color"]).darkened(0.3)

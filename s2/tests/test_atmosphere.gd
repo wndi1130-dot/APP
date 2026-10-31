@@ -286,6 +286,17 @@ func test_snow_in_the_sun_takes_the_exposure_down() -> void:
 	var t := Atmosphere.sun_times(1.0, 0.5)
 	var night := Atmosphere.light(Atmosphere.look(t.y + 3.0, ["clear"], "K1", 1.0, {"side": 0.5}))
 	assert_almost_eq(float(night["exposure"]), Atmosphere.EXPOSURE, 0.0001, "the night")
+	# The field says how white the ground lies: 25 cm lying (about 0.8) is a full
+	# snowfield, a thaw's thin snow keeps the exposure, between goes between.
+	var deep_l := Atmosphere.look(12.0, ["clear"], "K1", 1.0, {"side": 0.5})
+	assert_almost_eq(float(Atmosphere.light(deep_l, 0.8)["exposure"]), float(deep["exposure"]), 0.0001, "25 cm lying")
+	assert_almost_eq(float(Atmosphere.light(deep_l, 0.35)["exposure"]), Atmosphere.EXPOSURE, 0.0001, "thin snow")
+	var half := float(Atmosphere.light(deep_l, 0.6)["exposure"])
+	assert_true(half > float(deep["exposure"]) and half < Atmosphere.EXPOSURE, "between: %s" % half)
+	# The day through, low sun and dusk too: never up past EXPOSURE, never down to a dusk.
+	for q in range(int(t.x * 4.0), int(t.y * 4.0) + 1):
+		var e := float(Atmosphere.light(Atmosphere.look(q * 0.25, ["clear"], "K1", 1.0, {"side": 0.5}), 0.8)["exposure"])
+		assert_between(e, Atmosphere.EXPOSURE * 0.6, Atmosphere.EXPOSURE, "%.2f h" % (q * 0.25))
 
 
 func test_an_overcast_lights_from_above_and_keeps_the_ground() -> void:
