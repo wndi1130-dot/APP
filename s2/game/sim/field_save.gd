@@ -17,6 +17,7 @@ const PATH := "user://field_save.json"
 const TRAIN_PATH := "user://s1a_game_v2.json"
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const EatRules = preload("res://game/sim/eat_rules.gd")
+const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
@@ -28,6 +29,9 @@ const VEC_KEYS := ["pos", "home"]
 const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
+
+## Tests only: fail one step of the next write; empty is off, reset on entry.
+static var _test_fail_step: String = ""
 
 ## Only simulation state, never meshes, services or input widgets.
 const PERSON_FIELDS: Array[String] = [
@@ -141,9 +145,17 @@ static func from_json(text: String) -> Dictionary:
 	var parsed = json.data
 	if not parsed is Dictionary:
 		return {}
-	if String(parsed.get("kind", "")) != KIND or int(parsed.get("version", 0)) not in [1, VERSION]:
+	var version: Variant = parsed.get("version")
+	if not (version is int or version is float):
 		return {}
-	var d: Dictionary = _decode(parsed)
+	if not is_finite(float(version)) or float(version) != floorf(float(version)):
+		return {}
+	if parsed.get("kind") != KIND or float(version) not in [1.0, float(VERSION)]:
+		return {}
+	var decoded: Variant = _decode(parsed)
+	if not decoded is Dictionary or not _whole(decoded):
+		return {}
+	var d: Dictionary = decoded
 	d["version"] = int(d["version"])
 	d["seed"] = int(d.get("seed", 0))
 	for z in d.get("zombies", []):
@@ -167,6 +179,160 @@ static func from_json(text: String) -> Dictionary:
 			if h.has("loaded"):
 				h["loaded"] = int(h["loaded"])
 	return d
+
+
+## Only fields read without a fallback are required. Optional old fields, when
+## present, must still have the container/number type their readers consume.
+static func _fields(d: Variant, required: Dictionary, optional: Dictionary = {}) -> bool:
+	if not d is Dictionary:
+		return false
+	for key in required:
+		if not d.has(key) or not _field_type(d[key], required[key]):
+			return false
+	for key in optional:
+		if d.has(key) and not _field_type(d[key], optional[key]):
+			return false
+	return true
+
+
+static func _field_type(value: Variant, type: int) -> bool:
+	if type == TYPE_FLOAT:
+		return (value is int or value is float) and is_finite(float(value))
+	return typeof(value) == type
+
+
+static func _counts(d: Dictionary) -> bool:
+	for value in d.values():
+		if not _field_type(value, TYPE_FLOAT):
+			return false
+	return true
+
+
+static func _whole(d: Dictionary) -> bool:
+	if not _fields(d, {"clock": TYPE_DICTIONARY, "coal": TYPE_DICTIONARY}, {
+		"people": TYPE_ARRAY, "zombies": TYPE_ARRAY, "ground_items": TYPE_ARRAY,
+		"containers": TYPE_DICTIONARY, "spots": TYPE_DICTIONARY, "ammo": TYPE_DICTIONARY, "unloaded": TYPE_DICTIONARY,
+		"loaded_wear": TYPE_ARRAY, "decisions": TYPE_ARRAY, "start_opts": TYPE_DICTIONARY,
+		"departure": TYPE_DICTIONARY, "receipt_state": TYPE_DICTIONARY, "runtime": TYPE_DICTIONARY, "seed": TYPE_FLOAT,
+	}):
+		return false
+	if not _fields(d["clock"], {"elapsed": TYPE_FLOAT, "speed": TYPE_FLOAT}) \
+		or not _fields(d["coal"], {"delivered": TYPE_FLOAT, "spent": TYPE_FLOAT}):
+		return false
+	for key in ["ammo", "unloaded"]:
+		if not _counts(d.get(key, {})):
+			return false
+	for row in d.get("people", []):
+		if not _fields(row, {"pid": TYPE_STRING, "pos": TYPE_VECTOR3, "level": TYPE_FLOAT,
+			"bag": TYPE_STRING, "items": TYPE_DICTIONARY, "hands": TYPE_ARRAY, "body": TYPE_DICTIONARY}, {
+			"wear": TYPE_DICTIONARY, "heat": TYPE_DICTIONARY, "meta": TYPE_DICTIONARY, "state": TYPE_DICTIONARY, "aim": TYPE_DICTIONARY,
+		}):
+			return false
+		if not _counts(row["items"]):
+			return false
+		for hand in row["hands"]:
+			if not _fields(hand, {}, {"loaded": TYPE_FLOAT}):
+				return false
+	for row in d.get("zombies", []):
+		if not _fields(row, {"id": TYPE_FLOAT, "horde": TYPE_FLOAT, "kind": TYPE_STRING, "pos": TYPE_VECTOR3, "state": TYPE_STRING}, {"loot": TYPE_ARRAY}):
+			return false
+	for row in d.get("ground_items", []):
+		if not _fields(row, {"n": TYPE_FLOAT}):
+			return false
+	for row in d.get("containers", {}).values():
+		if not _fields(row, {"searched": TYPE_BOOL, "locked": TYPE_BOOL, "items": TYPE_ARRAY}):
+			return false
+	var opts: Dictionary = d.get("start_opts", {})
+	if not _whole_start(opts):
+		return false
+	var departure: Dictionary = d.get("departure", {})
+	if not _whole_departure(opts.get("departure", {}) if departure.is_empty() else departure):
+		return false
+	return not exact(d) or _whole_runtime(d)
+
+
+## The saved start options may supply a squad instead of the default one.
+static func _whole_start(opts: Dictionary) -> bool:
+	if not _fields(opts, {}, {"squad": TYPE_ARRAY}):
+		return false
+	if opts.has("squad") and opts["squad"].is_empty():
+		return false
+	for row in opts.get("squad", []):
+		if not _fields(row, {"id": TYPE_STRING, "name": TYPE_STRING, "role": TYPE_STRING}, {
+			"hands": TYPE_ARRAY, "items": TYPE_DICTIONARY, "skills": TYPE_DICTIONARY, "wear": TYPE_DICTIONARY,
+		}):
+			return false
+		if not _whole_start_hands(row.get("hands", [])) or not _counts(row.get("items", {})):
+			return false
+	return true
+
+
+static func _whole_start_hands(hands: Array) -> bool:
+	for hand in hands:
+		if not hand is Array or hand.is_empty() or not hand[0] is String:
+			return false
+		if hand.size() > 1 and not hand[1] is String:
+			return false
+		if hand.size() > 2 and not _field_type(hand[2], TYPE_FLOAT):
+			return false
+	return true
+
+
+## Only a v2 departure activates field_game.gd's direct contract/roster reads.
+static func _whole_departure(departure: Variant) -> bool:
+	if not _fields(departure, {}, {"version": TYPE_FLOAT, "train": TYPE_DICTIONARY, "lootDeck": TYPE_DICTIONARY}):
+		return false
+	if departure.get("pastWeather") is Array:
+		for row in departure["pastWeather"]:
+			if not _fields(row, {"weather": TYPE_STRING, "seg": TYPE_FLOAT}):
+				return false
+	if int(departure.get("version", 0)) != 2:
+		return true
+	if not _fields(departure, {"placeId": TYPE_STRING, "departureId": TYPE_STRING, "stopId": TYPE_STRING, "roster": TYPE_ARRAY}, {"workCrew": TYPE_ARRAY}):
+		return false
+	if departure["roster"].is_empty():
+		return false
+	for person in departure["roster"] + departure.get("workCrew", []):
+		if not _fields(person, {"id": TYPE_STRING, "name": TYPE_STRING, "role": TYPE_STRING, "comm": TYPE_STRING,
+			"rel": TYPE_FLOAT, "body": TYPE_DICTIONARY, "gear": TYPE_DICTIONARY, "hunger": TYPE_FLOAT, "sore": TYPE_FLOAT, "rest": TYPE_FLOAT}):
+			return false
+		if not _fields(person["gear"], {"hands": TYPE_ARRAY, "items": TYPE_DICTIONARY, "bag": TYPE_STRING, "wear": TYPE_DICTIONARY}):
+			return false
+		if not _whole_start_hands(person["gear"]["hands"]) or not _counts(person["gear"]["items"]):
+			return false
+		if person.get("know") is Dictionary and person["know"].get("field", "") == "med":
+			if not _fields(person["know"], {"skill": TYPE_FLOAT}):
+				return false
+	return true
+
+
+## A v2 slot without runtime uses the legacy path; with runtime every direct
+## exact-restore read must be safe, even if its map later needs the fallback.
+static func _whole_runtime(d: Dictionary) -> bool:
+	if not _fields(d, {"containers": TYPE_DICTIONARY, "people": TYPE_ARRAY, "zombies": TYPE_ARRAY}):
+		return false
+	var runtime: Dictionary = d["runtime"]
+	if not _fields(runtime, {"spots": TYPE_DICTIONARY, "levels": TYPE_DICTIONARY, "mission": TYPE_DICTIONARY,
+		"components": TYPE_DICTIONARY, "holdout_doors": TYPE_ARRAY, "game": TYPE_DICTIONARY}, {
+		"wagon_coal": TYPE_ARRAY, "hud": TYPE_DICTIONARY, "zombie_system": TYPE_DICTIONARY,
+	}):
+		return false
+	for kind in ["spots", "components"]:
+		for row in runtime[kind].values():
+			if not row is Dictionary:
+				return false
+	for row in runtime["levels"].values():
+		if not _fields(row, {"solid": TYPE_PACKED_BYTE_ARRAY, "doors": TYPE_DICTIONARY, "windows": TYPE_DICTIONARY, "revision": TYPE_FLOAT}, {
+			"width": TYPE_FLOAT, "height": TYPE_FLOAT, "floor_glass": TYPE_DICTIONARY,
+		}):
+			return false
+	for row in runtime["holdout_doors"]:
+		if not _fields(row, {"wall": TYPE_FLOAT}):
+			return false
+	for value in runtime.get("wagon_coal", []):
+		if not _field_type(value, TYPE_FLOAT):
+			return false
+	return _fields(runtime.get("hud", {}), {}, {"grab_total": TYPE_FLOAT})
 
 
 ## Whether the field is where play goes on when the app starts again: a stop still
@@ -296,6 +462,7 @@ static func apply(game, save: Dictionary) -> void:
 			game.data["spots"][id]["state"] = String(save["spots"][id])
 	game.ground_items = (save.get("ground_items", []) as Array).duplicate(true)
 	game.decisions = (save.get("decisions", []) as Array).duplicate(true)
+	# Version 1 and fallback keep the share this start set up, as the old switch did (decisions 383, 387, 134).
 	_put_zombies(game, save.get("zombies", []))
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
@@ -337,7 +504,7 @@ static func _runtime(game) -> Dictionary:
 		doors.append(_record(game, door))
 	out["holdout_doors"] = doors
 	out["hud"] = {"grab_total": game.hud.grab_total}
-	out["zombie_system"] = _properties(game, game.zombies, ["next_id", "loot_rng", "lunge_rng", "embed_rng", "lungers_on"])
+	out["zombie_system"] = _properties(game, game.zombies, ["next_id", "loot_rng", "lunge_rng", "embed_rng", "lunger_share"])
 	for level in game.levels:
 		var grid = game.levels[level]
 		var level_state: Dictionary = {"solid": grid.solid.duplicate(), "width": grid.width, "height": grid.height,
@@ -523,6 +690,21 @@ static func _restore_properties(game, object, saved: Dictionary) -> void:
 				object.set(key, restored)
 
 
+## Old v2 switches mean the forced share; never restore the removed property. With
+## neither, the share this start set up stays (decisions 383, 387, 134).
+static func _restore_zombie_system(game, saved: Dictionary) -> void:
+	var state: Dictionary = saved.duplicate()
+	if not state.has("lunger_share") and state.has("lungers_on"):
+		state["lunger_share"] = LungerRules.SHARE if bool(state["lungers_on"]) else 0.0
+	state.erase("lungers_on")
+	var start_share: float = game.zombies.lunger_share
+	_restore_properties(game, game.zombies, state)
+	# A saved share that is not a share (NaN comes back as -INF) leaves the start's.
+	var share: float = game.zombies.lunger_share
+	if not is_finite(share) or share < 0.0 or share > 1.0:
+		game.zombies.lunger_share = start_share
+
+
 static func _apply_exact(game, save: Dictionary) -> void:
 	var runtime: Dictionary = save["runtime"]
 	for kind: String in ["containers", "spots"]:
@@ -585,7 +767,7 @@ static func _apply_exact(game, save: Dictionary) -> void:
 		door["node"] = null
 		if int(door["wall"]) > 0:
 			game.holdout._show_wall(door)
-	_restore_properties(game, game.zombies, runtime["zombie_system"])
+	_restore_zombie_system(game, runtime.get("zombie_system", {}))
 	game.hud.grab_total = float(runtime.get("hud", {}).get("grab_total", game.hud.grab_total))
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
@@ -718,17 +900,63 @@ static func _put_receipt(r, state: Dictionary) -> void:
 
 ## Writes over the slot: the new file goes down whole first, the last one is kept as .bak.
 static func write(d: Dictionary, path: String = PATH) -> bool:
+	var fail_step := _test_fail_step
+	_test_fail_step = ""
+	var text := to_json(d)
+	var bytes := text.to_utf8_buffer()
 	var tmp := path + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
 		return false
-	f.store_string(to_json(d))
+	var payload := bytes
+	if fail_step == "short":
+		payload = bytes.slice(0, maxi(0, bytes.size() - 1))
+	elif fail_step == "tamper":
+		payload = bytes.duplicate()
+		var at := payload.find(46)  # A decimal point becomes a digit: same length, still valid sample JSON.
+		payload[at if at >= 0 else 0] = 48
+	f.store_buffer(payload)
+	f.flush()
+	var error: Error = f.get_error()
 	f.close()
+	if fail_step == "write_error":
+		error = ERR_FILE_CANT_WRITE
+	if error != OK:
+		DirAccess.remove_absolute(tmp)
+		return false
+	var written := FileAccess.get_file_as_bytes(tmp)
+	if written != bytes or from_json(text).is_empty():
+		DirAccess.remove_absolute(tmp)
+		return false
+	var backup := path + ".bak"
 	if FileAccess.file_exists(path):
-		if FileAccess.file_exists(path + ".bak"):
-			DirAccess.remove_absolute(path + ".bak")
-		DirAccess.rename_absolute(path, path + ".bak")
-	return DirAccess.rename_absolute(tmp, path) == OK
+		var previous_file := FileAccess.open(path, FileAccess.READ)
+		if previous_file == null:
+			DirAccess.remove_absolute(tmp)
+			return false
+		var previous_length := previous_file.get_length()
+		var previous_bytes := previous_file.get_buffer(previous_length)
+		error = previous_file.get_error()
+		previous_file.close()
+		if fail_step == "read_previous":
+			error = ERR_FILE_CANT_READ
+		if error != OK or previous_bytes.size() != previous_length:
+			DirAccess.remove_absolute(tmp)
+			return false
+		var previous := from_json(previous_bytes.get_string_from_utf8())
+		var moved := backup if not previous.is_empty() else path + ".broken"
+		if FileAccess.file_exists(moved) and DirAccess.remove_absolute(moved) != OK:
+			DirAccess.remove_absolute(tmp)
+			return false
+		if DirAccess.rename_absolute(path, moved) != OK:
+			DirAccess.remove_absolute(tmp)
+			return false
+	if fail_step != "rename_tmp" and DirAccess.rename_absolute(tmp, path) == OK:
+		return true
+	if not FileAccess.file_exists(path) and FileAccess.file_exists(backup):
+		DirAccess.rename_absolute(backup, path)
+	DirAccess.remove_absolute(tmp)
+	return false
 
 
 ## The last whole save: the slot, or the one before it when the slot is broken; {} when none.
@@ -742,7 +970,7 @@ static func read(path: String = PATH) -> Dictionary:
 
 
 static func clear(path: String = PATH) -> void:
-	for at in [path, path + ".tmp", path + ".bak"]:
+	for at in [path, path + ".tmp", path + ".bak", path + ".broken"]:
 		if FileAccess.file_exists(at):
 			DirAccess.remove_absolute(at)
 

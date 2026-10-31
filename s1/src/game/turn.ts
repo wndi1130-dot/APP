@@ -419,7 +419,7 @@ export function noteTarget(g: Game, target: LootKey | null): void {
 }
 
 /** 이 구간의 정차 장소를 뽑는다(결정 136). 묶음의 무게로 뽑고, 풀어 주는 구간이면 그 목록에서 뽑는다. 주사위는 한 번만 굴린다(뒤의 주사위 순서가 안 밀리게).
- * exclude: 핸드카 후보는 지금 장소를 뺀다. 풀어 주는 구간에선 목록의 다른 곳이 있으면 그것, 없으면 무게로 뽑는다. */
+ * exclude: 수동차 후보는 지금 장소를 뺀다. 풀어 주는 구간에선 목록의 다른 곳이 있으면 그것, 없으면 무게로 뽑는다. */
 export function pickPlace(g: Game, exclude?: string): PlaceDef {
   const r = rnd(g);
   const band = ROUTE.find(b => g.seg <= b.to) ?? ROUTE[ROUTE.length - 1];
@@ -446,7 +446,7 @@ function arriveStop(g: Game): void {
   };
   countCoalStop(g, place.id);
   rollStopView(g, g.stop, 1 + P.thrownHorde * g.thrown > 1.2);
-  // 핸드카 정찰(X2): 장소 후보가 하나 더 있다(7.3, J10 3번). X2가 없으면 주사위를 더 굴리지 않는다.
+  // 수동차 정찰(X2): 장소 후보가 하나 더 있다(7.3, J10 3번). X2가 없으면 주사위를 더 굴리지 않는다.
   if (g.dom) {
     g.dom.altPlace = null;
     if (techMult(g, 'x2') > 0) {
@@ -457,7 +457,7 @@ function arriveStop(g: Game): void {
   g.phase = 'stop';
 }
 
-/** 핸드카가 본 다른 곳으로 간다. 정찰을 보내기 전에 한 번만 고른다(되돌리면 바깥 기척을 다시 뽑게 되니 막는다). */
+/** 수동차가 본 다른 곳으로 간다. 정찰을 보내기 전에 한 번만 고른다(되돌리면 바깥 기척을 다시 뽑게 되니 막는다). */
 export function takeAltPlace(g: Game): void {
   const stop = g.stop;
   const alt = g.dom?.altPlace;
@@ -470,7 +470,7 @@ export function takeAltPlace(g: Game): void {
   countCoalStop(g, place.id);
   stop.target = suggestTarget(g, place.loot);
   rollStopView(g, stop, 1 + P.thrownHorde * g.thrown > 1.2);
-  journal(g, `핸드카가 본 ${place.name}에 섰다.`);
+  journal(g, `수동차가 본 ${place.name}에 섰다.`);
 }
 
 export function setStop(g: Game, patch: Partial<{ target: LootKey; stay: StayId; crewComm: Comm; crewSize: number; scout: boolean }>): void {
