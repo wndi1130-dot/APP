@@ -202,6 +202,7 @@ func _make_slice(resume: Dictionary = {}) -> Node:
 	flow.opts = {
 		"save": true, "resume": resume, "slice_save_path": slice_save_path,
 		"train_save_path": train_save_path, "field_save_path": field_save_path,
+		"intro": resume.is_empty(),
 	}
 	return flow
 

@@ -43,6 +43,7 @@ const LampKey = preload("res://game/ui/lamp_key.gd")
 const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
 const ArrivalSheet = preload("res://game/ui/arrival_sheet.gd")
 const EndCard = preload("res://game/ui/end_card.gd")
+const WorldIntro = preload("res://game/ui/world_intro.gd")
 const FieldArrival = preload("res://game/politics/field_arrival.gd")
 const TurnCard = preload("res://game/ui/turn_card.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
@@ -371,6 +372,16 @@ func _ready() -> void:
 	loader.threaded = bool(opts.get("map_threads", true))
 	add_child(loader)
 	go(_index_of(start_step))
+	if bool(opts.get("intro", false)):
+		_show_intro()
+
+
+## New runs only: an overlay that leaves the flow and saves as they are.
+func _show_intro() -> void:
+	var intro: WorldIntro = WorldIntro.new()
+	intro.name = "WorldIntro"
+	intro.still = bool(opts.get("still", false))
+	layer.add_child(intro)
 
 
 ## The step now ("train", "field", …).
