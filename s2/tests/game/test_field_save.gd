@@ -12,11 +12,13 @@ const AT := DIR + "/field_save.json"
 
 
 func before_each() -> void:
+	FieldSave._test_fail_step = ""
 	DirAccess.make_dir_recursive_absolute(DIR)
 	FieldSave.clear(AT)
 
 
 func after_each() -> void:
+	FieldSave._test_fail_step = ""
 	FieldSave.clear(AT)
 
 
@@ -63,6 +65,83 @@ func test_what_is_not_a_whole_save_of_this_kind_reads_as_none() -> void:
 	assert_eq(FieldSave.from_json(FieldSave.to_json(old)), {}, "another version")
 
 
+func test_fractional_or_non_numeric_versions_are_not_whole_saves() -> void:
+	# to_json writes an integer envelope, so edit the JSON data without that coercion.
+	var data: Dictionary = JSON.parse_string(FieldSave.to_json(_sample()))
+	for version in [2.5, "2", true, null, [], {}]:
+		data["version"] = version
+		assert_eq(FieldSave.from_json(JSON.stringify(data)), {}, "invalid version: " + str(version))
+	for version in [1.0, 2.0]:
+		data["version"] = version
+		assert_false(FieldSave.from_json(JSON.stringify(data)).is_empty(), "an integral JSON number is allowed")
+
+
+func test_required_nested_fields_must_have_the_expected_types() -> void:
+	var cases: Array = [
+		[["clock"], []], [["clock", "elapsed"], "12.5"], [["clock", "speed"], null],
+		[["coal"], []], [["coal", "delivered"], {}], [["coal", "spent"], "0"],
+		[["people"], {}], [["people", 0], []], [["people", 0, "pid"], null],
+		[["people", 0, "pos"], "here"], [["people", 0, "level"], "0"],
+		[["people", 0, "items"], []], [["people", 0, "items", "food"], "2"],
+		[["people", 0, "hands"], {}], [["people", 0, "hands"], [null]], [["people", 0, "body"], []],
+		[["zombies"], {}], [["zombies", 0, "id"], "3"], [["zombies", 0, "horde"], []],
+		[["containers", "c1"], []], [["containers", "c1", "items"], {}],
+		[["ground_items", 0, "n"], "1"], [["ammo", "pistol"], "7"],
+		[["start_opts"], []], [["departure"], []],
+	]
+	for version in [1, 2]:
+		for trial in cases:
+			var d := _sample()
+			d["version"] = version
+			var path: Array = trial[0]
+			var parent: Variant = d
+			for key in path.slice(0, path.size() - 1):
+				parent = parent[key]
+			parent[path.back()] = trial[1]
+			assert_eq(FieldSave.from_json(FieldSave.to_json(d)), {}, "v%d %s" % [version, str(path)])
+
+
+func test_optional_legacy_fields_and_body_defaults_can_be_absent() -> void:
+	for version in [1, 2]:
+		var d := _sample()
+		d["version"] = version
+		d["people"][0]["body"] = {}
+		assert_eq(FieldSave.from_json(FieldSave.to_json(d)), d, "body readers supply their old defaults")
+		for key in ["people", "zombies", "containers", "spots", "ammo", "unloaded", "ground_items", "decisions", "departure"]:
+			d.erase(key)
+		assert_eq(FieldSave.from_json(FieldSave.to_json(d)), d, "defaulted collections and runtime stay optional")
+
+
+func test_exact_saves_require_their_directly_read_runtime_fields() -> void:
+	var saved := FieldSave.capture(_game())
+	assert_false(FieldSave.from_json(FieldSave.to_json(saved)).is_empty())
+	for key in ["spots", "levels", "mission", "components", "holdout_doors", "zombie_system", "game"]:
+		var broken := saved.duplicate(true)
+		broken["runtime"].erase(key)
+		assert_eq(FieldSave.from_json(FieldSave.to_json(broken)), {}, "runtime." + key)
+	for key in ["containers", "people", "zombies"]:
+		var broken := saved.duplicate(true)
+		broken.erase(key)
+		assert_eq(FieldSave.from_json(FieldSave.to_json(broken)), {}, "exact save: " + key)
+
+
+func test_a_v2_departure_requires_the_fields_used_to_build_the_stop() -> void:
+	var d := _sample()
+	d["departure"] = {
+		"version": 2, "placeId": "bare", "departureId": "dep_1", "stopId": "stop-1",
+		"roster": [{"id": "p1", "name": "Chief", "role": "chief", "comm": "guard", "rel": 0.0,
+			"body": {}, "gear": {"hands": [], "items": {}, "bag": "pack", "wear": {}}, "hunger": 0, "sore": 0, "rest": 0}],
+	}
+	assert_false(FieldSave.from_json(FieldSave.to_json(d)).is_empty())
+	for key in ["placeId", "departureId", "stopId", "roster"]:
+		var broken := d.duplicate(true)
+		broken["departure"].erase(key)
+		assert_eq(FieldSave.from_json(FieldSave.to_json(broken)), {}, "departure." + key)
+	var broken_gear := d.duplicate(true)
+	broken_gear["departure"]["roster"][0]["gear"]["hands"] = {}
+	assert_eq(FieldSave.from_json(FieldSave.to_json(broken_gear)), {}, "nested contract gear")
+
+
 func test_the_slot_is_written_over_and_a_broken_one_falls_back() -> void:
 	var first := _sample()
 	assert_true(FieldSave.write(first, AT))
@@ -91,14 +170,109 @@ func test_a_cut_off_write_keeps_the_slot_and_its_backup_whole() -> void:
 	var backup_text := FileAccess.get_file_as_string(AT + ".bak")
 	var next := _sample()
 	next["clock"]["elapsed"] = 150.0
-	FieldSave._test_write_limit_bytes = 16
+	FieldSave._test_fail_step = "short"
 	assert_false(FieldSave.write(next, AT), "a cut-off temporary file is not a save")
-	assert_eq(FieldSave._test_write_limit_bytes, -1, "the write limit switches itself off")
+	assert_eq(FieldSave._test_fail_step, "", "the failure switches itself off")
 	assert_eq(FileAccess.get_file_as_string(AT), slot_text, "the slot is untouched")
 	assert_eq(FileAccess.get_file_as_string(AT + ".bak"), backup_text, "the backup is untouched")
 	assert_false(FileAccess.file_exists(AT + ".tmp"))
 	assert_eq(FieldSave.read(AT), previous, "the last whole save is still read")
-	assert_true(FieldSave.write(next, AT), "the next write is whole without resetting the limit")
+	assert_true(FieldSave.write(next, AT), "the next write is whole without resetting the failure")
+	assert_eq(FieldSave.read(AT), next)
+
+
+func _assert_write_failure_preserves_slot(step: String) -> void:
+	assert_true(FieldSave.write(_sample(), AT))
+	var previous := _sample()
+	previous["clock"]["elapsed"] = 99.0
+	assert_true(FieldSave.write(previous, AT))
+	var slot_bytes := FileAccess.get_file_as_bytes(AT)
+	var backup_bytes := FileAccess.get_file_as_bytes(AT + ".bak")
+	var next := _sample()
+	next["clock"]["elapsed"] = 150.0
+	FieldSave._test_fail_step = step
+	assert_false(FieldSave.write(next, AT), step)
+	assert_eq(FieldSave._test_fail_step, "", "one write only")
+	assert_eq(FileAccess.get_file_as_bytes(AT), slot_bytes, "the latest slot stays in place")
+	assert_eq(FileAccess.get_file_as_bytes(AT + ".bak"), backup_bytes, "the older backup is untouched")
+	assert_false(FileAccess.file_exists(AT + ".broken"), "a read error does not quarantine a whole save")
+	assert_false(FileAccess.file_exists(AT + ".tmp"))
+	assert_eq(FieldSave.read(AT), previous, "read still picks the latest whole save after " + step)
+	assert_true(FieldSave.write(next, AT), "the next write has no injected failure")
+	assert_eq(FieldSave.read(AT), next)
+
+
+func test_a_write_error_keeps_the_slot_and_its_backup_whole() -> void:
+	_assert_write_failure_preserves_slot("write_error")
+
+
+func test_same_length_tampering_keeps_the_previous_save() -> void:
+	var changed := FieldSave.to_json(_sample()).to_utf8_buffer()
+	var at := changed.find(46)
+	assert_gte(at, 0, "the sample has a decimal point")
+	changed[at] = 48
+	assert_eq(changed.size(), FieldSave.to_json(_sample()).to_utf8_buffer().size())
+	assert_false(FieldSave.from_json(changed.get_string_from_utf8()).is_empty(), "tampering remains parseable and structurally whole")
+	_assert_write_failure_preserves_slot("tamper")
+
+
+func test_a_previous_read_error_keeps_the_latest_slot_in_place() -> void:
+	_assert_write_failure_preserves_slot("read_previous")
+
+
+func test_a_temporary_rename_failure_still_reads_the_previous_save() -> void:
+	assert_true(FieldSave.write(_sample(), AT))
+	var previous := _sample()
+	previous["clock"]["elapsed"] = 99.0
+	assert_true(FieldSave.write(previous, AT))
+	var next := _sample()
+	next["clock"]["elapsed"] = 150.0
+	FieldSave._test_fail_step = "rename_tmp"
+	assert_false(FieldSave.write(next, AT))
+	assert_eq(FieldSave._test_fail_step, "")
+	assert_eq(FileAccess.get_file_as_string(AT), FieldSave.to_json(previous))
+	assert_false(FileAccess.file_exists(AT + ".tmp"))
+	assert_eq(FieldSave.read(AT), previous, "the whole slot moved to backup is restored/readable")
+	assert_true(FieldSave.write(next, AT))
+	assert_eq(FieldSave.read(AT), next)
+
+
+func test_a_write_with_only_a_whole_backup_preserves_that_backup() -> void:
+	var first := _sample()
+	assert_true(FieldSave.write(first, AT))
+	assert_eq(DirAccess.rename_absolute(AT, AT + ".bak"), OK)
+	var backup_bytes := FileAccess.get_file_as_bytes(AT + ".bak")
+	assert_eq(FieldSave.read(AT), first)
+	var next := _sample()
+	next["clock"]["elapsed"] = 150.0
+	assert_true(FieldSave.write(next, AT))
+	assert_eq(FileAccess.get_file_as_string(AT), FieldSave.to_json(next))
+	assert_eq(FileAccess.get_file_as_bytes(AT + ".bak"), backup_bytes)
+	assert_false(FileAccess.file_exists(AT + ".tmp"))
+	assert_eq(FieldSave.read(AT), next)
+
+
+func test_a_structurally_broken_slot_falls_back_and_preserves_the_backup_on_write() -> void:
+	var first := _sample()
+	assert_true(FieldSave.write(first, AT))
+	var previous := _sample()
+	previous["clock"]["elapsed"] = 99.0
+	assert_true(FieldSave.write(previous, AT))
+	var backup_bytes := FileAccess.get_file_as_bytes(AT + ".bak")
+	var broken := _sample()
+	broken.erase("clock")
+	var broken_text := FieldSave.to_json(broken)
+	var file := FileAccess.open(AT, FileAccess.WRITE)
+	file.store_string(broken_text)
+	file.close()
+	assert_eq(FieldSave.from_json(broken_text), {})
+	assert_eq(FieldSave.read(AT), first, "valid JSON with a missing clock must not hide the backup")
+	var next := _sample()
+	next["clock"]["elapsed"] = 150.0
+	assert_true(FieldSave.write(next, AT))
+	assert_eq(FileAccess.get_file_as_string(AT + ".broken"), broken_text)
+	assert_eq(FileAccess.get_file_as_bytes(AT + ".bak"), backup_bytes)
+	assert_false(FileAccess.file_exists(AT + ".tmp"))
 	assert_eq(FieldSave.read(AT), next)
 
 
