@@ -48,6 +48,7 @@ var cells: Dictionary = {}
 var marks: Node3D
 var cursor: MeshInstance3D
 var _faded: Dictionary = {}          # GeometryInstance3D -> its transparency before
+var _on_added: Callable              # the tree's node_added hook while decorating, kept to undo it
 
 
 ## Builds the marks in the car and fades the people; the scene places the camera (place_camera).
@@ -257,6 +258,8 @@ static func _paint(color: Color, by_instance: bool) -> StandardMaterial3D:
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	m.no_depth_test = false
+	# Draw before the faded people write depth, so their alpha blends over the marks.
+	m.render_priority = -1
 	m.albedo_color = color
 	if by_instance:
 		m.vertex_color_use_as_albedo = true
@@ -266,6 +269,11 @@ static func _paint(color: Color, by_instance: bool) -> StandardMaterial3D:
 ## Every body in the train seen through while decorating, and back as it was after: the baked
 ## bodies by their own shader (set_faded), the stand-ins by their nodes' transparency.
 func _fade_people(scene, on: bool) -> void:
+	var tree: SceneTree = scene.get_tree()
+	if not on and tree != null and _on_added.is_valid() and tree.node_added.is_connected(_on_added):
+		tree.node_added.disconnect(_on_added)
+	if not on:
+		_on_added = Callable()
 	if scene.people_view != null and scene.people_view.has_method("set_faded"):
 		scene.people_view.set_faded(PEOPLE_FADE if on else 0.0)
 	if not on:
@@ -275,6 +283,21 @@ func _fade_people(scene, on: bool) -> void:
 		_faded.clear()
 		return
 	if scene.people is Node:
+		if tree != null and not _on_added.is_valid():
+			_on_added = _on_people_added.bind(scene.people)
+			tree.node_added.connect(_on_added)
 		for geo: Node in (scene.people as Node).find_children("*", "GeometryInstance3D", true, false):
-			_faded[geo] = (geo as GeometryInstance3D).transparency
-			(geo as GeometryInstance3D).transparency = PEOPLE_FADE
+			_fade_geometry(geo as GeometryInstance3D)
+
+
+## Bodies and held things may enter while the train keeps stepping in the decorating view.
+func _on_people_added(node: Node, people: Node) -> void:
+	if node is GeometryInstance3D and is_instance_valid(people) and people.is_ancestor_of(node):
+		_fade_geometry(node as GeometryInstance3D)
+
+
+## Keep the first value even if the same node leaves and enters the tree again.
+func _fade_geometry(geo: GeometryInstance3D) -> void:
+	if not _faded.has(geo):
+		_faded[geo] = geo.transparency
+	geo.transparency = PEOPLE_FADE

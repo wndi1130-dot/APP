@@ -1397,6 +1397,8 @@ func open_decor(id: String) -> bool:
 		return false
 	if DecorUiData.lock_reason(train_g, false) != "":
 		return false
+	if not train.can_enter_decor(id):
+		return false
 	_put_rooms_away()
 	if not train.enter_decor(id):
 		return false
@@ -1454,7 +1456,10 @@ func _sync_decor_situation() -> void:
 	if is_instance_valid(train):
 		for comm: String in train_g.get("comms", {}):
 			var sit: Array = St.situation(train_g, train_t, comm)
-			train.set_comm(comm, "sit", [sit[0], sit[1], sit[2], sit[3]])
+			var next_sit: Array = [sit[0], sit[1], sit[2], sit[3]]
+			var current: Dictionary = train.rules.get("comms", {}).get(comm, {})
+			if current.get("sit") != next_sit:
+				train.set_comm(comm, "sit", next_sit)
 
 
 ## A room on the bottom bar with a screen of its own (home_bar.gd open_rooms).
