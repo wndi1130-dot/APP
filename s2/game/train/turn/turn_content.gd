@@ -335,8 +335,19 @@ static func content_pool(g: Dictionary, t: Dictionary, phase: String = "travel")
 		if not g.get("eventPack", false) and in_event_pack(ev["id"]): continue
 		var memo: Dictionary = g.get("eventLog", {}).get("content:" + str(ev["id"]), {})
 		if not memo.is_empty() and (int(memo["n"]) > int(ev["repeat"]) or int(memo["n"]) >= int(t["EVENT_CHAIN_MAX"]) or int(g["seg"]) - int(memo["seg"]) < int(t["EVENT_COOLDOWN"])): continue
+		# S1: a queued follow-up, or the same event already on a paper, is not drawn again.
+		if _queued_or_held(g, str(ev["id"])): continue
 		if _all_hold(g, t, ev["trigger"]) and can_bind(g, t, ev): out.append(ev)
 	return out
+
+
+static func _queued_or_held(g: Dictionary, id: String) -> bool:
+	for queued: Dictionary in g.get("contentQueue", []):
+		if queued["id"] == id: return true
+	for pile: String in ["cards", "lateCards", "deferred"]:
+		for card: Dictionary in g.get(pile, []) if g.get(pile) is Array else []:
+			if card.get("kind") == "content" and card.get("text") == id: return true
+	return false
 
 
 static func content_draw_info(g: Dictionary, t: Dictionary, id: String) -> Dictionary:

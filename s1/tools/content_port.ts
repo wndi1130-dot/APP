@@ -168,7 +168,15 @@ export function buildContentFixtures(bundle = buildContentBundle()) {
         views.push(viewRow(`requires/${ev.id}`, poor, poor.cards.at(-1)!));
       }
     }
-    const draws = [];
+    const draws: { before: Game; extra: string[]; recent: string[]; weights: { id: string; weight: number }[]; id: string; after: Game }[] = [];
+    const drawRow = (g: Game) => {
+      const before = plain(g);
+      const extra = S1.contentPool(g).map(ev => `content:${ev.id}`);
+      const recent = g.recentEvents.slice(-2).map(id => id.startsWith('content:') ? contentDrawInfo(g, id.slice(8)).comm : (() => { const v = S1.viewCard(g, { kind: 'travel', text: id, uid: 0 }); return v.focus ?? v.speaker?.comm; })());
+      const weights = [...['tail_cold', 'crowd_fight', 'front_curtain', 'water_tower', 'snow_drift', 'abandoned_tender', 'sick_child', 'ration_line', 'guard_frost'], ...extra].map(id => ({ id, weight: S1.travelWeight(g, id, recent) }));
+      const id = S1.drawTravelEvent(g, extra);
+      draws.push(plain({ before, extra, recent: recent.map(comm => comm ?? ''), weights, id: id ?? '', after: g }));
+    };
     for (let i = 0; i < 16; i++) {
       const g = fresh(`content-draw-${i}`);
       if (i < 4) delete g.eventPack;
@@ -178,12 +186,17 @@ export function buildContentFixtures(bundle = buildContentBundle()) {
       g.comms.tail.base[0] -= i * 3;
       g.recentEvents = ['water_tower', `content:${bundle.events[i * 3 % bundle.events.length].id}`, 'tail_cold'].slice(i % 3);
       if (i % 4) g.eventLog = { crowd_fight: { n: i % 3, seg: 0, pick: 'let_be', st: '' } };
-      const before = plain(g);
-      const extra = S1.contentPool(g).map(ev => `content:${ev.id}`);
-      const recent = g.recentEvents.slice(-2).map(id => id.startsWith('content:') ? contentDrawInfo(g, id.slice(8)).comm : (() => { const v = S1.viewCard(g, { kind: 'travel', text: id, uid: 0 }); return v.focus ?? v.speaker?.comm; })());
-      const weights = [...['tail_cold', 'crowd_fight', 'front_curtain', 'water_tower', 'snow_drift', 'abandoned_tender', 'sick_child', 'ration_line', 'guard_frost'], ...extra].map(id => ({ id, weight: S1.travelWeight(g, id, recent) }));
-      const id = S1.drawTravelEvent(g, extra);
-      draws.push(plain({ before, extra, recent: recent.map(comm => comm ?? ''), weights, id: id ?? '', after: g }));
+      drawRow(g);
+    }
+    // 추첨 경계: 후보가 하나도 없으면 난수를 쓰지 않고 빈손, 콘텐츠 후보 하나만 남은 판.
+    const travelIds = ['tail_cold', 'crowd_fight', 'front_curtain', 'water_tower', 'snow_drift', 'abandoned_tender', 'sick_child', 'ration_line', 'guard_frost'];
+    for (const mode of ['empty', 'single'] as const) {
+      const g = fresh(`content-draw-${mode}`);
+      g.seg = 6; g.coal = 20;
+      const pool = S1.contentPool(g).map(ev => `content:${ev.id}`);
+      if (pool.length < 2) throw new Error(`F-CONTENT-DRAW: ${mode} needs content candidates`);
+      g.recentEvents = [...travelIds, ...(mode === 'empty' ? pool : pool.slice(1))];
+      drawRow(g);
     }
     const definitions = syntheticDefinitions();
     S1.registerContentEvents(definitions.events); S1.registerContentSecrets(definitions.secrets); S1.registerContentDeals(definitions.deals);
@@ -252,6 +265,26 @@ export function buildContentFixtures(bundle = buildContentBundle()) {
     cooldown.seg = 20;
     cooldown.eventLog = Object.fromEntries(bundle.events.slice(0, 6).map((ev, i) => [`content:${ev.id}`, { n: i, seg: i % 2 ? 20 : 1, pick: '', st: '' }]));
     addPart('pool/cooldown-repeat-chain', cooldown, { kind: 'pool' }, () => S1.contentPool(cooldown).map(ev => ev.id));
+    // 사슬 한도(3)와 쿨다운(5) 경계를 따로: repeat=4인 합성 사건에 n 2·3(쿨다운 지남), 구간 차이 4·5(n 0).
+    for (const [n, gap] of [[2, 9], [3, 9], [0, 4], [0, 5]] as const) {
+      const g = fresh(`content-chain-${n}-${gap}`);
+      g.seg = 20;
+      g.eventLog = { 'content:port_front_a': { n, seg: 20 - gap, pick: '', st: '' } };
+      addPart(`pool/chain-${n}-gap-${gap}`, g, { kind: 'pool' }, () => S1.contentPool(g).map(ev => ev.id));
+    }
+    // 실제 사건의 예약 후속은 예약한 구간에만 한 장: 망치 수리를 미룬 뒤, 기한 전 출발마다 후보에 없고 기한 출발에서 예약분 한 장만.
+    const deferHandle = fresh('content-defer-handle');
+    deferHandle.seg = 3;
+    if (!S1.addContentCard(deferHandle, 'ev_b01_cracked_handle')) throw new Error('F-CONTENT-DEFER: ev_b01_cracked_handle');
+    const handle = deferHandle.cards.at(-1)!;
+    const deferIndex = S1.viewCard(deferHandle, handle).choices.findIndex(ch => ch.special === 'content:c_defer');
+    if (deferIndex < 0) throw new Error('F-CONTENT-DEFER: c_defer not shown');
+    addPart('followup/defer-handle', deferHandle, { kind: 'choose', uid: handle.uid, index: deferIndex }, () => S1.chooseCard(deferHandle, handle.uid, deferIndex));
+    for (let seg = 4; seg <= 7; seg++) {
+      deferHandle.seg = seg;
+      addPart(`followup/defer-handle-${seg}`, deferHandle, { kind: 'tick' }, () => S1.contentFollowupTick(deferHandle));
+      addPart(`pool/defer-handle-${seg}`, deferHandle, { kind: 'pool' }, () => S1.contentPool(deferHandle).map(ev => ev.id));
+    }
     const role = fresh('content-role');
     const specialist = S1.SPECIALISTS.findIndex(p => p.role === '견습 화부');
     role.dom = { people: [{ id: `sp${specialist + 1}`, name: '표본 화부', role: '견습 화부', comm: 'engine', alive: true, gone: false }] } as Game['dom'];
@@ -263,10 +296,16 @@ export function buildContentFixtures(bundle = buildContentBundle()) {
     savedGame.contentAway = { [S1.PROFILES[0].id]: 20 }; savedGame.contentInjured = [S1.PROFILES[1].id];
     savedGame.contentSecrets = secret.contentSecrets; savedGame.secrets = secret.secrets; savedGame.nextSecretId = secret.nextSecretId;
     savedGame.contentDeals = [{ id: 'port_deal_def', comm: 'tail', due: 12 }];
+    savedGame.contentQueue = [{ id: 'port_front_a', at: savedGame.seg + 2 }, { id: 'port_front_b', at: savedGame.seg + 4 }];
     savedGame.voteShift = [{ comm: 'tail', n: 2, side: 'captain' }];
     savedGame.chronicle = [{ template: 'port', who: '서린', where: '', when: savedGame.seg, witnesses: [], from: 'port' }];
     const roundtrip = readSave(plain(savedGame));
     if (!roundtrip.ok) throw new Error(`F-CONTENT-SAVE: ${roundtrip.why}`);
+    // 읽은 뒤 기한(예약 후속·거래·자리 비움)까지 간 S1 값: S2는 읽은 판에 같은 틱을 돌려 이것과 맞춘다.
+    const next = plain(roundtrip.g);
+    next.seg = 20;
+    contentAwayTick(next);
+    S1.contentFollowupTick(next);
     const actualViews = views.filter(row => row.name.startsWith('first/'));
     const size = (row: ViewRow) => row.view.body.length + row.view.choices.reduce((sum, ch) => sum + (ch.say ?? ch.label).length + (ch.why ?? '').length + (ch.later ?? '').length, 0);
     const bySize = [...actualViews].sort((a, b) => size(a) - size(b));
@@ -279,7 +318,7 @@ export function buildContentFixtures(bundle = buildContentBundle()) {
     return plain({
       turns: { format: 'turn-content-v1', maxSteps: 40, tables: table, runs },
       cards: { format: 'content-vectors-v1', tables: table, packCount: bundle.events.filter(ev => inEventPack(ev.id)).length, views, definitions, parts, draws, texts,
-        save: { before: savedGame, after: roundtrip.g },
+        save: { before: savedGame, after: roundtrip.g, next },
         shots: [{ name: 'short', case: bySize[0].name }, { name: 'longest', case: bySize.at(-1)!.name }, { name: 'why_later', case: explanatory.name }],
       },
     });

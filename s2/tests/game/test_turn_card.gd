@@ -367,7 +367,9 @@ func test_scrolling_from_a_way_moves_the_paper_and_answers_nothing() -> void:
 	var c := TurnCard.new()
 	c.fit_w = 1280.0 / UiFonts.K - 330.0 + 44.0 - 6.0 - TurnCard.SHEET_AT.x
 	viewport.add_child(c)
-	c.show_card(_case("late/ration_cut/1/first")[0], _data["tables"])
+	var sample: Array = _case("late/ration_cut/1/first")
+	var uid: int = int(sample[1])
+	c.show_card(sample[0], _data["tables"])
 	await _settled(c)
 	await get_tree().process_frame
 	var overflow := c.find_child("Overflow", true, false) as ScrollContainer
@@ -383,6 +385,11 @@ func test_scrolling_from_a_way_moves_the_paper_and_answers_nothing() -> void:
 	wheel.pressed = true
 	wheel.position = key.get_global_rect().get_center()
 	viewport.push_input(wheel, true)
+	# A real wheel notch comes as a press and a release; a press left held would
+	# keep the mouse on this way for every later tap.
+	var wheel_up := wheel.duplicate() as InputEventMouseButton
+	wheel_up.pressed = false
+	viewport.push_input(wheel_up, true)
 	await get_tree().process_frame
 	assert_gt(overflow.scroll_vertical, 0, "a wheel on a way moves the paper")
 	var at: Vector2 = key.get_global_rect().get_center()
@@ -395,6 +402,21 @@ func test_scrolling_from_a_way_moves_the_paper_and_answers_nothing() -> void:
 	viewport.push_input(_click(at, false), true)
 	await get_tree().process_frame
 	assert_eq(got.size(), 1, "a still tap on the same way answers")
+	# Scrolled to the end, a still tap on the last way (deferring) answers with it.
+	overflow.scroll_vertical = int(ceil(c.body.size.y))
+	await get_tree().process_frame
+	var keys: Array[Node] = c.body.find_children("Key_*", "Button", true, false)
+	var last := keys[keys.size() - 1] as Button
+	var spot: Vector2 = last.get_global_rect().get_center()
+	assert_lt(spot.y, 720.0, "the last way is in sight at the end")
+	var hit := _top_at(c, spot)
+	assert_eq(hit, last as Control, "a tap there lands on the last way (%s at %s, scroll %d of %d)" % [hit.name if hit != null else "nothing", spot, overflow.scroll_vertical, int(overflow.get_v_scroll_bar().max_value)])
+	viewport.push_input(_click(spot, true), true)
+	viewport.push_input(_click(spot, false), true)
+	await get_tree().process_frame
+	assert_eq(got.size(), 2, "a tap on the last way answers")
+	if got.size() == 2:
+		assert_true((got[1].get("lateCards", []) as Array).any(func(card: Dictionary) -> bool: return int(card["uid"]) == uid), "the last way defers the card")
 	c.free()
 
 
@@ -570,6 +592,14 @@ func test_content_card_model_hides_requires_and_preserves_filled_why_later() -> 
 		assert_eq(m["name"], row["view"]["speaker"]["name"])
 		assert_eq(m["role"], row["view"]["speaker"]["role"])
 		assert_gte(int(m["bust"]), 0)
+		if row["name"] == "bind/all-placeholders":
+			# An aide who is not the car's representative wears their own face, not the representative's.
+			var aide: Dictionary = {"name": row["view"]["speaker"]["name"]}
+			for person: Dictionary in fixtures["tables"]["PROFILES"]:
+				if person["name"] == aide["name"]: aide["personId"] = person["id"]
+			var rep: Dictionary = row["state"]["comms"][row["view"]["speaker"]["comm"]]["leader"]
+			assert_ne(aide["name"], rep["name"], "the aide is someone else")
+			assert_eq(int(m["bust"]), TurnCard.CouncilCard.bust_of(aide), "the aide's own bust")
 		assert_eq((m["choices"] as Array).size(), (row["view"]["choices"] as Array).size())
 		for i: int in (m["choices"] as Array).size():
 			var ch: Dictionary = m["choices"][i]

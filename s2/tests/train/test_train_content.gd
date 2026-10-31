@@ -151,6 +151,13 @@ func test_conditions_cooldown_repeat_and_chain_limit_match_s1() -> void:
 	_definitions()
 	for row: Dictionary in _cards["parts"]:
 		if str(row["name"]).begins_with("pool/"): _part(row)
+	# The chain limit (3) and cooldown (5) each on their own, and which side lets the event in.
+	var inside: Dictionary = {"pool/chain-2-gap-9": true, "pool/chain-3-gap-9": false, "pool/chain-0-gap-4": false, "pool/chain-0-gap-5": true}
+	for row: Dictionary in _cards["parts"]:
+		if inside.has(row["name"]):
+			assert_eq((row["result"] as Array).has("port_front_a"), inside[row["name"]], str(row["name"]))
+			inside.erase(row["name"])
+	assert_eq(inside.keys(), [], "every chain and cooldown edge is compared")
 
 
 func test_placeholders_and_binding_rng_order_match_s1() -> void:
@@ -227,6 +234,65 @@ func test_content_state_survives_json_save_read_and_next_tick() -> void:
 	Content.content_away_tick(got)
 	Content.content_followup_tick(got, _cards["tables"])
 	_same(uninterrupted, got, "same next content tick after loading")
+	# Loaded, then on to the segment where the queued follow-up, the deal and the
+	# absence are all due: the same as S1 from the same loaded state.
+	var due: Dictionary = SaveSlot.read_save(JSON.parse_string(JSON.stringify(original, "", false)), _cards["tables"])["g"]
+	var next: Dictionary = _cards["save"]["next"]
+	assert_false((original["contentQueue"] as Array).is_empty(), "the save holds a queued follow-up")
+	due["seg"] = next["seg"]
+	Content.content_away_tick(due)
+	Content.content_followup_tick(due, _cards["tables"])
+	if not next.has("lateOn") and due.get("lateOn") == false: due.erase("lateOn")
+	if not next.has("lateCards") and due.get("lateCards") == []: due.erase("lateCards")
+	_same(next, due, "S1 ticks at the due segment after loading")
+
+
+## S1 reads content fields with `??`: null in a save reads as none, and the next
+## tick and the card still work. A save keeps key order as S1's JSON does, so a
+## tie picked by insertion order (two laws repealed in one segment) stays put.
+func test_null_content_fields_read_as_none_and_saves_keep_key_order() -> void:
+	var base: Dictionary = _turns["runs"][0]["steps"][0]["before"].duplicate(true)
+	var g: Dictionary = base.duplicate(true)
+	var keys: Array[String] = ["contentAway", "contentFlags", "contentInjured", "contentDeals", "contentQueue", "contentSecrets"]
+	for key: String in keys: g[key] = null
+	g["cards"] = [{"uid": 900, "kind": "content", "text": "ev_h09_dropped_food", "comm": "tail", "vals": null}]
+	var read: Dictionary = SaveSlot.read_save(JSON.parse_string(JSON.stringify(g)), _turns["tables"])
+	assert_true(read["ok"], str(read.get("why", "")))
+	if not read["ok"]: return
+	var back: Dictionary = read["g"]
+	for key: String in keys: assert_false(back.has(key), key + ": null reads as none")
+	assert_false((back["cards"][0] as Dictionary).has("vals"), "null vals reads as none")
+	Content.content_away_tick(back)
+	Content.content_followup_tick(back, _turns["tables"])
+	assert_false(Cards.view(back, _turns["tables"], back["cards"][0]).is_empty(), "the card still shows")
+	var tie: Dictionary = base.duplicate(true)
+	tie["repealedAt"] = {"heat_quota": 2, "child_labor": 2}
+	for law: String in tie["repealedAt"]: tie["passed"].erase(law)
+	var path: String = "user://test_content_key_order.json"
+	assert_true(SaveSlot.save_slot(tie, path))
+	var loaded: Dictionary = SaveSlot.read_save(JSON.parse_string(FileAccess.get_file_as_string(path)), _turns["tables"])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	assert_true(loaded["ok"])
+	if not loaded["ok"]: return
+	assert_eq((loaded["g"]["repealedAt"] as Dictionary).keys(), ["heat_quota", "child_labor"], "keys keep their order")
+	assert_eq(Content._last_law(loaded["g"], true), Content._last_law(tie, true), "same law after a load")
+	assert_eq(Content._last_law(tie, true), "heat_quota", "the first repealed of a tie, as S1")
+
+
+## Content fields of the wrong shape are refused at the door, with a reason;
+## null is none (the test above).
+func test_content_fields_of_a_wrong_shape_are_refused() -> void:
+	var base: Dictionary = _turns["runs"][0]["steps"][0]["before"]
+	for patch: Dictionary in [{"eventPack": 1}, {"contentFlags": []}, {"contentAway": "x"}, {"contentSecrets": 3},
+		{"contentInjured": {}}, {"contentQueue": {}}, {"contentDeals": "x"},
+		{"contentQueue": [{"id": 3, "at": 2}]}, {"contentQueue": [{"id": "port_front_a", "at": "2"}]}, {"contentQueue": ["port_front_a"]},
+		{"contentDeals": [{"id": "port_deal_def", "comm": "tail"}]},
+		{"cards": [{"uid": 1, "kind": "content", "text": "ev_h09_dropped_food", "comm": "tail", "vals": []}]}]:
+		var g: Dictionary = base.duplicate(true)
+		g.merge(patch, true)
+		var read: Dictionary = SaveSlot.read_save(g, _turns["tables"])
+		assert_false(read["ok"], str(patch))
+		assert_ne(str(read.get("why", "")), "", str(patch) + " says why")
 
 
 func test_out_of_scope_branches_still_reject_actions() -> void:
