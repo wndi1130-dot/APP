@@ -19,99 +19,145 @@ var dress: MeshInstance3D
 var _materials: Dictionary = {}
 static var _dress_meshes: Dictionary = {}
 static var _dress_material: StandardMaterial3D
+var _build_rows: Array = []
+var _build_index: int = 0
+var _build_stage: int = 1
+var _build_car_id: String = ""
+var _build_phase: String = "done"
+var _dress_tool: SurfaceTool
+var _dress_laid: int = 0
 
 
 func build(parent: Node3D, car: Dictionary, stove_builder: Callable, stage: int = 1) -> void:
+	begin_build(parent, car, stage)
+	while building():
+		build_step(stove_builder)
+
+
+## The synchronous first build and the scene's budgeted restage use exactly the same units.
+## The caller owns visibility: a restage's parent is hidden until every unit is complete.
+func begin_build(parent: Node3D, car: Dictionary, stage: int = 1) -> void:
 	root = Node3D.new()
 	root.name = "Interior"
 	parent.add_child(root)
-	var dress_rows: Array = []
-	for row in Catalog.layout(car)["props"]:
-		# A row kept for some cars only: the three tail cars share a layout and each has one thing of its own.
-		if row.has("cars") and not (row["cars"] as Array).has(String(car.get("id", ""))):
-			continue
-		if row.has("home"):
-			var home: Array = row["home"]
-			if stage < int(home[0]) or stage > int(home[1]):
-				continue
-		# Resolve before splitting dress, ordinary props and the stove; never edit Catalog's shared rows.
-		var models: Dictionary = row.get("home_model", {})
-		var base_model: String = String(row["model"])
-		var model: String = String(models.get(str(stage), base_model))
-		row = row.duplicate()
+	_build_rows = Catalog.layout(car)["props"]
+	_build_index = 0
+	_build_stage = stage
+	_build_car_id = String(car.get("id", ""))
+	_build_phase = "rows"
+	_dress_laid = 0
+	_dress_tool = SurfaceTool.new()
+	_dress_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+
+func building() -> bool:
+	return _build_phase != "done"
+
+
+## At most one source row, placeholder, or final mesh commit; never yields inside a unit.
+func build_step(stove_builder: Callable) -> String:
+	if _build_phase == "rows" and _build_index < _build_rows.size():
+		var source: Dictionary = _build_rows[_build_index]
+		_build_index += 1
+		var row_id: String = String(source["id"])
+		if source.has("cars") and not (source["cars"] as Array).has(_build_car_id):
+			return "skip:" + row_id
+		var home: Array = source.get("home", [0, 3])
+		if _build_stage < int(home[0]) or _build_stage > int(home[1]):
+			return "skip:" + row_id
+		# Resolve without editing Catalog's shared rows, before any kind of construction.
+		var row: Dictionary = source.duplicate()
+		var models: Dictionary = source.get("home_model", {})
+		var base_model: String = String(source["model"])
+		var model: String = String(models.get(str(_build_stage), base_model))
 		row["model"] = model
 		if bool(row.get("dress", false)):
-			dress_rows.append(row)
-			continue
-		var at := Catalog.vector(row["at"])
+			_append_dress(row)
+			return "dress:" + row_id
 		if row.get("system", "") == "stove":
+			var at: Vector3 = Catalog.vector(row["at"])
 			var stove_model: String = model if model != base_model else ""
-			# Older callers only observe the position; their three-argument build calls still work.
 			if stove_builder.get_argument_count() == 1:
 				stove_builder.call(at)
 			else:
 				stove_builder.call(at, stove_model)
-			continue
-		var node: Node3D
-		var path := MODEL_ROOT + model + ".glb"
-		if not ResourceLoader.exists(path):
-			path = COMMON_ROOT + model + ".glb"
-		if model.is_valid_identifier() and ResourceLoader.exists(path):
-			var packed = load(path)
-			if packed is PackedScene:
-				node = packed.instantiate() as Node3D
-				if node != null and path.begins_with(COMMON_ROOT):
-					_paint_common(node)
-		var fitted := false
-		if node == null:
-			node = _box(Catalog.vector(row["size"]), String(row["material"]))
-		else:
-			fitted = true
-		node.name = String(row["id"])
-		node.position = at
-		if fitted:
-			_fit_to(node, at, Catalog.vector(row["size"]), float(row.get("grow", 1.0)))
-		node.rotation.y = float(row["yaw"])
-		node.set_meta("model_key", model)
-		node.set_meta("reserved_size", Catalog.vector(row["size"]))
-		root.add_child(node)
-		props[row["id"]] = node
-		rows[row["id"]] = row
-		if bool(row.get("trace", false)):
-			traces[row["id"]] = {"overturned": false, "scorched": false}
+			return "stove:" + row_id
+		_build_prop(row)
+		return "furniture:" + row_id
+	if _build_phase == "rows":
+		_build_fire_mark()
+		_build_phase = "commit"
+		return "fire_mark"
+	if _build_phase == "commit":
+		_commit_dress()
+		_build_rows = []
+		_dress_tool = null
+		_build_phase = "done"
+		return "dress_commit"
+	return "done"
+
+
+func _build_prop(row: Dictionary) -> void:
+	var model: String = String(row["model"])
+	var at: Vector3 = Catalog.vector(row["at"])
+	var node: Node3D
+	var path: String = MODEL_ROOT + model + ".glb"
+	if not ResourceLoader.exists(path):
+		path = COMMON_ROOT + model + ".glb"
+	if model.is_valid_identifier() and ResourceLoader.exists(path):
+		var packed = load(path)
+		if packed is PackedScene:
+			node = packed.instantiate() as Node3D
+			if node != null and path.begins_with(COMMON_ROOT):
+				_paint_common(node)
+	var fitted: bool = node != null
+	if node == null:
+		node = _box(Catalog.vector(row["size"]), String(row["material"]))
+	node.name = String(row["id"])
+	node.position = at
+	if fitted:
+		_fit_to(node, at, Catalog.vector(row["size"]), float(row.get("grow", 1.0)))
+	node.rotation.y = float(row["yaw"])
+	node.set_meta("model_key", model)
+	node.set_meta("reserved_size", Catalog.vector(row["size"]))
+	root.add_child(node)
+	props[row["id"]] = node
+	rows[row["id"]] = row
+	if bool(row.get("trace", false)):
+		traces[row["id"]] = {"overturned": false, "scorched": false}
+
+
+func _build_fire_mark() -> void:
 	# The fire is only a stand-in prop, with no new light, particles or shader.
 	fire_mark = _box(Catalog.vector(Catalog.tuning("fire_mark_size")), "ember")
 	fire_mark.name = "FirePlaceholder"
 	fire_mark.position = Catalog.vector(Catalog.tuning("fire_mark_at"))
 	fire_mark.visible = false
 	root.add_child(fire_mark)
-	_build_dress(dress_rows)
 
 
 ## Each dress row's model stands where its row keeps it, as a prop would (_fit_to), all in one mesh.
-func _build_dress(list: Array) -> void:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var laid := 0
-	for row: Dictionary in list:
-		var mesh := _dress_mesh(String(row["model"]))
-		if mesh == null:
-			push_warning("train_interior: dress model missing, row left out: " + String(row["id"]))
-			continue
-		var reserved := Catalog.vector(row["size"])
-		var box := mesh.get_aabb()
-		# The same fit as a prop's (_fit_to): made smaller to its box's height, bigger only by `grow`.
-		var k: float = minf(maxf(float(row.get("grow", 1.0)), 1.0), reserved.y / box.size.y) if box.size.y > 0.0 else 1.0
-		var at := Catalog.vector(row["at"])
-		var place := Transform3D(Basis(Vector3.UP, float(row["yaw"])).scaled(Vector3.ONE * k),
-			Vector3(at.x, at.y - reserved.y * 0.5 - box.position.y * k, at.z))
-		st.append_from(mesh, 0, place)
-		laid += 1
-	if laid == 0:
+func _append_dress(row: Dictionary) -> void:
+	var mesh: Mesh = _dress_mesh(String(row["model"]))
+	if mesh == null:
+		push_warning("train_interior: dress model missing, row left out: " + String(row["id"]))
+		return
+	var reserved: Vector3 = Catalog.vector(row["size"])
+	var box: AABB = mesh.get_aabb()
+	var k: float = minf(maxf(float(row.get("grow", 1.0)), 1.0), reserved.y / box.size.y) if box.size.y > 0.0 else 1.0
+	var at: Vector3 = Catalog.vector(row["at"])
+	var place := Transform3D(Basis(Vector3.UP, float(row["yaw"])).scaled(Vector3.ONE * k),
+		Vector3(at.x, at.y - reserved.y * 0.5 - box.position.y * k, at.z))
+	_dress_tool.append_from(mesh, 0, place)
+	_dress_laid += 1
+
+
+func _commit_dress() -> void:
+	if _dress_laid == 0:
 		return
 	dress = MeshInstance3D.new()
 	dress.name = "Dress"
-	dress.mesh = st.commit()
+	dress.mesh = _dress_tool.commit()
 	dress.material_override = _dress_paint()
 	dress.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(dress)
