@@ -12,6 +12,13 @@ const GROUPS: Dictionary = {
 	"run": ["p_run", "p_run_long", "p_run_pistol"],
 	"crouch": ["p_crouch_walk", "p_crouch_walk_long", "p_crouch_walk_pistol"],
 }
+const BLOWS: Array = [
+	["p_swing_one", "p_ready_one", 0.45, 24, 0.6],
+	["p_swing_back", "p_ready_one", 0.33, 24, 0.6],
+	["p_stab", "p_ready_stab", 0.35, 20, 0.45],
+	["p_swing_over", "p_ready_one", 0.45, 24, 0.6],
+	["p_chop_one", "p_ready_one", 0.45, 24, 0.6],
+]
 
 var _fixtures: Array[Dictionary] = []
 var _folder_count: int = 0
@@ -443,3 +450,143 @@ func test_stance_speed_ratios_are_reported_without_a_pass_threshold() -> void:
 						total += ratio
 					print("STANCE %s %s %s n=%d min=%.4f max=%.4f mean=%.4f target=-1.1..-0.9" % [fixture["name"], clip["name"], side, ratios.size(), ratios.min(), ratios.max(), total / float(ratios.size())])
 	pass_test("stance speed ratios are reported in the log (no pass line while the walk keys wait on a decision)")
+
+
+func _blow_hit_at(name_text: String, fallback: float) -> float:
+	for kind: String in PersonVisual.OWN_BLOWS:
+		for blow: Array in PersonVisual.OWN_BLOWS[kind]:
+			if str(blow[0]) == name_text:
+				return float(blow[1])
+	return fallback  # New overhead/chop clips both land at 0.45 before combat adopts them.
+
+
+func test_one_hand_blows_start_and_end_at_the_guard_and_land_in_front() -> void:
+	for fixture in _fixtures:
+		var right: PackedInt32Array = fixture["right"]
+		assert_false(right.is_empty(), str(fixture["name"]) + " right hand found like hand_of")
+		if right.is_empty():
+			continue
+		for blow: Array in BLOWS:
+			var clip := _clip(fixture, blow[0])
+			var guard := _clip(fixture, blow[1])
+			if clip.is_empty() or guard.is_empty():
+				continue
+			var label := "%s %s" % [fixture["name"], blow[0]]
+			assert_eq(int(clip["frames"]), int(blow[3]), label + " full frames")
+			assert_almost_eq(float(clip["length"]), float(blow[4]), 0.0001, label + " duration")
+			var frames := _sample(fixture, clip, right)
+			var ready := _center(_sample(fixture, guard, right)[0])
+			var first_gap := _center(frames[0]).distance_to(ready)
+			var last_gap := _center(frames[-1]).distance_to(ready)
+			assert_true(first_gap <= 0.05, "%s begins %.4f m from guard <= 0.05" % [label, first_gap])
+			assert_true(last_gap <= 0.05, "%s ends %.4f m from guard <= 0.05" % [label, last_gap])
+			var at := int(roundf(_blow_hit_at(blow[0], blow[2]) * float(frames.size() - 1)))
+			var hand := _center(frames[at])
+			assert_true(hand.z > 0.3, "%s impact hand z %.4f > 0.3 m" % [label, hand.z])
+			# How far off the middle line the blow lands is reported, not held: it follows each body's
+			# shoulders (the sheepskin's guard hand is already 0.71 m out), and the old keys landed
+			# 0.12..0.60 m off; the new keys bring the others in to 0.11..0.21 m.
+			print("BLOW_X %s %.4f" % [label, hand.x])
+
+
+func test_overhead_left_hand_never_grips_the_right_hand() -> void:
+	for fixture in _fixtures:
+		var clip := _clip(fixture, "p_swing_over")
+		var right: PackedInt32Array = fixture["right"]
+		var left: PackedInt32Array = fixture["left"]
+		assert_false(left.is_empty(), str(fixture["name"]) + " mirrored left hand found")
+		if clip.is_empty() or right.is_empty() or left.is_empty():
+			continue
+		var right_frames := _sample(fixture, clip, right)
+		var left_frames := _sample(fixture, clip, left)
+		var nearest := INF
+		for f in right_frames.size():
+			nearest = minf(nearest, _center(right_frames[f]).distance_to(_center(left_frames[f])))
+		assert_true(nearest > 0.25, "%s overhead hands stay %.4f m apart > 0.25" % [fixture["name"], nearest])
+
+
+func test_chop_left_hand_stays_more_than_twenty_five_centimetres_from_the_right() -> void:
+	for fixture in _fixtures:
+		var clip := _clip(fixture, "p_chop_one")
+		var right: PackedInt32Array = fixture["right"]
+		var left: PackedInt32Array = fixture["left"]
+		assert_false(left.is_empty(), str(fixture["name"]) + " chop left hand found")
+		if clip.is_empty() or right.is_empty() or left.is_empty():
+			continue
+		var right_frames := _sample(fixture, clip, right)
+		var left_frames := _sample(fixture, clip, left)
+		for f in right_frames.size():
+			var gap := _center(right_frames[f]).distance_to(_center(left_frames[f]))
+			assert_true(gap > 0.25, "%s p_chop_one frame %d hands %.4f m apart > 0.25" % [fixture["name"], f, gap])
+
+
+func test_blow_aim_angles_are_reported_without_a_pass_threshold() -> void:
+	for fixture in _fixtures:
+		var right: PackedInt32Array = fixture["right"]
+		if right.is_empty():
+			continue
+		print("BLOW_BODY %s" % fixture["name"])
+		for blow: Array in BLOWS:
+			var clip := _clip(fixture, blow[0])
+			if clip.is_empty():
+				continue
+			var frames := _sample(fixture, clip, right)
+			var at := int(roundf(_blow_hit_at(blow[0], blow[2]) * float(frames.size() - 1)))
+			var hand := _center(frames[at])
+			print("BLOW_AIM %s %.6f" % [blow[0], rad_to_deg(atan2(hand.x, hand.z))])
+	pass_test("blow aim angles are reported in the log for the attack timing")
+
+
+func _turn_at(spec: Dictionary, bone: String, axis: String, u: float) -> float:
+	var angle := 0.0
+	for step: Array in spec["steps"]:
+		if step[0] == "turn" and step[1] == bone and step[2] == axis:
+			angle += BodyBake._value(step[3], TAU * u)
+	return angle
+
+
+## The authored rotations in body space, in apply_layer's order. The chest
+## inherits hips before its own y turn; arm aims specify a body-space ray.
+func _source_pose(spec: Dictionary, u: float) -> Array:
+	var hips := Basis(Vector3.UP, _turn_at(spec, "hips", "y", u))
+	var spine := Basis(Vector3.RIGHT, _turn_at(spec, "spine", "x", u))
+	var chest := Basis(Vector3.UP, _turn_at(spec, "chest", "y", u)) * spine * hips
+	var arm := Vector3.FORWARD
+	for step: Array in spec["steps"]:
+		if step[0] == "aim" and step[1] == "upper_arm.R":
+			arm = Vector3(BodyBake._value(step[3][0], TAU * u), BodyBake._value(step[3][1], TAU * u), BodyBake._value(step[3][2], TAU * u)).normalized()
+	return [hips, chest, arm]
+
+
+func test_source_key_y_speed_peaks_go_hips_then_chest_then_arm() -> void:
+	for blow: Array in BLOWS:
+		var spec: Dictionary = BodyBake.LAYERS[blow[0]]
+		var count := int(blow[3])
+		var dt := float(blow[4]) / float(count - 1)
+		var fastest := [-1.0, -1.0, -1.0]
+		var peaks := [-1, -1, -1]
+		for f in count - 1:
+			var a := _source_pose(spec, float(f) / float(count - 1))
+			var b := _source_pose(spec, float(f + 1) / float(count - 1))
+			for part in 3:
+				var rotation: Quaternion
+				if part == 2:
+					rotation = Quaternion(a[2], b[2])
+				else:
+					rotation = ((b[part] as Basis) * (a[part] as Basis).inverse()).get_rotation_quaternion()
+				var speed := absf(BodyBake._rotation_vector(rotation).y) / dt
+				if speed > float(fastest[part]):
+					fastest[part] = speed
+					peaks[part] = f
+		assert_true(peaks[0] < peaks[1] and peaks[1] < peaks[2], "%s source y-speed peak intervals %s" % [blow[0], str(peaks)])
+
+
+func test_source_key_waist_y_twist_stays_below_sixty_degrees() -> void:
+	for blow: Array in BLOWS:
+		var spec: Dictionary = BodyBake.LAYERS[blow[0]]
+		var greatest := 0.0
+		for f in 1001:
+			var posed := _source_pose(spec, float(f) / 1000.0)
+			var relative: Basis = (posed[0] as Basis).inverse() * (posed[1] as Basis)
+			greatest = maxf(greatest, absf(atan2(relative.z.x, relative.z.z)))
+		assert_true(greatest <= deg_to_rad(60.0), "%s source waist y twist %.3f degrees" % [blow[0], rad_to_deg(greatest)])
