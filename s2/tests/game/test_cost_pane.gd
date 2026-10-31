@@ -98,6 +98,18 @@ func test_insulated_cars_show_what_they_keep_off_the_heating() -> void:
 	var kept: float = TrainTurn.heat_cost(bare, t) - TrainTurn.heat_cost(g, t)
 	assert_almost_eq(float(heat["saved"]), kept * St.law_mult(g, t, "heatMult"), 1e-9)
 	assert_gt(float(heat["saved"]), 0.0)
+	# With the outside on, the cold stage multiplies the heating and so what the insulation keeps off.
+	var cold: Dictionary = g.duplicate(true)
+	cold["climate"] = true
+	var stages: Array = t["CL"]["mult"]
+	cold["outside"] = stages.size() - 1
+	assert_gt(float(stages[-1]), 1.0, "the coldest stage costs more than the mild one")
+	var cold_bare: Dictionary = cold.duplicate(true)
+	cold_bare["dom"]["insulated"] = []
+	var cold_kept: float = TrainTurn.heat_cost(cold_bare, t) - TrainTurn.heat_cost(cold, t)
+	var cold_row: Dictionary = _row(CostPane.model(cold, t, "coal"), "heat")
+	assert_almost_eq(float(cold_row["saved"]), cold_kept * St.law_mult(cold, t, "heatMult"), 1e-9)
+	assert_gt(float(cold_row["saved"]), float(heat["saved"]), "the cold stage keeps more off")
 
 
 ## The ledger's lines for one cause are read once, from the newest settle's
