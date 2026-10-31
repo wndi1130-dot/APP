@@ -43,6 +43,10 @@ const BOARD_BELOW: float = 50.0
 ## The crew's pick at a coal wagon: half the speed it was (decision 520), so a stop's coal stays in its plan
 ## although the key lights early.
 const DIG_TIME: float = 90.0
+## A pick at the coal cut short (a retreat, a hold, a step back from the dead, boarding) leaves what it had
+## done in the coal, and the next pick there starts from the most done of what was left. Off until it is
+## decided; the measuring tools turn it on through keeps_dig().
+const KEEP_DIG: bool = false
 const TRIP_COAL: float = 0.25
 const EMPTY: float = 0.001
 const SHARE_CELLS: int = 8
@@ -237,6 +241,8 @@ func hold_position(id: String) -> Vector3:
 
 func update(delta: float) -> void:
 	elapsed += delta
+	if keeps_dig():
+		_keep_digs()
 	tick_left += delta
 	while tick_left >= TICK_S:
 		tick_left -= TICK_S
@@ -775,8 +781,48 @@ func crew_step(p, think: bool) -> bool:
 	if float(p.brain.get("work_wait", -1.0)) < 0.0:
 		p.brain["work_wait"] = elapsed + game.rng.randf_range(0.0, START_SPREAD)
 	if elapsed >= float(p.brain["work_wait"]):
-		p.start_action("dig", String(job(id)["verb"]), float(job(id)["work_s"]), _worked.bind(p, id))
+		var from: float = _take_dig(id) if keeps_dig() else 0.0
+		p.start_action("dig", String(job(id)["verb"]), maxf(float(job(id)["work_s"]) - from, EMPTY), _worked.bind(p, id))
+		if from > 0.0:
+			if p.action == "dig":
+				p.brain["dig_from"] = from
+			else:
+				_site(id)["dig_parts"].append(from)
 	return true
+
+
+func keeps_dig() -> bool:
+	return KEEP_DIG
+
+
+## Each frame while picks keep their work: how far each worker's pick at the coal has come, and one
+## that stopped short of done, whoever stopped it, goes back into the coal.
+func _keep_digs() -> void:
+	for id: String in sites:
+		if job_id(id) != "coal_wagon":
+			continue
+		for p in members(id):
+			if p.action == "dig":
+				p.brain["dig_done"] = float(p.brain.get("dig_from", 0.0)) + p.action_total - p.action_t
+			elif p.brain.has("dig_done"):
+				var state: Dictionary = _site(id)
+				if not state.has("dig_parts"):
+					state["dig_parts"] = []
+				state["dig_parts"].append(float(p.brain["dig_done"]))
+				p.brain.erase("dig_done")
+				p.brain.erase("dig_from")
+
+
+## The most done of the picks left in the coal, taken up (none left: 0).
+func _take_dig(id: String) -> float:
+	var parts: Array = _site(id).get("dig_parts", [])
+	if parts.is_empty():
+		return 0.0
+	var most: int = 0
+	for i in parts.size():
+		if float(parts[i]) > float(parts[most]):
+			most = i
+	return float(parts.pop_at(most))
 
 
 ## This worker's turn among the site's workers and how many there are: (turn, count).
@@ -882,6 +928,8 @@ func _go_home(p, id: String, think: bool) -> void:
 ## The wagon is looked up when the work is done, as the old dig did (a bound wagon row would
 ## not come back as the same row from a field save).
 func _worked(p, id: String) -> void:
+	p.brain.erase("dig_done")
+	p.brain.erase("dig_from")
 	if phase(id) != "working" or not p.can_act() or p.brain.get("boarded", false):
 		return
 	var wagon: Dictionary = game.ai._wagon_with_coal() if job_id(id) == "coal_wagon" else {}
