@@ -99,16 +99,21 @@ func test_insulated_cars_show_what_they_keep_off_the_heating() -> void:
 	assert_almost_eq(float(heat["saved"]), kept * St.law_mult(g, t, "heatMult"), 1e-9)
 	assert_gt(float(heat["saved"]), 0.0)
 	# With the outside on, the cold stage multiplies the heating and so what the insulation keeps off.
+	# The sample's tables predate the outside; its stages come from the game's own start tables.
+	var tc: Dictionary = t.duplicate(true)
+	if not tc.has("CL"):
+		var start: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://game/train/slice_start.json"))
+		tc["CL"] = (start as Dictionary)["tables"]["CL"]
 	var cold: Dictionary = g.duplicate(true)
 	cold["climate"] = true
-	var stages: Array = t["CL"]["mult"]
+	var stages: Array = tc["CL"]["mult"]
 	cold["outside"] = stages.size() - 1
 	assert_gt(float(stages[-1]), 1.0, "the coldest stage costs more than the mild one")
 	var cold_bare: Dictionary = cold.duplicate(true)
 	cold_bare["dom"]["insulated"] = []
-	var cold_kept: float = TrainTurn.heat_cost(cold_bare, t) - TrainTurn.heat_cost(cold, t)
-	var cold_row: Dictionary = _row(CostPane.model(cold, t, "coal"), "heat")
-	assert_almost_eq(float(cold_row["saved"]), cold_kept * St.law_mult(cold, t, "heatMult"), 1e-9)
+	var cold_kept: float = TrainTurn.heat_cost(cold_bare, tc) - TrainTurn.heat_cost(cold, tc)
+	var cold_row: Dictionary = _row(CostPane.model(cold, tc, "coal"), "heat")
+	assert_almost_eq(float(cold_row["saved"]), cold_kept * St.law_mult(cold, tc, "heatMult"), 1e-9)
 	assert_gt(float(cold_row["saved"]), float(heat["saved"]), "the cold stage keeps more off")
 
 
