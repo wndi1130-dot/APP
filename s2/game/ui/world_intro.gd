@@ -40,7 +40,16 @@ func _ready() -> void:
 	sheet = PaperSheet.new(SHEET_SIZE)
 	sheet.name = "Sheet"
 	add_child(sheet)
-	sheet.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	# Centred by its own size (fixed when it is made): anchored at the middle with
+	# half of it each way. A centre preset reads a minimum size that is not
+	# worked out yet here, leaves zero offsets and grows the sheet from the
+	# middle down and right.
+	var half: Vector2 = SHEET_SIZE * UiFonts.K * 0.5
+	sheet.set_anchors_preset(Control.PRESET_CENTER)
+	sheet.offset_left = -half.x
+	sheet.offset_right = half.x
+	sheet.offset_top = -half.y
+	sheet.offset_bottom = half.y
 	var kick: HBoxContainer = Paper.line_box(24.0)
 	kick.name = "Kick"
 	sheet.inner.add_child(kick)
