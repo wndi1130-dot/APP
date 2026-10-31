@@ -11,6 +11,7 @@ const FieldSave = preload("res://game/sim/field_save.gd")
 const FieldMission = preload("res://game/field_mission.gd")
 const FirstStop = preload("res://game/world/sulehuf_map.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
+const MapView = preload("res://game/world/map_view.gd")
 const OFFSET := Vector2i(21, 51)
 const VIEW_KEYS := ["stop_view_rows", "stop_view_cols", "stop_view_rule"]
 const GRID_ARRAYS := ["solid", "floor", "building", "zone", "opq", "walk_people", "walk_dead"]
@@ -450,3 +451,19 @@ func test_mission_cells_follow_view() -> void:
 			assert_eq(survey.data["containers"][row[0]]["cell"], row[2] + offset)
 			assert_eq(survey.data["containers"][row[0]]["building"], row[3])
 			_assert_mission_cell(survey, row[2], int(row[4]))
+
+
+## The water tower is drawn where its cells went (map_view.gd, stop_cinema.gd), not in the
+## forest that now fills the map's old north-west corner.
+func test_water_tower_follows_view() -> void:
+	var base := _base()
+	var wide := _wide()
+	var before: Array[Vector2i] = MapView.water_tower_cells(base["grid"], base)
+	var after: Array[Vector2i] = MapView.water_tower_cells(wide["grid"], wide)
+	assert_gt(before.size(), 0)
+	var moved: Array[Vector2i] = []
+	for c: Vector2i in before:
+		moved.append(c + OFFSET)
+	assert_eq(after, moved)
+	for c: Vector2i in after:
+		assert_false(_forest_has(wide, c), "tower cell %s in the forest" % c)
