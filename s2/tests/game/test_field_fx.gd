@@ -393,7 +393,7 @@ func test_snow_banks_against_walls_the_wind_blows_at() -> void:
 	# A building's cell beside it walls it off, whatever stands in that cell (the
 	# furniture laid in later is not in the ground's key).
 	g.building[g.index(Vector2i(6, 4))] = 0
-	var against := MapView.drift_uv(g, Vector2i(6, 3))
+	var against: Vector2 = MapView.drift_uv(g, Vector2i(6, 3))
 	g.set_solid(Vector2i(6, 4), FieldGrid.Solid.BLOCK)
 	assert_eq(MapView.drift_uv(g, Vector2i(6, 3)), against, "the room's furniture moves no bank")
 	assert_eq(against, Vector2(1, 1), "a block against a building banks")
