@@ -565,8 +565,10 @@ static func _speaker(g: Dictionary, t: Dictionary, ev: Dictionary, card: Diction
 	return {"name": SPEAKER_ROLE.get(ev["speaker"], ev["speaker"]), "role": ""}
 
 
-static func _choice(label: String, effs: Array, special: String = "") -> Dictionary:
-	return {"id": "", "label": label, "effs": effs, "special": special, "witness": false}
+static func _choice(label: String, effs: Array, special: String = "", journal_line: String = "") -> Dictionary:
+	var out: Dictionary = {"id": "", "label": label, "effs": effs, "special": special, "witness": false}
+	if journal_line != "": out["log"] = journal_line
+	return out
 
 
 static func _guard_costs(g: Dictionary, view: Dictionary, always: bool = false) -> Dictionary:
@@ -584,7 +586,7 @@ static func content_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dict
 	if card["kind"] == "content-deal": return deal_view(g, t, card)
 	if card["kind"] != "content": return {}
 	var ev: Dictionary = definition("events", card.get("text", ""))
-	if ev.is_empty(): return {"title": "빈 서류", "body": "읽을 수 없는 사건: " + str(card.get("text", "")), "choices": [_choice("덮는다", [])], "required": false}
+	if ev.is_empty(): return {"title": "빈 서류", "body": "읽을 수 없는 사건: " + str(card.get("text", "")), "choices": [_choice("덮는다", [], "", "읽을 수 없는 사건 서류를 덮었다.")], "required": false}
 	var vals: Dictionary = card.get("vals", {})
 	var speaker: Dictionary = _speaker(g, t, ev, card)
 	var comm: String = speaker.get("comm", "")
@@ -608,14 +610,15 @@ static func content_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dict
 static func deal_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var def: Dictionary = definition("deals", card.get("text", ""))
 	var comm: String = card.get("comm", "tail")
-	if def.is_empty(): return {"title": "빈 서류", "body": "읽을 수 없는 거래: " + str(card.get("text", "")), "choices": [_choice("덮는다", [])], "required": false}
+	if def.is_empty(): return {"title": "빈 서류", "body": "읽을 수 없는 거래: " + str(card.get("text", "")), "choices": [_choice("덮는다", [], "", "읽을 수 없는 거래 서류를 덮었다.")], "required": false}
 	var now: bool = int(def["deadline"]) <= 0
 	var parts: Array[String] = []
 	if str(def.get("say", "")) != "": parts.append(def["say"])
 	parts.append_array(["요구: " + effect_text(t, def["ask"]), "기한: " + ("지금" if now else "%d구간 뒤" % int(def["deadline"])), "어기면: " + effect_text(t, def["breach"])])
+	var comm_name: String = str(t["COMM_NAME"][comm])
 	var accept: Array = to_effs(t, def["gives"])
 	if now: accept.append_array(to_effs(t, def["ask"]))
-	return _guard_costs(g, {"title": str(t["COMM_NAME"][comm]) + "의 거래", "speaker": {"name": g["comms"][comm]["leader"]["name"], "role": t["REP_ROLE"][comm], "comm": comm}, "body": ". ".join(parts) + ".", "choices": [_choice("받는다", accept, "content-deal:accept"), _choice("거절한다", [], "content-deal:refuse")], "required": true, "key": "content-deal:" + str(def["id"]), "focus": comm}, true)
+	return _guard_costs(g, {"title": str(t["COMM_NAME"][comm]) + "의 거래", "speaker": {"name": g["comms"][comm]["leader"]["name"], "role": t["REP_ROLE"][comm], "comm": comm}, "body": ". ".join(parts) + ".", "choices": [_choice("받는다", accept, "content-deal:accept", ("%s의 거래를 받아 값을 치렀다." if now else "%s의 거래를 받고 값을 치르기로 했다.") % comm_name), _choice("거절한다", [], "content-deal:refuse", "%s이(가) 내민 사건 거래를 거절했다." % comm_name)], "required": true, "key": "content-deal:" + str(def["id"]), "focus": comm}, true)
 
 
 ## Generic effects and the one journal line remain in turn_cards.gd. Only extension effects live here.
