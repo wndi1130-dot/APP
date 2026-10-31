@@ -1044,6 +1044,7 @@ func _show_train(phase: String, seg: int) -> void:
 		train.opts["rules_before"] = last_rules
 	last_rules = rules.duplicate(true)
 	train.rules = rules
+	train.decor_closed.connect(_on_train_decor_closed)
 	add_child(train)
 	stage = train
 	# The world outside by the hour, the weather, the region and the cold
@@ -1442,6 +1443,13 @@ func leave_decor() -> void:
 		paper.g = train_g
 		paper._fill()
 	_select(id, false)
+
+
+## The train closed decorating on its own (its layout rebuilt): the pane, the screens put away
+## and the car id follow it on the next frame, outside the rebuild (leave_decor syncs the rules).
+func _on_train_decor_closed() -> void:
+	if decor_id != "":
+		leave_decor.call_deferred()
 
 
 func _decor_changed() -> void:

@@ -7,6 +7,7 @@ const Rules = preload("res://game/train/train_rules.gd")
 const DecorGrid = preload("res://game/train/decor_grid.gd")
 const DecorView = preload("res://game/train/decor_view.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
+const DecorUiData = preload("res://game/ui/decor_ui_data.gd")
 const DRESSED: Array[String] = ["tail1", "tail2", "tail3", "medtech", "guard", "front", "captain", "dining"]
 
 
@@ -165,6 +166,7 @@ func test_the_flow_keeps_an_open_room_when_decorating_is_rejected() -> void:
 	var room := Control.new()
 	autofree(room)
 	f.shop = room
+	assert_eq(DecorUiData.lock_reason(f.train_g, false), "", "no domestic lock: the train's own check is what refuses")
 	for id: String in ["store", "cold", "loco", "nowhere"]:
 		assert_false(f.open_decor(id))
 		assert_same(f.shop, room, id + " keeps the room")
@@ -304,3 +306,13 @@ func test_the_flow_opens_a_car_to_decorate_and_brings_the_train_back() -> void:
 		f.leave_decor()
 	f._select("store")
 	assert_eq(f.sel, "", "a car with nobody and nothing to decorate is not picked")
+	# The train rebuilding its layout closes decorating; the flow's pane and screens follow next frame.
+	assert_true(f.open_decor("guard"))
+	f.train._rebuild_layout()
+	assert_eq(f.train.decorating(), "")
+	await get_tree().process_frame
+	assert_eq(f.decor_id, "", "the flow is no longer decorating")
+	assert_null(f.decor_pane, "the decorating pane is gone")
+	for n: CanvasItem in [f.gauges, f.plates, f.home]:
+		if is_instance_valid(n):
+			assert_true(n.visible, "%s back after the rebuild" % n.name)

@@ -7,6 +7,8 @@ extends Node3D
 ## like the field; the car bodies and the people's clips swap in later.
 
 signal rules_applied
+## Decorating closed here (exit_decor), also when the train closes it itself before a rebuild.
+signal decor_closed
 
 const Rules = preload("res://game/train/train_rules.gd")
 const Look = preload("res://game/train/train_look.gd")
@@ -419,6 +421,7 @@ func exit_decor() -> void:
 		camera.v_offset = 0.0
 	_apply_view()
 	_place_camera()
+	decor_closed.emit()
 
 
 ## The car being decorated, or "".
