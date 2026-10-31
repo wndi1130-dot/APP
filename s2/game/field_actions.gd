@@ -1957,7 +1957,7 @@ func _lid_blocked(p, key: String, mat: String) -> void:
 	game.director.block(key)
 	game.view.update_manhole(key, true)
 	game.receipt.place_note("manholeBlocked", true)
-	game.hud.toast("맨홀을 막았다. 그 몫은 %s 나온다." % ("암거로" if game.data["manholes"].has("culvert") else "다른 길로"))
+	game.hud.toast("맨홀을 막았다. 막힌 무리는 %s 나온다." % ("암거로" if game.data["manholes"].has("culvert") else "다른 길로"))
 
 
 # ---------------------------------------------------------------- treatment, crafting
@@ -2146,7 +2146,7 @@ func _amputated(medic, o, part: String) -> void:
 	elif bite_there:
 		what += " 물림은 막았다."
 	else:
-		what += " 긁힌 데가 감염이었어도 막았다."
+		what += " 긁힌 데가 감염됐어도 막았다."
 	game.say(medic, what)
 
 
