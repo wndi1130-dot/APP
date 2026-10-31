@@ -525,7 +525,12 @@ static func _restore_zombie_system(game, saved: Dictionary) -> void:
 	if not state.has("lunger_share") and state.has("lungers_on"):
 		state["lunger_share"] = LungerRules.SHARE if bool(state["lungers_on"]) else 0.0
 	state.erase("lungers_on")
+	var start_share: float = game.zombies.lunger_share
 	_restore_properties(game, game.zombies, state)
+	# A saved share that is not a share (NaN comes back as -INF) leaves the start's.
+	var share: float = game.zombies.lunger_share
+	if not is_finite(share) or share < 0.0 or share > 1.0:
+		game.zombies.lunger_share = start_share
 
 
 static func _apply_exact(game, save: Dictionary) -> void:

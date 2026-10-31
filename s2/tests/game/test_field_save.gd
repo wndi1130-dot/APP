@@ -276,3 +276,14 @@ func test_v1_and_grid_fallback_keep_the_start_share() -> void:
 		opts[LungerRules.OPTION] = true
 		var b = _game(opts)
 		assert_eq(float(b.zombies.lunger_share), LungerRules.SHARE, "the start's forced share stays, as the old switch did")
+
+
+func test_a_saved_share_that_is_not_a_share_keeps_the_start_share() -> void:
+	for bad: float in [NAN, INF, -0.1, 1.5]:
+		var a = _game()
+		a.zombies.lunger_share = bad
+		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+		var opts: Dictionary = FieldSave.resume_opts(saved)
+		opts[LungerRules.OPTION] = true
+		var b = _game(opts)
+		assert_eq(float(b.zombies.lunger_share), LungerRules.SHARE, "%s falls back to the start's share" % bad)

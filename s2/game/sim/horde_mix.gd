@@ -14,7 +14,8 @@ const ACT3_MIX_END: float = 5.0 / 6.0
 
 
 static func of(act: String, act_progress: float) -> Dictionary:
-	var progress: float = clampf(act_progress, 0.0, 1.0)
+	# A NaN progress reads as the act's start; clampf would pass it through.
+	var progress: float = 0.0 if is_nan(act_progress) else clampf(act_progress, 0.0, 1.0)
 	var lunger_share: float = 0.0
 	var evolved_share: float = 0.0
 	match act:

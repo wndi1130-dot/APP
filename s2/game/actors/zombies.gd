@@ -99,9 +99,11 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	loot_rng.seed = hash(int(game.opts.get("seed", 0))) + 62
 	lunge_rng.seed = hash(int(game.opts.get("seed", 0))) + 63
 	embed_rng.seed = hash(int(game.opts.get("seed", 0))) + 64
-	var act := String(game.opts.get("act", "prologue"))
-	var act_progress: float = float(game.opts.get("act_progress", 0.0))
-	lunger_share = LungerRules.SHARE if bool(game.opts.get(LungerRules.OPTION, false)) else float(HordeMix.of(act, act_progress)["lunger_share"])
+	# Forced on never reads the act; otherwise the act's progress sets the share.
+	if bool(game.opts.get(LungerRules.OPTION, false)):
+		lunger_share = LungerRules.SHARE
+	else:
+		lunger_share = float(HordeMix.of(String(game.opts.get("act", "prologue")), act_progress_of(game.opts))["lunger_share"])
 	var body := DeadBody.assets()
 	baked = not body.is_empty()
 	vat = body if baked else vat_assets
@@ -138,6 +140,17 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 		mm3.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
 		embedded_draw.multimesh = mm3
 		add_child(embedded_draw)
+
+
+## The act's progress as a number: a missing, null or non-numeric value reads as
+## the act's start (decisions 383, 387, 134).
+static func act_progress_of(opts: Dictionary) -> float:
+	var value: Variant = opts.get("act_progress", 0.0)
+	if value is float or value is int:
+		return float(value)
+	if value is String and (value as String).is_valid_float():
+		return (value as String).to_float()
+	return 0.0
 
 
 func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:

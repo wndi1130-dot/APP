@@ -253,10 +253,10 @@ func _mix_initial(game) -> Dictionary:
 
 
 func _mix_new_bodies(game, mix: Dictionary, counted: int) -> int:
-	# Only add_rising makes fresh bodies here; count before they stiffen (134, 250).
+	# A risen body is fresh and still rising on the step add_rising makes it (134, 250).
 	for index: int in range(counted, game.zombies.list.size()):
 		var z: Dictionary = game.zombies.list[index]
-		if z["kind"] == "fresh":
+		if z["kind"] == "fresh" and String(z.get("state", "")) == "rising":
 			mix["risen"] += 1
 			if bool(z.get("lunger", false)):
 				mix["risen_assigned"] += 1

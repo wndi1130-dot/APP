@@ -2,6 +2,7 @@ extends "res://addons/gut/test.gd"
 ## Canonical slot boundaries, normal difficulty (decisions 383, 387, 134, 250).
 
 const HordeMix = preload("res://game/sim/horde_mix.gd")
+const Zombies = preload("res://game/actors/zombies.gd")
 const EDGE: float = 0.001
 const TOLERANCE: float = 0.000000001
 
@@ -81,3 +82,20 @@ func test_both_shares_never_decrease_through_the_acts_and_early_evolved_is_zero(
 			last_evolved = evolved
 	assert_eq(last_evolved, 0.05)
 	assert_false(HordeMix.EVOLVED_READY, "table only; evolved kinds are not spawned")
+
+
+func test_non_finite_progress_never_gives_a_non_finite_share() -> void:
+	for act: String in ["prologue", "act1", "act2", "act3", "unknown"]:
+		assert_eq(HordeMix.of(act, NAN), HordeMix.of(act, 0.0), "NaN reads as the act's start")
+		assert_eq(HordeMix.of(act, INF), HordeMix.of(act, 1.0))
+		assert_eq(HordeMix.of(act, -INF), HordeMix.of(act, 0.0))
+
+
+func test_progress_option_reads_numbers_and_falls_back_to_the_start() -> void:
+	assert_eq(Zombies.act_progress_of({}), 0.0)
+	assert_eq(Zombies.act_progress_of({"act_progress": null}), 0.0)
+	assert_eq(Zombies.act_progress_of({"act_progress": "not a number"}), 0.0)
+	assert_eq(Zombies.act_progress_of({"act_progress": [0.5]}), 0.0)
+	assert_eq(Zombies.act_progress_of({"act_progress": 1}), 1.0)
+	assert_eq(Zombies.act_progress_of({"act_progress": 0.75}), 0.75)
+	assert_eq(Zombies.act_progress_of({"act_progress": "0.75"}), 0.75)
