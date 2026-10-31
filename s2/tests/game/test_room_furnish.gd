@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
+const MapRing = preload("res://game/world/map_ring.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const FurnitureTints = preload("res://game/world/furniture_tints.gd")
 const S = FieldGrid.Solid
@@ -768,6 +769,8 @@ func test_nightstands_stand_by_the_pillow() -> void:
 	var stats := {"bedrooms": 0, "wide_bedrooms": 0, "head_beds": 0, "twins": 0, "stand_pairs": 0}
 	for map_name: String in ["houses_01", "houses_02"]:
 		var d := FieldMaps.build(map_name)
+		# 바깥 띠(map_ring)는 방 번호를 다시 매기고 density_classes를 지우므로 띠 전 판으로 본다.
+		_check_twin_rooms(MapRing.plain_build(load(FieldMaps.path_of(map_name)), FieldMaps.build_from), map_name)
 		for k: String in stats:
 			stats[k] = int(stats[k]) + int(d["room_stats"].get(k, 0))
 		var heads: Dictionary = {}  # "층:건물" -> [베개 칸]
@@ -803,3 +806,73 @@ func test_nightstands_stand_by_the_pillow() -> void:
 	assert_gt(int(stats["head_beds"]), int(stats["wide_bedrooms"]) / 2, "most wide bedrooms lay the bed head to a wall: %s" % str(stats))
 	assert_gt(int(stats["stand_pairs"]), 0, "a head-to-wall bed gets a nightstand on both sides: %s" % str(stats))
 	assert_between(int(stats["twins"]), 1, roundi(int(stats["bedrooms"]) * RoomFurnish.TWIN_SHARE) + 1, "about 12%% of the bedrooms have twin beds: %s" % str(stats))
+
+
+func _check_twin_rooms(data: Dictionary, map_name: String) -> void:
+	var maps: Dictionary = {}
+	for lv: int in data["levels"]:
+		maps[lv] = RoomFurnish.rooms_of(data["levels"][lv])
+	var beds: Dictionary = {}
+	var stands: Dictionary = {}
+	var actual: Dictionary = {}
+	var covered: Dictionary = {}
+	for prop: Dictionary in data["props"]:
+		var level := int(prop.get("level", 0))
+		var rect_value: Variant = RoomFurnish._rect(prop.get("rect"))
+		if not maps.has(level) or rect_value == null:
+			continue
+		var rect: Rect2i = rect_value
+		var room_id := RoomFurnish._at(data["levels"][level], maps[level]["of"], rect.position + rect.size / 2)
+		var room_key := "%d:%d" % [level, room_id]
+		var kind := String(prop.get("kind", ""))
+		if kind == "bed":
+			beds.get_or_add(room_key, []).append(prop)
+			if prop.get("twin", false):
+				assert_false(actual.has(room_key), "%s %s: 둘째 침대 표시는 하나" % [map_name, room_key])
+				actual[room_key] = true
+		elif kind == "nightstand":
+			stands.get_or_add(room_key, []).append(rect.position)
+		if not RoomFurnish.REPLACED.has(kind) and RoomFurnish.STANDS_FOR.get(kind, kind) == "bed":
+			covered[room_key] = true
+	var bedrooms := 0
+	var eligible := 0
+	for floor_id: int in maps:
+		for ri in range(maps[floor_id]["rooms"].size()):
+			var key := "%d:%d" % [floor_id, ri]
+			var cells: Array[Vector2i] = maps[floor_id]["rooms"][ri]["cells"]
+			if data["density_classes"].get(key, "") != "bed" or cells.size() < RoomFurnish.ROOM_MIN_CELLS:
+				continue
+			bedrooms += 1
+			eligible += int(RoomFurnish._wide_bedroom(cells) and not covered.has(key))
+	var quota := mini(roundi(bedrooms * RoomFurnish.TWIN_SHARE), eligible)
+	var selected := RoomFurnish._twin_rooms(data, {"classes": data["density_classes"]}, data["levels"], String(data.get("place_id", "")))
+	var stats: Dictionary = data["room_stats"]
+	assert_eq(selected.size(), quota, "%s: 남긴 침대 대체 가구 방을 빼고 몫을 채운다" % map_name)
+	assert_eq(int(stats.get("twin_quota", -1)), quota, "%s: 선정 몫 통계" % map_name)
+	assert_eq(int(stats.get("twins", 0)), actual.size(), "%s: 실제 두 침대 방 통계" % map_name)
+	assert_eq(actual.size() + int(stats.get("twin_abandoned", -1)), quota, "%s: 실제 방 + 포기 = 몫" % map_name)
+	for covered_key: String in covered:
+		assert_false(selected.has(covered_key), "%s %s: bed를 대신한 지도 가구 방은 선정 제외" % [map_name, covered_key])
+		assert_false(actual.has(covered_key), "%s %s: bed를 대신한 지도 가구 방에 두 침대를 더하지 않는다" % [map_name, covered_key])
+	for twin_key: String in actual:
+		assert_true(selected.has(twin_key), "%s %s: 선정한 방에만 두 침대" % [map_name, twin_key])
+		var pair: Array = beds[twin_key]
+		assert_eq(pair.size(), 2, "%s %s: 침대는 꼭 두 개" % [map_name, twin_key])
+		if pair.size() != 2:
+			continue
+		var first_rect: Rect2i = pair[0]["rect"]
+		var first_facing := int(pair[0]["facing"])
+		assert_eq(int(pair[1]["facing"]), first_facing, "%s %s: 같은 머리 방향" % [map_name, twin_key])
+		var first_head := RoomFurnish.bed_head(first_rect, first_facing)
+		var second_head := RoomFurnish.bed_head(pair[1]["rect"], int(pair[1]["facing"]))
+		var across := Vector2i(0, 1) if first_rect.size.x > first_rect.size.y else Vector2i(1, 0)
+		assert_true((second_head - first_head) in [across * 2, across * -2], "%s %s: 벽을 따라 머리 사이 꼭 두 칸" % [map_name, twin_key])
+		var head_dir: Vector2i = [Vector2i.LEFT, Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN][posmod(first_facing, 4)]
+		var twin_level := int(twin_key.get_slice(":", 0))
+		var twin_room := int(twin_key.get_slice(":", 1))
+		for bed: Dictionary in pair:
+			assert_true(RoomFurnish._wall_side(data["levels"][twin_level], maps[twin_level]["of"], twin_room, bed["rect"], head_dir), "%s %s: 두 머리는 같은 벽에" % [map_name, twin_key])
+		var middle: Vector2i = (first_head + second_head) / 2
+		assert_lte(stands.get(twin_key, []).size(), 1, "%s %s: 가운데 협탁은 최대 하나" % [map_name, twin_key])
+		for stand_cell: Vector2i in stands.get(twin_key, []):
+			assert_eq(stand_cell, middle, "%s %s: 협탁은 두 머리 사이 칸에만" % [map_name, twin_key])
