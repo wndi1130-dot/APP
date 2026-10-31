@@ -3,6 +3,8 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Card, CardView } from '../../src/game';
+import { FURNISH80 } from '../../src/game/domestic/decor_data';
+import { VOICE, VOICE_ANY } from '../../src/game/promise_voice';
 import { playGame } from '../../tools/s1c_bot';
 
 // 말씨 가름. 열차장 말은 해라체이고, 대체 불가한 장인 앞에서만 하오체다.
@@ -165,6 +167,18 @@ const TS_VOICES: [file: string, quote: string, voice: Voice][] = [
 
 const GAME = fileURLToPath(new URL('../../src/game/', import.meta.url));
 const EVENTS = fileURLToPath(new URL('../../data/events/', import.meta.url));
+const S2 = fileURLToPath(new URL('../../../s2/', import.meta.url));
+
+/** S2가 옮겨 적은 약속 말 표(`field_return.gd`의 `_voice_kept`)를 글로 읽는다 */
+function s2PromiseVoices(): { voice: Record<string, string[]>; any: string[] } {
+  const src = readFileSync(join(S2, 'game/politics/field_return.gd'), 'utf8').replace(/\r\n/g, '\n');
+  const start = src.indexOf('static func _voice_kept(');
+  const body = src.slice(start, src.indexOf('if not g.has("keptVoice")', start));
+  const quoted = (s: string) => [...s.matchAll(/"([^"]*)"/g)].map(q => q[1]);
+  const voice: Record<string, string[]> = {};
+  for (const m of body.matchAll(/^\t\t"(\w+)": \[(.*)\],?$/gmu)) voice[m[1]] = quoted(m[2]);
+  return { voice, any: quoted(/var any := \[(.*)\]/u.exec(body)?.[1] ?? '') };
+}
 
 /** 칸 대표가 요구하며 하는 말 표(cards.ts·late.ts)를 소스에서 칸마다 읽는다. 표는 내보내지 않는 값이라 글로 읽는다. */
 function repLines(file: string, name: string): [comm: string, line: string][] {
@@ -260,6 +274,29 @@ describe('말씨 가름', () => {
     expect(lines.length).toBe(75);
     const bad = lines.filter(([c, s]) => !fits(s, c === 'front' ? '앞칸 대표' : '칸')).map(([c, s]) => `${c} ${endings(s).join('·')}: ${s}`);
     expect(bad).toEqual([]);
+  });
+
+  it('약속을 지킨 뒤 칸 사람의 한마디는 해라체이고, S2 사본도 같은 글이다', () => {
+    const lines = [...Object.entries(VOICE).flatMap(([c, two]) => two.map(s => [c, s] as const)), ...VOICE_ANY.map(s => ['any', s] as const)];
+    // 칸 다섯 × 둘 + 어느 칸에나 쓰는 셋
+    expect(lines.length).toBe(13);
+    expect(lines.filter(([, s]) => !fits(s, '칸')).map(([c, s]) => `${c} ${endings(s).join('·')}: ${s}`)).toEqual([]);
+    expect(s2PromiseVoices()).toEqual({ voice: VOICE, any: VOICE_ANY });
+  });
+
+  it('꾸밈 뒤 한마디는 칸을 대신하는 대표 말씨다(앞칸 대표만 합쇼체)', () => {
+    const lines = Object.entries(FURNISH80).flatMap(([car, f]) => f.say.map(s => [car, s] as const));
+    // 꾸미는 칸 일곱 × 셋, 열차장실은 말이 없다
+    expect(lines.length).toBe(21);
+    const bad = lines.filter(([car, s]) => !fits(s, car === 'front' ? '앞칸 대표' : '칸')).map(([car, s]) => `${car} ${endings(s).join('·')}: ${s}`);
+    expect(bad).toEqual([]);
+  });
+
+  it('S2 필드 주민 카드에서 열차장 쪽이 하는 선택지 말은 해라체다', () => {
+    const src = readFileSync(join(S2, 'game/field_residents.gd'), 'utf8');
+    const says = [...src.matchAll(/"say": "\\"([^"\\]+)\\""/gu)].map(m => m[1]);
+    expect(says.length).toBe(3);
+    expect(says.filter(s => !endings(s).every(e => e === '해라' || e === '조각')).map(s => `${endings(s).join('·')}: ${s}`)).toEqual([]);
   });
 
   it('사건 글의 따옴표 말은 누가 하는 말인지에 맞는 말씨다', () => {
