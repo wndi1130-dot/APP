@@ -8,6 +8,29 @@ const VALUES := {
 	"remote": {"safe_sec": 1800.0, "limit_sec": 2400.0, "fill_share": 0.0},
 }
 const SIDINGS := ["freight", "factory", "mine", "sawmill"]
+## The forms of the route's direct stops, by act and stop as route_bands.gd keeps their bands
+## (decision 494: values only, the places stay out of the repository). "" is a stop that is not
+## a direct one: it takes its place's form (resolve).
+const ROUTE: Dictionary = {
+	"prologue": ["city", "edge", "siding", "city", "city"],
+	"act1": ["siding", "", "siding", "edge", "", "", "city", "city", "", "city", "siding", "edge"],
+	"act2": ["remote", "", "remote", "", "edge", "remote", "", "remote", "city", "", "edge", "city"],
+	"act3": ["remote", "", "city", "", "city", "edge"],
+}
+
+
+## The form the route gives stop `stop` of `act` ("" when it gives none). Before the first leg's
+## first stop (the train setting out) there is no stop; past its fifth a stop reads the fifth's,
+## as its band and season do (route_bands.gd, route_stops.gd).
+static func on_route(act: String, stop: int) -> String:
+	if not ROUTE.has(act) or stop < 1:
+		return ""
+	var forms: Array = ROUTE[act]
+	if act == "prologue":
+		stop = mini(stop, forms.size())
+	elif stop > forms.size():
+		return ""
+	return String(forms[stop - 1])
 
 
 static func resolve(opts: Dictionary, kind: String) -> String:

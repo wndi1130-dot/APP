@@ -66,6 +66,8 @@ func test_every_card_reads_as_s1() -> void:
 			_same(want[key], got[key], "%s.%s" % [at, key])
 		_same(want.get("focus"), got["focus"], at + ".focus")
 		_same(want.get("key"), got.get("key"), at + ".key")
+		_same(want.get("late"), got.get("late"), at + ".late")
+		_same(want.get("lateLeft"), got.get("lateLeft"), at + ".lateLeft")
 		_same(want.get("speaker"), got["speaker"], at + ".speaker")
 		var wc: Array = want["choices"]
 		var gc: Array = got["choices"]

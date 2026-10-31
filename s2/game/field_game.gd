@@ -146,6 +146,11 @@ const RADIO_NEAR_M: float = 60.0
 const LAMP_OFF_SIGHT: float = 0.42     # how far the eye reaches at night with the lanterns out (0.55 with them; 0.3 was too blind, build 89)
 const NIGHT_AMBIENT_MIN: float = 0.2
 const LAMP_GAIN_DAY: float = 0.25       # how much of the lamp light shows on the ground by day
+## How the chief's lantern falls off with distance (the OmniLight's attenuation):
+## the picture only, as what the eye sees and the lamp pools on the ground read
+## the lamp's own reach and strength. 0 keeps its light out to the edge of its
+## reach, so the pool round the crew is wide and soft, not a white spot (T0-9).
+const LANTERN_FALLOFF: float = 0.0
 ## The low sun through the windows (decision 474 B8): gold at 14:50, deep orange
 ## (about 22 degrees) by sunset. Never red: red is the colour of want (atmosphere 6).
 const WINDOW_GOLD := Color(1.0, 0.8, 0.52)
@@ -474,7 +479,8 @@ func _ready() -> void:
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
-	stop_map = shape_stop(stop_map, String(opts.get("stop_form", "")), rng.seed, float(opts.get("stop_form_m", -1.0)),
+	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
+	stop_map = shape_stop(stop_map, String(opts.get("stop_ground", opts.get("stop_form", ""))), rng.seed, float(opts.get("stop_form_m", -1.0)),
 		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	_take_map(with_side_path(stop_map, rng.seed))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
@@ -1058,6 +1064,7 @@ func _build_world() -> void:
 	_set_view_fill()
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
 	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
+	lantern.omni_attenuation = LANTERN_FALLOFF
 	lantern.visible = false
 	firebox = _warm_light(4.0, 0.8)
 	for l in data["lights"]:
@@ -1532,11 +1539,17 @@ const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground
 static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable) -> Dictionary:
 	if form.is_empty() or form == String(map.get("stop_form", "")) or form == String(map.get("stop_form_asked", "")):
 		return map
-	if form == "edge":
-		if map.has("side_path"):
+	if form in ["edge", "remote"]:
+		# The other outlying form's map is already grown, and stop_ground.gd will not regrow it.
+		if map.has("side_path") or String(map.get("stop_form", "")) in ["edge", "remote"]:
 			map = fresh.call()
 		for key in AHEAD_KEYS:
 			map.erase(key)
+		# The loader's wood job was judged from the old train doors: the field's dress
+		# judges it again from the moved ones (work_spots.gd keeps a site with a job).
+		var site: Dictionary = (map.get("spots", {}) as Dictionary).get("work_site", {}) as Dictionary
+		site.erase("job")
+		site.erase("amount")
 	return StopGround.apply(map, form, run_seed, target_m)
 
 

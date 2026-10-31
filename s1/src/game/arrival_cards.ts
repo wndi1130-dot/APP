@@ -53,12 +53,12 @@ function arrivalView(g: Game, card: Card): CardView {
   const speaker = atStop ? { name: card.who ?? '수색대', role: '수색대' } : { name: g.comms.engine.leader.name, role: REP_ROLE.engine, comm: 'engine' as Comm };
   const inj = (k: number): Eff[] => (k > 0 ? [{ t: 'injured', v: k }] : []);
   const choices: Choice[] = ban ? [
-    { id: 'turn_away_law', label: '법대로 보낸다', say: '법은 법이다. 보내라.', effs: turned([{ t: 'trust', v: -1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
+    { id: 'turn_away_law', label: '법대로 보낸다', log: `피난민 무리: ${n}명을 법대로 돌려보냈다.`, say: '법은 법이다. 보내라.', effs: turned([{ t: 'trust', v: -1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
   ] : [
-    { id: 'turn_away', label: '돌려보낸다', say: '자리가 없다. 갈 길을 알려 주고 보내라.', effs: turned([{ t: 'trust', v: -2 }, { t: 'rel', c: 'medtech', v: -3 }, { t: 'rel', c: 'tail', v: -2 }, { t: 'tension', v: 1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
+    { id: 'turn_away', label: '돌려보낸다', log: `피난민 무리: ${n}명을 돌려보냈다.`, say: '자리가 없다. 갈 길을 알려 주고 보내라.', effs: turned([{ t: 'trust', v: -2 }, { t: 'rel', c: 'medtech', v: -3 }, { t: 'rel', c: 'tail', v: -2 }, { t: 'tension', v: 1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
     { id: 'take_some', label: `가족 ${some}무리만 태운다`, say: '자리 나는 만큼만 태운다. 가족은 나누지 마라.', effs: [...inj(hurtSome), { t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: 1 }, { t: 'rel', c: 'tail', v: -1 }], special: 'arrive_take_some', extra: placeLines(g, 'tail', someGroups), log: `피난민 무리: ${someN}명을 태웠다.` },
     { id: 'take_all', label: '모두 태운다', say: '다 태워라. 자리는 만든다.', effs: [...inj(hurtIn.length), { t: 'trust', v: 1 }, { t: 'rel', c: 'medtech', v: 3 }, { t: 'rel', c: 'tail', v: -2 }, { t: 'rel', c: 'front', v: -2 }], special: 'arrive_take_all', extra: placeLines(g, 'tail', groups), witness: atStop, log: `피난민 무리: ${n}명을 모두 태웠다.` },
-    { id: 'escort', label: '수색대를 붙여 데려온다', say: '수색대를 붙여라. 다음 역에서 태운다.', effs: [{ t: 'food', v: -1 }, { t: 'trust', v: 2 }, { t: 'rel', c: 'medtech', v: 2 }, { t: 'rel', c: 'tail', v: -2 }], special: 'arrive_escort',
+    { id: 'escort', label: '수색대를 붙여 데려온다', log: `피난민 무리: 수색대를 붙여 ${n}명을 데려오게 했다.`, say: '수색대를 붙여라. 다음 역에서 태운다.', effs: [{ t: 'food', v: -1 }, { t: 'trust', v: 2 }, { t: 'rel', c: 'medtech', v: 2 }, { t: 'rel', c: 'tail', v: -2 }], special: 'arrive_escort',
       extra: [`수색대 ${AR.escortSize}명 · 다음 정차까지 자리 비움`, riskLine(card)], ...(crew.length < AR.escortSize ? { disabled: '보낼 사람이 없다' } : {}) },
   ];
   return { title: '피난민 무리', speaker, focus: 'tail', required: true, key: 'arrival', body, choices: withAfford(g, choices) };
@@ -78,9 +78,9 @@ function familyView(g: Game, card: Card): CardView {
     title: '대원의 가족', speaker: { name: who, role: '수색대원', comm: c }, focus: c, required: true, key: 'family',
     body: `${who}이(가) 둘러본 곳에서 자기 가족을 봤다고 한다. ${size}명이다.${hurt ? ' 한 명은 다쳤다.' : ''} 밤길로 셋이 가서 데려오면 다음 역에서 만날 수 있다.${ban ? ' 외부인 받지 않기 법이 있지만, 칸 사람들은 대원의 가족은 외부인이 아니라고 말한다.' : ''}${echo}`,
     choices: withAfford(g, [
-      { id: 'fetch', label: '데리러 보낸다', say: '셋을 붙여 보내라. 다음 역에서 기다린다.', effs: [{ t: 'food', v: -1 }, { t: 'trust', v: 1 }, { t: 'rel', c, v: 5 }, ...backers.map(b => ({ t: 'rel' as const, c: b, v: -3 }))], special: 'family_fetch',
+      { id: 'fetch', label: '데리러 보낸다', log: `${who}의 가족을 데리러 셋을 보냈다.`, say: '셋을 붙여 보내라. 다음 역에서 기다린다.', effs: [{ t: 'food', v: -1 }, { t: 'trust', v: 1 }, { t: 'rel', c, v: 5 }, ...backers.map(b => ({ t: 'rel' as const, c: b, v: -3 }))], special: 'family_fetch',
         extra: [`수색대 ${AR.fetchSize}명 · 다음 정차까지 자리 비움`, riskLine(card)], ...(crew.length < AR.fetchSize ? { disabled: '보낼 사람이 없다' } : {}) },
-      { id: 'stay_put', label: '지금은 못 간다', say: '지금은 못 간다. 있는 곳을 적어 둬라.', effs: [{ t: 'rel', c, v: -6 }, { t: 'tension', v: 2 }], witness: AR.witness > 0 },
+      { id: 'stay_put', label: '지금은 못 간다', log: `${who}의 가족을 지금은 데리러 가지 않았다.`, say: '지금은 못 간다. 있는 곳을 적어 둬라.', effs: [{ t: 'rel', c, v: -6 }, { t: 'tension', v: 2 }], witness: AR.witness > 0 },
     ]),
   };
 }
@@ -89,10 +89,10 @@ function quarrelView(g: Game, card: Card): CardView {
   const c = card.comm ?? 'tail';
   return {
     title: '잠자리 다툼', speaker: { name: g.comms[c].leader.name, role: REP_ROLE[c], comm: c }, focus: c, required: true,
-    body: `"늦게 탄 사람들이 문간과 통로에서 잔다. 먼저 있던 사람들과 자리를 두고 말이 오갔다." ${COMM_NAME[c]} 과밀 ${Math.round(situation(g, c)[2])}.`,
+    body: `${c === 'front' ? '"늦게 탄 사람들이 문간과 통로에서 잡니다. 먼저 있던 사람들과 자리를 두고 말이 오갔습니다."' : '"늦게 탄 사람들이 문간과 통로에서 잔다. 먼저 있던 사람들과 자리를 두고 말이 오갔다."'} ${COMM_NAME[c]} 과밀 ${Math.round(situation(g, c)[2])}.`,
     choices: withAfford(g, [
-      { label: '잠자리를 다시 짠다', say: '자리를 다시 짜라. 먼저 탄 사람도 늦게 탄 사람도 같은 바닥이다.', effs: [{ t: 'coal', v: -1 }, { t: 'rel', c, v: 2 }, { t: 'tension', v: -1 }] },
-      { label: '알아서 하라고 둔다', say: '바닥은 바닥이다. 알아서 나눠 자라.', effs: [{ t: 'rel', c, v: -3 }, { t: 'tension', v: 1 }] },
+      { label: '잠자리를 다시 짠다', log: `${COMM_NAME[c]}의 잠자리를 다시 짰다.`, say: '자리를 다시 짜라. 먼저 탄 사람도 늦게 탄 사람도 같은 바닥이다.', effs: [{ t: 'coal', v: -1 }, { t: 'rel', c, v: 2 }, { t: 'tension', v: -1 }] },
+      { label: '알아서 하라고 둔다', log: `${COMM_NAME[c]}의 잠자리 다툼은 그 칸에 맡겼다.`, say: '바닥은 바닥이다. 알아서 나눠 자라.', effs: [{ t: 'rel', c, v: -3 }, { t: 'tension', v: 1 }] },
     ]),
   };
 }

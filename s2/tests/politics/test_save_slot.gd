@@ -38,7 +38,10 @@ func test_fixture_states_round_trip_through_one_slot() -> void:
 		assert_true(SaveSlot.save_slot(samples[i], SAVE_PATH), "save sample %d" % i)
 		var loaded := SaveSlot.load_slot(_tables, SAVE_PATH, BROKEN_PATH)
 		assert_null(loaded["why"], "load sample %d" % i)
-		assert_eq(V.diff(samples[i], loaded["g"], "sample %d" % i), "")
+		var expected: Dictionary = samples[i].duplicate(true)
+		if not expected.has("lateOn"): expected["lateOn"] = false
+		if not expected.has("lateCards"): expected["lateCards"] = []
+		assert_eq(V.diff(expected, loaded["g"], "sample %d" % i), "")
 
 
 func test_bad_saves_are_rejected_with_reason_and_preserved_beside_slot() -> void:

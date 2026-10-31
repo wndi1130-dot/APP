@@ -37,8 +37,8 @@ export function settleJosa(text: string): string {
     let at = out.indexOf(both);
     while (at >= 0) {
       let i = at - 1;
-      // 괄호 안은 앞말을 보충하므로 짝이 되는 여는 괄호 앞 글자로 판단한다
-      if (out[i] === ')') {
+      // 괄호 안은 앞말을 보충하므로 짝이 되는 여는 괄호 앞 글자로 판단한다(괄호가 잇따르면 모두 건너뛴다)
+      while (out[i] === ')') {
         let depth = 0;
         for (; i >= 0; i--) {
           if (out[i] === ')') depth++;

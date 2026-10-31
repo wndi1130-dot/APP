@@ -3,8 +3,8 @@ extends RefCounted
 const C = preload("res://game/train/turn/turn_common.gd")
 const St = preload("res://game/train/train_state.gd")
 
-static func add_card(g: Dictionary, card: Dictionary) -> void:
-	C.card(g, card)
+static func add_card(g: Dictionary, card: Dictionary, t: Dictionary = {}) -> void:
+	C.card(g, card, t)
 	g["peopleSeg"] = g["seg"]
 
 static func recent(g: Dictionary, t: Dictionary) -> bool:
@@ -55,7 +55,7 @@ static func after_death(g: Dictionary, t: Dictionary, comm: String, names: Array
 			return
 	var card: Dictionary = {"kind": "orphan" if parent != "" else "keepsake", "comm": comm, "who": parent if parent != "" else known[0]}
 	if parent == "" and g["phase"] == "stop": card["text"] = "field"
-	add_card(g, card)
+	add_card(g, card, t)
 
 static func victim_weight(g: Dictionary, t: Dictionary, p: Dictionary, cause: String) -> float:
 	var age: int = int(p["age"])
@@ -120,7 +120,7 @@ static func fall_sick(g: Dictionary, t: Dictionary, comm: String) -> void:
 	s["sick"] = {"since": g["seg"], "rep": s["leader"]}
 	s["leader"] = {"personId": person["id"], "name": person["name"], "age": person["age"], "trait": proxy_trait, "traitShown": 0}
 	g["sickCount"] = int(g.get("sickCount", 0)) + 1
-	add_card(g, {"kind": "rep_sick", "comm": comm})
+	add_card(g, {"kind": "rep_sick", "comm": comm}, t)
 	C.journal(g, "%s 대표 %s이(가) 앓아누웠다. 회기엔 %s이(가) 대신 나온다." % [t["COMM_NAME"][comm], s["sick"]["rep"]["name"], person["name"]], "bad")
 
 static func sick_tick(g: Dictionary, t: Dictionary) -> void:
@@ -160,7 +160,7 @@ static func elder_tick(g: Dictionary, t: Dictionary) -> void:
 	var elder: Dictionary = tail_old if not tail_old.is_empty() else other_old
 	if elder.is_empty(): return
 	g["elderAsked"] = true
-	add_card(g, {"kind": "elder", "comm": elder["community"], "who": elder["name"]})
+	add_card(g, {"kind": "elder", "comm": elder["community"], "who": elder["name"]}, t)
 
 static func birth_tick(g: Dictionary, t: Dictionary) -> void:
 	var h: int = C.hash_text(str(g["seed"]) + ":birth")
@@ -182,7 +182,7 @@ static func birth_tick(g: Dictionary, t: Dictionary) -> void:
 				break
 	if mother.is_empty(): return
 	g["born"] = {"comm": comm, "mother": mother["name"], "weak": false, "left": 0}
-	add_card(g, {"kind": "birth", "comm": comm, "who": mother["name"]})
+	add_card(g, {"kind": "birth", "comm": comm, "who": mother["name"]}, t)
 
 static func tick(g: Dictionary, t: Dictionary) -> void:
 	var kept: Array = []
@@ -197,7 +197,7 @@ static func tick(g: Dictionary, t: Dictionary) -> void:
 			baby["left"] -= 1
 			if int(baby["left"]) == 0:
 				baby["weak"] = false
-				add_card(g, {"kind": "naming", "comm": baby["comm"], "who": baby["mother"]})
+				add_card(g, {"kind": "naming", "comm": baby["comm"], "who": baby["mother"]}, t)
 				C.journal(g, "%s의 아이가 고비를 넘겼다." % baby["mother"], "good")
 		else:
 			baby["left"] = 0

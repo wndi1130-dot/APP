@@ -53,9 +53,9 @@ function lossView(g: Game, card: Card): CardView | null {
         title: '빈 의석', speaker: leaderOf(g, c), focus: c, required: true,
         body: `${who}의 자리를 ${s.leader.name}이(가) 이었다. 첫 회기 전에 열차장에게 약속 하나를 받아 두겠다고 한다.`,
         choices: withAfford(g, [
-          { label: '약속한다', say: '좋다. 약속하지. 그 칸 몫은 내가 챙긴다.', effs: [{ t: 'rel', c, v: 3 }], special: 'dw_promise',
+          { label: '약속한다', log: '새 대표에게 칸 몫을 챙기겠다고 약속했다.', say: '좋다. 약속하지. 그 칸 몫은 내가 챙긴다.', effs: [{ t: 'rel', c, v: 3 }], special: 'dw_promise',
             extra: cond ? [`약속: ${cond.label}`] : [], ...(busy || !cond ? { disabled: '이미 걸린 약속이 있다' } : {}) },
-          { label: '거절한다', say: '자리를 이었으면 먼저 일로 보여라.', effs: spare(g, c, [{ t: 'rel', c, v: -5 }, { t: 'grudge', c }]), special: 'dw_refuse' },
+          { label: '거절한다', log: '새 대표의 약속 요구를 거절했다.', say: '자리를 이었으면 먼저 일로 보여라.', effs: spare(g, c, [{ t: 'rel', c, v: -5 }, { t: 'grudge', c }]), special: 'dw_refuse' },
         ]),
       };
     }
@@ -64,8 +64,8 @@ function lossView(g: Game, card: Card): CardView | null {
         title: '빈 잠자리', speaker: leaderOf(g, c), focus: c, required: true,
         body: `${who}의 잠자리가 비었다. ${COMM_NAME[c]}이(가) 남은 아이들 잠자리를 난로 곁으로 옮겨 달라고 한다.`,
         choices: withAfford(g, [
-          { label: '들어준다', say: '아이들 자리를 난로 곁으로 옮겨라. 석탄은 내가 낸다.', effs: [{ t: 'coal', v: -3 }, { t: 'base', c, i: 0, v: 3 }] },
-          { label: '지금은 안 된다', say: '지금은 석탄을 뺄 수 없다. 다음 역까지 버텨라.', effs: spare(g, c, [{ t: 'rel', c, v: -4 }, { t: 'tension', v: 2 }]), special: 'dw_refuse' },
+          { label: '들어준다', log: '남은 아이들 잠자리를 난로 곁에 두게 했다.', say: '아이들 자리를 난로 곁으로 옮겨라. 석탄은 내가 낸다.', effs: [{ t: 'coal', v: -3 }, { t: 'base', c, i: 0, v: 3 }] },
+          { label: '지금은 안 된다', log: '남은 아이들 잠자리는 그대로 두기로 했다.', say: '지금은 석탄을 뺄 수 없다. 다음 역까지 버텨라.', effs: spare(g, c, [{ t: 'rel', c, v: -4 }, { t: 'tension', v: 2 }]), special: 'dw_refuse' },
         ]),
       };
     }
@@ -77,9 +77,9 @@ function lossView(g: Game, card: Card): CardView | null {
         title: '빈 손', speaker: leaderOf(g, c), focus: c, required: true,
         body: `${who}이(가) 하던 일이 비었다.${skilled ? ' 손이 익은 사람이었다.' : ''} ${COMM_NAME[c]}이(가) 사람을 하나 보내 달라고 한다.`,
         choices: withAfford(g, [
-          { label: `${COMM_NAME[from]}에서 한 사람 옮긴다`, say: `${COMM_NAME[from]}에서 한 사람 보내라. 일은 멈추면 안 된다.`,
+          { label: `${COMM_NAME[from]}에서 한 사람 옮긴다`, log: `${COMM_NAME[from]}에서 ${COMM_NAME[c]}에 일손 하나를 보냈다.`, say: `${COMM_NAME[from]}에서 한 사람 보내라. 일은 멈추면 안 된다.`,
             effs: [{ t: 'pop', c: from, v: -1 }, { t: 'pop', c, v: 1 }, { t: 'rel', c: from, v: -3 }, { t: 'rel', c, v: 2 }] },
-          { label: '그 칸이 나눠 진다', say: '남은 사람끼리 나눠 져라. 지금은 보낼 손이 없다.', effs: [], special: 'dw_share',
+          { label: '그 칸이 나눠 진다', log: `${who}이(가) 하던 일을 그 칸이 나눠 지게 했다.`, say: '남은 사람끼리 나눠 져라. 지금은 보낼 손이 없다.', effs: [], special: 'dw_share',
             extra: [`다음 정차 작업조 −${short}`] },
         ]),
       };
@@ -90,9 +90,9 @@ function lossView(g: Game, card: Card): CardView | null {
         title: '식은 난로', speaker: leaderOf(g, c), focus: c, required: true,
         body: `지난밤 난로가 식었다. ${n}명이 아침을 맞지 못했다. 남은 사람들이 「난방 배당」을 거둘 안건을 다음 회기 첫 자리에 올려 달라고 한다.`,
         choices: withAfford(g, [
-          { label: '올린다', say: '다음 회기 첫 안건으로 올리겠다.', effs: [{ t: 'rel', c, v: 3 }], special: 'dw_heat_agenda', extra: ['다음 회기: 난방 배당 폐지 안건'] },
-          { label: '그 칸에 석탄을 따로 준다', say: '법은 두고, 그 칸 난로에 석탄을 더 넣어라.', effs: [{ t: 'coal', v: -4 }, { t: 'base', c, i: 0, v: 5 }], special: 'dw_heat_coal', extra: ['두 구간 동안'] },
-          { label: '이번엔 안 된다', say: '법은 그대로 간다. 모두가 춥다.', effs: spare(g, c, [{ t: 'rel', c, v: -4 }, { t: 'tension', v: 3 }]), special: 'dw_refuse' },
+          { label: '올린다', log: '난방 배당 폐지를 다음 회기에 올리기로 했다.', say: '다음 회기 첫 안건으로 올리겠다.', effs: [{ t: 'rel', c, v: 3 }], special: 'dw_heat_agenda', extra: ['다음 회기: 난방 배당 폐지 안건'] },
+          { label: '그 칸에 석탄을 따로 준다', log: '법은 두고 식은 칸 난로에 석탄을 더 넣게 했다.', say: '법은 두고, 그 칸 난로에 석탄을 더 넣어라.', effs: [{ t: 'coal', v: -4 }, { t: 'base', c, i: 0, v: 5 }], special: 'dw_heat_coal', extra: ['두 구간 동안'] },
+          { label: '이번엔 안 된다', log: '난로가 식은 칸에도 난방 배당을 그대로 뒀다.', say: '법은 그대로 간다. 모두가 춥다.', effs: spare(g, c, [{ t: 'rel', c, v: -4 }, { t: 'tension', v: 3 }]), special: 'dw_refuse' },
         ]),
       };
     }
@@ -102,8 +102,8 @@ function lossView(g: Game, card: Card): CardView | null {
         title: '다시 오른 요구', speaker: leaderOf(g, c), focus: c, required: true,
         body: PUSH_BODY[slot],
         choices: withAfford(g, [
-          { label: '들어준다', say: '알았다. 이번엔 들어주겠다.', effs: [...PUSH_COST[slot], { t: 'rel', c, v: 3 }] },
-          { label: '물리친다', say: '이미 대답했다. 같은 말을 두 번 하지 않는다.', effs: spare(g, c, [{ t: 'rel', c, v: -5 }]), special: 'dw_push_refuse', extra: ['다음 회기 그 칸 한 석이 반대로'] },
+          { label: '들어준다', log: '죽음 뒤 다시 오른 요구를 들어줬다.', say: '알았다. 이번엔 들어주겠다.', effs: [...PUSH_COST[slot], { t: 'rel', c, v: 3 }] },
+          { label: '물리친다', log: '죽음 뒤 다시 오른 요구를 물리쳤다.', say: '이미 대답했다. 같은 말을 두 번 하지 않는다.', effs: spare(g, c, [{ t: 'rel', c, v: -5 }]), special: 'dw_push_refuse', extra: ['다음 회기 그 칸 한 석이 반대로'] },
         ]),
       };
     }
@@ -125,17 +125,17 @@ const FIX_BODY: Record<DeathSlot, string> = {
 };
 
 function fixChoices(g: Game, c: Comm, slot: DeathSlot): Choice[] {
-  const close = (effs: Eff[], extra: string[]): Choice => ({ label: '값을 치르고 닫는다', say: '이 일은 여기서 매듭짓자.', effs: [...effs, { t: 'rel', c, v: 4 }], special: `dw_fix_${slot}`, extra });
-  const open: Choice = { label: '닫지 않는다', say: '지금은 그럴 수 없다.', effs: [{ t: 'grudge', c }], special: 'dw_fix_none' };
+  const close = (effs: Eff[], extra: string[], log: string): Choice => ({ label: '값을 치르고 닫는다', log, say: '이 일은 여기서 매듭짓자.', effs: [...effs, { t: 'rel', c, v: 4 }], special: `dw_fix_${slot}`, extra });
+  const open: Choice = { label: '닫지 않는다', log: '죽음 뒤 남은 요구를 받아들이지 않았다.', say: '지금은 그럴 수 없다.', effs: [{ t: 'grudge', c }], special: 'dw_fix_none' };
   switch (slot) {
-    case 'child': return [close([{ t: 'coal', v: -4 }, { t: 'base', c, i: 0, v: 5 }], ['두 구간 동안']), open];
+    case 'child': return [close([{ t: 'coal', v: -4 }, { t: 'base', c, i: 0, v: 5 }], ['두 구간 동안'], '아이들 잠자리 곁 난로에 석탄을 더 줬다.'), open];
     case 'parent': {
       const to = raisedComm(g, c);
-      return [close([{ t: 'food', v: -5 }, { t: 'base', c: to, i: 1, v: 3 }], []), open];
+      return [close([{ t: 'food', v: -5 }, { t: 'base', c: to, i: 1, v: 3 }], [], '남은 아이를 맡은 칸에 배급을 더 줬다.'), open];
     }
-    case 'hand': return [close([{ t: 'food', v: -3 }], ['다음 정차 작업조 +1']), open];
-    case 'rep': return [close([{ t: 'lux', v: -2 }], ['다음 회기 안건을 이 칸이 고른다']), open];
-    case 'heat': return [close([], ['다음 회기: 난방 배당 폐지 안건']), open];
+    case 'hand': return [close([{ t: 'food', v: -3 }], ['다음 정차 작업조 +1'], '빈 손을 메울 사람을 하나 더 먹여 가르치기로 했다.'), open];
+    case 'rep': return [close([{ t: 'lux', v: -2 }], ['다음 회기 안건을 이 칸이 고른다'], '다음 회기 안건을 이 칸이 고르게 했다.'), open];
+    case 'heat': return [close([], ['다음 회기: 난방 배당 폐지 안건'], '난방 배당 폐지를 회기에 올리기로 했다.'), open];
   }
 }
 

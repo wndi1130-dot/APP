@@ -19,8 +19,24 @@ interface DecorDef {
   warm: number; crowd: number; piano: boolean; model: string;
   res?: DecorRes; v?: number; light?: 'lamp' | 'stove';
 }
+const FURNITURE_MODELS: Partial<Record<keyof typeof FURNITURE, string>> = {
+  chair: 'res://models/train_interior/wood_chair.glb',
+  side_table: 'res://models/props_field/side_table.glb',
+  small_shelf: 'res://models/train_interior/cupboard.glb',
+  oil_lamp: 'res://models/train_interior/lantern_off.glb',
+  small_box: 'res://models/train_interior/medicine_box.glb',
+  drawer: 'res://models/props_field/dresser.glb',
+  bed_frame: 'res://models/props_stop01/iron_bed.glb',
+  table: 'res://models/props_field/long_table.glb',
+  bookshelf: 'res://models/props_stop01/bookcase.glb',
+  small_stove: 'res://models/train_interior/stove.glb',
+  wardrobe: 'res://models/props_stop01/wardrobe.glb',
+  cupboard: 'res://models/props_field/cupboard.glb',
+  iron_stove: 'res://models/props_common/cold_stove.glb',
+  safe: 'res://models/props_field/strongbox.glb',
+};
 const furniture = (kind: keyof typeof FURNITURE, spot: DecorSpot = 'floor', surface = false, light?: 'lamp' | 'stove'): DecorDef =>
-  ({ ...FURNITURE[kind], spot, surface, furniture: true, model: '', ...(light ? { light } : {}) });
+  ({ ...FURNITURE[kind], spot, surface, furniture: true, model: FURNITURE_MODELS[kind] ?? '', ...(light ? { light } : {}) });
 const find = (spot: DecorSpot, res: DecorRes, v: number): DecorDef =>
   ({ spot, size: 'small', surface: false, furniture: false, warm: 0, crowd: 0, piano: false, model: '',
     ...(v > 0 ? { res, v } : {}) });
