@@ -45,9 +45,11 @@ GRADED_TARGETS = {
     "poster_rust": (.235, .188, .170), "bike_red": (.348, .232, .215),
     "tyre": (.10, .10, .11), "snow": (.74, .77, .79),
     # The yard well by height: grey-brown stone, the darker brown of its frame, posts and roof, and the water
-    # inside. The stone and worn wood above read washed out in the game beside our yard props.
-    "well_stone": (.175, .160, .140), "well_frame": (.160, .112, .096),
-    "well_post": (.115, .082, .070), "well_roof": (.078, .056, .047), "well_water": (.040, .043, .047),
+    # inside. The stone and worn wood above read washed out in the game beside our yard props. The wood is
+    # the house furniture's yellow-side brown (hue 29°, props_field_room "room_honey" 30°): at 16° it went
+    # pink under the deep-winter blue light.
+    "well_stone": (.175, .160, .140), "well_frame": (.152, .120, .090),
+    "well_post": (.110, .087, .065), "well_roof": (.076, .060, .045), "well_water": (.040, .043, .047),
 }
 DESIGNS = json.loads(r'''
 {

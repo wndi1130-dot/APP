@@ -318,6 +318,9 @@ export function contentPool(g: Game, phase: ContentEvent['phase'] = 'travel'): C
     if (!g.eventPack && inEventPack(ev.id)) return false; // 새 이동 사건 묶음(event_pack.ts)은 켠 판에서만
     const m = memo(g, `content:${ev.id}`);
     if (m && (m.n > ev.repeat || m.n >= EVENT_CHAIN_MAX || g.seg - m.seg < EVENT_COOLDOWN)) return false;
+    // 예약된 후속이나 이미 서류로 든 같은 사건은 일반 추첨에 들지 않는다(예약한 구간에 한 장만, 카드의 「N구간 뒤」대로).
+    if ((g.contentQueue ?? []).some(q => q.id === ev.id)) return false;
+    if ([...g.cards, ...(g.lateCards ?? []), ...(g.deferred ?? [])].some(c => c.kind === CONTENT_CARD_KIND && c.text === ev.id)) return false;
     return ev.trigger.every(c => holds(g, c)) && canBind(g, ev);
   });
 }
