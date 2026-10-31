@@ -1030,7 +1030,8 @@ const PATH_WIDTH: int = 3
 ## only: the floor kind stays the rule (sound, speed). The first width*height
 ## values are the cells:
 ##   open ground (SNOW, DEEP_SNOW) out of doors: 0 grass, -1 pavement along x,
-##   -2 along z, -3 a pavement corner;
+##   -2 along z, -3 a pavement corner (a tree, a bench or any block or low
+##   thing standing on it takes the pavement too);
 ##   ROAD: bits 0~3 the sides (N, E, S, W) that meet open ground (kerb and
 ##   gutter), bit 4 a centre line along x, bit 5 along z, bits 6~8 where it lies
 ##   across the cell in quarter metres, bit 9 a footpath;
@@ -1145,7 +1146,10 @@ static func ground_details(g: FieldGrid) -> PackedFloat32Array:
 	for i in n:
 		var s := so[i]
 		wall[i] = 2 if s == S.DOOR else 1 if (bu[i] >= 0 or s == S.WALL or s == S.WINDOW) else 0
-	# Pavement: open ground out of doors beside a street (corners too).
+	# Pavement: open ground out of doors beside a street (corners too). What
+	# stands on it out of doors (a street tree, a bench, a post) takes the
+	# pavement it stands in: left out, its cell drew bare ground, a white square
+	# of snow at its foot in deep winter. The soil by walls stays on open ground.
 	var soil := PackedFloat32Array()
 	soil.resize(n)
 	for y in h:
@@ -1154,7 +1158,8 @@ static func ground_details(g: FieldGrid) -> PackedFloat32Array:
 		for x in w:
 			var i := y * w + x
 			var f := fl[i]
-			if (f != F.SNOW and f != F.DEEP_SNOW) or bu[i] >= 0 or so[i] != S.NONE:
+			var stands := so[i] == S.BLOCK or so[i] == S.LOW
+			if (f != F.SNOW and f != F.DEEP_SNOW) or bu[i] >= 0 or (so[i] != S.NONE and not stands):
 				continue
 			var x0 := maxi(x - 1, 0)
 			var x1 := mini(x + 1, w - 1)
@@ -1167,6 +1172,8 @@ static func ground_details(g: FieldGrid) -> PackedFloat32Array:
 					near = maxi(near, wall[j])
 			if along > 0:
 				out[i] = -3.0 if along == 3 else -float(along)
+			elif stands:
+				continue
 			elif near == 2:
 				soil[i] = 1.0
 			elif near == 1:
@@ -1188,7 +1195,8 @@ static func ground_details(g: FieldGrid) -> PackedFloat32Array:
 ## Which way the walls stand from a corner of the ground grid (the point where
 ## four cells meet): +1 or -1 on each axis, 0 for none or both. Snow banks up
 ## there when the wind blows that way (world_vis). Nothing next to a door, so
-## the way in stays level; the shader keeps it off floors under a roof.
+## the way in stays level; the shader keeps it off floors under a roof. A
+## block standing alone (lone_block) is no wall.
 static func drift_uv(g: FieldGrid, corner: Vector2i) -> Vector2:
 	var side := Vector2i.ZERO
 	var open := false
@@ -1199,11 +1207,34 @@ static func drift_uv(g: FieldGrid, corner: Vector2i) -> Vector2:
 		var kind := g.solid_at(c)
 		if kind == S.DOOR:
 			return Vector2.ZERO
-		if kind == S.WALL or kind == S.BLOCK or kind == S.WINDOW:
+		if kind == S.WALL or kind == S.WINDOW or (kind == S.BLOCK and not lone_block(g.solid, g.building, g.width, g.height, c.x, c.y)):
 			side += Vector2i(1, 1) + d * 2
 		elif kind == S.NONE and not g.indoor(c):
 			open = true
 	return Vector2(signi(side.x), signi(side.y)) if open else Vector2.ZERO
+
+
+## A block standing alone in its cell, nothing walled beside it (a street tree's
+## trunk, a post, a drum): the wind piles no bank against it. Counted as a wall,
+## it raised a bank on all four sides, a white box at a tree's foot in deep
+## winter. drift_uv and ground_bank_row both ask this, so they answer alike. A
+## building's cell beside it counts as a wall whatever stands in it: furniture
+## laid in after the loader (ground_key leaves it out) changes no bank.
+static func lone_block(so: PackedByteArray, bu: PackedInt32Array, w: int, h: int, x: int, y: int) -> bool:
+	var i := y * w + x
+	if x > 0 and _walls_off(so[i - 1], bu[i - 1]):
+		return false
+	if x + 1 < w and _walls_off(so[i + 1], bu[i + 1]):
+		return false
+	if y > 0 and _walls_off(so[i - w], bu[i - w]):
+		return false
+	if y + 1 < h and _walls_off(so[i + w], bu[i + w]):
+		return false
+	return true
+
+
+static func _walls_off(kind: int, building: int) -> bool:
+	return building >= 0 or kind == S.WALL or kind == S.BLOCK or kind == S.WINDOW or kind == S.DOOR
 
 
 ## A wagon the model kit has none for, as [size, centre, colour] boxes: a floor on its wheels and four
@@ -1335,7 +1366,7 @@ static func ground_bank_row(g: FieldGrid, y: int, banks: PackedVector2Array) -> 
 				var kind := so[i]
 				if kind == S.DOOR:
 					door = true
-				elif kind == S.WALL or kind == S.BLOCK or kind == S.WINDOW:
+				elif kind == S.WALL or kind == S.WINDOW or (kind == S.BLOCK and not lone_block(so, bu, w, g.height, cx, cy)):
 					side_x += 1 + dx * 2
 					side_y += 1 + dy * 2
 				elif kind == S.NONE and bu[i] < 0:
@@ -2160,7 +2191,9 @@ func _prop_shade(path: String, item: Dictionary) -> Dictionary:
 	var lv: int = item["level"]
 	var floor_y := lv * LEVEL_H
 	var prop: Dictionary = item.get("prop", {})
-	if lo.y > floor_y + SHADE_FLOOR_GAP or String(prop.get("mount", "")) == "wall" or not levels.has(lv):
+	# shade=false: 발이 모형 전체를 덮는 성긴 모형(마당의 마른 풀·그루터기, yard_dress)은 네모 판이 보여 깔지 않는다.
+	if lo.y > floor_y + SHADE_FLOOR_GAP or String(prop.get("mount", "")) == "wall" or not levels.has(lv) \
+			or not prop.get("shade", true):
 		return {}
 	var tall := clampf(hi.y - floor_y, 0.0, 2.0)
 	if xf.basis.y.normalized().y > 0.9:

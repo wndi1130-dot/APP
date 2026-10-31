@@ -172,6 +172,40 @@ func test_an_old_remote_save_resumes_exactly_on_the_ground_it_stood_on() -> void
 	assert_push_warning_count(0)
 
 
+## A map handed over grown in the same form on another end gap than the save's (a stop
+## loader's, worked out afresh) is built again on the save's gap, not kept.
+func test_a_handed_map_on_another_end_gap_is_built_again_on_the_saves() -> void:
+	var handed: Dictionary = StopGround.apply(FieldMaps.build_from(BareLine), "edge", 7)
+	assert_gt(int(handed["stop_end_gap"]), StopGround.END_GAP, "the handed map has the worked-out gap")
+	var own: FieldGame = _game({"stop_form": "edge", "stop_end_gap": StopGround.END_GAP})
+	var back: FieldGame = _game({"stop_form": "edge", "stop_end_gap": StopGround.END_GAP, "map_data": handed})
+	assert_eq(int(back.data["stop_end_gap"]), StopGround.END_GAP)
+	assert_eq(back.grid.width, own.grid.width, "the save's ground, not the handed one")
+	assert_eq(back.data["train"], own.data["train"])
+	assert_engine_error_count(0)
+
+
+## An edge save from before the train's end gap was worked out (VIEW_REACH) stood on a
+## gap of END_GAP: its ground goes up so again and the whole running state comes back.
+func test_an_old_edge_save_resumes_exactly_on_its_old_end_gap() -> void:
+	var first: FieldGame = _game({"stop_form": "edge", "stop_end_gap": StopGround.END_GAP})
+	first.clock.elapsed = 222.0
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+	assert_eq(int(saved["stop_end_gap"]), StopGround.END_GAP)
+	assert_false(saved["start_opts"].has("stop_end_gap"), "not a start option")
+	saved.erase("stop_end_gap")
+	saved["runtime"]["game"]["glass_warned"] = true
+	var opts: Dictionary = FieldSave.resume_opts(saved)
+	assert_eq(int(opts["stop_end_gap"]), StopGround.END_GAP, "a save without the key had the old gap")
+	var back: FieldGame = _game(opts)
+	assert_eq(back.grid.width, first.grid.width)
+	assert_eq(back.clock.elapsed, 222.0)
+	assert_true(back.glass_warned, "the exact runtime came back")
+	var fresh: FieldGame = _game({"stop_form": "edge"})
+	assert_gt(fresh.grid.width, first.grid.width, "a new edge stop gets the worked-out gap")
+	assert_engine_error_count(0)
+
+
 func test_a_save_whose_grids_do_not_fit_falls_back_to_the_legacy_restore() -> void:
 	var first: FieldGame = _game({"stop_form": "city"})
 	first.clock.elapsed = 321.0

@@ -318,7 +318,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     id: 'sick_child', when: g => g.med >= 2,
     view: (g, past) => ({
       title: past ? '열병이 번진다' : '아이 열병', speaker: leader(g, 'medtech'), focus: 'medtech', required: true,
-      body: again(past, '꼬리칸 아이 셋이 열이 난다. "해열제는 상자에 있다. 꺼낼지 정해 달라."', {
+      body: again(past, '꼬리칸 아이 셋이 열이 난다. "해열제는 상자에 있습니다. 꺼낼지 정해 주십시오."', {
         med_use: `이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. "그 집 애만 애냐." 의약품은 ${Math.round(g.med)} 남았다.`,
         med_save: '지난번 약을 못 받은 아이가 아직 열이 안 내렸다. 엄마가 의무칸 문 앞을 떠나지 않는다. "우리 애 차례는 언제냐."',
       }, '아이들이 또 열이 난다.'),
@@ -901,7 +901,7 @@ const FAVORS_AGAIN: Record<Comm, { body: string; cost: Eff[] }> = {
   tail: { body: '"아들이 나았다. 이번엔 조카다." 대표가 눈을 피하며 말한다. 의무칸 침상이 또 필요하다.', cost: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 2, v: 3 }] },
   medtech: { body: '"동생이 앞칸에서 쫓겨날 것 같다. 한마디만 해 달라." 의사가 처음으로 목소리를 낮춘다.', cost: [{ t: 'rel', c: 'front', v: -3 }] },
   guard: { body: '"부관 얘기, 잊지 않았겠지." 경비대장이 총을 닦으며 묻는다.', cost: [{ t: 'rel', c: 'engine', v: -2 }, { t: 'rel', c: 'tail', v: -1 }] },
-  front: { body: '"손님이 또 온다. 이번엔 세 병." 앞칸 대표가 지난번처럼 웃지는 않는다.', cost: [{ t: 'lux', v: -3 }] },
+  front: { body: '"손님이 또 옵니다. 이번엔 세 병." 앞칸 대표가 지난번처럼 웃지는 않는다.', cost: [{ t: 'lux', v: -3 }] },
   engine: { body: '"그 견습생, 쓸 만하다. 하나 더." 수석 기관사가 이번엔 이름까지 적어 왔다.', cost: [{ t: 'rel', c: 'tail', v: -3 }] },
 };
 
@@ -914,7 +914,7 @@ const FAVORS: Record<Comm, { body: string; cost: Eff[] }> = {
   tail: { body: '"아들이 기침을 한다. 의무칸 침상 하나만." 대표가 처음으로 사적인 부탁을 한다.', cost: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 2, v: 3 }] },
   medtech: { body: '"동생이 앞칸 빈자리에 갈 수 있게 해 달라." 아무도 모르게.', cost: [{ t: 'base', c: 'front', i: 2, v: 3 }] },
   guard: { body: '"부관 자리 얘기, 다음에 내 이름도 올려 달라." 경비대장이 낮게 말한다.', cost: [{ t: 'rel', c: 'engine', v: -2 }] },
-  front: { body: '"술 두 병만. 손님을 맞아야 한다." 앞칸 대표가 웃는다.', cost: [{ t: 'lux', v: -2 }] },
+  front: { body: '"술 두 병만. 손님을 맞아야 합니다." 앞칸 대표가 웃는다.', cost: [{ t: 'lux', v: -2 }] },
   engine: { body: '"견습생 하나를 꼬리칸에서 데려가고 싶다. 내가 고른 아이로."', cost: [{ t: 'rel', c: 'tail', v: -2 }] },
 };
 

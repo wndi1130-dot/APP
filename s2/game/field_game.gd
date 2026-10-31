@@ -481,7 +481,8 @@ func _ready() -> void:
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
 	stop_map = shape_stop(stop_map, String(opts.get("stop_ground", opts.get("stop_form", ""))), rng.seed, float(opts.get("stop_form_m", -1.0)),
-		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place),
+		int(opts.get("stop_end_gap", -1)))
 	_take_map(with_side_path(stop_map, rng.seed))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
@@ -496,9 +497,13 @@ func _ready() -> void:
 	if bool(opts.get("loot_dress", true)):
 		# The decks pick up where the last field stop left them (decision 474 S1, the contract's lootDeck).
 		var deck: Dictionary = {}
+		# Supplies only on a run that turned them on (decision 490, the contract's supplies);
+		# a contract without the field, or no contract, dresses them as always.
+		var supplies := true
 		if opts.get("departure") is Dictionary:
 			deck = (opts["departure"] as Dictionary).get("lootDeck", {})
-		loot_report = LootDress.dress(data, rng.seed, deck)
+			supplies = bool((opts["departure"] as Dictionary).get("supplies", true))
+		loot_report = LootDress.dress(data, rng.seed, deck, supplies)
 		# The box a note of the last stop told of (card 10, opts "stash": its spot).
 		if String(opts.get("stash", "")) != "":
 			loot_report["stash"] = LootDress.place_stash(data, String(opts["stash"]), rng.seed)
@@ -681,8 +686,8 @@ func _apply_fx() -> void:
 		atmo_min = -INF
 		fx_params = Atmosphere.params(atmo, weather.wind_dir, snow_cover.cover())
 		FxState.apply(fx_params)
-		fx_light = Atmosphere.light(atmo)
-		fx_light_night = Atmosphere.light(atmosphere_at(0.0))
+		fx_light = Atmosphere.light(atmo, float(fx_params["fx_snow"]))
+		fx_light_night = Atmosphere.light(atmosphere_at(0.0), float(fx_params["fx_snow"]))
 		return
 	# A storm keeps its stage's light; the look is still made for breath and the like.
 	atmo = atmosphere_at(picture_hour())
@@ -892,7 +897,7 @@ func _update_atmosphere() -> void:
 		atmo_min = m
 		atmo = atmosphere_at(picture_hour())
 		_take_air()
-		fx_light = Atmosphere.light(atmo)
+		fx_light = Atmosphere.light(atmo, float(fx_params.get("fx_snow", -1.0)))
 		var p := Atmosphere.params(atmo, weather.wind_dir, float(fx_params.get("fx_snow", 0.0)))
 		var changed := {}
 		for key in ["fx_tint", "fx_sky", "fx_cloud", "fx_cold", "fx_frost", "fx_sight"]:
@@ -914,6 +919,7 @@ func _update_atmosphere() -> void:
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
+		environment.tonemap_exposure = float(fx_light.get("exposure", Atmosphere.EXPOSURE))
 		if map_edge != null:
 			map_edge.set_fog(fx_light["fog_color"])
 			map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
@@ -1027,7 +1033,7 @@ func _build_world() -> void:
 	var world := WorldEnvironment.new()
 	environment = Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.tonemap_exposure = Atmosphere.EXPOSURE
+	environment.tonemap_exposure = float(fx_light.get("exposure", Atmosphere.EXPOSURE))
 	environment.background_color = fx_light.get("background", Color(fx_params["fx_tint"]).darkened(0.75))
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = fx_light["ambient_color"]
@@ -1535,13 +1541,16 @@ const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground
 ## The ground of the stop's form (stop_ground.gd), put on before the side path
 ## (with_side_path). An edge stop grows and shifts the map, so what the loader made
 ## ahead from it is dropped first, and a map handed over with its side path already on
-## is built again bare by `fresh`; a city or siding stop keeps all of it.
-static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable) -> Dictionary:
-	if form.is_empty() or form == String(map.get("stop_form", "")) or form == String(map.get("stop_form_asked", "")):
+## is built again bare by `fresh`; a city or siding stop keeps all of it. So is a map
+## grown in the same form on another end gap than the save's (`end_gap`, field_save.gd).
+static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable, end_gap: int = -1) -> Dictionary:
+	var regap: bool = end_gap >= 0 and form in ["edge", "remote"] and form == String(map.get("stop_form", "")) \
+		and int(map.get("stop_end_gap", end_gap)) != end_gap
+	if not regap and (form.is_empty() or form == String(map.get("stop_form", "")) or form == String(map.get("stop_form_asked", ""))):
 		return map
 	if form in ["edge", "remote"]:
 		# The other outlying form's map is already grown, and stop_ground.gd will not regrow it.
-		if map.has("side_path") or String(map.get("stop_form", "")) in ["edge", "remote"]:
+		if regap or map.has("side_path") or String(map.get("stop_form", "")) in ["edge", "remote"]:
 			map = fresh.call()
 		for key in AHEAD_KEYS:
 			map.erase(key)
@@ -1550,7 +1559,7 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 		var site: Dictionary = (map.get("spots", {}) as Dictionary).get("work_site", {}) as Dictionary
 		site.erase("job")
 		site.erase("amount")
-	return StopGround.apply(map, form, run_seed, target_m)
+	return StopGround.apply(map, form, run_seed, target_m, end_gap)
 
 
 ## The side path on a map built here or handed over (side_path.gd). The loader puts it

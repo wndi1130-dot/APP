@@ -73,7 +73,16 @@ static func item_quantity(items: Array) -> int:
 	return count
 
 func measure_map(id: String, data: Dictionary) -> void:
-	var props: Array = data.get("props", [])
+	var all_props: Array = data.get("props", [])
+	# Wall-hung decor (room_decor.gd, "decor": true) stands on no floor cell and blocks nothing: the
+	# room census reads the furniture only, as before decor came; the draw counts below take all rows.
+	var props: Array = []
+	var decor_rows := 0
+	for row: Variant in all_props:
+		if row is Dictionary and bool((row as Dictionary).get("decor", false)):
+			decor_rows += 1
+		else:
+			props.append(row)
 	var levels: Dictionary = data.get("levels", {0: data["grid"]})
 	var classified := Furnish._classified_buildings(data, levels, props)
 	var floor_hashes: Dictionary = {}
@@ -165,7 +174,7 @@ func measure_map(id: String, data: Dictionary) -> void:
 		quantity += item_quantity(items)
 	var batch_paths: Dictionary = {}
 	var modelled: Dictionary = {}
-	for p: Dictionary in props:
+	for p: Dictionary in all_props:
 		var kind := String(p.get("kind", ""))
 		if not chosen.has(kind):
 			chosen[kind] = ""
@@ -180,7 +189,8 @@ func measure_map(id: String, data: Dictionary) -> void:
 		if path.is_empty() or not levels.has(int(p.get("level", 0))):
 			continue
 		batch_paths[path] = true
-		if int(p.get("level", 0)) == 0:
+		# As map_view draws it: decor blocks no body, so it does not take the grey block off its cell.
+		if int(p.get("level", 0)) == 0 and not bool(p.get("decor", false)):
 			var r: Rect2i = Furnish._rect(p["rect"])
 			for y in range(r.position.y, r.end.y):
 				for x in range(r.position.x, r.end.x):
@@ -195,7 +205,7 @@ func measure_map(id: String, data: Dictionary) -> void:
 	var multi_meshes := 0
 	for path: String in batch_paths:
 		multi_meshes += int(lod_counts[path])
-	maps.append({"map": id, "props": props.size(), "grey_cells": grey.size(), "prop_batches": batch_paths.size(),
+	maps.append({"map": id, "props": all_props.size(), "decor_rows": decor_rows, "grey_cells": grey.size(), "prop_batches": batch_paths.size(),
 		"multi_meshes": multi_meshes, "containers": ids.size(), "item_slots": slots, "item_quantity": quantity,
 		"contents_sha256": var_to_str(contents).sha256_text(), "floors_sha256": floor_hashes,
 		"furnish": data.get("room_stats", {}), "bath_selection": data.get("density_baths", {})})

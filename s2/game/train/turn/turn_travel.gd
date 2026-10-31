@@ -4,6 +4,7 @@ const St = preload("res://game/train/train_state.gd")
 const Turn = preload("res://game/train/train_turn.gd")
 const People = preload("res://game/train/turn/turn_people.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
+const Content = preload("res://game/train/turn/turn_content.gd")
 const WEATHER_WEIGHT: Array = [["snow", 30], ["fog", 20], ["sleet", 15], ["overcast", 20], ["clear", 15]]
 
 static func event_state_key(g: Dictionary, t: Dictionary) -> String:
@@ -28,7 +29,50 @@ static func event_open(g: Dictionary, t: Dictionary, id: String) -> bool:
 		"guard_frost": return St.situation(g, t, "guard")[0] < 50
 	return false
 
-static func draw_event(g: Dictionary, t: Dictionary) -> String:
+## S1 travelComm uses focus before speaker (crowd_fight focuses tail, front_curtain front).
+static func travel_comm(g: Dictionary, t: Dictionary, id: String) -> String:
+	if id.begins_with("content:"): return Content.content_draw_info(g, t, id.substr(8)).get("comm", "")
+	return {"tail_cold": "tail", "crowd_fight": "tail", "front_curtain": "front", "water_tower": "engine", "snow_drift": "engine", "abandoned_tender": "engine", "sick_child": "medtech", "ration_line": "tail", "guard_frost": "guard"}.get(id, "")
+
+
+static func travel_weight(g: Dictionary, t: Dictionary, id: String, recent_comms: Array) -> float:
+	var draw: Dictionary = Content.data()["draw"]
+	var base: float = float(draw["tenderBase"]) if id == "abandoned_tender" else 1.0
+	var pressure: float = 1.0
+	var divisor: float = float(draw["pressDiv"])
+	if id.begins_with("content:"): pressure = float(Content.content_draw_info(g, t, id.substr(8))["pressure"])
+	else:
+		match id:
+			"tail_cold": pressure += (38.0 - float(St.situation(g, t, "tail")[0])) / divisor
+			"crowd_fight": pressure += (float(St.situation(g, t, "tail")[2]) - 78.0) / divisor
+			"abandoned_tender": pressure += (80.0 - float(g["coal"])) / divisor
+			"ration_line": pressure += (45.0 - float(St.situation(g, t, "tail")[1])) / divisor
+			"guard_frost": pressure += (50.0 - float(St.situation(g, t, "guard")[0])) / divisor
+	var seen: int = int(g.get("eventLog", {}).get(id, {}).get("n", 0))
+	var novelty: float = 1.0 if seen <= 0 else float(draw["seen1"] if seen == 1 else draw["seen2"])
+	var comm: String = travel_comm(g, t, id)
+	var speaker: float = float(draw["speakerPenalty"]) if comm != "" and recent_comms.has(comm) else 1.0
+	return base * clampf(pressure, 1.0, float(draw["pressMax"])) * novelty * speaker
+
+
+static func weighted_travel_pick(g: Dictionary, t: Dictionary, pool: Array) -> String:
+	var recent: Array = g["recentEvents"]
+	var recent_comms: Array = []
+	for id: String in recent.slice(maxi(0, recent.size() - 2)): recent_comms.append(travel_comm(g, t, id))
+	var weights: Array[float] = []
+	var total: float = 0.0
+	for id: String in pool:
+		var weight: float = travel_weight(g, t, id, recent_comms)
+		weights.append(weight)
+		total += weight
+	var value: float = C.rnd(g) * total
+	for i: int in pool.size():
+		value -= weights[i]
+		if value < 0: return pool[i]
+	return pool[-1]
+
+
+static func draw_event(g: Dictionary, t: Dictionary, extra: Array = []) -> String:
 	var key: String = event_state_key(g, t)
 	var pool: Array = []
 	for id: String in ["tail_cold", "crowd_fight", "front_curtain", "water_tower", "snow_drift", "abandoned_tender", "sick_child", "ration_line", "guard_frost"]:
@@ -37,6 +81,8 @@ static func draw_event(g: Dictionary, t: Dictionary) -> String:
 		var memo: Dictionary = g.get("eventLog", {}).get(id, {})
 		if not memo.is_empty() and (int(g["seg"]) - int(memo["seg"]) < int(t["EVENT_COOLDOWN"]) or int(memo["n"]) >= int(t["EVENT_CHAIN_MAX"]) or memo.get("st") == key): continue
 		pool.append(id)
+	for id: String in extra:
+		if not (g["recentEvents"] as Array).has(id): pool.append(id)
 	# A frozen stretch puts the track events in again (S1 freezeTrackBoost), before the hands' roof (handsTrackBoost).
 	pool = TrainClimate.track_boost(g, t, pool)
 	if float(g.get("hands", {}).get("short", {}).get("roof", 0)) > float(t["HANDS"]["roofOver"]):
@@ -44,14 +90,13 @@ static func draw_event(g: Dictionary, t: Dictionary) -> String:
 			if pool.has(id):
 				for _i: int in range(1, int(t["HANDS"]["roofTrack"])): pool.append(id)
 	if pool.is_empty(): return ""
-	var id: String = pool[int(floor(C.rnd(g) * pool.size()))]
+	var id: String = weighted_travel_pick(g, t, pool) if g.get("eventPack", false) else str(pool[int(floor(C.rnd(g) * pool.size()))])
 	g["recentEvents"].append(id)
 	g["recentEvents"] = g["recentEvents"].slice(maxi(0, g["recentEvents"].size() - 4))
 	return id
 
 static func depart(g0: Dictionary, t: Dictionary) -> Dictionary:
 	if g0.get("stranded") != null: return C.unsupported(g0, "depart: strandedDepart")
-	if g0.get("eventPack", false) or g0.get("content") != null: return C.unsupported(g0, "depart: eventPack/content")
 	var g: Dictionary = g0.duplicate(true)
 	g.erase("platform")
 	var p: Dictionary = t["P"]
@@ -83,9 +128,14 @@ static func depart(g0: Dictionary, t: Dictionary) -> Dictionary:
 		C.card(g, {"kind": "pro_deal", "comm": "tail"}, t)
 		g["phase"] = "travel"
 		return g
+	Content.content_away_tick(g)
+	Content.content_followup_tick(g, t)
 	if not People.recent(g, t):
-		var event: String = draw_event(g, t)
-		if event != "": C.card(g, {"kind": "travel", "text": event}, t)
+		var extra: Array = []
+		for ev: Dictionary in Content.content_pool(g, t): extra.append("content:" + str(ev["id"]))
+		var event: String = draw_event(g, t, extra)
+		if event.begins_with("content:"): Content.add_content_card(g, t, event.substr(8))
+		elif event != "": C.card(g, {"kind": "travel", "text": event}, t)
 	g["phase"] = "travel"
 	return g
 
