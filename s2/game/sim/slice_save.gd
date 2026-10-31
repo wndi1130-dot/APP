@@ -143,8 +143,10 @@ static func write_train(g: Dictionary, path: String = TrainSave.DEFAULT_PATH, wr
 	return true
 
 
+## Keys keep their order, as S1's JSON and save_slot.gd do: ties picked by insertion order
+## (laws repealed in the same segment) stay the same after a resume.
 static func _text(d: Dictionary) -> String:
-	return JSON.stringify(FieldSave._encode(d), "", true, true)
+	return JSON.stringify(FieldSave._encode(d), "", false, true)
 
 
 static func _replace(path: String, train_slot: bool = false) -> bool:

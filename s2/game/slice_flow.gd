@@ -1376,10 +1376,7 @@ func _show_train(phase: String, seg: int) -> void:
 	rules["train"]["hands"] = (train_g["hands"] as Dictionary).duplicate(true) if train_g.get("hands") is Dictionary else {}
 	# Each furnished car's home stage (결정 486·517, train_decor.gd tier_of), so its light follows
 	# how it is kept: a new train's cars start in rags. The cars no one furnishes are left out.
-	var home: Dictionary = {}
-	for car_id: String in TrainDecor.DECOR_CARS:
-		home[car_id] = TrainDecor.tier_of(train_g, car_id)
-	rules["train"]["home"] = home
+	rules["train"]["home"] = _home_of(train_g)
 	train = TRAIN_SCENE.instantiate()
 	train.opts = {"panel": false, "seed": int(opts.get("seed", 1))}
 	if phase == "council":
@@ -1775,7 +1772,15 @@ func open_decor(id: String) -> bool:
 	return true
 
 
-## Back from decorating: the train as it was, the screens put away come back, the car still picked.
+## Read the current furniture tiers both when showing the train and when leaving decor.
+func _home_of(g: Dictionary) -> Dictionary:
+	var stages: Dictionary = {}
+	for car_id: String in TrainDecor.DECOR_CARS:
+		stages[car_id] = TrainDecor.tier_of(g, car_id)
+	return stages
+
+
+## Back from decorating: restore the screens and refresh tiers with the car still picked.
 func leave_decor() -> void:
 	if decor_id == "":
 		return
@@ -1789,6 +1794,10 @@ func leave_decor() -> void:
 	if is_instance_valid(train):
 		train.exit_decor()
 		_sync_decor_situation()
+		var stages: Dictionary = _home_of(train_g)
+		if stages != (train.rules["train"] as Dictionary).get("home", {}):
+			train.rules["train"]["home"] = stages
+			train.apply_rules()
 	for n in _decor_hidden:
 		if is_instance_valid(n):
 			(n as CanvasItem).visible = true

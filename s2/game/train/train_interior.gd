@@ -21,7 +21,7 @@ static var _dress_meshes: Dictionary = {}
 static var _dress_material: StandardMaterial3D
 
 
-func build(parent: Node3D, car: Dictionary, stove_builder: Callable) -> void:
+func build(parent: Node3D, car: Dictionary, stove_builder: Callable, stage: int = 1) -> void:
 	root = Node3D.new()
 	root.name = "Interior"
 	parent.add_child(root)
@@ -30,15 +30,29 @@ func build(parent: Node3D, car: Dictionary, stove_builder: Callable) -> void:
 		# A row kept for some cars only: the three tail cars share a layout and each has one thing of its own.
 		if row.has("cars") and not (row["cars"] as Array).has(String(car.get("id", ""))):
 			continue
+		if row.has("home"):
+			var home: Array = row["home"]
+			if stage < int(home[0]) or stage > int(home[1]):
+				continue
+		# Resolve before splitting dress, ordinary props and the stove; never edit Catalog's shared rows.
+		var models: Dictionary = row.get("home_model", {})
+		var base_model: String = String(row["model"])
+		var model: String = String(models.get(str(stage), base_model))
+		row = row.duplicate()
+		row["model"] = model
 		if bool(row.get("dress", false)):
 			dress_rows.append(row)
 			continue
 		var at := Catalog.vector(row["at"])
 		if row.get("system", "") == "stove":
-			stove_builder.call(at)
+			var stove_model: String = model if model != base_model else ""
+			# Older callers only observe the position; their three-argument build calls still work.
+			if stove_builder.get_argument_count() == 1:
+				stove_builder.call(at)
+			else:
+				stove_builder.call(at, stove_model)
 			continue
 		var node: Node3D
-		var model: String = String(row["model"])
 		var path := MODEL_ROOT + model + ".glb"
 		if not ResourceLoader.exists(path):
 			path = COMMON_ROOT + model + ".glb"
