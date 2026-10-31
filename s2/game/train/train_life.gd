@@ -11,6 +11,7 @@ const Schedule = preload("res://game/train/train_schedule.gd")
 const Interaction = preload("res://game/train/train_interaction.gd")
 const Motion = preload("res://game/train/train_motion_contract.gd")
 const Interior = preload("res://game/train/train_interior.gd")
+const TrainLight = preload("res://game/train/train_light.gd")
 
 var host: Node3D
 var places = Places.new()
@@ -75,7 +76,8 @@ func add_car(c: Dictionary) -> void:
 			cancel(int(id), "closed")
 	places.add_car(c["def"], float(c["x0"]))
 	var room = Interior.new()
-	room.build(c["node"], c["def"], func(at: Vector3) -> void: host._build_stove(c, at))
+	var home_stage: int = clampi(int(c.get("home_stage", TrainLight.STAGE_DEFAULT)), 0, 3)
+	room.build(c["node"], c["def"], func(at: Vector3, model: String = "") -> void: host._build_stove(c, at, model), home_stage)
 	rooms[c["id"]] = room
 
 

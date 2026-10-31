@@ -1660,18 +1660,27 @@ func _step_backdrop(delta: float) -> void:
 
 ## An iron stove with its pipe, an ember glow and the faint steam a car stove
 ## may make (fx/smoke.gd "stove").
-func _build_stove(c: Dictionary, at: Vector3) -> void:
+func _build_stove(c: Dictionary, at: Vector3, model: String = "") -> void:
 	var node: Node3D = c["node"]
 	var iron := Color(0.12, 0.12, 0.13)
+	var pipe_bottom: float = at.y + 0.7
+	var tier_path: String = "res://models/train_interior/" + model + ".glb"
+	if not model.is_empty() and model.is_valid_identifier() and ResourceLoader.exists(tier_path):
+		var stove := (load(tier_path) as PackedScene).instantiate() as Node3D
+		var bounds: AABB = Interior._bounds_of(stove)
+		stove.name = "Stove"
+		# Tier models have their origin at the floor, unlike the original centre-origin stove.
+		stove.position = at - Vector3(0, bounds.position.y, 0)
+		pipe_bottom = at.y + bounds.size.y
+		node.add_child(stove)
 	# The iron stove model of the furniture set (origin at its middle); a box without it.
-	if ResourceLoader.exists(STOVE_MODEL):
+	elif ResourceLoader.exists(STOVE_MODEL):
 		var stove := (load(STOVE_MODEL) as PackedScene).instantiate() as Node3D
 		stove.name = "Stove"
 		stove.position = at + Vector3(0, 0.35, 0)
 		node.add_child(stove)
 	else:
 		_box(node, Vector3(0.4, 0.7, 0.4), at + Vector3(0, 0.35, 0), iron)
-	var pipe_bottom: float = at.y + 0.7
 	var pipe_end: float = at.y + CAR_HEIGHT
 	var pipe_low: MeshInstance3D = _box(node, Vector3(0.1, SHELL_CUT_Y - pipe_bottom, 0.1),
 		Vector3(at.x, (pipe_bottom + SHELL_CUT_Y) * 0.5, at.z - 0.1), iron)

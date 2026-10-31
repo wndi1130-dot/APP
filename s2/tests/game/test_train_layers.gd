@@ -134,9 +134,14 @@ func test_the_dress_is_one_mesh_a_car_where_its_rows_say_seen_up_close() -> void
 		var tris := 0
 		var rows := 0
 		var reach := AABB()
+		# Only the rows of the car's home stage, each with that stage's model (train_interior.gd build).
+		var stage: int = int(s.car(id).get("home_stage", 1))
 		for row: Dictionary in _rows(id):
+			if row.has("home") and (stage < int(row["home"][0]) or stage > int(row["home"][1])):
+				continue
 			if bool(row.get("dress", false)):
-				tris += int(kit["assets"][String(row["model"])]["lod0_tris"])
+				var model: String = String((row.get("home_model", {}) as Dictionary).get(str(stage), row["model"]))
+				tris += int(kit["assets"][model]["lod0_tris"])
 				rows += 1
 				var b := _box(row)
 				var one := AABB(Vector3(b[0], b[2], b[4]), Vector3(b[1] - b[0], b[3] - b[2], b[5] - b[4]))
