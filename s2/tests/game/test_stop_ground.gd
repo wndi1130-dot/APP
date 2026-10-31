@@ -975,13 +975,28 @@ func _end_reach(now: Dictionary) -> float:
 
 
 func test_view_reach_covers_the_furthest_view_on_a_wide_screen() -> void:
-	var half: Vector2 = EdgeBand.view_half(36.0, 21.0 / 9.0, FieldGame.CAM_PITCH, FieldGame.CAM_YAW)
-	assert_gte(StopGround.VIEW_REACH, maxf(half.x, half.y))
+	assert_gte(StopGround.MAX_ASPECT, 22.0 / 9.0, "wider than the 21:9 phones")
+	for aspect: float in [16.0 / 9.0, 21.0 / 9.0, StopGround.MAX_ASPECT]:
+		var half: Vector2 = EdgeBand.view_half(36.0, aspect, FieldGame.CAM_PITCH, FieldGame.CAM_YAW)
+		assert_gte(StopGround.VIEW_REACH, maxf(half.x, half.y), "aspect %.3f" % aspect)
 
 
 func test_outlying_doors_stand_a_full_view_from_the_map_end() -> void:
-	for place: String in PLACES:
+	var places: Array[String] = PLACES.duplicate()
+	places.append("church_01")
+	for place: String in places:
 		assert_gte(_end_reach(_edge(place)), StopGround.VIEW_REACH, place + " edge")
 	for to_right: bool in [true, false]:
 		var now: Dictionary = _remote_fixture(to_right)["now"]
 		assert_gte(_end_reach(now), StopGround.VIEW_REACH, "remote fixture %s" % to_right)
+
+
+## A door one cell past the train's end on the grown side stands nearer the map's end
+## than the train's end does: its offset counts negative, not as the end cell.
+func test_a_spot_past_the_trains_end_still_stands_a_full_view_from_the_map_end() -> void:
+	for to_right: bool in [true, false]:
+		var was: Dictionary = _small_map(to_right)
+		var train: Rect2i = was["train"]
+		was["train_doors"]["lower"].append(Vector2i(train.end.x if to_right else train.position.x - 1, train.end.y))
+		var now: Dictionary = StopGround.apply(was, "edge", 71, 200.0)
+		assert_gte(_end_reach(now), StopGround.VIEW_REACH, "to_right %s" % to_right)

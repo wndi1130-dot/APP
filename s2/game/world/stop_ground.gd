@@ -7,11 +7,14 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const END_GAP: int = 12
-## The furthest view out (field_hud.gd zooms to 36) on a 21:9 screen reaches this far
-## each way from where the player stands (edge_band.gd view_half at field_game.gd's 35°
-## and 45°): an outlying stop's map runs at least so far past the train's door nearest
-## its grown end, so arriving never shows the woods round the map (3회차 대조표 N4).
-const VIEW_REACH: float = 52.0
+## The longest screen the map's end stays out of view on: 23.1:9, a folding phone's cover
+## screen held sideways (the window's stretch aspect "expand" shows more ground across).
+const MAX_ASPECT: float = 23.1 / 9.0
+## The furthest view out (field_hud.gd zooms to 36) on a MAX_ASPECT screen reaches this
+## far each way from where the player stands (edge_band.gd view_half at field_game.gd's
+## 35° and 45°, 54.9 m): an outlying stop's map runs at least so far past the train's door
+## nearest its grown end, so arriving never shows the woods round the map (3회차 대조표 N4).
+const VIEW_REACH: float = 55.0
 const TREE_STEP: int = 9
 const REMOTE_BAND: int = 24
 const REMOTE_FOREST_EDGE: int = 6
@@ -82,7 +85,8 @@ static func _row_gap(data: Dictionary) -> float:
 
 ## Cells past the train's end on the grown side: END_GAP, or more, so that the door or
 ## squad spot nearest that end stands VIEW_REACH from the map's end (its cell's middle
-## is the gap and its offset from the train's end, and half a cell, away).
+## is the gap and its offset from the train's end, and half a cell, away). A spot past
+## the train's end has a negative offset: it stands nearer the map's end.
 static func _end_gap(data: Dictionary, direction: int) -> int:
 	var train: Rect2i = data["train"]
 	var cells: Array = []
@@ -92,7 +96,7 @@ static func _end_gap(data: Dictionary, direction: int) -> int:
 	var nearest: int = train.size.x
 	for c: Vector2i in cells:
 		var off: int = train.end.x - 1 - c.x if direction > 0 else c.x - train.position.x
-		nearest = mini(nearest, maxi(0, off))
+		nearest = mini(nearest, off)
 	return maxi(END_GAP, ceili(VIEW_REACH - float(nearest) - 0.5))
 
 
