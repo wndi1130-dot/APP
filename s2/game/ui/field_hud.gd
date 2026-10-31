@@ -40,6 +40,7 @@ const Amputation = preload("res://game/sim/amputation.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
+const Sled = preload("res://game/sim/sled.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
@@ -3518,6 +3519,7 @@ func depart_card() -> void:
 	var text := "기적을 울리고 떠난다. 기적 소리는 멀리까지 간다."
 	if not left.is_empty():
 		text += "\n승강장에 없는 사람: %s. 이들은 남는다." % ", ".join(left)
+	text += Sled.leaving_note(game)
 	# Words, not seconds: arrival spreads too widely to promise a number
 	# (s2_play/measure_depart.md: 30 m leaves about 20 s to 10 m).
 	if horde_close():
