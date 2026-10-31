@@ -87,7 +87,7 @@
   "godot_material": "built-in StandardMaterial3D, vertex colour enabled on import; no material file",
   "triangle_limit": 600,
   "total_triangle_limit": 10000,
-  "total_triangles": 9385,
+  "total_triangles": 9457,
   "assets": {
     "bench": {
       "status": "ready",
@@ -3617,7 +3617,7 @@
         0.28
       ],
       "origin": "floor_center",
-      "triangle_limit": 60,
+      "triangle_limit": 120,
       "uses": 1,
       "size_variants": [
         {
@@ -3648,24 +3648,15 @@
         ]
       ],
       "use": "벽걸이 나무 보관함",
-      "lod0_tris": 58,
+      "lod0_tris": 100,
       "colours": [
-        "wood_mended"
+        "iron",
+        "wood_mended",
+        "wood_mended_grain"
       ],
-      "bytes": 6960,
-      "sha256": "f9a6ff1df1bbc1aa2a1348e251d8d97503aa8d64e53d28e5c0e33f0af516fbbd",
-      "sources": [
-        {
-          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\Models\\GLTF format\\kitchenCabinetUpper.glb",
-          "pack": "kenney_furniture",
-          "file": "kenney_furniture/x/Models/GLTF format/kitchenCabinetUpper.glb",
-          "license": "CC0-1.0",
-          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\License.txt",
-          "sha256": "8f2496feed85a745ffb6e554075b8450d647f8f68b01d6a010fcac1510fc173a",
-          "original_triangles": 80,
-          "reduced_triangles": 58
-        }
-      ],
+      "bytes": 7788,
+      "sha256": "4697891c7cdb9fcc47aa89c7a460ff6e7aaf4abaeda2da69530363d7bd82b920",
+      "sources": [],
       "tier": 1,
       "generator": "tools/blender/train_car_tiers.py",
       "palette_extra": {
@@ -3673,15 +3664,20 @@
           0.2417722418198145,
           0.157411015229534,
           0.08959290545410033
+        ],
+        "wood_mended_grain": [
+          0.1552559521723492,
+          0.10208670681710084,
+          0.059034974448749014
         ]
       },
-      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "source_search": "2026-10-31 벽걸이 손질: 가로 판자 세 장·뚜껑 테·나무 손잡이·L자 받침 쇠 둘을 기본 도형으로 구성. 이전 CC0 메시를 재사용하지 않음.",
       "verification": {
-        "centred_check_glb_sha256": "5f4faf5d6c22e5d0438da807115b7082340406154dbd48df9f38a357080dbdb0",
+        "centred_check_glb_sha256": "7c6746f4d06a742457296ef0c30400f44d10c25e96849d72bb6b3ed60389b88e",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
-      "source_asset": "kenney_furniture / kenney_furniture/x/Models/GLTF format/kitchenCabinetUpper.glb (CC0-1.0)",
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)",
       "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
     },
     "wood_wall_box_shallow": {
@@ -3693,7 +3689,7 @@
         0.28
       ],
       "origin": "floor_center",
-      "triangle_limit": 60,
+      "triangle_limit": 120,
       "uses": 1,
       "size_variants": [
         {
@@ -3724,24 +3720,15 @@
         ]
       ],
       "use": "열차장실 얕은 벽걸이 나무 보관함",
-      "lod0_tris": 58,
+      "lod0_tris": 88,
       "colours": [
-        "wood_mended"
+        "iron",
+        "wood_mended",
+        "wood_mended_grain"
       ],
-      "bytes": 6972,
-      "sha256": "0356f353c81802ad7bea1a18c8d25bd36c6677226b0c6021ca74db82596a0172",
-      "sources": [
-        {
-          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\Models\\GLTF format\\kitchenCabinetUpperLow.glb",
-          "pack": "kenney_furniture",
-          "file": "kenney_furniture/x/Models/GLTF format/kitchenCabinetUpperLow.glb",
-          "license": "CC0-1.0",
-          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\License.txt",
-          "sha256": "c25293d38ad3d4338142f5bfb6832a2f7e8a069a552fc4a6730231b1b382d33e",
-          "original_triangles": 64,
-          "reduced_triangles": 58
-        }
-      ],
+      "bytes": 6960,
+      "sha256": "16b2b8120444d09bd80f4d41866019d2ba0ad3a6af2a70bd2a578675a7eb8e47",
+      "sources": [],
       "tier": 1,
       "generator": "tools/blender/train_car_tiers.py",
       "palette_extra": {
@@ -3749,15 +3736,20 @@
           0.2417722418198145,
           0.157411015229534,
           0.08959290545410033
+        ],
+        "wood_mended_grain": [
+          0.1552559521723492,
+          0.10208670681710084,
+          0.059034974448749014
         ]
       },
-      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "source_search": "2026-10-31 벽걸이 손질: 가로 판자 두 장·뚜껑 테·나무 손잡이·L자 받침 쇠 둘을 기본 도형으로 구성. 이전 CC0 메시를 재사용하지 않음.",
       "verification": {
-        "centred_check_glb_sha256": "24bb10ca8be526896b09dfb0e109fe7c47c22192142b3b54efd6135ff70eb043",
+        "centred_check_glb_sha256": "c77318c5a91aefe511680edbcc9a8eef070694374fd479cb615d6685f3df7fd4",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
-      "source_asset": "kenney_furniture / kenney_furniture/x/Models/GLTF format/kitchenCabinetUpperLow.glb (CC0-1.0)",
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)",
       "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
     },
     "drum_stove": {

@@ -3,6 +3,7 @@ r"""열차 살림 단계 31종 — Blender 4.5, 정점색 Col(선형), 한 메�
 blender -b --factory-startup -P tools/blender/train_car_tiers.py -- --repo .
     [--src-open C:\dev\zombie\wt\open_assets] [--only a,b]
     [--stage-only] [--render-contact-sheet] [--replace-existing]
+    [--evidence-prefix tiers_colour|wallbox]
 
 0 누더기: 창 아래 보수판·천·짚, 막대걸이 초, 깡통 난로, 자루 침상.
 1 손봄: 벽걸이 나무함 두 크기, 드럼통 난로.
@@ -31,7 +32,7 @@ Crosley_Alarm_Clock_Vintage_Metal.zip은 실제 축소 렌더에서 48삼각형 
 Piece.fit/check_glb의 기존 중앙 원점 검사를 먼저 실제 GLB에 수행하고,
 새 31종만 바닥 원점으로 옮겨 다시 내보내고 바이너리 좌표·색을 검사한다.
 기존 GLB 교체는 --only와 --replace-existing으로 아래 COLOUR_IDS만 명시할 때 허용한다.
-교체 전 codex_out/tiers_colour_baseline.json 및 tiers_colour_before 복구 사본이 필요하다.
+교체 전 codex_out/<evidence-prefix>_baseline.json 및 같은 접두사의 _before 복구 사본이 필요하다.
 .import, 게임 코드, 배치 파일은 쓰지 않는다. Godot은 실행 안 함.
 """
 import sys
@@ -61,6 +62,7 @@ import train_car_layers as layers
 # 공용 팔레트의 기존 이름은 바꾸지 않는다.
 COLOUR_HLS = {
     'wood_mended': (31, .43, .23),
+    'wood_mended_grain': (31, .35, .23),
     'wood_oak': (31, .42, .42),
     'wood_oak_grain': (31, .34, .42),
     'wood_pine': (36, .54, .46),
@@ -113,8 +115,8 @@ SPECS = {
     'tin_stove': (0, (.40, .58, .40), 120, '낮고 삐뚤한 깡통 난로, 굽은 짧은 연통과 덧댄 양철'),
     'sack_bunk_upper': (0, (2.80, .14, .60), 96, '자루 침구의 얇은 위 침상'),
     'sack_bunk_lower': (0, (1.75, .48, .58), 120, '자루 침구의 다리 있는 아래 침상'),
-    'wood_wall_box': (1, (.48, .42, .28), 60, '벽걸이 나무 보관함'),
-    'wood_wall_box_shallow': (1, (.48, .22, .28), 60, '열차장실 얕은 벽걸이 나무 보관함'),
+    'wood_wall_box': (1, (.48, .42, .28), 120, '벽걸이 나무 보관함'),
+    'wood_wall_box_shallow': (1, (.48, .22, .28), 120, '열차장실 얕은 벽걸이 나무 보관함'),
     'drum_stove': (1, (.40, .70, .40), 144, '세운 드럼통 난로, 둘레 테 둘과 네모 문, 곧은 연통, 세 다리'),
     'end_shelf': (2, (.48, .90, .28), 96, '판 사이가 열린 세 단 끝벽 선반'),
     'top_shelf': ('2·3', (.48, .24, .28), 48, '받침 쇠와 얇은 판 한 단의 윗벽 선반'),
@@ -174,6 +176,8 @@ SOURCE_KEYS = {
     'tiny_clock': 'clock', 'tiny_book': 'book',
 }
 SEARCH_NOTES = {
+    'wood_wall_box': '2026-10-31 벽걸이 손질: 가로 판자 세 장·뚜껑 테·나무 손잡이·L자 받침 쇠 둘을 기본 도형으로 구성. 이전 CC0 메시를 재사용하지 않음.',
+    'wood_wall_box_shallow': '2026-10-31 벽걸이 손질: 가로 판자 두 장·뚜껑 테·나무 손잡이·L자 받침 쇠 둘을 기본 도형으로 구성. 이전 CC0 메시를 재사용하지 않음.',
     'tin_stove': '2026-10-31 손질 발주: 깡통·덧댄 판·굽은 연통을 기본 도형으로 직접 구성.',
     'drum_stove': '2026-10-31 손질 발주: 세운 드럼통·둘레 테 둘·문·세 다리를 기본 도형으로 직접 구성.',
     'end_shelf': '2026-10-31 손질 발주: 비어 있는 세 단 선반을 기본 도형으로 직접 구성.',
@@ -458,6 +462,45 @@ def flat_handle(p, outer, inner, normal, colour='iron_worn'):
             p.face(pts, colour, tuple(sign*v for v in normal))
 
 
+def wall_box(p, size):
+    """수평 판자 몸통과 벽에 붙는 두 L자 받침. 모두 지정된 경계 상자 안이다."""
+    w, h, d = size
+    bottom = .075 if h > .3 else .055
+    top = h-.018
+    left, right, back, front = -w/2+.016, w/2-.016, -d/2, d/2-.035
+    plank_count = 3 if h > .3 else 2
+    levels = [bottom]
+    for i in range(1, plank_count):
+        seam = bottom+(top-bottom)*i/plank_count
+        levels.extend((seam-.0035, seam+.0035))
+    levels.append(top)
+    # 줄은 몸통 표면을 분할한 7 mm 색 띠다. 겹친 면이나 z-fighting이 없다.
+    for i, (y0, y1) in enumerate(zip(levels, levels[1:])):
+        colour = 'wood_mended_grain' if i % 2 else 'wood_mended'
+        p.face([(left,y0,front),(right,y0,front),(right,y1,front),(left,y1,front)], colour, (0,0,1))
+        for x, sign in ((left,-1),(right,1)):
+            p.face([(x,y0,back),(x,y1,back),(x,y1,front),(x,y0,front)], colour, (sign,0,0))
+    p.face([(left,bottom,back),(right,bottom,back),(right,top,back),(left,top,back)], 'wood_mended', (0,0,-1))
+    for y, sign in ((bottom,-1),(top,1)):
+        p.face([(left,y,back),(right,y,back),(right,y,front),(left,y,front)], 'wood_mended', (0,sign,0))
+    # 앞쪽 2 cm, 좌우 1.6 cm 돌출된 얇은 뚜껑 테.
+    p.box((-w/2,w/2), (top,h), (back,front+.020), 'wood_mended')
+    middle = (bottom+top)/2
+    p.box((-.048,.048), (middle-.014,middle+.014), (front,d/2),
+          'wood_mended_grain', top='wood_mended')
+    # 6꼭짓점 L 단면을 x 방향으로 두껍게 만든다. 뒤 평면은 정확히 -depth/2.
+    profile = [(0,back),(bottom,back),(bottom,front+.020),
+               (bottom-.018,front+.020),(bottom-.018,back+.014),(0,back+.014)]
+    for x in (-.215,.215):
+        for side, sign in ((x-.015,-1),(x+.015,1)):
+            p.face([(side,y,z) for y,z in profile], 'iron', (sign,0,0))
+        for i, (y0,z0) in enumerate(profile):
+            y1,z1 = profile[(i+1)%len(profile)]
+            # profile의 일정한 감김에서 바깥 법선을 얻는다 (오목 모서리도 보존).
+            p.face([(x-.015,y0,z0),(x+.015,y0,z0),(x+.015,y1,z1),(x-.015,y1,z1)],
+                   'iron', (0,z1-z0,-(y1-y0)))
+
+
 def build(p, root):
     pid = p.pid
     size = SPECS[pid][1]
@@ -536,8 +579,7 @@ def build(p, root):
             for sign in (-1, 1):
                 p.face(pts, 'iron_worn', (sign, 0, 0))
     elif pid in ('wood_wall_box', 'wood_wall_box_shallow'):
-        key = SOURCE_KEYS[pid]
-        add_source(p, root, key, size, {'box': 60, 'shallow': 60, 'end': 92, 'top': 48}[key], paint='wood_mended')
+        wall_box(p, size)
     elif pid == 'pale_paneling':
         for x in (-3., 3.):
             add_source(p, root, 'panel', (6., .42, .05), 40, centre=(x, 0, 0), style='panel')
@@ -748,8 +790,9 @@ def update_books(out_dir, rows, replace=False):
     text = path.read_text(encoding='utf-8')
     if replace:
         for row in rows:
-            line = '| %s | %s | %s | %d | %s | %s |' % (row['id'], row['source_asset'], ti.dimensions(row['dimensions_m']), row['lod0_tris'], ', '.join(row['colours']), row['sha256'])
-            text, count = re.subn(r'^\| '+re.escape(row['id'])+r' \|.*$', lambda _: line, text, flags=re.M)
+            triangles = '%d (상한 %d)' % (row['lod0_tris'], row['triangle_limit']) if row['id'] in ('wood_wall_box', 'wood_wall_box_shallow') else str(row['lod0_tris'])
+            line = '| %s | %s | %s | %s | %s | %s |' % (row['id'], row['source_asset'], ti.dimensions(row['dimensions_m']), triangles, ', '.join(row['colours']), row['sha256'])
+            text, count = re.subn(r'^\| '+re.escape(row['id'])+r' \| [^\n]* \| [0-9a-f]{64} \|$', lambda _: line, text, flags=re.M)
             if count != 1:
                 raise ValueError('F-INPUT-MISSING: README 행 개수 ' + row['id'])
             if row['id'] == 'tiny_cup' and not row['sources']:
@@ -761,16 +804,26 @@ def update_books(out_dir, rows, replace=False):
             raise ValueError('F-INPUT-MISSING: README 전체 합계 줄')
         text = text.replace('색은 기존 train_car_dress/layers의 선형 색 판.',
                             '색은 기존 train_car_dress/layers 및 train_car_tiers.EXTRA의 선형 색 판. 추가 색은 화면 sRGB HLS에서 선형 RGB로 변환한다.')
+        existing_metadata = re.search(r'<!-- tiers_colour_metadata -->.*?<!-- /tiers_colour_metadata -->', text, flags=re.S)
+        metadata_rows = []
         metadata = '<!-- tiers_colour_metadata -->\n### 색 단계 손질 메타데이터\n\n'
         metadata += '아래 palette_extra 값은 Col에 기록한 선형 RGB이며, bytes는 최종 GLB 크기다.\n\n'
         metadata += '| 이름 | bytes | palette_extra (선형 RGB) |\n|---|---:|---|\n'
         for row in rows:
             values = '; '.join('%s=(%.6f, %.6f, %.6f)' % (name, *rgb)
                                for name, rgb in sorted(row['palette_extra'].items()))
-            metadata += '| %s | %d | %s |\n' % (row['id'], row['bytes'], values)
+            metadata_rows.append((row['id'], '| %s | %d | %s |' % (row['id'], row['bytes'], values)))
+        metadata += ''.join(line+'\n' for _, line in metadata_rows)
         metadata += '<!-- /tiers_colour_metadata -->\n\n'
-        text = re.sub(r'<!-- tiers_colour_metadata -->.*?<!-- /tiers_colour_metadata -->\n*', '', text, flags=re.S)
-        text = re.sub(r'(?=^새 살림 단계 합계:)', lambda _: metadata, text, flags=re.M)
+        if existing_metadata:
+            block = existing_metadata.group()
+            for pid, line in metadata_rows:
+                block, count = re.subn(r'^\| '+re.escape(pid)+r' \|.*$', lambda _: line, block, flags=re.M)
+                if not count:
+                    block = block.replace('<!-- /tiers_colour_metadata -->', line+'\n<!-- /tiers_colour_metadata -->')
+            text = text[:existing_metadata.start()]+block+text[existing_metadata.end():]
+        else:
+            text = re.sub(r'(?=^새 살림 단계 합계:)', lambda _: metadata, text, flags=re.M)
         write_json(catalog, book)
         path.write_text(text, encoding='utf-8')
         return
@@ -893,11 +946,12 @@ def main():
     parser.add_argument('--stage-only', action='store_true')
     parser.add_argument('--render-contact-sheet', action='store_true')
     parser.add_argument('--replace-existing', action='store_true', help='현재 색 손질 복구 사본이 있는 COLOUR_IDS를 명시한 --only 범위에서만 교체')
+    parser.add_argument('--evidence-prefix', choices=('tiers_colour', 'wallbox'), default='tiers_colour', help='현재 복구 사본·기준 해시·빌드 증빙의 접두사')
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
     repo = Path(args.repo).resolve()
     out = repo / 's2/models/train_interior'
     evidence = repo / 'codex_out'
-    prefix = 'tiers_colour' if args.replace_existing else 'tiers'
+    prefix = args.evidence_prefix if args.replace_existing else 'tiers'
     stage = evidence / (prefix+'_stage')
     stage.mkdir(parents=True, exist_ok=True)
     selected = args.only.split(',') if args.only else list(SPECS)
@@ -905,17 +959,19 @@ def main():
         raise SystemExit('F-INPUT-MISSING: --only 중복/알 수 없는 이름')
     if args.replace_existing and (not args.only or not set(selected) <= COLOUR_IDS):
         raise SystemExit('F-INPUT-MISSING: 교체는 --only에 COLOUR_IDS만 명시해야 함')
+    if args.evidence_prefix == 'wallbox' and (not args.replace_existing or set(selected) != {'wood_wall_box','wood_wall_box_shallow'}):
+        raise SystemExit('F-INPUT-MISSING: wallbox 증빙은 두 벽걸이 보관함 한정 교체 전용')
     rows, failures = [], []
     base = json.loads((out / 'catalog.json').read_text(encoding='utf-8-sig'))
     old_hashes = {p.name: sha(p) for p in out.glob('*.glb')}
     replace_hashes = {}
     if args.replace_existing:
-        baseline = json.loads((evidence/'tiers_colour_baseline.json').read_text(encoding='utf-8'))
+        baseline = json.loads((evidence/(prefix+'_baseline.json')).read_text(encoding='utf-8'))
         if not set(selected) <= set(baseline['ids']):
             raise RuntimeError('F-PRESERVATION: 현재 기준의 승인 범위 밖')
         for rel in ['s2/models/train_interior/'+pid+'.glb' for pid in selected] + ['s2/models/train_interior/catalog.json', 's2/models/train_interior/README.md']:
             expected = baseline['hashes'][rel]
-            if sha(repo/rel) != expected or sha(evidence/'tiers_colour_before'/rel) != expected:
+            if sha(repo/rel) != expected or sha(evidence/(prefix+'_before')/rel) != expected:
                 raise RuntimeError('F-PRESERVATION: 교체 전 원본/복구 사본 불일치 '+rel)
             replace_hashes[rel] = expected
         if any(base['assets'].get(pid, {}).get('generator') != SCRIPT for pid in selected):
