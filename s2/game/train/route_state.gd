@@ -3,6 +3,8 @@ extends RefCounted
 
 const Catalog = preload("res://game/train/campaign_route.gd")
 const Rng = preload("res://game/politics/rng.gd")
+const FieldReceipt = preload("res://game/sim/receipt.gd")
+const FieldReturn = preload("res://game/politics/field_return.gd")
 
 
 static func is_campaign(g: Dictionary) -> bool:
@@ -39,7 +41,7 @@ static func record_for_visit(g: Dictionary) -> Dictionary:
 	return {}
 
 
-static func problem(g: Dictionary) -> String:
+static func problem(g: Dictionary, t: Dictionary = {}) -> String:
 	if not is_campaign(g):
 		return "F-CAMPAIGN-ROUTE: mode"
 	var route: Dictionary = g["campaign"]
@@ -83,6 +85,13 @@ static func problem(g: Dictionary) -> String:
 			for row: Variant in order[key]:
 				if not row is Dictionary or not row.get("id") is String:
 					return "F-CAMPAIGN-ROUTE: contract row"
+				if key == "promises":
+					if not row.get("kind") is String:
+						return "F-CAMPAIGN-ROUTE: contract promise"
+				elif not row.get("comm") is String:
+					return "F-CAMPAIGN-ROUTE: contract community"
+		if not t.is_empty() and not FieldReturn.check_departure(order, t).is_empty():
+			return "F-CAMPAIGN-ROUTE: contract contents"
 	var record: Dictionary = record_for_visit(g)
 	var matches: int = 0
 	var ledger: Dictionary = g.get("fieldReturns", {}) if g.get("fieldReturns") is Dictionary else {}
@@ -102,6 +111,10 @@ static func problem(g: Dictionary) -> String:
 		var receipt: Variant = JSON.parse_string(raw)
 		if not receipt is Dictionary or receipt.get("receiptId") != visit["receipt_id"] or not owns_receipt(g, receipt):
 			return "F-CAMPAIGN-ROUTE: return identity"
+		if not FieldReceipt.check(receipt).is_empty():
+			return "F-CAMPAIGN-ROUTE: return contents"
+		if not visit.has("contract") or not FieldReturn.match_departure(visit["contract"], receipt).is_empty():
+			return "F-CAMPAIGN-ROUTE: return contract"
 	elif not record.is_empty():
 		return "F-CAMPAIGN-ROUTE: unexpected return"
 	if visit["result"] == "open" and (visit["seg"] != g["seg"] or g.get("phase") != "stop" or not g.get("stop") is Dictionary or bool(g["stop"].get("done", false))):

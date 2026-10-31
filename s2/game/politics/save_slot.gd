@@ -79,7 +79,7 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 		if not (field_returns is Dictionary) or not (field_returns.get("applied") is Dictionary) or not (field_returns.get("records") is Array):
 			return "필드 귀환 기록이 이상하다"
 	if g.has("campaign"):
-		var issue: String = RouteState.problem(g)
+		var issue: String = RouteState.problem(g, t)
 		if issue != "":
 			return issue
 	return null

@@ -5,6 +5,7 @@ const SliceFlow = preload("res://game/slice_flow.gd")
 const SliceSave = preload("res://game/sim/slice_save.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
+const FieldReceipt = preload("res://game/sim/receipt.gd")
 const TrainSave = preload("res://game/politics/save_slot.gd")
 const TrainAdvance = preload("res://game/train/train_advance.gd")
 const RouteState = preload("res://game/train/route_state.gd")
@@ -289,6 +290,55 @@ func test_campaign_two_real_fields_apply_each_return_once() -> void:
 	assert_eq(quiet_returns, 0)
 
 
+func test_campaign_symbol_return_reaches_second_stop_without_second_session() -> void:
+	var flow: CampaignProbe = _flow()
+	_reach(flow, "stop_pick")
+	flow.next()
+	_freeze_field(flow)
+	if not is_instance_valid(flow.field):
+		return
+	var carrier: String = String(flow.contract["roster"][0]["id"])
+	flow.field.receipt.add_stock("symbol", 1)
+	assert_true(flow.field.receipt.set_extras(1, [], 0))
+	assert_true(flow.field.receipt.set_symbol("sym_tail_kettle", "tail", carrier))
+	flow.field.finish("departed")
+	assert_true(FieldReceipt.check(flow.receipt).is_empty())
+	assert_true(flow._returned())
+	assert_eq(_record_count(flow), 1)
+	assert_null(flow.train_g["fieldReturns"]["records"][0]["symbol"]["use"])
+	var sessions_before: int = int(flow.train_g["session"])
+	flow.next()
+	assert_eq(flow.current(), "receipt")
+	flow.next()
+	assert_eq(flow.current(), "council")
+	assert_eq(flow.campaign_error, "")
+	assert_eq(flow.train_g["phase"], "council")
+	assert_eq(int(flow.train_g["session"]), sessions_before + 1)
+	assert_eq(flow.train_g["fieldReturns"]["records"][0]["symbol"]["use"], "hang_before_session")
+	var before_reopen: String = _json(flow.train_g)
+	assert_true(flow._open_session())
+	assert_eq(_json(flow.train_g), before_reopen, "the symbol is used once")
+	assert_eq(_pick()["g"]["fieldReturns"]["records"][0]["symbol"]["use"], "hang_before_session")
+	if flow.train_g["phase"] == "council" and not flow.train_g["council"].get("result") is Dictionary:
+		flow.card.cast()
+	flow.next()
+	assert_eq(flow.current(), "travel")
+	_reach(flow, "arrive")
+	flow.next()
+	assert_eq(flow.current(), "stop_pick")
+	assert_eq(RouteState.current_stop(flow.train_g)["id"], "guben")
+	var first_session: String = _json(flow.train_g["fieldReturns"]["special"])
+	_play_field(flow)
+	flow.next()
+	assert_eq(flow.current(), "end")
+	assert_eq(flow.campaign_error, "")
+	assert_eq(_record_count(flow), 2)
+	assert_eq(SliceSave.applied_ids(flow.train_g).size(), 2)
+	assert_eq(flow.field_entries, 2)
+	assert_eq(flow.real_receipts.size(), 2)
+	assert_eq(_json(flow.train_g["fieldReturns"]["special"]), first_session)
+
+
 func test_campaign_rejects_wrong_maps() -> void:
 	var flow: CampaignProbe = _flow()
 	_reach(flow, "stop_pick")
@@ -424,6 +474,8 @@ func test_campaign_second_stop_resume_matches_uninterrupted() -> void:
 func test_campaign_save_identity_and_shape() -> void:
 	var flow: CampaignProbe = _flow()
 	_to_arrival(flow)
+	var returned: Dictionary = flow.train_g.duplicate(true)
+	var returned_receipt: Dictionary = flow.receipt.duplicate(true)
 	var old_meta: Dictionary = SliceSave.read(SLICE)
 	var old_field: Dictionary = FieldSave.read(FIELD)
 	assert_true(flow._begin_campaign_stop())
@@ -475,6 +527,39 @@ func test_campaign_save_identity_and_shape() -> void:
 		SliceSave.clear(TRAIN)
 		assert_true(SliceSave.write_train(bad, TRAIN))
 		assert_eq(_pick(), {}, "invalid route is never adopted")
+	var receipt_id: String = String(returned_receipt["receiptId"])
+	var identity_only: Dictionary = {"receiptId": receipt_id, "departureId": returned_receipt["departureId"],
+		"stopId": returned_receipt["stopId"], "place": {"id": returned_receipt["place"]["id"]}}
+	assert_eq(identity_only.size(), 4)
+	var bad_fingerprint: Dictionary = returned.duplicate(true)
+	bad_fingerprint["fieldReturns"]["applied"][receipt_id] = FieldReturn.canonical(identity_only)
+	assert_ne(RouteState.problem(bad_fingerprint, board_tables), "")
+	assert_not_null(TrainSave.shape_problem(bad_fingerprint, board_tables))
+	SliceSave.clear(TRAIN)
+	assert_true(SliceSave.write_train(bad_fingerprint, TRAIN))
+	assert_eq(_pick(), {}, "an identity without a receipt body is never adopted")
+	var bad_match: Dictionary = returned.duplicate(true)
+	bad_match["campaign"]["visit"]["contract"]["roster"][0]["id"] = "absent_from_receipt"
+	assert_true(FieldReceipt.check(returned_receipt).is_empty())
+	assert_true(FieldReturn.check_departure(bad_match["campaign"]["visit"]["contract"], board_tables).is_empty())
+	assert_ne(RouteState.problem(bad_match, board_tables), "")
+	assert_not_null(TrainSave.shape_problem(bad_match, board_tables))
+	SliceSave.clear(TRAIN)
+	assert_true(SliceSave.write_train(bad_match, TRAIN))
+	assert_eq(_pick(), {}, "a valid receipt must match its saved contract")
+	var wrong_comm: Dictionary = good["campaign"]["visit"]["contract"]["roster"][0].duplicate(true)
+	wrong_comm["comm"] = "unknown"
+	var bad_contracts: int = 0
+	for roster_row: Dictionary in [wrong_comm, {"id": "captain"}]:
+		var bad: Dictionary = good.duplicate(true)
+		bad["campaign"]["visit"]["contract"]["roster"][0] = roster_row
+		assert_ne(RouteState.problem(bad, board_tables), "")
+		assert_not_null(TrainSave.shape_problem(bad, board_tables))
+		SliceSave.clear(TRAIN)
+		assert_true(SliceSave.write_train(bad, TRAIN))
+		assert_eq(_pick(), {}, "an invalid departure is never adopted")
+		bad_contracts += 1
+	assert_eq(bad_contracts, 2)
 
 
 func test_campaign_passed_stop_advances_without_receipt() -> void:
@@ -575,18 +660,27 @@ func test_loader_does_not_reuse_another_stop_map() -> void:
 	assert_eq(game.data["place_kind"], "houses")
 	loader.threaded = true
 	loader.prepare("first_leg_01_sulechow", 92, "city", -1.0, "visit_c")
-	loader._start_task(load("res://game/world/sulehuf_map.gd"))
+	assert_eq(loader._state, "loading")
+	var old_path: String = loader._loading_path
+	assert_false(old_path.is_empty())
 	var old_generation: int = loader._generation
 	loader.prepare("houses_01", 93, "edge", -1.0, "visit_d")
 	assert_gt(loader._generation, old_generation)
+	assert_eq(loader._retired_paths.size(), 1)
+	assert_eq(loader._retired_paths[0], old_path)
 	loader._take({"place_id": "first_leg_01_sulechow"}, old_generation)
 	assert_true(loader.data.is_empty(), "a late old task is ignored")
 	for _frame: int in 1800:
-		if loader.has_data() or loader.error != "":
+		if (loader.has_data() and loader._retired_paths.is_empty()) or loader.error != "":
 			break
 		await get_tree().process_frame
 	assert_eq(loader.error, "")
 	assert_true(loader.has_data())
+	assert_eq(loader._retired_paths.size(), 0)
+	assert_eq(loader._loading_path, "")
+	assert_eq(ResourceLoader.load_threaded_get_status(old_path), ResourceLoader.THREAD_LOAD_INVALID_RESOURCE)
+	loader._process(0.0)
+	assert_eq(loader._retired_paths.size(), 0, "a retired request is collected once")
 	assert_eq(loader.place, "houses_01")
 	assert_eq(loader.visit_for, "visit_d")
 	if loader.has_data():
@@ -596,6 +690,25 @@ func test_loader_does_not_reuse_another_stop_map() -> void:
 	assert_eq(loader.place, before_place)
 	assert_eq(loader.visit_for, "visit_e", "the same map is a new visit")
 	assert_gt(loader._generation, old_generation + 1)
+	var exit_path: String = loader._loading_path
+	assert_false(exit_path.is_empty())
+	_drop(loader)
+	assert_eq(ResourceLoader.load_threaded_get_status(exit_path), ResourceLoader.THREAD_LOAD_INVALID_RESOURCE)
+
+
+func test_campaign_start_errors_keep_process_safe() -> void:
+	var broken: CampaignProbe = _flow(0, {"save": false, "start_board": {"state": {}, "tables": {}}})
+	assert_eq(broken.step, -1)
+	assert_null(broken.marks)
+	assert_true(broken.campaign_error.begins_with("F-CAMPAIGN-START"))
+	broken._process(0.0)
+	assert_true(broken.next_button.pressed.is_connected(Callable(broken, "next")))
+	var bad_resume: Dictionary = {"run": "broken", "step": "train", "g": {"campaign": {"mode": "campaign", "version": 2}}}
+	var resumed: CampaignProbe = _flow(0, {"save": false, "resume": bad_resume})
+	assert_eq(resumed.step, -1)
+	assert_null(resumed.marks)
+	assert_true(resumed.campaign_error.begins_with("F-CAMPAIGN-ROUTE"))
+	resumed._process(0.0)
 
 
 func test_boot_keeps_slice_button_and_resumes_campaign_mode() -> void:

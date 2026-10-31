@@ -60,6 +60,8 @@ var visit_for: String = ""
 var error: String = ""
 var _generation: int = 0
 var _retired: Array[int] = []
+var _loading_path: String = ""
+var _retired_paths: Array[String] = []
 
 
 func _ready() -> void:
@@ -77,6 +79,10 @@ func prepare(place_id: String, run_seed: int = -1, form: String = "", form_m: fl
 	if _state in ["loading", "building", "ready"] and id == place and visit_id == visit_for and run_seed == seed_for and form == form_for and form_m == form_m_for:
 		return
 	_generation += 1
+	if not _loading_path.is_empty():
+		_retired_paths.append(_loading_path)
+		_loading_path = ""
+		set_process(true)
 	if _task >= 0:
 		_retired.append(_task)
 		_task = -1
@@ -103,6 +109,7 @@ func prepare(place_id: String, run_seed: int = -1, form: String = "", form_m: fl
 	if ResourceLoader.load_threaded_request(_path, "", false) != OK:
 		_start_task(load(_path))
 		return
+	_loading_path = _path
 	_state = "loading"
 	set_process(true)
 
@@ -184,15 +191,25 @@ func abandon() -> void:
 
 
 func _process(_delta: float) -> void:
+	# Replaced resource requests still need one get when they finish.
+	for i: int in range(_retired_paths.size() - 1, -1, -1):
+		var retired_path: String = _retired_paths[i]
+		if ResourceLoader.load_threaded_get_status(retired_path) != ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			ResourceLoader.load_threaded_get(retired_path)
+			_retired_paths.remove_at(i)
 	for i: int in range(_retired.size() - 1, -1, -1):
 		if WorkerThreadPool.is_task_completed(_retired[i]):
 			WorkerThreadPool.wait_for_task_completion(_retired[i])
 			_retired.remove_at(i)
 	if _state == "loading":
-		var status: int = ResourceLoader.load_threaded_get_status(_path)
+		var status: int = ResourceLoader.load_threaded_get_status(_loading_path)
 		if status == ResourceLoader.THREAD_LOAD_LOADED:
-			_start_task(ResourceLoader.load_threaded_get(_path))
+			var loaded_script: Script = ResourceLoader.load_threaded_get(_loading_path)
+			_loading_path = ""
+			_start_task(loaded_script)
 		elif status != ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			ResourceLoader.load_threaded_get(_loading_path)
+			_loading_path = ""
 			_start_task(load(_path))
 	elif _state == "building" and WorkerThreadPool.is_task_completed(_task):
 		WorkerThreadPool.wait_for_task_completion(_task)
@@ -277,6 +294,12 @@ func _pace_budget() -> void:
 
 
 func _exit_tree() -> void:
+	if not _loading_path.is_empty():
+		ResourceLoader.load_threaded_get(_loading_path)
+		_loading_path = ""
+	for retired_path: String in _retired_paths:
+		ResourceLoader.load_threaded_get(retired_path)
+	_retired_paths.clear()
 	# A task still running finishes before the loader goes; its map is dropped.
 	if _task >= 0:
 		WorkerThreadPool.wait_for_task_completion(_task)

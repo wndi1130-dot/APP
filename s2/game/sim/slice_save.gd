@@ -184,7 +184,7 @@ static func _train(path: String, t: Dictionary, source: Dictionary = {}) -> Dict
 		var loaded: Dictionary = TrainSave.read_save(_parse(at, source), t)
 		if bool(loaded.get("ok", false)):
 			var g: Dictionary = loaded["g"]
-			if g.has("campaign") and RouteState.problem(g) != "":
+			if g.has("campaign") and RouteState.problem(g, t) != "":
 				return {}
 			var valid: bool = true
 			for record: Variant in _returns(g).get("records", []):

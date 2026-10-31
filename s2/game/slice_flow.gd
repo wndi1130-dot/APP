@@ -335,7 +335,7 @@ func _ready() -> void:
 			result["reason"] = String(resume.get("result_reason", result["reason"]))
 		start_step = String(resume["step"])
 		if _is_campaign():
-			var issue: String = RouteState.problem(train_g)
+			var issue: String = RouteState.problem(train_g, train_t)
 			if issue != "":
 				campaign_error = issue
 				_build_panel()
@@ -553,6 +553,9 @@ func _show_step(i: int) -> void:
 
 
 func next() -> void:
+	if step < 0:
+		get_tree().change_scene_to_file(BOOT_SCENE)
+		return
 	if _is_campaign():
 		_campaign_next()
 		return
@@ -627,13 +630,16 @@ func _stop_form(seg: int) -> String:
 
 
 ## The stretch of the slice's field step: the map made ready while the train runs is its stop's.
-func _field_seg() -> int:
-	if _is_campaign():
-		return int(train_g.get("seg", FIRST_SEG))
+static func _field_seg() -> int:
 	for row: Array in STEPS:
 		if row[0] == "field":
 			return int(row[2])
 	return FIRST_SEG
+
+
+## The campaign's current stretch, or the slice's fixed field stretch.
+func _current_field_seg() -> int:
+	return int(train_g.get("seg", FIRST_SEG)) if _is_campaign() else _field_seg()
 
 
 ## The season table's stretch that stop stands on (route_stops.gd): the stop's weather and
@@ -1132,7 +1138,7 @@ func _take(g: Dictionary) -> void:
 		var next_g: Dictionary = g
 		if RouteState.is_campaign(next_g) and next_g["campaign"]["visit"].is_empty() and next_g.get("phase") == "stop":
 			next_g = RouteState.enter_stop(next_g, int(next_g["seg"]))
-		var issue: String = RouteState.problem(next_g)
+		var issue: String = RouteState.problem(next_g, train_t)
 		if issue != "":
 			_campaign_fail(issue)
 			return
@@ -1247,6 +1253,15 @@ func _open_session() -> bool:
 		return true
 	var regular: Dictionary = CouncilAgenda.agenda_options(train_g, train_t)
 	var stepped: Dictionary = FieldCouncil.next_field_step(train_g, train_t, regular["options"])
+	if _is_campaign() and stepped["step"] == "choose_symbol":
+		# The first return uses the same default as the field slice table.
+		var chosen: Dictionary = FieldReturn.choose_symbol_use(stepped["g"], train_t, String(train_g["campaign"]["visit"]["receipt_id"]), "hang_before_session")
+		if not bool(chosen["accepted"]):
+			_campaign_fail("F-CAMPAIGN-SYMBOL")
+			return false
+		_take(chosen["g"])
+		regular = CouncilAgenda.agenda_options(train_g, train_t)
+		stepped = FieldCouncil.next_field_step(train_g, train_t, regular["options"])
 	_take(stepped["g"])
 	return String(stepped["step"]) == "council"
 
@@ -1589,6 +1604,8 @@ func _enamel(name_label: Label3D) -> Control:
 
 
 func _process(_delta: float) -> void:
+	if not is_instance_valid(marks):
+		return
 	if decor_id != "" and (DecorUiData.lock_reason(train_g, false) != "" or (is_instance_valid(paper) and not (paper as TurnCard).folded)):
 		leave_decor()
 	marks.queue_redraw()
@@ -2289,11 +2306,11 @@ func _prepare_stop() -> void:
 	if _campaign_map_problem() != "":
 		_campaign_fail(_campaign_map_problem())
 		return
-	loader.prepare(_field_place(), int(visit["field_seed"]), _stop_form(_field_seg()), -1.0, String(visit["id"]))
+	loader.prepare(_field_place(), int(visit["field_seed"]), _stop_form(_current_field_seg()), -1.0, String(visit["id"]))
 
 
 func _campaign_can_go(id: String) -> bool:
-	if RouteState.problem(train_g) != "":
+	if RouteState.problem(train_g, train_t) != "":
 		return false
 	var board: String = SliceSave.step_of_board(train_g)
 	var here: String = current()
@@ -2433,7 +2450,7 @@ func _campaign_apply_return(said: Dictionary) -> bool:
 		_campaign_fail("F-CAMPAIGN-RECEIPT: not applied")
 		return false
 	g = RouteState.mark_returned(g, id)
-	var issue: String = RouteState.problem(g)
+	var issue: String = RouteState.problem(g, train_t)
 	if issue != "":
 		_campaign_fail(issue)
 		return false
