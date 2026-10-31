@@ -291,7 +291,7 @@ func test_rain_by_day_eases_the_spread_and_keeps_the_grey() -> void:
 	# Godot parts the channels by the spread times the saturation: the ease keeps the colour.
 	var sat_plain: float = lerpf(1.0, 0.9, float(l["veil"])) * (1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - float(l["veil"]))) * float(l.get("region_sat", 1.0))
 	assert_almost_eq(float(rain["saturation"]) * float(rain["spread"]), sat_plain * veiled * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(w["dusk"])), 0.0001, "the ease keeps the colour")
-	assert_lt(float(rain["saturation"]), 1.0, "and adds none")
+	assert_lte(float(rain["saturation"]), float(Atmosphere.grade(Atmosphere.look(12.0, ["clear"], "K1", 0.0))["saturation"]), "and no more colour than a clear day")
 	for c: float in [0.1, 0.4, 0.8]:
 		var out: float = 0.5 + float(rain["contrast"]) * (float(rain["brightness"]) * c - 0.5)
 		assert_almost_eq(out, float(rain["spread"]) * (c - float(rain["pivot"])) + float(rain["pivot"]), 0.0001)
@@ -304,6 +304,26 @@ func test_rain_by_day_eases_the_spread_and_keeps_the_grey() -> void:
 	assert_ne(String(snow_l["falls"]), "rain")
 	var snow_veiled: float = lerpf(Atmosphere.TONE_CONTRAST, Atmosphere.TONE_CONTRAST_DIM, float(snow_l["veil"]))
 	assert_almost_eq(float(Atmosphere.grade(snow_l)["spread"]), snow_veiled * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(snow_l["weights"]["dusk"])), 0.0001)
+	# Every region, the day through (dawn and dusk meeting the day too): never
+	# flatter than a clear day at that hour, the channels parted as without the
+	# ease, no more colour than a clear day.
+	var eased := 0
+	for region: String in Atmosphere.REGIONS:
+		for q in range(24, 77):
+			var hour := q * 0.25
+			var rl := Atmosphere.look(hour, ["rain"], region, 0.0)
+			var rg := Atmosphere.grade(rl)
+			var cg := Atmosphere.grade(Atmosphere.look(hour, ["clear"], region, 0.0))
+			var rw: Dictionary = rl["weights"]
+			var v := float(rl["veil"])
+			var plain_spread: float = lerpf(Atmosphere.TONE_CONTRAST, Atmosphere.TONE_CONTRAST_DIM, maxf(v, float(rw["night"]))) * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(rw["dusk"]))
+			var plain_sat: float = lerpf(1.0, 0.9, v) * lerpf(1.0, 0.72, float(rw["night"])) * (1.0 + 0.1 * (float(rw["dawn"]) + float(rw["dusk"])) * (1.0 - v)) * float(rl.get("region_sat", 1.0))
+			var at := "%s %.2f h" % [region, hour]
+			assert_gte(float(rg["spread"]) + 0.0001, float(cg["spread"]), "never flatter than a clear day: " + at)
+			assert_almost_eq(float(rg["saturation"]) * float(rg["spread"]), plain_sat * plain_spread, 0.0001, "the channels part as before: " + at)
+			assert_lte(float(rg["saturation"]), float(cg["saturation"]) + 0.0001, "no more colour than a clear day: " + at)
+			eased += 1 if float(rg["spread"]) < plain_spread - 0.0001 else 0
+	assert_gt(eased, 0, "the ease is on by day somewhere")
 
 
 func test_an_overcast_lights_from_above_and_keeps_the_ground() -> void:
