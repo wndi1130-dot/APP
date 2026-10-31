@@ -1,4 +1,5 @@
 extends RefCounted
+const Budget = preload("res://game/train/turn/turn_budget.gd")
 ## S1 council_log.ts: the council record and the result arc (정치 흐름 P1, 결정 439). A record, not a new gauge.
 ## The record keeps only its last rows; the promise counts (comms[c].kept·broken) and the lasting
 ## limit (openClosed) stay for the whole run. tests/politics/test_field_port.gd and
@@ -36,11 +37,12 @@ static func _bump_rel(g: Dictionary, comm: String, delta: float, why: String) ->
 		rows.pop_front()
 
 
-static func _add_card(g: Dictionary, value: Dictionary) -> void:
+static func _add_card(g: Dictionary, value: Dictionary, t: Dictionary = {}) -> void:
 	var row: Dictionary = {"uid": g["nextCardUid"]}
 	row.merge(value)
 	g["nextCardUid"] = int(g["nextCardUid"]) + 1
 	(g["cards"] as Array).append(row)
+	Budget.on_add(g, t)
 
 
 ## S1 josa for the pairs this file uses (은/는, 이/가).
@@ -116,7 +118,7 @@ static func note_broken(g: Dictionary, t: Dictionary, comm: String) -> void:
 		_bump_rel(g, comm, float(ARC["harshRel"]), "arc")
 		_journal(g, "%s에서 말이 돈다: \"법은 모질게 세우면서 약속은 가볍게 어긴다.\"" % name, "bad")
 	if n == int(ARC["ledgerAt"]):
-		_add_card(g, {"kind": "promise_ledger", "comm": comm})
+		_add_card(g, {"kind": "promise_ledger", "comm": comm}, t)
 	if n >= int(ARC["closeAt"]) and not bool(s.get("openClosed", false)):
 		s["openClosed"] = true
 		_journal(g, "%s%s 더는 열차장의 약속을 받지 않는다." % [name, _josa(name, "은/는")], "bad")

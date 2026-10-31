@@ -7,6 +7,7 @@ import type { FieldDepartureV2 } from '../../src/game/field_departure';
 import { applyFieldReturn, decodeFieldReceipt, matchDeparture } from '../../src/game/field_receipt';
 import type { FieldReceipt } from '../../src/game/field_receipt';
 import { PROFILES } from '../../src/game/state';
+import { enableSupplies } from '../../src/game/supplies';
 import type { WoundBook } from '../../src/game/wounds';
 
 // 출발 계약 판 2·영수증 판 5(docs/design/briefs/s3_departure_receipt_contract.md). GDScript 맞대기는 s2/tests/politics/test_field_departure.gd.
@@ -91,6 +92,16 @@ describe('출발 계약 판 2', () => {
     const again = buildDeparture(g, { placeId: 'sulechow_station', companions: sent.slice(1) });
     expect(again.roster.map(p => p.sore)).toEqual([1, 1, 1, 1]);
     expect(again.roster.map(p => p.rest)).toEqual([1, 2, 1, 1]);
+  });
+
+  it('생필품 칸은 판이 생필품을 켰는지만 싣고, 다른 칸은 그대로다', () => {
+    const g = atStop('slice-seed-a');
+    const { supplies: off, ...before } = buildDeparture(g, { placeId: 'sulechow_station' });
+    expect(off).toBe(false);
+    enableSupplies(g);
+    const { supplies: on, ...after } = buildDeparture(g, { placeId: 'sulechow_station' });
+    expect(on).toBe(true);
+    expect(after).toEqual(before);
   });
 });
 

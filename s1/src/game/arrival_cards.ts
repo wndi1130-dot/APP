@@ -53,7 +53,7 @@ function arrivalView(g: Game, card: Card): CardView {
   const speaker = atStop ? { name: card.who ?? '수색대', role: '수색대' } : { name: g.comms.engine.leader.name, role: REP_ROLE.engine, comm: 'engine' as Comm };
   const inj = (k: number): Eff[] => (k > 0 ? [{ t: 'injured', v: k }] : []);
   const choices: Choice[] = ban ? [
-    { id: 'turn_away_law', label: '법대로 보낸다', say: '법은 법이다. 보내라.', effs: turned([{ t: 'trust', v: -1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
+    { id: 'turn_away_law', label: '법대로 보낸다', log: `피난민 무리: ${n}명을 법대로 돌려보냈다.`, say: '법은 법이다. 보내라.', effs: turned([{ t: 'trust', v: -1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
   ] : [
     { id: 'turn_away', label: '돌려보낸다', log: `피난민 무리: ${n}명을 돌려보냈다.`, say: '자리가 없다. 갈 길을 알려 주고 보내라.', effs: turned([{ t: 'trust', v: -2 }, { t: 'rel', c: 'medtech', v: -3 }, { t: 'rel', c: 'tail', v: -2 }, { t: 'tension', v: 1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
     { id: 'take_some', label: `가족 ${some}무리만 태운다`, say: '자리 나는 만큼만 태운다. 가족은 나누지 마라.', effs: [...inj(hurtSome), { t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: 1 }, { t: 'rel', c: 'tail', v: -1 }], special: 'arrive_take_some', extra: placeLines(g, 'tail', someGroups), log: `피난민 무리: ${someN}명을 태웠다.` },
@@ -89,7 +89,7 @@ function quarrelView(g: Game, card: Card): CardView {
   const c = card.comm ?? 'tail';
   return {
     title: '잠자리 다툼', speaker: { name: g.comms[c].leader.name, role: REP_ROLE[c], comm: c }, focus: c, required: true,
-    body: `"늦게 탄 사람들이 문간과 통로에서 잔다. 먼저 있던 사람들과 자리를 두고 말이 오갔다." ${COMM_NAME[c]} 과밀 ${Math.round(situation(g, c)[2])}.`,
+    body: `${c === 'front' ? '"늦게 탄 사람들이 문간과 통로에서 잡니다. 먼저 있던 사람들과 자리를 두고 말이 오갔습니다."' : '"늦게 탄 사람들이 문간과 통로에서 잔다. 먼저 있던 사람들과 자리를 두고 말이 오갔다."'} ${COMM_NAME[c]} 과밀 ${Math.round(situation(g, c)[2])}.`,
     choices: withAfford(g, [
       { label: '잠자리를 다시 짠다', log: `${COMM_NAME[c]}의 잠자리를 다시 짰다.`, say: '자리를 다시 짜라. 먼저 탄 사람도 늦게 탄 사람도 같은 바닥이다.', effs: [{ t: 'coal', v: -1 }, { t: 'rel', c, v: 2 }, { t: 'tension', v: -1 }] },
       { label: '알아서 하라고 둔다', log: `${COMM_NAME[c]}의 잠자리 다툼은 그 칸에 맡겼다.`, say: '바닥은 바닥이다. 알아서 나눠 자라.', effs: [{ t: 'rel', c, v: -3 }, { t: 'tension', v: 1 }] },

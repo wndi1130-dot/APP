@@ -766,6 +766,7 @@ static func start_board() -> Array:
 	if not d is Dictionary or not d.get("state") is Dictionary or not d.get("tables") is Dictionary:
 		push_error("slice: the start board does not read")
 		return [{}, {}]
+	d["state"]["lateOn"] = true
 	return [d["state"], d["tables"]]
 
 
@@ -1176,6 +1177,7 @@ func _show_train(phase: String, seg: int) -> void:
 		train.opts["rules_before"] = last_rules
 	last_rules = rules.duplicate(true)
 	train.rules = rules
+	train.decor_closed.connect(_on_train_decor_closed)
 	add_child(train)
 	stage = train
 	# The world outside by the hour, the weather, the region and the cold
@@ -1529,6 +1531,8 @@ func open_decor(id: String) -> bool:
 		return false
 	if DecorUiData.lock_reason(train_g, false) != "":
 		return false
+	if not train.can_enter_decor(id):
+		return false
 	_put_rooms_away()
 	if not train.enter_decor(id):
 		return false
@@ -1574,6 +1578,13 @@ func leave_decor() -> void:
 	_select(id, false)
 
 
+## The train closed decorating on its own (its layout rebuilt): the pane, the screens put away
+## and the car id follow it on the next frame, outside the rebuild (leave_decor syncs the rules).
+func _on_train_decor_closed() -> void:
+	if decor_id != "":
+		leave_decor.call_deferred()
+
+
 func _decor_changed() -> void:
 	_room_changed()
 	if is_instance_valid(pane):
@@ -1586,7 +1597,10 @@ func _sync_decor_situation() -> void:
 	if is_instance_valid(train):
 		for comm: String in train_g.get("comms", {}):
 			var sit: Array = St.situation(train_g, train_t, comm)
-			train.set_comm(comm, "sit", [sit[0], sit[1], sit[2], sit[3]])
+			var next_sit: Array = [sit[0], sit[1], sit[2], sit[3]]
+			var current: Dictionary = train.rules.get("comms", {}).get(comm, {})
+			if current.get("sit") != next_sit:
+				train.set_comm(comm, "sit", next_sit)
 
 
 ## A room on the bottom bar with a screen of its own (home_bar.gd open_rooms).
