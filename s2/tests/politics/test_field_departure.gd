@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 
 const V = preload("res://tests/politics/field_vectors.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
+const KitPick = preload("res://game/politics/kit_pick.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
 const TrainStop = preload("res://game/train/train_stop.gd")
@@ -273,3 +274,60 @@ func test_route_weather_fields_match_s1_and_are_absent_with_climate_off() -> voi
 		_check(bad, String(row["name"]), row["expected"], got)
 		_check(bad, String(row["name"]) + " state unchanged", before, JSON.stringify(g))
 	assert_eq(bad, [] as Array[String])
+
+
+func test_the_train_s_sleds_go_out_on_the_contract_and_come_back_on_the_receipt() -> void:
+	# s3 contract 2·3: sleds ride like lures (only a train that keeps them), sledsBack counts the
+	# ones at the platform when the stop is left; without it they all come back, as before.
+	var row: Dictionary = {}
+	for r: Dictionary in _contracts():
+		if bool(r["domestic"]) and not bool(r.get("supplies", false)):
+			row = r
+			break
+	assert_false(row.is_empty(), "a contract with the domestic side on")
+	if row.is_empty():
+		return
+	var g: Dictionary = (row["state"] as Dictionary).duplicate(true)
+	g["dom"]["ammo_pistol"] = 0
+	g["dom"]["sleds"] = 2
+	var dep := FieldDeparture.build(g, _tables, row["opts"])
+	assert_eq(dep["train"].get("sleds"), 2, "the train's sleds go out on the contract")
+	g["dom"]["sleds"] = 0
+	assert_false((FieldDeparture.build(g, _tables, row["opts"])["train"] as Dictionary).has("sleds"), "none kept, none handed over")
+	g["dom"]["sleds"] = 2
+	var receipt: Dictionary = (row["receipt"] as Dictionary).duplicate(true)
+	assert_eq(FieldReturn.apply_field_return(g, _tables, dep, receipt)["g"]["dom"]["sleds"], 2, "no sledsBack: all came back")
+	receipt["sledsBack"] = 1
+	assert_eq(Receipt.check(receipt), [] as Array[String])
+	assert_eq(FieldReturn.match_departure(dep, receipt), [] as Array[String])
+	assert_eq(FieldReturn.apply_field_return(g, _tables, dep, receipt)["g"]["dom"]["sleds"], 1.0, "one left out in the field")
+	receipt["sledsBack"] = 3
+	assert_ne(FieldReturn.match_departure(dep, receipt), [] as Array[String], "more back than went out")
+	receipt["sledsBack"] = 1
+	assert_ne(FieldReturn.match_departure(row["departure"], receipt), [] as Array[String], "back when none went out")
+	for bad: Variant in [-1, 0.5, "1"]:
+		receipt["sledsBack"] = bad
+		assert_ne(Receipt.check(receipt), [] as Array[String], "sledsBack %s is refused" % str(bad))
+	var r := Receipt.new("sulechow_station")
+	r.set_ids("ret_s", "stop_s", "dep_s")
+	r.set_defense(true, [], [], [])
+	assert_false(r.to_dict().has("sledsBack"), "unset, the receipt has none")
+	r.set_sleds_back(0)
+	assert_eq(r.to_dict().get("sledsBack"), 0, "the receipt writes how many came back")
+	r.set_sleds_back(-1)
+	assert_true("sledsBack" in str(r.problems()), "a wrong count set on the receipt is refused, not dropped")
+	# A return applied once (the same receipt again changes nothing), never below none, and a
+	# contract without a train block (v1) handed out none.
+	receipt["sledsBack"] = 0
+	var once: Dictionary = FieldReturn.apply_field_return(g, _tables, dep, receipt)
+	assert_eq(once["g"]["dom"]["sleds"], 0.0, "both left out in the field")
+	var twice: Dictionary = FieldReturn.apply_field_return(once["g"], _tables, dep, receipt)
+	assert_eq(twice["status"], "duplicate")
+	assert_eq(twice["g"]["dom"]["sleds"], 0.0, "not taken off twice")
+	g["dom"]["sleds"] = 1
+	assert_eq(FieldReturn.apply_field_return(g, _tables, dep, receipt)["g"]["dom"]["sleds"], 0.0, "never below none")
+	assert_eq(FieldReturn.sleds_out({"version": 1}), 0)
+	assert_eq(FieldReturn.sleds_out({"train": "none"}), 0)
+	# A train that keeps no rounds still hands over its sleds.
+	assert_eq(KitPick.train_kit({"dom": {"sleds": 2}}), {"sleds": 2})
+	assert_eq(KitPick.train_kit({"dom": {}}), {})

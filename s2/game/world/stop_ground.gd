@@ -5,6 +5,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
+const NightLights = preload("res://game/world/night_lights.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const END_GAP: int = 12
 ## The longest screen the map's end stays out of view on: 23.1:9, a folding phone's cover
@@ -52,6 +53,8 @@ static func apply(data: Dictionary, form: String, run_seed: int, target_m: float
 		else:
 			out = _outlying(data, run_seed, target_m, 150.0, 300.0, 0, end_gap) if form == "edge" \
 				else _outlying(data, run_seed, target_m, 400.0, 800.0, REMOTE_BAND, end_gap)
+			# The lights people left, planned again round where the crew now steps down.
+			NightLights.follow(out)
 	_set_village(out, form)
 	# A remote strip cut off from the old village (a wall along the old border) would name
 	# one of its own cells the village: the stop stays a city one instead.

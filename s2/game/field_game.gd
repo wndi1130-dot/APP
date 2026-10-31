@@ -497,9 +497,13 @@ func _ready() -> void:
 	if bool(opts.get("loot_dress", true)):
 		# The decks pick up where the last field stop left them (decision 474 S1, the contract's lootDeck).
 		var deck: Dictionary = {}
+		# Supplies only on a run that turned them on (decision 490, the contract's supplies);
+		# a contract without the field, or no contract, dresses them as always.
+		var supplies := true
 		if opts.get("departure") is Dictionary:
 			deck = (opts["departure"] as Dictionary).get("lootDeck", {})
-		loot_report = LootDress.dress(data, rng.seed, deck)
+			supplies = bool((opts["departure"] as Dictionary).get("supplies", true))
+		loot_report = LootDress.dress(data, rng.seed, deck, supplies)
 		# The box a note of the last stop told of (card 10, opts "stash": its spot).
 		if String(opts.get("stash", "")) != "":
 			loot_report["stash"] = LootDress.place_stash(data, String(opts["stash"]), rng.seed)

@@ -147,4 +147,17 @@ describe('영수증 판 5', () => {
     const stranger = PROFILES.find(p => ![...roster, ...d.workCrew.map(x => x.id)].includes(p.id))!.id;
     expect(() => matchDeparture(d, r([...roster, stranger]))).toThrow();
   });
+
+  it('돌아온 썰매 수는 0 이상 정수이고, 나간 썰매보다 많을 수 없다(계약 글 3절)', () => {
+    const g = atStop('slice-seed-a');
+    const d = buildDeparture(g, { placeId: 'sulechow_station' });
+    const sent = d.roster.map(p => p.id);
+    const r = (n: unknown) => decodeFieldReceipt(receiptFor(d, sent, { sledsBack: n })) as FieldReceipt;
+    for (const bad of [-1, 0.5, '1']) expect(() => r(bad)).toThrow();
+    expect(() => matchDeparture(d, r(0))).not.toThrow();
+    expect(() => matchDeparture(d, r(1))).toThrow();
+    const out = { ...d, train: { ...d.train, sleds: 2 } };
+    expect(() => matchDeparture(out, r(2))).not.toThrow();
+    expect(() => matchDeparture(out, r(3))).toThrow();
+  });
 });

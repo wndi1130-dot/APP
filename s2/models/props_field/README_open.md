@@ -20,7 +20,7 @@ NVIDIA 4종·Google 5종·Scenario 1종은 CC BY 4.0, 나머지 4종은 자체 �
 | `teapot` | `Threshold_Porcelain_Teapot_White` | Google LLC. / Google Scanned Objects Threshold_Porcelain_Teapot_White, CC BY 4.0 | 236 / 250 | 0.136345 | 18112 | 6b87036f56ea11741c9d8350c7cd41162d3d79a7f7db9cc251d52db61a171dfc | ready |
 | `serving_bowl` | `Threshold_Porcelain_Serving_Bowl_Coupe_White` | Google LLC. / Google Scanned Objects Threshold_Porcelain_Serving_Bowl_Coupe_White, CC BY 4.0 | 120 / 150 | 0.068883 | 10192 | 9b8ec09293eab71618140c9febae22e3ab3bfdeb13e37766c010ef583a071843 | ready |
 | `dinner_plate` | `Threshold_Dinner_Plate_Square_Rim_White_Porcelain` | Google LLC. / Google Scanned Objects Threshold_Dinner_Plate_Square_Rim_White_Porcelain, CC BY 4.0 | 72 / 80 | 0.038908 | 6832 | e69fb900234f0222291da763a8f5a029e0b63b6a2bd29d087791b2e4fa5f2214 | ready |
-| `yard_well` | `scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1` | Scenario scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1, CC BY 4.0 | 679 / 700 | 1.9 | 60492 | 7b47478afa038c2e730ff428cd254511ed270b39e995ba8b3c22de380fb47ec4 | ready |
+| `yard_well` | `scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1` | Scenario scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1, CC BY 4.0 | 679 / 700 | 1.9 | 60492 | 12cb838b057728f31456171b8d4ca101711ba1efb36c2739b1c6229bf97c0a5a | ready |
 | `mailbox` | `mailbox` | 자체 제작, Blender 기본 도형 | 76 / 200 | 1.25 | 5868 | ba4341c961d75397b78a75ba7c5838e59f3035afcf07259b72220cdc653f45d9 | ready |
 | `wall_poster` | `wall_poster` | 자체 제작, Blender 기본 도형 | 57 / 150 | 2.05 | 4416 | b0fe2692ef294f54289e4aee08a0d06bc5c6258fa1827dc740c4163e963d6229 | ready |
 | `wall_clock` | `wall_clock` | 자체 제작, Blender 기본 도형 | 222 / 250 | 2.11 | 15680 | 4f0bcd4376658bd1a31a8d313998b58f8a393f432c066846d28b1a4f6f1acf62 | ready |

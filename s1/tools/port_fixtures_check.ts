@@ -18,6 +18,7 @@ const EPS = 1e-12;
 
 // [도구, 인자, 그 도구가 쓰는 표본(저장소 뿌리 기준)]
 const TOOLS: [string, string[], string[]][] = [
+  ['content_port', [], ['s2/game/train/content_events.json', `${TRAIN}/turn_vectors_eventpack.json`, `${TRAIN}/content_vectors.json`]],
   ['card_view_fixtures', [], [`${TRAIN}/card_vectors.json`]],
   ['deal_port_fixtures', [], [`${TRAIN}/deal_vectors.json`]],
   ['ladder_port_fixtures', [], [`${TRAIN}/ladder_vectors.json`]],

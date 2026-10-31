@@ -97,6 +97,8 @@ export type FieldReceiptV5 = Omit<ReceiptV4, 'version'> & {
   version: 5; crew: FieldCrewRow[]; defense: FieldDefense | null;
   /** 승강장에서 실은 옷장 자리 옷, 남은 미끼, 실은 음식의 이름별 개수(계약 글 3절). 없으면 빈 것 */
   wardrobeIn?: FieldGarment[]; luresBack?: Record<string, number>; foodIn?: Record<string, number>;
+  /** 정차를 떠날 때 승강장 하역 칸 안에 있던 열차 썰매 수(계약 글 3절). S1 열차는 썰매를 두지 않아 꼴만 본다 */
+  sledsBack?: number;
   /** 갈래별 보장 몫(덱)의 쓴 뒤 자리(결정 474 S1). 반영하면 판 상태 lootDeck을 이것으로 바꾼다 */
   lootDeck?: LootDeck;
 };
@@ -199,6 +201,7 @@ const v5Schema = {
     wardrobeIn: { type: 'array', items: garment },
     luresBack: counts,
     foodIn: counts,
+    sledsBack: count,
     lootDeck: { type: 'object', additionalProperties: object({ n: count, k: count, seen: count, hit: count }) },
   },
   required: [...v4Schema.required, 'crew', 'defense'],
@@ -215,7 +218,7 @@ export function decodeFieldReceipt(input: unknown): FieldReceipt {
   const record = value as Record<string, unknown>;
   const ok = record.version === 4 ? v4Validator(record) : record.version === 5 ? v5Validator(record) : false;
   if (!ok) throw new Error('필드 영수증 계약이 올바르지 않다');
-  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, wardrobeIn: _w, luresBack: _l, foodIn: _fi, lootDeck: _ld, ...rest } = record;
+  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, wardrobeIn: _w, luresBack: _l, foodIn: _fi, lootDeck: _ld, sledsBack: _sb, ...rest } = record;
   // 판 3 검사는 처치 칸을 모른다: 상처 줄에서 처치만 떼어 넘긴다(검사만, 돌려주는 값은 그대로).
   const people = rest.people as { wounds?: Record<string, unknown>[] };
   const bare = people.wounds ? { ...people, wounds: people.wounds.map(({ treat: _t, ...w }) => w) } : people;
@@ -291,6 +294,7 @@ export function matchDeparture(d: AnyDeparture, r: FieldReceipt): void {
     throw new Error('출발 약속과 영수증의 약속이 다르다');
   }
   if (r.symbol && !returnedOf(r).includes(r.symbol.carriedBy)) throw new Error('상징물을 든 사람이 열차에 오르지 않았다');
+  if (r.version === 5 && (r.sledsBack ?? 0) > ((d.version === 2 ? d.train.sleds : undefined) ?? 0)) throw new Error('나간 썰매보다 많이 돌아왔다');
 }
 
 export function snapshot(g: Game): FieldSnapshot {
