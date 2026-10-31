@@ -15,7 +15,11 @@ extends Control
 ## decision card (field_hud.gd card), the scene is in pen, in print when pen
 ## would not fit over the ways, and never pushes them off the sheet; when print
 ## would not fit either, the paper is cut wider (the leave strip's 「cut to its
-## lines」), up to WIDE. The sheet shows once it has settled. Folded to the left
+## lines」), up to WIDE; any remaining scene scrolls inside Said. Only when the
+## fixed rows alone are too tall are the late lines packed, then the whole
+## paper scrolled, with a fading paper edge and an ink arrow for more below;
+## a drag or wheel that starts on a way then moves the paper, never answers.
+## The sheet shows once it has settled. Folded to the left
 ## (결정 508) only its right edge stays in sight and a press there opens it
 ## again, never a way under it; a new card comes open.
 ##
@@ -50,6 +54,8 @@ const SAY_H: float = 55.0
 const NUM_W: float = 26.0
 ## .scene: pen 18 or print 13.5, on lines of 20; the title in pen 36 on lines of 30.
 const SCENE_LINE: float = 20.0
+## Scene lines a card keeps in sight at the least before it packs or scrolls.
+const SCENE_MIN: float = 3.0
 const TITLE_LINE: float = 30.0
 ## How much wider the paper is cut at a time, and at the most: the car the
 ## card is about still shows at the right of the 844 stage.
@@ -90,6 +96,9 @@ var t: Dictionary = {}
 var uid: int = -1
 var sheet: Control
 var body: VBoxContainer
+var _overflow: ScrollContainer
+var _tried_late_inline: bool = false
+var _tried_later_inline: bool = false
 var _armed: int = -1
 ## The widest the holder lets the paper be, mockup px (0: as drawn, cut wider up to
 ## WIDE): on a narrow screen it stops short of what stands at its right, and the
@@ -114,6 +123,7 @@ static func model(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> Dictionary:
 	if v.is_empty():
 		return {}
 	var sp: Variant = v["speaker"]
+	var content_kind: bool = card["kind"] in ["content", "content-deal"]
 	var bust: int = -1
 	var name: String = ""
 	var role: String = ""
@@ -121,6 +131,14 @@ static func model(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> Dictionary:
 		name = String(sp["name"])
 		role = String(sp["role"])
 		bust = CouncilCard.bust_of(g0["comms"][sp["comm"]]["leader"] if sp.has("comm") else {"name": name})
+		# An aide can speak for a car without being its representative.
+		if content_kind and (not sp.has("comm") or name != g0["comms"][sp["comm"]]["leader"]["name"]):
+			var portrait: Dictionary = {"name": name}
+			for person: Dictionary in t0["PROFILES"]:
+				if person["name"] == name:
+					portrait["personId"] = person["id"]
+					break
+			bust = CouncilCard.bust_of(portrait)
 	var cards: Array = g0["cards"]
 	var choices: Array = []
 	var witness: bool = false
@@ -131,17 +149,27 @@ static func model(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> Dictionary:
 		var why: String = UiFonts.josa(String(ch["why"]))
 		var fx: Array = effects(t0, ch)
 		# A why that says what it costs stands for 「지금 드는 값 없음」.
-		if why != "" and String(fx[0]["tone"]) == "none":
+		if why != "" and not content_kind and String(fx[0]["tone"]) == "none":
 			fx = []
 		choices.append({
 			"n": i + 1, "id": String(ch["id"]),
+			"label": String(ch["label"]), "lateUrgent": v.has("late") and int(v["lateLeft"]) == 0,
 			"say": UiFonts.josa(say if say != "" else String(ch["label"])),
 			"effects": fx, "off": String(ch["disabled"]), "why": why,
 			"heavy": HEAVY_IDS.has(String(ch["id"])),
 		})
+		if content_kind:
+			choices[-1]["content"] = true
+			choices[-1]["later"] = UiFonts.josa(String(ch.get("later", "")))
+	var late: int = int(v.get("late", 0))
+	var left: int = int(v.get("lateLeft", 0))
+	var late_line := ""
+	if late > 0:
+		late_line = "미룬 지 %d차례 · 또 미루면 가장 나쁜 쪽으로" % late if left == 0 else "미룬 지 %d차례 · 남은 %d차례" % [late, left]
 	return {"uid": int(card["uid"]), "at": cards.find(card) + 1, "count": cards.size(), "witness": witness,
 		"title": UiFonts.josa(String(v["title"])), "name": name, "role": role, "bust": bust,
-		"body": UiFonts.josa(String(v["body"])), "choices": choices}
+		"body": UiFonts.josa(String(v["body"])), "choices": choices,
+		"late": late, "lateLeft": left, "lateLine": late_line}
 
 
 ## What a way costs now, as the line under it reads, in the order S1 lists
@@ -205,8 +233,9 @@ func set_folded(on: bool) -> void:
 		return
 	folded = on
 	_opening = false
-	if on and _armed >= 0:
+	if not on or _armed >= 0:
 		# A heavy way armed before the fold is not left armed under the edge.
+		# Opening also rechecks costs changed while the paper was folded.
 		_armed = -1
 		_fill()
 	if sheet != null:
@@ -252,7 +281,22 @@ func _mark_fold() -> void:
 ## The paper `_w` wide, new when its width changes.
 func _sheet() -> void:
 	if sheet != null and is_equal_approx(sheet.size.x, _w * UiFonts.K):
+		# Refilling the same-width sheet must not keep an old scroll wrapper/cue.
+		for name: String in ["SceneMore", "PaperMore"]:
+			var hint := sheet.inner.get_node_or_null(name) as Control
+			if hint != null:
+				sheet.inner.remove_child(hint)
+				hint.queue_free()
+		if _overflow != null:
+			_overflow.remove_child(body)
+			sheet.inner.remove_child(_overflow)
+			_overflow.queue_free()
+			_overflow = null
+			body.custom_minimum_size = Vector2.ZERO
+			sheet.inner.add_child(body)
+			body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		return
+	_overflow = null
 	if sheet != null:
 		# A new sheet lies where the fold has it; no slide is left on the old one.
 		if _fold_tween != null:
@@ -312,9 +356,14 @@ func _fill() -> void:
 	if not is_inside_tree():
 		return
 	_sheet()
+	_tried_late_inline = false
+	_tried_later_inline = false
+	set_meta("fit_stage", "1")
+	set_meta("fit_need", [])
 	for c in body.get_children():
 		body.remove_child(c)
 		c.queue_free()
+	body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var card: Dictionary = _card(g, uid)
 	var m: Dictionary = model(g, t, uid)
 	sheet.visible = not m.is_empty()
@@ -333,7 +382,8 @@ func _fill() -> void:
 
 
 ## Once laid out: pen that does not fit over the ways goes to print; print that
-## does not fit cuts the paper wider; then the sheet shows.
+## does not fit cuts the paper wider. The scene then scrolls in Said; only
+## fixed rows taller than the paper try packing, then whole-paper scrolling.
 func _process(_delta: float) -> void:
 	_settle -= 1
 	if _settle > 0:
@@ -357,7 +407,123 @@ func _process(_delta: float) -> void:
 			_w = minf(widest, _w + WIDEN)
 			_fill()
 			return
+	# Said holds SCENE_MIN lines of the scene (all of a shorter one) in sight, so
+	# a sentence can be read before a way is chosen; the rest scrolls. Less room
+	# than that moves on to the next stage, as fixed rows that do not fit do.
+	if said != null and _overflow == null:
+		var least: float = minf(scene.get_combined_minimum_size().y, UiFonts.px(SCENE_LINE) * SCENE_MIN)
+		if absf(said.custom_minimum_size.y - least) > 0.5:
+			said.custom_minimum_size.y = least
+			_settle = SETTLE
+			set_process(true)
+			return
+	# Each stage's height is kept in order, so the stage chosen can be checked.
+	if _overflow == null:
+		(get_meta("fit_need") as Array).append([str(get_meta("fit_stage")), body.get_combined_minimum_size().y])
+	if _overflow == null and body.get_combined_minimum_size().y > sheet.inner.size.y + 0.5:
+		if not _tried_late_inline:
+			_tried_late_inline = true
+			if _pack_late_line():
+				set_meta("fit_stage", "2a")
+				_settle = SETTLE
+				set_process(true)
+				return
+		if not _tried_later_inline:
+			_tried_later_inline = true
+			if _pack_later_quote():
+				set_meta("fit_stage", "2b")
+				_settle = SETTLE
+				set_process(true)
+				return
+		set_meta("fit_stage", "2c")
+		_overflow = ScrollContainer.new()
+		_overflow.name = "Overflow"
+		_overflow.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_overflow.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+		# A drag or wheel that starts on a way passes to the paper and moves it;
+		# scrolling cancels that way's press. The paper keeps what it gets.
+		_overflow.mouse_filter = Control.MOUSE_FILTER_STOP
+		for key: Node in body.find_children("Key_*", "Button", true, false):
+			(key as Control).mouse_filter = Control.MOUSE_FILTER_PASS
+		_overflow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		sheet.inner.remove_child(body)
+		sheet.inner.add_child(_overflow)
+		body.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		body.custom_minimum_size.x = sheet.inner.size.x
+		_overflow.add_child(body)
+		if scene != null:
+			said.custom_minimum_size.y = scene.get_combined_minimum_size().y
+			(said as ScrollContainer).vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+			said.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_settle = SETTLE
+		set_process(true)
+		return
+	if _overflow != null:
+		_more_hint(_overflow, "PaperMore")
+	elif scene != null and scene.get_combined_minimum_size().y > said.size.y + 0.5:
+		_more_hint(said as ScrollContainer, "SceneMore")
 	sheet.modulate.a = 1.0
+
+
+## (a) Keep the full late line at the name row's right, only if both fit.
+func _pack_late_line() -> bool:
+	var late := body.find_child("Late", true, false) as Label
+	var who := body.find_child("Who", true, false) as HBoxContainer
+	if late == null or who == null:
+		return false
+	var width: float = late.get_theme_font("font").get_string_size(late.text, HORIZONTAL_ALIGNMENT_LEFT, -1, late.get_theme_font_size("font_size")).x
+	if who.get_combined_minimum_size().x + who.get_theme_constant("separation") + ceil(width) > who.size.x:
+		return false
+	late.get_parent().remove_child(late)
+	late.autowrap_mode = TextServer.AUTOWRAP_OFF
+	late.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	late.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	late.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	who.add_child(late)
+	return true
+
+
+## (b) Remove only the forced line break; the unchanged words still wrap.
+func _pack_later_quote() -> bool:
+	for quote: Label in body.find_children("Quote", "Label", true, false):
+		if quote.has_meta("inline_later"):
+			quote.text = String(quote.get_meta("inline_later"))
+			return true
+	return false
+
+
+## A drawn fade and small ink ▼, outside the scrolling content and inert to
+## presses. No image asset; the same cue is used for scene and whole paper.
+func _more_hint(scroll: ScrollContainer, name: String) -> void:
+	if sheet.inner.has_node(name):
+		return
+	var hint := Control.new()
+	hint.name = name
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sheet.inner.add_child(hint)
+	hint.draw.connect(func() -> void:
+		var w: float = hint.size.x
+		var h: float = hint.size.y
+		hint.draw_polygon(PackedVector2Array([Vector2.ZERO, Vector2(w, 0), Vector2(w, h), Vector2(0, h)]), PackedColorArray([Color(PAPER, 0.0), Color(PAPER, 0.0), Color(PAPER, 0.94), Color(PAPER, 0.94)]))
+		var k: float = UiFonts.K
+		hint.draw_colored_polygon(PackedVector2Array([Vector2(w * 0.5 - 3 * k, h - 6 * k), Vector2(w * 0.5 + 3 * k, h - 6 * k), Vector2(w * 0.5, h - 2 * k)]), Paper.INK2))
+	var update := func() -> void: _update_more_hint(scroll, hint)
+	scroll.resized.connect(update)
+	scroll.get_v_scroll_bar().changed.connect(update)
+	scroll.get_v_scroll_bar().value_changed.connect(func(_value: float) -> void: update.call())
+	update.call()
+
+
+func _update_more_hint(scroll: ScrollContainer, hint: Control) -> void:
+	if not is_instance_valid(hint) or hint.is_queued_for_deletion():
+		return
+	var bar := scroll.get_v_scroll_bar()
+	var h: float = minf(UiFonts.px(14.0), scroll.size.y)
+	hint.position = sheet.inner.get_global_transform().affine_inverse() * scroll.global_position + Vector2(0, scroll.size.y - h)
+	hint.size = Vector2(scroll.size.x, h)
+	hint.visible = h > 0.5 and bar.value + bar.page < bar.max_value - 0.5
+	hint.queue_redraw()
 
 
 ## Who brings it and what has happened (.cd__top: the portrait, 14 to the
@@ -411,6 +577,12 @@ func _top(m: Dictionary) -> void:
 			role.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			who.add_child(role)
 		words.add_child(who)
+	if String(m["lateLine"]) != "":
+		var late_line := _lines(String(m["lateLine"]), UiFonts.WORD, 12.0, SCENE_LINE)
+		late_line.name = "Late"
+		late_line.add_theme_color_override("font_color", Color.WHITE)
+		late_line.modulate = RED if int(m["lateLeft"]) == 0 else Paper.INK2
+		words.add_child(late_line)
 	var said := ScrollContainer.new()
 	said.name = "Said"
 	said.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -475,7 +647,7 @@ func _say(ch: Dictionary, at: int) -> Control:
 	row.custom_minimum_size = Vector2(0, SAY_H * k)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = ARMED if armed else Color(0, 0, 0, 0)
-	sb.border_color = Paper.TRACK
+	sb.border_color = RED if bool(ch.get("lateUrgent", false)) else Paper.TRACK
 	sb.border_width_top = int(round(2.0 * k))
 	row.add_theme_stylebox_override("panel", sb)
 	var pad := MarginContainer.new()
@@ -501,13 +673,24 @@ func _say(ch: Dictionary, at: int) -> Control:
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	line.add_child(col)
 	var wide: float = UiFonts.px(_w - PaperSheet.INSET_L - PaperSheet.INSET_R - 4.0 - NUM_W - (26.0 if heavy else 6.0))
-	var q := Paper.ink(UiFonts.keep_all("「%s」" % String(ch["say"])), UiFonts.WORD, 500, 14.0)
+	var words: String = (String(ch["label"]) + "\n" if ch["id"] == "later" else "") + "「%s」" % String(ch["say"])
+	var q := Paper.ink(UiFonts.keep_all(words), UiFonts.WORD, 500, 14.0)
 	q.name = "Quote"
+	if ch["id"] == "later":
+		q.set_meta("inline_later", UiFonts.keep_all(String(ch["label"]) + " · 「%s」" % String(ch["say"])))
 	q.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	q.custom_minimum_size = Vector2(wide, 22.0 * k)
 	q.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	col.add_child(q)
 	col.add_child(_costs(ch, armed, wide))
+	if bool(ch.get("content", false)):
+		for note_key: String in ["why", "later"]:
+			if str(ch.get(note_key, "")) == "": continue
+			var note_label: Label = _small(UiFonts.keep_all(("까닭: " if note_key == "why" else "나중에: ") + str(ch[note_key])), 400, Paper.INK2)
+			note_label.name = "Why" if note_key == "why" else "Later"
+			note_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			note_label.custom_minimum_size.x = wide
+			col.add_child(note_label)
 	var key := Button.new()
 	key.name = "Key_%d" % int(ch["n"])
 	key.focus_mode = Control.FOCUS_NONE
@@ -567,7 +750,7 @@ func _costs(ch: Dictionary, armed: bool, wide: float) -> Control:
 			var tone: String = String(e["tone"])
 			var pol: bool = tone == "blue" or tone == "red"
 			flow.add_child(_small(String(e["text"]), 500 if pol else 400, BLUE if tone == "blue" else (RED if tone == "red" else Paper.INK2)))
-	if String(ch["why"]) != "":
+	if String(ch["why"]) != "" and not bool(ch.get("content", false)):
 		var why := _small(UiFonts.keep_all(String(ch["why"])), 400, Paper.INK2)
 		why.name = "Why"
 		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

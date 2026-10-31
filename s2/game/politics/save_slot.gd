@@ -4,6 +4,7 @@ extends RefCounted
 
 const SAVE_VERSION := 1
 const TrainDecor = preload("res://game/train/train_decor.gd")
+const Late = preload("res://game/train/turn/turn_late.gd")
 const DEFAULT_PATH := "user://s1a_game_v2.json"
 const DEFAULT_BROKEN_PATH := "user://s1a_game_broken.json"
 const PHASES := ["prep", "travel", "stop", "council", "settle", "end"]
@@ -41,6 +42,37 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 		return "내정 칸이 이상하다"
 	if g.has("deferred") and g["deferred"] != null and not g["deferred"] is Array:
 		return "미뤄 둔 카드 목록이 이상하다"
+	if g.has("lateOn") and not g["lateOn"] is bool:
+		return "서류 미루기 켜짐 값이 이상하다"
+	if g.has("lateCards") and not g["lateCards"] is Array:
+		return "미룬 서류 목록이 이상하다"
+	# Content (event pack) fields: absent or null is none (S1 `??`), anything else must have its shape.
+	if g.has("eventPack") and g["eventPack"] != null and not g["eventPack"] is bool:
+		return "사건 묶음 켜짐 값이 이상하다"
+	for key: String in ["contentFlags", "contentAway", "contentSecrets"]:
+		if g.has(key) and g[key] != null and not g[key] is Dictionary:
+			return "사건 기록이 이상하다: %s" % key
+	for key: String in ["contentInjured", "contentQueue", "contentDeals"]:
+		if g.has(key) and g[key] != null and not g[key] is Array:
+			return "사건 목록이 이상하다: %s" % key
+	for queued: Variant in g.get("contentQueue", []) if g.get("contentQueue") is Array else []:
+		if not queued is Dictionary or not queued.get("id") is String or not _is_number(queued.get("at")):
+			return "예약된 사건이 이상하다"
+	for deal: Variant in g.get("contentDeals", []) if g.get("contentDeals") is Array else []:
+		if not deal is Dictionary or not deal.get("id") is String or not deal.get("comm") is String or not _is_number(deal.get("due")):
+			return "사건 거래가 이상하다"
+	for key: String in ["cards", "lateCards", "deferred"]:
+		for card: Variant in g.get(key, []) if g.get(key) is Array else []:
+			if not card is Dictionary: return "서류 카드가 이상하다"
+			if card.has("late") and (not _is_number(card["late"]) or float(card["late"]) != floorf(float(card["late"])) or float(card["late"]) < 0 or float(card["late"]) > Late.LATE.max):
+				return "서류 미룬 횟수가 이상하다"
+			if card.has("vals") and card["vals"] != null and not card["vals"] is Dictionary:
+				return "사건 카드 값이 이상하다"
+			if key == "lateCards":
+				if Late.kind(card) == "" or not _is_number(card.get("uid")) or float(card["uid"]) != floorf(float(card["uid"])) or float(card["uid"]) < 1:
+					return "미룬 서류 카드가 이상하다"
+				if card.has("comm") and not (t["COMMS"] as Array).has(card["comm"]): return "미룬 서류 칸이 이상하다"
+				if card.get("who") != null and not card["who"] is String: return "미룬 서류 대표가 이상하다"
 	if g.has("fieldReturns") and g["fieldReturns"] != null:
 		var field_returns: Variant = g["fieldReturns"]
 		if not (field_returns is Dictionary) or not (field_returns.get("applied") is Dictionary) or not (field_returns.get("records") is Array):
@@ -50,6 +82,8 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 
 static func fill_defaults(g: Dictionary) -> void:
 	TrainDecor.migrate(g)
+	if not g.has("lateOn"): g["lateOn"] = false
+	if not g.has("lateCards"): g["lateCards"] = []
 	if not g.has("eventLog") or g["eventLog"] == null:
 		g["eventLog"] = {}
 	if not g.has("needs") or g["needs"] == null:
@@ -60,6 +94,12 @@ static func fill_defaults(g: Dictionary) -> void:
 		g["hunger"] = 0
 	if not g.has("linesSeen") or g["linesSeen"] == null:
 		g["linesSeen"] = []
+	# S1 reads these content fields with `??`: a null one is the same as none.
+	for key: String in ["contentAway", "contentFlags", "contentInjured", "contentDeals", "contentQueue", "contentSecrets"]:
+		if g.has(key) and g[key] == null: g.erase(key)
+	for pile: String in ["cards", "lateCards", "deferred"]:
+		for card: Variant in g.get(pile, []) if g.get(pile) is Array else []:
+			if card is Dictionary and card.has("vals") and card["vals"] == null: card.erase("vals")
 	if g.get("budget") is Dictionary:
 		if not g.has("deferred") or g["deferred"] == null:
 			g["deferred"] = []
@@ -90,7 +130,9 @@ static func save_slot(g: Dictionary, path: String = DEFAULT_PATH) -> bool:
 	var file := FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		return false
-	file.store_string(JSON.stringify(g))
+	# Keys keep their order, as S1's JSON does: ties picked by insertion order
+	# (laws repealed in the same segment) stay the same after a load.
+	file.store_string(JSON.stringify(g, "", false))
 	file.close()
 	return true
 

@@ -1,4 +1,5 @@
 extends RefCounted
+const Budget = preload("res://game/train/turn/turn_budget.gd")
 ## The train turn between stops, ported from s1/src/game/turn.ts (the reference) for the S1a game:
 ## what a stretch costs in coal and food, the levers, how each car's situation moves its relation,
 ## and stepping on to the next stretch. States and tables as in train_state.gd.
@@ -16,6 +17,7 @@ const TrainHands = preload("res://game/train/train_hands.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 const TrainLawTech = preload("res://game/train/train_lawtech.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
+const Late = preload("res://game/train/turn/turn_late.gd")
 const TurnCommon = preload("res://game/train/turn/turn_common.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
 
@@ -199,7 +201,7 @@ static func _journal(g: Dictionary, text: String, tone: Variant = null) -> void:
 	(g["journal"] as Array).append(row)
 
 
-static func _card(g: Dictionary, card: Dictionary) -> void:
+static func _card(g: Dictionary, card: Dictionary, t: Dictionary = {}) -> void:
 	if not g.get("cards") is Array:
 		g["cards"] = []
 	var row: Dictionary = card.duplicate(true)
@@ -210,6 +212,7 @@ static func _card(g: Dictionary, card: Dictionary) -> void:
 		for key: String in ["comm", "who", "text"]:
 			if row.has(key) and row[key] == null: row.erase(key)
 	(g["cards"] as Array).append(row)
+	Budget.on_add(g, t)
 
 
 static func _bump_rel(s: Dictionary, d: float) -> void:
@@ -317,7 +320,7 @@ static func hunger_tick(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var grace := int(t["HUNGER_GRACE"])
 	if int(g["hunger"]) == 1:
 		_card(g, {"kind": "info", "comm": null, "who": "식량이 떨어졌다",
-			"text": "사람들은 허리띠를 졸라매고 버틴다. %d구간을 넘기면 굶어 죽는 사람이 나온다." % grace})
+			"text": "사람들은 허리띠를 졸라매고 버틴다. %d구간을 넘기면 굶어 죽는 사람이 나온다." % grace}, t)
 		return {"state": g, "notes": notes, "starves": false}
 	if int(g["hunger"]) <= grace:
 		notes.append("굶은 지 %d구간째다." % int(g["hunger"]))
@@ -336,7 +339,7 @@ static func check_end(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var crisis: Variant = g.get("trustCrisis")
 	if trust <= 0.0 and crisis == null:
 		g["trustCrisis"] = int(g["seg"]) + 3
-		_card(g, {"kind": "trust_crisis", "comm": null, "who": null, "text": null})
+		_card(g, {"kind": "trust_crisis", "comm": null, "who": null, "text": null}, t)
 		_journal(g, "신임이 바닥났다. 3구간 안에 25까지 되돌려야 한다.", "bad")
 	elif crisis != null:
 		if trust >= 25.0:
@@ -348,10 +351,10 @@ static func check_end(g0: Dictionary, t: Dictionary) -> Dictionary:
 	if tension >= 60.0 and not bool(g.get("tensionWarned", false)):
 		g["tensionWarned"] = true
 		_card(g, {"kind": "info", "comm": null, "who": "긴장 경고",
-			"text": "칸 사이 문마다 사람이 서 있다. 긴장이 100에 닿으면 마지막 기회가 온다."})
+			"text": "칸 사이 문마다 사람이 서 있다. 긴장이 100에 닿으면 마지막 기회가 온다."}, t)
 	if tension >= 100.0:
 		if int(g.get("tensionCrisisUsed", 0)) < 2:
-			_card(g, {"kind": "tension_crisis", "comm": "tail", "who": null, "text": null})
+			_card(g, {"kind": "tension_crisis", "comm": "tail", "who": null, "text": null}, t)
 		else:
 			return _finish(g, "revolt")
 	return g
@@ -413,6 +416,8 @@ static func next_segment(g0: Dictionary, t: Dictionary) -> Dictionary:
 	g["seg"] = int(g["seg"]) + 1
 	g["lastStop"] = g.get("stop")
 	g["stop"] = null
+	Budget.next_segment(g, t)
+	Late.next_segment(g, t)
 	if int(g.get("decreeLeft", 0)) > 0:
 		g["decreeLeft"] = int(g["decreeLeft"]) - 1
 	g["phase"] = "prep"
@@ -427,7 +432,7 @@ static func next_segment(g0: Dictionary, t: Dictionary) -> Dictionary:
 		g["autoDropped"] = true
 		var rc: String = t["COMM_NAME"][ration_comm(g)]
 		_card(g, {"kind": "info", "comm": null, "who": "배급장이 장부를 내려놓았다",
-			"text": "%s의 지지가 떨어지자 배급장이 레버에서 손을 뗐다. 칸마다 레버를 다시 열차장이 잡는다." % rc})
+			"text": "%s의 지지가 떨어지자 배급장이 레버에서 손을 뗐다. 칸마다 레버를 다시 열차장이 잡는다." % rc}, t)
 	if bool(g["autoLevers"]):
 		var moved := auto_levers(g, t)
 		g = moved["state"]

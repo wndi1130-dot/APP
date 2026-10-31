@@ -1,0 +1,71 @@
+{
+  "version": 5,
+  "receiptId": "ret_sulechow_01",
+  "departureId": "dep_sulechow_01",
+  "stopId": "stop_sulechow",
+  "source": "direct",
+  "endReason": "departed",
+  "place": {
+    "id": "sulechow_station",
+    "type": "freight",
+    "variant": "small_station_siding"
+  },
+  "time": {
+    "arrive": "D1 10:30",
+    "depart": "D1 13:10",
+    "stayGameMinutes": 160
+  },
+  "stock": { "coal": 6, "food": 3, "symbol": 1 },
+  "items": { "gained": ["symbol_tail_kettle"], "lost": [] },
+  "people": {
+    "sent": ["p_151", "p_152", "p_153", "p_122"],
+    "injured": ["p_153"],
+    "bitten": [],
+    "dead": [],
+    "missing": [],
+    "leftBehind": [],
+    "rescued": ["p_004", "p_005"],
+    "wounds": [
+      { "person": "p_153", "part": "arm_left", "kind": "deep", "festering": false, "treat": { "bandaged": true } }
+    ]
+  },
+  "witnessed": [],
+  "placeState": { "looted": 0.4, "remainingRisk": 2 },
+  "promises": [],
+  "goal": { "kind": "coal", "required": 4, "earned": 6, "status": "done" },
+  "extras": { "documents": [], "symbolCount": 0, "fragments": [], "coreCount": 0 },
+  "symbol": { "id": "sym_tail_kettle", "groupId": "tail", "carriedBy": "p_152" },
+  "fieldPromises": [
+    { "id": "promise_prologue", "kind": "prologue", "witnesses": ["p_151", "p_122"], "heardBy": ["tail"] }
+  ],
+  "crew": [
+    {
+      "person": "p_151",
+      "exhaustion": 1,
+      "hunger": 1,
+      "bodyUse": { "walk": 1.25, "lift": 0.5 },
+      "gearBack": {
+        "hands": [["knife", "tool", 0.75]],
+        "items": { "bandage": 2 },
+        "wear": {
+          "jacket": { "id": "jacket_padded", "condition": 0.75, "holes": { "torso": true } },
+          "hands": "",
+          "coat": ""
+        }
+      }
+    }
+  ],
+  "defense": {
+    "held": true,
+    "people": ["p_122"],
+    "hurt": ["p_122"],
+    "dead": [],
+    "wounds": [
+      { "person": "p_122", "part": "arm_right", "kind": "scratch", "festering": false, "treat": { "bandaged": true } }
+    ]
+  },
+  "wardrobeIn": [{ "id": "coat_wool", "condition": 1, "holes": {} }],
+  "luresBack": { "tin_rattle": 1 },
+  "foodIn": { "bread": 1 },
+  "lootDeck": { "provisions": { "n": 4, "k": 1, "seen": 2, "hit": 1 } }
+}

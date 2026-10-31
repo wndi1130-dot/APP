@@ -1,4 +1,5 @@
 extends RefCounted
+const Budget = preload("res://game/train/turn/turn_budget.gd")
 ## S1a council stance, blocs and one non-decree vote. The field slice's two motions and every
 ## S1a law but 비상대권 are accepted, enacted or repealed (결정 426 PR 7: S1a laws are LAW_IDS less
 ## S1C_LAWS and FAREWELL_LAWS; emergency_powers and ratifying are not ported yet).
@@ -326,11 +327,12 @@ static func _motion_effect(g: Dictionary, t: Dictionary, agenda: Dictionary, pas
 
 
 ## S1 addCard.
-static func _add_card(g: Dictionary, value: Dictionary) -> void:
+static func _add_card(g: Dictionary, value: Dictionary, t: Dictionary = {}) -> void:
 	var row: Dictionary = {"uid": g["nextCardUid"]}
 	row.merge(value)
 	g["nextCardUid"] = int(g["nextCardUid"]) + 1
 	(g["cards"] as Array).append(row)
+	Budget.on_add(g, t)
 
 
 ## S1 classroom enactScale (결정 205): child work set while a lesson stands
@@ -443,7 +445,7 @@ static func _enact_law_mut(g: Dictionary, t: Dictionary, law: String, bought_fro
 	_calm_enact(g, t, law)
 	# 비상식량감축법이 서면 꼬리칸이 요구를 낸다(결정 091·430, turn_ration_cut.gd).
 	if law == "emergency_ration":
-		_add_card(g, {"kind": "ration_cut", "comm": "tail"})
+		_add_card(g, {"kind": "ration_cut", "comm": "tail"}, t)
 	if law == "guided_voting":
 		g["guidedLeft"] = 3
 	if (t["CORPSE_LAWS"] as Array).has(law):

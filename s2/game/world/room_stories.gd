@@ -12,6 +12,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
+const FieldItems = preload("res://game/sim/field_items.gd")
 const S = FieldGrid.Solid
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
@@ -335,10 +336,14 @@ static func _barricade_room(data: Dictionary, city: Dictionary, b: int, room: Di
 		if box_ids.has(id):
 			continue
 		var box: Dictionary = data["containers"][id].duplicate(true)
-		var items: Array = (box.get("items", []) as Array).duplicate()
+		# 생필품(결정 490, 차림 맨 끝에 붙음)은 세지도 옮기지도 않는다 — 다른 물건이 생필품을 켜든 끄든 같은 자리로 간다.
+		var items: Array = []
+		var supplies: Array = []
+		for item: Variant in box.get("items", []):
+			(supplies if FieldItems.group(String(item)) == "supplies" else items).append(item)
 		var move := int(items.size() / 2.0)
 		gathered.append_array(items.slice(items.size() - move))
-		box["items"] = items.slice(0, items.size() - move)
+		box["items"] = items.slice(0, items.size() - move) + supplies
 		data["containers"][id] = box
 	var target: Dictionary = data["containers"][into].duplicate(true)
 	target["items"] = gathered

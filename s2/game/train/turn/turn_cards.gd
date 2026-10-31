@@ -12,7 +12,10 @@ const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 const Ladder = preload("res://game/train/turn/turn_ladder.gd")
 const TrainResearch = preload("res://game/train/train_research.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
+const Late = preload("res://game/train/turn/turn_late.gd")
+const Budget = preload("res://game/train/turn/turn_budget.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
+const Content = preload("res://game/train/turn/turn_content.gd")
 
 static func choice(id: String, label: String, effs: Array, special: String = "", witness: bool = false) -> Dictionary:
 	return {"id": id, "label": label, "effs": effs, "special": special, "witness": witness}
@@ -90,6 +93,11 @@ static func travel_view(g: Dictionary, t: Dictionary, id: String) -> Dictionary:
 	return {"title": title, "key": id, "choices": choices}
 
 static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
+	return Late.view(g, card, _base_view(g, t, card))
+
+
+static func _base_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
+	if card["kind"] in ["content", "content-deal"]: return Content.content_view(g, t, card)
 	var comm: String = card.get("comm", "tail")
 	var s: Dictionary = g["comms"][comm]
 	match str(card["kind"]):
@@ -358,11 +366,37 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 	if v.is_empty(): return C.unsupported(g0, "chooseCard: " + str(card["kind"]))
 	if index < 0 or index >= v["choices"].size(): return g0.duplicate(true)
 	var selected: Dictionary = v["choices"][index]
-	if selected.has("disabled") or not affordable(g0, selected["effs"]): return g0.duplicate(true)
+	# Content.view already applies S1 guardCosts, including its all-unaffordable escape.
+	if selected.has("disabled") or (card["kind"] not in ["content", "content-deal"] and not affordable(g0, selected["effs"])): return g0.duplicate(true)
 	if selected["special"] == "revolt": return C.unsupported(g0, "chooseCard: revolt finish lookback")
 	if not St.is_s1a(g0) or g0.get("deathWeight", false): return C.unsupported(g0, "chooseCard: optional hooks")
+	if selected["special"] == "late":
+		if int(card.get("late", 0)) < int(Late.LATE.max):
+			var next: Dictionary = g0.duplicate(true)
+			next["cards"] = next["cards"].filter(func(row: Dictionary) -> bool: return int(row["uid"]) != uid)
+			Budget.pick(next)
+			apply_effects(next, t, selected["effs"], "stop", "")
+			var held: Dictionary = card.duplicate(true)
+			held["late"] = int(card.get("late", 0)) + 1
+			if card["kind"] == "favor" and card.get("who") == null: held["who"] = next["comms"][Late.comm(card)]["leader"]["personId"]
+			if not next.has("lateCards"): next["lateCards"] = []
+			next["lateCards"].append(held)
+			Budget.pass_cards(next, t)
+			return next
+		var line: String = Late.log_line(g0, t, card)
+		var expired: Dictionary = _resolve_choice(g0, t, card, v, Late.worst_choice(v["choices"], Late.comm(card)))
+		apply_effects(expired, t, selected["effs"], "stop", "")
+		C.journal(expired, line, "bad")
+		return expired
+	return _resolve_choice(g0, t, card, v, selected)
+
+
+## Ordinary answers and expiry share effects, special handling, memory and journal order.
+static func _resolve_choice(g0: Dictionary, t: Dictionary, card: Dictionary, v: Dictionary, selected: Dictionary) -> Dictionary:
+	var uid: int = int(card["uid"])
 	var g: Dictionary = g0.duplicate(true)
 	g["cards"] = g["cards"].filter(func(row: Dictionary) -> bool: return int(row["uid"]) != uid)
+	Budget.pick(g)
 	var sources: Dictionary = {"let_be": "brawl", "hold_post": "guard_post", "take_in": "rescue", "cut": "bite_cut"}
 	var from: String = sources.get(selected["id"], "bite_cut" if selected["special"] == "bite_cut" else "stop")
 	apply_effects(g, t, selected["effs"], from, card.get("comm", ""))
@@ -492,6 +526,7 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 			g["tensionCrisisUsed"] = int(g.get("tensionCrisisUsed", 0)) + 1
 			if selected["special"] == "crisis_guard": Ladder.guard(g, "tail")
 			else: Ladder.concede(g)
+	Content.content_choose(g, t, card, selected)
 	# hub.ts registers hubChoose for every accepted card, including non-hub cards.
 	var hub: Dictionary = C.hub(g)
 	if not hub.has("lines"): hub["lines"] = []
@@ -502,9 +537,12 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 		var key: String = v["key"]
 		g["eventLog"][key] = {"n": int(g["eventLog"].get(key, {}).get("n", 0)) + 1, "seg": g["seg"], "pick": selected["id"] if selected["id"] != "" else selected["label"], "st": Travel.event_state_key(g, t)}
 	if not card["kind"] in ["info", "trust_crisis", "leash"]: C.journal(g, selected.get("log", "%s: %s." % [v["title"], selected["label"]]), "dark" if bool(selected["witness"]) else "")
-	if bool(selected["witness"]) and g.get("stop") is Dictionary:
+	# S1 `g.stop?.crewComm`: a stop without its crew car has no witness to tell.
+	var crew: Variant = g["stop"].get("crewComm") if g.get("stop") is Dictionary else null
+	if bool(selected["witness"]) and crew is String and crew != "":
 		var harsh: bool = selected["special"] in ["leave_bitten", "hide_bite"] or selected["id"] == "stay_put"
 		for e: Array in selected["effs"]:
 			if e[0] == "trust" and float(e[1]) < 0: harsh = true
-		C.bump_rel(g, g["stop"]["crewComm"], -5 if harsh else 3, "card")
+		C.bump_rel(g, crew, -5 if harsh else 3, "card")
+	Budget.pass_cards(g, t)
 	return g

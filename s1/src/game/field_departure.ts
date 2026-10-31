@@ -67,6 +67,8 @@ export interface FieldDepartureV2 {
   /** 결정 474 N2: 기온 켠 판의 현재 정차와 지난 최대 세 정차(S2 날씨 id). */
   stopWeather?: StopWeather;
   pastWeather?: { seg: number; weather: StopWeather }[];
+  /** 생필품(결정 490)을 켠 판인가. 이 칸이 없는 옛 계약이면 필드는 지금처럼 늘 차린다 */
+  supplies?: boolean;
   /** 처음부터 나가는 수색대: 열차장과 동료 */
   roster: DeparturePerson[];
   /** 작업조 부르기로 내려올 수 있는 사람: 운송조(S1 정차의 작업조)와 호위조(경비대 둘) */
@@ -74,7 +76,7 @@ export interface FieldDepartureV2 {
   promises: FieldPromiseSpec[];
   domestic: boolean;
   /** 정차 전체에 걸리는 열차 사정 */
-  train: { food: number; hungerSegs: number };
+  train: { food: number; hungerSegs: number; /** 열차가 둔 썰매(S2 열차만, 계약 글 2절). S1은 싣지 않는다 */ sleds?: number };
 }
 
 export type StopWeather = Exclude<Weather, 'cold' | 'cold_front'> | 'rain';
@@ -224,6 +226,7 @@ export function buildDeparture(g: Game, opts: DepartureOpts): FieldDepartureV2 {
   return {
     version: 2, departureId: `dep_${opts.placeId}_${seg}`, stopId: `stop_${opts.placeId}_${seg}`, placeId: opts.placeId, segment: seg,
     arriveMin: arrivalMin(g.seed, seg), ...(g.lootDeck ? { lootDeck: structuredClone(g.lootDeck) } : {}), roster, workCrew, promises: departurePromises(g), domestic: !!g.dom, train: { food: g.food, hungerSegs: g.hunger ?? 0 },
+    supplies: !!g.supOn,
     ...(g.climate ? {
       stopWeather: stopWeatherId(g.stop?.weather ?? pickWeather(g), seg),
       pastWeather: Array.from({ length: Math.min(3, seg - 1) }, (_, i) => {
