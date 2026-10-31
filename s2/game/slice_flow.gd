@@ -670,6 +670,7 @@ static func start_board() -> Array:
 		push_error("slice: the start board does not read")
 		return [{}, {}]
 	d["state"]["lateOn"] = true
+	d["state"]["eventPack"] = true
 	return [d["state"], d["tables"]]
 
 
