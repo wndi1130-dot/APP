@@ -70,6 +70,75 @@ func test_every_model_darkens_at_the_foot_it_stands_on() -> void:
 	assert_lt(Props.CONTACT_DARK, 0.5, "darker, never black")
 
 
+func test_tops_are_where_the_baked_furniture_is_flat() -> void:
+	# Under every point of a top's rect, its edges too, the highest face of the model is that top, in every
+	# LOD the map draws: nothing stands above it (a splashback, a flue) and it is not a hole. A rebake that
+	# moves a top fails here.
+	for path: String in Props.TOPS:
+		var meshes: Dictionary = Props.batch_meshes(path)
+		assert_true(meshes.has(0), path + " loads")
+		for lod: int in meshes:
+			var tris := _triangles(meshes[lod])
+			for top: Dictionary in Props.tops(path):
+				var rect: Rect2 = top["rect"]
+				var y: float = top["y"]
+				for i in 7:
+					for j in 7:
+						var p := Vector2(rect.position.x + 0.001 + (rect.size.x - 0.002) * i / 6.0,
+							rect.position.y + 0.001 + (rect.size.y - 0.002) * j / 6.0)
+						var h := _highest(tris, p)
+						assert_between(h, y - 0.015, y + 0.005, "%s LOD%d top %.2f at %s: %.3f" % [path.get_file(), lod, y, p, h])
+
+
+func test_tops_are_only_the_furniture_things_go_on() -> void:
+	assert_true(Props.tops("res://models/props_stop01/tiled_stove.glb").is_empty(), "a fallback model has no top")
+	for path: String in Props.TOPS:
+		assert_false(Props.tops(path).is_empty(), path)
+
+
+func test_tabletop_things_keep_their_colour_and_take_no_rime() -> void:
+	for kind: String in Props.TABLETOP_KINDS:
+		var path := Props.LIVELY_DIR + kind + ".glb"
+		var rows: Array = Props.rows_path(path)
+		assert_false(rows.is_empty(), kind + " loads")
+		for row: Dictionary in rows:
+			var m := row["material"] as ShaderMaterial
+			assert_eq(float(m.get_shader_parameter("rime_catch")), 0.0, kind + ": indoors, no rime")
+			assert_ne(m.get_shader_parameter("lively"), 1.0, kind + ": its own colours")
+
+
+## The triangles of `mesh` as [a, b, c] points, every surface.
+func _triangles(mesh: Mesh) -> Array:
+	var out := []
+	for s in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(s)
+		var v: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var idx = arrays[Mesh.ARRAY_INDEX]
+		var order: Array = Array(idx) if idx != null and not (idx as PackedInt32Array).is_empty() else range(v.size())
+		for k in range(0, order.size() - 2, 3):
+			out.append([v[order[k]], v[order[k + 1]], v[order[k + 2]]])
+	return out
+
+
+## The highest face of `tris` over the ground point `p` (x, z); -1 where there is none.
+func _highest(tris: Array, p: Vector2) -> float:
+	var best := -1.0
+	for t: Array in tris:
+		var a: Vector3 = t[0]
+		var b: Vector3 = t[1]
+		var c: Vector3 = t[2]
+		var d := (b.z - c.z) * (a.x - c.x) + (c.x - b.x) * (a.z - c.z)
+		if absf(d) < 1e-9:
+			continue
+		var w1 := ((b.z - c.z) * (p.x - c.x) + (c.x - b.x) * (p.y - c.z)) / d
+		var w2 := ((c.z - a.z) * (p.x - c.x) + (a.x - c.x) * (p.y - c.z)) / d
+		var w3 := 1.0 - w1 - w2
+		if w1 < -1e-6 or w2 < -1e-6 or w3 < -1e-6:
+			continue
+		best = maxf(best, w1 * a.y + w2 * b.y + w3 * c.y)
+	return best
+
+
 func _triangle(coloured: bool) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
