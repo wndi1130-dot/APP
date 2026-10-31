@@ -537,10 +537,12 @@ static func _resolve_choice(g0: Dictionary, t: Dictionary, card: Dictionary, v: 
 		var key: String = v["key"]
 		g["eventLog"][key] = {"n": int(g["eventLog"].get(key, {}).get("n", 0)) + 1, "seg": g["seg"], "pick": selected["id"] if selected["id"] != "" else selected["label"], "st": Travel.event_state_key(g, t)}
 	if not card["kind"] in ["info", "trust_crisis", "leash"]: C.journal(g, selected.get("log", "%s: %s." % [v["title"], selected["label"]]), "dark" if bool(selected["witness"]) else "")
-	if bool(selected["witness"]) and g.get("stop") is Dictionary:
+	# S1 `g.stop?.crewComm`: a stop without its crew car has no witness to tell.
+	var crew: Variant = g["stop"].get("crewComm") if g.get("stop") is Dictionary else null
+	if bool(selected["witness"]) and crew is String and crew != "":
 		var harsh: bool = selected["special"] in ["leave_bitten", "hide_bite"] or selected["id"] == "stay_put"
 		for e: Array in selected["effs"]:
 			if e[0] == "trust" and float(e[1]) < 0: harsh = true
-		C.bump_rel(g, g["stop"]["crewComm"], -5 if harsh else 3, "card")
+		C.bump_rel(g, crew, -5 if harsh else 3, "card")
 	Budget.pass_cards(g, t)
 	return g
