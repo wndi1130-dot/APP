@@ -36,7 +36,7 @@ func test_the_sheet_says_the_port_s_end_card() -> void:
 	assert_eq(m["why"], "첫 정차 한 번이 열차를 이만큼 바꿨다.")
 	assert_eq(m["caption"], "나간 사람은 모두 열차로 돌아왔다.", "under the picture")
 	assert_eq(m["small"], "이 시험판은 둘째 역에서 멈춘다.", "small under that")
-	assert_eq(m["rows"], [["사람", 199, 199], ["석탄", 98, 96], ["식량", 106, 99]], "from before the first stop to here, whole")
+	assert_eq(m["rows"], [["사람", 199, 199], ["석탄", 98, 95], ["식량", 106, 99]], "from before the first stop to here, whole")
 	assert_eq(EndCard.model({}, e[1]), {}, "no state, nothing to say")
 
 

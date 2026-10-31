@@ -17,6 +17,7 @@ const PATH := "user://field_save.json"
 const TRAIN_PATH := "user://s1a_game_v2.json"
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const EatRules = preload("res://game/sim/eat_rules.gd")
+const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
@@ -311,6 +312,7 @@ static func apply(game, save: Dictionary) -> void:
 			game.data["spots"][id]["state"] = String(save["spots"][id])
 	game.ground_items = (save.get("ground_items", []) as Array).duplicate(true)
 	game.decisions = (save.get("decisions", []) as Array).duplicate(true)
+	# Version 1 and fallback keep the share this start set up, as the old switch did (decisions 383, 387, 134).
 	_put_zombies(game, save.get("zombies", []))
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
@@ -352,7 +354,7 @@ static func _runtime(game) -> Dictionary:
 		doors.append(_record(game, door))
 	out["holdout_doors"] = doors
 	out["hud"] = {"grab_total": game.hud.grab_total}
-	out["zombie_system"] = _properties(game, game.zombies, ["next_id", "loot_rng", "lunge_rng", "embed_rng", "lungers_on"])
+	out["zombie_system"] = _properties(game, game.zombies, ["next_id", "loot_rng", "lunge_rng", "embed_rng", "lunger_share"])
 	for level in game.levels:
 		var grid = game.levels[level]
 		var level_state: Dictionary = {"solid": grid.solid.duplicate(), "width": grid.width, "height": grid.height,
@@ -538,6 +540,21 @@ static func _restore_properties(game, object, saved: Dictionary) -> void:
 				object.set(key, restored)
 
 
+## Old v2 switches mean the forced share; never restore the removed property. With
+## neither, the share this start set up stays (decisions 383, 387, 134).
+static func _restore_zombie_system(game, saved: Dictionary) -> void:
+	var state: Dictionary = saved.duplicate()
+	if not state.has("lunger_share") and state.has("lungers_on"):
+		state["lunger_share"] = LungerRules.SHARE if bool(state["lungers_on"]) else 0.0
+	state.erase("lungers_on")
+	var start_share: float = game.zombies.lunger_share
+	_restore_properties(game, game.zombies, state)
+	# A saved share that is not a share (NaN comes back as -INF) leaves the start's.
+	var share: float = game.zombies.lunger_share
+	if not is_finite(share) or share < 0.0 or share > 1.0:
+		game.zombies.lunger_share = start_share
+
+
 static func _apply_exact(game, save: Dictionary) -> void:
 	var runtime: Dictionary = save["runtime"]
 	for kind: String in ["containers", "spots"]:
@@ -600,7 +617,7 @@ static func _apply_exact(game, save: Dictionary) -> void:
 		door["node"] = null
 		if int(door["wall"]) > 0:
 			game.holdout._show_wall(door)
-	_restore_properties(game, game.zombies, runtime["zombie_system"])
+	_restore_zombie_system(game, runtime.get("zombie_system", {}))
 	game.hud.grab_total = float(runtime.get("hud", {}).get("grab_total", game.hud.grab_total))
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))

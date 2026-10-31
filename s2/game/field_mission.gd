@@ -224,7 +224,7 @@ func conveyor_card(p) -> void:
 		game.hud.toast("적재 컨베이어가 서 있다. 작업조가 내려와야 손댈 수 있다.")
 		return
 	var have := scrap_at_hand()
-	game.hud.card("depot_conveyor", "적재 컨베이어가 서 있다. 고치면 빨리 싣지만 손 둘이 한동안 빠진다.", [
+	game.hud.card("depot_conveyor", "적재 컨베이어가 서 있다. 고치면 빨리 싣지만 일손 둘이 한동안 빠진다.", [
 		{"id": "load", "label": "바로 싣는다", "say": "\"손은 다 삽으로. 실을 수 있는 만큼 싣는다.\"", "cost": "지금 속도 · 곡괭이 소리"},
 		{"id": "repair", "label": "고치고 싣는다", "say": "\"둘은 설비를 봐. 돌기만 하면 금방이다.\"", "cost": "고철 %d (가진 것 %d) · 둘이 %d분 · 고치면 %d배, 설비 도는 소리" % [REPAIR_SCRAP, have, int(REPAIR_WORK / REPAIR_HANDS / 60.0), int(BELT_MULT)]},
 	], Callable(self, "_conveyor_choice").bind(p))

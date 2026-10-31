@@ -32,9 +32,8 @@ const CHOICES: Array = [
 	["primary_one", "주 행동 하나로", [[false, "끔 (조준·공격 따로)"], [true, "켬 (시험)"]]],
 	["retreat_name", "동료 한 명을 물릴 때 이름", [["", "후퇴"], ["train", "열차로"]]],
 	["melee_break", "근접 겨눔 끊김", [["grab", "잡히면 끊긴다"], ["none", "안 끊긴다"]]],
-	# One in ten of the standing dead lunges after a tell (user 2026-10-12). From
-	# which stop on is counted in S3; here it is on or off. zombies.gd reads it.
-	["lungers", "달려드는 자", [[false, "끔"], [true, "켬"]]],
+	# Follow act progress, or force the old share (decisions 383, 387, 134).
+	["lungers", "달려드는 자", [[false, "진행대로"], [true, "강제 켬"]]],
 	["holdout", "버티기 판 (재는 판)", [["", "없음"], ["depart", "「떠난다」를 부르면 열린다"], ["start", "처음부터"], ["roll", "굴려서 (장소 확률대로, 조용하면 안 뜬다)"]]],
 	# The radio operator's forecast of a held train (user decision 150); who is
 	# on watch is the train's to say, here it is on or off.
