@@ -173,9 +173,12 @@ func test_remote_resumes_a_small_version_two_grid_through_legacy_restore() -> vo
 
 
 ## BareLine with open ground east of it: its middle lies east of the train, so a remote
-## stop grows the map west and every old cell moves by the added width.
+## stop grows the map west and every old cell moves by the added width. No place, so no
+## side path grows either map.
 func _west_line() -> Dictionary:
-	return MapShift.grow(BareLine.build(), 0, 0, 40, 0)
+	var data: Dictionary = MapShift.grow(FieldMaps.build_from(BareLine), 0, 0, 40, 0)
+	data["place_id"] = ""
+	return data
 
 
 func test_remote_legacy_restore_moves_people_with_the_old_cells() -> void:
