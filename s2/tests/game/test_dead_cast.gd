@@ -298,40 +298,33 @@ func _reads(z) -> int:
 	return n
 
 
-# Every garment drawn is drawn where one of its body's drawn is, with the same
-# frame of the same motion (custom data), and is the garment that one has on,
-# in its colour and pattern in that one's look (found by where it stands).
+# Every garment drawn is drawn on one of the dead that has it on, in the body
+# that one is drawn in (as many as the multimesh shows), in its own colour and
+# pattern in its look. The instances' data is the renderer's (a headless run
+# reads none back), so this goes by who the field says it drew in each; that a
+# garment takes its body's place and frame is the one line that sets both.
 func _assert_on_their_bodies(z, when: String) -> void:
 	var garments := 0
 	for b in z.wear_draws.size():
-		var bodies := []
-		for look: String in z.draws[b]:
-			var mm: MultiMesh = (z.draws[b][look] as MultiMeshInstance3D).multimesh
-			for n in mm.visible_instance_count:
-				bodies.append([mm.get_instance_transform(n), mm.get_instance_custom_data(n), look])
 		for kind: String in z.wear_draws[b]:
-			if z.wear_draws[b][kind] == null:
+			var node: MultiMeshInstance3D = z.wear_draws[b][kind]
+			if node == null:
 				continue
-			var gm: MultiMesh = (z.wear_draws[b][kind] as MultiMeshInstance3D).multimesh
-			for w in gm.visible_instance_count:
+			var ids: Array = z.garments_drawn.get(node, [])
+			assert_eq(ids.size(), node.multimesh.visible_instance_count, "%s: body %d %s shows who it drew" % [when, b, kind])
+			for id: int in ids:
 				garments += 1
-				var at := gm.get_instance_transform(w)
-				var found: Array = []
-				for body: Array in bodies:
-					if (body[0] as Transform3D).is_equal_approx(at) and (body[1] as Color).is_equal_approx(gm.get_instance_custom_data(w)):
-						found = body
-						break
-				assert_false(found.is_empty(), "%s: body %d %s %d on a body" % [when, b, kind, w])
-				var who: Dictionary = {}
-				for one: Dictionary in z.list:
-					if Vector2(one["pos"].x - at.origin.x, one["pos"].z - at.origin.z).length() < 0.3:
-						who = one
-				assert_false(who.is_empty(), "%s: body %d %s %d is one of the dead" % [when, b, kind, w])
-				if found.is_empty() or who.is_empty():
+				var who: Dictionary = z.find(id)
+				assert_false(who.is_empty(), "%s: %d is one of the dead" % [when, id])
+				if who.is_empty():
 					continue
-				var over := DeadCast.garment_of(z.drawn_worn(who), Zombies.TINTS[String(found[2])])
-				assert_eq(String(over.get("shell", "")), kind, "%s: %d wears it" % [when, int(who["id"])])
-				assert_true((over.get("colour", Color.BLACK) as Color).is_equal_approx(gm.get_instance_color(w)), "%s: %d in its own colour and pattern" % [when, int(who["id"])])
+				var body := DeadCast.body_of(id, z.bodies_planned)
+				if body >= z.draws.size() or (z.draws[body] as Dictionary).is_empty():
+					body = 0
+				assert_eq(body, b, "%s: %d in its own body" % [when, id])
+				var look: String = "corpse" if who["state"] == "dead" else ("frozen" if who["state"] in ["frozen", "waking"] else String(who["kind"]))
+				var over := DeadCast.garment_of(z.drawn_worn(who), Zombies.TINTS[look])
+				assert_eq(String(over.get("shell", "")), kind, "%s: %d has it on" % [when, id])
 	assert_gt(garments, 0, when + ": some drawn")
 
 

@@ -84,6 +84,7 @@ var bodies_to_read: Array[String] = []   # bodies not read in yet: one a frame (
 var bodies_planned: int = 1
 var wear_draws: Array = []    # body -> garment (dead_cast.gd SHELLS) -> MultiMeshInstance3D, null for one it has none of; read when first worn
 var _garment_reads: int = 0   # garments still to be read in this frame
+var garments_drawn: Dictionary = {}   # garment multimesh -> the ids of the dead drawn in it this frame, in order (the instances' data is the renderer's)
 var _drawn_worn: Dictionary = {}   # id -> [worn_at, kind, what it has on] for one drawn before worn_of is asked (drawn_worn)
 var drawn_count: int = 0
 var vat: Dictionary
@@ -1346,7 +1347,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 	var counts := []
 	for _b in draws.size():
 		counts.append({"dead": 0, "clothed": 0, "fresh": 0, "frozen": 0, "corpse": 0})
-	var worn_n := {}   # garment multimesh -> how many drawn in it
+	garments_drawn = {}
 	var marks := 0
 	var axes := 0
 	for z in list:
@@ -1442,12 +1443,13 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		# by what it has on now (worn_of), so one stripped of its coat is without.
 		var over := DeadCast.garment_of(drawn_worn(z), TINTS[look]) if baked else {}
 		var garment: MultiMeshInstance3D = _garment_of(b, over["shell"]) if not over.is_empty() else null
-		if garment != null and int(worn_n.get(garment, 0)) < garment.multimesh.instance_count:
-			var w: int = int(worn_n.get(garment, 0))
+		var worn_ids: Array = garments_drawn.get_or_add(garment, []) if garment != null else []
+		if garment != null and worn_ids.size() < garment.multimesh.instance_count:
+			var w: int = worn_ids.size()
 			garment.multimesh.set_instance_transform(w, Transform3D(basis, pos))
 			garment.multimesh.set_instance_custom_data(w, custom)
 			garment.multimesh.set_instance_color(w, over["colour"])
-			worn_n[garment] = w + 1
+			worn_ids.append(int(z["id"]))
 	DeadBody.rounds = body_rounds[0]
 	if embedded_draw != null:
 		embedded_draw.multimesh.visible_instance_count = axes
@@ -1460,5 +1462,5 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 				drawn_count += counts[b][look]
 		for kind: String in wear_draws[b]:
 			if wear_draws[b][kind] != null:
-				(wear_draws[b][kind] as MultiMeshInstance3D).multimesh.visible_instance_count = int(worn_n.get(wear_draws[b][kind], 0))
+				(wear_draws[b][kind] as MultiMeshInstance3D).multimesh.visible_instance_count = (garments_drawn.get(wear_draws[b][kind], []) as Array).size()
 	markers.multimesh.visible_instance_count = marks
