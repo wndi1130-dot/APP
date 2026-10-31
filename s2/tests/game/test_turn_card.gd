@@ -275,6 +275,7 @@ func test_all_late_cases_keep_choices_visible_or_show_a_reachable_scroll_end() -
 			await get_tree().process_frame
 			var at := "%d/%s/%d" % [width, row["name"], count]
 			assert_lte(c.body.size.x, c.sheet.inner.size.x + 0.5, at + ": fixed rows also fit the paper width")
+			_check_stage_order(c, at)
 			var overflow := c.find_child("Overflow", true, false) as ScrollContainer
 			var more := c.find_child("PaperMore", true, false) as Control
 			if overflow == null:
@@ -284,13 +285,15 @@ func test_all_late_cases_keep_choices_visible_or_show_a_reachable_scroll_end() -
 					assert_lte(ch.position.y + ch.size.y, c.sheet.inner.size.y + 1.0, at + ": " + ch.name + " stays on paper")
 			else:
 				assert_eq(str(c.get_meta("fit_stage")), "2c", at + ": only the last resort scrolls the paper")
-				assert_gt(_fixed_rows_height(c), c.sheet.inner.size.y + 0.5, at + ": even a zero-line scene cannot fit the fixed rows")
+				assert_gt(_fixed_rows_height(c), c.sheet.inner.size.y + 0.5, at + ": even three scene lines and the fixed rows cannot fit")
 				assert_not_null(more, at + ": the extra choices are signposted")
 				if more != null: assert_true(more.visible, at + ": paper cue starts visible")
 				await _check_scroll_end(c, overflow, more, c.body, at)
 			var said := c.find_child("Said", true, false) as ScrollContainer
 			var scene := c.find_child("Scene", true, false) as Control
 			var scene_more := c.find_child("SceneMore", true, false) as Control
+			if overflow == null:
+				assert_gte(said.size.y + 0.5, _least_scene(c), "%s: three scene lines (or all of a shorter scene) in sight (%.0f)" % [at, said.size.y])
 			if overflow == null and scene.size.y > said.size.y + 0.5:
 				assert_not_null(scene_more, at + ": clipped scene is signposted")
 				assert_gt(said.size.y, 0.0, at + ": scene can be read")
@@ -321,14 +324,105 @@ func test_all_late_cases_keep_choices_visible_or_show_a_reachable_scroll_end() -
 		c.free()
 
 
-## Measure title/name/late/portrait and ways without the scene; independent
-## of the full-scrolling Said minimum, which includes its complete text.
+## The card stops at the first stage whose fixed rows fit, moving only forward
+## (1 → a → b → c), and skips none that could apply: below the name only when
+## the late line cannot sit beside it, a scrolled paper only after the
+## deferring way's forced break is gone.
+func _check_stage_order(c: Control, at: String) -> void:
+	var stage := str(c.get_meta("fit_stage"))
+	var needs: Array = c.get_meta("fit_need")
+	var inner: float = c.sheet.inner.size.y
+	assert_false(needs.is_empty(), at + ": each stage's height is kept")
+	var last := -1
+	for i: int in needs.size():
+		var step: int = ["1", "2a", "2b"].find(str(needs[i][0]))
+		assert_gt(step, last, "%s: %s comes after the stage before it" % [at, needs[i][0]])
+		last = step
+		var fits: bool = float(needs[i][1]) <= inner + 0.5
+		if i < needs.size() - 1 or stage == "2c":
+			assert_false(fits, "%s: %s was not enough (%.0f in %.0f)" % [at, needs[i][0], needs[i][1], inner])
+		else:
+			assert_true(fits, "%s: stops at %s, the first that fits" % [at, needs[i][0]])
+			assert_eq(str(needs[i][0]), stage, at + ": the stage shown is the one that fit")
+	var late := c.find_child("Late", true, false) as Label
+	var who := c.find_child("Who", true, false) as HBoxContainer
+	if stage != "1" and late != null and who != null and late.get_parent() != who:
+		var width: float = late.get_theme_font("font").get_string_size(late.text, HORIZONTAL_ALIGNMENT_LEFT, -1, late.get_theme_font_size("font_size")).x
+		assert_gt(who.get_combined_minimum_size().x + who.get_theme_constant("separation") + ceil(width), who.size.x, at + ": the late line stays below the name only when it cannot sit beside it")
+	if stage == "2c":
+		for quote: Node in c.body.find_children("Quote", "Label", true, false):
+			if quote.has_meta("inline_later"):
+				assert_eq((quote as Label).text, String(quote.get_meta("inline_later")), at + ": the paper scrolls only once the deferring way is on one line")
+
+
+## On a scrolled paper a wheel that starts on a way moves the paper, and a press
+## that turns into a scroll (a touch drag past the dead zone) answers nothing;
+## a still tap on the same way still answers.
+func test_scrolling_from_a_way_moves_the_paper_and_answers_nothing() -> void:
+	if _data.is_empty(): return
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(1280, 720)
+	add_child_autofree(viewport)
+	var c := TurnCard.new()
+	c.fit_w = 1280.0 / UiFonts.K - 330.0 + 44.0 - 6.0 - TurnCard.SHEET_AT.x
+	viewport.add_child(c)
+	c.show_card(_case("late/ration_cut/1/first")[0], _data["tables"])
+	await _settled(c)
+	await get_tree().process_frame
+	var overflow := c.find_child("Overflow", true, false) as ScrollContainer
+	assert_not_null(overflow, "this card scrolls the whole paper at 1280")
+	if overflow == null: return
+	assert_eq(overflow.mouse_filter, Control.MOUSE_FILTER_STOP, "the paper keeps what reaches it")
+	var key := _key(c, 1)
+	assert_eq(key.mouse_filter, Control.MOUSE_FILTER_PASS, "a way passes drags on to the paper")
+	var got: Array = []
+	c.chose.connect(func(next: Dictionary) -> void: got.append(next))
+	var wheel := InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_DOWN
+	wheel.pressed = true
+	wheel.position = key.get_global_rect().get_center()
+	viewport.push_input(wheel, true)
+	await get_tree().process_frame
+	assert_gt(overflow.scroll_vertical, 0, "a wheel on a way moves the paper")
+	var at: Vector2 = key.get_global_rect().get_center()
+	viewport.push_input(_click(at, true), true)
+	overflow.propagate_notification(Control.NOTIFICATION_SCROLL_BEGIN)
+	viewport.push_input(_click(at, false), true)
+	await get_tree().process_frame
+	assert_eq(got.size(), 0, "a scroll that began on a way answers nothing")
+	viewport.push_input(_click(at, true), true)
+	viewport.push_input(_click(at, false), true)
+	await get_tree().process_frame
+	assert_eq(got.size(), 1, "a still tap on the same way answers")
+	c.free()
+
+
+func _click(at: Vector2, down: bool) -> InputEventMouseButton:
+	var e := InputEventMouseButton.new()
+	e.button_index = MOUSE_BUTTON_LEFT
+	e.button_mask = MOUSE_BUTTON_MASK_LEFT if down else 0
+	e.pressed = down
+	e.position = at
+	return e
+
+
+## The scene height a card keeps in sight at the least: TurnCard.SCENE_MIN
+## lines, or all of a shorter scene.
+func _least_scene(c: Control) -> float:
+	var scene := c.find_child("Scene", true, false) as Control
+	return minf(scene.get_combined_minimum_size().y, UiFonts.px(TurnCard.SCENE_LINE) * TurnCard.SCENE_MIN)
+
+
+## Measure title/name/late/portrait and ways with only the scene lines a card
+## must keep in sight; independent of the full-scrolling Said minimum, which
+## includes its complete text.
 func _fixed_rows_height(c: Control) -> float:
 	var top := c.body.get_child(0) as HBoxContainer
 	var words := top.get_child(1) as VBoxContainer
 	var text_height := 0.0
 	for part: Control in words.get_children():
 		if part.name != "Said": text_height += part.get_combined_minimum_size().y
+		else: text_height += _least_scene(c)
 	var needed: float = maxf(text_height, (top.get_child(0) as Control).get_combined_minimum_size().y)
 	for i: int in range(1, c.body.get_child_count()):
 		needed += (c.body.get_child(i) as Control).get_combined_minimum_size().y

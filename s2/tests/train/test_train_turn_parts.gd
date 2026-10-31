@@ -12,10 +12,13 @@ const Common = preload("res://game/train/turn/turn_common.gd")
 var _errors: Dictionary = {}
 var _count: int = 0
 var _matched: int = 0
+var _names: Array = []
+var _tables: Dictionary = {}
 
 func before_all() -> void:
 	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/turn_vectors.json"))
 	var rows: Array = []
+	_tables = data["tables"]
 	for part: Dictionary in data.get("parts", []):
 		var action: Dictionary = part["action"]
 		var g: Dictionary = part["before"].duplicate(true)
@@ -44,6 +47,7 @@ func before_all() -> void:
 		var group: String = str(part["name"]).get_slice("/", 0)
 		if not _errors.has(group): _errors[group] = []
 		_errors[group].append_array(differences)
+		_names.append(str(part["name"]))
 		_count += 1
 		if differences.is_empty(): _matched += 1
 		rows.append({"name": part["name"], "matched": differences.is_empty(), "differences": differences})
@@ -59,6 +63,17 @@ func test_alternative_card_choices_match_s1() -> void:
 
 func test_late_choices_returns_expiry_duplicates_and_saves_match_s1() -> void:
 	assert_true(_errors.has("late"), "late fixtures must exist")
+	# Every decision 514 path must be there to be compared: a missing row fails.
+	var need: Array[String] = ["late/save/old", "late/save/held", "late/repeal", "late/unsupported/info"]
+	for mode: String in ["gone", "former", "law-down", "answered", "duplicate", "order"]: need.append("late/return/" + mode)
+	for mode: String in ["pick", "return-order", "protect-returned", "expiry", "merge", "gone", "gone-player"]: need.append("late/budget/" + mode)
+	for i: int in 12: need.append_array(["late/settle-duplicate/%d" % i, "late/travel-duplicate/%d" % i])
+	var tags: Array[String] = ["late/ration_cut/tail", "late/travel/tail"]
+	for comm: String in _tables["COMMS"]:
+		for kind: String in ["demand", "favor", "promise_ledger"]: tags.append("late/%s/%s" % [kind, comm])
+	for tag: String in tags:
+		for step: String in ["defer-1", "return-1", "answer-1-0", "defer-2", "return-2", "answer-2-0", "defer-3"]: need.append(tag + "/" + step)
+	for row: String in need: assert_true(_names.has(row), row + " is compared")
 	assert_eq(_errors.get("late", []), [], "all appended decision 514 inputs")
 
 func test_shared_death_and_wound_hooks_match_s1() -> void:

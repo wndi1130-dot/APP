@@ -54,7 +54,7 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 			if key == "lateCards":
 				if Late.kind(card) == "" or not _is_number(card.get("uid")) or float(card["uid"]) != floorf(float(card["uid"])) or float(card["uid"]) < 1:
 					return "미룬 서류 카드가 이상하다"
-				if card.get("comm") != null and not (t["COMMS"] as Array).has(card["comm"]): return "미룬 서류 칸이 이상하다"
+				if card.has("comm") and not (t["COMMS"] as Array).has(card["comm"]): return "미룬 서류 칸이 이상하다"
 				if card.get("who") != null and not card["who"] is String: return "미룬 서류 대표가 이상하다"
 	if g.has("fieldReturns") and g["fieldReturns"] != null:
 		var field_returns: Variant = g["fieldReturns"]

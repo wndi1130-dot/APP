@@ -24,7 +24,8 @@ static func enable(g: Dictionary) -> void:
 
 
 static func kind(card: Dictionary) -> String:
-	var k: String = card.get("kind", "")
+	var k: Variant = card.get("kind", "")
+	if not k is String: return ""
 	if k in ["demand", "favor", "promise_ledger", "ration_cut"]: return k
 	return "front_curtain" if k == "travel" and card.get("text") == "front_curtain" else ""
 
