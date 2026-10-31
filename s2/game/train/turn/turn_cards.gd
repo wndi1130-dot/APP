@@ -15,6 +15,7 @@ const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 const Late = preload("res://game/train/turn/turn_late.gd")
 const Budget = preload("res://game/train/turn/turn_budget.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
+const Content = preload("res://game/train/turn/turn_content.gd")
 
 static func choice(id: String, label: String, effs: Array, special: String = "", witness: bool = false) -> Dictionary:
 	return {"id": id, "label": label, "effs": effs, "special": special, "witness": witness}
@@ -96,6 +97,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 
 
 static func _base_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
+	if card["kind"] in ["content", "content-deal"]: return Content.content_view(g, t, card)
 	var comm: String = card.get("comm", "tail")
 	var s: Dictionary = g["comms"][comm]
 	match str(card["kind"]):
@@ -364,7 +366,8 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 	if v.is_empty(): return C.unsupported(g0, "chooseCard: " + str(card["kind"]))
 	if index < 0 or index >= v["choices"].size(): return g0.duplicate(true)
 	var selected: Dictionary = v["choices"][index]
-	if selected.has("disabled") or not affordable(g0, selected["effs"]): return g0.duplicate(true)
+	# Content.view already applies S1 guardCosts, including its all-unaffordable escape.
+	if selected.has("disabled") or (card["kind"] not in ["content", "content-deal"] and not affordable(g0, selected["effs"])): return g0.duplicate(true)
 	if selected["special"] == "revolt": return C.unsupported(g0, "chooseCard: revolt finish lookback")
 	if not St.is_s1a(g0) or g0.get("deathWeight", false): return C.unsupported(g0, "chooseCard: optional hooks")
 	if selected["special"] == "late":
@@ -523,6 +526,7 @@ static func _resolve_choice(g0: Dictionary, t: Dictionary, card: Dictionary, v: 
 			g["tensionCrisisUsed"] = int(g.get("tensionCrisisUsed", 0)) + 1
 			if selected["special"] == "crisis_guard": Ladder.guard(g, "tail")
 			else: Ladder.concede(g)
+	Content.content_choose(g, t, card, selected)
 	# hub.ts registers hubChoose for every accepted card, including non-hub cards.
 	var hub: Dictionary = C.hub(g)
 	if not hub.has("lines"): hub["lines"] = []

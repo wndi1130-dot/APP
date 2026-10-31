@@ -8,6 +8,7 @@ extends GutTest
 const TurnCard = preload("res://game/ui/turn_card.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const Content = preload("res://game/train/turn/turn_content.gd")
 const PATH: String = "res://tests/fixtures/train/card_vectors.json"
 ## A whole train state to lay a case's part over: a press runs the whole rule.
 const TRAIN: String = "res://tests/fixtures/train/train_vectors.json"
@@ -462,3 +463,86 @@ func _settled(c: Control) -> void:
 		if not c.is_processing():
 			return
 	assert_false(c.is_processing(), "card layout settles within 40 frames")
+
+
+func test_content_card_model_hides_requires_and_preserves_filled_why_later() -> void:
+	var fixtures: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/content_vectors.json"))
+	var original: Dictionary = Content.data().duplicate(true)
+	for kind: String in ["events", "secrets", "deals"]: Content.register_definitions(kind, fixtures["definitions"][kind])
+	for row: Dictionary in fixtures["views"]:
+		if row["name"] not in ["probe/port_requires", "bind/all-placeholders"]: continue
+		var m: Dictionary = TurnCard.model(row["state"], fixtures["tables"], int(row["card"]["uid"]))
+		assert_eq(m["body"], UiFonts.josa(row["view"]["body"]), row["name"])
+		assert_eq(m["name"], row["view"]["speaker"]["name"])
+		assert_eq(m["role"], row["view"]["speaker"]["role"])
+		assert_gte(int(m["bust"]), 0)
+		assert_eq((m["choices"] as Array).size(), (row["view"]["choices"] as Array).size())
+		for i: int in (m["choices"] as Array).size():
+			var ch: Dictionary = m["choices"][i]
+			var expected: Dictionary = row["view"]["choices"][i]
+			assert_eq(ch["why"], UiFonts.josa(expected.get("why", "")))
+			assert_eq(ch["later"], UiFonts.josa(expected.get("later", "")))
+			assert_true(ch["content"])
+			assert_false(ch["lateUrgent"])
+		if row["name"] == "probe/port_requires":
+			assert_eq((m["choices"] as Array).size(), 1, "unaffordable requires hides, rather than disables, pay")
+			assert_eq(m["choices"][0]["label"], "wait")
+	Content._data = original
+
+
+func test_content_short_long_and_notes_keep_choices_on_paper_or_reach_scroll_end() -> void:
+	var fixtures: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/content_vectors.json"))
+	var original: Dictionary = Content.data().duplicate(true)
+	for kind: String in ["events", "secrets", "deals"]: Content.register_definitions(kind, fixtures["definitions"][kind])
+	var names: Array = ["probe/port_requires", "bind/all-placeholders"]
+	for shot: Dictionary in fixtures["shots"]:
+		if not names.has(shot["case"]): names.append(shot["case"])
+	for width: int in [1560, 1280]:
+		var viewport: SubViewport = SubViewport.new()
+		viewport.size = Vector2i(width, 720)
+		add_child_autofree(viewport)
+		var c := TurnCard.new()
+		c.fit_w = float(width) / UiFonts.K - 330.0 + 44.0 - 6.0 - TurnCard.SHEET_AT.x
+		viewport.add_child(c)
+		var checked: int = 0
+		for row: Dictionary in fixtures["views"]:
+			if not names.has(row["name"]): continue
+			c.show_card(row["state"], fixtures["tables"], int(row["card"]["uid"]))
+			await _settled(c)
+			await get_tree().process_frame
+			var at: String = "%d/content/%s" % [width, row["name"]]
+			assert_lte(c.body.size.x, c.sheet.inner.size.x + 0.5, at + ": width")
+			var overflow: ScrollContainer = c.find_child("Overflow", true, false) as ScrollContainer
+			var more: Control = c.find_child("PaperMore", true, false) as Control
+			if overflow == null:
+				assert_lte(c.body.get_combined_minimum_size().y, c.sheet.inner.size.y + 0.5, at + ": fixed rows fit")
+				for child: Control in c.body.get_children(): assert_lte(child.position.y + child.size.y, c.sheet.inner.size.y + 1.0, at + ": " + child.name)
+			else:
+				assert_eq(str(c.get_meta("fit_stage")), "2c", at)
+				assert_gt(_fixed_rows_height(c), c.sheet.inner.size.y + 0.5, at + ": scroll only if fixed rows need it")
+				assert_not_null(more, at + ": more choices are signposted")
+				if more != null: assert_true(more.visible, at)
+				await _check_scroll_end(c, overflow, more, c.body, at)
+			var said: ScrollContainer = c.find_child("Said", true, false) as ScrollContainer
+			var scene: Control = c.find_child("Scene", true, false) as Control
+			var scene_more: Control = c.find_child("SceneMore", true, false) as Control
+			if overflow == null and said != null and scene != null and scene.size.y > said.size.y + 0.5:
+				assert_not_null(scene_more, at + ": long scene has a cue")
+				assert_gt(said.size.y, 0.0, at + ": scene is reachable")
+				await _check_scroll_end(c, said, scene_more, scene, at)
+			var m: Dictionary = TurnCard.model(row["state"], fixtures["tables"], int(row["card"]["uid"]))
+			for ch: Dictionary in m["choices"]:
+				var way: Control = c.find_child("Say_%d" % int(ch["n"]), true, false) as Control
+				assert_not_null(way, at)
+				if way == null: continue
+				assert_gte(way.size.y, TurnCard.SAY_H * UiFonts.K, at + ": tap height")
+				for pair: Array in [["why", "Why", "까닭: "], ["later", "Later", "나중에: "]]:
+					var note_label: Label = way.find_child(pair[1], true, false) as Label
+					if str(ch.get(pair[0], "")) == "": assert_null(note_label, at + ": absent " + str(pair[0]))
+					else:
+						assert_not_null(note_label, at + ": " + str(pair[0]))
+						if note_label != null: assert_eq(note_label.text.replace("\u2060", ""), str(pair[2]) + str(ch[pair[0]]), at)
+			checked += 1
+		assert_eq(checked, names.size(), "%d: every content layout case" % width)
+		c.free()
+	Content._data = original

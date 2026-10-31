@@ -30,6 +30,15 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var v: Dictionary = TurnCards.view(g, t, card)
 	if v.is_empty():
 		return {}
+	# Content carries S1's filled body/speaker/why/later/log and guarded choices already.
+	if card["kind"] in ["content", "content-deal"]:
+		var content: Dictionary = v.duplicate(true)
+		if not content.has("speaker"): content["speaker"] = null
+		if not content.has("focus"): content["focus"] = null
+		for choice: Dictionary in content["choices"]:
+			for key: String in ["say", "why", "later", "disabled"]:
+				if not choice.has(key): choice[key] = ""
+		return content
 	var out: Dictionary = v.duplicate(true)
 	out["speaker"] = null
 	out["body"] = ""
