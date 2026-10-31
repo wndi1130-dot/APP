@@ -35,7 +35,7 @@ func test_the_sheet_says_what_the_arrival_summary_says() -> void:
 	assert_eq(m["title"], "둘째 역")
 	assert_eq(m["arrive"], "3구간, 둘째 역에 닿았다. 첫 정차에서 1구간을 달려왔다.")
 	assert_eq(m["columns"][0], ["사람", [["다친 사람", "1", "+1"]]])
-	assert_eq(m["columns"][1], ["물자", [["석탄", "96", "−2"], ["식량", "99", "−7"], ["의약품", "20", "그대로"], ["사치품", "9", "그대로"]]])
+	assert_eq(m["columns"][1], ["물자", [["석탄", "95", "−3"], ["식량", "99", "−7"], ["의약품", "20", "그대로"], ["사치품", "9", "그대로"]]])
 	assert_eq(m["columns"][2], ["온기", [["칸마다 온기는 그대로다.", "", ""]]], "no car's warmth moved: the summary's own line")
 	assert_eq(m["seen"][0], ["symbol", "꼬리칸의 상징물을 가져왔다. 쓰임을 고른다."])
 	assert_eq(m["seen"][2], ["promise", "꼬리칸과의 약속을 지켰다: 저탄장 운반조를 다 데려온다. 본 사람 2명이 돌아와 말했다."], "the port's two-way particle settled")

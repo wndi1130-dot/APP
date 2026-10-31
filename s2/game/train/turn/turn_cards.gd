@@ -305,9 +305,9 @@ static func _base_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictio
 		"birth":
 			# S1 cards.ts birth (사람의 무게 A4): a child born where it stays under BIRTH.warm comes small.
 			var cold: bool = float(St.situation(g, t, comm)[0]) < float(t["BIRTH"]["warm"])
-			var options: Array = [choice("", "의무칸으로 옮긴다", [["med", -2], ["base", "medtech", 3, 2]], "birth_ok"),
+			var options: Array = [choice("", "의무칸으로 데려간다", [["med", -2], ["base", "medtech", 3, 2]], "birth_ok"),
 				choice("", "그 칸에서 낳는다", [], "birth_weak" if cold else "birth_ok")]
-			options[0]["log"] = "해산을 앞둔 %s을(를) 의무칸으로 옮겼다." % str(card.get("who", ""))
+			options[0]["log"] = "해산을 앞둔 %s을(를) 의무칸으로 데려갔다." % str(card.get("who", ""))
 			options[1]["log"] = "%s이(가) 그 칸에서 아이를 낳게 했다." % str(card.get("who", ""))
 			return {"title": "아이가 나온다", "choices": options}
 		"naming":

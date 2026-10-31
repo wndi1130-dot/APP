@@ -16,6 +16,7 @@ const DeadBody = preload("res://game/actors/dead_body.gd")
 const DeadCast = preload("res://game/actors/dead_cast.gd")
 const Motion = preload("res://game/sim/motion.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
+const HordeMix = preload("res://game/sim/horde_mix.gd")
 const DeadSeparation = preload("res://game/sim/dead_separation.gd")
 const EatRules = preload("res://game/sim/eat_rules.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
@@ -76,7 +77,7 @@ var loot_rng := RandomNumberGenerator.new()   # its own, so a body's pockets do 
 var lunge_rng := RandomNumberGenerator.new()  # its own, so who lunges does not shift them either
 var embed_rng := RandomNumberGenerator.new()  # its own, so who has an axe in the back shifts nothing else
 var embedded_draw: MultiMeshInstance3D        # the axes in backs; null without the model
-var lungers_on: bool = false  # opts["lungers"]: some of the dead lunge (lunger_rules.gd)
+var lunger_share: float = 0.0  # Act progress, or the forced share (decisions 383, 387, 134).
 var draw: Dictionary = {}     # look -> MultiMeshInstance3D (the first body's)
 var draws: Array = []         # body (dead_cast.gd) -> look -> MultiMeshInstance3D; {} for one not in the build
 var body_rounds: Array = []   # body -> its walks' rounds (dead_body.gd rounds_of)
@@ -102,7 +103,11 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	loot_rng.seed = hash(int(game.opts.get("seed", 0))) + 62
 	lunge_rng.seed = hash(int(game.opts.get("seed", 0))) + 63
 	embed_rng.seed = hash(int(game.opts.get("seed", 0))) + 64
-	lungers_on = bool(game.opts.get(LungerRules.OPTION, false))
+	# Forced on never reads the act; otherwise the act's progress sets the share.
+	if bool(game.opts.get(LungerRules.OPTION, false)):
+		lunger_share = LungerRules.SHARE
+	else:
+		lunger_share = float(HordeMix.of(String(game.opts.get("act", "prologue")), act_progress_of(game.opts))["lunger_share"])
 	var body := DeadBody.assets()
 	baked = not body.is_empty()
 	vat = body if baked else vat_assets
@@ -142,6 +147,17 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 		add_child(embedded_draw)
 
 
+## The act's progress as a number: a missing, null or non-numeric value reads as
+## the act's start (decisions 383, 387, 134).
+static func act_progress_of(opts: Dictionary) -> float:
+	var value: Variant = opts.get("act_progress", 0.0)
+	if value is float or value is int:
+		return float(value)
+	if value is String and (value as String).is_valid_float():
+		return (value as String).to_float()
+	return 0.0
+
+
 func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:
 	var z := {
 		"id": next_id, "kind": kind, "pos": _floor_y(at), "state": "frozen" if kind == "frozen" else "wander",
@@ -154,8 +170,9 @@ func spawn(kind: String, at: Vector3, opts: Dictionary = {}) -> Dictionary:
 	}
 	next_id += 1
 	# Not the frozen, and not those sent in with a horde (a horde's runners are another rule).
-	if lungers_on and kind != "frozen" and not opts.has("target"):
-		z["lunger"] = LungerRules.picks(lunge_rng.randf(), z["stander"])
+	# Keep the roll even for a drifter; zero share rolls nothing (decisions 134, 250, 387).
+	if lunger_share > 0.0 and kind != "frozen" and not opts.has("target"):
+		z["lunger"] = LungerRules.picks(lunge_rng.randf(), z["stander"], lunger_share)
 	if opts.has("target"):
 		z["state"] = "horde"
 		z["target"] = opts["target"]
@@ -174,10 +191,8 @@ func add_rising(at: Vector3, who_name: String) -> Dictionary:
 	var z := spawn("fresh", at, {"name": who_name})
 	z["state"] = "rising"
 	z["rise_t"] = RISE_TIME
-	# One in ten of those who died at this stop gets up as one that lunges, the
-	# same share as the dead that stand (a risen person stands, so true goes in
-	# for the stander). The roll is lunge_rng's, so the game's dice stay as they were.
-	z["lunger"] = lungers_on and LungerRules.picks(lunge_rng.randf(), true)
+	# A risen person stands. Keep this second roll after spawn's (decisions 134, 250, 387).
+	z["lunger"] = lunger_share > 0.0 and LungerRules.picks(lunge_rng.randf(), true, lunger_share)
 	# A person's things fall to the ground; a raider's are put on it (set_loot).
 	z["loot"] = []
 	z["searched"] = true
@@ -870,6 +885,10 @@ func _run_down(z: Dictionary, delta: float) -> void:
 			_end_dash(z)
 	elif z["spent_t"] > 0.0:
 		z["spent_t"] = maxf(0.0, z["spent_t"] - delta)
+
+
+func end_dash(z: Dictionary) -> void:
+	_end_dash(z)
 
 
 func _end_dash(z: Dictionary) -> void:
