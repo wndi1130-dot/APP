@@ -231,6 +231,14 @@ const PERSON_PHASE_SAMPLES: int = 256
 const PERSON_CONTACT_HEIGHT: float = 0.01
 const PERSON_SOLE_EPSILON: float = 0.0001  # equal rest-height vertices, 0.1 mm
 const PERSON_PHASE_SOURCE: String = "person_phase_source"
+# Bake-only opt-in. Empty this array to keep the original walk poses.
+const PERSON_FOOT_LOCK: Array = ["p_walk", "p_walk_long", "p_walk_axe", "p_walk_pistol", "p_carry_big", "p_walk_hurt"]
+const PERSON_FOOTLOCK_OVERLAP: float = 0.08
+const PERSON_FOOTLOCK_STANCE_MIN: float = 0.55
+const PERSON_FOOTLOCK_STANCE_MAX: float = 0.62
+const PERSON_FOOTLOCK_BLEND: float = 0.04
+const PERSON_FOOTLOCK_CLEARANCE: float = 0.02
+const PERSON_FOOTLOCK_HEIGHT_PASSES: int = 3
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -1190,13 +1198,7 @@ const LAYERS: Dictionary = {
 	# The living. Upright, both legs alike half a round apart, arms swinging
 	# against the legs. Left leg forward while sin(w) > 0.
 	"p_walk": {
-		"steps": [
-			["turn", "hips", "z", [0.0, 0.035, 0.0]],
-			["turn", "hips", "y", [0.0, -0.09, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.4, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0]]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.26, 0.38, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0], [0.0, -0.3, -1.5708], [0.0, -0.12, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.4, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0]]]],
-			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.26, 0.38, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0], [0.0, -0.3, 1.5708], [0.0, -0.12, 4.7124, 2.0]]]],
+		"steps": WALK_LEGS + [
 			["turn", "spine", "x", [0.05, 0.015, 0.0, 2.0]],
 			["turn", "chest", "y", [0.0, 0.12, 0.0]],
 			["turn", "neck", "x", 0.04],
@@ -1206,7 +1208,7 @@ const LAYERS: Dictionary = {
 			["aim", "upper_arm.R", "forearm.R", [-0.16, -1.0, [0.04, 0.3, 0.0]]],
 			["aim", "forearm.R", "hand.R", [-0.08, -1.0, [0.3, 0.28, 0.0]]],
 		],
-		"sink": [0.025, 0.02, -1.5708, 2.0],
+		"sink": WALK_SINK,
 	},
 	# Leaning into it. Each leg lands a little bent ahead, gives under the body,
 	# pushes off behind and folds up with the heel high on the way forward. The
@@ -1938,13 +1940,7 @@ const LAYERS: Dictionary = {
 	# Walking with a long weapon held upright before the right hip in both hands (decision
 	# 422, second set): the right fist at the hip, the left higher up it, the chest hardly turning.
 	"p_walk_long": {
-		"steps": [
-			["turn", "hips", "z", [0.0, 0.035, 0.0]],
-			["turn", "hips", "y", [0.0, -0.09, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.4, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0]]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.26, 0.38, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0], [0.0, -0.3, -1.5708], [0.0, -0.12, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.4, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0]]]],
-			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.26, 0.38, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0], [0.0, -0.3, 1.5708], [0.0, -0.12, 4.7124, 2.0]]]],
+		"steps": WALK_LEGS + [
 			["turn", "spine", "x", [0.05, 0.015, 0.0, 2.0]],
 			["turn", "chest", "y", [0.0, 0.04, 0.0]],
 			["turn", "neck", "x", 0.04],
@@ -1954,18 +1950,12 @@ const LAYERS: Dictionary = {
 			["aim", "upper_arm.L", "forearm.L", [-0.3, -0.7, [0.6, 0.015, 0.0]]],
 			["aim", "forearm.L", "hand.L", [-0.75, 0.45, 0.5]],
 		],
-		"sink": [0.025, 0.02, -1.5708, 2.0],
+		"sink": WALK_SINK,
 	},
 	# Walking with an axe hanging in the right hand (decision 422, second set): that arm
 	# straight and hardly swinging under the weight, held a little out from the leg, the left swinging.
 	"p_walk_axe": {
-		"steps": [
-			["turn", "hips", "z", [0.0, 0.035, 0.0]],
-			["turn", "hips", "y", [0.0, -0.09, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.4, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0]]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.26, 0.38, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0], [0.0, -0.3, -1.5708], [0.0, -0.12, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.4, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0]]]],
-			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.26, 0.38, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0], [0.0, -0.3, 1.5708], [0.0, -0.12, 4.7124, 2.0]]]],
+		"steps": WALK_LEGS + [
 			["turn", "spine", "x", [0.05, 0.015, 0.0, 2.0]],
 			["turn", "chest", "y", [0.0, 0.12, 0.0]],
 			["turn", "neck", "x", 0.04],
@@ -1975,18 +1965,12 @@ const LAYERS: Dictionary = {
 			["aim", "upper_arm.R", "forearm.R", [-0.22, -1.0, [0.02, 0.06, 0.0]]],
 			["aim", "forearm.R", "hand.R", [-0.12, -1.0, [0.12, 0.05, 0.0]]],
 		],
-		"sink": [0.025, 0.02, -1.5708, 2.0],
+		"sink": WALK_SINK,
 	},
 	# Walking with a pistol hanging in the right hand, its muzzle down and forward
 	# (decision 422, second set): the forearm a little back, that arm hardly swinging.
 	"p_walk_pistol": {
-		"steps": [
-			["turn", "hips", "z", [0.0, 0.035, 0.0]],
-			["turn", "hips", "y", [0.0, -0.09, 0.0]],
-			["aim", "thigh.L", "shin.L", [0.07, -1.0, [[0.02, 0.4, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0]]]],
-			["aim", "shin.L", "foot.L", [0.05, -1.0, [[-0.26, 0.38, 0.0], [0.0, -0.04, 0.0, 3.0], [0.0, 0.015, 0.0, 5.0], [0.0, -0.3, -1.5708], [0.0, -0.12, -1.5708, 2.0]]]],
-			["aim", "thigh.R", "shin.R", [-0.07, -1.0, [[0.02, 0.4, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0]]]],
-			["aim", "shin.R", "foot.R", [-0.05, -1.0, [[-0.26, 0.38, 3.1416], [0.0, -0.04, 9.4248, 3.0], [0.0, 0.015, 15.708, 5.0], [0.0, -0.3, 1.5708], [0.0, -0.12, 4.7124, 2.0]]]],
+		"steps": WALK_LEGS + [
 			["turn", "spine", "x", [0.05, 0.015, 0.0, 2.0]],
 			["turn", "chest", "y", [0.0, 0.12, 0.0]],
 			["turn", "neck", "x", 0.04],
@@ -1996,7 +1980,7 @@ const LAYERS: Dictionary = {
 			["aim", "upper_arm.R", "forearm.R", [-0.15, -1.0, [0.06, 0.08, 0.0]]],
 			["aim", "forearm.R", "hand.R", [-0.06, -1.0, -0.45]],
 		],
-		"sink": [0.025, 0.02, -1.5708, 2.0],
+		"sink": WALK_SINK,
 	},
 	# Running with a long weapon in both hands across the front (decision 422, second set):
 	# held as when walking with it, the legs and lean of the run.
@@ -2627,6 +2611,237 @@ static func _fit_person_phase(ctx: Dictionary, entry: Array) -> Dictionary:
 	# Preserve the pre-shift round: a fractional resample can alter the discrete
 	# round estimator even though it is the same continuous loop.
 	return {"shift": shift, "round": _person_stride_round(ctx, entry)}
+
+
+## Actual body skin, not a coat hem. Average tied lowest points in x/z,
+## retaining their minimum y so a change of lowest corner is measurable.
+static func _person_footlock_points(fit: Dictionary, skin: Array) -> Array:
+	var rest: PackedVector3Array = fit["rest"]
+	var bones: PackedInt32Array = fit["bones"]
+	var weights: PackedFloat32Array = fit["weights"]
+	var per: int = fit["per"]
+	var points := []
+	for side in 2:
+		var moved := []
+		var lowest := INF
+		for vertex: int in fit["soles"][side]:
+			var point := Vector3.ZERO
+			var total := 0.0
+			for slot in per:
+				var weight := weights[vertex * per + slot]
+				if weight > 0.0:
+					point += ((skin[bones[vertex * per + slot]] as Transform3D) * rest[vertex]) * weight
+					total += weight
+			point = point / total if total > 0.0 else rest[vertex]
+			moved.append(point)
+			lowest = minf(lowest, point.y)
+		var centre := Vector3.ZERO
+		var count := 0
+		for point: Vector3 in moved:
+			if point.y <= lowest + PERSON_SOLE_EPSILON:
+				centre += point
+				count += 1
+		centre /= float(count)
+		centre.y = lowest
+		points.append(centre)
+	return points
+
+
+## Rotation in skeleton space; only this foot's local rotation is written.
+static func _person_footlock_rotation(body: Skeleton3D, foot: int, rotation: Quaternion) -> void:
+	var parent := body.get_bone_parent(foot)
+	var parent_rot := body.get_bone_global_pose(parent).basis.orthonormalized().get_rotation_quaternion() if parent >= 0 else Quaternion()
+	body.set_bone_pose_rotation(foot, (parent_rot.inverse() * rotation).normalized())
+
+
+## Full lock throughout stance. Blend outside it, extending the same line
+## before touchdown/after toe-off; signed age keeps the loop seam continuous.
+static func _person_footlock_window(u: float, start: float, duration: float) -> Vector2:
+	var age := fposmod(u - start, 1.0)
+	if age <= duration:
+		return Vector2(age, 1.0)
+	if age < duration + PERSON_FOOTLOCK_BLEND:
+		return Vector2(age, 1.0 - smoothstep(duration, duration + PERSON_FOOTLOCK_BLEND, age))
+	if age > 1.0 - PERSON_FOOTLOCK_BLEND:
+		return Vector2(age - 1.0, smoothstep(1.0 - PERSON_FOOTLOCK_BLEND, 1.0, age))
+	return Vector2(age, 0.0)
+
+
+## One set of anchors/sole probes per body, shared by all six walk layers.
+## Called after the stride fit and phase fit, never by pose() or their samplers.
+static func _fit_person_footlock(ctx: Dictionary, entry: Array, phase: Dictionary) -> Dictionary:
+	if not entry[0] in PERSON_FOOT_LOCK:
+		return {}
+	if ctx.has("footlock_walk"):
+		return ctx["footlock_walk"]
+	ctx["footlock_walk"] = {}
+	var contacts: Dictionary = ctx.get("phase_fits", {}).get("p_walk", {})
+	if phase.is_empty() or contacts.is_empty() or float(contacts["left"]) < 0.0 or float(contacts["right"]) < 0.0:
+		push_error("FOOTLOCK_STOP %s F-INPUT-MISSING no_sole_contact" % entry[0])
+		return {}
+	var body: Skeleton3D = ctx["body"]
+	var mesh_node: MeshInstance3D = ctx["mesh_node"]
+	var source: Array = mesh_node.get_meta(PERSON_PHASE_SOURCE) if mesh_node.has_meta(PERSON_PHASE_SOURCE) else mesh_node.mesh.surface_get_arrays(0)
+	var rest: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = source[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = source[Mesh.ARRAY_WEIGHTS]
+	if rest.is_empty() or bones.is_empty() or weights.size() != bones.size():
+		push_error("FOOTLOCK_STOP %s F-INPUT-MISSING no_sole_skin" % entry[0])
+		return {}
+	var soles := person_sole_vertices(rest)
+	var per: int = bones.size() / rest.size()
+	var legs := []
+	for side in 2:
+		var suffix := ".L" if side == 0 else ".R"
+		var leg := [_bone(body, "thigh" + suffix), _bone(body, "shin" + suffix), _bone(body, "foot" + suffix)]
+		if leg.has(-1) or body.get_bone_parent(leg[1]) != leg[0] or body.get_bone_parent(leg[2]) != leg[1]:
+			push_error("FOOTLOCK_STOP %s F-INPUT-MISSING leg_chain %s" % [entry[0], suffix])
+			return {}
+		legs.append(leg)
+		# Include toe/heel corners that were not at the rest minimum, too.
+		for vertex in rest.size():
+			if _main_bone(body, ctx["skin"], bones, weights, per, vertex) == int(leg[2]) and not soles[side].has(vertex):
+				soles[side].append(vertex)
+		if soles[side].is_empty():
+			push_error("FOOTLOCK_STOP %s F-INPUT-MISSING empty_sole %s" % [entry[0], suffix])
+			return {}
+	var walk: Array = []
+	var stand: Array = []
+	for candidate: Array in PERSON_CLIPS:
+		if candidate[0] == "p_walk":
+			walk = candidate
+		elif candidate[0] == "p_stand":
+			stand = candidate
+	# A filtered bake may encounter a weapon walk before the base walk.
+	if entry[4] != walk[4]:
+		_fit_person_stride(ctx, walk)
+	var fit := {"rest": rest, "bones": bones, "weights": weights, "per": per, "soles": soles, "legs": legs,
+		"starts": [], "durations": [], "anchors": [], "rotations": [], "round": float(PERSON_STRIDE_ROUNDS["p_walk"])}
+	pose(ctx, stand[1], stand[4], 0.0)
+	var standing := _person_footlock_points(fit, _skin_frame(ctx))
+	fit["floor"] = minf((standing[0] as Vector3).y, (standing[1] as Vector3).y)
+	var shift: float = phase["shift"]
+	fit["starts"] = [fposmod(float(contacts["left"]) - shift, 1.0), fposmod(float(contacts["right"]) - shift, 1.0)]
+	var to_mesh: Transform3D = ctx["to_mesh"]
+	for side in 2:
+		var start: float = fit["starts"][side]
+		var gap := fposmod(float(fit["starts"][1 - side]) - start, 1.0)
+		fit["durations"].append(clampf(gap + PERSON_FOOTLOCK_OVERLAP, PERSON_FOOTLOCK_STANCE_MIN, PERSON_FOOTLOCK_STANCE_MAX))
+		pose(ctx, walk[1], walk[4], fposmod(start + shift, 1.0))
+		var foot: int = legs[side][2]
+		var current := to_mesh * body.get_bone_global_pose(foot)
+		var rest_basis := (to_mesh * body.get_bone_global_rest(foot)).basis.orthonormalized()
+		var forward := current.basis.orthonormalized() * rest_basis.inverse() * Vector3.BACK
+		var yaw := atan2(forward.x, forward.z) if Vector2(forward.x, forward.z).length_squared() > 0.0000001 else 0.0
+		# Rest sole normal is mesh +y; retain contact yaw and remove pitch/roll.
+		var flat := Basis(Vector3.UP, yaw) * rest_basis
+		var rotation := (to_mesh.basis.inverse() * flat).orthonormalized().get_rotation_quaternion()
+		_person_footlock_rotation(body, foot, rotation)
+		var flat_points := _person_footlock_points(fit, _skin_frame(ctx))
+		var anchor := current.origin
+		anchor.y += float(fit["floor"]) - (flat_points[side] as Vector3).y
+		fit["anchors"].append(anchor)
+		fit["rotations"].append(rotation)
+	ctx["footlock_walk"] = fit
+	return fit
+
+
+## Cosine-rule two-bone solve. The keyed bend direction is projected onto
+## the new hip-to-ankle plane; clamp distance, never translate the hips/bones.
+static func _solve_person_footlock_leg(body: Skeleton3D, leg: Array, target: Vector3, pole_hint: Vector3) -> void:
+	var hip := body.get_bone_global_pose(leg[0]).origin
+	var knee := body.get_bone_global_pose(leg[1]).origin
+	var ankle := body.get_bone_global_pose(leg[2]).origin
+	var upper := hip.distance_to(knee)
+	var lower := knee.distance_to(ankle)
+	if minf(upper, lower) < 0.000001:
+		return
+	var delta := target - hip
+	var wanted := delta.length()
+	var axis := delta / wanted if wanted > 0.000001 else (ankle - hip).normalized()
+	var distance := clampf(wanted, maxf(absf(upper - lower), 0.000001), upper + lower)
+	var along := (upper * upper - lower * lower + distance * distance) / (2.0 * distance)
+	var height := sqrt(maxf(0.0, upper * upper - along * along))
+	var bend := pole_hint - axis * pole_hint.dot(axis)
+	if bend.length_squared() < 0.0000001:
+		var fallback := Vector3.RIGHT if absf(axis.x) < 0.9 else Vector3.UP
+		bend = fallback - axis * fallback.dot(axis)
+	var knee_target := hip + axis * along + bend.normalized() * height
+	var ankle_target := hip + axis * distance
+	var suffix := ".L" if int(leg[0]) == _bone(body, "thigh.L") else ".R"
+	aim(body, "thigh" + suffix, "shin" + suffix, knee_target - hip)
+	aim(body, "shin" + suffix, "foot" + suffix, ankle_target - body.get_bone_global_pose(leg[1]).origin)
+
+
+static func _apply_person_footlock(ctx: Dictionary, fit: Dictionary, u: float, before: Array) -> Array:
+	var body: Skeleton3D = ctx["body"]
+	var to_mesh: Transform3D = ctx["to_mesh"]
+	var to_body := to_mesh.affine_inverse()
+	var misses := []
+	for side in 2:
+		var leg: Array = fit["legs"][side]
+		var hip := body.get_bone_global_pose(leg[0]).origin
+		var knee := body.get_bone_global_pose(leg[1]).origin
+		var foot_pose := body.get_bone_global_pose(leg[2])
+		var keyed_axis := (foot_pose.origin - hip).normalized()
+		var pole := knee - hip - keyed_axis * (knee - hip).dot(keyed_axis)
+		if pole.length_squared() < 0.0000001:
+			pole = to_body.basis * Vector3.BACK
+		var keyed_rotation := foot_pose.basis.orthonormalized().get_rotation_quaternion()
+		var keyed_ankle := to_mesh * foot_pose.origin
+		var window := _person_footlock_window(u, fit["starts"][side], fit["durations"][side])
+		var locked: Vector3 = fit["anchors"][side]
+		locked.z -= window.x * float(fit["round"])
+		var swing := keyed_ankle
+		swing.y += maxf(0.0, float(fit["floor"]) + PERSON_FOOTLOCK_CLEARANCE - (before[side] as Vector3).y)
+		var target := swing.lerp(locked, window.y)
+		var rotation := keyed_rotation.slerp(fit["rotations"][side], window.y)
+		# The 2 cm swing margin fades to zero through the 0.04-cycle blends.
+		var floor_y := float(fit["floor"]) + PERSON_FOOTLOCK_CLEARANCE * (1.0 - window.y)
+		for _pass_id in PERSON_FOOTLOCK_HEIGHT_PASSES:
+			_person_footlock_rotation(body, leg[2], rotation)
+			var sole := _person_footlock_points(fit, _skin_frame(ctx))
+			var ankle_y := (to_mesh * body.get_bone_global_pose(leg[2]).origin).y
+			var offset_y := (sole[side] as Vector3).y - ankle_y
+			# Recompute from the attained ankle, so an unreachable goal does not
+			# accumulate an artificial miss on every height refinement.
+			target.y = floor_y - offset_y if window.y == 1.0 else maxf(target.y, floor_y - offset_y)
+			_solve_person_footlock_leg(body, leg, to_body * target, pole)
+			_person_footlock_rotation(body, leg[2], rotation)
+		var reached := to_mesh * body.get_bone_global_pose(leg[2]).origin
+		misses.append(reached.distance_to(target))
+	return misses
+
+
+## Sample the same frames that enter the VAT, with stance-relative travel
+## unwrapped across u=0. No height threshold hides a slipping stance frame.
+static func _note_person_footlock(fit: Dictionary, u: float, before: Array, after: Array, misses: Array, stats: Array) -> void:
+	for side in 2:
+		var note: Dictionary = stats[side]
+		var age := fposmod(u - float(fit["starts"][side]), 1.0)
+		if age <= float(fit["durations"][side]):
+			note["before"].append((before[side] as Vector3).z + age * float(fit["round"]))
+			note["after"].append((after[side] as Vector3).z + age * float(fit["round"]))
+		else:
+			note["swing_min"] = minf(float(note["swing_min"]), (after[side] as Vector3).y)
+		note["miss"] = maxf(float(note["miss"]), float(misses[side]))
+
+
+static func _print_person_footlock(clip: String, fit: Dictionary, stats: Array) -> void:
+	for side in 2:
+		var note: Dictionary = stats[side]
+		var before: Array = note["before"]
+		var after: Array = note["after"]
+		var foot := "L" if side == 0 else "R"
+		if before.is_empty() or after.is_empty() or not is_finite(float(note["swing_min"])):
+			push_error("FOOTLOCK_STOP %s F-INPUT-MISSING no_frame_samples %s" % [clip, foot])
+			continue
+		var start: float = fit["starts"][side]
+		var slide_before := (float(before.max()) - float(before.min())) * 100.0
+		var slide_after := (float(after.max()) - float(after.min())) * 100.0
+		var underground := maxf(0.0, float(fit["floor"]) - float(note["swing_min"])) * 100.0
+		print("FOOTLOCK %s %s stance %.6f %.6f slide_before_cm %.4f slide_after_cm %.4f reach_miss_cm %.4f under_ground_cm %.4f" % [
+			clip, foot, start, start + float(fit["durations"][side]), slide_before, slide_after, float(note["miss"]) * 100.0, underground])
 
 
 ## One skin matrix per bone the mesh binds: pose * inverse bind, in mesh space.
@@ -3277,23 +3492,38 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 	var clips := []
 	ctx["phase_fits"] = {}
 	ctx["fit_failures"] = []
+	ctx.erase("footlock_walk")
 	for entry: Array in list:
 		_fit_person_stride(ctx, entry)
 		var phase := _fit_person_phase(ctx, entry)
+		var footlock := _fit_person_footlock(ctx, entry, phase)
+		var footlock_stats := []
+		if not footlock.is_empty():
+			for side in 2:
+				footlock_stats.append({"before": [], "after": [], "miss": 0.0, "swing_min": INF})
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
 		var reach := [[], []]
 		for f in count:
 			# A loop's last frame stops one step short of the first; a one-shot ends on its end.
-			var u: float = float(f) / float(count) if looped else float(f) / float(count - 1)
-			if not phase.is_empty():
-				u = fposmod(u + float(phase["shift"]), 1.0)
+			var output_u: float = float(f) / float(count) if looped else float(f) / float(count - 1)
+			var u := fposmod(output_u + float(phase["shift"]), 1.0) if not phase.is_empty() else output_u
 			pose(ctx, entry[1], entry[4], u)
-			frames.append(_skin_frame(ctx))
+			var skin := _skin_frame(ctx)
+			if not footlock.is_empty():
+				var before := _person_footlock_points(footlock, skin)
+				var misses := _apply_person_footlock(ctx, footlock, output_u, before)
+				skin = _skin_frame(ctx)
+				_note_person_footlock(footlock, output_u, before, _person_footlock_points(footlock, skin), misses, footlock_stats)
+			frames.append(skin)
 			_note_reach(ctx, entry[0], reach)
+		if not footlock.is_empty():
+			_print_person_footlock(entry[0], footlock, footlock_stats)
 		var length := float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length * _span_share(entry[4])
 		var stride_round := float(phase["round"]) if not phase.is_empty() else _round(reach)
+		if not footlock.is_empty():
+			stride_round = float(footlock["round"])
 		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0})
 	var still := []
 	for entry: Array in poses:
