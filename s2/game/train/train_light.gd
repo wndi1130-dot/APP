@@ -12,11 +12,11 @@ const WINDOW_AT := Vector2(1.1, -1.0) # y, z: snow light comes up from below.
 
 const STAGES: Array[Dictionary] = [
 	{
-		"stove": 0.7,
+		"stove": 0.9,
 		"night": {
 			"lamps": [
 				{"at": Vector3(0.5, 0.95, -0.6), "kind": "candle", "kelvin": 1850.0,
-					"energy": 0.5, "range": 4.5, "shadow": true, "sway": 0.3},
+					"energy": 0.6, "range": 5.0, "shadow": true, "sway": 0.3},
 				{"at": Vector3(0.22, 0.8, -0.7), "kind": "candle", "kelvin": 1850.0,
 					"energy": 0.25, "range": 3.0, "shadow": false, "sway": 0.3},
 			],
