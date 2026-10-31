@@ -75,6 +75,22 @@ func add_car(c: Dictionary) -> void:
 		if spot.get("car", "") == c["id"]:
 			cancel(int(id), "closed")
 	places.add_car(c["def"], float(c["x0"]))
+	_build_room(c)
+
+
+## The car's room at its home stage again: the places are the layout's whatever the stage, so the
+## bookings stay; the old room's traces (what was overturned or scorched) carry over.
+func restage_room(c: Dictionary) -> void:
+	var old = rooms[c["id"]]
+	var traces: Dictionary = old.traces.duplicate(true)
+	old.root.free()
+	_build_room(c)
+	for prop in rooms[c["id"]].traces:
+		if traces.has(prop):
+			rooms[c["id"]].traces[prop] = traces[prop]
+
+
+func _build_room(c: Dictionary) -> void:
 	var room = Interior.new()
 	var home_stage: int = clampi(int(c.get("home_stage", TrainLight.STAGE_DEFAULT)), 0, 3)
 	room.build(c["node"], c["def"], func(at: Vector3, model: String = "") -> void: host._build_stove(c, at, model), home_stage)

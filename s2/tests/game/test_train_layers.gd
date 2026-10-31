@@ -9,6 +9,7 @@ extends GutTest
 const Scene = preload("res://game/train/train_scene.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
+const TrainDecor = preload("res://game/train/train_decor.gd")
 const KIT: String = "res://models/train_interior/catalog.json"
 const LIVED: Array[String] = ["tail1", "tail2", "tail3", "medtech", "guard", "front", "dining", "workshop", "captain", "engine"]
 const LAYERS: Array[String] = ["floor", "wall", "ceiling"]
@@ -17,6 +18,8 @@ const WINDOWS: Array[Vector2] = [Vector2(1.2, 2.8), Vector2(5.2, 6.8), Vector2(9
 ## The walking line kept from door to door (z3 of the 0.5 m floor grid), and the end doors' way in.
 const LANE := Vector2(0.25, 0.75)
 const DOOR := Vector2(0.2, 1.1)
+const EPS: float = 0.00001
+const UPPER_BUNKS: Array[String] = ["bunk_upper", "sack_bunk_upper", "open_bunk_upper"]
 
 
 func _def(id: String) -> Dictionary:
@@ -26,11 +29,16 @@ func _def(id: String) -> Dictionary:
 	return {}
 
 
-func _rows(id: String) -> Array:
+func _rows(id: String, stage: int) -> Array:
 	var out: Array = []
-	for row: Dictionary in Catalog.layout(_def(id))["props"]:
-		if row.has("cars") and not (row["cars"] as Array).has(id):
+	for source: Dictionary in Catalog.layout(_def(id))["props"]:
+		if source.has("cars") and not (source["cars"] as Array).has(id):
 			continue
+		var home: Array = source.get("home", [0, 3])
+		if stage < int(home[0]) or stage > int(home[1]):
+			continue
+		var row: Dictionary = source.duplicate(true)
+		row["model"] = String((source.get("home_model", {}) as Dictionary).get(str(stage), source["model"]))
 		out.append(row)
 	return out
 
@@ -52,12 +60,16 @@ func _box(row: Dictionary) -> Array:
 func test_every_lived_car_has_three_of_each_layer() -> void:
 	for id: String in LIVED:
 		assert_false(_def(id).is_empty(), id + " is in the train")
-		var n: Dictionary = {"floor": 0, "wall": 0, "ceiling": 0}
-		for row: Dictionary in _rows(id):
-			if row.has("layer") and String(row.get("when", "always")) == "always":
-				n[String(row["layer"])] += 1
-		for layer: String in LAYERS:
-			assert_gte(int(n[layer]), 3, "%s: %s %d" % [id, layer, int(n[layer])])
+		for stage: int in range(4):
+			var n: Dictionary = {"floor": 0, "wall": 0, "ceiling": 0}
+			for row: Dictionary in _rows(id, stage):
+				if row.has("layer") and String(row.get("when", "always")) == "always":
+					var layer: String = String(row["layer"])
+					assert_has(n, layer, "%s stage %d" % [id, stage])
+					if n.has(layer):
+						n[layer] += 1
+			for layer: String in LAYERS:
+				assert_gte(int(n[layer]), 3, "%s stage %d: %s %d" % [id, stage, layer, int(n[layer])])
 
 
 func test_each_layer_row_keeps_its_place() -> void:
@@ -68,44 +80,148 @@ func test_each_layer_row_keeps_its_place() -> void:
 		for spot: Dictionary in layout.get("spots", []):
 			for a: Array in spot.get("anchors", []):
 				anchors.append(Vector2(float(a[0]), float(a[2])))
-		for row: Dictionary in _rows(id):
-			if not row.has("layer"):
-				continue
-			var b := _box(row)
-			var dress: bool = bool(row.get("dress", false))
-			var what: String = "%s %s" % [id, String(row["id"])]
-			assert_true(b[0] >= 0.0 and b[1] <= 16.0 and b[4] >= BACK - 0.06 and b[5] <= 1.4, what + " is inside the car")
-			match String(row["layer"]):
-				"ceiling":
-					assert_gte(b[2], 1.5, what + " hangs over heads")
-				"wall":
-					assert_gte(b[2], 0.6, what + " hangs on a wall")
-					assert_true(b[4] <= BACK + 0.06 or b[0] <= 0.15 or b[1] >= 15.85, what + " is on a wall")
-				"floor":
-					assert_lt(b[2], 0.25, what + " stands on the floor")
-				_:
-					fail_test(what + ": no such layer")
-			if not dress:
-				continue
-			# A dress row: one of the kit's, always shown, with no state of its own.
-			assert_true(ResourceLoader.exists("res://models/train_interior/%s.glb" % String(row["model"])), what + " has its model")
-			assert_false(row.has("when") or row.has("trace"), what + " is always there and never moved")
-			match String(row["layer"]):
-				"ceiling":
-					assert_lte(b[3], Scene.DIAG_PROP_TOP + 0.001, what + " hangs no higher than the diagonal's high props")
-				"wall":
-					assert_almost_eq(b[4], BACK, 0.001, what + " is on the back wall")
+		for stage: int in range(4):
+			for row: Dictionary in _rows(id, stage):
+				if not row.has("layer"):
+					continue
+				var b := _box(row)
+				var dress: bool = bool(row.get("dress", false))
+				var what: String = "%s stage %d %s" % [id, stage, String(row["id"])]
+				assert_true(b[0] >= 0.0 and b[1] <= 16.0 and b[4] >= BACK - 0.06 and b[5] <= 1.4, what + " is inside the car")
+				match String(row["layer"]):
+					"ceiling":
+						assert_gte(b[2], 1.5, what + " hangs over heads")
+					"wall":
+						assert_gte(b[2], 0.6, what + " hangs on a wall")
+						assert_true(b[4] <= BACK + 0.06 or b[0] <= 0.15 or b[1] >= 15.85, what + " is on a wall")
+					"floor":
+						assert_lt(b[2], 0.25, what + " stands on the floor")
+					_:
+						fail_test(what + ": no such layer")
+				if not dress:
+					continue
+				# A dress row: one of the kit's, always shown, with no state of its own.
+				assert_true(ResourceLoader.exists("res://models/train_interior/%s.glb" % String(row["model"])), what + " has its model")
+				assert_false(row.has("when") or row.has("trace"), what + " is always there and never moved")
+				match String(row["layer"]):
+					"ceiling":
+						assert_lte(b[3], Scene.DIAG_PROP_TOP + 0.001, what + " hangs no higher than the diagonal's high props")
+					"wall":
+						assert_almost_eq(b[4], BACK, 0.001, what + " is on the back wall")
+						for w: Vector2 in WINDOWS:
+							assert_false(b[0] < w.y and b[1] > w.x and b[3] > 1.3, what + " is not over a window")
+					"floor":
+						assert_lt(b[2], 0.001, what + " stands on the floor")
+						if b[3] - b[2] > 0.03:
+							assert_false(b[4] < LANE.y and b[5] > LANE.x, what + " is off the walking line")
+							assert_false((b[0] < 0.8 or b[1] > 15.2) and b[4] < DOOR.y and b[5] > DOOR.x, what + " is off the door's way")
+							for p: Vector2 in anchors:
+								var dx: float = maxf(maxf(b[0] - p.x, 0.0), p.x - b[1])
+								var dz: float = maxf(maxf(b[4] - p.y, 0.0), p.y - b[5])
+								assert_gte(Vector2(dx, dz).length(), clear, what + " keeps people's clearance")
+
+
+## Only the half-open curtain, the two existing upper-bunk sites and the tail car's patched
+## window may reach the glass; the patch boards only its lower part, the upper 0.4 m left open.
+func _window_exception(row: Dictionary) -> bool:
+	if String(row["model"]) == "curtain_half_open":
+		return true
+	if String(row["id"]) == "patched_window" and String(row["model"]) == "patch_boards":
+		return _box(row)[3] <= 2.2 - 0.4 + EPS
+	var sites: Dictionary = {"upper_bunk_a": Vector3(4, 1.8, -1), "upper_bunk_b": Vector3(12, 1.8, -1)}
+	var id: String = String(row["id"])
+	return (UPPER_BUNKS.has(String(row["model"])) and sites.has(id)
+		and Catalog.vector(row["at"]) == sites[id] and Catalog.vector(row["size"]) == Vector3(2.8, 0.14, 0.6))
+
+
+func _overlap(a: Array, b: Array) -> bool:
+	for axis: int in [0, 2, 4]:
+		if a[axis] >= b[axis + 1] - EPS or a[axis + 1] <= b[axis] + EPS:
+			return false
+	return true
+
+
+## Include every home row without requiring a layer, and resolve fixture model swaps too.
+func test_each_home_row_keeps_its_place_at_every_stage() -> void:
+	var clear: float = float(Catalog.tuning("actor_clearance"))
+	for id: String in TrainDecor.DECOR_CARS:
+		var layout: Dictionary = Catalog.layout(_def(id))
+		var anchors: Array = []
+		for spot: Dictionary in layout.get("spots", []):
+			for a: Array in spot.get("anchors", []):
+				anchors.append(Vector2(float(a[0]), float(a[2])))
+		for stage: int in range(4):
+			for row: Dictionary in _rows(id, stage):
+				if not (row.has("layer") or row.has("home") or row.has("home_model")):
+					continue
+				var b := _box(row)
+				var what: String = "%s stage %d %s" % [id, stage, String(row["id"])]
+				assert_true(b[0] >= -EPS and b[1] <= 16.0 + EPS and b[4] >= BACK - 0.06 - EPS and b[5] <= 1.4 + EPS, what + " is inside the car")
+				# Existing fixture anchors are seats/beds. Added home/dress rows must keep clear of them.
+				var added: bool = row.has("home") or bool(row.get("dress", false))
+				if added and b[2] < 0.4 - EPS and b[3] - b[2] > 0.03 + EPS:
+					assert_false(b[4] < LANE.y - EPS and b[5] > LANE.x + EPS, what + " leaves the walking line")
+					assert_false((b[0] < 0.8 - EPS or b[1] > 15.2 + EPS) and b[4] < DOOR.y - EPS and b[5] > DOOR.x + EPS, what + " leaves the door's way")
+					for p: Vector2 in anchors:
+						var dx: float = maxf(maxf(b[0] - p.x, 0.0), p.x - b[1])
+						var dz: float = maxf(maxf(b[4] - p.y, 0.0), p.y - b[5])
+						assert_gte(Vector2(dx, dz).length(), clear - EPS, what + " keeps people's clearance")
+				if b[4] < BACK + 0.45 - EPS and b[3] > 1.30 + EPS and b[2] < 2.20 - EPS and not _window_exception(row):
 					for w: Vector2 in WINDOWS:
-						assert_false(b[0] < w.y and b[1] > w.x and b[3] > 1.3, what + " is not over a window")
-				"floor":
-					assert_lt(b[2], 0.001, what + " stands on the floor")
-					if b[3] - b[2] > 0.03:
-						assert_false(b[4] < LANE.y and b[5] > LANE.x, what + " is off the walking line")
-						assert_false((b[0] < 0.8 or b[1] > 15.2) and b[4] < DOOR.y and b[5] > DOOR.x, what + " is off the door's way")
-						for p: Vector2 in anchors:
-							var dx: float = maxf(maxf(b[0] - p.x, 0.0), p.x - b[1])
-							var dz: float = maxf(maxf(b[4] - p.y, 0.0), p.y - b[5])
-							assert_gte(Vector2(dx, dz).length(), clear, what + " keeps people's clearance")
+						assert_false(b[0] < w.y - EPS and b[1] > w.x + EPS, what + " leaves the window glass clear")
+
+
+func _assert_shelf_support(row: Dictionary, shelf: Dictionary, what: String) -> void:
+	assert_true(bool(shelf.get("tier_shelf", false)), what + " has a support shelf")
+	var model: String = String(shelf["model"])
+	assert_has(["end_shelf", "top_shelf"], model, what + " resolves its shelf model")
+	if model not in ["end_shelf", "top_shelf"]:
+		return
+	var end: bool = model == "end_shelf"
+	var b := _box(row)
+	var sb := _box(shelf)
+	var k: float = minf(1.0, float(shelf["size"][1]) / (0.9 if end else 0.24))
+	var levels: Array = [0.025, 0.4625, 0.9] if end else [0.24]
+	var board: int = int(row.get("shelf_board", -1))
+	assert_between(board, 0, levels.size() - 1, what + " names a board")
+	if board < 0 or board >= levels.size():
+		return
+	var top: float = sb[2] + float(levels[board]) * k
+	var half_width: float = (0.204 if end else 0.24) * k
+	var back: float = (-0.105 if end else -0.14) * k
+	var front: float = ([0.14, 0.075, 0.01][board] if end else 0.14) * k
+	assert_almost_eq(b[2], top, EPS, what + " rests on the board")
+	assert_true(b[0] >= float(shelf["at"][0]) - half_width - EPS and b[1] <= float(shelf["at"][0]) + half_width + EPS, what + " fits the board width")
+	assert_true(b[4] >= float(shelf["at"][2]) + back - EPS and b[5] <= float(shelf["at"][2]) + front + EPS, what + " fits the board depth")
+	assert_true(b[0] >= sb[0] - EPS and b[1] <= sb[1] + EPS and b[4] >= sb[4] - EPS and b[5] <= sb[5] + EPS, what + " stays within its shelf")
+
+
+## A support must be present at this stage and clear of every other active fixture.
+func test_home_shelves_and_their_contents_do_not_overlap_other_rows() -> void:
+	for id: String in TrainDecor.DECOR_CARS:
+		for stage: int in range(4):
+			var rows: Array = _rows(id, stage)
+			var by_id: Dictionary = {}
+			for row: Dictionary in rows:
+				assert_false(by_id.has(row["id"]), "%s stage %d: unique row %s" % [id, stage, row["id"]])
+				by_id[row["id"]] = row
+			for row: Dictionary in rows:
+				var what: String = "%s stage %d %s" % [id, stage, row["id"]]
+				var b := _box(row)
+				if row.has("on_shelf"):
+					var support: String = String(row["on_shelf"])
+					assert_has(by_id, support, what + " has a visible support at this stage")
+					if by_id.has(support):
+						_assert_shelf_support(row, by_id[support], what)
+					for other: Dictionary in rows:
+						if String(other["id"]) == String(row["id"]) or String(other["id"]) == support:
+							continue
+						assert_false(_overlap(b, _box(other)), what + " clears " + String(other["id"]))
+				if bool(row.get("tier_shelf", false)):
+					for other: Dictionary in rows:
+						if String(other["id"]) == String(row["id"]) or String(other.get("on_shelf", "")) == String(row["id"]):
+							continue
+						assert_false(_overlap(b, _box(other)), what + " support clears " + String(other["id"]))
 
 
 func _scene(extra: Dictionary = {}) -> Scene:
@@ -136,11 +252,9 @@ func test_the_dress_is_one_mesh_a_car_where_its_rows_say_seen_up_close() -> void
 		var reach := AABB()
 		# Only the rows of the car's home stage, each with that stage's model (train_interior.gd build).
 		var stage: int = int(s.car(id).get("home_stage", 1))
-		for row: Dictionary in _rows(id):
-			if row.has("home") and (stage < int(row["home"][0]) or stage > int(row["home"][1])):
-				continue
+		for row: Dictionary in _rows(id, stage):
 			if bool(row.get("dress", false)):
-				var model: String = String((row.get("home_model", {}) as Dictionary).get(str(stage), row["model"]))
+				var model: String = String(row["model"])
 				tris += int(kit["assets"][model]["lod0_tris"])
 				rows += 1
 				var b := _box(row)

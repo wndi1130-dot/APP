@@ -69,6 +69,7 @@ func test_each_catalog_entry_has_a_matching_glb() -> void:
 		if read == OK:
 			assert_eq(String(settings.get_value("params", "import_script/path", "")), KIT_DIR + "/vertex_colors.gd", "%s 정점 색 가져오기" % id)
 		var file := FileAccess.open(path, FileAccess.READ)
+		assert_not_null(file, "%s glb opens for byte and hash checks" % id)
 		if file == null:
 			continue
 		assert_eq(file.get_length(), int(asset.get("bytes", -1)), "%s 바이트" % id)
