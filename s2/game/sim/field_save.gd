@@ -313,8 +313,8 @@ static func _whole_runtime(d: Dictionary) -> bool:
 		return false
 	var runtime: Dictionary = d["runtime"]
 	if not _fields(runtime, {"spots": TYPE_DICTIONARY, "levels": TYPE_DICTIONARY, "mission": TYPE_DICTIONARY,
-		"components": TYPE_DICTIONARY, "holdout_doors": TYPE_ARRAY, "zombie_system": TYPE_DICTIONARY, "game": TYPE_DICTIONARY}, {
-		"wagon_coal": TYPE_ARRAY, "hud": TYPE_DICTIONARY,
+		"components": TYPE_DICTIONARY, "holdout_doors": TYPE_ARRAY, "game": TYPE_DICTIONARY}, {
+		"wagon_coal": TYPE_ARRAY, "hud": TYPE_DICTIONARY, "zombie_system": TYPE_DICTIONARY,
 	}):
 		return false
 	for kind in ["spots", "components"]:

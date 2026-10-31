@@ -116,10 +116,17 @@ func test_optional_legacy_fields_and_body_defaults_can_be_absent() -> void:
 func test_exact_saves_require_their_directly_read_runtime_fields() -> void:
 	var saved := FieldSave.capture(_game())
 	assert_false(FieldSave.from_json(FieldSave.to_json(saved)).is_empty())
-	for key in ["spots", "levels", "mission", "components", "holdout_doors", "zombie_system", "game"]:
+	for key in ["spots", "levels", "mission", "components", "holdout_doors", "game"]:
 		var broken := saved.duplicate(true)
 		broken["runtime"].erase(key)
 		assert_eq(FieldSave.from_json(FieldSave.to_json(broken)), {}, "runtime." + key)
+	# zombie_system is read with a fallback (_restore_zombie_system): optional, but typed when there.
+	var without_system := saved.duplicate(true)
+	without_system["runtime"].erase("zombie_system")
+	assert_false(FieldSave.from_json(FieldSave.to_json(without_system)).is_empty(), "runtime.zombie_system optional")
+	var odd_system := saved.duplicate(true)
+	odd_system["runtime"]["zombie_system"] = []
+	assert_eq(FieldSave.from_json(FieldSave.to_json(odd_system)), {}, "runtime.zombie_system typed")
 	for key in ["containers", "people", "zombies"]:
 		var broken := saved.duplicate(true)
 		broken.erase(key)
