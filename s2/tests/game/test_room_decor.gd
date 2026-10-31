@@ -161,6 +161,27 @@ func test_no_wall_decor_hangs_on_a_wall_that_is_lowered_inside() -> void:
 	assert_eq(on_lowered, [], "집 안을 볼 때 낮아지는 벽에 건 장식 0")
 
 
+func test_outer_wall_matches_the_drawn_cut_at_corners() -> void:
+	# 지도에 그 자리가 안 나와도 잡히게 작은 격자로: 방 칸 (2,2), 집 칸만 0, 나머지는 집 밖.
+	# 북쪽 벽의 북동 끝과 서쪽 벽의 남서 끝은 그리기가 남동 쪽 모서리로 보고 턱 높이로 낮춘다.
+	var north := Vector2i(0, -1)
+	var west := Vector2i(-1, 0)
+	var cases := [
+		["곧은 북쪽 바깥 줄", north, [Vector2i(2, 1), Vector2i(1, 1), Vector2i(3, 1), Vector2i(1, 2), Vector2i(3, 2)], true],
+		["북쪽 벽의 북동 끝", north, [Vector2i(2, 1), Vector2i(1, 1), Vector2i(1, 2)], false],
+		["북쪽 벽의 북서 끝", north, [Vector2i(2, 1), Vector2i(3, 1), Vector2i(3, 2)], true],
+		["곧은 서쪽 바깥 줄", west, [Vector2i(1, 2), Vector2i(1, 1), Vector2i(1, 3), Vector2i(2, 1), Vector2i(2, 3)], true],
+		["서쪽 벽의 남서 끝", west, [Vector2i(1, 2), Vector2i(1, 1), Vector2i(2, 1)], false],
+		["안 벽(너머도 같은 집)", north, [Vector2i(2, 1), Vector2i(2, 0), Vector2i(1, 1), Vector2i(3, 1)], false],
+	]
+	for case: Array in cases:
+		var g := FieldGrid.new(5, 5)
+		g.building[g.index(Vector2i(2, 2))] = 0
+		for cell: Vector2i in case[2]:
+			g.building[g.index(cell)] = 0
+		assert_eq(RoomDecor._outer_wall(g, Vector2i(2, 2), case[1]), case[3], case[0])
+
+
 func test_plants_keep_furniture_boxes_doors_stairs_and_holder_fronts_clear() -> void:
 	# 깔개 위·용기 아닌 가구 앞은 방에 다른 자리가 없을 때만 쓰는 느슨한 단계라 여기서 막지 않는다.
 	var faults: Array = []
