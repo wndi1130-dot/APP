@@ -333,6 +333,10 @@ func test_the_ground_reads_streets_pavements_and_yards() -> void:
 			g.floor[g.index(Vector2i(x, z))] = F.ROAD
 	for x in range(2, 6):
 		g.set_solid(Vector2i(x, 10), FieldGrid.Solid.WALL)
+	# A street tree and a bench on the pavement, a tree out in the yard.
+	g.set_solid(Vector2i(6, 1), FieldGrid.Solid.BLOCK)
+	g.set_solid(Vector2i(7, 1), FieldGrid.Solid.LOW)
+	g.set_solid(Vector2i(16, 0), FieldGrid.Solid.BLOCK)
 	var floors: PackedByteArray = g.floor.duplicate()
 	var d: PackedFloat32Array = MapView.ground_details(g)
 	assert_eq(g.floor, floors, "the rules' floors are untouched")
@@ -346,6 +350,9 @@ func test_the_ground_reads_streets_pavements_and_yards() -> void:
 	assert_eq(d[g.index(Vector2i(3, 1))], -1.0, "pavement beside the street, along it")
 	assert_eq(d[g.index(Vector2i(3, 7))], -1.0)
 	assert_eq(d[g.index(Vector2i(3, 0))], 0.0, "grass past the pavement")
+	assert_eq(d[g.index(Vector2i(6, 1))], -1.0, "a street tree stands in the pavement (no white square at its foot)")
+	assert_eq(d[g.index(Vector2i(7, 1))], -1.0, "and a bench")
+	assert_eq(d[g.index(Vector2i(16, 0))], 0.0, "a tree out in the yard keeps the grass")
 	assert_eq(at.call(Vector2i(10, 4)) & 48, 0, "no line where the footpath joins")
 	var corner: int = g.width * g.height
 	assert_gt(d[corner + 10 * (g.width + 1) + 3], 0.3, "soil at the wall's foot")
@@ -366,6 +373,15 @@ func test_snow_banks_against_walls_the_wind_blows_at() -> void:
 	assert_eq(MapView.drift_uv(g, Vector2i(1, 3)), Vector2.ZERO, "open ground")
 	assert_eq(MapView.drift_uv(g, Vector2i(3, 6)), Vector2.ZERO, "level by a door")
 	assert_eq(MapView.drift_uv(g, Vector2i(0, 0)), Vector2.ZERO, "map edge")
+	# A tree's trunk standing alone is no wall: no bank round it (a white box);
+	# a block against the wall still banks.
+	g.set_solid(Vector2i(6, 3), FieldGrid.Solid.BLOCK)
+	for corner: Vector2i in [Vector2i(6, 3), Vector2i(7, 3), Vector2i(6, 4), Vector2i(7, 4)]:
+		assert_eq(MapView.drift_uv(g, corner), Vector2.ZERO, "no bank round a lone tree at %s" % str(corner))
+	g.set_solid(Vector2i(2, 2), FieldGrid.Solid.BLOCK)
+	assert_eq(MapView.drift_uv(g, Vector2i(2, 2)), Vector2(1, 1), "a block against the wall banks")
+	g.set_solid(Vector2i(6, 3), FieldGrid.Solid.NONE)
+	g.set_solid(Vector2i(2, 2), FieldGrid.Solid.NONE)
 	var code := FileAccess.get_file_as_string("res://game/world/world_vis.gdshader")
 	assert_true(code.contains("fx_wind") and code.contains("bank"))
 	# Same ground mesh, no new node: the bank costs no draw call.
