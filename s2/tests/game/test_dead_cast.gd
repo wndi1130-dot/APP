@@ -205,7 +205,8 @@ func test_what_is_drawn_over_the_body_is_what_is_worn() -> void:
 		if over.is_empty():
 			continue
 		var tint: Array = Wear.KINDS[id]["tint"]
-		assert_almost_eq(Vector3(over["colour"].r, over["colour"].g, over["colour"].b), Vector3(tint[0], tint[1], tint[2]), Vector3.ONE * 0.0001, id + " in its own colour")
+		var trim := float((BodyBake.SHELLS[over["shell"]] as Dictionary).get("trim", 1.0))   # a trimmed shell: its inside in the colour
+		assert_almost_eq(Vector3(over["colour"].r, over["colour"].g, over["colour"].b), Vector3(tint[0], tint[1], tint[2]) * trim, Vector3.ONE * 0.0001, id + " in its own colour")
 		assert_almost_eq(float(over["colour"].a) * 3.0, float(PersonVisual.PATTERNS[String(Wear.KINDS[id].get("pattern", "plain"))]), 0.0001, id + " in its own pattern")
 	assert_eq(DeadCast.garment_of({"coat": Wear.make("vest_armor")}, grey)["shell"], "vest")
 	assert_eq(DeadCast.garment_of({"coat": Wear.make("fire_suit")}, grey)["shell"], "coat_long", "the fire suit to the knees")
@@ -216,6 +217,71 @@ func test_what_is_drawn_over_the_body_is_what_is_worn() -> void:
 	var frozen := DeadCast.garment_of({"coat": Wear.make("coat_long")}, Zombies.TINTS["frozen"])["colour"] as Color
 	var corpse := DeadCast.garment_of({"coat": Wear.make("coat_long")}, Zombies.TINTS["corpse"])["colour"] as Color
 	assert_gt(frozen.get_luminance(), corpse.get_luminance(), "in the body's look: the frozen frosted, the lying dead darker")
+
+
+# A crowd in plain long coats is not one coat copied (COAT_SHADES): a shade by
+# the dead one's number, numbers one after another never the same, four or more
+# in all, about as light as the coat's own; the padded coat, the fire suit and
+# the vest keep their own colour; a risen one of ours (-1) the colour it wore.
+func test_plain_long_coats_come_in_shades_by_number() -> void:
+	var grey := Color(0.5, 0.5, 0.5)
+	assert_gte(DeadCast.COAT_SHADES.size(), 4)
+	for s: Color in DeadCast.COAT_SHADES:
+		assert_between(s.get_luminance(), 0.07, 0.13, "a shade about as light as the coat's own")
+	for kind: String in DeadCast.SHADED:
+		var on := {"coat": Wear.make(kind)}
+		var seen := {}
+		for id in range(100, 120):
+			var c: Color = DeadCast.garment_of(on, grey, id)["colour"]
+			assert_ne(c, DeadCast.garment_of(on, grey, id + 1)["colour"], "%s: %d and %d differ" % [kind, id, id + 1])
+			seen[c] = true
+		assert_gte(seen.size(), 4, kind + ": four shades or more")
+		var tint: Array = Wear.KINDS[kind]["tint"]
+		var own: Color = DeadCast.garment_of(on, grey, -1)["colour"]
+		assert_almost_eq(Vector3(own.r, own.g, own.b), Vector3(tint[0], tint[1], tint[2]), Vector3.ONE * 0.0001, kind + ": a risen one keeps its own")
+	for kind: String in ["coat_padded", "fire_suit", "vest_armor"]:
+		var on := {"coat": Wear.make(kind)}
+		assert_eq(DeadCast.garment_of(on, grey, 3), DeadCast.garment_of(on, grey, 4), kind + " in its own colour on all")
+
+
+# The armour vest reads apart from the clothes under it: its edges (neck,
+# armholes round the shoulder straps, hem) lighter by its trim, baked in its
+# vertex colours (body_bake.gd shell_trim), and drawn trim times its colour so
+# inside it keeps its own.
+func test_the_vest_has_a_lighter_trim() -> void:
+	var trim := float((BodyBake.SHELLS["vest"] as Dictionary).get("trim", 1.0))
+	assert_between(trim, 1.15, 1.6, "a little lighter, not white")
+	# A 3 x 3 grid of two triangles a cell: the middle vertex inside, the eight round it on the edge.
+	var index := PackedInt32Array()
+	for y in 2:
+		for x in 2:
+			var a := y * 3 + x
+			index.append_array(PackedInt32Array([a, a + 1, a + 3, a + 1, a + 4, a + 3]))
+	var grid := BodyBake.shell_trim(index, 9, trim)
+	for v in 9:
+		assert_almost_eq(grid[v].r, (1.0 / trim) if v == 4 else 1.0, 0.0001, "grid vertex %d" % v)
+		assert_eq(grid[v].a, 1.0, "the pattern left alone")
+	var vest := DeadCast.garment_of({"coat": Wear.make("vest_armor")}, Color(0.5, 0.5, 0.5))["colour"] as Color
+	var tint: Array = Wear.KINDS["vest_armor"]["tint"]
+	assert_almost_eq(vest.r, float(tint[0]) * trim, 0.0001, "drawn trim times its colour")
+	if not _build_bodies_in_use():
+		return
+	for body: String in DeadCast.BODIES:
+		var mesh := load(DeadCast.ROOT + body + "/wear/vest/mesh.res") as Mesh
+		assert_not_null(mesh, body)
+		if mesh == null:
+			continue
+		var colours = mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+		assert_not_null(colours, body + ": the vest's trim is baked")
+		if colours == null:
+			continue
+		var edge := 0
+		for col: Color in colours:
+			if col.r > 0.99:
+				edge += 1
+			else:
+				assert_almost_eq(col.r, 1.0 / trim, 0.01, body + ": inside")
+		assert_between(float(edge) / float(colours.size()), 0.05, 0.8, body + ": the edges, not all of it")
 
 
 # The field draws each of the dead in what it has on now (zombies.gd worn_of):

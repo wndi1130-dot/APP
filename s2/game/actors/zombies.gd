@@ -1441,7 +1441,8 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		counts[b][look] = n + 1
 		# What it has on over the body moves with it, the same place and frame;
 		# by what it has on now (worn_of), so one stripped of its coat is without.
-		var over := DeadCast.garment_of(drawn_worn(z), TINTS[look]) if baked else {}
+		# A plain long coat in a shade by its number; a risen one of ours (named) in the colour it wore.
+		var over := DeadCast.garment_of(drawn_worn(z), TINTS[look], int(z["id"]) if String(z.get("name", "")) == "" else -1) if baked else {}
 		var garment: MultiMeshInstance3D = _garment_of(b, over["shell"]) if not over.is_empty() else null
 		var worn_ids: Array = garments_drawn.get_or_add(garment, []) if garment != null else []
 		if garment != null and worn_ids.size() < garment.multimesh.instance_count:

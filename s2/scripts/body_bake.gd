@@ -2475,8 +2475,9 @@ const SHELLS: Dictionary = {
 	"hat_knit": {"bones": ["head"], "push": 0.02, "top": 0.55},
 	"hood": {"bones": ["head", "neck"], "push": 0.025, "top": 1.0, "face": true},
 	# The armour vest (wear.gd vest_armor, covers the torso): chest and back down to the waist, the arms bare,
-	# thicker than a coat.
-	"vest": {"bones": ["spine", "chest"], "push": 0.04},
+	# thicker than a coat. Its edges (neck, armholes round the shoulder straps, hem) a little lighter than the
+	# rest ("trim": how much), so it reads apart from the clothes under it; no marks or lettering.
+	"vest": {"bones": ["spine", "chest"], "push": 0.04, "trim": 1.35},
 }
 # Bags on the back (carry.gd BAGS, decision 448): not cut from the body but
 # made here against its back, each vertex weighted as the back beside it is,
@@ -2595,10 +2596,35 @@ static func shell(body_root: Node3D, kind: String) -> bool:
 	arrays[Mesh.ARRAY_BONES] = out_bones
 	arrays[Mesh.ARRAY_WEIGHTS] = out_weights
 	arrays[Mesh.ARRAY_INDEX] = out_index
+	if spec.has("trim"):
+		arrays[Mesh.ARRAY_COLOR] = shell_trim(out_index, out_pos.size(), float(spec["trim"]))
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if per == 8 else 0)
 	mesh_node.mesh = mesh
 	return true
+
+
+## A shell's vertex colours for a lighter trim: 1 on its open edges (an edge of
+## one triangle only: the neck, the armholes, the hem), 1 / `trim` elsewhere, so
+## a garment drawn `trim` times its colour (dead_cast.gd garment_of) keeps that
+## colour in the body of it and is lighter at the edges. Alpha 1 (the pattern).
+static func shell_trim(index: PackedInt32Array, count: int, trim: float) -> PackedColorArray:
+	var uses := {}
+	for t in range(0, index.size(), 3):
+		for k in 3:
+			var a := index[t + k]
+			var b := index[t + (k + 1) % 3]
+			var edge := Vector2i(mini(a, b), maxi(a, b))
+			uses[edge] = int(uses.get(edge, 0)) + 1
+	var inner := 1.0 / maxf(trim, 1.0)
+	var colours := PackedColorArray()
+	colours.resize(count)
+	colours.fill(Color(inner, inner, inner, 1.0))
+	for edge: Vector2i in uses:
+		if int(uses[edge]) == 1:
+			colours[edge.x] = Color.WHITE
+			colours[edge.y] = Color.WHITE
+	return colours
 
 
 ## Puts bag `kind` (BAG_SHELLS) in place of the body's skinned mesh: a block

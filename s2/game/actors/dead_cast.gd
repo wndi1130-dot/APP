@@ -75,30 +75,53 @@ static func read_garment(dir: String, first: Dictionary) -> Dictionary:
 ## body's look as its picture takes it (`tint` / 0.5), its pattern in alpha
 ## (PersonVisual.PATTERNS, thirds), as person_vat.gdshader worn_look draws it.
 ## {} for nothing drawn over the body: one stripped of its coat is drawn without.
-static func garment_of(worn: Dictionary, tint: Color) -> Dictionary:
+## A plain long coat (SHADED) takes one of COAT_SHADES by the dead one's number
+## `id`; -1 (a risen one of ours) keeps the coat's own colour, as it wore it.
+static func garment_of(worn: Dictionary, tint: Color, id: int = -1) -> Dictionary:
 	for slot: String in ["coat", "jacket"]:
 		if not worn.has(slot):
 			continue
-		var look: Array = _drawn_look(String(worn[slot].get("id", "")))
+		var kind := String(worn[slot].get("id", ""))
+		var look: Array = _drawn_look(kind)
 		if look.is_empty():
 			continue
 		var c: Color = look[1]
+		if id >= 0 and SHADED.has(kind):
+			var s: Color = COAT_SHADES[posmod(id, COAT_SHADES.size())]
+			c = Color(s.r, s.g, s.b, c.a)
 		return {"shell": look[0], "colour": Color(c.r * tint.r / 0.5, c.g * tint.g / 0.5, c.b * tint.b / 0.5, c.a)}
 	return {}
+
+
+## Plain long winter coats in faded shades, so a crowd in them is not one coat
+## copied: one by the dead one's number, and numbers one after another (as a
+## crowd let in together has) never the same. Linear, about as light as the
+## coat's own (wear.gd coat_long, the first).
+const COAT_SHADES: Array[Color] = [
+	Color(0.12, 0.1, 0.085),    # brown, the coat's own
+	Color(0.095, 0.098, 0.1),   # charcoal
+	Color(0.075, 0.09, 0.14),   # navy
+	Color(0.1, 0.105, 0.07),    # olive
+	Color(0.13, 0.085, 0.08),   # faded maroon
+]
+const SHADED: Array[String] = ["coat_long", "coat_wool_long"]
 
 
 static var _drawn_looks: Dictionary = {}   # garment id -> [shell, colour with the pattern in alpha], or [] when not drawn
 
 
 ## A garment's look as the dead are drawn in it, worked out once per kind (the
-## field asks it for every one of the dead in sight each frame).
+## field asks it for every one of the dead in sight each frame). A shell with a
+## lighter trim (body_bake.gd SHELLS "trim", its vertex colours 1 / trim inside)
+## is drawn that many times its colour, so inside it keeps its own.
 static func _drawn_look(id: String) -> Array:
 	if not _drawn_looks.has(id):
 		var look := Wear.look(id)
 		var shell := String(look["look_shell"])
 		var c: Array = look["look_tint"]
 		var pattern := int(PersonVisual.PATTERNS.get(String(look["look_pattern"]), 0))
-		_drawn_looks[id] = [shell, Color(float(c[0]), float(c[1]), float(c[2]), float(pattern) / 3.0)] if SHELLS.has(shell) and c.size() == 3 else []
+		var trim := float((BodyBake.SHELLS.get(shell, {}) as Dictionary).get("trim", 1.0))
+		_drawn_looks[id] = [shell, Color(float(c[0]) * trim, float(c[1]) * trim, float(c[2]) * trim, float(pattern) / 3.0)] if SHELLS.has(shell) and c.size() == 3 else []
 	return _drawn_looks[id]
 
 
