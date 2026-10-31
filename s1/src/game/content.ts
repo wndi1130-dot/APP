@@ -48,7 +48,7 @@ export type ContentEffect =
   | { type: 'followup'; id: string; delay: number }
   | { type: 'deal' | 'chronicle'; id: string };
 export interface ContentChoice {
-  id: string; label: string; say?: string;
+  id: string; label: string; say?: string; log?: string;
   /** 그 칸의 사정 한 줄(값이 왜 그렇게 나오는지), 나중에 돌아올 것 한 줄. 카드가 선택지 밑에 적는다(ui/card.ts) */
   why?: string; later?: string;
   /** 모두 참일 때만 카드에 보인다. 자원이 모자라면 회색이 아니라 숨긴다 */
@@ -528,6 +528,7 @@ function contentView(g: Game, card: Card): CardView | null {
   const shown = ev.choices.filter(ch => (ch.requires ?? []).every(r => holds(g, r)));
   const choices: Choice[] = (shown.length > 0 ? shown : ev.choices).map(ch => ({
     label: fillText(ch.label, vals), ...(ch.say ? { say: fillText(ch.say, vals) } : {}),
+    ...(ch.log !== undefined ? { log: fillText(ch.log, vals) } : {}),
     effs: toEffs(ch.effects), special: `content:${ch.id}`, witness: ch.witnesses.length > 0,
     ...(ch.why ? { why: fillText(ch.why, vals) } : {}), ...(ch.later ? { later: fillText(ch.later, vals) } : {}),
   }));
