@@ -274,6 +274,31 @@ func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	assert_almost_eq(0.5 + float(night["contrast"]) * (float(night["brightness"]) * p - 0.5), p, 0.0001)
 
 
+func test_snow_in_the_sun_takes_the_exposure_down() -> void:
+	# Deep winter in the sun: the snowfield would cut to white, so the exposure comes down.
+	var deep := Atmosphere.light(Atmosphere.look(12.0, ["clear"], "K1", 1.0, {"side": 0.5}))
+	assert_lt(float(deep["exposure"]), Atmosphere.EXPOSURE, "a sunny snowfield")
+	assert_gt(float(deep["exposure"]), Atmosphere.EXPOSURE * 0.6, "not down to a dusk")
+	# A grey snow day, patchy early snow, autumn and the night keep it.
+	for row: Array in [[["overcast"], 1.0, 0.5], [["snow"], 1.0, 0.5], [["clear"], 0.5, 0.0], [["clear"], 0.0, 0.0]]:
+		var lt := Atmosphere.light(Atmosphere.look(12.0, row[0], "K1", float(row[1]), {"side": float(row[2])}))
+		assert_almost_eq(float(lt["exposure"]), Atmosphere.EXPOSURE, 0.0001, "%s cold %s" % [str(row[0]), str(row[1])])
+	var t := Atmosphere.sun_times(1.0, 0.5)
+	var night := Atmosphere.light(Atmosphere.look(t.y + 3.0, ["clear"], "K1", 1.0, {"side": 0.5}))
+	assert_almost_eq(float(night["exposure"]), Atmosphere.EXPOSURE, 0.0001, "the night")
+	# The field says how white the ground lies: 25 cm lying (about 0.8) is a full
+	# snowfield, a thaw's thin snow keeps the exposure, between goes between.
+	var deep_l := Atmosphere.look(12.0, ["clear"], "K1", 1.0, {"side": 0.5})
+	assert_almost_eq(float(Atmosphere.light(deep_l, 0.8)["exposure"]), float(deep["exposure"]), 0.0001, "25 cm lying")
+	assert_almost_eq(float(Atmosphere.light(deep_l, 0.35)["exposure"]), Atmosphere.EXPOSURE, 0.0001, "thin snow")
+	var half := float(Atmosphere.light(deep_l, 0.6)["exposure"])
+	assert_true(half > float(deep["exposure"]) and half < Atmosphere.EXPOSURE, "between: %s" % half)
+	# The day through, low sun and dusk too: never up past EXPOSURE, never down to a dusk.
+	for q in range(int(t.x * 4.0), int(t.y * 4.0) + 1):
+		var e := float(Atmosphere.light(Atmosphere.look(q * 0.25, ["clear"], "K1", 1.0, {"side": 0.5}), 0.8)["exposure"])
+		assert_between(e, Atmosphere.EXPOSURE * 0.6, Atmosphere.EXPOSURE, "%.2f h" % (q * 0.25))
+
+
 func test_rain_by_day_eases_the_spread_and_keeps_the_grey() -> void:
 	# The fall dims a rain noon evenly; the spread eases so the darks stay over
 	# the dark line (decision 470), still above a clear day's, about the same grey.

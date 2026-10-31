@@ -8,6 +8,14 @@ const MapShift = preload("res://game/world/map_shift.gd")
 const NightLights = preload("res://game/world/night_lights.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const END_GAP: int = 12
+## The longest screen the map's end stays out of view on: 23.1:9, a folding phone's cover
+## screen held sideways (the window's stretch aspect "expand" shows more ground across).
+const MAX_ASPECT: float = 23.1 / 9.0
+## The furthest view out (field_hud.gd zooms to 36) on a MAX_ASPECT screen reaches this
+## far each way from where the player stands (edge_band.gd view_half at field_game.gd's
+## 35° and 45°, 54.9 m): an outlying stop's map runs at least so far past the train's door
+## nearest its grown end, so arriving never shows the woods round the map (3회차 대조표 N4).
+const VIEW_REACH: float = 55.0
 const TREE_STEP: int = 9
 const REMOTE_BAND: int = 24
 const REMOTE_FOREST_EDGE: int = 6
@@ -20,7 +28,9 @@ const TRAIN_LIGHTS: Array[String] = ["car_window", "firebox"]
 const FORMS: Array[String] = ["city", "edge", "remote", "siding"]
 
 
-static func apply(data: Dictionary, form: String, run_seed: int, target_m: float = -1.0) -> Dictionary:
+## `end_gap` >= 0 puts the train's end that many cells off the grown end (a save's ground, field_save.gd);
+## else _end_gap works it out.
+static func apply(data: Dictionary, form: String, run_seed: int, target_m: float = -1.0, end_gap: int = -1) -> Dictionary:
 	if form.is_empty() or form == String(data.get("stop_form", "")):
 		return data
 	if form not in FORMS:
@@ -41,7 +51,8 @@ static func apply(data: Dictionary, form: String, run_seed: int, target_m: float
 			data["stop_form_asked"] = form
 			form = "city"
 		else:
-			out = _edge(data, run_seed, target_m) if form == "edge" else _outlying(data, run_seed, target_m, 400.0, 800.0, REMOTE_BAND)
+			out = _outlying(data, run_seed, target_m, 150.0, 300.0, 0, end_gap) if form == "edge" \
+				else _outlying(data, run_seed, target_m, 400.0, 800.0, REMOTE_BAND, end_gap)
 			# The lights people left, planned again round where the crew now steps down.
 			NightLights.follow(out)
 	_set_village(out, form)
@@ -75,12 +86,25 @@ static func _row_gap(data: Dictionary) -> float:
 	return float(train.position.y) + float(train.size.y) * 0.5 - village_middle(data).y
 
 
-static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionary:
-	return _outlying(data, run_seed, target_m, 150.0, 300.0)
+## Cells past the train's end on the grown side: END_GAP, or more, so that the door or
+## squad spot nearest that end stands VIEW_REACH from the map's end (its cell's middle
+## is the gap and its offset from the train's end, and half a cell, away). A spot past
+## the train's end has a negative offset: it stands nearer the map's end.
+static func _end_gap(data: Dictionary, direction: int) -> int:
+	var train: Rect2i = data["train"]
+	var cells: Array = []
+	for doors: Array in data.get("train_doors", {}).values():
+		cells.append_array(doors)
+	cells.append_array(data.get("spawns", {}).get("squad", []))
+	var nearest: int = train.size.x
+	for c: Vector2i in cells:
+		var off: int = train.end.x - 1 - c.x if direction > 0 else c.x - train.position.x
+		nearest = mini(nearest, off)
+	return maxi(END_GAP, ceili(VIEW_REACH - float(nearest) - 0.5))
 
 
 ## The same seeded train move for both outlying forms; only remote ground is narrowed.
-static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_m: float, maximum_m: float, band: int = 0) -> Dictionary:
+static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_m: float, maximum_m: float, band: int = 0, end_gap: int = -1) -> Dictionary:
 	var old: FieldGrid = data["grid"]
 	var train: Rect2i = data["train"]
 	var middle: Vector2 = village_middle(data)
@@ -95,11 +119,12 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 		push_warning("stop form %s: the village's row is %.0f m off the train's" % ["remote" if band > 0 else "edge", absf(dy)])
 	var distance: float = target_m if target_m >= 0.0 else rng.randf_range(lowest, highest)
 	var direction: int = 1 if middle.x <= center.x else -1
+	var gap: int = end_gap if end_gap >= 0 else _end_gap(data, direction)
 	var along: float = sqrt(maxf(0.0, distance * distance - dy * dy))
 	var empty_length: int = 0
 	if data.get("buildings", []).is_empty():
 		# With no houses the fallback middle moves by half the added width.
-		empty_length = maxi(1, ceili(2.0 * along + float(train.size.x + 2 * END_GAP + 2)) - old.width)
+		empty_length = maxi(1, ceili(2.0 * along + float(train.size.x + 2 * gap + 2)) - old.width)
 		middle.x += float(direction * empty_length) * 0.5
 	var x: int = roundi(middle.x + float(direction) * along - float(train.size.x) * 0.5)
 	if target_m < 0.0:
@@ -109,7 +134,7 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 		elif rounded > highest:
 			x -= direction
 	var dx: int = x - train.position.x
-	var length: int = maxi(1, x + train.size.x + END_GAP - old.width) if direction > 0 else maxi(1, END_GAP - x)
+	var length: int = maxi(1, x + train.size.x + gap - old.width) if direction > 0 else maxi(1, gap - x)
 	if empty_length > 0:
 		length = empty_length
 	var left: int = length if direction < 0 else 0
@@ -125,6 +150,8 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 	var out: Dictionary = MapShift.grow(data, left, 0, length - left, 0, true, true)
 	# Its size is a Vector2i too: grow can shift a stale cache key into a match.
 	out.erase("_edge_plan")
+	# The gap the ground went up with, so a save's ground goes up the same (field_save.gd).
+	out["stop_end_gap"] = gap
 	if band > 0:
 		# Where the old map now lies, for apply's check that the walk reaches its village. A
 		# Rect2i, so a later shift (the side path's) moves it with the cells.
