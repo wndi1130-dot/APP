@@ -1590,6 +1590,18 @@ func tick(delta: float) -> void:
 			_set_running(p)
 	# The attack pad stays lit while the fight goes on (one press, field_unified 10).
 	attack_button.button_pressed = fighting(p)
+	if p.sled_weapon_stowed:
+		auto_aim = false
+		aiming = false
+		aim_target = null
+	for key: Button in [attack_button, aim_button, shove_button, manual_button]:
+		if p.sled_weapon_stowed:
+			if not key.has_meta("sled_disabled"):
+				key.set_meta("sled_disabled", key.disabled)
+			key.disabled = true
+		elif key.has_meta("sled_disabled"):
+			key.disabled = bool(key.get_meta("sled_disabled"))
+			key.remove_meta("sled_disabled")
 	_tick_primary(p)
 	blood_button.visible = leaving.is_empty() and p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit"))
 	lamp_button.visible = leaving.is_empty() and game.clock.is_dark()
@@ -3129,10 +3141,22 @@ func bag_panel() -> void:
 	InventoryPane.open(self, inv_near)
 
 
+func sled_panel(sled_id: int) -> void:
+	inv_view = "near"
+	InventoryPane.open(self, {"kind": "sled", "id": sled_id, "name": "썰매"})
+
+
+func _inv_sled_take(sled_id: int, item: String) -> void:
+	game.actions.move_sled(game.player, sled_id, item, false)
+	bag_panel()
+
+
 ## A row of the bag pressed: it goes across to the place shown at the right.
 func _inv_put(id: String) -> void:
 	var p = game.player
 	match String(inv_near.get("kind", "ground")):
+		"sled":
+			game.actions.move_sled(p, int(inv_near["id"]), id, true)
 		"box":
 			game.actions.store(p, String(inv_near["id"]), id)
 		"train":
