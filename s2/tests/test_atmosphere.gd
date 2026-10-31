@@ -274,6 +274,34 @@ func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	assert_almost_eq(0.5 + float(night["contrast"]) * (float(night["brightness"]) * p - 0.5), p, 0.0001)
 
 
+func test_rain_by_day_eases_the_spread_and_keeps_the_grey() -> void:
+	# The fall dims a rain noon evenly; the spread eases so the darks stay over
+	# the dark line (decision 470), still above a clear day's, about the same grey.
+	var l := Atmosphere.look(12.0, ["rain"], "K1", 0.0)
+	assert_eq(String(l["falls"]), "rain")
+	var rain := Atmosphere.grade(l)
+	var overcast := Atmosphere.grade(Atmosphere.look(12.0, ["overcast"], "K1", 0.0))
+	var veiled: float = lerpf(Atmosphere.TONE_CONTRAST, Atmosphere.TONE_CONTRAST_DIM, float(l["veil"]))
+	var w: Dictionary = l["weights"]
+	assert_almost_eq(float(rain["spread"]), veiled * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(w["dusk"])) * (1.0 - Atmosphere.TONE_RAIN_EASE * float(l["fall"]) * float(w["day"])), 0.0001)
+	assert_gt(float(w["day"]), 0.9, "noon is the day")
+	assert_lt(float(rain["spread"]), float(overcast["spread"]), "rain eases the spread")
+	assert_gt(float(rain["spread"]), Atmosphere.TONE_CONTRAST, "never flatter than a clear day")
+	assert_almost_eq(float(rain["pivot"]), float(overcast["pivot"]), 0.0001, "about the same grey")
+	for c: float in [0.1, 0.4, 0.8]:
+		var out: float = 0.5 + float(rain["contrast"]) * (float(rain["brightness"]) * c - 0.5)
+		assert_almost_eq(out, float(rain["spread"]) * (c - float(rain["pivot"])) + float(rain["pivot"]), 0.0001)
+	# The night's rain and the snow keep their spread.
+	var t := Atmosphere.sun_times(0.0)
+	var night_l := Atmosphere.look(t.y + 3.0, ["rain"], "K1", 0.0)
+	var night_veiled: float = lerpf(Atmosphere.TONE_CONTRAST, Atmosphere.TONE_CONTRAST_DIM, maxf(float(night_l["veil"]), float(night_l["weights"]["night"])))
+	assert_almost_eq(float(Atmosphere.grade(night_l)["spread"]), night_veiled * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(night_l["weights"]["dusk"])), 0.0001)
+	var snow_l := Atmosphere.look(12.0, ["snow"], "K1", 0.9)
+	assert_ne(String(snow_l["falls"]), "rain")
+	var snow_veiled: float = lerpf(Atmosphere.TONE_CONTRAST, Atmosphere.TONE_CONTRAST_DIM, float(snow_l["veil"]))
+	assert_almost_eq(float(Atmosphere.grade(snow_l)["spread"]), snow_veiled * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(snow_l["weights"]["dusk"])), 0.0001)
+
+
 func test_an_overcast_lights_from_above_and_keeps_the_ground() -> void:
 	# A closed sky by day: part of the fill becomes a high light with a soft
 	# shadow, so walls fall darker while the ground keeps its light; a

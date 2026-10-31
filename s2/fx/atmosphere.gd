@@ -669,6 +669,14 @@ const TONE_CONTRAST_DUSK := 0.35
 ## under the hour's grey, so the spread would sink it: the grey drops this much
 ## there, and the play view keeps its mean (decision 470: not darker).
 const TONE_PIVOT_DUSK_GREY := 0.04
+## Rain by day eases the spread back this much a full fall. The fall takes its
+## share of the day's light (CLOUD_KEEP, look()), about a tenth evenly over the
+## picture, and the spread pushed what that lowered of the dark painted sides,
+## the coal and the wall caps under the dark line (decision 470: 6 %; the first
+## stop's rain noon measured 0.066 in the field and 0.072 in play, the overcast
+## 0.054). Eased about the day's grey the mean holds and the darks come up; it
+## stays above a clear day's (1.355 · (1 − 0.12 · 0.7) = 1.24). Snow keeps its.
+const TONE_RAIN_EASE := 0.12
 ## The view fill: in the diagonal view (decision 476) the walls turned from the
 ## sun fill much of the screen, and lit by the fill alone they fell under the
 ## grade to black (V 0.01; the reference reads both wall faces at 0.45~0.6;
@@ -697,6 +705,8 @@ static func grade(l: Dictionary) -> Dictionary:
 	var w: Dictionary = l["weights"]
 	var veil := float(l["veil"])
 	var spread := lerpf(TONE_CONTRAST, TONE_CONTRAST_DIM, maxf(veil, float(w["night"]))) * (1.0 + TONE_CONTRAST_DUSK * float(w["dusk"]))
+	if String(l.get("falls", "none")) == "rain":
+		spread *= 1.0 - TONE_RAIN_EASE * float(l.get("fall", 0.0)) * float(w["day"])
 	# A grey sky takes a tenth of the colour, no more: the grey is in the
 	# materials already, and 0.8 left an overcast day near colourless.
 	var sat := lerpf(1.0, 0.9, veil) * lerpf(1.0, 0.72, float(w["night"]))
