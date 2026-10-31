@@ -165,6 +165,20 @@ static func widen_view(data: Dictionary, rows: int = -1, cols: int = -1) -> Dict
 	return out
 
 
+## A start that asks for the view ground (rows and columns worked out, VIEW_ASK). The game's
+## starts ask (boot.gd, slice_flow.gd, the loader's map has it on); a field started without
+## the keys keeps the map script's own cells, as tools and trials stand on them.
+const VIEW_ASK: int = -1
+
+
+static func ask_view(opts: Dictionary) -> Dictionary:
+	if not opts.has("stop_view_rows"):
+		opts["stop_view_rows"] = VIEW_ASK
+	if not opts.has("stop_view_cols"):
+		opts["stop_view_cols"] = VIEW_ASK
+	return opts
+
+
 ## How far the view ground moved the map's own cells: a map script's cell plus this is the field's.
 static func view_offset(data: Dictionary) -> Vector2i:
 	return Vector2i(int(data.get("stop_view_cols", 0)), int(data.get("stop_view_rows", 0)))

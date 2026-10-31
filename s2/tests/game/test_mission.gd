@@ -3,7 +3,6 @@ extends "res://addons/gut/test.gd"
 ## opts["mission"], and a stop with no kind writes what it always wrote.
 
 const FieldGame = preload("res://game/field_game.gd")
-const StopGround = preload("res://game/world/stop_ground.gd")
 const Mission = preload("res://game/sim/mission.gd")
 const FieldWork = preload("res://game/field_work.gd")
 const SulehufMap = preload("res://game/world/sulehuf_map.gd")
@@ -108,19 +107,17 @@ func test_the_survey_puts_its_places_on_the_map_and_a_plain_stop_does_not() -> v
 	assert_eq(plain.data["containers"].keys(), base["containers"].keys())
 	assert_false(plain.mission_play.active())
 	var game = _game({"mission": "survey"})
-	# The mission's cells are the map script's; the field's map may stand moved.
-	var off: Vector2i = StopGround.view_offset(game.data)
 	for row in game.mission_play.SURVEY_SPOTS:
 		assert_true(game.data["spots"].has(row[0]), row[0])
-		assert_true(game.grid.people_can_walk(row[2] + off), "%s can be walked up to" % row[1])
+		assert_true(game.grid.people_can_walk(row[2]), "%s can be walked up to" % row[1])
 		assert_false(base["spots"].values().any(func(sp): return sp["cell"] == row[2]), "its own cell")
 	for row in game.mission_play.SURVEY_LOGS:
 		var c: Dictionary = game.data["containers"][row[0]]
 		assert_true(c["locked"])
-		assert_true(game.levels[int(row[4])].people_can_walk(row[2] + off) or game.levels[int(row[4])].inside(row[2] + off))
+		assert_true(game.levels[int(row[4])].people_can_walk(row[2]) or game.levels[int(row[4])].inside(row[2]))
 		assert_false(base["containers"].values().any(func(o): return o["cell"] == row[2] and o["level"] == row[4]), "its own cell")
-	assert_eq(game.grid.building_at(game.mission_play.SURVEY_LOGS[0][2] + off), 0, "in the station")
-	assert_eq(game.grid.building_at(game.mission_play.SURVEY_LOGS[1][2] + off), 1, "in the signal box")
+	assert_eq(game.grid.building_at(game.mission_play.SURVEY_LOGS[0][2]), 0, "in the station")
+	assert_eq(game.grid.building_at(game.mission_play.SURVEY_LOGS[1][2]), 1, "in the signal box")
 
 
 func test_looking_at_the_outside_things_is_silent_and_counts() -> void:
@@ -304,7 +301,7 @@ func _depot():
 func test_the_yard_has_a_conveyor_and_one_card_once_the_crew_is_down() -> void:
 	var game = _depot()
 	var play = game.mission_play
-	assert_true(game.grid.people_can_walk((play.CONVEYOR_CELL + StopGround.view_offset(game.data))))
+	assert_true(game.grid.people_can_walk(play.CONVEYOR_CELL))
 	assert_eq(play.conveyor()["state"], "stopped")
 	play.conveyor_card(game.player)
 	assert_eq(game.decisions.size(), 0, "nothing to decide before the crew is down")
@@ -336,9 +333,9 @@ func test_mending_takes_scrap_and_two_pairs_of_hands_once() -> void:
 	assert_eq(play.mission.state("repair", "departed"), Mission.PART)
 	# A mender walks to the belt, then works in steps; nobody presses anything.
 	var q = menders[0]
-	q.position = game.lift((play.CONVEYOR_CELL + StopGround.view_offset(game.data)) + Vector2i(8, 0), 0)
+	q.position = game.lift(play.CONVEYOR_CELL + Vector2i(8, 0), 0)
 	assert_not_null(play.repair_step(q), "too far: go there")
-	q.position = game.lift((play.CONVEYOR_CELL + StopGround.view_offset(game.data)), 0)
+	q.position = game.lift(play.CONVEYOR_CELL, 0)
 	assert_null(play.repair_step(q))
 	assert_eq(q.action, "repair")
 	var steps := int(play.REPAIR_WORK / play.REPAIR_STEP)

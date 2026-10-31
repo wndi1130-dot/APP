@@ -62,7 +62,8 @@ func _game(extra: Dictionary = {}):
 	var opts := {"seed": 7, "raiders": false, "auto_pause": false, "arrive": false,
 		"arrival_horde": false, "map_data": _base()}
 	opts.merge(extra, true)
-	game.opts = opts
+	# As the game starts a stop (boot.gd, slice_flow.gd); a trial's own keys win.
+	game.opts = StopGround.ask_view(opts)
 	add_child_autofree(game)
 	game.set_process(false)
 	return game
@@ -99,6 +100,26 @@ func _assert_mission_cell(game, original: Vector2i, level: int = 0) -> void:
 	assert_eq(g.solid_at(cell), old.solid_at(original))
 	assert_eq(g.building_at(cell), old.building_at(original))
 	assert_eq(g.people_can_walk(cell), old.people_can_walk(original))
+
+
+## Only a start that asks gets the view ground; one without the keys keeps the map
+## script's cells (the trials and tools that stand on them), and a loader's map keeps its own.
+func test_a_field_widens_only_when_its_start_asks() -> void:
+	var asked: FieldGame = _game()
+	_assert_size(asked.data, Vector2i(191, 151))
+	var plain: FieldGame = FieldGame.new()
+	plain.opts = {"seed": 7, "raiders": false, "auto_pause": false, "arrive": false, "arrival_horde": false, "map_data": _base()}
+	add_child_autofree(plain)
+	plain.set_process(false)
+	_assert_size(plain.data, Vector2i(170, 100))
+	assert_eq(StopGround.view_offset(plain.data), Vector2i.ZERO)
+	var handed: FieldGame = FieldGame.new()
+	handed.opts = {"seed": 7, "raiders": false, "auto_pause": false, "arrive": false, "arrival_horde": false, "map_data": _loader_map()}
+	add_child_autofree(handed)
+	handed.set_process(false)
+	_assert_size(handed.data, Vector2i(191, 151))
+	var opts: Dictionary = StopGround.ask_view({"stop_view_rows": 0})
+	assert_eq([opts["stop_view_rows"], opts["stop_view_cols"]], [0, StopGround.VIEW_ASK], "a key already there is kept")
 
 
 func test_raw_size_and_need() -> void:

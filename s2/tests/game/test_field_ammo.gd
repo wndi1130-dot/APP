@@ -3,7 +3,6 @@ extends "res://addons/gut/test.gd"
 ## the ones taken from the reserve on reload (A2 code review, 2026-10-07).
 
 const FieldGame = preload("res://game/field_game.gd")
-const StopGround = preload("res://game/world/stop_ground.gd")
 
 var game
 
@@ -42,14 +41,14 @@ func test_rounds_fired_from_the_magazine_leave_the_stock() -> void:
 	game.ammo_start = game.ammo.duplicate()
 	game.loaded_start = game.loaded_totals()
 	assert_eq(_fire_rounds(3), 3)
-	p.position = game.lift(Vector2i(50, 6) + StopGround.view_offset(game.data), 0)
+	p.position = game.lift(Vector2i(50, 6), 0)
 	game.finish("departed")
 	assert_eq(_stock("ammo_pistol"), -3, "three pistol rounds went out of the gun")
 
 
 func test_found_rounds_still_count_as_a_gain() -> void:
 	game.ammo["pistol"] = int(game.ammo["pistol"]) + 6
-	game.player.position = game.lift(Vector2i(50, 6) + StopGround.view_offset(game.data), 0)
+	game.player.position = game.lift(Vector2i(50, 6), 0)
 	game.finish("departed")
 	assert_eq(_stock("ammo_pistol"), 6)
 
@@ -59,7 +58,7 @@ func test_a_gun_left_with_someone_left_behind_loses_its_rounds() -> void:
 	var loaded: int = int(marek.hands[0]["loaded"])
 	assert_gt(loaded, 0, "Marek's shotgun starts loaded")
 	for q in game.squad:
-		q.position = game.lift(Vector2i(50, 6) + StopGround.view_offset(game.data), 0)
+		q.position = game.lift(Vector2i(50, 6), 0)
 	marek.position = game.lift(Vector2i(60, 66), 0)
 	game.finish("departed")
 	assert_eq(_stock("ammo_shell"), -loaded, "the shells in his gun stay with him")

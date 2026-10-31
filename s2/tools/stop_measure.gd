@@ -30,6 +30,7 @@ const MapView = preload("res://game/world/map_view.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 
 ## Frames the field runs before it is measured (the first still load and
 ## compile), the frames measured, how long the camera is given to come to rest
@@ -104,6 +105,8 @@ func _field(place: String, data: Dictionary):
 		"fps_cap": 0, "map_data": data, "vat": vat}
 	if not weather.is_empty():
 		f.opts["weather"] = weather
+	# As the game starts a stop: the first stop with its view ground (stop_ground.gd).
+	StopGround.ask_view(f.opts)
 	return f
 
 

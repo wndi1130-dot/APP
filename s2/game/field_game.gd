@@ -485,8 +485,11 @@ func _ready() -> void:
 	var ground_m := float(opts.get("stop_form_m", -1.0))
 	var end_gap := int(opts.get("stop_end_gap", -1))
 	stop_map = shape_stop(stop_map, ground_form, rng.seed, ground_m, fresh_map, end_gap)
-	stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", -1)), int(opts.get("stop_view_cols", -1)),
-		ground_form, rng.seed, ground_m, fresh_map, end_gap)
+	# The view ground round the first stop, when the start asks for it (StopGround.ask_view) or
+	# a save names it; else the map as it came (a loader's map has it on already).
+	if opts.has("stop_view_rows") or opts.has("stop_view_cols"):
+		stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)),
+			ground_form, rng.seed, ground_m, fresh_map, end_gap)
 	_take_map(with_side_path(stop_map, rng.seed))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
