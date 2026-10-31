@@ -21,11 +21,12 @@ const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
-const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground"]
+const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
@@ -81,6 +82,7 @@ static func capture(game) -> Dictionary:
 		"version": VERSION, "kind": KIND,
 		"stop_id": stop_id, "place": game.place, "mission": game.mission,
 		"stop_form": game.stop_form, "stop_ground": String(game.data.get("stop_form", "")),
+		"stop_end_gap": int(game.data.get("stop_end_gap", -1)),
 		"seed": int(game.rng.seed), "phase": "ended" if game.ended else "field", "end_reason": String(said.get("endReason", "")),
 		"saved_at": game.clock.label(), "clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
 		"player_pid": game.player.pid if game.player != null else "",
@@ -221,6 +223,11 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 		opts["stop_ground"] = String(save["stop_ground"])
 	elif String(opts.get("stop_form", "")) == "remote":
 		opts["stop_ground"] = ""
+	# And with the train's end gap it had: one from before the gap was worked out had END_GAP.
+	if save.has("stop_end_gap"):
+		opts["stop_end_gap"] = int(save["stop_end_gap"])
+	elif String(opts.get("stop_ground", opts.get("stop_form", ""))) in ["edge", "remote"]:
+		opts["stop_end_gap"] = StopGround.END_GAP
 	if not (save.get("departure", {}) as Dictionary).is_empty():
 		opts["departure"] = (save["departure"] as Dictionary).duplicate(true)
 	if String(save.get("receipt_id", "")) != "":

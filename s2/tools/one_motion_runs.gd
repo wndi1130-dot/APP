@@ -18,6 +18,7 @@ const REACT_S := 0.25
 ## up to and finished, as a thumb would (coordinator 10-29, after the axe 1.3 m).
 const FINISH_STEP := 0.6
 const Weapons = preload("res://game/sim/weapons.gd")
+const GrabRules = preload("res://game/sim/grab_rules.gd")
 
 var keep: Array = []
 var game_script: GDScript
@@ -31,6 +32,8 @@ var bot := "counter"
 var mix_requested: bool = false
 var mix_act: String = "prologue"
 var mix_progress: float = 0.0
+var opt_keys: Array[String] = []   # --opts hit_push,hit_wall: game options turned on for every trial
+var weapon_fix := ""               # --weapon axe: every melee hand in the squad holds this weapon
 
 
 func _initialize() -> void:
@@ -133,22 +136,35 @@ func _arguments() -> bool:
 					push_error("Act progress must be between 0 and 1")
 					return false
 				mix_requested = true
+			"--opts":
+				opt_keys.clear()
+				for raw_key: String in value.split(",", true):
+					var key: String = raw_key.strip_edges()
+					if key not in ["hit_push", "hit_wall", "hit_counter"]:
+						push_error("Unknown option for --opts: " + key)
+						return false
+					opt_keys.append(key)
+			"--weapon": weapon_fix = value
 			"--mode":
 				if value != "both":
 					modes.assign([value])
 			"--seeds":
 				var bounds := value.split(":")
+				if bounds.is_empty():
+					push_error("Missing value for --seeds")
+					return false
 				seed_first = bounds[0].to_int()
 				seed_last = bounds[-1].to_int()
 			_:
 				push_error("Unknown argument: " + args[i])
 				return false
 		i += 2
-	if i < args.size() and args[i] in ["--act", "--act-progress"]:
-		push_error("Missing value: " + args[i])
+	if i < args.size():
+		push_error("Missing value for " + args[i])
 		return false
 	return hz > 0 and seconds > 0 and seed_last >= seed_first and bot in ["counter", "none"] \
-		and modes.all(func(m): return m in ["walk", "holdout"])
+		and modes.all(func(m): return m in ["walk", "holdout"]) \
+		and (weapon_fix == "" or String(Weapons.get_data(weapon_fix).get("kind", "")) == "melee")
 
 
 static func _striking(p) -> bool:
@@ -278,6 +294,8 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 		game.opts["act_progress"] = mix_progress
 	if mode == "holdout":
 		game.opts["holdout"] = "start"
+	for key: String in opt_keys:
+		game.opts[key] = true
 	root.add_child(game)
 	game.set_process(false)
 	game.process_mode = Node.PROCESS_MODE_DISABLED
@@ -286,6 +304,60 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 	if mix_requested:
 		lunger_mix = _mix_initial(game)
 		counted_bodies = game.zombies.list.size()
+	# Replace every starting melee slot; keep guns, bows and empty hands.
+	if weapon_fix != "":
+		for p: Variant in game.squad:
+			var hands: Array = p.hands.duplicate(true)
+			for slot: int in range(hands.size()):
+				var hand: Dictionary = hands[slot]
+				if String(Weapons.get_data(String(hand["id"])).get("kind", "")) == "melee":
+					hands[slot] = {"id": weapon_fix, "quality": "factory", "condition": 1.0, "loaded": 0}
+			p.set_weapon_slots(hands)
+	var melee_by_weapon: Dictionary = {}
+	var b_hits: Dictionary = {}
+	var record_b: bool = not opt_keys.is_empty()
+	var attack_limit: float = game.zombies.ATTACK_RANGE + GrabRules.CONTACT_MARGIN
+	game.combat.struck.connect(func(info: Dictionary) -> void:
+		if String(info["way"]) != "swing" or String(info["target"]) not in ["standing", "downed", "frozen", "rising"]:
+			return
+		if String(info["result"]) == "miss":
+			return
+		var wid: String = String(info["weapon"])
+		melee_by_weapon[wid] = int(melee_by_weapon.get(wid, 0)) + 1
+		if not record_b or not bool(info.get("b", false)):
+			return
+		if not b_hits.has(wid):
+			var bands: Dictionary = {}
+			for state: String in ["attack", "tell", "chase", "other"]:
+				bands[state] = {"lt_0_85": 0, "0_85_to_1_0": 0, "1_0_to_1_25": 0, "ge_1_25": 0}
+			b_hits[wid] = {"count": 0, "moved_sum": 0.0, "wall_count": 0,
+				"cut": {"": 0, "counter": 0, "dash": 0, "both": 0}, "pre_state_d0": bands,
+				"attack_out_of_range": 0, "by_player": 0}
+		var hits: Dictionary = b_hits[wid]
+		hits["count"] = int(hits["count"]) + 1
+		hits["moved_sum"] = float(hits["moved_sum"]) + float(info["moved"])
+		if bool(info.get("wall", false)):
+			hits["wall_count"] = int(hits["wall_count"]) + 1
+		var cuts: Dictionary = hits["cut"]
+		var cut: String = String(info["cut"])
+		cuts[cut] = int(cuts.get(cut, 0)) + 1
+		var pre_state: String = String(info["pre_state"])
+		var state_key: String = pre_state if pre_state in ["attack", "tell", "chase"] else "other"
+		var d0: float = float(info["d0"])
+		var band: String = "ge_1_25"
+		if d0 < 0.85:
+			band = "lt_0_85"
+		elif d0 < 1.0:
+			band = "0_85_to_1_0"
+		elif d0 < 1.25:
+			band = "1_0_to_1_25"
+		var state_bands: Dictionary = hits["pre_state_d0"][state_key]
+		state_bands[band] = int(state_bands[band]) + 1
+		if pre_state == "attack" and bool(info["victim_is_striker"]) and float(info["d1"]) > attack_limit:
+			hits["attack_out_of_range"] = int(hits["attack_out_of_range"]) + 1
+		if bool(info["by_player"]):
+			hits["by_player"] = int(hits["by_player"]) + 1
+	)
 	var delta := 1.0 / hz
 	var ticks := roundi(seconds * hz)
 	var was: Dictionary = {}          # person -> [action, striking]
@@ -382,5 +454,10 @@ func _trial(run_seed: int, mode: String) -> Dictionary:
 	if mix_requested:
 		_mix_finished(game, lunger_mix)
 		row["lunger_mix"] = lunger_mix
+	row["opts"] = opt_keys.duplicate()
+	row["weapon"] = weapon_fix
+	row["melee_by_weapon"] = melee_by_weapon.duplicate()
+	if record_b:
+		row["b_hits"] = b_hits.duplicate(true)
 	game.free()
 	return row

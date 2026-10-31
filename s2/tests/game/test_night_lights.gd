@@ -127,7 +127,142 @@ func test_the_torch_throws_a_beam_ahead_not_behind_or_aside() -> void:
 
 func test_a_real_town_map_gets_its_night_lights() -> void:
 	var d := FieldMaps.build("houses_01")
-	assert_between(_night_rows(d).size(), 3, NightLights.MOST)
+	# A 4.7 ha town gets more than a small map's six (T0-9: one on screen in three at night before).
+	assert_between(_night_rows(d).size(), NightLights.MOST + 1, NightLights.most_for(d["grid"]))
+
+
+func test_the_most_grows_with_the_map_up_to_twelve() -> void:
+	assert_eq(NightLights.most_for(FieldGrid.new(60, 40)), NightLights.MOST, "a small map keeps six")
+	assert_eq(NightLights.most_for(FieldGrid.new(170, 100)), NightLights.MOST)
+	assert_eq(NightLights.most_for(FieldGrid.new(210, 146)), 7)
+	assert_eq(NightLights.most_for(FieldGrid.new(230, 205)), 11)
+	assert_eq(NightLights.most_for(FieldGrid.new(400, 400)), NightLights.MOST_BIG)
+
+
+## A wide yard with a train along the top and the crew stepping down at
+## (40, 4): drums in a row far off and one on the first screen.
+func _yard(w: int, h: int, far: Array, first: Vector2i, place: String) -> Dictionary:
+	var g := FieldGrid.new(w, h)
+	var props := []
+	for c: Vector2i in far + [first]:
+		props.append({"kind": "barrel", "rect": Rect2i(c, Vector2i.ONE), "level": 0})
+		g.set_solid(c, S.BLOCK)
+	return {"grid": g, "props": props, "buildings": [], "lights": [], "place_id": place,
+		"train": Rect2i(0, 0, w, 2), "spawns": {"squad": [Vector2i(40, 4)]}}
+
+
+const FAR_DRUMS := [Vector2i(5, 60), Vector2i(17, 60), Vector2i(29, 60), Vector2i(41, 60), Vector2i(53, 60)]
+
+
+func test_the_first_screen_gets_none_to_two_as_the_map_dice_fall() -> void:
+	var first := Vector2i(52, 14)   # 16 m from where the crew steps down
+	var counts := {}
+	for i in 12:
+		# 3.2 ha: eight at most, three drums (two before, one more of its share).
+		var d := _yard(180, 180, FAR_DRUMS, first, "yard_%d" % i)
+		NightLights.replan(d)
+		var rows := _night_rows(d)
+		assert_eq(rows.size(), 3, "yard_%d: three drums" % i)
+		var n := NightLights.first_count(d)
+		assert_between(n, 0, NightLights.FIRST_MOST)
+		counts[n] = true
+		if n > 0:
+			assert_true(_has_cell(rows, first), "yard_%d: the drum on the first screen is lit" % i)
+	assert_true(counts.has(0) and counts.size() > 1, "some first screens dark, some lit: %s" % str(counts.keys()))
+
+
+func test_the_first_screen_never_holds_more_than_two() -> void:
+	# A big yard (most twelve, four drums) with five drums round where the crew steps down.
+	var near := [Vector2i(30, 16), Vector2i(52, 14), Vector2i(62, 26), Vector2i(18, 26), Vector2i(40, 30)]
+	var far: Array = []
+	for i in 6:
+		far.append(Vector2i(20 + i * 30, 150))
+	for i in 12:
+		var d := _yard(240, 210, far + near.slice(1), near[0], "crowd_%d" % i)
+		NightLights.replan(d)
+		var on := 0
+		for l: Dictionary in _night_rows(d):
+			on += 1 if Vector2(l["cell"] - Vector2i(40, 4)).length() <= NightLights.FIRST_SCREEN else 0
+		assert_lte(on, NightLights.FIRST_MOST, "crowd_%d" % i)
+
+
+func test_two_of_a_kind_can_go_first() -> void:
+	var near := [Vector2i(52, 14), Vector2i(30, 16)]   # both 16 m from where the crew steps down
+	for i in 12:
+		var d := _yard(240, 210, FAR_DRUMS + [near[1]], near[0], "pair_%d" % i)
+		NightLights.replan(d)
+		var rows := _night_rows(d)
+		var lit := 0
+		for c: Vector2i in near:
+			lit += 1 if _has_cell(rows, c) else 0
+		assert_gte(lit, NightLights.first_count(d), "pair_%d" % i)
+
+
+func test_the_first_screen_takes_none_more_once_it_holds_two_of_any_kind() -> void:
+	# The base plan's lights stay where they were (it keeps no first screen of its
+	# own); a fire and a candle of it already there leave the share no room: the
+	# drum 16 m off stays dark and the rest goes further off.
+	for i in 6:
+		var d := _yard(240, 210, FAR_DRUMS, Vector2i(52, 14), "mixed_%d" % i)
+		d["lights"] = [
+			{"id": "night_1_campfire", "kind": "campfire", "cell": Vector2i(45, 15)},
+			{"id": "night_2_candle", "kind": "candle", "cell": Vector2i(30, 20)},
+		]
+		assert_gt(NightLights.extend(d), 0, "mixed_%d: the share goes further off" % i)
+		var rows := _night_rows(d)
+		var on := 0
+		for l: Dictionary in rows:
+			on += 1 if Vector2(l["cell"] - Vector2i(40, 4)).length() <= NightLights.FIRST_SCREEN else 0
+		assert_eq(on, 2, "mixed_%d: the two it had, none more" % i)
+		assert_false(_has_cell(rows, Vector2i(52, 14)), "mixed_%d: the drum near the crew stays dark" % i)
+
+
+func test_a_big_map_adds_to_what_it_had_and_keeps_off_the_train() -> void:
+	var far: Array = []
+	for i in 8:
+		far.append(Vector2i(10 + i * 25, 120))
+	var d := _yard(240, 210, far, Vector2i(52, 5), "keeps")   # the last drum 4 cells off the train
+	d["lights"] = [{"id": "night_1_barrel_fire", "kind": "barrel_fire", "cell": far[3]}]
+	var added := NightLights.extend(d)
+	var rows := _night_rows(d)
+	assert_gt(added, 0, "a 5 ha map's share")
+	assert_true(_has_cell(rows, far[3]), "the light it had stays where it was")
+	assert_false(_has_cell(rows, Vector2i(52, 5)), "none added by the train: it has its own lights")
+	# A map's own rows of these kinds: it keeps them and gets none.
+	var own := _yard(240, 210, far, Vector2i(52, 5), "own")
+	own["lights"] = [{"id": "mine", "kind": "candle", "cell": Vector2i(9, 12)}]
+	assert_eq(NightLights.extend(own), 0)
+
+
+func test_the_lights_follow_a_moved_stop() -> void:
+	# A stop form moves the train and the crew (stop_ground.gd): planned again round them.
+	var lit_any := false
+	for i in 12:
+		var m := _yard(240, 210, FAR_DRUMS, Vector2i(52, 14), "moved_%d" % i)
+		NightLights.replan(m)
+		m["spawns"] = {"squad": [Vector2i(29, 70)]}
+		m["train"] = Rect2i(0, 76, 240, 2)
+		NightLights.follow(m)
+		var near := 0
+		var on := 0
+		for l: Dictionary in _night_rows(m):
+			var d: float = Vector2(l["cell"] - Vector2i(29, 70)).length()
+			near += 1 if d <= NightLights.FIRST_REACH else 0
+			on += 1 if d <= NightLights.FIRST_SCREEN else 0
+		# Lit as the dice fell, unless the lights it had already fill its far corners.
+		assert_true(near >= NightLights.first_count(m) or on >= NightLights.FIRST_MOST, "moved_%d: the new first screen" % i)
+		lit_any = lit_any or NightLights.first_count(m) > 0
+	assert_true(lit_any, "some map of 12 lights its first screen")
+
+
+func test_a_big_map_lights_more_of_a_kind() -> void:
+	var far: Array = []
+	for i in 8:
+		far.append(Vector2i(10 + i * 25, 120))
+	var d := _yard(240, 210, far, Vector2i(120, 40), "big")
+	NightLights.replan(d)
+	# 5 ha: twelve at most, a drum's two grow to four.
+	assert_eq(_night_rows(d).size(), 4)
 
 
 func test_the_view_lights_them_at_dusk_only() -> void:

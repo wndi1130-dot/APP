@@ -290,7 +290,15 @@ static func match_departure(departure: Dictionary, receipt: Dictionary) -> Array
 				break
 	if receipt["symbol"] is Dictionary and not returned_of(receipt).has(receipt["symbol"]["carriedBy"]):
 		out.append("상징물을 든 사람이 열차에 오르지 않았다")
+	if int(receipt.get("version", 0)) == 5 and float(receipt.get("sledsBack", 0)) > float(sleds_out(departure)):
+		out.append("나간 썰매보다 많이 돌아왔다")
 	return out
+
+
+## The sleds the contract handed the field (kit_pick.gd train_kit); 0 when it handed none.
+static func sleds_out(departure: Dictionary) -> int:
+	var train: Variant = departure.get("train")
+	return int((train as Dictionary).get("sleds", 0)) if train is Dictionary else 0
 
 
 static func canonical(value: Variant) -> String:
@@ -332,11 +340,11 @@ static func _offend(g: Dictionary, comm: String) -> void:
 
 static func _voice_kept(g: Dictionary, t: Dictionary, comm: String) -> void:
 	var voices := {
-		"engine": ["말한 대로 왔군. 화부들한테 전하겠다.", "약속은 석탄 같은 거다. 넣은 만큼 간다."],
+		"engine": ["말한 대로 왔구나. 화부들한테 전하겠다.", "약속은 석탄 같은 거다. 넣은 만큼 간다."],
 		"tail": ["한다고 한 걸 했네. 여기서는 그게 드문 일이야.", "뒤쪽에서도 다 봤어. 잊지 않을게."],
 		"guard": ["명령이 아니라 약속이었지. 지킨 것으로 적어 둔다.", "말과 한 일이 같았다. 그거면 됐다."],
-		"medtech": ["말한 날에 말한 대로였어요. 그렇게 적어 둘게요.", "지켜질 줄 몰랐어요. 다음에도 물어볼게요."],
-		"front": ["계산이 맞았군요. 다음 이야기도 들어 보죠.", "약속을 값으로 치는 분이라면 우리도 그렇게 대하겠습니다."],
+		"medtech": ["말한 날에 말한 대로였다. 그렇게 적어 두겠다.", "지켜질 줄 몰랐다. 다음에도 묻겠다."],
+		"front": ["계산이 맞았구나. 다음 이야기도 들어 보자.", "약속을 값으로 치는 사람이라면 우리도 그렇게 대하겠다."],
 	}
 	var any := ["한 말을 지켰다.", "이번에는 믿을 만했다.", "칸 사람들이 다 들었다. 열차장이 약속을 지켰다고."]
 	if not g.has("keptVoice"):
@@ -574,6 +582,12 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	# The decks' places (decision 474 S1): what the field left them at rides to the next contract.
 	if int(receipt["version"]) == 5 and receipt.get("lootDeck") is Dictionary:
 		g["lootDeck"] = (receipt["lootDeck"] as Dictionary).duplicate(true)
+	# The train's sleds (s3 contract 3): what went out less what stood at the platform when it left.
+	# A receipt without sledsBack brings them all back, as before the field used them.
+	if int(receipt["version"]) == 5 and receipt.has("sledsBack") and g.get("dom") is Dictionary:
+		# Never more back than went out, even where the assert above is not run (a release build).
+		var back: int = mini(int(receipt["sledsBack"]), sleds_out(departure))
+		g["dom"]["sleds"] = maxf(0.0, float(g["dom"].get("sleds", 0)) + float(back - sleds_out(departure)))
 	var got: Array[String] = []
 	for row: Array in [["coal", "석탄"], ["food", "식량"], ["medicine", "의약품"], ["luxury", "사치품"], ["wood", "목재"], ["scrap", "고철"], ["cloth", "천"], ["parts", "부품"]]:
 		var amount := float(stock.get(row[0], 0))

@@ -4,6 +4,7 @@ const RoomDecor = preload("res://game/world/room_decor.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const Measure = preload("res://tools/room_decor_measure.gd")
+const BuildingView = preload("res://game/world/building_view.gd")
 
 var first: Dictionary
 var fourth: Dictionary
@@ -108,6 +109,9 @@ func test_wall_decor_uses_north_or_west_without_tall_furniture_or_touching_neigh
 			var d := Vector2i(0, -1) if facing == 0 else Vector2i(-1, 0)
 			if not RoomFurnish._wall_side(g, map["of"], ri, p["rect"], d) or stairs.get(lv, {}).has(c):
 				faults.append(p)
+			# 안 벽은 집 안을 볼 때 턱 높이로 낮춰 그려 벽걸이가 뜬다: 등 벽은 그 집 바깥 벽이어야 한다.
+			if g.building_at(c + d) != g.building_at(c) or g.building_at(c + d * 2) == g.building_at(c):
+				faults.append(["inner wall", p])
 			var sink := false
 			for f: Dictionary in data["props"]:
 				if f.get("decor", false) or int(f.get("level", 0)) != lv:
@@ -130,7 +134,52 @@ func test_wall_decor_uses_north_or_west_without_tall_furniture_or_touching_neigh
 					faults.append([p, old])
 			hung.append(p)
 	assert_gt(checked, 0)
-	assert_eq(faults, [], "북·서 벽, 큰 가구 없음, 같은 벽 한 칸 띄움, 욕실 세면대")
+	assert_eq(faults, [], "북·서 바깥 벽, 큰 가구 없음, 같은 벽 한 칸 띄움, 욕실 세면대")
+
+
+func test_no_wall_decor_hangs_on_a_wall_that_is_lowered_inside() -> void:
+	# 집 안을 볼 때 낮춰 그리는 벽(안 벽, 바깥 남·동 벽)에 건 장식은 허공에 뜬다. 그리기 계획(building_view)의
+	# 벽 칸 갈래로 세어, 장식 갈래가 늘어도 다시 뜨지 않게 한다.
+	var third := Measure.prepare("houses_07")
+	RoomDecor.dress(third)
+	var checked := 0
+	var on_lowered: Array = []
+	for data: Dictionary in [first, fourth, third]:
+		var kinds: Dictionary = BuildingView.plan(data)["kinds"]
+		for p: Dictionary in _decor(data):
+			if p["mount"] != "wall":
+				continue
+			checked += 1
+			var c: Vector2i = p["rect"].position
+			var lv := int(p["level"])
+			var g: FieldGrid = data["levels"][lv]
+			var wall: Vector2i = c + RoomDecor.BACKS[int(p["facing"])]
+			var kind: Dictionary = kinds.get(Vector2i(g.building_at(c), lv), {}).get(wall, {})
+			if kind.is_empty() or kind["kind"] == "int" or BuildingView.cut_line(kind):
+				on_lowered.append([data["place_id"], lv, c, p["kind"], kind.get("kind", "?")])
+	assert_gt(checked, 0)
+	assert_eq(on_lowered, [], "집 안을 볼 때 낮아지는 벽에 건 장식 0")
+
+
+func test_outer_wall_matches_the_drawn_cut_at_corners() -> void:
+	# 지도에 그 자리가 안 나와도 잡히게 작은 격자로: 방 칸 (2,2), 집 칸만 0, 나머지는 집 밖.
+	# 북쪽 벽의 북동 끝과 서쪽 벽의 남서 끝은 그리기가 남동 쪽 모서리로 보고 턱 높이로 낮춘다.
+	var north := Vector2i(0, -1)
+	var west := Vector2i(-1, 0)
+	var cases := [
+		["곧은 북쪽 바깥 줄", north, [Vector2i(2, 1), Vector2i(1, 1), Vector2i(3, 1), Vector2i(1, 2), Vector2i(3, 2)], true],
+		["북쪽 벽의 북동 끝", north, [Vector2i(2, 1), Vector2i(1, 1), Vector2i(1, 2)], false],
+		["북쪽 벽의 북서 끝", north, [Vector2i(2, 1), Vector2i(3, 1), Vector2i(3, 2)], true],
+		["곧은 서쪽 바깥 줄", west, [Vector2i(1, 2), Vector2i(1, 1), Vector2i(1, 3), Vector2i(2, 1), Vector2i(2, 3)], true],
+		["서쪽 벽의 남서 끝", west, [Vector2i(1, 2), Vector2i(1, 1), Vector2i(2, 1)], false],
+		["안 벽(너머도 같은 집)", north, [Vector2i(2, 1), Vector2i(2, 0), Vector2i(1, 1), Vector2i(3, 1)], false],
+	]
+	for case: Array in cases:
+		var g := FieldGrid.new(5, 5)
+		g.building[g.index(Vector2i(2, 2))] = 0
+		for cell: Vector2i in case[2]:
+			g.building[g.index(cell)] = 0
+		assert_eq(RoomDecor._outer_wall(g, Vector2i(2, 2), case[1]), case[3], case[0])
 
 
 func test_plants_keep_furniture_boxes_doors_stairs_and_holder_fronts_clear() -> void:
@@ -176,9 +225,11 @@ func test_plants_keep_furniture_boxes_doors_stairs_and_holder_fronts_clear() -> 
 func test_room_kind_medians_and_eligible_bath_mirrors() -> void:
 	var rooms := Measure.census(first) + Measure.census(fourth)
 	var summary := Measure.summarize(rooms)
-	for cls: String in {"bed": 1.0, "living": 2.0, "kitchen": 0.0}:
+	# 벽걸이를 바깥 북·서 벽에만 걸어 잰 값(침실 0·거실 1). 다음 PR 탁상 얹기에서 1·2로 되돌림.
+	var medians := {"bed": 0.0, "living": 1.0, "kitchen": 0.0}
+	for cls: String in medians:
 		assert_gt(int(summary[cls]["rooms"]), 0, cls)
-		assert_eq(float(summary[cls]["median"]), float({"bed": 1.0, "living": 2.0, "kitchen": 0.0}[cls]), cls)
+		assert_eq(float(summary[cls]["median"]), float(medians[cls]), cls)
 	assert_gt(int(summary["bath"]["mirror_eligible"]), 0)
 	assert_gte(float(summary["bath"]["eligible_mirror_ratio"]), 0.6)
 	assert_eq(int(summary["bath"]["unsupported_mirrors"]), 0, "북·서 벽 세면대 없는 욕실의 거울은 0")

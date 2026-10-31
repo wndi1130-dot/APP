@@ -4,6 +4,7 @@ extends Node
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const SliceSave = preload("res://game/sim/slice_save.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
@@ -57,7 +58,8 @@ const CHOICES: Array = [
 ]
 
 var settings: Dictionary = {}
-## The two save slots read at start (tests point them elsewhere before adding the boot).
+## Save slots read at start (tests point them elsewhere before adding the boot).
+var slice_save_path: String = SliceSave.PATH
 var field_save_path: String = FieldSave.PATH
 var train_save_path: String = FieldSave.TRAIN_PATH
 var menu_scroll: int = 0
@@ -70,8 +72,16 @@ func _ready() -> void:
 	theme = UiTheme.make(24)
 	for row in CHOICES:
 		settings[row[0]] = row[2][0][0]
+	var board: Array = SliceFlow.start_board()
+	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path)
+	if not slice_resume.is_empty():
+		_start_slice(slice_resume)
+		return
 	# A stop the app was shut in the middle of comes back where it was (user decision 296).
 	var resume := FieldSave.pick_start(field_save_path, train_save_path)
+	if bool(resume.get("slice", false)):
+		_show_menu()
+		return
 	if not resume.is_empty():
 		_start(resume)
 		return
@@ -140,7 +150,7 @@ func _show_menu() -> void:
 	slice.name = "SliceButton"
 	slice.text = "슬라이스 흐름(시험)"
 	slice.custom_minimum_size = Vector2(240, 64)
-	slice.pressed.connect(func() -> void: get_tree().change_scene_to_node(SliceFlow.new()))
+	slice.pressed.connect(_start_slice)
 	go.add_child(slice)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(1000, 500)
@@ -175,6 +185,20 @@ func _pick(key: String, value) -> void:
 	if key == "cold_scheme":
 		Atmosphere.scheme = String(value) if String(value) != "" else Atmosphere.DEFAULT_SCHEME
 	_show_menu()
+
+
+func _make_slice(resume: Dictionary = {}) -> Node:
+	var flow = SliceFlow.new()
+	flow.opts = {
+		"save": true, "resume": resume, "slice_save_path": slice_save_path,
+		"train_save_path": train_save_path, "field_save_path": field_save_path,
+	}
+	return flow
+
+
+func _start_slice(resume: Dictionary = {}) -> void:
+	# Boot can be in _ready; switch only after the tree has finished adding it.
+	get_tree().change_scene_to_node.call_deferred(_make_slice(resume))
 
 
 ## `resume` is the start options of a stop coming back (FieldSave.pick_start); none starts a new one.

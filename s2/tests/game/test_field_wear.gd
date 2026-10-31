@@ -80,7 +80,7 @@ func test_the_values_are_the_listed_ones() -> void:
 
 
 func test_every_kind_has_its_places_a_picture_and_a_short_name() -> void:
-	var shells := ["coat_long", "jacket_short", "hat_knit", "hood"]
+	var shells := ["coat_long", "jacket_short", "hat_knit", "hood", "vest"]   # vest: the dead's alone (dead_cast.gd SHELLS)
 	for id: String in Wear.KINDS:
 		var k: Dictionary = Wear.KINDS[id]
 		for s: String in Wear.slots_of(id):

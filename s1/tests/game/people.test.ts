@@ -275,7 +275,7 @@ describe('A4 출산', () => {
     const g = birthGame();
     const c = g.born!.comm;
     const pop = g.comms[c].pop;
-    pickChoice(g, 'birth', '의무칸으로 옮긴다');
+    pickChoice(g, 'birth', '의무칸으로 데려간다');
     expect(g.comms[c].pop).toBe(pop + 1);
     expect(g.cards[0].kind).toBe('naming');
   });

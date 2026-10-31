@@ -316,3 +316,12 @@ func test_missing_share_v1_and_grid_fallback_keep_each_start_share() -> void:
 		for start: Array in STARTS:
 			var b = _resume_with_start(saved, start[0])
 			assert_almost_eq(float(b.zombies.lunger_share), float(start[1]), 0.000000001, "%s keeps the start's own share" % way)
+
+
+func test_the_slice_marker_survives_capture_and_resume_options() -> void:
+	var game = _game({"slice": true, "field_save": true, "field_save_path": AT})
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	assert_true(bool(saved["start_opts"]["slice"]))
+	var resumed: Dictionary = FieldSave.resume_opts(saved)
+	assert_true(bool(resumed["slice"]))
+	assert_false(saved["start_opts"].has("field_save_path"))

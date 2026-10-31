@@ -252,6 +252,71 @@ func _contract_game(departure: Variant):
 	return game
 
 
+func test_the_contract_says_whether_the_boxes_get_supplies() -> void:
+	# departure.supplies (s3 contract) is the run's supOn: off, no box gets one; on, or a
+	# contract without it, or no contract at all, they are dressed as always.
+	var got := {}
+	for which: Variant in [0, 6, "old", null]:
+		var d: Variant = null
+		if which is int:
+			var state: Dictionary = (V.data()["contracts"][which]["state"] as Dictionary).duplicate(true)
+			d = FieldDeparture.build(state, V.tables(), {"placeId": "sulechow_station"})
+		elif which is String:
+			d = FieldDeparture.build((V.data()["contracts"][0]["state"] as Dictionary).duplicate(true), V.tables(), {"placeId": "sulechow_station"})
+			(d as Dictionary).erase("supplies")
+		var game = FieldGame.new()
+		game.opts = {"seed": 4, "auto_pause": false, "raiders": false, "place": "houses_01"}
+		if d is Dictionary:
+			game.opts["departure"] = d
+		add_child_autofree(game)
+		game.set_process(false)
+		var in_boxes := 0
+		for c: Dictionary in game.data["containers"].values():
+			in_boxes += _supply_count(c.get("items", []))
+		got[str(which)] = [int(game.loot_report.get("supplies", -1)), in_boxes]
+	assert_false(bool(FieldDeparture.build((V.data()["contracts"][0]["state"] as Dictionary).duplicate(true), V.tables(), {"placeId": "sulechow_station"})["supplies"]), "contract 0 runs with supplies off")
+	assert_eq(got["0"], [0, 0], "off: none")
+	for key: String in ["6", "old", "<null>"]:
+		assert_gt(int(got[key][0]), 0, key)
+		assert_gt(int(got[key][1]), 0, key + ": and they are in the boxes")
+
+
+func test_in_the_field_supplies_go_in_last_and_move_nothing_else() -> void:
+	# A barricaded room takes the back half of each box and a looted house tips its first full box
+	# out: they count the lists without the supplies, so the same run with supplies off and on
+	# differs in them only (a looted house still gathers them with the rest into its hidden box).
+	var stories := {}
+	for place: String in ["houses_01", "houses_03"]:
+		for seed in range(1, 7):
+			var games: Array = []
+			for turned: bool in [false, true]:
+				var d: Dictionary = FieldDeparture.build((V.data()["contracts"][6]["state"] as Dictionary).duplicate(true), V.tables(), {"placeId": "sulechow_station"})
+				d["supplies"] = turned
+				var game = FieldGame.new()
+				game.opts = {"seed": seed, "auto_pause": false, "raiders": false, "place": place, "departure": d}
+				add_child_autofree(game)
+				game.set_process(false)
+				games.append(game)
+			var off = games[0]
+			var lit = games[1]
+			var label := "%s:%d" % [place, seed]
+			assert_eq(int(off.loot_report["supplies"]), 0, label)
+			assert_eq(lit.data["containers"].keys(), off.data["containers"].keys(), label)
+			for id: String in off.data["containers"]:
+				var bare: Dictionary = (lit.data["containers"][id] as Dictionary).duplicate(true)
+				bare["items"] = _without_supplies(bare.get("items", []))
+				assert_eq(JSON.stringify(bare), JSON.stringify(off.data["containers"][id]), "%s:%s" % [label, id])
+			assert_eq(JSON.stringify(lit.data.get("loose", [])), JSON.stringify(off.data.get("loose", [])), label + " floors")
+			for s: Dictionary in lit.data.get("floor_stashes", []):
+				assert_eq(_supply_count(lit.data["containers"][s["id"]].get("items", [])), 0, label + " board stash")
+			for row: Variant in (lit.receipt.to_dict().get("placeState", {}) as Dictionary).get("roomStories", []):
+				if row is Dictionary:
+					stories[String((row as Dictionary).get("story", ""))] = true
+	# The paths that read the lists were walked.
+	assert_true(stories.has("barricaded"), str(stories.keys()))
+	assert_true(stories.has("looted"), str(stories.keys()))
+
+
 func test_unloaded_supplies_melt_into_one_stock_rounded_once_a_stop() -> void:
 	# The train's contract makes the receipt v5; the stock is added up by key and rounded once
 	# (field_game.finish), so one cake of soap (0.25) is nothing and two are one.

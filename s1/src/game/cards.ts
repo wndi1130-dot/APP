@@ -593,7 +593,7 @@ function baseView(g: Game, card: Card): CardView {
       return {
         title: '사적인 부탁', speaker: leader(g, c), focus: c, required: true, body: fav.body, key: `favor:${c}`,
         choices: withAfford(g, [
-          { id: 'grant', label: '들어준다', log: `${leader(g, c).name}의 사적인 부탁을 들어줬다.`, say: past ? '이번까지다. 다음은 없다.' : '들어주지. 대신 이 일은 기억해 둬라.', effs: [...fav.cost, { t: 'debt', c }], special: 'favor_risk' },
+          { id: 'grant', label: '들어준다', log: `${leader(g, c).name}의 사적인 부탁을 들어줬다.`, say: past ? '이번까지다. 다음은 없다.' : '들어주마. 대신 이 일은 기억해 둬라.', effs: [...fav.cost, { t: 'debt', c }], special: 'favor_risk' },
           ...fine,
           { id: 'refuse', label: '거절한다', log: `${leader(g, c).name}의 사적인 부탁을 거절했다.`, say: past ? '한 번 들어줬다고 버릇이 되면 안 된다.' : '사사로운 부탁은 받지 않는다.', effs: [{ t: 'rel', c, v: past ? -4 : -3 }] },
         ]),
@@ -844,8 +844,8 @@ function baseView(g: Game, card: Card): CardView {
         title: '아이가 나온다', speaker: leader(g, 'medtech'), focus: c, required: true,
         body: `${COMM_NAME[c]}에서 ${mother}의 아이가 나온다. ${cold ? '거긴 너무 춥다.' : '칸은 그럭저럭 따뜻하다.'}`,
         choices: withAfford(g, [
-          { label: '의무칸으로 옮긴다', log: `해산을 앞둔 ${mother}을(를) 의무칸으로 옮겼다.`, say: '의무칸을 비워라. 아이는 따뜻한 데서 받는다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
-          { label: '그 칸에서 낳는다', log: `${mother}이(가) 그 칸에서 아이를 낳게 했다.`, say: '옮길 틈이 없다. 거기서 받아라.', effs: [], special: cold ? 'birth_weak' : 'birth_ok' },
+          { label: '의무칸으로 데려간다', log: `해산을 앞둔 ${mother}을(를) 의무칸으로 데려갔다.`, say: '의무칸을 비워라. 아이는 따뜻한 데서 받는다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
+          { label: '그 칸에서 낳는다', log: `${mother}이(가) 그 칸에서 아이를 낳게 했다.`, say: '데려갈 틈이 없다. 거기서 받아라.', effs: [], special: cold ? 'birth_weak' : 'birth_ok' },
         ]),
       };
     }

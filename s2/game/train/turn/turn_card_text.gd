@@ -68,7 +68,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["speaker"] = _leader(g, t, c)
 			out["focus"] = c
 			out["body"] = String((FAVORS_AGAIN if past != null else FAVORS)[c])
-			says = ["이번까지다. 다음은 없다." if past != null else "들어주지. 대신 이 일은 기억해 둬라.",
+			says = ["이번까지다. 다음은 없다." if past != null else "들어주마. 대신 이 일은 기억해 둬라.",
 				"한 번 들어줬다고 버릇이 되면 안 된다." if past != null else "사사로운 부탁은 받지 않는다."]
 		"rescue": _rescue(g, t, card, out, says)
 		"bitten":
@@ -192,7 +192,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["speaker"] = _leader(g, t, "medtech")
 			out["focus"] = c
 			out["body"] = "%s에서 %s의 아이가 나온다. %s" % [t["COMM_NAME"][c], mother, "거긴 너무 춥다." if cold else "칸은 그럭저럭 따뜻하다."]
-			says = ["의무칸을 비워라. 아이는 따뜻한 데서 받는다.", "옮길 틈이 없다. 거기서 받아라."]
+			says = ["의무칸을 비워라. 아이는 따뜻한 데서 받는다.", "데려갈 틈이 없다. 거기서 받아라."]
 		"naming":
 			var mother: String = str(card.get("who", ""))
 			out["speaker"] = {"name": mother, "role": String(t["COMM_NAME"][c]), "comm": c}
