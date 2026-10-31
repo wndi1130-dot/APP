@@ -288,6 +288,10 @@ func test_rain_by_day_eases_the_spread_and_keeps_the_grey() -> void:
 	assert_lt(float(rain["spread"]), float(overcast["spread"]), "rain eases the spread")
 	assert_gt(float(rain["spread"]), Atmosphere.TONE_CONTRAST, "never flatter than a clear day")
 	assert_almost_eq(float(rain["pivot"]), float(overcast["pivot"]), 0.0001, "about the same grey")
+	# Godot parts the channels by the spread times the saturation: the ease keeps the colour.
+	var sat_plain: float = lerpf(1.0, 0.9, float(l["veil"])) * (1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - float(l["veil"]))) * float(l.get("region_sat", 1.0))
+	assert_almost_eq(float(rain["saturation"]) * float(rain["spread"]), sat_plain * veiled * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(w["dusk"])), 0.0001, "the ease keeps the colour")
+	assert_lt(float(rain["saturation"]), 1.0, "and adds none")
 	for c: float in [0.1, 0.4, 0.8]:
 		var out: float = 0.5 + float(rain["contrast"]) * (float(rain["brightness"]) * c - 0.5)
 		assert_almost_eq(out, float(rain["spread"]) * (c - float(rain["pivot"])) + float(rain["pivot"]), 0.0001)
