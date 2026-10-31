@@ -2,7 +2,7 @@ r"""열차 살림 단계 31종 — Blender 4.5, 정점색 Col(선형), 한 메�
 
 blender -b --factory-startup -P tools/blender/train_car_tiers.py -- --repo .
     [--src-open C:\dev\zombie\wt\open_assets] [--only a,b]
-    [--stage-only] [--render-contact-sheet]
+    [--stage-only] [--render-contact-sheet] [--replace-existing]
 
 0 누더기: 창 아래 보수판·천·짚, 막대걸이 초, 깡통 난로, 자루 침상.
 1 손봄: 벽걸이 나무함 두 크기, 드럼통 난로.
@@ -22,19 +22,17 @@ kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/
 kaykit_furniture/x/KayKit-Furniture-Bits-1.0-main/addons/
   kaykit_furniture_bits/Assets/gltf/{pictureframe_small_A,book_single}.gltf
 각 팩의 License.txt 또는 Assets/LICENSE.txt에서 CC0를 확인한다.
-사용한 CC BY 4.0: G:/내 드라이브/좀비_공개자산/google_scanned_objects/
-  Cole_Hardware_Mug_Classic_Blue.zip 내부 meshes/model.obj.
-크레딧: Google Scanned Objects, Google Research, CC BY 4.0,
-  https://research.google/resources/datasets/scanned-objects-google-research/
-  https://creativecommons.org/licenses/by/4.0/ ; 면 축소·형태 맞춤·재착색.
-CC0 목록에서 손잡이 컵이 없음을 먼저 확인한 뒤 CC BY 사용.
+2026-10-31 손질: tin_stove, drum_stove, end_shelf, top_shelf, tiny_cup,
+tiny_tray는 직접 만든 기본 도형이다. 컵은 스캔 원본을 읽거나 사용하지 않는다.
 CC BY 후보 Threshold_Porcelain_Teapot_White.zip와
 Crosley_Alarm_Clock_Vintage_Metal.zip은 실제 축소 렌더에서 48삼각형 이하로
 형태가 보존되지 않아 제외했다. 천·실패·솔·주전자·시계는 기본 도형이다.
 
 Piece.fit/check_glb의 기존 중앙 원점 검사를 먼저 실제 GLB에 수행하고,
 새 31종만 바닥 원점으로 옮겨 다시 내보내고 바이너리 좌표·색을 검사한다.
-기존 GLB와 .import, 게임 코드, 배치 파일은 쓰지 않는다. Godot은 실행 안 함.
+기존 GLB 교체는 --only와 --replace-existing으로 아래 FIX_IDS만 명시할 때 허용한다.
+교체 전 codex_out/tiers_fix_baseline.json 및 tiers_fix_before 복구 사본이 필요하다.
+.import, 게임 코드, 배치 파일은 쓰지 않는다. Godot은 실행 안 함.
 """
 import sys
 sys.dont_write_bytecode = True
@@ -58,6 +56,12 @@ import train_interior as ti
 import train_car_dress as dress
 import train_car_layers as layers
 
+# 선형 RGB. 자작·소나무의 따뜻한 밝은 목재색, 흰 눈보다 낮은 밝기와 채도.
+EXTRA = {'wood_birch_pale': (.70, .63, .50, 1.0)}
+ti.PALETTE.update(EXTRA)
+FIX_IDS = {'tin_stove', 'drum_stove', 'end_shelf', 'top_shelf', 'tiny_cup',
+           'tiny_tray', 'pale_paneling', 'open_bunk_upper', 'open_bunk_lower'}
+
 SCRIPT = 'tools/blender/train_car_tiers.py'
 LIMIT = 2430
 KIT_LIMIT = 10000
@@ -72,14 +76,14 @@ SPECS = {
     'tarp_patch': (0, (.48, .42, .01), 16, '창 아래 벽에 못 두 개로 고정한 천 조각'),
     'straw_mat': (0, (.60, .015, .20), 24, '얇은 짚 마감'),
     'stick_candle': (0, (.13, .32, .13), 48, '사슬 없는 막대 고리의 초'),
-    'tin_stove': (0, (.40, .70, .40), 120, '낡은 깡통 난로 외형'),
+    'tin_stove': (0, (.40, .58, .40), 120, '낮고 삐뚤한 깡통 난로, 굽은 짧은 연통과 덧댄 양철'),
     'sack_bunk_upper': (0, (2.80, .14, .60), 96, '자루 침구의 얇은 위 침상'),
     'sack_bunk_lower': (0, (1.75, .48, .58), 120, '자루 침구의 다리 있는 아래 침상'),
     'wood_wall_box': (1, (.48, .42, .28), 60, '벽걸이 나무 보관함'),
     'wood_wall_box_shallow': (1, (.48, .22, .28), 60, '열차장실 얕은 벽걸이 나무 보관함'),
-    'drum_stove': (1, (.40, .70, .40), 144, '띠가 있는 드럼통 난로 외형'),
-    'end_shelf': (2, (.48, .90, .28), 96, '빈 끝벽 수납 선반'),
-    'top_shelf': ('2·3', (.48, .24, .28), 48, '빈 윗벽 선반'),
+    'drum_stove': (1, (.40, .70, .40), 144, '세운 드럼통 난로, 둘레 테 둘과 네모 문, 곧은 연통, 세 다리'),
+    'end_shelf': (2, (.48, .90, .28), 96, '판 사이가 열린 세 단 끝벽 선반'),
+    'top_shelf': ('2·3', (.48, .24, .28), 48, '받침 쇠와 얇은 판 한 단의 윗벽 선반'),
     'pale_paneling': (3, (12., .42, .05), 96, '창 아래 낮고 밝은 나무 판벽 띠'),
     'stick_lamp': (3, (.13, .32, .13), 80, '막대 고리와 갓·전구를 갖춘 전등'),
     'small_frame': (3, (.30, .40, .025), 28, '얼굴·글자 없는 추상 그림 액자'),
@@ -94,7 +98,7 @@ SPECS = {
     'tiny_can': ('2·3', (.07, .09, .07), 48, '라벨 없는 깡통'),
     'tiny_jar': ('2·3', (.09, .10, .09), 48, '짧은 목의 작은 단지'),
     'tiny_teapot': ('2·3', (.14, .11, .10), 48, '손잡이와 주둥이 있는 찻주전자'),
-    'tiny_tray': ('2·3', (.18, .02, .12), 48, '빈 타원 쟁반'),
+    'tiny_tray': ('2·3', (.18, .02, .12), 48, '낮은 네모 테두리와 양쪽 뚫린 손잡이의 쟁반'),
     'thread_spool': ('2·3', (.05, .07, .05), 48, '실을 감은 육각 실패'),
     'tiny_brush': ('2·3', (.04, .02, .14), 48, '나무 손잡이와 솔 부분'),
     'tiny_clock': ('2·3', (.09, .11, .04), 48, '글자·숫자 없는 탁상시계와 두 바늘'),
@@ -126,21 +130,25 @@ GSO = {
 }
 SOURCE_KEYS = {
     'wall_patch': 'planks', 'straw_mat': 'mat', 'stick_candle': 'candle',
-    'tin_stove': 'barrel', 'drum_stove': 'barrel', 'sack_bunk_upper': 'bedroll',
+    'sack_bunk_upper': 'bedroll',
     'sack_bunk_lower': 'bedroll', 'wood_wall_box': 'box', 'wood_wall_box_shallow': 'shallow',
-    'end_shelf': 'top', 'top_shelf': 'top', 'pale_paneling': 'panel', 'stick_lamp': 'lamp',
+    'pale_paneling': 'panel', 'stick_lamp': 'lamp',
     'small_frame': 'frame', 'wall_plant': 'plant', 'table_plant': 'plant',
-    'open_bunk_upper': 'bedroll', 'open_bunk_lower': 'bedroll', 'tiny_cup': 'cup',
+    'open_bunk_upper': 'bedroll', 'open_bunk_lower': 'bedroll',
     'tiny_bowl': 'plate', 'tiny_plate': 'plate', 'tiny_bottle': 'bottle',
-    'tiny_can': 'barrel', 'tiny_jar': 'jar', 'tiny_teapot': 'teapot', 'tiny_tray': 'plate',
+    'tiny_can': 'barrel', 'tiny_jar': 'jar', 'tiny_teapot': 'teapot',
     'tiny_clock': 'clock', 'tiny_book': 'book',
 }
 SEARCH_NOTES = {
-    'end_shelf': 'CC0 bookcaseOpenLow는 단순 축소 후 112삼각형으로 목표 92를 넘음. CC0 shelf_small을 위아래 두 개의 빈 벽걸이 선반으로 구성.',
+    'tin_stove': '2026-10-31 손질 발주: 깡통·덧댄 판·굽은 연통을 기본 도형으로 직접 구성.',
+    'drum_stove': '2026-10-31 손질 발주: 세운 드럼통·둘레 테 둘·문·세 다리를 기본 도형으로 직접 구성.',
+    'end_shelf': '2026-10-31 손질 발주: 비어 있는 세 단 선반을 기본 도형으로 직접 구성.',
+    'top_shelf': '2026-10-31 손질 발주: 얇은 판 하나와 받침 쇠를 기본 도형으로 직접 구성.',
+    'tiny_tray': '2026-10-31 손질 발주: 네모 쟁반과 양쪽 손잡이를 기본 도형으로 직접 구성.',
     'tarp_patch': 'CC0 structure-canvas·tent-canvas는 프레임/입체 지붕이라 평평한 벽 보수 천과 다름; 드라이브 파일명 목록에서 맞는 후보를 식별하지 못함. scenario의 불투명 ID는 부재 증거가 아님.',
     'thread_spool': '네 CC0 팩 names.txt와 드라이브 파일명 목록에서 spool/thread/sewing에 맞는 소형 실패를 식별하지 못함. scenario의 불투명 ID는 부재 증거가 아님.',
     'tiny_brush': '네 CC0 팩 names.txt와 드라이브 파일명 목록에서 손잡이 솔에 맞는 brush/broom을 식별하지 못함. brushed 재질 파일은 제외. scenario의 불투명 ID는 부재 증거가 아님.',
-    'tiny_cup': 'CC0 bucket은 들손 양동이이고 컵 손잡이/비례와 다름. CC BY 손잡이 컵 선택.',
+    'tiny_cup': '2026-10-31 손질 발주: 스캔 원본을 쓰지 않고 빈 컵과 손잡이를 기본 도형 40삼각형으로 직접 구성.',
     'tiny_teapot': 'CC0 teapot/kettle 후보 없음. G:/내 드라이브/좀비_공개자산/google_scanned_objects/Threshold_Porcelain_Teapot_White.zip을 실제 44면으로 축소했으나 주둥이·몸체 붕괴를 렌더에서 확인; 이 예산에 맞는 원본이 아니어서 기본 도형.',
     'tiny_clock': 'CC0 clock 후보 없음. G:/내 드라이브/좀비_공개자산/google_scanned_objects/Crosley_Alarm_Clock_Vintage_Metal.zip을 실제 38면 몸체로 축소했으나 몸체의 가시 같은 돌출을 렌더에서 확인; 이 예산에 맞지 않아 기본 도형.',
 }
@@ -307,7 +315,7 @@ def add_source(p, root, key, size, target, centre=(0, 0, 0), rotation=None, pain
         elif style == 'mat':
             colour = 'rope' if face.index % 3 else 'wool_dark'
         elif style == 'panel':
-            colour = 'wood_worn' if ny < .07 or ny > .92 else 'cloth_faded'
+            colour = 'wood_birch_pale'
         elif style == 'lamp':
             colour = 'iron' if ny > .75 or nz < -.23 else 'slate_faded'
         normal = Vector((face.normal.x, face.normal.z, -face.normal.y))
@@ -364,6 +372,29 @@ def tetra(p, pts, colour):
         p.face(face, colour, mid-centre)
 
 
+def ring_shell(p, rings, colours, caps=True):
+    """Godot 좌표의 닫힌 다각 고리들을 잇는다. 비틀린 통·짧은 굽은 연통용."""
+    if caps:
+        p.face(rings[0], colours[0], (0, -1, 0))
+        p.face(rings[-1], colours[-1], (0, 1, 0))
+    for k, (lower, upper) in enumerate(zip(rings, rings[1:])):
+        centre = sum((Vector(v) for v in lower+upper), Vector()) / (len(lower)*2)
+        for i in range(len(lower)):
+            j = (i+1) % len(lower)
+            pts = [lower[i], lower[j], upper[j], upper[i]]
+            outward = sum((Vector(v) for v in pts), Vector())/4-centre
+            outward.y = 0
+            p.face(pts, colours[(i+k) % len(colours)], outward)
+
+
+def flat_handle(p, outer, inner, normal):
+    """세 변의 C형 양면 얇은 판. 네 번째 변은 몸체에 붙이고 가운데 구멍을 남긴다."""
+    for i in range(3):
+        pts = [outer[i], outer[i+1], inner[i+1], inner[i]]
+        for sign in (-1, 1):
+            p.face(pts, 'iron_worn', tuple(sign*v for v in normal))
+
+
 def build(p, root):
     pid = p.pid
     size = SPECS[pid][1]
@@ -385,20 +416,34 @@ def build(p, root):
         p.beam((-.055, .31, -.060), (.055, .31, .060), .006, 'iron', sides=4)
         p.beam((.055, .31, .060), (.0275, .19, .027), .006, 'iron', sides=4)
         tetra(p, [(-.003, .207, .027), (.003, .207, .027), (0, .207, .030), (0, .222, .027)], 'soot')
-    elif pid in ('tin_stove', 'drum_stove'):
-        drum = pid == 'drum_stove'
-        add_radial_source(p, root, 'barrel', (.38, .46, .36), [0, .12, .50, .88, 1] if drum else [0, .50, 1],
-                          8 if drum else 6, centre=(0, .08, 0))
-        p.box((-.12, .12), (.14, .31), (.18, .20), 'soot')
-        p.beam((.09, .53, -.08), (.09, .70, -.08), .055, 'iron', sides=6)
-        p.box((-.20, -.14), (0, .095), (-.15, .15), 'iron')
-        p.box((.14, .20), (0, .095), (-.15, .15), 'iron')
+    elif pid == 'tin_stove':
+        rings = []
+        for y, dx, dz, radius in ((.065, -.012, 0, .18), (.22, .016, -.008, .188), (.39, -.024, .014, .156)):
+            rings.append([(dx+radius*math.cos(i*math.tau/6), y,
+                           dz+radius*math.sin(i*math.tau/6)) for i in range(6)])
+        ring_shell(p, rings, ['iron_worn', 'rust_faded', 'iron_worn'])
+        pipe = [[(x+.030*math.cos(i*math.tau/4), y, z+.030*math.sin(i*math.tau/4)) for i in range(4)]
+                for x, y, z in ((.035, .375, -.045), (.035, .49, -.045), (-.045, .58, -.045))]
+        ring_shell(p, pipe, ['iron', 'rust_faded'])
+        p.box((-.095, .065), (.13, .265), (.149, .175), 'soot')
+        p.box((.065, .145), (.22, .31), (.128, .153), 'rust_faded')
+        p.box((-.161, -.139), (.12, .245), (-.06, .06), 'iron_worn')
+        for x, z in ((-.12, .105), (.12, .10), (0, -.13)):
+            p.beam((x, 0, z), (x, .08, z), .028, 'iron', sides=3)
+    elif pid == 'drum_stove':
+        p.lathe((0, 0), [(.085, .179, .179), (.535, .179, .179)], 'iron', sides=8)
+        for y in (.175, .420):
+            p.lathe((0, 0), [(y, .19, .19), (y+.026, .19, .19)], 'iron_worn', sides=8)
+        p.box((-.105, .105), (.23, .385), (.165, .205), 'soot')
+        p.beam((.055, .535, -.055), (.055, .70, -.055), .038, 'iron', sides=6)
+        for x, z in ((-.13, .105), (.13, .105), (0, -.145)):
+            p.beam((x, 0, z), (x, .105, z), .028, 'iron', sides=3)
     elif 'bunk' in pid:
         opened = pid.startswith('open')
         lower = pid.endswith('lower')
         w, h, d = size
         base = .32 if lower else 0
-        wood = 'wood_worn' if opened else 'wood_dark'
+        wood = 'wood_birch_pale' if opened else 'wood_dark'
         p.box((-w/2, w/2), (base, base+.035), (-d/2, d/2), wood)
         if lower:
             for x in (-w/2+.045, w/2-.045):
@@ -406,21 +451,36 @@ def build(p, root):
                     p.box((x-.025, x+.025), (0, base), (z-.025, z+.025), wood)
         if opened:
             for z in (-d/2+.012, d/2-.012):
-                p.box((-w/2, w/2), (base+.035, h), (z-.012, z+.012), 'cloth_faded')
+                p.box((-w/2, w/2), (base+.035, h), (z-.012, z+.012), wood)
             for x in (-w/2+.015, w/2-.015):
-                p.box((x-.015, x+.015), (base+.035, h), (-d/2+.024, d/2-.024), 'cloth_faded')
+                p.box((x-.015, x+.015), (base+.035, h), (-d/2+.024, d/2-.024), wood)
+            for z in (-d/2+.012, d/2-.012):
+                p.face([(-w*.36, h+.0001, z-.0015), (w*.39, h+.0001, z-.0005),
+                        (w*.36, h+.0001, z+.0015), (-w*.30, h+.0001, z+.0005)], 'paper_aged', (0, 1, 0))
         add_source(p, root, 'bedroll', (w-.08, h-base-.04, d-.06), 44 if opened else 48,
                    centre=(0, base+.04, 0), rotation=Matrix.Rotation(math.pi/2, 3, 'Z'),
                    style='pale_bed' if opened else 'bed')
     elif pid == 'end_shelf':
-        for bottom in (0, .60):
-            add_source(p, root, 'top', (.48, .30, .28), 46, centre=(0, bottom, 0), paint='wood_worn')
-    elif pid in ('wood_wall_box', 'wood_wall_box_shallow', 'top_shelf'):
+        for y, front in ((0, .14), (.4375, .075), (.875, .01)):
+            p.box((-.24, .24), (y, y+.025), (-.14, front), 'wood', top='wood_worn')
+        for x in (-.222, .222):
+            p.box((x-.018, x+.018), (0, .90), (-.14, -.105), 'wood_worn')
+    elif pid == 'top_shelf':
+        p.box((-.24, .24), (.215, .24), (-.14, .14), 'wood', top='wood_worn')
+        for x in (-.17, .17):
+            p.box((x-.012, x+.012), (0, .215), (-.14, -.12), 'iron')
+            pts = [(x, .005, -.12), (x, .215, -.12), (x, .215, .10)]
+            for sign in (-1, 1):
+                p.face(pts, 'iron_worn', (sign, 0, 0))
+    elif pid in ('wood_wall_box', 'wood_wall_box_shallow'):
         key = SOURCE_KEYS[pid]
         add_source(p, root, key, size, {'box': 60, 'shallow': 60, 'end': 92, 'top': 48}[key], paint='wood' if key in ('box', 'shallow') else 'wood_worn')
     elif pid == 'pale_paneling':
         for x in (-3., 3.):
             add_source(p, root, 'panel', (6., .42, .05), 40, centre=(x, 0, 0), style='panel')
+            for y in (.14, .29):
+                p.face([(x-2.6, y, .0251), (x+2.2, y+.001, .0251),
+                        (x+2.5, y+.006, .0251), (x-2.3, y+.004, .0251)], 'paper_aged', (0, 0, 1))
     elif pid == 'stick_lamp':
         add_source(p, root, 'lamp', (.13, .09, .12), 42, centre=(0, .04, .005),
                    rotation=Matrix.Rotation(math.pi, 3, 'X'), style='lamp')
@@ -435,7 +495,35 @@ def build(p, root):
                    centre=(0, 0, .0075 if wall else 0), style='plant')
         if wall:
             p.box((-.022, .022), (.025, .14), (-.06, -.053), 'iron')
-    elif pid in ('tiny_cup', 'tiny_bowl', 'tiny_plate', 'tiny_tray'):
+    elif pid == 'tiny_cup':
+        # 속 빈 오각 컵 28면과 양면 C형 손잡이 12면. 스캔 원본 입력 없음.
+        low = [(-.008+.024*math.cos(i*math.tau/5), 0, .030*math.sin(i*math.tau/5)) for i in range(5)]
+        rim = [(-.008+.028*math.cos(i*math.tau/5), .09, .035*math.sin(i*math.tau/5)) for i in range(5)]
+        inner = [(-.008+.022*math.cos(i*math.tau/5), .09, .0275*math.sin(i*math.tau/5)) for i in range(5)]
+        p.face(low, 'slate_faded', (0, -1, 0))
+        for i in range(5):
+            j = (i+1) % 5
+            outward = (math.cos((i+.5)*math.tau/5), 0, math.sin((i+.5)*math.tau/5))
+            p.face([low[i], low[j], rim[j], rim[i]], 'slate_faded', outward)
+            p.face([rim[i], rim[j], inner[j], inner[i]], 'iron_worn', (0, 1, 0))
+            p.face([inner[i], inner[j], (-.008, .012, 0)], 'slate_faded', (-outward[0], .2, -outward[2]))
+        flat_handle(p, [(.014, .013, 0), (.047, .021, 0), (.047, .073, 0), (.014, .081, 0)],
+                    [(.014, .026, 0), (.036, .030, 0), (.036, .064, 0), (.014, .068, 0)], (0, 0, 1))
+    elif pid == 'tiny_tray':
+        low = [(-.068, 0, -.053), (.068, 0, -.053), (.068, 0, .053), (-.068, 0, .053)]
+        rim = [(-.073, .02, -.06), (.073, .02, -.06), (.073, .02, .06), (-.073, .02, .06)]
+        inner = [(-.062, .004, -.047), (.062, .004, -.047), (.062, .004, .047), (-.062, .004, .047)]
+        p.face(low, 'slate_faded', (0, -1, 0))
+        p.face(inner, 'slate_faded', (0, 1, 0))
+        for i in range(4):
+            j = (i+1) % 4
+            normal = ((rim[i][0]+rim[j][0])/2, 0, (rim[i][2]+rim[j][2])/2)
+            p.face([low[i], low[j], rim[j], rim[i]], 'slate_faded', normal)
+            p.face([rim[i], rim[j], inner[j], inner[i]], 'iron_worn', (0, 1, 0))
+        for side in (-1, 1):
+            flat_handle(p, [(side*.071, .016, -.026), (side*.09, .016, -.026), (side*.09, .016, .026), (side*.071, .016, .026)],
+                        [(side*.071, .016, -.015), (side*.083, .016, -.015), (side*.083, .016, .015), (side*.071, .016, .015)], (0, 1, 0))
+    elif pid in ('tiny_bowl', 'tiny_plate'):
         add_source(p, root, SOURCE_KEYS[pid], size, 48 if pid in ('tiny_cup', 'tiny_teapot') else 44, style='ceramic')
     elif pid in ('tiny_bottle', 'tiny_can', 'tiny_jar'):
         add_radial_source(p, root, SOURCE_KEYS[pid], size, [0, .60, .82, 1] if pid == 'tiny_bottle' else [0, .5, 1],
@@ -564,7 +652,7 @@ def make_row(p, path, centred_digest):
            'source_materials': {}, 'dimensions_m': size, 'bounds_m': bounds, 'use': SPECS[p.pid][3],
            'lod0_tris': tris, 'colours': sorted(p.colours), 'bytes': count, 'sha256': digest,
            'sources': p.sources, 'tier': SPECS[p.pid][0], 'generator': SCRIPT,
-           'palette_extra': {k: list(ti.PALETTE[k][:3]) for k in p.colours if k in dress.EXTRA or k in layers.EXTRA},
+           'palette_extra': {k: list(ti.PALETTE[k][:3]) for k in sorted(p.colours) if k in dress.EXTRA or k in layers.EXTRA or k in EXTRA},
            'source_search': SEARCH_NOTES.get(p.pid, 'CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.'),
            'verification': {'centred_check_glb_sha256': centred_digest, 'floor_binary_check': 'passed',
                             'godot': 'not_run: 발주 세션 담당'}}
@@ -577,11 +665,11 @@ def make_row(p, path, centred_digest):
     return row
 
 
-def update_books(out_dir, rows):
+def update_books(out_dir, rows, replace=False):
     catalog = out_dir / 'catalog.json'
     book = json.loads(catalog.read_text(encoding='utf-8-sig'))
     for row in rows:
-        if row['id'] in book['assets']:
+        if row['id'] in book['assets'] and not replace:
             raise ValueError('F-EXISTS: 장부 기존 id ' + row['id'])
     for row in rows:
         book['assets'][row['id']] = {k: v for k, v in row.items() if k != 'id'}
@@ -593,9 +681,25 @@ def update_books(out_dir, rows):
     book['tiers'] = {'script': SCRIPT, 'new_triangle_limit': LIMIT, 'base_triangles': BASE_TRIS,
                      'origin': 'floor_center', 'placement': '새 31종은 바닥 원점. 기존 자산은 개별 origin 유지.',
                      'source_priority': 'CC0 -> CC BY 4.0 -> 기본 도형'}
-    write_json(catalog, book)
     path = out_dir / 'README.md'
     text = path.read_text(encoding='utf-8')
+    if replace:
+        for row in rows:
+            line = '| %s | %s | %s | %d | %s | %s |' % (row['id'], row['source_asset'], ti.dimensions(row['dimensions_m']), row['lod0_tris'], ', '.join(row['colours']), row['sha256'])
+            text, count = re.subn(r'^\| '+re.escape(row['id'])+r' \|.*$', lambda _: line, text, flags=re.M)
+            if count != 1:
+                raise ValueError('F-INPUT-MISSING: README 행 개수 ' + row['id'])
+            if row['id'] == 'tiny_cup' and not row['sources']:
+                text = re.sub(r'^크레딧 `tiny_cup`:.*\n', '', text, flags=re.M)
+        new_total = sum(r['lod0_tris'] for r in book['assets'].values() if r.get('generator') == SCRIPT)
+        text = re.sub(r'전체 삼각형: \d+\.', '전체 삼각형: %d.' % total, text)
+        text, count = re.subn(r'^새 살림 단계 합계:.*$', '새 살림 단계 합계: %d / 2,430. 전체 삼각형: %d / 10,000.' % (new_total, total), text, flags=re.M)
+        if count != 1:
+            raise ValueError('F-INPUT-MISSING: README 전체 합계 줄')
+        write_json(catalog, book)
+        path.write_text(text, encoding='utf-8')
+        return
+    write_json(catalog, book)
     text = re.sub(r'^# 열차 실내 가구 \d+종', '# 열차 실내 가구 %d종' % len(book['assets']), text)
     text = text.replace('개별 상한 600, 전체 상한 8,000. 전체 삼각형: 4284.',
                         '기존 개별 상한 600, 새 살림 모형은 각 장부의 상한 적용. 전체 상한 10,000. 전체 삼각형: %d.' % total)
@@ -713,29 +817,43 @@ def main():
     parser.add_argument('--only', default='')
     parser.add_argument('--stage-only', action='store_true')
     parser.add_argument('--render-contact-sheet', action='store_true')
+    parser.add_argument('--replace-existing', action='store_true', help='복구 사본이 있는 FIX_IDS를 명시한 --only 범위에서만 교체')
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
     repo = Path(args.repo).resolve()
     out = repo / 's2/models/train_interior'
     evidence = repo / 'codex_out'
-    stage = evidence / 'tiers_stage'
+    prefix = 'tiers_fix' if args.replace_existing else 'tiers'
+    stage = evidence / (prefix+'_stage')
     stage.mkdir(parents=True, exist_ok=True)
     selected = args.only.split(',') if args.only else list(SPECS)
     if len(selected) != len(set(selected)) or any(pid not in SPECS for pid in selected):
         raise SystemExit('F-INPUT-MISSING: --only 중복/알 수 없는 이름')
+    if args.replace_existing and (not args.only or not set(selected) <= FIX_IDS):
+        raise SystemExit('F-INPUT-MISSING: 교체는 --only에 FIX_IDS만 명시해야 함')
     rows, failures = [], []
     base = json.loads((out / 'catalog.json').read_text(encoding='utf-8-sig'))
     old_hashes = {p.name: sha(p) for p in out.glob('*.glb')}
+    replace_hashes = {}
+    if args.replace_existing:
+        baseline = json.loads((evidence/'tiers_fix_baseline.json').read_text(encoding='utf-8'))
+        for rel in ['s2/models/train_interior/'+pid+'.glb' for pid in selected] + ['s2/models/train_interior/catalog.json', 's2/models/train_interior/README.md']:
+            expected = baseline['hashes'][rel]
+            if sha(repo/rel) != expected or sha(evidence/'tiers_fix_before'/rel) != expected:
+                raise RuntimeError('F-PRESERVATION: 교체 전 원본/복구 사본 불일치 '+rel)
+            replace_hashes[rel] = expected
+        if any(base['assets'].get(pid, {}).get('generator') != SCRIPT for pid in selected):
+            raise RuntimeError('F-PRESERVATION: 다른 생성기의 자산 교체 금지')
     for pid in selected:
         piece = None
         try:
-            if not args.stage_only and ((out/(pid+'.glb')).exists() or pid in base['assets']):
+            if not args.stage_only and not args.replace_existing and ((out/(pid+'.glb')).exists() or pid in base['assets']):
                 raise ValueError('F-EXISTS: 기존 GLB/장부를 덮어쓰지 않음 ' + pid)
             piece = ti.Piece(pid)
             piece.sources = []
             build(piece, Path(args.src_open).resolve())
             piece.fit(SPECS[pid][1])
             tris = len(piece.bm.faces)
-            if tris > SPECS[pid][2]:
+            if tris > (40 if pid == 'tiny_cup' else SPECS[pid][2]):
                 raise ValueError('F-BUDGET: %s %d > %d' % (pid, tris, SPECS[pid][2]))
             path = stage / (pid+'.glb')
             ti.export(piece, path)
@@ -755,31 +873,35 @@ def main():
         finally:
             if piece is not None:
                 piece.bm.free()
-        write_json(evidence / 'tiers_build_receipt.json', {'stage_only': args.stage_only, 'rows': rows, 'failures': failures,
+        write_json(evidence / (prefix+'_build_receipt.json'), {'stage_only': args.stage_only, 'replace_existing': args.replace_existing, 'rows': rows, 'failures': failures,
                     'blender': bpy.app.version_string, 'argv': sys.argv, 'total_new_triangles': sum(r['lod0_tris'] for r in rows)})
     total = sum(r['lod0_tris'] for r in rows)
-    existing_new = sum(r['lod0_tris'] for r in base['assets'].values() if r.get('generator') == SCRIPT)
+    built_ids = {r['id'] for r in rows}
+    existing_new = sum(r['lod0_tris'] for pid, r in base['assets'].items() if r.get('generator') == SCRIPT and pid not in built_ids)
     if total+existing_new > LIMIT:
         failures.append({'id': 'total', 'failure_code': 'F-BUDGET', 'observation': str(total+existing_new)})
-    if sum(r['lod0_tris'] for r in base['assets'].values()) + total > KIT_LIMIT:
+    if sum(r['lod0_tris'] for pid, r in base['assets'].items() if pid not in built_ids) + total > KIT_LIMIT:
         failures.append({'id': 'kit', 'failure_code': 'F-BUDGET', 'observation': '전체 10,000 초과'})
     installed = []
     if not args.stage_only and not any(f['id'] in ('total', 'kit') for f in failures):
+        for rel, expected in replace_hashes.items():
+            if sha(repo/rel) != expected:
+                raise RuntimeError('F-PRESERVATION: 생성 중 동시 변경 '+rel)
         for row in rows:
             target = out / (row['id']+'.glb')
-            with target.open('xb') as stream:
+            with target.open('wb' if args.replace_existing else 'xb') as stream:
                 stream.write((stage / target.name).read_bytes())
             installed.append(row['id'])
-        update_books(out, rows)
+        update_books(out, rows, replace=args.replace_existing)
     for name, digest in old_hashes.items():
-        if sha(out/name) != digest:
+        if name.removesuffix('.glb') not in installed and sha(out/name) != digest:
             failures.append({'id': name, 'failure_code': 'F-PRESERVATION', 'observation': '기존 GLB 해시 변경'})
-    write_json(evidence / 'tiers_build_receipt.json', {'stage_only': args.stage_only, 'rows': rows, 'failures': failures,
-                'blender': bpy.app.version_string, 'argv': sys.argv, 'total_new_triangles': total,
-                'installed': installed, 'old_glb_hashes_preserved': not any(f['failure_code'] == 'F-PRESERVATION' for f in failures)})
+    write_json(evidence / (prefix+'_build_receipt.json'), {'stage_only': args.stage_only, 'replace_existing': args.replace_existing, 'rows': rows, 'failures': failures,
+                'blender': bpy.app.version_string, 'argv': sys.argv, 'selected_triangles': total, 'total_new_triangles': total+existing_new,
+                'installed': installed, 'unselected_glb_hashes_preserved': not any(f['failure_code'] == 'F-PRESERVATION' for f in failures)})
     if args.render_contact_sheet and rows:
-        render_sheet(stage, rows, evidence / 'tiers_contact_sheet.png')
-    print('TIERS_COMPLETE ready=%d/%d triangles=%d/%d installed=%d failures=%d' % (len(rows), len(selected), total, LIMIT, len(installed), len(failures)), flush=True)
+        render_sheet(stage, rows, evidence / (prefix+'_contact_sheet.png'))
+    print('TIERS_COMPLETE ready=%d/%d triangles=%d/%d installed=%d failures=%d' % (len(rows), len(selected), total+existing_new, LIMIT, len(installed), len(failures)), flush=True)
     if failures:
         # Blender는 Python 예외에도 0을 반환할 수 있으므로 호출에 --python-exit-code 1 사용 권장.
         raise RuntimeError('F-BUILD: 위 failures 참조')

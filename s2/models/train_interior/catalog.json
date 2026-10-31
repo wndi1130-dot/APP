@@ -87,7 +87,7 @@
   "godot_material": "built-in StandardMaterial3D, vertex colour enabled on import; no material file",
   "triangle_limit": 600,
   "total_triangle_limit": 10000,
-  "total_triangles": 9373,
+  "total_triangles": 9383,
   "assets": {
     "bench": {
       "status": "ready",
@@ -3380,7 +3380,7 @@
       "path": "res://models/train_interior/tin_stove.glb",
       "reference_size_m": [
         0.4,
-        0.7,
+        0.58,
         0.4
       ],
       "origin": "floor_center",
@@ -3390,7 +3390,7 @@
         {
           "size_m": [
             0.4,
-            0.7,
+            0.58,
             0.4
           ],
           "uses": 1
@@ -3399,7 +3399,7 @@
       "source_materials": {},
       "dimensions_m": [
         0.4,
-        0.7,
+        0.58,
         0.4
       ],
       "bounds_m": [
@@ -3410,56 +3410,37 @@
         ],
         [
           0.2,
-          0.7,
+          0.58,
           0.2
         ]
       ],
-      "use": "낡은 깡통 난로 외형",
-      "lod0_tris": 88,
+      "use": "낮고 삐뚤한 깡통 난로, 굽은 짧은 연통과 덧댄 양철",
+      "lod0_tris": 112,
       "colours": [
         "iron",
         "iron_worn",
+        "rust_faded",
         "soot"
       ],
-      "bytes": 6940,
-      "sha256": "67c7c52b9f493f69dff0392d5ba7b82829cb21fa1a546879d2a8bbb51e34c8d4",
-      "sources": [
-        {
-          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\barrel.glb",
-          "pack": "kenney_survival",
-          "file": "kenney_survival/x/Models/GLB format/barrel.glb",
-          "license": "CC0-1.0",
-          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\License.txt",
-          "sha256": "3a0d12f6bdd1badd361f64ce0fbbf878a4ccfc2de8ff1ac4ed4c1aea2a9ee04a",
-          "original_triangles": 412,
-          "reduced_triangles": 32,
-          "reduction": "원본 높이별 외곽 반경 표본 기반 회전체 리토폴로지",
-          "source_profile": [
-            [
-              0,
-              1.0
-            ],
-            [
-              0.5,
-              1.0
-            ],
-            [
-              1,
-              1.0
-            ]
-          ]
-        }
-      ],
+      "bytes": 8940,
+      "sha256": "7fca23daa36eedb2fcad39b50af3910e0da238c670647309b00a2d6669435e72",
+      "sources": [],
       "tier": 0,
       "generator": "tools/blender/train_car_tiers.py",
-      "palette_extra": {},
-      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "palette_extra": {
+        "rust_faded": [
+          0.36,
+          0.19,
+          0.13
+        ]
+      },
+      "source_search": "2026-10-31 손질 발주: 깡통·덧댄 판·굽은 연통을 기본 도형으로 직접 구성.",
       "verification": {
-        "centred_check_glb_sha256": "da827dedf14d000f5eb93110315db124eef586c166bbc17b053144fa8734dd8c",
+        "centred_check_glb_sha256": "924ad9d63d2a81b303a21420765d7cde95ba1c0420721d09232d877966e13c5a",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
-      "source_asset": "kenney_survival / kenney_survival/x/Models/GLB format/barrel.glb (CC0-1.0)"
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
     },
     "sack_bunk_upper": {
       "status": "ready",
@@ -3806,60 +3787,26 @@
           0.2
         ]
       ],
-      "use": "띠가 있는 드럼통 난로 외형",
-      "lod0_tris": 132,
+      "use": "세운 드럼통 난로, 둘레 테 둘과 네모 문, 곧은 연통, 세 다리",
+      "lod0_tris": 140,
       "colours": [
         "iron",
         "iron_worn",
         "soot"
       ],
-      "bytes": 9892,
-      "sha256": "0b9dfde6abc4d7248b0ee05889b7237d8e7f1fba378853618d9f187be44a02de",
-      "sources": [
-        {
-          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\barrel.glb",
-          "pack": "kenney_survival",
-          "file": "kenney_survival/x/Models/GLB format/barrel.glb",
-          "license": "CC0-1.0",
-          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\License.txt",
-          "sha256": "3a0d12f6bdd1badd361f64ce0fbbf878a4ccfc2de8ff1ac4ed4c1aea2a9ee04a",
-          "original_triangles": 412,
-          "reduced_triangles": 76,
-          "reduction": "원본 높이별 외곽 반경 표본 기반 회전체 리토폴로지",
-          "source_profile": [
-            [
-              0,
-              1.0
-            ],
-            [
-              0.12,
-              1.0
-            ],
-            [
-              0.5,
-              1.0
-            ],
-            [
-              0.88,
-              1.0
-            ],
-            [
-              1,
-              1.0
-            ]
-          ]
-        }
-      ],
+      "bytes": 10132,
+      "sha256": "444b0b91ae44ceffa8d9a01dbcdf3f8eee1ef4a92d3998b2cea1cdb54b636591",
+      "sources": [],
       "tier": 1,
       "generator": "tools/blender/train_car_tiers.py",
       "palette_extra": {},
-      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "source_search": "2026-10-31 손질 발주: 세운 드럼통·둘레 테 둘·문·세 다리를 기본 도형으로 직접 구성.",
       "verification": {
-        "centred_check_glb_sha256": "97cab76936ea4f167e9ae5513b9d66348b1954807b9ff5cbc893bc8318e312d5",
+        "centred_check_glb_sha256": "68a0755dafe57ab8926b98b1457b0a1a750f8a3805ef3082582eff0b88f5bd66",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
-      "source_asset": "kenney_survival / kenney_survival/x/Models/GLB format/barrel.glb (CC0-1.0)"
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
     },
     "end_shelf": {
       "status": "ready",
@@ -3900,35 +3847,25 @@
           0.14
         ]
       ],
-      "use": "빈 끝벽 수납 선반",
-      "lod0_tris": 88,
+      "use": "판 사이가 열린 세 단 끝벽 선반",
+      "lod0_tris": 60,
       "colours": [
+        "wood",
         "wood_worn"
       ],
-      "bytes": 10012,
-      "sha256": "b44f52f74ee08fcd840a4d98b9baf12716e9f807c3db84b5a036b1d6d920d23f",
-      "sources": [
-        {
-          "path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\gltf\\shelf_small.gltf.glb",
-          "pack": "kaykit_dungeon",
-          "file": "kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/shelf_small.gltf.glb",
-          "license": "CC0-1.0",
-          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\LICENSE.txt",
-          "sha256": "270615f38648d2ab9d5d67e390a97929a07d6df81b7a7e131c8d73a6d2767078",
-          "original_triangles": 60,
-          "reduced_triangles": 44
-        }
-      ],
+      "bytes": 5236,
+      "sha256": "b916e9360d1e7405384653491f118c3b9c0d31ac641dd676a84edb76b0ba8ebe",
+      "sources": [],
       "tier": 2,
       "generator": "tools/blender/train_car_tiers.py",
       "palette_extra": {},
-      "source_search": "CC0 bookcaseOpenLow는 단순 축소 후 112삼각형으로 목표 92를 넘음. CC0 shelf_small을 위아래 두 개의 빈 벽걸이 선반으로 구성.",
+      "source_search": "2026-10-31 손질 발주: 비어 있는 세 단 선반을 기본 도형으로 직접 구성.",
       "verification": {
-        "centred_check_glb_sha256": "5fa77c6c3c7a1d950757165f38e14ab58a4a185c9f1a9293afa69cf4a5fc9c9d",
+        "centred_check_glb_sha256": "f5df4f0833539356dc781c35b4a2d49e53c99427c76ce1c0d1439c1992f68138",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
-      "source_asset": "kaykit_dungeon / kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/shelf_small.gltf.glb (CC0-1.0)",
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)",
       "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
     },
     "top_shelf": {
@@ -3970,35 +3907,27 @@
           0.14
         ]
       ],
-      "use": "빈 윗벽 선반",
-      "lod0_tris": 46,
+      "use": "받침 쇠와 얇은 판 한 단의 윗벽 선반",
+      "lod0_tris": 40,
       "colours": [
+        "iron",
+        "iron_worn",
+        "wood",
         "wood_worn"
       ],
-      "bytes": 5728,
-      "sha256": "8ee3fbd0eb3fe95c000e68452ba3e9152892d89c22014f2b2111227aee04cdf9",
-      "sources": [
-        {
-          "path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\gltf\\shelf_small.gltf.glb",
-          "pack": "kaykit_dungeon",
-          "file": "kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/shelf_small.gltf.glb",
-          "license": "CC0-1.0",
-          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\LICENSE.txt",
-          "sha256": "270615f38648d2ab9d5d67e390a97929a07d6df81b7a7e131c8d73a6d2767078",
-          "original_triangles": 60,
-          "reduced_triangles": 46
-        }
-      ],
+      "bytes": 3960,
+      "sha256": "9e5a7b60177497e3d9f87e07017314ca6c0ccc633dfb0f6f1a6935d446f45b76",
+      "sources": [],
       "tier": "2·3",
       "generator": "tools/blender/train_car_tiers.py",
       "palette_extra": {},
-      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "source_search": "2026-10-31 손질 발주: 얇은 판 하나와 받침 쇠를 기본 도형으로 직접 구성.",
       "verification": {
-        "centred_check_glb_sha256": "2db4ef1c8f01983188eca95234c66a0cf3ac23e8ffcdcd39cd73b8e3d944f329",
+        "centred_check_glb_sha256": "e3b3a9b0612d05a05bbdae98a06e6ca639aad7e14ba1a03a0e3ff0dfc5f8ebf9",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
-      "source_asset": "kaykit_dungeon / kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/shelf_small.gltf.glb (CC0-1.0)",
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)",
       "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
     },
     "pale_paneling": {
@@ -4041,13 +3970,13 @@
         ]
       ],
       "use": "창 아래 낮고 밝은 나무 판벽 띠",
-      "lod0_tris": 80,
+      "lod0_tris": 88,
       "colours": [
-        "cloth_faded",
-        "wood_worn"
+        "paper_aged",
+        "wood_birch_pale"
       ],
-      "bytes": 9168,
-      "sha256": "a1cdfe497f0f35fbb9be6c982c9c22f588280730d5a6066c052bb302ab924387",
+      "bytes": 9728,
+      "sha256": "34a0be5e92ebb92244da0e07e50c048322a692fed8079abafab417db20f85b71",
       "sources": [
         {
           "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\Models\\GLTF format\\paneling.glb",
@@ -4062,10 +3991,16 @@
       ],
       "tier": 3,
       "generator": "tools/blender/train_car_tiers.py",
-      "palette_extra": {},
+      "palette_extra": {
+        "wood_birch_pale": [
+          0.7,
+          0.63,
+          0.5
+        ]
+      },
       "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
       "verification": {
-        "centred_check_glb_sha256": "753c51b237f66a2e89e27ee91cc0fc4f5070aebf8b78452afe7d94defa4a67ac",
+        "centred_check_glb_sha256": "5df1a5ae1d17e557b778aebf7e89838e156f014d32f9387ca85a4e57f55dc03e",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
@@ -4438,13 +4373,14 @@
         ]
       ],
       "use": "문 없는 낮은 테두리의 위 침상",
-      "lod0_tris": 102,
+      "lod0_tris": 106,
       "colours": [
         "cloth_faded",
-        "wood_worn"
+        "paper_aged",
+        "wood_birch_pale"
       ],
-      "bytes": 9528,
-      "sha256": "7b6a3b9db113761e9117b2e23b84539583e60e67688348fc77ad0f60caca85d7",
+      "bytes": 9808,
+      "sha256": "bef7e9aa43f74ebb195a2fda98915355ac16a36195ea97099fa47599756c358b",
       "sources": [
         {
           "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\bedroll.glb",
@@ -4459,10 +4395,16 @@
       ],
       "tier": 3,
       "generator": "tools/blender/train_car_tiers.py",
-      "palette_extra": {},
+      "palette_extra": {
+        "wood_birch_pale": [
+          0.7,
+          0.63,
+          0.5
+        ]
+      },
       "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
       "verification": {
-        "centred_check_glb_sha256": "c41a09d91d9a5c3785175aa80a4d389a8131efa601d91301cfaf47d3bb57b7ad",
+        "centred_check_glb_sha256": "326db456d5c72ee5c01a38732aa88306d5f18e6dbf6f0f57e4401e270a635c83",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
@@ -4508,13 +4450,14 @@
         ]
       ],
       "use": "문 없는 낮은 테두리의 아래 침상",
-      "lod0_tris": 150,
+      "lod0_tris": 154,
       "colours": [
         "cloth_faded",
-        "wood_worn"
+        "paper_aged",
+        "wood_birch_pale"
       ],
-      "bytes": 12864,
-      "sha256": "806a01ffe045cea476942b7cee399f0394ed74584c8e771e403cd51a7716b16a",
+      "bytes": 13144,
+      "sha256": "eb069608f3d3c629c32289594ac82382e40c48457d2d6818214faa90b46e4375",
       "sources": [
         {
           "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\bedroll.glb",
@@ -4529,10 +4472,16 @@
       ],
       "tier": 3,
       "generator": "tools/blender/train_car_tiers.py",
-      "palette_extra": {},
+      "palette_extra": {
+        "wood_birch_pale": [
+          0.7,
+          0.63,
+          0.5
+        ]
+      },
       "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
       "verification": {
-        "centred_check_glb_sha256": "b79030f4a3e93f3fb2eaf754bf7a024bd44997e1279330a8e47f06229b7e127e",
+        "centred_check_glb_sha256": "a1c0d5758b4cbb57798d77156933a0def7ac751b73b0bd85db07850b0e4ef42e",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
@@ -4578,28 +4527,14 @@
         ]
       ],
       "use": "손잡이 있는 빈 컵",
-      "lod0_tris": 46,
+      "lod0_tris": 40,
       "colours": [
         "iron_worn",
         "slate_faded"
       ],
-      "bytes": 5728,
-      "sha256": "d0e053719600cca3e5de02b05d9bea40abd2424a3ec6d848a36bd13137fc36c0",
-      "sources": [
-        {
-          "path": "G:\\내 드라이브\\좀비_공개자산\\google_scanned_objects\\Cole_Hardware_Mug_Classic_Blue.zip",
-          "pack": "google_scanned_objects",
-          "file": "Cole_Hardware_Mug_Classic_Blue.zip!meshes/model.obj",
-          "license": "CC-BY-4.0",
-          "credit": "Google Scanned Objects / Google Research — CC BY 4.0; 원본 면 축소·크기 조정·재착색",
-          "source_url": "https://research.google/resources/datasets/scanned-objects-google-research/",
-          "license_url": "https://creativecommons.org/licenses/by/4.0/",
-          "license_evidence": "발주문에 CC BY 4.0 명시; 로컬 ZIP metadata.pbtxt도 조사 기록",
-          "sha256": "077446e8c3509a48dae63f2d5e67a1dfe086e794b2facb552a26b890c725bd26",
-          "original_triangles": 8716,
-          "reduced_triangles": 46
-        }
-      ],
+      "bytes": 3960,
+      "sha256": "ca101af2caad6c6af7c8d0e00abc5c3fe2649ec302bb045a739ef039e0b031c9",
+      "sources": [],
       "tier": "2·3",
       "generator": "tools/blender/train_car_tiers.py",
       "palette_extra": {
@@ -4609,14 +4544,13 @@
           0.34
         ]
       },
-      "source_search": "CC0 bucket은 들손 양동이이고 컵 손잡이/비례와 다름. CC BY 손잡이 컵 선택.",
+      "source_search": "2026-10-31 손질 발주: 스캔 원본을 쓰지 않고 빈 컵과 손잡이를 기본 도형 40삼각형으로 직접 구성.",
       "verification": {
-        "centred_check_glb_sha256": "761ef6194f251a9bd0764abf5576552a17b344b6d223bce56145b21e921ee7e7",
+        "centred_check_glb_sha256": "5432657b71215ce7fee4bcd8e93d4984684a73228dd63f6f20fd12643047148a",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
-      "source_asset": "google_scanned_objects / Cole_Hardware_Mug_Classic_Blue.zip!meshes/model.obj (CC-BY-4.0)",
-      "credit": "Google Scanned Objects / Google Research — CC BY 4.0; 원본 면 축소·크기 조정·재착색"
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
     },
     "tiny_bowl": {
       "status": "ready",
@@ -5143,26 +5077,15 @@
           0.06
         ]
       ],
-      "use": "빈 타원 쟁반",
-      "lod0_tris": 42,
+      "use": "낮은 네모 테두리와 양쪽 뚫린 손잡이의 쟁반",
+      "lod0_tris": 44,
       "colours": [
         "iron_worn",
         "slate_faded"
       ],
-      "bytes": 5320,
-      "sha256": "ada11889fab6f6a61c93f1f104af459167e26803e848e0da64b6363549f88ef8",
-      "sources": [
-        {
-          "path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\gltf\\plate_small.gltf.glb",
-          "pack": "kaykit_dungeon",
-          "file": "kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/plate_small.gltf.glb",
-          "license": "CC0-1.0",
-          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\LICENSE.txt",
-          "sha256": "4c76a077618c02f87dcd8b8a53c708983ac5cdbe7082a8d61dc4085db27a0181",
-          "original_triangles": 120,
-          "reduced_triangles": 42
-        }
-      ],
+      "bytes": 4112,
+      "sha256": "7d4b885dd899de1617f7027e74e72182be6d5ae5abd1c7082af74092ce5dcc4f",
+      "sources": [],
       "tier": "2·3",
       "generator": "tools/blender/train_car_tiers.py",
       "palette_extra": {
@@ -5172,13 +5095,13 @@
           0.34
         ]
       },
-      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "source_search": "2026-10-31 손질 발주: 네모 쟁반과 양쪽 손잡이를 기본 도형으로 직접 구성.",
       "verification": {
-        "centred_check_glb_sha256": "0ad171d4fc042314f45b9669404731bab3a19fba17ebfffbd95762cfb4047f5a",
+        "centred_check_glb_sha256": "63449d47ab1a3499fa3045fd75af65f5138da0e7965d89bb22b340d20e2760c5",
         "floor_binary_check": "passed",
         "godot": "not_run: 발주 세션 담당"
       },
-      "source_asset": "kaykit_dungeon / kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/plate_small.gltf.glb (CC0-1.0)"
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
     },
     "thread_spool": {
       "status": "ready",
