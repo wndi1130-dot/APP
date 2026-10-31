@@ -22,7 +22,7 @@ function endingOf(sentence: string): Ending {
   if (/(지요|죠)$/u.test(last)) return '지요';
   if (/(세요|어요|아요|해요|예요|에요|요)$/u.test(last)) return '해요';
   if (/(구려|오|소)$/u.test(last)) return '하오';
-  if (/(다|라|자|냐|니|지|게|군|네|마|야|어|아|래|대|걸|거든|고|까|해|줘|와|봐|러)$/u.test(last)) return '해라';
+  if (/(다|라|자|냐|니|지|게|군|구나|네|마|야|어|아|래|대|걸|거든|고|까|해|줘|와|봐|러)$/u.test(last)) return '해라';
   return '조각';
 }
 
@@ -230,6 +230,7 @@ describe('말씨 가름', () => {
     expect(endings('알겠어요. 출발한다.')).toEqual(['해요', '해라']);
     expect(endings('열쇠는 경비대장 하나만 쥔다. 오늘부터.')).toEqual(['해라', '조각']);
     expect(endings('한 눈금만 올려 줘. 그날 밤 명단부터 다시 가져와.')).toEqual(['해라', '해라']);
+    expect(endings('계산이 맞았구나. 다음 이야기도 들어 보자.')).toEqual(['해라', '해라']);
     expect(fits('열쇠는 경비대장 하나만 쥡니다. 오늘부터.', '칸')).toBe(false);
     expect(fits('열차를 세워 주십시오. 반나절이면 된다.', '보고')).toBe(false);
     expect(fits('괜찮아요.', '앞칸 대표')).toBe(false);
@@ -293,9 +294,14 @@ describe('말씨 가름', () => {
   });
 
   it('S2 필드 주민 카드에서 열차장 쪽이 하는 선택지 말은 해라체다', () => {
-    const src = readFileSync(join(S2, 'game/field_residents.gd'), 'utf8');
-    const says = [...src.matchAll(/"say": "\\"([^"\\]+)\\""/gu)].map(m => m[1]);
-    expect(says.length).toBe(3);
+    const src = readFileSync(join(S2, 'game/field_residents.gd'), 'utf8').replace(/\r\n/g, '\n');
+    const start = src.indexOf('func options() -> Array:');
+    const body = src.slice(start, src.indexOf('\n\n', src.indexOf('return [', start)));
+    // HUD는 바깥 큰따옴표가 있든 없든 say를 보여 주니 둘 다 읽고, 선택지 수와 맞대어 빠뜨린 것이 없게 한다
+    const ids = [...body.matchAll(/\{\s*"id":/gu)].length;
+    const says = [...body.matchAll(/"say":\s*"(?:\\")?((?:[^"\\]|\\[^"])*?)(?:\\")?"/gu)].map(m => m[1]);
+    expect(ids).toBe(3);
+    expect(says.length).toBe(ids);
     expect(says.filter(s => !endings(s).every(e => e === '해라' || e === '조각')).map(s => `${endings(s).join('·')}: ${s}`)).toEqual([]);
   });
 
