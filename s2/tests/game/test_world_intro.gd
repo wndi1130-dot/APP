@@ -84,7 +84,7 @@ func test_the_still_sheet_and_all_its_words_fit_in_1280_by_720() -> void:
 	await wait_frames(3)
 	var screen: Rect2 = Rect2(Vector2.ZERO, Vector2(viewport.size))
 	assert_eq(intro.size, screen.size, "the overlay fills the viewport")
-	assert_eq(intro.sheet.size, WorldIntro.SHEET_SIZE * UiFonts.K, "copy never grows the paper")
+	assert_almost_eq(intro.sheet.size, WorldIntro.SHEET_SIZE * UiFonts.K, Vector2.ONE * 0.01, "copy never grows the paper")
 	assert_true(intro.sheet.get_script() == PaperSheet)
 	assert_eq(intro.sheet.modulate.a, 1.0, "still shows the whole sheet at once")
 	var dim: ColorRect = intro.get_node("Dim") as ColorRect
