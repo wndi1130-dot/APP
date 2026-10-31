@@ -2319,6 +2319,16 @@ func _toast_warn(text: String) -> void:
 	b.pressed.connect(_toast_drop.bind(entry))
 
 
+## Drop only the warning with these words, leaving other notes alone.
+func drop_warning(text: String) -> void:
+	for t: Dictionary in toasts.duplicate():
+		if t["kind"] != TOAST_WARN or not is_instance_valid(t["l"]):
+			continue
+		var button := t["l"] as Button
+		if button != null and button.text == UiFonts.keep_all(text):
+			_toast_drop(t)
+
+
 func _toast_drop(entry: Dictionary) -> void:
 	if is_instance_valid(entry["l"]):
 		# Out of the column at once, so the ones left close up this frame.

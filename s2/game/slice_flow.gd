@@ -260,8 +260,11 @@ var pending_shop_events: Array = []
 var save_error: String = ""
 ## A failed write is told once a step where the player looks (the field's warn note, the
 ## home keys' note, the panel's lines); the next save point tries again and clears it.
+## With no place to tell it, the error waits for one of those screens to stand.
 var save_told_at: int = -1
 var save_line: Label = null
+var save_note: Label = null
+var save_hud: FieldHud = null
 var run: String = ""
 
 
@@ -1038,7 +1041,15 @@ func _save_slice() -> bool:
 			return false
 	save_error = ""
 	save_told_at = -1
+	if is_instance_valid(save_note):
+		save_note.hide()
+		save_note.queue_free()
+	save_note = null
+	if is_instance_valid(save_hud):
+		save_hud.drop_warning(SAVE_FAILED)
+	save_hud = null
 	if is_instance_valid(save_line):
+		save_line.hide()
 		save_line.queue_free()
 	save_line = null
 	return true
@@ -1059,10 +1070,16 @@ func _tell_save_error() -> void:
 		return
 	var hud: Variant = field.get("hud") if current() == "field" and is_instance_valid(field) else null
 	if hud is FieldHud and is_instance_valid(hud):
-		(hud as FieldHud).toast(SAVE_FAILED, FieldHud.TOAST_WARN)
-	elif is_instance_valid(bar):
-		(bar as HomeBar).note(SAVE_FAILED, null, SAVE_NOTE_S)
-	elif is_instance_valid(panel) and panel.visible:
+		var target := hud as FieldHud
+		if not is_instance_valid(target.toast_box):
+			return
+		target.toast(SAVE_FAILED, FieldHud.TOAST_WARN)
+		save_hud = target
+	elif is_instance_valid(bar) and bar.is_visible_in_tree():
+		save_note = (bar as HomeBar).note(SAVE_FAILED, null, SAVE_NOTE_S)
+		if not is_instance_valid(save_note):
+			return
+	elif is_instance_valid(panel) and panel.is_visible_in_tree():
 		_add_save_line()
 	else:
 		return
@@ -1539,6 +1556,7 @@ func _show_home(word: String) -> void:
 	bar = b
 	card = h
 	_select(FIRST_CAR, false)
+	_tell_save_error.call_deferred()
 
 
 ## Pick car `id` ("" folds the pane): its pane comes up and the camera moves
@@ -1659,6 +1677,7 @@ func leave_decor() -> void:
 		paper.g = train_g
 		paper._fill()
 	_select(id, false)
+	_tell_save_error.call_deferred()
 
 
 ## The train closed decorating on its own (its layout rebuilt): the pane, the screens put away
@@ -1898,6 +1917,7 @@ func _field_ready(game) -> void:
 	var on_close := Callable(game, "interrupt")
 	if bool(opts.get("save", false)) and not get_window().close_requested.is_connected(on_close):
 		get_window().close_requested.connect(on_close)
+	_tell_save_error.call_deferred()
 
 
 ## The departure contract for the stop the slice's train stands at (field_departure.gd,
@@ -2053,6 +2073,10 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 	next_button.text = go_word
 	panel.visible = true
 	_pin()
+	# Restoring the panel's contents is separate from telling a step once.
+	if save_error != "":
+		_add_save_line()
+		_tell_save_error.call_deferred()
 
 
 ## Bottom right at its own size, growing up and to the left: the carriage's

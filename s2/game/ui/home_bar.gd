@@ -220,10 +220,10 @@ func _soon(b: Button) -> void:
 
 ## A short note over key `b` (the main key when none) that fades after `hold_s`:
 ## the same note a room with no screen gets, one at a time.
-func note(text: String, b: Control = null, hold_s: float = NOTE_S) -> void:
+func note(text: String, b: Control = null, hold_s: float = NOTE_S) -> Label:
 	var over: Control = b if b != null else main_key
 	if over == null:
-		return
+		return null
 	var k: float = UiFonts.K
 	if is_instance_valid(_note):
 		_note.queue_free()
@@ -246,3 +246,4 @@ func note(text: String, b: Control = null, hold_s: float = NOTE_S) -> void:
 	tw.tween_interval(hold_s * 0.6)
 	tw.tween_property(l, "modulate:a", 0.0, hold_s * 0.4)
 	tw.tween_callback(l.queue_free)
+	return l
