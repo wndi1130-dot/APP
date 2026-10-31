@@ -19,6 +19,10 @@ const ROWS: Dictionary = {
 	"hall": [["candle", 0.06, "any"], ["book", 0.04, "any"]],
 }
 const MOST: int = 1
+## Every row's chance is scaled by this, so a house stop searched to its last box melts to
+## about 5 supplies (S1 SUP_YIELD.houses; the median over the seven house maps' expected
+## values, which run 2.4 to 7.4 by map size). A house gives the same in any stop's map.
+const YIELD: float = 0.72
 const HOME_KINDS: Array[String] = ["house", "farm", "fish"]
 ## Where people stayed that loot_kind does not tell: read from the name once, into the
 ## building's "stay_kind" key (LootDress.name_keys), and read from the key after (J06).
@@ -64,7 +68,7 @@ static func strew(containers: Dictionary, seed: int, rooms: Dictionary, building
 		var here := 0
 		for row: Array in rows:
 			var rolled := rng.randf()
-			if rolled < float(row[1]) * share and here < MOST and _fits(String(row[2]), kind, stay) and Carry.box_room(c, String(row[0])) > 0:
+			if rolled < float(row[1]) * YIELD * share and here < MOST and _fits(String(row[2]), kind, stay) and Carry.box_room(c, String(row[0])) > 0:
 				var items: Array = (c.get("items", []) as Array).duplicate()
 				items.append(String(row[0]))
 				c["items"] = items

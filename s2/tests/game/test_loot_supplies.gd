@@ -57,6 +57,7 @@ func test_rows_name_light_supplies_with_the_listed_values_and_distinct_pictures(
 				assert_ne(drawing, String(HudIcons.PATHS[other]), "%s / %s" % [icon, other])
 	assert_eq(seen.size(), 9)
 	assert_eq(LootSupplies.MOST, 1)
+	assert_between(LootSupplies.YIELD, 0.0, 1.0)
 
 
 func test_supplies_leave_every_other_item_and_report_field_unchanged() -> void:
