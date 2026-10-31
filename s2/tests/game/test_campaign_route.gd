@@ -132,6 +132,45 @@ func _type_gap(saved: Variant, back: Variant, at: String = "g") -> String:
 	return ""
 
 
+## The first place where a board read back from a save differs from the one kept in memory, or "".
+## Types and every other value must match exactly; a float may come back one last bit off
+## (Godot's JSON reader rounds some 17-digit numbers the other way), so floats match to 1e-12.
+func _board_gap(kept: Variant, back: Variant, at: String = "g") -> String:
+	if typeof(kept) != typeof(back):
+		return "%s: %s -> %s" % [at, type_string(typeof(kept)), type_string(typeof(back))]
+	if kept is Dictionary:
+		if kept.size() != back.size():
+			return at + ": keys differ"
+		for key: Variant in kept:
+			if not (back as Dictionary).has(key):
+				return "%s.%s: missing" % [at, str(key)]
+			var gap: String = _board_gap(kept[key], back[key], "%s.%s" % [at, str(key)])
+			if gap != "":
+				return gap
+	elif kept is Array:
+		if kept.size() != back.size():
+			return at + ": length differs"
+		for i: int in kept.size():
+			var gap: String = _board_gap(kept[i], back[i], "%s[%d]" % [at, i])
+			if gap != "":
+				return gap
+	elif kept is float:
+		var a: float = kept
+		var b: float = back
+		if absf(a - b) > 1e-12 * maxf(1.0, absf(a)):
+			return "%s: %s -> %s" % [at, str(a), str(b)]
+	elif kept != back:
+		return "%s: %s -> %s" % [at, str(kept), str(back)]
+	return ""
+
+
+## Waits until `done` says so, up to `seconds` (a field build takes many frames on a slow runner).
+func _wait_until(done: Callable, seconds: float = 60.0) -> void:
+	var until: int = Time.get_ticks_msec() + int(seconds * 1000.0)
+	while not bool(done.call()) and Time.get_ticks_msec() < until:
+		await get_tree().process_frame
+
+
 func _raw(path: String, content: String) -> void:
 	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	assert_not_null(file)
@@ -462,7 +501,7 @@ func test_campaign_second_stop_resume_matches_uninterrupted() -> void:
 			assert_eq(int(picked["g"]["campaign"]["cursor"]), 1)
 			var resumed: CampaignProbe = _flow(i, {"resume": picked})
 			_finish_second(resumed)
-			assert_eq(_json(resumed.train_g), _json(expected), "%s board %d values" % [cut, i])
+			assert_eq(_board_gap(expected, resumed.train_g), "", "%s board %d values" % [cut, i])
 			assert_eq(_type_gap(expected, resumed.train_g), "", "%s board %d types" % [cut, i])
 			assert_eq(_record_count(resumed), 2)
 			assert_eq(SliceSave.applied_ids(resumed.train_g).size(), 2)
@@ -490,7 +529,7 @@ func test_campaign_save_identity_and_shape() -> void:
 	SliceSave.clear(SLICE)
 	var missing: Dictionary = _pick()
 	assert_eq(missing["step"], "stop_pick")
-	assert_eq(_json(missing["g"]), _json(second))
+	assert_eq(_board_gap(second, missing["g"]), "")
 	assert_false(SliceSave.field_belongs(second, old_field))
 	_drop(flow)
 	var resumed: CampaignProbe = _flow(0, {"resume": missing})
@@ -513,7 +552,7 @@ func test_campaign_save_identity_and_shape() -> void:
 	meta["passed"] = true
 	assert_true(SliceSave.write(meta, SLICE))
 	var recovered: Dictionary = _pick()
-	assert_eq(_json(recovered["contract"]), _json(resumed.contract))
+	assert_eq(_board_gap(resumed.contract, recovered["contract"]), "")
 	assert_eq(recovered["receipt"], {})
 	assert_false(recovered["passed"])
 	var good: Dictionary = resumed.train_g.duplicate(true)
@@ -617,10 +656,10 @@ func test_campaign_departure_workshop_runs_once_after_resume() -> void:
 	_drop(flow)
 	var resumed: CampaignProbe = _flow(0, {"resume": _pick()})
 	assert_eq(resumed.current(), "travel")
-	assert_eq(_json(resumed.train_g), _json(before))
+	assert_eq(_board_gap(before, resumed.train_g), "")
 	resumed.go(resumed._index_of("travel"))
 	resumed._take(resumed.train_g.duplicate(true))
-	assert_eq(_json(resumed.train_g), _json(before), "no upkeep or work twice")
+	assert_eq(_board_gap(before, resumed.train_g), "", "no upkeep or work twice")
 	assert_eq(_type_gap(before, resumed.train_g), "")
 	assert_eq(resumed.train_g["campaign"]["workshop_done"].size(), 1)
 	_reach(resumed, "arrive")
@@ -641,10 +680,7 @@ func test_loader_does_not_reuse_another_stop_map() -> void:
 	loader.field_built.connect(func(built_game: Node) -> void: built.append(built_game))
 	loader.build_field(self, {"place": "houses_01", "visit_id": "visit_b", "campaign_kind": "houses",
 		"seed": 91, "stop_form": "edge", "vertices": 96, "cap": 0, "budget": 0})
-	for _frame: int in 1800:
-		if not built.is_empty() or loader.error != "":
-			break
-		await get_tree().process_frame
+	await _wait_until(func() -> bool: return not built.is_empty() or loader.error != "")
 	assert_eq(loader.error, "")
 	assert_eq(built.size(), 1)
 	if built.is_empty():
@@ -670,10 +706,7 @@ func test_loader_does_not_reuse_another_stop_map() -> void:
 	assert_eq(loader._retired_paths[0], old_path)
 	loader._take({"place_id": "first_leg_01_sulechow"}, old_generation)
 	assert_true(loader.data.is_empty(), "a late old task is ignored")
-	for _frame: int in 1800:
-		if (loader.has_data() and loader._retired_paths.is_empty()) or loader.error != "":
-			break
-		await get_tree().process_frame
+	await _wait_until(func() -> bool: return (loader.has_data() and loader._retired_paths.is_empty()) or loader.error != "")
 	assert_eq(loader.error, "")
 	assert_true(loader.has_data())
 	assert_eq(loader._retired_paths.size(), 0)
