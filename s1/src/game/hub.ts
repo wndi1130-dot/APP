@@ -388,7 +388,7 @@ function hubView(g: Game, card: Card): CardView | null {
     case 'hub_omen':
       return {
         title: '짐 싸는 기척', body: `${card.text ?? ''}\n${PACK_MEANING} ${COMM_NAME[c]}이(가) 라이프치히에서 내리려 한다. 두 구간 안에 관계를 한 단계라도 올리면 떠날 사람이 준다.`,
-        required: true, focus: c, choices: [{ label: '알았다', effs: [] }],
+        required: true, focus: c, choices: [{ label: '알았다', log: `${COMM_NAME[c]}에서 짐 싸는 기척을 알아챘다.`, effs: [] }],
       };
     case 'hub_split':
       return splitView(g, card);
@@ -411,7 +411,7 @@ function hubView(g: Game, card: Card): CardView | null {
           ...(lines.length > 0 ? lines : ['아무도 내리지 않았다.']),
           '다른 열차의 무전실에서 같은 문장이 되풀이된다. 북쪽, 좌표 하나, 그리고 처음으로 \'우리\'라는 말.',
         ].join('\n'),
-        required: true, choices: [{ label: '열차를 돌린다', effs: [] }],
+        required: true, choices: [{ label: '열차를 돌린다', log: '라이프치히 중앙역에서 열차를 돌렸다.', effs: [] }],
       };
     }
     default:
