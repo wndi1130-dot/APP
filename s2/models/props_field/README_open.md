@@ -15,12 +15,12 @@ NVIDIA 4종·Google 5종·Scenario 1종은 CC BY 4.0, 나머지 4종은 자체 �
 | `kettle_enamel` | `kitchenware_kettle_u01` | NVIDIA SimReady kitchenware_kettle_u01, CC BY 4.0 | 242 / 250 | 0.238915 | 25712 | 5d3ad0a901e50d640ac07715a9801acb85c33b7fed1556e6466fabac5f0fb28d | ready |
 | `cutting_board` | `kitchenware_cuttingBoard_a01` | NVIDIA SimReady kitchenware_cuttingBoard_a01, CC BY 4.0 | 76 / 80 | 0.014182 | 8780 | 0d961e8e1d9a3d618e2f461b4c338d5dd5e7df0c4084f7eabcb306cfbb9dd30e | ready |
 | `vase` | `misc_glass_vase_a01` | NVIDIA SimReady misc_glass_vase_a01, CC BY 4.0 | 108 / 120 | 0.203103 | 8312 | d3d76ec2978a4d1a759956b70c889d17c8d8c7d427ba9dc7dc4911df093ee58f | ready |
-| `alarm_clock` | `Crosley_Alarm_Clock_Vintage_Metal` | Google LLC. / Google Scanned Objects Crosley_Alarm_Clock_Vintage_Metal, CC BY 4.0 | 212 / 220 | 0.162254 | 22656 | 9b9ee21984ae7b160f3fe59a47bee5a1d790aeff4df1710d1ed32ea074e85ed3 | ready |
-| `mug` | `Threshold_Porcelain_Coffee_Mug_All_Over_Bead_White` | Google LLC. / Google Scanned Objects Threshold_Porcelain_Coffee_Mug_All_Over_Bead_White, CC BY 4.0 | 115 / 120 | 0.11462 | 12744 | 86b514e1877e2594c55c4b703c7f9064dff43b2fe08838cd52b12dd80707e1ec | ready |
-| `teapot` | `Threshold_Porcelain_Teapot_White` | Google LLC. / Google Scanned Objects Threshold_Porcelain_Teapot_White, CC BY 4.0 | 242 / 250 | 0.134128 | 25700 | 50d885b551001d45fbbf9fd1262a6f9336b0ca3e22790c00b4aeb892fb67babe | ready |
-| `serving_bowl` | `Threshold_Porcelain_Serving_Bowl_Coupe_White` | Google LLC. / Google Scanned Objects Threshold_Porcelain_Serving_Bowl_Coupe_White, CC BY 4.0 | 144 / 150 | 0.069532 | 15716 | cfb6e8064d0722a6bcc60ec181180d9977abd5f1277686af512e5d55faf6c579 | ready |
-| `dinner_plate` | `Threshold_Dinner_Plate_Square_Rim_White_Porcelain` | Google LLC. / Google Scanned Objects Threshold_Dinner_Plate_Square_Rim_White_Porcelain, CC BY 4.0 | 77 / 80 | 0.037108 | 8880 | a2136059137cdc6306af59cd614f472046aaa3e502257b3d885fc87547f31909 | ready |
-| `yard_well` | `scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1` | Scenario scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1, CC BY 4.0 | 679 / 700 | 1.9 | 70284 | 0577493f63eac690345a6469ffbc7e3c895fd502b5e38880edc3e0607dfb9332 | ready |
+| `alarm_clock` | `Crosley_Alarm_Clock_Vintage_Metal` | Google LLC. / Google Scanned Objects Crosley_Alarm_Clock_Vintage_Metal, CC BY 4.0 | 192 / 220 | 0.163714 | 14532 | 70f46fdbb224d8ceb80a5571fc485859030d4d528d339ae9ee6e112ec44ebe14 | ready |
+| `mug` | `Threshold_Porcelain_Coffee_Mug_All_Over_Bead_White` | Google LLC. / Google Scanned Objects Threshold_Porcelain_Coffee_Mug_All_Over_Bead_White, CC BY 4.0 | 120 / 120 | 0.114624 | 10364 | ab2e1b02c4631575e6dbdeee0470c28e602636f970b24d510bc956644f9e0094 | ready |
+| `teapot` | `Threshold_Porcelain_Teapot_White` | Google LLC. / Google Scanned Objects Threshold_Porcelain_Teapot_White, CC BY 4.0 | 236 / 250 | 0.136345 | 18112 | 6b87036f56ea11741c9d8350c7cd41162d3d79a7f7db9cc251d52db61a171dfc | ready |
+| `serving_bowl` | `Threshold_Porcelain_Serving_Bowl_Coupe_White` | Google LLC. / Google Scanned Objects Threshold_Porcelain_Serving_Bowl_Coupe_White, CC BY 4.0 | 120 / 150 | 0.068883 | 10192 | 9b8ec09293eab71618140c9febae22e3ab3bfdeb13e37766c010ef583a071843 | ready |
+| `dinner_plate` | `Threshold_Dinner_Plate_Square_Rim_White_Porcelain` | Google LLC. / Google Scanned Objects Threshold_Dinner_Plate_Square_Rim_White_Porcelain, CC BY 4.0 | 72 / 80 | 0.038908 | 6832 | e69fb900234f0222291da763a8f5a029e0b63b6a2bd29d087791b2e4fa5f2214 | ready |
+| `yard_well` | `scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1` | Scenario scenario_asset_9p84PJEb3SqR6SqvuMKWX1m1, CC BY 4.0 | 679 / 700 | 1.9 | 60492 | 7b47478afa038c2e730ff428cd254511ed270b39e995ba8b3c22de380fb47ec4 | ready |
 | `mailbox` | `mailbox` | 자체 제작, Blender 기본 도형 | 76 / 200 | 1.25 | 5868 | ba4341c961d75397b78a75ba7c5838e59f3035afcf07259b72220cdc653f45d9 | ready |
 | `wall_poster` | `wall_poster` | 자체 제작, Blender 기본 도형 | 57 / 150 | 2.05 | 4416 | b0fe2692ef294f54289e4aee08a0d06bc5c6258fa1827dc740c4163e963d6229 | ready |
 | `wall_clock` | `wall_clock` | 자체 제작, Blender 기본 도형 | 222 / 250 | 2.11 | 15680 | 4f0bcd4376658bd1a31a8d313998b58f8a393f432c066846d28b1a4f6f1acf62 | ready |
@@ -32,12 +32,12 @@ NVIDIA 4종·Google 5종·Scenario 1종은 CC BY 4.0, 나머지 4종은 자체 �
 - `kettle_enamel`: 연녹 법랑 몸과 짙은 나무 손잡이
 - `cutting_board`: 모로 선 원본을 눕힌 짙은 나무 도마(실측 유지)
 - `vase`: 원본 윤곽을 높이 일곱 곳에서 재어 8면으로 돌린 불투명 짙은 병유리, 입구는 더 어둡게
-- `alarm_clock`: 짙은 몸과 민무늬 크림 문자판, 글씨·상표 제거
-- `mug`: 손잡이와 안쪽 면을 살린 흰 자기 잔
-- `teapot`: 뚜껑·주둥이·손잡이를 살린 흰 자기 주전자
-- `serving_bowl`: 안쪽 바닥과 입구를 살린 흰 자기 큰 사발
-- `dinner_plate`: 낮은 안쪽과 사각 테를 살린 흰 자기 접시
-- `yard_well`: 돌·목재·바랜 지붕 널, 윗면에 옅은 눈
+- `alarm_clock`: 원본 치수로 다시 지은 둥근 짙은 몸·민무늬 크림 문자판·바늘·종 둘·손잡이(스캔 면 대신)
+- `mug`: 원본 윤곽을 재어 10면으로 돌린 흰 자기 잔, 안쪽 바닥과 손잡이
+- `teapot`: 원본 윤곽을 높이 일곱 곳에서 재어 12면으로 돌린 흰 자기 주전자, 주둥이와 손잡이
+- `serving_bowl`: 원본 윤곽을 재어 12면으로 돌린 흰 자기 큰 사발, 안쪽 바닥과 입구
+- `dinner_plate`: 원본 지름·높이로 12면 둥근 테를 돌린 흰 자기 접시
+- `yard_well`: 돌 둘레는 12각 기둥과 갓돌로 다시 짓고 안에 짙은 물, 원본 나무 틀·기둥·지붕은 높이별로 회갈 돌·갈색 나무
 - `mailbox`: 나무 기둥과 반원 지붕 통, 작은 녹슨 깃발
 - `wall_poster`: 찢긴 종이에 눈 덮인 산과 기차 색 조각, 글자 없음
 - `wall_clock`: 나무 테·크림 문자판·눈금 12개·바늘 둘, 숫자 없음

@@ -44,6 +44,10 @@ GRADED_TARGETS = {
     "bluegrey": (.30, .36, .42), "ink": (.15, .15, .16),
     "poster_rust": (.235, .188, .170), "bike_red": (.348, .232, .215),
     "tyre": (.10, .10, .11), "snow": (.74, .77, .79),
+    # The yard well by height: grey-brown stone, the darker brown of its frame, posts and roof, and the water
+    # inside. The stone and worn wood above read washed out in the game beside our yard props.
+    "well_stone": (.175, .160, .140), "well_frame": (.160, .112, .096),
+    "well_post": (.115, .082, .070), "well_roof": (.078, .056, .047), "well_water": (.040, .043, .047),
 }
 DESIGNS = json.loads(r'''
 {
@@ -181,9 +185,11 @@ DESIGNS = json.loads(r'''
     ],
     "paints": [
       "dark",
-      "cream"
+      "cream",
+      "ink"
     ],
-    "note": "짙은 몸과 민무늬 크림 문자판, 글씨·상표 제거"
+    "rebuild": "clock",
+    "note": "원본 치수로 다시 지은 둥근 짙은 몸·민무늬 크림 문자판·바늘·종 둘·손잡이(스캔 면 대신)"
   },
   "mug": {
     "source": "obj",
@@ -209,8 +215,8 @@ DESIGNS = json.loads(r'''
     "paints": [
       "porcelain"
     ],
-    "hollow": true,
-    "note": "손잡이와 안쪽 면을 살린 흰 자기 잔"
+    "rebuild": "mug",
+    "note": "원본 윤곽을 재어 10면으로 돌린 흰 자기 잔, 안쪽 바닥과 손잡이"
   },
   "teapot": {
     "source": "obj",
@@ -236,7 +242,8 @@ DESIGNS = json.loads(r'''
     "paints": [
       "porcelain"
     ],
-    "note": "뚜껑·주둥이·손잡이를 살린 흰 자기 주전자"
+    "rebuild": "teapot",
+    "note": "원본 윤곽을 높이 일곱 곳에서 재어 12면으로 돌린 흰 자기 주전자, 주둥이와 손잡이"
   },
   "serving_bowl": {
     "source": "obj",
@@ -262,8 +269,8 @@ DESIGNS = json.loads(r'''
     "paints": [
       "porcelain"
     ],
-    "hollow": true,
-    "note": "안쪽 바닥과 입구를 살린 흰 자기 큰 사발"
+    "rebuild": "bowl",
+    "note": "원본 윤곽을 재어 12면으로 돌린 흰 자기 큰 사발, 안쪽 바닥과 입구"
   },
   "dinner_plate": {
     "source": "obj",
@@ -289,8 +296,8 @@ DESIGNS = json.loads(r'''
     "paints": [
       "porcelain"
     ],
-    "hollow": true,
-    "note": "낮은 안쪽과 사각 테를 살린 흰 자기 접시"
+    "rebuild": "plate",
+    "note": "원본 지름·높이로 12면 둥근 테를 돌린 흰 자기 접시"
   },
   "yard_well": {
     "source": "glb",
@@ -315,13 +322,15 @@ DESIGNS = json.loads(r'''
       ]
     ],
     "paints": [
-      "stone",
-      "wood",
-      "worn_wood"
+      "well_stone",
+      "well_frame",
+      "well_post",
+      "well_roof",
+      "well_water"
     ],
-    "snow": 0.2,
+    "rebuild": "well",
     "height": 1.9,
-    "note": "돌·목재·바랜 지붕 널, 윗면에 옅은 눈"
+    "note": "돌 둘레는 12각 기둥과 갓돌로 다시 짓고 안에 짙은 물, 원본 나무 틀·기둥·지붕은 높이별로 회갈 돌·갈색 나무"
   },
   "mailbox": {
     "source": "made",
@@ -922,6 +931,204 @@ def decimate(obj, target, hollow=False, weld_m=.001):
     return tris
 
 
+# Scanned porcelain and the well's stone round collapse into crumpled triangles at this budget: they are built
+# again as clean solids of revolution from the source's own measured outline (as the vase), on its own axis.
+def axis_centre(mesh):
+    """The turning axis: the middle of the foot (no handle or spout reaches down there)."""
+    lo, hi = bounds(v.co for v in mesh.vertices)
+    foot = [v.co for v in mesh.vertices if v.co.z - lo.z <= (hi.z - lo.z) * .08]
+    require(bool(foot), "F-LATHE", "밑동 점이 없음")
+    a, b = bounds(foot)
+    return Vector(((a.x + b.x) / 2, (a.y + b.y) / 2, lo.z)), hi.z - lo.z
+
+
+def radii_at(mesh, centre, height, fractions, pick, band=.05):
+    """The radius at each height fraction: `pick` 1.0 the farthest point, lower to step past a handle or spout."""
+    out = []
+    for f in fractions:
+        z = centre.z + height * f
+        near = sorted(math.hypot(v.co.x - centre.x, v.co.y - centre.y)
+                      for v in mesh.vertices if abs(v.co.z - z) <= height * band)
+        require(bool(near), "F-LATHE", f"높이 {f}에 원본 점이 없음")
+        out.append(near[min(len(near) - 1, int(len(near) * pick))])
+    return out
+
+
+def revolve(piece, points, colour, sides, centre=(0.0, 0.0, 0.0)):
+    """Turn (r, z) points about a vertical axis: from the bottom middle round the outside, over a rim and down the
+    inside. A point with r 0 closes the ring to a fan. Outward is to the right of the way the points go."""
+    cx, cy, cz = centre
+    for (ra, za), (rb, zb) in zip(points, points[1:]):
+        dr, dz = rb - ra, zb - za
+        for i in range(sides):
+            t0, t1, tm = i * math.tau / sides, (i + 1) * math.tau / sides, (i + .5) * math.tau / sides
+            a = [(cx + ra * math.cos(t), cy + ra * math.sin(t), cz + za) for t in (t0, t1)]
+            b = [(cx + rb * math.cos(t), cy + rb * math.sin(t), cz + zb) for t in (t1, t0)]
+            if ra < 1e-6:
+                pts = [(cx, cy, cz + za)] + b
+            elif rb < 1e-6:
+                pts = a + [(cx, cy, cz + zb)]
+            else:
+                pts = a + b
+            piece.face(pts, colour, (dz * math.cos(tm), dz * math.sin(tm), -dr))
+
+
+def handle_loop(piece, points, radius, colour):
+    for a, b in zip(points, points[1:]):
+        piece.beam(a, b, radius, colour, sides=4)
+
+
+def rebuild(kind, spec, obj, info):
+    mesh = obj.data
+    shape = spec["rebuild"]
+    if shape == "well":
+        return rebuild_well(kind, spec, obj, info)
+    piece = Piece(kind)
+    if shape == "clock":
+        lo, hi = bounds(v.co for v in mesh.vertices)
+        width, depth, height = hi.x - lo.x, hi.y - lo.y, hi.z - lo.z
+        r = min(width / 2 * .96, (height - .012) / 2.35)
+        zc, front, back = .012 + r, -(depth / 2 - .004), depth / 2 - .004
+        piece.beam((0, front, zc), (0, back, zc), r, "open_dark", sides=14)
+        piece.face([(.8 * r * math.cos(i * math.tau / 14), front - .0015, zc + .8 * r * math.sin(i * math.tau / 14))
+                    for i in range(14)], "open_cream", (0, -1, 0))
+        for angle, length in ((math.radians(60), .62 * r), (math.radians(-30), .45 * r)):
+            radial = Vector((math.sin(angle), 0, math.cos(angle)))
+            across = Vector((math.cos(angle), 0, -math.sin(angle))) * .0025
+            a, b = Vector((0, front - .0025, zc)), Vector((0, front - .0025, zc)) + radial * length
+            piece.face([a - across, a + across, b + across, b - across], "open_ink", (0, -1, 0))
+        for sign in (-1, 1):
+            revolve(piece, [(0, 0), (.34 * r, 0), (.28 * r, .2 * r), (0, .3 * r)], "open_dark", 8,
+                    (sign * .58 * r, 0, zc + .74 * r))
+            piece.beam((sign * .32 * r, 0, zc + .9 * r), (sign * .32 * r, 0, height - .004), .004, "open_dark", sides=4)
+            piece.beam((sign * .52 * r, 0, zc - .82 * r), (sign * .62 * r, 0, 0), .006, "open_dark", sides=4)
+        piece.beam((-.32 * r - .004, 0, height - .004), (.32 * r + .004, 0, height - .004), .004, "open_dark", sides=4)
+        info["rebuilt"] = dict(shape="clock", radius_m=round(r, 4), depth_m=round(depth, 4), height_m=round(height, 4))
+        return piece, info
+    centre, height = axis_centre(mesh)
+    if shape == "plate":
+        lo, hi = bounds(v.co for v in mesh.vertices)
+        rim = min(hi.x - lo.x, hi.y - lo.y) / 2
+        foot = radii_at(mesh, centre, height, (0.0,), 1.0)[0]
+        foot = min(foot, rim * .62)
+        points = [(0, 0), (foot, 0), (rim, height), (.82 * rim, .8 * height), (0, .3 * height)]
+        revolve(piece, points, "open_porcelain", 12)
+    elif shape == "bowl":
+        # A coupe: the wall curves out from a foot about half the rim, the measured middle kept inside that curve.
+        rim = radii_at(mesh, centre, height, (1.0,), 1.0)[0]
+        mid = min(max(radii_at(mesh, centre, height, (.5,), 1.0)[0], .78 * rim), .93 * rim)
+        t = .006
+        points = [(0, 0), (.5 * rim, 0), (mid, .5 * height), (rim, height), (rim - t, height),
+                  (mid - t, .5 * height + t * .5), (0, 1.5 * t + .004)]
+        revolve(piece, points, "open_porcelain", 12)
+    elif shape == "mug":
+        # A straight cup: the radius just under the rim (past a foot ring), the handle a round loop on +X.
+        rt = radii_at(mesh, centre, height, (.85,), .5)[0]
+        reach = radii_at(mesh, centre, height, (.5,), 1.0)[0]
+        r0 = .94 * rt
+        t = .004
+        points = [(0, 0), (r0, 0), (rt, height), (rt - t, height), (r0 - t, .012), (0, .012)]
+        revolve(piece, points, "open_porcelain", 10)
+        out = min(max(reach - .007, rt + .018), rt + .03)
+        handle = [(rt - .003, 0, .80 * height), (rt + .45 * (out - rt), 0, .79 * height), (out, 0, .62 * height),
+                  (out, 0, .42 * height), (rt + .45 * (out - rt), 0, .25 * height), (rt - .003, 0, .24 * height)]
+        for a, b in zip(handle, handle[1:]):
+            piece.beam(a, b, .006, "open_porcelain", sides=3)
+    elif shape == "teapot":
+        # A round belly from its measured widest radius, shoulders in to the lid and a knob; spout and handle short
+        # enough that the whole stays within the source's own width.
+        belly = max(radii_at(mesh, centre, height, (.25, .4, .55), .55))
+        h = height
+        points = [(0, 0), (.62 * belly, 0), (.92 * belly, .15 * h), (belly, .38 * h), (.9 * belly, .6 * h),
+                  (.6 * belly, .78 * h), (.48 * belly, .84 * h), (.3 * belly, .93 * h), (.1 * belly, .95 * h),
+                  (.1 * belly, h), (0, h)]
+        revolve(piece, points, "open_porcelain", 10)
+        lo, hi = bounds(v.co for v in mesh.vertices)
+        reach = min(.03, max(.012, (min(hi.x - lo.x, .215) - 2 * belly) / 2))
+        piece.beam((.86 * belly, 0, .42 * h), (belly + reach - .008, 0, .76 * h), .013, "open_porcelain", sides=6,
+                   tip=.007)
+        back = belly + reach - .006
+        handle_loop(piece, [(-.8 * belly, 0, .72 * h), (-back, 0, .64 * h), (-back, 0, .34 * h),
+                            (-.95 * belly, 0, .26 * h)], .006, "open_porcelain")
+    else:
+        raise Blocked("F-REBUILD", "알 수 없는 다시 짓기 " + shape)
+    info["rebuilt"] = dict(shape=shape, height_m=round(height, 4))
+    return piece, info
+
+
+WELL_STONE = .62   # the stone round of the source ends here (m from its foot, in its 1.9 m)
+WELL_CUT = .80     # the plank collar on the stones ends here: below it the source goes, then posts and winch
+WELL_ROOF = 1.22   # the roof boards
+
+
+def rebuild_well(kind, spec, obj, info):
+    """The source's stone round goes (it decimates into crumpled triangles) for a clean 12-sided wall with a cap
+    stone and dark water inside, at the source's own radii; the frame, posts, winch and roof stay, painted by height."""
+    mesh = obj.data
+    lo, hi = bounds(v.co for v in mesh.vertices)
+    full = hi.z - lo.z
+    scale = spec["height"] / full
+    centre = Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z))
+    wall = sorted(math.hypot(v.co.x - centre.x, v.co.y - centre.y) for v in mesh.vertices
+                  if .05 * full / 1.9 <= v.co.z - lo.z <= .50 * full / 1.9)
+    cap = [math.hypot(v.co.x - centre.x, v.co.y - centre.y) for v in mesh.vertices
+           if .54 * full / 1.9 <= v.co.z - lo.z <= WELL_STONE * full / 1.9]
+    collar = sorted(math.hypot(v.co.x - centre.x, v.co.y - centre.y) for v in mesh.vertices
+                    if (WELL_STONE + .03) * full / 1.9 <= v.co.z - lo.z <= (WELL_CUT - .05) * full / 1.9)
+    require(len(wall) > 20 and bool(cap) and len(collar) > 20, "F-WELL", "우물 돌 둘레·나무 테 점을 찾지 못함")
+    inner, outer, lip = wall[int(len(wall) * .03)], wall[int(len(wall) * .97)], max(cap)
+    collar_out = collar[int(len(collar) * .97)]
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    gone = [f for f in bm.faces if f.calc_center_median().z - lo.z < WELL_CUT * full / 1.9]
+    bmesh.ops.delete(bm, geom=gone, context="FACES")
+    bm.to_mesh(mesh)
+    bm.free()
+    mesh.update()
+    before_lo, before_hi = bounds(v.co for v in mesh.vertices)
+    ring_tris = 3 * 12 * 8 + 10
+    decimate(obj, spec["limit"] - ring_tris - 8, False, float(spec.get("weld", .001)))
+    after_lo, after_hi = bounds(v.co for v in mesh.vertices)
+    require(all(abs((after_hi - after_lo)[i] - (before_hi - before_lo)[i]) <= (before_hi - before_lo)[i] * .08 + .002
+                for i in range(3)), "F-SIZE-LOSS", "면 축소 후 우물 윗부분 크기가 8%+2 mm 넘게 바뀜")
+    # The decimated ridge sits a little lower: the top, not the source's full height, is made 1.9 m.
+    scale = spec["height"] / (after_hi.z - lo.z)
+    mesh.transform(Matrix.Translation(-centre))
+    mesh.transform(Matrix.Scale(scale, 4))
+    mesh.update()
+    piece = Piece(kind)
+    roles = {key: 0 for key in spec["paints"]}
+    try:
+        for poly in mesh.polygons:
+            require(poly.area > 1e-12, "F-DEGENERATE", "면 축소 뒤 면적 없는 면")
+            z = poly.center.z
+            role = "well_post" if z < WELL_ROOF else "well_roof"
+            roles[role] += 1
+            piece.face([v.co.copy() for v in (mesh.vertices[i] for i in poly.vertices)], "open_" + role, poly.normal)
+        top, cap_top = .56, WELL_STONE + .02
+        piece.ring((0, 0, top / 2), outer * scale, inner * scale, top, "open_well_stone", sides=12, axis="z")
+        piece.ring((0, 0, (top - .02 + cap_top) / 2), lip * scale, (inner - .02) * scale, cap_top - top + .02,
+                   "open_well_stone", sides=12, axis="z")
+        # The plank collar on the cap stone, up to where the posts stand.
+        piece.ring((0, 0, (cap_top - .01 + WELL_CUT) / 2), min(collar_out, lip - .03) * scale, (inner - .01) * scale,
+                   WELL_CUT - cap_top + .01, "open_well_frame", sides=12, axis="z")
+        piece.face([(inner * scale * math.cos(i * math.tau / 12), inner * scale * math.sin(i * math.tau / 12), .25)
+                    for i in range(12)], "open_well_water", (0, 0, 1))
+        roles["well_stone"] += 2 * 12 * 4
+        roles["well_frame"] += 12 * 4
+        roles["well_water"] += 1
+        require(all(roles.values()), "F-COLOR-PARTS", f"색 부위가 사라짐: {roles}")
+        info["colour_faces"] = roles
+        info["rebuilt"] = dict(shape="well", stone_round_m=dict(inner=round(inner * scale, 4), outer=round(outer * scale, 4),
+                                                                cap=round(lip * scale, 4), top=cap_top),
+                               collar_m=dict(outer=round(min(collar_out, lip - .03) * scale, 4), top=WELL_CUT),
+                               cut_m=WELL_CUT, roof_from_m=WELL_ROOF)
+        return piece, info
+    except Exception:
+        piece.bm.free()
+        raise
+
+
 def imported_piece(kind, spec, work):
     path = source_path(spec)
     require(path is not None and path.is_file(), "F-INPUT-MISSING", "원본 없음: " + str(path))
@@ -982,6 +1189,8 @@ def imported_piece(kind, spec, work):
     dial = clock_dial(obj, samplers) if kind == "alarm_clock" else None
     if dial:
         info["dial"] = dial
+    if spec.get("rebuild"):
+        return rebuild(kind, spec, obj, info)
     if spec.get("lathe"):
         # 얇은 유리 겹벽은 collapse가 접힌 판으로 만든다: 원본 윤곽(높이별 가장 먼 반지름)을 돌려 다시 짓는다.
         lo, hi = bounds(v.co for v in obj.data.vertices)
