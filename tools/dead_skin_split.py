@@ -3,20 +3,23 @@
 For each body the dead wear (dead_skin_mask.py SOURCES), its colour picture is coloured twice, as the
 shaders colour it under the same light:
   the living: the model grade only (dead_vat.gdshaderinc without WEATHERED, tint 0.5);
-  the dead:   worn_down's gone-off skin (SKIN_OFF by SKIN_GONE from SKIN_GONE_LEAST, the blotch at its middle) by the skin mask
-              as the GPU reads it (128 x 128, linear filter, repeat, through SKIN_EDGE), the grade, then the look's tint: on the
-              skin its share of the colour (dead_cast.gd SKIN_TINT) and no brighter than 1, on the clothes by cloth_state.
+  the dead:   the mask as the GPU reads it (128 x 128, linear filter, repeat; red through SKIN_EDGE, green
+              the hood turned HEAD_CLOTH), the light cloth soiled, worn_down's gone-off skin (SKIN_OFF by
+              SKIN_GONE from the look's SKIN_GONE_LEAST, the blotch at its middle), the grade, then the look's
+              tint: on the skin its share of the colour (dead_cast.gd SKIN_TINT) and no brighter than 1, on the
+              clothes by cloth_state.
 The colours the shader declares source_color are made linear first, as the engine does. Counted: the
-texels the mask reads 0.5 or more at (before SKIN_EDGE). How far the skin has gone off is the kind's middle (dead_cast.gd
-TEAR, b) and its least. Blood, dirt and tears are left out (they are judged on the pictures). The values
-are read from the shader and scripts (a value not found stops the tool), so this follows them.
+texels the mask's red reads 0.5 or more at. How far the skin has gone off is the kind's middle (dead_cast.gd
+TEAR, b) and its least. Blood, dirt and tears are left out (they are judged on the pictures). The values are
+read from the shader and scripts; one not found, or not a plain number, stops the tool.
 
-Pass (coordinator, 10-31): the dead standing and lying (look "corpse", the dead's wear and tear; the
-crawlers are the dead too): (a) median saturation <= 0.6 x the living's, or <= 0.04 (below it the eye sees
-grey; the hooded and poncho bodies' living skin is already 0.027 and 0.047 after the grade), (b) median hue
-at least 20 degrees towards green of the living's and between 60 and 160. The newly risen: no more
-saturated than the living and at least 10 degrees greener (never more alive than the living). The
-layered (their cold blue) and the frozen (their frost) are printed beside them, not checked.
+Pass (coordinator, 10-31): the dead standing (look "dead") and every kind lying dead for good (look
+"corpse", with that kind's wear and tear; the crawlers are the dead too): (a) median saturation <= 0.6 x
+the living's, or <= 0.04 (below it the eye sees grey; the hooded and poncho bodies' living skin is already
+0.021 and 0.025 after the grade), (b) median hue at least 20 degrees towards green of the living's and
+between 60 and 160. The newly risen: no more saturated than the living and at least 10 degrees greener
+(never more alive than the living). The layered (their cold blue) and the frozen (their frost) standing are
+printed beside them, not checked.
 
 --sat-floor S sets that floor (default 0.04, 0 for the ratio alone).
 
@@ -40,13 +43,19 @@ SAT_FLOOR = 0.04
 FRESH_SAT_RATIO = 1.0
 FRESH_TOWARDS_GREEN = 10.0
 LUM = np.array([0.2126, 0.7152, 0.0722])
-# Look drawn -> (the kind whose wear and tear it has, its tint), checked or only printed.
-LOOKS = [("dead", "dead", "dead", "dead"), ("corpse", "dead", "corpse", "dead"), ("fresh", "fresh", "fresh", "fresh"),
+NUMBER = r"(-?[0-9]+(?:\.[0-9]+)?)"
+# (label, the kind whose wear and tear it has, the look drawn (its tint and shares), the rule).
+LOOKS = [("dead", "dead", "dead", "dead"), ("corpse", "dead", "corpse", "dead"),
+         ("corpse/fresh", "fresh", "corpse", "dead"), ("corpse/clothed", "clothed", "corpse", "dead"),
+         ("corpse/frozen", "frozen", "corpse", "dead"), ("fresh", "fresh", "fresh", "fresh"),
          ("clothed", "clothed", "clothed", ""), ("frozen", "frozen", "frozen", "")]
 
 
-def vec3(text):
-    return np.array([float(v) for v in text.split(",")], dtype=np.float64)
+def vec(text, n):
+    parts = [p.strip() for p in text.split(",")]
+    if len(parts) != n or not all(re.fullmatch(NUMBER, p) for p in parts):
+        raise SystemExit("dead_skin_split: not %d plain numbers: %s" % (n, text))
+    return np.array([float(p) for p in parts], dtype=np.float64)
 
 
 def found(pattern, text):
@@ -56,38 +65,55 @@ def found(pattern, text):
     return got
 
 
+def by_look(name, text):
+    body = found(r"const " + name + r": Dictionary = \{([^}]*)\}", text).group(1)
+    items = [i.strip() for i in body.split(",") if i.strip()]
+    out = {}
+    for item in items:
+        got = re.fullmatch(r'"(\w+)": ' + NUMBER, item)
+        if got is None:
+            raise SystemExit("dead_skin_split: %s: not a look and a plain number: %s" % (name, item))
+        out[got.group(1)] = float(got.group(2))
+    return out
+
+
 def read_values(repo):
     s2 = os.path.join(repo, "s2")
     inc = open(os.path.join(s2, "game/actors/dead_vat.gdshaderinc"), encoding="utf-8").read()
-    cool = found(r"uniform vec3 grade_cool([^=]*)= vec3\(([^)]*)\)", inc)
+    cool = found(r"uniform vec3 grade_cool([^=]*)= vec3\(([^)]*)\);", inc)
     v = {
-        "skin_off": vec3(found(r"const vec3 SKIN_OFF = vec3\(([^)]*)\)", inc).group(1)),
-        "blotch": float(found(r"off \* \(1\.0 - ([0-9.]+) \* n\)", inc).group(1)),
-        "gone": vec3(found(r"const vec2 SKIN_GONE = vec2\(([^)]*)\)", inc).group(1)),
-        "gone_least": float(found(r"const float SKIN_GONE_LEAST = ([0-9.]+);", inc).group(1)),
-        "edge": vec3(found(r"const vec2 SKIN_EDGE = vec2\(([^)]*)\)", inc).group(1)),
-        "cloth_state": float(found(r"uniform float cloth_state[^=]*= ([0-9.]+)", inc).group(1)),
-        "sat": float(found(r"uniform float grade_saturation[^=]*= ([0-9.]+)", inc).group(1)),
-        "val": float(found(r"uniform float grade_value[^=]*= ([0-9.]+)", inc).group(1)),
-        "cool": to_linear(vec3(cool.group(2))) if "source_color" in cool.group(1) else vec3(cool.group(2)),
-        "mix": float(found(r"uniform float grade_cool_mix[^=]*= ([0-9.]+)", inc).group(1)),
+        "skin_off": vec(found(r"const vec3 SKIN_OFF = vec3\(([^)]*)\);", inc).group(1), 3),
+        "blotch": float(found(r"off \* \(1\.0 - " + NUMBER + r" \* n\)", inc).group(1)),
+        "gone": vec(found(r"const vec2 SKIN_GONE = vec2\(([^)]*)\);", inc).group(1), 2),
+        "edge": vec(found(r"const vec2 SKIN_EDGE = vec2\(([^)]*)\);", inc).group(1), 2),
+        "hood": vec(found(r"const vec3 HEAD_CLOTH = vec3\(([^)]*)\);", inc).group(1), 3),
+        "hood_dim": float(found(r"const float HEAD_CLOTH_DIM = " + NUMBER + ";", inc).group(1)),
+        "cloth_max": float(found(r"const float CLOTH_LIGHT_MAX = " + NUMBER + ";", inc).group(1)),
+        "soil": vec(found(r"const vec3 CLOTH_SOIL = vec3\(([^)]*)\);", inc).group(1), 3),
+        "cloth_state": float(found(r"uniform float cloth_state[^=]*= " + NUMBER + ";", inc).group(1)),
+        "sat": float(found(r"uniform float grade_saturation[^=]*= " + NUMBER + ";", inc).group(1)),
+        "val": float(found(r"uniform float grade_value[^=]*= " + NUMBER + ";", inc).group(1)),
+        "mix": float(found(r"uniform float grade_cool_mix[^=]*= " + NUMBER + ";", inc).group(1)),
     }
+    v["cool"] = vec(cool.group(2), 3)
+    if "source_color" in cool.group(1):
+        v["cool"] = to_linear(v["cool"])
     cast = open(os.path.join(s2, "game/actors/dead_cast.gd"), encoding="utf-8").read()
-    v["tear"] = {k: (vec3(lo)[2], vec3(hi)[2]) for k, lo, hi in
+    v["tear"] = {k: (vec(lo, 3)[2], vec(hi, 3)[2]) for k, lo, hi in
                  re.findall(r'"(\w+)": \[Vector3\(([^)]*)\), Vector3\(([^)]*)\)\]', cast)}
+    v["skin_tint"] = by_look("SKIN_TINT", cast)
+    v["gone_least"] = by_look("SKIN_GONE_LEAST", cast)
     zomb = open(os.path.join(s2, "game/actors/zombies.gd"), encoding="utf-8").read()
     line = found(r"const TINTS: Dictionary = \{(.*)\}", zomb).group(1)
-    v["tints"] = {k: vec3(c) for k, c in re.findall(r'"(\w+)": Color\(([^)]*)\)', line)}
-    shares = found(r"const SKIN_TINT: Dictionary = \{(.*)\}", cast).group(1)
-    v["skin_tint"] = {k: float(x) for k, x in re.findall(r'"(\w+)": ([0-9.]+)', shares)}
-    for kind, _tear, tint, _r in LOOKS:
-        if _tear not in v["tear"] or tint not in v["tints"]:
-            raise SystemExit("dead_skin_split: no wear and tear or tint for " + kind)
+    v["tints"] = {k: vec(c, 3) for k, c in re.findall(r'"(\w+)": Color\(([^)]*)\)', line)}
+    for label, kind, look, _rule in LOOKS:
+        if kind not in v["tear"] or look not in v["tints"] or look not in v["skin_tint"] or look not in v["gone_least"]:
+            raise SystemExit("dead_skin_split: no wear and tear, tint or skin share for " + label)
     return v
 
 
 def smoothstep(a, b, x):
-    u = min(max((x - a) / (b - a), 0.0), 1.0)
+    u = np.clip((x - a) / (b - a), 0.0, 1.0)
     return u * u * (3.0 - 2.0 * u)
 
 
@@ -117,12 +143,23 @@ def sat_hue(c):
 
 
 def mask_as_read(mask_png, size):
-    """The mask's red at each picture texel's centre: linear filter, repeat (the shader's skin_tex)."""
-    m = np.asarray(Image.open(mask_png).convert("RGB"), dtype=np.float64)[..., 0] / 255.0
+    """The mask's red and green at each picture texel's centre: linear filter, repeat (the shader's skin_tex)."""
+    m = np.asarray(Image.open(mask_png).convert("RGB"), dtype=np.float64) / 255.0
     n = m.shape[0]
     centres = (np.arange(size) + 0.5) / size * n - 0.5
     yy, xx = np.meshgrid(centres, centres, indexing="ij")
-    return ndimage.map_coordinates(m, [yy, xx], order=1, mode="grid-wrap")
+    return [ndimage.map_coordinates(m[..., c], [yy, xx], order=1, mode="grid-wrap") for c in (0, 1)]
+
+
+def dead_picture(lin, red, green, v):
+    """The shader's steps before worn_down: the hood, the light cloth soiled; returns the picture and the skin."""
+    skin = smoothstep(v["edge"][0], v["edge"][1], red)[:, None]
+    g = green[:, None]
+    lin = lin + (v["hood"] * (lin @ LUM)[:, None] * v["hood_dim"] - lin) * g
+    light = (lin @ LUM)[:, None]
+    k = (1.0 - skin) * smoothstep(v["cloth_max"] * 0.6, v["cloth_max"], light)
+    lin = lin + (lin * v["soil"] * np.minimum(1.0, v["cloth_max"] / np.maximum(light, 1e-4)) - lin) * k
+    return lin, skin
 
 
 def measure(repo, v, sat_floor=SAT_FLOOR):
@@ -130,25 +167,24 @@ def measure(repo, v, sat_floor=SAT_FLOOR):
     for body in SOURCES:
         folder = os.path.join(repo, "s2/models/people", body)
         pic = np.asarray(Image.open(os.path.join(folder, "albedo.png")).convert("RGB"), dtype=np.float64) / 255.0
-        m_all = mask_as_read(os.path.join(folder, "skin_mask.png"), pic.shape[0])
-        inside = m_all >= 0.5
-        lin = to_linear(pic[inside])
-        e0, e1 = v["edge"][0], v["edge"][1]
-        u = np.clip((m_all[inside] - e0) / (e1 - e0), 0.0, 1.0)
-        m = (u * u * (3.0 - 2.0 * u))[:, None]
-        live_s, live_h = sat_hue(to_srgb(model_grade(lin, v)))
+        red, green = mask_as_read(os.path.join(folder, "skin_mask.png"), pic.shape[0])
+        inside = red >= 0.5
+        lin0 = to_linear(pic[inside])
+        live_s, live_h = sat_hue(to_srgb(model_grade(lin0, v)))
         ls, lh = float(np.median(live_s)), float(np.median(live_h))
+        lin, m = dead_picture(lin0, red[inside], green[inside], v)
         light = (lin @ LUM)[:, None]
         cells = []
-        for look, kind, tint, rule in LOOKS:
+        for label, kind, look, rule in LOOKS:
             lo, hi = v["tear"][kind]
-            state = v["tints"][tint] / 0.5
+            state = v["tints"][look] / 0.5
             light_of = float(state @ LUM)
-            on_skin = (light_of + (state - light_of) * v["skin_tint"].get(look, 1.0)) / max(1.0, light_of)
+            on_skin = (light_of + (state - light_of) * v["skin_tint"][look]) / max(1.0, light_of)
             on_cloth = 1.0 + (state - 1.0) * v["cloth_state"]
+            least = v["gone_least"][look]
             for which, b in (("mid", (lo + hi) / 2.0), ("least", lo)):
                 off = light * v["skin_off"] * (1.0 - v["blotch"] * 0.5)
-                gone = v["gone_least"] + (1.0 - v["gone_least"]) * smoothstep(v["gone"][0], v["gone"][1], b)
+                gone = least + (1.0 - least) * float(smoothstep(v["gone"][0], v["gone"][1], b))
                 worn = lin + (off - lin) * gone * m
                 c = model_grade(worn, v) * (on_cloth + (on_skin - on_cloth) * m)
                 s, h = sat_hue(to_srgb(c))
@@ -159,22 +195,23 @@ def measure(repo, v, sat_floor=SAT_FLOOR):
                     ok = ds <= max(ls * SAT_RATIO, sat_floor) and dh - lh >= HUE_TOWARDS_GREEN and HUE_DEAD[0] <= dh <= HUE_DEAD[1]
                 checked = rule != ""
                 if checked and not ok:
-                    failed.append("%s %s %s" % (body, look, which))
-                cells.append((look, which, ds / max(ls, 1e-9), dh, ok, checked, ds))
-        rows.append((body, int(inside.sum()), float((m_all > 0.02).sum()), ls, lh, cells))
+                    failed.append("%s %s %s" % (body, label, which))
+                cells.append((label, which, ds / max(ls, 1e-9), dh, ok, checked, ds))
+        rows.append((body, int(inside.sum()), float((red > 0.02).sum()), ls, lh, cells))
     return rows, failed
 
 
 def main():
     repo = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else ".")
     v = read_values(repo)
-    print("SKIN_OFF %s SKIN_GONE %s blotch %.2f grade sat %.2f val %.2f cool(linear) %s" % (
-        np.round(v["skin_off"], 3).tolist(), v["gone"][:2].tolist(), v["blotch"], v["sat"], v["val"], np.round(v["cool"], 3).tolist()))
+    print("SKIN_OFF %s SKIN_GONE %s least %s blotch %.2f grade sat %.2f val %.2f cool(linear) %s" % (
+        np.round(v["skin_off"], 3).tolist(), v["gone"].tolist(), v["gone_least"], v["blotch"], v["sat"], v["val"],
+        np.round(v["cool"], 3).tolist()))
     floor = float(sys.argv[sys.argv.index("--sat-floor") + 1]) if "--sat-floor" in sys.argv else SAT_FLOOR
     rows, failed = measure(repo, v, floor)
     for body, n, touched, ls, lh, cells in rows:
-        text = " | ".join("%s/%s s%.2f(%.3f) h%.0f %s" % (look, which, sr, ds, dh, "ok" if ok else ("FAIL" if checked else "-"))
-                          for look, which, sr, dh, ok, checked, ds in cells)
+        text = " | ".join("%s/%s s%.2f(%.3f) h%.0f %s" % (label, which, sr, ds, dh, "ok" if ok else ("FAIL" if checked else "-"))
+                          for label, which, sr, dh, ok, checked, ds in cells)
         print("%-20s n=%5d (of %5d touched) living s%.3f h%5.1f | %s" % (body, n, touched, ls, lh, text))
     print("SPLIT %s%s" % ("PASS" if not failed else "FAIL " + ", ".join(failed), " (sat floor %.3f)" % floor if floor else ""))
     return 1 if failed else 0

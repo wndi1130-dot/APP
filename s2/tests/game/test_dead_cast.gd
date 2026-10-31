@@ -236,6 +236,9 @@ func test_only_the_skin_takes_the_dead_look_and_the_ground_motions_are_marked() 
 		assert_between(float(DeadCast.SKIN_TINT.get(look, 1.0)), 0.0, 1.0, look + ": a share of its colour on the skin")
 	for look: String in ["dead", "corpse", "fresh"]:
 		assert_lt(float(DeadCast.SKIN_TINT[look]), 0.5, look + ": its skin never takes the look's colour above the living's")
+	for look: String in Zombies.TINTS:
+		assert_between(float(DeadCast.SKIN_GONE_LEAST.get(look, 0.82)), 0.5, 1.0, look + ": its skin mostly gone off at the least")
+	assert_eq(float(DeadCast.SKIN_GONE_LEAST["corpse"]), 1.0, "a body lying dead for good has none of its own skin left")
 	if not _build_bodies_in_use():
 		pending("a folder put in place of the build's own")
 		return

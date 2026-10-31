@@ -104,6 +104,10 @@ const CLOTH_STATE: float = 0.25
 ## living's, never redder (decision 432, tools/dead_skin_split.py); the layered and the frozen all of it,
 ## their cold blue is what they are.
 const SKIN_TINT: Dictionary = {"dead": 0.1, "corpse": 0.1, "fresh": 0.1, "clothed": 1.0, "frozen": 1.0}
+## How far the skin has gone off at the least, by look (dead_vat.gdshaderinc skin_gone_least): a body
+## lying dead for good has none of its own left, whatever it was standing; the rest 0.82, the newly risen
+## kept just short of the living (decision 432, tools/dead_skin_split.py).
+const SKIN_GONE_LEAST: Dictionary = {"dead": 0.82, "corpse": 1.0, "fresh": 0.82, "clothed": 0.82, "frozen": 0.82}
 
 
 ## Plain long winter coats in faded shades, so a crowd in them is not one coat

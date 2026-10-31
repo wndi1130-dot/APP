@@ -58,12 +58,14 @@ uniform sampler2D albedo_tex : source_color, filter_linear_mipmap, repeat_enable
 // tools/dead_skin_mask.py from the rigged source: head, neck, hands and bare forearms, by colour inside
 // them). With it only the skin goes grey-green and takes the state's tint; the clothes keep their own
 // colour and take the state only by cloth_state (dead_cast.gd CLOTH_STATE, the garments over them alike).
-// Without it the whole picture is tinted, as before.
+// Without one (a body put in to try) what is warm and light is taken for skin (skin_guess), the same way.
 uniform bool has_skin = false;
 uniform sampler2D skin_tex : filter_linear, repeat_enable, hint_default_black;
 uniform float cloth_state : hint_range(0.0, 1.0) = 0.25;
-// How much of the look's colour the skin takes, the rest only its darkness (dead_cast.gd SKIN_TINT).
+// How much of the look's colour the skin takes, the rest only its darkness (dead_cast.gd SKIN_TINT),
+// and how far the skin has gone off at the least (dead_cast.gd SKIN_GONE_LEAST).
 uniform float skin_tint : hint_range(0.0, 1.0) = 1.0;
+uniform float skin_gone_least : hint_range(0.0, 1.0) = 0.82;
 #endif
 uniform float grade_saturation : hint_range(0.0, 1.0) = 0.45;
 uniform float grade_value : hint_range(0.0, 1.0) = 0.82;
@@ -168,8 +170,8 @@ void vertex() {
 		float row_c = (kept * rows_per_frame + UV2.y + 0.5) / height;
 		int was = clip_of(kept);
 		offset = mix(offset, offset_at(UV2.x, row_c, quantized ? was : clip), share / 31.0);
-		// Still mostly in a motion on the ground it left (eating, then struck): lit by its moved surface.
-		lying = max(lying, step(1.5, clip_loop[was]) * step(15.5, share));
+		// While a motion on the ground it left (eating, then struck) still shows: lit by its moved surface.
+		lying = max(lying, step(1.5, clip_loop[was]));
 	}
 #ifdef WORN
 	rest = VERTEX;
@@ -251,15 +253,14 @@ float tear_noise(vec2 p) {
 }
 
 // The colour picture (linear) of one of the dead as worn as `worn_as` says, at
-// `uv`, `worn_at` where on the body (the varyings, passed in); `skin_in` how much
-// of it is skin (the skin mask), below 0 where the body has no mask.
+// `uv`, `worn_at` where on the body (the varyings, passed in); `skin` how much
+// of it is skin (skin_here: the mask, or the guess without one).
 // SKIN_OFF: what gone-off skin is, times its own light: a faintly green grey (tools/dead_skin_split.py
 // checks it against the living: the dead under 0.6 of their saturation or 0.04, 60..160 degrees; the
 // newly risen no more saturated and 10 degrees greener). SKIN_GONE: how far by the kind's b
-// (dead_cast.gd TEAR), from SKIN_GONE_LEAST for the newly risen to all of it for the long dead.
+// (dead_cast.gd TEAR), from skin_gone_least (by look, dead_cast.gd SKIN_GONE_LEAST) to all of it.
 const vec3 SKIN_OFF = vec3(0.768, 0.8, 0.608);
 const vec2 SKIN_GONE = vec2(0.1, 0.45);
-const float SKIN_GONE_LEAST = 0.82;
 // SKIN_EDGE: the mask read through a smooth step, so skin is wholly skin inside and the soft rim
 // (128 x 128, filtered) stays a rim, not a half-gone face.
 const vec2 SKIN_EDGE = vec2(0.15, 0.5);
@@ -268,14 +269,30 @@ const vec2 SKIN_EDGE = vec2(0.15, 0.5);
 // (HEAD_CLOTH the colour for a light of 1, HEAD_CLOTH_DIM how dark).
 const vec3 HEAD_CLOTH = vec3(2.03, 0.73, 0.63);
 const float HEAD_CLOTH_DIM = 0.45;
-vec3 worn_down(vec3 picture, vec2 uv, vec4 worn_as, vec2 worn_at, float skin_in) {
+// The dead's light cloth (white shirts, collars, scarves, shoes): no lighter than CLOTH_LIGHT_MAX and
+// soiled towards grey-brown by CLOTH_SOIL, worn and lain in; the living's keep their white (no WEATHERED).
+const float CLOTH_LIGHT_MAX = 0.5;
+const vec3 CLOTH_SOIL = vec3(1.0, 0.93, 0.82);
+
+// Without a skin mask (a body put in to try): what is warm and light is taken for skin.
+float skin_guess(vec3 picture) {
+	float light = dot(picture, vec3(0.2126, 0.7152, 0.0722));
+	return clamp((picture.r - picture.b) * 7.0 - 0.25, 0.0, 1.0) * smoothstep(0.02, 0.09, light);
+}
+
+vec3 soiled(vec3 picture, float cloth) {
+	float light = dot(picture, vec3(0.2126, 0.7152, 0.0722));
+	float k = cloth * smoothstep(CLOTH_LIGHT_MAX * 0.6, CLOTH_LIGHT_MAX, light);
+	return mix(picture, picture * CLOTH_SOIL * min(1.0, CLOTH_LIGHT_MAX / max(light, 1e-4)), k);
+}
+
+vec3 worn_down(vec3 picture, vec2 uv, vec4 worn_as, vec2 worn_at, float skin) {
 	float n = tear_noise(uv * 40.0) * 0.65 + tear_noise(uv * 110.0) * 0.35;
 	float light = dot(picture, vec3(0.2126, 0.7152, 0.0722));
 	// Skin gone off: grey-olive, darker than it was and blotched, so a light face under a dark hood
-	// reads as dead skin, not a white mask (without a mask: what is warm and light).
-	float skin = skin_in >= 0.0 ? skin_in : clamp((picture.r - picture.b) * 7.0 - 0.25, 0.0, 1.0) * smoothstep(0.02, 0.09, light);
+	// reads as dead skin, not a white mask.
 	vec3 off = vec3(light) * SKIN_OFF;
-	float gone = mix(SKIN_GONE_LEAST, 1.0, smoothstep(SKIN_GONE.x, SKIN_GONE.y, worn_as.b));
+	float gone = mix(skin_gone_least, 1.0, smoothstep(SKIN_GONE.x, SKIN_GONE.y, worn_as.b));
 	picture = mix(picture, off * (1.0 - 0.5 * n), gone * skin);
 	// Dirt from the feet up, in patches.
 	float low = 1.0 - smoothstep(0.12, 0.55, worn_at.x);
@@ -318,9 +335,10 @@ void fragment() {
 		}
 #endif
 #ifdef WEATHERED
-		vec2 mask_here = has_skin ? texture(skin_tex, UV).rg : vec2(-1.0, 0.0);
-		float skin_here = has_skin ? smoothstep(SKIN_EDGE.x, SKIN_EDGE.y, mask_here.r) : -1.0;
+		vec2 mask_here = has_skin ? texture(skin_tex, UV).rg : vec2(skin_guess(picture), 0.0);
+		float skin_here = has_skin ? smoothstep(SKIN_EDGE.x, SKIN_EDGE.y, mask_here.r) : mask_here.r;
 		picture = mix(picture, HEAD_CLOTH * (dot(picture, vec3(0.2126, 0.7152, 0.0722)) * HEAD_CLOTH_DIM), mask_here.g);
+		picture = soiled(picture, 1.0 - skin_here);
 		picture = worn_down(picture, UV, tear, tear_at, skin_here);
 #endif
 		vec3 c = fx_model_grade(picture, grade_saturation, grade_value, grade_cool, grade_cool_mix);
@@ -330,7 +348,7 @@ void fragment() {
 		// On the skin the state's colour but never its brightening (the frozen's 1.8 turned faces white).
 		float state_light = dot(state, vec3(0.2126, 0.7152, 0.0722));
 		vec3 on_skin = mix(vec3(state_light), state, skin_tint) / max(1.0, state_light);
-		base = c * (has_skin ? mix(mix(vec3(1.0), state, cloth_state), on_skin, skin_here) : state);
+		base = c * mix(mix(vec3(1.0), state, cloth_state), on_skin, skin_here);
 #else
 		base = c * (tint / 0.5);
 #endif

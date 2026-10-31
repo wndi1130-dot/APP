@@ -78,6 +78,9 @@ def regions_of(glb):
     # made otherwise stops the tool rather than giving a mask drawn from the wrong part.
     if len(js["meshes"]) != 1 or len(js["meshes"][0]["primitives"]) != 1 or len(js.get("skins", [])) != 1:
         raise SystemExit("dead_skin_mask: %s is not one skinned mesh of one primitive" % glb)
+    holders = [n for n in js["nodes"] if "mesh" in n]
+    if len(holders) != 1 or holders[0].get("mesh") != 0 or holders[0].get("skin") != 0:
+        raise SystemExit("dead_skin_mask: %s: the mesh is not held by one node with its skin" % glb)
     names = [js["nodes"][j]["name"] for j in js["skins"][0]["joints"]]
     prim = js["meshes"][0]["primitives"][0]
     at = prim["attributes"]

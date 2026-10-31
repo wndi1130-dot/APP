@@ -1279,6 +1279,7 @@ func _draws_of(body: Dictionary) -> Dictionary:
 			mat.set_shader_parameter("mixes", true)
 			mat.set_shader_parameter("cloth_state", DeadCast.CLOTH_STATE)
 			mat.set_shader_parameter("skin_tint", float(DeadCast.SKIN_TINT.get(look, 1.0)))
+			mat.set_shader_parameter("skin_gone_least", float(DeadCast.SKIN_GONE_LEAST.get(look, 0.82)))
 		var t: Color = TINTS[look]
 		mat.set_shader_parameter("tint", Vector3(t.r, t.g, t.b))
 		node.material_override = mat
