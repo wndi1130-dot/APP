@@ -278,12 +278,41 @@ func test_v1_and_grid_fallback_keep_the_start_share() -> void:
 		assert_eq(float(b.zombies.lunger_share), LungerRules.SHARE, "the start's forced share stays, as the old switch did")
 
 
+## The start's own share: the prologue's 0, act 1 slot 10's 0.05, or the forced 0.1 (383, 387, 134).
+func _resume_with_start(saved: Dictionary, start: Dictionary):
+	var opts: Dictionary = FieldSave.resume_opts(saved)
+	opts.merge(start, true)
+	return _game(opts)
+
+
+const STARTS: Array = [
+	[{"act": "prologue", "act_progress": 0.5, "lungers": false}, 0.0],
+	[{"act": "act1", "act_progress": 0.75, "lungers": false}, 0.05],
+	[{"act": "act1", "act_progress": 0.75, "lungers": true}, 0.1],
+]
+
+
 func test_a_saved_share_that_is_not_a_share_keeps_the_start_share() -> void:
-	for bad: float in [NAN, INF, -0.1, 1.5]:
+	for bad: float in [NAN, INF, -INF, -0.1, 1.5]:
 		var a = _game()
 		a.zombies.lunger_share = bad
 		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
-		var opts: Dictionary = FieldSave.resume_opts(saved)
-		opts[LungerRules.OPTION] = true
-		var b = _game(opts)
-		assert_eq(float(b.zombies.lunger_share), LungerRules.SHARE, "%s falls back to the start's share" % bad)
+		for start: Array in STARTS:
+			var b = _resume_with_start(saved, start[0])
+			assert_almost_eq(float(b.zombies.lunger_share), float(start[1]), 0.000000001, "%s falls back to the start's own share" % bad)
+
+
+func test_missing_share_v1_and_grid_fallback_keep_each_start_share() -> void:
+	var a = _game()
+	for way: String in ["missing", "v1", "grid"]:
+		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+		if way == "missing":
+			saved["runtime"]["zombie_system"].erase("lunger_share")
+		elif way == "v1":
+			saved["version"] = 1
+			saved.erase("runtime")
+		else:
+			saved["runtime"]["levels"][0]["width"] += 1
+		for start: Array in STARTS:
+			var b = _resume_with_start(saved, start[0])
+			assert_almost_eq(float(b.zombies.lunger_share), float(start[1]), 0.000000001, "%s keeps the start's own share" % way)
