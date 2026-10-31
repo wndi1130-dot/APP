@@ -101,15 +101,37 @@ func test_the_lighter_close_leaves_the_same_train_pane_and_paper() -> void:
 	assert_gt((after["paper"] as Array).size(), 0, "the unfolded paper has its lines")
 
 
-## Unfolding after the close shows the paper refilled with what decorating changed.
-func test_the_paper_unfolded_after_closing_matches_a_fresh_fill() -> void:
+## The first line on the paper's body, to mark as stale.
+func _body_label(paper) -> Label:
+	var labels: Array = paper.body.find_children("*", "Label", true, false)
+	for l: Label in labels:
+		if l.text != "":
+			return l
+	return null
+
+
+## The folded paper is not refilled on closing, and unfolding it refills and shows it: a line
+## marked stale while decorating stays under the fold and is gone once the paper opens.
+func test_the_folded_paper_is_refilled_on_unfolding_not_on_closing() -> void:
 	var f = await _flow()
+	var stale: Label = _body_label(f.paper)
+	assert_not_null(stale, "the paper has a line to mark")
+	stale.text = "STALE"
 	f.leave_decor()
 	await get_tree().process_frame
+	assert_true((f.paper as TurnCard).folded, "the paper stays folded")
+	assert_has(_texts(f.paper.body, []), "STALE", "closing left the folded paper as it was")
 	f.paper.set_folded(false)
+	assert_does_not_have(_texts(f.paper.body, []), "STALE", "unfolding refilled the paper")
+	for _i: int in 30:
+		if f.paper.sheet.modulate.a >= 1.0:
+			break
+		await get_tree().process_frame
+	assert_true(f.paper.sheet.visible and f.paper.sheet.inner.visible, "the unfolded paper shows")
+	assert_eq(f.paper.sheet.modulate.a, 1.0, "the refilled paper settles in sight")
 	var shown: Array = _texts(f.paper, [])
 	f.paper._fill()
-	assert_eq(_texts(f.paper, []), shown, "unfolding refilled the paper")
+	assert_eq(_texts(f.paper, []), shown, "the unfolded paper matches a fresh fill")
 
 
 ## The closing pane is let go and freed (its drag goes with it; the decor view's hover goes
@@ -123,3 +145,36 @@ func test_closing_lets_the_pane_go() -> void:
 	assert_eq(String(f.decor_id), "", "decorating is closed")
 	await get_tree().process_frame
 	assert_false(is_instance_valid(pane), "the pane is freed")
+
+
+## Closed mid-drag: the pane is not laid out again (its drag is left to go with it), and the
+## green place under the held thing goes with the decor view, nothing of it left in the train.
+func test_closing_mid_drag_leaves_nothing_in_the_train() -> void:
+	var f = await _flow()
+	var pane = f.decor_pane
+	pane.dragging = true
+	pane.drag_kind = "chair"
+	f.train.decor_hover("floor", [0, 0], true)
+	var cursor: Node3D = f.train.decor.cursor
+	assert_true(cursor.visible, "the place under the held thing shows")
+	f.leave_decor()
+	assert_true(pane.dragging, "the closing pane is not stopped and laid out again")
+	assert_eq(f.train.decorating(), "", "the train left decorating")
+	assert_false(cursor.is_inside_tree() and cursor.visible, "no green place left in the train")
+	await get_tree().process_frame
+	assert_false(is_instance_valid(pane), "the pane is freed with its drag")
+	assert_eq(f.train.find_children("DecorCursor", "", true, false).size(), 0, "no place mark left in the train")
+
+
+## The train closing decorating on its own (its layout rebuilt) closes the pane on the next frame.
+func test_the_train_closing_decorating_closes_the_pane() -> void:
+	var f = await _flow()
+	var pane = f.decor_pane
+	f.train.exit_decor()
+	assert_eq(String(f.decor_id), "guard", "the pane follows on the next frame")
+	await get_tree().process_frame
+	assert_eq(String(f.decor_id), "", "decorating is closed")
+	assert_null(f.decor_pane, "the pane is let go")
+	await get_tree().process_frame
+	assert_false(is_instance_valid(pane), "the pane is freed")
+	assert_true((f.paper as TurnCard).folded, "the paper stays folded")
