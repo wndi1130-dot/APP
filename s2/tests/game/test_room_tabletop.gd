@@ -20,6 +20,21 @@ func before_all() -> void:
 		maps.append(data)
 
 
+func test_seven_house_maps_restore_room_kind_medians() -> void:
+	# 합격 잣대는 일곱 장 방을 합친 종류 수 가운데값(참고 사본 표): 침실 1·거실 2·부엌 0.
+	var rooms: Array = []
+	for data: Dictionary in maps:
+		rooms.append_array(Measure.census(data))
+	for id: String in ["houses_02", "houses_03", "houses_05", "houses_06", "houses_07"]:
+		var data := Measure.prepare(id)
+		RoomDecor.dress(data)
+		rooms.append_array(Measure.census(data))
+	var summary := Measure.summarize(rooms)
+	for cls: String in {"bed": 1.0, "living": 2.0, "kitchen": 0.0}:
+		assert_gt(int(summary[cls]["rooms"]), 0, cls)
+		assert_eq(float(summary[cls]["median"]), float({"bed": 1.0, "living": 2.0, "kitchen": 0.0}[cls]), cls)
+
+
 func test_every_top_has_a_room_host_a_free_surface_and_a_missing_wall_kind() -> void:
 	var checked := 0
 	var total := 0
@@ -330,4 +345,6 @@ func test_renderer_defers_tops_uses_the_fitted_host_and_counts_skips() -> void:
 	var expected := MapView.top_mount_transform(host_xf, float(surface["y"]), top["at"])
 	assert_true(xf.is_equal_approx(expected), "줄 facing 대신 실제 받침의 최종 변환")
 	assert_almost_eq(xf.basis.x.length(), 1.0, 0.0001)
+	# 2칸 받침의 둘째 칸만 본 적 있어도 탁상이 보이게, 보이기·기억 칸은 받침 전체다.
+	assert_eq(items[0]["rect"], r, "탁상 보이기 칸 = 받침 칸")
 	assert_eq(view._prop_shade(top_path, items[0]), {}, "들뜬 탁상의 땅 그늘 없음")

@@ -1778,7 +1778,8 @@ func _build_props() -> void:
 		var xf := top_mount_transform(host["xf"], float(tops[spot]["y"]), prop["at"])
 		if not prop_batches.has(path):
 			prop_batches[path] = {"items": [], "nodes": {}, "tiles": {}}
-		var item := {"xf": xf, "rect": prop["rect"], "level": lv, "building": host["building"],
+		# 보이기·기억은 받침 전체 칸으로: 2칸 받침이면 탁상은 줄의 첫 칸이 아니라 윗면 가운데에 선다.
+		var item := {"xf": xf, "rect": prop["host_rect"], "level": lv, "building": host["building"],
 			"prop": prop, "remembered": false}
 		prop_batches[path]["items"].append(item)
 		_index_prop(prop_batches[path], item)
