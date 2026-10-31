@@ -26,19 +26,19 @@ function choices(g: Game, kind: string, c: string, text?: string): Choice[] {
   if (kind === 'need_warn') {
     if (!NEEDS[text as NeedId]) return [];
     return decreeLaws(g, text as NeedId).map(law => ({
-      label: `포고: ${LAWS[law].title}`, say: `${LAWS[law].title}, 오늘부터다. 의회는 나중에 추인한다.`, effs: [{ t: 'tension', v: 5 }],
+      label: `포고: ${LAWS[law].title}`, log: `포고로 ${LAWS[law].title}을(를) 시행했다.`, say: `${LAWS[law].title}, 오늘부터다. 의회는 나중에 추인한다.`, effs: [{ t: 'tension', v: 5 }],
       special: `dark:decree:law:${law}`, extra: ['이번 구간 포고 자리를 쓴다', '대권이 끝나면 추인 안건'],
     }));
   }
   if (kind === 'strike') {
     return [{
-      label: '포고로 불을 올린다', say: '비상대권으로 명한다. 불을 올려라. 지금.', effs: [{ t: 'tension', v: 5 }, { t: 'fear', v: 5 }, { t: 'rel', c: 'engine', v: -5 }],
+      label: '포고로 불을 올린다', log: '포고로 기관실에 불을 올리게 했다.', say: '비상대권으로 명한다. 불을 올려라. 지금.', effs: [{ t: 'tension', v: 5 }, { t: 'fear', v: 5 }, { t: 'rel', c: 'engine', v: -5 }],
       special: 'dark:decree:strike', extra: ['이번 구간 포고 자리를 쓴다', '파업이 끝난다'],
     }];
   }
   if (kind === 'demand' && COMMS.includes(c as never)) {
     return [{
-      label: '포고로 정한다', say: '비상대권으로 정한다. 지금은 올릴 수 없다. 더 묻지 마라.', effs: [{ t: 'tension', v: 5 }, { t: 'fear', v: 3 }, { t: 'rel', c: c as never, v: -3 }],
+      label: '포고로 정한다', log: `포고로 ${COMM_NAME[c as keyof typeof COMM_NAME]}의 요구를 거절했다.`, say: '비상대권으로 정한다. 지금은 올릴 수 없다. 더 묻지 마라.', effs: [{ t: 'tension', v: 5 }, { t: 'fear', v: 3 }, { t: 'rel', c: c as never, v: -3 }],
       special: 'dark:decree:refuse', extra: ['이번 구간 포고 자리를 쓴다', '거절해도 열기가 오르지 않는다'],
     }];
   }
