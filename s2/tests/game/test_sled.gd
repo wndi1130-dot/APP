@@ -91,6 +91,7 @@ func _snapshot(game: Variant) -> Dictionary:
 	return {"sleds": game.sleds.duplicate(true), "next": game.next_sled_id,
 		"pid": String(p.pid), "pos": p.position, "bag": p.items.duplicate(true), "hands": p.hands.duplicate(true),
 		"pulling": p.sled_id, "stowed": p.sled_weapon_stowed, "for": p.sled_stowed_for,
+		"rearm_t": p.sled_rearm_t, "path": p.path.duplicate(),
 		"job": p.sled_job.duplicate(true), "action": p.action, "left": p.action_t,
 		"callback": String(p.action_done.get_method()) if p.action != "" else "", "unloaded": game.unloaded.duplicate(true)}
 
@@ -279,15 +280,134 @@ func test_d3_pull_refusals_and_combat_lock_then_draw() -> void:
 	game.actions.release_sled(p)
 	assert_eq(p.sled_id, 0)
 	assert_eq(sled["puller"], "")
-	assert_eq(p.action, "sled_rearm")
-	var done: Callable = p.action_done
+	assert_eq(p.action, "")
+	assert_eq(p.sled_job, {})
+	assert_eq(p.sled_rearm_t, Carry.swap_time("belt", p.carry_state()))
 	game._update_person(p, 0.5)
 	assert_false(game.combat._hands_free_for_blow(p))
 	game._update_person(p, 0.5)
 	assert_true(game.combat._hands_free_for_blow(p))
 	assert_false(p.sled_weapon_stowed)
-	done.call()
+	assert_eq(p.sled_rearm_t, 0.0)
 	assert_eq(p.hands, weapons)
+
+
+func test_d3_rearm_keeps_stairs_path_and_unlocks_combat_after_one_second() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.set_weapon_slots([{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 3}])
+	var upper: Variant = FieldGrid.new(game.grid.width, game.grid.height)
+	upper.refresh_paths()
+	game.levels[1] = upper
+	var stair: Dictionary = {"cell": Vector2i(12, 20), "low": 0, "high": 1, "ladder": false}
+	game.stairs.append(stair)
+	var sled: Dictionary = _sled(game)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	game.actions.take_stairs(p, stair)
+	assert_eq(p.sled_id, 0)
+	assert_false(p.path.is_empty())
+	assert_eq(p.action, "")
+	assert_eq(p.sled_rearm_t, 1.0)
+	var start: Vector3 = p.position
+	game._update_person(p, 0.5)
+	assert_gt(start.distance_to(p.position), 0.0)
+	assert_false(p.path.is_empty(), "the normal tick must not erase the stair route")
+	assert_false(game.combat.can_shoot(p))
+	var loaded_before: int = int(p.weapon()["loaded"])
+	game.combat.fire(p, p.position + Vector3(0, 0, 4))
+	assert_eq(int(p.weapon()["loaded"]), loaded_before)
+	game.combat.start_swing(p, {})
+	game.combat.start_shove(p)
+	assert_eq(p.strike_t, 0.0)
+	assert_eq(p.shove_t, 0.0)
+	game._update_person(p, 0.5)
+	assert_false(p.sled_weapon_stowed)
+	assert_true(game.combat.can_shoot(p))
+	assert_true(game.combat._hands_free_for_blow(p))
+	for _tick: int in 60:
+		game._update_person(p, 0.1)
+	assert_eq(game.level_of(p.position), 1)
+	assert_true(p.path.is_empty())
+	assert_eq(sled["pos"], start + Vector3(-1, 0, 0))
+	p.set_weapon_slots([{"id": "knife", "quality": "factory", "condition": 1.0, "loaded": 0}])
+	game.combat.swing_air(p)
+	assert_gt(p.strike_t, 0.0)
+
+
+func test_d3_touch_pads_ignore_stowed_weapon_then_work_after_timer() -> void:
+	for pad_name: String in ["attack_button", "aim_button", "shove_button", "manual_button"]:
+		var game: Variant = _game()
+		var p: Variant = game.player
+		var hud: Variant = game.hud
+		var weapon: String = "knife" if pad_name == "attack_button" else "pistol"
+		p.set_weapon_slots([{"id": weapon, "quality": "factory", "condition": 1.0, "loaded": 3}])
+		var sled: Dictionary = _sled(game)
+		assert_true(game.actions.pull_sled(p, int(sled["id"])))
+		var button: Button = hud.get(pad_name)
+		hud.tick(0.0)
+		await get_tree().process_frame
+		button.show()
+		await get_tree().process_frame
+		hud.pads = [button]
+		var at: Vector2 = button.get_global_rect().get_center()
+		var manual_before: bool = hud.manual_button.button_pressed
+		button.disabled = false # Input must be safe even before the next HUD tick.
+		for phase: int in 2:
+			assert_true(hud.finger_down(9, at), pad_name)
+			assert_false(hud.fingers.has(9), "a blocked pad must not become a world touch")
+			hud.finger_up(9, at)
+			assert_eq(hud.manual_button.button_pressed, manual_before)
+			assert_false(p.aim.active)
+			assert_false(p.hold_attack)
+			assert_eq(p.strike_t, 0.0)
+			assert_eq(p.shove_t, 0.0)
+			assert_eq(p.swing_t, 0.0)
+			if phase == 0:
+				game.actions.release_sled(p)
+				game._update_person(p, 0.5)
+		game._update_person(p, 0.5)
+		hud.tick(0.0)
+		button.show()
+		await get_tree().process_frame
+		at = button.get_global_rect().get_center()
+		assert_false(button.disabled)
+		assert_true(hud.finger_down(9, at))
+		match pad_name:
+			"attack_button":
+				assert_gt(p.strike_t, 0.0)
+			"aim_button":
+				assert_true(p.aim.active)
+			"shove_button":
+				assert_gt(p.shove_t, 0.0)
+			"manual_button":
+				assert_ne(hud.manual_button.button_pressed, manual_before)
+		hud.finger_cancel(9)
+		_discard_field(game)
+
+
+func test_d3_touch_shove_can_drop_rope_and_escape_grab() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	var hud: Variant = game.hud
+	var sled: Dictionary = _sled(game)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	hud.tick(0.0)
+	await get_tree().process_frame
+	var dead: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.4, 0, 0))
+	dead["state"] = "grab"
+	dead["victim"] = p
+	p.grabbers.append(dead)
+	p.grab_left = 1.0
+	hud.shove_button.show()
+	hud.pads = [hud.shove_button]
+	assert_true(hud.shove_button.disabled, "the old disabled appearance may still be present")
+	var at: Vector2 = hud.shove_button.get_global_rect().get_center()
+	assert_true(hud.finger_down(9, at))
+	assert_true(p.grabbers.is_empty())
+	assert_eq(p.sled_id, 0)
+	assert_eq(sled["puller"], "")
+	assert_eq(p.sled_rearm_t, 1.0)
+	hud.finger_up(9, at)
 
 
 func test_d3_grab_drops_before_escape() -> void:
@@ -345,6 +465,7 @@ func test_d4_drive_and_path_speed_ratios_and_independent_bag() -> void:
 					game.player.path = PackedVector3Array([at + Vector3(4, 0, 0)])
 					game._move_person(game.player, 0.1)
 			var ratio: float = Sled.LOAD_MULT[load_index] * 0.9
+			assert_gt(at.distance_to(plain.player.position), 0.0, "a blocked baseline cannot prove a speed ratio")
 			assert_almost_eq(at.distance_to(towing.player.position), at.distance_to(plain.player.position) * ratio, EPS)
 			_discard_field(plain)
 			_discard_field(towing)
@@ -391,27 +512,60 @@ func test_d5_drive_and_path_leave_sled_outside() -> void:
 		assert_true(game.grid.indoor(FieldGrid.cell_of(p.position)))
 
 
-func test_d5_wall_corner_and_long_step_drop_without_teleport() -> void:
+func test_d5_blocked_segment_drops_without_teleport() -> void:
 	var game: Variant = _game()
 	var p: Variant = game.player
 	p.position = Vector3(11.5, 0, 20.5)
 	var sled: Dictionary = _sled(game)
 	var at: Vector3 = sled["pos"]
 	assert_true(game.actions.pull_sled(p, int(sled["id"])))
-	game.grid.set_solid(Vector2i(10, 21), FieldGrid.Solid.WALL)
-	assert_false(Sled.path_clear(game, Vector3(10.5, 0, 20.5), Vector3(11.5, 0, 21.5)))
-	p.stick = Vector2(0, 1)
-	p.drive_speed = p.speed(FieldGrid.Floor.SNOW)
-	game._drive(p, 0.7)
-	assert_eq(p.sled_id, 0)
-	assert_eq(sled["pos"], at)
-	assert_true(game.grid.people_can_walk(FieldGrid.cell_of(p.position)))
-	_finish_work(game)
-	p.position = at + Vector3(1, 0, 0)
-	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	game.grid.set_solid(Vector2i(12, 20), FieldGrid.Solid.WALL)
 	Sled.before_move(game, p, p.position + Vector3(5, 0, 0))
 	assert_eq(p.sled_id, 0)
 	assert_eq(sled["pos"], at)
+	assert_eq(p.sled_rearm_t, 1.0)
+
+
+func test_d5_corner_trail_survives_both_saves_and_long_walking_ticks() -> void:
+	for exact_mode: bool in [false, true]:
+		var game: Variant = _game()
+		var p: Variant = game.player
+		p.position = Vector3(11.1, 0, 20.8)
+		p.turn_rate = 0.0
+		var sled: Dictionary = _sled(game)
+		sled["pos"] = Vector3(10.8, 0, 20.8)
+		game.grid.set_solid(Vector2i(10, 21), FieldGrid.Solid.WALL)
+		assert_true(game.actions.pull_sled(p, int(sled["id"])))
+		p.path = PackedVector3Array([Vector3(11.1, 0, 21.4)])
+		game._update_person(p, 0.5)
+		assert_almost_eq(p.position, Vector3(11.1, 0, 21.4), Vector3.ONE * Sled.ROPE_EPS)
+		assert_eq(sled["pos"], Vector3(10.8, 0, 20.8), "slack rope does not pull the sled")
+		assert_false(Sled.path_clear(game, sled["pos"], p.position), "the direct chord crosses the corner wall")
+		assert_true(Sled.trail_clear(game, sled, p.position))
+		var resumed: Variant = _game()
+		resumed.grid.set_solid(Vector2i(10, 21), FieldGrid.Solid.WALL)
+		var saved: Dictionary = _saved(game)
+		_apply(resumed, saved, exact_mode)
+		assert_eq(_snapshot(resumed), _snapshot(game))
+		assert_eq(resumed.player.sled_id, int(sled["id"]))
+		for field: Variant in [game, resumed]:
+			var walker: Variant = field.player
+			var towed: Dictionary = field.sleds[0]
+			for dest: Vector3 in [Vector3(11.1, 0, 24.4), Vector3(15.1, 0, 24.4), Vector3(15.1, 0, 27.4)]:
+				var old_person: Vector3 = walker.position
+				var old_sled: Vector3 = towed["pos"]
+				walker.path = PackedVector3Array([dest])
+				field._update_person(walker, 4.0)
+				assert_gt(old_person.distance_to(walker.position), Sled.ROPE_LENGTH)
+				assert_lte(old_sled.distance_to(towed["pos"]), old_person.distance_to(walker.position) + Sled.ROPE_EPS)
+				assert_eq(walker.sled_id, int(towed["id"]))
+				assert_true(Sled.trail_clear(field, towed, walker.position))
+				assert_true(Sled.walkable(field, FieldGrid.cell_of(towed["pos"])))
+				assert_lte(Sled.trail_length(towed["trail"]), Sled.ROPE_LENGTH + Sled.ROPE_EPS)
+				assert_lte(towed["trail"].size(), 4, "points already passed by the sled are discarded")
+		assert_eq(_snapshot(resumed), _snapshot(game))
+		_discard_field(game)
+		_discard_field(resumed)
 
 
 func test_d5_stair_level_branch_and_hands_work_menu_boundary() -> void:
@@ -429,8 +583,7 @@ func test_d5_stair_level_branch_and_hands_work_menu_boundary() -> void:
 	assert_eq(p.sled_id, 0)
 	assert_eq(p.action, "craft")
 	_finish_work(game)
-	game._update_person(p, 0.0)
-	_finish_work(game)
+	game._update_person(p, 1.0)
 	assert_true(game.actions.pull_sled(p, int(sled["id"])))
 	p.path = PackedVector3Array([Vector3(p.position.x, 3.0, p.position.z)])
 	game._move_person(p, 0.1)
@@ -473,6 +626,36 @@ func test_d6_death_bleeding_down_and_fall_preserve_cargo() -> void:
 
 
 # D7: Explicit unloading, no field-store filter on the sled, no companion ownership.
+func test_d7_context_keeps_all_sled_rows_and_primary_order() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.items = {"food_pack": 1}
+	var sled: Dictionary = _sled(game, {"food_pack": 2})
+	for index: int in 4:
+		var box_id: String = "near_sled_%d" % index
+		game.data["containers"][box_id] = {"id": box_id, "name": "보관함", "cell": Vector2i(10, 20), "level": 0,
+			"building": -1, "search": 1.0, "items": [], "locked": false, "searched": false}
+	for cell: Vector2i in [Vector2i(10, 19), Vector2i(11, 20)]:
+		game.grid.doors[cell] = {"state": "open"}
+	var labels: Array = _labels(game)
+	assert_eq(labels[0], "열차에 싣기")
+	for label: String in ["열차에 싣기", "끈다", "썰매 짐"]:
+		assert_has(labels, label)
+	assert_lt(labels.find("끈다"), labels.find("썰매 짐"))
+	game.data["unloading"] = [Rect2i(30, 18, 2, 2)]
+	game.data["unload"] = Rect2i(30, 18, 2, 2)
+	labels = _labels(game)
+	assert_eq(labels[0], "끈다")
+	assert_has(labels, "썰매 짐")
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	game.data["unloading"] = [Rect2i(8, 18, 10, 5)]
+	game.data["unload"] = Rect2i(8, 18, 10, 5)
+	labels = _labels(game)
+	assert_eq(labels[0], "놓는다")
+	assert_has(labels, "열차에 싣기")
+	assert_has(labels, "썰매 짐")
+
+
 func test_d7_empty_bag_sled_buttons_all_cargo_and_no_second_trip() -> void:
 	var game: Variant = _game()
 	var p: Variant = game.player
@@ -616,9 +799,12 @@ func test_d9_all_checkpoints_legacy_and_exact_resume_twice() -> void:
 			_apply(resumed, saved, exact_mode)
 			assert_eq(_snapshot(resumed), _snapshot(game), phase + " applied twice")
 			assert_eq(FieldSave.to_json(saved), original, "restore never mutates the save")
-			if phase in ["craft", "rearm"]:
+			if phase == "craft":
 				_finish_work(game)
 				_finish_work(resumed)
+			elif phase == "rearm":
+				game._update_person(p, 1.0)
+				resumed._update_person(resumed.player, 1.0)
 			elif phase == "pulling":
 				for field: Variant in [game, resumed]:
 					field.player.stick = Vector2.RIGHT
@@ -629,6 +815,80 @@ func test_d9_all_checkpoints_legacy_and_exact_resume_twice() -> void:
 			assert_eq(_snapshot(resumed), _snapshot(game), phase + " continued")
 			_discard_field(game)
 			_discard_field(resumed)
+
+
+func test_d9_rearm_timer_and_legacy_action_resume_while_walking() -> void:
+	for exact_mode: bool in [false, true]:
+		for legacy: bool in [false, true]:
+			var game: Variant = _game()
+			var p: Variant = game.player
+			var sled: Dictionary = _sled(game)
+			assert_true(game.actions.pull_sled(p, int(sled["id"])))
+			game.actions.release_sled(p)
+			p.path = PackedVector3Array([p.position + Vector3(4, 0, 0)])
+			game._update_person(p, 0.4)
+			var saved: Dictionary = _saved(game)
+			if legacy:
+				for row: Dictionary in saved["people"]:
+					if row["pid"] != p.pid:
+						continue
+					var state: Dictionary = row["state"]
+					state.erase("sled_rearm_t")
+					state["action"] = "sled_rearm"
+					state["action_label"] = "무기 꺼냄"
+					state["action_t"] = p.sled_rearm_t
+					state["action_total"] = 1.0
+					state["action_done"] = FieldSave._freeze(game, game.actions._sled_crafted.bind(p, 1, int(sled["id"])))
+					state["action_done"]["$call"][1] = "_sled_rearmed"
+					state["sled_job"] = {"kind": "rearm", "token": 1, "sled_id": int(sled["id"]), "ready": false}
+			var original: String = FieldSave.to_json(saved)
+			var resumed: Variant = _game()
+			for _restore: int in 2:
+				_apply(resumed, saved, exact_mode)
+				assert_eq(_snapshot(resumed), _snapshot(game))
+				assert_eq(resumed.player.action, "")
+				assert_eq(resumed.player.sled_job, {})
+			assert_eq(FieldSave.to_json(saved), original)
+			for field: Variant in [game, resumed]:
+				var walker: Variant = field.player
+				var at: Vector3 = walker.position
+				field._update_person(walker, 0.25)
+				assert_true(walker.sled_weapon_stowed)
+				assert_gt(walker.position.distance_to(at), 0.0)
+				field._update_person(walker, 0.36)
+				assert_false(walker.sled_weapon_stowed)
+				assert_eq(walker.sled_rearm_t, 0.0)
+			assert_eq(_snapshot(resumed), _snapshot(game))
+			for row: Dictionary in _saved(resumed)["people"]:
+				assert_false(row["state"].has("sled_rearm_t"), "an idle timer adds no save field")
+			_discard_field(game)
+			_discard_field(resumed)
+
+
+func test_d9_legacy_trail_is_seeded_but_broken_or_too_long_trails_detach() -> void:
+	for exact_mode: bool in [false, true]:
+		for mode: String in ["legacy", "gap", "wall", "length"]:
+			var game: Variant = _game()
+			var p: Variant = game.player
+			var sled: Dictionary = _sled(game)
+			assert_true(game.actions.pull_sled(p, int(sled["id"])))
+			if mode == "legacy":
+				sled.erase("trail")
+			elif mode == "gap":
+				sled["trail"] = PackedVector3Array([sled["pos"], p.position + Vector3(0.1, 0, 0)])
+			elif mode == "wall":
+				game.grid.set_solid(FieldGrid.cell_of(sled["pos"]), FieldGrid.Solid.WALL)
+			else:
+				sled["trail"] = PackedVector3Array([sled["pos"], p.position + Vector3(0, 0, 1), p.position])
+			var saved: Dictionary = _saved(game)
+			_apply(game, saved, exact_mode)
+			if mode == "legacy":
+				assert_eq(p.sled_id, int(sled["id"]))
+				assert_true(Sled.trail_clear(game, game.sleds[0], p.position))
+			else:
+				assert_eq(p.sled_id, 0)
+				assert_eq(game.sleds[0]["puller"], "")
+			_discard_field(game)
 
 
 func test_d9_old_save_and_missing_or_dead_puller() -> void:
@@ -786,6 +1046,8 @@ func test_d11_unused_sled_queries_do_not_change_field_or_rng() -> void:
 			game._step(0.1)
 	assert_eq(queried.sleds, [])
 	assert_eq(queried.next_sled_id, 1)
+	for row: Dictionary in _saved(queried)["people"]:
+		assert_false(row["state"].has("sled_rearm_t"))
 	assert_eq(queried.rng.state, plain.rng.state)
 	assert_eq(queried.zombies.loot_rng.state, plain.zombies.loot_rng.state)
 	assert_eq(queried.combat._pace_rng.state, plain.combat._pace_rng.state)

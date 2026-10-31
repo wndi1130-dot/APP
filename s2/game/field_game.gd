@@ -1992,6 +1992,7 @@ func _update_person(p: Person, delta: float) -> void:
 	actions.validate_work(p)
 	if not p.is_alive():
 		return
+	Sled.tick_rearm(p, delta)
 	var cell := FieldGrid.cell_of(p.position)
 	var lg := grid_at(p.position)
 	var indoor := lg.indoor(cell)
@@ -2027,7 +2028,7 @@ func _update_person(p: Person, delta: float) -> void:
 		p.cancel_action()
 	if p.action != "":
 		# Each action takes its body multiplier once, here (not also in its length).
-		var rate := 1.0 if p.action == "climb" else float(p.mults()["swap" if p.action in ["swap", "sled_rearm"] else "hands"])
+		var rate := 1.0 if p.action == "climb" else float(p.mults()["swap" if p.action == "swap" else "hands"])
 		if p.action == "search":
 			actions.search_noise(p, delta)
 		p.action_t -= delta * rate

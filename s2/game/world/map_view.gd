@@ -818,8 +818,18 @@ func update_sleds(sleds: Array, people: Array) -> void:
 		for stack: int in stacks:
 			box(surface, Vector3(0.32, 0.3, 0.42), at + Vector3(-0.4 + float(stack) * 0.4, 0.37, 0), Color(0.49, 0.39, 0.27))
 		var handle: Vector3 = hands.get(String(sled["puller"]), at + Vector3(1.15, 0.12, 0))
-		_sled_rope(surface, at + Vector3(0.5, 0.22, -0.22), handle + Vector3(0, 0, -0.12))
-		_sled_rope(surface, at + Vector3(0.5, 0.22, 0.22), handle + Vector3(0, 0, 0.12))
+		var trail: PackedVector3Array = sled.get("trail", PackedVector3Array())
+		if trail.size() >= 2 and hands.has(String(sled["puller"])):
+			# The drawn rope bends along the same outdoor trail as the simulation.
+			var rope_from: Vector3 = trail[0] + Vector3(0, 0.22, 0)
+			for index: int in range(1, trail.size()):
+				var height: float = lerpf(0.22, 0.8, float(index) / float(trail.size() - 1))
+				var rope_to: Vector3 = trail[index] + Vector3(0, height, 0)
+				_sled_rope(surface, rope_from, rope_to)
+				rope_from = rope_to
+		else:
+			_sled_rope(surface, at + Vector3(0.5, 0.22, -0.22), handle + Vector3(0, 0, -0.12))
+			_sled_rope(surface, at + Vector3(0.5, 0.22, 0.22), handle + Vector3(0, 0, 0.12))
 		_sled_rope(surface, handle + Vector3(0, 0, -0.12), handle + Vector3(0, 0, 0.12))
 	sled_mesh.mesh = surface.commit()
 

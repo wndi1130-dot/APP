@@ -51,6 +51,7 @@ var items: Dictionary = {}             # item id -> count
 var sled_id: int = 0
 var sled_stowed_for: int = 0
 var sled_weapon_stowed: bool = false
+var sled_rearm_t: float = 0.0
 var sled_serial: int = 0
 var sled_job: Dictionary = {}
 ## What is worn, place by place (wear.gd, decision 434): {slot: garment state}.
@@ -334,9 +335,9 @@ func start_action(id: String, label: String, seconds: float, done: Callable) -> 
 		return
 	if id == "splint" and not _can_simple_splint():
 		return
+	if sled_weapon_stowed and id in ["aim", "swap"]:
+		return
 	if sled_id != 0:
-		if id in ["aim", "swap"]:
-			return
 		sled_hands_work.emit(self, id)
 	if not sled_job.is_empty():
 		sled_job = {}

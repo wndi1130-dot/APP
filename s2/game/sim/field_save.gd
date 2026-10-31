@@ -21,7 +21,7 @@ const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
 const Sled = preload("res://game/sim/sled.gd")
-const SLED_PERSON_FIELDS: Array[String] = ["sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_serial", "sled_job"]
+const SLED_PERSON_FIELDS: Array[String] = ["sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_rearm_t", "sled_serial", "sled_job"]
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
@@ -39,7 +39,7 @@ const PERSON_FIELDS: Array[String] = [
 	"reload_t", "jam_t", "target_zombie", "target_person", "hold_attack", "grabbers", "grab_left", "grab_front",
 	"climbing", "carrying_wounded", "downed_marked", "dead_marked", "brain", "panic", "ice_t", "fallen_t",
 	"last_hurt_by", "blood_soaked", "close_kills",
-	"sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_serial", "sled_job",
+	"sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_rearm_t", "sled_serial", "sled_job",
 ]
 const GAME_FIELDS: Array[String] = [
 	"squad", "crew", "raiders",
@@ -313,13 +313,14 @@ static func _restore_sled_envelope(game, save: Dictionary) -> void:
 		p.sled_id = 0
 		p.sled_stowed_for = 0
 		p.sled_weapon_stowed = false
+		p.sled_rearm_t = 0.0
 		p.sled_serial = 0
 		p.sled_job = {}
 	for row: Dictionary in save.get("people", []):
 		var p = _person_with_id(game, String(row["pid"]))
 		if p == null:
 			continue
-		var saved: Dictionary = row.get("state", {})
+		var saved: Dictionary = _sled_person_state(row.get("state", {}))
 		var fields: Dictionary = {}
 		for key: String in SLED_PERSON_FIELDS:
 			if saved.has(key):
@@ -337,6 +338,24 @@ static func _restore_sled_envelope(game, save: Dictionary) -> void:
 				if saved.has(key):
 					fields[key] = saved[key]
 			_restore_properties(game, p, fields)
+
+
+## Migrate before thawing callbacks: the old drawing action no longer exists.
+static func _sled_person_state(saved: Dictionary) -> Dictionary:
+	var state: Dictionary = saved.duplicate(true)
+	if String(state.get("sled_job", {}).get("kind", "")) == "rearm":
+		state["sled_job"] = {}
+	if String(state.get("action", "")) == "sled_rearm":
+		state["sled_rearm_t"] = maxf(0.0, float(state.get("action_t", 0.0)))
+		state["action"] = ""
+		state["action_label"] = ""
+		state["action_t"] = 0.0
+		state["action_total"] = 0.0
+		state["action_done"] = {"$call": []}
+		if float(state["sled_rearm_t"]) <= 0.0:
+			state["sled_weapon_stowed"] = false
+			state["sled_stowed_for"] = 0
+	return state
 
 
 static func _put_person(p, row: Dictionary) -> void:
@@ -412,6 +431,8 @@ static func _properties(game, object, fields: Array) -> Dictionary:
 	var out: Dictionary = {}
 	for field: String in fields:
 		var value: Variant = object.get(field)
+		if field == "sled_rearm_t" and float(value) <= 0.0:
+			continue
 		if field == "action_done":
 			if object.action == "":
 				value = Callable()
@@ -594,7 +615,7 @@ static func _apply_exact(game, save: Dictionary) -> void:
 	for row: Dictionary in save["people"]:
 		var p = _person_with_id(game, String(row["pid"]))
 		if p != null:
-			_restore_properties(game, p, row.get("state", {}))
+			_restore_properties(game, p, _sled_person_state(row.get("state", {})))
 			_restore_properties(game, p.aim, row.get("aim", {}))
 			var metadata: Dictionary = row.get("meta", {})
 			for key: String in PERSON_META:

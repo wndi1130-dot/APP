@@ -2324,8 +2324,7 @@ const NEAR_USE: float = 1.7
 
 
 ## The situation pad (field_unified 10): what is within a step of the player
-## on their floor, closest first, at most two (stairs, a box, a door, a
-## window, something on the ground).
+## on their floor, closest first. Keep sled commands alongside the usual two.
 func _near_things(p) -> Array:
 	var rows: Array = []
 	var lv: int = game.level_of(p.position)
@@ -2334,9 +2333,9 @@ func _near_things(p) -> Array:
 			rows.append([-2.0, "놓는다", release_sled.bind(p)])
 		for sled_id: int in near_sleds(p):
 			var sled: Dictionary = Sled.find(game, sled_id)
-			rows.append([-1.0, "썰매 짐", open_sled.bind(p, sled_id)])
+			rows.append([-0.5, "썰매 짐", open_sled.bind(p, sled_id)])
 			if Sled.can_pull(game, p, sled):
-				rows.append([-0.5, "끈다", pull_sled.bind(p, sled_id)])
+				rows.append([-1.0, "끈다", pull_sled.bind(p, sled_id)])
 	# By the train with something to put aboard: that comes first.
 	if at_unloading(p) and has_load(p):
 		rows.append([(-1.5 if p.sled_id != 0 else -1.25) if not game.sleds.is_empty() else 0.0, "열차에 싣기", load_train.bind(p)])
@@ -2426,7 +2425,12 @@ func _near_things(p) -> Array:
 				rows.append([d, spot["name"], go_and_do.bind(p, "spot", id, at)])
 	rows.sort_custom(func(a, b): return a[0] < b[0])
 	var out: Array = []
-	for row in rows.slice(0, 2):
+	var ordinary: int = 0
+	for row: Array in rows:
+		if String(row[1]) not in ["끈다", "썰매 짐", "놓는다"]:
+			if ordinary >= 2:
+				continue
+			ordinary += 1
 		var choice: Dictionary = {"label": row[1], "call": row[2]}
 		if row.size() > 3:
 			choice["work_ready"] = row[3]
@@ -2529,13 +2533,12 @@ func pull_sled(p: Variant, sled_id: int) -> bool:
 	return Sled.pull(game, p, sled_id)
 
 
-func release_sled(p: Variant, rearm: bool = true, message: String = "") -> void:
+func release_sled(p: Variant, _rearm: bool = true, message: String = "") -> void:
+	# Keep the legacy flag for callers; detaching now starts an independent timer.
 	if not Sled.detach(game, p):
 		return
 	if message != "" and p == game.player:
 		game.hud.toast(message)
-	if rearm:
-		_begin_sled_rearm(p)
 
 
 ## Emitted only after start_action's refusal checks, never by opening a menu.
@@ -2558,10 +2561,7 @@ func craft_sled(p: Variant) -> bool:
 func _sled_job_valid(p: Variant, job: Dictionary, finishing: bool = false) -> bool:
 	if game.ended or not p.can_act() or int(job["token"]) != p.sled_serial:
 		return false
-	if job["kind"] == "rearm":
-		return (p.sled_id == 0 and p.sled_weapon_stowed and int(job["sled_id"]) == p.sled_stowed_for
-			and not Sled.find(game, int(job["sled_id"])).is_empty() and (finishing or p.action == "sled_rearm"))
-	return (p == game.player and (finishing or p.action == "craft") and int(job["sled_id"]) == game.next_sled_id
+	return (job["kind"] == "craft" and p == game.player and (finishing or p.action == "craft") and int(job["sled_id"]) == game.next_sled_id
 		and game.sleds.is_empty() and Sled.outside(game, p.position) and _in_reach(p, job["at"]) and Sled.materials(p)
 		and p.body.injured_at == job["injured_at"] and p.body.wounds.size() == int(job["wounds"]))
 
@@ -2572,8 +2572,6 @@ func _validate_sled_work(p: Variant) -> void:
 	if not p.sled_job.is_empty() and not _sled_job_valid(p, p.sled_job):
 		p.sled_job = {}
 		p.cancel_action()
-	if p.sled_weapon_stowed and p.sled_id == 0 and p.action == "" and not game.ended:
-		_begin_sled_rearm(p)
 
 
 ## Completion consumes the ticket first; stale, cancelled and repeated calls do nothing.
@@ -2592,27 +2590,6 @@ func _sled_crafted(p: Variant, token: int, sled_id: int) -> void:
 	p.take_item("cloth", 1)
 	game.sleds.append({"id": sled_id, "level": 0, "pos": at, "items": {}, "puller": ""})
 	game.next_sled_id += 1
-
-
-func _begin_sled_rearm(p: Variant) -> void:
-	if not p.sled_weapon_stowed or p.sled_id != 0 or not p.can_act() or p.action != "" or striking(p) or game.ended:
-		return
-	var token: int = p.sled_serial + 1
-	var sled_id: int = p.sled_stowed_for
-	p.start_action("sled_rearm", "무기 꺼냄", Carry.swap_time("belt", p.carry_state()), _sled_rearmed.bind(p, token, sled_id))
-	p.sled_serial = token
-	p.sled_job = {"kind": "rearm", "token": token, "sled_id": sled_id, "ready": false}
-
-
-func _sled_rearmed(p: Variant, token: int, sled_id: int) -> void:
-	var job: Dictionary = p.sled_job
-	if job.is_empty() or int(job["token"]) != token or int(job["sled_id"]) != sled_id or job["kind"] != "rearm" or not bool(job["ready"]):
-		return
-	p.sled_job = {}
-	if _sled_job_valid(p, job, true):
-		p.sled_weapon_stowed = false
-		p.sled_stowed_for = 0
-		p._refresh_weapon_mesh()
 
 
 func move_sled(p: Variant, sled_id: int, item: String, into_sled: bool) -> bool:

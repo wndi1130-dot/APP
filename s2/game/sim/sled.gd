@@ -189,9 +189,11 @@ static func pull(game: Variant, p: Variant, id: int) -> bool:
 	p.brain.erase("goal")
 	connect_hands(game, p)
 	row["puller"] = String(p.pid)
+	row["trail"] = PackedVector3Array([row["pos"], p.position])
 	p.sled_id = id
 	p.sled_stowed_for = id
 	p.sled_weapon_stowed = true
+	p.sled_rearm_t = 0.0
 	p.drive_speed = 0.0
 	clear_attack(p)
 	game.hud.auto_aim = false
@@ -209,8 +211,44 @@ static func detach(game: Variant, p: Variant) -> bool:
 	var row: Dictionary = find(game, p.sled_id)
 	if not row.is_empty() and String(row["puller"]) == String(p.pid):
 		row["puller"] = ""
+		row.erase("trail")
 	p.sled_id = 0
+	p.sled_rearm_t = Carry.swap_time("belt", p.carry_state())
 	clear_attack(p)
+	return true
+
+
+## Drawing uses the same body rate as swapping, without taking the walking action.
+static func tick_rearm(p: Variant, delta: float) -> void:
+	if p.sled_rearm_t <= 0.0:
+		return
+	p.sled_rearm_t = maxf(0.0, p.sled_rearm_t - delta * float(p.mults()["swap"]))
+	if p.sled_rearm_t == 0.0:
+		p.sled_weapon_stowed = false
+		p.sled_stowed_for = 0
+		p._refresh_weapon_mesh()
+
+
+static func trail_length(trail: PackedVector3Array) -> float:
+	var length: float = 0.0
+	for index: int in range(1, trail.size()):
+		length += trail[index - 1].distance_to(trail[index])
+	return length
+
+
+## A bent rope follows only verified outdoor segments, with both ends attached.
+static func trail_clear(game: Variant, row: Dictionary, puller_at: Vector3) -> bool:
+	var stored: Variant = row.get("trail", PackedVector3Array())
+	if not stored is PackedVector3Array:
+		return false
+	var trail: PackedVector3Array = stored
+	if trail.size() < 2 or trail[0].distance_to(row["pos"]) > ROPE_EPS or trail[-1].distance_to(puller_at) > ROPE_EPS:
+		return false
+	if trail_length(trail) > ROPE_LENGTH + ROPE_EPS:
+		return false
+	for index: int in range(1, trail.size()):
+		if not path_clear(game, trail[index - 1], trail[index]):
+			return false
 	return true
 
 
@@ -225,15 +263,26 @@ static func before_move(game: Variant, p: Variant, dest: Vector3) -> void:
 	if not outside(game, dest):
 		game.actions.release_sled(p, true, "썰매는 밖에 두었다")
 		return
-	var at: Vector3 = row["pos"]
-	var gap: Vector3 = dest - at
-	if gap.length() <= ROPE_LENGTH + ROPE_EPS:
-		return
-	var next: Vector3 = dest - gap.normalized() * ROPE_LENGTH
-	if at.distance_to(next) > ROPE_LENGTH + ROPE_EPS or not path_clear(game, at, next) or not path_clear(game, next, dest):
+	if not trail_clear(game, row, p.position) or not path_clear(game, p.position, dest):
 		game.actions.release_sled(p, true, "썰매가 걸려 줄을 놓았다")
 		return
-	row["pos"] = next
+	if dest == p.position:
+		return
+	var trail: PackedVector3Array = row["trail"].duplicate()
+	trail.append(dest)
+	var excess: float = maxf(0.0, trail_length(trail) - ROPE_LENGTH)
+	var first: int = 0
+	while excess > 0.0 and first < trail.size() - 1:
+		var segment: float = trail[first].distance_to(trail[first + 1])
+		if segment <= excess:
+			excess -= segment
+			first += 1
+		else:
+			trail[first] = trail[first].lerp(trail[first + 1], excess / segment)
+			excess = 0.0
+	trail = trail.slice(first)
+	row["pos"] = trail[0]
+	row["trail"] = trail
 
 
 ## Reconnect only mutually matching, living player identities. Never consume or roll here.
@@ -246,15 +295,19 @@ static func reconcile(game: Variant) -> void:
 			if String(p.pid) == String(row.get("puller", "")):
 				puller = p
 		var id: int = int(row["id"])
+		# Old saves have no trail: their straight attachment still has to be clear.
+		if not row.has("trail") and puller != null:
+			row["trail"] = PackedVector3Array([row["pos"], puller.position])
 		if (puller == null or puller != game.player or not puller.can_act() or puller.sled_id != id
 			or used.has(String(puller.pid)) or int(row["level"]) != 0 or not outside(game, row["pos"])
-			or not outside(game, puller.position) or puller.position.distance_to(row["pos"]) > ROPE_LENGTH + ROPE_EPS
-			or not path_clear(game, row["pos"], puller.position)):
+			or not outside(game, puller.position) or not trail_clear(game, row, puller.position)):
 			row["puller"] = ""
+			row.erase("trail")
 		else:
 			used[String(puller.pid)] = id
 			puller.sled_weapon_stowed = true
 			puller.sled_stowed_for = id
+			puller.sled_rearm_t = 0.0
 			clear_attack(puller)
 			connect_hands(game, puller)
 		game.next_sled_id = maxi(game.next_sled_id, id + 1)
@@ -264,11 +317,12 @@ static func reconcile(game: Variant) -> void:
 		if p.sled_weapon_stowed and find(game, p.sled_stowed_for).is_empty():
 			p.sled_weapon_stowed = false
 			p.sled_stowed_for = 0
-			if p.action == "sled_rearm":
-				p.cancel_action()
+			p.sled_rearm_t = 0.0
+		elif p.sled_weapon_stowed and p.sled_id == 0 and p.sled_rearm_t <= 0.0:
+			p.sled_rearm_t = Carry.swap_time("belt", p.carry_state())
 		if not p.can_act() and not p.sled_job.is_empty():
 			p.sled_job = {}
-			if p.action == "sled_rearm" or p.action_done.get_method() == "_sled_crafted":
+			if p.action_done.get_method() == "_sled_crafted":
 				p.cancel_action()
 		if p.weapon_mesh != null and p.sled_weapon_stowed:
 			p.weapon_mesh.visible = false
