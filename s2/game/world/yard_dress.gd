@@ -73,22 +73,46 @@ static func forbidden_cells(data: Dictionary) -> Dictionary:
 		for depth in range(3):
 			for lateral in range(-1, 2):
 				forbidden[front["cell"] + normal * depth + tangent * lateral] = true
-	var rail_cells: Dictionary = {}
+	# 지도 밖 철길도 안쪽 세 칸에 영향을 주므로 원본 표에는 폭 3의 여백을 둔다.
+	var rail_bounds: Rect2i = Rect2i(-3, -3, grid.width + 6, grid.height + 6)
+	var rail_width: int = rail_bounds.size.x
+	var rail_mask: PackedByteArray = PackedByteArray()
+	rail_mask.resize(rail_width * rail_bounds.size.y)
 	for rail_y in range(grid.height):
 		for rail_x in range(grid.width):
-			var rail_cell: Vector2i = Vector2i(rail_x, rail_y)
-			if grid.floor_at(rail_cell) in [F.RAIL, F.PLATFORM]:
-				rail_cells[rail_cell] = true
+			if grid.floor[rail_y * grid.width + rail_x] in [F.RAIL, F.PLATFORM]:
+				rail_mask[(rail_y + 3) * rail_width + rail_x + 3] = 1
 	for crossing: Dictionary in data.get("crossings", []):
 		for crossing_cell: Vector2i in crossing.get("cells", []):
-			rail_cells[crossing_cell] = true
+			if rail_bounds.has_point(crossing_cell):
+				rail_mask[(crossing_cell.y + 3) * rail_width + crossing_cell.x + 3] = 1
 	for rail_rect_key: String in ["platform", "train"]:
 		if data.get(rail_rect_key) is Rect2i:
-			for rail_rect_cell: Vector2i in _rect_cells(data[rail_rect_key]):
-				rail_cells[rail_rect_cell] = true
-	for rail_key: Vector2i in rail_cells:
-		for protected_cell: Vector2i in _rect_cells(Rect2i(rail_key - Vector2i(3, 3), Vector2i(7, 7))):
-			forbidden[protected_cell] = true
+			var rail_rect: Rect2i = data[rail_rect_key].intersection(rail_bounds)
+			for rect_y in range(rail_rect.position.y, rail_rect.end.y):
+				for rect_x in range(rail_rect.position.x, rail_rect.end.x):
+					rail_mask[(rect_y + 3) * rail_width + rect_x + 3] = 1
+	# 가로·세로 폭 7 창의 합. 결과를 읽는 마당 칸은 모두 지도 안이다.
+	var horizontal: PackedByteArray = PackedByteArray()
+	horizontal.resize(grid.width * rail_bounds.size.y)
+	for padded_y in range(rail_bounds.size.y):
+		var row_offset: int = padded_y * rail_width
+		var horizontal_count: int = 0
+		for initial_x in range(6):
+			horizontal_count += rail_mask[row_offset + initial_x]
+		for expanded_x in range(grid.width):
+			horizontal_count += rail_mask[row_offset + expanded_x + 6]
+			horizontal[padded_y * grid.width + expanded_x] = int(horizontal_count > 0)
+			horizontal_count -= rail_mask[row_offset + expanded_x]
+	for protected_x in range(grid.width):
+		var vertical_count: int = 0
+		for initial_y in range(6):
+			vertical_count += horizontal[initial_y * grid.width + protected_x]
+		for protected_y in range(grid.height):
+			vertical_count += horizontal[(protected_y + 6) * grid.width + protected_x]
+			if vertical_count > 0:
+				forbidden[Vector2i(protected_x, protected_y)] = true
+			vertical_count -= horizontal[protected_y * grid.width + protected_x]
 	# 새 막힘 때문에 등장 위치를 런타임에서 옮기는 일이 없도록 기존 등장 칸도 비워 둔다.
 	for spawn_list: Variant in data.get("spawns", {}).values():
 		if spawn_list is Array:
@@ -143,6 +167,48 @@ static func _owner(cell: Vector2i, homes: Array[Dictionary]) -> int:
 	return owner
 
 
+## 작은 건물 번호부터 거리를 갱신하고, 같은 거리에서는 먼저 정한 주인을 둔다.
+static func _owner_map(grid: FieldGrid, homes: Array[Dictionary]) -> PackedInt32Array:
+	var owners: PackedInt32Array = PackedInt32Array()
+	owners.resize(grid.width * grid.height)
+	owners.fill(-1)
+	var distances: PackedInt32Array = PackedInt32Array()
+	distances.resize(owners.size())
+	distances.fill(2147483647)
+	var bounds: Rect2i = Rect2i(0, 0, grid.width, grid.height)
+	for home: Dictionary in homes:
+		var house: Rect2i = home["rect"]
+		var lot: Rect2i = house.grow(LOT).intersection(bounds)
+		for lot_y in range(lot.position.y, lot.end.y):
+			for lot_x in range(lot.position.x, lot.end.x):
+				var cell_index: int = lot_y * grid.width + lot_x
+				var distance: int = _distance(Vector2i(lot_x, lot_y), house)
+				if distance < distances[cell_index]:
+					distances[cell_index] = distance
+					owners[cell_index] = int(home["building"])
+	return owners
+
+
+## 장애물을 무시한 ROAD까지의 L1 거리. 길이 없으면 기존 비교의 최댓값 그대로다.
+static func _road_distances(grid: FieldGrid) -> PackedInt32Array:
+	var distances: PackedInt32Array = PackedInt32Array()
+	distances.resize(grid.width * grid.height)
+	distances.fill(2147483647)
+	for forward_index in range(distances.size()):
+		if grid.floor[forward_index] == F.ROAD:
+			distances[forward_index] = 0
+		if forward_index % grid.width > 0:
+			distances[forward_index] = mini(distances[forward_index], distances[forward_index - 1] + 1)
+		if forward_index >= grid.width:
+			distances[forward_index] = mini(distances[forward_index], distances[forward_index - grid.width] + 1)
+	for backward_index in range(distances.size() - 1, -1, -1):
+		if backward_index % grid.width < grid.width - 1:
+			distances[backward_index] = mini(distances[backward_index], distances[backward_index + 1] + 1)
+		if backward_index + grid.width < distances.size():
+			distances[backward_index] = mini(distances[backward_index], distances[backward_index + grid.width] + 1)
+	return distances
+
+
 ## 차린 뒤에도 원래의 배치 가능 면적을 복원해 재기 위한 읽기 전용 조사.
 ## region은 소품에 가린 칸도 포함(기존 줄을 세는 용도), owners는 원래 빈 마당 칸.
 static func survey(data: Dictionary) -> Dictionary:
@@ -169,7 +235,7 @@ static func survey(data: Dictionary) -> Dictionary:
 		taken[tree] = true
 	var owners: Dictionary = {}
 	var region: Dictionary = {}
-	var roads: Array[Vector2i] = []
+	var owner_map: PackedInt32Array = _owner_map(grid, homes)
 	var by_id: Dictionary = {}
 	for indexed_home: Dictionary in homes:
 		by_id[indexed_home["building"]] = indexed_home
@@ -177,11 +243,9 @@ static func survey(data: Dictionary) -> Dictionary:
 		for scan_x in range(grid.width):
 			var cell: Vector2i = Vector2i(scan_x, scan_y)
 			var floor_kind: int = grid.floor_at(cell)
-			if floor_kind == F.ROAD:
-				roads.append(cell)
 			if grid.building_at(cell) >= 0 or floor_kind in [F.ROAD, F.RAIL, F.PLATFORM, F.ICE, F.DEEP_SNOW]:
 				continue
-			var owner: int = _owner(cell, homes)
+			var owner: int = owner_map[grid.index(cell)]
 			if owner < 0:
 				continue
 			region[cell] = owner
@@ -190,17 +254,17 @@ static func survey(data: Dictionary) -> Dictionary:
 			owners[cell] = owner
 			by_id[owner]["cells"].append(cell)
 	var fronts: Array[Dictionary] = door_fronts(grid)
+	var road_distances: PackedInt32Array = _road_distances(grid)
 	for oriented_home: Dictionary in homes:
 		var best_road: int = 2147483647
 		for home_front: Dictionary in fronts:
 			if int(home_front["building"]) != int(oriented_home["building"]):
 				continue
-			for road: Vector2i in roads:
-				var door_cell: Vector2i = home_front["door"]
-				var road_distance: int = absi(door_cell.x - road.x) + absi(door_cell.y - road.y)
-				if road_distance < best_road:
-					best_road = road_distance
-					oriented_home["front"] = home_front["normal"]
+			var door_cell: Vector2i = home_front["door"]
+			var road_distance: int = road_distances[grid.index(door_cell)]
+			if road_distance < best_road:
+				best_road = road_distance
+				oriented_home["front"] = home_front["normal"]
 	return {"homes": homes, "owners": owners, "region": region, "forbidden": forbidden_cells(data), "fronts": fronts}
 
 
@@ -242,6 +306,27 @@ static func _fences(data: Dictionary) -> Dictionary:
 	return cells
 
 
+## 집 네모·울타리·주인 칸은 차리는 동안 바뀌지 않는다.
+static func _cache_home(home: Dictionary, state: Dictionary) -> void:
+	var backs: Dictionary = {}
+	var edges: Dictionary = {}
+	for cell: Vector2i in home["cells"]:
+		backs[cell] = _back(Rect2i(cell, Vector2i.ONE), home["rect"])
+		edges[cell] = _edge(cell, home, state["fences"])
+	state["back"] = backs
+	state["edge"] = edges
+
+
+## _back과 같은 접촉 조건. facing을 굴리기 전에 두 크기 모두 불가능할 때만 거른다.
+static func _can_touch_house(anchor: Vector2i, size: Vector2i, house: Rect2i) -> bool:
+	var end_x: int = anchor.x + size.x
+	var end_y: int = anchor.y + size.y
+	return ((end_y == house.position.y or anchor.y == house.end.y) \
+			and anchor.x < house.end.x and end_x > house.position.x) \
+		or ((end_x == house.position.x or anchor.x == house.end.x) \
+			and anchor.y < house.end.y and end_y > house.position.y)
+
+
 ## 빨랫줄 전체는 예약하되 막힘은 두 끝의 기둥만.
 static func blocking_cells(prop: Dictionary) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
@@ -255,40 +340,74 @@ static func blocking_cells(prop: Dictionary) -> Array[Vector2i]:
 	return _rect_cells(rect)
 
 
-## 경로 캐시는 쓰지 않는다. NONE·DOOR만 통과하는 4이웃 BFS의 성분 번호.
-static func _components(grid: FieldGrid, extra_blocked: Dictionary = {}) -> PackedInt32Array:
+## 경로 캐시와 별도로 NONE·DOOR만 통과하는 마당 검사용 표를 만든다.
+static func _walk_mask(grid: FieldGrid) -> PackedByteArray:
+	var walk: PackedByteArray = PackedByteArray()
+	walk.resize(grid.width * grid.height)
+	for cell_index in range(walk.size()):
+		var solid_kind: int = grid.solid[cell_index]
+		walk[cell_index] = int(solid_kind == S.NONE or solid_kind == S.DOOR)
+	return walk
+
+
+## 시작 칸·이웃 차례는 기존 BFS와 같다. 빌린 표의 임시 막힘은 반환 전에 복원한다.
+static func _components(grid: FieldGrid, extra_blocked: Dictionary = {},
+		walk: PackedByteArray = PackedByteArray()) -> PackedInt32Array:
+	if walk.is_empty():
+		walk = _walk_mask(grid)
+	var restored: PackedInt32Array = PackedInt32Array()
+	for blocked_cell: Vector2i in extra_blocked:
+		if grid.inside(blocked_cell):
+			var blocked_index: int = grid.index(blocked_cell)
+			if walk[blocked_index] != 0:
+				walk[blocked_index] = 0
+				restored.append(blocked_index)
 	var labels: PackedInt32Array = PackedInt32Array()
 	labels.resize(grid.width * grid.height)
 	labels.fill(-1)
-	var queue: Array[Vector2i] = []
+	var queue: PackedInt32Array = PackedInt32Array()
+	queue.resize(labels.size())
 	var component: int = 0
-	for start_y in range(grid.height):
-		for start_x in range(grid.width):
-			var start: Vector2i = Vector2i(start_x, start_y)
-			if labels[grid.index(start)] >= 0 or extra_blocked.has(start) or grid.solid_at(start) not in [S.NONE, S.DOOR]:
-				continue
-			queue.clear()
-			queue.append(start)
-			labels[grid.index(start)] = component
-			var head: int = 0
-			while head < queue.size():
-				var here: Vector2i = queue[head]
-				head += 1
-				for direction: Vector2i in DIRS:
-					var next: Vector2i = here + direction
-					if not grid.inside(next) or extra_blocked.has(next):
-						continue
-					var next_index: int = grid.index(next)
-					if labels[next_index] < 0 and grid.solid_at(next) in [S.NONE, S.DOOR]:
-						labels[next_index] = component
-						queue.append(next)
-			component += 1
+	for start_index in range(labels.size()):
+		if labels[start_index] >= 0 or walk[start_index] == 0:
+			continue
+		queue[0] = start_index
+		labels[start_index] = component
+		var head: int = 0
+		var tail: int = 1
+		while head < tail:
+			var here: int = queue[head]
+			head += 1
+			var col_x: int = here % grid.width
+			var neighbor: int = here + 1
+			if col_x < grid.width - 1 and labels[neighbor] < 0 and walk[neighbor] != 0:
+				labels[neighbor] = component
+				queue[tail] = neighbor
+				tail += 1
+			neighbor = here - 1
+			if col_x > 0 and labels[neighbor] < 0 and walk[neighbor] != 0:
+				labels[neighbor] = component
+				queue[tail] = neighbor
+				tail += 1
+			neighbor = here + grid.width
+			if neighbor < labels.size() and labels[neighbor] < 0 and walk[neighbor] != 0:
+				labels[neighbor] = component
+				queue[tail] = neighbor
+				tail += 1
+			neighbor = here - grid.width
+			if neighbor >= 0 and labels[neighbor] < 0 and walk[neighbor] != 0:
+				labels[neighbor] = component
+				queue[tail] = neighbor
+				tail += 1
+		component += 1
+	for restored_index in restored:
+		walk[restored_index] = 1
 	return labels
 
 
 ## 각 문의 원래 성분에 속한 ROAD·끝 칸 전부를 보존한다(아무 길 하나만 남기는 검사가 아님).
-static func path_guard(grid: FieldGrid) -> Dictionary:
-	var labels: PackedInt32Array = _components(grid)
+static func path_guard(grid: FieldGrid, walk: PackedByteArray = PackedByteArray()) -> Dictionary:
+	var labels: PackedInt32Array = _components(grid, {}, walk)
 	var groups: Dictionary = {}
 	for front: Dictionary in door_fronts(grid):
 		var source: Vector2i = front["cell"]
@@ -297,13 +416,14 @@ static func path_guard(grid: FieldGrid) -> Dictionary:
 			if not groups.has(component):
 				groups[component] = {"sources": [], "targets": []}
 			groups[component]["sources"].append(source)
-	for target_y in range(grid.height):
-		for target_x in range(grid.width):
-			var target: Vector2i = Vector2i(target_x, target_y)
-			var target_group: int = labels[grid.index(target)]
-			if groups.has(target_group) and (grid.floor_at(target) == F.ROAD \
-					or target_x == 0 or target_y == 0 or target_x == grid.width - 1 or target_y == grid.height - 1):
-				groups[target_group]["targets"].append(target)
+	for target_index in range(labels.size()):
+		var target_group: int = labels[target_index]
+		if not groups.has(target_group):
+			continue
+		var target_x: int = target_index % grid.width
+		if grid.floor[target_index] == F.ROAD or target_x == 0 or target_x == grid.width - 1 \
+				or target_index < grid.width or target_index >= labels.size() - grid.width:
+			groups[target_group]["targets"].append(Vector2i(target_x, target_index / grid.width))
 	return groups
 
 
@@ -335,8 +455,9 @@ static func ring_keeps_paths(grid: FieldGrid, block: Array[Vector2i]) -> bool:
 	return true
 
 
-static func paths_preserved(grid: FieldGrid, guard: Dictionary, blocked: Dictionary = {}) -> bool:
-	var labels: PackedInt32Array = _components(grid, blocked)
+static func paths_preserved(grid: FieldGrid, guard: Dictionary, blocked: Dictionary = {},
+		walk: PackedByteArray = PackedByteArray()) -> bool:
+	var labels: PackedInt32Array = _components(grid, blocked, walk)
 	for group: Dictionary in guard.values():
 		if group["targets"].is_empty():
 			continue
@@ -366,22 +487,26 @@ static func _fits(rect: Rect2i, role: String, home: Dictionary, state: Dictionar
 			return false
 	var wall_coverage: int = 0
 	var edge_coverage: int = 0
-	for cell: Vector2i in _rect_cells(rect):
-		if state["owners"].get(cell, -1) != home["building"] or state["forbidden"].has(cell) or state["used"].has(cell):
-			return false
-		if role in ["garden", "laundry"] and _is_front(cell, home):
-			return false
-		if role == "garden" and _distance(cell, house) < 2:
-			return false
-		if role == "bench":
-			if not _is_front(cell, home):
+	for rect_y in range(rect.position.y, rect.end.y):
+		for rect_x in range(rect.position.x, rect.end.x):
+			var cell: Vector2i = Vector2i(rect_x, rect_y)
+			if state["owners"].get(cell, -1) != home["building"] or state["forbidden"].has(cell) or state["used"].has(cell):
 				return false
-			for front: Dictionary in state["fronts"]:
-				var door: Vector2i = front["door"]
-				if absi(cell.x - door.x) + absi(cell.y - door.y) < 3:
+			if role in ["garden", "laundry"] and _is_front(cell, home):
+				return false
+			if role == "garden" and _distance(cell, house) < 2:
+				return false
+			if role == "bench":
+				if not _is_front(cell, home):
 					return false
-		wall_coverage += int(_back(Rect2i(cell, Vector2i.ONE), house) != Vector2i.ZERO)
-		edge_coverage += int(_edge(cell, home, state["fences"]))
+				for front: Dictionary in state["fronts"]:
+					var door: Vector2i = front["door"]
+					if absi(cell.x - door.x) + absi(cell.y - door.y) < 3:
+						return false
+			if role == "wall":
+				wall_coverage += int(state["back"][cell] != Vector2i.ZERO)
+			elif role == "edge":
+				edge_coverage += int(state["edge"][cell])
 	if role == "wall" and wall_coverage > int(state["wall_left"]):
 		return false
 	if role == "edge" and (edge_coverage == 0 or edge_coverage > int(state["edge_left"])):
@@ -397,27 +522,44 @@ static func _place(data: Dictionary, home: Dictionary, state: Dictionary, kind: 
 	var seed_value: int = home["seed"]
 	var candidates: Array[Dictionary] = []
 	for anchor: Vector2i in home["cells"]:
-		var facing: int = _roll(seed_value, purpose + 1, grid.index(anchor) + ordinal * grid.width * grid.height) % 4
+		if state["owners"].get(anchor, -1) != home["building"] \
+				or state["forbidden"].has(anchor) or state["used"].has(anchor):
+			continue
+		var anchor_index: int = grid.index(anchor)
 		var size: Vector2i = SIZES[kind]
+		var facing: int = 0
 		if role in ["wood", "bench"]:
-			var anchor_back: Vector2i = _back(Rect2i(anchor, Vector2i.ONE), home["rect"])
+			var anchor_back: Vector2i = state["back"][anchor]
 			if anchor_back == Vector2i.ZERO:
 				continue
 			facing = RoomFurnish._facing_from_back(anchor_back)
+		else:
+			if role == "wall" and not _can_touch_house(anchor, size, home["rect"]) \
+					and not _can_touch_house(anchor, Vector2i(size.y, size.x), home["rect"]):
+				continue
+			# 각 굴림은 입력 해시만 쓰므로 탈락 칸·덮어쓸 facing의 굴림을 생략해도 값은 같다.
+			facing = _roll(seed_value, purpose + 1, anchor_index + ordinal * grid.width * grid.height) % 4
 		if facing % 2 == 1:
 			size = Vector2i(size.y, size.x)
 		var rect: Rect2i = Rect2i(anchor, size)
 		if not _fits(rect, role, home, state):
 			continue
-		var score: int = _roll(seed_value, purpose + 2, grid.index(anchor) + ordinal * grid.width * grid.height)
-		var edge_priority: int = 0 if role == "rock" and _edge(anchor, home, state["fences"]) else 1
-		candidates.append({"rect": rect, "facing": facing, "score": score, "edge": edge_priority})
-	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		if a["edge"] != b["edge"]: return a["edge"] < b["edge"]
-		if a["score"] != b["score"]: return a["score"] < b["score"]
-		return grid.index(a["rect"].position) < grid.index(b["rect"].position))
+		var score: int = _roll(seed_value, purpose + 2, anchor_index + ordinal * grid.width * grid.height)
+		var edge_priority: int = 0 if role == "rock" and state["edge"][anchor] else 1
+		candidates.append({"rect": rect, "facing": facing, "score": score, "edge": edge_priority, "index": anchor_index})
 	var attempts: int = 0
-	for candidate: Dictionary in candidates:
+	while not candidates.is_empty():
+		var best_index: int = 0
+		var candidate: Dictionary = candidates[0]
+		for candidate_index in range(1, candidates.size()):
+			var challenger: Dictionary = candidates[candidate_index]
+			if challenger["edge"] < candidate["edge"] \
+					or (challenger["edge"] == candidate["edge"] and challenger["score"] < candidate["score"]) \
+					or (challenger["edge"] == candidate["edge"] and challenger["score"] == candidate["score"] \
+						and challenger["index"] < candidate["index"]):
+				best_index = candidate_index
+				candidate = challenger
+		candidates.remove_at(best_index)
 		var prop: Dictionary = {"kind": kind, "rect": candidate["rect"],
 			"solid": "low" if LOW_KINDS.has(kind) else "none", "facing": candidate["facing"],
 			"level": 0, "note": "%s 마당의 %s" % [home["name"], LABELS[kind]],
@@ -428,12 +570,15 @@ static func _place(data: Dictionary, home: Dictionary, state: Dictionary, kind: 
 			for prospective: Vector2i in block_cells:
 				blocked[prospective] = true
 			attempts += 1
-			if not ring_keeps_paths(grid, block_cells) and not paths_preserved(grid, state["guard"], blocked):
-				if attempts >= MAX_PATH_TRIES:
-					break
-				continue
+			if not ring_keeps_paths(grid, block_cells):
+				state["full_checks"] += 1
+				if not paths_preserved(grid, state["guard"], blocked, state["walk"]):
+					if attempts >= MAX_PATH_TRIES:
+						break
+					continue
 			for accepted: Vector2i in block_cells:
 				grid.set_solid(accepted, S.LOW)
+				state["walk"][grid.index(accepted)] = 0
 			if kind == "laundry_line":
 				for post: Vector2i in block_cells:
 					data["low_blocks"].append(Rect2i(post, Vector2i.ONE))
@@ -442,9 +587,9 @@ static func _place(data: Dictionary, home: Dictionary, state: Dictionary, kind: 
 		for reserved: Vector2i in _rect_cells(prop["rect"]):
 			state["used"][reserved] = true
 			if role == "wall":
-				state["wall_left"] -= int(_back(Rect2i(reserved, Vector2i.ONE), home["rect"]) != Vector2i.ZERO)
+				state["wall_left"] -= int(state["back"][reserved] != Vector2i.ZERO)
 			elif role == "edge":
-				state["edge_left"] -= int(_edge(reserved, home, state["fences"]))
+				state["edge_left"] -= int(state["edge"][reserved])
 		data["props"].append(prop)
 		state["remaining"] -= 1
 		return true
@@ -519,6 +664,7 @@ static func census(data: Dictionary, surveyed: Dictionary = {}) -> Dictionary:
 
 
 static func _dress_home(data: Dictionary, home: Dictionary, state: Dictionary, old_count: int) -> void:
+	_cache_home(home, state)
 	var seed_value: int = ("%s|%d|yard" % [data.get("place_id", ""), home["building"]]).hash() & 0x7fffffff
 	home["seed"] = seed_value
 	state["remaining"] = maxi(0, floori(float(home["cells"].size()) * TARGET_PER_100 / 100.0) - old_count)
@@ -540,8 +686,8 @@ static func _dress_home(data: Dictionary, home: Dictionary, state: Dictionary, o
 	for cell: Vector2i in home["cells"]:
 		if state["forbidden"].has(cell):
 			continue
-		wall_cells += int(_back(Rect2i(cell, Vector2i.ONE), home["rect"]) != Vector2i.ZERO)
-		edge_cells += int(_edge(cell, home, state["fences"]))
+		wall_cells += int(state["back"][cell] != Vector2i.ZERO)
+		edge_cells += int(state["edge"][cell])
 	var wall_wanted: int = roundi(float(wall_cells) * (0.25 + 0.15 * _unit(seed_value, 70)))
 	var edge_wanted: int = roundi(float(edge_cells) * (0.10 + 0.10 * _unit(seed_value, 71)))
 	state["wall_left"] = wall_wanted
@@ -562,7 +708,12 @@ static func dress(data: Dictionary) -> Dictionary:
 	var started: int = Time.get_ticks_usec()
 	var area: Dictionary = survey(data)
 	var stats: Dictionary = {"homes": area["homes"].size(), "yard_cells": area["owners"].size(),
-		"rows": 0, "kinds": {}, "blocking": 0}
+		"rows": 0, "kinds": {}, "blocking": 0, "over_cap_homes": 0, "full_checks": 0}
+	var old: Dictionary = census(data, area)
+	for counted_home: Dictionary in area["homes"]:
+		var cap: int = floori(float(counted_home["cells"].size()) * TARGET_PER_100 / 100.0)
+		if int(old["per_home"][counted_home["building"]]["old"]) > cap:
+			stats["over_cap_homes"] += 1
 	# 실수로 두 번 불러도 쌓지 않는다. 지도마다 준비한 자료 두 벌의 결과도 같다.
 	for existing: Dictionary in data.get("props", []):
 		if existing.get("yard", false):
@@ -580,16 +731,17 @@ static func dress(data: Dictionary) -> Dictionary:
 	if not data.has("low_blocks"):
 		data["low_blocks"] = []
 	var before: int = data["props"].size()
-	var old: Dictionary = census(data, area)
 	var models: Dictionary = {}
 	for kind: String in SIZES:
 		models[kind] = not PropKinds.model_path(kind).is_empty()
 	var grid: FieldGrid = data["grid"]
+	var walk: PackedByteArray = _walk_mask(grid)
 	var state: Dictionary = {"owners": area["owners"], "forbidden": area["forbidden"],
 		"fronts": area["fronts"], "fences": _fences(data), "used": {}, "models": models,
-		"remaining": 0, "guard": path_guard(grid)}
+		"remaining": 0, "guard": path_guard(grid, walk), "walk": walk, "full_checks": 0}
 	for home: Dictionary in area["homes"]:
 		_dress_home(data, home, state, int(old["per_home"][home["building"]]["old"]))
+	stats["full_checks"] = state["full_checks"]
 	for prop_index in range(before, data["props"].size()):
 		var prop: Dictionary = data["props"][prop_index]
 		var prop_kind: String = prop["kind"]

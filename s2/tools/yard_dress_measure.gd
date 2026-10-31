@@ -29,7 +29,8 @@ func _measure() -> void:
 			return
 	var total: Dictionary = {"type": "summary", "scope": "before_map_ring", "maps": 0,
 		"homes": 0, "yard_cells": 0, "old": 0, "new": 0, "rows": 0,
-		"blocking": 0, "new_blocking": 0, "dress_ms": 0.0, "build_ms": 0.0, "kinds": {}, "target_misses": []}
+		"blocking": 0, "new_blocking": 0, "over_cap_homes": 0, "full_checks": 0,
+		"dress_ms": 0.0, "build_ms": 0.0, "kinds": {}, "target_misses": []}
 	var all_variety: Array[int] = []
 	for place_id: String in ids:
 		var started: int = Time.get_ticks_usec()
@@ -48,6 +49,8 @@ func _measure() -> void:
 		row["rows"] = int(row["old"]) + int(row["new"])
 		row["per_100"] = 100.0 * float(row["rows"]) / float(row["yard_cells"]) if row["yard_cells"] > 0 else 0.0
 		row["new_blocking"] = int(stats.get("blocking", 0))
+		row["over_cap_homes"] = int(stats.get("over_cap_homes", 0))
+		row["full_checks"] = int(stats.get("full_checks", 0))
 		row["dress_ms"] = float(data.get("yard_dress_ms", 0.0))
 		row["build_ms"] = build_ms
 		row["target_met"] = row["homes"] > 0 and row["per_100"] >= 5.0 and row["per_100"] <= 8.0 \
@@ -56,7 +59,8 @@ func _measure() -> void:
 			all_variety.append(variety)
 		row.erase("home_variety")
 		total["maps"] += 1
-		for count_key: String in ["homes", "yard_cells", "old", "new", "rows", "blocking", "new_blocking", "dress_ms", "build_ms"]:
+		for count_key: String in ["homes", "yard_cells", "old", "new", "rows", "blocking", "new_blocking",
+				"over_cap_homes", "full_checks", "dress_ms", "build_ms"]:
 			total[count_key] += row[count_key]
 		for kind: String in row["kinds"]:
 			total["kinds"][kind] = int(total["kinds"].get(kind, 0)) + int(row["kinds"][kind])
