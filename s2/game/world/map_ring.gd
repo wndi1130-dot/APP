@@ -7,6 +7,7 @@ const Shell = preload("res://game/world/sulehuf_map.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
+const RegionLooks = preload("res://game/world/region_looks.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const TOWN: Array[String] = ["houses", "freight", "office", "factory", "hospital", "church"]
@@ -60,6 +61,8 @@ static func add(original: Dictionary) -> Dictionary:
 	var width := width_for(String(original.get("place_kind", "")))
 	if width == 0:
 		return original
+	var look: Dictionary = RegionLooks.of(String(original.get("region_band", "")), String(original.get("place_kind", "")))
+	var lot_step: int = int(look.get("lot_step", LOT_STEP))
 	var old: FieldGrid = original["grid"]
 	var inner := Rect2i(width, width, old.width, old.height)
 	var data := MapShift.grow(original, width, width, width, width, false)
@@ -67,7 +70,13 @@ static func add(original: Dictionary) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = (String(data["place_id"]) + "|outer-village").hash()
 	var seed_value := rng.seed
-	var target := rng.randi_range(4, 8) if width == TOWN_WIDTH else rng.randi_range(1, 3)
+	var target: int
+	if look.has("outer_lots"):
+		var count_range: Array = look["outer_lots"]
+		target = rng.randi_range(int(count_range[0]), int(count_range[1]))
+	else:
+		# 지역값이 없으면 원래 범위에서 한 번만 뽑아 난수 차례를 지킨다.
+		target = rng.randi_range(4, 8) if width == TOWN_WIDTH else rng.randi_range(1, 3)
 	# Work only on the ring. The solid mask prevents furnishing the old rooms.
 	var rg := FieldGrid.new(g.width, g.height)
 	for y in range(g.height):
@@ -127,10 +136,10 @@ static func add(original: Dictionary) -> Dictionary:
 		next_id = maxi(next_id, int(b["id"]) + 1)
 	# Choose among all four sides. Try every candidate, with no random retry loop.
 	var sides: Array = [[], [], [], []]
-	for x in range(width, g.width - width - 12, LOT_STEP):
+	for x in range(width, g.width - width - 12, lot_step):
 		sides[0].append(Rect2i(x, 2, 12, 7 if width == TOWN_WIDTH else 6))
 		sides[2].append(Rect2i(x, g.height - (9 if width == TOWN_WIDTH else 8), 12, 7 if width == TOWN_WIDTH else 6))
-	for y in range(width, g.height - width - 12, LOT_STEP):
+	for y in range(width, g.height - width - 12, lot_step):
 		sides[1].append(Rect2i(g.width - (9 if width == TOWN_WIDTH else 8), y, 7 if width == TOWN_WIDTH else 6, 12))
 		sides[3].append(Rect2i(2, y, 7 if width == TOWN_WIDTH else 6, 12))
 	for list: Array in sides:
@@ -140,6 +149,7 @@ static func add(original: Dictionary) -> Dictionary:
 			list[i] = list[j]
 			list[j] = tmp
 	var lots: Array[Rect2i] = []
+	var placed: Array[Dictionary] = []
 	_move_entries_out(data, inner)
 	var start_side := rng.randi_range(0, 3)
 	for round_index in range(20):
@@ -148,9 +158,26 @@ static func add(original: Dictionary) -> Dictionary:
 			if lots.size() >= target or round_index >= sides[side].size():
 				continue
 			var r: Rect2i = sides[side][round_index]
-			if not _clear(rg, r.grow(1), inner, lots):
+			var choice: Dictionary = {}
+			if not look.is_empty():
+				var neighbours: Array[Dictionary] = _regional_neighbours(r, side, placed)
+				choice = _regional_choice(look, rng, lots.size(), width, neighbours, placed)
+				if choice.is_empty():
+					continue
+				r = _regional_fit(rg, r, side, mid, inner, lots, choice, neighbours)
+				if not r.has_area():
+					continue
+			if look.is_empty() and not _clear(rg, r.grow(1), inner, lots):
 				continue
 			_house(ring, r, next_id + lots.size(), lots.size(), side, mid)
+			if not look.is_empty():
+				# 한 채씩의 기존 울타리와 상자 틀은 두고 용도와 이름을 고른 값으로 바꾼다.
+				var building: Dictionary = ring["buildings"][-1]
+				building["name"] = choice["name"]
+				building["role"] = choice["use"]
+				if lots.size() % 3 == 0:
+					ring["labels"][-1]["text"] = choice["name"]
+				placed.append({"rect": r, "name": choice["name"], "side": side})
 			lots.append(r.grow(1))
 	# Snow-covered furrows are floor colour only; no props or collision rows.
 	var fields: Array[Rect2i] = []
@@ -206,6 +233,134 @@ static func add(original: Dictionary) -> Dictionary:
 		"buildings": ring["buildings"].size(), "target": target, "roads": roads,
 		"fields": fields, "containers": ring["containers"].keys(), "rooms": ring["room_stats"]}
 	return data
+
+
+## 배치 순서는 섞여 있으므로 같은 변의 앞뒤 집터를 좌표로 찾는다.
+static func _regional_neighbours(anchor: Rect2i, side: int, placed: Array[Dictionary]) -> Array[Dictionary]:
+	var before: Dictionary = {}
+	var after: Dictionary = {}
+	var before_at: int = -1
+	var after_at: int = 2147483647
+	var axis: int = anchor.position.x if side % 2 == 0 else anchor.position.y
+	for row: Dictionary in placed:
+		if int(row["side"]) != side:
+			continue
+		var rect: Rect2i = row["rect"]
+		var at: int = rect.position.x if side % 2 == 0 else rect.position.y
+		if at < axis and at > before_at:
+			before = row
+			before_at = at
+		elif at >= axis and at < after_at:
+			after = row
+			after_at = at
+	var out: Array[Dictionary] = []
+	if not before.is_empty():
+		out.append(before)
+	if not after.is_empty():
+		out.append(after)
+	return out
+
+
+## 같은 이름은 바깥 마을 전체에 두 채까지. 0 비중과 이웃의 이름은 후보에서 뺀다.
+## 후보를 만든 뒤 한 번씩 뽑으며, 실패한 집터를 난수 재시도로 채우지 않는다.
+static func _regional_choice(look: Dictionary, rng: RandomNumberGenerator, number: int, width: int,
+		neighbours: Array[Dictionary], placed: Array[Dictionary]) -> Dictionary:
+	var home: bool = number % 3 == 2
+	var sheds: Array = look.get("sheds", TOWN_SHEDS if width == TOWN_WIDTH else WILD_SHEDS)
+	var fallback: String = "외딴집" if home else (String(sheds[(number / 3) % sheds.size()]) if number % 3 == 0 else "바깥 창고")
+	var fallback_use: String = "home" if home else "shed"
+	var weights: Dictionary = look.get("uses", {fallback_use: 1})
+	var names: Dictionary = look.get("names", {})
+	var counts: Dictionary = {}
+	for row: Dictionary in placed:
+		var old_name: String = String(row["name"])
+		counts[old_name] = int(counts.get(old_name, 0)) + 1
+	var options: Dictionary = {}
+	var total: float = 0.0
+	for use: String in weights:
+		if float(weights[use]) <= 0.0:
+			continue
+		var candidates: Array[String] = []
+		for candidate: String in names.get(use, [fallback]):
+			var available: bool = int(counts.get(candidate, 0)) < 2
+			for neighbour: Dictionary in neighbours:
+				if String(neighbour["name"]) == candidate:
+					available = false
+			if available:
+				candidates.append(candidate)
+		if not candidates.is_empty():
+			options[use] = candidates
+			total += float(weights[use])
+	if total <= 0.0:
+		return {}
+	var ticket: float = rng.randf() * total
+	var chosen_use: String = String(options.keys()[-1])
+	for use: String in options:
+		ticket -= float(weights[use])
+		if ticket < 0.0:
+			chosen_use = use
+			break
+	var chosen_names: Array = options[chosen_use]
+	var chosen_name: String = String(chosen_names[rng.randi_range(0, chosen_names.size() - 1)])
+	var depth: int = 7 if width == TOWN_WIDTH else 6
+	var sizes: Dictionary = look.get("sizes", {})
+	var bounds: Array = sizes.get(chosen_use, [12, depth, 12, depth])
+	return {"use": chosen_use, "name": chosen_name,
+		"size": Vector2i(rng.randi_range(int(bounds[0]), int(bounds[2])), rng.randi_range(int(bounds[1]), int(bounds[3]))),
+		"min_width": int(bounds[0]), "max_width": int(bounds[2])}
+
+
+## 긴 변은 길을 따라 놓고 깊이는 길 앞까지만 쓴다. 길과 고리 너비는 늘리지 않는다.
+static func _regional_rect(g: FieldGrid, anchor: Rect2i, side: int, span: int, depth: int) -> Rect2i:
+	if side == 0:
+		return Rect2i(anchor.position.x, 2, span, depth)
+	if side == 2:
+		return Rect2i(anchor.position.x, g.height - 2 - depth, span, depth)
+	if side == 1:
+		return Rect2i(g.width - 2 - depth, anchor.position.y, depth, span)
+	return Rect2i(2, anchor.position.y, depth, span)
+
+
+## 모든 바깥 건물은 기존처럼 지상 한 층이다. 긴 이웃은 길이를 세 칸 이상 달리한다.
+static func _regional_size_distinct(rect: Rect2i, side: int, neighbours: Array[Dictionary]) -> bool:
+	var size: Vector2i = rect.size if side % 2 == 0 else Vector2i(rect.size.y, rect.size.x)
+	var length: int = maxi(size.x, size.y)
+	for neighbour: Dictionary in neighbours:
+		var other: Rect2i = neighbour["rect"]
+		var other_size: Vector2i = other.size if side % 2 == 0 else Vector2i(other.size.y, other.size.x)
+		var other_length: int = maxi(other_size.x, other_size.y)
+		if size == other_size or (maxi(length, other_length) >= 20 and absi(length - other_length) < 3):
+			return false
+	return true
+
+
+## 크기 범위 안을 먼저 훑는다. 빈 자리가 전혀 없을 때만 최소보다 줄여 맞춘다.
+## 크기나 이름의 이웃 제한만 걸린 집터는 범위를 벗어나 억지로 채우지 않는다.
+static func _regional_fit(g: FieldGrid, anchor: Rect2i, side: int, road: int, inner: Rect2i,
+		lots: Array[Rect2i], choice: Dictionary, neighbours: Array[Dictionary]) -> Rect2i:
+	var size: Vector2i = choice["size"]
+	var axis: int = anchor.position.x if side % 2 == 0 else anchor.position.y
+	var available: int = (g.width if side % 2 == 0 else g.height) - 2 - axis
+	var high: int = mini(int(choice["max_width"]), available)
+	var low: int = mini(int(choice["min_width"]), high)
+	var depth: int = mini(size.y, road - 3)
+	if low < 4 or depth < 4:
+		return Rect2i()
+	var first: int = clampi(size.x, low, high)
+	var has_space: bool = false
+	for offset in range(high - low + 1):
+		var span: int = low + (first - low + offset) % (high - low + 1)
+		var rect: Rect2i = _regional_rect(g, anchor, side, span, depth)
+		if _clear(g, rect.grow(1), inner, lots):
+			has_space = true
+			if _regional_size_distinct(rect, side, neighbours):
+				return rect
+	if not has_space:
+		for span in range(low - 1, 3, -1):
+			var rect: Rect2i = _regional_rect(g, anchor, side, span, depth)
+			if _clear(g, rect.grow(1), inner, lots) and _regional_size_distinct(rect, side, neighbours):
+				return rect
+	return Rect2i()
 
 
 ## The outer houses belong to the same place: their boxes keep only the kinds of things the
