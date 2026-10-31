@@ -690,6 +690,8 @@ func test_woods_depth_continues_outside_without_a_young_tree_seam() -> void:
 	assert_almost_eq(EdgeBand.woods_depth(g, forest, -5.0, 100.0), 20.0, 0.001)
 	assert_almost_eq(EdgeBand.woods_depth(g, forest, 100.0, -2.0), 42.0, 0.001)
 	assert_almost_eq(EdgeBand.woods_depth(g, forest, -2.0, 55.0), EdgeBand.outside(g, -2.0, 55.0), 0.001, "outside a walking cell keeps its old depth")
+	# Beside the open side's own tree rows the woods outside start at the map edge (no bare strip past x=0).
+	assert_almost_eq(EdgeBand.woods_depth(g, forest, -1.0, 62.0), 1.0, 0.001)
 	var p := EdgeBand.plan(g, 71, EdgeBand.look_of({}), forest)
 	var west: int = 0
 	for tree: Dictionary in p["trees"]:
@@ -704,6 +706,12 @@ func test_woods_depth_continues_outside_without_a_young_tree_seam() -> void:
 			assert_true(tree.has("height"), "tall canopy rather than a new young edge at x=0")
 			assert_gt(float(tree.get("height", 0.0)), EdgeBand.YOUNG_TALL.y)
 	assert_gt(west, 20, "the west forest continues outside the map")
+	var beside_rows: int = 0
+	for tree: Dictionary in p["trees"]:
+		var at: Vector3 = tree["at"]
+		if not bool(tree.get("skip", false)) and at.x < 0.0 and at.z > 61.0 and at.z < 67.0:
+			beside_rows += 1
+	assert_gt(beside_rows, 0, "woods stand outside beside the west forest's tree rows")
 
 
 func test_deep_forest_shadow_uses_woods_depth_inside_the_map() -> void:

@@ -9,6 +9,7 @@ const StopLoader = preload("res://game/stop_loader.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const FieldMission = preload("res://game/field_mission.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const FirstStop = preload("res://game/world/sulehuf_map.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 const MapView = preload("res://game/world/map_view.gd")
@@ -471,3 +472,14 @@ func test_water_tower_follows_view() -> void:
 	assert_eq(after, moved)
 	for c: Vector2i in after:
 		assert_false(_forest_has(wide, c), "tower cell %s in the forest" % c)
+
+
+## Coal goes down on the moved platform row, not in the forest over the old one (field_work.gd).
+func test_coal_drop_follows_view() -> void:
+	for offset: Vector2i in [OFFSET, Vector2i.ZERO]:
+		var game: FieldGame = _game({"stop_view_rows": offset.y, "stop_view_cols": offset.x})
+		var original := Vector2i(39, FieldWork.COAL_DROP_ROW)
+		assert_eq(game.work.coal_drop(float(original.x + offset.x) + 0.5), FieldGrid.center(original + offset))
+		_assert_mission_cell(game, original)
+		assert_true((game.levels[0] as FieldGrid).people_can_walk(original + offset))
+		assert_eq(game.work.coal_drop(-50.0), FieldGrid.center(Vector2i(FieldWork.COAL_DROP_MIN_X, FieldWork.COAL_DROP_ROW) + offset))

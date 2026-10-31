@@ -340,7 +340,11 @@ static func woods_depth(g: FieldGrid, forest: Array, x: float, z: float, borders
 		for edge: Rect2 in part["edges"]:
 			var nearest := Vector2(clampf(source.x, edge.position.x, edge.end.x), clampf(source.y, edge.position.y, edge.end.y))
 			inside = minf(inside, source.distance_to(nearest))
-	return maxf(depth, 0.0) + inside - float(FOREST_ROWS)
+	# The map's own tree rows stand only inside it: outside, the woods start at the edge
+	# even beside those rows (else a strip past x=0 beside a forest's open side stays bare).
+	if depth <= 0.0:
+		return inside - float(FOREST_ROWS)
+	return depth + maxf(inside - float(FOREST_ROWS), 0.0)
 
 
 ## Everything the band places, the same for the same map: trees {at, yaw, model,
