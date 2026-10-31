@@ -535,13 +535,22 @@ func stop_drag() -> void:
 
 
 func cancel_drag() -> void:
+	drop_drag()
+	_layout()
+
+
+## Let go of a drag without laying the pane out again: for a pane that is closing (leave_decor).
+func drop_drag() -> void:
 	_down = false
 	_finger = -1
 	_origin = ""
 	_candidate_index = -1
 	_touches.clear()
 	selected = -1
-	stop_drag()
+	dragging = false
+	drag_kind = ""
+	_ghost.visible = false
+	if is_instance_valid(train): train.decor_hover("")
 
 
 func show_note(word: String) -> void:

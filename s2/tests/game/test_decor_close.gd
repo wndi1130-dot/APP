@@ -147,7 +147,7 @@ func test_closing_lets_the_pane_go() -> void:
 	assert_false(is_instance_valid(pane), "the pane is freed")
 
 
-## Closed mid-drag: the pane is not laid out again (its drag is left to go with it), and the
+## Closed mid-drag: the pane lets the drag go (without laying itself out again), and the
 ## green place under the held thing goes with the decor view, nothing of it left in the train.
 func test_closing_mid_drag_leaves_nothing_in_the_train() -> void:
 	var f = await _flow()
@@ -158,7 +158,9 @@ func test_closing_mid_drag_leaves_nothing_in_the_train() -> void:
 	var cursor: Node3D = f.train.decor.cursor
 	assert_true(cursor.visible, "the place under the held thing shows")
 	f.leave_decor()
-	assert_true(pane.dragging, "the closing pane is not stopped and laid out again")
+	assert_false(pane.dragging, "the closing pane let the drag go")
+	assert_false(pane._ghost.visible, "the held thing's ghost is hidden")
+	assert_eq(pane.selected, -1, "nothing stays picked")
 	assert_eq(f.train.decorating(), "", "the train left decorating")
 	assert_false(cursor.is_inside_tree() and cursor.visible, "no green place left in the train")
 	await get_tree().process_frame

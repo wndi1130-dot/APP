@@ -1591,10 +1591,9 @@ func leave_decor() -> void:
 	var id: String = decor_id
 	decor_id = ""
 	if is_instance_valid(decor_pane):
-		# A drag goes with the pane. Only the train's hover is cleared: cancel_drag would lay
-		# the closing pane out again (stop_drag → _layout), most of the close's stall.
-		if is_instance_valid(train):
-			train.decor_hover("")
+		# The drag is let go without cancel_drag's layout of the closing pane (stop_drag → _layout),
+		# most of the close's stall.
+		decor_pane.drop_drag()
 		decor_pane.hide()
 		decor_pane.queue_free()
 	decor_pane = null
