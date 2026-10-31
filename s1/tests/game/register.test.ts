@@ -11,15 +11,22 @@ import { playGame } from '../../tools/s1c_bot';
 // 맡은 일로 열차장에게 보고하는 사람(기관사·수색대·배급장·의무장·측근·부관)은 합쇼체, 칸 사람·칸 대표는 해라체다.
 // 앞칸 대표만 합쇼체이고 돌려 말하는 「~지요」도 그 높임으로 본다. 구조 카드의 바깥 사람은 높여 말한다.
 
-type Ending = '합쇼' | '지요' | '해요' | '하오' | '해라' | '조각';
+type Ending = '합쇼' | '지요' | '해요' | '하오' | '해라' | '해체' | '조각';
+
+/** 한글 음절의 받침이 ㅂ인가 */
+const bieup = (ch?: string) => !!ch && ch >= '가' && ch <= '힣' && (ch.charCodeAt(0) - 0xac00) % 28 === 17;
 
 /** 한 문장의 말끝 말씨. 말끝이 없는(명사·조사로 끝나는) 문장은 조각이다. */
 function endingOf(sentence: string): Ending {
   const last = sentence.replace(/[.!?…~]+$/u, '').trim();
   if (/(아니다|\s다오)$/u.test(last)) return '해라';
   if (/이라$/u.test(last)) return '조각';
+  // 「-니까」는 받침 ㅂ 뒤(「합니까」「없습니까」)만 합쇼 물음이고, 「추우니까」 같은 이유 잇기는 조각으로 둔다
+  if (/니까$/u.test(last) && !bieup(last.at(-3))) return '조각';
   if (/(습니다|십시오|니다|니까|십시다)$/u.test(last)) return '합쇼';
   if (/(지요|죠)$/u.test(last)) return '지요';
+  // 「-군」과 뜻을 밝히는 「-지」(「약속하지.」「들어주지.」)는 해라체가 아닌 해체다. 확인·물음의 「-지」(「있지」「갔지」「필요하지?」)는 해라 쪽으로 둔다.
+  if (/군$/u.test(last) || (/[하주]지$/u.test(last) && !/\?/u.test(sentence))) return '해체';
   if (/(세요|어요|아요|해요|예요|에요|요)$/u.test(last)) return '해요';
   if (/(구려|오|소)$/u.test(last)) return '하오';
   if (/(다|라|자|냐|니|지|게|군|구나|네|마|야|어|아|래|대|걸|거든|고|까|해|줘|와|봐|러)$/u.test(last)) return '해라';
@@ -38,7 +45,7 @@ const ALLOWED: Record<Voice, Ending[]> = {
   칸: ['해라', '조각'],
   '앞칸 대표': ['합쇼', '지요', '조각'],
   바깥: ['합쇼', '지요', '해요', '조각'],
-  옮김: ['합쇼', '지요', '해요', '하오', '해라', '조각'],
+  옮김: ['합쇼', '지요', '해요', '하오', '해라', '해체', '조각'],
 };
 const fits = (text: string, v: Voice) => endings(text).every(e => ALLOWED[v].includes(e));
 
@@ -231,6 +238,9 @@ describe('말씨 가름', () => {
     expect(endings('열쇠는 경비대장 하나만 쥔다. 오늘부터.')).toEqual(['해라', '조각']);
     expect(endings('한 눈금만 올려 줘. 그날 밤 명단부터 다시 가져와.')).toEqual(['해라', '해라']);
     expect(endings('계산이 맞았구나. 다음 이야기도 들어 보자.')).toEqual(['해라', '해라']);
+    expect(endings('말한 대로 왔군. 좋다. 약속하지. 들어주지.')).toEqual(['해체', '해라', '해체', '해체']);
+    expect(endings('지난번엔 그냥 갔지. 그자를 미워하는 사람이 있지. 약속하마. 뭐가 필요하지?')).toEqual(['해라', '해라', '해라', '해라']);
+    expect(endings('추우니까... 별수 없죠... 누가 올라갑니까.')).toEqual(['조각', '지요', '합쇼']);
     expect(fits('열쇠는 경비대장 하나만 쥡니다. 오늘부터.', '칸')).toBe(false);
     expect(fits('열차를 세워 주십시오. 반나절이면 된다.', '보고')).toBe(false);
     expect(fits('괜찮아요.', '앞칸 대표')).toBe(false);
@@ -290,6 +300,24 @@ describe('말씨 가름', () => {
     // 꾸미는 칸 일곱 × 셋, 열차장실은 말이 없다
     expect(lines.length).toBe(21);
     const bad = lines.filter(([car, s]) => !fits(s, car === 'front' ? '앞칸 대표' : '칸')).map(([car, s]) => `${car} ${endings(s).join('·')}: ${s}`);
+    expect(bad).toEqual([]);
+  });
+
+  it('S2 동료 말은 칸 사람 말씨다(겁 많은 성격만 해요체 — 성격 말씨 예외)', () => {
+    const voiced: Record<'fear' | 'rough' | 'quiet', string[]> = { fear: [], rough: [], quiet: [] };
+    for (const f of ['game/sim/ally_lines.gd', 'game/field_residents.gd']) {
+      const src = readFileSync(join(S2, f), 'utf8');
+      for (const m of src.matchAll(/"(fear|rough|quiet)":\s*(\[[^\]]*\]|"[^"]*")/gu)) {
+        for (const q of m[2].matchAll(/"([^"]*[가-힣][^"]*)"/gu)) voiced[m[1] as keyof typeof voiced].push(q[1]);
+      }
+    }
+    // 세 성격의 말을 다 읽었는지(표 꼴이 바뀌어 읽기가 빠지면 떨어진다)
+    for (const lines of Object.values(voiced)) expect(lines.length).toBeGreaterThan(100);
+    const FEAR: Ending[] = ['해라', '해체', '해요', '지요', '조각'];
+    const bad = [
+      ...voiced.fear.filter(s => !endings(s).every(e => FEAR.includes(e))).map(s => `fear ${endings(s).join('·')}: ${s}`),
+      ...[...voiced.rough, ...voiced.quiet].filter(s => !fits(s, '칸')).map(s => `${endings(s).join('·')}: ${s}`),
+    ];
     expect(bad).toEqual([]);
   });
 
