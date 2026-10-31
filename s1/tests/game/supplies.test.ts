@@ -254,6 +254,11 @@ describe('생필품: 관계·위생·요구', () => {
 });
 
 describe('생필품: 정차 입고', () => {
+  it('장소 표는 필드 다 뒤짐 기대 가운데값의 70%를 0.25 단위로 둔다', () => {
+    // 5.03·3.6·3.2·2.5·1.4·2.1 (loot_supplies.gd 기대값) × 0.7
+    expect(SUP_YIELD).toEqual({ houses: 3.5, church: 2.5, office: 2.25, hospital: 1.75, freight: 1, factory: 1.5 });
+  });
+
   it.each(Object.entries(SUP_YIELD))('%s 장소 표와 맡긴 수색 덤 +1을 장부에 따로 적는다', (place, yieldAmount) => {
     const g = atStop(place);
     const off = structuredClone(g);
