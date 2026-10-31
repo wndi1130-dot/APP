@@ -5,9 +5,11 @@ import { bump, bumpRel } from './ledger';
 import { lawActive } from './state';
 import type { Game } from './state';
 
-/** 정차 부산물. 목표 자원(LOOT_KEYS)에는 넣지 않아 기존 배분·난수 순서를 보존한다. */
+/** 정차 부산물. 목표 자원(LOOT_KEYS)에는 넣지 않아 기존 배분·난수 순서를 보존한다.
+ * 값 = S2 필드에서 그 정차 지도를 다 뒤졌을 때의 기대 가운데값(loot_supplies.gd)의 70%, 0.25 단위.
+ * 실제로는 상자를 다 열거나 다 싣지 못해서다. 새 정차 갈래도 같은 규칙으로 넣는다. */
 export const SUP_YIELD: Readonly<Record<string, number>> = Object.freeze({
-  houses: 5, church: 2, office: 2, hospital: 2, freight: 1, factory: 1,
+  houses: 3.5, church: 2.5, office: 2.25, hospital: 1.75, freight: 1, factory: 1.5,
 });
 
 /** 결정 490 둘째 PR의 제안 값. 공방 생산량은 실수로 셈한다. */

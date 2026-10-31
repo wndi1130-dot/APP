@@ -3,6 +3,7 @@ extends RefCounted
 
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const BuildingView = preload("res://game/world/building_view.gd")
 const KINDS: Array[String] = ["wall_picture", "wall_mirror", "wall_poster", "wall_clock", "potted_plant"]
 const NAMES: Dictionary = {"wall_picture": "벽 그림", "wall_mirror": "거울", "wall_poster": "포스터",
 	"wall_clock": "벽시계", "potted_plant": "화분"}
@@ -155,7 +156,8 @@ static func _walls(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vec
 		var line: Dictionary = {}
 		var along := Vector2i(1, 0) if facing == 0 else Vector2i(0, 1)
 		for c in cells:
-			if RoomFurnish._wall_side(g, of, ri, Rect2i(c, Vector2i.ONE), BACKS[facing]):
+			if RoomFurnish._wall_side(g, of, ri, Rect2i(c, Vector2i.ONE), BACKS[facing]) \
+					and _outer_wall(g, c, BACKS[facing]):
 				line[c] = true
 		# 이어진 벽 구간마다 한 번만 끝을 찾아 칸마다 [구간 안 자리, 구간 길이]를 둔다(칸마다 다시 찾으면 긴 벽에서 제곱).
 		var spot: Dictionary = {}
@@ -183,6 +185,17 @@ static func _walls(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vec
 			var hi := at.y - 1 - at.x
 			out.append({"cell": c, "facing": facing, "middle": 1.0 / (1.0 + absf(float(hi - lo)) / 2.0)})
 	return out
+
+
+## 등 벽이 집 안을 볼 때도 높이 그대로 서는 바깥 벽인가: 벽 칸이 같은 집이고 그 너머가 집 밖이며, 그리기의
+## 칸 갈래(building_view cell_kind)가 턱 줄도 아니다. 안 벽과 턱 줄(남·동 바깥 줄, 그쪽으로 꺾인 모서리 —
+## 북쪽 벽의 북동 끝, 서쪽 벽의 남서 끝)은 턱 높이로 낮춰 그려 거기 건 장식은 허공에 뜬다.
+static func _outer_wall(g: FieldGrid, c: Vector2i, back: Vector2i) -> bool:
+	var b := g.building_at(c)
+	var w := c + back
+	if g.building_at(w) != b or g.building_at(w + back) == b:
+		return false
+	return not BuildingView.cut_line(BuildingView.cell_kind(g, w, b))
 
 
 static func _hanging(kind: String, cls: String, walls: Array, cover: Dictionary, hung: Array, seed_value: int) -> Dictionary:

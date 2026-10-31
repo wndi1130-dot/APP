@@ -593,7 +593,7 @@ function baseView(g: Game, card: Card): CardView {
       return {
         title: '사적인 부탁', speaker: leader(g, c), focus: c, required: true, body: fav.body, key: `favor:${c}`,
         choices: withAfford(g, [
-          { id: 'grant', label: '들어준다', log: `${leader(g, c).name}의 사적인 부탁을 들어줬다.`, say: past ? '이번까지다. 다음은 없다.' : '들어주지. 대신 이 일은 기억해 둬라.', effs: [...fav.cost, { t: 'debt', c }], special: 'favor_risk' },
+          { id: 'grant', label: '들어준다', log: `${leader(g, c).name}의 사적인 부탁을 들어줬다.`, say: past ? '이번까지다. 다음은 없다.' : '들어주마. 대신 이 일은 기억해 둬라.', effs: [...fav.cost, { t: 'debt', c }], special: 'favor_risk' },
           ...fine,
           { id: 'refuse', label: '거절한다', log: `${leader(g, c).name}의 사적인 부탁을 거절했다.`, say: past ? '한 번 들어줬다고 버릇이 되면 안 된다.' : '사사로운 부탁은 받지 않는다.', effs: [{ t: 'rel', c, v: past ? -4 : -3 }] },
         ]),

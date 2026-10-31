@@ -68,7 +68,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["speaker"] = _leader(g, t, c)
 			out["focus"] = c
 			out["body"] = String((FAVORS_AGAIN if past != null else FAVORS)[c])
-			says = ["이번까지다. 다음은 없다." if past != null else "들어주지. 대신 이 일은 기억해 둬라.",
+			says = ["이번까지다. 다음은 없다." if past != null else "들어주마. 대신 이 일은 기억해 둬라.",
 				"한 번 들어줬다고 버릇이 되면 안 된다." if past != null else "사사로운 부탁은 받지 않는다."]
 		"rescue": _rescue(g, t, card, out, says)
 		"bitten":
