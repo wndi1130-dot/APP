@@ -77,7 +77,7 @@ var _crew: Array[Dictionary] = []
 var _defense: Dictionary = {}
 var _wardrobe_in: Array = []
 var _lures_back: Dictionary = {}
-var _sleds_back: int = -1
+var _sleds_back: Variant = null
 var _food_in: Dictionary = {}
 var _loot_deck: Dictionary = {}
 
@@ -345,7 +345,8 @@ func set_lures_back(by_kind: Dictionary) -> void:
 
 
 ## The train's sleds standing in the platform's unloading cells when the stop is left
-## (0..the contract's train.sleds). On a v5 receipt only; unset, the receipt has none.
+## (0..the contract's train.sleds). On a v5 receipt only; unset, the receipt has none. A wrong
+## count is written as it is, so the receipt's own check refuses it.
 func set_sleds_back(n: int) -> void:
 	_sleds_back = n
 
@@ -436,7 +437,7 @@ func to_dict() -> Dictionary:
 				d["wardrobeIn"] = _wardrobe_in.duplicate(true)
 			if not _lures_back.is_empty():
 				d["luresBack"] = _lures_back.duplicate()
-			if _sleds_back >= 0:
+			if _sleds_back != null:
 				d["sledsBack"] = _sleds_back
 			if not _food_in.is_empty():
 				d["foodIn"] = _food_in.duplicate()

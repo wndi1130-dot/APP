@@ -585,7 +585,9 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	# The train's sleds (s3 contract 3): what went out less what stood at the platform when it left.
 	# A receipt without sledsBack brings them all back, as before the field used them.
 	if int(receipt["version"]) == 5 and receipt.has("sledsBack") and g.get("dom") is Dictionary:
-		g["dom"]["sleds"] = maxf(0.0, float(g["dom"].get("sleds", 0)) + float(receipt["sledsBack"]) - float(sleds_out(departure)))
+		# Never more back than went out, even where the assert above is not run (a release build).
+		var back: int = mini(int(receipt["sledsBack"]), sleds_out(departure))
+		g["dom"]["sleds"] = maxf(0.0, float(g["dom"].get("sleds", 0)) + float(back - sleds_out(departure)))
 	var got: Array[String] = []
 	for row: Array in [["coal", "석탄"], ["food", "식량"], ["medicine", "의약품"], ["luxury", "사치품"], ["wood", "목재"], ["scrap", "고철"], ["cloth", "천"], ["parts", "부품"]]:
 		var amount := float(stock.get(row[0], 0))

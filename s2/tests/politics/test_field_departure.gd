@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 
 const V = preload("res://tests/politics/field_vectors.gd")
 const FieldDeparture = preload("res://game/politics/field_departure.gd")
+const KitPick = preload("res://game/politics/kit_pick.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
 const TrainStop = preload("res://game/train/train_stop.gd")
@@ -313,3 +314,20 @@ func test_the_train_s_sleds_go_out_on_the_contract_and_come_back_on_the_receipt(
 	assert_false(r.to_dict().has("sledsBack"), "unset, the receipt has none")
 	r.set_sleds_back(0)
 	assert_eq(r.to_dict().get("sledsBack"), 0, "the receipt writes how many came back")
+	r.set_sleds_back(-1)
+	assert_true("sledsBack" in str(r.problems()), "a wrong count set on the receipt is refused, not dropped")
+	# A return applied once (the same receipt again changes nothing), never below none, and a
+	# contract without a train block (v1) handed out none.
+	receipt["sledsBack"] = 0
+	var once: Dictionary = FieldReturn.apply_field_return(g, _tables, dep, receipt)
+	assert_eq(once["g"]["dom"]["sleds"], 0.0, "both left out in the field")
+	var twice: Dictionary = FieldReturn.apply_field_return(once["g"], _tables, dep, receipt)
+	assert_eq(twice["status"], "duplicate")
+	assert_eq(twice["g"]["dom"]["sleds"], 0.0, "not taken off twice")
+	g["dom"]["sleds"] = 1
+	assert_eq(FieldReturn.apply_field_return(g, _tables, dep, receipt)["g"]["dom"]["sleds"], 0.0, "never below none")
+	assert_eq(FieldReturn.sleds_out({"version": 1}), 0)
+	assert_eq(FieldReturn.sleds_out({"train": "none"}), 0)
+	# A train that keeps no rounds still hands over its sleds.
+	assert_eq(KitPick.train_kit({"dom": {"sleds": 2}}), {"sleds": 2})
+	assert_eq(KitPick.train_kit({"dom": {}}), {})
