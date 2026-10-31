@@ -4,7 +4,9 @@
 #include "res://fx/shaders/fx_common.gdshaderinc"
 
 // VAT layout from scripts/vat_baker.gd. INSTANCE_CUSTOM:
-// r = phase, g = clip number, b = 1 stops the animation, a = shade. b below 0
+// r = phase, g = clip number, b = 1 stops the animation, a = shade + 2 * k.
+// k = 0..16 hides that many sixteenths with SIGHT_FADE; shade stays below 2.
+// Plain shade (the living and train's people) has k = 0. b below 0
 // is a tremble of the cold (the train's people, -0.5 at most) and stops nothing.
 // Clips stack downward in the texture; the four tables say where each one
 // starts, how many frames it has, how fast it runs and whether it loops.
@@ -86,6 +88,7 @@ varying vec2 tear_at;    // x how high it rests (0 feet .. 1 crown), y 1 on the 
 #endif
 
 varying float shade;
+varying flat float sight_k;
 varying vec3 view_pos;
 #ifdef WORN
 varying vec4 worn;
@@ -161,7 +164,9 @@ void vertex() {
 	VERTEX += offset;
 	// The cold's tremble: quick and small, from the hips up, more toward the head, each body at its own phase.
 	VERTEX.xz += shiver * clamp((VERTEX.y - 0.55) / 0.7, 0.0, 1.0) * 0.05 * vec2(sin((TIME - fx_still) * 59.0 + INSTANCE_CUSTOM.r * 41.0), sin((TIME - fx_still) * 47.0 + INSTANCE_CUSTOM.r * 29.0) * 0.6);
-	shade = INSTANCE_CUSTOM.a;
+	float k = floor(INSTANCE_CUSTOM.a * 0.5);
+	shade = INSTANCE_CUSTOM.a - 2.0 * k;
+	sight_k = 1.0 - k / 16.0;
 	view_pos = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 #ifdef WORN
 	worn = COLOR;
@@ -255,7 +260,21 @@ float bled(vec2 uv, vec4 worn_as, vec2 worn_at) {
 const vec3 DRIED_BLOOD = vec3(0.075, 0.012, 0.01);
 #endif
 
+#ifdef SIGHT_FADE
+// Four by four Bayer order, in screen pixels, shared by body and garment.
+float sight_threshold(vec2 pixel) {
+	ivec2 p = ivec2(mod(floor(pixel), 4.0));
+	int low = ((p.x & 1) ^ (p.y & 1)) * 2 + (p.y & 1);
+	int high = ((p.x >> 1) ^ (p.y >> 1)) * 2 + (p.y >> 1);
+	return (float(low * 4 + high) + 0.5) / 16.0;
+}
+#endif
+
 void fragment() {
+#ifdef SIGHT_FADE
+	float threshold = sight_threshold(FRAGCOORD.xy);
+	if (sight_k < 0.999 && sight_k <= threshold) discard;
+#endif
 	if (flat_normals) {
 		NORMAL = normalize(cross(dFdy(view_pos), dFdx(view_pos)));
 	}

@@ -22,6 +22,9 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const SEPARATION_EXCLUDED: Array[String] = ["downed", "rising", "waking", "frozen", "climb", "grab", "dead", "corpse", "dash", "eat"]
 
 const MAX_DRAW: int = 160
+const SIGHT_FADE_IN: float = 0.18
+const SIGHT_FADE_OUT: float = 0.2
+const FRUSTUM_PAD: float = 1.2
 const SIGHT: float = 9.0
 const SPEED_WANDER: float = 0.45
 const SPEED_SHAMBLE: float = 1.05
@@ -87,6 +90,13 @@ var _garment_reads: int = 0   # garments still to be read in this frame
 var garments_drawn: Dictionary = {}   # garment multimesh -> the ids of the dead drawn in it this frame, in order (the instances' data is the renderer's)
 var _drawn_worn: Dictionary = {}   # id -> [worn_at, kind, what it has on] for one drawn before worn_of is asked (drawn_worn)
 var drawn_count: int = 0
+var drawn_at: Dictionary = {}          # id -> world place actually drawn this frame
+var _shown: Dictionary = {}            # id -> sight visibility; never part of a saved body
+var _last_seen_draw: Dictionary = {}   # id -> last draw while in sight, before packing visibility
+var _held_frames: Dictionary = {}      # id -> consecutive in-sight frames waiting for its appearance
+var _rendered_once: bool = false
+var appearance_swaps: int = 0
+var held_frames_max: int = 0
 var vat: Dictionary
 var baked: bool = false       # the dead are a baked body (dead_body.gd), not the boxes
 var markers: MultiMeshInstance3D
@@ -1303,7 +1313,8 @@ func _read_a_body() -> void:
 ## Garment `kind` over body `b` (dead_cast.gd), read in the first time one of
 ## the dead in that body is drawn in it, one a frame as the bodies are and not
 ## in a frame a body is read (a stop with no police station never reads the
-## vest); until then it is drawn without. null when that body has none of it.
+## vest). A body not yet shown waits for this read, including a cached null
+## when that body has none of it.
 func _garment_of(b: int, kind: String) -> MultiMeshInstance3D:
 	var wear: Dictionary = wear_draws[b]
 	if wear.has(kind):
@@ -1316,8 +1327,8 @@ func _garment_of(b: int, kind: String) -> MultiMeshInstance3D:
 	return wear[kind]
 
 
-## One garment's multimesh: the living's garment shader (person_vat.gdshader
-## worn_look) on the dead's motions, each of the dead in the garment's own
+## One garment's multimesh: dead_garment.gdshader's worn_look and sight fade
+## on the dead's motions, each of the dead in the garment's own
 ## colour and pattern (dead_cast.gd garment_of, the multimesh colour).
 func _garment_draw(shell: Dictionary) -> MultiMeshInstance3D:
 	var node := MultiMeshInstance3D.new()
@@ -1331,7 +1342,7 @@ func _garment_draw(shell: Dictionary) -> MultiMeshInstance3D:
 	mm.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
 	node.multimesh = mm
 	var mat := ShaderMaterial.new()
-	mat.shader = preload("res://game/actors/person_vat.gdshader")
+	mat.shader = preload("res://game/actors/dead_garment.gdshader")
 	mat.set_shader_parameter("vat", shell["texture"])
 	mat.set_shader_parameter("rows_per_frame", float(shell["rows_per_frame"]))
 	var tables := VatBaker.shader_tables(shell)
@@ -1344,117 +1355,203 @@ func _garment_draw(shell: Dictionary) -> MultiMeshInstance3D:
 	return node
 
 
-## Visible-only drawing with CPU frustum test, one MultiMesh per body and look.
-func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
+## Sight changes only the drawing; elapsed time is supplied by render.
+static func next_shown(prev: float, seen_now: bool, delta: float) -> float:
+	return clampf(prev + delta / SIGHT_FADE_IN if seen_now else prev - delta / SIGHT_FADE_OUT, 0.0, 1.0)
+
+
+## Keep shade below 2, leaving the even part for sixteen steps of hidden pixels.
+static func pack_shade(shade: float, shown: float) -> float:
+	assert(shade >= 0.0 and shade < 2.0, "shade must leave room for sight visibility")
+	var k: int = int(round((1.0 - clampf(shown, 0.0, 1.0)) * 16.0))
+	return shade + 2.0 * float(k)
+
+
+static func unpack_shade(a: float) -> Vector2:
+	var k: float = floorf(a * 0.5)
+	return Vector2(a - 2.0 * k, 1.0 - k / 16.0)
+
+
+## Camera3D's planes face out: positive distance is outside. Keep a sphere
+## touching any plane, so a body is already submitted before its centre enters.
+static func in_sight_frustum(planes: Array[Plane], at: Vector3) -> bool:
+	var centre: Vector3 = at + Vector3(0, 0.9, 0)
+	for plane: Plane in planes:
+		if plane.distance_to(centre) > FRUSTUM_PAD:
+			return false
+	return true
+
+
+## The last in-sight draw owns these values; shader TIME keeps its motion going.
+func _sight_draw(z: Dictionary, b: int, look: String, over: Dictionary, garment: MultiMeshInstance3D) -> Dictionary:
+	var at: Vector3 = z["pos"]
+	var state: String = z["state"]
+	var basis := Basis(Vector3.UP, DeadBody.yaw_of(z, baked))
+	var pos := draw_pos(z)
+	var reel := 1.0 - shoved_k(z)
+	var frozen_anim := 0.0
+	var shade := 1.0
+	var down := DeadPose.down_k(z)
+	if down > 0.0:
+		# A baked body goes over by its own motion; the boxes are laid down whole.
+		if not DeadBody.falls_by_motion(z, baked):
+			var lie := DeadPose.lying(z, down)
+			basis = basis * lie.basis
+			pos.y = pos.y + lie.origin.y
+		else:
+			basis = basis * Basis(Vector3.UP, DeadBody.ground_turn(z, down))
+		# Flat on the ground it is still (a crawler drags itself); going over or coming up, the limbs move.
+		frozen_anim = 1.0 if down >= 1.0 and (state != "downed" or not z["crawl"]) else 0.0
+	elif reel > 0.0:
+		basis = basis * Basis(Vector3.RIGHT, -0.5 * reel)   # thrown back on its heels
+	elif state == "grab" or state == "attack":
+		basis = basis * reach_basis(z)
+		if state == "grab":
+			# The rules hold it 0.5 m off; drawn there its reach goes through them.
+			pos -= Basis(Vector3.UP, z["angle"]) * Vector3(0, 0, GRAB_BACK)
+	elif state == "climb":
+		var out := DeadBody.climbing(z, baked)
+		pos = pos + basis * out.origin
+		basis = basis * out.basis
+	elif state == "tell":
+		# The boxes have no motion for it: they bend forward and sink. A baked body has its own.
+		if not baked:
+			var low := DeadBody.tell_k(z)
+			basis = basis * Basis(Vector3.RIGHT, 0.45 * low)
+			pos.y -= 0.18 * low
+	elif state == "eat" and not baked:
+		# The boxes have no motion for it: bent low over the body.
+		basis = basis * Basis(Vector3.RIGHT, 0.6)
+		pos.y -= 0.25
+	elif state != "frozen" and state != "waking" and not baked:
+		basis = basis * DeadPose.gait_basis(z)
+	if state == "frozen":
+		frozen_anim = 1.0
+		basis = basis * Basis(Vector3.RIGHT, -0.5)
+		pos.y = at.y - 0.55
+	elif state == "waking":
+		pos.y = at.y - 0.55 * clampf(float(z["t"]) / WAKE_TIME, 0, 1) + sin(z["t"] * 40.0) * 0.04
+	var record: Dictionary = {"b": b, "look": look, "at": at, "garment": garment,
+		"shell": String(over.get("shell", "")), "garment_color": over.get("colour", Color.WHITE)}
+	if state == "rising":
+		record["marker"] = Transform3D(Basis.IDENTITY, at + Vector3(0, 0.05, 0))
+	# The axe goes by the body as it stands or lies, before the clothed are drawn broader.
+	if embedded_draw != null and shows_embedded(z):
+		var axe := Transform3D(basis, pos) * EMBED_AT
+		if down > 0.5:
+			var turn := Basis(Vector3.UP, z["angle"])
+			axe = Transform3D(Basis(Vector3.UP, z["angle"] + EMBED_DROP_TURN), Vector3(pos.x, at.y, pos.z) + turn * EMBED_DROP_AT)
+		record["axe"] = axe
+	if z["kind"] == "clothed":
+		basis = basis.scaled(Vector3(1.3, 1.0, 1.35))
+	if z["stun"] > 0.0:
+		shade = 0.8
+	var node: MultiMeshInstance3D = draws[b][look]
+	# Its walk goes by its own body's stride (dead_body.gd reads the rounds of the folder in use).
+	DeadBody.rounds = body_rounds[b]
+	record["transform"] = Transform3D(basis, pos)
+	record["custom"] = DeadBody.custom(z, down, frozen_anim, shade, baked)
+	record["color"] = DeadCast.tear_of(z, bool(node.get_meta(&"hands_marked", false)))
+	return record
+
+
+## One MultiMesh per body and look; sight fades before floor and screen culling.
+func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1.0) -> void:
+	var step: float = clampf(get_process_delta_time() if delta < 0.0 else delta, 0.0, 0.1)
+	var first: bool = not _rendered_once
 	_garment_reads = 0 if not bodies_to_read.is_empty() else 1   # one read a frame, body or garment
 	_read_a_body()
+	var planes: Array[Plane] = camera.get_frustum()
 	var counts := []
 	for _b in draws.size():
 		counts.append({"dead": 0, "clothed": 0, "fresh": 0, "frozen": 0, "corpse": 0})
+	var shown_next: Dictionary = {}
+	var seen_draw_next: Dictionary = {}
+	var held_next: Dictionary = {}
 	garments_drawn = {}
+	drawn_at = {}
 	var marks := 0
 	var axes := 0
 	for z in list:
+		var id: int = int(z["id"])
 		var at: Vector3 = z["pos"]
-		if mask_on and not seen.has(game.seen_key(at)):
-			continue
+		var seen_now: bool = not mask_on or seen.has(game.seen_key(at))
+		var prev: float = float(_shown.get(id, 0.0))
+		var shown: float = 1.0 if first and seen_now else next_shown(prev, seen_now, step)
+		shown_next[id] = shown
 		if not game.level_shown(game.level_of(at)):
+			shown_next[id] = 0.0
 			continue
-		if not camera.is_position_in_frustum(at + Vector3(0, 0.6, 0)):
+		var last: Dictionary = _last_seen_draw.get(id, {})
+		var record: Dictionary = last
+		var appearance_ready: bool = false
+		if seen_now:
+			var wanted_b: int = DeadCast.body_of(id, bodies_planned)
+			appearance_ready = wanted_b < draws.size()
+			# An attempted but absent body is a permanent fallback, not a pending read.
+			if appearance_ready and (draws[wanted_b] as Dictionary).is_empty():
+				wanted_b = 0
+			var wanted_look: String = "corpse" if z["state"] == "dead" else String(z["kind"])
+			if z["state"] == "frozen" or z["state"] == "waking":
+				wanted_look = "frozen"
+			var over: Dictionary = DeadCast.garment_of(drawn_worn(z), TINTS[wanted_look], id if String(z.get("name", "")) == "" else -1) if baked else {}
+			var wanted_garment: MultiMeshInstance3D = null
+			if appearance_ready and not over.is_empty():
+				wanted_garment = _garment_of(wanted_b, String(over["shell"]))
+				appearance_ready = (wear_draws[wanted_b] as Dictionary).has(over["shell"])
+			if not appearance_ready and (prev <= 0.0 or last.is_empty()):
+				# Even on arrival, an unread appearance never gets a visible placeholder.
+				shown_next[id] = 0.0
+				var held: int = int(_held_frames.get(id, 0)) + 1
+				held_next[id] = held
+				held_frames_max = maxi(held_frames_max, held)
+				continue
+			if appearance_ready and shown > 0.0:
+				record = _sight_draw(z, wanted_b, wanted_look, over, wanted_garment)
+		if shown <= 0.0 or record.is_empty():
 			continue
-		var look: String = z["kind"]
-		var state: String = z["state"]
-		var basis := Basis(Vector3.UP, DeadBody.yaw_of(z, baked))
-		var pos := draw_pos(z)
-		var reel := 1.0 - shoved_k(z)
-		var frozen_anim := 0.0
-		var shade := 1.0
-		if state == "dead":
-			look = "corpse"
-		var down := DeadPose.down_k(z)
-		if down > 0.0:
-			# A baked body goes over by its own motion; the boxes are laid down whole.
-			if not DeadBody.falls_by_motion(z, baked):
-				var lie := DeadPose.lying(z, down)
-				basis = basis * lie.basis
-				pos.y = pos.y + lie.origin.y
-			else:
-				basis = basis * Basis(Vector3.UP, DeadBody.ground_turn(z, down))
-			# Flat on the ground it is still (a crawler drags itself); going over or coming up, the limbs move.
-			frozen_anim = 1.0 if down >= 1.0 and (state != "downed" or not z["crawl"]) else 0.0
-		elif reel > 0.0:
-			basis = basis * Basis(Vector3.RIGHT, -0.5 * reel)   # thrown back on its heels
-		elif state == "grab" or state == "attack":
-			basis = basis * reach_basis(z)
-			if state == "grab":
-				# The rules hold it 0.5 m off; drawn there its reach goes through them.
-				pos -= Basis(Vector3.UP, z["angle"]) * Vector3(0, 0, GRAB_BACK)
-		elif state == "climb":
-			var out := DeadBody.climbing(z, baked)
-			pos = pos + basis * out.origin
-			basis = basis * out.basis
-		elif state == "tell":
-			# The boxes have no motion for it: they bend forward and sink. A baked body has its own.
-			if not baked:
-				var low := DeadBody.tell_k(z)
-				basis = basis * Basis(Vector3.RIGHT, 0.45 * low)
-				pos.y -= 0.18 * low
-		elif state == "eat" and not baked:
-			# The boxes have no motion for it: bent low over the body.
-			basis = basis * Basis(Vector3.RIGHT, 0.6)
-			pos.y -= 0.25
-		elif state != "frozen" and state != "waking" and not baked:
-			basis = basis * DeadPose.gait_basis(z)
-		if state == "frozen":
-			look = "frozen"
-			frozen_anim = 1.0
-			basis = basis * Basis(Vector3.RIGHT, -0.5)
-			pos.y = at.y - 0.55
-		elif state == "waking":
-			look = "frozen"
-			pos.y = at.y - 0.55 * clampf(float(z["t"]) / WAKE_TIME, 0, 1) + sin(z["t"] * 40.0) * 0.04
-		if state == "rising" and marks < 32:
-			markers.multimesh.set_instance_transform(marks, Transform3D(Basis.IDENTITY, at + Vector3(0, 0.05, 0)))
-			marks += 1
-		# The axe goes by the body as it stands or lies, before the clothed are drawn broader.
-		if embedded_draw != null and axes < EMBED_MAX and shows_embedded(z):
-			var axe := Transform3D(basis, pos) * EMBED_AT
-			if down > 0.5:
-				var turn := Basis(Vector3.UP, z["angle"])
-				axe = Transform3D(Basis(Vector3.UP, z["angle"] + EMBED_DROP_TURN), Vector3(pos.x, at.y, pos.z) + turn * EMBED_DROP_AT)
-			embedded_draw.multimesh.set_instance_transform(axes, axe)
-			axes += 1
-		if z["kind"] == "clothed":
-			basis = basis.scaled(Vector3(1.3, 1.0, 1.35))
-		if z["stun"] > 0.0:
-			shade = 0.8
-		var b := DeadCast.body_of(int(z["id"]), bodies_planned)
-		if b >= draws.size() or (draws[b] as Dictionary).is_empty():
-			b = 0
+		# Keep the last actual draw even when the camera has since moved away.
+		if not last.is_empty():
+			seen_draw_next[id] = last
+		if not in_sight_frustum(planes, record["at"]):
+			continue
+		var b: int = int(record["b"])
+		var look: String = record["look"]
 		var n: int = counts[b][look]
 		if n >= MAX_DRAW:
 			continue
-		var node: MultiMeshInstance3D = draws[b][look]
-		var mm: MultiMesh = node.multimesh
-		mm.set_instance_transform(n, Transform3D(basis, pos))
-		# Its walk goes by its own body's stride (dead_body.gd reads the rounds of the folder in use).
-		DeadBody.rounds = body_rounds[b]
-		var custom := DeadBody.custom(z, down, frozen_anim, shade, baked)
+		if seen_now and appearance_ready:
+			if not first and prev > 0.0 and not last.is_empty() and (last["b"] != b or last["shell"] != record["shell"] or last["garment"] != record["garment"] or last["garment_color"] != record["garment_color"]):
+				appearance_swaps += 1
+			seen_draw_next[id] = record
+		var mm: MultiMesh = draws[b][look].multimesh
+		var draw_transform: Transform3D = record["transform"]
+		var custom: Color = record["custom"]   # Color is a value: the cached shade stays unpacked.
+		custom.a = pack_shade(custom.a, shown)
+		mm.set_instance_transform(n, draw_transform)
 		mm.set_instance_custom_data(n, custom)
-		mm.set_instance_color(n, DeadCast.tear_of(z, bool(node.get_meta(&"hands_marked", false))))
+		mm.set_instance_color(n, record["color"])
 		counts[b][look] = n + 1
-		# What it has on over the body moves with it, the same place and frame;
-		# by what it has on now (worn_of), so one stripped of its coat is without.
-		# A plain long coat in a shade by its number; a risen one of ours (named) in the colour it wore.
-		var over := DeadCast.garment_of(drawn_worn(z), TINTS[look], int(z["id"]) if String(z.get("name", "")) == "" else -1) if baked else {}
-		var garment: MultiMeshInstance3D = _garment_of(b, over["shell"]) if not over.is_empty() else null
+		drawn_at[id] = draw_transform.origin
+		var garment: MultiMeshInstance3D = record["garment"]
 		var worn_ids: Array = garments_drawn.get_or_add(garment, []) if garment != null else []
 		if garment != null and worn_ids.size() < garment.multimesh.instance_count:
 			var w: int = worn_ids.size()
-			garment.multimesh.set_instance_transform(w, Transform3D(basis, pos))
+			garment.multimesh.set_instance_transform(w, draw_transform)
 			garment.multimesh.set_instance_custom_data(w, custom)
-			garment.multimesh.set_instance_color(w, over["colour"])
-			worn_ids.append(int(z["id"]))
+			garment.multimesh.set_instance_color(w, record["garment_color"])
+			worn_ids.append(id)
+		if shown >= 0.5:
+			if record.has("marker") and marks < 32:
+				markers.multimesh.set_instance_transform(marks, record["marker"])
+				marks += 1
+			if embedded_draw != null and record.has("axe") and axes < EMBED_MAX:
+				embedded_draw.multimesh.set_instance_transform(axes, record["axe"])
+				axes += 1
+	_shown = shown_next
+	_last_seen_draw = seen_draw_next
+	_held_frames = held_next
+	_rendered_once = true
 	DeadBody.rounds = body_rounds[0]
 	if embedded_draw != null:
 		embedded_draw.multimesh.visible_instance_count = axes
