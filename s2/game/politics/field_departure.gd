@@ -208,6 +208,8 @@ static func build(g: Dictionary, t: Dictionary, opts: Dictionary) -> Dictionary:
 		"arriveMin": TrainStop.arrival_min(String(g["seed"]), seg),
 		"roster": roster, "workCrew": work, "promises": promises_of(g, t), "domestic": g.get("dom") != null,
 		"train": ({"food": g["food"], "hungerSegs": int(g.get("hunger", 0))} as Dictionary).merged(KitPick.train_kit(g)),
+		# Whether the run turned supplies on (decision 490); a contract without it is dressed as always.
+		"supplies": bool(g.get("supOn", false)),
 	}
 	# The decks' places (decision 474 S1), when a field stop has left them in the train's state.
 	if g.get("lootDeck") is Dictionary:
