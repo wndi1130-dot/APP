@@ -158,7 +158,7 @@ func test_the_ration_cut_demand_is_drawn() -> void:
 	assert_not_null(c.find_child("Why", true, false))
 
 
-func test_late_is_the_last_row_with_the_same_key_and_warning_rule() -> void:
+func test_one_turn_left_can_still_be_deferred_without_red() -> void:
 	if _data.is_empty(): return
 	var s: Array = _case("late/favor/front/1/base")
 	var c := _card(s[0])
@@ -174,7 +174,8 @@ func test_late_is_the_last_row_with_the_same_key_and_warning_rule() -> void:
 	var last := c.body.get_child(c.body.get_child_count() - 1) as PanelContainer
 	assert_eq(last.name, "Say_3")
 	var border := last.get_theme_stylebox("panel") as StyleBoxFlat
-	assert_eq(border.border_color, TurnCard.RED)
+	assert_eq(border.border_color, TurnCard.Paper.TRACK)
+	assert_eq(line.modulate, TurnCard.Paper.INK2)
 	var got: Array = []
 	c.chose.connect(func(next: Dictionary) -> void: got.append(next))
 	_key(c, 3).pressed.emit()
@@ -183,13 +184,24 @@ func test_late_is_the_last_row_with_the_same_key_and_warning_rule() -> void:
 	assert_eq(got[0]["lateCards"][0]["late"], 2)
 
 
-func test_late_warning_only_when_one_turn_is_left() -> void:
+func test_only_zero_turns_left_warns_that_deferring_picks_the_worst() -> void:
 	if _data.is_empty(): return
-	for n: int in [0, 2]:
+	for n: int in [0, 1, 2]:
 		var c := _card(_case("late/favor/front/%d/base" % n)[0])
-		var last := c.body.get_child(c.body.get_child_count() - 1) as PanelContainer
-		assert_ne((last.get_theme_stylebox("panel") as StyleBoxFlat).border_color, TurnCard.RED)
-		assert_eq(c.find_child("Late", true, false) != null, n > 0)
+		await _settled(c)
+		var m: Dictionary = TurnCard.model(c.g, c.t)
+		var urgent: bool = int(m["lateLeft"]) == 0
+		for ch: Dictionary in m["choices"]:
+			assert_eq(bool(ch["lateUrgent"]), urgent)
+			var row := c.find_child("Say_%d" % int(ch["n"]), true, false) as PanelContainer
+			assert_eq((row.get_theme_stylebox("panel") as StyleBoxFlat).border_color, TurnCard.RED if urgent else TurnCard.Paper.TRACK)
+		var line := c.find_child("Late", true, false) as Label
+		assert_eq(line != null, n > 0)
+		var text: String = "" if n == 0 else ("미룬 지 2차례 · 또 미루면 가장 나쁜 쪽으로" if urgent else "미룬 지 1차례 · 남은 1차례")
+		assert_eq(m["lateLine"], text)
+		if line != null:
+			assert_eq(line.text.replace("\u2060", ""), text)
+			assert_eq(line.modulate, TurnCard.RED if urgent else TurnCard.Paper.INK2)
 
 
 func test_a_kind_not_drawn_hands_back_the_rule_error() -> void:
@@ -209,10 +221,11 @@ func test_a_kind_not_drawn_hands_back_the_rule_error() -> void:
 
 ## Each kind's case with the most words: the ways stay on the sheet and the
 ## scene is all there to read (in print when pen would not fit).
-func test_every_kind_longest_card_stays_on_the_sheet() -> void:
+func test_every_existing_kind_longest_card_stays_on_the_sheet() -> void:
 	if _data.is_empty(): return
 	var longest: Dictionary = {}
 	for row: Dictionary in _data["cases"]:
+		if String(row["name"]).begins_with("late/"): continue
 		var v: Dictionary = row["view"]
 		var words: int = String(v["body"]).length() + String(v["title"]).length()
 		for ch: Dictionary in v["choices"]:
@@ -230,20 +243,110 @@ func test_every_kind_longest_card_stays_on_the_sheet() -> void:
 			parts.append("%s %.0f" % [p.name, p.get_combined_minimum_size().y / UiFonts.K])
 		var at: String = "%s (%s)" % [kind, longest[kind][0]]
 		var overflow := c.find_child("Overflow", true, false) as ScrollContainer
-		if overflow == null:
-			assert_lte(need, inner.size.y + 0.5, "%s: %.0f of %.0f | %s" % [at, need, inner.size.y, ", ".join(parts)])
-		else:
-			assert_true(str(longest[kind][0]).begins_with("late/"), at + ": existing cards keep their fit")
-			assert_lte(overflow.size.y, inner.size.y + 0.5, at + ": same paper height")
-			overflow.scroll_vertical = int(ceil(c.body.size.y))
-			await get_tree().process_frame
-			var last := c.body.get_child(c.body.get_child_count() - 1) as Control
-			assert_gt(overflow.scroll_vertical, 0, at + ": the whole paper scrolls")
-			assert_lte(c.body.position.y + last.position.y + last.size.y, overflow.size.y + 1.0, at + ": the final way is reachable")
+		assert_null(overflow, at + ": existing cards keep their fit")
+		assert_lte(need, inner.size.y + 0.5, "%s: %.0f of %.0f | %s" % [at, need, inner.size.y, ", ".join(parts)])
 		var said := c.find_child("Said", true, false) as Control
 		var scene := c.find_child("Scene", true, false) as Control
 		assert_lte(scene.get_combined_minimum_size().y, said.size.y + 0.5, "%s: the scene is all there (%.0f in %.0f)" % [at, scene.get_combined_minimum_size().y, said.size.y])
 		assert_lte(c.sheet.size.x / UiFonts.K, TurnCard.WIDE + 0.5, at + ": no wider than WIDE")
+
+
+## Every late fixture row at both game widths, including repeated names and
+## consecutive cards on one sheet: ways fit or advertise the remaining scroll.
+func test_all_late_cases_keep_choices_visible_or_show_a_reachable_scroll_end() -> void:
+	if _data.is_empty(): return
+	for width: int in [1560, 1280]:
+		var viewport := SubViewport.new()
+		viewport.size = Vector2i(width, 720)
+		add_child_autofree(viewport)
+		var c := TurnCard.new()
+		# The same width limit as slice_flow._show_paper, including the car pane.
+		c.fit_w = float(width) / UiFonts.K - 330.0 + 44.0 - 6.0 - TurnCard.SHEET_AT.x
+		viewport.add_child(c)
+		var count := 0
+		for row: Dictionary in _data["cases"]:
+			if not String(row["name"]).begins_with("late/"): continue
+			# Some fixture names repeat: measure each row, not _case's first match.
+			var g: Dictionary = _whole.duplicate(true)
+			g.merge((row["state"] as Dictionary).duplicate(true), true)
+			g["cards"] = [row["card"].duplicate(true)]
+			c.show_card(g, _data["tables"])
+			await _settled(c)
+			await get_tree().process_frame
+			var at := "%d/%s/%d" % [width, row["name"], count]
+			assert_lte(c.body.size.x, c.sheet.inner.size.x + 0.5, at + ": fixed rows also fit the paper width")
+			var overflow := c.find_child("Overflow", true, false) as ScrollContainer
+			var more := c.find_child("PaperMore", true, false) as Control
+			if overflow == null:
+				assert_lte(c.body.get_combined_minimum_size().y, c.sheet.inner.size.y + 0.5, at + ": fixed rows fit")
+				assert_null(more, at + ": no whole-paper scroll cue")
+				for ch: Control in c.body.get_children():
+					assert_lte(ch.position.y + ch.size.y, c.sheet.inner.size.y + 1.0, at + ": " + ch.name + " stays on paper")
+			else:
+				assert_eq(str(c.get_meta("fit_stage")), "2c", at + ": only the last resort scrolls the paper")
+				assert_gt(_fixed_rows_height(c), c.sheet.inner.size.y + 0.5, at + ": even a zero-line scene cannot fit the fixed rows")
+				assert_not_null(more, at + ": the extra choices are signposted")
+				if more != null: assert_true(more.visible, at + ": paper cue starts visible")
+				await _check_scroll_end(c, overflow, more, c.body, at)
+			var said := c.find_child("Said", true, false) as ScrollContainer
+			var scene := c.find_child("Scene", true, false) as Control
+			var scene_more := c.find_child("SceneMore", true, false) as Control
+			if overflow == null and scene.size.y > said.size.y + 0.5:
+				assert_not_null(scene_more, at + ": clipped scene is signposted")
+				assert_gt(said.size.y, 0.0, at + ": scene can be read")
+				if scene_more != null: assert_true(scene_more.visible, at + ": scene cue starts visible")
+				await _check_scroll_end(c, said, scene_more, scene, at)
+			else:
+				assert_true(scene_more == null or not scene_more.visible, at + ": no unnecessary scene cue")
+			var m: Dictionary = TurnCard.model(g, _data["tables"])
+			var urgent: bool = int(m["late"]) > 0 and int(m["lateLeft"]) == 0
+			for ch: Dictionary in m["choices"]:
+				var way := c.find_child("Say_%d" % int(ch["n"]), true, false) as PanelContainer
+				assert_eq(bool(ch["lateUrgent"]), urgent, at + ": warning order")
+				assert_eq((way.get_theme_stylebox("panel") as StyleBoxFlat).border_color, TurnCard.RED if urgent else TurnCard.Paper.TRACK, at + ": border")
+				assert_gte(way.size.y, TurnCard.SAY_H * UiFonts.K, at + ": minimum tap height preserved")
+				if ch["id"] == "later":
+					var quote := way.find_child("Quote", true, false) as Label
+					var joiner: String = " · " if str(c.get_meta("fit_stage")) in ["2b", "2c"] else "\n"
+					assert_eq(quote.text.replace("\u2060", ""), String(ch["label"]) + joiner + "「%s」" % String(ch["say"]), at + ": only the forced line break changes")
+			var late := c.find_child("Late", true, false) as Label
+			if late != null:
+				var expected: String = ("미룬 지 %d차례 · 또 미루면 가장 나쁜 쪽으로" % int(m["late"])) if urgent else ("미룬 지 %d차례 · 남은 %d차례" % [int(m["late"]), int(m["lateLeft"])])
+				assert_eq(late.text.replace("\u2060", ""), expected, at + ": late line")
+				assert_eq(late.modulate, TurnCard.RED if urgent else TurnCard.Paper.INK2, at + ": late ink")
+				if late.get_parent().name == "Who":
+					assert_lte(late.position.x + late.size.x, (late.get_parent() as Control).size.x + 0.5, at + ": late line fits beside name")
+			count += 1
+		assert_eq(count, 142, "%d: every late fixture row, including duplicate names" % width)
+		c.free()
+
+
+## Measure title/name/late/portrait and ways without the scene; independent
+## of the full-scrolling Said minimum, which includes its complete text.
+func _fixed_rows_height(c: Control) -> float:
+	var top := c.body.get_child(0) as HBoxContainer
+	var words := top.get_child(1) as VBoxContainer
+	var text_height := 0.0
+	for part: Control in words.get_children():
+		if part.name != "Said": text_height += part.get_combined_minimum_size().y
+	var needed: float = maxf(text_height, (top.get_child(0) as Control).get_combined_minimum_size().y)
+	for i: int in range(1, c.body.get_child_count()):
+		needed += (c.body.get_child(i) as Control).get_combined_minimum_size().y
+	return needed
+
+
+func _check_scroll_end(c: Control, scroll: ScrollContainer, more: Control, content: Control, at: String) -> void:
+	var last := c.body.get_child(c.body.get_child_count() - 1) as Control
+	var before := last.position
+	scroll.scroll_vertical = int(ceil(content.size.y))
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_gt(scroll.scroll_vertical, 0, at + ": scroll reaches more content")
+	assert_lte(content.position.y + content.size.y, scroll.size.y + 1.0, at + ": final line reachable")
+	if more != null:
+		assert_false(more.visible, at + ": cue disappears at the bottom")
+		assert_eq(more.mouse_filter, Control.MOUSE_FILTER_IGNORE, at + ": cue does not intercept taps")
+	if scroll.name == "Said": assert_eq(last.position, before, at + ": scrolling the scene leaves choices still")
 
 
 ## A short card keeps the mockup's sheet and its pen; a long one is cut wider,
@@ -358,3 +461,4 @@ func _settled(c: Control) -> void:
 		await get_tree().process_frame
 		if not c.is_processing():
 			return
+	assert_false(c.is_processing(), "card layout settles within 40 frames")
