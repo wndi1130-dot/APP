@@ -29,6 +29,9 @@ const NOT_START := ["field_save", "field_save_path", "field_resume", "departure"
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
+## Tests only: cap the next write's UTF-8 bytes; -1 is off, and write() resets it on entry.
+static var _test_write_limit_bytes: int = -1
+
 ## Only simulation state, never meshes, services or input widgets.
 const PERSON_FIELDS: Array[String] = [
 	"team", "role", "display_name", "skills", "medical", "hunger_level", "sore_level", "smell", "traits", "lamp", "lamp_on",
@@ -718,17 +721,45 @@ static func _put_receipt(r, state: Dictionary) -> void:
 
 ## Writes over the slot: the new file goes down whole first, the last one is kept as .bak.
 static func write(d: Dictionary, path: String = PATH) -> bool:
+	var write_limit := _test_write_limit_bytes
+	_test_write_limit_bytes = -1
+	var text := to_json(d)
+	var bytes := text.to_utf8_buffer()
 	var tmp := path + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
 		return false
-	f.store_string(to_json(d))
+	if write_limit >= 0:
+		f.store_buffer(bytes.slice(0, write_limit))
+	else:
+		f.store_string(text)
+	f.flush()
+	var error: Error = f.get_error()
 	f.close()
+	if error != OK:
+		DirAccess.remove_absolute(tmp)
+		return false
+	var written := FileAccess.get_file_as_bytes(tmp)
+	if written.size() != bytes.size():
+		DirAccess.remove_absolute(tmp)
+		return false
+	var written_text := written.get_string_from_utf8()
+	if written_text != text or from_json(written_text).is_empty():
+		DirAccess.remove_absolute(tmp)
+		return false
+	var backup := path + ".bak"
 	if FileAccess.file_exists(path):
-		if FileAccess.file_exists(path + ".bak"):
-			DirAccess.remove_absolute(path + ".bak")
-		DirAccess.rename_absolute(path, path + ".bak")
-	return DirAccess.rename_absolute(tmp, path) == OK
+		var previous := from_json(FileAccess.get_file_as_string(path))
+		var moved := backup if not previous.is_empty() else path + ".broken"
+		if FileAccess.file_exists(moved) and DirAccess.remove_absolute(moved) != OK:
+			return false
+		if DirAccess.rename_absolute(path, moved) != OK:
+			return false
+	if DirAccess.rename_absolute(tmp, path) == OK:
+		return true
+	if not FileAccess.file_exists(path) and FileAccess.file_exists(backup):
+		DirAccess.rename_absolute(backup, path)
+	return false
 
 
 ## The last whole save: the slot, or the one before it when the slot is broken; {} when none.
@@ -742,7 +773,7 @@ static func read(path: String = PATH) -> Dictionary:
 
 
 static func clear(path: String = PATH) -> void:
-	for at in [path, path + ".tmp", path + ".bak"]:
+	for at in [path, path + ".tmp", path + ".bak", path + ".broken"]:
 		if FileAccess.file_exists(at):
 			DirAccess.remove_absolute(at)
 
