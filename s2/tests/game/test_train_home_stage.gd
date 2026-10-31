@@ -107,6 +107,7 @@ func test_a_stage_change_redresses_only_that_car_in_both_directions() -> void:
 	var s := _scene({"guard": 0})
 	var scene_id: int = s.get_instance_id()
 	var rags: int = _assert_stage(s, "guard", 0)
+	# The guard car has no rows that keep traces; the traces carrying over is tested on a tail car.
 	var traced: Array = s.life.rooms["guard"].traces.keys()
 	if not traced.is_empty():
 		s.life.rooms["guard"].traces[traced[0]]["scorched"] = true
@@ -126,9 +127,12 @@ func test_a_stage_change_redresses_only_that_car_in_both_directions() -> void:
 		for part: String in ["Interior", "Stove", "StovePipeLow", "StovePipeTop", "Lamp0", "LampPool"]:
 			# A second node of the same name would be renamed @name@n by add_child.
 			var found: int = node.get_children().filter(func(n: Node) -> bool: return String(n.name) == part or String(n.name).begins_with("@%s@" % part)).size()
-			assert_true(found <= 1, "guard: one %s, not %d" % [part, found])
-		assert_eq(node.get_children().filter(func(n: Node) -> bool: return n is OmniLight3D).size(),
-			2 if s.car("guard").has("stove_light") else 1, "guard: the lamp and the stove's glow only")
+			# The guard car keeps a stove at every stage (a tin stove in rags, a drum stove after),
+			# so each part is there exactly once: none missing, none left twice.
+			assert_eq(found, 1, "guard: one %s, not %d" % [part, found])
+		assert_true(s.car("guard").has("stove_light"), "guard: its stove glows")
+		assert_eq(node.get_children().filter(func(n: Node) -> bool: return n is OmniLight3D).size(), 2,
+			"guard: the lamp and the stove's glow only")
 		if not traced.is_empty():
 			assert_true(bool(s.life.rooms["guard"].traces[traced[0]]["scorched"]), "guard: the room's traces carry over")
 		var triangles: int = _assert_stage(s, "guard", stage)
@@ -144,6 +148,28 @@ func test_a_stage_change_redresses_only_that_car_in_both_directions() -> void:
 
 ## Furnishing raises a car's stage while it is being decorated (결정 517); leaving shows the new
 ## stage at once, in that car only, without waiting for the next stop.
+## What happened in a car stays when its stage changes: a tail car's sacks, overturned and scorched,
+## are still so (and still shown tilted) after the car is dressed again, up and down.
+func test_a_restaged_car_keeps_its_room_traces() -> void:
+	var s := _scene({"tail1": 0})
+	var traces: Dictionary = s.life.rooms["tail1"].traces
+	assert_true(traces.has("sacks"), "tail1: its sacks keep traces")
+	if not traces.has("sacks"):
+		return
+	traces["sacks"]["overturned"] = true
+	traces["sacks"]["scorched"] = true
+	for stage: int in [3, 0]:
+		var room_before: int = (s.life.rooms["tail1"].root as Node3D).get_instance_id()
+		s.rules["train"]["home"]["tail1"] = stage
+		s.apply_rules()
+		var room = s.life.rooms["tail1"]
+		assert_ne((room.root as Node3D).get_instance_id(), room_before, "tail1 stage %d: dressed again" % stage)
+		assert_true(bool(room.traces["sacks"]["overturned"]), "tail1 stage %d: the sacks stay overturned" % stage)
+		assert_true(bool(room.traces["sacks"]["scorched"]), "tail1 stage %d: the sacks stay scorched" % stage)
+		assert_almost_eq((room.props["sacks"] as Node3D).rotation.z, float(Catalog.tuning("trace_tilt")), 0.0001,
+			"tail1 stage %d: the sacks are shown tilted" % stage)
+
+
 func test_furnishing_a_car_shows_its_new_stage_when_decorating_ends() -> void:
 	var f = SliceFlow.new()
 	f.opts = {"skip_field": true, "cinema": false}
