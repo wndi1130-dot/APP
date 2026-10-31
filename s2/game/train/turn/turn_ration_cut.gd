@@ -22,6 +22,8 @@ static func apply(g: Dictionary, t: Dictionary, pick: String) -> void:
 ## Repealing the law: take back what the answer gave and the demand not yet answered.
 static func revert(g: Dictionary) -> void:
 	g["cards"] = (g["cards"] as Array).filter(func(row: Dictionary) -> bool: return row["kind"] != "ration_cut")
+	if g.get("lateOn", false) and g.has("lateCards"):
+		g["lateCards"] = (g["lateCards"] as Array).filter(func(row: Dictionary) -> bool: return row["kind"] != "ration_cut")
 	var rc: Variant = g.get("rationCut")
 	if not rc is Dictionary:
 		return

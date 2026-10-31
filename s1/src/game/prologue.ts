@@ -29,9 +29,9 @@ export const PROLOGUE = Object.freeze({
  * 사람부터 부르면 다섯 다 온다: 약속을 지킬 길은 열차장이 고르는 것이고, 주사위는 석탄 욕심에만 건다.
  * (처음엔 3~5명으로 뒀다가 약속한 판의 2/3가 어긴 판이 되어 4000판 완주가 43%→16%로 무너졌다.) */
 const SEARCH = {
-  pro_people: { label: '운반조부터 부른다', say: '자루는 버려라. 사람부터 데려온다!', people: [5, 5], coal: [0, 2] },
-  pro_coal: { label: '자루도 챙긴다', say: '부르면서 자루를 끌어라. 석탄 없이는 못 간다!', people: [2, 5], coal: [3, 8] },
-  pro_leave: { label: '바로 돌아선다', say: '시간이 없다. 지금 떠난다.', people: [0, 0], coal: [0, 0] },
+  pro_people: { label: '운반조부터 부른다', log: '저탄장에서 자루를 버리고 사람부터 불렀다.', say: '자루는 버려라. 사람부터 데려온다!', people: [5, 5], coal: [0, 2] },
+  pro_coal: { label: '자루도 챙긴다', log: '저탄장에서 사람을 부르며 석탄 자루도 끌었다.', say: '부르면서 자루를 끌어라. 석탄 없이는 못 간다!', people: [2, 5], coal: [3, 8] },
+  pro_leave: { label: '바로 돌아선다', log: '망자가 닿기 전에 저탄장에서 바로 돌아섰다.', say: '시간이 없다. 지금 떠난다.', people: [0, 0], coal: [0, 0] },
 } as const;
 type SearchId = keyof typeof SEARCH;
 
@@ -71,8 +71,8 @@ function prologueView(g: Game, card: Card): CardView | null {
         title: '저탄장에 남은 사람들', speaker: speaker(g), focus: 'tail', required: true,
         body: `${who(g)} 열차장 앞에 섰다. "저탄장에 우리 사람 다섯이 있다. 그들을 데려오면 첫 회기에서 당신 편에 서겠다." 출발 전까지다.`,
         choices: [
-          { label: '약속한다', say: '다섯 다 데려온다. 한 사람도 두고 가지 않는다.', effs: [], special: 'pro_promise', extra: ['다 데려오면 약속을 지킨 것, 하나라도 남기면 어긴 것'] },
-          { label: '약속하지 않는다', say: '약속은 못 한다. 할 수 있는 만큼만 한다.', effs: [], special: 'pro_refuse', extra: ['어길 약속이 없다. 첫 거래 요구가 커진다'] },
+          { label: '약속한다', log: '저탄장에 남은 다섯을 데려오겠다고 약속했다.', say: '다섯 다 데려온다. 한 사람도 두고 가지 않는다.', effs: [], special: 'pro_promise', extra: ['다 데려오면 약속을 지킨 것, 하나라도 남기면 어긴 것'] },
+          { label: '약속하지 않는다', log: '저탄장에 남은 다섯을 데려오겠다는 약속은 하지 않았다.', say: '약속은 못 한다. 할 수 있는 만큼만 한다.', effs: [], special: 'pro_refuse', extra: ['어길 약속이 없다. 첫 거래 요구가 커진다'] },
         ],
       };
     case 'pro_search': {
@@ -81,7 +81,7 @@ function prologueView(g: Game, card: Card): CardView | null {
         title: '저탄장 수색', focus: 'tail', required: true,
         body: `열차장과 동료 둘이 저탄장으로 내려간다. 망자가 얼음 한가운데를 건너오고 있다. 첫 무리가 닿기까지 길지 않다.${promised ? ' 다섯을 데려오기로 약속했다.' : ''}`,
         choices: (Object.keys(SEARCH) as SearchId[]).map((id): Choice => ({
-          label: SEARCH[id].label, say: SEARCH[id].say, effs: [], special: id,
+          label: SEARCH[id].label, log: SEARCH[id].log, say: SEARCH[id].say, effs: [], special: id,
           extra: id === 'pro_leave' ? ['다섯 모두 승강장에 남는다'] : [`데려올 사람 ${range(SEARCH[id].people, '명')}`, `석탄 +${range(SEARCH[id].coal, '')}`],
         })),
       };
@@ -94,8 +94,8 @@ function prologueView(g: Game, card: Card): CardView | null {
           ? `열차가 호숫가를 벗어났다. ${who(g)} 말한다. "약속을 지켰다. 그러니 하나만 청한다. 꼬리칸 난로에 석탄을 한 삽 더."`
           : `열차가 호숫가를 벗어났다. ${who(g)} 말한다. "이제 값을 치러라. 꼬리칸 난로에 한 삽 더, 배급도 한 국자 더."`,
         choices: [
-          { label: '들어준다', say: kept ? '한 삽 더 넣어라.' : '난로도 배급도 한 칸씩 올린다.', effs: [], special: 'pro_deal_yes', extra: [kept ? '꼬리칸 난방 레버 +1' : '꼬리칸 난방 레버 +1 · 배급 레버 +1'] },
-          { label: '거절한다', say: '지금은 못 한다. 석탄이 모자란다.', effs: [{ t: 'rel', c: 'tail', v: PROLOGUE.dealRefuseRel }], special: 'pro_deal_no' },
+          { label: '들어준다', log: kept ? '꼬리칸 난로에 석탄을 한 삽 더 넣어 줬다.' : '꼬리칸 난로에 석탄 한 삽과 배급 한 국자를 더 줬다.', say: kept ? '한 삽 더 넣어라.' : '난로도 배급도 한 칸씩 올린다.', effs: [], special: 'pro_deal_yes', extra: [kept ? '꼬리칸 난방 레버 +1' : '꼬리칸 난방 레버 +1 · 배급 레버 +1'] },
+          { label: '거절한다', log: kept ? '꼬리칸 난로에 석탄 한 삽을 더 달라는 청을 거절했다.' : '꼬리칸이 값으로 청한 석탄과 배급을 거절했다.', say: '지금은 못 한다. 석탄이 모자란다.', effs: [{ t: 'rel', c: 'tail', v: PROLOGUE.dealRefuseRel }], special: 'pro_deal_no' },
         ],
       };
     }
@@ -107,8 +107,8 @@ function prologueView(g: Game, card: Card): CardView | null {
         body: `역 기둥에 분필로 쓴 이름들이 있다. ${names.join(', ')}. 그 밑에 화살표와 「선로 따라」. 재 위의 불 땐 자리가 아직 따뜻하다. ${who(g)} 말한다. "저탄장에 두고 온 사람들이다. 길을 질러 여기까지 왔다."`,
         // 석탄이 모자라면 기다릴 불이 없다(다른 사람 카드처럼 withAfford가 막는다)
         choices: withAfford(g, [
-          { id: 'trail_wait', label: '기다렸다 태운다', say: '불을 지펴 두고 부른다. 다 같이 간다.', effs: [{ t: 'coal', v: -TRAIL.coal }], special: 'pro_trail_wait', extra: [`${names.length}명이 다시 탄다`, `꼬리칸 관계 +${TRAIL.rel}`] },
-          { id: 'trail_note', label: '쪽지를 남긴다', say: '갈 곳을 적어 둔다. 지금은 기다릴 수 없다.', effs: [], special: 'pro_trail_note', extra: ['걸어서 뒤를 따른다'] },
+          { id: 'trail_wait', label: '기다렸다 태운다', log: '저탄장에 두고 온 사람들을 기다리려 불을 지폈다.', say: '불을 지펴 두고 부른다. 다 같이 간다.', effs: [{ t: 'coal', v: -TRAIL.coal }], special: 'pro_trail_wait', extra: [`${names.length}명이 다시 탄다`, `꼬리칸 관계 +${TRAIL.rel}`] },
+          { id: 'trail_note', label: '쪽지를 남긴다', log: '분필 이름들 밑에 갈 곳을 적은 쪽지를 남겼다.', say: '갈 곳을 적어 둔다. 지금은 기다릴 수 없다.', effs: [], special: 'pro_trail_note', extra: ['걸어서 뒤를 따른다'] },
         ]),
       };
     }

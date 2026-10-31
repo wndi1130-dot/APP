@@ -45,8 +45,9 @@ func before_all() -> void:
 			details.append({"seed": run["seed"], "step": row["step"], "phase": input["phase"], "action": action["kind"], "matched": differences.is_empty(), "reason": reason, "firstDifference": differences[0] if not differences.is_empty() else ""})
 			_count += 1
 	var report: Dictionary = {"checked": _count, "matched": _matched, "unsupported": _unsupported, "firstMismatch": first, "differences": _bad, "portedDifferences": _ported_bad, "inputDifferences": _input_bad, "steps": details}
-	var file: FileAccess = FileAccess.open("res://.godot/turn_port_audit.json", FileAccess.WRITE)
-	if file != null: file.store_string(JSON.stringify(report, "\t") + "\n")
+	if OS.get_environment("GUT_NO_REPORT_FILES") != "1":
+		var file: FileAccess = FileAccess.open("res://.godot/turn_port_audit.json", FileAccess.WRITE)
+		if file != null: file.store_string(JSON.stringify(report, "\t") + "\n")
 	print("TURN_ADVANCE checked=%d matched=%d unsupported=%d ported_differences=%d input_differences=%d" % [_count, _matched, _unsupported, _ported_bad.size(), _input_bad.size()])
 
 

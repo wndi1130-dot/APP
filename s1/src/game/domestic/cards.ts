@@ -80,14 +80,14 @@ export function domView(g: Game, card: Card): CardView | null {
       const def = TECHS[id];
       const ch = restoreCheck(g, id);
       const half = d.frags[def.branch] < ch.fragsNeed;
-      const later = { label: '나중에', say: '아직은 아니다. 부품을 아껴라.', effs: [], special: 'dom:none' };
+      const later = { label: '나중에', say: '아직은 아니다. 부품을 아껴라.', log: `${def.name} 복원은 나중으로 미뤘다.`, effs: [], special: 'dom:none' };
       const parts = (n: number) => [...(n ? [`부품 −${n}`] : []), ...(ch.wood ? [`목재 −${ch.wood}`] : []), ...(ch.scrap ? [`고철 −${ch.scrap}`] : []), ...(ch.core ? [`코어 −${ch.core}`] : [])];
       return {
         title: '설계도가 맞았다', speaker: sp(chief(g, 'craft')), required: false,
         body: `${BRANCH_NAME[def.branch]}의 ${def.name}. ${half ? '조각이 반만 맞는다. 금 간 채로라도 돌릴 수는 있다.' : '조각이 다 맞았다.'} ${def.effect}.${useText(g, id)}`,
         choices: [
-          { label: '완성판 복원', say: '옛 세상의 손이 아직 살아 있다. 당장 맞춰라!', effs: techVariants(g, id) ? [] : sidesEffs(g, id), special: 'dom:restore:full', disabled: ch.full, extra: parts(ch.parts) },
-          ...(ch.defectNeed < ch.fragsNeed ? [{ label: '결함판으로', say: '반쪽이라도 오늘 돌린다!', effs: techVariants(g, id) ? [] : sidesEffs(g, id), special: 'dom:restore:defect', disabled: ch.defect === '완성판으로 된다' ? '조각이 다 있다' : ch.defect, extra: [...parts(ch.parts), '효과 절반, 고장 +3%p'] }] : []),
+          { label: '완성판 복원', say: '옛 세상의 손이 아직 살아 있다. 당장 맞춰라!', log: `${def.name}의 완성판 복원을 골랐다.`, effs: techVariants(g, id) ? [] : sidesEffs(g, id), special: 'dom:restore:full', disabled: ch.full, extra: parts(ch.parts) },
+          ...(ch.defectNeed < ch.fragsNeed ? [{ label: '결함판으로', say: '반쪽이라도 오늘 돌린다!', log: `${def.name}의 결함판 복원을 골랐다.`, effs: techVariants(g, id) ? [] : sidesEffs(g, id), special: 'dom:restore:defect', disabled: ch.defect === '완성판으로 된다' ? '조각이 다 있다' : ch.defect, extra: [...parts(ch.parts), '효과 절반, 고장 +3%p'] }] : []),
           later,
         ],
       };
@@ -103,10 +103,10 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '두 갈래', speaker: sp(chief(g, def.branch)), required: true,
         body: `${def.name}은(는) 두 갈래로만 맞출 수 있다. 한 번 고르면 이 길에선 못 바꾼다.`,
         choices: (['a', 'b'] as Variant[]).map(v => ({
-          label: vs[v].label, say: vs[v].say, effs: sidesEffs(g, id, v), special: `dom:variant:${v}`,
+          label: vs[v].label, say: vs[v].say, log: `${def.name}은(는) '${vs[v].name}' 갈래로 정했다.`, effs: sidesEffs(g, id, v), special: `dom:variant:${v}`,
           disabled: why ?? (variantParts(id, v) && d.parts < ch.parts + variantParts(id, v) ? '부품이 모자라다' : undefined),
           extra: [vs[v].effect, ...(techUseLine(g, id, v) ? [techUseLine(g, id, v)!] : []), ...(id === 'e3' ? ['다음 회기 추인 표결 뒤에 관계가 움직인다'] : [])],
-        } as Choice)).concat(why ? [{ label: '나중에', say: '공방이 비면 다시 보자.', effs: [], special: 'dom:none' }] : []),
+        } as Choice)).concat(why ? [{ label: '나중에', say: '공방이 비면 다시 보자.', log: `${def.name}의 갈래 선택을 미뤘다.`, effs: [], special: 'dom:none' }] : []),
       };
     }
     case 'dom:short': {
@@ -117,9 +117,9 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '부품이 모자란다', speaker: sp(chief(g, 'craft')), required: true, key: 'dom:short',
         body: isBreak ? `${BREAK_LINES[n]}. 고칠 부품이 없다. 부품 ${Math.floor(d.parts)}개.` : `유지비를 못 낸 기계가 반쯤만 돈다(${(card.text ?? '').split(',').map(x => TECHS[x as TechId]?.name ?? x).join(', ')}).`,
         choices: [
-          { label: '하나를 세운다', say: '그건 세워라. 그 부품으로 보일러부터 막는다!', effs: [], special: 'dom:short:stand', extra: ['기술 하나가 멈춘다'] },
-          { label: '그냥 달린다', say: '삐걱대도 달린다!', effs: [], special: 'dom:short:go', extra: isBreak ? [penalty] : ['반쯤만 돈다'] },
-          { label: '목표치 +3', say: '기계를 굶길 순 없다. 목표치를 올려라!', effs: [], special: 'dom:short:target', extra: ['부품 목표치 +3', ...(isBreak ? [penalty] : [])] },
+          { label: '하나를 세운다', say: '그건 세워라. 그 부품으로 보일러부터 막는다!', log: '부품을 돌리려 기술 하나를 세우기로 했다.', effs: [], special: 'dom:short:stand', extra: ['기술 하나가 멈춘다'] },
+          { label: '그냥 달린다', say: '삐걱대도 달린다!', log: '부품이 모자라도 그대로 달리기로 했다.', effs: [], special: 'dom:short:go', extra: isBreak ? [penalty] : ['반쯤만 돈다'] },
+          { label: '목표치 +3', say: '기계를 굶길 순 없다. 목표치를 올려라!', log: '부품 목표치를 높이기로 했다.', effs: [], special: 'dom:short:target', extra: ['부품 목표치 +3', ...(isBreak ? [penalty] : [])] },
         ],
       };
     }
@@ -135,10 +135,10 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '견습생 후보', speaker: sp(t && t !== 'manual' ? t : chief(g, f)), required: false,
         body: `${FIELD_NAME[f]}을(를) 배울 사람 ${fresh ? '넷' : '셋'}이 왔다. ${COMM_NAME[owner]} 아이, ${COMM_NAME[other]} 아이, 간부가 미는 아이${fresh ? `, 그리고 ${COMM_NAME[fresh]}에 늦게 탄 사람 하나` : ''}.${f === 'engine' ? ` 기관실 화부 노출 ${Math.round(g.comms.engine.base[3])}.` : ''}`,
         choices: [
-          { label: '길드에 맡긴다', say: '기술은 그 일을 해 온 손에 남긴다.', effs: [rel(owner, D.guildRel)], special: 'dom:pupil:guild', disabled: t ? undefined : '가르칠 사람이 없다' },
-          { label: '다른 칸에 나눈다', say: '기술은 한 칸의 것이 아니다. 다른 칸 아이에게도 가르쳐라!', effs: [rel(owner, D.distributeRel)], special: 'dom:pupil:other', disabled: !t ? '가르칠 사람이 없다' : blocked },
-          ...(fresh ? [{ label: '늦게 탄 사람에게', say: '새로 탄 손도 우리 손이다. 가르쳐라.', effs: fresh === owner ? [] : [rel(owner, D.distributeRel)], special: 'dom:pupil:new', disabled: t ? undefined : '가르칠 사람이 없다' }] : []),
-          { label: '아직 아니다', say: '지금은 손이 모자라다. 다음에 보자.', effs: [], special: 'dom:none' },
+          { label: '길드에 맡긴다', say: '기술은 그 일을 해 온 손에 남긴다.', log: `${FIELD_NAME[f]} 견습은 그 일을 해 온 칸에 맡겼다.`, effs: [rel(owner, D.guildRel)], special: 'dom:pupil:guild', disabled: t ? undefined : '가르칠 사람이 없다' },
+          { label: '다른 칸에 나눈다', say: '기술은 한 칸의 것이 아니다. 다른 칸 아이에게도 가르쳐라!', log: `${FIELD_NAME[f]} 견습 자리를 다른 칸에 줬다.`, effs: [rel(owner, D.distributeRel)], special: 'dom:pupil:other', disabled: !t ? '가르칠 사람이 없다' : blocked },
+          ...(fresh ? [{ label: '늦게 탄 사람에게', say: '새로 탄 손도 우리 손이다. 가르쳐라.', log: `${FIELD_NAME[f]} 견습을 늦게 탄 사람에게 맡겼다.`, effs: fresh === owner ? [] : [rel(owner, D.distributeRel)], special: 'dom:pupil:new', disabled: t ? undefined : '가르칠 사람이 없다' }] : []),
+          { label: '아직 아니다', say: '지금은 손이 모자라다. 다음에 보자.', log: `${FIELD_NAME[f]} 견습은 다음으로 미뤘다.`, effs: [], special: 'dom:none' },
         ],
       };
     }
@@ -149,8 +149,8 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '매뉴얼을 써 달라', speaker: sp(who), required: false,
         body: why ? `${who?.name ?? '그 사람'}이(가) 고개를 젓는다. ${why}.` : `${who?.name ?? '그 사람'}이(가) 종이 묶음을 본다. 3구간이 걸리고, 그동안 ${FIELD_NAME[f]} 기계가 덜 돈다.`,
         choices: [
-          { label: '써 달라', say: '당신이 죽어도 열차는 달려야 하오.', effs: [], special: 'dom:manual:write', disabled: why, extra: f === 'engine' ? [`다 쓰면 기관실 관계 ${D.engineManualRel}`] : [] },
-          { label: '그만둔다', say: '알겠다. 다음에 다시 묻겠다.', effs: [], special: 'dom:none' },
+          { label: '써 달라', say: '당신이 죽어도 열차는 달려야 하오.', log: `${who?.name ?? '그 사람'}에게 매뉴얼을 써 달라고 했다.`, effs: [], special: 'dom:manual:write', disabled: why, extra: f === 'engine' ? [`다 쓰면 기관실 관계 ${D.engineManualRel}`] : [] },
+          { label: '그만둔다', say: '알겠다. 다음에 다시 묻겠다.', log: `${FIELD_NAME[f]} 매뉴얼은 다음으로 미뤘다.`, effs: [], special: 'dom:none' },
         ],
       };
     }
@@ -163,9 +163,9 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '대체 불가', speaker: sp(p), required: true,
         body: `${p?.name ?? '그 사람'} 말고는 ${FIELD_NAME[p?.field ?? 'engine']}을(를) 아는 사람이 없다. 그가 ${ask}을(를) 원한다.`,
         choices: [
-          { label: '들어준다', say: '당신 없인 우리도 없소. 원하는 걸 주겠소.', effs: [...cost, rel(p?.comm ?? 'tail', D.demandRel), rel('tail', D.demandFair)], special: 'dom:demand:grant', extra: n === 1 ? ['식량 −0.5/구간(6구간)'] : n === 2 ? ['파견 못 감'] : [] },
-          { label: '거절한다', say: '특별한 사람은 없다. 똑같이 먹고 똑같이 잔다!', effs: [], special: 'dom:demand:refuse', extra: ['그 분야 기술 ×0.8(3구간)'] },
-          { label: '견습생을 붙인다', say: '그러니 더더욱 제자를 둬야겠소.', effs: [rel(p?.comm ?? 'tail', -3)], special: 'dom:demand:pupil', disabled: p && freeTeacher(g, p.field) ? undefined : '가르칠 틈이 없다' },
+          { label: '들어준다', log: n === 0 ? `${p?.name ?? '그 사람'}에게 더 좋은 침상을 주기로 했다.` : n === 1 ? `${p?.name ?? '그 사람'}의 가족 몫 식량을 더 주기로 했다.` : `${p?.name ?? '그 사람'}에게 위험한 일을 면제하기로 했다.`, say: '당신 없인 우리도 없소. 원하는 걸 주겠소.', effs: [...cost, rel(p?.comm ?? 'tail', D.demandRel), rel('tail', D.demandFair)], special: 'dom:demand:grant', extra: n === 1 ? ['식량 −0.5/구간(6구간)'] : n === 2 ? ['파견 못 감'] : [] },
+          { label: '거절한다', log: `${p?.name ?? '그 사람'}의 특별 대우 요구를 거절했다.`, say: '특별한 사람은 없다. 똑같이 먹고 똑같이 잔다!', effs: [], special: 'dom:demand:refuse', extra: ['그 분야 기술 ×0.8(3구간)'] },
+          { label: '견습생을 붙인다', log: `${p?.name ?? '그 사람'}에게 견습생을 붙이기로 했다.`, say: '그러니 더더욱 제자를 둬야겠소.', effs: [rel(p?.comm ?? 'tail', -3)], special: 'dom:demand:pupil', disabled: p && freeTeacher(g, p.field) ? undefined : '가르칠 틈이 없다' },
         ],
       };
     }
@@ -178,9 +178,9 @@ export function domView(g: Game, card: Card): CardView | null {
           : '측선에 지붕 있는 화차 한 칸이 서 있다. 바닥이 멀쩡하다. 연결기를 고치고 선반을 짜면 달 수 있다.',
         choices: [
           coach
-            ? { label: '고쳐서 거주칸으로 단다', say: '사람이 먼저다. 판자를 대라, 꼬리칸을 넓힌다!', effs: [], special: 'dom:car:coach', disabled: carShort(g, 'coach'), extra: [`목재 −${wood} · 고철 −${scrap}`, `꼬리칸 과밀 −${D.coachCrowd}`, '달리기 석탄 +0.4/구간'] }
-            : { label: '고쳐서 창고로 단다', say: '쌓을 곳이 생겼다. 연결기를 고쳐 달아라!', effs: [], special: 'dom:car:store', disabled: carShort(g, 'store'), extra: [`고철 −${scrap} · 목재 −${wood}`, '자재 상한 +40', '달리기 석탄 +0.4/구간'] },
-          { label: '두고 간다', say: '끌 석탄도 고칠 자재도 아깝다. 두고 간다.', effs: [], special: 'dom:none' },
+            ? { label: '고쳐서 거주칸으로 단다', log: '낡은 객차를 고쳐 거주칸으로 달기로 했다.', say: '사람이 먼저다. 판자를 대라, 꼬리칸을 넓힌다!', effs: [], special: 'dom:car:coach', disabled: carShort(g, 'coach'), extra: [`목재 −${wood} · 고철 −${scrap}`, `꼬리칸 과밀 −${D.coachCrowd}`, '달리기 석탄 +0.4/구간'] }
+            : { label: '고쳐서 창고로 단다', log: '측선 화차를 고쳐 창고칸으로 달기로 했다.', say: '쌓을 곳이 생겼다. 연결기를 고쳐 달아라!', effs: [], special: 'dom:car:store', disabled: carShort(g, 'store'), extra: [`고철 −${scrap} · 목재 −${wood}`, '자재 상한 +40', '달리기 석탄 +0.4/구간'] },
+          { label: '두고 간다', log: '측선에 선 칸은 두고 가기로 했다.', say: '끌 석탄도 고칠 자재도 아깝다. 두고 간다.', effs: [], special: 'dom:none' },
         ],
       };
     }
@@ -193,10 +193,10 @@ export function domView(g: Game, card: Card): CardView | null {
         body: '온실 유리 지붕을 얹을 칸 하나가 필요하다. 그 칸의 물건은 밀려난다.',
         choices: [
           ...cands.map(car => ({
-            label: GIVE_LABEL[car] ?? `${CAR_NAME[car]} 내준다`, say: say[car], effs: effs[car] ?? [], special: `dom:give:${car}`,
+            label: GIVE_LABEL[car] ?? `${CAR_NAME[car]} 내준다`, log: `온실 지붕을 얹으려 ${CAR_NAME[car]}을(를) 내주기로 했다.`, say: say[car], effs: effs[car] ?? [], special: `dom:give:${car}`,
             disabled: jobCheck(g, 'convert', car).why, extra: [...giveExtra(g, car), '자재 −20, 공방 작업 6'],
           })),
-          { label: '아직 아니다', say: '아직은 어느 칸도 못 내준다.', effs: [], special: 'dom:none' },
+          { label: '아직 아니다', log: '온실에 내줄 칸은 아직 정하지 않았다.', say: '아직은 어느 칸도 못 내준다.', effs: [], special: 'dom:none' },
         ],
       };
     }
@@ -205,8 +205,8 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '빈 매뉴얼 상자', speaker: sp(chief(g, 'engine')), required: true,
         body: '기관 매뉴얼 상자가 비어 있다. 기관실 사람들은 아무것도 모른다고 한다.',
         choices: [
-          { label: '기관실을 추궁한다', say: '누가 가져갔는지 오늘 안에 밝혀라!', effs: [rel('engine', -10)], special: 'dom:box:press' },
-          { label: '묻어 둔다', say: '못 본 걸로 하겠다.', effs: [], special: 'dom:none' },
+          { label: '기관실을 추궁한다', log: '빈 매뉴얼 상자 일로 기관실을 추궁했다.', say: '누가 가져갔는지 오늘 안에 밝혀라!', effs: [rel('engine', -10)], special: 'dom:box:press' },
+          { label: '묻어 둔다', log: '빈 매뉴얼 상자는 못 본 걸로 묻어 두었다.', say: '못 본 걸로 하겠다.', effs: [], special: 'dom:none' },
         ],
       };
     case 'dom:full':
@@ -214,9 +214,9 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '창고가 넘친다', speaker: sp(chief(g, 'craft')), required: true,
         body: `창고칸에 쇳조각과 판자가 천장까지 찼다. ${Math.max(1, Math.round(card.n ?? 0))}만큼이 통로에 나와 있다. 정한 답이 뒤로도 규칙이 된다.`,
         choices: [
-          { label: '부품으로 만든다', say: '쌓아 두지 말고 부품으로 만들어라!', effs: [], special: 'dom:full:parts', extra: ['부품 목표치 +3', '넘친 몫은 버림'] },
-          { label: '내다 버린다', say: '무게만 늘린다. 내다 버려라.', effs: [], special: 'dom:full:dump', extra: ['넘친 몫은 버림'] },
-          { label: '통로에 쌓는다', say: '통로에라도 쌓아라. 언젠가 쓴다.', effs: [], special: 'dom:full:aisle', extra: ['자재 상한 +20', `꼬리칸 과밀 +${D.fullCrowd}`] },
+          { label: '부품으로 만든다', say: '쌓아 두지 말고 부품으로 만들어라!', log: '창고가 넘쳐 부품 목표치를 높이기로 했다.', effs: [], special: 'dom:full:parts', extra: ['부품 목표치 +3', '넘친 몫은 버림'] },
+          { label: '내다 버린다', say: '무게만 늘린다. 내다 버려라.', log: '넘친 창고칸 자재를 내다 버리게 했다.', effs: [], special: 'dom:full:dump', extra: ['넘친 몫은 버림'] },
+          { label: '통로에 쌓는다', say: '통로에라도 쌓아라. 언젠가 쓴다.', log: '넘친 창고칸 자재를 통로에 쌓게 했다.', effs: [], special: 'dom:full:aisle', extra: ['자재 상한 +20', `꼬리칸 과밀 +${D.fullCrowd}`] },
         ],
       };
     case 'dom:bed':
@@ -224,9 +224,9 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '누가 침상에 눕나', speaker: sp(chief(g, 'med')), required: true,
         body: `의무칸 침상은 ${D.beds}개인데 눕힐 사람이 ${card.n ?? D.beds + 1}명이다. 정한 순서가 뒤로도 의무칸 규칙이 된다.`,
         choices: [
-          { label: '일할 손 먼저', say: '내일 삽을 들 손부터 눕혀라!', effs: [rel('engine', D.bedWorkersRel), rel('guard', D.bedWorkersRel), rel('tail', -D.bedWorkersRel)], special: 'dom:bed:workers', extra: ['병자는 제 칸에서 앓는다'] },
-          { label: '아픈 사람 먼저', say: '가장 아픈 사람이 먼저다.', effs: [rel('medtech', D.bedWorkersRel)], special: 'dom:bed:sick', extra: ['넘친 사람은 제 칸에서 하루 더 앓는다'] },
-          { label: '순번으로', say: '침상은 순번이다. 넘치는 사람은 제 칸이 돌봐라.', effs: [], special: 'dom:bed:rota', extra: ['넘치면 그 칸 과밀 +5'] },
+          { label: '일할 손 먼저', say: '내일 삽을 들 손부터 눕혀라!', log: '의무칸에는 일할 손부터 눕히기로 했다.', effs: [rel('engine', D.bedWorkersRel), rel('guard', D.bedWorkersRel), rel('tail', -D.bedWorkersRel)], special: 'dom:bed:workers', extra: ['병자는 제 칸에서 앓는다'] },
+          { label: '아픈 사람 먼저', say: '가장 아픈 사람이 먼저다.', log: '의무칸에는 가장 아픈 사람부터 눕히기로 했다.', effs: [rel('medtech', D.bedWorkersRel)], special: 'dom:bed:sick', extra: ['넘친 사람은 제 칸에서 하루 더 앓는다'] },
+          { label: '순번으로', say: '침상은 순번이다. 넘치는 사람은 제 칸이 돌봐라.', log: '의무칸 침상은 순번대로 쓰기로 했다.', effs: [], special: 'dom:bed:rota', extra: ['넘치면 그 칸 과밀 +5'] },
         ],
       };
     case 'dom:officer': {
@@ -235,8 +235,8 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '간부가 대신 정했다', speaker: sp(p), required: true,
         body: `열차장이 누워 있는 동안 ${p?.name ?? '공방장'}이(가) 맡긴 것보다 한 칸 더 정했다.`,
         choices: [
-          { label: '그대로 맡긴다', say: '잘했다. 앞으로도 그렇게 해라.', effs: [], special: 'dom:officer:keep', extra: ['간부 야심 +1'] },
-          { label: '되돌린다', say: '내가 누워 있어도 이 열차는 내 것이다!', effs: [{ t: 'trust', v: 2 }], special: 'dom:officer:revert', extra: ['그 간부 적의 +1'] },
+          { label: '그대로 맡긴다', log: `${p?.name ?? '공방장'}이(가) 대신 정한 일을 그대로 맡겼다.`, say: '잘했다. 앞으로도 그렇게 해라.', effs: [], special: 'dom:officer:keep', extra: ['간부 야심 +1'] },
+          { label: '되돌린다', log: `${p?.name ?? '공방장'}이(가) 대신 정한 일을 되돌리기로 했다.`, say: '내가 누워 있어도 이 열차는 내 것이다!', effs: [{ t: 'trust', v: 2 }], special: 'dom:officer:revert', extra: ['그 간부 적의 +1'] },
         ],
       };
     }
@@ -246,9 +246,9 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '이가 돈다', focus: c, required: true,
         body: `${COMM_NAME[c]}에서 젖은 담요가 밤새 마르지 않는다. 같이 덮는 담요, 돌려 입는 옷, 말릴 데 없는 빨래 탓이다. (${hygieneWhy(g, c)})`,
         choices: [
-          { label: '옷을 삶는다', say: '옷이고 담요고 다 솥에 넣어라. 석탄이 아까워도 지금이다!', effs: [{ t: 'coal', v: -D.boilCoal }], special: 'dom:lice:boil' },
-          { label: '침구를 태운다', say: '침구를 태워라. 오늘 밤은 추워도 참게.', effs: [], special: 'dom:lice:burn', extra: [`${COMM_NAME[c]} 온기 −${D.beddingWarm}(${D.beddingSegs}구간)`] },
-          { label: '버틴다', say: '석탄을 아껴야 한다. 며칠만 버텨 다오.', effs: [], special: 'dom:lice:endure', extra: [`${D.endureSegs}구간 뒤 열병이 될 수 있다`] },
+          { label: '옷을 삶는다', say: '옷이고 담요고 다 솥에 넣어라. 석탄이 아까워도 지금이다!', log: `${COMM_NAME[c]}에 이가 돌아 옷과 담요를 솥에 삶았다.`, effs: [{ t: 'coal', v: -D.boilCoal }], special: 'dom:lice:boil' },
+          { label: '침구를 태운다', say: '침구를 태워라. 오늘 밤은 추워도 참게.', log: `${COMM_NAME[c]}에 이가 돌아 침구를 태웠다.`, effs: [], special: 'dom:lice:burn', extra: [`${COMM_NAME[c]} 온기 −${D.beddingWarm}(${D.beddingSegs}구간)`] },
+          { label: '버틴다', say: '석탄을 아껴야 한다. 며칠만 버텨 다오.', log: `${COMM_NAME[c]}에 이가 돌아도 석탄을 아끼며 버텼다.`, effs: [], special: 'dom:lice:endure', extra: [`${D.endureSegs}구간 뒤 열병이 될 수 있다`] },
         ],
       };
     }
@@ -258,8 +258,8 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '열병', focus: c, required: true,
         body: `${COMM_NAME[c]}에서 ${typhusNames(g, c, card.n ?? 4)} 열에 들떠 누웠다. 앓는 사람은 의약품을 먹는다. 붐비고 담요를 같이 덮는 칸은 어디든 열병이 날 수 있다.`,
         choices: [
-          { label: '의무칸을 비운다', say: '의무칸을 비워라. 앓는 사람이 먼저다!', effs: [], special: 'dom:typhus:bay', extra: ['번지지 않는다', `약 받으면 ${pct(D.typhusRecover)} 회복`, '부상자 회복이 멈춘다'] },
-          { label: '따로 눕힌다', say: '앓는 사람은 그 칸 끝에 따로 눕혀라. 담요도 그릇도 따로다.', effs: [], special: 'dom:typhus:apart', extra: [`번질 확률 ${pct(D.typhusSpread)} → ${pct(D.typhusSpreadApart)}`, `약 받으면 ${pct(D.typhusRecoverApart)} 회복`, '부상자 회복은 그대로'] },
+          { label: '의무칸을 비운다', say: '의무칸을 비워라. 앓는 사람이 먼저다!', log: `${COMM_NAME[c]}의 열병 환자를 받으려 의무칸을 비웠다.`, effs: [], special: 'dom:typhus:bay', extra: ['번지지 않는다', `약 받으면 ${pct(D.typhusRecover)} 회복`, '부상자 회복이 멈춘다'] },
+          { label: '따로 눕힌다', say: '앓는 사람은 그 칸 끝에 따로 눕혀라. 담요도 그릇도 따로다.', log: `${COMM_NAME[c]}의 열병 환자를 그 칸 끝에 따로 눕혔다.`, effs: [], special: 'dom:typhus:apart', extra: [`번질 확률 ${pct(D.typhusSpread)} → ${pct(D.typhusSpreadApart)}`, `약 받으면 ${pct(D.typhusRecoverApart)} 회복`, '부상자 회복은 그대로'] },
         ],
       };
     }
@@ -268,9 +268,9 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '삽을 쥘 사람', speaker: sp(chief(g, 'engine')), required: true,
         body: '기관실이 불을 껐다. 몰 사람은 있다. 화부 일을 맡을 칸이 있으면 열차가 간다.',
         choices: [
-          { label: '꼬리칸에 맡긴다', say: '꼬리칸이 삽을 든다. 이 열차는 모두의 것이다!', effs: [rel('engine', D.stokerEngineRel)], special: 'dom:stoker:tail', extra: ['꼬리칸 노출 +5/구간', '석탄 +2/구간'] },
-          { label: '경비대에 맡긴다', say: '경비대가 불을 지켜라!', effs: [rel('engine', D.stokerEngineRel)], special: 'dom:stoker:guard', extra: ['경비대 노출 +5/구간', '석탄 +2/구간'] },
-          { label: '세워 둔다', say: '기관실과 이야기하겠다. 기다려라.', effs: [], special: 'dom:none' },
+          { label: '꼬리칸에 맡긴다', log: '불을 끈 기관실 대신 꼬리칸에 삽을 맡겼다.', say: '꼬리칸이 삽을 든다. 이 열차는 모두의 것이다!', effs: [rel('engine', D.stokerEngineRel)], special: 'dom:stoker:tail', extra: ['꼬리칸 노출 +5/구간', '석탄 +2/구간'] },
+          { label: '경비대에 맡긴다', log: '불을 끈 기관실 대신 경비대에 삽을 맡겼다.', say: '경비대가 불을 지켜라!', effs: [rel('engine', D.stokerEngineRel)], special: 'dom:stoker:guard', extra: ['경비대 노출 +5/구간', '석탄 +2/구간'] },
+          { label: '세워 둔다', log: '열차를 세워 두고 기관실과 이야기하기로 했다.', say: '기관실과 이야기하겠다. 기다려라.', effs: [], special: 'dom:none' },
         ],
       };
     case 'dom:elder': {
@@ -281,7 +281,7 @@ export function domView(g: Game, card: Card): CardView | null {
         return {
           title: '장인의 조짐', speaker: sp(p), required: true,
           body: `${p?.name ?? '그 사람'}의 일은 이미 끝났다.`,
-          choices: [{ label: '알았다', say: '알았다.', effs: [], special: 'dom:none' }],
+          choices: [{ label: '알았다', log: `${p?.name ?? '그 사람'}의 조짐을 두고 정할 일은 이미 끝났다.`, say: '알았다.', effs: [], special: 'dom:none' }],
         };
       }
       const f = p.field;
@@ -294,15 +294,15 @@ export function domView(g: Game, card: Card): CardView | null {
         body: `${p.role} ${p.name}. ${elderSign(f, false)}. 조짐은 틀리지 않는다. ${s0}~${s1}구간 안에 쓰러진다.`,
         choices: [
           {
-            label: '견습을 서두른다', say: '견습을 붙여라. 남은 날에 다 가르쳐 달라고 해!', effs: [], special: 'dom:elder:pupil', disabled: why('pupil'),
+            label: '견습을 서두른다', say: '견습을 붙여라. 남은 날에 다 가르쳐 달라고 해!', log: `쓰러질 조짐이 보인 ${p.name}의 견습을 앞당겼다.`, effs: [], special: 'dom:elder:pupil', disabled: why('pupil'),
             extra: [pupil?.learn ? `견습 남은 구간 ${pupil.learn.left} → ${Math.max(1, Math.ceil(pupil.learn.left / 2))}` : '견습생이 붙는다', `${field} 기술 ×${D.elderPupilMult}`],
           },
           {
-            label: '매뉴얼을 남긴다', say: '매뉴얼을 남기게 해라.', effs: [], special: 'dom:elder:manual', disabled: why('manual'),
+            label: '매뉴얼을 남긴다', say: '매뉴얼을 남기게 해라.', log: `쓰러질 조짐이 보인 ${p.name}에게 매뉴얼을 남기게 했다.`, effs: [], special: 'dom:elder:manual', disabled: why('manual'),
             extra: [`${D.elderManualSegs}구간에 쓴다`, ...(f === 'engine' ? [`다 쓰면 기관실 관계 ${D.engineManualRel}`] : [])],
           },
           {
-            label: '쉬게 둔다', say: '쉬게 둬라. 일은 우리가 나눠 진다.', effs: [rel(p.comm, D.elderRestRel)], special: 'dom:elder:rest',
+            label: '쉬게 둔다', say: '쉬게 둬라. 일은 우리가 나눠 진다.', log: `쓰러질 조짐이 보인 ${p.name}을(를) 쉬게 뒀다.`, effs: [rel(p.comm, D.elderRestRel)], special: 'dom:elder:rest',
             extra: [`쓰러지는 때가 ${D.elderRestDelay}구간 늦춰진다`, `${field} 기술 ×${D.elderRestMult}`],
           },
         ],
@@ -315,8 +315,8 @@ export function domView(g: Game, card: Card): CardView | null {
         title: '어디 곁에서 배우나', required: true,
         body: `아이들은 열차에 남아 낮 동안 배운다.${half ? ' 짐도 반나절은 받으니 곁에서 얻는 것도 절반이다.' : ''} 어른 곁에서 손에 맞는 일을 거들며 배우는 자리를 정한다.`,
         choices: [
-          { label: SIDE_NAME.workshop, say: '연장 곁에 앉혀라. 못과 줄을 가르는 것부터 배워라.', effs: [], special: 'dom:side:workshop', extra: [`공방의 일 +${half ? '0.5' : '1'}`, `복원에 드는 목재·고철 ${half ? '여덟' : '넷'}에 하나 덜`] },
-          { label: SIDE_NAME.med, say: '물과 천을 나르는 일을 맡겨라. 다친 사람 곁에는 앉히지 마라.', effs: [], special: 'dom:side:med', extra: [half ? '깊은 상처·골절이 둘에 하나만 하루 먼저 낫는다' : '깊은 상처·골절이 하루 먼저 낫는다'] },
+          { label: SIDE_NAME.workshop, say: '연장 곁에 앉혀라. 못과 줄을 가르는 것부터 배워라.', log: '아이들이 낮 동안 공방 곁에서 배우게 했다.', effs: [], special: 'dom:side:workshop', extra: [`공방의 일 +${half ? '0.5' : '1'}`, `복원에 드는 목재·고철 ${half ? '여덟' : '넷'}에 하나 덜`] },
+          { label: SIDE_NAME.med, say: '물과 천을 나르는 일을 맡겨라. 다친 사람 곁에는 앉히지 마라.', log: '아이들이 낮 동안 의무칸 곁에서 배우게 했다.', effs: [], special: 'dom:side:med', extra: [half ? '깊은 상처·골절이 둘에 하나만 하루 먼저 낫는다' : '깊은 상처·골절이 하루 먼저 낫는다'] },
         ],
       };
     }
@@ -328,10 +328,10 @@ export function domView(g: Game, card: Card): CardView | null {
           ? '이음매에서 김이 샌다. 바늘이 붉은 칸을 넘었다. 이번엔 기관실 누구도 웃지 않는다.'
           : '견습이 모는 보일러 바늘이 붉은 칸에서 떨린다. 김을 빼면 석탄이 더 든다.',
         choices: [
-          { label: '김을 뺀다', say: '김을 빼라. 보일러보다 귀한 건 없다!', effs: [{ t: 'coal', v: -locoVentCoal(g) }], special: 'dom:pressure:vent' },
+          { label: '김을 뺀다', say: '김을 빼라. 보일러보다 귀한 건 없다!', log: '압력 경고에 보일러의 김을 뺐다.', effs: [{ t: 'coal', v: -locoVentCoal(g) }], special: 'dom:pressure:vent' },
           last
-            ? { label: '그대로 간다', say: '멈추면 다 얼어 죽는다. 그대로 간다!', effs: [], special: 'dom:pressure:go', extra: ['보일러가 터진다(판 끝)'] }
-            : { label: '그대로 간다', say: '바늘은 늘 떤다. 그대로 간다!', effs: [], special: 'dom:pressure:go', extra: ['다음 경고가 마지막이다'] },
+            ? { label: '그대로 간다', say: '멈추면 다 얼어 죽는다. 그대로 간다!', log: '압력 경고에도 그대로 가기로 했다.', effs: [], special: 'dom:pressure:go', extra: ['보일러가 터진다(판 끝)'] }
+            : { label: '그대로 간다', say: '바늘은 늘 떤다. 그대로 간다!', log: '압력 경고에도 그대로 가기로 했다.', effs: [], special: 'dom:pressure:go', extra: ['다음 경고가 마지막이다'] },
         ],
       };
     }

@@ -27,6 +27,7 @@ import { arrivalSummary, endCard, finishSlice, secondStationReached } from '../s
 import { buildDeparture } from '../src/game/field_departure';
 import type { FieldDepartureV2 } from '../src/game/field_departure';
 import { enableDomestic } from '../src/game/domestic/state';
+import { enableSupplies } from '../src/game/supplies';
 
 export const FORMAT = 'field-vectors-v1';
 const SEEDS = ['slice-seed-a', 'train-0', 'train-1'];
@@ -169,9 +170,10 @@ function liveReceipt(d: FieldDepartureV2): Record<string, unknown> {
   };
 }
 
-function contractCase(seed: string, domestic: boolean) {
+function contractCase(seed: string, domestic: boolean, supplies = false) {
   const g = createGame(seed);
   if (domestic) enableDomestic(g);
+  if (supplies) enableSupplies(g);
   g.seg = 2;
   step(g); step(g);
   const opts = { placeId: 'sulechow_station' };
@@ -181,7 +183,7 @@ function contractCase(seed: string, domestic: boolean) {
   const applied = applyFieldReturn(g, departure, receipt);
   const apply = { status: applied.status, record: plain(applied.record), after: plain(g) };
   const again = plain(buildDeparture(g, opts));
-  return { seed, domestic, opts, state, departure, receipt, apply, again };
+  return { seed, domestic, supplies, opts, state, departure, receipt, apply, again };
 }
 
 /** 사람 기억(memory.ts): 목격 template 아홉 꼴을 다 담은 귀환 하나를 반영하고, 다음 출발 계약의 stance·cues까지 본다. */
@@ -256,7 +258,8 @@ function main(): void {
   const out = process.argv[2] ? resolve(process.argv[2]) : resolve(here, '../../s2/tests/game/fixtures/field_port/field_vectors.json');
   const cases = [];
   for (const seed of SEEDS) for (const [r, d, h] of PAIRS) cases.push(runCase(seed, r, d, h));
-  const contracts = SEEDS.flatMap(seed => [contractCase(seed, false), contractCase(seed, true)]);
+  // 생필품을 켠 판 하나: 계약의 supplies 칸(결정 490)이 true로 나간다.
+  const contracts = [...SEEDS.flatMap(seed => [contractCase(seed, false), contractCase(seed, true)]), contractCase(SEEDS[0], false, true)];
   const memories = SEEDS.map(memoryCase);
   const tables = {
     COMMS, COMM_NAME, P, STAGES, IDEO, LAWS, LAW_VARIANT_OF, CORPSE_LAWS, PROLOGUE, FIELD,
