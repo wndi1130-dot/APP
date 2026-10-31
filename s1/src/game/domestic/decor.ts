@@ -1,7 +1,7 @@
 import type { Game } from '../state';
 import { FURNISH_CARS, FURNITURE } from './data';
 import type { FurnitureKind, FurnishTier } from './data';
-import { furnishOf } from './state';
+import { furnishOf, furnishTier } from './state';
 import { refreshSit } from './sit';
 import { updateFurnish } from './workshop';
 import type { JobCheck } from './workshop';
@@ -103,20 +103,44 @@ export function rotate(g: Game, car: string, i: number, rot: number): DecorCheck
   item.rot = rot;
   return { ok: true };
 }
+function slotsFit(car: string, items: readonly DecorItem[], tier: FurnishTier): boolean {
+  const slots = DECOR_SLOTS[tier];
+  const surfaces = new Map<number, number>();
+  for (const item of items) if (spotOf(item) === 'surface') {
+    const used = (surfaces.get(item.on!) ?? 0) + 1;
+    if (used > slots.surface) return false;
+    surfaces.set(item.on!, used);
+  }
+  return items.filter(item => spotOf(item) === 'floor').length <= Math.min(slots.floor, FURNISH_FLOOR_MAX[car])
+    && items.filter(item => spotOf(item) === 'wall').length <= Math.min(slots.wall, FURNISH_WALL_MAX[car]);
+}
 export function takeBack(g: Game, car: string, i: number): DecorCheck {
   const item = placed(g, car, i);
   if (!item) return fail('그 자리에 물건이 없다');
   const items = decorItems(g, car);
-  const store = readStore(g);
   const children = items.map((row, j) => row.on === i && spotOf(row) === 'surface' ? j : -1).filter(j => j >= 0);
   const removed = new Set([...children, i]);
+  const kept = items.filter((_, j) => !removed.has(j));
+  if (DECOR_SLOT_TABLE[car as DecorCar] === 'tier') {
+    // A drop is measured against what the placed items reach now: an old save may still keep a higher tier.
+    const tier = furnishTier(g, car, kept);
+    if (tier < furnishTier(g, car)) {
+      const now = FURNISH_CARS.map(other => furnishTier(g, other));
+      const common = Math.max(...FURNISH_CARS.map((other, k) => other === car ? tier : now[k])) as FurnishTier;
+      if (!slotsFit(car, kept, tier) || (common < Math.max(...now)
+        && ['captain', 'dining'].some(other => !slotsFit(other, decorItems(g, other), common)))) {
+        return fail('살림이 내려가면 자리가 모자란다. 다른 것부터 거둬라');
+      }
+    }
+  }
+  // A rejected removal must not even reconcile stored resource tags.
+  const store = readStore(g);
   for (const j of [...children, i]) {
     const row = items[j], def = DECOR[row.kind];
     if (def.res && row.v !== undefined) g[def.res] = amount(g, def.res) + row.v;
     addStored(store, row.kind, def.res ? row.v : undefined);
   }
   const remap = new Map<number, number>();
-  const kept = items.filter((_, j) => !removed.has(j));
   let next = 0;
   items.forEach((_, j) => { if (!removed.has(j)) remap.set(j, next++); });
   for (const row of kept) if (row.on !== undefined) row.on = remap.get(row.on)!;

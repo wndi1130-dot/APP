@@ -102,6 +102,16 @@ const ITEMS: Dictionary = {
 	"junk_rag": {"name": "걸레 조각", "icon": "it_cloth", "weight": 0.1, "stock": "cloth", "melt": 0.1, "group": "junk"},
 	"junk_nails": {"name": "굽은 못", "icon": "it_nails", "weight": 0.1, "stock": "scrap", "melt": 0.1, "group": "junk"},
 	"junk_smokes": {"name": "담배 몇 개비", "icon": "it_cigarettes", "weight": 0.05, "stock": "luxury", "melt": 0.05, "group": "junk"},
+	# ---- supplies (decision 490): named in the field, one stock on the train.
+	"toilet_paper": {"name": "휴지", "icon": "it_toilet_paper", "weight": 0.1, "stock": "supplies", "melt": 0.25, "group": "supplies"},
+	"soap": {"name": "비누", "icon": "it_soap", "weight": 0.1, "stock": "supplies", "melt": 0.25, "group": "supplies"},
+	"candle": {"name": "양초", "icon": "it_candle", "weight": 0.1, "stock": "supplies", "melt": 0.25, "group": "supplies"},
+	"sewing_kit": {"name": "반짇고리", "icon": "it_sewing_kit", "weight": 0.2, "stock": "supplies", "melt": 0.25, "group": "supplies"},
+	"old_clothes": {"name": "헌 옷", "icon": "it_old_clothes", "weight": 0.5, "stock": "supplies", "melt": 0.5, "group": "supplies"},
+	"child_clothes": {"name": "아이 옷", "icon": "it_child_clothes", "weight": 0.3, "stock": "supplies", "melt": 0.5, "group": "supplies"},
+	"book": {"name": "책", "icon": "it_book", "weight": 0.5, "stock": "supplies", "melt": 0.5, "group": "supplies"},
+	"toy": {"name": "장난감", "icon": "it_toy", "weight": 0.2, "stock": "supplies", "melt": 0.25, "group": "supplies"},
+	"razor": {"name": "면도칼", "icon": "it_razor", "weight": 0.05, "stock": "supplies", "melt": 0.25, "group": "supplies"},
 }
 
 ## A building's key (P12): one id a building, "key_<building index>". It opens

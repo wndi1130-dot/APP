@@ -36,6 +36,7 @@ const FieldClock = preload("res://game/sim/field_clock.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
 const RouteBands = preload("res://game/train/route_bands.gd")
 const RouteStops = preload("res://game/train/route_stops.gd")
+const StopForm = preload("res://game/sim/stop_form.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
@@ -50,6 +51,8 @@ const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
 const CarPane = preload("res://game/ui/car_pane.gd")
+const DecorPane = preload("res://game/ui/decor_pane.gd")
+const DecorUiData = preload("res://game/ui/decor_ui_data.gd")
 const CostPane = preload("res://game/ui/cost_pane.gd")
 const HomeBar = preload("res://game/ui/home_bar.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
@@ -87,6 +90,7 @@ const TrainAdvance = preload("res://game/train/train_advance.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const FieldCouncil = preload("res://game/politics/field_council.gd")
 const CouncilAgenda = preload("res://game/politics/council_agenda.gd")
+const DecorGrid = preload("res://game/train/decor_grid.gd")
 ## The stretch the slice's train first runs (S1's slice: field_arrival.test.ts).
 const FIRST_SEG: int = 2
 ## Steps the train may take from the session to the second station before the slice gives up.
@@ -179,6 +183,9 @@ var home: Control = null           # the train's own screen on the train steps: 
 var pane: Control = null           # the picked car's pane (car_pane.gd)
 var bar: Control = null            # the keys along the bottom (home_bar.gd)
 var sel: String = ""               # the picked car's id, "" with the pane folded
+var decor_id: String = ""          # the car being decorated (open_decor), "" when none
+var decor_pane: Control = null
+var _decor_hidden: Array = []      # what open_decor put away, to bring back
 var _plate_press_id: String = ""
 var _plate_press_pos: Vector2 = Vector2.ZERO
 var _plate_pointer: int = -1         # mouse, or the touch index
@@ -269,6 +276,8 @@ func current() -> String:
 
 
 func go(i: int) -> void:
+	if decor_id != "":
+		leave_decor()
 	step = i
 	var id: String = STEPS[i][0]
 	_ensure_board(id)
@@ -307,7 +316,7 @@ func go(i: int) -> void:
 	# The next stop is known on the train: its map is made ready off the main
 	# thread while the train runs.
 	if id == "train" and _cinema_on():
-		loader.prepare(_field_place(), int(opts.get("seed", 1)), String(opts.get("stop_form", "")), float(opts.get("stop_form_m", -1.0)))
+		loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)))
 	if id == "stop_pick" and _cinema_on():
 		_show_stop_cinema()
 		return
@@ -353,6 +362,7 @@ func go(i: int) -> void:
 
 
 func next() -> void:
+	leave_decor()
 	if step + 1 >= STEPS.size():
 		get_tree().change_scene_to_file(BOOT_SCENE)
 		return
@@ -406,6 +416,22 @@ func _stop_band(seg: int) -> String:
 	return RouteBands.stop_band("prologue", _stop_of(seg))
 
 
+## That stop's form (stop_form.gd): one asked of the slice (opts "stop_form", a check switch),
+## else the route's; "" leaves it to the place.
+func _stop_form(seg: int) -> String:
+	if opts.has("stop_form"):
+		return String(opts["stop_form"])
+	return StopForm.on_route("prologue", _stop_of(seg))
+
+
+## The stretch of the slice's field step: the map made ready while the train runs is its stop's.
+static func _field_seg() -> int:
+	for row: Array in STEPS:
+		if row[0] == "field":
+			return int(row[2])
+	return FIRST_SEG
+
+
 ## The season table's stretch that stop stands on (route_stops.gd): the stop's weather and
 ## cold, not those of the table's row with the stretch's number. Before the first stop (the
 ## train setting out on the first stretch) it is the table's first stretch, the start.
@@ -423,7 +449,7 @@ func _show_stop_cinema() -> void:
 	for p in plates.get_children():
 		plates.remove_child(p)
 		p.queue_free()
-	loader.prepare(_field_place(), int(opts.get("seed", 1)), String(opts.get("stop_form", "")), float(opts.get("stop_form_m", -1.0)))
+	loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)))
 	# Its own scene (scenes/stop_cinema.tscn), so the train and the weather can be dressed there.
 	var c = STOP_CINEMA_SCENE.instantiate()
 	c.name = "StopCinema"
@@ -534,6 +560,7 @@ func _drop_cinema(id: String) -> void:
 func _let_stage_go(seconds: float) -> void:
 	if not is_instance_valid(stage):
 		return
+	leave_decor()
 	var old: Node = stage
 	stage = null
 	train = null
@@ -642,6 +669,7 @@ static func start_board() -> Array:
 	if not d is Dictionary or not d.get("state") is Dictionary or not d.get("tables") is Dictionary:
 		push_error("slice: the start board does not read")
 		return [{}, {}]
+	d["state"]["lateOn"] = true
 	return [d["state"], d["tables"]]
 
 
@@ -726,6 +754,7 @@ func _show_paper() -> void:
 	c.chose.connect(_paper_chosen)
 	c.fold_changed.connect(_paper_folded)
 	paper = c
+	_update_decor_lock()
 
 
 func _drop_paper() -> void:
@@ -733,6 +762,7 @@ func _drop_paper() -> void:
 	if is_instance_valid(paper):
 		paper.queue_free()
 	paper = null
+	_update_decor_lock()
 	# The room its edge took goes back to the picked car.
 	if was_folded:
 		_paper_folded(false)
@@ -741,10 +771,19 @@ func _drop_paper() -> void:
 ## The paper folded to its edge or opened again (결정 508): the picked car moves into
 ## the middle of what the edge and the car pane leave clear.
 func _paper_folded(_folded: bool) -> void:
+	_update_decor_lock()
 	if sel == "" or not is_instance_valid(pane) or not is_instance_valid(train) or train.camera == null:
 		return
 	if str(train.get("view_mode")) == "diag":
 		_set_cover()
+
+
+func _update_decor_lock() -> void:
+	if decor_id != "" and (DecorUiData.lock_reason(train_g, false) != "" or (is_instance_valid(paper) and not (paper as TurnCard).folded)):
+		leave_decor()
+	if is_instance_valid(pane):
+		pane.choosing_paper = is_instance_valid(paper) and not (paper as TurnCard).folded
+		pane.refresh(train_g, train_t)
 
 
 ## The diagonal camera's cover: the car pane's width at the right, a folded paper's
@@ -754,6 +793,8 @@ func _set_cover() -> void:
 	var covered_px: float = get_viewport().get_visible_rect().size.x - pane_rect.position.x
 	if pane_rect.size.x == 0.0:
 		covered_px = CarPane.CSS_SIZE.x * UiFonts.K
+	if not pane.visible:
+		covered_px = 0.0
 	var left_px: float = 0.0
 	if is_instance_valid(paper) and (paper as TurnCard).folded:
 		left_px = (paper as TurnCard).folded_edge()
@@ -846,6 +887,7 @@ func _take(g: Dictionary) -> void:
 		port_error = String(g["_turn_port_error"])
 		push_error("slice: " + port_error)
 		return
+	leave_decor()
 	train_g = g
 	if is_instance_valid(gauges):
 		gauges.g = train_g
@@ -968,6 +1010,7 @@ func _index_of(id: String) -> int:
 
 
 func _clear_stage() -> void:
+	leave_decor()
 	if is_instance_valid(stage):
 		stage.queue_free()
 	stage = null
@@ -979,6 +1022,7 @@ func _clear_stage() -> void:
 ## the slice's state has them (warmth, ration, crowding and exposure, head
 ## counts and relations), so the windows' frost and the pane say the same.
 func _show_train(phase: String, seg: int) -> void:
+	leave_decor()
 	var rules: Dictionary = TrainRules.load_default()
 	rules["train"]["phase"] = phase
 	rules["train"]["seg"] = seg
@@ -1001,6 +1045,7 @@ func _show_train(phase: String, seg: int) -> void:
 		train.opts["rules_before"] = last_rules
 	last_rules = rules.duplicate(true)
 	train.rules = rules
+	train.decor_closed.connect(_on_train_decor_closed)
 	add_child(train)
 	stage = train
 	# The world outside by the hour, the weather, the region and the cold
@@ -1117,11 +1162,11 @@ func _plate(name_label: Label3D) -> Control:
 	row.set_meta("x", name_label.position.x)
 	row.set_meta("id", id)
 	row.add_child(_enamel(name_label))
-	if _has_people(def):
+	if _has_people(def) or _decor_car(id):
 		row.mouse_filter = Control.MOUSE_FILTER_STOP
 		row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		row.gui_input.connect(_plate_input.bind(id))
-		if float(St.situation(train_g, train_t, String(def["comm"]))[0]) < CarPane.COLD:
+		if _has_people(def) and float(St.situation(train_g, train_t, String(def["comm"]))[0]) < CarPane.COLD:
 			# The snow mark alone: the frost says cold (결정 417).
 			var tag: Control = GlassParts.paper_tag("", "snow", -2.5)
 			tag.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1173,7 +1218,7 @@ func _plate_input(e: InputEvent, id: String) -> void:
 	if released:
 		_plate_press_id = ""
 		if not _plate_dragged:
-			_select(id)
+			_select(id, true)
 	elif relative != Vector2.ZERO and is_instance_valid(train):
 		train.drag(relative)
 
@@ -1208,6 +1253,8 @@ func _enamel(name_label: Label3D) -> Control:
 
 
 func _process(_delta: float) -> void:
+	if decor_id != "" and (DecorUiData.lock_reason(train_g, false) != "" or (is_instance_valid(paper) and not (paper as TurnCard).folded)):
+		leave_decor()
 	marks.queue_redraw()
 	if is_instance_valid(journey):
 		journey.quiet = _journey_quiet()
@@ -1244,6 +1291,8 @@ func _process(_delta: float) -> void:
 ## A decision card or a room's pane is up: the land outside goes on, but no new
 ## outside event begins (presentation_motion.md 7b: they never get in the way of reading).
 func _journey_quiet() -> bool:
+	if decor_id != "":
+		return true
 	if is_instance_valid(paper) or (card != null and card != home):
 		return true
 	for p: Variant in [shop, research, mods, cost]:
@@ -1264,6 +1313,7 @@ func _show_home(word: String) -> void:
 	p.name = "CarPane"
 	p.lever_set.connect(_set_lever)
 	p.folded.connect(_select.bind(""))
+	p.decor_pressed.connect(open_decor)
 	h.add_child(p)
 	p.pin(TrainGauges.BAND_H)
 	var b = HomeBar.new()
@@ -1285,12 +1335,14 @@ func _show_home(word: String) -> void:
 	pane = p
 	bar = b
 	card = h
-	_select(FIRST_CAR)
+	_select(FIRST_CAR, false)
 
 
 ## Pick car `id` ("" folds the pane): its pane comes up and the camera moves
 ## it into the middle of what the pane leaves clear.
-func _select(id: String) -> void:
+func _select(id: String, toggle: bool = false) -> void:
+	if toggle and id == sel:
+		id = ""
 	# A car picked over the workshop or the refit pane puts it away.
 	if id != "":
 		_put_rooms_away()
@@ -1299,12 +1351,13 @@ func _select(id: String) -> void:
 	var def: Dictionary = {}
 	if id != "" and is_instance_valid(train):
 		def = (train.car(id) as Dictionary).get("def", {})
-	if _has_people(def):
+	if _has_people(def) or _decor_car(id):
 		sel = id
 	if not is_instance_valid(pane):
 		return
-	pane.visible = sel != ""
-	if sel != "":
+	pane.visible = sel != "" and _shows_pane(def)
+	if pane.visible:
+		pane.choosing_paper = is_instance_valid(paper) and not (paper as TurnCard).folded
 		pane.show_car(def, train_g, train_t)
 	if not is_instance_valid(train) or train.camera == null:
 		return
@@ -1320,9 +1373,102 @@ func _select(id: String) -> void:
 			train.set_pane(0.0)
 		return
 	train.focus_car(at)
-	if sel != "":
+	# The two common cars use the same glass with just its header.
+	if sel != "" and pane.visible:
 		var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
 		train.scroll(UiFonts.px(PANE_SHIFT_CSS) * train.camera.size / view_h)
+
+
+## The two common cars are picked like the living cars (결정 511·513).
+func _decor_car(id: String) -> bool:
+	return id != "" and not DecorGrid.of(id).is_empty()
+
+
+func _shows_pane(def: Dictionary) -> bool:
+	return _has_people(def) or String(def.get("id", "")) in ["captain", "dining"]
+
+
+## Decorating a car (결정 506·510·511, train_scene.gd enter_decor): the train shows it alone with
+## its grid, and the gauges, the plates, the keys, the pane and a folded paper go away till
+## leave_decor. Not while a paper card is open to choose on, nor for a car the decor table has not.
+## The strip, title, exit and gestures belong to decor_pane.gd.
+func open_decor(id: String) -> bool:
+	if not is_instance_valid(train) or decor_id != "":
+		return false
+	if is_instance_valid(paper) and not (paper as TurnCard).folded:
+		return false
+	if DecorUiData.lock_reason(train_g, false) != "":
+		return false
+	if not train.can_enter_decor(id):
+		return false
+	_put_rooms_away()
+	if not train.enter_decor(id):
+		return false
+	decor_id = id
+	_decor_hidden.clear()
+	# The snow over the screen too: with the roof off it would fall inside the car.
+	for n in [gauges, plates, marks, home, paper, next_button, soot_bot, weather]:
+		if is_instance_valid(n) and n is CanvasItem and (n as CanvasItem).visible:
+			(n as CanvasItem).visible = false
+			_decor_hidden.append(n)
+	var ui := DecorPane.new()
+	ui.g = train_g
+	ui.car_id = id
+	ui.train = train
+	ui.leave_requested.connect(leave_decor)
+	ui.changed.connect(_decor_changed)
+	layer.add_child(ui)
+	decor_pane = ui
+	return true
+
+
+## Back from decorating: the train as it was, the screens put away come back, the car still picked.
+func leave_decor() -> void:
+	if decor_id == "":
+		return
+	var id: String = decor_id
+	decor_id = ""
+	if is_instance_valid(decor_pane):
+		decor_pane.cancel_drag()
+		decor_pane.hide()
+		decor_pane.queue_free()
+	decor_pane = null
+	if is_instance_valid(train):
+		train.exit_decor()
+		_sync_decor_situation()
+	for n in _decor_hidden:
+		if is_instance_valid(n):
+			(n as CanvasItem).visible = true
+	_decor_hidden.clear()
+	if is_instance_valid(paper):
+		paper.g = train_g
+		paper._fill()
+	_select(id, false)
+
+
+## The train closed decorating on its own (its layout rebuilt): the pane, the screens put away
+## and the car id follow it on the next frame, outside the rebuild (leave_decor syncs the rules).
+func _on_train_decor_closed() -> void:
+	if decor_id != "":
+		leave_decor.call_deferred()
+
+
+func _decor_changed() -> void:
+	_room_changed()
+	if is_instance_valid(pane):
+		pane.refresh(train_g, train_t)
+
+
+## Reseating while editing would replace the people that the 3D view faded.
+## Apply the resulting situation after its own exit restores the people.
+func _sync_decor_situation() -> void:
+	if is_instance_valid(train):
+		for comm: String in train_g.get("comms", {}):
+			var sit: Array = St.situation(train_g, train_t, comm)
+			var next_sit: Array = [sit[0], sit[1], sit[2], sit[3]]
+			var current: Dictionary = train.rules.get("comms", {}).get(comm, {})
+			if current.get("sit") != next_sit:
+				train.set_comm(comm, "sit", next_sit)
 
 
 ## A room on the bottom bar with a screen of its own (home_bar.gd open_rooms).
@@ -1351,7 +1497,7 @@ func _open_workshop() -> void:
 
 func _close_room() -> void:
 	_put_rooms_away()
-	_select(shop_was)
+	_select(shop_was, false)
 
 
 ## The refit pane (mods_pane.gd) where the workshop's stands, with this
@@ -1440,6 +1586,7 @@ func _room_changed() -> void:
 
 ## A lever on the pane: set it in the slice's state and draw again what reads it.
 func _set_lever(comm: String, which: String, value: int) -> void:
+	leave_decor()
 	train_g = TrainTurn.set_lever(train_g, train_t, comm, which, float(value))
 	gauges.refresh(train_g, train_t)
 	if is_instance_valid(pane):
@@ -1564,11 +1711,13 @@ func _field_opts() -> Dictionary:
 	o["laws"] = (train_g.get("passed", {}) as Dictionary).keys()
 	if opts.has("place"):
 		o["place"] = String(opts["place"])
-	# A stop form asked of the slice (stop_ground.gd, a test switch for now): the loader
-	# makes the map in it, off the main thread (prepare), and the field keeps it.
-	for key: String in ["stop_form", "stop_form_m"]:
-		if opts.has(key):
-			o[key] = opts[key]
+	# The stop's form (_stop_form, stop_ground.gd): the loader makes the map in it, off the
+	# main thread (prepare), and the field keeps it.
+	var form := _stop_form(int(STEPS[step][2]))
+	if not form.is_empty():
+		o["stop_form"] = form
+	if opts.has("stop_form_m"):
+		o["stop_form_m"] = opts["stop_form_m"]
 	return o
 
 

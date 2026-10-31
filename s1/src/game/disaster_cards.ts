@@ -23,20 +23,20 @@ function prepView(g: Game, card: Card): CardView | null {
     ? `서쪽 하늘이 낮다. 내일부터 ${lenOf(kind)}구간 눈보라가 온다. 모든 칸 온기 −${warm}, 석탄이 구간마다 ${coalOf(kind)} 더 든다. 대비 없이 가면 밤사이 얼어 숨지는 사람이 나올 수 있다.`
     : `북쪽에서 찬 공기가 내려온다. 내일부터 ${lenOf(kind)}구간 한파가 온다. 모든 칸 온기 −${warm}, 석탄이 구간마다 ${coalOf(kind)} 더 든다. 대비 없이 가면 밤사이 얼어 숨지는 사람이 나올 수 있다.`;
   const choices: Choice[] = [
-    { label: '석탄을 쌓아 둔다', say: '불을 미리 키워 둬라. 석탄은 이럴 때 쓰는 거다.', effs: [{ t: 'coal', v: -DZ.prepCoal }], special: 'dz_coal', extra: [`${DISASTER_NAME[kind]} 온기 −${half}로 줄어든다`, '재난 동안 더 드는 석탄이 없다'] },
+    { label: '석탄을 쌓아 둔다', log: `${DISASTER_NAME[kind]}에 대비해 불을 미리 키워 두게 했다.`, say: '불을 미리 키워 둬라. 석탄은 이럴 때 쓰는 거다.', effs: [{ t: 'coal', v: -DZ.prepCoal }], special: 'dz_coal', extra: [`${DISASTER_NAME[kind]} 온기 −${half}로 줄어든다`, '재난 동안 더 드는 석탄이 없다'] },
     {
-      label: '칸을 모아 잔다', say: '오늘 밤은 문을 열어 두고 한 칸에 붙어 자라. 서로 체온이 난로다.',
+      label: '칸을 모아 잔다', log: `${DISASTER_NAME[kind]}에 대비해 한 칸에 붙어 자게 했다.`, say: '오늘 밤은 문을 열어 두고 한 칸에 붙어 자라. 서로 체온이 난로다.',
       effs: [...HUDDLE_COMMS.map(c => ({ t: 'base' as const, c, i: 2 as const, v: DZ.huddleCrowd })), { t: 'tension', v: DZ.huddleTension }],
       special: 'dz_huddle', extra: [`${DISASTER_NAME[kind]} 온기 −${half}로 줄어든다`, '과밀은 재난이 끝나면 원래대로 돌아간다'],
     },
     // 출발 미루기(날씨 명세 4장, DZ.wait로 끈다): 석탄과 긴장을 치르고 첫 구간을 선 채로 넘기며, 그날 같은 정차를 한 번 더 뒤진다.
     // 눈보라 예고 때만 있다(결정 338). 한파에도 두면 늘 미루기가 가장 나아진다(500판, 결정 332).
     ...(DZ.wait && kind === 'blizzard' ? [{
-      label: '출발을 하루 미룬다', say: '하루 서서 기다린다. 첫날은 선 채로 넘긴다.',
+      label: '출발을 하루 미룬다', log: '눈보라 예고에 출발을 하루 미루기로 했다.', say: '하루 서서 기다린다. 첫날은 선 채로 넘긴다.',
       effs: [...(DZ.waitFood ? [{ t: 'food' as const, v: -Math.round(foodCost(g) * DZ.waitFood) }] : []), { t: 'coal' as const, v: -DZ.waitCoal }, { t: 'tension' as const, v: DZ.waitTension }],
       special: 'dz_wait', extra: [`${DISASTER_NAME[kind]} 첫 구간을 선 채로 넘긴다(${Math.max(1, lenOf(kind) - 1)}구간만 맞는다)`, `온기 −${half}로 줄어든다`, ...(DZ.waitSearch ? ['기다리는 날 이 정차를 같은 작업조로 한 번 더 뒤진다'] : [])],
     }] : []),
-    { label: '그냥 간다', say: '예고일 뿐이다. 평소대로 간다.', effs: [], special: 'dz_none', extra: ['대비 없음'] },
+    { label: '그냥 간다', log: `${DISASTER_NAME[kind]} 예고에도 평소대로 가기로 했다.`, say: '예고일 뿐이다. 평소대로 간다.', effs: [], special: 'dz_none', extra: ['대비 없음'] },
   ];
   return {
     title: kind === 'blizzard' ? '눈보라 예고' : '한파 예고', required: true, key: 'disaster_prep',

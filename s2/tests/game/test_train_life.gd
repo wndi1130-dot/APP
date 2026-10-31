@@ -9,6 +9,7 @@ const SeasonTable = preload("res://game/season_table.gd")
 const Schedule = preload("res://game/train/train_schedule.gd")
 const TrainLight = preload("res://game/train/train_light.gd")
 const Look = preload("res://game/train/train_look.gd")
+const Interior = preload("res://game/train/train_interior.gd")
 
 
 func _scene(panel: bool = false):
@@ -621,6 +622,15 @@ func test_each_tail_car_has_one_thing_of_its_own() -> void:
 		for other in own:
 			assert_eq(s.life.rooms[car_id].props.has(own[other]), car_id == other, "%s / %s" % [car_id, own[other]])
 	assert_false(s.life.rooms["front"].props.has("laundry"), "a car outside the list keeps the plain layout")
+
+## The tail car's patched window: boards over part of the glass only (glass 1.30~2.20 m), the upper
+## glass left open so the window and its light still read.
+func test_the_patched_window_leaves_the_upper_glass_open() -> void:
+	var s = _scene()
+	var boards: Node3D = s.life.rooms["tail2"].props["patched_window"]
+	var box: AABB = boards.transform * Interior._bounds_of(boards)
+	assert_lt(box.position.y, 1.75, "the boards cover the lower part of the glass")
+	assert_lte(box.end.y, 2.2 - 0.4, "at least 0.4 m of the upper glass stays open")
 
 
 func test_expansion_uses_s1_car_ids_and_keeps_car_bound_traces() -> void:

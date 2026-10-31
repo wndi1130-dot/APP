@@ -28,6 +28,7 @@ function state(g: Game) {
   return plain({
     seg: g.seg, coal: g.coal, food: g.food, med: g.med, lux: g.lux, injured: g.injured, passed: g.passed,
     eventLog: g.eventLog ?? {}, lastCrew: g.lastCrew ?? null, comms: g.comms, space: g.space ?? null, hands: g.hands ?? null,
+    ...(g.lateOn !== undefined ? { lateOn: g.lateOn } : {}),
   });
 }
 
@@ -158,6 +159,35 @@ for (const seed of SEEDS) {
     add(`afford/${at}/guard_frost/lever`, maxed, card('travel', { text: 'guard_frost' }));
   }
 }
+
+// 결정 514: 기존 입력의 순서와 내용 뒤에만 덧붙인다.
+for (const c of S1.COMMS) for (const late of [0, 1, 2]) {
+  for (const kind of ['demand', 'favor', 'promise_ledger']) for (const poor of [false, true]) {
+    const g = S1.createGame('card-late'); S1.enableLate(g);
+    if (poor) { g.med = 0; g.lux = 0; g.coal = S1.P.shiftCoal; }
+    if (kind === 'demand') { g.comms[c].heat = 0; g.comms[c].ration = 0; }
+    add(`late/${kind}/${c}/${late}/${poor ? 'poor' : 'base'}`, g, { uid: 1, kind, comm: c, late });
+    if (kind === 'demand') {
+      g.comms[c].heat = 4;
+      add(`late/demand/${c}/${late}/ration`, g, { uid: 1, kind, comm: c, late });
+      if (c === 'engine') {
+        g.comms.engine.base[3] = 100;
+        add(`late/demand/engine/${late}/${poor ? 'poor-shift' : 'shift'}`, g, { uid: 1, kind, comm: c, late });
+      }
+    }
+  }
+}
+for (const late of [0, 1, 2]) for (const kind of ['ration_cut', 'travel']) for (const again of [false, true]) {
+  const g = S1.createGame('card-late'); S1.enableLate(g);
+  const card: Card = { uid: 1, kind, late, ...(kind === 'travel' ? { text: 'front_curtain' } : {}) };
+  if (again) memo(g, kind === 'travel' ? 'front_curtain' : kind, kind === 'travel' ? 'side_front' : 'refuse', 2);
+  add(`late/${kind}/${late}/${again ? 'again' : 'first'}`, g, card);
+}
+for (const kind of ['info', 'rescue', 'bitten']) {
+  const g = S1.createGame('card-late'); S1.enableLate(g);
+  add(`late/unsupported/${kind}`, g, { uid: 1, kind, comm: 'tail' });
+}
+add('late/old-save/off', S1.createGame('card-late-old'), { uid: 1, kind: 'favor', comm: 'front', late: 2 });
 
 const out = resolve(process.argv.find(a => a.endsWith('.json')) ?? resolve(import.meta.dirname, '../../s2/tests/fixtures/train/card_vectors.json'));
 const data = { format: FORMAT, seeds: SEEDS, checkpoints: CHECKPOINTS, kinds: KINDS,

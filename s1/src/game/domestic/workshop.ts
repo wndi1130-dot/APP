@@ -11,7 +11,7 @@ import { refreshSit } from './sit';
 import { locoAutoRepairParts, locoOf, locoRepairParts } from '../loco';
 import { saveRestore, workBonus } from './classroom';
 import { handsWorkMult } from '../hands';
-import { domCard, furnishOf, furnishScore, nextFurnishWork, secondPath, techMult, techUsable, techVariants, topSkill, variantMult, zoneOf } from './state';
+import { domCard, furnishOf, furnishTier, nextFurnishWork, secondPath, techMult, techUsable, techVariants, topSkill, variantMult, zoneOf } from './state';
 import type { DomState, ModKind, Task } from './state';
 import { addSupplies, SUP_MAKE, SUPPLIES_BOT, SUPPLIES_PROBE, suppliesNeed } from '../supplies';
 
@@ -383,26 +383,25 @@ export const CAR_NAME: Record<string, string> = {
 function mutableFurnish(g: Game, car: string) {
   const states = dom(g).furnish ??= {};
   const f = furnishOf(g, car);
+  f.best = Math.max(f.best ?? f.tier, f.tier) as FurnishTier;
   states[car] = f;
   return f;
 }
 
-/** 단은 내려가지 않고, 처음 닿은 단마다 한 번만 관계와 일지를 남긴다. */
+/** Furniture tiers last while placed; best records the highest rewarded tier (517). */
 export function updateFurnish(g: Game, car: string): void {
   if (!FURNISH_CARS.some(c => c === car)) return;
   const f = mutableFurnish(g, car);
   f.work = f.jobs.length as FurnishTier;
   f.furnPts = Math.min(D.furnishFurnitureCap, furniturePoints(f.items));
-  const score = furnishScore(g, car);
-  const reached = FURNISH_STEPS.filter(n => score >= D.furnishThreshold[n]).at(-1) ?? 0;
-  f.tier = Math.max(f.tier, f.best, reached) as FurnishTier;
+  f.tier = furnishTier(g, car);
   const c = CAR_COMM[car];
   for (const n of FURNISH_STEPS.filter(n => n > f.best && n <= f.tier)) {
     bumpRel(g, c, D.furnishRel * n / COMM_CARS[c], 'furnish');
     const change = ({ 1: '벽을 맞추고 잠자리를 손봤다', 2: '선반과 식탁이 들어섰다', 3: '붙박이 침대가 들어섰다' } as const)[n];
     journal(g, `${CAR_NAME[car]}에 살림 ${n}단: ${change}. ${COMM_NAME[c === 'tail' ? 'front' : 'tail']}에서 그 소리를 들었다.`, 'good');
   }
-  f.best = f.tier;
+  f.best = Math.max(f.best, f.tier) as FurnishTier;
 }
 
 function completeJob(g: Game): void {

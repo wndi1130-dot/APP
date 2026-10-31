@@ -7,7 +7,7 @@ import { seasonHolds } from './climate';
 import type { SeasonNeed } from './climate';
 import { onDeath } from './death';
 import { inEventPack } from './event_pack';
-import { josa } from './josa';
+import { josa, settleJosa } from './josa';
 import { SPECIALISTS } from './domestic/data';
 import { CAR_COMM } from './domestic/data';
 import { domesticAide, living } from './domestic/state';
@@ -48,7 +48,7 @@ export type ContentEffect =
   | { type: 'followup'; id: string; delay: number }
   | { type: 'deal' | 'chronicle'; id: string };
 export interface ContentChoice {
-  id: string; label: string; say?: string;
+  id: string; label: string; say?: string; log?: string;
   /** 그 칸의 사정 한 줄(값이 왜 그렇게 나오는지), 나중에 돌아올 것 한 줄. 카드가 선택지 밑에 적는다(ui/card.ts) */
   why?: string; later?: string;
   /** 모두 참일 때만 카드에 보인다. 자원이 모자라면 회색이 아니라 숨긴다 */
@@ -104,7 +104,7 @@ export const CONTENT_DEAL_KIND = 'content-deal';
 /** person.state away: 돌아오는 구간을 정하지 않은 떠남. 저장(JSON)에 Infinity를 못 써서 큰 수로 둔다 */
 const AWAY_FOREVER = 1e6;
 
-export { josa };
+export { josa, settleJosa };
 
 /** {name}[a/b]를 값과 조사로 채운다. 값이 없는 자리표시자는 그대로 둔다(사건이 뽑히기 전에 거른다). */
 export function fillText(text: string, values: Partial<Record<Placeholder, string>>): string {
@@ -521,13 +521,14 @@ function contentView(g: Game, card: Card): CardView | null {
   if (card.kind === CONTENT_DEAL_KIND) return dealView(g, card);
   if (card.kind !== CONTENT_CARD_KIND) return null;
   const ev = CONTENT_EVENTS.find(e => e.id === card.text);
-  if (!ev) return { title: '빈 서류', body: `읽을 수 없는 사건: ${card.text ?? ''}`, choices: [{ label: '덮는다', effs: [] }], required: false };
+  if (!ev) return { title: '빈 서류', body: `읽을 수 없는 사건: ${card.text ?? ''}`, choices: [{ label: '덮는다', log: '읽을 수 없는 사건 서류를 덮었다.', effs: [] }], required: false };
   const vals = (card.vals ?? {}) as Partial<Record<Placeholder, string>>;
   const speaker = speakerOf(g, ev, card);
   const c = speaker.comm;
   const shown = ev.choices.filter(ch => (ch.requires ?? []).every(r => holds(g, r)));
   const choices: Choice[] = (shown.length > 0 ? shown : ev.choices).map(ch => ({
     label: fillText(ch.label, vals), ...(ch.say ? { say: fillText(ch.say, vals) } : {}),
+    ...(ch.log !== undefined ? { log: fillText(ch.log, vals) } : {}),
     effs: toEffs(ch.effects), special: `content:${ch.id}`, witness: ch.witnesses.length > 0,
     ...(ch.why ? { why: fillText(ch.why, vals) } : {}), ...(ch.later ? { later: fillText(ch.later, vals) } : {}),
   }));
@@ -540,15 +541,15 @@ function contentView(g: Game, card: Card): CardView | null {
 function dealView(g: Game, card: Card): CardView {
   const def = CONTENT_DEALS.find(x => x.id === card.text);
   const c = card.comm ?? 'tail';
-  if (!def) return { title: '빈 서류', body: `읽을 수 없는 거래: ${card.text ?? ''}`, choices: [{ label: '덮는다', effs: [] }], required: false };
+  if (!def) return { title: '빈 서류', body: `읽을 수 없는 거래: ${card.text ?? ''}`, choices: [{ label: '덮는다', log: '읽을 수 없는 거래 서류를 덮었다.', effs: [] }], required: false };
   const now = def.deadline <= 0;
   const body = [...(def.say ? [def.say] : []), `요구: ${effectText(def.ask)}`, `기한: ${now ? '지금' : `${def.deadline}구간 뒤`}`, `어기면: ${effectText(def.breach)}`].join('. ') + '.';
   const accept = toEffs(def.gives).concat(now ? toEffs(def.ask) : []);
   return {
     title: `${COMM_NAME[c]}의 거래`, speaker: { name: g.comms[c].leader.name, role: REP_ROLE[c], comm: c }, body,
     choices: withAfford(g, [
-      { label: '받는다', effs: accept, special: 'content-deal:accept' },
-      { label: '거절한다', effs: [], special: 'content-deal:refuse' },
+      { label: '받는다', log: now ? `${COMM_NAME[c]}의 거래를 받아 값을 치렀다.` : `${COMM_NAME[c]}의 거래를 받고 값을 치르기로 했다.`, effs: accept, special: 'content-deal:accept' },
+      { label: '거절한다', log: `${COMM_NAME[c]}이(가) 내민 사건 거래를 거절했다.`, effs: [], special: 'content-deal:refuse' },
     ]),
     required: true, key: `content-deal:${def.id}`, focus: c,
   };

@@ -1,10 +1,11 @@
 import { COMMS, LAWS } from '../data';
 import type { Comm, LawId, LawRes } from '../data';
-import { lawActive } from '../state';
+import { journal, lawActive } from '../state';
 import { bumpRel } from '../ledger';
 import type { Game } from '../state';
 import { CAR_COMM, COMM_CARS, D, FURNISH_CARS, SUPPLIES_TECHS, TECHS } from './data';
-import { DECOR as FURNITURE, decorCrowd } from './decor_data';
+import { DECOR as FURNITURE, DECOR_CARS, FURNISH80, decorBand, decorCrowd, decorPercent } from './decor_data';
+import type { DecorCar } from './decor_data';
 import { SUPPLIES_BOT } from '../supplies';
 import type { TechId, Variant } from './data';
 import { furnishOf, techMult, variantMult } from './state';
@@ -106,15 +107,56 @@ export function furnishComparison(g: Game): Record<Comm, number> {
   return out;
 }
 
-/** 정산마다 비교 불만과 공동체당 피아노 하나. 관계 변화는 기존 까닭 장부에 남긴다. */
+/** Per-car decoration reward before the community share and relationship clamp. */
+export function decorRelGain(g: Game, car: string): number {
+  const band = decorBand(decorPercent(g, car));
+  if (band < 0 || car === 'captain') return 0;
+  if (car === 'dining') return D.diningDecorRel[band];
+  if (!FURNISH_CARS.some(c => c === car)) return 0;
+  return D.decorRel[furnishOf(g, car).tier === 3 ? band : 0];
+}
+export function decorVoice(g: Game, car: DecorCar): string | undefined {
+  if (car === 'captain') return undefined;
+  const mood = car === 'dining'
+    ? g.trust >= D.decorVoiceTrustGood ? 1 : g.trust < D.decorVoiceTrustLow ? 2 : 0
+    : g.comms[CAR_COMM[car]].rel >= D.decorVoiceRelGood ? 1 : g.comms[CAR_COMM[car]].rel <= D.decorVoiceRelBad ? 2 : 0;
+  return FURNISH80[car].say[mood];
+}
+/** Observe before this tick's relationship changes; no RNG and no numeric achievement reward. */
+function firstDecor80(g: Game): void {
+  for (const car of DECOR_CARS) {
+    if ((g.dom!.decor80 ?? []).includes(car) || decorBand(decorPercent(g, car)) < 1) continue;
+    (g.dom!.decor80 ??= []).push(car);
+    const say = decorVoice(g, car);
+    journal(g, FURNISH80[car].journal + (say ? ` 「${say}」` : ''), 'good');
+  }
+}
+
+/** 정산마다 비교 불만·공동체당 피아노 하나·칸 꾸밈. 기존 까닭 장부를 쓴다. */
 export function furnishTick(g: Game): void {
   if (!g.dom) return;
+  firstDecor80(g);
   const comparison = furnishComparison(g);
   for (const c of COMMS) {
     bumpRel(g, c, comparison[c], 'furnish');
     if (c !== 'engine' && g.comms[c].pop > 0 && FURNISH_CARS.some(car => CAR_COMM[car] === c && furnishOf(g, car).items.some(item => FURNITURE[item.kind].piano))) {
       bumpRel(g, c, D.furnishPianoRel, 'furnish');
     }
+  }
+  residentialDecorTick(g);
+  diningDecorTick(g);
+}
+function residentialDecorTick(g: Game): void {
+  for (const car of FURNISH_CARS) {
+    const c = CAR_COMM[car];
+    bumpRel(g, c, decorRelGain(g, car) / COMM_CARS[c], 'furnish');
+  }
+}
+function diningDecorTick(g: Game): void {
+  const dining = decorRelGain(g, 'dining');
+  for (const car of FURNISH_CARS) {
+    const c = CAR_COMM[car];
+    bumpRel(g, c, dining / COMM_CARS[c], 'furnish');
   }
 }
 

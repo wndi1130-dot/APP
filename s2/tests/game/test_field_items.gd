@@ -25,7 +25,7 @@ func _names() -> Dictionary:
 
 func test_thirty_to_fifty_things_each_with_a_short_name_a_picture_and_a_weight() -> void:
 	var names := _names()
-	assert_between(names.size(), 30, 50, "named things picked up in the field")
+	assert_between(names.size(), 30, 60, "named things picked up in the field") # 결정 490 생필품 아홉 가지
 	assert_between(FieldItems.RARE.size(), 6, 10, "and the named finds")
 	for id: String in FieldItems.ITEMS.keys() + FieldItems.RARE.keys():
 		assert_true(FieldItems.item_name(id).length() <= 9, "short: " + id)
@@ -33,7 +33,7 @@ func test_thirty_to_fifty_things_each_with_a_short_name_a_picture_and_a_weight()
 		assert_true(HudIcons.PATHS.has(FieldItems.icon(id)), "a picture: %s (%s)" % [id, FieldItems.icon(id)])
 		assert_true(Carry.item_weight(id) == FieldItems.weight(id), "the pack weighs it: " + id)
 		var melt: Array = FieldItems.stock_of(id)
-		assert_true(String(melt[0]) == "" or Receipt.STOCK_KEYS.has(melt[0]), "a stock the receipt knows: " + id)
+		assert_true(String(melt[0]) == "" or Receipt.STOCK_KEYS.has(melt[0]) or Receipt.V3_STOCK_KEYS.has(melt[0]), "a stock the receipt knows: " + id)
 	for id: String in FieldItems.ITEMS:
 		assert_false(Carry.ITEM_WEIGHTS.has(id), "no clash with the old ids: " + id)
 
@@ -145,6 +145,10 @@ func test_dressing_keeps_what_each_building_holds_and_names_every_bundle() -> vo
 	# The parts stuff and the clothes are finds too (decision 426 D2, 423 card 2).
 	for found: String in ["gears", "springs", "wire_coil"] + FieldItems.Wear.KINDS.keys():
 		after.erase(found)
+	# And the supplies, last of all (loot_supplies.gd, decision 490).
+	for rows: Array in LootDress.LootSupplies.ROWS.values():
+		for row: Array in rows:
+			after.erase(String(row[0]))
 	assert_eq(after, before, "the same bundles and things, only moved")
 	for id: String in c:
 		if id == "goal":

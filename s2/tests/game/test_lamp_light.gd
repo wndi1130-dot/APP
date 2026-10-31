@@ -102,6 +102,9 @@ func test_after_sunset_windows_and_lanterns_are_lit() -> void:
 	game._update_lantern(0.1)
 	assert_true(game.lantern.visible)
 	assert_eq(game.lantern.light_color, FxState.LAMP)
+	# Its falloff is the picture's only: the reach the rules read stays the lamp's.
+	assert_eq(game.lantern.omni_attenuation, game.LANTERN_FALLOFF)
+	assert_almost_eq(game.lantern.omni_range, float(game.player.lamp["reach"]), 0.001)
 	assert_almost_eq(game.lantern.position.x, game.player.position.x, 0.001)
 
 

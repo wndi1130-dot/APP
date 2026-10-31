@@ -31,6 +31,11 @@ uniform float rime_catch : hint_range(0.0, 1.0) = 1.0;
 // Dirt and soot rising from the ground (world metres).
 uniform float grime : hint_range(0.0, 1.0) = 0.0;
 uniform float grime_height = 0.8;
+// Contact (T0-6): the foot of a thing standing on a floor goes darker, most at the floor and gone by
+// contact_height above it (3 m storeys), so a pale box stands on its floor and does not float over
+// it. What stands on a table or hangs on a wall is clear of it. 0: off (prop_models.gd turns it on).
+uniform float contact_dark : hint_range(0.0, 1.0) = 0.0;
+uniform float contact_height = 0.3;
 // Flat ground only: let rain pool in low noise spots.
 uniform float puddles : hint_range(0.0, 1.0) = 0.0;
 // 1 indoors: no rain, snow or puddles reach it.
@@ -42,13 +47,22 @@ uniform float grade_saturation : hint_range(0.0, 1.0) = 0.45;
 uniform float grade_value : hint_range(0.0, 1.0) = 0.82;
 uniform vec3 grade_cool : source_color = vec3(0.78, 0.85, 0.95);
 uniform float grade_cool_mix : hint_range(0.0, 1.0) = 0.35;
+// Living colour (decision 421-1, as building.gdshader's accent): house furniture is pressed less, so its wood,
+// cloth and paint read as such indoors. 1 for the room furniture prop_models.gd names, 0 for everything else.
+// The bake inverts this grade for those models (tools/blender/props_field_room.py LIVELY_GRADE).
+uniform float lively : hint_range(0.0, 1.0) = 0.0;
+uniform float accent_saturation : hint_range(0.0, 1.0) = 0.75;
 
 varying vec3 w_pos;
 varying vec3 w_nrm;
 varying flat float v_tint_set;
+// The floor the model stands on: its own origin taken down to its storey (3 m), so a tall
+// tree's crown is not darkened where it passes the next storey's height.
+varying flat float v_floor;
 
 void vertex() {
 	w_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	v_floor = floor(MODEL_MATRIX[3].y / 3.0 + 0.02) * 3.0;
 	w_nrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	v_tint_set = tint_from_custom ? INSTANCE_CUSTOM.r : 0.0;
 }
@@ -91,11 +105,15 @@ void fragment() {
 			base = mix(base * (want / r), paint.rgb * (k * shade), clamp(paint.a, 0.0, 1.0));
 		}
 	}
-	base = fx_model_grade(base, grade_saturation, grade_value, grade_cool, grade_cool_mix);
+	base = mix(fx_model_grade(base, grade_saturation, grade_value, grade_cool, grade_cool_mix),
+			fx_model_grade(base, accent_saturation, grade_value, grade_cool, grade_cool_mix * 0.6), lively);
 	float open = 1.0 - sheltered;
 	float up = clamp(w_nrm.y, 0.0, 1.0);
 	float n = fx_fbm2(w_pos.xz * 0.9 + w_pos.y * 0.37);
 	float rough = roughness_base;
+
+	float above_floor = w_pos.y - v_floor;
+	base *= 1.0 - contact_dark * (1.0 - smoothstep(0.0, contact_height, above_floor));
 
 	// Soot and dirt: darker toward the ground, broken by noise.
 	float g = grime * (1.0 - smoothstep(0.0, grime_height, w_pos.y)) * (0.55 + 0.45 * n);

@@ -15,22 +15,22 @@ const FURNISH_WALL_MAX: Dictionary = {"tail1": 6, "tail2": 7, "tail3": 5, "medte
 ## The dining car keeps its four-way walkway clear (row iz 4 is the aisle), so only 13 floor pieces fit.
 const FURNISH_FLOOR_MAX: Dictionary = {"tail1": 29, "tail2": 29, "tail3": 29, "medtech": 29, "guard": 29, "front": 29, "captain": 29, "dining": 13}
 const DECOR: Dictionary = {
-	"chair": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": ""},
-	"side_table": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": ""},
-	"small_shelf": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": ""},
-	"oil_lamp": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": ""},
-	"small_box": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": ""},
+	"chair": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": "res://models/train_interior/wood_chair.glb"},
+	"side_table": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": "res://models/props_field/side_table.glb"},
+	"small_shelf": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": "res://models/train_interior/cupboard.glb"},
+	"oil_lamp": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": "res://models/train_interior/lantern_off.glb", "light": "lamp"},
+	"small_box": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": "res://models/train_interior/medicine_box.glb"},
 	"frame": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "wall", "surface": false, "furniture": true, "model": ""},
-	"drawer": {"size": "medium", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": ""},
-	"bed_frame": {"size": "medium", "warm": 0, "crowd": -1, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": ""},
-	"table": {"size": "medium", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": ""},
-	"bookshelf": {"size": "medium", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": ""},
-	"small_stove": {"size": "medium", "warm": 2, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": ""},
-	"wardrobe": {"size": "large", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": ""},
+	"drawer": {"size": "medium", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": "res://models/props_field/dresser.glb"},
+	"bed_frame": {"size": "medium", "warm": 0, "crowd": -1, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": "res://models/props_stop01/iron_bed.glb"},
+	"table": {"size": "medium", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": "res://models/props_field/long_table.glb"},
+	"bookshelf": {"size": "medium", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": "res://models/props_stop01/bookcase.glb"},
+	"small_stove": {"size": "medium", "warm": 2, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": "res://models/train_interior/stove.glb", "light": "stove"},
+	"wardrobe": {"size": "large", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": "res://models/props_stop01/wardrobe.glb"},
 	"piano": {"size": "large", "warm": 0, "crowd": 0, "piano": true, "spot": "floor", "surface": false, "furniture": true, "model": ""},
-	"cupboard": {"size": "large", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": ""},
-	"iron_stove": {"size": "large", "warm": 4, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": ""},
-	"safe": {"size": "large", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": ""},
+	"cupboard": {"size": "large", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": true, "furniture": true, "model": "res://models/props_field/cupboard.glb"},
+	"iron_stove": {"size": "large", "warm": 4, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": "res://models/props_common/cold_stove.glb", "light": "stove"},
+	"safe": {"size": "large", "warm": 0, "crowd": 0, "piano": false, "spot": "floor", "surface": false, "furniture": true, "model": "res://models/props_field/strongbox.glb"},
 	"painting": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "wall", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 0.75},
 	"record": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 0.5},
 	"can_beans": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "food", "v": 0.5},
@@ -40,6 +40,68 @@ const DECOR: Dictionary = {
 	"bottle_spirit": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 0.5},
 	"rare_violin": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "wall", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 1.5},
 	"rare_wine_case": {"size": "small", "warm": 0, "crowd": 0, "piano": false, "spot": "surface", "surface": false, "furniture": false, "model": "", "res": "lux", "v": 2},
+}
+const FURNISH80: Dictionary = {
+	"tail1": {
+		"journal": "꼬리칸 선반에 인형과 장난감 차가 서고 전구 줄이 켜졌다. 아이들이 처음으로 늦게까지 논다.",
+		"say": [
+			"우리 칸도 이제 사람 사는 데 같다.",
+			"열차장이 손수 놓은 거, 우리도 다 봤다.",
+			"꾸며 준다고 빚이 없어지진 않는다. 그래도 고맙다."
+		]
+	},
+	"tail2": {
+		"journal": "꼬리칸 벽에 작은 그림이 줄지어 걸렸다. 사람들이 서로 자리를 비켜 앉는다.",
+		"say": [
+			"우리 칸도 이제 사람 사는 데 같다.",
+			"열차장이 손수 놓은 거, 우리도 다 봤다.",
+			"꾸며 준다고 빚이 없어지진 않는다. 그래도 고맙다."
+		]
+	},
+	"tail3": {
+		"journal": "꼬리칸 선반에 고무 오리와 병이 섰다. 처음으로 누가 노래를 흥얼거린다.",
+		"say": [
+			"우리 칸도 이제 사람 사는 데 같다.",
+			"열차장이 손수 놓은 거, 우리도 다 봤다.",
+			"꾸며 준다고 빚이 없어지진 않는다. 그래도 고맙다."
+		]
+	},
+	"medtech": {
+		"journal": "의무칸 선반에 약병이 크기대로 섰다. 환자들이 처음으로 창 쪽을 보고 눕는다.",
+		"say": [
+			"이 칸에서 웃는 환자는 처음 봤다. 적어 둔다.",
+			"손 닿는 데 다 있다. 열차장 몫으로 적어 두겠다.",
+			"보기 좋다. 그래도 침상 수는 그대로다."
+		]
+	},
+	"guard": {
+		"journal": "경비대 칸 벽에 지도와 작은 그림이 걸렸다. 교대하는 대원마다 멈춰 서서 한 번씩 본다.",
+		"say": [
+			"초소 같지 않다. 집 같다.",
+			"대원들이 고맙다고 전해 달란다. 나도다.",
+			"꾸밈은 받았다. 할 말은 회기에서 한다."
+		]
+	},
+	"front": {
+		"journal": "앞칸 탁자마다 등잔이 켜지고 레코드가 돈다. 앞칸 사람들이 다시 손님을 들이기 시작했다.",
+		"say": [
+			"이제야 손님을 맞을 만합니다.",
+			"손수 놓으셨다지요. 앞칸이 기억해 두겠습니다.",
+			"보기엔 좋지요. 그래도 셈은 따로 하겠습니다."
+		]
+	},
+	"captain": {
+		"journal": "열차장실 책상에 노선도가 펼쳐지고 등잔이 켜졌다. 찾아온 대표들이 처음으로 앉아서 말한다.",
+		"say": []
+	},
+	"dining": {
+		"journal": "식당칸 탁자마다 등잔이 켜지고 벽에 그림이 걸렸다. 칸이 다른 사람들이 처음으로 한 탁자에 앉는다.",
+		"say": [
+			"여기서 먹으니 같은 열차 사람 같다.",
+			"열차장이 손수 걸었다더라. 오늘은 다 같이 먹자.",
+			"탁자는 좋아졌다. 그릇이 차야 웃는다."
+		]
+	}
 }
 const POINTS: Dictionary = {"small": 1, "medium": 2, "large": 3}
 const CROWD: Dictionary = {"small": 0, "medium": 0.5, "large": 1.5}
@@ -51,6 +113,60 @@ static func items_of(g: Dictionary, car: String) -> Array:
 
 static func spot_of(item: Dictionary) -> String:
 	return String(item.get("spot", DECOR[item["kind"]]["spot"]))
+
+
+## Deferred D lookup avoids the Mods -> Decor preload cycle.
+static func decor_parts(g: Dictionary, car: String) -> Array:
+	if not DECOR_CARS.has(car):
+		return [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+	var d: Dictionary = load("res://game/train/train_mods.gd").D
+	var items: Array = items_of(g, car)
+	var kinds: Dictionary = {}
+	var lights: Dictionary = {}
+	var surfaces: Array[int] = []
+	var occupied: Dictionary = {}
+	var floors: int = 0
+	var walls: int = 0
+	var small: int = 0
+	for i: int in items.size():
+		var item: Dictionary = items[i]
+		var def: Dictionary = DECOR[item["kind"]]
+		kinds[item["kind"]] = true
+		if def.has("light"): lights[def["light"]] = true
+		match spot_of(item):
+			"floor":
+				floors += 1
+				if def["surface"]: surfaces.append(i)
+			"wall": walls += 1
+			"surface":
+				small += 1
+				occupied[int(item.get("on", -1))] = true
+	var covered: int = 0
+	for i: int in surfaces:
+		if occupied.has(i): covered += 1
+	var parts: Array = [
+		float(kinds.size()) / mini(int(d["decorKindMax"]), int(floor(float(d["decorKindShare"]) * DECOR.size()))),
+		float(floors) / mini(int(d["decorFloorTarget"]), FURNISH_FLOOR_MAX[car]),
+		float(walls) / mini(int(d["decorWallTarget"]), FURNISH_WALL_MAX[car]),
+		float(covered) / surfaces.size() / float(d["decorSurfaceTarget"]) if not surfaces.is_empty() else 0.0,
+		float(small) / float(d["decorSmallTarget"]), float(lights.size()) / float(d["decorLightTarget"]),
+	]
+	for i: int in parts.size(): parts[i] = minf(1.0, float(parts[i]))
+	return parts
+
+
+static func decor_percent(g: Dictionary, car: String) -> float:
+	var total: float = 0.0
+	for value: float in decor_parts(g, car): total += value
+	return total / 6.0
+
+
+static func decor_band(percent: float) -> int:
+	var d: Dictionary = load("res://game/train/train_mods.gd").D
+	var band: int = -1
+	for i: int in d["decorThresholds"].size():
+		if percent + float(d["decorEpsilon"]) >= float(d["decorThresholds"][i]): band = i
+	return band
 
 
 static func common_tier(g: Dictionary) -> int:
@@ -78,6 +194,23 @@ static func slots_open(g: Dictionary, car: String) -> Dictionary:
 	for spot: String in result:
 		result[spot] = maxi(0, int(result[spot]))
 	return result
+
+
+static func slots_fit(car: String, items: Array, tier: int) -> bool:
+	var slots: Dictionary = DECOR_SLOTS[tier]
+	var floor_used: int = 0
+	var wall_used: int = 0
+	var surfaces: Dictionary = {}
+	for item: Dictionary in items:
+		match spot_of(item):
+			"floor": floor_used += 1
+			"wall": wall_used += 1
+			"surface":
+				var on: int = int(item["on"])
+				surfaces[on] = int(surfaces.get(on, 0)) + 1
+				if int(surfaces[on]) > int(slots["surface"]):
+					return false
+	return floor_used <= mini(int(slots["floor"]), int(FURNISH_FLOOR_MAX[car])) and wall_used <= mini(int(slots["wall"]), int(FURNISH_WALL_MAX[car]))
 
 
 ## The resource numbers have already been credited by the receipt owner.
@@ -285,10 +418,14 @@ static func migrate(g: Dictionary) -> void:
 	var d: Dictionary = g["dom"]
 	if not d.has("store"):
 		d["store"] = {}
+	if not d.has("decor80"):
+		d["decor80"] = []
 	if d.get("furnish") is Dictionary:
 		for state: Variant in d["furnish"].values():
 			if not state is Dictionary or not state.get("items") is Array:
 				continue
+			if state.has("tier"):
+				state["best"] = maxi(int(state.get("best", state["tier"])), int(state["tier"]))
 			for item: Variant in state["items"]:
 				if item is Dictionary and DECOR.has(item.get("kind")) and not item.has("spot"):
 					item["spot"] = DECOR[item["kind"]]["spot"]

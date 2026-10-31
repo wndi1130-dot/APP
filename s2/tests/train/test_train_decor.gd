@@ -46,6 +46,124 @@ func _put(g: Dictionary, car: String, kind: String, on: Variant = null) -> void:
 	assert_eq(Mods.place(g, car, kind, Decor.DECOR[kind]["spot"], [2, 0], 0, on), {"ok": true})
 
 
+func test_residential_wall_overflow_keeps_even_unreconciled_stock_and_all_state() -> void:
+	var g: Dictionary = _fresh()
+	_put(g, "front", "piano")
+	_put(g, "front", "painting")
+	Decor.receive_decor(g, ["rare_violin"])
+	g["lux"] = 0.0
+	var before: Dictionary = g.duplicate(true)
+	assert_eq(Mods.take_back(g, "front", 0), {"ok": false, "why": "살림이 내려가면 자리가 모자란다. 다른 것부터 거둬라"})
+	assert_eq(g, before)
+	assert_true(Mods.take_back(g, "front", 1)["ok"])
+	assert_true(Mods.take_back(g, "front", 0)["ok"])
+	assert_eq(Mods.furnish_of(g, "front")["tier"], 0)
+	assert_eq(Mods.furnish_of(g, "front")["best"], 1)
+	assert_eq(Mods.slots_open(g, "front"), {"floor": 8, "wall": 0, "surface": 0})
+
+
+func test_surface_overflow_is_per_parent_and_failed_cascade_keeps_everything() -> void:
+	var g: Dictionary = _fresh()
+	_put(g, "front", "cupboard")
+	_put(g, "front", "side_table")
+	_put(g, "front", "side_table")
+	for _i: int in 4: _put(g, "front", "can_beans", 0)
+	for _i: int in 3: _put(g, "front", "record", 1)
+	var before: Dictionary = g.duplicate(true)
+	assert_eq(Mods.take_back(g, "front", 0), {"ok": false, "why": "살림이 내려가면 자리가 모자란다. 다른 것부터 거둬라"})
+	assert_eq(g, before)
+
+
+func test_cascade_is_excluded_before_capacity_check_and_remaining_indices_are_remapped() -> void:
+	var g: Dictionary = _fresh()
+	_put(g, "front", "cupboard")
+	_put(g, "front", "side_table")
+	for _i: int in 4: _put(g, "front", "can_beans", 0)
+	for _i: int in 2: _put(g, "front", "record", 1)
+	var food: float = g["food"]
+	assert_true(Mods.take_back(g, "front", 0)["ok"])
+	assert_eq(Mods.furnish_of(g, "front")["tier"], 0)
+	assert_eq(Mods.furnish_of(g, "front")["best"], 1)
+	assert_eq(Decor.items_of(g, "front").map(func(item: Dictionary) -> String: return item["kind"]), ["side_table", "record", "record"])
+	assert_eq(Decor.items_of(g, "front").slice(1).map(func(item: Dictionary) -> int: return item["on"]), [0, 0])
+	assert_eq(float(g["food"]), food + 4 * float(Decor.DECOR["can_beans"]["v"]))
+	assert_eq(Decor.read_store(g)["can_beans"]["n"], 4)
+	assert_eq(Mods.slots_open(g, "front")["surface"], 0)
+
+
+func test_common_tier_drop_checks_both_cars_floor_wall_and_each_surface() -> void:
+	for car: String in ["captain", "dining"]:
+		for spot: String in ["floor", "wall", "surface"]:
+			var g: Dictionary = _fresh()
+			_put(g, "front", "piano")
+			match spot:
+				"floor":
+					for _i: int in 9: _put(g, car, "chair")
+				"wall": _put(g, car, "painting")
+				"surface":
+					_put(g, car, "side_table")
+					for _i: int in 3: _put(g, car, "record", 0)
+			var before: Dictionary = g.duplicate(true)
+			assert_eq(Mods.take_back(g, "front", 0), {"ok": false, "why": "살림이 내려가면 자리가 모자란다. 다른 것부터 거둬라"}, car + " " + spot)
+			assert_eq(g, before)
+			assert_eq(Decor.common_tier(g), 1)
+
+
+func test_another_current_tier_keeps_common_capacity_until_the_last_car_drops() -> void:
+	var g: Dictionary = _fresh()
+	_put(g, "front", "piano")
+	_put(g, "tail1", "piano")
+	_put(g, "captain", "painting")
+	_put(g, "dining", "painting")
+	assert_true(Mods.take_back(g, "front", 0)["ok"])
+	assert_eq(Decor.common_tier(g), 1)
+	assert_false(Mods.take_back(g, "tail1", 0)["ok"])
+	assert_true(Mods.take_back(g, "captain", 0)["ok"])
+	assert_false(Mods.take_back(g, "tail1", 0)["ok"])
+	assert_true(Mods.take_back(g, "dining", 0)["ok"])
+	assert_true(Mods.take_back(g, "tail1", 0)["ok"])
+	assert_eq(Decor.common_tier(g), 0)
+	assert_eq(Mods.slots_open(g, "captain")["wall"], 0)
+	assert_eq(Mods.slots_open(g, "dining")["floor"], 8)
+
+
+func test_a_legacy_kept_tier_is_not_a_drop_so_a_pointless_painting_comes_back() -> void:
+	var g: Dictionary = _fresh()
+	var paintings: Array = []
+	for k: int in 6:
+		paintings.append({"kind": "painting", "size": "small", "spot": "wall", "at": [k, -1], "rot": 0, "v": Decor.DECOR["painting"]["v"]})
+	g["dom"]["furnish"]["medtech"] = {"work": 1, "jobs": [2], "furnPts": 0, "tier": 2, "best": 2, "items": paintings}
+	assert_eq(Mods.take_back(g, "medtech", 0), {"ok": true})
+	assert_eq(Mods.furnish_of(g, "medtech")["tier"], 1)
+	assert_eq(Mods.furnish_of(g, "medtech")["best"], 2)
+	assert_eq(Decor.items_of(g, "medtech").size(), 5)
+
+
+func test_legacy_best_is_filled_without_recalculating_tier_on_load() -> void:
+	for best: Variant in [null, 0, 1]:
+		var g: Dictionary = _fresh()
+		g["version"] = Save.SAVE_VERSION
+		g["dom"]["furnish"]["front"] = {"work": 0, "jobs": [], "furnPts": 0, "tier": 1, "items": []}
+		if best != null: g["dom"]["furnish"]["front"]["best"] = best
+		var loaded: Dictionary = Save.read_save(g, TV.tables())
+		assert_true(loaded["ok"])
+		if not loaded["ok"]: continue
+		var restored: Dictionary = loaded["g"]
+		assert_eq(restored["version"], Save.SAVE_VERSION)
+		assert_eq(restored["rng"], g["rng"])
+		assert_eq(Mods.furnish_of(restored, "front")["tier"], 1)
+		assert_eq(Mods.furnish_of(restored, "front")["best"], 1)
+		assert_true(Dom.is_store(restored["dom"]))
+		var journal: Array = restored["journal"].duplicate(true)
+		var rel: float = restored["comms"]["front"]["rel"]
+		Mods._update_furnish(restored, "front")
+		assert_eq(Mods.furnish_of(restored, "front")["tier"], 0)
+		assert_eq(Mods.furnish_of(restored, "front")["best"], 1)
+		_put(restored, "front", "piano")
+		assert_eq(restored["comms"]["front"]["rel"], rel)
+		assert_eq(restored["journal"], journal)
+
+
 func test_catalog_and_all_slot_tables_match_s1() -> void:
 	var tables: Dictionary = _data["tables"]
 	var actual: Dictionary = {"DECOR": Decor.DECOR, "DECOR_CARS": Decor.DECOR_CARS, "DECOR_SLOT_TABLE": Decor.DECOR_SLOT_TABLE,
@@ -59,7 +177,10 @@ func test_catalog_and_all_slot_tables_match_s1() -> void:
 		var def: Dictionary = Decor.DECOR[kind]
 		furniture += int(def["furniture"])
 		surfaces += int(def["surface"])
-		assert_eq(def["model"], "")
+		# Missing art keeps an empty path; mapped art must resolve in this checkout.
+		# The complete catalog (including model paths) is compared with S1 above.
+		if String(def["model"]) != "":
+			assert_true(FileAccess.file_exists(def["model"]), kind + " model exists")
 		if def.has("res"):
 			# bottle_spirit is an existing legacy STOCK_OF entry in field_game.gd. The tag is exactly what the
 			# field credits — rounding it up would melt the piece on arrival.
@@ -267,6 +388,7 @@ func test_old_save_migration_keeps_version_rng_tier_and_unassigned_coordinates()
 	assert_eq(Save.SAVE_VERSION, 1)
 	assert_eq(int(loaded["g"]["version"]), 1)
 	assert_eq(loaded["g"]["dom"]["store"], {})
+	assert_eq(loaded["g"]["dom"]["decor80"], [])
 	assert_eq(Decor.items_of(loaded["g"], "front"), [{"kind": "frame", "size": "small", "spot": "wall"}])
 	assert_eq(loaded["g"]["rng"], rng)
 	assert_true(Dom.is_store(loaded["g"]["dom"]))
@@ -342,3 +464,113 @@ func test_operations_replay_s1_results_and_complete_owned_state() -> void:
 			assert_true(Dom.is_store(g["dom"]), label + " saved shape")
 			actions += 1
 	assert_gt(actions, 40)
+
+
+func _effect_owned(g: Dictionary) -> Dictionary:
+	var out: Dictionary = {"percent": {}, "parts": {}, "gain": {}, "rel": {},
+		"decor80": g["dom"].get("decor80", []).duplicate(true),
+		"journal": g["journal"].duplicate(true), "ledger": g["ledger"].duplicate(true), "rng": g["rng"].duplicate(true)}
+	for car: String in Decor.DECOR_CARS:
+		out["percent"][car] = Decor.decor_percent(g, car)
+		out["parts"][car] = Decor.decor_parts(g, car)
+		out["gain"][car] = LawTech.decor_rel_gain(g, car)
+	for c: String in g["comms"]: out["rel"][c] = g["comms"][c]["rel"]
+	return out
+
+
+func _effect_item(kind: String, on: int = -1) -> Dictionary:
+	var item: Dictionary = {"kind": kind, "size": Decor.DECOR[kind]["size"], "spot": Decor.DECOR[kind]["spot"]}
+	if on >= 0: item["on"] = on
+	return item
+
+
+func test_effects_replay_s1_percent_rewards_first80_and_reentry() -> void:
+	var effects: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(PATH))["decorEffects"]
+	_same(effects["voices"], Decor.FURNISH80, "exact story table")
+	assert_eq(effects["cases"].size(), 133)
+	for row: Dictionary in effects["cases"]:
+		var g: Dictionary = row["state"].duplicate(true)
+		var original: Dictionary = g["dom"]["furnish"].duplicate(true)
+		_same(row["before"], _effect_owned(g), row["name"] + "/before")
+		LawTech.furnish_tick(g)
+		_same(row["first"], _effect_owned(g), row["name"] + "/first")
+		for car: String in g["dom"]["furnish"]: g["dom"]["furnish"][car]["items"] = []
+		LawTech.furnish_tick(g)
+		_same(row["below"], _effect_owned(g), row["name"] + "/below")
+		g["dom"]["furnish"] = original
+		LawTech.furnish_tick(g)
+		_same(row["again"], _effect_owned(g), row["name"] + "/again")
+		for entry: Dictionary in g["ledger"]: assert_eq(entry["why"], "furnish")
+
+
+func test_effect_thresholds_share_epsilon() -> void:
+	var effects: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(PATH))["decorEffects"]
+	for row: Dictionary in effects["thresholds"]:
+		assert_eq(Decor.decor_band(row["percent"]), int(row["band"]))
+	for i: int in 3:
+		var line: float = float(Mods.D["decorThresholds"][i])
+		assert_eq(Decor.decor_band(line - 2e-9), i - 1)
+		assert_eq(Decor.decor_band(line - 0.5e-9), i)
+
+
+func test_effect_kind_floor_wall_caps_for_eight_cars() -> void:
+	var g: Dictionary = _fresh()
+	var before: Dictionary = g.duplicate(true)
+	for car: String in Decor.DECOR_CARS: assert_eq(Decor.decor_percent(g, car), 0.0)
+	assert_eq(Decor.decor_percent(g, "engine"), 0.0)
+	assert_eq(g, before)
+	var kinds: Array = Decor.DECOR.keys()
+	for n: int in [19, 20, 25]:
+		g["dom"]["furnish"]["front"] = {"items": []}
+		for i: int in n: g["dom"]["furnish"]["front"]["items"].append(_effect_item(kinds[i]))
+		assert_almost_eq(Decor.decor_parts(g, "front")[0], minf(1.0, float(n) / 20.0), 1e-12)
+	for car: String in Decor.DECOR_CARS:
+		for spot: String in ["floor", "wall"]:
+			var target: int = mini(25, Decor.FURNISH_FLOOR_MAX[car]) if spot == "floor" else mini(8, Decor.FURNISH_WALL_MAX[car])
+			var index: int = 1 if spot == "floor" else 2
+			for n: int in [target - 1, target, target + 1]:
+				var items: Array = []
+				for _i: int in n: items.append(_effect_item("chair" if spot == "floor" else "frame"))
+				g["dom"]["furnish"][car] = {"items": items}
+				assert_almost_eq(Decor.decor_parts(g, car)[index], minf(1.0, float(n) / target), 1e-12)
+
+
+func test_effect_occupied_surface_small_objects_and_light_caps() -> void:
+	var g: Dictionary = _fresh()
+	for n: int in [0, 1, 3, 4, 5]:
+		var items: Array = []
+		for _i: int in 5: items.append(_effect_item("table"))
+		for i: int in n: items.append(_effect_item("record", i))
+		if n > 0: items.append(_effect_item("record", 0))
+		g["dom"]["furnish"]["front"] = {"items": items}
+		assert_almost_eq(Decor.decor_parts(g, "front")[3], minf(1.0, float(n) / 5.0 / 0.8), 1e-12)
+	for n: int in [65, 66, 67]:
+		var items: Array = [_effect_item("table")]
+		for _i: int in n: items.append(_effect_item("record", 0))
+		g["dom"]["furnish"]["front"] = {"items": items}
+		assert_almost_eq(Decor.decor_parts(g, "front")[4], minf(1.0, float(n) / 66.0), 1e-12)
+	for row: Array in [[[], 0.0], [["small_stove", "iron_stove"], 0.5],
+			[["oil_lamp", "oil_lamp"], 0.5], [["oil_lamp", "small_stove", "iron_stove"], 1.0]]:
+		var items: Array = []
+		for kind: String in row[0]: items.append(_effect_item(kind))
+		g["dom"]["furnish"]["front"] = {"items": items}
+		assert_eq(Decor.decor_parts(g, "front")[5], row[1])
+
+
+func test_decor80_save_contract() -> void:
+	var d: Dictionary = Dom.start()
+	assert_true(Dom.is_store(d), "legacy absent")
+	d["decor80"] = Decor.DECOR_CARS.duplicate()
+	assert_true(Dom.is_store(d))
+	for invalid: Variant in [null, {}, "front", 1, ["front", "front"], ["engine"], ["unknown"], [1], ["Front"]]:
+		d["decor80"] = invalid
+		assert_false(Dom.is_store(d), str(invalid))
+	d["decor80"] = []
+	d["decor80_extra"] = []
+	assert_false(Dom.is_store(d))
+	var g: Dictionary = _fresh()
+	g["version"] = Save.SAVE_VERSION
+	g["dom"]["decor80"] = ["captain", "dining", "tail1"]
+	var loaded: Dictionary = Save.read_save(g, TV.tables())
+	assert_true(loaded["ok"])
+	if loaded["ok"]: assert_eq(loaded["g"]["dom"]["decor80"], ["captain", "dining", "tail1"])

@@ -1,5 +1,5 @@
 import {
-  BRANCH_NAME, bedNeed, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS,
+  BRANCH_NAME, bedNeed, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS, enableLate,
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, cancelOpen, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
@@ -31,7 +31,7 @@ import type { IconName } from './icons';
 import { CARS, fmt, signed } from './common';
 import type { CarDef, DomUi, Ui, View } from './common';
 import { bar, portrait, tip } from './widgets';
-import { nameBtn, shownName } from './names';
+import { nameBtn, shortText, shownName } from './names';
 import { plainData } from './repro';
 import { duoStates, tierCells } from './tech_pairs';
 import type { Step } from './repro';
@@ -57,6 +57,7 @@ export function urlWantsS1c(): boolean {
  * 바깥 기온·결빙(game/climate.ts, 결정 370·384)과 사람 들어오는 사건(game/arrivals.ts, 결정 352·369·389)도 어느 새 판이든 켠다(결정 407 E2). */
 export function newGame(seed: string, s1c: boolean, s1b = false, prologue = true, events = s1c, death = true): Game {
   const g = s1c ? createS1cGame(seed) : createGame(seed);
+  enableLate(g);
   // 시험 판 곡선(메뉴 '시험 판' 단추)은 다른 켬/끔처럼 새 판에 그대로 이어진다. 서막으로 되돌릴 때까지.
   const act = seasonAct();
   if (act !== 'prologue') g.seasonAct = act;
@@ -893,7 +894,7 @@ function faces(cs: Comm[], g: Game): HTMLElement[] {
 /** 법에 걸린 기술의 쓸모 줄(7.3). 모르고 사는 함정을 막는다. */
 function useLine(g: Game, id: TechId, v?: Variant): HTMLElement | null {
   const line = techUseLine(g, id, v);
-  return line ? h('p', { class: 'dom-use' }, line) : null;
+  return line ? h('p', { class: 'dom-use' }, shortText(line)) : null;
 }
 function useTag(g: Game, id: TechId, v?: Variant): HTMLElement | null {
   const laws = techLaws(id, v);
@@ -957,7 +958,7 @@ function nodeDetail(g: Game, id: TechId, more = false): HTMLElement {
         v && def.variants ? h('span', null, eff(def.variants[v].effect), more ? h('span', { class: 'sub' }, ` · ${upkeepText(def.variants[v].upkeep)}`) : null) : null,
         h('span', { class: 'pol pol--gray' }, rel || '관계 안 움직임'),
         sameUse ? null : useTag(g, id, v),
-        use ? h('span', { class: 'dom-use' }, use) : null,
+        use ? h('span', { class: 'dom-use' }, shortText(use)) : null,
         h('span', { class: 'dom-vrow__acts' },
           h('button', {
             class: 'btn btn--dark btn--small', 'data-action': 'dom-restore', 'data-id': id, 'data-mode': 'full', 'data-variant': v ?? '', disabled: !!check.full, title: check.full ?? '',
