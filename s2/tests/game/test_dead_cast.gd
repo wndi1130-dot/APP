@@ -232,6 +232,10 @@ func test_what_is_drawn_over_the_body_is_what_is_worn() -> void:
 # body lying or crawling is lit by its moved surface (A6-1).
 func test_only_the_skin_takes_the_dead_look_and_the_ground_motions_are_marked() -> void:
 	assert_between(DeadCast.CLOTH_STATE, 0.0, 0.5, "the clothes keep most of their own colour")
+	for look: String in Zombies.TINTS:
+		assert_between(float(DeadCast.SKIN_TINT.get(look, 1.0)), 0.0, 1.0, look + ": a share of its colour on the skin")
+	for look: String in ["dead", "corpse", "fresh"]:
+		assert_lt(float(DeadCast.SKIN_TINT[look]), 0.5, look + ": its skin never takes the look's colour above the living's")
 	if not _build_bodies_in_use():
 		pending("a folder put in place of the build's own")
 		return
@@ -280,6 +284,7 @@ func test_plain_long_coats_come_in_shades_by_number() -> void:
 	assert_gte(DeadCast.COAT_SHADES.size(), 4)
 	for s: Color in DeadCast.COAT_SHADES:
 		assert_between(s.get_luminance(), 0.07, 0.13, "a shade about as light as the coat's own")
+		assert_false(s.g > s.r and s.g > s.b, "%s: no army green among the coats" % s)
 	for kind: String in DeadCast.SHADED:
 		var on := {"coat": Wear.make(kind)}
 		var seen := {}

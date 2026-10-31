@@ -4,7 +4,7 @@ The dead's look (dead_vat.gdshaderinc) turns the skin grey-green and puts the st
 clothes keep their own colour. Which texels are skin is not guessed in the shader (a warm-colour test
 also takes a red tracksuit or a brown coat): it is this mask beside each body's albedo, in red. Green
 marks the head's cloth that is a light red (a hood): the model grade presses such a red towards pink,
-which on the dead reads as a bare living head, so the shader darkens it (HEAD_CLOTH_DIM).
+which on the dead reads as a bare living head, so the shader turns it a dark red-brown (HEAD_CLOTH).
 
 How: from the body's rigged source (the glb its build folder was baked from, byte-checked when the
 garment shells were baked), each triangle whose three corners are mostly the head or neck, the hands, or

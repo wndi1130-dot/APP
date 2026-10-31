@@ -3,22 +3,22 @@
 For each body the dead wear (dead_skin_mask.py SOURCES), its colour picture is coloured twice, as the
 shaders colour it under the same light:
   the living: the model grade only (dead_vat.gdshaderinc without WEATHERED, tint 0.5);
-  the dead:   worn_down's gone-off skin (SKIN_OFF by SKIN_GONE, the blotch at its middle) by the skin mask
+  the dead:   worn_down's gone-off skin (SKIN_OFF by SKIN_GONE from SKIN_GONE_LEAST, the blotch at its middle) by the skin mask
               as the GPU reads it (128 x 128, linear filter, repeat, through SKIN_EDGE), the grade, then the look's tint: on the
-              skin no brighter than 1, on the clothes by cloth_state.
+              skin its share of the colour (dead_cast.gd SKIN_TINT) and no brighter than 1, on the clothes by cloth_state.
 The colours the shader declares source_color are made linear first, as the engine does. Counted: the
 texels the mask reads 0.5 or more at (before SKIN_EDGE). How far the skin has gone off is the kind's middle (dead_cast.gd
 TEAR, b) and its least. Blood, dirt and tears are left out (they are judged on the pictures). The values
 are read from the shader and scripts (a value not found stops the tool), so this follows them.
 
-Pass (coordinator, 10-31): (a) the dead's median saturation <= 0.6 x the living's; (b) the dead's median hue
-at least 20 degrees towards green of the living's and between 60 and 160 (living 0..40 -> dead 60..160).
-Checked: the dead standing and the dead lying (look "corpse", the dead's wear and tear); the crawlers
-are the dead too. The other kinds are printed beside them: the newly risen are meant to be near the
-living, the layered take their cold blue, the frozen their frost.
+Pass (coordinator, 10-31): the dead standing and lying (look "corpse", the dead's wear and tear; the
+crawlers are the dead too): (a) median saturation <= 0.6 x the living's, or <= 0.04 (below it the eye sees
+grey; the hooded and poncho bodies' living skin is already 0.027 and 0.047 after the grade), (b) median hue
+at least 20 degrees towards green of the living's and between 60 and 160. The newly risen: no more
+saturated than the living and at least 10 degrees greener (never more alive than the living). The
+layered (their cold blue) and the frozen (their frost) are printed beside them, not checked.
 
---sat-floor S passes (a) also where the dead's saturation is at most S (a body whose living skin the grade
-already leaves nearly grey); 0, the default, is the rule as the coordinator set it.
+--sat-floor S sets that floor (default 0.04, 0 for the ratio alone).
 
   python -X utf8 -I tools/dead_skin_split.py <repo> [--sat-floor S]
 """
@@ -36,10 +36,13 @@ from dead_skin_mask import SOURCES  # noqa: E402
 SAT_RATIO = 0.6
 HUE_TOWARDS_GREEN = 20.0
 HUE_DEAD = (60.0, 160.0)
+SAT_FLOOR = 0.04
+FRESH_SAT_RATIO = 1.0
+FRESH_TOWARDS_GREEN = 10.0
 LUM = np.array([0.2126, 0.7152, 0.0722])
 # Look drawn -> (the kind whose wear and tear it has, its tint), checked or only printed.
-LOOKS = [("dead", "dead", "dead", True), ("corpse", "dead", "corpse", True), ("clothed", "clothed", "clothed", False),
-         ("fresh", "fresh", "fresh", False), ("frozen", "frozen", "frozen", False)]
+LOOKS = [("dead", "dead", "dead", "dead"), ("corpse", "dead", "corpse", "dead"), ("fresh", "fresh", "fresh", "fresh"),
+         ("clothed", "clothed", "clothed", ""), ("frozen", "frozen", "frozen", "")]
 
 
 def vec3(text):
@@ -61,6 +64,7 @@ def read_values(repo):
         "skin_off": vec3(found(r"const vec3 SKIN_OFF = vec3\(([^)]*)\)", inc).group(1)),
         "blotch": float(found(r"off \* \(1\.0 - ([0-9.]+) \* n\)", inc).group(1)),
         "gone": vec3(found(r"const vec2 SKIN_GONE = vec2\(([^)]*)\)", inc).group(1)),
+        "gone_least": float(found(r"const float SKIN_GONE_LEAST = ([0-9.]+);", inc).group(1)),
         "edge": vec3(found(r"const vec2 SKIN_EDGE = vec2\(([^)]*)\)", inc).group(1)),
         "cloth_state": float(found(r"uniform float cloth_state[^=]*= ([0-9.]+)", inc).group(1)),
         "sat": float(found(r"uniform float grade_saturation[^=]*= ([0-9.]+)", inc).group(1)),
@@ -74,7 +78,9 @@ def read_values(repo):
     zomb = open(os.path.join(s2, "game/actors/zombies.gd"), encoding="utf-8").read()
     line = found(r"const TINTS: Dictionary = \{(.*)\}", zomb).group(1)
     v["tints"] = {k: vec3(c) for k, c in re.findall(r'"(\w+)": Color\(([^)]*)\)', line)}
-    for kind, _tear, tint, _c in LOOKS:
+    shares = found(r"const SKIN_TINT: Dictionary = \{(.*)\}", cast).group(1)
+    v["skin_tint"] = {k: float(x) for k, x in re.findall(r'"(\w+)": ([0-9.]+)', shares)}
+    for kind, _tear, tint, _r in LOOKS:
         if _tear not in v["tear"] or tint not in v["tints"]:
             raise SystemExit("dead_skin_split: no wear and tear or tint for " + kind)
     return v
@@ -119,7 +125,7 @@ def mask_as_read(mask_png, size):
     return ndimage.map_coordinates(m, [yy, xx], order=1, mode="grid-wrap")
 
 
-def measure(repo, v, sat_floor=0.0):
+def measure(repo, v, sat_floor=SAT_FLOOR):
     rows, failed = [], []
     for body in SOURCES:
         folder = os.path.join(repo, "s2/models/people", body)
@@ -134,18 +140,24 @@ def measure(repo, v, sat_floor=0.0):
         ls, lh = float(np.median(live_s)), float(np.median(live_h))
         light = (lin @ LUM)[:, None]
         cells = []
-        for look, kind, tint, checked in LOOKS:
+        for look, kind, tint, rule in LOOKS:
             lo, hi = v["tear"][kind]
             state = v["tints"][tint] / 0.5
-            on_skin = state / max(1.0, float(state @ LUM))
+            light_of = float(state @ LUM)
+            on_skin = (light_of + (state - light_of) * v["skin_tint"].get(look, 1.0)) / max(1.0, light_of)
             on_cloth = 1.0 + (state - 1.0) * v["cloth_state"]
             for which, b in (("mid", (lo + hi) / 2.0), ("least", lo)):
                 off = light * v["skin_off"] * (1.0 - v["blotch"] * 0.5)
-                worn = lin + (off - lin) * smoothstep(v["gone"][0], v["gone"][1], b) * m
+                gone = v["gone_least"] + (1.0 - v["gone_least"]) * smoothstep(v["gone"][0], v["gone"][1], b)
+                worn = lin + (off - lin) * gone * m
                 c = model_grade(worn, v) * (on_cloth + (on_skin - on_cloth) * m)
                 s, h = sat_hue(to_srgb(c))
                 ds, dh = float(np.median(s)), float(np.median(h))
-                ok = ds <= max(ls * SAT_RATIO, sat_floor) and dh - lh >= HUE_TOWARDS_GREEN and HUE_DEAD[0] <= dh <= HUE_DEAD[1]
+                if rule == "fresh":
+                    ok = ds <= ls * FRESH_SAT_RATIO and dh - lh >= FRESH_TOWARDS_GREEN
+                else:
+                    ok = ds <= max(ls * SAT_RATIO, sat_floor) and dh - lh >= HUE_TOWARDS_GREEN and HUE_DEAD[0] <= dh <= HUE_DEAD[1]
+                checked = rule != ""
                 if checked and not ok:
                     failed.append("%s %s %s" % (body, look, which))
                 cells.append((look, which, ds / max(ls, 1e-9), dh, ok, checked, ds))
@@ -158,7 +170,7 @@ def main():
     v = read_values(repo)
     print("SKIN_OFF %s SKIN_GONE %s blotch %.2f grade sat %.2f val %.2f cool(linear) %s" % (
         np.round(v["skin_off"], 3).tolist(), v["gone"][:2].tolist(), v["blotch"], v["sat"], v["val"], np.round(v["cool"], 3).tolist()))
-    floor = float(sys.argv[sys.argv.index("--sat-floor") + 1]) if "--sat-floor" in sys.argv else 0.0
+    floor = float(sys.argv[sys.argv.index("--sat-floor") + 1]) if "--sat-floor" in sys.argv else SAT_FLOOR
     rows, failed = measure(repo, v, floor)
     for body, n, touched, ls, lh, cells in rows:
         text = " | ".join("%s/%s s%.2f(%.3f) h%.0f %s" % (look, which, sr, ds, dh, "ok" if ok else ("FAIL" if checked else "-"))
