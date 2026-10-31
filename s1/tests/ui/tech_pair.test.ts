@@ -9,7 +9,7 @@ describe('둘 중 하나 칸', () => {
   const single = TECH_IDS.filter(id => !TECHS[id].variants);
 
   it('변형이 있는 기술만 두 쪽으로 그린다', () => {
-    // 핸드카(x2)의 두 갈래는 정찰 장비를 켠 판에만 있다(결정 371). 켠 판에서 본다.
+    // 수동차(x2)의 두 갈래는 정찰 장비를 켠 판에만 있다(결정 371). 켠 판에서 본다.
     const g = createS1cGame('pair');
     enableScoutGear(g);
     expect(pairHalves(createS1cGame('pair'), 'x2')).toBeNull();
