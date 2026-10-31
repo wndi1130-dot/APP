@@ -7,6 +7,7 @@ const FieldSave = preload("res://game/sim/field_save.gd")
 const TrainSave = preload("res://game/politics/save_slot.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const Boot = preload("res://game/boot.gd")
+const Content = preload("res://game/train/turn/turn_content.gd")
 const SLICE := "user://test_slice_resume_slice.json"
 const TRAIN := "user://test_slice_resume_train.json"
 const FIELD := "user://test_slice_resume_field.json"
@@ -268,6 +269,24 @@ func _train_round_trip(at: String) -> void:
 	assert_false(loaded.is_empty(), at + " reads back through the S1 shape check")
 	assert_eq(_json(loaded), _json(flow.train_g), at + " every value and digit")
 	assert_eq(_type_gap(flow.train_g, loaded), "", at + " every type")
+
+
+func test_the_train_slot_keeps_key_order_for_a_tie_of_repealed_laws() -> void:
+	var flow = _flow()
+	flow.go(flow._index_of("stop_pick"))
+	var tie: Dictionary = flow.train_g.duplicate(true)
+	# Out of alphabetical order on purpose: a sorted write would put child_labor first.
+	tie["repealedAt"] = {"heat_quota": int(tie["seg"]), "child_labor": int(tie["seg"])}
+	for law: String in tie["repealedAt"]:
+		(tie["passed"] as Dictionary).erase(law)
+	assert_true(SliceSave.write_train(tie, ROUND_TRIP))
+	var loaded: Dictionary = SliceSave._train(ROUND_TRIP, flow.train_t)
+	assert_false(loaded.is_empty(), "the tie reads back through the S1 shape check")
+	if loaded.is_empty():
+		return
+	assert_eq((loaded["repealedAt"] as Dictionary).keys(), ["heat_quota", "child_labor"], "keys keep their order")
+	assert_eq(Content._last_law(loaded, true), Content._last_law(tie, true), "the same law after a resume")
+	assert_eq(Content._last_law(tie, true), "heat_quota", "the first repealed of a tie, as S1")
 
 
 func test_train_slot_round_trip_at_stop_pick() -> void:
