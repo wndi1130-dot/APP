@@ -931,3 +931,30 @@ func test_city_edge_and_siding_do_not_gain_deep_forest() -> void:
 			assert_eq(now["train"], train, form)
 			assert_eq(g.solid, solid, form)
 			assert_eq(g.floor, floor, form)
+
+
+func test_remote_own_anchor_off_the_strip_is_worked_out_again() -> void:
+	var was: Dictionary = MapShift.shift_rows(_small_map(true, 80), 40)
+	# Far below the train's rows (60..62): the map set it, so it moves with the train.
+	was["anchors"]["horde_home"] = Vector2i(39, 110)
+	var now: Dictionary = StopGround.apply(was, "remote", 71, 600.0)
+	assert_true(now.has("deep_forest"))
+	var home: Vector2i = now["anchors"].get("horde_home", Vector2i(-1, -1))
+	assert_true(now["anchors"].has("horde_home"), "worked out from the moved train")
+	assert_false(_in_forest(now, home), "not in the deep forest")
+	assert_eq(now["grid"].solid_at(home), FieldGrid.Solid.NONE)
+
+
+func test_remote_strip_cut_off_from_the_village_warns_and_stays_city() -> void:
+	var was: Dictionary = MapShift.shift_rows(_small_map(true, 80), 40)
+	var g: FieldGrid = was["grid"]
+	# A wall all down the old border: the strip would meet the old map nowhere.
+	for y: int in range(g.height):
+		g.solid[g.index(Vector2i(g.width - 1, y))] = FieldGrid.Solid.WALL
+	g.refresh_paths()
+	var now: Dictionary = StopGround.apply(was, "remote", 71, 600.0)
+	assert_true(is_same(now, was), "the map as it was")
+	assert_eq(now["stop_form"], "city")
+	assert_eq(now["stop_form_asked"], "remote")
+	assert_eq(now["grid"].width, 80, "not grown")
+	assert_false(now.has("deep_forest"))

@@ -24,7 +24,7 @@ const StopForm = preload("res://game/sim/stop_form.gd")
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
-const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged"]
+const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
@@ -79,7 +79,7 @@ static func capture(game) -> Dictionary:
 	var out: Dictionary = {
 		"version": VERSION, "kind": KIND,
 		"stop_id": stop_id, "place": game.place, "mission": game.mission,
-		"stop_form": game.stop_form,
+		"stop_form": game.stop_form, "stop_ground": String(game.data.get("stop_form", "")),
 		"seed": int(game.rng.seed), "phase": "ended" if game.ended else "field", "end_reason": String(said.get("endReason", "")),
 		"saved_at": game.clock.label(), "clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
 		"player_pid": game.player.pid if game.player != null else "",
@@ -214,6 +214,12 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 	opts["mission"] = String(save.get("mission", ""))
 	if save.has("stop_form"):
 		opts["stop_form"] = save["stop_form"]
+	# The ground goes up as the save stood on it (field_game.gd shape_stop). One from before
+	# remote ground was built kept a remote stop's map as it was.
+	if save.has("stop_ground"):
+		opts["stop_ground"] = String(save["stop_ground"])
+	elif String(opts.get("stop_form", "")) == "remote":
+		opts["stop_ground"] = ""
 	if not (save.get("departure", {}) as Dictionary).is_empty():
 		opts["departure"] = (save["departure"] as Dictionary).duplicate(true)
 	if String(save.get("receipt_id", "")) != "":
@@ -227,7 +233,8 @@ static func exact(save: Dictionary) -> bool:
 	return int(save.get("version", 1)) >= 2 and save.has("runtime")
 
 
-## Exact solids must fit every saved floor before any grid is replaced.
+## Exact solids must fit every saved floor before any grid is replaced: its cell count,
+## and its width and height where the save keeps them.
 static func _grid_sizes_match(game, save: Dictionary) -> bool:
 	var levels: Dictionary = save["runtime"].get("levels", {})
 	for level in levels:
@@ -236,6 +243,8 @@ static func _grid_sizes_match(game, save: Dictionary) -> bool:
 		var grid: FieldGrid = game.levels[level]
 		var row: Dictionary = levels[level]
 		if row.get("solid", PackedByteArray()).size() != grid.width * grid.height:
+			return false
+		if row.has("width") and (int(row["width"]) != grid.width or int(row.get("height", -1)) != grid.height):
 			return false
 	return true
 
@@ -247,19 +256,13 @@ static func apply(game, save: Dictionary) -> void:
 	game.begin_resume()
 	game.clock.elapsed = float(save["clock"]["elapsed"])
 	game.clock.speed = float(save["clock"]["speed"])
-	var fits := exact(save) and _grid_sizes_match(game, save)
-	# One that does not fit a grown remote map was made while its ground stood unbuilt.
-	var moved: bool = not fits and game.data.has("stop_left")
-	var shift := _legacy_shift(game) if moved else Vector3.ZERO
 	# The work crew is made during play (field_work.gd): each member a save carries is made again first.
 	if game.get("work") != null:
 		game.work.remake(save.get("people", []))
 	for row: Dictionary in save.get("people", []):
 		for p in game.people:
 			if p.pid == String(row["pid"]):
-				_put_person(p, row, shift)
-				if moved:
-					p.position = _onto_open(game, p.position, false)
+				_put_person(p, row)
 	if exact(save):
 		game.ammo.clear()
 	_put_counts(game.ammo, save.get("ammo", {}))
@@ -269,7 +272,7 @@ static func apply(game, save: Dictionary) -> void:
 	game.actions.coal_delivered = float(save["coal"]["delivered"])
 	game.actions.coal_spent = float(save["coal"]["spent"])
 	if exact(save):
-		if fits:
+		if _grid_sizes_match(game, save):
 			_apply_exact(game, save)
 			game.set_stop_form(form)
 			return
@@ -285,12 +288,8 @@ static func apply(game, save: Dictionary) -> void:
 		if game.data["spots"].has(id):
 			game.data["spots"][id]["state"] = String(save["spots"][id])
 	game.ground_items = (save.get("ground_items", []) as Array).duplicate(true)
-	if moved:
-		for item: Dictionary in game.ground_items:
-			if item.get("pos") is Vector3:
-				item["pos"] = _onto_open(game, item["pos"] + shift, false)
 	game.decisions = (save.get("decisions", []) as Array).duplicate(true)
-	_put_zombies(game, save.get("zombies", []), shift, moved)
+	_put_zombies(game, save.get("zombies", []))
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	game.cam_focus = game.player.position
@@ -299,33 +298,10 @@ static func apply(game, save: Dictionary) -> void:
 	game.set_stop_form(form)
 
 
-## How far an old remote save's cells moved when the ground grew west (stop_ground.gd
-## `stop_left`); a side path the grown map took on and the old one did not, or the other
-## way round, is not in it, so _onto_open still steps off what is not open.
-static func _legacy_shift(game) -> Vector3:
-	return Vector3(float(int(game.data.get("stop_left", 0))), 0.0, 0.0)
-
-
-## How far, in cells, a moved spot looks for open ground (a side path's strip is 14).
-const OPEN_REACH: int = 32
-
-
-## The open cell nearest `at` on its floor, or `at` when it is open: an old save's spot
-## can lie under the grown remote ground's deep forest.
-static func _onto_open(game, at: Vector3, for_dead: bool) -> Vector3:
-	var g: FieldGrid = game.levels.get(game.level_of(at), game.grid)
-	var c := FieldGrid.cell_of(at)
-	var open: bool = g.dead_can_walk(c) if for_dead else g.people_can_walk(c)
-	if open:
-		return at
-	var n := g.nearest_walkable(c, for_dead, OPEN_REACH)
-	return Vector3(float(n.x) + 0.5, at.y, float(n.y) + 0.5)
-
-
-static func _put_person(p, row: Dictionary, shift: Vector3 = Vector3.ZERO) -> void:
+static func _put_person(p, row: Dictionary) -> void:
 	p.cancel_action()
 	p.stop()
-	p.position = row["pos"] + shift
+	p.position = row["pos"]
 	p.bag = String(row["bag"])
 	p.items = (row["items"] as Dictionary).duplicate(true)
 	# A save from before the three places has none: they keep what they put on.
@@ -357,7 +333,8 @@ static func _runtime(game) -> Dictionary:
 	out["zombie_system"] = _properties(game, game.zombies, ["next_id", "loot_rng", "lunge_rng", "embed_rng", "lungers_on"])
 	for level in game.levels:
 		var grid = game.levels[level]
-		var level_state: Dictionary = {"solid": grid.solid.duplicate(), "revision": grid.revision, "doors": {}, "windows": {}, "floor_glass": grid.floor_glass.duplicate()}
+		var level_state: Dictionary = {"solid": grid.solid.duplicate(), "width": grid.width, "height": grid.height,
+			"revision": grid.revision, "doors": {}, "windows": {}, "floor_glass": grid.floor_glass.duplicate()}
 		for kind: String in ["doors", "windows"]:
 			for cell in grid.get(kind):
 				level_state[kind][cell] = _record(game, grid.get(kind)[cell])
@@ -667,13 +644,12 @@ static func _put_counts(into: Dictionary, counts: Dictionary) -> void:
 		into[id] = int(counts[id])
 
 
-static func _put_zombies(game, rows: Array, shift: Vector3 = Vector3.ZERO, moved: bool = false) -> void:
+static func _put_zombies(game, rows: Array) -> void:
 	var all = game.zombies
 	all.list.clear()
 	var top := 0
 	for row: Dictionary in rows:
-		var at: Vector3 = _onto_open(game, row["pos"] + shift, true) if moved else row["pos"]
-		var z: Dictionary = all.spawn(String(row["kind"]), at, {"horde": int(row.get("horde", -1)), "name": String(row.get("name", ""))})
+		var z: Dictionary = all.spawn(String(row["kind"]), row["pos"], {"horde": int(row.get("horde", -1)), "name": String(row.get("name", ""))})
 		var state := String(row["state"])
 		if state in ["downed", "dead"]:
 			DeadPose.mark_fall(z, game.people)  # lies as it fell, not standing
@@ -687,7 +663,7 @@ static func _put_zombies(game, rows: Array, shift: Vector3 = Vector3.ZERO, moved
 		z["searched"] = bool(row.get("searched", false))
 		# Where it keeps to: its pockets and clothes are rolled by that place when first asked.
 		if row.get("home") is Vector3:
-			z["home"] = _onto_open(game, row["home"] + shift, true) if moved else row["home"]
+			z["home"] = row["home"]
 		if row.get("worn") is Dictionary:
 			z["worn"] = (row["worn"] as Dictionary).duplicate(true)
 			z["stripped"] = bool(row.get("stripped", false))

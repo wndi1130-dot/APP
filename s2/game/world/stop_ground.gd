@@ -42,6 +42,14 @@ static func apply(data: Dictionary, form: String, run_seed: int, target_m: float
 		else:
 			out = _edge(data, run_seed, target_m) if form == "edge" else _outlying(data, run_seed, target_m, 400.0, 800.0, REMOTE_BAND)
 	_set_village(out, form)
+	# A remote strip cut off from the old village (a wall along the old border) would name
+	# one of its own cells the village: the stop stays a city one instead.
+	if out.has("stop_old_ground") and not (out.get("buildings", []) as Array).is_empty() \
+			and (float(out["walk_to_village_m"]) < 0.0 or not (out["stop_old_ground"] as Rect2i).has_point(out["village_middle"])):
+		push_warning("stop form %s: the walk from the train does not reach the village, the stop stays a city one" % form)
+		data["stop_form_asked"] = form
+		_set_village(data, "city")
+		return data
 	return out
 
 
@@ -115,9 +123,9 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 	# Its size is a Vector2i too: grow can shift a stale cache key into a match.
 	out.erase("_edge_plan")
 	if band > 0:
-		# How far the old cells moved, for a save made while remote ground stood unbuilt
-		# (field_save.gd). An int, so no later shift moves it as it would a cell.
-		out["stop_left"] = left
+		# Where the old map now lies, for apply's check that the walk reaches its village. A
+		# Rect2i, so a later shift (the side path's) moves it with the cells.
+		out["stop_old_ground"] = Rect2i(left, 0, old.width, old.height)
 	var g: FieldGrid = out["grid"]
 	var added: Rect2i = Rect2i(0 if left > 0 else old.width, 0, length, old.height)
 	var old_border: int = left if left > 0 else old.width - 1
@@ -145,6 +153,12 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 	for key: String in TRAIN_ANCHORS:
 		if own.get(key, false):
 			anchors[key] += Vector2i(dx, 0)
+			# One the map set off the strip's rows would stand in the deep forest: worked out again.
+			if band > 0 and key != "horde_home_upper" and _in_deep_forest(out, anchors[key]):
+				if worked.has(key):
+					anchors[key] = worked[key]
+				else:
+					anchors.erase(key)
 		elif worked.has(key):
 			anchors[key] = worked[key]
 		else:
@@ -160,6 +174,13 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 		anchors["flee_exit"] = worked["flee_exit"]
 	out["anchors"] = anchors
 	return out
+
+
+static func _in_deep_forest(data: Dictionary, c: Vector2i) -> bool:
+	for rect: Rect2i in data.get("deep_forest", []):
+		if rect.has_point(c):
+			return true
+	return false
 
 
 ## Every cell of `r`, in the grid's own order.

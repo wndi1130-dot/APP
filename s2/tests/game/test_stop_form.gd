@@ -10,7 +10,6 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const RouteBands = preload("res://game/train/route_bands.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
-const MapShift = preload("res://game/world/map_shift.gd")
 
 
 func _game(extra: Dictionary = {}):
@@ -134,7 +133,9 @@ func test_remote_survives_capture_json_and_resume() -> void:
 func test_old_save_resolves_from_start_opts_then_place() -> void:
 	var first = _game({"stop_form": "remote"})
 	var saved := FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+	# An old save has neither its form nor its ground.
 	saved.erase("stop_form")
+	saved.erase("stop_ground")
 	saved["runtime"]["components"]["director"].erase("limit_sec")
 	var from_opts = _game(FieldSave.resume_opts(saved))
 	assert_eq(from_opts.stop_form, "remote")
@@ -148,22 +149,43 @@ func test_old_save_resolves_from_start_opts_then_place() -> void:
 	assert_eq(from_place.music.director.safe_sec, 1200.0)
 
 
-func test_remote_resumes_a_small_version_two_grid_through_legacy_restore() -> void:
+## A save from before remote ground was built (no stop_ground) stood on the map as it was:
+## the ground goes up that way again and the whole running state comes back.
+func test_an_old_remote_save_resumes_exactly_on_the_ground_it_stood_on() -> void:
 	var first: FieldGame = _game({"stop_form": "city"})
 	first.clock.elapsed = 321.0
 	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
 	assert_eq(int(saved["version"]), 2)
 	assert_eq(saved["runtime"]["levels"][0]["solid"].size(), 1800, "the old remote map was 60 by 30")
 	saved["stop_form"] = "remote"
-	# An exact-only flag distinguishes the fallback from an attempted runtime restore.
+	saved.erase("stop_ground")
+	# An exact-only flag tells the exact restore from the fallback.
+	saved["runtime"]["game"]["glass_warned"] = true
+	var opts: Dictionary = FieldSave.resume_opts(saved)
+	assert_eq(opts["stop_ground"], "", "the remote stop's map as it was")
+	var back: FieldGame = _game(opts)
+	assert_eq(back.stop_form, "remote", "the remote clock")
+	assert_eq(back.grid.width, BareLine.WIDTH, "not grown")
+	assert_eq(back.clock.elapsed, 321.0)
+	assert_true(back.glass_warned, "the exact runtime came back")
+	assert_engine_error_count(0)
+	assert_push_warning_count(0)
+
+
+func test_a_save_whose_grids_do_not_fit_falls_back_to_the_legacy_restore() -> void:
+	var first: FieldGame = _game({"stop_form": "city"})
+	first.clock.elapsed = 321.0
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+	saved["stop_form"] = "remote"
+	saved["stop_ground"] = "remote"
 	saved["runtime"]["game"]["glass_warned"] = true
 	var back: FieldGame = _game(FieldSave.resume_opts(saved))
 	assert_eq(back.stop_form, "remote")
 	assert_eq(back.clock.elapsed, 321.0, "the fallback still restores the saved clock")
-	assert_gt(back.grid.width, BareLine.WIDTH)
 	var fresh: FieldGame = _game({"stop_form": "remote"})
 	assert_eq(back.grid.width, fresh.grid.width, "the fallback stands on the ground a fresh remote stop gets")
 	assert_eq(back.grid.height, fresh.grid.height)
+	assert_gt(back.grid.width, BareLine.WIDTH)
 	assert_eq(back.grid.solid.size(), back.grid.width * back.grid.height)
 	assert_eq(back.grid.walk_people.size(), back.grid.solid.size())
 	assert_eq(back.grid.walk_dead.size(), back.grid.solid.size())
@@ -172,29 +194,17 @@ func test_remote_resumes_a_small_version_two_grid_through_legacy_restore() -> vo
 	assert_push_warning_count(1)
 
 
-## BareLine with open ground east of it: its middle lies east of the train, so a remote
-## stop grows the map west and every old cell moves by the added width. No place, so no
-## side path grows either map.
-func _west_line() -> Dictionary:
-	var data: Dictionary = MapShift.grow(FieldMaps.build_from(BareLine), 0, 0, 40, 0)
-	data["place_id"] = ""
-	return data
-
-
-func test_remote_legacy_restore_moves_people_with_the_old_cells() -> void:
-	var first: FieldGame = _game({"stop_form": "city", "map_data": _west_line()})
-	var cell: Vector2i = Vector2i(8, 22)
-	first.player.position = FieldGrid.center(cell)
-	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
-	saved["stop_form"] = "remote"
-	var opts: Dictionary = FieldSave.resume_opts(saved)
-	opts["map_data"] = _west_line()
-	var back: FieldGame = _game(opts)
-	var left: int = int(back.data.get("stop_left", 0))
-	assert_gt(left, 0, "the remote ground grew west")
-	var now: Vector2i = FieldGrid.cell_of(back.player.position)
-	assert_eq(now, cell + Vector2i(left, 0), "the player stands where the old cell went")
-	assert_true(back.grid.people_can_walk(now), "not under the deep forest")
+func test_shape_stop_regrows_an_edge_map_asked_to_be_remote() -> void:
+	var handed: Dictionary = StopGround.apply(FieldMaps.build_from(BareLine), "edge", 7, 200.0)
+	assert_eq(handed["stop_form"], "edge")
+	var rebuilt: Array[bool] = [false]
+	var fresh: Callable = func() -> Dictionary:
+		rebuilt[0] = true
+		return FieldMaps.build_from(BareLine)
+	var now: Dictionary = FieldGame.shape_stop(handed, "remote", 7, 600.0, fresh)
+	assert_true(rebuilt[0], "an edge map is built again bare before it grows remote")
+	assert_eq(now["stop_form"], "remote")
+	assert_gt(now["grid"].width, handed["grid"].width)
 
 
 func test_shape_stop_lets_the_field_judge_a_loader_wood_job_again() -> void:
@@ -221,6 +231,12 @@ func test_exact_grid_size_check_covers_every_saved_floor() -> void:
 	saved["runtime"]["levels"][1]["solid"] = upper.solid.duplicate()
 	game["levels"].erase(1)
 	assert_false(FieldSave._grid_sizes_match(game, saved), "a saved floor must still exist")
+	game["levels"][1] = upper
+	saved["runtime"]["levels"][1] = {"solid": upper.solid.duplicate(), "width": 3, "height": 2}
+	assert_false(FieldSave._grid_sizes_match(game, saved), "the same cell count in another shape does not fit")
+	saved["runtime"]["levels"][1]["width"] = 2
+	saved["runtime"]["levels"][1]["height"] = 3
+	assert_true(FieldSave._grid_sizes_match(game, saved))
 
 
 func test_shape_stop_rebuilds_a_city_side_path_and_drops_ahead_data_for_remote() -> void:
