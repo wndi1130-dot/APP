@@ -245,23 +245,27 @@ func test_tree_edges_and_seed() -> void:
 	var top_edge: int = 0
 	var left_edge: int = 0
 	var g: FieldGrid = a["grid"]
+	var tree_props: Dictionary = {}
 	for prop: Dictionary in a["props"]:
 		if String(prop["kind"]) not in ["spruce", "bare_tree"]:
 			continue
 		var cell: Vector2i = (prop["rect"] as Rect2i).position
+		tree_props[cell] = prop
+	for cell: Vector2i in a["trees"]:
 		if cell.x >= 21 and cell.y >= 51:
 			continue
 		assert_false(seen.has(cell), "no double planting at forest corners")
 		seen[cell] = true
-		assert_eq(int(prop["level"]), 0)
-		assert_true((a["trees"] as Array).has(cell))
-		if prop["kind"] == "spruce":
-			assert_true(_forest_has(a, cell))
+		if _forest_has(a, cell):
+			assert_false(tree_props.has(cell), "forest rows are always-visible tree cells, without props")
 			assert_true((cell.y >= 40 and cell.y < 46) or (cell.x < 21 and cell.y >= 61 and (cell.x >= 15 or cell.y < 67)))
 			top_edge += 1 if cell.y < 46 else 0
 			left_edge += 1 if cell.y >= 61 and cell.x >= 15 else 0
 		else:
-			assert_false(_forest_has(a, cell))
+			assert_true(tree_props.has(cell), "sparse snow trees retain their props")
+			if tree_props.has(cell):
+				assert_eq(tree_props[cell]["kind"], "bare_tree")
+				assert_eq(int(tree_props[cell]["level"]), 0)
 			assert_eq(g.floor_at(cell), FieldGrid.Floor.SNOW)
 			assert_true(cell.y < 49 or cell.y > 57, "three clear cells beside the rail")
 			for y: int in range(cell.y - 2, cell.y + 3):

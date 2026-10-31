@@ -4,6 +4,7 @@ const EdgeBand = preload("res://game/world/edge_band.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const F = FieldGrid.Floor
 
 
@@ -25,6 +26,8 @@ func _grid() -> FieldGrid:
 
 func test_values_are_fixed() -> void:
 	assert_eq(EdgeBand.BAND, 12.0)
+	assert_eq(EdgeBand.FOREST_ROWS, StopGround.REMOTE_FOREST_EDGE)
+	assert_eq(EdgeBand.FOREST_ROWS, 6)
 	assert_eq(EdgeBand.INNER_ROW, 2.6)
 	assert_eq(EdgeBand.YOUNG_TALL, Vector2(1.8, 3.4))
 	assert_eq(EdgeBand.CANOPY_TALL, Vector2(4.6, 8.5))
@@ -518,12 +521,14 @@ func test_the_plan_made_ahead_is_used_while_it_fits() -> void:
 	assert_eq(ahead["plan"], EdgeBand.plan(g, EdgeBand.seed_of(data), EdgeBand.look_of(data)), "the same plan the main thread would make")
 	var colors := [Color.WHITE, Color.GRAY, Color.GRAY, Color.GRAY, Color.DIM_GRAY, Color.WHITE, Color.WHITE, Color.GRAY]
 	var built := {}
-	for way: String in ["fresh", "ahead", "other_band"]:
+	for way: String in ["fresh", "ahead", "other_band", "other_forest"]:
 		var d := data.duplicate()
 		if way != "fresh":
 			d["_edge_plan"] = ahead
 		if way == "other_band":
 			d["region_band"] = "K4"
+		if way == "other_forest":
+			d["deep_forest"] = [Rect2i(0, 0, g.width, 16)]
 		var root := Node3D.new()
 		add_child_autofree(root)
 		var counts: Dictionary = await EdgeBand.build(root, g, d, StandardMaterial3D.new(), colors)
@@ -566,3 +571,209 @@ func test_a_band_whose_map_is_torn_down_while_it_rests_makes_nothing_more() -> v
 		await get_tree().process_frame
 	assert_true(done[0], "the build ended instead of building on a freed root")
 	assert_eq(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT), orphans, "no piece left without a parent")
+
+
+func test_empty_forest_keeps_the_original_plan_bytes() -> void:
+	for g: FieldGrid in [_grid(), FieldGrid.new(170, 120)]:
+		for seed: int in [7, 11, 93]:
+			for place: String in ["sawmill_01", "freight_01", "houses_01"]:
+				var look := EdgeBand.look_of({"place_id": place})
+				var original := EdgeBand.plan(g, seed, look)
+				var explicit_empty := EdgeBand.plan(g, seed, look, [])
+				assert_eq(explicit_empty, original)
+				assert_eq(var_to_bytes(explicit_empty), var_to_bytes(original), "empty forest adds no entries, flags or draws")
+
+
+func test_deep_forest_depth_counts_only_open_sides() -> void:
+	var g := FieldGrid.new(60, 64)
+	var forest: Array = [Rect2i(0, 0, 60, 50)]
+	assert_almost_eq(EdgeBand.woods_depth(g, forest, 30.0, 44.0), 0.0, 0.001, "six metres from the open south side")
+	assert_almost_eq(EdgeBand.woods_depth(g, forest, 30.0, 43.0), 1.0, 0.001)
+	assert_almost_eq(EdgeBand.woods_depth(g, forest, 0.0, 20.0), 24.0, 0.001, "the west map edge is closed")
+	assert_lte(EdgeBand.woods_depth(g, forest, 30.0, 55.0), 0.0, "walkable ground has no woods depth")
+	var joined: Array = [Rect2i(0, 0, 30, 50), Rect2i(30, 0, 30, 50)]
+	assert_almost_eq(EdgeBand.woods_depth(g, joined, 29.0, 20.0), 24.0, 0.001, "another forest closes the shared side")
+	var partial: Array = [Rect2i(0, 0, 30, 50), Rect2i(30, 0, 30, 25)]
+	assert_gt(EdgeBand.woods_depth(g, partial, 29.0, 10.0), 8.0, "a partially shared side opens only beyond the neighbour")
+	assert_gt(EdgeBand.woods_depth(g, [Rect2i(0, 0, 60, 64)], 30.0, 30.0), EdgeBand.FAR_WOODS, "a sealed forest has no near edge")
+
+
+func test_deep_forest_leaves_the_map_rows_and_walkable_cells_clear() -> void:
+	var g := FieldGrid.new(60, 64)
+	var rect := Rect2i(0, 0, 60, 50)
+	var forest: Array = [rect]
+	var p := EdgeBand.plan(g, 17, EdgeBand.look_of({}), forest)
+	var inside: int = 0
+	for tree: Dictionary in p["trees"]:
+		if bool(tree.get("skip", false)):
+			continue
+		var at: Vector3 = tree["at"]
+		var c := Vector2i(floori(at.x), floori(at.z))
+		if g.inside(c):
+			inside += 1
+			assert_true(rect.has_point(c), "no band tree on the map's walkable ground")
+			assert_gt(float(rect.end.y) - at.z, float(EdgeBand.FOREST_ROWS), "the map's first six metres keep their own rows")
+			assert_gt(EdgeBand.woods_depth(g, forest, at.x, at.z), 0.0)
+	assert_gt(inside, 100, "the blocked forest beyond the map rows is planted")
+
+
+func test_deep_forest_canopy_reaches_the_fog_without_far_woods_glades() -> void:
+	var g := FieldGrid.new(60, 64)
+	var forest: Array = [Rect2i(0, 0, 60, 50)]
+	var p := EdgeBand.plan(g, 17, EdgeBand.look_of({}), forest)
+	var deep: int = 0
+	var furthest: float = 0.0
+	for tree: Dictionary in p["trees"]:
+		if bool(tree.get("skip", false)):
+			continue
+		var at: Vector3 = tree["at"]
+		if not _starts_in_forest(g, forest, at):
+			continue
+		var d := EdgeBand.woods_depth(g, forest, at.x, at.z)
+		assert_lt(d, EdgeBand.FAR_WOODS)
+		if d >= EdgeBand.BAND:
+			assert_true(tree.has("height"), "past BAND this layer is continuous canopy, without low clumps")
+			if tree.has("height"):
+				assert_between(float(tree["height"]), lerpf(EdgeBand.CANOPY_TALL.x, EdgeBand.CANOPY_TALL.y, 0.75), EdgeBand.CANOPY_TALL.y)
+			if g.inside(Vector2i(floori(at.x), floori(at.z))):
+				deep += 1
+				furthest = maxf(furthest, d)
+	assert_gt(deep, 30)
+	assert_gt(furthest, EdgeBand.FAR_WOODS - 4.0, "canopy inside the map goes almost to the fog limit")
+	for item: Dictionary in p["far"]:
+		if _starts_in_forest(g, forest, item["at"]):
+			assert_true(bool(item.get("skip", false)), "the old distant groves and houses cannot open a glade here")
+
+
+func _starts_in_forest(g: FieldGrid, forest: Array, at: Vector3) -> bool:
+	var c := Vector2i(clampi(floori(at.x), 0, g.width - 1), clampi(floori(at.z), 0, g.height - 1))
+	return forest.any(func(rect: Rect2i) -> bool: return rect.has_point(c))
+
+
+func test_forest_only_flags_legacy_items_and_appends_its_own_trees() -> void:
+	var g := FieldGrid.new(170, 120)
+	var forest: Array = [Rect2i(0, 0, 170, 46), Rect2i(0, 61, 21, 59)]
+	var look := EdgeBand.look_of({})
+	var legacy := EdgeBand.plan(g, 93, look)
+	var p := EdgeBand.plan(g, 93, look, forest)
+	assert_eq(p, EdgeBand.plan(g, 93, look, forest), "the separate forest draw repeats too")
+	for key: String in ["trees", "glades", "far", "fields"]:
+		var before: Array = legacy[key]
+		var after: Array = p[key]
+		if key != "trees":
+			assert_eq(after.size(), before.size(), "legacy indices remain in " + key)
+		else:
+			assert_gt(after.size(), before.size(), "new forest is appended last")
+		for i: int in before.size():
+			var item: Dictionary = (after[i] as Dictionary).duplicate(true)
+			var at: Vector3
+			if item.has("at"):
+				at = item["at"]
+			else:
+				var center: Vector2 = (item["rect"] as Rect2).get_center()
+				at = Vector3(center.x, 0, center.y)
+			assert_eq(bool(item.get("skip", false)), _starts_in_forest(g, forest, at), "only a forest starting cell hides an entry (%s %d)" % [key, i])
+			item.erase("skip")
+			assert_eq(var_to_bytes(item), var_to_bytes(before[i]), "all original entry bytes and indices stay put (%s %d)" % [key, i])
+	for key: String in ["blocks", "clear", "runs", "tracks", "sounds"]:
+		assert_eq(p[key], legacy[key], "unchanged " + key)
+	var old_count: int = (legacy["trees"] as Array).size()
+	for i: int in range(old_count, (p["trees"] as Array).size()):
+		assert_true(_starts_in_forest(g, forest, p["trees"][i]["at"]), "appended trees belong only to deep forest")
+
+
+func test_woods_depth_continues_outside_without_a_young_tree_seam() -> void:
+	var g := FieldGrid.new(191, 151)
+	var forest: Array = [Rect2i(0, 0, 191, 46), Rect2i(0, 61, 21, 90)]
+	assert_almost_eq(EdgeBand.woods_depth(g, forest, 0.0, 100.0), 15.0, 0.001)
+	assert_almost_eq(EdgeBand.woods_depth(g, forest, -0.01, 100.0), 15.01, 0.001)
+	assert_almost_eq(EdgeBand.woods_depth(g, forest, -5.0, 100.0), 20.0, 0.001)
+	assert_almost_eq(EdgeBand.woods_depth(g, forest, 100.0, -2.0), 42.0, 0.001)
+	assert_almost_eq(EdgeBand.woods_depth(g, forest, -2.0, 55.0), EdgeBand.outside(g, -2.0, 55.0), 0.001, "outside a walking cell keeps its old depth")
+	var p := EdgeBand.plan(g, 71, EdgeBand.look_of({}), forest)
+	var west: int = 0
+	for tree: Dictionary in p["trees"]:
+		if bool(tree.get("skip", false)):
+			continue
+		var at: Vector3 = tree["at"]
+		if _starts_in_forest(g, forest, at):
+			assert_lt(EdgeBand.woods_depth(g, forest, at.x, at.z), EdgeBand.FAR_WOODS)
+			assert_gte(at.z, 0.0, "north of the map even the starting depth is past FAR_WOODS")
+		if at.x < 0.0 and at.z > 85.0 and at.z < 130.0:
+			west += 1
+			assert_true(tree.has("height"), "tall canopy rather than a new young edge at x=0")
+			assert_gt(float(tree.get("height", 0.0)), EdgeBand.YOUNG_TALL.y)
+	assert_gt(west, 20, "the west forest continues outside the map")
+
+
+func test_deep_forest_shadow_uses_woods_depth_inside_the_map() -> void:
+	var g := FieldGrid.new(60, 64)
+	var forest: Array = [Rect2i(0, 0, 60, 50)]
+	var data := {"grid": g, "place_id": "test", "deep_forest": forest}
+	var seed := EdgeBand.seed_of(data)
+	var look := EdgeBand.look_of(data)
+	var p := EdgeBand.plan(g, seed, look, forest)
+	var trees: Array = []
+	for at: Vector3 in [Vector3(30, 0, 43.4), Vector3(30, 0, 40)]:
+		var tree := EdgeBand._tree(EdgeBand.SPRUCE, 2.5)
+		tree["at"] = at
+		tree["yaw"] = 0.0
+		trees.append(tree)
+	var hidden: Dictionary = (trees[0] as Dictionary).duplicate()
+	hidden["skip"] = true
+	trees.append(hidden)
+	p["trees"] = trees
+	p["glades"] = [{"rect": Rect2(20, -8, 5, 5), "kind": "felled", "skip": true,
+		"props": [{"at": Vector3(22, 0, -5), "yaw": 0.0, "model": EdgeBand.STUMPS_MODEL}]}]
+	p["far"] = [{"at": Vector3(20, 0, -40), "yaw": 0.0, "scale": Vector3(6, 3, 5),
+		"model": EdgeBand.FAR_HOUSE, "side": 2, "skip": true}]
+	p["fields"] = [{"rect": Rect2(20, -30, 5, 1), "kind": "bank", "side": 2, "skip": true}]
+	data["_edge_plan"] = {"key": EdgeBand.plan_key(g, seed, look, forest), "plan": p}
+	var root := Node3D.new()
+	add_child_autofree(root)
+	var colors := [Color.WHITE, Color.GRAY, Color.GRAY, Color.GRAY, Color.DIM_GRAY, Color.WHITE, Color.WHITE, Color.GRAY]
+	var counts: Dictionary = await EdgeBand.build(root, g, data, StandardMaterial3D.new(), colors)
+	assert_true(bool(counts["planned_ahead"]))
+	assert_eq(int(counts["trees"]), 2, "a skipped legacy tree is not drawn or counted")
+	for key: String in ["glades", "traces", "houses", "fields"]:
+		assert_eq(int(counts[key]), 0, "skipped " + key)
+	var band := root.get_node("EdgeBand")
+	var shaded: int = 0
+	var unshaded: int = 0
+	for node in band.get_children() + band.get_node("Far").get_children():
+		if not node is GeometryInstance3D:
+			continue
+		var n: int = (node as MultiMeshInstance3D).multimesh.instance_count if node is MultiMeshInstance3D else 1
+		if (node as GeometryInstance3D).cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:
+			unshaded += n
+		else:
+			shaded += n
+	assert_eq(shaded, 1, "only depth 0.6 casts a shadow, even though both trees are inside")
+	assert_eq(unshaded, 1, "depth 4 is batched without a shadow")
+
+
+func test_forest_plan_key_copies_the_rectangles_and_plan_ahead_passes_them() -> void:
+	var g := FieldGrid.new(60, 64)
+	var forest: Array = [Rect2i(0, 0, 60, 50)]
+	var data := {"grid": g, "place_id": "test", "deep_forest": forest}
+	var seed := EdgeBand.seed_of(data)
+	var look := EdgeBand.look_of(data)
+	var ahead := EdgeBand.plan_ahead(data)
+	assert_eq(ahead["plan"], EdgeBand.plan(g, seed, look, forest))
+	assert_eq(ahead["key"], EdgeBand.plan_key(g, seed, look, forest))
+	assert_ne(ahead["key"], EdgeBand.plan_key(g, seed, look, []))
+	forest[0] = Rect2i(0, 0, 60, 45)
+	assert_ne(ahead["key"], EdgeBand.plan_key(g, seed, look, forest), "editing the source list cannot mutate the saved key")
+
+
+func test_fell_groves_ignore_skipped_and_inside_forest_trees() -> void:
+	var g := FieldGrid.new(60, 64)
+	var trees: Array = []
+	for i: int in 8:
+		for hidden: bool in [false, true]:
+			var tree := EdgeBand._tree(EdgeBand.SPRUCE, 2.5)
+			tree["at"] = Vector3(-0.5 if hidden else 0.5, 0, 12.0 + float(i) * 0.1)
+			if hidden:
+				tree["skip"] = true
+			trees.append(tree)
+	assert_eq(EdgeBand.fell_groves(g, {"trees": trees}, {"grid": g}), [], "neither hidden exterior entries nor new interior trees become work spots")

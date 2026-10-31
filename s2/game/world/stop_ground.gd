@@ -228,7 +228,6 @@ static func _view_walk_edge(g: FieldGrid, rect: Rect2i, edge: Vector2i) -> bool:
 static func _view_forest_trees(data: Dictionary, forest: Array[Rect2i], rng: RandomNumberGenerator) -> void:
 	var g: FieldGrid = data["grid"]
 	var trees: Array = data.get("trees", [])
-	var props: Array = data.get("props", [])
 	var planted: Dictionary = {}
 	for rect: Rect2i in forest:
 		for edge: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
@@ -246,11 +245,10 @@ static func _view_forest_trees(data: Dictionary, forest: Array[Rect2i], rng: Ran
 					if not planted.has(c):
 						planted[c] = true
 						trees.append(c)
-						props.append({"kind": "spruce", "rect": Rect2i(c, Vector2i.ONE), "facing": rng.randi_range(0, 3), "level": 0})
+						rng.randi_range(0, 3)  # Retain the old facing draw, keeping every later cell in place.
 					along += rng.randi_range(2, 3)
 				row += rng.randi_range(2, 3)
 	data["trees"] = trees
-	data["props"] = props
 
 
 static func village_middle(data: Dictionary) -> Vector2:
@@ -483,10 +481,9 @@ static func _remote_band(data: Dictionary, added: Rect2i, strip: Rect2i) -> void
 
 
 ## Only the first six metres of blocked forest carry trees, two or three cells apart.
-## Spruce is the existing field-tree model (PropKinds.candidates).
+## MapView draws these cells as always-visible spruce, without discovery-gated props.
 static func _add_forest_trees(data: Dictionary, strip: Rect2i, rng: RandomNumberGenerator) -> void:
 	var trees: Array = data.get("trees", [])
-	var props: Array = data.get("props", [])
 	for rect: Rect2i in data.get("deep_forest", []):
 		var above: bool = rect.end.y == strip.position.y
 		var depth: int = mini(REMOTE_FOREST_EDGE, rect.size.y)
@@ -497,11 +494,10 @@ static func _add_forest_trees(data: Dictionary, strip: Rect2i, rng: RandomNumber
 			while x < rect.end.x:
 				var c: Vector2i = Vector2i(x, y)
 				trees.append(c)
-				props.append({"kind": "spruce", "rect": Rect2i(c, Vector2i.ONE), "facing": rng.randi_range(0, 3), "level": 0})
+				rng.randi_range(0, 3)  # Retain the old facing draw, keeping every later cell in place.
 				x += rng.randi_range(2, 3)
 			row += rng.randi_range(2, 3)
 	data["trees"] = trees
-	data["props"] = props
 
 
 static func _extend_ground(g: FieldGrid, old: FieldGrid, added: Rect2i, edge_x: int) -> void:

@@ -1532,7 +1532,7 @@ const TREE_PIECE: int = TILE * 2
 
 ## The tree on cell `c` of `place_id`'s map: {model, at, yaw, height, spread}, the same
 ## every time. Off the middle of its cell by a little, so a row of tree cells is no row.
-static func tree_plant(place_id: String, c: Vector2i) -> Dictionary:
+static func tree_plant(place_id: String, c: Vector2i, force_model: String = "") -> Dictionary:
 	var mix: Array = TREE_MIX.get(BuildingUses.region_of(place_id), TREE_MIX["rail_works"])
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("%s:tree:%d:%d" % [place_id, c.x, c.y])
@@ -1543,6 +1543,8 @@ static func tree_plant(place_id: String, c: Vector2i) -> Dictionary:
 		if pick < 0.0:
 			model = row[0]
 			break
+	if not force_model.is_empty():
+		model = force_model
 	var size: Array = TREE_SIZE[model]
 	var at := FieldGrid.center(c) + Vector3(rng.randf_range(-0.2, 0.2), 0, rng.randf_range(-0.2, 0.2))
 	return {"model": model, "at": at, "yaw": rng.randf() * TAU, "height": rng.randf_range(size[0], size[1]), "spread": float(size[2])}
@@ -1552,11 +1554,13 @@ static func tree_plant(place_id: String, c: Vector2i) -> Dictionary:
 ## box trees did. Returns the trees that had no model, for the grey boxes.
 func _build_tree_models(cells: Array) -> Array:
 	var place_id := String(data.get("place_id", ""))
+	var forest: Array = data.get("deep_forest", [])
 	var meshes: Dictionary = {}
 	var pieces: Dictionary = {}
 	var left: Array = []
 	for c: Vector2i in cells:
-		var plant := tree_plant(place_id, c)
+		var in_forest: bool = forest.any(func(rect: Rect2i) -> bool: return rect.has_point(c))
+		var plant := tree_plant(place_id, c, TREE_SPRUCE if in_forest else "")
 		var path := String(plant["model"])
 		if not meshes.has(path):
 			var ok := PropModels.enabled() and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty()

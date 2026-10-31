@@ -1,10 +1,10 @@
 extends RefCounted
-## What stands round a stop map, outside its cells (결정 448 17번): woods
+## What stands round a stop map and in its blocked deep forest (결정 448 17번): woods
 ## starting just past the last walkable cell, the rails running on out of them,
 ## and every road ending deep in the band at sleepers or crates (지도 발주 6장:
 ## no wire on roads or bands; barricades are crates, sleds and sleeper piles).
 ## The ground and the low fog out there are fx/map_edge.gd's; this draws what
-## stands on it. Nothing here is walked on: the cells end where they always did.
+## stands on it. Nothing here is walked on; deep forest keeps its blocked cells.
 ## The camera's reach is separate from the woods (clamp_focus).
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -17,6 +17,9 @@ const F = FieldGrid.Floor
 
 ## Metres of woods drawn outside each edge, independent of the camera's reach.
 const BAND: float = 12.0
+## The map's own always-visible tree rows occupy the first six metres of forest.
+## Kept equal to StopGround.REMOTE_FOREST_EDGE by test (no circular preload).
+const FOREST_ROWS: int = 6
 ## How far past the edge the camera may look: past the woods, onto the far ground
 ## (user 10-27, picked from 12 / 24 / 36 m pictures). Trials set view_band.
 const VIEW_BAND: float = 24.0
@@ -205,9 +208,10 @@ static func look_of(data: Dictionary) -> Dictionary:
 
 
 ## Everything plan() reads: of the map only its size and where roads and rails cross
-## its edges, of the data only the place (seed) and the region band (look).
-static func plan_key(g: FieldGrid, seed: int, look: Dictionary) -> Dictionary:
-	return {"size": Vector2i(g.width, g.height), "openings": openings(g), "seed": seed, "look": look}
+## its edges and the deep forest, of the data the place (seed) and region band (look).
+static func plan_key(g: FieldGrid, seed: int, look: Dictionary, forest: Array = []) -> Dictionary:
+	return {"size": Vector2i(g.width, g.height), "openings": openings(g), "seed": seed, "look": look,
+		"deep_forest": forest.duplicate()}
 
 
 ## The plan made ahead off the main thread (stop_loader.make_ready), with the key it
@@ -217,7 +221,8 @@ static func plan_ahead(d: Dictionary) -> Dictionary:
 	var g: FieldGrid = d["grid"]
 	var seed := seed_of(d)
 	var look := look_of(d)
-	return {"key": plan_key(g, seed, look), "plan": plan(g, seed, look)}
+	var forest: Array = d.get("deep_forest", [])
+	return {"key": plan_key(g, seed, look, forest), "plan": plan(g, seed, look, forest)}
 
 
 ## Where a road or the rails cross an edge: {"side": 0 west 1 east 2 north 3 south,
@@ -279,10 +284,69 @@ static func outside(g: FieldGrid, x: float, z: float) -> float:
 	return Vector2(maxf(dx, 0.0), maxf(dz, 0.0)).length()
 
 
+static func _forest_cell(forest: Array, c: Vector2i) -> bool:
+	for rect: Rect2i in forest:
+		if rect.has_point(c):
+			return true
+	return false
+
+
+## Outside points start their depth at the nearest map cell, including corners.
+static func _forest_origin(g: FieldGrid, forest: Array, x: float, z: float) -> bool:
+	return _forest_cell(forest, Vector2i(clampi(floori(x), 0, g.width - 1), clampi(floori(z), 0, g.height - 1)))
+
+
+## Open parts of each rectangle's sides. A map edge or another forest rectangle
+## closes a side; partial neighbours close only their part, with no false seam.
+## Prepare once per plan/build, rather than scanning border cells for every tree.
+static func _forest_borders(g: FieldGrid, forest: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for rect: Rect2i in forest:
+		var edges: Array[Rect2] = []
+		for side: int in 4:
+			var vertical: bool = side < 2
+			var length: int = rect.size.y if vertical else rect.size.x
+			var start: int = -1
+			for along: int in range(length + 1):
+				var c := Vector2i(rect.position.x - 1 if side == 0 else rect.end.x, rect.position.y + along) if vertical \
+					else Vector2i(rect.position.x + along, rect.position.y - 1 if side == 2 else rect.end.y)
+				var open: bool = along < length and g.inside(c) and not _forest_cell(forest, c)
+				if open and start < 0:
+					start = along
+				elif not open and start >= 0:
+					var at := Vector2(rect.position.x if side == 0 else rect.end.x, rect.position.y + start) if vertical \
+						else Vector2(rect.position.x + start, rect.position.y if side == 2 else rect.end.y)
+					var size := Vector2(0, along - start) if vertical else Vector2(along - start, 0)
+					edges.append(Rect2(at, size))
+					start = -1
+		out.append({"rect": rect, "edges": edges})
+	return out
+
+
+## Distance past the map's tree rows, continuing unchanged over a wooded map edge.
+## A sealed rectangle has infinite depth and grows nothing before the fog limit.
+## `borders` is the optional precomputed _forest_borders result.
+static func woods_depth(g: FieldGrid, forest: Array, x: float, z: float, borders: Array[Dictionary] = []) -> float:
+	var depth: float = outside(g, x, z)
+	if forest.is_empty() or not _forest_origin(g, forest, x, z):
+		return depth
+	var source := Vector2(clampf(x, 0.0, float(g.width)), clampf(z, 0.0, float(g.height)))
+	var cell := Vector2i(clampi(floori(x), 0, g.width - 1), clampi(floori(z), 0, g.height - 1))
+	var sides: Array[Dictionary] = borders if not borders.is_empty() else _forest_borders(g, forest)
+	var inside: float = INF
+	for part: Dictionary in sides:
+		if not (part["rect"] as Rect2i).has_point(cell):
+			continue
+		for edge: Rect2 in part["edges"]:
+			var nearest := Vector2(clampf(source.x, edge.position.x, edge.end.x), clampf(source.y, edge.position.y, edge.end.y))
+			inside = minf(inside, source.distance_to(nearest))
+	return maxf(depth, 0.0) + inside - float(FOREST_ROWS)
+
+
 ## Everything the band places, the same for the same map: trees {at, yaw, model,
 ## height and spread, or scale for what grows low}, blocks {at, yaw, model}, the clear
 ## corridors and the openings they come from. `look`: look_of, "mixed" when empty.
-static func plan(g: FieldGrid, seed: int, look: Dictionary = {}) -> Dictionary:
+static func plan(g: FieldGrid, seed: int, look: Dictionary = {}, forest: Array = []) -> Dictionary:
 	var lk := look if not look.is_empty() else look_of({})
 	var profile: Dictionary = PROFILES[lk["profile"]]
 	var rng := RandomNumberGenerator.new()
@@ -316,8 +380,73 @@ static func plan(g: FieldGrid, seed: int, look: Dictionary = {}) -> Dictionary:
 	_scatter(g, rng, no_trees, trees, float(profile["under"]), INNER_ROW, BAND, "under", lk)
 	# New scenery never consumes a draw from the woods or the glades.
 	var distant := _far_plan(g, seed, runs, lk)
-	return {"trees": trees, "blocks": blocks, "glades": glades, "clear": clear, "runs": runs,
+	var p := {"trees": trees, "blocks": blocks, "glades": glades, "clear": clear, "runs": runs,
 		"far": distant["far"], "fields": distant["fields"], "tracks": distant["tracks"], "sounds": distant["sounds"]}
+	if not forest.is_empty():
+		# All legacy draws and indices above stay intact. Hide only the entries whose
+		# starting cell is forest; replacement woods use their own draw, appended last.
+		for key: String in ["trees", "glades", "far", "fields"]:
+			_skip_forest(g, forest, p[key])
+		trees.append_array(_forest_trees(g, seed, clear, lk, forest))
+	return p
+
+
+static func _skip_forest(g: FieldGrid, forest: Array, items: Array) -> void:
+	for item: Dictionary in items:
+		var at: Vector2
+		if item.has("at"):
+			var world: Vector3 = item["at"]
+			at = Vector2(world.x, world.z)
+		else:
+			at = (item["rect"] as Rect2).get_center()
+		if _forest_origin(g, forest, at.x, at.y):
+			item["skip"] = true
+
+
+## Continuous canopy rather than the glades and noisy far-woods stands. Only the
+## first band gets young trees/undergrowth; deeper crowns are taller and spaced 25% further apart.
+static func _forest_trees(g: FieldGrid, seed: int, clear: Array[Rect2], look: Dictionary, forest: Array) -> Array:
+	var trees: Array = []
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(str(seed) + ":deep_forest")
+	var borders := _forest_borders(g, forest)
+	var profile: Dictionary = PROFILES[look["profile"]]
+	_scatter_forest(g, rng, clear, trees, float(profile["edge"]), TRUNK_GAP, INNER_ROW, "edge", look, forest, borders)
+	_scatter_forest(g, rng, clear, trees, float(profile["canopy"]), INNER_ROW, BAND, "canopy", look, forest, borders)
+	_scatter_forest(g, rng, clear, trees, float(profile["under"]), INNER_ROW, BAND, "under", look, forest, borders)
+	_scatter_forest(g, rng, clear, trees, float(profile["canopy"]) * 1.25, BAND, FAR_WOODS, "canopy", look, forest, borders)
+	return trees
+
+
+static func _scatter_forest(g: FieldGrid, rng: RandomNumberGenerator, clear: Array[Rect2], trees: Array, spacing: float, near: float, far: float, layer: String, look: Dictionary, forest: Array, borders: Array[Dictionary]) -> void:
+	var z: float = -far
+	while z < float(g.height) + far:
+		var x: float = -far
+		while x < float(g.width) + far:
+			var px: float = x + spacing * 0.5
+			var pz: float = z + spacing * 0.5
+			var middle: float = woods_depth(g, forest, px, pz, borders)
+			if not _forest_origin(g, forest, px, pz) or middle < near - spacing or middle > far + spacing:
+				x += spacing
+				continue
+			px += rng.randf_range(-0.42, 0.42) * spacing
+			pz += rng.randf_range(-0.42, 0.42) * spacing
+			var yaw: float = rng.randf() * TAU
+			var roll: float = rng.randf()
+			var pick: float = rng.randf()
+			var size: float = rng.randf()
+			var d: float = woods_depth(g, forest, px, pz, borders)
+			var start: float = near if near > TRUNK_GAP else _edge_start(px, pz, rng.seed)
+			if _forest_origin(g, forest, px, pz) and d >= start and d < far and not _in_any(clear, px, pz):
+				var item := _pick(layer, look, d, roll, pick, size)
+				if not item.is_empty():
+					if layer == "canopy" and near >= BAND:
+						item["height"] = lerpf(lerpf(CANOPY_TALL.x, CANOPY_TALL.y, 0.75), CANOPY_TALL.y, size)
+					item["at"] = Vector3(px, 0, pz)
+					item["yaw"] = yaw
+					trees.append(item)
+			x += spacing
+		z += spacing
 
 
 ## Work from the same plan build() draws. Corner trees belong to one side, with
@@ -327,7 +456,7 @@ static func fell_groves(g: FieldGrid, p: Dictionary, data: Dictionary) -> Array:
 	var spans: Dictionary = {}
 	for plan_idx: int in range(trees.size()):
 		var tree: Dictionary = trees[plan_idx] as Dictionary
-		if not tree.has("height"):
+		if bool(tree.get("skip", false)) or not tree.has("height"):
 			continue
 		var at: Vector3 = tree["at"] as Vector3
 		var depth: float = outside(g, at.x, at.z)
@@ -841,12 +970,14 @@ static func _chunk(at: Vector3) -> Vector2i:
 static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Material, colors: Array, pace = null) -> Dictionary:
 	var seed := seed_of(data)
 	var look := look_of(data)
+	var forest: Array = data.get("deep_forest", [])
+	var borders := _forest_borders(g, forest)
 	# The plan made ahead on the stop loader's worker (plan_ahead), read once, when it
 	# was made from the same inputs; else made here, on the main thread.
 	var ahead: Dictionary = data.get("_edge_plan", {})
 	data.erase("_edge_plan")
-	var planned_ahead: bool = not ahead.is_empty() and ahead["key"] == plan_key(g, seed, look)
-	var p: Dictionary = (ahead["plan"] as Dictionary) if planned_ahead else plan(g, seed, look)
+	var planned_ahead: bool = not ahead.is_empty() and ahead["key"] == plan_key(g, seed, look, forest)
+	var p: Dictionary = (ahead["plan"] as Dictionary) if planned_ahead else plan(g, seed, look, forest)
 	var root := Node3D.new()
 	root.name = "EdgeBand"
 	parent.add_child(root)
@@ -884,12 +1015,16 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 	var meshes: Dictionary = {}
 	var with_far: Array = []
 	var groups: Dictionary = {}
+	var tree_count: int = 0
 	for t: Dictionary in p["trees"]:
+		if bool(t.get("skip", false)):
+			continue
+		tree_count += 1
 		var at: Vector3 = t["at"]
 		var model := String(t["model"])
 		if not meshes.has(model):
 			meshes[model] = _model_mesh(model)
-		var shade := outside(g, at.x, at.z) <= SHADE_DEPTH
+		var shade := woods_depth(g, forest, at.x, at.z, borders) <= SHADE_DEPTH
 		if meshes[model] != null and not (model == SPRUCE and shade):
 			with_far.append(t)
 			continue
@@ -937,7 +1072,11 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		if not is_instance_valid(root):
 			return {}
 	var traces := 0
+	var glade_count: int = 0
 	for gl: Dictionary in p["glades"]:
+		if bool(gl.get("skip", false)):
+			continue
+		glade_count += 1
 		for t: Dictionary in gl["props"]:
 			var mesh := _model_mesh(String(t["model"]))
 			if mesh == null:
@@ -962,7 +1101,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 			node.material_override = material
 		node.transform = Transform3D(Basis(Vector3.UP, float(b["yaw"])), b["at"])
 		root.add_child(node)
-	var counts := {"trees": (p["trees"] as Array).size(), "blocks": (p["blocks"] as Array).size(), "glades": (p["glades"] as Array).size(), "traces": traces, "chunks": groups.size(), "runs": (p["runs"] as Array).size(), "planned_ahead": planned_ahead}
+	var counts := {"trees": tree_count, "blocks": (p["blocks"] as Array).size(), "glades": glade_count, "traces": traces, "chunks": groups.size(), "runs": (p["runs"] as Array).size(), "planned_ahead": planned_ahead}
 	await BuildPace.rest(pace)
 	if not is_instance_valid(root):
 		return {}
@@ -998,6 +1137,8 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 	var ground_kind := int(ground["kind"])
 	var house_count := 0
 	for item: Dictionary in (p["far"] as Array) + plants:
+		if bool(item.get("skip", false)):
+			continue
 		var at := item["at"] as Vector3
 		var chunk := _far_chunk(at)
 		var model := String(item["model"])
@@ -1034,7 +1175,11 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 		await BuildPace.rest(pace)
 		if not is_instance_valid(root):
 			return {}
+	var field_count: int = 0
 	for plot: Dictionary in p["fields"]:
+		if bool(plot.get("skip", false)):
+			continue
+		field_count += 1
 		var rect := plot["rect"] as Rect2
 		if String(plot["kind"]) == "bank":
 			_far_quad(surfaces, rect, 0.018, ground_color.darkened(0.05), ground_kind)
@@ -1087,7 +1232,7 @@ static func _build_far(parent: Node3D, g: FieldGrid, p: Dictionary, material: Ma
 			return {}
 	# far_pieces: every piece drawn out there (each model's batches and the ground), for
 	# comparing what the band costs to draw beside chunks (the band's own pieces).
-	return {"far": prop_count, "far_pieces": root.get_child_count(), "houses": house_count, "fields": (p["fields"] as Array).size(), "tracks": (p["tracks"] as Array).size(), "sounds": (p["sounds"] as Array).size()}
+	return {"far": prop_count, "far_pieces": root.get_child_count(), "houses": house_count, "fields": field_count, "tracks": (p["tracks"] as Array).size(), "sounds": (p["sounds"] as Array).size()}
 
 
 ## Match the ground outside the blend without depending on map_view (which
