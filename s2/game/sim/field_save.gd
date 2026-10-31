@@ -4,7 +4,7 @@ extends RefCounted
 ## going back: the last whole save is the only one, and a broken file falls
 ## back to the one before it (.bak).
 ##
-## capture() only reads the field; to_json/from_json and write/read are plain
+## capture() snapshots live picks; to_json/from_json and write/read are plain
 ## functions over a Dictionary. Only S2 reads this file (its keys are its own);
 ## the train keeps its own save (user://s1a_game_v2.json). On start the field
 ## save wins while its phase is "field", unless the train already applied its
@@ -20,6 +20,7 @@ const EatRules = preload("res://game/sim/eat_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const FieldWork = preload("res://game/field_work.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
@@ -55,6 +56,8 @@ const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow
 
 ## What the field is now, as plain data. `game` is a field_game.gd.
 static func capture(game) -> Dictionary:
+	if game.get("work") != null:
+		game.work.prepare_digs()
 	var people: Array = []
 	for p in game.people:
 		people.append(_person(game, p))
@@ -558,6 +561,8 @@ static func _apply_exact(game, save: Dictionary) -> void:
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	_restore_properties(game, game, runtime["game"])
+	if game.work != null:
+		game.work.restore_digs()
 	_refresh_restored_view(game)
 	# Sight/view rebuilding must not advance the saved simulation or random streams.
 	_restore_properties(game, game, runtime["game"])
@@ -748,7 +753,10 @@ static func _encode(v: Variant) -> Variant:
 			return {"$type": "Dictionary", "value": pairs}
 		var out := {}
 		for k in v:
-			out[String(k)] = _encode(v[k])
+			if k == "dig_parts":
+				out[String(k)] = _encode(FieldWork.clean_dig_parts(v[k], int(v.get("dig_wagon", -1))))
+			else:
+				out[String(k)] = _encode(v[k])
 		return out
 	if v is Array:
 		var out: Array = []
@@ -786,6 +794,8 @@ static func _decode(v: Variant) -> Variant:
 				out[k] = Vector3(float(e[0]), float(e[1]), float(e[2]))
 			else:
 				out[k] = _decode(e)
+		if out.has("dig_parts"):
+			out["dig_parts"] = FieldWork.clean_dig_parts(out["dig_parts"], int(out.get("dig_wagon", -1)))
 		return out
 	if v is Array:
 		var out: Array = []

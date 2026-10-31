@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 
 const DIR := "user://test_field_save"
@@ -51,6 +52,54 @@ func test_a_save_goes_to_json_and_back_whole() -> void:
 	assert_true(back["people"][0]["pos"] is Vector3)
 	assert_eq(typeof(back["zombies"][0]["id"]), TYPE_INT)
 	assert_eq(back["departure"], d["departure"], "the departure order passes through untouched")
+
+
+func _dig_save(parts: Array, wagon_index: int = -1) -> Dictionary:
+	var saved: Dictionary = _sample()
+	var site: Dictionary = {"dig_parts": parts}
+	if wagon_index >= 0:
+		site["dig_wagon"] = wagon_index
+	saved["runtime"] = {"components": {"work": {"sites": {"work_site": site}}}}
+	return saved
+
+
+func test_wagon_indices_and_pick_seconds_survive_json() -> void:
+	var parts: Array = [{"wagon": 0, "seconds": 60.0}, {"wagon": 1, "seconds": 30.0}]
+	var saved: Dictionary = _dig_save(parts, 1)
+	var back: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
+	var site: Dictionary = back["runtime"]["components"]["work"]["sites"]["work_site"]
+	assert_eq(site["dig_parts"], parts)
+	assert_eq(int(site["dig_wagon"]), 1)
+	assert_eq(typeof(site["dig_parts"][0]["wagon"]), TYPE_INT)
+	assert_eq(FieldSave.from_json(FieldSave.to_json(back)), back)
+
+
+func test_writing_dig_parts_clamps_finite_seconds_and_discards_nonfinite_seconds() -> void:
+	var saved: Dictionary = _dig_save([135.0, -15.0, NAN, INF, -INF,
+		{"wagon": 1, "seconds": INF}, {"wagon": 1, "seconds": 45.0}], 0)
+	var back: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
+	var parts: Array = back["runtime"]["components"]["work"]["sites"]["work_site"]["dig_parts"]
+	assert_eq(parts, [{"wagon": 0, "seconds": 90.0}, {"wagon": 0, "seconds": 0.0},
+		{"wagon": 1, "seconds": 45.0}])
+
+
+func test_reading_dig_parts_clamps_seconds_before_they_can_be_resumed() -> void:
+	var encoded: Dictionary = JSON.parse_string(FieldSave.to_json(_dig_save([], 0)))
+	encoded["runtime"]["components"]["work"]["sites"]["work_site"]["dig_parts"] = [135.0, -15.0,
+		{"wagon": 1, "seconds": {"$type": "float", "value": "inf"}},
+		{"wagon": 1, "seconds": {"$type": "float", "value": "-inf"}}]
+	var back: Dictionary = FieldSave.from_json(JSON.stringify(encoded))
+	assert_eq(back["runtime"]["components"]["work"]["sites"]["work_site"]["dig_parts"],
+		[{"wagon": 0, "seconds": 90.0}, {"wagon": 0, "seconds": 0.0}])
+
+
+func test_legacy_numeric_dig_parts_wait_for_the_current_map_wagon() -> void:
+	var saved: Dictionary = _dig_save([60.0, 135.0, -15.0, NAN, INF])
+	var back: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
+	var site: Dictionary = back["runtime"]["components"]["work"]["sites"]["work_site"]
+	assert_eq(site["dig_parts"], [60.0, 90.0, 0.0], "no map index invented by JSON conversion")
+	assert_eq(FieldWork.clean_dig_parts(site["dig_parts"], 1),
+		[{"wagon": 1, "seconds": 60.0}, {"wagon": 1, "seconds": 90.0}, {"wagon": 1, "seconds": 0.0}])
 
 
 func test_what_is_not_a_whole_save_of_this_kind_reads_as_none() -> void:

@@ -390,7 +390,7 @@ func paint_digs() -> void:
 	for id: String in site_ids():
 		if job_id(id) != "coal_wagon":
 			continue
-		var wagon: Dictionary = game.ai._wagon_with_coal()
+		var wagon: Dictionary = dig_wagon(id)
 		var progress: float = dig_progress(id) if not wagon.is_empty() else 0.0
 		var cells: int = roundi(progress * DIG_CELLS) if progress > 0.0 else -1
 		game.view.update_dig(id, wagon, cells)
@@ -544,7 +544,7 @@ func _disembark(id: String, row: Dictionary, side: int) -> void:
 	if p == null:
 		p = game.make_person(row, door)
 		game.crew.append(p)
-	p.cancel_action()
+	_cancel_dig(p, id)
 	p.stop()
 	p.target_zombie = {}
 	p.target_person = null
@@ -628,9 +628,16 @@ func _no_hands(id: String) -> bool:
 
 
 func _cancel_workers(id: String) -> void:
+	# The site still owns picks whose workers left the crew list.
+	for pid: String in _active_digs(id).keys():
+		var worker: Variant = _active_digs(id)[pid].get("worker")
+		if is_instance_valid(worker):
+			_cancel_dig(worker, id)
+		else:
+			_return_dig(id, pid)
 	for p in members(id):
 		if p.role == "worker" and not p.brain.get("boarded", false):
-			p.cancel_action()
+			_cancel_dig(p, id)
 			p.stop()
 
 
@@ -736,6 +743,7 @@ func _trip(id: String) -> float:
 func crew_step(p, think: bool) -> bool:
 	var id: String = String(p.brain.get("work_site", "work_site"))
 	if p.brain.get("boarded", false):
+		_return_dig(id, String(p.pid))
 		return true
 	if phase(id) in ["retreat", "done"] or p.brain.get("job", "") == "home":
 		_go_home(p, id, think)
@@ -746,13 +754,17 @@ func crew_step(p, think: bool) -> bool:
 		return true
 	var threat: Dictionary = nearest_threat(p.position, WORKER_BACK_R)
 	if not threat.is_empty():
-		p.cancel_action()
+		_cancel_dig(p, id)
 		p.brain["fleeing"] = true
 		if p.position.distance_to(threat["pos"]) <= WORKER_RUN_R:
 			drop_load(p)
 			p.brain["work_run"] = true
 		if not p.brain.get("work_run", false):
-			game.ai._walk(p, _behind_escort(p, threat, id), true)
+			var shelter: Vector3 = _behind_escort(p, threat, id)
+			if shelter.is_finite():
+				game.ai._walk(p, shelter, true)
+			else:
+				p.stop()
 			return true
 	if p.brain.get("work_run", false):
 		if p.position.distance_to(door_of(id)) > BOARD_R or not threat.is_empty():
@@ -761,8 +773,8 @@ func crew_step(p, think: bool) -> bool:
 		p.brain["work_run"] = false
 	p.brain["fleeing"] = false
 	if phase(id) == "hold":
-		p.cancel_action()
-		game.ai._walk(p, _hold_spot(p, id), true)
+		_cancel_dig(p, id)
+		_wait_worker(p, id, true)
 		return true
 	if phase(id) != "working" or p.action != "":
 		return true
@@ -785,23 +797,20 @@ func crew_step(p, think: bool) -> bool:
 		else:
 			_take_drop(p, pile, id)
 		return true
-	var wagon: Dictionary = game.ai._wagon_with_coal() if job_id(id) == "coal_wagon" else {}
+	var wagon: Dictionary = dig_wagon(id) if job_id(id) == "coal_wagon" else {}
 	if remaining(id) <= EMPTY or (job_id(id) == "coal_wagon" and wagon.is_empty()):
 		return true
 	var at: Vector3 = _work_spot(p, id, wagon)
+	if not at.is_finite():
+		_wait_worker(p, id, false)
+		return true
 	if p.position.distance_to(at) > (WORK_R if wagon.is_empty() else WAGON_WORK_R):
 		game.ai._walk(p, at, false)
 		return true
 	if float(p.brain.get("work_wait", -1.0)) < 0.0:
 		p.brain["work_wait"] = elapsed + game.rng.randf_range(0.0, START_SPREAD)
 	if elapsed >= float(p.brain["work_wait"]):
-		var from: float = _take_dig(id) if keeps_dig() else 0.0
-		p.start_action("dig", String(job(id)["verb"]), maxf(float(job(id)["work_s"]) - from, EMPTY), _worked.bind(p, id))
-		if from > 0.0:
-			if p.action == "dig":
-				p.brain["dig_from"] = from
-			else:
-				_site(id)["dig_parts"].append(from)
+		_begin_dig(p, id)
 	return true
 
 
@@ -809,48 +818,231 @@ func keeps_dig() -> bool:
 	return KEEP_DIG
 
 
-## Each frame while picks keep their work: how far each worker's pick at the coal has come, and one
-## that stopped short of done, whoever stopped it, goes back into the coal.
+## Invalid seconds are discarded; finite seconds stay within one pick (decision 524).
+static func dig_seconds(value: Variant) -> float:
+	if not (value is int or value is float) or not is_finite(float(value)):
+		return -1.0
+	return clampf(float(value), 0.0, DIG_TIME)
+
+
+## Old numeric parts acquire the current wagon once its map index is known.
+static func clean_dig_parts(value: Variant, wagon_index: int = -1) -> Array:
+	var out: Array = []
+	if not value is Array:
+		return out
+	for part: Variant in value:
+		var seconds: float = dig_seconds(part.get("seconds") if part is Dictionary else part)
+		if seconds < 0.0:
+			continue
+		if part is Dictionary:
+			var key: Variant = part.get("wagon")
+			if not (key is int or key is float) or not is_finite(float(key)):
+				continue
+			if float(key) < 0.0 or float(key) != floorf(float(key)):
+				continue
+			out.append({"wagon": int(key), "seconds": seconds})
+		elif wagon_index >= 0:
+			out.append({"wagon": wagon_index, "seconds": seconds})
+		else:
+			out.append(seconds)
+	return out
+
+
+func _wagon_at(index: int) -> Dictionary:
+	var wagons: Array = game.data.get("wagons", [])
+	return wagons[index] if index >= 0 and index < wagons.size() else {}
+
+
+## A site keeps its wagon until empty. Other coal sites claim separate wagons.
+func _dig_wagon_index(id: String) -> int:
+	var state: Dictionary = _site(id)
+	var current: int = int(state.get("dig_wagon", -1))
+	var wagon: Dictionary = _wagon_at(current)
+	if wagon.has("work") and float(wagon.get("coal", 0.0)) > EMPTY:
+		return current
+	var claimed: Array[int] = []
+	for other: String in site_ids():
+		if other != id and job_id(other) == "coal_wagon":
+			claimed.append(int(_site(other).get("dig_wagon", -1)))
+	var wagons: Array = game.data.get("wagons", [])
+	for index in wagons.size():
+		wagon = wagons[index]
+		if not claimed.has(index) and wagon.has("work") and float(wagon.get("coal", 0.0)) > EMPTY:
+			state["dig_wagon"] = index
+			return index
+	state["dig_wagon"] = -1
+	return -1
+
+
+func dig_wagon(id: String = "work_site") -> Dictionary:
+	return _wagon_at(_dig_wagon_index(id))
+
+
+func _dig_parts(id: String) -> Array:
+	var state: Dictionary = _site(id)
+	state["dig_parts"] = clean_dig_parts(state.get("dig_parts", []), _dig_wagon_index(id))
+	return state["dig_parts"]
+
+
+func _active_digs(id: String) -> Dictionary:
+	var state: Dictionary = _site(id)
+	if not state.has("dig_active"):
+		state["dig_active"] = {}
+	return state["dig_active"]
+
+
+func _store_dig(id: String, wagon_index: int, seconds: float) -> void:
+	var safe: float = dig_seconds(seconds)
+	if keeps_dig() and wagon_index >= 0 and safe > 0.0:
+		_dig_parts(id).append({"wagon": wagon_index, "seconds": safe})
+
+
+func _watch_dig(p, id: String) -> void:
+	var on_exit: Callable = _return_dig.bind(id, String(p.pid))
+	if not p.tree_exiting.is_connected(on_exit):
+		p.tree_exiting.connect(on_exit)
+
+
+## Register ownership before the next update, even when no seconds were resumed.
+func _begin_dig(p, id: String) -> void:
+	_return_dig(id, String(p.pid))
+	p.brain.erase("dig_from")
+	p.brain.erase("dig_done")
+	p.brain.erase("dig_wagon")
+	var coal: bool = job_id(id) == "coal_wagon"
+	var wagon_index: int = _dig_wagon_index(id) if coal else -1
+	if coal and wagon_index < 0:
+		return
+	var from: float = _take_dig(id) if coal and keeps_dig() else 0.0
+	var done: Callable = _worked.bind(p, id, wagon_index)
+	p.start_action("dig", String(job(id)["verb"]), maxf(float(job(id)["work_s"]) - from, EMPTY), done)
+	if p.action != "dig" or p.action_done != done:
+		_store_dig(id, wagon_index, from)
+		return
+	if coal:
+		_active_digs(id)[String(p.pid)] = {"worker": p, "wagon": wagon_index, "from": from, "done": from}
+		p.brain["dig_from"] = from
+		p.brain["dig_done"] = from
+		p.brain["dig_wagon"] = wagon_index
+		_watch_dig(p, id)
+
+
+func _dig_done(row: Dictionary) -> float:
+	var most: float = maxf(dig_seconds(row.get("done", 0.0)), 0.0)
+	var p: Variant = row.get("worker")
+	if is_instance_valid(p) and p.action == "dig":
+		var from: float = maxf(dig_seconds(row.get("from", 0.0)), 0.0)
+		if is_finite(p.action_total) and is_finite(p.action_t):
+			most = maxf(most, dig_seconds(from + maxf(p.action_total - p.action_t, 0.0)))
+	return most
+
+
+## Erase ownership first so cancellation, departure and later polling return it once.
+func _return_dig(id: String, pid: String, consumed: bool = false) -> Dictionary:
+	var active: Dictionary = _active_digs(id)
+	var row: Dictionary = active.get(pid, {})
+	if row.is_empty():
+		return {}
+	var seconds: float = _dig_done(row)
+	active.erase(pid)
+	var p: Variant = row.get("worker")
+	if is_instance_valid(p):
+		p.brain.erase("dig_from")
+		p.brain.erase("dig_done")
+		p.brain.erase("dig_wagon")
+	if not consumed:
+		_store_dig(id, int(row["wagon"]), seconds)
+	return row
+
+
+func _cancel_dig(p, id: String) -> void:
+	_return_dig(id, String(p.pid))
+	p.cancel_action()
+
+
+## The site owns the references, including workers removed from members().
 func _keep_digs() -> void:
-	for id: String in sites:
+	for id: String in sites.keys():
 		if job_id(id) != "coal_wagon":
 			continue
+		var active: Dictionary = _active_digs(id)
+		for pid: String in active.keys():
+			var row: Dictionary = active[pid]
+			var p: Variant = row.get("worker")
+			if not is_instance_valid(p):
+				_return_dig(id, pid)
+			elif p.action != "dig":
+				_return_dig(id, pid)
+			elif not game.crew.has(p) or not p.can_act() or p.brain.get("boarded", false):
+				_cancel_dig(p, id)
+			else:
+				row["done"] = _dig_done(row)
+				p.brain["dig_done"] = row["done"]
+
+
+## Save the current timer, not only the previous frame's snapshot.
+func prepare_digs() -> void:
+	_keep_digs()
+	for id: String in sites.keys():
+		if job_id(id) == "coal_wagon":
+			_dig_parts(id)
+
+
+## Reconnect saved ownership and migrate numeric parts and older live picks.
+func restore_digs() -> void:
+	for id: String in sites.keys():
+		if job_id(id) != "coal_wagon":
+			continue
+		var wagon_index: int = _dig_wagon_index(id)
+		_dig_parts(id)
+		var active: Dictionary = _active_digs(id)
 		for p in members(id):
-			if p.action == "dig":
-				p.brain["dig_done"] = float(p.brain.get("dig_from", 0.0)) + p.action_total - p.action_t
-			elif p.brain.has("dig_done"):
-				var state: Dictionary = _site(id)
-				if not state.has("dig_parts"):
-					state["dig_parts"] = []
-				state["dig_parts"].append(float(p.brain["dig_done"]))
-				p.brain.erase("dig_done")
-				p.brain.erase("dig_from")
+			if p.role != "worker" or p.action != "dig":
+				continue
+			var pid: String = String(p.pid)
+			if not active.has(pid):
+				active[pid] = {"worker": p, "wagon": wagon_index,
+					"from": p.brain.get("dig_from", 0.0), "done": p.brain.get("dig_done", 0.0)}
+			var row: Dictionary = active[pid]
+			row["from"] = maxf(dig_seconds(row.get("from", 0.0)), 0.0)
+			row["done"] = maxf(dig_seconds(row.get("done", 0.0)), float(row["from"]))
+			row["done"] = _dig_done(row)
+			p.action_total = maxf(DIG_TIME - float(row["from"]), EMPTY)
+			p.action_t = maxf(DIG_TIME - float(row["done"]), EMPTY)
+			p.brain["dig_from"] = row["from"]
+			p.brain["dig_done"] = row["done"]
+			p.brain["dig_wagon"] = int(row["wagon"])
+			_watch_dig(p, id)
+	_keep_digs()
 
 
-## The most done of the picks left in the coal, taken up (none left: 0).
+## Only the most advanced pick in this wagon can be resumed.
 func _take_dig(id: String) -> float:
-	var parts: Array = _site(id).get("dig_parts", [])
-	if parts.is_empty():
-		return 0.0
-	var most: int = 0
+	var wagon_index: int = _dig_wagon_index(id)
+	var parts: Array = _dig_parts(id)
+	var most: int = -1
 	for i in parts.size():
-		if float(parts[i]) > float(parts[most]):
-			most = i
-	return float(parts.pop_at(most))
+		if parts[i] is Dictionary and int(parts[i]["wagon"]) == wagon_index:
+			if most < 0 or float(parts[i]["seconds"]) > float(parts[most]["seconds"]):
+				most = i
+	return float(parts.pop_at(most)["seconds"]) if most >= 0 else 0.0
 
 
-## The furthest pick in this coal, left behind or still in someone's hands (decision 524).
+## The furthest pick in this site's current wagon (decision 524).
 func dig_progress(id: String = "work_site") -> float:
 	if job_id(id) != "coal_wagon" or not sites.has(id):
 		return 0.0
+	var wagon_index: int = _dig_wagon_index(id)
+	if wagon_index < 0:
+		return 0.0
 	var most: float = 0.0
-	for part in _site(id).get("dig_parts", []):
-		most = maxf(most, float(part))
-	for p in members(id):
-		if p.role == "worker" and p.action == "dig":
-			var live: float = float(p.brain.get("dig_from", 0.0)) + p.action_total - p.action_t
-			most = maxf(most, maxf(float(p.brain.get("dig_done", 0.0)), live))
-	return clampf(most / DIG_TIME, 0.0, 1.0)
+	for part: Dictionary in _dig_parts(id):
+		if int(part["wagon"]) == wagon_index:
+			most = maxf(most, float(part["seconds"]))
+	for row: Dictionary in _active_digs(id).values():
+		if int(row["wagon"]) == wagon_index:
+			most = maxf(most, _dig_done(row))
+	return most / DIG_TIME
 
 
 ## This worker's turn among the site's workers and how many there are: (turn, count).
@@ -875,29 +1067,60 @@ func _side(p, id: String) -> Vector3:
 
 ## Where this worker waits out a hold: by the hold position, at its own place.
 func _hold_spot(p, id: String) -> Vector3:
-	return game.walkable_near(hold_position(id) + _side(p, id))
+	var turn: Vector2i = _turn(p, id)
+	var places: Array[Vector3] = []
+	var center: Vector3 = hold_position(id)
+	for ring in range(turn.y + 1):
+		for dz in range(-ring, ring + 1):
+			for dx in range(-ring, ring + 1):
+				if maxi(absi(dx), absi(dz)) != ring:
+					continue
+				_add_work_place(places, center + Vector3(float(dx) * WORK_GAP, 0.0, float(dz) * WORK_GAP))
+				if places.size() > turn.x:
+					return places[turn.x]
+	return Vector3.INF
+
+
+func _wait_worker(p, id: String, run: bool) -> void:
+	var at: Vector3 = _hold_spot(p, id)
+	if at.is_finite():
+		game.ai._walk(p, at, run)
+	else:
+		p.stop()
+
+
+## Check the corrected destination; nearby blocked cells can collapse several candidates.
+func _add_work_place(places: Array[Vector3], candidate: Vector3) -> void:
+	var at: Vector3 = game.walkable_near(candidate)
+	if not at.is_finite() or not game.grid.people_can_walk(FieldGrid.cell_of(at)):
+		return
+	for other: Vector3 in places:
+		if at.distance_to(other) < WORK_GAP - EMPTY:
+			return
+	places.append(at)
+
+
+func _wagon_places(wagon: Dictionary) -> Array[Vector3]:
+	var places: Array[Vector3] = []
+	var rect: Rect2i = wagon["rect"]
+	var at: Vector3 = FieldGrid.center(wagon["work"])
+	for k in range(rect.size.x + 1):
+		for step: int in ([k, -k] if k > 0 else [0]):
+			var x: float = at.x + WORK_GAP * float(step)
+			if x >= float(rect.position.x) + 0.5 and x <= float(rect.end.x) - 0.5:
+				_add_work_place(places, Vector3(x, at.y, at.z))
+	return places
 
 
 ## Where this worker digs: its own place by its turn in the crew (no dice) — along a coal wagon's
 ## side from its work cell, a WORK_GAP step at a time to either hand within the wagon's length,
 ## or spread across any other site.
 func _work_spot(p, id: String, wagon: Dictionary) -> Vector3:
-	var at: Vector3
 	if wagon.is_empty():
-		at = position_of(id) + _side(p, id)
-	else:
-		var i: int = _turn(p, id).x
-		var rect: Rect2i = wagon["rect"]
-		at = FieldGrid.center(wagon["work"])
-		var places: Array[float] = []
-		for k in range(rect.size.x + 1):
-			for step: int in ([k, -k] if k > 0 else [0]):
-				var x: float = at.x + WORK_GAP * float(step)
-				if x >= float(rect.position.x) + 0.5 and x <= float(rect.end.x) - 0.5:
-					places.append(x)
-		if not places.is_empty():
-			at.x = places[i % places.size()]
-	return game.walkable_near(at)
+		return game.walkable_near(position_of(id) + _side(p, id))
+	var places: Array[Vector3] = _wagon_places(wagon)
+	var turn: int = _turn(p, id).x
+	return places[turn] if turn < places.size() else Vector3.INF
 
 
 ## A small fixed offset per person (from the pid, no dice) so a crew does not stand in one spot.
@@ -937,7 +1160,7 @@ func _behind_escort(p, threat: Dictionary, id: String) -> Vector3:
 func _go_home(p, id: String, think: bool) -> void:
 	var door: Vector3 = door_of(id)
 	if p.position.distance_to(door) <= BOARD_R:
-		p.cancel_action()
+		_cancel_dig(p, id)
 		p.stop()
 		p.target_zombie = {}
 		p.target_person = null
@@ -953,18 +1176,25 @@ func _go_home(p, id: String, think: bool) -> void:
 		game.ai._walk(p, door, true)
 
 
-## The wagon is looked up when the work is done, as the old dig did (a bound wagon row would
-## not come back as the same row from a field save).
-func _worked(p, id: String) -> void:
-	p.brain.erase("dig_done")
-	p.brain.erase("dig_from")
-	if phase(id) != "working" or not p.can_act() or p.brain.get("boarded", false):
+## Completion uses the same map index as the pick, including after a save.
+func _worked(p, id: String, wagon_index: int = -1) -> void:
+	var coal: bool = job_id(id) == "coal_wagon"
+	if coal:
+		var row: Dictionary = _active_digs(id).get(String(p.pid), {})
+		if row.is_empty() or (wagon_index >= 0 and wagon_index != int(row["wagon"])):
+			return
+		wagon_index = int(row["wagon"])
+		_return_dig(id, String(p.pid), true)
+	if phase(id) != "working" or not p.can_act() or p.brain.get("boarded", false) or not game.crew.has(p):
+		if coal:
+			_store_dig(id, wagon_index, DIG_TIME)
 		return
-	var wagon: Dictionary = game.ai._wagon_with_coal() if job_id(id) == "coal_wagon" else {}
-	if job_id(id) == "coal_wagon" and wagon.is_empty():
+	var source: Dictionary = _wagon_at(wagon_index) if coal else game.data["spots"][id]
+	var key: String = "coal" if coal else "amount"
+	if source.is_empty() or float(source.get(key, 0.0)) <= EMPTY:
+		if coal:
+			_store_dig(id, wagon_index, DIG_TIME)
 		return
-	var source: Dictionary = wagon if job_id(id) == "coal_wagon" else game.data["spots"][id]
-	var key: String = "coal" if job_id(id) == "coal_wagon" else "amount"
 	var take: float = minf(_trip(id), float(source.get(key, 0.0)))
 	source[key] = maxf(float(source.get(key, 0.0)) - take, 0.0)
 	p.brain["load"] = take
@@ -977,8 +1207,11 @@ func _worked(p, id: String) -> void:
 ## in from either end of the train, on the map, and the nearest a carrier can stand on.
 func coal_drop(p) -> Vector3:
 	var train: Rect2i = game.data["train"]
+	var row: int = train.end.y + COAL_DROP_OUT
+	if row >= game.grid.height:
+		row = train.position.y - COAL_DROP_OUT
 	var cell := Vector2i(clampi(int(p.position.x), train.position.x + 1, train.end.x - 2),
-		mini(train.end.y + COAL_DROP_OUT, game.grid.height - 1))
+		clampi(row, 0, game.grid.height - 1))
 	return game.walkable_near(FieldGrid.center(cell))
 
 
