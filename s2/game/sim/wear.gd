@@ -85,7 +85,7 @@ const KINDS: Dictionary = {
 	"coat_wool_long": {"slot": "coat", "name": "긴 털 외투", "icon": "it_coat", "weight": 2.8, "warmth": 0.75, "windproof": 0.6, "block": 0.3, "stuff": "wool", "shell": "coat_long", "tint": [0.11, 0.105, 0.1], "pattern": "plain"},
 	"raincoat": {"slot": "coat", "name": "비옷", "icon": "it_coat", "weight": 0.8, "warmth": 0.05, "windproof": 0.7, "water": 0.9, "block": 0.05, "stuff": "oilcloth", "shell": "coat_long", "tint": [0.12, 0.13, 0.12], "pattern": "plain"},
 	"fire_suit": {"slot": "coat", "also": ["overtrousers"], "name": "방화복", "icon": "it_coat", "weight": 5.0, "warmth": 0.6, "windproof": 0.8, "water": 0.6, "block": 0.5, "bite": 0.5, "heavy": true, "stuff": "oilcloth", "shell": "coat_long", "tint": [0.13, 0.12, 0.1], "pattern": "plain"},
-	"vest_armor": {"slot": "coat", "name": "방탄조끼", "icon": "it_vest", "weight": 3.0, "warmth": 0.15, "windproof": 0.2, "block": 0.5, "bite": 0.5, "bullet": 1.0, "heavy": true, "stuff": "padded", "covers": ["torso"], "pattern": "quilt", "tint": [0.13, 0.135, 0.14]},
+	"vest_armor": {"slot": "coat", "name": "방탄조끼", "icon": "it_vest", "weight": 3.0, "warmth": 0.15, "windproof": 0.2, "block": 0.5, "bite": 0.5, "bullet": 1.0, "heavy": true, "stuff": "padded", "covers": ["torso"], "shell": "vest", "pattern": "quilt", "tint": [0.13, 0.135, 0.14]},
 	# Trousers.
 	"trousers_cotton": {"slot": "trousers", "name": "면 바지", "icon": "it_trousers", "weight": 0.5, "warmth": 0.0, "stuff": "cotton"},
 	"trousers_work": {"slot": "trousers", "name": "작업 바지", "icon": "it_trousers", "weight": 0.7, "warmth": 0.05, "block": 0.1, "stuff": "cotton"},
