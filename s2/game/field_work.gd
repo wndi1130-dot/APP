@@ -44,12 +44,12 @@ const BOARD_BELOW: float = 50.0
 ## although the key lights early.
 const DIG_TIME: float = 90.0
 ## A pick at the coal cut short (a retreat, a hold, a step back from the dead, boarding) leaves what it had
-## done in the coal, and the next pick there starts from the most done of what was left. Off until it is
-## decided; the measuring tools turn it on through keeps_dig().
-const KEEP_DIG: bool = false
+## done in the coal, and the next pick there starts from the most done of what was left (decision 524).
+const KEEP_DIG: bool = true
 const TRIP_COAL: float = 0.25
 const EMPTY: float = 0.001
 const SHARE_CELLS: int = 8
+const DIG_CELLS: int = 6
 ## Coal goes down this many rows out from the train's side, at the carrier's own x along it.
 const COAL_DROP_OUT: int = 2
 ## Workers dig this far apart along a coal wagon's side, and spread this far either side of
@@ -253,6 +253,7 @@ func update(delta: float) -> void:
 			if phase(id) in ["working", "hold", "retreat"]:
 				game.actions.work_started = true
 		game.actions._dig_noise(TICK_S)
+	paint_digs()
 
 
 func _tick(id: String) -> void:
@@ -378,8 +379,22 @@ func _paint(id: String, safe: Dictionary) -> void:
 		return
 	state["cells"] = cells
 	state["bright"] = bright
-	if game.view.spot_nodes.has(id):
+	if game.view != null and game.view.spot_nodes.has(id):
 		game.view.update_spot(id)
+
+
+## The view keeps the last filled count; moving to another wagon only moves the bar.
+func paint_digs() -> void:
+	if game.view == null:
+		return
+	for id: String in site_ids():
+		if job_id(id) != "coal_wagon":
+			continue
+		var wagon: Dictionary = game.ai._wagon_with_coal()
+		var progress: float = dig_progress(id) if not wagon.is_empty() else 0.0
+		var cells: int = roundi(progress * DIG_CELLS) if progress > 0.0 else -1
+		var work_cell: Vector2i = wagon.get("work", Vector2i.ZERO)
+		game.view.update_dig(id, work_cell, cells)
 
 
 func _event(id: String, ev: String) -> void:
@@ -823,6 +838,20 @@ func _take_dig(id: String) -> float:
 		if float(parts[i]) > float(parts[most]):
 			most = i
 	return float(parts.pop_at(most))
+
+
+## The furthest pick in this coal, left behind or still in someone's hands (decision 524).
+func dig_progress(id: String = "work_site") -> float:
+	if job_id(id) != "coal_wagon" or not sites.has(id):
+		return 0.0
+	var most: float = 0.0
+	for part in _site(id).get("dig_parts", []):
+		most = maxf(most, float(part))
+	for p in members(id):
+		if p.role == "worker" and p.action == "dig":
+			var live: float = float(p.brain.get("dig_from", 0.0)) + p.action_total - p.action_t
+			most = maxf(most, maxf(float(p.brain.get("dig_done", 0.0)), live))
+	return clampf(most / DIG_TIME, 0.0, 1.0)
 
 
 ## This worker's turn among the site's workers and how many there are: (turn, count).

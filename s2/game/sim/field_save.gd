@@ -579,6 +579,8 @@ static func _apply_exact(game, save: Dictionary) -> void:
 
 
 static func _refresh_restored_view(game) -> void:
+	if game.view == null:
+		return
 	# Boxes are drawn in shared chunk meshes (map_view.gd): ask the view, not its nodes.
 	for id in game.view.container_ids():
 		if not game.data["containers"].has(id):
@@ -591,6 +593,8 @@ static func _refresh_restored_view(game) -> void:
 	for id in game.data["spots"]:
 		if game.view.spot_nodes.has(id):
 			game.view.update_spot(id)
+	if game.work != null:
+		game.work.paint_digs()
 	for cell in game.grid.doors:
 		if game.view.door_nodes.has(cell) or (game.view.buildings and game.view.buildings.draws_cell(cell)):
 			game.view.update_door(cell)

@@ -104,6 +104,7 @@ var _contact_materials: Dictionary = {}   # "rim" / "prop" / "box" -> ShaderMate
 ## Every prop's contact shade (T0-6) in one MultiMesh, filled with the props in refresh_props.
 var prop_shades: MultiMeshInstance3D = null
 var spot_nodes: Dictionary = {}
+var dig_nodes: Dictionary = {}
 var stove_nodes: Array = []
 var manhole_nodes: Dictionary = {}
 var lid_nodes: Dictionary = {}          # manhole key -> its lid (and any planks on it), a node of its own so it can move
@@ -909,6 +910,29 @@ func update_spot(id: String) -> void:
 				# In the open hatch on top, so the camera sees it from any side.
 				box(st, side * 0.4 + out.abs() * 0.3 + Vector3(0, 0.14, 0), at + out * 0.2 + Vector3(0, 1.07, 0), Color(0.5, 0.43, 0.28))
 	node.mesh = st.commit()
+
+
+## Six boxes above the wagon's work cell; the same filled count keeps the same mesh.
+func update_dig(id: String, work_cell: Vector2i, filled: int) -> void:
+	var node: MeshInstance3D = dig_nodes.get(id)
+	if filled < 0:
+		if node != null:
+			node.visible = false
+		return
+	if node == null:
+		node = _mesh_node()
+		dig_nodes[id] = node
+	node.position = FieldGrid.center(work_cell) + Vector3(0, 1.6, 0)
+	node.visible = true
+	if int(node.get_meta("cells", -1)) == filled:
+		return
+	var st := _begin()
+	for i in FieldWork.DIG_CELLS:
+		var offset: float = (float(i) - float(FieldWork.DIG_CELLS - 1) * 0.5) * 0.28
+		var tint: Color = Color(0.95, 0.6, 0.18) if i < filled else Color(0.24, 0.23, 0.21)
+		box(st, Vector3(0.22, 0.08, 0.14), Vector3(offset, 0, 0), tint)
+	node.mesh = st.commit()
+	node.set_meta("cells", filled)
 
 
 func _mesh_node(lv: int = 0) -> MeshInstance3D:

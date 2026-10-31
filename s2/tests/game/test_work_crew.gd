@@ -595,6 +595,106 @@ func test_workers_dig_at_their_own_places_along_the_wagon() -> void:
 		assert_lt(spots[i].distance_to(FieldGrid.center(wagon["work"])), (wagon["rect"] as Rect2i).size.x + 0.5)
 
 
+func test_a_retreat_keeps_the_pick_and_the_next_dispatch_resumes_it_by_default() -> void:
+	_job("coal_wagon")
+	_send()
+	assert_true(game.work.keeps_dig(), "the rule is on without a measuring override")
+	var worker: Variant = _role("worker")[0]
+	worker.position = game.work._work_spot(worker, "work_site", game.ai._wagon_with_coal())
+	worker.brain["work_wait"] = 0.0
+	game.ai._crew(worker, 0.1, true)
+	assert_eq(worker.action, "dig")
+	assert_eq(worker.action_total, FieldWork.DIG_TIME)
+	worker.action_t = FieldWork.DIG_TIME - 30.0
+	game.work.update(0.0)
+	game.work.retreat("work_site")
+	game.work.update(0.0)
+	assert_eq(game.work._site("work_site")["dig_parts"], [30.0])
+	assert_false(worker.brain.has("dig_done"))
+	assert_false(worker.brain.has("dig_from"))
+	_board_all()
+	_advance(2.0)
+	game.actions.start_work(game.player)
+	_advance(FieldWork.ESCORT_LEAD)
+	worker.position = game.work._work_spot(worker, "work_site", game.ai._wagon_with_coal())
+	worker.brain["work_wait"] = 0.0
+	game.ai._crew(worker, 0.1, true)
+	assert_eq(worker.action, "dig")
+	assert_eq(worker.action_total, FieldWork.DIG_TIME - 30.0)
+	assert_eq(float(worker.brain["dig_from"]), 30.0)
+	assert_true(game.work._site("work_site")["dig_parts"].is_empty())
+	assert_almost_eq(game.work.dig_progress(), 1.0 / 3.0, 0.0001)
+	worker.action_t -= 15.0
+	game.work.update(0.0)
+	game.work.retreat("work_site")
+	game.work.update(0.0)
+	assert_eq(game.work._site("work_site")["dig_parts"], [45.0], "the resumed pick keeps both parts once")
+
+
+func test_dig_progress_uses_the_furthest_saved_or_live_pick() -> void:
+	assert_eq(game.work.dig_progress(), 0.0)
+	var state: Dictionary = game.work._site("work_site")
+	state["dig_parts"] = [45.0]
+	assert_eq(game.work.dig_progress(), 0.5)
+	state["dig_parts"] = [15.0, 67.5, 30.0]
+	assert_eq(game.work.dig_progress(), 0.75, "the largest part, not their sum")
+	_send()
+	var worker: Variant = _role("worker")[0]
+	worker.start_action("dig", "곡괭이질", 60.0, Callable())
+	worker.brain["dig_from"] = 30.0
+	worker.brain["dig_done"] = 54.0
+	worker.action_t = 9.0
+	assert_almost_eq(game.work.dig_progress(), 0.9, 0.0001, "the live timer includes what this pick resumed")
+	worker.brain["dig_done"] = 85.5
+	assert_almost_eq(game.work.dig_progress(), 0.95, 0.0001, "the worker's larger recorded progress counts too")
+	state["dig_parts"] = [135.0]
+	assert_eq(game.work.dig_progress(), 1.0)
+	worker.cancel_action()
+	state["dig_parts"] = [-15.0]
+	assert_eq(game.work.dig_progress(), 0.0)
+
+
+func test_dig_bar_reuses_its_mesh_until_the_filled_count_changes() -> void:
+	var state: Dictionary = game.work._site("work_site")
+	state["dig_parts"] = [30.0]
+	game.work.paint_digs()
+	var bar: MeshInstance3D = game.view.dig_nodes["work_site"]
+	var first_mesh: Mesh = bar.mesh
+	var wagon: Dictionary = game.ai._wagon_with_coal()
+	assert_true(bar.visible)
+	assert_eq(bar.position, FieldGrid.center(wagon["work"]) + Vector3(0, 1.6, 0))
+	assert_eq(int(bar.get_meta("cells", -1)), 2)
+	state["dig_parts"] = [31.0]
+	game.work.paint_digs()
+	assert_eq(bar.mesh, first_mesh, "the same two filled cells reuse the mesh")
+	var work_cell: Vector2i = wagon["work"]
+	wagon["work"] = work_cell + Vector2i(1, 0)
+	game.work.paint_digs()
+	assert_eq(bar.position, FieldGrid.center(wagon["work"]) + Vector3(0, 1.6, 0))
+	assert_eq(bar.mesh, first_mesh, "moving the bar does not rebuild it")
+	state["dig_parts"] = [60.0]
+	game.work.paint_digs()
+	assert_ne(bar.mesh, first_mesh)
+	assert_eq(int(bar.get_meta("cells", -1)), 4)
+	state["dig_parts"] = []
+	game.work.paint_digs()
+	assert_false(bar.visible)
+	state["dig_parts"] = [1.0]
+	game.work.paint_digs()
+	assert_true(bar.visible, "even a part below the first filled cell is visible")
+	assert_eq(int(bar.get_meta("cells", -1)), 0)
+
+
+func test_dig_progress_and_restore_painting_allow_a_missing_view() -> void:
+	var original_view: Variant = game.view
+	game.view = null
+	game.work._site("work_site")["dig_parts"] = [45.0]
+	game.work.update(1.0)
+	FieldSave._refresh_restored_view(game)
+	game.view = original_view
+	assert_eq(game.work.dig_progress(), 0.5)
+
+
 func test_coal_wagon_cycle() -> void:
 	_cycle("coal_wagon")
 
@@ -689,6 +789,15 @@ func test_budget_counts_wagons_once_salvage_wood_and_five_other_job_amounts() ->
 func test_a_save_while_the_crew_is_out_makes_the_same_crew_again_on_resume() -> void:
 	_send()
 	_advance(1.0)
+	var state: Dictionary = game.work._site("work_site")
+	state["dig_parts"] = [15.0, 30.0, 45.0]
+	var worker: Variant = _role("worker")[0]
+	worker.position = game.work._work_spot(worker, "work_site", game.ai._wagon_with_coal())
+	worker.brain["work_wait"] = 0.0
+	game.ai._crew(worker, 0.1, true)
+	worker.action_t = 30.0
+	game.work.update(0.0)
+	assert_eq(state["dig_parts"], [15.0, 30.0], "the next pick took the largest saved part")
 	var pids: Array = []
 	for p in game.crew:
 		pids.append(p.pid)
@@ -709,6 +818,21 @@ func test_a_save_while_the_crew_is_out_makes_the_same_crew_again_on_resume() -> 
 	assert_eq(back, pids)
 	assert_eq(resumed.work.phase(), game.work.phase())
 	assert_eq(resumed.work.members("work_site").size(), 6)
+	assert_eq(resumed.work._site("work_site")["dig_parts"], state["dig_parts"])
+	var resumed_worker: Variant = resumed.work._person(worker.pid)
+	assert_not_null(resumed_worker)
+	if resumed_worker != null:
+		assert_eq(float(resumed_worker.brain["dig_from"]), 45.0)
+		assert_eq(float(resumed_worker.brain["dig_done"]), 60.0)
+		assert_eq(resumed_worker.action, "dig")
+		assert_eq(resumed_worker.action_t, worker.action_t)
+		assert_eq(resumed_worker.action_total, worker.action_total)
+	assert_almost_eq(resumed.work.dig_progress(), 2.0 / 3.0, 0.0001)
+	assert_true(resumed.view.dig_nodes.has("work_site"), "the bar is rebuilt before another tick")
+	if resumed.view.dig_nodes.has("work_site"):
+		var bar: MeshInstance3D = resumed.view.dig_nodes["work_site"]
+		assert_true(bar.visible)
+		assert_eq(int(bar.get_meta("cells", -1)), 4)
 
 
 func test_a_part_load_of_wood_dropped_by_the_crew_keeps_its_part_through_a_save() -> void:
