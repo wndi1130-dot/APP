@@ -17,6 +17,14 @@ const EXPECTED := [
 	"hang_lamp", "drying_line", "drying_line_b", "drying_line_c", "hang_pot", "coat_hook", "wall_notes", "wall_rack",
 	"rug", "bucket", "firewood", "basket",
 ]
+## 칸 살림 단계(0~3) 꾸밈(tools/blender/train_car_tiers.py): 바닥 원점, 모형마다 자기 상한.
+const TIERS := [
+	"wall_patch", "tarp_patch", "straw_mat", "stick_candle", "tin_stove", "sack_bunk_upper", "sack_bunk_lower",
+	"wood_wall_box", "wood_wall_box_shallow", "drum_stove", "end_shelf", "top_shelf", "pale_paneling", "stick_lamp",
+	"small_frame", "wall_plant", "table_plant", "open_bunk_upper", "open_bunk_lower",
+	"tiny_cup", "tiny_bowl", "tiny_plate", "tiny_bottle", "tiny_can", "tiny_jar", "tiny_teapot", "tiny_tray",
+	"thread_spool", "tiny_brush", "tiny_clock", "tiny_book",
+]
 
 
 func _assets() -> Dictionary:
@@ -32,7 +40,7 @@ func test_catalog_names_are_exactly_the_listed_models() -> void:
 	assert_false(assets.is_empty(), "빈 장부는 통과하지 않음")
 	var listed: Array = assets.keys()
 	listed.sort()
-	var expected: Array = EXPECTED.duplicate()
+	var expected: Array = EXPECTED + TIERS
 	expected.sort()
 	assert_eq(listed, expected, "이름 집합")
 	var on_disk: Array = []
@@ -45,16 +53,23 @@ func test_catalog_names_are_exactly_the_listed_models() -> void:
 
 func test_each_catalog_entry_has_a_matching_glb() -> void:
 	var assets := _assets()
-	assert_eq(assets.size(), EXPECTED.size(), "모든 모델 검사")
+	assert_eq(assets.size(), EXPECTED.size() + TIERS.size(), "모든 모델 검사")
 	for id: String in assets:
 		var asset: Dictionary = assets[id]
 		var path := "%s/%s.glb" % [KIT_DIR, id]
 		assert_eq(asset.get("path", ""), path, "%s 경로" % id)
 		assert_eq(asset.get("status", ""), "ready", "%s 상태" % id)
-		assert_eq(asset.get("origin", ""), "box_center", "%s 중앙 기준" % id)
+		assert_eq(asset.get("origin", ""), "floor_center" if TIERS.has(id) else "box_center", "%s 원점" % id)
 		assert_true(FileAccess.file_exists(path), "%s glb" % id)
 		assert_true(FileAccess.file_exists(path + ".import"), "%s 가져오기 설정" % id)
+		# 정점 색은 가져오기 스크립트가 바탕색으로 잇는다 — 빠지면 노드로 짓는 모형이 흰 재질로 나온다.
+		var settings := ConfigFile.new()
+		var read := settings.load(path + ".import")
+		assert_eq(read, OK, "%s 가져오기 설정을 읽음" % id)
+		if read == OK:
+			assert_eq(String(settings.get_value("params", "import_script/path", "")), KIT_DIR + "/vertex_colors.gd", "%s 정점 색 가져오기" % id)
 		var file := FileAccess.open(path, FileAccess.READ)
+		assert_not_null(file, "%s glb opens for byte and hash checks" % id)
 		if file == null:
 			continue
 		assert_eq(file.get_length(), int(asset.get("bytes", -1)), "%s 바이트" % id)
@@ -63,13 +78,16 @@ func test_each_catalog_entry_has_a_matching_glb() -> void:
 
 func test_individual_and_total_triangle_budgets() -> void:
 	var assets := _assets()
-	assert_eq(assets.size(), EXPECTED.size(), "모두 예산 검사")
+	assert_eq(assets.size(), EXPECTED.size() + TIERS.size(), "모두 예산 검사")
 	var total := 0
 	for id: String in assets:
 		var asset: Dictionary = assets[id]
 		var triangles := int(asset.get("lod0_tris", -1))
 		assert_gt(triangles, 0, "%s 빈 메시 금지" % id)
-		assert_lte(triangles, 600, "%s 개별 상한" % id)
-		assert_eq(int(asset.get("triangle_limit", -1)), 600, "%s 예산" % id)
+		if TIERS.has(id):
+			assert_lte(triangles, int(asset.get("triangle_limit", -1)), "%s 개별 상한" % id)
+		else:
+			assert_lte(triangles, 600, "%s 개별 상한" % id)
+			assert_eq(int(asset.get("triangle_limit", -1)), 600, "%s 예산" % id)
 		total += triangles
-	assert_lte(total, 8000, "합계 상한")
+	assert_lte(total, 10000, "합계 상한(살림 단계 꾸밈을 더한 장부)")
