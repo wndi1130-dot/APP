@@ -230,6 +230,30 @@ func test_the_button_waits_while_the_brakes_dead_are_coming() -> void:
 	assert_eq(game.data["spots"]["work_site"]["state"], "ready")
 
 
+## One still to walk in (the guards' fill, a few seconds apart) holds the button too.
+func test_one_still_to_walk_in_holds_the_button() -> void:
+	game.train_guard.fill_due = [{"t": game.clock.elapsed + 2.5, "i": 0}]
+	assert_true(game.work.arriving())
+	game.train_guard.fill_due = []
+	assert_false(game.work.arriving())
+
+
+## A worker two metres from its own place along the wagon (at the next one's) walks on to it
+## rather than digging there.
+func test_a_worker_at_the_next_place_walks_on_to_its_own() -> void:
+	_job("coal_wagon")
+	_send()
+	var wagon: Dictionary = game.ai._wagon_with_coal()
+	var workers: Array = _role("worker")
+	var own: Vector3 = game.work._work_spot(workers[1], "work_site", wagon)
+	var other: Vector3 = game.work._work_spot(workers[0], "work_site", wagon)
+	assert_gt(own.distance_to(other), FieldWork.WAGON_WORK_R, "the next place is outside its own reach")
+	workers[1].position = other
+	workers[1].brain["work_wait"] = 0.0
+	game.ai._crew(workers[1], 0.1, true)
+	assert_ne(workers[1].action_label, String(FieldWork.JOBS["coal_wagon"]["verb"]), "not digging at the next place")
+
+
 func test_past_the_arrival_window_a_late_one_no_longer_holds_the_button() -> void:
 	var z: Dictionary = _spawn(_outer(FieldWork.RING_R + 20.0), "investigate")
 	z["arrival"] = true
@@ -540,7 +564,19 @@ func test_coal_goes_down_beside_the_train_where_the_map_puts_it() -> void:
 	worker.position = Vector3(121.4, 0.0, 93.5)
 	assert_eq(FieldGrid.cell_of(game.work.coal_drop(worker)), Vector2i(121, 81))
 	worker.position = Vector3(140.0, 0.0, 93.5)
-	assert_eq(FieldGrid.cell_of(game.work.coal_drop(worker)), Vector2i(126, 81), "kept to the train's length")
+	assert_eq(FieldGrid.cell_of(game.work.coal_drop(worker)), Vector2i(124, 81), "a cell in from the train's end")
+
+
+## A train at the foot of the map still gets its coal put down on the map, where a carrier can stand.
+func test_coal_drop_stays_on_the_map_where_a_carrier_can_stand() -> void:
+	_job("coal_wagon")
+	_send()
+	var worker: Variant = _role("worker")[0]
+	game.data["train"] = Rect2i(10, game.grid.height - 3, 40, 3)
+	worker.position = Vector3(20.5, 0.0, float(game.grid.height) - 5.0)
+	var cell: Vector2i = FieldGrid.cell_of(game.work.coal_drop(worker))
+	assert_true(game.grid.inside(cell), "on the map")
+	assert_true(game.grid.people_can_walk(cell), "where a carrier can stand")
 
 
 ## Each worker digs at its own place along the wagon, two metres apart to either hand of the work

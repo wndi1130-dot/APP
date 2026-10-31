@@ -35,6 +35,9 @@ const BEHIND_M: float = 2.0
 const START_SPREAD: float = 6.0
 const BOARD_R: float = 1.5
 const WORK_R: float = 2.2
+## Along a coal wagon, near enough to its own place only: under half WORK_GAP, so a worker never digs
+## at the next one's. A wagon place is the middle of a cell, so one standing in that cell is in reach.
+const WAGON_WORK_R: float = 0.9
 const DROP_R: float = 1.0
 const BOARD_BELOW: float = 50.0
 ## The crew's pick at a coal wagon: half the speed it was (decision 520), so a stop's coal stays in its plan
@@ -146,10 +149,13 @@ func awake(z: Dictionary) -> bool:
 
 
 ## The brakes' dead are still coming to the train (decision 486): in the arrival window one
-## of them is still up, so the guards are on them first and the button waits.
+## of them is still up, or one more is still to walk in (field_train_guard fill_due), so the
+## guards are on them first and the button waits.
 func arriving() -> bool:
 	if game.clock.elapsed > ArrivalHorde.WINDOW_S:
 		return false
+	if game.train_guard != null and not game.train_guard.fill_due.is_empty():
+		return true
 	for z: Dictionary in game.zombies.list:
 		if z.get("arrival", false) and awake(z):
 			return true
@@ -763,7 +769,7 @@ func crew_step(p, think: bool) -> bool:
 	if remaining(id) <= EMPTY or (job_id(id) == "coal_wagon" and wagon.is_empty()):
 		return true
 	var at: Vector3 = _work_spot(p, id, wagon)
-	if p.position.distance_to(at) > WORK_R:
+	if p.position.distance_to(at) > (WORK_R if wagon.is_empty() else WAGON_WORK_R):
 		game.ai._walk(p, at, false)
 		return true
 	if float(p.brain.get("work_wait", -1.0)) < 0.0:
@@ -891,10 +897,13 @@ func _worked(p, id: String) -> void:
 
 
 ## Beside the train at the carrier's own x, counted from the train itself: a map grown round its
-## edges (map_ring.gd) moves the train, and fixed cells had left the drop at the old row.
+## edges (map_ring.gd) moves the train, and fixed cells had left the drop at the old row. A cell
+## in from either end of the train, on the map, and the nearest a carrier can stand on.
 func coal_drop(p) -> Vector3:
 	var train: Rect2i = game.data["train"]
-	return FieldGrid.center(Vector2i(clampi(int(p.position.x), train.position.x + 1, train.end.x), train.end.y + COAL_DROP_OUT))
+	var cell := Vector2i(clampi(int(p.position.x), train.position.x + 1, train.end.x - 2),
+		mini(train.end.y + COAL_DROP_OUT, game.grid.height - 1))
+	return game.walkable_near(FieldGrid.center(cell))
 
 
 func _deliver(p, id: String) -> void:
