@@ -18,7 +18,7 @@ export const P = Object.freeze({
   // 생필품(결정 490 첫째 PR). supOn 판에서만 쓴다.
   sup0: 8, supPer100: 2, supShortRel: 0.5, supPlentyRel: 0.1,
   supPlentyNeeds: 2, supDemandCool: 2, supHygieneCover: 0.5, supHygienePenalty: 1, supSearch: 1,
-  coalRun: 6, coalStrike: 4, coalHeatPerLever: 0.25, foodPerPersonLever: 0.025,
+  coalRun: 6, coalStrike: 4, coalHeatPerLever: 0.285, foodPerPersonLever: 0.025,
   haulTotal: 36, targetBoost: 3, leverStep: 12, winterEvery: 6, winterDrop: 5,
   // 결정 257: 정차에서 얻는 석탄만 이 배수를 곱한 뒤 반올림한다(식량·의약품·사치품·상징물·정보는 그대로).
   coalHaul: 0.85,

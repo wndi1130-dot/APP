@@ -107,7 +107,7 @@ func test_a_birth_brings_the_naming_paper_first() -> void:
 	var v: Dictionary = CardText.view(g, _t(), g["cards"][0])
 	assert_eq(v["title"], "아이가 나온다")
 	assert_string_starts_with(String(v["body"]), "꼬리칸에서 %s의 아이가 나온다. " % mother["name"])
-	assert_eq(_labels(v), ["의무칸으로 옮긴다", "그 칸에서 낳는다"])
+	assert_eq(_labels(v), ["의무칸으로 데려간다", "그 칸에서 낳는다"])
 	var out := _pick(g, 0)
 	assert_eq(int(out["comms"]["tail"]["pop"]), int(g["comms"]["tail"]["pop"]) + 1)
 	assert_eq(out["cards"][0]["kind"], "naming")
