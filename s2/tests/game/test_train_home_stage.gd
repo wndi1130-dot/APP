@@ -144,6 +144,7 @@ func test_furnishing_a_car_shows_its_new_stage_when_decorating_ends() -> void:
 	f.train_g["phase"] = "travel"
 	f.paper.set_folded(true)
 	assert_eq(int(f.train.car("guard")["home_stage"]), 0, "the guard car starts in rags")
+	var stages_before: Dictionary = f._home_of(f.train_g)
 	assert_true(f.open_decor("guard"))
 	for kind: String in ["chair", "table"]:
 		assert_true(Mods.place(f.train_g, "guard", kind, "floor")["ok"], kind + " placed")
@@ -156,13 +157,22 @@ func test_furnishing_a_car_shows_its_new_stage_when_decorating_ends() -> void:
 	var daytime: String = TrainLight.daytime_of(f.train.rules.get("view", {}))
 	assert_almost_eq(float(c["stove_share"]), float(TrainLight.spec(tier, daytime)["stove"]), 0.0001, "the stove burns as the new stage")
 	assert_almost_eq((c["lamp"] as OmniLight3D).omni_range, float(TrainLight.spec(tier, daytime)["lamps"][0]["range"]), 0.0001, "the lamp is the new stage's")
+	# The captain's and dining cars take the highest tier of the cars people live in
+	# (train_decor.gd common_tier), so the guard car's first stage lifts them too.
+	var stages_after: Dictionary = f._home_of(f.train_g)
+	for id: String in ["captain", "dining"]:
+		assert_eq(int(stages_after[id]), tier, id + ": the shared tier follows the guard car")
+		assert_eq(int(f.train.car(id)["home_stage"]), tier, id + ": shows the shared tier on leaving")
 	var after: Dictionary = _ids(f.train)
+	var redressed: int = 0
 	for id: String in after:
 		assert_eq(after[id][0], before[id][0], id + ": the car itself stays")
-		if id == "guard":
-			assert_ne(after[id][1], before[id][1], "guard: its room is dressed again")
+		if int(stages_after.get(id, -1)) != int(stages_before.get(id, -1)):
+			assert_ne(after[id][1], before[id][1], id + ": its stage changed, so its room is dressed again")
+			redressed += 1
 		else:
-			assert_eq(after[id][1], before[id][1], id + ": another car's room stays")
+			assert_eq(after[id][1], before[id][1], id + ": its stage did not change, so its room stays")
+	assert_eq(redressed, 3, "the guard car and the two cars on the shared tier, no others")
 
 
 func test_an_unchanged_initial_stage_keeps_every_car_instance() -> void:
