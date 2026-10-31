@@ -24,6 +24,8 @@ const F = FieldGrid.Floor
 const WALL_H: float = 2.1
 const LEVEL_H: float = 3.0
 const CUT_H: float = 0.35
+## The 「남은 곡괭이질」 bar's height over the wagon's track: the wagon model is 3 m tall.
+const DIG_BAR_Y: float = 3.5
 ## 카메라가 보는 층 바닥의 중심에서 잰 수평 거리(m). 최대 가로 78칸 이내.
 const PROP_CULL_DISTANCE: float = 39.0
 const PROP_LOD_DISTANCE: float = 18.0
@@ -912,27 +914,36 @@ func update_spot(id: String) -> void:
 	node.mesh = st.commit()
 
 
-## Six boxes above the wagon's work cell; the same filled count keeps the same mesh.
-func update_dig(id: String, work_cell: Vector2i, filled: int) -> void:
+## Six cells on a dark plate over the wagon's work cell, above its roof (the wagon model stands
+## 3 m on its track's height) so the wagon's side does not hide it from the diagonal view; the
+## same filled count keeps the same mesh.
+func update_dig(id: String, wagon: Dictionary, filled: int) -> void:
 	var node: MeshInstance3D = dig_nodes.get(id)
-	if filled < 0:
+	if filled < 0 or wagon.is_empty():
 		if node != null:
 			node.visible = false
 		return
 	if node == null:
 		node = _mesh_node()
 		dig_nodes[id] = node
-	node.position = FieldGrid.center(work_cell) + Vector3(0, 1.6, 0)
+	node.position = dig_bar_at(wagon)
 	node.visible = true
 	if int(node.get_meta("cells", -1)) == filled:
 		return
 	var st := _begin()
+	var pitch: float = 0.4
+	# The cells stand on a dark plate wider than they are, so the empty ones read on snow too.
+	box(st, Vector3(pitch * FieldWork.DIG_CELLS + 0.08, 0.06, 0.26), Vector3(0, -0.06, 0), Color(0.06, 0.07, 0.08))
 	for i in FieldWork.DIG_CELLS:
-		var offset: float = (float(i) - float(FieldWork.DIG_CELLS - 1) * 0.5) * 0.28
+		var offset: float = (float(i) - float(FieldWork.DIG_CELLS - 1) * 0.5) * pitch
 		var tint: Color = Color(0.95, 0.6, 0.18) if i < filled else Color(0.24, 0.23, 0.21)
-		box(st, Vector3(0.22, 0.08, 0.14), Vector3(offset, 0, 0), tint)
+		box(st, Vector3(0.34, 0.12, 0.16), Vector3(offset, 0.03, 0), tint)
 	node.mesh = st.commit()
 	node.set_meta("cells", filled)
+
+
+func dig_bar_at(wagon: Dictionary) -> Vector3:
+	return FieldGrid.center(wagon["work"]) + Vector3(0, TrackView.height_under(grid, wagon["rect"]) + DIG_BAR_Y, 0)
 
 
 func _mesh_node(lv: int = 0) -> MeshInstance3D:

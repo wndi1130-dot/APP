@@ -662,7 +662,8 @@ func test_dig_bar_reuses_its_mesh_until_the_filled_count_changes() -> void:
 	var first_mesh: Mesh = bar.mesh
 	var wagon: Dictionary = game.ai._wagon_with_coal()
 	assert_true(bar.visible)
-	assert_eq(bar.position, FieldGrid.center(wagon["work"]) + Vector3(0, 1.6, 0))
+	assert_eq(bar.position, game.view.dig_bar_at(wagon))
+	assert_gt(bar.position.y, 3.0, "over the 3 m wagon's roof, not hidden by its side")
 	assert_eq(int(bar.get_meta("cells", -1)), 2)
 	state["dig_parts"] = [31.0]
 	game.work.paint_digs()
@@ -670,7 +671,8 @@ func test_dig_bar_reuses_its_mesh_until_the_filled_count_changes() -> void:
 	var work_cell: Vector2i = wagon["work"]
 	wagon["work"] = work_cell + Vector2i(1, 0)
 	game.work.paint_digs()
-	assert_eq(bar.position, FieldGrid.center(wagon["work"]) + Vector3(0, 1.6, 0))
+	assert_eq(bar.position, game.view.dig_bar_at(wagon))
+	assert_almost_eq(bar.position.x, FieldGrid.center(work_cell + Vector2i(1, 0)).x, 0.0001, "the bar follows the work cell")
 	assert_eq(bar.mesh, first_mesh, "moving the bar does not rebuild it")
 	state["dig_parts"] = [60.0]
 	game.work.paint_digs()

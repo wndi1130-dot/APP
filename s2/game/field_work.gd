@@ -393,8 +393,7 @@ func paint_digs() -> void:
 		var wagon: Dictionary = game.ai._wagon_with_coal()
 		var progress: float = dig_progress(id) if not wagon.is_empty() else 0.0
 		var cells: int = roundi(progress * DIG_CELLS) if progress > 0.0 else -1
-		var work_cell: Vector2i = wagon.get("work", Vector2i.ZERO)
-		game.view.update_dig(id, work_cell, cells)
+		game.view.update_dig(id, wagon, cells)
 
 
 func _event(id: String, ev: String) -> void:
