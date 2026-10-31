@@ -1596,7 +1596,7 @@ func tick(delta: float) -> void:
 		aiming = false
 		aim_target = null
 	for key: Button in [attack_button, aim_button, shove_button, manual_button]:
-		if p.sled_weapon_stowed:
+		if p.sled_weapon_stowed and (key != shove_button or p.grabbers.is_empty()):
 			if not key.has_meta("sled_disabled"):
 				key.set_meta("sled_disabled", key.disabled)
 			key.disabled = true
@@ -3881,6 +3881,8 @@ func finger_down(index: int, pos: Vector2) -> bool:
 		_stick_release()
 	for b in pads:
 		if b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
+			if _pad_blocked(b):
+				return true
 			fingers[index] = {"kind": "pad", "pad": b, "start": pos, "ms": Time.get_ticks_msec()}
 			_pad_down(b, pos)
 			return true
@@ -3908,6 +3910,8 @@ func finger_down(index: int, pos: Vector2) -> bool:
 	var near: Control = _skirt_at(pos)
 	if near != null:
 		if pads.has(near):
+			if _pad_blocked(near as Button):
+				return true
 			fingers[index] = {"kind": "pad", "pad": near, "start": pos, "ms": Time.get_ticks_msec()}
 			_pad_down(near as Button, pos)
 		elif near == portrait:
@@ -4325,7 +4329,17 @@ func _stick_release() -> void:
 
 # ---------------------------------------------------------------- pads
 
+## Custom touch hit testing must respect the same lock as native buttons.
+func _pad_blocked(b: Button) -> bool:
+	var p: Variant = game.player
+	if b == shove_button and not p.grabbers.is_empty():
+		return false
+	return b.disabled or (p.sled_weapon_stowed and b in [attack_button, aim_button, shove_button, manual_button])
+
+
 func _pad_down(b: Button, pos: Vector2) -> void:
+	if _pad_blocked(b):
+		return
 	var p = game.player
 	if b == aim_button and primary_melee(p):
 		b = attack_button
@@ -4394,6 +4408,8 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 
 
 func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
+	if _pad_blocked(b):
+		return
 	if b == lever_button:
 		# Pulled down it opens, pushed up it folds, as the thumb goes.
 		var dy: float = pos.y - Vector2(f["start"]).y
@@ -4433,6 +4449,10 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 
 
 func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
+	if _pad_blocked(b):
+		if b in [attack_button, aim_button, shove_button]:
+			b.button_pressed = false
+		return
 	if b == aim_button and primary_melee(game.player):
 		return
 	if b == aim_button:
