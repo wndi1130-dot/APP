@@ -16,6 +16,8 @@ signal restages_invalidated
 
 ## One main-thread budget shared by every car, checked only between indivisible build/swap units.
 const RESTAGE_BUDGET_USEC: int = 6000
+const RESTAGE_FRAME_HISTORY_LIMIT: int = 120
+const RESTAGE_JOB_HISTORY_LIMIT: int = 32
 
 const Rules = preload("res://game/train/train_rules.gd")
 const Look = preload("res://game/train/train_look.gd")
@@ -187,8 +189,9 @@ var _restage_jobs: Dictionary = {}
 var _restage_queue: Array[String] = []
 ## Per-job samples include cancelled work. Frame samples measure scheduler CPU work, not rendering
 ## or the later queue_free flush; forced samples are the test-only drain and have no frame budget.
+## Keep recent detail across batch invalidations; counters and peaks cover the scene's lifetime.
 var restage_stats: Dictionary = {"jobs": {}, "frames": [], "max_frame_usec": 0,
-	"max_unit_usec": 0, "max_unit_name": ""}
+	"max_unit_usec": 0, "max_unit_name": "", "jobs_total": 0, "frames_total": 0, "forced_frames_total": 0}
 
 
 func _ready() -> void:
@@ -1588,7 +1591,11 @@ func _restage_car(c: Dictionary) -> void:
 	var stats_key: String = "%d:%s:%d" % [_restage_batch, id, generation]
 	var stats: Dictionary = {"id": id, "target_stage": target_stage, "state": "queued",
 		"frames": 0, "forced_frames": 0, "max_frame_usec": 0, "max_unit_usec": 0, "max_unit_name": ""}
-	restage_stats["jobs"][stats_key] = stats
+	var job_samples: Dictionary = restage_stats["jobs"]
+	job_samples[stats_key] = stats
+	if job_samples.size() > RESTAGE_JOB_HISTORY_LIMIT:
+		job_samples.erase(job_samples.keys()[0])  # Dictionary order is registration order.
+	restage_stats["jobs_total"] = int(restage_stats["jobs_total"]) + 1
 	_restage_jobs[id] = {"id": id, "target_stage": target_stage, "batch": _restage_batch,
 		"generation": generation, "node": c["node"], "phase": "begin", "bundle": null,
 		"room": null, "parts": {}, "stats_key": stats_key, "stats": stats}
@@ -1709,14 +1716,25 @@ func _step_restages(budget_usec: int = RESTAGE_BUDGET_USEC, forced: bool = false
 			stats["forced_frames"] = int(stats["forced_frames"]) + 1
 		else:
 			stats["max_frame_usec"] = maxi(int(stats["max_frame_usec"]), int(spent[stats_key]))
-	restage_stats["frames"].append({"frame": Engine.get_process_frames(), "usec": elapsed,
+	_record_restage_frame({"frame": Engine.get_process_frames(), "usec": elapsed,
 		"budget_usec": budget_usec, "max_unit_usec": largest_usec, "max_unit_name": largest_name,
 		"jobs": frame_ids, "job_usec": spent, "units": units, "forced": forced})
-	if not forced:
-		restage_stats["max_frame_usec"] = maxi(int(restage_stats["max_frame_usec"]), elapsed)
-	if largest_usec >= int(restage_stats["max_unit_usec"]):
-		restage_stats["max_unit_usec"] = largest_usec
-		restage_stats["max_unit_name"] = largest_name
+
+
+## Telemetry only: eviction never changes a live job's own stats or the scheduler's queue.
+func _record_restage_frame(sample: Dictionary) -> void:
+	var frame_samples: Array = restage_stats["frames"]
+	frame_samples.append(sample)
+	if frame_samples.size() > RESTAGE_FRAME_HISTORY_LIMIT:
+		frame_samples.pop_front()
+	restage_stats["frames_total"] = int(restage_stats["frames_total"]) + 1
+	if bool(sample["forced"]):
+		restage_stats["forced_frames_total"] = int(restage_stats["forced_frames_total"]) + 1
+	else:
+		restage_stats["max_frame_usec"] = maxi(int(restage_stats["max_frame_usec"]), int(sample["usec"]))
+	if int(sample["max_unit_usec"]) >= int(restage_stats["max_unit_usec"]):
+		restage_stats["max_unit_usec"] = int(sample["max_unit_usec"])
+		restage_stats["max_unit_name"] = String(sample["max_unit_name"])
 
 
 func _advance_restage(job: Dictionary) -> String:

@@ -10,7 +10,10 @@ const TrainDecor = preload("res://game/train/train_decor.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const Dom = preload("res://game/train/train_dom.gd")
 const Mods = preload("res://game/train/train_mods.gd")
+const Interior = preload("res://game/train/train_interior.gd")
 const MAX_FRAMES: int = 600
+const MAX_BUILD_UNITS: int = 1000
+const CANCEL_STOPS: Array[String] = ["dress", "stove", "swap"]
 const PART_NAMES: Array[String] = ["Interior", "Stove", "StovePipeLow", "StovePipeTop", "Lamp0", "LampPool"]
 const ACTIVE_KEYS: Array[String] = ["home_stage", "stove_share", "stove_light", "steam", "lamp",
 	"lamp_pool", "lamp_color", "lamp_energy", "lamp_sway"]
@@ -54,6 +57,97 @@ func _active_snapshot(c: Dictionary) -> Dictionary:
 	for key: String in ACTIVE_KEYS:
 		snapshot[key] = c.get(key)
 	return snapshot
+
+
+func _at_restage_stop(job: Dictionary, stop: String) -> bool:
+	if job["room"] == null:
+		return false
+	var room: Interior = job["room"]
+	var parts: Dictionary = job["parts"]
+	match stop:
+		"dress":
+			return String(job["phase"]) == "interior" and room._build_phase == "rows" \
+				and room._dress_laid > 0 and room._build_index < room._build_rows.size() \
+				and room._dress_tool != null and room.dress == null
+		"stove":
+			return String(job["phase"]) == "interior" and room._build_phase == "rows" \
+				and is_instance_valid(parts.get("stove_light")) \
+				and is_instance_valid(parts.get("steam")) and not parts.has("lamp")
+		"swap":
+			return String(job["phase"]) == "swap" and not room.building() \
+				and is_instance_valid(room.dress) and is_instance_valid(parts.get("lamp"))
+	return false
+
+
+## Advance production build units, not a clock budget. Stop before dispatching swap.
+## Scheduler timing is covered separately by the shared-budget tests.
+func _advance_to_stop(s: Scene, id: String, stop: String) -> bool:
+	var job: Dictionary = s._restage_jobs[id]
+	for _unit_index: int in range(MAX_BUILD_UNITS):
+		if _at_restage_stop(job, stop):
+			return true
+		if not s._valid_restage(job) or String(job["phase"]) == "swap":
+			break
+		var _unit_name: String = s._advance_restage(job)
+	assert_true(false, id + ": did not reach the requested build state " + stop)
+	return false
+
+
+func _subtree_refs(root: Node) -> Array:
+	var nodes: Array = [root]
+	for child: Node in root.get_children():
+		nodes.append_array(_subtree_refs(child))
+	return nodes
+
+
+func _assert_reclaimed(nodes: Array, label: String) -> void:
+	assert_gt(nodes.size(), 1, label + ": captured the holder and its descendants")
+	for _frame_index: int in range(2):
+		await get_tree().process_frame
+	# Freed objects must stay Variant values: converting one back to Node can itself fail.
+	for node: Variant in nodes:
+		assert_false(is_instance_valid(node), label + ": exact pending node was freed")
+
+
+func _applied_room_look(c: Dictionary) -> Dictionary:
+	var walls: Array[Color] = []
+	for material: StandardMaterial3D in c["shell_mats"]:
+		walls.append(material.albedo_color)
+	return {"walls": walls, "frost": float((c["glass"] as ShaderMaterial).get_shader_parameter("cold_car")),
+		"stove_energy": (c["stove_light"] as OmniLight3D).light_energy,
+		"steam": (c["steam"] as GPUParticles3D).emitting}
+
+
+func _assert_applied_look_equal(actual: Dictionary, expected: Dictionary) -> void:
+	var walls: Array = actual["walls"]
+	var expected_walls: Array = expected["walls"]
+	assert_eq(walls.size(), expected_walls.size())
+	assert_gt(walls.size(), 0, "the fixture has real wall materials")
+	for index: int in range(mini(walls.size(), expected_walls.size())):
+		var wall: Color = walls[index]
+		assert_true(wall.is_equal_approx(expected_walls[index]), "applied wall tint survives swap")
+	for key: String in ["frost", "stove_energy"]:
+		assert_almost_eq(float(actual[key]), float(expected[key]), 0.0001, "applied " + key + " survives swap")
+	assert_eq(bool(actual["steam"]), bool(expected["steam"]))
+
+
+func _wall_error(actual: Dictionary, target: Dictionary) -> float:
+	var walls: Array = actual["walls"]
+	var targets: Array = target["walls"]
+	var error: float = 0.0
+	assert_eq(walls.size(), targets.size())
+	for index: int in range(mini(walls.size(), targets.size())):
+		var wall: Color = walls[index]
+		var goal: Color = targets[index]
+		error += absf(wall.r - goal.r) + absf(wall.g - goal.g) + absf(wall.b - goal.b)
+	return error
+
+
+func _assert_look_moves_toward(before: Dictionary, after: Dictionary, target: Dictionary) -> void:
+	assert_lt(_wall_error(after, target), _wall_error(before, target), "applied wall tint continues easing")
+	for key: String in ["frost", "stove_energy"]:
+		assert_lt(absf(float(after[key]) - float(target[key])), absf(float(before[key]) - float(target[key])),
+			"applied " + key + " continues toward the target")
 
 
 func _assert_pending_hidden(s: Scene, id: String, old_root: Node3D, old_stage: int) -> void:
@@ -219,36 +313,54 @@ func test_three_shared_tier_cars_use_one_frame_budget_and_all_finish() -> void:
 		await _frame(s)
 		calls += 1
 	assert_false(s.restaging())
-	assert_eq((s.restage_stats["frames"] as Array).size(), calls, "one sample per scheduler frame, not per car")
+	assert_eq(int(s.restage_stats["frames_total"]), calls, "one sample per scheduler frame, not per car")
+	assert_eq((s.restage_stats["frames"] as Array).size(), mini(calls, Scene.RESTAGE_FRAME_HISTORY_LIMIT))
 	assert_eq(completed.size(), 3)
 	for id: String in ids:
 		assert_eq(completed.count(id), 1)
 		assert_eq(int(s.car(id)["home_stage"]), 1)
 	_assert_budget(s)
+	for job_key: String in s.restage_stats["jobs"]:
+		var stats: Dictionary = s.restage_stats["jobs"][job_key]
+		print("RESTAGE_UNIT job=%s frames=%d max_unit_usec=%d max_unit_name=%s max_frame_usec=%d" % [
+			job_key, int(stats["frames"]), int(stats["max_unit_usec"]),
+			String(stats["max_unit_name"]), int(stats["max_frame_usec"])])
 	await _after_retirement(s, ids)
 
 
 func test_a_new_target_rejects_and_reclaims_the_previous_generation() -> void:
-	var s := _scene({"guard": 0})
-	var completed: Array[String] = []
-	s.room_restaged.connect(func(id: String) -> void: completed.append(id))
-	_request(s, "guard", 3)
-	await _frame(s, 1)
-	var discarded: Dictionary = s._restage_jobs["guard"]
-	var pending: Node3D = discarded["bundle"]
-	var pending_root: Node3D = discarded["room"].root
-	_request(s, "guard", 2)
-	assert_eq(String(discarded["stats"]["state"]), "cancelled")
-	assert_false(s._valid_restage(discarded))
-	assert_false(s._swap_restage(discarded), "a discarded result cannot publish")
-	assert_eq(int(s.car("guard")["home_stage"]), 0)
-	assert_eq(int(s._restage_jobs["guard"]["target_stage"]), 2)
-	await _drain(s)
-	assert_eq(completed, ["guard"])
-	assert_eq(int(s.car("guard")["home_stage"]), 2)
-	await _after_retirement(s, ["guard"])
-	assert_false(is_instance_valid(pending))
-	assert_false(is_instance_valid(pending_root))
+	for stop: String in CANCEL_STOPS:
+		var s: Scene = _scene({"guard": 0})
+		var c: Dictionary = s.car("guard")
+		var before: Dictionary = _active_snapshot(c)
+		var old_root: Node3D = s.life.rooms["guard"].root
+		var old_nodes: Array = (c["room_nodes"] as Array).duplicate()
+		var completed: Array[String] = []
+		s.room_restaged.connect(func(id: String) -> void: completed.append(id))
+		_request(s, "guard", 3)
+		if not _advance_to_stop(s, "guard", stop):
+			continue
+		_assert_pending_hidden(s, "guard", old_root, 0)
+		var discarded: Dictionary = s._restage_jobs["guard"]
+		var pending_nodes: Array = _subtree_refs(discarded["bundle"])
+		_request(s, "guard", 2)
+		assert_eq(String(discarded["stats"]["state"]), "cancelled")
+		assert_false(s._valid_restage(discarded))
+		assert_false(s._swap_restage(discarded), "a discarded result cannot publish")
+		assert_eq(_active_snapshot(c), before, stop + ": cancellation preserves every active field")
+		assert_eq(s.life.rooms["guard"].root, old_root)
+		assert_eq(c["room_nodes"], old_nodes)
+		assert_eq(int(s.car("guard")["home_stage"]), 0)
+		assert_eq(int(s._restage_jobs["guard"]["target_stage"]), 2)
+		assert_eq(completed.size(), 0)
+		await _assert_reclaimed(pending_nodes, "new target / " + stop)
+		assert_eq(s.life.rooms["guard"].root, old_root, "reclamation did not replace the active room")
+		assert_eq(_active_snapshot(c), before)
+		assert_eq(c["room_nodes"], old_nodes)
+		await _drain(s)
+		assert_eq(completed, ["guard"])
+		assert_eq(int(s.car("guard")["home_stage"]), 2)
+		await _after_retirement(s, ["guard"])
 
 
 func test_returning_to_the_applied_stage_cancels_without_losing_a_later_request() -> void:
@@ -257,7 +369,8 @@ func test_returning_to_the_applied_stage_cancels_without_losing_a_later_request(
 	var completed: Array[String] = []
 	s.room_restaged.connect(func(id: String) -> void: completed.append(id))
 	_request(s, "guard", 3)
-	await _frame(s, 1)
+	if not _advance_to_stop(s, "guard", "dress"):
+		return
 	var pending: Node3D = s._restage_jobs["guard"]["bundle"]
 	_request(s, "guard", 0)
 	assert_false(s.restaging())
@@ -273,48 +386,83 @@ func test_returning_to_the_applied_stage_cancels_without_losing_a_later_request(
 
 
 func test_rebuild_invalidates_before_freeing_the_old_car_nodes() -> void:
-	var s := _scene({"guard": 0})
-	_request(s, "guard", 3)
-	await _frame(s, 1)
-	var discarded: Dictionary = s._restage_jobs["guard"]
-	var old_car: Node3D = discarded["node"]
-	var pending: Node3D = discarded["bundle"]
-	var batch: int = s._restage_batch
-	s._rebuild_layout()
-	s.apply_rules()
-	assert_gt(s._restage_batch, batch)
-	assert_false(s.restaging())
-	assert_false(is_instance_valid(old_car))
-	assert_false(s._valid_restage(discarded))
-	assert_false(s._swap_restage(discarded))
-	assert_eq(String(discarded["stats"]["reason"]), "layout")
-	assert_eq(int(s.car("guard")["home_stage"]), 3)
-	await _after_retirement(s, ["guard"])
-	assert_false(is_instance_valid(pending))
+	for stop: String in CANCEL_STOPS:
+		var s: Scene = _scene({"guard": 0})
+		var c: Dictionary = s.car("guard")
+		var before: Dictionary = _active_snapshot(c)
+		var old_car: Node3D = c["node"]
+		var old_root: Node3D = s.life.rooms["guard"].root
+		var old_nodes: Array = (c["room_nodes"] as Array).duplicate()
+		_request(s, "guard", 3)
+		if not _advance_to_stop(s, "guard", stop):
+			continue
+		_assert_pending_hidden(s, "guard", old_root, 0)
+		var discarded: Dictionary = s._restage_jobs["guard"]
+		var pending_nodes: Array = _subtree_refs(discarded["bundle"])
+		var pending_root: Node3D = discarded["room"].root
+		var observed: Array[bool] = []
+		var check_before_free: Callable = func() -> void:
+			assert_false(s.restaging())
+			assert_true(is_instance_valid(old_car), stop + ": invalidation precedes old-car destruction")
+			assert_true(is_instance_valid(old_root))
+			assert_same(s.car("guard"), c, "the old active car dictionary still owns the old room here")
+			assert_eq(_active_snapshot(s.car("guard")), before)
+			assert_eq(s.car("guard")["room_nodes"], old_nodes)
+			assert_eq(s.life.rooms["guard"].root, old_root)
+			observed.append(true)
+		s.restages_invalidated.connect(check_before_free, CONNECT_ONE_SHOT)
+		var batch: int = s._restage_batch
+		s._rebuild_layout()
+		s.apply_rules()
+		assert_eq(observed, [true], "checked old references exactly at invalidation")
+		assert_gt(s._restage_batch, batch)
+		assert_false(s.restaging())
+		assert_false(is_instance_valid(old_car))
+		assert_false(is_instance_valid(old_root))
+		assert_false(s._valid_restage(discarded))
+		assert_false(s._swap_restage(discarded))
+		assert_eq(String(discarded["stats"]["reason"]), "layout")
+		assert_eq(int(s.car("guard")["home_stage"]), 3)
+		var rebuilt_root: Node3D = s.life.rooms["guard"].root
+		assert_ne(rebuilt_root, pending_root, "the discarded candidate cannot become the rebuilt room")
+		await _assert_reclaimed(pending_nodes, "layout / " + stop)
+		assert_eq(s.life.rooms["guard"].root, rebuilt_root, "reclamation leaves the complete rebuilt room active")
+		await _after_retirement(s, ["guard"])
 
 
 func test_leaving_the_tree_discards_work_and_reentry_uses_a_new_generation() -> void:
-	var s := _scene({"guard": 0})
-	_request(s, "guard", 3)
-	await _frame(s, 1)
-	var discarded: Dictionary = s._restage_jobs["guard"]
-	var pending: Node3D = discarded["bundle"]
-	var old_root: Node3D = s.life.rooms["guard"].root
-	var parent: Node = s.get_parent()
-	parent.remove_child(s)
-	assert_false(s.restaging())
-	assert_false(s._valid_restage(discarded))
-	assert_false(s._swap_restage(discarded))
-	assert_eq(int(s.car("guard")["home_stage"]), 0)
-	assert_eq(String(discarded["stats"]["reason"]), "tree_exit")
-	parent.add_child(s)
-	assert_eq(s.life.rooms["guard"].root, old_root)
-	s.apply_rules()
-	assert_true(s.restaging())
-	assert_ne(String(s._restage_jobs["guard"]["stats_key"]), String(discarded["stats_key"]))
-	await _drain(s)
-	await _after_retirement(s, ["guard"])
-	assert_false(is_instance_valid(pending))
+	for stop: String in CANCEL_STOPS:
+		var s: Scene = _scene({"guard": 0})
+		var c: Dictionary = s.car("guard")
+		var before: Dictionary = _active_snapshot(c)
+		var old_root: Node3D = s.life.rooms["guard"].root
+		var old_nodes: Array = (c["room_nodes"] as Array).duplicate()
+		_request(s, "guard", 3)
+		if not _advance_to_stop(s, "guard", stop):
+			continue
+		_assert_pending_hidden(s, "guard", old_root, 0)
+		var discarded: Dictionary = s._restage_jobs["guard"]
+		var pending_nodes: Array = _subtree_refs(discarded["bundle"])
+		var parent: Node = s.get_parent()
+		parent.remove_child(s)
+		assert_false(s.restaging())
+		assert_false(s._valid_restage(discarded))
+		assert_false(s._swap_restage(discarded))
+		assert_eq(int(s.car("guard")["home_stage"]), 0)
+		assert_eq(_active_snapshot(c), before, stop + ": tree exit preserves the active room")
+		assert_eq(c["room_nodes"], old_nodes)
+		assert_eq(s.life.rooms["guard"].root, old_root)
+		assert_eq(String(discarded["stats"]["reason"]), "tree_exit")
+		parent.add_child(s)
+		await _assert_reclaimed(pending_nodes, "tree exit / " + stop)
+		assert_eq(s.life.rooms["guard"].root, old_root)
+		assert_eq(_active_snapshot(c), before)
+		assert_eq(c["room_nodes"], old_nodes)
+		s.apply_rules()
+		assert_true(s.restaging())
+		assert_ne(String(s._restage_jobs["guard"]["stats_key"]), String(discarded["stats_key"]))
+		await _drain(s)
+		await _after_retirement(s, ["guard"])
 
 
 func test_car_node_identity_rejects_a_result_even_with_matching_ids_and_generations() -> void:
@@ -322,7 +470,8 @@ func test_car_node_identity_rejects_a_result_even_with_matching_ids_and_generati
 	var c: Dictionary = s.car("guard")
 	var original: Node3D = c["node"]
 	_request(s, "guard", 3)
-	await _frame(s, 1)
+	if not _advance_to_stop(s, "guard", "swap"):
+		return
 	var discarded: Dictionary = s._restage_jobs["guard"]
 	var pending: Node3D = discarded["bundle"]
 	var replacement := Node3D.new()
@@ -438,7 +587,7 @@ func test_layout_and_tree_exit_cancel_pending_editor_callbacks() -> void:
 		await _after_retirement(s, ["guard", "captain", "dining"])
 
 
-func test_swap_uses_latest_context_view_easing_and_the_actual_reseat_time() -> void:
+func test_swap_uses_latest_context_view_and_the_actual_reseat_time() -> void:
 	var s := _scene({"guard": 0})
 	s.room_ease = 3.0
 	s.room_lead = 0.75
@@ -474,3 +623,106 @@ func test_swap_uses_latest_context_view_easing_and_the_actual_reseat_time() -> v
 	s._step_reseat()
 	assert_false(c.has("reseat_at"))
 	await _after_retirement(s, ["guard"])
+
+
+func test_swap_preserves_applied_mid_ease_values_and_continues_on_the_new_room() -> void:
+	# Stages 1 and 3 have the same stove share, so absolute energies are comparable.
+	# Keep fuel present here; the separate latest-context test covers coal == 0.
+	var s: Scene = _scene({"guard": 1})
+	var c: Dictionary = s.car("guard")
+	s.rules["train"]["coal"] = 100.0
+	assert_true(s.set_sit("guard", 0, 100.0))
+	var target: Dictionary = _applied_room_look(c)
+	assert_true(s.set_sit("guard", 0, 0.0))
+	var start: Dictionary = _applied_room_look(c)
+	var old_root: Node3D = s.life.rooms["guard"].root
+	var old_light: OmniLight3D = c["stove_light"]
+	s.room_ease = 3.0
+	_request(s, "guard", 3)
+	if not _advance_to_stop(s, "guard", "swap"):
+		return
+	var job: Dictionary = s._restage_jobs["guard"]
+	var new_root: Node3D = job["room"].root
+	var new_light: OmniLight3D = job["parts"]["stove_light"]
+	assert_almost_eq(float(c["stove_share"]), float(job["parts"]["stove_share"]), 0.0001)
+	assert_true(s.set_sit("guard", 0, 100.0))
+	s.step(0.6)  # t == 0.2: walls/frost and the faster stove ease are all in progress.
+	assert_true(c.has("room_since"))
+	assert_gt(s.clock - float(c["room_since"]), s.room_ease * Scene.WALLS_FROM)
+	assert_lt(s.clock - float(c["room_since"]), s.room_ease * Scene.STOVE_SHARE)
+	var before_swap: Dictionary = _applied_room_look(c)
+	var visible_look: Dictionary = (c["room_vis"] as Dictionary).duplicate()
+	_assert_look_moves_toward(start, before_swap, target)
+	assert_gt(_wall_error(before_swap, target), 0.0001, "walls have not reached their target")
+	for key: String in ["frost", "stove_energy"]:
+		assert_gt(absf(float(before_swap[key]) - float(target[key])), 0.0001, key + " is still easing")
+	assert_false(is_equal_approx(new_light.light_energy, float(before_swap["stove_energy"])),
+		"the unshown candidate differs, so omitting _show_room during swap is observable")
+	_assert_pending_hidden(s, "guard", old_root, 1)
+	s.finish_restage_now()
+	assert_false(s.restaging())
+	assert_eq(s.life.rooms["guard"].root, new_root)
+	assert_ne(s.life.rooms["guard"].root, old_root)
+	assert_eq(c["stove_light"], new_light)
+	assert_ne(c["stove_light"], old_light, "appearance is read from the replacement light")
+	assert_eq(c["room_vis"], visible_look)
+	_assert_applied_look_equal(_applied_room_look(c), before_swap)
+	var previous: Dictionary = _applied_room_look(c)
+	for _step_index: int in range(3):
+		s.step(0.1)
+		var current: Dictionary = _applied_room_look(c)
+		_assert_look_moves_toward(previous, current, target)
+		assert_eq(c["stove_light"], new_light, "normal step still drives the replacement light")
+		assert_true(c.has("room_since"), "the normal frame path has not skipped to the endpoint")
+		previous = current
+	await _after_retirement(s, ["guard"])
+
+
+func test_restage_stats_bound_frame_history_but_keep_lifetime_counts_and_peaks() -> void:
+	var s: Scene = Scene.new()
+	autofree(s)  # Telemetry-only fixture; no tree, models, scheduler or fake timing budget.
+	var total: int = Scene.RESTAGE_FRAME_HISTORY_LIMIT + 3
+	for sample_index: int in range(total):
+		var forced: bool = sample_index == 1
+		var usec: int = 2000 if forced else (900 if sample_index == 0 else 100)
+		var unit_name: String = "guard/forced_peak" if forced else "guard/sample_%d" % sample_index
+		s._record_restage_frame({"frame": sample_index, "usec": usec, "budget_usec": Scene.RESTAGE_BUDGET_USEC,
+			"max_unit_usec": usec, "max_unit_name": unit_name, "jobs": ["guard"],
+			"job_usec": {"sample": usec}, "units": 1, "forced": forced})
+	var samples: Array = s.restage_stats["frames"]
+	assert_eq(samples.size(), Scene.RESTAGE_FRAME_HISTORY_LIMIT)
+	for index: int in range(samples.size()):
+		assert_eq(int(samples[index]["frame"]), index + 3, "only the oldest frame samples are evicted")
+	assert_eq(int(s.restage_stats["frames_total"]), total)
+	assert_eq(int(s.restage_stats["forced_frames_total"]), 1)
+	assert_eq(int(s.restage_stats["max_frame_usec"]), 900, "the lifetime frame peak still excludes forced drains")
+	assert_eq(int(s.restage_stats["max_unit_usec"]), 2000, "the lifetime unit peak still includes forced drains")
+	assert_eq(String(s.restage_stats["max_unit_name"]), "guard/forced_peak")
+	var before: Dictionary = s.restage_stats.duplicate(true)
+	s._invalidate_restages("test_history")
+	assert_eq(s.restage_stats, before, "batch invalidation retains bounded history and lifetime summaries")
+
+
+func test_restage_stats_bound_job_history_and_keep_cancelled_work_across_batches() -> void:
+	var s: Scene = _scene({"guard": 0})
+	var keys: Array[String] = []
+	var total: int = Scene.RESTAGE_JOB_HISTORY_LIMIT + 3
+	for request_index: int in range(total):
+		_request(s, "guard", 1 + request_index % 2)
+		keys.append(String(s._restage_jobs["guard"]["stats_key"]))
+	var jobs: Dictionary = s.restage_stats["jobs"]
+	assert_eq(jobs.size(), Scene.RESTAGE_JOB_HISTORY_LIMIT)
+	assert_eq(jobs.keys(), keys.slice(3), "the most recently registered jobs survive, in order")
+	assert_eq(int(s.restage_stats["jobs_total"]), total)
+	for key: String in jobs:
+		if key != keys.back():
+			assert_eq(String(jobs[key]["state"]), "cancelled", "cancelled work remains inspectable")
+	s._invalidate_restages("test_history")
+	assert_eq((s.restage_stats["jobs"] as Dictionary).keys(), keys.slice(3))
+	assert_eq(String(jobs[keys.back()]["reason"]), "test_history")
+	assert_eq(int(s.restage_stats["jobs_total"]), total)
+	_request(s, "guard", 1)
+	keys.append(String(s._restage_jobs["guard"]["stats_key"]))
+	assert_eq(jobs.keys(), keys.slice(4), "a new batch shares the same bounded job window")
+	assert_eq(int(s.restage_stats["jobs_total"]), total + 1)
+	assert_eq(int(s.car("guard")["home_stage"]), 0, "telemetry eviction never publishes a pending job")
