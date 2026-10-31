@@ -481,7 +481,8 @@ func _ready() -> void:
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
 	stop_map = shape_stop(stop_map, String(opts.get("stop_ground", opts.get("stop_form", ""))), rng.seed, float(opts.get("stop_form_m", -1.0)),
-		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
+		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place),
+		int(opts.get("stop_end_gap", -1)))
 	_take_map(with_side_path(stop_map, rng.seed))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
@@ -1540,13 +1541,16 @@ const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground
 ## The ground of the stop's form (stop_ground.gd), put on before the side path
 ## (with_side_path). An edge stop grows and shifts the map, so what the loader made
 ## ahead from it is dropped first, and a map handed over with its side path already on
-## is built again bare by `fresh`; a city or siding stop keeps all of it.
-static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable) -> Dictionary:
-	if form.is_empty() or form == String(map.get("stop_form", "")) or form == String(map.get("stop_form_asked", "")):
+## is built again bare by `fresh`; a city or siding stop keeps all of it. So is a map
+## grown in the same form on another end gap than the save's (`end_gap`, field_save.gd).
+static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable, end_gap: int = -1) -> Dictionary:
+	var regap: bool = end_gap >= 0 and form in ["edge", "remote"] and form == String(map.get("stop_form", "")) \
+		and int(map.get("stop_end_gap", end_gap)) != end_gap
+	if not regap and (form.is_empty() or form == String(map.get("stop_form", "")) or form == String(map.get("stop_form_asked", ""))):
 		return map
 	if form in ["edge", "remote"]:
 		# The other outlying form's map is already grown, and stop_ground.gd will not regrow it.
-		if map.has("side_path") or String(map.get("stop_form", "")) in ["edge", "remote"]:
+		if regap or map.has("side_path") or String(map.get("stop_form", "")) in ["edge", "remote"]:
 			map = fresh.call()
 		for key in AHEAD_KEYS:
 			map.erase(key)
@@ -1555,7 +1559,7 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 		var site: Dictionary = (map.get("spots", {}) as Dictionary).get("work_site", {}) as Dictionary
 		site.erase("job")
 		site.erase("amount")
-	return StopGround.apply(map, form, run_seed, target_m)
+	return StopGround.apply(map, form, run_seed, target_m, end_gap)
 
 
 ## The side path on a map built here or handed over (side_path.gd). The loader puts it
