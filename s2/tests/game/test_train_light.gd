@@ -35,7 +35,7 @@ func test_spec_clamps_stage_and_defaults_to_day() -> void:
 	var low_first: Dictionary = low_lamps[0]
 	assert_eq(low_lamps.size(), 2)
 	assert_almost_eq(float(low_first["kelvin"]), 1850.0, EPSILON)
-	assert_almost_eq(float(low["stove"]), 0.9, EPSILON)
+	assert_almost_eq(float(low["stove"]), 0.7, EPSILON)
 	var high: Dictionary = Light.spec(9, "night")
 	var high_lamps: Array = high["lamps"]
 	var high_first: Dictionary = high_lamps[0]
@@ -105,7 +105,7 @@ func test_day_windows_are_brighter_and_do_not_dim_with_stage() -> void:
 
 
 func test_stove_multipliers_are_the_same_by_day_and_night() -> void:
-	var expected: Array[float] = [0.9, 1.0, 1.15, 1.0]
+	var expected: Array[float] = [0.7, 1.0, 1.15, 1.0]
 	for stage: int in 4:
 		for daytime: String in ["day", "night"]:
 			var plan: Dictionary = Light.spec(stage, daytime)
