@@ -189,7 +189,8 @@ func measure_map(id: String, data: Dictionary) -> void:
 		if path.is_empty() or not levels.has(int(p.get("level", 0))):
 			continue
 		batch_paths[path] = true
-		if int(p.get("level", 0)) == 0:
+		# As map_view draws it: decor blocks no body, so it does not take the grey block off its cell.
+		if int(p.get("level", 0)) == 0 and not bool(p.get("decor", false)):
 			var r: Rect2i = Furnish._rect(p["rect"])
 			for y in range(r.position.y, r.end.y):
 				for x in range(r.position.x, r.end.x):
