@@ -52,7 +52,7 @@ static func _find(stock: Array, want: Array) -> int:
 
 
 ## What the train hands the field to shoot and lure with, for the contract's train block:
-## {ammo: {pistol, shell, craft}, lures?}, or {} for a train that keeps no rounds.
+## {ammo: {pistol, shell, craft}, lures?, sleds?}, or {} for a train that keeps no rounds.
 ## Lures go only when there are some: the stores always count them now (the
 ## workshop makes them, decision 449), and none kept is none handed over.
 static func train_kit(g: Dictionary) -> Dictionary:
@@ -62,6 +62,9 @@ static func train_kit(g: Dictionary) -> Dictionary:
 	var out := {"ammo": {"pistol": int(dom.get("ammo_pistol", 0)), "shell": int(dom.get("ammo_shell", 0)), "craft": int(dom.get("ammo_craft", 0))}}
 	if int(dom.get("lures", 0)) > 0:
 		out["lures"] = int(dom["lures"])
+	# The workshop's load sleds (two at most, sled.md 94), not taken from the stores either.
+	if int(dom.get("sleds", 0)) > 0:
+		out["sleds"] = int(dom["sleds"])
 	return out
 
 

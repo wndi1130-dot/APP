@@ -17,7 +17,8 @@ const V5_REQUIRED := ["crew", "defense"]
 ## v5 may also carry (s3 contract 3): the outer things put aboard at the platform, the lures
 ## that came back, the food put aboard by name before it melted into stock.food (J07: the pot
 ## reads its state by id). Left out when there are none.
-const V5_OPTIONAL := ["wardrobeIn", "luresBack", "foodIn", "lootDeck"]
+## and how many of the train's sleds stood in the platform's unloading cells when it left.
+const V5_OPTIONAL := ["wardrobeIn", "luresBack", "foodIn", "lootDeck", "sledsBack"]
 ## A deck's place (decision 474 S1, loot_dress.gd decks): n places, exactly k of them, seen and hit so far.
 const DECK_KEYS := ["n", "k", "seen", "hit"]
 ## The v5 keys that are counts by id.
@@ -76,6 +77,7 @@ var _crew: Array[Dictionary] = []
 var _defense: Dictionary = {}
 var _wardrobe_in: Array = []
 var _lures_back: Dictionary = {}
+var _sleds_back: int = -1
 var _food_in: Dictionary = {}
 var _loot_deck: Dictionary = {}
 
@@ -342,6 +344,12 @@ func set_lures_back(by_kind: Dictionary) -> void:
 	_lures_back = by_kind.duplicate()
 
 
+## The train's sleds standing in the platform's unloading cells when the stop is left
+## (0..the contract's train.sleds). On a v5 receipt only; unset, the receipt has none.
+func set_sleds_back(n: int) -> void:
+	_sleds_back = n
+
+
 ## The food put aboard, by the field's id (fresh, wilted, spoiled, frozen, dented … in the id,
 ## food_cooking.md 2), as many as melted into stock.food: what it was, not more of it. On a v5
 ## receipt only.
@@ -428,6 +436,8 @@ func to_dict() -> Dictionary:
 				d["wardrobeIn"] = _wardrobe_in.duplicate(true)
 			if not _lures_back.is_empty():
 				d["luresBack"] = _lures_back.duplicate()
+			if _sleds_back >= 0:
+				d["sledsBack"] = _sleds_back
 			if not _food_in.is_empty():
 				d["foodIn"] = _food_in.duplicate()
 			if not _loot_deck.is_empty():
@@ -694,6 +704,8 @@ static func _check_v5_fields(out: Array[String], d: Dictionary, id_re: RegEx) ->
 		for kind: Variant in counts:
 			if not (_is_id(kind, id_re) and _is_int(counts[kind]) and float(counts[kind]) >= 0.0):
 				out.append("%s.%s: 0 이상 정수가 아님" % [key, str(kind)])
+	if d.has("sledsBack") and not (_is_int(d["sledsBack"]) and float(d["sledsBack"]) >= 0.0):
+		out.append("sledsBack: 0 이상 정수가 아님")
 	if d.has("lootDeck"):
 		var deck: Variant = d["lootDeck"]
 		if not deck is Dictionary:
