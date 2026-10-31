@@ -658,7 +658,7 @@ function baseView(g: Game, card: Card): CardView {
         choices: withAfford(g, [
           { id: 'cut', label: `${partObj} 자른다`, log: `물린 ${card.who ?? '대원'}의 ${partObj} 잘랐다.`, say: `지금 ${partObj} 잘라라! 망설이면 늦는다.`, effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'rel', c, v: 2 }], witness: true },
           { id: 'hide', label: '숨겨 준다', log: `물린 ${card.who ?? '대원'}을(를) 숨겨 태웠다.`, say: was(past, 'hide') ? '지난번엔 운이 좋았다. 이번에도 감아서 태워라.' : `아무도 못 본 거다. ${part}에 붕대를 감고 태워라.`, effs: [], special: 'hide_bite', witness: true },
-          { id: 'leave', label: '두고 온다', log: `물린 ${card.who ?? '대원'}을(를) 두고 왔다.`, say: '물린 사람은 못 태운다. 미안하다고 전해라.', effs: [{ t: 'rel', c, v: -8 }, { t: 'tension', v: 2 }], special: 'leave_bitten', witness: true },
+          { id: 'leave', label: '두고 온다', log: '물린 한 명을 역에 남기고 왔다.', say: '물린 사람은 못 태운다. 미안하다고 전해라.', effs: [{ t: 'rel', c, v: -8 }, { t: 'tension', v: 2 }], special: 'leave_bitten', witness: true },
         ]),
       };
     }
@@ -1050,7 +1050,7 @@ function resolveCardChoice(g: Game, card: Card, view: CardView, choice: Choice):
       g.comms[c].pop = Math.max(1, g.comms[c].pop - 1);
       g.deaths.push(card.who ?? '이름 모를 대원');
       logDeath(g, [card.who ?? '이름 모를 대원'], 'chosen', true, c);
-      journal(g, `${card.who ?? '대원'}을(를) 역에 두고 왔다.`, 'dark');
+      // 일지는 고른 줄(log) 한 줄만, 이름 없이 수로 적는다(정차 끝에 남은 사람은 수만, 결정 183).
       break;
     case 'need_promise': {
       const st = g.needs?.[card.text as NeedId];
