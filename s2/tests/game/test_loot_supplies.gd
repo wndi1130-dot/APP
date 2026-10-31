@@ -252,6 +252,35 @@ func _contract_game(departure: Variant):
 	return game
 
 
+func test_the_contract_says_whether_the_boxes_get_supplies() -> void:
+	# departure.supplies (s3 contract) is the run's supOn: off, no box gets one; on, or a
+	# contract without it, or no contract at all, they are dressed as always.
+	var got := {}
+	for which: Variant in [0, 6, "old", null]:
+		var d: Variant = null
+		if which is int:
+			var state: Dictionary = (V.data()["contracts"][which]["state"] as Dictionary).duplicate(true)
+			d = FieldDeparture.build(state, V.tables(), {"placeId": "sulechow_station"})
+		elif which is String:
+			d = FieldDeparture.build((V.data()["contracts"][0]["state"] as Dictionary).duplicate(true), V.tables(), {"placeId": "sulechow_station"})
+			(d as Dictionary).erase("supplies")
+		var game = FieldGame.new()
+		game.opts = {"seed": 4, "auto_pause": false, "raiders": false, "place": "houses_01"}
+		if d is Dictionary:
+			game.opts["departure"] = d
+		add_child_autofree(game)
+		game.set_process(false)
+		var in_boxes := 0
+		for c: Dictionary in game.data["containers"].values():
+			in_boxes += _supply_count(c.get("items", []))
+		got[str(which)] = [int(game.loot_report.get("supplies", -1)), in_boxes]
+	assert_false(bool(FieldDeparture.build((V.data()["contracts"][0]["state"] as Dictionary).duplicate(true), V.tables(), {"placeId": "sulechow_station"})["supplies"]), "contract 0 runs with supplies off")
+	assert_eq(got["0"], [0, 0], "off: none")
+	for key: String in ["6", "old", "<null>"]:
+		assert_gt(int(got[key][0]), 0, key)
+		assert_gt(int(got[key][1]), 0, key + ": and they are in the boxes")
+
+
 func test_unloaded_supplies_melt_into_one_stock_rounded_once_a_stop() -> void:
 	# The train's contract makes the receipt v5; the stock is added up by key and rounded once
 	# (field_game.finish), so one cake of soap (0.25) is nothing and two are one.
