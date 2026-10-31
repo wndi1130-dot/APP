@@ -8,6 +8,7 @@ const SulehufMap = preload("res://game/world/sulehuf_map.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const TinyMap = preload("res://tests/game/fixtures/tiny_map.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 
 
 func _game(opts: Dictionary):
@@ -111,15 +112,17 @@ func test_the_train_has_doors_drawn_on_each_side_the_map_gives() -> void:
 
 func test_the_first_stop_steers_by_the_cells_it_always_did() -> void:
 	var game = _game({"seed": 3, "raiders": false, "auto_pause": false})
-	assert_eq(game.horde_home(), Vector2i(50, 10), "the platform by the train")
-	assert_eq(game.data["anchors"]["whistle"], Vector2i(90, 4))
-	assert_eq(game.data["anchors"]["flee_exit"], Vector2i(60, 99))
-	assert_eq(game.data["anchors"]["engine"], Vector2i(92, 2), "where the engine idles")
-	assert_eq(game.data["platform"], Rect2i(16, 4, 82, 6), "its own platform, not one worked out")
+	# The map script's cells, moved by the view ground the field puts round them.
+	var off: Vector2i = StopGround.view_offset(game.data)
+	assert_eq(game.horde_home(), Vector2i(50, 10) + off, "the platform by the train")
+	assert_eq(game.data["anchors"]["whistle"], Vector2i(90, 4) + off)
+	assert_eq(game.data["anchors"]["flee_exit"], Vector2i(60, 99) + off)
+	assert_eq(game.data["anchors"]["engine"], Vector2i(92, 2) + off, "where the engine idles")
+	assert_eq(game.data["platform"], Rect2i(Vector2i(16, 4) + off, Vector2i(82, 6)), "its own platform, not one worked out")
 	assert_eq(game.road_entries(), ["east_track", "north_road", "south_road", "east_road"], "the fair spawn tries them in this order")
-	assert_eq(game.combat._where(FieldGrid.center(Vector2i(50, 8))), "platform")
+	assert_eq(game.combat._where(FieldGrid.center(Vector2i(50, 8) + off)), "platform")
 	assert_eq(game.data["zone_names"][""], "sulechow", "anywhere unnamed")
-	assert_ne(FieldMaps.anchors(game.data)["horde_home"], Vector2i(50, 10), "the map's own cell is kept over the worked-out one")
+	assert_ne(FieldMaps.anchors(game.data)["horde_home"], Vector2i(50, 10) + off, "the map's own cell is kept over the worked-out one")
 
 
 func test_a_map_that_names_no_cells_has_them_worked_out() -> void:

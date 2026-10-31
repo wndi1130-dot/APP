@@ -201,6 +201,7 @@ static func make_ready(script: Script, run_seed: int, form: String = "", form_m:
 	var d: Dictionary = FieldMaps.build_from(script)
 	if not form.is_empty():
 		d = StopGround.apply(d, form, run_seed, form_m)
+	d = StopGround.widen_view(d)
 	if run_seed >= 0:
 		d = SidePath.add(d, run_seed)
 		d["_side_seed"] = run_seed

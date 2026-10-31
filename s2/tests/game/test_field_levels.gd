@@ -3,6 +3,7 @@ extends "res://addons/gut/test.gd"
 ## them, sight out of upstairs windows, the dead on other floors.
 
 const FieldGame = preload("res://game/field_game.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const SulehufMap = preload("res://game/world/sulehuf_map.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
@@ -42,7 +43,7 @@ func test_map_is_about_twice_the_old_one() -> void:
 
 
 func test_every_entry_reaches_the_platform_across_floors() -> void:
-	var platform: Vector3 = game.lift(Vector2i(50, 6), 0)
+	var platform: Vector3 = game.lift(Vector2i(50, 6) + StopGround.view_offset(game.data), 0)
 	for key in game.data["entries"]:
 		var path: PackedVector3Array = game.find_path(game.entry_pos(key), platform, false)
 		assert_gt(path.size(), 0, "%s reaches the platform" % key)
@@ -121,7 +122,7 @@ func test_the_dead_do_not_see_through_a_floor() -> void:
 	p.position = game.lift(Vector2i(75, 44), 1)
 	for q in game.squad:
 		if q != p:
-			q.position = game.lift(Vector2i(50, 6), 0)
+			q.position = game.lift(Vector2i(50, 6) + StopGround.view_offset(game.data), 0)
 	var z := _zombie(game.lift(Vector2i(75, 45), 0))
 	game.zombies._sense(z, [p], 0.2)
 	assert_ne(z["state"], "chase", "right under the player, but a floor between")

@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 ## attack pad, and two fingers at once.
 
 const FieldGame = preload("res://game/field_game.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const Person = preload("res://game/actors/person.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 
@@ -441,7 +442,7 @@ func test_departure_logs_the_dead_on_the_track() -> void:
 	game.zombies.spawn("dead", game.lift(Vector2i(5, 2), 0))
 	game.zombies.spawn("dead", game.lift(Vector2i(120, 1), 0))
 	game.zombies.spawn("dead", game.lift(Vector2i(130, 3), 0))
-	game.zombies.spawn("dead", game.lift(Vector2i(50, 6), 0))   # on the platform, not the track
+	game.zombies.spawn("dead", game.lift(Vector2i(50, 6) + StopGround.view_offset(game.data), 0))   # on the platform, not the track
 	var gone: Dictionary = game.zombies.spawn("dead", game.lift(Vector2i(140, 2), 0))
 	gone["state"] = "dead"
 	assert_eq(game.track_dead(), {"west": 1, "east": 2})
