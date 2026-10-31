@@ -27,6 +27,8 @@ func _run() -> void:
 		ids.assign(HOUSES)
 	var all_rooms: Array = []
 	var all_rows := 0
+	var all_tops_needed := 0
+	var all_tops_placed := 0
 	var all_ms := 0.0
 	var walls := {"north": 0, "west": 0}
 	for id: String in ids:
@@ -37,15 +39,18 @@ func _run() -> void:
 		var rooms := census(data)
 		var wall := wall_counts(data)
 		print("ROOM_DECOR ", JSON.stringify({"map": id, "classes": summarize(rooms), "wall": wall,
-			"rows": stats["rows"], "dress_ms": elapsed}))
+			"rows": stats["rows"], "dress_ms": elapsed, "tops_needed": stats["tops_needed"], "tops_placed": stats["tops_placed"]}))
 		all_rooms.append_array(rooms)
 		all_rows += int(stats["rows"])
+		all_tops_needed += int(stats["tops_needed"])
+		all_tops_placed += int(stats["tops_placed"])
 		all_ms += elapsed
 		walls["north"] += int(wall["north"])
 		walls["west"] += int(wall["west"])
 		await process_frame
 	print("ROOM_DECOR_TOTAL ", JSON.stringify({"maps": ids, "classes": summarize(all_rooms),
-		"wall": _wall_ratios(walls), "rows": all_rows, "dress_ms": all_ms}))
+		"wall": _wall_ratios(walls), "rows": all_rows, "dress_ms": all_ms,
+		"tops_needed": all_tops_needed, "tops_placed": all_tops_placed}))
 	quit(0)
 
 

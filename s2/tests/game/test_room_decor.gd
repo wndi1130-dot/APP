@@ -90,7 +90,28 @@ func test_only_decor_rows_are_appended_and_other_map_values_are_unchanged() -> v
 		counted[p["kind"]] = int(counted.get(p["kind"], 0)) + 1
 	for kind: String in RoomDecor.KINDS + RoomDecor.TOP_KINDS:
 		assert_eq(int(first_stats["kinds"][kind]), int(counted.get(kind, 0)), kind)
+	var top_count := 0
+	for kind: String in RoomDecor.TOP_KINDS:
+		top_count += int(counted.get(kind, 0))
+	assert_eq(first_stats["tops_placed"], top_count, "실제 탁상 줄 수")
+	assert_gte(int(first_stats["tops_needed"]), top_count)
 	assert_eq(faults, [], "추가 줄의 계약")
+
+
+func test_top_stats_sum_room_budgets_including_unplaced_tops() -> void:
+	var needed := 0
+	for room: Dictionary in Measure.census(first):
+		var lv := int(room["level"])
+		var ri := int(room["room"])
+		var rooms := RoomFurnish._rooms(first, lv, first["levels"][lv])
+		var building := int(rooms["rooms"][ri]["building"])
+		var seed_value: int = ("%s|%d|%d|%d|decor" % [first["place_id"], building, lv, ri]).hash() & 0x7fffffff
+		var walls: Array = []
+		for kind: String in room["kinds"]:
+			if RoomDecor.KINDS.has(kind) and kind != "potted_plant":
+				walls.append({"kind": kind, "mount": "wall"})
+		needed += RoomDecor._top_budget(room["class"], seed_value, walls)
+	assert_eq(first_stats["tops_needed"], needed, "놓은 수가 아니라 방마다 필요한 차례의 합")
 
 
 func test_wall_decor_uses_north_or_west_without_tall_furniture_or_touching_neighbors() -> void:
@@ -277,6 +298,9 @@ func test_tabletops_preserve_the_legacy_wall_and_plant_rows() -> void:
 	assert_gt(top_count, 0, "탁상 보충도 실제로 있는 입력")
 	assert_eq(var_to_str(rows), var_to_str(_decor(legacy)), "기존 줄의 값과 차례")
 	assert_eq(stats["rows"], first_stats["rows"] - top_count)
+	assert_eq(first_stats["tops_placed"], top_count)
+	assert_eq(stats["tops_needed"], first_stats["tops_needed"], "모형을 꺼 전부 못 놓아도 필요 수는 유지")
+	assert_eq(stats["tops_placed"], 0)
 	assert_eq(var_to_str(stats["rooms"]), var_to_str(first_stats["rooms"]))
 	for kind: String in RoomDecor.KINDS:
 		assert_eq(stats["kinds"][kind], first_stats["kinds"][kind], kind)

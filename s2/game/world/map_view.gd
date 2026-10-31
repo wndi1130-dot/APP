@@ -1778,9 +1778,10 @@ func _build_props() -> void:
 		var xf := top_mount_transform(host["xf"], float(tops[spot]["y"]), prop["at"])
 		if not prop_batches.has(path):
 			prop_batches[path] = {"items": [], "nodes": {}, "tiles": {}}
-		# 보이기·기억은 받침 전체 칸으로: 2칸 받침이면 탁상은 줄의 첫 칸이 아니라 윗면 가운데에 선다.
+		# 보이기·기억은 받침 전체 칸으로, 거리 제거·타일 인덱스는 받침 원점으로 함께 판정한다.
+		var host_xf: Transform3D = host["xf"]
 		var item := {"xf": xf, "rect": prop["host_rect"], "level": lv, "building": host["building"],
-			"prop": prop, "remembered": false}
+			"prop": prop, "remembered": false, "cull_at": host_xf.origin}
 		prop_batches[path]["items"].append(item)
 		_index_prop(prop_batches[path], item)
 		prop_fit_counts["placed"] += 1
@@ -1807,6 +1808,16 @@ func _build_props() -> void:
 
 static func top_mount_transform(host_xf: Transform3D, spot_y: float, at: Vector2) -> Transform3D:
 	return Transform3D(host_xf.basis.orthonormalized(), host_xf * Vector3(at.x, spot_y, at.y))
+
+
+static func prop_cull_at(item: Dictionary) -> Vector3:
+	var xf: Transform3D = item["xf"]
+	return item.get("cull_at", xf.origin)
+
+
+static func prop_cull_distance(at: Vector3, eye: Vector3, ray: Vector3) -> float:
+	var focus := eye + ray * ((at.y - eye.y) / ray.y) if absf(ray.y) > 0.001 else eye
+	return Vector2(at.x - focus.x, at.z - focus.z).length()
 
 
 ## 벽걸이 장식의 등 쪽 칸(facing 0 북·1 동·2 남·3 서 — 모형 앞 +Z가 facing만큼 돈다).
@@ -1928,20 +1939,20 @@ func _add_object_batch(prop: Dictionary, path: String) -> void:
 
 ## Tiles hold the same item dictionaries as the model-path batch.
 func _index_prop(batch: Dictionary, item: Dictionary) -> void:
-	var xf: Transform3D = item["xf"] as Transform3D
-	var key: Vector3i = Vector3i(floori(xf.origin.x / float(TILE)), floori(xf.origin.z / float(TILE)), int(item["level"]))
+	var at := prop_cull_at(item)
+	var key: Vector3i = Vector3i(floori(at.x / float(TILE)), floori(at.z / float(TILE)), int(item["level"]))
 	var tiles: Dictionary = batch["tiles"] as Dictionary
 	if not tiles.has(key):
-		tiles[key] = {"items": [], "min_y": xf.origin.y, "max_y": xf.origin.y}
+		tiles[key] = {"items": [], "min_y": at.y, "max_y": at.y}
 	var tile: Dictionary = tiles[key] as Dictionary
 	tile["items"].append(item)
-	tile["min_y"] = minf(float(tile["min_y"]), xf.origin.y)
-	tile["max_y"] = maxf(float(tile["max_y"]), xf.origin.y)
+	tile["min_y"] = minf(float(tile["min_y"]), at.y)
+	tile["max_y"] = maxf(float(tile["max_y"]), at.y)
 	item["tile"] = key
 	# All batches' tiles in one table, so a refill tests each tile once. The
 	# heights only grow (a wider span reaches further: never too few items).
-	var span: Vector2 = _prop_tile_y.get(key, Vector2(xf.origin.y, xf.origin.y))
-	_prop_tile_y[key] = Vector2(minf(span.x, xf.origin.y), maxf(span.y, xf.origin.y))
+	var span: Vector2 = _prop_tile_y.get(key, Vector2(at.y, at.y))
+	_prop_tile_y[key] = Vector2(minf(span.x, at.y), maxf(span.y, at.y))
 
 
 func _unindex_prop(batch: Dictionary, item: Dictionary) -> void:
@@ -1959,9 +1970,9 @@ func _unindex_prop(batch: Dictionary, item: Dictionary) -> void:
 	var min_y: float = INF
 	var max_y: float = -INF
 	for other: Dictionary in items:
-		var xf: Transform3D = other["xf"] as Transform3D
-		min_y = minf(min_y, xf.origin.y)
-		max_y = maxf(max_y, xf.origin.y)
+		var at := prop_cull_at(other)
+		min_y = minf(min_y, at.y)
+		max_y = maxf(max_y, at.y)
 	tile["min_y"] = min_y
 	tile["max_y"] = max_y
 
@@ -2137,9 +2148,7 @@ func refresh_props(camera: Camera3D = null) -> void:
 			if not _prop_is_seen(item["rect"], lv, item):
 				continue
 			var xf: Transform3D = item["xf"]
-			var at := to_global(xf.origin)
-			var focus := eye + ray * ((at.y - eye.y) / ray.y) if absf(ray.y) > 0.001 else eye
-			var distance := Vector2(at.x - focus.x, at.z - focus.z).length()
+			var distance := prop_cull_distance(to_global(prop_cull_at(item)), eye, ray)
 			if distance > PROP_CULL_DISTANCE:
 				continue
 			var lod := 1 if distance >= PROP_LOD_DISTANCE and batch["nodes"].has(1) else 0

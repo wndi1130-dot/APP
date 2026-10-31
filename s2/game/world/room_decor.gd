@@ -37,6 +37,7 @@ const TOP_HOSTS: Dictionary = {
 }
 const TOP_PURPOSE := 5
 const KETTLE_PURPOSE := 6
+const TOP_CELL_PURPOSE := 7
 const BACKS: Dictionary = {0: Vector2i(0, -1), 3: Vector2i(-1, 0)}
 const FRONTS: Array[Vector2i] = [Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1), Vector2i(1, 0)]
 const BED_BACKS: Array[Vector2i] = [Vector2i(-1, 0), Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1)]
@@ -48,9 +49,13 @@ const AVOID_HOLDER_FRONT := 3
 const AVOID_TAKEN := 4
 const PLANT_STEPS := 3
 
+static var _drawn_models: Dictionary = {} # enabled + kind -> 첫 유효 모형(없음도 저장)
+static var _model_boxes: Dictionary = {}  # path -> LOD 0 AABB
+static var _model_tops: Dictionary = {}   # path -> 윗면 표(읽기 전용)
+
 
 static func dress(data: Dictionary) -> Dictionary:
-	var stats := {"rooms": {}, "kinds": {}, "rows": 0}
+	var stats := {"rooms": {}, "kinds": {}, "rows": 0, "tops_needed": 0, "tops_placed": 0}
 	for cls: String in PLAN:
 		stats["rooms"][cls] = 0
 	for kind: String in KINDS:
@@ -120,21 +125,42 @@ static func dress(data: Dictionary) -> Dictionary:
 					stats["kinds"][kind] += 1
 					stats["rows"] += 1
 			var budget := _top_budget(cls, seed_value, props.slice(decor_start))
+			stats["tops_needed"] += budget
 			for row: Dictionary in _tabletops(props, in_room.get(ri, []), lv, cls, seed_value, name, budget, g):
 				props.append(row)
 				stats["kinds"][row["kind"]] += 1
 				stats["rows"] += 1
+				stats["tops_placed"] += 1
 	data["props"] = props
 	return stats
 
 
 ## 그리기와 받침 검사가 같은 첫 유효 모형을 쓴다. 윗면 없는 대체도 그대로 고른다.
 static func drawn_model(kind: String) -> String:
-	if PropModels.enabled():
+	var models_enabled := PropModels.enabled()
+	var key := "%s:%s" % [models_enabled, kind]
+	if _drawn_models.has(key):
+		return _drawn_models[key]
+	var chosen := ""
+	if models_enabled:
 		for path in PropKinds.candidates(kind):
 			if ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
-				return path
-	return ""
+				chosen = path
+				break
+	_drawn_models[key] = chosen
+	return chosen
+
+
+static func _model_box(path: String) -> AABB:
+	if not _model_boxes.has(path):
+		_model_boxes[path] = PropModels.batch_meshes(path)[0].get_aabb()
+	return _model_boxes[path]
+
+
+static func _tops(path: String) -> Array:
+	if not _model_tops.has(path):
+		_model_tops[path] = PropModels.tops(path)
+	return _model_tops[path]
 
 
 ## 기존 굴림은 다시 읽기만 한다. 복사본이 하나라도 걸렸으면 그 종류는 보충하지 않는다.
@@ -181,10 +207,66 @@ static func _top_fits(box: AABB, rect: Rect2, scale: Vector2 = Vector2.ONE) -> b
 	return lo.x >= rect.position.x and lo.y >= rect.position.y and hi.x <= rect.end.x and hi.y <= rect.end.y
 
 
+## 2칸 받침은 윗면의 긴 축을 반으로 나눈다. 실제 크기로 절반에 못 들어가면 가운데를 유지한다.
+static func _top_at(box: AABB, surface: Rect2, scale: Vector2, host_rect: Rect2i, seed_value: int) -> Vector2:
+	if host_rect.get_area() != 2:
+		return surface.get_center()
+	var half := surface
+	var along_x := surface.size.x >= surface.size.y
+	if along_x:
+		half.size.x *= 0.5
+	else:
+		half.size.y *= 0.5
+	if not _top_fits(box, half, scale):
+		return surface.get_center()
+	var roll := int(rand_from_seed(hash([seed_value, TOP_CELL_PURPOSE]))[0])
+	if roll % 2 != 0:
+		if along_x:
+			half.position.x += half.size.x
+		else:
+			half.position.y += half.size.y
+	return half.get_center()
+
+
+## 방의 받침 줄마다 한 번만 모형·맞춤·윗면 순서를 구한다. 종류별 배열 안의 가구 줄 순서는 그대로다.
+static func _top_candidates(props: Array, idxs: Array, lv: int, cls: String, grid: FieldGrid) -> Dictionary:
+	var hosts: Dictionary = {}
+	for kinds: Array in TOP_HOSTS.get(cls, {}).values():
+		for host_kind: String in kinds:
+			hosts[host_kind] = []
+	for i: int in idxs:
+		var host: Dictionary = props[i]
+		var on := String(host.get("kind", ""))
+		if host.get("decor", false) or int(host.get("level", 0)) != lv or not hosts.has(on):
+			continue
+		var r: Variant = RoomFurnish._rect(host.get("rect"))
+		if r == null:
+			continue
+		var path := drawn_model(on)
+		var tops := _tops(path)
+		if tops.is_empty():
+			continue
+		var box := _model_box(path)
+		var facing := int(host.get("facing", 0))
+		var fit := PropFit.fit(box.position, box.end, r, facing, grid)
+		var basis := Basis.from_scale(fit["scale"]) * Basis(Vector3.UP, -float(fit["facing"]) * PI * 0.5)
+		var scale := Vector2(basis.x.length(), basis.z.length())
+		var spots: Array = range(tops.size())
+		if on == "cold_stove":
+			spots.sort_custom(func(a: int, b: int) -> bool:
+				return tops[a]["y"] > tops[b]["y"] if tops[a]["y"] != tops[b]["y"] else a < b)
+		var surfaces: Array = []
+		for spot: int in spots:
+			surfaces.append({"spot": spot, "rect": tops[spot]["rect"], "slot": "%d:%s:%s:%d" % [lv, r, on, spot]})
+		hosts[on].append({"rect": r, "facing": facing, "scale": scale, "surfaces": surfaces})
+	return hosts
+
+
 static func _tabletops(props: Array, idxs: Array, lv: int, cls: String, seed_value: int,
 		name: String, limit: int, grid: FieldGrid = null) -> Array:
-	if limit <= 0:
+	if limit <= 0 or not PropModels.enabled():
 		return []
+	var hosts := _top_candidates(props, idxs, lv, cls, grid)
 	var options: Array = []
 	for kind: String in _top_order(cls, seed_value):
 		var choices: Array = []
@@ -192,35 +274,19 @@ static func _tabletops(props: Array, idxs: Array, lv: int, cls: String, seed_val
 		if path.is_empty():
 			options.append(choices)
 			continue
-		var box: AABB = PropModels.batch_meshes(path)[0].get_aabb()
+		var box := _model_box(path)
 		for on: String in top_hosts(cls, kind):
-			for i: int in idxs:
-				var host: Dictionary = props[i]
-				if host.get("decor", false) or int(host.get("level", 0)) != lv or host.get("kind", "") != on:
-					continue
-				var r: Variant = RoomFurnish._rect(host.get("rect"))
-				if r == null:
-					continue
-				var host_path := drawn_model(on)
-				var tops := PropModels.tops(host_path)
-				if tops.is_empty():
-					continue
-				var host_box: AABB = PropModels.batch_meshes(host_path)[0].get_aabb()
-				var fit := PropFit.fit(host_box.position, host_box.end, r, int(host.get("facing", 0)), grid)
-				var basis := Basis.from_scale(fit["scale"]) * Basis(Vector3.UP, -float(fit["facing"]) * PI * 0.5)
-				var scale := Vector2(basis.x.length(), basis.z.length())
-				var spots: Array = range(tops.size())
-				if on == "cold_stove":
-					spots.sort_custom(func(a: int, b: int) -> bool:
-						return tops[a]["y"] > tops[b]["y"] if tops[a]["y"] != tops[b]["y"] else a < b)
-				for spot: int in spots:
-					var surface: Rect2 = tops[spot]["rect"]
+			for host: Dictionary in hosts.get(on, []):
+				var r: Rect2i = host["rect"]
+				var scale: Vector2 = host["scale"]
+				for top: Dictionary in host["surfaces"]:
+					var surface: Rect2 = top["rect"]
 					if not _top_fits(box, surface, scale):
 						continue
 					var row := {"kind": kind, "rect": Rect2i(r.position, Vector2i.ONE), "solid": "none",
-						"mount": "top", "on": on, "host_rect": r, "spot": spot, "at": surface.get_center(),
-						"facing": int(host.get("facing", 0)), "level": lv, "note": "%s의 %s" % [name, NAMES[kind]], "decor": true}
-					choices.append({"slot": "%d:%s:%s:%d" % [lv, r, on, spot],
+						"mount": "top", "on": on, "host_rect": r, "spot": top["spot"], "at": _top_at(box, surface, scale, r, seed_value),
+						"facing": host["facing"], "level": lv, "note": "%s의 %s" % [name, NAMES[kind]], "decor": true}
+					choices.append({"slot": top["slot"],
 						"order": options.size(), "choice": choices.size(), "row": row})
 		options.append(choices)
 	var out: Array = []
