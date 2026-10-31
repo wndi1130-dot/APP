@@ -153,6 +153,12 @@ func _show_menu() -> void:
 	slice.custom_minimum_size = Vector2(240, 64)
 	slice.pressed.connect(_start_slice)
 	go.add_child(slice)
+	var campaign: Button = Button.new()
+	campaign.name = "CampaignButton"
+	campaign.text = "캠페인(두 정차 시험)"
+	campaign.custom_minimum_size = Vector2(240, 64)
+	campaign.pressed.connect(_start_campaign)
+	go.add_child(campaign)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(1000, 500)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -194,7 +200,15 @@ func _make_slice(resume: Dictionary = {}) -> Node:
 		"save": true, "resume": resume, "slice_save_path": slice_save_path,
 		"train_save_path": train_save_path, "field_save_path": field_save_path,
 	}
+	if resume.get("mode") == "campaign" or (resume.get("g") is Dictionary and (resume["g"] as Dictionary).get("campaign", {}).get("mode") == "campaign"):
+		flow.opts["mode"] = "campaign"
 	return flow
+
+
+func _start_campaign() -> void:
+	var flow: Node = _make_slice()
+	flow.opts["mode"] = "campaign"
+	get_tree().change_scene_to_node.call_deferred(flow)
 
 
 func _start_slice(resume: Dictionary = {}) -> void:

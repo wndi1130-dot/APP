@@ -5,6 +5,7 @@ extends RefCounted
 const SAVE_VERSION := 1
 const TrainDecor = preload("res://game/train/train_decor.gd")
 const Late = preload("res://game/train/turn/turn_late.gd")
+const RouteState = preload("res://game/train/route_state.gd")
 const DEFAULT_PATH := "user://s1a_game_v2.json"
 const DEFAULT_BROKEN_PATH := "user://s1a_game_broken.json"
 const PHASES := ["prep", "travel", "stop", "council", "settle", "end"]
@@ -77,6 +78,10 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 		var field_returns: Variant = g["fieldReturns"]
 		if not (field_returns is Dictionary) or not (field_returns.get("applied") is Dictionary) or not (field_returns.get("records") is Array):
 			return "필드 귀환 기록이 이상하다"
+	if g.has("campaign"):
+		var issue: String = RouteState.problem(g)
+		if issue != "":
+			return issue
 	return null
 
 
