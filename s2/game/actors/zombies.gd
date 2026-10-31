@@ -77,6 +77,9 @@ var lunge_rng := RandomNumberGenerator.new()  # its own, so who lunges does not 
 var embed_rng := RandomNumberGenerator.new()  # its own, so who has an axe in the back shifts nothing else
 var embedded_draw: MultiMeshInstance3D        # the axes in backs; null without the model
 var lungers_on: bool = false  # opts["lungers"]: some of the dead lunge (lunger_rules.gd)
+## How fast the dead walk to a loud sound. In the prologue they come slowly even then
+## (decisions 383, 525); seeing someone and giving chase stays SPEED_HURRY (387 (3)).
+var noise_hurry: float = SPEED_HURRY
 var draw: Dictionary = {}     # look -> MultiMeshInstance3D (the first body's)
 var draws: Array = []         # body (dead_cast.gd) -> look -> MultiMeshInstance3D; {} for one not in the build
 var body_rounds: Array = []   # body -> its walks' rounds (dead_body.gd rounds_of)
@@ -97,12 +100,19 @@ var _sense_cells_ready: bool = false
 var _sense_padding: float = 0.0
 
 
+## The pace of a loud sound's pull in an act; an act it does not know is the prologue,
+## as for journey_progress (decisions 383, 525).
+static func loud_pace(act: String) -> float:
+	return SPEED_HURRY if act in ["act1", "act2", "act3"] else SPEED_SHAMBLE
+
+
 func setup(field_game, vat_assets: Dictionary) -> void:
 	game = field_game
 	loot_rng.seed = hash(int(game.opts.get("seed", 0))) + 62
 	lunge_rng.seed = hash(int(game.opts.get("seed", 0))) + 63
 	embed_rng.seed = hash(int(game.opts.get("seed", 0))) + 64
 	lungers_on = bool(game.opts.get(LungerRules.OPTION, false))
+	noise_hurry = loud_pace(String(game.opts.get("act", "prologue")))
 	var body := DeadBody.assets()
 	baked = not body.is_empty()
 	vat = body if baked else vat_assets
@@ -388,7 +398,7 @@ func hear_one(z: Dictionary, at: Vector3, level: int) -> bool:
 	z["state"] = "investigate"
 	z["target"] = at
 	z["linger"] = SimNoise.LINGER[level]
-	z["speed"] = SPEED_HURRY if level >= SimNoise.Level.LOUD else SPEED_SHAMBLE
+	z["speed"] = noise_hurry if level >= SimNoise.Level.LOUD else SPEED_SHAMBLE
 	z["path_t"] = 0.0
 	return true
 
