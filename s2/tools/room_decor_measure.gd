@@ -122,7 +122,8 @@ static func census(data: Dictionary) -> Array:
 						for x in range(r.position.x, r.end.x):
 							var cell_rect := Rect2i(Vector2i(x, y), Vector2i.ONE)
 							for d: Vector2i in [Vector2i(0, -1), Vector2i(-1, 0)]:
-								eligible = eligible or RoomFurnish._wall_side(g, of, ri, cell_rect, d)
+								eligible = eligible or (RoomFurnish._wall_side(g, of, ri, cell_rect, d)
+									and RoomDecor._outer_wall(g, Vector2i(x, y), d))
 			out.append({"map": String(data.get("place_id", "")), "level": lv, "room": ri, "class": cls,
 				"kinds": kinds, "kind_count": kinds.size() + int(tv), "tv_role": tv, "mirror_eligible": eligible})
 	return out

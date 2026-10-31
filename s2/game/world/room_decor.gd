@@ -155,7 +155,8 @@ static func _walls(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vec
 		var line: Dictionary = {}
 		var along := Vector2i(1, 0) if facing == 0 else Vector2i(0, 1)
 		for c in cells:
-			if RoomFurnish._wall_side(g, of, ri, Rect2i(c, Vector2i.ONE), BACKS[facing]):
+			if RoomFurnish._wall_side(g, of, ri, Rect2i(c, Vector2i.ONE), BACKS[facing]) \
+					and _outer_wall(g, c, BACKS[facing]):
 				line[c] = true
 		# 이어진 벽 구간마다 한 번만 끝을 찾아 칸마다 [구간 안 자리, 구간 길이]를 둔다(칸마다 다시 찾으면 긴 벽에서 제곱).
 		var spot: Dictionary = {}
@@ -183,6 +184,13 @@ static func _walls(g: FieldGrid, of: PackedInt32Array, ri: int, cells: Array[Vec
 			var hi := at.y - 1 - at.x
 			out.append({"cell": c, "facing": facing, "middle": 1.0 / (1.0 + absf(float(hi - lo)) / 2.0)})
 	return out
+
+
+## 등 벽이 그 집의 바깥 벽인가: 벽 칸이 같은 집이고 그 너머가 집 밖. 집 안을 볼 때 안 벽은 늘 턱 높이로 낮춰
+## 그려(building_view int_cut) 거기 건 장식은 허공에 뜬다. 북·서 바깥 벽은 열려도 높이 그대로다.
+static func _outer_wall(g: FieldGrid, c: Vector2i, back: Vector2i) -> bool:
+	var b := g.building_at(c)
+	return g.building_at(c + back) == b and g.building_at(c + back * 2) != b
 
 
 static func _hanging(kind: String, cls: String, walls: Array, cover: Dictionary, hung: Array, seed_value: int) -> Dictionary:
