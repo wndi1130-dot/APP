@@ -82,6 +82,8 @@ var draws: Array = []         # body (dead_cast.gd) -> look -> MultiMeshInstance
 var body_rounds: Array = []   # body -> its walks' rounds (dead_body.gd rounds_of)
 var bodies_to_read: Array[String] = []   # bodies not read in yet: one a frame (render)
 var bodies_planned: int = 1
+var wear_draws: Array = []    # body -> garment (dead_cast.gd SHELLS) -> MultiMeshInstance3D, null for one it has none of; read when first worn
+var _garment_reads: int = 0   # garments still to be read in this frame
 var drawn_count: int = 0
 var vat: Dictionary
 var baked: bool = false       # the dead are a baked body (dead_body.gd), not the boxes
@@ -104,6 +106,7 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	vat = body if baked else vat_assets
 	draw = _draws_of(vat)
 	draws = [draw]
+	wear_draws = [{}]
 	body_rounds = [DeadBody.rounds]
 	bodies_to_read = DeadCast.others() if baked else ([] as Array[String])
 	bodies_planned = 1 + bodies_to_read.size()
@@ -1259,15 +1262,62 @@ func _read_a_body() -> void:
 		return
 	var got := DeadCast.read(bodies_to_read.pop_front(), vat)
 	draws.append(_draws_of(got) if not got.is_empty() else {})
+	wear_draws.append({})
 	body_rounds.append(DeadBody.rounds_of(got) if not got.is_empty() else DeadBody.rounds)
+
+
+## Garment `kind` over body `b` (dead_cast.gd), read in the first time one of
+## the dead in that body is drawn in it, one a frame as the bodies are (a stop
+## with no police station never reads the vest); until then it is drawn
+## without. null when that body has none of it.
+func _garment_of(b: int, kind: String) -> MultiMeshInstance3D:
+	var wear: Dictionary = wear_draws[b]
+	if wear.has(kind):
+		return wear[kind]
+	if _garment_reads <= 0:
+		return null
+	_garment_reads -= 1
+	var got := DeadCast.read_garment(DeadCast.garment_dir(b, kind), vat)
+	wear[kind] = _garment_draw(got) if not got.is_empty() else null
+	return wear[kind]
+
+
+## One garment's multimesh: the living's garment shader (person_vat.gdshader
+## worn_look) on the dead's motions, each of the dead in the garment's own
+## colour and pattern (dead_cast.gd garment_of, the multimesh colour).
+func _garment_draw(shell: Dictionary) -> MultiMeshInstance3D:
+	var node := MultiMeshInstance3D.new()
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.use_colors = true
+	mm.mesh = shell["mesh"]
+	mm.instance_count = MAX_DRAW
+	mm.visible_instance_count = 0
+	mm.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
+	node.multimesh = mm
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://game/actors/person_vat.gdshader")
+	mat.set_shader_parameter("vat", shell["texture"])
+	mat.set_shader_parameter("rows_per_frame", float(shell["rows_per_frame"]))
+	var tables := VatBaker.shader_tables(shell)
+	for key in tables:
+		mat.set_shader_parameter(key, tables[key])
+	mat.set_shader_parameter("mixes", true)
+	mat.set_shader_parameter("worn_look", true)
+	node.material_override = mat
+	add_child(node)
+	return node
 
 
 ## Visible-only drawing with CPU frustum test, one MultiMesh per body and look.
 func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 	_read_a_body()
+	_garment_reads = 1
 	var counts := []
 	for _b in draws.size():
 		counts.append({"dead": 0, "clothed": 0, "fresh": 0, "frozen": 0, "corpse": 0})
+	var worn_n := {}   # garment multimesh -> how many drawn in it
 	var marks := 0
 	var axes := 0
 	for z in list:
@@ -1355,9 +1405,20 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		mm.set_instance_transform(n, Transform3D(basis, pos))
 		# Its walk goes by its own body's stride (dead_body.gd reads the rounds of the folder in use).
 		DeadBody.rounds = body_rounds[b]
-		mm.set_instance_custom_data(n, DeadBody.custom(z, down, frozen_anim, shade, baked))
+		var custom := DeadBody.custom(z, down, frozen_anim, shade, baked)
+		mm.set_instance_custom_data(n, custom)
 		mm.set_instance_color(n, DeadCast.tear_of(z, bool(node.get_meta(&"hands_marked", false))))
 		counts[b][look] = n + 1
+		# What it has on over the body moves with it, the same place and frame;
+		# by what it has on now (worn_of), so one stripped of its coat is without.
+		var over := DeadCast.garment_of(worn_of(z), TINTS[look]) if baked else {}
+		var garment: MultiMeshInstance3D = _garment_of(b, over["shell"]) if not over.is_empty() else null
+		if garment != null and int(worn_n.get(garment, 0)) < MAX_DRAW:
+			var w: int = int(worn_n.get(garment, 0))
+			garment.multimesh.set_instance_transform(w, Transform3D(basis, pos))
+			garment.multimesh.set_instance_custom_data(w, custom)
+			garment.multimesh.set_instance_color(w, over["colour"])
+			worn_n[garment] = w + 1
 	DeadBody.rounds = body_rounds[0]
 	if embedded_draw != null:
 		embedded_draw.multimesh.visible_instance_count = axes
@@ -1368,4 +1429,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 				draws[b][look].multimesh.visible_instance_count = counts[b][look]
 			if look != "corpse":
 				drawn_count += counts[b][look]
+		for kind: String in wear_draws[b]:
+			if wear_draws[b][kind] != null:
+				(wear_draws[b][kind] as MultiMeshInstance3D).multimesh.visible_instance_count = int(worn_n.get(wear_draws[b][kind], 0))
 	markers.multimesh.visible_instance_count = marks

@@ -8,6 +8,9 @@ const BodyBake = preload("res://scripts/body_bake.gd")
 const BodyCast = preload("res://game/actors/body_cast.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
+const FieldGame = preload("res://game/field_game.gd")
+const Wear = preload("res://game/sim/wear.gd")
+const LootTables = preload("res://game/sim/loot_tables.gd")
 
 
 func _build_bodies_in_use() -> bool:
@@ -155,3 +158,127 @@ func test_the_bodies_are_read_one_a_frame_each_with_its_looks_and_stride() -> vo
 		strides[float((z.body_rounds[b] as Dictionary).get(crawl, 0.0))] = true
 	assert_eq(meshes.size(), DeadCast.BODIES.size(), "each body its own mesh")
 	assert_gt(strides.size(), 1, "each body crawls by its own stride")
+
+
+# Every body of the dead has each garment beside it (dead_cast.gd SHELLS), its
+# motions lined up with the body's, and fewer vertices than the body.
+func test_every_body_of_the_dead_has_its_garments_lined_up() -> void:
+	var first := BodyBake.load_baked(DeadBody.BUILT_IN)
+	for b in DeadCast.BODIES.size():
+		var body := BodyBake.load_baked(DeadCast.ROOT + DeadCast.BODIES[b])
+		for kind: String in DeadCast.SHELLS:
+			assert_true(BodyBake.SHELLS.has(kind), kind + " is a shell the bake knows")
+			var dir := DeadCast.garment_dir(b, kind)
+			assert_eq(dir, DeadCast.ROOT + DeadCast.BODIES[b] + "/wear/" + kind)
+			var got := DeadCast.read_garment(dir, first)
+			assert_false(got.is_empty(), "%s %s lines up with the first" % [DeadCast.BODIES[b], kind])
+			if not got.is_empty() and not body.is_empty():
+				assert_lt(int(got["vertices"]), int(body["vertices"]), "%s %s: fewer vertices than the body" % [DeadCast.BODIES[b], kind])
+	assert_eq(DeadCast.garment_dir(0, "hood"), "", "no garment the dead are not drawn in")
+	assert_eq(DeadCast.garment_dir(DeadCast.BODIES.size(), "vest"), "", "no body past the last")
+
+
+# Drawn over the body is the outermost of coat and jacket the dead have a
+# garment for, as the living's is picked: every coat the dead can come in
+# (loot_tables.gd WEAR_*) is drawn, a short jacket not; in the garment's own
+# colour, in the body's look, its pattern in alpha.
+func test_what_is_drawn_over_the_body_is_what_is_worn() -> void:
+	var grey := Color(0.5, 0.5, 0.5)
+	assert_true(DeadCast.garment_of({}, grey).is_empty(), "nothing on: nothing drawn")
+	var coats := {}
+	for rows: Dictionary in [LootTables.WEAR_PLAIN] + LootTables.WEAR_KIND.values() + LootTables.WEAR_PLACE.values():
+		for r: Array in rows.get("coat", []):
+			coats[String(r[0])] = true
+	coats.erase("")
+	assert_true(coats.has("vest_armor") and coats.has("fire_suit") and coats.has("coat_padded"), "the vest, the fire suit and the padded coat among them")
+	for id: String in coats:
+		var over := DeadCast.garment_of({"coat": Wear.make(id)}, grey)
+		assert_false(over.is_empty(), id + " is drawn")
+		if over.is_empty():
+			continue
+		var tint: Array = Wear.KINDS[id]["tint"]
+		assert_almost_eq(Vector3(over["colour"].r, over["colour"].g, over["colour"].b), Vector3(tint[0], tint[1], tint[2]), Vector3.ONE * 0.0001, id + " in its own colour")
+		assert_almost_eq(float(over["colour"].a) * 3.0, float(PersonVisual.PATTERNS[String(Wear.KINDS[id].get("pattern", "plain"))]), 0.0001, id + " in its own pattern")
+	assert_eq(DeadCast.garment_of({"coat": Wear.make("vest_armor")}, grey)["shell"], "vest")
+	assert_eq(DeadCast.garment_of({"coat": Wear.make("fire_suit")}, grey)["shell"], "coat_long", "the fire suit to the knees")
+	assert_eq(DeadCast.garment_of({"coat": Wear.make("coat_padded")}, grey)["shell"], "coat_long")
+	assert_true(DeadCast.garment_of({"jacket": Wear.make("jacket_plain")}, grey).is_empty(), "a short jacket is not drawn")
+	assert_eq(DeadCast.garment_of({"jacket": Wear.make("coat_leather")}, grey)["shell"], "coat_long", "a long one in the jacket's place is")
+	assert_eq(DeadCast.garment_of({"coat": Wear.make("vest_armor"), "jacket": Wear.make("coat_leather")}, grey)["shell"], "vest", "the outermost")
+	var frozen := DeadCast.garment_of({"coat": Wear.make("coat_long")}, Zombies.TINTS["frozen"])["colour"] as Color
+	var corpse := DeadCast.garment_of({"coat": Wear.make("coat_long")}, Zombies.TINTS["corpse"])["colour"] as Color
+	assert_gt(frozen.get_luminance(), corpse.get_luminance(), "in the body's look: the frozen frosted, the lying dead darker")
+
+
+# The field draws each of the dead in what it has on now (zombies.gd worn_of):
+# one garment multimesh per body and garment, as many in it as have it on;
+# taken off a body, it is drawn without.
+func test_the_dead_are_drawn_in_what_they_have_on() -> void:
+	if not _build_bodies_in_use():
+		pending("a folder put in place of the build's own: no garments beside it")
+		return
+	var game = FieldGame.new()
+	game.opts = {"seed": 11, "raiders": false, "auto_pause": false}
+	add_child_autofree(game)
+	game.set_process(false)
+	var z = game.zombies
+	z.list.clear()
+	game.pending_spawn.clear()
+	assert_true(z.baked, "the baked bodies")
+	var at: Vector3 = game.lift(Vector2i(60, 7), 0)
+	var cam := Camera3D.new()
+	add_child_autofree(cam)
+	cam.look_at_from_position(at + Vector3(0, 40, 0.01), at)
+	var on := [{}, {"coat": Wear.make("coat_long")}, {"coat": Wear.make("coat_padded")}, {"coat": Wear.make("vest_armor")},
+		{"coat": Wear.make("fire_suit")}, {"jacket": Wear.make("jacket_plain")}]
+	var dead: Array[Dictionary] = []
+	for i in 64:
+		var one: Dictionary = z.spawn(["dead", "clothed", "fresh", "frozen"][i % 4], at + Vector3(float(i % 8) * 0.9 - 3.2, 0, floorf(float(i) / 8.0) * 0.9 - 3.2))
+		if i < 48:
+			one["worn"] = (on[i % on.size()] as Dictionary).duplicate(true)   # the rest as their own dice have it
+		dead.append(one)
+	for _frame in DeadCast.BODIES.size() * (1 + DeadCast.SHELLS.size()) + 2:
+		z.render(cam, {}, false)   # every body and garment read in, one a frame
+	assert_eq(_drawn_in(z), _wearing(z, cam), "each garment drawn as many times as it is worn")
+	assert_gt(_wearing(z, cam).size(), 8, "garments on several bodies")
+	var vests := 0
+	for one: Dictionary in dead:
+		if String(z.worn_of(one).get("coat", {}).get("id", "")) == "vest_armor":
+			vests += 1
+	assert_gt(vests, 4, "armour vests among them")
+	var stripped := 0
+	for one: Dictionary in dead:
+		if z.worn_of(one).has("coat"):
+			z.worn_of(one).erase("coat")
+			stripped += 1
+	assert_gt(stripped, 10)
+	z.render(cam, {}, false)
+	assert_eq(_drawn_in(z), _wearing(z, cam), "taken off, drawn without")
+
+
+# body:garment -> how many the field drew in it.
+func _drawn_in(z) -> Dictionary:
+	var out := {}
+	for b in z.wear_draws.size():
+		for kind: String in z.wear_draws[b]:
+			var node: MultiMeshInstance3D = z.wear_draws[b][kind]
+			if node != null and node.multimesh.visible_instance_count > 0:
+				out["%d:%s" % [b, kind]] = node.multimesh.visible_instance_count
+	return out
+
+
+# body:garment -> how many in sight have it on (worn_of), in the body each is drawn in.
+func _wearing(z, cam: Camera3D) -> Dictionary:
+	var out := {}
+	for one: Dictionary in z.list:
+		if not cam.is_position_in_frustum(one["pos"] + Vector3(0, 0.6, 0)):
+			continue
+		var over := DeadCast.garment_of(z.worn_of(one), Zombies.TINTS["dead"])
+		if over.is_empty():
+			continue
+		var b := DeadCast.body_of(int(one["id"]), z.bodies_planned)
+		if b >= z.draws.size() or (z.draws[b] as Dictionary).is_empty():
+			b = 0
+		var key := "%d:%s" % [b, over["shell"]]
+		out[key] = int(out.get(key, 0)) + 1
+	return out
