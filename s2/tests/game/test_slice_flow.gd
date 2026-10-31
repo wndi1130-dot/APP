@@ -28,6 +28,7 @@ func _assert_halt_panel(f, kind: String) -> void:
 	assert_false(is_instance_valid(f.paper))
 	assert_false(is_instance_valid(f.card), "no stop, receipt or arrival card")
 	assert_false(f.weather.moving)
+	assert_false(f.train.running(), "the train scene stands still, an ending without stranding too")
 	assert_eq(f.next_stop_line(), "")
 	assert_eq(f.train.rules["train"].get("stranded"), f.train_g.get("stranded"), "train scene receives the stopped state")
 	assert_false("\n".join(_texts(f)).contains("이식"))

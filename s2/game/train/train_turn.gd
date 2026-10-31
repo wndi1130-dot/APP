@@ -383,6 +383,17 @@ static func finish(g: Dictionary, t: Dictionary, end: String) -> Dictionary:
 	g["end"] = end
 	g["phase"] = "end"
 	_journal(g, end_text(g, end), "good" if end == "complete" else "bad")
+	write_lookback(g, t)
+	# S1 people.raisedLines preserves the record's insertion order and original words.
+	var raised: Dictionary = g["raised"] if g.get("raised") is Dictionary else {}
+	for name: String in raised: _journal(g, "%s은(는) %s에서 컸다." % [name, t["COMM_NAME"][raised[name]]])
+	# darkFinish is a no-op for the S1a states accepted by this port.
+	return g
+
+
+## S1 lookback.writeLookback: the last settle's values read, then its lines into the journal.
+## The revolt card calls this alone (S1 cards.ts 'revolt'), without the end words or raised lines.
+static func write_lookback(g: Dictionary, t: Dictionary) -> void:
 	track_lookback(g)
 	for line: String in lookback_lines(g, t): _journal(g, line, "dark")
 	# S1 classroom.eduLookLines: an S1a state without edu produces no lines.
@@ -390,11 +401,6 @@ static func finish(g: Dictionary, t: Dictionary, end: String) -> Dictionary:
 	if edu is Dictionary:
 		if int(edu.get("segs", 0)) > 0: _journal(g, "수업은 %d구간 섰다. 하루 먼저 일어난 사람 %d." % [int(edu["segs"]), int(edu["early"])])
 		if int(edu.get("hands", 0)) > 0: _journal(g, "아이들이 승강장에 선 정차 %d." % int(edu["hands"]))
-	# S1 people.raisedLines preserves the record's insertion order and original words.
-	var raised: Dictionary = g["raised"] if g.get("raised") is Dictionary else {}
-	for name: String in raised: _journal(g, "%s은(는) %s에서 컸다." % [name, t["COMM_NAME"][raised[name]]])
-	# darkFinish is a no-op for the S1a states accepted by this port.
-	return g
 
 
 ## S1 lookback.trackLookback: record the first low/choice, without running domestic hooks.

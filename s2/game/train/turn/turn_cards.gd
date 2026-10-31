@@ -405,7 +405,11 @@ static func _resolve_choice(g0: Dictionary, t: Dictionary, card: Dictionary, v: 
 	apply_effects(g, t, selected["effs"], from, str(card["comm"]) if card.get("comm") != null else "")
 	var comm: String = str(card["comm"]) if card.get("comm") != null else "tail"
 	match str(selected["special"]):
-		"revolt": load("res://game/train/train_turn.gd").finish(g, t, "revolt")
+		"revolt":
+			# S1 cards.ts 'revolt': the end and its lookback only (the end words are the settle's finish).
+			g["end"] = "revolt"
+			g["phase"] = "end"
+			load("res://game/train/train_turn.gd").write_lookback(g, t)
 		"trip_go_crew", "trip_go_captain", "trip_fire", "trip_stay": Trip.choose(g, t, selected)
 		"risk_injury":
 			if C.rnd(g) < 0.3 + 0.15 * mini(int(g.get("eventLog", {}).get("abandoned_tender", {}).get("n", 0)), 3):

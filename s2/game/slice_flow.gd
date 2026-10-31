@@ -1210,6 +1210,8 @@ func _show_train(phase: String, seg: int) -> void:
 	rules["train"]["seg"] = seg
 	rules["train"]["stranded"] = train_g["stranded"].duplicate(true) if train_g.get("stranded") is Dictionary else null
 	weather.moving = phase == "travel" and train_halt_line(train_g) == ""
+	# A halted board stands still, an ending without stranding too (the scene's auto motion runs it).
+	if train_halt_line(train_g) != "": rules["view"]["motion"] = "stopped"
 	rules["view"]["region"] = _stop_band(seg + 1 if phase == "travel" else seg)
 	for c: String in (rules.get("comms", {}) as Dictionary).keys():
 		if (train_g.get("comms", {}) as Dictionary).has(c):
