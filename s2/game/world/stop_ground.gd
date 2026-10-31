@@ -24,7 +24,9 @@ const TRAIN_LIGHTS: Array[String] = ["car_window", "firebox"]
 const FORMS: Array[String] = ["city", "edge", "remote", "siding"]
 
 
-static func apply(data: Dictionary, form: String, run_seed: int, target_m: float = -1.0) -> Dictionary:
+## `end_gap` >= 0 puts the train's end that many cells off the grown end (a save's ground, field_save.gd);
+## else _end_gap works it out.
+static func apply(data: Dictionary, form: String, run_seed: int, target_m: float = -1.0, end_gap: int = -1) -> Dictionary:
 	if form.is_empty() or form == String(data.get("stop_form", "")):
 		return data
 	if form not in FORMS:
@@ -45,7 +47,8 @@ static func apply(data: Dictionary, form: String, run_seed: int, target_m: float
 			data["stop_form_asked"] = form
 			form = "city"
 		else:
-			out = _edge(data, run_seed, target_m) if form == "edge" else _outlying(data, run_seed, target_m, 400.0, 800.0, REMOTE_BAND)
+			out = _outlying(data, run_seed, target_m, 150.0, 300.0, 0, end_gap) if form == "edge" \
+				else _outlying(data, run_seed, target_m, 400.0, 800.0, REMOTE_BAND, end_gap)
 	_set_village(out, form)
 	# A remote strip cut off from the old village (a wall along the old border) would name
 	# one of its own cells the village: the stop stays a city one instead.
@@ -77,10 +80,6 @@ static func _row_gap(data: Dictionary) -> float:
 	return float(train.position.y) + float(train.size.y) * 0.5 - village_middle(data).y
 
 
-static func _edge(data: Dictionary, run_seed: int, target_m: float) -> Dictionary:
-	return _outlying(data, run_seed, target_m, 150.0, 300.0)
-
-
 ## Cells past the train's end on the grown side: END_GAP, or more, so that the door or
 ## squad spot nearest that end stands VIEW_REACH from the map's end (its cell's middle
 ## is the gap and its offset from the train's end, and half a cell, away).
@@ -98,7 +97,7 @@ static func _end_gap(data: Dictionary, direction: int) -> int:
 
 
 ## The same seeded train move for both outlying forms; only remote ground is narrowed.
-static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_m: float, maximum_m: float, band: int = 0) -> Dictionary:
+static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_m: float, maximum_m: float, band: int = 0, end_gap: int = -1) -> Dictionary:
 	var old: FieldGrid = data["grid"]
 	var train: Rect2i = data["train"]
 	var middle: Vector2 = village_middle(data)
@@ -113,7 +112,7 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 		push_warning("stop form %s: the village's row is %.0f m off the train's" % ["remote" if band > 0 else "edge", absf(dy)])
 	var distance: float = target_m if target_m >= 0.0 else rng.randf_range(lowest, highest)
 	var direction: int = 1 if middle.x <= center.x else -1
-	var gap: int = _end_gap(data, direction)
+	var gap: int = end_gap if end_gap >= 0 else _end_gap(data, direction)
 	var along: float = sqrt(maxf(0.0, distance * distance - dy * dy))
 	var empty_length: int = 0
 	if data.get("buildings", []).is_empty():
@@ -144,6 +143,8 @@ static func _outlying(data: Dictionary, run_seed: int, target_m: float, minimum_
 	var out: Dictionary = MapShift.grow(data, left, 0, length - left, 0, true, true)
 	# Its size is a Vector2i too: grow can shift a stale cache key into a match.
 	out.erase("_edge_plan")
+	# The gap the ground went up with, so a save's ground goes up the same (field_save.gd).
+	out["stop_end_gap"] = gap
 	if band > 0:
 		# Where the old map now lies, for apply's check that the walk reaches its village. A
 		# Rect2i, so a later shift (the side path's) moves it with the cells.
