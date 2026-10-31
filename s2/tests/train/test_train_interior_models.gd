@@ -64,7 +64,9 @@ func test_each_catalog_entry_has_a_matching_glb() -> void:
 		assert_true(FileAccess.file_exists(path + ".import"), "%s 가져오기 설정" % id)
 		# 정점 색은 가져오기 스크립트가 바탕색으로 잇는다 — 빠지면 노드로 짓는 모형이 흰 재질로 나온다.
 		var settings := ConfigFile.new()
-		if settings.load(path + ".import") == OK:
+		var read := settings.load(path + ".import")
+		assert_eq(read, OK, "%s 가져오기 설정을 읽음" % id)
+		if read == OK:
 			assert_eq(String(settings.get_value("params", "import_script/path", "")), KIT_DIR + "/vertex_colors.gd", "%s 정점 색 가져오기" % id)
 		var file := FileAccess.open(path, FileAccess.READ)
 		if file == null:
