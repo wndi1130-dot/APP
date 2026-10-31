@@ -89,8 +89,16 @@ static func garment_of(worn: Dictionary, tint: Color, id: int = -1) -> Dictionar
 		if id >= 0 and SHADED.has(kind):
 			var s: Color = COAT_SHADES[posmod(id, COAT_SHADES.size())]
 			c = Color(s.r, s.g, s.b, c.a)
-		return {"shell": look[0], "colour": Color(c.r * tint.r / 0.5, c.g * tint.g / 0.5, c.b * tint.b / 0.5, c.a)}
+		# Cloth takes the state's look only by CLOTH_STATE, as the clothes of the body under it do
+		# (dead_vat.gdshaderinc cloth_state): the skin is what says dead.
+		var state := Vector3(1.0, 1.0, 1.0).lerp(Vector3(tint.r, tint.g, tint.b) / 0.5, CLOTH_STATE)
+		return {"shell": look[0], "colour": Color(c.r * state.x, c.g * state.y, c.b * state.z, c.a)}
 	return {}
+
+
+## How much of the state's tint (zombies.gd TINTS, / 0.5) the clothes take, the
+## body's and the garments' over it alike; the skin takes all of it.
+const CLOTH_STATE: float = 0.25
 
 
 ## Plain long winter coats in faded shades, so a crowd in them is not one coat

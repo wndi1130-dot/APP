@@ -4,6 +4,7 @@ extends GutTest
 
 const DeadCast = preload("res://game/actors/dead_cast.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
+const VatBaker = preload("res://scripts/vat_baker.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 const BodyCast = preload("res://game/actors/body_cast.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -217,6 +218,45 @@ func test_what_is_drawn_over_the_body_is_what_is_worn() -> void:
 	var frozen := DeadCast.garment_of({"coat": Wear.make("coat_long")}, Zombies.TINTS["frozen"])["colour"] as Color
 	var corpse := DeadCast.garment_of({"coat": Wear.make("coat_long")}, Zombies.TINTS["corpse"])["colour"] as Color
 	assert_gt(frozen.get_luminance(), corpse.get_luminance(), "in the body's look: the frozen frosted, the lying dead darker")
+
+
+# Only the skin takes the dead's look (A6-3): every body the dead wear brings a
+# skin mask beside its colour picture, handed to the shader, covering a little
+# of the picture (head, neck, hands, bare forearms), not the clothes; the
+# clothes, the body's and the garments' over it, take the state only by
+# CLOTH_STATE. And the motions on the ground are marked for the shader, so a
+# body lying or crawling is lit by its moved surface (A6-1).
+func test_only_the_skin_takes_the_dead_look_and_the_ground_motions_are_marked() -> void:
+	assert_between(DeadCast.CLOTH_STATE, 0.0, 0.5, "the clothes keep most of their own colour")
+	if not _build_bodies_in_use():
+		pending("a folder put in place of the build's own")
+		return
+	for body: String in DeadCast.BODIES:
+		var dir := DeadCast.ROOT + body
+		var got := DeadBody.with_albedo(BodyBake.load_baked(dir), dir)
+		assert_true(got.get("skin") is Texture2D, body + " has its skin mask")
+		var tables := VatBaker.shader_tables(got)
+		assert_true(bool(tables.get("has_skin", false)), body + ": the shader gets it")
+		var image := Image.load_from_file(ProjectSettings.globalize_path(dir.path_join(DeadBody.SKIN_FILE)))
+		assert_not_null(image, body)
+		if image == null:
+			continue
+		var sum := 0.0
+		for y in image.get_height():
+			for x in image.get_width():
+				sum += image.get_pixel(x, y).r
+		var share := sum / float(image.get_width() * image.get_height())
+		assert_between(share, 0.01, 0.25, body + ": a little of the picture, not the clothes")
+		for i in (got["clips"] as Array).size():
+			var name := String(got["clips"][i]["name"])
+			var code: float = tables["clip_loop"][i]
+			assert_eq(code >= 2.0, VatBaker.GROUND_CLIPS.has(name), body + " " + name + " marked as on the ground or not")
+			assert_eq(fmod(code, 2.0), 1.0 if got["clips"][i]["loop"] else 0.0, body + " " + name + " still loops as baked")
+	var frozen := Zombies.TINTS["frozen"] as Color
+	var over := DeadCast.garment_of({"coat": Wear.make("fire_suit")}, frozen)["colour"] as Color
+	var tint: Array = Wear.KINDS["fire_suit"]["tint"]
+	var state := 1.0 + (frozen.r / 0.5 - 1.0) * DeadCast.CLOTH_STATE
+	assert_almost_eq(over.r, float(tint[0]) * state, 0.0001, "a garment takes the state as the clothes do")
 
 
 # A crowd in plain long coats is not one coat copied (COAT_SHADES): a shade by

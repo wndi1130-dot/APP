@@ -1277,6 +1277,7 @@ func _draws_of(body: Dictionary) -> Dictionary:
 			for key in tables:
 				mat.set_shader_parameter(key, tables[key])
 			mat.set_shader_parameter("mixes", true)
+			mat.set_shader_parameter("cloth_state", DeadCast.CLOTH_STATE)
 		var t: Color = TINTS[look]
 		mat.set_shader_parameter("tint", Vector3(t.r, t.g, t.b))
 		node.material_override = mat

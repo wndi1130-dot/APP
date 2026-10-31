@@ -53,6 +53,16 @@ uniform vec3 clip_hi[128];
 // Without one the body is tint alone, as before.
 uniform bool has_albedo = false;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap, repeat_enable, hint_default_white;
+#ifdef WEATHERED
+// The dead: which texels of the colour picture are skin (models/people/<body>/skin_mask.png, made by
+// tools/dead_skin_mask.py from the rigged source: head, neck, hands and bare forearms, by colour inside
+// them). With it only the skin goes grey-green and takes the state's tint; the clothes keep their own
+// colour and take the state only by cloth_state (dead_cast.gd CLOTH_STATE, the garments over them alike).
+// Without it the whole picture is tinted, as before.
+uniform bool has_skin = false;
+uniform sampler2D skin_tex : filter_linear, repeat_enable, hint_default_black;
+uniform float cloth_state : hint_range(0.0, 1.0) = 0.25;
+#endif
 uniform float grade_saturation : hint_range(0.0, 1.0) = 0.45;
 uniform float grade_value : hint_range(0.0, 1.0) = 0.82;
 uniform vec3 grade_cool : source_color = vec3(0.78, 0.85, 0.95);
@@ -87,6 +97,9 @@ varying vec2 tear_at;    // x how high it rests (0 feet .. 1 crown), y 1 on the 
 
 varying float shade;
 varying vec3 view_pos;
+// 1 in a motion on the ground (falls, the crawl, getting up, eating; vat_baker.gd shader_tables marks
+// them in clip_loop as 2 more): its normals are taken from the moved surface (see flat_normals).
+varying float lying;
 #ifdef WORN
 varying vec4 worn;
 varying vec3 rest;
@@ -123,12 +136,15 @@ void vertex() {
 	float frames = clip_frames[clip];
 	float start = clip_start[clip];
 	float rate = clip_rate[clip];
-	float loops = clip_loop[clip];
+	float loop_code = clip_loop[clip];   // 1 loops, + 2 on the ground
+	float loops = mod(loop_code, 2.0);
+	lying = step(1.5, loop_code);
 	if (frames < 0.5) {
 		frames = 32.0;
 		start = float(clip) * 32.0;
 		rate = mix(7.0, 11.0, float(clip));
 		loops = 1.0;
+		lying = 0.0;
 	}
 	// Each body walks at its own pace (0.82..1.18), from its own number.
 	float pace = mix(0.82, 1.18, fract(INSTANCE_CUSTOM.r * 7.31));
@@ -230,12 +246,13 @@ float tear_noise(vec2 p) {
 }
 
 // The colour picture (linear) of one of the dead as worn as `worn_as` says, at
-// `uv`, `worn_at` where on the body (the varyings, passed in).
-vec3 worn_down(vec3 picture, vec2 uv, vec4 worn_as, vec2 worn_at) {
+// `uv`, `worn_at` where on the body (the varyings, passed in); `skin_in` how much
+// of it is skin (the skin mask), below 0 where the body has no mask.
+vec3 worn_down(vec3 picture, vec2 uv, vec4 worn_as, vec2 worn_at, float skin_in) {
 	float n = tear_noise(uv * 40.0) * 0.65 + tear_noise(uv * 110.0) * 0.35;
 	float light = dot(picture, vec3(0.2126, 0.7152, 0.0722));
-	// Skin gone off: warm and light turns grey-green and blotched.
-	float skin = clamp((picture.r - picture.b) * 7.0 - 0.25, 0.0, 1.0) * smoothstep(0.02, 0.09, light);
+	// Skin gone off: the skin turns grey-green and blotched (without a mask: what is warm and light).
+	float skin = skin_in >= 0.0 ? skin_in : clamp((picture.r - picture.b) * 7.0 - 0.25, 0.0, 1.0) * smoothstep(0.02, 0.09, light);
 	vec3 off = vec3(light) * vec3(0.9, 1.0, 0.84);
 	picture = mix(picture, off * (1.0 - 0.35 * n), worn_as.b * skin);
 	// Dirt from the feet up, in patches.
@@ -256,8 +273,11 @@ const vec3 DRIED_BLOOD = vec3(0.075, 0.012, 0.01);
 #endif
 
 void fragment() {
-	if (flat_normals) {
-		NORMAL = normalize(cross(dFdy(view_pos), dFdx(view_pos)));
+	// The face of the moved surface, outside any branch (derivatives want every pixel); used switched on,
+	// or in a motion on the ground, where the standing normals would light the body as if upright.
+	vec3 face = cross(dFdy(view_pos), dFdx(view_pos));
+	if ((flat_normals || lying > 0.5) && dot(face, face) > 1e-14) {
+		NORMAL = normalize(face);
 	}
 	vec3 base = tint;
 #ifdef WORN
@@ -276,13 +296,17 @@ void fragment() {
 		}
 #endif
 #ifdef WEATHERED
-		picture = worn_down(picture, UV, tear, tear_at);
+		float skin_here = has_skin ? texture(skin_tex, UV).r : -1.0;
+		picture = worn_down(picture, UV, tear, tear_at, skin_here);
 #endif
 		vec3 c = fx_model_grade(picture, grade_saturation, grade_value, grade_cool, grade_cool_mix);
 #ifdef WEATHERED
 		c = mix(c, DRIED_BLOOD, bled(UV, tear, tear_at) * 0.85);
-#endif
+		vec3 state = tint / 0.5;
+		base = c * (has_skin ? mix(mix(vec3(1.0), state, cloth_state), state, skin_here) : state);
+#else
 		base = c * (tint / 0.5);
+#endif
 	}
 	ALBEDO = base * shade;
 	ROUGHNESS = 1.0;
