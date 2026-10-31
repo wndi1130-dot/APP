@@ -17,15 +17,17 @@ const PATH := "user://field_save.json"
 const TRAIN_PATH := "user://s1a_game_v2.json"
 const DeadPose = preload("res://game/actors/dead_pose.gd")
 const EatRules = preload("res://game/sim/eat_rules.gd")
+const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
 const FieldWork = preload("res://game/field_work.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
-const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged"]
+const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
@@ -82,7 +84,8 @@ static func capture(game) -> Dictionary:
 	var out: Dictionary = {
 		"version": VERSION, "kind": KIND,
 		"stop_id": stop_id, "place": game.place, "mission": game.mission,
-		"stop_form": game.stop_form,
+		"stop_form": game.stop_form, "stop_ground": String(game.data.get("stop_form", "")),
+		"stop_end_gap": int(game.data.get("stop_end_gap", -1)),
 		"seed": int(game.rng.seed), "phase": "ended" if game.ended else "field", "end_reason": String(said.get("endReason", "")),
 		"saved_at": game.clock.label(), "clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
 		"player_pid": game.player.pid if game.player != null else "",
@@ -217,6 +220,17 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 	opts["mission"] = String(save.get("mission", ""))
 	if save.has("stop_form"):
 		opts["stop_form"] = save["stop_form"]
+	# The ground goes up as the save stood on it (field_game.gd shape_stop). One from before
+	# remote ground was built kept a remote stop's map as it was.
+	if save.has("stop_ground"):
+		opts["stop_ground"] = String(save["stop_ground"])
+	elif String(opts.get("stop_form", "")) == "remote":
+		opts["stop_ground"] = ""
+	# And with the train's end gap it had: one from before the gap was worked out had END_GAP.
+	if save.has("stop_end_gap"):
+		opts["stop_end_gap"] = int(save["stop_end_gap"])
+	elif String(opts.get("stop_ground", opts.get("stop_form", ""))) in ["edge", "remote"]:
+		opts["stop_end_gap"] = StopGround.END_GAP
 	if not (save.get("departure", {}) as Dictionary).is_empty():
 		opts["departure"] = (save["departure"] as Dictionary).duplicate(true)
 	if String(save.get("receipt_id", "")) != "":
@@ -228,6 +242,22 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 ## A save that holds the whole running state (version 2 with "runtime"), not only the old fallbacks.
 static func exact(save: Dictionary) -> bool:
 	return int(save.get("version", 1)) >= 2 and save.has("runtime")
+
+
+## Exact solids must fit every saved floor before any grid is replaced: its cell count,
+## and its width and height where the save keeps them.
+static func _grid_sizes_match(game, save: Dictionary) -> bool:
+	var levels: Dictionary = save["runtime"].get("levels", {})
+	for level in levels:
+		if not game.levels.has(level):
+			return false
+		var grid: FieldGrid = game.levels[level]
+		var row: Dictionary = levels[level]
+		if row.get("solid", PackedByteArray()).size() != grid.width * grid.height:
+			return false
+		if row.has("width") and (int(row["width"]) != grid.width or int(row.get("height", -1)) != grid.height):
+			return false
+	return true
 
 
 ## Version 2 reconnects existing identities before restoring their clocks or callbacks.
@@ -253,9 +283,11 @@ static func apply(game, save: Dictionary) -> void:
 	game.actions.coal_delivered = float(save["coal"]["delivered"])
 	game.actions.coal_spent = float(save["coal"]["spent"])
 	if exact(save):
-		_apply_exact(game, save)
-		game.set_stop_form(form)
-		return
+		if _grid_sizes_match(game, save):
+			_apply_exact(game, save)
+			game.set_stop_form(form)
+			return
+		push_warning("field save grid size changed; restoring legacy state")
 	var boxes: Dictionary = game.data.get("containers", {})
 	for id in save.get("containers", {}):
 		if boxes.has(id):  # a heap pulled together during the stop is not on the map yet
@@ -268,6 +300,7 @@ static func apply(game, save: Dictionary) -> void:
 			game.data["spots"][id]["state"] = String(save["spots"][id])
 	game.ground_items = (save.get("ground_items", []) as Array).duplicate(true)
 	game.decisions = (save.get("decisions", []) as Array).duplicate(true)
+	# Version 1 and fallback keep the share this start set up, as the old switch did (decisions 383, 387, 134).
 	_put_zombies(game, save.get("zombies", []))
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
@@ -309,10 +342,11 @@ static func _runtime(game) -> Dictionary:
 		doors.append(_record(game, door))
 	out["holdout_doors"] = doors
 	out["hud"] = {"grab_total": game.hud.grab_total}
-	out["zombie_system"] = _properties(game, game.zombies, ["next_id", "loot_rng", "lunge_rng", "embed_rng", "lungers_on"])
+	out["zombie_system"] = _properties(game, game.zombies, ["next_id", "loot_rng", "lunge_rng", "embed_rng", "lunger_share"])
 	for level in game.levels:
 		var grid = game.levels[level]
-		var level_state: Dictionary = {"solid": grid.solid.duplicate(), "revision": grid.revision, "doors": {}, "windows": {}, "floor_glass": grid.floor_glass.duplicate()}
+		var level_state: Dictionary = {"solid": grid.solid.duplicate(), "width": grid.width, "height": grid.height,
+			"revision": grid.revision, "doors": {}, "windows": {}, "floor_glass": grid.floor_glass.duplicate()}
 		for kind: String in ["doors", "windows"]:
 			for cell in grid.get(kind):
 				level_state[kind][cell] = _record(game, grid.get(kind)[cell])
@@ -494,6 +528,21 @@ static func _restore_properties(game, object, saved: Dictionary) -> void:
 				object.set(key, restored)
 
 
+## Old v2 switches mean the forced share; never restore the removed property. With
+## neither, the share this start set up stays (decisions 383, 387, 134).
+static func _restore_zombie_system(game, saved: Dictionary) -> void:
+	var state: Dictionary = saved.duplicate()
+	if not state.has("lunger_share") and state.has("lungers_on"):
+		state["lunger_share"] = LungerRules.SHARE if bool(state["lungers_on"]) else 0.0
+	state.erase("lungers_on")
+	var start_share: float = game.zombies.lunger_share
+	_restore_properties(game, game.zombies, state)
+	# A saved share that is not a share (NaN comes back as -INF) leaves the start's.
+	var share: float = game.zombies.lunger_share
+	if not is_finite(share) or share < 0.0 or share > 1.0:
+		game.zombies.lunger_share = start_share
+
+
 static func _apply_exact(game, save: Dictionary) -> void:
 	var runtime: Dictionary = save["runtime"]
 	for kind: String in ["containers", "spots"]:
@@ -556,7 +605,7 @@ static func _apply_exact(game, save: Dictionary) -> void:
 		door["node"] = null
 		if int(door["wall"]) > 0:
 			game.holdout._show_wall(door)
-	_restore_properties(game, game.zombies, runtime["zombie_system"])
+	_restore_zombie_system(game, runtime.get("zombie_system", {}))
 	game.hud.grab_total = float(runtime.get("hud", {}).get("grab_total", game.hud.grab_total))
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))

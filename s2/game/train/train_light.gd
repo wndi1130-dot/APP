@@ -16,16 +16,18 @@ const STAGES: Array[Dictionary] = [
 		"night": {
 			"lamps": [
 				{"at": Vector3(0.5, 0.95, -0.6), "kind": "candle", "kelvin": 1850.0,
-					"energy": 0.35, "range": 3.5, "shadow": true, "sway": 0.3},
+					"energy": 0.75, "range": 5.5, "shadow": true, "sway": 0.3},
 				{"at": Vector3(0.22, 0.8, -0.7), "kind": "candle", "kelvin": 1850.0,
 					"energy": 0.25, "range": 3.0, "shadow": false, "sway": 0.3},
 			],
 			"window": {"kelvin": 9000.0, "energy": 0.08, "range": 4.0},
 		},
 		"day": {
+			# A car's lamps are built once; the hour only eases their colour and strength
+			# (train_scene.gd _dress_car), so each lamp keeps the same place and reach day and night.
 			"lamps": [
 				{"at": Vector3(0.5, 0.95, -0.6), "kind": "candle", "kelvin": 1850.0,
-					"energy": 0.0, "range": 3.5, "shadow": true, "sway": 0.3},
+					"energy": 0.0, "range": 5.5, "shadow": true, "sway": 0.3},
 				{"at": Vector3(0.22, 0.8, -0.7), "kind": "candle", "kelvin": 1850.0,
 					"energy": 0.0, "range": 3.0, "shadow": false, "sway": 0.3},
 			],

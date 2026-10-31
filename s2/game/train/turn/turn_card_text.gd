@@ -13,6 +13,7 @@ const TrainClimate = preload("res://game/train/train_climate.gd")
 const TrainResearch = preload("res://game/train/train_research.gd")
 const C = preload("res://game/train/turn/turn_common.gd")
 const People = preload("res://game/train/turn/turn_people.gd")
+const Late = preload("res://game/train/turn/turn_late.gd")
 
 const RES_NAME: Dictionary = {"coal": "석탄", "food": "식량", "med": "의약품", "lux": "사치품", "trust": "신임",
 	"tension": "긴장", "fear": "공포", "injured": "부상자"}
@@ -29,6 +30,15 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var v: Dictionary = TurnCards.view(g, t, card)
 	if v.is_empty():
 		return {}
+	# Content carries S1's filled body/speaker/why/later/log and guarded choices already.
+	if card["kind"] in ["content", "content-deal"]:
+		var content: Dictionary = v.duplicate(true)
+		if not content.has("speaker"): content["speaker"] = null
+		if not content.has("focus"): content["focus"] = null
+		for choice: Dictionary in content["choices"]:
+			for key: String in ["say", "why", "later", "disabled"]:
+				if not choice.has(key): choice[key] = ""
+		return content
 	var out: Dictionary = v.duplicate(true)
 	out["speaker"] = null
 	out["body"] = ""
@@ -58,7 +68,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["speaker"] = _leader(g, t, c)
 			out["focus"] = c
 			out["body"] = String((FAVORS_AGAIN if past != null else FAVORS)[c])
-			says = ["이번까지다. 다음은 없다." if past != null else "들어주지. 대신 이 일은 기억해 둬라.",
+			says = ["이번까지다. 다음은 없다." if past != null else "들어주마. 대신 이 일은 기억해 둬라.",
 				"한 번 들어줬다고 버릇이 되면 안 된다." if past != null else "사사로운 부탁은 받지 않는다."]
 		"rescue": _rescue(g, t, card, out, says)
 		"bitten":
@@ -182,7 +192,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["speaker"] = _leader(g, t, "medtech")
 			out["focus"] = c
 			out["body"] = "%s에서 %s의 아이가 나온다. %s" % [t["COMM_NAME"][c], mother, "거긴 너무 춥다." if cold else "칸은 그럭저럭 따뜻하다."]
-			says = ["의무칸을 비워라. 아이는 따뜻한 데서 받는다.", "옮길 틈이 없다. 거기서 받아라."]
+			says = ["의무칸을 비워라. 아이는 따뜻한 데서 받는다.", "데려갈 틈이 없다. 거기서 받아라."]
 		"naming":
 			var mother: String = str(card.get("who", ""))
 			out["speaker"] = {"name": mother, "role": String(t["COMM_NAME"][c]), "comm": c}
@@ -212,11 +222,12 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var choices: Array = out["choices"]
 	for i: int in choices.size():
 		var ch: Dictionary = choices[i]
-		ch["say"] = String(says[i]) if i < says.size() else ""
+		ch["say"] = String(says[i]) if i < says.size() else String(ch.get("say", ""))
 		ch["why"] = String(why[i]) if i < why.size() else ""
 		# A way the rule shuts keeps why (S1 card.ts shows it on the way): the guard who
 		# will not go, the infection window that has closed.
 		ch["disabled"] = String(ch.get("disabled", ""))
+	out["body"] = Late.body(g, card, out["body"])
 	# withAfford in the kinds' own views, then guardCosts over every view: when
 	# every way is shut the card would trap the captain, so then none is.
 	if AFFORD_KINDS.has(kind):
@@ -423,7 +434,7 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 		"sick_child":
 			out["speaker"] = _leader(g, t, "medtech")
 			out["focus"] = "medtech"
-			out["body"] = _again(past, "꼬리칸 아이 셋이 열이 난다. \"해열제는 상자에 있다. 꺼낼지 정해 달라.\"", {
+			out["body"] = _again(past, "꼬리칸 아이 셋이 열이 난다. \"해열제는 상자에 있습니다. 꺼낼지 정해 주십시오.\"", {
 				"med_use": "이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. \"그 집 애만 애냐.\" 의약품은 %d 남았다." % _round(float(g["med"])),
 				"med_save": "지난번 약을 못 받은 아이가 아직 열이 안 내렸다. 엄마가 의무칸 문 앞을 떠나지 않는다. \"우리 애 차례는 언제냐.\"",
 			}, "아이들이 또 열이 난다.")
@@ -555,7 +566,7 @@ const FAVORS: Dictionary = {
 	"tail": "\"아들이 기침을 한다. 의무칸 침상 하나만.\" 대표가 처음으로 사적인 부탁을 한다.",
 	"medtech": "\"동생이 앞칸 빈자리에 갈 수 있게 해 달라.\" 아무도 모르게.",
 	"guard": "\"부관 자리 얘기, 다음에 내 이름도 올려 달라.\" 경비대장이 낮게 말한다.",
-	"front": "\"술 두 병만. 손님을 맞아야 한다.\" 앞칸 대표가 웃는다.",
+	"front": "\"술 두 병만. 손님을 맞아야 합니다.\" 앞칸 대표가 웃는다.",
 	"engine": "\"견습생 하나를 꼬리칸에서 데려가고 싶다. 내가 고른 아이로.\"",
 }
 ## S1 FAVORS_AGAIN: the second time another favour comes.
@@ -563,6 +574,6 @@ const FAVORS_AGAIN: Dictionary = {
 	"tail": "\"아들이 나았다. 이번엔 조카다.\" 대표가 눈을 피하며 말한다. 의무칸 침상이 또 필요하다.",
 	"medtech": "\"동생이 앞칸에서 쫓겨날 것 같다. 한마디만 해 달라.\" 의사가 처음으로 목소리를 낮춘다.",
 	"guard": "\"부관 얘기, 잊지 않았겠지.\" 경비대장이 총을 닦으며 묻는다.",
-	"front": "\"손님이 또 온다. 이번엔 세 병.\" 앞칸 대표가 지난번처럼 웃지는 않는다.",
+	"front": "\"손님이 또 옵니다. 이번엔 세 병.\" 앞칸 대표가 지난번처럼 웃지는 않는다.",
 	"engine": "\"그 견습생, 쓸 만하다. 하나 더.\" 수석 기관사가 이번엔 이름까지 적어 왔다.",
 }

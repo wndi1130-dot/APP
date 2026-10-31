@@ -37,7 +37,7 @@ func broken_into(building: int, c: Vector2i) -> bool:
 	var at: Vector3 = FieldGrid.center(c)
 	ringing.append({"building": building, "at": at, "rings": AlarmRules.rings(game.clock.elapsed)})
 	if game.hud != null and game.player != null and game.player.position.distance_to(at) <= AlarmRules.REACH * 35.0:
-		game.hud.toast("경보기가 울린다. 근처 것들이 몰려온다.")
+		game.hud.toast("경보기가 울린다. 근처 망자들이 몰려온다.")
 	return true
 
 

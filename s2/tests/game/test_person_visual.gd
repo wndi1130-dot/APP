@@ -621,6 +621,8 @@ func test_the_putting_on_motions_and_the_garments_over_the_living_own() -> void:
 			out.append([clip["name"], clip["start"], clip["frames"], clip["loop"], clip["length"]])
 		return out
 	for kind: String in BodyBake.SHELLS:
+		if not PersonVisual.WEAR_TINTS.has(kind):
+			continue   # a shell only the dead are drawn in (the armour vest, dead_cast.gd SHELLS)
 		var worn := BodyBake.load_baked(PersonVisual.OWN_FOLDER.path_join("wear").path_join(kind))
 		assert_false(worn.is_empty(), kind)
 		if worn.is_empty():

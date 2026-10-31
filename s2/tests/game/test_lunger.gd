@@ -1,8 +1,8 @@
 extends "res://addons/gut/test.gd"
 ## The dead that lunge (user 2026-10-12): one in ten of those that stand, and
 ## one in ten of whoever died at this stop. Seeing a person within 8 m it drops low for 1.2 s,
-## runs straight for 3 s and is spent for 6 s. Once. Two at a time. Off unless
-## the field is started with opts["lungers"].
+## runs straight for 3 s and is spent for 6 s. Once. Two at a time. The share
+## follows act progress unless forced on (decisions 383, 387, 134, 250).
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -14,9 +14,10 @@ const TICK: float = 1.0 / 60.0
 var game
 
 
-func _start(lungers) -> void:
+func _start(lungers, extra: Dictionary = {}) -> void:
 	game = FieldGame.new()
 	game.opts = {"seed": 11, "raiders": false, "auto_pause": false}
+	game.opts.merge(extra, true)
 	if lungers != null:
 		game.opts[LungerRules.OPTION] = lungers
 	add_child_autofree(game)
@@ -51,7 +52,7 @@ func _floor(z: Dictionary) -> float:
 
 func test_left_off_nobody_lunges_and_the_fights_dice_are_not_touched() -> void:
 	_start(null)
-	assert_false(game.zombies.lungers_on)
+	assert_eq(float(game.zombies.lunger_share), 0.0)
 	var before: int = game.rng.state
 	for n in 40:
 		game.zombies.spawn("dead", game.player.position + Vector3(20, 0, 0))
@@ -173,3 +174,93 @@ func test_too_far_off_it_comes_on_as_the_dead_do() -> void:
 		assert_false(z.get("lunged", false))
 	else:
 		assert_ne(z["state"], "tell")
+
+
+func _copy_dice(source: RandomNumberGenerator) -> RandomNumberGenerator:
+	var dice := RandomNumberGenerator.new()
+	dice.seed = source.seed
+	dice.state = source.state
+	return dice
+
+
+func test_picks_keeps_its_default_and_accepts_a_different_share() -> void:
+	assert_true(LungerRules.picks(0.099, true))
+	assert_false(LungerRules.picks(0.10, true))
+	assert_false(LungerRules.picks(0.0, true, 0.0))
+	assert_true(LungerRules.picks(0.049, true, 0.05))
+	assert_false(LungerRules.picks(0.05, true, 0.05))
+	assert_false(LungerRules.picks(0.0, false, 1.0))
+
+
+func test_zero_share_never_uses_assignment_dice_for_any_birth() -> void:
+	for spot: Array in [["prologue", 0.0], ["prologue", 0.5], ["prologue", 1.0],
+		["act1", 0.0], ["act1", 6.0 / 12.0], ["act1", 7.0 / 12.0], ["unknown", 1.0]]:
+		_start(false, {"act": spot[0], "act_progress": spot[1], "lungers_many": true})
+		assert_eq(float(game.zombies.lunger_share), 0.0)
+		var before: int = game.zombies.lunge_rng.state
+		for kind: String in ["dead", "clothed", "fresh", "frozen"]:
+			var z: Dictionary = game.zombies.spawn(kind, game.player.position)
+			assert_false(z.has("lunger"))
+		assert_false(game.zombies.spawn("dead", game.player.position, {"target": game.player.position}).has("lunger"))
+		assert_false(game.zombies.add_rising(game.player.position, "")["lunger"])
+		assert_eq(game.zombies.lunge_rng.state, before, "zero share, including a risen body, takes no rolls")
+
+
+## The old on path: roll even for a drifter, skip frozen/hordes, roll twice for a risen body.
+func _assert_assignment_stream(share: float) -> void:
+	assert_almost_eq(float(game.zombies.lunger_share), share, 0.000000001)
+	var old_dice := _copy_dice(game.zombies.lunge_rng)
+	var field_dice := _copy_dice(game.rng)
+	var drifters: int = 0
+	for n: int in range(80):
+		var kind: String = ["dead", "clothed", "fresh", "frozen"][n % 4]
+		var horde: bool = n % 5 == 0
+		var opts: Dictionary = {"target": game.player.position} if horde else {}
+		var z: Dictionary = game.zombies.spawn(kind, game.player.position, opts)
+		for _roll: int in range(3):
+			field_dice.randf()
+		if kind != "frozen" and not horde:
+			var roll: float = old_dice.randf()
+			assert_eq(bool(z["lunger"]), bool(z["stander"]) and roll < share)
+			if not z["stander"]:
+				drifters += 1
+		else:
+			assert_false(z.has("lunger"))
+		assert_eq(game.zombies.lunge_rng.state, old_dice.state)
+		if n % 7 == 0:
+			old_dice.randf()  # spawn("fresh") consumes the first, regardless of stander (134, 250).
+			var expected: bool = old_dice.randf() < share
+			var risen: Dictionary = game.zombies.add_rising(game.player.position, "")
+			for _roll: int in range(3):
+				field_dice.randf()
+			assert_eq(bool(risen["lunger"]), expected, "the second roll overwrites the first")
+			assert_eq(game.zombies.lunge_rng.state, old_dice.state)
+		assert_eq(game.rng.state, field_dice.state, "only spawn's original three field rolls")
+	assert_gt(drifters, 0, "the stream check includes non-standing bodies")
+
+
+func test_positive_progress_share_keeps_the_legacy_on_consumption_order() -> void:
+	_start(false, {"act": "act1", "act_progress": 9.0 / 12.0})
+	_assert_assignment_stream(0.05)
+
+
+func test_forced_on_matches_legacy_assignments_regardless_of_act() -> void:
+	for spot: Array in [["prologue", 0.0], ["act1", 9.0 / 12.0], ["act3", 1.0]]:
+		_start(true, {"act": spot[0], "act_progress": spot[1]})
+		_assert_assignment_stream(LungerRules.SHARE)
+
+
+func test_many_overrides_only_forced_on_after_the_original_map_rolls() -> void:
+	for forced: bool in [false, true]:
+		for many: bool in [false, true]:
+			_start(forced, {"act": "act2", "lungers_many": many})
+			var old_dice := _copy_dice(game.zombies.lunge_rng)
+			game._spawn_dead()
+			for z: Dictionary in game.zombies.list:
+				if z["kind"] == "frozen":
+					assert_false(z.has("lunger"))
+					continue
+				var roll: float = old_dice.randf()
+				var expected: bool = bool(z["stander"]) and (roll < LungerRules.SHARE or (forced and many))
+				assert_eq(bool(z["lunger"]), expected)
+			assert_eq(game.zombies.lunge_rng.state, old_dice.state, "the map override consumes no extra rolls")

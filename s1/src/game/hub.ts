@@ -388,7 +388,7 @@ function hubView(g: Game, card: Card): CardView | null {
     case 'hub_omen':
       return {
         title: '짐 싸는 기척', body: `${card.text ?? ''}\n${PACK_MEANING} ${COMM_NAME[c]}이(가) 라이프치히에서 내리려 한다. 두 구간 안에 관계를 한 단계라도 올리면 떠날 사람이 준다.`,
-        required: true, focus: c, choices: [{ label: '알았다', effs: [] }],
+        required: true, focus: c, choices: [{ label: '알았다', log: `${COMM_NAME[c]}에서 짐 싸는 기척을 알아챘다.`, effs: [] }],
       };
     case 'hub_split':
       return splitView(g, card);
@@ -398,8 +398,8 @@ function hubView(g: Game, card: Card): CardView | null {
         title: '다른 열차로 옮기겠다는 사람', speaker: { name: who[0] ?? COMM_NAME[c], role: COMM_NAME[c], comm: c }, focus: c, required: true, faces: who,
         body: `${who.join('와(과) ')}이(가) 다른 승강장의 열차로 옮기겠다고 한다. 칸 전체가 아니라 몇 사람의 결정이다.`,
         choices: [
-          { label: '보내 준다', say: '원한다면 막지 않겠다. 잘 가라.', effs: [{ t: 'pop', c, v: -who.length }], special: 'hub_few_go' },
-          { label: '붙잡는다', say: '여기가 너희 열차다. 같이 가자.', effs: [{ t: 'rel', c, v: 2 }], special: 'hub_few_stay' },
+          { label: '보내 준다', log: '다른 열차로 가겠다는 사람들을 보내 줬다.', say: '원한다면 막지 않겠다. 잘 가라.', effs: [{ t: 'pop', c, v: -who.length }], special: 'hub_few_go' },
+          { label: '붙잡는다', log: '다른 열차로 가겠다는 사람들을 붙잡았다.', say: '여기가 너희 열차다. 같이 가자.', effs: [{ t: 'rel', c, v: 2 }], special: 'hub_few_stay' },
         ],
       };
     }
@@ -411,7 +411,7 @@ function hubView(g: Game, card: Card): CardView | null {
           ...(lines.length > 0 ? lines : ['아무도 내리지 않았다.']),
           '다른 열차의 무전실에서 같은 문장이 되풀이된다. 북쪽, 좌표 하나, 그리고 처음으로 \'우리\'라는 말.',
         ].join('\n'),
-        required: true, choices: [{ label: '열차를 돌린다', effs: [] }],
+        required: true, choices: [{ label: '열차를 돌린다', log: '라이프치히 중앙역에서 열차를 돌렸다.', effs: [] }],
       };
     }
     default:

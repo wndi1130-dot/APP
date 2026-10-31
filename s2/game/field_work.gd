@@ -406,9 +406,9 @@ func _number(n: int) -> String:
 
 func blocked_reason(safe: Dictionary) -> String:
 	if int(safe["path_awake"]) > 0:
-		return SPEAKER + ": 열차에서 거기까지 길에 망자가 %s 있습니다." % _number(int(safe["path_awake"]))
+		return SPEAKER + ": 열차에서 일터 가는 길에 망자가 %s 있습니다." % _number(int(safe["path_awake"]))
 	if int(safe["near_awake"]) > 0:
-		return SPEAKER + ": 일터 바로 곁에 깨어 있는 놈이 %s 있습니다." % _number(int(safe["near_awake"]))
+		return SPEAKER + ": 일터 바로 곁에 깨어 있는 망자가 %s 있습니다." % _number(int(safe["near_awake"]))
 	var left: int = maxi(ceili(float(safe["total"]) * CLEAR_SHARE) - int(safe["cleared"]), 0)
 	return SPEAKER + ": 둘레에 아직 %s 남았습니다." % _number(left)
 
