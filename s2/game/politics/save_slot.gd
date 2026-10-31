@@ -140,7 +140,7 @@ static func load_slot(t: Dictionary, path: String = DEFAULT_PATH, broken_path: S
 	if parser.parse(raw) != OK:
 		read = {"ok": false, "why": "저장 글이 깨졌다"}
 	else:
-		read = read_save(parser.data, t)
+		read = read_save(preload("res://game/sim/field_save.gd")._decode(parser.data), t)
 	if bool(read["ok"]):
 		return {"g": read["g"], "why": null}
 	if _preserve_broken(raw, broken_path):

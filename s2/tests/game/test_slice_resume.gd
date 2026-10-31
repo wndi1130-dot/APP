@@ -61,7 +61,7 @@ func _flow(extra: Dictionary = {}):
 
 func _pick() -> Dictionary:
 	var start: Array = SliceFlow.start_board()
-	return SliceSave.pick(SLICE, TRAIN, start[1])
+	return SliceSave.pick(SLICE, TRAIN, start[1], FIELD)
 
 
 ## Every type and every float digit: a 9 that comes back as 9.0 is a different board.
@@ -150,6 +150,7 @@ func _cut(at: String, seed_value: int) -> void:
 		assert_eq(resumed.result, SliceFlow.result_of(resumed.receipt))
 	_finish(resumed)
 	var ended: String = _json(resumed.train_g)
+	var ended_g: Dictionary = resumed.train_g.duplicate(true)
 	resumed.free()
 	# The same seed played through the same steps without the cut ends on the same board.
 	var straight = _flow({"seed": seed_value, "save": false})
@@ -157,6 +158,7 @@ func _cut(at: String, seed_value: int) -> void:
 	for i in range(straight.step + 1, SliceFlow.STEPS.size()):
 		straight.go(i)
 	assert_eq(ended, _json(straight.train_g), "%s seed %d ends as the run that was never cut" % [at, seed_value])
+	assert_eq(_type_gap(ended_g, straight.train_g), "", "%s seed %d ends with every type" % [at, seed_value])
 	straight.free()
 
 
@@ -229,10 +231,32 @@ func test_ten_seeds_resume_the_running_field() -> void:
 		assert_eq(_json(resumed.train_g), board_before)
 		assert_null(resumed.cinema, "no arrival scene on resume")
 		assert_true(resumed.field.opts["slice"])
+		assert_eq(resumed.run, before["start_opts"]["slice_run"])
+		assert_eq(resumed.field.opts["slice_run"], resumed.run)
 		assert_eq(resumed.field.opts["field_save_path"], FIELD)
 		_same_field(FieldSave.capture(resumed.field), before)
+		resumed.field.finish("departed")
+		assert_true(resumed._returned())
+		assert_eq(resumed.receipt["receiptId"], before["receipt_id"])
+		assert_eq(_json(resumed.receipt), _json(resumed.result["receipt"]))
+		var ended_receipt: Dictionary = resumed.receipt.duplicate(true)
 		_finish(resumed)
+		var ended_g: Dictionary = resumed.train_g.duplicate(true)
 		resumed.free()
+		var straight = _flow({"seed": seed_value, "save": false, "skip_field": false})
+		straight.go(straight._index_of("field"))
+		_exercise_field(straight.field)
+		straight.field.finish("departed")
+		assert_true(straight._returned())
+		assert_eq(_json(ended_receipt), _json(straight.receipt), "seed %d keeps the real receipt" % seed_value)
+		assert_eq(_type_gap(ended_receipt, straight.receipt), "", "seed %d keeps the receipt types" % seed_value)
+		for i in range(straight.step + 1, SliceFlow.STEPS.size()):
+			straight.go(i)
+		assert_eq(straight.current(), "end")
+		assert_eq(straight.port_error, "")
+		assert_eq(_json(ended_g), _json(straight.train_g), "seed %d ends on the same board" % seed_value)
+		assert_eq(_type_gap(ended_g, straight.train_g), "", "seed %d ends with every type" % seed_value)
+		straight.free()
 
 
 func _train_round_trip(at: String) -> void:
@@ -276,7 +300,7 @@ func test_broken_slice_without_backup_and_missing_train_are_not_picked() -> void
 func test_slice_shape_rejects_wrong_types_and_unknown_steps() -> void:
 	var flow = _flow()
 	var good: Dictionary = SliceSave.capture(flow)
-	for change: Dictionary in [{"version": 2}, {"kind": "s2_field"}, {"step": "missing"}, {"seg": -1}, {"seg": 2.5}, {"applied": {}}, {"applied": [2]}, {"contract": []}, {"receipt": []}, {"passed": 1}, {"result_reason": null}]:
+	for change: Dictionary in [{"version": 2}, {"kind": "s2_field"}, {"step": "missing"}, {"seg": -1}, {"seg": 2.5}, {"applied": {}}, {"applied": [2]}, {"contract": []}, {"receipt": []}, {"passed": 1}, {"result_reason": null}, {"run": 1}, {"train_sha": null}]:
 		SliceSave.clear(SLICE)
 		var bad: Dictionary = good.duplicate(true)
 		bad.merge(change, true)
@@ -291,8 +315,10 @@ func test_capture_is_metadata_only_and_keeps_the_result_reason() -> void:
 	var captured: Dictionary = SliceSave.capture(flow)
 	var keys: Array = captured.keys()
 	keys.sort()
-	assert_eq(keys, ["applied", "contract", "kind", "passed", "receipt", "result_reason", "seg", "step", "version"])
+	assert_eq(keys, ["applied", "contract", "kind", "passed", "receipt", "result_reason", "run", "seg", "step", "train_sha", "version"])
 	assert_eq(captured["contract"], flow.contract)
+	assert_eq(captured["run"], flow.run)
+	assert_eq(captured["train_sha"], FileAccess.get_file_as_string(TRAIN).sha256_text())
 	assert_true(SliceSave.write(captured, SLICE))
 	assert_eq(_pick()["result_reason"], "saved_reason")
 
@@ -612,3 +638,220 @@ func test_the_train_s_sleds_survive_the_slots() -> void:
 	assert_eq(int(picked["g"]["dom"]["sleds"]), 2)
 	var resumed = _flow({"resume": picked})
 	assert_eq(int(resumed.train_g["dom"]["sleds"]), 2, "the sleds are still the train's")
+
+
+func test_torn_train_fingerprint_uses_the_backup_board_without_a_return() -> void:
+	var flow = _flow()
+	flow.go(flow._index_of("stop_pick"))
+	var before: Dictionary = flow.train_g.duplicate(true)
+	var train_text: String = FileAccess.get_file_as_string(TRAIN)
+	flow._pass_stop()
+	var newer: Dictionary = SliceSave.read(SLICE)
+	assert_eq(newer["step"], "travel")
+	assert_eq(int(newer["seg"]), int(before["seg"]))
+	assert_eq(newer["applied"], SliceSave.applied_ids(before))
+	assert_ne(newer["train_sha"], train_text.sha256_text())
+	flow.free()
+	_raw(TRAIN + ".bak", train_text)
+	_raw(TRAIN, "{")
+	var picked: Dictionary = _pick()
+	assert_true(picked["reconciled"])
+	assert_eq(picked["step"], SliceSave.step_of_board(before))
+	assert_false(picked["passed"])
+	var resumed = _flow({"resume": picked})
+	assert_eq(resumed.current(), "stop_pick")
+	assert_eq(_json(resumed.train_g), _json(before))
+	assert_eq(SliceSave._returns(resumed.train_g).get("records", []), SliceSave._returns(before).get("records", []))
+	assert_eq(SliceSave.applied_ids(resumed.train_g), SliceSave.applied_ids(before))
+	assert_eq(_session_count(resumed.train_g), 0)
+	assert_false(resumed._returned())
+
+
+func test_running_field_resumes_when_only_the_slice_write_failed() -> void:
+	var flow = _flow({"skip_field": false})
+	flow.go(flow._index_of("stop_pick"))
+	var slice_text: String = FileAccess.get_file_as_string(SLICE)
+	# A file cannot be the parent directory of the failed slot.
+	flow.opts["slice_save_path"] = SLICE + "/unwritable.json"
+	flow.go(flow._index_of("field"))
+	_exercise_field(flow.field)
+	flow.propagate_notification(NOTIFICATION_APPLICATION_PAUSED)
+	assert_eq(flow.save_error, "F-SAVE-SLICE")
+	assert_eq(FileAccess.get_file_as_string(SLICE), slice_text)
+	assert_eq(SliceSave.read(SLICE)["step"], "stop_pick")
+	var before: Dictionary = FieldSave.read(FIELD)
+	assert_eq(before["phase"], "field")
+	flow.free()
+	var picked: Dictionary = _pick()
+	assert_eq(picked["step"], "stop_pick")
+	var resumed = _flow({"resume": picked, "skip_field": false})
+	assert_eq(resumed.current(), "field")
+	assert_eq(resumed.run, before["start_opts"]["slice_run"])
+	_same_field(FieldSave.capture(resumed.field), before)
+	assert_false(resumed._returned())
+
+
+func test_ended_field_returns_once_from_a_train_backup_before_the_return() -> void:
+	var flow = _flow({"skip_field": false})
+	flow.go(flow._index_of("field"))
+	var train_text: String = FileAccess.get_file_as_string(TRAIN)
+	flow.field.finish("departed")
+	var expected: Dictionary = flow.receipt.duplicate(true)
+	assert_true(flow._returned())
+	assert_eq(FieldSave.read(FIELD)["phase"], "ended")
+	flow.free()
+	_raw(TRAIN + ".bak", train_text)
+	_raw(TRAIN, "{")
+	var picked: Dictionary = _pick()
+	assert_true(picked["reconciled"])
+	assert_eq(picked["step"], "stop_pick")
+	var resumed = _flow({"resume": picked})
+	assert_eq(resumed.current(), "receipt")
+	assert_null(resumed.field)
+	assert_eq(_json(resumed.receipt), _json(expected))
+	assert_eq(_type_gap(expected, resumed.receipt), "")
+	assert_eq(resumed.train_g["fieldReturns"]["records"].size(), 1)
+	assert_eq(SliceSave.applied_ids(resumed.train_g), [expected["receiptId"]])
+	resumed.free()
+	var again = _flow({"resume": _pick()})
+	assert_eq(again.current(), "receipt")
+	assert_eq(_json(again.receipt), _json(expected))
+	assert_eq(again.train_g["fieldReturns"]["records"].size(), 1)
+	_finish(again)
+
+
+func test_writing_after_backup_recovery_keeps_the_good_backups() -> void:
+	var flow = _flow()
+	flow.go(flow._index_of("stop_pick"))
+	assert_true(flow._save_slice())
+	var slice_backup: String = FileAccess.get_file_as_string(SLICE + ".bak")
+	var train_backup: String = FileAccess.get_file_as_string(TRAIN + ".bak")
+	flow.free()
+	_raw(SLICE, "{")
+	_raw(TRAIN, "{")
+	var picked: Dictionary = _pick()
+	assert_false(picked.is_empty())
+	var resumed = _flow({"resume": picked})
+	assert_eq(resumed.save_error, "")
+	assert_eq(FileAccess.get_file_as_string(SLICE + ".bak"), slice_backup)
+	assert_eq(FileAccess.get_file_as_string(TRAIN + ".bak"), train_backup)
+	assert_eq(FileAccess.get_file_as_string(SLICE + ".broken"), "{")
+	assert_eq(FileAccess.get_file_as_string(TRAIN + ".broken"), "{")
+	assert_true(SliceSave._shape(SliceSave._parse(SLICE)))
+	assert_eq(_json(SliceSave._train(TRAIN, resumed.train_t)), _json(resumed.train_g))
+	for path: String in [SLICE, TRAIN]:
+		SliceSave.clear(path)
+		assert_false(FileAccess.file_exists(path + ".broken"))
+
+
+func test_standalone_field_survives_a_new_slice_and_its_end() -> void:
+	var source = _flow({"save": false, "skip_field": false})
+	source.go(source._index_of("field"))
+	var standalone: Dictionary = FieldSave.capture(source.field)
+	standalone["start_opts"].erase("slice")
+	standalone["start_opts"].erase("slice_run")
+	assert_true(FieldSave.write(standalone, FIELD))
+	assert_true(FieldSave.write(standalone, FIELD))
+	var field_text: String = FileAccess.get_file_as_string(FIELD)
+	var backup_text: String = FileAccess.get_file_as_string(FIELD + ".bak")
+	source.free()
+	var fresh = _flow()
+	assert_eq(FileAccess.get_file_as_string(FIELD), field_text)
+	assert_eq(FileAccess.get_file_as_string(FIELD + ".bak"), backup_text)
+	fresh.go(fresh._index_of("end"))
+	assert_eq(fresh.current(), "end")
+	assert_eq(fresh.save_error, "")
+	assert_eq(FileAccess.get_file_as_string(FIELD), field_text)
+	assert_eq(FileAccess.get_file_as_string(FIELD + ".bak"), backup_text)
+
+
+func test_a_field_from_an_old_run_is_not_resumed_with_the_same_departure_id() -> void:
+	var previous = _flow({"skip_field": false})
+	previous.go(previous._index_of("field"))
+	var foreign: Dictionary = FieldSave.capture(previous.field)
+	var previous_run: String = previous.run
+	previous.free()
+	var fresh = _flow()
+	fresh.go(fresh._index_of("stop_pick"))
+	var fresh_run: String = fresh.run
+	assert_ne(fresh_run, previous_run)
+	assert_eq(foreign["departure"]["departureId"], fresh._departure()["departureId"])
+	var saved: Dictionary = SliceSave.capture(fresh)
+	saved["step"] = "field"
+	assert_true(SliceSave.write(saved, SLICE))
+	# A failed removal can leave only the old field's backup.
+	_raw(FIELD + ".bak", FieldSave.to_json(foreign))
+	fresh.free()
+	var resumed = _flow({"resume": _pick(), "skip_field": false})
+	assert_eq(resumed.run, fresh_run)
+	assert_eq(resumed.current(), "stop_pick")
+	assert_null(resumed.field)
+	assert_false(resumed._returned())
+
+
+func test_train_slot_round_trip_through_the_s1_loaders() -> void:
+	var flow = _flow()
+	flow.go(flow._index_of("stop_pick"))
+	assert_true(SliceSave.write_train(flow.train_g, ROUND_TRIP))
+	var loaded: Dictionary = TrainSave.load_slot(flow.train_t, ROUND_TRIP, BROKEN)
+	assert_null(loaded["why"])
+	assert_not_null(loaded["g"])
+	assert_eq(_json(loaded["g"]), _json(flow.train_g))
+	assert_eq(_type_gap(flow.train_g, loaded["g"]), "")
+	var alias: Dictionary = TrainSave.load(flow.train_t, ROUND_TRIP, BROKEN)
+	assert_null(alias["why"])
+	assert_eq(_json(alias["g"]), _json(flow.train_g))
+	assert_eq(_type_gap(flow.train_g, alias["g"]), "")
+	assert_false(FileAccess.file_exists(BROKEN))
+
+
+func test_a_lever_is_saved_before_any_notification() -> void:
+	var flow = _flow()
+	var before: int = int(flow.train_g["comms"]["front"]["ration"])
+	flow._set_lever("front", "ration", 1 if before == 4 else 4)
+	assert_ne(int(flow.train_g["comms"]["front"]["ration"]), before)
+	var loaded: Dictionary = SliceSave._train(TRAIN, flow.train_t)
+	assert_eq(_json(loaded), _json(flow.train_g))
+	assert_eq(_type_gap(flow.train_g, loaded), "")
+	assert_eq(SliceSave.read(SLICE)["train_sha"], FileAccess.get_file_as_string(TRAIN).sha256_text())
+
+
+func test_a_room_change_is_saved_before_any_notification() -> void:
+	var flow = _flow()
+	flow.train_g["dom"]["sleds"] = 2
+	flow._room_changed()
+	var loaded: Dictionary = SliceSave._train(TRAIN, flow.train_t)
+	assert_eq(_json(loaded), _json(flow.train_g))
+	assert_eq(_type_gap(flow.train_g, loaded), "")
+
+
+func test_torn_receipt_keeps_the_metadata_copy_s_number_types() -> void:
+	var flow = _flow()
+	flow.go(flow._index_of("receipt"))
+	var expected: Dictionary = flow.receipt.duplicate(true)
+	var saved: Dictionary = SliceSave.capture(flow)
+	saved["train_sha"] = "torn"
+	assert_true(SliceSave.write(saved, SLICE))
+	var picked: Dictionary = _pick()
+	assert_true(picked["reconciled"])
+	assert_eq(picked["step"], "receipt")
+	assert_eq(_json(picked["receipt"]), _json(expected))
+	assert_eq(_type_gap(expected, picked["receipt"]), "")
+	assert_true(picked["receipt"]["version"] is int)
+
+
+func test_torn_receipt_uses_the_ended_field_when_metadata_is_missing() -> void:
+	var flow = _flow({"skip_field": false})
+	flow.go(flow._index_of("field"))
+	flow.field.finish("departed")
+	var expected: Dictionary = flow.receipt.duplicate(true)
+	var saved: Dictionary = SliceSave.capture(flow)
+	saved["receipt"] = {}
+	saved["train_sha"] = "torn"
+	assert_true(SliceSave.write(saved, SLICE))
+	assert_eq(FieldSave.read(FIELD)["phase"], "ended")
+	var picked: Dictionary = _pick()
+	assert_true(picked["reconciled"])
+	assert_eq(_json(picked["receipt"]), _json(expected))
+	assert_eq(_type_gap(expected, picked["receipt"]), "")
+	assert_true(picked["receipt"]["version"] is int)

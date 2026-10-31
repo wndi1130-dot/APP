@@ -252,6 +252,7 @@ var pending_field: Node = null
 var field_resume: Dictionary = {}
 var pending_shop_events: Array = []
 var save_error: String = ""
+var run: String = ""
 
 
 func _ready() -> void:
@@ -265,10 +266,12 @@ func _ready() -> void:
 	var resume: Dictionary = opts.get("resume", {})
 	var start_step: String = "train"
 	if resume.is_empty():
+		run = Crypto.new().generate_random_bytes(8).hex_encode()
 		train_g = to_travel(s[0], train_t)
 		if bool(opts.get("save", false)) and not train_g.is_empty():
-			FieldSave.clear(String(opts.get("field_save_path", FieldSave.PATH)))
+			_clear_slice_field()
 	else:
+		run = String(resume["run"])
 		train_g = (resume["g"] as Dictionary).duplicate(true)
 		contract = (resume.get("contract", {}) as Dictionary).duplicate(true)
 		receipt = (resume.get("receipt", {}) as Dictionary).duplicate(true)
@@ -277,23 +280,23 @@ func _ready() -> void:
 			result = result_of(receipt)
 			result["reason"] = String(resume.get("result_reason", result["reason"]))
 		start_step = String(resume["step"])
-		if start_step == "field":
+		if not _returned() and not passed and start_step in ["stop_pick", "field"]:
 			var saved: Dictionary = FieldSave.read(String(opts.get("field_save_path", FieldSave.PATH)))
 			var order: Dictionary = saved["departure"] if saved.get("departure") is Dictionary else {}
 			var start_opts: Dictionary = saved["start_opts"] if saved.get("start_opts") is Dictionary else {}
 			var belongs: bool = bool(start_opts.get("slice", false)) \
+				and start_opts.get("slice_run") == run \
 				and int(order.get("segment", -1)) == int(train_g["seg"]) \
 				and (contract.is_empty() or order.get("departureId") == contract.get("departureId"))
 			if belongs and FieldSave.should_resume(saved, SliceSave.applied_ids(train_g)):
 				field_resume = FieldSave.resume_opts(saved)
 				contract = order.duplicate(true)
+				start_step = "field"
 			else:
 				start_step = SliceSave.step_of_board(train_g)
 				# The field writes its end before handing the return to the train.
-				if belongs and saved.get("phase") == "ended" and not _returned():
-					var ended_receipt = FieldReceipt.new(String(saved.get("place", "")))
-					FieldSave._put_receipt(ended_receipt, saved.get("receipt_state", {}))
-					var ended: Dictionary = ended_receipt.to_dict()
+				if belongs and saved.get("phase") == "ended":
+					var ended: Dictionary = SliceSave.receipt_of_field(saved)
 					if FieldReceipt.check(ended).is_empty() and FieldReturn.check_departure(order, train_t).is_empty() and FieldReturn.match_departure(order, ended).is_empty():
 						contract = order.duplicate(true)
 						_apply_return(ended)
@@ -1006,18 +1009,30 @@ func _save_slice() -> bool:
 	if not bool(opts.get("save", false)) or train_g.is_empty() or step < 0:
 		return true
 	var train_path := String(opts.get("train_save_path", TrainSave.DEFAULT_PATH))
-	if not SliceSave.write_train(train_g, train_path):
+	var written: Dictionary = {}
+	if not SliceSave.write_train(train_g, train_path, written):
 		save_error = "F-SAVE-TRAIN"
 		return false
 	var slice_path := String(opts.get("slice_save_path", SliceSave.PATH))
 	if current() == "end":
 		SliceSave.clear(slice_path)
-		FieldSave.clear(String(opts.get("field_save_path", FieldSave.PATH)))
-	elif not SliceSave.write(SliceSave.capture(self), slice_path):
-		save_error = "F-SAVE-SLICE"
-		return false
+		_clear_slice_field()
+	else:
+		var saved: Dictionary = SliceSave.capture(self)
+		saved["train_sha"] = written["train_sha"]
+		if not SliceSave.write(saved, slice_path):
+			save_error = "F-SAVE-SLICE"
+			return false
 	save_error = ""
 	return true
+
+
+func _clear_slice_field() -> void:
+	var path := String(opts.get("field_save_path", FieldSave.PATH))
+	var saved: Dictionary = FieldSave.read(path)
+	var start_opts: Dictionary = saved["start_opts"] if saved.get("start_opts") is Dictionary else {}
+	if start_opts.get("slice") == true:
+		FieldSave.clear(path)
 
 
 func _returned() -> bool:
@@ -1714,6 +1729,7 @@ func _room_changed() -> void:
 	gauges.refresh(train_g, train_t)
 	if is_instance_valid(bar):
 		bar.g = train_g
+	_save_slice()
 
 
 ## A lever on the pane: set it in the slice's state and draw again what reads it.
@@ -1729,6 +1745,7 @@ func _set_lever(comm: String, which: String, value: int) -> void:
 		var sit: Array = St.situation(train_g, train_t, comm)
 		train.set_comm(comm, "sit", [sit[0], sit[1], sit[2], sit[3]])
 		_quiet_labels()
+	_save_slice()
 
 
 ## The picked car's lamp-amber corners, and the shade over the cars not picked.
@@ -1833,6 +1850,7 @@ func _field_opts() -> Dictionary:
 	o["field_save"] = bool(opts.get("save", false))
 	o["field_save_path"] = String(opts.get("field_save_path", FieldSave.PATH))
 	o["slice"] = true
+	o["slice_run"] = run
 	# When the train comes in (decision 471 B0): the departure contract's, rolled by the train
 	# from its run's seed and stretch; a contract without one, from the slice's seed and step.
 	o["arrive_min"] = int(opts.get("arrive_min", _departure().get("arriveMin", FieldClock.arrival_for(int(opts.get("seed", 1)) * 1000 + step))))

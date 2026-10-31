@@ -74,7 +74,7 @@ func _ready() -> void:
 	for row in CHOICES:
 		settings[row[0]] = row[2][0][0]
 	var board: Array = SliceFlow.start_board()
-	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1])
+	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path)
 	if not slice_resume.is_empty():
 		_start_slice(slice_resume)
 		return

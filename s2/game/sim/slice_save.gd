@@ -9,6 +9,7 @@ const KIND := "s3_slice"
 const PATH := "user://slice_save.json"
 const TrainSave = preload("res://game/politics/save_slot.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const FieldReceipt = preload("res://game/sim/receipt.gd")
 const FieldArrival = preload("res://game/politics/field_arrival.gd")
 const STEPS: Array[String] = ["train", "stop_pick", "field", "receipt", "council", "travel", "arrive", "end"]
 
@@ -17,6 +18,7 @@ static func capture(flow) -> Dictionary:
 	var g: Dictionary = flow.train_g
 	return {
 		"version": VERSION, "kind": KIND, "step": resume_step(g, flow.current()),
+		"run": flow.run, "train_sha": _text(g).sha256_text(),
 		"seg": int(g.get("seg", 0)), "applied": applied_ids(g),
 		"contract": flow.contract.duplicate(true), "receipt": flow.receipt.duplicate(true),
 		"passed": flow.passed, "result_reason": String(flow.result.get("reason", "")),
@@ -77,6 +79,8 @@ static func _shape(d: Dictionary) -> bool:
 		return false
 	if not d.get("passed") is bool or not d.get("result_reason") is String:
 		return false
+	if not d.get("run") is String or not d.get("train_sha") is String:
+		return false
 	var seen: Dictionary = {}
 	for id: Variant in d["applied"]:
 		if not id is String or seen.has(id):
@@ -85,13 +89,15 @@ static func _shape(d: Dictionary) -> bool:
 	return true
 
 
-static func _parse(at: String) -> Dictionary:
+static func _parse(at: String, source: Dictionary = {}) -> Dictionary:
 	if not FileAccess.file_exists(at):
 		return {}
+	var text := FileAccess.get_file_as_string(at)
 	var json := JSON.new()
-	if json.parse(FileAccess.get_file_as_string(at)) != OK or not json.data is Dictionary:
+	if json.parse(text) != OK or not json.data is Dictionary:
 		return {}
 	var decoded: Dictionary = FieldSave._decode(json.data)
+	source["train_sha"] = text.sha256_text()
 	return decoded
 
 
@@ -109,27 +115,34 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 
 
 ## The S1 board as it is, through the same temporary-file boundary as the slice slot.
-static func write_train(g: Dictionary, path: String = TrainSave.DEFAULT_PATH) -> bool:
+static func write_train(g: Dictionary, path: String = TrainSave.DEFAULT_PATH, written: Dictionary = {}) -> bool:
 	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if file == null:
 		return false
-	file.store_string(_text(g))
+	var text := _text(g)
+	file.store_string(text)
 	file.flush()
 	var error: Error = file.get_error()
 	file.close()
-	return error == OK and _replace(path)
+	if error != OK or not _replace(path, true):
+		return false
+	written["train_sha"] = text.sha256_text()
+	return true
 
 
 static func _text(d: Dictionary) -> String:
 	return JSON.stringify(FieldSave._encode(d), "", true, true)
 
 
-static func _replace(path: String) -> bool:
+static func _replace(path: String, train_slot: bool = false) -> bool:
 	var backup := path + ".bak"
 	if FileAccess.file_exists(path):
-		if FileAccess.file_exists(backup) and DirAccess.remove_absolute(backup) != OK:
+		var previous := _parse(path)
+		var valid: bool = not previous.is_empty() and (previous.get("seg") is int or previous.get("seg") is float) if train_slot else _shape(previous)
+		var moved := backup if valid else path + ".broken"
+		if FileAccess.file_exists(moved) and DirAccess.remove_absolute(moved) != OK:
 			return false
-		if DirAccess.rename_absolute(path, backup) != OK:
+		if DirAccess.rename_absolute(path, moved) != OK:
 			return false
 	if DirAccess.rename_absolute(path + ".tmp", path) == OK:
 		return true
@@ -147,15 +160,15 @@ static func read(path: String = PATH) -> Dictionary:
 
 
 static func clear(path: String = PATH) -> void:
-	for at: String in [path, path + ".tmp", path + ".bak"]:
+	for at: String in [path, path + ".tmp", path + ".bak", path + ".broken"]:
 		if FileAccess.file_exists(at):
 			DirAccess.remove_absolute(at)
 
 
 ## Read through S1's shape check without writing its global broken-save slot.
-static func _train(path: String, t: Dictionary) -> Dictionary:
+static func _train(path: String, t: Dictionary, source: Dictionary = {}) -> Dictionary:
 	for at: String in [path, path + ".bak"]:
-		var loaded: Dictionary = TrainSave.read_save(_parse(at), t)
+		var loaded: Dictionary = TrainSave.read_save(_parse(at, source), t)
 		if bool(loaded.get("ok", false)):
 			var g: Dictionary = loaded["g"]
 			var valid: bool = true
@@ -184,23 +197,36 @@ static func receipt_of_board(g: Dictionary) -> Dictionary:
 	return receipt if receipt.get("receiptId") == id else {}
 
 
-static func pick(slice_path: String, train_path: String, t: Dictionary) -> Dictionary:
+static func receipt_of_field(saved: Dictionary) -> Dictionary:
+	var ended = FieldReceipt.new(String(saved.get("place", "")))
+	FieldSave._put_receipt(ended, saved.get("receipt_state", {}))
+	return ended.to_dict()
+
+
+static func pick(slice_path: String, train_path: String, t: Dictionary, field_path: String = FieldSave.PATH) -> Dictionary:
 	var d := read(slice_path)
 	if d.is_empty():
 		return {}
-	var g := _train(train_path, t)
+	var source: Dictionary = {}
+	var g := _train(train_path, t, source)
 	if g.is_empty() or String(g.get("phase", "")) == "end":
 		return {}
 	var saved_ids: Array = d["applied"].duplicate()
 	saved_ids.sort()
-	var torn: bool = int(d["seg"]) != int(g["seg"]) or saved_ids != applied_ids(g)
+	var torn: bool = int(d["seg"]) != int(g["seg"]) or saved_ids != applied_ids(g) or d["train_sha"] != source["train_sha"]
 	var at := step_of_board(g) if torn else resume_step(g, String(d["step"]))
 	if at == "end":
 		return {}
 	var receipt := receipt_of_board(g)
 	# The train keeps the receipt as S1's canonical text; the slice slot keeps its types.
-	if not torn and not receipt.is_empty() and d["receipt"].get("receiptId") == receipt.get("receiptId"):
-		receipt = d["receipt"].duplicate(true)
+	if not receipt.is_empty():
+		if d["receipt"].get("receiptId") == receipt.get("receiptId"):
+			receipt = d["receipt"].duplicate(true)
+		else:
+			var saved: Dictionary = FieldSave.read(field_path)
+			if saved.get("phase") == "ended" and saved.get("receipt_id") == receipt.get("receiptId"):
+				receipt = receipt_of_field(saved)
+			# Without either typed copy, the canonical train text loses number types.
 	var contract: Dictionary = d["contract"].duplicate(true)
 	if not contract.is_empty():
 		if not receipt.is_empty():
@@ -214,6 +240,6 @@ static func pick(slice_path: String, train_path: String, t: Dictionary) -> Dicti
 	if not torn and String(d["result_reason"]) != "" and d["receipt"].get("receiptId") == receipt.get("receiptId"):
 		reason = String(d["result_reason"])
 	return {
-		"g": g, "step": at, "contract": contract, "receipt": receipt, "passed": passed,
+		"g": g, "step": at, "run": d["run"], "contract": contract, "receipt": receipt, "passed": passed,
 		"result_reason": reason, "reconciled": torn,
 	}
