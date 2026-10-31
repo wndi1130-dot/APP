@@ -9,7 +9,7 @@ extends RefCounted
 
 const Carry = preload("res://game/sim/carry.gd")
 
-const STOCK_NAMES: Dictionary = {"coal": "석탄", "food": "식량", "medicine": "의약품", "luxury": "사치품", "symbol": "상징물", "info": "정보", "scrap": "고철", "wood": "목재", "ammo_pistol": "권총탄", "ammo_shell": "산탄", "ammo_craft": "공방탄"}
+const STOCK_NAMES: Dictionary = {"coal": "석탄", "food": "식량", "medicine": "의약품", "luxury": "사치품", "symbol": "상징물", "info": "정보", "scrap": "고철", "wood": "목재", "ammo_pistol": "권총탄", "ammo_shell": "산탄", "ammo_craft": "공방탄", "supplies": "생필품"}
 const ROWS_MOST: int = 4
 
 

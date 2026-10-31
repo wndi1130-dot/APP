@@ -277,6 +277,20 @@
       "valid": false
     },
     {
+      "name": "판 3 전 영수증의 생필품 칸",
+      "set": [
+        [
+          [
+            "stock",
+            "supplies"
+          ],
+          2
+        ]
+      ],
+      "remove": [],
+      "valid": false
+    },
+    {
       "name": "보낸 사람 중복",
       "set": [
         [
