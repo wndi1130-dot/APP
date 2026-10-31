@@ -53,7 +53,7 @@ function departView(g: Game): CardView {
 
 function returnView(g: Game, card: Card): CardView {
   const t = g.stranded?.trip;
-  if (!t) return { title: '수동차', body: '수동차는 빈 선로 위에 서 있다.', choices: [{ label: '알았다', effs: [] }], required: true };
+  if (!t) return { title: '수동차', body: '수동차는 빈 선로 위에 서 있다.', choices: [{ label: '알았다', log: '수동차가 빈 선로에 서 있는 것을 봤다.', effs: [] }], required: true };
   const effs: Eff[] = [{ t: 'coal', v: P.tripCoal }];
   if (t.leaderGoes && t.forced) effs.push({ t: 'trust', v: P.tripTrustForced });
   if (!t.leaderGoes) effs.push({ t: 'rel', c: t.comm, v: P.tripRelCrew });
@@ -89,7 +89,7 @@ function extendView(g: Game, card: Card): CardView {
   return {
     title: '무전', speaker: speaker(g, c), focus: c, required: true,
     body: `무전이 짧게 왔다. 역에 석탄이 없다. ${P.extendKm}km를 더 간다. 식량 ${card.n ?? 0}이 더 든다.`,
-    choices: [{ label: '알았다', say: '기다린다. 불을 아껴라.', effs: [] }],
+    choices: [{ label: '알았다', log: '더 간다는 수동차 무전에 불을 아끼며 기다리기로 했다.', say: '기다린다. 불을 아껴라.', effs: [] }],
   };
 }
 

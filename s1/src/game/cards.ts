@@ -867,7 +867,7 @@ function baseView(g: Game, card: Card): CardView {
     default:
       break;
   }
-  return { title: '빈 서류', body: '', required: false, choices: [{ label: '덮는다', effs: [] }] };
+  return { title: '빈 서류', body: '', required: false, choices: [{ label: '덮는다', log: '빈 카드 서류를 덮었다.', effs: [] }] };
 }
 
 /** 요구 카드에서 칸 대표가 직접 하는 말 — [보통, 좋음(관계 15 이상), 나쁨(관계 −15 이하)]. 칸마다 말투가 다르고(s1_content_guide 2장) 나쁨은 답의 기한을 못 박는다. S2 turn_card_text.gd와 같다. */

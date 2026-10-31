@@ -398,8 +398,8 @@ function hubView(g: Game, card: Card): CardView | null {
         title: '다른 열차로 옮기겠다는 사람', speaker: { name: who[0] ?? COMM_NAME[c], role: COMM_NAME[c], comm: c }, focus: c, required: true, faces: who,
         body: `${who.join('와(과) ')}이(가) 다른 승강장의 열차로 옮기겠다고 한다. 칸 전체가 아니라 몇 사람의 결정이다.`,
         choices: [
-          { label: '보내 준다', say: '원한다면 막지 않겠다. 잘 가라.', effs: [{ t: 'pop', c, v: -who.length }], special: 'hub_few_go' },
-          { label: '붙잡는다', say: '여기가 너희 열차다. 같이 가자.', effs: [{ t: 'rel', c, v: 2 }], special: 'hub_few_stay' },
+          { label: '보내 준다', log: '다른 열차로 가겠다는 사람들을 보내 줬다.', say: '원한다면 막지 않겠다. 잘 가라.', effs: [{ t: 'pop', c, v: -who.length }], special: 'hub_few_go' },
+          { label: '붙잡는다', log: '다른 열차로 가겠다는 사람들을 붙잡았다.', say: '여기가 너희 열차다. 같이 가자.', effs: [{ t: 'rel', c, v: 2 }], special: 'hub_few_stay' },
         ],
       };
     }
