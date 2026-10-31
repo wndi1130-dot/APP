@@ -30,14 +30,15 @@ Crosley_Alarm_Clock_Vintage_Metal.zip은 실제 축소 렌더에서 48삼각형 
 
 Piece.fit/check_glb의 기존 중앙 원점 검사를 먼저 실제 GLB에 수행하고,
 새 31종만 바닥 원점으로 옮겨 다시 내보내고 바이너리 좌표·색을 검사한다.
-기존 GLB 교체는 --only와 --replace-existing으로 아래 FIX_IDS만 명시할 때 허용한다.
-교체 전 codex_out/tiers_fix_baseline.json 및 tiers_fix_before 복구 사본이 필요하다.
+기존 GLB 교체는 --only와 --replace-existing으로 아래 COLOUR_IDS만 명시할 때 허용한다.
+교체 전 codex_out/tiers_colour_baseline.json 및 tiers_colour_before 복구 사본이 필요하다.
 .import, 게임 코드, 배치 파일은 쓰지 않는다. Godot은 실행 안 함.
 """
 import sys
 sys.dont_write_bytecode = True
 
 import argparse
+import colorsys
 import hashlib
 import json
 import math
@@ -56,11 +57,44 @@ import train_interior as ti
 import train_car_dress as dress
 import train_car_layers as layers
 
-# 선형 RGB. 자작·소나무의 따뜻한 밝은 목재색, 흰 눈보다 낮은 밝기와 채도.
-EXTRA = {'wood_birch_pale': (.70, .63, .50, 1.0)}
+# 목표는 화면 sRGB의 H(도), L, S. Col에는 IEC sRGB 전이함수를 거친 선형 RGB만 쓴다.
+# 공용 팔레트의 기존 이름은 바꾸지 않는다.
+COLOUR_HLS = {
+    'wood_mended': (31, .43, .23),
+    'wood_oak': (31, .42, .42),
+    'wood_oak_grain': (31, .34, .42),
+    'wood_pine': (36, .54, .46),
+    'wood_pine_grain': (36, .46, .46),
+    'wool_rust': (12, .37, .42),
+    'wool_teal': (188, .35, .32),
+    'linen_warm': (43, .66, .25),
+    'linen_ochre': (38, .60, .42),
+    'leaf_green': (112, .36, .40),
+    'pot_terracotta': (18, .43, .42),
+    'soil_brown': (28, .20, .32),
+    'picture_sky': (205, .71, .24),
+    'picture_field': (43, .62, .36),
+    'enamel_cream': (45, .74, .26),
+    'enamel_blue_rim': (217, .34, .38),
+    'enamel_blue': (217, .40, .40),
+    'enamel_red': (12, .40, .40),
+}
+
+
+def srgb_to_linear(value):
+    return value/12.92 if value <= .04045 else ((value+.055)/1.055)**2.4
+
+
+EXTRA = {name: tuple(srgb_to_linear(c) for c in colorsys.hls_to_rgb(h/360, l, s))+(1.,)
+         for name, (h, l, s) in COLOUR_HLS.items()}
+if set(EXTRA) & set(ti.PALETTE):
+    raise RuntimeError('F-COLOUR: 공용 색 이름 덮어쓰기 금지')
 ti.PALETTE.update(EXTRA)
-FIX_IDS = {'tin_stove', 'drum_stove', 'end_shelf', 'top_shelf', 'tiny_cup',
-           'tiny_tray', 'pale_paneling', 'open_bunk_upper', 'open_bunk_lower'}
+COLOUR_IDS = {'wood_wall_box', 'wood_wall_box_shallow', 'end_shelf', 'top_shelf',
+              'pale_paneling', 'stick_lamp', 'small_frame', 'wall_plant', 'table_plant',
+              'open_bunk_upper', 'open_bunk_lower', 'tiny_cup', 'tiny_bowl', 'tiny_plate',
+              'tiny_jar', 'tiny_teapot', 'tiny_tray', 'thread_spool', 'tiny_brush',
+              'tiny_clock', 'tiny_book'}
 
 SCRIPT = 'tools/blender/train_car_tiers.py'
 LIMIT = 2430
@@ -285,6 +319,7 @@ def add_source(p, root, key, size, target, centre=(0, 0, 0), rotation=None, pain
     coords = [((v.x-(lo[0]+hi[0])/2)/(hi[0]-lo[0])*size[0] + centre[0],
                (v.z-lo[2])/(hi[2]-lo[2])*size[1] + centre[1],
                -(v.y-(lo[1]+hi[1])/2)/(hi[1]-lo[1])*size[2] + centre[2]) for v in vs]
+    picture = []
     for face in obj.data.polygons:
         pts = [coords[i] for i in face.vertices]
         mid = sum((Vector(v) for v in pts), Vector()) / len(pts)
@@ -293,21 +328,34 @@ def add_source(p, root, key, size, target, centre=(0, 0, 0), rotation=None, pain
         nz = (mid.z-centre[2])/size[2]
         colour = paint
         if style == 'plant':
-            colour = 'wool_moss' if ny > .35 else ('iron_worn' if ny > .24 else 'wool')
+            # 원본의 부위 material 구분을 색 이름으로만 옮긴다. 높이로 나누면 화분 테까지 초록이 된다.
+            part = obj.data.materials[face.material_index].name.split('.')[0].lower()
+            plant_colours = {'plant': 'leaf_green', 'wood': 'pot_terracotta', 'wooddark': 'soil_brown'}
+            if part not in plant_colours:
+                raise ValueError('F-COLOUR: 화분 원본의 부위 이름 ' + part)
+            colour = plant_colours[part]
         elif style == 'frame':
-            colour = 'wood_worn' if abs(nx) > .34 or ny < .10 or ny > .90 else ('cloth_blue' if ny > .40 else 'slate_faded')
+            # 축소된 원본의 그림 안쪽 두 면만 수평 두 띠(네 삼각형)로 재분할한다.
+            # 액자 외곽·테두리·뒷면은 원본 좌표를 그대로 사용한다.
+            if all(abs((v[0]-centre[0])/size[0]) < .335 and
+                   .15 < (v[1]-centre[1])/size[1] < .86 and
+                   (v[2]-centre[2])/size[2] > .20 for v in pts):
+                picture.append(pts)
+                continue
+            colour = 'wood_pine'
         elif style == 'bed':
             colour = 'wool' if ny < .25 else ('cloth' if nx < -.15 else 'wool_dark')
         elif style == 'pale_bed':
-            colour = 'cloth_faded' if ny > .2 else 'slate_faded'
+            colour = ('linen_warm' if nx < -.27 or ny < .16 else
+                      'wool_teal' if p.pid.endswith('lower') else 'wool_rust')
         elif style == 'book':
-            colour = 'paper_aged' if .12 < ny < .88 else 'cloth_blue'
+            colour = 'paper_aged' if .12 < ny < .88 else 'wool_teal'
         elif style == 'bottle':
             colour = 'iron_worn' if ny > .88 else 'glass_dark'
         elif style == 'metal':
             colour = 'iron_worn' if ny < .08 or ny > .89 else 'iron'
         elif style == 'ceramic':
-            colour = 'iron_worn' if ny < .15 else 'slate_faded'
+            colour = 'enamel_blue_rim' if ny > .80 and math.hypot(nx, nz) > .40 else 'enamel_cream'
         elif style == 'candle':
             colour = 'soot' if ny > .92 else 'cloth'
         elif style == 'planks':
@@ -315,14 +363,29 @@ def add_source(p, root, key, size, target, centre=(0, 0, 0), rotation=None, pain
         elif style == 'mat':
             colour = 'rope' if face.index % 3 else 'wool_dark'
         elif style == 'panel':
-            colour = 'wood_birch_pale'
+            colour = 'wood_pine'
         elif style == 'lamp':
-            colour = 'iron' if ny > .75 or nz < -.23 else 'slate_faded'
+            colour = 'iron' if ny > .75 or nz < -.23 else 'linen_ochre'
         normal = Vector((face.normal.x, face.normal.z, -face.normal.y))
         area_vector = sum((Vector(pts[i]).cross(Vector(pts[(i+1) % len(pts)])) for i in range(len(pts))), Vector())
         if normal.length < .001 or area_vector.length < 1e-9:
             continue
         p.face(pts, colour, normal)
+    if style == 'frame':
+        corners = sorted({tuple(v) for pts in picture for v in pts}, key=lambda v: (v[1], v[0]))
+        if len(picture) != 2 or len(corners) != 4:
+            raise ValueError('F-GEOMETRY: 액자 안쪽 두 면 식별 실패')
+        bottom_left, bottom_right = sorted(corners[:2], key=lambda v: v[0])
+        top_left, top_right = sorted(corners[2:], key=lambda v: v[0])
+        horizon = centre[1]+size[1]*.50
+        def intersection(a, b):
+            t = (horizon-a[1])/(b[1]-a[1])
+            return tuple(a[i]+t*(b[i]-a[i]) for i in range(3))
+        left = intersection(bottom_left, top_left)
+        right = intersection(bottom_right, top_right)
+        p.face([bottom_left, bottom_right, right, left], 'picture_field', (0, 0, 1))
+        p.face([left, right, top_right, top_left], 'picture_sky', (0, 0, 1))
+        info['picture_subdivision'] = '원래 그림 안쪽 2삼각형을 수평 2띠의 4삼각형으로 재분할; 바깥 24삼각형 유지'
     info.update(original_triangles=before, reduced_triangles=after)
     if not any(s['path'] == info['path'] for s in p.sources):
         p.sources.append(info)
@@ -387,12 +450,12 @@ def ring_shell(p, rings, colours, caps=True):
             p.face(pts, colours[(i+k) % len(colours)], outward)
 
 
-def flat_handle(p, outer, inner, normal):
+def flat_handle(p, outer, inner, normal, colour='iron_worn'):
     """세 변의 C형 양면 얇은 판. 네 번째 변은 몸체에 붙이고 가운데 구멍을 남긴다."""
     for i in range(3):
         pts = [outer[i], outer[i+1], inner[i+1], inner[i]]
         for sign in (-1, 1):
-            p.face(pts, 'iron_worn', tuple(sign*v for v in normal))
+            p.face(pts, colour, tuple(sign*v for v in normal))
 
 
 def build(p, root):
@@ -443,7 +506,7 @@ def build(p, root):
         lower = pid.endswith('lower')
         w, h, d = size
         base = .32 if lower else 0
-        wood = 'wood_birch_pale' if opened else 'wood_dark'
+        wood = 'wood_pine' if opened else 'wood_dark'
         p.box((-w/2, w/2), (base, base+.035), (-d/2, d/2), wood)
         if lower:
             for x in (-w/2+.045, w/2-.045):
@@ -456,17 +519,17 @@ def build(p, root):
                 p.box((x-.015, x+.015), (base+.035, h), (-d/2+.024, d/2-.024), wood)
             for z in (-d/2+.012, d/2-.012):
                 p.face([(-w*.36, h+.0001, z-.0015), (w*.39, h+.0001, z-.0005),
-                        (w*.36, h+.0001, z+.0015), (-w*.30, h+.0001, z+.0005)], 'paper_aged', (0, 1, 0))
+                        (w*.36, h+.0001, z+.0015), (-w*.30, h+.0001, z+.0005)], 'wood_pine_grain', (0, 1, 0))
         add_source(p, root, 'bedroll', (w-.08, h-base-.04, d-.06), 44 if opened else 48,
                    centre=(0, base+.04, 0), rotation=Matrix.Rotation(math.pi/2, 3, 'Z'),
                    style='pale_bed' if opened else 'bed')
     elif pid == 'end_shelf':
         for y, front in ((0, .14), (.4375, .075), (.875, .01)):
-            p.box((-.24, .24), (y, y+.025), (-.14, front), 'wood', top='wood_worn')
+            p.box((-.24, .24), (y, y+.025), (-.14, front), 'wood_oak_grain', top='wood_oak')
         for x in (-.222, .222):
-            p.box((x-.018, x+.018), (0, .90), (-.14, -.105), 'wood_worn')
+            p.box((x-.018, x+.018), (0, .90), (-.14, -.105), 'wood_oak')
     elif pid == 'top_shelf':
-        p.box((-.24, .24), (.215, .24), (-.14, .14), 'wood', top='wood_worn')
+        p.box((-.24, .24), (.215, .24), (-.14, .14), 'wood_oak_grain', top='wood_oak')
         for x in (-.17, .17):
             p.box((x-.012, x+.012), (0, .215), (-.14, -.12), 'iron')
             pts = [(x, .005, -.12), (x, .215, -.12), (x, .215, .10)]
@@ -474,19 +537,19 @@ def build(p, root):
                 p.face(pts, 'iron_worn', (sign, 0, 0))
     elif pid in ('wood_wall_box', 'wood_wall_box_shallow'):
         key = SOURCE_KEYS[pid]
-        add_source(p, root, key, size, {'box': 60, 'shallow': 60, 'end': 92, 'top': 48}[key], paint='wood' if key in ('box', 'shallow') else 'wood_worn')
+        add_source(p, root, key, size, {'box': 60, 'shallow': 60, 'end': 92, 'top': 48}[key], paint='wood_mended')
     elif pid == 'pale_paneling':
         for x in (-3., 3.):
             add_source(p, root, 'panel', (6., .42, .05), 40, centre=(x, 0, 0), style='panel')
             for y in (.14, .29):
                 p.face([(x-2.6, y, .0251), (x+2.2, y+.001, .0251),
-                        (x+2.5, y+.006, .0251), (x-2.3, y+.004, .0251)], 'paper_aged', (0, 0, 1))
+                        (x+2.5, y+.006, .0251), (x-2.3, y+.004, .0251)], 'wood_pine_grain', (0, 0, 1))
     elif pid == 'stick_lamp':
         add_source(p, root, 'lamp', (.13, .09, .12), 42, centre=(0, .04, .005),
                    rotation=Matrix.Rotation(math.pi, 3, 'X'), style='lamp')
         p.beam((0, .12, 0), (0, .314, 0), .006, 'iron', sides=4)
         p.beam((0, .314, -.059), (0, .314, .059), .006, 'iron', sides=4)
-        p.lathe((0, .02), [(0, .019, .019), (.04, .025, .025)], 'cloth_faded', sides=4)
+        p.lathe((0, .02), [(0, .019, .019), (.04, .025, .025)], 'linen_warm', sides=4)
     elif pid == 'small_frame':
         add_source(p, root, 'frame', size, 28, style='frame')
     elif pid in ('wall_plant', 'table_plant'):
@@ -500,15 +563,15 @@ def build(p, root):
         low = [(-.008+.024*math.cos(i*math.tau/5), 0, .030*math.sin(i*math.tau/5)) for i in range(5)]
         rim = [(-.008+.028*math.cos(i*math.tau/5), .09, .035*math.sin(i*math.tau/5)) for i in range(5)]
         inner = [(-.008+.022*math.cos(i*math.tau/5), .09, .0275*math.sin(i*math.tau/5)) for i in range(5)]
-        p.face(low, 'slate_faded', (0, -1, 0))
+        p.face(low, 'enamel_cream', (0, -1, 0))
         for i in range(5):
             j = (i+1) % 5
             outward = (math.cos((i+.5)*math.tau/5), 0, math.sin((i+.5)*math.tau/5))
-            p.face([low[i], low[j], rim[j], rim[i]], 'slate_faded', outward)
-            p.face([rim[i], rim[j], inner[j], inner[i]], 'iron_worn', (0, 1, 0))
-            p.face([inner[i], inner[j], (-.008, .012, 0)], 'slate_faded', (-outward[0], .2, -outward[2]))
+            p.face([low[i], low[j], rim[j], rim[i]], 'enamel_cream', outward)
+            p.face([rim[i], rim[j], inner[j], inner[i]], 'enamel_blue_rim', (0, 1, 0))
+            p.face([inner[i], inner[j], (-.008, .012, 0)], 'enamel_cream', (-outward[0], .2, -outward[2]))
         flat_handle(p, [(.014, .013, 0), (.047, .021, 0), (.047, .073, 0), (.014, .081, 0)],
-                    [(.014, .026, 0), (.036, .030, 0), (.036, .064, 0), (.014, .068, 0)], (0, 0, 1))
+                    [(.014, .026, 0), (.036, .030, 0), (.036, .064, 0), (.014, .068, 0)], (0, 0, 1), 'enamel_blue_rim')
     elif pid == 'tiny_tray':
         low = [(-.068, 0, -.053), (.068, 0, -.053), (.068, 0, .053), (-.068, 0, .053)]
         rim = [(-.073, .02, -.06), (.073, .02, -.06), (.073, .02, .06), (-.073, .02, .06)]
@@ -528,10 +591,10 @@ def build(p, root):
     elif pid in ('tiny_bottle', 'tiny_can', 'tiny_jar'):
         add_radial_source(p, root, SOURCE_KEYS[pid], size, [0, .60, .82, 1] if pid == 'tiny_bottle' else [0, .5, 1],
                           8 if pid == 'tiny_can' else 6, opened=pid == 'tiny_jar',
-                          paint='glass_dark' if pid == 'tiny_bottle' else 'iron' if pid == 'tiny_can' else 'slate_faded')
+                          paint='glass_dark' if pid == 'tiny_bottle' else 'iron' if pid == 'tiny_can' else 'enamel_blue')
     elif pid == 'tiny_teapot':
-        p.lathe((0, 0), [(0, .035, .045), (.08, .042, .05)], 'slate_faded', sides=6)
-        p.beam((.028, .04, 0), (.075, .082, 0), .012, 'slate_faded', sides=3)
+        p.lathe((0, 0), [(0, .035, .045), (.08, .042, .05)], 'enamel_red', sides=6)
+        p.beam((.028, .04, 0), (.075, .082, 0), .012, 'enamel_red', sides=3)
         outer = [(-.032, .017, 0), (-.065, .024, 0), (-.065, .070, 0), (-.032, .078, 0)]
         inner = [(-.038, .028, 0), (-.054, .032, 0), (-.054, .060, 0), (-.038, .067, 0)]
         for i in range(4):
@@ -540,10 +603,10 @@ def build(p, root):
                 p.face(pts, 'iron_worn', (0, 0, sign))
         tetra(p, [(-.012, .08, -.01), (.012, .08, -.01), (0, .08, .012), (0, .11, 0)], 'iron_worn')
     elif pid == 'thread_spool':
-        p.lathe((0, 0), [(0, .025, .025), (.012, .017, .017), (.058, .017, .017), (.07, .025, .025)], 'cloth_blue', sides=6, alternate='wool')
+        p.lathe((0, 0), [(0, .025, .025), (.012, .017, .017), (.058, .017, .017), (.07, .025, .025)], 'wool_rust', sides=6)
     elif pid == 'tiny_brush':
-        p.box((-.02, .02), (.008, .02), (-.07, -.015), 'wood')
-        p.box((-.006, .006), (.009, .017), (-.02, .07), 'wood_worn')
+        p.box((-.02, .02), (.008, .02), (-.07, -.015), 'wood_oak_grain')
+        p.box((-.006, .006), (.009, .017), (-.02, .07), 'wood_oak')
         p.box((-.018, .018), (0, .008), (-.066, -.02), 'wool_dark')
     elif pid == 'tiny_clock':
         outline = [(-.045, 0), (.045, 0), (.045, .085), (.028, .11), (-.028, .11), (-.045, .085)]
@@ -696,6 +759,18 @@ def update_books(out_dir, rows, replace=False):
         text, count = re.subn(r'^새 살림 단계 합계:.*$', '새 살림 단계 합계: %d / 2,430. 전체 삼각형: %d / 10,000.' % (new_total, total), text, flags=re.M)
         if count != 1:
             raise ValueError('F-INPUT-MISSING: README 전체 합계 줄')
+        text = text.replace('색은 기존 train_car_dress/layers의 선형 색 판.',
+                            '색은 기존 train_car_dress/layers 및 train_car_tiers.EXTRA의 선형 색 판. 추가 색은 화면 sRGB HLS에서 선형 RGB로 변환한다.')
+        metadata = '<!-- tiers_colour_metadata -->\n### 색 단계 손질 메타데이터\n\n'
+        metadata += '아래 palette_extra 값은 Col에 기록한 선형 RGB이며, bytes는 최종 GLB 크기다.\n\n'
+        metadata += '| 이름 | bytes | palette_extra (선형 RGB) |\n|---|---:|---|\n'
+        for row in rows:
+            values = '; '.join('%s=(%.6f, %.6f, %.6f)' % (name, *rgb)
+                               for name, rgb in sorted(row['palette_extra'].items()))
+            metadata += '| %s | %d | %s |\n' % (row['id'], row['bytes'], values)
+        metadata += '<!-- /tiers_colour_metadata -->\n\n'
+        text = re.sub(r'<!-- tiers_colour_metadata -->.*?<!-- /tiers_colour_metadata -->\n*', '', text, flags=re.S)
+        text = re.sub(r'(?=^새 살림 단계 합계:)', lambda _: metadata, text, flags=re.M)
         write_json(catalog, book)
         path.write_text(text, encoding='utf-8')
         return
@@ -817,28 +892,30 @@ def main():
     parser.add_argument('--only', default='')
     parser.add_argument('--stage-only', action='store_true')
     parser.add_argument('--render-contact-sheet', action='store_true')
-    parser.add_argument('--replace-existing', action='store_true', help='복구 사본이 있는 FIX_IDS를 명시한 --only 범위에서만 교체')
+    parser.add_argument('--replace-existing', action='store_true', help='현재 색 손질 복구 사본이 있는 COLOUR_IDS를 명시한 --only 범위에서만 교체')
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
     repo = Path(args.repo).resolve()
     out = repo / 's2/models/train_interior'
     evidence = repo / 'codex_out'
-    prefix = 'tiers_fix' if args.replace_existing else 'tiers'
+    prefix = 'tiers_colour' if args.replace_existing else 'tiers'
     stage = evidence / (prefix+'_stage')
     stage.mkdir(parents=True, exist_ok=True)
     selected = args.only.split(',') if args.only else list(SPECS)
     if len(selected) != len(set(selected)) or any(pid not in SPECS for pid in selected):
         raise SystemExit('F-INPUT-MISSING: --only 중복/알 수 없는 이름')
-    if args.replace_existing and (not args.only or not set(selected) <= FIX_IDS):
-        raise SystemExit('F-INPUT-MISSING: 교체는 --only에 FIX_IDS만 명시해야 함')
+    if args.replace_existing and (not args.only or not set(selected) <= COLOUR_IDS):
+        raise SystemExit('F-INPUT-MISSING: 교체는 --only에 COLOUR_IDS만 명시해야 함')
     rows, failures = [], []
     base = json.loads((out / 'catalog.json').read_text(encoding='utf-8-sig'))
     old_hashes = {p.name: sha(p) for p in out.glob('*.glb')}
     replace_hashes = {}
     if args.replace_existing:
-        baseline = json.loads((evidence/'tiers_fix_baseline.json').read_text(encoding='utf-8'))
+        baseline = json.loads((evidence/'tiers_colour_baseline.json').read_text(encoding='utf-8'))
+        if not set(selected) <= set(baseline['ids']):
+            raise RuntimeError('F-PRESERVATION: 현재 기준의 승인 범위 밖')
         for rel in ['s2/models/train_interior/'+pid+'.glb' for pid in selected] + ['s2/models/train_interior/catalog.json', 's2/models/train_interior/README.md']:
             expected = baseline['hashes'][rel]
-            if sha(repo/rel) != expected or sha(evidence/'tiers_fix_before'/rel) != expected:
+            if sha(repo/rel) != expected or sha(evidence/'tiers_colour_before'/rel) != expected:
                 raise RuntimeError('F-PRESERVATION: 교체 전 원본/복구 사본 불일치 '+rel)
             replace_hashes[rel] = expected
         if any(base['assets'].get(pid, {}).get('generator') != SCRIPT for pid in selected):

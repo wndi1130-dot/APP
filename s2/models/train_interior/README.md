@@ -8,7 +8,7 @@ X·Y·Z 경계 상자의 한가운데가 (0,0,0). +Y 위, +Z 앞. at에 그대�
 종류마다 메시 1개·면 묶음 1개·Col 정점색. GLB 안에 재질·텍스처·빛·카메라 없음. 별도 셰이더 파일 없음.
 vertex_colors.gd는 가져올 때 엔진 내장 StandardMaterial3D의 정점색 표시를 켠다. 별도 재질 파일은 만들지 않는다.
 .import의 초기 설정은 이 스크립트가 준비하고 Godot --import가 최종화한다. 게임 코드는 수정할 필요가 없다.
-기존 개별 상한 600, 새 살림 모형은 각 장부의 상한 적용. 전체 상한 10,000. 전체 삼각형: 9383.
+기존 개별 상한 600, 새 살림 모형은 각 장부의 상한 적용. 전체 상한 10,000. 전체 삼각형: 9385.
 
 ```text
 blender -b --factory-startup -P tools/blender/train_interior.py -- --repo .
@@ -118,7 +118,7 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 
 ## 공개 3D로 바꾼 것
 
-`tools/blender/train_interior_swap.py`(공개 3D)와 `tools/blender/train_ice_chest.py`(얼음 상자)가 위 표의 같은 경로를 덮어쓰고, `tools/blender/train_car_dress.py`(찬 칸·꼬리칸·운전실 꾸밈)가 새 경로를 더한다. 전체 삼각형: 9383. `tools/blender/train_car_layers.py`(사는 칸 세 겹 꾸밈: 천장·벽·바닥 열 가지)도 새 경로를 더한다.
+`tools/blender/train_interior_swap.py`(공개 3D)와 `tools/blender/train_ice_chest.py`(얼음 상자)가 위 표의 같은 경로를 덮어쓰고, `tools/blender/train_car_dress.py`(찬 칸·꼬리칸·운전실 꾸밈)가 새 경로를 더한다. 전체 삼각형: 9385. `tools/blender/train_car_layers.py`(사는 칸 세 겹 꾸밈: 천장·벽·바닥 열 가지)도 새 경로를 더한다.
 
 | 이름 | 원본 | 크기 | 삼각형 | 색 | sha256 |
 |---|---|---|---:|---|---|
@@ -150,7 +150,7 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 ## 살림 단계 31종
 
 `tools/blender/train_car_tiers.py`로 생성. 새 모형은 발자국 중앙·바닥 원점(최저 Y=0), +Y 위·+Z 앞. 벽걸이 등은 -Z. 기존 행의 원점은 유지한다.
-색은 기존 train_car_dress/layers의 선형 색 판. 원본 재질·질감·얼굴·글자는 내보내지 않는다. 창 아래 판·천은 높이 0.42 m.
+색은 기존 train_car_dress/layers 및 train_car_tiers.EXTRA의 선형 색 판. 추가 색은 화면 sRGB HLS에서 선형 RGB로 변환한다. 원본 재질·질감·얼굴·글자는 내보내지 않는다. 창 아래 판·천은 높이 0.42 m.
 
 | 이름 | 원본 | 크기 | 삼각형 | 색 | sha256 |
 |---|---|---|---:|---|---|
@@ -161,30 +161,58 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 | tin_stove | 기본 도형 (tools/blender/train_car_tiers.py) | 0.4×0.58×0.4 | 112 | iron, iron_worn, rust_faded, soot | 7fca23daa36eedb2fcad39b50af3910e0da238c670647309b00a2d6669435e72 |
 | sack_bunk_upper | kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0) | 2.8×0.14×0.6 | 58 | cloth, wood_dark, wool, wool_dark | a41fe6cbf12ef1461b1a5910217900c875576ebceae2abca6f8316dd288c5651 |
 | sack_bunk_lower | kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0) | 1.75×0.48×0.58 | 106 | cloth, wood_dark, wool, wool_dark | be304e936915de2f4364a125e7a120cb080203908855068735efec7c75de2255 |
-| wood_wall_box | kenney_furniture / kenney_furniture/x/Models/GLTF format/kitchenCabinetUpper.glb (CC0-1.0) | 0.48×0.42×0.28 | 58 | wood | a22200292fb7abac0288bb810252e08d27b25fc0bef4c5066fe4d6ad62e1eae7 |
-| wood_wall_box_shallow | kenney_furniture / kenney_furniture/x/Models/GLTF format/kitchenCabinetUpperLow.glb (CC0-1.0) | 0.48×0.22×0.28 | 58 | wood | a2e57f230a8c54c7e5a2c040f1b61482b7b9e854fae166ceec0eb18a77cb8a3d |
+| wood_wall_box | kenney_furniture / kenney_furniture/x/Models/GLTF format/kitchenCabinetUpper.glb (CC0-1.0) | 0.48×0.42×0.28 | 58 | wood_mended | f9a6ff1df1bbc1aa2a1348e251d8d97503aa8d64e53d28e5c0e33f0af516fbbd |
+| wood_wall_box_shallow | kenney_furniture / kenney_furniture/x/Models/GLTF format/kitchenCabinetUpperLow.glb (CC0-1.0) | 0.48×0.22×0.28 | 58 | wood_mended | 0356f353c81802ad7bea1a18c8d25bd36c6677226b0c6021ca74db82596a0172 |
 | drum_stove | 기본 도형 (tools/blender/train_car_tiers.py) | 0.4×0.7×0.4 | 140 | iron, iron_worn, soot | 444b0b91ae44ceffa8d9a01dbcdf3f8eee1ef4a92d3998b2cea1cdb54b636591 |
-| end_shelf | 기본 도형 (tools/blender/train_car_tiers.py) | 0.48×0.9×0.28 | 60 | wood, wood_worn | b916e9360d1e7405384653491f118c3b9c0d31ac641dd676a84edb76b0ba8ebe |
-| top_shelf | 기본 도형 (tools/blender/train_car_tiers.py) | 0.48×0.24×0.28 | 40 | iron, iron_worn, wood, wood_worn | 9e5a7b60177497e3d9f87e07017314ca6c0ccc633dfb0f6f1a6935d446f45b76 |
-| pale_paneling | kenney_furniture / kenney_furniture/x/Models/GLTF format/paneling.glb (CC0-1.0) | 12×0.42×0.05 | 88 | paper_aged, wood_birch_pale | 34a0be5e92ebb92244da0e07e50c048322a692fed8079abafab417db20f85b71 |
-| stick_lamp | kenney_furniture / kenney_furniture/x/Models/GLTF format/lampWall.glb (CC0-1.0) | 0.13×0.32×0.13 | 63 | cloth_faded, iron, slate_faded | b964a2d0cf9e5e09e70ce6c79ec1ab299391e2d258dc123669ee4371cc152280 |
-| small_frame | kaykit_furniture / kaykit_furniture/x/KayKit-Furniture-Bits-1.0-main/addons/kaykit_furniture_bits/Assets/gltf/pictureframe_small_A.gltf (CC0-1.0) | 0.3×0.4×0.025 | 26 | cloth_blue, slate_faded, wood_worn | 95005e24d3ce5e2f49e1281425d9342165b13f04acc093201cd0c24ec33b09aa |
-| wall_plant | kenney_furniture / kenney_furniture/x/Models/GLTF format/pottedPlant.glb (CC0-1.0) | 0.12×0.2×0.12 | 58 | iron, iron_worn, wool, wool_moss | 15b947b508e85f27a583930f45581e0790dbd3d31e1a511c15fd2abc934291d0 |
-| table_plant | kenney_furniture / kenney_furniture/x/Models/GLTF format/pottedPlant.glb (CC0-1.0) | 0.12×0.2×0.12 | 52 | iron_worn, wool, wool_moss | e7c8c269349d1f59fcc32a4677876bdc928c005ddb3da1d77d6b6b32df34d644 |
-| open_bunk_upper | kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0) | 2.8×0.14×0.6 | 106 | cloth_faded, paper_aged, wood_birch_pale | bef7e9aa43f74ebb195a2fda98915355ac16a36195ea97099fa47599756c358b |
-| open_bunk_lower | kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0) | 1.75×0.48×0.58 | 154 | cloth_faded, paper_aged, wood_birch_pale | eb069608f3d3c629c32289594ac82382e40c48457d2d6818214faa90b46e4375 |
-| tiny_cup | 기본 도형 (tools/blender/train_car_tiers.py) | 0.07×0.09×0.07 | 40 | iron_worn, slate_faded | ca101af2caad6c6af7c8d0e00abc5c3fe2649ec302bb045a739ef039e0b031c9 |
-| tiny_bowl | kaykit_dungeon / kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/plate_small.gltf.glb (CC0-1.0) | 0.11×0.045×0.11 | 42 | iron_worn, slate_faded | 78840c431e0459a8e2d3c294e5374396a4ce71aeb3436942fb2b30729c5c2459 |
-| tiny_plate | kaykit_dungeon / kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/plate_small.gltf.glb (CC0-1.0) | 0.12×0.015×0.12 | 42 | iron_worn, slate_faded | ccf2dad851522cdb5395b872ebf9d834cdb8fe0c84d5036372d07bef51494697 |
+| end_shelf | 기본 도형 (tools/blender/train_car_tiers.py) | 0.48×0.9×0.28 | 60 | wood_oak, wood_oak_grain | f34a1ed982a3552cd1471ba4c1ce680b474dcd59ac253ace544bb4bf29eb5ec1 |
+| top_shelf | 기본 도형 (tools/blender/train_car_tiers.py) | 0.48×0.24×0.28 | 40 | iron, iron_worn, wood_oak, wood_oak_grain | 1f48a550d3e3bf540d3bf3138f674f7ddaf2d5da3af844108660611f1642d9df |
+| pale_paneling | kenney_furniture / kenney_furniture/x/Models/GLTF format/paneling.glb (CC0-1.0) | 12×0.42×0.05 | 88 | wood_pine, wood_pine_grain | 6eae563fa07fa5b01295f60776a390b9e9c90e0c8182c1206bd5d3332c6a7545 |
+| stick_lamp | kenney_furniture / kenney_furniture/x/Models/GLTF format/lampWall.glb (CC0-1.0) | 0.13×0.32×0.13 | 63 | iron, linen_ochre, linen_warm | 930a754e697091d32ebd8ffcbc5d27878093db249f4c6164264d345593f98771 |
+| small_frame | kaykit_furniture / kaykit_furniture/x/KayKit-Furniture-Bits-1.0-main/addons/kaykit_furniture_bits/Assets/gltf/pictureframe_small_A.gltf (CC0-1.0) | 0.3×0.4×0.025 | 28 | picture_field, picture_sky, wood_pine | e78ee22ff156e82464456bb21d73da93c870d3feb61af1258c1880bd003f5a74 |
+| wall_plant | kenney_furniture / kenney_furniture/x/Models/GLTF format/pottedPlant.glb (CC0-1.0) | 0.12×0.2×0.12 | 58 | iron, leaf_green, pot_terracotta, soil_brown | 79380f37a3ed8079decdd0c69268ebfbde9fd7757ee30b427c51b185711c1e0a |
+| table_plant | kenney_furniture / kenney_furniture/x/Models/GLTF format/pottedPlant.glb (CC0-1.0) | 0.12×0.2×0.12 | 52 | leaf_green, pot_terracotta, soil_brown | 00809fb1232a0cc874e39fc21e28bcc32e380693d4b98275a2a1a40150dd2f9d |
+| open_bunk_upper | kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0) | 2.8×0.14×0.6 | 106 | linen_warm, wood_pine, wood_pine_grain, wool_rust | f11f0769ecd0a27f12269acb5824c2cf70e619b404d738126fb2635ee5f2da08 |
+| open_bunk_lower | kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0) | 1.75×0.48×0.58 | 154 | linen_warm, wood_pine, wood_pine_grain, wool_teal | 42f6a804ecebba036b77e09712ba584865184ea1747f7594ee53f8d95010c4e4 |
+| tiny_cup | 기본 도형 (tools/blender/train_car_tiers.py) | 0.07×0.09×0.07 | 40 | enamel_blue_rim, enamel_cream | 632dfdff64405cb796c172491ffdb7be2fa58cee6a7a2994c3c6aa2f695c8884 |
+| tiny_bowl | kaykit_dungeon / kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/plate_small.gltf.glb (CC0-1.0) | 0.11×0.045×0.11 | 42 | enamel_blue_rim, enamel_cream | dc4b3ffed615b437391aea1143eb4c3315f6eebb3402862b20cf5ba9a0681986 |
+| tiny_plate | kaykit_dungeon / kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/plate_small.gltf.glb (CC0-1.0) | 0.12×0.015×0.12 | 42 | enamel_blue_rim, enamel_cream | 68b7a58903ad9135cb58165e93b0e5d655bb2b5d404627f6f7cbe214ff154ec9 |
 | tiny_bottle | kenney_survival / kenney_survival/x/Models/GLB format/bottle.glb (CC0-1.0) | 0.06×0.14×0.06 | 44 | glass_dark | dde5fc279113d68ab70d9afdf7603cde02ad6ce93b7c97fac556cd6118695b82 |
 | tiny_can | kenney_survival / kenney_survival/x/Models/GLB format/barrel.glb (CC0-1.0) | 0.07×0.09×0.07 | 44 | iron, iron_worn | 3c5ae410962a71575ffda2c3843e22048054690572766ced96fdcba0f2813795 |
-| tiny_jar | kenney_survival / kenney_survival/x/Models/GLB format/barrel-open.glb (CC0-1.0) | 0.09×0.1×0.09 | 44 | slate_faded | 7faeaf2ebce15de464322cf2c9844ff62a370d28e1efe3836bd86ddfaffd9312 |
-| tiny_teapot | 기본 도형 (tools/blender/train_car_tiers.py) | 0.14×0.11×0.1 | 48 | iron_worn, slate_faded | 498d4cb08e3b04018b5d28419fb84adffe0a812e781377893c3be2bcd03ae84d |
+| tiny_jar | kenney_survival / kenney_survival/x/Models/GLB format/barrel-open.glb (CC0-1.0) | 0.09×0.1×0.09 | 44 | enamel_blue | 7ea349cdd452175889dd9ccd54bde158bbccb077fdd31b21897046f408ec9181 |
+| tiny_teapot | 기본 도형 (tools/blender/train_car_tiers.py) | 0.14×0.11×0.1 | 48 | enamel_red, iron_worn | 4052641ece1ba8f89135d468ba29ffbb64488323956f03529bcd64be20cf99fe |
 | tiny_tray | 기본 도형 (tools/blender/train_car_tiers.py) | 0.18×0.02×0.12 | 44 | iron_worn, slate_faded | 7d4b885dd899de1617f7027e74e72182be6d5ae5abd1c7082af74092ce5dcc4f |
-| thread_spool | 기본 도형 (tools/blender/train_car_tiers.py) | 0.05×0.07×0.05 | 44 | cloth_blue, wool | 1201c8c3d0d779f378766337345a9a4f8606610bb19a0e51b71c98a75c0f3a8a |
-| tiny_brush | 기본 도형 (tools/blender/train_car_tiers.py) | 0.04×0.02×0.14 | 36 | wood, wood_worn, wool_dark | 0155b000d16f5162b4134a51032bf247476a6c303fed3ea87f17a028641127eb |
+| thread_spool | 기본 도형 (tools/blender/train_car_tiers.py) | 0.05×0.07×0.05 | 44 | wool_rust | 9997338bf84bde10ac42fc5571be5605ecd3ee767a82c2235f54cc0af91840de |
+| tiny_brush | 기본 도형 (tools/blender/train_car_tiers.py) | 0.04×0.02×0.14 | 36 | wood_oak, wood_oak_grain, wool_dark | c51a971de91dc82f29f2a202920321ddc6bd1de91c8e92d6de040a0d2da52016 |
 | tiny_clock | 기본 도형 (tools/blender/train_car_tiers.py) | 0.09×0.11×0.04 | 26 | cloth_faded, iron, slate_faded | 3da30f05e35f6186c92dc614c2750960ee47463db1a2d40d7ab601678e323165 |
-| tiny_book | kaykit_furniture / kaykit_furniture/x/KayKit-Furniture-Bits-1.0-main/addons/kaykit_furniture_bits/Assets/gltf/book_single.gltf (CC0-1.0) | 0.12×0.025×0.09 | 42 | cloth_blue, paper_aged | c148d3adf15fd84ac526a22eca018c9a67afaec477ddf77b0425b1e00bbe79cc |
+| tiny_book | kaykit_furniture / kaykit_furniture/x/KayKit-Furniture-Bits-1.0-main/addons/kaykit_furniture_bits/Assets/gltf/book_single.gltf (CC0-1.0) | 0.12×0.025×0.09 | 42 | paper_aged, wool_teal | ca44e2ce546dfd94e034772890513ed927c90f55db2fdd0ff3598222e9996770 |
 
 
-새 살림 단계 합계: 1813 / 2,430. 전체 삼각형: 9383 / 10,000.
+<!-- tiers_colour_metadata -->
+### 색 단계 손질 메타데이터
+
+아래 palette_extra 값은 Col에 기록한 선형 RGB이며, bytes는 최종 GLB 크기다.
+
+| 이름 | bytes | palette_extra (선형 RGB) |
+|---|---:|---|
+| wood_wall_box | 6960 | wood_mended=(0.241772, 0.157411, 0.089593) |
+| wood_wall_box_shallow | 6972 | wood_mended=(0.241772, 0.157411, 0.089593) |
+| end_shelf | 5236 | wood_oak=(0.314361, 0.151734, 0.048351); wood_oak_grain=(0.198465, 0.097390, 0.032239) |
+| top_shelf | 3960 | wood_oak=(0.314361, 0.151734, 0.048351); wood_oak_grain=(0.198465, 0.097390, 0.032239) |
+| pale_paneling | 9728 | wood_pine=(0.525018, 0.298299, 0.088097); wood_pine_grain=(0.408604, 0.216195, 0.050238) |
+| stick_lamp | 6312 | linen_ochre=(0.551003, 0.373363, 0.156410); linen_warm=(0.514766, 0.443492, 0.290143) |
+| small_frame | 3892 | picture_field=(0.533177, 0.419046, 0.198819); picture_sky=(0.367754, 0.479367, 0.569826); wood_pine=(0.525018, 0.298299, 0.088097) |
+| wall_plant | 6572 | leaf_green=(0.052655, 0.217762, 0.038311); pot_terracotta=(0.331059, 0.105164, 0.050636); soil_brown=(0.056662, 0.031791, 0.016545) |
+| table_plant | 6344 | leaf_green=(0.052655, 0.217762, 0.038311); pot_terracotta=(0.331059, 0.105164, 0.050636); soil_brown=(0.056662, 0.031791, 0.016545) |
+| open_bunk_upper | 9808 | linen_warm=(0.514766, 0.443492, 0.290143); wood_pine=(0.525018, 0.298299, 0.088097); wood_pine_grain=(0.408604, 0.216195, 0.050238); wool_rust=(0.238309, 0.062255, 0.037837) |
+| open_bunk_lower | 13144 | linen_warm=(0.514766, 0.443492, 0.290143); wood_pine=(0.525018, 0.298299, 0.088097); wood_pine_grain=(0.408604, 0.216195, 0.050238); wool_teal=(0.046204, 0.156512, 0.180539) |
+| tiny_cup | 3960 | enamel_blue_rim=(0.036570, 0.078213, 0.186632); enamel_cream=(0.616789, 0.560368, 0.409685) |
+| tiny_bowl | 5324 | enamel_blue_rim=(0.036570, 0.078213, 0.186632); enamel_cream=(0.616789, 0.560368, 0.409685) |
+| tiny_plate | 5324 | enamel_blue_rim=(0.036570, 0.078213, 0.186632); enamel_cream=(0.616789, 0.560368, 0.409685) |
+| tiny_jar | 3984 | enamel_blue=(0.046964, 0.108190, 0.273838) |
+| tiny_teapot | 4716 | enamel_red=(0.273838, 0.075235, 0.046964) |
+| thread_spool | 3992 | wool_rust=(0.238309, 0.062255, 0.037837) |
+| tiny_brush | 3556 | wood_oak=(0.314361, 0.151734, 0.048351); wood_oak_grain=(0.198465, 0.097390, 0.032239); wool_dark=(0.210000, 0.200000, 0.190000) |
+| tiny_book | 5320 | wool_teal=(0.046204, 0.156512, 0.180539) |
+<!-- /tiers_colour_metadata -->
+
+새 살림 단계 합계: 1815 / 2,430. 전체 삼각형: 9385 / 10,000.
