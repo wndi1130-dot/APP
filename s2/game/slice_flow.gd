@@ -266,7 +266,9 @@ func _ready() -> void:
 	var resume: Dictionary = opts.get("resume", {})
 	var start_step: String = "train"
 	if resume.is_empty():
-		run = Crypto.new().generate_random_bytes(8).hex_encode()
+		# A run id only where slots are written: a play without saves stays as it was.
+		if bool(opts.get("save", false)):
+			run = Crypto.new().generate_random_bytes(8).hex_encode()
 		train_g = to_travel(s[0], train_t)
 		if bool(opts.get("save", false)) and not train_g.is_empty():
 			_clear_slice_field()
@@ -1850,7 +1852,8 @@ func _field_opts() -> Dictionary:
 	o["field_save"] = bool(opts.get("save", false))
 	o["field_save_path"] = String(opts.get("field_save_path", FieldSave.PATH))
 	o["slice"] = true
-	o["slice_run"] = run
+	if run != "":
+		o["slice_run"] = run
 	# When the train comes in (decision 471 B0): the departure contract's, rolled by the train
 	# from its run's seed and stretch; a contract without one, from the slice's seed and step.
 	o["arrive_min"] = int(opts.get("arrive_min", _departure().get("arriveMin", FieldClock.arrival_for(int(opts.get("seed", 1)) * 1000 + step))))
