@@ -1207,7 +1207,7 @@ static func drift_uv(g: FieldGrid, corner: Vector2i) -> Vector2:
 		var kind := g.solid_at(c)
 		if kind == S.DOOR:
 			return Vector2.ZERO
-		if kind == S.WALL or kind == S.WINDOW or (kind == S.BLOCK and not lone_block(g.solid, g.width, g.height, c.x, c.y)):
+		if kind == S.WALL or kind == S.WINDOW or (kind == S.BLOCK and not lone_block(g.solid, g.building, g.width, g.height, c.x, c.y)):
 			side += Vector2i(1, 1) + d * 2
 		elif kind == S.NONE and not g.indoor(c):
 			open = true
@@ -1217,22 +1217,24 @@ static func drift_uv(g: FieldGrid, corner: Vector2i) -> Vector2:
 ## A block standing alone in its cell, nothing walled beside it (a street tree's
 ## trunk, a post, a drum): the wind piles no bank against it. Counted as a wall,
 ## it raised a bank on all four sides, a white box at a tree's foot in deep
-## winter. drift_uv and ground_bank_row both ask this, so they answer alike.
-static func lone_block(so: PackedByteArray, w: int, h: int, x: int, y: int) -> bool:
+## winter. drift_uv and ground_bank_row both ask this, so they answer alike. A
+## building's cell beside it counts as a wall whatever stands in it: furniture
+## laid in after the loader (ground_key leaves it out) changes no bank.
+static func lone_block(so: PackedByteArray, bu: PackedInt32Array, w: int, h: int, x: int, y: int) -> bool:
 	var i := y * w + x
-	if x > 0 and _walls_off(so[i - 1]):
+	if x > 0 and _walls_off(so[i - 1], bu[i - 1]):
 		return false
-	if x + 1 < w and _walls_off(so[i + 1]):
+	if x + 1 < w and _walls_off(so[i + 1], bu[i + 1]):
 		return false
-	if y > 0 and _walls_off(so[i - w]):
+	if y > 0 and _walls_off(so[i - w], bu[i - w]):
 		return false
-	if y + 1 < h and _walls_off(so[i + w]):
+	if y + 1 < h and _walls_off(so[i + w], bu[i + w]):
 		return false
 	return true
 
 
-static func _walls_off(kind: int) -> bool:
-	return kind == S.WALL or kind == S.BLOCK or kind == S.WINDOW or kind == S.DOOR
+static func _walls_off(kind: int, building: int) -> bool:
+	return building >= 0 or kind == S.WALL or kind == S.BLOCK or kind == S.WINDOW or kind == S.DOOR
 
 
 ## A wagon the model kit has none for, as [size, centre, colour] boxes: a floor on its wheels and four
@@ -1364,7 +1366,7 @@ static func ground_bank_row(g: FieldGrid, y: int, banks: PackedVector2Array) -> 
 				var kind := so[i]
 				if kind == S.DOOR:
 					door = true
-				elif kind == S.WALL or kind == S.WINDOW or (kind == S.BLOCK and not lone_block(so, w, g.height, cx, cy)):
+				elif kind == S.WALL or kind == S.WINDOW or (kind == S.BLOCK and not lone_block(so, bu, w, g.height, cx, cy)):
 					side_x += 1 + dx * 2
 					side_y += 1 + dy * 2
 				elif kind == S.NONE and bu[i] < 0:
