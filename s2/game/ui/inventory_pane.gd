@@ -6,6 +6,7 @@ extends RefCounted
 const GlassPane = preload("res://game/ui/glass_pane.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Carry = preload("res://game/sim/carry.gd")
+const Sled = preload("res://game/sim/sled.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
@@ -56,6 +57,8 @@ static func places(game, p) -> Array:
 		out.append({"kind": "train", "id": "", "name": "열차 짐칸"})
 	for id: String in game.actions.near_boxes(p):
 		out.append({"kind": "box", "id": id, "name": String(game.data["containers"][id]["name"])})
+	for sled_id: int in game.actions.near_sleds(p):
+		out.append({"kind": "sled", "id": sled_id, "name": "썰매"})
 	out.append({"kind": "ground", "id": "", "name": "바닥"})
 	return out
 
@@ -94,7 +97,7 @@ static func bag_order(game, p, by: String) -> Array:
 static func keep_order(all: Array, shown: Array) -> Array:
 	var rank := func(i: int) -> int:
 		var place: Dictionary = all[i]
-		if place["kind"] != "box":
+		if place["kind"] not in ["box", "sled"]:
 			return -1 if place["kind"] == "train" else all.size() + shown.size()
 		var at: int = shown.find(place_key(place))
 		return at if at >= 0 else shown.size() + i
@@ -120,6 +123,9 @@ static func open(hud, want: Dictionary) -> void:
 	if not bag and at["kind"] == "box":
 		var c: Dictionary = game.data["containers"][at["id"]]
 		side = "담긴 %.1f / %.0f" % [Carry.box_load(c), Carry.box_limit(c)]
+	elif not bag and at["kind"] == "sled":
+		var sled: Dictionary = Sled.find(game, int(at["id"]))
+		side = "%.1f / %.0f · %s" % [Sled.weight(sled), Sled.LIMIT, Carry.STATE_NAMES[Sled.state(sled)]]
 	var pane: GlassPane = hud._open_pane(title, side, "pack" if bag else _place_icon(at), PANE_W, true, true)
 	_slim_head(pane, hud, title, side, "pack" if bag else _place_icon(at))
 	var layout := GlassPane.row()
@@ -309,7 +315,7 @@ static func _place_name(game, place: Dictionary, short: bool = false) -> String:
 
 
 static func _place_icon(place: Dictionary) -> String:
-	return "train" if place["kind"] == "train" else ("fetch" if place["kind"] == "box" else "drop")
+	return "train" if place["kind"] == "train" else ("fetch" if place["kind"] in ["box", "sled"] else "drop")
 
 
 ## With the bag shown, the place a pressed row goes to keeps an amber edge.
@@ -412,7 +418,7 @@ static func _tools(hud, p, at: Dictionary, bag: bool) -> Control:
 	elif not bag and at["kind"] == "box":
 		if not (hud.game.data["containers"][at["id"]]["items"] as Array).is_empty():
 			row.add_child(_icon_key("pickup", "모두 담기", hud._loot_all.bind(String(at["id"])), true))
-	if at["kind"] == "train" and not hud.game.actions.loadable(p).is_empty():
+	if (at["kind"] == "train" or not hud.game.sleds.is_empty()) and hud.game.actions.at_unloading(p) and hud.game.actions.has_load(p):
 		row.add_child(_icon_key("train", "열차에 싣기", hud._load_train, true))
 	return row
 
@@ -500,6 +506,16 @@ static func _near_rows(hud, p, at: Dictionary) -> Control:
 	list.name = "Near"
 	var empty: String = ""
 	match String(at["kind"]):
+		"sled":
+			var cargo: Dictionary = Sled.find(game, int(at["id"])).get("items", {})
+			var keys: Array = cargo.keys()
+			var ids: Array = keys.duplicate()
+			ids.sort_custom(func(a: String, b: String) -> bool:
+				return _steady(_order_key(hud, a, int(cargo[a])), _order_key(hud, b, int(cargo[b])), keys.find(a), keys.find(b)))
+			for item: String in ids:
+				var count: int = int(cargo[item])
+				list.add_child(_thin_row(hud, item, "%s ×%d" % [game.item_name(item), count], Carry.item_weight(item) * count, hud._inv_sled_take.bind(int(at["id"]), item)))
+			empty = "빈 썰매"
 		"box":
 			var c: Dictionary = game.data["containers"][at["id"]]
 			var items: Array = c["items"]

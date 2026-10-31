@@ -173,6 +173,9 @@ func update(delta: float) -> void:
 	for p in game.people_alive():
 		if p == game.player:
 			continue
+		# Only the player's hands take a field sled (sled.md 2.2, vertical slice).
+		if p.sled_id != 0:
+			game.actions.release_sled(p, false)
 		_grab_reflex(p, delta)
 	think_t -= delta
 	var think := think_t <= 0.0

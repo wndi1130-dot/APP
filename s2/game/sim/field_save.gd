@@ -20,6 +20,8 @@ const EatRules = preload("res://game/sim/eat_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const Sled = preload("res://game/sim/sled.gd")
+const SLED_PERSON_FIELDS: Array[String] = ["sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_serial", "sled_job"]
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
@@ -37,6 +39,7 @@ const PERSON_FIELDS: Array[String] = [
 	"reload_t", "jam_t", "target_zombie", "target_person", "hold_attack", "grabbers", "grab_left", "grab_front",
 	"climbing", "carrying_wounded", "downed_marked", "dead_marked", "brain", "panic", "ice_t", "fallen_t",
 	"last_hurt_by", "blood_soaked", "close_kills",
+	"sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_serial", "sled_job",
 ]
 const GAME_FIELDS: Array[String] = [
 	"squad", "crew", "raiders",
@@ -47,6 +50,7 @@ const GAME_FIELDS: Array[String] = [
 	"radio_last", "radio_rings", "radio_t", "zone_now", "auto_paused_once", "dark_noise_t", "safe_warned",
 	"glass_warned", "player_downed_t", "spotted_events", "unseen_rattle", "lid_tip_told", "roof_seen",
 	"seen_now", "seen_memory", "vis_t", "cam_focus", "cam_push", "cam_size",
+	"sleds", "next_sled_id",
 ]
 const COMPONENTS: Array[String] = ["director", "ledger", "mission_play", "holdout", "actions", "ai", "combat", "lines", "weather", "telemetry", "train_guard", "work"]
 ## "dead_eaten_seconds" is EatRules.EATEN_META (결정 441 (3)).
@@ -85,6 +89,7 @@ static func capture(game) -> Dictionary:
 		"player_pid": game.player.pid if game.player != null else "",
 		"people": people, "ammo": game.ammo.duplicate(), "containers": containers, "spots": spots,
 		"ground_items": ground, "unloaded": game.unloaded.duplicate(), "loaded_wear": game.loaded_wear.duplicate(true),
+		"sleds": game.sleds.duplicate(true), "next_sled_id": game.next_sled_id,
 		"coal": {"delivered": game.actions.coal_delivered if game.actions != null else 0, "spent": game.actions.coal_spent if game.actions != null else 0},
 		"zombies": zombies, "decisions": game.decisions.duplicate(true),
 		# The return's id, the same as the receipt's receiptId: the train side applies it once.
@@ -263,6 +268,7 @@ static func apply(game, save: Dictionary) -> void:
 		for p in game.people:
 			if p.pid == String(row["pid"]):
 				_put_person(p, row)
+	_restore_sled_envelope(game, save)
 	if exact(save):
 		game.ammo.clear()
 	_put_counts(game.ammo, save.get("ammo", {}))
@@ -294,8 +300,43 @@ static func apply(game, save: Dictionary) -> void:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	game.cam_focus = game.player.position
 	game._update_camera(1.0)
+	Sled.reconcile(game)
 	_refresh_restored_view(game)
 	game.set_stop_form(form)
+
+
+## The old/fallback path also keeps sled work by pid and id, with no replay.
+static func _restore_sled_envelope(game, save: Dictionary) -> void:
+	game.sleds = (save.get("sleds", []) as Array).duplicate(true)
+	game.next_sled_id = int(save.get("next_sled_id", 1))
+	for p in game.people:
+		p.sled_id = 0
+		p.sled_stowed_for = 0
+		p.sled_weapon_stowed = false
+		p.sled_serial = 0
+		p.sled_job = {}
+	for row: Dictionary in save.get("people", []):
+		var p = _person_with_id(game, String(row["pid"]))
+		if p == null:
+			continue
+		var saved: Dictionary = row.get("state", {})
+		var fields: Dictionary = {}
+		for key: String in SLED_PERSON_FIELDS:
+			if saved.has(key):
+				fields[key] = saved[key]
+		_restore_properties(game, p, fields)
+		if p.sled_id != 0 or p.sled_weapon_stowed or not p.sled_job.is_empty():
+			fields.clear()
+			for key: String in ["path", "running", "crouched", "facing", "look", "moving", "stick", "drive_speed", "drive_dir"]:
+				if saved.has(key):
+					fields[key] = saved[key]
+			_restore_properties(game, p, fields)
+		if not p.sled_job.is_empty():
+			fields.clear()
+			for key: String in ["action", "action_label", "action_t", "action_total", "action_done"]:
+				if saved.has(key):
+					fields[key] = saved[key]
+			_restore_properties(game, p, fields)
 
 
 static func _put_person(p, row: Dictionary) -> void:
@@ -517,6 +558,7 @@ static func _restore_properties(game, object, saved: Dictionary) -> void:
 
 
 static func _apply_exact(game, save: Dictionary) -> void:
+	_restore_sled_envelope(game, save)
 	var runtime: Dictionary = save["runtime"]
 	for kind: String in ["containers", "spots"]:
 		var rows: Dictionary = save["containers"] if kind == "containers" else runtime["spots"]
@@ -583,9 +625,11 @@ static func _apply_exact(game, save: Dictionary) -> void:
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	_restore_properties(game, game, runtime["game"])
+	Sled.reconcile(game)
 	_refresh_restored_view(game)
 	# Sight/view rebuilding must not advance the saved simulation or random streams.
 	_restore_properties(game, game, runtime["game"])
+	Sled.reconcile(game)
 	# Rendering establishes pose caches. Keep their saved clocks too: showing the
 	# paused frame is not an extra simulation/render step on the body's timeline.
 	for i in game.zombies.list.size():
@@ -604,6 +648,7 @@ static func _apply_exact(game, save: Dictionary) -> void:
 
 
 static func _refresh_restored_view(game) -> void:
+	game.view.update_sleds(game.sleds, game.people)
 	# Boxes are drawn in shared chunk meshes (map_view.gd): ask the view, not its nodes.
 	for id in game.view.container_ids():
 		if not game.data["containers"].has(id):

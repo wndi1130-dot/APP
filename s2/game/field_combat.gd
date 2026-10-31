@@ -164,6 +164,8 @@ func wound_side(group: String) -> String:
 
 func update(delta: float) -> void:
 	for p in game.people_alive():
+		if p.sled_weapon_stowed:
+			game.Sled.clear_attack(p)
 		var m: Dictionary = p.mults()
 		p.swing_t = maxf(0.0, p.swing_t - delta)
 		p.lunge_t = maxf(0.0, p.lunge_t - delta)
@@ -221,6 +223,8 @@ func update(delta: float) -> void:
 
 ## Tap on a zombie: walk up and swing once; hold keeps swinging.
 func melee_target(p, z: Dictionary, hold: bool = false) -> void:
+	if p.sled_weapon_stowed:
+		return
 	p.target_zombie = z
 	p.target_person = null
 	p.hold_attack = hold
@@ -228,6 +232,8 @@ func melee_target(p, z: Dictionary, hold: bool = false) -> void:
 
 
 func melee_person(p, other) -> void:
+	if p.sled_weapon_stowed:
+		return
 	p.target_person = other
 	p.target_zombie = {}
 	p.hold_attack = true
@@ -244,6 +250,8 @@ func fighting(p) -> bool:
 
 ## Go for an enemy; hold keeps swinging.
 func fight(p, target, hold: bool) -> void:
+	if p.sled_weapon_stowed:
+		return
 	# A raider who surrendered, ran or was taken is not a target (a tap that
 	# lands a moment late, a finger still down on him).
 	if target == null or (not (target is Dictionary) and not hostile(target)):
@@ -633,6 +641,8 @@ func stomps(p, at) -> bool:
 ## One stomp lands on a fallen one. It takes STOMPS_TO_END of them; what it
 ## has taken stays with it if it gets up meanwhile.
 func stomp(p, z: Dictionary) -> void:
+	if p.sled_weapon_stowed:
+		return
 	var blow: Dictionary = _power_before(p, z, "stomp")
 	p.swing_t = STOMP_TIME / float(p.mults()["swing"])
 	p.body.add_fatigue(STOMP_FATIGUE)
@@ -688,7 +698,7 @@ func _land_strike(p) -> void:
 	p.strike_total = 0.0
 	p.strike_at = null
 	p.swing_t = 0.0
-	var stopped: bool = p.body.dead or p.body.downed or p.fallen_t > 0.0
+	var stopped: bool = p.sled_weapon_stowed or p.body.dead or p.body.downed or p.fallen_t > 0.0
 	if String(game.opts.get("melee_break", "grab")) == "grab" and not p.grabbers.is_empty():
 		stopped = true
 	var stomp_it: bool = p.strike_kind == "stomp"
@@ -733,6 +743,8 @@ func _strike_reaches(p, at) -> bool:
 
 ## One melee swing at a zombie (weapons.md S2 rows, zombies.md kinds).
 func swing(p, z: Dictionary) -> void:
+	if p.sled_weapon_stowed:
+		return
 	var rng: RandomNumberGenerator = game.rng
 	var now: float = game.clock.elapsed
 	var wid: String = p.weapon_id()
@@ -820,6 +832,8 @@ func swing(p, z: Dictionary) -> void:
 
 ## Raider or squad melee on a person. Hit chance from melee skill.
 func swing_person(p, o) -> void:
+	if p.sled_weapon_stowed:
+		return
 	var rng: RandomNumberGenerator = game.rng
 	var wid: String = p.weapon_id()
 	var d: Dictionary = W.get_data(wid)
@@ -945,6 +959,8 @@ func striking(p) -> bool:
 ## Free to start a blow or a shove (decision 420): a work it breaks off is let
 ## go now; any other work of the hands runs to its end first.
 func _hands_free_for_blow(p) -> bool:
+	if p.sled_weapon_stowed:
+		return false
 	if p.action == "" or p.action == "aim":
 		return true
 	if BLOW_BREAKS.has(p.action):
@@ -1001,6 +1017,7 @@ func shove(p) -> void:
 func break_grab(p) -> bool:
 	if p.grabbers.is_empty() or p.grab_left <= 0.0:
 		return false
+	game.actions.release_sled(p, false)
 	for z in p.grabbers.duplicate():
 		game.zombies.release(z, p.position, game.rng.randf() < SHOVE_KNOCK)
 	p.grabbers.clear()
@@ -1090,6 +1107,7 @@ func zombie_reaches(z: Dictionary, p) -> String:
 			z["victim"] = p
 			z["state"] = "grab"
 			if not p.grabbers.has(z):
+				game.actions.release_sled(p, false)
 				p.grabbers.append(z)
 				game.shout(p, "grabbed")
 			var window: float = GrabRules.window(front, p.grabbers.size(), int(p.skills["melee"]), int(p.skills["strength"]), float(p.mults()["shove_window"]))
@@ -1239,6 +1257,7 @@ func _where(at: Vector3) -> String:
 
 ## Falls on ice, under a load or off the ladder (body_injury 3.2).
 func fall(p, msg: String, fracture_chance: float = 0.05, leg: bool = false) -> void:
+	game.actions.release_sled(p, false)
 	p.fallen_t = FALL_TIME
 	p.cancel_action()
 	p.stop()
@@ -1265,6 +1284,8 @@ func aim_mods(p) -> Dictionary:
 
 
 func can_shoot(p) -> bool:
+	if p.sled_weapon_stowed:
+		return false
 	var wid: String = p.weapon_id()
 	return p.can_act() and W.is_ranged(wid) and not arm_too_hurt(p) and p.reload_t <= 0.0 and p.jam_t <= 0.0 and not bool(p.weapon().get("broken", false))
 
@@ -1555,6 +1576,8 @@ func _first_wall(from: Vector3, to: Vector3):
 
 ## Reload from the shared squad pool (raiders carry their own few rounds).
 func start_reload(p) -> bool:
+	if p.sled_weapon_stowed:
+		return false
 	var wid: String = p.weapon_id()
 	var d: Dictionary = W.get_data(wid)
 	if not W.is_ranged(wid) or p.reload_t > 0.0 or p.jam_t > 0.0:
@@ -1605,6 +1628,8 @@ func _take(p, kind: String, n: int) -> int:
 
 ## Swap hand slots: belt to hand, slower with a heavy bag (body_injury 6).
 func swap(p) -> void:
+	if p.sled_weapon_stowed:
+		return
 	# Not mid-blow either: one body does one thing at a time (decision 420).
 	if p.hands.size() < 2 or not p.can_act() or p.action != "" or striking(p):
 		return

@@ -1,0 +1,764 @@
+extends GutTest
+## Field-only cargo, one-use work, and both save paths (sled.md 2.1-2.5).
+
+const FieldSave = preload("res://game/sim/field_save.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
+const Sled = preload("res://game/sim/sled.gd")
+const Carry = preload("res://game/sim/carry.gd")
+const Gait = preload("res://game/sim/gait.gd")
+const InventoryPane = preload("res://game/ui/inventory_pane.gd")
+const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
+const EPS: float = 0.00001
+var fields: Array[Node] = []
+
+class QuietField:
+	extends "res://game/field_game.gd"
+	var saved_result: Dictionary = {}
+
+	func _save(result: Dictionary) -> void:
+		saved_result = result.duplicate(true)
+
+
+func after_each() -> void:
+	for field: Node in fields:
+		if is_instance_valid(field):
+			field.free()
+	fields.clear()
+	await get_tree().process_frame
+
+
+func _game() -> Variant:
+	var field: QuietField = QuietField.new()
+	field.opts = {"seed": 831, "raiders": false, "auto_pause": false, "arrive": false, "field_save": false, "receipt_id": "sled_test"}
+	field.map_script = BareLine
+	add_child(field)
+	field.set_process(false)
+	fields.append(field)
+	field.zombies.list.clear()
+	field.director.budget_left = 0
+	field.director.next_arrival = INF
+	field.data["unloading"] = [Rect2i(8, 18, 10, 5)]
+	field.data["unload"] = Rect2i(8, 18, 10, 5)
+	field.ground_items.clear()
+	field.unloaded.clear()
+	field.cloth_start = 0
+	for person: Variant in field.people:
+		person.items.clear()
+		person.command = "wait"
+		person.stop()
+	var p: Variant = field.player
+	p.position = Vector3(10.5, 0, 20.5)
+	p.gloves = false
+	p.heat.heat = 100.0
+	p.heat.wet = 0.0
+	p.running = false
+	p.stick = Vector2.ZERO
+	p.skills["strength"] = 5
+	return field
+
+
+func _discard_field(field: Node) -> void:
+	fields.erase(field)
+	field.free()
+
+
+func _sled(game: Variant, cargo: Dictionary = {}) -> Dictionary:
+	var row: Dictionary = {"id": game.next_sled_id, "level": 0, "pos": game.player.position + Vector3(-1, 0, 0), "items": cargo.duplicate(true), "puller": ""}
+	game.next_sled_id += 1
+	game.sleds.append(row)
+	return row
+
+
+func _labels(game: Variant) -> Array:
+	return game.actions.context(game.player).map(func(row: Dictionary) -> String: return String(row["label"]))
+
+
+func _buttons(game: Variant) -> Array:
+	return game.hud.modal.find_children("*", "Button", true, false).map(func(button: Button) -> String: return button.text)
+
+
+func _saved(game: Variant) -> Dictionary:
+	return FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+
+
+func _finish_work(game: Variant) -> void:
+	game.player.action_t = 0.0
+	game._update_person(game.player, 0.0)
+
+
+func _snapshot(game: Variant) -> Dictionary:
+	var p: Variant = game.player
+	return {"sleds": game.sleds.duplicate(true), "next": game.next_sled_id,
+		"pid": String(p.pid), "pos": p.position, "bag": p.items.duplicate(true), "hands": p.hands.duplicate(true),
+		"pulling": p.sled_id, "stowed": p.sled_weapon_stowed, "for": p.sled_stowed_for,
+		"job": p.sled_job.duplicate(true), "action": p.action, "left": p.action_t,
+		"callback": String(p.action_done.get_method()) if p.action != "" else "", "unloaded": game.unloaded.duplicate(true)}
+
+
+func _apply(game: Variant, saved: Dictionary, exact_mode: bool) -> void:
+	var copy: Dictionary = saved.duplicate(true)
+	if not exact_mode:
+		copy.erase("runtime")
+	FieldSave.apply(game, copy)
+
+
+# D1: Inclusive boundaries; the sled never reads body strength.
+func test_d1_weight_boundaries_and_fixed_capacity() -> void:
+	var game: Variant = _game()
+	var values: Array[float] = [0.0, 5.5, 6.0, 6.5, 11.5, 12.0, 12.5, 24.0, 24.5]
+	var states: Array[int] = [0, 0, 0, 1, 1, 1, 2, 2, 3]
+	for strength: int in [3, 5, 7]:
+		game.player.skills["strength"] = strength
+		assert_eq(Sled.LIMIT, 12.0)
+		for i: int in values.size():
+			var row: Dictionary = {"items": {"document": int(values[i] * 2.0)}}
+			assert_eq(Sled.weight(row), values[i])
+			assert_eq(Sled.state(row), states[i], "strength %d, load %.1f" % [strength, values[i]])
+
+
+# D2: Availability, exact base work, cancellations and stale completions.
+func test_d2_craft_offer_materials_floor_and_one_sled() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	for materials: Dictionary in [{"plank": 1}, {"wood": 2, "cloth": 1}, {"plank": 2}]:
+		p.items = materials.duplicate()
+		assert_false(_labels(game).has("썰매 엮기"))
+		assert_false(game.actions.craft_sled(p))
+	p.items = {"plank": 2, "cloth": 1}
+	assert_true(_labels(game).has("썰매 엮기"))
+	var cell: Vector2i = FieldGrid.cell_of(p.position)
+	game.grid.building[game.grid.index(cell)] = 1
+	assert_false(_labels(game).has("썰매 엮기"))
+	game.grid.building[game.grid.index(cell)] = -1
+	p.position.y = 3.0
+	assert_false(_labels(game).has("썰매 엮기"))
+	p.position.y = 0.0
+	_sled(game)
+	assert_false(_labels(game).has("썰매 엮기"))
+	assert_false(game.actions.craft_sled(p))
+
+
+func test_d2_craft_thirty_seconds_once_and_quiet() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.items = {"plank": 2, "cloth": 1}
+	var random_state: int = game.rng.state
+	var noise: int = game.ledger.total
+	assert_true(game.actions.craft_sled(p))
+	var done: Callable = p.action_done
+	assert_eq(p.action_total, 30.0)
+	assert_eq(float(p.mults()["hands"]), 1.0)
+	game._update_person(p, 29.0)
+	assert_eq(game.sleds.size(), 0)
+	assert_eq(p.items, {"plank": 2, "cloth": 1})
+	game._update_person(p, 1.0)
+	assert_eq(game.sleds.size(), 1)
+	assert_eq(p.items, {})
+	var after: Dictionary = _snapshot(game)
+	done.call()
+	assert_eq(_snapshot(game), after)
+	assert_eq(game.ledger.total, noise)
+	assert_eq(game.rng.state, random_state)
+
+
+func test_d2_move_cancel_missing_material_and_old_callback() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.items = {"plank": 2, "cloth": 1}
+	assert_true(game.actions.craft_sled(p))
+	var old: Callable = p.action_done
+	p.stick = Vector2(1, 0)
+	game._update_person(p, 0.1)
+	p.stick = Vector2.ZERO
+	p.drive_speed = 0.0
+	old.call()
+	assert_eq(game.sleds.size(), 0)
+	assert_eq(p.items, {"plank": 2, "cloth": 1})
+	assert_true(game.actions.craft_sled(p))
+	old.call()
+	assert_eq(p.action, "craft", "an old completion does not cancel the new job")
+	assert_true(game.actions.put_down(p, "cloth"))
+	_finish_work(game)
+	assert_eq(game.sleds.size(), 0)
+	assert_eq(p.items, {"plank": 2})
+	assert_eq(int(game.ground_items[0]["n"]), 1)
+
+
+func test_d2_completion_rechecks_space_distance_and_id() -> void:
+	for failure: String in ["space", "distance", "id", "floor"]:
+		var game: Variant = _game()
+		var p: Variant = game.player
+		p.items = {"plank": 2, "cloth": 1}
+		assert_true(game.actions.craft_sled(p))
+		var done: Callable = p.action_done
+		p.action_t = 0.0
+		game.actions.complete_work(p)
+		p.cancel_action(true)
+		match failure:
+			"space":
+				var here: Vector2i = FieldGrid.cell_of(p.position)
+				for x: int in range(-1, 2):
+					for y: int in range(-1, 2):
+						if x != 0 or y != 0:
+							game.grid.set_solid(here + Vector2i(x, y), FieldGrid.Solid.WALL)
+			"distance":
+				p.position.x += 4.0
+			"id":
+				game.next_sled_id += 1
+			"floor":
+				p.position.y = 3.0
+		done.call()
+		done.call()
+		assert_eq(game.sleds.size(), 0, failure)
+		assert_eq(p.items, {"plank": 2, "cloth": 1}, failure)
+
+
+func test_d2_cancel_even_after_ticket_revokes_completion() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.items = {"plank": 2, "cloth": 1}
+	assert_true(game.actions.craft_sled(p))
+	var done: Callable = p.action_done
+	p.action_t = 0.0
+	game.actions.complete_work(p)
+	p.cancel_action()
+	done.call()
+	assert_eq(game.sleds, [])
+	assert_eq(p.items, {"plank": 2, "cloth": 1})
+
+
+# D3: The hand slot is stored intact; drawing it is a named, one-second job.
+func test_d3_pull_refusals_and_combat_lock_then_draw() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	var sled: Dictionary = _sled(game)
+	var id: int = int(sled["id"])
+	p.set_weapon_slots([{"id": "pistol", "quality": "factory", "condition": 0.63, "loaded": 3}, {"id": "knife", "quality": "factory", "condition": 0.42, "loaded": 0}])
+	var weapons: Array = p.hands.duplicate(true)
+	p.reload_t = 0.5
+	assert_false(game.actions.pull_sled(p, id))
+	p.reload_t = 0.0
+	p.items = {"symbol_bell": 1}
+	assert_false(game.actions.pull_sled(p, id))
+	p.items.clear()
+	p.carrying_wounded = game.squad[1]
+	assert_false(game.actions.pull_sled(p, id))
+	p.carrying_wounded = null
+	assert_true(game.combat.start_aim(p))
+	assert_false(game.actions.pull_sled(p, id))
+	p.aim.stop()
+	p.start_action("search", "뒤지기", 2.0, Callable())
+	assert_false(game.actions.pull_sled(p, id))
+	p.cancel_action()
+	p.strike_t = 0.2
+	assert_false(game.actions.pull_sled(p, id))
+	p.strike_t = 0.0
+	p.hold_attack = true
+	p.target_zombie = {"id": 77}
+	game.hud.auto_aim = true
+	assert_true(game.actions.pull_sled(p, id))
+	assert_false(game.hud.auto_aim)
+	assert_false(p.hold_attack)
+	assert_eq(p.target_zombie, {})
+	assert_false(p.load_lets_run())
+	assert_false(game.combat.can_shoot(p))
+	assert_false(game.combat.start_aim(p))
+	assert_false(game.combat.start_reload(p))
+	game.combat.start_swing(p, {})
+	game.combat.shove(p)
+	game.combat.stomp(p, {})
+	game.combat.swap(p)
+	assert_eq(p.swing_t, 0.0)
+	assert_eq(p.strike_t, 0.0)
+	assert_eq(p.hands, weapons)
+	assert_false(p.weapon_mesh.visible)
+	assert_eq(Gait.ready_name(p), "")
+	assert_eq(Gait.gait_name(p, false), Gait.CARRY_BIG)
+	assert_eq(Gait.crouch_name(p, true), Gait.CARRY_BIG)
+	assert_eq(Gait.burden_name(p, 0.5), Gait.CARRY_BIG)
+	game.actions.release_sled(p)
+	assert_eq(p.sled_id, 0)
+	assert_eq(sled["puller"], "")
+	assert_eq(p.action, "sled_rearm")
+	var done: Callable = p.action_done
+	game._update_person(p, 0.5)
+	assert_false(game.combat._hands_free_for_blow(p))
+	game._update_person(p, 0.5)
+	assert_true(game.combat._hands_free_for_blow(p))
+	assert_false(p.sled_weapon_stowed)
+	done.call()
+	assert_eq(p.hands, weapons)
+
+
+func test_d3_grab_drops_before_escape() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	var sled: Dictionary = _sled(game, {"food_pack": 2})
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	var dead: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.4, 0, 0))
+	dead["state"] = "grab"
+	dead["victim"] = p
+	p.grabbers.append(dead)
+	p.grab_left = 1.0
+	assert_true(game.combat.break_grab(p))
+	assert_eq(p.sled_id, 0)
+	assert_eq(sled["puller"], "")
+	assert_eq(sled["items"], {"food_pack": 2})
+
+
+func test_d3_weapon_pickup_blocked_small_auto_pickup_keeps_rope() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.set_weapon_slots([{"id": "knife", "quality": "factory", "condition": 0.73, "loaded": 0}])
+	var weapons: Array = p.hands.duplicate(true)
+	var sled: Dictionary = _sled(game)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	game.ground_items.append({"pos": p.position, "id": "pistol", "n": 1, "weapon": {"id": "pistol", "quality": "factory", "condition": 0.41, "loaded": 2}})
+	game.actions.pick_up(p, 0)
+	assert_eq(p.hands, weapons)
+	assert_eq(game.ground_items.size(), 1)
+	var rounds: int = int(game.ammo["craft"])
+	game.ground_items.append({"pos": p.position, "id": "ammo_craft", "n": 2})
+	game.actions._auto_pickup()
+	assert_eq(game.ground_items.size(), 1)
+	assert_eq(int(game.ammo["craft"]), rounds + 2)
+	assert_eq(p.sled_id, int(sled["id"]))
+
+
+# D4: Compare actual displacement, including residual stick inertia.
+func test_d4_drive_and_path_speed_ratios_and_independent_bag() -> void:
+	for load_index: int in 3:
+		for drive: bool in [true, false]:
+			var plain: Variant = _game()
+			var towing: Variant = _game()
+			plain.player.items = {"scrap": 2}
+			towing.player.items = {"scrap": 2}
+			var sled: Dictionary = _sled(towing, {"scrap": [0, 7, 13][load_index]})
+			assert_true(towing.actions.pull_sled(towing.player, int(sled["id"])))
+			assert_eq(towing.player.weight(), plain.player.weight())
+			var at: Vector3 = plain.player.position
+			for game: Variant in [plain, towing]:
+				if drive:
+					game.player.stick = Vector2(1, 0)
+					game._drive(game.player, 0.1)
+				else:
+					game.player.path = PackedVector3Array([at + Vector3(4, 0, 0)])
+					game._move_person(game.player, 0.1)
+			var ratio: float = Sled.LOAD_MULT[load_index] * 0.9
+			assert_almost_eq(at.distance_to(towing.player.position), at.distance_to(plain.player.position) * ratio, EPS)
+			_discard_field(plain)
+			_discard_field(towing)
+
+
+func test_d4_overloaded_stops_this_tick_with_inertia() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	var sled: Dictionary = _sled(game, {"scrap": 25})
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	var at: Vector3 = p.position
+	p.drive_speed = 3.0
+	p.drive_dir = Vector3.RIGHT
+	p.stick = Vector2.RIGHT
+	game._drive(p, 0.1)
+	assert_eq(p.position, at)
+	assert_eq(p.drive_speed, 0.0)
+	p.path = PackedVector3Array([at + Vector3(4, 0, 0)])
+	game._move_person(p, 0.1)
+	assert_eq(p.position, at)
+	assert_eq(p.sled_id, int(sled["id"]))
+
+
+# D5: The final movement candidate and the sled's swept cells are separate checks.
+func test_d5_drive_and_path_leave_sled_outside() -> void:
+	for drive: bool in [true, false]:
+		var game: Variant = _game()
+		var p: Variant = game.player
+		p.position = Vector3(10.95, 0, 20.5)
+		var sled: Dictionary = _sled(game)
+		var at: Vector3 = sled["pos"]
+		assert_true(game.actions.pull_sled(p, int(sled["id"])))
+		game.grid.building[game.grid.index(Vector2i(11, 20))] = 1
+		if drive:
+			p.stick = Vector2.RIGHT
+			p.drive_speed = p.speed(FieldGrid.Floor.SNOW)
+			game._drive(p, 0.1)
+		else:
+			p.path = PackedVector3Array([Vector3(13.5, 0, 20.5)])
+			game._move_person(p, 0.1)
+		assert_eq(p.sled_id, 0)
+		assert_eq(sled["pos"], at)
+		assert_false(game.grid.indoor(FieldGrid.cell_of(sled["pos"])))
+		assert_true(game.grid.indoor(FieldGrid.cell_of(p.position)))
+
+
+func test_d5_wall_corner_and_long_step_drop_without_teleport() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.position = Vector3(11.5, 0, 20.5)
+	var sled: Dictionary = _sled(game)
+	var at: Vector3 = sled["pos"]
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	game.grid.set_solid(Vector2i(10, 21), FieldGrid.Solid.WALL)
+	assert_false(Sled.path_clear(game, Vector3(10.5, 0, 20.5), Vector3(11.5, 0, 21.5)))
+	p.stick = Vector2(0, 1)
+	p.drive_speed = p.speed(FieldGrid.Floor.SNOW)
+	game._drive(p, 0.7)
+	assert_eq(p.sled_id, 0)
+	assert_eq(sled["pos"], at)
+	assert_true(game.grid.people_can_walk(FieldGrid.cell_of(p.position)))
+	_finish_work(game)
+	p.position = at + Vector3(1, 0, 0)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	Sled.before_move(game, p, p.position + Vector3(5, 0, 0))
+	assert_eq(p.sled_id, 0)
+	assert_eq(sled["pos"], at)
+
+
+func test_d5_stair_level_branch_and_hands_work_menu_boundary() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	var sled: Dictionary = _sled(game)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	game.actions.open_sled(p, int(sled["id"]))
+	game.hud._close_modal()
+	assert_ne(p.sled_id, 0)
+	game.actions.tear_bandage(p)
+	assert_ne(p.sled_id, 0, "an unavailable work does not drop the rope")
+	p.items["cloth"] = 1
+	game.actions.tear_bandage(p)
+	assert_eq(p.sled_id, 0)
+	assert_eq(p.action, "craft")
+	_finish_work(game)
+	game._update_person(p, 0.0)
+	_finish_work(game)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	p.path = PackedVector3Array([Vector3(p.position.x, 3.0, p.position.z)])
+	game._move_person(p, 0.1)
+	assert_eq(p.sled_id, 0)
+	assert_eq(float(sled["pos"].y), 0.0)
+	assert_eq(p.position.y, 3.0)
+
+
+# D6: All three incapacitation entries leave cargo owned by the sled.
+func test_d6_death_bleeding_down_and_fall_preserve_cargo() -> void:
+	for event: String in ["death", "raider_death", "downed", "fall"]:
+		var game: Variant = _game()
+		var p: Variant = game.player
+		p.items = {"scrap": 1}
+		var sled: Dictionary = _sled(game, {"food_pack": 7})
+		assert_false(is_same(p.items, sled["items"]))
+		assert_true(game.actions.pull_sled(p, int(sled["id"])))
+		match event:
+			"death", "raider_death":
+				if event == "raider_death":
+					p.team = "raider"
+				game.on_person_died(p)
+			"downed":
+				p.body.downed = true
+				game._on_body_event(p, "downed")
+			"fall":
+				game.combat.fall(p, "넘어졌다", 0.0)
+		assert_eq(p.sled_id, 0, event)
+		assert_eq(sled["puller"], "", event)
+		assert_eq(sled["items"], {"food_pack": 7}, event)
+		assert_false(p.items.has("food_pack"))
+		assert_false(game.ground_items.any(func(row: Dictionary) -> bool: return row["id"] == "food_pack"))
+		for dead: Dictionary in game.zombies.list:
+			for loot: Dictionary in dead.get("loot", []):
+				assert_ne(String(loot.get("id", "")), "food_pack")
+		p.body.downed = false
+		p.fallen_t = 0.0
+		game._update_person(p, 0.1)
+		assert_eq(p.sled_id, 0, "recovery never reattaches")
+
+
+# D7: Explicit unloading, no field-store filter on the sled, no companion ownership.
+func test_d7_empty_bag_sled_buttons_all_cargo_and_no_second_trip() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	var sled: Dictionary = _sled(game, {"cloth": 2, "bandage": 3, "food_pack": 2})
+	assert_true(_labels(game).has("열차에 싣기"))
+	game.hud.bag_panel()
+	assert_true(_buttons(game).has("열차에 싣기"))
+	assert_true(InventoryPane.places(game, p).any(func(place: Dictionary) -> bool: return place["kind"] == "sled"))
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	assert_eq(String(game.actions._near_things(p)[0]["label"]), "놓는다")
+	var mate: Variant = game.squad[1]
+	mate.position = p.position
+	mate.items = {"scrap": 1}
+	assert_false(game.actions.pull_sled(mate, int(sled["id"])))
+	assert_false(game.actions.move_sled(mate, int(sled["id"]), "cloth", false))
+	game.actions._auto_unload()
+	assert_eq(sled["items"], {"cloth": 2, "bandage": 3, "food_pack": 2})
+	var trips: int = game.telemetry.trips
+	assert_true(game.actions.load_train(p))
+	assert_eq(sled["items"], {})
+	assert_eq(game.unloaded, {"scrap": 1, "cloth": 2, "bandage": 3, "food_pack": 2})
+	assert_eq(game.telemetry.trips, trips + 1)
+	assert_ne(p.sled_id, 0, "unloading keeps the rope")
+	assert_false(game.actions.load_train(p))
+	assert_eq(game.telemetry.trips, trips + 1)
+	game.hud.bag_panel()
+	assert_false(_buttons(game).has("열차에 싣기"))
+	game.hud._close_modal()
+
+
+func test_d7_bag_only_and_sled_reference_cell_outside() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	var sled: Dictionary = _sled(game)
+	p.items = {"scrap": 2, "cloth": 1}
+	assert_true(game.actions.load_train(p))
+	assert_eq(game.unloaded, {"scrap": 2})
+	assert_eq(p.items, {"cloth": 1})
+	sled["items"] = {"cloth": 3, "bandage": 2}
+	sled["pos"] = Vector3(7.5, 0, 20.5)
+	assert_false(game.actions.load_train(p), "the sled reference is outside the actual unloading cells")
+	assert_eq(sled["items"], {"cloth": 3, "bandage": 2})
+	sled["pos"] = Vector3(9.5, 3, 20.5)
+	sled["level"] = 1
+	assert_false(game.actions.load_train(p))
+	sled["pos"] = Vector3(9.5, 0, 20.5)
+	sled["level"] = 0
+	assert_true(game.actions.load_train(p))
+	assert_eq(int(game.unloaded["cloth"]), 3)
+	assert_eq(int(game.unloaded["bandage"]), 2)
+
+
+# D8: The stop's receipt never includes a sled that was not unloaded.
+func test_d8_all_end_reasons_leave_sled_cargo_out_of_receipt() -> void:
+	for reason: String in ["departed", "limit", "wiped"]:
+		var game: Variant = _game()
+		var sled: Dictionary = _sled(game, {"food_pack": 4, "cloth": 2})
+		assert_true(game.actions.pull_sled(game.player, int(sled["id"])))
+		game.finish(reason)
+		assert_eq(sled["items"], {"food_pack": 4, "cloth": 2}, reason)
+		assert_eq(sled["puller"], "")
+		assert_eq(game.player.sled_id, 0)
+		assert_eq(game.unloaded, {})
+		var stock: Dictionary = game.saved_result["receipt"]["stock"]
+		assert_eq(int(stock.get("food", 0)), 0)
+		assert_eq(int(stock.get("cloth", 0)), 0)
+
+
+# D9: Transfers are immediate; the transfer checkpoint is immediately after the press.
+func test_d9_all_checkpoints_legacy_and_exact_resume_twice() -> void:
+	for exact_mode: bool in [false, true]:
+		for phase: String in ["parked", "pulling", "craft", "moved", "rearm", "before_unload", "after_unload"]:
+			var game: Variant = _game()
+			var p: Variant = game.player
+			p.set_weapon_slots([{"id": "pipe_shotgun", "quality": "fine", "condition": 0.63, "loaded": 1}, {"id": "knife", "quality": "factory", "condition": 0.42, "loaded": 0}])
+			if phase == "craft":
+				p.items = {"plank": 2, "cloth": 1}
+				assert_true(game.actions.craft_sled(p))
+				game._update_person(p, 12.0)
+			else:
+				var sled: Dictionary = _sled(game, {"food_pack": 2})
+				if phase in ["pulling", "rearm"]:
+					assert_true(game.actions.pull_sled(p, int(sled["id"])))
+				if phase == "pulling":
+					p.stick = Vector2.RIGHT
+					game._drive(p, 0.4)
+					assert_almost_eq(p.position.distance_to(sled["pos"]), Sled.ROPE_LENGTH, Sled.ROPE_EPS)
+				if phase == "rearm":
+					game.actions.release_sled(p)
+					game._update_person(p, 0.4)
+				elif phase == "moved":
+					assert_true(game.actions.move_sled(p, int(sled["id"]), "food_pack", false))
+				elif phase == "after_unload":
+					assert_true(game.actions.load_train(p))
+			var saved: Dictionary = _saved(game)
+			var original: String = FieldSave.to_json(saved)
+			var resumed: Variant = _game()
+			_apply(resumed, saved, exact_mode)
+			assert_eq(_snapshot(resumed), _snapshot(game), phase)
+			_apply(resumed, saved, exact_mode)
+			assert_eq(_snapshot(resumed), _snapshot(game), phase + " applied twice")
+			assert_eq(FieldSave.to_json(saved), original, "restore never mutates the save")
+			if phase in ["craft", "rearm"]:
+				_finish_work(game)
+				_finish_work(resumed)
+			elif phase == "pulling":
+				for field: Variant in [game, resumed]:
+					field.player.stick = Vector2.RIGHT
+					field._drive(field.player, 0.25)
+			elif phase == "before_unload":
+				game.actions.load_train(p)
+				resumed.actions.load_train(resumed.player)
+			assert_eq(_snapshot(resumed), _snapshot(game), phase + " continued")
+			_discard_field(game)
+			_discard_field(resumed)
+
+
+func test_d9_old_save_and_missing_or_dead_puller() -> void:
+	for exact_mode: bool in [false, true]:
+		for invalid: String in ["old", "missing", "dead"]:
+			var game: Variant = _game()
+			var sled: Dictionary = _sled(game, {"food_pack": 2})
+			assert_true(game.actions.pull_sled(game.player, int(sled["id"])))
+			var saved: Dictionary = _saved(game)
+			if invalid == "old":
+				saved.erase("sleds")
+				saved.erase("next_sled_id")
+				saved["runtime"]["game"].erase("sleds")
+				saved["runtime"]["game"].erase("next_sled_id")
+				for row: Dictionary in saved["people"]:
+					for key: String in FieldSave.SLED_PERSON_FIELDS:
+						row["state"].erase(key)
+			elif invalid == "missing":
+				saved["sleds"][0]["puller"] = "absent_pid"
+				saved["runtime"]["game"]["sleds"][0]["puller"] = "absent_pid"
+			else:
+				for row: Dictionary in saved["people"]:
+					if row["pid"] == game.player.pid:
+						row["body"]["dead"] = true
+			_apply(game, saved, exact_mode)
+			assert_eq(game.player.sled_id, 0, invalid)
+			if invalid == "old":
+				assert_eq(game.sleds, [])
+				assert_eq(game.next_sled_id, 1)
+				assert_false(game.player.sled_weapon_stowed)
+			else:
+				assert_eq(game.sleds[0]["puller"], "")
+				assert_eq(game.sleds[0]["items"], {"food_pack": 2})
+
+
+func _counts(game: Variant) -> Dictionary:
+	var out: Dictionary = {}
+	for p: Variant in game.people:
+		_sum(out, p.items)
+	for box: Dictionary in game.data["containers"].values():
+		for item: String in box["items"]:
+			out[item] = int(out.get(item, 0)) + 1
+	for ground: Dictionary in game.ground_items:
+		var item: String = String(ground["id"])
+		out[item] = int(out.get(item, 0)) + int(ground["n"])
+	for sled: Dictionary in game.sleds:
+		_sum(out, sled["items"])
+	_sum(out, game.unloaded)
+	return out
+
+
+func _sum(into: Dictionary, counts: Dictionary) -> void:
+	for item: String in counts:
+		into[item] = int(into.get(item, 0)) + int(counts[item])
+
+
+func _conserved(game: Variant, start: Dictionary, consumed: Dictionary) -> void:
+	var total: Dictionary = _counts(game)
+	_sum(total, consumed)
+	assert_eq(total, start, "start + created = inventories + explicitly consumed crafting materials")
+
+
+# D10: Check every operation, including one-use transfer completion and both restore paths.
+func test_d10_conservation_each_step_and_transfer_commit_checks() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.items = {"plank": 2, "cloth": 1, "food_pack": 3, "scrap": 2}
+	game.data["containers"]["sled_counts"] = {"id": "sled_counts", "name": "보관함", "cell": Vector2i(5, 20), "level": 0,
+		"building": -1, "search": 1.0, "items": ["scrap", "document"], "locked": false, "searched": true}
+	game.view.add_container("sled_counts")
+	game.ground_items.append({"id": "document", "n": 2, "pos": p.position})
+	var start: Dictionary = _counts(game)
+	_conserved(game, start, {})
+	assert_true(game.actions.craft_sled(p))
+	_finish_work(game)
+	var consumed: Dictionary = {"plank": 2, "cloth": 1}
+	_conserved(game, start, consumed)
+	var id: int = int(game.sleds[0]["id"])
+	for _press: int in 3:
+		assert_true(game.actions.move_sled(p, id, "food_pack", true))
+		_conserved(game, start, consumed)
+	var moved_ticket: int = game.actions.sled_move_serial
+	assert_false(game.actions._sled_moved(p, moved_ticket))
+	_conserved(game, start, consumed)
+	assert_true(game.actions.move_sled(p, id, "food_pack", false))
+	_conserved(game, start, consumed)
+	var at: Vector3 = p.position
+	p.position.x += 4.0
+	assert_false(game.actions.move_sled(p, id, "scrap", true))
+	p.position = at + Vector3(0, 3, 0)
+	assert_false(game.actions.move_sled(p, id, "scrap", true))
+	p.position = at
+	assert_false(game.actions.move_sled(p, id + 99, "scrap", true))
+	_conserved(game, start, consumed)
+	assert_true(game.actions.pull_sled(p, id))
+	_conserved(game, start, consumed)
+	game.actions.release_sled(p)
+	_finish_work(game)
+	_conserved(game, start, consumed)
+	var saved: Dictionary = _saved(game)
+	for exact_mode: bool in [false, true]:
+		_apply(game, saved, exact_mode)
+		_conserved(game, start, consumed)
+	assert_true(game.actions.load_train(p))
+	_conserved(game, start, consumed)
+	assert_false(game.actions.load_train(p))
+	_conserved(game, start, consumed)
+
+
+func test_d10_pane_moves_counts_immediately_past_capacity() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.items = {"bandage": 25, "scrap": 2}
+	var sled: Dictionary = _sled(game, {"scrap": 24})
+	var id: int = int(sled["id"])
+	var start: Dictionary = _counts(game)
+	game.hud.sled_panel(id)
+	assert_false(_buttons(game).has("모두 담기"))
+	game.hud._inv_bag()
+	game.hud._inv_put("bandage")
+	assert_eq(int(sled["items"]["bandage"]), 25)
+	assert_false(p.items.has("bandage"))
+	assert_eq(p.action, "")
+	_conserved(game, start, {})
+	game.hud._inv_put("scrap")
+	assert_eq(int(sled["items"]["scrap"]), 25)
+	assert_eq(int(p.items["scrap"]), 1)
+	assert_eq(Sled.state(sled), 3)
+	_conserved(game, start, {})
+	game.hud._inv_sled_take(id, "bandage")
+	assert_eq(int(p.items["bandage"]), 25)
+	_conserved(game, start, {})
+	game.hud._inv_sled_take(id, "scrap")
+	assert_eq(int(p.items["scrap"]), 2)
+	assert_eq(Sled.state(sled), 2)
+	assert_eq(p.action, "")
+	_conserved(game, start, {})
+	game.hud._close_modal()
+
+
+# D11: Same build and seed; the caller separately compares the pre-change HEAD.
+func test_d11_unused_sled_queries_do_not_change_field_or_rng() -> void:
+	var plain: Variant = _game()
+	var queried: Variant = _game()
+	var before: int = queried.rng.state
+	for _query: int in 20:
+		Sled.can_craft(queried, queried.player)
+		Sled.placement(queried, queried.player)
+		queried.actions.near_sleds(queried.player)
+		Sled.speed_mult(queried, queried.player)
+	assert_eq(queried.rng.state, before)
+	for tick: int in 40:
+		for game: Variant in [plain, queried]:
+			game.player.stick = Vector2.RIGHT if tick < 20 else Vector2.ZERO
+			game._step(0.1)
+	assert_eq(queried.sleds, [])
+	assert_eq(queried.next_sled_id, 1)
+	assert_eq(queried.rng.state, plain.rng.state)
+	assert_eq(queried.zombies.loot_rng.state, plain.zombies.loot_rng.state)
+	assert_eq(queried.combat._pace_rng.state, plain.combat._pace_rng.state)
+	var first: Dictionary = _without_unseeded(_saved(plain))
+	var second: Dictionary = _without_unseeded(_saved(queried))
+	assert_eq(second, first, "no query creates a reservation, spends an id, or advances a random stream")
+
+
+## The combat's gear and wound streams are not seeded (each new game rolls its own),
+## so two games never match on them, sled or no sled; everything else must.
+func _without_unseeded(saved: Dictionary) -> Dictionary:
+	var runtime: Dictionary = saved.get("runtime", {})
+	var components: Dictionary = runtime.get("components", {})
+	var combat: Dictionary = components.get("combat", {})
+	combat.erase("_gear_rng")
+	combat.erase("_wound_rng")
+	return saved
