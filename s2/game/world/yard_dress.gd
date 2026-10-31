@@ -241,15 +241,16 @@ static func survey(data: Dictionary) -> Dictionary:
 		by_id[indexed_home["building"]] = indexed_home
 	for scan_y in range(grid.height):
 		for scan_x in range(grid.width):
-			var cell: Vector2i = Vector2i(scan_x, scan_y)
-			var floor_kind: int = grid.floor_at(cell)
-			if grid.building_at(cell) >= 0 or floor_kind in [F.ROAD, F.RAIL, F.PLATFORM, F.ICE, F.DEEP_SNOW]:
+			var cell_index: int = scan_y * grid.width + scan_x
+			var floor_kind: int = grid.floor[cell_index]
+			if grid.building[cell_index] >= 0 or floor_kind in [F.ROAD, F.RAIL, F.PLATFORM, F.ICE, F.DEEP_SNOW]:
 				continue
-			var owner: int = owner_map[grid.index(cell)]
+			var owner: int = owner_map[cell_index]
 			if owner < 0:
 				continue
+			var cell: Vector2i = Vector2i(scan_x, scan_y)
 			region[cell] = owner
-			if taken.has(cell) or (grid.solid_at(cell) != S.NONE and not yard_low.has(cell)):
+			if taken.has(cell) or (grid.solid[cell_index] != S.NONE and not yard_low.has(cell)):
 				continue
 			owners[cell] = owner
 			by_id[owner]["cells"].append(cell)
@@ -315,6 +316,39 @@ static func _cache_home(home: Dictionary, state: Dictionary) -> void:
 		edges[cell] = _edge(cell, home, state["fences"])
 	state["back"] = backs
 	state["edge"] = edges
+	# 이 단계의 갈래에서 크기를 읽고, 같은 크기의 목록은 집마다 한 번만 만든다.
+	var role_sizes: Dictionary = {
+		"wall": [SIZES["bush_juniper"], SIZES["dry_bush"], SIZES["bush_dry"], SIZES["fern_dry"]],
+		"edge": [SIZES["dry_bush"], SIZES["dry_grass"]],
+	}
+	var anchors: Dictionary = {}
+	for role: String in role_sizes:
+		var by_size: Dictionary = {}
+		for size: Vector2i in role_sizes[role]:
+			if by_size.has(size):
+				continue
+			var matching: Array[Vector2i] = []
+			var rotated_size: Vector2i = Vector2i(size.y, size.x)
+			for anchor: Vector2i in home["cells"]:
+				if role == "wall":
+					if _can_touch_house(anchor, size, home["rect"]) \
+							or _can_touch_house(anchor, rotated_size, home["rect"]):
+						matching.append(anchor)
+				elif _can_cover_edge(anchor, size, edges) \
+						or (rotated_size != size and _can_cover_edge(anchor, rotated_size, edges)):
+					matching.append(anchor)
+			by_size[size] = matching
+		anchors[role] = by_size
+	state["anchors"] = anchors
+
+
+## edge의 _fits가 참이면 실제로 굴린 방향의 네모 안에는 반드시 가장자리 칸이 있다.
+static func _can_cover_edge(anchor: Vector2i, size: Vector2i, edges: Dictionary) -> bool:
+	for edge_y in range(anchor.y, anchor.y + size.y):
+		for edge_x in range(anchor.x, anchor.x + size.x):
+			if edges.get(Vector2i(edge_x, edge_y), false):
+				return true
+	return false
 
 
 ## _back과 같은 접촉 조건. facing을 굴리기 전에 두 크기 모두 불가능할 때만 거른다.
@@ -521,12 +555,16 @@ static func _place(data: Dictionary, home: Dictionary, state: Dictionary, kind: 
 	var grid: FieldGrid = data["grid"]
 	var seed_value: int = home["seed"]
 	var candidates: Array[Dictionary] = []
-	for anchor: Vector2i in home["cells"]:
+	var base_size: Vector2i = SIZES[kind]
+	var anchors: Array = home["cells"]
+	if role in ["wall", "edge"]:
+		anchors = state["anchors"][role][base_size]
+	for anchor: Vector2i in anchors:
 		if state["owners"].get(anchor, -1) != home["building"] \
 				or state["forbidden"].has(anchor) or state["used"].has(anchor):
 			continue
 		var anchor_index: int = grid.index(anchor)
-		var size: Vector2i = SIZES[kind]
+		var size: Vector2i = base_size
 		var facing: int = 0
 		if role in ["wood", "bench"]:
 			var anchor_back: Vector2i = state["back"][anchor]
@@ -534,9 +572,6 @@ static func _place(data: Dictionary, home: Dictionary, state: Dictionary, kind: 
 				continue
 			facing = RoomFurnish._facing_from_back(anchor_back)
 		else:
-			if role == "wall" and not _can_touch_house(anchor, size, home["rect"]) \
-					and not _can_touch_house(anchor, Vector2i(size.y, size.x), home["rect"]):
-				continue
 			# 각 굴림은 입력 해시만 쓰므로 탈락 칸·덮어쓸 facing의 굴림을 생략해도 값은 같다.
 			facing = _roll(seed_value, purpose + 1, anchor_index + ordinal * grid.width * grid.height) % 4
 		if facing % 2 == 1:
