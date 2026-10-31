@@ -38,7 +38,7 @@ describe('정차 장소는 구간 묶음의 무게로 정한다', () => {
     }
   });
 
-  it('풀어 주는 구간이라도 뺀 장소(핸드카 후보)는 나오지 않고, 남는 곳이 없으면 무게로 돌아간다', () => {
+  it('풀어 주는 구간이라도 뺀 장소(수동차 후보)는 나오지 않고, 남는 곳이 없으면 무게로 돌아간다', () => {
     const c = counts(6, 400, 'freight');
     expect(c.freight ?? 0).toBe(0);
     expect(c.factory).toBeGreaterThan(0);
