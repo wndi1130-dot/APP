@@ -8,6 +8,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
 const MapView = preload("res://game/world/map_view.gd")
+const EdgeBand = preload("res://game/world/edge_band.gd")
 const PLACES: Array[String] = ["houses_01", "freight_01"]
 static var _built: Dictionary = {}
 
@@ -958,3 +959,29 @@ func test_remote_strip_cut_off_from_the_village_warns_and_stays_city() -> void:
 	assert_eq(now["stop_form_asked"], "remote")
 	assert_eq(now["grid"].width, 80, "not grown")
 	assert_false(now.has("deep_forest"))
+
+
+## Each door and squad spot's metres to the map's nearer side end (x), from its cell's middle.
+func _end_reach(now: Dictionary) -> float:
+	var g: FieldGrid = now["grid"]
+	var cells: Array = []
+	for doors: Array in now.get("train_doors", {}).values():
+		cells.append_array(doors)
+	cells.append_array(now.get("spawns", {}).get("squad", []))
+	var reach: float = INF
+	for c: Vector2i in cells:
+		reach = minf(reach, minf(float(c.x) + 0.5, float(g.width) - float(c.x) - 0.5))
+	return reach
+
+
+func test_view_reach_covers_the_furthest_view_on_a_wide_screen() -> void:
+	var half: Vector2 = EdgeBand.view_half(36.0, 21.0 / 9.0, FieldGame.CAM_PITCH, FieldGame.CAM_YAW)
+	assert_gte(StopGround.VIEW_REACH, maxf(half.x, half.y))
+
+
+func test_outlying_doors_stand_a_full_view_from_the_map_end() -> void:
+	for place: String in PLACES:
+		assert_gte(_end_reach(_edge(place)), StopGround.VIEW_REACH, place + " edge")
+	for to_right: bool in [true, false]:
+		var now: Dictionary = _remote_fixture(to_right)["now"]
+		assert_gte(_end_reach(now), StopGround.VIEW_REACH, "remote fixture %s" % to_right)
