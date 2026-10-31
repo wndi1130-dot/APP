@@ -113,7 +113,10 @@ func test_save_keeps_the_queue_and_live_card_count() -> void:
 func test_save_rejects_bad_late_fields() -> void:
 	for patch: Dictionary in [{"lateOn": 1}, {"lateCards": {}}, {"lateCards": [{"uid": 1, "kind": "rescue", "late": 1}]},
 		{"cards": [{"uid": 1, "kind": "favor", "late": 3}]}, {"cards": [{"uid": 1, "kind": "favor", "late": -1}]},
-		{"cards": [{"uid": 1, "kind": "favor", "late": 0.5}]}, {"cards": [{"uid": 1, "kind": "favor", "late": "1"}]}]:
+		{"cards": [{"uid": 1, "kind": "favor", "late": 0.5}]}, {"cards": [{"uid": 1, "kind": "favor", "late": "1"}]},
+		# A broken kind is refused, not read as a string; a null place is not a car.
+		{"lateCards": [{"uid": 1, "kind": 7, "late": 1}]}, {"lateCards": [{"uid": 1, "kind": null, "late": 1}]},
+		{"lateCards": [{"uid": 1, "kind": ["favor"], "late": 1}]}, {"lateCards": [{"uid": 1, "kind": "favor", "comm": null, "late": 1}]}]:
 		var g: Dictionary = _base.duplicate(true)
 		g.merge(patch, true)
 		assert_false(SaveSlot.read_save(g, _t)["ok"], str(patch))

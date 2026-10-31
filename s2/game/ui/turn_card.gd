@@ -17,7 +17,8 @@ extends Control
 ## would not fit either, the paper is cut wider (the leave strip's 「cut to its
 ## lines」), up to WIDE; any remaining scene scrolls inside Said. Only when the
 ## fixed rows alone are too tall are the late lines packed, then the whole
-## paper scrolled, with a fading paper edge and an ink arrow for more below.
+## paper scrolled, with a fading paper edge and an ink arrow for more below;
+## a drag or wheel that starts on a way then moves the paper, never answers.
 ## The sheet shows once it has settled. Folded to the left
 ## (결정 508) only its right edge stays in sight and a press there opens it
 ## again, never a way under it; a new card comes open.
@@ -53,6 +54,8 @@ const SAY_H: float = 55.0
 const NUM_W: float = 26.0
 ## .scene: pen 18 or print 13.5, on lines of 20; the title in pen 36 on lines of 30.
 const SCENE_LINE: float = 20.0
+## Scene lines a card keeps in sight at the least before it packs or scrolls.
+const SCENE_MIN: float = 3.0
 const TITLE_LINE: float = 30.0
 ## How much wider the paper is cut at a time, and at the most: the car the
 ## card is about still shows at the right of the 844 stage.
@@ -356,6 +359,7 @@ func _fill() -> void:
 	_tried_late_inline = false
 	_tried_later_inline = false
 	set_meta("fit_stage", "1")
+	set_meta("fit_need", [])
 	for c in body.get_children():
 		body.remove_child(c)
 		c.queue_free()
@@ -403,8 +407,19 @@ func _process(_delta: float) -> void:
 			_w = minf(widest, _w + WIDEN)
 			_fill()
 			return
-	# Said contributes no scene height to the minimum: this is the fixed rows
-	# alone, even with zero lines of scene. A long scene cannot move the ways.
+	# Said holds SCENE_MIN lines of the scene (all of a shorter one) in sight, so
+	# a sentence can be read before a way is chosen; the rest scrolls. Less room
+	# than that moves on to the next stage, as fixed rows that do not fit do.
+	if said != null and _overflow == null:
+		var least: float = minf(scene.get_combined_minimum_size().y, UiFonts.px(SCENE_LINE) * SCENE_MIN)
+		if absf(said.custom_minimum_size.y - least) > 0.5:
+			said.custom_minimum_size.y = least
+			_settle = SETTLE
+			set_process(true)
+			return
+	# Each stage's height is kept in order, so the stage chosen can be checked.
+	if _overflow == null:
+		(get_meta("fit_need") as Array).append([str(get_meta("fit_stage")), body.get_combined_minimum_size().y])
 	if _overflow == null and body.get_combined_minimum_size().y > sheet.inner.size.y + 0.5:
 		if not _tried_late_inline:
 			_tried_late_inline = true
@@ -425,7 +440,11 @@ func _process(_delta: float) -> void:
 		_overflow.name = "Overflow"
 		_overflow.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		_overflow.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-		_overflow.mouse_filter = Control.MOUSE_FILTER_PASS
+		# A drag or wheel that starts on a way passes to the paper and moves it;
+		# scrolling cancels that way's press. The paper keeps what it gets.
+		_overflow.mouse_filter = Control.MOUSE_FILTER_STOP
+		for key: Node in body.find_children("Key_*", "Button", true, false):
+			(key as Control).mouse_filter = Control.MOUSE_FILTER_PASS
 		_overflow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		sheet.inner.remove_child(body)
 		sheet.inner.add_child(_overflow)

@@ -140,6 +140,8 @@ function partVectors(runs: ReturnType<typeof play>[]) {
     { kind: 'demand', comm }, { kind: 'favor', comm }, { kind: 'promise_ledger', comm },
   ]);
   templates.push({ kind: 'ration_cut' }, { kind: 'travel', text: 'front_curtain' });
+  // 돌아온 카드를 미루지 않고 답하는 길(커진 효과, 부탁의 누설 난수)은 복귀 직후 상태를 갈라 두었다가 미루기 표본 맨 뒤에 붙인다.
+  const answers: { name: string; g: Game; uid: number; index: number }[] = [];
   for (const patch of templates) {
     const g = S1.createGame(`turn-late-${patch.kind}-${patch.comm ?? 'tail'}`);
     S1.enableLate(g); g.phase = 'settle'; g.seg = 3; g.passed.emergency_ration = 1;
@@ -153,6 +155,10 @@ function partVectors(runs: ReturnType<typeof play>[]) {
       if (n < 2) {
         g.phase = 'settle';
         add(`${tag}/return-${n + 1}`, g, { kind: 'advance' }, () => { S1.advance(g); });
+        const back = g.cards.find(c => c.uid === card.uid)!;
+        S1.viewCard(g, back).choices.forEach((c, index) => {
+          if (c.id !== 'later') answers.push({ name: `${tag}/answer-${n + 1}-${index}`, g: plain(g), uid: card.uid, index });
+        });
       }
     }
   }
@@ -224,6 +230,7 @@ function partVectors(runs: ReturnType<typeof play>[]) {
   dropped.lateCards = [{ uid: 2, kind: 'demand', comm: 'guard', late: 1 }];
   add('late/budget/gone', dropped, { kind: 'budget_next' }, () => { S1.budgetNextSeg(dropped); });
   add('late/budget/gone-player', dropped, { kind: 'late_next' }, () => { lateNextSeg(dropped); });
+  for (const a of answers) add(a.name, a.g, { kind: 'choose_card', uid: a.uid, index: a.index }, () => { S1.chooseCard(a.g, a.uid, a.index); });
   return parts;
 }
 
