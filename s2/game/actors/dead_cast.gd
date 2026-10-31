@@ -79,14 +79,27 @@ static func garment_of(worn: Dictionary, tint: Color) -> Dictionary:
 	for slot: String in ["coat", "jacket"]:
 		if not worn.has(slot):
 			continue
-		var look := Wear.look(String(worn[slot].get("id", "")))
+		var look: Array = _drawn_look(String(worn[slot].get("id", "")))
+		if look.is_empty():
+			continue
+		var c: Color = look[1]
+		return {"shell": look[0], "colour": Color(c.r * tint.r / 0.5, c.g * tint.g / 0.5, c.b * tint.b / 0.5, c.a)}
+	return {}
+
+
+static var _drawn_looks: Dictionary = {}   # garment id -> [shell, colour with the pattern in alpha], or [] when not drawn
+
+
+## A garment's look as the dead are drawn in it, worked out once per kind (the
+## field asks it for every one of the dead in sight each frame).
+static func _drawn_look(id: String) -> Array:
+	if not _drawn_looks.has(id):
+		var look := Wear.look(id)
 		var shell := String(look["look_shell"])
 		var c: Array = look["look_tint"]
-		if not SHELLS.has(shell) or c.size() != 3:
-			continue
 		var pattern := int(PersonVisual.PATTERNS.get(String(look["look_pattern"]), 0))
-		return {"shell": shell, "colour": Color(float(c[0]) * tint.r / 0.5, float(c[1]) * tint.g / 0.5, float(c[2]) * tint.b / 0.5, float(pattern) / 3.0)}
-	return {}
+		_drawn_looks[id] = [shell, Color(float(c[0]), float(c[1]), float(c[2]), float(pattern) / 3.0)] if SHELLS.has(shell) and c.size() == 3 else []
+	return _drawn_looks[id]
 
 
 ## One more body, read with its colour picture; {} when it is not in the build

@@ -1286,9 +1286,9 @@ func _read_a_body() -> void:
 
 
 ## Garment `kind` over body `b` (dead_cast.gd), read in the first time one of
-## the dead in that body is drawn in it, one a frame as the bodies are (a stop
-## with no police station never reads the vest); until then it is drawn
-## without. null when that body has none of it.
+## the dead in that body is drawn in it, one a frame as the bodies are and not
+## in a frame a body is read (a stop with no police station never reads the
+## vest); until then it is drawn without. null when that body has none of it.
 func _garment_of(b: int, kind: String) -> MultiMeshInstance3D:
 	var wear: Dictionary = wear_draws[b]
 	if wear.has(kind):
@@ -1311,7 +1311,7 @@ func _garment_draw(shell: Dictionary) -> MultiMeshInstance3D:
 	mm.use_custom_data = true
 	mm.use_colors = true
 	mm.mesh = shell["mesh"]
-	mm.instance_count = MAX_DRAW
+	mm.instance_count = MAX_DRAW * 5   # as many as the body's five looks hold
 	mm.visible_instance_count = 0
 	mm.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
 	node.multimesh = mm
@@ -1331,8 +1331,8 @@ func _garment_draw(shell: Dictionary) -> MultiMeshInstance3D:
 
 ## Visible-only drawing with CPU frustum test, one MultiMesh per body and look.
 func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
+	_garment_reads = 0 if not bodies_to_read.is_empty() else 1   # one read a frame, body or garment
 	_read_a_body()
-	_garment_reads = 1
 	var counts := []
 	for _b in draws.size():
 		counts.append({"dead": 0, "clothed": 0, "fresh": 0, "frozen": 0, "corpse": 0})
@@ -1432,7 +1432,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		# by what it has on now (worn_of), so one stripped of its coat is without.
 		var over := DeadCast.garment_of(drawn_worn(z), TINTS[look]) if baked else {}
 		var garment: MultiMeshInstance3D = _garment_of(b, over["shell"]) if not over.is_empty() else null
-		if garment != null and int(worn_n.get(garment, 0)) < MAX_DRAW:
+		if garment != null and int(worn_n.get(garment, 0)) < garment.multimesh.instance_count:
 			var w: int = int(worn_n.get(garment, 0))
 			garment.multimesh.set_instance_transform(w, Transform3D(basis, pos))
 			garment.multimesh.set_instance_custom_data(w, custom)
