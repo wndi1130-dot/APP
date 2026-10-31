@@ -28,6 +28,7 @@
       "/choices/*/label",
       "/choices/*/say",
       "/choices/*/why",
+      "/choices/*/log",
       "/choices/*/later",
       "/choices/*/witnesses/*/text"
     ],
@@ -84,6 +85,10 @@
       {
         "path": "/choices/*/say",
         "max": 2
+      },
+      {
+        "path": "/choices/*/log",
+        "max": 1
       },
       {
         "path": "/choices/*/why",

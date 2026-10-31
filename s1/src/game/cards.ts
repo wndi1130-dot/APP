@@ -605,9 +605,9 @@ function baseView(g: Game, card: Card): CardView {
         title: '파업 경고', speaker: leader(g, 'engine'), focus: 'engine', required: true,
         body: `"다음 역까지 답이 없으면 불을 끄겠다." 기관실 위험 노출 ${Math.round(ex)}, 배급 ${Math.round(situation(g, 'engine')[1])}.`,
         choices: withAfford(g, [
-          { label: '교대를 늘린다', say: '교대를 늘리겠다. 그러니 불은 끄지 마라.', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'rel', c: 'engine', v: 6 }] },
-          { label: '기관실 배급 +1', say: '기관실 그릇을 채워라. 불 지키는 사람이 굶으면 안 된다.', effs: [{ t: 'lever', c: 'engine', which: 'ration', v: 1 }, { t: 'rel', c: 'engine', v: 5 }, { t: 'rel', c: 'medtech', v: -2 }] },
-          { label: '듣기만 한다', say: '불을 끄겠다고? 그럼 다 같이 얼어 죽는 거다.', effs: [{ t: 'rel', c: 'engine', v: -3 }] },
+          { label: '교대를 늘린다', log: '불을 끄겠다는 화부들의 경고에 교대를 늘렸다.', say: '교대를 늘리겠다. 그러니 불은 끄지 마라.', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'rel', c: 'engine', v: 6 }] },
+          { label: '기관실 배급 +1', log: '불을 끄겠다는 화부들의 경고에 기관실 배급을 올렸다.', say: '기관실 그릇을 채워라. 불 지키는 사람이 굶으면 안 된다.', effs: [{ t: 'lever', c: 'engine', which: 'ration', v: 1 }, { t: 'rel', c: 'engine', v: 5 }, { t: 'rel', c: 'medtech', v: -2 }] },
+          { label: '듣기만 한다', log: '불을 끄겠다는 화부들의 경고를 듣기만 했다.', say: '불을 끄겠다고? 그럼 다 같이 얼어 죽는 거다.', effs: [{ t: 'rel', c: 'engine', v: -3 }] },
         ]),
       };
     }
@@ -616,10 +616,10 @@ function baseView(g: Game, card: Card): CardView {
         title: '파업', speaker: leader(g, 'engine'), focus: 'engine', required: true,
         body: '보일러 불이 낮게 깔렸다. 열차가 선다. 기관실 문 앞에 화부들이 앉아 있다.',
         choices: withAfford(g, [
-          { label: '요구를 들어준다', say: '요구를 받아들인다. 당장 불을 올려라!', effs: [{ t: 'lever', c: 'engine', which: 'ration', v: 1 }, { t: 'fervor', c: 'engine', v: -1 }, { t: 'fervor', c: 'medtech', v: 1 }, { t: 'rel', c: 'engine', v: 12 }] },
-          { label: '교대를 늘린다', say: '교대를 늘린다. 그러니 문 앞에서 일어나라.', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'fervor', c: 'engine', v: -1 }, { t: 'rel', c: 'engine', v: 8 }] },
-          { label: '수석 기관사를 산다', say: '수석 기관사를 따로 불러라. 줄 게 있다.', effs: [{ t: 'lux', v: -3 }], special: 'strike_bribe' },
-          { label: '버틴다', say: '협박에는 굽히지 않는다. 앉아 있고 싶으면 계속 앉아 있어라.', effs: [{ t: 'tension', v: 3 }] },
+          { label: '요구를 들어준다', log: '기관실 문 앞에 앉은 화부들의 요구를 받아들였다.', say: '요구를 받아들인다. 당장 불을 올려라!', effs: [{ t: 'lever', c: 'engine', which: 'ration', v: 1 }, { t: 'fervor', c: 'engine', v: -1 }, { t: 'fervor', c: 'medtech', v: 1 }, { t: 'rel', c: 'engine', v: 12 }] },
+          { label: '교대를 늘린다', log: '파업한 화부들의 교대를 늘렸다.', say: '교대를 늘린다. 그러니 문 앞에서 일어나라.', effs: [{ t: 'coal', v: -P.shiftCoal }, { t: 'base', c: 'engine', i: 3, v: -P.shiftRelief }, { t: 'fervor', c: 'engine', v: -1 }, { t: 'rel', c: 'engine', v: 8 }] },
+          { label: '수석 기관사를 산다', log: '파업 중에 수석 기관사를 따로 불러 사치품을 쥐여 줬다.', say: '수석 기관사를 따로 불러라. 줄 게 있다.', effs: [{ t: 'lux', v: -3 }], special: 'strike_bribe' },
+          { label: '버틴다', log: '화부들의 파업에 굽히지 않고 버텼다.', say: '협박에는 굽히지 않는다. 앉아 있고 싶으면 계속 앉아 있어라.', effs: [{ t: 'tension', v: 3 }] },
         ]),
       };
     }
@@ -670,10 +670,10 @@ function baseView(g: Game, card: Card): CardView {
         title: '시신에게 물렸다', speaker: leader(g, 'medtech'), focus: c, required: true, key: 'bite_corpse',
         body: `남겨 두었던 시신에게 ${card.who ?? '그 사람'}이(가) 물렸다.`,
         choices: withAfford(g, [
-          { label: '의무칸에서 자른다', say: '아직 늦지 않았다. 의무칸으로 옮겨 잘라라!', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }], special: 'bite_cut',
+          { label: '의무칸에서 자른다', log: `시신에 물린 ${card.who ?? '그 사람'}의 물린 곳을 의무칸에서 잘랐다.`, say: '아직 늦지 않았다. 의무칸으로 옮겨 잘라라!', effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }], special: 'bite_cut',
             ...(canCut ? {} : { disabled: '감염 창이 닫혔다' }) },
-          { label: '따로 눕힌다', say: '빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.', effs: [{ t: 'tension', v: 2 }], special: 'bite_isolate' },
-          { label: '쏜다', say: '일어나기 전에 끝내라. 가족은 뒤로 물려라.', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
+          { label: '따로 눕힌다', log: `시신에 물린 ${card.who ?? '그 사람'}을(를) 따로 눕혔다.`, say: '빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.', effs: [{ t: 'tension', v: 2 }], special: 'bite_isolate' },
+          { label: '쏜다', log: `시신에 물린 ${card.who ?? '그 사람'}을(를) 쐈다.`, say: '일어나기 전에 끝내라. 가족은 뒤로 물려라.', effs: [{ t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
         ]),
       };
       // 숨긴 물림은 드러났을 땐 이미 늦어 자를 수 없다(2026-10-08 사용자 아침 목록 17번 '가'). 자르기는 데려오자마자 의무칸에서만 한다.
@@ -681,8 +681,8 @@ function baseView(g: Game, card: Card): CardView {
         title: '숨긴 물림이 드러났다', speaker: leader(g, 'medtech'), focus: c, required: true, key: 'bite_found',
         body: `${card.text ?? ''} ${card.who ?? '대원'}의 붕대 아래가 검게 부었다. 자르기엔 늦었다. 열차장이 숨겨 줬다는 말이 벌써 돈다.`.trim(),
         choices: withAfford(g, [
-          { label: '따로 눕힌다', say: '빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.', effs: [{ t: 'trust', v: -5 }, { t: 'tension', v: 2 }], special: 'bite_isolate' },
-          { label: '쏜다', say: '일어나기 전에 끝내라. 내가 숨긴 일이다, 내가 책임진다.', effs: [{ t: 'trust', v: -5 }, { t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
+          { label: '따로 눕힌다', log: `물림이 드러난 ${card.who ?? '대원'}을(를) 따로 눕혔다.`, say: '빈 칸 끝에 눕혀라. 문은 열고 가족을 곁에 둬라.', effs: [{ t: 'trust', v: -5 }, { t: 'tension', v: 2 }], special: 'bite_isolate' },
+          { label: '쏜다', log: `물림이 드러난 ${card.who ?? '대원'}을(를) 쐈다.`, say: '일어나기 전에 끝내라. 내가 숨긴 일이다, 내가 책임진다.', effs: [{ t: 'trust', v: -5 }, { t: 'fear', v: 3 }, { t: 'rel', c, v: -3 }], special: 'bite_shoot', witness: true },
         ]),
       };
     }
@@ -694,9 +694,9 @@ function baseView(g: Game, card: Card): CardView {
         title: '마지막 기회', speaker: leader(g, 'tail'), focus: 'tail', required: true,
         body: '칸마다 사람들이 모였다. 통로를 막아서고 거래도 끊었다. 오늘 밤을 넘기지 못할 수도 있다.',
         choices: withAfford(g, [
-          { label: '경비대를 푼다', say: '경비대, 통로를 비워라. 손은 쓰지 마라.', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'crisis_guard', ...refused },
-          { label: '창고를 연다', say: '창고를 열어라! 오늘 밤은 모두 배불리 먹는다.', effs: [{ t: 'food', v: -15 }, { t: 'coal', v: -10 }, { t: 'rel', c: 'tail', v: 8 }], special: 'crisis_yield' },
-          { label: '아무것도 안 한다', say: '(열차장은 아무 말도 하지 않는다.)', effs: [], special: 'revolt' },
+          { label: '경비대를 푼다', log: '통로를 막은 사람들 앞에 경비대를 풀었다.', say: '경비대, 통로를 비워라. 손은 쓰지 마라.', effs: [{ t: 'fear', v: 15 }, { t: 'trust', v: -10 }, { t: 'rel', c: 'tail', v: -10 }], special: 'crisis_guard', ...refused },
+          { label: '창고를 연다', log: '창고를 열어 식량과 석탄을 풀었다.', say: '창고를 열어라! 오늘 밤은 모두 배불리 먹는다.', effs: [{ t: 'food', v: -15 }, { t: 'coal', v: -10 }, { t: 'rel', c: 'tail', v: 8 }], special: 'crisis_yield' },
+          { label: '아무것도 안 한다', log: '통로가 막혀도 아무것도 하지 않았다.', say: '(열차장은 아무 말도 하지 않는다.)', effs: [], special: 'revolt' },
         ]),
       };
     }
@@ -710,9 +710,9 @@ function baseView(g: Game, card: Card): CardView {
           title: '항의', speaker: leader(g, 'tail'), focus: 'tail', required: true,
           body: '복도마다 사람들이 모여 열차장을 찾는다. 배급과 석탄을 두고 목소리가 높아지고 있다.',
           choices: withAfford(g, [
-            { label: '들어준다', say: '들어보자. 줄 수 있는 것은 나눠 주겠다.', effs: [{ t: 'food', v: -8 }, { t: 'coal', v: -5 }, { t: 'tension', v: -10 }, { t: 'rel', c: 'tail', v: 3 }, { t: 'rel', c: OPPOSITE.tail, v: -3 }], special: 'ladder_yield' },
-            { label: '경비대를 세운다', say: '통로에 경비를 세워라. 손은 쓰지 마라.', effs: [{ t: 'tension', v: -6 }], special: 'ladder_guard', ...refused },
-            { label: '물리친다', say: '지금은 줄 것이 없다. 돌아가 제 일을 해라.', effs: [{ t: 'rel', c: 'tail', v: -5 }], special: 'ladder_ignore' },
+            { label: '들어준다', log: '항의를 듣고 식량과 석탄을 나눠 줬다.', say: '들어보자. 줄 수 있는 것은 나눠 주겠다.', effs: [{ t: 'food', v: -8 }, { t: 'coal', v: -5 }, { t: 'tension', v: -10 }, { t: 'rel', c: 'tail', v: 3 }, { t: 'rel', c: OPPOSITE.tail, v: -3 }], special: 'ladder_yield' },
+            { label: '경비대를 세운다', log: '항의하는 사람들 앞 통로에 경비를 세웠다.', say: '통로에 경비를 세워라. 손은 쓰지 마라.', effs: [{ t: 'tension', v: -6 }], special: 'ladder_guard', ...refused },
+            { label: '물리친다', log: '통로에 모인 사람들의 항의를 물리쳤다.', say: '지금은 줄 것이 없다. 돌아가 제 일을 해라.', effs: [{ t: 'rel', c: 'tail', v: -5 }], special: 'ladder_ignore' },
           ]),
         };
       }
@@ -720,9 +720,9 @@ function baseView(g: Game, card: Card): CardView {
         title: '난장판', speaker: leader(g, 'tail'), focus: 'tail', required: true,
         body: `싸움이 번졌다. 물건이 날고 어른들이 쓰러진다.${g.riot?.fire.length ? ' 불이 붙었다. 사람들은 걸어서 옆 칸으로 옮겨 간다.' : ''}`,
         choices: withAfford(g, [
-          { label: '들어준다', say: '요구를 듣겠다. 모두 손을 내려라.', effs: [{ t: 'food', v: -10 }, { t: 'coal', v: -6 }, { t: 'tension', v: -10 }, { t: 'rel', c: 'tail', v: 4 }, { t: 'rel', c: OPPOSITE.tail, v: -3 }], special: 'riot_yield' },
-          { label: '경비대를 푼다', say: '경비대를 풀어라! 싸움부터 말려라.', effs: [{ t: 'fear', v: 8 }, { t: 'trust', v: -5 }, { t: 'rel', c: 'tail', v: -5 }], special: 'riot_guard', ...refused },
-          { label: '아무것도 안 한다', say: '(열차장은 아무 말도 하지 않는다.)', effs: [], special: 'ladder_ignore' },
+          { label: '들어준다', log: '난장판이 된 칸의 요구를 들어줬다.', say: '요구를 듣겠다. 모두 손을 내려라.', effs: [{ t: 'food', v: -10 }, { t: 'coal', v: -6 }, { t: 'tension', v: -10 }, { t: 'rel', c: 'tail', v: 4 }, { t: 'rel', c: OPPOSITE.tail, v: -3 }], special: 'riot_yield' },
+          { label: '경비대를 푼다', log: '싸움을 말리려 경비대를 풀었다.', say: '경비대를 풀어라! 싸움부터 말려라.', effs: [{ t: 'fear', v: 8 }, { t: 'trust', v: -5 }, { t: 'rel', c: 'tail', v: -5 }], special: 'riot_guard', ...refused },
+          { label: '아무것도 안 한다', log: '싸움이 번지는 동안 아무것도 하지 않았다.', say: '(열차장은 아무 말도 하지 않는다.)', effs: [], special: 'ladder_ignore' },
         ]),
       };
     }
@@ -774,10 +774,10 @@ function baseView(g: Game, card: Card): CardView {
       // 곁에 부모 한쪽이 살아 있으면 그 부모가 키우고, 나머지 갈래는 그 손을 덜어 주는 쪽이다(triage N7).
       const oc = other?.community ?? c;
       const choices: Choice[] = other
-        ? [{ label: '곁의 부모가 키운다', say: `${other.name}이(가) 키운다. 칸이 손을 보태라!`, effs: [{ t: 'base', c: oc, i: 1, v: -1 }, { t: 'rel', c: oc, v: 2 }], special: 'orphan_parent' }]
-        : [{ label: '같은 칸이 돌본다', say: '이 칸의 아이다. 이 칸이 함께 키운다.', effs: [{ t: 'base', c, i: 1, v: -2 }], special: 'orphan_same' }];
-      if (c !== 'front') choices.push({ label: '앞칸 집에 맡긴다', say: other ? `밤엔 앞칸 빈 침대에서 재워라. ${other.name}도 자야 한다.` : '앞칸에 빈 침대가 있다. 거기서 자게 해라.', effs: [{ t: 'base', c: 'front', i: 2, v: 1 }, { t: 'rel', c, v: 4 }, { t: 'rel', c: 'front', v: -4 }], special: 'orphan_front' });
-      if (c !== 'medtech') choices.push({ label: '의무칸에 둔다', say: other ? `낮엔 의무진이 맡아라. ${other.name}의 손을 덜어 줘라.` : '의무진이 맡아라. 아플 때 제일 가깝다.', effs: [{ t: 'base', c: 'medtech', i: 3, v: 2 }, { t: 'rel', c: 'medtech', v: -2 }, { t: 'trust', v: 1 }], special: 'orphan_med' });
+        ? [{ label: '곁의 부모가 키운다', log: `남은 아이를 ${other.name}이(가) 키우고 칸이 돕게 했다.`, say: `${other.name}이(가) 키운다. 칸이 손을 보태라!`, effs: [{ t: 'base', c: oc, i: 1, v: -1 }, { t: 'rel', c: oc, v: 2 }], special: 'orphan_parent' }]
+        : [{ label: '같은 칸이 돌본다', log: '남은 아이를 같은 칸이 함께 키우게 했다.', say: '이 칸의 아이다. 이 칸이 함께 키운다.', effs: [{ t: 'base', c, i: 1, v: -2 }], special: 'orphan_same' }];
+      if (c !== 'front') choices.push({ label: '앞칸 집에 맡긴다', log: '남은 아이를 밤마다 앞칸 빈 침대에서 재우게 했다.', say: other ? `밤엔 앞칸 빈 침대에서 재워라. ${other.name}도 자야 한다.` : '앞칸에 빈 침대가 있다. 거기서 자게 해라.', effs: [{ t: 'base', c: 'front', i: 2, v: 1 }, { t: 'rel', c, v: 4 }, { t: 'rel', c: 'front', v: -4 }], special: 'orphan_front' });
+      if (c !== 'medtech') choices.push({ label: '의무칸에 둔다', log: '남은 아이를 의무진에게 맡겼다.', say: other ? `낮엔 의무진이 맡아라. ${other.name}의 손을 덜어 줘라.` : '의무진이 맡아라. 아플 때 제일 가깝다.', effs: [{ t: 'base', c: 'medtech', i: 3, v: 2 }, { t: 'rel', c: 'medtech', v: -2 }, { t: 'trust', v: 1 }], special: 'orphan_med' });
       return {
         title: '남은 아이', speaker: leader(g, c), focus: c, required: true,
         body: other
@@ -830,9 +830,9 @@ function baseView(g: Game, card: Card): CardView {
         title: '내리겠다는 노인', speaker: { name: who, role: `${COMM_NAME[c]}${age ? ` · ${age}세` : ''}`, comm: c }, focus: c, required: true,
         body: `${who}이(가) 스스로 정했다며 찾아왔다. "다음 역에서 내리겠다. 내 몫은 아이들에게."`,
         choices: withAfford(g, [
-          { label: '붙잡는다', say: '아무도 혼자 내리지 않는다. 자리로 돌아가라.', effs: [{ t: 'rel', c, v: 3 }], special: 'elder_hold' },
-          { label: '보내 준다', say: '원한다면 막지 않겠다. 몫은 아이들에게 간다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'rel', c, v: -5 }, { t: 'trust', v: -2 }], special: 'elder_leave', witness: true },
-          { label: '작별을 치른다', say: '모두 모여라. 그를 그냥 보내지는 않는다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'lux', v: -1 }, { t: 'tension', v: -3 }, { t: 'rel', c, v: 2 }], special: 'elder_leave' },
+          { label: '붙잡는다', log: `다음 역에서 내리겠다던 ${who}을(를) 붙잡았다.`, say: '아무도 혼자 내리지 않는다. 자리로 돌아가라.', effs: [{ t: 'rel', c, v: 3 }], special: 'elder_hold' },
+          { label: '보내 준다', log: `내리겠다던 ${who}을(를) 막지 않고 보내 줬다.`, say: '원한다면 막지 않겠다. 몫은 아이들에게 간다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'rel', c, v: -5 }, { t: 'trust', v: -2 }], special: 'elder_leave', witness: true },
+          { label: '작별을 치른다', log: `모두 모여 ${who}의 작별을 치렀다.`, say: '모두 모여라. 그를 그냥 보내지는 않는다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'lux', v: -1 }, { t: 'tension', v: -3 }, { t: 'rel', c, v: 2 }], special: 'elder_leave' },
         ]),
       };
     }
@@ -844,8 +844,8 @@ function baseView(g: Game, card: Card): CardView {
         title: '아이가 나온다', speaker: leader(g, 'medtech'), focus: c, required: true,
         body: `${COMM_NAME[c]}에서 ${mother}의 아이가 나온다. ${cold ? '거긴 너무 춥다.' : '칸은 그럭저럭 따뜻하다.'}`,
         choices: withAfford(g, [
-          { label: '의무칸으로 옮긴다', say: '의무칸을 비워라. 아이는 따뜻한 데서 받는다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
-          { label: '그 칸에서 낳는다', say: '옮길 틈이 없다. 거기서 받아라.', effs: [], special: cold ? 'birth_weak' : 'birth_ok' },
+          { label: '의무칸으로 옮긴다', log: `해산을 앞둔 ${mother}을(를) 의무칸으로 옮겼다.`, say: '의무칸을 비워라. 아이는 따뜻한 데서 받는다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
+          { label: '그 칸에서 낳는다', log: `${mother}이(가) 그 칸에서 아이를 낳게 했다.`, say: '옮길 틈이 없다. 거기서 받아라.', effs: [], special: cold ? 'birth_weak' : 'birth_ok' },
         ]),
       };
     }
@@ -855,8 +855,8 @@ function baseView(g: Game, card: Card): CardView {
         title: '아이의 이름', speaker: { name: mother, role: COMM_NAME[c], comm: c }, focus: c, required: true,
         body: `${mother}의 아이에게 이름이 필요하다. 칸 사람들이 열차장을 쳐다본다.`,
         choices: withAfford(g, [
-          { label: '엄마가 짓는다', say: '이름은 엄마가 짓는 거다. 내가 끼어들 일 아니다.', effs: [{ t: 'rel', c, v: 3 }] },
-          { label: '열차 이름을 준다', say: '이 아이는 열차 모두의 아이다. 열차 이름을 줘라.', effs: [], special: 'name_train' },
+          { label: '엄마가 짓는다', log: '아이의 이름은 엄마가 짓게 뒀다.', say: '이름은 엄마가 짓는 거다. 내가 끼어들 일 아니다.', effs: [{ t: 'rel', c, v: 3 }] },
+          { label: '열차 이름을 준다', log: '아이에게 열차의 이름을 줬다.', say: '이 아이는 열차 모두의 아이다. 열차 이름을 줘라.', effs: [], special: 'name_train' },
           { label: '내 이름을 준다', say: '내 이름을 줘라. 이 아이는 내가 지킨다.', effs: [{ t: 'trust', v: 3 }, { t: 'rel', c: 'medtech', v: -2 }, { t: 'rel', c: 'tail', v: -2 }], log: '아이에게 열차장의 이름을 주었다.' },
         ]),
       };
@@ -867,7 +867,7 @@ function baseView(g: Game, card: Card): CardView {
     default:
       break;
   }
-  return { title: '빈 서류', body: '', required: false, choices: [{ label: '덮는다', effs: [] }] };
+  return { title: '빈 서류', body: '', required: false, choices: [{ label: '덮는다', log: '빈 카드 서류를 덮었다.', effs: [] }] };
 }
 
 /** 요구 카드에서 칸 대표가 직접 하는 말 — [보통, 좋음(관계 15 이상), 나쁨(관계 −15 이하)]. 칸마다 말투가 다르고(s1_content_guide 2장) 나쁨은 답의 기한을 못 박는다. S2 turn_card_text.gd와 같다. */

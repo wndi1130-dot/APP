@@ -1,4 +1,5 @@
 extends RefCounted
+const Budget = preload("res://game/train/turn/turn_budget.gd")
 ## S1 state.ts / ledger.ts primitives. Mutate only the caller's working copy.
 
 const State = preload("res://game/train/train_state.gd")
@@ -23,11 +24,12 @@ static func journal(g: Dictionary, line: String, tone: String = "") -> void:
 	if tone != "": row["tone"] = tone
 	g["journal"].append(row)
 
-static func card(g: Dictionary, value: Dictionary) -> void:
+static func card(g: Dictionary, value: Dictionary, t: Dictionary = {}) -> void:
 	var row: Dictionary = {"uid": g["nextCardUid"]}
 	row.merge(value)
 	g["nextCardUid"] = int(g["nextCardUid"]) + 1
 	g["cards"].append(row)
+	Budget.on_add(g, t)
 
 static func has_card(g: Dictionary, kind: String) -> bool:
 	for row: Dictionary in g["cards"]:
