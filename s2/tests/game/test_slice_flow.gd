@@ -352,6 +352,10 @@ func test_the_special_session_is_the_session_card_and_closing_it_goes_on() -> vo
 
 func test_the_boot_menu_has_the_slice_key() -> void:
 	var boot = Boot.new()
+	# Slots of its own, so a slice or a stop left on this machine does not open instead of the menu.
+	boot.slice_save_path = "user://test_slice_flow_menu_slice.json"
+	boot.train_save_path = "user://test_slice_flow_menu_train.json"
+	boot.field_save_path = "user://test_slice_flow_menu_field.json"
 	add_child_autofree(boot)
 	assert_not_null(boot.find_child("SliceButton", true, false))
 

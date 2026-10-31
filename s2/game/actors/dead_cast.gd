@@ -11,6 +11,8 @@ extends RefCounted
 
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
+const PersonVisual = preload("res://game/actors/person_visual.gd")
+const Wear = preload("res://game/sim/wear.gd")
 
 const ROOT: String = "res://models/people/"
 ## BUILT_IN first. Few vertices each, since the dead are many on screen: the
@@ -26,13 +28,101 @@ const SETTING: String = "visuals/dead_bodies_max"
 ## build's own (a folder put in place of it to try a body, dead_body.gd assets).
 static func others() -> Array[String]:
 	var out: Array[String] = []
-	if OS.get_environment(DeadBody.FOLDER_ENV) != "" or DirAccess.dir_exists_absolute(DeadBody.FOLDER) or DeadBody.built_in() != ROOT + BODIES[0]:
+	if not own_bodies():
 		return out
 	var cap := int(ProjectSettings.get_setting(SETTING, 0))
 	var count := BODIES.size() if cap <= 0 else clampi(cap, 1, BODIES.size())
 	for i in range(1, count):
 		out.append(ROOT + BODIES[i])
 	return out
+
+
+## The dead wear the build's own bodies: no folder put in place of the first.
+static func own_bodies() -> bool:
+	return OS.get_environment(DeadBody.FOLDER_ENV) == "" and not DirAccess.dir_exists_absolute(DeadBody.FOLDER) and DeadBody.built_in() == ROOT + BODIES[0]
+
+
+## What the dead are drawn in over the body (decision 434, zombies.md 「껴입은
+## 자와 전리품」): the shells of body_bake.gd SHELLS baked with the dead's
+## motions beside each body (<body>/wear/<kind>), as the living's are beside
+## theirs. The long coat is the padded ones' coat and every other long one,
+## the fire suit too (to the knees); the vest is the armour vest worn near the
+## police station.
+const SHELLS: Array[String] = ["coat_long", "vest"]
+
+
+## The folder of body `b`'s garment `kind`; "" when the dead do not wear the
+## build's own bodies (a folder put in place of the first has none beside it).
+static func garment_dir(b: int, kind: String) -> String:
+	if b < 0 or b >= BODIES.size() or not SHELLS.has(kind) or not own_bodies():
+		return ""
+	return ROOT + BODIES[b] + "/wear/" + kind
+
+
+## A garment over one of the bodies, read; {} when there is none or its
+## motions do not line up with `first`'s (every body's do).
+static func read_garment(dir: String, first: Dictionary) -> Dictionary:
+	var got := BodyBake.load_baked(dir) if dir != "" else {}
+	if got.is_empty() or not lined_up(got, first):
+		return {}
+	return got
+
+
+## What one of the dead is drawn in over its body, by what it has on
+## (zombies.gd worn_of): the outermost of its coat and jacket that the dead
+## have a garment for (SHELLS), as person_visual.gd looks_on picks the
+## living's. {shell, colour}: the garment's own colour (wear.gd look) in the
+## body's look as its picture takes it (`tint` / 0.5), its pattern in alpha
+## (PersonVisual.PATTERNS, thirds), as person_vat.gdshader worn_look draws it.
+## {} for nothing drawn over the body: one stripped of its coat is drawn without.
+## A plain long coat (SHADED) takes one of COAT_SHADES by the dead one's number
+## `id`; -1 (a risen one of ours) keeps the coat's own colour, as it wore it.
+static func garment_of(worn: Dictionary, tint: Color, id: int = -1) -> Dictionary:
+	for slot: String in ["coat", "jacket"]:
+		if not worn.has(slot):
+			continue
+		var kind := String(worn[slot].get("id", ""))
+		var look: Array = _drawn_look(kind)
+		if look.is_empty():
+			continue
+		var c: Color = look[1]
+		if id >= 0 and SHADED.has(kind):
+			var s: Color = COAT_SHADES[posmod(id, COAT_SHADES.size())]
+			c = Color(s.r, s.g, s.b, c.a)
+		return {"shell": look[0], "colour": Color(c.r * tint.r / 0.5, c.g * tint.g / 0.5, c.b * tint.b / 0.5, c.a)}
+	return {}
+
+
+## Plain long winter coats in faded shades, so a crowd in them is not one coat
+## copied: one by the dead one's number, and numbers one after another (as a
+## crowd let in together has) never the same. Linear, about as light as the
+## coat's own (wear.gd coat_long, the first).
+const COAT_SHADES: Array[Color] = [
+	Color(0.12, 0.1, 0.085),    # brown, the coat's own
+	Color(0.095, 0.098, 0.1),   # charcoal
+	Color(0.075, 0.09, 0.14),   # navy
+	Color(0.1, 0.105, 0.07),    # olive
+	Color(0.13, 0.085, 0.08),   # faded maroon
+]
+const SHADED: Array[String] = ["coat_long", "coat_wool_long"]
+
+
+static var _drawn_looks: Dictionary = {}   # garment id -> [shell, colour with the pattern in alpha], or [] when not drawn
+
+
+## A garment's look as the dead are drawn in it, worked out once per kind (the
+## field asks it for every one of the dead in sight each frame). A shell with a
+## lighter trim (body_bake.gd SHELLS "trim", its vertex colours 1 / trim inside)
+## is drawn that many times its colour, so inside it keeps its own.
+static func _drawn_look(id: String) -> Array:
+	if not _drawn_looks.has(id):
+		var look := Wear.look(id)
+		var shell := String(look["look_shell"])
+		var c: Array = look["look_tint"]
+		var pattern := int(PersonVisual.PATTERNS.get(String(look["look_pattern"]), 0))
+		var trim := float((BodyBake.SHELLS.get(shell, {}) as Dictionary).get("trim", 1.0))
+		_drawn_looks[id] = [shell, Color(float(c[0]) * trim, float(c[1]) * trim, float(c[2]) * trim, float(pattern) / 3.0)] if SHELLS.has(shell) and c.size() == 3 else []
+	return _drawn_looks[id]
 
 
 ## One more body, read with its colour picture; {} when it is not in the build

@@ -3,24 +3,34 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Card, CardView } from '../../src/game';
+import { FURNISH80 } from '../../src/game/domestic/decor_data';
+import { VOICE, VOICE_ANY } from '../../src/game/promise_voice';
 import { playGame } from '../../tools/s1c_bot';
 
 // 말씨 가름. 열차장 말은 해라체이고, 대체 불가한 장인 앞에서만 하오체다.
 // 맡은 일로 열차장에게 보고하는 사람(기관사·수색대·배급장·의무장·측근·부관)은 합쇼체, 칸 사람·칸 대표는 해라체다.
 // 앞칸 대표만 합쇼체이고 돌려 말하는 「~지요」도 그 높임으로 본다. 구조 카드의 바깥 사람은 높여 말한다.
 
-type Ending = '합쇼' | '지요' | '해요' | '하오' | '해라' | '조각';
+type Ending = '합쇼' | '지요' | '해요' | '하오' | '해라' | '해체' | '조각';
+
+/** 한글 음절의 받침이 ㅂ인가 */
+const bieup = (ch?: string) => !!ch && ch >= '가' && ch <= '힣' && (ch.charCodeAt(0) - 0xac00) % 28 === 17;
 
 /** 한 문장의 말끝 말씨. 말끝이 없는(명사·조사로 끝나는) 문장은 조각이다. */
 function endingOf(sentence: string): Ending {
   const last = sentence.replace(/[.!?…~]+$/u, '').trim();
   if (/(아니다|\s다오)$/u.test(last)) return '해라';
   if (/이라$/u.test(last)) return '조각';
+  // 「-니까」는 받침 ㅂ 뒤(「합니까」「없습니까」)만 합쇼 물음이고, 「추우니까」 같은 이유 잇기는 조각으로 둔다
+  if (/니까$/u.test(last) && !bieup(last.at(-3))) return '조각';
   if (/(습니다|십시오|니다|니까|십시다)$/u.test(last)) return '합쇼';
   if (/(지요|죠)$/u.test(last)) return '지요';
+  // 「-군」과 뜻을 밝히는 「-지」(「약속하지.」「들어주지.」)는 해라체가 아닌 해체다. 확인·물음의 「-지」(「있지」「갔지」「필요하지?」)는 해라 쪽으로 둔다.
+  // 형태만으로는 확인(「중요하지.」)과 의지(「해 보지.」)를 다 가를 수 없어 「하지·주지」 꼴만 잡는다 — 새 글에서 걸리면 문장을 바꾼다
+  if (/군$/u.test(last) || (/[하주]지$/u.test(last) && !/\?[.!…~]*$/u.test(sentence.trim()))) return '해체';
   if (/(세요|어요|아요|해요|예요|에요|요)$/u.test(last)) return '해요';
   if (/(구려|오|소)$/u.test(last)) return '하오';
-  if (/(다|라|자|냐|니|지|게|군|네|마|야|어|아|래|대|걸|거든|고|까|해|줘|와|봐|러)$/u.test(last)) return '해라';
+  if (/(다|라|자|냐|니|지|게|군|구나|네|마|야|어|아|래|대|걸|거든|고|까|해|줘|와|봐|러)$/u.test(last)) return '해라';
   return '조각';
 }
 
@@ -36,7 +46,7 @@ const ALLOWED: Record<Voice, Ending[]> = {
   칸: ['해라', '조각'],
   '앞칸 대표': ['합쇼', '지요', '조각'],
   바깥: ['합쇼', '지요', '해요', '조각'],
-  옮김: ['합쇼', '지요', '해요', '하오', '해라', '조각'],
+  옮김: ['합쇼', '지요', '해요', '하오', '해라', '해체', '조각'],
 };
 const fits = (text: string, v: Voice) => endings(text).every(e => ALLOWED[v].includes(e));
 
@@ -165,6 +175,18 @@ const TS_VOICES: [file: string, quote: string, voice: Voice][] = [
 
 const GAME = fileURLToPath(new URL('../../src/game/', import.meta.url));
 const EVENTS = fileURLToPath(new URL('../../data/events/', import.meta.url));
+const S2 = fileURLToPath(new URL('../../../s2/', import.meta.url));
+
+/** S2가 옮겨 적은 약속 말 표(`field_return.gd`의 `_voice_kept`)를 글로 읽는다 */
+function s2PromiseVoices(): { voice: Record<string, string[]>; any: string[] } {
+  const src = readFileSync(join(S2, 'game/politics/field_return.gd'), 'utf8').replace(/\r\n/g, '\n');
+  const start = src.indexOf('static func _voice_kept(');
+  const body = src.slice(start, src.indexOf('if not g.has("keptVoice")', start));
+  const quoted = (s: string) => [...s.matchAll(/"([^"]*)"/g)].map(q => q[1]);
+  const voice: Record<string, string[]> = {};
+  for (const m of body.matchAll(/^\t\t"(\w+)": \[(.*)\],?$/gmu)) voice[m[1]] = quoted(m[2]);
+  return { voice, any: quoted(/var any := \[(.*)\]/u.exec(body)?.[1] ?? '') };
+}
 
 /** 칸 대표가 요구하며 하는 말 표(cards.ts·late.ts)를 소스에서 칸마다 읽는다. 표는 내보내지 않는 값이라 글로 읽는다. */
 function repLines(file: string, name: string): [comm: string, line: string][] {
@@ -216,6 +238,10 @@ describe('말씨 가름', () => {
     expect(endings('알겠어요. 출발한다.')).toEqual(['해요', '해라']);
     expect(endings('열쇠는 경비대장 하나만 쥔다. 오늘부터.')).toEqual(['해라', '조각']);
     expect(endings('한 눈금만 올려 줘. 그날 밤 명단부터 다시 가져와.')).toEqual(['해라', '해라']);
+    expect(endings('계산이 맞았구나. 다음 이야기도 들어 보자.')).toEqual(['해라', '해라']);
+    expect(endings('말한 대로 왔군. 좋다. 약속하지. 들어주지.')).toEqual(['해체', '해라', '해체', '해체']);
+    expect(endings('지난번엔 그냥 갔지. 그자를 미워하는 사람이 있지. 약속하마. 뭐가 필요하지?')).toEqual(['해라', '해라', '해라', '해라']);
+    expect(endings('추우니까... 별수 없죠... 누가 올라갑니까.')).toEqual(['조각', '지요', '합쇼']);
     expect(fits('열쇠는 경비대장 하나만 쥡니다. 오늘부터.', '칸')).toBe(false);
     expect(fits('열차를 세워 주십시오. 반나절이면 된다.', '보고')).toBe(false);
     expect(fits('괜찮아요.', '앞칸 대표')).toBe(false);
@@ -260,6 +286,61 @@ describe('말씨 가름', () => {
     expect(lines.length).toBe(75);
     const bad = lines.filter(([c, s]) => !fits(s, c === 'front' ? '앞칸 대표' : '칸')).map(([c, s]) => `${c} ${endings(s).join('·')}: ${s}`);
     expect(bad).toEqual([]);
+  });
+
+  it('약속을 지킨 뒤 칸 사람의 한마디는 해라체이고, S2 사본도 같은 글이다', () => {
+    const lines = [...Object.entries(VOICE).flatMap(([c, two]) => two.map(s => [c, s] as const)), ...VOICE_ANY.map(s => ['any', s] as const)];
+    // 칸 다섯 × 둘 + 어느 칸에나 쓰는 셋
+    expect(lines.length).toBe(13);
+    expect(lines.filter(([, s]) => !fits(s, '칸')).map(([c, s]) => `${c} ${endings(s).join('·')}: ${s}`)).toEqual([]);
+    expect(s2PromiseVoices()).toEqual({ voice: VOICE, any: VOICE_ANY });
+  });
+
+  it('꾸밈 뒤 한마디는 칸을 대신하는 대표 말씨다(앞칸 대표만 합쇼체)', () => {
+    const lines = Object.entries(FURNISH80).flatMap(([car, f]) => f.say.map(s => [car, s] as const));
+    // 꾸미는 칸 일곱 × 셋, 열차장실은 말이 없다
+    expect(lines.length).toBe(21);
+    const bad = lines.filter(([car, s]) => !fits(s, car === 'front' ? '앞칸 대표' : '칸')).map(([car, s]) => `${car} ${endings(s).join('·')}: ${s}`);
+    expect(bad).toEqual([]);
+  });
+
+  it('S2 동료 말은 칸 사람 말씨다(겁 많은 성격만 해요체 — 성격 말씨 예외)', () => {
+    const voiced: Record<'fear' | 'rough' | 'quiet', string[]> = { fear: [], rough: [], quiet: [] };
+    // 주석 줄은 빼고, 문자열 안의 대괄호·이스케이프가 목록 끝으로 읽히지 않게 문자열 단위로 읽는다
+    const STR = String.raw`"(?:[^"\\]|\\.)*"`;
+    const strings = (s: string) => [...s.matchAll(new RegExp(STR, 'gu'))].map(q => q[0].slice(1, -1)).filter(q => /[가-힣]/u.test(q));
+    const noComments = (src: string) => src.replace(/\r\n/g, '\n').split('\n').filter(l => !l.trim().startsWith('#')).join('\n');
+    const ally = noComments(readFileSync(join(S2, 'game/sim/ally_lines.gd'), 'utf8'));
+    for (const src of [ally, noComments(readFileSync(join(S2, 'game/field_residents.gd'), 'utf8'))]) {
+      for (const m of src.matchAll(new RegExp(String.raw`"(fear|rough|quiet)":\s*(\[(?:${STR}|[^\]"])*\]|${STR})`, 'gu'))) {
+        voiced[m[1] as keyof typeof voiced].push(...strings(m[2]));
+      }
+    }
+    // 세 성격의 말을 다 읽었는지 — 지금 성격마다 210줄 넘게(VOICED·REL_LINES·MEMORY_LINES), 큰 표 하나가 빠지면 떨어진다
+    for (const lines of Object.values(voiced)) expect(lines.length).toBeGreaterThan(180);
+    // 성격 키 없이 누구나 하는 외침(LINES)은 칸 사람 말씨
+    const start = ally.indexOf('const LINES: Dictionary = {');
+    const common = strings(ally.slice(start, ally.indexOf('\n}', start)));
+    expect(common.length).toBeGreaterThan(5);
+    // 겁 많은 동료에게 더 허용하는 것은 해요·지요뿐이다(「-군」·뜻을 밝히는 「-지」는 여기서도 안 된다)
+    const FEAR: Ending[] = ['해라', '해요', '지요', '조각'];
+    const bad = [
+      ...voiced.fear.filter(s => !endings(s).every(e => FEAR.includes(e))).map(s => `fear ${endings(s).join('·')}: ${s}`),
+      ...[...voiced.rough, ...voiced.quiet, ...common].filter(s => !fits(s, '칸')).map(s => `${endings(s).join('·')}: ${s}`),
+    ];
+    expect(bad).toEqual([]);
+  });
+
+  it('S2 필드 주민 카드에서 열차장 쪽이 하는 선택지 말은 해라체다', () => {
+    const src = readFileSync(join(S2, 'game/field_residents.gd'), 'utf8').replace(/\r\n/g, '\n');
+    const start = src.indexOf('func options() -> Array:');
+    const body = src.slice(start, src.indexOf('\n\n', src.indexOf('return [', start)));
+    // HUD는 바깥 큰따옴표가 있든 없든 say를 보여 주니 둘 다 읽고, 선택지 수와 맞대어 빠뜨린 것이 없게 한다
+    const ids = [...body.matchAll(/\{\s*"id":/gu)].length;
+    const says = [...body.matchAll(/"say":\s*"(?:\\")?((?:[^"\\]|\\[^"])*?)(?:\\")?"/gu)].map(m => m[1]);
+    expect(ids).toBe(3);
+    expect(says.length).toBe(ids);
+    expect(says.filter(s => !endings(s).every(e => e === '해라' || e === '조각')).map(s => `${endings(s).join('·')}: ${s}`)).toEqual([]);
   });
 
   it('사건 글의 따옴표 말은 누가 하는 말인지에 맞는 말씨다', () => {

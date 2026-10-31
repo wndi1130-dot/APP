@@ -182,3 +182,12 @@ func test_without_a_save_handed_over_the_field_starts_fresh() -> void:
 	assert_true(FieldSave.write(FieldSave.capture(a), AT))
 	var b = _game({"field_save_path": AT})
 	assert_almost_eq(b.clock.elapsed, 0.0, 0.001, "a file on disk alone changes nothing")
+
+
+func test_the_slice_marker_survives_capture_and_resume_options() -> void:
+	var game = _game({"slice": true, "field_save": true, "field_save_path": AT})
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	assert_true(bool(saved["start_opts"]["slice"]))
+	var resumed: Dictionary = FieldSave.resume_opts(saved)
+	assert_true(bool(resumed["slice"]))
+	assert_false(saved["start_opts"].has("field_save_path"))

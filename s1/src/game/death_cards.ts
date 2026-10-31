@@ -53,7 +53,7 @@ function lossView(g: Game, card: Card): CardView | null {
         title: '빈 의석', speaker: leaderOf(g, c), focus: c, required: true,
         body: `${who}의 자리를 ${s.leader.name}이(가) 이었다. 첫 회기 전에 열차장에게 약속 하나를 받아 두겠다고 한다.`,
         choices: withAfford(g, [
-          { label: '약속한다', log: '새 대표에게 칸 몫을 챙기겠다고 약속했다.', say: '좋다. 약속하지. 그 칸 몫은 내가 챙긴다.', effs: [{ t: 'rel', c, v: 3 }], special: 'dw_promise',
+          { label: '약속한다', log: '새 대표에게 칸 몫을 챙기겠다고 약속했다.', say: '좋다. 약속하마. 그 칸 몫은 내가 챙긴다.', effs: [{ t: 'rel', c, v: 3 }], special: 'dw_promise',
             extra: cond ? [`약속: ${cond.label}`] : [], ...(busy || !cond ? { disabled: '이미 걸린 약속이 있다' } : {}) },
           { label: '거절한다', log: '새 대표의 약속 요구를 거절했다.', say: '자리를 이었으면 먼저 일로 보여라.', effs: spare(g, c, [{ t: 'rel', c, v: -5 }, { t: 'grudge', c }]), special: 'dw_refuse' },
         ]),
