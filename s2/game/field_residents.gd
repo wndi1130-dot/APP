@@ -101,9 +101,9 @@ func options() -> Array:
 	if _holder("medkit") != null:
 		give.append("구급 상자 1")
 	return [
-		{"id": "aid", "label": "붕대와 약을 준다 (%s)" % "·".join(PackedStringArray(give)), "say": "\"이거 써요. 손부터 헹구고.\""},
-		{"id": "robbed", "label": "단지와 지도를 그냥 가져간다 (먹을 것 2·선로 지도)", "say": "\"비켜요. 우리도 굶어요.\""},
-		{"id": "ignored", "label": "줄 게 없다고 한다", "say": "\"줄 게 없어요. 미안합니다.\""},
+		{"id": "aid", "label": "붕대와 약을 준다 (%s)" % "·".join(PackedStringArray(give)), "say": "\"이거 써라. 손부터 헹구고.\""},
+		{"id": "robbed", "label": "단지와 지도를 그냥 가져간다 (먹을 것 2·선로 지도)", "say": "\"비켜라. 우리도 굶는다.\""},
+		{"id": "ignored", "label": "줄 게 없다고 한다", "say": "\"줄 게 없다. 미안하다.\""},
 	]
 
 
