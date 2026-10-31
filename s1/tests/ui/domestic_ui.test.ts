@@ -83,6 +83,8 @@ describe('홈 편성', () => {
   it('새 판은 내정 스위치를 이어 간다', () => {
     expect(newGame('x', true).dom).toBeDefined();
     expect(newGame('x', false).dom).toBeUndefined();
+    expect(newGame('x', true).lateOn).toBe(true);
+    expect(newGame('x', false).lateOn).toBe(true);
   });
 
   it('새 판은 내정·어두운 길·서막과 상관없이 재난을 켠 채 시작한다(결정 350)', () => {

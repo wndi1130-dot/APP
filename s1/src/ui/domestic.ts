@@ -1,5 +1,5 @@
 import {
-  BRANCH_NAME, bedNeed, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS,
+  BRANCH_NAME, bedNeed, CAR_COMM, CAR_NAME, COMM_NAME, D, FIELDS, FIELD_NAME, HOT_WATER_NAMES, SKILL_NAME, WASH_NAME, TECHS, enableLate,
   TECH_IDS, buryOpen, coldCap, createGame, createS1cGame, startPrologue, delegateStatus, delegateTier, escortOptions, finishCheck, freeTeacher,
   COMMS, hotWaterCoal, hotWaterFloor, hygiene, hygieneWhy, insulateCarNote, insulateNumbers, insulatePickLine, irreplaceable, jobCheck, jobTitle, cancelOpen, knowers, lawActive, living, manualWriter, materials, moveOpen,
   movedThisStop, previewMove, researchPromise, restartWhy, restoreCheck, restoreCost, storeCap, techLaws, techMult, techRelSides, techTitle, techUsable, techUseLine, upkeepOf,
@@ -57,6 +57,7 @@ export function urlWantsS1c(): boolean {
  * 바깥 기온·결빙(game/climate.ts, 결정 370·384)과 사람 들어오는 사건(game/arrivals.ts, 결정 352·369·389)도 어느 새 판이든 켠다(결정 407 E2). */
 export function newGame(seed: string, s1c: boolean, s1b = false, prologue = true, events = s1c, death = true): Game {
   const g = s1c ? createS1cGame(seed) : createGame(seed);
+  enableLate(g);
   // 시험 판 곡선(메뉴 '시험 판' 단추)은 다른 켬/끔처럼 새 판에 그대로 이어진다. 서막으로 되돌릴 때까지.
   const act = seasonAct();
   if (act !== 'prologue') g.seasonAct = act;

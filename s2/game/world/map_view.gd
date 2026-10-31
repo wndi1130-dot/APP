@@ -953,6 +953,8 @@ static func outdoor_block_runs(g: FieldGrid, d: Dictionary) -> Array[Rect2i]:
 	var skip: Array[Rect2i] = [d["train"]]
 	for w in d.get("wagons", []):
 		skip.append(w["rect"])
+	for rect: Rect2i in d.get("deep_forest", []):
+		skip.append(rect)
 	var trees: Dictionary = {}
 	for c in d.get("trees", []):
 		trees[c] = true
@@ -2158,7 +2160,9 @@ func _prop_shade(path: String, item: Dictionary) -> Dictionary:
 	var lv: int = item["level"]
 	var floor_y := lv * LEVEL_H
 	var prop: Dictionary = item.get("prop", {})
-	if lo.y > floor_y + SHADE_FLOOR_GAP or String(prop.get("mount", "")) == "wall" or not levels.has(lv):
+	# shade=false: 발이 모형 전체를 덮는 성긴 모형(마당의 마른 풀·그루터기, yard_dress)은 네모 판이 보여 깔지 않는다.
+	if lo.y > floor_y + SHADE_FLOOR_GAP or String(prop.get("mount", "")) == "wall" or not levels.has(lv) \
+			or not prop.get("shade", true):
 		return {}
 	var tall := clampf(hi.y - floor_y, 0.0, 2.0)
 	if xf.basis.y.normalized().y > 0.9:

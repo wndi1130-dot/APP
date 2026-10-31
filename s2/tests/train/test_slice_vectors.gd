@@ -41,6 +41,9 @@ func test_the_start_asset_is_s1s_new_game() -> void:
 	assert_eq(_start.get("format"), "slice-start-v1")
 	assert_eq(_start.get("seed"), _data.get("seed"))
 	assert_true(_start.get("state") is Dictionary and _start.get("tables") is Dictionary)
+	var live: Array = SliceFlow.start_board()
+	assert_eq(live[0].get("lateOn"), true, "new playable S2 boards enable decision 514")
+	assert_false(_start["state"].has("lateOn"), "the old reference input stays unchanged")
 
 
 func test_the_slice_reaches_its_first_stop_as_s1() -> void:
