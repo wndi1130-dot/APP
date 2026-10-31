@@ -8,7 +8,7 @@ X·Y·Z 경계 상자의 한가운데가 (0,0,0). +Y 위, +Z 앞. at에 그대�
 종류마다 메시 1개·면 묶음 1개·Col 정점색. GLB 안에 재질·텍스처·빛·카메라 없음. 별도 셰이더 파일 없음.
 vertex_colors.gd는 가져올 때 엔진 내장 StandardMaterial3D의 정점색 표시를 켠다. 별도 재질 파일은 만들지 않는다.
 .import의 초기 설정은 이 스크립트가 준비하고 Godot --import가 최종화한다. 게임 코드는 수정할 필요가 없다.
-기존 개별 상한 600, 새 살림 모형은 각 장부의 상한 적용. 전체 상한 10,000. 전체 삼각형: 9385.
+기존 개별 상한 600, 새 살림 모형은 각 장부의 상한 적용. 전체 상한 10,000. 전체 삼각형: 9457.
 
 ```text
 blender -b --factory-startup -P tools/blender/train_interior.py -- --repo .
@@ -118,7 +118,7 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 
 ## 공개 3D로 바꾼 것
 
-`tools/blender/train_interior_swap.py`(공개 3D)와 `tools/blender/train_ice_chest.py`(얼음 상자)가 위 표의 같은 경로를 덮어쓰고, `tools/blender/train_car_dress.py`(찬 칸·꼬리칸·운전실 꾸밈)가 새 경로를 더한다. 전체 삼각형: 9385. `tools/blender/train_car_layers.py`(사는 칸 세 겹 꾸밈: 천장·벽·바닥 열 가지)도 새 경로를 더한다.
+`tools/blender/train_interior_swap.py`(공개 3D)와 `tools/blender/train_ice_chest.py`(얼음 상자)가 위 표의 같은 경로를 덮어쓰고, `tools/blender/train_car_dress.py`(찬 칸·꼬리칸·운전실 꾸밈)가 새 경로를 더한다. 전체 삼각형: 9457. `tools/blender/train_car_layers.py`(사는 칸 세 겹 꾸밈: 천장·벽·바닥 열 가지)도 새 경로를 더한다.
 
 | 이름 | 원본 | 크기 | 삼각형 | 색 | sha256 |
 |---|---|---|---:|---|---|
@@ -161,8 +161,8 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 | tin_stove | 기본 도형 (tools/blender/train_car_tiers.py) | 0.4×0.58×0.4 | 112 | iron, iron_worn, rust_faded, soot | 7fca23daa36eedb2fcad39b50af3910e0da238c670647309b00a2d6669435e72 |
 | sack_bunk_upper | kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0) | 2.8×0.14×0.6 | 58 | cloth, wood_dark, wool, wool_dark | a41fe6cbf12ef1461b1a5910217900c875576ebceae2abca6f8316dd288c5651 |
 | sack_bunk_lower | kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0) | 1.75×0.48×0.58 | 106 | cloth, wood_dark, wool, wool_dark | be304e936915de2f4364a125e7a120cb080203908855068735efec7c75de2255 |
-| wood_wall_box | kenney_furniture / kenney_furniture/x/Models/GLTF format/kitchenCabinetUpper.glb (CC0-1.0) | 0.48×0.42×0.28 | 58 | wood_mended | f9a6ff1df1bbc1aa2a1348e251d8d97503aa8d64e53d28e5c0e33f0af516fbbd |
-| wood_wall_box_shallow | kenney_furniture / kenney_furniture/x/Models/GLTF format/kitchenCabinetUpperLow.glb (CC0-1.0) | 0.48×0.22×0.28 | 58 | wood_mended | 0356f353c81802ad7bea1a18c8d25bd36c6677226b0c6021ca74db82596a0172 |
+| wood_wall_box | 기본 도형 (tools/blender/train_car_tiers.py) | 0.48×0.42×0.28 | 100 (상한 120) | iron, wood_mended, wood_mended_grain | 4697891c7cdb9fcc47aa89c7a460ff6e7aaf4abaeda2da69530363d7bd82b920 |
+| wood_wall_box_shallow | 기본 도형 (tools/blender/train_car_tiers.py) | 0.48×0.22×0.28 | 88 (상한 120) | iron, wood_mended, wood_mended_grain | 16b2b8120444d09bd80f4d41866019d2ba0ad3a6af2a70bd2a578675a7eb8e47 |
 | drum_stove | 기본 도형 (tools/blender/train_car_tiers.py) | 0.4×0.7×0.4 | 140 | iron, iron_worn, soot | 444b0b91ae44ceffa8d9a01dbcdf3f8eee1ef4a92d3998b2cea1cdb54b636591 |
 | end_shelf | 기본 도형 (tools/blender/train_car_tiers.py) | 0.48×0.9×0.28 | 60 | wood_oak, wood_oak_grain | f34a1ed982a3552cd1471ba4c1ce680b474dcd59ac253ace544bb4bf29eb5ec1 |
 | top_shelf | 기본 도형 (tools/blender/train_car_tiers.py) | 0.48×0.24×0.28 | 40 | iron, iron_worn, wood_oak, wood_oak_grain | 1f48a550d3e3bf540d3bf3138f674f7ddaf2d5da3af844108660611f1642d9df |
@@ -194,8 +194,8 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 
 | 이름 | bytes | palette_extra (선형 RGB) |
 |---|---:|---|
-| wood_wall_box | 6960 | wood_mended=(0.241772, 0.157411, 0.089593) |
-| wood_wall_box_shallow | 6972 | wood_mended=(0.241772, 0.157411, 0.089593) |
+| wood_wall_box | 7788 | wood_mended=(0.241772, 0.157411, 0.089593); wood_mended_grain=(0.155256, 0.102087, 0.059035) |
+| wood_wall_box_shallow | 6960 | wood_mended=(0.241772, 0.157411, 0.089593); wood_mended_grain=(0.155256, 0.102087, 0.059035) |
 | end_shelf | 5236 | wood_oak=(0.314361, 0.151734, 0.048351); wood_oak_grain=(0.198465, 0.097390, 0.032239) |
 | top_shelf | 3960 | wood_oak=(0.314361, 0.151734, 0.048351); wood_oak_grain=(0.198465, 0.097390, 0.032239) |
 | pale_paneling | 9728 | wood_pine=(0.525018, 0.298299, 0.088097); wood_pine_grain=(0.408604, 0.216195, 0.050238) |
@@ -215,4 +215,4 @@ stove는 기존 코드의 stove_builder 분기로 건너뛰므로 파일만으�
 | tiny_book | 5320 | wool_teal=(0.046204, 0.156512, 0.180539) |
 <!-- /tiers_colour_metadata -->
 
-새 살림 단계 합계: 1815 / 2,430. 전체 삼각형: 9385 / 10,000.
+새 살림 단계 합계: 1887 / 2,430. 전체 삼각형: 9457 / 10,000.
