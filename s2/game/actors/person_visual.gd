@@ -36,6 +36,7 @@ const InjuryRules = preload("res://game/sim/injury_rules.gd")
 const BodyCast = preload("res://game/actors/body_cast.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Gait = preload("res://game/sim/gait.gd")
+const SimNoise = preload("res://game/sim/noise.gd")
 
 const FOLDER: String = "res://models/people/n5-crew_seamstress"
 const OWN_FOLDER: String = "res://models/people/n5-crew_seamstress_p"
@@ -78,6 +79,11 @@ const TELL: int = DeadBody.TELL
 const SHADE: float = 1.0
 const STRIDE_CAP: float = 0.5            # more than this between two drawings is not a step
 const STILL_AFTER: float = 0.2           # stands once it has kept its place this long
+const GROUND_TAU: float = 0.3
+const WALK_OFF: float = 0.15             # m/s, filtered ground speed
+const WALK_ON: float = 0.25
+const GROUND_MIN: float = 0.000001       # metres; ignore subtraction noise
+const BACKWARD_DEG: float = 100.0
 # Held by the dead (after the reference game's struck state, 상태표 2.3): the arms
 # out against them (the lunge's reach), leaning back from one in front and
 # bent under one behind, twisting to get free.
@@ -98,8 +104,10 @@ const HURT_SIDE_ROLL: float = 0.6        # of the lean, rolled away from one at 
 # TURN_FOOT metres round the walk, so a half turn is about two steps.
 const TURN_FOOT: float = 0.35
 const TURN_HOLD: float = 0.15            # it keeps stepping this long after the turn stops
-const TURN_MIN: float = 0.002            # less than this between two drawings is not a turn
-const TURN_CAP: float = 1.2              # more than this at once is a snap round, not stepped
+const TURN_ANGLE: float = PI / 9.0       # twenty degrees accumulated in TURN_WINDOW
+const TURN_RATE: float = 0.6             # radians per second
+const TURN_WINDOW: float = 1.0
+const TURN_NOISE: float = 0.000001
 # The living's own motions in OWN_FOLDER, by name; where the build has no such
 # folder, the dead's that read closest. Crouched (the reference game's sneak: its
 # own stand and walk) it stands low as the dead do before they run, and walks
@@ -569,8 +577,17 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	var t: float = float(note.get("t", 0.0)) + delta
 	note["t"] = t
 	var at: Vector3 = p.global_position
-	var gone: float = at.distance_to(note.get("at", at))
+	var previous: Vector3 = note.get("at", at)
+	var gone: float = at.distance_to(previous)
 	note["at"] = at
+	var push: Vector3 = p.visual_push
+	var previous_push: Vector3 = note.get("push_at", push)
+	var pushed: Vector3 = push - previous_push
+	note["push_at"] = push
+	var ground: Vector3 = at - previous - pushed
+	ground.y = 0.0
+	var ground_gone: float = ground.length()
+	var walking: bool = _ground_walk(note, ground_gone, delta, t)
 	_note_hurt(p, note, t)
 	# Noted every drawing, so a turn made in another motion (aiming, a blow) is not stepped later.
 	var turned := _turned(p, note, t)
@@ -648,36 +665,34 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	var work := work_of(p, note, t, own)
 	if work.y >= 0.0:
 		return work
-	if gone > 0.001:
-		note["moved"] = t
 	var load := reload_of(p, note, t, own)
-	if load.y >= 0.0 and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+	if load.y >= 0.0 and not walking:
 		return load
 	var aim := aim_of(p, own)
-	if aim >= 0 and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+	if aim >= 0 and not walking:
 		return Vector2(_own_cycle(note, OWN_BASE + aim, t, _length(own, aim, 1.0), p.name_unit("aim")), aim)
 	var unit: float = p.name_unit("stand")
-	# The run as the feet go: out of breath or spent with the run still on, it walks.
-	var running: bool = Gait.runs(p)
+	# The same ground-speed decision sets the footstep round.
+	var running: bool = Gait.ground_runs(p)
 	# Spent or bleeding hard it reels (gait.gd reels; the dead's reel in a folder
 	# without its own), still reeling where it stops.
 	var reeling: bool = Gait.reels(p)
 	var own_reel := clip_named(own, OWN_SPENT, -1) if reeling else -1
-	if reeling and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+	if reeling and not walking:
 		if own_reel >= 0:
 			return Vector2(_own_cycle(note, OWN_BASE + own_reel, t, _length(own, own_reel, 1.0) * 2.0, unit), own_reel)
 		return Vector2(_own_cycle(note, STAGGER, t, _length(clips, STAGGER, 1.0) * 2.0, unit), STAGGER)
-	if t - float(note.get("moved", -10.0)) >= STILL_AFTER and t - float(note.get("turned", -10.0)) < TURN_HOLD:
+	if not walking and t - float(note.get("turned", -10.0)) < TURN_HOLD:
 		# Turning on the spot: the walk goes round by the turn, not by ground covered.
 		var own_turn := gait_of(p, own, false)
-		var foot := turned * TURN_FOOT
+		var foot: float = minf(turned * TURN_FOOT, STRIDE_CAP)
 		if own_turn >= 0:
 			note["motion"] = OWN_BASE + own_turn
 			return Vector2(_round(note, "step", foot, _round_of(own, own_turn, 1.2)), own_turn)
 		var turn_gait := CROUCH_WALK if p.crouched else WALK
 		note["motion"] = turn_gait
 		return Vector2(_round(note, "step", foot, _round_of(clips, turn_gait, float(DeadBody.STRIDE.get(turn_gait, 1.2)))), turn_gait)
-	if t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+	if not walking:
 		# Danger near (guard_note): the hand weapon held up, on guard.
 		var ready := clip_named(own, Gait.ready_name(p), -1) if not p.crouched and t < float(note.get("guard_until", -1.0)) else -1
 		if ready >= 0:
@@ -704,11 +719,20 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		own_gait = clip_named(own, Gait.burden_name(p, PAIN_SHOWN), -1)
 	if own_gait < 0:
 		own_gait = own_reel if reeling else gait_of(p, own, running)
+	var forward: Vector3 = Vector3(sin(p.rotation.y), 0.0, cos(p.rotation.y))
+	var backward: bool = bool(note.get("gait_backward", false))
+	if ground_gone > GROUND_MIN:
+		backward = ground.dot(forward) < ground_gone * cos(deg_to_rad(BACKWARD_DEG))
+	note["gait_backward"] = backward
+	var signed_gone: float = -ground_gone if backward else ground_gone
 	if own_gait >= 0:
 		note["motion"] = OWN_BASE + own_gait
-		var stepped := _round(note, "step", gone, _round_of(own, own_gait, 1.2))
+		var stepped: float = _round(note, "step", signed_gone, _round_of(own, own_gait, 1.2))
 		if p.brain.has("step_r") and is_stepped(String(own[own_gait].get("name", ""))):
 			stepped = float(p.brain["step_r"])   # the feet land with the footsteps (field_game.gd steps_in)
+			if backward:
+				# Decision 425: reflection swaps the two contacts without changing their times.
+				stepped = fposmod(float(SimNoise.STEP_AT[0]) + float(SimNoise.STEP_AT[1]) - stepped, 1.0)
 		return Vector2(stepped, own_gait)
 	var gait := WALK
 	if running:
@@ -718,7 +742,28 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	elif reeling:
 		gait = STAGGER
 	note["motion"] = gait
-	return Vector2(_round(note, "step", gone, _round_of(clips, gait, float(DeadBody.STRIDE.get(gait, 1.2)))), gait)
+	return Vector2(_round(note, "step", signed_gone, _round_of(clips, gait, float(DeadBody.STRIDE.get(gait, 1.2)))), gait)
+
+
+## User feedback 2026-11-01: ground speed gates the drawing, not the rules.
+static func _ground_walk(note: Dictionary, gone: float, delta: float, t: float) -> bool:
+	var speed: float = float(note.get("ground_speed", 0.0))
+	var walking: bool = bool(note.get("ground_walk", false))
+	if delta > 0.0:
+		speed = lerpf(speed, gone / delta, 1.0 - exp(-delta / GROUND_TAU))
+	if gone > GROUND_MIN:
+		note["moved"] = t
+	elif t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+		# Preserve the existing release after a complete stop.
+		speed = 0.0
+	# Decision 442: enter now; distance comparison tolerates coordinate subtraction noise.
+	if delta > 0.0 and gone > GROUND_MIN and (gone >= WALK_ON * delta or is_equal_approx(gone, WALK_ON * delta)):
+		walking = true
+	elif speed < WALK_OFF:
+		walking = false
+	note["ground_speed"] = speed
+	note["ground_walk"] = walking
+	return walking
 
 
 ## The living's own walk (or run) for what is in the hand (gait.gd), the plain
@@ -1211,15 +1256,30 @@ static func hurt_from(p) -> Vector2:
 	return from
 
 
-## How far the body has turned since it was last drawn (radians); notes when it
-## last turned. A snap round (TURN_CAP) or a tremble (TURN_MIN) is not a turn.
+## User feedback 2026-11-01: small, slow turns leave the standing feet alone.
 static func _turned(p, note: Dictionary, t: float) -> float:
 	var yaw: float = p.rotation.y
 	var was: float = float(note.get("yaw", yaw))
+	var delta: float = t - float(note.get("yaw_at", t))
 	note["yaw"] = yaw
-	var d := absf(angle_difference(was, yaw))
-	if d < TURN_MIN or d > TURN_CAP:
+	note["yaw_at"] = t
+	var turn: float = angle_difference(was, yaw)
+	var d: float = absf(turn)
+	var since: float = float(note.get("turn_since", t))
+	var total: float = float(note.get("turn_sum", 0.0))
+	if t - since > TURN_WINDOW:
+		total = 0.0
+		since = t
+	total += turn
+	note["turn_since"] = since
+	note["turn_sum"] = total
+	if d < TURN_NOISE or delta <= 0.0:
 		return 0.0
+	var active: bool = t - float(note.get("turned", -10.0)) < TURN_HOLD
+	if not active and absf(total) <= TURN_ANGLE and d / delta <= TURN_RATE:
+		return 0.0
+	note["turn_sum"] = 0.0
+	note["turn_since"] = t
 	note["turned"] = t
 	return d
 
@@ -1315,7 +1375,7 @@ static func _cycle(note: Dictionary, motion: int, t: float, clips: Array) -> flo
 ## A motion that goes round by the ground covered (walk, run, crawl).
 static func _round(note: Dictionary, key: String, gone: float, size: float) -> float:
 	var at: float = float(note.get(key, 0.0))
-	if gone <= STRIDE_CAP:
+	if absf(gone) <= STRIDE_CAP:
 		at = fposmod(at + gone / maxf(size, 0.01), 1.0)
 	note[key] = at
 	return at
