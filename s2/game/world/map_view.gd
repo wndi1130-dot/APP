@@ -1699,14 +1699,20 @@ func _build_props() -> void:
 		# 0은 원래 자세, 1~3은 위에서 보아 시계 방향으로 90도씩. 모델의 긴 축을 rect의
 		# 긴 축에 맞추고, 남는 작은 넘침만 그 축으로 줄인다(prop_fit.gd). 칸은 그대로.
 		var box: AABB = PropModels.batch_meshes(path)[0].get_aabb()
-		var fit := PropFit.fit(box.position, box.end, r, int(prop.get("facing", 0)), lg)
-		var turn := Basis(Vector3.UP, -float(fit["facing"]) * PI * 0.5)
-		var xf := Transform3D(Basis.from_scale(fit["scale"]) * turn, at)
+		var xf: Transform3D
 		prop_fit_counts["placed"] += 1
-		if fit["turned"]:
-			prop_fit_counts["turned"] += 1
-		if fit["shrunk"]:
-			prop_fit_counts["shrunk"] += 1
+		if String(prop.get("mount", "")) == "wall":
+			# 벽걸이 장식(room_decor): 지도 facing 그대로, 줄이지 않고 등 쪽 벽 안쪽 면에 붙인다.
+			var facing := posmod(int(prop.get("facing", 0)), 4)
+			xf = wall_mount_transform(box, at, facing, wall_face(lg, r.position + WALL_BACK[facing], WALL_BACK[facing], b))
+		else:
+			var fit := PropFit.fit(box.position, box.end, r, int(prop.get("facing", 0)), lg)
+			var turn := Basis(Vector3.UP, -float(fit["facing"]) * PI * 0.5)
+			xf = Transform3D(Basis.from_scale(fit["scale"]) * turn, at)
+			if fit["turned"]:
+				prop_fit_counts["turned"] += 1
+			if fit["shrunk"]:
+				prop_fit_counts["shrunk"] += 1
 		if not prop_batches.has(path):
 			prop_batches[path] = {"items": [], "nodes": {}, "tiles": {}}
 		var item: Dictionary = {"xf": xf, "rect": r, "level": lv, "building": b, "prop": prop, "remembered": false}
@@ -1715,7 +1721,8 @@ func _build_props() -> void:
 			item["tint"] = FurnitureTints.pick(prop, r.position, b)
 		prop_batches[path]["items"].append(item)
 		_index_prop(prop_batches[path], item)
-		if lv == 0:
+		# 장식(벽걸이·화분)은 몸을 막지 않아 그 칸의 회색 덩이(모형 없는 가구)를 지우지 않는다.
+		if lv == 0 and not prop.get("decor", false):
 			for y in range(r.position.y, r.end.y):
 				for x in range(r.position.x, r.end.x):
 					modelled_prop_cells[Vector2i(x, y)] = true
@@ -1738,6 +1745,28 @@ func _build_props() -> void:
 			batch["nodes"][lod] = node
 		await BuildPace.rest(pace)
 	_make_prop_shades()
+
+
+## 벽걸이 장식의 등 쪽 칸(facing 0 북·1 동·2 남·3 서 — 모형 앞 +Z가 facing만큼 돈다).
+const WALL_BACK: Array[Vector2i] = [Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0)]
+## 벽면과 모형 등 사이(겹쳐 깜박이지 않게, 창 판자와 같은 꼴).
+const WALL_GAP := 0.015
+
+
+## 방 칸 가운데에서 등 쪽 벽 안쪽 면까지(m). 벽은 벽 칸 가운데에 서므로 바깥벽은 1 − EXT_T/2,
+## 안벽(벽 너머도 같은 건물)은 1 − INT_HALF. 건물을 모르면 바깥벽 값(벽 속에 묻히지 않는 쪽).
+static func wall_face(lg: FieldGrid, wall_cell: Vector2i, back: Vector2i, b: int) -> float:
+	if b >= 0 and lg != null and lg.building_at(wall_cell + back) == b:
+		return 1.0 - BuildingView.INT_HALF
+	return 1.0 - BuildingView.EXT_T * 0.5
+
+
+## 벽걸이 모형 자리: facing만큼 돌리고(줄이지 않음), 모형 등(경계 z 최소)이 벽 안쪽 면 앞 WALL_GAP에 오게
+## 등 쪽으로 민다. 모형은 원점이 칸 가운데 바닥, 앞 +Z·등 −Z, 걸 높이는 모형 안(art3d).
+static func wall_mount_transform(box: AABB, at: Vector3, facing: int, face: float) -> Transform3D:
+	var turn := Basis(Vector3.UP, -float(facing) * PI * 0.5)
+	var push := face - WALL_GAP + box.position.z
+	return Transform3D(turn, at + turn * Vector3(0.0, 0.0, -push))
 
 
 static func _interactive_prop(kind: String) -> bool:
