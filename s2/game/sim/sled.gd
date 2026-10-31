@@ -75,6 +75,45 @@ static func path_clear(game: Variant, from: Vector3, to: Vector3) -> bool:
 	return false
 
 
+## The sled's own cell in an unloading area on the ground floor (sled.md 2.1).
+static func in_unloading(game: Variant, row: Dictionary) -> bool:
+	if row.is_empty() or int(row["level"]) != 0 or game.level_of(row["pos"]) != 0:
+		return false
+	var cell: Vector2i = FieldGrid.cell_of(row["pos"])
+	for area: Rect2i in game.data.get("unloading", []):
+		if area.has_point(cell):
+			return true
+	return false
+
+
+## The leaving card's lines: a sled out of the unloading area stays with its load,
+## one in it goes aboard (sled.md 2.1). "" with no sled.
+static func leaving_note(game: Variant) -> String:
+	var sleds_left: int = 0
+	var things_left: int = 0
+	var things_aboard: int = 0
+	for row: Dictionary in game.sleds:
+		if in_unloading(game, row):
+			things_aboard += count(row)
+		else:
+			sleds_left += 1
+			things_left += count(row)
+	var text: String = ""
+	if things_aboard > 0:
+		text += "\n하역 칸 안 썰매의 짐 %d개는 같이 싣는다." % things_aboard
+	if sleds_left > 0:
+		text += "\n하역 칸 밖 썰매 %d대·짐 %d개를 두고 간다." % [sleds_left, things_left]
+	return text
+
+
+## How many things the sled holds (counts, not weight).
+static func count(row: Dictionary) -> int:
+	var n: int = 0
+	for id: String in row.get("items", {}):
+		n += int(row["items"][id])
+	return n
+
+
 static func reachable(game: Variant, p: Variant, row: Dictionary) -> bool:
 	return (p == game.player and p.can_act() and not game.ended and not row.is_empty()
 		and int(row["level"]) == game.level_of(p.position) and game.actions._in_reach(p, row["pos"]))

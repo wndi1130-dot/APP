@@ -3304,7 +3304,13 @@ func finish(reason: String) -> void:
 	if ended:
 		return
 	ended = true
-	# Cargo remains in the field on every end path (sled.md 2.5).
+	# Leaving: a sled standing in an unloading area has its cargo put aboard; one left
+	# outside stays in the field with what is on it (sled.md 2.1, 2.5).
+	for sled: Dictionary in sleds:
+		if Sled.in_unloading(self, sled):
+			for id: String in sled["items"]:
+				unloaded[id] = int(unloaded.get(id, 0)) + int(sled["items"][id])
+			sled["items"] = {}
 	for person: Person in people:
 		actions.release_sled(person, false)
 		if not person.sled_job.is_empty():

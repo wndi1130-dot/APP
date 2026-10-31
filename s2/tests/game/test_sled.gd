@@ -527,10 +527,12 @@ func test_d7_bag_only_and_sled_reference_cell_outside() -> void:
 
 # D8: The stop's receipt never includes a sled that was not unloaded.
 func test_d8_all_end_reasons_leave_sled_cargo_out_of_receipt() -> void:
+	# A sled left outside the unloading area: it and its load stay in the field (sled.md 2.1).
 	for reason: String in ["departed", "limit", "wiped"]:
 		var game: Variant = _game()
 		var sled: Dictionary = _sled(game, {"food_pack": 4, "cloth": 2})
-		assert_true(game.actions.pull_sled(game.player, int(sled["id"])))
+		sled["pos"] = Vector3(24.5, 0, 20.5)
+		assert_false(Sled.in_unloading(game, sled))
 		game.finish(reason)
 		assert_eq(sled["items"], {"food_pack": 4, "cloth": 2}, reason)
 		assert_eq(sled["puller"], "")
@@ -539,6 +541,45 @@ func test_d8_all_end_reasons_leave_sled_cargo_out_of_receipt() -> void:
 		var stock: Dictionary = game.saved_result["receipt"]["stock"]
 		assert_eq(int(stock.get("food", 0)), 0)
 		assert_eq(int(stock.get("cloth", 0)), 0)
+
+
+func test_d8_a_sled_in_the_unloading_area_goes_aboard_on_leaving() -> void:
+	for reason: String in ["departed", "limit", "wiped"]:
+		var game: Variant = _game()
+		var sled: Dictionary = _sled(game, {"food_pack": 4, "cloth": 2})
+		assert_true(Sled.in_unloading(game, sled))
+		assert_true(game.actions.pull_sled(game.player, int(sled["id"])))
+		game.finish(reason)
+		assert_eq(sled["items"], {}, reason)
+		assert_eq(sled["puller"], "")
+		assert_eq(game.player.sled_id, 0)
+		assert_eq(int(game.unloaded.get("food_pack", 0)), 4, reason)
+		assert_eq(int(game.unloaded.get("cloth", 0)), 2, reason)
+	# Already loaded by the key: nothing is counted twice.
+	var twice: Variant = _game()
+	var loaded: Dictionary = _sled(twice, {"food_pack": 3})
+	assert_true(twice.actions.load_train(twice.player))
+	assert_eq(int(twice.unloaded.get("food_pack", 0)), 3)
+	twice.finish("departed")
+	assert_eq(int(twice.unloaded.get("food_pack", 0)), 3)
+	assert_eq(loaded["items"], {})
+
+
+func test_d8_the_leaving_card_names_what_is_left_and_what_goes_aboard() -> void:
+	var game: Variant = _game()
+	var sled: Dictionary = _sled(game, {"food_pack": 2, "scrap": 3})
+	assert_eq(Sled.leaving_note(game), "\n하역 칸 안 썰매의 짐 5개는 같이 싣는다.")
+	sled["pos"] = Vector3(24.5, 0, 20.5)
+	assert_eq(Sled.leaving_note(game), "\n하역 칸 밖 썰매 1대·짐 5개를 두고 간다.")
+	sled["items"] = {}
+	assert_eq(Sled.leaving_note(game), "\n하역 칸 밖 썰매 1대·짐 0개를 두고 간다.")
+	game.sleds.clear()
+	assert_eq(Sled.leaving_note(game), "")
+	# The card shows it: opening it with a sled out runs the same note without error.
+	_sled(game, {"scrap": 1})["pos"] = Vector3(24.5, 0, 20.5)
+	game.hud.depart_card()
+	assert_true(game.hud.modal != null)
+	game.hud._close_modal()
 
 
 # D9: Transfers are immediate; the transfer checkpoint is immediately after the press.
