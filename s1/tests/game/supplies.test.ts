@@ -273,14 +273,14 @@ describe('생필품: 정차 입고', () => {
   it.each(['short', 'normal', 'long'] as const)('%s 체류는 부산물에만 곱하고 덤은 +1이다', stay => {
     const g = atStop('houses', stay);
     resolveStop(g, true);
-    expect(g.sup).toBeCloseTo(5 * STAY[stay].mult + 1, 12);
+    expect(g.sup).toBeCloseTo(SUP_YIELD.houses * STAY[stay].mult + 1, 12);
   });
 
   it('비상식량감축법은 부산물과 수색 덤 양쪽에 ×0.8이다', () => {
     const g = atStop();
     g.passed.emergency_ration = 1;
     resolveStop(g, true);
-    expect(g.sup).toBeCloseTo(4.8, 12);
+    expect(g.sup).toBeCloseTo((SUP_YIELD.houses + 1) * 0.8, 12);
     expect(g.ledger?.find(r => r.k === 'sup' && r.why === 'sup.search')?.d).toBeCloseTo(0.8, 12);
   });
 
@@ -289,7 +289,7 @@ describe('생필품: 정차 입고', () => {
     g.dom!.escort = g.dom!.people.find(p => p.field === 'craft')!.id;
     g.passed.child_labor = 1;
     resolveStop(g, true);
-    expect(g.sup).toBeCloseTo(5 * 1.4 * 1.15 * D.escortMaterials + 1, 12);
+    expect(g.sup).toBeCloseTo(SUP_YIELD.houses * 1.4 * 1.15 * D.escortMaterials + 1, 12);
     expect(g.dom!.escort).toBeNull();
   });
 
