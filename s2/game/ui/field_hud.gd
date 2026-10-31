@@ -3503,7 +3503,7 @@ func depart_card() -> void:
 	var left: Array = would_stay()
 	var text := "기적을 울리고 떠난다. 기적 소리는 멀리까지 간다."
 	if not left.is_empty():
-		text += "\n승강장에 없는 사람 %d명은 그대로 남는다." % left.size()
+		text += "\n지금 떠나면 %d명이 그대로 남는다." % left.size()
 	# Words, not seconds: arrival spreads too widely to promise a number
 	# (s2_play/measure_depart.md: 30 m leaves about 20 s to 10 m).
 	if horde_close():
