@@ -153,6 +153,9 @@ func _check_map(place_id: String) -> void:
 		assert_true(int(row["facing"]) >= 0 and int(row["facing"]) <= 3)
 		assert_true(String(row["note"]).contains(" 마당의 "))
 		assert_false(row.has("search"), "뒤지는 소품을 만들지 않음")
+		assert_false(String(row["kind"]) in ["garden_bed", "herb_bed", "laundry_line"], "꺼 둔 갈래(텃밭·빨랫줄)는 새 줄 없음")
+		assert_eq(bool(row.get("shade", true)), not Yard.NO_SHADE_KINDS.has(String(row["kind"])),
+			String(row["kind"]) + " 발이 모형 전체인 갈래만 접지 그늘 끔")
 		var rect: Rect2i = row["rect"]
 		var expected_size: Vector2i = Yard.SIZES[row["kind"]]
 		if int(row["facing"]) % 2 == 1:

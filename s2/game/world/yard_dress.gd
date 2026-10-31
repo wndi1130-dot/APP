@@ -25,6 +25,12 @@ const LABELS: Dictionary = {
 	"firewood_pile": "장작", "water_barrel": "물통", "laundry_line": "빈 빨랫줄", "bench": "벤치",
 }
 const LOW_KINDS: Array[String] = ["boulder", "firewood_pile", "water_barrel", "laundry_line", "bench"]
+## 지금 모형이 결함으로 읽혀(텃밭은 흰 통, 빨랫줄은 굵은 기둥 둘과 땅 판) 집 차리기에서 꺼 둔 갈래.
+## 모형이 바뀌면 켠다(_place 자체는 그대로 쓸 수 있다).
+const ROLES_OFF: Array[String] = ["garden", "laundry"]
+## 모형 발(가장 낮은 곳 꼭짓점 상자)이 모형 전체를 덮어 접지 그늘이 눈 위에 네모 판으로 보이는 갈래:
+## 줄에 shade=false를 달아 map_view가 그늘을 깔지 않게 한다.
+const NO_SHADE_KINDS: Array[String] = ["dry_grass", "stump_cluster"]
 
 
 static func _roll(seed_value: int, purpose: int, ordinal: int = 0) -> int:
@@ -599,6 +605,8 @@ static func _place(data: Dictionary, home: Dictionary, state: Dictionary, kind: 
 			"solid": "low" if LOW_KINDS.has(kind) else "none", "facing": candidate["facing"],
 			"level": 0, "note": "%s 마당의 %s" % [home["name"], LABELS[kind]],
 			"yard": true, "building": home["building"]}
+		if NO_SHADE_KINDS.has(kind):
+			prop["shade"] = false
 		var block_cells: Array[Vector2i] = blocking_cells(prop)
 		if not block_cells.is_empty():
 			var blocked: Dictionary = {}
@@ -704,13 +712,13 @@ static func _dress_home(data: Dictionary, home: Dictionary, state: Dictionary, o
 	home["seed"] = seed_value
 	state["remaining"] = maxi(0, floori(float(home["cells"].size()) * TARGET_PER_100 / 100.0) - old_count)
 	# 큰 소품 자리를 먼저 확보해 덤불만으로 몫을 다 쓰지 않는다.
-	if _unit(seed_value, 10) < 0.5:
+	if _unit(seed_value, 10) < 0.5 and not ROLES_OFF.has("garden"):
 		_place(data, home, state, "garden_bed" if _roll(seed_value, 11) % 2 == 0 else "herb_bed", "garden", 100)
 	if _unit(seed_value, 20) < 0.6:
 		_place(data, home, state, "firewood_pile", "wood", 200)
 	if _unit(seed_value, 30) < 0.4:
 		_place(data, home, state, "water_barrel", "corner", 300)
-	if _unit(seed_value, 40) < 0.3:
+	if _unit(seed_value, 40) < 0.3 and not ROLES_OFF.has("laundry"):
 		_place(data, home, state, "laundry_line", "laundry", 400)
 	if _unit(seed_value, 50) < 0.25:
 		_place(data, home, state, "bench", "bench", 500)
