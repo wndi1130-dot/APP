@@ -217,6 +217,123 @@ func test_hidden_culling_uses_the_last_seen_place() -> void:
 	assert_eq(dead.drawn_at.get(id, Vector3.INF), origin, "culling does not follow unseen movement either")
 
 
+func test_offscreen_seen_movement_refreshes_the_fading_draw() -> void:
+	_field()
+	var z: Dictionary = _spawn(origin)
+	z["worn"] = {"coat": Wear.make("coat_long")}
+	var id: int = int(z["id"])
+	dead.render(camera, _seen(origin), true, 0.0)
+	var record: Dictionary = dead._last_seen_draw[id]
+	var last_seen_at: Vector3 = origin + Vector3(30, 0, 0)
+	z["pos"] = last_seen_at
+	z["kind"] = "clothed"
+	dead.render(camera, _seen(last_seen_at), true, 0.09)
+	assert_false(dead.drawn_at.has(id), "the seen body is outside the camera")
+	assert_true(is_same(dead._last_seen_draw[id], record), "a seen update reuses its record")
+	assert_eq(record["at"], last_seen_at, "offscreen sight refreshes the cached position")
+	assert_eq(dead.appearance_swaps, 1, "compare the old coat colour before overwriting, even offscreen")
+	# Copy values, not the reused Dictionary reference, to detect an unseen overwrite.
+	var kept_transform: Transform3D = record["transform"]
+	var kept_body: int = int(record["b"])
+	var kept_shell: String = String(record["shell"])
+	var kept_color: Color = record["garment_color"]
+	z["pos"] = last_seen_at + Vector3(3, 0, 0)
+	z["kind"] = "fresh"
+	z["worn"] = {}
+	camera.look_at_from_position(last_seen_at + Vector3(0, 40, 0.01), last_seen_at)
+	dead.render(camera, {}, true, 0.1)
+	assert_eq(dead.drawn_at.get(id, Vector3.INF), last_seen_at, "fade uses the latest seen place, not the old onscreen place")
+	assert_eq(record["transform"], kept_transform)
+	assert_eq(int(record["b"]), kept_body)
+	assert_eq(String(record["shell"]), kept_shell)
+	assert_eq(record["garment_color"], kept_color)
+	assert_eq(dead.appearance_swaps, 1, "unseen changes do not refresh appearance")
+
+
+func test_seen_record_reuses_values_and_erases_finished_attachments() -> void:
+	_field()
+	if dead.embedded_draw == null:
+		dead.embedded_draw = MultiMeshInstance3D.new()
+		dead.embedded_draw.multimesh = MultiMesh.new()
+		dead.embedded_draw.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		dead.embedded_draw.multimesh.mesh = BoxMesh.new()
+		dead.embedded_draw.multimesh.instance_count = Zombies.EMBED_MAX
+		dead.add_child(dead.embedded_draw)
+	var z: Dictionary = _spawn(origin)
+	var id: int = int(z["id"])
+	z["state"] = "rising"
+	z["embedded"] = {"id": "axe"}
+	dead.render(camera, _seen(origin), true, 0.0)
+	var record: Dictionary = dead._last_seen_draw[id]
+	assert_true(record.has("marker"))
+	assert_true(record.has("axe"))
+	z["state"] = "wander"
+	z.erase("embedded")
+	z["pos"] = origin + Vector3(1, 0, 0)
+	dead.render(camera, _seen(z["pos"]), true, 0.09)
+	assert_true(is_same(dead._last_seen_draw[id], record), "refresh does not allocate another record")
+	assert_eq(record["at"], z["pos"])
+	assert_false(record.has("marker"), "rising finished on the reused record")
+	assert_false(record.has("axe"), "the removed axe cannot linger on the reused record")
+	assert_eq(dead.markers.multimesh.visible_instance_count, 0)
+	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 0)
+
+
+func test_draw_cap_keeps_previous_ids_and_waits_at_zero_until_a_slot_opens() -> void:
+	_field()
+	for _index: int in Zombies.MAX_DRAW:
+		_spawn(origin + Vector3(2, 0, 0))
+	var newcomer: Dictionary = _spawn(origin + Vector3(4, 0, 0))
+	var newcomer_id: int = int(newcomer["id"])
+	dead.render(camera, {}, false, 0.0)
+	var kept_ids: Array = dead.drawn_at.keys()
+	kept_ids.sort()
+	assert_eq(kept_ids.size(), Zombies.MAX_DRAW)
+	assert_eq(dead.drawn_count, Zombies.MAX_DRAW)
+	assert_false(dead.drawn_at.has(newcomer_id))
+	assert_eq(float(dead._shown[newcomer_id]), 0.0, "the 161st waits instead of finishing its fade unseen")
+	var waiting_record: Dictionary = dead._last_seen_draw[newcomer_id]
+	newcomer["pos"] = origin
+	# Put the newcomer first as well as closest, so list order cannot preserve incumbents by accident.
+	dead.list.reverse()
+	dead.render(camera, {}, false, 0.09)
+	var next_ids: Array = dead.drawn_at.keys()
+	next_ids.sort()
+	assert_eq(next_ids, kept_ids, "all 160 previously shown ids retain their slots")
+	assert_eq(float(dead._shown[newcomer_id]), 0.0)
+	assert_true(is_same(dead._last_seen_draw[newcomer_id], waiting_record))
+	assert_eq(waiting_record["at"], origin, "cap waiting still refreshes the last seen position")
+	assert_eq(dead.cap_drops, 0, "newcomer rejection does not count as a previously shown drop")
+	var removed_id: int = int(kept_ids[0])
+	for z: Dictionary in dead.list:
+		if int(z["id"]) == removed_id:
+			dead.list.erase(z)
+			break
+	dead.render(camera, {}, false, 0.09)
+	assert_eq(dead.drawn_at.size(), Zombies.MAX_DRAW)
+	assert_true(dead.drawn_at.has(newcomer_id))
+	assert_false(dead.drawn_at.has(removed_id))
+	assert_almost_eq(float(dead._shown[newcomer_id]), 0.5, 0.0001, "the freed slot starts the usual fade from zero")
+
+
+func test_draw_cap_uses_distance_and_counts_excess_previous_visibility() -> void:
+	_field()
+	var crowd_at: Vector3 = origin + Vector3(30, 0, 0)
+	for _index: int in Zombies.MAX_DRAW:
+		_spawn(crowd_at)
+	var nearest: Dictionary = _spawn(crowd_at - Vector3(1, 0, 0))
+	var nearest_id: int = int(nearest["id"])
+	dead.render(camera, {}, false, 0.0)
+	assert_eq(dead.drawn_at.size(), 0, "all 161 are offscreen but have positive sight visibility")
+	camera.look_at_from_position(crowd_at + Vector3(0, 40, 0.01), crowd_at)
+	dead.render(camera, {}, false, 0.09)
+	assert_eq(dead.drawn_at.size(), Zombies.MAX_DRAW)
+	assert_true(dead.drawn_at.has(nearest_id), "distance to the player wins inside the previously shown group")
+	assert_eq(dead.cap_drops, 1, "only the excess previously positive id is counted")
+	dead.render(camera, {}, false, 0.09)
+	assert_eq(dead.cap_drops, 1, "a zero-visibility waiting id is not counted again")
+
+
 func test_markers_and_embedded_axes_stop_below_half_shown() -> void:
 	_field()
 	# Supply an axe draw even when the optional model is not carried in a build.

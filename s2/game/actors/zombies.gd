@@ -92,10 +92,11 @@ var _drawn_worn: Dictionary = {}   # id -> [worn_at, kind, what it has on] for o
 var drawn_count: int = 0
 var drawn_at: Dictionary = {}          # id -> world place actually drawn this frame
 var _shown: Dictionary = {}            # id -> sight visibility; never part of a saved body
-var _last_seen_draw: Dictionary = {}   # id -> last draw while in sight, before packing visibility
+var _last_seen_draw: Dictionary = {}   # id -> last in-sight appearance, before packing visibility
 var _held_frames: Dictionary = {}      # id -> consecutive in-sight frames waiting for its appearance
 var _rendered_once: bool = false
 var appearance_swaps: int = 0
+var cap_drops: int = 0                # previously shown candidates displaced by a full body/look
 var held_frames_max: int = 0
 var vat: Dictionary
 var baked: bool = false       # the dead are a baked body (dead_body.gd), not the boxes
@@ -1383,7 +1384,7 @@ static func in_sight_frustum(planes: Array[Plane], at: Vector3) -> bool:
 
 
 ## The last in-sight draw owns these values; shader TIME keeps its motion going.
-func _sight_draw(z: Dictionary, b: int, look: String, over: Dictionary, garment: MultiMeshInstance3D) -> Dictionary:
+func _sight_draw(z: Dictionary, b: int, look: String, over: Dictionary, garment: MultiMeshInstance3D, record: Dictionary) -> Dictionary:
 	var at: Vector3 = z["pos"]
 	var state: String = z["state"]
 	var basis := Basis(Vector3.UP, DeadBody.yaw_of(z, baked))
@@ -1431,10 +1432,17 @@ func _sight_draw(z: Dictionary, b: int, look: String, over: Dictionary, garment:
 		pos.y = at.y - 0.55
 	elif state == "waking":
 		pos.y = at.y - 0.55 * clampf(float(z["t"]) / WAKE_TIME, 0, 1) + sin(z["t"] * 40.0) * 0.04
-	var record: Dictionary = {"b": b, "look": look, "at": at, "garment": garment,
-		"shell": String(over.get("shell", "")), "garment_color": over.get("colour", Color.WHITE)}
+	# Reuse this id's record; only an in-sight frame may overwrite its values.
+	record["b"] = b
+	record["look"] = look
+	record["at"] = at
+	record["garment"] = garment
+	record["shell"] = String(over.get("shell", ""))
+	record["garment_color"] = over.get("colour", Color.WHITE)
 	if state == "rising":
 		record["marker"] = Transform3D(Basis.IDENTITY, at + Vector3(0, 0.05, 0))
+	else:
+		record.erase("marker")
 	# The axe goes by the body as it stands or lies, before the clothed are drawn broader.
 	if embedded_draw != null and shows_embedded(z):
 		var axe := Transform3D(basis, pos) * EMBED_AT
@@ -1442,6 +1450,8 @@ func _sight_draw(z: Dictionary, b: int, look: String, over: Dictionary, garment:
 			var turn := Basis(Vector3.UP, z["angle"])
 			axe = Transform3D(Basis(Vector3.UP, z["angle"] + EMBED_DROP_TURN), Vector3(pos.x, at.y, pos.z) + turn * EMBED_DROP_AT)
 		record["axe"] = axe
+	else:
+		record.erase("axe")
 	if z["kind"] == "clothed":
 		basis = basis.scaled(Vector3(1.3, 1.0, 1.35))
 	if z["stun"] > 0.0:
@@ -1453,6 +1463,38 @@ func _sight_draw(z: Dictionary, b: int, look: String, over: Dictionary, garment:
 	record["custom"] = DeadBody.custom(z, down, frozen_anim, shade, baked)
 	record["color"] = DeadCast.tear_of(z, bool(node.get_meta(&"hands_marked", false)))
 	return record
+
+
+## Both the ordinary pass and a changed cap selection submit the same attachments.
+func _submit_sight_draw(id: int, record: Dictionary, shown: float, counts: Array, attachments: Vector2i) -> Vector2i:
+	var b: int = int(record["b"])
+	var look: String = record["look"]
+	var n: int = counts[b][look]
+	var mm: MultiMesh = draws[b][look].multimesh
+	var draw_transform: Transform3D = record["transform"]
+	var custom: Color = record["custom"]   # Color is a value: the cached shade stays unpacked.
+	custom.a = pack_shade(custom.a, shown)
+	mm.set_instance_transform(n, draw_transform)
+	mm.set_instance_custom_data(n, custom)
+	mm.set_instance_color(n, record["color"])
+	counts[b][look] = n + 1
+	drawn_at[id] = draw_transform.origin
+	var garment: MultiMeshInstance3D = record["garment"]
+	var worn_ids: Array = garments_drawn.get_or_add(garment, []) if garment != null else []
+	if garment != null and worn_ids.size() < garment.multimesh.instance_count:
+		var w: int = worn_ids.size()
+		garment.multimesh.set_instance_transform(w, draw_transform)
+		garment.multimesh.set_instance_custom_data(w, custom)
+		garment.multimesh.set_instance_color(w, record["garment_color"])
+		worn_ids.append(id)
+	if shown >= 0.5:
+		if record.has("marker") and attachments.x < 32:
+			markers.multimesh.set_instance_transform(attachments.x, record["marker"])
+			attachments.x += 1
+		if embedded_draw != null and record.has("axe") and attachments.y < EMBED_MAX:
+			embedded_draw.multimesh.set_instance_transform(attachments.y, record["axe"])
+			attachments.y += 1
+	return attachments
 
 
 ## One MultiMesh per body and look; sight fades before floor and screen culling.
@@ -1468,10 +1510,10 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 	var shown_next: Dictionary = {}
 	var seen_draw_next: Dictionary = {}
 	var held_next: Dictionary = {}
+	var overflow: Dictionary = {}   # body -> look -> ids; created only at the 161st candidate
 	garments_drawn = {}
 	drawn_at = {}
-	var marks := 0
-	var axes := 0
+	var attachments: Vector2i = Vector2i.ZERO
 	for z in list:
 		var id: int = int(z["id"])
 		var at: Vector3 = z["pos"]
@@ -1482,7 +1524,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 		if not game.level_shown(game.level_of(at)):
 			shown_next[id] = 0.0
 			continue
-		var last: Dictionary = _last_seen_draw.get(id, {})
+		var last: Dictionary = _last_seen_draw[id] if _last_seen_draw.has(id) else {}
 		var record: Dictionary = last
 		var appearance_ready: bool = false
 		if seen_now:
@@ -1506,11 +1548,21 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 				held_next[id] = held
 				held_frames_max = maxi(held_frames_max, held)
 				continue
-			if appearance_ready and shown > 0.0:
-				record = _sight_draw(z, wanted_b, wanted_look, over, wanted_garment)
+			if appearance_ready:
+				# The record is reused, so compare snapshots taken before overwriting it.
+				var had_last: bool = not last.is_empty()
+				var last_b: int = int(last.get("b", -1))
+				var last_shell: String = String(last.get("shell", ""))
+				var last_garment: MultiMeshInstance3D = last.get("garment", null)
+				var last_garment_color: Color = last.get("garment_color", Color.WHITE)
+				record = _sight_draw(z, wanted_b, wanted_look, over, wanted_garment, last)
+				if not first and prev > 0.0 and had_last and (last_b != wanted_b or last_shell != record["shell"] or last_garment != record["garment"] or last_garment_color != record["garment_color"]):
+					appearance_swaps += 1
+				# Sight owns the latest pose even offscreen or while waiting for a draw slot.
+				seen_draw_next[id] = record
 		if shown <= 0.0 or record.is_empty():
 			continue
-		# Keep the last actual draw even when the camera has since moved away.
+		# Unseen frames retain the last in-sight values without refreshing them.
 		if not last.is_empty():
 			seen_draw_next[id] = last
 		if not in_sight_frustum(planes, record["at"]):
@@ -1519,42 +1571,68 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 		var look: String = record["look"]
 		var n: int = counts[b][look]
 		if n >= MAX_DRAW:
+			if not overflow.has(b):
+				overflow[b] = {}
+			var body_overflow: Dictionary = overflow[b]
+			if not body_overflow.has(look):
+				var candidates: Array[int] = []
+				# The ordinary path already drew these ids; collect only once the slot overflows.
+				for drawn_id: int in drawn_at:
+					var drawn_record: Dictionary = seen_draw_next[drawn_id]
+					if int(drawn_record["b"]) == b and String(drawn_record["look"]) == look:
+						candidates.append(drawn_id)
+				body_overflow[look] = candidates
+			(body_overflow[look] as Array).append(id)
 			continue
-		if seen_now and appearance_ready:
-			if not first and prev > 0.0 and not last.is_empty() and (last["b"] != b or last["shell"] != record["shell"] or last["garment"] != record["garment"] or last["garment_color"] != record["garment_color"]):
-				appearance_swaps += 1
-			seen_draw_next[id] = record
-		var mm: MultiMesh = draws[b][look].multimesh
-		var draw_transform: Transform3D = record["transform"]
-		var custom: Color = record["custom"]   # Color is a value: the cached shade stays unpacked.
-		custom.a = pack_shade(custom.a, shown)
-		mm.set_instance_transform(n, draw_transform)
-		mm.set_instance_custom_data(n, custom)
-		mm.set_instance_color(n, record["color"])
-		counts[b][look] = n + 1
-		drawn_at[id] = draw_transform.origin
-		var garment: MultiMeshInstance3D = record["garment"]
-		var worn_ids: Array = garments_drawn.get_or_add(garment, []) if garment != null else []
-		if garment != null and worn_ids.size() < garment.multimesh.instance_count:
-			var w: int = worn_ids.size()
-			garment.multimesh.set_instance_transform(w, draw_transform)
-			garment.multimesh.set_instance_custom_data(w, custom)
-			garment.multimesh.set_instance_color(w, record["garment_color"])
-			worn_ids.append(id)
-		if shown >= 0.5:
-			if record.has("marker") and marks < 32:
-				markers.multimesh.set_instance_transform(marks, record["marker"])
-				marks += 1
-			if embedded_draw != null and record.has("axe") and axes < EMBED_MAX:
-				embedded_draw.multimesh.set_instance_transform(axes, record["axe"])
-				axes += 1
+		attachments = _submit_sight_draw(id, record, shown, counts, attachments)
+	var redraw: bool = false
+	for b: int in overflow:
+		for look: String in overflow[b]:
+			var candidates: Array = overflow[b][look]
+			var player_at: Vector3 = game.player.position
+			candidates.sort_custom(func(left: int, right: int) -> bool:
+				var left_was_shown: bool = float(_shown.get(left, 0.0)) > 0.0
+				var right_was_shown: bool = float(_shown.get(right, 0.0)) > 0.0
+				if left_was_shown != right_was_shown:
+					return left_was_shown
+				# Use the cached position so an unseen move cannot change draw priority.
+				var left_at: Vector3 = seen_draw_next[left]["at"]
+				var right_at: Vector3 = seen_draw_next[right]["at"]
+				var left_distance: float = player_at.distance_squared_to(left_at)
+				var right_distance: float = player_at.distance_squared_to(right_at)
+				return left_distance < right_distance if left_distance != right_distance else left < right
+			)
+			for rank: int in candidates.size():
+				var id: int = int(candidates[rank])
+				if rank < MAX_DRAW:
+					if not drawn_at.has(id):
+						var selected_transform: Transform3D = seen_draw_next[id]["transform"]
+						drawn_at[id] = selected_transform.origin
+						redraw = true
+				else:
+					if float(_shown.get(id, 0.0)) > 0.0:
+						cap_drops += 1
+					shown_next[id] = 0.0   # a newcomer waits here, then fades in from zero
+					if drawn_at.erase(id):
+						redraw = true
+	if redraw:
+		# Selection changed: repack bodies, shared garments and attachments together.
+		var selected_ids: Array = drawn_at.keys()
+		drawn_at.clear()
+		garments_drawn.clear()
+		attachments = Vector2i.ZERO
+		for b: int in counts.size():
+			for look: String in counts[b]:
+				counts[b][look] = 0
+		for id: int in selected_ids:
+			attachments = _submit_sight_draw(id, seen_draw_next[id], float(shown_next[id]), counts, attachments)
 	_shown = shown_next
 	_last_seen_draw = seen_draw_next
 	_held_frames = held_next
 	_rendered_once = true
 	DeadBody.rounds = body_rounds[0]
 	if embedded_draw != null:
-		embedded_draw.multimesh.visible_instance_count = axes
+		embedded_draw.multimesh.visible_instance_count = attachments.y
 	drawn_count = 0
 	for b in draws.size():
 		for look in counts[b]:
@@ -1565,4 +1643,4 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 		for kind: String in wear_draws[b]:
 			if wear_draws[b][kind] != null:
 				(wear_draws[b][kind] as MultiMeshInstance3D).multimesh.visible_instance_count = (garments_drawn.get(wear_draws[b][kind], []) as Array).size()
-	markers.multimesh.visible_instance_count = marks
+	markers.multimesh.visible_instance_count = attachments.x
