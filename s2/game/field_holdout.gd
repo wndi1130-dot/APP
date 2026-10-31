@@ -288,7 +288,7 @@ func watch(delta: float) -> void:
 	# What it says is so of this stop whatever is done next: it can have it.
 	if forecast and not forecast_said and game.clock.elapsed >= FORECAST_AT:
 		forecast_said = true
-		game.set_radio("무전수: 이 근처에 무리가 돈다. 소리를 내면 열차로 몰려 떠날 때 붙들린다.", "must")
+		game.set_radio("무전수: 이 근처에 무리가 돈다. 소리 내면 열차로 몰려들어 떠날 때 붙들리겠다.", "must")
 	watch_t -= delta
 	if watch_t > 0.0:
 		return
@@ -303,7 +303,7 @@ func watch(delta: float) -> void:
 		game.set_radio("%s: 소리를 듣고 모여든다. 떠날 때 붙들린다." % who.display_name, "must")
 	elif track_now() > CLEAR_TRACK and now - told_track_t >= WATCH_TRACK_GAP:
 		told_track_t = now
-		game.set_radio("%s: 선로에 섰다. 치우지 않으면 붙들린다." % who.display_name, "must")
+		game.set_radio("%s: 망자가 선로에 섰다. 치우지 않으면 붙들린다." % who.display_name, "must")
 
 
 ## Leaving is called and the stage has not opened yet: it opens instead.
@@ -586,7 +586,7 @@ func build(p, i: int) -> void:
 			break
 	if mat == "":
 		if p == game.player:
-			game.hud.toast("방벽을 세울 것(판자나 고철)이 있어야 한다.")
+			game.hud.toast("방벽을 세울 판자·고철·목재가 하나도 없다.")
 		return
 	game.make_sound(p.position, SimNoise.Level.NORMAL, "lid", p)
 	p.start_action("wall", "방벽 세우기", BUILD_TIME, _built.bind(p, i, mat))
@@ -677,7 +677,7 @@ func end_lines() -> Array:
 	var how := "채비를 다 채우고 떠났다" if ready else ("채비 %d초를 남기고 떠났다" % int(r["leftSec"]) if early else "채비 중에 끝났다")
 	var out: Array = [
 		"버티기 판: %s · 물결 %d번" % [how, int(r["waves"])],
-		"상한 문 %d · 뚫린 문 %d · 뚫린 문으로 든 것 %d · 세운 방벽 %d" % [int(r["damaged"]), int(r["breached"]), int(r["entered"]), int(r["walls"])],
+		"상한 문 %d · 뚫린 문 %d · 뚫린 문으로 들어온 망자 %d · 세운 방벽 %d" % [int(r["damaged"]), int(r["breached"]), int(r["entered"]), int(r["walls"])],
 		"문이 뚫릴 때 그 앞에 있던 사람 %d · 그 가운데 긁힌 사람 %d" % [reached, hurt],
 	]
 	if ready or early:
@@ -731,7 +731,7 @@ func chosen() -> Array:
 		elif both:
 			out.append("양쪽 문이 뚫렸다")
 		else:
-			out.append("뚫린 문이 있고 버틴 문이 있다")
+			out.append("뚫린 문도 있고 버틴 문도 있었다")
 	if walls_built > 0:
 		out.append("방벽을 세웠다")
 	elif count("breached") > 0:
