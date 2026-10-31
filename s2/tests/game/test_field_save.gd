@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 
 const DIR := "user://test_field_save"
@@ -182,3 +183,96 @@ func test_without_a_save_handed_over_the_field_starts_fresh() -> void:
 	assert_true(FieldSave.write(FieldSave.capture(a), AT))
 	var b = _game({"field_save_path": AT})
 	assert_almost_eq(b.clock.elapsed, 0.0, 0.001, "a file on disk alone changes nothing")
+
+
+func test_new_lunger_share_round_trips_with_assignments_clocks_and_dice() -> void:
+	var a = _game({"act": "act1", "act_progress": 9.0 / 12.0})
+	var z: Dictionary = a.zombies.spawn("dead", a.player.position + Vector3(3, 0, 0))
+	z["lunger"] = true
+	z["lunged"] = true
+	z["state"] = "chase"
+	z["dash_t"] = 0.7
+	z["dash_dir"] = Vector3.RIGHT
+	z["spent_t"] = 0.25
+	var risen: Dictionary = a.zombies.add_rising(a.player.position + Vector3(4, 0, 0), "")
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	var system: Dictionary = saved["runtime"]["zombie_system"]
+	assert_almost_eq(float(system["lunger_share"]), 0.05, 0.000000001)
+	assert_false(system.has("lungers_on"), "new saves store only the share")
+	var opts: Dictionary = FieldSave.resume_opts(saved)
+	opts[LungerRules.OPTION] = true  # Saved share wins over the rebuilt field (383, 387, 134).
+	var b = _game(opts)
+	assert_eq(b.zombies.lunger_share, a.zombies.lunger_share)
+	assert_eq(b.zombies.lunge_rng.state, a.zombies.lunge_rng.state)
+	assert_eq(b.rng.state, a.rng.state)
+	var back: Dictionary = b.zombies.find(int(z["id"]))
+	assert_true(back["lunger"])
+	assert_true(back["lunged"])
+	assert_eq(back["dash_t"], z["dash_t"])
+	assert_eq(back["dash_dir"], z["dash_dir"])
+	assert_eq(back["spent_t"], z["spent_t"])
+	var risen_back: Dictionary = b.zombies.find(int(risen["id"]))
+	assert_eq(risen_back["lunger"], risen["lunger"])
+	assert_eq(risen_back["rise_t"], risen["rise_t"])
+	var next_a: Dictionary = a.zombies.spawn("dead", a.player.position)
+	var next_b: Dictionary = b.zombies.spawn("dead", b.player.position)
+	assert_eq(next_b["id"], next_a["id"])
+	assert_eq(next_b["lunger"], next_a["lunger"])
+	var rising_a: Dictionary = a.zombies.add_rising(a.player.position, "")
+	var rising_b: Dictionary = b.zombies.add_rising(b.player.position, "")
+	assert_eq(rising_b["lunger"], rising_a["lunger"])
+	assert_eq(b.zombies.lunge_rng.state, a.zombies.lunge_rng.state)
+	assert_eq(b.rng.state, a.rng.state)
+
+
+func test_old_v2_lungers_on_true_and_false_restore_without_the_removed_property() -> void:
+	var a = _game()
+	for was_on: bool in [true, false]:
+		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+		var system: Dictionary = saved["runtime"]["zombie_system"]
+		system.erase("lunger_share")
+		system["lungers_on"] = was_on
+		var opts: Dictionary = FieldSave.resume_opts(saved)
+		opts["act"] = "act3"
+		var b = _game(opts)
+		assert_eq(float(b.zombies.lunger_share), LungerRules.SHARE if was_on else 0.0)
+		assert_eq(b.zombies.lunge_rng.state, a.zombies.lunge_rng.state)
+		assert_true(system.has("lungers_on"), "migration leaves the input untouched")
+
+
+func test_new_share_wins_over_an_old_switch_even_when_zero() -> void:
+	var a = _game()
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["zombie_system"]["lunger_share"] = 0.0
+	saved["runtime"]["zombie_system"]["lungers_on"] = true
+	var b = _game(FieldSave.resume_opts(saved))
+	assert_eq(float(b.zombies.lunger_share), 0.0, "presence, not truthiness, chooses the new field")
+
+
+func test_missing_v2_switch_or_system_keeps_the_start_share() -> void:
+	var a = _game()
+	for missing_system: bool in [false, true]:
+		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+		if missing_system:
+			saved["runtime"].erase("zombie_system")
+		else:
+			saved["runtime"]["zombie_system"].erase("lunger_share")
+		var opts: Dictionary = FieldSave.resume_opts(saved)
+		opts[LungerRules.OPTION] = true
+		var b = _game(opts)
+		assert_eq(float(b.zombies.lunger_share), LungerRules.SHARE, "the start's forced share stays, as the old switch did")
+
+
+func test_v1_and_grid_fallback_keep_the_start_share() -> void:
+	var a = _game()
+	for legacy: bool in [true, false]:
+		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+		if legacy:
+			saved["version"] = 1
+			saved.erase("runtime")
+		else:
+			saved["runtime"]["levels"][0]["width"] += 1
+		var opts: Dictionary = FieldSave.resume_opts(saved)
+		opts[LungerRules.OPTION] = true
+		var b = _game(opts)
+		assert_eq(float(b.zombies.lunger_share), LungerRules.SHARE, "the start's forced share stays, as the old switch did")
