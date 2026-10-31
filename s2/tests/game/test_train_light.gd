@@ -112,6 +112,21 @@ func test_stove_multipliers_are_the_same_by_day_and_night() -> void:
 			assert_almost_eq(float(plan["stove"]), expected[stage], EPSILON)
 
 
+## The scene builds a car's lamps once and the hour only eases their colour and strength
+## (train_scene.gd _dress_car), so day and night must give every lamp the same kind, place and reach.
+func test_each_lamp_keeps_its_kind_place_and_reach_day_and_night() -> void:
+	for stage: int in 4:
+		var day: Array = Light.spec(stage, "day")["lamps"]
+		var night: Array = Light.spec(stage, "night")["lamps"]
+		assert_eq(day.size(), night.size(), "stage %d: as many lamps by day as by night" % stage)
+		for i: int in mini(day.size(), night.size()):
+			var context: String = "stage %d lamp %d" % [stage, i]
+			assert_eq(String(day[i]["kind"]), String(night[i]["kind"]), context + ": kind")
+			assert_eq(day[i]["at"], night[i]["at"], context + ": place")
+			assert_almost_eq(float(day[i]["range"]), float(night[i]["range"]), EPSILON, context + ": reach")
+			assert_eq(bool(day[i]["shadow"]), bool(night[i]["shadow"]), context + ": shadow")
+
+
 func test_nordic_lamps_stay_still_while_early_stages_sway() -> void:
 	for daytime: String in ["day", "night"]:
 		var nordic: Dictionary = Light.spec(3, daytime)
