@@ -1,7 +1,8 @@
 extends Control
 ## A short world introduction on one sheet over the first train screen of a
-## new slice. Its lamp key puts only this sheet away; the flow stays on the
-## train. The words live here so the draft can be replaced in one place.
+## new slice (결정 531: before the prologue, no separate record screen). Its
+## lamp key puts only this sheet away; the flow stays on the train. The words
+## live here so they can be changed in one place.
 
 signal went_on
 
@@ -10,11 +11,11 @@ const Paper = preload("res://game/ui/paper_parts.gd")
 const PaperSheet = preload("res://game/ui/paper_sheet.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
 
-const KICK: String = "열차에 오르기 전에"
-const TEXT: String = "겨울이 끝나지 않는다. 죽은 이들이 일어나 걷기 시작한 뒤로, 사람이 모여 사는 곳은 선로를 달리는 이 열차뿐이다. 칸마다 사람들은 저마다의 몫을 따지고, 엔진이 식으면 모두 얼어 죽는다. 이 열차를 끌고 갈 사람은 열차장이다."
+const KICK: String = "출발 전에"
+const TEXT: String = "죽은 자들이 일어나 도시가 무너진 지 여섯 해째, 겨울은 길어지고 해빙기는 해마다 짧아진다. 볼슈틴 차고의 늙은 기관사들이 박물관 기관차에 불을 넣었고, 이제 열차는 중부 유럽의 철길을 달린다. 칸의 순서가 곧 계급인 열차에서, 정차마다 수색대는 물자를 구하고 칸 대표들은 법을 표결한다. 망자 무리가 몰려오는 역에서 누구를 기다리고 언제 떠날지, 열차장의 선택은 일대기 한 권으로 남는다."
 const GO_WORD: String = "출발"
-## Fixed room for the draft, in the same mockup px as the other papers.
-const SHEET_SIZE: Vector2 = Vector2(446, 270)
+## Fixed room for the words: the mockup's sheet (paper_sheet.gd), in its px.
+const SHEET_SIZE: Vector2 = Vector2(446, 346)
 ## The end card's dim and the short rise used when its words come up.
 const DIM: Color = Color(2 / 255.0, 4 / 255.0, 6 / 255.0, 0.78)
 const DIM_S: float = 0.7
