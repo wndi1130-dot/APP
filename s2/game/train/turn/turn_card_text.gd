@@ -423,7 +423,7 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 		"sick_child":
 			out["speaker"] = _leader(g, t, "medtech")
 			out["focus"] = "medtech"
-			out["body"] = _again(past, "꼬리칸 아이 셋이 열이 난다. \"해열제는 상자에 있다. 꺼낼지 정해 달라.\"", {
+			out["body"] = _again(past, "꼬리칸 아이 셋이 열이 난다. \"해열제는 상자에 있습니다. 꺼낼지 정해 주십시오.\"", {
 				"med_use": "이번엔 아이 다섯이 열이 난다. 지난번 약을 받은 집 얘기가 칸에 다 퍼졌다. \"그 집 애만 애냐.\" 의약품은 %d 남았다." % _round(float(g["med"])),
 				"med_save": "지난번 약을 못 받은 아이가 아직 열이 안 내렸다. 엄마가 의무칸 문 앞을 떠나지 않는다. \"우리 애 차례는 언제냐.\"",
 			}, "아이들이 또 열이 난다.")
