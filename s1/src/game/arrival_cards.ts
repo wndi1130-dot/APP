@@ -89,7 +89,7 @@ function quarrelView(g: Game, card: Card): CardView {
   const c = card.comm ?? 'tail';
   return {
     title: '잠자리 다툼', speaker: { name: g.comms[c].leader.name, role: REP_ROLE[c], comm: c }, focus: c, required: true,
-    body: `"늦게 탄 사람들이 문간과 통로에서 잔다. 먼저 있던 사람들과 자리를 두고 말이 오갔다." ${COMM_NAME[c]} 과밀 ${Math.round(situation(g, c)[2])}.`,
+    body: `${c === 'front' ? '"늦게 탄 사람들이 문간과 통로에서 잡니다. 먼저 있던 사람들과 자리를 두고 말이 오갔습니다."' : '"늦게 탄 사람들이 문간과 통로에서 잔다. 먼저 있던 사람들과 자리를 두고 말이 오갔다."'} ${COMM_NAME[c]} 과밀 ${Math.round(situation(g, c)[2])}.`,
     choices: withAfford(g, [
       { label: '잠자리를 다시 짠다', log: `${COMM_NAME[c]}의 잠자리를 다시 짰다.`, say: '자리를 다시 짜라. 먼저 탄 사람도 늦게 탄 사람도 같은 바닥이다.', effs: [{ t: 'coal', v: -1 }, { t: 'rel', c, v: 2 }, { t: 'tension', v: -1 }] },
       { label: '알아서 하라고 둔다', log: `${COMM_NAME[c]}의 잠자리 다툼은 그 칸에 맡겼다.`, say: '바닥은 바닥이다. 알아서 나눠 자라.', effs: [{ t: 'rel', c, v: -3 }, { t: 'tension', v: 1 }] },
