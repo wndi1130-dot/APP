@@ -16,7 +16,7 @@ const STAGES: Array[Dictionary] = [
 		"night": {
 			"lamps": [
 				{"at": Vector3(0.5, 0.95, -0.6), "kind": "candle", "kelvin": 1850.0,
-					"energy": 0.35, "range": 3.5, "shadow": true, "sway": 0.3},
+					"energy": 0.5, "range": 4.5, "shadow": true, "sway": 0.3},
 				{"at": Vector3(0.22, 0.8, -0.7), "kind": "candle", "kelvin": 1850.0,
 					"energy": 0.25, "range": 3.0, "shadow": false, "sway": 0.3},
 			],
