@@ -40,6 +40,21 @@ describe('field receipt v5 contract table (S1 schema = S2 check)', () => {
     expect(contract.cases.some(c => !c.valid)).toBe(true);
   });
 
+  // JSON cannot carry these, so they go in by hand (S2 test_receipt_v5_contract.gd does the same).
+  it('turns down numbers that are not finite, free keys too', () => {
+    const free = structuredClone(base) as any;
+    free.placeState.drift = 0.5;
+    expect(() => decodeFieldReceipt(free)).not.toThrow();
+    for (const value of [NaN, Infinity, -Infinity]) {
+      const bad = structuredClone(base) as any;
+      bad.placeState.drift = value;
+      expect(() => decodeFieldReceipt(bad)).toThrow();
+      const used = structuredClone(base) as any;
+      used.crew[0].bodyUse.walk = value;
+      expect(() => decodeFieldReceipt(used)).toThrow();
+    }
+  });
+
   it.each(contract.cases.map(c => [c.name, c] as const))('%s', (_, c) => {
     const changed = applyCase(base, c);
     if (c.set.length || c.remove.length) expect(changed).not.toEqual(base);

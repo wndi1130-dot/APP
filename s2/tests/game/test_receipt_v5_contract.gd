@@ -56,6 +56,22 @@ func test_table_loads() -> void:
 	assert_gt(cases.size() - valid_count, 0)
 
 
+func test_numbers_that_are_not_finite_are_turned_down_anywhere() -> void:
+	# JSON cannot carry them, so they go in by hand (S1 field_receipt_v5_contract.test.ts does the same).
+	var table: Dictionary = _read(TABLE_PATH)
+	var base: Dictionary = _read(FIXTURES + String(table["base"]))
+	var free: Dictionary = base.duplicate(true)
+	free["placeState"]["drift"] = 0.5
+	assert_eq(Receipt.check(free), [] as Array[String], "a free placeState key takes a finite number")
+	for value: float in [NAN, INF, -INF]:
+		var bad: Dictionary = base.duplicate(true)
+		bad["placeState"]["drift"] = value
+		assert_eq(Receipt.check(bad), ["placeState.drift: 유한하지 않은 수"] as Array[String], str(value))
+		bad = base.duplicate(true)
+		bad["crew"][0]["bodyUse"]["walk"] = value
+		assert_true(Receipt.check(bad).has("crew.0.bodyUse.walk: 유한하지 않은 수"), str(value))
+
+
 func test_check_matches_schema_verdicts() -> void:
 	var table: Dictionary = _read(TABLE_PATH)
 	var base: Dictionary = _read(FIXTURES + String(table["base"]))

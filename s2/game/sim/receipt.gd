@@ -489,6 +489,7 @@ static func fold_gaps(d: Dictionary) -> Array[String]:
 ## Accepts JSON-parsed input too (integers arrive as whole floats).
 static func check(d: Dictionary) -> Array[String]:
 	var out: Array[String] = []
+	_check_finite(out, "", d)
 	var id_re := RegEx.create_from_string(ID_PATTERN)
 	var clock_re := RegEx.create_from_string(CLOCK_PATTERN)
 	var version: int = int(d.get("version", 1)) if _is_int(d.get("version", 1)) else 0
@@ -745,6 +746,20 @@ static func _check_v5_fields(out: Array[String], d: Dictionary, id_re: RegEx) ->
 		_check_wounds(out, defense.get("wounds"), id_re, true, "defense.wounds")
 	elif defense != null:
 		out.append("defense: null이나 사전이 아님")
+
+
+## S1 canonical() turns down a receipt holding a number that is not finite anywhere in it,
+## free keys too (placeState's, a witness weight); JSON cannot carry one, a dictionary can.
+static func _check_finite(out: Array[String], at: String, v: Variant) -> void:
+	if v is float:
+		if not is_finite(float(v)):
+			out.append("%s: 유한하지 않은 수" % (at if at != "" else "receipt"))
+	elif v is Dictionary:
+		for key: Variant in v:
+			_check_finite(out, str(key) if at == "" else "%s.%s" % [at, str(key)], v[key])
+	elif v is Array:
+		for i: int in (v as Array).size():
+			_check_finite(out, "%s.%d" % [at, i], v[i])
 
 
 ## S1 counts accepts any string key, with nonnegative integer values.
