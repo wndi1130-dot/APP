@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  addCard, COMMS, createGame, DZ, enableDark, enableDeathWeight, enableDisasters, enterMartial, PROFILES, viewCard,
+  addCard, chooseCard, COMMS, createGame, DZ, enableDark, enableDeathWeight, enableDisasters, enterMartial, PROFILES, viewCard,
 } from '../../src/game';
 import type { Card, CardView, DeathSlot, Game } from '../../src/game';
 import { DARK_CARD_KINDS } from '../../src/game/dark/cards';
@@ -52,9 +52,12 @@ function logged(g: Game, card: Card): CardView {
     expect(choice.log, at).toBeTypeOf('string');
     expect(choice.log, at).not.toBe('');
     expect(choice.log, at).not.toMatch(/[:：]|옮기|옮겼|옮아/);
+    expect(choice.log, at).not.toMatch(/undefined|null|NaN|\[object Object\]/);
   }
   return view;
 }
+
+const specials = (view: CardView) => view.choices.map(c => c.special);
 
 describe('고른 선택이 남기는 일지', () => {
   it('어두운 카드 19종의 모든 선택지에 제목 머리 없는 log가 있다', () => {
@@ -63,10 +66,13 @@ describe('고른 선택이 남기는 일지', () => {
       const e = ember(g, { imm: 2, sab: 'boiler' });
       const cs = investigation(g);
       if (kind === 'dark:gtrial') cs.status = 'trial';
-      logged(g, add(g, {
+      const view = logged(g, add(g, {
         kind, comm: 'tail', who: g.comms.tail.leader.personId, n: kind === 'dark:sign' ? e.id : cs.id,
         ...(kind === 'dark:sign' ? { text: 'imm' } : {}),
       }));
+      // 빈 서류(처리 못 한 종류의 방어 갈래)로 빠지면 이 종류의 선택지를 본 것이 아니다
+      expect(view.title, kind).not.toBe('빈 서류');
+      expect(specials(view).some(s => s?.startsWith('dark:')), kind).toBe(true);
     }
   });
 
@@ -121,10 +127,33 @@ describe('고른 선택이 남기는 일지', () => {
     for (const choice of crowd.choices.filter(c => c.special !== 'dark:mob:promise')) {
       expect(choice.log).toContain(person.name);
     }
-    for (const kind of ['dark:truth', 'dark:hostile', 'dark:exec_threat', 'dark:order_exe', 'dark:order_method']) {
+    // 드러나려는 일: 말하게 두는 줄은 벌받은 사람, 입을 닫는 줄은 증인
+    const witness = PROFILES.find(p => p.age >= 16 && p.id !== person.id && !COMMS.some(c => g.comms[c].leader.personId === p.id))!;
+    const truth = logged(g, add(g, { kind: 'dark:truth', who: person.id, text: witness.id, comm: person.community }));
+    expect(truth.choices.find(c => c.special === 'dark:truth:let')?.log).toContain(person.name);
+    expect(truth.choices.find(c => c.special === 'dark:truth:order')?.log).toContain(witness.name);
+    expect(truth.choices.find(c => c.special === 'dark:truth:order')?.log).not.toContain(person.name);
+    // 대상 이름이 드는 선택지마다(거두기·털어놓기는 이름 없음)
+    const named: Record<string, string[]> = {
+      'dark:hostile': ['dark:hostile:let', 'dark:hostile:order'],
+      'dark:exec_threat': ['dark:threat:give', 'dark:threat:stand', 'dark:threat:order'],
+      'dark:order_exe': ['dark:exe:guard', 'dark:exe:rival', 'dark:exe:bound'],
+      'dark:order_method': ['dark:method:accident', 'dark:method:stop', 'dark:method:night'],
+    };
+    for (const [kind, want] of Object.entries(named)) {
       const view = logged(g, add(g, { kind, who: person.id, text: person.id, comm: person.community }));
-      expect(view.choices.some(choice => choice.log!.includes(person.name)), kind).toBe(true);
+      for (const s of want) expect(view.choices.find(c => c.special === s)?.log, `${kind}/${s}`).toContain(person.name);
     }
+  });
+
+  it('고르면 그 log가 일지에 그대로 한 줄로 남는다', () => {
+    const g = darkGame('choice-log-journal');
+    const card = add(g, { kind: 'dark:armory', comm: 'guard' });
+    const view = logged(g, card);
+    const idx = view.choices.findIndex(c => c.special === 'dark:armory:on');
+    expect(chooseCard(g, card.uid, idx)).toBe(true);
+    expect(g.journal.map(j => j.text)).toContain(view.choices[idx].log);
+    expect(g.journal.some(j => j.text.startsWith('무기고 열쇠:'))).toBe(false);
   });
 
   it('들킨 죽음과 숨긴 죽음은 각 수습 문구를 남긴다', () => {
@@ -180,13 +209,17 @@ describe('고른 선택이 남기는 일지', () => {
     const dir = new URL('../../data/events/', import.meta.url);
     const files = readdirSync(dir).filter(file => /^ev_(?:b01_|h).*\.json$/.test(file));
     expect(files).toHaveLength(46);
+    let n = 0;
     for (const file of files) {
       const event = JSON.parse(readFileSync(new URL(file, dir), 'utf8')) as { choices: { id: string; log?: string }[] };
+      expect(event.choices.length, file).toBeGreaterThanOrEqual(2);
+      n += event.choices.length;
       for (const choice of event.choices) {
         const at = join(file, choice.id);
         expect(choice.log, at).toBeTypeOf('string');
         expect(choice.log, at).not.toBe('');
       }
     }
+    expect(n).toBe(117);
   });
 });
