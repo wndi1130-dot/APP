@@ -290,7 +290,15 @@ static func match_departure(departure: Dictionary, receipt: Dictionary) -> Array
 				break
 	if receipt["symbol"] is Dictionary and not returned_of(receipt).has(receipt["symbol"]["carriedBy"]):
 		out.append("상징물을 든 사람이 열차에 오르지 않았다")
+	if int(receipt.get("version", 0)) == 5 and float(receipt.get("sledsBack", 0)) > float(sleds_out(departure)):
+		out.append("나간 썰매보다 많이 돌아왔다")
 	return out
+
+
+## The sleds the contract handed the field (kit_pick.gd train_kit); 0 when it handed none.
+static func sleds_out(departure: Dictionary) -> int:
+	var train: Variant = departure.get("train")
+	return int((train as Dictionary).get("sleds", 0)) if train is Dictionary else 0
 
 
 static func canonical(value: Variant) -> String:
@@ -574,6 +582,12 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	# The decks' places (decision 474 S1): what the field left them at rides to the next contract.
 	if int(receipt["version"]) == 5 and receipt.get("lootDeck") is Dictionary:
 		g["lootDeck"] = (receipt["lootDeck"] as Dictionary).duplicate(true)
+	# The train's sleds (s3 contract 3): what went out less what stood at the platform when it left.
+	# A receipt without sledsBack brings them all back, as before the field used them.
+	if int(receipt["version"]) == 5 and receipt.has("sledsBack") and g.get("dom") is Dictionary:
+		# Never more back than went out, even where the assert above is not run (a release build).
+		var back: int = mini(int(receipt["sledsBack"]), sleds_out(departure))
+		g["dom"]["sleds"] = maxf(0.0, float(g["dom"].get("sleds", 0)) + float(back - sleds_out(departure)))
 	var got: Array[String] = []
 	for row: Array in [["coal", "석탄"], ["food", "식량"], ["medicine", "의약품"], ["luxury", "사치품"], ["wood", "목재"], ["scrap", "고철"], ["cloth", "천"], ["parts", "부품"]]:
 		var amount := float(stock.get(row[0], 0))

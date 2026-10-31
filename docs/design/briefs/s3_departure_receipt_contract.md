@@ -25,7 +25,7 @@
   roster:   [ Person ],      // 처음부터 나가는 수색대(열차장 + 동료)
   workCrew: [ Person ],      // 작업조 부르기로 내려올 수 있는 사람(운송조·호위조)
   train:    { food, hungerSegs, cold, weather,
-              ammo?: {pistol, shell, craft}, lures? } }  // 정차 전체에 걸리는 열차 사정, 탄·미끼는 열차가 재고로 둘 때만
+              ammo?: {pistol, shell, craft}, lures?, sleds? } }  // 정차 전체에 걸리는 열차 사정, 탄·미끼·썰매는 열차가 재고로 둘 때만
 Person = { id, comm, name, role: chief|companion|carrier|escort,
   body:  { strength, melee, shooting, stealth, search },  // 몸 능력 0~10 (결정 카드 A)
   know:  { field, skill } | null,                          // 지식 층(내정 명부의 분야·등급)
@@ -62,6 +62,7 @@ defense:{ held: bool, people: [ids], hurt: [ids], dead: [ids],
 witnessed: [ {…, template?} ]               // 판 4와 같음. template 이름 표는 4절
 wardrobeIn?: [ Garment ]                    // 승강장에서 열차에 실은 옷장 자리 옷
 luresBack?:  {id: n}                        // 남은 미끼
+sledsBack?:  n                             // 정차를 떠날 때 승강장 하역 칸 안에 있던 열차 썰매 수, 0..train.sleds
 foodIn?:     {id: n}                        // 열차에 실은 음식, 녹이기 전 이름별(J07)
 lootDeck?:   {갈래: {n, k, seen, hit}}      // 갈래별 보장 몫(덱)의 쓴 뒤 자리(결정 474 S1)
 
@@ -75,7 +76,7 @@ wear    = { jacket: Garment|"", hands: Garment|"", coat?: Garment|"" }   // "" =
 - `crew.bodyUse`는 필드에서 몸 능력을 쓴 양이다. 쓰면 오르는 규칙(field_unified 3장)이 들어올 자리이고, 그 전까지는 비어 있다.
 - **장비 귀환**(출발 때 빼지 않은 장비의 순증감, 2절): `gearBack.wear`는 그 사람이 입고 돌아온 옷장 자리 옷이다. 출발 `gear.wear`와 같은 꼴이고, `coat`는 필드에서 주워 입은 긴 외투가 있을 때만 쓴다. `wardrobeIn`은 승강장에서 실은 옷장 자리 옷(재킷·외투·장갑)이고 셔츠 같은 것은 넣지 않는다. `luresBack`은 미끼가 나갔을 때만 쓴다. 세 칸 다 없어도 된다(판 5 앞쪽 영수증).
 - **실은 음식**(J07): `foodIn`은 열차에 실은 음식을 녹이기 전 필드 물건 id(`meat_spoiled`·`can_dented` 등, 상태가 id에 들어 있다)별 개수다. `stock.food`를 쪼갠 내역이지 더할 몫이 아니다: 열차는 식량을 지금처럼 `stock.food`로만 더하고, 솥이 `foodIn`의 id로 신선도·익힘·밀봉을 읽는다. 없으면 이름 없는 식량으로 센다.
-- 열차는 이렇게 맞춘다. 탄 = 출발 전 − 계약 `train.ammo` + `stock.ammo_*`. 무기고 = 나간 `gear.hands` − 돌아온 `gearBack.hands`. 옷장 = 나간 `gear.wear` − 돌아온 `gearBack.wear` + `wardrobeIn`. 미끼 = 출발 전 − 계약 `train.lures` + `luresBack`. `gearBack.wear`가 없으면 나간 그대로 돌아온 것으로, `luresBack`이 없으면 다 쓴 것으로 센다. 죽거나 남겨져 `crew`에 없는 사람의 무기·옷은 잃은 것이다.
+- 열차는 이렇게 맞춘다. 탄 = 출발 전 − 계약 `train.ammo` + `stock.ammo_*`. 무기고 = 나간 `gear.hands` − 돌아온 `gearBack.hands`. 옷장 = 나간 `gear.wear` − 돌아온 `gearBack.wear` + `wardrobeIn`. 미끼 = 출발 전 − 계약 `train.lures` + `luresBack`. 썰매 = 출발 전 − 계약 `train.sleds` + `sledsBack`(S2 열차만 썰매를 둔다 — S1 `domestic/data.ts` x1·x4의 「(S2)」; 열차가 가진 썰매는 둘까지, `docs/design/briefs/sled.md` 94·136줄. 짐 썰매 한 종류만, 긴 썰매는 아직 계약 밖). `gearBack.wear`가 없으면 나간 그대로 돌아온 것으로, `luresBack`이 없으면 다 쓴 것으로, `sledsBack`이 없으면 나간 그대로 돌아온 것으로 센다(필드가 썰매를 쓰기 전 판과 같게). `sledsBack`이 `train.sleds`보다 크거나 0 이상 정수가 아니면 거절한다. 죽거나 남겨져 `crew`에 없는 사람의 무기·옷은 잃은 것이다.
 
 ## 4. 열차가 영수증을 반영하는 법
 
