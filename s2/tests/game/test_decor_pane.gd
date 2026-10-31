@@ -388,7 +388,17 @@ func test_only_wheel_buttons_scroll_the_store() -> void:
 	assert_gt(ui.scroll, 0.0)
 
 
+## The first free floor cell other than [0, 0], in the order the pane walks (rows, then columns).
+func _first_free_after_origin() -> Array:
+	var cells: Dictionary = Grid.of("guard")
+	for z: int in Grid.NZ:
+		for x: int in Grid.NX:
+			if cells["floor"][z][x] == "." and [x, z] != [0, 0]: return [x, z]
+	return []
+
+
 func test_old_save_gets_first_free_cell_then_touch_move_and_take_back() -> void:
+	var free: Array = _first_free_after_origin()
 	var old := _state()
 	_placed(old, "chair", [0, 0])
 	_stock(old, "chair")
@@ -398,12 +408,13 @@ func test_old_save_gets_first_free_cell_then_touch_move_and_take_back() -> void:
 	var again: Dictionary = g.duplicate(true)
 	var ui := _pane(g)
 	var other := _pane(again)
-	assert_eq(Decor.items_of(g, "guard")[1]["at"], [30, 0], "row then column; existing cell stays occupied")
+	assert_eq(Decor.items_of(g, "guard")[1]["at"], free, "row then column; the saved [0.0, 0.0] cell stays occupied")
 	assert_eq(g, again, "same save opens in the same order")
 	assert_eq(Decor.items_of(g, "guard")[0]["at"], [0.0, 0.0])
+	assert_eq(ui.placed_at({"spot": "floor", "at": [0, 0]}), 0, "a cell read back from JSON is still found")
 	# Reach the recovered item with a coordinate-based picker in the viewport.
 	ui.train.cell_width = 20.0
-	_touch(ui, 7, _cell([30, 0], 20), true)
+	_touch(ui, 7, _cell(free, 20), true)
 	ui._process(0.36)
 	assert_eq(ui.selected, 1)
 	_drag(ui, 7, _cell([8, 0], 20))
@@ -419,8 +430,8 @@ func test_old_save_gets_first_free_cell_then_touch_move_and_take_back() -> void:
 
 func test_legacy_wall_without_a_rule_slot_returns_its_exact_value() -> void:
 	var g := _state()
-	g["dom"]["furnish"]["guard"] = {"tier": 0, "best": 0, "items": [
-		{"kind": "painting", "size": "small", "v": 0.75}]}
+	g["dom"]["furnish"]["guard"] = {"work": 0, "jobs": [], "furnPts": 0, "tier": 0, "best": 0,
+		"items": [{"kind": "painting", "size": "small", "v": 0.75}]}
 	Decor.migrate(g)
 	var ui := _pane(g)
 	assert_true(Decor.items_of(g, "guard").is_empty())
@@ -539,18 +550,37 @@ func test_primary_can_drag_to_store_while_second_finger_is_down() -> void:
 	assert_eq(Decor.read_store(g)["chair"]["n"], 1)
 
 
+## A whole card state laid as test_turn_card.gd lays it: tail_cold's second way,
+## 「담요를 나눈다」, costs one lux. With 1.0 lux it is payable; a placed record
+## (0.5) leaves too little.
+const LUX_CASE: String = "travel/card-0/6/tail_cold/first"
+
+
+func _card_data() -> Dictionary:
+	return JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/card_vectors.json"))
+
+
 func _lux_state() -> Dictionary:
-	var g := _state()
+	var whole: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/train_vectors.json"))["points"][3]["state"]
+	var g: Dictionary = whole.duplicate(true)
+	for row: Dictionary in _card_data()["cases"]:
+		if str(row["name"]) == LUX_CASE:
+			g.merge((row["state"] as Dictionary).duplicate(true), true)
+			g["cards"] = [(row["card"] as Dictionary).duplicate(true)]
+	g["dom"] = Dom.start()
+	g["phase"] = "travel"
 	g["lux"] = 1.0
-	g["eventLog"] = {}
-	g["cards"] = [{"uid": 1146, "kind": "travel", "text": "front_curtain"}]
 	_placed(g, "table")
 	_stock(g, "record", 1, 0.5)
 	return g
 
 
+func _lux_uid(g: Dictionary) -> int:
+	return int((g["cards"] as Array)[0]["uid"])
+
+
 func _lux_key(card: TurnCard) -> Button:
-	return card.find_child("Key_3", true, false) as Button
+	return card.find_child("Key_2", true, false) as Button
 
 
 func test_unfold_rechecks_locked_choice_after_decor_return() -> void:
@@ -558,7 +588,7 @@ func test_unfold_rechecks_locked_choice_after_decor_return() -> void:
 	assert_true(Mods.place(g, "guard", "record", "surface", [0, 0], 0, 0)["ok"])
 	var card := TurnCard.new()
 	add_child_autofree(card)
-	card.show_card(g, Sample.sample()[1], 1146)
+	card.show_card(g, _card_data()["tables"], _lux_uid(g))
 	assert_ne(_lux_key(card).tooltip_text, "")
 	card.set_folded(true)
 	var ui := _pane(g)
@@ -566,7 +596,7 @@ func test_unfold_rechecks_locked_choice_after_decor_return() -> void:
 	ui.return_selected()
 	assert_eq(g["lux"], 1.0)
 	card.set_folded(false)
-	assert_eq(card.uid, 1146)
+	assert_eq(card.uid, _lux_uid(g))
 	assert_false(card.folded)
 	assert_eq(_lux_key(card).tooltip_text, "")
 	watch_signals(card)
@@ -578,7 +608,7 @@ func test_unfold_rechecks_open_choice_after_decor_placement() -> void:
 	var g := _lux_state()
 	var card := TurnCard.new()
 	add_child_autofree(card)
-	card.show_card(g, Sample.sample()[1], 1146)
+	card.show_card(g, _card_data()["tables"], _lux_uid(g))
 	assert_eq(_lux_key(card).tooltip_text, "")
 	card.set_folded(true)
 	var ui := _pane(g)
@@ -586,7 +616,7 @@ func test_unfold_rechecks_open_choice_after_decor_placement() -> void:
 	assert_true(ui.apply_drop({"spot": "surface", "at": [0, 0], "on": 0}))
 	assert_eq(g["lux"], 0.5)
 	card.set_folded(false)
-	assert_eq(card.uid, 1146)
+	assert_eq(card.uid, _lux_uid(g))
 	assert_ne(_lux_key(card).tooltip_text, "")
 	watch_signals(card)
 	_lux_key(card).pressed.emit()
@@ -598,7 +628,8 @@ func test_leaving_decor_refreshes_both_lux_locks_and_keeps_fold_and_uid() -> voi
 	flow.opts = {"skip_field": true, "cinema": false}
 	add_child_autofree(flow)
 	await get_tree().process_frame
-	flow._take(_lux_state())
+	var g := _lux_state()
+	flow._take(g)
 	flow._show_paper()
 	flow._select("guard", false)
 	var card := flow.paper as TurnCard
@@ -608,14 +639,14 @@ func test_leaving_decor_refreshes_both_lux_locks_and_keeps_fold_and_uid() -> voi
 	assert_true(flow.decor_pane.apply_drop({"spot": "surface", "at": [0, 0], "on": 0}))
 	flow.leave_decor()
 	assert_true(card.folded)
-	assert_eq(card.uid, 1146)
+	assert_eq(card.uid, _lux_uid(g))
 	assert_ne(_lux_key(card).tooltip_text, "")
 	assert_true(flow.open_decor("guard"))
 	flow.decor_pane.pick_up(1)
 	flow.decor_pane.return_selected()
 	flow.leave_decor()
 	assert_true(card.folded)
-	assert_eq(card.uid, 1146)
+	assert_eq(card.uid, _lux_uid(g))
 	assert_eq(_lux_key(card).tooltip_text, "")
 	await wait_process_frames(1)
 

@@ -340,12 +340,21 @@ func pick_at(pos: Vector2) -> Dictionary:
 	return train.decor_pick(get_global_transform_with_canvas() * pos)
 
 
+## Cells by value: a save read back from JSON holds 0.0 where the grid says 0,
+## and Array == does not take the one for the other.
+static func _same_at(a: Variant, b: Variant) -> bool:
+	if not (a is Array and b is Array) or (a as Array).size() != (b as Array).size(): return false
+	for i: int in (a as Array).size():
+		if float(a[i]) != float(b[i]): return false
+	return true
+
+
 func placed_at(pick: Dictionary) -> int:
 	if pick.is_empty(): return -1
 	var items: Array = Decor.items_of(g, car_id)
 	for i: int in range(items.size() - 1, -1, -1):
 		var item: Dictionary = items[i]
-		if Decor.spot_of(item) == pick.get("spot") and item.get("at", []) == pick.get("at", []) and (Decor.spot_of(item) != "surface" or item.get("on") == pick.get("on")):
+		if Decor.spot_of(item) == pick.get("spot") and _same_at(item.get("at", []), pick.get("at", [])) and (Decor.spot_of(item) != "surface" or item.get("on") == pick.get("on")):
 			return i
 	return -1
 
