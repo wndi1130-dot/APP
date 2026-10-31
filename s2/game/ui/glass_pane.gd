@@ -12,6 +12,7 @@ extends PanelContainer
 ## (ui_fonts.gd K).
 
 signal folded
+signal motion_finished
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
@@ -60,9 +61,16 @@ const ARM: float = 12.0
 ## How the pane comes in (c4.css spIn: .15 s from 12 px to the left).
 const IN_S: float = 0.15
 const IN_FROM: float = 12.0
+const RIGHT_IN_S: float = 0.2
+const RIGHT_OUT_S: float = 0.16
 
 var body: VBoxContainer
 var title_label: Label
+var motion_direction: Vector2 = Vector2.LEFT
+var _motion: Tween
+var _enter_pending: bool = false
+var _leaving: bool = false
+var _motion_shade: CanvasItem
 
 
 func _init(width_css: float = 420.0, title: String = "", side: String = "", icon: String = "") -> void:
@@ -105,22 +113,86 @@ func _init(width_css: float = 420.0, title: String = "", side: String = "", icon
 	minimum_size_changed.connect(_fit)
 
 
-## At the left edge under the band. `slide`: it comes in as the short panel
-## does; a pane laid again over itself (a setting changed) does not.
-func pin(slide: bool) -> void:
+## Pin once, before the caller fills the rows. Layout settles before the tween;
+## only position and opacity change while it runs. Rebuilt panes stand still.
+func pin(slide: bool, direction: Vector2 = Vector2.LEFT, shade: CanvasItem = null) -> void:
+	motion_direction = direction
 	_fit()
-	position = Vector2(0.0, UiFonts.px(TOP))
-	if not slide or not is_inside_tree():
-		return
+	if slide and is_inside_tree():
+		slide_in(direction, shade)
+
+
+func resting_position() -> Vector2:
+	return Vector2(get_viewport_rect().size.x - size.x if motion_direction.x > 0.0 else 0.0, UiFonts.px(TOP))
+
+
+func _travel(direction: Vector2) -> Vector2:
+	return direction * (size.x if direction.x > 0.0 else UiFonts.px(IN_FROM))
+
+
+## Reusable by other glass overlays: direction points toward the screen edge.
+func slide_in(direction: Vector2, shade: CanvasItem = null) -> void:
+	if _motion != null:
+		_motion.kill()
+		_motion = null
+	motion_direction = direction
+	_motion_shade = shade
+	_leaving = false
+	_enter_pending = true
+	position = resting_position() + _travel(direction)
 	modulate.a = 0.0
-	position.x = -UiFonts.px(IN_FROM)
-	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "modulate:a", 1.0, IN_S)
-	tw.tween_property(self, "position:x", 0.0, IN_S)
+	if is_instance_valid(shade):
+		shade.modulate.a = 0.0
+	if not get_tree().process_frame.is_connected(_begin_slide_in):
+		get_tree().process_frame.connect(_begin_slide_in, CONNECT_ONE_SHOT)
+
+
+func _begin_slide_in() -> void:
+	if not _enter_pending or is_queued_for_deletion():
+		return
+	_fit()
+	_enter_pending = false
+	var duration: float = RIGHT_IN_S if motion_direction.x > 0.0 else IN_S
+	var fade: float = duration * 0.5 if motion_direction.x > 0.0 else duration
+	_motion = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_motion.tween_property(self, "position", resting_position(), duration)
+	_motion.tween_property(self, "modulate:a", 1.0, fade)
+	if is_instance_valid(_motion_shade):
+		_motion.tween_property(_motion_shade, "modulate:a", 1.0, duration)
+	_motion.finished.connect(_finish_slide_in)
+
+
+func _finish_slide_in() -> void:
+	_motion = null
+	_fit()
+	motion_finished.emit()
+
+
+func slide_out(direction: Vector2, shade: CanvasItem = null) -> Tween:
+	_enter_pending = false
+	_leaving = true
+	if _motion != null:
+		_motion.kill()
+	var duration: float = RIGHT_OUT_S if direction.x > 0.0 else IN_S
+	_motion = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	_motion.tween_property(self, "position", position + _travel(direction), duration)
+	_motion.tween_property(self, "modulate:a", 0.0, duration)
+	if is_instance_valid(shade):
+		_motion.tween_property(shade, "modulate:a", 0.0, duration)
+	return _motion
+
+
+func is_moving() -> bool:
+	return _leaving or _motion != null
 
 
 func _fit() -> void:
+	if is_moving():
+		return
 	size = get_combined_minimum_size()
+	position = resting_position()
+	if _enter_pending:
+		position += _travel(motion_direction)
 
 
 ## The head (.pane__head, items centred): the mark and the name (h3: 18/500,

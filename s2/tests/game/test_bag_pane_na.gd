@@ -63,6 +63,7 @@ func _key(hud, word: String) -> Button:
 func _layout() -> void:
 	for _i in range(3):
 		await get_tree().process_frame
+	await get_tree().create_timer(0.25).timeout
 
 
 func _screen_rect(control: Control) -> Rect2:
@@ -70,7 +71,7 @@ func _screen_rect(control: Control) -> Rect2:
 
 
 ## The mockup card's share of the screen the pane covers: 43% at 1280×720 (35% on a
-## 1688×780 phone, where the canvas is wider); the left half stays free for the stick.
+## 1688x780 phone, where the canvas is wider); the dimmed HUD stays visible at left.
 ## In canvas units against the project's 1280×720 window: a headless run's own
 ## window is a small square whose screen transform says nothing about a phone.
 func test_the_pane_keeps_the_left_half_free_and_covers_at_most_the_mockup_share() -> void:
@@ -357,23 +358,24 @@ func test_the_places_rail_stops_at_five_keys_and_fades_while_more_lie_below() ->
 	hud._close_modal()
 
 
-## Under the bag pane RUN still answers (the dead come, one runs) and the rest of
-## the HUD sleeps, dimmed; the pane put away wakes it (coordinator 10-30).
-func test_run_answers_and_the_rest_sleeps_dimmed_under_the_pane() -> void:
+## Decision 532: RUN, the lamp and the stick sleep with the rest of the HUD.
+func test_run_and_the_rest_sleep_dimmed_until_the_pane_closes() -> void:
 	var game = _game()
 	var hud = game.hud
 	hud.loot(_box(game))
 	await _layout()
-	assert_almost_eq(hud.run_button.modulate.a, 1.0, 0.001, "RUN stays bright")
+	assert_lt(hud.run_button.modulate.a, 0.5, "RUN sleeps, dimmed")
+	assert_lt(hud.lamp_button.modulate.a, 0.5, "the lamp sleeps, dimmed")
+	assert_lt(hud.touch.modulate.a, 0.5, "the stick sleeps, dimmed")
 	assert_lt(hud.portrait.modulate.a, 0.5, "the portrait sleeps, dimmed")
 	var was: bool = hud.run_button.button_pressed
 	var at: Vector2 = hud.run_button.get_global_rect().get_center()
 	_touch(hud, at, true)
 	_touch(hud, at, false)
-	assert_ne(hud.run_button.button_pressed, was, "RUN toggles under the pane")
+	assert_eq(hud.run_button.button_pressed, was, "RUN does not toggle under the pane")
 	assert_eq(hud.stick_index, -1, "and plants no stick")
-	assert_true(hud.modal_open, "the pane stays up")
-	hud._close_modal()
+	assert_false(hud.modal_open, "a tap outside folds the pane")
+	assert_almost_eq(hud.run_button.modulate.a, 1.0, 0.001, "RUN wakes")
 	assert_almost_eq(hud.portrait.modulate.a, 1.0, 0.001, "the pane put away wakes it")
 
 
@@ -505,9 +507,8 @@ func _two_boxes(game) -> Array:
 	return []
 
 
-## The bag pane leaves the stick free (decision 488): a thumb on it walks and the
-## field runs; let go, and the field waits again under the pane.
-func test_the_stick_walks_with_the_bag_up() -> void:
+## Decision 532: dragging over the sleeping stick cannot advance the field.
+func test_the_stick_stays_locked_with_the_bag_up() -> void:
 	var game = _game()
 	var hud = game.hud
 	hud.loot(_box(game))
@@ -516,20 +517,20 @@ func test_the_stick_walks_with_the_bag_up() -> void:
 	var home: Vector2 = hud.stick_home()
 	_touch(hud, home, true)
 	_drag(hud, home + Vector2(hud.STICK_R, 0))
-	assert_ne(game.player.stick, Vector2.ZERO, "the stick pushes under the bag pane")
+	assert_eq(game.player.stick, Vector2.ZERO, "the stick sleeps under the bag pane")
 	hud.tick(0.016)
-	assert_false(game.paused, "the field runs while the stick walks")
+	assert_true(game.paused, "the field stays paused")
 	assert_true(hud.modal_open, "the pane stays up")
 	_touch(hud, home + Vector2(hud.STICK_R, 0), false)
 	hud.tick(0.016)
 	assert_eq(game.player.stick, Vector2.ZERO)
-	assert_true(game.paused, "let go, and the field waits again")
+	assert_true(game.paused, "a drag is not a closing tap")
+	assert_true(hud.modal_open)
 	hud._close_modal()
 
 
-## Pushing the stick while a thing comes out lets the take go (STICK_BREAKS) and the
-## thing stays in the box; the pane is laid again without its stop key.
-func test_pushing_the_stick_lets_a_take_go_under_the_pane() -> void:
+## The sleeping stick cannot cancel the take that keeps the field running.
+func test_dragging_over_the_stick_keeps_taking_under_the_pane() -> void:
 	var game = _game()
 	var p = game.player
 	p.items.clear()
@@ -543,15 +544,15 @@ func test_pushing_the_stick_lets_a_take_go_under_the_pane() -> void:
 	_drag(hud, home + Vector2(hud.STICK_R, 0))
 	hud.tick(0.016)
 	game._update_person(p, 0.05)
-	assert_eq(p.action, "", "the stick lets the take go")
-	assert_has(game.data["containers"][id]["items"], "food_pack", "the thing stays in the box")
+	assert_eq(p.action, "take", "the stick cannot cancel the take")
+	assert_eq(p.stick, Vector2.ZERO)
+	assert_has(game.data["containers"][id]["items"], "food_pack", "the thing is still coming out")
 	hud.tick(0.016)
 	assert_true(hud.modal_open, "the pane stays up")
-	assert_eq(hud.modal, hud.box_pane, "the bag pane, laid again")
-	assert_eq(hud.taking_box, "")
-	assert_null(_key(hud, "멈추기"))
-	assert_not_null(_row(hud, "Near", "food_pack"), "the row is back in the box")
-	assert_false(game.paused, "the stick still walks the field")
+	assert_eq(hud.modal, hud.box_pane)
+	assert_eq(hud.taking_box, id)
+	assert_not_null(_key(hud, "멈추기"))
+	assert_false(game.paused, "taking still advances the field")
 	_touch(hud, home + Vector2(hud.STICK_R, 0), false)
 	hud._close_modal()
 
@@ -574,28 +575,28 @@ func test_the_app_away_holds_the_field_while_taking() -> void:
 	hud._close_modal()
 
 
-## With the thumb on the stick (index 0, the one finger Godot makes a mouse of),
-## another finger presses the pane's keys by hand.
-func test_a_second_finger_presses_the_pane_with_the_stick_held() -> void:
+## A first finger outside must not steal another finger's pane buttons.
+func test_a_second_finger_presses_the_pane_with_the_first_outside() -> void:
 	var game = _game()
 	var hud = game.hud
 	hud.loot(_box(game))
 	await _layout()
 	var home: Vector2 = hud.stick_home()
 	_touch(hud, home, true)
-	_drag(hud, home + Vector2(hud.STICK_R, 0))
 	var at: Vector2 = _tab(hud, "ground").get_global_rect().get_center()
 	_touch(hud, at, true, 1)
 	_touch(hud, at, false, 1)
 	assert_eq(String(hud.inv_near.get("kind", "")), "ground", "the second finger took the floor's key")
-	assert_eq(hud.stick_index, 0, "the thumb still holds the stick")
-	assert_ne(game.player.stick, Vector2.ZERO, "and still walks")
-	_touch(hud, home + Vector2(hud.STICK_R, 0), false)
+	assert_eq(hud.stick_index, -1, "no stick was planted")
+	assert_eq(game.player.stick, Vector2.ZERO)
+	_touch(hud, home, false)
+	assert_true(hud.modal_open, "the old outside finger cannot close the rebuilt pane")
+	assert_true(game.paused)
 	hud._close_modal()
 
 
 ## The same finger drags the pane's list, and lifting presses nothing.
-func test_a_second_finger_drags_the_list_with_the_stick_held() -> void:
+func test_a_second_finger_drags_the_list_with_the_first_outside() -> void:
 	var game = _game()
 	var p = game.player
 	var hud = game.hud
@@ -641,7 +642,7 @@ func test_the_same_places_in_another_order_lay_nothing_again() -> void:
 	hud._close_modal()
 
 
-## Laid again (a walk), the item list stays where it was scrolled to.
+## Laid again after a content change, the item list keeps its scroll.
 func test_laying_again_keeps_the_list_where_it_was() -> void:
 	var game = _game()
 	var hud = game.hud
@@ -659,9 +660,8 @@ func test_laying_again_keeps_the_list_where_it_was() -> void:
 	hud._close_modal()
 
 
-## Under the bag pane as in the field, the ring round the run key over the stick
-## plants no stick (finger_down's ring of nothing).
-func test_the_ring_round_the_run_key_plants_no_stick_under_the_pane() -> void:
+## The sleeping RUN key's ring is outside the pane too.
+func test_the_ring_round_run_folds_the_pane_without_planting_a_stick() -> void:
 	var game = _game()
 	var hud = game.hud
 	hud.loot(_box(game))
@@ -674,12 +674,11 @@ func test_the_ring_round_the_run_key_plants_no_stick_under_the_pane() -> void:
 	_touch(hud, at, true)
 	assert_eq(hud.stick_index, -1, "no stick planted")
 	_touch(hud, at, false)
-	hud._close_modal()
+	assert_false(hud.modal_open)
 
 
-## A floating stick (a setting) under the bag pane is not the world: a short
-## touch taps nothing there, and a cancelled touch is no lift at all.
-func test_the_stick_under_the_pane_taps_nothing() -> void:
+## A canceled outside touch neither closes the pane nor becomes a field tap.
+func test_a_canceled_outside_touch_does_nothing_under_the_pane() -> void:
 	var game = _game()
 	game.opts["stick_float"] = true
 	var hud = game.hud
@@ -687,17 +686,17 @@ func test_the_stick_under_the_pane_taps_nothing() -> void:
 	await _layout()
 	var at := Vector2(hud._view_size().x * 0.25, hud._view_size().y * 0.4)
 	_touch(hud, at, true)
-	assert_eq(hud.stick_index, 0)
-	assert_true(bool(hud.fingers[0].get("fixed", false)), "a touch on it taps nothing")
+	assert_eq(hud.stick_index, -1)
 	hud.stick_tap_ms = 0
 	_touch(hud, at, false, 0, true)
-	assert_eq(hud.stick_index, -1, "a cancelled touch lets the stick go")
+	assert_eq(hud.stick_index, -1)
 	assert_eq(hud.stick_tap_ms, 0, "and is no lift")
+	assert_true(hud.modal_open)
 	hud._close_modal()
 
 
-## Walking off a box drops its place from the rail, and a box shown goes back to the bag.
-func test_walking_off_a_box_drops_its_place_and_shows_the_bag() -> void:
+## External relocation still refreshes nearby places; the bag itself cannot walk.
+func test_external_relocation_drops_a_box_place_and_shows_the_bag() -> void:
 	var game = _game()
 	var hud = game.hud
 	var id: String = _box(game)
