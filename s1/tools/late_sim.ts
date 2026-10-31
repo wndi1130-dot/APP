@@ -1,5 +1,5 @@
 // 결정 514: 같은 sp-0… 시드와 생필품 재기의 BASE로 팔 셋을 견준다. 파일은 쓰지 않는다.
-// 사용: npx tsx tools/late_sim.ts [판 수=300] [--tune=margin,step,grow] [--lengths-only]
+// 사용: npx tsx tools/late_sim.ts [판 수=300] [--seed-prefix=sp-] [--summary-only] [--tune=margin,step,grow] [--lengths-only]
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -71,7 +71,7 @@ export function lateLengths() {
   });
 }
 
-function runArm(arm: Arm, n: number) {
+function runArm(arm: Arm, n: number, seedPrefix: string) {
   let complete = 0;
   let deferred = 0;
   let automatic = 0;
@@ -80,7 +80,7 @@ function runArm(arm: Arm, n: number) {
   const ends: Record<string, number> = {};
   const hashes: string[] = [];
   for (let i = 0; i < n; i++) {
-    const seed = `sp-${i}`;
+    const seed = `${seedPrefix}${i}`;
     const { g } = playGame(seed, { ...BASE, late: arm !== 'off', lateAlways: arm === 'always', probe: {
       beforePick: (_g, card, view, idx) => {
         if (view.choices[idx].id !== 'later') return;
@@ -99,11 +99,11 @@ function runArm(arm: Arm, n: number) {
     automaticPerGame: automatic / n, endRel: rel, endTension: tension / n, ends, stateHash: hash(hashes.join('\n')) } };
 }
 
-export function measureLate(n = 300) {
-  const arms = Object.fromEntries(ARMS.map(arm => [arm, runArm(arm, n)])) as Record<Arm, ReturnType<typeof runArm>>;
-  const mismatches = arms.base.hashes.flatMap((h, i) => h === arms.off.hashes[i] ? [] : [`sp-${i}`]);
+export function measureLate(n = 300, seedPrefix = 'sp-') {
+  const arms = Object.fromEntries(ARMS.map(arm => [arm, runArm(arm, n, seedPrefix)])) as Record<Arm, ReturnType<typeof runArm>>;
+  const mismatches = arms.base.hashes.flatMap((h, i) => h === arms.off.hashes[i] ? [] : [`${seedPrefix}${i}`]);
   const gapPP = arms.base.summary.completionPct - arms.always.summary.completionPct;
-  return { gamesPerArm: n, seedPrefix: 'sp-', bot: BASE, late: { ...LATE },
+  return { gamesPerArm: n, seedPrefix, bot: BASE, late: { ...LATE },
     arms: Object.fromEntries(ARMS.map(arm => [arm, arms[arm].summary])),
     checks: { alwaysBelowBase: gapPP > 0, baseBelow20Pct: arms.base.summary.completionPct < 20,
       baseEqualsOff: mismatches.length === 0, gapPP, needsTuning: gapPP <= 3, mismatches },
@@ -114,8 +114,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const args = process.argv.slice(2);
   const positional = args.filter(a => !a.startsWith('--'));
   const n = Number(positional[0] ?? 300);
-  if (!Number.isSafeInteger(n) || n < 1 || positional.length > 1 || args.some(a => a.startsWith('--') && !a.startsWith('--tune=') && a !== '--lengths-only')) {
-    throw new Error('사용: late_sim.ts [판 수=300] [--tune=margin,step,grow] [--lengths-only]');
+  if (!Number.isSafeInteger(n) || n < 1 || positional.length > 1 || args.some(a => a.startsWith('--') && !a.startsWith('--tune=') && !a.startsWith('--seed-prefix=') && a !== '--lengths-only' && a !== '--summary-only')) {
+    throw new Error('사용: late_sim.ts [판 수=300] [--seed-prefix=sp-] [--summary-only] [--tune=margin,step,grow] [--lengths-only]');
   }
   const tune = args.find(a => a.startsWith('--tune='));
   if (tune) {
@@ -123,5 +123,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (values.length !== 3 || values.some(x => !Number.isFinite(x) || x < 0)) throw new Error('tune 값 셋은 0 이상이어야 한다');
     [LATE.margin, LATE.step, LATE.grow] = values;
   }
-  console.log(JSON.stringify(args.includes('--lengths-only') ? lateLengths() : measureLate(n), null, 2));
+  const result = args.includes('--lengths-only') ? lateLengths() : measureLate(n, args.find(a => a.startsWith('--seed-prefix='))?.slice(14) ?? 'sp-');
+  if (args.includes('--summary-only') && !Array.isArray(result)) {
+    const { lengths: _lengths, ...summary } = result;
+    console.log(JSON.stringify(summary, null, 2));
+  } else console.log(JSON.stringify(result, null, 2));
 }
