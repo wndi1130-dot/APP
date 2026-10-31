@@ -68,7 +68,10 @@ func test_the_slot_is_written_over_and_a_broken_one_falls_back() -> void:
 	assert_true(FieldSave.write(first, AT))
 	var second := _sample()
 	second["clock"]["elapsed"] = 99.0
+	second["stop_id"] = "정차-2"
 	assert_true(FieldSave.write(second, AT))
+	assert_eq(FileAccess.get_file_as_string(AT), FieldSave.to_json(second))
+	assert_eq(FieldSave.from_json(FileAccess.get_file_as_string(AT + ".bak")), first)
 	assert_eq(FieldSave.read(AT)["clock"]["elapsed"], 99.0, "the last save is the one read")
 	assert_false(FileAccess.file_exists(AT + ".tmp"))
 	var f := FileAccess.open(AT, FileAccess.WRITE)
@@ -77,6 +80,65 @@ func test_the_slot_is_written_over_and_a_broken_one_falls_back() -> void:
 	assert_eq(FieldSave.read(AT)["clock"]["elapsed"], 12.5, "a broken slot: the last whole one")
 	FieldSave.clear(AT)
 	assert_eq(FieldSave.read(AT), {}, "no save at all")
+
+
+func test_a_cut_off_write_keeps_the_slot_and_its_backup_whole() -> void:
+	assert_true(FieldSave.write(_sample(), AT))
+	var previous := _sample()
+	previous["clock"]["elapsed"] = 99.0
+	assert_true(FieldSave.write(previous, AT))
+	var slot_text := FileAccess.get_file_as_string(AT)
+	var backup_text := FileAccess.get_file_as_string(AT + ".bak")
+	var next := _sample()
+	next["clock"]["elapsed"] = 150.0
+	FieldSave._test_write_limit_bytes = 16
+	assert_false(FieldSave.write(next, AT), "a cut-off temporary file is not a save")
+	assert_eq(FieldSave._test_write_limit_bytes, -1, "the write limit switches itself off")
+	assert_eq(FileAccess.get_file_as_string(AT), slot_text, "the slot is untouched")
+	assert_eq(FileAccess.get_file_as_string(AT + ".bak"), backup_text, "the backup is untouched")
+	assert_false(FileAccess.file_exists(AT + ".tmp"))
+	assert_eq(FieldSave.read(AT), previous, "the last whole save is still read")
+	assert_true(FieldSave.write(next, AT), "the next write is whole without resetting the limit")
+	assert_eq(FieldSave.read(AT), next)
+
+
+func test_writing_over_a_broken_slot_keeps_the_whole_backup() -> void:
+	var first := _sample()
+	assert_true(FieldSave.write(first, AT))
+	var second := _sample()
+	second["clock"]["elapsed"] = 99.0
+	assert_true(FieldSave.write(second, AT))
+	var backup_text := FileAccess.get_file_as_string(AT + ".bak")
+	var f := FileAccess.open(AT + ".broken", FileAccess.WRITE)
+	f.store_string("an older broken slot")
+	f.close()
+	var broken_text := "{\"version\": 1, \"kind\": \"s2_fi"
+	f = FileAccess.open(AT, FileAccess.WRITE)
+	f.store_string(broken_text)
+	f.close()
+	var next := _sample()
+	next["clock"]["elapsed"] = 150.0
+	assert_true(FieldSave.write(next, AT))
+	assert_eq(FileAccess.get_file_as_string(AT + ".bak"), backup_text, "the whole backup is kept")
+	assert_eq(FieldSave.from_json(backup_text), first)
+	assert_eq(FileAccess.get_file_as_string(AT + ".broken"), broken_text, "the broken slot replaces the older one")
+	assert_eq(FileAccess.get_file_as_string(AT), FieldSave.to_json(next))
+	assert_eq(FieldSave.read(AT), next)
+	assert_false(FileAccess.file_exists(AT + ".tmp"))
+
+
+func test_clearing_the_slot_removes_its_broken_file_too() -> void:
+	assert_true(FieldSave.write(_sample(), AT))
+	assert_true(FieldSave.write(_sample(), AT))
+	for suffix in [".tmp", ".broken"]:
+		var f := FileAccess.open(AT + suffix, FileAccess.WRITE)
+		f.store_string("left over")
+		f.close()
+		assert_true(FileAccess.file_exists(AT + suffix))
+	FieldSave.clear(AT)
+	for at in [AT, AT + ".tmp", AT + ".bak", AT + ".broken"]:
+		assert_false(FileAccess.file_exists(at), "every file belonging to the slot is cleared")
+	assert_eq(FieldSave.read(AT), {})
 
 
 func test_a_field_is_captured_and_comes_back_the_same() -> void:
