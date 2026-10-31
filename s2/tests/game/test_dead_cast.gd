@@ -239,7 +239,10 @@ func test_the_dead_are_drawn_in_what_they_have_on() -> void:
 		dead.append(one)
 	for _frame in DeadCast.BODIES.size() * (1 + DeadCast.SHELLS.size()) + 2:
 		z.render(cam, {}, false)   # every body and garment read in, one a frame
-	assert_eq(_drawn_in(z), _wearing(z, cam), "each garment drawn as many times as it is worn")
+	var drawn := _drawn_in(z)
+	for i in range(48, dead.size()):
+		assert_false(dead[i].has("worn"), "drawn, its clothes are not put in its record")
+	assert_eq(drawn, _wearing(z, cam), "each garment drawn as many times as it is worn")
 	assert_gt(_wearing(z, cam).size(), 8, "garments on several bodies")
 	var vests := 0
 	for one: Dictionary in dead:

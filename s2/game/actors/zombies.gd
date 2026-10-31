@@ -84,6 +84,7 @@ var bodies_to_read: Array[String] = []   # bodies not read in yet: one a frame (
 var bodies_planned: int = 1
 var wear_draws: Array = []    # body -> garment (dead_cast.gd SHELLS) -> MultiMeshInstance3D, null for one it has none of; read when first worn
 var _garment_reads: int = 0   # garments still to be read in this frame
+var _drawn_worn: Dictionary = {}   # id -> [home, kind, what it has on] for one drawn before worn_of is asked (drawn_worn)
 var drawn_count: int = 0
 var vat: Dictionary
 var baked: bool = false       # the dead are a baked body (dead_body.gd), not the boxes
@@ -208,11 +209,29 @@ func set_loot(z: Dictionary, loot: Array) -> void:
 ## (field_game.gd).
 func worn_of(z: Dictionary) -> Dictionary:
 	if not z.has("worn"):
-		var rng := RandomNumberGenerator.new()
-		rng.seed = ("%d:worn:%d" % [int(game.opts.get("seed", 0)), int(z["id"])]).hash()
-		var place := LootRules.wear_place_at(game.data.get("buildings", []), FieldGrid.cell_of(z["home"]))
-		z["worn"] = LootRules.wear_roll(String(z["kind"]), place, rng)
+		z["worn"] = _roll_worn(z)
 	return z["worn"]
+
+
+func _roll_worn(z: Dictionary) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = ("%d:worn:%d" % [int(game.opts.get("seed", 0)), int(z["id"])]).hash()
+	var place := LootRules.wear_place_at(game.data.get("buildings", []), FieldGrid.cell_of(z["home"]))
+	return LootRules.wear_roll(String(z["kind"]), place, rng)
+
+
+## What one of the dead has on as it is drawn (render): worn_of's once that is
+## asked for, till then the same roll kept here by its number and home, so
+## drawing it puts nothing in its record (a save keeps only what was asked for).
+func drawn_worn(z: Dictionary) -> Dictionary:
+	if z.has("worn"):
+		return z["worn"]
+	var id := int(z["id"])
+	var kept: Array = _drawn_worn.get(id, [])
+	if kept.is_empty() or kept[0] != z["home"] or kept[1] != z["kind"]:
+		kept = [z["home"], z["kind"], _roll_worn(z)]
+		_drawn_worn[id] = kept
+	return kept[2]
 
 
 ## Lying there with something still on it to take off.
@@ -1411,7 +1430,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool) -> void:
 		counts[b][look] = n + 1
 		# What it has on over the body moves with it, the same place and frame;
 		# by what it has on now (worn_of), so one stripped of its coat is without.
-		var over := DeadCast.garment_of(worn_of(z), TINTS[look]) if baked else {}
+		var over := DeadCast.garment_of(drawn_worn(z), TINTS[look]) if baked else {}
 		var garment: MultiMeshInstance3D = _garment_of(b, over["shell"]) if not over.is_empty() else null
 		if garment != null and int(worn_n.get(garment, 0)) < MAX_DRAW:
 			var w: int = int(worn_n.get(garment, 0))
