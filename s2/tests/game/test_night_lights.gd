@@ -198,6 +198,25 @@ func test_two_of_a_kind_can_go_first() -> void:
 		assert_gte(lit, NightLights.first_count(d), "pair_%d" % i)
 
 
+func test_the_first_screen_takes_none_more_once_it_holds_two_of_any_kind() -> void:
+	# The base plan's lights stay where they were (it keeps no first screen of its
+	# own); a fire and a candle of it already there leave the share no room: the
+	# drum 16 m off stays dark and the rest goes further off.
+	for i in 6:
+		var d := _yard(240, 210, FAR_DRUMS, Vector2i(52, 14), "mixed_%d" % i)
+		d["lights"] = [
+			{"id": "night_1_campfire", "kind": "campfire", "cell": Vector2i(45, 15)},
+			{"id": "night_2_candle", "kind": "candle", "cell": Vector2i(30, 20)},
+		]
+		assert_gt(NightLights.extend(d), 0, "mixed_%d: the share goes further off" % i)
+		var rows := _night_rows(d)
+		var on := 0
+		for l: Dictionary in rows:
+			on += 1 if Vector2(l["cell"] - Vector2i(40, 4)).length() <= NightLights.FIRST_SCREEN else 0
+		assert_eq(on, 2, "mixed_%d: the two it had, none more" % i)
+		assert_false(_has_cell(rows, Vector2i(52, 14)), "mixed_%d: the drum near the crew stays dark" % i)
+
+
 func test_a_big_map_adds_to_what_it_had_and_keeps_off_the_train() -> void:
 	var far: Array = []
 	for i in 8:
