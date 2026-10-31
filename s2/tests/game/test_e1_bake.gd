@@ -262,6 +262,28 @@ func test_prop_shades_ride_with_the_props_and_stop_at_a_wall() -> void:
 	assert_eq(view.prop_shades.multimesh.visible_instance_count, 0, "unseen props, no shades")
 
 
+func test_a_prop_marked_shade_false_gets_no_shade() -> void:
+	# A sparse model whose foot is its whole spread (the yard's dry grass) would lay a square on the snow.
+	var view: MapView = _view()
+	view._make_prop_shades()
+	_prop(view, Rect2i(10, 10, 1, 1), 0)
+	var sparse: Dictionary = _prop(view, Rect2i(20, 10, 1, 1), 0)
+	sparse["shade"] = false
+	view._props_mask_on = false
+	var camera: Camera3D = Camera3D.new()
+	add_child_autofree(camera)
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	var focus := Vector3(15, 0, 10.5)
+	camera.position = focus + Vector3(45, sqrt(2.0) * 45 * tan(deg_to_rad(35.0)), 45)
+	camera.look_at(focus)
+	camera.size = 36.0
+	view.refresh_props(camera)
+	assert_eq(view.prop_shades.multimesh.visible_instance_count, 1, "only the unmarked prop")
+	var items: Array = view.prop_batches[TEST_PROP]["items"]
+	assert_false((items[0]["shade"] as Dictionary).is_empty())
+	assert_true((items[1]["shade"] as Dictionary).is_empty(), "shade=false: no shade")
+
+
 func test_a_prop_shade_goes_round_its_foot_not_its_crown() -> void:
 	# A bare tree: a thin trunk under a wide crown. Its shade is the trunk's, not a dark square
 	# under the whole crown.
