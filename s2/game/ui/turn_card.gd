@@ -218,8 +218,9 @@ func set_folded(on: bool) -> void:
 		return
 	folded = on
 	_opening = false
-	if on and _armed >= 0:
+	if not on or _armed >= 0:
 		# A heavy way armed before the fold is not left armed under the edge.
+		# Opening also rechecks costs changed while the paper was folded.
 		_armed = -1
 		_fill()
 	if sheet != null:
