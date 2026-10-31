@@ -123,6 +123,7 @@ static func model(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> Dictionary:
 	if v.is_empty():
 		return {}
 	var sp: Variant = v["speaker"]
+	var content_kind: bool = card["kind"] in ["content", "content-deal"]
 	var bust: int = -1
 	var name: String = ""
 	var role: String = ""
@@ -130,6 +131,14 @@ static func model(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> Dictionary:
 		name = String(sp["name"])
 		role = String(sp["role"])
 		bust = CouncilCard.bust_of(g0["comms"][sp["comm"]]["leader"] if sp.has("comm") else {"name": name})
+		# An aide can speak for a car without being its representative.
+		if content_kind and (not sp.has("comm") or name != g0["comms"][sp["comm"]]["leader"]["name"]):
+			var portrait: Dictionary = {"name": name}
+			for person: Dictionary in t0["PROFILES"]:
+				if person["name"] == name:
+					portrait["personId"] = person["id"]
+					break
+			bust = CouncilCard.bust_of(portrait)
 	var cards: Array = g0["cards"]
 	var choices: Array = []
 	var witness: bool = false
@@ -140,7 +149,7 @@ static func model(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> Dictionary:
 		var why: String = UiFonts.josa(String(ch["why"]))
 		var fx: Array = effects(t0, ch)
 		# A why that says what it costs stands for 「지금 드는 값 없음」.
-		if why != "" and String(fx[0]["tone"]) == "none":
+		if why != "" and not content_kind and String(fx[0]["tone"]) == "none":
 			fx = []
 		choices.append({
 			"n": i + 1, "id": String(ch["id"]),
@@ -149,6 +158,9 @@ static func model(g0: Dictionary, t0: Dictionary, uid0: int = -1) -> Dictionary:
 			"effects": fx, "off": String(ch["disabled"]), "why": why,
 			"heavy": HEAVY_IDS.has(String(ch["id"])),
 		})
+		if content_kind:
+			choices[-1]["content"] = true
+			choices[-1]["later"] = UiFonts.josa(String(ch.get("later", "")))
 	var late: int = int(v.get("late", 0))
 	var left: int = int(v.get("lateLeft", 0))
 	var late_line := ""
@@ -671,6 +683,14 @@ func _say(ch: Dictionary, at: int) -> Control:
 	q.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	col.add_child(q)
 	col.add_child(_costs(ch, armed, wide))
+	if bool(ch.get("content", false)):
+		for note_key: String in ["why", "later"]:
+			if str(ch.get(note_key, "")) == "": continue
+			var note_label: Label = _small(UiFonts.keep_all(("까닭: " if note_key == "why" else "나중에: ") + str(ch[note_key])), 400, Paper.INK2)
+			note_label.name = "Why" if note_key == "why" else "Later"
+			note_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			note_label.custom_minimum_size.x = wide
+			col.add_child(note_label)
 	var key := Button.new()
 	key.name = "Key_%d" % int(ch["n"])
 	key.focus_mode = Control.FOCUS_NONE
@@ -730,7 +750,7 @@ func _costs(ch: Dictionary, armed: bool, wide: float) -> Control:
 			var tone: String = String(e["tone"])
 			var pol: bool = tone == "blue" or tone == "red"
 			flow.add_child(_small(String(e["text"]), 500 if pol else 400, BLUE if tone == "blue" else (RED if tone == "red" else Paper.INK2)))
-	if String(ch["why"]) != "":
+	if String(ch["why"]) != "" and not bool(ch.get("content", false)):
 		var why := _small(UiFonts.keep_all(String(ch["why"])), 400, Paper.INK2)
 		why.name = "Why"
 		why.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
