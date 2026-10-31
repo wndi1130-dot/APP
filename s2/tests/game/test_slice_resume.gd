@@ -11,11 +11,13 @@ const Content = preload("res://game/train/turn/turn_content.gd")
 const TrainAdvance = preload("res://game/train/train_advance.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
-const SLICE := "user://test_slice_resume_slice.json"
-const TRAIN := "user://test_slice_resume_train.json"
-const FIELD := "user://test_slice_resume_field.json"
-const ROUND_TRIP := "user://test_slice_resume_round_trip.json"
-const BROKEN := "user://test_slice_resume_broken.json"
+## Every run's own files: two test runs from other checkouts share one user:// folder (the
+## project name) and wrote over each other's slots when these names were fixed.
+var SLICE: String = "user://test_slice_resume_%d_slice.json" % OS.get_process_id()
+var TRAIN: String = "user://test_slice_resume_%d_train.json" % OS.get_process_id()
+var FIELD: String = "user://test_slice_resume_%d_field.json" % OS.get_process_id()
+var ROUND_TRIP: String = "user://test_slice_resume_%d_round_trip.json" % OS.get_process_id()
+var BROKEN: String = "user://test_slice_resume_%d_broken.json" % OS.get_process_id()
 const SEEDS: Array[int] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 var flows: Array = []
 
