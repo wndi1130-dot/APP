@@ -1,6 +1,6 @@
 extends "res://addons/gut/test.gd"
 ## 소리 물결(결정 471 H1): 우리 쪽이 문을 차거나 창을 깨거나 장작을 패면, 또 플레이어가 뛰면 그 소리가
-## 닿는 넓이가 바닥에 옅은 동그라미로 1초 보인다. 반경은 make_sound가 잰 그대로(누가 듣는지는 그대로),
+## 닿는 넓이가 바닥에 옅은 동그라미로 잠깐 보인다. 반경은 make_sound가 잰 그대로(누가 듣는지는 그대로),
 ## 망자·열차·다른 소리는 그리지 않는다.
 
 const FieldGame = preload("res://game/field_game.gd")
@@ -70,3 +70,15 @@ func test_running_draws_a_ring_a_second_at_most_and_only_the_player() -> void:
 	game.clock.elapsed = 20.0
 	game._ripple_run(other, 12.0)
 	assert_eq(game.ripples.rings.size(), 3, "a companion running draws none")
+
+
+func test_envelope_fades_in_holds_and_fades_out_early() -> void:
+	assert_almost_eq(SoundRipple.envelope(0.0), 0.0, 0.0001)
+	assert_almost_eq(SoundRipple.envelope(0.06), 1.0, 0.0001)
+	assert_almost_eq(SoundRipple.envelope(0.3), 1.0, 0.0001)
+	var fading: float = SoundRipple.envelope(0.65)
+	assert_gt(fading, 0.0)
+	assert_lt(fading, 1.0)
+	assert_almost_eq(SoundRipple.envelope(0.85), 0.0, 0.0001)
+	assert_almost_eq(SoundRipple.envelope(0.9), 0.0, 0.0001)
+	assert_almost_eq(SoundRipple.envelope(1.0), 0.0, 0.0001)
