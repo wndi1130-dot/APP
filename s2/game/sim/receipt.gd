@@ -2,6 +2,10 @@ extends RefCounted
 ## Stop receipt builder. Legacy schema plus S1 stop v3 and field v4 contracts.
 
 const STOCK_KEYS := ["coal", "food", "medicine", "luxury", "symbol", "info", "scrap", "wood", "cloth", "parts", "ammo_pistol", "ammo_shell", "ammo_craft"]
+## Stock the stop contract adds from v3 on (S1 stop_receipt.ts v3Schema; the legacy shared
+## schema has no place for it): supplies (decision 490). Taken on any receipt, written and
+## accepted only on a v3 or later one.
+const V3_STOCK_KEYS := ["supplies"]
 const PEOPLE_LISTS := ["sent", "injured", "bitten", "dead", "missing", "leftBehind", "rescued"]
 ## The six towns, and the five stops on the way (mine, lodge, sawmill, lake,
 ## summit: each its own kind, decision 423).
@@ -103,7 +107,7 @@ func set_time(arrive: String, depart: String, stay_min: int) -> bool:
 
 ## Adds a signed delta. Unknown keys are refused (returns false).
 func add_stock(key: String, n: int) -> bool:
-	if not STOCK_KEYS.has(key):
+	if not (STOCK_KEYS.has(key) or V3_STOCK_KEYS.has(key)):
 		return false
 	_stock[key] = int(_stock.get(key, 0)) + n
 	return true
@@ -378,6 +382,10 @@ func to_dict() -> Dictionary:
 	for key: String in STOCK_KEYS:
 		if _stock.has(key):
 			stock[key] = _stock[key]
+	if _has_v3 or _has_v4:
+		for key: String in V3_STOCK_KEYS:
+			if _stock.has(key):
+				stock[key] = _stock[key]
 	var people := {}
 	for list_name: String in PEOPLE_LISTS:
 		people[list_name] = (_people[list_name] as Array[String]).duplicate()
@@ -527,7 +535,9 @@ static func check(d: Dictionary) -> Array[String]:
 	var stock: Variant = d.get("stock")
 	if stock is Dictionary:
 		for key: Variant in stock:
-			if not STOCK_KEYS.has(key):
+			if V3_STOCK_KEYS.has(key) and version < 3:
+				out.append("stock.%s: 판 3 전 영수증에는 없는 칸" % str(key))
+			elif not (STOCK_KEYS.has(key) or V3_STOCK_KEYS.has(key)):
 				out.append("stock.%s: 모르는 키" % str(key))
 			elif not _is_int(stock[key]):
 				out.append("stock.%s: 정수가 아님" % str(key))

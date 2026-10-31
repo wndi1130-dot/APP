@@ -13,6 +13,7 @@ const TrainClimate = preload("res://game/train/train_climate.gd")
 const TrainResearch = preload("res://game/train/train_research.gd")
 const C = preload("res://game/train/turn/turn_common.gd")
 const People = preload("res://game/train/turn/turn_people.gd")
+const Late = preload("res://game/train/turn/turn_late.gd")
 
 const RES_NAME: Dictionary = {"coal": "석탄", "food": "식량", "med": "의약품", "lux": "사치품", "trust": "신임",
 	"tension": "긴장", "fear": "공포", "injured": "부상자"}
@@ -212,11 +213,12 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var choices: Array = out["choices"]
 	for i: int in choices.size():
 		var ch: Dictionary = choices[i]
-		ch["say"] = String(says[i]) if i < says.size() else ""
+		ch["say"] = String(says[i]) if i < says.size() else String(ch.get("say", ""))
 		ch["why"] = String(why[i]) if i < why.size() else ""
 		# A way the rule shuts keeps why (S1 card.ts shows it on the way): the guard who
 		# will not go, the infection window that has closed.
 		ch["disabled"] = String(ch.get("disabled", ""))
+	out["body"] = Late.body(g, card, out["body"])
 	# withAfford in the kinds' own views, then guardCosts over every view: when
 	# every way is shut the card would trap the captain, so then none is.
 	if AFFORD_KINDS.has(kind):

@@ -53,7 +53,7 @@ function arrivalView(g: Game, card: Card): CardView {
   const speaker = atStop ? { name: card.who ?? '수색대', role: '수색대' } : { name: g.comms.engine.leader.name, role: REP_ROLE.engine, comm: 'engine' as Comm };
   const inj = (k: number): Eff[] => (k > 0 ? [{ t: 'injured', v: k }] : []);
   const choices: Choice[] = ban ? [
-    { id: 'turn_away_law', label: '법대로 보낸다', say: '법은 법이다. 보내라.', effs: turned([{ t: 'trust', v: -1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
+    { id: 'turn_away_law', label: '법대로 보낸다', log: `피난민 무리: ${n}명을 법대로 돌려보냈다.`, say: '법은 법이다. 보내라.', effs: turned([{ t: 'trust', v: -1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
   ] : [
     { id: 'turn_away', label: '돌려보낸다', log: `피난민 무리: ${n}명을 돌려보냈다.`, say: '자리가 없다. 갈 길을 알려 주고 보내라.', effs: turned([{ t: 'trust', v: -2 }, { t: 'rel', c: 'medtech', v: -3 }, { t: 'rel', c: 'tail', v: -2 }, { t: 'tension', v: 1 }]), special: 'arrive_turn', witness: atStop && AR.witness > 0 },
     { id: 'take_some', label: `가족 ${some}무리만 태운다`, say: '자리 나는 만큼만 태운다. 가족은 나누지 마라.', effs: [...inj(hurtSome), { t: 'trust', v: -1 }, { t: 'rel', c: 'medtech', v: 1 }, { t: 'rel', c: 'tail', v: -1 }], special: 'arrive_take_some', extra: placeLines(g, 'tail', someGroups), log: `피난민 무리: ${someN}명을 태웠다.` },
