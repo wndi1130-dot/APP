@@ -3484,6 +3484,8 @@ func _set_crew(key: String, value: String) -> void:
 
 
 ## Departure: the leader on the platform blows the whistle; who is not here stays.
+## Only how many stay is said, never their names (결정 147·183: the end of a stop counts
+## those left behind).
 func depart_card() -> void:
 	var left: Array = []
 	for p in game.squad + game.crew:
@@ -3493,7 +3495,7 @@ func depart_card() -> void:
 			left.append(p.display_name)
 	var text := "기적을 울리고 떠난다. 기적 소리는 멀리까지 간다."
 	if not left.is_empty():
-		text += "\n승강장에 없는 사람: %s. 이들은 남는다." % ", ".join(left)
+		text += "\n승강장에 없는 사람 %d명은 그대로 남는다." % left.size()
 	# Words, not seconds: arrival spreads too widely to promise a number
 	# (s2_play/measure_depart.md: 30 m leaves about 20 s to 10 m).
 	if horde_close():
