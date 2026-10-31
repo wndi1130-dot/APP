@@ -586,7 +586,7 @@ func build(p, i: int) -> void:
 			break
 	if mat == "":
 		if p == game.player:
-			game.hud.toast("방벽을 세우려면 판자나 고철이 있어야 한다.")
+			game.hud.toast("방벽을 세울 판자·고철·목재가 하나도 없다.")
 		return
 	game.make_sound(p.position, SimNoise.Level.NORMAL, "lid", p)
 	p.start_action("wall", "방벽 세우기", BUILD_TIME, _built.bind(p, i, mat))
