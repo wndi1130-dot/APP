@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   advance, chooseCard, COMMS, createGame, enterStranded, isSessionSeg, P, startTrip, strandedSettle, supportShare, tripPlan, tripTick, viewCard,
 } from '../../src/game';
-import type { Game } from '../../src/game';
+import type { Card, Game } from '../../src/game';
 import { playGame } from '../../tools/s1c_bot';
 
 // 멈춘 열차 나(구현명세 가 3.4~3.9, 7절 5~11): 수동차 원정.
@@ -234,6 +234,29 @@ describe('못 돌아옴', () => {
     const card = lastCard(g, 'trip_lost')!;
     expect(viewCard(g, card).choices.map(c => c.label)).toEqual(['다시 보낸다', '내가 간다', '기다린다']);
     expect(g.end).toBeNull();
+  });
+
+  it('일지 줄은 종이에 적힌 사람 수를 가리키고, 수색대 갈래가 없어도 밀리지 않으며, 이름 칸이 비면 수동차를 가리킨다', () => {
+    const g = stranded('trip-lost-log');
+    rels(g, 30);
+    const card = { uid: 9001, kind: 'trip_lost', comm: 'tail', who: '얀 세들라크,알리 슈테판,요나 호프만' } as Card;
+    const logs = (c: Card) => Object.fromEntries(viewCard(g, c).choices.map(ch => [ch.label, ch.log]));
+    expect(logs(card)).toEqual({
+      '다시 보낸다': '돌아오지 않은 3명을 찾으러 수색대를 다시 보냈다.',
+      '내가 간다': '돌아오지 않은 3명을 찾으러 직접 나섰다.',
+      '기다린다': '돌아오지 않은 3명을 더 기다리기로 했다.',
+    });
+    rels(g, -20); // 지지가 문턱 아래라 수색대 갈래가 없다
+    expect(logs(card)).toEqual({
+      '내가 간다': '돌아오지 않은 3명을 찾으러 직접 나섰다.',
+      '기다린다': '돌아오지 않은 3명을 더 기다리기로 했다.',
+    });
+    rels(g, 30);
+    expect(logs({ ...card, who: '' })).toEqual({
+      '다시 보낸다': '돌아오지 않은 수동차를 찾으러 수색대를 다시 보냈다.',
+      '내가 간다': '돌아오지 않은 수동차를 찾으러 직접 나섰다.',
+      '기다린다': '돌아오지 않은 수동차를 더 기다리기로 했다.',
+    });
   });
 
   it('열차장이 탔으면 판이 lost_captain으로 끝난다', () => {

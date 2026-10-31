@@ -27,7 +27,7 @@ func _contracts() -> Array:
 
 
 func _at(row: Dictionary) -> String:
-	return "%s/domestic=%s" % [row["seed"], row["domestic"]]
+	return "%s/domestic=%s/supplies=%s" % [row["seed"], row["domestic"], row.get("supplies", false)]
 
 
 func _profile(id: String) -> Dictionary:
@@ -117,8 +117,8 @@ func test_one_in_both_lists_is_taken_off_once_and_the_floor_notes_the_rest() -> 
 			assert_false(g.has("leftShort"))
 
 
-func test_the_fixture_has_six_contracts() -> void:
-	assert_eq(_contracts().size(), 6, "three seeds, with and without the domestic rules")
+func test_the_fixture_has_seven_contracts() -> void:
+	assert_eq(_contracts().size(), 7, "three seeds, with and without the domestic rules, and one with supplies on")
 
 
 func test_the_contract_matches_s1() -> void:
@@ -223,6 +223,23 @@ func test_the_decks_place_rides_from_one_stop_to_the_next() -> void:
 	r.set_defense(true, [], [], [])
 	r.set_loot_deck(deck)
 	assert_eq(r.to_dict().get("lootDeck"), deck, "the receipt writes the deck on v5")
+
+
+func test_the_contract_says_whether_the_run_turned_supplies_on() -> void:
+	# Decision 490: the field reads it to dress supplies or not; a contract without it is dressed as always.
+	var bad: Array[String] = []
+	var on: int = 0
+	for row: Dictionary in _contracts():
+		assert_eq((row["departure"] as Dictionary).get("supplies"), bool(row.get("supplies", false)), _at(row))
+		on += 1 if bool(row.get("supplies", false)) else 0
+		var g: Dictionary = (row["state"] as Dictionary).duplicate(true)
+		g["supOn"] = not bool(g.get("supOn", false))
+		var d := FieldDeparture.build(g, _tables, row["opts"])
+		assert_eq(d.get("supplies"), g["supOn"], _at(row) + " turned the other way")
+		d["supplies"] = row["departure"]["supplies"]
+		_check(bad, _at(row) + " the rest as before", row["departure"], d)
+	assert_eq(on, 1, "one run with supplies on")
+	assert_eq(bad, [] as Array[String])
 
 
 func test_route_weather_fields_match_s1_and_are_absent_with_climate_off() -> void:
