@@ -9,6 +9,12 @@ const DIR := "res://models/props_stop01/"
 const MODE_SETTING := "visuals/prop_models_enabled"
 ## How much darker a model is at the floor it stands on (weathered.gdshader contact_dark, T0-6).
 const CONTACT_DARK: float = 0.35
+## House furniture keeps its living colour (weathered.gdshader lively, decision 421-1): the room set baked by
+## tools/blender/props_field_room.py, whose vertex colours are inverted with that lesser grade.
+const LIVELY_DIR := "res://models/props_field/"
+const LIVELY_KINDS: Array[String] = ["dresser", "chair", "nightstand", "counter", "sink", "cupboard", "settee",
+	"armchair", "low_table", "side_table", "toilet", "washstand", "bathtub", "towel_shelf", "medicine_cabinet",
+	"waste_bin"]
 
 ## container id -> model file. Kinds follow the container's name (책상 desk,
 ## 선반 shelf, 옷장·사물함 wardrobe, 부엌 dining set, 찬장 bookcase-like
@@ -97,8 +103,15 @@ static func rows_path(path: String) -> Array:
 			var source := scene.instantiate()
 			_collect(source, Transform3D.IDENTITY, found)
 			source.free()
+	if lively(path):
+		for row: Dictionary in found:
+			(row["material"] as ShaderMaterial).set_shader_parameter("lively", 1.0)
 	_rows[path] = found
 	return found
+
+
+static func lively(path: String) -> bool:
+	return path.begins_with(LIVELY_DIR) and path.get_file().get_basename() in LIVELY_KINDS
 
 
 ## 모델의 여러 노드도 LOD마다 메시 하나로 묶는다. 원래 재질과 노드 변환을 보존한다.

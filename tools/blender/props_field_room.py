@@ -29,16 +29,16 @@ TOLERANCE = 0.0001
 # trashcan has a source-node rotation which must not be dropped on import.
 # Front/back read-only CPU projections were inspected; Workbench review is pending.
 DESIGNS = {
-    "dresser": dict(source="sideTableDrawers", height=1.0, footprint=[2, 1], size=[1.76, .62], paint="room_cream",
-                    note="기존 두 서랍·상판·다리를 살리고 아래 몸통과 서랍 네 개를 덧댄 낮고 넓은 목제 서랍장"),
-    "chair": dict(source="chair", height=.85, footprint=[1, 1], size=[.52, .55], paint="room_cream",
-                  note="네 다리와 뚫린 등받이의 목제 의자, 밝은 크림 칠과 짙은 좌판"),
+    "dresser": dict(source="sideTableDrawers", height=1.0, footprint=[2, 1], size=[1.76, .62], paint="room_walnut",
+                    note="기존 두 서랍·상판·다리를 살리고 아래 몸통과 서랍 네 개를 덧댄 낮고 넓은 목제 서랍장, 짙은 호두색 몸통과 참나무색 서랍·상판"),
+    "chair": dict(source="chair", height=.85, footprint=[1, 1], size=[.52, .55], paint="room_walnut",
+                  note="네 다리와 뚫린 등받이의 목제 의자, 짙은 호두색 틀과 참나무색 좌판"),
     "nightstand": dict(source="cabinetBedDrawerTable", height=.55, footprint=[1, 1], size=[.50, .43], paint="room_blue",
                        note="작은 서랍 하나, 네 다리, 바랜 파랑 칠과 나무 상판"),
-    "counter": dict(source="kitchenCabinet", height=.9, footprint=[1, 1], size=[.96, .66], paint="room_sage",
-                    note="옆면이 단순한 조리대, 상판의 금속색도 목재색으로 변경"),
-    "sink": dict(source="kitchenSink", height=.9, footprint=[1, 1], size=[.90, .66], paint="room_cream",
-                 note="밝은 회색 금속 개수통·수도꼭지, 크림 칠 목제 하부장"),
+    "counter": dict(source="kitchenCabinet", height=.9, footprint=[1, 1], size=[.96, .66], paint="room_honey",
+                    note="옆면이 단순한 조리대, 꿀색 나무 문짝, 상판의 금속색도 참나무색으로 변경"),
+    "sink": dict(source="kitchenSink", height=.9, footprint=[1, 1], size=[.90, .66], paint="room_honey",
+                 note="밝은 회색 금속 개수통·수도꼭지, 조리대와 같은 꿀색 나무 하부장"),
     "cupboard": dict(source="bookcaseClosedDoors", height=1.8, footprint=[1, 1], size=[.78, .44], paint="room_sage",
                      note="연초록 칠의 높은 두 문 찬장, 짙은 목재 상판과 회색 손잡이"),
     "settee": dict(source="loungeSofa", height=.85, footprint=[2, 1], size=[1.76, .78], paint="room_walnut",
@@ -47,16 +47,16 @@ DESIGNS = {
                      note="바랜 초록 천의 넓은 의자, 나무 다리와 목제 팔걸이 상단"),
     "low_table": dict(source="tableCoffeeSquare", height=.45, footprint=[1, 1], size=[.72, .66], paint="room_blue",
                      note="짙은 나무 사각 상판과 바랜 파랑 다리의 낮은 탁자"),
-    "side_table": dict(source="sideTable", height=.6, footprint=[1, 1], size=[.56, .43], paint="room_cream",
-                      note="밝은 크림 다리와 짙은 목제 상판의 작은 탁자"),
+    "side_table": dict(source="sideTable", height=.6, footprint=[1, 1], size=[.56, .43], paint="room_walnut",
+                      note="짙은 호두색 다리와 참나무색 상판의 작은 탁자"),
     "toilet": dict(source="toilet", height=.65, footprint=[1, 1], size=[.46, .68], paint="room_enamel",
                   note="밝은 흰 도기, 닫힌 뚜껑과 뒤쪽 물통"),
     "washstand": dict(source="bathroomCabinetDrawer", height=.85, footprint=[1, 1], size=[.72, .55], paint="room_cream",
                      note="후보 받침 세면대 대신 같은 제공 묶음의 수납형 세면대 선택, 법랑 대야·목제 서랍·짧은 다리"),
     "bathtub": dict(source="bathtub", height=.6, footprint=[2, 1], size=[1.82, .83], paint="room_enamel",
                    note="긴 쪽 X, 밝은 흰 법랑 욕조에 짧은 주철 다리 네 개 추가"),
-    "towel_shelf": dict(source="bookcaseOpen", height=1.6, footprint=[1, 1], size=[.62, .40], paint="room_cream",
-                       note="좁고 높은 목제 선반, 기존 수평 선반 높이를 찾아 접은 수건 여섯 장 추가"),
+    "towel_shelf": dict(source="bookcaseOpen", height=1.6, footprint=[1, 1], size=[.62, .40], paint="room_honey",
+                       note="좁고 높은 꿀색 나무 선반, 기존 수평 선반 높이를 찾아 접은 수건 여섯 장 추가"),
     "medicine_cabinet": dict(source="bathroomCabinet", height=1.75, bottom=1.15, footprint=[1, 1], size=[.46, .20], paint="room_blue",
                             note="바닥 기준 원점, 높이 1.15~1.75 m의 작은 벽 약장, 거울색은 법랑색으로 대체, 표지 없음"),
     "waste_bin": dict(source="trashcan", height=.45, footprint=[1, 1], size=[.34, .34], paint="room_metal",
@@ -65,16 +65,22 @@ DESIGNS = {
 
 # Linear RGB AFTER fx_model_grade, before lighting/weather/photo fade. Reversing
 # max-channel desaturation keeps warm wood/cloth distinct and whites bright.
+# Wood, cloth and paint are the living colour of a house (T0-8c): dark walnut chairs, dressers and small
+# tables, honey kitchen fronts, oak tops; sage, blue, brick and moss as paint and cloth. Their saturation
+# needs the lesser living-colour grade below; under the default press no input reads as wood.
 GRADED_TARGETS = {
-    "room_cream": (.62, .60, .50), "room_sage": (.46, .55, .45),
-    "room_blue": (.40, .50, .58), "room_walnut": (.26, .225, .18),
-    "room_oak": (.42, .35, .27), "room_brick": (.45, .32, .28),
-    "room_moss": (.27, .37, .26), "room_mustard": (.50, .43, .30),
+    "room_cream": (.62, .60, .50), "room_sage": (.1473, .2429, .14),
+    "room_blue": (.126, .196, .2846), "room_walnut": (.1706, .0783, .0443),
+    "room_oak": (.3185, .1706, .0830), "room_honey": (.477, .3185, .1626),
+    "room_brick": (.2738, .0946, .0716), "room_moss": (.1473, .1873, .0783),
+    "room_mustard": (.3931, .2633, .1030),
     "room_linen": (.65, .65, .59), "room_enamel": (.735, .75, .77),
     "room_steel": (.54, .57, .60), "room_metal": (.26, .285, .30),
     "room_cast": (.17, .18, .19), "room_seam": (.12, .13, .14),
 }
-GRADE = dict(saturation=.45, value=.82, cool=[.78, .85, .95], cool_mix=.35)
+# weathered.gdshader with lively = 1 (prop_models.gd LIVELY_KINDS): accent_saturation and a cool mix of
+# 0.6 times the default, the living-colour press of building.gdshader.
+GRADE = dict(saturation=.75, value=.82, cool=[.78, .85, .95], cool_mix=.21)
 
 
 def grade(rgb):
@@ -179,8 +185,8 @@ def write_books(repo, assets, failures, verification, palette=None):
                      f'{asset["height_m"]:.2f} | {asset["bytes"] if asset["bytes"] is not None else "—"} | '
                      f'{asset["sha256"] or "—"} | {asset["status"]} |')
     lines += ["", "## 손질", ""] + [f'- `{kind}`: {a["judgment"]}.' for kind, a in assets.items()]
-    lines += ["", "## 색과 확인", "", "E 묶음 PALETTE에 room 색을 추가한다. 셰이더의 채도 0.45·밝기 0.82·찬 기운 0.35를 역산한 선형 RGBA다.",
-              "흰 도기·법랑, 크림·연초록·흐린 파랑 칠, 짙은 나무, 바랜 붉은 갈색·초록·겨자 천과 회색 금속을 사용한다.",
+    lines += ["", "## 색과 확인", "", "E 묶음 PALETTE에 room 색을 추가한다. 방 가구가 받는 생활 색 보정(weathered `lively`: 채도 0.75·밝기 0.82·찬 기운 0.21)을 역산한 선형 RGBA다.",
+              "흰 도기·법랑, 짙은 호두·참나무·꿀색 나무, 크림·초록·파랑 칠, 바랜 붉은 갈색·이끼 초록·겨자 천과 회색 금속을 사용한다.",
               "가방·신발·옷 더미, 빨간 십자·초승달, 사슬·쇠창살·빗장, 현대 가전·플라스틱·유리 탁자를 추가하지 않는다.",
               "", "```json", json.dumps(verification, ensure_ascii=False, indent=2), "```", "", "## 실행", "",
               "먼저 원래 PC 문지기를 실행해 `GODOT_GATE=PASS`를 확인한다. 실패하면 Blender를 시작하지 않는다.",
@@ -310,7 +316,7 @@ def embellish(piece, kind, spec):
         p.box((-.80, .80), (-.275, .275), (.11, .68), "room_walnut")
         for x0, x1 in ((-.78, -.02), (.02, .78)):
             for z0, z1 in ((.14, .37), (.40, .63)):
-                p.box((x0, x1), (-.30, -.275), (z0, z1), "room_cream")
+                p.box((x0, x1), (-.30, -.275), (z0, z1), "room_oak")
                 mid = (x0 + x1) / 2
                 p.box((mid - .045, mid + .045), (-.33, -.30), (z0 + .10, z0 + .13), "room_metal")
     elif kind in ("settee", "armchair"):

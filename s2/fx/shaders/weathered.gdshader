@@ -47,6 +47,11 @@ uniform float grade_saturation : hint_range(0.0, 1.0) = 0.45;
 uniform float grade_value : hint_range(0.0, 1.0) = 0.82;
 uniform vec3 grade_cool : source_color = vec3(0.78, 0.85, 0.95);
 uniform float grade_cool_mix : hint_range(0.0, 1.0) = 0.35;
+// Living colour (decision 421-1, as building.gdshader's accent): house furniture is pressed less, so its wood,
+// cloth and paint read as such indoors. 1 for the room furniture prop_models.gd names, 0 for everything else.
+// The bake inverts this grade for those models (tools/blender/props_field_room.py LIVELY_GRADE).
+uniform float lively : hint_range(0.0, 1.0) = 0.0;
+uniform float accent_saturation : hint_range(0.0, 1.0) = 0.75;
 
 varying vec3 w_pos;
 varying vec3 w_nrm;
@@ -100,7 +105,8 @@ void fragment() {
 			base = mix(base * (want / r), paint.rgb * (k * shade), clamp(paint.a, 0.0, 1.0));
 		}
 	}
-	base = fx_model_grade(base, grade_saturation, grade_value, grade_cool, grade_cool_mix);
+	base = mix(fx_model_grade(base, grade_saturation, grade_value, grade_cool, grade_cool_mix),
+			fx_model_grade(base, accent_saturation, grade_value, grade_cool, grade_cool_mix * 0.6), lively);
 	float open = 1.0 - sheltered;
 	float up = clamp(w_nrm.y, 0.0, 1.0);
 	float n = fx_fbm2(w_pos.xz * 0.9 + w_pos.y * 0.37);
