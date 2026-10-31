@@ -672,6 +672,9 @@ func test_loader_does_not_reuse_another_stop_map() -> void:
 	# Off the main thread as the slice does: a map made there is made ready in its stop form too
 	# (a field built on one made at once, without that, never finished).
 	var loader: StopLoader = StopLoader.new()
+	# The resting share per frame, as the loader's own test: a house map built at the moving
+	# share under the 60 fps cap took more than a minute on the runner.
+	loader.resting = true
 	roots.append(loader)
 	add_child(loader)
 	loader.prepare("first_leg_01_sulechow", 91, "city", -1.0, "visit_a")
@@ -685,7 +688,7 @@ func test_loader_does_not_reuse_another_stop_map() -> void:
 	add_child(holder)
 	loader.build_field(holder, {"place": "houses_01", "visit_id": "visit_b", "campaign_kind": "houses",
 		"seed": 91, "stop_form": "edge", "vertices": 96, "cap": 0, "budget": 0})
-	await _wait_until(func() -> bool: return not built.is_empty() or loader.error != "")
+	await _wait_until(func() -> bool: return not built.is_empty() or loader.error != "", 120.0)
 	assert_eq(loader.error, "")
 	assert_eq(built.size(), 1)
 	if built.is_empty():
