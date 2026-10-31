@@ -16,6 +16,12 @@ const TEXT: String = "죽은 자들이 일어나 도시가 무너진 지 여섯 
 const GO_WORD: String = "출발"
 ## Fixed room for the words: the mockup's sheet (paper_sheet.gd), in its px.
 const SHEET_SIZE: Vector2 = Vector2(446, 346)
+## Body and heading sizes in mockup px: the body is read on a phone at night
+## (about 2.4 mm there), the heading a little larger and heavier than it.
+const BODY_PX: float = 15.0
+const LINE_PX: float = 22.5
+const KICK_PX: float = 16.0
+const KICK_ROOM_PX: float = 28.0
 ## The end card's dim and the short rise used when its words come up.
 const DIM: Color = Color(2 / 255.0, 4 / 255.0, 6 / 255.0, 0.78)
 const DIM_S: float = 0.7
@@ -50,12 +56,13 @@ func _ready() -> void:
 	sheet.offset_right = half.x
 	sheet.offset_top = -half.y
 	sheet.offset_bottom = half.y
-	var kick: HBoxContainer = Paper.line_box(24.0)
+	var kick: HBoxContainer = Paper.line_box(KICK_ROOM_PX)
 	kick.name = "Kick"
 	sheet.inner.add_child(kick)
 	kick.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	kick.offset_bottom = UiFonts.px(24.0)
-	var heading: Label = Paper.ink(KICK, UiFonts.NUMBER, 500, 10.0, Paper.INK2, 0.8)
+	kick.offset_bottom = UiFonts.px(KICK_ROOM_PX)
+	var heading: Label = Paper.ink(KICK, UiFonts.WORD, 600, KICK_PX, Paper.INK2)
+	heading.name = "Heading"
 	heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	kick.add_child(heading)
 	# The paragraph has a fixed room: longer copy must fail the fit check,
@@ -66,15 +73,15 @@ func _ready() -> void:
 	text_room.clip_contents = true
 	sheet.inner.add_child(text_room)
 	text_room.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	text_room.offset_top = UiFonts.px(36.0)
+	text_room.offset_top = UiFonts.px(KICK_ROOM_PX + 12.0)
 	text_room.offset_bottom = -UiFonts.px(60.0)
-	body = Paper.ink(UiFonts.keep_all(TEXT), UiFonts.WORD, 400, 12.0, Paper.INK2)
+	body = Paper.ink(UiFonts.keep_all(TEXT), UiFonts.WORD, 400, BODY_PX, Paper.INK2)
 	body.name = "Text"
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	var font: Font = body.get_theme_font("font")
 	var font_size: int = body.get_theme_font_size("font_size")
-	body.add_theme_constant_override("line_spacing", int(round(UiFonts.px(18.0) - font.get_height(font_size))))
+	body.add_theme_constant_override("line_spacing", int(round(UiFonts.px(LINE_PX) - font.get_height(font_size))))
 	text_room.add_child(body)
 	body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var foot: HBoxContainer = Paper.line_box(48.0)

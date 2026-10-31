@@ -112,7 +112,10 @@ func test_the_still_sheet_and_all_its_words_fit_in_1280_by_720() -> void:
 	assert_lte(text_height, text_room.size.y + 1.0, "every line fits without clipping or growing the sheet")
 	var font: Font = intro.body.get_theme_font("font")
 	assert_true(font is FontVariation and String((font as FontVariation).base_font.resource_path).begins_with(UiFonts.DIR), "the paragraph uses the game's face")
-	assert_eq(intro.body.get_theme_font_size("font_size"), UiFonts.size(12.0))
+	assert_eq(intro.body.get_theme_font_size("font_size"), UiFonts.size(WorldIntro.BODY_PX))
+	var heading: Label = intro.sheet.find_child("Heading", true, false) as Label
+	assert_not_null(heading)
+	assert_gte(heading.get_theme_font_size("font_size"), intro.body.get_theme_font_size("font_size"), "the heading is no smaller than the body")
 	assert_eq(intro.body.text.replace(UiFonts.WORD_JOINER, ""), WorldIntro.TEXT)
 	assert_eq(intro.go_key.text, WorldIntro.GO_WORD)
 
