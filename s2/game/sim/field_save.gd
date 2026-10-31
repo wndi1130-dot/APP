@@ -24,7 +24,7 @@ const StopForm = preload("res://game/sim/stop_form.gd")
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
-const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged"]
+const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
@@ -79,7 +79,7 @@ static func capture(game) -> Dictionary:
 	var out: Dictionary = {
 		"version": VERSION, "kind": KIND,
 		"stop_id": stop_id, "place": game.place, "mission": game.mission,
-		"stop_form": game.stop_form,
+		"stop_form": game.stop_form, "stop_ground": String(game.data.get("stop_form", "")),
 		"seed": int(game.rng.seed), "phase": "ended" if game.ended else "field", "end_reason": String(said.get("endReason", "")),
 		"saved_at": game.clock.label(), "clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
 		"player_pid": game.player.pid if game.player != null else "",
@@ -214,6 +214,12 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 	opts["mission"] = String(save.get("mission", ""))
 	if save.has("stop_form"):
 		opts["stop_form"] = save["stop_form"]
+	# The ground goes up as the save stood on it (field_game.gd shape_stop). One from before
+	# remote ground was built kept a remote stop's map as it was.
+	if save.has("stop_ground"):
+		opts["stop_ground"] = String(save["stop_ground"])
+	elif String(opts.get("stop_form", "")) == "remote":
+		opts["stop_ground"] = ""
 	if not (save.get("departure", {}) as Dictionary).is_empty():
 		opts["departure"] = (save["departure"] as Dictionary).duplicate(true)
 	if String(save.get("receipt_id", "")) != "":
@@ -225,6 +231,22 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 ## A save that holds the whole running state (version 2 with "runtime"), not only the old fallbacks.
 static func exact(save: Dictionary) -> bool:
 	return int(save.get("version", 1)) >= 2 and save.has("runtime")
+
+
+## Exact solids must fit every saved floor before any grid is replaced: its cell count,
+## and its width and height where the save keeps them.
+static func _grid_sizes_match(game, save: Dictionary) -> bool:
+	var levels: Dictionary = save["runtime"].get("levels", {})
+	for level in levels:
+		if not game.levels.has(level):
+			return false
+		var grid: FieldGrid = game.levels[level]
+		var row: Dictionary = levels[level]
+		if row.get("solid", PackedByteArray()).size() != grid.width * grid.height:
+			return false
+		if row.has("width") and (int(row["width"]) != grid.width or int(row.get("height", -1)) != grid.height):
+			return false
+	return true
 
 
 ## Version 2 reconnects existing identities before restoring their clocks or callbacks.
@@ -250,9 +272,11 @@ static func apply(game, save: Dictionary) -> void:
 	game.actions.coal_delivered = float(save["coal"]["delivered"])
 	game.actions.coal_spent = float(save["coal"]["spent"])
 	if exact(save):
-		_apply_exact(game, save)
-		game.set_stop_form(form)
-		return
+		if _grid_sizes_match(game, save):
+			_apply_exact(game, save)
+			game.set_stop_form(form)
+			return
+		push_warning("field save grid size changed; restoring legacy state")
 	var boxes: Dictionary = game.data.get("containers", {})
 	for id in save.get("containers", {}):
 		if boxes.has(id):  # a heap pulled together during the stop is not on the map yet
@@ -309,7 +333,8 @@ static func _runtime(game) -> Dictionary:
 	out["zombie_system"] = _properties(game, game.zombies, ["next_id", "loot_rng", "lunge_rng", "embed_rng", "lungers_on"])
 	for level in game.levels:
 		var grid = game.levels[level]
-		var level_state: Dictionary = {"solid": grid.solid.duplicate(), "revision": grid.revision, "doors": {}, "windows": {}, "floor_glass": grid.floor_glass.duplicate()}
+		var level_state: Dictionary = {"solid": grid.solid.duplicate(), "width": grid.width, "height": grid.height,
+			"revision": grid.revision, "doors": {}, "windows": {}, "floor_glass": grid.floor_glass.duplicate()}
 		for kind: String in ["doors", "windows"]:
 			for cell in grid.get(kind):
 				level_state[kind][cell] = _record(game, grid.get(kind)[cell])

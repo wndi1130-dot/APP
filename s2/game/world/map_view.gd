@@ -953,6 +953,8 @@ static func outdoor_block_runs(g: FieldGrid, d: Dictionary) -> Array[Rect2i]:
 	var skip: Array[Rect2i] = [d["train"]]
 	for w in d.get("wagons", []):
 		skip.append(w["rect"])
+	for rect: Rect2i in d.get("deep_forest", []):
+		skip.append(rect)
 	var trees: Dictionary = {}
 	for c in d.get("trees", []):
 		trees[c] = true
