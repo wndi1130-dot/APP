@@ -10,6 +10,7 @@ const GrabRules = preload("res://game/sim/grab_rules.gd")
 const W = preload("res://game/sim/weapons.gd")
 const DT: float = 1.0 / 60.0
 const EPS: float = 0.00001
+const B_FIELDS: Array[String] = ["b", "pre_state", "d0", "d1", "moved", "cut", "victim_is_striker"]
 
 var game: FieldGame
 var p: Variant
@@ -138,6 +139,16 @@ func _no_b(tally: Dictionary, heard: Array) -> void:
 		assert_false(key.begins_with("b_"), key)
 	for info: Dictionary in heard:
 		assert_false(info.has("wall"), "legacy signals have no wall field")
+		for key: String in B_FIELDS:
+			assert_false(info.has(key), "legacy signals have no " + key)
+
+
+func _legacy_b_trace(heard: Array) -> Array:
+	var trace: Array = heard.duplicate(true)
+	for info: Dictionary in trace:
+		for key: String in B_FIELDS:
+			info.erase(key)
+	return trace
 
 
 func _snapshot(field: FieldGame, heard: Array) -> Dictionary:
@@ -146,8 +157,13 @@ func _snapshot(field: FieldGame, heard: Array) -> Dictionary:
 		dead.append([z["id"], z["state"], z["pos"], field.zombies.seen_pos(z)])
 	var people: Array = []
 	for who: Variant in field.people:
-		people.append([who.pid, who.position, who.body.dead, who.body.downed])
+		people.append({"id": who.pid, "pos": who.position, "dead": who.body.dead, "downed": who.body.downed,
+			"exhaustion": who.body.exhaustion, "breath": who.body.breath, "breath_locked": who.body.breath_locked,
+			"hands": who.hands.duplicate(true), "swing_t": who.swing_t})
+	var tally_keys: Array = field.combat.melee_tally.keys()
+	tally_keys.sort()
 	return {"dead": dead, "people": people, "melee_tally": field.combat.melee_tally.duplicate(true),
+		"melee_tally_keys": tally_keys,
 		"contacts": field.combat.contacts.duplicate(true), "rng": field.rng.state,
 		"trace": heard.duplicate(true), "kills": field.combat.kills, "crowd_falls": field.combat.crowd_falls}
 
@@ -161,10 +177,14 @@ func _record(field: FieldGame, z: Dictionary) -> Dictionary:
 	return record
 
 
-func _mixed_fight(explicit_off: bool, seed_value: int) -> Dictionary:
-	var field: FieldGame = _field(_options(0) if explicit_off else {}, seed_value)
+func _mixed_fight(explicit_off: bool, seed_value: int, hit_power: bool) -> Dictionary:
+	var options: Dictionary = {"hit_power": hit_power}
+	if explicit_off:
+		options.merge(_options(0), true)
+	var field: FieldGame = _field(options, seed_value)
 	var who: Variant = field.player
 	var heard: Array = _trace(field)
+	var checkpoints: Array = []
 	var rushing: Dictionary = _dead(field, who)
 	rushing["lunger"] = true
 	rushing["dash_t"] = 0.15
@@ -172,6 +192,7 @@ func _mixed_fight(explicit_off: bool, seed_value: int) -> Dictionary:
 	var start: Vector3 = rushing["pos"]
 	_body(field, who, rushing)
 	assert_almost_eq(start.distance_to(rushing["pos"]), 0.3, EPS)
+	checkpoints.append(_snapshot(field, heard))
 	# The second body hit ends in a wall, so the whole old push is cancelled.
 	who.position = Vector3(61.0, 0.0, 9.5)
 	field.grid.set_solid(Vector2i(62, 9), FieldGrid.Solid.WALL)
@@ -179,39 +200,46 @@ func _mixed_fight(explicit_off: bool, seed_value: int) -> Dictionary:
 	start = blocked["pos"]
 	_body(field, who, blocked)
 	assert_eq(blocked["pos"], start)
+	checkpoints.append(_snapshot(field, heard))
 	who.position = field.lift(Vector2i(60, 7), 0)
 	var frozen: Dictionary = field.zombies.spawn("frozen", who.position + Vector3(0.8, 0, 0))
 	field.combat._strike(who, frozen)
 	assert_eq(frozen["state"], "dead")
+	checkpoints.append(_snapshot(field, heard))
 	_hand(who, "")
 	var fallen: Dictionary = _dead(field, who)
 	field.zombies.knock_down(fallen)
 	for _i: int in range(field.combat.STOMPS_TO_END):
 		field.combat.stomp(who, fallen)
+		checkpoints.append(_snapshot(field, heard))
 	assert_eq(fallen["state"], "dead")
 	var shoved: Dictionary = _dead(field, who, 0.7, "tell")
 	shoved["lunger"] = true
 	who.swing_t = 0.0
 	field.combat.shove(who)
 	assert_gt(float(shoved.get("shoved_t", 0.0)), 0.0)
+	checkpoints.append(_snapshot(field, heard))
 	var ally: Variant = field.allies_alive().filter(func(person: Variant) -> bool: return person != who)[0]
 	ally.position = who.position + Vector3(0, 0, 3)
 	ally.facing = PI * 0.5
 	_hand(ally, "axe")
 	var target: Dictionary = _dead(field, ally)
 	_body(field, ally, target)
+	checkpoints.append(_snapshot(field, heard))
 	ally.position = field.lift(Vector2i(25, 7), 0)
 	for _i: int in range(12):
 		field._step(DT)
 	_no_b(field.combat.melee_tally, heard)
 	var result: Dictionary = _snapshot(field, heard)
+	result["checkpoints"] = checkpoints
 	field.free()
 	return result
 
 
 func test_missing_options_and_explicit_off_match_the_whole_mixed_fight() -> void:
-	for seed_value: int in [17, 51]:
-		assert_eq(_mixed_fight(false, seed_value), _mixed_fight(true, seed_value), "same rules and full signal trace")
+	for hit_power: bool in [false, true]:
+		for seed_value: int in [17, 51]:
+			assert_eq(_mixed_fight(false, seed_value, hit_power), _mixed_fight(true, seed_value, hit_power), "same rules and full signal trace, power %s" % hit_power)
 
 
 func _matrix_case(mask: int, wall: bool) -> int:
@@ -247,6 +275,16 @@ func _matrix_case(mask: int, wall: bool) -> int:
 	assert_eq(heard[0].has("wall"), clip)
 	if clip:
 		assert_eq(heard[0]["wall"], wall)
+	if mask == 0:
+		_no_b(field.combat.melee_tally, heard)
+	else:
+		assert_true(heard[0]["b"])
+		assert_eq(heard[0]["pre_state"], "attack")
+		assert_almost_eq(float(heard[0]["d0"]), who.position.distance_to(start), EPS)
+		assert_almost_eq(float(heard[0]["d1"]), who.position.distance_to(z["pos"]), EPS)
+		assert_almost_eq(float(heard[0]["moved"]), start.distance_to(z["pos"]), EPS)
+		assert_eq(heard[0]["cut"], "counter" if counter else "")
+		assert_true(heard[0]["victim_is_striker"])
 	_count(field.combat.melee_tally, "b_push", 1 if push and expected > 0.0 else 0)
 	_count(field.combat.melee_tally, "b_wall", 1 if clip and wall else 0)
 	_count(field.combat.melee_tally, "b_counter_cut", 1 if counter else 0)
@@ -413,6 +451,7 @@ func test_counter_ends_live_dash_in_both_attack_and_chase() -> void:
 			z["dash_dir"] = Vector3.LEFT
 			z["path_t"] = 2.4
 			z["cooldown"] = 0.35
+			var heard: Array = _trace(field)
 			_body(field, who, z)
 			assert_eq(float(z["dash_t"]), 0.0 if enabled else 0.25)
 			assert_eq(float(z["spent_t"]), 6.0 if enabled else 0.0)
@@ -427,6 +466,12 @@ func test_counter_ends_live_dash_in_both_attack_and_chase() -> void:
 			_count(field.combat.melee_tally, "b_counter_cut", 1 if enabled and state == "attack" else 0)
 			_count(field.combat.melee_tally, "b_push", 0)
 			_count(field.combat.melee_tally, "b_wall", 0)
+			if enabled:
+				assert_eq(heard[0]["cut"], "both" if state == "attack" else "dash")
+				assert_eq(heard[0]["pre_state"], state)
+				assert_false(heard[0].has("wall"))
+			else:
+				_no_b(field.combat.melee_tally, heard)
 			field.free()
 
 
@@ -446,6 +491,14 @@ func _unchanged_case(mask: int, state: String, kind: String = "dead", weapon: St
 	if kind == "clothed":
 		assert_eq(heard[0]["result"], "blocked")
 		assert_eq(float(z["stun"]), 0.3)
+	if mask != 0 and state not in ["downed", "climb"] and kind != "clothed":
+		assert_true(heard[0]["b"])
+		assert_eq(heard[0]["pre_state"], state)
+		assert_eq(heard[0]["cut"], "")
+		heard = _legacy_b_trace(heard)
+	elif mask != 0:
+		for info: Dictionary in heard:
+			assert_false(info.has("b"), "an excluded state's blow carries no B fields")
 	_no_b(field.combat.melee_tally, heard)
 	var before: Dictionary = _record(field, z)
 	field._step(DT)
@@ -491,6 +544,8 @@ func _grab_case(mask: int, breaks: String) -> Dictionary:
 	assert_eq(int(field.combat.melee_tally["body_stun"]), before + (1 if breaks == "none" else 0))
 	assert_eq(z["state"], "grab")
 	assert_eq(who.grabbers.size(), 1)
+	for info: Dictionary in heard:
+		assert_false(info.has("b"), "a grab's blow carries no B fields")
 	_no_b(field.combat.melee_tally, heard)
 	var result: Dictionary = _snapshot(field, heard)
 	result["body"] = _record(field, z)
@@ -682,6 +737,116 @@ func test_line_cells_clear_rejects_either_side_of_an_exact_corner() -> void:
 		assert_false(Combat.line_cells_clear(game.grid, finish, start))
 		assert_false(game.combat._push_spot_ok(start, finish))
 		game.grid.set_solid(side, FieldGrid.Solid.NONE)
+
+
+func test_line_cells_clear_checks_exact_corner_endpoints_in_both_directions() -> void:
+	var finish: Vector3 = Vector3(61, 0, 8)
+	var cases: Array = [
+		[Vector3(60.75, 0, 8.25), [Vector2i(60, 7), Vector2i(61, 8)]],
+		[Vector3(60.75, 0, 7.75), [Vector2i(61, 7), Vector2i(60, 8)]],
+		[Vector3(61.25, 0, 7.75), [Vector2i(60, 7), Vector2i(61, 8)]],
+		[Vector3(61.25, 0, 8.25), [Vector2i(60, 8), Vector2i(61, 7)]]]
+	for row: Array in cases:
+		var start: Vector3 = row[0]
+		assert_true(Combat.line_cells_clear(game.grid, start, finish))
+		assert_true(Combat.line_cells_clear(game.grid, finish, start))
+		for side: Vector2i in row[1]:
+			game.grid.set_solid(side, FieldGrid.Solid.WALL)
+			assert_false(Combat.line_cells_clear(game.grid, start, finish))
+			assert_false(Combat.line_cells_clear(game.grid, finish, start))
+			assert_false(game.combat._push_spot_ok(start, finish))
+			assert_false(game.combat._push_spot_ok(finish, start))
+			game.grid.set_solid(side, FieldGrid.Solid.NONE)
+		assert_true(Combat.line_cells_clear(game.grid, start, finish))
+		assert_true(Combat.line_cells_clear(game.grid, finish, start))
+
+
+func _shoved_dead(field: FieldGame) -> Dictionary:
+	var who: Variant = field.player
+	who.position = Vector3(59.8875, 0, 8.05)
+	var z: Dictionary = _dead(field, who, 0.8, "chase")
+	z["pos"] = Vector3(60.6875, 0, 8.05)
+	z["shoved_from"] = Vector3(60.6875, 0, 6.75)
+	z["shoved_t"] = field.zombies.SHOVED_TIME * sqrt(0.1)
+	assert_almost_eq(field.zombies.shoved_k(z), 0.9, EPS)
+	return z
+
+
+func test_push_during_shove_checks_both_drawn_segments_for_every_candidate() -> void:
+	for wall_present: bool in [false, true]:
+		for wall_on: bool in [false, true]:
+			var field: FieldGame = _field({})
+			var z: Dictionary = _shoved_dead(field)
+			if wall_present:
+				field.grid.set_solid(Vector2i(61, 7), FieldGrid.Solid.WALL)
+			var start: Vector3 = z["pos"]
+			var now: Vector3 = field.zombies.draw_pos(z)
+			var shove_from: Vector3 = z["shoved_from"]
+			var shove_t: float = float(z["shoved_t"])
+			var dice_before: int = field.rng.state
+			assert_true(field.combat._push_spot_ok(start, start + Vector3(0.375, 0, 0)))
+			var pushed: Dictionary = field.combat._push_b(z, field.player.position, 0.375, wall_on)
+			assert_eq(pushed["wall"], wall_present)
+			if wall_present:
+				assert_lt(float(pushed["moved"]), 0.375)
+				if wall_on:
+					assert_gt(float(pushed["moved"]), 0.0)
+				else:
+					assert_eq(z["pos"], start)
+			else:
+				assert_almost_eq(float(pushed["moved"]), 0.375, EPS)
+			var next: Vector3 = field.zombies.draw_pos(z)
+			assert_false(field.grid.blocks_body(FieldGrid.cell_of(next)))
+			assert_true(field.combat._push_spot_ok(now, next))
+			assert_true(field.combat._push_spot_ok(next, z["pos"]))
+			assert_eq(z["shoved_from"], shove_from)
+			assert_eq(z["shoved_t"], shove_t)
+			assert_eq(field.rng.state, dice_before)
+			field.free()
+
+
+func test_body_hit_during_shove_records_seen_distance_and_the_pre_hit_victim() -> void:
+	for wall_present: bool in [false, true]:
+		for victim_is_striker: bool in [false, true]:
+			var field: FieldGame = _field({"hit_push": true, "hit_wall": true})
+			var who: Variant = field.player
+			var z: Dictionary = _shoved_dead(field)
+			if not victim_is_striker:
+				z["victim"] = field.allies_alive().filter(func(person: Variant) -> bool: return person != who)[0]
+			if wall_present:
+				field.grid.set_solid(Vector2i(61, 7), FieldGrid.Solid.WALL)
+			var start: Vector3 = z["pos"]
+			var now: Vector3 = field.zombies.draw_pos(z)
+			var d0: float = who.position.distance_to(field.zombies.seen_pos(z))
+			var shove_from: Vector3 = z["shoved_from"]
+			var shove_t: float = float(z["shoved_t"])
+			assert_gt(absf(d0 - who.position.distance_to(start)), EPS)
+			assert_almost_eq(Combat.push_distance(1.25, _q(field, who, z)), 0.375, EPS)
+			var heard: Array = _trace(field)
+			_body(field, who, z)
+			assert_eq(heard.size(), 1)
+			var info: Dictionary = heard[0]
+			assert_true(info["b"])
+			assert_eq(info["pre_state"], "chase")
+			assert_almost_eq(float(info["d0"]), d0, EPS)
+			assert_almost_eq(float(info["d1"]), who.position.distance_to(z["pos"]), EPS)
+			assert_almost_eq(float(info["moved"]), start.distance_to(z["pos"]), EPS)
+			assert_eq(info["cut"], "")
+			assert_eq(info["victim_is_striker"], victim_is_striker)
+			assert_eq(info["wall"], wall_present)
+			assert_true(info["by_player"])
+			if wall_present:
+				assert_gt(float(info["moved"]), 0.0)
+				assert_lt(float(info["moved"]), 0.375)
+			else:
+				assert_almost_eq(float(info["moved"]), 0.375, EPS)
+			var next: Vector3 = field.zombies.draw_pos(z)
+			assert_false(field.grid.blocks_body(FieldGrid.cell_of(next)))
+			assert_true(field.combat._push_spot_ok(now, next))
+			assert_true(field.combat._push_spot_ok(next, z["pos"]))
+			assert_eq(z["shoved_from"], shove_from)
+			assert_eq(z["shoved_t"], shove_t)
+			field.free()
 
 
 func test_zero_horizontal_direction_does_not_move_or_claim_an_event() -> void:

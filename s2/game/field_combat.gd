@@ -754,11 +754,17 @@ func swing(p, z: Dictionary) -> void:
 	var state_b: String = ""
 	var counter_b: bool = false
 	var q_b: float = 1.0
+	var start_b: Vector3 = Vector3.ZERO
+	var extra_b: Dictionary = {}
 	if hit_push or hit_wall or hit_counter:
 		# Read once, before this blow spends fatigue or breaks the weapon.
 		state_b = String(z["state"])
+		start_b = z["pos"]
+		var d0_b: float = p.position.distance_to(game.zombies.seen_pos(z))
+		extra_b = {"b": true, "pre_state": state_b, "d0": d0_b, "cut": "",
+			"victim_is_striker": z.get("victim") == p}
 		var dash_b: float = float(z.get("dash_t", 0.0))
-		counter_b = hit_counter and state_b not in ["downed", "grab", "climb"] and HitFeel.countering(state_b, dash_b, p.position.distance_to(game.zombies.seen_pos(z)))
+		counter_b = hit_counter and state_b not in ["downed", "grab", "climb"] and HitFeel.countering(state_b, dash_b, d0_b)
 		q_b = float(HitFeel.blow_power(float(d.get("weight", 0.0)), int(p.skills.get("strength", 5)), HitFeel.body_melee(p.body, p.mult_ctx()), p.body.breath_locked, behind(z, p.position), counter_b and hit_push, _edge_of(p), "swing")["q"])
 	var m: Dictionary = p.mults()
 	p.swing_t = float(d["swing"]) / float(m["swing"])
@@ -849,14 +855,20 @@ func swing(p, z: Dictionary) -> void:
 				_push(z, p.position, 0.3)
 			if counter_b:
 				if float(z.get("dash_t", 0.0)) > 0.0:
+					extra_b["cut"] = "dash"
 					game.zombies.end_dash(z)
 					melee_tally["b_dash_cut"] = int(melee_tally.get("b_dash_cut", 0)) + 1
 				if z["state"] == "attack":
+					extra_b["cut"] = "both" if extra_b["cut"] == "dash" else "counter"
 					z["state"] = "chase"
 					melee_tally["b_counter_cut"] = int(melee_tally.get("b_counter_cut", 0)) + 1
 			if hit_wall:
-				_struck(p, seen, "swing", wid, target, "body", edge, {}, {"wall": bool(pushed_b["wall"])})
-				return
+				extra_b["wall"] = bool(pushed_b["wall"])
+		if (hit_push or hit_wall or hit_counter) and state_b not in ["downed", "grab", "climb"]:
+			extra_b["d1"] = p.position.distance_to(z["pos"])
+			extra_b["moved"] = start_b.distance_to(z["pos"])
+			_struck(p, seen, "swing", wid, target, "body", edge, {}, extra_b)
+			return
 	_struck(p, seen, "swing", wid, target, "body", edge)
 
 
@@ -1083,6 +1095,16 @@ static func line_cells_clear(grid: FieldGrid, from: Vector3, to: Vector3) -> boo
 	var step_z: int = 1 if dz > 0.0 else -1
 	if grid.blocks_body(cell):
 		return false
+	if dx != 0.0 and dz != 0.0:
+		# Endpoints touch the same side cells as an interior corner.
+		if from.x == float(cell.x) and from.z == float(cell.y):
+			var c_out: Vector2i = Vector2i(cell.x if dx > 0.0 else cell.x - 1, cell.y if dz > 0.0 else cell.y - 1)
+			if grid.blocks_body(c_out - Vector2i(step_x, 0)) or grid.blocks_body(c_out - Vector2i(0, step_z)):
+				return false
+		if to.x == float(last.x) and to.z == float(last.y):
+			var c_in: Vector2i = Vector2i(last.x - 1 if dx > 0.0 else last.x, last.y - 1 if dz > 0.0 else last.y)
+			if grid.blocks_body(c_in + Vector2i(step_x, 0)) or grid.blocks_body(c_in + Vector2i(0, step_z)):
+				return false
 	while cell != last:
 		if cell.x == last.x:
 			cell.y += step_z
@@ -1110,6 +1132,17 @@ func _push_spot_ok(from: Vector3, to: Vector3) -> bool:
 	return game.level_of(to) == game.level_of(from) and not game.grid_at(to).blocks_body(FieldGrid.cell_of(to)) and line_cells_clear(game.grid_at(from), from, to)
 
 
+func _push_candidate_ok(z: Dictionary, from: Vector3, to: Vector3) -> bool:
+	if not _push_spot_ok(from, to):
+		return false
+	var shoved_k: float = game.zombies.shoved_k(z)
+	if shoved_k >= 1.0:
+		return true
+	var now: Vector3 = game.zombies.draw_pos(z)
+	var next: Vector3 = Vector3(z["shoved_from"]).lerp(to, shoved_k)
+	return _push_spot_ok(now, next) and _push_spot_ok(next, to)
+
+
 func _push_b(z: Dictionary, from: Vector3, dist: float, hit_wall: bool) -> Dictionary:
 	var start: Vector3 = z["pos"]
 	var away: Vector3 = start - from
@@ -1118,14 +1151,14 @@ func _push_b(z: Dictionary, from: Vector3, dist: float, hit_wall: bool) -> Dicti
 		return {"moved": 0.0, "wall": false}
 	var direction: Vector3 = away.normalized()
 	var dest: Vector3 = start + direction * dist
-	var wall: bool = not _push_spot_ok(start, dest)
+	var wall: bool = not _push_candidate_ok(z, start, dest)
 	if wall:
 		dest = start
 		if hit_wall:
 			var shorter: float = maxf(PUSH_STEP, dist - PUSH_STEP)
 			while true:
 				var candidate: Vector3 = start + direction * shorter
-				if _push_spot_ok(start, candidate):
+				if _push_candidate_ok(z, start, candidate):
 					dest = candidate
 					break
 				if shorter <= PUSH_STEP:
