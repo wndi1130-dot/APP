@@ -2,7 +2,9 @@
 
 The dead's look (dead_vat.gdshaderinc) turns the skin grey-green and puts the state's tint on it; the
 clothes keep their own colour. Which texels are skin is not guessed in the shader (a warm-colour test
-also takes a red tracksuit or a brown coat): it is this mask, one channel, beside each body's albedo.
+also takes a red tracksuit or a brown coat): it is this mask beside each body's albedo, in red. Green
+marks the head's cloth that is a light red (a hood): the model grade presses such a red towards pink,
+which on the dead reads as a bare living head, so the shader darkens it (HEAD_CLOTH_DIM).
 
 How: from the body's rigged source (the glb its build folder was baked from, byte-checked when the
 garment shells were baked), each triangle whose three corners are mostly the head or neck, the hands, or
@@ -72,10 +74,16 @@ def accessor(js, bin_, i):
 
 def regions_of(glb):
     js, bin_ = read_glb(glb)
+    # One mesh, one primitive, one skin, its UVs inside the picture (no repeat): what this reads. A body
+    # made otherwise stops the tool rather than giving a mask drawn from the wrong part.
+    if len(js["meshes"]) != 1 or len(js["meshes"][0]["primitives"]) != 1 or len(js.get("skins", [])) != 1:
+        raise SystemExit("dead_skin_mask: %s is not one skinned mesh of one primitive" % glb)
     names = [js["nodes"][j]["name"] for j in js["skins"][0]["joints"]]
     prim = js["meshes"][0]["primitives"][0]
     at = prim["attributes"]
     uv = accessor(js, bin_, at["TEXCOORD_0"])
+    if uv.min() < -0.001 or uv.max() > 1.001:
+        raise SystemExit("dead_skin_mask: %s has UVs outside the picture" % glb)
     joints = accessor(js, bin_, at["JOINTS_0"]).astype(int)
     weights = accessor(js, bin_, at["WEIGHTS_0"])
     idx = accessor(js, bin_, prim["indices"]).astype(int).ravel()
@@ -106,6 +114,17 @@ def skin_colour(rgb, strict):
     return ((h <= 0.12) | (h >= 0.94)) & (s >= 0.08) & (s <= 0.70) & (v >= 0.25)
 
 
+def light_red(rgb):
+    hsv = np.asarray(Image.fromarray(rgb).convert("HSV"), dtype=np.float32) / 255.0
+    h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    return ((h <= 0.056) | (h >= 0.917)) & (s >= 0.5) & (v >= 0.6)
+
+
+def soft(mask):
+    small = Image.fromarray((mask * 255).astype(np.uint8)).resize((SIZE, SIZE), Image.BILINEAR)
+    return np.clip(ndimage.uniform_filter(np.asarray(small, dtype=np.float32), size=3), 0, 255).astype(np.uint8)
+
+
 def main():
     repo = sys.argv[1]
     rigs = sys.argv[sys.argv.index("--rigs") + 1]
@@ -118,11 +137,10 @@ def main():
         same = float(np.abs(np.asarray(src, dtype=np.float32) - rgb.astype(np.float32)).mean()) if src is not None else -1.0
         skin = (masks["head"] | masks["hand"]) & skin_colour(rgb, False) | masks["forearm"] & skin_colour(rgb, True)
         skin = ndimage.binary_opening(skin, iterations=1)
-        small = Image.fromarray((skin * 255).astype(np.uint8)).resize((SIZE, SIZE), Image.BILINEAR)
-        soft = ndimage.uniform_filter(np.asarray(small, dtype=np.float32), size=3)
-        out = Image.fromarray(np.clip(soft, 0, 255).astype(np.uint8), "L")
-        out.save(os.path.join(d, "skin_mask.png"))
-        report[body] = {"skin": round(float(skin.mean()), 4), "head": round(float(masks["head"].mean()), 4),
+        hood = ndimage.binary_opening(masks["head"] & ~skin_colour(rgb, False) & light_red(rgb), iterations=1)
+        planes = [soft(skin), soft(hood), np.zeros((SIZE, SIZE), np.uint8)]
+        Image.fromarray(np.stack(planes, axis=-1), "RGB").save(os.path.join(d, "skin_mask.png"))
+        report[body] = {"skin": round(float(skin.mean()), 4), "hood": round(float(hood.mean()), 4), "head": round(float(masks["head"].mean()), 4),
                         "hand": round(float(masks["hand"].mean()), 4), "picture_vs_rig": round(same, 2)}
         over = rgb.astype(np.float32)
         for name, colour in (("head", (255, 210, 0)), ("hand", (0, 160, 255)), ("forearm", (200, 0, 255))):

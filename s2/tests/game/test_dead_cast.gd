@@ -12,6 +12,10 @@ const Zombies = preload("res://game/actors/zombies.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const LootTables = preload("res://game/sim/loot_tables.gd")
+## The dead's motions that lie, crawl or kneel on the ground, written out here and not read from
+## vat_baker.gd: a motion dropped from its list would light a lying body as if it stood.
+const ON_THE_GROUND: Array[String] = ["fall", "fall_front", "fall_thrown", "fall_slump", "crawl", "rise",
+	"rise_front", "eat_start", "eat", "eat_rise"]
 
 
 func _build_bodies_in_use() -> bool:
@@ -242,15 +246,23 @@ func test_only_the_skin_takes_the_dead_look_and_the_ground_motions_are_marked() 
 		if image == null:
 			continue
 		var sum := 0.0
+		var hood := 0.0
 		for y in image.get_height():
 			for x in image.get_width():
 				sum += image.get_pixel(x, y).r
+				hood += image.get_pixel(x, y).g
 		var share := sum / float(image.get_width() * image.get_height())
 		assert_between(share, 0.01, 0.25, body + ": a little of the picture, not the clothes")
+		# Green: the light red hood the grade would press pink (only the hooded body has one).
+		var hood_share := hood / float(image.get_width() * image.get_height())
+		if body == "n3-body_hoodie":
+			assert_between(hood_share, 0.01, 0.15, body + ": its hood marked to be darkened")
+		else:
+			assert_lt(hood_share, 0.001, body + ": no light red head cloth")
 		for i in (got["clips"] as Array).size():
 			var name := String(got["clips"][i]["name"])
 			var code: float = tables["clip_loop"][i]
-			assert_eq(code >= 2.0, VatBaker.GROUND_CLIPS.has(name), body + " " + name + " marked as on the ground or not")
+			assert_eq(code >= 2.0, ON_THE_GROUND.has(name), body + " " + name + " marked as on the ground or not")
 			assert_eq(fmod(code, 2.0), 1.0 if got["clips"][i]["loop"] else 0.0, body + " " + name + " still loops as baked")
 	var frozen := Zombies.TINTS["frozen"] as Color
 	var over := DeadCast.garment_of({"coat": Wear.make("fire_suit")}, frozen)["colour"] as Color

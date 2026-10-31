@@ -164,7 +164,10 @@ void vertex() {
 	vec3 offset = mix(a, b, fract(frame));
 	if (mixes && share > 0.5) {
 		float row_c = (kept * rows_per_frame + UV2.y + 0.5) / height;
-		offset = mix(offset, offset_at(UV2.x, row_c, quantized ? clip_of(kept) : clip), share / 31.0);
+		int was = clip_of(kept);
+		offset = mix(offset, offset_at(UV2.x, row_c, quantized ? was : clip), share / 31.0);
+		// Still mostly in a motion on the ground it left (eating, then struck): lit by its moved surface.
+		lying = max(lying, step(1.5, clip_loop[was]) * step(15.5, share));
 	}
 #ifdef WORN
 	rest = VERTEX;
@@ -252,8 +255,14 @@ float tear_noise(vec2 p) {
 // (tools/dead_skin_split.py checks it against the living: under 0.6 of their saturation, 60..160 degrees).
 // SKIN_GONE: how far by the kind's b (dead_cast.gd TEAR): the newly risen keep most of their own skin,
 // the long dead none of it.
-const vec3 SKIN_OFF = vec3(0.816, 0.8, 0.816);
+const vec3 SKIN_OFF = vec3(0.8, 0.755, 0.664);
 const vec2 SKIN_GONE = vec2(0.1, 0.45);
+// SKIN_EDGE: the mask read through a smooth step, so skin is wholly skin inside and the soft rim
+// (128 x 128, filtered) stays a rim, not a half-gone face.
+const vec2 SKIN_EDGE = vec2(0.15, 0.5);
+// A light red cloth on the head (a hood; the skin mask's green, dead_skin_mask.py): the grade presses
+// it pink, a bare living head on the dead, so it is darkened to the dark red of the other heads' hats.
+const float HEAD_CLOTH_DIM = 0.4;
 vec3 worn_down(vec3 picture, vec2 uv, vec4 worn_as, vec2 worn_at, float skin_in) {
 	float n = tear_noise(uv * 40.0) * 0.65 + tear_noise(uv * 110.0) * 0.35;
 	float light = dot(picture, vec3(0.2126, 0.7152, 0.0722));
@@ -303,7 +312,9 @@ void fragment() {
 		}
 #endif
 #ifdef WEATHERED
-		float skin_here = has_skin ? texture(skin_tex, UV).r : -1.0;
+		vec2 mask_here = has_skin ? texture(skin_tex, UV).rg : vec2(-1.0, 0.0);
+		float skin_here = has_skin ? smoothstep(SKIN_EDGE.x, SKIN_EDGE.y, mask_here.r) : -1.0;
+		picture *= mix(1.0, HEAD_CLOTH_DIM, mask_here.g);
 		picture = worn_down(picture, UV, tear, tear_at, skin_here);
 #endif
 		vec3 c = fx_model_grade(picture, grade_saturation, grade_value, grade_cool, grade_cool_mix);
