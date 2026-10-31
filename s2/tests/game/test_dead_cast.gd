@@ -281,7 +281,8 @@ func test_the_vest_has_a_lighter_trim() -> void:
 				edge += 1
 			else:
 				assert_almost_eq(col.r, 1.0 / trim, 0.01, body + ": inside")
-		assert_between(float(edge) / float(colours.size()), 0.05, 0.8, body + ": the edges, not all of it")
+		# The fewest-vertex vest (n3-body_gilet, 87) has 84% of them on an edge: still a darker middle.
+		assert_between(float(edge) / float(colours.size()), 0.05, 0.9, body + ": the edges, not all of it")
 
 
 # The field draws each of the dead in what it has on now (zombies.gd worn_of):
