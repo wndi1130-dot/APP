@@ -115,14 +115,14 @@ const OWN_POSES: Array = [
 # The living people's motions (bake_body_cli --set=person, a folder of its own
 # so the dead's numbers above stay): name, source motion ("" for one written
 # here), frames, loops, layer ("" for none), seconds (a source motion's own
-# length is what is baked). Those written here come first, so a bake with no
-# motion set keeps their numbers; the field finds each by its name. 128 at
+# length is what is baked). Existing slots stay fixed even when their source
+# changes; new clips append after the last slot. The field finds names. 128 at
 # most: the shader's clip tables have VatBaker.TABLE_SIZE places
 # (dead_vat.gdshader); numbers 16 and up are written with VatBaker.pack_motion.
 const PERSON_CLIPS: Array = [
 	["p_walk", "", 32, true, "p_walk", 0.78],
 	["p_run", "", 24, true, "p_run", 0.58],
-	["p_stand", "", 32, true, "p_stand", 4.0],
+	["p_stand", "Idle_Loop", 32, true, "p_stand", 2.5],
 	["p_held", "", 24, true, "p_held", 1.0],
 	["p_bitten", "", 24, false, "p_bitten", 0.6],
 	["p_swing_one", "", 24, false, "p_swing_one", 0.6],
@@ -204,9 +204,24 @@ const PERSON_CLIPS: Array = [
 	# blow and a fall: an axe chopped in from the side (UAL's sword blows turn
 	# the hips round 69 to 160 degrees, the chop 34).
 	["p_chop_side", "TreeChopping_Loop", 24, false, "", 0.967],
+	# Append only: bodies and their garments share the existing motion numbers.
+	["p_swing_over", "", 24, false, "p_swing_over", 0.6],
 ]
-# Played once and quick: every frame kept in the small bake (bake_body_cli --keep).
-const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_swing_back", "p_chop_side", "p_bitten_front", "p_bitten_back", "p_shiver"]
+# Quick blows and all walk/run legs keep every frame in the small bake.
+const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_swing_back", "p_chop_side", "p_bitten_front", "p_bitten_back", "p_shiver", "p_walk", "p_walk_long", "p_walk_axe", "p_walk_pistol", "p_carry_big", "p_walk_hurt", "p_run", "p_run_long", "p_run_pistol", "p_swing_over"]
+# Decision 425, game/sim/noise.gd STEP_ROUND. Fit the bake to these distances;
+# neither body dimensions nor the rules' distances change.
+const PERSON_STRIDE_ROUNDS: Dictionary = {
+	"p_walk": 1.64, "p_walk_long": 1.64, "p_walk_axe": 1.64,
+	"p_walk_pistol": 1.64, "p_carry_big": 1.64, "p_walk_hurt": 1.64,
+	"p_run": 2.27, "p_run_long": 2.27, "p_run_pistol": 2.27,
+	"p_crouch_walk": 1.19, "p_crouch_walk_long": 1.19, "p_crouch_walk_pistol": 1.19,
+}
+const PERSON_STRIDE_BONES: Array = ["thigh.L", "shin.L", "foot.L", "thigh.R", "shin.R", "foot.R"]
+const STRIDE_TOLERANCE: float = 0.005
+const STRIDE_SCALE_MIN: float = 0.9
+const STRIDE_SCALE_MAX: float = 1.1
+const STRIDE_PASSES: int = 3
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -1198,24 +1213,15 @@ const LAYERS: Dictionary = {
 		],
 		"sink": RUN_SINK,
 	},
-	# Standing easy: breathing, the weight drifting from one foot to the other.
+	# UAL1 Idle_Loop supplies the planted feet and breathing. Only the arms are
+	# layered over it; the old hip drift and leg aims must not undo its feet.
 	"p_stand": {
 		"steps": [
-			["turn", "hips", "z", [0.0, 0.04, 0.0]],
-			["aim", "thigh.L", "shin.L", [[0.08, 0.02, 0.0], -1.0, 0.0]],
-			["aim", "shin.L", "foot.L", [[0.06, 0.02, 0.0], -1.0, -0.02]],
-			["aim", "thigh.R", "shin.R", [[-0.08, 0.02, 0.0], -1.0, 0.0]],
-			["aim", "shin.R", "foot.R", [[-0.06, 0.02, 0.0], -1.0, -0.02]],
-			["turn", "spine", "z", [0.0, -0.03, 0.0]],
-			["turn", "spine", "x", [0.03, 0.012, 0.0, 4.0]],
-			["turn", "chest", "x", [0.02, -0.015, 0.0, 4.0]],
-			["turn", "head", "y", [0.0, 0.1, 0.8]],
 			["aim", "upper_arm.L", "forearm.L", [0.14, -1.0, [0.02, 0.01, 0.0, 4.0]]],
 			["aim", "forearm.L", "hand.L", [0.08, -1.0, 0.1]],
 			["aim", "upper_arm.R", "forearm.R", [-0.14, -1.0, [0.02, 0.01, 0.0, 4.0]]],
 			["aim", "forearm.R", "hand.R", [-0.08, -1.0, 0.1]],
 		],
-		"sink": [0.0, 0.004, 0.0, 4.0],
 	},
 	# Held by a dead one: both arms out at its shoulders, leaning back from it,
 	# twisting side to side to get loose, feet braced apart.
@@ -1261,38 +1267,40 @@ const LAYERS: Dictionary = {
 	# with the body twisted right, across in front to the left, back again.
 	"p_swing_one": {
 		"steps": [
-			["aim", "thigh.L", "shin.L", [0.08, -1.0, ["keys", [[0, 0.0], [0.45, -0.15], [1, 0.0]]]]],
-			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.05]],
-			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0, 0.0], [0.3, 0.0], [0.45, 0.3], [1, 0.0]]]]],
-			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0, -0.02], [0.45, 0.05], [1, -0.02]]]]],
-			["turn", "spine", "x", ["keys", [[0, 0.05], [0.3, 0.0], [0.45, 0.25], [1, 0.05]]]],
-			["turn", "chest", "y", ["keys", [[0, 0.0], [0.3, -0.6], [0.45, 0.5], [1, 0.0]]]],
-			["turn", "head", "y", ["keys", [[0, 0.0], [0.3, 0.3], [0.45, -0.25], [1, 0.0]]]],
-			["aim", "upper_arm.L", "forearm.L", [0.25, -0.8, 0.4]],
-			["aim", "forearm.L", "hand.L", [-0.1, -0.2, 1.0]],
-			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.16], [0.3, -0.7], [0.45, 0.35], [1, -0.16]]], ["keys", [[0, -1.0], [0.3, 0.35], [0.45, -0.1], [1, -1.0]]], ["keys", [[0, 0.04], [0.3, -0.5], [0.45, 0.9], [1, 0.04]]]]],
-			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.3, -0.3], [0.45, 0.7], [1, -0.08]]], ["keys", [[0, -1.0], [0.3, 0.9], [0.45, 0.0], [1, -1.0]]], ["keys", [[0, 0.1], [0.3, -0.3], [0.45, 0.7], [1, 0.1]]]]],
+			["aim", "thigh.L", "shin.L", [0.12, -1, ["keys", [[0, 0.22], [0.28, 0.16], [0.45, 0.5], [0.56, 0.42], [0.8, 0.28], [1, 0.22]]]]],
+			["aim", "shin.L", "foot.L", [0.1, -1, ["keys", [[0, -0.12], [0.28, -0.1], [0.45, -0.3], [0.56, -0.28], [0.8, -0.16], [1, -0.12]]]]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, ["keys", [[0, -0.12], [0.28, -0.22], [0.45, 0.05], [0.56, 0.02], [0.8, -0.1], [1, -0.12]]]]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, ["keys", [[0, -0.2], [0.28, -0.15], [0.45, -0.35], [0.56, -0.3], [0.8, -0.22], [1, -0.2]]]]],
+			["turn", "hips", "y", ["keys", [[0, 0.2], [0.14, -0.18], [0.36, 0.15], [0.56, 0.18], [0.8, 0.2], [1, 0.2]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.14], [0.28, -0.1], [0.45, 0.34], [0.56, 0.25], [0.8, 0.16], [1, 0.14]]]],
+			["turn", "neck", "x", ["keys", [[0, -0.1], [0.28, -0.1], [0.45, 0.02], [0.56, -0.02], [0.8, -0.1], [1, -0.1]]]],
+			["turn", "chest", "y", ["keys", [[0, -0.2], [0.24, -0.6], [0.42, 0.45], [0.56, 0.55], [0.8, -0.2], [1, -0.2]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.45, 0.9]],
+			["aim", "forearm.L", "hand.L", [-0.25, 0.45, 0.9]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.55], [0.28, -0.8], [0.45, 0.3], [0.56, 0.8], [0.8, -0.55], [1, -0.55]]], ["keys", [[0, -0.35], [0.28, 0.1], [0.45, -0.45], [0.56, -0.3], [0.8, -0.35], [1, -0.35]]], ["keys", [[0, -0.25], [0.28, -0.5], [0.45, 1], [0.56, 0.5], [0.8, -0.25], [1, -0.25]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.05], [0.28, -0.25], [0.45, 0.22], [0.56, 0.65], [0.8, -0.05], [1, -0.05]]], ["keys", [[0, 1], [0.28, 0.8], [0.45, -0.08], [0.56, -0.1], [0.8, 1], [1, 1]]], ["keys", [[0, 0.3], [0.28, -0.45], [0.45, 1], [0.56, 0.6], [0.8, 0.3], [1, 0.3]]]]],
 		],
-		"sink": ["keys", [[0, 0.0], [0.45, 0.06], [1, 0.0]]],
+		"sink": ["keys", [[0, 0.07], [0.28, 0.05500000000000001], [0.45, 0.12], [0.56, 0.09999999999999999], [0.8, 0.07], [1, 0.07]]],
 	},
 	# The one-handed swing back the other way (backhand): the right hand drawn
 	# across to the left shoulder with the body twisted left, out across in
 	# front to the right, back again.
 	"p_swing_back": {
 		"steps": [
-			["aim", "thigh.L", "shin.L", [0.08, -1.0, ["keys", [[0, 0.0], [0.45, -0.15], [1, 0.0]]]]],
-			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.05]],
-			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0, 0.0], [0.3, 0.0], [0.45, 0.3], [1, 0.0]]]]],
-			["aim", "shin.R", "foot.R", [-0.06, -1.0, ["keys", [[0, -0.02], [0.45, 0.05], [1, -0.02]]]]],
-			["turn", "spine", "x", ["keys", [[0, 0.05], [0.3, 0.0], [0.45, 0.25], [1, 0.05]]]],
-			["turn", "chest", "y", ["keys", [[0, 0.0], [0.3, 0.55], [0.45, -0.5], [1, 0.0]]]],
-			["turn", "head", "y", ["keys", [[0, 0.0], [0.3, -0.25], [0.45, 0.2], [1, 0.0]]]],
-			["aim", "upper_arm.L", "forearm.L", [0.35, -0.85, 0.25]],
-			["aim", "forearm.L", "hand.L", [-0.1, -0.2, 1.0]],
-			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.16], [0.3, 0.8], [0.45, -0.6], [1, -0.16]]], ["keys", [[0, -1.0], [0.3, 0.1], [0.45, -0.05], [1, -1.0]]], ["keys", [[0, 0.04], [0.3, 0.3], [0.45, 0.8], [1, 0.04]]]]],
-			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.3, 0.45], [0.45, -0.75], [1, -0.08]]], ["keys", [[0, -1.0], [0.3, 0.6], [0.45, 0.0], [1, -1.0]]], ["keys", [[0, 0.1], [0.3, -0.45], [0.45, 0.65], [1, 0.1]]]]],
+			["aim", "thigh.L", "shin.L", [0.12, -1, ["keys", [[0, 0.22], [0.24, 0.16], [0.33, 0.5], [0.56, 0.42], [0.8, 0.28], [1, 0.22]]]]],
+			["aim", "shin.L", "foot.L", [0.1, -1, ["keys", [[0, -0.12], [0.24, -0.1], [0.33, -0.3], [0.56, -0.28], [0.8, -0.16], [1, -0.12]]]]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, ["keys", [[0, -0.12], [0.24, -0.22], [0.33, 0.05], [0.56, 0.02], [0.8, -0.1], [1, -0.12]]]]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, ["keys", [[0, -0.2], [0.24, -0.15], [0.33, -0.35], [0.56, -0.3], [0.8, -0.22], [1, -0.2]]]]],
+			["turn", "hips", "y", ["keys", [[0, 0.2], [0.1, 0.18], [0.27, -0.15], [0.56, -0.18], [0.8, 0.2], [1, 0.2]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.14], [0.24, -0.1], [0.33, 0.34], [0.56, 0.25], [0.8, 0.16], [1, 0.14]]]],
+			["turn", "neck", "x", ["keys", [[0, -0.1], [0.24, -0.1], [0.33, 0.02], [0.56, -0.02], [0.8, -0.1], [1, -0.1]]]],
+			["turn", "chest", "y", ["keys", [[0, -0.2], [0.15, 0.55], [0.31, -0.45], [0.56, -0.55], [0.8, -0.2], [1, -0.2]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.45, 0.9]],
+			["aim", "forearm.L", "hand.L", [-0.25, 0.45, 0.9]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.55], [0.24, 0.75], [0.33, 0.3], [0.56, -0.8], [0.8, -0.55], [1, -0.55]]], ["keys", [[0, -0.35], [0.24, 0.05], [0.33, -0.45], [0.56, -0.3], [0.8, -0.35], [1, -0.35]]], ["keys", [[0, -0.25], [0.24, 0.2], [0.33, 1], [0.56, 0.5], [0.8, -0.25], [1, -0.25]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.05], [0.24, 0.5], [0.33, 0.22], [0.56, -0.65], [0.8, -0.05], [1, -0.05]]], ["keys", [[0, 1], [0.24, 0.65], [0.33, -0.08], [0.56, -0.1], [0.8, 1], [1, 1]]], ["keys", [[0, 0.3], [0.24, -0.3], [0.33, 1], [0.56, 0.6], [0.8, 0.3], [1, 0.3]]]]],
 		],
-		"sink": ["keys", [[0, 0.0], [0.45, 0.06], [1, 0.0]]],
+		"sink": ["keys", [[0, 0.07], [0.24, 0.05500000000000001], [0.33, 0.12], [0.56, 0.09999999999999999], [0.8, 0.07], [1, 0.07]]],
 	},
 	# Two-handed axe: both hands up over and behind the head, chopped down in
 	# front with the knees giving, lifted back.
@@ -1315,18 +1323,20 @@ const LAYERS: Dictionary = {
 	# body behind it, the left hand up in front.
 	"p_stab": {
 		"steps": [
-			["aim", "thigh.L", "shin.L", [0.08, -1.0, -0.05]],
-			["aim", "shin.L", "foot.L", [0.06, -1.0, -0.1]],
-			["aim", "thigh.R", "shin.R", [-0.08, -1.0, ["keys", [[0, 0.0], [0.22, 0.0], [0.35, 0.25], [1, 0.0]]]]],
-			["aim", "shin.R", "foot.R", [-0.06, -1.0, 0.0]],
-			["turn", "spine", "x", ["keys", [[0, 0.05], [0.22, 0.0], [0.35, 0.25], [1, 0.05]]]],
-			["turn", "chest", "y", ["keys", [[0, 0.0], [0.22, -0.3], [0.35, 0.2], [1, 0.0]]]],
-			["aim", "upper_arm.L", "forearm.L", [0.2, -0.7, 0.6]],
-			["aim", "forearm.L", "hand.L", [-0.3, 0.3, 1.0]],
-			["aim", "upper_arm.R", "forearm.R", [-0.3, ["keys", [[0, -1.0], [0.22, -0.7], [0.35, -0.15], [1, -1.0]]], ["keys", [[0, 0.04], [0.22, -0.6], [0.35, 1.0], [1, 0.04]]]]],
-			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.08], [0.22, 0.05], [0.35, 0.1], [1, -0.08]]], ["keys", [[0, -1.0], [0.22, -0.1], [0.35, 0.0], [1, -1.0]]], ["keys", [[0, 0.1], [0.22, 1.0], [0.35, 1.0], [1, 0.1]]]]],
+			["aim", "thigh.L", "shin.L", [0.12, -1, ["keys", [[0, 0.22], [0.22, 0.16], [0.35, 0.5], [0.56, 0.42], [0.8, 0.28], [1, 0.22]]]]],
+			["aim", "shin.L", "foot.L", [0.1, -1, ["keys", [[0, -0.12], [0.22, -0.1], [0.35, -0.3], [0.56, -0.28], [0.8, -0.16], [1, -0.12]]]]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, ["keys", [[0, -0.12], [0.22, -0.22], [0.35, 0.05], [0.56, 0.02], [0.8, -0.1], [1, -0.12]]]]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, ["keys", [[0, -0.2], [0.22, -0.15], [0.35, -0.35], [0.56, -0.3], [0.8, -0.22], [1, -0.2]]]]],
+			["turn", "hips", "y", ["keys", [[0, 0.2], [0.1, -0.12], [0.29, 0.15], [0.56, 0.18], [0.8, 0.2], [1, 0.2]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.14], [0.22, -0.03], [0.35, 0.3], [0.56, 0.25], [0.8, 0.16], [1, 0.14]]]],
+			["turn", "neck", "x", ["keys", [[0, -0.1], [0.22, -0.1], [0.35, 0.02], [0.56, -0.02], [0.8, -0.1], [1, -0.1]]]],
+			["turn", "chest", "y", ["keys", [[0, -0.15], [0.16, -0.45], [0.33, 0.45], [0.56, 0.5], [0.8, -0.15], [1, -0.15]]]],
+			["aim", "upper_arm.L", "forearm.L", [0.2, -0.4, 0.85]],
+			["aim", "forearm.L", "hand.L", [-0.3, 0.6, 0.75]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.2], [0.22, -0.6], [0.35, 0.28], [0.56, 0.25], [0.8, -0.2], [1, -0.2]]], ["keys", [[0, -0.75], [0.22, -0.7], [0.35, -0.3], [0.56, -0.35], [0.8, -0.75], [1, -0.75]]], ["keys", [[0, 0.6], [0.22, -0.15], [0.35, 1], [0.56, 1], [0.8, 0.6], [1, 0.6]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.05], [0.22, 0.15], [0.35, 0.2], [0.56, 0.18], [0.8, -0.05], [1, -0.05]]], ["keys", [[0, -1], [0.22, -0.2], [0.35, -0.05], [0.56, -0.1], [0.8, -1], [1, -1]]], ["keys", [[0, -0.1], [0.22, 0.8], [0.35, 1], [0.56, 1], [0.8, -0.1], [1, -0.1]]]]],
 		],
-		"sink": ["keys", [[0, 0.0], [0.35, 0.05], [1, 0.0]]],
+		"sink": ["keys", [[0, 0.11], [0.22, 0.095], [0.35, 0.16], [0.56, 0.14], [0.8, 0.11], [1, 0.11]]],
 	},
 	# Shove: hands drawn to the chest leaning back, then both arms straight out
 	# with a step and the body thrown forward, back again.
@@ -2136,6 +2146,24 @@ const LAYERS: Dictionary = {
 		],
 		"sink": WALK_SINK,
 	},
+	# One hand overhead, with the left arm spread for balance and no grip.
+	"p_swing_over": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1, ["keys", [[0, 0.22], [0.28, 0.16], [0.45, 0.5], [0.56, 0.42], [0.8, 0.28], [1, 0.22]]]]],
+			["aim", "shin.L", "foot.L", [0.1, -1, ["keys", [[0, -0.12], [0.28, -0.1], [0.45, -0.3], [0.56, -0.28], [0.8, -0.16], [1, -0.12]]]]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, ["keys", [[0, -0.12], [0.28, -0.22], [0.45, 0.05], [0.56, 0.02], [0.8, -0.1], [1, -0.12]]]]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, ["keys", [[0, -0.2], [0.28, -0.15], [0.45, -0.35], [0.56, -0.3], [0.8, -0.22], [1, -0.2]]]]],
+			["turn", "hips", "y", ["keys", [[0, 0.2], [0.14, -0.18], [0.36, 0.15], [0.56, 0.18], [0.8, 0.2], [1, 0.2]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.14], [0.28, -0.1], [0.45, 0.34], [0.56, 0.25], [0.8, 0.16], [1, 0.14]]]],
+			["turn", "neck", "x", ["keys", [[0, -0.1], [0.28, -0.1], [0.45, 0.02], [0.56, -0.02], [0.8, -0.1], [1, -0.1]]]],
+			["turn", "chest", "y", ["keys", [[0, -0.2], [0.24, -0.5], [0.42, 0.45], [0.56, 0.55], [0.8, -0.2], [1, -0.2]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0, 0.2], [0.28, 0.75], [0.45, 0.9], [0.56, 0.65], [0.8, 0.2], [1, 0.2]]], ["keys", [[0, -0.45], [0.28, -0.2], [0.45, -0.25], [0.56, -0.35], [0.8, -0.45], [1, -0.45]]], ["keys", [[0, 0.9], [0.28, 0.5], [0.45, 0.55], [0.56, 0.7], [0.8, 0.9], [1, 0.9]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0, -0.25], [0.28, 0.25], [0.45, 0.35], [0.56, 0.25], [0.8, -0.25], [1, -0.25]]], ["keys", [[0, 0.45], [0.28, 0.2], [0.45, -0.1], [0.56, 0.1], [0.8, 0.45], [1, 0.45]]], ["keys", [[0, 0.9], [0.28, 0.9], [0.45, 0.85], [0.56, 0.9], [0.8, 0.9], [1, 0.9]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.55], [0.28, -0.8], [0.45, 0.3], [0.56, 0.4], [0.8, -0.55], [1, -0.55]]], ["keys", [[0, -0.35], [0.28, 0.65], [0.45, -0.4], [0.56, -0.8], [0.8, -0.35], [1, -0.35]]], ["keys", [[0, -0.25], [0.28, -0.45], [0.45, 1], [0.56, 0.65], [0.8, -0.25], [1, -0.25]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.05], [0.28, -0.35], [0.45, 0.22], [0.56, 0.3], [0.8, -0.05], [1, -0.05]]], ["keys", [[0, 1], [0.28, 0.75], [0.45, -0.08], [0.56, -0.55], [0.8, 1], [1, 1]]], ["keys", [[0, 0.3], [0.28, -0.7], [0.45, 1], [0.56, 0.75], [0.8, 0.3], [1, 0.3]]]]],
+		],
+		"sink": ["keys", [[0, 0.07], [0.28, 0.05500000000000001], [0.45, 0.14], [0.56, 0.12000000000000001], [0.8, 0.07], [1, 0.07]]],
+	},
 	# Fixing_Kneeling gets down at its start and up at its end: the kneeling middle alone, looped.
 	"p_kneel_work": {"span": [0.2, 0.8], "steps": []},
 }
@@ -2352,6 +2380,103 @@ static func pose(ctx: Dictionary, clip: String, layer: String, u: float) -> void
 		at = lerpf(float(span[0]), float(span[1]), at)
 	_pose_at(ctx, clip, at, spec.get("damp", {}))
 	apply_layer(ctx["body"], spec, u, float(ctx.get("sink_scale", 1.0)))
+	_apply_person_stride(ctx, layer)
+
+
+## Rotation vectors on the shortest arc, so a loop's mean pose survives a
+## change of amplitude. Only the six leg rotations are ever written back.
+static func _rotation_vector(q: Quaternion) -> Vector3:
+	if q.w < 0.0:
+		q = -q
+	var v := Vector3(q.x, q.y, q.z)
+	var size := v.length()
+	return v * (2.0 * atan2(size, q.w) / size) if size > 0.0000001 else Vector3.ZERO
+
+
+static func _mean_rotation(samples: Array) -> Quaternion:
+	var mean: Quaternion = samples[0]
+	for _pass_id in 12:
+		var shift := Vector3.ZERO
+		for q: Quaternion in samples:
+			shift += _rotation_vector(mean.inverse() * q)
+		shift /= float(samples.size())
+		if shift.length() < 0.0000001:
+			break
+		mean = (mean * Quaternion(shift.normalized(), shift.length())).normalized()
+	return mean
+
+
+static func _apply_person_stride(ctx: Dictionary, layer: String) -> void:
+	var fit: Dictionary = ctx.get("stride_fits", {}).get(layer, {})
+	if fit.is_empty():
+		return
+	var body: Skeleton3D = ctx["body"]
+	for n in fit["bones"].size():
+		var bone: int = fit["bones"][n]
+		var mean: Quaternion = fit["means"][n]
+		var delta := _rotation_vector(mean.inverse() * body.get_bone_pose_rotation(bone))
+		if delta.length() > 0.0000001:
+			body.set_bone_pose_rotation(bone, (mean * Quaternion(delta.normalized(), delta.length() * float(fit["scale"]))).normalized())
+		else:
+			body.set_bone_pose_rotation(bone, mean)
+
+
+static func _person_stride_round(ctx: Dictionary, entry: Array) -> float:
+	var reach := [[], []]
+	for f in int(entry[2]):
+		pose(ctx, entry[1], entry[4], float(f) / float(entry[2]))
+		_note_reach(ctx, entry[0], reach)
+	return _round(reach)
+
+
+## A new fit for this body and this clip, including motions retargeted from
+## a source in future. The sampler and the saved round use the same poses.
+static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
+	if not PERSON_STRIDE_ROUNDS.has(entry[0]):
+		return
+	var name: String = entry[0]
+	var layer: String = entry[4]
+	var body: Skeleton3D = ctx["body"]
+	var fits: Dictionary = ctx.get("stride_fits", {})
+	ctx["stride_fits"] = fits
+	fits.erase(layer)
+	var bones := []
+	var samples := []
+	for bone_name: String in PERSON_STRIDE_BONES:
+		bones.append(_bone(body, bone_name))
+		samples.append([])
+	var reach := [[], []]
+	for f in int(entry[2]):
+		pose(ctx, entry[1], layer, float(f) / float(entry[2]))
+		_note_reach(ctx, name, reach)
+		for n in bones.size():
+			samples[n].append(body.get_bone_pose_rotation(bones[n]))
+	var before := _round(reach)
+	var target: float = PERSON_STRIDE_ROUNDS[name]
+	if before <= 0.0:
+		print("STRIDE_STOP %s %.6f inf" % [name, before])
+		return
+	var means := []
+	for rotations: Array in samples:
+		means.append(_mean_rotation(rotations))
+	var fit := {"bones": bones, "means": means, "scale": 1.0}
+	fits[layer] = fit
+	var measured := before
+	for _pass_id in STRIDE_PASSES:
+		var correction := target / measured if measured > 0.0 else INF
+		var needed := float(fit["scale"]) * correction
+		# Bound the total change from the original, as well as each correction.
+		# On a stop, discard every trial and bake the original amplitude.
+		if not is_finite(needed) or correction < STRIDE_SCALE_MIN or correction > STRIDE_SCALE_MAX or needed < STRIDE_SCALE_MIN or needed > STRIDE_SCALE_MAX:
+			fits.erase(layer)
+			print("STRIDE_STOP %s %.6f %.6f" % [name, before, needed])
+			return
+		fit["scale"] = needed
+		measured = _person_stride_round(ctx, entry)
+		if absf(measured - target) <= target * STRIDE_TOLERANCE:
+			break
+	var status := "STRIDE" if absf(measured - target) <= target * STRIDE_TOLERANCE else "STRIDE_UNFIT"
+	print("%s %s round %.6f -> %.6f scale %.6f" % [status, name, before, measured, fit["scale"]])
 
 
 ## One skin matrix per bone the mesh binds: pose * inverse bind, in mesh space.
@@ -2998,6 +3123,7 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var clips := []
 	for entry: Array in list:
+		_fit_person_stride(ctx, entry)
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
