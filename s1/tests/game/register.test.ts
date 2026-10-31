@@ -26,7 +26,8 @@ function endingOf(sentence: string): Ending {
   if (/(습니다|십시오|니다|니까|십시다)$/u.test(last)) return '합쇼';
   if (/(지요|죠)$/u.test(last)) return '지요';
   // 「-군」과 뜻을 밝히는 「-지」(「약속하지.」「들어주지.」)는 해라체가 아닌 해체다. 확인·물음의 「-지」(「있지」「갔지」「필요하지?」)는 해라 쪽으로 둔다.
-  if (/군$/u.test(last) || (/[하주]지$/u.test(last) && !/\?/u.test(sentence))) return '해체';
+  // 형태만으로는 확인(「중요하지.」)과 의지(「해 보지.」)를 다 가를 수 없어 「하지·주지」 꼴만 잡는다 — 새 글에서 걸리면 문장을 바꾼다
+  if (/군$/u.test(last) || (/[하주]지$/u.test(last) && !/\?[.!…~]*$/u.test(sentence.trim()))) return '해체';
   if (/(세요|어요|아요|해요|예요|에요|요)$/u.test(last)) return '해요';
   if (/(구려|오|소)$/u.test(last)) return '하오';
   if (/(다|라|자|냐|니|지|게|군|구나|네|마|야|어|아|래|대|걸|거든|고|까|해|줘|와|봐|러)$/u.test(last)) return '해라';
@@ -305,18 +306,27 @@ describe('말씨 가름', () => {
 
   it('S2 동료 말은 칸 사람 말씨다(겁 많은 성격만 해요체 — 성격 말씨 예외)', () => {
     const voiced: Record<'fear' | 'rough' | 'quiet', string[]> = { fear: [], rough: [], quiet: [] };
-    for (const f of ['game/sim/ally_lines.gd', 'game/field_residents.gd']) {
-      const src = readFileSync(join(S2, f), 'utf8');
-      for (const m of src.matchAll(/"(fear|rough|quiet)":\s*(\[[^\]]*\]|"[^"]*")/gu)) {
-        for (const q of m[2].matchAll(/"([^"]*[가-힣][^"]*)"/gu)) voiced[m[1] as keyof typeof voiced].push(q[1]);
+    // 주석 줄은 빼고, 문자열 안의 대괄호·이스케이프가 목록 끝으로 읽히지 않게 문자열 단위로 읽는다
+    const STR = String.raw`"(?:[^"\\]|\\.)*"`;
+    const strings = (s: string) => [...s.matchAll(new RegExp(STR, 'gu'))].map(q => q[0].slice(1, -1)).filter(q => /[가-힣]/u.test(q));
+    const noComments = (src: string) => src.replace(/\r\n/g, '\n').split('\n').filter(l => !l.trim().startsWith('#')).join('\n');
+    const ally = noComments(readFileSync(join(S2, 'game/sim/ally_lines.gd'), 'utf8'));
+    for (const src of [ally, noComments(readFileSync(join(S2, 'game/field_residents.gd'), 'utf8'))]) {
+      for (const m of src.matchAll(new RegExp(String.raw`"(fear|rough|quiet)":\s*(\[(?:${STR}|[^\]"])*\]|${STR})`, 'gu'))) {
+        voiced[m[1] as keyof typeof voiced].push(...strings(m[2]));
       }
     }
-    // 세 성격의 말을 다 읽었는지(표 꼴이 바뀌어 읽기가 빠지면 떨어진다)
-    for (const lines of Object.values(voiced)) expect(lines.length).toBeGreaterThan(100);
-    const FEAR: Ending[] = ['해라', '해체', '해요', '지요', '조각'];
+    // 세 성격의 말을 다 읽었는지 — 지금 성격마다 210줄 넘게(VOICED·REL_LINES·MEMORY_LINES), 큰 표 하나가 빠지면 떨어진다
+    for (const lines of Object.values(voiced)) expect(lines.length).toBeGreaterThan(180);
+    // 성격 키 없이 누구나 하는 외침(LINES)은 칸 사람 말씨
+    const start = ally.indexOf('const LINES: Dictionary = {');
+    const common = strings(ally.slice(start, ally.indexOf('\n}', start)));
+    expect(common.length).toBeGreaterThan(5);
+    // 겁 많은 동료에게 더 허용하는 것은 해요·지요뿐이다(「-군」·뜻을 밝히는 「-지」는 여기서도 안 된다)
+    const FEAR: Ending[] = ['해라', '해요', '지요', '조각'];
     const bad = [
       ...voiced.fear.filter(s => !endings(s).every(e => FEAR.includes(e))).map(s => `fear ${endings(s).join('·')}: ${s}`),
-      ...[...voiced.rough, ...voiced.quiet].filter(s => !fits(s, '칸')).map(s => `${endings(s).join('·')}: ${s}`),
+      ...[...voiced.rough, ...voiced.quiet, ...common].filter(s => !fits(s, '칸')).map(s => `${endings(s).join('·')}: ${s}`),
     ];
     expect(bad).toEqual([]);
   });
