@@ -901,7 +901,7 @@ const FAVORS_AGAIN: Record<Comm, { body: string; cost: Eff[] }> = {
   tail: { body: '"아들이 나았다. 이번엔 조카다." 대표가 눈을 피하며 말한다. 의무칸 침상이 또 필요하다.', cost: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 2, v: 3 }] },
   medtech: { body: '"동생이 앞칸에서 쫓겨날 것 같다. 한마디만 해 달라." 의사가 처음으로 목소리를 낮춘다.', cost: [{ t: 'rel', c: 'front', v: -3 }] },
   guard: { body: '"부관 얘기, 잊지 않았겠지." 경비대장이 총을 닦으며 묻는다.', cost: [{ t: 'rel', c: 'engine', v: -2 }, { t: 'rel', c: 'tail', v: -1 }] },
-  front: { body: '"손님이 또 온다. 이번엔 세 병." 앞칸 대표가 지난번처럼 웃지는 않는다.', cost: [{ t: 'lux', v: -3 }] },
+  front: { body: '"손님이 또 옵니다. 이번엔 세 병." 앞칸 대표가 지난번처럼 웃지는 않는다.', cost: [{ t: 'lux', v: -3 }] },
   engine: { body: '"그 견습생, 쓸 만하다. 하나 더." 수석 기관사가 이번엔 이름까지 적어 왔다.', cost: [{ t: 'rel', c: 'tail', v: -3 }] },
 };
 
@@ -914,7 +914,7 @@ const FAVORS: Record<Comm, { body: string; cost: Eff[] }> = {
   tail: { body: '"아들이 기침을 한다. 의무칸 침상 하나만." 대표가 처음으로 사적인 부탁을 한다.', cost: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 2, v: 3 }] },
   medtech: { body: '"동생이 앞칸 빈자리에 갈 수 있게 해 달라." 아무도 모르게.', cost: [{ t: 'base', c: 'front', i: 2, v: 3 }] },
   guard: { body: '"부관 자리 얘기, 다음에 내 이름도 올려 달라." 경비대장이 낮게 말한다.', cost: [{ t: 'rel', c: 'engine', v: -2 }] },
-  front: { body: '"술 두 병만. 손님을 맞아야 한다." 앞칸 대표가 웃는다.', cost: [{ t: 'lux', v: -2 }] },
+  front: { body: '"술 두 병만. 손님을 맞아야 합니다." 앞칸 대표가 웃는다.', cost: [{ t: 'lux', v: -2 }] },
   engine: { body: '"견습생 하나를 꼬리칸에서 데려가고 싶다. 내가 고른 아이로."', cost: [{ t: 'rel', c: 'tail', v: -2 }] },
 };
 
