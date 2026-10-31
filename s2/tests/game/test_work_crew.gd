@@ -731,6 +731,7 @@ func test_a_retreat_keeps_the_pick_and_the_next_dispatch_resumes_it_by_default()
 func test_dig_progress_uses_the_furthest_saved_or_live_pick() -> void:
 	assert_eq(game.work.dig_progress(), 0.0)
 	var state: Dictionary = game.work._site("work_site")
+	state["dig_wagon"] = 0
 	state["dig_parts"] = [45.0]
 	assert_eq(game.work.dig_progress(), 0.5)
 	state["dig_parts"] = [15.0, 67.5, 30.0]
@@ -745,11 +746,11 @@ func test_dig_progress_uses_the_furthest_saved_or_live_pick() -> void:
 	assert_almost_eq(game.work.dig_progress(), 0.95, 0.0001, "the worker's larger recorded progress counts too")
 	state["dig_parts"] = [135.0]
 	assert_eq(game.work.dig_progress(), 1.0)
-	assert_eq(state["dig_parts"], _parts([90.0]))
+	assert_eq(state["dig_parts"], [135.0], "reading progress does not rewrite saved parts")
 	game.work._cancel_dig(worker, "work_site")
 	state["dig_parts"] = [-15.0]
 	assert_eq(game.work.dig_progress(), 0.0)
-	assert_eq(state["dig_parts"], _parts([0.0]))
+	assert_eq(state["dig_parts"], [-15.0], "normalization belongs to the work state")
 
 
 func test_a_resumed_pick_returns_immediately_without_an_update() -> void:
@@ -905,6 +906,8 @@ func test_a_completed_pick_never_takes_coal_from_the_next_wagon() -> void:
 func test_coal_sites_paint_their_own_wagons() -> void:
 	var other: Dictionary = game.data["spots"]["work_site"].duplicate(true)
 	game.data["spots"]["other_coal"] = other
+	game.work._site("work_site")["phase"] = "working"
+	game.work._site("other_coal")["phase"] = "working"
 	var first: Dictionary = game.work.dig_wagon("work_site")
 	var second: Dictionary = game.work.dig_wagon("other_coal")
 	assert_false(is_same(first, second))
@@ -940,6 +943,7 @@ func test_only_finite_clamped_seconds_can_be_resumed() -> void:
 
 func test_dig_bar_reuses_its_mesh_until_the_filled_count_changes() -> void:
 	var state: Dictionary = game.work._site("work_site")
+	state["dig_wagon"] = 0
 	state["dig_parts"] = [30.0]
 	game.work.paint_digs()
 	var bar: MeshInstance3D = game.view.dig_nodes["work_site"]
@@ -975,6 +979,7 @@ func test_dig_progress_and_restore_painting_allow_a_missing_view() -> void:
 	var original_view: Variant = game.view
 	game.view = null
 	game.work._site("work_site")["dig_parts"] = [45.0]
+	game.work._site("work_site")["dig_wagon"] = 0
 	game.work.update(1.0)
 	FieldSave._refresh_restored_view(game)
 	game.view = original_view
@@ -1292,3 +1297,215 @@ func test_every_carrier_down_for_ten_seconds_calls_the_crew_back() -> void:
 	_advance(1.0)
 	assert_eq(game.work.phase(), "retreat")
 	assert_eq(game.work.sites["work_site"]["why"], "no_hands")
+
+
+func test_idle_coal_sites_never_claim_wagons_while_painting() -> void:
+	var original_view: Variant = game.view
+	var choices: Array[int] = []
+	for with_view: bool in [true, false]:
+		game.view = original_view if with_view else null
+		game.work.sites.clear()
+		game.data["spots"]["other_coal"] = game.data["spots"]["work_site"].duplicate(true)
+		game.data["wagons"][0]["coal"] = 0.25
+		game.data["wagons"][1]["coal"] = 1.0
+		game.work.paint_digs()
+		assert_true(game.work.sites.is_empty(), "painting does not even create a site state")
+		_send()
+		assert_eq(int(game.work._site("work_site")["dig_wagon"]), 0)
+		game.work.paint_digs()
+		assert_eq(int(game.work._site("other_coal").get("dig_wagon", -1)), -1)
+		var worker: Variant = _pick()
+		var done: Callable = worker.action_done
+		worker.cancel_action()
+		done.call()
+		assert_eq(float(game.data["wagons"][0]["coal"]), 0.0)
+		worker.position = game.work.coal_drop(worker)
+		game.work.crew_step(worker, true)
+		game.work.crew_step(worker, true)
+		choices.append(int(game.work._site("work_site")["dig_wagon"]))
+		assert_eq(choices[-1], 1, "the active site reaches the second wagon")
+		game.work.retreat("work_site")
+		assert_eq(int(game.work._site("work_site")["dig_wagon"]), -1)
+		_board_all()
+		game.work.paint_digs()
+		assert_eq(int(game.work._site("work_site")["dig_wagon"]), -1)
+	game.view = original_view
+	assert_eq(choices, [1, 1])
+
+
+func test_a_short_wagon_passes_its_place_and_pick_to_the_next_live_worker() -> void:
+	_send()
+	var wagon: Dictionary = game.work.dig_wagon()
+	var cell: Vector2i = wagon["work"]
+	var rect: Rect2i = wagon["rect"]
+	wagon["rect"] = Rect2i(cell.x, rect.position.y, 1, rect.size.y)
+	var first: Variant = _pick([60.0])
+	var next: Variant = _role("worker")[1]
+	assert_false(game.work._work_spot(next, "work_site", wagon).is_finite())
+	first.body.downed = true
+	game.work.update(0.0)
+	var place: Vector3 = game.work._work_spot(next, "work_site", wagon)
+	assert_eq(place, FieldGrid.center(cell))
+	next.position = place
+	next.brain["work_wait"] = 0.0
+	game.ai._crew(next, 0.1, true)
+	assert_eq(next.action, "dig")
+	assert_eq(next.action_total, 30.0)
+	assert_eq(float(next.brain["dig_from"]), 60.0)
+	game.work._cancel_dig(next, "work_site")
+	next.body.dead = true
+	var last: Variant = _role("worker")[2]
+	_role("worker")[3].brain["boarded"] = true
+	assert_eq(game.work._turn(last, "work_site"), Vector2i(0, 1))
+	assert_eq(game.work._work_spot(last, "work_site", wagon), place)
+
+
+func test_missing_carriers_retreat_after_ten_seconds_and_can_be_sent_again() -> void:
+	_send()
+	for worker in _role("worker"):
+		game.crew.erase(worker)
+		game.people.erase(worker)
+		worker.free()
+	_advance(FieldWork.NO_HANDS_S - 1.0)
+	assert_eq(game.work.phase(), "working")
+	_advance(1.0)
+	assert_eq(game.work.phase(), "retreat")
+	assert_eq(game.work._site("work_site")["why"], "no_hands")
+	_board_all()
+	_advance(2.0)
+	assert_true(game.work.start())
+	_advance(FieldWork.ESCORT_LEAD)
+	assert_eq(game.work.phase(), "working")
+	assert_eq(_role("worker").size(), 4)
+
+
+func test_boarded_carriers_do_not_count_as_missing_hands() -> void:
+	_send()
+	for worker in _role("worker"):
+		worker.position = game.work.door_of("work_site")
+		game.work._go_home(worker, "work_site", true)
+	assert_false(game.work._no_hands("work_site"))
+	_advance(FieldWork.NO_HANDS_S + 1.0)
+	assert_eq(game.work.phase(), "working")
+	assert_eq(float(game.work._site("work_site")["no_hands_s"]), 0.0)
+
+
+func test_a_blocked_cached_coal_drop_is_replaced_before_delivery() -> void:
+	_send()
+	var worker: Variant = _role("worker")[0]
+	worker.position = game.work._work_spot(worker, "work_site", game.work.dig_wagon())
+	worker.brain["load"] = 0.25
+	var old_drop: Vector3 = game.work.coal_drop(worker)
+	worker.brain["coal_drop"] = old_drop
+	game.grid.set_solid(FieldGrid.cell_of(old_drop), FieldGrid.Solid.BLOCK)
+	game.grid.refresh_paths()
+	game.work._deliver(worker, "work_site")
+	var next_drop: Vector3 = worker.brain["coal_drop"]
+	assert_ne(next_drop, old_drop)
+	assert_true(game.grid.people_can_walk(FieldGrid.cell_of(next_drop)))
+	assert_eq(worker.brain["dest"], next_drop)
+	assert_false(worker.path.is_empty())
+	if not worker.path.is_empty():
+		assert_lte(worker.path[-1].distance_to(next_drop), FieldWork.DROP_R)
+	assert_eq(float(worker.brain["load"]), 0.25)
+	assert_eq(game.actions.coal_delivered, 0.0)
+
+
+func test_a_walkable_but_unreachable_coal_drop_is_replaced() -> void:
+	_send()
+	var worker: Variant = _role("worker")[0]
+	worker.position = game.work._work_spot(worker, "work_site", game.work.dig_wagon())
+	worker.brain["load"] = 0.25
+	var old_drop: Vector3 = game.work.coal_drop(worker)
+	var cell: Vector2i = FieldGrid.cell_of(old_drop)
+	worker.brain["coal_drop"] = old_drop
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if dx != 0 or dy != 0:
+				game.grid.set_solid(cell + Vector2i(dx, dy), FieldGrid.Solid.BLOCK)
+	game.grid.refresh_paths()
+	assert_true(game.grid.people_can_walk(cell))
+	var failed: PackedVector3Array = game.find_path(worker.position, old_drop, false)
+	assert_true(failed.is_empty() or failed[-1].distance_to(old_drop) > FieldWork.DROP_R)
+	game.work._deliver(worker, "work_site")
+	var next_drop: Vector3 = worker.brain["coal_drop"]
+	assert_ne(next_drop, old_drop)
+	assert_false(worker.path.is_empty())
+	if not worker.path.is_empty():
+		assert_lte(worker.path[-1].distance_to(next_drop), FieldWork.DROP_R)
+	worker.position = next_drop
+	game.work._deliver(worker, "work_site")
+	assert_eq(game.actions.coal_delivered, 0.25)
+	assert_eq(float(worker.brain["load"]), 0.0)
+
+
+func _warm_pick_timer(field: FieldGame, worker) -> void:
+	field.weather.kinds.clear()
+	field.weather.ambient_c = 20.0
+	worker.worn.erase("hands")
+	worker.heat.heat = 100.0
+	worker.heat.wet = 0.0
+	assert_eq(float(worker.mults()["hands"]), 1.0)
+
+
+func _advance_pick_timer(field: FieldGame, worker, seconds: float) -> void:
+	var left: float = seconds
+	while left > 0.0001:
+		var dt: float = minf(left, 0.25)
+		field.clock.elapsed += dt
+		field._update_person(worker, dt)
+		field.work.update(dt)
+		left -= dt
+
+
+func test_a_real_pick_timer_takes_coal_once_only_after_ninety_seconds() -> void:
+	_send()
+	var worker: Variant = _pick()
+	_warm_pick_timer(game, worker)
+	var before: float = FieldWork.wagon_coal(game.data)
+	_advance_pick_timer(game, worker, 89.75)
+	assert_eq(worker.action, "dig")
+	assert_eq(worker.action_t, 0.25)
+	assert_eq(FieldWork.wagon_coal(game.data), before)
+	assert_eq(float(worker.brain["load"]), 0.0)
+	_advance_pick_timer(game, worker, 0.5)
+	assert_eq(worker.action, "")
+	assert_eq(FieldWork.wagon_coal(game.data), before - FieldWork.TRIP_COAL)
+	assert_eq(float(worker.brain["load"]), FieldWork.TRIP_COAL)
+	assert_true(game.work._active_digs("work_site").is_empty())
+	_advance_pick_timer(game, worker, 5.0)
+	assert_eq(FieldWork.wagon_coal(game.data), before - FieldWork.TRIP_COAL)
+	assert_eq(float(worker.brain["load"]), FieldWork.TRIP_COAL)
+
+
+func test_an_interrupted_saved_pick_uses_only_its_remaining_real_timer() -> void:
+	_send()
+	var worker: Variant = _pick()
+	_warm_pick_timer(game, worker)
+	var before: float = FieldWork.wagon_coal(game.data)
+	_advance_pick_timer(game, worker, 30.0)
+	game.work._cancel_dig(worker, "work_site")
+	assert_eq(game.work._site("work_site")["dig_parts"], _parts([30.0]))
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	var resumed: FieldGame = FieldGame.new()
+	resumed.opts = FieldSave.resume_opts(saved)
+	add_child_autofree(resumed)
+	resumed.set_process(false)
+	var back: Variant = resumed.work._person(worker.pid)
+	_warm_pick_timer(resumed, back)
+	back.brain["work_wait"] = 0.0
+	resumed.ai._crew(back, 0.1, true)
+	assert_eq(back.action, "dig")
+	assert_eq(back.action_total, 60.0)
+	assert_eq(float(back.brain["dig_from"]), 30.0)
+	_advance_pick_timer(resumed, back, 59.75)
+	assert_eq(back.action_t, 0.25)
+	assert_eq(FieldWork.wagon_coal(resumed.data), before)
+	assert_eq(float(back.brain["load"]), 0.0)
+	_advance_pick_timer(resumed, back, 0.5)
+	assert_eq(back.action, "")
+	assert_eq(FieldWork.wagon_coal(resumed.data), before - FieldWork.TRIP_COAL)
+	assert_eq(float(back.brain["load"]), FieldWork.TRIP_COAL)
+	_advance_pick_timer(resumed, back, 5.0)
+	assert_eq(FieldWork.wagon_coal(resumed.data), before - FieldWork.TRIP_COAL)
+	assert_eq(float(back.brain["load"]), FieldWork.TRIP_COAL)

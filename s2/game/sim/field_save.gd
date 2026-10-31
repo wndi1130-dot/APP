@@ -304,10 +304,100 @@ static func apply(game, save: Dictionary) -> void:
 	_put_zombies(game, save.get("zombies", []))
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
+	if exact(save):
+		_restore_work_fallback(game, save)
 	game.cam_focus = game.player.position
 	game._update_camera(1.0)
 	_refresh_restored_view(game)
 	game.set_stop_form(form)
+
+
+## Keep the saved coal pool when grid paths cannot be restored.
+static func _restore_fallback_coal(game, runtime: Dictionary, saved_people: Array) -> bool:
+	var wagons: Array = game.data.get("wagons", [])
+	if not runtime.has("wagon_coal"):
+		var removed: float = maxf(game.actions.coal_delivered, 0.0)
+		for person: Dictionary in saved_people:
+			var brain: Dictionary = person.get("state", {}).get("brain", {})
+			if brain.get("load_kind", "coal") == "coal":
+				removed += maxf(float(brain.get("load", 0.0)), 0.0)
+		if game.work != null:
+			for pile: Dictionary in game.work.dropped:
+				if pile.get("kind", "") == "coal":
+					removed += maxf(float(pile.get("n", 0.0)), 0.0)
+		for wagon: Dictionary in wagons:
+			if wagon.has("work"):
+				var taken: float = minf(maxf(float(wagon.get("coal", 0.0)), 0.0), removed)
+				wagon["coal"] = maxf(float(wagon.get("coal", 0.0)) - taken, 0.0)
+				removed -= taken
+		return false
+	var coal: Array = runtime.get("wagon_coal", [])
+	var ids: Array = runtime.get("wagon_ids", [])
+	var matched: bool = wagons.size() == coal.size()
+	if runtime.has("wagon_ids"):
+		matched = matched and ids.size() == wagons.size()
+		if matched:
+			for i in wagons.size():
+				if String(ids[i]) != String(wagons[i].get("id", "")):
+					matched = false
+					break
+	if matched:
+		for i in wagons.size():
+			wagons[i]["coal"] = maxf(float(coal[i]), 0.0)
+		return true
+	var pool: float = 0.0
+	for amount: Variant in coal:
+		pool += maxf(float(amount), 0.0)
+	for wagon: Dictionary in wagons:
+		wagon["coal"] = 0.0
+	for wagon: Dictionary in wagons:
+		if wagon.has("work"):
+			wagon["coal"] = pool
+			pool = 0.0
+			break
+	if pool > 0.0 and game.work != null:
+		game.work.dropped.append({"pos": game.player.position, "kind": "coal", "n": pool})
+	return false
+
+
+## Rebuild routes on this grid. Interrupted picks keep seconds, never old callbacks.
+static func _restore_work_fallback(game, save: Dictionary) -> void:
+	var runtime: Dictionary = save["runtime"]
+	if game.work != null:
+		_restore_properties(game, game.work, runtime.get("components", {}).get("work", {}))
+	var matched: bool = _restore_fallback_coal(game, runtime, save.get("people", []))
+	for row: Dictionary in save.get("people", []):
+		var p = _person_with_id(game, String(row["pid"]))
+		if p == null:
+			continue
+		var brain: Dictionary = row.get("state", {}).get("brain", {})
+		for key: String in ["work_site", "job", "side", "load", "load_kind", "boarded", "board_at", "work_wait"]:
+			if brain.has(key):
+				p.brain[key] = brain[key]
+		p.brain.erase("coal_drop")
+	if game.work == null:
+		return
+	for id: String in game.work.sites.keys():
+		if not game.data["spots"].has(id):
+			game.work.sites.erase(id)
+			continue
+		var state: Dictionary = game.work.sites[id]
+		state["path"] = PackedVector3Array()
+		state["path_at"] = -INF
+		state["door"] = Vector3.ZERO
+		state["cells"] = -1
+		state["bright"] = false
+		if not matched:
+			state["dig_wagon"] = -1
+			state["dig_parts"] = []
+			state["dig_active"] = {}
+	game.work.restore_digs()
+	game.actions.work_started = false
+	for id: String in game.work.sites:
+		if not matched:
+			game.work.sites[id]["dig_wagon"] = -1
+		if game.work.phase(id) in ["working", "hold", "retreat"]:
+			game.actions.work_started = true
 
 
 static func _put_person(p, row: Dictionary) -> void:
@@ -356,9 +446,12 @@ static func _runtime(game) -> Dictionary:
 	# Coal dug from a wagon (field_ai.gd _dug, field_work.gd) is in the map's own rows, which a
 	# restart builds afresh: each wagon's coal, in the map's order.
 	var wagon_coal: Array = []
+	var wagon_ids: Array = []
 	for wagon: Dictionary in game.data.get("wagons", []):
 		wagon_coal.append(float(wagon.get("coal", 0.0)))
+		wagon_ids.append(String(wagon.get("id", "")))
 	out["wagon_coal"] = wagon_coal
+	out["wagon_ids"] = wagon_ids
 	return out
 
 

@@ -112,7 +112,7 @@ func _site(id: String) -> Dictionary:
 		sites[id] = {"phase": "unseen", "seen": false, "warned": false, "warn_share": 0.0, "half": false,
 			"last_open": -INF, "retry": false, "retry_said": false, "hold_s": 0.0, "clear_s": 0.0,
 			"path": PackedVector3Array(), "path_at": -INF, "door": Vector3.ZERO,
-			"pending": [], "roster": [], "depart_at": 0.0, "sent": false, "noise_s": 0.0,
+			"pending": [], "roster": [], "workers_out": [], "depart_at": 0.0, "sent": false, "noise_s": 0.0,
 			"cells": -1, "bright": false}
 	return sites[id]
 
@@ -293,6 +293,7 @@ func _tick(id: String) -> void:
 			_release_workers(id)
 			if _finished(id):
 				state["phase"] = "done"
+				state["dig_wagon"] = -1
 				_event(id, "done")
 				for p in members(id):
 					p.brain["job"] = "home"
@@ -308,6 +309,7 @@ func _tick(id: String) -> void:
 		return
 	if _finished(id):
 		state["phase"] = "done"
+		state["dig_wagon"] = -1
 		_event(id, "done")
 	elif not state["seen"]:
 		var distance: float = game.player.position.distance_to(position_of(id))
@@ -390,7 +392,8 @@ func paint_digs() -> void:
 	for id: String in site_ids():
 		if job_id(id) != "coal_wagon":
 			continue
-		var wagon: Dictionary = dig_wagon(id)
+		var state: Dictionary = sites.get(id, {})
+		var wagon: Dictionary = _wagon_at(int(state.get("dig_wagon", -1)))
 		var progress: float = dig_progress(id) if not wagon.is_empty() else 0.0
 		var cells: int = roundi(progress * DIG_CELLS) if progress > 0.0 else -1
 		game.view.update_dig(id, wagon, cells)
@@ -524,11 +527,14 @@ func start(id: String = "work_site") -> bool:
 	state["sent"] = false
 	state["pending"] = workers
 	state["roster"] = []
+	state["workers_out"] = []
 	for row: Dictionary in rows:
 		state["roster"].append(String(row["id"]))
 	state["depart_at"] = elapsed + ESCORT_LEAD
 	state["noise_s"] = 0.0
 	state["no_hands_s"] = 0.0
+	if job_id(id) == "coal_wagon":
+		_dig_wagon_index(id)
 	game.actions.work_started = true
 	game.ai.crew_recalled = false
 	for i in escorts.size():
@@ -560,6 +566,8 @@ func _disembark(id: String, row: Dictionary, side: int) -> void:
 		"work_wait": -1.0}, true)
 	p.brain.erase("board_at")
 	p.brain.erase("dest")
+	if p.role == "worker" and not _site(id)["workers_out"].has(String(p.pid)):
+		_site(id)["workers_out"].append(String(p.pid))
 	if not sent.has(p.pid):
 		sent[p.pid] = true
 		game.receipt.person("sent", p.pid)
@@ -588,7 +596,7 @@ func _release_workers(id: String) -> void:
 func members(id: String) -> Array:
 	var out: Array = []
 	for p in game.crew:
-		if p.brain.get("work_site", "work_site") == id and _site(id)["roster"].has(p.pid):
+		if is_instance_valid(p) and p.brain.get("work_site", "work_site") == id and _site(id)["roster"].has(p.pid):
 			out.append(p)
 	return out
 
@@ -613,17 +621,24 @@ func _trouble(id: String, safe: Dictionary) -> String:
 	return ""
 
 
-## Carriers are out (not back aboard) and none of them is up: dead or down. False while some are still to come down.
+## Remember carriers that came down. Missing hands count; those back aboard do not.
 func _no_hands(id: String) -> bool:
 	if not _site(id)["pending"].is_empty():
 		return false
 	var out: int = 0
+	var present: Array[String] = []
 	for p in members(id):
-		if p.role != "worker" or p.brain.get("boarded", false):
+		if p.role != "worker":
+			continue
+		present.append(String(p.pid))
+		if p.brain.get("boarded", false):
 			continue
 		out += 1
 		if p.is_alive() and not p.body.downed:
 			return false
+	for pid: String in _site(id).get("workers_out", []):
+		if not present.has(pid):
+			return true
 	return out > 0
 
 
@@ -649,6 +664,7 @@ func retreat(id: String, why: String = "") -> void:
 	state["why"] = why
 	state["pending"].clear()
 	_cancel_workers(id)
+	state["dig_wagon"] = -1
 	for p in members(id):
 		if not p.brain.get("boarded", false):
 			if p.role == "worker":
@@ -862,7 +878,7 @@ func _dig_wagon_index(id: String) -> int:
 		return current
 	var claimed: Array[int] = []
 	for other: String in site_ids():
-		if other != id and job_id(other) == "coal_wagon":
+		if other != id and job_id(other) == "coal_wagon" and phase(other) in ["working", "hold"]:
 			claimed.append(int(_site(other).get("dig_wagon", -1)))
 	var wagons: Array = game.data.get("wagons", [])
 	for index in wagons.size():
@@ -880,7 +896,7 @@ func dig_wagon(id: String = "work_site") -> Dictionary:
 
 func _dig_parts(id: String) -> Array:
 	var state: Dictionary = _site(id)
-	state["dig_parts"] = clean_dig_parts(state.get("dig_parts", []), _dig_wagon_index(id))
+	state["dig_parts"] = clean_dig_parts(state.get("dig_parts", []), int(state.get("dig_wagon", -1)))
 	return state["dig_parts"]
 
 
@@ -991,10 +1007,24 @@ func prepare_digs() -> void:
 ## Reconnect saved ownership and migrate numeric parts and older live picks.
 func restore_digs() -> void:
 	for id: String in sites.keys():
+		var state: Dictionary = _site(id)
+		if not state.has("workers_out"):
+			state["workers_out"] = []
+			var pending_ids: Array[String] = []
+			for pending_row: Dictionary in state["pending"]:
+				pending_ids.append(String(pending_row["id"]))
+			for source_row: Dictionary in _source():
+				var pid: String = String(source_row["id"])
+				if source_row["role"] == "worker" and state["roster"].has(pid) and not pending_ids.has(pid):
+					state["workers_out"].append(pid)
 		if job_id(id) != "coal_wagon":
 			continue
-		var wagon_index: int = _dig_wagon_index(id)
+		var wagon_index: int = int(state.get("dig_wagon", -1))
+		if phase(id) in ["working", "hold"]:
+			wagon_index = _dig_wagon_index(id)
 		_dig_parts(id)
+		if phase(id) not in ["working", "hold"]:
+			state["dig_wagon"] = -1
 		var active: Dictionary = _active_digs(id)
 		for p in members(id):
 			if p.role != "worker" or p.action != "dig":
@@ -1032,14 +1062,15 @@ func _take_dig(id: String) -> float:
 func dig_progress(id: String = "work_site") -> float:
 	if job_id(id) != "coal_wagon" or not sites.has(id):
 		return 0.0
-	var wagon_index: int = _dig_wagon_index(id)
+	var state: Dictionary = sites[id]
+	var wagon_index: int = int(state.get("dig_wagon", -1))
 	if wagon_index < 0:
 		return 0.0
 	var most: float = 0.0
-	for part: Dictionary in _dig_parts(id):
-		if int(part["wagon"]) == wagon_index:
+	for part: Variant in clean_dig_parts(state.get("dig_parts", []), wagon_index):
+		if part is Dictionary and int(part["wagon"]) == wagon_index:
 			most = maxf(most, float(part["seconds"]))
-	for row: Dictionary in _active_digs(id).values():
+	for row: Dictionary in state.get("dig_active", {}).values():
 		if int(row["wagon"]) == wagon_index:
 			most = maxf(most, _dig_done(row))
 	return most / DIG_TIME
@@ -1050,7 +1081,7 @@ func _turn(p, id: String) -> Vector2i:
 	var n: int = 0
 	var i: int = 0
 	for q in members(id):
-		if q.role == "worker":
+		if q.role == "worker" and q.is_alive() and not q.body.downed and not q.brain.get("boarded", false):
 			if q == p:
 				i = n
 			n += 1
@@ -1071,13 +1102,21 @@ func _hold_spot(p, id: String) -> Vector3:
 	var places: Array[Vector3] = []
 	var center: Vector3 = hold_position(id)
 	for ring in range(turn.y + 1):
+		# Nearest first in each ring: the straight places before the corners (a corner is 1.41
+		# times as far, and four waiting by one point need only the straight ones).
+		var cells: Array[Vector2i] = []
 		for dz in range(-ring, ring + 1):
 			for dx in range(-ring, ring + 1):
-				if maxi(absi(dx), absi(dz)) != ring:
-					continue
-				_add_work_place(places, center + Vector3(float(dx) * WORK_GAP, 0.0, float(dz) * WORK_GAP))
-				if places.size() > turn.x:
-					return places[turn.x]
+				if maxi(absi(dx), absi(dz)) == ring:
+					cells.append(Vector2i(dx, dz))
+		cells.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			if a.length_squared() != b.length_squared():
+				return a.length_squared() < b.length_squared()
+			return a.y < b.y or (a.y == b.y and a.x < b.x))
+		for cell: Vector2i in cells:
+			_add_work_place(places, center + Vector3(float(cell.x) * WORK_GAP, 0.0, float(cell.y) * WORK_GAP))
+			if places.size() > turn.x:
+				return places[turn.x]
 	return Vector3.INF
 
 
@@ -1200,6 +1239,8 @@ func _worked(p, id: String, wagon_index: int = -1) -> void:
 	p.brain["load"] = take
 	p.brain["load_kind"] = job(id)["yield"]
 	p.brain["job"] = "carry"
+	if coal and float(source[key]) <= EMPTY:
+		_dig_wagon_index(id)
 
 
 ## Beside the train at the carrier's own x, counted from the train itself: a map grown round its
@@ -1212,16 +1253,48 @@ func coal_drop(p) -> Vector3:
 		row = train.position.y - COAL_DROP_OUT
 	var cell := Vector2i(clampi(int(p.position.x), train.position.x + 1, train.end.x - 2),
 		clampi(row, 0, game.grid.height - 1))
-	return game.walkable_near(FieldGrid.center(cell))
+	var at: Vector3 = game.walkable_near(FieldGrid.center(cell))
+	if _can_drop_at(p, at):
+		return at
+	for offset in range(1, train.size.x):
+		for step: int in [offset, -offset]:
+			var x: int = cell.x + step
+			if x < train.position.x + 1 or x > train.end.x - 2:
+				continue
+			at = game.walkable_near(FieldGrid.center(Vector2i(x, cell.y)))
+			if _can_drop_at(p, at):
+				return at
+	return Vector3.INF
+
+
+## No nearby walkable cell returns the blocked cell; failed paths may stop short.
+func _can_drop_at(p, at: Vector3) -> bool:
+	if not at.is_finite() or not game.grid.people_can_walk(FieldGrid.cell_of(at)):
+		return false
+	if p.position.distance_to(at) <= DROP_R:
+		return true
+	var path: PackedVector3Array = game.find_path(p.position, at, false)
+	return not path.is_empty() and path[-1].distance_to(at) <= DROP_R
 
 
 func _deliver(p, id: String) -> void:
 	var drop: Vector3 = door_of(id)
 	if job_id(id) == "coal_wagon":
 		# Taken where the load is picked up, so the carrier's own steps do not move it and send
-		# it looking for the way again.
-		if not (p.brain.get("coal_drop") is Vector3):
-			p.brain["coal_drop"] = coal_drop(p)
+		# it looking for the way again. Taken again when its cell is blocked, or when the carrier
+		# has no way on and is not there yet: only then is a path found to it (not every think).
+		var cached: Variant = p.brain.get("coal_drop")
+		var stale: bool = not (cached is Vector3) or not game.grid.people_can_walk(FieldGrid.cell_of(cached))
+		if not stale and p.path.is_empty() and p.position.distance_to(cached) > DROP_R:
+			stale = not _can_drop_at(p, cached)
+		if stale:
+			drop = coal_drop(p)
+			p.stop()
+			p.brain.erase("dest")
+			if not drop.is_finite():
+				p.brain.erase("coal_drop")
+				return
+			p.brain["coal_drop"] = drop
 		drop = p.brain["coal_drop"]
 	if p.position.distance_to(drop) > DROP_R:
 		game.ai._walk(p, drop, false)

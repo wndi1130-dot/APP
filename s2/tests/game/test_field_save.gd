@@ -374,3 +374,113 @@ func test_the_slice_marker_survives_capture_and_resume_options() -> void:
 	var resumed: Dictionary = FieldSave.resume_opts(saved)
 	assert_true(bool(resumed["slice"]))
 	assert_false(saved["start_opts"].has("field_save_path"))
+
+
+func test_grid_fallback_keeps_coal_totals_loads_and_wagon_progress() -> void:
+	var a = _full_game()
+	a.zombies.list.clear()
+	a.pending_spawn.clear()
+	a.player.position = a.work.position_of("work_site")
+	a.work.update(1.0)
+	assert_true(a.work.start())
+	a.work.update(FieldWork.ESCORT_LEAD)
+	var workers: Array = []
+	for person in a.crew:
+		if person.role == "worker":
+			workers.append(person)
+	var state: Dictionary = a.work._site("work_site")
+	state["dig_parts"] = [{"wagon": 0, "seconds": 60.0}, {"wagon": 1, "seconds": 30.0}]
+	a.work._begin_dig(workers[0], "work_site")
+	workers[0].action_t = 24.0
+	workers[1].brain["load"] = 0.25
+	workers[1].brain["load_kind"] = "coal"
+	workers[1].brain["job"] = "carry"
+	a.work.dropped.append({"pos": a.player.position, "kind": "coal", "n": 0.25})
+	a.data["wagons"][0]["coal"] = 9.5
+	a.data["wagons"][1]["coal"] = 8.0
+	a.actions.coal_delivered = 2.0
+	a.actions.coal_spent = 0.5
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	var b = _full_game(FieldSave.resume_opts(saved))
+	assert_eq(FieldWork.wagon_coal(b.data) + b.actions.coal_delivered, 19.5)
+	assert_eq(b.actions.coal_spent, 0.5)
+	var carrier = b.work._person(workers[1].pid)
+	assert_eq(float(carrier.brain["load"]), 0.25)
+	assert_eq(carrier.brain["job"], "carry")
+	assert_eq(float(b.work.dropped[0]["n"]), 0.25)
+	assert_eq(FieldWork.wagon_coal(b.data) + b.actions.coal_delivered +
+		float(carrier.brain["load"]) + float(b.work.dropped[0]["n"]), 20.0)
+	var back: Dictionary = b.work._site("work_site")
+	assert_eq(back["dig_parts"], [{"wagon": 1, "seconds": 30.0}, {"wagon": 0, "seconds": 66.0}])
+	assert_true(back["dig_active"].is_empty(), "old grid callbacks become saved seconds")
+	assert_eq(b.work.phase(), "working")
+	var digger = b.work._person(workers[0].pid)
+	b.work._begin_dig(digger, "work_site")
+	assert_eq(digger.action_total, 24.0)
+	assert_eq(float(digger.brain["dig_from"]), 66.0)
+
+
+func test_grid_fallback_with_a_different_wagon_count_uses_the_saved_coal_pool() -> void:
+	var a = _full_game()
+	a.data["wagons"][0]["coal"] = 3.0
+	a.data["wagons"][1]["coal"] = 4.0
+	a.actions.coal_delivered = 2.0
+	var state: Dictionary = a.work._site("work_site")
+	state["dig_wagon"] = 0
+	state["dig_parts"] = [{"wagon": 0, "seconds": 60.0}]
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	saved["runtime"]["wagon_coal"].pop_back()
+	saved["runtime"]["wagon_ids"].pop_back()
+	var b = _full_game(FieldSave.resume_opts(saved))
+	assert_eq(FieldWork.wagon_coal(b.data), 7.0)
+	assert_eq(FieldWork.wagon_coal(b.data) + b.actions.coal_delivered, 9.0)
+	assert_true(b.work._site("work_site")["dig_parts"].is_empty())
+	assert_eq(int(b.work._site("work_site")["dig_wagon"]), -1)
+
+
+func test_grid_fallback_rejects_changed_wagon_ids_even_at_the_same_count() -> void:
+	var a = _full_game()
+	a.data["wagons"][0]["coal"] = 3.0
+	a.data["wagons"][1]["coal"] = 4.0
+	var state: Dictionary = a.work._site("work_site")
+	state["dig_wagon"] = 0
+	state["dig_parts"] = [{"wagon": 0, "seconds": 60.0}]
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	saved["runtime"]["wagon_ids"][0] = "changed_wagon"
+	var b = _full_game(FieldSave.resume_opts(saved))
+	assert_eq(FieldWork.wagon_coal(b.data), 7.0)
+	assert_eq(float(b.data["wagons"][0]["coal"]), 7.0)
+	assert_eq(float(b.data["wagons"][1]["coal"]), 0.0)
+	assert_true(b.work._site("work_site")["dig_parts"].is_empty())
+
+
+func test_grid_fallback_without_wagon_counts_deducts_coal_already_removed() -> void:
+	var a = _full_game()
+	a.actions.coal_delivered = 2.0
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	saved["runtime"].erase("wagon_coal")
+	saved["runtime"].erase("wagon_ids")
+	var b = _full_game(FieldSave.resume_opts(saved))
+	assert_eq(FieldWork.wagon_coal(b.data), 18.0)
+	assert_eq(FieldWork.wagon_coal(b.data) + b.actions.coal_delivered, 20.0)
+
+
+func test_grid_fallback_without_work_wagons_keeps_the_saved_coal_as_a_pile() -> void:
+	var a = _full_game()
+	a.data["wagons"][0]["coal"] = 3.0
+	a.data["wagons"][1]["coal"] = 4.0
+	a.actions.coal_delivered = 2.0
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	var b = _full_game()
+	b.data["wagons"] = []
+	FieldSave.apply(b, saved)
+	assert_eq(FieldWork.wagon_coal(b.data), 0.0)
+	assert_eq(b.work.dropped.size(), 1)
+	assert_eq(b.work.dropped[0]["kind"], "coal")
+	assert_eq(float(b.work.dropped[0]["n"]), 7.0)
+	assert_eq(float(b.work.dropped[0]["n"]) + b.actions.coal_delivered, 9.0)
