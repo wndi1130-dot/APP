@@ -8,8 +8,10 @@ const FieldSave = preload("res://game/sim/field_save.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 
-const DIR := "user://test_field_save"
-const AT := DIR + "/field_save.json"
+## A folder of this run's own: another run of the trials at the same time (another
+## working copy) shares the user folder and would write over the same slot.
+static var DIR: String = "user://test_field_save_%d" % OS.get_process_id()
+static var AT: String = DIR + "/field_save.json"
 
 
 func before_each() -> void:
@@ -21,6 +23,10 @@ func before_each() -> void:
 func after_each() -> void:
 	FieldSave._test_fail_step = ""
 	FieldSave.clear(AT)
+
+
+func after_all() -> void:
+	DirAccess.remove_absolute(DIR)
 
 
 func _game(extra: Dictionary = {}):
