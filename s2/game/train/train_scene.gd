@@ -1310,7 +1310,7 @@ func _build_train() -> void:
 			"def": def, "id": String(def["id"]), "index": i, "x0": node.position.x, "node": node,
 			"bodies": [], "out": 0, "errand_t": rng.randf_range(2.0, 8.0), "errand_i": 0, "mood": "calm",
 			"call_t": rng.randf_range(CALL_FIRST.x, CALL_FIRST.y), "call_i": 0,
-			"unrest": -1, "quiet": "", "seats": 0,
+			"unrest": -1, "quiet": "", "seats": 0, "home_stage": _home_stage_of(String(def["id"])),
 		}
 		_build_car(c, i < defs.size() - 1)
 		cars.append(c)
@@ -1320,6 +1320,14 @@ func _build_train() -> void:
 	_build_snow_ground()
 	_build_highlight()
 	_apply_view()
+
+
+## A car's home stage (결정 486·517): the tier the domestic rules give a car a player furnishes
+## (train_decor.gd tier_of, handed in as rules["train"]["home"] by slice_flow.gd), so its light
+## follows how it is kept; a car no one furnishes, or a train shown without it, keeps the default.
+func _home_stage_of(id: String) -> int:
+	var home: Dictionary = (rules.get("train", {}) as Dictionary).get("home", {})
+	return int(home.get(id, TrainLight.STAGE_DEFAULT))
 
 
 func _build_car(c: Dictionary, gangway: bool) -> void:
