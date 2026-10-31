@@ -1591,7 +1591,10 @@ func leave_decor() -> void:
 	var id: String = decor_id
 	decor_id = ""
 	if is_instance_valid(decor_pane):
-		decor_pane.cancel_drag()
+		# A drag goes with the pane. Only the train's hover is cleared: cancel_drag would lay
+		# the closing pane out again (stop_drag → _layout), most of the close's stall.
+		if is_instance_valid(train):
+			train.decor_hover("")
 		decor_pane.hide()
 		decor_pane.queue_free()
 	decor_pane = null
@@ -1608,7 +1611,10 @@ func leave_decor() -> void:
 	_decor_hidden.clear()
 	if is_instance_valid(paper):
 		paper.g = train_g
-		paper._fill()
+		# Decorating opens only over a folded paper (open_decor), and unfolding refills it
+		# with what changed meanwhile (turn_card.gd set_folded), so it is not refilled under the fold.
+		if not (paper as TurnCard).folded:
+			paper._fill()
 	_select(id, false)
 
 
