@@ -86,17 +86,23 @@ func _ready() -> void:
 		_come_up(dim)
 
 
-## The end card's fade and cubic rise, with no delay between the words.
+## The end card's fade and cubic rise, with no delay between the words. The
+## rise moves the centred sheet's offsets, not its position, so a screen that
+## changes size while it comes up still has the sheet in its middle.
 func _come_up(dim: ColorRect) -> void:
 	dim.modulate.a = 0.0
 	sheet.modulate.a = 0.0
-	var at: Vector2 = sheet.position
-	sheet.position = at + Vector2(0, UiFonts.px(RISE_CSS))
+	var top: float = sheet.offset_top
+	var bottom: float = sheet.offset_bottom
+	var rise: float = UiFonts.px(RISE_CSS)
+	sheet.offset_top = top + rise
+	sheet.offset_bottom = bottom + rise
 	var tw: Tween = create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(dim, "modulate:a", 1.0, DIM_S)
 	tw.tween_property(sheet, "modulate:a", 1.0, SHOW_S)
-	tw.tween_property(sheet, "position", at, SHOW_S).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(sheet, "offset_top", top, SHOW_S).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(sheet, "offset_bottom", bottom, SHOW_S).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 func _go_on() -> void:

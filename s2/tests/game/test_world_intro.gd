@@ -117,7 +117,22 @@ func test_the_still_sheet_and_all_its_words_fit_in_1280_by_720() -> void:
 	assert_eq(intro.go_key.text, WorldIntro.GO_WORD)
 
 
-func test_the_draft_is_three_or_four_sentences_with_a_kick_and_a_key() -> void:
+func test_a_screen_that_changes_size_while_the_sheet_comes_up_keeps_it_centred() -> void:
+	var viewport: SubViewport = SubViewport.new()
+	viewport.size = Vector2i(1280, 720)
+	add_child_autofree(viewport)
+	var intro: WorldIntro = WorldIntro.new()
+	viewport.add_child(intro)
+	await wait_frames(2)
+	viewport.size = Vector2i(1600, 720)
+	await wait_seconds(WorldIntro.SHOW_S + 0.2)
+	var centre: Vector2 = Vector2(viewport.size) / 2.0
+	var sheet_centre: Vector2 = intro.sheet.position + intro.sheet.size / 2.0
+	assert_almost_eq(sheet_centre.x, centre.x, 1.0, "the sheet came up in the new middle")
+	assert_almost_eq(sheet_centre.y, centre.y, 1.0)
+
+
+func test_the_words_are_three_or_four_sentences_with_a_kick_and_a_key() -> void:
 	for words: String in [WorldIntro.KICK, WorldIntro.TEXT, WorldIntro.GO_WORD]:
 		assert_false(words.strip_edges().is_empty())
 	var sentences: int = WorldIntro.TEXT.count(".")
