@@ -7,6 +7,8 @@ extends Node3D
 ## like the field; the car bodies and the people's clips swap in later.
 
 signal rules_applied
+## Decorating closed here (exit_decor), also when the train closes it itself before a rebuild.
+signal decor_closed
 
 const Rules = preload("res://game/train/train_rules.gd")
 const Look = preload("res://game/train/train_look.gd")
@@ -262,6 +264,7 @@ func apply_rules(event: String = "rules") -> void:
 
 
 func _rebuild_layout() -> void:
+	exit_decor()
 	var traces: Dictionary = {}
 	for id in life.rooms:
 		traces[id] = life.rooms[id].traces.duplicate(true)
@@ -384,15 +387,20 @@ func focus_car(id: String, near: bool = false) -> void:
 	_place_camera()
 
 
+## Whether this car may be decorated, without closing or changing the current view.
+func can_enter_decor(id: String) -> bool:
+	return not car(id).is_empty() and not DecorGrid.of(id).is_empty() and phase() != "council"
+
+
 ## Decorating a car (결정 506·510·511, decor_view.gd): its own camera, the grid over its floor and
 ## its people seen through. Only the cars the decor table has; false for any other, and while the
 ## council sits. The strip, the rules and when it may open are the domestic side's (decor_strip.gd).
 func enter_decor(id: String) -> bool:
+	if not can_enter_decor(id):
+		return false
 	if decor != null:
 		exit_decor()
 	var c := car(id)
-	if c.is_empty() or DecorGrid.of(id).is_empty() or phase() == "council":
-		return false
 	var view = DecorView.new()
 	if not view.enter(self, c):
 		return false
@@ -413,6 +421,7 @@ func exit_decor() -> void:
 		camera.v_offset = 0.0
 	_apply_view()
 	_place_camera()
+	decor_closed.emit()
 
 
 ## The car being decorated, or "".
