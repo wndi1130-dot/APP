@@ -76,7 +76,7 @@ export interface FieldDepartureV2 {
   promises: FieldPromiseSpec[];
   domestic: boolean;
   /** 정차 전체에 걸리는 열차 사정 */
-  train: { food: number; hungerSegs: number };
+  train: { food: number; hungerSegs: number; /** 열차가 둔 썰매(S2 열차만, 계약 글 2절). S1은 싣지 않는다 */ sleds?: number };
 }
 
 export type StopWeather = Exclude<Weather, 'cold' | 'cold_front'> | 'rain';

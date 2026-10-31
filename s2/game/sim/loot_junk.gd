@@ -11,6 +11,7 @@ extends RefCounted
 
 const LootTables = preload("res://game/sim/loot_tables.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const FieldItems = preload("res://game/sim/field_items.gd")
 
 ## [item, chance] rows by room (loot_dress.gd room_of). The kitchen more than
 ## the bedroom, so the bedroom stays the one most often found empty; a store
@@ -117,7 +118,7 @@ static func spill_looted(data: Dictionary, stories: Array, seed: int) -> Array:
 			if bool(box.get("searched", false)) and (box.get("items", []) as Array).is_empty():
 				emptied.append(id)
 			elif kept == "" and not bool(box.get("searched", false)) and not bool(box.get("locked", false)) \
-					and not box.has("pick") and not (box.get("items", []) as Array).is_empty():
+					and not box.has("pick") and _things(box.get("items", [])) > 0:
 				kept = id
 		if kept == "" or emptied.is_empty():
 			continue
@@ -135,7 +136,7 @@ static func spill_looted(data: Dictionary, stories: Array, seed: int) -> Array:
 					at = i
 					break
 			# The box that was missed is never left empty by it.
-			if at < 0 or items.size() <= 1:
+			if at < 0 or _things(items) <= 1:
 				break
 			var box: Dictionary = containers[id]
 			var lv := int(box.get("level", 0))
@@ -148,6 +149,15 @@ static func spill_looted(data: Dictionary, stories: Array, seed: int) -> Array:
 			here += 1
 		containers[kept]["items"] = items
 	return out
+
+
+## What a box holds but the everyday supplies (decision 490, put on last by the dressing):
+## the spill reads the box as it was before them, so they change none of what it tips out.
+static func _things(items: Array) -> int:
+	var n := 0
+	for item: Variant in items:
+		n += int(FieldItems.group(String(item)) != "supplies")
+	return n
 
 
 ## A floor cell beside c, in building b, people can stand on and not a door.
