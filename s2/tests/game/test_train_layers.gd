@@ -151,10 +151,13 @@ func test_the_dress_is_one_mesh_a_car_where_its_rows_say_seen_up_close() -> void
 		var index: PackedInt32Array = dress.mesh.surface_get_arrays(0)[Mesh.ARRAY_INDEX]
 		assert_eq(dress.mesh.get_surface_count(), 1, id + ": one surface, one draw")
 		assert_eq(int(index.size() / 3.0), tris, id + ": every dress model in it")
-		# Laid where the rows keep them: the mesh fills the rows' boxes, no more and no less.
+		# Laid where the rows keep them: the mesh stays in the rows' boxes (nothing in the wall or the
+		# floor), and a model a stage puts in a row's place (home_model) may be smaller than its box.
 		var got: AABB = dress.mesh.get_aabb()
-		assert_true(got.position.is_equal_approx(reach.position) or got.position.distance_to(reach.position) < 0.011, "%s: from %s, rows %s" % [id, got.position, reach.position])
-		assert_lt(got.end.distance_to(reach.end), 0.011, "%s: to %s, rows %s" % [id, got.end, reach.end])
+		for axis: int in 3:
+			assert_true(got.position[axis] >= reach.position[axis] - 0.011, "%s: from %s, rows %s" % [id, got.position, reach.position])
+			assert_true(got.end[axis] <= reach.end[axis] + 0.011, "%s: to %s, rows %s" % [id, got.end, reach.end])
+		assert_gt(got.get_volume(), reach.get_volume() * 0.5, id + ": the mesh fills most of the rows' reach")
 		assert_eq(dress.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
 	var guard: MeshInstance3D = s.life.rooms["guard"].dress
 	s.focus_car("guard", false)

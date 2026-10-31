@@ -487,12 +487,40 @@
           "cars": [
             "tail1"
           ],
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tail1_tier",
+          "model": "wood_wall_box",
+          "at": [
+            8.0,
+            1.46,
+            -1.16
+          ],
+          "size": [
+            0.5,
+            0.88,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail1"
+          ],
           "home_model": {
             "1": "wood_wall_box",
             "2": "end_shelf",
             "3": "end_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_wall_rack_tail1",
@@ -513,12 +541,40 @@
           "cars": [
             "tail1"
           ],
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_wall_rack_tail1_tier",
+          "model": "wood_wall_box",
+          "at": [
+            15.5,
+            1.62,
+            -1.16
+          ],
+          "size": [
+            0.48,
+            0.4,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail1"
+          ],
           "home_model": {
             "1": "wood_wall_box",
             "2": "top_shelf",
             "3": "top_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_wall_notes_tail1",
@@ -539,12 +595,40 @@
           "cars": [
             "tail1"
           ],
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_wall_notes_tail1_tier",
+          "model": "wood_wall_box",
+          "at": [
+            0.5,
+            1.53,
+            -1.16
+          ],
+          "size": [
+            0.48,
+            0.46,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail1"
+          ],
           "home_model": {
             "1": "wood_wall_box",
             "2": "top_shelf",
             "3": "top_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_rug_tail1",
@@ -677,12 +761,40 @@
           "cars": [
             "tail2"
           ],
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tail2_tier",
+          "model": "wood_wall_box",
+          "at": [
+            8.0,
+            1.46,
+            -1.16
+          ],
+          "size": [
+            0.5,
+            0.88,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail2"
+          ],
           "home_model": {
             "1": "wood_wall_box",
             "2": "end_shelf",
             "3": "end_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_wall_rack_tail2",
@@ -703,12 +815,40 @@
           "cars": [
             "tail2"
           ],
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_wall_rack_tail2_tier",
+          "model": "wood_wall_box",
+          "at": [
+            15.5,
+            1.62,
+            -1.16
+          ],
+          "size": [
+            0.48,
+            0.4,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail2"
+          ],
           "home_model": {
             "1": "wood_wall_box",
             "2": "top_shelf",
             "3": "top_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_rug_tail2",
@@ -841,12 +981,40 @@
           "cars": [
             "tail3"
           ],
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tail3_tier",
+          "model": "wood_wall_box",
+          "at": [
+            15.5,
+            1.46,
+            -1.16
+          ],
+          "size": [
+            0.5,
+            0.88,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
+          "cars": [
+            "tail3"
+          ],
           "home_model": {
             "1": "wood_wall_box",
             "2": "end_shelf",
             "3": "end_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_rug_tail3",
@@ -1535,7 +1703,7 @@
           "at": [
             8.145533,
             1.062444,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -1549,7 +1717,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 0,
           "cars": [
             "tail1"
@@ -1561,7 +1729,7 @@
           "at": [
             8.145533,
             1.490222,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -1575,7 +1743,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 1,
           "cars": [
             "tail1"
@@ -1925,7 +2093,7 @@
           "at": [
             7.841533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -1939,7 +2107,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 0,
           "cars": [
             "tail1"
@@ -1951,7 +2119,7 @@
           "at": [
             7.917533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -1965,7 +2133,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 0,
           "cars": [
             "tail1"
@@ -1977,7 +2145,7 @@
           "at": [
             7.993533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -1991,7 +2159,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 0,
           "cars": [
             "tail1"
@@ -2003,7 +2171,7 @@
           "at": [
             7.841533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -2017,7 +2185,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 2,
           "cars": [
             "tail1"
@@ -2029,7 +2197,7 @@
           "at": [
             7.917533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -2043,7 +2211,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 2,
           "cars": [
             "tail1"
@@ -2185,7 +2353,7 @@
           "at": [
             8.137533,
             1.084444,
-            -1.157
+            -1.067
           ],
           "size": [
             0.072,
@@ -2199,7 +2367,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 0,
           "cars": [
             "tail1"
@@ -2575,7 +2743,7 @@
           "at": [
             7.877533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -2589,7 +2757,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 0,
           "cars": [
             "tail1"
@@ -2601,7 +2769,7 @@
           "at": [
             8.025533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -2615,7 +2783,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 0,
           "cars": [
             "tail1"
@@ -2627,7 +2795,7 @@
           "at": [
             7.877533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -2641,7 +2809,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 1,
           "cars": [
             "tail1"
@@ -2653,7 +2821,7 @@
           "at": [
             8.025533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -2667,7 +2835,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail1",
+          "on_shelf": "dress_coat_hook_tail1_tier",
           "shelf_board": 1,
           "cars": [
             "tail1"
@@ -3458,7 +3626,7 @@
           "at": [
             8.145533,
             1.062444,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -3472,7 +3640,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 0,
           "cars": [
             "tail2"
@@ -3484,7 +3652,7 @@
           "at": [
             8.145533,
             1.490222,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -3498,7 +3666,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 1,
           "cars": [
             "tail2"
@@ -3848,7 +4016,7 @@
           "at": [
             7.841533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -3862,7 +4030,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 0,
           "cars": [
             "tail2"
@@ -3874,7 +4042,7 @@
           "at": [
             7.917533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -3888,7 +4056,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 0,
           "cars": [
             "tail2"
@@ -3900,7 +4068,7 @@
           "at": [
             7.993533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -3914,7 +4082,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 0,
           "cars": [
             "tail2"
@@ -3926,7 +4094,7 @@
           "at": [
             7.841533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -3940,7 +4108,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 2,
           "cars": [
             "tail2"
@@ -3952,7 +4120,7 @@
           "at": [
             7.917533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -3966,7 +4134,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 2,
           "cars": [
             "tail2"
@@ -4108,7 +4276,7 @@
           "at": [
             8.137533,
             1.084444,
-            -1.157
+            -1.067
           ],
           "size": [
             0.072,
@@ -4122,7 +4290,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 0,
           "cars": [
             "tail2"
@@ -4498,7 +4666,7 @@
           "at": [
             7.877533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -4512,7 +4680,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 0,
           "cars": [
             "tail2"
@@ -4524,7 +4692,7 @@
           "at": [
             8.025533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -4538,7 +4706,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 0,
           "cars": [
             "tail2"
@@ -4550,7 +4718,7 @@
           "at": [
             7.877533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -4564,7 +4732,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 1,
           "cars": [
             "tail2"
@@ -4576,7 +4744,7 @@
           "at": [
             8.025533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -4590,7 +4758,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail2",
+          "on_shelf": "dress_coat_hook_tail2_tier",
           "shelf_board": 1,
           "cars": [
             "tail2"
@@ -5381,7 +5549,7 @@
           "at": [
             15.645533,
             1.062444,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -5395,7 +5563,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 0,
           "cars": [
             "tail3"
@@ -5407,7 +5575,7 @@
           "at": [
             15.645533,
             1.490222,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -5421,7 +5589,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 1,
           "cars": [
             "tail3"
@@ -5771,7 +5939,7 @@
           "at": [
             15.341533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -5785,7 +5953,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 0,
           "cars": [
             "tail3"
@@ -5797,7 +5965,7 @@
           "at": [
             15.417533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -5811,7 +5979,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 0,
           "cars": [
             "tail3"
@@ -5823,7 +5991,7 @@
           "at": [
             15.493533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -5837,7 +6005,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 0,
           "cars": [
             "tail3"
@@ -5849,7 +6017,7 @@
           "at": [
             15.341533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -5863,7 +6031,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 2,
           "cars": [
             "tail3"
@@ -5875,7 +6043,7 @@
           "at": [
             15.417533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -5889,7 +6057,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 2,
           "cars": [
             "tail3"
@@ -6031,7 +6199,7 @@
           "at": [
             15.637533,
             1.084444,
-            -1.157
+            -1.067
           ],
           "size": [
             0.072,
@@ -6045,7 +6213,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 0,
           "cars": [
             "tail3"
@@ -6421,7 +6589,7 @@
           "at": [
             15.377533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -6435,7 +6603,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 0,
           "cars": [
             "tail3"
@@ -6447,7 +6615,7 @@
           "at": [
             15.525533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -6461,7 +6629,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 0,
           "cars": [
             "tail3"
@@ -6473,7 +6641,7 @@
           "at": [
             15.377533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -6487,7 +6655,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 1,
           "cars": [
             "tail3"
@@ -6499,7 +6667,7 @@
           "at": [
             15.525533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -6513,7 +6681,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook_tail3",
+          "on_shelf": "dress_coat_hook_tail3_tier",
           "shelf_board": 1,
           "cars": [
             "tail3"
@@ -7215,12 +7383,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tier",
+          "model": "wood_wall_box",
+          "at": [
+            12.0,
+            1.46,
+            -1.16
+          ],
+          "size": [
+            0.5,
+            0.88,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "end_shelf",
             "3": "end_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_wall_rack",
@@ -7238,12 +7431,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_wall_rack_tier",
+          "model": "wood_wall_box",
+          "at": [
+            8.0,
+            1.62,
+            -1.16
+          ],
+          "size": [
+            0.48,
+            0.4,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "top_shelf",
             "3": "top_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_wall_notes",
@@ -7261,12 +7479,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_wall_notes_tier",
+          "model": "wood_wall_box",
+          "at": [
+            4.0,
+            1.53,
+            -1.16
+          ],
+          "size": [
+            0.48,
+            0.46,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "top_shelf",
             "3": "top_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_rug",
@@ -7915,7 +8158,7 @@
           "at": [
             12.145533,
             1.062444,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -7929,7 +8172,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -7938,7 +8181,7 @@
           "at": [
             12.145533,
             1.490222,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -7952,7 +8195,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -8260,7 +8503,7 @@
           "at": [
             11.841533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -8274,7 +8517,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -8283,7 +8526,7 @@
           "at": [
             11.917533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -8297,7 +8540,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -8306,7 +8549,7 @@
           "at": [
             11.993533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -8320,7 +8563,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -8329,7 +8572,7 @@
           "at": [
             11.841533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -8343,7 +8586,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 2
         },
         {
@@ -8352,7 +8595,7 @@
           "at": [
             11.917533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -8366,7 +8609,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 2
         },
         {
@@ -8490,7 +8733,7 @@
           "at": [
             12.137533,
             1.084444,
-            -1.157
+            -1.067
           ],
           "size": [
             0.072,
@@ -8504,7 +8747,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -8835,7 +9078,7 @@
           "at": [
             11.877533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -8849,7 +9092,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -8858,7 +9101,7 @@
           "at": [
             12.025533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -8872,7 +9115,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -8881,7 +9124,7 @@
           "at": [
             11.877533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -8895,7 +9138,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -8904,7 +9147,7 @@
           "at": [
             12.025533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -8918,7 +9161,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -9644,12 +9887,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tier",
+          "model": "wood_wall_box",
+          "at": [
+            0.5,
+            1.46,
+            -1.16
+          ],
+          "size": [
+            0.5,
+            0.88,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "end_shelf",
             "3": "end_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_wall_rack",
@@ -9667,12 +9935,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_wall_rack_tier",
+          "model": "wood_wall_box",
+          "at": [
+            15.5,
+            1.62,
+            -1.16
+          ],
+          "size": [
+            0.48,
+            0.4,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "top_shelf",
             "3": "top_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_wall_notes",
@@ -9690,12 +9983,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_wall_notes_tier",
+          "model": "wood_wall_box",
+          "at": [
+            4.0,
+            1.53,
+            -1.16
+          ],
+          "size": [
+            0.48,
+            0.46,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "top_shelf",
             "3": "top_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_rug",
@@ -10361,7 +10679,7 @@
           "at": [
             0.645533,
             1.062444,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -10375,7 +10693,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -10384,7 +10702,7 @@
           "at": [
             0.645533,
             1.490222,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -10398,7 +10716,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -10706,7 +11024,7 @@
           "at": [
             0.341533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -10720,7 +11038,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -10729,7 +11047,7 @@
           "at": [
             0.417533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -10743,7 +11061,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -10752,7 +11070,7 @@
           "at": [
             0.493533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -10766,7 +11084,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -10775,7 +11093,7 @@
           "at": [
             0.341533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -10789,7 +11107,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 2
         },
         {
@@ -10798,7 +11116,7 @@
           "at": [
             0.417533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -10812,7 +11130,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 2
         },
         {
@@ -10936,7 +11254,7 @@
           "at": [
             0.637533,
             1.084444,
-            -1.157
+            -1.067
           ],
           "size": [
             0.072,
@@ -10950,7 +11268,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -11281,7 +11599,7 @@
           "at": [
             0.377533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -11295,7 +11613,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -11304,7 +11622,7 @@
           "at": [
             0.525533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -11318,7 +11636,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -11327,7 +11645,7 @@
           "at": [
             0.377533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -11341,7 +11659,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -11350,7 +11668,7 @@
           "at": [
             0.525533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -11364,7 +11682,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -12220,12 +12538,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tier",
+          "model": "wood_wall_box",
+          "at": [
+            8.0,
+            1.46,
+            -1.16
+          ],
+          "size": [
+            0.5,
+            0.88,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "end_shelf",
             "3": "end_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_wall_rack",
@@ -12243,12 +12586,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_wall_rack_tier",
+          "model": "wood_wall_box",
+          "at": [
+            4.0,
+            1.62,
+            -1.16
+          ],
+          "size": [
+            0.48,
+            0.4,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "top_shelf",
             "3": "top_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_wall_notes",
@@ -12266,12 +12634,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_wall_notes_tier",
+          "model": "wood_wall_box",
+          "at": [
+            12.0,
+            1.53,
+            -1.16
+          ],
+          "size": [
+            0.48,
+            0.46,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "top_shelf",
             "3": "top_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_rug",
@@ -12903,7 +13296,7 @@
           "at": [
             8.145533,
             1.062444,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -12917,7 +13310,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -12926,7 +13319,7 @@
           "at": [
             8.145533,
             1.490222,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -12940,7 +13333,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -13248,7 +13641,7 @@
           "at": [
             7.841533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -13262,7 +13655,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -13271,7 +13664,7 @@
           "at": [
             7.917533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -13285,7 +13678,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -13294,7 +13687,7 @@
           "at": [
             7.993533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -13308,7 +13701,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -13317,7 +13710,7 @@
           "at": [
             7.841533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -13331,7 +13724,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 2
         },
         {
@@ -13340,7 +13733,7 @@
           "at": [
             7.917533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -13354,7 +13747,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 2
         },
         {
@@ -13478,7 +13871,7 @@
           "at": [
             8.137533,
             1.084444,
-            -1.157
+            -1.067
           ],
           "size": [
             0.072,
@@ -13492,7 +13885,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -13823,7 +14216,7 @@
           "at": [
             7.877533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -13837,7 +14230,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -13846,7 +14239,7 @@
           "at": [
             8.025533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -13860,7 +14253,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -13869,7 +14262,7 @@
           "at": [
             7.877533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -13883,7 +14276,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -13892,7 +14285,7 @@
           "at": [
             8.025533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -13906,7 +14299,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -15450,12 +15843,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tier",
+          "model": "wood_wall_box",
+          "at": [
+            15.5,
+            1.46,
+            -1.16
+          ],
+          "size": [
+            0.5,
+            0.88,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "end_shelf",
             "3": "end_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_wall_rack",
@@ -15473,12 +15891,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_wall_rack_tier",
+          "model": "wood_wall_box",
+          "at": [
+            0.5,
+            1.62,
+            -1.16
+          ],
+          "size": [
+            0.48,
+            0.4,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box",
             "2": "top_shelf",
             "3": "top_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_rug",
@@ -16127,7 +16570,7 @@
           "at": [
             15.645533,
             1.062444,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -16141,7 +16584,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -16150,7 +16593,7 @@
           "at": [
             15.645533,
             1.490222,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -16164,7 +16607,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -16472,7 +16915,7 @@
           "at": [
             15.341533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -16486,7 +16929,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -16495,7 +16938,7 @@
           "at": [
             15.417533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -16509,7 +16952,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -16518,7 +16961,7 @@
           "at": [
             15.493533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -16532,7 +16975,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -16541,7 +16984,7 @@
           "at": [
             15.341533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -16555,7 +16998,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 2
         },
         {
@@ -16564,7 +17007,7 @@
           "at": [
             15.417533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -16578,7 +17021,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 2
         },
         {
@@ -16702,7 +17145,7 @@
           "at": [
             15.637533,
             1.084444,
-            -1.157
+            -1.067
           ],
           "size": [
             0.072,
@@ -16716,7 +17159,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -17047,7 +17490,7 @@
           "at": [
             15.377533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -17061,7 +17504,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -17070,7 +17513,7 @@
           "at": [
             15.525533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -17084,7 +17527,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -17093,7 +17536,7 @@
           "at": [
             15.377533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -17107,7 +17550,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -17116,7 +17559,7 @@
           "at": [
             15.525533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -17130,7 +17573,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -17780,12 +18223,37 @@
           "yaw": 0,
           "layer": "wall",
           "dress": true,
+          "home": [
+            0,
+            0
+          ]
+        },
+        {
+          "id": "dress_coat_hook_tier",
+          "model": "wood_wall_box_shallow",
+          "at": [
+            0.5,
+            1.46,
+            -1.16
+          ],
+          "size": [
+            0.5,
+            0.88,
+            0.28
+          ],
+          "yaw": 0,
+          "layer": "wall",
+          "dress": true,
           "home_model": {
             "1": "wood_wall_box_shallow",
             "2": "end_shelf",
             "3": "end_shelf"
           },
-          "tier_shelf": true
+          "tier_shelf": true,
+          "home": [
+            1,
+            3
+          ]
         },
         {
           "id": "dress_rug",
@@ -18417,7 +18885,7 @@
           "at": [
             0.645533,
             1.062444,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -18431,7 +18899,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -18440,7 +18908,7 @@
           "at": [
             0.645533,
             1.490222,
-            -1.241
+            -1.151
           ],
           "size": [
             0.088,
@@ -18454,7 +18922,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -18762,7 +19230,7 @@
           "at": [
             0.341533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -18776,7 +19244,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -18785,7 +19253,7 @@
           "at": [
             0.417533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -18799,7 +19267,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -18808,7 +19276,7 @@
           "at": [
             0.493533,
             1.088444,
-            -1.169
+            -1.079
           ],
           "size": [
             0.072,
@@ -18822,7 +19290,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -18831,7 +19299,7 @@
           "at": [
             0.341533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -18845,7 +19313,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 2
         },
         {
@@ -18854,7 +19322,7 @@
           "at": [
             0.417533,
             1.944,
-            -1.269
+            -1.179
           ],
           "size": [
             0.072,
@@ -18868,7 +19336,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 2
         },
         {
@@ -18992,7 +19460,7 @@
           "at": [
             0.637533,
             1.084444,
-            -1.157
+            -1.067
           ],
           "size": [
             0.072,
@@ -19006,7 +19474,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -19337,7 +19805,7 @@
           "at": [
             0.377533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -19351,7 +19819,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -19360,7 +19828,7 @@
           "at": [
             0.525533,
             1.052444,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -19374,7 +19842,7 @@
             2,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 0
         },
         {
@@ -19383,7 +19851,7 @@
           "at": [
             0.377533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -19397,7 +19865,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
@@ -19406,7 +19874,7 @@
           "at": [
             0.525533,
             1.480222,
-            -1.237
+            -1.147
           ],
           "size": [
             0.144,
@@ -19420,7 +19888,7 @@
             3,
             3
           ],
-          "on_shelf": "dress_coat_hook",
+          "on_shelf": "dress_coat_hook_tier",
           "shelf_board": 1
         },
         {
