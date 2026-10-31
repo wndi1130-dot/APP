@@ -177,7 +177,10 @@ func test_catalog_and_all_slot_tables_match_s1() -> void:
 		var def: Dictionary = Decor.DECOR[kind]
 		furniture += int(def["furniture"])
 		surfaces += int(def["surface"])
-		assert_eq(def["model"], "")
+		# Missing art keeps an empty path; mapped art must resolve in this checkout.
+		# The complete catalog (including model paths) is compared with S1 above.
+		if String(def["model"]) != "":
+			assert_true(FileAccess.file_exists(def["model"]), kind + " model exists")
 		if def.has("res"):
 			# bottle_spirit is an existing legacy STOCK_OF entry in field_game.gd. The tag is exactly what the
 			# field credits — rounding it up would melt the piece on arrival.

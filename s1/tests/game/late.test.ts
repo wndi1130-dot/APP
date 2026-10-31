@@ -372,7 +372,7 @@ describe('기한 초과·저장·봇', () => {
   });
 
   it.each([false, true])('기준 봇은 later를 고르지 않고 off와 끝 상태가 같다(scoreCards=%s)', scoreCards => {
-    const off = playGame('late-bot', { ...BASE, scoreCards }).g;
+    const off = playGame('late-bot', { ...BASE, scoreCards, late: false }).g;
     let seen = 0;
     const on = playGame('late-bot', { ...BASE, scoreCards, late: true, probe: {
       beforePick: (_g, _card, view, idx) => { if (view.choices.some(c => c.id === 'later')) seen++; expect(view.choices[idx].id).not.toBe('later'); },

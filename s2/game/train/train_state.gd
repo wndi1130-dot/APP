@@ -27,6 +27,8 @@ static func is_s1a(g: Dictionary) -> bool:
 		# The outside's stages and the track freeze are ported (train_climate.gd).
 		if key == "climate" and v is bool:
 			continue
+		if key == "budget" and v is Dictionary:
+			continue
 		return false
 	return true
 
