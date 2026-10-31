@@ -99,10 +99,12 @@ func test_a_cap_on_the_bodies_the_dead_wear() -> void:
 	var three := DeadCast.others().size()
 	ProjectSettings.set_setting(DeadCast.SETTING, 1)
 	var one := DeadCast.others().size()
+	ProjectSettings.set_setting(DeadCast.SETTING, 0)
+	var all := DeadCast.others().size()
 	ProjectSettings.set_setting(DeadCast.SETTING, was)
 	assert_eq(three, 2)
 	assert_eq(one, 0, "the first alone")
-	assert_eq(DeadCast.others().size(), DeadCast.BODIES.size() - 1, "all of them with no cap")
+	assert_eq(all, DeadCast.BODIES.size() - 1, "all of them with no cap")
 
 
 # Read in one a frame, each body with its own five looks and its own walk's
@@ -140,7 +142,10 @@ func test_the_bodies_are_read_one_a_frame_each_with_its_looks_and_stride() -> vo
 	z.draw = z._draws_of(z.vat)
 	z.draws = [z.draw]
 	z.body_rounds = [DeadBody.rounds]
+	var was = ProjectSettings.get_setting(DeadCast.SETTING, 0)
+	ProjectSettings.set_setting(DeadCast.SETTING, 0)
 	z.bodies_to_read = DeadCast.others()
+	ProjectSettings.set_setting(DeadCast.SETTING, was)
 	z.bodies_planned = 1 + z.bodies_to_read.size()
 	assert_eq(z.bodies_planned, DeadCast.BODIES.size())
 	for frame in DeadCast.BODIES.size() - 1:
@@ -294,15 +299,9 @@ func _reads(z) -> int:
 
 
 # Every garment drawn is drawn where one of its body's drawn is, with the same
-# frame of the same motion (custom data), in a garment colour in that one's look.
+# frame of the same motion (custom data), and is the garment that one has on,
+# in its colour and pattern in that one's look (found by where it stands).
 func _assert_on_their_bodies(z, when: String) -> void:
-	var colours := {}   # look -> the garment colours the dead have in it
-	for look: String in Zombies.TINTS:
-		colours[look] = []
-		for one: Dictionary in z.list:
-			var over := DeadCast.garment_of(z.drawn_worn(one), Zombies.TINTS[look])
-			if not over.is_empty():
-				colours[look].append(over["colour"])
 	var garments := 0
 	for b in z.wear_draws.size():
 		var bodies := []
@@ -316,16 +315,54 @@ func _assert_on_their_bodies(z, when: String) -> void:
 			var gm: MultiMesh = (z.wear_draws[b][kind] as MultiMeshInstance3D).multimesh
 			for w in gm.visible_instance_count:
 				garments += 1
+				var at := gm.get_instance_transform(w)
 				var found: Array = []
 				for body: Array in bodies:
-					if (body[0] as Transform3D).is_equal_approx(gm.get_instance_transform(w)) and (body[1] as Color).is_equal_approx(gm.get_instance_custom_data(w)):
+					if (body[0] as Transform3D).is_equal_approx(at) and (body[1] as Color).is_equal_approx(gm.get_instance_custom_data(w)):
 						found = body
 						break
 				assert_false(found.is_empty(), "%s: body %d %s %d on a body" % [when, b, kind, w])
-				if not found.is_empty():
-					var c: Color = gm.get_instance_color(w)
-					assert_true((colours[String(found[2])] as Array).any(func(k: Color) -> bool: return k.is_equal_approx(c)), "%s: body %d %s %d in its look" % [when, b, kind, w])
+				var who: Dictionary = {}
+				for one: Dictionary in z.list:
+					if Vector2(one["pos"].x - at.origin.x, one["pos"].z - at.origin.z).length() < 0.3:
+						who = one
+				assert_false(who.is_empty(), "%s: body %d %s %d is one of the dead" % [when, b, kind, w])
+				if found.is_empty() or who.is_empty():
+					continue
+				var over := DeadCast.garment_of(z.drawn_worn(who), Zombies.TINTS[String(found[2])])
+				assert_eq(String(over.get("shell", "")), kind, "%s: %d wears it" % [when, int(who["id"])])
+				assert_true((over.get("colour", Color.BLACK) as Color).is_equal_approx(gm.get_instance_color(w)), "%s: %d in its own colour and pattern" % [when, int(who["id"])])
 	assert_gt(garments, 0, when + ": some drawn")
+
+
+# What one of the dead is first seen in is what it has on after: led off and
+# kept somewhere else (its home moved), the coat drawn stays and is the one
+# taken off it; its clothes are not put in its record, where it kept to is.
+func test_led_off_the_dead_keep_what_they_were_seen_in() -> void:
+	var game = FieldGame.new()
+	game.opts = {"seed": 11, "raiders": false, "auto_pause": false}
+	add_child_autofree(game)
+	game.set_process(false)
+	var z = game.zombies
+	z.list.clear()
+	var at: Vector3 = game.lift(Vector2i(60, 7), 0)
+	var cell: Vector2i = FieldGame.FieldGrid.cell_of(at)
+	game.data["buildings"] = (game.data.get("buildings", []) as Array) + [{"name": "경찰서", "rect": Rect2i(cell - Vector2i(2, 2), Vector2i(5, 5))}]
+	var seen := 0
+	for i in 24:
+		var one: Dictionary = z.spawn("dead", at + Vector3(float(i % 4) * 0.5 - 0.75, 0, floorf(float(i) / 4.0) * 0.4 - 1.0))
+		var first := str(z.drawn_worn(one))
+		var away: Dictionary = one.duplicate(true)
+		away.erase("worn_at")
+		away["home"] = at + Vector3(40, 0, 0)
+		if str(z._roll_worn(away)) != first:
+			seen += 1
+		assert_false(one.has("worn"), "drawn, its clothes are not in its record")
+		assert_true(one.has("worn_at"), "where it kept to is")
+		one["home"] = at + Vector3(40, 0, 0)   # led off, kept there now
+		assert_eq(str(z.drawn_worn(one)), first, "drawn as it was first seen")
+		assert_eq(str(z.worn_of(one)), first, "and it is what it has on")
+	assert_gt(seen, 4, "the place tells (else this proves nothing)")
 
 
 # body:garment -> how many the field drew in it.

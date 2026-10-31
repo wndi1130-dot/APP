@@ -84,7 +84,7 @@ var bodies_to_read: Array[String] = []   # bodies not read in yet: one a frame (
 var bodies_planned: int = 1
 var wear_draws: Array = []    # body -> garment (dead_cast.gd SHELLS) -> MultiMeshInstance3D, null for one it has none of; read when first worn
 var _garment_reads: int = 0   # garments still to be read in this frame
-var _drawn_worn: Dictionary = {}   # id -> [home, kind, what it has on] for one drawn before worn_of is asked (drawn_worn)
+var _drawn_worn: Dictionary = {}   # id -> [worn_at, kind, what it has on] for one drawn before worn_of is asked (drawn_worn)
 var drawn_count: int = 0
 var vat: Dictionary
 var baked: bool = false       # the dead are a baked body (dead_body.gd), not the boxes
@@ -202,36 +202,46 @@ func set_loot(z: Dictionary, loot: Array) -> void:
 
 
 ## What one of the dead has on (decision 434, loot_tables.gd WEAR_*): rolled
-## the first time it is asked for, by the place it keeps to (its home, which a
-## save keeps), on dice of its own from the run's seed and the body's number,
-## so whenever that is (a round on a vest, a hand on a coat) it comes out the
-## same and moves no other dice. A risen one of ours has what it wore
-## (field_game.gd).
+## the first time it is asked for or drawn, by the place it keeps to then (its
+## home, kept as worn_at, which a save keeps), on dice of its own from the run's
+## seed and the body's number, so whenever that is (a round on a vest, a hand
+## on a coat) it comes out the same and moves no other dice, and led off
+## somewhere else it keeps what it was seen in. A risen one of ours has what it
+## wore (field_game.gd).
 func worn_of(z: Dictionary) -> Dictionary:
 	if not z.has("worn"):
-		z["worn"] = _roll_worn(z)
+		var kept: Array = _drawn_worn.get(int(z["id"]), [])
+		z["worn"] = kept[2] if _kept_for(kept, z) else _roll_worn(z)
+		_drawn_worn.erase(int(z["id"]))
 	return z["worn"]
 
 
 func _roll_worn(z: Dictionary) -> Dictionary:
+	if not z.has("worn_at"):
+		z["worn_at"] = z["home"]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = ("%d:worn:%d" % [int(game.opts.get("seed", 0)), int(z["id"])]).hash()
-	var place := LootRules.wear_place_at(game.data.get("buildings", []), FieldGrid.cell_of(z["home"]))
+	var place := LootRules.wear_place_at(game.data.get("buildings", []), FieldGrid.cell_of(z["worn_at"]))
 	return LootRules.wear_roll(String(z["kind"]), place, rng)
 
 
 ## What one of the dead has on as it is drawn (render): worn_of's once that is
-## asked for, till then the same roll kept here by its number and home, so
-## drawing it puts nothing in its record (a save keeps only what was asked for).
+## asked for, till then the same roll kept here by its number (with the place
+## and kind it was rolled by), so drawing it puts only where it kept to in its
+## record, not its clothes (a save keeps what was asked for).
 func drawn_worn(z: Dictionary) -> Dictionary:
 	if z.has("worn"):
 		return z["worn"]
-	var id := int(z["id"])
-	var kept: Array = _drawn_worn.get(id, [])
-	if kept.is_empty() or kept[0] != z["home"] or kept[1] != z["kind"]:
-		kept = [z["home"], z["kind"], _roll_worn(z)]
-		_drawn_worn[id] = kept
+	var kept: Array = _drawn_worn.get(int(z["id"]), [])
+	if not _kept_for(kept, z):
+		var worn := _roll_worn(z)
+		kept = [z["worn_at"], z["kind"], worn]
+		_drawn_worn[int(z["id"])] = kept
 	return kept[2]
+
+
+func _kept_for(kept: Array, z: Dictionary) -> bool:
+	return not kept.is_empty() and z.has("worn_at") and kept[0] == z["worn_at"] and kept[1] == z["kind"]
 
 
 ## Lying there with something still on it to take off.
