@@ -2474,6 +2474,9 @@ const SHELLS: Dictionary = {
 	"jacket_short": {"bones": ["hips", "spine", "chest", "upper_arm.L", "upper_arm.R", "forearm.L", "forearm.R"], "push": 0.025},
 	"hat_knit": {"bones": ["head"], "push": 0.02, "top": 0.55},
 	"hood": {"bones": ["head", "neck"], "push": 0.025, "top": 1.0, "face": true},
+	# The armour vest (wear.gd vest_armor, covers the torso): chest and back down to the waist, the arms bare,
+	# thicker than a coat.
+	"vest": {"bones": ["spine", "chest"], "push": 0.04},
 }
 # Bags on the back (carry.gd BAGS, decision 448): not cut from the body but
 # made here against its back, each vertex weighted as the back beside it is,
