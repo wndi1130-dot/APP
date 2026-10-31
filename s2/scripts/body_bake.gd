@@ -206,9 +206,10 @@ const PERSON_CLIPS: Array = [
 	["p_chop_side", "TreeChopping_Loop", 24, false, "", 0.967],
 	# Append only: bodies and their garments share the existing motion numbers.
 	["p_swing_over", "", 24, false, "p_swing_over", 0.6],
+	["p_chop_one", "", 24, false, "p_chop_one", 0.6],
 ]
 # Quick blows and all walk/run legs keep every frame in the small bake.
-const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_swing_back", "p_chop_side", "p_bitten_front", "p_bitten_back", "p_shiver", "p_walk", "p_walk_long", "p_walk_axe", "p_walk_pistol", "p_carry_big", "p_walk_hurt", "p_run", "p_run_long", "p_run_pistol", "p_swing_over"]
+const PERSON_KEEP: Array = ["p_bitten", "p_swing_one", "p_swing_axe", "p_stab", "p_shove", "p_floor_strike", "p_stomp", "p_kick", "p_climb", "p_swing_back", "p_chop_side", "p_bitten_front", "p_bitten_back", "p_shiver", "p_walk", "p_walk_long", "p_walk_axe", "p_walk_pistol", "p_carry_big", "p_walk_hurt", "p_run", "p_run_long", "p_run_pistol", "p_swing_over", "p_chop_one"]
 # Decision 425, game/sim/noise.gd STEP_ROUND. Fit the bake to these distances;
 # neither body dimensions nor the rules' distances change.
 const PERSON_STRIDE_ROUNDS: Dictionary = {
@@ -222,6 +223,17 @@ const STRIDE_TOLERANCE: float = 0.005
 const STRIDE_SCALE_MIN: float = 0.9
 const STRIDE_SCALE_MAX: float = 1.1
 const STRIDE_PASSES: int = 3
+# Only these shared legs follow STEP_AT; crouching keeps its current phase.
+const PERSON_PHASE_BASE: Dictionary = {
+	"p_walk": "p_walk", "p_walk_long": "p_walk", "p_walk_axe": "p_walk",
+	"p_walk_pistol": "p_walk", "p_carry_big": "p_walk", "p_walk_hurt": "p_walk",
+	"p_run": "p_run", "p_run_long": "p_run", "p_run_pistol": "p_run",
+}
+const PERSON_STEP_AT: Array = [0.2, 0.65]  # game/sim/noise.gd, unchanged
+const PERSON_PHASE_SAMPLES: int = 256
+const PERSON_CONTACT_HEIGHT: float = 0.01
+const PERSON_SOLE_EPSILON: float = 0.0001  # equal rest-height vertices, 0.1 mm
+const PERSON_PHASE_SOURCE: String = "person_phase_source"
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -2164,6 +2176,24 @@ const LAYERS: Dictionary = {
 		],
 		"sink": ["keys", [[0, 0.07], [0.28, 0.05500000000000001], [0.45, 0.14], [0.56, 0.12000000000000001], [0.8, 0.07], [1, 0.07]]],
 	},
+	# One-handed diagonal chop from shoulder height at the right rear; left arm balances.
+	"p_chop_one": {
+		"steps": [
+			["aim", "thigh.L", "shin.L", [0.12, -1, ["keys", [[0, 0.22], [0.28, 0.16], [0.45, 0.5], [0.56, 0.42], [0.8, 0.28], [1, 0.22]]]]],
+			["aim", "shin.L", "foot.L", [0.1, -1, ["keys", [[0, -0.12], [0.28, -0.1], [0.45, -0.3], [0.56, -0.28], [0.8, -0.16], [1, -0.12]]]]],
+			["aim", "thigh.R", "shin.R", [-0.14, -1, ["keys", [[0, -0.12], [0.28, -0.22], [0.45, 0.05], [0.56, 0.02], [0.8, -0.1], [1, -0.12]]]]],
+			["aim", "shin.R", "foot.R", [-0.1, -1, ["keys", [[0, -0.2], [0.28, -0.15], [0.45, -0.35], [0.56, -0.3], [0.8, -0.22], [1, -0.2]]]]],
+			["turn", "hips", "y", ["keys", [[0, 0.2], [0.14, -0.2], [0.36, 0.18], [0.56, 0.2], [0.8, 0.2], [1, 0.2]]]],
+			["turn", "spine", "x", ["keys", [[0, 0.14], [0.28, -0.06], [0.45, 0.3], [0.56, 0.25], [0.8, 0.14], [1, 0.14]]]],
+			["turn", "neck", "x", ["keys", [[0, -0.1], [0.28, -0.1], [0.45, 0.02], [0.56, -0.02], [0.8, -0.1], [1, -0.1]]]],
+			["turn", "chest", "y", ["keys", [[0, -0.2], [0.24, -0.58], [0.42, 0.48], [0.56, 0.58], [0.8, -0.2], [1, -0.2]]]],
+			["aim", "upper_arm.L", "forearm.L", [["keys", [[0, 0.2], [0.28, 0.8], [0.45, 0.95], [0.56, 0.7], [0.8, 0.2], [1, 0.2]]], ["keys", [[0, -0.45], [0.28, -0.3], [0.45, -0.25], [0.56, -0.35], [0.8, -0.45], [1, -0.45]]], ["keys", [[0, 0.9], [0.28, 0.45], [0.45, 0.45], [0.56, 0.65], [0.8, 0.9], [1, 0.9]]]]],
+			["aim", "forearm.L", "hand.L", [["keys", [[0, -0.25], [0.28, 0.25], [0.45, 0.35], [0.56, 0.25], [0.8, -0.25], [1, -0.25]]], ["keys", [[0, 0.45], [0.28, 0.15], [0.45, -0.05], [0.56, 0.05], [0.8, 0.45], [1, 0.45]]], ["keys", [[0, 0.9], [0.28, 0.9], [0.45, 0.9], [0.56, 0.9], [0.8, 0.9], [1, 0.9]]]]],
+			["aim", "upper_arm.R", "forearm.R", [["keys", [[0, -0.55], [0.28, -0.95], [0.45, 0.3], [0.56, 0.8], [0.8, -0.55], [1, -0.55]]], ["keys", [[0, -0.35], [0.28, 0.1], [0.45, -0.45], [0.56, -0.55], [0.8, -0.35], [1, -0.35]]], ["keys", [[0, -0.25], [0.28, -0.3], [0.45, 1], [0.56, 0.5], [0.8, -0.25], [1, -0.25]]]]],
+			["aim", "forearm.R", "hand.R", [["keys", [[0, -0.05], [0.28, -0.35], [0.45, 0.22], [0.56, 0.65], [0.8, -0.05], [1, -0.05]]], ["keys", [[0, 1], [0.28, 0.15], [0.45, -0.08], [0.56, -0.55], [0.8, 1], [1, 1]]], ["keys", [[0, 0.3], [0.28, -0.95], [0.45, 1], [0.56, 0.6], [0.8, 0.3], [1, 0.3]]]]],
+		],
+		"sink": ["keys", [[0, 0.07], [0.28, 0.055], [0.45, 0.14], [0.56, 0.12], [0.8, 0.07], [1, 0.07]]],
+	},
 	# Fixing_Kneeling gets down at its start and up at its end: the kneeling middle alone, looped.
 	"p_kneel_work": {"span": [0.2, 0.8], "steps": []},
 }
@@ -2479,6 +2509,107 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
 	print("%s %s round %.6f -> %.6f scale %.6f" % [status, name, before, measured, fit["scale"]])
 
 
+## Fixed rest-bottom vertices of each foot, reused for contact and standing checks.
+static func person_sole_vertices(rest: PackedVector3Array) -> Array:
+	var soles := [PackedInt32Array(), PackedInt32Array()]  # left (+x), right (-x)
+	var lows := [INF, INF]
+	for i in rest.size():
+		var side := 0 if rest[i].x >= 0.0 else 1
+		lows[side] = minf(float(lows[side]), rest[i].y)
+	for i in rest.size():
+		var side := 0 if rest[i].x >= 0.0 else 1
+		if rest[i].y <= float(lows[side]) + PERSON_SOLE_EPSILON:
+			soles[side].append(i)
+	return soles
+
+
+## First downward entry into the lowest centimetre, including the loop seam.
+## Interpolate the crossing between samples; -1 means no airborne-to-ground entry.
+static func person_contact_phase(heights: Array) -> float:
+	if heights.size() < 2:
+		return -1.0
+	var threshold := float(heights.min()) + PERSON_CONTACT_HEIGHT
+	for f in heights.size():
+		var previous := float(heights[(f + heights.size() - 1) % heights.size()])
+		var current := float(heights[f])
+		if previous > threshold and current <= threshold:
+			var fraction := (previous - threshold) / (previous - current)
+			return fposmod((float(f - 1) + fraction) / float(heights.size()), 1.0)
+	return -1.0
+
+
+## The output samples source(u + shift). Minimise the larger circular error,
+## considering either foot order, and split any spacing mismatch equally.
+static func person_phase_shift(left: float, right: float) -> float:
+	var best := 0.0
+	var least_error := INF
+	for order in 2:
+		var a := fposmod(left - float(PERSON_STEP_AT[order]), 1.0)
+		var b := fposmod(right - float(PERSON_STEP_AT[1 - order]), 1.0)
+		var gap := fposmod(b - a + 0.5, 1.0) - 0.5
+		var shift := fposmod(a + gap * 0.5, 1.0)
+		var error := absf(gap) * 0.5
+		if error < least_error - 0.0000001 or (absf(error - least_error) <= 0.0000001 and minf(shift, 1.0 - shift) < minf(best, 1.0 - best)):
+			least_error = error
+			best = shift
+	return best
+
+
+## Use the body's sole skin, including when this bake outputs a coat or bag.
+## A garment's own lowest point is its hem, not the person's foot.
+static func _person_sole_heights(ctx: Dictionary, entry: Array) -> Array:
+	var mesh_node: MeshInstance3D = ctx["mesh_node"]
+	var source: Array = mesh_node.get_meta(PERSON_PHASE_SOURCE) if mesh_node.has_meta(PERSON_PHASE_SOURCE) else mesh_node.mesh.surface_get_arrays(0)
+	var rest: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = source[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = source[Mesh.ARRAY_WEIGHTS]
+	var soles := person_sole_vertices(rest)
+	var heights := [[], []]
+	if rest.is_empty() or soles[0].is_empty() or soles[1].is_empty():
+		return heights
+	var per: int = bones.size() / rest.size()
+	for f in PERSON_PHASE_SAMPLES:
+		pose(ctx, entry[1], entry[4], float(f) / float(PERSON_PHASE_SAMPLES))
+		var skin := _skin_frame(ctx)
+		for side in 2:
+			var lowest := INF
+			for vertex: int in soles[side]:
+				var moved := Vector3.ZERO
+				var weight_sum := 0.0
+				for slot in per:
+					var weight := weights[vertex * per + slot]
+					if weight > 0.0:
+						moved += ((skin[bones[vertex * per + slot]] as Transform3D) * rest[vertex]) * weight
+						weight_sum += weight
+				var point := moved / weight_sum if weight_sum > 0.0 else rest[vertex]
+				lowest = minf(lowest, point.y)
+			heights[side].append(lowest)
+	return heights
+
+
+static func _fit_person_phase(ctx: Dictionary, entry: Array) -> Dictionary:
+	var name: String = entry[0]
+	if not PERSON_PHASE_BASE.has(name):
+		return {}
+	var base: String = PERSON_PHASE_BASE[name]
+	var fits: Dictionary = ctx.get("phase_fits", {})
+	ctx["phase_fits"] = fits
+	if not fits.has(base):
+		var heights := _person_sole_heights(ctx, entry)
+		var left := person_contact_phase(heights[0])
+		var right := person_contact_phase(heights[1])
+		fits[base] = {"left": left, "right": right, "shift": person_phase_shift(left, right) if left >= 0.0 and right >= 0.0 else 0.0}
+	var fit: Dictionary = fits[base]
+	var shift: float = fit["shift"]
+	if float(fit["left"]) < 0.0 or float(fit["right"]) < 0.0:
+		push_error("PHASE_STOP %s no_sole_contact left %.6f right %.6f" % [name, fit["left"], fit["right"]])
+	else:
+		print("PHASE %s %.6f %.6f shift %.6f" % [name, fposmod(float(fit["left"]) - shift, 1.0), fposmod(float(fit["right"]) - shift, 1.0), shift])
+	# Preserve the pre-shift round: a fractional resample can alter the discrete
+	# round estimator even though it is the same continuous loop.
+	return {"shift": shift, "round": _person_stride_round(ctx, entry)}
+
+
 ## One skin matrix per bone the mesh binds: pose * inverse bind, in mesh space.
 static func _skin_frame(ctx: Dictionary) -> Array:
 	var body: Skeleton3D = ctx["body"]
@@ -2629,6 +2760,9 @@ const HAND_LIGHT: StringName = &"hand_light"   # a marked mesh's meta: the colou
 ## the body's vertices were split, pushed out. False if `kind` is unknown or
 ## the body has no skinned mesh.
 static func shell(body_root: Node3D, kind: String) -> bool:
+	var phase_mesh := first_of(body_root, "MeshInstance3D") as MeshInstance3D
+	if phase_mesh != null and phase_mesh.mesh != null and not phase_mesh.has_meta(PERSON_PHASE_SOURCE):
+		phase_mesh.set_meta(PERSON_PHASE_SOURCE, phase_mesh.mesh.surface_get_arrays(0))
 	if BAG_SHELLS.has(kind):
 		return _bag(body_root, kind)
 	var spec: Dictionary = SHELLS.get(kind, {})
@@ -3122,8 +3256,10 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 	var player: AnimationPlayer = ctx["player"]
 	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var clips := []
+	ctx["phase_fits"] = {}
 	for entry: Array in list:
 		_fit_person_stride(ctx, entry)
+		var phase := _fit_person_phase(ctx, entry)
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
@@ -3131,11 +3267,14 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 		for f in count:
 			# A loop's last frame stops one step short of the first; a one-shot ends on its end.
 			var u: float = float(f) / float(count) if looped else float(f) / float(count - 1)
+			if not phase.is_empty():
+				u = fposmod(u + float(phase["shift"]), 1.0)
 			pose(ctx, entry[1], entry[4], u)
 			frames.append(_skin_frame(ctx))
 			_note_reach(ctx, entry[0], reach)
 		var length := float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length * _span_share(entry[4])
-		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": _round(reach) if looped else 0.0})
+		var stride_round := float(phase["round"]) if not phase.is_empty() else _round(reach)
+		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0})
 	var still := []
 	for entry: Array in poses:
 		_pose_at(ctx, entry[0], entry[1], {})

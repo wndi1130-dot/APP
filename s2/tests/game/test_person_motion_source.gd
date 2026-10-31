@@ -1,7 +1,7 @@
 extends "res://addons/gut/test.gd"
 ## Run after rebaking all living bodies and wear with the same PERSON_KEEP.
-## VAT does not retain bones. Checks 10/11 use the source keys below, with
-## their frame tables in _out/motion_source_result.md; they are not VAT proof.
+## VAT does not retain bones. Rotation checks use source keys; their frame
+## tables are in _out/motion_source_result.md and _out/motion_add_result.md.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -17,6 +17,7 @@ const BLOWS: Array = [
 	["p_swing_back", "p_ready_one", 0.33, 24, 0.6],
 	["p_stab", "p_ready_stab", 0.35, 20, 0.45],
 	["p_swing_over", "p_ready_one", 0.45, 24, 0.6],
+	["p_chop_one", "p_ready_one", 0.45, 24, 0.6],
 ]
 
 var _fixtures: Array[Dictionary] = []
@@ -37,6 +38,7 @@ func before_all() -> void:
 		var arrays: Array = (baked["mesh"] as Mesh).surface_get_arrays(0)
 		var fixture := {"name": folder, "baked": baked, "rest": arrays[Mesh.ARRAY_VERTEX], "look": arrays[Mesh.ARRAY_TEX_UV2]}
 		fixture["feet"] = _walk_feet(fixture)
+		fixture["soles"] = BodyBake.person_sole_vertices(fixture["rest"])
 		fixture["right"] = PersonVisual.hand_of(baked).get("hand", PackedInt32Array())
 		fixture["left"] = _left_hand(fixture)
 		_fixtures.append(fixture)
@@ -79,7 +81,7 @@ func _sample(fixture: Dictionary, clip: Dictionary, ids: PackedInt32Array) -> Ar
 
 
 ## Same 40 vertices as still_feet.py: rank walk z ranges after filtering the
-## mean offsets, then reuse those vertex IDs for every clip in this body.
+## mean offsets, then reuse those IDs for shared-leg and stance-speed checks.
 func _walk_feet(fixture: Dictionary) -> PackedInt32Array:
 	var rest: PackedVector3Array = fixture["rest"]
 	var ids := PackedInt32Array()
@@ -151,6 +153,8 @@ func test_all_fourteen_living_folders_load() -> void:
 	assert_eq(_fixtures.size(), _folder_count, "none silently skipped")
 	for fixture in _fixtures:
 		assert_eq((fixture["feet"] as PackedInt32Array).size(), 40, str(fixture["name"]) + " foot vertices")
+		for side in 2:
+			assert_false(fixture["soles"][side].is_empty(), "%s %s rest sole found" % [fixture["name"], "L" if side == 0 else "R"])
 
 
 func test_standing_feet_stay_within_one_centimetre() -> void:
@@ -160,22 +164,28 @@ func test_standing_feet_stay_within_one_centimetre() -> void:
 			continue
 		assert_true(float(clip["round"]) <= BodyBake.ROUND_LEAST, str(fixture["name"]) + " standing round")
 		assert_almost_eq(float(clip["length"]), 2.5, 0.0001, "UAL1 Idle_Loop length")
-		var frames := _sample(fixture, clip, fixture["feet"])
-		var greatest := 0.0
-		var greatest_round := 0.0
-		for i in (fixture["feet"] as PackedInt32Array).size():
-			var low: Vector3 = frames[0][i]
-			var high := low
-			var zs := []
-			for points: PackedVector3Array in frames:
-				low = low.min(points[i])
-				high = high.max(points[i])
-				zs.append(points[i].z)
-			var span := high - low
-			greatest = maxf(greatest, maxf(span.x, maxf(span.y, span.z)))
-			greatest_round = maxf(greatest_round, BodyBake.round_of(zs))
-		assert_true(greatest <= 0.01, "%s standing foot range %.6f m <= 0.01" % [fixture["name"], greatest])
-		assert_true(greatest_round <= BodyBake.ROUND_LEAST, "%s standing foot round %.6f m" % [fixture["name"], greatest_round])
+		for side in 2:
+			var sole: PackedInt32Array = fixture["soles"][side]
+			if sole.is_empty():
+				continue  # Missing soles already fail the fixture check.
+			var frames := _sample(fixture, clip, sole)
+			var greatest := 0.0
+			var greatest_round := 0.0
+			# Track each fixed rest-bottom vertex, avoiding toe/heel identity jumps.
+			for i in sole.size():
+				var low: Vector3 = frames[0][i]
+				var high := low
+				var zs := []
+				for points: PackedVector3Array in frames:
+					low = low.min(points[i])
+					high = high.max(points[i])
+					zs.append(points[i].z)
+				var span := high - low
+				greatest = maxf(greatest, maxf(span.x, maxf(span.y, span.z)))
+				greatest_round = maxf(greatest_round, BodyBake.round_of(zs))
+			var label := "%s %s sole (%d rest-bottom vertices)" % [fixture["name"], "L" if side == 0 else "R", sole.size()]
+			assert_true(greatest <= 0.01, "%s standing axis range %.6f m <= 0.01" % [label, greatest])
+			assert_true(greatest_round <= BodyBake.ROUND_LEAST, "%s standing round %.6f m" % [label, greatest_round])
 
 
 func test_shared_legs_and_full_walk_run_frames() -> void:
@@ -204,6 +214,106 @@ func test_shared_legs_and_full_walk_run_frames() -> void:
 				# Allow one cell from each box, including truncating encoders.
 				var tolerance := _quantum(fixture, base) + _quantum(fixture, clip) + 0.00001
 				assert_true(greatest <= tolerance, "%s foot difference %.6f <= quantization %.6f" % [label, greatest, tolerance])
+
+
+func _contact_at(frames: Array[PackedVector3Array]) -> float:
+	var heights := []
+	for points: PackedVector3Array in frames:
+		var lowest := INF
+		for point in points:
+			lowest = minf(lowest, point.y)
+		heights.append(lowest)
+	if heights.size() < 2 or not is_finite(float(heights.min())):
+		return -1.0
+	var threshold := float(heights.min()) + 0.01
+	for f in heights.size():
+		var previous := float(heights[(f + heights.size() - 1) % heights.size()])
+		var current := float(heights[f])
+		if previous > threshold and current <= threshold:
+			return fposmod((float(f - 1) + (previous - threshold) / (previous - current)) / float(heights.size()), 1.0)
+	return -1.0
+
+
+func _phase_distance(a: float, b: float) -> float:
+	var gap := absf(a - b)
+	return minf(gap, 1.0 - gap)
+
+
+func test_walk_run_sole_contacts_are_within_fifty_milliseconds_of_steps() -> void:
+	for fixture in _fixtures:
+		for group in ["walk", "run"]:
+			var period := float(SimNoise.STEP_ROUND[group]) / (2.1 if group == "walk" else 3.9)
+			for name_text: String in GROUPS[group]:
+				var clip := _clip(fixture, name_text)
+				if clip.is_empty():
+					continue
+				var contacts := []
+				for side in 2:
+					contacts.append(_contact_at(_sample(fixture, clip, fixture["soles"][side])))
+				var label := "%s %s" % [fixture["name"], name_text]
+				assert_true(float(contacts[0]) >= 0.0 and float(contacts[1]) >= 0.0, "%s sole first entries L %.6f R %.6f" % [label, contacts[0], contacts[1]])
+				if float(contacts[0]) < 0.0 or float(contacts[1]) < 0.0:
+					continue
+				var best := []
+				var least := INF
+				for order in 2:
+					var errors := [_phase_distance(contacts[0], SimNoise.STEP_AT[order]), _phase_distance(contacts[1], SimNoise.STEP_AT[1 - order])]
+					var worst := maxf(errors[0], errors[1])
+					if worst < least:
+						least = worst
+						best = errors
+				for side in 2:
+					var seconds := float(best[side]) * period
+					assert_true(seconds <= 0.05, "%s %s contact %.6f, STEP_AT %s, error %.3f ms <= 50 (round time %.6f s)" % [label, "L" if side == 0 else "R", contacts[side], str(SimNoise.STEP_AT), seconds * 1000.0, period])
+
+
+func test_phase_solver_splits_symmetric_contact_error_and_handles_the_seam() -> void:
+	assert_eq(BodyBake.PERSON_STEP_AT, SimNoise.STEP_AT, "phase targets follow the unchanged noise rule")
+	for pair: Array in [[0.1, 0.6], [0.98, 0.48]]:
+		var shift := BodyBake.person_phase_shift(pair[0], pair[1])
+		for contact: float in pair:
+			var phase := fposmod(contact - shift, 1.0)
+			var error := minf(_phase_distance(phase, SimNoise.STEP_AT[0]), _phase_distance(phase, SimNoise.STEP_AT[1]))
+			assert_almost_eq(error, 0.025, 0.000001, "half-cycle contacts split the 0.05 mismatch equally")
+	assert_almost_eq(BodyBake.person_contact_phase([0.0, 0.0, 0.03, 0.02]), 0.875, 0.000001, "contact interpolates across the seam")
+	assert_eq(BodyBake.person_contact_phase([0.0, 0.0, 0.0, 0.0]), -1.0, "a foot that never lifts has no first entry")
+
+
+func _clip_info(folder: String) -> Dictionary:
+	var path := folder.path_join("clips.json")
+	assert_true(FileAccess.file_exists(path), path + " exists")
+	if not FileAccess.file_exists(path):
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	assert_true(parsed is Dictionary, path + " is an object")
+	if not parsed is Dictionary:
+		return {}
+	var info: Dictionary = parsed
+	var height := int(info.get("height", 0))
+	assert_true(height > 0 and height <= 4096, "%s height %d in 1..4096" % [path, height])
+	assert_true(info.get("clips", []) is Array and not (info.get("clips", []) as Array).is_empty(), path + " has clips")
+	return info
+
+
+func _clip_layout(info: Dictionary) -> Array:
+	var layout := []
+	for clip: Dictionary in info.get("clips", []):
+		layout.append([str(clip.get("name", "")), int(clip.get("start", -1)), int(clip.get("frames", 0))])
+	return layout
+
+
+func test_all_body_and_wear_heights_and_clip_layouts_match() -> void:
+	for name_text: String in DirAccess.get_directories_at(PEOPLE):
+		if not name_text.ends_with("_p"):
+			continue
+		var folder := PEOPLE.path_join(name_text)
+		var body_info := _clip_info(folder)
+		var layout := _clip_layout(body_info)
+		var wear := folder.path_join("wear")
+		for garment: String in DirAccess.get_directories_at(wear):
+			var garment_folder := wear.path_join(garment)
+			var garment_info := _clip_info(garment_folder)
+			assert_eq(_clip_layout(garment_info), layout, garment_folder + " shares body clip names/start/frames")
 
 
 func test_every_gait_round_matches_the_rules_within_half_a_percent() -> void:
@@ -249,6 +359,14 @@ func test_stance_speed_ratios_are_reported_without_a_pass_threshold() -> void:
 					print("STANCE %s %s %s n=%d min=%.4f max=%.4f mean=%.4f target=-1.1..-0.9" % [fixture["name"], clip["name"], side, ratios.size(), ratios.min(), ratios.max(), total / float(ratios.size())])
 
 
+func _blow_hit_at(name_text: String, fallback: float) -> float:
+	for kind: String in PersonVisual.OWN_BLOWS:
+		for blow: Array in PersonVisual.OWN_BLOWS[kind]:
+			if str(blow[0]) == name_text:
+				return float(blow[1])
+	return fallback  # New overhead/chop clips both land at 0.45 before combat adopts them.
+
+
 func test_one_hand_blows_start_and_end_at_the_guard_and_land_in_front() -> void:
 	for fixture in _fixtures:
 		var right: PackedInt32Array = fixture["right"]
@@ -265,9 +383,11 @@ func test_one_hand_blows_start_and_end_at_the_guard_and_land_in_front() -> void:
 			assert_almost_eq(float(clip["length"]), float(blow[4]), 0.0001, label + " duration")
 			var frames := _sample(fixture, clip, right)
 			var ready := _center(_sample(fixture, guard, right)[0])
-			assert_true(_center(frames[0]).distance_to(ready) <= 0.05, label + " begins at guard")
-			assert_true(_center(frames[-1]).distance_to(ready) <= 0.05, label + " ends at guard")
-			var at := int(roundf(float(blow[2]) * float(frames.size() - 1)))
+			var first_gap := _center(frames[0]).distance_to(ready)
+			var last_gap := _center(frames[-1]).distance_to(ready)
+			assert_true(first_gap <= 0.05, "%s begins %.4f m from guard <= 0.05" % [label, first_gap])
+			assert_true(last_gap <= 0.05, "%s ends %.4f m from guard <= 0.05" % [label, last_gap])
+			var at := int(roundf(_blow_hit_at(blow[0], blow[2]) * float(frames.size() - 1)))
 			var hand := _center(frames[at])
 			assert_true(hand.z > 0.3, "%s impact hand z %.4f > 0.3 m" % [label, hand.z])
 			assert_true(absf(hand.x) <= 0.15, "%s impact hand |x| %.4f <= 0.15 m" % [label, absf(hand.x)])
@@ -287,6 +407,37 @@ func test_overhead_left_hand_never_grips_the_right_hand() -> void:
 		for f in right_frames.size():
 			nearest = minf(nearest, _center(right_frames[f]).distance_to(_center(left_frames[f])))
 		assert_true(nearest > 0.25, "%s overhead hands stay %.4f m apart > 0.25" % [fixture["name"], nearest])
+
+
+func test_chop_left_hand_stays_more_than_twenty_five_centimetres_from_the_right() -> void:
+	for fixture in _fixtures:
+		var clip := _clip(fixture, "p_chop_one")
+		var right: PackedInt32Array = fixture["right"]
+		var left: PackedInt32Array = fixture["left"]
+		assert_false(left.is_empty(), str(fixture["name"]) + " chop left hand found")
+		if clip.is_empty() or right.is_empty() or left.is_empty():
+			continue
+		var right_frames := _sample(fixture, clip, right)
+		var left_frames := _sample(fixture, clip, left)
+		for f in right_frames.size():
+			var gap := _center(right_frames[f]).distance_to(_center(left_frames[f]))
+			assert_true(gap > 0.25, "%s p_chop_one frame %d hands %.4f m apart > 0.25" % [fixture["name"], f, gap])
+
+
+func test_blow_aim_angles_are_reported_without_a_pass_threshold() -> void:
+	for fixture in _fixtures:
+		var right: PackedInt32Array = fixture["right"]
+		if right.is_empty():
+			continue
+		print("BLOW_BODY %s" % fixture["name"])
+		for blow: Array in BLOWS:
+			var clip := _clip(fixture, blow[0])
+			if clip.is_empty():
+				continue
+			var frames := _sample(fixture, clip, right)
+			var at := int(roundf(_blow_hit_at(blow[0], blow[2]) * float(frames.size() - 1)))
+			var hand := _center(frames[at])
+			print("BLOW_AIM %s %.6f" % [blow[0], rad_to_deg(atan2(hand.x, hand.z))])
 
 
 func _turn_at(spec: Dictionary, bone: String, axis: String, u: float) -> float:
