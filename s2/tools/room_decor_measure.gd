@@ -145,6 +145,8 @@ static func summarize(rooms: Array) -> Dictionary:
 		var present: Dictionary = {}
 		for kind: String in RoomDecor.KINDS:
 			present[kind] = 0
+		for kind: String in RoomDecor.TOP_KINDS:
+			present[kind] = 0
 		var eligible := 0
 		var mirrored := 0
 		var unsupported := 0

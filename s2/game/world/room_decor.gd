@@ -4,9 +4,15 @@ extends RefCounted
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
+const PropKinds = preload("res://game/world/prop_kinds.gd")
+const PropModels = preload("res://game/world/prop_models.gd")
+const PropFit = preload("res://game/world/prop_fit.gd")
 const KINDS: Array[String] = ["wall_picture", "wall_mirror", "wall_poster", "wall_clock", "potted_plant"]
+const TOP_KINDS: Array[String] = PropModels.TABLETOP_KINDS
 const NAMES: Dictionary = {"wall_picture": "벽 그림", "wall_mirror": "거울", "wall_poster": "포스터",
-	"wall_clock": "벽시계", "potted_plant": "화분"}
+	"wall_clock": "벽시계", "potted_plant": "화분", "alarm_clock": "탁상시계", "vase": "꽃병",
+	"mug": "머그", "teapot": "찻주전자", "kettle": "주전자", "kettle_enamel": "법랑 주전자",
+	"cutting_board": "도마", "serving_bowl": "사발", "dinner_plate": "접시"}
 # 쓰임 번호는 배치 차례와 독립이다. 종류를 추가해도 기존 굴림이 바뀌지 않는다.
 const PURPOSE: Dictionary = {"wall_picture": 0, "potted_plant": 1, "wall_mirror": 2, "wall_poster": 3, "wall_clock": 4}
 const PLAN: Dictionary = {
@@ -16,6 +22,21 @@ const PLAN: Dictionary = {
 	# 욕실 거울 0.80은 참고 표 밖의 새 값이며, 북·서 벽 세면대 위에만 둔다.
 	"bath": {"wall_mirror": [0.80, 1]},
 }
+const TOP_PLAN: Dictionary = {
+	"bed": ["alarm_clock", "vase", "mug"],
+	"living": ["vase", "teapot", "serving_bowl", "mug"],
+	"kitchen": ["kettle", "cutting_board", "dinner_plate", "serving_bowl"],
+}
+const TOP_HOSTS: Dictionary = {
+	"bed": {"alarm_clock": ["nightstand", "dresser"], "vase": ["dresser", "nightstand"],
+		"mug": ["nightstand", "dresser"]},
+	"living": {"vase": ["side_table", "low_table"], "teapot": ["low_table", "side_table"],
+		"serving_bowl": ["low_table", "side_table"], "mug": ["side_table", "low_table"]},
+	"kitchen": {"kettle": ["cold_stove", "counter"], "kettle_enamel": ["cold_stove", "counter"],
+		"cutting_board": ["counter"], "dinner_plate": ["counter"], "serving_bowl": ["counter"]},
+}
+const TOP_PURPOSE := 5
+const KETTLE_PURPOSE := 6
 const BACKS: Dictionary = {0: Vector2i(0, -1), 3: Vector2i(-1, 0)}
 const FRONTS: Array[Vector2i] = [Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1), Vector2i(1, 0)]
 const BED_BACKS: Array[Vector2i] = [Vector2i(-1, 0), Vector2i(0, -1), Vector2i(1, 0), Vector2i(0, 1)]
@@ -33,6 +54,8 @@ static func dress(data: Dictionary) -> Dictionary:
 	for cls: String in PLAN:
 		stats["rooms"][cls] = 0
 	for kind: String in KINDS:
+		stats["kinds"][kind] = 0
+	for kind: String in TOP_KINDS:
 		stats["kinds"][kind] = 0
 	var props: Array = data.get("props", [])
 	var place := String(data.get("place_id", ""))
@@ -67,6 +90,7 @@ static func dress(data: Dictionary) -> Dictionary:
 			var walls := _walls(g, of, ri, cells, cover, stairs)
 			var forbidden := RoomFurnish._forbidden(g, of, ri, cells, stairs)
 			var hung: Array = []
+			var decor_start := props.size()
 			for kind: String in KINDS:
 				if not PLAN[cls].has(kind):
 					continue
@@ -95,8 +119,142 @@ static func dress(data: Dictionary) -> Dictionary:
 						hung.append(chosen)
 					stats["kinds"][kind] += 1
 					stats["rows"] += 1
+			var budget := _top_budget(cls, seed_value, props.slice(decor_start))
+			for row: Dictionary in _tabletops(props, in_room.get(ri, []), lv, cls, seed_value, name, budget, g):
+				props.append(row)
+				stats["kinds"][row["kind"]] += 1
+				stats["rows"] += 1
 	data["props"] = props
 	return stats
+
+
+## 그리기와 받침 검사가 같은 첫 유효 모형을 쓴다. 윗면 없는 대체도 그대로 고른다.
+static func drawn_model(kind: String) -> String:
+	if PropModels.enabled():
+		for path in PropKinds.candidates(kind):
+			if ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
+				return path
+	return ""
+
+
+## 기존 굴림은 다시 읽기만 한다. 복사본이 하나라도 걸렸으면 그 종류는 보충하지 않는다.
+static func _top_budget(cls: String, seed_value: int, rows: Array) -> int:
+	if not TOP_PLAN.has(cls):
+		return 0
+	var hung: Dictionary = {}
+	for row: Dictionary in rows:
+		if row.get("mount", "") == "wall":
+			hung[String(row["kind"])] = true
+	var count := 0
+	for kind: String in KINDS:
+		if kind == "potted_plant" or not PLAN[cls].has(kind):
+			continue
+		var roll := int(rand_from_seed(hash([seed_value, PURPOSE[kind]]))[0])
+		if float(roll % 1000) / 1000.0 < float(PLAN[cls][kind][0]) and not hung.has(kind):
+			count += 1
+	return count
+
+
+static func _top_order(cls: String, seed_value: int) -> Array[String]:
+	var out: Array[String] = []
+	if not TOP_PLAN.has(cls):
+		return out
+	var plan: Array = TOP_PLAN[cls].duplicate()
+	if cls == "kitchen":
+		var kettle_roll := int(rand_from_seed(hash([seed_value, KETTLE_PURPOSE]))[0])
+		plan[0] = "kettle" if kettle_roll % 2 == 0 else "kettle_enamel"
+	var roll := int(rand_from_seed(hash([seed_value, TOP_PURPOSE]))[0])
+	for i in range(plan.size()):
+		out.append(plan[(i + roll % plan.size()) % plan.size()])
+	return out
+
+
+static func top_hosts(cls: String, kind: String) -> Array:
+	return TOP_HOSTS.get(cls, {}).get(kind, [])
+
+
+## 탁상은 줄이지 않는다. 받침이 줄어든 축의 여백도 모형 좌표에서 미리 뺀다.
+static func _top_fits(box: AABB, rect: Rect2, scale: Vector2 = Vector2.ONE) -> bool:
+	var at := rect.get_center()
+	var lo := at + Vector2(box.position.x, box.position.z) / scale
+	var hi := at + Vector2(box.end.x, box.end.z) / scale
+	return lo.x >= rect.position.x and lo.y >= rect.position.y and hi.x <= rect.end.x and hi.y <= rect.end.y
+
+
+static func _tabletops(props: Array, idxs: Array, lv: int, cls: String, seed_value: int,
+		name: String, limit: int, grid: FieldGrid = null) -> Array:
+	if limit <= 0:
+		return []
+	var options: Array = []
+	for kind: String in _top_order(cls, seed_value):
+		var choices: Array = []
+		var path := drawn_model(kind)
+		if path.is_empty():
+			options.append(choices)
+			continue
+		var box: AABB = PropModels.batch_meshes(path)[0].get_aabb()
+		for on: String in top_hosts(cls, kind):
+			for i: int in idxs:
+				var host: Dictionary = props[i]
+				if host.get("decor", false) or int(host.get("level", 0)) != lv or host.get("kind", "") != on:
+					continue
+				var r: Variant = RoomFurnish._rect(host.get("rect"))
+				if r == null:
+					continue
+				var host_path := drawn_model(on)
+				var tops := PropModels.tops(host_path)
+				if tops.is_empty():
+					continue
+				var host_box: AABB = PropModels.batch_meshes(host_path)[0].get_aabb()
+				var fit := PropFit.fit(host_box.position, host_box.end, r, int(host.get("facing", 0)), grid)
+				var basis := Basis.from_scale(fit["scale"]) * Basis(Vector3.UP, -float(fit["facing"]) * PI * 0.5)
+				var scale := Vector2(basis.x.length(), basis.z.length())
+				var spots: Array = range(tops.size())
+				if on == "cold_stove":
+					spots.sort_custom(func(a: int, b: int) -> bool:
+						return tops[a]["y"] > tops[b]["y"] if tops[a]["y"] != tops[b]["y"] else a < b)
+				for spot: int in spots:
+					var surface: Rect2 = tops[spot]["rect"]
+					if not _top_fits(box, surface, scale):
+						continue
+					var row := {"kind": kind, "rect": Rect2i(r.position, Vector2i.ONE), "solid": "none",
+						"mount": "top", "on": on, "host_rect": r, "spot": spot, "at": surface.get_center(),
+						"facing": int(host.get("facing", 0)), "level": lv, "note": "%s의 %s" % [name, NAMES[kind]], "decor": true}
+					choices.append({"slot": "%d:%s:%s:%d" % [lv, r, on, spot],
+						"order": options.size(), "choice": choices.size(), "row": row})
+		options.append(choices)
+	var out: Array = []
+	for picked: Dictionary in _match_tops(options, limit):
+		out.append(picked["row"])
+	return out
+
+
+## 수를 먼저 최대화하고, 같은 수면 종류 차례 전체를 받침 선호보다 먼저 비교한다.
+static func _top_ahead(a: Array, b: Array) -> bool:
+	if a.size() != b.size():
+		return a.size() > b.size()
+	for key: String in ["order", "choice"]:
+		for i in range(a.size()):
+			if a[i][key] != b[i][key]:
+				return a[i][key] < b[i][key]
+	return false
+
+
+static func _match_tops(options: Array, limit: int, index: int = 0, used: Dictionary = {}) -> Array:
+	if limit <= 0 or index >= options.size():
+		return []
+	var best: Array = []
+	for choice: Dictionary in options[index]:
+		if used.has(choice["slot"]):
+			continue
+		used[choice["slot"]] = true
+		var picked: Array = [choice]
+		picked.append_array(_match_tops(options, limit - 1, index + 1, used))
+		used.erase(choice["slot"])
+		if _top_ahead(picked, best):
+			best = picked
+	var skipped := _match_tops(options, limit, index + 1, used)
+	return skipped if _top_ahead(skipped, best) else best
 
 
 static func _coverage(props: Array, lv: int) -> Dictionary:

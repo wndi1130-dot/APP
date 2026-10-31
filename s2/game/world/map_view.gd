@@ -11,10 +11,10 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
-const PropKinds = preload("res://game/world/prop_kinds.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const TrackView = preload("res://game/world/track_view.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
+const RoomDecor = preload("res://game/world/room_decor.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
 const FurnitureTints = preload("res://game/world/furniture_tints.gd")
 const ObjectRules = preload("res://game/sim/object_rules.gd")
@@ -81,7 +81,7 @@ var prop_batches: Dictionary = {} # 모델 경로 -> {items, nodes(LOD -> MultiM
 var object_gray: Array = [] # Individually removable fallbacks for interactive furniture.
 var stove_glows: Dictionary = {}
 var modelled_prop_cells: Dictionary = {} # 땅 층에서 모델로 그리는 칸: 회색 덩이 제외용
-var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0} # 지도 facing과 다르게 돌린 수, 줄인 수
+var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0, "top_skipped": 0} # 지도 facing과 다르게 돌린 수, 줄인 수
 var _prop_memory := PackedByteArray()
 var _prop_seen_now: Dictionary = {}
 var _props_mask_on: bool = true
@@ -1672,14 +1672,15 @@ static func remaining_low_rects(r: Rect2i, covered: Dictionary) -> Array[Rect2i]
 
 func _build_props() -> void:
 	var chosen: Dictionary = {}
+	var top_props: Array = []
+	var hosts: Dictionary = {}
 	for prop: Dictionary in data.get("props", []):
+		if String(prop.get("mount", "")) == "top":
+			top_props.append(prop)
+			continue
 		var kind := String(prop.get("kind", ""))
 		if not chosen.has(kind):
-			chosen[kind] = ""
-			for path in PropKinds.candidates(kind):
-				if PropModels.enabled() and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
-					chosen[kind] = path
-					break
+			chosen[kind] = RoomDecor.drawn_model(kind)
 		var path: String = chosen[kind]
 		var lv := int(prop.get("level", 0))
 		if _interactive_prop(kind) and prop.get("rect") is Rect2i and levels.has(lv):
@@ -1721,11 +1722,36 @@ func _build_props() -> void:
 			item["tint"] = FurnitureTints.pick(prop, r.position, b)
 		prop_batches[path]["items"].append(item)
 		_index_prop(prop_batches[path], item)
+		if not prop.get("decor", false):
+			hosts["%d:%s:%s" % [lv, r, kind]] = {"path": path, "xf": xf, "building": b}
 		# 장식(벽걸이·화분)은 몸을 막지 않아 그 칸의 회색 덩이(모형 없는 가구)를 지우지 않는다.
 		if lv == 0 and not prop.get("decor", false):
 			for y in range(r.position.y, r.end.y):
 				for x in range(r.position.x, r.end.x):
 					modelled_prop_cells[Vector2i(x, y)] = true
+	# 받침은 모두 최종 변환을 받은 뒤다. 탁상은 그 돌림만 따라 실제 크기로 얹는다.
+	for prop: Dictionary in top_props:
+		await BuildPace.rest(pace)
+		var kind := String(prop.get("kind", ""))
+		if not chosen.has(kind):
+			chosen[kind] = RoomDecor.drawn_model(kind)
+		var path: String = chosen[kind]
+		var lv := int(prop.get("level", 0))
+		var host: Dictionary = hosts.get("%d:%s:%s" % [lv, prop.get("host_rect"), prop.get("on", "")], {})
+		var tops := PropModels.tops(String(host.get("path", "")))
+		var spot := int(prop.get("spot", -1))
+		if host.is_empty() or path.is_empty() or not levels.has(lv) or spot < 0 or spot >= tops.size() \
+				or not prop.get("rect") is Rect2i or not prop.get("at") is Vector2:
+			prop_fit_counts["top_skipped"] += 1
+			continue
+		var xf := top_mount_transform(host["xf"], float(tops[spot]["y"]), prop["at"])
+		if not prop_batches.has(path):
+			prop_batches[path] = {"items": [], "nodes": {}, "tiles": {}}
+		var item := {"xf": xf, "rect": prop["rect"], "level": lv, "building": host["building"],
+			"prop": prop, "remembered": false}
+		prop_batches[path]["items"].append(item)
+		_index_prop(prop_batches[path], item)
+		prop_fit_counts["placed"] += 1
 	for path: String in prop_batches:
 		var batch: Dictionary = prop_batches[path]
 		var meshes := PropModels.batch_meshes(path)
@@ -1745,6 +1771,10 @@ func _build_props() -> void:
 			batch["nodes"][lod] = node
 		await BuildPace.rest(pace)
 	_make_prop_shades()
+
+
+static func top_mount_transform(host_xf: Transform3D, spot_y: float, at: Vector2) -> Transform3D:
+	return Transform3D(host_xf.basis.orthonormalized(), host_xf * Vector3(at.x, spot_y, at.y))
 
 
 ## 벽걸이 장식의 등 쪽 칸(facing 0 북·1 동·2 남·3 서 — 모형 앞 +Z가 facing만큼 돈다).
