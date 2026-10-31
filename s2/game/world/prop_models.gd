@@ -15,24 +15,31 @@ const LIVELY_DIR := "res://models/props_field/"
 const LIVELY_KINDS: Array[String] = ["dresser", "chair", "nightstand", "counter", "sink", "cupboard", "settee",
 	"armchair", "low_table", "side_table", "toilet", "washstand", "bathtub", "towel_shelf", "medicine_cabinet",
 	"waste_bin"]
-## Things set on top of the room furniture (map_view, mount "top"): indoors only, so no rime on them
-## either; their own colours stay as baked (no lively grade).
+## Things set on top of the room furniture (map_view, mount "top"): indoors only (the map puts them in rooms,
+## never in a yard; the material is one per file, so one put outdoors would lose its rime too), so no rime on
+## them either; their own colours stay as baked (no lively grade).
 const TABLETOP_KINDS: Array[String] = ["vase", "alarm_clock", "mug", "teapot", "kettle", "kettle_enamel",
 	"cutting_board", "serving_bowl", "dinner_plate"]
 ## Where something can be set on a piece of furniture: the flat top's height and the part of it with nothing
 ## standing above, in the model's own frame (+Z its front, before map_view's PropFit turns or narrows it), as
-## [{y, rect: Rect2(x, z, width, depth)}]. Measured on the baked model's faces; test_prop_models probes the
-## mesh under each rect, so a rebake that moves a top fails there. By model file, since a kind can fall back
-## to another model (cold_stove to tiled_stove) whose top is elsewhere: that one has none.
+## [{y, rect: Rect2(x, z, width, depth)}]. Measured on the baked model's faces, each rect 1 cm inside the
+## edges found; test_prop_models probes every LOD's mesh under each rect, edges included, so a rebake that
+## moves a top fails there. By model file, since a kind can fall back to another model (cold_stove to
+## tiled_stove) whose top is elsewhere: that one has none.
 const TOPS: Dictionary = {
-	LIVELY_DIR + "nightstand.glb": [{"y": 0.55, "rect": Rect2(-0.25, -0.215, 0.5, 0.425)}],
-	LIVELY_DIR + "dresser.glb": [{"y": 1.0, "rect": Rect2(-0.88, -0.32, 1.76, 0.614)}],
-	LIVELY_DIR + "side_table.glb": [{"y": 0.6, "rect": Rect2(-0.28, -0.215, 0.56, 0.43)}],
-	LIVELY_DIR + "low_table.glb": [{"y": 0.45, "rect": Rect2(-0.36, -0.33, 0.72, 0.66)}],
+	LIVELY_DIR + "nightstand.glb": [{"y": 0.55, "rect": Rect2(-0.24, -0.205, 0.48, 0.405)}],
+	LIVELY_DIR + "dresser.glb": [{"y": 1.0, "rect": Rect2(-0.87, -0.31, 1.74, 0.594)}],
+	LIVELY_DIR + "side_table.glb": [{"y": 0.6, "rect": Rect2(-0.27, -0.205, 0.54, 0.41)}],
+	LIVELY_DIR + "low_table.glb": [{"y": 0.45, "rect": Rect2(-0.35, -0.32, 0.7, 0.64)}],
 	# The worktop, in front of the 6 cm splashback along the back edge.
-	LIVELY_DIR + "counter.glb": [{"y": 0.84, "rect": Rect2(-0.48, -0.286, 0.96, 0.616)}],
-	# The lid; its straps stand 1 cm proud, so things go on at their height.
-	"res://models/props_common/blanket_chest.glb": [{"y": 0.65, "rect": Rect2(-1.0, -0.5, 2.0, 0.93)}],
+	LIVELY_DIR + "counter.glb": [{"y": 0.84, "rect": Rect2(-0.47, -0.276, 0.94, 0.596)}],
+	# The lid, three boards with 5 mm gaps between (z -0.188..-0.183, 0.129..0.134); its straps stand 1 cm
+	# proud, so things go on at their height.
+	"res://models/props_common/blanket_chest.glb": [
+		{"y": 0.65, "rect": Rect2(-0.99, -0.49, 1.98, 0.297)},
+		{"y": 0.65, "rect": Rect2(-0.99, -0.178, 1.98, 0.302)},
+		{"y": 0.65, "rect": Rect2(-0.99, 0.139, 1.98, 0.291)},
+	],
 	# Either side of the flue (back middle) and the round hob plate (front middle, centre z 0.135), and on
 	# the plate itself, the square inside its round.
 	"res://models/props_common/cold_stove.glb": [

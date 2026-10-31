@@ -71,23 +71,23 @@ func test_every_model_darkens_at_the_foot_it_stands_on() -> void:
 
 
 func test_tops_are_where_the_baked_furniture_is_flat() -> void:
-	# Under every point of a top's rect the highest face of the model is that top: nothing stands above it
-	# (a splashback, a flue) and it is not a hole. A rebake that moves a top fails here.
+	# Under every point of a top's rect, its edges too, the highest face of the model is that top, in every
+	# LOD the map draws: nothing stands above it (a splashback, a flue) and it is not a hole. A rebake that
+	# moves a top fails here.
 	for path: String in Props.TOPS:
 		var meshes: Dictionary = Props.batch_meshes(path)
 		assert_true(meshes.has(0), path + " loads")
-		if not meshes.has(0):
-			continue
-		var tris := _triangles(meshes[0])
-		for top: Dictionary in Props.tops(path):
-			var rect: Rect2 = top["rect"]
-			var y: float = top["y"]
-			for i in 5:
-				for j in 5:
-					var p := Vector2(rect.position.x + 0.01 + (rect.size.x - 0.02) * i / 4.0,
-						rect.position.y + 0.01 + (rect.size.y - 0.02) * j / 4.0)
-					var h := _highest(tris, p)
-					assert_between(h, y - 0.015, y + 0.005, "%s top %.2f at %s: %.3f" % [path.get_file(), y, p, h])
+		for lod: int in meshes:
+			var tris := _triangles(meshes[lod])
+			for top: Dictionary in Props.tops(path):
+				var rect: Rect2 = top["rect"]
+				var y: float = top["y"]
+				for i in 7:
+					for j in 7:
+						var p := Vector2(rect.position.x + 0.001 + (rect.size.x - 0.002) * i / 6.0,
+							rect.position.y + 0.001 + (rect.size.y - 0.002) * j / 6.0)
+						var h := _highest(tris, p)
+						assert_between(h, y - 0.015, y + 0.005, "%s LOD%d top %.2f at %s: %.3f" % [path.get_file(), lod, y, p, h])
 
 
 func test_tops_are_only_the_furniture_things_go_on() -> void:
