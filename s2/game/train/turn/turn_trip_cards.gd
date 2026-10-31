@@ -60,7 +60,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 		"trip_extend":
 			var comm: String = str(card["comm"]) if card.get("comm") != null else "tail"
 			return {"title": "무전", "speaker": _speaker(g, t, comm), "focus": comm, "required": true,
-				"body": "무전이 짧게 왔다. 역에 석탄이 없다. %dkm를 더 간다. 식량 %d이 더 든다." % [int(p["extendKm"]), int(card.get("n", 0))],
+				"body": "무전이 짧게 왔다. 역에 석탄이 없다. %dkm를 더 간다. 식량 %d이 더 든다." % [int(p["extendKm"]), int(card["n"]) if card.get("n") != null else 0],
 				"choices": [_choice("알았다", "더 간다는 수동차 무전에 불을 아끼며 기다리기로 했다.", [], "", "기다린다. 불을 아껴라.")]}
 	return {}
 

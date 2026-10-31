@@ -75,10 +75,21 @@ func _step(input: Dictionary, t: Dictionary, action: Dictionary, at: String) -> 
 					var direct: Dictionary = Advance.advance(read["g"], t)
 					var after: Dictionary = Advance.advance(reloaded["g"], t)
 					_same(direct, after, at + " next settlement and RNG survive save")
-					result = {"before": read["g"], "after": after}
+					result = {"before": _drop_load_defaults(g, read["g"]), "after": _drop_load_defaults(g, after)}
 		_: fail_test("unknown fixture action: " + str(action["kind"]))
 	assert_false(g.has("_turn_port_error"), at + ": " + str(g.get("_turn_port_error", "")))
 	return {"g": g, "result": result}
+
+## save_slot.gd fill_defaults fills these when a save lacks them; S1 reads them with ?? (absent is
+## this default, and old saves keep lateOn/eventPack off by policy). Only a default the source
+## board did not carry is dropped before comparing with S1; any other value still differs.
+const LOAD_DEFAULTS: Dictionary = {"lateOn": false, "lateCards": [], "eventLog": {}, "needs": {}, "emergencyCalls": [], "hunger": 0, "linesSeen": []}
+
+func _drop_load_defaults(source: Dictionary, loaded: Dictionary) -> Dictionary:
+	var out: Dictionary = loaded.duplicate(true)
+	for key: String in LOAD_DEFAULTS:
+		if not source.has(key) and out.has(key) and out[key] == LOAD_DEFAULTS[key]: out.erase(key)
+	return out
 
 func _case(id: String) -> Dictionary:
 	for row: Dictionary in _data["cases"]:
