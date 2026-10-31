@@ -105,7 +105,10 @@ static func rows_path(path: String) -> Array:
 			source.free()
 	if lively(path):
 		for row: Dictionary in found:
-			(row["material"] as ShaderMaterial).set_shader_parameter("lively", 1.0)
+			var material := row["material"] as ShaderMaterial
+			material.set_shader_parameter("lively", 1.0)
+			# Indoors only: rime is not held off by `sheltered` and would grey the wood on a cold stop.
+			material.set_shader_parameter("rime_catch", 0.0)
 	_rows[path] = found
 	return found
 

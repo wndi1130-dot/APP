@@ -155,17 +155,28 @@ func test_imported_mesh_has_one_surface_colours_and_measured_bounds() -> void:
 		root.free()
 
 
-## The living-colour press of building.gdshader (accent): saturation 0.75, the default value, 0.6 of the cool mix.
+## The living-colour press as weathered.gdshader writes it: its own value and cool-mix defaults, accent_saturation,
+## and the cool-mix factor of its lively mix (the very expression building.gdshader mixes its accent with).
 func _lively() -> Dictionary:
+	var path := "res://fx/shaders/weathered.gdshader"
 	var g := FxState.MODEL_GRADE.duplicate()
-	g["grade_saturation"] = _uniform_default("res://fx/shaders/weathered.gdshader", "accent_saturation")
-	g["grade_cool_mix"] = float(FxState.MODEL_GRADE["grade_cool_mix"]) * 0.6
+	g["grade_saturation"] = _uniform_default(path, "accent_saturation")
+	g["grade_value"] = _uniform_default(path, "grade_value")
+	g["grade_cool_mix"] = _uniform_default(path, "grade_cool_mix") * _lively_cool_factor(path)
 	return g
 
 
 func _uniform_default(path: String, name: String) -> float:
 	var re := RegEx.new()
 	re.compile("uniform float " + name + "[^=;]*=\\s*([0-9.]+)")
+	var m := re.search(FileAccess.get_file_as_string(path))
+	return float(m.get_string(1)) if m != null else -1.0
+
+
+## The factor on grade_cool_mix in a shader's accent grade; -1 when that expression is not in it.
+func _lively_cool_factor(path: String) -> float:
+	var re := RegEx.new()
+	re.compile("fx_model_grade\\(base,\\s*accent_saturation,\\s*grade_value,\\s*grade_cool,\\s*grade_cool_mix\\s*\\*\\s*([0-9.]+)\\)")
 	var m := re.search(FileAccess.get_file_as_string(path))
 	return float(m.get_string(1)) if m != null else -1.0
 
@@ -177,11 +188,20 @@ func test_room_kinds_and_only_they_get_the_living_colour_press() -> void:
 	listed.sort()
 	assert_eq(listed, expected, "the bake inverts the living press for exactly these")
 	for id: String in expected:
-		var rows: Array = PropModels.rows_path(KIT_DIR + "/" + id + ".glb")
+		var path := KIT_DIR + "/" + id + ".glb"
+		var rows: Array = PropModels.rows_path(path)
 		assert_false(rows.is_empty(), id)
 		for row: Dictionary in rows:
-			var got = (row["material"] as ShaderMaterial).get_shader_parameter("lively")
+			var material := row["material"] as ShaderMaterial
+			var got = material.get_shader_parameter("lively")
 			assert_almost_eq(float(got) if got != null else 0.0, 1.0, EPS, id)
+			var rime = material.get_shader_parameter("rime_catch")
+			assert_almost_eq(float(rime) if rime != null else 1.0, 0.0, EPS, id + " takes no rime indoors")
+		# The map draws the batched mesh: its surfaces carry the same material.
+		var batched: Mesh = PropModels.batch_meshes(path)[0]
+		for surface in range(batched.get_surface_count()):
+			var got = (batched.surface_get_material(surface) as ShaderMaterial).get_shader_parameter("lively")
+			assert_almost_eq(float(got) if got != null else 0.0, 1.0, EPS, id + " batched")
 	for other: String in ["bench", "cooking_pot"]:
 		var rows: Array = PropModels.rows_path(KIT_DIR + "/" + other + ".glb")
 		assert_false(rows.is_empty(), other)
@@ -191,12 +211,21 @@ func test_room_kinds_and_only_they_get_the_living_colour_press() -> void:
 
 
 func test_catalog_grade_is_the_shaders_living_colour_press() -> void:
+	var weathered := "res://fx/shaders/weathered.gdshader"
+	var code := FileAccess.get_file_as_string(weathered)
+	assert_almost_eq(_uniform_default(weathered, "lively"), 0.0, EPS, "every other model keeps the default press")
+	var mix := RegEx.new()
+	mix.compile("mix\\(fx_model_grade\\(base,\\s*grade_saturation[^;]*accent_saturation[^;]*\\),\\s*lively\\)")
+	assert_not_null(mix.search(code), "weathered mixes the accent grade by lively")
+	var factor := _lively_cool_factor(weathered)
+	assert_gt(factor, 0.0, "weathered's accent grade")
+	assert_almost_eq(factor, _lively_cool_factor("res://game/world/building.gdshader"), EPS,
+		"houses and their furniture keep one living colour")
+	assert_almost_eq(_uniform_default(weathered, "accent_saturation"),
+		_uniform_default("res://game/world/building.gdshader", "accent_saturation"), EPS)
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(KIT_DIR + "/catalog_room.json"))
 	var g: Dictionary = parsed.get("grade", {}) if parsed is Dictionary else {}
 	var lively := _lively()
-	var accent := _uniform_default("res://fx/shaders/weathered.gdshader", "accent_saturation")
-	assert_almost_eq(accent, _uniform_default("res://game/world/building.gdshader", "accent_saturation"), EPS,
-		"houses and their furniture keep one living colour")
 	assert_almost_eq(float(g.get("saturation", -1)), float(lively["grade_saturation"]), EPS)
 	assert_almost_eq(float(g.get("value", -1)), float(lively["grade_value"]), EPS)
 	assert_almost_eq(float(g.get("cool_mix", -1)), float(lively["grade_cool_mix"]), EPS)
@@ -207,8 +236,10 @@ func test_catalog_grade_is_the_shaders_living_colour_press() -> void:
 		assert_almost_eq(Vector3(cool[0], cool[1], cool[2]), Vector3(want.r, want.g, want.b), Vector3.ONE * EPS)
 
 
-## The area mean of what the shader makes of each face (graded, then sRGB): hue in degrees, HLS saturation, lightness.
+## What the shader makes of each face (graded, then sRGB), weighted by its area turned to the diagonal camera so the
+## tops and fronts the view shows count and the undersides do not: hue in degrees, HLS saturation, lightness.
 func _graded_look(id: String) -> Vector3:
+	var view := Vector3(0.5, 1.0, 0.7).normalized()
 	var packed := load(KIT_DIR + "/" + id + ".glb") as PackedScene
 	var root := packed.instantiate()
 	var nodes: Array[MeshInstance3D] = []
@@ -216,17 +247,20 @@ func _graded_look(id: String) -> Vector3:
 	var arrays := nodes[0].mesh.surface_get_arrays(0)
 	root.free()
 	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
 	var colours: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
 	var index: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
 	var lively := _lively()
 	var sum := Color(0, 0, 0)
-	var area := 0.0
+	var weight := 0.0
 	for t in range(0, index.size() - 2, 3):
 		var a := (verts[index[t + 1]] - verts[index[t]]).cross(verts[index[t + 2]] - verts[index[t]]).length() * 0.5
+		var n := (normals[index[t]] + normals[index[t + 1]] + normals[index[t + 2]]).normalized()
+		var w := a * maxf(0.0, n.dot(view))
 		var c: Color = (colours[index[t]] + colours[index[t + 1]] + colours[index[t + 2]]) / 3.0
-		sum += FxState.grade_color(c, lively) * a
-		area += a
-	var m: Color = (sum / area).linear_to_srgb()
+		sum += FxState.grade_color(c, lively) * w
+		weight += w
+	var m: Color = (sum / weight).linear_to_srgb()
 	var hi := maxf(m.r, maxf(m.g, m.b))
 	var lo := minf(m.r, minf(m.g, m.b))
 	var l := (hi + lo) * 0.5
@@ -237,8 +271,8 @@ func _graded_look(id: String) -> Vector3:
 func test_wood_furniture_reads_as_wood_after_the_press() -> void:
 	# The T0-8c gauge: dark wood is hue 15-45, saturation 0.2 up, lightness under 0.5 before light; the kitchen
 	# fronts are the lighter wood. Under the default press no vertex colour gets wood that saturated.
-	for row: Array in [["chair", 0.0, 0.5], ["dresser", 0.0, 0.5], ["side_table", 0.0, 0.5], ["counter", 0.45, 0.75],
-			["sink", 0.45, 0.85]]:
+	# (The sink's top is its steel basin; its fronts are the counter's.)
+	for row: Array in [["chair", 0.0, 0.5], ["dresser", 0.0, 0.5], ["side_table", 0.0, 0.5], ["counter", 0.45, 0.75]]:
 		var look := _graded_look(String(row[0]))
 		assert_between(look.x, 15.0, 45.0, "%s hue %s" % [row[0], look])
 		assert_gt(look.y, 0.2, "%s saturation %s" % [row[0], look])
