@@ -2,6 +2,10 @@ extends RefCounted
 ## Stop receipt builder. Legacy schema plus S1 stop v3 and field v4 contracts.
 
 const STOCK_KEYS := ["coal", "food", "medicine", "luxury", "symbol", "info", "scrap", "wood", "cloth", "parts", "ammo_pistol", "ammo_shell", "ammo_craft"]
+## Stock the stop contract adds from v3 on (S1 stop_receipt.ts v3Schema; the legacy shared
+## schema has no place for it): supplies (decision 490). Taken on any receipt, written and
+## accepted only on a v3 or later one.
+const V3_STOCK_KEYS := ["supplies"]
 const PEOPLE_LISTS := ["sent", "injured", "bitten", "dead", "missing", "leftBehind", "rescued"]
 ## The six towns, and the five stops on the way (mine, lodge, sawmill, lake,
 ## summit: each its own kind, decision 423).
@@ -105,7 +109,7 @@ func set_time(arrive: String, depart: String, stay_min: int) -> bool:
 
 ## Adds a signed delta. Unknown keys are refused (returns false).
 func add_stock(key: String, n: int) -> bool:
-	if not STOCK_KEYS.has(key):
+	if not (STOCK_KEYS.has(key) or V3_STOCK_KEYS.has(key)):
 		return false
 	_stock[key] = int(_stock.get(key, 0)) + n
 	return true
@@ -387,6 +391,10 @@ func to_dict() -> Dictionary:
 	for key: String in STOCK_KEYS:
 		if _stock.has(key):
 			stock[key] = _stock[key]
+	if _has_v3 or _has_v4:
+		for key: String in V3_STOCK_KEYS:
+			if _stock.has(key):
+				stock[key] = _stock[key]
 	var people := {}
 	for list_name: String in PEOPLE_LISTS:
 		people[list_name] = (_people[list_name] as Array[String]).duplicate()
@@ -492,6 +500,7 @@ static func fold_gaps(d: Dictionary) -> Array[String]:
 ## Accepts JSON-parsed input too (integers arrive as whole floats).
 static func check(d: Dictionary) -> Array[String]:
 	var out: Array[String] = []
+	_check_finite(out, "", d)
 	var id_re := RegEx.create_from_string(ID_PATTERN)
 	var clock_re := RegEx.create_from_string(CLOCK_PATTERN)
 	var version: int = int(d.get("version", 1)) if _is_int(d.get("version", 1)) else 0
@@ -538,7 +547,9 @@ static func check(d: Dictionary) -> Array[String]:
 	var stock: Variant = d.get("stock")
 	if stock is Dictionary:
 		for key: Variant in stock:
-			if not STOCK_KEYS.has(key):
+			if V3_STOCK_KEYS.has(key) and version < 3:
+				out.append("stock.%s: 판 3 전 영수증에는 없는 칸" % str(key))
+			elif not (STOCK_KEYS.has(key) or V3_STOCK_KEYS.has(key)):
 				out.append("stock.%s: 모르는 키" % str(key))
 			elif not _is_int(stock[key]):
 				out.append("stock.%s: 정수가 아님" % str(key))
@@ -672,21 +683,43 @@ static func _check_v5_fields(out: Array[String], d: Dictionary, id_re: RegEx) ->
 			for key: String in ["exhaustion", "hunger"]:
 				if not (_is_int(row.get(key)) and float(row[key]) >= 0.0 and float(row[key]) <= 2.0):
 					out.append("crew.%d.%s: 0~2가 아님" % [i, key])
-			if not row.get("bodyUse") is Dictionary:
+			var body_use: Variant = row.get("bodyUse")
+			if not body_use is Dictionary:
 				out.append("crew.%d.bodyUse: 사전이 아님" % i)
+			else:
+				for use_key: Variant in body_use:
+					var use_amount: Variant = body_use[use_key]
+					if not (_is_num(use_amount) and is_finite(float(use_amount)) and float(use_amount) >= 0.0):
+						out.append("crew.%d.bodyUse.%s: 0 이상 수가 아님" % [i, str(use_key)])
 			var back: Variant = row.get("gearBack")
-			if not (back is Dictionary and back.get("hands") is Array and back.get("items") is Dictionary):
+			if not back is Dictionary:
 				out.append("crew.%d.gearBack: 꼴이 아님" % i)
-			elif (back as Dictionary).has("wear"):
+			else:
 				_no_extra(out, "crew.%d.gearBack" % i, back, ["hands", "items", "wear"])
-				var wear: Variant = back["wear"]
-				if not (wear is Dictionary and wear.has("jacket") and wear.has("hands")):
-					out.append("crew.%d.gearBack.wear: 꼴이 아님" % i)
+				var hands: Variant = back.get("hands")
+				if not hands is Array:
+					out.append("crew.%d.gearBack.hands: 목록이 아님" % i)
 				else:
-					_no_extra(out, "crew.%d.gearBack.wear" % i, wear, GEAR_WEAR_KEYS)
-					for place: Variant in wear:
-						if not (wear[place] is String and wear[place] == "") and not _wardrobe_entry_ok(wear[place], id_re):
-							out.append("crew.%d.gearBack.wear.%s: 옷장 꼴이 아님" % [i, str(place)])
+					for j: int in (hands as Array).size():
+						var hand: Variant = hands[j]
+						if not (hand is Array and hand.size() == 3):
+							out.append("crew.%d.gearBack.hands.%d: 세 칸 목록이 아님" % [i, j])
+							continue
+						for column: int in 2:
+							if not hand[column] is String:
+								out.append("crew.%d.gearBack.hands.%d.%d: 문자열이 아님" % [i, j, column])
+						if not (_is_num(hand[2]) and is_finite(float(hand[2]))):
+							out.append("crew.%d.gearBack.hands.%d.2: 수가 아님" % [i, j])
+				_check_v5_counts(out, "crew.%d.gearBack.items" % i, back.get("items"))
+				if back.has("wear"):
+					var wear: Variant = back["wear"]
+					if not (wear is Dictionary and wear.has("jacket") and wear.has("hands")):
+						out.append("crew.%d.gearBack.wear: 꼴이 아님" % i)
+					else:
+						_no_extra(out, "crew.%d.gearBack.wear" % i, wear, GEAR_WEAR_KEYS)
+						for place: Variant in wear:
+							if not (wear[place] is String and wear[place] == "") and not _wardrobe_entry_ok(wear[place], id_re):
+								out.append("crew.%d.gearBack.wear.%s: 옷장 꼴이 아님" % [i, str(place)])
 	if d.has("wardrobeIn"):
 		var rows: Variant = d["wardrobeIn"]
 		if not rows is Array:
@@ -696,15 +729,8 @@ static func _check_v5_fields(out: Array[String], d: Dictionary, id_re: RegEx) ->
 				if not _wardrobe_entry_ok(rows[i], id_re):
 					out.append("wardrobeIn.%d: 옷장 꼴이 아님" % i)
 	for key: String in V5_COUNTS:
-		if not d.has(key):
-			continue
-		var counts: Variant = d[key]
-		if not counts is Dictionary:
-			out.append("%s: 사전이 아님" % key)
-			continue
-		for kind: Variant in counts:
-			if not (_is_id(kind, id_re) and _is_int(counts[kind]) and float(counts[kind]) >= 0.0):
-				out.append("%s.%s: 0 이상 정수가 아님" % [key, str(kind)])
+		if d.has(key):
+			_check_v5_counts(out, key, d[key])
 	if d.has("sledsBack") and not (_is_int(d["sledsBack"]) and float(d["sledsBack"]) >= 0.0):
 		out.append("sledsBack: 0 이상 정수가 아님")
 	if d.has("lootDeck"):
@@ -714,7 +740,7 @@ static func _check_v5_fields(out: Array[String], d: Dictionary, id_re: RegEx) ->
 		else:
 			for kind: Variant in deck:
 				var row: Variant = deck[kind]
-				if not (_is_id(kind, id_re) and row is Dictionary):
+				if not row is Dictionary:
 					out.append("lootDeck.%s: 꼴이 아님" % str(kind))
 					continue
 				var place: Dictionary = row
@@ -730,10 +756,33 @@ static func _check_v5_fields(out: Array[String], d: Dictionary, id_re: RegEx) ->
 		for key: String in ["people", "hurt", "dead"]:
 			if not _is_id_list(defense.get(key), id_re, true):
 				out.append("defense.%s: 겹치지 않는 id 목록이 아님" % key)
-		if defense.has("wounds"):
-			_check_wounds(out, defense["wounds"], id_re, true)
+		_check_wounds(out, defense.get("wounds"), id_re, true, "defense.wounds")
 	elif defense != null:
 		out.append("defense: null이나 사전이 아님")
+
+
+## S1 canonical() turns down a receipt holding a number that is not finite anywhere in it,
+## free keys too (placeState's, a witness weight); JSON cannot carry one, a dictionary can.
+static func _check_finite(out: Array[String], at: String, v: Variant) -> void:
+	if v is float:
+		if not is_finite(float(v)):
+			out.append("%s: 유한하지 않은 수" % (at if at != "" else "receipt"))
+	elif v is Dictionary:
+		for key: Variant in v:
+			_check_finite(out, str(key) if at == "" else "%s.%s" % [at, str(key)], v[key])
+	elif v is Array:
+		for i: int in (v as Array).size():
+			_check_finite(out, "%s.%d" % [at, i], v[i])
+
+
+## S1 counts accepts any string key, with nonnegative integer values.
+static func _check_v5_counts(out: Array[String], at: String, counts: Variant) -> void:
+	if not counts is Dictionary:
+		out.append("%s: 사전이 아님" % at)
+		return
+	for key: Variant in counts:
+		if not (_is_int(counts[key]) and float(counts[key]) >= 0.0):
+			out.append("%s.%s: 0 이상 정수가 아님" % [at, str(key)])
 
 
 ## Same precedence as S1 goalStatus, using this stop's earned amount (not stock).
@@ -943,33 +992,33 @@ static func _witness_ok(v: Variant, id_re: RegEx) -> bool:
 
 
 ## Receipt v2 per-part wounds (body_injury 4.6): {person, part, kind, festering?}, and on v5 treat?.
-static func _check_wounds(out: Array[String], wounds: Variant, id_re: RegEx, treat_ok: bool = false) -> void:
+static func _check_wounds(out: Array[String], wounds: Variant, id_re: RegEx, treat_ok: bool = false, at: String = "people.wounds") -> void:
 	if not (wounds is Array):
-		out.append("people.wounds: 목록이 아님")
+		out.append("%s: 목록이 아님" % at)
 		return
 	for i: int in (wounds as Array).size():
 		var w: Variant = wounds[i]
 		if not (w is Dictionary):
-			out.append("people.wounds.%d: 사전이 아님" % i)
+			out.append("%s.%d: 사전이 아님" % [at, i])
 			continue
-		_no_extra(out, "people.wounds.%d" % i, w, ["person", "part", "kind", "festering", "treat"] if treat_ok else ["person", "part", "kind", "festering"])
+		_no_extra(out, "%s.%d" % [at, i], w, ["person", "part", "kind", "festering", "treat"] if treat_ok else ["person", "part", "kind", "festering"])
 		if w.has("treat"):
 			if not w["treat"] is Dictionary:
-				out.append("people.wounds.%d.treat: 사전이 아님" % i)
+				out.append("%s.%d.treat: 사전이 아님" % [at, i])
 			else:
 				for k: Variant in w["treat"]:
-					if not WOUND_TREATS.has(k) or w["treat"][k] != true:
-						out.append("people.wounds.%d.treat.%s: 모르는 처치" % [i, str(k)])
+					if not WOUND_TREATS.has(k) or (treat_ok and not w["treat"][k] is bool) or w["treat"][k] != true:
+						out.append("%s.%d.treat.%s: 모르는 처치" % [at, i, str(k)])
 		if not _is_id(w.get("person"), id_re):
-			out.append("people.wounds.%d.person: id 형식이 아님" % i)
+			out.append("%s.%d.person: id 형식이 아님" % [at, i])
 		if not WOUND_PARTS.has(w.get("part")):
-			out.append("people.wounds.%d.part: 모르는 부위" % i)
+			out.append("%s.%d.part: 모르는 부위" % [at, i])
 		if not WOUND_KINDS.has(w.get("kind")):
-			out.append("people.wounds.%d.kind: 모르는 상처" % i)
+			out.append("%s.%d.kind: 모르는 상처" % [at, i])
 		elif w.get("kind") == "amputation" and WOUND_PARTS.has(w.get("part")) and not CUT_PARTS.has(w.get("part")):
-			out.append("people.wounds.%d.part: 팔·다리가 아닌 절단" % i)
+			out.append("%s.%d.part: 팔·다리가 아닌 절단" % [at, i])
 		if w.has("festering") and not (w["festering"] is bool):
-			out.append("people.wounds.%d.festering: 참·거짓이 아님" % i)
+			out.append("%s.%d.festering: 참·거짓이 아님" % [at, i])
 
 
 static func _is_num(v: Variant) -> bool:

@@ -18,6 +18,7 @@ extends RefCounted
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootTables = preload("res://game/sim/loot_tables.gd")
 const LootJunk = preload("res://game/sim/loot_junk.gd")
+const LootSupplies = preload("res://game/sim/loot_supplies.gd")
 const Carry = preload("res://game/sim/carry.gd")
 
 ## What may be moved between the boxes of one building, and as what.
@@ -348,6 +349,8 @@ static func name_keys(data: Dictionary) -> void:
 	for b in data.get("buildings", []):
 		if b is Dictionary and not (b as Dictionary).has("loot_kind"):
 			b["loot_kind"] = building_kind(String(b.get("name", "")))
+		if b is Dictionary and not (b as Dictionary).has("stay_kind"):
+			b["stay_kind"] = LootSupplies.stay_kind(String(b.get("name", "")))
 
 
 ## What a building is by its name ("" for none of these).
@@ -512,10 +515,10 @@ static func name_pocket(id: String, salt: int) -> String:
 ## Dress the stop in place. data: the map's dictionary (containers, buildings,
 ## place_kind). Returns what was done, for the tests and the measuring tool:
 ## {"moved", "named", "finds": [[id, box]], "rare": id or "", "fragment": id or "",
-## "store": kind or "", "promised", "loot_deck"}. deck: where the decks stood after
+## "store": kind or "", "promised", "loot_deck", "supplies"}. deck: where the decks stood after
 ## the last stop (DECKS); empty, the promised shares are kept within this stop and
 ## the rest roll as before. Where they stand after this one is "loot_deck".
-static func dress(data: Dictionary, seed: int, deck: Dictionary = {}) -> Dictionary:
+static func dress(data: Dictionary, seed: int, deck: Dictionary = {}, supplies: bool = true) -> Dictionary:
 	var containers: Dictionary = data.get("containers", {})
 	var buildings: Array = data.get("buildings", [])
 	var place_kind: String = String(data.get("place_kind", ""))
@@ -572,6 +575,7 @@ static func dress(data: Dictionary, seed: int, deck: Dictionary = {}) -> Diction
 	for id: String in DECKS:
 		_deck_row(decks, id)
 	report["loot_deck"] = decks
+	report["supplies"] = LootSupplies.strew(containers, seed, rooms, buildings) if supplies else 0
 	return report
 
 
