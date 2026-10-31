@@ -330,7 +330,7 @@ static func hunger_tick(g0: Dictionary, t: Dictionary) -> Dictionary:
 
 ## The end checks at the close of settle (checkEnd): the trust crisis and its three stretches,
 ## the tension warning at 60 and the last chance at 100. An S1a game has no martial law.
-## Ending writes the end and its first journal line; the look-back lines after it are not ported.
+## Ending writes the S1 end, lookback and raised-child lines through one path.
 static func check_end(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var g := g0.duplicate(true)
 	if float(g["food"]) < 0.0:
@@ -346,7 +346,7 @@ static func check_end(g0: Dictionary, t: Dictionary) -> Dictionary:
 			g["trustCrisis"] = null
 			_journal(g, "불신임의 말이 잦아들었다.", "good")
 		elif int(g["seg"]) >= int(crisis):
-			return _finish(g, "ousted")
+			return finish(g, t, "ousted")
 	var tension := float(g["tension"])
 	if tension >= 60.0 and not bool(g.get("tensionWarned", false)):
 		g["tensionWarned"] = true
@@ -356,23 +356,140 @@ static func check_end(g0: Dictionary, t: Dictionary) -> Dictionary:
 		if int(g.get("tensionCrisisUsed", 0)) < 2:
 			_card(g, {"kind": "tension_crisis", "comm": "tail", "who": null, "text": null}, t)
 		else:
-			return _finish(g, "revolt")
+			return finish(g, t, "revolt")
 	return g
 
 
 const END_TEXT := {
 	"complete": "라이프치히 중앙역에 닿았다.", "stranded": "석탄이 다 떨어졌다. 열차가 섰다.",
 	"ousted": "의회가 열차장을 끌어내렸다. 아무도 소리치지 않았다. 사람들이 길을 비켜 섰다.", "revolt": "반란이 일어났다. 식당칸 탁자가 엎어지고 고함이 칸을 넘어왔다.",
+	"lost_captain": "열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.",
+	"coup": "경비대장이 열차를 잡았다. 열차장은 열차장실 문을 열어 둔 채 짐을 쌌다.",
+	"slice": "둘째 역에 닿았다. 시험판은 여기서 멈춘다.",
 }
+const STRANDED_REVOLT_TEXT = "솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다."
+const LOOK_RES = ["coal", "food", "wood", "scrap"]
+const LOOK_NAMES = {"coal": "석탄", "food": "식량", "wood": "목재", "scrap": "고철"}
 
 
-static func _finish(g: Dictionary, end: String) -> Dictionary:
+static func end_text(g: Dictionary, end: String) -> String:
+	return STRANDED_REVOLT_TEXT if end == "revolt" and g.get("stranded") != null else str(END_TEXT.get(end, ""))
+
+
+## S1 turn.finish mutates its working state (unlike the public copy-returning steps).
+static func finish(g: Dictionary, t: Dictionary, end: String) -> Dictionary:
 	if g["phase"] == "end":
 		return g
 	g["end"] = end
 	g["phase"] = "end"
-	_journal(g, END_TEXT[end], "good" if end == "complete" else "bad")
+	_journal(g, end_text(g, end), "good" if end == "complete" else "bad")
+	track_lookback(g)
+	for line: String in lookback_lines(g, t): _journal(g, line, "dark")
+	# S1 classroom.eduLookLines: an S1a state without edu produces no lines.
+	var edu: Variant = g.get("edu")
+	if edu is Dictionary:
+		if int(edu.get("segs", 0)) > 0: _journal(g, "수업은 %d구간 섰다. 하루 먼저 일어난 사람 %d." % [int(edu["segs"]), int(edu["early"])])
+		if int(edu.get("hands", 0)) > 0: _journal(g, "아이들이 승강장에 선 정차 %d." % int(edu["hands"]))
+	# S1 people.raisedLines preserves the record's insertion order and original words.
+	var raised: Dictionary = g["raised"] if g.get("raised") is Dictionary else {}
+	for name: String in raised: _journal(g, "%s은(는) %s에서 컸다." % [name, t["COMM_NAME"][raised[name]]])
+	# darkFinish is a no-op for the S1a states accepted by this port.
 	return g
+
+
+## S1 lookback.trackLookback: record the first low/choice, without running domestic hooks.
+static func track_lookback(g: Dictionary) -> void:
+	if g.get("look") == null: g["look"] = {"low": {}, "skip": {}, "coalStops": 0}
+	var look: Dictionary = g["look"]
+	var dom: Dictionary = g["dom"] if g.get("dom") is Dictionary else {}
+	var read: Dictionary = {"coal": g["coal"], "food": g["food"], "wood": dom.get("wood"), "scrap": dom.get("scrap")}
+	var floors: Dictionary = {"coal": 15, "food": 25, "wood": 3, "scrap": 3}
+	for res: String in LOOK_RES:
+		if read[res] != null and float(read[res]) <= float(floors[res]) and not look["low"].has(res):
+			look["low"][res] = g["seg"]
+			if res == "coal" and g.get("dom") != null and dom.get("insulated", []).is_empty() and float(dom.get("wood", 0)) >= float(load("res://game/train/train_mods.gd").D["insulateWood"]): look["skip"]["noInsulate"] = g["seg"]
+	var taken: Dictionary = {"tailHeat": float(g["comms"]["tail"]["heat"]) < 2, "heatQuota": St.law_active(g, "heat_quota"), "tailRation": float(g["comms"]["tail"]["ration"]) < 2, "contribution": St.law_active(g, "contribution_ration"), "noOutsiders": St.law_active(g, "no_outsiders"), "breakdown": int(dom.get("stats", {}).get("breakdowns", 0)) > 0}
+	for key: String in taken:
+		if bool(taken[key]) and not look["skip"].has(key): look["skip"][key] = g["seg"]
+
+
+static func _look_res(res: String) -> String:
+	var name: String = LOOK_NAMES[res]
+	return name + load("res://game/train/turn/turn_stranded.gd").josa(name, "이/가")
+
+
+static func _look_first(lows: Array, arrived: bool = false) -> String:
+	var a: Dictionary = lows[0]
+	var first: String = _look_res(a["res"])
+	if arrived:
+		if lows.size() == 1: return "돌이켜 보면, %d째 정산에서 %s 바닥을 보였다. 그래도 닿았다." % [int(a["seg"]), first]
+		return "돌이켜 보면, %d째 정산에서 %s, %d째 정산에서 %s 바닥을 보였다. 그래도 닿았다." % [int(a["seg"]), first, int(lows[1]["seg"]), _look_res(lows[1]["res"])]
+	for b: Dictionary in lows.slice(1):
+		if b["seg"] == a["seg"]:
+			var name: String = LOOK_NAMES[a["res"]]
+			return "돌이켜 보면, %d째 정산에서 %s%s %s 함께 바닥을 보였다." % [int(a["seg"]), name, load("res://game/train/turn/turn_stranded.gd").josa(name, "과/와"), _look_res(b["res"])]
+	if lows.size() > 1: return "돌이켜 보면, %d째 정산에서 %s 처음 바닥을 보였고, %d째 정산에서 %s 뒤따랐다." % [int(a["seg"]), first, int(lows[1]["seg"]), _look_res(lows[1]["res"])]
+	return "돌이켜 보면, %d째 정산에서 %s 처음 바닥을 보였다." % [int(a["seg"]), first]
+
+
+static func _route_was_thin(g: Dictionary, t: Dictionary) -> bool:
+	var low: Variant = g.get("look", {}).get("low", {}).get("coal")
+	if low == null: return false
+	var want: float = 0
+	for seg: int in range(1, int(low) + 1):
+		var band: Dictionary = t["ROUTE"][-1]
+		for row: Dictionary in t["ROUTE"]:
+			if seg <= int(row["to"]):
+				band = row
+				break
+		if seg == int(band["relief"]["seg"]):
+			var places: Array = band["relief"]["places"]
+			var coal_places: int = places.filter(func(id: String) -> bool: return id in ["freight", "factory"]).size()
+			want += float(coal_places) / places.size()
+		else:
+			var total: float = 0
+			for weight: Variant in band["w"].values(): total += float(weight)
+			want += (float(band["w"].get("freight", 0)) + float(band["w"].get("factory", 0))) / maxf(1, total)
+	return want >= 2 and float(g["look"].get("coalStops", 0)) < want / 2
+
+
+static func _look_skip(g: Dictionary, full: bool) -> String:
+	if g.get("look") == null: return ""
+	var look: Dictionary = g["look"]
+	var s: Dictionary = look["skip"]
+	var coal: Variant = look["low"].get("coal")
+	var food: Variant = look["low"].get("food")
+	if s.has("noInsulate"): return "그때 단열한 칸은 하나도 없었다. 식은 칸이 석탄을 더 먹었다." if full else "그때 단열한 칸은 하나도 없었다."
+	if s.has("breakdown") and coal != null and s["breakdown"] < coal: return ("그보다 앞서 %d째 정산에서 고장이 났고, 고치지 못한 기관이 석탄을 더 먹었다." if full else "그보다 앞서 %d째 정산에서 고장이 났다.") % int(s["breakdown"])
+	if g.get("end") == "revolt" and coal != null:
+		if s.has("tailHeat") and s["tailHeat"] >= coal: return ("%d째 정산에서 꼬리칸의 난방을 내렸다. 석탄은 아꼈고 꼬리칸은 식었다." if full else "%d째 정산에서 꼬리칸의 난방을 내렸다.") % int(s["tailHeat"])
+		if s.has("heatQuota") and s["heatQuota"] >= coal: return ("%d째 정산에서 난방 배당이 법이 되었다. 석탄은 아꼈고 뒤쪽 칸들은 식었다." if full else "%d째 정산에서 난방 배당이 법이 되었다.") % int(s["heatQuota"])
+	if g.get("end") == "revolt" and food != null:
+		if s.has("tailRation") and s["tailRation"] >= food: return ("%d째 정산에서 꼬리칸의 배급을 깎았다. 식량은 버텼고 꼬리칸은 굶었다." if full else "%d째 정산에서 꼬리칸의 배급을 깎았다.") % int(s["tailRation"])
+		if s.has("contribution") and s["contribution"] >= food: return ("%d째 정산에서 기여 배급이 법이 되었다. 식량은 버텼고 일하지 못하는 사람은 굶었다." if full else "%d째 정산에서 기여 배급이 법이 되었다.") % int(s["contribution"])
+		if s.has("noOutsiders") and s["noOutsiders"] >= food: return ("%d째 정산에서 바깥 사람을 받지 않기로 했다. 입은 줄었고 일손도 줄었다." if full else "%d째 정산에서 바깥 사람을 받지 않기로 했다.") % int(s["noOutsiders"])
+	return ""
+
+
+static func lookback_lines(g: Dictionary, t: Dictionary) -> Array:
+	var end: Variant = g.get("end")
+	if end == null: return []
+	var low: Dictionary = g.get("look", {}).get("low", {})
+	var lows: Array = []
+	for res: String in LOOK_RES:
+		if low.has(res): lows.append({"res": res, "seg": low[res]})
+	lows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["seg"]) < int(b["seg"]) if a["seg"] != b["seg"] else LOOK_RES.find(a["res"]) < LOOK_RES.find(b["res"]))
+	if end == "complete": return [_look_first(lows, true)] if not lows.is_empty() else []
+	if end in ["ousted", "coup", "lost_captain"]: return [_look_first(lows)] if not lows.is_empty() else []
+	if end not in ["revolt", "stranded"]: return []
+	if lows.is_empty(): return ["돌이켜 보면, 석탄도 식량도 바닥을 보인 적은 없었다. 모자란 것은 다른 데 있었다."] if end == "revolt" else []
+	var out: Array = [_look_first(lows)]
+	if end == "stranded" and low.get("coal") == g["seg"]: return out
+	var thin: bool = _route_was_thin(g, t)
+	var tail: String = _look_skip(g, not thin)
+	if thin: out.append("이 노선은 석탄이 나는 역이 드물었다." + (" " + tail if tail != "" else ""))
+	elif tail != "": out.append(tail)
+	return out
 
 
 ## The unrest/support band: {unrest, neutral, support, byComm: [{c, seats, side}]}.
@@ -401,10 +518,10 @@ static func rel_stage(g: Dictionary, t: Dictionary, c: String) -> String:
 
 
 ## Whether next_segment covers this state: the settle step of an S1a game, before the run-up to
-## the hub, not stranded, and not the stretch an emergency term runs out (that ends in politics).
+## the hub, and not the stretch an emergency term runs out (that ends in politics).
 static func next_segment_covers(g: Dictionary, t: Dictionary) -> bool:
 	var p: Dictionary = t["P"]
-	return St.is_s1a(g) and g["phase"] == "settle" and g.get("stranded") == null \
+	return St.is_s1a(g) and g["phase"] == "settle" \
 		and int(g["seg"]) + 1 < int(p["segments"]) - 1 and int(g.get("decreeLeft", 0)) != 1 \
 		and (g.get("cards", []) as Array).is_empty()
 

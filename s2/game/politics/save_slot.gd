@@ -15,6 +15,43 @@ static func _is_number(value: Variant) -> bool:
 	return (value is int or value is float) and is_finite(float(value))
 
 
+static func _natural(value: Variant) -> bool:
+	return _is_number(value) and float(value) >= 0 and float(value) == floorf(float(value))
+
+
+static func _strings(value: Variant) -> bool:
+	if not value is Array: return false
+	for item: Variant in value:
+		if not item is String: return false
+	return true
+
+
+static func _stranded_problem(st: Dictionary, t: Dictionary) -> Variant:
+	for key: String in ["since", "turns", "segKm", "atKm", "toNextKm", "lostTrips"]:
+		if not _natural(st.get(key)): return "멈춘 열차 수치가 이상하다: " + key
+	if not _strings(st.get("seen")): return "멈춘 열차 사건 목록이 이상하다"
+	for key: String in ["captainAway", "lamp"]:
+		if not st.get(key) is bool: return "멈춘 열차 표식이 이상하다: " + key
+	if not st.has("deputy") or (st["deputy"] != null and st["deputy"] not in t["COMMS"]): return "열차를 맡은 칸이 이상하다"
+	if not st.has("snow") or st["snow"] not in [null, "all", "guard", "none"]: return "선로의 눈 기록이 이상하다"
+	if st.has("burned") and not _is_number(st["burned"]): return "태운 석탄 수치가 이상하다"
+	if not st.has("trip") or (st["trip"] != null and not st["trip"] is Dictionary): return "수동차 원정 칸이 이상하다"
+	if st["trip"] == null: return null
+	var trip: Dictionary = st["trip"]
+	for key: String in ["leaderGoes", "forced", "known"]:
+		if not trip.get(key) is bool: return "수동차 표식이 이상하다: " + key
+	if trip.get("comm") not in t["COMMS"]: return "수동차 칸 이름이 이상하다"
+	if not _strings(trip.get("names")): return "수동차 사람 목록이 이상하다"
+	for key: String in ["size", "distKm", "extends", "goTurns", "searchTurns", "backTurns", "plannedTurns", "turn"]:
+		if not _natural(trip.get(key)): return "수동차 수치가 이상하다: " + key
+	if trip.get("phase") not in ["go", "search", "back"]: return "수동차 단계가 이상하다"
+	for key: String in ["posKm", "baseFood", "foodShort", "foodOwed"]:
+		if not _is_number(trip.get(key)): return "수동차 수치가 이상하다: " + key
+	if not trip.has("outcome") or trip["outcome"] not in [null, "coal", "lost"]: return "수동차 결과가 이상하다"
+	if not trip.has("promise") or trip["promise"] not in [null, "yes", "no"]: return "수동차 약속이 이상하다"
+	return null
+
+
 static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 	if not g.get("seed") is String or String(g.get("seed")).is_empty():
 		return "시드가 없다"
@@ -40,6 +77,13 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 		return "통과한 법 칸이 없다"
 	if g.has("dom") and g["dom"] != null and not g["dom"] is Dictionary:
 		return "내정 칸이 이상하다"
+	if g.get("stranded") != null:
+		if not g["stranded"] is Dictionary: return "멈춘 열차 칸이 이상하다"
+		var problem: Variant = _stranded_problem(g["stranded"], t)
+		if problem != null: return problem
+	if g.get("budget") is Dictionary:
+		for key: String in ["seg", "picked"]:
+			if not _is_number(g["budget"].get(key)): return "서류 예산 수치가 이상하다: " + key
 	if g.has("deferred") and g["deferred"] != null and not g["deferred"] is Array:
 		return "미뤄 둔 카드 목록이 이상하다"
 	if g.has("lateOn") and not g["lateOn"] is bool:

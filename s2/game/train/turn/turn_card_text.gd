@@ -28,10 +28,11 @@ const AFFORD_KINDS: Array[String] = ["travel", "demand", "ration_cut", "favor", 
 ## key?}. {} for a kind turn_cards.gd does not draw.
 static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var v: Dictionary = TurnCards.view(g, t, card)
+	if g.get("stranded") != null and bool(g["stranded"]["captainAway"]) and card["kind"] in ["tension_crisis", "protest"]: v = Late.view(g, card, TurnCards._base_view(g, t, card))
 	if v.is_empty():
 		return {}
 	# Content carries S1's filled body/speaker/why/later/log and guarded choices already.
-	if card["kind"] in ["content", "content-deal"]:
+	if card["kind"] in ["content", "content-deal", "trip_depart", "trip_return", "trip_lost", "trip_extend"]:
 		var content: Dictionary = v.duplicate(true)
 		if not content.has("speaker"): content["speaker"] = null
 		if not content.has("focus"): content["focus"] = null
@@ -236,7 +237,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	_afford(g, after)
 	if after.any(func(ch: Dictionary) -> bool: return ch["disabled"] == ""):
 		out["choices"] = after
-	return out
+	return TurnCards.Trip.filter_view(g, card, out)
 
 
 ## S1 affordable: why a choice's cost cannot be paid now ("" when it can).
