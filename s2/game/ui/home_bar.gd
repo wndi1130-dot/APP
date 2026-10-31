@@ -215,10 +215,19 @@ func _press_sink(b: Button) -> void:
 
 ## A room with no screen yet: a note over its key that fades.
 func _soon(b: Button) -> void:
+	note("준비 중", b)
+
+
+## A short note over key `b` (the main key when none) that fades after `hold_s`:
+## the same note a room with no screen gets, one at a time.
+func note(text: String, b: Control = null, hold_s: float = NOTE_S) -> void:
+	var over: Control = b if b != null else main_key
+	if over == null:
+		return
 	var k: float = UiFonts.K
 	if is_instance_valid(_note):
 		_note.queue_free()
-	var l := UiFonts.label("준비 중", UiFonts.WORD, 400, 13.0, INK2, 0.52)
+	var l := UiFonts.label(text, UiFonts.WORD, 400, 13.0, INK2, 0.52)
 	l.name = "Note"
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = NOTE_BG
@@ -230,10 +239,10 @@ func _soon(b: Button) -> void:
 	l.custom_minimum_size = Vector2(0, 26.0 * k)
 	add_child(l)
 	l.size = l.get_combined_minimum_size()
-	l.position = Vector2(b.position.x + (b.size.x - l.size.x) * 0.5, -l.size.y - 6.0 * k)
+	l.position = Vector2(over.position.x + (over.size.x - l.size.x) * 0.5, -l.size.y - 6.0 * k)
 	l.position.x = clampf(l.position.x, 6.0 * k, size.x - l.size.x - 6.0 * k)
 	_note = l
 	var tw := l.create_tween()
-	tw.tween_interval(NOTE_S * 0.6)
-	tw.tween_property(l, "modulate:a", 0.0, NOTE_S * 0.4)
+	tw.tween_interval(hold_s * 0.6)
+	tw.tween_property(l, "modulate:a", 0.0, hold_s * 0.4)
 	tw.tween_callback(l.queue_free)

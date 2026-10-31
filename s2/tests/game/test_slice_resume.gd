@@ -8,6 +8,9 @@ const TrainSave = preload("res://game/politics/save_slot.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const Boot = preload("res://game/boot.gd")
 const Content = preload("res://game/train/turn/turn_content.gd")
+const TrainAdvance = preload("res://game/train/train_advance.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const FieldHud = preload("res://game/ui/field_hud.gd")
 const SLICE := "user://test_slice_resume_slice.json"
 const TRAIN := "user://test_slice_resume_train.json"
 const FIELD := "user://test_slice_resume_field.json"
@@ -291,6 +294,98 @@ func test_the_train_slot_keeps_key_order_for_a_tie_of_repealed_laws() -> void:
 
 func test_train_slot_round_trip_at_stop_pick() -> void:
 	_train_round_trip("stop_pick")
+
+
+## The piles and clocks a later board carries, made by hand: late and put-aside papers, a spent
+## paper budget, a queued event and a deal both due now, and the comms' cooldowns.
+func test_train_slot_round_trip_with_late_papers_queues_and_cooldowns() -> void:
+	var flow = _flow()
+	flow.go(flow._index_of("stop_pick"))
+	var g: Dictionary = flow.train_g.duplicate(true)
+	var seg: int = int(g["seg"])
+	g["lateOn"] = true
+	g["lateCards"] = [{"uid": 9001, "kind": "demand", "comm": "tail", "late": 1, "who": null}]
+	g["deferred"] = [{"uid": 9002, "kind": "favor", "comm": "guard", "pushed": 1}]
+	g["budget"] = {"picked": int(flow.train_t["BUDGET"]["perSeg"]), "stats": {"deferred": {"5": 1}, "faded": {}, "dropped": {"6": 2}}}
+	g["contentQueue"] = [{"id": "queued_now", "at": seg}]
+	g["contentDeals"] = [{"id": "deal_now", "comm": "front", "due": seg}]
+	g["comms"]["tail"]["demandCool"] = 3
+	g["comms"]["guard"]["favorCool"] = 0
+	assert_null(TrainSave.shape_problem(g, flow.train_t), "the hand-made board has the S1 shape")
+	assert_true(SliceSave.write_train(g, ROUND_TRIP))
+	var loaded: Dictionary = SliceSave._train(ROUND_TRIP, flow.train_t)
+	assert_false(loaded.is_empty(), "it reads back through the S1 shape check")
+	assert_eq(_json(loaded), _json(g), "every value and digit")
+	assert_eq(_type_gap(g, loaded), "", "every type")
+
+
+## The train reaches its stop with no paper waiting (the turn draws none on arriving and
+## does not move while one waits), so a save there is a stop_pick that skips no paper.
+func test_the_board_stands_at_its_stop_with_no_paper_waiting() -> void:
+	var start: Array = SliceFlow.start_board()
+	var t: Dictionary = start[1]
+	var g: Dictionary = SliceFlow.to_travel(start[0], t)
+	for i in 50:
+		g = SliceFlow.pick_first(g, t)
+		assert_false(g.has("_turn_port_error"), "the way to the stop is ported")
+		if String(g.get("phase", "")) != "travel" or g.has("_turn_port_error"):
+			break
+		g = TrainAdvance.advance(g, t)
+		if String(g.get("phase", "")) == "stop":
+			assert_false(SliceFlow.papers_of(g), "no paper waits as the train reaches the stop")
+			assert_eq(SliceSave.step_of_board(g), "stop_pick")
+			return
+	fail_test("the board never reached its stop")
+
+
+func _toast_texts(hud) -> Array:
+	var out: Array = []
+	for t: Dictionary in hud.toasts:
+		if t["kind"] == FieldHud.TOAST_WARN:
+			out.append(String(t["l"].text).replace(UiFonts.WORD_JOINER, ""))
+	return out
+
+
+## A write that fails is told over the home keys, play goes on with the old slots whole,
+## and the next save point writes the board as it is then.
+func test_a_failed_save_is_told_and_the_next_save_point_writes() -> void:
+	var flow = _flow()
+	assert_eq(flow.current(), "train")
+	var slice_text: String = FileAccess.get_file_as_string(SLICE)
+	var train_text: String = FileAccess.get_file_as_string(TRAIN)
+	# A file cannot be the parent directory of the failed slot.
+	flow.opts["train_save_path"] = TRAIN + "/unwritable.json"
+	flow.notification(NOTIFICATION_APPLICATION_PAUSED)
+	assert_eq(flow.save_error, "F-SAVE-TRAIN")
+	await get_tree().process_frame
+	assert_true(is_instance_valid(flow.bar), "the home keys are up")
+	var note: Variant = flow.bar._note
+	assert_true(is_instance_valid(note), "a note over the main key")
+	if is_instance_valid(note):
+		assert_eq(String(note.text).replace(UiFonts.WORD_JOINER, ""), SliceFlow.SAVE_FAILED)
+	flow.next()
+	assert_eq(flow.current(), "stop_pick", "play is not held")
+	assert_eq(flow.save_error, "F-SAVE-TRAIN")
+	assert_eq(FileAccess.get_file_as_string(TRAIN), train_text, "the old train slot stays whole")
+	assert_eq(FileAccess.get_file_as_string(SLICE), slice_text, "the old slice slot stays whole")
+	flow.opts["train_save_path"] = TRAIN
+	flow.notification(NOTIFICATION_APPLICATION_PAUSED)
+	assert_eq(flow.save_error, "")
+	assert_eq(_pick()["step"], "stop_pick")
+	assert_eq(_json(_pick()["g"]), _json(flow.train_g))
+
+
+func test_a_failed_save_in_the_field_is_the_field_s_warn_note() -> void:
+	var flow = _flow({"skip_field": false})
+	flow.go(flow._index_of("field"))
+	flow.opts["slice_save_path"] = SLICE + "/unwritable.json"
+	flow.propagate_notification(NOTIFICATION_APPLICATION_PAUSED)
+	assert_eq(flow.save_error, "F-SAVE-SLICE")
+	await get_tree().process_frame
+	assert_has(_toast_texts(flow.field.hud), SliceFlow.SAVE_FAILED)
+	flow.opts["slice_save_path"] = SLICE
+	flow.propagate_notification(NOTIFICATION_APPLICATION_PAUSED)
+	assert_eq(flow.save_error, "")
 
 
 func test_train_slot_round_trip_in_field() -> void:

@@ -81,6 +81,7 @@ const StopLoader = preload("res://game/stop_loader.gd")
 const Journey = preload("res://game/train/journey/journey.gd")
 const Corridor = preload("res://game/train/journey/journey_corridor.gd")
 const PaperMotion = preload("res://game/ui/paper_motion.gd")
+const FieldHud = preload("res://game/ui/field_hud.gd")
 const STOP_CINEMA_SCENE := preload("res://scenes/stop_cinema.tscn")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
 const EDGE_BOT := preload("res://game/ui/tex/edge_bot.png")
@@ -160,6 +161,10 @@ class SavedCouncil extends CouncilCard:
 
 
 const PANEL_W: float = 560.0
+## A failed write, said where the player looks; the home keys' note holds it as the
+## field's warn note does (field_hud.gd TOAST_WARN_S).
+const SAVE_FAILED: String = "저장하지 못했다. 다음 저장 때 다시 해 본다."
+const SAVE_NOTE_S: float = 6.0
 ## What stays lit in the gauges while a step's sheet is up (the stop and what it
 ## brought back are about stock; the session about what a vote moves,
 ## k3c_views.js vCouncil TOP hot).
@@ -253,6 +258,10 @@ var pending_field: Node = null
 var field_resume: Dictionary = {}
 var pending_shop_events: Array = []
 var save_error: String = ""
+## A failed write is told once a step where the player looks (the field's warn note, the
+## home keys' note, the panel's lines); the next save point tries again and clears it.
+var save_told_at: int = -1
+var save_line: Label = null
 var run: String = ""
 
 
@@ -1015,7 +1024,7 @@ func _save_slice() -> bool:
 	var train_path := String(opts.get("train_save_path", TrainSave.DEFAULT_PATH))
 	var written: Dictionary = {}
 	if not SliceSave.write_train(train_g, train_path, written):
-		save_error = "F-SAVE-TRAIN"
+		_save_failed("F-SAVE-TRAIN")
 		return false
 	var slice_path := String(opts.get("slice_save_path", SliceSave.PATH))
 	if current() == "end":
@@ -1025,10 +1034,50 @@ func _save_slice() -> bool:
 		var saved: Dictionary = SliceSave.capture(self)
 		saved["train_sha"] = written["train_sha"]
 		if not SliceSave.write(saved, slice_path):
-			save_error = "F-SAVE-SLICE"
+			_save_failed("F-SAVE-SLICE")
 			return false
 	save_error = ""
+	save_told_at = -1
+	if is_instance_valid(save_line):
+		save_line.queue_free()
+	save_line = null
 	return true
+
+
+## Play goes on over a failed write (the old slots stay whole); the player is told, and the
+## next save point (a step, a board change, the app put away) writes again.
+func _save_failed(code: String) -> void:
+	save_error = code
+	push_warning("slice: could not save (%s), the next save point tries again" % code)
+	# Told once the step's screen is up: a board change saved while a step is being built
+	# would say it on the keys that step is taking away.
+	_tell_save_error.call_deferred()
+
+
+func _tell_save_error() -> void:
+	if save_error == "" or save_told_at == step:
+		return
+	var hud: Variant = field.get("hud") if current() == "field" and is_instance_valid(field) else null
+	if hud is FieldHud and is_instance_valid(hud):
+		(hud as FieldHud).toast(SAVE_FAILED, FieldHud.TOAST_WARN)
+	elif is_instance_valid(bar):
+		(bar as HomeBar).note(SAVE_FAILED, null, SAVE_NOTE_S)
+	elif is_instance_valid(panel) and panel.visible:
+		_add_save_line()
+	else:
+		return
+	save_told_at = step
+
+
+func _add_save_line() -> void:
+	if is_instance_valid(save_line):
+		return
+	save_line = UiFonts.label(SAVE_FAILED, UiFonts.WORD, 400, 13.0, INK2)
+	save_line.name = "SaveFailed"
+	save_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	save_line.custom_minimum_size.x = PANEL_W - UiFonts.px(28.0)
+	lines.add_child(save_line)
+	_pin()
 
 
 func _clear_slice_field() -> void:
@@ -1995,6 +2044,7 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 	for c in lines.get_children():
 		lines.remove_child(c)
 		c.queue_free()
+	save_line = null
 	for text in rows:
 		var l := UiFonts.label(String(text), UiFonts.WORD, 400, 13.0, INK2)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
