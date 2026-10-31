@@ -844,8 +844,8 @@ function baseView(g: Game, card: Card): CardView {
         title: '아이가 나온다', speaker: leader(g, 'medtech'), focus: c, required: true,
         body: `${COMM_NAME[c]}에서 ${mother}의 아이가 나온다. ${cold ? '거긴 너무 춥다.' : '칸은 그럭저럭 따뜻하다.'}`,
         choices: withAfford(g, [
-          { label: '의무칸으로 옮긴다', log: `해산을 앞둔 ${mother}을(를) 의무칸으로 데려갔다.`, say: '의무칸을 비워라. 아이는 따뜻한 데서 받는다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
-          { label: '그 칸에서 낳는다', log: `${mother}이(가) 그 칸에서 아이를 낳게 했다.`, say: '옮길 틈이 없다. 거기서 받아라.', effs: [], special: cold ? 'birth_weak' : 'birth_ok' },
+          { label: '의무칸으로 데려간다', log: `해산을 앞둔 ${mother}을(를) 의무칸으로 데려갔다.`, say: '의무칸을 비워라. 아이는 따뜻한 데서 받는다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
+          { label: '그 칸에서 낳는다', log: `${mother}이(가) 그 칸에서 아이를 낳게 했다.`, say: '데려갈 틈이 없다. 거기서 받아라.', effs: [], special: cold ? 'birth_weak' : 'birth_ok' },
         ]),
       };
     }

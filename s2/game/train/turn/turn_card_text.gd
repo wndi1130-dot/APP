@@ -192,7 +192,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["speaker"] = _leader(g, t, "medtech")
 			out["focus"] = c
 			out["body"] = "%s에서 %s의 아이가 나온다. %s" % [t["COMM_NAME"][c], mother, "거긴 너무 춥다." if cold else "칸은 그럭저럭 따뜻하다."]
-			says = ["의무칸을 비워라. 아이는 따뜻한 데서 받는다.", "옮길 틈이 없다. 거기서 받아라."]
+			says = ["의무칸을 비워라. 아이는 따뜻한 데서 받는다.", "데려갈 틈이 없다. 거기서 받아라."]
 		"naming":
 			var mother: String = str(card.get("who", ""))
 			out["speaker"] = {"name": mother, "role": String(t["COMM_NAME"][c]), "comm": c}
