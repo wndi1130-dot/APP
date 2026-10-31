@@ -459,7 +459,7 @@ func _build_world() -> void:
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = air
 	# The field's exposure (field_game.gd _build_world), so the stop and the field it opens on are one brightness.
-	env.tonemap_exposure = Atmosphere.EXPOSURE
+	env.tonemap_exposure = float(light.get("exposure", Atmosphere.EXPOSURE))
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = light["ambient_color"]
 	env.ambient_light_energy = float(light["ambient_energy"]) * 1.15

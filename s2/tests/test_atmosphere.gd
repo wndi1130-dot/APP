@@ -274,6 +274,20 @@ func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	assert_almost_eq(0.5 + float(night["contrast"]) * (float(night["brightness"]) * p - 0.5), p, 0.0001)
 
 
+func test_snow_in_the_sun_takes_the_exposure_down() -> void:
+	# Deep winter in the sun: the snowfield would cut to white, so the exposure comes down.
+	var deep := Atmosphere.light(Atmosphere.look(12.0, ["clear"], "K1", 1.0, {"side": 0.5}))
+	assert_lt(float(deep["exposure"]), Atmosphere.EXPOSURE, "a sunny snowfield")
+	assert_gt(float(deep["exposure"]), Atmosphere.EXPOSURE * 0.6, "not down to a dusk")
+	# A grey snow day, patchy early snow, autumn and the night keep it.
+	for row: Array in [[["overcast"], 1.0, 0.5], [["snow"], 1.0, 0.5], [["clear"], 0.5, 0.0], [["clear"], 0.0, 0.0]]:
+		var lt := Atmosphere.light(Atmosphere.look(12.0, row[0], "K1", float(row[1]), {"side": float(row[2])}))
+		assert_almost_eq(float(lt["exposure"]), Atmosphere.EXPOSURE, 0.0001, "%s cold %s" % [str(row[0]), str(row[1])])
+	var t := Atmosphere.sun_times(1.0, 0.5)
+	var night := Atmosphere.light(Atmosphere.look(t.y + 3.0, ["clear"], "K1", 1.0, {"side": 0.5}))
+	assert_almost_eq(float(night["exposure"]), Atmosphere.EXPOSURE, 0.0001, "the night")
+
+
 func test_an_overcast_lights_from_above_and_keeps_the_ground() -> void:
 	# A closed sky by day: part of the fill becomes a high light with a soft
 	# shadow, so walls fall darker while the ground keeps its light; a

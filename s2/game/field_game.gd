@@ -913,6 +913,7 @@ func _update_atmosphere() -> void:
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
+		environment.tonemap_exposure = float(fx_light.get("exposure", Atmosphere.EXPOSURE))
 		if map_edge != null:
 			map_edge.set_fog(fx_light["fog_color"])
 			map_edge.set_field_fog(Atmosphere.field_fog(atmo), SIGHT_RADIUS * eye_mult(), fx_light)
@@ -1026,7 +1027,7 @@ func _build_world() -> void:
 	var world := WorldEnvironment.new()
 	environment = Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.tonemap_exposure = Atmosphere.EXPOSURE
+	environment.tonemap_exposure = float(fx_light.get("exposure", Atmosphere.EXPOSURE))
 	environment.background_color = fx_light.get("background", Color(fx_params["fx_tint"]).darkened(0.75))
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = fx_light["ambient_color"]
