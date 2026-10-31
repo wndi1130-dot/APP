@@ -298,17 +298,20 @@ func test_unusable_first_model_uses_the_drawn_fallback_without_a_top() -> void:
 	var primary := PropKinds.candidates("cold_stove")[0]
 	var had_cache := PropModels._batches.has(primary)
 	var original: Variant = PropModels._batches.get(primary)
-	var original_drawn := RoomDecor._drawn_models
-	RoomDecor._drawn_models = {}
+	# 주 모형을 먼저 고른 기억이 있어도, 그 메시가 비면 대체 모형으로 다시 고른다.
+	RoomDecor.forget_models()
+	var warm := RoomDecor.drawn_model("cold_stove")
 	PropModels._batches[primary] = {}
 	var selected := RoomDecor.drawn_model("cold_stove")
 	var props := [{"kind": "cold_stove", "rect": Rect2i(2, 2, 1, 1), "level": 0}]
 	var rows := RoomDecor._tabletops(props, [0], 0, "kitchen", 7, "부엌", 1)
-	RoomDecor._drawn_models = original_drawn
 	if had_cache:
 		PropModels._batches[primary] = original
 	else:
 		PropModels._batches.erase(primary)
+	RoomDecor.forget_models()
+	assert_eq(warm, primary, "바꿔 끼우기 전에는 주 모형을 기억한다")
+	assert_eq(RoomDecor.drawn_model("cold_stove"), primary, "되돌린 뒤 다시 주 모형")
 	assert_eq(selected, String(PropKinds.MODELS["cold_stove"]))
 	assert_eq(PropModels.tops(selected), [])
 	assert_eq(rows, [], "그려진 대체 모형에 윗면이 없으면 탁상 없음")
@@ -436,3 +439,64 @@ func test_renderer_defers_tops_uses_the_fitted_host_and_counts_skips() -> void:
 	assert_eq(MapView.prop_cull_at(items[0]), host_xf.origin, "탁상 거리 판정점 = 실제 받침 원점")
 	assert_eq(items[0]["tile"], view.prop_batches[path]["items"][0]["tile"])
 	assert_eq(view._prop_shade(top_path, items[0]), {}, "들뜬 탁상의 땅 그늘 없음")
+
+
+func test_refresh_submits_a_top_only_with_its_host_across_the_cull_edge() -> void:
+	# 실제 제출 단계: 받침과 탁상은 거리 제거 경계(39 m) 안팎에서 함께 그려지고 함께 빠진다.
+	# 받침이 초점보다 카메라에서 먼 쪽이라, 탁상 자기 높이로 재면 탁상만 먼저 빠지는 자리다.
+	var view = MapView.new()
+	add_child_autofree(view)
+	view.set_process(false)
+	var g := FieldGrid.new(160, 160)
+	view.grid = g
+	view.levels = {0: g}
+	var root := Node3D.new()
+	view.add_child(root)
+	view.level_roots = {0: root}
+	view._props_mask_on = false
+	var r := Rect2i(40, 40, 1, 2)
+	var path := RoomDecor.drawn_model("dresser")
+	assert_ne(path, "")
+	if path.is_empty():
+		return
+	var surface: Dictionary = PropModels.tops(path)[0]
+	var host := {"kind": "dresser", "rect": r, "level": 0, "facing": 0}
+	var top := {"kind": "alarm_clock", "rect": Rect2i(r.position, Vector2i.ONE), "solid": "none",
+		"mount": "top", "on": "dresser", "host_rect": r, "spot": 0, "at": surface["rect"].get_center(),
+		"facing": 0, "level": 0, "decor": true}
+	view.data = {"props": [top, host]}
+	await view._build_props()
+	var top_path := RoomDecor.drawn_model("alarm_clock")
+	var built: bool = view.prop_batches.has(top_path) and view.prop_batches.has(path)
+	assert_true(built, "받침과 탁상 배치가 모두 있다")
+	if not built:
+		return
+	var host_xf: Transform3D = view.prop_batches[path]["items"][0]["xf"]
+	var camera := Camera3D.new()
+	add_child_autofree(camera)
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 36.0
+	var toward_camera := Vector3(1.0, 0.0, 1.0).normalized()
+	var seen := {0: 0, 1: 0}
+	for tiled: bool in [true, false]:
+		view._prop_tile_culling = tiled
+		for d: float in [37.5, 38.0, 38.5, 38.8, 39.2, 39.5, 40.0, 40.5]:
+			var focus := host_xf.origin + toward_camera * d
+			focus.y = 0.0
+			camera.position = focus + Vector3(45.0, sqrt(2.0) * 45.0 * tan(deg_to_rad(35.0)), 45.0)
+			camera.look_at(focus)
+			view.refresh_props(camera)
+			var host_n := _submitted(view, path)
+			var top_n := _submitted(view, top_path)
+			assert_eq(top_n, host_n, "거리 %.1f m, 타일 거르기 %s: 받침과 탁상이 함께" % [d, tiled])
+			seen[host_n] = int(seen.get(host_n, 0)) + 1
+	assert_gt(int(seen.get(1, 0)), 0, "경계 안에서는 실제로 그린다")
+	assert_gt(int(seen.get(0, 0)), 0, "경계 밖에서는 실제로 뺀다")
+
+
+func _submitted(view, path: String) -> int:
+	var n := 0
+	for lod: int in view.prop_batches[path]["nodes"]:
+		var node: MultiMeshInstance3D = view.prop_batches[path]["nodes"][lod]
+		n += node.multimesh.visible_instance_count
+	return n

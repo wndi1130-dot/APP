@@ -50,8 +50,6 @@ const AVOID_TAKEN := 4
 const PLANT_STEPS := 3
 
 static var _drawn_models: Dictionary = {} # enabled + kind -> 첫 유효 모형(없음도 저장)
-static var _model_boxes: Dictionary = {}  # path -> LOD 0 AABB
-static var _model_tops: Dictionary = {}   # path -> 윗면 표(읽기 전용)
 
 
 static func dress(data: Dictionary) -> Dictionary:
@@ -140,7 +138,10 @@ static func drawn_model(kind: String) -> String:
 	var models_enabled := PropModels.enabled()
 	var key := "%s:%s" % [models_enabled, kind]
 	if _drawn_models.has(key):
-		return _drawn_models[key]
+		# 고른 모형의 메시가 그 뒤 비었으면(모형 캐시를 바꿔 끼운 경우) 처음부터 다시 고른다.
+		var cached: String = _drawn_models[key]
+		if cached.is_empty() or not PropModels.batch_meshes(cached).is_empty():
+			return cached
 	var chosen := ""
 	if models_enabled:
 		for path in PropKinds.candidates(kind):
@@ -151,16 +152,18 @@ static func drawn_model(kind: String) -> String:
 	return chosen
 
 
+## 모형 캐시를 바꿔 끼운 뒤(시험) 고른 모형 기억을 비운다.
+static func forget_models() -> void:
+	_drawn_models.clear()
+
+
+## 메시의 AABB와 윗면 표는 저장된 값이라 따로 기억하지 않는다(바꿔 끼운 메시도 그대로 따른다).
 static func _model_box(path: String) -> AABB:
-	if not _model_boxes.has(path):
-		_model_boxes[path] = PropModels.batch_meshes(path)[0].get_aabb()
-	return _model_boxes[path]
+	return PropModels.batch_meshes(path)[0].get_aabb()
 
 
 static func _tops(path: String) -> Array:
-	if not _model_tops.has(path):
-		_model_tops[path] = PropModels.tops(path)
-	return _model_tops[path]
+	return PropModels.tops(path)
 
 
 ## 기존 굴림은 다시 읽기만 한다. 복사본이 하나라도 걸렸으면 그 종류는 보충하지 않는다.
