@@ -845,17 +845,39 @@ func _check_twin_rooms(data: Dictionary, map_name: String) -> void:
 			bedrooms += 1
 			eligible += int(RoomFurnish._wide_bedroom(cells) and not covered.has(key))
 	var quota := mini(roundi(bedrooms * RoomFurnish.TWIN_SHARE), eligible)
-	var selected := RoomFurnish._twin_rooms(data, {"classes": data["density_classes"]}, data["levels"], String(data.get("place_id", "")))
+	var selection := RoomFurnish._twin_rooms(data, {"classes": data["density_classes"]}, data["levels"], String(data.get("place_id", "")))
+	var selected: Dictionary = selection["selected"]
+	var reserve: Dictionary = selection["reserve"]
 	var stats: Dictionary = data["room_stats"]
 	assert_eq(selected.size(), quota, "%s: 남긴 침대 대체 가구 방을 빼고 몫을 채운다" % map_name)
+	assert_eq(reserve.size(), eligible - quota, "%s: 안 뽑힌 넓은 침실을 예비로 넘긴다" % map_name)
 	assert_eq(int(stats.get("twin_quota", -1)), quota, "%s: 선정 몫 통계" % map_name)
 	assert_eq(int(stats.get("twins", 0)), actual.size(), "%s: 실제 두 침대 방 통계" % map_name)
-	assert_eq(actual.size() + int(stats.get("twin_abandoned", -1)), quota, "%s: 실제 방 + 포기 = 몫" % map_name)
+	assert_eq(actual.size(), int(stats.get("twin_tried", -1)) - int(stats.get("twin_abandoned", -1)), "%s: 실제 방 = 시도 - 포기" % map_name)
+	assert_lte(actual.size(), quota, "%s: 성공한 방은 몫 이하" % map_name)
+	assert_gte(int(stats.get("twin_tried", -1)), quota, "%s: 첫 뽑기는 모두 시도" % map_name)
+	assert_lte(int(stats.get("twin_tried", -1)), eligible, "%s: 방마다 최대 한 번 시도" % map_name)
+	assert_lte(int(stats.get("twin_filled", -1)), int(stats.get("twin_abandoned", -1)), "%s: 포기한 만큼만 채운다" % map_name)
+	for selected_key: String in selected:
+		assert_false(reserve.has(selected_key), "%s %s: 첫 뽑기와 예비는 겹치지 않는다" % [map_name, selected_key])
 	for covered_key: String in covered:
 		assert_false(selected.has(covered_key), "%s %s: bed를 대신한 지도 가구 방은 선정 제외" % [map_name, covered_key])
+		assert_false(reserve.has(covered_key), "%s %s: bed를 대신한 지도 가구 방은 예비 제외" % [map_name, covered_key])
 		assert_false(actual.has(covered_key), "%s %s: bed를 대신한 지도 가구 방에 두 침대를 더하지 않는다" % [map_name, covered_key])
+	var filled := 0
+	var filled_floors: Dictionary = {}
+	var standing_first_floors: Dictionary = {}
 	for twin_key: String in actual:
-		assert_true(selected.has(twin_key), "%s %s: 선정한 방에만 두 침대" % [map_name, twin_key])
+		if selected.has(twin_key):
+			standing_first_floors[String(selected[twin_key])] = true
+	for twin_key: String in actual:
+		assert_true(selected.has(twin_key) or reserve.has(twin_key), "%s %s: 첫 뽑기나 예비에만 두 침대" % [map_name, twin_key])
+		if not selected.has(twin_key):
+			filled += 1
+			var floor_key := String(reserve.get(twin_key, ""))
+			assert_false(standing_first_floors.has(floor_key), "%s %s: 첫 뽑기가 선 건물·층에는 채우지 않는다" % [map_name, twin_key])
+			assert_false(filled_floors.has(floor_key), "%s %s: 예비도 건물·층마다 성공은 하나" % [map_name, twin_key])
+			filled_floors[floor_key] = true
 		var pair: Array = beds[twin_key]
 		assert_eq(pair.size(), 2, "%s %s: 침대는 꼭 두 개" % [map_name, twin_key])
 		if pair.size() != 2:
@@ -876,3 +898,4 @@ func _check_twin_rooms(data: Dictionary, map_name: String) -> void:
 		assert_lte(stands.get(twin_key, []).size(), 1, "%s %s: 가운데 협탁은 최대 하나" % [map_name, twin_key])
 		for stand_cell: Vector2i in stands.get(twin_key, []):
 			assert_eq(stand_cell, middle, "%s %s: 협탁은 두 머리 사이 칸에만" % [map_name, twin_key])
+	assert_eq(filled, int(stats.get("twin_filled", -1)), "%s: 예비에서 성공한 방 통계" % map_name)

@@ -1438,13 +1438,15 @@ static func _wide_bedroom(cells: Array[Vector2i]) -> bool:
 	return _short_side(cells) >= WIDE_BED_SIDE
 
 
-## 홑침대 둘을 둘 침실("층:방" -> true): 이 지도에서 가구를 놓는 침실 수의 TWIN_SHARE(반올림)만큼, 짧은 변이
+## 홑침대 둘의 첫 뽑기(selected: "층:방" -> "건물:층"): 이 지도에서 가구를 놓는 침실 수의 TWIN_SHARE(반올림)만큼, 짧은 변이
 ## 넓은 방부터, 같으면 씨앗을 섞은 굴림 차례로. 짧은 변이 WIDE_BED_SIDE보다 좁은 방은 머리-벽 침대 둘이 서지
 ## 않아 고르지 않는다. 첫 바퀴는 한 건물 한 층에 하나씩(같은 꼴 방이 줄지은 연립·위층 숙소에 몰리지 않게),
 ## 모자라면 둘째 바퀴에서 채운다. 남기는 지도 가구가 bed를 대신하는 방은 후보에서 뺀다.
+## 안 뽑힌 넓은 침실(reserve: "층:방" -> "건물:층")도 넘긴다.
 static func _twin_rooms(data: Dictionary, plan: Dictionary, levels: Dictionary, place: String) -> Dictionary:
 	var count := 0
 	var wide: Array = []  # [짧은 변, 굴림, "층:방", "건물:층"]
+	var reserve: Dictionary = {}
 	var bed_covered: Dictionary = {}
 	for prop: Dictionary in data.get("props", []):
 		var kind := String(prop.get("kind", ""))
@@ -1474,7 +1476,9 @@ static func _twin_rooms(data: Dictionary, plan: Dictionary, levels: Dictionary, 
 			var side := _short_side(cells)
 			if side >= WIDE_BED_SIDE:
 				var bid := int(map["rooms"][ri]["building"])
-				wide.append([side, _roll(look_seed_of(place, bid, lv, ri), ROLL_TWIN), key, "%d:%d" % [bid, lv]])
+				var floor_key := "%d:%d" % [bid, lv]
+				wide.append([side, _roll(look_seed_of(place, bid, lv, ri), ROLL_TWIN), key, floor_key])
+				reserve[key] = floor_key
 	wide.sort_custom(func(a: Array, b: Array) -> bool: return a[0] > b[0] or (a[0] == b[0] and a[1] < b[1]))
 	var quota := mini(roundi(count * TWIN_SHARE), wide.size())
 	var out: Dictionary = {}
@@ -1482,12 +1486,13 @@ static func _twin_rooms(data: Dictionary, plan: Dictionary, levels: Dictionary, 
 	for spread: bool in [true, false]:
 		for row: Array in wide:
 			if out.size() >= quota:
-				return out
+				break
 			if out.has(row[2]) or (spread and floors.has(row[3])):
 				continue
-			out[row[2]] = true
+			out[row[2]] = row[3]
 			floors[row[3]] = true
-	return out
+			reserve.erase(row[2])
+	return {"selected": out, "reserve": reserve}
 
 
 ## 넓은 침실의 묶음: 침대는 머리-벽 자리부터(head_first), 협탁 뒤에 짝 하나(pair, 꼭 있을 것 아님).
@@ -1965,9 +1970,19 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 	lvs.sort()
 	data["density_classes"] = plan["classes"]
 	data["density_baths"] = plan["baths"]
-	var twins := _twin_rooms(data, plan, levels, place)
+	var twin_plan := _twin_rooms(data, plan, levels, place)
+	var twins: Dictionary = twin_plan["selected"]
+	var twin_reserve: Dictionary = twin_plan["reserve"]
+	# "건물:층" -> 그 층에 섰거나 아직 차리지 않은 홑침대 둘 방 수. 첫 뽑기가 포기하면 그 층을 예비에 연다.
+	var twin_floors: Dictionary = {}
+	for twin_selected: String in twins:
+		twin_floors[twins[twin_selected]] = int(twin_floors.get(twins[twin_selected], 0)) + 1
+	var twin_pending := twins.size()
+	var twin_made := 0
 	stats["twin_quota"] = twins.size()
+	stats["twin_tried"] = 0
 	stats["twin_abandoned"] = 0
+	stats["twin_filled"] = 0
 	for lv: int in lvs:
 		var g: FieldGrid = levels[lv]
 		var stairs: Dictionary = stairs_by.get(lv, {})
@@ -2118,9 +2133,19 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 			var items := _palette_for(cls, area, rng)
 			# 넓은 침실: 침대는 머리-벽 자리부터, 협탁은 짝으로도, 굴림이 맞으면 홑침대 둘.
 			var wide: bool = cls == "bed" and _wide_bedroom(cells)
-			var twin: bool = wide and twins.has("%d:%d" % [lv, ri])
+			var twin_key := "%d:%d" % [lv, ri] if wide else ""
+			var twin: bool = wide and twins.has(twin_key)
+			var twin_fill := false
+			if twin:
+				twin_pending -= 1
+			elif wide and twin_reserve.has(twin_key) and twin_made + twin_pending < twins.size():
+				# 남은 첫 뽑기가 모두 서도 모자랄 때만, 기존 방 순회에서 만난 예비 방을 시도한다.
+				if int(twin_floors.get(twin_reserve[twin_key], 0)) == 0:
+					twin = true
+					twin_fill = true
 			var twin_stand := Vector2i(-1, -1)
 			if twin:
+				stats["twin_tried"] += 1
 				var twin_beds: Array = []
 				for bed_source: Dictionary in items:
 					if bed_source["kind"] != "bed" or not bed_source.get("need", false):
@@ -2141,7 +2166,13 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 				if twin_beds.is_empty():
 					twin = false
 					stats["twin_abandoned"] += 1
+					if not twin_fill:
+						twin_floors[twins[twin_key]] -= 1
 				else:
+					twin_made += 1
+					if twin_fill:
+						stats["twin_filled"] += 1
+						twin_floors[twin_reserve[twin_key]] = 1
 					for twin_bed: Dictionary in twin_beds:
 						placed.append(twin_bed)
 						var twin_rect: Rect2i = twin_bed["rect"]
