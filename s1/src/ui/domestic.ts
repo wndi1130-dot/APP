@@ -668,13 +668,13 @@ export function domesticResource(view: View): HTMLElement | null {
 // ---- 정차 카드의 내정 줄 ----
 
 /** 정차 준비 카드에 더하는 줄: 전문가 데려가기(8.8), 냉동칸 묻고 가기(4.1), 화물역 칸 순서(4.5). */
-/** 정차 서류 머리, 장소 이름 옆: 핸드카 정찰(X2)이 본 다른 곳. 정찰을 보내기 전에 한 번만 바꾼다(7.3). */
+/** 정차 서류 머리, 장소 이름 옆: 수동차 정찰(X2)이 본 다른 곳. 정찰을 보내기 전에 한 번만 바꾼다(7.3). */
 export function domesticAltPlace(view: View): HTMLElement | null {
   const g = view.g;
   const alt = g.dom?.altPlace ? PLACES.find(p => p.id === g.dom!.altPlace) : undefined;
   if (!alt || !g.stop || g.stop.done || g.stop.scoutReport) return null;
-  return h('button', { class: 'chip chip--alt', 'data-action': 'stop-set', 'data-key': 'place', 'data-value': 'alt', title: '핸드카가 먼저 본 곳이다. 바꾸면 되돌릴 수 없다.' },
-    `핸드카: ${alt.name}${josa(alt.name, '으로/로')}`, h('small', null, ` 위험 ${alt.risk}`));
+  return h('button', { class: 'chip chip--alt', 'data-action': 'stop-set', 'data-key': 'place', 'data-value': 'alt', title: '수동차가 먼저 본 곳이다. 바꾸면 되돌릴 수 없다.' },
+    `수동차: ${alt.name}${josa(alt.name, '으로/로')}`, h('small', null, ` 위험 ${alt.risk}`));
 }
 
 export function domesticStopRows(view: View): HTMLElement | null {
@@ -729,8 +729,8 @@ function scoutGearRow(g: Game): HTMLElement | null {
     const chips: [GearKey, number, number, string, string][] = [
       ['glass', own.glass, taken.glass, '기관사 망원경', '흐리면 멀리 안 보인다'],
       ['signal', own.signal, taken.signal, '한 명만 보낸다', '혼자 들어간다'],
-      ['cart', own.pedal, taken.pedal, '페달 핸드카', '덜컹이는 소리가 난다'],
-      ['cart', own.motor, taken.motor, '발동기 핸드카', '소리가 난다'],
+      ['cart', own.pedal, taken.pedal, '페달 궤도차', '덜컹이는 소리가 난다'],
+      ['cart', own.motor, taken.motor, '발동기 궤도차', '소리가 난다'],
     ];
     const shown = chips.filter(c => c[1] > 0);
     if (!shown.length) return null;

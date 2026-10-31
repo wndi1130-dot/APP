@@ -63,7 +63,7 @@ function stopCard(view: View): HTMLElement | null {
           stop.scoutReport
             ? h('span', { class: 'risk', 'aria-label': `위험 ${place.risk}` }, '위험 ', Array.from({ length: 3 }, (_, i) => h('i', { class: cx(i < place.risk && 'is-on') })))
             : h('span', { class: 'risk', 'aria-label': '위험 모름' }, '위험 ?'),
-          domesticAltPlace(view)))), // S1c 내정 훅: 핸드카 정찰
+          domesticAltPlace(view)))), // S1c 내정 훅: 수동차 정찰
     scene ? h('p', { class: 'scene' }, scene.outside) : null,
     h('div', { class: 'field field--row' },
       h('span', { class: 'field__label' }, '무엇을'),
