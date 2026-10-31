@@ -93,9 +93,14 @@ func prepare_restage_room(c: Dictionary, room: Interior) -> Dictionary:
 func _build_room(c: Dictionary, stove_builder: Callable) -> void:
 	var room = Interior.new()
 	var home_stage: int = clampi(int(c.get("home_stage", TrainLight.STAGE_DEFAULT)), 0, 3)
-	# Minimal hosts may still observe the old callback; the real scene supplies a parent-owned builder.
+	# Without a builder (a car registered again): the real scene builds the stove into the car and
+	# registers it, as the first build does; minimal test hosts still observe the old callback.
 	if not stove_builder.is_valid():
-		stove_builder = func(at: Vector3, model: String = "") -> void: host._build_stove(c, at, model)
+		if host.has_method("_install_stove"):
+			stove_builder = func(at: Vector3, model: String = "") -> void:
+				host._install_stove(c, host._build_stove(c["node"], at, model))
+		else:
+			stove_builder = func(at: Vector3, model: String = "") -> void: host._build_stove(c, at, model)
 	room.build(c["node"], c["def"], stove_builder, home_stage)
 	rooms[c["id"]] = room
 

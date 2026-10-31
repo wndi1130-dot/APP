@@ -267,12 +267,13 @@ func apply_rules(event: String = "rules") -> void:
 		cars[i]["def"] = definitions[i]
 	var reseat: Array = []
 	for c in cars:
-		if is_car_restaging(String(c["id"])):
-			continue  # the swap sets reseat_at from its actual publication time
 		var key := _seat_key(c)
 		if key != String(c.get("seat_key", "")):
-			c["seat_key"] = key
 			var core := _seat_core(c)
+			if is_car_restaging(String(c["id"])) and core == String(c.get("seat_core", "")):
+				continue  # only the car's state changed: the swap seats them after the new room shows
+			# People, the run's phase or the council changed: seat them now in the room that shows.
+			c["seat_key"] = key
 			if room_lead > 0.0 and not rebuild and core == String(c.get("seat_core", "")):
 				# Only the car's state changed: the room turns first, the people after.
 				c["reseat_at"] = clock + room_lead

@@ -726,3 +726,44 @@ func test_restage_stats_bound_job_history_and_keep_cancelled_work_across_batches
 	assert_eq(jobs.keys(), keys.slice(4), "a new batch shares the same bounded job window")
 	assert_eq(int(s.restage_stats["jobs_total"]), total + 1)
 	assert_eq(int(s.car("guard")["home_stage"]), 0, "telemetry eviction never publishes a pending job")
+
+
+## A later pick (another car, none, or a room pane) cancels a reopen still waiting for its car,
+## so guard's completion cannot take the screen from what the player opened since.
+func test_a_later_pick_or_room_cancels_the_waiting_reopen() -> void:
+	for later: String in ["captain", "", "room"]:
+		var f: SliceFlow = await _flow()
+		var s: Scene = f.train as Scene
+		_furnish_guard(f)
+		assert_false(f.open_decor("guard"))
+		assert_false(f._decor_restage_wait.is_empty(), "guard waits for its new room")
+		if later == "room":
+			f._room_up()
+		else:
+			f._select(later, false)
+		assert_true(f._decor_restage_wait.is_empty(), "the later pick cancels the wait: " + later)
+		await _drain(s)
+		assert_eq(f.decor_id, "", "guard's completion does not open over the later pick: " + later)
+		assert_eq(s.decorating(), "")
+		await _after_retirement(s, ["guard", "captain", "dining"])
+
+
+## People, the run's phase or the council changing while a car is rebuilt are seated at once in
+## the room that shows; only the car's own state waits for the swap.
+func test_a_core_change_while_restaging_seats_people_at_once() -> void:
+	var s: Scene = _scene({"guard": 0, "dining": 0})
+	var c: Dictionary = s.car("dining")
+	var old_root: Node3D = s.life.rooms["dining"].root
+	_request(s, "dining", 3)
+	assert_true(s.is_car_restaging("dining"))
+	var core_before: String = String(c.get("seat_core", ""))
+	s.rules["train"]["phase"] = "council"
+	s.apply_rules()
+	assert_true(s.is_car_restaging("dining"), "the phase change keeps the same build")
+	assert_ne(String(c.get("seat_core", "")), core_before, "the council changed the car's seating core")
+	assert_eq(String(c["seat_core"]), s._seat_core(c), "seated at once, not left for the swap")
+	assert_eq(String(c["seat_key"]), s._seat_key(c))
+	assert_eq(s.life.rooms["dining"].root, old_root, "in the room that still shows")
+	await _drain(s)
+	assert_true(c.has("reseat_at"), "the swap seats them again in the new room")
+	await _after_retirement(s, ["dining"])

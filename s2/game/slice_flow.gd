@@ -1497,6 +1497,10 @@ func _show_home(word: String) -> void:
 func _select(id: String, toggle: bool = false) -> void:
 	if toggle and id == sel:
 		id = ""
+	# A later pick (another car, none, or a room pane) wins over a reopen still waiting for its car.
+	var waiting_id: String = String(_decor_restage_wait.get("id", ""))
+	if waiting_id != "" and waiting_id != id:
+		_clear_decor_restage_wait()
 	# A car picked over the workshop or the refit pane puts it away.
 	if id != "":
 		_put_rooms_away()
