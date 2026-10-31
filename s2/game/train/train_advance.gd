@@ -317,9 +317,9 @@ static func resolve_stop(g0: Dictionary, t: Dictionary, go: bool = true) -> Dict
 	if int(g["seg"]) - int(event_log.get("rescue", {}).get("seg", -99)) >= 4 and _rnd(g) < float(p["rescueRate"]):
 		var rescue: Dictionary = {"kind": "rescue", "comm": comm}
 		if not returned.is_empty(): rescue["who"] = returned[0]
-		Turn._card(g, rescue)
+		Turn._card(g, rescue, t)
 	if int(g["seg"]) - int(event_log.get("bitten", {}).get("seg", -99)) >= 3 and not hurt.is_empty() and _rnd(g) < 0.35:
-		Turn._card(g, {"kind": "bitten", "comm": comm, "who": hurt[0]})
+		Turn._card(g, {"kind": "bitten", "comm": comm, "who": hurt[0]}, t)
 	_check_stop_promises(g, t, stop["target"], gains)
 	_note_target(g, stop["target"])
 	return g
