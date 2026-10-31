@@ -69,6 +69,9 @@ var theme: Theme
 
 
 func _ready() -> void:
+	# The menu, the train and the stop card run at the field's 60 too: uncapped they ran at
+	# the phone's 120 Hz beat (80 fps on the stop card) and warmed it (phone night run 2026-10-31).
+	Engine.max_fps = 60
 	theme = UiTheme.make(24)
 	for row in CHOICES:
 		settings[row[0]] = row[2][0][0]
