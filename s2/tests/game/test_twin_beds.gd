@@ -238,7 +238,7 @@ func test_successful_first_pick_never_tries_a_reserve() -> void:
 	_assert_twins(data, stats)
 
 
-func test_reserves_on_the_first_picks_building_floor_are_skipped() -> void:
+func test_an_abandoned_first_picks_floor_opens_to_its_reserves() -> void:
 	var data := _same_floor_bedrooms()
 	var selection := _selection(data)
 	assert_true(selection["selected"].has("0:0"))
