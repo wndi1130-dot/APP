@@ -650,7 +650,7 @@ function baseView(g: Game, card: Card): CardView {
     case 'bitten': {
       const past = memo(g, 'bitten');
       const [part, partObj] = ([['팔', '팔을'], ['다리', '다리를'], ['손', '손을']] as const)[card.uid % 3];
-      const echo = was(past, 'hide') ? ' 지난번 일 때문에 다들 상처부터 본다.' : was(past, 'leave') ? ' 지난번 역에 두고 온 사람을 다들 기억한다.' : '';
+      const echo = was(past, 'hide') ? ' 지난번 일 때문에 다들 상처부터 본다.' : was(past, 'leave') ? ' 지난번에 남기고 온 사람을 다들 기억한다.' : '';
       return {
         title: '물렸다', speaker: { name: card.who ?? '수색대원', role: COMM_NAME[c] }, focus: c, required: true, key: 'bitten',
         // 첫 줄: 정하는 건 열차장이다(물린 사람이 스스로 정한 일이 아니다, 정치 디테일 조사 안 3).

@@ -74,7 +74,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 		"bitten":
 			var past: Variant = _memo(g, "bitten")
 			var parts: Array = [["팔", "팔을"], ["다리", "다리를"], ["손", "손을"]][int(card["uid"]) % 3]
-			var echo: String = " 지난번 일 때문에 다들 상처부터 본다." if _was(past, "hide") else (" 지난번 역에 두고 온 사람을 다들 기억한다." if _was(past, "leave") else "")
+			var echo: String = " 지난번 일 때문에 다들 상처부터 본다." if _was(past, "hide") else (" 지난번에 남기고 온 사람을 다들 기억한다." if _was(past, "leave") else "")
 			out["speaker"] = {"name": str(card.get("who", "수색대원")), "role": String(t["COMM_NAME"][c])}
 			out["focus"] = c
 			out["body"] = "%s이(가) %s 물렸다. \"열차장…\" 수색대가 열차장의 말을 기다린다. \"감염 창이 닫히기 전에 잘라야 합니다.\"%s" % [str(card.get("who", "대원")), parts[1], echo]
