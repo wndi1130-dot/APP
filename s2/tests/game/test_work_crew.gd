@@ -457,7 +457,7 @@ func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 			var state: Dictionary = guard.brain["watch_escort"]
 			var target: float = float(state["target"])
 			var look := Vector3(sin(target), 0.0, cos(target))
-			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 119.5, "watching outward, the work behind")
+			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 180.0 - game.ai.LOOK_SECTOR_DEG - game.ai.LOOK_CAMERA_TURN_MAX_DEG - 0.5, "within the turned outward sector")
 			assert_lte(absf(float(guard.brain["watch_head_yaw"])), deg_to_rad(game.ai.LOOK_HEAD_MAX_DEG))
 			var turned: float = float(guard.brain.get("watch_body_turn_t", last_turn))
 			if turned > last_turn and turned - last_turn < game.ai.LOOK_BODY_TURN_GAP_S:

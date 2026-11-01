@@ -108,7 +108,7 @@ const LOOK_START_MIN_S: float = 0.15
 const LOOK_START_SLOT_S: float = 0.3
 const LOOK_START_SLOTS: int = 3
 const LOOK_DWELL_TRIES: int = 16
-const LOOK_STATE_VERSION: int = 3
+const LOOK_STATE_VERSION: int = 4
 const LOOK_KEYS: Array[String] = ["watch_point", "watch_side", "watch_rear", "watch_aside", "watch_escort"]
 const LOOK_ANGLE_EPS: float = 0.000001
 const LOOK_HASH_MIN_UNIT: float = 0.001
@@ -145,7 +145,9 @@ const FOLLOW_DOOR_RECENT: float = 5.0
 const FOLLOW_NARROW_SCAN: int = 3
 const FOLLOW_NARROW_WIDTH: int = 2
 const LOOK_CAMERA_DEG: float = 60.0
-const LOOK_CAMERA_WEIGHT: float = 0.25
+const LOOK_CAMERA_MAX_POINTS: int = 2
+const LOOK_CAMERA_TURN_MAX_DEG: float = 90.0
+const LOOK_CAMERA_WEIGHT: float = 0.08
 const LOOK_CAMERA_DWELL_MAX_S: float = 2.0   # Set to 0.0 to keep the ordinary upper bound.
 
 var game
@@ -1205,7 +1207,7 @@ func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: St
 		_stop_watch(p)
 	p.brain["watch_seen_t"] = now
 	if int(state.get("version", 0)) != LOOK_STATE_VERSION:
-		state = _watch_state(p, base, k, now)
+		state = _watch_state(p, base, k, now, camera_way)
 	state.erase("edge")   # Old saves may still carry the camera edge latch.
 	p.brain.erase("watch_camera_on")
 	p.brain.erase("watch_camera_yaw")
@@ -1255,15 +1257,51 @@ func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: St
 	return Vector3(sin(body), 0.0, cos(body))
 
 
-func _watch_state(p: Variant, base: Vector3, k: int, now: float) -> Dictionary:
+func _watch_state(p: Variant, base: Vector3, k: int, now: float, camera_way: Vector3 = Vector3.ZERO) -> Dictionary:
 	var delay: float = LOOK_START_MIN_S + (float(k % LOOK_START_SLOTS) + p.name_unit("watch_start")) * LOOK_START_SLOT_S
 	var state: Dictionary = {"version": LOOK_STATE_VERSION, "step": -1, "point": -1,
 		"seen": now, "picked": now, "until": now + delay, "waiting": 0.0,
 		"turning": 0.0, "body_turned": 0.0, "body_target": p.facing}
 	for point: int in range(LOOK_POINTS):
 		state["yaw_" + str(point)] = _watch_target(p, base, point)
+	var turn: float = _watch_camera_turn(p, state, base, camera_way)
+	if turn != 0.0:
+		for point: int in range(LOOK_POINTS):
+			state["yaw_" + str(point)] = wrapf(float(state["yaw_" + str(point)]) + turn, -PI, PI)
 	state["target"] = float(state["yaw_0"])
 	return state
+
+
+func _watch_camera_turn(p: Variant, state: Dictionary, base: Vector3, camera_way: Vector3) -> float:
+	camera_way.y = 0.0
+	if camera_way.length_squared() <= 0.0001:
+		return 0.0
+	var tie_side: float = -1.0 if p.name_unit("watch_turn") < 0.5 else 1.0
+	var away: float = signf(angle_difference(atan2(camera_way.x, camera_way.z), atan2(base.x, base.z)))
+	if away == 0.0:
+		away = tie_side
+	var best_turn: float = 0.0
+	var best_count: int = LOOK_POINTS + 1
+	# Check both sides at each angle before accepting the shortest turn.
+	for degrees: int in range(int(LOOK_CAMERA_TURN_MAX_DEG) + 1):
+		var found: bool = false
+		var found_turn: float = 0.0
+		for side: float in [away, -away]:
+			var turn: float = deg_to_rad(float(degrees)) * side
+			var camera_count: int = 0
+			for point: int in range(LOOK_POINTS):
+				if _watch_faces_camera(float(state["yaw_" + str(point)]) + turn, camera_way):
+					camera_count += 1
+			if camera_count <= LOOK_CAMERA_MAX_POINTS and (not found or side == tie_side):
+				found = true
+				found_turn = turn
+			if camera_count < best_count or (camera_count == best_count and absf(turn) == absf(best_turn) and side == tie_side):
+				best_count = camera_count
+				best_turn = turn
+		if found:
+			return found_turn
+	# At the boundary, the fewest reachable points may be one over the limit.
+	return best_turn
 
 
 func _watch_weight(state: Dictionary, point: int, now: float) -> float:
