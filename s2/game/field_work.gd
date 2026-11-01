@@ -144,16 +144,30 @@ func position_of(id: String) -> Vector3:
 	return FieldGrid.center(cell) if cell is Vector2i else origin_of(id)
 
 
-## The work cell of the wagon a coal site digs or would dig next (the next one when the first runs
-## dry) when it stands past FOLLOW_R from the site's own place, else null: a wagon near it is
-## worked from the site's own place.
+## The work cell of the wagon a coal crew works at (_anchor_wagon_index) when it stands past
+## FOLLOW_R from the site's own place, else null: a wagon near it is worked from the site's own place.
 func moved_to(id: String) -> Variant:
 	if job_id(id) != "coal_wagon":
 		return null
-	var wagon: Dictionary = _wagon_at(_next_wagon_index(id))
+	var wagon: Dictionary = _wagon_at(_anchor_wagon_index(id))
 	if not wagon.has("work") or FieldGrid.center(wagon["work"]).distance_to(origin_of(id)) <= FOLLOW_R:
 		return null
 	return wagon["work"]
+
+
+## The wagon the crew works at: on the way home the one it left (retreat), while a pick still runs
+## the one that pick is on (a picker stays till its timer ends though another took the last coal),
+## else the one it digs or would dig next.
+func _anchor_wagon_index(id: String) -> int:
+	if sites.has(id):
+		var state: Dictionary = sites[id]
+		if phase(id) == "retreat" and state.has("retreat_wagon"):
+			return int(state["retreat_wagon"])
+		for row: Dictionary in state.get("dig_active", {}).values():
+			var p: Variant = row.get("worker")
+			if is_instance_valid(p) and p.action == "dig":
+				return int(row["wagon"])
+	return _next_wagon_index(id)
 
 
 func remaining(id: String = "work_site") -> float:
@@ -403,7 +417,19 @@ func _paint(id: String, safe: Dictionary) -> void:
 	var bright: bool = phase(id) == "open"
 	spot["work_share"] = progress
 	spot["state"] = "ready" if bright else phase(id)
-	# The ring stands where the crew works: on a far wagon the site moved on to (map_view.gd).
+	var moved: bool = _mark(id)
+	if cells == int(state["cells"]) and bright == bool(state["bright"]) and not moved:
+		return
+	state["cells"] = cells
+	state["bright"] = bright
+	if game.view != null and game.view.spot_nodes.has(id):
+		game.view.update_spot(id)
+
+
+## The ring stands where the crew works: on a far wagon the site moved on to (map_view.gd).
+## True when it moved.
+func _mark(id: String) -> bool:
+	var spot: Dictionary = game.data["spots"][id]
 	var marker: Variant = moved_to(id)
 	var had: Variant = spot.get("marker_cell")
 	var moved: bool = typeof(had) != typeof(marker) or (marker is Vector2i and had != marker)
@@ -411,12 +437,7 @@ func _paint(id: String, safe: Dictionary) -> void:
 		spot["marker_cell"] = marker
 	else:
 		spot.erase("marker_cell")
-	if cells == int(state["cells"]) and bright == bool(state["bright"]) and not moved:
-		return
-	state["cells"] = cells
-	state["bright"] = bright
-	if game.view != null and game.view.spot_nodes.has(id):
-		game.view.update_spot(id)
+	return moved
 
 
 ## The view keeps the last filled count; moving to another wagon only moves the bar.
@@ -426,6 +447,9 @@ func paint_digs() -> void:
 	for id: String in site_ids():
 		if job_id(id) != "coal_wagon":
 			continue
+		# After a restore too: a save between a wagon running dry and the next tick kept the old ring.
+		if _mark(id) and game.view.spot_nodes.has(id):
+			game.view.update_spot(id)
 		var state: Dictionary = sites.get(id, {})
 		var wagon: Dictionary = _wagon_at(int(state.get("dig_wagon", -1)))
 		var progress: float = dig_progress(id) if not wagon.is_empty() else 0.0
@@ -694,6 +718,8 @@ func retreat(id: String, why: String = "") -> void:
 	var state: Dictionary = _site(id)
 	if phase(id) == "retreat":
 		return
+	# Home by the door of the wagon it left, whatever the next send would claim.
+	state["retreat_wagon"] = _anchor_wagon_index(id)
 	state["phase"] = "retreat"
 	state["why"] = why
 	state["pending"].clear()

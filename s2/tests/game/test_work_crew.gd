@@ -1566,3 +1566,35 @@ func test_the_site_is_found_from_its_own_place() -> void:
 	game.player.position = game.work.origin_of("work_site")
 	_advance(1.0)
 	assert_true(_events().has("seen"))
+
+
+# Another took the last coal while a pick still runs: the ring stays on that pick's wagon till it ends.
+func test_a_running_pick_keeps_the_site_on_its_wagon() -> void:
+	_send()
+	var worker: Variant = _pick()
+	assert_eq(worker.action, "dig")
+	assert_eq(int(worker.brain["dig_wagon"]), 0)
+	var far: Vector2i = _far_next_wagon()
+	assert_eq(game.work.position_of("work_site"), game.work.origin_of("work_site"), "the picker is still at the first wagon")
+	game.work._return_dig("work_site", String(worker.pid))
+	assert_eq(game.work.position_of("work_site"), FieldGrid.center(far), "then on to the next")
+
+
+# On the way home the site keeps the wagon it left, whatever the next send would claim.
+func test_the_way_home_keeps_the_wagon_it_left() -> void:
+	var far: Vector2i = _far_next_wagon()
+	game.work.retreat("work_site")
+	for wagon: Dictionary in game.data["wagons"]:
+		wagon["coal"] = 0.0
+	assert_eq(game.work.position_of("work_site"), FieldGrid.center(far), "home by the door of the wagon it left")
+	game.work._site("work_site")["phase"] = "closed"
+	assert_eq(game.work.position_of("work_site"), game.work.origin_of("work_site"))
+
+
+# The ring is worked out again when the digs are painted, as after a restore (field_save.gd).
+func test_painting_the_digs_moves_the_ring() -> void:
+	assert_not_null(game.view)
+	var far: Vector2i = _far_next_wagon()
+	game.data["spots"]["work_site"].erase("marker_cell")
+	game.work.paint_digs()
+	assert_eq(game.data["spots"]["work_site"].get("marker_cell"), far)
