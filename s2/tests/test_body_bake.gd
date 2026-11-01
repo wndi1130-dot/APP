@@ -254,6 +254,8 @@ func _walk_stick_context() -> Dictionary:
 	arrays[Mesh.ARRAY_BONES] = bones
 	arrays[Mesh.ARRAY_WEIGHTS] = weights
 	arrays[Mesh.ARRAY_INDEX] = indices
+	# surface_get_arrays hands back tangents (4 per vertex) for the three stick vertices only.
+	arrays[Mesh.ARRAY_TANGENT] = null
 	var mesh: ArrayMesh = ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	mesh_node.mesh = mesh
