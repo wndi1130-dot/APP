@@ -451,7 +451,14 @@ func test_camera_boundary_points_use_the_best_reachable_turn() -> void:
 	for point: int in range(FieldAi.LOOK_POINTS):
 		state["yaw_" + str(point)] = wrapf(float(original["yaw_" + str(point)]) + turn, -PI, PI)
 	_assert_camera_watch_turn(state, Vector3.BACK, Vector3.BACK, original)
-	var expected_count: int = maxi(FieldAi.LOOK_CAMERA_MAX_POINTS, int(FieldAi.LOOK_POINTS / 2.0))
+	# The fewest camera points any turn within the cap reaches, counted the long way.
+	var expected_count: int = FieldAi.LOOK_POINTS + 1
+	var cap: int = int(FieldAi.LOOK_CAMERA_TURN_MAX_DEG)
+	for trial: int in range(-cap, cap + 1):
+		var candidate: Dictionary = {}
+		for point: int in range(FieldAi.LOOK_POINTS):
+			candidate["yaw_" + str(point)] = float(original["yaw_" + str(point)]) + deg_to_rad(float(trial))
+		expected_count = mini(expected_count, _camera_point_count(candidate, Vector3.BACK))
 	assert_eq(_camera_point_count(state, Vector3.BACK), expected_count)
 	assert_lte(expected_count, FieldAi.LOOK_CAMERA_MAX_POINTS + 1)
 	assert_eq(field.rng.state, rng_before)

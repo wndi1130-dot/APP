@@ -146,7 +146,7 @@ const FOLLOW_NARROW_SCAN: int = 3
 const FOLLOW_NARROW_WIDTH: int = 2
 const LOOK_CAMERA_DEG: float = 60.0
 const LOOK_CAMERA_MAX_POINTS: int = 2
-const LOOK_CAMERA_TURN_MAX_DEG: float = 90.0
+const LOOK_CAMERA_TURN_MAX_DEG: float = 60.0
 const LOOK_CAMERA_WEIGHT: float = 0.08
 const LOOK_CAMERA_DWELL_MAX_S: float = 2.0   # Set to 0.0 to keep the ordinary upper bound.
 
