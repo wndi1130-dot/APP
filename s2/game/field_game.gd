@@ -1424,10 +1424,6 @@ const VOICE_OF_COMM := {"guard": "rough", "medtech": "quiet", "tail": "fear", "e
 const MEDICAL_OF_SKILL := ["none", "apprentice", "skilled", "master"]
 
 
-## The field's rows for people of the departure contract (field_departure.gd person): the same
-## id and name as the train's roll, their body skills, kit, car and how it stands with the chief,
-## what they know of medicine and how hungry and sore they go out. One of the medical staff with
-## no knowledge on record still goes as an apprentice (the car's own work).
 ## The cap a field runs at. On a phone every stop keeps the cap the start menu set (boot.gd), so a
 ## campaign stop, a loaded stop or an old save's start options (60 from before) never lift it; a
 ## field with no cap set yet, and every field off the phone, takes its options' cap, 60 if none.
@@ -1437,6 +1433,10 @@ static func fps_cap_for(current: int, field_opts: Dictionary, mobile: bool) -> i
 	return int(field_opts.get("fps_cap", 60))
 
 
+## The field's rows for people of the departure contract (field_departure.gd person): the same
+## id and name as the train's roll, their body skills, kit, car and how it stands with the chief,
+## what they know of medicine and how hungry and sore they go out. One of the medical staff with
+## no knowledge on record still goes as an apprentice (the car's own work).
 static func squad_rows(people: Array) -> Array:
 	var out: Array = []
 	for person: Dictionary in people:
