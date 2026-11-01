@@ -58,7 +58,7 @@ func test_what_a_cut_takes_and_why_not() -> void:
 	assert_eq(_why(o, o, "torso", have), "팔이나 다리만 자를 수 있다")
 	assert_eq(_why(o, o, "leg_left", have), "자를 까닭이 없다", "nothing there to cut for")
 	o.body.window_left = 15.0
-	assert_eq(_why(o, o, "arm_left", have), "창이 15초 남아 다 자르기 전에 닫힌다", "20 s of work in a window of 15")
+	assert_eq(_why(o, o, "arm_left", have), "자를 수 있는 시간이 15초뿐이라 다 자르기 전에 끝난다", "20 s of work in a window of 15")
 	o.body.window_left = 0.0
 	assert_eq(_why(o, o, "arm_left", have), "자를 수 있는 시간이 지나 소용없다")
 	for row in [["none", 20.0], ["apprentice", 16.0], ["skilled", 12.0], ["master", 8.0]]:

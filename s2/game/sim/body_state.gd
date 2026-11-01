@@ -981,7 +981,8 @@ func status_notes() -> Array:
 					row["title"] = "물린 상처"
 					var limbs: Array[String] = bitten_limbs()
 					if window_left <= 0.0:
-						row["text"] = "자를 수 있는 시간이 지났다"
+						# A bite no cut reaches keeps its reason: there never was a time to cut.
+						row["text"] = "%s 자를 수 없다" % _ira(PART_WORDS[core]) if core != "" else "자를 수 있는 시간이 지났다"
 					elif core != "":
 						row["text"] = "%s 자를 수 없다. 열이 오르기까지 %s" % [_ira(PART_WORDS[core]), time]
 					elif limbs.is_empty():
