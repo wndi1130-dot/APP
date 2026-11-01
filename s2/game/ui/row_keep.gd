@@ -1,6 +1,8 @@
 extends RefCounted
 ## Keep rows and their controls while the model changes.
 
+const PaneMotion = preload("res://game/ui/pane_motion.gd")
+
 const ADD_S: float = 0.12
 const REMOVE_S: float = 0.10
 const MOVE_S: float = 0.15
@@ -15,8 +17,13 @@ const SCROLL_META: StringName = &"row_keep_scroll"
 static func sync(into: Control, ids: Array, make: Callable, fill: Callable) -> void:
 	var kept: Dictionary = {}
 	for child: Node in into.get_children():
-		if child is Control and child.has_meta(ID_META) and not child.has_meta(LEAVING_META):
-			kept[String(child.get_meta(ID_META))] = child
+		if child is Control and child.has_meta(ID_META):
+			var id: String = String(child.get_meta(ID_META))
+			if child.has_meta(LEAVING_META):
+				if ids.has(id):
+					child.hide()
+			else:
+				kept[id] = child
 	for id: String in kept:
 		if not ids.has(id):
 			_retire(kept[id])
@@ -45,6 +52,7 @@ static func sync(into: Control, ids: Array, make: Callable, fill: Callable) -> v
 				tween.tween_property(row, "position", target, MOVE_S).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 			if row.modulate.a < 1.0:
 				tween.tween_property(row, "modulate:a", 1.0, ADD_S)
+	_quiet_if_needed(into)
 
 
 static func _stop(row: Control) -> void:
@@ -78,6 +86,23 @@ static func _block(node: Node) -> void:
 		_block(child)
 
 
+## Keep the intended filter for reopening while a quiet ancestor owns input.
+static func pass_mouse(control: Control) -> void:
+	control.mouse_filter = Control.MOUSE_FILTER_PASS
+	if control.has_meta(PaneMotion.META_MOUSE):
+		control.set_meta(PaneMotion.META_MOUSE, Control.MOUSE_FILTER_PASS)
+	_quiet_if_needed(control)
+
+
+static func _quiet_if_needed(control: Control) -> void:
+	var ancestor: Node = control
+	while ancestor != null:
+		if ancestor.has_meta(PaneMotion.META_RETIRING) or ancestor.has_meta(PaneMotion.META_MOUSE):
+			PaneMotion.quiet(control)
+			return
+		ancestor = ancestor.get_parent()
+
+
 ## Mark parts as used without hiding a held button between fills.
 static func begin(into: Control) -> void:
 	for child: Node in into.get_children():
@@ -101,6 +126,8 @@ static func finish(into: Control) -> void:
 	for child: Node in into.get_children():
 		if child is Control and child.has_meta(USED_META) and not bool(child.get_meta(USED_META)):
 			child.hide()
+	# Parts are fully configured now, so save their final input settings.
+	_quiet_if_needed(into)
 
 
 ## Container sorting is deferred; only the latest fill restores the scroll.
@@ -108,11 +135,13 @@ static func restore_scroll(scroll: ScrollContainer, value: int) -> void:
 	var serial: int = int(scroll.get_meta(SCROLL_META)) + 1 if scroll.has_meta(SCROLL_META) else 1
 	scroll.set_meta(SCROLL_META, serial)
 	_apply_scroll(scroll, value, serial)
-	_apply_scroll.call_deferred(scroll, value, serial)
+	_apply_scroll.call_deferred(scroll, value, serial, scroll.scroll_vertical)
 
 
-static func _apply_scroll(scroll: ScrollContainer, value: int, serial: int) -> void:
+static func _apply_scroll(scroll: ScrollContainer, value: int, serial: int, expected: int = -1) -> void:
 	if not is_instance_valid(scroll) or not scroll.has_meta(SCROLL_META) or int(scroll.get_meta(SCROLL_META)) != serial:
+		return
+	if expected >= 0 and scroll.scroll_vertical != expected:
 		return
 	var content: Control = scroll.get_child(0) as Control
 	var end: int = maxi(0, int(ceilf(content.get_combined_minimum_size().y - scroll.size.y)))

@@ -204,15 +204,15 @@ func _draw_all() -> void:
 	if fresh_scroll:
 		s.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		s.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-		s.mouse_filter = Control.MOUSE_FILTER_PASS
+		RowKeep.pass_mouse(s)
 		s.position = Vector2(0.0, top) * k
 		s.size = Vector2(CSS_SIZE.x, CSS_SIZE.y - top) * k
 	var list: Control = RowKeep.part(s, "Rows", func() -> Control: return Control.new())
-	list.mouse_filter = Control.MOUSE_FILTER_PASS
+	RowKeep.pass_mouse(list)
 	list.custom_minimum_size = Vector2(CSS_SIZE.x, y - top) * k
 	RowKeep.sync(list, ids, func(_id: String) -> Control:
 		var row := Control.new()
-		row.mouse_filter = Control.MOUSE_FILTER_PASS
+		RowKeep.pass_mouse(row)
 		row.size = Vector2(CSS_SIZE.x, ROW_H) * k
 		return row,
 		func(row: Control, id: String, _index: int) -> void:

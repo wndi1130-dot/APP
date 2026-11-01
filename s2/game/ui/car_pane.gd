@@ -215,11 +215,11 @@ func _draw_all() -> void:
 	if fresh_scroll:
 		s.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 		s.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-		s.mouse_filter = Control.MOUSE_FILTER_PASS
+		RowKeep.pass_mouse(s)
 		s.position = Vector2(0.0, 162.0) * k
 		s.size = Vector2(CSS_SIZE.x, CSS_SIZE.y - 162.0) * k
 	var list: Control = RowKeep.part(s, "Rows", func() -> Control: return Control.new())
-	list.mouse_filter = Control.MOUSE_FILTER_PASS
+	RowKeep.pass_mouse(list)
 	list.custom_minimum_size = Vector2(CSS_SIZE.x, 62.0 * (m["levers"] as Array).size()) * k
 	var ids: Array = []
 	var by_id: Dictionary = {}
@@ -229,7 +229,7 @@ func _draw_all() -> void:
 		by_id[id] = lever
 	RowKeep.sync(list, ids, func(_id: String) -> Control:
 		var row := Control.new()
-		row.mouse_filter = Control.MOUSE_FILTER_PASS
+		RowKeep.pass_mouse(row)
 		row.size = Vector2(CSS_SIZE.x, 62.0) * k
 		return row,
 		func(row: Control, id: String, index: int) -> void:

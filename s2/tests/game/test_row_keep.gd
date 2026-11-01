@@ -2,6 +2,7 @@ extends "res://addons/gut/test.gd"
 ## Row identity, input and motion without waiting for wall time.
 
 const RowKeep = preload("res://game/ui/row_keep.gd")
+const PaneMotion = preload("res://game/ui/pane_motion.gd")
 
 var _list: Control
 var _made: int = 0
@@ -141,6 +142,116 @@ func test_reorder_finishes_at_the_exact_targets() -> void:
 	assert_eq(_item("a").get_instance_id(), first_id)
 
 
+func test_sync_while_quiet_blocks_new_rows_until_the_pane_opens() -> void:
+	PaneMotion.quiet(_list)
+	_sync(["a"])
+	_settle()
+	var row: Control = _item("a")
+	var key: Button = row.get_node("Key") as Button
+	var word: Control = key.get_node("Word") as Control
+	for control: Control in [row, key, word]:
+		assert_eq(control.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+		assert_eq(control.focus_mode, Control.FOCUS_NONE)
+	assert_false(key.disabled)
+	var tween: Tween = PaneMotion.open(_list)
+	tween.pause()
+	tween.custom_step(PaneMotion.OPEN_S)
+	assert_eq(row.mouse_filter, Control.MOUSE_FILTER_STOP)
+	assert_eq(key.mouse_filter, Control.MOUSE_FILTER_STOP)
+	assert_eq(key.focus_mode, Control.FOCUS_ALL)
+	assert_eq(word.mouse_filter, Control.MOUSE_FILTER_STOP)
+	assert_eq(word.focus_mode, Control.FOCUS_ALL)
+
+
+func test_finish_while_quiet_blocks_new_parts_and_pass_mouse_until_open() -> void:
+	PaneMotion.quiet(_list)
+	RowKeep.begin(_list)
+	var scroll: ScrollContainer = RowKeep.part(_list, "List", func() -> Control: return ScrollContainer.new()) as ScrollContainer
+	RowKeep.pass_mouse(scroll)
+	var rows: Control = RowKeep.part(scroll, "Rows", func() -> Control: return Control.new())
+	RowKeep.pass_mouse(rows)
+	var choice: Button = RowKeep.part(rows, "Choice", func() -> Control: return Button.new()) as Button
+	choice.focus_mode = Control.FOCUS_ALL
+	RowKeep.finish(_list)
+	# A later fill must not overwrite the saved PASS values with IGNORE.
+	RowKeep.pass_mouse(scroll)
+	RowKeep.pass_mouse(rows)
+	RowKeep.finish(_list)
+	for control: Control in [scroll, rows, choice]:
+		assert_eq(control.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+		assert_eq(control.focus_mode, Control.FOCUS_NONE)
+	var tween: Tween = PaneMotion.open(_list)
+	tween.pause()
+	tween.custom_step(PaneMotion.OPEN_S)
+	assert_eq(scroll.mouse_filter, Control.MOUSE_FILTER_PASS)
+	assert_eq(rows.mouse_filter, Control.MOUSE_FILTER_PASS)
+	assert_eq(choice.mouse_filter, Control.MOUSE_FILTER_STOP)
+	assert_eq(choice.focus_mode, Control.FOCUS_ALL)
+	assert_false(choice.disabled)
+
+
+func test_retiring_ancestor_blocks_new_rows_and_parts() -> void:
+	# The retiring marker alone is enough, even through a non-Control parent.
+	_list.set_meta(PaneMotion.META_RETIRING, true)
+	var bridge := Node.new()
+	_list.add_child(bridge)
+	var rows := Control.new()
+	bridge.add_child(rows)
+	RowKeep.pass_mouse(rows)
+	RowKeep.sync(rows, ["a"], _make, _fill)
+	var key: Button = rows.get_node("Item_a/Key") as Button
+	assert_eq(rows.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+	assert_eq(key.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+	assert_eq(key.focus_mode, Control.FOCUS_NONE)
+	RowKeep.begin(rows)
+	var choice: Control = RowKeep.part(rows, "Choice", func() -> Control: return Button.new())
+	RowKeep.finish(rows)
+	assert_eq(choice.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+	assert_eq(choice.focus_mode, Control.FOCUS_NONE)
+
+
+func test_open_after_quiet_and_remove_keeps_leaving_descendants_blocked() -> void:
+	_sync(["a"])
+	_settle()
+	var leaving: Control = _item("a")
+	var key: Button = leaving.get_node("Key") as Button
+	var word: Control = key.get_node("Word") as Control
+	PaneMotion.quiet(_list)
+	_sync([])
+	_step(leaving, RowKeep.REMOVE_S * 0.5)
+	var tween: Tween = PaneMotion.open(_list)
+	tween.pause()
+	tween.custom_step(PaneMotion.OPEN_S)
+	assert_eq(_list.mouse_filter, Control.MOUSE_FILTER_STOP)
+	assert_true(leaving.has_meta(RowKeep.LEAVING_META))
+	for control: Control in [leaving, key, word]:
+		assert_eq(control.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+		assert_eq(control.focus_mode, Control.FOCUS_NONE)
+	assert_true(key.disabled)
+
+
+func test_id_returning_during_retirement_has_only_one_visible_row() -> void:
+	_sync(["a"])
+	_settle()
+	var leaving: Control = _item("a")
+	_sync([])
+	_step(leaving, RowKeep.REMOVE_S * 0.5)
+	assert_true(leaving.visible)
+	assert_gt(leaving.modulate.a, 0.0)
+	_sync(["a"])
+	var replacement: Control = _item("a")
+	_step(replacement, RowKeep.ADD_S)
+	assert_eq(_made, 2)
+	assert_ne(replacement.get_instance_id(), leaving.get_instance_id())
+	assert_eq(String(replacement.name), "Item_a")
+	assert_false(leaving.visible)
+	var visible_rows: int = 0
+	for child: Node in _list.get_children():
+		if child is Control and child.visible and child.get_meta(RowKeep.ID_META, "") == "a":
+			visible_rows += 1
+	assert_eq(visible_rows, 1)
+
+
 func test_add_and_remove_slide_survivors_and_new_rows_do_not_fly_in() -> void:
 	_sync(["a", "b"])
 	_settle()
@@ -200,3 +311,21 @@ func test_scroll_restoration_uses_the_latest_value_and_clamps_a_shorter_list() -
 	assert_eq(scroll.scroll_vertical, 0)
 	await wait_process_frames(2)
 	assert_eq(scroll.scroll_vertical, 0)
+
+
+func test_deferred_scroll_restoration_preserves_a_value_changed_after_restore() -> void:
+	var scroll := ScrollContainer.new()
+	scroll.size = Vector2(120, 90)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	add_child_autofree(scroll)
+	var content := Control.new()
+	content.custom_minimum_size = Vector2(120, 400)
+	scroll.add_child(content)
+	await wait_process_frames(2)
+	# Queue a real container sort before the deferred restoration.
+	content.custom_minimum_size.y = 420
+	RowKeep.restore_scroll(scroll, 80)
+	assert_eq(scroll.scroll_vertical, 80)
+	scroll.scroll_vertical = 125
+	await wait_process_frames(2)
+	assert_eq(scroll.scroll_vertical, 125)
