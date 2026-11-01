@@ -360,7 +360,7 @@ func test_backward_rule_phase_reflects_between_the_same_two_foot_contacts() -> v
 		p.position += Vector3.FORWARD * 0.1
 		p.brain["step_r"] = contact
 		var motion: Vector2 = _draw(p, note, 0.1)
-		assert_almost_eq(motion.x, 0.85 - contact, 0.0001)
+		assert_almost_eq(motion.x, contact, 0.0001, "the shared rule phase is already signed")
 		assert_almost_eq(float(p.brain["step_r"]), contact, 0.0001, "drawing does not change the rules")
 
 
@@ -792,14 +792,16 @@ func test_a_wall_slide_below_the_minimum_holds_but_a_faster_slide_still_moves() 
 		game.grid.set_solid(Vector2i(11, 10), FieldGrid.Solid.WALL)
 		game.grid.refresh_paths()
 		p.position = Vector3(10.9995, 0.0, 10.5)
-		p.stick = Vector2(1.0, 0.2).normalized()
+		# Keep the old test name; a blocked normal holds, a free tangent now moves.
+		p.stick = Vector2.RIGHT
 		var before: Vector3 = p.position
 		var delta: float = 1.0 / float(fps)
 		game._drive(p, delta)
 		assert_eq(p.position, before)
-		assert_almost_eq(p.drive_speed, 0.0, 0.000001)
+		assert_gte(p.drive_speed, Person.MOVE_MIN, "a wall preserves the drive")
 		assert_false(p.moving)
 		p.drive_speed = Person.WALK
+		p.stick = Vector2(1.0, 0.2).normalized()
 		game._drive(p, delta)
 		assert_true(p.moving)
 		assert_gte(p.position.distance_to(before) / delta, Person.MOVE_MIN)
@@ -1312,3 +1314,248 @@ func test_a_melee_plant_holds_released_inertia_until_the_existing_swing_end() ->
 		p.stick = Vector2(0.051, 0.0)
 		game._drive(p, delta)
 		assert_gte(p.drive_speed, Person.MOVE_MIN)
+
+
+func test_a_thirty_degree_wall_start_keeps_accelerating_at_thirty_and_sixty_hz() -> void:
+	var distances: Array[float] = []
+	for fps: int in [30, 60]:
+		var game: FieldGame = _motion_field()
+		var p: Person = game.player
+		for z: int in range(9, 15):
+			game.grid.set_solid(Vector2i(11, z), FieldGrid.Solid.WALL)
+		game.grid.refresh_paths()
+		p.position = Vector3(10.9995, 0.0, 10.5)
+		p.stick = Vector2(sin(PI / 6.0), cos(PI / 6.0))
+		var start: Vector3 = p.position
+		var delta: float = 1.0 / float(fps)
+		var first_drive: float = 0.0
+		for tick: int in range(fps):
+			var before: Vector3 = p.position
+			game.clock.advance(delta)
+			game._drive(p, delta)
+			assert_true(p.moving)
+			assert_gt(p.position.z, before.z, "even a subminimum tangent can slide")
+			assert_almost_eq(p.position.x, start.x, 0.000001)
+			if tick == 0:
+				first_drive = p.drive_speed
+				if fps == 60:
+					assert_lt(p.position.distance_to(before) / delta, Person.MOVE_MIN)
+		assert_gt(p.drive_speed, first_drive)
+		assert_almost_eq(p.drive_speed, p.speed(FieldGrid.Floor.SNOW), 0.0001)
+		distances.append(p.position.z - start.z)
+	assert_almost_eq(distances[0], distances[1], 0.05)
+
+
+func test_a_broken_leg_companion_keeps_its_point_one_nine_pace_in_deep_snow() -> void:
+	for fps: int in [30, 60]:
+		var game: FieldGame = _motion_field(FieldGrid.Floor.DEEP_SNOW)
+		var p: Person = game.squad[1]
+		p.crouched = true
+		p.body.fracture(false, "leg_left")
+		p.turn_rate = 1.0
+		p.look = 0.0
+		p.rotation.y = 0.0
+		p.path = PackedVector3Array([p.position + Vector3.BACK * 5.0])
+		var pace: float = p.speed(FieldGrid.Floor.DEEP_SNOW)
+		assert_false(p.body.downed)
+		assert_almost_eq(pace, 0.1925, 0.0001)
+		var start: Vector3 = p.position
+		var delta: float = 1.0 / float(fps)
+		for _tick: int in range(fps):
+			game.clock.advance(delta)
+			game._move_person(p, delta)
+			assert_true(p.moving)
+		assert_almost_eq(p.position.distance_to(start), pace, 0.0001)
+		assert_false(p.path.is_empty())
+		p.look = PI * 0.49
+		start = p.position
+		game._move_person(p, delta)
+		assert_eq(p.position, start, "the turn can still hold a fraction of that pace")
+
+
+func test_ai_and_stick_backsteps_share_a_decreasing_phase_and_both_sound_contacts() -> void:
+	for stick: bool in [false, true]:
+		var game: FieldGame = _motion_field()
+		var p: Person = game.player if stick else game.squad[1]
+		p.rotation.y = PI
+		p.look = PI
+		p.facing = PI
+		p.brain["step_r"] = 0.8
+		if stick:
+			p.aim.active = true
+			p.stick = Vector2(0.0, 0.051)
+		else:
+			p.brain["face_hold"] = p.position + Vector3.FORWARD * 5.0
+			p.brain["face_hold_t"] = game.clock.elapsed
+			p.path = PackedVector3Array([p.position + Vector3.BACK * 6.0])
+		var note: Dictionary = {}
+		_draw(p, note, 0.0)
+		var crossed: Dictionary = {}
+		var size: float = float(SimNoise.STEP_ROUND["walk"]) * Gait.stride(p)
+		for _tick: int in range(120):
+			var before: Vector3 = p.position
+			var was: float = float(p.brain["step_r"])
+			var events: int = game.ledger.sound_events
+			game.clock.advance(1.0 / 60.0)
+			if stick:
+				game._drive(p, 1.0 / 60.0)
+			else:
+				p.brain["face_hold_t"] = game.clock.elapsed
+				game._move_person(p, 1.0 / 60.0)
+			var next: float = was - p.position.distance_to(before) / size
+			var motion: Vector2 = _draw(p, note, 1.0 / 60.0)
+			assert_eq(_named(motion), "p_walk")
+			assert_almost_eq(motion.x, fposmod(next, 1.0), 0.00001)
+			assert_gt(fposmod(was - motion.x, 1.0), 0.0, "the displayed round also runs back")
+			var contacts: int = 0
+			for contact: float in SimNoise.STEP_AT:
+				if next <= contact and contact < was:
+					crossed[contact] = true
+					contacts += 1
+			assert_eq(game.ledger.sound_events - events, contacts)
+		assert_eq(crossed.size(), 2)
+
+
+func test_reverse_footsteps_sound_on_contact_arrival_and_not_departure() -> void:
+	var p: Person = _person()
+	var size: float = float(SimNoise.STEP_ROUND["walk"]) * Gait.stride(p)
+	for contact: float in SimNoise.STEP_AT:
+		for direction: float in [-1.0, 1.0]:
+			p.brain["step_r"] = contact - direction * 0.01
+			var gone: float = (contact - float(p.brain["step_r"])) * size
+			assert_eq(FieldGame.steps_in(p, gone), 1)
+			assert_almost_eq(float(p.brain["step_r"]), contact, 0.000001)
+			assert_eq(FieldGame.steps_in(p, direction * 0.01 * size), 0)
+
+
+func test_a_light_run_request_uses_walk_noise_and_the_walk_round_together() -> void:
+	var game: FieldGame = _motion_field()
+	var p: Person = game.player
+	var counter: Person = _person()
+	counter.display_name = p.display_name
+	p.running = true
+	p.stick = Vector2(0.0, 0.051)
+	p.brain["step_r"] = 0.0
+	counter.brain["step_r"] = 0.0
+	var expected: int = 0
+	for _tick: int in range(240):
+		var before: Vector3 = p.position
+		game.clock.advance(1.0 / 60.0)
+		game._drive(p, 1.0 / 60.0)
+		expected += FieldGame.steps_in(counter, p.position.distance_to(before))
+		assert_true(p.is_running_now(), "the request alone still says run")
+		assert_false(Gait.ground_runs(p), "the shared ground decision says walk")
+		assert_almost_eq(float(p.brain["step_r"]), float(counter.brain["step_r"]), 0.00001)
+	assert_gt(expected, 0)
+	assert_false(game.ledger.by_action.has("run"))
+	var row: Dictionary = game.ledger.by_action["walk"]
+	assert_eq(int(row["events"]), expected)
+	var radius: float = SimNoise.footstep_radius(false, FieldGrid.FLOOR_SOUND[FieldGrid.Floor.SNOW], 1.0, false, int(p.skills["stealth"])) * game.weather.sound_mult(true)
+	assert_almost_eq(float(row["max_radius"]), radius, 0.000001)
+	assert_almost_eq(float(row["linger"]), float(SimNoise.LINGER[SimNoise.footstep_level(false, false)]), 0.000001)
+
+
+func test_a_twenty_four_degree_turn_crosses_the_window_and_keeps_its_whole_phase() -> void:
+	for fps: int in [30, 60]:
+		var phases: Array[float] = []
+		for delay: float in [0.1, 0.75]:
+			var p: Person = _person()
+			var note: Dictionary = {}
+			_draw(p, note, 0.0)
+			_draw(p, note, delay)
+			var delta: float = 1.0 / float(fps)
+			var ticks: int = int(roundf(0.8 * float(fps)))
+			var angle: float = deg_to_rad(24.0) / float(ticks)
+			var motion: Vector2 = Vector2.ZERO
+			for _tick: int in range(ticks):
+				p.rotation.y += angle
+				motion = _draw(p, note, delta)
+			assert_eq(_named(motion), "p_walk")
+			assert_almost_eq(motion.x, deg_to_rad(24.0) * PersonVisual.TURN_FOOT / 1.64, 0.00001)
+			phases.append(motion.x)
+		assert_almost_eq(phases[0], phases[1], 0.000001)
+
+
+func test_turn_samples_older_than_one_second_cannot_start_a_step() -> void:
+	var p: Person = _person()
+	var note: Dictionary = {}
+	_draw(p, note, 0.0)
+	p.rotation.y += deg_to_rad(12.0)
+	assert_eq(_named(_draw(p, note, 0.4)), "p_stand")
+	_draw(p, note, 1.1)
+	p.rotation.y += deg_to_rad(12.0)
+	assert_eq(_named(_draw(p, note, 0.4)), "p_stand")
+
+
+func test_a_companion_starts_walking_on_the_point_three_simulation_clock() -> void:
+	for fps: int in [30, 60]:
+		var game: FieldGame = _motion_field(FieldGrid.Floor.DEEP_SNOW)
+		var p: Person = game.squad[1]
+		game.slow = 0.3
+		p.crouched = true
+		p.path = PackedVector3Array([p.position + Vector3.BACK * 5.0])
+		var note: Dictionary = {}
+		_draw(p, note, 0.0)
+		var frame: float = 1.0 / float(fps)
+		var delta: float = frame * game.slow
+		assert_almost_eq(PersonVisual.frame_delta(game, frame), delta, 0.000001)
+		for _tick: int in range(fps):
+			game.clock.advance(delta)
+			game._move_person(p, delta)
+			assert_true(p.moving)
+			assert_eq(_named(_draw(p, note, PersonVisual.frame_delta(game, frame))), "p_crouch_walk")
+
+
+func test_a_saved_middle_band_walk_rebuilds_from_the_existing_movement_fields() -> void:
+	for moving: bool in [false, true]:
+		var first: FieldGame = _field()
+		var p: Person = first.squad[1]
+		var note: Dictionary = {}
+		_draw(p, note, 0.0)
+		_ground_for(p, note, 1.0, 1.0, 60)
+		_ground_for(p, note, 0.2, 2.0, 60)
+		assert_true(bool(note["ground_walk"]))
+		if not moving:
+			p.stop()
+			_draw(p, note, 0.4)
+		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+		var resumed: FieldGame = _field(FieldSave.resume_opts(saved))
+		var q: Person = resumed.squad[1]
+		var restored: Dictionary = {}
+		_draw(q, restored, 0.0)
+		assert_eq(bool(restored["ground_walk"]), bool(note["ground_walk"]))
+		assert_false(FieldSave.PERSON_FIELDS.has("ground_sample"))
+		assert_false(FieldSave.PERSON_FIELDS.has("motion_epoch"))
+		assert_true(q.ground_sample.is_empty())
+		if moving:
+			for _tick: int in range(30):
+				assert_eq(_named(_ground_tick(q, restored, 0.2, 1.0 / 60.0)), _named(_ground_tick(p, note, 0.2, 1.0 / 60.0)))
+
+
+func test_a_rewound_clock_cannot_reuse_a_sample_even_at_the_same_elapsed_value() -> void:
+	var game: FieldGame = _motion_field()
+	var p: Person = game.player
+	p.running = true
+	p.moving = true
+	p.brain[Gait.GROUND_RUN] = {"speed": 20.0, "running": true}
+	game.clock.elapsed = 10.0
+	game._update_ground_gait(p, 0.1, 2.0)
+	game._motion_clock = game.clock.elapsed
+	var note: Dictionary = {}
+	_draw(p, note, 0.0)
+	note["turn_samples"] = [Vector3(0.0, 0.1, 0.2)]
+	game.clock.elapsed = 9.9
+	game._begin_motion_tick()
+	game.clock.advance(0.1)
+	game._update_ground_gait(p, 0.1, 0.02)
+	assert_almost_eq(float(p.brain[Gait.GROUND_RUN]["speed"]), 0.2 * (1.0 - exp(-0.1 / Gait.RUN_TAU)), 0.000001)
+	assert_false(Gait.ground_runs(p))
+	_draw(p, note, 0.0)
+	assert_false(note.has("turn_samples"))
+	assert_eq(int(note["epoch"]), p.motion_epoch)
+	var sampled: float = float(p.brain[Gait.GROUND_RUN]["speed"])
+	game._update_ground_gait(p, 0.1, 2.0)
+	assert_almost_eq(float(p.brain[Gait.GROUND_RUN]["speed"]), sampled, 0.000001)
+	game.clock.elapsed = 1.0
+	game._update_ground_gait(p, 0.1, 0.01)
+	assert_almost_eq(float(p.brain[Gait.GROUND_RUN]["speed"]), 0.1 * (1.0 - exp(-0.1 / Gait.RUN_TAU)), 0.000001)

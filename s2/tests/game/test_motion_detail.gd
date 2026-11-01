@@ -103,9 +103,17 @@ func test_turning_on_the_spot_is_stepped() -> void:
 	assert_almost_eq(fposmod(turning.x - before, 1.0), 0.2 * PersonVisual.TURN_FOOT / float(DeadBody.STRIDE[0]), 0.0001, "by the turn")
 	PersonVisual.motion_of(p, note, PersonVisual.TURN_HOLD + 0.05, [])
 	assert_eq(int(PersonVisual.motion_of(p, note, 0.05, []).y), DeadBody.STAND, "and stands again once it stops turning")
-	# A snap round all at once is not stepped.
-	p.rotation.y += PersonVisual.TURN_CAP + 0.3
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.05, []).y), DeadBody.STAND)
+	# A small, slow turn stays below both step-start thresholds.
+	p.rotation.y += PersonVisual.TURN_ANGLE * 0.25
+	var slow_delta: float = PersonVisual.TURN_WINDOW * 0.5
+	assert_lt(PersonVisual.TURN_ANGLE * 0.25 / slow_delta, PersonVisual.TURN_RATE)
+	assert_eq(int(PersonVisual.motion_of(p, note, slow_delta, []).y), DeadBody.STAND)
+	# A large turn is stepped too, but one drawing cannot add more than STRIDE_CAP.
+	before = float(note.get("step", 0.0))
+	p.rotation.y += PI * 0.5
+	turning = PersonVisual.motion_of(p, note, 0.05, [])
+	assert_eq(int(turning.y), PersonVisual.WALK)
+	assert_almost_eq(fposmod(turning.x - before, 1.0), PersonVisual.STRIDE_CAP / float(DeadBody.STRIDE[0]), 0.0001, "a large turn keeps its step bounded")
 
 
 func test_a_blow_throws_the_body_away_from_where_it_came() -> void:

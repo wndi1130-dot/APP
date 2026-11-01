@@ -31,6 +31,11 @@ const TOPS: Dictionary = {
 	LIVELY_DIR + "dresser.glb": [{"y": 1.0, "rect": Rect2(-0.87, -0.31, 1.74, 0.594)}],
 	LIVELY_DIR + "side_table.glb": [{"y": 0.6, "rect": Rect2(-0.27, -0.205, 0.54, 0.41)}],
 	LIVELY_DIR + "low_table.glb": [{"y": 0.45, "rect": Rect2(-0.35, -0.32, 0.7, 0.64)}],
+	# The radio cabinet's lid, in front of and behind the thin rail along it (z -0.246..-0.205, 0.10 proud).
+	LIVELY_DIR + "radio_set.glb": [
+		{"y": 0.35, "rect": Rect2(-0.95, -0.195, 1.9, 0.561)},
+		{"y": 0.35, "rect": Rect2(-0.95, -0.47, 1.9, 0.214)},
+	],
 	# The worktop, in front of the 6 cm splashback along the back edge.
 	LIVELY_DIR + "counter.glb": [{"y": 0.84, "rect": Rect2(-0.47, -0.276, 0.94, 0.596)}],
 	# The lid, three boards with 5 mm gaps between (z -0.188..-0.183, 0.129..0.134); its straps stand 1 cm

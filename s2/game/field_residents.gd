@@ -26,10 +26,10 @@ const ROWS: Array = [
 	{"id": "npc_resident_daughter", "name": "선로원의 딸", "role": "resident"},
 ]
 const WARN: String = "거기서 멈춰. 뭘 원하는지 말해."
-const CARD_B: String = "신호소 위층의 늙은 선로원과 딸. 딸의 손이 곪았다.\n선로원: 「유리에 베였어. 눈 녹일 땔감이 없어 상처를 못 헹궜다. …붕대랑 약 좀.」\n딸: 「아버지, 됐어요. 저 사람들도 모자랄 거예요.」"
+const CARD_B: String = "신호소 위층의 늙은 선로원과 딸. 딸의 손이 곪았다.\n선로원: 「유리에 베였어. 눈 녹일 땔감이 없어 상처를 못 헹궜어. …붕대랑 약 좀.」\n딸: 「아버지, 됐어요. 저 사람들도 모자랄 거예요.」"
 const AFTER: Dictionary = {
-	"aid": "선로 사정은 이 종이에 다 있다. 북쪽 분기는 얼어 있어.",
-	"robbed": "이건 겨울 몫이야. 가져가면 우린 끝이다.",
+	"aid": "선로 사정은 이 종이에 다 있어. 북쪽 분기는 얼어 있어.",
+	"robbed": "이건 겨울 몫이야. 가져가면 우린 끝이야.",
 }
 ## What one who saw it says after (people-memory design 3.6), by voice.
 const SEEN_LINE: Dictionary = {
@@ -99,7 +99,7 @@ func meet() -> void:
 func options() -> Array:
 	var give: Array = ["붕대 1"]
 	if _holder("medkit") != null:
-		give.append("구급 상자 1")
+		give.append("구급함 1")
 	return [
 		{"id": "aid", "label": "붕대와 약을 준다 (%s)" % "·".join(PackedStringArray(give)), "say": "\"이거 써라. 손부터 헹구고.\""},
 		{"id": "robbed", "label": "단지와 지도를 그냥 가져간다 (먹을 것 2·선로 지도)", "say": "\"비켜라. 우리도 굶는다.\""},

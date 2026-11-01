@@ -83,7 +83,7 @@ const GROUND_TAU: float = 0.3
 const WALK_OFF: float = 0.15             # m/s, filtered ground speed
 const WALK_ON: float = 0.25
 const GROUND_MIN: float = 0.000001       # metres; ignore subtraction noise
-const BACKWARD_DEG: float = 100.0
+const BACKWARD_DEG: float = Gait.BACKWARD_DEG
 # Held by the dead (after the reference game's struck state, 상태표 2.3): the arms
 # out against them (the lunge's reach), leaning back from one in front and
 # bent under one behind, twisting to get free.
@@ -382,8 +382,14 @@ func is_worn() -> bool:
 ## still then (field_game.gd still shading), and through a blow's hold (hit_feel.gd);
 ## at the end, the train leaving, they go on.
 static func frame_delta(field, delta: float) -> float:
-	var held: bool = field.get("paused") == true or field.get("hitstop") == true
-	return 0.0 if held and field.get("ended") != true else minf(delta, FRAME_MAX)
+	var ended: bool = field.get("ended") == true
+	if not ended and (field.get("paused") == true or field.get("hitstop") == true):
+		return 0.0
+	var step: float = minf(delta, FRAME_MAX)
+	if ended:
+		return step
+	var slow: Variant = field.get("slow")
+	return step * (float(slow) if slow != null else 1.0)
 
 
 func _process(delta: float) -> void:
@@ -400,6 +406,8 @@ func _process(delta: float) -> void:
 	var reads := READS_PER_FRAME
 	for p in game.people:
 		_hide_boxes(p)
+		if p.sled_weapon_stowed and p.weapon_mesh != null:
+			p.weapon_mesh.visible = false
 		if not p.visible or count >= MAX_PEOPLE:
 			continue
 		var had := worn.size()
@@ -564,6 +572,18 @@ func _hide_boxes(p) -> void:
 ## by the ground covered and a fall plays once from where it started. `own` is
 ## the living's own folder's motions: when y is one of those, is_own(note).
 static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Array = []) -> Vector2:
+	if int(note.get("epoch", p.motion_epoch)) != p.motion_epoch:
+		note.clear()
+	note["epoch"] = p.motion_epoch
+	if not note.has("ground_walk"):
+		# Decision 425: rebuild from the saved movement, without adding save fields.
+		var state: Dictionary = p.brain.get(Gait.GROUND_RUN, {})
+		var speed: float = float(state.get("speed", 0.0))
+		var walking_now: bool = p.moving and is_finite(speed) and speed >= WALK_OFF
+		note["ground_speed"] = speed if walking_now else 0.0
+		note["ground_walk"] = walking_now
+		if walking_now:
+			note["moved"] = float(note.get("t", 0.0))
 	note.erase("blow_aim")   # Only a blow drawn this frame restores its turn.
 	var t: float = float(note.get("t", 0.0)) + delta
 	note["t"] = t
@@ -667,6 +687,12 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	var running: bool = Gait.ground_runs(p)
 	# Spent or bleeding hard it reels (gait.gd reels; the dead's reel in a folder
 	# without its own), still reeling where it stops.
+	# The rope keeps both arms occupied, even standing or crouched (sled.md 2.2).
+	if p.sled_id != 0:
+		var sled_carry: int = clip_named(own, Gait.CARRY_BIG, -1)
+		if sled_carry >= 0:
+			note["motion"] = OWN_BASE + sled_carry
+			return Vector2(_round(note, "step", gone, _round_of(own, sled_carry, 1.2)), sled_carry)
 	var reeling: bool = Gait.reels(p)
 	var own_reel := clip_named(own, OWN_SPENT, -1) if reeling else -1
 	if reeling and not walking:
@@ -710,10 +736,9 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		own_gait = clip_named(own, Gait.burden_name(p, PAIN_SHOWN), -1)
 	if own_gait < 0:
 		own_gait = own_reel if reeling else gait_of(p, own, running)
-	var forward: Vector3 = Vector3(sin(p.rotation.y), 0.0, cos(p.rotation.y))
 	var backward: bool = bool(note.get("gait_backward", false))
 	if ground_gone > GROUND_MIN:
-		backward = ground.dot(forward) < ground_gone * cos(deg_to_rad(BACKWARD_DEG))
+		backward = Gait.signed_distance(p, ground) < 0.0
 	note["gait_backward"] = backward
 	var signed_gone: float = -ground_gone if backward else ground_gone
 	if own_gait >= 0:
@@ -721,9 +746,6 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		var stepped: float = _round(note, "step", signed_gone, _round_of(own, own_gait, 1.2))
 		if p.brain.has("step_r") and is_stepped(String(own[own_gait].get("name", ""))):
 			stepped = float(p.brain["step_r"])   # the feet land with the footsteps (field_game.gd steps_in)
-			if backward:
-				# Decision 425: reflection swaps the two contacts without changing their times.
-				stepped = fposmod(float(SimNoise.STEP_AT[0]) + float(SimNoise.STEP_AT[1]) - stepped, 1.0)
 		return Vector2(stepped, own_gait)
 	var gait := WALK
 	if running:
@@ -1264,23 +1286,28 @@ static func _turned(p, note: Dictionary, t: float) -> float:
 	note["yaw_at"] = t
 	var turn: float = angle_difference(was, yaw)
 	var d: float = absf(turn)
-	var since: float = float(note.get("turn_since", t))
-	var total: float = float(note.get("turn_sum", 0.0))
-	if t - since > TURN_WINDOW:
-		total = 0.0
-		since = t
-	total += turn
-	note["turn_since"] = since
-	note["turn_sum"] = total
 	if d < TURN_NOISE or delta <= 0.0:
 		return 0.0
+	var samples: Array = note.get("turn_samples", [])
+	samples.append(Vector3(t - delta, t, turn))
+	var cutoff: float = t - TURN_WINDOW
+	while not samples.is_empty() and samples[0].y <= cutoff:
+		samples.pop_front()
+	if not samples.is_empty() and samples[0].x < cutoff:
+		var first: Vector3 = samples[0]
+		first.z *= (first.y - cutoff) / (first.y - first.x)
+		first.x = cutoff
+		samples[0] = first
+	var total: float = 0.0
+	for sample: Vector3 in samples:
+		total += sample.z
+	note["turn_samples"] = samples
 	var active: bool = t - float(note.get("turned", -10.0)) < TURN_HOLD
 	if not active and absf(total) <= TURN_ANGLE and d / delta <= TURN_RATE:
 		return 0.0
-	note["turn_sum"] = 0.0
-	note["turn_since"] = t
+	samples.clear()
 	note["turned"] = t
-	return d
+	return absf(total)
 
 
 ## 1 as a wound comes, down to 0 HURT_TIME after.

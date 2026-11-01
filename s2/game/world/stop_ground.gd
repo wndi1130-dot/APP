@@ -7,6 +7,7 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
 const NightLights = preload("res://game/world/night_lights.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
 const END_GAP: int = 12
 ## The longest screen the map's end stays out of view on: 23.1:9, a folding phone's cover
 ## screen held sideways (the window's stretch aspect "expand" shows more ground across).
@@ -16,6 +17,11 @@ const MAX_ASPECT: float = 23.1 / 9.0
 ## 35° and 45°, 54.9 m): an outlying stop's map runs at least so far past the train's door
 ## nearest its grown end, so arriving never shows the woods round the map (3회차 대조표 N4).
 const VIEW_REACH: float = 55.0
+const VIEW_SNOW: int = 6
+const VIEW_RULE: int = 1
+const VIEW_PLACES: Array[String] = ["first_leg_01_sulechow"]
+const VIEW_AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground_arrays", "_ground_key",
+	"_floor_arrays", "_floor_keys", "_room_finish", "_walk_field", "_walk_key", "fell_groves", "_edge_plan"]
 const TREE_STEP: int = 9
 const REMOTE_BAND: int = 24
 const REMOTE_FOREST_EDGE: int = 6
@@ -31,6 +37,8 @@ const FORMS: Array[String] = ["city", "edge", "remote", "siding"]
 ## `end_gap` >= 0 puts the train's end that many cells off the grown end (a save's ground, field_save.gd);
 ## else _end_gap works it out.
 static func apply(data: Dictionary, form: String, run_seed: int, target_m: float = -1.0, end_gap: int = -1) -> Dictionary:
+	if StoryMaps.is_story(String(data.get("place_id", ""))):
+		return data
 	if form.is_empty() or form == String(data.get("stop_form", "")):
 		return data
 	if form not in FORMS:
@@ -65,6 +73,185 @@ static func apply(data: Dictionary, form: String, run_seed: int, target_m: float
 		_set_village(data, "city")
 		return data
 	return out
+
+
+## The missing view from the nearest door or squad cell's middle.
+static func view_need(data: Dictionary) -> Vector2i:
+	var g: FieldGrid = data["grid"]
+	var cells: Array = []
+	for doors: Array in data.get("train_doors", {}).values():
+		cells.append_array(doors)
+	cells.append_array(data.get("spawns", {}).get("squad", []))
+	if cells.is_empty():
+		return Vector2i.ZERO
+	var left: float = INF
+	var top: float = INF
+	var right: float = INF
+	var bottom: float = INF
+	for c: Vector2i in cells:
+		left = minf(left, float(c.x) + 0.5)
+		top = minf(top, float(c.y) + 0.5)
+		right = minf(right, float(g.width - c.x) - 0.5)
+		bottom = minf(bottom, float(g.height - c.y) - 0.5)
+	if right < VIEW_REACH or bottom < VIEW_REACH:
+		push_warning("stop view: the east or south edge is within view")
+	return Vector2i(maxi(0, ceili(VIEW_REACH - left)), maxi(0, ceili(VIEW_REACH - top)))
+
+
+## Grow only bare north and west ground; a different applied view needs a fresh map.
+static func widen_view(data: Dictionary, rows: int = -1, cols: int = -1) -> Dictionary:
+	if String(data.get("place_id", "")) not in VIEW_PLACES:
+		return data
+	if data.has("stop_view_rows"):
+		return data
+	if rows == -1 or cols == -1:
+		var need: Vector2i = view_need(data)
+		if rows == -1:
+			rows = need.y
+		if cols == -1:
+			cols = need.x
+	if rows == 0 and cols == 0:
+		data["stop_view_rows"] = 0
+		data["stop_view_cols"] = 0
+		data["stop_view_rule"] = VIEW_RULE
+		return data
+	for key: String in VIEW_AHEAD_KEYS:
+		data.erase(key)
+	var site: Dictionary = (data.get("spots", {}) as Dictionary).get("work_site", {}) as Dictionary
+	site.erase("job")
+	site.erase("amount")
+	var old: FieldGrid = data["grid"]
+	var out: Dictionary = MapShift.grow(data, cols, rows, 0, 0, true, true)
+	var g: FieldGrid = out["grid"]
+	var train: Rect2i = out["train"]
+	var platform: Rect2i = out["platform"]
+	var snow_top: int = maxi(0, train.position.y - VIEW_SNOW)
+	var snow_bottom: int = mini(g.height, platform.end.y)
+	var snow: Array[Rect2i] = []
+	if rows > snow_top:
+		snow.append(Rect2i(0, snow_top, g.width, rows - snow_top))
+	if cols > 0 and snow_bottom > rows:
+		snow.append(Rect2i(0, rows, cols, snow_bottom - rows))
+	for rect: Rect2i in snow:
+		_view_floor(g, rect, FieldGrid.Floor.SNOW)
+	# The old rail keeps its shifted row, the road its shifted column.
+	for y: int in range((data["train"] as Rect2i).position.y, (data["train"] as Rect2i).end.y):
+		var edge: Vector2i = Vector2i(0, y)
+		if old.floor_at(edge) == FieldGrid.Floor.RAIL and old.solid_at(edge) == FieldGrid.Solid.NONE:
+			_view_floor(g, Rect2i(0, rows + y, cols, 1), FieldGrid.Floor.RAIL)
+	var north: Array = []
+	for x: int in range(old.width):
+		var edge: Vector2i = Vector2i(x, 0)
+		if old.floor_at(edge) == FieldGrid.Floor.ROAD and old.solid_at(edge) == FieldGrid.Solid.NONE:
+			_view_floor(g, Rect2i(cols + x, snow_top, 1, rows - snow_top), FieldGrid.Floor.ROAD)
+			north.append(Vector2i(cols + x, snow_top))
+	north.reverse()
+	if not north.is_empty():
+		out["entries"]["north_road"] = north
+	var forest: Array[Rect2i] = []
+	if snow_top > 0 and rows > 0:
+		forest.append(Rect2i(0, 0, g.width, mini(rows, snow_top)))
+	if cols > 0 and snow_bottom < g.height:
+		forest.append(Rect2i(0, snow_bottom, cols, g.height - snow_bottom))
+	_view_forest(out, forest)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("%s:view:%d" % [String(out["place_id"]), VIEW_RULE])
+	var first_tree: int = (out.get("trees", []) as Array).size()
+	_view_forest_trees(out, forest, rng)
+	for rect: Rect2i in snow:
+		_add_trees(out, rect, rng)
+	for i: int in range(first_tree, (out["trees"] as Array).size()):
+		g.refresh_cell(out["trees"][i])
+	out["stop_view_rows"] = rows
+	out["stop_view_cols"] = cols
+	out["stop_view_rule"] = VIEW_RULE
+	return out
+
+
+## A start that asks for the view ground (rows and columns worked out, VIEW_ASK). The game's
+## starts ask (boot.gd, slice_flow.gd, the loader's map has it on); a field started without
+## the keys keeps the map script's own cells, as tools and trials stand on them.
+const VIEW_ASK: int = -1
+
+
+static func ask_view(opts: Dictionary) -> Dictionary:
+	if not opts.has("stop_view_rows"):
+		opts["stop_view_rows"] = VIEW_ASK
+	if not opts.has("stop_view_cols"):
+		opts["stop_view_cols"] = VIEW_ASK
+	return opts
+
+
+## How far the view ground moved the map's own cells: a map script's cell plus this is the field's.
+static func view_offset(data: Dictionary) -> Vector2i:
+	return Vector2i(int(data.get("stop_view_cols", 0)), int(data.get("stop_view_rows", 0)))
+
+
+static func _view_floor(g: FieldGrid, rect: Rect2i, floor_kind: int) -> void:
+	for c: Vector2i in _cells(rect):
+		var i: int = g.index(c)
+		g.solid[i] = FieldGrid.Solid.NONE
+		g.floor[i] = floor_kind
+		g.building[i] = -1
+		g.refresh_cell(c)
+
+
+## Append only this view's forest; existing remote ground is left alone.
+static func _view_forest(data: Dictionary, forest: Array[Rect2i]) -> void:
+	var all_forest: Array = data.get("deep_forest", [])
+	all_forest.append_array(forest)
+	data["deep_forest"] = all_forest
+	var g: FieldGrid = data["grid"]
+	for rect: Rect2i in forest:
+		for c: Vector2i in _cells(rect):
+			var i: int = g.index(c)
+			g.solid[i] = FieldGrid.Solid.BLOCK
+			g.floor[i] = FieldGrid.Floor.SNOW
+			g.building[i] = -1
+			g.opq[i] = 1
+			g.walk_people[i] = 0
+			g.walk_dead[i] = 0
+		g.people_path.fill_solid_region(rect, true)
+		g.dead_path.fill_solid_region(rect, true)
+		g.revision += 1
+
+
+static func _view_walk_edge(g: FieldGrid, rect: Rect2i, edge: Vector2i) -> bool:
+	var vertical: bool = edge.x != 0
+	var length: int = rect.size.y if vertical else rect.size.x
+	for along: int in range(length):
+		var c: Vector2i = Vector2i(rect.end.x if edge.x > 0 else rect.position.x - 1, rect.position.y + along) if vertical \
+			else Vector2i(rect.position.x + along, rect.end.y if edge.y > 0 else rect.position.y - 1)
+		if g.inside(c) and g.people_can_walk(c):
+			return true
+	return false
+
+
+## The same spacing as remote spruce, along each side that meets walkable ground.
+static func _view_forest_trees(data: Dictionary, forest: Array[Rect2i], rng: RandomNumberGenerator) -> void:
+	var g: FieldGrid = data["grid"]
+	var trees: Array = data.get("trees", [])
+	var planted: Dictionary = {}
+	for rect: Rect2i in forest:
+		for edge: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			if not _view_walk_edge(g, rect, edge):
+				continue
+			var vertical: bool = edge.x != 0
+			var depth: int = mini(REMOTE_FOREST_EDGE, rect.size.x if vertical else rect.size.y)
+			var length: int = rect.size.y if vertical else rect.size.x
+			var row: int = rng.randi_range(0, 1)
+			while row < depth:
+				var along: int = rng.randi_range(0, 2)
+				while along < length:
+					var c: Vector2i = Vector2i(rect.end.x - 1 - row if edge.x > 0 else rect.position.x + row, rect.position.y + along) if vertical \
+						else Vector2i(rect.position.x + along, rect.end.y - 1 - row if edge.y > 0 else rect.position.y + row)
+					if not planted.has(c):
+						planted[c] = true
+						trees.append(c)
+						rng.randi_range(0, 3)  # Retain the old facing draw, keeping every later cell in place.
+					along += rng.randi_range(2, 3)
+				row += rng.randi_range(2, 3)
+	data["trees"] = trees
 
 
 static func village_middle(data: Dictionary) -> Vector2:
@@ -297,10 +484,9 @@ static func _remote_band(data: Dictionary, added: Rect2i, strip: Rect2i) -> void
 
 
 ## Only the first six metres of blocked forest carry trees, two or three cells apart.
-## Spruce is the existing field-tree model (PropKinds.candidates).
+## MapView draws these cells as always-visible spruce, without discovery-gated props.
 static func _add_forest_trees(data: Dictionary, strip: Rect2i, rng: RandomNumberGenerator) -> void:
 	var trees: Array = data.get("trees", [])
-	var props: Array = data.get("props", [])
 	for rect: Rect2i in data.get("deep_forest", []):
 		var above: bool = rect.end.y == strip.position.y
 		var depth: int = mini(REMOTE_FOREST_EDGE, rect.size.y)
@@ -311,11 +497,10 @@ static func _add_forest_trees(data: Dictionary, strip: Rect2i, rng: RandomNumber
 			while x < rect.end.x:
 				var c: Vector2i = Vector2i(x, y)
 				trees.append(c)
-				props.append({"kind": "spruce", "rect": Rect2i(c, Vector2i.ONE), "facing": rng.randi_range(0, 3), "level": 0})
+				rng.randi_range(0, 3)  # Retain the old facing draw, keeping every later cell in place.
 				x += rng.randi_range(2, 3)
 			row += rng.randi_range(2, 3)
 	data["trees"] = trees
-	data["props"] = props
 
 
 static func _extend_ground(g: FieldGrid, old: FieldGrid, added: Rect2i, edge_x: int) -> void:

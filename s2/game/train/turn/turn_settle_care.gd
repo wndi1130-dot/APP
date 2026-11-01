@@ -19,13 +19,13 @@ static func medicine(g: Dictionary, t: Dictionary, notes: Array) -> void:
 		g["injured"] += 1
 		W.note_injury(g, t, 1, "rise", "살던 칸" if in_kin else "냉동칸")
 		C.bump(g, "tension", 5, "corpse")
-		C.journal(g, "칸에 두었던 시신 하나가 일어났다. 하나가 다쳤다." if in_kin else "냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.", "bad")
+		C.journal(g, "칸에 두었던 시신 하나가 일어났다. 한 명이 다쳤다." if in_kin else "냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.", "bad")
 	if float(g["stored"]) > 0 and C.rnd(g) < minf(0.3, float(t["P"]["storeRisk"]) * float(g["stored"])):
 		g["injured"] += 2
 		W.note_injury(g, t, 2, "thaw", "냉동칸")
 		C.bump(g, "tension", 8, "corpse")
 		g["stored"] = 0
-		C.journal(g, "냉동칸의 시신이 녹아 일어났다. 둘이 다쳤다.", "bad")
+		C.journal(g, "냉동칸의 시신이 녹아 일어났다. 두 명이 다쳤다.", "bad")
 
 static func child_settle(g: Dictionary, t: Dictionary, notes: Array) -> void:
 	if not St.law_active(g, "child_labor"): return

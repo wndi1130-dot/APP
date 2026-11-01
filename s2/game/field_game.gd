@@ -11,6 +11,7 @@ signal built
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const WoodsShade = preload("res://fx/woods_shade.gd")
@@ -27,6 +28,7 @@ const Zombies = preload("res://game/actors/zombies.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
+const Sled = preload("res://game/sim/sled.gd")
 const NoiseLedger = preload("res://game/sim/noise_ledger.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
@@ -248,6 +250,8 @@ var audio: FieldAudio
 var music: MusicPlayer                  # background music (briefs/bgm.md); silent with no files
 
 var people: Array = []
+var _motion_tick: int = 0              # Runtime identity, independent of the rewindable clock.
+var _motion_clock: float = -INF
 var people_look  # person_visual.gd: the baked body the people wear
 var squad: Array = []
 var crew: Array = []
@@ -315,6 +319,8 @@ var last_loud = null                   # where the last loud sound was (Vector3)
 var rattle: Dictionary = {}            # manhole key -> seconds of rattling left
 var lid_open: Dictionary = {}          # manhole key -> seconds the lid stays pushed aside (a body is coming up)
 var ground_items: Array = []           # {pos, id, n}
+var sleds: Array = []                  # {id, level, pos, items, puller}; field-only cargo
+var next_sled_id: int = 1
 var decisions: Array = []
 ## What LootDress did to this stop's boxes (empty when it was not asked).
 var loot_report: Dictionary = {}
@@ -416,6 +422,8 @@ var blood_fx: Node3D                  # drops and marks off a blow (decision 444
 ## Frost creeping in at the screen's edges on cold nights (plain stops; a storm has its own).
 var cold_frost: Control
 var cold_frost_mat: ShaderMaterial
+var _perf_settings: Dictionary = {}
+var _perf_renderer_active: bool = false
 
 
 func _ready() -> void:
@@ -480,9 +488,16 @@ func _ready() -> void:
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
-	stop_map = shape_stop(stop_map, String(opts.get("stop_ground", opts.get("stop_form", ""))), rng.seed, float(opts.get("stop_form_m", -1.0)),
-		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place),
-		int(opts.get("stop_end_gap", -1)))
+	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
+	var ground_form := String(opts.get("stop_ground", opts.get("stop_form", "")))
+	var ground_m := float(opts.get("stop_form_m", -1.0))
+	var end_gap := int(opts.get("stop_end_gap", -1))
+	stop_map = shape_stop(stop_map, ground_form, rng.seed, ground_m, fresh_map, end_gap)
+	# The view ground round the first stop, when the start asks for it (StopGround.ask_view) or
+	# a save names it; else the map as it came (a loader's map has it on already).
+	if opts.has("stop_view_rows") or opts.has("stop_view_cols"):
+		stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)),
+			ground_form, rng.seed, ground_m, fresh_map, end_gap)
 	_take_map(with_side_path(stop_map, rng.seed))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
@@ -904,7 +919,7 @@ func _update_atmosphere() -> void:
 			if p[key] != fx_params.get(key):
 				fx_params[key] = p[key]
 				changed[key] = p[key]
-		FxState.apply(changed)
+		FxState.apply(PerfSwitch.cloud_params(sun, changed) if sun.has_meta(PerfSwitch.CLOUD_OFF) else changed)
 		_set_sky_photo()
 		_set_cold_frost(float(atmo["edge_frost"]))
 		# Lights and the grade change only with the look (the grade's curve is a
@@ -1068,6 +1083,7 @@ func _build_world() -> void:
 	view_fill.transform = Transform3D(Basis.looking_at(toward, Vector3.UP), Vector3.ZERO)
 	add_child(view_fill)
 	_set_view_fill()
+	_configure_perf_switch()
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
 	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
 	lantern.omni_attenuation = LANTERN_FALLOFF
@@ -1543,14 +1559,18 @@ const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground
 ## ahead from it is dropped first, and a map handed over with its side path already on
 ## is built again bare by `fresh`; a city or siding stop keeps all of it. So is a map
 ## grown in the same form on another end gap than the save's (`end_gap`, field_save.gd).
+## View ground also follows the form, so a handed view starts bare for a new form.
 static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable, end_gap: int = -1) -> Dictionary:
+	# A hand-made story map keeps its own ground in every form (story_maps.gd).
+	if StoryMaps.is_story(String(map.get("place_id", ""))):
+		return map
 	var regap: bool = end_gap >= 0 and form in ["edge", "remote"] and form == String(map.get("stop_form", "")) \
 		and int(map.get("stop_end_gap", end_gap)) != end_gap
 	if not regap and (form.is_empty() or form == String(map.get("stop_form", "")) or form == String(map.get("stop_form_asked", ""))):
 		return map
 	if form in ["edge", "remote"]:
 		# The other outlying form's map is already grown, and stop_ground.gd will not regrow it.
-		if regap or map.has("side_path") or String(map.get("stop_form", "")) in ["edge", "remote"]:
+		if regap or map.has("side_path") or map.has("stop_view_rows") or String(map.get("stop_form", "")) in ["edge", "remote"]:
 			map = fresh.call()
 		for key in AHEAD_KEYS:
 			map.erase(key)
@@ -1569,10 +1589,23 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 ## all), made again from the map as it is now.
 static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 	var place_id := String(map.get("place_id", ""))
+	if StoryMaps.is_story(place_id):
+		return map
 	if not map.has("side_path") and place_id not in ["", SidePath.FIRST_STOP] and SidePath.rolls(place_id, run_seed):
 		for key in AHEAD_KEYS:
 			map.erase(key)
 	return SidePath.add(map, run_seed)
+
+
+## A handed view is reusable only on the requested rows and columns.
+static func shape_view(map: Dictionary, rows: int, cols: int, form: String, run_seed: int, target_m: float, fresh: Callable, end_gap: int = -1) -> Dictionary:
+	if String(map.get("place_id", "")) not in StopGround.VIEW_PLACES:
+		return map
+	if map.has("stop_view_rows"):
+		if (rows == -1 or rows == int(map["stop_view_rows"])) and (cols == -1 or cols == int(map.get("stop_view_cols", 0))):
+			return map
+		map = shape_stop(fresh.call(), form, run_seed, target_m, fresh, end_gap)
+	return StopGround.widen_view(map, rows, cols)
 
 
 ## Reapply derived times after a saved stop is restored (decision 494).
@@ -1828,6 +1861,44 @@ func continue_resume() -> bool:
 	return true
 
 
+func _configure_perf_switch() -> void:
+	# Phone measurements only; desktop fields never read the real user file.
+	if OS.has_feature("android"):
+		_apply_perf_settings(PerfSwitch.read())
+
+
+func _apply_perf_settings(settings: Dictionary) -> void:
+	_perf_settings = settings
+	if not settings.is_empty():
+		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
+		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false)
+		if not changed.is_empty():
+			print("PERF_SWITCH ", changed)
+	# StopLoader builds with visible=false, even with processing disabled.
+	# Keep this one-shot connection for empty files too: another field may
+	# change the renderer before this hidden field is shown.
+	if not visibility_changed.is_connected(_apply_perf_renderer):
+		visibility_changed.connect(_apply_perf_renderer)
+	_apply_perf_renderer()
+
+
+func _apply_perf_renderer() -> void:
+	if not is_visible_in_tree():
+		return
+	if PerfSwitch.needs_renderer(_perf_settings):
+		var changed: Dictionary = PerfSwitch.apply_renderer(_perf_settings, get_instance_id())
+		_perf_renderer_active = true
+		if not _perf_settings.is_empty() and not changed.is_empty():
+			print("PERF_SWITCH ", changed)
+	if visibility_changed.is_connected(_apply_perf_renderer):
+		visibility_changed.disconnect(_apply_perf_renderer)
+
+
+func _exit_tree() -> void:
+	if _perf_renderer_active:
+		PerfSwitch.restore_renderer(get_instance_id())
+
+
 func _process(delta: float) -> void:
 	if resume_pending:
 		if not away and resume_ready_at_ms >= 0:
@@ -1885,7 +1956,9 @@ func _turn_people(delta: float) -> void:
 
 
 func _step(delta: float) -> void:
+	_begin_motion_tick()
 	clock.advance(delta)
+	_motion_clock = clock.elapsed
 	weather.dusk = clock.dusk_share()
 	var now := clock.elapsed
 	_turn_people(delta)
@@ -1991,6 +2064,8 @@ func _update_zone(delta: float) -> void:
 	view.show_levels(pl)
 	view.cut_away(grid_at(player.position).building_at(FieldGrid.cell_of(player.position)), pl)
 	view.update_ground(ground_items)
+	if not sleds.is_empty():
+		view.update_sleds(sleds, people)
 
 
 # ---------------------------------------------------------------- people
@@ -1999,6 +2074,7 @@ func _update_person(p: Person, delta: float) -> void:
 	actions.validate_work(p)
 	if not p.is_alive():
 		return
+	Sled.tick_rearm(p, delta)
 	var cell := FieldGrid.cell_of(p.position)
 	var lg := grid_at(p.position)
 	var indoor := lg.indoor(cell)
@@ -2041,7 +2117,7 @@ func _update_person(p: Person, delta: float) -> void:
 		if p.action_t <= 0.0:
 			actions.complete_work(p)
 			var done := p.action_done
-			p.cancel_action()
+			p.cancel_action(true)
 			if done.is_valid():
 				done.call()
 		if not walking_work:
@@ -2066,6 +2142,11 @@ func _meets_door(p: Person, door: Dictionary) -> bool:
 ## the thumb at once; the body takes a moment to get going and to stop, more
 ## so loaded, worn out or on ice. A hard turn at a run drops to a walk first.
 func _drive(p: Person, delta: float) -> void:
+	var sled_mult: float = Sled.speed_mult(self, p)
+	if sled_mult <= 0.0:
+		p.drive_speed = 0.0
+		p.moving = false
+		return
 	var push := p.stick.length()
 	# A melee blow holds the feet from part way through it to its end (decision 425).
 	if combat.feet_held(p):
@@ -2102,7 +2183,7 @@ func _drive(p: Person, delta: float) -> void:
 		p.drive_speed = 0.0
 		p.moving = false
 		return
-	var step := p.drive_dir * p.drive_speed * delta
+	var step := p.drive_dir * p.drive_speed * delta * sled_mult
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
 	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
@@ -2111,8 +2192,8 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	if lg.blocks_body(dc):
 		dest = _slide(p.position, step)
-		if p.position.distance_to(dest) < Person.MOVE_MIN * delta:
-			p.drive_speed = 0.0
+		# A wall may leave a small tangent; it does not take away the built-up drive.
+		if dest == p.position:
 			p.moving = false
 			return
 	dc = FieldGrid.cell_of(dest)
@@ -2120,13 +2201,19 @@ func _drive(p: Person, delta: float) -> void:
 		if not actions.can_vault_window(p, dc):
 			return
 		actions.vault_window(p, dc)
-	var gone := p.position.distance_to(dest)
+	var gone := Gait.signed_distance(p, dest - p.position)
+	Sled.before_move(self, p, dest)
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
 
 
 func _move_person(p: Person, delta: float) -> void:
+	var sled_mult: float = Sled.speed_mult(self, p)
+	if sled_mult <= 0.0:
+		p.drive_speed = 0.0
+		p.moving = false
+		return
 	# A walk along a path keeps the weapon's planted-feet span too (결정 441 (1)).
 	if combat.feet_held(p):
 		p.moving = false
@@ -2139,14 +2226,17 @@ func _move_person(p: Person, delta: float) -> void:
 	d.y = 0
 	if d.length() < 0.12:
 		# A stair: the next point is the same spot one floor up or down.
+		Sled.before_move(self, p, Vector3(p.position.x, next.y, p.position.z))
 		p.position.y = next.y
-		p.path.remove_at(0)
+		if not p.path.is_empty():
+			p.path.remove_at(0)
 		if p.path.is_empty():
 			p.moving = false
 		return
 	var cell := FieldGrid.cell_of(p.position)
 	var lg := grid_at(p.position)
-	var spd := p.speed(lg.floor_at(cell))
+	var spd := p.speed(lg.floor_at(cell)) * sled_mult
+	var available_speed: float = spd
 	if spd <= 0.0:
 		p.moving = false
 		if p == player:
@@ -2172,7 +2262,7 @@ func _move_person(p: Person, delta: float) -> void:
 		if remaining > AI.FOLLOW_SETTLE:
 			break
 		remaining += p.path[index - 1].distance_to(p.path[index])
-	if _slow_step_holds(p, spd, remaining):
+	if _slow_step_holds(p, spd, remaining, available_speed):
 		return
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
@@ -2188,23 +2278,23 @@ func _move_person(p: Person, delta: float) -> void:
 			return
 		actions.vault_window(p, dc)
 	p.facing = face
-	var gone := p.position.distance_to(dest)
-	if absf(angle_difference(face, way)) > PI * 0.5:
-		gone = -gone   # stepping back: the walk's round runs back, so it is drawn backwards
+	var gone := Gait.signed_distance(p, dest - p.position)
+	Sled.before_move(self, p, dest)
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
 
 
 ## Decision 442: hold before distance clipping; turning keeps its usual clock.
-func _slow_step_holds(p: Person, spd: float, remaining: float) -> bool:
+func _slow_step_holds(p: Person, spd: float, remaining: float, available_speed: float = Person.MOVE_MIN) -> bool:
 	var slot: Variant = p.brain.get("follow_slot")
 	if p != player and p.command in ["follow", "cover"] and slot is Vector3 and not p.path.is_empty():
 		var target: Vector3 = slot
 		if remaining <= AI.FOLLOW_SETTLE and p.path[-1].distance_to(target) <= AI.FOLLOW_EPS:
 			p.stop()
 			return true
-	if spd <= 0.0 or (p != player and spd < Person.MOVE_MIN):
+	# Hold a turn's slow start, but let a hurt body use all of its lower pace.
+	if spd <= 0.0 or (p != player and spd < minf(Person.MOVE_MIN, available_speed)):
 		p.moving = false
 		return true
 	return false
@@ -2234,25 +2324,44 @@ static func steps_in(p, gone: float) -> int:
 	p.brain["step_r"] = fposmod(now, 1.0)
 	var n := 0
 	for at: float in SimNoise.STEP_AT:
-		n += absi(int(floorf(now - at)) - int(floorf(was - at)))   # a step back is a step too
+		# The same contacts are crossed in reverse. Use clip lift/plant markers here when available.
+		if now < was:
+			n += absi(int(ceilf(now - at)) - int(ceilf(was - at)))
+		else:
+			n += absi(int(floorf(now - at)) - int(floorf(was - at)))
 	return n
+
+
+## A new simulation tick cannot alias an old one when the clock comes round again.
+func _begin_motion_tick() -> void:
+	_motion_tick += 1
+	if clock.elapsed < _motion_clock:
+		for p: Person in people:
+			p.brain.erase(Gait.GROUND_RUN)
+			p.ground_sample.clear()
+			p.motion_epoch += 1
+	_motion_clock = clock.elapsed
 
 
 ## Moving feet sample before their round; idle ticks decay the same filter.
 func _update_ground_gait(p: Person, delta: float, gone: float = 0.0) -> void:
-	var state: Dictionary = p.brain.get(Gait.GROUND_RUN, {})
 	var tick: float = clock.elapsed
-	if float(state.get("tick", -1.0)) == tick:
+	if tick < float(p.ground_sample.get("clock", -INF)):
+		p.brain.erase(Gait.GROUND_RUN)
+		p.ground_sample.clear()
+		p.motion_epoch += 1
+	if int(p.ground_sample.get("tick", -1)) == _motion_tick and float(p.ground_sample.get("clock", -INF)) == tick:
 		return
 	var floor_kind: int = grid_at(p.position).floor_at(FieldGrid.cell_of(p.position))
 	Gait.update_ground_run(p, gone, delta, floor_kind)
-	state = p.brain[Gait.GROUND_RUN]
+	var state: Dictionary = p.brain[Gait.GROUND_RUN]
 	state["tick"] = tick if is_finite(tick) else -1.0
+	p.ground_sample = {"tick": _motion_tick, "clock": tick}
 
 
 func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> void:
 	_update_ground_gait(p, delta, gone)
-	var running := p.is_running_now()
+	var running := Gait.ground_runs(p)
 	var lg := grid_at(p.position)
 	var floor_kind := lg.floor_at(cell)
 	if steps_in(p, gone) > 0:
@@ -2340,6 +2449,7 @@ func building_open(b: int) -> bool:
 func _on_body_event(p: Person, ev: String) -> void:
 	match ev:
 		"downed":
+			actions.release_sled(p, false)
 			p.cancel_action()
 			p.stop()
 			say(p, "%s 쓰러졌다." % p.display_name, false, "downed")
@@ -2360,6 +2470,7 @@ func _on_body_event(p: Person, ev: String) -> void:
 
 
 func on_person_died(p: Person) -> void:
+	actions.release_sled(p, false)
 	p.body.dead = true
 	p.cancel_action()
 	p.stop()
@@ -2417,7 +2528,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 		level = SimNoise.clamp_level(level + 1)
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
-			set_radio("기관사: 굴 쪽이 울립니다. 다음 것들은 %s에서 나옵니다." % director.name_of(hole), "info", entry_pos(hole))
+			set_radio("기관사: 굴 쪽이 울립니다. 다음 무리는 %s에서 나옵니다." % director.name_of(hole), "info", entry_pos(hole))
 	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false) * SimNoise.reach(tag)
 	var reacted: int = zombies.hear(at, level, radius)
 	ledger.observe(level, tag, radius, reacted)
@@ -2586,7 +2697,7 @@ func _update_hordes(delta: float) -> void:
 		director.noticed(now)
 	elif director.update_lost(now):
 		telemetry.lost_at(now)
-		set_radio("기관사: 놓친 것 같습니다. 다음 것들이 늦어집니다. 숨 돌리십시오.")
+		set_radio("기관사: 놓친 것 같습니다. 다음 무리가 늦어집니다. 숨 돌리십시오.")
 	var h := director.update(now)
 	if not h.is_empty():
 		_start_horde(h)
@@ -2682,7 +2793,7 @@ func _start_horde(h: Dictionary) -> void:
 	if director.sewer(key):
 		set_radio("기관사: %s이 덜컹거린다. 올라온다." % director.name_of(key) if FieldMaps.lid(key) else "기관사: %s에서 소리가 울린다. 올라온다." % director.name_of(key), "urgent", entry_pos(key))
 	else:
-		set_radio("기관사: %s, 저것들이 들어온다." % director.name_of(key), "urgent", entry_pos(key))
+		set_radio("기관사: %s, 무리가 몰려온다." % director.name_of(key), "urgent", entry_pos(key))
 	# The first wave also pulls the dead of the street toward the train (front wave).
 	if int(h["index"]) == 0:
 		for z in zombies.list:
@@ -3334,6 +3445,22 @@ func finish(reason: String) -> void:
 	if ended:
 		return
 	ended = true
+	# Leaving: a sled standing in an unloading area has its cargo put aboard; one left
+	# outside stays in the field with what is on it (sled.md 2.1, 2.5).
+	for sled: Dictionary in sleds:
+		if Sled.in_unloading(self, sled):
+			for id: String in sled["items"].keys():
+				if not actions.goes_to_train(id):
+					continue
+				unloaded[id] = int(unloaded.get(id, 0)) + int(sled["items"][id])
+				sled["items"].erase(id)
+	for person: Person in people:
+		actions.release_sled(person, false)
+		if not person.sled_job.is_empty():
+			person.sled_job = {}
+			person.cancel_action()
+	for sled: Dictionary in sleds:
+		sled["puller"] = ""
 	var now := clock.elapsed
 	if reason == "departed":
 		make_sound(FieldGrid.center(data["anchors"]["whistle"]), SimNoise.Level.VERY_LOUD, "whistle")
