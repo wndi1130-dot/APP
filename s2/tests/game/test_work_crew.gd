@@ -444,23 +444,37 @@ func test_worker_backs_behind_escort_at_eight_and_drops_at_three_metres() -> voi
 
 func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 	_send()
+	var total_turn: float = 0.0
 	for guard in _role("escort"):
 		guard.position = _at() + Vector3(-4.0 if guard.brain.get("side", 0) == 0 else 4.0, 0, 1.5)
 		guard.stop()
 		guard.face_point(_at())
-		var before := INF
-		# A whole sweep (about 12.6 s): no step may jump, as a flip across the screen would.
-		for i in 26:
-			game.clock.elapsed += 0.5
-			game.ai._crew(guard, 0.1, true)
-			var look := Vector3(sin(guard.facing), 0.0, cos(guard.facing))
-			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 119.5, "watching outward, the work behind")
-			var screen: Vector3 = game.cam_back()
-			screen.y = 0.0
-			assert_gt(rad_to_deg(look.angle_to(screen)), game.ai.LOOK_CAMERA_DEG - 0.5, "never into the screen")
-			if before != INF:
-				assert_lt(rad_to_deg(absf(angle_difference(before, guard.facing))), 30.0, "the sweep turns slowly, never flips")
-			before = guard.facing
+		game.ai._crew(guard, 0.0, true)
+		game._turn_people(0.0)
+		guard.look = guard.facing   # Start from the first posted watch, after arrival.
+		guard.refresh_view(false)
+		assert_gt(guard.turn_rate, 0.0, "a posted escort uses the game's body turn rate")
+		for fps: int in [30, 60]:
+			var delta: float = 1.0 / float(fps)
+			var before: float = guard.rotation.y
+			# A whole sweep (about 12.6 s), advancing the rules and drawing each frame.
+			for _tick: int in range(13 * fps):
+				game.clock.elapsed += delta
+				game._turn_people(delta)
+				game.ai._crew(guard, delta, true)
+				guard.refresh_view(false)
+				var screen: Vector3 = game.cam_back()
+				screen.y = 0.0
+				for yaw: float in [guard.facing, guard.rotation.y]:
+					var look := Vector3(sin(yaw), 0.0, cos(yaw))
+					assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 119.5, "watching outward, the work behind")
+					assert_gt(rad_to_deg(look.angle_to(screen)), game.ai.LOOK_CAMERA_DEG - 0.5, "never into the screen")
+				var turned: float = absf(angle_difference(before, guard.rotation.y))
+				assert_lte(turned, guard.turn_rate * delta + 0.00001, "the drawn turn stays within its rate")
+				assert_lt(rad_to_deg(turned), 30.0, "the sweep turns slowly, never flips")
+				total_turn += turned
+				before = guard.rotation.y
+	assert_gt(total_turn, deg_to_rad(5.0), "the posted watches are not all frozen at a camera edge")
 
 
 func _cycle(id: String) -> void:
