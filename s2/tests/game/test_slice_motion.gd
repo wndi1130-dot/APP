@@ -171,17 +171,33 @@ func test_select_hides_logically_before_the_reusable_pane_disappears() -> void:
 
 
 func _car_button_inputs(c: Control) -> Dictionary:
-	var paths: Array[String] = ["Parts/Fold", "Parts/DecorButton"]
+	var buttons: Dictionary = {"Fold": c.get_node_or_null("Parts/Fold"), "DecorButton": c.get_node_or_null("Parts/DecorButton")}
 	for lever: String in ["heat", "ration"]:
+		var slot: Node = _live_slot(c, lever)
 		for at in CarPane.STEPS:
-			paths.append("Parts/Slot_%s/Step%d" % [lever, at])
+			buttons["Slot_%s/Step%d" % [lever, at]] = slot.get_node_or_null("Step%d" % at) if slot != null else null
 	var inputs: Dictionary = {}
-	for path: String in paths:
-		var button: Control = c.get_node_or_null(path) as Control
-		assert_not_null(button, path)
+	for key: String in buttons:
+		var button: Control = buttons[key] as Control
+		assert_not_null(button, key)
 		if button != null:
-			inputs[path] = Vector2i(button.mouse_filter, button.focus_mode)
+			inputs[key] = Vector2i(button.mouse_filter, button.focus_mode)
 	return inputs
+
+
+## The lever's slot wherever the pane keeps it (straight under Parts, or in a kept row of
+## row_keep.gd), not one in a row still fading out.
+func _live_slot(c: Control, lever: String) -> Node:
+	for slot: Node in c.find_children("Slot_" + lever, "", true, false):
+		var leaving: bool = false
+		var node: Node = slot
+		while node != null and node != c:
+			if node.has_meta(&"row_keep_leaving"):
+				leaving = true
+			node = node.get_parent()
+		if not leaving:
+			return slot
+	return null
 
 
 func _check_reselect_while_closing(car_id: String) -> void:
