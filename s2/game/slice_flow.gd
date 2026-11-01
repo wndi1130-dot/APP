@@ -525,7 +525,7 @@ func _show_step(i: int) -> void:
 	soot_bot.visible = gauges.visible and not SHEET_STEPS.has(id)
 	if train_halt_line(train_g) != "":
 		_show_train("end" if train_g.get("phase") == "end" else "travel", int(train_g.get("seg", row[2])))
-		_show_panel("끝" if id == "end" else train_halt_title(train_g), [train_halt_line(train_g)], "처음으로" if id == "end" else "끝")
+		_show_panel("끝" if id == "end" else train_halt_title(train_g), load("res://game/train/turn/turn_end.gd").panel_lines(train_g, train_t, train_halt_line(train_g)), "처음으로" if id == "end" else "끝")
 		return
 	# The next stop is known on the train: its map is made ready off the main
 	# thread while the train runs.
@@ -887,7 +887,7 @@ func _show_arrival(go_word: String) -> void:
 func _show_end(go_word: String) -> void:
 	panel.visible = false
 	if train_halt_line(train_g) != "":
-		_show_panel("끝", [train_halt_line(train_g)], go_word)
+		_show_panel("끝", load("res://game/train/turn/turn_end.gd").panel_lines(train_g, train_t, train_halt_line(train_g)), go_word)
 		return
 	if arrival_g.is_empty() and FieldArrival.second_station_reached(train_g):
 		arrival_g = train_g
