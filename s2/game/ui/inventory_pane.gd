@@ -107,7 +107,7 @@ static func open(hud, want: Dictionary) -> void:
 	var game = hud.game
 	var p = game.player
 	var all: Array = places(game, p)
-	# Laid again over itself (a walk, a row taken): the places keep their order.
+	# Laid again over itself (a row taken): the places keep their order.
 	if hud.modal != null and hud.modal == hud.box_pane:
 		all = keep_order(all, hud.bag_places)
 	var at: Dictionary = chosen(all, want)
@@ -149,7 +149,7 @@ static func open(hud, want: Dictionary) -> void:
 	var main_ref: WeakRef = weakref(main)
 	var rail_ref: WeakRef = weakref(rail)
 	var fit: Callable = func() -> void:
-		var shown: Control = pane_ref.get_ref() as Control
+		var shown: GlassPane = pane_ref.get_ref() as GlassPane
 		var col: Control = main_ref.get_ref() as Control
 		var strip: ScrollContainer = rail_ref.get_ref() as ScrollContainer
 		if shown != null and col != null and strip != null:
@@ -166,6 +166,7 @@ static func open(hud, want: Dictionary) -> void:
 		pane.body.add_child(journal)
 	rows.minimum_size_changed.connect(fit, CONNECT_DEFERRED)
 	place_col.minimum_size_changed.connect(fit, CONNECT_DEFERRED)
+	pane.motion_finished.connect(fit)
 	var screen: Viewport = pane.get_viewport()
 	screen.size_changed.connect(fit)
 	pane.tree_exiting.connect(func() -> void:
@@ -264,8 +265,8 @@ static func _slim_head(pane: GlassPane, hud, title: String, side: String, icon: 
 
 ## The pane stays inside the screen: the item scroll gives up height first, then
 ## the places rail (down to one place); each shows all it holds while it fits.
-static func _fit_screen(pane: Control, main: Control, rail: ScrollContainer) -> void:
-	if not is_instance_valid(pane) or not pane.is_inside_tree():
+static func _fit_screen(pane: GlassPane, main: Control, rail: ScrollContainer) -> void:
+	if not is_instance_valid(pane) or not pane.is_inside_tree() or pane.is_moving():
 		return
 	for child: Node in main.get_children():
 		if child is ScrollContainer:
@@ -282,8 +283,7 @@ static func _fit_screen(pane: Control, main: Control, rail: ScrollContainer) -> 
 			var scroll := child as ScrollContainer
 			scroll.custom_minimum_size.y = maxf(UiFonts.px(ROW_H), scroll.custom_minimum_size.y - over)
 	rail.custom_minimum_size.y = maxf(UiFonts.px(PLACE_H), minf(rail.custom_minimum_size.y, fits))
-	pane.size = pane.get_combined_minimum_size()
-	pane.position.x = pane.get_viewport_rect().size.x - pane.size.x
+	pane._fit()
 
 
 static func _column(gap: float = 6.0) -> VBoxContainer:

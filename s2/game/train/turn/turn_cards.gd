@@ -158,7 +158,7 @@ static func _base_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictio
 			var options: Array = [choice("cut", part + " 자른다", [["med", -3], ["injured", 1], ["rel", comm, 2]], "", true), choice("hide", "숨겨 준다", [], "hide_bite", true), choice("leave", "두고 온다", [["rel", comm, -8], ["tension", 2]], "leave_bitten", true)]
 			options[0]["log"] = "물린 %s의 %s 잘랐다." % [who, part]
 			options[1]["log"] = "물린 %s을(를) 숨겨 태웠다." % who
-			options[2]["log"] = "물린 %s을(를) 두고 왔다." % who
+			options[2]["log"] = "물린 한 명을 남기고 왔다."
 			return {"title": "물렸다", "key": "bitten", "choices": options}
 		"ration_cut":
 			# The tail's demand after 비상식량감축법 stands (결정 091·430, turn_ration_cut.gd).
@@ -431,7 +431,7 @@ static func _resolve_choice(g0: Dictionary, t: Dictionary, card: Dictionary, v: 
 			g["comms"][comm]["pop"] = maxi(1, int(g["comms"][comm]["pop"]) - 1)
 			g["deaths"].append(card.get("who", "이름 모를 대원"))
 			Death.log_death(g, [card.get("who", "이름 모를 대원")], "chosen", true, comm)
-			C.journal(g, "%s을(를) 역에 두고 왔다." % card.get("who", "대원"), "dark")
+			# The journal keeps only the chosen line, counted, never named (결정 183; s1 the same).
 		"need_promise":
 			var need: Variant = g.get("needs", {}).get(card.get("text", ""))
 			if need is Dictionary and not bool(need.get("promised", false)):

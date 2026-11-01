@@ -480,9 +480,16 @@ func _ready() -> void:
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
 		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
-	stop_map = shape_stop(stop_map, String(opts.get("stop_ground", opts.get("stop_form", ""))), rng.seed, float(opts.get("stop_form_m", -1.0)),
-		func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place),
-		int(opts.get("stop_end_gap", -1)))
+	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
+	var ground_form := String(opts.get("stop_ground", opts.get("stop_form", "")))
+	var ground_m := float(opts.get("stop_form_m", -1.0))
+	var end_gap := int(opts.get("stop_end_gap", -1))
+	stop_map = shape_stop(stop_map, ground_form, rng.seed, ground_m, fresh_map, end_gap)
+	# The view ground round the first stop, when the start asks for it (StopGround.ask_view) or
+	# a save names it; else the map as it came (a loader's map has it on already).
+	if opts.has("stop_view_rows") or opts.has("stop_view_cols"):
+		stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)),
+			ground_form, rng.seed, ground_m, fresh_map, end_gap)
 	_take_map(with_side_path(stop_map, rng.seed))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
@@ -1543,6 +1550,7 @@ const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground
 ## ahead from it is dropped first, and a map handed over with its side path already on
 ## is built again bare by `fresh`; a city or siding stop keeps all of it. So is a map
 ## grown in the same form on another end gap than the save's (`end_gap`, field_save.gd).
+## View ground also follows the form, so a handed view starts bare for a new form.
 static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable, end_gap: int = -1) -> Dictionary:
 	var regap: bool = end_gap >= 0 and form in ["edge", "remote"] and form == String(map.get("stop_form", "")) \
 		and int(map.get("stop_end_gap", end_gap)) != end_gap
@@ -1550,7 +1558,7 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 		return map
 	if form in ["edge", "remote"]:
 		# The other outlying form's map is already grown, and stop_ground.gd will not regrow it.
-		if regap or map.has("side_path") or String(map.get("stop_form", "")) in ["edge", "remote"]:
+		if regap or map.has("side_path") or map.has("stop_view_rows") or String(map.get("stop_form", "")) in ["edge", "remote"]:
 			map = fresh.call()
 		for key in AHEAD_KEYS:
 			map.erase(key)
@@ -1573,6 +1581,17 @@ static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 		for key in AHEAD_KEYS:
 			map.erase(key)
 	return SidePath.add(map, run_seed)
+
+
+## A handed view is reusable only on the requested rows and columns.
+static func shape_view(map: Dictionary, rows: int, cols: int, form: String, run_seed: int, target_m: float, fresh: Callable, end_gap: int = -1) -> Dictionary:
+	if String(map.get("place_id", "")) not in StopGround.VIEW_PLACES:
+		return map
+	if map.has("stop_view_rows"):
+		if (rows == -1 or rows == int(map["stop_view_rows"])) and (cols == -1 or cols == int(map.get("stop_view_cols", 0))):
+			return map
+		map = shape_stop(fresh.call(), form, run_seed, target_m, fresh, end_gap)
+	return StopGround.widen_view(map, rows, cols)
 
 
 ## Reapply derived times after a saved stop is restored (decision 494).

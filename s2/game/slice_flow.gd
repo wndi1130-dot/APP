@@ -80,6 +80,7 @@ const FieldReceipt = preload("res://game/sim/receipt.gd")
 const SliceSave = preload("res://game/sim/slice_save.gd")
 const TrainSave = preload("res://game/politics/save_slot.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
 const Journey = preload("res://game/train/journey/journey.gd")
 const Corridor = preload("res://game/train/journey/journey_corridor.gd")
@@ -1816,6 +1817,10 @@ func _show_home(word: String) -> void:
 func _select(id: String, toggle: bool = false) -> void:
 	if toggle and id == sel:
 		id = ""
+	# A later pick (another car, none, or a room pane) wins over a reopen still waiting for its car.
+	var waiting_id: String = String(_decor_restage_wait.get("id", ""))
+	if waiting_id != "" and waiting_id != id:
+		_clear_decor_restage_wait()
 	# A car picked over the workshop or the refit pane puts it away.
 	if id != "":
 		_put_rooms_away()
@@ -1865,6 +1870,9 @@ func _shows_pane(def: Dictionary) -> bool:
 ## its grid, and the gauges, the plates, the keys, the pane and a folded paper go away till
 ## leave_decor. Not while a paper card is open to choose on, nor for a car the decor table has not.
 ## The strip, title, exit and gestures belong to decor_pane.gd.
+var _decor_restage_wait: Dictionary = {}
+
+
 func open_decor(id: String) -> bool:
 	if not is_instance_valid(train) or decor_id != "":
 		return false
@@ -1874,6 +1882,10 @@ func open_decor(id: String) -> bool:
 		return false
 	if not train.can_enter_decor(id):
 		return false
+	if train.is_car_restaging(id):
+		_wait_for_decor_restage(id)
+		return false
+	_clear_decor_restage_wait()
 	_put_rooms_away()
 	if not train.enter_decor(id):
 		return false
@@ -1895,6 +1907,65 @@ func open_decor(id: String) -> bool:
 	return true
 
 
+## No synchronous drain on reopen. One request follows the latest generation of this car;
+## another car may open immediately, and a layout/scene change discards this UI intent.
+func _wait_for_decor_restage(id: String) -> void:
+	var c: Dictionary = train.car(id)
+	if is_instance_valid(_decor_restage_wait.get("train")) and _decor_restage_wait.get("train") == train \
+			and String(_decor_restage_wait.get("id", "")) == id \
+			and _decor_restage_wait.get("node") == c["node"] \
+			and int(_decor_restage_wait.get("batch", -1)) == int(train._restage_batch):
+		return
+	_clear_decor_restage_wait()
+	_decor_restage_wait = {"id": id, "train": train, "node": c["node"], "batch": int(train._restage_batch)}
+	train.connect("room_restaged", _on_decor_room_restaged)
+	train.connect("restages_invalidated", _clear_decor_restage_wait)
+	train.connect("rules_applied", _on_decor_restage_rules_applied)
+
+
+func _clear_decor_restage_wait() -> void:
+	var source: Variant = _decor_restage_wait.get("train")
+	_decor_restage_wait = {}
+	if not is_instance_valid(source):
+		return
+	var source_scene: Node3D = source
+	if source_scene.is_connected("room_restaged", _on_decor_room_restaged):
+		source_scene.disconnect("room_restaged", _on_decor_room_restaged)
+	if source_scene.is_connected("restages_invalidated", _clear_decor_restage_wait):
+		source_scene.disconnect("restages_invalidated", _clear_decor_restage_wait)
+	if source_scene.is_connected("rules_applied", _on_decor_restage_rules_applied):
+		source_scene.disconnect("rules_applied", _on_decor_restage_rules_applied)
+
+
+func _on_decor_restage_rules_applied() -> void:
+	if _decor_restage_wait.is_empty():
+		return
+	# A target reverted to the already-visible stage produces no room_restaged signal.
+	# Do not leave an intent that could unexpectedly open on an unrelated future restage.
+	if not is_instance_valid(train) or not is_instance_valid(_decor_restage_wait["train"]) \
+			or train != _decor_restage_wait["train"] \
+			or not train.is_car_restaging(String(_decor_restage_wait["id"])):
+		_clear_decor_restage_wait()
+
+
+func _on_decor_room_restaged(id: String) -> void:
+	if String(_decor_restage_wait.get("id", "")) != id:
+		return
+	var waiting: Dictionary = _decor_restage_wait
+	_clear_decor_restage_wait()  # consume before retrying, including a retry rejected by a new UI lock
+	if not is_inside_tree() or not is_instance_valid(train) or not is_instance_valid(waiting["train"]):
+		return
+	if train != waiting["train"]:
+		return
+	if not train.is_inside_tree() or train.is_queued_for_deletion() or int(train._restage_batch) != int(waiting["batch"]):
+		return
+	var c: Dictionary = train.car(id)
+	if c.is_empty() or not is_instance_valid(waiting["node"]) or c["node"] != waiting["node"]:
+		return
+	if not train.is_car_restaging(id):
+		open_decor(id)  # directly in the publication frame, once, after all active references changed
+
+
 ## Read the current furniture tiers both when showing the train and when leaving decor.
 func _home_of(g: Dictionary) -> Dictionary:
 	var stages: Dictionary = {}
@@ -1905,6 +1976,7 @@ func _home_of(g: Dictionary) -> Dictionary:
 
 ## Back from decorating: restore the screens and refresh tiers with the car still picked.
 func leave_decor() -> void:
+	_clear_decor_restage_wait()
 	if decor_id == "":
 		return
 	var id: String = decor_id
@@ -1940,8 +2012,18 @@ func leave_decor() -> void:
 ## The train closed decorating on its own (its layout rebuilt): the pane, the screens put away
 ## and the car id follow it on the next frame, outside the rebuild (leave_decor syncs the rules).
 func _on_train_decor_closed() -> void:
-	if decor_id != "":
-		leave_decor.call_deferred()
+	_clear_decor_restage_wait()
+	if decor_id != "" and is_instance_valid(train) and is_instance_valid(decor_pane):
+		_leave_closed_train_decor.call_deferred(train.get_instance_id(), decor_id, decor_pane.get_instance_id())
+
+
+func _leave_closed_train_decor(source_train_id: int, source_car_id: String, source_pane_id: int) -> void:
+	if not is_inside_tree() or not is_instance_valid(train) or not is_instance_valid(decor_pane):
+		return
+	if train.get_instance_id() != source_train_id or decor_id != source_car_id \
+			or decor_pane.get_instance_id() != source_pane_id or train.decorating() != "":
+		return
+	leave_decor()
 
 
 func _decor_changed() -> void:
@@ -2267,7 +2349,8 @@ func _field_opts() -> Dictionary:
 		o["region"] = stop["band"]
 		o["stop_form"] = stop["form"]
 		o["act_progress"] = prologue_progress(RouteStops.season_seg(int(stop["number"])))
-	return o
+	# The first stop's view ground (stop_ground.gd): the loader's map has it on, a field made here asks.
+	return StopGround.ask_view(o)
 
 
 ## The field is over: its end card stays where it is, and a key over it goes
