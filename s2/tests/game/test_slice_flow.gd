@@ -135,7 +135,7 @@ func _texts(f) -> Array:
 	var out: Array = []
 	for l in f.lines.get_children():
 		if not l.is_queued_for_deletion():
-			out.append(String(l.text))
+			out.append(String(l.text).replace(UiFonts.WORD_JOINER, ""))
 	return out
 
 

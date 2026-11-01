@@ -27,6 +27,7 @@ const HandPanel = preload("res://game/train/train_panel.gd")
 const Gesture = preload("res://game/train/train_gesture.gd")
 const Life = preload("res://game/train/train_life.gd")
 const Interior = preload("res://game/train/train_interior.gd")
+const TrainWarm = preload("res://game/train/train_warm.gd")
 const DecorView = preload("res://game/train/decor_view.gd")
 const DecorGrid = preload("res://game/train/decor_grid.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
@@ -181,6 +182,7 @@ var _highlight_id: String = ""
 var people_view: Node3D                  # the baked bodies drawn over the stand-in capsules
 var _scroll: float = 0.0
 var life = Life.new()
+var warm: TrainWarm
 var decor = null                         # the decorating view (decor_view.gd) while a car is decorated
 var music: MusicPlayer                  # the faint train piece by the train's state (briefs/bgm.md 3.1)
 var _restage_batch: int = 0
@@ -212,6 +214,8 @@ func _ready() -> void:
 			people_view = PeopleView.new()
 			people_view.setup(self)
 			add_child(people_view)
+		warm = TrainWarm.new()
+		warm.begin(self, cars)
 	else:
 		push_warning("train rules: %s" % ", ".join(problems))
 	if bool(opts.get("panel", true)):
@@ -227,10 +231,15 @@ func _process(delta: float) -> void:
 	_update_snow_ground()
 	step(delta)
 	music.tick(delta)
+	var busy := restaging()
 	_step_restages()
+	if warm != null:
+		warm.step(busy)
 
 
 func _exit_tree() -> void:
+	if warm != null:
+		warm.release()
 	_invalidate_restages("tree_exit")
 
 

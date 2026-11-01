@@ -193,7 +193,7 @@ const SEL_COLOR := Color("ffc66c")
 ## Cars not picked darken (.train.has-sel .car:not(.is-sel), brightness .5).
 const UNPICKED_SHADE: float = 0.42
 ## 디자인 토큰 2차: the smoked glass of a pane (B1) and its words.
-const PANE := Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.84)
+const PANE := Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.95)
 const INK := Color("eee9dc")
 const INK2 := Color(238 / 255.0, 233 / 255.0, 220 / 255.0, 0.7)
 
@@ -633,21 +633,35 @@ func _field_place() -> String:
 	return String(opts.get("place", ""))
 
 
+## The first leg counts on with the slice; another act's own map keeps its own stop.
+static func stop_at_for(own: Array, seg: int) -> Array:
+	if own.is_empty():
+		return ["prologue", seg]
+	if String(own[0]) == "prologue":
+		return ["prologue", int(own[1]) + seg - FIRST_SEG]
+	return own
+
+
+func _stop_at(seg: int) -> Array:
+	return stop_at_for(RouteBands.place_stop(FieldMaps.resolve(_field_place())), seg)
+
+
 ## The first leg's stop the slice is at on stretch `seg` (decision 494). The field's map, when
 ## it is a stop's own map (the first stop's, which the slice plays on FIRST_SEG), is that
 ## stop, and the stops after it count on from there; any other map takes the stretch's stop.
 func _stop_of(seg: int) -> int:
 	if _is_campaign():
 		return int(_campaign_scene_stop().get("number", CampaignRoute.size()))
-	var own: Array = RouteBands.place_stop(FieldMaps.resolve(_field_place()))
-	return seg if own.is_empty() else int(own[1]) + seg - FIRST_SEG
+	var at := _stop_at(seg)
+	return int(at[1]) if String(at[0]) == "prologue" else seg
 
 
 ## That stop's band.
 func _stop_band(seg: int) -> String:
 	if _is_campaign():
 		return String(_campaign_scene_stop().get("band", "K3"))
-	return RouteBands.stop_band("prologue", _stop_of(seg))
+	var at := _stop_at(seg)
+	return RouteBands.stop_band(String(at[0]), int(at[1]))
 
 
 ## That stop's form (stop_form.gd): one asked of the slice (opts "stop_form", a check switch),
@@ -657,7 +671,8 @@ func _stop_form(seg: int) -> String:
 		return String(RouteState.current_stop(train_g).get("form", ""))
 	if opts.has("stop_form"):
 		return String(opts["stop_form"])
-	return StopForm.on_route("prologue", _stop_of(seg))
+	var at := _stop_at(seg)
+	return StopForm.on_route(String(at[0]), int(at[1]))
 
 
 ## The stretch of the slice's field step: the map made ready while the train runs is its stop's.
@@ -1296,7 +1311,7 @@ func _tell_save_error() -> void:
 func _add_save_line() -> void:
 	if is_instance_valid(save_line):
 		return
-	save_line = UiFonts.label(SAVE_FAILED, UiFonts.WORD, 400, 13.0, INK2)
+	save_line = UiFonts.label(UiFonts.keep_all(SAVE_FAILED), UiFonts.WORD, 400, 13.0, INK2)
 	save_line.name = "SaveFailed"
 	save_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	save_line.custom_minimum_size.x = PANEL_W - UiFonts.px(28.0)
@@ -2454,7 +2469,7 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 		c.queue_free()
 	save_line = null
 	for text in rows:
-		var l := UiFonts.label(String(text), UiFonts.WORD, 400, 13.0, INK2)
+		var l := UiFonts.label(UiFonts.keep_all(String(text)), UiFonts.WORD, 400, 13.0, INK2)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = PANEL_W - UiFonts.px(28.0)
 		lines.add_child(l)

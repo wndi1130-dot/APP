@@ -51,7 +51,7 @@ const FILL_GAP_S := 2.5
 const AUTO_FIRST_S := 30.0
 const AUTO_GAP_S := 8.0
 ## Spoken once the briefing has been heard (the radio's rules: "off" hears none).
-const RADIO_LINE := "기관사: 제동 소리를 들었을 겁니다. 근처 망자들이 열차로 옵니다."
+const RADIO_LINE := "기관사: 제동 소리를 들었을 겁니다. 근처 망자들을 조심하세요."
 const RADIO_AT_S := 6.0
 
 

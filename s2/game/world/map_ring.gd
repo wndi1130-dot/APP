@@ -8,6 +8,7 @@ const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
 const RegionLooks = preload("res://game/world/region_looks.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const TOWN: Array[String] = ["houses", "freight", "office", "factory", "hospital", "church"]
@@ -56,6 +57,8 @@ static func build(script: Script, finish: Callable) -> Dictionary:
 
 
 static func add(original: Dictionary) -> Dictionary:
+	if StoryMaps.is_story(String(original.get("place_id", ""))):
+		return original
 	if original.get("place_id", "") == "first_leg_01_sulechow":
 		return original
 	var width := width_for(String(original.get("place_kind", "")))
