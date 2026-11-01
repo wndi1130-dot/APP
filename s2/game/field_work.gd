@@ -56,6 +56,9 @@ const COAL_DROP_OUT: int = 2
 ## any other site: each at its own place, so a carrier is not in the way of one at work.
 const WORK_GAP: float = 2.0
 const SITE_SPREAD: float = 1.5
+## A coal wagon this far from the site's own place takes the site with it (moved_to): past the
+## escort's widest reach (12 m, field_ai.gd _escort) its guard would stand away from the crew.
+const FOLLOW_R: float = 12.0
 const BUDGET_SLACK: float = 0.1
 const WOOD_TABLE: Dictionary = {"freight": 2, "houses": 5, "hospital": 1,
 	"factory": 1, "church": 3, "office": 3}
@@ -129,8 +132,28 @@ func job(id: String = "work_site") -> Dictionary:
 	return JOBS.get(job_id(id), JOBS["coal_wagon"])
 
 
-func position_of(id: String) -> Vector3:
+## The site's own place on the map, where it is found from (its spot cell).
+func origin_of(id: String) -> Vector3:
 	return FieldGrid.center(game.data["spots"][id]["cell"])
+
+
+## Where the crew works: its own place, or the far wagon a coal site moved on to (moved_to), so
+## the escort, the safety ring, the wait, the way and the pickaxe sound go with the crew.
+func position_of(id: String) -> Vector3:
+	var cell: Variant = moved_to(id)
+	return FieldGrid.center(cell) if cell is Vector2i else origin_of(id)
+
+
+## The work cell of the wagon a coal site digs or would dig next (the next one when the first runs
+## dry) when it stands past FOLLOW_R from the site's own place, else null: a wagon near it is
+## worked from the site's own place.
+func moved_to(id: String) -> Variant:
+	if job_id(id) != "coal_wagon":
+		return null
+	var wagon: Dictionary = _wagon_at(_next_wagon_index(id))
+	if not wagon.has("work") or FieldGrid.center(wagon["work"]).distance_to(origin_of(id)) <= FOLLOW_R:
+		return null
+	return wagon["work"]
 
 
 func remaining(id: String = "work_site") -> float:
@@ -201,8 +224,10 @@ func safety(id: String = "work_site") -> Dictionary:
 
 func route(id: String) -> PackedVector3Array:
 	var state: Dictionary = _site(id)
-	if elapsed - float(state["path_at"]) >= PATH_EVERY:
-		var at: Vector3 = position_of(id)
+	var at: Vector3 = position_of(id)
+	var last: PackedVector3Array = state["path"]
+	# Found again now and then, and at once when the site moved to the next wagon.
+	if elapsed - float(state["path_at"]) >= PATH_EVERY or last.is_empty() or last[-1].distance_to(at) > EMPTY:
 		var nearest: Vector3 = at
 		var distance: float = INF
 		for cell: Vector2i in game.data["spawns"]["train_door"]:
@@ -312,9 +337,10 @@ func _tick(id: String) -> void:
 		state["dig_wagon"] = -1
 		_event(id, "done")
 	elif not state["seen"]:
-		var distance: float = game.player.position.distance_to(position_of(id))
+		# Found from its own place, not the wagon it would move to.
+		var distance: float = game.player.position.distance_to(origin_of(id))
 		# Right beside it counts as seen even when the site's own cell is behind a wall.
-		if distance <= SEE_R and (distance <= SEEN_BESIDE_R or game.sight_clear(game.player.position, position_of(id))):
+		if distance <= SEE_R and (distance <= SEEN_BESIDE_R or game.sight_clear(game.player.position, origin_of(id))):
 			state["seen"] = true
 			_event(id, "seen")
 			if safe["open"] and not arriving():
@@ -377,7 +403,15 @@ func _paint(id: String, safe: Dictionary) -> void:
 	var bright: bool = phase(id) == "open"
 	spot["work_share"] = progress
 	spot["state"] = "ready" if bright else phase(id)
-	if cells == int(state["cells"]) and bright == bool(state["bright"]):
+	# The ring stands where the crew works: on a far wagon the site moved on to (map_view.gd).
+	var marker: Variant = moved_to(id)
+	var had: Variant = spot.get("marker_cell")
+	var moved: bool = typeof(had) != typeof(marker) or (marker is Vector2i and had != marker)
+	if marker is Vector2i:
+		spot["marker_cell"] = marker
+	else:
+		spot.erase("marker_cell")
+	if cells == int(state["cells"]) and bright == bool(state["bright"]) and not moved:
 		return
 	state["cells"] = cells
 	state["bright"] = bright
@@ -871,22 +905,27 @@ func _wagon_at(index: int) -> Dictionary:
 
 ## A site keeps its wagon until empty. Other coal sites claim separate wagons.
 func _dig_wagon_index(id: String) -> int:
-	var state: Dictionary = _site(id)
-	var current: int = int(state.get("dig_wagon", -1))
+	var index: int = _next_wagon_index(id)
+	_site(id)["dig_wagon"] = index
+	return index
+
+
+## The wagon a site digs, or would dig next: its own while it has coal, else the first with coal
+## that no other working site holds. Reads only.
+func _next_wagon_index(id: String) -> int:
+	var current: int = int(sites[id].get("dig_wagon", -1)) if sites.has(id) else -1
 	var wagon: Dictionary = _wagon_at(current)
 	if wagon.has("work") and float(wagon.get("coal", 0.0)) > EMPTY:
 		return current
 	var claimed: Array[int] = []
 	for other: String in site_ids():
-		if other != id and job_id(other) == "coal_wagon" and phase(other) in ["working", "hold"]:
-			claimed.append(int(_site(other).get("dig_wagon", -1)))
+		if other != id and job_id(other) == "coal_wagon" and sites.has(other) and phase(other) in ["working", "hold"]:
+			claimed.append(int(sites[other].get("dig_wagon", -1)))
 	var wagons: Array = game.data.get("wagons", [])
 	for index in wagons.size():
 		wagon = wagons[index]
 		if not claimed.has(index) and wagon.has("work") and float(wagon.get("coal", 0.0)) > EMPTY:
-			state["dig_wagon"] = index
 			return index
-	state["dig_wagon"] = -1
 	return -1
 
 
