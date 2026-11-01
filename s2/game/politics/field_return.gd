@@ -535,32 +535,52 @@ static func _on_death(g: Dictionary, t: Dictionary, comm: String, names: Array) 
 	TurnDeath.on_death(g, t, comm, names)
 
 
-static func _receipt_value(input: Variant) -> Dictionary:
-	var value: Variant = JSON.parse_string(input) if input is String else input
-	assert(value is Dictionary, "영수증은 객체여야 한다")
-	var problems := Receipt.check(value)
-	assert(problems.is_empty(), "필드 영수증 계약이 올바르지 않다: %s" % [problems])
-	assert(int(value["version"]) == 4 or int(value["version"]) == 5, "필드 영수증은 판 4나 5여야 한다")
+static func _receipt_value(input: Variant, problems: Array[String]) -> Dictionary:
+	var value: Variant = input
+	if input is String:
+		var json: JSON = JSON.new()
+		value = json.data if json.parse(input) == OK else null
+	if not value is Dictionary:
+		problems.append("영수증은 객체여야 한다")
+		return {}
+	problems.append_array(Receipt.check(value))
+	if not problems.is_empty():
+		return {}
+	if int(value.get("version", 0)) != 4 and int(value.get("version", 0)) != 5:
+		problems.append("필드 영수증은 판 4나 5여야 한다")
+		return {}
 	return (value as Dictionary).duplicate(true)
 
 
+## S1 throws on a bad return; S2 hands back status "rejected" with the problems and the board as it was.
 static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Dictionary, input: Variant) -> Dictionary:
-	var g := g0.duplicate(true)
-	var receipt := _receipt_value(input)
-	var fingerprint := canonical(receipt)
+	var g: Dictionary = g0.duplicate(true)
+	var problems: Array[String] = []
+	var receipt: Dictionary = _receipt_value(input, problems)
+	if not problems.is_empty():
+		return {"status": "rejected", "problems": problems, "g": g}
+	var fingerprint: String = canonical(receipt)
 	var known: Variant = null
 	if g.get("fieldReturns") is Dictionary:
 		known = g["fieldReturns"]["applied"].get(receipt["receiptId"])
 	if known != null:
-		assert(known == fingerprint, "같은 귀환 id에 다른 영수증이 왔다")
+		if known != fingerprint:
+			problems.append("같은 귀환 id에 다른 영수증이 왔다")
+			return {"status": "rejected", "problems": problems, "g": g}
 		for record: Dictionary in g["fieldReturns"]["records"]:
 			if record["receiptId"] == receipt["receiptId"]:
 				return {"status": "duplicate", "record": record, "g": g}
-	assert(check_departure(departure, t).is_empty(), "출발 명세가 올바르지 않다")
-	assert(match_departure(departure, receipt).is_empty(), "출발 명세와 영수증이 맞지 않는다")
+	problems = check_departure(departure, t)
+	if not problems.is_empty():
+		return {"status": "rejected", "problems": problems, "g": g}
+	problems = match_departure(departure, receipt)
+	if not problems.is_empty():
+		return {"status": "rejected", "problems": problems, "g": g}
 	if g.get("fieldReturns") is Dictionary:
 		for old: Dictionary in g["fieldReturns"]["records"]:
-			assert(old["stopId"] != receipt["stopId"] and old["departureId"] != receipt["departureId"], "이미 반영한 정차에 다른 영수증이 왔다")
+			if old["stopId"] == receipt["stopId"] or old["departureId"] == receipt["departureId"]:
+				problems.append("이미 반영한 정차에 다른 영수증이 왔다")
+				return {"status": "rejected", "problems": problems, "g": g}
 	var verdicts := judge_promises(departure, receipt)
 	# S1's snapshot reads situation, which reads the wound book and so makes the empty book (wounds.ts book).
 	if not g.has("wounds"):
@@ -590,7 +610,7 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	# The train's sleds (s3 contract 3): what went out less what stood at the platform when it left.
 	# A receipt without sledsBack brings them all back, as before the field used them.
 	if int(receipt["version"]) == 5 and receipt.has("sledsBack") and g.get("dom") is Dictionary:
-		# Never more back than went out, even where the assert above is not run (a release build).
+		# Never more back than went out, also bounded here after departure validation.
 		var back: int = mini(int(receipt["sledsBack"]), sleds_out(departure))
 		g["dom"]["sleds"] = maxf(0.0, float(g["dom"].get("sleds", 0)) + float(back - sleds_out(departure)))
 	var got: Array[String] = []
