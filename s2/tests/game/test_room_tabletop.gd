@@ -158,7 +158,7 @@ func test_hosts_cannot_be_broken_or_pushed_and_top_kinds_are_separate() -> void:
 			for host: String in RoomDecor.top_hosts(cls, kind):
 				assert_false(ObjectRules.WOOD_KINDS.has(host), host)
 				assert_false(ObjectRules.PUSH_KINDS.has(host), host)
-				assert_false(["blanket_chest", "radio_set", "cupboard", "bookcase"].has(host), host)
+				assert_false(["blanket_chest", "cupboard", "bookcase"].has(host), host)
 
 
 func test_budget_counts_missing_kinds_and_ignores_partial_copies_plants_and_baths() -> void:
@@ -326,8 +326,8 @@ func test_actual_model_selection_missing_hosts_and_disabled_models() -> void:
 				break
 		assert_eq(RoomDecor.drawn_model(kind), expected)
 	assert_eq(RoomDecor._tabletops([], [], 0, "bed", 7, "방", 2), [])
-	var hosts := [{"kind": "radio_set", "rect": Rect2i(2, 2, 1, 1), "level": 0}]
-	assert_eq(RoomDecor._tabletops(hosts, [0], 0, "living", 7, "방", 2), [])
+	var hosts := [{"kind": "bookcase", "rect": Rect2i(2, 2, 2, 1), "level": 0}]
+	assert_eq(RoomDecor._tabletops(hosts, [0], 0, "living", 7, "방", 2), [], "책장은 받침 아님")
 	hosts[0]["kind"] = "nightstand"
 	assert_eq(RoomDecor._tabletops(hosts, [0], 1, "bed", 7, "방", 2), [], "다른 층")
 	hosts[0]["decor"] = true
@@ -492,6 +492,20 @@ func test_refresh_submits_a_top_only_with_its_host_across_the_cull_edge() -> voi
 			seen[host_n] = int(seen.get(host_n, 0)) + 1
 	assert_gt(int(seen.get(1, 0)), 0, "경계 안에서는 실제로 그린다")
 	assert_gt(int(seen.get(0, 0)), 0, "경계 밖에서는 실제로 뺀다")
+
+
+## 라디오 장 뚜껑(윗면 표 둘)은 거실 꽃병만 받는다 — 곁탁자·낮은 탁자가 없을 때의 셋째 받침.
+func test_radio_lid_takes_only_a_living_room_vase() -> void:
+	var props := [{"kind": "radio_set", "rect": Rect2i(2, 2, 2, 1), "level": 0, "facing": 0}]
+	assert_eq(PropModels.tops(RoomDecor.drawn_model("radio_set")).size(), 2, "앞·뒤 두 윗면")
+	for seed_value in range(16):
+		var rows := RoomDecor._tabletops(props, [0], 0, "living", seed_value, "거실", 4)
+		assert_eq(rows.size(), 1, "seed %d" % seed_value)
+		for row: Dictionary in rows:
+			assert_eq(row["kind"], "vase")
+			assert_eq(row["on"], "radio_set")
+			assert_eq(row["host_rect"], Rect2i(2, 2, 2, 1))
+	assert_eq(RoomDecor._tabletops(props, [0], 0, "bed", 3, "침실", 4), [], "침실 받침이 아니다")
 
 
 func _submitted(view, path: String) -> int:
