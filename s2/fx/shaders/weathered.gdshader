@@ -8,6 +8,8 @@ shader_type spatial;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap, repeat_enable, hint_default_white;
 uniform vec4 albedo : source_color = vec4(1.0);
 uniform bool use_vertex_color = false;
+// Embedded axes opt in on private materials; every other world model stays solid.
+uniform bool sight_fade = false;
 // Furniture paint sets (furniture_tints.gd): linear RGB, alpha = strength. Batched
 // props (MultiMesh) carry set number + 1 in INSTANCE_CUSTOM.r; 0 means no paint.
 uniform bool tint_from_custom = false;
@@ -56,6 +58,7 @@ uniform float accent_saturation : hint_range(0.0, 1.0) = 0.75;
 varying vec3 w_pos;
 varying vec3 w_nrm;
 varying flat float v_tint_set;
+varying flat float sight_k;
 // The floor the model stands on: its own origin taken down to its storey (3 m), so a tall
 // tree's crown is not darkened where it passes the next storey's height.
 varying flat float v_floor;
@@ -65,6 +68,15 @@ void vertex() {
 	v_floor = floor(MODEL_MATRIX[3].y / 3.0 + 0.02) * 3.0;
 	w_nrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	v_tint_set = tint_from_custom ? INSTANCE_CUSTOM.r : 0.0;
+	sight_k = sight_fade ? INSTANCE_CUSTOM.a : 1.0;
+}
+
+// Keep identical to dead_vat.gdshaderinc: body and axe share screen-pixel coverage.
+float sight_threshold(vec2 pixel) {
+	ivec2 p = ivec2(mod(floor(pixel), 4.0));
+	int low = ((p.x & 1) ^ (p.y & 1)) * 2 + (p.y & 1);
+	int high = ((p.x >> 1) ^ (p.y >> 1)) * 2 + (p.y >> 1);
+	return (float(low * 4 + high) + 0.5) / 16.0;
 }
 
 void fragment() {
@@ -151,4 +163,9 @@ void fragment() {
 	ALBEDO = fx_photo(base, fx_fade);
 	ROUGHNESS = rough;
 	METALLIC = metallic * (1.0 - cover);
+	if (sight_fade) {
+		// Derivatives and implicit texture LOD must run before divergent discard.
+		float threshold = sight_threshold(FRAGCOORD.xy);
+		if (sight_k < 0.999 && sight_k <= threshold) discard;
+	}
 }

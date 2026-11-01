@@ -188,6 +188,18 @@ static func batch_meshes(path: String) -> Dictionary:
 	return meshes
 
 
+## Opt-in for embedded axes: keep the cached mesh and every shared material untouched.
+static func with_sight_fade(source: Mesh) -> Mesh:
+	var mesh := source.duplicate() as Mesh
+	for surface in range(mesh.get_surface_count()):
+		var material := mesh.surface_get_material(surface) as ShaderMaterial
+		if material != null and material.shader == Weathered:
+			var faded := material.duplicate() as ShaderMaterial
+			faded.set_shader_parameter("sight_fade", true)
+			mesh.surface_set_material(surface, faded)
+	return mesh
+
+
 ## 정점색을 가진 모델(들판 소품 GLB)은 셰이더가 그 색을 곱하게 한다. 임포터는
 ## 재질 플래그를 켜 주지 않아 메시 자료를 직접 본다. 색 속성이 없는 모델은 그대로.
 static func _has_vertex_colors(mesh: Mesh) -> bool:

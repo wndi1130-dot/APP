@@ -98,6 +98,7 @@ var drawn_count: int = 0
 var drawn_at: Dictionary = {}          # id -> world place actually drawn this frame
 var _submitted_last: Dictionary = {}   # snapshot of drawn_at; membership owns next frame's cap priority
 var _submitted_markers: Dictionary = {} # id -> visibility sent to the rising marker this frame
+var _submitted_axes: Dictionary = {}    # id -> custom data sent to the embedded axe this frame
 var _shown: Dictionary = {}            # id -> sight visibility; never part of a saved body
 var _last_seen_draw: Dictionary = {}   # id -> last in-sight appearance, before packing visibility
 var _held_frames: Dictionary = {}      # id -> consecutive in-sight frames waiting for its appearance
@@ -177,7 +178,8 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 		embedded_draw = MultiMeshInstance3D.new()
 		var mm3 := MultiMesh.new()
 		mm3.transform_format = MultiMesh.TRANSFORM_3D
-		mm3.mesh = axe[0]
+		mm3.use_custom_data = true
+		mm3.mesh = PropModels.with_sight_fade(axe[0])
 		mm3.instance_count = EMBED_MAX
 		mm3.visible_instance_count = 0
 		mm3.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
@@ -1538,10 +1540,12 @@ func _submit_sight_draw(id: int, record: Dictionary, shown: float, counts: Array
 		markers.multimesh.set_instance_color(attachments.x, Color(1, 1, 1, shown))
 		_submitted_markers[id] = shown
 		attachments.x += 1
-	# The axe uses PropModels' shared weathered shader, which has no sight fade.
-	# Keep its existing threshold until that material gains an opt-in fade path.
-	if shown >= 0.5 and embedded_draw != null and record.has("axe") and attachments.y < EMBED_MAX:
+	if shown > 0.0 and embedded_draw != null and record.has("axe") and attachments.y < EMBED_MAX:
+		# Decode the body's packed value so both use exactly the same sixteen steps.
+		var axe_custom := Color(0.0, 0.0, 0.0, unpack_shade(custom.a).y)
 		embedded_draw.multimesh.set_instance_transform(attachments.y, record["axe"])
+		embedded_draw.multimesh.set_instance_custom_data(attachments.y, axe_custom)
+		_submitted_axes[id] = axe_custom
 		attachments.y += 1
 	return attachments
 
@@ -1581,6 +1585,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 	garments_drawn = {}
 	drawn_at = {}
 	_submitted_markers.clear()
+	_submitted_axes.clear()
 	var attachments: Vector2i = Vector2i.ZERO
 	for z in list:
 		var id: int = int(z["id"])
@@ -1715,6 +1720,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 		drawn_at.clear()
 		garments_drawn.clear()
 		_submitted_markers.clear()
+		_submitted_axes.clear()
 		attachments = Vector2i.ZERO
 		for b: int in counts.size():
 			for look: String in counts[b]:

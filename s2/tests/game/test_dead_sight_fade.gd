@@ -7,6 +7,7 @@ const DeadCast = preload("res://game/actors/dead_cast.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const Wear = preload("res://game/sim/wear.gd")
+const Props = preload("res://game/world/prop_models.gd")
 
 var game
 var dead: Zombies
@@ -419,6 +420,7 @@ func test_seen_record_reuses_values_and_erases_finished_attachments() -> void:
 		dead.embedded_draw = MultiMeshInstance3D.new()
 		dead.embedded_draw.multimesh = MultiMesh.new()
 		dead.embedded_draw.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		dead.embedded_draw.multimesh.use_custom_data = true
 		dead.embedded_draw.multimesh.mesh = BoxMesh.new()
 		dead.embedded_draw.multimesh.instance_count = Zombies.EMBED_MAX
 		dead.add_child(dead.embedded_draw)
@@ -523,16 +525,18 @@ func test_draw_cap_keeps_submitted_ids_over_a_charged_offscreen_candidate() -> v
 	assert_eq(dead._last_seen_draw[newcomer_id]["at"], origin, "waiting still tracks the seen place")
 
 
-func test_markers_fade_while_embedded_axes_keep_their_material_threshold() -> void:
+func test_markers_and_embedded_axes_fade_together_with_custom_visibility() -> void:
 	_field()
 	# Supply an axe draw even when the optional model is not carried in a build.
 	if dead.embedded_draw == null:
 		dead.embedded_draw = MultiMeshInstance3D.new()
 		dead.embedded_draw.multimesh = MultiMesh.new()
 		dead.embedded_draw.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+		dead.embedded_draw.multimesh.use_custom_data = true
 		dead.embedded_draw.multimesh.mesh = BoxMesh.new()
 		dead.embedded_draw.multimesh.instance_count = Zombies.EMBED_MAX
 		dead.add_child(dead.embedded_draw)
+	assert_true(dead.embedded_draw.multimesh.use_custom_data)
 	var z: Dictionary = _spawn(origin)
 	var id: int = int(z["id"])
 	z["state"] = "rising"
@@ -541,18 +545,63 @@ func test_markers_fade_while_embedded_axes_keep_their_material_threshold() -> vo
 	assert_eq(dead.markers.multimesh.visible_instance_count, 1)
 	assert_eq(float(dead._submitted_markers[id]), 1.0)
 	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 1)
+	assert_eq(dead._submitted_axes[id], Color(0.0, 0.0, 0.0, 1.0))
 	dead.render(camera, {}, true, 0.1)
 	assert_eq(dead.markers.multimesh.visible_instance_count, 1, "half shown still has its marker")
 	assert_almost_eq(float(dead._submitted_markers[id]), 0.5, 0.0001)
 	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 1)
+	assert_eq(dead._submitted_axes[id], Color(0.0, 0.0, 0.0, 0.5))
 	dead.render(camera, {}, true, 0.05)
 	assert_eq(dead.markers.multimesh.visible_instance_count, 1, "the marker keeps fading below half shown")
 	assert_almost_eq(float(dead._submitted_markers[id]), 0.25, 0.0001)
-	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 0)
-	assert_eq(dead.drawn_count, 1, "the body and marker still fade after the solid axe stops")
+	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 1, "the axe keeps fading below half shown")
+	assert_eq(dead._submitted_axes[id], Color(0.0, 0.0, 0.0, 0.25))
+	assert_eq(dead.drawn_count, 1, "body, marker and axe still fade together")
 	dead.render(camera, {}, true, 0.05)
 	assert_eq(dead.markers.multimesh.visible_instance_count, 0)
 	assert_false(dead._submitted_markers.has(id))
+	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 0)
+	assert_false(dead._submitted_axes.has(id))
+	dead.render(camera, _seen(origin), true, 0.045)
+	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 1)
+	assert_eq(dead._submitted_axes[id], Color(0.0, 0.0, 0.0, 0.25))
+	dead.render(camera, _seen(origin), true, 0.045)
+	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 1)
+	assert_eq(dead._submitted_axes[id], Color(0.0, 0.0, 0.0, 0.5))
+	# A non-step visibility must use the body's quantization, not the raw timer.
+	dead.render(camera, _seen(origin), true, 0.01)
+	var shown: float = float(dead._shown[id])
+	var axe_custom: Color = dead._submitted_axes[id]
+	assert_almost_eq(axe_custom.a, Zombies.unpack_shade(Zombies.pack_shade(1.0, shown)).y, 0.0001)
+	assert_ne(axe_custom.a, shown)
+
+
+func test_embedded_axes_opt_in_without_changing_cached_prop_materials() -> void:
+	var cached: Dictionary = Props.batch_meshes(Zombies.EMBED_MODEL)
+	if not cached.has(0):
+		pending("the optional embedded axe model is not carried in this build")
+		return
+	var shared: Mesh = cached[0]
+	_field()
+	assert_not_null(dead.embedded_draw)
+	if dead.embedded_draw == null:
+		return
+	var faded: Mesh = dead.embedded_draw.multimesh.mesh
+	assert_false(is_same(faded, shared), "the cached mesh keeps its original surfaces")
+	assert_eq(faded.get_surface_count(), shared.get_surface_count())
+	for surface: int in shared.get_surface_count():
+		var original := shared.surface_get_material(surface) as ShaderMaterial
+		var opted_in := faded.surface_get_material(surface) as ShaderMaterial
+		assert_false(is_same(opted_in, original), "only the axe's private material opts in")
+		assert_true(bool(opted_in.get_shader_parameter("sight_fade")))
+		assert_ne(original.get_shader_parameter("sight_fade"), true, "shared cache stays solid")
+	var furniture: Dictionary = Props.batch_meshes(Props.DIR + "bookcase.glb")
+	assert_true(furniture.has(0))
+	if furniture.has(0):
+		var mesh: Mesh = furniture[0]
+		for surface: int in mesh.get_surface_count():
+			var material := mesh.surface_get_material(surface) as ShaderMaterial
+			assert_ne(material.get_shader_parameter("sight_fade"), true, "other props keep sight fade off")
 
 
 func test_an_unread_body_waits_at_zero_then_fades_in() -> void:
