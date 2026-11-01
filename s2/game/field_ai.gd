@@ -108,9 +108,8 @@ const LOOK_START_MIN_S: float = 0.15
 const LOOK_START_SLOT_S: float = 0.3
 const LOOK_START_SLOTS: int = 3
 const LOOK_DWELL_TRIES: int = 16
-const LOOK_STATE_VERSION: int = 2
+const LOOK_STATE_VERSION: int = 3
 const LOOK_KEYS: Array[String] = ["watch_point", "watch_side", "watch_rear", "watch_aside", "watch_escort"]
-const LOOK_EDGE_MARGIN_DEG: float = 15.0
 const LOOK_ANGLE_EPS: float = 0.000001
 const LOOK_HASH_MIN_UNIT: float = 0.001
 ## Decision 486: the slot is where to keep, the lead is where to walk toward.
@@ -146,6 +145,8 @@ const FOLLOW_DOOR_RECENT: float = 5.0
 const FOLLOW_NARROW_SCAN: int = 3
 const FOLLOW_NARROW_WIDTH: int = 2
 const LOOK_CAMERA_DEG: float = 60.0
+const LOOK_CAMERA_WEIGHT: float = 0.25
+const LOOK_CAMERA_DWELL_MAX_S: float = 2.0   # Set to 0.0 to keep the ordinary upper bound.
 
 var game
 var think_t: float = 0.0
@@ -1204,7 +1205,10 @@ func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: St
 		_stop_watch(p)
 	p.brain["watch_seen_t"] = now
 	if int(state.get("version", 0)) != LOOK_STATE_VERSION:
-		state = _watch_state(p, base, k, camera_way, now)
+		state = _watch_state(p, base, k, now)
+	state.erase("edge")   # Old saves may still carry the camera edge latch.
+	p.brain.erase("watch_camera_on")
+	p.brain.erase("watch_camera_yaw")
 	state["seen"] = now
 	if int(state["point"]) < 0 and now < float(state["until"]):
 		p.brain[key] = state
@@ -1213,7 +1217,7 @@ func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: St
 		return Vector3(sin(p.facing), 0.0, cos(p.facing))
 	if float(state["waiting"]) == 0.0 and now >= float(state["until"]):
 		state["step"] = int(state["step"]) + 1
-		var point: int = _watch_pick(p, state, int(state["step"]), now)
+		var point: int = _watch_pick(p, state, int(state["step"]), now, camera_way)
 		state["point"] = point
 		state["target"] = float(state["yaw_" + str(point)])
 		state["waiting"] = 1.0
@@ -1242,24 +1246,22 @@ func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: St
 	if float(state["waiting"]) != 0.0 and arrived:
 		state["waiting"] = 0.0
 		state["picked"] = now
-		state["until"] = now + _watch_dwell(p, int(state["step"]))
+		state["until"] = now + _watch_dwell(p, int(state["step"]), _watch_faces_camera(float(state["target"]), camera_way))
 	p.brain["watch_target_yaw"] = float(state["target"])
 	p.brain["watch_slot"] = LOOK_KEYS.find(key)
-	p.brain["watch_camera_on"] = 1.0 if Vector2(camera_way.x, camera_way.z).length_squared() > 0.0001 else 0.0
-	p.brain["watch_camera_yaw"] = atan2(camera_way.x, camera_way.z)
-	p.brain["watch_head_yaw"] = _watch_head_yaw(shown, float(state["target"]), camera_way)
+	p.brain["watch_head_yaw"] = _watch_head_yaw(shown, float(state["target"]))
 	_watch_mark_seen(p, state, p.look if p.turn_rate > 0.0 else p.facing, now)
 	p.brain[key] = state   # Only finite numbers and times cross the save boundary.
 	return Vector3(sin(body), 0.0, cos(body))
 
 
-func _watch_state(p: Variant, base: Vector3, k: int, camera_way: Vector3, now: float) -> Dictionary:
+func _watch_state(p: Variant, base: Vector3, k: int, now: float) -> Dictionary:
 	var delay: float = LOOK_START_MIN_S + (float(k % LOOK_START_SLOTS) + p.name_unit("watch_start")) * LOOK_START_SLOT_S
 	var state: Dictionary = {"version": LOOK_STATE_VERSION, "step": -1, "point": -1,
 		"seen": now, "picked": now, "until": now + delay, "waiting": 0.0,
 		"turning": 0.0, "body_turned": 0.0, "body_target": p.facing}
 	for point: int in range(LOOK_POINTS):
-		state["yaw_" + str(point)] = _watch_target(p, base, point, camera_way, state)
+		state["yaw_" + str(point)] = _watch_target(p, base, point)
 	state["target"] = float(state["yaw_0"])
 	return state
 
@@ -1270,13 +1272,32 @@ func _watch_weight(state: Dictionary, point: int, now: float) -> float:
 	return lerpf(LOOK_RECENT_WEIGHT, 1.0, minf(age / LOOK_RECENCY_S, 1.0))
 
 
-func _watch_pick(p: Variant, state: Dictionary, step: int, now: float) -> int:
+func _watch_faces_camera(target: float, camera_way: Vector3) -> bool:
+	camera_way.y = 0.0
+	if camera_way.length_squared() <= 0.0001:
+		return false
+	return absf(angle_difference(atan2(camera_way.x, camera_way.z), target)) <= deg_to_rad(LOOK_CAMERA_DEG) + LOOK_ANGLE_EPS
+
+
+func _watch_pick(p: Variant, state: Dictionary, step: int, now: float, camera_way: Vector3 = Vector3.ZERO) -> int:
+	var camera_points: Array[bool] = []
+	var camera_count: int = 0
+	for point: int in range(LOOK_POINTS):
+		var facing_camera: bool = _watch_faces_camera(float(state.get("yaw_" + str(point), 0.0)), camera_way)
+		camera_points.append(facing_camera)
+		if facing_camera:
+			camera_count += 1
+	var weights: Array[float] = []
 	var total: float = 0.0
 	for point: int in range(LOOK_POINTS):
-		total += _watch_weight(state, point, now)
+		var weight: float = _watch_weight(state, point, now)
+		if camera_points[point] and camera_count < LOOK_POINTS:
+			weight *= LOOK_CAMERA_WEIGHT
+		weights.append(weight)
+		total += weight
 	var pick: float = p.name_unit("watch_pick_" + str(step)) * total
 	for point: int in range(LOOK_POINTS):
-		pick -= _watch_weight(state, point, now)
+		pick -= weights[point]
 		if pick < 0.0:
 			return point
 	return LOOK_POINTS - 1
@@ -1306,9 +1327,7 @@ func _tick_watch_head(p: Variant) -> void:
 	if state.is_empty():
 		return
 	var body: float = p.look if p.turn_rate > 0.0 else p.facing
-	var camera_yaw: float = float(p.brain["watch_camera_yaw"])
-	var camera_way: Vector3 = Vector3(sin(camera_yaw), 0.0, cos(camera_yaw)) * float(p.brain["watch_camera_on"])
-	p.brain["watch_head_yaw"] = _watch_head_yaw(body, float(p.brain["watch_target_yaw"]), camera_way)
+	p.brain["watch_head_yaw"] = _watch_head_yaw(body, float(p.brain["watch_target_yaw"]))
 	_watch_mark_seen(p, state, body, game.clock.elapsed)
 
 
@@ -1328,64 +1347,32 @@ func _stop_watch(p: Variant) -> void:
 			state["until"] = game.clock.elapsed
 
 
-func _watch_dwell(p: Variant, step: int) -> float:
+func _watch_dwell(p: Variant, step: int, facing_camera: bool = false) -> float:
+	var limit: float = LOOK_DWELL_MAX_S
+	if facing_camera and LOOK_CAMERA_DWELL_MAX_S > LOOK_DWELL_MIN_S:
+		limit = minf(limit, LOOK_CAMERA_DWELL_MAX_S)
 	for attempt: int in range(LOOK_DWELL_TRIES):
 		var salt: String = str(step) + "_" + str(attempt)
 		var u: float = maxf(p.name_unit("watch_dwell_u_" + salt), LOOK_HASH_MIN_UNIT)
 		var v: float = p.name_unit("watch_dwell_v_" + salt)
 		var normal: float = sqrt(-2.0 * log(u)) * cos(TAU * v)
 		var dwell: float = LOOK_DWELL_MEDIAN_S * exp(LOOK_DWELL_SIGMA * normal)
-		if dwell > LOOK_DWELL_MIN_S and dwell < LOOK_DWELL_MAX_S:
+		if dwell > LOOK_DWELL_MIN_S and dwell < limit:
 			return dwell
-	return LOOK_DWELL_MEDIAN_S   # A bounded fallback never piles samples onto either edge.
+	return LOOK_DWELL_MEDIAN_S if LOOK_DWELL_MEDIAN_S < limit else sqrt(LOOK_DWELL_MIN_S * limit)
 
 
-func _watch_target(p: Variant, base: Vector3, point: int, camera_way: Vector3, state: Dictionary) -> float:
+func _watch_target(p: Variant, base: Vector3, point: int) -> float:
 	var centre_yaw: float = atan2(base.x, base.z)
 	var sector: float = deg_to_rad(LOOK_SECTOR_DEG)
 	var unit: float = p.name_unit("watch_point_" + str(point))
 	var target: float = centre_yaw - sector + 2.0 * sector * (float(point) + unit) / float(LOOK_POINTS)
-	camera_way.y = 0.0
-	var edge: float = float(state.get("edge", 0.0))
-	if camera_way.length_squared() > 0.0001:
-		camera_way = camera_way.normalized()
-		var camera_yaw: float = atan2(camera_way.x, camera_way.z)
-		var centre: float = angle_difference(camera_yaw, centre_yaw)
-		if absf(edge) < 0.5:
-			edge = -1.0 if centre < 0.0 else 1.0
-		elif centre * edge < -deg_to_rad(LOOK_EDGE_MARGIN_DEG):
-			edge = -edge
-		var offset: float = angle_difference(camera_yaw, target)
-		var limit: float = deg_to_rad(LOOK_CAMERA_DEG)
-		if absf(offset) < limit:
-			target = camera_yaw + limit * edge
-			if absf(angle_difference(centre_yaw, target)) > sector + LOOK_ANGLE_EPS:
-				edge = -edge   # Keep the camera edge inside the role's sector too.
-				target = camera_yaw + limit * edge
-	state["edge"] = edge
 	return wrapf(target, -PI, PI)
 
 
-## While a body turn waits, use a reachable camera edge instead of its cone.
-func _watch_head_yaw(body: float, target: float, camera_way: Vector3) -> float:
+func _watch_head_yaw(body: float, target: float) -> float:
 	var neck: float = deg_to_rad(LOOK_HEAD_MAX_DEG)
-	var head: float = clampf(angle_difference(body, target), -neck, neck)
-	camera_way.y = 0.0
-	if camera_way.length_squared() <= 0.0001:
-		return head
-	var camera_yaw: float = atan2(camera_way.x, camera_way.z)
-	var limit: float = deg_to_rad(LOOK_CAMERA_DEG)
-	if absf(angle_difference(camera_yaw, body + head)) >= limit - LOOK_ANGLE_EPS:
-		return head
-	var best: float = TAU
-	for side: float in [-1.0, 1.0]:
-		var edge: float = camera_yaw + side * limit
-		var offset: float = angle_difference(body, edge)
-		var gap: float = absf(angle_difference(target, edge))
-		if absf(offset) <= neck + LOOK_ANGLE_EPS and gap < best:
-			head = clampf(offset, -neck, neck)
-			best = gap
-	return head
+	return clampf(angle_difference(body, target), -neck, neck)
 
 
 # ---------------------------------------------------------------- words
@@ -1856,8 +1843,8 @@ func _escort(p, falling_back: bool = false) -> void:
 
 ## Decision 486 (2): posted with nothing on the crew, the escort keeps its back
 ## to the work and watches outward, pausing at places the dead may come from;
-## (6) as the companions, never into the screen: targets stop at the edge of
-## the camera's cone (the camera is orthographic, so that is one way for all).
+## Decision 536: share the companions' camera preference; an orthographic
+## camera gives every posted escort the same camera direction.
 func _escort_watch(p, site: Vector3) -> void:
 	var out: Vector3 = p.position - site
 	out.y = 0.0

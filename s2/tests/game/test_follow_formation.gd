@@ -110,15 +110,29 @@ func test_idle_watch_stays_outside_the_camera_cone_after_the_sweep() -> void:
 	_start()
 	var p = mates["rear"]
 	var before_rng: int = game.rng.state
-	for camera_way in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
+	for camera_way: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
 		game.camera.global_position = p.global_position + camera_way * 20.0 + Vector3.UP * 50.0
-		for time in [0.0, 1.5, 3.0, 6.0, 12.0]:
-			game.clock.elapsed = time
-			for role in ["point", "side", "rear", "aside"]:
-				game.ai._look_out(p, role, Vector3.RIGHT, Vector3.FORWARD)
-				var target: float = float(p.brain["watch_" + role]["target"])
-				var gaze := Vector3(sin(target), 0.0, cos(target))
-				assert_lte(gaze.normalized().dot(camera_way), 0.50001, "at least 60 degrees from the camera")
+		for role: String in ["point", "side", "rear", "aside"]:
+			game.ai._look_out(p, role, Vector3.RIGHT, Vector3.FORWARD)
+			var state: Dictionary = p.brain["watch_" + role]
+			var camera_points: int = 0
+			for point: int in range(FieldAi.LOOK_POINTS):
+				var yaw: float = float(state["yaw_" + str(point)])
+				if Vector3(sin(yaw), 0.0, cos(yaw)).dot(camera_way) >= 0.5 - FieldAi.LOOK_ANGLE_EPS:
+					camera_points += 1
+			var camera_picks: int = 0
+			for step: int in range(400):
+				var point: int = game.ai._watch_pick(p, state, step, game.clock.elapsed, camera_way)
+				var yaw: float = float(state["yaw_" + str(point)])
+				if Vector3(sin(yaw), 0.0, cos(yaw)).dot(camera_way) >= 0.5 - FieldAi.LOOK_ANGLE_EPS:
+					camera_picks += 1
+			var expected: float = 1.0
+			if camera_points < FieldAi.LOOK_POINTS:
+				expected = float(camera_points) * FieldAi.LOOK_CAMERA_WEIGHT / (float(FieldAi.LOOK_POINTS - camera_points) + float(camera_points) * FieldAi.LOOK_CAMERA_WEIGHT)
+			assert_almost_eq(float(camera_picks) / 400.0, expected, 0.09, role + " uses a soft camera preference")
+			if camera_points > 0 and camera_points < FieldAi.LOOK_POINTS:
+				assert_gt(camera_picks, 0)
+				assert_lt(float(camera_picks) / 400.0, float(camera_points) / float(FieldAi.LOOK_POINTS))
 	game.camera.global_position = p.global_position + Vector3.UP * 50.0
 	assert_true(game.ai._look_out(p, "rear", Vector3.RIGHT, Vector3.FORWARD).is_finite())
 	assert_eq(game.rng.state, before_rng)
