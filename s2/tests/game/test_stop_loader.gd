@@ -216,3 +216,17 @@ func test_region_resolution_keeps_the_fields_existing_precedence() -> void:
 	assert_eq(FieldGame.region_for({"place": "houses_01", "departure": {"segment": 3}}), "K4")
 	assert_eq(FieldGame.region_for({"place": "houses_01"}), "K1")
 	assert_eq(FieldGame.region_for({"departure": {"segment": 3}}), "K1", "a stop's own map keeps its own band")
+
+
+func test_two_maps_built_at_once_both_grow_their_outer_village() -> void:
+	# A build the loader left running and a new one overlap on worker threads (MapRing's shared flags).
+	var script: Script = load(FieldMaps.path_of("houses_01"))
+	var out: Array = [{}, {}]
+	var first := WorkerThreadPool.add_task(func() -> void: out[0] = FieldMaps.build_from(script, "K1"))
+	var second := WorkerThreadPool.add_task(func() -> void: out[1] = FieldMaps.build_from(script, "K4"))
+	WorkerThreadPool.wait_for_task_completion(first)
+	WorkerThreadPool.wait_for_task_completion(second)
+	for i: int in 2:
+		assert_true((out[i] as Dictionary).has("map_ring"), "build %d keeps its outer village" % i)
+	assert_eq(out[0].get("region_band", ""), "K1")
+	assert_eq(out[1].get("region_band", ""), "K4")
