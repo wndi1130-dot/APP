@@ -3,10 +3,12 @@ extends RefCounted
 
 const Carry = preload("res://game/sim/carry.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const W = preload("res://game/sim/weapons.gd")
 const LIMIT: float = 12.0
 const CRAFT_SECONDS: float = 30.0
 const ROPE_LENGTH: float = 1.35
 const ROPE_EPS: float = 0.001 # Vector3 roundoff at the taut rope, including a JSON round trip.
+const TRAIL_MAX_POINTS: int = 16
 const SNOW_MULT: float = 0.9
 const LOAD_MULT: Array[float] = [1.0, 0.9, 0.7, 0.0]
 
@@ -236,6 +238,16 @@ static func trail_length(trail: PackedVector3Array) -> float:
 	return length
 
 
+## Visit the whole saved route from the front, preserving both attached ends.
+static func simplify_trail(game: Variant, stored: PackedVector3Array) -> PackedVector3Array:
+	var trail: PackedVector3Array = PackedVector3Array()
+	for at: Vector3 in stored:
+		trail.append(at)
+		while trail.size() >= 3 and path_clear(game, trail[-3], trail[-1]):
+			trail.remove_at(trail.size() - 2)
+	return trail
+
+
 ## A bent rope follows only verified outdoor segments, with both ends attached.
 static func trail_clear(game: Variant, row: Dictionary, puller_at: Vector3) -> bool:
 	var stored: Variant = row.get("trail", PackedVector3Array())
@@ -270,6 +282,9 @@ static func before_move(game: Variant, p: Variant, dest: Vector3) -> void:
 		return
 	var trail: PackedVector3Array = row["trail"].duplicate()
 	trail.append(dest)
+	# Keep only bends needed by walls before pulling any excess from the front.
+	while trail.size() >= 3 and path_clear(game, trail[-3], trail[-1]):
+		trail.remove_at(trail.size() - 2)
 	var excess: float = maxf(0.0, trail_length(trail) - ROPE_LENGTH)
 	var first: int = 0
 	while excess > 0.0 and first < trail.size() - 1:
@@ -281,8 +296,38 @@ static func before_move(game: Variant, p: Variant, dest: Vector3) -> void:
 			trail[first] = trail[first].lerp(trail[first + 1], excess / segment)
 			excess = 0.0
 	trail = trail.slice(first)
+	if trail.size() > TRAIL_MAX_POINTS:
+		trail = simplify_trail(game, trail)
+		if trail.size() > TRAIL_MAX_POINTS:
+			game.actions.release_sled(p, true, "썰매가 걸려 줄을 놓았다")
+			return
 	row["pos"] = trail[0]
 	row["trail"] = trail
+
+
+## Exact resume restores sled rows twice but keeps the same ground array.
+## This transient ledger prevents duplicate drops without adding save fields.
+static func _restore_body_cargo(game: Variant, row: Dictionary) -> void:
+	var cargo: Dictionary = row["items"]
+	for item: String in cargo.keys():
+		if game.actions.goes_to_train(item):
+			continue
+		var restored: Dictionary = game.get_meta("sled_cargo_restore", {})
+		if restored.is_empty() or not is_same(restored["ground"], game.ground_items):
+			restored = {"ground": game.ground_items, "counts": {}}
+			game.set_meta("sled_cargo_restore", restored)
+		var counts: Dictionary = restored["counts"]
+		var key: String = "%d:%s" % [int(row["id"]), item]
+		var cargo_count: int = int(cargo[item])
+		var remaining: int = maxi(0, cargo_count - int(counts.get(key, 0)))
+		if W.is_known(item):
+			for _piece: int in remaining:
+				game.ground_items.append({"pos": row["pos"], "id": item, "n": 1,
+					"weapon": {"id": item, "quality": "factory", "condition": 1.0, "loaded": 0}})
+		elif remaining > 0:
+			game.ground_items.append({"pos": row["pos"], "id": item, "n": remaining})
+		counts[key] = maxi(cargo_count, int(counts.get(key, 0)))
+		cargo.erase(item)
 
 
 ## Reconnect only mutually matching, living player identities. Never consume or roll here.
@@ -290,6 +335,7 @@ static func reconcile(game: Variant) -> void:
 	var used: Dictionary = {}
 	for row: Dictionary in game.sleds:
 		row["items"] = (row.get("items", {}) as Dictionary).duplicate(true)
+		_restore_body_cargo(game, row)
 		var puller: Variant = null
 		for p: Variant in game.people:
 			if String(p.pid) == String(row.get("puller", "")):
@@ -298,9 +344,16 @@ static func reconcile(game: Variant) -> void:
 		# Old saves have no trail: their straight attachment still has to be clear.
 		if not row.has("trail") and puller != null:
 			row["trail"] = PackedVector3Array([row["pos"], puller.position])
+		# Invalid old lengths or endpoints still detach, even if a shortcut could hide them.
+		var valid_trail: bool = puller != null and trail_clear(game, row, puller.position)
+		if row.get("trail") is PackedVector3Array:
+			var trail: PackedVector3Array = simplify_trail(game, row["trail"])
+			row["trail"] = trail
+			if trail.size() > TRAIL_MAX_POINTS and puller != null and puller == game.player and puller.sled_id == id:
+				game.actions.release_sled(puller, true, "썰매가 걸려 줄을 놓았다")
 		if (puller == null or puller != game.player or not puller.can_act() or puller.sled_id != id
 			or used.has(String(puller.pid)) or int(row["level"]) != 0 or not outside(game, row["pos"])
-			or not outside(game, puller.position) or not trail_clear(game, row, puller.position)):
+			or not outside(game, puller.position) or not valid_trail):
 			row["puller"] = ""
 			row.erase("trail")
 		else:

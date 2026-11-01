@@ -1881,14 +1881,22 @@ func _surrender(r) -> void:
 		game.ground_items.append({"pos": r.position + Vector3(0.6, 0, 0), "id": h["id"], "n": 1, "weapon": h.duplicate()})
 	r.set_weapon_slots([])
 	surrendered = r
+	_surrender_card(r)
+
+
+func _surrender_card(r: Variant) -> void:
+	var stowed: bool = game.player.sled_weapon_stowed
 	game.hud.card("surrender", "약탈자가 무기를 내려놓고 손을 든다.", [
 		{"id": "take", "label": "묶어서 데려간다", "say": "\"손 뒤로. 열차까지 걷는다.\""},
 		{"id": "disarm", "label": "무기만 뺏고 보낸다", "say": "\"가라. 다시 보이면 그땐 없다.\""},
-		{"id": "shoot", "label": "쏜다", "say": "\"약을 훔친 값이다.\""},
+		{"id": "shoot", "label": "쏜다", "say": "무기를 썰매 짐에 묶어 두었다." if stowed else "\"약을 훔친 값이다.\"", "off": stowed},
 	], Callable(self, "_on_surrender_choice").bind(r))
 
 
 func _on_surrender_choice(choice: String, r) -> void:
+	if choice == "shoot" and game.player.sled_weapon_stowed:
+		_surrender_card(r)
+		return
 	game.decisions.append({"id": "raider_surrender", "choice": choice})
 	match choice:
 		"take":

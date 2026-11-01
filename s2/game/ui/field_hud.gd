@@ -288,7 +288,7 @@ const LONE_ICON: int = 40
 const LETTER_NUDGE: float = -3.5
 ## Leaving shows its word alone (user 2026-10-18: no train) on a slim lamp
 ## pill, the word as big as the 시안's lamp pill word (.fpad--ctx .lab 13).
-const DEPART_SEEN := Vector2(100.0, 56.0)
+const DEPART_SEEN: Vector2 = Vector2(116.0, 80.0)
 const DEPART_FONT: float = 13.0
 const FACE_SIZE: float = 84.0
 ## A companion's chip (시안 .fchip's face 32 across) folded to the face alone
@@ -379,7 +379,7 @@ var context_more: Label
 var all_aboard_size: Vector2            # its touch rect, as wide as its mark and words need
 var attack_icon: String = "-"           # the attack pad's picture now (_tick_attack_icon)
 var pause_shows_play: bool = false      # the pause key shows 'play' while paused
-var offer_box: HBoxContainer
+var offer_box: Control
 var toast_box: VBoxContainer
 var toasts: Array = []
 var grab_button: Button
@@ -1204,7 +1204,7 @@ func _build_thumbs() -> void:
 	context_badge.add_child(context_more)
 	context_badge.visible = false
 	context_button.add_child(context_badge)
-	# Leaving: its word alone on a slim pill (the same day: no train).
+	# Leaving: its word alone on a pill at least MIN_TOUCH high.
 	depart_button = _pad("출발", DEPART_AT, Vector2(140, 84), UiFonts.size(DEPART_FONT))
 	_dress(depart_button, "", DEPART_SEEN, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)
 	_bold(depart_button)
@@ -1349,11 +1349,11 @@ func _build_thumbs() -> void:
 	_dress(alarm_button, "clock", Vector2(48, 48), true, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 26)
 	alarm_button.visible = false
 	bag_box.add_child(alarm_button)
-	offer_box = HBoxContainer.new()
-	offer_box.set_anchors_preset(Control.PRESET_CENTER)
-	offer_box.position = Vector2(-260, 90)
-	offer_box.add_theme_constant_override("separation", 12)
+	offer_box = Control.new()
+	offer_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	offer_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(offer_box)
+	root.resized.connect(_layout_offer.call_deferred)
 
 
 func _build_toasts() -> void:
@@ -2374,14 +2374,64 @@ func _fit_radio() -> void:
 
 
 ## A short row of choices in the middle (break a window, how to climb...).
+## Wrap fixed-size choices before the right pads, then lift the whole group above the faces.
+static func offer_rects(sizes: Array[Vector2], view: Vector2, right_limit: float, bottom_limit: float) -> Array[Rect2]:
+	var rects: Array[Rect2] = []
+	var start: Vector2 = view * 0.5 + Vector2(-260, 90)
+	var cursor: Vector2 = start
+	var row_height: float = 0.0
+	var bottom: float = start.y
+	for key_size: Vector2 in sizes:
+		if cursor.x > start.x and cursor.x + key_size.x > minf(view.x, right_limit):
+			cursor.x = start.x
+			cursor.y += row_height + 12.0
+			row_height = 0.0
+		rects.append(Rect2(cursor, key_size))
+		bottom = maxf(bottom, cursor.y + key_size.y)
+		row_height = maxf(row_height, key_size.y)
+		cursor.x += key_size.x + 12.0
+	var lift: float = maxf(0.0, bottom - minf(view.y, bottom_limit))
+	for index: int in rects.size():
+		rects[index].position.y -= lift
+	return rects
+
+
+## Keep 24 px before the departure touch pad unless even one fixed-size choice cannot fit.
+static func offer_gap(sizes: Array[Vector2], view: Vector2, depart_left: float) -> float:
+	var widest: float = 0.0
+	for key_size: Vector2 in sizes:
+		widest = maxf(widest, key_size.x)
+	return 24.0 if view.x * 0.5 - 260.0 + widest <= depart_left - 24.0 else 12.0
+
+
+func _layout_offer() -> void:
+	if offer_box.get_child_count() == 0:
+		return
+	_place_allies()
+	var sizes: Array[Vector2] = []
+	for key: Control in offer_box.get_children():
+		sizes.append(key.custom_minimum_size)
+	var origin: Vector2 = offer_box.global_position
+	var depart_left: float = depart_button.get_global_rect().position.x - origin.x
+	var right_limit: float = depart_left - offer_gap(sizes, _view_size(), depart_left)
+	var bottom_limit: float = allies_box.get_global_rect().position.y - origin.y - 12.0
+	var rects: Array[Rect2] = offer_rects(sizes, _view_size(), right_limit, bottom_limit)
+	for index: int in rects.size():
+		var key: Control = offer_box.get_child(index)
+		key.position = rects[index].position
+		key.size = rects[index].size
+
+
 func offer(list: Array) -> void:
 	for c in offer_box.get_children():
+		offer_box.remove_child(c)
 		c.queue_free()
 	for row in list:
 		var key: Button = _offer_key(row["label"], _offer_pick.bind(row["call"]), Vector2(180, 72))
 		key.modulate = Color.WHITE if row.get("work_ready", true) else Color(0.5, 0.5, 0.5)
 		offer_box.add_child(key)
 	offer_box.add_child(_offer_key("그만", _offer_pick.bind(Callable()), Vector2(100, 72), true))
+	_layout_offer()
 
 
 ## A choice offered on the field: a glass pill of the field's (시안 .fglass) in
@@ -2401,6 +2451,7 @@ func _offer_key(word: String, cb: Callable, at_least: Vector2, quiet: bool = fal
 
 func _offer_pick(cb: Callable) -> void:
 	for c in offer_box.get_children():
+		offer_box.remove_child(c)
 		c.queue_free()
 	if cb.is_valid():
 		cb.call()
@@ -2882,6 +2933,8 @@ func _ink_lines(text: String, kind: int, css_px: float, line_css: float, color: 
 func _say(i: int, o: Dictionary, cb: Callable) -> Button:
 	var b := Button.new()
 	b.name = "Say_" + String(o["id"])
+	b.disabled = bool(o.get("off", false))
+	b.modulate = Color(0.5, 0.5, 0.5) if b.disabled else Color.WHITE
 	b.focus_mode = Control.FOCUS_NONE
 	b.clip_text = true
 	b.custom_minimum_size = Vector2(0, UiFonts.px(55.0))
@@ -3879,6 +3932,17 @@ func finger_down(index: int, pos: Vector2) -> bool:
 		stick_index = -1
 		stick_dash = false
 		_stick_release()
+	if offer_box.get_child_count() > 0:
+		# The last child is drawn on top; its full touch rect wins over every pad.
+		for choice_index: int in range(offer_box.get_child_count() - 1, -1, -1):
+			var choice: Button = offer_box.get_child(choice_index) as Button
+			if choice != null and choice.is_visible_in_tree() and touch_rect(choice).has_point(pos):
+				fingers[index] = {"kind": "button", "button": choice, "start": pos}
+				return true
+		# Only new presses are blocked. Existing pad fingers keep their move/lift rules.
+		for covered: Button in [depart_button, shove_button, attack_button, aim_button, manual_button]:
+			if covered.is_visible_in_tree() and touch_rect(covered).has_point(pos):
+				return true
 	for b in pads:
 		if b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
 			if _pad_blocked(b):

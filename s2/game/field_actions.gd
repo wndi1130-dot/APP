@@ -590,6 +590,8 @@ func _boards_changed(c: Vector2i, kind: String) -> void:
 
 ## A plank whittled to a stake (P22, P23): into a free hand.
 func whittle_stake(p) -> void:
+	if p.sled_weapon_stowed:
+		return
 	if _wait_blow(p, whittle_stake.bind(p)):
 		return
 	if int(p.items.get("plank", 0)) <= 0 or p.hands.size() >= 2:
@@ -598,15 +600,15 @@ func whittle_stake(p) -> void:
 
 
 func _whittled(p) -> void:
-	if p.hands.size() >= 2 or not p.take_item("plank"):
+	if p.sled_weapon_stowed or p.hands.size() >= 2 or not p.take_item("plank"):
 		return
 	_into_hand(p, "wood_stake")
 
 
 ## An improvised weapon goes straight into a free hand (P23: one tap). Returns
-## false when both hands are full.
+## false when both hands are full or the sled weapon is still stowed.
 func _into_hand(p, id: String) -> bool:
-	if p.sled_id != 0:
+	if p.sled_weapon_stowed:
 		return false
 	if p.hands.size() >= 2 or not W.is_known(id) or not (String(W.get_data(id).get("kind", "")) == "melee" or W.is_ranged(id)):
 		return false
@@ -1105,7 +1107,7 @@ func _companion_take(p, c: Dictionary) -> void:
 	var took: Array = []
 	for item in c["items"]:
 		# Clothes are put on, not bagged (wear.gd): a companion leaves them.
-		if Wear.is_garment(String(item)):
+		if Wear.is_garment(String(item)) or (p.sled_weapon_stowed and W.is_known(String(item))):
 			keep.append(item)
 		elif AMMO_ITEMS.has(item) or p.weight() + Carry.item_weight(item) <= p.carry_limit():
 			_receive(p, item, 1)
@@ -1183,7 +1185,7 @@ func taking_item(p) -> String:
 
 
 func _begin_take(p, id: String, item: String) -> bool:
-	if p.sled_id != 0 and W.is_known(item):
+	if p.sled_weapon_stowed and W.is_known(item):
 		return false
 	var c: Dictionary = game.data["containers"].get(id, {})
 	if not _begin_work(p, "take", "챙기기", SearchRules.take_seconds(item), _take_done.bind(p, id, item), "container", id, _container_at(c)):
@@ -1202,6 +1204,8 @@ func _take_next(p, id: String) -> void:
 	var left: Array = queue["left"]
 	while not left.is_empty():
 		var item: String = left.pop_front()
+		if p.sled_weapon_stowed and W.is_known(item):
+			continue
 		if c.get("items", []).has(item):
 			if _begin_take(p, id, item):
 				return
@@ -1215,7 +1219,7 @@ func _take_done(p, id: String, item: String) -> void:
 	if not _finished_work(p, "take"):
 		take_queue.erase(pid)
 		return
-	if p.sled_id != 0 and W.is_known(item):
+	if p.sled_weapon_stowed and W.is_known(item):
 		take_queue.erase(pid)
 		return
 	var c: Dictionary = game.data["containers"].get(id, {})
@@ -1275,6 +1279,10 @@ func _body_searched(p, zid: int) -> void:
 			names.append(String(W.get_data(row["id"]).get("name", row["id"])))
 			game.ground_items.append({"pos": p.position, "id": row["id"], "n": 1, "weapon": row["weapon"]})
 			pick_up(p, game.ground_items.size() - 1)
+		elif p.sled_weapon_stowed and W.is_known(String(row["id"])):
+			# Keep a counted weapon at the feet until the hands are available.
+			names.append(game.item_name(row["id"]))
+			game.ground_items.append({"pos": p.position, "id": row["id"], "n": n})
 		else:
 			names.append(game.item_name(row["id"]) + (" %d" % n if n > 1 else ""))
 			_receive(p, row["id"], n)
@@ -2472,10 +2480,14 @@ func at_unloading(p) -> bool:
 
 ## What of one's bag goes aboard: all but a key, an empty tin and the can
 ## opener, a weapon, and the field's own stores (bandages, cloth, tools).
+static func goes_to_train(id: String) -> bool:
+	return not (UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id))
+
+
 func loadable(p) -> Array:
 	var out: Array = []
-	for id in p.items.keys():
-		if not (UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id)):
+	for id: String in p.items.keys():
+		if goes_to_train(id):
 			out.append(id)
 	return out
 
@@ -2500,6 +2512,8 @@ func load_train(p, only: String = "") -> bool:
 			var sled: Dictionary = Sled.find(game, sled_id)
 			var cargo: Dictionary = sled["items"]
 			for item: String in cargo.keys():
+				if not goes_to_train(item):
+					continue
 				var count: int = int(cargo[item])
 				if count > 0:
 					game.unloaded[item] = int(game.unloaded.get(item, 0)) + count
@@ -2609,6 +2623,9 @@ func _sled_moved(p: Variant, ticket: int) -> bool:
 		return false
 	var item: String = String(job["item"])
 	var into_sled: bool = bool(job["into"])
+	if into_sled and not goes_to_train(item):
+		game.hud.toast("이건 가방에 둔다")
+		return false
 	if not into_sled and p.sled_weapon_stowed and W.is_known(item):
 		return false
 	var cargo: Dictionary = sled["items"]

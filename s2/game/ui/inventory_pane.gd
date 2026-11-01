@@ -454,7 +454,7 @@ static func _bag_rows(hud, p, at: Dictionary) -> Control:
 	var loadable: Array = game.actions.loadable(p)
 	var box: Dictionary = game.data["containers"][at["id"]] if at["kind"] == "box" else {}
 	for id: String in bag_order(game, p, hud.inv_sort):
-		var can_move: bool = loadable.has(id) if at["kind"] == "train" else (box.is_empty() or Carry.box_room(box, id) > 0)
+		var can_move: bool = loadable.has(id) if at["kind"] in ["train", "sled"] else (box.is_empty() or Carry.box_room(box, id) > 0)
 		list.add_child(_bag_row(hud, p, id, can_move))
 	if list.get_child_count() == 0:
 		list.add_child(_label("빈 가방", 12.0, GlassPane.INK3))

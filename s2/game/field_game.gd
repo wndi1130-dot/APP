@@ -3309,9 +3309,11 @@ func finish(reason: String) -> void:
 	# outside stays in the field with what is on it (sled.md 2.1, 2.5).
 	for sled: Dictionary in sleds:
 		if Sled.in_unloading(self, sled):
-			for id: String in sled["items"]:
+			for id: String in sled["items"].keys():
+				if not actions.goes_to_train(id):
+					continue
 				unloaded[id] = int(unloaded.get(id, 0)) + int(sled["items"][id])
-			sled["items"] = {}
+				sled["items"].erase(id)
 	for person: Person in people:
 		actions.release_sled(person, false)
 		if not person.sled_job.is_empty():

@@ -7,6 +7,7 @@ const Sled = preload("res://game/sim/sled.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Gait = preload("res://game/sim/gait.gd")
 const InventoryPane = preload("res://game/ui/inventory_pane.gd")
+const FieldHud = preload("res://game/ui/field_hud.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 const EPS: float = 0.00001
 var fields: Array[Node] = []
@@ -19,6 +20,15 @@ class QuietField:
 		saved_result = result.duplicate(true)
 
 
+class RaiderLine:
+	extends "res://tests/game/fixtures/bare_line_map.gd"
+
+	static func build() -> Dictionary:
+		var data: Dictionary = preload("res://tests/game/fixtures/bare_line_map.gd").build()
+		data["spawns"]["raiders"] = [Vector2i(12, 20)]
+		return data
+
+
 func after_each() -> void:
 	for field: Node in fields:
 		if is_instance_valid(field):
@@ -27,11 +37,14 @@ func after_each() -> void:
 	await get_tree().process_frame
 
 
-func _game() -> Variant:
+func _game(with_raiders: bool = false, viewport: SubViewport = null) -> Variant:
 	var field: QuietField = QuietField.new()
-	field.opts = {"seed": 831, "raiders": false, "auto_pause": false, "arrive": false, "field_save": false, "receipt_id": "sled_test"}
-	field.map_script = BareLine
-	add_child(field)
+	field.opts = {"seed": 831, "raiders": with_raiders, "auto_pause": false, "arrive": false, "field_save": false, "receipt_id": "sled_test"}
+	field.map_script = RaiderLine if with_raiders else BareLine
+	if viewport == null:
+		add_child(field)
+	else:
+		viewport.add_child(field)
 	field.set_process(false)
 	fields.append(field)
 	field.zombies.list.clear()
@@ -659,7 +672,7 @@ func test_d7_context_keeps_all_sled_rows_and_primary_order() -> void:
 func test_d7_empty_bag_sled_buttons_all_cargo_and_no_second_trip() -> void:
 	var game: Variant = _game()
 	var p: Variant = game.player
-	var sled: Dictionary = _sled(game, {"cloth": 2, "bandage": 3, "food_pack": 2})
+	var sled: Dictionary = _sled(game, {"wood": 2, "scrap": 3, "food_pack": 2})
 	assert_true(_labels(game).has("열차에 싣기"))
 	game.hud.bag_panel()
 	assert_true(_buttons(game).has("열차에 싣기"))
@@ -670,13 +683,13 @@ func test_d7_empty_bag_sled_buttons_all_cargo_and_no_second_trip() -> void:
 	mate.position = p.position
 	mate.items = {"scrap": 1}
 	assert_false(game.actions.pull_sled(mate, int(sled["id"])))
-	assert_false(game.actions.move_sled(mate, int(sled["id"]), "cloth", false))
+	assert_false(game.actions.move_sled(mate, int(sled["id"]), "wood", false))
 	game.actions._auto_unload()
-	assert_eq(sled["items"], {"cloth": 2, "bandage": 3, "food_pack": 2})
+	assert_eq(sled["items"], {"wood": 2, "scrap": 3, "food_pack": 2})
 	var trips: int = game.telemetry.trips
 	assert_true(game.actions.load_train(p))
 	assert_eq(sled["items"], {})
-	assert_eq(game.unloaded, {"scrap": 1, "cloth": 2, "bandage": 3, "food_pack": 2})
+	assert_eq(game.unloaded, {"scrap": 4, "wood": 2, "food_pack": 2})
 	assert_eq(game.telemetry.trips, trips + 1)
 	assert_ne(p.sled_id, 0, "unloading keeps the rope")
 	assert_false(game.actions.load_train(p))
@@ -694,18 +707,18 @@ func test_d7_bag_only_and_sled_reference_cell_outside() -> void:
 	assert_true(game.actions.load_train(p))
 	assert_eq(game.unloaded, {"scrap": 2})
 	assert_eq(p.items, {"cloth": 1})
-	sled["items"] = {"cloth": 3, "bandage": 2}
+	sled["items"] = {"wood": 3, "food_pack": 2}
 	sled["pos"] = Vector3(7.5, 0, 20.5)
 	assert_false(game.actions.load_train(p), "the sled reference is outside the actual unloading cells")
-	assert_eq(sled["items"], {"cloth": 3, "bandage": 2})
+	assert_eq(sled["items"], {"wood": 3, "food_pack": 2})
 	sled["pos"] = Vector3(9.5, 3, 20.5)
 	sled["level"] = 1
 	assert_false(game.actions.load_train(p))
 	sled["pos"] = Vector3(9.5, 0, 20.5)
 	sled["level"] = 0
 	assert_true(game.actions.load_train(p))
-	assert_eq(int(game.unloaded["cloth"]), 3)
-	assert_eq(int(game.unloaded["bandage"]), 2)
+	assert_eq(int(game.unloaded["wood"]), 3)
+	assert_eq(int(game.unloaded["food_pack"]), 2)
 
 
 # D8: The stop's receipt never includes a sled that was not unloaded.
@@ -713,23 +726,23 @@ func test_d8_all_end_reasons_leave_sled_cargo_out_of_receipt() -> void:
 	# A sled left outside the unloading area: it and its load stay in the field (sled.md 2.1).
 	for reason: String in ["departed", "limit", "wiped"]:
 		var game: Variant = _game()
-		var sled: Dictionary = _sled(game, {"food_pack": 4, "cloth": 2})
+		var sled: Dictionary = _sled(game, {"food_pack": 4, "scrap": 2})
 		sled["pos"] = Vector3(24.5, 0, 20.5)
 		assert_false(Sled.in_unloading(game, sled))
 		game.finish(reason)
-		assert_eq(sled["items"], {"food_pack": 4, "cloth": 2}, reason)
+		assert_eq(sled["items"], {"food_pack": 4, "scrap": 2}, reason)
 		assert_eq(sled["puller"], "")
 		assert_eq(game.player.sled_id, 0)
 		assert_eq(game.unloaded, {})
 		var stock: Dictionary = game.saved_result["receipt"]["stock"]
 		assert_eq(int(stock.get("food", 0)), 0)
-		assert_eq(int(stock.get("cloth", 0)), 0)
+		assert_eq(int(stock.get("scrap", 0)), 0)
 
 
 func test_d8_a_sled_in_the_unloading_area_goes_aboard_on_leaving() -> void:
 	for reason: String in ["departed", "limit", "wiped"]:
 		var game: Variant = _game()
-		var sled: Dictionary = _sled(game, {"food_pack": 4, "cloth": 2})
+		var sled: Dictionary = _sled(game, {"food_pack": 4, "scrap": 2})
 		assert_true(Sled.in_unloading(game, sled))
 		assert_true(game.actions.pull_sled(game.player, int(sled["id"])))
 		game.finish(reason)
@@ -737,7 +750,7 @@ func test_d8_a_sled_in_the_unloading_area_goes_aboard_on_leaving() -> void:
 		assert_eq(sled["puller"], "")
 		assert_eq(game.player.sled_id, 0)
 		assert_eq(int(game.unloaded.get("food_pack", 0)), 4, reason)
-		assert_eq(int(game.unloaded.get("cloth", 0)), 2, reason)
+		assert_eq(int(game.unloaded.get("scrap", 0)), 2, reason)
 	# Already loaded by the key: nothing is counted twice.
 	var twice: Variant = _game()
 	var loaded: Dictionary = _sled(twice, {"food_pack": 3})
@@ -1001,16 +1014,16 @@ func test_d10_conservation_each_step_and_transfer_commit_checks() -> void:
 func test_d10_pane_moves_counts_immediately_past_capacity() -> void:
 	var game: Variant = _game()
 	var p: Variant = game.player
-	p.items = {"bandage": 25, "scrap": 2}
+	p.items = {"junk_nails": 25, "scrap": 2}
 	var sled: Dictionary = _sled(game, {"scrap": 24})
 	var id: int = int(sled["id"])
 	var start: Dictionary = _counts(game)
 	game.hud.sled_panel(id)
 	assert_false(_buttons(game).has("모두 담기"))
 	game.hud._inv_bag()
-	game.hud._inv_put("bandage")
-	assert_eq(int(sled["items"]["bandage"]), 25)
-	assert_false(p.items.has("bandage"))
+	game.hud._inv_put("junk_nails")
+	assert_eq(int(sled["items"]["junk_nails"]), 25)
+	assert_false(p.items.has("junk_nails"))
 	assert_eq(p.action, "")
 	_conserved(game, start, {})
 	game.hud._inv_put("scrap")
@@ -1018,8 +1031,8 @@ func test_d10_pane_moves_counts_immediately_past_capacity() -> void:
 	assert_eq(int(p.items["scrap"]), 1)
 	assert_eq(Sled.state(sled), 3)
 	_conserved(game, start, {})
-	game.hud._inv_sled_take(id, "bandage")
-	assert_eq(int(p.items["bandage"]), 25)
+	game.hud._inv_sled_take(id, "junk_nails")
+	assert_eq(int(p.items["junk_nails"]), 25)
 	_conserved(game, start, {})
 	game.hud._inv_sled_take(id, "scrap")
 	assert_eq(int(p.items["scrap"]), 2)
@@ -1065,3 +1078,688 @@ func _without_unseeded(saved: Dictionary) -> Dictionary:
 	combat.erase("_gear_rng")
 	combat.erase("_wound_rng")
 	return saved
+
+
+func test_d3_surrender_card_and_direct_shoot_wait_for_rearm() -> void:
+	var game: Variant = _game(true)
+	assert_eq(game.raiders.size(), 1)
+	if game.raiders.is_empty():
+		return
+	var p: Variant = game.player
+	var raider: Variant = game.raiders[0]
+	var sled: Dictionary = _sled(game)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	game.ai._surrender(raider)
+	var dropped: Array = game.ground_items.duplicate(true)
+	var decisions: Array = game.decisions.duplicate(true)
+	var sounds: Array = game.sounds.duplicate(true)
+	var witnesses: Array = game.receipt._witnessed.duplicate(true)
+	for released: bool in [false, true]:
+		if released:
+			game.actions.release_sled(p)
+			assert_eq(p.sled_id, 0)
+			assert_gt(p.sled_rearm_t, 0.0)
+		assert_true(p.sled_weapon_stowed)
+		var shoot: Button = game.hud.modal.find_child("Say_shoot", true, false) as Button
+		assert_not_null(shoot)
+		if shoot == null:
+			return
+		assert_true(shoot.disabled)
+		assert_eq(shoot.modulate, Color(0.5, 0.5, 0.5))
+		var words: String = ""
+		for label: Label in shoot.find_children("*", "Label", true, false):
+			words += label.text.replace(FieldHud.UiFonts.WORD_JOINER, "")
+		assert_true(words.contains("무기를 썰매 짐에 묶어 두었다."))
+		game.ai._on_surrender_choice("shoot", raider)
+		var reopened: Button = game.hud.modal.find_child("Say_shoot", true, false) as Button
+		assert_true(reopened.disabled)
+		for choice: String in ["take", "disarm"]:
+			var other: Button = game.hud.modal.find_child("Say_" + choice, true, false) as Button
+			assert_false(other.disabled)
+		assert_true(raider.is_alive())
+		assert_eq(String(raider.brain["state"]), "surrender")
+		assert_eq(game.sounds, sounds)
+		assert_eq(game.decisions, decisions)
+		assert_eq(game.receipt._witnessed, witnesses)
+		assert_eq(game.ground_items, dropped, "reopening does not surrender or drop a weapon twice")
+	Sled.tick_rearm(p, 1.01)
+	assert_false(p.sled_weapon_stowed)
+	game.ai._surrender_card(raider)
+	var ready: Button = game.hud.modal.find_child("Say_shoot", true, false) as Button
+	assert_false(ready.disabled)
+	assert_eq(ready.modulate, Color.WHITE)
+	ready.pressed.emit()
+	assert_false(raider.is_alive())
+	assert_eq(game.decisions.size(), decisions.size() + 1)
+	assert_eq(game.decisions[-1], {"id": "raider_surrender", "choice": "shoot"})
+	assert_eq(String(game.sounds[-1]["tag"]), "gun")
+	assert_eq(game.receipt._witnessed.size(), witnesses.size() + 1)
+
+
+func _take_box(game: Variant, contents: Array) -> Dictionary:
+	var box: Dictionary = {"id": "sled_weapons", "name": "보관함", "cell": Vector2i(11, 20), "level": 0,
+		"building": -1, "search": 1.0, "items": contents.duplicate(), "locked": false, "searched": true}
+	game.data["containers"]["sled_weapons"] = box
+	game.view.add_container("sled_weapons")
+	return box
+
+
+func test_d3_rearm_blocks_box_row_and_ground_weapon_until_one_second() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.set_weapon_slots([{"id": "knife", "quality": "factory", "condition": 0.73, "loaded": 0}])
+	p.items = {"scrap": 1}
+	var box: Dictionary = _take_box(game, ["pistol"])
+	var sled: Dictionary = _sled(game)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	game.actions.release_sled(p)
+	assert_eq(p.sled_id, 0)
+	assert_eq(p.sled_rearm_t, 1.0)
+	var bag: Dictionary = p.items.duplicate(true)
+	var hands: Array = p.hands.duplicate(true)
+	game.ground_items.append({"pos": p.position, "id": "pistol", "n": 1,
+		"weapon": {"id": "pistol", "quality": "factory", "condition": 0.41, "loaded": 2}})
+	game.ground_items.append({"pos": p.position, "id": "wood_stake", "n": 1})
+	var ground: Array = game.ground_items.duplicate(true)
+	game.hud.loot("sled_weapons")
+	game.hud._loot_take("sled_weapons", 0)
+	game.actions.pick_up(p, 0)
+	game.actions.pick_up(p, 1)
+	assert_eq(p.action, "")
+	assert_eq(game.actions.taking_item(p), "")
+	assert_eq(box["items"], ["pistol"])
+	assert_eq(p.items, bag)
+	assert_eq(p.hands, hands)
+	assert_eq(game.ground_items, ground)
+	Sled.tick_rearm(p, 0.99)
+	assert_true(p.sled_weapon_stowed)
+	game.hud._loot_take("sled_weapons", 0)
+	assert_eq(p.action, "")
+	Sled.tick_rearm(p, 0.02)
+	assert_false(p.sled_weapon_stowed)
+	game.hud._loot_take("sled_weapons", 0)
+	assert_eq(p.action, "take")
+	_finish_work(game)
+	assert_eq(box["items"], [])
+	assert_eq(p.items, bag)
+	assert_eq(p.hands.size(), 2)
+	assert_eq(String(p.hands[0]["id"]), "pistol")
+	assert_eq(game.ground_items, ground)
+	game.actions.pick_up(p, 1)
+	assert_eq(int(p.items.get("wood_stake", 0)), 1)
+	assert_eq(game.ground_items.size(), 1)
+
+
+func test_d3_take_completion_and_take_all_preserve_stowed_weapons() -> void:
+	for full_hands: bool in [false, true]:
+		var game: Variant = _game()
+		var p: Variant = game.player
+		p.set_weapon_slots([{"id": "knife", "quality": "factory", "condition": 1.0, "loaded": 0},
+			{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}] if full_hands else [])
+		var hands: Array = p.hands.duplicate(true)
+		var box: Dictionary = _take_box(game, ["pistol", "scrap"])
+		assert_true(game.actions._begin_take(p, "sled_weapons", "pistol"))
+		# A completion already in flight must not fall through into the bag.
+		p.sled_weapon_stowed = true
+		p.sled_rearm_t = 1.0
+		_finish_work(game)
+		assert_eq(box["items"], ["pistol", "scrap"])
+		assert_eq(p.items, {})
+		assert_eq(p.hands, hands)
+		assert_false(bool(box.get("busy", false)))
+		game.actions.take_all(p, "sled_weapons")
+		assert_eq(game.actions.taking_item(p), "scrap", "the queue skips the weapon and continues")
+		_finish_work(game)
+		assert_eq(box["items"], ["pistol"])
+		assert_eq(p.items, {"scrap": 1})
+		assert_eq(p.hands, hands)
+		assert_eq(p.action, "")
+		assert_false(game.actions.take_queue.has(p.get_instance_id()))
+
+
+func test_d3_whittling_keeps_plank_while_weapon_is_stowed() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.set_weapon_slots([])
+	p.items = {"plank": 1}
+	var sled: Dictionary = _sled(game)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	game.actions.release_sled(p)
+	game.actions.whittle_stake(p)
+	assert_eq(p.action, "")
+	game.actions._whittled(p)
+	assert_false(game.actions._into_hand(p, "wood_stake"))
+	assert_eq(p.items, {"plank": 1})
+	assert_eq(p.hands, [])
+	Sled.tick_rearm(p, 1.01)
+	game.actions.whittle_stake(p)
+	assert_eq(p.action, "craft")
+	_finish_work(game)
+	assert_eq(p.items, {})
+	assert_eq(p.hands.size(), 1)
+	assert_eq(String(p.hands[0]["id"]), "wood_stake")
+
+
+func test_d5_taut_rope_stays_put_on_two_half_metre_backsteps() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.position = Vector3(11.35, 0, 20.5)
+	var sled: Dictionary = _sled(game)
+	sled["pos"] = Vector3(10, 0, 20.5)
+	var parked: Vector3 = sled["pos"]
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	for _step: int in 2:
+		var dest: Vector3 = p.position - Vector3(0.5, 0, 0)
+		Sled.before_move(game, p, dest)
+		p.position = dest
+		assert_eq(sled["pos"], parked)
+		assert_eq(sled["trail"][-1], dest)
+		assert_eq(sled["trail"].size(), 2)
+		assert_true(Sled.trail_clear(game, sled, p.position))
+
+
+func test_d5_corner_backsteps_keep_sled_and_clear_bends() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.position = Vector3(11.1, 0, 20.8)
+	var sled: Dictionary = _sled(game)
+	sled["pos"] = Vector3(10.8, 0, 20.8)
+	game.grid.set_solid(Vector2i(10, 21), FieldGrid.Solid.WALL)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	var round_corner: Vector3 = Vector3(11.1, 0, 22.0)
+	Sled.before_move(game, p, round_corner)
+	p.position = round_corner
+	var parked: Vector3 = sled["pos"]
+	assert_gt(parked.x, 10.8, "the initial outward step actually pulled the sled")
+	assert_false(Sled.path_clear(game, parked, p.position))
+	for dest: Vector3 in [Vector3(11.1, 0, 21.6), Vector3(11.1, 0, 21.2)]:
+		Sled.before_move(game, p, dest)
+		p.position = dest
+		assert_eq(sled["pos"], parked)
+		assert_eq(sled["trail"][-1], dest)
+		assert_true(Sled.trail_clear(game, sled, p.position))
+		assert_eq(p.sled_id, int(sled["id"]))
+
+
+func test_d5_two_hundred_zigzag_steps_keep_trail_small() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	var sled: Dictionary = _sled(game)
+	assert_true(game.actions.pull_sled(p, int(sled["id"])))
+	for step: int in 200:
+		var old_person: Vector3 = p.position
+		var old_sled: Vector3 = sled["pos"]
+		var dest: Vector3 = Vector3(10.5 + float(step + 1) * 0.05, 0, 20.5 + (0.02 if step % 2 == 0 else 0.0))
+		Sled.before_move(game, p, dest)
+		p.position = dest
+		assert_lte(sled["trail"].size(), 8, "step %d" % step)
+		assert_eq(sled["trail"][-1], dest)
+		assert_true(Sled.trail_clear(game, sled, p.position))
+		assert_lte(old_sled.distance_to(sled["pos"]), old_person.distance_to(dest) + Sled.ROPE_EPS)
+
+
+func test_d7_sled_refuses_body_items_and_dims_bag_rows() -> void:
+	var game: Variant = _game()
+	var p: Variant = game.player
+	p.items = {"bandage": 2, "pistol": 1, "cloth": 1, "medkit": 1, "ammo_craft": 2,
+		"flare": 1, "tweezers": 1, "needle_thread": 1, "can_opener": 1, "scrap": 2}
+	var bag: Dictionary = p.items.duplicate(true)
+	var sled: Dictionary = _sled(game)
+	var id: int = int(sled["id"])
+	var pane: Control = InventoryPane._bag_rows(game.hud, p, {"kind": "sled", "id": id})
+	add_child(pane)
+	var disabled: Dictionary = {}
+	for key: Button in pane.find_children("*", "Button", true, false):
+		if key.has_meta("item_id"):
+			disabled[String(key.get_meta("item_id"))] = key.disabled
+	for item: String in bag:
+		assert_eq(bool(disabled.get(item, false)), item != "scrap", item)
+		assert_eq(game.actions.goes_to_train(item), item == "scrap", item)
+	pane.free()
+	game.hud.sled_panel(id)
+	game.hud._inv_bag()
+	for item: String in bag:
+		if item == "scrap":
+			continue
+		game.hud._inv_put(item)
+		assert_eq(p.items, bag)
+		assert_eq(sled["items"], {})
+		var note: String = String(game.hud.toasts[-1]["l"].text).replace(FieldHud.UiFonts.WORD_JOINER, "")
+		assert_eq(note, "이건 가방에 둔다")
+	game.hud._inv_put("scrap")
+	assert_eq(sled["items"], {"scrap": 1})
+	assert_eq(int(p.items["scrap"]), 1)
+	game.hud._inv_sled_take(id, "scrap")
+	assert_eq(sled["items"], {})
+	assert_eq(p.items, bag)
+
+
+func test_d8_train_button_and_departure_conserve_sled_stock_and_named_receipts() -> void:
+	# Whole stock units leave the receipt's existing rounding outside this check.
+	var cargo: Dictionary = {"scrap": 2, "food_pack": 4, "rare_saw_blades": 2}
+	for by_button: bool in [false, true]:
+		var game: Variant = _game()
+		var p: Variant = game.player
+		p.items = cargo.duplicate()
+		var sled: Dictionary = _sled(game)
+		for item: String in cargo:
+			assert_true(game.actions.goes_to_train(item))
+			for _piece: int in int(cargo[item]):
+				assert_true(game.actions.move_sled(p, int(sled["id"]), item, true))
+		assert_eq(sled["items"], cargo)
+		assert_eq(p.items, {})
+		if by_button:
+			assert_true(game.actions.load_train(p))
+			assert_eq(game.unloaded, cargo)
+			assert_eq(sled["items"], {})
+			assert_false(game.actions.load_train(p))
+		game.finish("departed")
+		assert_eq(game.unloaded, cargo, "every accepted count reaches settlement exactly once")
+		assert_eq(sled["items"], {})
+		var receipt: Dictionary = game.saved_result["receipt"]
+		assert_almost_eq(float(receipt["stock"].get("scrap", 0.0)), 6.0, EPS)
+		assert_almost_eq(float(receipt["stock"].get("food", 0.0)), 2.0, EPS)
+		assert_eq(receipt["items"]["gained"].count("rare_saw_blades"), 2)
+
+
+func test_d7_offer_layout_wraps_two_four_six_at_both_widths() -> void:
+	for view: Vector2 in [Vector2(1280, 720), Vector2(1560, 720)]:
+		var screen: Rect2 = Rect2(Vector2.ZERO, view)
+		var depart: Rect2 = Rect2(view + FieldHud.DEPART_AT, Vector2(140, 84))
+		var context: Rect2 = Rect2(view + FieldHud.CONTEXT_AT, Vector2(140, 84))
+		var faces: Rect2 = Rect2(Vector2(0, view.y - FieldHud.ALLIES_UP), Vector2(view.x, FieldHud.CHIP_TOKEN))
+		for count: int in [2, 4, 6]:
+			var sizes: Array[Vector2] = []
+			for index: int in count:
+				sizes.append(Vector2(100 if index == count - 1 else 180, 72))
+			var gap: float = FieldHud.offer_gap(sizes, view, depart.position.x)
+			assert_eq(gap, 24.0)
+			var rects: Array[Rect2] = FieldHud.offer_rects(sizes, view, depart.position.x - gap, faces.position.y - 12.0)
+			assert_eq(rects.size(), count)
+			var first_row: int = 0
+			for index: int in rects.size():
+				var rect: Rect2 = rects[index]
+				assert_eq(rect.size, sizes[index])
+				assert_true(screen.encloses(rect))
+				assert_false(rect.intersects(depart))
+				assert_false(rect.intersects(context))
+				assert_false(rect.intersects(faces))
+				assert_lte(rect.end.x, depart.position.x - 24.0)
+				assert_lte(rect.end.y, faces.position.y - 12.0)
+				if rect.position.y == rects[0].position.y:
+					first_row += 1
+				for previous: int in index:
+					assert_false(rect.intersects(rects[previous]))
+			assert_eq(first_row, mini(count, 2 if view.x == 1280 else 3))
+			assert_eq(rects[0].position.x, view.x * 0.5 - 260.0)
+			if count == 2:
+				assert_eq(rects[0].position, view * 0.5 + Vector2(-260, 90))
+				assert_eq(rects[1].position, rects[0].position + Vector2(192, 0))
+
+
+func test_d7_offer_reflows_open_list_from_live_node_bounds() -> void:
+	var viewport: SubViewport = SubViewport.new()
+	viewport.size = Vector2i(1280, 720)
+	add_child(viewport)
+	var game: Variant = _game(false, viewport)
+	fields.append(viewport)
+	var hud: Variant = game.hud
+	for view: Vector2i in [Vector2i(1280, 720), Vector2i(1560, 720)]:
+		viewport.size = view
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var depart: Rect2 = hud.depart_button.get_global_rect()
+		var context: Rect2 = hud.context_button.get_global_rect()
+		var faces: Rect2 = hud.allies_box.get_global_rect()
+		var plate: StyleBox = hud.depart_button.get_theme_stylebox("normal")
+		var seen: Vector2 = plate.get("seen")
+		var drawn: Rect2 = Rect2(depart.get_center() - seen * 0.5, seen)
+		assert_eq(seen, FieldHud.DEPART_SEEN)
+		assert_gte(seen.y, FieldHud.MIN_TOUCH)
+		assert_true(hud.touch_rect(hud.depart_button).encloses(drawn))
+		var pressed_plate: StyleBox = hud.depart_button.get_theme_stylebox("pressed")
+		var pressed_drawn: Rect2 = pressed_plate.call("_shape", depart)
+		assert_true(hud.touch_rect(hud.depart_button).encloses(pressed_drawn))
+		assert_gte(context.position.y - depart.end.y, 0.0)
+		assert_gte(context.position.y - drawn.end.y, 0.0)
+		assert_gte(context.position.y - pressed_drawn.end.y, 0.0)
+		for count: int in [2, 4, 6]:
+			var choices: Array = []
+			for choice_index: int in count - 1:
+				choices.append({"label": "선택 %d" % choice_index, "call": Callable()})
+			hud.offer(choices)
+			var first_y: float = (hud.offer_box.get_child(0) as Control).global_position.y
+			var first_row: int = 0
+			assert_eq(hud.offer_box.get_child_count(), count)
+			for key: Control in hud.offer_box.get_children():
+				var rect: Rect2 = key.get_global_rect()
+				assert_true(Rect2(Vector2.ZERO, Vector2(view)).encloses(rect))
+				assert_false(rect.intersects(depart))
+				assert_false(rect.intersects(context))
+				assert_false(rect.intersects(faces))
+				assert_lte(rect.end.x, depart.position.x - 24.0)
+				assert_gte(drawn.position.x - rect.end.x, 24.0)
+				assert_lte(rect.end.y, faces.position.y - 12.0)
+				if rect.position.y == first_y:
+					first_row += 1
+			assert_eq(first_row, mini(count, 2 if view.x == 1280 else 3))
+	# Moving the actual pad changes the limit without changing any layout constant.
+	hud.depart_button.position.x -= 40.0
+	hud._layout_offer()
+	var third: Control = hud.offer_box.get_child(2)
+	var first: Control = hud.offer_box.get_child(0)
+	assert_gt(third.position.y, first.position.y)
+	hud._offer_pick(Callable())
+	assert_eq(hud.offer_box.get_child_count(), 0)
+
+
+func test_d9_legacy_body_cargo_drops_once_in_both_restore_paths() -> void:
+	for exact_mode: bool in [false, true]:
+		for by_button: bool in [false, true]:
+			var game: Variant = _game()
+			var sled: Dictionary = _sled(game, {"pistol": 1, "bandage": 2, "scrap": 2})
+			var at: Vector3 = sled["pos"]
+			var saved: Dictionary = _saved(game)
+			var original: String = FieldSave.to_json(saved)
+			for _restore: int in 2:
+				_apply(game, saved, exact_mode)
+				assert_eq(game.sleds[0]["items"], {"scrap": 2})
+				assert_eq(game.ground_items.size(), 2, "exact resume must not duplicate either drop")
+				var ground_counts: Dictionary = {}
+				for ground: Dictionary in game.ground_items:
+					ground_counts[String(ground["id"])] = int(ground["n"])
+					assert_almost_eq(ground["pos"], at, Vector3.ONE * Sled.ROPE_EPS)
+					if ground["id"] == "pistol":
+						assert_eq(ground["weapon"], {"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 0})
+					else:
+						assert_false(ground.has("weapon"))
+				assert_eq(ground_counts, {"pistol": 1, "bandage": 2})
+				var rng_state: int = game.rng.state
+				Sled.reconcile(game)
+				assert_eq(game.rng.state, rng_state)
+				assert_eq(game.ground_items.size(), 2)
+			assert_eq(FieldSave.to_json(saved), original, "migration does not edit the source save")
+			if by_button:
+				assert_true(game.actions.load_train(game.player))
+				assert_eq(game.unloaded, {"scrap": 2})
+			game.finish("departed")
+			assert_eq(game.unloaded, {"scrap": 2})
+			assert_eq(game.sleds[0]["items"], {})
+			assert_eq(game.ground_items.size(), 2)
+			assert_almost_eq(float(game.saved_result["receipt"]["stock"].get("scrap", 0)), 2.0, EPS)
+			_discard_field(game)
+
+
+func test_d8_sled_unload_guards_keep_injected_body_cargo() -> void:
+	for by_button: bool in [false, true]:
+		var game: Variant = _game()
+		var sled: Dictionary = _sled(game, {"pistol": 1, "bandage": 2, "scrap": 2})
+		if by_button:
+			assert_true(game.actions.load_train(game.player))
+			assert_eq(sled["items"], {"pistol": 1, "bandage": 2})
+			assert_eq(game.unloaded, {"scrap": 2})
+			assert_false(game.actions.load_train(game.player))
+		game.finish("departed")
+		assert_eq(sled["items"], {"pistol": 1, "bandage": 2})
+		assert_eq(game.unloaded, {"scrap": 2}, "both exits reject cargo that bypassed restore")
+		assert_almost_eq(float(game.saved_result["receipt"]["stock"].get("scrap", 0)), 2.0, EPS)
+		_discard_field(game)
+
+
+func test_d9_dense_legacy_trail_simplifies_before_its_last_bend() -> void:
+	for exact_mode: bool in [false, true]:
+		var game: Variant = _game()
+		var p: Variant = game.player
+		var start: Vector3 = Vector3(10.8, 0, 20.8)
+		var corner: Vector3 = Vector3(11.1, 0, 20.8)
+		var end: Vector3 = Vector3(11.1, 0, 21.4)
+		p.position = corner
+		var sled: Dictionary = _sled(game, {"scrap": 2})
+		sled["pos"] = start
+		game.grid.set_solid(Vector2i(10, 21), FieldGrid.Solid.WALL)
+		assert_true(game.actions.pull_sled(p, int(sled["id"])))
+		var dense: PackedVector3Array = PackedVector3Array()
+		for point_index: int in 59:
+			dense.append(start.lerp(corner, float(point_index) / 58.0))
+		dense.append(end)
+		p.position = end
+		sled["trail"] = dense
+		assert_eq(dense.size(), 60)
+		assert_lte(Sled.trail_length(dense), Sled.ROPE_LENGTH)
+		assert_true(Sled.trail_clear(game, sled, p.position))
+		assert_false(Sled.path_clear(game, start, end))
+		var saved: Dictionary = _saved(game)
+		_apply(game, saved, exact_mode)
+		var restored: Dictionary = game.sleds[0]
+		var trail: PackedVector3Array = restored["trail"]
+		assert_eq(p.sled_id, int(restored["id"]))
+		assert_eq(trail.size(), 3, "the dense front is reduced before the final blocked shortcut")
+		assert_lte(trail.size(), Sled.TRAIL_MAX_POINTS)
+		assert_almost_eq(trail[0], start, Vector3.ONE * Sled.ROPE_EPS)
+		assert_almost_eq(trail[-1], end, Vector3.ONE * Sled.ROPE_EPS)
+		assert_true(Sled.trail_clear(game, restored, p.position))
+		assert_eq(restored["items"], {"scrap": 2})
+		_discard_field(game)
+
+
+func test_d9_irreducible_legacy_trail_over_cap_uses_safe_release() -> void:
+	assert_eq(Sled.TRAIL_MAX_POINTS, 16)
+	for exact_mode: bool in [false, true]:
+		var game: Variant = _game()
+		var p: Variant = game.player
+		p.position = Vector3(3.5, 0, 8.5)
+		var sled: Dictionary = _sled(game, {"scrap": 2})
+		assert_true(game.actions.pull_sled(p, int(sled["id"])))
+		var trail: PackedVector3Array = PackedVector3Array()
+		for point_index: int in 20:
+			trail.append(Vector3(2.5 + 2.0 * point_index, 0, 8.5 if point_index % 2 == 0 else 10.5))
+			if point_index > 0 and point_index < 19:
+				game.grid.set_solid(Vector2i(2 + 2 * point_index, 10 if point_index % 2 == 0 else 8), FieldGrid.Solid.WALL)
+		for point_index: int in range(1, trail.size()):
+			assert_true(Sled.path_clear(game, trail[point_index - 1], trail[point_index]))
+		assert_eq(Sled.simplify_trail(game, trail).size(), 20, "all eighteen bends are required")
+		p.position = trail[-1]
+		sled["trail"] = trail
+		var at: Vector3 = sled["pos"]
+		var saved: Dictionary = _saved(game)
+		_apply(game, saved, exact_mode)
+		assert_eq(p.sled_id, 0)
+		assert_true(p.sled_weapon_stowed)
+		assert_gt(p.sled_rearm_t, 0.0, "the ordinary rope release starts drawing the weapon")
+		assert_eq(game.sleds[0]["puller"], "")
+		assert_false(game.sleds[0].has("trail"))
+		assert_eq(game.sleds[0]["pos"], at)
+		assert_eq(game.sleds[0]["items"], {"scrap": 2})
+		assert_true(game.hud.toasts.any(func(row: Dictionary) -> bool: return String(row["l"].text).replace("\u2060", "") == "썰매가 걸려 줄을 놓았다"))
+		_discard_field(game)
+
+
+func test_d3_companion_search_respects_both_weapon_storage_states() -> void:
+	for stowed: bool in [false, true]:
+		var game: Variant = _game()
+		var mate: Variant = game.squad[1]
+		mate.position = game.player.position
+		mate.bag = "pack"
+		mate.set_weapon_slots([{"id": "knife", "quality": "factory", "condition": 0.75, "loaded": 0}])
+		mate.sled_weapon_stowed = stowed
+		var hands: Array = mate.hands.duplicate(true)
+		var box: Dictionary = _take_box(game, ["pistol", "bandage", "scrap"])
+		box["searched"] = false
+		game.actions._searched(mate, "sled_weapons")
+		assert_true(box["searched"])
+		assert_eq(mate.hands, hands)
+		assert_eq(int(mate.items.get("bandage", 0)), 1)
+		assert_eq(int(mate.items.get("scrap", 0)), 1)
+		assert_eq(int(mate.items.get("pistol", 0)), 0 if stowed else 1)
+		assert_eq(box["items"], ["pistol"] if stowed else [])
+		assert_true(game.ground_items.is_empty())
+		_discard_field(game)
+
+
+func test_d3_body_search_respects_both_weapon_storage_states() -> void:
+	for stowed: bool in [false, true]:
+		var game: Variant = _game()
+		var p: Variant = game.player
+		p.set_weapon_slots([])
+		p.sled_weapon_stowed = stowed
+		var weapon: Dictionary = {"id": "pistol", "quality": "factory", "condition": 0.43, "loaded": 3}
+		var dead: Dictionary = game.zombies.spawn("dead", p.position + Vector3(0.4, 0, 0))
+		dead["state"] = "dead"
+		game.zombies.set_loot(dead, [{"id": "pistol", "n": 1, "weapon": weapon.duplicate()},
+			{"id": "knife", "n": 2}, {"id": "bandage", "n": 2}, {"id": "scrap", "n": 1}])
+		game.actions.search_body(p, int(dead["id"]))
+		assert_eq(p.action, "loot")
+		_finish_work(game)
+		assert_true(dead["searched"])
+		assert_eq(dead["loot"], [])
+		assert_eq(int(p.items.get("bandage", 0)), 2)
+		assert_eq(int(p.items.get("scrap", 0)), 1)
+		if stowed:
+			assert_eq(p.hands, [])
+			assert_false(p.items.has("pistol"))
+			assert_false(p.items.has("knife"))
+			assert_eq(game.ground_items.size(), 2)
+			for ground: Dictionary in game.ground_items:
+				assert_eq(ground["pos"], p.position)
+				if ground["id"] == "pistol":
+					assert_eq(ground["weapon"], weapon)
+				else:
+					assert_eq(ground["id"], "knife")
+					assert_eq(int(ground["n"]), 2)
+			# A second completion cannot duplicate the weapons left at the feet.
+			game.actions._body_searched(p, int(dead["id"]))
+			assert_eq(game.ground_items.size(), 2)
+			p.sled_weapon_stowed = false
+			game.actions.pick_up(p, 0)
+			game.actions.pick_up(p, 0)
+		assert_eq(p.hands, [weapon])
+		assert_eq(int(p.items.get("knife", 0)), 2)
+		assert_true(game.ground_items.is_empty())
+		_discard_field(game)
+
+
+func _touch_field() -> Variant:
+	var viewport: SubViewport = SubViewport.new()
+	viewport.size = Vector2i(1280, 720)
+	add_child(viewport)
+	var game: Variant = _game(false, viewport)
+	fields.append(viewport)
+	return game
+
+
+func test_b03_offer_blocks_new_depart_shove_attack_and_aim_presses() -> void:
+	var game: Variant = _touch_field()
+	var p: Variant = game.player
+	var hud: Variant = game.hud
+	p.set_weapon_slots([{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 8}])
+	hud.tick(0.0)
+	await get_tree().process_frame
+	hud.offer([{"label": "목록 유지", "call": Callable()}])
+	var before: Array = [p.strike_t, p.shove_t, p.hold_attack, p.aim.active, hud.auto_aim]
+	for key: Button in [hud.depart_button, hud.shove_button, hud.attack_button, hud.aim_button, hud.manual_button]:
+		key.show()
+		key.disabled = false
+		var at: Vector2 = key.get_global_rect().get_center()
+		for finger: int in [0, 7]:
+			assert_true(hud.finger_down(finger, at))
+			assert_false(hud.fingers.has(finger), "a covered pad never owns the new finger")
+			hud.finger_up(finger, at)
+			assert_false(key.button_pressed)
+	assert_eq([p.strike_t, p.shove_t, p.hold_attack, p.aim.active, hud.auto_aim], before)
+	assert_false(hud.modal_open, "departure did not open")
+	assert_false(game.ended)
+	# Walking and RUN still take new fingers while the offer remains up.
+	var run_at: Vector2 = hud.run_button.get_global_rect().get_center()
+	assert_true(hud.finger_down(12, run_at))
+	assert_eq(hud.fingers[12]["pad"], hud.run_button)
+	hud.finger_cancel(12)
+	assert_true(hud.finger_down(13, hud.stick_home()))
+	assert_eq(hud.fingers[13]["kind"], "stick")
+	hud.finger_cancel(13)
+	assert_eq(hud.offer_box.get_child_count(), 2)
+
+
+func test_b03_top_offer_touch_rect_beats_overlapping_pad() -> void:
+	var game: Variant = _touch_field()
+	var hud: Variant = game.hud
+	await get_tree().process_frame
+	hud.depart_button.show()
+	var picked: Array[String] = []
+	for finger: int in [0, 7]:
+		hud.offer([{"label": "아래 선택", "call": func() -> void: picked.append("아래")},
+			{"label": "위 선택", "call": func() -> void: picked.append("위")}])
+		var depart: Rect2 = hud.depart_button.get_global_rect()
+		var top: Button = hud.offer_box.get_child(1) as Button
+		for choice_index: int in 2:
+			var choice: Button = hud.offer_box.get_child(choice_index) as Button
+			choice.global_position = depart.position - Vector2(0, 72)
+			choice.size = Vector2(180, 72)
+		var at: Vector2 = depart.position + Vector2(20, 1)
+		assert_false(top.get_global_rect().has_point(at), "only the offer's enlarged touch skirt holds it")
+		assert_true(hud.touch_rect(top).has_point(at))
+		assert_true(hud.touch_rect(hud.depart_button).has_point(at))
+		assert_true(hud.finger_down(finger, at))
+		assert_eq(hud.fingers[finger]["button"], top)
+		assert_false(hud.depart_button.button_pressed)
+		assert_true(hud.finger_up(finger, at))
+		assert_eq(picked, ["위"])
+		assert_eq(hud.offer_box.get_child_count(), 0)
+		assert_false(hud.modal_open)
+		# Choosing releases the pad immediately, in the same frame.
+		assert_true(hud.finger_down(finger, depart.get_center()))
+		assert_eq(hud.fingers[finger]["pad"], hud.depart_button)
+		hud.finger_cancel(finger)
+		picked.clear()
+
+
+func test_b03_cancel_restores_pads_and_existing_fingers_finish() -> void:
+	var game: Variant = _touch_field()
+	var hud: Variant = game.hud
+	await get_tree().process_frame
+	hud.depart_button.show()
+	var depart_at: Vector2 = hud.depart_button.get_global_rect().get_center()
+	assert_true(hud.finger_down(4, depart_at))
+	hud.offer([])
+	assert_true(hud.finger_up(4, depart_at))
+	assert_true(hud.modal_open, "a finger held before the offer keeps its old lift rule")
+	hud._close_modal()
+	hud.offer([])
+	var cancel: Button = hud.offer_box.get_child(0) as Button
+	var cancel_at: Vector2 = cancel.get_global_rect().get_center()
+	assert_true(hud.finger_down(0, cancel_at))
+	assert_true(hud.finger_up(0, cancel_at))
+	assert_eq(hud.offer_box.get_child_count(), 0)
+	for key: Button in [hud.depart_button, hud.shove_button, hud.attack_button, hud.aim_button, hud.manual_button]:
+		key.show()
+		key.disabled = false
+		assert_true(hud.finger_down(8, key.get_global_rect().get_center()))
+		assert_eq(hud.fingers[8]["kind"], "pad")
+		assert_eq(hud.fingers[8]["pad"], key)
+		hud.finger_cancel(8)
+
+
+func test_b03_replaced_offer_does_not_fire_held_choice() -> void:
+	var game: Variant = _touch_field()
+	var hud: Variant = game.hud
+	await get_tree().process_frame
+	var picked: Array[String] = []
+	hud.offer([{"label": "옛 선택", "call": func() -> void: picked.append("옛")}])
+	var old_key: Button = hud.offer_box.get_child(0) as Button
+	var at: Vector2 = old_key.get_global_rect().get_center()
+	assert_true(hud.finger_down(5, at))
+	hud.offer([{"label": "새 선택", "call": func() -> void: picked.append("새")}])
+	assert_true(hud.finger_up(5, at))
+	assert_true(picked.is_empty())
+	assert_eq(hud.offer_box.get_child_count(), 2)
+
+
+func test_b03_offer_gap_falls_back_only_when_one_choice_needs_it() -> void:
+	var sizes: Array[Vector2] = [Vector2(180, 72), Vector2(100, 72)]
+	for width: float in [720.0, 760.0]:
+		var view: Vector2 = Vector2(width, 720)
+		var depart_left: float = width + FieldHud.DEPART_AT.x
+		var gap: float = FieldHud.offer_gap(sizes, view, depart_left)
+		assert_eq(gap, 12.0 if width == 720.0 else 24.0)
+		var rects: Array[Rect2] = FieldHud.offer_rects(sizes, view, depart_left - gap, 600.0)
+		for rect: Rect2 in rects:
+			assert_lte(rect.end.x, depart_left - gap)
