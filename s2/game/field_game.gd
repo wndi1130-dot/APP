@@ -419,6 +419,8 @@ var blood_fx: Node3D                  # drops and marks off a blow (decision 444
 ## Frost creeping in at the screen's edges on cold nights (plain stops; a storm has its own).
 var cold_frost: Control
 var cold_frost_mat: ShaderMaterial
+var _perf_settings: Dictionary = {}
+var _perf_renderer_active: bool = false
 
 
 func _ready() -> void:
@@ -914,7 +916,7 @@ func _update_atmosphere() -> void:
 			if p[key] != fx_params.get(key):
 				fx_params[key] = p[key]
 				changed[key] = p[key]
-		FxState.apply(changed)
+		FxState.apply(PerfSwitch.cloud_params(sun, changed) if sun.has_meta(PerfSwitch.CLOUD_OFF) else changed)
 		_set_sky_photo()
 		_set_cold_frost(float(atmo["edge_frost"]))
 		# Lights and the grade change only with the look (the grade's curve is a
@@ -1078,6 +1080,7 @@ func _build_world() -> void:
 	view_fill.transform = Transform3D(Basis.looking_at(toward, Vector3.UP), Vector3.ZERO)
 	add_child(view_fill)
 	_set_view_fill()
+	_configure_perf_switch()
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
 	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
 	lantern.omni_attenuation = LANTERN_FALLOFF
@@ -1848,6 +1851,44 @@ func continue_resume() -> bool:
 	resume_pending = false
 	paused = false
 	return true
+
+
+func _configure_perf_switch() -> void:
+	# Phone measurements only; desktop fields never read the real user file.
+	if OS.has_feature("android"):
+		_apply_perf_settings(PerfSwitch.read())
+
+
+func _apply_perf_settings(settings: Dictionary) -> void:
+	_perf_settings = settings
+	if not settings.is_empty():
+		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
+		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false)
+		if not changed.is_empty():
+			print("PERF_SWITCH ", changed)
+	# StopLoader builds with visible=false, even with processing disabled.
+	# Keep this one-shot connection for empty files too: another field may
+	# change the renderer before this hidden field is shown.
+	if not visibility_changed.is_connected(_apply_perf_renderer):
+		visibility_changed.connect(_apply_perf_renderer)
+	_apply_perf_renderer()
+
+
+func _apply_perf_renderer() -> void:
+	if not is_visible_in_tree():
+		return
+	if PerfSwitch.needs_renderer(_perf_settings):
+		var changed: Dictionary = PerfSwitch.apply_renderer(_perf_settings, get_instance_id())
+		_perf_renderer_active = true
+		if not _perf_settings.is_empty() and not changed.is_empty():
+			print("PERF_SWITCH ", changed)
+	if visibility_changed.is_connected(_apply_perf_renderer):
+		visibility_changed.disconnect(_apply_perf_renderer)
+
+
+func _exit_tree() -> void:
+	if _perf_renderer_active:
+		PerfSwitch.restore_renderer(get_instance_id())
 
 
 func _process(delta: float) -> void:
