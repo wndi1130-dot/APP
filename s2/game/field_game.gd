@@ -248,6 +248,8 @@ var audio: FieldAudio
 var music: MusicPlayer                  # background music (briefs/bgm.md); silent with no files
 
 var people: Array = []
+var _motion_tick: int = 0              # Runtime identity, independent of the rewindable clock.
+var _motion_clock: float = -INF
 var people_look  # person_visual.gd: the baked body the people wear
 var squad: Array = []
 var crew: Array = []
@@ -1885,7 +1887,9 @@ func _turn_people(delta: float) -> void:
 
 
 func _step(delta: float) -> void:
+	_begin_motion_tick()
 	clock.advance(delta)
+	_motion_clock = clock.elapsed
 	weather.dusk = clock.dusk_share()
 	var now := clock.elapsed
 	_turn_people(delta)
@@ -2111,8 +2115,8 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	if lg.blocks_body(dc):
 		dest = _slide(p.position, step)
-		if p.position.distance_to(dest) < Person.MOVE_MIN * delta:
-			p.drive_speed = 0.0
+		# A wall may leave a small tangent; it does not take away the built-up drive.
+		if dest == p.position:
 			p.moving = false
 			return
 	dc = FieldGrid.cell_of(dest)
@@ -2120,7 +2124,7 @@ func _drive(p: Person, delta: float) -> void:
 		if not actions.can_vault_window(p, dc):
 			return
 		actions.vault_window(p, dc)
-	var gone := p.position.distance_to(dest)
+	var gone := Gait.signed_distance(p, dest - p.position)
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
@@ -2147,6 +2151,7 @@ func _move_person(p: Person, delta: float) -> void:
 	var cell := FieldGrid.cell_of(p.position)
 	var lg := grid_at(p.position)
 	var spd := p.speed(lg.floor_at(cell))
+	var available_speed: float = spd
 	if spd <= 0.0:
 		p.moving = false
 		if p == player:
@@ -2172,7 +2177,7 @@ func _move_person(p: Person, delta: float) -> void:
 		if remaining > AI.FOLLOW_SETTLE:
 			break
 		remaining += p.path[index - 1].distance_to(p.path[index])
-	if _slow_step_holds(p, spd, remaining):
+	if _slow_step_holds(p, spd, remaining, available_speed):
 		return
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
@@ -2188,23 +2193,22 @@ func _move_person(p: Person, delta: float) -> void:
 			return
 		actions.vault_window(p, dc)
 	p.facing = face
-	var gone := p.position.distance_to(dest)
-	if absf(angle_difference(face, way)) > PI * 0.5:
-		gone = -gone   # stepping back: the walk's round runs back, so it is drawn backwards
+	var gone := Gait.signed_distance(p, dest - p.position)
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
 
 
 ## Decision 442: hold before distance clipping; turning keeps its usual clock.
-func _slow_step_holds(p: Person, spd: float, remaining: float) -> bool:
+func _slow_step_holds(p: Person, spd: float, remaining: float, available_speed: float = Person.MOVE_MIN) -> bool:
 	var slot: Variant = p.brain.get("follow_slot")
 	if p != player and p.command in ["follow", "cover"] and slot is Vector3 and not p.path.is_empty():
 		var target: Vector3 = slot
 		if remaining <= AI.FOLLOW_SETTLE and p.path[-1].distance_to(target) <= AI.FOLLOW_EPS:
 			p.stop()
 			return true
-	if spd <= 0.0 or (p != player and spd < Person.MOVE_MIN):
+	# Hold a turn's slow start, but let a hurt body use all of its lower pace.
+	if spd <= 0.0 or (p != player and spd < minf(Person.MOVE_MIN, available_speed)):
 		p.moving = false
 		return true
 	return false
@@ -2234,25 +2238,44 @@ static func steps_in(p, gone: float) -> int:
 	p.brain["step_r"] = fposmod(now, 1.0)
 	var n := 0
 	for at: float in SimNoise.STEP_AT:
-		n += absi(int(floorf(now - at)) - int(floorf(was - at)))   # a step back is a step too
+		# The same contacts are crossed in reverse. Use clip lift/plant markers here when available.
+		if now < was:
+			n += absi(int(ceilf(now - at)) - int(ceilf(was - at)))
+		else:
+			n += absi(int(floorf(now - at)) - int(floorf(was - at)))
 	return n
+
+
+## A new simulation tick cannot alias an old one when the clock comes round again.
+func _begin_motion_tick() -> void:
+	_motion_tick += 1
+	if clock.elapsed < _motion_clock:
+		for p: Person in people:
+			p.brain.erase(Gait.GROUND_RUN)
+			p.ground_sample.clear()
+			p.motion_epoch += 1
+	_motion_clock = clock.elapsed
 
 
 ## Moving feet sample before their round; idle ticks decay the same filter.
 func _update_ground_gait(p: Person, delta: float, gone: float = 0.0) -> void:
-	var state: Dictionary = p.brain.get(Gait.GROUND_RUN, {})
 	var tick: float = clock.elapsed
-	if float(state.get("tick", -1.0)) == tick:
+	if tick < float(p.ground_sample.get("clock", -INF)):
+		p.brain.erase(Gait.GROUND_RUN)
+		p.ground_sample.clear()
+		p.motion_epoch += 1
+	if int(p.ground_sample.get("tick", -1)) == _motion_tick and float(p.ground_sample.get("clock", -INF)) == tick:
 		return
 	var floor_kind: int = grid_at(p.position).floor_at(FieldGrid.cell_of(p.position))
 	Gait.update_ground_run(p, gone, delta, floor_kind)
-	state = p.brain[Gait.GROUND_RUN]
+	var state: Dictionary = p.brain[Gait.GROUND_RUN]
 	state["tick"] = tick if is_finite(tick) else -1.0
+	p.ground_sample = {"tick": _motion_tick, "clock": tick}
 
 
 func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> void:
 	_update_ground_gait(p, delta, gone)
-	var running := p.is_running_now()
+	var running := Gait.ground_runs(p)
 	var lg := grid_at(p.position)
 	var floor_kind := lg.floor_at(cell)
 	if steps_in(p, gone) > 0:

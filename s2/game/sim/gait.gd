@@ -60,6 +60,14 @@ const GROUND_RUN: String = "ground_run"
 const RUN_TAU: float = 0.15
 const RUN_ON: float = 1.15
 const RUN_OFF: float = 1.05
+const BACKWARD_DEG: float = 100.0
+
+
+## Both stick and path movement sign the shared round against the drawn body.
+static func signed_distance(p: Variant, ground: Vector3) -> float:
+	var gone: float = ground.length()
+	var forward := Vector3(sin(p.rotation.y), 0.0, cos(p.rotation.y))
+	return -gone if ground.dot(forward) < gone * cos(deg_to_rad(BACKWARD_DEG)) else gone
 
 
 ## "long" (a two-handed gun), "pistol" (a one-handed gun), "axe" (a heavy
