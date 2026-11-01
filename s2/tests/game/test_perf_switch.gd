@@ -223,13 +223,20 @@ func test_empty_and_unknown_settings_leave_the_light_and_fill_unchanged() -> voi
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sun.directional_shadow_max_distance = 73.0
 	sun.light_energy = 2.5
+	fill.light_energy = 1.5
+	fill.light_specular = 0.75
+	fill.light_color = Color.RED
 	var old_cache: Dictionary = Switch._renderer_state.duplicate()
-	for settings in [{}, {"unknown": false}]:
+	for settings in [{}, {"unknown": false}, {"sun_shadow": true}]:
 		assert_eq(Switch.apply(sun, fill, settings), {})
 		assert_true(sun.shadow_enabled)
 		assert_eq(sun.directional_shadow_mode, DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS)
 		assert_eq(sun.directional_shadow_max_distance, 73.0)
 		assert_eq(sun.light_energy, 2.5)
+		assert_eq(fill.light_energy, 1.5)
+		assert_eq(fill.light_specular, 0.75)
+		assert_eq(fill.light_color, Color.RED)
+		assert_false(fill.has_meta(Switch.FILL_ENERGY))
 		assert_true(fill.visible)
 		assert_false(fill.visibility_changed.is_connected(fill.hide))
 		assert_false(sun.has_meta(Switch.CLOUD_OFF))
@@ -368,18 +375,43 @@ func test_view_fill_false_wins_over_diagnostics_on_minute_updates() -> void:
 
 func test_missing_file_keeps_field_fill_properties_and_normal_updates() -> void:
 	var field: FieldProbe = _field()
-	field.fx_light = {"fill_energy": 2.0}
+	field.fx_light = {"fill_energy": 2.0, "fill_color": Color.RED}
 	field.view_fill.light_specular = 0.75
 	field._set_view_fill()
 	field._apply_perf_settings(Switch.read(path))
 	assert_eq(field.view_fill.light_energy, 2.0)
 	assert_eq(field.view_fill.light_specular, 0.75)
+	assert_eq(field.view_fill.light_color, Color.RED)
 	assert_false(field.view_fill.has_meta(Switch.FILL_ENERGY))
 	field.fx_light["fill_energy"] = 1.5
 	field._set_view_fill()
 	assert_eq(field.view_fill.light_energy, 1.5)
 	assert_eq(field.view_fill.light_specular, 0.75)
+	assert_eq(field.view_fill.light_color, Color.RED)
 	assert_true(field.view_fill.visible)
+
+
+func test_diagnostics_and_fill_lock_survive_showing_a_hidden_field() -> void:
+	_save_renderer()
+	for locked: bool in [false, true]:
+		var field: FieldProbe = _field()
+		field.fx_light = {"fill_energy": 2.0, "fill_color": Color.RED}
+		field._set_view_fill()
+		var settings: Dictionary = {"view_fill_energy": 0.002, "view_fill_specular": 0.0}
+		if locked:
+			settings["view_fill"] = false
+		field._apply_perf_settings(settings)
+		field.visible = true
+		# Right after showing, then after the next minute update.
+		for update: int in 2:
+			assert_almost_eq(field.view_fill.light_energy, 0.002, 0.000001)
+			assert_eq(field.view_fill.light_specular, 0.0)
+			assert_eq(field.view_fill.light_color, Color.RED)
+			assert_eq(field.view_fill.is_visible_in_tree(), not locked)
+			assert_eq(field.view_fill.visibility_changed.is_connected(field.view_fill.hide), locked)
+			field._set_view_fill()
+		_free_field(field)
+	assert_eq(Switch.renderer_state(), renderer_before)
 
 
 func test_omitted_atlas_partner_and_filter_return_to_baseline() -> void:
