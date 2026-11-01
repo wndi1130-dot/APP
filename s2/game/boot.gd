@@ -72,6 +72,7 @@ func _ready() -> void:
 	theme = UiTheme.make(24)
 	for row in CHOICES:
 		settings[row[0]] = row[2][0][0]
+	_cap_fps()
 	var board: Array = SliceFlow.start_board()
 	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path)
 	if not slice_resume.is_empty():
@@ -190,7 +191,16 @@ func _pick(key: String, value) -> void:
 	settings[key] = value
 	if key == "cold_scheme":
 		Atmosphere.scheme = String(value) if String(value) != "" else Atmosphere.DEFAULT_SCHEME
+	if key == "fps_cap":
+		_cap_fps()
 	_show_menu()
+
+
+## The menu, the train and the stop card run at the field's cap too: the menu's 「FPS 상한」,
+## 60 unless picked. Uncapped they ran at the phone's 120 Hz beat (80 fps on the stop card)
+## and warmed it (phone night run 2026-10-31).
+func _cap_fps() -> void:
+	Engine.max_fps = int(settings.get("fps_cap", 60))
 
 
 func _make_slice(resume: Dictionary = {}) -> Node:
@@ -198,6 +208,7 @@ func _make_slice(resume: Dictionary = {}) -> Node:
 	flow.opts = {
 		"save": true, "resume": resume, "slice_save_path": slice_save_path,
 		"train_save_path": train_save_path, "field_save_path": field_save_path,
+		"intro": resume.is_empty(),
 	}
 	if resume.get("mode") == "campaign" or (resume.get("g") is Dictionary and (resume["g"] as Dictionary).get("campaign", {}).get("mode") == "campaign"):
 		flow.opts["mode"] = "campaign"
@@ -254,5 +265,5 @@ func _on_restart() -> void:
 	if field != null:
 		field.queue_free()
 		field = null
-	Engine.max_fps = 60
+	_cap_fps()
 	_show_menu()
