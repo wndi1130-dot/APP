@@ -12,6 +12,8 @@ var _saved_cfg_path: String
 var _saved_default_on: bool
 var _saved_held: Dictionary
 var _saved_dress: Dictionary
+var _saved_live: int
+var _saved_dress_added: Dictionary
 var _scenes: Array[Scene] = []
 var _files: Array[String] = []
 
@@ -21,8 +23,12 @@ func before_each() -> void:
 	_saved_default_on = Warm.default_on
 	_saved_held = Warm.held.duplicate()
 	_saved_dress = Interior._dress_meshes.duplicate()
+	_saved_live = Warm._live
+	_saved_dress_added = Warm._dress_added.duplicate()
 	Warm.held.clear()
 	Interior._dress_meshes.clear()
+	Warm._live = 0
+	Warm._dress_added.clear()
 	assert_true(Warm._requests.is_empty())
 	assert_true(Warm._orphans.is_empty())
 	Warm.cfg_path = "user://test_train_warm_%d_%d.cfg" % [get_instance_id(), Time.get_ticks_usec()]
@@ -35,6 +41,8 @@ func after_each() -> void:
 			s.free()
 	_scenes.clear()
 	await _drain_orphans()
+	assert_eq(Warm._live, 0)
+	assert_true(Warm._dress_added.is_empty())
 	for path: String in _files:
 		if FileAccess.file_exists(path):
 			assert_eq(DirAccess.remove_absolute(path), OK)
@@ -45,6 +53,8 @@ func after_each() -> void:
 	Warm.default_on = _saved_default_on
 	Warm.held = _saved_held
 	Interior._dress_meshes = _saved_dress
+	Warm._live = _saved_live
+	Warm._dress_added = _saved_dress_added
 
 
 func _scene(options: Dictionary = {"warm": true}) -> Scene:
@@ -85,7 +95,7 @@ func _drain(s: Scene) -> void:
 		assert_lte(int(s.warm.stats["dress"]) - dress_before, 1)
 		if s.warm._next_dress > next_dress:
 			var path: String = Interior.MODEL_ROOT + String(s.warm._dress[next_dress]) + ".glb"
-			if not s.warm._keep.has(path):
+			if Warm._live == 1 and not s.warm._keep.has(path):
 				assert_false(Warm.held.has(path), "dress-only scene is dropped in its mesh frame")
 		frames += 1
 	assert_eq(s.warm.state, "done", "warming finishes within the frame limit")
@@ -422,11 +432,14 @@ func test_exit_clears_held_and_only_dress_added_by_warming() -> void:
 	var s := _scene()
 	var before: Dictionary = Interior._dress_meshes.duplicate()
 	await _drain(s)
-	var added: Array = s.warm._dress_added.keys()
+	var added: Array = Warm._dress_added.keys()
 	assert_gt(added.size(), 0, "future tiers add meshes that the initial train did not build")
 	assert_gt(Warm.held.size(), 0)
 	# A later non-warm entry must survive too.
 	Interior._dress_meshes["__warm_later"] = preserved
+	# Replacing a warm entry transfers its ownership to the later writer.
+	Warm._dress_added["__warm_replaced"] = BoxMesh.new()
+	Interior._dress_meshes["__warm_replaced"] = preserved
 	s.free()
 	assert_true(Warm.held.is_empty())
 	for model: String in added:
@@ -434,11 +447,107 @@ func test_exit_clears_held_and_only_dress_added_by_warming() -> void:
 	for model: String in before:
 		assert_eq(Interior._dress_meshes.get(model), before[model], model)
 	assert_eq(Interior._dress_meshes.get("__warm_later"), preserved)
+	assert_eq(Interior._dress_meshes.get("__warm_replaced"), preserved)
 	var again := _scene()
 	assert_eq(again.warm.state, "waiting")
 	assert_eq(again.warm._next_car, 0)
 	await _drain(again)
 	assert_gt(Warm.held.size(), 0, "a later visit warms again")
+
+
+func test_overlapping_trains_keep_shared_cache_until_last_exit() -> void:
+	var first := _scene()
+	var second := _scene()
+	assert_eq(Warm._live, 2)
+	var model: String = "pale_paneling"
+	var dress_path: String = Interior.MODEL_ROOT + model + ".glb"
+	var path: String = _fresh_path()
+	Interior._dress_meshes.erase(model)
+	_only_paths(first, [path, dress_path])
+	first.warm._dress = [model]
+	first.warm._keep[dress_path] = true
+	_only_paths(second, [path, dress_path])
+	second.warm._dress = [model]
+	await _drain(first)
+	assert_has(Warm._dress_added, model)
+	await _drain(second)
+	assert_eq(second.warm.state, "done")
+	assert_eq(Warm._live, 2, "done still owns the shared cache")
+	assert_has(Warm.held, path)
+	assert_has(Warm.held, dress_path, "another train still needs this dress scene")
+	var held_before: Dictionary = Warm.held.duplicate()
+	var added_before: Dictionary = Warm._dress_added.duplicate()
+	var dress_before: Dictionary = Interior._dress_meshes.duplicate()
+	assert_not_null(Interior._dress_meshes.get(model))
+	var first_warmer: Warm = first.warm
+	first.free()
+	assert_eq(Warm._live, 1)
+	assert_eq(Warm.held, held_before)
+	assert_eq(Warm._dress_added, added_before)
+	assert_eq(Interior._dress_meshes, dress_before)
+	first_warmer.release()
+	assert_eq(Warm._live, 1, "releasing twice does not retire the other train")
+	assert_eq(Warm.held, held_before)
+	var second_warmer: Warm = second.warm
+	second.free()
+	assert_eq(Warm._live, 0)
+	assert_true(Warm.held.is_empty())
+	assert_true(Warm._dress_added.is_empty())
+	for added_model: String in added_before:
+		assert_false(Interior._dress_meshes.has(added_model), added_model)
+	second_warmer.release()
+	assert_eq(Warm._live, 0)
+
+
+func test_disabled_train_exit_keeps_enabled_train_cache() -> void:
+	var enabled := _scene()
+	var disabled := _scene({"warm": false})
+	assert_eq(disabled.warm.state, "off")
+	assert_eq(Warm._live, 1, "disabled warming never joins the shared cache")
+	var path: String = _fresh_path()
+	_only_paths(enabled, [path])
+	await _drain(enabled)
+	assert_has(Warm.held, path)
+	var held_before: Dictionary = Warm.held.duplicate()
+	var disabled_warmer: Warm = disabled.warm
+	disabled.free()
+	assert_eq(Warm._live, 1)
+	assert_eq(Warm.held, held_before)
+	disabled_warmer.release()
+	assert_eq(Warm._live, 1)
+	assert_eq(Warm.held, held_before)
+	enabled.free()
+	assert_eq(Warm._live, 0)
+	assert_true(Warm.held.is_empty())
+
+
+func test_other_train_request_defers_once_and_allows_later_path() -> void:
+	var first := _scene()
+	var second := _scene()
+	var shared_path: String = _fresh_path()
+	var later_path: String = _fresh_path()
+	_only_paths(first, [shared_path])
+	first.warm.step(false)
+	assert_has(Warm._requests, shared_path)
+	_only_paths(second, [shared_path])
+	second.warm.step(false)
+	assert_eq(second.warm.requested, 0)
+	assert_eq(second.warm._next_path, 1, "a deferred path is visited only once per frame")
+	assert_eq(second.warm._paths, [shared_path, shared_path])
+	second.warm._paths.append(later_path)
+	second.warm.stats["paths"] += 1
+	second.warm.step(false)
+	assert_eq(second.warm.requested, 1, "the later path uses the next slot in the same frame")
+	assert_has(second.warm._in_flight, later_path)
+	assert_has(Warm._requests, later_path)
+	assert_eq(Warm._requests.count(shared_path), 1)
+	assert_eq(second.warm._paths.back(), shared_path)
+	assert_eq(Warm._requests.size(), Warm.WARM_IN_FLIGHT)
+	first.free()
+	await _drain(second)
+	assert_eq(int(second.warm.stats["loaded"]) + int(second.warm.stats["cached"]), 2)
+	assert_has(Warm.held, shared_path)
+	assert_has(Warm.held, later_path)
 
 
 func test_reentry_waits_for_old_request_to_be_collected() -> void:

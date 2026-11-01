@@ -10,6 +10,8 @@ const STOVE_MODEL := "res://models/train_interior/stove.glb"
 static var cfg_path := "user://train_warm.cfg"
 static var default_on: bool = not " ".join(OS.get_cmdline_args()).contains("gut_cmdln.gd")
 static var held: Dictionary = {}
+static var _live: int = 0
+static var _dress_added: Dictionary = {}
 # Every started request has one owner here until its one get, even after tree exit.
 static var _requests: Array[String] = []
 static var _orphans: Array[String] = []
@@ -51,7 +53,7 @@ var _exists_paths: Dictionary = {}
 var _collected_paths: Dictionary = {}
 var _dress_models: Dictionary = {}
 var _keep: Dictionary = {}
-var _dress_added: Dictionary = {}
+var _active: bool = false
 var _paths: Array = []
 var _dress: Array = []
 var _next_path: int = 0
@@ -120,6 +122,9 @@ func begin(scene: Node, cars: Array) -> void:
 	if not _enabled(options):
 		state = "off"
 		return
+	if not _active:
+		_active = true
+		_live += 1
 	_cars = cars
 	state = "waiting"
 
@@ -194,13 +199,16 @@ func _step() -> void:
 		else:
 			stats["failed"] += 1
 	# Bound cached work too, so a second visit cannot collect everything in one frame.
+	var path_end: int = _paths.size()
 	for _slot: int in range(WARM_IN_FLIGHT):
-		if _requests.size() >= WARM_IN_FLIGHT or _next_path >= _paths.size():
+		if _requests.size() >= WARM_IN_FLIGHT or _next_path >= path_end:
 			break
 		var path: String = _paths[_next_path]
-		if _requests.has(path):
-			break  # Let the old train's reaper collect it before requesting it again.
 		_next_path += 1
+		if _requests.has(path):
+			# Try it next frame; another train's request must not stop later paths.
+			_paths.append(path)
+			continue
 		if ResourceLoader.has_cached(path):
 			_hold(path, load(path), "cached")
 		else:
@@ -229,7 +237,7 @@ func _step() -> void:
 				stats["dress"] += 1
 			else:
 				stats["failed"] += 1
-		if not _keep.has(path):
+		if _live == 1 and not _keep.has(path):
 			held.erase(path)
 	if _next_dress == _dress.size():
 		state = "done"
@@ -243,11 +251,15 @@ func release() -> void:
 		if not _orphans.has(path):
 			_orphans.append(path)
 	_in_flight.clear()
-	held.clear()
-	for model: String in _dress_added:
-		if Interior._dress_meshes.get(model) == _dress_added[model]:
-			Interior._dress_meshes.erase(model)
-	_dress_added.clear()
+	if _active:
+		_active = false
+		_live -= 1
+		if _live == 0:
+			held.clear()
+			for model: String in _dress_added:
+				if Interior._dress_meshes.get(model) == _dress_added[model]:
+					Interior._dress_meshes.erase(model)
+			_dress_added.clear()
 	_cars = []
 	_scene = null
 	if not _orphans.is_empty():
