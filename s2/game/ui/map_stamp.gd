@@ -71,7 +71,8 @@ static func place_on(size: Vector2, seen: Vector2, behind: bool, inset: float = 
 
 
 func _process(delta: float) -> void:
-	if hud == null or hud.game == null:
+	# Nor under the end card, which puts the field's marks away (field_hud.gd show_end).
+	if hud == null or hud.game == null or hud.get("end_up") == true:
 		visible = false
 		return
 	var game = hud.game

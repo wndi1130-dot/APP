@@ -113,13 +113,24 @@ func test_the_end_card_is_the_paper_slip_with_its_keys_on_its_foot() -> void:
 		assert_true(foot.is_ancestor_of(b), "%s is on the paper" % (b as Button).text)
 		assert_gte((b as Button).get_combined_minimum_size().y, UiFonts.px(48.0) - 0.5, "a finger high")
 		assert_eq((b as Button).pressed.get_connections().size(), 1, "%s does its one thing" % (b as Button).text)
+	# Each copy hands over its own text: the receipt, then the record.
+	var copies: Array = game.hud.modal.find_children("*", "Button", true, false).slice(0, 2)
+	var receipt_call: Callable = (copies[0] as Button).pressed.get_connections()[0]["callable"]
+	var record_call: Callable = (copies[1] as Button).pressed.get_connections()[0]["callable"]
+	assert_eq(receipt_call.get_method(), &"_copy")
+	assert_eq(receipt_call.get_bound_arguments(), [got[0]["receipt_json"], "영수증 복사됨"])
+	assert_eq(record_call.get_method(), &"_copy")
+	assert_eq(record_call.get_bound_arguments(), [got[0]["telemetry"], "기록 복사됨"])
 	assert_eq((slip.go_key as Button).text, "다시", "again is the paper's main key")
 	assert_true(slip.went_on.is_connected(game.hud._restart), "and it starts again")
 	# The field's keys and words go under the card and stay gone as the HUD ticks,
 	# the lamp key that dusk brings up too; only the notes stay up, for a copy's word.
 	game.clock.arrive_min = float(game.clock.SUNSET_MIN) + 10.0
 	assert_true(game.clock.is_dark(), "dusk has come")
+	# The map mark that shows itself on its own frame stays down too.
+	game.hud.map_stamp.aim(game.player.position + Vector3(6.0, 0.0, 6.0))
 	game.hud.tick(0.1)
+	game.hud.map_stamp._process(0.1)
 	for c in game.hud.root.get_children():
 		if c != game.hud.modal and c != game.hud.toast_box and c is CanvasItem:
 			assert_false((c as CanvasItem).visible, "%s is put away" % c.name)
