@@ -1451,6 +1451,8 @@ func _apply_return(r: Dictionary) -> bool:
 	if _returned() or r.is_empty():
 		return false
 	var out: Dictionary = FieldReturn.apply_field_return(train_g, train_t, _departure(), r)
+	if out["status"] == "rejected":
+		return false
 	receipt = r.duplicate(true)
 	if result.is_empty():
 		result = result_of(receipt)
