@@ -640,13 +640,17 @@ func test_leaving_decor_refreshes_both_lux_locks_and_keeps_fold_and_uid() -> voi
 	flow.leave_decor()
 	assert_true(card.folded)
 	assert_eq(card.uid, _lux_uid(g))
+	# The folded paper is refilled as it opens (turn_card set_folded), not under the fold.
+	card.set_folded(false)
 	assert_ne(_lux_key(card).tooltip_text, "")
+	card.set_folded(true)
 	assert_true(flow.open_decor("guard"))
 	flow.decor_pane.pick_up(1)
 	flow.decor_pane.return_selected()
 	flow.leave_decor()
 	assert_true(card.folded)
 	assert_eq(card.uid, _lux_uid(g))
+	card.set_folded(false)
 	assert_eq(_lux_key(card).tooltip_text, "")
 	await wait_process_frames(1)
 

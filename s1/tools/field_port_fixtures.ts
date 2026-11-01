@@ -170,6 +170,19 @@ function liveReceipt(d: FieldDepartureV2): Record<string, unknown> {
   };
 }
 
+/** field_receipt.test.ts T09와 같은 판: 순증감, 부족, 꼭 맞음, 소수 잔액의 부족분. */
+function stockCase(coal: number, delta: number) {
+  const seed = SEEDS[0];
+  const g = createGame(seed);
+  g.coal = coal;
+  const departure = read<FieldDeparture>('departure_prologue');
+  const receipt = { ...read<FieldReceipt>('case3_nosymbol_kept'), stock: { coal: delta } };
+  const state = plain(g);
+  const applied = applyFieldReturn(g, departure, receipt);
+  const apply = { status: applied.status, record: plain(applied.record), after: plain(g) };
+  return { seed, state, departure, receipt, apply };
+}
+
 function contractCase(seed: string, domestic: boolean, supplies = false) {
   const g = createGame(seed);
   if (domestic) enableDomestic(g);
@@ -261,6 +274,7 @@ function main(): void {
   // 생필품을 켠 판 하나: 계약의 supplies 칸(결정 490)이 true로 나간다.
   const contracts = [...SEEDS.flatMap(seed => [contractCase(seed, false), contractCase(seed, true)]), contractCase(SEEDS[0], false, true)];
   const memories = SEEDS.map(memoryCase);
+  const stockCases = [[10, 1], [3, -5], [5, -5], [3.5, -5]].map(([coal, delta]) => stockCase(coal, delta));
   const tables = {
     COMMS, COMM_NAME, P, STAGES, IDEO, LAWS, LAW_VARIANT_OF, CORPSE_LAWS, PROLOGUE, FIELD,
     // 남겨진 대표 승계: 실제 열차 slice_start.json과 같은 표.
@@ -280,6 +294,7 @@ function main(): void {
     cases,
     contracts,
     memories,
+    stockCases,
     repLeft: repLeftCase(SEEDS[0]),
     voices: Object.fromEntries(PROFILES.map(p => [p.id, voiceOf(p.id)])),
   };
@@ -288,7 +303,7 @@ function main(): void {
   writeFileSync(out, `${JSON.stringify(file)}${eol}`);
   const votes = cases.reduce((n, c) => n + c.votes.length, 0);
   const arrivals = cases.filter(c => c.arrival).length;
-  console.log(`${out}: 사례 ${cases.length}, 표결 ${votes}, 도착 ${arrivals}, 계약 ${contracts.length}, 기억 ${memories.length}, 대표 승계 1, ${Buffer.byteLength(JSON.stringify(file))}바이트`);
+  console.log(`${out}: 사례 ${cases.length}, 표결 ${votes}, 도착 ${arrivals}, 계약 ${contracts.length}, 기억 ${memories.length}, 물자 ${stockCases.length}, 대표 승계 1, ${Buffer.byteLength(JSON.stringify(file))}바이트`);
 }
 
 main();

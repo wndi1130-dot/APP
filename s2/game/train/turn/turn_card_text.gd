@@ -28,10 +28,11 @@ const AFFORD_KINDS: Array[String] = ["travel", "demand", "ration_cut", "favor", 
 ## key?}. {} for a kind turn_cards.gd does not draw.
 static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var v: Dictionary = TurnCards.view(g, t, card)
+	if g.get("stranded") != null and bool(g["stranded"]["captainAway"]) and card["kind"] in ["tension_crisis", "protest"]: v = Late.view(g, card, TurnCards._base_view(g, t, card))
 	if v.is_empty():
 		return {}
 	# Content carries S1's filled body/speaker/why/later/log and guarded choices already.
-	if card["kind"] in ["content", "content-deal"]:
+	if card["kind"] in ["content", "content-deal", "trip_depart", "trip_return", "trip_lost", "trip_extend"]:
 		var content: Dictionary = v.duplicate(true)
 		if not content.has("speaker"): content["speaker"] = null
 		if not content.has("focus"): content["focus"] = null
@@ -110,7 +111,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var like: String = String(C.profile(t, dead).get("like", ""))
 			out["focus"] = c
 			out["body"] = ("%s은(는) 정차에서 돌아오지 못했다. 침상 밑에 여벌 외투와 장화가 남았다." % dead if field else "%s의 외투와 장화가 남았다." % dead) \
-				+ (" 칸 사람들은 그를 '%s'%s 좋아하던 사람으로 기억한다." % [like, _eul(like)] if like != "" else "") + " 누가 입을지 칸이 묻는다."
+				+ (" 칸 사람들은 '%s'%s 좋아하던 사람으로 기억한다." % [like, _eul(like)] if like != "" else "") + " 누가 입을지 칸이 묻는다."
 			says = ["그 칸 사람들이 나눠 입어라. 그게 맞다."]
 			if c != "tail": says.append("꼬리칸엔 장화 없는 사람이 있다. 그리로 보내라.")
 			says.append("그 침상은 아무도 건드리지 마라." if field else ("그 옷은 그와 함께 불에 들어간다." if St.law_active(g, "corpse_burn") else "그 옷은 그와 함께 간다. 손대지 마라."))
@@ -185,7 +186,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["speaker"] = {"name": who, "role": String(t["COMM_NAME"][c]) + ((" · %s세" % _num(float(age))) if age != null else ""), "comm": c}
 			out["focus"] = c
 			out["body"] = "%s이(가) 스스로 정했다며 찾아왔다. \"다음 역에서 내리겠다. 내 몫은 아이들에게.\"" % who
-			says = ["아무도 혼자 내리지 않는다. 자리로 돌아가라.", "원한다면 막지 않겠다. 몫은 아이들에게 간다.", "모두 모여라. 그를 그냥 보내지는 않는다."]
+			says = ["아무도 혼자 내리지 않는다. 자리로 돌아가라.", "원한다면 막지 않겠다. 몫은 아이들에게 간다.", "모두 모여라. 그냥 보내지는 않는다."]
 		"birth":
 			var mother: String = str(card.get("who", ""))
 			var cold: bool = float(St.situation(g, t, c)[0]) < float(t["BIRTH"]["warm"])
@@ -197,7 +198,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			var mother: String = str(card.get("who", ""))
 			out["speaker"] = {"name": mother, "role": String(t["COMM_NAME"][c]), "comm": c}
 			out["focus"] = c
-			out["body"] = "%s의 아이에게 이름이 필요하다. 칸 사람들이 열차장을 쳐다본다." % mother
+			out["body"] = "%s의 아이 이름을 지어야 한다. 칸 사람들이 열차장을 쳐다본다." % mother
 			says = ["이름은 엄마가 짓는 거다. 내가 끼어들 일 아니다.", "이 아이는 열차 모두의 아이다. 열차 이름을 줘라.", "내 이름을 줘라. 이 아이는 내가 지킨다."]
 		"tension_crisis":
 			# S1 cards.ts tension_crisis: the ladder's last rung, the tail's leader brings it.
@@ -236,7 +237,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	_afford(g, after)
 	if after.any(func(ch: Dictionary) -> bool: return ch["disabled"] == ""):
 		out["choices"] = after
-	return out
+	return TurnCards.Trip.filter_view(g, card, out)
 
 
 ## S1 affordable: why a choice's cost cannot be paid now ("" when it can).
@@ -420,7 +421,7 @@ static func _travel(g: Dictionary, t: Dictionary, id: String, out: Dictionary, s
 			out["speaker"] = _leader(g, t, "engine")
 			out["focus"] = "engine"
 			out["body"] = _again(past, "선로가 눈더미에 묻혔다. 삽이 열두 자루 있다.", {
-				"dig_all": "또 눈더미다. 사람들이 지난번 일을 아직 말한다. \"다 같이 파면 금방 끝난다.\" 앞칸 몇은 벌써 삽을 들었다.",
+				"dig_all": "또 눈더미다. 사람들이 아직 지난번 얘기를 한다. \"다 같이 파면 금방 끝난다.\" 앞칸 몇은 벌써 삽을 들었다.",
 				"dig_tail": "또 눈더미다. 꼬리칸 사람들이 삽을 내려놓고 앉아 있다. \"이번엔 앞칸 차례다.\"",
 				"plow": "또 눈더미다. 지난번 밀어붙인 뒤로 앞바퀴에서 쇳소리가 난다.",
 			}, "선로가 또 눈에 묻혔다.")

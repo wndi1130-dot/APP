@@ -36,6 +36,8 @@ const FieldClock = preload("res://game/sim/field_clock.gd")
 const TrainRules = preload("res://game/train/train_rules.gd")
 const RouteBands = preload("res://game/train/route_bands.gd")
 const RouteStops = preload("res://game/train/route_stops.gd")
+const CampaignRoute = preload("res://game/train/campaign_route.gd")
+const RouteState = preload("res://game/train/route_state.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
@@ -43,6 +45,7 @@ const LampKey = preload("res://game/ui/lamp_key.gd")
 const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
 const ArrivalSheet = preload("res://game/ui/arrival_sheet.gd")
 const EndCard = preload("res://game/ui/end_card.gd")
+const WorldIntro = preload("res://game/ui/world_intro.gd")
 const FieldArrival = preload("res://game/politics/field_arrival.gd")
 const TurnCard = preload("res://game/ui/turn_card.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
@@ -82,6 +85,7 @@ const StopLoader = preload("res://game/stop_loader.gd")
 const Journey = preload("res://game/train/journey/journey.gd")
 const Corridor = preload("res://game/train/journey/journey_corridor.gd")
 const PaperMotion = preload("res://game/ui/paper_motion.gd")
+const FieldHud = preload("res://game/ui/field_hud.gd")
 const STOP_CINEMA_SCENE := preload("res://scenes/stop_cinema.tscn")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
 const EDGE_BOT := preload("res://game/ui/tex/edge_bot.png")
@@ -161,6 +165,10 @@ class SavedCouncil extends CouncilCard:
 
 
 const PANEL_W: float = 560.0
+## A failed write, said where the player looks; the home keys' note holds it as the
+## field's warn note does (field_hud.gd TOAST_WARN_S).
+const SAVE_FAILED: String = "저장하지 못했다. 다음 저장 때 다시 해 본다."
+const SAVE_NOTE_S: float = 6.0
 ## What stays lit in the gauges while a step's sheet is up (the stop and what it
 ## brought back are about stock; the session about what a vote moves,
 ## k3c_views.js vCouncil TOP hot).
@@ -254,7 +262,53 @@ var pending_field: Node = null
 var field_resume: Dictionary = {}
 var pending_shop_events: Array = []
 var save_error: String = ""
+## A failed write is told once a step where the player looks (the field's warn note, the
+## home keys' note, the panel's lines); the next save point tries again and clears it.
+## With no place to tell it, the error waits for one of those screens to stand.
+var save_told_at: int = -1
+var save_line: Label = null
+var save_note: Label = null
+var save_hud: FieldHud = null
 var run: String = ""
+var campaign_error: String = ""
+var _campaign_map: Dictionary = {}
+
+
+## The same arrival sheet when the previous stop had no return (442).
+class PassedArrival extends ArrivalSheet:
+	func _ready() -> void:
+		set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var arrival_paper = PaperSheet.new()
+		arrival_paper.name = "Sheet"
+		arrival_paper.position = SHEET_AT * UiFonts.K
+		sheet = arrival_paper
+		add_child(arrival_paper)
+		body = VBoxContainer.new()
+		body.name = "Body"
+		body.add_theme_constant_override("separation", 0)
+		body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		arrival_paper.inner.add_child(body)
+		var display_g: Dictionary = g.duplicate(true)
+		var now: Dictionary = FieldReturn.snapshot(display_g, t)
+		var stocks: Array = []
+		for pair: Array in STOCKS:
+			stocks.append([String(pair[1]), whole(now[pair[0]]), ""])
+		_head({"title": "둘째 역"})
+		var arrive_words: Control = _runs("구벤에 닿았다. 이전 정차는 지나쳤다.", 18.0)
+		arrive_words.name = "Arrive"
+		body.add_child(arrive_words)
+		body.add_child(_rule())
+		_columns([["사람", [["귀환 없음", "", ""]]], ["물자", stocks], ["온기", [["정차를 지나쳤다.", "", ""]]]])
+		body.add_child(_rule())
+		_seen([])
+		var bottom_room: Control = Control.new()
+		bottom_room.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		bottom_room.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		body.add_child(bottom_room)
+		_keys()
+		_build_slip({"open": false, "line": "특별 회기를 열지 않았다."})
 
 
 func _ready() -> void:
@@ -263,8 +317,13 @@ func _ready() -> void:
 	layer = CanvasLayer.new()
 	layer.layer = 40
 	add_child(layer)
-	var s: Array = start_board()
+	var s: Array = _starting_board()
 	train_t = s[1]
+	if (s[0] as Dictionary).is_empty() or train_t.is_empty():
+		campaign_error = "F-CAMPAIGN-START: invalid start board"
+		_build_panel()
+		_show_panel("캠페인을 열 수 없다", [campaign_error], "처음으로")
+		return
 	var resume: Dictionary = opts.get("resume", {})
 	var start_step: String = "train"
 	if resume.is_empty():
@@ -272,6 +331,11 @@ func _ready() -> void:
 		if bool(opts.get("save", false)):
 			run = Crypto.new().generate_random_bytes(8).hex_encode()
 		train_g = to_travel(s[0], train_t)
+		if _is_campaign():
+			run = String(opts.get("run", run))
+			if run.is_empty():
+				run = Crypto.new().generate_random_bytes(8).hex_encode()
+			train_g = RouteState.start(train_g, run)
 		if bool(opts.get("save", false)) and not train_g.is_empty():
 			_clear_slice_field()
 	else:
@@ -284,6 +348,25 @@ func _ready() -> void:
 			result = result_of(receipt)
 			result["reason"] = String(resume.get("result_reason", result["reason"]))
 		start_step = String(resume["step"])
+		if _is_campaign():
+			var issue: String = RouteState.problem(train_g, train_t)
+			if issue != "":
+				campaign_error = issue
+				_build_panel()
+				_show_panel("캠페인을 열 수 없다", [issue], "처음으로")
+				return
+			run = String(train_g["campaign"]["run"])
+			contract = train_g["campaign"]["visit"].get("contract", {}).duplicate(true)
+			passed = train_g["campaign"]["visit"].get("result") == "passed"
+			var board_receipt: Dictionary = SliceSave.receipt_of_board(train_g)
+			if board_receipt.is_empty():
+				receipt = {}
+				result = {}
+			else:
+				if not RouteState.owns_receipt(train_g, receipt) or FieldReturn.canonical(receipt) != FieldReturn.canonical(board_receipt):
+					receipt = board_receipt
+				result = result_of(receipt)
+			start_step = SliceSave.resume_step(train_g, start_step)
 		if not _returned() and not passed and start_step in ["stop_pick", "field"]:
 			var saved: Dictionary = FieldSave.read(String(opts.get("field_save_path", FieldSave.PATH)))
 			var order: Dictionary = saved["departure"] if saved.get("departure") is Dictionary else {}
@@ -292,6 +375,8 @@ func _ready() -> void:
 				and start_opts.get("slice_run") == run \
 				and int(order.get("segment", -1)) == int(train_g["seg"]) \
 				and (contract.is_empty() or order.get("departureId") == contract.get("departureId"))
+			if _is_campaign():
+				belongs = SliceSave.field_belongs(train_g, saved)
 			if belongs and FieldSave.should_resume(saved, SliceSave.applied_ids(train_g)):
 				field_resume = FieldSave.resume_opts(saved)
 				contract = order.duplicate(true)
@@ -304,7 +389,8 @@ func _ready() -> void:
 					if FieldReceipt.check(ended).is_empty() and FieldReturn.check_departure(order, train_t).is_empty() and FieldReturn.match_departure(order, ended).is_empty():
 						contract = order.duplicate(true)
 						_apply_return(ended)
-						start_step = "receipt"
+						if not _is_campaign() or _returned():
+							start_step = "receipt"
 		if _index_of(start_step) >= _index_of("travel"):
 			shop_seg = int(STEPS[_index_of("travel")][2])
 	# The train's stores, so what the field brings home has somewhere to go:
@@ -358,8 +444,19 @@ func _ready() -> void:
 	loader = StopLoader.new()
 	loader.name = "StopLoader"
 	loader.threaded = bool(opts.get("map_threads", true))
+	loader.failed.connect(_campaign_fail)
 	add_child(loader)
 	go(_index_of(start_step))
+	if bool(opts.get("intro", false)):
+		_show_intro()
+
+
+## New runs only: an overlay that leaves the flow and saves as they are.
+func _show_intro() -> void:
+	var intro: WorldIntro = WorldIntro.new()
+	intro.name = "WorldIntro"
+	intro.still = bool(opts.get("still", false))
+	layer.add_child(intro)
 
 
 ## The step now ("train", "field", …).
@@ -368,6 +465,23 @@ func current() -> String:
 
 
 func go(i: int) -> void:
+	if _is_campaign():
+		if i < 0 or i >= STEPS.size() or not _campaign_can_go(String(STEPS[i][0])):
+			_campaign_fail("F-CAMPAIGN-TRANSITION")
+			return
+		if STEPS[i][0] in ["stop_pick", "field"]:
+			var issue: String = _campaign_map_problem()
+			if issue != "":
+				_campaign_fail(issue)
+				return
+		if STEPS[i][0] == "field" and not is_instance_valid(pending_field):
+			_campaign_map = (opts["map_data"] as Dictionary).duplicate(true) if opts.get("map_data") is Dictionary else FieldMaps.build(_field_place())
+			var issue: String = CampaignRoute.map_problem(RouteState.current_stop(train_g), _campaign_map)
+			if issue != "":
+				_campaign_map = {}
+				_campaign_fail(issue)
+				return
+		campaign_error = ""
 	_show_step(i)
 	_save_slice()
 
@@ -408,18 +522,22 @@ func _show_step(i: int) -> void:
 	film.visible = frost.visible
 	# The train runs between the stops; at a stop the snow falls straight down
 	# and the drift lies still (.world.run, .world.is-stop).
-	weather.moving = String(row[1]) == "travel"
+	weather.moving = String(row[1]) == "travel" and train_halt_line(train_g) == ""
 	soot_bot.visible = gauges.visible and not SHEET_STEPS.has(id)
+	if train_halt_line(train_g) != "":
+		_show_train("end" if train_g.get("phase") == "end" else "travel", int(train_g.get("seg", row[2])))
+		_show_panel("끝" if id == "end" else train_halt_title(train_g), [train_halt_line(train_g)], "처음으로" if id == "end" else "끝")
+		return
 	# The next stop is known on the train: its map is made ready off the main
 	# thread while the train runs.
 	if id == "train" and _cinema_on():
-		loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)))
+		_prepare_stop()
 	if id == "stop_pick" and _cinema_on():
 		_show_stop_cinema()
 		return
 	if id == "field":
 		panel.visible = false
-		if bool(opts.get("skip_field", false)) and field_resume.is_empty():
+		if not _is_campaign() and bool(opts.get("skip_field", false)) and field_resume.is_empty():
 			_field_done({})
 		else:
 			_start_field()
@@ -428,17 +546,17 @@ func _show_step(i: int) -> void:
 	# stretch's work, once (train_workshop.gd stretch).
 	var shop_events: Array = pending_shop_events
 	pending_shop_events = []
-	if id == "travel" and int(row[2]) != shop_seg:
+	if not _is_campaign() and id == "travel" and int(row[2]) != shop_seg:
 		shop_seg = int(row[2])
 		shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if String(row[1]) != "":
-		_show_train(String(row[1]), int(row[2]))
+		_show_train(String(row[1]), int(train_g["seg"]) if _is_campaign() else int(row[2]))
 		# What it made, for the people on the train to see (the train scene's events).
 		if is_instance_valid(train) and train.has_method("post_event"):
 			for ev: Dictionary in shop_events:
 				train.call("post_event", ev)
 	if id == "receipt":
-		_show_receipt(String(row[4]))
+		_show_receipt("여기까지" if _is_campaign() and int(train_g["campaign"]["cursor"]) == CampaignRoute.size() - 1 else String(row[4]))
 		return
 	if id == "stop_pick":
 		_show_stop_pick()
@@ -447,10 +565,13 @@ func _show_step(i: int) -> void:
 		_show_council()
 		return
 	if id == "arrive":
-		_show_arrival(String(row[4]))
+		_show_arrival("다음" if _is_campaign() else String(row[4]))
 		return
 	if id == "end":
-		_show_end(String(row[4]))
+		if _is_campaign():
+			_show_panel("여기까지 — 다음 정차는 아직", [], "처음으로")
+		else:
+			_show_end(String(row[4]))
 		return
 	if HOME_STEPS.has(id):
 		_show_home(String(row[4]))
@@ -460,7 +581,16 @@ func _show_step(i: int) -> void:
 
 
 func next() -> void:
+	if step < 0:
+		get_tree().change_scene_to_file(BOOT_SCENE)
+		return
+	if _is_campaign():
+		_campaign_next()
+		return
 	leave_decor()
+	if train_halt_line(train_g) != "" and current() != "end":
+		go(_index_of("end"))
+		return
 	if step + 1 >= STEPS.size():
 		get_tree().change_scene_to_file(BOOT_SCENE)
 		return
@@ -475,9 +605,9 @@ func _show_stop_pick() -> void:
 	c.g = train_g.duplicate(true)
 	c.t = train_t
 	if c.g.get("stop") is Dictionary:
-		c.g["stop"]["place"] = "freight"
-	c.stop_name = "술레후프"
-	c.g["seg"] = int(STEPS[step][2])
+		c.g["stop"]["place"] = String(RouteState.current_stop(train_g)["kind"]) if _is_campaign() else "freight"
+	c.stop_name = String(RouteState.current_stop(train_g)["name"]) if _is_campaign() else "술레후프"
+	c.g["seg"] = int(RouteState.current_stop(train_g)["number"]) if _is_campaign() else int(STEPS[step][2])
 	c.top_room = TrainGauges.BAND_H
 	c.promises = _departure().get("promises", [])
 	c.squad = _departure().get("roster", [])
@@ -498,6 +628,8 @@ func _cinema_on() -> bool:
 
 ## The place of the slice's field (FieldMaps; "" is its default, Sulechów).
 func _field_place() -> String:
+	if _is_campaign():
+		return String(RouteState.current_stop(train_g).get("map", ""))
 	return String(opts.get("place", ""))
 
 
@@ -505,18 +637,24 @@ func _field_place() -> String:
 ## it is a stop's own map (the first stop's, which the slice plays on FIRST_SEG), is that
 ## stop, and the stops after it count on from there; any other map takes the stretch's stop.
 func _stop_of(seg: int) -> int:
+	if _is_campaign():
+		return int(_campaign_scene_stop().get("number", CampaignRoute.size()))
 	var own: Array = RouteBands.place_stop(FieldMaps.resolve(_field_place()))
 	return seg if own.is_empty() else int(own[1]) + seg - FIRST_SEG
 
 
 ## That stop's band.
 func _stop_band(seg: int) -> String:
+	if _is_campaign():
+		return String(_campaign_scene_stop().get("band", "K3"))
 	return RouteBands.stop_band("prologue", _stop_of(seg))
 
 
 ## That stop's form (stop_form.gd): one asked of the slice (opts "stop_form", a check switch),
 ## else the route's; "" leaves it to the place.
 func _stop_form(seg: int) -> String:
+	if _is_campaign():
+		return String(RouteState.current_stop(train_g).get("form", ""))
 	if opts.has("stop_form"):
 		return String(opts["stop_form"])
 	return StopForm.on_route("prologue", _stop_of(seg))
@@ -528,6 +666,11 @@ static func _field_seg() -> int:
 		if row[0] == "field":
 			return int(row[2])
 	return FIRST_SEG
+
+
+## The campaign's current stretch, or the slice's fixed field stretch.
+func _current_field_seg() -> int:
+	return int(train_g.get("seg", FIRST_SEG)) if _is_campaign() else _field_seg()
 
 
 ## The season table's stretch that stop stands on (route_stops.gd): the stop's weather and
@@ -547,7 +690,7 @@ func _show_stop_cinema() -> void:
 	for p in plates.get_children():
 		plates.remove_child(p)
 		p.queue_free()
-	loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)))
+	_prepare_stop()
 	# Its own scene (scenes/stop_cinema.tscn), so the train and the weather can be dressed there.
 	var c = STOP_CINEMA_SCENE.instantiate()
 	c.name = "StopCinema"
@@ -560,8 +703,11 @@ func _show_stop_cinema() -> void:
 	if loader.has_data():
 		c.data = loader.data
 	else:
+		var wanted_visit: String = String(train_g["campaign"]["visit"].get("id", "")) if _is_campaign() else ""
 		loader.data_ready.connect(func() -> void:
 			if is_instance_valid(c):
+				if _is_campaign() and (loader.visit_for != wanted_visit or not loader.error.is_empty()):
+					return
 				c.set_map(loader.data), CONNECT_ONE_SHOT)
 	c.card_time.connect(_on_card_time)
 	c.done.connect(_on_cinema_done)
@@ -580,12 +726,15 @@ func _on_card_time() -> void:
 ## Sent: the brakes and the look down, the field built under it meanwhile.
 ## Without the stop scene the field comes at once, as it did.
 func _send_crew() -> void:
+	if _is_campaign() and _campaign_map_problem() != "":
+		_campaign_fail(_campaign_map_problem())
+		return
 	if not is_instance_valid(cinema):
 		next()
 		return
 	_drop_card()
 	cinema.send()
-	if bool(opts.get("skip_field", false)):
+	if not _is_campaign() and bool(opts.get("skip_field", false)):
 		cinema.land()
 		return
 	loader.field_built.connect(_on_field_built, CONNECT_ONE_SHOT)
@@ -594,6 +743,22 @@ func _send_crew() -> void:
 
 ## Passed by: the train picks up speed and its own screen comes back.
 func _pass_stop() -> void:
+	if _is_campaign():
+		if current() != "stop_pick" or train_g["campaign"]["visit"].get("result") != "open":
+			_campaign_fail("F-CAMPAIGN-TRANSITION: pass")
+			return
+		var out: Dictionary = TrainAdvance.resolve_stop(train_g, train_t, false)
+		_take(RouteState.mark_passed(out))
+		passed = true
+		if int(train_g["campaign"]["cursor"]) == CampaignRoute.size() - 1:
+			_take(RouteState.activate_next_stop(train_g))
+			go(_index_of("end"))
+		elif not is_instance_valid(cinema):
+			go(_index_of("travel"))
+		else:
+			_drop_card()
+			cinema.pass_by()
+		return
 	if not passed and not _returned():
 		passed = true
 		_take(TrainAdvance.resolve_stop(train_g, train_t, false))
@@ -605,6 +770,10 @@ func _pass_stop() -> void:
 
 
 func _on_field_built(f: Node) -> void:
+	if _is_campaign() and (not SliceSave.field_opts_belong(train_g, f.opts) or CampaignRoute.map_problem(RouteState.current_stop(train_g), f.data) != ""):
+		f.queue_free()
+		_campaign_fail("F-CAMPAIGN-MAP: stale field")
+		return
 	pending_field = f
 	loader.field = null
 	if is_instance_valid(cinema):
@@ -704,7 +873,7 @@ func _show_arrival(go_word: String) -> void:
 		return
 	arrival_g = train_g
 	gauges.refresh(arrival_g, train_t)
-	var c = ArrivalSheet.new()
+	var c: ArrivalSheet = PassedArrival.new() if _is_campaign() and passed else ArrivalSheet.new()
 	c.name = "ArrivalSheet"
 	c.g = arrival_g
 	c.t = train_t
@@ -718,6 +887,9 @@ func _show_arrival(go_word: String) -> void:
 ## finish_slice) and the port's end card on the long sheet over the train.
 func _show_end(go_word: String) -> void:
 	panel.visible = false
+	if train_halt_line(train_g) != "":
+		_show_panel("끝", [train_halt_line(train_g)], go_word)
+		return
 	if arrival_g.is_empty() and FieldArrival.second_station_reached(train_g):
 		arrival_g = train_g
 	if arrival_g.is_empty():
@@ -781,12 +953,28 @@ static func start_board() -> Array:
 ## One step of the train's turn as a step gone to straight takes it: the papers before and
 ## after taken on their first way (pick_first), the turn as S1 runs it. An unported step
 ## comes back with its _turn_port_error.
+## A stopped train or a real S1 ending holds this slice without advancing the rules.
+static func train_halt_line(g: Dictionary) -> String:
+	if g.get("phase") == "end" and g.get("end") != "slice": return TrainTurn.end_text(g, str(g.get("end", "")))
+	if g.get("stranded") != null: return TrainTurn.END_TEXT["stranded"]
+	return ""
+
+
+## The halt panel's head, in train_halt_line's order: a real S1 ending names
+## itself as the S1 end screen does, a stopped train says it stopped.
+static func train_halt_title(g: Dictionary) -> String:
+	if g.get("phase") == "end" and g.get("end") != "slice": return str(TrainTurn.END_TITLE.get(str(g.get("end", "")), "끝"))
+	if g.get("stranded") != null: return "열차가 멈췄다"
+	return ""
+
+
 static func step_train(g0: Dictionary, t: Dictionary) -> Dictionary:
+	if train_halt_line(g0) != "": return g0.duplicate(true)
 	var g: Dictionary = pick_first(g0.duplicate(true), t)
-	if g.has("_turn_port_error"):
+	if g.has("_turn_port_error") or train_halt_line(g) != "":
 		return g
 	var out: Dictionary = TrainAdvance.advance(g, t)
-	if out.has("_turn_port_error"):
+	if out.has("_turn_port_error") or train_halt_line(out) != "":
 		return out
 	return pick_first(out, t)
 
@@ -798,7 +986,7 @@ static func step_train(g0: Dictionary, t: Dictionary) -> Dictionary:
 static func pick_first(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var g: Dictionary = g0
 	for n in 50:
-		if not papers_of(g) or g.has("_turn_port_error"):
+		if not papers_of(g) or g.has("_turn_port_error") or train_halt_line(g) != "":
 			break
 		var uid: int = int((g["cards"] as Array)[0]["uid"])
 		var taken := false
@@ -833,7 +1021,7 @@ static func _holds(g: Dictionary, uid: int) -> bool:
 ## papers it brings stay on the board: the train step shows them first.
 static func to_travel(state: Dictionary, t: Dictionary) -> Dictionary:
 	var g: Dictionary = state.duplicate(true)
-	if g.is_empty():
+	if g.is_empty() or train_halt_line(g) != "":
 		return g
 	g["seg"] = FIRST_SEG
 	g = pick_first(g, t)
@@ -845,7 +1033,7 @@ static func to_travel(state: Dictionary, t: Dictionary) -> Dictionary:
 ## The first paper waiting, over the train on its steps (turn_card.gd); none when none waits.
 func _show_paper() -> void:
 	_drop_paper()
-	if not papers_of(train_g) or not HOME_STEPS.has(current()):
+	if train_halt_line(train_g) != "" or not papers_of(train_g) or not HOME_STEPS.has(current()):
 		return
 	var c = TurnCard.new()
 	c.name = "Paper"
@@ -921,6 +1109,9 @@ func _paper_chosen(g: Dictionary) -> void:
 		_take(rest)
 	else:
 		_take(g)
+	if train_halt_line(train_g) != "":
+		_show_step(step)
+		return
 	_show_paper()
 	if going and not papers_of(train_g):
 		going = false
@@ -931,6 +1122,12 @@ func _paper_chosen(g: Dictionary) -> void:
 ## shakes); else the board runs to where the next step stands (to the stop, or on to
 ## the second station), stopping at each paper that comes, and the step goes on.
 func train_on() -> void:
+	if train_halt_line(train_g) != "":
+		_show_step(step)
+		return
+	if _is_campaign():
+		_campaign_train_on()
+		return
 	if papers_of(train_g):
 		going = true
 		if is_instance_valid(paper):
@@ -949,6 +1146,9 @@ func train_on() -> void:
 		if id != "train" and id != "travel":
 			break
 		_take(TrainAdvance.advance(train_g, train_t))
+		if train_halt_line(train_g) != "":
+			_show_step(step)
+			return
 		if papers_of(train_g):
 			going = true
 			_show_paper()
@@ -993,10 +1193,28 @@ func _take(g: Dictionary) -> void:
 		push_error("slice: " + port_error)
 		return
 	leave_decor()
+	if _is_campaign():
+		var next_g: Dictionary = g
+		if RouteState.is_campaign(next_g) and next_g["campaign"]["visit"].is_empty() and next_g.get("phase") == "stop":
+			next_g = RouteState.enter_stop(next_g, int(next_g["seg"]))
+		var issue: String = RouteState.problem(next_g, train_t)
+		if issue != "":
+			_campaign_fail(issue)
+			return
+		train_g = next_g
+		if SliceSave.step_of_board(train_g) == "travel":
+			var departure_id: String = String(train_g["campaign"]["visit"].get("departure_id", ""))
+			if RouteState.workshop_due(train_g, departure_id):
+				pending_shop_events = TrainWorkshop.stretch(train_g)["events"]
+				train_g = RouteState.mark_workshop(train_g, departure_id)
+		if is_instance_valid(gauges):
+			gauges.g = train_g
+		_save_slice()
+		return
 	var leaving: bool = SliceSave.step_of_board(g) == "travel" and SliceSave.step_of_board(train_g) != "travel"
 	train_g = g
 	# Departure and workshop work share one train write, including a closed vote.
-	if leaving and shop_seg != int(STEPS[_index_of("travel")][2]):
+	if leaving and train_halt_line(train_g) == "" and shop_seg != int(STEPS[_index_of("travel")][2]):
 		shop_seg = int(STEPS[_index_of("travel")][2])
 		pending_shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if is_instance_valid(gauges):
@@ -1016,58 +1234,123 @@ func _save_slice() -> bool:
 	var train_path := String(opts.get("train_save_path", TrainSave.DEFAULT_PATH))
 	var written: Dictionary = {}
 	if not SliceSave.write_train(train_g, train_path, written):
-		save_error = "F-SAVE-TRAIN"
+		_save_failed("F-SAVE-TRAIN")
 		return false
 	var slice_path := String(opts.get("slice_save_path", SliceSave.PATH))
-	if current() == "end":
+	if current() == "end" and not _is_campaign():
 		SliceSave.clear(slice_path)
 		_clear_slice_field()
 	else:
 		var saved: Dictionary = SliceSave.capture(self)
 		saved["train_sha"] = written["train_sha"]
 		if not SliceSave.write(saved, slice_path):
-			save_error = "F-SAVE-SLICE"
+			_save_failed("F-SAVE-SLICE")
 			return false
 	save_error = ""
+	save_told_at = -1
+	if is_instance_valid(save_note):
+		save_note.hide()
+		save_note.queue_free()
+	save_note = null
+	if is_instance_valid(save_hud):
+		save_hud.drop_warning(SAVE_FAILED)
+	save_hud = null
+	if is_instance_valid(save_line):
+		save_line.hide()
+		save_line.queue_free()
+	save_line = null
 	return true
+
+
+## Play goes on over a failed write (the old slots stay whole); the player is told, and the
+## next save point (a step, a board change, the app put away) writes again.
+func _save_failed(code: String) -> void:
+	save_error = code
+	push_warning("slice: could not save (%s), the next save point tries again" % code)
+	# Told once the step's screen is up: a board change saved while a step is being built
+	# would say it on the keys that step is taking away.
+	_tell_save_error.call_deferred()
+
+
+func _tell_save_error() -> void:
+	if save_error == "" or save_told_at == step:
+		return
+	var hud: Variant = field.get("hud") if current() == "field" and is_instance_valid(field) else null
+	if hud is FieldHud and is_instance_valid(hud):
+		var target := hud as FieldHud
+		if not is_instance_valid(target.toast_box):
+			return
+		target.toast(SAVE_FAILED, FieldHud.TOAST_WARN)
+		save_hud = target
+	elif is_instance_valid(bar) and bar.is_visible_in_tree():
+		save_note = (bar as HomeBar).note(SAVE_FAILED, null, SAVE_NOTE_S)
+		if not is_instance_valid(save_note):
+			return
+	elif is_instance_valid(panel) and panel.is_visible_in_tree():
+		_add_save_line()
+	else:
+		return
+	save_told_at = step
+
+
+func _add_save_line() -> void:
+	if is_instance_valid(save_line):
+		return
+	save_line = UiFonts.label(SAVE_FAILED, UiFonts.WORD, 400, 13.0, INK2)
+	save_line.name = "SaveFailed"
+	save_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	save_line.custom_minimum_size.x = PANEL_W - UiFonts.px(28.0)
+	lines.add_child(save_line)
+	_pin()
 
 
 func _clear_slice_field() -> void:
 	var path := String(opts.get("field_save_path", FieldSave.PATH))
 	var saved: Dictionary = FieldSave.read(path)
 	var start_opts: Dictionary = saved["start_opts"] if saved.get("start_opts") is Dictionary else {}
-	if start_opts.get("slice") == true:
+	if start_opts.get("slice") == true and (not _is_campaign() or start_opts.get("slice_run") == run):
 		FieldSave.clear(path)
 
 
 func _returned() -> bool:
+	if _is_campaign():
+		return RouteState.returned_for_current_stop(train_g)
 	return train_g.get("fieldReturns") is Dictionary and not (train_g["fieldReturns"]["records"] as Array).is_empty()
 
 
 ## The board up to the step `id` stands on, played once in order: the stop reached, the
 ## stop's return, the session sat and left, the run to the second station.
 func _ensure_board(id: String) -> void:
+	if train_halt_line(train_g) != "": return
+	if _is_campaign():
+		return
 	var at: int = _index_of(id)
 	if at >= _index_of("stop_pick") and not _returned() and not passed and String(train_g.get("phase", "")) == "travel" and port_error == "":
 		_take(step_train(train_g, train_t))
+	if train_halt_line(train_g) != "": return
 	if at >= _index_of("receipt") and not _returned() and not passed and id != "field":
 		_apply_return(quiet_receipt(_departure()))
+	if train_halt_line(train_g) != "": return
 	if at >= _index_of("travel") and _returned():
 		_leave_session()
+	if train_halt_line(train_g) != "": return
 	if at >= _index_of("arrive"):
 		_run_to_station()
 
 
 ## The field's receipt onto the board, once (field_return.gd: the stop closes with it).
-func _apply_return(r: Dictionary) -> void:
+func _apply_return(r: Dictionary) -> bool:
+	if _is_campaign():
+		return _campaign_apply_return(r)
 	if _returned() or r.is_empty():
-		return
+		return false
 	var out: Dictionary = FieldReturn.apply_field_return(train_g, train_t, _departure(), r)
 	receipt = r.duplicate(true)
 	if result.is_empty():
 		result = result_of(receipt)
 	_take(out["g"])
 	_after_return(train_g)
+	return true
 
 
 ## Right after a return comes onto the board. 내정 훅 자리: the hands' share for a train
@@ -1079,12 +1362,23 @@ func _after_return(_g: Dictionary) -> void:
 
 ## The special session the return opens, opened on the board; false when it opens none.
 func _open_session() -> bool:
+	if _is_campaign() and int(train_g["campaign"]["cursor"]) != 0:
+		return false
 	if not _returned():
 		return false
 	if String(train_g.get("phase", "")) == "council" and (train_g.get("council", {}) as Dictionary).get("special", false):
 		return true
 	var regular: Dictionary = CouncilAgenda.agenda_options(train_g, train_t)
 	var stepped: Dictionary = FieldCouncil.next_field_step(train_g, train_t, regular["options"])
+	if _is_campaign() and stepped["step"] == "choose_symbol":
+		# The first return uses the same default as the field slice table.
+		var chosen: Dictionary = FieldReturn.choose_symbol_use(stepped["g"], train_t, String(train_g["campaign"]["visit"]["receipt_id"]), "hang_before_session")
+		if not bool(chosen["accepted"]):
+			_campaign_fail("F-CAMPAIGN-SYMBOL")
+			return false
+		_take(chosen["g"])
+		regular = CouncilAgenda.agenda_options(train_g, train_t)
+		stepped = FieldCouncil.next_field_step(train_g, train_t, regular["options"])
 	_take(stepped["g"])
 	return String(stepped["step"]) == "council"
 
@@ -1093,6 +1387,13 @@ func _open_session() -> bool:
 ## left (as the card does with its keys), so the train can run on.
 func _leave_session() -> void:
 	var special: Variant = (train_g.get("fieldReturns", {}) as Dictionary).get("special")
+	if _is_campaign():
+		if special is Dictionary and special.get("receiptId") == train_g["campaign"]["visit"].get("receipt_id") and train_g.get("phase") == "council" and (train_g.get("council", {}) as Dictionary).get("result") is Dictionary:
+			var left: Dictionary = FieldCouncil.leave_special_council(train_g, train_t)
+			if bool(left["left"]):
+				council_g = left["g"]
+				_take(left["g"])
+		return
 	if special is Dictionary and special.get("status") == "opened" and String(train_g.get("phase", "")) == "council":
 		if not (train_g.get("council", {}) as Dictionary).get("result") is Dictionary:
 			_take(TrainAdvance.cast_vote(train_g, train_t))
@@ -1107,10 +1408,12 @@ func _leave_session() -> void:
 ## The train runs on from the session to the second station. A stop passed by has no
 ## return to carry there: the slice ends at it (its arrival and end panels say so).
 func _run_to_station() -> void:
+	if _is_campaign():
+		return
 	if not _returned():
 		return
 	for i in RUN_LIMIT:
-		if FieldArrival.second_station_reached(train_g) or String(train_g.get("phase", "")) == "end" or port_error != "":
+		if train_halt_line(train_g) != "" or FieldArrival.second_station_reached(train_g) or String(train_g.get("phase", "")) == "end" or port_error != "":
 			return
 		_take(step_train(train_g, train_t))
 
@@ -1178,6 +1481,10 @@ func _show_train(phase: String, seg: int) -> void:
 	var rules: Dictionary = TrainRules.load_default()
 	rules["train"]["phase"] = phase
 	rules["train"]["seg"] = seg
+	rules["train"]["stranded"] = train_g["stranded"].duplicate(true) if train_g.get("stranded") is Dictionary else null
+	weather.moving = phase == "travel" and train_halt_line(train_g) == ""
+	# A halted board stands still, an ending without stranding too (the scene's auto motion runs it).
+	if train_halt_line(train_g) != "": rules["view"]["motion"] = "stopped"
 	rules["view"]["region"] = _stop_band(seg + 1 if phase == "travel" else seg)
 	for c: String in (rules.get("comms", {}) as Dictionary).keys():
 		if (train_g.get("comms", {}) as Dictionary).has(c):
@@ -1209,7 +1516,7 @@ func _show_train(phase: String, seg: int) -> void:
 	var look := outside_look(rules, _season_seg(seg))
 	var cam: Camera3D = train.get("camera")
 	if cam != null:
-		outside = OutsideView.attach(cam, look, phase == "travel")
+		outside = OutsideView.attach(cam, look, phase == "travel" and train_g.get("stranded") == null)
 		outside.visible = train.view_mode == "section"
 	journey = null
 	if Journey.enabled():
@@ -1256,6 +1563,13 @@ const WEATHER_WORD: Dictionary = {"snow": "눈", "fog": "안개", "sleet": "진�
 ## the departure contract will carry (train_stop.gd arrival_min, unless the slice is told
 ## one) and the weather the stop will wear (stop_weather). Only on the train before the stop.
 func next_stop_line() -> String:
+	if train_halt_line(train_g) != "":
+		return ""
+	if _is_campaign():
+		if not current() in ["train", "travel"]:
+			return ""
+		var stop: Dictionary = _campaign_scene_stop()
+		return "%d · %s · %s" % [int(stop.get("number", 0)), String(stop.get("name", "")), String(stop.get("kind", ""))]
 	if String(STEPS[step][0]) != "train" or step + 1 >= STEPS.size():
 		return ""
 	var at := int(opts.get("arrive_min", TrainStop.arrival_min(String(train_g.get("seed", "")), int(train_g.get("seg", 1)))))
@@ -1268,6 +1582,8 @@ func next_stop_line() -> String:
 ## weights and what falls by its temperature, drawn on the slice's seed with S1's
 ## key, so the train outside, the stop scene and the field all wear the same.
 func stop_weather(seg: int) -> Dictionary:
+	if _is_campaign():
+		return SeasonTable.pick_weather("prologue", prologue_progress(seg), String(train_g["seed"]))
 	return SeasonTable.pick_weather("prologue", prologue_progress(seg), str(int(opts.get("seed", 1))))
 
 
@@ -1408,6 +1724,8 @@ func _enamel(name_label: Label3D) -> Control:
 
 
 func _process(_delta: float) -> void:
+	if not is_instance_valid(marks):
+		return
 	if decor_id != "" and (DecorUiData.lock_reason(train_g, false) != "" or (is_instance_valid(paper) and not (paper as TurnCard).folded)):
 		leave_decor()
 	marks.queue_redraw()
@@ -1491,6 +1809,7 @@ func _show_home(word: String) -> void:
 	bar = b
 	card = h
 	_select(FIRST_CAR, false)
+	_tell_save_error.call_deferred()
 
 
 ## Pick car `id` ("" folds the pane): its pane comes up and the camera moves
@@ -1592,7 +1911,9 @@ func leave_decor() -> void:
 	var id: String = decor_id
 	decor_id = ""
 	if is_instance_valid(decor_pane):
-		decor_pane.cancel_drag()
+		# The drag is let go without cancel_drag's layout of the closing pane (stop_drag → _layout),
+		# most of the close's stall.
+		decor_pane.drop_drag()
 		decor_pane.hide()
 		decor_pane.queue_free()
 	decor_pane = null
@@ -1609,8 +1930,12 @@ func leave_decor() -> void:
 	_decor_hidden.clear()
 	if is_instance_valid(paper):
 		paper.g = train_g
-		paper._fill()
+		# Decorating opens only over a folded paper (open_decor), and unfolding refills it
+		# with what changed meanwhile (turn_card.gd set_folded), so it is not refilled under the fold.
+		if not (paper as TurnCard).folded:
+			paper._fill()
 	_select(id, false)
+	_tell_save_error.call_deferred()
 
 
 ## The train closed decorating on its own (its layout rebuilt): the pane, the screens put away
@@ -1833,6 +2158,9 @@ func _start_field() -> void:
 		field.opts["field_save"] = bool(opts.get("save", false))
 		field.opts["field_save_path"] = String(opts.get("field_save_path", FieldSave.PATH))
 		field_resume = {}
+	if _is_campaign():
+		field.opts["map_data"] = _campaign_map
+		_campaign_map = {}
 	field.finished.connect(_field_done)
 	add_child(field)
 	stage = field
@@ -1850,6 +2178,7 @@ func _field_ready(game) -> void:
 	var on_close := Callable(game, "interrupt")
 	if bool(opts.get("save", false)) and not get_window().close_requested.is_connected(on_close):
 		get_window().close_requested.connect(on_close)
+	_tell_save_error.call_deferred()
 
 
 ## The departure contract for the stop the slice's train stands at (field_departure.gd,
@@ -1858,6 +2187,28 @@ var contract: Dictionary = {}
 
 
 func _departure() -> Dictionary:
+	if _is_campaign():
+		if _campaign_map_problem() != "":
+			return {}
+		var visit: Dictionary = train_g["campaign"]["visit"]
+		if visit.is_empty():
+			return {}
+		if visit.get("contract") is Dictionary:
+			contract = visit["contract"].duplicate(true)
+			return contract
+		if visit.get("result") != "open":
+			return {}
+		var built: Dictionary = FieldDeparture.build(train_g, train_t, {"placeId": visit["map"]})
+		built["departureId"] = visit["departure_id"]
+		built["stopId"] = visit["stop_id"]
+		if not FieldReturn.check_departure(built, train_t).is_empty():
+			_campaign_fail("F-CAMPAIGN-CONTRACT")
+			return {}
+		contract = built
+		var out: Dictionary = train_g.duplicate(true)
+		out["campaign"]["visit"]["contract"] = built.duplicate(true)
+		_take(out)
+		return contract
 	if contract.is_empty() or int(contract.get("segment", -1)) != int(train_g.get("seg", -2)):
 		contract = FieldDeparture.build(train_g, train_t, {"placeId": FieldMaps.resolve(_field_place())})
 	return contract
@@ -1907,6 +2258,16 @@ func _field_opts() -> Dictionary:
 		o["stop_form"] = form
 	if opts.has("stop_form_m"):
 		o["stop_form_m"] = opts["stop_form_m"]
+	if _is_campaign():
+		var visit: Dictionary = train_g["campaign"]["visit"]
+		var stop: Dictionary = RouteState.current_stop(train_g)
+		o["seed"] = int(visit["field_seed"])
+		o["place"] = stop["map"]
+		o["visit_id"] = visit["id"]
+		o["campaign_kind"] = stop["kind"]
+		o["region"] = stop["band"]
+		o["stop_form"] = stop["form"]
+		o["act_progress"] = prologue_progress(RouteStops.season_seg(int(stop["number"])))
 	# The first stop's view ground (stop_ground.gd): the loader's map has it on, a field made here asks.
 	return StopGround.ask_view(o)
 
@@ -1914,6 +2275,15 @@ func _field_opts() -> Dictionary:
 ## The field is over: its end card stays where it is, and a key over it goes
 ## on to the receipt.
 func _field_done(r: Dictionary) -> void:
+	if _is_campaign():
+		var said: Dictionary = r.get("receipt", {}) if r.get("receipt") is Dictionary else {}
+		if not _apply_return(said):
+			return
+		if field == null:
+			go(_index_of("receipt"))
+		else:
+			_show_panel("", [], "귀환 영수증")
+		return
 	result = r
 	receipt = r.get("receipt", {}) if not r.is_empty() else quiet_receipt(_departure())
 	_apply_return(receipt)
@@ -1982,11 +2352,15 @@ func _show_receipt(go_word: String) -> void:
 	var c = ReceiptSheet.new()
 	c.name = "ReceiptSheet"
 	c.result = result if not result.is_empty() else result_of(receipt)
-	c.seg = int(STEPS[step][2])
+	c.seg = int(RouteState.current_stop(train_g)["number"]) if _is_campaign() else int(STEPS[step][2])
 	c.go_word = go_word
 	c.went_on.connect(next)
 	layer.add_child(c)
 	card = c
+	if _is_campaign():
+		var place_label: Label = c.find_child("Place", true, false) as Label
+		if place_label != null:
+			place_label.text = String(RouteState.current_stop(train_g)["name"])
 
 
 func _show_panel(head: String, rows: Array, go_word: String) -> void:
@@ -1997,6 +2371,7 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 	for c in lines.get_children():
 		lines.remove_child(c)
 		c.queue_free()
+	save_line = null
 	for text in rows:
 		var l := UiFonts.label(String(text), UiFonts.WORD, 400, 13.0, INK2)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2005,6 +2380,10 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 	next_button.text = go_word
 	panel.visible = true
 	_pin()
+	# Restoring the panel's contents is separate from telling a step once.
+	if save_error != "":
+		_add_save_line()
+		_tell_save_error.call_deferred()
 
 
 ## Bottom right at its own size, growing up and to the left: the carriage's
@@ -2012,3 +2391,220 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 func _pin() -> void:
 	panel.reset_size()
 	panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, int(round(UiFonts.px(12.0))))
+
+
+# ---------------------------------------------------------------- the campaign trial
+
+func _is_campaign() -> bool:
+	return opts.get("mode") == "campaign" or RouteState.is_campaign(train_g)
+
+
+func _starting_board() -> Array:
+	if not opts.has("start_board"):
+		return start_board()
+	var source: Variant = opts["start_board"]
+	var state: Dictionary = {}
+	var tables: Dictionary = {}
+	if source is Dictionary and source.get("state") is Dictionary and source.get("tables") is Dictionary:
+		state = source["state"].duplicate(true)
+		tables = source["tables"].duplicate(true)
+	elif source is Array and source.size() == 2 and source[0] is Dictionary and source[1] is Dictionary:
+		state = source[0].duplicate(true)
+		tables = source[1].duplicate(true)
+	if not state.is_empty():
+		state["lateOn"] = true
+		state["eventPack"] = true
+	return [state, tables]
+
+
+func _campaign_fail(issue: String) -> void:
+	campaign_error = issue
+	if is_instance_valid(panel):
+		_show_panel("캠페인을 진행할 수 없다", [issue], "확인")
+
+
+func _campaign_scene_stop() -> Dictionary:
+	var cursor: int = int(train_g["campaign"]["cursor"])
+	var visit: Dictionary = train_g["campaign"]["visit"]
+	if current() in ["travel", "arrive"] and visit.get("result") in ["returned", "passed"]:
+		cursor += 1
+	return CampaignRoute.stop_at(mini(cursor, CampaignRoute.size() - 1))
+
+
+func _campaign_map_problem() -> String:
+	var stop: Dictionary = RouteState.current_stop(train_g)
+	if stop.is_empty():
+		return "F-CAMPAIGN-MAP: no current stop"
+	if opts.has("place") and opts["place"] != stop["map"]:
+		return "F-CAMPAIGN-MAP: requested map differs from stop"
+	if opts.has("map_data") and (not opts["map_data"] is Dictionary or (opts["map_data"] as Dictionary).is_empty()):
+		return "F-CAMPAIGN-MAP: invalid map data"
+	return CampaignRoute.map_problem(stop, opts.get("map_data", {}))
+
+
+func _prepare_stop() -> void:
+	if not _is_campaign():
+		loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)))
+		return
+	var visit: Dictionary = train_g["campaign"]["visit"]
+	if visit.is_empty():
+		return
+	if _campaign_map_problem() != "":
+		_campaign_fail(_campaign_map_problem())
+		return
+	loader.prepare(_field_place(), int(visit["field_seed"]), _stop_form(_current_field_seg()), -1.0, String(visit["id"]))
+
+
+func _campaign_can_go(id: String) -> bool:
+	if RouteState.problem(train_g, train_t) != "":
+		return false
+	var board: String = SliceSave.step_of_board(train_g)
+	var here: String = current()
+	if here == "":
+		return id == board or (id == "field" and board == "stop_pick" and not field_resume.is_empty())
+	match id:
+		"train":
+			return here == "train" and board == "train"
+		"stop_pick":
+			return board == "stop_pick" and here in ["train", "arrive", "stop_pick"]
+		"field":
+			return board == "stop_pick" and here in ["stop_pick", "field"]
+		"receipt":
+			return board == "receipt" and here in ["field", "receipt"]
+		"council":
+			return int(train_g["campaign"]["cursor"]) == 0 and _returned() and board in ["receipt", "council"] and here in ["receipt", "council"]
+		"travel":
+			return board == "travel" and here in ["stop_pick", "council", "travel"]
+		"arrive":
+			return board == "arrive" and here in ["travel", "arrive"]
+		"end":
+			return board == "end" and here in ["receipt", "stop_pick", "travel", "end"]
+	return false
+
+
+func _campaign_next() -> void:
+	leave_decor()
+	match current():
+		"train", "travel":
+			_campaign_train_on()
+		"stop_pick":
+			go(_index_of("field"))
+		"field":
+			go(_index_of("receipt"))
+		"receipt":
+			if int(train_g["campaign"]["cursor"]) == CampaignRoute.size() - 1:
+				_take(RouteState.activate_next_stop(train_g))
+				go(_index_of("end"))
+			else:
+				go(_index_of("council"))
+		"council":
+			_leave_session()
+			go(_index_of("travel"))
+		"arrive":
+			if _begin_campaign_stop():
+				go(_index_of("stop_pick"))
+		"end", "":
+			_campaign_close_slots()
+			get_tree().change_scene_to_file(BOOT_SCENE)
+		_:
+			_campaign_fail("F-CAMPAIGN-TRANSITION: next")
+
+
+## Only real train turns reach the next unresolved stop. Papers keep their keys.
+func _campaign_train_on() -> void:
+	if not current() in ["train", "travel"]:
+		_campaign_fail("F-CAMPAIGN-TRANSITION: train")
+		return
+	if current() == "train" and _campaign_map_problem() != "":
+		_campaign_fail(_campaign_map_problem())
+		return
+	for _turn: int in RUN_LIMIT:
+		if papers_of(train_g):
+			going = true
+			_show_paper()
+			return
+		if train_g.get("phase") == "end" or port_error != "":
+			go(_index_of("end"))
+			return
+		if current() == "train" and train_g.get("phase") == "stop":
+			go(_index_of("stop_pick"))
+			return
+		if current() == "travel" and FieldArrival.second_station_reached(train_g):
+			go(_index_of("arrive"))
+			return
+		if current() == "travel" and SliceSave.step_of_board(train_g) != "travel":
+			_campaign_fail("F-CAMPAIGN-TRANSITION: unresolved stop")
+			return
+		_take(TrainAdvance.advance(train_g, train_t))
+		if campaign_error != "":
+			return
+		if train_halt_line(train_g) != "":
+			_show_step(step)
+			return
+	_campaign_fail("F-CAMPAIGN-TRAIN: turn limit")
+
+
+func _campaign_close_slots() -> void:
+	if bool(opts.get("save", false)):
+		SliceSave.clear(String(opts.get("slice_save_path", SliceSave.PATH)))
+		_clear_slice_field()
+
+
+## Start a fresh visit without touching the accumulated returns.
+func _begin_campaign_stop() -> bool:
+	var out: Dictionary = RouteState.activate_next_stop(train_g)
+	if int(out["campaign"]["cursor"]) != int(train_g["campaign"]["cursor"]) + 1 or out["campaign"]["visit"].get("result") != "open":
+		_campaign_fail("F-CAMPAIGN-TRANSITION: next stop")
+		return false
+	contract = {}
+	receipt = {}
+	result = {}
+	passed = false
+	council_g = {}
+	arrival_g = {}
+	field_resume = {}
+	_campaign_map = {}
+	pending_shop_events = []
+	if is_instance_valid(pending_field):
+		pending_field.queue_free()
+	pending_field = null
+	loader.abandon()
+	_take(out)
+	return campaign_error.is_empty()
+
+
+func _campaign_apply_return(said: Dictionary) -> bool:
+	if said.is_empty() or not FieldReceipt.check(said).is_empty() or not RouteState.owns_receipt(train_g, said):
+		_campaign_fail("F-CAMPAIGN-RECEIPT: identity or shape")
+		return false
+	var id: String = String(said["receiptId"])
+	var fingerprint: String = FieldReturn.canonical(said)
+	var returns: Dictionary = train_g.get("fieldReturns", {}) if train_g.get("fieldReturns") is Dictionary else {}
+	var known: Variant = (returns.get("applied", {}) as Dictionary).get(id)
+	if known != null:
+		if known != fingerprint or RouteState.record_for_visit(train_g).get("receiptId") != id:
+			_campaign_fail("F-CAMPAIGN-RECEIPT: conflicting replay")
+			return false
+		return true
+	if train_g["campaign"]["visit"].get("result") != "open" or not RouteState.record_for_visit(train_g).is_empty():
+		_campaign_fail("F-CAMPAIGN-RECEIPT: visit already closed")
+		return false
+	var order: Dictionary = _departure()
+	if not FieldReturn.check_departure(order, train_t).is_empty() or not FieldReturn.match_departure(order, said).is_empty():
+		_campaign_fail("F-CAMPAIGN-RECEIPT: contract")
+		return false
+	var out: Dictionary = FieldReturn.apply_field_return(train_g, train_t, order, said)
+	var g: Dictionary = out["g"]
+	if out.get("status") != "applied" or RouteState.record_for_visit(g).get("receiptId") != id or g.get("fieldReturns", {}).get("applied", {}).get(id) != fingerprint:
+		_campaign_fail("F-CAMPAIGN-RECEIPT: not applied")
+		return false
+	g = RouteState.mark_returned(g, id)
+	var issue: String = RouteState.problem(g, train_t)
+	if issue != "":
+		_campaign_fail(issue)
+		return false
+	receipt = said.duplicate(true)
+	result = result_of(receipt)
+	_take(g)
+	_after_return(train_g)
+	return _returned()

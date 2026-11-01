@@ -568,6 +568,11 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	var before := snapshot(g, t)
 	var lines: Array = []
 	var stock: Dictionary = receipt["stock"]
+	# Keep the pre-return balances for S1's shortage note, before the zero floor applies.
+	var have := {"coal": g["coal"], "food": g["food"], "medicine": g["med"], "luxury": g["lux"]}
+	if g.get("dom") is Dictionary:
+		for key: String in ["wood", "scrap", "cloth", "parts"]:
+			have[key] = g["dom"].get(key, 0)
 	for row: Array in [["coal", "coal"], ["food", "food"], ["medicine", "med"], ["luxury", "lux"]]:
 		var delta := float(stock.get(row[0], 0))
 		if delta != 0.0:
@@ -592,7 +597,9 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	for row: Array in [["coal", "석탄"], ["food", "식량"], ["medicine", "의약품"], ["luxury", "사치품"], ["wood", "목재"], ["scrap", "고철"], ["cloth", "천"], ["parts", "부품"]]:
 		var amount := float(stock.get(row[0], 0))
 		if amount != 0.0:
-			got.append("%s %s%s" % [row[1], "+" if amount > 0 else "", int(amount) if amount == floorf(amount) else amount])
+			var lack := maxf(0.0, -(float(have[row[0]]) + amount)) if have.has(row[0]) else 0.0
+			var suffix := " (모자라 0, 부족 %s)" % (int(lack) if lack == floorf(lack) else lack) if lack > 0.0 else ""
+			got.append("%s %s%s%s" % [row[1], "+" if amount > 0 else "", int(amount) if amount == floorf(amount) else amount, suffix])
 	if not got.is_empty():
 		lines.append({"k": "stock", "text": ", ".join(got)})
 	var place: String = receipt["place"]["id"]
@@ -646,6 +653,7 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		if not (receipt["people"]["dead"] as Array).has(person_id) and not lost_ids.has(person_id):
 			lost_ids.append(person_id)
 	var lost_by_comm := _by_comm(t, departure, lost_ids)
+	var left_count: int = 0
 	for comm: String in lost_by_comm:
 		var names: Array = lost_by_comm[comm]
 		var had := int(g["comms"][comm]["pop"])
@@ -657,8 +665,11 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 			if not g.get("leftShort") is Dictionary:
 				g["leftShort"] = {}
 			g["leftShort"][comm] = int(g["leftShort"].get(comm, 0)) + short
-		lines.append({"k": "people", "comm": comm, "text": "%s %s이(가) 필드에 남았다." % [t["COMM_NAME"][comm], ", ".join(names)]})
-		_journal(g, "%s이(가) 필드에 남았다. 열차는 그들 없이 떠났다." % ", ".join(names), "dark")
+		lines.append({"k": "people", "comm": comm, "text": "%s %d명이 필드에 남았다." % [t["COMM_NAME"][comm], names.size()]})
+		left_count += names.size()
+	# Those left at the end of a stop are counted, never named (결정 147·183; s1 the same).
+	if left_count > 0:
+		_journal(g, "%d명을 필드에 남기고 열차가 떠났다." % left_count, "dark")
 	# Left at an earlier stop and rescued alive this time: off the left list and back into the car's
 	# count (as the prologue's waiting for them does; s1 field_receipt.ts rejoined).
 	var rejoined: Array = []
