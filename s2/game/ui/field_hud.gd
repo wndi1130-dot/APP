@@ -5037,6 +5037,9 @@ func _tap_thing(p, world: Vector3) -> bool:
 		return false
 	for id in game.data["spots"]:
 		var spot: Dictionary = game.data["spots"][id]
+		# A story map's scene marker only holds a place: nothing is drawn there to walk over and do.
+		if spot.get("kind") == "story":
+			continue
 		if FieldGrid.center(spot["cell"]).distance_to(world) < 1.3:
 			_go_and_do(p, "spot", id, FieldGrid.center(spot["cell"]))
 			return true

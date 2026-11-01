@@ -99,8 +99,11 @@ func test_keys_sizes_ground_only_and_borrowed_kind() -> void:
 	for data in built:
 		var spec: Dictionary = SPECS[data["place_id"]]
 		var g: FieldGrid = data["grid"]
+		assert_eq(data.size(), KEYS.size(), data["place_id"])
 		for key in KEYS:
 			assert_true(data.has(key), data["place_id"] + ": " + key)
+		for key in data:
+			assert_true(KEYS.has(key), data["place_id"] + " unexpected " + str(key))
 		# The game reads its loot, horde and roof rules by place_kind: a story map keeps its borrowed kind.
 		assert_eq(data["place_kind"], spec["borrowed_kind"])
 		assert_true(BASE_KINDS.has(data["place_kind"]))
@@ -192,6 +195,14 @@ func test_entries_and_dead_stay_outside_bands() -> void:
 		var reached: PackedInt32Array = walks[data["place_id"]]["dead"]
 		assert_gte(data["entries"].size(), 2)
 		assert_true(data["entries"].has(data["first_entry"]))
+		var ways: Array = data["entries"].keys()
+		var named: Array = data["entry_names"].keys()
+		var weighed: Array = data["entry_weights"].keys()
+		ways.sort()
+		named.sort()
+		weighed.sort()
+		assert_eq(named, ways)
+		assert_eq(weighed, ways)
 		for key in data["entries"]:
 			assert_true(data["entry_names"].has(key))
 			assert_gt(float(data["entry_weights"].get(key, 0.0)), 0.0)
@@ -415,6 +426,7 @@ func test_distinct_grids_judgment_line_allowed_preloads_and_facility_names() -> 
 	assert_eq(roman.compile("[A-Za-z]"), OK)
 	var preloads := RegEx.new()
 	assert_eq(preloads.compile("preload\\(\"([^\"]+)\"\\)"), OK)
+	# With one story map the cross-map grid check has nothing to compare; two builds are kept apart below.
 	for i in range(built.size()):
 		var data: Dictionary = built[i]
 		var g: FieldGrid = data["grid"]
@@ -441,3 +453,14 @@ func test_distinct_grids_judgment_line_allowed_preloads_and_facility_names() -> 
 				if g.solid_at(Vector2i(x, y)) != g.solid_at(Vector2i(x, g.height - 1 - y)):
 					asymmetric = true
 		assert_true(asymmetric)
+
+
+func test_two_builds_share_no_grid_or_nested_data() -> void:
+	# A later build() that handed back a cached grid or shared rows would let one field change the next.
+	for script in MAPS:
+		var a: Dictionary = script.build()
+		var b: Dictionary = script.build()
+		assert_ne(a["grid"], b["grid"])
+		for key in ["containers", "spots", "entries", "bands", "entry_names", "entry_weights"]:
+			a[key]["_probe"] = true
+			assert_false(b[key].has("_probe"), key)
