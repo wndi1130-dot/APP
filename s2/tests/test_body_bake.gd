@@ -29,8 +29,9 @@ func test_every_motion_names_a_layer_that_exists_and_layers_only_name_body_bones
 		for bone in layer.get("damp", {}):
 			assert_true(BodyBake.MAP.has(bone), "%s damp %s" % [layer_name, bone])
 		for step in layer["steps"]:
-			if step[0] != "turn" and step[0] != "aim":
-				continue  # a step written in code (stand_support): it names no bones here
+			if step[0] == "stand_support":
+				continue  # written in code: it names no bones here
+			assert_true(step[0] in ["turn", "aim", "swing"], "%s step kind %s" % [layer_name, step[0]])
 			assert_true(BodyBake.MAP.has(step[1]), "%s step %s" % [layer_name, step[1]])
 			if step[0] == "turn":
 				assert_true(BodyBake.AXES.has(step[2]))

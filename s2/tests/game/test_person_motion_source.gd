@@ -259,6 +259,13 @@ func test_standing_source_support_is_upright_on_all_fourteen_rigs() -> void:
 				var bend := rad_to_deg((knee - thigh).angle_to(foot - knee))
 				knee_sum[side] += bend
 				assert_true(bend >= 3.0 and bend <= 5.0, "%s frame %d side %d relaxed knee 3..5 degrees" % [rig_name, frame, side])
+				# The knee bends forward (+Z in skeleton space), never backward.
+				var pose_hip := body.get_bone_global_pose(BodyBake._bone(body, "thigh" + suffix)).origin
+				var pose_knee := body.get_bone_global_pose(BodyBake._bone(body, "shin" + suffix)).origin
+				var pose_axis := (body.get_bone_global_pose(BodyBake._bone(body, "foot" + suffix)).origin - pose_hip).normalized()
+				var knee_out := (pose_knee - pose_hip) - pose_axis * (pose_knee - pose_hip).dot(pose_axis)
+				var forward := Vector3.BACK - pose_axis * Vector3.BACK.dot(pose_axis)
+				assert_gt(knee_out.dot(forward), 0.0, "%s frame %d side %d knee bends forward" % [rig_name, frame, side])
 				feet.append(foot)
 				thighs.append(thigh)
 				outward.append((foot.x - thigh.x) * (1.0 if side == 0 else -1.0))
