@@ -11,10 +11,10 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
-const PropKinds = preload("res://game/world/prop_kinds.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const TrackView = preload("res://game/world/track_view.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
+const RoomDecor = preload("res://game/world/room_decor.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
 const FurnitureTints = preload("res://game/world/furniture_tints.gd")
 const ObjectRules = preload("res://game/sim/object_rules.gd")
@@ -81,7 +81,7 @@ var prop_batches: Dictionary = {} # 모델 경로 -> {items, nodes(LOD -> MultiM
 var object_gray: Array = [] # Individually removable fallbacks for interactive furniture.
 var stove_glows: Dictionary = {}
 var modelled_prop_cells: Dictionary = {} # 땅 층에서 모델로 그리는 칸: 회색 덩이 제외용
-var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0} # 지도 facing과 다르게 돌린 수, 줄인 수
+var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0, "top_skipped": 0} # 지도 facing과 다르게 돌린 수, 줄인 수
 var _prop_memory := PackedByteArray()
 var _prop_seen_now: Dictionary = {}
 var _props_mask_on: bool = true
@@ -1703,14 +1703,15 @@ static func remaining_low_rects(r: Rect2i, covered: Dictionary) -> Array[Rect2i]
 
 func _build_props() -> void:
 	var chosen: Dictionary = {}
+	var top_props: Array = []
+	var hosts: Dictionary = {}
 	for prop: Dictionary in data.get("props", []):
+		if String(prop.get("mount", "")) == "top":
+			top_props.append(prop)
+			continue
 		var kind := String(prop.get("kind", ""))
 		if not chosen.has(kind):
-			chosen[kind] = ""
-			for path in PropKinds.candidates(kind):
-				if PropModels.enabled() and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
-					chosen[kind] = path
-					break
+			chosen[kind] = RoomDecor.drawn_model(kind)
 		var path: String = chosen[kind]
 		var lv := int(prop.get("level", 0))
 		if _interactive_prop(kind) and prop.get("rect") is Rect2i and levels.has(lv):
@@ -1752,11 +1753,38 @@ func _build_props() -> void:
 			item["tint"] = FurnitureTints.pick(prop, r.position, b)
 		prop_batches[path]["items"].append(item)
 		_index_prop(prop_batches[path], item)
+		if not prop.get("decor", false):
+			hosts["%d:%s:%s" % [lv, r, kind]] = {"path": path, "xf": xf, "building": b}
 		# 장식(벽걸이·화분)은 몸을 막지 않아 그 칸의 회색 덩이(모형 없는 가구)를 지우지 않는다.
 		if lv == 0 and not prop.get("decor", false):
 			for y in range(r.position.y, r.end.y):
 				for x in range(r.position.x, r.end.x):
 					modelled_prop_cells[Vector2i(x, y)] = true
+	# 받침은 모두 최종 변환을 받은 뒤다. 탁상은 그 돌림만 따라 실제 크기로 얹는다.
+	for prop: Dictionary in top_props:
+		await BuildPace.rest(pace)
+		var kind := String(prop.get("kind", ""))
+		if not chosen.has(kind):
+			chosen[kind] = RoomDecor.drawn_model(kind)
+		var path: String = chosen[kind]
+		var lv := int(prop.get("level", 0))
+		var host: Dictionary = hosts.get("%d:%s:%s" % [lv, prop.get("host_rect"), prop.get("on", "")], {})
+		var tops := PropModels.tops(String(host.get("path", "")))
+		var spot := int(prop.get("spot", -1))
+		if host.is_empty() or path.is_empty() or not levels.has(lv) or spot < 0 or spot >= tops.size() \
+				or not prop.get("rect") is Rect2i or not prop.get("at") is Vector2:
+			prop_fit_counts["top_skipped"] += 1
+			continue
+		var xf := top_mount_transform(host["xf"], float(tops[spot]["y"]), prop["at"])
+		if not prop_batches.has(path):
+			prop_batches[path] = {"items": [], "nodes": {}, "tiles": {}}
+		# 보이기·기억은 받침 전체 칸으로, 거리 제거·타일 인덱스는 받침 원점으로 함께 판정한다.
+		var host_xf: Transform3D = host["xf"]
+		var item := {"xf": xf, "rect": prop["host_rect"], "level": lv, "building": host["building"],
+			"prop": prop, "remembered": false, "cull_at": host_xf.origin}
+		prop_batches[path]["items"].append(item)
+		_index_prop(prop_batches[path], item)
+		prop_fit_counts["placed"] += 1
 	for path: String in prop_batches:
 		var batch: Dictionary = prop_batches[path]
 		var meshes := PropModels.batch_meshes(path)
@@ -1776,6 +1804,20 @@ func _build_props() -> void:
 			batch["nodes"][lod] = node
 		await BuildPace.rest(pace)
 	_make_prop_shades()
+
+
+static func top_mount_transform(host_xf: Transform3D, spot_y: float, at: Vector2) -> Transform3D:
+	return Transform3D(host_xf.basis.orthonormalized(), host_xf * Vector3(at.x, spot_y, at.y))
+
+
+static func prop_cull_at(item: Dictionary) -> Vector3:
+	var xf: Transform3D = item["xf"]
+	return item.get("cull_at", xf.origin)
+
+
+static func prop_cull_distance(at: Vector3, eye: Vector3, ray: Vector3) -> float:
+	var focus := eye + ray * ((at.y - eye.y) / ray.y) if absf(ray.y) > 0.001 else eye
+	return Vector2(at.x - focus.x, at.z - focus.z).length()
 
 
 ## 벽걸이 장식의 등 쪽 칸(facing 0 북·1 동·2 남·3 서 — 모형 앞 +Z가 facing만큼 돈다).
@@ -1897,20 +1939,20 @@ func _add_object_batch(prop: Dictionary, path: String) -> void:
 
 ## Tiles hold the same item dictionaries as the model-path batch.
 func _index_prop(batch: Dictionary, item: Dictionary) -> void:
-	var xf: Transform3D = item["xf"] as Transform3D
-	var key: Vector3i = Vector3i(floori(xf.origin.x / float(TILE)), floori(xf.origin.z / float(TILE)), int(item["level"]))
+	var at := prop_cull_at(item)
+	var key: Vector3i = Vector3i(floori(at.x / float(TILE)), floori(at.z / float(TILE)), int(item["level"]))
 	var tiles: Dictionary = batch["tiles"] as Dictionary
 	if not tiles.has(key):
-		tiles[key] = {"items": [], "min_y": xf.origin.y, "max_y": xf.origin.y}
+		tiles[key] = {"items": [], "min_y": at.y, "max_y": at.y}
 	var tile: Dictionary = tiles[key] as Dictionary
 	tile["items"].append(item)
-	tile["min_y"] = minf(float(tile["min_y"]), xf.origin.y)
-	tile["max_y"] = maxf(float(tile["max_y"]), xf.origin.y)
+	tile["min_y"] = minf(float(tile["min_y"]), at.y)
+	tile["max_y"] = maxf(float(tile["max_y"]), at.y)
 	item["tile"] = key
 	# All batches' tiles in one table, so a refill tests each tile once. The
 	# heights only grow (a wider span reaches further: never too few items).
-	var span: Vector2 = _prop_tile_y.get(key, Vector2(xf.origin.y, xf.origin.y))
-	_prop_tile_y[key] = Vector2(minf(span.x, xf.origin.y), maxf(span.y, xf.origin.y))
+	var span: Vector2 = _prop_tile_y.get(key, Vector2(at.y, at.y))
+	_prop_tile_y[key] = Vector2(minf(span.x, at.y), maxf(span.y, at.y))
 
 
 func _unindex_prop(batch: Dictionary, item: Dictionary) -> void:
@@ -1928,9 +1970,9 @@ func _unindex_prop(batch: Dictionary, item: Dictionary) -> void:
 	var min_y: float = INF
 	var max_y: float = -INF
 	for other: Dictionary in items:
-		var xf: Transform3D = other["xf"] as Transform3D
-		min_y = minf(min_y, xf.origin.y)
-		max_y = maxf(max_y, xf.origin.y)
+		var at := prop_cull_at(other)
+		min_y = minf(min_y, at.y)
+		max_y = maxf(max_y, at.y)
 	tile["min_y"] = min_y
 	tile["max_y"] = max_y
 
@@ -2106,9 +2148,7 @@ func refresh_props(camera: Camera3D = null) -> void:
 			if not _prop_is_seen(item["rect"], lv, item):
 				continue
 			var xf: Transform3D = item["xf"]
-			var at := to_global(xf.origin)
-			var focus := eye + ray * ((at.y - eye.y) / ray.y) if absf(ray.y) > 0.001 else eye
-			var distance := Vector2(at.x - focus.x, at.z - focus.z).length()
+			var distance := prop_cull_distance(to_global(prop_cull_at(item)), eye, ray)
 			if distance > PROP_CULL_DISTANCE:
 				continue
 			var lod := 1 if distance >= PROP_LOD_DISTANCE and batch["nodes"].has(1) else 0
