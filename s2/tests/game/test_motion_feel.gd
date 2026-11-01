@@ -1,5 +1,5 @@
 extends GutTest
-## Decisions 486 and 425; user motion feedback 2026-11-01.
+## Decisions 535, 486 and 425: watch choices and body motion.
 
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -16,6 +16,20 @@ const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 class WatchClock:
 	extends RefCounted
 	var elapsed: float = 0.0
+
+
+class DwellHashes:
+	extends RefCounted
+	var rejects: int = 1
+	var draws: int = 0
+
+	func name_unit(salt: String = "") -> float:
+		draws += 1
+		var parts: PackedStringArray = salt.split("_")
+		var attempt: int = int(parts[-1])
+		if attempt < rejects:
+			return 0.001 if salt.contains("_u_") else 0.0
+		return 0.5 if salt.contains("_u_") else 0.25
 
 
 class PacePerson:
@@ -84,33 +98,148 @@ func _walk_for(p: Person, note: Dictionary, speed: float, seconds: float, fps: i
 
 
 func _watch() -> Vector3:
-	return ai._look_out(watcher, "point", Vector3.BACK, Vector3.RIGHT)
+	var body: Vector3 = ai._look_out(watcher, "point", Vector3.BACK, Vector3.RIGHT)
+	watcher.face_point(watcher.position + body)
+	ai._tick_watch_head(watcher)
+	return body
 
 
-func test_follow_and_escort_hold_a_watch_for_at_least_one_and_a_half_seconds() -> void:
+func _set_watch(target: float, person: Person = null, key: String = "watch_point") -> void:
+	var p: Person = watcher if person == null else person
+	var state: Dictionary = ai._watch_state(p, Vector3.BACK, 0, Vector3.ZERO, field.clock.elapsed)
+	state["step"] = 0
+	state["point"] = 0
+	state["target"] = target
+	state["yaw_0"] = target
+	state["waiting"] = 1.0
+	state["until"] = field.clock.elapsed
+	p.brain[key] = state
+
+
+func test_follow_and_escort_hold_body_and_head_through_the_dwell() -> void:
 	var rng_before: int = field.rng.state
+	var escort: Person = _person()
+	field.crew = [escort]
+	var site: Vector3 = escort.position - Vector3.BACK * 5.0
+	_watch()
+	ai._escort_watch(escort, site)
+	field.clock.elapsed = float(watcher.brain["watch_point"]["until"]) + 0.001
 	var first: Vector3 = _watch()
-	var site: Vector3 = watcher.position - Vector3.BACK * 5.0
-	ai._escort_watch(watcher, site)
-	var escort_first: float = watcher.facing
-	for tick: int in range(1, 7):
-		field.clock.elapsed = float(tick) * 0.249
+	ai._escort_watch(escort, site)
+	ai._tick_watch_head(escort)
+	var head: float = float(watcher.brain["watch_head_yaw"])
+	var escort_first: float = escort.facing
+	var escort_head: float = float(escort.brain["watch_head_yaw"])
+	var start: float = field.clock.elapsed
+	var until: float = minf(float(watcher.brain["watch_point"]["until"]), float(escort.brain["watch_escort"]["until"]))
+	for tick: int in range(1, 10):
+		field.clock.elapsed = start + (until - start) * float(tick) / 10.0
 		assert_almost_eq(first.angle_to(_watch()), 0.0, 0.0001)
-		ai._escort_watch(watcher, site)
-		assert_almost_eq(angle_difference(escort_first, watcher.facing), 0.0, 0.0001)
+		assert_almost_eq(float(watcher.brain["watch_head_yaw"]), head, 0.0001)
+		ai._escort_watch(escort, site)
+		ai._tick_watch_head(escort)
+		assert_almost_eq(angle_difference(escort_first, escort.facing), 0.0, 0.0001)
+		assert_almost_eq(float(escort.brain["watch_head_yaw"]), escort_head, 0.0001)
 	assert_eq(field.rng.state, rng_before, "watching does not draw random numbers")
 
 
-func test_a_watch_change_under_ten_degrees_is_ignored_after_the_hold() -> void:
-	var first: Vector3 = _watch()
-	field.clock.elapsed = 2.0
-	var sweep: float = sin(field.clock.elapsed * 0.5) * deg_to_rad(FieldAi.LOOK_SWEEP_DEG)
-	var base: Vector3 = Vector3.BACK.rotated(Vector3.UP, deg_to_rad(5.0) - sweep)
-	var kept: Vector3 = ai._look_out(watcher, "point", base, Vector3.RIGHT)
-	assert_almost_eq(first.angle_to(kept), 0.0, 0.0001)
-	base = Vector3.BACK.rotated(Vector3.UP, deg_to_rad(12.0) - sweep)
-	var changed: Vector3 = ai._look_out(watcher, "point", base, Vector3.RIGHT)
-	assert_almost_eq(first.angle_to(changed), deg_to_rad(12.0), 0.0001)
+func test_a_watch_within_forty_five_degrees_keeps_the_body_still() -> void:
+	for degrees: float in [30.0, -40.0, 45.0, -45.0]:
+		_set_watch(deg_to_rad(degrees))
+		assert_almost_eq(_watch().angle_to(Vector3.BACK), 0.0, 0.0001)
+		assert_almost_eq(float(watcher.brain["watch_head_yaw"]), deg_to_rad(degrees), 0.0001)
+	assert_false(watcher.brain.has("watch_body_turn_t"))
+
+
+func test_a_ninety_degree_watch_leaves_twenty_degrees_for_the_head() -> void:
+	_set_watch(PI * 0.5)
+	_watch()
+	assert_almost_eq(watcher.facing, deg_to_rad(70.0), 0.0001)
+	assert_almost_eq(float(watcher.brain["watch_head_yaw"]), deg_to_rad(20.0), 0.0001)
+
+
+func test_an_ordinary_body_turn_prefers_the_three_second_gap() -> void:
+	_set_watch(PI * 0.5)
+	_watch()
+	field.clock.elapsed = 0.5
+	_set_watch(0.0)
+	_watch()
+	assert_almost_eq(watcher.facing, deg_to_rad(70.0), 0.0001)
+	assert_eq(float(watcher.brain["watch_point"]["waiting"]), 1.0)
+	field.clock.elapsed = 2.999
+	_watch()
+	assert_almost_eq(watcher.facing, deg_to_rad(70.0), 0.0001)
+	field.clock.elapsed = 3.0
+	_watch()
+	assert_almost_eq(watcher.facing, deg_to_rad(20.0), 0.0001)
+	assert_eq(float(watcher.brain["watch_body_turn_t"]), 3.0)
+	assert_eq(float(watcher.brain["watch_point"]["picked"]), 3.0, "waiting is not dwell time")
+
+
+func test_a_request_over_seventy_degrees_bypasses_the_body_gap() -> void:
+	_set_watch(PI * 0.5)
+	_watch()
+	field.clock.elapsed = 0.5
+	_set_watch(deg_to_rad(-10.0))
+	_watch()
+	assert_almost_eq(watcher.facing, deg_to_rad(10.0), 0.0001)
+	assert_almost_eq(float(watcher.brain["watch_head_yaw"]), deg_to_rad(-20.0), 0.0001)
+	assert_eq(float(watcher.brain["watch_body_turn_t"]), 0.5)
+
+
+func test_the_twenty_five_degree_done_threshold_does_not_restart_a_turn() -> void:
+	watcher.turn_rate = 1.0
+	watcher.look = 0.0
+	_set_watch(PI * 0.5)
+	_watch()
+	assert_eq(float(watcher.brain["watch_point"]["turning"]), 1.0)
+	watcher.look = deg_to_rad(65.0)
+	_watch()
+	assert_eq(float(watcher.brain["watch_point"]["turning"]), 0.0)
+	watcher.look = deg_to_rad(64.0)
+	_watch()
+	assert_eq(float(watcher.brain["watch_point"]["turning"]), 0.0)
+	assert_eq(float(watcher.brain["watch_body_turn_t"]), 0.0)
+	assert_almost_eq(watcher.facing, deg_to_rad(70.0), 0.0001)
+
+
+func test_the_head_request_tracks_the_shown_body_without_passing_the_world_target() -> void:
+	watcher.turn_rate = 1.0
+	watcher.look = 0.0
+	_set_watch(PI * 0.5)
+	_watch()
+	assert_almost_eq(float(watcher.brain["watch_head_yaw"]), deg_to_rad(70.0), 0.0001)
+	for degrees: float in [20.0, 30.0, 60.0, 70.0, 100.0]:
+		watcher.look = deg_to_rad(degrees)
+		ai._tick_watch_head(watcher)
+		var head: float = float(watcher.brain["watch_head_yaw"])
+		assert_almost_eq(angle_difference(watcher.look + head, PI * 0.5), 0.0, 0.0001)
+		assert_lte(absf(head), deg_to_rad(FieldAi.LOOK_HEAD_MAX_DEG))
+		assert_eq(float(watcher.brain["watch_point"]["target"]), PI * 0.5)
+
+
+func test_follow_and_escort_share_the_preferred_body_turn_gap() -> void:
+	_set_watch(PI * 0.5)
+	_watch()
+	field.clock.elapsed = 1.0
+	_set_watch(0.0, watcher, "watch_escort")
+	ai._escort_watch(watcher, Vector3.BACK * 5.0)
+	assert_almost_eq(watcher.facing, deg_to_rad(70.0), 0.0001)
+	assert_eq(float(watcher.brain["watch_escort"]["waiting"]), 1.0)
+
+
+func test_a_large_camera_crossing_bypasses_the_preferred_body_gap() -> void:
+	field.camera = Node3D.new()
+	add_child_autofree(field.camera)
+	field.camera.position = Vector3.BACK * 20.0
+	_set_watch(deg_to_rad(60.0))
+	_watch()
+	field.clock.elapsed = 1.0
+	_set_watch(deg_to_rad(-60.0))
+	_watch()
+	assert_almost_eq(watcher.facing, deg_to_rad(-40.0), 0.0001)
+	assert_lte(cos(watcher.facing + float(watcher.brain["watch_head_yaw"])), 0.50001)
+	assert_eq(float(watcher.brain["watch_body_turn_t"]), 1.0)
 
 
 func test_a_watch_keeps_the_camera_edge_when_the_sweep_crosses_the_camera() -> void:
@@ -122,40 +251,180 @@ func test_a_watch_keeps_the_camera_edge_when_the_sweep_crosses_the_camera() -> v
 	var site: Vector3 = watcher.position - base * 5.0
 	for tick: int in range(105):
 		field.clock.elapsed = float(tick) * 0.25
-		var look: Vector3 = ai._look_out(watcher, "point", base, Vector3.RIGHT)
+		var body: Vector3 = ai._look_out(watcher, "point", base, Vector3.RIGHT)
+		watcher.face_point(watcher.position + body)
+		var target: float = float(watcher.brain["watch_point"]["target"])
+		var look := Vector3(sin(target), 0.0, cos(target))
 		assert_gt(look.x, 0.0, "the outward centre chooses the positive edge")
 		assert_lte(look.dot(Vector3.BACK), 0.50001)
 		ai._escort_watch(watcher, site)
-		assert_gt(sin(watcher.facing), 0.0, "the escort uses the same edge latch")
+		assert_gt(sin(float(watcher.brain["watch_escort"]["target"])), 0.0, "the escort uses the same edge latch")
 
 
 func test_camera_edge_changes_only_beyond_fifteen_degrees_past_the_centre() -> void:
-	field.camera = Node3D.new()
-	add_child_autofree(field.camera)
-	field.camera.position = watcher.position + Vector3.BACK * 20.0
-	var base: Vector3 = Vector3.BACK.rotated(Vector3.UP, deg_to_rad(3.0))
-	ai._look_out(watcher, "point", base, Vector3.RIGHT)
-	field.clock.elapsed = 2.0
-	base = Vector3.BACK.rotated(Vector3.UP, deg_to_rad(-10.0))
-	assert_gt(ai._look_out(watcher, "point", base, Vector3.RIGHT).x, 0.0)
-	field.clock.elapsed = 4.0
-	base = Vector3.BACK.rotated(Vector3.UP, deg_to_rad(-20.0))
-	assert_lt(ai._look_out(watcher, "point", base, Vector3.RIGHT).x, 0.0)
+	var state: Dictionary = {}
+	for degrees: float in [30.0, 10.0, -20.0]:
+		var base: Vector3 = Vector3.BACK.rotated(Vector3.UP, deg_to_rad(degrees))
+		var target: float = ai._watch_target(watcher, base, 1, Vector3.BACK, state)
+		assert_eq(signf(sin(target)), 1.0 if degrees > 0.0 else -1.0)
 
 
-func test_the_held_watch_still_sweeps_close_to_forty_degrees_each_way() -> void:
-	var least: float = 0.0
-	var most: float = 0.0
-	for tick: int in range(241):
-		field.clock.elapsed = float(tick) * 0.25
-		var look: Vector3 = _watch()
-		var angle: float = atan2(look.x, look.z)
-		least = minf(least, angle)
-		most = maxf(most, angle)
-	assert_lt(least, deg_to_rad(-35.0))
-	assert_gt(most, deg_to_rad(35.0))
-	assert_gte(least, deg_to_rad(-40.01))
-	assert_lte(most, deg_to_rad(40.01))
+func test_watch_points_stay_in_the_sector_and_keep_their_world_yaws() -> void:
+	_watch()
+	var original: Dictionary = watcher.brain["watch_point"].duplicate(true)
+	for point: int in range(FieldAi.LOOK_POINTS):
+		assert_lte(absf(float(original["yaw_" + str(point)])), deg_to_rad(FieldAi.LOOK_SECTOR_DEG))
+	field.clock.elapsed = float(original["until"]) + 0.001
+	for tick: int in range(300):
+		field.clock.elapsed += 0.1
+		_watch()
+		var state: Dictionary = watcher.brain["watch_point"]
+		for point: int in range(FieldAi.LOOK_POINTS):
+			assert_eq(float(state["yaw_" + str(point)]), float(original["yaw_" + str(point)]))
+		assert_lte(absf(float(watcher.brain["watch_head_yaw"])), deg_to_rad(FieldAi.LOOK_HEAD_MAX_DEG))
+
+
+func test_recent_views_reduce_weight_without_banning_a_point_or_its_neighbours() -> void:
+	var state: Dictionary = {"viewed_0": 0.0, "point": 0}
+	assert_gt(ai._watch_weight(state, 0, 0.0), 0.0)
+	assert_lt(ai._watch_weight(state, 0, 0.0), ai._watch_weight(state, 1, 0.0))
+	assert_almost_eq(ai._watch_weight(state, 0, FieldAi.LOOK_RECENCY_S), 1.0, 0.00001)
+	var recent: int = 0
+	var aged: int = 0
+	var chosen: Dictionary = {}
+	for step: int in range(2048):
+		var point: int = ai._watch_pick(watcher, state, step, 0.0)
+		chosen[point] = true
+		if point == 0:
+			recent += 1
+		if ai._watch_pick(watcher, state, step, FieldAi.LOOK_RECENCY_S) == 0:
+			aged += 1
+	assert_eq(chosen.size(), FieldAi.LOOK_POINTS)
+	assert_gt(recent, 0, "a recently viewed point is still possible")
+	assert_gt(aged, recent, "the same hash stream returns more often after the penalty fades")
+
+
+func test_head_only_requests_do_not_record_a_view_until_the_body_turns() -> void:
+	_set_watch(deg_to_rad(30.0))
+	_watch()
+	assert_eq(watcher.brain["watch_point"].has("viewed_0"), FieldAi.LOOK_HEAD_DRAWN)
+	field.clock.elapsed = 0.1
+	_set_watch(PI * 0.5)
+	_watch()
+	assert_true(watcher.brain["watch_point"].has("viewed_0"))
+	assert_almost_eq(float(watcher.brain["watch_point"]["viewed_0"]), 0.1, 0.00001)
+
+
+func test_a_planned_turn_is_not_a_view_before_the_shown_body_arrives() -> void:
+	watcher.turn_rate = 1.0
+	watcher.look = 0.0
+	_set_watch(PI * 0.5)
+	_watch()
+	assert_false(watcher.brain["watch_point"].has("viewed_0"))
+	watcher.look = deg_to_rad(70.0)
+	ai._tick_watch_head(watcher)
+	assert_true(watcher.brain["watch_point"].has("viewed_0"))
+
+
+func test_three_people_start_their_first_watch_at_different_times_and_sizes() -> void:
+	var mates: Array = [watcher, _person(), _person()]
+	var names: Array[String] = ["Alpha", "Bravo", "Charlie"]
+	field.squad = mates
+	for index: int in range(mates.size()):
+		mates[index].display_name = names[index]
+	var first: Dictionary = {}
+	var sizes: Dictionary = {}
+	for tick: int in range(121):
+		field.clock.elapsed = float(tick) * 0.01
+		for index: int in range(mates.size()):
+			var p: Person = mates[index]
+			var body: Vector3 = ai._look_out(p, "point", Vector3.BACK, Vector3.RIGHT)
+			p.face_point(p.position + body)
+			if int(p.brain["watch_point"]["point"]) >= 0 and not first.has(index):
+				first[index] = field.clock.elapsed
+				sizes[float(p.brain["watch_point"]["target"])] = true
+	assert_eq(first.size(), 3)
+	assert_ne(first[0], first[1])
+	assert_ne(first[0], first[2])
+	assert_ne(first[1], first[2])
+	assert_gt(sizes.size(), 1)
+
+
+func test_watch_dwells_are_bounded_and_vary_by_person_and_step() -> void:
+	var other: Person = _person()
+	other.display_name = "Other"
+	var durations: Dictionary = {}
+	var different: bool = false
+	for step: int in range(512):
+		var dwell: float = ai._watch_dwell(watcher, step)
+		assert_gt(dwell, FieldAi.LOOK_DWELL_MIN_S)
+		assert_lt(dwell, FieldAi.LOOK_DWELL_MAX_S)
+		durations[dwell] = true
+		different = different or not is_equal_approx(dwell, ai._watch_dwell(other, step))
+	assert_gt(durations.size(), 1)
+	assert_true(different)
+
+
+func test_out_of_range_dwells_are_redrawn_instead_of_clamped() -> void:
+	var hashes: DwellHashes = DwellHashes.new()
+	var dwell: float = ai._watch_dwell(hashes, 0)
+	assert_almost_eq(dwell, FieldAi.LOOK_DWELL_MEDIAN_S, 0.00001)
+	assert_eq(hashes.draws, 4, "the rejected pair is followed by a second pair")
+	var exhausted: DwellHashes = DwellHashes.new()
+	exhausted.rejects = FieldAi.LOOK_DWELL_TRIES + 1
+	dwell = ai._watch_dwell(exhausted, 0)
+	assert_eq(dwell, FieldAi.LOOK_DWELL_MEDIAN_S)
+	assert_eq(exhausted.draws, FieldAi.LOOK_DWELL_TRIES * 2, "rejection has a finite budget")
+
+
+func test_the_same_watch_inputs_repeat_without_using_game_randomness() -> void:
+	var other: Person = _person()
+	var rng_before: int = field.rng.state
+	for tick: int in range(600):
+		field.clock.elapsed = float(tick) * 0.1
+		var body: Vector3 = _watch()
+		var repeated: Vector3 = ai._look_out(other, "point", Vector3.BACK, Vector3.RIGHT)
+		other.face_point(other.position + repeated)
+		ai._tick_watch_head(other)
+		assert_almost_eq(body.angle_to(repeated), 0.0, 0.0001)
+		assert_eq(watcher.brain["watch_point"], other.brain["watch_point"])
+		assert_almost_eq(float(watcher.brain["watch_head_yaw"]), float(other.brain["watch_head_yaw"]), 0.0001)
+	assert_eq(field.rng.state, rng_before)
+
+
+func test_a_rewound_clock_and_an_old_watch_start_a_fresh_sequence() -> void:
+	field.clock.elapsed = 10.0
+	_watch()
+	field.clock.elapsed = 0.0
+	watcher.facing = 0.0
+	_watch()
+	var fresh: Person = _person()
+	ai._look_out(fresh, "point", Vector3.BACK, Vector3.RIGHT)
+	assert_eq(watcher.brain["watch_point"], fresh.brain["watch_point"])
+	watcher.brain["watch_point"] = {"target": 0.5, "picked": 0.0, "seen": 0.0, "edge": 1.0}
+	_watch()
+	assert_eq(int(watcher.brain["watch_point"]["version"]), FieldAi.LOOK_STATE_VERSION)
+	assert_eq(int(watcher.brain["watch_point"]["step"]), -1)
+	field.clock.elapsed = float(watcher.brain["watch_point"]["until"]) + 0.001
+	_watch()
+	assert_eq(int(watcher.brain["watch_point"]["step"]), 0)
+
+
+func test_movement_and_attack_leave_the_watch_without_waiting_for_the_gap() -> void:
+	for transition: String in ["move", "attack"]:
+		watcher.moving = false
+		watcher.action = ""
+		watcher.facing = 0.0
+		_set_watch(PI * 0.5)
+		_watch()
+		watcher.moving = transition == "move"
+		watcher.action = "strike" if transition == "attack" else ""
+		ai._tick_watch_head(watcher)
+		assert_eq(float(watcher.brain["watch_head_yaw"]), 0.0)
+		assert_false(watcher.brain.has("watch_target_yaw"))
+		assert_false(watcher.brain.has("watch_body_turn_t"))
+		watcher.face_point(Vector3.LEFT)
+		assert_almost_eq(watcher.facing, -PI * 0.5, 0.0001)
 
 
 func _field(extra: Dictionary = {}) -> FieldGame:
@@ -168,13 +437,53 @@ func _field(extra: Dictionary = {}) -> FieldGame:
 	return game
 
 
+func _assert_watch_state_same(restored: Dictionary, original: Dictionary, context: String) -> void:
+	const SAVE_EPS: float = 0.0000001
+	const EXACT_FIELDS: Array[String] = ["version", "step", "point", "waiting", "turning", "body_turned", "edge"]
+	assert_eq(restored.size(), original.size(), context + " key count")
+	for field in restored:
+		assert_eq(typeof(field), TYPE_STRING, context + " restored key type: " + str(field))
+	for field in original:
+		assert_eq(typeof(field), TYPE_STRING, context + " original key type: " + str(field))
+		var label: String = context + "." + str(field)
+		assert_true(restored.has(field), label + " is restored")
+		if not restored.has(field):
+			continue
+		var before: Variant = original[field]
+		var after: Variant = restored[field]
+		var numeric: bool = typeof(before) in [TYPE_INT, TYPE_FLOAT] and typeof(after) in [TYPE_INT, TYPE_FLOAT]
+		assert_true(numeric, label + " contains numbers")
+		if not numeric:
+			continue
+		var a: float = float(before)
+		var b: float = float(after)
+		assert_true(is_finite(a) and is_finite(b), label + " contains finite numbers")
+		if not is_finite(a) or not is_finite(b):
+			continue
+		var detail: String = "%s original=%.17f (%s) restored=%.17f (%s) delta=%.20f" % [
+			label, a, type_string(typeof(before)), b, type_string(typeof(after)), b - a]
+		if field in EXACT_FIELDS:
+			assert_eq(b, a, detail)
+		else:
+			assert_almost_eq(b, a, SAVE_EPS, detail)
+
+
 func test_a_saved_watch_picks_the_same_next_target_and_leaves_pushes_unsaved() -> void:
 	var first: FieldGame = _field()
 	var p: Person = first.squad[1]
+	p.turn_rate = 0.0
+	p.facing = PI
 	first.camera.position = p.position + Vector3.FORWARD * 20.0
 	first.clock.elapsed = 2.0
 	first.ai._look_out(p, "point", Vector3.BACK, Vector3.RIGHT)
 	first.ai._escort_watch(p, p.position - Vector3.BACK * 5.0)
+	first.clock.elapsed = 4.0
+	var body: Vector3 = first.ai._look_out(p, "point", Vector3.BACK, Vector3.RIGHT)
+	p.face_point(p.position + body)
+	first.ai._tick_watch_head(p)
+	assert_true(p.brain["watch_point"].has("viewed_" + str(int(p.brain["watch_point"]["point"]))))
+	first.ai._escort_watch(p, p.position - Vector3.BACK * 5.0)
+	first.ai._tick_watch_head(p)
 	p.visual_push = Vector3(0.3, 0.0, 0.0)
 	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
 	assert_false(saved.is_empty())
@@ -182,28 +491,76 @@ func test_a_saved_watch_picks_the_same_next_target_and_leaves_pushes_unsaved() -
 	var q: Person = resumed.squad[1]
 	assert_eq(String(q.pid), String(p.pid))
 	assert_eq(q.visual_push, Vector3.ZERO, "push history belongs only to the drawing")
+	assert_almost_eq(float(q.brain["watch_head_yaw"]), float(p.brain["watch_head_yaw"]), 0.0000001)
+	assert_eq(q.brain.get("watch_body_turn_t"), p.brain.get("watch_body_turn_t"))
 	resumed.camera.position = first.camera.position
 	for key: String in ["watch_point", "watch_escort"]:
 		var state: Dictionary = p.brain[key]
 		var restored: Dictionary = q.brain[key]
-		assert_eq(restored.size(), state.size())
-		for field_name: String in state:
-			assert_true(restored.has(field_name))
-			var value: float = float(state[field_name])
-			assert_true(is_finite(value), "watch state contains only finite numbers")
-			assert_almost_eq(float(restored[field_name]), value, 0.0000001)
+		_assert_watch_state_same(restored, state, key + " after restore")
 	var rng_before: int = first.rng.state
-	for elapsed: float in [2.5, 4.0, 6.0, 8.0]:
+	for elapsed: float in [4.5, 6.0, 8.0, 10.0]:
 		first.clock.elapsed = elapsed
 		resumed.clock.elapsed = elapsed
 		var a: Vector3 = first.ai._look_out(p, "point", Vector3.BACK, Vector3.RIGHT)
 		var b: Vector3 = resumed.ai._look_out(q, "point", Vector3.BACK, Vector3.RIGHT)
+		p.face_point(p.position + a)
+		q.face_point(q.position + b)
+		first.ai._tick_watch_head(p)
+		resumed.ai._tick_watch_head(q)
 		assert_almost_eq(a.angle_to(b), 0.0, 0.0001)
+		_assert_watch_state_same(q.brain["watch_point"], p.brain["watch_point"], "watch_point at %.3f" % elapsed)
+		assert_almost_eq(float(p.brain["watch_head_yaw"]), float(q.brain["watch_head_yaw"]), 0.0000001)
 		first.ai._escort_watch(p, p.position - Vector3.BACK * 5.0)
 		resumed.ai._escort_watch(q, q.position - Vector3.BACK * 5.0)
+		first.ai._tick_watch_head(p)
+		resumed.ai._tick_watch_head(q)
 		assert_almost_eq(angle_difference(p.facing, q.facing), 0.0, 0.0001)
+		_assert_watch_state_same(q.brain["watch_escort"], p.brain["watch_escort"], "watch_escort at %.3f" % elapsed)
 	assert_eq(first.rng.state, rng_before)
 	assert_eq(resumed.rng.state, rng_before)
+
+
+func test_a_saved_pending_watch_keeps_the_body_gap_and_remaining_dwell() -> void:
+	var first: FieldGame = _field()
+	var p: Person = first.squad[1]
+	first.clock.elapsed = 1.0
+	first.camera.position = p.position + Vector3.FORWARD * 20.0
+	p.turn_rate = 0.0
+	p.facing = deg_to_rad(70.0)
+	p.brain["watch_body_turn_t"] = 0.0
+	var state: Dictionary = first.ai._watch_state(p, Vector3.BACK, 1, Vector3.ZERO, 1.0)
+	state["step"] = 0
+	state["point"] = 0
+	state["target"] = 0.0
+	state["yaw_0"] = 0.0
+	state["waiting"] = 1.0
+	state["until"] = 1.0
+	p.brain["watch_point"] = state
+	first.ai._look_out(p, "point", Vector3.BACK, Vector3.RIGHT)
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+	assert_false(saved.is_empty())
+	var resumed: FieldGame = _field(FieldSave.resume_opts(saved))
+	var q: Person = resumed.squad[1]
+	resumed.camera.position = first.camera.position
+	for elapsed: float in [2.999, 3.0, 3.5]:
+		first.clock.elapsed = elapsed
+		resumed.clock.elapsed = elapsed
+		var a: Vector3 = first.ai._look_out(p, "point", Vector3.BACK, Vector3.RIGHT)
+		var b: Vector3 = resumed.ai._look_out(q, "point", Vector3.BACK, Vector3.RIGHT)
+		p.face_point(p.position + a)
+		q.face_point(q.position + b)
+		first.ai._tick_watch_head(p)
+		resumed.ai._tick_watch_head(q)
+		assert_almost_eq(angle_difference(p.facing, q.facing), 0.0, 0.0001)
+		_assert_watch_state_same(q.brain["watch_point"], p.brain["watch_point"], "pending watch_point at %.3f" % elapsed)
+		assert_almost_eq(float(p.brain["watch_head_yaw"]), float(q.brain["watch_head_yaw"]), 0.0001)
+		if elapsed < 3.0:
+			assert_almost_eq(q.facing, deg_to_rad(70.0), 0.0001)
+			assert_eq(float(q.brain["watch_point"]["waiting"]), 1.0)
+		else:
+			assert_almost_eq(q.facing, deg_to_rad(20.0), 0.0001)
+			assert_eq(float(q.brain["watch_point"]["picked"]), 3.0)
 
 
 func test_five_degrees_at_point_three_radians_per_second_do_not_step() -> void:

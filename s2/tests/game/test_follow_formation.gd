@@ -115,7 +115,9 @@ func test_idle_watch_stays_outside_the_camera_cone_after_the_sweep() -> void:
 		for time in [0.0, 1.5, 3.0, 6.0, 12.0]:
 			game.clock.elapsed = time
 			for role in ["point", "side", "rear", "aside"]:
-				var gaze: Vector3 = game.ai._look_out(p, role, Vector3.RIGHT, Vector3.FORWARD)
+				game.ai._look_out(p, role, Vector3.RIGHT, Vector3.FORWARD)
+				var target: float = float(p.brain["watch_" + role]["target"])
+				var gaze := Vector3(sin(target), 0.0, cos(target))
 				assert_lte(gaze.normalized().dot(camera_way), 0.50001, "at least 60 degrees from the camera")
 	game.camera.global_position = p.global_position + Vector3.UP * 50.0
 	assert_true(game.ai._look_out(p, "rear", Vector3.RIGHT, Vector3.FORWARD).is_finite())

@@ -448,19 +448,23 @@ func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 		guard.position = _at() + Vector3(-4.0 if guard.brain.get("side", 0) == 0 else 4.0, 0, 1.5)
 		guard.stop()
 		guard.face_point(_at())
-		var before := INF
-		# A whole sweep (about 12.6 s): no step may jump, as a flip across the screen would.
+		# Ordinary turns prefer a gap; requests past the head limit bypass it.
 		for i in 26:
 			game.clock.elapsed += 0.5
+			var shown: float = guard.look if guard.turn_rate > 0.0 else guard.facing
+			var last_turn: float = float(guard.brain.get("watch_body_turn_t", game.clock.elapsed - game.ai.LOOK_BODY_TURN_GAP_S))
 			game.ai._crew(guard, 0.1, true)
-			var look := Vector3(sin(guard.facing), 0.0, cos(guard.facing))
+			var state: Dictionary = guard.brain["watch_escort"]
+			var target: float = float(state["target"])
+			var look := Vector3(sin(target), 0.0, cos(target))
 			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 119.5, "watching outward, the work behind")
 			var screen: Vector3 = game.cam_back()
 			screen.y = 0.0
 			assert_gt(rad_to_deg(look.angle_to(screen)), game.ai.LOOK_CAMERA_DEG - 0.5, "never into the screen")
-			if before != INF:
-				assert_lt(rad_to_deg(absf(angle_difference(before, guard.facing))), 30.0, "the sweep turns slowly, never flips")
-			before = guard.facing
+			assert_lte(absf(float(guard.brain["watch_head_yaw"])), deg_to_rad(game.ai.LOOK_HEAD_MAX_DEG))
+			var turned: float = float(guard.brain.get("watch_body_turn_t", last_turn))
+			if turned > last_turn and turned - last_turn < game.ai.LOOK_BODY_TURN_GAP_S:
+				assert_gt(absf(angle_difference(shown, target)), deg_to_rad(game.ai.LOOK_HEAD_MAX_DEG))
 
 
 func _cycle(id: String) -> void:

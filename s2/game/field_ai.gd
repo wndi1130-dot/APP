@@ -87,9 +87,32 @@ const HORDE_N: int = 5
 ## One of us falls: the nearest companion this near that sees it calls out.
 const SEE_DOWN_R: float = 12.0
 ## The chief stands still this long: the companions look round, each its own
-## way, sweeping this far either side.
+## way, pausing at a few places inside its role's sector.
 const LOOK_STILL_S: float = 1.5
-const LOOK_SWEEP_DEG: float = 40.0
+const LOOK_SECTOR_DEG: float = 60.0
+const LOOK_POINTS: int = 4
+const LOOK_DWELL_MEDIAN_S: float = 1.6
+const LOOK_DWELL_MIN_S: float = 0.8
+const LOOK_DWELL_MAX_S: float = 3.5
+const LOOK_DWELL_SIGMA: float = 0.45
+const LOOK_HEAD_EASY_DEG: float = 30.0
+const LOOK_BODY_TURN_DEG: float = 45.0
+const LOOK_HEAD_REST_DEG: float = 20.0
+const LOOK_TURN_DONE_DEG: float = 25.0
+const LOOK_HEAD_MAX_DEG: float = 70.0
+const LOOK_HEAD_DRAWN: bool = false
+const LOOK_BODY_TURN_GAP_S: float = 3.0
+const LOOK_RECENT_WEIGHT: float = 0.65
+const LOOK_RECENCY_S: float = 8.0
+const LOOK_START_MIN_S: float = 0.15
+const LOOK_START_SLOT_S: float = 0.3
+const LOOK_START_SLOTS: int = 3
+const LOOK_DWELL_TRIES: int = 16
+const LOOK_STATE_VERSION: int = 2
+const LOOK_KEYS: Array[String] = ["watch_point", "watch_side", "watch_rear", "watch_aside", "watch_escort"]
+const LOOK_EDGE_MARGIN_DEG: float = 15.0
+const LOOK_ANGLE_EPS: float = 0.000001
+const LOOK_HASH_MIN_UNIT: float = 0.001
 ## Decision 486: the slot is where to keep, the lead is where to walk toward.
 const FOLLOW_POINT_SIDE: float = 2.1
 const FOLLOW_SIDE := Vector2(2.4, -0.6)
@@ -174,6 +197,11 @@ func update(delta: float) -> void:
 		if p == game.player:
 			continue
 		_grab_reflex(p, delta)
+		if p.brain.has("watch_target_yaw"):
+			if p.team == "squad" and game.player.moving:
+				_stop_watch(p)
+			else:
+				_tick_watch_head(p)
 	think_t -= delta
 	var think := think_t <= 0.0
 	_chief_still = 0.0 if game.player.moving else _chief_still + delta
@@ -300,6 +328,7 @@ func _hostile_raider_near(p, r: float):
 
 
 func _walk(p, to: Vector3, run: bool = false) -> void:
+	_stop_watch(p)
 	if p.brain.get("dest", Vector3.INF).distance_to(to) < 0.6 and not p.path.is_empty():
 		return
 	p.brain["dest"] = to
@@ -385,6 +414,7 @@ func _use_bandage(giver, who, n: int) -> void:
 ## (reference game 1 mod lesson: workers that let themselves be eaten mid-task).
 func _companion(p) -> void:
 	if _hold_swing(p):
+		_stop_watch(p)
 		return
 	var player = game.player
 	# Out of the train again at the door it went in by: an order other than to
@@ -400,6 +430,8 @@ func _companion(p) -> void:
 	if not threat.is_empty():
 		_horde_call(p)
 	var raider = _hostile_raider_near(p, 20.0)
+	if not threat.is_empty() or raider != null or player.moving or p.action != "" or p.command not in ["follow", "cover"]:
+		_stop_watch(p)
 	_watch_stuck(p)
 	# Slow work is dropped when one of the dead gets close.
 	if BREAKS.has(p.action) and not threat.is_empty() and threat["pos"].distance_to(p.position) <= BREAK_R:
@@ -570,6 +602,7 @@ func _squad_threat(p) -> Dictionary:
 ## the chief and shove the nearest off. The pace of the blows is the combat's
 ## (decision 119); this only says whom.
 func _engage(p, z: Dictionary) -> void:
+	_stop_watch(p)
 	if _hold_swing(p):
 		return
 	if _finish_fallen(p):
@@ -791,6 +824,8 @@ func _keep_formation(p) -> void:
 	var look := fwd
 	if _chief_still >= LOOK_STILL_S:
 		look = _look_out(p, role, fwd, right)
+	elif p.brain.has("watch_head_yaw"):
+		_stop_watch(p)
 	if _follow_queueing(p, spot, fwd):
 		var queue := _follow_queue_mates(mates)
 		var order := maxi(queue.find(p), 0)
@@ -1127,6 +1162,7 @@ func _follow_walk(p, route: PackedVector3Array) -> void:
 	if route.is_empty():
 		p.stop()
 		return
+	_stop_watch(p)
 	var goal := route[-1]
 	var gap: float = p.position.distance_to(goal)
 	var run: bool = p.brain.get("follow_running", false)
@@ -1140,7 +1176,7 @@ func _follow_walk(p, route: PackedVector3Array) -> void:
 
 
 ## Where p keeps watch while the chief stands: the front one ahead, the side
-## one to its side, the back one behind, each sweeping slowly either way.
+## one to its side, the back one behind, each choosing places to watch.
 func _look_out(p, role: String, fwd: Vector3, right: Vector3) -> Vector3:
 	var base: Vector3
 	match role:
@@ -1159,46 +1195,197 @@ func _look_out(p, role: String, fwd: Vector3, right: Vector3) -> Vector3:
 	return _watch_look(p, base, k, camera_way, "watch_" + role)
 
 
-## Decision 486; user feedback 2026-11-01: hold the slow sweep's targets.
+## Decision 535: keep world targets, leave neck room, then dwell.
 func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: String) -> Vector3:
-	const HOLD_MIN: float = 1.5
-	const HOLD_SPREAD: float = 0.5
-	const CHANGE_DEG: float = 10.0
-	const EDGE_MARGIN_DEG: float = 15.0
 	var now: float = game.clock.elapsed
 	var state: Dictionary = p.brain.get(key, {})
-	if now < float(state.get("seen", now)):
+	if now < float(state.get("seen", now)) or now < float(p.brain.get("watch_seen_t", now)):
 		state = {}   # A rewound clock starts a fresh watch.
+		_stop_watch(p)
+	p.brain["watch_seen_t"] = now
+	if int(state.get("version", 0)) != LOOK_STATE_VERSION:
+		state = _watch_state(p, base, k, camera_way, now)
 	state["seen"] = now
-	var hold: float = HOLD_MIN + HOLD_SPREAD * p.name_unit("watch")
-	if state.has("target") and now - float(state["picked"]) < hold:
-		var kept: float = float(state["target"])
-		return Vector3(sin(kept), 0.0, cos(kept))
-	var sweep: float = sin(now * 0.5 + float(k) * 2.1) * deg_to_rad(LOOK_SWEEP_DEG)
-	var look: Vector3 = base.normalized().rotated(Vector3.UP, sweep)
+	if int(state["point"]) < 0 and now < float(state["until"]):
+		p.brain[key] = state
+		p.brain["watch_head_yaw"] = 0.0
+		p.brain.erase("watch_target_yaw")
+		return Vector3(sin(p.facing), 0.0, cos(p.facing))
+	if float(state["waiting"]) == 0.0 and now >= float(state["until"]):
+		state["step"] = int(state["step"]) + 1
+		var point: int = _watch_pick(p, state, int(state["step"]), now)
+		state["point"] = point
+		state["target"] = float(state["yaw_" + str(point)])
+		state["waiting"] = 1.0
+		state["turning"] = 0.0
+		state["body_turned"] = 0.0
+	var body: float = p.facing
+	var shown: float = p.look if p.turn_rate > 0.0 else body
+	var offset: float = angle_difference(shown, float(state["target"]))
+	var urgent: bool = absf(offset) > deg_to_rad(LOOK_HEAD_MAX_DEG) + LOOK_ANGLE_EPS
+	var last_turn: float = float(p.brain.get("watch_body_turn_t", now - LOOK_BODY_TURN_GAP_S))
+	if float(state["turning"]) == 0.0 and absf(offset) > deg_to_rad(LOOK_BODY_TURN_DEG) + LOOK_ANGLE_EPS and (urgent or now - last_turn >= LOOK_BODY_TURN_GAP_S):
+		state["body_target"] = wrapf(float(state["target"]) - signf(offset) * deg_to_rad(LOOK_HEAD_REST_DEG), -PI, PI)
+		state["turning"] = 1.0
+		state["body_turned"] = 1.0
+		p.brain["watch_body_turn_t"] = now
+	if float(state["body_turned"]) != 0.0:
+		body = float(state["body_target"])
+	if p.turn_rate <= 0.0:
+		shown = body
+	offset = angle_difference(shown, float(state["target"]))
+	if float(state["turning"]) != 0.0 and absf(offset) <= deg_to_rad(LOOK_TURN_DONE_DEG) + LOOK_ANGLE_EPS:
+		state["turning"] = 0.0
+	var arrived: bool = absf(offset) <= deg_to_rad(LOOK_BODY_TURN_DEG) + LOOK_ANGLE_EPS
+	if float(state["body_turned"]) != 0.0:
+		arrived = absf(angle_difference(shown, body)) <= LOOK_ANGLE_EPS
+	if float(state["waiting"]) != 0.0 and arrived:
+		state["waiting"] = 0.0
+		state["picked"] = now
+		state["until"] = now + _watch_dwell(p, int(state["step"]))
+	p.brain["watch_target_yaw"] = float(state["target"])
+	p.brain["watch_slot"] = LOOK_KEYS.find(key)
+	p.brain["watch_camera_on"] = 1.0 if Vector2(camera_way.x, camera_way.z).length_squared() > 0.0001 else 0.0
+	p.brain["watch_camera_yaw"] = atan2(camera_way.x, camera_way.z)
+	p.brain["watch_head_yaw"] = _watch_head_yaw(shown, float(state["target"]), camera_way)
+	_watch_mark_seen(p, state, p.look if p.turn_rate > 0.0 else p.facing, now)
+	p.brain[key] = state   # Only finite numbers and times cross the save boundary.
+	return Vector3(sin(body), 0.0, cos(body))
+
+
+func _watch_state(p: Variant, base: Vector3, k: int, camera_way: Vector3, now: float) -> Dictionary:
+	var delay: float = LOOK_START_MIN_S + (float(k % LOOK_START_SLOTS) + p.name_unit("watch_start")) * LOOK_START_SLOT_S
+	var state: Dictionary = {"version": LOOK_STATE_VERSION, "step": -1, "point": -1,
+		"seen": now, "picked": now, "until": now + delay, "waiting": 0.0,
+		"turning": 0.0, "body_turned": 0.0, "body_target": p.facing}
+	for point: int in range(LOOK_POINTS):
+		state["yaw_" + str(point)] = _watch_target(p, base, point, camera_way, state)
+	state["target"] = float(state["yaw_0"])
+	return state
+
+
+func _watch_weight(state: Dictionary, point: int, now: float) -> float:
+	var last: float = float(state.get("viewed_" + str(point), -1.0))
+	var age: float = LOOK_RECENCY_S if last < 0.0 else maxf(now - last, 0.0)
+	return lerpf(LOOK_RECENT_WEIGHT, 1.0, minf(age / LOOK_RECENCY_S, 1.0))
+
+
+func _watch_pick(p: Variant, state: Dictionary, step: int, now: float) -> int:
+	var total: float = 0.0
+	for point: int in range(LOOK_POINTS):
+		total += _watch_weight(state, point, now)
+	var pick: float = p.name_unit("watch_pick_" + str(step)) * total
+	for point: int in range(LOOK_POINTS):
+		pick -= _watch_weight(state, point, now)
+		if pick < 0.0:
+			return point
+	return LOOK_POINTS - 1
+
+
+func _watch_mark_seen(p: Variant, state: Dictionary, body: float, now: float) -> void:
+	var point: int = int(state["point"])
+	if point < 0:
+		return
+	var offset: float = angle_difference(body, float(state["target"]))
+	var reached: bool = absf(angle_difference(body + float(p.brain["watch_head_yaw"]), float(state["target"]))) <= LOOK_ANGLE_EPS
+	if reached and (LOOK_HEAD_DRAWN or (float(state["body_turned"]) != 0.0 and absf(offset) <= deg_to_rad(LOOK_HEAD_EASY_DEG) + LOOK_ANGLE_EPS)):
+		state["viewed_" + str(point)] = now
+
+
+## The rules turn the shown body before AI update, including non-think ticks.
+func _tick_watch_head(p: Variant) -> void:
+	if not p.brain.has("watch_target_yaw"):
+		return
+	if p.moving or p.action != "" or p.aim.active or not p.target_zombie.is_empty() or p.target_person != null or not p.can_act():
+		_stop_watch(p)
+		return
+	var slot: int = int(p.brain.get("watch_slot", -1))
+	if slot < 0 or slot >= LOOK_KEYS.size():
+		return
+	var state: Dictionary = p.brain.get(LOOK_KEYS[slot], {})
+	if state.is_empty():
+		return
+	var body: float = p.look if p.turn_rate > 0.0 else p.facing
+	var camera_yaw: float = float(p.brain["watch_camera_yaw"])
+	var camera_way: Vector3 = Vector3(sin(camera_yaw), 0.0, cos(camera_yaw)) * float(p.brain["watch_camera_on"])
+	p.brain["watch_head_yaw"] = _watch_head_yaw(body, float(p.brain["watch_target_yaw"]), camera_way)
+	_watch_mark_seen(p, state, body, game.clock.elapsed)
+
+
+func _stop_watch(p: Variant) -> void:
+	if not p.brain.has("watch_head_yaw") and not p.brain.has("watch_body_turn_t"):
+		return
+	p.brain["watch_head_yaw"] = 0.0
+	for key: String in ["watch_target_yaw", "watch_slot", "watch_camera_on", "watch_camera_yaw", "watch_body_turn_t"]:
+		p.brain.erase(key)
+	for key: String in LOOK_KEYS:
+		var state: Dictionary = p.brain.get(key, {})
+		if not state.is_empty():
+			state["version"] = 0
+			state["turning"] = 0.0
+			state["body_turned"] = 0.0
+			state["waiting"] = 0.0
+			state["until"] = game.clock.elapsed
+
+
+func _watch_dwell(p: Variant, step: int) -> float:
+	for attempt: int in range(LOOK_DWELL_TRIES):
+		var salt: String = str(step) + "_" + str(attempt)
+		var u: float = maxf(p.name_unit("watch_dwell_u_" + salt), LOOK_HASH_MIN_UNIT)
+		var v: float = p.name_unit("watch_dwell_v_" + salt)
+		var normal: float = sqrt(-2.0 * log(u)) * cos(TAU * v)
+		var dwell: float = LOOK_DWELL_MEDIAN_S * exp(LOOK_DWELL_SIGMA * normal)
+		if dwell > LOOK_DWELL_MIN_S and dwell < LOOK_DWELL_MAX_S:
+			return dwell
+	return LOOK_DWELL_MEDIAN_S   # A bounded fallback never piles samples onto either edge.
+
+
+func _watch_target(p: Variant, base: Vector3, point: int, camera_way: Vector3, state: Dictionary) -> float:
+	var centre_yaw: float = atan2(base.x, base.z)
+	var sector: float = deg_to_rad(LOOK_SECTOR_DEG)
+	var unit: float = p.name_unit("watch_point_" + str(point))
+	var target: float = centre_yaw - sector + 2.0 * sector * (float(point) + unit) / float(LOOK_POINTS)
 	camera_way.y = 0.0
 	var edge: float = float(state.get("edge", 0.0))
 	if camera_way.length_squared() > 0.0001:
 		camera_way = camera_way.normalized()
 		var camera_yaw: float = atan2(camera_way.x, camera_way.z)
-		var centre: float = angle_difference(camera_yaw, atan2(base.x, base.z))
+		var centre: float = angle_difference(camera_yaw, centre_yaw)
 		if absf(edge) < 0.5:
 			edge = -1.0 if centre < 0.0 else 1.0
-		elif centre * edge < -deg_to_rad(EDGE_MARGIN_DEG):
+		elif centre * edge < -deg_to_rad(LOOK_EDGE_MARGIN_DEG):
 			edge = -edge
-		var offset: float = angle_difference(camera_yaw, atan2(look.x, look.z))
+		var offset: float = angle_difference(camera_yaw, target)
 		var limit: float = deg_to_rad(LOOK_CAMERA_DEG)
 		if absf(offset) < limit:
-			look = camera_way.rotated(Vector3.UP, limit * edge)
+			target = camera_yaw + limit * edge
+			if absf(angle_difference(centre_yaw, target)) > sector + LOOK_ANGLE_EPS:
+				edge = -edge   # Keep the camera edge inside the role's sector too.
+				target = camera_yaw + limit * edge
 	state["edge"] = edge
-	var target: float = atan2(look.x, look.z)
-	if state.has("target") and absf(angle_difference(float(state["target"]), target)) < deg_to_rad(CHANGE_DEG):
-		target = float(state["target"])
-	else:
-		state["target"] = target
-		state["picked"] = now
-	p.brain[key] = state   # Finite angles and times survive the brain's save round trip.
-	return Vector3(sin(target), 0.0, cos(target))
+	return wrapf(target, -PI, PI)
+
+
+## While a body turn waits, use a reachable camera edge instead of its cone.
+func _watch_head_yaw(body: float, target: float, camera_way: Vector3) -> float:
+	var neck: float = deg_to_rad(LOOK_HEAD_MAX_DEG)
+	var head: float = clampf(angle_difference(body, target), -neck, neck)
+	camera_way.y = 0.0
+	if camera_way.length_squared() <= 0.0001:
+		return head
+	var camera_yaw: float = atan2(camera_way.x, camera_way.z)
+	var limit: float = deg_to_rad(LOOK_CAMERA_DEG)
+	if absf(angle_difference(camera_yaw, body + head)) >= limit - LOOK_ANGLE_EPS:
+		return head
+	var best: float = TAU
+	for side: float in [-1.0, 1.0]:
+		var edge: float = camera_yaw + side * limit
+		var offset: float = angle_difference(body, edge)
+		var gap: float = absf(angle_difference(target, edge))
+		if absf(offset) <= neck + LOOK_ANGLE_EPS and gap < best:
+			head = clampf(offset, -neck, neck)
+			best = gap
+	return head
 
 
 # ---------------------------------------------------------------- words
@@ -1620,6 +1807,7 @@ func _wagon_with_coal() -> Dictionary:
 ## permission says whether they may shoot (s2_station 2.4).
 func _escort(p, falling_back: bool = false) -> void:
 	if _hold_swing(p):
+		_stop_watch(p)
 		return
 	var site: Vector3 = p.position if falling_back else game.work.position_of(String(p.brain.get("work_site", "work_site")))
 	var reach: float = {"aggressive": 12.0, "defensive": 6.0, "neutral": 2.0}.get(crew_attitude, 6.0)
@@ -1647,10 +1835,12 @@ func _escort(p, falling_back: bool = false) -> void:
 		if falling_back:
 			post = game.work.door_of(String(p.brain.get("work_site", "work_site")))
 		if p.position.distance_to(post) > 1.5:
+			_stop_watch(p)
 			_walk(p, post, false)
 		elif not falling_back and p.path.is_empty():
 			_escort_watch(p, site)
 		return
+	_stop_watch(p)
 	var dist: float = p.position.distance_to(threat["pos"])
 	var may_shoot: bool = crew_fire == "free" or (crew_fire == "threat" and best < 5.0)
 	if may_shoot and dist > 2.0:
@@ -1665,8 +1855,8 @@ func _escort(p, falling_back: bool = false) -> void:
 
 
 ## Decision 486 (2): posted with nothing on the crew, the escort keeps its back
-## to the work and watches outward, the way the dead come, in a slow sweep;
-## (6) as the companions, never into the screen: the sweep stops at the edge of
+## to the work and watches outward, pausing at places the dead may come from;
+## (6) as the companions, never into the screen: targets stop at the edge of
 ## the camera's cone (the camera is orthographic, so that is one way for all).
 func _escort_watch(p, site: Vector3) -> void:
 	var out: Vector3 = p.position - site
