@@ -226,7 +226,7 @@ func test_empty_and_unknown_settings_leave_the_light_and_fill_unchanged() -> voi
 	fill.light_energy = 1.5
 	fill.light_specular = 0.75
 	fill.light_color = Color.RED
-	var mask_before: int = fill.light_cull_mask
+	fill.light_cull_mask = 5
 	var old_cache: Dictionary = Switch._renderer_state.duplicate()
 	for settings in [{}, {"unknown": false}, {"sun_shadow": true}]:
 		assert_eq(Switch.apply(sun, fill, settings), {})
@@ -237,7 +237,7 @@ func test_empty_and_unknown_settings_leave_the_light_and_fill_unchanged() -> voi
 		assert_eq(fill.light_energy, 1.5)
 		assert_eq(fill.light_specular, 0.75)
 		assert_eq(fill.light_color, Color.RED)
-		assert_eq(fill.light_cull_mask, mask_before)
+		assert_eq(fill.light_cull_mask, 5)
 		assert_false(fill.has_meta(Switch.FILL_ENERGY))
 		assert_true(fill.visible)
 		assert_false(fill.visibility_changed.is_connected(fill.hide))
@@ -337,10 +337,11 @@ func test_view_fill_cull_mask_takes_whole_layer_masks_and_survives_minute_update
 	var field: FieldProbe = _field()
 	field.fx_light = {"fill_energy": 2.0}
 	field._set_view_fill()
-	var settings: Dictionary = {"view_fill_cull_mask": 0}
-	assert_eq(Switch.apply(field.sun, field.view_fill, settings, false), settings)
-	assert_eq(field.view_fill.light_cull_mask, 0)
-	assert_eq(Switch.apply(field.sun, field.view_fill, settings, false), {})
+	for mask: int in [1, 5, 1048575, 0]:
+		var settings: Dictionary = {"view_fill_cull_mask": mask}
+		assert_eq(Switch.apply(field.sun, field.view_fill, settings, false), settings)
+		assert_eq(field.view_fill.light_cull_mask, mask)
+		assert_eq(Switch.apply(field.sun, field.view_fill, settings, false), {})
 	# Night hides the light and day brings it back; the mask stays through both.
 	for source_energy: float in [1.0, 0.0, 2.0]:
 		field.fx_light["fill_energy"] = source_energy
@@ -404,17 +405,20 @@ func test_missing_file_keeps_field_fill_properties_and_normal_updates() -> void:
 	var field: FieldProbe = _field()
 	field.fx_light = {"fill_energy": 2.0, "fill_color": Color.RED}
 	field.view_fill.light_specular = 0.75
+	field.view_fill.light_cull_mask = 5
 	field._set_view_fill()
 	field._apply_perf_settings(Switch.read(path))
 	assert_eq(field.view_fill.light_energy, 2.0)
 	assert_eq(field.view_fill.light_specular, 0.75)
 	assert_eq(field.view_fill.light_color, Color.RED)
+	assert_eq(field.view_fill.light_cull_mask, 5)
 	assert_false(field.view_fill.has_meta(Switch.FILL_ENERGY))
 	field.fx_light["fill_energy"] = 1.5
 	field._set_view_fill()
 	assert_eq(field.view_fill.light_energy, 1.5)
 	assert_eq(field.view_fill.light_specular, 0.75)
 	assert_eq(field.view_fill.light_color, Color.RED)
+	assert_eq(field.view_fill.light_cull_mask, 5)
 	assert_true(field.view_fill.visible)
 
 
@@ -424,7 +428,7 @@ func test_diagnostics_and_fill_lock_survive_showing_a_hidden_field() -> void:
 		var field: FieldProbe = _field()
 		field.fx_light = {"fill_energy": 2.0, "fill_color": Color.RED}
 		field._set_view_fill()
-		var settings: Dictionary = {"view_fill_energy": 0.002, "view_fill_specular": 0.0}
+		var settings: Dictionary = {"view_fill_energy": 0.002, "view_fill_specular": 0.0, "view_fill_cull_mask": 5}
 		if locked:
 			settings["view_fill"] = false
 		field._apply_perf_settings(settings)
@@ -434,6 +438,7 @@ func test_diagnostics_and_fill_lock_survive_showing_a_hidden_field() -> void:
 			assert_almost_eq(field.view_fill.light_energy, 0.002, 0.000001)
 			assert_eq(field.view_fill.light_specular, 0.0)
 			assert_eq(field.view_fill.light_color, Color.RED)
+			assert_eq(field.view_fill.light_cull_mask, 5)
 			assert_eq(field.view_fill.is_visible_in_tree(), not locked)
 			assert_eq(field.view_fill.visibility_changed.is_connected(field.view_fill.hide), locked)
 			field._set_view_fill()
