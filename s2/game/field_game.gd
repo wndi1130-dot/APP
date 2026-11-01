@@ -478,7 +478,7 @@ func _ready() -> void:
 	snow_cover = SnowCover.new(season, open_ground, float(opts.get("storm_cm", storm.get("storm_cm", 0.0))), old_cm)
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
-	Engine.max_fps = int(opts.get("fps_cap", 60))
+	Engine.max_fps = fps_cap_for(Engine.max_fps, opts, OS.has_feature("mobile"))
 	place = map_id
 	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
@@ -1428,6 +1428,15 @@ const MEDICAL_OF_SKILL := ["none", "apprentice", "skilled", "master"]
 ## id and name as the train's roll, their body skills, kit, car and how it stands with the chief,
 ## what they know of medicine and how hungry and sore they go out. One of the medical staff with
 ## no knowledge on record still goes as an apprentice (the car's own work).
+## The cap a field runs at. On a phone every stop keeps the cap the start menu set (boot.gd), so a
+## campaign stop, a loaded stop or an old save's start options (60 from before) never lift it; a
+## field with no cap set yet, and every field off the phone, takes its options' cap, 60 if none.
+static func fps_cap_for(current: int, field_opts: Dictionary, mobile: bool) -> int:
+	if mobile and current > 0:
+		return current
+	return int(field_opts.get("fps_cap", 60))
+
+
 static func squad_rows(people: Array) -> Array:
 	var out: Array = []
 	for person: Dictionary in people:
