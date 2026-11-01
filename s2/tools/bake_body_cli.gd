@@ -72,6 +72,10 @@ func _init() -> void:
 	if assets.is_empty():
 		quit(1)
 		return
+	if not (assets.get("fit_failures", []) as Array).is_empty():
+		print("fit failed, nothing saved: ", ", ".join(assets["fit_failures"]))
+		quit(1)
+		return
 	if small:
 		assets = BodyBake.compact(assets, keep)
 	if not marks.is_empty():

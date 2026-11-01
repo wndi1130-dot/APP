@@ -164,6 +164,16 @@ func test_standing_feet_stay_within_one_centimetre() -> void:
 			var frames := _sample(fixture, clip, sole)
 			var greatest := 0.0
 			var greatest_round := 0.0
+			# The sole stays on the floor (rest bottom y = 0): neither floating nor sunk.
+			var lowest := INF
+			var highest_low := -INF
+			for points: PackedVector3Array in frames:
+				var low_y := INF
+				for i in sole.size():
+					low_y = minf(low_y, points[i].y)
+				lowest = minf(lowest, low_y)
+				highest_low = maxf(highest_low, low_y)
+			assert_true(lowest >= -0.01 and highest_low <= 0.015, "%s %s standing sole height %.4f..%.4f m within -0.01..0.015" % [fixture["name"], "L" if side == 0 else "R", lowest, highest_low])
 			# Track each fixed rest-bottom vertex, avoiding toe/heel identity jumps.
 			for i in sole.size():
 				var low: Vector3 = frames[0][i]

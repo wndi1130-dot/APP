@@ -2443,6 +2443,7 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
 	var target: float = PERSON_STRIDE_ROUNDS[name]
 	if before <= 0.0:
 		print("STRIDE_STOP %s %.6f inf" % [name, before])
+		ctx.get_or_add("fit_failures", []).append("STRIDE_STOP " + name)
 		return
 	var means := []
 	for rotations: Array in samples:
@@ -2458,6 +2459,7 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
 		if not is_finite(needed) or correction < STRIDE_SCALE_MIN or correction > STRIDE_SCALE_MAX or needed < STRIDE_SCALE_MIN or needed > STRIDE_SCALE_MAX:
 			fits.erase(layer)
 			print("STRIDE_STOP %s %.6f %.6f" % [name, before, needed])
+			ctx.get_or_add("fit_failures", []).append("STRIDE_STOP " + name)
 			return
 		fit["scale"] = needed
 		measured = _person_stride_round(ctx, entry)
@@ -2465,6 +2467,8 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
 			break
 	var status := "STRIDE" if absf(measured - target) <= target * STRIDE_TOLERANCE else "STRIDE_UNFIT"
 	print("%s %s round %.6f -> %.6f scale %.6f" % [status, name, before, measured, fit["scale"]])
+	if status == "STRIDE_UNFIT":
+		ctx.get_or_add("fit_failures", []).append("STRIDE_UNFIT " + name)
 
 
 ## Fixed rest-bottom vertices of each foot, reused for contact and standing checks.
@@ -2561,6 +2565,7 @@ static func _fit_person_phase(ctx: Dictionary, entry: Array) -> Dictionary:
 	var shift: float = fit["shift"]
 	if float(fit["left"]) < 0.0 or float(fit["right"]) < 0.0:
 		push_error("PHASE_STOP %s no_sole_contact left %.6f right %.6f" % [name, fit["left"], fit["right"]])
+		ctx.get_or_add("fit_failures", []).append("PHASE_STOP " + name)
 	else:
 		print("PHASE %s %.6f %.6f shift %.6f" % [name, fposmod(float(fit["left"]) - shift, 1.0), fposmod(float(fit["right"]) - shift, 1.0), shift])
 	# Preserve the pre-shift round: a fractional resample can alter the discrete
@@ -3215,6 +3220,7 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var clips := []
 	ctx["phase_fits"] = {}
+	ctx["fit_failures"] = []
 	for entry: Array in list:
 		_fit_person_stride(ctx, entry)
 		var phase := _fit_person_phase(ctx, entry)
@@ -3240,7 +3246,11 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 		still.append(_skin_frame(ctx))
 	if not still.is_empty():
 		clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
-	return _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
+	var out := _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
+	# A stride or step fit that failed is baked at its own amplitude and phase; the tools refuse to save it.
+	if not (ctx["fit_failures"] as Array).is_empty() and not out.is_empty():
+		out["fit_failures"] = ctx["fit_failures"]
+	return out
 
 
 ## Bakes the body in `body_root` (in the scene tree) with the motions written
