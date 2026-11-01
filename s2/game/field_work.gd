@@ -20,7 +20,7 @@ const RADIO_EVERY: float = 60.0
 ## Who speaks the crew's radio lines: the engineer for now, changed here alone.
 const SPEAKER: String = "기관사"
 ## Said once while the brakes' dead keep the button off (decision 486).
-const ARRIVAL_LINE: String = SPEAKER + ": 제동 소리에 몰려오는 것들부터 막겠습니다. 그다음에 작업조 내보내겠습니다."
+const ARRIVAL_LINE: String = SPEAKER + ": 제동 소리에 몰려오는 망자들부터 막겠습니다. 그다음에 작업조 내보내겠습니다."
 const ESCORT_LEAD: float = 3.0
 const HOLD_N: int = 4
 const HOLD_CLEAR_S: float = 5.0
