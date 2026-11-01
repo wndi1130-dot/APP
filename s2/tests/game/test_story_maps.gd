@@ -11,6 +11,8 @@ const BuildingUses = preload("res://game/world/building_uses.gd")
 const SidePath = preload("res://game/world/side_path.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const SliceFlow = preload("res://game/slice_flow.gd")
+const StopForm = preload("res://game/sim/stop_form.gd")
 const StoryFixture = preload("res://tests/fixtures/story_fixture_map.gd")
 const FORMS: Array[String] = ["city", "edge", "siding", "remote"]
 
@@ -75,6 +77,15 @@ func test_story_bands_and_building_groups_come_from_their_own_stop_and_base() ->
 	assert_eq(BuildingUses.group_of("story_03"), "office")
 	assert_eq(MapRing.width_for("freight"), 30)
 	assert_eq(MapRing.width_for("office"), 30)
+
+
+func test_slice_keeps_the_act_of_a_maps_own_stop() -> void:
+	assert_eq_deep(SliceFlow.stop_at_for([], 3), ["prologue", 3])
+	assert_eq_deep(SliceFlow.stop_at_for(["prologue", 1], SliceFlow.FIRST_SEG + 1), ["prologue", 2])
+	assert_eq_deep(SliceFlow.stop_at_for(["act1", 10], SliceFlow.FIRST_SEG), ["act1", 10])
+	assert_eq_deep(SliceFlow.stop_at_for(["act2", 1], 5), ["act2", 1])
+	assert_eq(RouteBands.stop_band("act1", 10), "K10")
+	assert_eq(StopForm.on_route("act2", 1), "remote")
 
 
 func _ground(data: Dictionary) -> Dictionary:
@@ -205,12 +216,15 @@ func test_remote_clock_and_unchanged_story_ground_survive_save_and_resume() -> v
 	assert_eq_deep(_ground(first.data), before)
 	first.clock.elapsed = 123.0
 	var saved := FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+	assert_eq(saved["place"], first.place)
 	assert_eq(saved["stop_form"], "remote")
 	assert_eq(saved["stop_ground"], "")
 	var opts := FieldSave.resume_opts(saved)
+	assert_eq(opts["place"], first.place)
 	assert_eq(opts["stop_form"], "remote")
 	assert_eq(opts["stop_ground"], "")
 	var back = _game(opts)
+	assert_eq(back.place, first.place)
 	assert_eq(back.stop_form, first.stop_form)
 	assert_eq(back.data["place_id"], StoryFixture.PLACE_ID)
 	assert_eq_deep(_ground(back.data), before)
@@ -218,5 +232,33 @@ func test_remote_clock_and_unchanged_story_ground_survive_save_and_resume() -> v
 	assert_eq(back.clock.safe_sec, 1800.0)
 	assert_eq(back.clock.limit_sec, 2400.0)
 	var resumed := FieldSave.capture(back)
+	assert_eq(resumed["place"], first.place)
 	assert_eq(resumed["stop_form"], saved["stop_form"])
 	assert_eq(resumed["stop_ground"], saved["stop_ground"])
+
+
+func test_existing_story_place_resumes_without_a_forced_map_script() -> void:
+	var ids := FieldMaps.story_ids()
+	if ids.is_empty():
+		pass_test("No story map files yet.")
+		return
+	for id in ids:
+		var first = FieldGame.new()
+		first.opts = {"place": id, "seed": 7, "raiders": false, "auto_pause": false,
+			"arrive": false, "arrival_horde": false}
+		add_child_autofree(first)
+		first.set_process(false)
+		assert_null(first.map_script)
+		assert_eq(first.place, id)
+		assert_eq(first.data["place_id"], id)
+		var saved := FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+		assert_eq(saved["place"], id)
+		var opts := FieldSave.resume_opts(saved)
+		assert_eq(opts["place"], id)
+		var back = FieldGame.new()
+		back.opts = opts
+		add_child_autofree(back)
+		back.set_process(false)
+		assert_null(back.map_script)
+		assert_eq(back.place, id)
+		assert_eq(back.data["place_id"], id)

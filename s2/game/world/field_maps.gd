@@ -110,6 +110,11 @@ static func story_ids() -> Array[String]:
 	return out
 
 
+## Every map for checks and measurements; random picks use ids().
+static func all_ids() -> Array[String]:
+	return ids() + story_ids()
+
+
 ## The map's data, ready for the field. An unknown place gives the default map.
 static func build(place_id: String) -> Dictionary:
 	return build_from(load(path_of(resolve(place_id))))
