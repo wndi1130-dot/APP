@@ -233,13 +233,11 @@ func test_people_stand_each_at_their_own_place_and_pace() -> void:
 	assert_ne(PersonVisual.motion_of(a, na, 0.1, []).x, PersonVisual.motion_of(b, nb, 0.1, []).x)
 
 
-# A melee blow is the living's own: a knife stabs, an axe (and any blow at a
-# body on the ground) comes down, the rest swing across; drawn back to where
-# the blow lands over the wind-up, the rest on the way back. A stomp has none.
+# Match the weapon's hands; ground blows and stomps keep their own motions.
 func test_a_blow_is_the_living_own_swing() -> void:
 	var own := _own()
 	var p := _person()
-	for want in [["knife", "p_stab", 0.35], ["axe", "p_swing_axe", 0.45], ["crowbar", "p_swing_one", 0.45]]:
+	for want in [["knife", "p_stab", 0.35], ["axe", "p_swing_one", 0.45], ["crowbar", "p_swing_one", 0.45]]:
 		p.hands = [{"id": want[0], "quality": "factory", "condition": 1.0, "loaded": 0}]
 		p.strike_kind = "swing"
 		p.strike_at = {"state": "chase"}
@@ -253,7 +251,7 @@ func test_a_blow_is_the_living_own_swing() -> void:
 		p.strike_t = 0.0
 		p.swing_t = 0.3
 		assert_almost_eq(PersonVisual.blow_of(p, own).x, float(want[2]), 0.001, "the blow lands")
-		p.swing_t = 0.15
+		p.swing_t = 0.3 - PersonVisual.Pose.recover_seconds(String(want[0])) * 0.5
 		assert_almost_eq(PersonVisual.blow_of(p, own).x, float(want[2]) + (1.0 - float(want[2])) * 0.5, 0.001, "half way back")
 		p.swing_t = 0.0
 		PersonVisual.blow_of(p, own)
@@ -305,9 +303,9 @@ func test_blow_after_blow_goes_through_the_ways() -> void:
 	var p := _person()
 	p.strike_kind = "swing"
 	p.strike_at = {"state": "chase"}
-	for want in [["crowbar", ["p_swing_one", "p_swing_back", "p_swing_axe", "p_swing_one"]],
+	for want in [["crowbar", ["p_swing_one", "p_swing_back", "p_swing_one", "p_swing_back"]],
 			["knife", ["p_stab", "p_swing_one", "p_stab", "p_swing_one"]],
-			["axe", ["p_swing_axe", "p_chop_side", "p_swing_axe", "p_chop_side"]]]:
+			["axe", ["p_swing_one", "p_swing_back", "p_swing_one", "p_swing_back"]]]:
 		p.hands = [{"id": want[0], "quality": "factory", "condition": 1.0, "loaded": 0}]
 		var note := {}
 		var seen: Array = []
@@ -334,19 +332,19 @@ func test_blow_after_blow_goes_through_the_ways() -> void:
 	var gone := {"blow_n": 0, "blow_end": 0.0}
 	p.strike_t = 0.2
 	assert_eq(_named(older, PersonVisual.blow_of(p, older, gone, 0.5)), "p_swing_one", "no p_swing_back: the first way")
-	# The axe's chop from the side stops its way back with the axe low, before the loop lifts it again.
+	# The hatchet keeps its one-hand backswing on the way back.
 	p.strike_t = 0.0
 	p.swing_t = 0.0
 	PersonVisual.blow_of(p, own, gone, 1.0)
 	p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
 	gone = {"blow_n": 0, "blow_end": 1.0}
 	p.strike_t = 0.2
-	assert_eq(_named(own, PersonVisual.blow_of(p, own, gone, 1.5)), "p_chop_side")
+	assert_eq(_named(own, PersonVisual.blow_of(p, own, gone, 1.5)), "p_swing_back")
 	p.strike_t = 0.0
-	p.swing_t = 0.3
-	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 1.6).x, 0.16, 0.001, "where it lands")
-	p.swing_t = 0.003
-	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 1.9).x, 0.45, 0.01, "the axe low, not lifted again")
+	p.swing_t = 0.6
+	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 1.6).x, 0.33, 0.001, "where it lands")
+	p.swing_t = 0.6 - PersonVisual.Pose.recover_seconds("axe") + 0.001
+	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 1.9).x, 1.0, 0.01, "the backswing returns fully")
 
 
 # The weapon goes in the worn body's right hand: hanging at the side the head

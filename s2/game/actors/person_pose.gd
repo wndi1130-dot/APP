@@ -15,7 +15,10 @@ const BLOW_WAY: String = "pose_blow_way"   # which way of its blows the swing is
 const CARE: String = "pose_care"         # whom a treatment is for and where: {of, part, total, label} (field_actions.gd; person_visual.gd treat_name)
 const FOOT_SIZE: Vector3 = Vector3(0.18, 0.16, 0.4)
 const FOOT_REST: Vector3 = Vector3(0.12, 0.08, 0.1)
-const SWING: String = "pose_swing"    # the way back of the swing being drawn: how long it is in all
+const SWING: String = "pose_swing"    # Cooldown remaining when the picture's recovery starts.
+const RECOVER_BASE: float = 0.25
+const RECOVER_PER_KG: float = 0.05
+const RECOVER_MAX: float = 0.35
 const Protest = preload("res://game/actors/person_protest.gd")
 const W = preload("res://game/sim/weapons.gd")
 const LOADED: String = "pose_loaded"  # rounds in the hand's weapon last frame; one fewer is a shot
@@ -82,8 +85,7 @@ static func _protest(p, arms: Array, mark: Dictionary) -> void:
 
 
 ## Where a melee swing is: [windup 0..1, way back 0..1, landed], or [] with no
-## swing. The rules keep the draw-back (strike_t of strike_total); what is left
-## of swing_t after it is the way back, a hit or a miss alike.
+## swing. Recovery uses elapsed seconds, independent of the next blow's wait.
 static func swing_state(p) -> Array:
 	if p.strike_t > 0.0:
 		p.set_meta(SWING, -1.0)
@@ -97,7 +99,17 @@ static func swing_state(p) -> Array:
 	if rest < p.swing_t:
 		rest = p.swing_t
 		p.set_meta(SWING, rest)
-	return [1.0, 1.0 - clampf(p.swing_t / rest, 0.0, 1.0), true]
+	var recover: float = (rest - p.swing_t) / recover_seconds(p.weapon_id())
+	if recover >= 1.0:
+		p.remove_meta(SWING)
+		p.remove_meta(MODE)
+		return []
+	return [1.0, clampf(recover, 0.0, 1.0), true]
+
+
+static func recover_seconds(wid: String) -> float:
+	var weight: float = float(W.get_data(wid).get("weight", 1.0))
+	return clampf(RECOVER_BASE + (weight - 1.0) * RECOVER_PER_KG, RECOVER_BASE, RECOVER_MAX)
 
 
 ## What kind of blow is being drawn back. The rules say whether it is a stomp
@@ -131,8 +143,8 @@ static func arm_at(push: float, side: float) -> Dictionary:
 
 ## The weapon through a swing. windup runs 0..1 until the blow, recover 0..1
 ## after it. The weapon is back by DRAW of the windup and comes round in the
-## rest of it, so it is there when the rules land the blow; the way back takes
-## the rest of the swing time. A knife stabs, a crowbar sweeps across, an axe
+## rest of it, so it is there when the rules land the blow; recovery has
+## its own duration. A knife stabs, a crowbar sweeps across, an axe
 ## comes down.
 const DRAW: float = 0.7
 

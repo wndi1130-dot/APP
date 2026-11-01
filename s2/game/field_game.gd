@@ -1837,7 +1837,7 @@ func _process(delta: float) -> void:
 		if not away and resume_ready_at_ms < 0:
 			resume_ready_at_ms = Time.get_ticks_msec() + 1000
 		return
-	delta = minf(delta, 0.1)
+	delta = minf(delta, PersonVisual.FRAME_MAX)
 	if arrive_t >= 0.0:
 		_arrive(delta)
 	elif not ended and not paused:
@@ -2068,7 +2068,7 @@ func _meets_door(p: Person, door: Dictionary) -> bool:
 func _drive(p: Person, delta: float) -> void:
 	var push := p.stick.length()
 	# A melee blow holds the feet from part way through it to its end (decision 425).
-	if push > 0.05 and combat.feet_held(p):
+	if combat.feet_held(p):
 		p.drive_speed = 0.0
 		p.moving = false
 		return
