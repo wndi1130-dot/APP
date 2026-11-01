@@ -1531,8 +1531,20 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 	var step: float = clampf(get_process_delta_time() if delta < 0.0 else delta, 0.0, 0.1)
 	step = 0.0 if bool(game.hitstop) else step * maxf(float(game.slow), 0.0)
 	var first: bool = not _rendered_once
+	var immediate: bool = first or bool(game.resume_pending)
 	_garment_reads = 0 if not bodies_to_read.is_empty() else 1   # one read a frame, body or garment
 	_read_a_body()
+	if immediate:
+		# The restored still gets only one render before the resume overlay waits.
+		# Resolve every seen body's slot before sizing the submission counters.
+		for z: Dictionary in list:
+			var at: Vector3 = z["pos"]
+			if (mask_on and not seen.has(game.seen_key(at))) or not game.level_shown(game.level_of(at)):
+				continue
+			var wanted_b: int = DeadCast.body_of(int(z["id"]), bodies_planned)
+			while wanted_b >= draws.size() and not bodies_to_read.is_empty():
+				_read_a_body()
+		_garment_reads = list.size()   # at most one garment request per seen body
 	var planes: Array[Plane] = camera.get_frustum()
 	var counts := []
 	for _b in draws.size():
@@ -1550,12 +1562,13 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 		var at: Vector3 = z["pos"]
 		var seen_now: bool = not mask_on or seen.has(game.seen_key(at))
 		var prev: float = float(_shown.get(id, 0.0))
-		var shown: float = 1.0 if first and seen_now else next_shown(prev, seen_now, step)
+		var shown: float = 1.0 if immediate and seen_now else next_shown(prev, seen_now, step)
 		shown_next[id] = shown
-		if not game.level_shown(game.level_of(at)):
+		var last: Dictionary = _last_seen_draw[id] if _last_seen_draw.has(id) else {}
+		var floor_at: Vector3 = at if seen_now or last.is_empty() else last["at"]
+		if not game.level_shown(game.level_of(floor_at)):
 			shown_next[id] = 0.0
 			continue
-		var last: Dictionary = _last_seen_draw[id] if _last_seen_draw.has(id) else {}
 		var record: Dictionary = last
 		var appearance_ready: bool = false
 		if seen_now:
@@ -1570,7 +1583,15 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 			var over: Dictionary = DeadCast.garment_of(drawn_worn(z), TINTS[wanted_look], id if String(z.get("name", "")) == "" else -1) if baked else {}
 			var wanted_garment: MultiMeshInstance3D = null
 			if appearance_ready and not over.is_empty():
-				wanted_garment = _garment_of(wanted_b, String(over["shell"]))
+				var request_garment: bool = immediate or (wear_draws[wanted_b] as Dictionary).has(over["shell"])
+				if not request_garment and _garment_reads > 0:
+					# Use the actual pose (including shove/grab offsets), without
+					# overwriting the last appearance before the garment is ready.
+					var probe: Dictionary = _sight_draw(z, wanted_b, wanted_look, over, null, {})
+					var probe_transform: Transform3D = probe["transform"]
+					request_garment = in_sight_frustum(planes, probe_transform.origin)
+				if request_garment:
+					wanted_garment = _garment_of(wanted_b, String(over["shell"]))
 				appearance_ready = (wear_draws[wanted_b] as Dictionary).has(over["shell"])
 			if not appearance_ready and (prev <= 0.0 or last.is_empty()):
 				# Even on arrival, an unread appearance never gets a visible placeholder.

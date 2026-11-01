@@ -22,6 +22,31 @@ class WaitingGarment extends Zombies:
 		return null if waiting else super._garment_of(b, kind)
 
 
+class QueuedAppearance extends Zombies:
+	# Model successful reads using the fixture's assets, without optional files.
+	var body_reads: int = 0
+	var garment_reads: Array[String] = []
+
+	func _read_a_body() -> void:
+		if bodies_to_read.is_empty():
+			return
+		bodies_to_read.pop_front()
+		body_reads += 1
+		draws.append(_draws_of(vat))
+		wear_draws.append({})
+		body_rounds.append(body_rounds[0])
+
+	func _garment_of(b: int, kind: String) -> MultiMeshInstance3D:
+		var wear: Dictionary = wear_draws[b]
+		if not wear.has(kind):
+			if _garment_reads <= 0:
+				return null
+			_garment_reads -= 1
+			garment_reads.append(kind)
+			wear[kind] = _garment_draw(vat)
+		return wear[kind]
+
+
 func _camera_at(at: Vector3) -> Camera3D:
 	# A sized viewport gives Camera3D its projection even with no display.
 	var viewport := SubViewport.new()
@@ -36,7 +61,7 @@ func _camera_at(at: Vector3) -> Camera3D:
 	return cam
 
 
-func _field(wait_for_garment: bool = false) -> void:
+func _field(wait_for_garment: bool = false, queued_appearance: bool = false) -> void:
 	game = FieldGame.new()
 	game.opts = {"seed": 11, "raiders": false, "auto_pause": false}
 	add_child_autofree(game)
@@ -47,7 +72,10 @@ func _field(wait_for_garment: bool = false) -> void:
 	game.player.position = origin
 	# A fresh renderer makes its first render explicit, without relying on the
 	# field's arrival drawing. Loading tests add their own pending appearance.
-	dead = WaitingGarment.new() if wait_for_garment else Zombies.new()
+	if queued_appearance:
+		dead = QueuedAppearance.new()
+	else:
+		dead = WaitingGarment.new() if wait_for_garment else Zombies.new()
 	game.add_child(dead)
 	dead.setup(game, game.zombies.vat)
 	dead.bodies_to_read.clear()
@@ -120,6 +148,85 @@ func test_leaving_sight_keeps_the_last_draw_until_reentry() -> void:
 	assert_eq(dead.drawn_count, 1)
 	assert_false(z.has("shown"), "drawing state is not saved on the body")
 	assert_false(z.has("last_seen_draw"))
+
+
+func test_first_or_resume_render_resolves_unread_bodies_and_garments() -> void:
+	for resuming: bool in [false, true]:
+		_field(false, true)
+		var loading: QueuedAppearance = dead as QueuedAppearance
+		if resuming:
+			dead.render(camera, {}, true, 0.0)
+		game.resume_pending = resuming
+		dead.bodies_planned = 3
+		dead.bodies_to_read.assign(["pending-one", "pending-two"])
+		var ids: Array[int] = []
+		for candidate: int in range(1, 65):
+			if DeadCast.body_of(candidate, 3) != 2:
+				continue
+			dead.next_id = candidate
+			var z: Dictionary = _spawn(origin)
+			z["worn"] = {"coat": Wear.make("coat_long" if ids.is_empty() else "vest_armor")}
+			ids.append(int(z["id"]))
+			if ids.size() == 2:
+				break
+		assert_eq(ids.size(), 2, "two seen bodies need the second queued body and different garments")
+		assert_eq(dead.draws.size(), 1)
+		assert_true(loading.garment_reads.is_empty())
+		dead.render(camera, _seen(origin), true, 0.0)
+		assert_eq(loading.body_reads, 2, "the still resolves more than one pending body")
+		assert_eq(loading.garment_reads, ["coat_long", "vest"], "both garments resolve in the same render")
+		for id: int in ids:
+			assert_eq(float(dead._shown.get(id, 0.0)), 1.0)
+			assert_eq(dead.drawn_at.get(id, Vector3.INF), origin)
+			assert_true(dead._submitted_last.has(id))
+			if not dead._last_seen_draw.has(id):
+				fail_test("the single restored render must submit the complete appearance")
+				continue
+			var record: Dictionary = dead._last_seen_draw[id]
+			assert_eq(int(record["b"]), 2)
+			assert_not_null(record["garment"])
+			assert_true((dead.garments_drawn.get(record["garment"], []) as Array).has(id))
+
+
+func test_onscreen_garment_reads_before_an_earlier_offscreen_seen_body() -> void:
+	_field(false, true)
+	var loading: QueuedAppearance = dead as QueuedAppearance
+	dead.render(camera, {}, true, 0.0)   # exercise the ordinary one-read budget
+	var offscreen: Dictionary = _spawn(origin + Vector3(30, 0, 0))
+	offscreen["worn"] = {"coat": Wear.make("coat_long")}
+	var onscreen: Dictionary = _spawn(origin)
+	onscreen["worn"] = {"coat": Wear.make("vest_armor")}
+	var onscreen_id: int = int(onscreen["id"])
+	dead.render(camera, {}, false, 0.09)
+	assert_eq(loading.garment_reads, ["vest"], "the earlier offscreen coat cannot spend the one read")
+	assert_false((dead.wear_draws[0] as Dictionary).has("coat_long"))
+	assert_eq(dead.drawn_at.get(onscreen_id, Vector3.INF), origin)
+	assert_true(dead._submitted_last.has(onscreen_id))
+	assert_almost_eq(float(dead._shown[onscreen_id]), 0.5, 0.0001)
+	assert_false(dead.drawn_at.has(int(offscreen["id"])))
+	offscreen["pos"] = origin
+	dead.render(camera, {}, false, 0.09)
+	assert_eq(loading.garment_reads, ["vest", "coat_long"], "the deferred coat loads when its picture enters")
+	assert_true(dead._submitted_last.has(int(offscreen["id"])))
+
+
+func test_unseen_floor_change_hides_the_last_seen_upper_floor_draw() -> void:
+	_field()
+	var upper: Vector3 = game.lift(Vector2i(60, 7), 1)
+	game.player.position = upper
+	var z: Dictionary = _spawn(upper)
+	var id: int = int(z["id"])
+	dead.render(camera, _seen(upper), true, 0.0)
+	assert_eq(dead.drawn_at.get(id, Vector3.INF), upper)
+	z["pos"] = origin
+	dead.render(camera, {}, true, 0.05)
+	assert_eq(dead.drawn_at.get(id, Vector3.INF), upper, "unseen descent leaves the picture upstairs")
+	assert_almost_eq(float(dead._shown[id]), 0.75, 0.0001)
+	game.player.position = origin
+	dead.render(camera, {}, true, 0.05)
+	assert_eq(float(dead._shown[id]), 0.0, "hide the upstairs picture even though the body is now downstairs")
+	assert_false(dead.drawn_at.has(id))
+	assert_false(dead._submitted_last.has(id))
 
 
 func test_spawn_after_the_first_render_starts_at_zero() -> void:
