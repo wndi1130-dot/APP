@@ -13,6 +13,7 @@ const TrainDom = preload("res://game/train/train_dom.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
+const PaneMotion = preload("res://game/ui/pane_motion.gd")
 
 
 ## Let queued frees settle before GUT counts orphans.
@@ -267,7 +268,7 @@ func test_the_slice_opens_the_research_room() -> void:
 	f._open_room("papers")
 	assert_true(is_instance_valid(f.research), "the research pane is up")
 	assert_eq(String(f.research.name), "ResearchPane")
-	assert_false(f.pane.visible, "the car's pane makes way")
+	assert_false(PaneMotion.shown(f.pane), "the car's pane makes way")
 	f._open_room("wrench")
 	await wait_process_frames(1)
 	assert_false(is_instance_valid(f.research), "the refit room takes its place")
