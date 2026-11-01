@@ -226,6 +226,7 @@ func test_empty_and_unknown_settings_leave_the_light_and_fill_unchanged() -> voi
 	fill.light_energy = 1.5
 	fill.light_specular = 0.75
 	fill.light_color = Color.RED
+	var mask_before: int = fill.light_cull_mask
 	var old_cache: Dictionary = Switch._renderer_state.duplicate()
 	for settings in [{}, {"unknown": false}, {"sun_shadow": true}]:
 		assert_eq(Switch.apply(sun, fill, settings), {})
@@ -236,6 +237,7 @@ func test_empty_and_unknown_settings_leave_the_light_and_fill_unchanged() -> voi
 		assert_eq(fill.light_energy, 1.5)
 		assert_eq(fill.light_specular, 0.75)
 		assert_eq(fill.light_color, Color.RED)
+		assert_eq(fill.light_cull_mask, mask_before)
 		assert_false(fill.has_meta(Switch.FILL_ENERGY))
 		assert_true(fill.visible)
 		assert_false(fill.visibility_changed.is_connected(fill.hide))
@@ -273,9 +275,11 @@ func test_invalid_fill_diagnostics_keep_other_valid_keys_and_report_reasons() ->
 	var invalid: Dictionary = {
 		"view_fill_specular": [-0.001, 1.001, "0", false, null, [], {}, INF, -INF, NAN],
 		"view_fill_energy": [0, 0.001, 4.001, "0.002", true, null, [], {}, INF, -INF, NAN],
+		"view_fill_cull_mask": [-1, 1048576, 0.5, "0", true, null, [], {}, INF, -INF, NAN],
 	}
 	fill.light_energy = 2.5
 	fill.light_specular = 0.75
+	var mask_before: int = fill.light_cull_mask
 	for key: String in invalid:
 		for value in invalid[key]:
 			var settings: Dictionary = {"sun_shadow": false}
@@ -286,6 +290,7 @@ func test_invalid_fill_diagnostics_keep_other_valid_keys_and_report_reasons() ->
 			assert_false(sun.shadow_enabled)
 			assert_eq(fill.light_energy, 2.5)
 			assert_eq(fill.light_specular, 0.75)
+			assert_eq(fill.light_cull_mask, mask_before)
 			assert_false(fill.has_meta(Switch.FILL_ENERGY))
 			# JSON has no non-finite literals; exercise those through _valid/apply.
 			if value is float and not is_finite(value):
@@ -321,6 +326,28 @@ func test_view_fill_energy_applies_and_reports_only_changes() -> void:
 		assert_eq(fill.light_specular, 0.75)
 		assert_true(fill.visible)
 		assert_eq(Switch.apply(sun, fill, settings, false), {})
+
+
+func test_view_fill_cull_mask_takes_whole_layer_masks_and_survives_minute_updates() -> void:
+	for value in [0, 1, 1048575, 1048575.0]:
+		var diagnostic: Dictionary = {"reason": "previous read"}
+		_write(JSON.stringify({"view_fill_cull_mask": value}))
+		assert_eq(Switch.read(path, diagnostic), {"view_fill_cull_mask": int(value)})
+		assert_eq(diagnostic, {})
+	var field: FieldProbe = _field()
+	field.fx_light = {"fill_energy": 2.0}
+	field._set_view_fill()
+	var settings: Dictionary = {"view_fill_cull_mask": 0}
+	assert_eq(Switch.apply(field.sun, field.view_fill, settings, false), settings)
+	assert_eq(field.view_fill.light_cull_mask, 0)
+	assert_eq(Switch.apply(field.sun, field.view_fill, settings, false), {})
+	# Night hides the light and day brings it back; the mask stays through both.
+	for source_energy: float in [1.0, 0.0, 2.0]:
+		field.fx_light["fill_energy"] = source_energy
+		field._set_view_fill()
+		assert_eq(field.view_fill.light_cull_mask, 0)
+	assert_true(field.view_fill.visible)
+	assert_almost_eq(field.view_fill.light_energy, 2.0, 0.000001)
 
 
 func test_fill_energy_survives_minute_updates_and_keeps_specular() -> void:
