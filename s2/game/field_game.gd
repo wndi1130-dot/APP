@@ -1035,9 +1035,13 @@ func _set_sight_round() -> void:
 ## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
 func _update_light() -> void:
 	if storm.is_empty():
+		if ripples != null:
+			ripples.dusk = 0.0
 		_update_atmosphere()
 		return
 	var t := clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
+	if ripples != null:
+		ripples.dusk = t
 	# The night band is lamps only; the gray-box field has no lamps yet, so the
 	# floors keep people, doors and the platform edge readable after dark.
 	sun.light_energy = lerpf(float(fx_light["sun_energy"]), maxf(float(fx_light_night["sun_energy"]), NIGHT_SUN_MIN), t)
