@@ -116,19 +116,28 @@ static func all_ids() -> Array[String]:
 
 
 ## The map's data, ready for the field. An unknown place gives the default map.
-static func build(place_id: String) -> Dictionary:
-	return build_from(load(path_of(resolve(place_id))))
+static func build(place_id: String, band: String = "") -> Dictionary:
+	return build_from(load(path_of(resolve(place_id))), band)
 
 
-static func build_from(script: Script) -> Dictionary:
+## Finish the original map in its band before MapRing adds the outer village.
+static func finish_with_band(band: String) -> Callable:
+	if band.is_empty():
+		return build_from
+	return func(script: Script) -> Dictionary: return build_from(script, band)
+
+
+static func build_from(script: Script, band: String = "") -> Dictionary:
 	# A stop map is finished as it is, then grows its outer village (map_ring.gd).
 	if MapRing.enabled(script):
-		var grown := MapRing.build(script, build_from)
+		var grown := MapRing.build(script, finish_with_band(band))
 		# The lights people left: the grown map's share by its whole area, the
 		# ones planned on the stop map kept where they are (T0-9).
 		NightLights.extend(grown)
 		return grown
 	var data: Dictionary = script.build()
+	if not band.is_empty():
+		data["region_band"] = band
 	var consts: Dictionary = script.get_script_constant_map()
 	if not data.has("place_id"):
 		data["place_id"] = String(consts.get("PLACE_ID", DEFAULT_PLACE))

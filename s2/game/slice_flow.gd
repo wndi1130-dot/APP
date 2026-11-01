@@ -475,7 +475,7 @@ func go(i: int) -> void:
 				_campaign_fail(issue)
 				return
 		if STEPS[i][0] == "field" and not is_instance_valid(pending_field):
-			_campaign_map = (opts["map_data"] as Dictionary).duplicate(true) if opts.get("map_data") is Dictionary else FieldMaps.build(_field_place())
+			_campaign_map = (opts["map_data"] as Dictionary).duplicate(true) if opts.get("map_data") is Dictionary else FieldMaps.build(_field_place(), _stop_band(_field_seg()))
 			var issue: String = CampaignRoute.map_problem(RouteState.current_stop(train_g), _campaign_map)
 			if issue != "":
 				_campaign_map = {}
@@ -2540,7 +2540,7 @@ func _campaign_map_problem() -> String:
 
 func _prepare_stop() -> void:
 	if not _is_campaign():
-		loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)))
+		loader.prepare(_field_place(), int(opts.get("seed", 1)), _stop_form(_field_seg()), float(opts.get("stop_form_m", -1.0)), "", _stop_band(_field_seg()))
 		return
 	var visit: Dictionary = train_g["campaign"]["visit"]
 	if visit.is_empty():
@@ -2548,7 +2548,7 @@ func _prepare_stop() -> void:
 	if _campaign_map_problem() != "":
 		_campaign_fail(_campaign_map_problem())
 		return
-	loader.prepare(_field_place(), int(visit["field_seed"]), _stop_form(_current_field_seg()), -1.0, String(visit["id"]))
+	loader.prepare(_field_place(), int(visit["field_seed"]), _stop_form(_current_field_seg()), -1.0, String(visit["id"]), _stop_band(_field_seg()))
 
 
 func _campaign_can_go(id: String) -> bool:
