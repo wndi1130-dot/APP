@@ -525,7 +525,7 @@ func _show_step(i: int) -> void:
 	soot_bot.visible = gauges.visible and not SHEET_STEPS.has(id)
 	if train_halt_line(train_g) != "":
 		_show_train("end" if train_g.get("phase") == "end" else "travel", int(train_g.get("seg", row[2])))
-		_show_panel("끝" if id == "end" else "열차가 멈췄다", [train_halt_line(train_g)], "처음으로" if id == "end" else "끝")
+		_show_panel("끝" if id == "end" else train_halt_title(train_g), [train_halt_line(train_g)], "처음으로" if id == "end" else "끝")
 		return
 	# The next stop is known on the train: its map is made ready off the main
 	# thread while the train runs.
@@ -956,6 +956,14 @@ static func start_board() -> Array:
 static func train_halt_line(g: Dictionary) -> String:
 	if g.get("phase") == "end" and g.get("end") != "slice": return TrainTurn.end_text(g, str(g.get("end", "")))
 	if g.get("stranded") != null: return TrainTurn.END_TEXT["stranded"]
+	return ""
+
+
+## The halt panel's head, in train_halt_line's order: a real S1 ending names
+## itself as the S1 end screen does, a stopped train says it stopped.
+static func train_halt_title(g: Dictionary) -> String:
+	if g.get("phase") == "end" and g.get("end") != "slice": return str(TrainTurn.END_TITLE.get(str(g.get("end", "")), "끝"))
+	if g.get("stranded") != null: return "열차가 멈췄다"
 	return ""
 
 

@@ -367,6 +367,11 @@ const END_TEXT := {
 	"coup": "경비대장이 열차를 잡았다. 열차장은 열차장실 문을 열어 둔 채 짐을 쌌다.",
 	"slice": "둘째 역에 닿았다. 시험판은 여기서 멈춘다.",
 }
+## S1 panels.ts END_TITLE: the end screen's head for each ending.
+const END_TITLE := {
+	"complete": "라이프치히 중앙역", "stranded": "좌초", "ousted": "축출", "revolt": "반란",
+	"coup": "쿠데타", "lost_captain": "열차장 실종", "slice": "둘째 역",
+}
 const STRANDED_REVOLT_TEXT = "솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다."
 const LOOK_RES = ["coal", "food", "wood", "scrap"]
 const LOOK_NAMES = {"coal": "석탄", "food": "식량", "wood": "목재", "scrap": "고철"}

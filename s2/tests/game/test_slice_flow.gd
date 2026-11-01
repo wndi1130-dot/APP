@@ -22,6 +22,7 @@ func _halt_input(kind: String, after: bool = false) -> Dictionary:
 func _assert_halt_panel(f, kind: String) -> void:
 	var reason: String = HaltTurn.END_TEXT["stranded" if kind == "stranded" else "ousted"]
 	assert_true(f.panel.visible)
+	assert_eq(f.title.text, "열차가 멈췄다" if kind == "stranded" else "축출", "an ending without stranding names its S1 ending")
 	assert_eq(_texts(f), [reason])
 	assert_eq(f.next_button.text, "끝")
 	assert_eq(f.port_error, "", "game halt does not enter the port_error path")
@@ -97,6 +98,10 @@ func test_halt_words_prioritize_the_real_ending_and_exclude_slice_finish() -> vo
 		assert_eq(SliceFlow.train_halt_line({"phase": "end", "end": end, "stranded": {}}), HaltTurn.END_TEXT[end])
 	assert_eq(SliceFlow.train_halt_line({"phase": "end", "end": "revolt", "stranded": {}}), HaltTurn.STRANDED_REVOLT_TEXT)
 	assert_eq(SliceFlow.train_halt_line({"phase": "end", "end": "slice"}), "")
+	for end: String in ["ousted", "lost_captain", "coup", "revolt"]:
+		assert_eq(SliceFlow.train_halt_title({"phase": "end", "end": end, "stranded": {}}), HaltTurn.END_TITLE[end])
+	assert_eq(SliceFlow.train_halt_title({"stranded": {}}), "열차가 멈췄다")
+	assert_eq(SliceFlow.train_halt_title({"phase": "end", "end": "slice"}), "")
 
 
 ## Without the stop scene (cinema off) unless asked: the card at once, as the
