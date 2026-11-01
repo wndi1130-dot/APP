@@ -206,7 +206,7 @@ const TECHS: Dictionary = {
 		"branch": "med",
 		"tier": 0,
 		"name": "약초와 민간요법",
-		"effect": "모두를 치료의 의약품 소모 ×1.6 → ×1.3, 이가 병으로 번질 확률 40% → 25%",
+		"effect": "모두를 치료: 의약품 소모 ×1.6 → ×1.3, 몸니가 병을 옮길 확률 40% → 25%",
 		"adapt": {
 			"parts": 0,
 			"wood": 2
@@ -498,7 +498,7 @@ const TECHS: Dictionary = {
 		"branch": "expedition",
 		"tier": 3,
 		"name": "궤도 모터카",
-		"effect": "지나쳐도 짧게의 절반을 얻는다(석탄 1)"
+		"effect": "지나친 정차에서도 '짧게' 머문 몫의 절반을 얻는다(석탄 1)"
 	},
 	"x4": {
 		"upkeep": {}, "like": ["tail"], "dislike": [],
