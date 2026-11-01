@@ -11,6 +11,7 @@ const Fonts = preload("res://game/ui/ui_fonts.gd")
 const Flow = preload("res://game/slice_flow.gd")
 const TurnCard = preload("res://game/ui/turn_card.gd")
 const Grid = preload("res://game/train/decor_grid.gd")
+const PaneMotion = preload("res://game/ui/pane_motion.gd")
 
 class PickScene extends Node:
 	var pick: Dictionary = {}
@@ -741,7 +742,8 @@ func test_selected_plate_toggles_off_for_common_and_ordinary_cars() -> void:
 			event.pressed = false
 			flow._plate_input(event, id)
 			assert_eq(flow.sel, expected)
-			assert_eq(flow.pane.visible, expected != "")
+			# Shut at once; the pane itself slides off before it hides (pane_motion.gd).
+			assert_eq(PaneMotion.shown(flow.pane), expected != "")
 		flow._process(0.0)
 		var shown: int = 0
 		for plate: Control in flow.plates.get_children():
