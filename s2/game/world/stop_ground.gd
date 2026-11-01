@@ -7,6 +7,7 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
 const NightLights = preload("res://game/world/night_lights.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
 const END_GAP: int = 12
 ## The longest screen the map's end stays out of view on: 23.1:9, a folding phone's cover
 ## screen held sideways (the window's stretch aspect "expand" shows more ground across).
@@ -36,6 +37,8 @@ const FORMS: Array[String] = ["city", "edge", "remote", "siding"]
 ## `end_gap` >= 0 puts the train's end that many cells off the grown end (a save's ground, field_save.gd);
 ## else _end_gap works it out.
 static func apply(data: Dictionary, form: String, run_seed: int, target_m: float = -1.0, end_gap: int = -1) -> Dictionary:
+	if StoryMaps.is_story(String(data.get("place_id", ""))):
+		return data
 	if form.is_empty() or form == String(data.get("stop_form", "")):
 		return data
 	if form not in FORMS:

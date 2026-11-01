@@ -87,7 +87,7 @@ func _initialize() -> void:
 			"--edges":
 				edges = true
 			"--all":
-				places = Array(FieldMaps.ids())
+				places = Array(FieldMaps.all_ids())
 			"--size-only":
 				size_only = true
 			"--weather":

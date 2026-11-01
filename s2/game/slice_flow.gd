@@ -633,21 +633,35 @@ func _field_place() -> String:
 	return String(opts.get("place", ""))
 
 
+## The first leg counts on with the slice; another act's own map keeps its own stop.
+static func stop_at_for(own: Array, seg: int) -> Array:
+	if own.is_empty():
+		return ["prologue", seg]
+	if String(own[0]) == "prologue":
+		return ["prologue", int(own[1]) + seg - FIRST_SEG]
+	return own
+
+
+func _stop_at(seg: int) -> Array:
+	return stop_at_for(RouteBands.place_stop(FieldMaps.resolve(_field_place())), seg)
+
+
 ## The first leg's stop the slice is at on stretch `seg` (decision 494). The field's map, when
 ## it is a stop's own map (the first stop's, which the slice plays on FIRST_SEG), is that
 ## stop, and the stops after it count on from there; any other map takes the stretch's stop.
 func _stop_of(seg: int) -> int:
 	if _is_campaign():
 		return int(_campaign_scene_stop().get("number", CampaignRoute.size()))
-	var own: Array = RouteBands.place_stop(FieldMaps.resolve(_field_place()))
-	return seg if own.is_empty() else int(own[1]) + seg - FIRST_SEG
+	var at := _stop_at(seg)
+	return int(at[1]) if String(at[0]) == "prologue" else seg
 
 
 ## That stop's band.
 func _stop_band(seg: int) -> String:
 	if _is_campaign():
 		return String(_campaign_scene_stop().get("band", "K3"))
-	return RouteBands.stop_band("prologue", _stop_of(seg))
+	var at := _stop_at(seg)
+	return RouteBands.stop_band(String(at[0]), int(at[1]))
 
 
 ## That stop's form (stop_form.gd): one asked of the slice (opts "stop_form", a check switch),
@@ -657,7 +671,8 @@ func _stop_form(seg: int) -> String:
 		return String(RouteState.current_stop(train_g).get("form", ""))
 	if opts.has("stop_form"):
 		return String(opts["stop_form"])
-	return StopForm.on_route("prologue", _stop_of(seg))
+	var at := _stop_at(seg)
+	return StopForm.on_route(String(at[0]), int(at[1]))
 
 
 ## The stretch of the slice's field step: the map made ready while the train runs is its stop's.
