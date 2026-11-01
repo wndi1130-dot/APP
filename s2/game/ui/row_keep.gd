@@ -147,8 +147,13 @@ static func restore_scroll(scroll: ScrollContainer, value: int) -> void:
 	_apply_scroll.call_deferred(scroll, value, serial, scroll.scroll_vertical)
 
 
-static func _apply_scroll(scroll: ScrollContainer, value: int, serial: int, expected: int = -1) -> void:
-	if not is_instance_valid(scroll) or not scroll.has_meta(SCROLL_META) or int(scroll.get_meta(SCROLL_META)) != serial:
+## `target` is untyped: the deferred call can arrive after its pane was freed, and a freed
+## object cannot be passed into a typed argument.
+static func _apply_scroll(target: Variant, value: int, serial: int, expected: int = -1) -> void:
+	if not is_instance_valid(target) or not target is ScrollContainer:
+		return
+	var scroll: ScrollContainer = target as ScrollContainer
+	if not scroll.has_meta(SCROLL_META) or int(scroll.get_meta(SCROLL_META)) != serial:
 		return
 	if expected >= 0 and scroll.scroll_vertical != expected:
 		return
