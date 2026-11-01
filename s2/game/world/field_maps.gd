@@ -20,6 +20,7 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const MapRing = preload("res://game/world/map_ring.gd")
 const RoomSplit = preload("res://game/world/room_split.gd")
 const NightLights = preload("res://game/world/night_lights.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
 
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
@@ -66,6 +67,8 @@ static func path_of(place_id: String) -> String:
 static func has(place_id: String) -> bool:
 	if BUILT_IN.has(place_id):
 		return true
+	if StoryMaps.is_story(place_id):
+		return ResourceLoader.exists(path_of(place_id))
 	# Only <kind>_<NN>: a place id never walks out of the maps folder.
 	var parts: PackedStringArray = place_id.rsplit("_", true, 1)
 	if parts.size() != 2 or not KINDS.has(parts[0]) or parts[1].length() != 2 or not parts[1].is_valid_int():
@@ -96,6 +99,20 @@ static func ids() -> Array[String]:
 			if has(id):
 				out.append(id)
 	return out
+
+
+## Story maps join the registry only once their hand-made scripts exist.
+static func story_ids() -> Array[String]:
+	var out: Array[String] = []
+	for id: String in StoryMaps.BASE:
+		if has(id):
+			out.append(id)
+	return out
+
+
+## Every map for checks and measurements; random picks use ids().
+static func all_ids() -> Array[String]:
+	return ids() + story_ids()
 
 
 ## The map's data, ready for the field. An unknown place gives the default map.

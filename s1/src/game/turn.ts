@@ -1061,7 +1061,7 @@ function medicineTick(g: Game, notes: string[]): void {
     g.injured += 1;
     noteInjury(g, 1, 'rise', inKin ? '살던 칸' : '냉동칸');
     bump(g, 'tension', 5, 'corpse');
-    journal(g, inKin ? '칸에 두었던 시신 하나가 일어났다. 하나가 다쳤다.' : '냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
+    journal(g, inKin ? '칸에 두었던 시신 하나가 일어났다. 한 명이 다쳤다.' : '냉동칸에서 태우려고 기다리던 시신 하나가 일어났다. 경비 하나가 다쳤다.', 'bad');
   }
   // S1b: 무게를 늘 먼저 셈해 냉동칸이 비면 확인 수도 0으로 돌린다. S1a 판이면 무게가 곧 시신 수다.
   const storedWeight = darkStoredWeight(g, g.stored);
@@ -1071,7 +1071,7 @@ function medicineTick(g: Game, notes: string[]): void {
     bump(g, 'tension', 8, 'corpse');
     g.stored = 0;
     darkStoredWeight(g, 0);
-    journal(g, '냉동칸의 시신이 녹아 일어났다. 둘이 다쳤다.', 'bad');
+    journal(g, '냉동칸의 시신이 녹아 일어났다. 두 명이 다쳤다.', 'bad');
   }
 }
 

@@ -80,6 +80,7 @@ const FieldReceipt = preload("res://game/sim/receipt.gd")
 const SliceSave = preload("res://game/sim/slice_save.gd")
 const TrainSave = preload("res://game/politics/save_slot.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
 const Journey = preload("res://game/train/journey/journey.gd")
 const Corridor = preload("res://game/train/journey/journey_corridor.gd")
@@ -192,7 +193,7 @@ const SEL_COLOR := Color("ffc66c")
 ## Cars not picked darken (.train.has-sel .car:not(.is-sel), brightness .5).
 const UNPICKED_SHADE: float = 0.42
 ## 디자인 토큰 2차: the smoked glass of a pane (B1) and its words.
-const PANE := Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.84)
+const PANE := Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.95)
 const INK := Color("eee9dc")
 const INK2 := Color(238 / 255.0, 233 / 255.0, 220 / 255.0, 0.7)
 
@@ -632,21 +633,35 @@ func _field_place() -> String:
 	return String(opts.get("place", ""))
 
 
+## The first leg counts on with the slice; another act's own map keeps its own stop.
+static func stop_at_for(own: Array, seg: int) -> Array:
+	if own.is_empty():
+		return ["prologue", seg]
+	if String(own[0]) == "prologue":
+		return ["prologue", int(own[1]) + seg - FIRST_SEG]
+	return own
+
+
+func _stop_at(seg: int) -> Array:
+	return stop_at_for(RouteBands.place_stop(FieldMaps.resolve(_field_place())), seg)
+
+
 ## The first leg's stop the slice is at on stretch `seg` (decision 494). The field's map, when
 ## it is a stop's own map (the first stop's, which the slice plays on FIRST_SEG), is that
 ## stop, and the stops after it count on from there; any other map takes the stretch's stop.
 func _stop_of(seg: int) -> int:
 	if _is_campaign():
 		return int(_campaign_scene_stop().get("number", CampaignRoute.size()))
-	var own: Array = RouteBands.place_stop(FieldMaps.resolve(_field_place()))
-	return seg if own.is_empty() else int(own[1]) + seg - FIRST_SEG
+	var at := _stop_at(seg)
+	return int(at[1]) if String(at[0]) == "prologue" else seg
 
 
 ## That stop's band.
 func _stop_band(seg: int) -> String:
 	if _is_campaign():
 		return String(_campaign_scene_stop().get("band", "K3"))
-	return RouteBands.stop_band("prologue", _stop_of(seg))
+	var at := _stop_at(seg)
+	return RouteBands.stop_band(String(at[0]), int(at[1]))
 
 
 ## That stop's form (stop_form.gd): one asked of the slice (opts "stop_form", a check switch),
@@ -656,7 +671,8 @@ func _stop_form(seg: int) -> String:
 		return String(RouteState.current_stop(train_g).get("form", ""))
 	if opts.has("stop_form"):
 		return String(opts["stop_form"])
-	return StopForm.on_route("prologue", _stop_of(seg))
+	var at := _stop_at(seg)
+	return StopForm.on_route(String(at[0]), int(at[1]))
 
 
 ## The stretch of the slice's field step: the map made ready while the train runs is its stop's.
@@ -1295,7 +1311,7 @@ func _tell_save_error() -> void:
 func _add_save_line() -> void:
 	if is_instance_valid(save_line):
 		return
-	save_line = UiFonts.label(SAVE_FAILED, UiFonts.WORD, 400, 13.0, INK2)
+	save_line = UiFonts.label(UiFonts.keep_all(SAVE_FAILED), UiFonts.WORD, 400, 13.0, INK2)
 	save_line.name = "SaveFailed"
 	save_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	save_line.custom_minimum_size.x = PANEL_W - UiFonts.px(28.0)
@@ -1816,6 +1832,10 @@ func _show_home(word: String) -> void:
 func _select(id: String, toggle: bool = false) -> void:
 	if toggle and id == sel:
 		id = ""
+	# A later pick (another car, none, or a room pane) wins over a reopen still waiting for its car.
+	var waiting_id: String = String(_decor_restage_wait.get("id", ""))
+	if waiting_id != "" and waiting_id != id:
+		_clear_decor_restage_wait()
 	# A car picked over the workshop or the refit pane puts it away.
 	if id != "":
 		_put_rooms_away()
@@ -1865,6 +1885,9 @@ func _shows_pane(def: Dictionary) -> bool:
 ## its grid, and the gauges, the plates, the keys, the pane and a folded paper go away till
 ## leave_decor. Not while a paper card is open to choose on, nor for a car the decor table has not.
 ## The strip, title, exit and gestures belong to decor_pane.gd.
+var _decor_restage_wait: Dictionary = {}
+
+
 func open_decor(id: String) -> bool:
 	if not is_instance_valid(train) or decor_id != "":
 		return false
@@ -1874,6 +1897,10 @@ func open_decor(id: String) -> bool:
 		return false
 	if not train.can_enter_decor(id):
 		return false
+	if train.is_car_restaging(id):
+		_wait_for_decor_restage(id)
+		return false
+	_clear_decor_restage_wait()
 	_put_rooms_away()
 	if not train.enter_decor(id):
 		return false
@@ -1895,6 +1922,65 @@ func open_decor(id: String) -> bool:
 	return true
 
 
+## No synchronous drain on reopen. One request follows the latest generation of this car;
+## another car may open immediately, and a layout/scene change discards this UI intent.
+func _wait_for_decor_restage(id: String) -> void:
+	var c: Dictionary = train.car(id)
+	if is_instance_valid(_decor_restage_wait.get("train")) and _decor_restage_wait.get("train") == train \
+			and String(_decor_restage_wait.get("id", "")) == id \
+			and _decor_restage_wait.get("node") == c["node"] \
+			and int(_decor_restage_wait.get("batch", -1)) == int(train._restage_batch):
+		return
+	_clear_decor_restage_wait()
+	_decor_restage_wait = {"id": id, "train": train, "node": c["node"], "batch": int(train._restage_batch)}
+	train.connect("room_restaged", _on_decor_room_restaged)
+	train.connect("restages_invalidated", _clear_decor_restage_wait)
+	train.connect("rules_applied", _on_decor_restage_rules_applied)
+
+
+func _clear_decor_restage_wait() -> void:
+	var source: Variant = _decor_restage_wait.get("train")
+	_decor_restage_wait = {}
+	if not is_instance_valid(source):
+		return
+	var source_scene: Node3D = source
+	if source_scene.is_connected("room_restaged", _on_decor_room_restaged):
+		source_scene.disconnect("room_restaged", _on_decor_room_restaged)
+	if source_scene.is_connected("restages_invalidated", _clear_decor_restage_wait):
+		source_scene.disconnect("restages_invalidated", _clear_decor_restage_wait)
+	if source_scene.is_connected("rules_applied", _on_decor_restage_rules_applied):
+		source_scene.disconnect("rules_applied", _on_decor_restage_rules_applied)
+
+
+func _on_decor_restage_rules_applied() -> void:
+	if _decor_restage_wait.is_empty():
+		return
+	# A target reverted to the already-visible stage produces no room_restaged signal.
+	# Do not leave an intent that could unexpectedly open on an unrelated future restage.
+	if not is_instance_valid(train) or not is_instance_valid(_decor_restage_wait["train"]) \
+			or train != _decor_restage_wait["train"] \
+			or not train.is_car_restaging(String(_decor_restage_wait["id"])):
+		_clear_decor_restage_wait()
+
+
+func _on_decor_room_restaged(id: String) -> void:
+	if String(_decor_restage_wait.get("id", "")) != id:
+		return
+	var waiting: Dictionary = _decor_restage_wait
+	_clear_decor_restage_wait()  # consume before retrying, including a retry rejected by a new UI lock
+	if not is_inside_tree() or not is_instance_valid(train) or not is_instance_valid(waiting["train"]):
+		return
+	if train != waiting["train"]:
+		return
+	if not train.is_inside_tree() or train.is_queued_for_deletion() or int(train._restage_batch) != int(waiting["batch"]):
+		return
+	var c: Dictionary = train.car(id)
+	if c.is_empty() or not is_instance_valid(waiting["node"]) or c["node"] != waiting["node"]:
+		return
+	if not train.is_car_restaging(id):
+		open_decor(id)  # directly in the publication frame, once, after all active references changed
+
+
 ## Read the current furniture tiers both when showing the train and when leaving decor.
 func _home_of(g: Dictionary) -> Dictionary:
 	var stages: Dictionary = {}
@@ -1905,6 +1991,7 @@ func _home_of(g: Dictionary) -> Dictionary:
 
 ## Back from decorating: restore the screens and refresh tiers with the car still picked.
 func leave_decor() -> void:
+	_clear_decor_restage_wait()
 	if decor_id == "":
 		return
 	var id: String = decor_id
@@ -1940,8 +2027,18 @@ func leave_decor() -> void:
 ## The train closed decorating on its own (its layout rebuilt): the pane, the screens put away
 ## and the car id follow it on the next frame, outside the rebuild (leave_decor syncs the rules).
 func _on_train_decor_closed() -> void:
-	if decor_id != "":
-		leave_decor.call_deferred()
+	_clear_decor_restage_wait()
+	if decor_id != "" and is_instance_valid(train) and is_instance_valid(decor_pane):
+		_leave_closed_train_decor.call_deferred(train.get_instance_id(), decor_id, decor_pane.get_instance_id())
+
+
+func _leave_closed_train_decor(source_train_id: int, source_car_id: String, source_pane_id: int) -> void:
+	if not is_inside_tree() or not is_instance_valid(train) or not is_instance_valid(decor_pane):
+		return
+	if train.get_instance_id() != source_train_id or decor_id != source_car_id \
+			or decor_pane.get_instance_id() != source_pane_id or train.decorating() != "":
+		return
+	leave_decor()
 
 
 func _decor_changed() -> void:
@@ -2267,7 +2364,8 @@ func _field_opts() -> Dictionary:
 		o["region"] = stop["band"]
 		o["stop_form"] = stop["form"]
 		o["act_progress"] = prologue_progress(RouteStops.season_seg(int(stop["number"])))
-	return o
+	# The first stop's view ground (stop_ground.gd): the loader's map has it on, a field made here asks.
+	return StopGround.ask_view(o)
 
 
 ## The field is over: its end card stays where it is, and a key over it goes
@@ -2371,7 +2469,7 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 		c.queue_free()
 	save_line = null
 	for text in rows:
-		var l := UiFonts.label(String(text), UiFonts.WORD, 400, 13.0, INK2)
+		var l := UiFonts.label(UiFonts.keep_all(String(text)), UiFonts.WORD, 400, 13.0, INK2)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = PANEL_W - UiFonts.px(28.0)
 		lines.add_child(l)

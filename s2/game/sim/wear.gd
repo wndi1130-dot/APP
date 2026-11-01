@@ -114,7 +114,7 @@ const KINDS: Dictionary = {
 	"gloves": {"slot": "hands", "name": "장갑", "icon": "it_gloves", "weight": 0.2, "warmth": 0.1, "stuff": "wool", "pattern": "knit"},
 	"gloves_cotton": {"slot": "hands", "name": "면 장갑", "icon": "it_gloves", "weight": 0.1, "warmth": 0.05, "stuff": "cotton", "tint": [0.17, 0.165, 0.155], "pattern": "plain"},
 	"gloves_leather": {"slot": "hands", "name": "가죽 장갑", "icon": "it_gloves", "weight": 0.3, "warmth": 0.08, "block": 0.1, "bite": 0.2, "stuff": "leather", "tint": [0.12, 0.095, 0.075], "pattern": "plain"},
-	"mittens": {"slot": "hands", "name": "벙어리장갑", "icon": "it_gloves", "weight": 0.2, "warmth": 0.15, "stuff": "wool", "tint": [0.13, 0.11, 0.1], "pattern": "knit"},
+	"mittens": {"slot": "hands", "name": "손모아장갑", "icon": "it_gloves", "weight": 0.2, "warmth": 0.15, "stuff": "wool", "tint": [0.13, 0.11, 0.1], "pattern": "knit"},
 	# Whole suits: a shirt and trousers in one.
 	"coverall": {"slot": "shirt", "also": ["trousers"], "name": "작업복", "icon": "it_overalls", "weight": 1.2, "warmth": 0.1, "block": 0.15, "stuff": "cotton"},
 	"dress_wool": {"slot": "shirt", "also": ["trousers"], "name": "원피스", "icon": "it_dress", "weight": 0.6, "warmth": 0.08, "stuff": "wool"},

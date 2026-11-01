@@ -21,12 +21,15 @@ const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const Sled = preload("res://game/sim/sled.gd")
+const SLED_PERSON_FIELDS: Array[String] = ["sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_rearm_t", "sled_serial", "sled_job"]
 const StopGround = preload("res://game/world/stop_ground.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
-const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap"]
+const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap",
+	"stop_view_rows", "stop_view_cols", "stop_view_rule"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
@@ -42,6 +45,7 @@ const PERSON_FIELDS: Array[String] = [
 	"reload_t", "jam_t", "target_zombie", "target_person", "hold_attack", "grabbers", "grab_left", "grab_front",
 	"climbing", "carrying_wounded", "downed_marked", "dead_marked", "brain", "panic", "ice_t", "fallen_t",
 	"last_hurt_by", "blood_soaked", "close_kills",
+	"sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_rearm_t", "sled_serial", "sled_job",
 ]
 const GAME_FIELDS: Array[String] = [
 	"squad", "crew", "raiders",
@@ -52,6 +56,7 @@ const GAME_FIELDS: Array[String] = [
 	"radio_last", "radio_rings", "radio_t", "zone_now", "auto_paused_once", "dark_noise_t", "safe_warned",
 	"glass_warned", "player_downed_t", "spotted_events", "unseen_rattle", "lid_tip_told", "roof_seen",
 	"seen_now", "seen_memory", "vis_t", "cam_focus", "cam_push", "cam_size",
+	"sleds", "next_sled_id",
 ]
 const COMPONENTS: Array[String] = ["director", "ledger", "mission_play", "holdout", "actions", "ai", "combat", "lines", "weather", "telemetry", "train_guard", "work"]
 ## "dead_eaten_seconds" is EatRules.EATEN_META (결정 441 (3)).
@@ -86,11 +91,15 @@ static func capture(game) -> Dictionary:
 		"stop_id": stop_id, "place": game.place, "mission": game.mission,
 		"stop_form": game.stop_form, "stop_ground": String(game.data.get("stop_form", "")),
 		"stop_end_gap": int(game.data.get("stop_end_gap", -1)),
+		"stop_view_rows": int(game.data.get("stop_view_rows", 0)),
+		"stop_view_cols": int(game.data.get("stop_view_cols", 0)),
+		"stop_view_rule": int(game.data.get("stop_view_rule", 0)),
 		"seed": int(game.rng.seed), "phase": "ended" if game.ended else "field", "end_reason": String(said.get("endReason", "")),
 		"saved_at": game.clock.label(), "clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
 		"player_pid": game.player.pid if game.player != null else "",
 		"people": people, "ammo": game.ammo.duplicate(), "containers": containers, "spots": spots,
 		"ground_items": ground, "unloaded": game.unloaded.duplicate(), "loaded_wear": game.loaded_wear.duplicate(true),
+		"sleds": game.sleds.duplicate(true), "next_sled_id": game.next_sled_id,
 		"coal": {"delivered": game.actions.coal_delivered if game.actions != null else 0, "spent": game.actions.coal_spent if game.actions != null else 0},
 		"zombies": zombies, "decisions": game.decisions.duplicate(true),
 		# The return's id, the same as the receipt's receiptId: the train side applies it once.
@@ -214,6 +223,7 @@ static func _whole(d: Dictionary) -> bool:
 		"containers": TYPE_DICTIONARY, "spots": TYPE_DICTIONARY, "ammo": TYPE_DICTIONARY, "unloaded": TYPE_DICTIONARY,
 		"loaded_wear": TYPE_ARRAY, "decisions": TYPE_ARRAY, "start_opts": TYPE_DICTIONARY,
 		"departure": TYPE_DICTIONARY, "receipt_state": TYPE_DICTIONARY, "runtime": TYPE_DICTIONARY, "seed": TYPE_FLOAT,
+		"sleds": TYPE_ARRAY, "next_sled_id": TYPE_FLOAT,
 	}):
 		return false
 	if not _fields(d["clock"], {"elapsed": TYPE_FLOAT, "speed": TYPE_FLOAT}) \
@@ -239,6 +249,8 @@ static func _whole(d: Dictionary) -> bool:
 	for row in d.get("ground_items", []):
 		if not _fields(row, {"n": TYPE_FLOAT}):
 			return false
+	if not _whole_sleds(d):
+		return false
 	for row in d.get("containers", {}).values():
 		if not _fields(row, {"searched": TYPE_BOOL, "locked": TYPE_BOOL, "items": TYPE_ARRAY}):
 			return false
@@ -249,6 +261,23 @@ static func _whole(d: Dictionary) -> bool:
 	if not _whole_departure(opts.get("departure", {}) if departure.is_empty() else departure):
 		return false
 	return not exact(d) or _whole_runtime(d)
+
+
+## Sled rows as the restore reads them: a bad one sends the read to the backup
+## before anything of the game changes. Saves from before sleds have none.
+static func _whole_sleds(d: Dictionary) -> bool:
+	if not _fields(d, {}, {"sleds": TYPE_ARRAY, "next_sled_id": TYPE_FLOAT}):
+		return false
+	for row in d.get("sleds", []):
+		if not _fields(row, {"id": TYPE_FLOAT, "level": TYPE_FLOAT, "pos": TYPE_VECTOR3, "items": TYPE_DICTIONARY}, {"puller": TYPE_STRING}):
+			return false
+		if not _counts(row["items"]):
+			return false
+		# The restore walks the cargo by item id: a tagged key of another type is not one.
+		for item in row["items"]:
+			if not item is String:
+				return false
+	return true
 
 
 ## The saved start options may supply a squad instead of the default one.
@@ -329,6 +358,8 @@ static func _whole_runtime(d: Dictionary) -> bool:
 	for row in runtime["holdout_doors"]:
 		if not _fields(row, {"wall": TYPE_FLOAT}):
 			return false
+	if not _whole_sleds(runtime["game"]):
+		return false
 	for value in runtime.get("wagon_coal", []):
 		if not _field_type(value, TYPE_FLOAT):
 			return false
@@ -393,6 +424,14 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 		opts["stop_end_gap"] = int(save["stop_end_gap"])
 	elif String(opts.get("stop_ground", opts.get("stop_form", ""))) in ["edge", "remote"]:
 		opts["stop_end_gap"] = StopGround.END_GAP
+	if save.has("stop_view_rows"):
+		for key: String in ["stop_view_rows", "stop_view_cols", "stop_view_rule"]:
+			opts[key] = int(save.get(key, 0))
+		if (int(opts["stop_view_rows"]) > 0 or int(opts["stop_view_cols"]) > 0) and int(opts["stop_view_rule"]) != StopGround.VIEW_RULE:
+			push_warning("field save view rule changed; restoring legacy state on the saved view size")
+	elif String(save.get("place", "")) in StopGround.VIEW_PLACES:
+		opts["stop_view_rows"] = 0
+		opts["stop_view_cols"] = 0
 	if not (save.get("departure", {}) as Dictionary).is_empty():
 		opts["departure"] = (save["departure"] as Dictionary).duplicate(true)
 	if String(save.get("receipt_id", "")) != "":
@@ -403,6 +442,9 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 
 ## A save that holds the whole running state (version 2 with "runtime"), not only the old fallbacks.
 static func exact(save: Dictionary) -> bool:
+	if (int(save.get("stop_view_rows", 0)) > 0 or int(save.get("stop_view_cols", 0)) > 0) \
+			and int(save.get("stop_view_rule", 0)) != StopGround.VIEW_RULE:
+		return false
 	return int(save.get("version", 1)) >= 2 and save.has("runtime")
 
 
@@ -436,6 +478,7 @@ static func apply(game, save: Dictionary) -> void:
 		for p in game.people:
 			if p.pid == String(row["pid"]):
 				_put_person(p, row)
+	_restore_sled_envelope(game, save)
 	if exact(save):
 		game.ammo.clear()
 	_put_counts(game.ammo, save.get("ammo", {}))
@@ -468,8 +511,62 @@ static func apply(game, save: Dictionary) -> void:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	game.cam_focus = game.player.position
 	game._update_camera(1.0)
+	Sled.reconcile(game)
 	_refresh_restored_view(game)
 	game.set_stop_form(form)
+
+
+## The old/fallback path also keeps sled work by pid and id, with no replay.
+static func _restore_sled_envelope(game, save: Dictionary) -> void:
+	game.sleds = (save.get("sleds", []) as Array).duplicate(true)
+	game.next_sled_id = int(save.get("next_sled_id", 1))
+	for p in game.people:
+		p.sled_id = 0
+		p.sled_stowed_for = 0
+		p.sled_weapon_stowed = false
+		p.sled_rearm_t = 0.0
+		p.sled_serial = 0
+		p.sled_job = {}
+	for row: Dictionary in save.get("people", []):
+		var p = _person_with_id(game, String(row["pid"]))
+		if p == null:
+			continue
+		var saved: Dictionary = _sled_person_state(row.get("state", {}))
+		var fields: Dictionary = {}
+		for key: String in SLED_PERSON_FIELDS:
+			if saved.has(key):
+				fields[key] = saved[key]
+		_restore_properties(game, p, fields)
+		if p.sled_id != 0 or p.sled_weapon_stowed or not p.sled_job.is_empty():
+			fields.clear()
+			for key: String in ["path", "running", "crouched", "facing", "look", "moving", "stick", "drive_speed", "drive_dir"]:
+				if saved.has(key):
+					fields[key] = saved[key]
+			_restore_properties(game, p, fields)
+		if not p.sled_job.is_empty():
+			fields.clear()
+			for key: String in ["action", "action_label", "action_t", "action_total", "action_done"]:
+				if saved.has(key):
+					fields[key] = saved[key]
+			_restore_properties(game, p, fields)
+
+
+## Migrate before thawing callbacks: the old drawing action no longer exists.
+static func _sled_person_state(saved: Dictionary) -> Dictionary:
+	var state: Dictionary = saved.duplicate(true)
+	if String(state.get("sled_job", {}).get("kind", "")) == "rearm":
+		state["sled_job"] = {}
+	if String(state.get("action", "")) == "sled_rearm":
+		state["sled_rearm_t"] = maxf(0.0, float(state.get("action_t", 0.0)))
+		state["action"] = ""
+		state["action_label"] = ""
+		state["action_t"] = 0.0
+		state["action_total"] = 0.0
+		state["action_done"] = {"$call": []}
+		if float(state["sled_rearm_t"]) <= 0.0:
+			state["sled_weapon_stowed"] = false
+			state["sled_stowed_for"] = 0
+	return state
 
 
 static func _put_person(p, row: Dictionary) -> void:
@@ -545,6 +642,8 @@ static func _properties(game, object, fields: Array) -> Dictionary:
 	var out: Dictionary = {}
 	for field: String in fields:
 		var value: Variant = object.get(field)
+		if field == "sled_rearm_t" and float(value) <= 0.0:
+			continue
 		if field == "action_done":
 			if object.action == "":
 				value = Callable()
@@ -705,7 +804,17 @@ static func _restore_zombie_system(game, saved: Dictionary) -> void:
 		game.zombies.lunger_share = start_share
 
 
+## Old prologue saves can still be walking to a loud sound at the chase pace.
+static func _restore_noise_pace(game, z: Dictionary) -> void:
+	var all = game.zombies
+	if all.noise_hurry >= all.SPEED_HURRY:
+		return   # Act 1 on keeps the chase pace (the act's pace is set up before a restore).
+	if z.get("state", "") == "investigate" and z.get("clue_kind", "") == "sound" and float(z.get("speed", 0.0)) == all.SPEED_HURRY:
+		z["speed"] = all.noise_hurry
+
+
 static func _apply_exact(game, save: Dictionary) -> void:
+	_restore_sled_envelope(game, save)
 	var runtime: Dictionary = save["runtime"]
 	for kind: String in ["containers", "spots"]:
 		var rows: Dictionary = save["containers"] if kind == "containers" else runtime["spots"]
@@ -737,11 +846,12 @@ static func _apply_exact(game, save: Dictionary) -> void:
 		game.zombies.list.append({"id": int(row["id"])})
 	for i in game.zombies.list.size():
 		game.zombies.list[i].merge(_thaw(game, save["zombies"][i]), true)
+		_restore_noise_pace(game, game.zombies.list[i])
 	game.zombies._sense_cells_ready = false
 	for row: Dictionary in save["people"]:
 		var p = _person_with_id(game, String(row["pid"]))
 		if p != null:
-			_restore_properties(game, p, row.get("state", {}))
+			_restore_properties(game, p, _sled_person_state(row.get("state", {})))
 			_restore_properties(game, p.aim, row.get("aim", {}))
 			var metadata: Dictionary = row.get("meta", {})
 			for key: String in PERSON_META:
@@ -772,15 +882,18 @@ static func _apply_exact(game, save: Dictionary) -> void:
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	_restore_properties(game, game, runtime["game"])
+	Sled.reconcile(game)
 	_refresh_restored_view(game)
 	# Sight/view rebuilding must not advance the saved simulation or random streams.
 	_restore_properties(game, game, runtime["game"])
+	Sled.reconcile(game)
 	# Rendering establishes pose caches. Keep their saved clocks too: showing the
 	# paused frame is not an extra simulation/render step on the body's timeline.
 	for i in game.zombies.list.size():
 		var restored: Dictionary = _thaw(game, save["zombies"][i])
 		game.zombies.list[i].clear()
 		game.zombies.list[i].merge(restored)
+		_restore_noise_pace(game, game.zombies.list[i])
 	for row: Dictionary in save["people"]:
 		var p = _person_with_id(game, String(row["pid"]))
 		if p != null:
@@ -793,6 +906,7 @@ static func _apply_exact(game, save: Dictionary) -> void:
 
 
 static func _refresh_restored_view(game) -> void:
+	game.view.update_sleds(game.sleds, game.people)
 	# Boxes are drawn in shared chunk meshes (map_view.gd): ask the view, not its nodes.
 	for id in game.view.container_ids():
 		if not game.data["containers"].has(id):

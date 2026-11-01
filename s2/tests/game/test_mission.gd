@@ -425,7 +425,7 @@ func test_the_goals_wait_in_the_journal_until_the_line_under_the_clock_is_opened
 	shut.hud.bag_panel()
 	var words: Array = []
 	for c in shut.hud.modal.find_children("*", "Label", true, false):
-		words.append((c as Label).text)
+		words.append((c as Label).text.replace(UiFonts.WORD_JOINER, ""))
 	assert_has(words, "일지")
 	assert_has(words, "· 바깥 설비 0/2")
 	assert_has(words, "· 선로 기록 0/1")

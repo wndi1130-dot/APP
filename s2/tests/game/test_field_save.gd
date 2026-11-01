@@ -474,6 +474,42 @@ func test_new_lunger_share_round_trips_with_assignments_clocks_and_dice() -> voi
 	assert_eq(b.rng.state, a.rng.state)
 
 
+func test_old_loud_sound_pace_is_restored_only_in_the_prologue() -> void:
+	# Old saves can hold the old loud pace while the clue's clock is still running.
+	var cases: Array = [
+		["investigate", "sound", 1.35, 1.05],
+		["chase", "sound", 1.35, 1.35],
+		["attack", "sound", 1.35, 1.35],
+		["investigate", "scent", 1.35, 1.35],
+		["investigate", "sound", 1.05, 1.05],
+		["horde", "sound", 1.35, 1.35],
+		["investigate", "sound", 1.2, 1.2],
+	]
+	for act: String in ["prologue", "act1", "act2", "act3"]:
+		var a = _game({"act": act})
+		a.zombies.list.clear()
+		for row: Array in cases:
+			var z: Dictionary = a.zombies.spawn("dead", a.player.position + Vector3(3, 0, 0))
+			z["state"] = row[0]
+			z["clue_kind"] = row[1]
+			z["speed"] = float(row[2])
+			z["target"] = z["pos"] + Vector3(10, 0, 0)
+			z["clue_left"] = 90.0
+		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+		assert_true(FieldSave.exact(saved), "the whole running state is restored")
+		var b = _game(FieldSave.resume_opts(saved))
+		for i in cases.size():
+			var row: Array = cases[i]
+			var before: Dictionary = saved["zombies"][i]
+			var back: Dictionary = b.zombies.find(int(before["id"]))
+			var want: float = float(row[3] if act == "prologue" else row[2])
+			assert_eq(float(back["speed"]), want, "%s %s %s at %s" % [act, row[0], row[1], row[2]])
+			assert_eq(back["state"], row[0], "the saved state stays")
+			assert_eq(back["clue_kind"], row[1], "the saved clue stays")
+			assert_eq(float(back["clue_left"]), 90.0, "the saved clue's clock stays")
+			assert_eq(float(before["speed"]), float(row[2]), "migration leaves the input untouched")
+
+
 func test_old_v2_lungers_on_true_and_false_restore_without_the_removed_property() -> void:
 	var a = _game()
 	for was_on: bool in [true, false]:

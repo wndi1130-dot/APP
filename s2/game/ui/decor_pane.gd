@@ -18,7 +18,7 @@ const CARD := Vector2(70.0, 92.0)
 const PITCH: float = 77.0
 const HOLD_SECONDS: float = 0.35
 const NOTE_SECONDS: float = 2.0
-const NO_PLACE := "놓을 자리를 골라 주세요."
+const NO_PLACE := "놓을 자리를 골라라."
 
 var g: Dictionary = {}
 var car_id: String = ""
@@ -136,7 +136,7 @@ func _restore_positions() -> void:
 	if repaired:
 		refresh()
 		changed.emit()
-	if returned: show_note("놓을 자리가 없어 창고로 옮겼어요.")
+	if returned: show_note("놓을 자리가 없어 창고로 옮겼다.")
 
 
 ## Floor rows then columns; back wall left to right, then each end wall;
@@ -458,7 +458,7 @@ func preview(pick: Dictionary) -> Dictionary:
 	if pick["spot"] != Decor.spot_of(item):
 		return {"ok": false, "why": "이 물건을 놓는 면이 아니다"}
 	if item.get("on") != pick.get("on"):
-		return {"ok": false, "why": "다른 가구로 옮기려면 창고로 거둬 주세요."}
+		return {"ok": false, "why": "다른 가구로 옮기려면 창고로 거둬라."}
 	var on: Variant = pick.get("on")
 	if on != null and int(on) > selected: on = int(on) - 1
 	return Mods.can_place(_placement_trial(selected), car_id, drag_kind, pick["spot"], pick["at"], drag_rot, on)

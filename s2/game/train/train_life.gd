@@ -69,31 +69,39 @@ func before_reseat(car_ids: Array) -> void:
 			_finish(car_id, true)
 
 
-func add_car(c: Dictionary) -> void:
+func add_car(c: Dictionary, stove_builder: Callable = Callable()) -> void:
 	for id in places.bookings.keys():
 		var spot: Dictionary = places.spots.get(places.bookings[id], {})
 		if spot.get("car", "") == c["id"]:
 			cancel(int(id), "closed")
 	places.add_car(c["def"], float(c["x0"]))
-	_build_room(c)
+	_build_room(c, stove_builder)
 
 
-## The car's room at its home stage again: the places are the layout's whatever the stage, so the
-## bookings stay; the old room's traces (what was overturned or scorched) carry over.
-func restage_room(c: Dictionary) -> void:
-	var old = rooms[c["id"]]
-	var traces: Dictionary = old.traces.duplicate(true)
-	old.root.free()
-	_build_room(c)
-	for prop in rooms[c["id"]].traces:
-		if traces.has(prop):
-			rooms[c["id"]].traces[prop] = traces[prop]
+## Called only at the atomic swap, after ending interactions that can finish a cleanup.
+## Read the live room now: changes made while the replacement was hidden must survive.
+func prepare_restage_room(c: Dictionary, room: Interior) -> Dictionary:
+	var old_room: Interior = rooms[c["id"]]
+	for prop_id: String in room.traces:
+		if old_room.traces.has(prop_id):
+			room.traces[prop_id] = (old_room.traces[prop_id] as Dictionary).duplicate(true)
+	var context: Dictionary = Context.read(host.rules, c["def"]).duplicate(true)
+	room.apply(context)
+	return context
 
 
-func _build_room(c: Dictionary) -> void:
+func _build_room(c: Dictionary, stove_builder: Callable) -> void:
 	var room = Interior.new()
 	var home_stage: int = clampi(int(c.get("home_stage", TrainLight.STAGE_DEFAULT)), 0, 3)
-	room.build(c["node"], c["def"], func(at: Vector3, model: String = "") -> void: host._build_stove(c, at, model), home_stage)
+	# Without a builder (a car registered again): the real scene builds the stove into the car and
+	# registers it, as the first build does; minimal test hosts still observe the old callback.
+	if not stove_builder.is_valid():
+		if host.has_method("_install_stove"):
+			stove_builder = func(at: Vector3, model: String = "") -> void:
+				host._install_stove(c, host._build_stove(c["node"], at, model))
+		else:
+			stove_builder = func(at: Vector3, model: String = "") -> void: host._build_stove(c, at, model)
+	room.build(c["node"], c["def"], stove_builder, home_stage)
 	rooms[c["id"]] = room
 
 

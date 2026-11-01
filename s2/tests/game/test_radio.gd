@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 var game
 
@@ -162,3 +163,22 @@ func test_the_driver_says_there_are_no_more_politely() -> void:
 	game.director.budget_left = 0
 	assert_eq(game.driver_forecast(0.0, 0), "더 오는 기척은 없습니다.")
 	assert_eq(game.director.forecast(0.0, 1, game.clock), "더 오는 기척은 없다.", "from the signal box")
+
+
+func test_a_long_call_wraps_between_words_only() -> void:
+	var hud = game.hud
+	var line := "기관사: 제동 소리를 들었을 겁니다. 근처 망자들을 조심하세요."
+	hud.radio_room = 300.0
+	hud.radio(line)
+	var shown: String = hud.radio_label.text
+	# Inside a word every letter holds the next; at a space nothing does.
+	for word: String in ["들었을", "망자들을", "조심하세요"]:
+		assert_true(shown.contains(word[0] + UiFonts.WORD_JOINER + word[1]), word)
+	assert_false(shown.contains(" " + UiFonts.WORD_JOINER) or shown.contains(UiFonts.WORD_JOINER + " "), "no joiner at a space")
+	var pairs: int = 0
+	for i in line.length() - 1:
+		if line[i] != " " and line[i + 1] != " ":
+			pairs += 1
+	assert_eq(shown.count(UiFonts.WORD_JOINER), pairs, "one joiner between each two letters of a word")
+	assert_eq(hud.radio_label.text.replace(UiFonts.WORD_JOINER, ""), line, "the words themselves are the call's")
+	assert_eq(hud.radio_label.autowrap_mode, TextServer.AUTOWRAP_WORD_SMART, "a call wider than its room wraps")

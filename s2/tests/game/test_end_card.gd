@@ -44,14 +44,32 @@ func test_who_stayed_behind_is_said_under_the_picture_as_a_count() -> void:
 	var e: Array = _end()
 	var g1: Dictionary = (e[0] as Dictionary).duplicate(true)
 	g1["fieldReturns"]["records"][0]["dead"] = ["p_152", "p_153"]
-	assert_eq(EndCard.model(g1, e[1])["caption"], "2명은 그 역에 남았다.")
+	assert_eq(EndCard.model(g1, e[1])["caption"], "2명이 돌아오지 못했다.")
 	var c = _card(true, g1)
 	var said: Array = []
 	for l in c.find_children("*", "Label", true, false):
 		said.append(String((l as Label).text).replace(UiFonts.WORD_JOINER, ""))
-	assert_has(said, "2명은 그 역에 남았다.")
+	assert_has(said, "2명이 돌아오지 못했다.")
 	for s in said:
 		assert_false(String(s).contains("p_15"), "a number, never a name")
+
+
+func test_those_left_in_the_field_are_counted_with_the_dead() -> void:
+	var e: Array = _end()
+	var g1: Dictionary = (e[0] as Dictionary).duplicate(true)
+	var rec: Dictionary = g1["fieldReturns"]["records"][0]
+	rec["dead"] = []
+	rec["leftCount"] = 2
+	assert_eq(EndCard.model(g1, e[1])["caption"], "2명이 돌아오지 못했다.", "left in the field, not 「all came back」")
+	rec["dead"] = ["p_152"]
+	assert_eq(EndCard.model(g1, e[1])["caption"], "3명이 돌아오지 못했다.", "the dead and the left, one count")
+	rec["dead"] = []
+	rec.erase("leftCount")
+	assert_eq(EndCard.model(g1, e[1])["caption"], "나간 사람은 모두 열차로 돌아왔다.", "an old record counts from its receipt: none left here")
+	g1["fieldReturns"]["applied"][rec["receiptId"]] = JSON.stringify({"people": {"dead": ["p_9"], "leftBehind": ["p_1", "p_2", "p_9"], "missing": ["p_2"]}})
+	assert_eq(EndCard.model(g1, e[1])["caption"], "2명이 돌아오지 못했다.", "left behind or missing, each once, the receipt's dead not again")
+	g1["fieldReturns"]["applied"][rec["receiptId"]] = ""
+	assert_eq(EndCard.model(g1, e[1])["caption"], "나간 사람은 모두 열차로 돌아왔다.", "no receipt to read: only the record's dead")
 
 
 func test_a_bar_is_what_is_left_and_what_went() -> void:

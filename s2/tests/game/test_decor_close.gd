@@ -61,7 +61,7 @@ func _texts(node: Node, out: Array) -> Array:
 	return out
 
 
-## What the player sees and what the rules hold after the close and one settled frame,
+## What the player sees and what the rules hold after the close, its restage finished and one settled frame,
 ## then with the paper unfolded.
 func _snapshot(f) -> Dictionary:
 	var cars: Dictionary = {}
@@ -85,12 +85,14 @@ func _snapshot(f) -> Dictionary:
 func test_the_lighter_close_leaves_the_same_train_pane_and_paper() -> void:
 	var old_flow = await _flow()
 	_old_close(old_flow)
+	old_flow.train.finish_restage_now()
 	await get_tree().process_frame
 	var before: Dictionary = _snapshot(old_flow)
 	old_flow.queue_free()
 	await get_tree().process_frame
 	var new_flow = await _flow()
 	new_flow.leave_decor()
+	new_flow.train.finish_restage_now()
 	await get_tree().process_frame
 	var after: Dictionary = _snapshot(new_flow)
 	assert_eq(int(after["cars"]["guard"][0]), 1, "the guard car shows its first stage")
