@@ -29,6 +29,9 @@ func test_every_motion_names_a_layer_that_exists_and_layers_only_name_body_bones
 		for bone in layer.get("damp", {}):
 			assert_true(BodyBake.MAP.has(bone), "%s damp %s" % [layer_name, bone])
 		for step in layer["steps"]:
+			if step[0] == "stand_support":
+				continue  # written in code: it names no bones here
+			assert_true(step[0] in ["turn", "aim", "swing"], "%s step kind %s" % [layer_name, step[0]])
 			assert_true(BodyBake.MAP.has(step[1]), "%s step %s" % [layer_name, step[1]])
 			if step[0] == "turn":
 				assert_true(BodyBake.AXES.has(step[2]))
@@ -214,6 +217,174 @@ func _stick_body(size: float = 1.0) -> Node3D:
 	return root
 
 
+## Keep the stick rig, but give both feet a sole vertex for final-phase checks.
+func _stick_body_with_two_soles(size: float = 1.0) -> Node3D:
+	var root: Node3D = _stick_body(size)
+	var body: Skeleton3D = BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
+	var mesh_node: MeshInstance3D = BodyBake.first_of(root, "MeshInstance3D") as MeshInstance3D
+	var arrays: Array = mesh_node.mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+	vertices[1] = Vector3(-0.1, 0.0, 0.0) * size
+	bones[4] = body.find_bone("foot.R")
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_BONES] = bones
+	var mesh: ArrayMesh = ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	mesh_node.mesh = mesh
+	return root
+
+
+## Actual skin matrices with independently timed soles. A negative phase
+## leaves that foot on the ground throughout, so it has no first contact.
+func _sole_frames(ctx: Dictionary, left: float, right: float, count: int = 24) -> Array:
+	var body: Skeleton3D = ctx["body"]
+	var bind_bone: Array = ctx["bind_bone"]
+	var feet: Array = [bind_bone.find(body.find_bone("foot.L")), bind_bone.find(body.find_bone("foot.R"))]
+	var phases: Array[float] = [left, right]
+	var frames: Array = []
+	for f in count:
+		var skin: Array = []
+		for _bone_index in bind_bone.size():
+			skin.append(Transform3D.IDENTITY)
+		for side in 2:
+			var height: float = 0.02 * (1.0 - cos(TAU * (float(f) / float(count) - phases[side] - 1.0 / 6.0))) if phases[side] >= 0.0 else 0.0
+			skin[int(feet[side])] = Transform3D(Basis.IDENTITY, Vector3(0.0, height, 0.0))
+		frames.append(skin)
+	return frames
+
+
+func test_stand_support_uses_thigh_x_and_accepts_symmetric_splayed_rest() -> void:
+	var root: Node3D = _stick_body()
+	add_child_autofree(root)
+	var body: Skeleton3D = BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
+	for side: String in ["L", "R"]:
+		var foot: int = body.find_bone("foot." + side)
+		var rest: Transform3D = body.get_bone_rest(foot)
+		rest.origin.x = 0.08 if side == "L" else -0.08
+		body.set_bone_rest(foot, rest)
+	var ctx: Dictionary = BodyBake.prepare_own(root)
+	for f in 32:
+		BodyBake.pose(ctx, "", "p_stand", float(f) / 32.0)
+		for side: String in ["L", "R"]:
+			var thigh: Vector3 = body.get_bone_global_rest(body.find_bone("thigh." + side)).origin
+			var rest: Vector3 = body.get_bone_global_rest(body.find_bone("foot." + side)).origin
+			var foot: Vector3 = body.get_bone_global_pose(body.find_bone("foot." + side)).origin
+			var target: Vector3 = Vector3(thigh.x + (0.05 if side == "L" else -0.05), rest.y, rest.z)
+			assert_lt(foot.distance_to(target), 0.001, side + " ankle is relative to its thigh, not its splayed rest ankle")
+	assert_eq(ctx.get("fit_failures", []), [], "symmetric support meets all four final checks")
+	ctx["player"] = null
+	var assets: Dictionary = BodyBake._bake_list(ctx, [["p_stand", "", 32, true, "p_stand", 2.5]], [])
+	assert_false(assets.is_empty())
+	assert_eq(assets.get("fit_failures", []), [], "normal support has no bake failures")
+
+
+func test_asymmetric_stand_fails_once_per_leg_and_retains_worst_measurements() -> void:
+	var root: Node3D = _stick_body()
+	add_child_autofree(root)
+	var ctx: Dictionary = BodyBake.prepare_own(root)
+	var body: Skeleton3D = ctx["body"]
+	var foot: int = body.find_bone("foot.L")
+	var rest: Transform3D = body.get_bone_rest(foot)
+	for offset: float in [0.1, 0.2]:
+		rest.origin.x = offset
+		body.set_bone_rest(foot, rest)
+		for f in 64:
+			BodyBake.pose(ctx, "", "p_stand", float(f) / 64.0)
+	var failures: Array = ctx.get("fit_failures", [])
+	assert_eq(failures.size(), 2, "128 bad frames give one STAND_UNFIT per leg")
+	for failure: String in failures:
+		assert_true(failure.begins_with("STAND_UNFIT p_stand "), failure)
+	var records: Dictionary = ctx.get("stand_failures", {})
+	assert_true(records.has("p_stand:R"), "averaging the pelvis drop leaves the other ankle unreachable")
+	if records.has("p_stand:R"):
+		var worst: float = records["p_stand:R"]["ankle_error"]
+		assert_gt(worst, 0.001, "unreachable ankle is measured, not inferred from the target")
+		rest.origin.x = 0.1
+		body.set_bone_rest(foot, rest)
+		BodyBake.pose(ctx, "", "p_stand", 0.0)
+		assert_eq(float(records["p_stand:R"]["ankle_error"]), worst, "a less bad frame retains the worst error")
+		rest.origin.x = 0.0
+		body.set_bone_rest(foot, rest)
+		BodyBake.pose(ctx, "", "p_stand", 0.0)
+		assert_eq((ctx["fit_failures"] as Array).size(), 2, "a good frame cannot erase earlier failures")
+	rest.origin.x = 0.2
+	body.set_bone_rest(foot, rest)
+	ctx["player"] = null
+	var entry: Array = ["p_stand", "", 32, true, "p_stand", 2.5]
+	var assets: Dictionary = BodyBake._bake_list(ctx, [entry], [])
+	assert_eq((assets.get("fit_failures", []) as Array).size(), 2, "both failures reach the result consumed by the CLI")
+	var own: Dictionary = BodyBake.bake_own(root, [entry], [])
+	assert_eq((own.get("fit_failures", []) as Array).size(), 2, "the body-only path also forwards support failures")
+
+
+func test_final_phase_checks_saved_sole_frames_for_both_orders_missing_and_late_steps() -> void:
+	var root: Node3D = _stick_body_with_two_soles()
+	add_child_autofree(root)
+	var ctx: Dictionary = BodyBake.prepare_own(root)
+	# Preserve the original soles as a garment bake does, then remove a foot
+	# from the output mesh. The final checker must still use the body source.
+	var mesh_node: MeshInstance3D = ctx["mesh_node"]
+	mesh_node.set_meta(BodyBake.PERSON_PHASE_SOURCE, mesh_node.mesh.surface_get_arrays(0))
+	var shell_root: Node3D = _stick_body()
+	add_child_autofree(shell_root)
+	mesh_node.mesh = (BodyBake.first_of(shell_root, "MeshInstance3D") as MeshInstance3D).mesh
+	for pair: Array in [[0.2, 0.65], [0.65, 0.2], [0.45, 0.9], [-1.0, 0.65], [0.2, -1.0]]:
+		var heights: Array = BodyBake._person_sole_heights_from_frames(ctx, _sole_frames(ctx, float(pair[0]), float(pair[1])))
+		for clip: String in ["p_walk", "p_run"]:
+			ctx["fit_failures"] = []
+			BodyBake._check_person_phase_final(ctx, clip, heights)
+			var failed: bool = float(pair[0]) < 0.0 or float(pair[1]) < 0.0 or (clip == "p_run" and float(pair[0]) == 0.45)
+			var failures: Array = ctx["fit_failures"]
+			assert_eq(failures.size(), 1 if failed else 0, "%s %s missing contacts fail, late walks only report" % [clip, str(pair)])
+			for failure: String in failures:
+				assert_true(failure.begins_with("PHASE_FINAL " + clip + " "), failure)
+	assert_eq(BodyBake.person_contact_phase([0.0, INF, 0.02]), -1.0, "non-finite samples cannot establish a contact")
+
+
+func test_final_round_returns_measured_reach_and_rejects_wrong_strides_for_all_twelve_clips() -> void:
+	for clip: String in BodyBake.PERSON_STRIDE_ROUNDS:
+		var target: float = BodyBake.PERSON_STRIDE_ROUNDS[clip]
+		for scale: float in [1.0, 1.02]:
+			var zs: Array = []
+			for f in 8:
+				zs.append(target * scale * (1.0 - float(f) / 8.0))
+			var ctx: Dictionary = {"fit_failures": []}
+			var measured: float = BodyBake._check_person_stride_final(ctx, clip, [zs, zs])
+			assert_almost_eq(measured, target * scale, 0.000001, "return the actual round, even when refusing to save")
+			var failures: Array = ctx["fit_failures"]
+			assert_eq(failures.size(), 0 if scale == 1.0 else 1, clip + " 0.5 percent gate")
+			for failure: String in failures:
+				assert_true(failure.begins_with("STRIDE_FINAL " + clip + " "), failure)
+
+
+func test_shifted_stride_refits_on_the_saved_grid_and_bakes_that_round() -> void:
+	var entry: Array = BodyBake.PERSON_CLIPS[1]
+	var probe: Node3D = _stick_body_with_two_soles()
+	add_child_autofree(probe)
+	var probe_ctx: Dictionary = BodyBake.prepare_own(probe)
+	var raw_round: float = BodyBake._person_stride_round(probe_ctx, entry)
+	assert_gt(raw_round, 0.0)
+	if raw_round <= 0.0:
+		return
+	# Calibrate body size, not the fit bounds, so this stick is a valid input.
+	var root: Node3D = _stick_body_with_two_soles(float(BodyBake.PERSON_STRIDE_ROUNDS["p_run"]) / raw_round)
+	add_child_autofree(root)
+	var ctx: Dictionary = BodyBake.prepare_own(root)
+	ctx["player"] = null
+	var assets: Dictionary = BodyBake._bake_list(ctx, [entry], [])
+	assert_false(assets.is_empty())
+	if assets.is_empty():
+		return
+	assert_eq(assets.get("fit_failures", []), [], "normal shifted stick gait passes the final gates")
+	var shift: float = ctx["phase_fits"]["p_run"]["shift"]
+	var reach: Array = [[], []]
+	for f in int(entry[2]):
+		BodyBake.pose(ctx, "", "p_run", fposmod(float(f) / float(entry[2]) + shift, 1.0))
+		BodyBake._note_reach(ctx, "p_run", reach)
+	assert_almost_eq(float(assets["clips"][0]["round"]), BodyBake._round(reach), 0.000001, "clips round is measured from the saved grid")
+
+
 func test_the_motions_written_here_alone_have_the_same_numbers_and_bake_with_no_motion_set() -> void:
 	var names: Array = []
 	for clip in BodyBake.CLIPS:
@@ -257,8 +428,10 @@ func test_the_living_have_their_own_set_baked_with_no_still_poses() -> void:
 			written.append(clip)
 		else:
 			assert_true(clip[4] == "" or BodyBake.LAYERS.has(clip[4]), "layer of %s" % clip[0])
-	# The ones written here come first, so the bake with no motion set keeps their numbers.
-	assert_eq(BodyBake.PERSON_CLIPS.slice(0, written.size()), written, "written ones first")
+	# Slots stay where they are when a clip's source changes (the field finds clips by name).
+	assert_eq(String(BodyBake.PERSON_CLIPS[0][0]), "p_walk", "first slot")
+	assert_eq(String(BodyBake.PERSON_CLIPS[1][0]), "p_run", "second slot")
+	assert_eq(String(BodyBake.PERSON_CLIPS[2][0]), "p_stand", "third slot")
 	var root := _stick_body()
 	add_child_autofree(root)
 	var assets: Dictionary = BodyBake.bake_own(root, written, [])
@@ -267,7 +440,6 @@ func test_the_living_have_their_own_set_baked_with_no_still_poses() -> void:
 	assert_eq(String(assets["clips"][0]["name"]), "p_walk")
 	assert_gt(float(assets["clips"][0]["round"]), 0.5, "a walk covers ground")
 	assert_gt(float(assets["clips"][1]["round"]), float(assets["clips"][0]["round"]), "the run more")
-	assert_eq(float(assets["clips"][2]["round"]), 0.0, "standing covers none")
 
 
 func test_a_keyed_value_eases_from_key_to_key_and_holds_past_the_ends() -> void:

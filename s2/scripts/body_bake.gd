@@ -234,6 +234,10 @@ const PERSON_PHASE_SAMPLES: int = 256
 const PERSON_CONTACT_HEIGHT: float = 0.01
 const PERSON_SOLE_EPSILON: float = 0.0001  # equal rest-height vertices, 0.1 mm
 const PERSON_PHASE_SOURCE: String = "person_phase_source"
+const PERSON_PHASE_MAX_SECONDS: float = 0.05
+const STAND_KNEE_TOLERANCE: float = 0.5  # degrees
+const STAND_ANKLE_TOLERANCE: float = 0.001  # metres
+const STAND_WIDTH_TOLERANCE: float = 0.005  # metres
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -1226,10 +1230,10 @@ const LAYERS: Dictionary = {
 		"sink": RUN_SINK,
 	},
 	# UAL1 Idle_Loop crouches and staggers the feet. Keep its upper-body
-	# pose, with a straight, planted support pose and a small upper-body breath.
+	# pose, with relaxed, planted legs and a small upper-body breath.
 	"p_stand": {
 		"steps": [
-			["stand_support"],
+			["stand_support", 4.0, 0.10],
 			["turn", "spine", "x", [0.0, 0.012, 0.0]],
 			["turn", "chest", "x", [0.0, -0.006, 0.0]],
 			["aim", "upper_arm.L", "forearm.L", [0.14, -1.0, [0.02, 0.01, 0.0, 4.0]]],
@@ -2347,11 +2351,106 @@ static func _keyed(keys: Array, u: float) -> float:
 	return float(keys[keys.size() - 1][1])
 
 
+## Relax neutral standing legs without changing their lengths. Place each
+## ankle half extra_width outward from its thigh, keep its rest height and foot orientation,
+## and lower the pelvis to fit the requested knee bend. The two-link solve
+## bends the knees forward (+Z); the spine and arms keep their rotations.
+static func _relax_stand_support(body: Skeleton3D, knee_degrees: float, extra_width: float) -> Array[Dictionary]:
+	var legs: Array[Dictionary] = []
+	var drop := 0.0
+	for side: String in ["L", "R"]:
+		var thigh_name := "thigh." + side
+		var shin_name := "shin." + side
+		var foot_name := "foot." + side
+		var thigh := body.get_bone_global_rest(_bone(body, thigh_name)).origin
+		var knee := body.get_bone_global_rest(_bone(body, shin_name)).origin
+		var foot := body.get_bone_global_rest(_bone(body, foot_name))
+		var upper := thigh.distance_to(knee)
+		var lower := knee.distance_to(foot.origin)
+		var target := Vector3(thigh.x + extra_width * (0.5 if side == "L" else -0.5), foot.origin.y, foot.origin.z)
+		var reach_squared := upper * upper + lower * lower + 2.0 * upper * lower * cos(deg_to_rad(knee_degrees))
+		var across := target - thigh
+		var height := sqrt(maxf(0.0, reach_squared - across.x * across.x - across.z * across.z))
+		drop += thigh.y - target.y - height
+		legs.append({"side": side, "thigh": thigh_name, "shin": shin_name, "foot": foot_name, "target": target, "upper": upper, "lower": lower, "foot_basis": foot.basis.orthonormalized()})
+	# Both legs have matching lengths/heights in the fourteen living rigs.
+	sink(body, drop * 0.5)
+	for leg: Dictionary in legs:
+		var start := body.get_bone_global_pose(_bone(body, leg["thigh"])).origin
+		var target: Vector3 = leg["target"]
+		var axis := (target - start).normalized()
+		var distance := start.distance_to(target)
+		if distance <= 0.000001 or not is_finite(distance):
+			continue  # The post-solve checks below reject an unsolved leg.
+		var upper: float = leg["upper"]
+		var lower: float = leg["lower"]
+		var along := (upper * upper - lower * lower + distance * distance) / (2.0 * distance)
+		var bend := (Vector3.BACK - axis * axis.dot(Vector3.BACK)).normalized()
+		var knee := start + axis * along + bend * sqrt(maxf(0.0, upper * upper - along * along))
+		aim(body, leg["thigh"], leg["shin"], knee - start)
+		var shin := body.get_bone_global_pose(_bone(body, leg["shin"])).origin
+		aim(body, leg["shin"], leg["foot"], target - shin)
+		var foot := _bone(body, leg["foot"])
+		var parent_basis := body.get_bone_global_pose(body.get_bone_parent(foot)).basis.orthonormalized()
+		body.set_bone_pose_rotation(foot, (parent_basis.inverse() * (leg["foot_basis"] as Basis)).get_rotation_quaternion())
+	# Check the actual pose after BOTH solves. An averaged pelvis drop can
+	# leave one asymmetric leg short of its target even when the other fits.
+	var hip_width: float = absf(body.get_bone_global_pose(_bone(body, "thigh.L")).origin.x - body.get_bone_global_pose(_bone(body, "thigh.R")).origin.x)
+	var ankle_width: float = absf(body.get_bone_global_pose(_bone(body, "foot.L")).origin.x - body.get_bone_global_pose(_bone(body, "foot.R")).origin.x)
+	var width: float = ankle_width - hip_width
+	var width_error: float = absf(width - extra_width) if is_finite(width) else INF
+	var failures: Array[Dictionary] = []
+	for leg: Dictionary in legs:
+		var thigh: Vector3 = body.get_bone_global_pose(_bone(body, leg["thigh"])).origin
+		var shin: Vector3 = body.get_bone_global_pose(_bone(body, leg["shin"])).origin
+		var foot: Vector3 = body.get_bone_global_pose(_bone(body, leg["foot"])).origin
+		var knee: float = rad_to_deg((shin - thigh).angle_to(foot - shin))
+		var knee_error: float = absf(knee - knee_degrees) if is_finite(knee) else INF
+		var ankle_error: float = foot.distance_to(leg["target"])
+		if not is_finite(ankle_error):
+			ankle_error = INF
+		var axis: Vector3 = (foot - thigh).normalized()
+		var knee_out: Vector3 = (shin - thigh) - axis * (shin - thigh).dot(axis)
+		var forward: float = knee_out.dot(Vector3.BACK - axis * Vector3.BACK.dot(axis))
+		if not is_finite(forward):
+			forward = -INF
+		if knee_error > STAND_KNEE_TOLERANCE or ankle_error > STAND_ANKLE_TOLERANCE or forward <= 0.0 or width_error > STAND_WIDTH_TOLERANCE:
+			failures.append({"side": leg["side"], "knee": knee, "knee_target": knee_degrees, "knee_error": knee_error, "ankle_error": ankle_error, "forward": forward, "width": width, "width_target": extra_width, "width_error": width_error})
+	return failures
+
+
+## One failure slot per clip and leg, retaining each measurement's worst
+## value across all samples (a later good frame cannot erase a failure).
+static func _record_stand_failures(ctx: Dictionary, clip: String, samples: Array[Dictionary]) -> void:
+	if samples.is_empty():
+		return
+	var records: Dictionary = ctx.get_or_add("stand_failures", {})
+	var failures: Array = ctx.get_or_add("fit_failures", [])
+	for sample: Dictionary in samples:
+		var key: String = clip + ":" + String(sample["side"])
+		if not records.has(key):
+			var first: Dictionary = sample.duplicate()
+			first["index"] = failures.size()
+			records[key] = first
+			failures.append("")
+		var worst: Dictionary = records[key]
+		if float(sample["knee_error"]) > float(worst["knee_error"]):
+			worst["knee"] = sample["knee"]
+			worst["knee_error"] = sample["knee_error"]
+		if float(sample["width_error"]) > float(worst["width_error"]):
+			worst["width"] = sample["width"]
+			worst["width_error"] = sample["width_error"]
+		worst["ankle_error"] = maxf(float(worst["ankle_error"]), float(sample["ankle_error"]))
+		worst["forward"] = minf(float(worst["forward"]), float(sample["forward"]))
+		failures[int(worst["index"])] = "STAND_UNFIT %s %s knee %.6f target %.6f error_deg %.6f ankle_error_m %.6f forward %.6f width_m %.6f target %.6f error_m %.6f" % [clip, sample["side"], worst["knee"], worst["knee_target"], worst["knee_error"], worst["ankle_error"], worst["forward"], worst["width"], worst["width_target"], worst["width_error"]]
+
+
 ## Hangs a layer on the body (after retarget), for progress u (0..1). The
 ## layers' sinks are metres for hips 1 m up; `sink_scale` is this body's hip
 ## height over that, so a shorter body is lowered as far in proportion.
-static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scale: float = 1.0) -> void:
+static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scale: float = 1.0) -> Array[Dictionary]:
 	var w := TAU * u
+	var failures: Array[Dictionary] = []
 	for step: Array in layer.get("steps", []):
 		match step[0]:
 			"stand_support":
@@ -2364,6 +2463,7 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scal
 					var rest := body.get_bone_rest(bone)
 					body.set_bone_pose_position(bone, rest.origin)
 					body.set_bone_pose_rotation(bone, rest.basis.get_rotation_quaternion())
+				failures.append_array(_relax_stand_support(body, float(step[1]), float(step[2])))
 			"turn":
 				turn(body, step[1], _value(step[3], w), AXES[step[2]])
 			"aim":
@@ -2374,6 +2474,7 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scal
 				aim(body, step[1], step[2], Vector3(_value(step[3], w), -cos(angle), sin(angle)))
 	if layer.has("sink"):
 		sink(body, _value(layer["sink"], w) * sink_scale)
+	return failures
 
 
 static func apply_overlay(body: Skeleton3D, kind: String) -> void:
@@ -2412,7 +2513,7 @@ static func _pose_at(ctx: Dictionary, clip: String, at: float, damp: Dictionary)
 
 
 ## Poses the body for `clip` of the motion set under `layer` ("" for none) at progress u (0..1).
-static func pose(ctx: Dictionary, clip: String, layer: String, u: float) -> void:
+static func pose(ctx: Dictionary, clip: String, layer: String, u: float, report_clip: String = "") -> void:
 	var spec: Dictionary = LAYERS.get(layer, {})
 	var at := u
 	if spec.has("warp"):
@@ -2422,7 +2523,8 @@ static func pose(ctx: Dictionary, clip: String, layer: String, u: float) -> void
 		var span: Array = spec["span"]
 		at = lerpf(float(span[0]), float(span[1]), at)
 	_pose_at(ctx, clip, at, spec.get("damp", {}))
-	apply_layer(ctx["body"], spec, u, float(ctx.get("sink_scale", 1.0)))
+	var failures: Array[Dictionary] = apply_layer(ctx["body"], spec, u, float(ctx.get("sink_scale", 1.0)))
+	_record_stand_failures(ctx, layer if report_clip.is_empty() else report_clip, failures)
 	_apply_person_stride(ctx, layer)
 
 
@@ -2464,17 +2566,17 @@ static func _apply_person_stride(ctx: Dictionary, layer: String) -> void:
 			body.set_bone_pose_rotation(bone, mean)
 
 
-static func _person_stride_round(ctx: Dictionary, entry: Array) -> float:
+static func _person_stride_round(ctx: Dictionary, entry: Array, shift: float = 0.0) -> float:
 	var reach := [[], []]
 	for f in int(entry[2]):
-		pose(ctx, entry[1], entry[4], float(f) / float(entry[2]))
+		pose(ctx, entry[1], entry[4], fposmod(float(f) / float(entry[2]) + shift, 1.0), entry[0])
 		_note_reach(ctx, entry[0], reach)
 	return _round(reach)
 
 
 ## A new fit for this body and this clip, including motions retargeted from
 ## a source in future. The sampler and the saved round use the same poses.
-static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
+static func _fit_person_stride(ctx: Dictionary, entry: Array, shift: float = 0.0) -> void:
 	var name: String = entry[0]
 	var layer: String = entry[4]
 	var fits: Dictionary = ctx.get("stride_fits", {})
@@ -2491,7 +2593,7 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
 		samples.append([])
 	var reach := [[], []]
 	for f in int(entry[2]):
-		pose(ctx, entry[1], layer, float(f) / float(entry[2]))
+		pose(ctx, entry[1], layer, fposmod(float(f) / float(entry[2]) + shift, 1.0), name)
 		_note_reach(ctx, name, reach)
 		for n in bones.size():
 			samples[n].append(body.get_bone_pose_rotation(bones[n]))
@@ -2518,13 +2620,27 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
 			ctx.get_or_add("fit_failures", []).append("STRIDE_STOP " + name)
 			return
 		fit["scale"] = needed
-		measured = _person_stride_round(ctx, entry)
+		measured = _person_stride_round(ctx, entry, shift)
 		if absf(measured - target) <= target * STRIDE_TOLERANCE:
 			break
 	var status := "STRIDE" if absf(measured - target) <= target * STRIDE_TOLERANCE else "STRIDE_UNFIT"
 	print("%s %s round %.6f -> %.6f scale %.6f" % [status, name, before, measured, fit["scale"]])
 	if status == "STRIDE_UNFIT":
 		ctx.get_or_add("fit_failures", []).append("STRIDE_UNFIT " + name)
+
+
+## This reach comes from the exact frames handed to the VAT builder.
+## Never substitute a rule target or a measurement from before the shift.
+static func _check_person_stride_final(ctx: Dictionary, name: String, reach: Array) -> float:
+	var measured: float = _round(reach)
+	if PERSON_STRIDE_ROUNDS.has(name):
+		var target: float = PERSON_STRIDE_ROUNDS[name]
+		if not is_finite(measured) or absf(measured - target) > target * STRIDE_TOLERANCE:
+			var failure: String = "STRIDE_FINAL %s round %.6f target %.6f relative_error %.6f limit %.6f" % [name, measured, target, absf(measured - target) / target, STRIDE_TOLERANCE]
+			var failures: Array = ctx.get_or_add("fit_failures", [])
+			failures.append(failure)
+			print(failure)
+	return measured
 
 
 ## Fixed rest-bottom vertices of each foot, reused for contact and standing checks.
@@ -2546,6 +2662,9 @@ static func person_sole_vertices(rest: PackedVector3Array) -> Array:
 static func person_contact_phase(heights: Array) -> float:
 	if heights.size() < 2:
 		return -1.0
+	for height: float in heights:
+		if not is_finite(height):
+			return -1.0
 	var threshold := float(heights.min()) + PERSON_CONTACT_HEIGHT
 	for f in heights.size():
 		var previous := float(heights[(f + heights.size() - 1) % heights.size()])
@@ -2576,6 +2695,16 @@ static func person_phase_shift(left: float, right: float) -> float:
 ## Use the body's sole skin, including when this bake outputs a coat or bag.
 ## A garment's own lowest point is its hem, not the person's foot.
 static func _person_sole_heights(ctx: Dictionary, entry: Array) -> Array:
+	var frames: Array = []
+	for f in PERSON_PHASE_SAMPLES:
+		pose(ctx, entry[1], entry[4], float(f) / float(PERSON_PHASE_SAMPLES))
+		frames.append(_skin_frame(ctx))
+	return _person_sole_heights_from_frames(ctx, frames)
+
+
+## Reuse the same fixed body soles and skinning for the fit and final check.
+## With a shell, frames still transform the original body's saved source skin.
+static func _person_sole_heights_from_frames(ctx: Dictionary, frames: Array) -> Array:
 	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var source: Array = mesh_node.get_meta(PERSON_PHASE_SOURCE) if mesh_node.has_meta(PERSON_PHASE_SOURCE) else mesh_node.mesh.surface_get_arrays(0)
 	var rest: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
@@ -2586,9 +2715,7 @@ static func _person_sole_heights(ctx: Dictionary, entry: Array) -> Array:
 	if rest.is_empty() or soles[0].is_empty() or soles[1].is_empty():
 		return heights
 	var per: int = bones.size() / rest.size()
-	for f in PERSON_PHASE_SAMPLES:
-		pose(ctx, entry[1], entry[4], float(f) / float(PERSON_PHASE_SAMPLES))
-		var skin := _skin_frame(ctx)
+	for skin: Array in frames:
 		for side in 2:
 			var lowest := INF
 			for vertex: int in soles[side]:
@@ -2624,9 +2751,35 @@ static func _fit_person_phase(ctx: Dictionary, entry: Array) -> Dictionary:
 		ctx.get_or_add("fit_failures", []).append("PHASE_STOP " + name)
 	else:
 		print("PHASE %s %.6f %.6f shift %.6f" % [name, fposmod(float(fit["left"]) - shift, 1.0), fposmod(float(fit["right"]) - shift, 1.0), shift])
-	# Preserve the pre-shift round: a fractional resample can alter the discrete
-	# round estimator even though it is the same continuous loop.
-	return {"shift": shift, "round": _person_stride_round(ctx, entry)}
+	return {"shift": shift}
+
+
+## Match the baked-sole test: both feet must enter the ground band. Runs
+## enforce the better foot order's maximum circular error; walks report it.
+static func _check_person_phase_final(ctx: Dictionary, name: String, heights: Array) -> void:
+	if not PERSON_PHASE_BASE.has(name):
+		return
+	var left: float = person_contact_phase(heights[0])
+	var right: float = person_contact_phase(heights[1])
+	var failures: Array = ctx.get_or_add("fit_failures", [])
+	if left < 0.0 or right < 0.0:
+		var failure: String = "PHASE_FINAL %s no_sole_contact left %.6f right %.6f" % [name, left, right]
+		failures.append(failure)
+		print(failure)
+		return
+	var least: float = INF
+	for order in 2:
+		var left_gap: float = absf(left - float(PERSON_STEP_AT[order]))
+		var right_gap: float = absf(right - float(PERSON_STEP_AT[1 - order]))
+		var worst: float = maxf(minf(left_gap, 1.0 - left_gap), minf(right_gap, 1.0 - right_gap))
+		least = minf(least, worst)
+	var base: String = PERSON_PHASE_BASE[name]
+	var period: float = float(PERSON_STRIDE_ROUNDS[base]) / (3.9 if base == "p_run" else 2.1)
+	var seconds: float = least * period
+	var report: String = "%s final left %.6f right %.6f max_error_ms %.6f period_s %.6f" % [name, left, right, seconds * 1000.0, period]
+	print("PHASE " + report + (" walk_report_only" if base == "p_walk" else " run_limit_ms 50.000"))
+	if base == "p_run" and seconds > PERSON_PHASE_MAX_SECONDS:
+		failures.append("PHASE_FINAL " + report + " limit_ms 50.000")
 
 
 ## One skin matrix per bone the mesh binds: pose * inverse bind, in mesh space.
@@ -3277,9 +3430,14 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 	var clips := []
 	ctx["phase_fits"] = {}
 	ctx["fit_failures"] = []
+	ctx["stand_failures"] = {}
 	for entry: Array in list:
 		_fit_person_stride(ctx, entry)
 		var phase := _fit_person_phase(ctx, entry)
+		if not phase.is_empty():
+			# Keep the shared phase fixed, then refit from the ORIGINAL leg
+			# rotations on the output grid. Bounds remain total, not compounded.
+			_fit_person_stride(ctx, entry, float(phase["shift"]))
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
@@ -3289,11 +3447,13 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 			var u: float = float(f) / float(count) if looped else float(f) / float(count - 1)
 			if not phase.is_empty():
 				u = fposmod(u + float(phase["shift"]), 1.0)
-			pose(ctx, entry[1], entry[4], u)
+			pose(ctx, entry[1], entry[4], u, entry[0])
 			frames.append(_skin_frame(ctx))
 			_note_reach(ctx, entry[0], reach)
 		var length := float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length * _span_share(entry[4])
-		var stride_round := float(phase["round"]) if not phase.is_empty() else _round(reach)
+		if not phase.is_empty():
+			_check_person_phase_final(ctx, entry[0], _person_sole_heights_from_frames(ctx, frames))
+		var stride_round: float = _check_person_stride_final(ctx, entry[0], reach)
 		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0})
 	var still := []
 	for entry: Array in poses:
@@ -3303,7 +3463,7 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 	if not still.is_empty():
 		clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
 	var out := _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
-	# A stride or step fit that failed is baked at its own amplitude and phase; the tools refuse to save it.
+	# Any support, stride or step failure reaches the tools' save refusal.
 	if not (ctx["fit_failures"] as Array).is_empty() and not out.is_empty():
 		out["fit_failures"] = ctx["fit_failures"]
 	return out
@@ -3326,7 +3486,7 @@ static func bake_own(body_root: Node3D, list: Array = OWN_CLIPS, poses: Array = 
 		var reach := [[], []]
 		for f in count:
 			var u: float = float(f) / float(count) if looped else float(f) / float(count - 1)
-			pose(ctx, "", entry[4], u)
+			pose(ctx, "", entry[4], u, entry[0])
 			frames.append(_skin_frame(ctx))
 			_note_reach(ctx, entry[0], reach)
 		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]), "frames": frames, "round": _round(reach) if looped else 0.0})
@@ -3337,7 +3497,10 @@ static func bake_own(body_root: Node3D, list: Array = OWN_CLIPS, poses: Array = 
 		still.append(_skin_frame(ctx))
 	if not still.is_empty():
 		clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
-	return _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
+	var out: Dictionary = _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
+	if not (ctx.get("fit_failures", []) as Array).is_empty() and not out.is_empty():
+		out["fit_failures"] = ctx["fit_failures"]
+	return out
 
 
 ## Notes where the two feet are (front to back) in the pose the body is in
