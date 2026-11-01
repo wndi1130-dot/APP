@@ -20,6 +20,15 @@ static func shown(c: Control) -> bool:
 	return c.visible
 
 
+## A child still belongs to the retiring screen until that screen is freed.
+static func retiring(node: Node) -> bool:
+	while is_instance_valid(node):
+		if node.has_meta(META_RETIRING):
+			return true
+		node = node.get_parent()
+	return false
+
+
 static func open(c: Control) -> Tween:
 	var fresh: bool = not c.has_meta(META_STATE)
 	var state: Dictionary = _state(c)
