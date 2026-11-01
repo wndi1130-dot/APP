@@ -70,13 +70,10 @@ static func add(original: Dictionary) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = (String(data["place_id"]) + "|outer-village").hash()
 	var seed_value := rng.seed
-	var target: int
-	if look.has("outer_lots"):
-		var count_range: Array = look["outer_lots"]
-		target = rng.randi_range(int(count_range[0]), int(count_range[1]))
-	else:
-		# 지역값이 없으면 원래 범위에서 한 번만 뽑아 난수 차례를 지킨다.
-		target = rng.randi_range(4, 8) if width == TOWN_WIDTH else rng.randi_range(1, 3)
+	# 지역값이 있어도 원래 범위에서 한 번 뽑아 난수 차례를 지키고, 지역은 그 수를 lot_shift만큼 옮긴다.
+	# 지도마다 원래 마을 크기가 달라 고정 범위로 주면 상자 양이 지도마다 크게 갈린다(교회 지도 -19%).
+	var target: int = rng.randi_range(4, 8) if width == TOWN_WIDTH else rng.randi_range(1, 3)
+	target = maxi(1, target + int(look.get("lot_shift", 0)))
 	# Work only on the ring. The solid mask prevents furnishing the old rooms.
 	var rg := FieldGrid.new(g.width, g.height)
 	for y in range(g.height):

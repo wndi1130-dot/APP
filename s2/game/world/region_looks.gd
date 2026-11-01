@@ -3,7 +3,7 @@ extends RefCounted
 const BuildingUses = preload("res://game/world/building_uses.gd")
 
 const LAKE_PLAIN: Dictionary = {
-	"outer_lots": [3, 5], "lot_step": 28, "sheds": ["외양간", "바깥 헛간"],
+	"lot_shift": 0, "lot_step": 28, "sheds": ["외양간", "바깥 헛간"],
 	"uses": {"home": 40, "barn": 20, "store": 10, "shop": 10, "station": 5, "depot": 5, "hall": 5, "office": 5},
 	"names": {"home": ["벽돌 농가", "살림집"], "barn": ["목판 헛간"], "store": ["곡물 창고"],
 		"shop": ["가게"], "station": ["작은 역사"], "depot": ["차고"], "hall": ["회관"], "office": ["관리 사무실"]},
@@ -12,7 +12,7 @@ const LAKE_PLAIN: Dictionary = {
 	"symbols": ["water_tower", "power_pole", "fieldstone_wall", "plank_fence"], "ground": [4, 6, 2, 7],
 }
 const BORDER_RIVER: Dictionary = {
-	"outer_lots": [6, 8], "lot_step": 19, "sheds": ["차고", "바깥 헛간"],
+	"lot_shift": 0, "lot_step": 19, "sheds": ["차고", "바깥 헛간"],
 	"uses": {"home": 35, "shop": 20, "depot": 15, "store": 15, "office": 5, "hall": 5, "barn": 5},
 	"names": {"home": ["공동주택", "연립"], "shop": ["가게", "잡화점"], "depot": ["차고"],
 		"store": ["강가 창고"], "office": ["관청"], "hall": ["회관"], "barn": ["헛간"]},
@@ -21,7 +21,7 @@ const BORDER_RIVER: Dictionary = {
 	"symbols": ["bridge_rail", "shop_awning", "garage_door_leaf", "mooring_post"], "ground": [0, 1, 3, 7],
 }
 const COAL_PLAIN: Dictionary = {
-	"outer_lots": [8, 10], "lot_step": 18, "sheds": ["석탄 헛간", "차고"],
+	"lot_shift": 1, "lot_step": 18, "sheds": ["석탄 헛간", "차고"],
 	"uses": {"home": 42, "store": 18, "works": 12, "shop": 11, "hall": 5, "station": 4, "depot": 3, "barn": 3, "clinic": 2},
 	"names": {"home": ["공동주택", "연립"], "store": ["석탄 창고", "자재 창고", "하역 창고"],
 		"works": ["선탄장", "변전실", "정비 공방"], "shop": ["매점", "식료품점", "가게"],
@@ -33,7 +33,7 @@ const COAL_PLAIN: Dictionary = {
 	"ground": [2, 6, 4, 7], "ground_wish": ["석탄 가루 흙", "모래"], "tree_wish": ["소나무"],
 }
 const FLOOD_SUBURB: Dictionary = {
-	"outer_lots": [4, 6], "lot_step": 22, "sheds": ["바깥 헛간", "차고"],
+	"lot_shift": 0, "lot_step": 22, "sheds": ["바깥 헛간", "차고"],
 	"uses": {"store": 25, "home": 25, "barn": 25, "works": 10, "shop": 10, "hall": 5},
 	"names": {"store": ["화물 창고"], "home": ["살림집"], "barn": ["주말농장 헛간"],
 		"works": ["작업장"], "shop": ["가게"], "hall": ["회관"]},
@@ -42,7 +42,7 @@ const FLOOD_SUBURB: Dictionary = {
 	"ground": [0, 1, 3, 6],
 }
 const GRAIN_PLAIN: Dictionary = {
-	"outer_lots": [2, 4], "lot_step": 35, "sheds": ["바깥 헛간", "외양간"],
+	"lot_shift": 0, "lot_step": 35, "sheds": ["바깥 헛간", "외양간"],
 	"uses": {"store": 30, "works": 25, "home": 25, "barn": 10, "shop": 5, "hall": 5},
 	"names": {"store": ["곡물 창고"], "works": ["제분 공방", "농기계 정비"], "home": ["농가"],
 		"barn": ["사일로"], "shop": ["가게"], "hall": ["회관"]},
@@ -51,7 +51,7 @@ const GRAIN_PLAIN: Dictionary = {
 	"symbols": ["grain_silo", "flour_sack_pile", "millstone", "pallet_stack", "weigh_platform"], "ground": [2, 6, 4, 7],
 }
 const HEATH_PLAIN: Dictionary = {
-	"outer_lots": [3, 5], "lot_step": 28, "sheds": ["장작 헛간", "외양간"],
+	"lot_shift": 0, "lot_step": 28, "sheds": ["장작 헛간", "외양간"],
 	"uses": {"home": 35, "barn": 25, "depot": 10, "store": 10, "shop": 10, "church": 5, "hall": 5},
 	"names": {"home": ["들돌 농가", "회칠 연립"], "barn": ["목재 헛간"], "depot": ["기관고"],
 		"store": ["창고"], "shop": ["가게"], "church": ["교회"], "hall": ["회관"]},
@@ -60,7 +60,7 @@ const HEATH_PLAIN: Dictionary = {
 	"ground": [4, 6, 2, 7], "ground_wish": ["모래"], "tree_wish": ["소나무"],
 }
 const CITY_CANAL: Dictionary = {
-	"outer_lots": [8, 10], "lot_step": 17, "sheds": ["차고", "바깥 헛간"],
+	"lot_shift": 1, "lot_step": 17, "sheds": ["차고", "바깥 헛간"],
 	"uses": {"home": 40, "depot": 15, "shop": 15, "office": 10, "station": 8, "works": 7, "hall": 5},
 	"names": {"home": ["공동주택"], "depot": ["차고"], "shop": ["단지 가게"], "office": ["학교", "관청"],
 		"station": ["신호소"], "works": ["정비 공방"], "hall": ["회관"]},
@@ -69,7 +69,7 @@ const CITY_CANAL: Dictionary = {
 	"symbols": ["signal_bridge", "water_crane", "switch_cluster", "playground_frame", "bin_bay"], "ground": [0, 1, 3, 5],
 }
 const FOREST_LAKES: Dictionary = {
-	"outer_lots": [2, 4], "lot_step": 29, "sheds": ["장작 헛간", "바깥 헛간"],
+	"lot_shift": 0, "lot_step": 29, "sheds": ["장작 헛간", "바깥 헛간"],
 	"uses": {"home": 30, "barn": 25, "store": 15, "works": 15, "shop": 10, "church": 5},
 	"names": {"home": ["살림집"], "barn": ["들돌 헛간", "장작 헛간"], "store": ["보트 창고"],
 		"works": ["정비 공방"], "shop": ["가게"], "church": ["교회"]},
@@ -79,7 +79,7 @@ const FOREST_LAKES: Dictionary = {
 	"ground": [1, 4, 3, 7], "ground_wish": ["숲 바닥"], "tree_wish": ["너도밤나무"],
 }
 const LAGOON_COAST: Dictionary = {
-	"outer_lots": [3, 5], "lot_step": 27, "sheds": ["어구 헛간", "바깥 헛간"],
+	"lot_shift": 0, "lot_step": 27, "sheds": ["어구 헛간", "바깥 헛간"],
 	"uses": {"home": 40, "store": 20, "barn": 20, "works": 10, "church": 5, "hall": 5},
 	"names": {"home": ["어촌 집", "농가"], "store": ["항만 창고"], "barn": ["어구 헛간", "훈제 헛간"],
 		"works": ["배수 펌프장"], "church": ["교회"], "hall": ["회관"]},
@@ -89,7 +89,7 @@ const LAGOON_COAST: Dictionary = {
 	"ground": [2, 6, 3, 6], "ground_wish": ["토탄 흙"],
 }
 const ISLAND: Dictionary = {
-	"outer_lots": [2, 4], "lot_step": 30, "sheds": ["바깥 헛간", "장작 헛간"],
+	"lot_shift": 0, "lot_step": 30, "sheds": ["바깥 헛간", "장작 헛간"],
 	"uses": {"home": 45, "barn": 20, "store": 15, "shop": 10, "church": 10},
 	"names": {"home": ["섬 마을 집"], "barn": ["헛간"], "store": ["구내 창고"], "shop": ["가게"], "church": ["교회"]},
 	"sizes": {"home": [8, 10, 8, 10]}, "facade": {"town": 0.6, "waterside": 0.4},
@@ -97,7 +97,7 @@ const ISLAND: Dictionary = {
 	"ground": [4, 6, 3, 7], "ground_wish": ["모래"], "tree_wish": ["해안 소나무"],
 }
 const MOUNTAINS: Dictionary = {
-	"outer_lots": [1, 3], "lot_step": 50, "sheds": ["장작 헛간", "자재 헛간"],
+	"lot_shift": 0, "lot_step": 50, "sheds": ["장작 헛간", "자재 헛간"],
 	"uses": {"lodge": 35, "barn": 17, "sawmill": 15, "works": 10, "shop": 8, "depot": 5, "hall": 5, "home": 5, "office": 0},
 	"names": {"lodge": ["산장", "통나무 오두막"], "barn": ["건조장", "자재 헛간"], "sawmill": ["제재소"],
 		"works": ["임업 작업장"], "shop": ["작은 가게"], "depot": ["작은 소방 차고"], "hall": ["산골 식당"],
@@ -117,6 +117,14 @@ const LOOKS: Dictionary = {
 	"mountain_works": MOUNTAINS, "high_mountain": MOUNTAINS,
 }
 
+## 정차 상자 물건 양에 거는 지역 배율. 석탄 지대·큰 도시는 많게, 산골·외딴 해안과 섬은 적게 한다.
+## 바깥 마을 집터는 그 지도의 원래 수에서 lot_shift만큼만 옮겨, 띠 없이 지은 판 대비 무게 합이 ±15% 안에 들게 한다.
+## LootDress.dress가 끝에서 읽는다.
+const LOOT_SCALE: Dictionary = {
+	"K1": 1.0, "K2": 1.0, "K3": 1.05, "K4": 1.06, "K5": 1.06, "K6": 1.0, "K7": 1.0, "K8": 1.0,
+	"K9": 1.06, "K10": 1.0, "K11": 0.91, "K12": 0.91, "mountain_works": 0.91, "high_mountain": 0.91,
+}
+
 
 static func of(band: String, place_kind: String) -> Dictionary:
 	if not band.begins_with("K") or not LOOKS.has(band):
@@ -134,3 +142,15 @@ static func of(band: String, place_kind: String) -> Dictionary:
 	out.erase("waterside")
 	out.erase("bare_line")
 	return out
+
+
+## 띠가 없거나 모르는 띠, 호숫가·빈 땅 지도는 정확히 1.0이다. 산간 지도는 띠와 상관없이 산골 값을 쓴다.
+static func loot_scale(band: String, place_kind: String) -> float:
+	if not band.begins_with("K") or not LOOKS.has(band):
+		return 1.0
+	var region: String = String(BuildingUses.REGION_OF_GROUP.get(place_kind, ""))
+	if region in ["mountain_works", "high_mountain"]:
+		return float(LOOT_SCALE[region])
+	if region not in ["town", "rail_works"]:
+		return 1.0
+	return float(LOOT_SCALE[band])

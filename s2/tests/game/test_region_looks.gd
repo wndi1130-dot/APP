@@ -51,7 +51,7 @@ func test_of_validates_band_before_region_and_copies_nested_values() -> void:
 	var changed: Dictionary = RegionLooks.of("K4", "houses")
 	changed["names"]["home"][0] = "바꾼 집"
 	changed["uses"]["home"] = 0
-	changed["outer_lots"][0] = 999
+	changed["sheds"][0] = "바꾼 헛간"
 	changed["ground"][0] = 999
 	changed["symbols"].clear()
 	changed["facade"]["town"] = 0.0
@@ -61,6 +61,27 @@ func test_of_validates_band_before_region_and_copies_nested_values() -> void:
 	assert_eq(RegionLooks.of("K9", "lodge"), RegionLooks.LOOKS["high_mountain"])
 
 
+## 상자 양 배율: 띠 없음·호숫가·빈 땅은 정확히 1.0, 방향은 석탄·도시 많게, 평야 그대로, 외딴·산골 적게.
+func test_loot_scale_is_one_without_a_band_and_follows_region_direction() -> void:
+	assert_eq(RegionLooks.LOOT_SCALE.size(), 14)
+	for key: String in RegionLooks.LOOKS:
+		assert_true(RegionLooks.LOOT_SCALE.has(key), key)
+		assert_between(float(RegionLooks.LOOT_SCALE[key]), 0.85, 1.15, key)
+	for pair: Array in [["", "houses"], ["K99", "houses"], ["", "lodge"], ["", "mine"], ["K01", "houses"],
+		["K4", "lake"], ["K4", "bare_line"], ["K4", "story"], ["mountain_works", "mine"]]:
+		assert_eq(RegionLooks.loot_scale(String(pair[0]), String(pair[1])), 1.0, str(pair))
+	for band: String in ["K4", "K5", "K9"]:
+		assert_gt(RegionLooks.loot_scale(band, "houses"), 1.0, band)
+	assert_gt(RegionLooks.loot_scale("K3", "houses"), 1.0)
+	for band: String in ["K1", "K2", "K6", "K7", "K8", "K10"]:
+		assert_eq(RegionLooks.loot_scale(band, "freight"), 1.0, band)
+	for band: String in ["K11", "K12"]:
+		assert_lt(RegionLooks.loot_scale(band, "church"), 1.0, band)
+	for place_kind: String in ["mine", "sawmill", "lodge", "summit"]:
+		assert_lt(RegionLooks.loot_scale("K4", place_kind), 1.0, place_kind)
+		assert_eq(RegionLooks.loot_scale("K4", place_kind), RegionLooks.loot_scale("K9", place_kind), place_kind)
+
+
 func test_names_weights_ranges_ground_and_existing_prop_catalogs() -> void:
 	var assets: Dictionary = _catalog_names()
 	assert_gt(assets.size(), 0)
@@ -68,9 +89,8 @@ func test_names_weights_ranges_ground_and_existing_prop_catalogs() -> void:
 		var look: Dictionary = RegionLooks.LOOKS[band]
 		assert_false(look.has("waterside"), band + ": 들름 값은 다음 작업")
 		assert_false(look.has("bare_line"), band + ": 들름 값은 다음 작업")
-		var counts: Array = look["outer_lots"]
-		assert_eq(counts.size(), 2, band)
-		assert_true(int(counts[0]) >= 0 and int(counts[0]) <= int(counts[1]), band)
+		assert_false(look.has("outer_lots"), band + ": 집터 수는 원래 뽑기에서 옮기기만 한다")
+		assert_between(int(look["lot_shift"]), -2, 2, band)
 		assert_gt(int(look["lot_step"]), 0, band)
 		assert_gt(look["sheds"].size(), 0, band)
 		for shed: String in look["sheds"]:
@@ -124,7 +144,7 @@ func test_absent_and_empty_bands_keep_the_same_old_village() -> void:
 		assert_between(count, 4 if place == "houses_01" else 1, 8 if place == "houses_01" else 3, place)
 
 
-func test_k4_outer_lots_names_and_repeatability() -> void:
+func test_k4_lot_shift_names_and_repeatability() -> void:
 	var data: Dictionary = _ringed("houses_01", "K4")
 	var look: Dictionary = RegionLooks.of("K4", "houses")
 	var buildings: Array[Dictionary] = _outer_buildings(data)
@@ -133,7 +153,8 @@ func test_k4_outer_lots_names_and_repeatability() -> void:
 		for building_name: String in names:
 			allowed_names.append(building_name)
 	assert_gt(buildings.size(), 0, "빈 마을로 범위 검사를 통과하지 않는다")
-	assert_between(int(data["map_ring"]["target"]), int(look["outer_lots"][0]), int(look["outer_lots"][1]))
+	var plain_target: int = int(_ringed("houses_01", "")["map_ring"]["target"])
+	assert_eq(int(data["map_ring"]["target"]), plain_target + int(look["lot_shift"]), "원래 뽑은 수 + 지역 몫")
 	assert_true(buildings.size() <= int(data["map_ring"]["target"]), "고리가 좁으면 목표보다 적게 둔다")
 	assert_eq(buildings.size(), int(data["map_ring"]["buildings"]))
 	for building: Dictionary in buildings:
@@ -147,8 +168,9 @@ func test_mountain_village_is_independent_of_valid_band() -> void:
 	var first: Dictionary = _ringed("lodge_01", "K1")
 	var ninth: Dictionary = _ringed("lodge_01", "K9")
 	assert_eq(_signature(first), _signature(ninth))
-	var bounds: Array = RegionLooks.LOOKS["high_mountain"]["outer_lots"]
-	assert_between(int(first["map_ring"]["buildings"]), int(bounds[0]), int(bounds[1]))
+	var plain: Dictionary = _ringed("lodge_01", "")
+	assert_eq(int(first["map_ring"]["target"]), int(plain["map_ring"]["target"]) + int(RegionLooks.LOOKS["high_mountain"]["lot_shift"]))
+	assert_true(int(first["map_ring"]["buildings"]) <= int(first["map_ring"]["target"]))
 	for building: Dictionary in _outer_buildings(first):
 		assert_ne(BuildingUses.use_of(building), "office", "0 비중인 경찰 초소는 짓지 않는다")
 	_assert_ring_bounds(first)
@@ -196,22 +218,28 @@ func test_neighbour_names_sizes_and_long_buildings_stay_varied() -> void:
 
 ## 정차 전체의 상자를 잰다. 몫은 각 stock 갈래의 물건 무게 / 전체 물건 무게다.
 ## 갈래가 없는 물건도 빈 문자열 갈래로 세어 분모에서 빠지는 물건이 없게 한다.
+## 무게는 바깥 마을이 바꾼 몫에 상자 양 배율(LootDress.dress가 거는 값)을 곱해, 띠 없는 판 대비 지역 폭 안인지 본다.
 func test_stop_loot_weight_and_stock_shares_remain_in_bounds() -> void:
-	for pair: Array in [["houses_01", "K4"], ["hospital_01", "K4"], ["lodge_01", "K7"]]:
+	for pair: Array in [["houses_01", "K4"], ["hospital_01", "K4"], ["church_01", "K4"], ["freight_01", "K4"],
+		["houses_01", "K9"], ["church_01", "K12"], ["houses_01", "K12"], ["lodge_01", "K7"]]:
 		var place: String = String(pair[0])
 		var band: String = String(pair[1])
 		var base: Dictionary = _loot(_ringed(place, ""))
-		var changed: Dictionary = _loot(_ringed(place, band))
+		var changed_data: Dictionary = _ringed(place, band)
+		var changed: Dictionary = _loot(changed_data)
 		var base_weight: float = float(base["weight"])
 		var changed_weight: float = float(changed["weight"])
 		assert_gt(base_weight, 0.0, place + ": 비교 기준 무게")
 		assert_gt(changed_weight, 0.0, place + ": 지역 무게")
 		if base_weight <= 0.0 or changed_weight <= 0.0:
 			continue
-		var difference: float = changed_weight / base_weight - 1.0
-		var context: String = "%s %s: 기준 %.3f, 지역 %.3f, 증감 %+.2f%%" % [place, band, base_weight, changed_weight, difference * 100.0]
+		var scale: float = RegionLooks.loot_scale(band, String(changed_data.get("place_kind", "")))
+		var difference: float = changed_weight * scale / base_weight - 1.0
+		var bounds: Array = _weight_bounds(band, String(changed_data.get("place_kind", "")))
+		var context: String = "%s %s: 기준 %.3f, 지역 %.3f × 배율 %.2f, 증감 %+.2f%% (폭 %+d%% ~ %+d%%)" % [place, band, base_weight,
+			changed_weight, scale, difference * 100.0, roundi(float(bounds[0]) * 100.0), roundi(float(bounds[1]) * 100.0)]
 		print(context)
-		assert_true(absf(difference) <= 0.100001, context + ": 무게 ±10%")
+		assert_between(difference, float(bounds[0]) - 0.000001, float(bounds[1]) + 0.000001, context + ": 지역 무게 폭")
 		var stocks: Dictionary = (base["stocks"] as Dictionary).duplicate()
 		stocks.merge(changed["stocks"])
 		for stock: String in stocks:
@@ -302,6 +330,19 @@ func _assert_ring_bounds(data: Dictionary) -> void:
 		for other: Rect2i in yards:
 			assert_false(yard.intersects(other), "여러 집을 같은 울타리에 넣지 않는다")
 		yards.append(yard)
+
+
+## 띠 없이 지은 판 대비 정차 상자 무게 합의 폭: 석탄·큰 도시 0~+15%, 작은 도시 0~+10%, 외딴·산골 -15~0%, 나머지 ±5%.
+func _weight_bounds(band: String, place_kind: String) -> Array:
+	if String(BuildingUses.REGION_OF_GROUP.get(place_kind, "")) in ["mountain_works", "high_mountain"]:
+		return [-0.15, 0.0]
+	if band in ["K4", "K5", "K9"]:
+		return [0.0, 0.15]
+	if band == "K3":
+		return [0.0, 0.10]
+	if band in ["K11", "K12"]:
+		return [-0.15, 0.0]
+	return [-0.05, 0.05]
 
 
 func _loot(data: Dictionary) -> Dictionary:
