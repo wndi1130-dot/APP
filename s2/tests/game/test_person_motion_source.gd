@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 ## tables are in _out/motion_source_result.md and _out/motion_add_result.md.
 
 const BodyBake = preload("res://scripts/body_bake.gd")
+const VatBaker = preload("res://scripts/vat_baker.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const PEOPLE: String = "res://models/people"
@@ -15,6 +16,147 @@ const GROUPS: Dictionary = {
 
 var _fixtures: Array[Dictionary] = []
 var _folder_count: int = 0
+
+
+## Decision 535 drafts: run only in the bake/test session, after rebuilding bodies
+## and every wear folder. Missing metadata on old assets is an intentional failure.
+func test_head_share_is_zero_at_feet_and_one_at_crown() -> void:
+	for fixture in _fixtures:
+		var mesh: Mesh = fixture["baked"]["mesh"]
+		var arrays := mesh.surface_get_arrays(0)
+		assert_true(arrays[Mesh.ARRAY_CUSTOM0] is PackedFloat32Array, str(fixture["name"]) + " CUSTOM0 R_FLOAT")
+		if not arrays[Mesh.ARRAY_CUSTOM0] is PackedFloat32Array:
+			continue
+		var shares: PackedFloat32Array = arrays[Mesh.ARRAY_CUSTOM0]
+		var rest: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		assert_eq(shares.size(), rest.size())
+		if shares.size() != rest.size():
+			continue
+		var low := INF
+		var high := -INF
+		for p in rest:
+			low = minf(low, p.y)
+			high = maxf(high, p.y)
+		var feet := 0
+		var crown := 0
+		for v in rest.size():
+			assert_true(shares[v] >= 0.0 and shares[v] <= 1.0, "head share bounded")
+			if rest[v].y <= low + 0.05:
+				feet += 1
+				assert_almost_eq(shares[v], 0.0, 0.01, "feet do not turn")
+			if rest[v].y >= high - 0.03:
+				crown += 1
+				assert_almost_eq(shares[v], 1.0, 0.05, "crown follows head")
+		assert_gt(feet, 0)
+		assert_gt(crown, 0)
+
+
+func _assert_head_bake(folder: String, baked: Dictionary, bag: bool = false) -> void:
+	assert_false(baked.is_empty(), folder + " loads")
+	if baked.is_empty():
+		return
+	var info := _clip_info(folder)
+	assert_true(info.has("head"), folder + " clips.json head metadata")
+	if not info.has("head"):
+		return
+	assert_eq(baked.get("head", {}), info["head"], "load preserves head metadata")
+	var mesh: Mesh = baked["mesh"]
+	var arrays := mesh.surface_get_arrays(0)
+	var total := mesh.surface_get_array_len(0)
+	var look: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
+	var width := int(baked["width"])
+	var head: Dictionary = baked["head"]
+	var tables := VatBaker.shader_tables(baked)
+	assert_true(bool(tables.get("has_head", false)))
+	var mesh_columns := {}
+	for uv in look:
+		mesh_columns[int(uv.x * width) + int(uv.y) * width] = true
+	assert_eq(int(baked["columns"]), mesh_columns.size() + 2, "exactly two extra columns, no gap")
+	for n in 2:
+		var name_text: String = "pivot" if n == 0 else "up"
+		assert_true(head.has(name_text), name_text + " present")
+		if not head.has(name_text):
+			continue
+		var point: Dictionary = head[name_text]
+		assert_eq(int(point["vertex"]), total + n, "virtual ID outside the mesh")
+		assert_eq(int(point["column"]), mesh_columns.size() + n, "appended after deduplication")
+		assert_false(mesh_columns.has(int(point["column"])), "no triangle reads virtual column")
+		assert_eq(int(point["uv"][0] * width) + int(point["uv"][1]) * width, int(point["column"]))
+		assert_almost_eq(float(tables["head_" + name_text + "_x"]), float(point["uv"][0]), 0.000001)
+		assert_eq(float(tables["head_" + name_text + "_row"]), float(point["uv"][1]))
+		var rest: Array = point["rest"]
+		assert_eq(tables["head_" + name_text + "_rest"], Vector3(rest[0], rest[1], rest[2]))
+	assert_almost_eq((tables["head_up_rest"] as Vector3).distance_to(tables["head_pivot_rest"]), 0.1, 0.00001)
+	for index: int in arrays[Mesh.ARRAY_INDEX]:
+		assert_true(index >= 0 and index < total, "virtual vertices have no triangles")
+	assert_true(arrays[Mesh.ARRAY_CUSTOM0] is PackedFloat32Array, folder + " CUSTOM0")
+	if arrays[Mesh.ARRAY_CUSTOM0] is PackedFloat32Array:
+		var shares: PackedFloat32Array = arrays[Mesh.ARRAY_CUSTOM0]
+		assert_eq(shares.size(), total)
+		for share in shares:
+			assert_true(share >= 0.0 and share <= 1.0)
+			if bag:
+				assert_eq(share, 0.0, "generated bag never turns")
+	for clip: Dictionary in info["clips"]:
+		assert_true(clip.has("head_yaw"), str(clip["name"]) + " raw JSON yaw stats")
+		var yaw: Array = clip.get("head_yaw", [])
+		assert_eq(yaw.size(), 3, "mean, min, max radians")
+		if yaw.size() == 3:
+			assert_true(is_finite(float(yaw[0])) and is_finite(float(yaw[1])) and is_finite(float(yaw[2])))
+			assert_true(float(yaw[1]) <= float(yaw[0]) and float(yaw[0]) <= float(yaw[2]), "min <= mean <= max")
+			for loaded: Dictionary in baked["clips"]:
+				if loaded["name"] == clip["name"]:
+					assert_eq(loaded["head_yaw"], yaw, "load preserves yaw stats")
+
+
+func test_body_and_wear_head_metadata_columns_tables_and_yaw() -> void:
+	for fixture in _fixtures:
+		var folder := PEOPLE.path_join(str(fixture["name"]))
+		_assert_head_bake(folder, fixture["baked"])
+		var wear := folder.path_join("wear")
+		for garment: String in DirAccess.get_directories_at(wear):
+			var path := wear.path_join(garment)
+			_assert_head_bake(path, BodyBake.load_baked(path), BodyBake.BAG_SHELLS.has(garment))
+
+
+func test_virtual_neck_columns_fold_and_compact_without_mesh_vertices() -> void:
+	var source: Array = []
+	source.resize(Mesh.ARRAY_MAX)
+	source[Mesh.ARRAY_VERTEX] = PackedVector3Array([Vector3.ZERO, Vector3.UP, Vector3.RIGHT, Vector3.ZERO])
+	source[Mesh.ARRAY_NORMAL] = PackedVector3Array([Vector3.BACK, Vector3.BACK, Vector3.BACK, Vector3.BACK])
+	source[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 3, 1, 2])
+	source[Mesh.ARRAY_BONES] = PackedInt32Array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	source[Mesh.ARRAY_WEIGHTS] = PackedFloat32Array([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0])
+	source[Mesh.ARRAY_CUSTOM0] = PackedFloat32Array([0, 1, 0, 0])
+	var probes := [{"rest": Vector3.UP, "bone": 0}, {"rest": Vector3(0, 1.1, 0), "bone": 0}]
+	var shifted := Transform3D(Basis(), Vector3(0.2, 0.3, -0.1))
+	var clips := [{"name": "probe", "frames": [[Transform3D()], [shifted]], "loop": false, "head_yaw": [0.1, -0.2, 0.4]}]
+	var baked := VatBaker.build_skinned(source, clips, 4, probes)
+	assert_eq(int(baked["vertices"]), 4)
+	assert_eq(int(baked["columns"]), 5, "three shared columns plus two probes")
+	assert_eq(int(baked["rows_per_frame"]), 2)
+	assert_eq(int(baked["head"]["pivot"]["column"]), 3)
+	assert_eq(int(baked["head"]["up"]["column"]), 4)
+	assert_eq((baked["mesh"] as Mesh).surface_get_array_len(0), 4)
+	var small := BodyBake.compact(baked, ["probe"])
+	assert_eq(small["clips"][0]["head_yaw"], clips[0]["head_yaw"], "compact keeps original sampled stats")
+	for assets: Dictionary in [baked, small]:
+		var image: Image = assets["image"]
+		var tables := VatBaker.shader_tables(assets)
+		for name_text: String in ["pivot", "up"]:
+			var point: Dictionary = assets["head"][name_text]
+			var pixel := image.get_pixel(int(point["uv"][0] * int(assets["width"])), int(assets["rows_per_frame"]) + int(point["uv"][1]))
+			var offset := Vector3(pixel.r, pixel.g, pixel.b)
+			if bool(tables["quantized"]):
+				offset = tables["clip_lo"][0] + offset * (tables["clip_hi"][0] - tables["clip_lo"][0])
+			assert_almost_eq(offset.x, shifted.origin.x, 0.003)
+			assert_almost_eq(offset.y, shifted.origin.y, 0.003)
+			assert_almost_eq(offset.z, shifted.origin.z, 0.003)
+	var legacy := baked.duplicate()
+	legacy.erase("head")
+	assert_false(bool(VatBaker.shader_tables(legacy)["has_head"]))
+	assert_eq(BodyBake._head_yaw_stats([]), [0.0, 0.0, 0.0])
+	assert_eq(BodyBake._head_yaw_stats([-0.25, 0.25]), [0.0, -0.25, 0.25])
 
 
 func before_all() -> void:

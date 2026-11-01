@@ -2913,6 +2913,10 @@ static func _skin_frame(ctx: Dictionary) -> Array:
 	var mats := []
 	for j in bind_bone.size():
 		mats.append((ctx["to_mesh"] as Transform3D) * body.get_bone_global_pose(bind_bone[j]) * skin.get_bind_pose(j))
+	# A mesh-space neck bind, also when a garment has no weighted neck vertex.
+	var to_mesh: Transform3D = ctx["to_mesh"]
+	var neck: int = _bone(body, "neck")
+	mats.append(to_mesh * body.get_bone_global_pose(neck) * body.get_bone_global_rest(neck).affine_inverse() * to_mesh.affine_inverse())
 	return mats
 
 
@@ -3003,6 +3007,67 @@ static func _bind_skin(ctx: Dictionary) -> void:
 	ctx["to_mesh"] = mesh_node.global_transform.affine_inverse() * body.global_transform
 
 
+## Decision 535: leave mesh topology alone; only two VAT columns have no triangles.
+## Shells retain source skin weights. Generated bags must never turn with the head.
+static func _bake_head(ctx: Dictionary, clips: Array) -> Dictionary:
+	var body: Skeleton3D = ctx["body"]
+	var mesh_node: MeshInstance3D = ctx["mesh_node"]
+	var source: Array = mesh_node.mesh.surface_get_arrays(0)
+	var positions: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = source[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = source[Mesh.ARRAY_WEIGHTS]
+	var per: int = bones.size() / positions.size()
+	var head := _bone(body, "head")
+	var neck := _bone(body, "neck")
+	var shares := PackedFloat32Array()
+	shares.resize(positions.size())
+	if not mesh_node.has_meta("head_layer_bag"):
+		for v in positions.size():
+			var share := 0.0
+			for k in per:
+				var bone: int = ctx["bind_bone"][bones[v * per + k]]
+				share += weights[v * per + k] * (1.0 if bone == head else (0.5 if bone == neck else 0.0))
+			shares[v] = clampf(share, 0.0, 1.0)
+	source[Mesh.ARRAY_CUSTOM0] = shares
+	var neck_rest: Transform3D = (ctx["to_mesh"] as Transform3D) * body.get_bone_global_rest(neck)
+	var pivot := neck_rest.origin
+	var up := pivot + neck_rest.basis.y.normalized() * 0.1
+	var bind: int = (ctx["bind_bone"] as Array).size()
+	var probes := [{"rest": pivot, "bone": bind}, {"rest": up, "bone": bind}]
+	return _with_rounds(VatBaker.build_skinned(source, clips, VatBaker.MAX_WIDTH, probes), clips)
+
+
+## Remove each bone's rest orientation before comparing anatomical +Z forwards.
+## Chest +Y is the body's posed up axis; project forwards onto its normal plane.
+## Positive radians follow right-handed rotation about that axis (shader alike).
+static func _head_yaw(ctx: Dictionary) -> float:
+	var body: Skeleton3D = ctx["body"]
+	var to_mesh: Basis = (ctx["to_mesh"] as Transform3D).basis
+	var chest := _bone(body, "chest")
+	var head := _bone(body, "head")
+	var chest_turn := (to_mesh * body.get_bone_global_pose(chest).basis * body.get_bone_global_rest(chest).basis.inverse() * to_mesh.inverse()).orthonormalized()
+	var head_turn := (to_mesh * body.get_bone_global_pose(head).basis * body.get_bone_global_rest(head).basis.inverse() * to_mesh.inverse()).orthonormalized()
+	var axis := chest_turn.y.normalized()
+	var forward := chest_turn.z.slide(axis)
+	var facing := head_turn.z.slide(axis)
+	if forward.length_squared() < 0.000001 or facing.length_squared() < 0.000001:
+		return 0.0
+	return forward.normalized().signed_angle_to(facing.normalized(), axis)
+
+
+static func _head_yaw_stats(samples: Array) -> Array:
+	if samples.is_empty():
+		return [0.0, 0.0, 0.0]
+	var total := 0.0
+	var low := INF
+	var high := -INF
+	for sample: float in samples:
+		total += sample
+		low = minf(low, sample)
+		high = maxf(high, sample)
+	return [clampf(total / float(samples.size()), low, high), low, high]
+
+
 ## Bakes the body in `body_root` with the motions in `motion_root`; both must be
 ## in the scene tree. Returns what VatBaker.build_skinned returns (the clips are
 ## CLIPS in order, then one POSES_CLIP of still poses), or {} if something is missing.
@@ -3060,6 +3125,8 @@ static func shell(body_root: Node3D, kind: String) -> bool:
 		phase_mesh.set_meta(PERSON_PHASE_SOURCE, phase_mesh.mesh.surface_get_arrays(0))
 	if BAG_SHELLS.has(kind):
 		return _bag(body_root, kind)
+	if phase_mesh != null and phase_mesh.has_meta("head_layer_bag"):
+		phase_mesh.remove_meta("head_layer_bag")
 	var spec: Dictionary = SHELLS.get(kind, {})
 	var mesh_node := first_of(body_root, "MeshInstance3D") as MeshInstance3D
 	var body := first_of(body_root, "Skeleton3D") as Skeleton3D
@@ -3261,6 +3328,7 @@ static func _bag(body_root: Node3D, kind: String) -> bool:
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if per == 8 else 0)
 	mesh_node.mesh = mesh
+	mesh_node.set_meta("head_layer_bag", true)
 	return true
 
 
@@ -3482,7 +3550,10 @@ static func with_hand_marks(mesh: Mesh, marks: PackedColorArray, light: float) -
 	var bones = src[Mesh.ARRAY_BONES]
 	var eight: bool = bones != null and (bones as PackedInt32Array).size() == 8 * marks.size()
 	var out := ArrayMesh.new()
-	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, src, [], {}, Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if eight else 0)
+	var flags: int = Mesh.ARRAY_FLAG_USE_8_BONE_WEIGHTS if eight else 0
+	if src[Mesh.ARRAY_CUSTOM0] != null:
+		flags |= Mesh.ARRAY_CUSTOM_R_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT
+	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, src, [], {}, flags)
 	out.set_meta(HAND_LIGHT, light)
 	return out
 
@@ -3549,7 +3620,6 @@ static func _span_share(layer: String) -> float:
 
 static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary:
 	var player: AnimationPlayer = ctx["player"]
-	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var clips := []
 	ctx["phase_fits"] = {}
 	ctx["fit_failures"] = []
@@ -3559,6 +3629,7 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 		var phase := _fit_person_phase(ctx, entry)
 		var footlock := _fit_person_footlock(ctx, entry, phase)
 		var footlock_stats := []
+		var head_yaws := []
 		if not footlock.is_empty():
 			for side in 2:
 				footlock_stats.append({"before": [], "after": [], "contact_after": [], "miss": 0.0, "minimum": INF, "frames": 0, "contacts": 0, "hip_drop": 0.0})
@@ -3579,6 +3650,7 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 				skin = _skin_frame(ctx)
 				_note_person_footlock(footlock, output_u, before, _person_footlock_probes(footlock, skin), misses, footlock_stats, hip_drop)
 			frames.append(skin)
+			head_yaws.append(_head_yaw(ctx))
 			_note_reach(ctx, entry[0], reach)
 		if not footlock.is_empty():
 			_print_person_footlock(entry[0], footlock, footlock_stats)
@@ -3586,15 +3658,17 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 		var stride_round := float(phase["round"]) if not phase.is_empty() else _round(reach)
 		if not footlock.is_empty():
 			stride_round = float(footlock["round"])
-		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0})
+		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0, "head_yaw": _head_yaw_stats(head_yaws)})
 	var still := []
+	var still_yaws := []
 	for entry: Array in poses:
 		_pose_at(ctx, entry[0], entry[1], {})
 		apply_overlay(ctx["body"], entry[2])
 		still.append(_skin_frame(ctx))
+		still_yaws.append(_head_yaw(ctx))
 	if not still.is_empty():
-		clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
-	var out := _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
+		clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still, "head_yaw": _head_yaw_stats(still_yaws)})
+	var out := _bake_head(ctx, clips)
 	# A stride or step fit that failed is baked at its own amplitude and phase; the tools refuse to save it.
 	if not (ctx["fit_failures"] as Array).is_empty() and not out.is_empty():
 		out["fit_failures"] = ctx["fit_failures"]
@@ -3609,27 +3683,30 @@ static func bake_own(body_root: Node3D, list: Array = OWN_CLIPS, poses: Array = 
 	var ctx := prepare_own(body_root, list + poses)
 	if ctx.is_empty():
 		return {}
-	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var clips := []
 	for entry: Array in list:
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
 		var reach := [[], []]
+		var head_yaws := []
 		for f in count:
 			var u: float = float(f) / float(count) if looped else float(f) / float(count - 1)
 			pose(ctx, "", entry[4], u)
 			frames.append(_skin_frame(ctx))
+			head_yaws.append(_head_yaw(ctx))
 			_note_reach(ctx, entry[0], reach)
-		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]), "frames": frames, "round": _round(reach) if looped else 0.0})
+		clips.append({"name": entry[0], "loop": looped, "length": float(entry[5]), "frames": frames, "round": _round(reach) if looped else 0.0, "head_yaw": _head_yaw_stats(head_yaws)})
 	var still := []
+	var still_yaws := []
 	for entry: Array in poses:
 		pose(ctx, "", entry[0], entry[1])
 		apply_overlay(ctx["body"], entry[2])
 		still.append(_skin_frame(ctx))
+		still_yaws.append(_head_yaw(ctx))
 	if not still.is_empty():
-		clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still})
-	return _with_rounds(VatBaker.build_skinned(mesh_node.mesh.surface_get_arrays(0), clips), clips)
+		clips.append({"name": POSES_CLIP, "loop": false, "length": 1.0, "frames": still, "head_yaw": _head_yaw_stats(still_yaws)})
+	return _bake_head(ctx, clips)
 
 
 ## Notes where the two feet are (front to back) in the pose the body is in
@@ -3694,6 +3771,7 @@ static func _with_rounds(out: Dictionary, clips: Array) -> Dictionary:
 		return out
 	for n in clips.size():
 		out["clips"][n]["round"] = float(clips[n].get("round", 0.0))
+		out["clips"][n]["head_yaw"] = clips[n].get("head_yaw", [0.0, 0.0, 0.0])
 	return out
 
 
@@ -3777,6 +3855,13 @@ static func compact(assets: Dictionary, keep_full: Array = []) -> Dictionary:
 	out["height"] = small.get_height()
 	out["clips"] = table
 	out["format"] = SMALL_FORMAT
+	if assets.has("head"):
+		out["head"] = (assets["head"] as Dictionary).duplicate(true)
+		var error := 0.0
+		for got: Array in picked:
+			error = maxf(error, ((got[2] as Vector3) - (got[1] as Vector3)).length() / 255.0)
+		# Each of vertex and pivot rounds by at most half a texel quantum.
+		out["head"]["radius"] = float(assets["head"]["radius"]) + error
 	return out
 
 
@@ -3795,6 +3880,9 @@ static func save(assets: Dictionary, dir: String) -> void:
 	if err != OK:
 		push_error("body_bake: could not save mesh.res (" + error_string(err) + ")")
 	var info := {"vertices": assets["vertices"], "width": image.get_width(), "height": image.get_height(), "rows_per_frame": assets["rows_per_frame"], "clips": assets["clips"]}
+	for key in ["columns", "head"]:
+		if assets.has(key):
+			info[key] = assets[key]
 	if assets.has("format"):
 		info["format"] = assets["format"]
 	var file := FileAccess.open(dir.path_join("clips.json"), FileAccess.WRITE)
@@ -3828,11 +3916,15 @@ static func load_baked(dir: String) -> Dictionary:
 	var clips := []
 	for clip: Dictionary in info["clips"]:
 		var row := {"name": str(clip["name"]), "start": int(clip["start"]), "frames": int(clip["frames"]), "loop": bool(clip["loop"]), "length": float(clip["length"]), "round": float(clip.get("round", 0.0))}
+		row["head_yaw"] = clip.get("head_yaw", [0.0, 0.0, 0.0])
 		if small:
 			row["lo"] = clip.get("lo", [0.0, 0.0, 0.0])
 			row["hi"] = clip.get("hi", [0.0, 0.0, 0.0])
 		clips.append(row)
 	var out := {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": int(info["vertices"]), "width": image.get_width(), "rows_per_frame": int(info["rows_per_frame"]), "height": image.get_height(), "image": image, "clips": clips}
+	for key in ["columns", "head"]:
+		if info.has(key):
+			out[key] = info[key]
 	if small:
 		out["format"] = SMALL_FORMAT
 	return out

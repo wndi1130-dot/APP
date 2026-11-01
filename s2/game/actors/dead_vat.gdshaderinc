@@ -47,6 +47,19 @@ uniform bool mixes = false;
 uniform bool quantized = false;
 uniform vec3 clip_lo[128];
 uniform vec3 clip_hi[128];
+// Decision 535. Absent on old bakes; combat supplies per-MultiMesh slot yaw in
+// radians in a float texture's red channel (no colour conversion). Rows wrap at
+// head_yaw_width. Every body/garment material must use its own INSTANCE_ID map.
+uniform bool has_head = false;
+uniform float head_pivot_x = 0.0;
+uniform float head_up_x = 0.0;
+uniform float head_pivot_row = 0.0;
+uniform float head_up_row = 0.0;
+uniform vec3 head_pivot_rest = vec3(0.0);
+uniform vec3 head_up_rest = vec3(0.0);
+uniform bool head_yaw_on = false;
+uniform sampler2D head_yaw_tex : filter_nearest;
+uniform int head_yaw_width = 1;
 // A baked body that brings its own colour picture (models/people/<body>/albedo.png)
 // is drawn with it, pressed like every other model (fx_model_grade, the user's
 // values of 2026-10-17); tint then only shifts it (tint / 0.5, so 0.5 leaves it).
@@ -128,6 +141,26 @@ int clip_of(float frame) {
 	return 0;
 }
 
+// Identical offset arithmetic for mesh UV2 and the two virtual columns,
+// including folded rows, per-clip quantization and the retained old frame.
+vec3 motion_offset(vec2 look, float start, float current, float next, float frame, int clip, float kept, float share, int was) {
+	float height = frame_rows * rows_per_frame;
+	float row_a = ((start + current) * rows_per_frame + look.y + 0.5) / height;
+	float row_b = ((start + next) * rows_per_frame + look.y + 0.5) / height;
+	vec3 a = offset_at(look.x, row_a, clip);
+	vec3 b = offset_at(look.x, row_b, clip);
+	vec3 offset = mix(a, b, fract(frame));
+	if (mixes && share > 0.5) {
+		float row_c = (kept * rows_per_frame + look.y + 0.5) / height;
+		offset = mix(offset, offset_at(look.x, row_c, quantized ? was : clip), share / 31.0);
+	}
+	return offset;
+}
+
+vec3 head_rotate(vec3 v, vec3 axis, float c, float s) {
+	return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
+}
+
 void vertex() {
 	// g is a whole number; above 2^23 a float has no halves, so adding 0.5 would
 	// round an odd one up to the next clip (clips 32 and on). round() keeps it.
@@ -160,19 +193,13 @@ void vertex() {
 	float frame = mix(once, looped, loops);
 	float current = floor(frame);
 	float next = mix(min(current + 1.0, frames - 1.0), mod(current + 1.0, frames), loops);
-	float height = frame_rows * rows_per_frame;
-	float row_a = ((start + current) * rows_per_frame + UV2.y + 0.5) / height;
-	float row_b = ((start + next) * rows_per_frame + UV2.y + 0.5) / height;
-	vec3 a = offset_at(UV2.x, row_a, clip);
-	vec3 b = offset_at(UV2.x, row_b, clip);
-	vec3 offset = mix(a, b, fract(frame));
+	int was = clip;
 	if (mixes && share > 0.5) {
-		float row_c = (kept * rows_per_frame + UV2.y + 0.5) / height;
-		int was = clip_of(kept);
-		offset = mix(offset, offset_at(UV2.x, row_c, quantized ? was : clip), share / 31.0);
+		was = clip_of(kept);
 		// While a motion on the ground it left (eating, then struck) still shows: lit by its moved surface.
 		lying = max(lying, step(1.5, clip_loop[was]));
 	}
+	vec3 offset = motion_offset(UV2, start, current, next, frame, clip, kept, share, was);
 #ifdef WORN
 	rest = VERTEX;
 	rest_normal = NORMAL;
@@ -182,6 +209,28 @@ void vertex() {
 	tear_at = vec2(clamp(VERTEX.y / 1.7, 0.0, 1.0), step(0.0, VERTEX.z));
 #endif
 	VERTEX += offset;
+	// No head texture/probe reads or rotation arithmetic while disabled. This
+	// vertex path is also used by shadow/depth passes; there is no pass override.
+	if (has_head && head_yaw_on && CUSTOM0.r > 0.0 && head_yaw_width > 0) {
+		ivec2 size = textureSize(head_yaw_tex, 0);
+		ivec2 cell = ivec2(INSTANCE_ID % head_yaw_width, INSTANCE_ID / head_yaw_width);
+		if (head_yaw_width <= size.x && cell.y < size.y) {
+			float yaw = texelFetch(head_yaw_tex, cell, 0).r;
+			if (yaw != 0.0) {
+				vec3 pivot = head_pivot_rest + motion_offset(vec2(head_pivot_x, head_pivot_row), start, current, next, frame, clip, kept, share, was);
+				vec3 up = head_up_rest + motion_offset(vec2(head_up_x, head_up_row), start, current, next, frame, clip, kept, share, was);
+				vec3 axis = up - pivot;
+				if (dot(axis, axis) > 0.00000001) {
+					axis = normalize(axis);
+					float angle = clamp(CUSTOM0.r, 0.0, 1.0) * yaw;
+					float c = cos(angle);
+					float s = sin(angle);
+					VERTEX = pivot + head_rotate(VERTEX - pivot, axis, c, s);
+					NORMAL = head_rotate(NORMAL, axis, c, s);
+				}
+			}
+		}
+	}
 	// The cold's tremble: quick and small, from the hips up, more toward the head, each body at its own phase.
 	VERTEX.xz += shiver * clamp((VERTEX.y - 0.55) / 0.7, 0.0, 1.0) * 0.05 * vec2(sin((TIME - fx_still) * 59.0 + INSTANCE_CUSTOM.r * 41.0), sin((TIME - fx_still) * 47.0 + INSTANCE_CUSTOM.r * 29.0) * 0.6);
 	shade = INSTANCE_CUSTOM.a;

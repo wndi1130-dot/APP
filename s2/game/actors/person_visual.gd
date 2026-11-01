@@ -348,6 +348,11 @@ func _wear(baked: Dictionary, garment: bool = false) -> MultiMeshInstance3D:
 	mm.instance_count = MAX_PEOPLE
 	mm.visible_instance_count = 0
 	mm.custom_aabb = AABB(Vector3(-5, -5, -5), Vector3(185, 16, 115))
+	# A turn can move a weighted vertex at most twice its distance from the neck.
+	# The bake bounds all frames; interpolation/mixing stays within that radius,
+	# and compact includes the two points' quantization error. Old bakes stay as-is.
+	if baked.has("head"):
+		mm.custom_aabb = mm.custom_aabb.grow(2.0 * float(baked["head"].get("radius", 0.0)))
 	one.multimesh = mm
 	var mat := ShaderMaterial.new()
 	mat.shader = SHADER

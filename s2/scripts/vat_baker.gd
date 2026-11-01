@@ -109,7 +109,7 @@ static func build(target_vertices: int = 144, max_width: int = MAX_WIDTH) -> Dic
 ## Vertices at the same place with the same bones and weights (a body's are
 ## split at the colour picture's seams) move alike, so they share one column
 ## of the picture: "vertices" is the mesh's count, "columns" the picture's.
-static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDTH) -> Dictionary:
+static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDTH, head: Array = []) -> Dictionary:
 	var positions: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
 	var bones = source[Mesh.ARRAY_BONES]
 	var weights = source[Mesh.ARRAY_WEIGHTS]
@@ -124,7 +124,11 @@ static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDT
 			seen[key] = held.size()
 			held.append(id)
 		column.append(int(seen[key]))
-	var count := held.size()
+	# The two probes follow the shared mesh columns, without padding or triangles.
+	# Their logical vertex IDs start after the real mesh, independently of deduplication.
+	assert(head.is_empty() or head.size() == 2)
+	var mesh_columns := held.size()
+	var count := mesh_columns + head.size()
 	var width := mini(count, max_width)
 	var rows_per_frame := ceili(float(count) / width)
 	var lookup := PackedVector2Array()
@@ -132,11 +136,20 @@ static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDT
 		lookup.append(Vector2((float(column[id] % width) + 0.5) / width, float(column[id] / width)))
 	var arrays: Array = []
 	arrays.resize(Mesh.ARRAY_MAX)
-	for slot in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_TEX_UV, Mesh.ARRAY_COLOR, Mesh.ARRAY_INDEX]:
+	for slot in [Mesh.ARRAY_VERTEX, Mesh.ARRAY_NORMAL, Mesh.ARRAY_TEX_UV, Mesh.ARRAY_COLOR, Mesh.ARRAY_CUSTOM0, Mesh.ARRAY_INDEX]:
 		arrays[slot] = source[slot]
 	arrays[Mesh.ARRAY_TEX_UV2] = lookup
 	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var flags: int = (Mesh.ARRAY_CUSTOM_R_FLOAT << Mesh.ARRAY_FORMAT_CUSTOM0_SHIFT) if arrays[Mesh.ARRAY_CUSTOM0] != null else 0
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays, [], {}, flags)
+	var head_info := {}
+	var head_radius := 0.0
+	var head_storage_error := 0.0
+	for n in head.size():
+		var at := mesh_columns + n
+		var rest: Vector3 = head[n]["rest"]
+		head_info["pivot" if n == 0 else "up"] = {"vertex": total + n, "column": at,
+			"uv": [(float(at % width) + 0.5) / width, float(at / width)], "rest": [rest.x, rest.y, rest.z]}
 	var frame_total: int = 0
 	for clip in clips:
 		frame_total += (clip["frames"] as Array).size()
@@ -148,7 +161,10 @@ static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDT
 		for frame in range(frames.size()):
 			var skin: Array = frames[frame]
 			var row := (start + frame) * rows_per_frame
-			for at in range(count):
+			var pivot := Vector3.ZERO
+			if not head.is_empty():
+				pivot = (skin[int(head[0]["bone"])] as Transform3D) * (head[0]["rest"] as Vector3)
+			for at in range(mesh_columns):
 				var vertex := held[at]
 				var rest := positions[vertex]
 				var moved := Vector3.ZERO
@@ -161,10 +177,29 @@ static func build_skinned(source: Array, clips: Array, max_width: int = MAX_WIDT
 						weight_sum += weight
 				# A vertex no bone holds stays where it rests.
 				var offset := moved / weight_sum - rest if weight_sum > 0.0 else Vector3.ZERO
+				if not head.is_empty() and source[Mesh.ARRAY_CUSTOM0] != null and float(source[Mesh.ARRAY_CUSTOM0][vertex]) > 0.0:
+					head_radius = maxf(head_radius, (rest + offset).distance_to(pivot))
 				image.set_pixel(at % width, row + at / width, Color(offset.x, offset.y, offset.z, 1.0))
-		table.append({"name": clip.get("name", ""), "start": start, "frames": frames.size(), "loop": bool(clip.get("loop", true)), "length": float(clip.get("length", 1.0))})
+				if not head.is_empty() and source[Mesh.ARRAY_CUSTOM0] != null and float(source[Mesh.ARRAY_CUSTOM0][vertex]) > 0.0:
+					var stored := image.get_pixel(at % width, row + at / width)
+					head_storage_error = maxf(head_storage_error, offset.distance_to(Vector3(stored.r, stored.g, stored.b)))
+			for n in head.size():
+				var at := mesh_columns + n
+				var rest: Vector3 = head[n]["rest"]
+				var bone: Transform3D = skin[int(head[n]["bone"])]
+				var offset := bone * rest - rest  # exactly one neck weight, 1.0
+				image.set_pixel(at % width, row + at / width, Color(offset.x, offset.y, offset.z, 1.0))
+				var stored := image.get_pixel(at % width, row + at / width)
+				head_storage_error = maxf(head_storage_error, offset.distance_to(Vector3(stored.r, stored.g, stored.b)))
+		table.append({"name": clip.get("name", ""), "start": start, "frames": frames.size(), "loop": bool(clip.get("loop", true)), "length": float(clip.get("length", 1.0)), "head_yaw": clip.get("head_yaw", [0.0, 0.0, 0.0])})
 		start += frames.size()
-	return {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": total, "columns": count, "width": width, "rows_per_frame": rows_per_frame, "height": image.get_height(), "image": image, "clips": table}
+	var out := {"mesh": mesh, "texture": ImageTexture.create_from_image(image), "vertices": total, "columns": count, "width": width, "rows_per_frame": rows_per_frame, "height": image.get_height(), "image": image, "clips": table}
+	if not head_info.is_empty():
+		# Bound errors in both vertex and pivot after actual half-float storage.
+		# Compact adds its own quantization bound; interpolation is convex.
+		head_info["radius"] = head_radius + 2.0 * head_storage_error
+		out["head"] = head_info
+	return out
 
 const TABLE_SIZE: int = 128
 ## Clips 16 and up go in the shader's upper part, sixteen to each step of
@@ -218,6 +253,15 @@ static func shader_tables(assets: Dictionary) -> Dictionary:
 	if assets.get("skin") is Texture2D:
 		out["has_skin"] = true
 		out["skin_tex"] = assets["skin"]
+	var head: Dictionary = assets.get("head", {})
+	out["has_head"] = head.has("pivot") and head.has("up")
+	if out["has_head"]:
+		for name_text: String in ["pivot", "up"]:
+			var point: Dictionary = head[name_text]
+			var rest: Array = point["rest"]
+			out["head_" + name_text + "_x"] = float(point["uv"][0])
+			out["head_" + name_text + "_row"] = float(point["uv"][1])
+			out["head_" + name_text + "_rest"] = Vector3(rest[0], rest[1], rest[2])
 	return out
 
 
