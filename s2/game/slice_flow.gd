@@ -816,6 +816,9 @@ func _retire_card(c: Control) -> Tween:
 	var tw: Tween
 	if sheet is Control:
 		tw = PaperMotion.close(sheet as Control, _seen_before())
+	elif c is CouncilCard:
+		tw = c.create_tween()
+		tw.tween_method(_set_council_alpha.bind(c), c.modulate.a, 0.0, CARD_FADE_S)
 	else:
 		tw = c.create_tween()
 		tw.tween_property(c, "modulate:a", 0.0, CARD_FADE_S)
@@ -824,6 +827,13 @@ func _retire_card(c: Control) -> Tween:
 		if is_instance_valid(c):
 			c.queue_free())
 	return tw
+
+
+## The screen-reading shade lives in its own CanvasLayer, outside card modulation.
+func _set_council_alpha(alpha: float, c: Control) -> void:
+	c.modulate.a = alpha
+	var shade: ColorRect = c.get_node("Back/Shade") as ColorRect
+	(shade.material as ShaderMaterial).set_shader_parameter("motion_alpha", alpha)
 
 
 ## The stop scene seen whole before: its paper comes and goes in half the time.
@@ -884,10 +894,10 @@ func _show_council() -> void:
 	layer.add_child(c)
 	var rest: Vector2 = c.position
 	c.position = rest + Vector2(0.0, COUNCIL_FROM_PX)
-	c.modulate.a = 0.0
+	_set_council_alpha(0.0, c)
 	var tw: Tween = c.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tw.tween_property(c, "position", rest, COUNCIL_OPEN_S)
-	tw.tween_property(c, "modulate:a", 1.0, COUNCIL_OPEN_S)
+	tw.tween_method(_set_council_alpha.bind(c), 0.0, 1.0, COUNCIL_OPEN_S)
 	c.set_meta(META_CARD_TWEEN, tw)
 	card = c
 
@@ -1125,7 +1135,7 @@ func _update_decor_lock() -> void:
 	if is_instance_valid(pane):
 		pane.choosing_paper = is_instance_valid(paper) and not (paper as TurnCard).folded
 		pane.refresh(train_g, train_t)
-		if not PaneMotion.shown(pane):
+		if PaneMotion.retiring(pane) or not PaneMotion.shown(pane):
 			PaneMotion.quiet(pane)
 
 
@@ -1865,9 +1875,15 @@ func _show_home(word: String) -> void:
 	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var p = CarPane.new()
 	p.name = "CarPane"
-	p.lever_set.connect(_set_lever)
-	p.folded.connect(_select.bind(""))
-	p.decor_pressed.connect(open_decor)
+	p.lever_set.connect(func(comm: String, which: String, value: int) -> void:
+		if _pane_can_act(p):
+			_set_lever(comm, which, value))
+	p.folded.connect(func() -> void:
+		if _pane_can_act(p):
+			_select(""))
+	p.decor_pressed.connect(func(id: String) -> void:
+		if _pane_can_act(p):
+			open_decor(id))
 	h.add_child(p)
 	p.pin(TrainGauges.BAND_H)
 	p.hide()
@@ -1892,6 +1908,10 @@ func _show_home(word: String) -> void:
 	card = h
 	_select(FIRST_CAR, false)
 	_tell_save_error.call_deferred()
+
+
+func _pane_can_act(source: Control) -> bool:
+	return is_instance_valid(source) and source == pane and not PaneMotion.retiring(source) and PaneMotion.shown(source)
 
 
 ## Pick car `id` ("" folds the pane): its pane comes up and the camera moves
@@ -2122,7 +2142,7 @@ func _decor_changed() -> void:
 	_room_changed()
 	if is_instance_valid(pane):
 		pane.refresh(train_g, train_t)
-		if not PaneMotion.shown(pane):
+		if PaneMotion.retiring(pane) or not PaneMotion.shown(pane):
 			PaneMotion.quiet(pane)
 
 
@@ -2264,7 +2284,7 @@ func _set_lever(comm: String, which: String, value: int) -> void:
 	gauges.refresh(train_g, train_t)
 	if is_instance_valid(pane):
 		pane.refresh(train_g, train_t)
-		if not PaneMotion.shown(pane):
+		if PaneMotion.retiring(pane) or not PaneMotion.shown(pane):
 			PaneMotion.quiet(pane)
 	if is_instance_valid(bar):
 		bar.g = train_g

@@ -170,6 +170,93 @@ func test_select_hides_logically_before_the_reusable_pane_disappears() -> void:
 	assert_eq(f.pane.modulate.a, 0.0)
 
 
+func _car_button_inputs(c: Control) -> Dictionary:
+	var paths: Array[String] = ["Parts/Fold", "Parts/DecorButton"]
+	for lever: String in ["heat", "ration"]:
+		for at in CarPane.STEPS:
+			paths.append("Parts/Slot_%s/Step%d" % [lever, at])
+	var inputs: Dictionary = {}
+	for path: String in paths:
+		var button: Control = c.get_node_or_null(path) as Control
+		assert_not_null(button, path)
+		if button != null:
+			inputs[path] = Vector2i(button.mouse_filter, button.focus_mode)
+	return inputs
+
+
+func _check_reselect_while_closing(car_id: String) -> void:
+	var f: SliceFlow = _flow()
+	_finish_pane(f.pane)
+	var inputs: Dictionary = _car_button_inputs(f.pane)
+	for path: String in inputs:
+		assert_eq(inputs[path], Vector2i(Control.MOUSE_FILTER_STOP, Control.FOCUS_NONE), path)
+	f._select("")
+	var leaving: Tween = f.pane.get_meta(PaneMotion.META_TWEEN) as Tween
+	leaving.custom_step(PaneMotion.CLOSE_S * 0.4)
+	f._update_decor_lock()
+	_assert_quiet(f.pane)
+	f._select(car_id)
+	assert_eq(f.sel, car_id)
+	assert_true(PaneMotion.shown(f.pane))
+	assert_false(leaving.is_valid() and leaving.is_running())
+	assert_eq(_car_button_inputs(f.pane), inputs, "real buttons recover their input settings immediately")
+	_finish_pane(f.pane)
+	assert_eq(_car_button_inputs(f.pane), inputs)
+
+
+func test_reselect_same_car_while_closing_restores_real_buttons() -> void:
+	_check_reselect_while_closing(SliceFlow.FIRST_CAR)
+
+
+func test_reselect_other_car_while_closing_restores_real_buttons() -> void:
+	_check_reselect_while_closing("tail2")
+
+
+func test_step_change_quiets_old_home_before_tween_and_rejects_old_pane_signals() -> void:
+	var f: SliceFlow = _flow()
+	_finish_pane(f.pane)
+	var old_home: Control = f.home
+	var old_pane: CarPane = f.pane as CarPane
+	assert_not_null(f.paper)
+	f.go(f._index_of("council"))
+	assert_true(is_instance_valid(old_home))
+	assert_false(old_home.is_queued_for_deletion())
+	_assert_quiet(old_home)
+	var state: Dictionary = f.train_g.duplicate(true)
+	var selection: String = f.sel
+	var decor: String = f.decor_id
+	var heat: int = 3 if int(state["comms"]["tail"]["heat"]) == 4 else 4
+	old_pane.lever_set.emit("tail", "heat", heat)
+	old_pane.folded.emit()
+	old_pane.decor_pressed.emit(SliceFlow.FIRST_CAR)
+	assert_eq(f.train_g, state, "the retiring Home cannot mutate or save the current board")
+	assert_eq(f.sel, selection)
+	assert_eq(f.decor_id, decor)
+	_assert_quiet(old_home)
+
+
+func test_retiring_ancestor_blocks_signals_even_while_pane_is_current() -> void:
+	var f: SliceFlow = _flow()
+	_finish_pane(f.pane)
+	var old_pane: CarPane = f.pane as CarPane
+	f._retire_card(f.home)
+	f._drop_paper()
+	assert_eq(f.pane, old_pane)
+	assert_true(PaneMotion.shown(old_pane))
+	assert_true(PaneMotion.retiring(old_pane))
+	_assert_quiet(f.home)
+	var state: Dictionary = f.train_g.duplicate(true)
+	var selection: String = f.sel
+	var heat: int = 3 if int(state["comms"]["tail"]["heat"]) == 4 else 4
+	old_pane.lever_set.emit("tail", "heat", heat)
+	old_pane.folded.emit()
+	old_pane.decor_pressed.emit(SliceFlow.FIRST_CAR)
+	assert_eq(f.train_g, state)
+	assert_eq(f.sel, selection)
+	assert_eq(f.decor_id, "")
+	_assert_quiet(f.home)
+
+
 func test_room_slots_clear_while_the_old_panes_leave() -> void:
 	var f: SliceFlow = _flow()
 	f._open_workshop()
@@ -341,6 +428,33 @@ func test_council_rises_into_place_and_retires_with_a_plain_fade() -> void:
 	assert_true(c.is_queued_for_deletion())
 
 
+func _council_strength(c: Control) -> float:
+	var shade: ColorRect = c.get_node("Back/Shade") as ColorRect
+	return float((shade.material as ShaderMaterial).get_shader_parameter("motion_alpha"))
+
+
+func test_council_backdrop_tracks_card_alpha_during_entry_and_exit() -> void:
+	var f: SliceFlow = _flow()
+	f.go(f._index_of("council"))
+	var c: Control = f.card
+	assert_eq(_council_strength(c), 0.0)
+	var entering: Tween = c.get_meta(SliceFlow.META_CARD_TWEEN) as Tween
+	entering.custom_step(SliceFlow.COUNCIL_OPEN_S * 0.5)
+	assert_gt(c.modulate.a, 0.0)
+	assert_lt(c.modulate.a, 1.0)
+	assert_almost_eq(_council_strength(c), c.modulate.a, 0.00001)
+	entering.custom_step(SliceFlow.COUNCIL_OPEN_S)
+	assert_eq(_council_strength(c), 1.0)
+	var leaving: Tween = f._retire_card(c)
+	leaving.custom_step(SliceFlow.CARD_FADE_S * 0.5)
+	assert_gt(c.modulate.a, 0.0)
+	assert_lt(c.modulate.a, 1.0)
+	assert_almost_eq(_council_strength(c), c.modulate.a, 0.00001)
+	leaving.custom_step(SliceFlow.CARD_FADE_S)
+	assert_eq(_council_strength(c), 0.0)
+	assert_true(c.is_queued_for_deletion())
+
+
 func test_council_retirement_cancels_an_unfinished_entry() -> void:
 	var f: SliceFlow = _flow()
 	f.go(f._index_of("council"))
@@ -351,7 +465,13 @@ func test_council_retirement_cancels_an_unfinished_entry() -> void:
 	var leaving: Tween = f._retire_card(c)
 	assert_false(entering.is_valid() and entering.is_running())
 	assert_eq(c.modulate.a, alpha, "the fade continues from the current alpha")
+	assert_almost_eq(_council_strength(c), alpha, 0.00001)
+	leaving.custom_step(SliceFlow.CARD_FADE_S * 0.5)
+	assert_gt(c.modulate.a, 0.0)
+	assert_lt(c.modulate.a, alpha)
+	assert_almost_eq(_council_strength(c), c.modulate.a, 0.00001)
 	leaving.custom_step(SliceFlow.CARD_FADE_S + 0.001)
+	assert_eq(_council_strength(c), 0.0)
 	assert_true(c.is_queued_for_deletion())
 
 
