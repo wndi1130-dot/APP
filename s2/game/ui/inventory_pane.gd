@@ -161,6 +161,7 @@ static func open(hud, want: Dictionary) -> void:
 		for entry: Node in entries.get_children():
 			if entry is Label:
 				(entry as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				(entry as Label).text = UiFonts.keep_all((entry as Label).text)
 		journal.minimum_size_changed.connect(fit, CONNECT_DEFERRED)
 		pane.body.add_child(journal)
 	rows.minimum_size_changed.connect(fit, CONNECT_DEFERRED)
