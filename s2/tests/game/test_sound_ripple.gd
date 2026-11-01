@@ -82,3 +82,18 @@ func test_envelope_fades_in_holds_and_fades_out_early() -> void:
 	assert_almost_eq(SoundRipple.envelope(0.85), 0.0, 0.0001)
 	assert_almost_eq(SoundRipple.envelope(0.9), 0.0, 0.0001)
 	assert_almost_eq(SoundRipple.envelope(1.0), 0.0, 0.0001)
+
+
+func test_ground_look_adapts_to_snow_only_in_daylight() -> void:
+	assert_eq(SoundRipple.ground_look(0.0, 1.0), Vector2(0.0, 1.0))
+	assert_eq(SoundRipple.ground_look(1.0, 1.0), Vector2(1.0, 1.8))
+	assert_eq(SoundRipple.ground_look(1.0, 0.0), Vector2(0.0, 1.0))
+	var partial: Vector2 = SoundRipple.ground_look(0.55, 1.0)
+	assert_almost_eq(partial.x, 0.5, 0.0001)
+	assert_almost_eq(partial.y, 1.4, 0.0001)
+
+	var ripple: SoundRipple = SoundRipple.new()
+	ripple.show_ring(Vector3.ZERO, 3.0)
+	var material: ShaderMaterial = ripple.rings[0]["mat"] as ShaderMaterial
+	assert_eq(float(material.get_shader_parameter("ground_snow")), 1.0, "a parentless ring is outdoors")
+	ripple.free()
