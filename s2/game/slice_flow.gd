@@ -85,6 +85,7 @@ const StopLoader = preload("res://game/stop_loader.gd")
 const Journey = preload("res://game/train/journey/journey.gd")
 const Corridor = preload("res://game/train/journey/journey_corridor.gd")
 const PaperMotion = preload("res://game/ui/paper_motion.gd")
+const PaneMotion = preload("res://game/ui/pane_motion.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
 const STOP_CINEMA_SCENE := preload("res://scenes/stop_cinema.tscn")
 const TRAIN_SCENE := preload("res://game/train/train.tscn")
@@ -108,6 +109,13 @@ const RUN_LIMIT: int = 12
 ## Where the car pane's words start in from its left (car_pane.gd), and the paper's room short of them.
 const PANE_WORDS_X: float = 44.0
 const PAPER_GAP: float = 6.0
+const CARD_FADE_S: float = 0.18          # Cards without a sheet.
+const COUNCIL_OPEN_S: float = 0.24       # The session rises into place.
+const COUNCIL_FROM_PX: float = 8.0
+const PAPER_FOLDED_CLOSE_S: float = 0.12
+const PAPER_OPEN_CLOSE_S: float = 0.20
+const PAPER_DROP_PX: float = 24.0
+const META_CARD_TWEEN := "slice_card_tween"
 ## The train's people left to stand by it while the field is out (stop-cam's train defense).
 const GUARDS_LEFT: int = 2
 
@@ -234,6 +242,8 @@ var train_g: Dictionary = {}       # the slice's train state (its own board)
 var train_t: Dictionary = {}       # its tables
 var home: Control = null           # the train's own screen on the train steps: pane and keys
 var pane: Control = null           # the picked car's pane (car_pane.gd)
+var _cover_tween: Tween = null
+var _cover_target := Vector2.ZERO
 var bar: Control = null            # the keys along the bottom (home_bar.gd)
 var sel: String = ""               # the picked car's id, "" with the pane folded
 var decor_id: String = ""          # the car being decorated (open_decor), "" when none
@@ -497,16 +507,13 @@ func _show_step(i: int) -> void:
 		_let_stage_go(StopCinema.FADE_S)
 	_clear_stage()
 	_drop_cinema(id)
-	if is_instance_valid(card):
-		card.queue_free()
-	card = null
+	_put_rooms_away()
+	_retire_card(card)
 	_drop_paper()
 	going = false
 	home = null
 	pane = null
 	bar = null
-	shop = null
-	mods = null
 	sel = ""
 	var row: Array = STEPS[i]
 	# Over the train, not over the field; the slice's state, but the session's
@@ -805,18 +812,43 @@ func _on_cinema_done(how: String) -> void:
 
 
 func _drop_card() -> void:
-	var c: Control = card if is_instance_valid(card) else null
-	card = null
 	gauges.visible = false
-	if c == null:
-		return
-	# Folded away under the finger that sent it; nothing on it answers any more.
-	c.propagate_call("set", ["mouse_filter", Control.MOUSE_FILTER_IGNORE])
-	var paper: Variant = c.get("sheet")
-	if paper is Control:
-		PaperMotion.close(paper, _seen_before()).finished.connect(c.queue_free)
+	_retire_card(card)
+
+
+## The logical slot clears before the old card stops answering and leaves.
+func _retire_card(c: Control) -> Tween:
+	if card == c:
+		card = null
+	if not is_instance_valid(c) or c.has_meta(PaneMotion.META_RETIRING):
+		return null
+	PaneMotion.quiet(c, true)
+	if c.has_meta(META_CARD_TWEEN):
+		var old: Tween = c.get_meta(META_CARD_TWEEN) as Tween
+		if old != null and old.is_valid():
+			old.kill()
+	var sheet: Variant = c.get("sheet")
+	var tw: Tween
+	if sheet is Control:
+		tw = PaperMotion.close(sheet as Control, _seen_before())
+	elif c is CouncilCard:
+		tw = c.create_tween()
+		tw.tween_method(_set_council_alpha.bind(c), c.modulate.a, 0.0, CARD_FADE_S)
 	else:
-		c.queue_free()
+		tw = c.create_tween()
+		tw.tween_property(c, "modulate:a", 0.0, CARD_FADE_S)
+	c.set_meta(META_CARD_TWEEN, tw)
+	tw.finished.connect(func() -> void:
+		if is_instance_valid(c):
+			c.queue_free())
+	return tw
+
+
+## The screen-reading shade lives in its own CanvasLayer, outside card modulation.
+func _set_council_alpha(alpha: float, c: Control) -> void:
+	c.modulate.a = alpha
+	var shade: ColorRect = c.get_node("Back/Shade") as ColorRect
+	(shade.material as ShaderMaterial).set_shader_parameter("motion_alpha", alpha)
 
 
 ## The stop scene seen whole before: its paper comes and goes in half the time.
@@ -875,6 +907,13 @@ func _show_council() -> void:
 		_take(g1)
 		next())
 	layer.add_child(c)
+	var rest: Vector2 = c.position
+	c.position = rest + Vector2(0.0, COUNCIL_FROM_PX)
+	_set_council_alpha(0.0, c)
+	var tw: Tween = c.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "position", rest, COUNCIL_OPEN_S)
+	tw.tween_method(_set_council_alpha.bind(c), 0.0, 1.0, COUNCIL_OPEN_S)
+	c.set_meta(META_CARD_TWEEN, tw)
 	card = c
 
 
@@ -895,6 +934,8 @@ func _show_arrival(go_word: String) -> void:
 	c.go_word = go_word
 	c.went_on.connect(next)
 	layer.add_child(c)
+	if c.sheet != null:
+		PaperMotion.open(c.sheet, _seen_before())
 	card = c
 
 
@@ -1065,15 +1106,32 @@ func _show_paper() -> void:
 	_update_decor_lock()
 
 
-func _drop_paper() -> void:
-	var was_folded: bool = is_instance_valid(paper) and (paper as TurnCard).folded
-	if is_instance_valid(paper):
-		paper.queue_free()
+func _drop_paper() -> Tween:
+	var old: Control = paper if is_instance_valid(paper) else null
+	var was_folded: bool = old != null and (old as TurnCard).folded
 	paper = null
 	_update_decor_lock()
 	# The room its edge took goes back to the picked car.
 	if was_folded:
 		_paper_folded(false)
+	if old == null:
+		return null
+	# Layout retries must not rebuild live controls while this paper leaves.
+	old.set_process(false)
+	var old_paper: TurnCard = old as TurnCard
+	if old_paper.chose.is_connected(_paper_chosen):
+		old_paper.chose.disconnect(_paper_chosen)
+	if old_paper.fold_changed.is_connected(_paper_folded):
+		old_paper.fold_changed.disconnect(_paper_folded)
+	PaneMotion.quiet(old, true)
+	var seconds: float = PAPER_FOLDED_CLOSE_S if was_folded else PAPER_OPEN_CLOSE_S
+	var tw: Tween = old.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tw.tween_property(old, "position", old.position + Vector2(0.0, PAPER_DROP_PX), seconds)
+	tw.tween_property(old, "modulate:a", 0.0, seconds)
+	tw.finished.connect(func() -> void:
+		if is_instance_valid(old):
+			old.queue_free())
+	return tw
 
 
 ## The paper folded to its edge or opened again (결정 508): the picked car moves into
@@ -1092,21 +1150,54 @@ func _update_decor_lock() -> void:
 	if is_instance_valid(pane):
 		pane.choosing_paper = is_instance_valid(paper) and not (paper as TurnCard).folded
 		pane.refresh(train_g, train_t)
+		if PaneMotion.retiring(pane) or not PaneMotion.shown(pane):
+			PaneMotion.quiet(pane)
 
 
 ## The diagonal camera's cover: the car pane's width at the right, a folded paper's
 ## edge at the left.
-func _set_cover() -> void:
-	var pane_rect: Rect2 = pane.get_global_rect()
+func _pane_cover() -> float:
+	if not PaneMotion.shown(pane):
+		return 0.0
+	var pane_rect: Rect2 = PaneMotion.rest_rect(pane)
 	var covered_px: float = get_viewport().get_visible_rect().size.x - pane_rect.position.x
 	if pane_rect.size.x == 0.0:
 		covered_px = CarPane.CSS_SIZE.x * UiFonts.K
-	if not pane.visible:
-		covered_px = 0.0
+	return covered_px
+
+
+func _set_cover(seconds: float = 0.0) -> void:
+	if not is_instance_valid(train) or not is_instance_valid(pane):
+		return
 	var left_px: float = 0.0
 	if is_instance_valid(paper) and (paper as TurnCard).folded:
 		left_px = (paper as TurnCard).folded_edge()
-	train.set_pane(covered_px, left_px)
+	_move_cover(_pane_cover(), left_px, seconds)
+
+
+## Keep a running width change when only the folded edge or pin changes.
+func _move_cover(covered_px: float, left_px: float, seconds: float) -> void:
+	_cover_target = Vector2(covered_px, left_px)
+	if seconds <= 0.0:
+		if _cover_tween != null and _cover_tween.is_valid() and _cover_tween.is_running():
+			train.set_pane(float(train.get("pane_px")), left_px)
+		else:
+			train.set_pane(covered_px, left_px)
+		return
+	if _cover_tween != null and _cover_tween.is_valid():
+		_cover_tween.kill()
+	var from_px: float = float(train.get("pane_px"))
+	var cover_train: Node3D = train
+	train.set_pane(from_px, left_px)
+	_cover_tween = cover_train.create_tween().set_trans(Tween.TRANS_CUBIC)
+	_cover_tween.set_ease(Tween.EASE_OUT if seconds == PaneMotion.OPEN_S else Tween.EASE_IN)
+	_cover_tween.tween_method(func(k: float) -> void:
+		if not is_instance_valid(cover_train) or cover_train != train or decor_id != "":
+			return
+		if str(cover_train.get("view_mode")) != "diag":
+			return
+		_cover_target.x = _pane_cover()
+		cover_train.set_pane(lerpf(from_px, _cover_target.x, k), _cover_target.y), 0.0, 1.0, seconds)
 
 
 ## A way chosen on the paper: the board it gives back, then the next paper, and once
@@ -1799,11 +1890,18 @@ func _show_home(word: String) -> void:
 	h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var p = CarPane.new()
 	p.name = "CarPane"
-	p.lever_set.connect(_set_lever)
-	p.folded.connect(_select.bind(""))
-	p.decor_pressed.connect(open_decor)
+	p.lever_set.connect(func(comm: String, which: String, value: int) -> void:
+		if _pane_can_act(p):
+			_set_lever(comm, which, value))
+	p.folded.connect(func() -> void:
+		if _pane_can_act(p):
+			_select(""))
+	p.decor_pressed.connect(func(id: String) -> void:
+		if _pane_can_act(p):
+			open_decor(id))
 	h.add_child(p)
 	p.pin(TrainGauges.BAND_H)
+	p.hide()
 	var b = HomeBar.new()
 	b.name = "HomeBar"
 	b.g = train_g
@@ -1827,6 +1925,10 @@ func _show_home(word: String) -> void:
 	_tell_save_error.call_deferred()
 
 
+func _pane_can_act(source: Control) -> bool:
+	return is_instance_valid(source) and source == pane and not PaneMotion.retiring(source) and PaneMotion.shown(source)
+
+
 ## Pick car `id` ("" folds the pane): its pane comes up and the camera moves
 ## it into the middle of what the pane leaves clear.
 func _select(id: String, toggle: bool = false) -> void:
@@ -1848,10 +1950,18 @@ func _select(id: String, toggle: bool = false) -> void:
 		sel = id
 	if not is_instance_valid(pane):
 		return
-	pane.visible = sel != "" and _shows_pane(def)
-	if pane.visible:
+	var was_shown: bool = PaneMotion.shown(pane)
+	var wants_pane: bool = sel != "" and _shows_pane(def)
+	var motion_s: float = 0.0
+	if wants_pane:
 		pane.choosing_paper = is_instance_valid(paper) and not (paper as TurnCard).folded
 		pane.show_car(def, train_g, train_t)
+		if not was_shown:
+			PaneMotion.open(pane)
+			motion_s = PaneMotion.OPEN_S
+	elif was_shown:
+		PaneMotion.close(pane)
+		motion_s = PaneMotion.CLOSE_S
 	if not is_instance_valid(train) or train.camera == null:
 		return
 	var at: String = sel if sel != "" else was
@@ -1860,14 +1970,14 @@ func _select(id: String, toggle: bool = false) -> void:
 	if str(train.get("view_mode")) == "diag":
 		if sel != "":
 			train.focus_car(at, true)
-			_set_cover()
+			_set_cover(motion_s)
 		else:
 			train.focus_car(at, false)
-			train.set_pane(0.0)
+			_move_cover(0.0, 0.0, motion_s)
 		return
 	train.focus_car(at)
 	# The two common cars use the same glass with just its header.
-	if sel != "" and pane.visible:
+	if sel != "" and PaneMotion.shown(pane):
 		var view_h: float = maxf(get_viewport().get_visible_rect().size.y, 1.0)
 		train.scroll(UiFonts.px(PANE_SHIFT_CSS) * train.camera.size / view_h)
 
@@ -1904,6 +2014,8 @@ func open_decor(id: String) -> bool:
 	_put_rooms_away()
 	if not train.enter_decor(id):
 		return false
+	if _cover_tween != null and _cover_tween.is_valid():
+		_cover_tween.kill()
 	decor_id = id
 	_decor_hidden.clear()
 	# The snow over the screen too: with the roof off it would fall inside the car.
@@ -2045,6 +2157,8 @@ func _decor_changed() -> void:
 	_room_changed()
 	if is_instance_valid(pane):
 		pane.refresh(train_g, train_t)
+		if PaneMotion.retiring(pane) or not PaneMotion.shown(pane):
+			PaneMotion.quiet(pane)
 
 
 ## Reseating while editing would replace the people that the 3D view faded.
@@ -2080,6 +2194,7 @@ func _open_workshop() -> void:
 	home.add_child(w)
 	w.pin(TrainGauges.BAND_H)
 	w.show_state(train_g)
+	PaneMotion.open(w)
 	shop = w
 
 
@@ -2103,6 +2218,7 @@ func _open_mods() -> void:
 	home.add_child(m)
 	m.pin(TrainGauges.BAND_H)
 	m.show_state(train_g)
+	PaneMotion.open(m)
 	mods = m
 
 
@@ -2120,6 +2236,7 @@ func _open_research() -> void:
 	home.add_child(r)
 	r.pin(TrainGauges.BAND_H)
 	r.show_state(train_g)
+	PaneMotion.open(r)
 	research = r
 
 
@@ -2135,13 +2252,14 @@ func _room_up() -> void:
 func _put_rooms_away() -> void:
 	if is_instance_valid(cost):
 		gauges.set_focus([])
-	for r in [shop, mods, research, cost]:
-		if is_instance_valid(r):
-			r.queue_free()
+	var rooms: Array = [shop, mods, research, cost]
 	shop = null
 	mods = null
 	research = null
 	cost = null
+	for room: Control in rooms:
+		if is_instance_valid(room):
+			PaneMotion.close(room, true)
 
 
 ## What a stretch costs in the stock pressed on the gauges and why
@@ -2161,6 +2279,7 @@ func _open_cost(id: String) -> void:
 	home.add_child(c)
 	c.pin(TrainGauges.BAND_H)
 	c.show_state(train_g, train_t)
+	PaneMotion.open(c)
 	cost = c
 	# The stock it is about stays lit on the band, as under a sheet.
 	gauges.set_focus([id])
@@ -2180,6 +2299,8 @@ func _set_lever(comm: String, which: String, value: int) -> void:
 	gauges.refresh(train_g, train_t)
 	if is_instance_valid(pane):
 		pane.refresh(train_g, train_t)
+		if PaneMotion.retiring(pane) or not PaneMotion.shown(pane):
+			PaneMotion.quiet(pane)
 	if is_instance_valid(bar):
 		bar.g = train_g
 	if is_instance_valid(train):
@@ -2452,6 +2573,8 @@ func _show_receipt(go_word: String) -> void:
 	c.go_word = go_word
 	c.went_on.connect(next)
 	layer.add_child(c)
+	if c.sheet != null:
+		PaperMotion.open(c.sheet, _seen_before())
 	card = c
 	if _is_campaign():
 		var place_label: Label = c.find_child("Place", true, false) as Label

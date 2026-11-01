@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 ## reads a receipt, and the boot menu has the key that starts it.
 
 const SliceFlow = preload("res://game/slice_flow.gd")
+const PaneMotion = preload("res://game/ui/pane_motion.gd")
 const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
 const Boot = preload("res://game/boot.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
@@ -202,12 +203,16 @@ func test_diag_selection_uses_the_covered_pane_width_and_clears_it() -> void:
 	await wait_process_frames(2)
 	flow.train.set_view_mode("diag")
 	flow._select(SliceFlow.FIRST_CAR)
-	var pane_rect: Rect2 = flow.pane.get_global_rect()
+	var pane_rect: Rect2 = PaneMotion.rest_rect(flow.pane)
 	var covered_px: float = flow.get_viewport().get_visible_rect().size.x - pane_rect.position.x
 	assert_gt(pane_rect.size.x, 0.0)
+	if flow._cover_tween != null and flow._cover_tween.is_valid():
+		flow._cover_tween.custom_step(PaneMotion.OPEN_S + 0.001)
 	assert_almost_eq(float(flow.train.pane_px), covered_px, 0.001)
 	assert_eq(str(flow.train.zoom), "near")
 	flow._select("")
+	assert_false(PaneMotion.shown(flow.pane), "hidden logically before the camera finishes")
+	flow._cover_tween.custom_step(PaneMotion.CLOSE_S + 0.001)
 	assert_eq(float(flow.train.pane_px), 0.0)
 	assert_eq(str(flow.train.zoom), "wide")
 	assert_eq(float(flow.train.camera.h_offset), 0.0)

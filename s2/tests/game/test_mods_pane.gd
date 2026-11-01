@@ -13,6 +13,7 @@ const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const HomeBar = preload("res://game/ui/home_bar.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
+const PaneMotion = preload("res://game/ui/pane_motion.gd")
 
 
 ## The rows a press draws again are freed a frame later; let them go before GUT counts orphans.
@@ -221,7 +222,7 @@ func test_the_slice_opens_one_room_at_a_time() -> void:
 	f._open_room("wrench")
 	assert_true(is_instance_valid(f.mods), "the refit pane is up")
 	assert_eq(String(f.mods.name), "ModsPane")
-	assert_false(f.pane.visible, "the car's pane makes way")
+	assert_false(PaneMotion.shown(f.pane), "the car's pane makes way")
 	f._open_room("gear")
 	await wait_process_frames(1)
 	assert_false(is_instance_valid(f.mods), "the workshop takes the refit pane's place")
@@ -229,7 +230,7 @@ func test_the_slice_opens_one_room_at_a_time() -> void:
 	f._close_room()
 	await wait_process_frames(1)
 	assert_eq(f.sel, was, "folding brings back the car picked before either room")
-	assert_true(f.pane.visible)
+	assert_true(PaneMotion.shown(f.pane))
 	f._open_room("wrench")
 	f._select(was)
 	await wait_process_frames(1)
