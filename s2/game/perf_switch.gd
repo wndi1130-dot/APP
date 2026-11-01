@@ -1,11 +1,12 @@
-## 폰에서 해 그림자 비용을 비교하는 개발용 파일 스위치.
-## 예: user://perf_switch.json → {"sun_shadow":false,"shadow_mode":"ortho","shadow_distance":30.0,"atlas_size":2048,"atlas_16_bits":true,"soft_quality":"hard","view_fill":false,"cloud":false}
+## 폰에서 해 그림자와 시야 채움 빛 비용을 비교하는 개발용 파일 스위치.
+## 예: user://perf_switch.json → {"sun_shadow":false,"shadow_mode":"ortho","shadow_distance":30.0,"atlas_size":2048,"atlas_16_bits":true,"soft_quality":"hard","view_fill":true,"view_fill_specular":0.0,"view_fill_energy":0.002,"cloud":false}
 class_name PerfSwitch
 extends RefCounted
 
 const FILE := "user://perf_switch.json"
 const CLOUD_SOURCE := &"_perf_cloud_source"
 const CLOUD_OFF := &"_perf_cloud_off"
+const FILL_ENERGY := &"_perf_view_fill_energy"
 const ATLAS_SIZES: Array[int] = [1024, 2048, 4096, 8192]
 const MODES: Dictionary = {
 	"ortho": DirectionalLight3D.SHADOW_ORTHOGONAL,
@@ -81,14 +82,22 @@ static func _valid(s: Dictionary) -> Dictionary:
 		valid["shadow_mode"] = s["shadow_mode"]
 	if s.get("soft_quality") is String and QUALITIES.has(s["soft_quality"]):
 		valid["soft_quality"] = s["soft_quality"]
-	for key in ["shadow_distance", "atlas_size"]:
+	for key in ["shadow_distance", "atlas_size", "view_fill_specular", "view_fill_energy"]:
 		var value: Variant = s.get(key)
 		if not (value is int or value is float):
 			continue
 		var number: float = float(value)
-		if not is_finite(number) or number <= 0.0:
+		if not is_finite(number):
 			continue
-		if key == "shadow_distance":
+		if key == "view_fill_specular":
+			if number >= 0.0 and number <= 1.0:
+				valid[key] = number
+		elif key == "view_fill_energy":
+			if number >= 0.002 and number <= 4.0:
+				valid[key] = number
+		elif number <= 0.0:
+			continue
+		elif key == "shadow_distance":
 			valid[key] = number
 		else:
 			# Array[int] membership coerces floats; compare before any int conversion.
@@ -174,6 +183,24 @@ static func apply(sun: DirectionalLight3D, view_fill: Node3D, s: Dictionary, inc
 		changed["shadow_distance"] = sun.directional_shadow_max_distance
 	if include_renderer:
 		changed.merge(apply_renderer(settings, sun.get_instance_id()))
+	if view_fill is DirectionalLight3D:
+		var fill_light: DirectionalLight3D = view_fill
+		if settings.has("view_fill_specular"):
+			var specular_before: float = fill_light.light_specular
+			fill_light.light_specular = settings["view_fill_specular"]
+			if fill_light.light_specular != specular_before:
+				changed["view_fill_specular"] = fill_light.light_specular
+		if settings.has("view_fill_energy"):
+			var energy: float = settings["view_fill_energy"]
+			var energy_changed: bool = fill_light.get_meta(FILL_ENERGY, -1.0) != energy
+			fill_light.set_meta(FILL_ENERGY, energy)
+			# Keep night/storm energy at zero; the field rechecks its source below.
+			if fill_light.light_energy > 0.001:
+				var energy_before: float = fill_light.light_energy
+				fill_light.light_energy = energy
+				energy_changed = energy_changed or fill_light.light_energy != energy_before
+			if energy_changed:
+				changed["view_fill_energy"] = energy
 	if settings.has("view_fill"):
 		var visible: bool = settings["view_fill"]
 		var locked: bool = view_fill.visibility_changed.is_connected(view_fill.hide)
