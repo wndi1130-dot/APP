@@ -414,6 +414,8 @@ func _process(delta: float) -> void:
 	var reads := READS_PER_FRAME
 	for p in game.people:
 		_hide_boxes(p)
+		if p.sled_weapon_stowed and p.weapon_mesh != null:
+			p.weapon_mesh.visible = false
 		if not p.visible or count >= MAX_PEOPLE:
 			continue
 		var had := worn.size()
@@ -693,6 +695,12 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	var running: bool = Gait.ground_runs(p)
 	# Spent or bleeding hard it reels (gait.gd reels; the dead's reel in a folder
 	# without its own), still reeling where it stops.
+	# The rope keeps both arms occupied, even standing or crouched (sled.md 2.2).
+	if p.sled_id != 0:
+		var sled_carry: int = clip_named(own, Gait.CARRY_BIG, -1)
+		if sled_carry >= 0:
+			note["motion"] = OWN_BASE + sled_carry
+			return Vector2(_round(note, "step", gone, _round_of(own, sled_carry, 1.2)), sled_carry)
 	var reeling: bool = Gait.reels(p)
 	var own_reel := clip_named(own, OWN_SPENT, -1) if reeling else -1
 	if reeling and not walking:

@@ -5,6 +5,7 @@ const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const Measure = preload("res://tools/room_decor_measure.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
+const PropModels = preload("res://game/world/prop_models.gd")
 
 var first: Dictionary
 var fourth: Dictionary
@@ -71,20 +72,46 @@ func test_only_decor_rows_are_appended_and_other_map_values_are_unchanged() -> v
 		var r: Rect2i = p["rect"]
 		var lv := int(p["level"])
 		var g: FieldGrid = first["levels"][lv]
-		if not p.get("decor", false) or p.get("solid", "") != "none" or not RoomDecor.KINDS.has(p.get("kind", "")):
+		var is_top: bool = RoomDecor.TOP_KINDS.has(p.get("kind", ""))
+		if not p.get("decor", false) or p.get("solid", "") != "none" or (not is_top and not RoomDecor.KINDS.has(p.get("kind", ""))):
 			faults.append(p)
 		if r.size != Vector2i.ONE or p.has("search") or p.has("container") or p.has("holds"):
 			faults.append(p)
-		if p["mount"] != ("floor" if p["kind"] == "potted_plant" else "wall"):
+		if is_top:
+			if p["mount"] != "top" or not p["host_rect"].encloses(r):
+				faults.append(p)
+		elif p["mount"] != ("floor" if p["kind"] == "potted_plant" else "wall"):
 			faults.append(p)
-		if p["tint"] != RoomFurnish.tint_for(first["place_id"], g.building_at(r.position)):
+		# 탁상도 벽걸이·화분처럼 그 집 가구의 칠 판을 단다(test_room_furnish의 집 색 잇기와 같은 판).
+		if p.get("tint") != RoomFurnish.tint_for(first["place_id"], g.building_at(r.position)):
 			faults.append(p)
 		if not String(p["note"]).ends_with("의 " + String(RoomDecor.NAMES[p["kind"]])):
 			faults.append(p)
 		counted[p["kind"]] = int(counted.get(p["kind"], 0)) + 1
-	for kind: String in RoomDecor.KINDS:
+	for kind: String in RoomDecor.KINDS + RoomDecor.TOP_KINDS:
 		assert_eq(int(first_stats["kinds"][kind]), int(counted.get(kind, 0)), kind)
+	var top_count := 0
+	for kind: String in RoomDecor.TOP_KINDS:
+		top_count += int(counted.get(kind, 0))
+	assert_eq(first_stats["tops_placed"], top_count, "실제 탁상 줄 수")
+	assert_gte(int(first_stats["tops_needed"]), top_count)
 	assert_eq(faults, [], "추가 줄의 계약")
+
+
+func test_top_stats_sum_room_budgets_including_unplaced_tops() -> void:
+	var needed := 0
+	for room: Dictionary in Measure.census(first):
+		var lv := int(room["level"])
+		var ri := int(room["room"])
+		var rooms := RoomFurnish._rooms(first, lv, first["levels"][lv])
+		var building := int(rooms["rooms"][ri]["building"])
+		var seed_value: int = ("%s|%d|%d|%d|decor" % [first["place_id"], building, lv, ri]).hash() & 0x7fffffff
+		var walls: Array = []
+		for kind: String in room["kinds"]:
+			if RoomDecor.KINDS.has(kind) and kind != "potted_plant":
+				walls.append({"kind": kind, "mount": "wall"})
+		needed += RoomDecor._top_budget(room["class"], seed_value, walls)
+	assert_eq(first_stats["tops_needed"], needed, "놓은 수가 아니라 방마다 필요한 차례의 합")
 
 
 func test_wall_decor_uses_north_or_west_without_tall_furniture_or_touching_neighbors() -> void:
@@ -225,8 +252,10 @@ func test_plants_keep_furniture_boxes_doors_stairs_and_holder_fronts_clear() -> 
 func test_room_kind_medians_and_eligible_bath_mirrors() -> void:
 	var rooms := Measure.census(first) + Measure.census(fourth)
 	var summary := Measure.summarize(rooms)
-	# 벽걸이를 바깥 북·서 벽에만 걸어 잰 값(침실 0·거실 1). 다음 PR 탁상 얹기에서 1·2로 되돌림.
-	var medians := {"bed": 0.0, "living": 1.0, "kitchen": 0.0}
+	# 회귀 막이 바닥(지금 잰 값 1·1·0). 합격 잣대 침실 1·거실 2·부엌 0은 일곱 장 합산으로
+	# test_room_tabletop의 test_seven_house_maps_restore_room_kind_medians가 본다.
+	# houses_01 거실 39방이 1 — 다음 차례(선반 위·바닥 장식)에서 2로 올리고 이 단언도 2로.
+	var medians := {"bed": 1.0, "living": 1.0, "kitchen": 0.0}
 	for cls: String in medians:
 		assert_gt(int(summary[cls]["rooms"]), 0, cls)
 		assert_eq(float(summary[cls]["median"]), float(medians[cls]), cls)
@@ -235,8 +264,12 @@ func test_room_kind_medians_and_eligible_bath_mirrors() -> void:
 	assert_eq(int(summary["bath"]["unsupported_mirrors"]), 0, "북·서 벽 세면대 없는 욕실의 거울은 0")
 	for room: Dictionary in rooms:
 		for kind: String in room["kinds"]:
-			assert_true(RoomDecor.PLAN[room["class"]].has(kind))
-			assert_lte(int(room["kinds"][kind]), int(RoomDecor.PLAN[room["class"]][kind][1]))
+			if RoomDecor.TOP_KINDS.has(kind):
+				assert_false(RoomDecor.top_hosts(room["class"], kind).is_empty())
+				assert_lte(int(room["kinds"][kind]), 1)
+			else:
+				assert_true(RoomDecor.PLAN[room["class"]].has(kind))
+				assert_lte(int(room["kinds"][kind]), int(RoomDecor.PLAN[room["class"]][kind][1]))
 
 
 func test_the_same_prepared_map_gives_identical_rows_and_counts() -> void:
@@ -244,6 +277,36 @@ func test_the_same_prepared_map_gives_identical_rows_and_counts() -> void:
 	assert_eq(var_to_str(first_stats), var_to_str(repeated_stats))
 	assert_eq(var_to_str(repeated["props"].slice(0, before_props.size())), var_to_str(before_props))
 	assert_eq(var_to_str(_grids(repeated)), var_to_str(before_grids))
+
+
+func test_tabletops_preserve_the_legacy_wall_and_plant_rows() -> void:
+	# 모형을 끄면 탁상만 불가능하다. 같은 준비 지도로 기존 줄과 셈을 직접 대조한다.
+	var legacy := first.duplicate(true)
+	legacy["props"] = before_props.duplicate(true)
+	var had_setting := ProjectSettings.has_setting(PropModels.MODE_SETTING)
+	var setting: Variant = ProjectSettings.get_setting(PropModels.MODE_SETTING, true)
+	ProjectSettings.set_setting(PropModels.MODE_SETTING, false)
+	var stats := RoomDecor.dress(legacy)
+	ProjectSettings.set_setting(PropModels.MODE_SETTING, setting if had_setting else null)
+	var rows: Array = []
+	var top_count := 0
+	for row: Dictionary in _decor(first):
+		if row["mount"] == "top":
+			top_count += 1
+		else:
+			rows.append(row)
+	assert_gt(top_count, 0, "탁상 보충도 실제로 있는 입력")
+	assert_eq(var_to_str(rows), var_to_str(_decor(legacy)), "기존 줄의 값과 차례")
+	assert_eq(stats["rows"], first_stats["rows"] - top_count)
+	assert_eq(first_stats["tops_placed"], top_count)
+	assert_eq(stats["tops_needed"], first_stats["tops_needed"], "모형을 꺼 전부 못 놓아도 필요 수는 유지")
+	assert_eq(stats["tops_placed"], 0)
+	assert_eq(var_to_str(stats["rooms"]), var_to_str(first_stats["rooms"]))
+	for kind: String in RoomDecor.KINDS:
+		assert_eq(stats["kinds"][kind], first_stats["kinds"][kind], kind)
+	for kind: String in RoomDecor.TOP_KINDS:
+		assert_eq(stats["kinds"][kind], 0, kind)
+	assert_eq(var_to_str(_grids(legacy)), var_to_str(before_grids))
 
 
 func test_wall_hangings_sit_on_the_inner_wall_face() -> void:

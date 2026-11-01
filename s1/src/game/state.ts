@@ -526,7 +526,7 @@ export interface Game {
   climate?: boolean;
   /** 시험 판 스위치(결정 447 카드 3)로 막 곡선을 따르는 판. 없으면 서막 곡선. 판을 다시 열 때 useSeasonAct로 되살린다 */
   seasonAct?: 'act1' | 'act2' | 'act3';
-  /** 정찰 장비(domestic/scout_gear.ts, 결정 371)를 켠 판. 켜지 않은 판에는 r4·w4가 없고 핸드카에 갈래가 없다 */
+  /** 정찰 장비(domestic/scout_gear.ts, 결정 371)를 켠 판. 켜지 않은 판에는 r4·w4가 없고 수동차에 갈래가 없다 */
   gearOn?: boolean;
   /** 적용된 기온 단계 0~4(출발 때만 계절표를 따라 바뀐다) */
   outside?: number;

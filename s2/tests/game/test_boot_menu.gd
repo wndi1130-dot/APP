@@ -6,6 +6,19 @@ const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 
 
+# The menu runs at the field's cap, 60 unless picked; the pick holds on the menu and after a restart.
+func test_the_fps_cap_picked_holds_over_the_default() -> void:
+	var was: int = Engine.max_fps
+	var boot = Boot.new()
+	add_child_autofree(boot)
+	assert_eq(Engine.max_fps, 60, "the menu runs capped")
+	boot._pick("fps_cap", 30)
+	assert_eq(Engine.max_fps, 30, "the pick wins")
+	boot._on_restart()
+	assert_eq(Engine.max_fps, 30, "a restart keeps the pick")
+	Engine.max_fps = was
+
+
 func test_picking_settings_does_not_pile_up_menu_layers() -> void:
 	var boot = Boot.new()
 	add_child_autofree(boot)

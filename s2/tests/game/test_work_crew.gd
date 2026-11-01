@@ -495,7 +495,7 @@ func _cycle(id: String) -> void:
 	assert_almost_eq(game.work.remaining(), before - float(template["trip"]), 0.0001)
 	worker.position = game.work.door_of("work_site")
 	if id == "coal_wagon":
-		worker.position = FieldGrid.center(Vector2i(clampi(int(worker.position.x), FieldWork.COAL_DROP_MIN_X, FieldWork.COAL_DROP_MAX_X), FieldWork.COAL_DROP_ROW))
+		worker.position = game.work.coal_drop(worker.position.x)
 	game.ai._crew(worker, 0.1, true)
 	var delivered: float = game.actions.coal_delivered if template["yield"] == "coal" else game.actions.wood_delivered
 	assert_almost_eq(delivered, float(template["trip"]), 0.0001)
