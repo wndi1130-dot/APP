@@ -426,6 +426,184 @@ func test_standing_source_support_is_upright_on_all_fourteen_rigs() -> void:
 	motion.queue_free()
 
 
+## VAT contains no joint origins: knee/hip checks use the original rigs.
+## Missing source files are pending; present files that fail to import are failures.
+func test_walking_source_mid_knees_hips_and_footlock_on_all_fourteen_rigs() -> void:
+	var directory: String = ProjectSettings.globalize_path("res://").path_join("../../_motion_src").simplify_path()
+	var names: Array[String] = ["driver", "duffel_b1v2", "fitter", "guard", "guard_f", "hunter_f", "lumberjack", "medic", "overalls", "railman_old", "seamstress", "sheepskin", "stoker", "woodsman"]
+	if not FileAccess.file_exists(directory.path_join("UAL1.glb")):
+		pending("walking joint checks require original _motion_src/UAL1.glb")
+		return
+	for rig_name: String in names:
+		if not FileAccess.file_exists(directory.path_join("rig").path_join(rig_name + ".glb")):
+			pending("walking joint checks require original rig " + rig_name)
+			return
+	var motion: Node3D = _stand_source_scene(directory.path_join("UAL1.glb"))
+	if motion == null:
+		return
+	add_child(motion)
+	var walks: Array = []
+	for entry: Array in BodyBake.PERSON_CLIPS:
+		if BodyBake.PERSON_FOOT_LOCK.has(entry[0]):
+			walks.append(entry)
+	var checked: int = 0
+	for rig_name: String in names:
+		var root: Node3D = _stand_source_scene(directory.path_join("rig").path_join(rig_name + ".glb"))
+		if root == null:
+			continue
+		add_child(root)
+		var ctx: Dictionary = BodyBake.prepare(root, motion, walks + [BodyBake.PERSON_CLIPS[2]], [])
+		assert_false(ctx.is_empty(), rig_name + " walking context")
+		if ctx.is_empty():
+			root.queue_free()
+			continue
+		var walk: Array = walks[0]
+		ctx["sink_scale"] = BodyBake._sink_scale(root, ctx["body"])
+		BodyBake._fit_person_stride(ctx, walk)
+		var phase: Dictionary = BodyBake._fit_person_phase(ctx, walk)
+		var fit: Dictionary = BodyBake._fit_person_footlock(ctx, walk, phase)
+		assert_false(fit.is_empty(), rig_name + " canonical footlock fit")
+		if fit.is_empty():
+			root.queue_free()
+			continue
+		var table: Dictionary = fit["pelvis"]
+		var repeated: Dictionary = BodyBake._fit_person_walk_height(ctx, fit, walk, float(phase["shift"]))
+		for key: String in ["values", "slopes", "uppers", "lowers"]:
+			var first: PackedFloat64Array = table[key]
+			var second: PackedFloat64Array = repeated[key]
+			assert_eq(first.to_byte_array(), second.to_byte_array(), rig_name + " deterministic height " + key)
+		assert_true((table["failed_samples"] as PackedInt32Array).is_empty(), rig_name + " all 256 height intervals feasible")
+		assert_eq(BodyBake._person_walk_height_at(table, 0.0), BodyBake._person_walk_height_at(table, 1.0), rig_name + " seam height")
+		var epsilon: float = 0.000001
+		var seam: float = BodyBake._person_walk_height_at(table, 0.0)
+		var left: float = (seam - BodyBake._person_walk_height_at(table, 1.0 - epsilon)) / epsilon
+		var right: float = (BodyBake._person_walk_height_at(table, epsilon) - seam) / epsilon
+		assert_almost_eq(left, right, 0.002, rig_name + " periodic height slope m/cycle")
+		var body: Skeleton3D = ctx["body"]
+		var to_mesh: Transform3D = ctx["to_mesh"]
+		var applied: Array[float] = []
+		var pose_epsilon: float = 0.00002
+		for u: float in [0.0, 1.0, 1.0 - pose_epsilon, pose_epsilon]:
+			var keyed_u: float = fposmod(u + float(phase["shift"]), 1.0)
+			BodyBake.pose(ctx, walk[1], walk[4], keyed_u)
+			BodyBake._apply_person_walk_body(ctx, fit, u, keyed_u, walk[4])
+			applied.append((to_mesh * body.get_bone_global_pose(BodyBake._bone(body, "hips")).origin).y)
+		assert_almost_eq(applied[0], applied[1], 0.000001, rig_name + " applied seam height")
+		assert_almost_eq((applied[0] - applied[2]) / pose_epsilon, (applied[3] - applied[0]) / pose_epsilon, 0.02, rig_name + " applied seam slope (float32 skeleton positions)")
+		for entry: Array in walks:
+			if entry[0] != walk[0]:
+				BodyBake._fit_person_stride(ctx, entry)
+				phase = BodyBake._fit_person_phase(ctx, entry)
+			var shared: Dictionary = BodyBake._fit_person_footlock(ctx, entry, phase)
+			assert_eq(shared["pelvis"]["values"], table["values"], rig_name + " canonical table shared by " + str(entry[0]))
+			var stats: Array = BodyBake._person_footlock_stats()
+			for frame in int(entry[2]):
+				var u: float = float(frame) / float(entry[2])
+				var keyed_u: float = fposmod(u + float(phase["shift"]), 1.0)
+				BodyBake.pose(ctx, entry[1], entry[4], keyed_u)
+				var before: Array = BodyBake._person_footlock_points(fit, BodyBake._skin_frame(ctx))
+				var drop: float = BodyBake._apply_person_walk_body(ctx, fit, u, keyed_u, entry[4])
+				var misses: Array = BodyBake._apply_person_footlock(ctx, fit, u)
+				var after: Array = BodyBake._person_footlock_probes(fit, BodyBake._skin_frame(ctx))
+				BodyBake._note_person_footlock(ctx, fit, u, before, after, misses, stats, drop)
+			BodyBake._print_person_footlock(entry[0], fit, stats)
+			for side in 2:
+				var note: Dictionary = stats[side]
+				var label: String = "%s %s side %d" % [rig_name, entry[0], side]
+				assert_gt(int(note["mid_samples"]), 0, label + " scheduled mid-stance samples")
+				assert_lte(float(note["mid_knee_max_deg"]), 15.001, label + " mid knee <= 15 degrees (0.001 degree numeric tolerance)")
+				var ratio: float = float(note["hips_sum_m"]) / float(note["frames"]) / float(fit["stand_ref_m"])
+				assert_gte(ratio, 0.95, label + " mean hip / main rest hips above same floor >= 95%")
+				assert_lte(BodyBake._person_footlock_slide(note["after"]), 2.0, label + " full scheduled stance slide <= 2 cm")
+				assert_gte(float(note["contacts"]) / float(note["frames"]), 0.50, label + " actual contact share >= 50%")
+				assert_eq(int(note["reach_clamp_frames"]), 0, label + " no IK distance cuts")
+				assert_eq(int(note["height_fail_frames"]), 0, label + " exact bake phase height feasible")
+				assert_gte(float(note["knee_forward_min_m"]), -0.00001, label + " fixed forward knee branch")
+				assert_eq(int(note["knee_backward_frames"]), 0, label + " no backward knee")
+		checked += 1
+		root.queue_free()
+	assert_eq(checked, 14, "all original living rigs checked")
+	motion.queue_free()
+
+
+## Include toe/heel corners above the rest minimum, not just one flat row.
+func _baked_walk_sole(fixture: Dictionary, side: int) -> PackedInt32Array:
+	var rest: PackedVector3Array = fixture["rest"]
+	var flat: PackedInt32Array = fixture["soles"][side]
+	var ids: PackedInt32Array = PackedInt32Array()
+	if flat.is_empty():
+		return ids
+	var floor_y: float = rest[flat[0]].y
+	for vertex in rest.size():
+		if (rest[vertex].x >= 0.0) == (side == 0) and rest[vertex].y <= floor_y + 0.12:
+			ids.append(vertex)
+	return ids
+
+
+func test_baked_six_walks_keep_rolling_stance_slide_and_contact_share() -> void:
+	for fixture: Dictionary in _fixtures:
+		var rest: PackedVector3Array = fixture["rest"]
+		for side in 2:
+			var ids: PackedInt32Array = _baked_walk_sole(fixture, side)
+			assert_gt(ids.size(), 0, str(fixture["name"]) + " rolling sole vertices")
+			if ids.is_empty():
+				continue
+			var base_frames: Array[PackedVector3Array] = _sample(fixture, _clip(fixture, "p_walk"), ids)
+			var heights: Array[float] = []
+			var floor_y: float = INF
+			for vertex in ids:
+				floor_y = minf(floor_y, rest[vertex].y)
+			for points: PackedVector3Array in base_frames:
+				var lowest: float = INF
+				for point: Vector3 in points:
+					lowest = minf(lowest, point.y)
+				heights.append(lowest)
+			var contact: float = BodyBake.person_contact_phase(heights)
+			assert_gte(contact, 0.0, str(fixture["name"]) + " base walk has a touchdown")
+			if contact < 0.0:
+				continue
+			# Only foot order is inferred; every walk uses the same exact STEP_AT.
+			var order: int = 0 if _phase_distance(contact, float(BodyBake.PERSON_STEP_AT[0])) <= _phase_distance(contact, float(BodyBake.PERSON_STEP_AT[1])) else 1
+			var start: float = BodyBake.PERSON_STEP_AT[order]
+			var gap: float = fposmod(float(BodyBake.PERSON_STEP_AT[1 - order]) - start, 1.0)
+			var duration: float = clampf(gap + BodyBake.PERSON_FOOTLOCK_OVERLAP, BodyBake.PERSON_FOOTLOCK_STANCE_MIN, BodyBake.PERSON_FOOTLOCK_STANCE_MAX)
+			for name_text: String in GROUPS["walk"]:
+				var clip: Dictionary = _clip(fixture, name_text)
+				var frames: Array[PackedVector3Array] = _sample(fixture, clip, ids)
+				if frames.is_empty():
+					continue
+				var contacts: int = 0
+				var residuals: Array = []
+				var y_quantum: float = 0.0
+				if fixture["baked"].get("format", "") != "":
+					y_quantum = (float(clip["hi"][1]) - float(clip["lo"][1])) / 255.0
+				for frame in frames.size():
+					var points: PackedVector3Array = frames[frame]
+					var lowest: float = INF
+					for point: Vector3 in points:
+						lowest = minf(lowest, point.y)
+					# The stored rgb8q pixel has up to half a vertical quantum of error.
+					if absf(lowest - floor_y) <= BodyBake.PERSON_WALK_CONTACT_EPSILON + y_quantum * 0.5:
+						contacts += 1
+					var age: float = fposmod(float(frame) / float(frames.size()) - start, 1.0)
+					if age > duration:
+						continue
+					var centre: Vector3 = Vector3.ZERO
+					var reference: Vector3 = Vector3.ZERO
+					var count: int = 0
+					for index in points.size():
+						if points[index].y <= lowest + BodyBake.PERSON_SOLE_EPSILON:
+							centre += points[index]
+							reference += rest[ids[index]]
+							count += 1
+					centre /= float(count)
+					reference /= float(count)
+					residuals.append(Vector2(centre.x - reference.x, centre.z + age * float(clip["round"]) - reference.z))
+				var label: String = "%s %s side %d" % [fixture["name"], name_text, side]
+				assert_lte(BodyBake._person_footlock_slide(residuals), 2.0, label + " baked stance slide <= 2 cm")
+				assert_gte(float(contacts) / float(frames.size()), 0.50, label + " baked actual contact share >= 50%")
+
+
 func test_shared_legs_and_full_walk_run_frames() -> void:
 	for fixture in _fixtures:
 		for group: String in GROUPS:
