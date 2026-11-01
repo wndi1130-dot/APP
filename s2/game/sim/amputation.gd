@@ -48,7 +48,7 @@ static func plan(medic, o, part: String, have: Dictionary) -> Dictionary:
 		out["why"] = "자를 까닭이 없다"
 		return out
 	if o.body.window_left <= 0.0:
-		out["why"] = "감염 창이 닫혀 소용없다"
+		out["why"] = "자를 수 있는 시간이 지나 소용없다"
 		return out
 	var core: String = o.body.uncut_bite()
 	if core != "":
@@ -56,7 +56,7 @@ static func plan(medic, o, part: String, have: Dictionary) -> Dictionary:
 		return out
 	var takes: float = float(out["seconds"]) / maxf(float(medic.mults()["hands"]), 0.01)
 	if takes > o.body.window_left:
-		out["why"] = "창이 %d초 남아 다 자르기 전에 닫힌다" % ceili(o.body.window_left)
+		out["why"] = "자를 수 있는 시간이 %d초뿐이라 다 자르기 전에 끝난다" % ceili(o.body.window_left)
 		return out
 	out.merge(tools(medic, o, have), true)
 	if out["why"] != "":
@@ -121,7 +121,7 @@ static func blade_of(medic, o) -> String:
 
 
 ## The plan as one line for the body picture: "손도끼 · 지혈대(천+판자) ·
-## 구급함 · 20초 · 비명이 온 지도에 들린다", or what stops it.
+## 구급함 · 20초 · 비명이 멀리까지 들린다", or what stops it.
 static func plan_text(p: Dictionary) -> String:
 	if not bool(p["ok"]):
 		return String(p["why"])
@@ -138,5 +138,5 @@ static func plan_text(p: Dictionary) -> String:
 	if bool(p["kit"]):
 		words.append(Carry.ITEM_NAMES["medkit"])
 	words.append("%d초" % roundi(float(p["seconds"])))
-	words.append("비명이 온 지도에 들린다")
+	words.append("비명이 멀리까지 들린다")
 	return " · ".join(words)
