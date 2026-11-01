@@ -904,7 +904,7 @@ func _update_atmosphere() -> void:
 			if p[key] != fx_params.get(key):
 				fx_params[key] = p[key]
 				changed[key] = p[key]
-		FxState.apply(changed)
+		FxState.apply(PerfSwitch.cloud_params(sun, changed) if sun.has_meta(PerfSwitch.CLOUD_OFF) else changed)
 		_set_sky_photo()
 		_set_cold_frost(float(atmo["edge_frost"]))
 		# Lights and the grade change only with the look (the grade's curve is a
@@ -1068,6 +1068,10 @@ func _build_world() -> void:
 	view_fill.transform = Transform3D(Basis.looking_at(toward, Vector3.UP), Vector3.ZERO)
 	add_child(view_fill)
 	_set_view_fill()
+	var perf_settings: Dictionary = PerfSwitch.read()
+	if not perf_settings.is_empty():
+		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
+		print("PERF_SWITCH ", PerfSwitch.apply(sun, view_fill, perf_settings))
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
 	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
 	lantern.omni_attenuation = LANTERN_FALLOFF
