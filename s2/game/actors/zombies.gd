@@ -1544,10 +1544,15 @@ func _submit_sight_draw(id: int, record: Dictionary, shown: float, counts: Array
 		# Decode the body's packed value so both use exactly the same sixteen steps.
 		var axe_custom := Color(0.0, 0.0, 0.0, unpack_shade(custom.a).y)
 		embedded_draw.multimesh.set_instance_transform(attachments.y, record["axe"])
-		embedded_draw.multimesh.set_instance_custom_data(attachments.y, axe_custom)
-		_submitted_axes[id] = axe_custom
+		_submit_axe_custom(attachments.y, id, axe_custom)
 		attachments.y += 1
 	return attachments
+
+
+## One submission boundary keeps the draw and its ledger on the same value.
+func _submit_axe_custom(slot: int, id: int, custom: Color) -> void:
+	embedded_draw.multimesh.set_instance_custom_data(slot, custom)
+	_submitted_axes[id] = custom
 
 
 ## One MultiMesh per body and look; sight fades before floor and screen culling.

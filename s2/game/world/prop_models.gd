@@ -5,6 +5,7 @@ extends RefCounted
 ## container's cell, search time and items do not change.
 
 const Weathered = preload("res://fx/shaders/weathered.gdshader")
+const WeatheredSightFade = preload("res://fx/shaders/weathered_sight_fade.gdshader")
 const DIR := "res://models/props_stop01/"
 const MODE_SETTING := "visuals/prop_models_enabled"
 ## How much darker a model is at the floor it stands on (weathered.gdshader contact_dark, T0-6).
@@ -195,7 +196,7 @@ static func with_sight_fade(source: Mesh) -> Mesh:
 		var material := mesh.surface_get_material(surface) as ShaderMaterial
 		if material != null and material.shader == Weathered:
 			var faded := material.duplicate() as ShaderMaterial
-			faded.set_shader_parameter("sight_fade", true)
+			faded.shader = WeatheredSightFade
 			mesh.surface_set_material(surface, faded)
 	return mesh
 

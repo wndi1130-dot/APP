@@ -1,6 +1,7 @@
 extends "res://addons/gut/test.gd"
 ## Sight changes the dead's drawing, never where the rules put them. The draw
 ## ledger is used here: a headless MultiMesh does not return its instance data.
+## Axe observations capture the submission boundary, not rendered pixel coverage.
 
 const Zombies = preload("res://game/actors/zombies.gd")
 const DeadCast = preload("res://game/actors/dead_cast.gd")
@@ -13,6 +14,14 @@ var game
 var dead: Zombies
 var camera: Camera3D
 var origin: Vector3
+
+
+class ObservedAxes extends Zombies:
+	var axe_submissions: Array[Dictionary] = []
+
+	func _submit_axe_custom(slot: int, id: int, custom: Color) -> void:
+		super._submit_axe_custom(slot, id, custom)
+		axe_submissions.append({"slot": slot, "id": id, "custom": custom, "target": embedded_draw.multimesh})
 
 
 class WaitingGarment extends Zombies:
@@ -63,7 +72,7 @@ func _camera_at(at: Vector3) -> Camera3D:
 	return cam
 
 
-func _field(wait_for_garment: bool = false, queued_appearance: bool = false) -> void:
+func _field(wait_for_garment: bool = false, queued_appearance: bool = false, observe_axes: bool = false) -> void:
 	game = FieldGame.new()
 	game.opts = {"seed": 11, "raiders": false, "auto_pause": false}
 	add_child_autofree(game)
@@ -76,6 +85,8 @@ func _field(wait_for_garment: bool = false, queued_appearance: bool = false) -> 
 	# field's arrival drawing. Loading tests add their own pending appearance.
 	if queued_appearance:
 		dead = QueuedAppearance.new()
+	elif observe_axes:
+		dead = ObservedAxes.new()
 	else:
 		dead = WaitingGarment.new() if wait_for_garment else Zombies.new()
 	game.add_child(dead)
@@ -83,6 +94,18 @@ func _field(wait_for_garment: bool = false, queued_appearance: bool = false) -> 
 	dead.bodies_to_read.clear()
 	dead.bodies_planned = 1
 	camera = _camera_at(origin)
+
+
+func _ensure_axe_draw() -> void:
+	if dead.embedded_draw != null:
+		return
+	dead.embedded_draw = MultiMeshInstance3D.new()
+	dead.embedded_draw.multimesh = MultiMesh.new()
+	dead.embedded_draw.multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	dead.embedded_draw.multimesh.use_custom_data = true
+	dead.embedded_draw.multimesh.mesh = BoxMesh.new()
+	dead.embedded_draw.multimesh.instance_count = Zombies.EMBED_MAX
+	dead.add_child(dead.embedded_draw)
 
 
 func _spawn(at: Vector3) -> Dictionary:
@@ -416,14 +439,7 @@ func test_offscreen_seen_movement_refreshes_the_fading_draw() -> void:
 
 func test_seen_record_reuses_values_and_erases_finished_attachments() -> void:
 	_field()
-	if dead.embedded_draw == null:
-		dead.embedded_draw = MultiMeshInstance3D.new()
-		dead.embedded_draw.multimesh = MultiMesh.new()
-		dead.embedded_draw.multimesh.transform_format = MultiMesh.TRANSFORM_3D
-		dead.embedded_draw.multimesh.use_custom_data = true
-		dead.embedded_draw.multimesh.mesh = BoxMesh.new()
-		dead.embedded_draw.multimesh.instance_count = Zombies.EMBED_MAX
-		dead.add_child(dead.embedded_draw)
+	_ensure_axe_draw()
 	var z: Dictionary = _spawn(origin)
 	var id: int = int(z["id"])
 	z["state"] = "rising"
@@ -500,19 +516,29 @@ func test_draw_cap_uses_distance_without_counting_unsubmitted_visibility() -> vo
 
 
 func test_draw_cap_keeps_submitted_ids_over_a_charged_offscreen_candidate() -> void:
-	_field()
+	_field(false, false, true)
+	_ensure_axe_draw()
+	var observed := dead as ObservedAxes
+	var axe_id: int = -1
 	for _index: int in Zombies.MAX_DRAW:
-		_spawn(origin + Vector3(2, 0, 0))
+		var z: Dictionary = _spawn(origin + Vector3(2, 0, 0))
+		if _index == 0:
+			z["embedded"] = {"id": "axe"}
+			axe_id = int(z["id"])
 	var newcomer: Dictionary = _spawn(origin + Vector3(30, 0, 0))
 	var newcomer_id: int = int(newcomer["id"])
+	newcomer["embedded"] = {"id": "axe"}
 	dead.render(camera, {}, false, 0.0)
 	var kept_ids: Array = dead._submitted_last.keys()
 	kept_ids.sort()
 	assert_eq(kept_ids.size(), Zombies.MAX_DRAW)
 	assert_eq(float(dead._shown[newcomer_id]), 1.0, "offscreen sight has already filled its visibility")
 	assert_false(dead._submitted_last.has(newcomer_id))
+	assert_true(dead._submitted_axes.has(axe_id))
+	assert_false(dead._submitted_axes.has(newcomer_id))
 	newcomer["pos"] = origin
 	dead.list.reverse()   # nearest and first, but never submitted in the preceding frame
+	observed.axe_submissions.clear()
 	dead.render(camera, {}, false, 0.09)
 	var drawn_ids: Array = dead.drawn_at.keys()
 	drawn_ids.sort()
@@ -523,19 +549,19 @@ func test_draw_cap_keeps_submitted_ids_over_a_charged_offscreen_candidate() -> v
 	assert_false(dead.drawn_at.has(newcomer_id))
 	assert_eq(float(dead._shown[newcomer_id]), 0.0, "the rejected candidate waits for a fresh fade-in")
 	assert_eq(dead._last_seen_draw[newcomer_id]["at"], origin, "waiting still tracks the seen place")
+	assert_eq(observed.axe_submissions[0]["id"], newcomer_id, "the rejected axe was provisionally submitted")
+	assert_eq(observed.axe_submissions[-1]["id"], axe_id)
+	assert_eq(observed.axe_submissions[-1]["slot"], 0, "reselection repacks the surviving axe")
+	assert_eq(dead._submitted_axes.size(), 1)
+	assert_false(dead._submitted_axes.has(newcomer_id), "reselection clears the provisional axe ledger")
+	assert_eq(dead._submitted_axes[axe_id], observed.axe_submissions[-1]["custom"])
+	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 1)
 
 
 func test_markers_and_embedded_axes_fade_together_with_custom_visibility() -> void:
 	_field()
 	# Supply an axe draw even when the optional model is not carried in a build.
-	if dead.embedded_draw == null:
-		dead.embedded_draw = MultiMeshInstance3D.new()
-		dead.embedded_draw.multimesh = MultiMesh.new()
-		dead.embedded_draw.multimesh.transform_format = MultiMesh.TRANSFORM_3D
-		dead.embedded_draw.multimesh.use_custom_data = true
-		dead.embedded_draw.multimesh.mesh = BoxMesh.new()
-		dead.embedded_draw.multimesh.instance_count = Zombies.EMBED_MAX
-		dead.add_child(dead.embedded_draw)
+	_ensure_axe_draw()
 	assert_true(dead.embedded_draw.multimesh.use_custom_data)
 	var z: Dictionary = _spawn(origin)
 	var id: int = int(z["id"])
@@ -576,6 +602,111 @@ func test_markers_and_embedded_axes_fade_together_with_custom_visibility() -> vo
 	assert_ne(axe_custom.a, shown)
 
 
+func test_with_sight_fade_copies_only_weathered_surfaces_without_assets() -> void:
+	var source := ArrayMesh.new()
+	var weathered := ShaderMaterial.new()
+	weathered.shader = Props.Weathered
+	weathered.set_shader_parameter("porosity", 0.37)
+	weathered.set_shader_parameter("use_vertex_color", true)
+	var standard := StandardMaterial3D.new()
+	var materials: Array[Material] = [weathered, standard, null]
+	var arrays: Array = BoxMesh.new().surface_get_arrays(0)
+	for material: Material in materials:
+		source.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+		source.surface_set_material(source.get_surface_count() - 1, material)
+	var cached: Dictionary = {0: source}
+	var original_code: String = Props.Weathered.code
+	var faded: Mesh = Props.with_sight_fade(cached[0])
+	assert_true(is_same(cached[0], source))
+	assert_false(is_same(faded, source))
+	assert_eq(source.get_surface_count(), 3)
+	assert_eq(faded.get_surface_count(), 3)
+	for surface: int in materials.size():
+		if materials[surface] == null:
+			assert_null(source.surface_get_material(surface))
+		else:
+			assert_true(is_same(source.surface_get_material(surface), materials[surface]))
+	assert_true(is_same(weathered.shader, Props.Weathered))
+	assert_eq(Props.Weathered.code, original_code, "the shared Shader is untouched")
+	var opted_in := faded.surface_get_material(0) as ShaderMaterial
+	assert_not_null(opted_in)
+	if opted_in == null:
+		return
+	assert_false(is_same(opted_in, weathered))
+	assert_true(is_same(opted_in.shader, Props.WeatheredSightFade))
+	for material: ShaderMaterial in [weathered, opted_in]:
+		assert_almost_eq(float(material.get_shader_parameter("porosity")), 0.37, 0.0001)
+		assert_true(bool(material.get_shader_parameter("use_vertex_color")))
+	assert_true(is_same(faded.surface_get_material(1), standard))
+	assert_null(faded.surface_get_material(2), "the surface without a material stays without one")
+
+
+func test_two_axes_submit_each_visibility_to_its_own_slot() -> void:
+	_field(false, false, true)
+	_ensure_axe_draw()
+	var observed := dead as ObservedAxes
+	var first: Dictionary = _spawn(origin)
+	var second: Dictionary = _spawn(origin + Vector3(1, 0, 0))
+	first["embedded"] = {"id": "axe"}
+	second["embedded"] = {"id": "axe"}
+	dead.render(camera, {}, false, 0.0)
+	var expected: Dictionary = {int(first["id"]): 0.25, int(second["id"]): 0.75}
+	for _order: int in 2:
+		for id: int in expected:
+			dead._shown[id] = expected[id]
+		observed.axe_submissions.clear()
+		dead.render(camera, {}, false, 0.0)
+		assert_eq(observed.axe_submissions.size(), 2)
+		assert_eq(dead._submitted_axes.size(), 2)
+		assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 2)
+		for slot: int in 2:
+			var sent: Dictionary = observed.axe_submissions[slot]
+			var id: int = int(dead.list[slot]["id"])
+			assert_true(is_same(sent["target"], dead.embedded_draw.multimesh))
+			assert_eq(sent["slot"], slot)
+			assert_eq(sent["id"], id)
+			assert_eq(sent["custom"], Color(0.0, 0.0, 0.0, float(expected[id])))
+			assert_eq(dead._submitted_axes[id], sent["custom"])
+		dead.list.reverse()
+
+
+func test_axe_quantization_ends_and_rounding_boundaries_keep_stun_shade() -> void:
+	_field(false, false, true)
+	_ensure_axe_draw()
+	var observed := dead as ObservedAxes
+	var z: Dictionary = _spawn(origin)
+	var id: int = int(z["id"])
+	z["embedded"] = {"id": "axe"}
+	dead.render(camera, {}, false, 0.0)
+	var cases: Array[Vector2] = [Vector2(0, 0), Vector2(1.0 / 16.0, 1.0 / 16.0),
+		Vector2(15.0 / 16.0, 15.0 / 16.0), Vector2(1, 1)]
+	for step: int in 16:
+		var boundary: float = (float(step) + 0.5) / 16.0
+		cases.append(Vector2(boundary - 0.0001, float(step) / 16.0))
+		cases.append(Vector2(boundary + 0.0001, float(step + 1) / 16.0))
+	for shade: float in [1.0, 0.8]:
+		z["stun"] = 1.0 if shade == 0.8 else 0.0
+		for sample: Vector2 in cases:
+			var decoded: Vector2 = Zombies.unpack_shade(Zombies.pack_shade(shade, sample.x))
+			assert_almost_eq(decoded.x, shade, 0.0001)
+			assert_eq(decoded.y, sample.y)
+			dead._shown[id] = sample.x
+			observed.axe_submissions.clear()
+			dead.render(camera, {}, false, 0.0)
+			if sample.x == 0.0:
+				assert_true(observed.axe_submissions.is_empty())
+				assert_false(dead._submitted_axes.has(id))
+				assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 0)
+				continue
+			var custom: Color = dead._last_seen_draw[id]["custom"]
+			assert_almost_eq(custom.a, shade, 0.0001)
+			assert_eq(observed.axe_submissions.size(), 1)
+			assert_eq(observed.axe_submissions[0]["slot"], 0)
+			assert_eq(observed.axe_submissions[0]["custom"], Color(0.0, 0.0, 0.0, sample.y))
+			assert_eq(dead._submitted_axes[id], observed.axe_submissions[0]["custom"])
+			assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 1)
+
+
 func test_embedded_axes_opt_in_without_changing_cached_prop_materials() -> void:
 	var cached: Dictionary = Props.batch_meshes(Zombies.EMBED_MODEL)
 	if not cached.has(0):
@@ -593,15 +724,15 @@ func test_embedded_axes_opt_in_without_changing_cached_prop_materials() -> void:
 		var original := shared.surface_get_material(surface) as ShaderMaterial
 		var opted_in := faded.surface_get_material(surface) as ShaderMaterial
 		assert_false(is_same(opted_in, original), "only the axe's private material opts in")
-		assert_true(bool(opted_in.get_shader_parameter("sight_fade")))
-		assert_ne(original.get_shader_parameter("sight_fade"), true, "shared cache stays solid")
+		assert_true(is_same(opted_in.shader, Props.WeatheredSightFade))
+		assert_true(is_same(original.shader, Props.Weathered), "shared cache stays solid")
 	var furniture: Dictionary = Props.batch_meshes(Props.DIR + "bookcase.glb")
 	assert_true(furniture.has(0))
 	if furniture.has(0):
 		var mesh: Mesh = furniture[0]
 		for surface: int in mesh.get_surface_count():
 			var material := mesh.surface_get_material(surface) as ShaderMaterial
-			assert_ne(material.get_shader_parameter("sight_fade"), true, "other props keep sight fade off")
+			assert_true(is_same(material.shader, Props.Weathered), "other props keep sight fade off")
 
 
 func test_an_unread_body_waits_at_zero_then_fades_in() -> void:
@@ -775,4 +906,6 @@ func test_sight_discard_is_enabled_only_by_the_field_dead_shaders() -> void:
 	assert_false(train.contains("#define SIGHT_FADE"))
 	assert_true(body.contains("#define SIGHT_FADE"))
 	assert_true(garment.contains("#define SIGHT_FADE"))
+	assert_false(Props.Weathered.code.contains("#define SIGHT_FADE"))
+	assert_true(Props.WeatheredSightFade.code.contains("#define SIGHT_FADE"))
 	assert_eq(garment.replace("\r\n", "\n").replace("#define SIGHT_FADE\n", ""), living.replace("\r\n", "\n"))
