@@ -119,7 +119,7 @@ static func open(hud, want: Dictionary) -> void:
 	hud.take_bar = null
 	var bag: bool = hud.inv_view == "bag"
 	var title: String = String(Carry.BAGS[p.bag]["name"]) if bag else _place_name(game, at)
-	var side: String = "%.1f / %.0f · %s" % [p.weight(), p.carry_limit(), Carry.STATE_NAMES[p.carry_state()]] if bag else ""
+	var side: String = "%.1f / %.0f · 몸 부담 %.1f · %s" % [p.weight(), p.carry_limit(), p.body_burden(), Carry.STATE_NAMES[p.carry_state()]] if bag else ""
 	if not bag and at["kind"] == "box":
 		var c: Dictionary = game.data["containers"][at["id"]]
 		side = "담긴 %.1f / %.0f" % [Carry.box_load(c), Carry.box_limit(c)]

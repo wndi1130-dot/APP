@@ -230,8 +230,16 @@ func carry_limit() -> float:
 	return Carry.limit(bag, int(skills["strength"]))
 
 
+## What the load weighs on the body (2026-11-02 user's pick): weight() with what is packed in the
+## bag lightened by the bag's relief. weight() stays the bag's own budget; what is not in the bag
+## (a big thing held in both arms, the spare weapons, soaked or extra clothes) weighs in whole.
+func body_burden() -> float:
+	var packed := Carry.total_weight(items) - Carry.held_weight(items)
+	return Carry.body_burden(bag, packed, weight() - packed)
+
+
 func carry_state() -> int:
-	return Carry.state(weight(), carry_limit())
+	return Carry.state(body_burden(), carry_limit())
 
 
 ## The load lets one run: not over the limit and nothing held in both arms
