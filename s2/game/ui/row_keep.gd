@@ -27,6 +27,7 @@ static func sync(into: Control, ids: Array, make: Callable, fill: Callable) -> v
 	for id: String in kept:
 		if not ids.has(id):
 			_retire(kept[id])
+	var made: Array[Rect2] = []
 	for index: int in ids.size():
 		var id: String = String(ids[index])
 		var fresh: bool = not kept.has(id)
@@ -42,6 +43,7 @@ static func sync(into: Control, ids: Array, make: Callable, fill: Callable) -> v
 		into.move_child(row, index)
 		if fresh:
 			row.modulate.a = 0.0
+			made.append(Rect2(target, row.size))
 		else:
 			row.position = from
 		var moving: bool = not row.position.is_equal_approx(target)
@@ -52,6 +54,13 @@ static func sync(into: Control, ids: Array, make: Callable, fill: Callable) -> v
 				tween.tween_property(row, "position", target, MOVE_S).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 			if row.modulate.a < 1.0:
 				tween.tween_property(row, "modulate:a", 1.0, ADD_S)
+	# A leaving row under a new one goes at once: what shows there is what takes the press.
+	for child: Node in into.get_children():
+		if child is Control and child.has_meta(LEAVING_META) and child.visible:
+			for rect: Rect2 in made:
+				if rect.intersects(Rect2(child.position, child.size)):
+					child.hide()
+					break
 	_quiet_if_needed(into)
 
 

@@ -330,3 +330,18 @@ func test_deferred_scroll_restoration_preserves_a_value_changed_after_restore() 
 	scroll.scroll_vertical = 125
 	await wait_process_frames(2)
 	assert_eq(scroll.scroll_vertical, 125)
+
+
+# A row put where a leaving one still fades takes the press: the leaving one goes at once.
+func test_a_new_row_over_a_leaving_one_hides_it_at_once() -> void:
+	_sync(["a", "b"])
+	_settle()
+	var a: Control = _item("a")
+	var b: Control = _item("b")
+	_sync(["c", "b"])
+	assert_true(a.has_meta(RowKeep.LEAVING_META))
+	assert_false(a.visible, "what shows at the first row is what takes the press")
+	assert_true(_item("c").visible)
+	_sync(["c"])
+	assert_true(b.visible, "a row leaving with nothing new over it still fades")
+	assert_gt(b.modulate.a, 0.0)
