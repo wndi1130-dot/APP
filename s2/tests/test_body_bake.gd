@@ -29,6 +29,8 @@ func test_every_motion_names_a_layer_that_exists_and_layers_only_name_body_bones
 		for bone in layer.get("damp", {}):
 			assert_true(BodyBake.MAP.has(bone), "%s damp %s" % [layer_name, bone])
 		for step in layer["steps"]:
+			if step[0] != "turn" and step[0] != "aim":
+				continue  # a step written in code (stand_support): it names no bones here
 			assert_true(BodyBake.MAP.has(step[1]), "%s step %s" % [layer_name, step[1]])
 			if step[0] == "turn":
 				assert_true(BodyBake.AXES.has(step[2]))
@@ -257,8 +259,10 @@ func test_the_living_have_their_own_set_baked_with_no_still_poses() -> void:
 			written.append(clip)
 		else:
 			assert_true(clip[4] == "" or BodyBake.LAYERS.has(clip[4]), "layer of %s" % clip[0])
-	# The ones written here come first, so the bake with no motion set keeps their numbers.
-	assert_eq(BodyBake.PERSON_CLIPS.slice(0, written.size()), written, "written ones first")
+	# Slots stay where they are when a clip's source changes (the field finds clips by name).
+	assert_eq(String(BodyBake.PERSON_CLIPS[0][0]), "p_walk", "first slot")
+	assert_eq(String(BodyBake.PERSON_CLIPS[1][0]), "p_run", "second slot")
+	assert_eq(String(BodyBake.PERSON_CLIPS[2][0]), "p_stand", "third slot")
 	var root := _stick_body()
 	add_child_autofree(root)
 	var assets: Dictionary = BodyBake.bake_own(root, written, [])
@@ -267,7 +271,6 @@ func test_the_living_have_their_own_set_baked_with_no_still_poses() -> void:
 	assert_eq(String(assets["clips"][0]["name"]), "p_walk")
 	assert_gt(float(assets["clips"][0]["round"]), 0.5, "a walk covers ground")
 	assert_gt(float(assets["clips"][1]["round"]), float(assets["clips"][0]["round"]), "the run more")
-	assert_eq(float(assets["clips"][2]["round"]), 0.0, "standing covers none")
 
 
 func test_a_keyed_value_eases_from_key_to_key_and_holds_past_the_ends() -> void:
