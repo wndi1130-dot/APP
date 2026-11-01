@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
+const Zombies = preload("res://game/actors/zombies.gd")
 
 var game
 
@@ -240,3 +241,23 @@ func test_a_path_that_stops_short_ends_in_its_last_cell_not_at_the_wall() -> voi
 	var free: PackedVector3Array = game.grid.find_path(FieldGrid.center(Vector2i(92, 24)), FieldGrid.center(Vector2i(100, 26)) + Vector3(0.3, 0, 0.3), false)
 	assert_almost_eq(free[free.size() - 1].x, 100.8, 0.01, "a path that arrives still ends on the exact spot")
 
+
+func test_prologue_dead_walk_to_a_loud_sound_and_later_acts_hurry() -> void:
+	# Decisions 383, 525: in the prologue a loud sound brings the dead at the shamble pace.
+	var z := _zombie(Vector3(40.5, 0, 7.5))
+	game.zombies.hear(Vector3(50.5, 0, 7.5), SimNoise.Level.LOUD, 35.0)
+	assert_eq(z["state"], "investigate")
+	assert_eq(float(z["speed"]), Zombies.SPEED_SHAMBLE, "the prologue's dead come slowly to a loud sound")
+	game.zombies.noise_hurry = Zombies.SPEED_HURRY
+	var later := _zombie(Vector3(40.5, 0, 9.5))
+	game.zombies.hear(Vector3(50.5, 0, 9.5), SimNoise.Level.LOUD, 35.0)
+	assert_eq(float(later["speed"]), Zombies.SPEED_HURRY, "after the prologue a loud sound still hurries them")
+
+
+func test_act_opts_pick_the_loud_sound_pace_and_chase_keeps_its_pace() -> void:
+	# Decisions 387 (3), 525: only the noise reaction changes; the chase after seeing stays 1.35.
+	for act: String in ["prologue", "act1", "act2", "act3", "", "unknown"]:
+		var want: float = Zombies.SPEED_HURRY if act in ["act1", "act2", "act3"] else Zombies.SPEED_SHAMBLE
+		assert_eq(Zombies.loud_pace(act), want, act)
+	assert_eq(game.zombies.noise_hurry, Zombies.SPEED_SHAMBLE, "a start with no act is the prologue")
+	assert_eq(Zombies.SPEED_HURRY, 1.35, "the chase pace is not this decision's")

@@ -223,12 +223,12 @@ func test_a_press_before_the_first_call_only_opens_the_button() -> void:
 func test_closed_button_says_one_reason_and_sends_nobody() -> void:
 	_spawn(game.work.door_of("work_site"))
 	game.actions.start_work(game.player)
-	assert_eq(_radio(), "기관사: 열차에서 거기까지 길에 망자가 하나 있습니다.")
+	assert_eq(_radio(), "기관사: 열차에서 일터 가는 길에 망자가 하나 있습니다.")
 	assert_eq(game.crew.size(), 0)
 	assert_eq(game.receipt.to_dict()["people"]["sent"].size(), 0)
-	assert_eq(game.work.blocked_reason({"path_awake": 0, "near_awake": 2}), "기관사: 일터 바로 곁에 깨어 있는 놈이 둘 있습니다.")
+	assert_eq(game.work.blocked_reason({"path_awake": 0, "near_awake": 2}), "기관사: 일터 바로 곁에 깨어 있는 망자가 둘 있습니다.")
 	assert_eq(game.work.blocked_reason({"path_awake": 0, "near_awake": 0, "total": 10, "cleared": 6}), "기관사: 둘레에 아직 하나 남았습니다.")
-	assert_eq(game.work.blocked_reason({"path_awake": 11}), "기관사: 열차에서 거기까지 길에 망자가 열 남짓 있습니다.")
+	assert_eq(game.work.blocked_reason({"path_awake": 11}), "기관사: 열차에서 일터 가는 길에 망자가 열 남짓 있습니다.")
 
 
 func test_open_call_is_not_repeated_until_sixty_seconds_have_passed() -> void:
@@ -481,7 +481,7 @@ func _cycle(id: String) -> void:
 	assert_almost_eq(game.work.remaining(), before - float(template["trip"]), 0.0001)
 	worker.position = game.work.door_of("work_site")
 	if id == "coal_wagon":
-		worker.position = FieldGrid.center(Vector2i(clampi(int(worker.position.x), FieldWork.COAL_DROP_MIN_X, FieldWork.COAL_DROP_MAX_X), FieldWork.COAL_DROP_ROW))
+		worker.position = game.work.coal_drop(worker.position.x)
 	game.ai._crew(worker, 0.1, true)
 	var delivered: float = game.actions.coal_delivered if template["yield"] == "coal" else game.actions.wood_delivered
 	assert_almost_eq(delivered, float(template["trip"]), 0.0001)

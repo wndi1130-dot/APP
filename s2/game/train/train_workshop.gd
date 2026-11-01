@@ -125,7 +125,7 @@ static func why_not(g: Dictionary, id: String) -> String:
 	if id in ["sled", "long_sled"] and sleds >= 2.0:
 		return "썰매 자리는 둘까지"
 	if id in ["stretcher", "cart"] and float(dom.get(RECIPES[id]["to"], 0)) >= 1.0:
-		return "%s은 하나까지" % String(RECIPES[id]["name"])
+		return "%s 자리는 하나까지" % String(RECIPES[id]["name"])
 	if id == "runner" and float(dom.get("runners", 0)) >= sleds:
 		return "쇠 날은 썰매·긴 썰매마다 하나"
 	var cost: Dictionary = RECIPES[id]["cost"]

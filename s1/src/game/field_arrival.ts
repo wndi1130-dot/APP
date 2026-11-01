@@ -2,7 +2,7 @@ import { COMMS, COMM_NAME } from './data';
 import { END_LINK } from './state';
 import type { Game } from './state';
 import { snapshot } from './field_receipt';
-import type { FieldSnapshot } from './field_receipt';
+import type { FieldReturnRecord, FieldSnapshot } from './field_receipt';
 
 // 둘째 역 도착 화면과 끝 카드(구현명세 S3 연결 v1 5절, 결정 297). 수직 슬라이스는 여기서 끝난다.
 // 첫 귀환 뒤 다음 정차에 닿으면 정차를 고르지 않고 이 화면을 보인다. 둘째 역에는 필드도 새 정차 결정도 없다.
@@ -68,15 +68,33 @@ export function arrivalSummary(g: Game): ArrivalSection[] | null {
   return out;
 }
 
+/**
+ * 첫 정차에서 돌아오지 못한 사람 수: 죽은 사람과 필드에 남기고 온 사람(남겨짐·사라짐)을 한 사람씩 센다.
+ * 남긴 수 칸(leftCount)이 없는 옛 기록은 반영 때 보관한 영수증(applied)에서 귀환 때와 같은 규칙
+ * (남겨짐·사라짐, 죽은 사람 빼고)으로 남긴 수를 다시 센다. 그것도 못 읽으면 죽은 사람만 센다.
+ * 이름은 쓰지 않는다(결정 147·183). S2 field_arrival.gd not_back과 같다.
+ */
+function notBack(g: Game, rec: FieldReturnRecord): number {
+  if (rec.leftCount !== undefined) return rec.dead.length + rec.leftCount;
+  try {
+    const p = (JSON.parse(g.fieldReturns?.applied[rec.receiptId] ?? '') as { people?: Record<string, unknown> }).people ?? {};
+    const ids = (k: string): string[] => (Array.isArray(p[k]) ? (p[k] as unknown[]).filter((x): x is string => typeof x === 'string') : []);
+    const gone = ids('dead');
+    return rec.dead.length + new Set([...ids('leftBehind'), ...ids('missing')].filter(x => !gone.includes(x))).size;
+  } catch {
+    return rec.dead.length;
+  }
+}
+
 /** 끝 카드 문구(결정 297: 작업자가 정한다). */
 export function endCard(g: Game): { title: string; lines: string[] } {
   const rec = g.fieldReturns?.records[0];
-  const lost = rec?.dead.length ?? 0;
+  const lost = rec ? notBack(g, rec) : 0;
   return {
     title: '여기까지',
     lines: [
       '첫 정차 한 번이 열차를 이만큼 바꿨다.',
-      lost > 0 ? `${lost}명은 그 역에 남았다.` : '나간 사람은 모두 열차로 돌아왔다.',
+      lost > 0 ? `${lost}명이 돌아오지 못했다.` : '나간 사람은 모두 열차로 돌아왔다.',
       '이 시험판은 둘째 역에서 멈춘다.',
     ],
   };
