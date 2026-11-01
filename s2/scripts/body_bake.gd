@@ -3418,7 +3418,9 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 		if PERSON_STRIDE_ROUNDS.has(entry[0]):
 			var grid_round := stride_round
 			stride_round = _check_person_stride_final(ctx, entry[0], _person_stride_reach(ctx, entry))
-			print("STRIDE_SAVED %s round %.6f frames_round %.6f" % [entry[0], stride_round, grid_round])
+			# For the record: the same legs measured from where the saved loop starts.
+			var at_shift := _person_stride_round(ctx, entry, float(phase["shift"])) if not phase.is_empty() else stride_round
+			print("STRIDE_SAVED %s round %.6f at_shift %.6f frames_round %.6f" % [entry[0], stride_round, at_shift, grid_round])
 		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0})
 	var still := []
 	for entry: Array in poses:
