@@ -55,6 +55,19 @@ const STRIDE: Vector2 = Vector2(0.98, 1.02)
 const POSTURE: Vector2 = Vector2(0.0, 0.06)
 const RUN_POSTURE: float = 1.3
 const POSTURE_EASE: float = 4.0
+## Shared ground-speed gait; shorter than the drawing's 0.3 s stand filter.
+const GROUND_RUN: String = "ground_run"
+const RUN_TAU: float = 0.15
+const RUN_ON: float = 1.15
+const RUN_OFF: float = 1.05
+const BACKWARD_DEG: float = 100.0
+
+
+## Both stick and path movement sign the shared round against the drawn body.
+static func signed_distance(p: Variant, ground: Vector3) -> float:
+	var gone: float = ground.length()
+	var forward := Vector3(sin(p.rotation.y), 0.0, cos(p.rotation.y))
+	return -gone if ground.dot(forward) < gone * cos(deg_to_rad(BACKWARD_DEG)) else gone
 
 
 ## "long" (a two-handed gun), "pistol" (a one-handed gun), "axe" (a heavy
@@ -82,6 +95,36 @@ static func weak_hold(p) -> bool:
 ## walks, as field_game.gd moves it (person.gd speed, load_lets_run).
 static func runs(p) -> bool:
 	return p.running and not p.crouched and p.load_lets_run() and p.body.can_run()
+
+
+## Read by both the drawn gait and the footstep round.
+static func ground_runs(p: Variant) -> bool:
+	var state: Dictionary = p.brain.get(GROUND_RUN, {})
+	return bool(state.get("running", false))
+
+
+## Sample the travelled ground distance once per simulation tick.
+static func update_ground_run(p: Variant, gone: float, delta: float, floor_kind: int) -> void:
+	var state: Dictionary = p.brain.get(GROUND_RUN, {})
+	var speed: float = float(state.get("speed", 0.0))
+	if not is_finite(speed) or speed < 0.0:
+		speed = 0.0
+	if is_finite(delta) and delta > 0.0:
+		var sample: float = absf(gone) / delta if is_finite(gone) else 0.0
+		if not is_finite(sample):
+			sample = 0.0
+		speed = lerpf(speed, sample, 1.0 - exp(-delta / RUN_TAU))
+		if not is_finite(speed):
+			speed = 0.0
+	var walking_speed: float = p.walk_speed(floor_kind)
+	var running: bool = bool(state.get("running", false))
+	if not runs(p) or not is_finite(walking_speed) or walking_speed <= 0.0:
+		running = false
+	elif speed >= walking_speed * RUN_ON:
+		running = true
+	elif speed <= walking_speed * RUN_OFF:
+		running = false
+	p.brain[GROUND_RUN] = {"speed": speed, "running": running}
 
 
 ## Reeling on its feet: spent, or bleeding hard (body_state.gd bleed_level 2,

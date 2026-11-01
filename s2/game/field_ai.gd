@@ -1156,19 +1156,52 @@ func _look_out(p, role: String, fwd: Vector3, right: Vector3) -> Vector3:
 		_:
 			base = right
 	var k: int = maxi(game.squad.find(p), 0)
-	var sweep: float = sin(game.clock.elapsed * 0.5 + float(k) * 2.1) * deg_to_rad(LOOK_SWEEP_DEG)
-	var look := base.rotated(Vector3.UP, sweep)
-	# Decision 486: keep the slow sweep, but turn its result to the nearest camera-cone edge.
+	var camera_way: Vector3 = Vector3.ZERO
 	if game.camera != null:
-		var camera_way: Vector3 = game.camera.global_position - p.global_position
-		camera_way.y = 0.0
-		if camera_way.length_squared() > 0.0001:
-			camera_way = camera_way.normalized()
-			var offset := angle_difference(atan2(camera_way.x, camera_way.z), atan2(look.x, look.z))
-			var limit := deg_to_rad(LOOK_CAMERA_DEG)
-			if absf(offset) < limit:
-				look = camera_way.rotated(Vector3.UP, limit * (-1.0 if offset < 0.0 else 1.0))
-	return look
+		camera_way = game.camera.global_position - p.global_position
+	return _watch_look(p, base, k, camera_way, "watch_" + role)
+
+
+## Decision 486; user feedback 2026-11-01: hold the slow sweep's targets.
+func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: String) -> Vector3:
+	const HOLD_MIN: float = 1.5
+	const HOLD_SPREAD: float = 0.5
+	const CHANGE_DEG: float = 10.0
+	const EDGE_MARGIN_DEG: float = 15.0
+	var now: float = game.clock.elapsed
+	var state: Dictionary = p.brain.get(key, {})
+	if now < float(state.get("seen", now)):
+		state = {}   # A rewound clock starts a fresh watch.
+	state["seen"] = now
+	var hold: float = HOLD_MIN + HOLD_SPREAD * p.name_unit("watch")
+	if state.has("target") and now - float(state["picked"]) < hold:
+		var kept: float = float(state["target"])
+		return Vector3(sin(kept), 0.0, cos(kept))
+	var sweep: float = sin(now * 0.5 + float(k) * 2.1) * deg_to_rad(LOOK_SWEEP_DEG)
+	var look: Vector3 = base.normalized().rotated(Vector3.UP, sweep)
+	camera_way.y = 0.0
+	var edge: float = float(state.get("edge", 0.0))
+	if camera_way.length_squared() > 0.0001:
+		camera_way = camera_way.normalized()
+		var camera_yaw: float = atan2(camera_way.x, camera_way.z)
+		var centre: float = angle_difference(camera_yaw, atan2(base.x, base.z))
+		if absf(edge) < 0.5:
+			edge = -1.0 if centre < 0.0 else 1.0
+		elif centre * edge < -deg_to_rad(EDGE_MARGIN_DEG):
+			edge = -edge
+		var offset: float = angle_difference(camera_yaw, atan2(look.x, look.z))
+		var limit: float = deg_to_rad(LOOK_CAMERA_DEG)
+		if absf(offset) < limit:
+			look = camera_way.rotated(Vector3.UP, limit * edge)
+	state["edge"] = edge
+	var target: float = atan2(look.x, look.z)
+	if state.has("target") and absf(angle_difference(float(state["target"]), target)) < deg_to_rad(CHANGE_DEG):
+		target = float(state["target"])
+	else:
+		state["target"] = target
+		state["picked"] = now
+	p.brain[key] = state   # Finite angles and times survive the brain's save round trip.
+	return Vector3(sin(target), 0.0, cos(target))
 
 
 # ---------------------------------------------------------------- words
@@ -1642,20 +1675,10 @@ func _escort_watch(p, site: Vector3) -> void:
 	var out: Vector3 = p.position - site
 	out.y = 0.0
 	if out.length_squared() < 0.01:
-		out = Vector3(-1.0 if p.brain.get("side", 0) == 0 else 1.0, 0.0, 0.0)
+		out = Vector3(-1.0 if int(p.brain.get("side", 0)) == 0 else 1.0, 0.0, 0.0)
 	var k: int = maxi(game.crew.find(p), 0)
-	var sweep: float = sin(game.clock.elapsed * 0.5 + float(k) * 2.1) * deg_to_rad(LOOK_SWEEP_DEG)
-	var look: Vector3 = out.normalized().rotated(Vector3.UP, sweep)
 	var screen: Vector3 = game.cam_back()
-	screen.y = 0.0
-	screen = screen.normalized()
-	var offset: float = angle_difference(atan2(screen.x, screen.z), atan2(look.x, look.z))
-	var limit: float = deg_to_rad(LOOK_CAMERA_DEG)
-	if absf(offset) < limit:
-		# The edge is picked on the side the outward watch lies, not the swept look, so
-		# a sweep across the screen never flips the body through it.
-		var side: float = angle_difference(atan2(screen.x, screen.z), atan2(out.x, out.z))
-		look = screen.rotated(Vector3.UP, limit * (-1.0 if side < 0.0 else 1.0))
+	var look: Vector3 = _watch_look(p, out, k, screen, "watch_escort")
 	p.face_point(p.position + look * 10.0)
 
 
