@@ -236,9 +236,20 @@ const PERSON_FOOT_LOCK: Array = ["p_walk", "p_walk_long", "p_walk_axe", "p_walk_
 const PERSON_FOOTLOCK_OVERLAP: float = 0.08
 const PERSON_FOOTLOCK_STANCE_MIN: float = 0.55
 const PERSON_FOOTLOCK_STANCE_MAX: float = 0.62
-const PERSON_FOOTLOCK_BLEND: float = 0.04
-const PERSON_FOOTLOCK_CLEARANCE: float = 0.02
-const PERSON_FOOTLOCK_HEIGHT_PASSES: int = 3
+# Decision 534. Metres/radians, bake-only; no skeleton scale or rule changes.
+const PERSON_WALK_HIP_DROP: float = 0.10
+const PERSON_WALK_HIP_BOB: float = 0.015
+const PERSON_WALK_PELVIS_YAW: float = 0.08726646  # 5 degrees
+const PERSON_WALK_CHEST_COUNTER: float = 0.4
+const PERSON_WALK_HEEL_PITCH: float = 0.38397244  # 22 degrees, toe up
+const PERSON_WALK_TOE_PITCH: float = 0.78539816   # 45 degrees, heel up
+const PERSON_WALK_HEEL_END: float = 0.20
+const PERSON_WALK_TOE_START: float = 0.60
+const PERSON_WALK_SWING_LIFT: float = 0.07
+const PERSON_WALK_FOOTPRINT_BACK: float = 0.06  # balance the ankle's heel/toe reach
+const PERSON_WALK_KNEE_MIN: float = 0.05235988   # 3 degrees, never straight/backward
+const PERSON_WALK_SOLVE_PASSES: int = 6
+const PERSON_WALK_CONTACT_EPSILON: float = 0.005
 const POSES_CLIP: String = "poses"
 const ROUND_LEAST: float = 0.05               # a loop whose feet go back less than this a round is standing
 const CRAWL_CLIP: String = "crawl"            # pulled along by its hands, not its feet
@@ -2615,7 +2626,7 @@ static func _fit_person_phase(ctx: Dictionary, entry: Array) -> Dictionary:
 
 ## Actual body skin, not a coat hem. Average tied lowest points in x/z,
 ## retaining their minimum y so a change of lowest corner is measurable.
-static func _person_footlock_points(fit: Dictionary, skin: Array) -> Array:
+static func _person_footlock_probes(fit: Dictionary, skin: Array) -> Array:
 	var rest: PackedVector3Array = fit["rest"]
 	var bones: PackedInt32Array = fit["bones"]
 	var weights: PackedFloat32Array = fit["weights"]
@@ -2636,14 +2647,24 @@ static func _person_footlock_points(fit: Dictionary, skin: Array) -> Array:
 			moved.append(point)
 			lowest = minf(lowest, point.y)
 		var centre := Vector3.ZERO
+		var reference := Vector3.ZERO
 		var count := 0
-		for point: Vector3 in moved:
+		for index in moved.size():
+			var point: Vector3 = moved[index]
 			if point.y <= lowest + PERSON_SOLE_EPSILON:
 				centre += point
+				reference += rest[fit["soles"][side][index]]
 				count += 1
 		centre /= float(count)
 		centre.y = lowest
-		points.append(centre)
+		points.append({"point": centre, "rest": reference / float(count)})
+	return points
+
+
+static func _person_footlock_points(fit: Dictionary, skin: Array) -> Array:
+	var points := []
+	for probe: Dictionary in _person_footlock_probes(fit, skin):
+		points.append(probe["point"])
 	return points
 
 
@@ -2654,17 +2675,41 @@ static func _person_footlock_rotation(body: Skeleton3D, foot: int, rotation: Qua
 	body.set_bone_pose_rotation(foot, (parent_rot.inverse() * rotation).normalized())
 
 
-## Full lock throughout stance. Blend outside it, extending the same line
-## before touchdown/after toe-off; signed age keeps the loop seam continuous.
-static func _person_footlock_window(u: float, start: float, duration: float) -> Vector2:
-	var age := fposmod(u - start, 1.0)
+## z travel, sole lift, foot pitch. The flat footprint is stationary in world
+## space during stance. Swing is Hermite with the same endpoint velocity;
+## both position and velocity join at toe-off, touchdown and the loop seam.
+static func _person_walk_path(age: float, duration: float, stride: float) -> Vector3:
 	if age <= duration:
-		return Vector2(age, 1.0)
-	if age < duration + PERSON_FOOTLOCK_BLEND:
-		return Vector2(age, 1.0 - smoothstep(duration, duration + PERSON_FOOTLOCK_BLEND, age))
-	if age > 1.0 - PERSON_FOOTLOCK_BLEND:
-		return Vector2(age - 1.0, smoothstep(1.0 - PERSON_FOOTLOCK_BLEND, 1.0, age))
-	return Vector2(age, 0.0)
+		var t := age / duration
+		var pitch := -PERSON_WALK_HEEL_PITCH * (1.0 - smoothstep(0.0, PERSON_WALK_HEEL_END, t))
+		pitch += PERSON_WALK_TOE_PITCH * smoothstep(PERSON_WALK_TOE_START, 1.0, t)
+		return Vector3(stride * (duration * 0.5 - age), 0.0, pitch)
+	var t := (age - duration) / (1.0 - duration)
+	var h := t * t * (3.0 - 2.0 * t)
+	var z := stride * duration * (h - 0.5) - stride * (1.0 - duration) * (2.0 * t * t * t - 3.0 * t * t + t)
+	return Vector3(z, PERSON_WALK_SWING_LIFT * pow(sin(PI * t), 2.0), lerpf(PERSON_WALK_TOE_PITCH, -PERSON_WALK_HEEL_PITCH, h))
+
+
+## Replace the old vertical oscillation, preserving its mean plus a fixed
+## drop. Low at double support, high halfway between successive footfalls.
+## The advancing hip turns forward; the chest counter-turn carries the arms.
+static func _apply_person_walk_body(ctx: Dictionary, fit: Dictionary, u: float, keyed_u: float, layer: String) -> float:
+	var body: Skeleton3D = ctx["body"]
+	var age := fposmod(u - float(fit["starts"][0]), 1.0)
+	var gap := fposmod(float(fit["starts"][1]) - float(fit["starts"][0]), 1.0)
+	var half := age / gap if age < gap else (age - gap) / (1.0 - gap)
+	var yaw := -PERSON_WALK_PELVIS_YAW * cos(PI * half) * (1.0 if age < gap else -1.0)
+	var old_yaw := _value(WALK_LEGS[1][3], TAU * keyed_u)
+	turn(body, "hips", yaw - old_yaw, Vector3.UP)
+	var old_chest := 0.0
+	for step: Array in LAYERS[layer].get("steps", []):
+		if step[0] == "turn" and step[1] == "chest" and step[2] == "y":
+			old_chest += _value(step[3], TAU * keyed_u)
+	turn(body, "chest", -yaw * (1.0 + PERSON_WALK_CHEST_COUNTER) - old_chest, Vector3.UP)
+	var scale: float = ctx.get("sink_scale", 1.0)
+	var drop := float(WALK_SINK[0]) * scale + PERSON_WALK_HIP_DROP + PERSON_WALK_HIP_BOB * cos(TAU * half) - _value(WALK_SINK, TAU * keyed_u) * scale
+	sink(body, drop)
+	return drop
 
 
 ## One set of anchors/sole probes per body, shared by all six walk layers.
@@ -2716,38 +2761,35 @@ static func _fit_person_footlock(ctx: Dictionary, entry: Array, phase: Dictionar
 	if entry[4] != walk[4]:
 		_fit_person_stride(ctx, walk)
 	var fit := {"rest": rest, "bones": bones, "weights": weights, "per": per, "soles": soles, "legs": legs,
-		"starts": [], "durations": [], "anchors": [], "rotations": [], "round": float(PERSON_STRIDE_ROUNDS["p_walk"])}
+		"starts": [], "durations": [], "anchors": [], "rest_ankles": [], "rotations": [], "round": float(PERSON_STRIDE_ROUNDS["p_walk"])}
 	pose(ctx, stand[1], stand[4], 0.0)
 	var standing := _person_footlock_points(fit, _skin_frame(ctx))
 	fit["floor"] = minf((standing[0] as Vector3).y, (standing[1] as Vector3).y)
 	var shift: float = phase["shift"]
-	fit["starts"] = [fposmod(float(contacts["left"]) - shift, 1.0), fposmod(float(contacts["right"]) - shift, 1.0)]
+	var left := fposmod(float(contacts["left"]) - shift, 1.0)
+	var left_order := 0 if absf(wrapf(left - float(PERSON_STEP_AT[0]), -0.5, 0.5)) <= absf(wrapf(left - float(PERSON_STEP_AT[1]), -0.5, 0.5)) else 1
+	# Preserve foot order, but place physical touchdown on STEP_AT exactly.
+	fit["starts"] = [float(PERSON_STEP_AT[left_order]), float(PERSON_STEP_AT[1 - left_order])]
 	var to_mesh: Transform3D = ctx["to_mesh"]
 	for side in 2:
 		var start: float = fit["starts"][side]
 		var gap := fposmod(float(fit["starts"][1 - side]) - start, 1.0)
 		fit["durations"].append(clampf(gap + PERSON_FOOTLOCK_OVERLAP, PERSON_FOOTLOCK_STANCE_MIN, PERSON_FOOTLOCK_STANCE_MAX))
-		pose(ctx, walk[1], walk[4], fposmod(start + shift, 1.0))
 		var foot: int = legs[side][2]
-		var current := to_mesh * body.get_bone_global_pose(foot)
-		var rest_basis := (to_mesh * body.get_bone_global_rest(foot)).basis.orthonormalized()
-		var forward := current.basis.orthonormalized() * rest_basis.inverse() * Vector3.BACK
-		var yaw := atan2(forward.x, forward.z) if Vector2(forward.x, forward.z).length_squared() > 0.0000001 else 0.0
-		# Rest sole normal is mesh +y; retain contact yaw and remove pitch/roll.
-		var flat := Basis(Vector3.UP, yaw) * rest_basis
-		var rotation := (to_mesh.basis.inverse() * flat).orthonormalized().get_rotation_quaternion()
-		_person_footlock_rotation(body, foot, rotation)
-		var flat_points := _person_footlock_points(fit, _skin_frame(ctx))
-		var anchor := current.origin
-		anchor.y += float(fit["floor"]) - (flat_points[side] as Vector3).y
+		var rest_foot := to_mesh * body.get_bone_global_rest(foot)
+		var anchor := (to_mesh * body.get_bone_global_rest(legs[side][0])).origin
+		anchor.z -= PERSON_WALK_FOOTPRINT_BACK
+		# Centre the footprint under the hip, not at the old keyed touchdown.
+		# Moving the support from heel to toe must not translate a planted shoe.
 		fit["anchors"].append(anchor)
-		fit["rotations"].append(rotation)
+		fit["rest_ankles"].append(rest_foot.origin)
+		fit["rotations"].append(rest_foot.basis.orthonormalized())
 	ctx["footlock_walk"] = fit
 	return fit
 
 
 ## Cosine-rule two-bone solve. The keyed bend direction is projected onto
-## the new hip-to-ankle plane; clamp distance, never translate the hips/bones.
+## the new hip-to-ankle plane; rotate only, never lengthen either bone.
 static func _solve_person_footlock_leg(body: Skeleton3D, leg: Array, target: Vector3, pole_hint: Vector3) -> void:
 	var hip := body.get_bone_global_pose(leg[0]).origin
 	var knee := body.get_bone_global_pose(leg[1]).origin
@@ -2759,7 +2801,8 @@ static func _solve_person_footlock_leg(body: Skeleton3D, leg: Array, target: Vec
 	var delta := target - hip
 	var wanted := delta.length()
 	var axis := delta / wanted if wanted > 0.000001 else (ankle - hip).normalized()
-	var distance := clampf(wanted, maxf(absf(upper - lower), 0.000001), upper + lower)
+	var limit := sqrt(upper * upper + lower * lower + 2.0 * upper * lower * cos(PERSON_WALK_KNEE_MIN))
+	var distance := clampf(wanted, maxf(absf(upper - lower), 0.000001), limit)
 	var along := (upper * upper - lower * lower + distance * distance) / (2.0 * distance)
 	var height := sqrt(maxf(0.0, upper * upper - along * along))
 	var bend := pole_hint - axis * pole_hint.dot(axis)
@@ -2773,39 +2816,33 @@ static func _solve_person_footlock_leg(body: Skeleton3D, leg: Array, target: Vec
 	aim(body, "shin" + suffix, "foot" + suffix, ankle_target - body.get_bone_global_pose(leg[1]).origin)
 
 
-static func _apply_person_footlock(ctx: Dictionary, fit: Dictionary, u: float, before: Array) -> Array:
+static func _apply_person_footlock(ctx: Dictionary, fit: Dictionary, u: float) -> Array:
 	var body: Skeleton3D = ctx["body"]
 	var to_mesh: Transform3D = ctx["to_mesh"]
 	var to_body := to_mesh.affine_inverse()
 	var misses := []
 	for side in 2:
 		var leg: Array = fit["legs"][side]
-		var hip := body.get_bone_global_pose(leg[0]).origin
-		var knee := body.get_bone_global_pose(leg[1]).origin
-		var foot_pose := body.get_bone_global_pose(leg[2])
-		var keyed_axis := (foot_pose.origin - hip).normalized()
-		var pole := knee - hip - keyed_axis * (knee - hip).dot(keyed_axis)
-		if pole.length_squared() < 0.0000001:
-			pole = to_body.basis * Vector3.BACK
-		var keyed_rotation := foot_pose.basis.orthonormalized().get_rotation_quaternion()
-		var keyed_ankle := to_mesh * foot_pose.origin
-		var window := _person_footlock_window(u, fit["starts"][side], fit["durations"][side])
-		var locked: Vector3 = fit["anchors"][side]
-		locked.z -= window.x * float(fit["round"])
-		var swing := keyed_ankle
-		swing.y += maxf(0.0, float(fit["floor"]) + PERSON_FOOTLOCK_CLEARANCE - (before[side] as Vector3).y)
-		var target := swing.lerp(locked, window.y)
-		var rotation := keyed_rotation.slerp(fit["rotations"][side], window.y)
-		# The 2 cm swing margin fades to zero through the 0.04-cycle blends.
-		var floor_y := float(fit["floor"]) + PERSON_FOOTLOCK_CLEARANCE * (1.0 - window.y)
-		for _pass_id in PERSON_FOOTLOCK_HEIGHT_PASSES:
+		# A forward pole is intentional: a noisy/straight keyed knee cannot
+		# select the backwards branch of the two-bone solution.
+		var pole := to_body.basis * Vector3.BACK
+		var age := fposmod(u - float(fit["starts"][side]), 1.0)
+		var path := _person_walk_path(age, fit["durations"][side], fit["round"])
+		var base: Vector3 = fit["anchors"][side]
+		base.z += path.x
+		var flat: Basis = fit["rotations"][side]
+		var rotation := (to_body.basis * Basis(Vector3.RIGHT, path.z) * flat).orthonormalized().get_rotation_quaternion()
+		var target := to_mesh * body.get_bone_global_pose(leg[2]).origin
+		for _pass_id in PERSON_WALK_SOLVE_PASSES:
 			_person_footlock_rotation(body, leg[2], rotation)
-			var sole := _person_footlock_points(fit, _skin_frame(ctx))
-			var ankle_y := (to_mesh * body.get_bone_global_pose(leg[2]).origin).y
-			var offset_y := (sole[side] as Vector3).y - ankle_y
-			# Recompute from the attained ankle, so an unreachable goal does not
-			# accumulate an artificial miss on every height refinement.
-			target.y = floor_y - offset_y if window.y == 1.0 else maxf(target.y, floor_y - offset_y)
+			var probe: Dictionary = _person_footlock_probes(fit, _skin_frame(ctx))[side]
+			var ankle := to_mesh * body.get_bone_global_pose(leg[2]).origin
+			var offset: Vector3 = (probe["point"] as Vector3) - ankle
+			var flat_offset: Vector3 = (probe["rest"] as Vector3) - (fit["rest_ankles"][side] as Vector3)
+			# A material sole point stays over its own flat footprint while
+			# the ankle rolls around it. Re-evaluate the support after skinning.
+			target = base + flat_offset - offset
+			target.y = float(fit["floor"]) + path.y - offset.y
 			_solve_person_footlock_leg(body, leg, to_body * target, pole)
 			_person_footlock_rotation(body, leg[2], rotation)
 		var reached := to_mesh * body.get_bone_global_pose(leg[2]).origin
@@ -2815,16 +2852,38 @@ static func _apply_person_footlock(ctx: Dictionary, fit: Dictionary, u: float, b
 
 ## Sample the same frames that enter the VAT, with stance-relative travel
 ## unwrapped across u=0. No height threshold hides a slipping stance frame.
-static func _note_person_footlock(fit: Dictionary, u: float, before: Array, after: Array, misses: Array, stats: Array) -> void:
+static func _note_person_footlock(fit: Dictionary, u: float, before: Array, after: Array, misses: Array, stats: Array, hip_drop: float) -> void:
 	for side in 2:
 		var note: Dictionary = stats[side]
 		var age := fposmod(u - float(fit["starts"][side]), 1.0)
+		var probe: Dictionary = after[side]
+		var point: Vector3 = probe["point"]
+		var flat_offset: Vector3 = (probe["rest"] as Vector3) - (fit["rest_ankles"][side] as Vector3)
+		var residual := Vector2(point.x - flat_offset.x, point.z + age * float(fit["round"]) - flat_offset.z)
+		note["frames"] += 1
+		note["hip_drop"] += hip_drop
+		var touching := absf(point.y - float(fit["floor"])) <= PERSON_WALK_CONTACT_EPSILON
+		if touching:
+			note["contacts"] += 1
 		if age <= float(fit["durations"][side]):
 			note["before"].append((before[side] as Vector3).z + age * float(fit["round"]))
-			note["after"].append((after[side] as Vector3).z + age * float(fit["round"]))
-		else:
-			note["swing_min"] = minf(float(note["swing_min"]), (after[side] as Vector3).y)
+			note["after"].append(residual)
+			if touching:
+				note["contact_after"].append(residual)
+		note["minimum"] = minf(float(note["minimum"]), point.y)
 		note["miss"] = maxf(float(note["miss"]), float(misses[side]))
+
+
+## Bounding-box diagonal includes lateral drift as well as forward slip.
+static func _person_footlock_slide(points: Array) -> float:
+	if points.is_empty():
+		return INF
+	var low: Vector2 = points[0]
+	var high := low
+	for point: Vector2 in points:
+		low = low.min(point)
+		high = high.max(point)
+	return low.distance_to(high) * 100.0
 
 
 static func _print_person_footlock(clip: String, fit: Dictionary, stats: Array) -> void:
@@ -2833,15 +2892,17 @@ static func _print_person_footlock(clip: String, fit: Dictionary, stats: Array) 
 		var before: Array = note["before"]
 		var after: Array = note["after"]
 		var foot := "L" if side == 0 else "R"
-		if before.is_empty() or after.is_empty() or not is_finite(float(note["swing_min"])):
+		if before.is_empty() or after.is_empty() or not is_finite(float(note["minimum"])):
 			push_error("FOOTLOCK_STOP %s F-INPUT-MISSING no_frame_samples %s" % [clip, foot])
 			continue
 		var start: float = fit["starts"][side]
 		var slide_before := (float(before.max()) - float(before.min())) * 100.0
-		var slide_after := (float(after.max()) - float(after.min())) * 100.0
-		var underground := maxf(0.0, float(fit["floor"]) - float(note["swing_min"])) * 100.0
-		print("FOOTLOCK %s %s stance %.6f %.6f slide_before_cm %.4f slide_after_cm %.4f reach_miss_cm %.4f under_ground_cm %.4f" % [
-			clip, foot, start, start + float(fit["durations"][side]), slide_before, slide_after, float(note["miss"]) * 100.0, underground])
+		var slide_after := _person_footlock_slide(after)
+		var underground := maxf(0.0, float(fit["floor"]) - float(note["minimum"])) * 100.0
+		var contact_share := float(note["contacts"]) / float(note["frames"])
+		var hip_drop_cm := float(note["hip_drop"]) / float(note["frames"]) * 100.0
+		print("FOOTLOCK %s %s stance %.6f %.6f slide_before_cm %.4f slide_after_cm %.4f reach_miss_cm %.4f under_ground_cm %.4f contact_share %.6f hip_drop_cm %.4f contact_slide_cm %.4f" % [
+			clip, foot, start, start + float(fit["durations"][side]), slide_before, slide_after, float(note["miss"]) * 100.0, underground, contact_share, hip_drop_cm, _person_footlock_slide(note["contact_after"])])
 
 
 ## One skin matrix per bone the mesh binds: pose * inverse bind, in mesh space.
@@ -3500,7 +3561,7 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 		var footlock_stats := []
 		if not footlock.is_empty():
 			for side in 2:
-				footlock_stats.append({"before": [], "after": [], "miss": 0.0, "swing_min": INF})
+				footlock_stats.append({"before": [], "after": [], "contact_after": [], "miss": 0.0, "minimum": INF, "frames": 0, "contacts": 0, "hip_drop": 0.0})
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
@@ -3513,9 +3574,10 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 			var skin := _skin_frame(ctx)
 			if not footlock.is_empty():
 				var before := _person_footlock_points(footlock, skin)
-				var misses := _apply_person_footlock(ctx, footlock, output_u, before)
+				var hip_drop := _apply_person_walk_body(ctx, footlock, output_u, u, entry[4])
+				var misses := _apply_person_footlock(ctx, footlock, output_u)
 				skin = _skin_frame(ctx)
-				_note_person_footlock(footlock, output_u, before, _person_footlock_points(footlock, skin), misses, footlock_stats)
+				_note_person_footlock(footlock, output_u, before, _person_footlock_probes(footlock, skin), misses, footlock_stats, hip_drop)
 			frames.append(skin)
 			_note_reach(ctx, entry[0], reach)
 		if not footlock.is_empty():
