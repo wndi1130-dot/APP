@@ -18,6 +18,7 @@ const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
 const St = preload("res://game/train/train_state.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
+const TrainClimate = preload("res://game/train/train_climate.gd")
 const TurnCommon = preload("res://game/train/turn/turn_common.gd")
 const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
@@ -118,14 +119,14 @@ static func _in_block(row: Variant, key: String, whys: Array, seen: Dictionary) 
 
 ## How much coal the insulated cars keep off this stretch's heating: the
 ## heating with none insulated less the heating as it is, by the laws' heat
-## multiplier as forecast takes it.
+## multiplier and the outside's stage as forecast takes them.
 static func insulation_kept(g0: Dictionary, t0: Dictionary) -> float:
 	var bare: float = 0.0
 	var now: float = 0.0
 	for c: String in St.comms(t0):
 		bare += TrainTurn.comm_heat(g0, c, false)
 		now += TrainTurn.comm_heat(g0, c)
-	return (bare - now) * float(t0["P"]["coalHeatPerLever"]) * St.law_mult(g0, t0, "heatMult")
+	return (bare - now) * float(t0["P"]["coalHeatPerLever"]) * TrainClimate.temp_mult(g0, t0) * St.law_mult(g0, t0, "heatMult")
 
 
 func _ready() -> void:

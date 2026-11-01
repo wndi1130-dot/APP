@@ -292,7 +292,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: '눈더미', speaker: leader(g, 'engine'), focus: 'engine', required: true,
       body: again(past, '선로가 눈더미에 묻혔다. 삽이 열두 자루 있다.', {
-        dig_all: '또 눈더미다. 사람들이 지난번 일을 아직 말한다. "다 같이 파면 금방 끝난다." 앞칸 몇은 벌써 삽을 들었다.',
+        dig_all: '또 눈더미다. 사람들이 아직 지난번 얘기를 한다. "다 같이 파면 금방 끝난다." 앞칸 몇은 벌써 삽을 들었다.',
         dig_tail: '또 눈더미다. 꼬리칸 사람들이 삽을 내려놓고 앉아 있다. "이번엔 앞칸 차례다."',
         plow: '또 눈더미다. 지난번 밀어붙인 뒤로 앞바퀴에서 쇳소리가 난다.',
       }, '선로가 또 눈에 묻혔다.'),
@@ -802,7 +802,7 @@ function baseView(g: Game, card: Card): CardView {
         : { label: '함께 보낸다', log: `${dead}을(를) 보낼 때 외투와 장화도 함께 보냈다.`, say: burn ? '그 옷은 그와 함께 불에 들어간다.' : '그 옷은 그와 함께 간다. 손대지 마라.', effs: [{ t: 'rel', c, v: 4 }] });
       return {
         title: '외투와 장화', focus: c, required: true,
-        body: `${field ? `${dead}은(는) 정차에서 돌아오지 못했다. 침상 밑에 여벌 외투와 장화가 남았다.` : `${dead}의 외투와 장화가 남았다.`}${like ? ` 칸 사람들은 그를 '${like}'${eul(like)} 좋아하던 사람으로 기억한다.` : ''} 누가 입을지 칸이 묻는다.`,
+        body: `${field ? `${dead}은(는) 정차에서 돌아오지 못했다. 침상 밑에 여벌 외투와 장화가 남았다.` : `${dead}의 외투와 장화가 남았다.`}${like ? ` 칸 사람들은 '${like}'${eul(like)} 좋아하던 사람으로 기억한다.` : ''} 누가 입을지 칸이 묻는다.`,
         choices: withAfford(g, choices),
       };
     }
@@ -832,7 +832,7 @@ function baseView(g: Game, card: Card): CardView {
         choices: withAfford(g, [
           { label: '붙잡는다', log: `다음 역에서 내리겠다던 ${who}을(를) 붙잡았다.`, say: '아무도 혼자 내리지 않는다. 자리로 돌아가라.', effs: [{ t: 'rel', c, v: 3 }], special: 'elder_hold' },
           { label: '보내 준다', log: `내리겠다던 ${who}을(를) 막지 않고 보내 줬다.`, say: '원한다면 막지 않겠다. 몫은 아이들에게 간다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'rel', c, v: -5 }, { t: 'trust', v: -2 }], special: 'elder_leave', witness: true },
-          { label: '작별을 치른다', log: `모두 모여 ${who}의 작별을 치렀다.`, say: '모두 모여라. 그를 그냥 보내지는 않는다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'lux', v: -1 }, { t: 'tension', v: -3 }, { t: 'rel', c, v: 2 }], special: 'elder_leave' },
+          { label: '작별을 치른다', log: `모두 모여 ${who}의 작별을 치렀다.`, say: '모두 모여라. 그냥 보내지는 않는다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'lux', v: -1 }, { t: 'tension', v: -3 }, { t: 'rel', c, v: 2 }], special: 'elder_leave' },
         ]),
       };
     }
@@ -844,8 +844,8 @@ function baseView(g: Game, card: Card): CardView {
         title: '아이가 나온다', speaker: leader(g, 'medtech'), focus: c, required: true,
         body: `${COMM_NAME[c]}에서 ${mother}의 아이가 나온다. ${cold ? '거긴 너무 춥다.' : '칸은 그럭저럭 따뜻하다.'}`,
         choices: withAfford(g, [
-          { label: '의무칸으로 옮긴다', log: `해산을 앞둔 ${mother}을(를) 의무칸으로 옮겼다.`, say: '의무칸을 비워라. 아이는 따뜻한 데서 받는다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
-          { label: '그 칸에서 낳는다', log: `${mother}이(가) 그 칸에서 아이를 낳게 했다.`, say: '옮길 틈이 없다. 거기서 받아라.', effs: [], special: cold ? 'birth_weak' : 'birth_ok' },
+          { label: '의무칸으로 데려간다', log: `해산을 앞둔 ${mother}을(를) 의무칸으로 데려갔다.`, say: '의무칸을 비워라. 아이는 따뜻한 데서 받는다.', effs: [{ t: 'med', v: -2 }, { t: 'base', c: 'medtech', i: 3, v: 2 }], special: 'birth_ok' },
+          { label: '그 칸에서 낳는다', log: `${mother}이(가) 그 칸에서 아이를 낳게 했다.`, say: '데려갈 틈이 없다. 거기서 받아라.', effs: [], special: cold ? 'birth_weak' : 'birth_ok' },
         ]),
       };
     }
@@ -853,7 +853,7 @@ function baseView(g: Game, card: Card): CardView {
       const mother = card.who ?? '';
       return {
         title: '아이의 이름', speaker: { name: mother, role: COMM_NAME[c], comm: c }, focus: c, required: true,
-        body: `${mother}의 아이에게 이름이 필요하다. 칸 사람들이 열차장을 쳐다본다.`,
+        body: `${mother}의 아이 이름을 지어야 한다. 칸 사람들이 열차장을 쳐다본다.`,
         choices: withAfford(g, [
           { label: '엄마가 짓는다', log: '아이의 이름은 엄마가 짓게 뒀다.', say: '이름은 엄마가 짓는 거다. 내가 끼어들 일 아니다.', effs: [{ t: 'rel', c, v: 3 }] },
           { label: '열차 이름을 준다', log: '아이에게 열차의 이름을 줬다.', say: '이 아이는 열차 모두의 아이다. 열차 이름을 줘라.', effs: [], special: 'name_train' },
