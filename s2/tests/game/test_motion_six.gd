@@ -13,6 +13,7 @@ const W = preload("res://game/sim/weapons.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Gait = preload("res://game/sim/gait.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 
 var game
 var p
@@ -150,12 +151,17 @@ func test_footsteps_go_by_the_walk_and_the_drawn_feet_with_them() -> void:
 	assert_eq(game.steps_in(p, walk * 1.0), 2, "two to a round")
 	p.running = true
 	p.moving = true
+	var floor_kind: int = game.grid.floor_at(FieldGrid.cell_of(p.position))
+	Gait.update_ground_run(p, p.speed(floor_kind), 1.0, floor_kind)
+	assert_true(Gait.ground_runs(p), "a measured run uses the run round")
 	var before := float(p.brain["step_r"])
 	game.steps_in(p, 0.5)
 	assert_almost_eq(fposmod(float(p.brain["step_r"]) - before, 1.0), 0.5 / (float(SimNoise.STEP_ROUND["run"]) * Gait.stride(p)), 0.001, "a run goes round by its own")
 	# The drawn walk is where the footsteps are (the axe in the hand: its own walk).
 	p.running = false
 	p.moving = false
+	Gait.update_ground_run(p, 0.0, 0.05, floor_kind)
+	assert_false(Gait.ground_runs(p))
 	var note := {}
 	PersonVisual.motion_of(p, note, 0.05, [], own)
 	p.position += Vector3(0.1, 0, 0)

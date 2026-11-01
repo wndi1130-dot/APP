@@ -15,6 +15,7 @@ const Pose = preload("res://game/actors/person_pose.gd")
 
 const WALK: float = 2.1
 const RUN: float = 3.9
+const MOVE_MIN: float = 0.25 # Decision 442: no slow input glide; decision 425 stays unchanged.
 const CROUCH: float = 1.1
 const CROUCH_NOISE_MULT: float = 0.5 # contract with the sound rules; no extra sound event
 const ROLE_COLORS: Dictionary = {
@@ -93,6 +94,9 @@ var facing: float = 0.0
 var turn_rate: float = 0.0
 var look: float = 0.0
 var moving: bool = false
+var visual_push: Vector3 = Vector3.ZERO # Cumulative world-space separation; drawing only, not saved.
+var ground_sample: Dictionary = {}     # Runtime tick identity; never restored from a saved clock.
+var motion_epoch: int = 0              # A rewind starts the drawing's samples again too.
 var stick := Vector2.ZERO               # player's left thumb: world x/z direction, length 0..1
 var drive_speed: float = 0.0            # body speed under the stick (eases in and out)
 var drive_dir := Vector3.ZERO
@@ -297,6 +301,15 @@ func speed(floor_kind: int) -> float:
 		base = RUN
 	if carry_state() >= 3:
 		return 0.0
+	var m: Dictionary = mults()
+	return base * float(m["move"]) * FieldGrid.FLOOR_SPEED[floor_kind]
+
+
+## The same speed with only the run switched off.
+func walk_speed(floor_kind: int) -> float:
+	if carry_state() >= 3:
+		return 0.0
+	var base: float = CROUCH if crouched else WALK
 	var m: Dictionary = mults()
 	return base * float(m["move"]) * FieldGrid.FLOOR_SPEED[floor_kind]
 

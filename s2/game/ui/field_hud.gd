@@ -2369,7 +2369,8 @@ func radio(text: String) -> void:
 	var words: String = text
 	if text.begins_with(HISS_TEXT):
 		words = text.substr(HISS_TEXT.length()).lstrip("… ")
-	radio_label.text = words if words != "" else text
+	# A long call wraps between words only, like the goal and feel lines.
+	radio_label.text = UiFonts.keep_all(words) if words != "" else text
 	radio_label.visible = words != ""
 	_fit_radio()
 	radio_left = 8.0

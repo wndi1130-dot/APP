@@ -11,6 +11,7 @@ signal built
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
 const MapView = preload("res://game/world/map_view.gd")
 const MapEdge = preload("res://fx/map_edge.gd")
 const WoodsShade = preload("res://fx/woods_shade.gd")
@@ -249,6 +250,8 @@ var audio: FieldAudio
 var music: MusicPlayer                  # background music (briefs/bgm.md); silent with no files
 
 var people: Array = []
+var _motion_tick: int = 0              # Runtime identity, independent of the rewindable clock.
+var _motion_clock: float = -INF
 var people_look  # person_visual.gd: the baked body the people wear
 var squad: Array = []
 var crew: Array = []
@@ -1032,9 +1035,13 @@ func _set_sight_round() -> void:
 ## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
 func _update_light() -> void:
 	if storm.is_empty():
+		if ripples != null:
+			ripples.dusk = 0.0
 		_update_atmosphere()
 		return
 	var t := clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
+	if ripples != null:
+		ripples.dusk = t
 	# The night band is lamps only; the gray-box field has no lamps yet, so the
 	# floors keep people, doors and the platform edge readable after dark.
 	sun.light_energy = lerpf(float(fx_light["sun_energy"]), maxf(float(fx_light_night["sun_energy"]), NIGHT_SUN_MIN), t)
@@ -1558,6 +1565,9 @@ const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground
 ## grown in the same form on another end gap than the save's (`end_gap`, field_save.gd).
 ## View ground also follows the form, so a handed view starts bare for a new form.
 static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: float, fresh: Callable, end_gap: int = -1) -> Dictionary:
+	# A hand-made story map keeps its own ground in every form (story_maps.gd).
+	if StoryMaps.is_story(String(map.get("place_id", ""))):
+		return map
 	var regap: bool = end_gap >= 0 and form in ["edge", "remote"] and form == String(map.get("stop_form", "")) \
 		and int(map.get("stop_end_gap", end_gap)) != end_gap
 	if not regap and (form.is_empty() or form == String(map.get("stop_form", "")) or form == String(map.get("stop_form_asked", ""))):
@@ -1583,6 +1593,8 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 ## all), made again from the map as it is now.
 static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 	var place_id := String(map.get("place_id", ""))
+	if StoryMaps.is_story(place_id):
+		return map
 	if not map.has("side_path") and place_id not in ["", SidePath.FIRST_STOP] and SidePath.rolls(place_id, run_seed):
 		for key in AHEAD_KEYS:
 			map.erase(key)
@@ -1948,7 +1960,9 @@ func _turn_people(delta: float) -> void:
 
 
 func _step(delta: float) -> void:
+	_begin_motion_tick()
 	clock.advance(delta)
+	_motion_clock = clock.elapsed
 	weather.dusk = clock.dusk_share()
 	var now := clock.elapsed
 	_turn_people(delta)
@@ -1956,6 +1970,7 @@ func _step(delta: float) -> void:
 	_tick_radio(delta)
 	for p in people:
 		_update_person(p, delta)
+		_update_ground_gait(p, delta)
 	_separate_people(delta)
 	zombies.update(delta)
 	ai.update(delta)
@@ -2024,7 +2039,9 @@ func _separate_people(delta: float) -> void:
 			continue
 		if _on_stair(cell, floors[i]):
 			continue
+		var before_push: Vector3 = bodies[i].global_position
 		bodies[i].position = dest
+		bodies[i].visual_push += bodies[i].global_position - before_push
 
 
 ## A stair or ladder end on that floor (the dead are never pushed onto one either).
@@ -2145,6 +2162,7 @@ func _drive(p: Person, delta: float) -> void:
 	var floor_kind := lg.floor_at(cell)
 	var heavy := 1.0 + 0.35 * maxi(0, p.carry_state()) + maxf(0.0, 1.0 - float(p.mults()["move"]))
 	var fast := p.drive_speed > Person.WALK * 1.1
+	var available_speed: float = p.speed(floor_kind)
 	var want := 0.0
 	if push > 0.05:
 		p.path = PackedVector3Array()
@@ -2155,14 +2173,17 @@ func _drive(p: Person, delta: float) -> void:
 		p.drive_dir = dir
 		if not p.aim.active:
 			p.facing = atan2(dir.x, dir.z)   # aiming, you walk and keep the gun on it
-		want = p.speed(floor_kind) * clampf(push * 1.6, 0.35, 1.0)
+		want = maxf(Person.MOVE_MIN, available_speed * clampf(push * 1.6, 0.35, 1.0)) if available_speed > 0.0 else 0.0
+	if available_speed <= 0.0:
+		p.drive_speed = 0.0
 	var feel: Array = INERTIA.get(String(opts.get("inertia", "now")), INERTIA["now"])
 	if want > p.drive_speed:
-		p.drive_speed = minf(want, p.drive_speed + want / (float(feel[0]) * heavy) * delta)
+		# Decision 442, user 2026-11-01: start above the standing band.
+		p.drive_speed = minf(want, maxf(Person.MOVE_MIN, p.drive_speed + want / (float(feel[0]) * heavy) * delta))
 	else:
 		var stop_t := float(feel[2] if fast else feel[1]) * heavy * (2.0 if floor_kind == FieldGrid.Floor.ICE else 1.0)
 		p.drive_speed = maxf(want, p.drive_speed - maxf(p.drive_speed, Person.WALK) / stop_t * delta)
-	if p.drive_speed <= 0.01:
+	if p.drive_speed < Person.MOVE_MIN:
 		p.drive_speed = 0.0
 		p.moving = false
 		return
@@ -2175,12 +2196,16 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	if lg.blocks_body(dc):
 		dest = _slide(p.position, step)
+		# A wall may leave a small tangent; it does not take away the built-up drive.
+		if dest == p.position:
+			p.moving = false
+			return
 	dc = FieldGrid.cell_of(dest)
 	if lg == grid and grid.windows.has(dc) and FieldGrid.cell_of(p.position) != dc:
 		if not actions.can_vault_window(p, dc):
 			return
 		actions.vault_window(p, dc)
-	var gone := p.position.distance_to(dest)
+	var gone := Gait.signed_distance(p, dest - p.position)
 	Sled.before_move(self, p, dest)
 	p.position = dest
 	p.moving = true
@@ -2215,6 +2240,7 @@ func _move_person(p: Person, delta: float) -> void:
 	var cell := FieldGrid.cell_of(p.position)
 	var lg := grid_at(p.position)
 	var spd := p.speed(lg.floor_at(cell)) * sled_mult
+	var available_speed: float = spd
 	if spd <= 0.0:
 		p.moving = false
 		if p == player:
@@ -2235,9 +2261,13 @@ func _move_person(p: Person, delta: float) -> void:
 		elif p.turn_rate > 0.0:
 			spd *= MoveRules.heading_share(absf(angle_difference(p.look, way)))
 		p.facing = face
-		if spd <= 0.0:
-			p.moving = false   # a half turn is made standing, not gliding off the other way meanwhile
-			return
+	var remaining: float = d.length()
+	for index: int in range(1, p.path.size()):
+		if remaining > AI.FOLLOW_SETTLE:
+			break
+		remaining += p.path[index - 1].distance_to(p.path[index])
+	if _slow_step_holds(p, spd, remaining, available_speed):
+		return
 	var step := d.normalized() * minf(spd * delta, d.length())
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
@@ -2252,13 +2282,26 @@ func _move_person(p: Person, delta: float) -> void:
 			return
 		actions.vault_window(p, dc)
 	p.facing = face
-	var gone := p.position.distance_to(dest)
-	if absf(angle_difference(face, way)) > PI * 0.5:
-		gone = -gone   # stepping back: the walk's round runs back, so it is drawn backwards
+	var gone := Gait.signed_distance(p, dest - p.position)
 	Sled.before_move(self, p, dest)
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
+
+
+## Decision 442: hold before distance clipping; turning keeps its usual clock.
+func _slow_step_holds(p: Person, spd: float, remaining: float, available_speed: float = Person.MOVE_MIN) -> bool:
+	var slot: Variant = p.brain.get("follow_slot")
+	if p != player and p.command in ["follow", "cover"] and slot is Vector3 and not p.path.is_empty():
+		var target: Vector3 = slot
+		if remaining <= AI.FOLLOW_SETTLE and p.path[-1].distance_to(target) <= AI.FOLLOW_EPS:
+			p.stop()
+			return true
+	# Hold a turn's slow start, but let a hurt body use all of its lower pace.
+	if spd <= 0.0 or (p != player and spd < minf(Person.MOVE_MIN, available_speed)):
+		p.moving = false
+		return true
+	return false
 
 
 func _slide(at: Vector3, step: Vector3) -> Vector3:
@@ -2279,18 +2322,50 @@ func _slide(at: Vector3, step: Vector3) -> Vector3:
 ## Each person walks at their own stride and starts from their own place in the
 ## round (gait.gd, decision 423 card 3), so two who go together are not in step.
 static func steps_in(p, gone: float) -> int:
-	var size: float = float(SimNoise.STEP_ROUND["run" if p.is_running_now() else ("crouch" if p.crouched else "walk")]) * Gait.stride(p)
+	var size: float = float(SimNoise.STEP_ROUND["run" if Gait.ground_runs(p) else ("crouch" if p.crouched else "walk")]) * Gait.stride(p)
 	var was := float(p.brain.get("step_r", Gait.first_step(p)))
 	var now := was + gone / maxf(size, 0.01)
 	p.brain["step_r"] = fposmod(now, 1.0)
 	var n := 0
 	for at: float in SimNoise.STEP_AT:
-		n += absi(int(floorf(now - at)) - int(floorf(was - at)))   # a step back is a step too
+		# The same contacts are crossed in reverse. Use clip lift/plant markers here when available.
+		if now < was:
+			n += absi(int(ceilf(now - at)) - int(ceilf(was - at)))
+		else:
+			n += absi(int(floorf(now - at)) - int(floorf(was - at)))
 	return n
 
 
+## A new simulation tick cannot alias an old one when the clock comes round again.
+func _begin_motion_tick() -> void:
+	_motion_tick += 1
+	if clock.elapsed < _motion_clock:
+		for p: Person in people:
+			p.brain.erase(Gait.GROUND_RUN)
+			p.ground_sample.clear()
+			p.motion_epoch += 1
+	_motion_clock = clock.elapsed
+
+
+## Moving feet sample before their round; idle ticks decay the same filter.
+func _update_ground_gait(p: Person, delta: float, gone: float = 0.0) -> void:
+	var tick: float = clock.elapsed
+	if tick < float(p.ground_sample.get("clock", -INF)):
+		p.brain.erase(Gait.GROUND_RUN)
+		p.ground_sample.clear()
+		p.motion_epoch += 1
+	if int(p.ground_sample.get("tick", -1)) == _motion_tick and float(p.ground_sample.get("clock", -INF)) == tick:
+		return
+	var floor_kind: int = grid_at(p.position).floor_at(FieldGrid.cell_of(p.position))
+	Gait.update_ground_run(p, gone, delta, floor_kind)
+	var state: Dictionary = p.brain[Gait.GROUND_RUN]
+	state["tick"] = tick if is_finite(tick) else -1.0
+	p.ground_sample = {"tick": _motion_tick, "clock": tick}
+
+
 func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> void:
-	var running := p.is_running_now()
+	_update_ground_gait(p, delta, gone)
+	var running := Gait.ground_runs(p)
 	var lg := grid_at(p.position)
 	var floor_kind := lg.floor_at(cell)
 	if steps_in(p, gone) > 0:
