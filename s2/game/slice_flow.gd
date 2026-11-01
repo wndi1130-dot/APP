@@ -521,8 +521,12 @@ func _show_step(i: int) -> void:
 	film.visible = frost.visible
 	# The train runs between the stops; at a stop the snow falls straight down
 	# and the drift lies still (.world.run, .world.is-stop).
-	weather.moving = String(row[1]) == "travel"
+	weather.moving = String(row[1]) == "travel" and train_halt_line(train_g) == ""
 	soot_bot.visible = gauges.visible and not SHEET_STEPS.has(id)
+	if train_halt_line(train_g) != "":
+		_show_train("end" if train_g.get("phase") == "end" else "travel", int(train_g.get("seg", row[2])))
+		_show_panel("끝" if id == "end" else train_halt_title(train_g), [train_halt_line(train_g)], "처음으로" if id == "end" else "끝")
+		return
 	# The next stop is known on the train: its map is made ready off the main
 	# thread while the train runs.
 	if id == "train" and _cinema_on():
@@ -583,6 +587,9 @@ func next() -> void:
 		_campaign_next()
 		return
 	leave_decor()
+	if train_halt_line(train_g) != "" and current() != "end":
+		go(_index_of("end"))
+		return
 	if step + 1 >= STEPS.size():
 		get_tree().change_scene_to_file(BOOT_SCENE)
 		return
@@ -879,6 +886,9 @@ func _show_arrival(go_word: String) -> void:
 ## finish_slice) and the port's end card on the long sheet over the train.
 func _show_end(go_word: String) -> void:
 	panel.visible = false
+	if train_halt_line(train_g) != "":
+		_show_panel("끝", [train_halt_line(train_g)], go_word)
+		return
 	if arrival_g.is_empty() and FieldArrival.second_station_reached(train_g):
 		arrival_g = train_g
 	if arrival_g.is_empty():
@@ -942,12 +952,28 @@ static func start_board() -> Array:
 ## One step of the train's turn as a step gone to straight takes it: the papers before and
 ## after taken on their first way (pick_first), the turn as S1 runs it. An unported step
 ## comes back with its _turn_port_error.
+## A stopped train or a real S1 ending holds this slice without advancing the rules.
+static func train_halt_line(g: Dictionary) -> String:
+	if g.get("phase") == "end" and g.get("end") != "slice": return TrainTurn.end_text(g, str(g.get("end", "")))
+	if g.get("stranded") != null: return TrainTurn.END_TEXT["stranded"]
+	return ""
+
+
+## The halt panel's head, in train_halt_line's order: a real S1 ending names
+## itself as the S1 end screen does, a stopped train says it stopped.
+static func train_halt_title(g: Dictionary) -> String:
+	if g.get("phase") == "end" and g.get("end") != "slice": return str(TrainTurn.END_TITLE.get(str(g.get("end", "")), "끝"))
+	if g.get("stranded") != null: return "열차가 멈췄다"
+	return ""
+
+
 static func step_train(g0: Dictionary, t: Dictionary) -> Dictionary:
+	if train_halt_line(g0) != "": return g0.duplicate(true)
 	var g: Dictionary = pick_first(g0.duplicate(true), t)
-	if g.has("_turn_port_error"):
+	if g.has("_turn_port_error") or train_halt_line(g) != "":
 		return g
 	var out: Dictionary = TrainAdvance.advance(g, t)
-	if out.has("_turn_port_error"):
+	if out.has("_turn_port_error") or train_halt_line(out) != "":
 		return out
 	return pick_first(out, t)
 
@@ -959,7 +985,7 @@ static func step_train(g0: Dictionary, t: Dictionary) -> Dictionary:
 static func pick_first(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var g: Dictionary = g0
 	for n in 50:
-		if not papers_of(g) or g.has("_turn_port_error"):
+		if not papers_of(g) or g.has("_turn_port_error") or train_halt_line(g) != "":
 			break
 		var uid: int = int((g["cards"] as Array)[0]["uid"])
 		var taken := false
@@ -994,7 +1020,7 @@ static func _holds(g: Dictionary, uid: int) -> bool:
 ## papers it brings stay on the board: the train step shows them first.
 static func to_travel(state: Dictionary, t: Dictionary) -> Dictionary:
 	var g: Dictionary = state.duplicate(true)
-	if g.is_empty():
+	if g.is_empty() or train_halt_line(g) != "":
 		return g
 	g["seg"] = FIRST_SEG
 	g = pick_first(g, t)
@@ -1006,7 +1032,7 @@ static func to_travel(state: Dictionary, t: Dictionary) -> Dictionary:
 ## The first paper waiting, over the train on its steps (turn_card.gd); none when none waits.
 func _show_paper() -> void:
 	_drop_paper()
-	if not papers_of(train_g) or not HOME_STEPS.has(current()):
+	if train_halt_line(train_g) != "" or not papers_of(train_g) or not HOME_STEPS.has(current()):
 		return
 	var c = TurnCard.new()
 	c.name = "Paper"
@@ -1082,6 +1108,9 @@ func _paper_chosen(g: Dictionary) -> void:
 		_take(rest)
 	else:
 		_take(g)
+	if train_halt_line(train_g) != "":
+		_show_step(step)
+		return
 	_show_paper()
 	if going and not papers_of(train_g):
 		going = false
@@ -1092,6 +1121,9 @@ func _paper_chosen(g: Dictionary) -> void:
 ## shakes); else the board runs to where the next step stands (to the stop, or on to
 ## the second station), stopping at each paper that comes, and the step goes on.
 func train_on() -> void:
+	if train_halt_line(train_g) != "":
+		_show_step(step)
+		return
 	if _is_campaign():
 		_campaign_train_on()
 		return
@@ -1113,6 +1145,9 @@ func train_on() -> void:
 		if id != "train" and id != "travel":
 			break
 		_take(TrainAdvance.advance(train_g, train_t))
+		if train_halt_line(train_g) != "":
+			_show_step(step)
+			return
 		if papers_of(train_g):
 			going = true
 			_show_paper()
@@ -1178,7 +1213,7 @@ func _take(g: Dictionary) -> void:
 	var leaving: bool = SliceSave.step_of_board(g) == "travel" and SliceSave.step_of_board(train_g) != "travel"
 	train_g = g
 	# Departure and workshop work share one train write, including a closed vote.
-	if leaving and shop_seg != int(STEPS[_index_of("travel")][2]):
+	if leaving and train_halt_line(train_g) == "" and shop_seg != int(STEPS[_index_of("travel")][2]):
 		shop_seg = int(STEPS[_index_of("travel")][2])
 		pending_shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if is_instance_valid(gauges):
@@ -1285,15 +1320,19 @@ func _returned() -> bool:
 ## The board up to the step `id` stands on, played once in order: the stop reached, the
 ## stop's return, the session sat and left, the run to the second station.
 func _ensure_board(id: String) -> void:
+	if train_halt_line(train_g) != "": return
 	if _is_campaign():
 		return
 	var at: int = _index_of(id)
 	if at >= _index_of("stop_pick") and not _returned() and not passed and String(train_g.get("phase", "")) == "travel" and port_error == "":
 		_take(step_train(train_g, train_t))
+	if train_halt_line(train_g) != "": return
 	if at >= _index_of("receipt") and not _returned() and not passed and id != "field":
 		_apply_return(quiet_receipt(_departure()))
+	if train_halt_line(train_g) != "": return
 	if at >= _index_of("travel") and _returned():
 		_leave_session()
+	if train_halt_line(train_g) != "": return
 	if at >= _index_of("arrive"):
 		_run_to_station()
 
@@ -1373,7 +1412,7 @@ func _run_to_station() -> void:
 	if not _returned():
 		return
 	for i in RUN_LIMIT:
-		if FieldArrival.second_station_reached(train_g) or String(train_g.get("phase", "")) == "end" or port_error != "":
+		if train_halt_line(train_g) != "" or FieldArrival.second_station_reached(train_g) or String(train_g.get("phase", "")) == "end" or port_error != "":
 			return
 		_take(step_train(train_g, train_t))
 
@@ -1441,6 +1480,10 @@ func _show_train(phase: String, seg: int) -> void:
 	var rules: Dictionary = TrainRules.load_default()
 	rules["train"]["phase"] = phase
 	rules["train"]["seg"] = seg
+	rules["train"]["stranded"] = train_g["stranded"].duplicate(true) if train_g.get("stranded") is Dictionary else null
+	weather.moving = phase == "travel" and train_halt_line(train_g) == ""
+	# A halted board stands still, an ending without stranding too (the scene's auto motion runs it).
+	if train_halt_line(train_g) != "": rules["view"]["motion"] = "stopped"
 	rules["view"]["region"] = _stop_band(seg + 1 if phase == "travel" else seg)
 	for c: String in (rules.get("comms", {}) as Dictionary).keys():
 		if (train_g.get("comms", {}) as Dictionary).has(c):
@@ -1472,7 +1515,7 @@ func _show_train(phase: String, seg: int) -> void:
 	var look := outside_look(rules, _season_seg(seg))
 	var cam: Camera3D = train.get("camera")
 	if cam != null:
-		outside = OutsideView.attach(cam, look, phase == "travel")
+		outside = OutsideView.attach(cam, look, phase == "travel" and train_g.get("stranded") == null)
 		outside.visible = train.view_mode == "section"
 	journey = null
 	if Journey.enabled():
@@ -1519,6 +1562,8 @@ const WEATHER_WORD: Dictionary = {"snow": "눈", "fog": "안개", "sleet": "진�
 ## the departure contract will carry (train_stop.gd arrival_min, unless the slice is told
 ## one) and the weather the stop will wear (stop_weather). Only on the train before the stop.
 func next_stop_line() -> String:
+	if train_halt_line(train_g) != "":
+		return ""
 	if _is_campaign():
 		if not current() in ["train", "travel"]:
 			return ""
@@ -2490,6 +2535,9 @@ func _campaign_train_on() -> void:
 			return
 		_take(TrainAdvance.advance(train_g, train_t))
 		if campaign_error != "":
+			return
+		if train_halt_line(train_g) != "":
+			_show_step(step)
 			return
 	_campaign_fail("F-CAMPAIGN-TRAIN: turn limit")
 
