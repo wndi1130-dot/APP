@@ -60,7 +60,7 @@ const HEATH_PLAIN: Dictionary = {
 	"ground": [4, 6, 2, 7], "ground_wish": ["모래"], "tree_wish": ["소나무"],
 }
 const CITY_CANAL: Dictionary = {
-	"lot_shift": 1, "lot_step": 17, "sheds": ["차고", "바깥 헛간"],
+	"lot_shift": 0, "lot_step": 17, "sheds": ["차고", "바깥 헛간"],
 	"uses": {"home": 40, "depot": 15, "shop": 15, "office": 10, "station": 8, "works": 7, "hall": 5},
 	"names": {"home": ["공동주택"], "depot": ["차고"], "shop": ["단지 가게"], "office": ["학교", "관청"],
 		"station": ["신호소"], "works": ["정비 공방"], "hall": ["회관"]},
@@ -122,7 +122,7 @@ const LOOKS: Dictionary = {
 ## LootDress.dress가 끝에서 읽는다.
 const LOOT_SCALE: Dictionary = {
 	"K1": 1.0, "K2": 1.0, "K3": 1.05, "K4": 1.06, "K5": 1.06, "K6": 1.0, "K7": 1.0, "K8": 1.0,
-	"K9": 1.06, "K10": 1.0, "K11": 0.91, "K12": 0.91, "mountain_works": 0.91, "high_mountain": 0.91,
+	"K9": 1.09, "K10": 1.0, "K11": 0.91, "K12": 0.91, "mountain_works": 0.91, "high_mountain": 0.91,
 }
 
 
