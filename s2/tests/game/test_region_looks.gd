@@ -171,9 +171,33 @@ func test_mountain_village_is_independent_of_valid_band() -> void:
 	var plain: Dictionary = _ringed("lodge_01", "")
 	assert_eq(int(first["map_ring"]["target"]), int(plain["map_ring"]["target"]) + int(RegionLooks.LOOKS["high_mountain"]["lot_shift"]))
 	assert_true(int(first["map_ring"]["buildings"]) <= int(first["map_ring"]["target"]))
+	assert_gt(_outer_buildings(first).size(), 0, "빈 마을로 산간 검사를 통과하지 않는다")
 	for building: Dictionary in _outer_buildings(first):
 		assert_ne(BuildingUses.use_of(building), "office", "0 비중인 경찰 초소는 짓지 않는다")
 	_assert_ring_bounds(first)
+
+
+## 폭 4~6칸 지역 헛간(K1·K6·K11)도 문 칸이 창으로 덮이지 않고, 두 상자가 다른 칸에 선다.
+func test_small_outer_buildings_keep_their_door_and_separate_boxes() -> void:
+	var small := 0
+	for band: String in ["K1", "K6", "K11"]:
+		for place: String in ["houses_01", "hospital_01"]:
+			var data: Dictionary = _ringed(place, band)
+			var grid: FieldGrid = data["grid"]
+			var ids: Dictionary = {}
+			for building: Dictionary in _outer_buildings(data):
+				ids[int(building["id"])] = true
+				small += int(mini((building["rect"] as Rect2i).size.x, (building["rect"] as Rect2i).size.y) <= 6)
+			for cell: Vector2i in grid.doors:
+				if ids.has(int(grid.doors[cell].get("building", -1))):
+					assert_eq(grid.solid[grid.index(cell)], FieldGrid.Solid.DOOR, "%s %s 문 %s" % [place, band, str(cell)])
+					assert_false(grid.windows.has(cell), "%s %s 문 칸에 창 %s" % [place, band, str(cell)])
+			var cells: Dictionary = {}
+			for box: Dictionary in data["containers"].values():
+				if ids.has(int(box.get("building", -1))):
+					assert_false(cells.has(box["cell"]), "%s %s 상자 칸 겹침 %s" % [place, band, str(box["cell"])])
+					cells[box["cell"]] = true
+	assert_gt(small, 0, "작은 지역 헛간이 실제로 지어진다")
 
 
 func test_neighbour_names_sizes_and_long_buildings_stay_varied() -> void:
@@ -219,9 +243,11 @@ func test_neighbour_names_sizes_and_long_buildings_stay_varied() -> void:
 ## 정차 전체의 상자를 잰다. 몫은 각 stock 갈래의 물건 무게 / 전체 물건 무게다.
 ## 갈래가 없는 물건도 빈 문자열 갈래로 세어 분모에서 빠지는 물건이 없게 한다.
 ## 무게는 바깥 마을이 바꾼 몫에 상자 양 배율(LootDress.dress가 거는 값)을 곱해, 띠 없는 판 대비 지역 폭 안인지 본다.
+## 배율을 곱한 값은 예측이다 — 실제로 물건을 더하고 뺀 뒤의 무게·갈래 몫은 loot-feel의 dress 시험이 잰다.
 func test_stop_loot_weight_and_stock_shares_remain_in_bounds() -> void:
 	for pair: Array in [["houses_01", "K4"], ["hospital_01", "K4"], ["church_01", "K4"], ["freight_01", "K4"],
-		["houses_01", "K9"], ["church_01", "K12"], ["houses_01", "K12"], ["lodge_01", "K7"]]:
+		["houses_01", "K9"], ["hospital_01", "K3"], ["freight_01", "K7"], ["hospital_01", "K11"], ["church_01", "K12"],
+		["houses_01", "K12"], ["lodge_01", "K7"], ["mine_01", "K4"]]:
 		var place: String = String(pair[0])
 		var band: String = String(pair[1])
 		var base: Dictionary = _loot(_ringed(place, ""))

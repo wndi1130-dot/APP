@@ -499,8 +499,10 @@ static func _house(data: Dictionary, r: Rect2i, id: int, number: int, side: int,
 		direction = Vector2i.RIGHT
 		end = Vector2i(road, door.y)
 	Shell._door(g, door, "closed", id)
-	Shell._window(g, Vector2i(r.position.x + 2, r.position.y), id)
-	Shell._window(g, Vector2i(r.end.x - 3, r.end.y - 1), id)
+	# 폭 4~6칸 지역 헛간은 창 자리가 문 칸과 겹칠 수 있다 — 문을 두고 그 창은 뺀다(원래 마을 크기는 안 겹침).
+	for window: Vector2i in [Vector2i(r.position.x + 2, r.position.y), Vector2i(r.end.x - 3, r.end.y - 1)]:
+		if window != door:
+			Shell._window(g, window, id)
 	# Low wooden yard fences, with a three-cell opening facing the road; each straight
 	# run is drawn as plank-fence models (6 m) of at most FENCE_PIECE cells, turned
 	# along the run: the model fit turns a piece only when it fits either way.
@@ -542,5 +544,8 @@ static func _house(data: Dictionary, r: Rect2i, id: int, number: int, side: int,
 	for i in range(2):
 		var box_id := "ring_%d_%d" % [id, i]
 		var c := r.position + Vector2i(2 + i * (r.size.x - 5), 2)
+		if i == 1 and r.size.x == 5:
+			# 폭 5칸이면 두 상자가 같은 칸이 되므로 둘째는 한 줄 아래로.
+			c.y += 1
 		data["containers"][box_id] = {"id": box_id, "name": ("부엌 찬장" if i == 0 else "옷장") if home else ("창고 상자" if i == 0 else "공구함"),
 			"cell": c, "level": 0, "building": id, "search": 4.0, "items": [], "locked": false, "searched": false}
