@@ -64,7 +64,7 @@ const CITY_CANAL: Dictionary = {
 	"uses": {"home": 40, "depot": 15, "shop": 15, "office": 10, "station": 8, "works": 7, "hall": 5},
 	"names": {"home": ["공동주택"], "depot": ["차고"], "shop": ["단지 가게"], "office": ["학교", "관청"],
 		"station": ["신호소"], "works": ["정비 공방"], "hall": ["회관"]},
-	"sizes": {"home": [30, 12, 34, 12]}, "facade": {"town": 0.7, "rail_works": 0.3},
+	"sizes": {"home": [22, 12, 26, 12]}, "facade": {"town": 0.7, "rail_works": 0.3},
 	"yard_cars": ["city_bus", "stalled_tram", "car", "box_truck"],
 	"symbols": ["signal_bridge", "water_crane", "switch_cluster", "playground_frame", "bin_bay"], "ground": [0, 1, 3, 5],
 }
