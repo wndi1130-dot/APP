@@ -30,7 +30,7 @@ const TOP_PLAN: Dictionary = {
 const TOP_HOSTS: Dictionary = {
 	"bed": {"alarm_clock": ["nightstand", "dresser"], "vase": ["dresser", "nightstand"],
 		"mug": ["nightstand", "dresser"]},
-	"living": {"vase": ["side_table", "low_table"], "teapot": ["low_table", "side_table"],
+	"living": {"vase": ["side_table", "low_table", "radio_set"], "teapot": ["low_table", "side_table"],
 		"serving_bowl": ["low_table", "side_table"], "mug": ["side_table", "low_table"]},
 	"kitchen": {"kettle": ["cold_stove", "counter"], "kettle_enamel": ["cold_stove", "counter"],
 		"cutting_board": ["counter"], "dinner_plate": ["counter"], "serving_bowl": ["counter"]},

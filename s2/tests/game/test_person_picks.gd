@@ -13,6 +13,8 @@ const Pose = preload("res://game/actors/person_pose.gd")
 const Stamina = preload("res://game/sim/stamina.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
+const Gait = preload("res://game/sim/gait.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 
 const OLD: Array = ["p_walk", "p_run", "p_stand", "p_crouch_walk", "p_crouch_idle", "p_bitten",
 	"p_search_mid", "p_search_low", "p_kneel_work", "p_treat", "p_pry"]
@@ -64,11 +66,19 @@ func _working(p, action: String, busy: Dictionary = {}) -> void:
 	p.action_busy = busy
 
 
-func _walked(p, own: Array) -> String:
+func _walked(p, own: Array, speed: float = -1.0) -> String:
 	var note := {}
-	PersonVisual.motion_of(p, note, 0.05, [], own)
-	p.position += Vector3(0.1, 0, 0)
-	return _named(own, PersonVisual.motion_of(p, note, 0.05, [], own))
+	PersonVisual.motion_of(p, note, 0.0, [], own)
+	p.moving = true
+	var pace: float = p.speed(FieldGrid.Floor.SNOW) if speed < 0.0 else speed
+	var drawn: String = ""
+	# Sample real movement long enough for the shared run filter to settle.
+	for _tick: int in range(6):
+		var gone: float = pace * 0.1
+		p.position += Vector3(gone, 0.0, 0.0)
+		Gait.update_ground_run(p, gone, 0.1, FieldGrid.Floor.SNOW)
+		drawn = _named(own, PersonVisual.motion_of(p, note, 0.1, [], own))
+	return drawn
 
 
 func test_a_container_is_searched_at_its_height() -> void:
@@ -110,8 +120,12 @@ func test_a_leg_that_hurts_limps_on_its_side() -> void:
 	# at a walk, so it limps on (gait.gd runs). One that can run does not limp.
 	r.running = true
 	assert_eq(_walked(r, own), "p_limp_heavy_r", "the run on but the leg cannot: it limps at a walk")
+	assert_false(Gait.ground_runs(r))
 	q.running = true
-	assert_ne(_walked(q, own).begins_with("p_limp"), true, "running it does not limp")
+	assert_eq(_walked(q, own, q.walk_speed(FieldGrid.Floor.SNOW) * 0.9), "p_limp_light", "a run request at walking speed still limps")
+	assert_false(Gait.ground_runs(q))
+	assert_eq(_walked(q, own), "p_run", "running it does not limp")
+	assert_true(Gait.ground_runs(q))
 	# (Cut lightly: one cut deep bleeds hard, and bleeding hard it reels, test_gait.gd.)
 	var arm := _person()
 	arm.body.add_wound("arm_left", "laceration", 1.0)

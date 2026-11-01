@@ -438,7 +438,7 @@ func test_legacy_wall_without_a_rule_slot_returns_its_exact_value() -> void:
 	assert_eq(Decor.read_store(g)["painting"]["n"], 1)
 	assert_eq(Decor.oldest(Decor.read_store(g)["painting"])["v"], 0.75)
 	assert_eq(g["lux"], 50.75)
-	assert_eq(ui.note_text, "놓을 자리가 없어 창고로 옮겼어요.")
+	assert_eq(ui.note_text, "놓을 자리가 없어 창고로 옮겼다.")
 	ui.show_car(g, "guard", ui.train)
 	assert_eq(g["lux"], 50.75, "opening again does not refund twice")
 

@@ -97,13 +97,18 @@ func build_step(stove_builder: Callable) -> String:
 	return "done"
 
 
+static func model_path(model: String) -> String:
+	var path: String = MODEL_ROOT + model + ".glb"
+	if not ResourceLoader.exists(path):
+		path = COMMON_ROOT + model + ".glb"
+	return path
+
+
 func _build_prop(row: Dictionary) -> void:
 	var model: String = String(row["model"])
 	var at: Vector3 = Catalog.vector(row["at"])
 	var node: Node3D
-	var path: String = MODEL_ROOT + model + ".glb"
-	if not ResourceLoader.exists(path):
-		path = COMMON_ROOT + model + ".glb"
+	var path: String = model_path(model)
 	if model.is_valid_identifier() and ResourceLoader.exists(path):
 		var packed = load(path)
 		if packed is PackedScene:

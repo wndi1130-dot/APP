@@ -193,7 +193,7 @@ const SEL_COLOR := Color("ffc66c")
 ## Cars not picked darken (.train.has-sel .car:not(.is-sel), brightness .5).
 const UNPICKED_SHADE: float = 0.42
 ## 디자인 토큰 2차: the smoked glass of a pane (B1) and its words.
-const PANE := Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.84)
+const PANE := Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.95)
 const INK := Color("eee9dc")
 const INK2 := Color(238 / 255.0, 233 / 255.0, 220 / 255.0, 0.7)
 
@@ -1311,7 +1311,7 @@ func _tell_save_error() -> void:
 func _add_save_line() -> void:
 	if is_instance_valid(save_line):
 		return
-	save_line = UiFonts.label(SAVE_FAILED, UiFonts.WORD, 400, 13.0, INK2)
+	save_line = UiFonts.label(UiFonts.keep_all(SAVE_FAILED), UiFonts.WORD, 400, 13.0, INK2)
 	save_line.name = "SaveFailed"
 	save_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	save_line.custom_minimum_size.x = PANEL_W - UiFonts.px(28.0)
@@ -2469,7 +2469,7 @@ func _show_panel(head: String, rows: Array, go_word: String) -> void:
 		c.queue_free()
 	save_line = null
 	for text in rows:
-		var l := UiFonts.label(String(text), UiFonts.WORD, 400, 13.0, INK2)
+		var l := UiFonts.label(UiFonts.keep_all(String(text)), UiFonts.WORD, 400, 13.0, INK2)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.custom_minimum_size.x = PANEL_W - UiFonts.px(28.0)
 		lines.add_child(l)
