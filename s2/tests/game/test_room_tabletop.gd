@@ -506,6 +506,23 @@ func test_radio_lid_takes_only_a_living_room_vase() -> void:
 			assert_eq(row["on"], "radio_set")
 			assert_eq(row["host_rect"], Rect2i(2, 2, 2, 1))
 	assert_eq(RoomDecor._tabletops(props, [0], 0, "bed", 3, "침실", 4), [], "침실 받침이 아니다")
+	assert_eq(RoomDecor.top_hosts("living", "vase"), ["side_table", "low_table", "radio_set"], "라디오는 셋째")
+	# 받침 셋이 다 있을 때 꽃병 하나만 놓는 판은 곁탁자, 곁탁자를 빼면 낮은 탁자에 놓는다.
+	var three := [{"kind": "side_table", "rect": Rect2i(2, 2, 1, 1), "level": 0, "facing": 0},
+		{"kind": "low_table", "rect": Rect2i(5, 2, 1, 1), "level": 0, "facing": 0}, props[0].duplicate()]
+	three[2]["rect"] = Rect2i(8, 2, 2, 1)
+	var vase_first := 0
+	for seed_value in range(64):
+		var first := RoomDecor._tabletops(three, [0, 1, 2], 0, "living", seed_value, "거실", 1)
+		if first.size() != 1 or first[0]["kind"] != "vase":
+			continue
+		vase_first += 1
+		assert_eq(first[0]["on"], "side_table", "seed %d" % seed_value)
+		var second := RoomDecor._tabletops(three, [1, 2], 0, "living", seed_value, "거실", 1)
+		assert_eq(second.size(), 1, "seed %d" % seed_value)
+		if second.size() == 1:
+			assert_eq(second[0]["on"], "low_table", "seed %d" % seed_value)
+	assert_gt(vase_first, 0, "꽃병이 먼저 오는 판이 있다")
 
 
 func _submitted(view, path: String) -> int:
