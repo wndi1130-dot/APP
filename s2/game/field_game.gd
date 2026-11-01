@@ -1831,7 +1831,7 @@ func welcome_back() -> void:
 	away = false
 	if not ended:
 		if resume_announce and hud != null:
-			hud.toast("멈춰 둔 자리다.")
+			hud.toast("중단한 상태 그대로다.")
 		begin_resume()
 
 
@@ -2466,7 +2466,7 @@ func _on_body_event(p: Person, ev: String) -> void:
 				say(p, "%s 열이 오른다." % p.display_name, false, "window_closed")
 		"exhausted_heavy":
 			if p == player:
-				hud.toast("숨참")
+				hud.toast("숨이 찬다.")
 
 
 func on_person_died(p: Person) -> void:
@@ -3818,7 +3818,7 @@ func _ate(p, id: String, plan: Dictionary) -> void:
 	var result: Dictionary = FieldItems.eat_result(id, float(plan["spill"]))
 	if bool(result["bad"]):
 		if p == player and hud != null:
-			hud.toast("상해 있었다.")
+			hud.toast("먹은 것이 상해 있었다.")
 		return
 	p.body.add_fatigue(-float(result["rest"]))
 
