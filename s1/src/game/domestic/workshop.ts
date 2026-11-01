@@ -298,16 +298,16 @@ export function jobCheck(g: Game, kind: ModKind, car: string, step?: FurnishStep
     if (n >= 2 && techMult(g, 'w5') <= 0) return { ok: false, why: '객차 목공을 사용해야 한다' };
     if (n === 3 && techMult(g, 'w1') <= 0) return { ok: false, why: '공구 수리부터' };
     const cost = furnishCost(n);
-    if (d.wood < cost.wood) return { ok: false, why: `목재 ${cost.wood}이 든다` };
-    if (d.scrap < cost.scrap) return { ok: false, why: `고철 ${cost.scrap}이 든다` };
-    if (d.parts < cost.parts) return { ok: false, why: `부품 ${cost.parts}이 든다` };
+    if (d.wood < cost.wood) return { ok: false, why: `목재가 ${cost.wood} 든다` };
+    if (d.scrap < cost.scrap) return { ok: false, why: `고철이 ${cost.scrap} 든다` };
+    if (d.parts < cost.parts) return { ok: false, why: `부품이 ${cost.parts} 든다` };
     return { ok: true };
   }
   if (kind === 'insulate') {
     if (!techUsable(g, 'e5')) return { ok: false, why: '단열 개조를 아직 모른다' };
     if (!CAR_COMM[car]) return { ok: false, why: '사람이 사는 칸만' };
     if (d.insulated.includes(car)) return { ok: false, why: '이미 단열했다' };
-    if (d.wood < D.insulateWood) return { ok: false, why: `목재 ${D.insulateWood}이 든다` };
+    if (d.wood < D.insulateWood) return { ok: false, why: `목재가 ${D.insulateWood} 든다` };
     return { ok: true };
   }
   if (kind === 'armor') {
@@ -315,12 +315,12 @@ export function jobCheck(g: Game, kind: ModKind, car: string, step?: FurnishStep
     // 장갑이 하는 일은 경비대 노출을 낮추는 것뿐이다(sit.ts). 다른 칸에 대면 고철만 든다.
     if (car !== 'guard') return { ok: false, why: '경비대칸에만 댄다' };
     if (d.armored.includes(car)) return { ok: false, why: '이미 장갑을 댔다' };
-    if (d.scrap < D.armorScrap) return { ok: false, why: `고철 ${D.armorScrap}이 든다` };
+    if (d.scrap < D.armorScrap) return { ok: false, why: `고철이 ${D.armorScrap} 든다` };
     return { ok: true };
   }
   if (!techUsable(g, 'm4')) return { ok: false, why: '온실칸을 아직 모른다' };
   if (d.greenhouse) return { ok: false, why: '온실은 하나다' };
-  if (materials(g) < D.convertMaterials) return { ok: false, why: `자재 ${D.convertMaterials}이 든다` };
+  if (materials(g) < D.convertMaterials) return { ok: false, why: `자재가 ${D.convertMaterials} 든다` };
   return { ok: true };
 }
 
