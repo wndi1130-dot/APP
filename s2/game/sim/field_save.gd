@@ -269,6 +269,10 @@ static func _whole_sleds(d: Dictionary) -> bool:
 			return false
 		if not _counts(row["items"]):
 			return false
+		# The restore walks the cargo by item id: a tagged key of another type is not one.
+		for item in row["items"]:
+			if not item is String:
+				return false
 	return true
 
 

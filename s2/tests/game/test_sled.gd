@@ -1774,7 +1774,8 @@ func test_d9_bad_sled_rows_send_the_read_to_the_backup() -> void:
 	var text: String = FieldSave.to_json(FieldSave.capture(game))
 	assert_false(FieldSave.from_json(text).is_empty())
 	var bad: Array[String] = []
-	for shape: String in ["sleds_not_a_list", "items_not_counts", "no_pos", "next_id_text"]:
+	var odd_key: Dictionary = {"$type": "Dictionary", "value": [[{"$type": "Vector3", "value": [0, 0, 0]}, 2]]}
+	for shape: String in ["sleds_not_a_list", "items_not_counts", "no_pos", "next_id_text", "item_key_not_text", "runtime_item_key_not_text"]:
 		var parsed: Dictionary = JSON.parse_string(text)
 		match shape:
 			"sleds_not_a_list":
@@ -1785,6 +1786,12 @@ func test_d9_bad_sled_rows_send_the_read_to_the_backup() -> void:
 				parsed["sleds"][0].erase("pos")
 			"next_id_text":
 				parsed["next_sled_id"] = "two"
+			"item_key_not_text":
+				parsed["sleds"][0]["items"] = odd_key
+			"runtime_item_key_not_text":
+				# Only the exact copy is bad: the envelope alone would pass.
+				assert_true(parsed["runtime"]["game"]["sleds"] is Array, "the exact copy keeps sled rows")
+				parsed["runtime"]["game"]["sleds"][0]["items"] = odd_key
 		bad.append(JSON.stringify(parsed))
 		assert_true(FieldSave.from_json(bad[-1]).is_empty(), shape)
 	var old: Dictionary = JSON.parse_string(text)
