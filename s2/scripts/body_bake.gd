@@ -1223,10 +1223,10 @@ const LAYERS: Dictionary = {
 		"sink": RUN_SINK,
 	},
 	# UAL1 Idle_Loop crouches and staggers the feet. Keep its upper-body
-	# pose, with a straight, planted support pose and a small upper-body breath.
+	# pose, with relaxed, planted legs and a small upper-body breath.
 	"p_stand": {
 		"steps": [
-			["stand_support"],
+			["stand_support", 4.0, 0.10],
 			["turn", "spine", "x", [0.0, 0.012, 0.0]],
 			["turn", "chest", "x", [0.0, -0.006, 0.0]],
 			["aim", "upper_arm.L", "forearm.L", [0.14, -1.0, [0.02, 0.01, 0.0, 4.0]]],
@@ -2304,6 +2304,48 @@ static func _keyed(keys: Array, u: float) -> float:
 	return float(keys[keys.size() - 1][1])
 
 
+## Relax neutral standing legs without changing their lengths. Place each
+## ankle half extra_width outward, keep its rest height and foot orientation,
+## and lower the pelvis to fit the requested knee bend. The two-link solve
+## bends the knees forward (+Z); the spine and arms keep their rotations.
+static func _relax_stand_support(body: Skeleton3D, knee_degrees: float, extra_width: float) -> void:
+	var legs: Array[Dictionary] = []
+	var drop := 0.0
+	for side: String in ["L", "R"]:
+		var thigh_name := "thigh." + side
+		var shin_name := "shin." + side
+		var foot_name := "foot." + side
+		var thigh := body.get_bone_global_rest(_bone(body, thigh_name)).origin
+		var knee := body.get_bone_global_rest(_bone(body, shin_name)).origin
+		var foot := body.get_bone_global_rest(_bone(body, foot_name))
+		var upper := thigh.distance_to(knee)
+		var lower := knee.distance_to(foot.origin)
+		var target := foot.origin + Vector3(extra_width * (0.5 if side == "L" else -0.5), 0.0, 0.0)
+		var reach_squared := upper * upper + lower * lower + 2.0 * upper * lower * cos(deg_to_rad(knee_degrees))
+		var across := target - thigh
+		var height := sqrt(maxf(0.0, reach_squared - across.x * across.x - across.z * across.z))
+		drop += thigh.y - target.y - height
+		legs.append({"thigh": thigh_name, "shin": shin_name, "foot": foot_name, "target": target, "upper": upper, "lower": lower, "foot_basis": foot.basis.orthonormalized()})
+	# Both legs have matching lengths/heights in the fourteen living rigs.
+	sink(body, drop * 0.5)
+	for leg: Dictionary in legs:
+		var start := body.get_bone_global_pose(_bone(body, leg["thigh"])).origin
+		var target: Vector3 = leg["target"]
+		var axis := (target - start).normalized()
+		var distance := start.distance_to(target)
+		var upper: float = leg["upper"]
+		var lower: float = leg["lower"]
+		var along := (upper * upper - lower * lower + distance * distance) / (2.0 * distance)
+		var bend := (Vector3.BACK - axis * axis.dot(Vector3.BACK)).normalized()
+		var knee := start + axis * along + bend * sqrt(maxf(0.0, upper * upper - along * along))
+		aim(body, leg["thigh"], leg["shin"], knee - start)
+		var shin := body.get_bone_global_pose(_bone(body, leg["shin"])).origin
+		aim(body, leg["shin"], leg["foot"], target - shin)
+		var foot := _bone(body, leg["foot"])
+		var parent_basis := body.get_bone_global_pose(body.get_bone_parent(foot)).basis.orthonormalized()
+		body.set_bone_pose_rotation(foot, (parent_basis.inverse() * (leg["foot_basis"] as Basis)).get_rotation_quaternion())
+
+
 ## Hangs a layer on the body (after retarget), for progress u (0..1). The
 ## layers' sinks are metres for hips 1 m up; `sink_scale` is this body's hip
 ## height over that, so a shorter body is lowered as far in proportion.
@@ -2321,6 +2363,7 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scal
 					var rest := body.get_bone_rest(bone)
 					body.set_bone_pose_position(bone, rest.origin)
 					body.set_bone_pose_rotation(bone, rest.basis.get_rotation_quaternion())
+				_relax_stand_support(body, float(step[1]), float(step[2]))
 			"turn":
 				turn(body, step[1], _value(step[3], w), AXES[step[2]])
 			"aim":

@@ -249,14 +249,32 @@ func test_standing_source_support_is_upright_on_all_fourteen_rigs() -> void:
 			var height := BodyBake._world(body, hips).origin.y - root.global_position.y
 			assert_true(height >= main_height * 0.97, "%s frame %d hip >= 97%% main" % [rig_name, frame])
 			var feet: Array[Vector3] = []
+			var thighs: Array[Vector3] = []
+			var outward: Array[float] = []
 			for side in 2:
 				var suffix := ".L" if side == 0 else ".R"
 				var thigh := BodyBake._world(body, BodyBake._bone(body, "thigh" + suffix)).origin
 				var knee := BodyBake._world(body, BodyBake._bone(body, "shin" + suffix)).origin
 				var foot := BodyBake._world(body, BodyBake._bone(body, "foot" + suffix)).origin
-				knee_sum[side] += rad_to_deg((knee - thigh).angle_to(foot - knee))
+				var bend := rad_to_deg((knee - thigh).angle_to(foot - knee))
+				knee_sum[side] += bend
+				assert_true(bend >= 3.0 and bend <= 5.0, "%s frame %d side %d relaxed knee 3..5 degrees" % [rig_name, frame, side])
 				feet.append(foot)
+				thighs.append(thigh)
+				outward.append((foot.x - thigh.x) * (1.0 if side == 0 else -1.0))
+				var rest_thigh := body.get_bone_global_rest(BodyBake._bone(body, "thigh" + suffix)).origin
+				var rest_knee := body.get_bone_global_rest(BodyBake._bone(body, "shin" + suffix)).origin
+				var rest_foot := body.get_bone_global_rest(BodyBake._bone(body, "foot" + suffix))
+				assert_almost_eq(thigh.distance_to(knee), rest_thigh.distance_to(rest_knee), 0.00001, rig_name + " thigh length preserved")
+				assert_almost_eq(knee.distance_to(foot), rest_knee.distance_to(rest_foot.origin), 0.00001, rig_name + " shin length preserved")
+				var foot_basis := body.get_bone_global_pose(BodyBake._bone(body, "foot" + suffix)).basis.orthonormalized()
+				var tilt := rad_to_deg(foot_basis.get_rotation_quaternion().angle_to(rest_foot.basis.orthonormalized().get_rotation_quaternion()))
+				assert_true(absf(tilt) <= 0.01, rig_name + " foot stays flat in its rest orientation")
 			assert_true(absf(feet[0].z - feet[1].z) <= 0.35, "%s frame %d foot z spread <= 0.35 m" % [rig_name, frame])
+			var extra_width := absf(feet[0].x - feet[1].x) - absf(thighs[0].x - thighs[1].x)
+			assert_true(extra_width >= 0.08 and extra_width <= 0.12, rig_name + " ankles 0.08..0.12 m wider than hips")
+			assert_true(outward[0] >= 0.04 and outward[0] <= 0.06 and outward[1] >= 0.04 and outward[1] <= 0.06, rig_name + " both feet move outward")
+			assert_almost_eq(outward[0], outward[1], 0.00001, rig_name + " symmetric foot widening")
 		for side in 2:
 			assert_true(float(knee_sum[side]) / float(count) <= 10.0, "%s side %d mean knee <= 10 degrees" % [rig_name, side])
 		assert_true(chest_travel >= 0.0005 and chest_travel <= 0.01, rig_name + " small upper-body breath remains")
