@@ -1831,7 +1831,7 @@ func welcome_back() -> void:
 	away = false
 	if not ended:
 		if resume_announce and hud != null:
-			hud.toast("중단한 상태 그대로다.")
+			hud.toast("멈춰 둔 그대로다.")
 		begin_resume()
 
 

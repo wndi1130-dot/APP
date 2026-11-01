@@ -285,13 +285,13 @@ func test_coming_back_says_the_field_was_held_once() -> void:
 	_clear_toasts()
 	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
 	assert_true(game.paused)
-	assert_false(_toast_texts().has("중단한 상태 그대로다."), "nothing to say while away")
+	assert_false(_toast_texts().has("멈춰 둔 그대로다."), "nothing to say while away")
 	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
-	assert_eq(_toast_texts().count("중단한 상태 그대로다."), 1)
+	assert_eq(_toast_texts().count("멈춰 둔 그대로다."), 1)
 	# Android fires both: the second is quiet.
 	game._notification(Node.NOTIFICATION_APPLICATION_RESUMED)
 	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
-	assert_eq(_toast_texts().count("중단한 상태 그대로다."), 1)
+	assert_eq(_toast_texts().count("멈춰 둔 그대로다."), 1)
 	assert_eq(game.hud.toasts.back()["kind"], FieldHud.TOAST_NORMAL)
 
 
@@ -300,7 +300,7 @@ func test_a_pause_the_player_chose_is_not_announced_on_return() -> void:
 	game.paused = true
 	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
 	game._notification(Node.NOTIFICATION_APPLICATION_FOCUS_IN)
-	assert_false(_toast_texts().has("중단한 상태 그대로다."))
+	assert_false(_toast_texts().has("멈춰 둔 그대로다."))
 
 
 func test_a_second_trip_away_is_announced_again() -> void:
@@ -310,4 +310,4 @@ func test_a_second_trip_away_is_announced_again() -> void:
 	game.paused = false
 	game._notification(Node.NOTIFICATION_APPLICATION_PAUSED)
 	game._notification(Node.NOTIFICATION_APPLICATION_RESUMED)
-	assert_eq(_toast_texts().count("중단한 상태 그대로다."), 2)
+	assert_eq(_toast_texts().count("멈춰 둔 그대로다."), 2)
