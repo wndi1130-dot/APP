@@ -444,6 +444,7 @@ func test_worker_backs_behind_escort_at_eight_and_drops_at_three_metres() -> voi
 
 func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 	_send()
+	var total_turn: float = 0.0
 	for guard in _role("escort"):
 		guard.position = _at() + Vector3(-4.0 if guard.brain.get("side", 0) == 0 else 4.0, 0, 1.5)
 		guard.stop()
@@ -462,6 +463,29 @@ func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 			var turned: float = float(guard.brain.get("watch_body_turn_t", last_turn))
 			if turned > last_turn and turned - last_turn < game.ai.LOOK_BODY_TURN_GAP_S:
 				assert_gt(absf(angle_difference(shown, target)), deg_to_rad(game.ai.LOOK_HEAD_MAX_DEG))
+		# Drawn at 30 and 60 fps: the body turn keeps the game's rate and never flips.
+		game.ai._crew(guard, 0.0, true)
+		game._turn_people(0.0)
+		guard.look = guard.facing
+		guard.refresh_view(false)
+		assert_gt(guard.turn_rate, 0.0, "a posted escort uses the game's body turn rate")
+		for fps: int in [30, 60]:
+			var delta: float = 1.0 / float(fps)
+			var before: float = guard.rotation.y
+			for _tick: int in range(13 * fps):
+				game.clock.elapsed += delta
+				game._turn_people(delta)
+				game.ai._crew(guard, delta, true)
+				guard.refresh_view(false)
+				for yaw: float in [guard.facing, guard.rotation.y]:
+					var out := Vector3(sin(yaw), 0.0, cos(yaw))
+					assert_gt(rad_to_deg(out.angle_to(_at() - guard.position)), 180.0 - game.ai.LOOK_SECTOR_DEG - game.ai.LOOK_CAMERA_TURN_MAX_DEG - 0.5, "watching outward, the work behind")
+				var turned_now: float = absf(angle_difference(before, guard.rotation.y))
+				assert_lte(turned_now, guard.turn_rate * delta + 0.00001, "the drawn turn stays within its rate")
+				assert_lt(rad_to_deg(turned_now), 30.0, "the watch turns slowly, never flips")
+				total_turn += turned_now
+				before = guard.rotation.y
+	assert_gt(total_turn, deg_to_rad(5.0), "the posted watches move between their points")
 
 
 func _cycle(id: String) -> void:
@@ -482,7 +506,7 @@ func _cycle(id: String) -> void:
 	assert_almost_eq(game.work.remaining(), before - float(template["trip"]), 0.0001)
 	worker.position = game.work.door_of("work_site")
 	if id == "coal_wagon":
-		worker.position = FieldGrid.center(Vector2i(clampi(int(worker.position.x), FieldWork.COAL_DROP_MIN_X, FieldWork.COAL_DROP_MAX_X), FieldWork.COAL_DROP_ROW))
+		worker.position = game.work.coal_drop(worker.position.x)
 	game.ai._crew(worker, 0.1, true)
 	var delivered: float = game.actions.coal_delivered if template["yield"] == "coal" else game.actions.wood_delivered
 	assert_almost_eq(delivered, float(template["trip"]), 0.0001)

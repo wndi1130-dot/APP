@@ -28,6 +28,7 @@ const LEAN_IN_DEG: float = -6.0
 const LIFT := Vector2(14, 16)
 const META_REST := "paper_motion_rest"
 const META_TWEEN := "paper_motion_tween"
+const META_ALPHA_PEER := "paper_motion_alpha_peer"
 
 
 ## Bring `sheet` in to where it lies now. Returns the tween (its finished
@@ -113,7 +114,7 @@ static func _open_pose(sheet: Control, rest: Dictionary, k: float) -> void:
 	var rot: float = lerpf(float(rest["rot"]) + lean, float(rest["rot"]) + lean * 0.5, slide)
 	rot = lerpf(rot, float(rest["rot"]), settle) + deg_to_rad(0.7) * sin(settle * PI) * (1.0 - settle)
 	_pose(sheet, rest, _from_at(sheet, rest).lerp(_rest_at(rest), slide), rot, lerpf(FOLDED, 1.0, unfold), 1.0 - settle)
-	sheet.modulate.a = clampf(k / 0.12, 0.0, 1.0)
+	_alpha(sheet, clampf(k / 0.12, 0.0, 1.0))
 
 
 static func _close_pose(sheet: Control, rest: Dictionary, k: float) -> void:
@@ -122,7 +123,17 @@ static func _close_pose(sheet: Control, rest: Dictionary, k: float) -> void:
 	var away: float = _in_cubic(clampf((k - 0.45) / 0.55, 0.0, 1.0))
 	var rot: float = float(rest["rot"]) + deg_to_rad(LEAN_IN_DEG) * 0.5 * lift + deg_to_rad(LEAN_IN_DEG) * 0.5 * away
 	_pose(sheet, rest, _rest_at(rest).lerp(_from_at(sheet, rest), away), rot, lerpf(1.0, FOLDED, fold), lift)
-	sheet.modulate.a = 1.0 - clampf((k - 0.8) / 0.2, 0.0, 1.0)
+	_alpha(sheet, 1.0 - clampf((k - 0.8) / 0.2, 0.0, 1.0))
+
+
+## A loose slip can share the sheet's visibility without changing its layout.
+static func _alpha(sheet: Control, value: float) -> void:
+	sheet.modulate.a = value
+	if not sheet.has_meta(META_ALPHA_PEER):
+		return
+	var peer: Variant = sheet.get_meta(META_ALPHA_PEER)
+	if is_instance_valid(peer):
+		(peer as Control).modulate.a = value
 
 
 ## Lying where it lies: its own corner, turn and shadow, nothing moved.
@@ -131,7 +142,7 @@ static func _lay(sheet: Control, rest: Dictionary) -> void:
 	sheet.position = rest["pos"]
 	sheet.rotation = rest["rot"]
 	sheet.scale = Vector2.ONE
-	sheet.modulate.a = 1.0
+	_alpha(sheet, 1.0)
 	var shadow: Control = rest["shadow"]
 	if shadow != null:
 		shadow.position = rest["shadow_at"]

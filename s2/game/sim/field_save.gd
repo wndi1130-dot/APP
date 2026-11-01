@@ -21,14 +21,20 @@ const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const Sled = preload("res://game/sim/sled.gd")
+const SLED_PERSON_FIELDS: Array[String] = ["sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_rearm_t", "sled_serial", "sled_job"]
 const StopGround = preload("res://game/world/stop_ground.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
-const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap"]
+const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap",
+	"stop_view_rows", "stop_view_cols", "stop_view_rule"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
+
+## Tests only: fail one step of the next write; empty is off, reset on entry.
+static var _test_fail_step: String = ""
 
 ## Only simulation state, never meshes, services or input widgets.
 const PERSON_FIELDS: Array[String] = [
@@ -39,6 +45,7 @@ const PERSON_FIELDS: Array[String] = [
 	"reload_t", "jam_t", "target_zombie", "target_person", "hold_attack", "grabbers", "grab_left", "grab_front",
 	"climbing", "carrying_wounded", "downed_marked", "dead_marked", "brain", "panic", "ice_t", "fallen_t",
 	"last_hurt_by", "blood_soaked", "close_kills",
+	"sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_rearm_t", "sled_serial", "sled_job",
 ]
 const GAME_FIELDS: Array[String] = [
 	"squad", "crew", "raiders",
@@ -49,6 +56,7 @@ const GAME_FIELDS: Array[String] = [
 	"radio_last", "radio_rings", "radio_t", "zone_now", "auto_paused_once", "dark_noise_t", "safe_warned",
 	"glass_warned", "player_downed_t", "spotted_events", "unseen_rattle", "lid_tip_told", "roof_seen",
 	"seen_now", "seen_memory", "vis_t", "cam_focus", "cam_push", "cam_size",
+	"sleds", "next_sled_id",
 ]
 const COMPONENTS: Array[String] = ["director", "ledger", "mission_play", "holdout", "actions", "ai", "combat", "lines", "weather", "telemetry", "train_guard", "work"]
 ## "dead_eaten_seconds" is EatRules.EATEN_META (결정 441 (3)).
@@ -83,11 +91,15 @@ static func capture(game) -> Dictionary:
 		"stop_id": stop_id, "place": game.place, "mission": game.mission,
 		"stop_form": game.stop_form, "stop_ground": String(game.data.get("stop_form", "")),
 		"stop_end_gap": int(game.data.get("stop_end_gap", -1)),
+		"stop_view_rows": int(game.data.get("stop_view_rows", 0)),
+		"stop_view_cols": int(game.data.get("stop_view_cols", 0)),
+		"stop_view_rule": int(game.data.get("stop_view_rule", 0)),
 		"seed": int(game.rng.seed), "phase": "ended" if game.ended else "field", "end_reason": String(said.get("endReason", "")),
 		"saved_at": game.clock.label(), "clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
 		"player_pid": game.player.pid if game.player != null else "",
 		"people": people, "ammo": game.ammo.duplicate(), "containers": containers, "spots": spots,
 		"ground_items": ground, "unloaded": game.unloaded.duplicate(), "loaded_wear": game.loaded_wear.duplicate(true),
+		"sleds": game.sleds.duplicate(true), "next_sled_id": game.next_sled_id,
 		"coal": {"delivered": game.actions.coal_delivered if game.actions != null else 0, "spent": game.actions.coal_spent if game.actions != null else 0},
 		"zombies": zombies, "decisions": game.decisions.duplicate(true),
 		# The return's id, the same as the receipt's receiptId: the train side applies it once.
@@ -142,9 +154,17 @@ static func from_json(text: String) -> Dictionary:
 	var parsed = json.data
 	if not parsed is Dictionary:
 		return {}
-	if String(parsed.get("kind", "")) != KIND or int(parsed.get("version", 0)) not in [1, VERSION]:
+	var version: Variant = parsed.get("version")
+	if not (version is int or version is float):
 		return {}
-	var d: Dictionary = _decode(parsed)
+	if not is_finite(float(version)) or float(version) != floorf(float(version)):
+		return {}
+	if parsed.get("kind") != KIND or float(version) not in [1.0, float(VERSION)]:
+		return {}
+	var decoded: Variant = _decode(parsed)
+	if not decoded is Dictionary or not _whole(decoded):
+		return {}
+	var d: Dictionary = decoded
 	d["version"] = int(d["version"])
 	d["seed"] = int(d.get("seed", 0))
 	for z in d.get("zombies", []):
@@ -168,6 +188,182 @@ static func from_json(text: String) -> Dictionary:
 			if h.has("loaded"):
 				h["loaded"] = int(h["loaded"])
 	return d
+
+
+## Only fields read without a fallback are required. Optional old fields, when
+## present, must still have the container/number type their readers consume.
+static func _fields(d: Variant, required: Dictionary, optional: Dictionary = {}) -> bool:
+	if not d is Dictionary:
+		return false
+	for key in required:
+		if not d.has(key) or not _field_type(d[key], required[key]):
+			return false
+	for key in optional:
+		if d.has(key) and not _field_type(d[key], optional[key]):
+			return false
+	return true
+
+
+static func _field_type(value: Variant, type: int) -> bool:
+	if type == TYPE_FLOAT:
+		return (value is int or value is float) and is_finite(float(value))
+	return typeof(value) == type
+
+
+static func _counts(d: Dictionary) -> bool:
+	for value in d.values():
+		if not _field_type(value, TYPE_FLOAT):
+			return false
+	return true
+
+
+static func _whole(d: Dictionary) -> bool:
+	if not _fields(d, {"clock": TYPE_DICTIONARY, "coal": TYPE_DICTIONARY}, {
+		"people": TYPE_ARRAY, "zombies": TYPE_ARRAY, "ground_items": TYPE_ARRAY,
+		"containers": TYPE_DICTIONARY, "spots": TYPE_DICTIONARY, "ammo": TYPE_DICTIONARY, "unloaded": TYPE_DICTIONARY,
+		"loaded_wear": TYPE_ARRAY, "decisions": TYPE_ARRAY, "start_opts": TYPE_DICTIONARY,
+		"departure": TYPE_DICTIONARY, "receipt_state": TYPE_DICTIONARY, "runtime": TYPE_DICTIONARY, "seed": TYPE_FLOAT,
+		"sleds": TYPE_ARRAY, "next_sled_id": TYPE_FLOAT,
+	}):
+		return false
+	if not _fields(d["clock"], {"elapsed": TYPE_FLOAT, "speed": TYPE_FLOAT}) \
+		or not _fields(d["coal"], {"delivered": TYPE_FLOAT, "spent": TYPE_FLOAT}):
+		return false
+	for key in ["ammo", "unloaded"]:
+		if not _counts(d.get(key, {})):
+			return false
+	for row in d.get("people", []):
+		if not _fields(row, {"pid": TYPE_STRING, "pos": TYPE_VECTOR3, "level": TYPE_FLOAT,
+			"bag": TYPE_STRING, "items": TYPE_DICTIONARY, "hands": TYPE_ARRAY, "body": TYPE_DICTIONARY}, {
+			"wear": TYPE_DICTIONARY, "heat": TYPE_DICTIONARY, "meta": TYPE_DICTIONARY, "state": TYPE_DICTIONARY, "aim": TYPE_DICTIONARY,
+		}):
+			return false
+		if not _counts(row["items"]):
+			return false
+		for hand in row["hands"]:
+			if not _fields(hand, {}, {"loaded": TYPE_FLOAT}):
+				return false
+	for row in d.get("zombies", []):
+		if not _fields(row, {"id": TYPE_FLOAT, "horde": TYPE_FLOAT, "kind": TYPE_STRING, "pos": TYPE_VECTOR3, "state": TYPE_STRING}, {"loot": TYPE_ARRAY}):
+			return false
+	for row in d.get("ground_items", []):
+		if not _fields(row, {"n": TYPE_FLOAT}):
+			return false
+	if not _whole_sleds(d):
+		return false
+	for row in d.get("containers", {}).values():
+		if not _fields(row, {"searched": TYPE_BOOL, "locked": TYPE_BOOL, "items": TYPE_ARRAY}):
+			return false
+	var opts: Dictionary = d.get("start_opts", {})
+	if not _whole_start(opts):
+		return false
+	var departure: Dictionary = d.get("departure", {})
+	if not _whole_departure(opts.get("departure", {}) if departure.is_empty() else departure):
+		return false
+	return not exact(d) or _whole_runtime(d)
+
+
+## Sled rows as the restore reads them: a bad one sends the read to the backup
+## before anything of the game changes. Saves from before sleds have none.
+static func _whole_sleds(d: Dictionary) -> bool:
+	if not _fields(d, {}, {"sleds": TYPE_ARRAY, "next_sled_id": TYPE_FLOAT}):
+		return false
+	for row in d.get("sleds", []):
+		if not _fields(row, {"id": TYPE_FLOAT, "level": TYPE_FLOAT, "pos": TYPE_VECTOR3, "items": TYPE_DICTIONARY}, {"puller": TYPE_STRING}):
+			return false
+		if not _counts(row["items"]):
+			return false
+		# The restore walks the cargo by item id: a tagged key of another type is not one.
+		for item in row["items"]:
+			if not item is String:
+				return false
+	return true
+
+
+## The saved start options may supply a squad instead of the default one.
+static func _whole_start(opts: Dictionary) -> bool:
+	if not _fields(opts, {}, {"squad": TYPE_ARRAY}):
+		return false
+	if opts.has("squad") and opts["squad"].is_empty():
+		return false
+	for row in opts.get("squad", []):
+		if not _fields(row, {"id": TYPE_STRING, "name": TYPE_STRING, "role": TYPE_STRING}, {
+			"hands": TYPE_ARRAY, "items": TYPE_DICTIONARY, "skills": TYPE_DICTIONARY, "wear": TYPE_DICTIONARY,
+		}):
+			return false
+		if not _whole_start_hands(row.get("hands", [])) or not _counts(row.get("items", {})):
+			return false
+	return true
+
+
+static func _whole_start_hands(hands: Array) -> bool:
+	for hand in hands:
+		if not hand is Array or hand.is_empty() or not hand[0] is String:
+			return false
+		if hand.size() > 1 and not hand[1] is String:
+			return false
+		if hand.size() > 2 and not _field_type(hand[2], TYPE_FLOAT):
+			return false
+	return true
+
+
+## Only a v2 departure activates field_game.gd's direct contract/roster reads.
+static func _whole_departure(departure: Variant) -> bool:
+	if not _fields(departure, {}, {"version": TYPE_FLOAT, "train": TYPE_DICTIONARY, "lootDeck": TYPE_DICTIONARY}):
+		return false
+	if departure.get("pastWeather") is Array:
+		for row in departure["pastWeather"]:
+			if not _fields(row, {"weather": TYPE_STRING, "seg": TYPE_FLOAT}):
+				return false
+	if int(departure.get("version", 0)) != 2:
+		return true
+	if not _fields(departure, {"placeId": TYPE_STRING, "departureId": TYPE_STRING, "stopId": TYPE_STRING, "roster": TYPE_ARRAY}, {"workCrew": TYPE_ARRAY}):
+		return false
+	if departure["roster"].is_empty():
+		return false
+	for person in departure["roster"] + departure.get("workCrew", []):
+		if not _fields(person, {"id": TYPE_STRING, "name": TYPE_STRING, "role": TYPE_STRING, "comm": TYPE_STRING,
+			"rel": TYPE_FLOAT, "body": TYPE_DICTIONARY, "gear": TYPE_DICTIONARY, "hunger": TYPE_FLOAT, "sore": TYPE_FLOAT, "rest": TYPE_FLOAT}):
+			return false
+		if not _fields(person["gear"], {"hands": TYPE_ARRAY, "items": TYPE_DICTIONARY, "bag": TYPE_STRING, "wear": TYPE_DICTIONARY}):
+			return false
+		if not _whole_start_hands(person["gear"]["hands"]) or not _counts(person["gear"]["items"]):
+			return false
+		if person.get("know") is Dictionary and person["know"].get("field", "") == "med":
+			if not _fields(person["know"], {"skill": TYPE_FLOAT}):
+				return false
+	return true
+
+
+## A v2 slot without runtime uses the legacy path; with runtime every direct
+## exact-restore read must be safe, even if its map later needs the fallback.
+static func _whole_runtime(d: Dictionary) -> bool:
+	if not _fields(d, {"containers": TYPE_DICTIONARY, "people": TYPE_ARRAY, "zombies": TYPE_ARRAY}):
+		return false
+	var runtime: Dictionary = d["runtime"]
+	if not _fields(runtime, {"spots": TYPE_DICTIONARY, "levels": TYPE_DICTIONARY, "mission": TYPE_DICTIONARY,
+		"components": TYPE_DICTIONARY, "holdout_doors": TYPE_ARRAY, "game": TYPE_DICTIONARY}, {
+		"wagon_coal": TYPE_ARRAY, "hud": TYPE_DICTIONARY, "zombie_system": TYPE_DICTIONARY,
+	}):
+		return false
+	for kind in ["spots", "components"]:
+		for row in runtime[kind].values():
+			if not row is Dictionary:
+				return false
+	for row in runtime["levels"].values():
+		if not _fields(row, {"solid": TYPE_PACKED_BYTE_ARRAY, "doors": TYPE_DICTIONARY, "windows": TYPE_DICTIONARY, "revision": TYPE_FLOAT}, {
+			"width": TYPE_FLOAT, "height": TYPE_FLOAT, "floor_glass": TYPE_DICTIONARY,
+		}):
+			return false
+	for row in runtime["holdout_doors"]:
+		if not _fields(row, {"wall": TYPE_FLOAT}):
+			return false
+	if not _whole_sleds(runtime["game"]):
+		return false
+	for value in runtime.get("wagon_coal", []):
+		if not _field_type(value, TYPE_FLOAT):
+			return false
+	return _fields(runtime.get("hud", {}), {}, {"grab_total": TYPE_FLOAT})
 
 
 ## Whether the field is where play goes on when the app starts again: a stop still
@@ -228,6 +424,14 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 		opts["stop_end_gap"] = int(save["stop_end_gap"])
 	elif String(opts.get("stop_ground", opts.get("stop_form", ""))) in ["edge", "remote"]:
 		opts["stop_end_gap"] = StopGround.END_GAP
+	if save.has("stop_view_rows"):
+		for key: String in ["stop_view_rows", "stop_view_cols", "stop_view_rule"]:
+			opts[key] = int(save.get(key, 0))
+		if (int(opts["stop_view_rows"]) > 0 or int(opts["stop_view_cols"]) > 0) and int(opts["stop_view_rule"]) != StopGround.VIEW_RULE:
+			push_warning("field save view rule changed; restoring legacy state on the saved view size")
+	elif String(save.get("place", "")) in StopGround.VIEW_PLACES:
+		opts["stop_view_rows"] = 0
+		opts["stop_view_cols"] = 0
 	if not (save.get("departure", {}) as Dictionary).is_empty():
 		opts["departure"] = (save["departure"] as Dictionary).duplicate(true)
 	if String(save.get("receipt_id", "")) != "":
@@ -238,6 +442,9 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 
 ## A save that holds the whole running state (version 2 with "runtime"), not only the old fallbacks.
 static func exact(save: Dictionary) -> bool:
+	if (int(save.get("stop_view_rows", 0)) > 0 or int(save.get("stop_view_cols", 0)) > 0) \
+			and int(save.get("stop_view_rule", 0)) != StopGround.VIEW_RULE:
+		return false
 	return int(save.get("version", 1)) >= 2 and save.has("runtime")
 
 
@@ -271,6 +478,7 @@ static func apply(game, save: Dictionary) -> void:
 		for p in game.people:
 			if p.pid == String(row["pid"]):
 				_put_person(p, row)
+	_restore_sled_envelope(game, save)
 	if exact(save):
 		game.ammo.clear()
 	_put_counts(game.ammo, save.get("ammo", {}))
@@ -303,8 +511,62 @@ static func apply(game, save: Dictionary) -> void:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	game.cam_focus = game.player.position
 	game._update_camera(1.0)
+	Sled.reconcile(game)
 	_refresh_restored_view(game)
 	game.set_stop_form(form)
+
+
+## The old/fallback path also keeps sled work by pid and id, with no replay.
+static func _restore_sled_envelope(game, save: Dictionary) -> void:
+	game.sleds = (save.get("sleds", []) as Array).duplicate(true)
+	game.next_sled_id = int(save.get("next_sled_id", 1))
+	for p in game.people:
+		p.sled_id = 0
+		p.sled_stowed_for = 0
+		p.sled_weapon_stowed = false
+		p.sled_rearm_t = 0.0
+		p.sled_serial = 0
+		p.sled_job = {}
+	for row: Dictionary in save.get("people", []):
+		var p = _person_with_id(game, String(row["pid"]))
+		if p == null:
+			continue
+		var saved: Dictionary = _sled_person_state(row.get("state", {}))
+		var fields: Dictionary = {}
+		for key: String in SLED_PERSON_FIELDS:
+			if saved.has(key):
+				fields[key] = saved[key]
+		_restore_properties(game, p, fields)
+		if p.sled_id != 0 or p.sled_weapon_stowed or not p.sled_job.is_empty():
+			fields.clear()
+			for key: String in ["path", "running", "crouched", "facing", "look", "moving", "stick", "drive_speed", "drive_dir"]:
+				if saved.has(key):
+					fields[key] = saved[key]
+			_restore_properties(game, p, fields)
+		if not p.sled_job.is_empty():
+			fields.clear()
+			for key: String in ["action", "action_label", "action_t", "action_total", "action_done"]:
+				if saved.has(key):
+					fields[key] = saved[key]
+			_restore_properties(game, p, fields)
+
+
+## Migrate before thawing callbacks: the old drawing action no longer exists.
+static func _sled_person_state(saved: Dictionary) -> Dictionary:
+	var state: Dictionary = saved.duplicate(true)
+	if String(state.get("sled_job", {}).get("kind", "")) == "rearm":
+		state["sled_job"] = {}
+	if String(state.get("action", "")) == "sled_rearm":
+		state["sled_rearm_t"] = maxf(0.0, float(state.get("action_t", 0.0)))
+		state["action"] = ""
+		state["action_label"] = ""
+		state["action_t"] = 0.0
+		state["action_total"] = 0.0
+		state["action_done"] = {"$call": []}
+		if float(state["sled_rearm_t"]) <= 0.0:
+			state["sled_weapon_stowed"] = false
+			state["sled_stowed_for"] = 0
+	return state
 
 
 static func _put_person(p, row: Dictionary) -> void:
@@ -380,6 +642,8 @@ static func _properties(game, object, fields: Array) -> Dictionary:
 	var out: Dictionary = {}
 	for field: String in fields:
 		var value: Variant = object.get(field)
+		if field == "sled_rearm_t" and float(value) <= 0.0:
+			continue
 		if field == "action_done":
 			if object.action == "":
 				value = Callable()
@@ -540,7 +804,17 @@ static func _restore_zombie_system(game, saved: Dictionary) -> void:
 		game.zombies.lunger_share = start_share
 
 
+## Old prologue saves can still be walking to a loud sound at the chase pace.
+static func _restore_noise_pace(game, z: Dictionary) -> void:
+	var all = game.zombies
+	if all.noise_hurry >= all.SPEED_HURRY:
+		return   # Act 1 on keeps the chase pace (the act's pace is set up before a restore).
+	if z.get("state", "") == "investigate" and z.get("clue_kind", "") == "sound" and float(z.get("speed", 0.0)) == all.SPEED_HURRY:
+		z["speed"] = all.noise_hurry
+
+
 static func _apply_exact(game, save: Dictionary) -> void:
+	_restore_sled_envelope(game, save)
 	var runtime: Dictionary = save["runtime"]
 	for kind: String in ["containers", "spots"]:
 		var rows: Dictionary = save["containers"] if kind == "containers" else runtime["spots"]
@@ -572,11 +846,12 @@ static func _apply_exact(game, save: Dictionary) -> void:
 		game.zombies.list.append({"id": int(row["id"])})
 	for i in game.zombies.list.size():
 		game.zombies.list[i].merge(_thaw(game, save["zombies"][i]), true)
+		_restore_noise_pace(game, game.zombies.list[i])
 	game.zombies._sense_cells_ready = false
 	for row: Dictionary in save["people"]:
 		var p = _person_with_id(game, String(row["pid"]))
 		if p != null:
-			_restore_properties(game, p, row.get("state", {}))
+			_restore_properties(game, p, _sled_person_state(row.get("state", {})))
 			_restore_properties(game, p.aim, row.get("aim", {}))
 			var metadata: Dictionary = row.get("meta", {})
 			for key: String in PERSON_META:
@@ -607,15 +882,18 @@ static func _apply_exact(game, save: Dictionary) -> void:
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	_restore_properties(game, game, runtime["game"])
+	Sled.reconcile(game)
 	_refresh_restored_view(game)
 	# Sight/view rebuilding must not advance the saved simulation or random streams.
 	_restore_properties(game, game, runtime["game"])
+	Sled.reconcile(game)
 	# Rendering establishes pose caches. Keep their saved clocks too: showing the
 	# paused frame is not an extra simulation/render step on the body's timeline.
 	for i in game.zombies.list.size():
 		var restored: Dictionary = _thaw(game, save["zombies"][i])
 		game.zombies.list[i].clear()
 		game.zombies.list[i].merge(restored)
+		_restore_noise_pace(game, game.zombies.list[i])
 	for row: Dictionary in save["people"]:
 		var p = _person_with_id(game, String(row["pid"]))
 		if p != null:
@@ -628,6 +906,7 @@ static func _apply_exact(game, save: Dictionary) -> void:
 
 
 static func _refresh_restored_view(game) -> void:
+	game.view.update_sleds(game.sleds, game.people)
 	# Boxes are drawn in shared chunk meshes (map_view.gd): ask the view, not its nodes.
 	for id in game.view.container_ids():
 		if not game.data["containers"].has(id):
@@ -735,17 +1014,63 @@ static func _put_receipt(r, state: Dictionary) -> void:
 
 ## Writes over the slot: the new file goes down whole first, the last one is kept as .bak.
 static func write(d: Dictionary, path: String = PATH) -> bool:
+	var fail_step := _test_fail_step
+	_test_fail_step = ""
+	var text := to_json(d)
+	var bytes := text.to_utf8_buffer()
 	var tmp := path + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
 		return false
-	f.store_string(to_json(d))
+	var payload := bytes
+	if fail_step == "short":
+		payload = bytes.slice(0, maxi(0, bytes.size() - 1))
+	elif fail_step == "tamper":
+		payload = bytes.duplicate()
+		var at := payload.find(46)  # A decimal point becomes a digit: same length, still valid sample JSON.
+		payload[at if at >= 0 else 0] = 48
+	f.store_buffer(payload)
+	f.flush()
+	var error: Error = f.get_error()
 	f.close()
+	if fail_step == "write_error":
+		error = ERR_FILE_CANT_WRITE
+	if error != OK:
+		DirAccess.remove_absolute(tmp)
+		return false
+	var written := FileAccess.get_file_as_bytes(tmp)
+	if written != bytes or from_json(text).is_empty():
+		DirAccess.remove_absolute(tmp)
+		return false
+	var backup := path + ".bak"
 	if FileAccess.file_exists(path):
-		if FileAccess.file_exists(path + ".bak"):
-			DirAccess.remove_absolute(path + ".bak")
-		DirAccess.rename_absolute(path, path + ".bak")
-	return DirAccess.rename_absolute(tmp, path) == OK
+		var previous_file := FileAccess.open(path, FileAccess.READ)
+		if previous_file == null:
+			DirAccess.remove_absolute(tmp)
+			return false
+		var previous_length := previous_file.get_length()
+		var previous_bytes := previous_file.get_buffer(previous_length)
+		error = previous_file.get_error()
+		previous_file.close()
+		if fail_step == "read_previous":
+			error = ERR_FILE_CANT_READ
+		if error != OK or previous_bytes.size() != previous_length:
+			DirAccess.remove_absolute(tmp)
+			return false
+		var previous := from_json(previous_bytes.get_string_from_utf8())
+		var moved := backup if not previous.is_empty() else path + ".broken"
+		if FileAccess.file_exists(moved) and DirAccess.remove_absolute(moved) != OK:
+			DirAccess.remove_absolute(tmp)
+			return false
+		if DirAccess.rename_absolute(path, moved) != OK:
+			DirAccess.remove_absolute(tmp)
+			return false
+	if fail_step != "rename_tmp" and DirAccess.rename_absolute(tmp, path) == OK:
+		return true
+	if not FileAccess.file_exists(path) and FileAccess.file_exists(backup):
+		DirAccess.rename_absolute(backup, path)
+	DirAccess.remove_absolute(tmp)
+	return false
 
 
 ## The last whole save: the slot, or the one before it when the slot is broken; {} when none.
@@ -759,7 +1084,7 @@ static func read(path: String = PATH) -> Dictionary:
 
 
 static func clear(path: String = PATH) -> void:
-	for at in [path, path + ".tmp", path + ".bak"]:
+	for at in [path, path + ".tmp", path + ".bak", path + ".broken"]:
 		if FileAccess.file_exists(at):
 			DirAccess.remove_absolute(at)
 

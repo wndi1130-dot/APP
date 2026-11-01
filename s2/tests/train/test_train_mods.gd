@@ -247,7 +247,7 @@ func test_furnish_cloth_and_recorded_four_store_refund() -> void:
 	g["dom"]["techs"]["w5"] = {"stage": "done", "defect": false, "need": 3, "progress": 3}
 	g["dom"]["cloth"] = 1.0
 	var before: Dictionary = g.duplicate(true)
-	assert_eq(Mods.job_check(g, "furnish", "front")["why"], "천 2이 든다")
+	assert_eq(Mods.job_check(g, "furnish", "front")["why"], "천이 2 든다")
 	assert_false(Mods.start_job(g, "furnish", "front"))
 	assert_eq(g, before)
 	g["dom"]["cloth"] = 4.0
