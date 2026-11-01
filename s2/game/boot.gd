@@ -4,6 +4,7 @@ extends Node
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const SliceSave = preload("res://game/sim/slice_save.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
@@ -241,6 +242,8 @@ func _start(resume: Dictionary = {}) -> void:
 		var seed_env: String = OS.get_environment("S2_SEED")
 		if seed_env != "":
 			opts["seed"] = int(seed_env)
+		# A new stop has the first stop's view ground (stop_ground.gd); a resumed one, its save's.
+		StopGround.ask_view(opts)
 	# The one save slot: written when the app is pushed away and when the stop ends.
 	opts["field_save"] = true
 	opts["field_save_path"] = field_save_path

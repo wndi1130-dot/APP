@@ -11,10 +11,10 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
-const PropKinds = preload("res://game/world/prop_kinds.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const TrackView = preload("res://game/world/track_view.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
+const RoomDecor = preload("res://game/world/room_decor.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
 const FurnitureTints = preload("res://game/world/furniture_tints.gd")
 const ObjectRules = preload("res://game/sim/object_rules.gd")
@@ -36,6 +36,7 @@ const CONTACT_SHADER = preload("res://fx/shaders/contact_shade.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
 const GroundLook = preload("res://game/world/ground_look.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 ## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
 const WINDOW_DARK := Color(0.16, 0.16, 0.17)
 ## Size (along the wall, up, thickness) and height of each glowing face.
@@ -81,7 +82,7 @@ var prop_batches: Dictionary = {} # 모델 경로 -> {items, nodes(LOD -> MultiM
 var object_gray: Array = [] # Individually removable fallbacks for interactive furniture.
 var stove_glows: Dictionary = {}
 var modelled_prop_cells: Dictionary = {} # 땅 층에서 모델로 그리는 칸: 회색 덩이 제외용
-var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0} # 지도 facing과 다르게 돌린 수, 줄인 수
+var prop_fit_counts: Dictionary = {"placed": 0, "turned": 0, "shrunk": 0, "top_skipped": 0} # 지도 facing과 다르게 돌린 수, 줄인 수
 var _prop_memory := PackedByteArray()
 var _prop_seen_now: Dictionary = {}
 var _props_mask_on: bool = true
@@ -1531,7 +1532,7 @@ const TREE_PIECE: int = TILE * 2
 
 ## The tree on cell `c` of `place_id`'s map: {model, at, yaw, height, spread}, the same
 ## every time. Off the middle of its cell by a little, so a row of tree cells is no row.
-static func tree_plant(place_id: String, c: Vector2i) -> Dictionary:
+static func tree_plant(place_id: String, c: Vector2i, force_model: String = "") -> Dictionary:
 	var mix: Array = TREE_MIX.get(BuildingUses.region_of(place_id), TREE_MIX["rail_works"])
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("%s:tree:%d:%d" % [place_id, c.x, c.y])
@@ -1542,6 +1543,8 @@ static func tree_plant(place_id: String, c: Vector2i) -> Dictionary:
 		if pick < 0.0:
 			model = row[0]
 			break
+	if not force_model.is_empty():
+		model = force_model
 	var size: Array = TREE_SIZE[model]
 	var at := FieldGrid.center(c) + Vector3(rng.randf_range(-0.2, 0.2), 0, rng.randf_range(-0.2, 0.2))
 	return {"model": model, "at": at, "yaw": rng.randf() * TAU, "height": rng.randf_range(size[0], size[1]), "spread": float(size[2])}
@@ -1551,11 +1554,13 @@ static func tree_plant(place_id: String, c: Vector2i) -> Dictionary:
 ## box trees did. Returns the trees that had no model, for the grey boxes.
 func _build_tree_models(cells: Array) -> Array:
 	var place_id := String(data.get("place_id", ""))
+	var forest: Array = data.get("deep_forest", [])
 	var meshes: Dictionary = {}
 	var pieces: Dictionary = {}
 	var left: Array = []
 	for c: Vector2i in cells:
-		var plant := tree_plant(place_id, c)
+		var in_forest: bool = forest.any(func(rect: Rect2i) -> bool: return rect.has_point(c))
+		var plant := tree_plant(place_id, c, TREE_SPRUCE if in_forest else "")
 		var path := String(plant["model"])
 		if not meshes.has(path):
 			var ok := PropModels.enabled() and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty()
@@ -1642,12 +1647,8 @@ func _build_blocks() -> void:
 		for part: Array in open_wagon_parts(data["wagons"][index]):
 			box(st, part[0], part[1], part[2])
 	if data["spots"].has("water_tower"):
-		# The first stop: the blocked cells in its north-west corner are the water tower.
-		for y in range(mini(14, grid.height)):
-			for x in range(mini(14, grid.width)):
-				var c := Vector2i(x, y)
-				if grid.solid_at(c) == S.BLOCK and grid.building_at(c) < 0:
-					box(st, Vector3(1, 6.0, 1), Vector3(x + 0.5, 3.0, y + 0.5), Color(0.4, 0.37, 0.35))
+		for c: Vector2i in water_tower_cells(grid, data):
+			box(st, Vector3(1, 6.0, 1), Vector3(c.x + 0.5, 3.0, c.y + 0.5), Color(0.4, 0.37, 0.35))
 	var node := _mesh_node()
 	node.mesh = st.commit()
 	await BuildPace.rest(pace)
@@ -1703,14 +1704,15 @@ static func remaining_low_rects(r: Rect2i, covered: Dictionary) -> Array[Rect2i]
 
 func _build_props() -> void:
 	var chosen: Dictionary = {}
+	var top_props: Array = []
+	var hosts: Dictionary = {}
 	for prop: Dictionary in data.get("props", []):
+		if String(prop.get("mount", "")) == "top":
+			top_props.append(prop)
+			continue
 		var kind := String(prop.get("kind", ""))
 		if not chosen.has(kind):
-			chosen[kind] = ""
-			for path in PropKinds.candidates(kind):
-				if PropModels.enabled() and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty():
-					chosen[kind] = path
-					break
+			chosen[kind] = RoomDecor.drawn_model(kind)
 		var path: String = chosen[kind]
 		var lv := int(prop.get("level", 0))
 		if _interactive_prop(kind) and prop.get("rect") is Rect2i and levels.has(lv):
@@ -1752,11 +1754,38 @@ func _build_props() -> void:
 			item["tint"] = FurnitureTints.pick(prop, r.position, b)
 		prop_batches[path]["items"].append(item)
 		_index_prop(prop_batches[path], item)
+		if not prop.get("decor", false):
+			hosts["%d:%s:%s" % [lv, r, kind]] = {"path": path, "xf": xf, "building": b}
 		# 장식(벽걸이·화분)은 몸을 막지 않아 그 칸의 회색 덩이(모형 없는 가구)를 지우지 않는다.
 		if lv == 0 and not prop.get("decor", false):
 			for y in range(r.position.y, r.end.y):
 				for x in range(r.position.x, r.end.x):
 					modelled_prop_cells[Vector2i(x, y)] = true
+	# 받침은 모두 최종 변환을 받은 뒤다. 탁상은 그 돌림만 따라 실제 크기로 얹는다.
+	for prop: Dictionary in top_props:
+		await BuildPace.rest(pace)
+		var kind := String(prop.get("kind", ""))
+		if not chosen.has(kind):
+			chosen[kind] = RoomDecor.drawn_model(kind)
+		var path: String = chosen[kind]
+		var lv := int(prop.get("level", 0))
+		var host: Dictionary = hosts.get("%d:%s:%s" % [lv, prop.get("host_rect"), prop.get("on", "")], {})
+		var tops := PropModels.tops(String(host.get("path", "")))
+		var spot := int(prop.get("spot", -1))
+		if host.is_empty() or path.is_empty() or not levels.has(lv) or spot < 0 or spot >= tops.size() \
+				or not prop.get("rect") is Rect2i or not prop.get("at") is Vector2:
+			prop_fit_counts["top_skipped"] += 1
+			continue
+		var xf := top_mount_transform(host["xf"], float(tops[spot]["y"]), prop["at"])
+		if not prop_batches.has(path):
+			prop_batches[path] = {"items": [], "nodes": {}, "tiles": {}}
+		# 보이기·기억은 받침 전체 칸으로, 거리 제거·타일 인덱스는 받침 원점으로 함께 판정한다.
+		var host_xf: Transform3D = host["xf"]
+		var item := {"xf": xf, "rect": prop["host_rect"], "level": lv, "building": host["building"],
+			"prop": prop, "remembered": false, "cull_at": host_xf.origin}
+		prop_batches[path]["items"].append(item)
+		_index_prop(prop_batches[path], item)
+		prop_fit_counts["placed"] += 1
 	for path: String in prop_batches:
 		var batch: Dictionary = prop_batches[path]
 		var meshes := PropModels.batch_meshes(path)
@@ -1776,6 +1805,20 @@ func _build_props() -> void:
 			batch["nodes"][lod] = node
 		await BuildPace.rest(pace)
 	_make_prop_shades()
+
+
+static func top_mount_transform(host_xf: Transform3D, spot_y: float, at: Vector2) -> Transform3D:
+	return Transform3D(host_xf.basis.orthonormalized(), host_xf * Vector3(at.x, spot_y, at.y))
+
+
+static func prop_cull_at(item: Dictionary) -> Vector3:
+	var xf: Transform3D = item["xf"]
+	return item.get("cull_at", xf.origin)
+
+
+static func prop_cull_distance(at: Vector3, eye: Vector3, ray: Vector3) -> float:
+	var focus := eye + ray * ((at.y - eye.y) / ray.y) if absf(ray.y) > 0.001 else eye
+	return Vector2(at.x - focus.x, at.z - focus.z).length()
 
 
 ## 벽걸이 장식의 등 쪽 칸(facing 0 북·1 동·2 남·3 서 — 모형 앞 +Z가 facing만큼 돈다).
@@ -1798,6 +1841,22 @@ static func wall_mount_transform(box: AABB, at: Vector3, facing: int, face: floa
 	var turn := Basis(Vector3.UP, -float(facing) * PI * 0.5)
 	var push := face - WALL_GAP + box.position.z
 	return Transform3D(turn, at + turn * Vector3(0.0, 0.0, -push))
+
+
+## The first stop's water tower: the blocked cells in its map's north-west corner, this
+## many a side. The view ground round the stop moves that corner (StopGround.view_offset).
+const WATER_TOWER_SIDE: int = 14
+
+
+static func water_tower_cells(g: FieldGrid, d: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var at: Vector2i = StopGround.view_offset(d)
+	for y in range(at.y, mini(at.y + WATER_TOWER_SIDE, g.height)):
+		for x in range(at.x, mini(at.x + WATER_TOWER_SIDE, g.width)):
+			var c := Vector2i(x, y)
+			if g.solid_at(c) == S.BLOCK and g.building_at(c) < 0:
+				out.append(c)
+	return out
 
 
 static func _interactive_prop(kind: String) -> bool:
@@ -1897,20 +1956,20 @@ func _add_object_batch(prop: Dictionary, path: String) -> void:
 
 ## Tiles hold the same item dictionaries as the model-path batch.
 func _index_prop(batch: Dictionary, item: Dictionary) -> void:
-	var xf: Transform3D = item["xf"] as Transform3D
-	var key: Vector3i = Vector3i(floori(xf.origin.x / float(TILE)), floori(xf.origin.z / float(TILE)), int(item["level"]))
+	var at := prop_cull_at(item)
+	var key: Vector3i = Vector3i(floori(at.x / float(TILE)), floori(at.z / float(TILE)), int(item["level"]))
 	var tiles: Dictionary = batch["tiles"] as Dictionary
 	if not tiles.has(key):
-		tiles[key] = {"items": [], "min_y": xf.origin.y, "max_y": xf.origin.y}
+		tiles[key] = {"items": [], "min_y": at.y, "max_y": at.y}
 	var tile: Dictionary = tiles[key] as Dictionary
 	tile["items"].append(item)
-	tile["min_y"] = minf(float(tile["min_y"]), xf.origin.y)
-	tile["max_y"] = maxf(float(tile["max_y"]), xf.origin.y)
+	tile["min_y"] = minf(float(tile["min_y"]), at.y)
+	tile["max_y"] = maxf(float(tile["max_y"]), at.y)
 	item["tile"] = key
 	# All batches' tiles in one table, so a refill tests each tile once. The
 	# heights only grow (a wider span reaches further: never too few items).
-	var span: Vector2 = _prop_tile_y.get(key, Vector2(xf.origin.y, xf.origin.y))
-	_prop_tile_y[key] = Vector2(minf(span.x, xf.origin.y), maxf(span.y, xf.origin.y))
+	var span: Vector2 = _prop_tile_y.get(key, Vector2(at.y, at.y))
+	_prop_tile_y[key] = Vector2(minf(span.x, at.y), maxf(span.y, at.y))
 
 
 func _unindex_prop(batch: Dictionary, item: Dictionary) -> void:
@@ -1928,9 +1987,9 @@ func _unindex_prop(batch: Dictionary, item: Dictionary) -> void:
 	var min_y: float = INF
 	var max_y: float = -INF
 	for other: Dictionary in items:
-		var xf: Transform3D = other["xf"] as Transform3D
-		min_y = minf(min_y, xf.origin.y)
-		max_y = maxf(max_y, xf.origin.y)
+		var at := prop_cull_at(other)
+		min_y = minf(min_y, at.y)
+		max_y = maxf(max_y, at.y)
 	tile["min_y"] = min_y
 	tile["max_y"] = max_y
 
@@ -2106,9 +2165,7 @@ func refresh_props(camera: Camera3D = null) -> void:
 			if not _prop_is_seen(item["rect"], lv, item):
 				continue
 			var xf: Transform3D = item["xf"]
-			var at := to_global(xf.origin)
-			var focus := eye + ray * ((at.y - eye.y) / ray.y) if absf(ray.y) > 0.001 else eye
-			var distance := Vector2(at.x - focus.x, at.z - focus.z).length()
+			var distance := prop_cull_distance(to_global(prop_cull_at(item)), eye, ray)
 			if distance > PROP_CULL_DISTANCE:
 				continue
 			var lod := 1 if distance >= PROP_LOD_DISTANCE and batch["nodes"].has(1) else 0

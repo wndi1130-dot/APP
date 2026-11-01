@@ -768,6 +768,9 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		record["sent"] = (receipt["people"]["sent"] as Array).duplicate()
 	if int(receipt["version"]) == 5:
 		record["crew"] = (receipt["crew"] as Array).duplicate(true)
+	# How many were left in the field (counted, never named — 결정 147·183); the end card reads it, old saves have none.
+	if left_count > 0:
+		record["leftCount"] = left_count
 	if not g.get("fieldReturns") is Dictionary:
 		g["fieldReturns"] = {"applied": {}, "records": []}
 	g["fieldReturns"]["applied"][receipt["receiptId"]] = fingerprint

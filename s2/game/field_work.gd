@@ -808,10 +808,18 @@ func _worked(p, id: String) -> void:
 	p.brain["job"] = "carry"
 
 
+## Where coal goes down on the first stop's platform, nearest `x`: the map script's row
+## and span, moved with the view ground round the stop (StopGround.view_offset; read from
+## the map's keys here, as stop_ground.gd already reaches this file through work_spots.gd).
+func coal_drop(x: float) -> Vector3:
+	var at := Vector2i(int(game.data.get("stop_view_cols", 0)), int(game.data.get("stop_view_rows", 0)))
+	return FieldGrid.center(Vector2i(clampi(int(x), COAL_DROP_MIN_X + at.x, COAL_DROP_MAX_X + at.x), COAL_DROP_ROW + at.y))
+
+
 func _deliver(p, id: String) -> void:
 	var drop: Vector3 = door_of(id)
 	if job_id(id) == "coal_wagon":
-		drop = FieldGrid.center(Vector2i(clampi(int(p.position.x), COAL_DROP_MIN_X, COAL_DROP_MAX_X), COAL_DROP_ROW))
+		drop = coal_drop(p.position.x)
 	if p.position.distance_to(drop) > DROP_R:
 		game.ai._walk(p, drop, false)
 		return
