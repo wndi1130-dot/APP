@@ -219,6 +219,7 @@ static func _whole(d: Dictionary) -> bool:
 		"containers": TYPE_DICTIONARY, "spots": TYPE_DICTIONARY, "ammo": TYPE_DICTIONARY, "unloaded": TYPE_DICTIONARY,
 		"loaded_wear": TYPE_ARRAY, "decisions": TYPE_ARRAY, "start_opts": TYPE_DICTIONARY,
 		"departure": TYPE_DICTIONARY, "receipt_state": TYPE_DICTIONARY, "runtime": TYPE_DICTIONARY, "seed": TYPE_FLOAT,
+		"sleds": TYPE_ARRAY, "next_sled_id": TYPE_FLOAT,
 	}):
 		return false
 	if not _fields(d["clock"], {"elapsed": TYPE_FLOAT, "speed": TYPE_FLOAT}) \
@@ -244,6 +245,8 @@ static func _whole(d: Dictionary) -> bool:
 	for row in d.get("ground_items", []):
 		if not _fields(row, {"n": TYPE_FLOAT}):
 			return false
+	if not _whole_sleds(d):
+		return false
 	for row in d.get("containers", {}).values():
 		if not _fields(row, {"searched": TYPE_BOOL, "locked": TYPE_BOOL, "items": TYPE_ARRAY}):
 			return false
@@ -254,6 +257,19 @@ static func _whole(d: Dictionary) -> bool:
 	if not _whole_departure(opts.get("departure", {}) if departure.is_empty() else departure):
 		return false
 	return not exact(d) or _whole_runtime(d)
+
+
+## Sled rows as the restore reads them: a bad one sends the read to the backup
+## before anything of the game changes. Saves from before sleds have none.
+static func _whole_sleds(d: Dictionary) -> bool:
+	if not _fields(d, {}, {"sleds": TYPE_ARRAY, "next_sled_id": TYPE_FLOAT}):
+		return false
+	for row in d.get("sleds", []):
+		if not _fields(row, {"id": TYPE_FLOAT, "level": TYPE_FLOAT, "pos": TYPE_VECTOR3, "items": TYPE_DICTIONARY}, {"puller": TYPE_STRING}):
+			return false
+		if not _counts(row["items"]):
+			return false
+	return true
 
 
 ## The saved start options may supply a squad instead of the default one.
@@ -334,6 +350,8 @@ static func _whole_runtime(d: Dictionary) -> bool:
 	for row in runtime["holdout_doors"]:
 		if not _fields(row, {"wall": TYPE_FLOAT}):
 			return false
+	if not _whole_sleds(runtime["game"]):
+		return false
 	for value in runtime.get("wagon_coal", []):
 		if not _field_type(value, TYPE_FLOAT):
 			return false

@@ -1763,3 +1763,44 @@ func test_b03_offer_gap_falls_back_only_when_one_choice_needs_it() -> void:
 		var rects: Array[Rect2] = FieldHud.offer_rects(sizes, view, depart_left - gap, 600.0)
 		for rect: Rect2 in rects:
 			assert_lte(rect.end.x, depart_left - gap)
+
+
+## A save whose sled rows are not the shape the restore reads is refused before any
+## of the game changes, so the read falls back to the good backup; a save from
+## before sleds (no sled keys at all) still reads.
+func test_d9_bad_sled_rows_send_the_read_to_the_backup() -> void:
+	var game: Variant = _game()
+	_sled(game, {"scrap": 2})
+	var text: String = FieldSave.to_json(FieldSave.capture(game))
+	assert_false(FieldSave.from_json(text).is_empty())
+	var bad: Array[String] = []
+	for shape: String in ["sleds_not_a_list", "items_not_counts", "no_pos", "next_id_text"]:
+		var parsed: Dictionary = JSON.parse_string(text)
+		match shape:
+			"sleds_not_a_list":
+				parsed["sleds"] = {}
+			"items_not_counts":
+				parsed["sleds"][0]["items"] = ["scrap"]
+			"no_pos":
+				parsed["sleds"][0].erase("pos")
+			"next_id_text":
+				parsed["next_sled_id"] = "two"
+		bad.append(JSON.stringify(parsed))
+		assert_true(FieldSave.from_json(bad[-1]).is_empty(), shape)
+	var old: Dictionary = JSON.parse_string(text)
+	old.erase("sleds")
+	old.erase("next_sled_id")
+	assert_false(FieldSave.from_json(JSON.stringify(old)).is_empty(), "a save from before sleds still reads")
+	var path: String = "user://test_sled_bad_rows.json"
+	FieldSave.clear(path)
+	var main_file := FileAccess.open(path, FileAccess.WRITE)
+	main_file.store_string(bad[0])
+	main_file.close()
+	var backup := FileAccess.open(path + ".bak", FileAccess.WRITE)
+	backup.store_string(text)
+	backup.close()
+	var read: Dictionary = FieldSave.read(path)
+	assert_false(read.is_empty(), "the good backup is read")
+	assert_eq((read["sleds"] as Array).size(), 1)
+	FieldSave.clear(path)
+	_discard_field(game)
