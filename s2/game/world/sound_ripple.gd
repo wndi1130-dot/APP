@@ -23,6 +23,7 @@ uniform float fade = 1.0;          // the ring's envelope at this moment
 uniform float night_alpha = 0.15;
 uniform float day_alpha = 0.30;
 uniform float width = 0.02;
+uniform float dusk = 0.0;          // a storm keeps its stage's tint, so the hour's dusk comes in here
 // Linear maxima: FxState clear night (0.80 * 0.36), default day (0.75 * 0.77).
 // Atmosphere's night lies below this range and its clear day above it.
 const float FX_TINT_NIGHT = 0.06743727;
@@ -33,7 +34,7 @@ void fragment() {
 	float x = (d - (1.0 - width)) / width;
 	float band = smoothstep(0.0, 0.5, x) * (1.0 - smoothstep(0.5, 1.0, x));
 	float light = max(fx_tint.r, max(fx_tint.g, fx_tint.b));
-	float day = smoothstep(FX_TINT_NIGHT, FX_TINT_DAY, light);
+	float day = smoothstep(FX_TINT_NIGHT, FX_TINT_DAY, light) * (1.0 - dusk);
 	ALBEDO = tint.rgb * mix(NIGHT_BRIGHTNESS, 1.0, day);
 	ALPHA = fade * band * mix(night_alpha, day_alpha, day);
 }
@@ -41,6 +42,7 @@ void fragment() {
 
 var peak_alpha: float = ALPHA      # night peak
 var day_alpha: float = DAY_ALPHA
+var dusk: float = 0.0              # 0 by day or off a storm, 1 once a storm's dusk is over
 var rings: Array = []   # {node, mat, t, r}
 var _shader: Shader
 
@@ -78,7 +80,7 @@ func _process(delta: float) -> void:
 func advance(delta: float) -> void:
 	for ring: Dictionary in rings.duplicate():
 		ring["t"] = float(ring["t"]) + delta
-		if float(ring["t"]) >= SECONDS:
+		if float(ring["t"]) >= FADE_OUT_END:
 			(ring["node"] as Node).queue_free()
 			rings.erase(ring)
 			continue
@@ -99,3 +101,4 @@ func _shape(ring: Dictionary) -> void:
 	var mat: ShaderMaterial = ring["mat"]
 	mat.set_shader_parameter("width", WIDTH / s)
 	mat.set_shader_parameter("fade", envelope(t))
+	mat.set_shader_parameter("dusk", dusk)

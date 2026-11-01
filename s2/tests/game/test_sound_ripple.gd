@@ -42,8 +42,9 @@ func test_the_ring_grows_and_is_gone_after_a_second() -> void:
 	game.ripples.advance(0.5)
 	assert_gt((ring["node"] as Node3D).scale.x, first, "it spreads out")
 	assert_eq(game.ripples.rings.size(), 1)
-	game.ripples.advance(0.6)
-	assert_eq(game.ripples.rings.size(), 0)
+	game.ripples.advance(SoundRipple.FADE_OUT_END - 0.5)
+	assert_eq(game.ripples.rings.size(), 0, "gone once it has faded out")
+	assert_true((ring["node"] as Node).is_queued_for_deletion(), "and its node goes with it")
 
 
 func test_other_sounds_draw_nothing() -> void:
@@ -88,6 +89,8 @@ func test_envelope_fades_in_holds_and_fades_out_early() -> void:
 	assert_almost_eq(SoundRipple.envelope(0.0), 0.0, 0.0001)
 	assert_almost_eq(SoundRipple.envelope(0.06), 1.0, 0.0001)
 	assert_almost_eq(SoundRipple.envelope(0.3), 1.0, 0.0001)
+	assert_almost_eq(SoundRipple.envelope(0.45), 1.0, 0.0001, "held up to the fade-out")
+	assert_lt(SoundRipple.envelope(0.46), 1.0)
 	var fading: float = SoundRipple.envelope(0.65)
 	assert_gt(fading, 0.0)
 	assert_lt(fading, 1.0)
@@ -95,3 +98,21 @@ func test_envelope_fades_in_holds_and_fades_out_early() -> void:
 	assert_almost_eq(SoundRipple.envelope(0.85), 0.0, 0.0001)
 	assert_almost_eq(SoundRipple.envelope(0.9), 0.0, 0.0001)
 	assert_almost_eq(SoundRipple.envelope(1.0), 0.0, 0.0001)
+
+## A storm keeps its stage's sky colour all day, so the ring takes the dusk from the hour instead.
+func test_in_a_storm_the_ring_still_goes_faint_after_dusk() -> void:
+	game.make_sound(game.player.position, SimNoise.Level.LOUD, "kick", game.player)
+	var mat: ShaderMaterial = game.ripples.rings[0]["mat"]
+	game.clock.elapsed = 0.0
+	game.clock.arrive_min = 1000.0
+	game._update_light()
+	game.ripples.advance(0.1)
+	assert_almost_eq(float(mat.get_shader_parameter("dusk")), 0.0, 0.0001, "no storm: the sky colour already tells day from night")
+	game.storm = {"sun": 1.0}
+	game._update_light()
+	game.ripples.advance(0.1)
+	assert_almost_eq(float(mat.get_shader_parameter("dusk")), 1.0, 0.0001, "a storm after 16:30")
+	game.clock.arrive_min = 600.0
+	game._update_light()
+	game.ripples.advance(0.1)
+	assert_almost_eq(float(mat.get_shader_parameter("dusk")), 0.0, 0.0001, "a storm at 10:00")
