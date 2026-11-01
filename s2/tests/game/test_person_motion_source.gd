@@ -330,6 +330,8 @@ func test_original_final_fit_checks_accept_normal_rigs_and_reject_asymmetric_sup
 		if ctx.is_empty():
 			root.queue_free()
 			continue
+		# As bake_person sets it, so the walk and run sink here is the bake's own.
+		ctx["sink_scale"] = BodyBake._sink_scale(root, ctx["body"])
 		var normal: Dictionary = BodyBake._bake_list(ctx, entries, [])
 		assert_false(normal.is_empty(), rig_name + " normal frames are built")
 		assert_eq(normal.get("fit_failures", []), [], rig_name + " normal stand, final phase and final round all pass")

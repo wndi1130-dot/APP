@@ -342,6 +342,14 @@ func test_final_phase_checks_saved_sole_frames_for_both_orders_missing_and_late_
 	assert_eq(BodyBake.person_contact_phase([0.0, INF, 0.02]), -1.0, "non-finite samples cannot establish a contact")
 
 
+func test_a_saved_frame_contact_is_the_first_sole_vertex_s_own_crossing() -> void:
+	# Heel just above the band then lifting, toe coming down: the lowest point switches vertex.
+	var rows: Array = [PackedFloat32Array([0.05, 0.05]), PackedFloat32Array([0.0101, 0.04]), PackedFloat32Array([0.04, 0.0]), PackedFloat32Array([0.05, 0.05])]
+	assert_almost_eq(BodyBake.person_contact_phase(rows), (1.0 + 0.75) / 4.0, 0.0001, "the toe enters three quarters of the way between frames 1 and 2")
+	assert_almost_eq(BodyBake.person_contact_phase([0.05, 0.0101, 0.0, 0.05]), (1.0 + 0.0001 / 0.0101) / 4.0, 0.0001, "joining the lowest points would put it at frame 1")
+	assert_eq(BodyBake.person_contact_phase([PackedFloat32Array([0.0, NAN]), PackedFloat32Array([0.02, 0.02])]), -1.0, "a non-finite vertex cannot establish a contact")
+
+
 func test_final_round_returns_measured_reach_and_rejects_wrong_strides_for_all_twelve_clips() -> void:
 	for clip: String in BodyBake.PERSON_STRIDE_ROUNDS:
 		var target: float = BodyBake.PERSON_STRIDE_ROUNDS[clip]
@@ -356,9 +364,22 @@ func test_final_round_returns_measured_reach_and_rejects_wrong_strides_for_all_t
 			assert_eq(failures.size(), 0 if scale == 1.0 else 1, clip + " 0.5 percent gate")
 			for failure: String in failures:
 				assert_true(failure.begins_with("STRIDE_FINAL " + clip + " "), failure)
+		# One foot going back the whole round and the other standing still averages to the
+		# rule's round; the gate still refuses it.
+		var going: Array = []
+		var still: Array = []
+		for f in 8:
+			going.append(target * (1.0 - float(f) / 8.0))
+			still.append(0.0)
+		var one: Dictionary = {"fit_failures": []}
+		BodyBake._check_person_stride_final(one, clip, [going, still])
+		var refused: Array = one["fit_failures"]
+		assert_eq(refused.size(), 1, clip + " one foot still")
+		if refused.size() == 1:
+			assert_true(String(refused[0]).begins_with("STRIDE_FINAL " + clip + " one_foot "), refused[0])
 
 
-func test_shifted_stride_refits_on_the_saved_grid_and_bakes_that_round() -> void:
+func test_the_saved_round_is_the_motion_s_own_wherever_the_loop_starts() -> void:
 	var entry: Array = BodyBake.PERSON_CLIPS[1]
 	var probe: Node3D = _stick_body_with_two_soles()
 	add_child_autofree(probe)
@@ -367,6 +388,11 @@ func test_shifted_stride_refits_on_the_saved_grid_and_bakes_that_round() -> void
 	assert_gt(raw_round, 0.0)
 	if raw_round <= 0.0:
 		return
+	# A step-phase shift moves where the samples fall, not how far a foot goes back: on the
+	# fine grid it stays inside the save gate (this stick: 0.36 % at most; on 24 frames up to 5 %).
+	for shift: float in [0.13, 0.31, 0.5, 0.77]:
+		var shifted: float = BodyBake._person_stride_round(probe_ctx, entry, shift)
+		assert_almost_eq(shifted, raw_round, raw_round * BodyBake.STRIDE_TOLERANCE, "round at shift %.2f stays inside the 0.5 percent gate" % shift)
 	# Calibrate body size, not the fit bounds, so this stick is a valid input.
 	var root: Node3D = _stick_body_with_two_soles(float(BodyBake.PERSON_STRIDE_ROUNDS["p_run"]) / raw_round)
 	add_child_autofree(root)
@@ -377,12 +403,23 @@ func test_shifted_stride_refits_on_the_saved_grid_and_bakes_that_round() -> void
 	if assets.is_empty():
 		return
 	assert_eq(assets.get("fit_failures", []), [], "normal shifted stick gait passes the final gates")
-	var shift: float = ctx["phase_fits"]["p_run"]["shift"]
-	var reach: Array = [[], []]
-	for f in int(entry[2]):
-		BodyBake.pose(ctx, "", "p_run", fposmod(float(f) / float(entry[2]) + shift, 1.0))
-		BodyBake._note_reach(ctx, "p_run", reach)
-	assert_almost_eq(float(assets["clips"][0]["round"]), BodyBake._round(reach), 0.000001, "clips round is measured from the saved grid")
+	assert_almost_eq(float(assets["clips"][0]["round"]), BodyBake._person_stride_round(ctx, entry), 0.000001, "clips round is the final legs' round on the fine grid")
+	# A body 4 % too long in the legs: the fit turns the leg swing down to the rule's round.
+	var long_root: Node3D = _stick_body_with_two_soles(float(BodyBake.PERSON_STRIDE_ROUNDS["p_run"]) / raw_round * 1.04)
+	add_child_autofree(long_root)
+	var long_ctx: Dictionary = BodyBake.prepare_own(long_root)
+	long_ctx["player"] = null
+	var before: float = BodyBake._person_stride_round(long_ctx, entry)
+	assert_gt(absf(before / float(BodyBake.PERSON_STRIDE_ROUNDS["p_run"]) - 1.0), 0.03, "off the rule before the fit")
+	var fitted: Dictionary = BodyBake._bake_list(long_ctx, [entry], [])
+	assert_false(fitted.is_empty())
+	if fitted.is_empty():
+		return
+	assert_eq(fitted.get("fit_failures", []), [], "a 4 percent long stride is fitted, not refused")
+	assert_almost_eq(float(fitted["clips"][0]["round"]), float(BodyBake.PERSON_STRIDE_ROUNDS["p_run"]), float(BodyBake.PERSON_STRIDE_ROUNDS["p_run"]) * BodyBake.STRIDE_TOLERANCE, "fitted onto the rule's round")
+	var fits: Dictionary = long_ctx["stride_fits"]
+	var fit: Dictionary = fits.get(String(entry[4]), {})
+	assert_lt(float(fit.get("scale", 1.0)), 0.99, "by turning the swing down")
 
 
 func test_the_motions_written_here_alone_have_the_same_numbers_and_bake_with_no_motion_set() -> void:
