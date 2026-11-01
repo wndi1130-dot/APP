@@ -36,6 +36,9 @@ var seg: int = 1
 ## The main key's word (the next step's); "" leaves the foot bare, for keys of
 ## the caller's own off the paper (the field's end).
 var go_word: String = ""
+## Small keys of the paper's own (.ghost) at the foot's left, [word, Callable] each
+## (the field's end: its two copies).
+var side_keys: Array = []
 var sheet: Control
 var body: VBoxContainer
 var go_key: Button
@@ -221,12 +224,23 @@ func _seen(seen: Array) -> void:
 		box.add_child(row)
 
 
-## The keys at the foot (.sh__act, 48): the main key at the right, as 보내기 is.
+## The keys at the foot (.sh__act, 48): the small ones at the left, the main key
+## at the right, as 보내기 is.
 func _keys() -> void:
-	if go_word == "":
+	if go_word == "" and side_keys.is_empty():
 		return
 	var foot := Paper.line_box(48.0)
+	foot.name = "Foot"
 	body.add_child(foot)
+	for pair in side_keys:
+		var k := Paper.ghost(String(pair[0]))
+		# Each a full finger high on the foot's line of 48.
+		k.custom_minimum_size.y = UiFonts.px(48.0)
+		k.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		k.pressed.connect(pair[1])
+		foot.add_child(k)
+	if go_word == "":
+		return
 	var fill := Control.new()
 	fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
