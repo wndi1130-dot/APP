@@ -142,3 +142,23 @@ func test_four_digit_stocks_read_in_thousands_and_the_band_still_fits() -> void:
 			assert_eq(count.text.replace(Fonts.WORD_JOINER, ""), Gauges.count_word(case[0]), at)
 			var bounds: Dictionary = strip.find_child("Standing", true, false).get_meta("band_layout", {})
 			assert_true(bool(bounds.get("fits", false)), at + " readable minimum")
+
+
+func test_a_squeezed_band_warns_once_and_again_only_after_it_fits() -> void:
+	# Every stock three digits (no real run gets there) leaves 1280×720 about 118 dp, under the minimum.
+	var g: Dictionary = _g.duplicate(true)
+	for id: String in ["coal", "food", "med", "lux", "sup"]:
+		g[id] = 999
+	var strip: Gauges = Gauges.new()
+	strip.g = g
+	strip.t = _t
+	add_child_autofree(strip)
+	strip.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	for width: float in [1280.0, 1280.0, 2316.0 * 720.0 / 1080.0, 1280.0]:
+		strip.size = Vector2(width, Gauges.BAND_H)
+		strip._lay_out()
+		var mood: Control = strip.find_child("Standing", true, false)
+		var fits: bool = bool(mood.get_meta("band_layout", {}).get("fits", true))
+		assert_eq(fits, width > 1280.0, "width %d, every stock 999" % int(width))
+	# Squeezed, laid out again, fitting, squeezed again: two warnings, never a failure.
+	assert_push_warning_count(2)

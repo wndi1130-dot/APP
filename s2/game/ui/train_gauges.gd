@@ -190,6 +190,8 @@ var focus: Array = []
 var _parts: Control
 ## The band is under NARROW_CSS (set at each refresh).
 var _narrow: bool = false
+## The middle band was last laid out under STANDING_MIN (warned once until it fits again).
+var _band_short: bool = false
 ## The thermometer's last reading (the model's outside: temp, stage …) or
 ## null, its roll to a new one (roll_plan; empty: none) and when that began.
 var _ot_last: Variant = null
@@ -749,6 +751,12 @@ func _lay_out() -> void:
 		_fit_standing(mood, float(layout["mood_width"]))
 		mood.position = Vector2(float(layout["mood_left"]), k)
 		mood.set_meta("band_layout", layout)
+		# A run that ever squeezes the band (no real one does yet) shows up in a development build.
+		var short: bool = size.x > 0.0 and not bool(layout["fits"])
+		if short and not _band_short and OS.is_debug_build():
+			var room: float = (float(layout["stock_left"]) - float(layout["left_end"])) / k - 2.0 * BAND_GAP
+			push_warning("train gauges: middle band %.1f dp under the %.0f dp minimum at %.0f dp wide" % [room, STANDING_MIN, size.x / k])
+		_band_short = short
 
 
 ## Horizontal bounds in logical canvas pixels. A false fits result is deliberately visible to
