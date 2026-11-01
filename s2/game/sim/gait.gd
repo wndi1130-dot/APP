@@ -97,6 +97,8 @@ static func reels(p) -> bool:
 ## aimed their own way), an arm too hurt to hold a weapon up, or the arms full
 ## (something big, or someone carried).
 static func ready_name(p) -> String:
+	if p.sled_weapon_stowed:
+		return ""
 	var wid: String = p.weapon_id()
 	if W.is_ranged(wid) or bool(p.mults()["one_hand"]) or p.carrying_wounded != null or Carry.has_big(p.items):
 		return ""
@@ -115,6 +117,8 @@ static func threatened(field, p) -> bool:
 
 ## The walk (or the run) for what is in the hand, "" for the plain one.
 static func gait_name(p, running: bool) -> String:
+	if p.sled_id != 0:
+		return CARRY_BIG
 	if weak_hold(p):
 		return ""
 	return String((RUN if running else WALK).get(kind_of(p.weapon_id()), ""))
@@ -123,6 +127,8 @@ static func gait_name(p, running: bool) -> String:
 ## Crouched, the walk (or the stand) for what is in the hand, "" for the plain
 ## one; a long weapon held in one hand (weak_hold) crouches the plain way too.
 static func crouch_name(p, walking: bool) -> String:
+	if p.sled_id != 0:
+		return CARRY_BIG
 	if weak_hold(p):
 		return ""
 	return String((CROUCH_WALK if walking else CROUCH_STAND).get(kind_of(p.weapon_id()), ""))
@@ -135,7 +141,7 @@ static func crouch_name(p, walking: bool) -> String:
 ## hard keeps the reel: the field camera barely tells the hurt walk from a walk,
 ## and that body goes down in two minutes. "" with neither.
 static func burden_name(p, shown: float) -> String:
-	if Carry.has_big(p.items):
+	if p.sled_id != 0 or Carry.has_big(p.items):
 		return CARRY_BIG
 	if p.body.torso_effort() - 1.0 >= shown:
 		return WALK_HURT

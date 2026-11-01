@@ -44,7 +44,8 @@ func _loader() -> Node:
 
 func test_a_stop_built_over_frames_is_the_stop_built_at_once_and_stands_till_shown() -> void:
 	var whole = FieldGame.new()
-	whole.opts = OPTS.duplicate()
+	# Started as the game starts a stop: the first stop with its view ground, as the loader's map has it.
+	whole.opts = StopGround.ask_view(OPTS.duplicate())
 	add_child_autofree(whole)
 	assert_true(whole.is_built, "built in the one call, as before")
 	assert_eq(whole.pace.waits, 0)
