@@ -125,6 +125,8 @@ static func dress(data: Dictionary) -> Dictionary:
 			var budget := _top_budget(cls, seed_value, props.slice(decor_start))
 			stats["tops_needed"] += budget
 			for row: Dictionary in _tabletops(props, in_room.get(ri, []), lv, cls, seed_value, name, budget, g):
+				# 벽걸이·화분 줄처럼 그 집 가구의 칠 판을 단다(map_view의 FurnitureTints.pick은 tint를 먼저 읽는다).
+				row["tint"] = RoomFurnish.tint_for(place, building)
 				props.append(row)
 				stats["kinds"][row["kind"]] += 1
 				stats["rows"] += 1

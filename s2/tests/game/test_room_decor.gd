@@ -78,13 +78,13 @@ func test_only_decor_rows_are_appended_and_other_map_values_are_unchanged() -> v
 		if r.size != Vector2i.ONE or p.has("search") or p.has("container") or p.has("holds"):
 			faults.append(p)
 		if is_top:
-			if p["mount"] != "top" or p.has("tint") or not p["host_rect"].encloses(r):
+			if p["mount"] != "top" or not p["host_rect"].encloses(r):
 				faults.append(p)
-		else:
-			if p["mount"] != ("floor" if p["kind"] == "potted_plant" else "wall"):
-				faults.append(p)
-			if p.get("tint") != RoomFurnish.tint_for(first["place_id"], g.building_at(r.position)):
-				faults.append(p)
+		elif p["mount"] != ("floor" if p["kind"] == "potted_plant" else "wall"):
+			faults.append(p)
+		# 탁상도 벽걸이·화분처럼 그 집 가구의 칠 판을 단다(test_room_furnish의 집 색 잇기와 같은 판).
+		if p.get("tint") != RoomFurnish.tint_for(first["place_id"], g.building_at(r.position)):
+			faults.append(p)
 		if not String(p["note"]).ends_with("의 " + String(RoomDecor.NAMES[p["kind"]])):
 			faults.append(p)
 		counted[p["kind"]] = int(counted.get(p["kind"], 0)) + 1
