@@ -224,7 +224,8 @@ func _draw_all() -> void:
 	var ids: Array = []
 	var by_id: Dictionary = {}
 	for lever: Dictionary in m["levers"]:
-		var id: String = String(car["id"]) + "_" + String(lever["id"])
+		# A car shown without its id (a lone pane) keys its rows by its stock.
+		var id: String = String(car.get("id", car.get("comm", ""))) + "_" + String(lever["id"])
 		ids.append(id)
 		by_id[id] = lever
 	RowKeep.sync(list, ids, func(_id: String) -> Control:
@@ -294,6 +295,12 @@ func _head(m: Dictionary) -> void:
 		hands.name = "HandsShortage"
 		hands.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_text(hands, 44.0, 64.0)
+	else:
+		# Gone, not only hidden: nothing short means no line at all.
+		var old: Node = _parts.get_node_or_null("HandsShortage")
+		if old != null:
+			_parts.remove_child(old)
+			old.queue_free()
 	_fold_key()
 
 
