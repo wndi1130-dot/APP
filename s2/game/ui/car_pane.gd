@@ -18,6 +18,7 @@ signal lever_set(comm: String, which: String, step: int)
 signal folded
 signal decor_pressed(car_id: String)
 
+const RowKeep = preload("res://game/ui/row_keep.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
@@ -70,10 +71,9 @@ var t: Dictionary = {}
 ## The picked carriage: its id, comm and name (train_rules.json cars).
 var car: Dictionary = {}
 var _parts: Control
+var _into: Control = null
 var decor_block: String = ""
 var choosing_paper: bool = true
-## The lever just moved and the step it left, so its knob slides from there.
-var _moved: Array = []
 ## The warmth last drawn per comm, so the thermometer rises from it.
 var _warm_was: Dictionary = {}
 
@@ -190,33 +190,66 @@ func refresh(g0: Dictionary, t0: Dictionary) -> void:
 func _draw_all() -> void:
 	if _parts == null:
 		return
-	for c in _parts.get_children():
-		_parts.remove_child(c)
-		c.queue_free()
 	var m: Dictionary = model(g, t, car)
+	_parts.visible = not m.is_empty()
 	if m.is_empty():
 		return
+	RowKeep.begin(_parts)
 	m["lock"] = DecorUiData.lock_reason(g, choosing_paper)
 	if bool(m["small"]):
-		var name_label := UiFonts.label(String(m["name"]), UiFonts.WORD, 500, 18.0, INK, 2.16)
-		name_label.name = "Name"
+		var name_label := _label("Name", String(m["name"]), UiFonts.WORD, 500, 18.0, INK, 2.16)
 		_text(name_label, 44.0, 27.0)
 		_fold_key()
 		_decor_head(m, 44.0)
+		RowKeep.finish(_parts)
 		return
 	_head(m)
 	if bool(m["decor"]):
 		_decor_head(m, 157.0)
 	_thermo(m)
 	_stats(m)
-	for i in 2:
-		_lever(m["levers"][i], 162.0 + 62.0 * i, String(m["comm"]))
+	var k: float = UiFonts.K
+	var fresh_scroll: bool = not _parts.has_node("List")
+	var s: ScrollContainer = RowKeep.part(_parts, "List", func() -> Control: return ScrollContainer.new()) as ScrollContainer
+	var saved: int = s.scroll_vertical
+	if fresh_scroll:
+		s.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		s.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+		s.mouse_filter = Control.MOUSE_FILTER_PASS
+		s.position = Vector2(0.0, 162.0) * k
+		s.size = Vector2(CSS_SIZE.x, CSS_SIZE.y - 162.0) * k
+	var list: Control = RowKeep.part(s, "Rows", func() -> Control: return Control.new())
+	list.mouse_filter = Control.MOUSE_FILTER_PASS
+	list.custom_minimum_size = Vector2(CSS_SIZE.x, 62.0 * (m["levers"] as Array).size()) * k
+	var ids: Array = []
+	var by_id: Dictionary = {}
+	for lever: Dictionary in m["levers"]:
+		var id: String = String(car["id"]) + "_" + String(lever["id"])
+		ids.append(id)
+		by_id[id] = lever
+	RowKeep.sync(list, ids, func(_id: String) -> Control:
+		var row := Control.new()
+		row.mouse_filter = Control.MOUSE_FILTER_PASS
+		row.size = Vector2(CSS_SIZE.x, 62.0) * k
+		return row,
+		func(row: Control, id: String, index: int) -> void:
+			row.position = Vector2(0.0, 62.0 * index) * k
+			_into = row
+			RowKeep.begin(row)
+			_lever(by_id[id], 0.0, String(m["comm"]))
+			RowKeep.finish(row)
+			_into = null)
+	RowKeep.restore_scroll(s, saved)
+	RowKeep.finish(_parts)
 	_warm_was[m["comm"]] = int(m["warm"])
-	_moved = []
 
 
 func _add(c: Control) -> Control:
-	_parts.add_child(c)
+	if c.get_parent() == null:
+		_host().add_child(c)
+	c.set_meta(RowKeep.USED_META, true)
+	if not c.visible:
+		c.show()
 	return c
 
 
@@ -232,30 +265,32 @@ func _text(l: Label, x_css: float, base_css: float) -> void:
 ## baseline, and 접기 at the top right (.word: its arrow 6 from the right).
 func _head(m: Dictionary) -> void:
 	var k: float = UiFonts.K
-	var name := UiFonts.label(String(m["name"]), UiFonts.WORD, 500, 18.0, INK, 2.16)
-	name.name = "Name"
-	_text(name, 44.0, 27.0)
+	var name_l := _label("Name", String(m["name"]), UiFonts.WORD, 500, 18.0, INK, 2.16)
+	name_l.name = "Name"
+	_text(name_l, 44.0, 27.0)
 	if String(m["furnish"]) != "":
-		var tier := UiFonts.label(String(m["furnish"]), UiFonts.WORD, 400, 12.0, INK2, 0.52)
+		var tier := _label("Furnish", String(m["furnish"]), UiFonts.WORD, 400, 12.0, INK2, 0.52)
 		tier.name = "Furnish"
 		_add(tier)
-		GlassParts.put_on(tier, name.position.x + GlassParts.text_w(name) + 10.0 * k, 27.0 * k)
+		GlassParts.put_on(tier, name_l.position.x + GlassParts.text_w(name_l) + 10.0 * k, 27.0 * k)
 	# The people as their mark and count, then the stage (결정 417: no 「명 · 관계」).
-	_add(_mark("people", 14.0, Vector2(44.0, 33.0), INK2))
-	var pop := UiFonts.label(str(m["pop"]), UiFonts.NUMBER, 400, 15.0, INK, 0.225)
+	_add(_mark("people", 14.0, Vector2(44.0, 33.0), INK2, "PeopleMark"))
+	var pop := _label("People", str(m["pop"]), UiFonts.NUMBER, 400, 15.0, INK, 0.225)
 	pop.name = "People"
 	_text(pop, 62.0, 45.0)
 	var span: String = String(SPAN_WORDS.get(int(m["span"]), "")) if int(m["span"]) > 1 else ""
-	var stage := UiFonts.label((" · " + span if span != "" else "") + " · " + String(m["stage"]) + (" · 단열" if bool(m["insulated"]) else ""), UiFonts.WORD, 400, 12.0, INK2, 0.72)
+	var stage := _label("Stage", (" · " + span if span != "" else "") + " · " + String(m["stage"]) + (" · 단열" if bool(m["insulated"]) else ""), UiFonts.WORD, 400, 12.0, INK2, 0.72)
 	stage.name = "Stage"
 	_add(stage)
 	GlassParts.put_on(stage, pop.position.x + GlassParts.text_w(pop), GlassParts.base_of(pop))
+	stage.clip_text = bool(m["decor"])
+	stage.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	if bool(m["decor"]):
 		stage.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		stage.clip_text = true
 		stage.size.x = maxf(1.0, 153.0 * k - stage.position.x)
 	if not String(m["hands_line"]).is_empty() and String(m["lock"]) == "" and decor_block == "":
-		var hands := UiFonts.label(String(m["hands_line"]), UiFonts.WORD, 400, 11.0, INK2, 0.0)
+		var hands := _label("HandsShortage", String(m["hands_line"]), UiFonts.WORD, 400, 11.0, INK2, 0.0)
 		hands.name = "HandsShortage"
 		hands.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_text(hands, 44.0, 64.0)
@@ -264,14 +299,12 @@ func _head(m: Dictionary) -> void:
 
 func _fold_key() -> void:
 	var k: float = UiFonts.K
-	var fold := Button.new()
-	fold.name = "Fold"
-	fold.flat = true
-	fold.focus_mode = Control.FOCUS_NONE
-	for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
-		fold.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	var fold: Button = _bare("Fold")
 	fold.position = Vector2(266.0, 0.0) * k
 	fold.size = Vector2(56.0, 32.0) * k
+	if fold.has_meta("wired"):
+		return
+	fold.set_meta("wired", true)
 	fold.pressed.connect(func() -> void: folded.emit())
 	_add(fold)
 	var mark := TextureRect.new()
@@ -290,11 +323,11 @@ func _fold_key() -> void:
 
 func _decor_head(m: Dictionary, x: float) -> void:
 	var k: float = UiFonts.K
-	var percent := UiFonts.label("꾸밈 %d%%" % int(m["percent"]), UiFonts.NUMBER, 500, 12.0, INK2)
+	var percent := _label("DecorPercent", "꾸밈 %d%%" % int(m["percent"]), UiFonts.NUMBER, 500, 12.0, INK2)
 	percent.name = "DecorPercent"
 	_text(percent, x, 46.0)
 	var why: String = decor_block if decor_block != "" else String(m["lock"])
-	var button := Button.new()
+	var button: Button = _bare("DecorButton")
 	button.name = "DecorButton"
 	button.text = "꾸미기"
 	button.position = Vector2(236.0, 33.0) * k
@@ -312,22 +345,23 @@ func _decor_head(m: Dictionary, x: float) -> void:
 	for state: String in ["normal", "hover", "pressed", "disabled"]:
 		button.add_theme_stylebox_override(state, box)
 	button.modulate.a = 0.45 if button.disabled else 1.0
-	button.pressed.connect(func() -> void:
-		if not button.disabled:
-			decor_pressed.emit(String(car["id"])))
-	_add(button)
-	var house := UiBake.Batch.new()
-	for stroke: Array in [
-		[Vector2(2, 14), Vector2(14, 14)],
-		[Vector2(4, 14), Vector2(4, 8), Vector2(8, 4), Vector2(12, 8), Vector2(12, 14)],
-		[Vector2(7, 14), Vector2(7, 11), Vector2(9, 11), Vector2(9, 14)],
-	]:
-		var line := PackedVector2Array()
-		for point: Vector2 in stroke: line.append((point + Vector2(7, 1.5)) * k)
-		house.polyline(line, PackedColorArray([Color("f7e6b4")]), 1.5 * k)
-	button.draw.connect(func() -> void: house.draw(button))
+	if not button.has_meta("wired"):
+		button.set_meta("wired", true)
+		button.pressed.connect(func() -> void:
+			if not button.disabled:
+				decor_pressed.emit(String(car["id"])))
+		var house := UiBake.Batch.new()
+		for stroke: Array in [
+			[Vector2(2, 14), Vector2(14, 14)],
+			[Vector2(4, 14), Vector2(4, 8), Vector2(8, 4), Vector2(12, 8), Vector2(12, 14)],
+			[Vector2(7, 14), Vector2(7, 11), Vector2(9, 11), Vector2(9, 14)],
+		]:
+			var line := PackedVector2Array()
+			for point: Vector2 in stroke: line.append((point + Vector2(7, 1.5)) * k)
+			house.polyline(line, PackedColorArray([Color("f7e6b4")]), 1.5 * k)
+		button.draw.connect(func() -> void: house.draw(button))
 	if why != "":
-		var reason := UiFonts.label(why, UiFonts.WORD, 400, 10.0, INK2)
+		var reason := _label("DecorLock", why, UiFonts.WORD, 400, 10.0, INK2)
 		reason.name = "DecorLock"
 		_text(reason, 44.0, 69.0 if bool(m["small"]) else 64.0)
 
@@ -340,61 +374,72 @@ func _thermo(m: Dictionary) -> void:
 	var k: float = UiFonts.K
 	var warm: int = int(m["warm"])
 	var cold: bool = bool(m["cold"])
-	var c := Control.new()
+	var c: Control = RowKeep.part(_host(), "Thermo", func() -> Control: return Control.new())
 	c.name = "Thermo"
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	c.position = Vector2(44.0, 75.0) * k
 	c.size = Vector2(74.0, 78.0) * k
-	c.set_meta("warm", float(_warm_was.get(m["comm"], warm)))
-	c.draw.connect(func() -> void:
-		var w: float = clampf(float(c.get_meta("warm")), 0.0, 100.0)
-		var tube := Rect2(31.0 * k, 1.0 * k, 12.0 * k, 62.0 * k)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = WELL
-		sb.corner_radius_top_left = int(round(6.0 * k))
-		sb.corner_radius_top_right = int(round(6.0 * k))
-		sb.corner_detail = 8
-		sb.anti_aliasing_size = 0.7
-		c.draw_style_box(sb, tube)
-		# inset 0 1px 2px rgba(0,0,0,.45)
-		c.draw_rect(Rect2(tube.position.x + 4.0 * k, tube.position.y + 0.5 * k, tube.size.x - 8.0 * k, 1.0 * k), Color(0, 0, 0, 0.35))
-		var zone_h: float = 62.0 * k * COLD / 100.0
-		GlassParts.round_rect(c, Rect2(24.0 * k, tube.end.y - zone_h, 3.0 * k, zone_h), 2.0 * k, Color(COLDZ.r, COLDZ.g, COLDZ.b, 0.55))
-		var fill: Color = COLDZ if cold else FILL
-		var fh: float = 62.0 * k * w / 100.0
-		if fh > 0.5:
-			var fsb := StyleBoxFlat.new()
-			fsb.bg_color = fill
-			fsb.corner_radius_top_left = int(round(3.0 * k))
-			fsb.corner_radius_top_right = int(round(3.0 * k))
-			fsb.anti_aliasing_size = 0.6
-			c.draw_style_box(fsb, Rect2(34.0 * k, tube.end.y - fh, 6.0 * k, fh))
-		GlassParts.round_rect(c, Rect2(22.0 * k, tube.end.y - zone_h - 1.0 * k, 30.0 * k, 2.0 * k), 1.0 * k, COLDZ)
-		var bulb := Vector2(37.0, 67.0) * k
-		if cold:
-			# 0 0 8px rgba(194,204,212,.45), round the bulb's edge.
-			GlassParts.glow_ring(c, bulb, 11.0 * k, 8.0 * k, Color(COLDZ, 0.45))
-		var circles := UiBake.Batch.new()
-		circles.circle(bulb, 11.0 * k, WELL)
-		circles.circle(bulb, 7.0 * k, fill)
-		circles.draw(c))
+	if not c.has_meta("warm") or String(c.get_meta("comm", "")) != String(m["comm"]):
+		c.set_meta("warm", float(_warm_was.get(m["comm"], warm)))
+	c.set_meta("comm", String(m["comm"]))
+	c.set_meta("cold", cold)
+	if not c.has_meta("wired"):
+		c.set_meta("wired", true)
+		c.draw.connect(func() -> void:
+			var w: float = clampf(float(c.get_meta("warm")), 0.0, 100.0)
+			var tube := Rect2(31.0 * k, 1.0 * k, 12.0 * k, 62.0 * k)
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = WELL
+			sb.corner_radius_top_left = int(round(6.0 * k))
+			sb.corner_radius_top_right = int(round(6.0 * k))
+			sb.corner_detail = 8
+			sb.anti_aliasing_size = 0.7
+			c.draw_style_box(sb, tube)
+			# inset 0 1px 2px rgba(0,0,0,.45)
+			c.draw_rect(Rect2(tube.position.x + 4.0 * k, tube.position.y + 0.5 * k, tube.size.x - 8.0 * k, 1.0 * k), Color(0, 0, 0, 0.35))
+			var zone_h: float = 62.0 * k * COLD / 100.0
+			GlassParts.round_rect(c, Rect2(24.0 * k, tube.end.y - zone_h, 3.0 * k, zone_h), 2.0 * k, Color(COLDZ.r, COLDZ.g, COLDZ.b, 0.55))
+			var fill: Color = COLDZ if bool(c.get_meta("cold")) else FILL
+			var fh: float = 62.0 * k * w / 100.0
+			if fh > 0.5:
+				var fsb := StyleBoxFlat.new()
+				fsb.bg_color = fill
+				fsb.corner_radius_top_left = int(round(3.0 * k))
+				fsb.corner_radius_top_right = int(round(3.0 * k))
+				fsb.anti_aliasing_size = 0.6
+				c.draw_style_box(fsb, Rect2(34.0 * k, tube.end.y - fh, 6.0 * k, fh))
+			GlassParts.round_rect(c, Rect2(22.0 * k, tube.end.y - zone_h - 1.0 * k, 30.0 * k, 2.0 * k), 1.0 * k, COLDZ)
+			var bulb := Vector2(37.0, 67.0) * k
+			if bool(c.get_meta("cold")):
+				# 0 0 8px rgba(194,204,212,.45), round the bulb's edge.
+				GlassParts.glow_ring(c, bulb, 11.0 * k, 8.0 * k, Color(COLDZ, 0.45))
+			var circles := UiBake.Batch.new()
+			circles.circle(bulb, 11.0 * k, WELL)
+			circles.circle(bulb, 7.0 * k, fill)
+			circles.draw(c))
 	_add(c)
+	if c.has_meta("warm_tween"):
+		var old: Tween = c.get_meta("warm_tween")
+		if old != null and old.is_valid():
+			old.kill()
 	var was: float = float(c.get_meta("warm"))
 	if not is_equal_approx(was, float(warm)):
 		var tw := c.create_tween()
+		c.set_meta("warm_tween", tw)
 		tw.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 		tw.tween_method(func(v: float) -> void:
 			c.set_meta("warm", v)
 			c.queue_redraw(), was, float(warm), WARM_S)
 	else:
 		c.set_meta("warm", float(warm))
+	c.queue_redraw()
 	# The warmth's number beside the glass; the thermometer is its word (결정 417).
-	var num := UiFonts.label(str(warm), UiFonts.NUMBER, 600, 28.0, INK, 0.42)
+	var num := _label("Warmth", str(warm), UiFonts.NUMBER, 600, 28.0, INK, 0.42)
 	num.name = "Warmth"
 	_text(num, 132.0, 95.0)
 	# 45 at the end of the threshold's line across the glass, so the line says
 	# what it is (no 「문턱」).
-	var th := UiFonts.label(str(int(COLD)), UiFonts.NUMBER, 400, 14.0, INK3, 0.21)
+	var th := _label("Threshold", str(int(COLD)), UiFonts.NUMBER, 400, 14.0, INK3, 0.21)
 	th.name = "Threshold"
 	_text(th, 44.0 + 55.0, 75.0 + 63.0 - 62.0 * COLD / 100.0 + 5.0)
 
@@ -408,24 +453,29 @@ func _stats(m: Dictionary) -> void:
 		var s: Dictionary = m["stats"][i]
 		var top: float = 100.0 + 20.0 * i
 		var bad: bool = bool(s["bad"])
-		var lab := UiFonts.label(String(s["word"]), UiFonts.WORD, 400, 12.0, INK2, 0.96)
+		var lab := _label("Stat_" + String(s["word"]), String(s["word"]), UiFonts.WORD, 400, 12.0, INK2, 0.96)
 		_text(lab, 132.0, top + 13.0)
-		var bar := Control.new()
+		var bar: Control = RowKeep.part(_host(), "Bar_" + String(s["word"]), func() -> Control: return Control.new())
 		bar.name = "Bar_" + String(s["word"])
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		bar.position = Vector2(169.0, top + 6.0) * k
 		bar.size = Vector2(116.0, 6.0) * k
-		var n: float = float(s["n"])
-		var mark: float = float(s["mark"])
-		bar.draw.connect(func() -> void:
-			var r: float = 3.0 * k
-			GlassParts.round_rect(bar, Rect2(Vector2.ZERO, bar.size), r, WELL)
-			var fill: Rect2 = stat_fill_rect(bar.size, n)
-			if fill.size.x > 0.5:
-				GlassParts.round_rect(bar, fill, r, ACCENT if bad else FILL)
-			GlassParts.round_rect(bar, Rect2(bar.size.x * mark / 100.0 - 1.0 * k, -4.0 * k, 2.0 * k, 14.0 * k), 1.0 * k, ACCENT))
+		bar.set_meta("stat", s)
+		if not bar.has_meta("wired"):
+			bar.set_meta("wired", true)
+			bar.draw.connect(func() -> void:
+				var current: Dictionary = bar.get_meta("stat")
+				var n: float = float(current["n"])
+				var mark: float = float(current["mark"])
+				var r: float = 3.0 * k
+				GlassParts.round_rect(bar, Rect2(Vector2.ZERO, bar.size), r, WELL)
+				var fill: Rect2 = stat_fill_rect(bar.size, n)
+				if fill.size.x > 0.5:
+					GlassParts.round_rect(bar, fill, r, ACCENT if bool(current["bad"]) else FILL)
+				GlassParts.round_rect(bar, Rect2(bar.size.x * mark / 100.0 - 1.0 * k, -4.0 * k, 2.0 * k, 14.0 * k), 1.0 * k, ACCENT))
+		bar.queue_redraw()
 		_add(bar)
-		var num := UiFonts.label(str(s["n"]), UiFonts.NUMBER, 500, 17.0, ACCENT if bad else INK, 0.255)
+		var num := _label("Value_" + String(s["word"]), str(s["n"]), UiFonts.NUMBER, 500, 17.0, ACCENT if bad else INK, 0.255)
 		num.name = "Value_" + String(s["word"])
 		_text(num, 0.0, top + 15.5)
 		num.position.x = 316.0 * k - GlassParts.text_w(num)
@@ -437,18 +487,16 @@ static func stat_fill_rect(bar_size: Vector2, value: float) -> Rect2:
 
 
 ## An icon of `css` at `at` (pane px), in `color`; nothing for an empty id.
-func _mark(icon: String, css: float, at: Vector2, color: Color) -> Control:
-	var t := TextureRect.new()
-	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if icon == "":
-		return t
+func _mark(icon: String, css: float, at: Vector2, color: Color = INK2, key_name: String = "") -> TextureRect:
+	var mark: TextureRect = TextureRect.new() if key_name == "" else RowKeep.part(_host(), key_name, func() -> Control: return TextureRect.new()) as TextureRect
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var px: int = int(round(css * UiFonts.K))
-	t.texture = HudIcons.texture(icon, px, color, 2.0, SOOT_CUT)
-	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	t.size = Vector2(px, px)
-	t.position = at * UiFonts.K
-	return t
+	mark.texture = HudIcons.texture(icon, px, color, 2.0, SOOT_CUT) if icon != "" else null
+	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mark.size = Vector2(px, px)
+	mark.position = at * UiFonts.K
+	return mark
 
 
 ## A lever (.lever, 272 × 62 at `top`): its word, what the step burns, the word
@@ -457,19 +505,15 @@ func _mark(icon: String, css: float, at: Vector2, color: Color) -> Control:
 func _lever(lv: Dictionary, top: float, comm: String) -> void:
 	var k: float = UiFonts.K
 	var id: String = String(lv["id"])
-	var word := UiFonts.label(String(lv["word"]), UiFonts.WORD, 500, 13.0, INK, 2.08)
+	var word := _label("Lever_" + id, String(lv["word"]), UiFonts.WORD, 500, 13.0, INK, 2.08)
 	_text(word, 44.0, top + 14.0)
-	# What a step burns: its stock's mark and the number (결정 417: no word).
 	var cost_x: float = (word.position.x + GlassParts.text_w(word)) / k + 10.0
-	_add(_mark(String(lv.get("cost_icon", "")), 13.0, Vector2(cost_x, top + 3.0), INK2))
-	var cost := UiFonts.label(String(lv["cost"]), UiFonts.NUMBER, 400, 13.0, INK2, 0.52)
-	cost.name = "Cost_" + id
-	_text(cost, 0.0, top + 14.0)
-	cost.position.x = (cost_x + 16.0) * k
+	_add(_mark(String(lv.get("cost_icon", "")), 13.0, Vector2(cost_x, top + 3.0), INK2, "CostMark_" + id))
+	var cost := _label("Cost_" + id, String(lv["cost"]), UiFonts.NUMBER, 400, 13.0, INK2, 0.52)
+	_text(cost, cost_x + 16.0, top + 14.0)
 	var need: String = String(lv["need"])
 	var low: bool = need == "부족"
-	var tag := UiFonts.label(need, UiFonts.WORD, 500, 12.0, RED if low else INK2, 0.72)
-	tag.name = "Need_" + id
+	var tag := _label("Need_" + id, need, UiFonts.WORD, 500, 12.0, RED if low else INK2, 0.72)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(RED.r, RED.g, RED.b, 0.12) if low else Color(0, 0, 0, 0)
 	sb.set_border_width_all(int(round(2.0 * k)))
@@ -481,47 +525,54 @@ func _lever(lv: Dictionary, top: float, comm: String) -> void:
 	tag.add_theme_stylebox_override("normal", sb)
 	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	tag.custom_minimum_size = Vector2(0, 20.0 * k)
-	_add(tag)
 	tag.size = tag.get_combined_minimum_size()
 	tag.position = Vector2(316.0 * k - tag.size.x, (top + 1.0) * k)
-	var slot := Control.new()
-	slot.name = "Slot_" + id
+	var slot: Control = RowKeep.part(_host(), "Slot_" + id, func() -> Control: return Control.new())
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.position = Vector2(44.0, top + 18.0) * k
 	slot.size = Vector2(272.0, 44.0) * k
 	var step: int = int(lv["step"])
-	var floor_step: int = int(lv["floor"])
-	var from: float = float(step)
-	if _moved.size() == 3 and _moved[0] == comm and _moved[1] == id:
-		from = float(_moved[2])
+	var from: float = float(slot.get_meta("at")) if slot.has_meta("at") else float(step)
 	slot.set_meta("at", from)
-	slot.draw.connect(_draw_slot.bind(slot, floor_step))
-	_add(slot)
-	for i in STEPS:
-		var b := Button.new()
-		b.name = "Step%d" % i
-		b.flat = true
-		b.focus_mode = Control.FOCUS_NONE
-		for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
-			b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
-		b.position = Vector2(slot.size.x * i / STEPS, 0)
-		b.size = Vector2(slot.size.x / STEPS, slot.size.y)
-		b.tooltip_text = "%s %d단" % [lv["word"], i + 1]
-		b.pressed.connect(func() -> void:
-			if i < floor_step:
-				UiDeny.shake(slot)
-				return
-			if i == step:
-				return
-			_moved = [comm, id, step]
-			lever_set.emit(comm, id, i))
-		slot.add_child(b)
+	slot.set_meta("floor", int(lv["floor"]))
+	slot.set_meta("lever", lv)
+	slot.set_meta("comm", comm)
+	if not slot.has_meta("wired"):
+		slot.set_meta("wired", true)
+		slot.draw.connect(_draw_slot.bind(slot))
+		for i: int in STEPS:
+			var button := Button.new()
+			button.name = "Step%d" % i
+			button.flat = true
+			button.focus_mode = Control.FOCUS_NONE
+			for state: String in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
+				button.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+			button.position = Vector2(slot.size.x * i / STEPS, 0)
+			button.size = Vector2(slot.size.x / STEPS, slot.size.y)
+			button.pressed.connect(func() -> void:
+				var current: Dictionary = slot.get_meta("lever")
+				if i < int(current["floor"]):
+					UiDeny.shake(slot)
+					return
+				if i == int(current["step"]):
+					return
+				var current_comm: String = String(slot.get_meta("comm"))
+				lever_set.emit(current_comm, id, i))
+			slot.add_child(button)
+	for i: int in STEPS:
+		(slot.get_node("Step%d" % i) as Button).tooltip_text = "%s %d단" % [lv["word"], i + 1]
+	if slot.has_meta("knob_tween"):
+		var old: Tween = slot.get_meta("knob_tween")
+		if old != null and old.is_valid():
+			old.kill()
 	if not is_equal_approx(from, float(step)):
 		var tw := slot.create_tween()
+		slot.set_meta("knob_tween", tw)
 		tw.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_method(func(v: float) -> void:
 			slot.set_meta("at", v)
 			slot.queue_redraw(), from, float(step), KNOB_S)
+	slot.queue_redraw()
 
 
 ## The slot (.lever__slot): a sunk groove, a dot at each step (dim under a
@@ -535,7 +586,8 @@ static func slot_geometry(width: float, at: float) -> Dictionary:
 		"knob": Rect2(cell * (at + 0.5) - 13.0 * k, 5.0 * k, 26.0 * k, 34.0 * k)}
 
 
-func _draw_slot(slot: Control, floor_step: int) -> void:
+func _draw_slot(slot: Control) -> void:
+	var floor_step: int = int(slot.get_meta("floor"))
 	var k: float = UiFonts.K
 	var w: float = slot.size.x
 	var at: float = float(slot.get_meta("at"))
@@ -579,3 +631,28 @@ func _draw_slot(slot: Control, floor_step: int) -> void:
 	metal.rect(Rect2(knob.position.x + 3.0 * k, knob.position.y, knob.size.x - 6.0 * k, 1.0 * k), Color(1, 1, 1, 0.5))
 	metal.rect(Rect2(knob.position.x + 3.0 * k, knob.end.y - 2.0 * k, knob.size.x - 6.0 * k, 2.0 * k), Color(0, 0, 0, 0.3))
 	metal.draw(slot)
+
+
+
+
+
+func _host() -> Control:
+	return _into if _into != null else _parts
+
+
+func _label(key_name: String, word: String, kind: int, weight: int, css: float, color: Color, spacing: float = 0.0) -> Label:
+	var lab: Label = RowKeep.part(_host(), key_name, func() -> Control:
+		return UiFonts.label("", kind, weight, css, color, spacing)) as Label
+	lab.text = word
+	lab.add_theme_color_override("font_color", color)
+	return lab
+
+
+func _bare(key_name: String) -> Button:
+	return RowKeep.part(_host(), key_name, func() -> Control:
+		var b := Button.new()
+		b.flat = true
+		b.focus_mode = Control.FOCUS_NONE
+		for state: String in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
+			b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+		return b) as Button

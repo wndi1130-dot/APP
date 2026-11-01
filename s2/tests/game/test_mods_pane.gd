@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 ## the wood, a take-back only while the workshop has not touched it, and a done
 ## car with its numbers and no key.
 
+const RowKeep = preload("res://game/ui/row_keep.gd")
 const ModsPane = preload("res://game/ui/mods_pane.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
@@ -15,7 +16,7 @@ const HomeBar = preload("res://game/ui/home_bar.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 
 
-## The rows a press draws again are freed a frame later; let them go before GUT counts orphans.
+## Let queued frees settle before GUT counts orphans.
 func after_each() -> void:
 	await wait_process_frames(1)
 
@@ -39,7 +40,7 @@ func _pane(g: Dictionary) -> Control:
 
 
 func _key(p: Control, key_name: String) -> Button:
-	return p.find_child(key_name, true, false) as Button
+	return _live(p, key_name) as Button
 
 
 func _word(b: Button) -> String:
@@ -73,7 +74,7 @@ func test_furnish_rows_show_each_cars_next_tier_and_pay_and_refund_cloth() -> vo
 	var p := _pane(g)
 	await wait_process_frames(1)
 	var key: Button = _key(p, "Key_furnish_front")
-	assert_eq((p.find_child("Gain_furnish_front", true, false) as Label).text, "살림 0단 → 1단")
+	assert_eq((_live(p, "Gain_furnish_front") as Label).text, "살림 0단 → 1단")
 	assert_eq(key.tooltip_text, "목재 1 · 고철 3 · 일 1", "the first tier needs no cloth")
 	assert_null(_key(p, "Key_furnish_engine"))
 	g["dom"]["cloth"] = 2
@@ -83,8 +84,8 @@ func test_furnish_rows_show_each_cars_next_tier_and_pay_and_refund_cloth() -> vo
 	assert_eq(g["dom"]["job"]["kind"], "furnish")
 	assert_eq(float(g["dom"]["cloth"]), 2.0)
 	await wait_process_frames(1)
-	assert_not_null(p.find_child("Progress_furnish_front", true, false))
-	assert_null(p.find_child("Progress_front", true, false), "insulation row is not this job")
+	assert_not_null(_live(p, "Progress_furnish_front"))
+	assert_null(_live(p, "Progress_front"), "insulation row is not this job")
 	assert_eq(_word(_key(p, "Key_furnish_front")), "취소")
 	_key(p, "Key_furnish_front").pressed.emit()
 	assert_null(g["dom"]["job"])
@@ -97,13 +98,13 @@ func test_more_cars_than_fit_scroll_inside_the_pane() -> void:
 	var p := _pane(_game())
 	await wait_process_frames(2)
 	assert_almost_eq(p.size.y / UiFonts.K, ModsPane.CSS_H_MAX, 0.5, "no higher than the car's pane")
-	var s := p.find_child("List", true, false) as ScrollContainer
+	var s := _live(p, "List") as ScrollContainer
 	assert_not_null(s)
-	var rows := p.find_child("Rows", true, false) as Control
+	var rows := _live(p, "Rows") as Control
 	assert_gt(rows.size.y, s.size.y, "seven rows are longer than the room for them")
 	assert_lte(s.position.y + s.size.y, p.size.y + 0.5, "the list ends inside the pane")
-	assert_not_null(p.find_child("Key_engine", true, false), "the last car's key is there to drag up to")
-	var more := p.find_child("More", true, false) as Control
+	assert_not_null(_live(p, "Key_engine"), "the last car's key is there to drag up to")
+	var more := _live(p, "More") as Control
 	assert_not_null(more, "the glass darkens where rows are left below")
 	assert_true(more.visible)
 	s.scroll_vertical = 10000
@@ -117,7 +118,7 @@ func test_without_its_research_the_keys_wait_and_the_head_names_it() -> void:
 	assert_eq(m["need"], "단열 개조")
 	var p := _pane(g)
 	await wait_process_frames(1)
-	assert_eq((p.find_child("Need", true, false) as Label).text, "단열 개조")
+	assert_eq((_live(p, "Need") as Label).text, "단열 개조")
 	var key: Button = _key(p, "Key_tail1")
 	assert_almost_eq(key.modulate.a, UiDeny.DIM, 1e-6)
 	assert_eq(key.tooltip_text, "단열 개조를 아직 모른다")
@@ -141,7 +142,7 @@ func test_short_wood_is_red_and_will_not_start() -> void:
 	g["dom"]["wood"] = 3
 	var p := _pane(g)
 	await wait_process_frames(1)
-	var cost: Label = p.find_child("Cost_front_wood", true, false) as Label
+	var cost: Label = _live(p, "Cost_front_wood") as Label
 	assert_eq(cost.get_theme_color("font_color"), ModsPane.RED)
 	_key(p, "Key_front").pressed.emit()
 	assert_null(g["dom"]["job"])
@@ -155,7 +156,7 @@ func test_start_then_take_back_before_the_workshop_touches_it() -> void:
 	assert_eq(String(g["dom"]["job"]["car"]), "medtech")
 	assert_eq(float(g["dom"]["wood"]), 2.0)
 	await wait_process_frames(1)
-	assert_not_null(p.find_child("Progress_medtech", true, false))
+	assert_not_null(_live(p, "Progress_medtech"))
 	assert_eq(_word(_key(p, "Key_medtech")), "취소")
 	assert_almost_eq(_key(p, "Key_front").modulate.a, UiDeny.DIM, 1e-6, "one job on the line")
 	_key(p, "Key_medtech").pressed.emit()
@@ -181,8 +182,8 @@ func test_a_done_car_shows_what_it_gets_and_has_no_key() -> void:
 	var p := _pane(g)
 	await wait_process_frames(1)
 	assert_null(_key(p, "Key_front"))
-	assert_eq((p.find_child("Gain_front", true, false) as Label).text, TrainMods.insulate_numbers("front"))
-	assert_null(p.find_child("Cost_front_wood", true, false), "no price on a done car")
+	assert_eq((_live(p, "Gain_front") as Label).text, TrainMods.insulate_numbers("front"))
+	assert_null(_live(p, "Cost_front_wood"), "no price on a done car")
 
 
 func test_the_fold_key_folds() -> void:
@@ -234,3 +235,51 @@ func test_the_slice_opens_one_room_at_a_time() -> void:
 	f._select(was)
 	await wait_process_frames(1)
 	assert_false(is_instance_valid(f.mods), "a car picked puts the room away")
+
+
+
+func _live(p: Control, key_name: String) -> Control:
+	# Hidden parts and retiring rows no longer belong to the current list.
+	for found: Node in p.find_children(key_name, "Control", true, false):
+		var control: Control = found as Control
+		if not control.is_visible_in_tree():
+			continue
+		var ancestor: Node = control
+		var leaving: bool = false
+		while ancestor != null and ancestor != p:
+			if ancestor.has_meta(RowKeep.LEAVING_META):
+				leaving = true
+				break
+			ancestor = ancestor.get_parent()
+		if not leaving:
+			return control
+	return null
+
+
+func test_show_state_keeps_scroll_row_controls_and_pressed_key() -> void:
+	var g: Dictionary = _game()
+	var p: Control = _pane(g)
+	await wait_process_frames(2)
+	var scroll: ScrollContainer = p.get_node("Parts/List") as ScrollContainer
+	scroll.scroll_vertical = 80
+	await wait_process_frames(1)
+	var saved: int = scroll.scroll_vertical
+	assert_gt(saved, 0)
+	var row: Control = p.get_node("Parts/List/Rows/Item_tail1") as Control
+	var row_id: int = row.get_instance_id()
+	var key: Button = row.get_node("Key_tail1") as Button
+	var key_id: int = key.get_instance_id()
+	var store: Label = p.get_node("Parts/Store_wood") as Label
+	var store_id: int = store.get_instance_id()
+	key.toggle_mode = true
+	key.set_pressed_no_signal(true)
+	g["dom"]["wood"] = float(g["dom"]["wood"]) + 1.0
+	p.show_state(g)
+	assert_eq(scroll.scroll_vertical, saved)
+	await wait_process_frames(2)
+	assert_eq(scroll.scroll_vertical, saved)
+	assert_eq(p.get_node("Parts/List/Rows/Item_tail1").get_instance_id(), row_id)
+	assert_eq(row.get_node("Key_tail1").get_instance_id(), key_id)
+	assert_eq(p.get_node("Parts/Store_wood").get_instance_id(), store_id)
+	assert_eq(store.text, str(int(g["dom"]["wood"])))
+	assert_true(key.button_pressed)

@@ -230,3 +230,34 @@ func test_a_technology_s_saving_is_the_same_cause_before_and_after() -> void:
 	for r: Dictionary in before["rows"]:
 		assert_almost_eq(float(_row(m, String(r["why"]))["last"]), float(r["now"]), 1e-9, String(r["why"]))
 	assert_null(m["rest"])
+
+
+
+func test_show_state_keeps_scroll_cause_row_and_pressed_fold_key() -> void:
+	var sample: Array = _sample()
+	var pane = CostPane.new()
+	add_child_autofree(pane)
+	pane.pin(TrainGauges.BAND_H)
+	pane.show_state(sample[0], sample[1])
+	var scroll: ScrollContainer = pane.get_node("Parts/List") as ScrollContainer
+	# A short viewport also covers forecasts with only a few causes.
+	scroll.size.y = 30.0 * UiFonts.K
+	await wait_process_frames(2)
+	scroll.scroll_vertical = 20
+	await wait_process_frames(1)
+	var saved: int = scroll.scroll_vertical
+	assert_gt(saved, 0)
+	var row: Control = pane.get_node("Parts/List/Rows/Item_why_run") as Control
+	var row_id: int = row.get_instance_id()
+	var amount: Label = row.get_node("Row_run_now") as Label
+	var amount_id: int = amount.get_instance_id()
+	var fold: Button = pane.get_node("Parts/Fold") as Button
+	fold.toggle_mode = true
+	fold.set_pressed_no_signal(true)
+	pane.show_state(sample[0], sample[1])
+	assert_eq(scroll.scroll_vertical, saved)
+	await wait_process_frames(2)
+	assert_eq(scroll.scroll_vertical, saved)
+	assert_eq(pane.get_node("Parts/List/Rows/Item_why_run").get_instance_id(), row_id)
+	assert_eq(row.get_node("Row_run_now").get_instance_id(), amount_id)
+	assert_true(fold.button_pressed)

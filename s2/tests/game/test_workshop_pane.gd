@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 ## (its row stays while it is on the line, even when its technique stops);
 ## and the bottom bar's 공방 room opening it while the other rooms stay 「준비 중」.
 
+const RowKeep = preload("res://game/ui/row_keep.gd")
 const WorkshopPane = preload("res://game/ui/workshop_pane.gd")
 const HomeBar = preload("res://game/ui/home_bar.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
@@ -29,7 +30,7 @@ func _pane(g: Dictionary) -> Control:
 
 
 func _key(p: Control, key_name: String) -> Button:
-	return p.find_child(key_name, true, false) as Button
+	return _live(p, key_name) as Button
 
 
 func test_transport_recipes_use_existing_rows_counts_and_cap_tooltips() -> void:
@@ -50,7 +51,7 @@ func test_transport_recipes_use_existing_rows_counts_and_cap_tooltips() -> void:
 		assert_ne(row["why"], "")
 		key.pressed.emit()
 		assert_null(g["dom"].get("make"))
-	assert_eq((p.find_child("Have_runner", true, false) as Label).text, "×2")
+	assert_eq((_live(p, "Have_runner") as Label).text, "×2")
 	await wait_process_frames(1)
 
 
@@ -79,8 +80,8 @@ func test_what_the_train_holds_shows_by_its_name() -> void:
 	assert_eq([m["rows"][0]["have"], m["rows"][1]["have"], m["rows"][2]["have"]], [0, 1, 1])
 	var p := _pane(g)
 	await wait_frames(1)
-	assert_eq((p.find_child("Have_crowbar", true, false) as Label).text, "×1")
-	assert_null(p.find_child("Have_bow", true, false), "none held: no number")
+	assert_eq((_live(p, "Have_crowbar") as Label).text, "×1")
+	assert_null(_live(p, "Have_bow"), "none held: no number")
 
 
 func test_every_key_takes_a_finger_48_dp_wide() -> void:
@@ -109,18 +110,18 @@ func test_the_core_row_counts_the_cores_and_the_rows_scroll() -> void:
 	var p := _pane(g)
 	await wait_frames(1)
 	assert_almost_eq(p.size.y, WorkshopPane.CSS_SIZE.y * UiFonts.K, 0.5, "no taller than the car's pane")
-	var s: ScrollContainer = p.find_child("List", true, false) as ScrollContainer
+	var s: ScrollContainer = _live(p, "List") as ScrollContainer
 	assert_not_null(s)
 	assert_true(s.is_ancestor_of(_key(p, "Key_core_remake")), "the core's key is in the dragged list")
-	assert_not_null(p.find_child("More", true, false), "a shade while a row is below")
-	assert_eq((p.find_child("Have_core_remake", true, false) as Label).text, "×2")
+	assert_not_null(_live(p, "More"), "a shade while a row is below")
+	assert_eq((_live(p, "Have_core_remake") as Label).text, "×2")
 
 
 func test_a_short_store_is_red_and_its_key_will_not_start() -> void:
 	var g := _game()
 	var p := _pane(g)
 	await wait_frames(1)
-	var cloth: Label = p.find_child("Cost_coat_long_cloth", true, false) as Label
+	var cloth: Label = _live(p, "Cost_coat_long_cloth") as Label
 	assert_not_null(cloth)
 	assert_eq(cloth.get_theme_color("font_color"), WorkshopPane.RED)
 	_key(p, "Key_coat_long").pressed.emit()
@@ -135,7 +136,7 @@ func test_make_then_take_back() -> void:
 	assert_eq(String((TrainWorkshop.line(g) as Dictionary)["id"]), "crowbar")
 	assert_eq(float(g["dom"]["scrap"]), 6.0)
 	await wait_frames(1)
-	assert_not_null(p.find_child("Progress_crowbar", true, false), "its row shows how far along")
+	assert_not_null(_live(p, "Progress_crowbar"), "its row shows how far along")
 	_key(p, "Key_crowbar").pressed.emit()
 	assert_null(TrainWorkshop.line(g), "taken back")
 	assert_eq(float(g["dom"]["scrap"]), 10.0)
@@ -173,28 +174,28 @@ func test_rounds_row_only_appears_while_w2_a_runs() -> void:
 	var g: Dictionary = _game()
 	var p: Control = _pane(g)
 	await wait_frames(1)
-	assert_null(p.find_child("Name_rounds", true, false))
+	assert_null(_live(p, "Name_rounds"))
 	g["dom"]["techs"]["w2"] = {"stage": "done", "defect": false, "progress": 6.0, "need": 6.0, "variant": "a"}
 	p.show_state(g)
 	await wait_frames(1)
-	var rounds: Label = p.find_child("Name_rounds", true, false) as Label
+	var rounds: Label = _live(p, "Name_rounds") as Label
 	assert_not_null(rounds)
 	if rounds != null:
 		assert_eq(rounds.text, "권총탄 한 줌")
-	assert_eq((p.find_child("Have_rounds", true, false) as Label).text, "×16")
-	assert_null(p.find_child("Name_arrows", true, false))
+	assert_eq((_live(p, "Have_rounds") as Label).text, "×16")
+	assert_null(_live(p, "Name_arrows"))
 	g["dom"]["techs"]["w2"]["variant"] = "b"
 	p.show_state(g)
 	await wait_frames(1)
-	assert_null(p.find_child("Name_rounds", true, false))
-	assert_eq((p.find_child("Name_arrows", true, false) as Label).text, "화살 묶음")
-	assert_eq((p.find_child("Have_arrows", true, false) as Label).text, "×9")
+	assert_null(_live(p, "Name_rounds"))
+	assert_eq((_live(p, "Name_arrows") as Label).text, "화살 묶음")
+	assert_eq((_live(p, "Have_arrows") as Label).text, "×9")
 	g["dom"]["techs"]["w2"]["variant"] = "a"
 	g["dom"]["techs"]["w2"]["off"] = true
 	p.show_state(g)
 	await wait_frames(1)
-	assert_null(p.find_child("Name_rounds", true, false), "the selected way is off")
-	assert_null(p.find_child("Name_arrows", true, false))
+	assert_null(_live(p, "Name_rounds"), "the selected way is off")
+	assert_null(_live(p, "Name_arrows"))
 
 
 func test_research_recipe_rows_count_their_store_amounts() -> void:
@@ -221,11 +222,59 @@ func test_the_thing_on_the_line_keeps_its_row_when_its_way_stops() -> void:
 	assert_false(TrainWorkshop.shown(g).has("rounds"), "the stopped way is off the list of things to make")
 	p.show_state(g)
 	await wait_frames(1)
-	assert_not_null(p.find_child("Name_rounds", true, false), "but the thing on the line keeps its row")
-	assert_not_null(p.find_child("Progress_rounds", true, false))
-	assert_null(p.find_child("Name_arrows", true, false))
+	assert_not_null(_live(p, "Name_rounds"), "but the thing on the line keeps its row")
+	assert_not_null(_live(p, "Progress_rounds"))
+	assert_null(_live(p, "Name_arrows"))
 	_key(p, "Key_rounds").pressed.emit()
 	assert_null(TrainWorkshop.line(g), "nothing done yet: it can be taken back")
 	p.show_state(g)
 	await wait_frames(1)
-	assert_null(p.find_child("Name_rounds", true, false), "off the line, the stopped way's row goes")
+	assert_null(_live(p, "Name_rounds"), "off the line, the stopped way's row goes")
+
+
+
+func _live(p: Control, key_name: String) -> Control:
+	# Hidden parts and retiring rows no longer belong to the current list.
+	for found: Node in p.find_children(key_name, "Control", true, false):
+		var control: Control = found as Control
+		if not control.is_visible_in_tree():
+			continue
+		var ancestor: Node = control
+		var leaving: bool = false
+		while ancestor != null and ancestor != p:
+			if ancestor.has_meta(RowKeep.LEAVING_META):
+				leaving = true
+				break
+			ancestor = ancestor.get_parent()
+		if not leaving:
+			return control
+	return null
+
+
+func test_show_state_keeps_scroll_row_and_the_started_jobs_key() -> void:
+	var g: Dictionary = _game()
+	var p: Control = _pane(g)
+	await wait_process_frames(2)
+	var scroll: ScrollContainer = p.get_node("Parts/List") as ScrollContainer
+	scroll.scroll_vertical = 80
+	await wait_process_frames(1)
+	var saved: int = scroll.scroll_vertical
+	assert_gt(saved, 0)
+	var row: Control = p.get_node("Parts/List/Rows/Item_crowbar") as Control
+	var row_id: int = row.get_instance_id()
+	var key: Button = row.get_node("Key_crowbar") as Button
+	var key_id: int = key.get_instance_id()
+	var name_id: int = row.get_node("Name_crowbar").get_instance_id()
+	key.toggle_mode = true
+	key.set_pressed_no_signal(true)
+	key.pressed.emit()
+	assert_eq(String((TrainWorkshop.line(g) as Dictionary)["id"]), "crowbar")
+	p.show_state(g)
+	assert_eq(scroll.scroll_vertical, saved)
+	await wait_process_frames(2)
+	assert_eq(scroll.scroll_vertical, saved)
+	assert_eq(p.get_node("Parts/List/Rows/Item_crowbar").get_instance_id(), row_id)
+	assert_eq(row.get_node("Key_crowbar").get_instance_id(), key_id)
+	assert_eq(row.get_node("Name_crowbar").get_instance_id(), name_id)
+	assert_eq((key.get_node("Word") as Label).text, "취소")
+	assert_true(key.button_pressed)
