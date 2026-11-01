@@ -519,7 +519,7 @@ describe('J10 1~4: 값이 틀리거나 효과가 없던 것', () => {
     expect(on.tension).toBeLessThan(off.tension);
   });
 
-  it('3. X2(핸드카): 장소 후보가 하나 더 있고, 정찰 전에 한 번 바꾼다', () => {
+  it('3. X2(수동차): 장소 후보가 하나 더 있고, 정찰 전에 한 번 바꾼다', () => {
     const g = fresh('x2');
     done(g, 'x2');
     toStop(g);

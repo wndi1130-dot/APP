@@ -11,18 +11,26 @@ const TrainSave = preload("res://game/politics/save_slot.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const FieldReceipt = preload("res://game/sim/receipt.gd")
 const FieldArrival = preload("res://game/politics/field_arrival.gd")
+const RouteState = preload("res://game/train/route_state.gd")
+const CampaignRoute = preload("res://game/train/campaign_route.gd")
+const FieldReturn = preload("res://game/politics/field_return.gd")
 const STEPS: Array[String] = ["train", "stop_pick", "field", "receipt", "council", "travel", "arrive", "end"]
 
 
 static func capture(flow) -> Dictionary:
 	var g: Dictionary = flow.train_g
-	return {
+	var captured: Dictionary = {
 		"version": VERSION, "kind": KIND, "step": resume_step(g, flow.current()),
 		"run": flow.run, "train_sha": _text(g).sha256_text(),
 		"seg": int(g.get("seg", 0)), "applied": applied_ids(g),
 		"contract": flow.contract.duplicate(true), "receipt": flow.receipt.duplicate(true),
 		"passed": flow.passed, "result_reason": String(flow.result.get("reason", "")),
 	}
+	if RouteState.is_campaign(g):
+		captured["mode"] = "campaign"
+		captured["visit_id"] = String(g["campaign"]["visit"].get("id", ""))
+		captured["passed"] = g["campaign"]["visit"].get("result") == "passed"
+	return captured
 
 
 static func applied_ids(g: Dictionary) -> Array:
@@ -38,6 +46,8 @@ static func _returns(g: Dictionary) -> Dictionary:
 
 ## A left session still says "opened"; its result and phase say it was left.
 static func step_of_board(g: Dictionary) -> String:
+	if RouteState.is_campaign(g):
+		return _campaign_step(g)
 	var phase := String(g.get("phase", ""))
 	if phase == "end":
 		return "end"
@@ -60,6 +70,9 @@ static func step_of_board(g: Dictionary) -> String:
 
 ## A return or a vote can be saved before its screen has changed.
 static func resume_step(g: Dictionary, wanted: String) -> String:
+	if RouteState.is_campaign(g):
+		var at: String = step_of_board(g)
+		return "field" if at == "stop_pick" and wanted == "field" else at
 	var board := step_of_board(g)
 	if board == "end" or board == "council" or not STEPS.has(wanted):
 		return board
@@ -173,6 +186,8 @@ static func _train(path: String, t: Dictionary, source: Dictionary = {}) -> Dict
 		var loaded: Dictionary = TrainSave.read_save(_parse(at, source), t)
 		if bool(loaded.get("ok", false)):
 			var g: Dictionary = loaded["g"]
+			if g.has("campaign") and RouteState.problem(g, t) != "":
+				return {}
 			var valid: bool = true
 			for record: Variant in _returns(g).get("records", []):
 				if not record is Dictionary or not record.get("receiptId") is String or not (record.get("seg") is int or record.get("seg") is float):
@@ -186,6 +201,9 @@ static func _train(path: String, t: Dictionary, source: Dictionary = {}) -> Dict
 static func receipt_of_board(g: Dictionary) -> Dictionary:
 	var returns := _returns(g)
 	var records: Array = returns.get("records", [])
+	if RouteState.is_campaign(g):
+		var record: Dictionary = RouteState.record_for_visit(g)
+		records = [record] if not record.is_empty() else []
 	if records.is_empty():
 		return {}
 	var id := String(records[0].get("receiptId", ""))
@@ -207,10 +225,12 @@ static func receipt_of_field(saved: Dictionary) -> Dictionary:
 
 static func pick(slice_path: String, train_path: String, t: Dictionary, field_path: String = FieldSave.PATH) -> Dictionary:
 	var d := read(slice_path)
-	if d.is_empty():
-		return {}
 	var source: Dictionary = {}
 	var g := _train(train_path, t, source)
+	if RouteState.is_campaign(g):
+		return _pick_campaign(d, g, source, field_path)
+	if d.is_empty():
+		return {}
 	if g.is_empty() or String(g.get("phase", "")) == "end":
 		return {}
 	var saved_ids: Array = d["applied"].duplicate()
@@ -245,3 +265,73 @@ static func pick(slice_path: String, train_path: String, t: Dictionary, field_pa
 		"g": g, "step": at, "run": d["run"], "contract": contract, "receipt": receipt, "passed": passed,
 		"result_reason": reason, "reconciled": torn,
 	}
+
+
+static func _campaign_step(g: Dictionary) -> String:
+	if RouteState.problem(g) != "":
+		return ""
+	var route: Dictionary = g["campaign"]
+	if g.get("phase") == "end" or int(route["cursor"]) == CampaignRoute.size():
+		return "end"
+	var visit: Dictionary = route["visit"]
+	if visit.is_empty():
+		return "train"
+	if visit["result"] == "open":
+		return "stop_pick"
+	if int(route["cursor"]) == CampaignRoute.size() - 1:
+		return "receipt" if visit["result"] == "returned" else "end"
+	if FieldArrival.second_station_reached(g):
+		return "arrive"
+	if visit["result"] == "passed":
+		return "travel"
+	var special: Variant = _returns(g).get("special")
+	if special is Dictionary and special.get("receiptId") == visit.get("receipt_id"):
+		if g.get("phase") == "council" and special.get("status") == "opened":
+			return "council"
+		if special.get("status") == "skipped" or special.get("result") is Dictionary:
+			return "travel"
+	return "receipt"
+
+
+static func field_opts_belong(g: Dictionary, options: Dictionary) -> bool:
+	if not RouteState.is_campaign(g) or not options.get("departure") is Dictionary:
+		return false
+	var visit: Dictionary = g["campaign"]["visit"]
+	if visit.is_empty():
+		return false
+	if options.get("slice") != true or options.get("slice_run") != g["campaign"]["run"] or options.get("visit_id") != visit["id"] or options.get("place") != visit["map"] or options.get("seed") != visit["field_seed"]:
+		return false
+	var order: Dictionary = options["departure"]
+	return RouteState.owns_contract(g, order) and visit.get("contract") is Dictionary and FieldReturn.canonical(order) == FieldReturn.canonical(visit["contract"])
+
+
+static func field_belongs(g: Dictionary, saved: Dictionary) -> bool:
+	if not RouteState.is_campaign(g) or not saved.get("start_opts") is Dictionary:
+		return false
+	var options: Dictionary = saved["start_opts"].duplicate(true)
+	options["departure"] = saved.get("departure", {})
+	options["place"] = saved.get("place", "")
+	options["seed"] = saved.get("seed", -1)
+	return field_opts_belong(g, options) and saved.get("stop_id") == g["campaign"]["visit"].get("stop_id") and saved.get("receipt_id") == "ret_" + String(g["campaign"]["visit"].get("departure_id", "")).trim_prefix("dep_")
+
+
+static func _pick_campaign(d: Dictionary, g: Dictionary, source: Dictionary, field_path: String) -> Dictionary:
+	if RouteState.problem(g) != "" or step_of_board(g) == "end":
+		return {}
+	var route: Dictionary = g["campaign"]
+	var visit: Dictionary = route["visit"]
+	var torn: bool = d.is_empty() or d.get("mode") != "campaign" or d.get("run") != route["run"] or d.get("visit_id") != visit.get("id", "") or d.get("train_sha") != source.get("train_sha") or d.get("seg") != g["seg"] or d.get("applied") != applied_ids(g)
+	var at: String = step_of_board(g) if torn else resume_step(g, String(d["step"]))
+	var receipt: Dictionary = receipt_of_board(g)
+	var saved: Dictionary = FieldSave.read(field_path)
+	if not receipt.is_empty():
+		var fingerprint: String = FieldReturn.canonical(receipt)
+		if not torn and RouteState.owns_receipt(g, d["receipt"]) and FieldReturn.canonical(d["receipt"]) == fingerprint:
+			receipt = d["receipt"].duplicate(true)
+		elif field_belongs(g, saved) and saved.get("phase") == "ended":
+			var typed: Dictionary = receipt_of_field(saved)
+			if FieldReturn.canonical(typed) == fingerprint:
+				receipt = typed
+	return {"g": g, "mode": "campaign", "run": route["run"], "step": at,
+		"contract": (visit.get("contract", {}) as Dictionary).duplicate(true), "receipt": receipt,
+		"passed": visit.get("result") == "passed", "result_reason": String(receipt.get("endReason", "")), "reconciled": torn}
