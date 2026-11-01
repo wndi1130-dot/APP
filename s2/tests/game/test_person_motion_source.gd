@@ -12,6 +12,7 @@ const GROUPS: Dictionary = {
 	"run": ["p_run", "p_run_long", "p_run_pistol"],
 	"crouch": ["p_crouch_walk", "p_crouch_walk_long", "p_crouch_walk_pistol"],
 }
+const SOURCE_RIGS: Array[String] = ["driver", "duffel_b1v2", "fitter", "guard", "guard_f", "hunter_f", "lumberjack", "medic", "overalls", "railman_old", "seamstress", "sheepskin", "stoker", "woodsman"]
 
 var _fixtures: Array[Dictionary] = []
 var _folder_count: int = 0
@@ -220,9 +221,8 @@ func test_standing_source_support_is_upright_on_all_fourteen_rigs() -> void:
 	if motion == null:
 		return
 	add_child(motion)
-	var names := ["driver", "duffel_b1v2", "fitter", "guard", "guard_f", "hunter_f", "lumberjack", "medic", "overalls", "railman_old", "seamstress", "sheepskin", "stoker", "woodsman"]
 	var checked := 0
-	for rig_name: String in names:
+	for rig_name: String in SOURCE_RIGS:
 		var root := _stand_source_scene(directory.path_join("rig").path_join(rig_name + ".glb"))
 		if root == null:
 			continue
@@ -287,9 +287,62 @@ func test_standing_source_support_is_upright_on_all_fourteen_rigs() -> void:
 		for side in 2:
 			assert_true(float(knee_sum[side]) / float(count) <= 10.0, "%s side %d mean knee <= 10 degrees" % [rig_name, side])
 		assert_true(chest_travel >= 0.0005 and chest_travel <= 0.01, rig_name + " small upper-body breath remains")
+		assert_eq(ctx.get("fit_failures", []), [], rig_name + " standing solver passes the stricter save gate")
 		checked += 1
 		root.queue_free()
 	assert_eq(checked, 14, "all original living rigs checked")
+	motion.queue_free()
+
+
+func test_original_final_fit_checks_accept_normal_rigs_and_reject_asymmetric_support() -> void:
+	var directory: String = ProjectSettings.globalize_path("res://").path_join("../../_motion_src").simplify_path()
+	var required: Array[String] = [directory.path_join("UAL1.glb")]
+	for rig_name: String in SOURCE_RIGS:
+		required.append(directory.path_join("rig").path_join(rig_name + ".glb"))
+	for path: String in required:
+		if not FileAccess.file_exists(path):
+			pending("final fit checks require the original motion and all 14 rigs; missing " + path)
+			return
+	var motion: Node3D = _stand_source_scene(required[0])
+	if motion == null:
+		return
+	add_child(motion)
+	var entries: Array = []
+	for entry: Array in BodyBake.PERSON_CLIPS:
+		if BodyBake.PERSON_STRIDE_ROUNDS.has(entry[0]) or entry[0] == "p_stand":
+			entries.append(entry)
+	assert_eq(entries.size(), 13, "standing plus all twelve gait clips")
+	var checked: int = 0
+	for rig_name: String in SOURCE_RIGS:
+		var root: Node3D = _stand_source_scene(directory.path_join("rig").path_join(rig_name + ".glb"))
+		if root == null:
+			continue
+		add_child(root)
+		var ctx: Dictionary = BodyBake.prepare(root, motion, entries, [])
+		assert_false(ctx.is_empty(), rig_name + " final-fit context")
+		if ctx.is_empty():
+			root.queue_free()
+			continue
+		var normal: Dictionary = BodyBake._bake_list(ctx, entries, [])
+		assert_false(normal.is_empty(), rig_name + " normal frames are built")
+		assert_eq(normal.get("fit_failures", []), [], rig_name + " normal stand, final phase and final round all pass")
+		# A lateral offset lengthens only the left lower leg. The single mean
+		# pelvis drop cannot satisfy both legs' requested knee angle/ankle.
+		var body: Skeleton3D = ctx["body"]
+		var foot: int = BodyBake._bone(body, "foot.L")
+		var rest: Transform3D = body.get_bone_rest(foot)
+		rest.origin.x += 0.2
+		body.set_bone_rest(foot, rest)
+		var broken: Dictionary = BodyBake._bake_list(ctx, [BodyBake.PERSON_CLIPS[2]], [])
+		assert_false(broken.is_empty(), rig_name + " rejected frames still return diagnostics")
+		var failures: Array = broken.get("fit_failures", [])
+		assert_gt(failures.size(), 0, rig_name + " asymmetric support reaches fit_failures")
+		assert_lte(failures.size(), 2, "at most one failure per standing leg")
+		for failure: String in failures:
+			assert_true(failure.begins_with("STAND_UNFIT p_stand "), failure)
+		checked += 1
+		root.queue_free()
+	assert_eq(checked, 14, "all original rigs exercise the save gate")
 	motion.queue_free()
 
 
@@ -377,6 +430,43 @@ func test_run_sole_contacts_are_within_fifty_milliseconds_of_steps_walks_reporte
 						print("WALK_PHASE " + line)
 					else:
 						assert_true(seconds <= 0.05, line)
+
+
+func test_final_phase_gate_accepts_baked_soles_and_rejects_shifted_or_missing_contacts() -> void:
+	for fixture: Dictionary in _fixtures:
+		for group: String in ["walk", "run"]:
+			for name_text: String in GROUPS[group]:
+				var clip: Dictionary = _clip(fixture, name_text)
+				if clip.is_empty():
+					continue
+				var heights: Array = [[], []]
+				for side in 2:
+					for points: PackedVector3Array in _sample(fixture, clip, fixture["soles"][side]):
+						var lowest: float = INF
+						for point: Vector3 in points:
+							lowest = minf(lowest, point.y)
+						heights[side].append(lowest)
+				var label: String = "%s %s" % [fixture["name"], name_text]
+				var ctx: Dictionary = {"fit_failures": []}
+				BodyBake._check_person_phase_final(ctx, name_text, heights)
+				assert_eq(ctx["fit_failures"], [], label + " existing baked soles pass the same final gate")
+				if group == "run":
+					var shifted: Array = [[], []]
+					for side in 2:
+						var count: int = heights[side].size()
+						for f in count:
+							shifted[side].append(heights[side][(f + int(count / 4.0)) % count])
+					ctx["fit_failures"] = []
+					BodyBake._check_person_phase_final(ctx, name_text, shifted)
+					assert_eq((ctx["fit_failures"] as Array).size(), 1, label + " a quarter-cycle late fails")
+					for failure: String in ctx["fit_failures"]:
+						assert_true(failure.begins_with("PHASE_FINAL " + name_text + " "), failure)
+				heights[0] = []
+				ctx["fit_failures"] = []
+				BodyBake._check_person_phase_final(ctx, name_text, heights)
+				assert_eq((ctx["fit_failures"] as Array).size(), 1, label + " a missing foot also fails for walks")
+				for failure: String in ctx["fit_failures"]:
+					assert_true(failure.begins_with("PHASE_FINAL " + name_text + " no_sole_contact "), failure)
 
 
 func test_phase_solver_splits_symmetric_contact_error_and_handles_the_seam() -> void:
