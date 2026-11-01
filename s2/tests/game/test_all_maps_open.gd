@@ -25,7 +25,7 @@ func test_registry_has_eighty_field_maps_and_the_first_stop() -> void:
 
 func test_every_registered_map_builds_with_required_keys() -> void:
 	var no_height: Dictionary = {}           # container kind -> a map it is in
-	for id in FieldMaps.ids():
+	for id in FieldMaps.ids() + FieldMaps.story_ids():
 		var data := FieldMaps.build(id)
 		assert_false(data.is_empty(), id)
 		for key: String in REQUIRED:
