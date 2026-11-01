@@ -1,58 +1,58 @@
 {
 	"clips": [
 		{
-			"frames": 16,
+			"frames": 32,
 			"hi": [
-				0.057403564453125,
-				0.10638427734375,
-				0.0623779296875
+				0.05718994140625,
+				0.106689453125,
+				0.0626220703125
 			],
 			"length": 0.78,
 			"lo": [
-				-0.1724853515625,
-				-0.1053466796875,
-				-0.0134048461914063
+				-0.172607421875,
+				-0.10430908203125,
+				-0.0137176513671875
 			],
 			"loop": true,
 			"name": "p_walk",
-			"round": 1.65124613046646,
+			"round": 1.64111951986949,
 			"start": 0
 		},
 		{
-			"frames": 12,
+			"frames": 24,
 			"hi": [
-				0.2330322265625,
-				0.1844482421875,
+				0.2325439453125,
+				0.1885986328125,
 				0.3955078125
 			],
 			"length": 0.58,
 			"lo": [
-				-0.2132568359375,
-				-0.1549072265625,
-				-0.020782470703125
+				-0.2125244140625,
+				-0.1541748046875,
+				-0.0208740234375
 			],
 			"loop": true,
 			"name": "p_run",
-			"round": 2.28777734438578,
-			"start": 16
+			"round": 2.27168790499369,
+			"start": 32
 		},
 		{
 			"frames": 16,
 			"hi": [
-				0.009918212890625,
-				0.059967041015625,
-				0.0224151611328125
+				0.1361083984375,
+				0.06268310546875,
+				0.10601806640625
 			],
-			"length": 4.0,
+			"length": 2.5,
 			"lo": [
-				-0.0970458984375,
-				-0.0316162109375,
-				0.0
+				0.040130615234375,
+				-0.1558837890625,
+				-0.0662841796875
 			],
 			"loop": true,
 			"name": "p_stand",
 			"round": 0.0,
-			"start": 28
+			"start": 56
 		},
 		{
 			"frames": 12,
@@ -70,7 +70,7 @@
 			"loop": true,
 			"name": "p_held",
 			"round": 0.115657053887844,
-			"start": 44
+			"start": 72
 		},
 		{
 			"frames": 24,
@@ -88,7 +88,7 @@
 			"loop": false,
 			"name": "p_bitten",
 			"round": 0.0,
-			"start": 56
+			"start": 84
 		},
 		{
 			"frames": 24,
@@ -106,7 +106,7 @@
 			"loop": false,
 			"name": "p_swing_one",
 			"round": 0.0,
-			"start": 80
+			"start": 108
 		},
 		{
 			"frames": 32,
@@ -124,7 +124,7 @@
 			"loop": false,
 			"name": "p_swing_axe",
 			"round": 0.0,
-			"start": 104
+			"start": 132
 		},
 		{
 			"frames": 20,
@@ -142,7 +142,7 @@
 			"loop": false,
 			"name": "p_stab",
 			"round": 0.0,
-			"start": 136
+			"start": 164
 		},
 		{
 			"frames": 20,
@@ -160,25 +160,25 @@
 			"loop": false,
 			"name": "p_shove",
 			"round": 0.0,
-			"start": 156
+			"start": 184
 		},
 		{
 			"frames": 16,
 			"hi": [
-				0.050506591796875,
+				0.050445556640625,
 				0.163818359375,
 				0.449462890625
 			],
 			"length": 1.08,
 			"lo": [
 				-0.156494140625,
-				-0.1932373046875,
-				-0.00428009033203125
+				-0.1927490234375,
+				-0.0041351318359375
 			],
 			"loop": true,
 			"name": "p_crouch_walk",
-			"round": 1.20036270221074,
-			"start": 176
+			"round": 1.19053087631861,
+			"start": 204
 		},
 		{
 			"frames": 12,
@@ -196,7 +196,7 @@
 			"loop": true,
 			"name": "p_crouch_idle",
 			"round": 0.0,
-			"start": 192
+			"start": 220
 		},
 		{
 			"frames": 12,
@@ -214,7 +214,7 @@
 			"loop": true,
 			"name": "p_search_mid",
 			"round": 0.0,
-			"start": 204
+			"start": 232
 		},
 		{
 			"frames": 12,
@@ -232,7 +232,7 @@
 			"loop": true,
 			"name": "p_search_low",
 			"round": 0.0,
-			"start": 216
+			"start": 244
 		},
 		{
 			"frames": 12,
@@ -250,7 +250,7 @@
 			"loop": true,
 			"name": "p_treat",
 			"round": 0.0,
-			"start": 228
+			"start": 256
 		},
 		{
 			"frames": 8,
@@ -268,7 +268,7 @@
 			"loop": true,
 			"name": "p_aim_one",
 			"round": 0.0,
-			"start": 240
+			"start": 268
 		},
 		{
 			"frames": 8,
@@ -286,7 +286,7 @@
 			"loop": true,
 			"name": "p_aim_two",
 			"round": 0.0,
-			"start": 248
+			"start": 276
 		},
 		{
 			"frames": 17,
@@ -304,7 +304,7 @@
 			"loop": false,
 			"name": "p_fall",
 			"round": 0.0,
-			"start": 256
+			"start": 284
 		},
 		{
 			"frames": 17,
@@ -322,7 +322,7 @@
 			"loop": false,
 			"name": "p_fall_front",
 			"round": 0.0,
-			"start": 273
+			"start": 301
 		},
 		{
 			"frames": 16,
@@ -340,7 +340,7 @@
 			"loop": true,
 			"name": "p_crawl",
 			"round": 0.522947447640555,
-			"start": 290
+			"start": 318
 		},
 		{
 			"frames": 17,
@@ -358,7 +358,7 @@
 			"loop": false,
 			"name": "p_rise",
 			"round": 0.0,
-			"start": 306
+			"start": 334
 		},
 		{
 			"frames": 17,
@@ -376,7 +376,7 @@
 			"loop": false,
 			"name": "p_rise_front",
 			"round": 0.0,
-			"start": 323
+			"start": 351
 		},
 		{
 			"frames": 16,
@@ -394,7 +394,7 @@
 			"loop": true,
 			"name": "p_spent",
 			"round": 0.868355423212051,
-			"start": 340
+			"start": 368
 		},
 		{
 			"frames": 24,
@@ -412,7 +412,7 @@
 			"loop": false,
 			"name": "p_floor_strike",
 			"round": 0.0,
-			"start": 356
+			"start": 384
 		},
 		{
 			"frames": 20,
@@ -430,7 +430,7 @@
 			"loop": false,
 			"name": "p_stomp",
 			"round": 0.0,
-			"start": 380
+			"start": 408
 		},
 		{
 			"frames": 12,
@@ -448,7 +448,7 @@
 			"loop": true,
 			"name": "p_pry",
 			"round": 0.1558324880898,
-			"start": 400
+			"start": 428
 		},
 		{
 			"frames": 20,
@@ -466,7 +466,7 @@
 			"loop": false,
 			"name": "p_kick",
 			"round": 0.0,
-			"start": 412
+			"start": 440
 		},
 		{
 			"frames": 24,
@@ -484,7 +484,7 @@
 			"loop": false,
 			"name": "p_swing_back",
 			"round": 0.0,
-			"start": 432
+			"start": 460
 		},
 		{
 			"frames": 17,
@@ -502,7 +502,7 @@
 			"loop": false,
 			"name": "p_fall_slump",
 			"round": 0.0,
-			"start": 456
+			"start": 484
 		},
 		{
 			"frames": 12,
@@ -520,7 +520,7 @@
 			"loop": true,
 			"name": "p_search_high",
 			"round": 0.0,
-			"start": 473
+			"start": 501
 		},
 		{
 			"frames": 16,
@@ -538,7 +538,7 @@
 			"loop": true,
 			"name": "p_limp_light_l",
 			"round": 1.50282329320908,
-			"start": 485
+			"start": 513
 		},
 		{
 			"frames": 16,
@@ -556,7 +556,7 @@
 			"loop": true,
 			"name": "p_limp_light_r",
 			"round": 1.5027880469958,
-			"start": 501
+			"start": 529
 		},
 		{
 			"frames": 16,
@@ -574,7 +574,7 @@
 			"loop": true,
 			"name": "p_limp_heavy_l",
 			"round": 1.18471571879509,
-			"start": 517
+			"start": 545
 		},
 		{
 			"frames": 16,
@@ -592,7 +592,7 @@
 			"loop": true,
 			"name": "p_limp_heavy_r",
 			"round": 1.18459907479775,
-			"start": 533
+			"start": 561
 		},
 		{
 			"frames": 12,
@@ -610,7 +610,7 @@
 			"loop": true,
 			"name": "p_treat_arm",
 			"round": 0.0,
-			"start": 549
+			"start": 577
 		},
 		{
 			"frames": 12,
@@ -628,7 +628,7 @@
 			"loop": true,
 			"name": "p_treat_leg",
 			"round": 0.0,
-			"start": 561
+			"start": 589
 		},
 		{
 			"frames": 12,
@@ -646,7 +646,7 @@
 			"loop": true,
 			"name": "p_treat_head",
 			"round": 0.0,
-			"start": 573
+			"start": 601
 		},
 		{
 			"frames": 24,
@@ -664,7 +664,7 @@
 			"loop": false,
 			"name": "p_bitten_front",
 			"round": 0.0,
-			"start": 585
+			"start": 613
 		},
 		{
 			"frames": 24,
@@ -682,7 +682,7 @@
 			"loop": false,
 			"name": "p_bitten_back",
 			"round": 0.0,
-			"start": 609
+			"start": 637
 		},
 		{
 			"frames": 24,
@@ -700,7 +700,7 @@
 			"loop": true,
 			"name": "p_shiver",
 			"round": 0.0,
-			"start": 633
+			"start": 661
 		},
 		{
 			"frames": 13,
@@ -718,7 +718,7 @@
 			"loop": false,
 			"name": "p_pain_head",
 			"round": 0.0,
-			"start": 657
+			"start": 685
 		},
 		{
 			"frames": 13,
@@ -736,7 +736,7 @@
 			"loop": false,
 			"name": "p_pain_torso",
 			"round": 0.0,
-			"start": 670
+			"start": 698
 		},
 		{
 			"frames": 13,
@@ -754,7 +754,7 @@
 			"loop": false,
 			"name": "p_pain_arm",
 			"round": 0.0,
-			"start": 683
+			"start": 711
 		},
 		{
 			"frames": 13,
@@ -772,7 +772,7 @@
 			"loop": false,
 			"name": "p_pain_leg",
 			"round": 0.0,
-			"start": 696
+			"start": 724
 		},
 		{
 			"frames": 13,
@@ -790,7 +790,7 @@
 			"loop": false,
 			"name": "p_tired_stretch",
 			"round": 0.0,
-			"start": 709
+			"start": 737
 		},
 		{
 			"frames": 13,
@@ -808,7 +808,7 @@
 			"loop": false,
 			"name": "p_wear_outer",
 			"round": 0.0,
-			"start": 722
+			"start": 750
 		},
 		{
 			"frames": 13,
@@ -826,7 +826,7 @@
 			"loop": false,
 			"name": "p_wear_head",
 			"round": 0.0,
-			"start": 735
+			"start": 763
 		},
 		{
 			"frames": 13,
@@ -844,97 +844,97 @@
 			"loop": false,
 			"name": "p_wear_hands",
 			"round": 0.0,
-			"start": 748
+			"start": 776
 		},
 		{
-			"frames": 16,
+			"frames": 32,
 			"hi": [
-				0.057403564453125,
-				0.09100341796875,
-				0.06842041015625
+				0.05718994140625,
+				0.0892333984375,
+				0.06884765625
 			],
 			"length": 0.78,
 			"lo": [
-				-0.1448974609375,
-				-0.111328125,
-				-0.0134048461914063
+				-0.14501953125,
+				-0.11187744140625,
+				-0.0137176513671875
 			],
 			"loop": true,
 			"name": "p_walk_long",
-			"round": 1.65124613046646,
-			"start": 761
+			"round": 1.64111951986949,
+			"start": 789
 		},
 		{
-			"frames": 16,
+			"frames": 32,
 			"hi": [
-				0.057403564453125,
-				0.09100341796875,
-				0.05413818359375
+				0.05718994140625,
+				0.0892333984375,
+				0.05328369140625
 			],
 			"length": 0.78,
 			"lo": [
-				-0.12445068359375,
-				-0.1053466796875,
-				-0.0134048461914063
+				-0.12469482421875,
+				-0.10430908203125,
+				-0.0137176513671875
 			],
 			"loop": true,
 			"name": "p_walk_axe",
-			"round": 1.65124613046646,
-			"start": 777
+			"round": 1.64111951986949,
+			"start": 821
 		},
 		{
-			"frames": 16,
+			"frames": 32,
 			"hi": [
-				0.057403564453125,
-				0.09100341796875,
-				0.05413818359375
+				0.05718994140625,
+				0.0892333984375,
+				0.05328369140625
 			],
 			"length": 0.78,
 			"lo": [
-				-0.1383056640625,
-				-0.1053466796875,
-				-0.0134048461914063
+				-0.138671875,
+				-0.10430908203125,
+				-0.0137176513671875
 			],
 			"loop": true,
 			"name": "p_walk_pistol",
-			"round": 1.65124613046646,
-			"start": 793
+			"round": 1.64111951986949,
+			"start": 853
 		},
 		{
-			"frames": 12,
+			"frames": 24,
 			"hi": [
-				0.09002685546875,
-				0.09814453125,
+				0.0897216796875,
+				0.09637451171875,
 				0.315185546875
 			],
 			"length": 0.58,
 			"lo": [
 				-0.225830078125,
-				-0.1549072265625,
-				-0.020782470703125
+				-0.1541748046875,
+				-0.0208740234375
 			],
 			"loop": true,
 			"name": "p_run_long",
-			"round": 2.28777734438578,
-			"start": 809
+			"round": 2.27168790499369,
+			"start": 885
 		},
 		{
-			"frames": 12,
+			"frames": 24,
 			"hi": [
-				0.09002685546875,
-				0.131591796875,
+				0.0897216796875,
+				0.1312255859375,
 				0.267578125
 			],
 			"length": 0.58,
 			"lo": [
-				-0.2186279296875,
-				-0.1549072265625,
-				-0.020782470703125
+				-0.2183837890625,
+				-0.1541748046875,
+				-0.0208740234375
 			],
 			"loop": true,
 			"name": "p_run_pistol",
-			"round": 2.28777734438578,
-			"start": 821
+			"round": 2.27168790499369,
+			"start": 909
 		},
 		{
 			"frames": 12,
@@ -952,7 +952,7 @@
 			"loop": true,
 			"name": "p_ready_one",
 			"round": 0.0,
-			"start": 833
+			"start": 933
 		},
 		{
 			"frames": 12,
@@ -970,7 +970,7 @@
 			"loop": true,
 			"name": "p_ready_two",
 			"round": 0.0,
-			"start": 845
+			"start": 945
 		},
 		{
 			"frames": 12,
@@ -988,7 +988,7 @@
 			"loop": true,
 			"name": "p_ready_stab",
 			"round": 0.0,
-			"start": 857
+			"start": 957
 		},
 		{
 			"frames": 12,
@@ -1006,43 +1006,43 @@
 			"loop": true,
 			"name": "p_hold_weak",
 			"round": 0.0,
-			"start": 869
+			"start": 969
 		},
 		{
 			"frames": 16,
 			"hi": [
-				0.050506591796875,
+				0.050445556640625,
 				0.03594970703125,
 				0.541015625
 			],
 			"length": 1.08,
 			"lo": [
 				-0.270263671875,
-				-0.1932373046875,
-				-0.00428009033203125
+				-0.1927490234375,
+				-0.0041351318359375
 			],
 			"loop": true,
 			"name": "p_crouch_walk_long",
-			"round": 1.20036270221074,
-			"start": 881
+			"round": 1.19053087631861,
+			"start": 981
 		},
 		{
 			"frames": 16,
 			"hi": [
-				0.050506591796875,
+				0.050445556640625,
 				0.039306640625,
 				0.59033203125
 			],
 			"length": 1.08,
 			"lo": [
 				-0.291259765625,
-				-0.1932373046875,
-				-0.00428009033203125
+				-0.1927490234375,
+				-0.0041351318359375
 			],
 			"loop": true,
 			"name": "p_crouch_walk_pistol",
-			"round": 1.20036270221074,
-			"start": 897
+			"round": 1.19053087631861,
+			"start": 997
 		},
 		{
 			"frames": 12,
@@ -1060,7 +1060,7 @@
 			"loop": true,
 			"name": "p_crouch_idle_long",
 			"round": 0.0,
-			"start": 913
+			"start": 1013
 		},
 		{
 			"frames": 12,
@@ -1078,7 +1078,7 @@
 			"loop": true,
 			"name": "p_crouch_idle_pistol",
 			"round": 0.0,
-			"start": 925
+			"start": 1025
 		},
 		{
 			"frames": 12,
@@ -1096,43 +1096,43 @@
 			"loop": true,
 			"name": "p_hold_weak_r",
 			"round": 0.0,
-			"start": 937
+			"start": 1037
 		},
 		{
-			"frames": 16,
+			"frames": 32,
 			"hi": [
-				0.057403564453125,
-				0.09100341796875,
-				0.05413818359375
+				0.05718994140625,
+				0.0892333984375,
+				0.05328369140625
 			],
 			"length": 0.78,
 			"lo": [
 				-0.1500244140625,
-				-0.13720703125,
-				-0.0284423828125
+				-0.1380615234375,
+				-0.028411865234375
 			],
 			"loop": true,
 			"name": "p_carry_big",
-			"round": 1.65124613046646,
-			"start": 949
+			"round": 1.64111951986949,
+			"start": 1049
 		},
 		{
-			"frames": 16,
+			"frames": 32,
 			"hi": [
-				0.057403564453125,
-				0.158203125,
-				0.2156982421875
+				0.05718994140625,
+				0.1585693359375,
+				0.2159423828125
 			],
 			"length": 0.78,
 			"lo": [
 				-0.16357421875,
-				-0.1053466796875,
-				-0.0134048461914063
+				-0.10430908203125,
+				-0.0137176513671875
 			],
 			"loop": true,
 			"name": "p_walk_hurt",
-			"round": 1.65124613046646,
-			"start": 965
+			"round": 1.64111951986949,
+			"start": 1081
 		},
 		{
 			"frames": 17,
@@ -1150,7 +1150,7 @@
 			"loop": false,
 			"name": "p_reload",
 			"round": 0.0,
-			"start": 981
+			"start": 1113
 		},
 		{
 			"frames": 20,
@@ -1168,7 +1168,7 @@
 			"loop": false,
 			"name": "p_climb",
 			"round": 0.0,
-			"start": 998
+			"start": 1130
 		},
 		{
 			"frames": 16,
@@ -1186,7 +1186,7 @@
 			"loop": true,
 			"name": "p_kneel_work",
 			"round": 0.0656360626220703,
-			"start": 1018
+			"start": 1150
 		},
 		{
 			"frames": 24,
@@ -1204,11 +1204,11 @@
 			"loop": false,
 			"name": "p_chop_side",
 			"round": 0.0,
-			"start": 1034
+			"start": 1166
 		}
 	],
 	"format": "rgb8q",
-	"height": 1058,
+	"height": 1190,
 	"rows_per_frame": 1,
 	"vertices": 96,
 	"width": 32
