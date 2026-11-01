@@ -2600,11 +2600,18 @@ static func _check_person_stride_final(ctx: Dictionary, name: String, reach: Arr
 	var measured: float = _round(reach)
 	if PERSON_STRIDE_ROUNDS.has(name):
 		var target: float = PERSON_STRIDE_ROUNDS[name]
+		var failures: Array = ctx.get_or_add("fit_failures", [])
 		if not is_finite(measured) or absf(measured - target) > target * STRIDE_TOLERANCE:
 			var failure: String = "STRIDE_FINAL %s round %.6f target %.6f relative_error %.6f limit %.6f" % [name, measured, target, absf(measured - target) / target, STRIDE_TOLERANCE]
-			var failures: Array = ctx.get_or_add("fit_failures", [])
 			failures.append(failure)
 			print(failure)
+		# The mean leaves out a foot that never goes back; both must.
+		var left: float = round_of(reach[0])
+		var right: float = round_of(reach[1])
+		if left <= ROUND_LEAST or right <= ROUND_LEAST:
+			var one_foot: String = "STRIDE_FINAL %s one_foot left %.6f right %.6f" % [name, left, right]
+			failures.append(one_foot)
+			print(one_foot)
 	return measured
 
 
@@ -3449,10 +3456,11 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 		var stride_round: float = _round(reach)
 		if PERSON_STRIDE_ROUNDS.has(entry[0]):
 			var grid_round := stride_round
-			stride_round = _check_person_stride_final(ctx, entry[0], _person_stride_reach(ctx, entry))
-			# For the record: the same legs measured from where the saved loop starts.
+			var fine := _person_stride_reach(ctx, entry)
+			stride_round = _check_person_stride_final(ctx, entry[0], fine)
+			# For the record: the same legs measured from where the saved loop starts, and each foot.
 			var at_shift := _person_stride_round(ctx, entry, float(phase["shift"])) if not phase.is_empty() else stride_round
-			print("STRIDE_SAVED %s round %.6f at_shift %.6f frames_round %.6f" % [entry[0], stride_round, at_shift, grid_round])
+			print("STRIDE_SAVED %s round %.6f at_shift %.6f frames_round %.6f left %.6f right %.6f" % [entry[0], stride_round, at_shift, grid_round, round_of(fine[0]), round_of(fine[1])])
 		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0})
 	var still := []
 	for entry: Array in poses:
