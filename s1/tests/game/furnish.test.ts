@@ -338,7 +338,7 @@ describe('연구 줄과 채택', () => {
     expect(prereqs('x3')).toEqual(['x2']); expect(prereqs('w3')).toEqual(['w2']);
     expect(prereqs('x4')).toEqual(['x1']); expect(prereqs('w5')).toEqual([]);
     expect(PREREQ).not.toHaveProperty('w5');
-    expect(restoreBlock(g, 'x3')).toContain('핸드카 정찰');
+    expect(restoreBlock(g, 'x3')).toContain('수동차 정찰');
     expect(restoreBlock(g, 'w3')).toContain('사냥과 방어');
     expect(prereqs('e4')).toEqual(['e2', 'e3']);
   });
