@@ -2522,17 +2522,24 @@ static func _apply_person_stride(ctx: Dictionary, layer: String) -> void:
 			body.set_bone_pose_rotation(bone, mean)
 
 
-static func _person_stride_round(ctx: Dictionary, entry: Array, shift: float = 0.0) -> float:
+## Where each foot is over a round, on the fine grid (PERSON_PHASE_SAMPLES). A round
+## measured on the bake's own few frames moves with where they fall in the loop
+## (up to 5 % on a run at 24 frames); on this grid it is the motion's own.
+static func _person_stride_reach(ctx: Dictionary, entry: Array, shift: float = 0.0) -> Array:
 	var reach := [[], []]
-	for f in int(entry[2]):
-		pose(ctx, entry[1], entry[4], fposmod(float(f) / float(entry[2]) + shift, 1.0), entry[0])
+	for f in PERSON_PHASE_SAMPLES:
+		pose(ctx, entry[1], entry[4], fposmod(float(f) / float(PERSON_PHASE_SAMPLES) + shift, 1.0), entry[0])
 		_note_reach(ctx, entry[0], reach)
-	return _round(reach)
+	return reach
+
+
+static func _person_stride_round(ctx: Dictionary, entry: Array, shift: float = 0.0) -> float:
+	return _round(_person_stride_reach(ctx, entry, shift))
 
 
 ## A new fit for this body and this clip, including motions retargeted from
-## a source in future. The sampler and the saved round use the same poses.
-static func _fit_person_stride(ctx: Dictionary, entry: Array, shift: float = 0.0) -> void:
+## a source in future. The sampler and the saved round use the same fine grid.
+static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
 	var name: String = entry[0]
 	var layer: String = entry[4]
 	var fits: Dictionary = ctx.get("stride_fits", {})
@@ -2548,8 +2555,8 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array, shift: float = 0.0
 		bones.append(_bone(body, bone_name))
 		samples.append([])
 	var reach := [[], []]
-	for f in int(entry[2]):
-		pose(ctx, entry[1], layer, fposmod(float(f) / float(entry[2]) + shift, 1.0), name)
+	for f in PERSON_PHASE_SAMPLES:
+		pose(ctx, entry[1], layer, float(f) / float(PERSON_PHASE_SAMPLES), name)
 		_note_reach(ctx, name, reach)
 		for n in bones.size():
 			samples[n].append(body.get_bone_pose_rotation(bones[n]))
@@ -2576,7 +2583,7 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array, shift: float = 0.0
 			ctx.get_or_add("fit_failures", []).append("STRIDE_STOP " + name)
 			return
 		fit["scale"] = needed
-		measured = _person_stride_round(ctx, entry, shift)
+		measured = _person_stride_round(ctx, entry)
 		if absf(measured - target) <= target * STRIDE_TOLERANCE:
 			break
 	var status := "STRIDE" if absf(measured - target) <= target * STRIDE_TOLERANCE else "STRIDE_UNFIT"
@@ -2585,17 +2592,25 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array, shift: float = 0.0
 		ctx.get_or_add("fit_failures", []).append("STRIDE_UNFIT " + name)
 
 
-## This reach comes from the exact frames handed to the VAT builder.
-## Never substitute a rule target or a measurement from before the shift.
+## This reach comes from the final legs on the fine grid; the saved frames are
+## samples of that motion and the shader blends between them. Never substitute
+## a rule target for the measurement.
 static func _check_person_stride_final(ctx: Dictionary, name: String, reach: Array) -> float:
 	var measured: float = _round(reach)
 	if PERSON_STRIDE_ROUNDS.has(name):
 		var target: float = PERSON_STRIDE_ROUNDS[name]
+		var failures: Array = ctx.get_or_add("fit_failures", [])
 		if not is_finite(measured) or absf(measured - target) > target * STRIDE_TOLERANCE:
 			var failure: String = "STRIDE_FINAL %s round %.6f target %.6f relative_error %.6f limit %.6f" % [name, measured, target, absf(measured - target) / target, STRIDE_TOLERANCE]
-			var failures: Array = ctx.get_or_add("fit_failures", [])
 			failures.append(failure)
 			print(failure)
+		# The mean leaves out a foot that never goes back; both must.
+		var left: float = round_of(reach[0])
+		var right: float = round_of(reach[1])
+		if left <= ROUND_LEAST or right <= ROUND_LEAST:
+			var one_foot: String = "STRIDE_FINAL %s one_foot left %.6f right %.6f" % [name, left, right]
+			failures.append(one_foot)
+			print(one_foot)
 	return measured
 
 
@@ -2615,19 +2630,33 @@ static func person_sole_vertices(rest: PackedVector3Array) -> Array:
 
 ## First downward entry into the lowest centimetre, including the loop seam.
 ## Interpolate the crossing between samples; -1 means no airborne-to-ground entry.
+## A sample may hold one height per sole vertex (PackedFloat32Array): the shader
+## moves each vertex on its own straight line between frames, so the entry is the
+## first vertex's own crossing, not that of the two frames' lowest points joined.
 static func person_contact_phase(heights: Array) -> float:
 	if heights.size() < 2:
 		return -1.0
-	for height: float in heights:
-		if not is_finite(height):
+	var lows: Array[float] = []
+	for sample: Variant in heights:
+		var low := _lowest_sole_height(sample)
+		if not is_finite(low):
 			return -1.0
-	var threshold := float(heights.min()) + PERSON_CONTACT_HEIGHT
-	for f in heights.size():
-		var previous := float(heights[(f + heights.size() - 1) % heights.size()])
-		var current := float(heights[f])
+		lows.append(low)
+	var threshold := float(lows.min()) + PERSON_CONTACT_HEIGHT
+	for f in lows.size():
+		var p := (f + lows.size() - 1) % lows.size()
+		var previous := lows[p]
+		var current := lows[f]
 		if previous > threshold and current <= threshold:
 			var fraction := (previous - threshold) / (previous - current)
-			return fposmod((float(f - 1) + fraction) / float(heights.size()), 1.0)
+			if typeof(heights[f]) == TYPE_PACKED_FLOAT32_ARRAY:
+				var before: PackedFloat32Array = heights[p]
+				var after: PackedFloat32Array = heights[f]
+				fraction = 1.0
+				for v in after.size():
+					if after[v] <= threshold and before[v] > threshold:
+						fraction = minf(fraction, (before[v] - threshold) / (before[v] - after[v]))
+			return fposmod((float(f - 1) + fraction) / float(lows.size()), 1.0)
 	return -1.0
 
 
@@ -2679,6 +2708,18 @@ static func _person_step_off(ctx: Dictionary, frames: Array) -> Array:
 	return result
 
 
+static func _lowest_sole_height(sample: Variant) -> float:
+	if typeof(sample) != TYPE_PACKED_FLOAT32_ARRAY:
+		return float(sample)
+	var values: PackedFloat32Array = sample
+	var low := INF
+	for height: float in values:
+		if not is_finite(height):
+			return NAN
+		low = minf(low, height)
+	return low
+
+
 ## The output samples source(u + shift). Minimise the larger circular error,
 ## considering either foot order, and split any spacing mismatch equally.
 static func person_phase_shift(left: float, right: float) -> float:
@@ -2708,7 +2749,8 @@ static func _person_sole_heights(ctx: Dictionary, entry: Array) -> Array:
 
 ## Reuse the same fixed body soles and skinning for the fit and final check.
 ## With a shell, frames still transform the original body's saved source skin.
-static func _person_sole_heights_from_frames(ctx: Dictionary, frames: Array) -> Array:
+## per_vertex keeps every sole vertex's height (for the few saved frames).
+static func _person_sole_heights_from_frames(ctx: Dictionary, frames: Array, per_vertex: bool = false) -> Array:
 	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var source: Array = mesh_node.get_meta(PERSON_PHASE_SOURCE) if mesh_node.has_meta(PERSON_PHASE_SOURCE) else mesh_node.mesh.surface_get_arrays(0)
 	var rest: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
@@ -2722,6 +2764,7 @@ static func _person_sole_heights_from_frames(ctx: Dictionary, frames: Array) -> 
 	for skin: Array in frames:
 		for side in 2:
 			var lowest := INF
+			var each := PackedFloat32Array()
 			for vertex: int in soles[side]:
 				var moved := Vector3.ZERO
 				var weight_sum := 0.0
@@ -2732,7 +2775,11 @@ static func _person_sole_heights_from_frames(ctx: Dictionary, frames: Array) -> 
 						weight_sum += weight
 				var point := moved / weight_sum if weight_sum > 0.0 else rest[vertex]
 				lowest = minf(lowest, point.y)
-			heights[side].append(lowest)
+				each.append(point.y)
+			if per_vertex:
+				heights[side].append(each)
+			else:
+				heights[side].append(lowest)
 	return heights
 
 
@@ -3978,12 +4025,8 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 	for entry: Array in list:
 		_fit_person_stride(ctx, entry)
 		var phase := _fit_person_phase(ctx, entry)
-		if not phase.is_empty():
-			# Keep the shared phase fixed, then refit from the ORIGINAL leg
-			# rotations on the output grid. Bounds remain total, not compounded.
-			_fit_person_stride(ctx, entry, float(phase["shift"]))
-		# The foot lock and pelvis table follow the shifted phase and refit stride;
-		# the final phase and stride checks below read the locked, saved frames.
+		# The foot lock and pelvis table follow the phase on the fitted stride;
+		# the final phase check below reads the locked, saved frames.
 		var footlock := _fit_person_footlock(ctx, entry, phase)
 		var footlock_stats: Array = _person_footlock_stats() if not footlock.is_empty() else []
 		var head_yaws := []
@@ -4010,8 +4053,15 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 			_print_person_footlock(entry[0], footlock, footlock_stats)
 		var length := float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length * _span_share(entry[4])
 		if not phase.is_empty():
-			_check_person_phase_final(ctx, entry[0], _person_sole_heights_from_frames(ctx, frames))
-		var stride_round: float = _check_person_stride_final(ctx, entry[0], reach)
+			_check_person_phase_final(ctx, entry[0], _person_sole_heights_from_frames(ctx, frames, true))
+		var stride_round: float = _round(reach)
+		if PERSON_STRIDE_ROUNDS.has(entry[0]):
+			var grid_round := stride_round
+			var fine := _person_stride_reach(ctx, entry)
+			stride_round = _check_person_stride_final(ctx, entry[0], fine)
+			# For the record: the same legs measured from where the saved loop starts, and each foot.
+			var at_shift := _person_stride_round(ctx, entry, float(phase["shift"])) if not phase.is_empty() else stride_round
+			print("STRIDE_SAVED %s round %.6f at_shift %.6f frames_round %.6f left %.6f right %.6f" % [entry[0], stride_round, at_shift, grid_round, round_of(fine[0]), round_of(fine[1])])
 		var clip := {"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0, "head_yaw": _head_yaw_stats(head_yaws)}
 		if PERSON_STRIDE_ROUNDS.has(entry[0]):
 			var step_off := _person_step_off(ctx, frames)

@@ -5,7 +5,8 @@ extends SceneTree
 ## --set=person bakes the living people's motions (BodyBake.PERSON_CLIPS, no still poses) instead of the dead's;
 ## those from a motion set need the motion files, so "-" is refused for it.
 ## --small writes the compacted bake (BodyBake.compact) the phone build carries;
-## --keep names the clips that keep every frame in it.
+## --keep names the clips that keep every frame in it (with --set=person and no --keep: BodyBake.PERSON_KEEP,
+## so the walks and runs the bake checked keep their frames).
 ## --shell=<kind> bakes a garment (BodyBake.SHELLS) cut from the body, or a bag on its back
 ## (BodyBake.BAG_SHELLS), instead of the body:
 ## the same skin and motions, so it is drawn over a body baked with the same --set and --keep.
@@ -44,6 +45,8 @@ func _init() -> void:
 		print("the living's motions take some from a motion set: give the motion files")
 		quit(1)
 		return
+	if person and keep.is_empty():
+		keep = BodyBake.PERSON_KEEP.duplicate()
 	var body_root := BodyBake.load_glb(paths[0]) as Node3D
 	var motion_roots: Array = []
 	if not own:
