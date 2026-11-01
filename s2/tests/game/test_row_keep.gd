@@ -119,7 +119,8 @@ func test_removed_id_renames_blocks_every_child_and_frees_after_its_fade() -> vo
 	_step(leaving, RowKeep.REMOVE_S * 0.5)
 	assert_true(is_instance_valid(leaving))
 	assert_gt(leaving.modulate.a, 0.0)
-	_step(leaving, RowKeep.REMOVE_S * 0.5)
+	# A step that ends exactly on the fade's end leaves the callback after it for the next step.
+	_step(leaving, RowKeep.REMOVE_S * 0.5 + 0.001)
 	assert_almost_eq(leaving.modulate.a, 0.0, 0.00001)
 	assert_true(leaving.is_queued_for_deletion())
 	await wait_process_frames(1)
