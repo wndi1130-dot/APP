@@ -1581,6 +1581,8 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 ## all), made again from the map as it is now.
 static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 	var place_id := String(map.get("place_id", ""))
+	if StoryMaps.is_story(place_id):
+		return map
 	if not map.has("side_path") and place_id not in ["", SidePath.FIRST_STOP] and SidePath.rolls(place_id, run_seed):
 		for key in AHEAD_KEYS:
 			map.erase(key)

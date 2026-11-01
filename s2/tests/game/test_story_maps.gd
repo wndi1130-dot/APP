@@ -54,6 +54,17 @@ func test_story_registry_only_lists_scripts_that_exist() -> void:
 		assert_false(FieldMaps.has(id), id)
 
 
+func test_existing_story_scripts_keep_their_names_and_borrowed_kinds() -> void:
+	var ids := FieldMaps.story_ids()
+	if ids.is_empty():
+		pass_test("No story map files yet.")
+		return
+	for id in ids:
+		var data := FieldMaps.build(id)
+		assert_eq(data["place_id"], id, id)
+		assert_eq(data["place_kind"], StoryMaps.base_of(id), id)
+
+
 func test_story_bands_and_building_groups_come_from_their_own_stop_and_base() -> void:
 	assert_eq(RouteBands.band_of("story_02", "prologue", 1), "K10")
 	assert_eq(RouteBands.band_of("story_03", "prologue", 1), "K10")
@@ -114,11 +125,14 @@ func test_story_names_skip_the_ring_but_a_normal_name_still_grows() -> void:
 		var kept := MapRing.add(data)
 		assert_true(is_same(kept, data), id)
 		assert_eq_deep(_ground(kept), before)
-	var normal: Dictionary = StoryFixture.build()
-	normal["place_id"] = "freight_01"
-	var size: Vector2i = _ground(normal)["size"]
-	var grown := MapRing.add(normal)
-	assert_eq(_ground(grown)["size"], size + Vector2i(60, 60))
+	for kind: String in ["freight", "office"]:
+		var normal: Dictionary = StoryFixture.build()
+		normal["place_id"] = kind + "_01"
+		normal["place_kind"] = kind
+		var size: Vector2i = _ground(normal)["size"]
+		var grown := MapRing.add(normal)
+		assert_eq(_ground(grown)["size"], size + Vector2i(60, 60), kind)
+		assert_eq(grown["place_kind"], kind)
 
 
 func _side_seed(id: String) -> int:
@@ -139,6 +153,23 @@ func test_story_names_keep_their_ground_even_when_a_side_path_rolls() -> void:
 		var kept := SidePath.add(data, run_seed)
 		assert_true(is_same(kept, data), id)
 		assert_eq_deep(_ground(kept), before)
+		assert_false(kept.has("side_path"), id)
+
+
+func test_field_side_path_keeps_story_ahead_data_when_a_side_path_rolls() -> void:
+	for id: String in StoryMaps.BASE:
+		var data: Dictionary = StoryFixture.build()
+		data["place_id"] = id
+		for key: String in FieldGame.AHEAD_KEYS:
+			data[key] = "made ahead: " + key
+		var before := _ground(data)
+		var run_seed := _side_seed(id)
+		assert_true(SidePath.rolls(id, run_seed))
+		var kept := FieldGame.with_side_path(data, run_seed)
+		assert_true(is_same(kept, data), id)
+		assert_eq_deep(_ground(kept), before)
+		for key: String in FieldGame.AHEAD_KEYS:
+			assert_eq(kept.get(key), "made ahead: " + key, key)
 		assert_false(kept.has("side_path"), id)
 
 
