@@ -43,6 +43,16 @@ func _assert_rejected(g: Dictionary, departure: Dictionary, input: Variant, expe
 	return out
 
 
+## Rejected for any reason the checks give, the board untouched.
+func _assert_rejected_any(g: Dictionary, departure: Dictionary, input: Variant) -> void:
+	var before: String = JSON.stringify(g)
+	var out: Dictionary = FieldReturn.apply_field_return(g, _tables, departure, input)
+	assert_eq(out["status"], "rejected", "rejected: %s" % [input])
+	assert_false((out.get("problems", []) as Array).is_empty())
+	assert_eq(JSON.stringify(out["g"]), before)
+	assert_eq(JSON.stringify(g), before)
+
+
 func test_other_receipt_id_for_same_stop_is_rejected_without_adding_stock() -> void:
 	var row: Dictionary = _case()
 	var receipt: Dictionary = row["receipt"]
@@ -131,6 +141,78 @@ func test_departure_validation_precedes_already_applied_stop() -> void:
 	_assert_rejected(once["g"], {}, receipt, FieldReturn.check_departure({}, _tables))
 	receipt["departureId"] = "dep_other"
 	_assert_rejected(once["g"], row["departure"], receipt, FieldReturn.match_departure(row["departure"], receipt))
+
+
+func test_same_stop_alone_or_same_departure_alone_is_rejected() -> void:
+	var row: Dictionary = _case()
+	var receipt: Dictionary = row["receipt"]
+	receipt["stock"]["coal"] = 7
+	var once: Dictionary = FieldReturn.apply_field_return(row["g"], _tables, row["departure"], receipt)
+	assert_eq(once["status"], "applied")
+	# Same stop, another departure.
+	var by_stop: Dictionary = receipt.duplicate(true)
+	var stop_departure: Dictionary = (row["departure"] as Dictionary).duplicate(true)
+	by_stop["receiptId"] = "ret_by_stop"
+	by_stop["departureId"] = "dep_by_stop"
+	stop_departure["departureId"] = "dep_by_stop"
+	assert_eq(FieldReturn.check_departure(stop_departure, _tables), [] as Array[String])
+	assert_eq(FieldReturn.match_departure(stop_departure, by_stop), [] as Array[String])
+	_assert_rejected(once["g"], stop_departure, by_stop, ["이미 반영한 정차에 다른 영수증이 왔다"])
+	# Another stop, the same departure.
+	var by_departure: Dictionary = receipt.duplicate(true)
+	var departure_departure: Dictionary = (row["departure"] as Dictionary).duplicate(true)
+	by_departure["receiptId"] = "ret_by_departure"
+	by_departure["stopId"] = "stop_other"
+	departure_departure["stopId"] = "stop_other"
+	assert_eq(FieldReturn.check_departure(departure_departure, _tables), [] as Array[String])
+	assert_eq(FieldReturn.match_departure(departure_departure, by_departure), [] as Array[String])
+	_assert_rejected(once["g"], departure_departure, by_departure, ["이미 반영한 정차에 다른 영수증이 왔다"])
+
+
+func test_mistyped_departure_rows_are_rejected_not_stopped() -> void:
+	var row: Dictionary = _case()
+	var bad: Array = [
+		["promises", ["bad"]],
+		["promises", "bad"],
+		["roster", ["bad"]],
+		["roster", null],
+		["version", null],
+		["version", "1"],
+	]
+	for change: Array in bad:
+		var departure: Dictionary = (row["departure"] as Dictionary).duplicate(true)
+		departure[change[0]] = change[1]
+		var expected: Array[String] = FieldReturn.check_departure(departure, _tables)
+		assert_false(expected.is_empty(), "%s = %s is a problem" % change)
+		_assert_rejected(row["g"], departure, row["receipt"], expected)
+	var subjects: Dictionary = (row["departure"] as Dictionary).duplicate(true)
+	if not (subjects["promises"] as Array).is_empty():
+		subjects["promises"][0]["subjects"] = "bad"
+		_assert_rejected(row["g"], subjects, row["receipt"], FieldReturn.check_departure(subjects, _tables))
+
+
+func test_receipts_without_a_whole_return_version_are_rejected() -> void:
+	var row: Dictionary = _case()
+	for version: Variant in ["missing", null, "4", [], {}, 4.5]:
+		var receipt: Dictionary = (row["receipt"] as Dictionary).duplicate(true)
+		if version is String and version == "missing":
+			receipt.erase("version")
+		else:
+			receipt["version"] = version
+		_assert_rejected_any(row["g"], row["departure"], receipt)
+		_assert_rejected_any(row["g"], row["departure"], JSON.stringify(receipt))
+
+
+func test_applied_fingerprint_without_its_record_is_still_duplicate() -> void:
+	var row: Dictionary = _case()
+	var once: Dictionary = FieldReturn.apply_field_return(row["g"], _tables, row["departure"], row["receipt"])
+	assert_eq(once["status"], "applied")
+	var g: Dictionary = (once["g"] as Dictionary).duplicate(true)
+	g["fieldReturns"]["records"] = []
+	var before: String = JSON.stringify(g)
+	var out: Dictionary = FieldReturn.apply_field_return(g, _tables, row["departure"], row["receipt"])
+	assert_eq(out["status"], "duplicate", "S1 answers duplicate on the fingerprint alone")
+	assert_eq(JSON.stringify(out["g"]), before)
 
 
 func test_slice_rejection_preserves_board_receipt_and_result() -> void:

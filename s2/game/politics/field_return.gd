@@ -232,22 +232,31 @@ static func check_departure(departure: Dictionary, t: Dictionary) -> Array[Strin
 			out.append("출발 명세에 %s 칸이 없다" % key)
 	if not out.is_empty():
 		return out
-	var version := int(departure["version"])
+	# A release build runs no asserts: a mistyped contract is a problem here, never a typed loop that stops.
+	var numeric: bool = departure["version"] is int or departure["version"] is float
+	var version: int = int(departure["version"]) if numeric else 0
 	if (version != 1 and version != 2) or (version == 2 and not departure.get("workCrew") is Array) or not _valid_id(departure["departureId"]) or not _valid_id(departure["stopId"]) or not _valid_id(departure["placeId"]):
 		out.append("출발 명세가 올바르지 않다")
 	if not departure["segment"] is int and not departure["segment"] is float:
 		out.append("출발 구간이 수가 아니다")
 	elif float(departure["segment"]) != floorf(float(departure["segment"])) or int(departure["segment"]) < 0:
 		out.append("출발 구간이 올바르지 않다")
-	var roster_ids := {}
-	for row: Dictionary in FieldDeparture.people_of(departure):
-		if not _valid_id(row.get("id")) or not (t["COMMS"] as Array).has(row.get("comm")) or roster_ids.has(row.get("id")):
+	if numeric:
+		if not _dict_rows(departure["roster"]) or (version == 2 and not _dict_rows(departure.get("workCrew"))):
 			out.append("출발 명단이 올바르지 않다")
-			break
-		roster_ids[row["id"]] = true
+		else:
+			var roster_ids := {}
+			for row: Dictionary in FieldDeparture.people_of(departure):
+				if not _valid_id(row.get("id")) or not (t["COMMS"] as Array).has(row.get("comm")) or roster_ids.has(row.get("id")):
+					out.append("출발 명단이 올바르지 않다")
+					break
+				roster_ids[row["id"]] = true
+	if not _dict_rows(departure["promises"]):
+		out.append("출발 약속이 올바르지 않다")
+		return out
 	var promise_ids := {}
 	for promise: Dictionary in departure["promises"]:
-		if not _valid_id(promise.get("id")) or not FIELD_PROMISE_KINDS.has(promise.get("kind")) or not (t["COMMS"] as Array).has(promise.get("madeTo")) or promise_ids.has(promise.get("id")):
+		if not _valid_id(promise.get("id")) or not FIELD_PROMISE_KINDS.has(promise.get("kind")) or not (t["COMMS"] as Array).has(promise.get("madeTo")) or promise_ids.has(promise.get("id")) or not promise.get("subjects", []) is Array:
 			out.append("출발 약속이 올바르지 않다")
 			break
 		for subject: Variant in promise.get("subjects", []):
@@ -256,6 +265,16 @@ static func check_departure(departure: Dictionary, t: Dictionary) -> Array[Strin
 				break
 		promise_ids[promise["id"]] = true
 	return out
+
+
+## An array whose every row is a dictionary (a departure's roster, work crew or promises).
+static func _dict_rows(value: Variant) -> bool:
+	if not value is Array:
+		return false
+	for row: Variant in value:
+		if not row is Dictionary:
+			return false
+	return true
 
 
 static func match_departure(departure: Dictionary, receipt: Dictionary) -> Array[String]:
@@ -570,6 +589,8 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		for record: Dictionary in g["fieldReturns"]["records"]:
 			if record["receiptId"] == receipt["receiptId"]:
 				return {"status": "duplicate", "record": record, "g": g}
+		# S1 answers duplicate on the fingerprint alone, even where the record row is missing.
+		return {"status": "duplicate", "record": {}, "g": g}
 	problems = check_departure(departure, t)
 	if not problems.is_empty():
 		return {"status": "rejected", "problems": problems, "g": g}
