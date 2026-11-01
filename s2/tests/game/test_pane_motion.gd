@@ -536,7 +536,10 @@ func test_hoq_two_fingers_and_a_lift_after_closing_leak_nothing() -> void:
 	assert_eq(p.swing_t, 0.0)
 	assert_false(p.hold_attack)
 	assert_true(hud.modal_open)
-	await get_tree().create_timer(0.4).timeout
+	# Both holds 400 ms old on the clock the tap rule reads (a timer's first tick
+	# can carry a whole busy frame, so waiting one is not the same).
+	for held: int in [0, 1]:
+		hud.modal_fingers[held]["ms"] = Time.get_ticks_msec() - 400
 	_touch(hud, attack, false, 1)
 	_touch(hud, stick + Vector2(hud.STICK_R, 0.0), false, 0)
 	assert_true(hud.modal_open, "long holds never fold the pane")
@@ -553,3 +556,69 @@ func test_hoq_two_fingers_and_a_lift_after_closing_leak_nothing() -> void:
 	assert_false(p.hold_attack)
 	assert_eq(p.position, before)
 	_assert_no_field_input(hud)
+
+
+func _frames_until_still(pane: GlassPane) -> int:
+	var frames: int = 0
+	while is_instance_valid(pane) and pane.is_sliding() and frames < 120:
+		await get_tree().process_frame
+		frames += 1
+	return frames
+
+
+## The slide runs on the pane's own frames: no hand stepping, it comes in, says so
+## once, stops processing, and on close leaves and is freed the same way.
+func test_real_frames_bring_the_bag_in_and_out_once() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	var pane: GlassPane = hud.modal_pane
+	var settled: Array[int] = [0]
+	var gone: Array[int] = [0]
+	pane.motion_finished.connect(func() -> void: settled[0] += 1)
+	pane.left.connect(func() -> void: gone[0] += 1)
+	assert_true(pane.is_processing())
+	var frames: int = await _frames_until_still(pane)
+	assert_between(frames, 4, 120, "the pane's own frames bring it in")
+	assert_false(pane.is_sliding())
+	assert_almost_eq(pane.position.x, pane.resting_position().x, 0.5)
+	assert_eq(settled[0], 1)
+	assert_false(pane.is_processing(), "a pane at rest costs no frame")
+	var old: Control = hud.modal
+	pane.folded.emit()
+	assert_true(pane.is_processing())
+	assert_between(await _frames_until_still(pane), 3, 120, "and take it out")
+	await get_tree().process_frame
+	assert_eq(gone[0], 1)
+	assert_eq(settled[0], 1)
+	assert_null(hud.closing_modal)
+	assert_false(is_instance_valid(old))
+
+
+## A key that was off when the finger came down presses nothing on the lift,
+## even if it woke meanwhile; one that was on still works.
+func test_a_key_off_at_the_touch_stays_unpressed_when_it_wakes() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	await _settle()
+	var key: Button = null
+	for node: Node in hud.modal_pane.find_children("*", "Button", true, false):
+		var b: Button = node as Button
+		if b.is_visible_in_tree() and b.mouse_filter != Control.MOUSE_FILTER_IGNORE and b.size.x > 8.0:
+			key = b
+			break
+	assert_not_null(key)
+	var presses: Array[int] = [0]
+	key.pressed.connect(func() -> void: presses[0] += 1)
+	var at: Vector2 = key.get_global_rect().get_center()
+	key.disabled = true
+	_touch(hud, at, true, 1)
+	key.disabled = false
+	_touch(hud, at, false, 1)
+	assert_eq(presses[0], 0, "the lift of a press that began on an off key does nothing")
+	if not is_instance_valid(key) or not key.is_visible_in_tree():
+		return
+	_touch(hud, at, true, 1)
+	_touch(hud, at, false, 1)
+	assert_eq(presses[0], 1, "the same key pressed while on still works")

@@ -3919,7 +3919,7 @@ func finger_down(index: int, pos: Vector2) -> bool:
 	var ui := _button_at(pos)
 	if ui != null:
 		if index != 0:
-			fingers[index] = {"kind": "button", "button": ui, "start": pos}
+			fingers[index] = {"kind": "button", "button": ui, "start": pos, "off": ui.disabled}
 			return true
 		return false
 	# Nothing drawn under the finger: a small key whose 48 dp skirt holds it
@@ -3933,7 +3933,7 @@ func finger_down(index: int, pos: Vector2) -> bool:
 		elif near == portrait:
 			fingers[index] = {"kind": "portrait", "start": pos}
 		elif near is Button:
-			fingers[index] = {"kind": "button", "button": near, "start": pos}
+			fingers[index] = {"kind": "button", "button": near, "start": pos, "off": (near as Button).disabled}
 		else:
 			fingers[index] = {"kind": "fold", "start": pos, "glass": near}
 		return true
@@ -4023,7 +4023,8 @@ func _modal_input(event: InputEvent) -> bool:
 		if manual:
 			var under: Dictionary = _pane_under(modal, pos)
 			var list: ScrollContainer = under["scroll"]
-			fingers[index] = {"kind": "button", "button": under["button"], "start": pos, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false}
+			var key: Button = under["button"]
+			fingers[index] = {"kind": "button", "button": key, "start": pos, "off": key != null and key.disabled, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false}
 			return true
 		return false
 	if not modal_fingers.has(index):
@@ -4112,9 +4113,10 @@ func finger_up(index: int, pos: Vector2) -> bool:
 			_pad_up(f["pad"], pos, f)
 		"button":
 			# A bag pane finger may hold no key (a gap in a list), or one laid away
-			# since, or have dragged its list: then the lift presses nothing.
+			# since, or have dragged its list, or have come down on a key still off
+			# (it may wake before the lift): then the lift presses nothing.
 			var held: Variant = f["button"]
-			if not is_instance_valid(held) or f.get("dragged", false):
+			if not is_instance_valid(held) or f.get("dragged", false) or f.get("off", false):
 				return true
 			var b: Button = held
 			if not b.disabled and b.is_visible_in_tree() and touch_rect(b).has_point(pos):
