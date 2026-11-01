@@ -394,6 +394,82 @@ func test_folded_turn_paper_retires_in_the_folded_span() -> void:
 	await _check_paper_retirement(true)
 
 
+func test_freeing_the_train_stops_its_pending_cover_motion() -> void:
+	var f: SliceFlow = _flow()
+	f.train.set_view_mode("diag")
+	f._select("")
+	var cover: Tween = f._cover_tween
+	assert_true(cover.is_valid())
+	var old_train: Node3D = f.train
+	f.train = null
+	old_train.queue_free()
+	await get_tree().process_frame
+	assert_false(is_instance_valid(old_train))
+	# GUT also rejects any freed-capture errors on the tween's next frame.
+	await get_tree().process_frame
+	assert_true(is_instance_valid(f))
+	assert_eq(f._cover_tween, cover)
+	assert_false(f._cover_tween.is_valid())
+
+
+func test_retiring_turn_paper_stops_layout_and_ignores_old_choices() -> void:
+	var f: SliceFlow = _flow()
+	var old: Control = f.paper
+	var sheet: Control = old.get("sheet") as Control
+	var children: Array[Node] = old.get_children()
+	old.set_process(true)
+	var leaving: Tween = f._drop_paper()
+	assert_false(old.is_processing(), "layout retries cannot create new active buttons")
+	assert_false(old.is_connected("chose", f._paper_chosen))
+	assert_false(old.is_connected("fold_changed", f._paper_folded))
+	f._show_paper()
+	var replacement: Control = f.paper
+	var state: Dictionary = f.train_g.duplicate(true)
+	old.emit_signal("chose", state.duplicate(true))
+	assert_eq(f.paper, replacement, "a late choice cannot replace the current paper")
+	assert_eq(f.train_g, state)
+	leaving.custom_step(SliceFlow.PAPER_OPEN_CLOSE_S * 0.5)
+	assert_eq(old.get("sheet"), sheet)
+	assert_eq(old.get_children(), children)
+	_assert_quiet(old)
+	leaving.custom_step(SliceFlow.PAPER_OPEN_CLOSE_S)
+	assert_true(old.is_queued_for_deletion())
+
+
+func test_arrival_slip_follows_the_sheet_alpha_on_entry_and_retirement() -> void:
+	var f: SliceFlow = _flow()
+	f.go(f._index_of("arrive"))
+	var c: Control = f.card
+	var sheet: Control = c.get("sheet") as Control
+	var slip: Control = c.get("slip") as Control
+	assert_not_null(slip)
+	var at: Vector2 = slip.position
+	var turn: float = slip.rotation
+	var size: Vector2 = slip.size
+	assert_eq(slip.modulate.a, 0.0, "the slip cannot appear ahead of its sheet")
+	var entering: Tween = sheet.get_meta(PaperMotion.META_TWEEN) as Tween
+	entering.custom_step(PaperMotion.OPEN_S * 0.06)
+	assert_gt(sheet.modulate.a, 0.0)
+	assert_lt(sheet.modulate.a, 1.0)
+	assert_eq(slip.modulate.a, sheet.modulate.a)
+	entering.custom_step(PaperMotion.OPEN_S)
+	assert_eq(slip.modulate.a, 1.0)
+	var leaving: Tween = f._retire_card(c)
+	leaving.custom_step(PaperMotion.CLOSE_S * 0.9)
+	assert_gt(sheet.modulate.a, 0.0)
+	assert_lt(sheet.modulate.a, 1.0)
+	assert_eq(slip.modulate.a, sheet.modulate.a)
+	assert_eq(slip.position, at)
+	assert_eq(slip.rotation, turn)
+	assert_eq(slip.size, size)
+	leaving.custom_step(PaperMotion.CLOSE_S)
+	assert_eq(slip.modulate.a, 0.0, "no slip remains visible after its sheet leaves")
+	assert_true(c.is_queued_for_deletion())
+	await get_tree().process_frame
+	assert_false(is_instance_valid(c))
+	assert_false(is_instance_valid(slip))
+
+
 func test_freeing_the_flow_stops_its_pending_motions() -> void:
 	var f: SliceFlow = _flow()
 	f.train.set_view_mode("diag")

@@ -1064,6 +1064,13 @@ func _drop_paper() -> Tween:
 		_paper_folded(false)
 	if old == null:
 		return null
+	# Layout retries must not rebuild live controls while this paper leaves.
+	old.set_process(false)
+	var old_paper: TurnCard = old as TurnCard
+	if old_paper.chose.is_connected(_paper_chosen):
+		old_paper.chose.disconnect(_paper_chosen)
+	if old_paper.fold_changed.is_connected(_paper_folded):
+		old_paper.fold_changed.disconnect(_paper_folded)
 	PaneMotion.quiet(old, true)
 	var seconds: float = PAPER_FOLDED_CLOSE_S if was_folded else PAPER_OPEN_CLOSE_S
 	var tw: Tween = old.create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
@@ -1130,7 +1137,7 @@ func _move_cover(covered_px: float, left_px: float, seconds: float) -> void:
 	var from_px: float = float(train.get("pane_px"))
 	var cover_train: Node3D = train
 	train.set_pane(from_px, left_px)
-	_cover_tween = create_tween().set_trans(Tween.TRANS_CUBIC)
+	_cover_tween = cover_train.create_tween().set_trans(Tween.TRANS_CUBIC)
 	_cover_tween.set_ease(Tween.EASE_OUT if seconds == PaneMotion.OPEN_S else Tween.EASE_IN)
 	_cover_tween.tween_method(func(k: float) -> void:
 		if not is_instance_valid(cover_train) or cover_train != train or decor_id != "":
