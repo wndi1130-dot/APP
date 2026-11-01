@@ -1,6 +1,7 @@
 extends RefCounted
 ## One JSON save slot compatible with the S1a Game object. Invalid text is preserved in a separate
 ## slot; the original is never deleted by load_slot.
+## 새 저장을 옛 빌드로 읽기는 지원하지 않음(생필품 정산·give_sup 약속이 빠짐), 출시 전 개발판만.
 
 const SAVE_VERSION := 1
 const TrainDecor = preload("res://game/train/train_decor.gd")
@@ -65,6 +66,14 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 	for key: String in ["coal", "food", "med", "trust", "tension"]:
 		if not _is_number(g.get(key)):
 			return "수치가 이상하다: %s" % key
+	if g.has("supOn") and not g["supOn"] is bool: return "생필품 켜짐 값이 이상하다"
+	for key: String in ["sup", "supFine"]:
+		if g.has(key) and (not _is_number(g[key]) or float(g[key]) < 0.0): return "생필품 수치가 이상하다: " + key
+	if g.has("supCover"):
+		if not g["supCover"] is Dictionary: return "생필품 몫이 이상하다"
+		for comm: Variant in g["supCover"]:
+			var f: Variant = g["supCover"][comm]
+			if comm not in t["COMMS"] or not _is_number(f) or float(f) < 0.0 or float(f) > 1.0: return "생필품 몫이 이상하다: " + str(comm)
 	if not (g.get("comms") is Dictionary):
 		return "공동체 칸이 없다"
 	for comm: String in t["COMMS"]:
