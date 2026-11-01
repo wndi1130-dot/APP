@@ -358,7 +358,7 @@ func test_final_round_returns_measured_reach_and_rejects_wrong_strides_for_all_t
 				assert_true(failure.begins_with("STRIDE_FINAL " + clip + " "), failure)
 
 
-func test_shifted_stride_refits_on_the_saved_grid_and_bakes_that_round() -> void:
+func test_the_saved_round_is_the_motion_s_own_wherever_the_loop_starts() -> void:
 	var entry: Array = BodyBake.PERSON_CLIPS[1]
 	var probe: Node3D = _stick_body_with_two_soles()
 	add_child_autofree(probe)
@@ -367,6 +367,10 @@ func test_shifted_stride_refits_on_the_saved_grid_and_bakes_that_round() -> void
 	assert_gt(raw_round, 0.0)
 	if raw_round <= 0.0:
 		return
+	# A step-phase shift moves where the samples fall, not how far a foot goes back.
+	for shift: float in [0.13, 0.31, 0.5, 0.77]:
+		var shifted: float = BodyBake._person_stride_round(probe_ctx, entry, shift)
+		assert_almost_eq(shifted, raw_round, raw_round * 0.001, "round at shift %.2f stays within 0.1 percent" % shift)
 	# Calibrate body size, not the fit bounds, so this stick is a valid input.
 	var root: Node3D = _stick_body_with_two_soles(float(BodyBake.PERSON_STRIDE_ROUNDS["p_run"]) / raw_round)
 	add_child_autofree(root)
@@ -377,12 +381,7 @@ func test_shifted_stride_refits_on_the_saved_grid_and_bakes_that_round() -> void
 	if assets.is_empty():
 		return
 	assert_eq(assets.get("fit_failures", []), [], "normal shifted stick gait passes the final gates")
-	var shift: float = ctx["phase_fits"]["p_run"]["shift"]
-	var reach: Array = [[], []]
-	for f in int(entry[2]):
-		BodyBake.pose(ctx, "", "p_run", fposmod(float(f) / float(entry[2]) + shift, 1.0))
-		BodyBake._note_reach(ctx, "p_run", reach)
-	assert_almost_eq(float(assets["clips"][0]["round"]), BodyBake._round(reach), 0.000001, "clips round is measured from the saved grid")
+	assert_almost_eq(float(assets["clips"][0]["round"]), BodyBake._person_stride_round(ctx, entry), 0.000001, "clips round is the final legs' round on the fine grid")
 
 
 func test_the_motions_written_here_alone_have_the_same_numbers_and_bake_with_no_motion_set() -> void:

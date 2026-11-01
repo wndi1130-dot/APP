@@ -2523,17 +2523,24 @@ static func _apply_person_stride(ctx: Dictionary, layer: String) -> void:
 			body.set_bone_pose_rotation(bone, mean)
 
 
-static func _person_stride_round(ctx: Dictionary, entry: Array, shift: float = 0.0) -> float:
+## Where each foot is over a round, on the fine grid (PERSON_PHASE_SAMPLES). A round
+## measured on the bake's own few frames moves with where they fall in the loop
+## (up to 5 % on a run at 24 frames); on this grid it is the motion's own.
+static func _person_stride_reach(ctx: Dictionary, entry: Array, shift: float = 0.0) -> Array:
 	var reach := [[], []]
-	for f in int(entry[2]):
-		pose(ctx, entry[1], entry[4], fposmod(float(f) / float(entry[2]) + shift, 1.0), entry[0])
+	for f in PERSON_PHASE_SAMPLES:
+		pose(ctx, entry[1], entry[4], fposmod(float(f) / float(PERSON_PHASE_SAMPLES) + shift, 1.0), entry[0])
 		_note_reach(ctx, entry[0], reach)
-	return _round(reach)
+	return reach
+
+
+static func _person_stride_round(ctx: Dictionary, entry: Array, shift: float = 0.0) -> float:
+	return _round(_person_stride_reach(ctx, entry, shift))
 
 
 ## A new fit for this body and this clip, including motions retargeted from
-## a source in future. The sampler and the saved round use the same poses.
-static func _fit_person_stride(ctx: Dictionary, entry: Array, shift: float = 0.0) -> void:
+## a source in future. The sampler and the saved round use the same fine grid.
+static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
 	var name: String = entry[0]
 	var layer: String = entry[4]
 	var fits: Dictionary = ctx.get("stride_fits", {})
@@ -2549,8 +2556,8 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array, shift: float = 0.0
 		bones.append(_bone(body, bone_name))
 		samples.append([])
 	var reach := [[], []]
-	for f in int(entry[2]):
-		pose(ctx, entry[1], layer, fposmod(float(f) / float(entry[2]) + shift, 1.0), name)
+	for f in PERSON_PHASE_SAMPLES:
+		pose(ctx, entry[1], layer, float(f) / float(PERSON_PHASE_SAMPLES), name)
 		_note_reach(ctx, name, reach)
 		for n in bones.size():
 			samples[n].append(body.get_bone_pose_rotation(bones[n]))
@@ -2577,7 +2584,7 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array, shift: float = 0.0
 			ctx.get_or_add("fit_failures", []).append("STRIDE_STOP " + name)
 			return
 		fit["scale"] = needed
-		measured = _person_stride_round(ctx, entry, shift)
+		measured = _person_stride_round(ctx, entry)
 		if absf(measured - target) <= target * STRIDE_TOLERANCE:
 			break
 	var status := "STRIDE" if absf(measured - target) <= target * STRIDE_TOLERANCE else "STRIDE_UNFIT"
@@ -2586,8 +2593,9 @@ static func _fit_person_stride(ctx: Dictionary, entry: Array, shift: float = 0.0
 		ctx.get_or_add("fit_failures", []).append("STRIDE_UNFIT " + name)
 
 
-## This reach comes from the exact frames handed to the VAT builder.
-## Never substitute a rule target or a measurement from before the shift.
+## This reach comes from the final legs on the fine grid; the saved frames are
+## samples of that motion and the shader blends between them. Never substitute
+## a rule target for the measurement.
 static func _check_person_stride_final(ctx: Dictionary, name: String, reach: Array) -> float:
 	var measured: float = _round(reach)
 	if PERSON_STRIDE_ROUNDS.has(name):
@@ -3391,10 +3399,6 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 	for entry: Array in list:
 		_fit_person_stride(ctx, entry)
 		var phase := _fit_person_phase(ctx, entry)
-		if not phase.is_empty():
-			# Keep the shared phase fixed, then refit from the ORIGINAL leg
-			# rotations on the output grid. Bounds remain total, not compounded.
-			_fit_person_stride(ctx, entry, float(phase["shift"]))
 		var count: int = entry[2]
 		var looped: bool = entry[3]
 		var frames := []
@@ -3410,7 +3414,11 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 		var length := float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length * _span_share(entry[4])
 		if not phase.is_empty():
 			_check_person_phase_final(ctx, entry[0], _person_sole_heights_from_frames(ctx, frames))
-		var stride_round: float = _check_person_stride_final(ctx, entry[0], reach)
+		var stride_round: float = _round(reach)
+		if PERSON_STRIDE_ROUNDS.has(entry[0]):
+			var grid_round := stride_round
+			stride_round = _check_person_stride_final(ctx, entry[0], _person_stride_reach(ctx, entry))
+			print("STRIDE_SAVED %s round %.6f frames_round %.6f" % [entry[0], stride_round, grid_round])
 		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0})
 	var still := []
 	for entry: Array in poses:
