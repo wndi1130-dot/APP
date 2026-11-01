@@ -72,6 +72,18 @@ func test_running_draws_a_ring_a_second_at_most_and_only_the_player() -> void:
 	assert_eq(game.ripples.rings.size(), 3, "a companion running draws none")
 
 
+func test_a_thin_ring_faint_at_night_and_a_little_stronger_by_day() -> void:
+	assert_almost_eq(SoundRipple.WIDTH, 0.09, 0.0001)
+	assert_almost_eq(SoundRipple.ALPHA, 0.15, 0.0001)
+	assert_almost_eq(SoundRipple.DAY_ALPHA, 0.30, 0.0001)
+	game.make_sound(game.player.position, SimNoise.Level.LOUD, "kick", game.player)
+	var mat: ShaderMaterial = game.ripples.rings[0]["mat"]
+	assert_almost_eq(float(mat.get_shader_parameter("night_alpha")), 0.15, 0.0001)
+	assert_almost_eq(float(mat.get_shader_parameter("day_alpha")), 0.30, 0.0001)
+	game.ripples.advance(0.3)
+	assert_almost_eq(float(mat.get_shader_parameter("fade")), 1.0, 0.0001, "held while it spreads")
+
+
 func test_envelope_fades_in_holds_and_fades_out_early() -> void:
 	assert_almost_eq(SoundRipple.envelope(0.0), 0.0, 0.0001)
 	assert_almost_eq(SoundRipple.envelope(0.06), 1.0, 0.0001)
@@ -79,6 +91,7 @@ func test_envelope_fades_in_holds_and_fades_out_early() -> void:
 	var fading: float = SoundRipple.envelope(0.65)
 	assert_gt(fading, 0.0)
 	assert_lt(fading, 1.0)
+	assert_almost_eq(SoundRipple.envelope(0.55), 0.5625, 0.0001, "(1 - u)^2: a quarter into the fade-out it is already down to 0.56")
 	assert_almost_eq(SoundRipple.envelope(0.85), 0.0, 0.0001)
 	assert_almost_eq(SoundRipple.envelope(0.9), 0.0, 0.0001)
 	assert_almost_eq(SoundRipple.envelope(1.0), 0.0, 0.0001)
