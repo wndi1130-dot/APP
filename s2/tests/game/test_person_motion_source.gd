@@ -157,12 +157,15 @@ func test_standing_feet_stay_within_one_centimetre() -> void:
 			continue
 		assert_true(float(clip["round"]) <= BodyBake.ROUND_LEAST, str(fixture["name"]) + " standing round")
 		assert_almost_eq(float(clip["length"]), 2.5, 0.0001, "UAL1 Idle_Loop length")
+		var footprint_low := INF
+		var footprint_high := -INF
 		for side in 2:
 			var sole: PackedInt32Array = fixture["soles"][side]
 			if sole.is_empty():
 				continue  # Missing soles already fail the fixture check.
 			var frames := _sample(fixture, clip, sole)
 			var greatest := 0.0
+			var greatest_distance := 0.0
 			var greatest_round := 0.0
 			# The sole stays on the floor (rest bottom y = 0): neither floating nor sunk.
 			var lowest := INF
@@ -171,6 +174,8 @@ func test_standing_feet_stay_within_one_centimetre() -> void:
 				var low_y := INF
 				for i in sole.size():
 					low_y = minf(low_y, points[i].y)
+					footprint_low = minf(footprint_low, points[i].z)
+					footprint_high = maxf(footprint_high, points[i].z)
 				lowest = minf(lowest, low_y)
 				highest_low = maxf(highest_low, low_y)
 			assert_true(lowest >= -0.01 and highest_low <= 0.015, "%s %s standing sole height %.4f..%.4f m within -0.01..0.015" % [fixture["name"], "L" if side == 0 else "R", lowest, highest_low])
@@ -185,10 +190,80 @@ func test_standing_feet_stay_within_one_centimetre() -> void:
 					zs.append(points[i].z)
 				var span := high - low
 				greatest = maxf(greatest, maxf(span.x, maxf(span.y, span.z)))
+				for a in frames.size():
+					for b in range(a + 1, frames.size()):
+						greatest_distance = maxf(greatest_distance, frames[a][i].distance_to(frames[b][i]))
 				greatest_round = maxf(greatest_round, BodyBake.round_of(zs))
 			var label := "%s %s sole (%d rest-bottom vertices)" % [fixture["name"], "L" if side == 0 else "R", sole.size()]
 			assert_true(greatest <= 0.01, "%s standing axis range %.6f m <= 0.01" % [label, greatest])
+			assert_true(greatest_distance <= 0.01, "%s standing 3D travel %.6f m <= 0.01" % [label, greatest_distance])
 			assert_true(greatest_round <= BodyBake.ROUND_LEAST, "%s standing round %.6f m" % [label, greatest_round])
+		assert_true(footprint_high - footprint_low <= 0.35, str(fixture["name"]) + " standing fixed sole z span <= 0.35 m")
+
+
+## VAT has no joints. This optional source fixture checks the knee/hip/stance
+## contract on the original rigs; the test above checks the baked soles.
+func _stand_source_scene(path: String) -> Node3D:
+	var document := GLTFDocument.new()
+	var state := GLTFState.new()
+	var error := document.append_from_file(path, state)
+	assert_eq(error, OK, path + " imports")
+	return document.generate_scene(state) as Node3D if error == OK else null
+
+
+func test_standing_source_support_is_upright_on_all_fourteen_rigs() -> void:
+	var directory := ProjectSettings.globalize_path("res://").path_join("../../_motion_src").simplify_path()
+	if not FileAccess.file_exists(directory.path_join("UAL1.glb")):
+		pending("standing joint checks require original _motion_src/UAL1.glb and 14 rigs")
+		return
+	var motion := _stand_source_scene(directory.path_join("UAL1.glb"))
+	if motion == null:
+		return
+	add_child(motion)
+	var names := ["driver", "duffel_b1v2", "fitter", "guard", "guard_f", "hunter_f", "lumberjack", "medic", "overalls", "railman_old", "seamstress", "sheepskin", "stoker", "woodsman"]
+	var checked := 0
+	for rig_name: String in names:
+		var root := _stand_source_scene(directory.path_join("rig").path_join(rig_name + ".glb"))
+		if root == null:
+			continue
+		add_child(root)
+		var ctx := BodyBake.prepare(root, motion, [BodyBake.PERSON_CLIPS[2]], [])
+		assert_false(ctx.is_empty(), rig_name + " standing context")
+		if ctx.is_empty():
+			root.queue_free()
+			continue
+		var body: Skeleton3D = ctx["body"]
+		var hips := BodyBake._bone(body, "hips")
+		# The old main sink is a zero-mean sine, so its mean hip height is rest.
+		var main_height := (body.global_transform * body.get_bone_global_rest(hips)).origin.y - root.global_position.y
+		var knee_sum := [0.0, 0.0]
+		var first_chest := Vector3.ZERO
+		var chest_travel := 0.0
+		var count: int = BodyBake.PERSON_CLIPS[2][2]
+		for frame in count:
+			BodyBake.pose(ctx, "Idle_Loop", "p_stand", float(frame) / float(count))
+			var chest := BodyBake._world(body, BodyBake._bone(body, "chest")).origin
+			if frame == 0:
+				first_chest = chest
+			chest_travel = maxf(chest_travel, chest.distance_to(first_chest))
+			var height := BodyBake._world(body, hips).origin.y - root.global_position.y
+			assert_true(height >= main_height * 0.97, "%s frame %d hip >= 97%% main" % [rig_name, frame])
+			var feet: Array[Vector3] = []
+			for side in 2:
+				var suffix := ".L" if side == 0 else ".R"
+				var thigh := BodyBake._world(body, BodyBake._bone(body, "thigh" + suffix)).origin
+				var knee := BodyBake._world(body, BodyBake._bone(body, "shin" + suffix)).origin
+				var foot := BodyBake._world(body, BodyBake._bone(body, "foot" + suffix)).origin
+				knee_sum[side] += rad_to_deg((knee - thigh).angle_to(foot - knee))
+				feet.append(foot)
+			assert_true(absf(feet[0].z - feet[1].z) <= 0.35, "%s frame %d foot z spread <= 0.35 m" % [rig_name, frame])
+		for side in 2:
+			assert_true(float(knee_sum[side]) / float(count) <= 10.0, "%s side %d mean knee <= 10 degrees" % [rig_name, side])
+		assert_true(chest_travel >= 0.0005 and chest_travel <= 0.01, rig_name + " small upper-body breath remains")
+		checked += 1
+		root.queue_free()
+	assert_eq(checked, 14, "all original living rigs checked")
+	motion.queue_free()
 
 
 func test_shared_legs_and_full_walk_run_frames() -> void:

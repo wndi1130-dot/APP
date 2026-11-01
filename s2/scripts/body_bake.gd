@@ -1222,10 +1222,13 @@ const LAYERS: Dictionary = {
 		],
 		"sink": RUN_SINK,
 	},
-	# UAL1 Idle_Loop supplies the planted feet and breathing. Only the arms are
-	# layered over it; the old hip drift and leg aims must not undo its feet.
+	# UAL1 Idle_Loop crouches and staggers the feet. Keep its upper-body
+	# pose, with a straight, planted support pose and a small upper-body breath.
 	"p_stand": {
 		"steps": [
+			["stand_support"],
+			["turn", "spine", "x", [0.0, 0.012, 0.0]],
+			["turn", "chest", "x", [0.0, -0.006, 0.0]],
 			["aim", "upper_arm.L", "forearm.L", [0.14, -1.0, [0.02, 0.01, 0.0, 4.0]]],
 			["aim", "forearm.L", "hand.L", [0.08, -1.0, 0.1]],
 			["aim", "upper_arm.R", "forearm.R", [-0.14, -1.0, [0.02, 0.01, 0.0, 4.0]]],
@@ -2308,6 +2311,16 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scal
 	var w := TAU * u
 	for step: Array in layer.get("steps", []):
 		match step[0]:
+			"stand_support":
+				# Only p_stand uses this layer. The rig's neutral legs are straight
+				# and its sole vertices already sit at y=0. Reset pelvis travel as
+				# well as rotation, so breathing cannot slide the planted feet.
+				# Spine/chest/head retain the source animation's local rotations.
+				for bone_name: String in ["hips", "thigh.L", "shin.L", "foot.L", "thigh.R", "shin.R", "foot.R"]:
+					var bone := _bone(body, bone_name)
+					var rest := body.get_bone_rest(bone)
+					body.set_bone_pose_position(bone, rest.origin)
+					body.set_bone_pose_rotation(bone, rest.basis.get_rotation_quaternion())
 			"turn":
 				turn(body, step[1], _value(step[3], w), AXES[step[2]])
 			"aim":
