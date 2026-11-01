@@ -524,6 +524,45 @@ func test_phase_solver_splits_symmetric_contact_error_and_handles_the_seam() -> 
 	assert_eq(BodyBake.person_contact_phase([0.0, 0.0, 0.0, 0.0]), -1.0, "a foot that never lifts has no first entry")
 
 
+func test_step_off_solver_interpolates_upward_exits_and_the_seam() -> void:
+	assert_almost_eq(BodyBake.person_step_off_phase([0.0, 0.0, 0.03, 0.02]), 1.0 / 3.0, 0.000001, "upward exit between output frames")
+	assert_almost_eq(BodyBake.person_step_off_phase([0.02, 0.03, 0.0, 0.0]), 0.875, 0.000001, "upward exit across last-to-first seam")
+	assert_almost_eq(BodyBake.person_step_off_phase([0.0, 0.01, 0.03, 0.0]), 0.25, 0.000001, "threshold is still grounded; exit starts at that sample")
+	assert_almost_eq(BodyBake.person_step_off_phase([0.01, 0.03, 0.0, 0.0]), 0.0, 0.000001, "phase zero is a valid exit")
+	assert_almost_eq(BodyBake.person_step_off_phase([-0.2, -0.2, -0.17, -0.18]), 1.0 / 3.0, 0.000001, "ground follows the sole minimum, as for contact")
+	for heights: Array in [[], [0.0], [0.0, 0.0, 0.0, 0.0], [0.0, 0.005, 0.01, 0.005]]:
+		assert_eq(BodyBake.person_step_off_phase(heights), -1.0, "no upward exit in %s" % [heights])
+
+
+## Draft for the bake/test session: old bodies must be rebaked before this runs.
+func test_baked_gait_step_off_is_preserved_and_differs_from_contact() -> void:
+	if _fixtures.is_empty():
+		pending("No baked living bodies available for step_off checks")
+		return
+	for fixture in _fixtures:
+		var info := _clip_info(PEOPLE.path_join(fixture["name"]))
+		for saved: Dictionary in info.get("clips", []):
+			var loaded := _clip(fixture, str(saved["name"]))
+			assert_eq(loaded.has("step_off"), saved.has("step_off"), "load preserves key presence, including legacy omissions")
+			if saved.has("step_off"):
+				assert_eq(loaded.get("step_off"), saved["step_off"], "load preserves step_off unchanged")
+		for name_text: String in BodyBake.PERSON_STRIDE_ROUNDS:
+			var clip := _clip(fixture, name_text)
+			var label := "%s %s" % [fixture["name"], name_text]
+			assert_true(clip.has("step_off"), label + " has step_off after rebaking")
+			var step_off: Array = clip.get("step_off", [])
+			assert_eq(step_off.size(), 2, label + " has left/right phases")
+			if step_off.size() != 2:
+				continue
+			for side in 2:
+				var phase := float(step_off[side])
+				assert_true(phase >= 0.0 and phase < 1.0, "%s side %d step_off %.6f in [0, 1)" % [label, side, phase])
+				var contact := _contact_at(_sample(fixture, clip, fixture["soles"][side]))
+				assert_true(contact >= 0.0, label + " has a sole contact")
+				if contact >= 0.0:
+					assert_true(_phase_distance(phase, contact) > 0.000001, label + " lift differs from that foot's contact")
+
+
 func _clip_info(folder: String) -> Dictionary:
 	var path := folder.path_join("clips.json")
 	assert_true(FileAccess.file_exists(path), path + " exists")

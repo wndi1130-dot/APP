@@ -2551,6 +2551,54 @@ static func person_contact_phase(heights: Array) -> float:
 	return -1.0
 
 
+## First upward exit from the lowest centimetre, including the loop seam.
+## Use final output-frame heights; -1 means the foot never leaves the band.
+static func person_step_off_phase(heights: Array) -> float:
+	if heights.size() < 2:
+		return -1.0
+	var threshold := float(heights.min()) + PERSON_CONTACT_HEIGHT
+	for f in heights.size():
+		var previous := float(heights[(f + heights.size() - 1) % heights.size()])
+		var current := float(heights[f])
+		if previous <= threshold and current > threshold:
+			var fraction := (threshold - previous) / (current - previous)
+			return fposmod((float(f - 1) + fraction) / float(heights.size()), 1.0)
+	return -1.0
+
+
+## Measure the same body soles as contact, after phase shift and foot locking.
+## Shells retain the body source, so a hem cannot become a foot probe.
+static func _person_step_off(ctx: Dictionary, frames: Array) -> Array:
+	var mesh_node: MeshInstance3D = ctx["mesh_node"]
+	var source: Array = mesh_node.get_meta(PERSON_PHASE_SOURCE) if mesh_node.has_meta(PERSON_PHASE_SOURCE) else mesh_node.mesh.surface_get_arrays(0)
+	var rest: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = source[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = source[Mesh.ARRAY_WEIGHTS]
+	if rest.is_empty() or bones.is_empty() or weights.size() != bones.size():
+		return [-1.0, -1.0]
+	var soles := person_sole_vertices(rest)
+	var per: int = bones.size() / rest.size()
+	var result := []
+	for side in 2:
+		var heights := []
+		if not soles[side].is_empty():
+			for skin: Array in frames:
+				var lowest := INF
+				for vertex: int in soles[side]:
+					var moved := Vector3.ZERO
+					var weight_sum := 0.0
+					for slot in per:
+						var weight := weights[vertex * per + slot]
+						if weight > 0.0:
+							moved += ((skin[bones[vertex * per + slot]] as Transform3D) * rest[vertex]) * weight
+							weight_sum += weight
+					var point := moved / weight_sum if weight_sum > 0.0 else rest[vertex]
+					lowest = minf(lowest, point.y)
+				heights.append(lowest)
+		result.append(person_step_off_phase(heights))
+	return result
+
+
 ## The output samples source(u + shift). Minimise the larger circular error,
 ## considering either foot order, and split any spacing mismatch equally.
 static func person_phase_shift(left: float, right: float) -> float:
@@ -3658,7 +3706,15 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 		var stride_round := float(phase["round"]) if not phase.is_empty() else _round(reach)
 		if not footlock.is_empty():
 			stride_round = float(footlock["round"])
-		clips.append({"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0, "head_yaw": _head_yaw_stats(head_yaws)})
+		var clip := {"name": entry[0], "loop": looped, "length": length, "frames": frames, "round": stride_round if looped else 0.0, "head_yaw": _head_yaw_stats(head_yaws)}
+		if PERSON_STRIDE_ROUNDS.has(entry[0]):
+			var step_off := _person_step_off(ctx, frames)
+			for side in 2:
+				if float(step_off[side]) < 0.0:
+					print("STEP_OFF_MISS %s %s" % [entry[0], "L" if side == 0 else "R"])
+			if float(step_off[0]) >= 0.0 and float(step_off[1]) >= 0.0:
+				clip["step_off"] = step_off
+		clips.append(clip)
 	var still := []
 	var still_yaws := []
 	for entry: Array in poses:
@@ -3772,6 +3828,8 @@ static func _with_rounds(out: Dictionary, clips: Array) -> Dictionary:
 	for n in clips.size():
 		out["clips"][n]["round"] = float(clips[n].get("round", 0.0))
 		out["clips"][n]["head_yaw"] = clips[n].get("head_yaw", [0.0, 0.0, 0.0])
+		if clips[n].has("step_off"):
+			out["clips"][n]["step_off"] = clips[n]["step_off"]
 	return out
 
 
@@ -3917,6 +3975,8 @@ static func load_baked(dir: String) -> Dictionary:
 	for clip: Dictionary in info["clips"]:
 		var row := {"name": str(clip["name"]), "start": int(clip["start"]), "frames": int(clip["frames"]), "loop": bool(clip["loop"]), "length": float(clip["length"]), "round": float(clip.get("round", 0.0))}
 		row["head_yaw"] = clip.get("head_yaw", [0.0, 0.0, 0.0])
+		if clip.has("step_off"):
+			row["step_off"] = clip["step_off"]
 		if small:
 			row["lo"] = clip.get("lo", [0.0, 0.0, 0.0])
 			row["hi"] = clip.get("hi", [0.0, 0.0, 0.0])
