@@ -26,7 +26,8 @@ const StopGround = preload("res://game/world/stop_ground.gd")
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
-const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap"]
+const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap",
+	"stop_view_rows", "stop_view_cols", "stop_view_rule"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
@@ -86,6 +87,9 @@ static func capture(game) -> Dictionary:
 		"stop_id": stop_id, "place": game.place, "mission": game.mission,
 		"stop_form": game.stop_form, "stop_ground": String(game.data.get("stop_form", "")),
 		"stop_end_gap": int(game.data.get("stop_end_gap", -1)),
+		"stop_view_rows": int(game.data.get("stop_view_rows", 0)),
+		"stop_view_cols": int(game.data.get("stop_view_cols", 0)),
+		"stop_view_rule": int(game.data.get("stop_view_rule", 0)),
 		"seed": int(game.rng.seed), "phase": "ended" if game.ended else "field", "end_reason": String(said.get("endReason", "")),
 		"saved_at": game.clock.label(), "clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
 		"player_pid": game.player.pid if game.player != null else "",
@@ -393,6 +397,14 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 		opts["stop_end_gap"] = int(save["stop_end_gap"])
 	elif String(opts.get("stop_ground", opts.get("stop_form", ""))) in ["edge", "remote"]:
 		opts["stop_end_gap"] = StopGround.END_GAP
+	if save.has("stop_view_rows"):
+		for key: String in ["stop_view_rows", "stop_view_cols", "stop_view_rule"]:
+			opts[key] = int(save.get(key, 0))
+		if (int(opts["stop_view_rows"]) > 0 or int(opts["stop_view_cols"]) > 0) and int(opts["stop_view_rule"]) != StopGround.VIEW_RULE:
+			push_warning("field save view rule changed; restoring legacy state on the saved view size")
+	elif String(save.get("place", "")) in StopGround.VIEW_PLACES:
+		opts["stop_view_rows"] = 0
+		opts["stop_view_cols"] = 0
 	if not (save.get("departure", {}) as Dictionary).is_empty():
 		opts["departure"] = (save["departure"] as Dictionary).duplicate(true)
 	if String(save.get("receipt_id", "")) != "":
@@ -403,6 +415,9 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 
 ## A save that holds the whole running state (version 2 with "runtime"), not only the old fallbacks.
 static func exact(save: Dictionary) -> bool:
+	if (int(save.get("stop_view_rows", 0)) > 0 or int(save.get("stop_view_cols", 0)) > 0) \
+			and int(save.get("stop_view_rule", 0)) != StopGround.VIEW_RULE:
+		return false
 	return int(save.get("version", 1)) >= 2 and save.has("runtime")
 
 

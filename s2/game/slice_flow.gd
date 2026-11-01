@@ -80,6 +80,7 @@ const FieldReceipt = preload("res://game/sim/receipt.gd")
 const SliceSave = preload("res://game/sim/slice_save.gd")
 const TrainSave = preload("res://game/politics/save_slot.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
 const Journey = preload("res://game/train/journey/journey.gd")
 const Corridor = preload("res://game/train/journey/journey_corridor.gd")
@@ -2348,7 +2349,8 @@ func _field_opts() -> Dictionary:
 		o["region"] = stop["band"]
 		o["stop_form"] = stop["form"]
 		o["act_progress"] = prologue_progress(RouteStops.season_seg(int(stop["number"])))
-	return o
+	# The first stop's view ground (stop_ground.gd): the loader's map has it on, a field made here asks.
+	return StopGround.ask_view(o)
 
 
 ## The field is over: its end card stays where it is, and a key over it goes

@@ -36,6 +36,7 @@ const CONTACT_SHADER = preload("res://fx/shaders/contact_shade.gdshader")
 const BuildingView = preload("res://game/world/building_view.gd")
 const BuildPace = preload("res://game/world/build_pace.gd")
 const GroundLook = preload("res://game/world/ground_look.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 ## Unlit car windows: dark glass. Lit ones take FxState.LAMP.
 const WINDOW_DARK := Color(0.16, 0.16, 0.17)
 ## Size (along the wall, up, thickness) and height of each glowing face.
@@ -1531,7 +1532,7 @@ const TREE_PIECE: int = TILE * 2
 
 ## The tree on cell `c` of `place_id`'s map: {model, at, yaw, height, spread}, the same
 ## every time. Off the middle of its cell by a little, so a row of tree cells is no row.
-static func tree_plant(place_id: String, c: Vector2i) -> Dictionary:
+static func tree_plant(place_id: String, c: Vector2i, force_model: String = "") -> Dictionary:
 	var mix: Array = TREE_MIX.get(BuildingUses.region_of(place_id), TREE_MIX["rail_works"])
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("%s:tree:%d:%d" % [place_id, c.x, c.y])
@@ -1542,6 +1543,8 @@ static func tree_plant(place_id: String, c: Vector2i) -> Dictionary:
 		if pick < 0.0:
 			model = row[0]
 			break
+	if not force_model.is_empty():
+		model = force_model
 	var size: Array = TREE_SIZE[model]
 	var at := FieldGrid.center(c) + Vector3(rng.randf_range(-0.2, 0.2), 0, rng.randf_range(-0.2, 0.2))
 	return {"model": model, "at": at, "yaw": rng.randf() * TAU, "height": rng.randf_range(size[0], size[1]), "spread": float(size[2])}
@@ -1551,11 +1554,13 @@ static func tree_plant(place_id: String, c: Vector2i) -> Dictionary:
 ## box trees did. Returns the trees that had no model, for the grey boxes.
 func _build_tree_models(cells: Array) -> Array:
 	var place_id := String(data.get("place_id", ""))
+	var forest: Array = data.get("deep_forest", [])
 	var meshes: Dictionary = {}
 	var pieces: Dictionary = {}
 	var left: Array = []
 	for c: Vector2i in cells:
-		var plant := tree_plant(place_id, c)
+		var in_forest: bool = forest.any(func(rect: Rect2i) -> bool: return rect.has_point(c))
+		var plant := tree_plant(place_id, c, TREE_SPRUCE if in_forest else "")
 		var path := String(plant["model"])
 		if not meshes.has(path):
 			var ok := PropModels.enabled() and ResourceLoader.exists(path) and not PropModels.batch_meshes(path).is_empty()
@@ -1642,12 +1647,8 @@ func _build_blocks() -> void:
 		for part: Array in open_wagon_parts(data["wagons"][index]):
 			box(st, part[0], part[1], part[2])
 	if data["spots"].has("water_tower"):
-		# The first stop: the blocked cells in its north-west corner are the water tower.
-		for y in range(mini(14, grid.height)):
-			for x in range(mini(14, grid.width)):
-				var c := Vector2i(x, y)
-				if grid.solid_at(c) == S.BLOCK and grid.building_at(c) < 0:
-					box(st, Vector3(1, 6.0, 1), Vector3(x + 0.5, 3.0, y + 0.5), Color(0.4, 0.37, 0.35))
+		for c: Vector2i in water_tower_cells(grid, data):
+			box(st, Vector3(1, 6.0, 1), Vector3(c.x + 0.5, 3.0, c.y + 0.5), Color(0.4, 0.37, 0.35))
 	var node := _mesh_node()
 	node.mesh = st.commit()
 	await BuildPace.rest(pace)
@@ -1840,6 +1841,22 @@ static func wall_mount_transform(box: AABB, at: Vector3, facing: int, face: floa
 	var turn := Basis(Vector3.UP, -float(facing) * PI * 0.5)
 	var push := face - WALL_GAP + box.position.z
 	return Transform3D(turn, at + turn * Vector3(0.0, 0.0, -push))
+
+
+## The first stop's water tower: the blocked cells in its map's north-west corner, this
+## many a side. The view ground round the stop moves that corner (StopGround.view_offset).
+const WATER_TOWER_SIDE: int = 14
+
+
+static func water_tower_cells(g: FieldGrid, d: Dictionary) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var at: Vector2i = StopGround.view_offset(d)
+	for y in range(at.y, mini(at.y + WATER_TOWER_SIDE, g.height)):
+		for x in range(at.x, mini(at.x + WATER_TOWER_SIDE, g.width)):
+			var c := Vector2i(x, y)
+			if g.solid_at(c) == S.BLOCK and g.building_at(c) < 0:
+				out.append(c)
+	return out
 
 
 static func _interactive_prop(kind: String) -> bool:
