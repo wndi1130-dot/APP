@@ -117,6 +117,16 @@ func _pick(parts: Array = []) -> Variant:
 	return worker
 
 
+## The whole site somewhere else: its cell, and its wagons' work cells with it (a coal site
+## works from a wagon far off its cell, field_work.gd moved_to).
+func _move_site(cell: Vector2i) -> void:
+	var shift: Vector2i = cell - (game.data["spots"]["work_site"]["cell"] as Vector2i)
+	game.data["spots"]["work_site"]["cell"] = cell
+	for wagon: Dictionary in game.data["wagons"]:
+		if wagon.has("work"):
+			wagon["work"] = (wagon["work"] as Vector2i) + shift
+
+
 func _events() -> Array[String]:
 	var out: Array[String] = []
 	for row: Dictionary in game.telemetry.work_events:
@@ -177,7 +187,7 @@ func test_one_awake_near_the_site_closes_a_cleared_ring() -> void:
 
 func test_waking_on_the_door_path_blocks_and_path_is_cached_for_ten_seconds() -> void:
 	var door: Vector2i = game.data["spawns"]["train_door"][0]
-	game.data["spots"]["work_site"]["cell"] = door + Vector2i(0, 51)
+	_move_site(door + Vector2i(0, 51))
 	var z: Dictionary = _spawn(game.work.door_of("work_site"), "waking")
 	var safe: Dictionary = game.work.safety()
 	assert_eq(int(safe["near_awake"]), 0)
@@ -210,7 +220,7 @@ func test_radio_seen_then_half_then_open_uses_the_exact_lines() -> void:
 
 func test_smoothed_path_segments_are_checked_between_their_endpoints() -> void:
 	var door: Vector3 = game.work.door_of("work_site")
-	game.data["spots"]["work_site"]["cell"] = FieldGrid.cell_of(door) + Vector2i(0, 70)
+	_move_site(FieldGrid.cell_of(door) + Vector2i(0, 70))
 	game.work.sites["work_site"]["path"] = PackedVector3Array([door, _at()])
 	game.work.sites["work_site"]["path_at"] = game.work.elapsed
 	for i in 10:
@@ -1509,3 +1519,82 @@ func test_an_interrupted_saved_pick_uses_only_its_remaining_real_timer() -> void
 	_advance_pick_timer(resumed, back, 5.0)
 	assert_eq(FieldWork.wagon_coal(resumed.data), before - FieldWork.TRIP_COAL)
 	assert_eq(float(back.brain["load"]), FieldWork.TRIP_COAL)
+
+
+## The first wagon runs dry and the next stands far off (moved here 35 cells from the site's own place).
+func _far_next_wagon() -> Vector2i:
+	var wagons: Array = game.data["wagons"]
+	var origin: Vector2i = game.data["spots"]["work_site"]["cell"]
+	var far: Vector2i = origin + Vector2i(-35, 0)
+	for i in wagons.size():
+		if i == 0:
+			wagons[i]["coal"] = 0.0
+		elif wagons[i].has("work"):
+			wagons[i]["work"] = far
+	return far
+
+
+# A wagon near the site is worked from the site's own place; a far one takes the site with it:
+# the safety ring, the wait on the way and the ring on the ground (escort, sound: position_of).
+func test_a_far_next_wagon_moves_the_site_and_a_near_one_does_not() -> void:
+	var origin: Vector3 = game.work.origin_of("work_site")
+	assert_eq(game.work.position_of("work_site"), origin, "the stop's own wagons stand near")
+	game.data["wagons"][0]["coal"] = 0.0
+	assert_eq(game.work.position_of("work_site"), origin, "the second one too")
+	var far: Vector2i = _far_next_wagon()
+	var at: Vector3 = FieldGrid.center(far)
+	assert_gt(at.distance_to(origin), FieldWork.FOLLOW_R)
+	assert_eq(game.work.position_of("work_site"), at)
+	var path: PackedVector3Array = game.work.route("work_site")
+	assert_lte(path[-1].distance_to(at), FieldWork.EMPTY, "the way leads to the wagon at once")
+	_spawn(at + Vector3(3, 0, 0), "wander")
+	assert_eq(int(game.work.safety()["near_awake"]), 1, "the ring stands round the wagon")
+	game.work._paint("work_site", game.work.safety())
+	assert_eq(game.data["spots"]["work_site"]["marker_cell"], far, "the ring on the ground moves")
+	game.data["wagons"][1]["coal"] = 0.0
+	assert_eq(game.work.position_of("work_site"), origin, "no wagon left: back to its own place")
+	game.work._paint("work_site", game.work.safety())
+	assert_false(game.data["spots"]["work_site"].has("marker_cell"))
+
+
+# The site is found from its own place even when its next wagon stands far off.
+func test_the_site_is_found_from_its_own_place() -> void:
+	var far: Vector2i = _far_next_wagon()
+	game.player.position = FieldGrid.center(far)
+	_advance(2.0)
+	assert_false(_events().has("seen"), "beside the far wagon is not beside the site")
+	game.player.position = game.work.origin_of("work_site")
+	_advance(1.0)
+	assert_true(_events().has("seen"))
+
+
+# Another took the last coal while a pick still runs: the ring stays on that pick's wagon till it ends.
+func test_a_running_pick_keeps_the_site_on_its_wagon() -> void:
+	_send()
+	var worker: Variant = _pick()
+	assert_eq(worker.action, "dig")
+	assert_eq(int(worker.brain["dig_wagon"]), 0)
+	var far: Vector2i = _far_next_wagon()
+	assert_eq(game.work.position_of("work_site"), game.work.origin_of("work_site"), "the picker is still at the first wagon")
+	game.work._return_dig("work_site", String(worker.pid))
+	assert_eq(game.work.position_of("work_site"), FieldGrid.center(far), "then on to the next")
+
+
+# On the way home the site keeps the wagon it left, whatever the next send would claim.
+func test_the_way_home_keeps_the_wagon_it_left() -> void:
+	var far: Vector2i = _far_next_wagon()
+	game.work.retreat("work_site")
+	for wagon: Dictionary in game.data["wagons"]:
+		wagon["coal"] = 0.0
+	assert_eq(game.work.position_of("work_site"), FieldGrid.center(far), "home by the door of the wagon it left")
+	game.work._site("work_site")["phase"] = "closed"
+	assert_eq(game.work.position_of("work_site"), game.work.origin_of("work_site"))
+
+
+# The ring is worked out again when the digs are painted, as after a restore (field_save.gd).
+func test_painting_the_digs_moves_the_ring() -> void:
+	assert_not_null(game.view)
+	var far: Vector2i = _far_next_wagon()
+	game.data["spots"]["work_site"].erase("marker_cell")
+	game.work.paint_digs()
+	assert_eq(game.data["spots"]["work_site"].get("marker_cell"), far)

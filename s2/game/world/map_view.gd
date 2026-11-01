@@ -873,6 +873,8 @@ func update_spot(id: String) -> void:
 			box(st, Vector3(0.06, 3.2, 0.06), at + Vector3(-0.28, 1.6, -0.3), Color(0.5, 0.42, 0.3))
 			box(st, Vector3(0.06, 3.2, 0.06), at + Vector3(0.28, 1.6, -0.3), Color(0.5, 0.42, 0.3))
 		"work_site":
+			# On the far wagon a coal crew moved on to, once it has (field_work.gd moved_to).
+			at = FieldGrid.center(spot.get("marker_cell", spot["cell"]))
 			var color: Color = Color(0.9, 0.76, 0.4) if spot["state"] == "ready" else Color(0.45, 0.45, 0.45)
 			box(st, Vector3(1.2, 0.05, 1.2), at + Vector3(0, 0.03, 0), color)
 			var filled: int = clampi(roundi(float(spot.get("work_share", 0.0)) * FieldWork.SHARE_CELLS), 0, FieldWork.SHARE_CELLS)
