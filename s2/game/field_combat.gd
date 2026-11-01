@@ -1401,7 +1401,7 @@ func fall(p, msg: String, fracture_chance: float = 0.05, leg: bool = false) -> v
 	if fracture_chance > 0.0 and game.rng.randf() < fracture_chance:
 		p.body.fracture(not leg, wound_side("leg" if leg else "arm"), game.clock.elapsed)
 		game.telemetry.injury(game.clock.elapsed, p.pid, "fracture")
-		game.say(p, "%s %s, %s가 부러졌다." % [p.display_name, msg, "다리" if leg else "팔"], true, "fracture")
+		game.say(p, "%s %s, %s 부러졌다." % [p.display_name, msg, "다리가" if leg else "팔이"], true, "fracture")
 	elif p.team != "raider":
 		game.say(p, "%s %s." % [p.display_name, msg], true, "fall")
 

@@ -1342,7 +1342,7 @@ func dress(p, idx: int) -> void:
 		return
 	if not Wear.wearable(g["garment"]):
 		if p == game.player:
-			game.hud.toast("너덜해서 못 입는다.")
+			game.hud.toast("너덜너덜해서 못 입는다.")
 		return
 	_begin_chain(p, Wear.dress_plan(p, String(g["id"])), g)
 
@@ -1934,7 +1934,7 @@ func block_lid(p, key: String) -> void:
 		return
 	if not game.FieldMaps.lid(key):
 		if p == game.player:
-			game.hud.toast("%s는 막을 수 없다." % ("암거" if key == "culvert" else "이 구멍"))
+			game.hud.toast("%s 막을 수 없다." % ("암거는" if key == "culvert" else "이 구멍은"))
 		return
 	if not game.director.is_open(key):
 		return
@@ -2140,7 +2140,7 @@ func _amputated(medic, o, part: String) -> void:
 		return
 	var what: String = "%s의 %s 잘랐다." % [o.display_name, BodyState._eul(String(Treatment.PART_NAMES[part]))]
 	if not in_time:
-		what += " 감염 창이 먼저 닫혀 소용없었다."
+		what += " 자를 수 있는 시간이 이미 지나 소용없었다."
 	elif o.body.infection == "bite":
 		what += " 물린 데가 더 남았다."
 	elif bite_there:

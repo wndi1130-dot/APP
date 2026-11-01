@@ -981,21 +981,21 @@ func status_notes() -> Array:
 					row["title"] = "물린 상처"
 					var limbs: Array[String] = bitten_limbs()
 					if window_left <= 0.0:
-						row["text"] = "감염 창이 닫혔다"
+						row["text"] = "자를 수 있는 시간이 지났다"
 					elif core != "":
 						row["text"] = "%s 자를 수 없다. 열이 오르기까지 %s" % [_ira(PART_WORDS[core]), time]
 					elif limbs.is_empty():
-						row["text"] = "감염 창이 %s 남았다. 닫히기 전에 정해야 한다" % time
+						row["text"] = "자를 수 있는 시간이 %s 남았다. 그 안에 정해야 한다" % time
 					else:
-						row["text"] = "감염 창이 %s 남았다. 닫히기 전에 정해야 한다: %s 자르면 막는다" % [time, _eul(_words(limbs))]
+						row["text"] = "자를 수 있는 시간이 %s 남았다. 그 안에 정해야 한다: %s 자르면 막는다" % [time, _eul(_words(limbs))]
 						if off != "":
 							row["text"] += ". %s 긁힘은 자를 수 없다" % PART_WORDS[off]
 				else:
 					row["title"] = "긁힌 상처"
 					if window_left > 0.0 and off != "":
-						row["text"] = "감염됐는지 아직 모른다. %s 자를 수 없다. %s 뒤 창이 끝나면 안다" % [_ira(PART_WORDS[off]), time]
+						row["text"] = "감염됐는지 아직 모른다. %s 자를 수 없다. %s 뒤면 안다" % [_ira(PART_WORDS[off]), time]
 					else:
-						row["text"] = "감염됐는지 아직 모른다. 창이 끝나야 안다"
+						row["text"] = "감염됐는지 아직 모른다. 좀 더 지나야 안다"
 						var cut: Array[String] = cut_parts()
 						if not cut.is_empty() and window_left > 0.0:
 							row["text"] += ". %s 자르면 감염이어도 막는다" % _eul(_words(cut))
