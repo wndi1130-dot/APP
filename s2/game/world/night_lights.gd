@@ -1,9 +1,11 @@
 extends RefCounted
 ## Lights people left in a town at night (decision 471 B4): a fire in a drum,
 ## a campfire by a woodpile, a candle in a window, a car's headlights with
-## battery left. Three to six a map, spread out, chosen from what the map
-## already has, so the dark has a few warm places to steer by. A map whose own
-## light rows already name one of these kinds keeps its own and gets none.
+## battery left. Three to six a map, a big one up to twelve by its area,
+## spread out, chosen from what the map already has, so the dark has a few warm
+## places to steer by; of a big map's share none to two go on the first screen.
+## A map whose own light rows already name one of these kinds keeps its own and
+## gets none.
 ## A map marked no_fire gets no fires. No smoke anywhere: a flame is a glow.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -22,20 +24,116 @@ const LIGHT: Dictionary = {
 }
 const MOST_OF: Dictionary = {"campfire": 1, "barrel_fire": 2, "headlights": 1, "candle": 2}
 const MOST := 6
+## A big map gets a share of six per this much ground (m², a cell a metre), up to
+## MOST_BIG: a 5 ha town's six lights left one on screen in three at night
+## (T0-9, mood 10-30). Each kind's own most grows with it.
+const AREA_PER_MOST := 25000.0
+const MOST_BIG := 12
+## Round where the crew steps down (metres from the middle of the squad's
+## cells) a big map's share lights the first screen up to none to FIRST_MOST,
+## as the map's dice fall, so it often has a warm place or two. Only what would
+## be lit there anyway: a window's candle or a fire, not a car left on. The play
+## camera shows about 26 m either side and 21 m up and down there (zoom 24, a
+## phone held wide).
+const FIRST_REACH := 22.0
+const FIRST_MOST := 2
+## The first screen's far corners from where the crew steps down: the rest of
+## the share keeps out of it, so the stop never looks dressed.
+const FIRST_SCREEN := 33.0
+const FIRST_KINDS: Array[String] = ["campfire", "barrel_fire", "candle"]
 const SPREAD := 10.0   # cells at least between two of them
 const TRAIN_GAP := 6   # cells kept clear of the train (it has its own lights)
 const ON_MIN := 890    # they show as the light goes (decision 210)
 
 
-## Add the night lights to data["lights"]; returns how many.
+## Add the night lights to data["lights"], as many as a map of any size gets
+## (MOST, MOST_OF of a kind); returns how many. extend() adds a big map's share.
 static func plan(data: Dictionary) -> int:
 	var lights: Array = data["lights"]
 	for l: Dictionary in lights:
 		if KINDS.has(String(l.get("kind", ""))):
 			return 0
 	var grid: FieldGrid = data["grid"]
+	var pools := _pools(data, grid, "night_lights")
+	var picked: Array = []
+	var took: Dictionary = {}
+	_pick(pools, picked, took, MOST, MOST_OF, data, false)
+	_add_rows(lights, picked, 0)
+	return picked.size()
+
+
+## More on a big map, every light planned before kept where it was (so no
+## stretch of it gets darker): first none to FIRST_MOST round where the crew
+## steps down, as the map's dice fall, then the rest of its share by area, clear
+## of the train and of the first screen. Returns how many it added.
+static func extend(data: Dictionary) -> int:
+	var lights: Array = data["lights"]
+	var picked: Array = []
+	var took: Dictionary = {}
+	for l: Dictionary in lights:
+		var kind := String(l.get("kind", ""))
+		if not KINDS.has(kind):
+			continue
+		if not String(l.get("id", "")).begins_with("night_"):
+			return 0
+		picked.append({"cell": l["cell"], "kind": kind})
+		took[kind] = int(took.get(kind, 0)) + 1
+	var grid: FieldGrid = data["grid"]
+	var most := most_for(grid)
+	var cap := {}
+	for kind: String in KINDS:
+		cap[kind] = ceili(float(MOST_OF[kind]) * most / MOST)
+	var pools := _pools(data, grid, "night_lights_more")
+	for kind: String in pools:
+		pools[kind] = (pools[kind] as Array).filter(func(r: Dictionary) -> bool: return not _lit(picked, r["cell"]))
+	var had := picked.size()
+	var step := _step_down(data)
+	var want := first_count(data) if step.x >= 0.0 else 0
+	var more := true
+	while more and _first_short(picked, step, want) and picked.size() < most:
+		more = false
+		for kind: String in FIRST_KINDS:
+			if not _first_short(picked, step, want) or picked.size() >= most:
+				break
+			if not pools.has(kind) or int(took.get(kind, 0)) >= int(cap[kind]):
+				continue
+			var pool: Array = pools[kind]
+			for i in range(pool.size() - 1, -1, -1):
+				var c: Vector2i = pool[i]["cell"]
+				if _within(step, c, FIRST_REACH) and _far(picked, c) and not _by_train(data, c):
+					var row: Dictionary = pool[i]
+					row["kind"] = kind
+					picked.append(row)
+					took[kind] = int(took.get(kind, 0)) + 1
+					pool.remove_at(i)
+					more = true
+					break
+	_pick(pools, picked, took, most, cap, data, true)
+	_add_rows(lights, picked.slice(had), had)
+	return picked.size() - had
+
+
+## Plan again from scratch, the planner's own rows dropped first: for a stop
+## marked no_fire by its place on the route after its map was built.
+static func replan(data: Dictionary) -> int:
+	data["lights"] = (data["lights"] as Array).filter(func(l: Dictionary) -> bool: return not String(l.get("id", "")).begins_with("night_"))
+	var n := plan(data)
+	return n + extend(data)
+
+
+## Plan again where the planner's rows are, after the train and the crew were
+## moved (a stop form, stop_ground.gd): the first screen goes with them.
+static func follow(data: Dictionary) -> void:
+	for l: Dictionary in data.get("lights", []):
+		if String(l.get("id", "")).begins_with("night_"):
+			replan(data)
+			return
+
+
+## The candidates of each kind, in the map's own shuffled order (salt: which dice).
+static func _pools(data: Dictionary, grid: FieldGrid, salt: String) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = hash([String(data.get("place_id", "")), "night_lights"])
+	rng.seed = hash([String(data.get("place_id", "")), salt])
 	var pools := {
 		"campfire": _campfires(data, grid),
 		"barrel_fire": _barrels(data, grid),
@@ -47,37 +145,88 @@ static func plan(data: Dictionary) -> int:
 			pools.erase(kind)
 	for kind: String in pools:
 		_shuffle(pools[kind], rng)
-	var picked: Array = []
-	var took: Dictionary = {}
+	return pools
+
+
+## The kinds in turn, each its next spread-out candidate, up to total and each
+## kind's most. clear: none by the train or on the first screen (extend's share).
+static func _pick(pools: Dictionary, picked: Array, took: Dictionary, total: int, most_of: Dictionary, data: Dictionary, clear: bool) -> void:
+	var step := _step_down(data) if clear else Vector2(-1, -1)
 	var more := true
-	while more and picked.size() < MOST:
+	while more and picked.size() < total:
 		more = false
 		for kind: String in KINDS:
-			if not pools.has(kind) or int(took.get(kind, 0)) >= int(MOST_OF[kind]) or picked.size() >= MOST:
+			if not pools.has(kind) or int(took.get(kind, 0)) >= int(most_of[kind]) or picked.size() >= total:
 				continue
 			var pool: Array = pools[kind]
 			while not pool.is_empty():
 				var row: Dictionary = pool.pop_back()
-				if _far(picked, row["cell"]):
+				var c: Vector2i = row["cell"]
+				if _far(picked, c) and not (clear and (_by_train(data, c) or _within(step, c, FIRST_SCREEN))):
 					row["kind"] = kind
 					picked.append(row)
 					took[kind] = int(took.get(kind, 0)) + 1
 					more = true
 					break
-	for i in picked.size():
-		var row: Dictionary = picked[i]
+
+
+static func _add_rows(lights: Array, rows: Array, before: int) -> void:
+	for i in rows.size():
+		var row: Dictionary = rows[i]
 		var light: Dictionary = (LIGHT[row["kind"]] as Dictionary).duplicate()
-		light.merge({"id": "night_%d_%s" % [i + 1, row["kind"]], "kind": row["kind"], "cell": row["cell"],
+		light.merge({"id": "night_%d_%s" % [before + i + 1, row["kind"]], "kind": row["kind"], "cell": row["cell"],
 			"side": row.get("side", Vector2i.ZERO), "when": "dusk", "from_min": ON_MIN})
 		lights.append(light)
-	return picked.size()
 
 
-## Plan again from scratch, the planner's own rows dropped first: for a stop
-## marked no_fire by its place on the route after its map was built.
-static func replan(data: Dictionary) -> int:
-	data["lights"] = (data["lights"] as Array).filter(func(l: Dictionary) -> bool: return not String(l.get("id", "")).begins_with("night_"))
-	return plan(data)
+## The first screen wants another: fewer than want round where the crew steps
+## down, and fewer than FIRST_MOST out to its far corners.
+static func _first_short(picked: Array, step: Vector2, want: int) -> bool:
+	var near := 0
+	var on := 0
+	for row: Dictionary in picked:
+		near += 1 if _within(step, row["cell"], FIRST_REACH) else 0
+		on += 1 if _within(step, row["cell"], FIRST_SCREEN) else 0
+	return near < want and on < FIRST_MOST
+
+
+static func _within(step: Vector2, c: Vector2i, reach: float) -> bool:
+	return step.x >= 0.0 and (Vector2(c) + Vector2(0.5, 0.5)).distance_to(step) <= reach
+
+
+static func _by_train(data: Dictionary, c: Vector2i) -> bool:
+	var train: Variant = data.get("train")
+	return train is Rect2i and (train as Rect2i).grow(TRAIN_GAP).has_point(c)
+
+
+static func _lit(picked: Array, c: Vector2i) -> bool:
+	for row: Dictionary in picked:
+		if row["cell"] == c:
+			return true
+	return false
+
+
+## How many go first on the first screen: none to FIRST_MOST, by the map's own dice.
+static func first_count(data: Dictionary) -> int:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([String(data.get("place_id", "")), "night_lights_first"])
+	return rng.randi_range(0, FIRST_MOST)
+
+
+## How many lights a map of this size may get.
+static func most_for(grid: FieldGrid) -> int:
+	return clampi(roundi(grid.width * grid.height / AREA_PER_MOST * MOST), MOST, MOST_BIG)
+
+
+## Where the crew steps down: the middle of the squad's cells, or (-1, -1).
+static func _step_down(data: Dictionary) -> Vector2:
+	var cells: Array = data.get("spawns", {}).get("squad", [])
+	if cells.is_empty():
+		return Vector2(-1, -1)
+	var at := Vector2.ZERO
+	for c: Vector2i in cells:
+		at += Vector2(c) + Vector2(0.5, 0.5)
+	return at / cells.size()
 
 
 ## Open ground out of doors, clear of the train.

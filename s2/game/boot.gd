@@ -4,6 +4,7 @@ extends Node
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const SliceSave = preload("res://game/sim/slice_save.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
@@ -30,9 +31,8 @@ const CHOICES: Array = [
 	["primary_one", "주 행동 하나로", [[false, "끔 (조준·공격 따로)"], [true, "켬 (시험)"]]],
 	["retreat_name", "동료 한 명을 물릴 때 이름", [["", "후퇴"], ["train", "열차로"]]],
 	["melee_break", "근접 겨눔 끊김", [["grab", "잡히면 끊긴다"], ["none", "안 끊긴다"]]],
-	# One in ten of the standing dead lunges after a tell (user 2026-10-12). From
-	# which stop on is counted in S3; here it is on or off. zombies.gd reads it.
-	["lungers", "달려드는 자", [[false, "끔"], [true, "켬"]]],
+	# Follow act progress, or force the old share (decisions 383, 387, 134).
+	["lungers", "달려드는 자", [[false, "진행대로"], [true, "강제 켬"]]],
 	["holdout", "버티기 판 (재는 판)", [["", "없음"], ["depart", "「떠난다」를 부르면 열린다"], ["start", "처음부터"], ["roll", "굴려서 (장소 확률대로, 조용하면 안 뜬다)"]]],
 	# The radio operator's forecast of a held train (user decision 150); who is
 	# on watch is the train's to say, here it is on or off.
@@ -58,7 +58,8 @@ const CHOICES: Array = [
 ]
 
 var settings: Dictionary = {}
-## The two save slots read at start (tests point them elsewhere before adding the boot).
+## Save slots read at start (tests point them elsewhere before adding the boot).
+var slice_save_path: String = SliceSave.PATH
 var field_save_path: String = FieldSave.PATH
 var train_save_path: String = FieldSave.TRAIN_PATH
 var menu_scroll: int = 0
@@ -71,8 +72,17 @@ func _ready() -> void:
 	theme = UiTheme.make(24)
 	for row in CHOICES:
 		settings[row[0]] = row[2][0][0]
+	_cap_fps()
+	var board: Array = SliceFlow.start_board()
+	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path)
+	if not slice_resume.is_empty():
+		_start_slice(slice_resume)
+		return
 	# A stop the app was shut in the middle of comes back where it was (user decision 296).
 	var resume := FieldSave.pick_start(field_save_path, train_save_path)
+	if bool(resume.get("slice", false)):
+		_show_menu()
+		return
 	if not resume.is_empty():
 		_start(resume)
 		return
@@ -141,8 +151,14 @@ func _show_menu() -> void:
 	slice.name = "SliceButton"
 	slice.text = "슬라이스 흐름(시험)"
 	slice.custom_minimum_size = Vector2(240, 64)
-	slice.pressed.connect(func() -> void: get_tree().change_scene_to_node(SliceFlow.new()))
+	slice.pressed.connect(_start_slice)
 	go.add_child(slice)
+	var campaign: Button = Button.new()
+	campaign.name = "CampaignButton"
+	campaign.text = "캠페인(두 정차 시험)"
+	campaign.custom_minimum_size = Vector2(240, 64)
+	campaign.pressed.connect(_start_campaign)
+	go.add_child(campaign)
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(1000, 500)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -175,7 +191,39 @@ func _pick(key: String, value) -> void:
 	settings[key] = value
 	if key == "cold_scheme":
 		Atmosphere.scheme = String(value) if String(value) != "" else Atmosphere.DEFAULT_SCHEME
+	if key == "fps_cap":
+		_cap_fps()
 	_show_menu()
+
+
+## The menu, the train and the stop card run at the field's cap too: the menu's 「FPS 상한」,
+## 60 unless picked. Uncapped they ran at the phone's 120 Hz beat (80 fps on the stop card)
+## and warmed it (phone night run 2026-10-31).
+func _cap_fps() -> void:
+	Engine.max_fps = int(settings.get("fps_cap", 60))
+
+
+func _make_slice(resume: Dictionary = {}) -> Node:
+	var flow = SliceFlow.new()
+	flow.opts = {
+		"save": true, "resume": resume, "slice_save_path": slice_save_path,
+		"train_save_path": train_save_path, "field_save_path": field_save_path,
+		"intro": resume.is_empty(),
+	}
+	if resume.get("mode") == "campaign" or (resume.get("g") is Dictionary and (resume["g"] as Dictionary).get("campaign", {}).get("mode") == "campaign"):
+		flow.opts["mode"] = "campaign"
+	return flow
+
+
+func _start_campaign() -> void:
+	var flow: Node = _make_slice()
+	flow.opts["mode"] = "campaign"
+	get_tree().change_scene_to_node.call_deferred(flow)
+
+
+func _start_slice(resume: Dictionary = {}) -> void:
+	# Boot can be in _ready; switch only after the tree has finished adding it.
+	get_tree().change_scene_to_node.call_deferred(_make_slice(resume))
 
 
 ## `resume` is the start options of a stop coming back (FieldSave.pick_start); none starts a new one.
@@ -217,5 +265,5 @@ func _on_restart() -> void:
 	if field != null:
 		field.queue_free()
 		field = null
-	Engine.max_fps = 60
+	_cap_fps()
 	_show_menu()

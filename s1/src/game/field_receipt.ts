@@ -97,6 +97,8 @@ export type FieldReceiptV5 = Omit<ReceiptV4, 'version'> & {
   version: 5; crew: FieldCrewRow[]; defense: FieldDefense | null;
   /** 승강장에서 실은 옷장 자리 옷, 남은 미끼, 실은 음식의 이름별 개수(계약 글 3절). 없으면 빈 것 */
   wardrobeIn?: FieldGarment[]; luresBack?: Record<string, number>; foodIn?: Record<string, number>;
+  /** 정차를 떠날 때 승강장 하역 칸 안에 있던 열차 썰매 수(계약 글 3절). S1 열차는 썰매를 두지 않아 꼴만 본다 */
+  sledsBack?: number;
   /** 갈래별 보장 몫(덱)의 쓴 뒤 자리(결정 474 S1). 반영하면 판 상태 lootDeck을 이것으로 바꾼다 */
   lootDeck?: LootDeck;
 };
@@ -199,6 +201,7 @@ const v5Schema = {
     wardrobeIn: { type: 'array', items: garment },
     luresBack: counts,
     foodIn: counts,
+    sledsBack: count,
     lootDeck: { type: 'object', additionalProperties: object({ n: count, k: count, seen: count, hit: count }) },
   },
   required: [...v4Schema.required, 'crew', 'defense'],
@@ -215,7 +218,7 @@ export function decodeFieldReceipt(input: unknown): FieldReceipt {
   const record = value as Record<string, unknown>;
   const ok = record.version === 4 ? v4Validator(record) : record.version === 5 ? v5Validator(record) : false;
   if (!ok) throw new Error('필드 영수증 계약이 올바르지 않다');
-  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, wardrobeIn: _w, luresBack: _l, foodIn: _fi, lootDeck: _ld, ...rest } = record;
+  const { departureId: _d, symbol: _s, fieldPromises: _p, crew: _c, defense: _f, wardrobeIn: _w, luresBack: _l, foodIn: _fi, lootDeck: _ld, sledsBack: _sb, ...rest } = record;
   // 판 3 검사는 처치 칸을 모른다: 상처 줄에서 처치만 떼어 넘긴다(검사만, 돌려주는 값은 그대로).
   const people = rest.people as { wounds?: Record<string, unknown>[] };
   const bare = people.wounds ? { ...people, wounds: people.wounds.map(({ treat: _t, ...w }) => w) } : people;
@@ -291,6 +294,7 @@ export function matchDeparture(d: AnyDeparture, r: FieldReceipt): void {
     throw new Error('출발 약속과 영수증의 약속이 다르다');
   }
   if (r.symbol && !returnedOf(r).includes(r.symbol.carriedBy)) throw new Error('상징물을 든 사람이 열차에 오르지 않았다');
+  if (r.version === 5 && (r.sledsBack ?? 0) > ((d.version === 2 ? d.train.sleds : undefined) ?? 0)) throw new Error('나간 썰매보다 많이 돌아왔다');
 }
 
 export function snapshot(g: Game): FieldSnapshot {
@@ -433,15 +437,18 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   }
   // 남겨짐과 사라짐에 함께 든 사람은 한 번만 센다(묶음 점검 L2).
   const lost = [...new Set([...r.people.leftBehind, ...r.people.missing])].filter(p => !r.people.dead.includes(p));
+  let leftCount = 0;
   for (const [c, names] of byComm(departure, lost)) {
     const had = g.comms[c].pop;
     g.comms[c].pop = Math.max(1, had - names.length);
     // 하한 1에 막혀 빼지 못한 몫은 적어 두고, 구조되어 돌아올 때 그만큼은 다시 더하지 않는다(명단과 인구를 맞춘다, 묶음 점검 M1).
     const short = names.length - Math.max(0, had - g.comms[c].pop);
     if (short > 0) (g.leftShort ??= {})[c] = (g.leftShort[c] ?? 0) + short;
-    lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.join(', ')}이(가) 필드에 남았다.` });
-    journal(g, `${names.join(', ')}이(가) 필드에 남았다. 열차는 그들 없이 떠났다.`, 'dark');
+    lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.length}명이 필드에 남았다.` });
+    leftCount += names.length;
   }
+  // 정차 끝에 남은 사람은 수로만 적고 이름은 적지 않는다(결정 147·183).
+  if (leftCount > 0) journal(g, `${leftCount}명을 필드에 남기고 열차가 떠났다.`, 'dark');
   // 앞 정차에 남았다가 살아서 구해져 돌아온 사람: 떠난 사람 명단에서 빼고 칸 인원으로 돌린다(서막 「기다렸다 태운다」와 같은 꼴).
   const rejoined = returnedOf(r).filter(p => p !== CAPTAIN_ID && r.people.rescued.includes(p) && (g.left ?? []).includes(personOf(departure, p).name));
   for (const [c, names] of byComm(departure, rejoined)) {

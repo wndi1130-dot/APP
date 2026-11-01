@@ -669,6 +669,15 @@ const TONE_CONTRAST_DUSK := 0.35
 ## under the hour's grey, so the spread would sink it: the grey drops this much
 ## there, and the play view keeps its mean (decision 470: not darker).
 const TONE_PIVOT_DUSK_GREY := 0.04
+## Rain by day eases the spread back this much a full fall. The fall takes its
+## share of the day's light (CLOUD_KEEP, look()), about a tenth evenly over the
+## picture, and the spread pushed what that lowered of the dark painted sides,
+## the coal and the wall caps under the dark line (decision 470: 6 %; the first
+## stop's rain noon measured 0.066 in the field and 0.072 in play, the overcast
+## 0.054). Eased about the day's grey the mean holds and the darks come up, and
+## the saturation keeps the colour; it stays above a clear day's (1.355 · (1 −
+## 0.12 · 0.7) = 1.24). Snow keeps its spread.
+const TONE_RAIN_EASE := 0.12
 ## The view fill: in the diagonal view (decision 476) the walls turned from the
 ## sun fill much of the screen, and lit by the fill alone they fell under the
 ## grade to black (V 0.01; the reference reads both wall faces at 0.45~0.6;
@@ -688,6 +697,17 @@ const TONE_PIVOT_NIGHT := 0.1
 ## at 0.19 and white at 0.4 on an overcast noon. 1.8 brings them near the
 ## reference's picture; the ground stays about where it was.
 const EXPOSURE := 1.8
+## A snowfield in the sun is the brightest thing the field shows, and the linear
+## tonemap cut it to white (deep winter, clear noon: 55 % of the screen over V 0.85
+## at the first stop and houses_04, against at most 16 % in the reference's pictures).
+## Where snow covers the ground (how white it lies, the field's fx_snow: 25 cm lying
+## is about 0.8, sim/snow_cover.gd; between SNOW_EXPOSE_COVER's ends) and an
+## up-facing face takes more light than SNOW_LIGHT_MAX (sun and fill, the light's own
+## units), the exposure comes down by that much, as an eye or a camera does on snow.
+## A grey snow day (about 0.25~0.28), patchy early snow, a thaw's thin snow and
+## autumn keep EXPOSURE.
+const SNOW_LIGHT_MAX := 0.34
+const SNOW_EXPOSE_COVER := Vector2(0.4, 0.8)
 
 
 ## The colour grade (WorldEnvironment adjustments): a tone turned about the
@@ -697,11 +717,18 @@ static func grade(l: Dictionary) -> Dictionary:
 	var w: Dictionary = l["weights"]
 	var veil := float(l["veil"])
 	var spread := lerpf(TONE_CONTRAST, TONE_CONTRAST_DIM, maxf(veil, float(w["night"]))) * (1.0 + TONE_CONTRAST_DUSK * float(w["dusk"]))
+	var rain_ease := 1.0
+	if String(l.get("falls", "none")) == "rain":
+		rain_ease = 1.0 - TONE_RAIN_EASE * float(l.get("fall", 0.0)) * float(w["day"])
+	spread *= rain_ease
 	# A grey sky takes a tenth of the colour, no more: the grey is in the
 	# materials already, and 0.8 left an overcast day near colourless.
 	var sat := lerpf(1.0, 0.9, veil) * lerpf(1.0, 0.72, float(w["night"]))
 	sat *= 1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - veil)
 	sat *= float(l.get("region_sat", 1.0))
+	# The channels part by the spread too, so the rain's ease would grey the
+	# picture as much: the saturation gives it back (the darks come up, not the grey).
+	sat /= rain_ease
 	# Godot multiplies the brightness, then turns the contrast about 0.5 (sRGB):
 	# 0.5 + k(b·c − 0.5) is the line spread·(c − pivot) + pivot when these hold.
 	var pivot := lerpf(TONE_PIVOT_NIGHT, TONE_PIVOT_DAY, float(l["lum"])) - TONE_PIVOT_DUSK_GREY * float(w["dusk"]) * veil
@@ -731,7 +758,10 @@ const SKY_DOME_PITCH := -62.0
 const SKY_DOME_SHADOW := 0.5
 
 
-static func light(l: Dictionary) -> Dictionary:
+## ground_snow: how white the ground lies, 0..1 (the field's fx_snow, which follows
+## the snow lying and what falls or melts), for the exposure; below 0, the look's
+## snow level stands for it.
+static func light(l: Dictionary, ground_snow := -1.0) -> Dictionary:
 	var dome := smoothstep(0.45, 0.9, float(l["veil"])) * (1.0 - float(l["weights"]["night"]))
 	var fill := float(l["ambient_energy"])
 	var moved := fill * SKY_DOME_SHARE * dome
@@ -745,6 +775,10 @@ static func light(l: Dictionary) -> Dictionary:
 	var color := Color(l["sun_color"])
 	if sun_part + dome_part > 0.001:
 		color = Color(l["sun_color"]).lerp(Color(l["ambient_color"]), dome_part / (sun_part + dome_part))
+	var up_light := (sun_part + dome_part) * sin(deg_to_rad(clampf(-pitch, 0.0, 90.0))) * _lin_lum(color) + (fill - moved) * _lin_lum(Color(l["ambient_color"]))
+	var cover := ground_snow if ground_snow >= 0.0 else FxState.snow_for_level(int(l["snow_level"]))
+	var snowed := smoothstep(SNOW_EXPOSE_COVER.x, SNOW_EXPOSE_COVER.y, cover)
+	var exposure := EXPOSURE * lerpf(1.0, minf(1.0, SNOW_LIGHT_MAX / maxf(up_light, 0.001)), snowed)
 	return {
 		"band": l["band"],
 		"sun_color": color,
@@ -760,6 +794,7 @@ static func light(l: Dictionary) -> Dictionary:
 		"fog_density": 0.012 + 0.03 * float(l["haze"]),
 		"background": l["background"],
 		"lamp": l["lamp"],
+		"exposure": exposure,
 	}
 
 

@@ -236,6 +236,17 @@ func apply_rules(event: String = "rules") -> void:
 	if rebuild:
 		life.before_refresh()
 		_rebuild_layout()
+	else:
+		# A car whose home stage changed (결정 517: furnishing raised it) is dressed again on its own.
+		var restage: Array = []
+		for c in cars:
+			if int(c.get("home_stage", -1)) != _home_stage_of(String(c["id"])):
+				restage.append(c["id"])
+		if not restage.is_empty():
+			life.before_reseat(restage)
+			for c in cars:
+				if restage.has(c["id"]):
+					_restage_car(c)
 	for i in cars.size():
 		cars[i]["def"] = definitions[i]
 	var reseat: Array = []
@@ -1319,7 +1330,7 @@ func _build_train() -> void:
 			"def": def, "id": String(def["id"]), "index": i, "x0": node.position.x, "node": node,
 			"bodies": [], "out": 0, "errand_t": rng.randf_range(2.0, 8.0), "errand_i": 0, "mood": "calm",
 			"call_t": rng.randf_range(CALL_FIRST.x, CALL_FIRST.y), "call_i": 0,
-			"unrest": -1, "quiet": "", "seats": 0,
+			"unrest": -1, "quiet": "", "seats": 0, "home_stage": _home_stage_of(String(def["id"])),
 		}
 		_build_car(c, i < defs.size() - 1)
 		cars.append(c)
@@ -1329,6 +1340,14 @@ func _build_train() -> void:
 	_build_snow_ground()
 	_build_highlight()
 	_apply_view()
+
+
+## A car's home stage (결정 486·517): the tier the domestic rules give a car a player furnishes
+## (train_decor.gd tier_of, handed in as rules["train"]["home"] by slice_flow.gd), so its light
+## follows how it is kept; a car no one furnishes, or a train shown without it, keeps the default.
+func _home_stage_of(id: String) -> int:
+	var home: Dictionary = (rules.get("train", {}) as Dictionary).get("home", {})
+	return int(home.get(id, TrainLight.STAGE_DEFAULT))
 
 
 func _build_car(c: Dictionary, gangway: bool) -> void:
@@ -1509,16 +1528,53 @@ func _shell_box(c: Dictionary, size: Vector3, at: Vector3, color: Color) -> void
 
 
 func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: float) -> void:
-	var stage: int = TrainLight.stage_of(c)
-	var daytime: String = TrainLight.daytime_of(rules.get("view", {}))
-	# The stage's share of the stove, the same by day and night; read once, as the lamp's place.
-	c["stove_share"] = float(TrainLight.spec(stage, daytime)["stove"])
+	_read_stove_share(c)
 	life.add_car(c)
-	# The car's lamp by its home stage and the hour (train_light.gd, 결정 486), easing toward
-	# the mood. One lamp a car and no shadow on the phone: a swaying lamp's shadow is drawn
-	# again every frame (+29k primitives on the first diagonal screen), and the second lamp and
-	# the window glow added no draw call but 39 lights over the train's 24.
-	var lamps: Array[OmniLight3D] = TrainLight.build(node, l, stage, daytime)
+	_build_lamp(c, node, l)
+	c["name"] = _label(node, String(def.get("name", def["id"])), Vector3(l * 0.5, h + 1.2, 0), 72, Color(0.93, 0.91, 0.86))
+	c["values"] = _label(node, "", Vector3(l * 0.5, h + 0.55, 0), 44, Color(0.7, 0.7, 0.68))
+	# The car's numbers are not on the everyday screen (decisions.md 「평소 화면에는
+	# 칸 수치를 두지 않는다」, 결정 417): the line keeps them for this scene's
+	# tests and is not drawn; a press on the car opens its pane with them.
+	(c["values"] as Label3D).visible = false
+
+
+## The stage's share of the stove, the same by day and night; read once, as the lamp's place.
+func _read_stove_share(c: Dictionary) -> void:
+	var daytime: String = TrainLight.daytime_of(rules.get("view", {}))
+	c["stove_share"] = float(TrainLight.spec(TrainLight.stage_of(c), daytime)["stove"])
+
+
+## A car whose home stage changed in this scene: its room (the furniture, the dress, the stove)
+## and its lamp are built again at the new stage. The shell, the places, the people and the
+## room's traces stay, so only this car is redone (on the phone a whole rebuild stutters).
+func _restage_car(c: Dictionary) -> void:
+	var node: Node3D = c["node"]
+	for part: String in ["Stove", "StovePipeLow", "StovePipeTop"]:
+		var old: Node = node.get_node_or_null(part)
+		if old != null:
+			(c["shell_top"] as Array).erase(old)
+			old.free()
+	for key: String in ["stove_light", "steam", "lamp", "lamp_pool"]:
+		if c.get(key) is Node and is_instance_valid(c[key]):
+			(c[key] as Node).free()
+		c.erase(key)
+	c["home_stage"] = _home_stage_of(String(c["id"]))
+	_read_stove_share(c)
+	life.restage_room(c)
+	_build_lamp(c, node, CAR_LENGTH)
+	_remember_high_props(c)
+	_apply_shell_view(c)
+	if c.has("room_vis"):
+		_show_room(c)
+
+
+## The car's lamp by its home stage and the hour (train_light.gd, 결정 486), easing toward
+## the mood. One lamp a car and no shadow on the phone: a swaying lamp's shadow is drawn
+## again every frame (+29k primitives on the first diagonal screen), and the second lamp and
+## the window glow added no draw call but 39 lights over the train's 24.
+func _build_lamp(c: Dictionary, node: Node3D, l: float) -> void:
+	var lamps: Array[OmniLight3D] = TrainLight.build(node, l, TrainLight.stage_of(c), TrainLight.daytime_of(rules.get("view", {})))
 	var lamp: OmniLight3D = lamps[0]
 	lamp.shadow_enabled = false
 	for extra: OmniLight3D in lamps.slice(1):
@@ -1531,12 +1587,6 @@ func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: 
 	c["lamp_sway"] = 1.0
 	c["lamp_pool"] = _lamp_pool(node, lamp.position)
 	_tint_pool(c)
-	c["name"] = _label(node, String(def.get("name", def["id"])), Vector3(l * 0.5, h + 1.2, 0), 72, Color(0.93, 0.91, 0.86))
-	c["values"] = _label(node, "", Vector3(l * 0.5, h + 0.55, 0), 44, Color(0.7, 0.7, 0.68))
-	# The car's numbers are not on the everyday screen (decisions.md 「평소 화면에는
-	# 칸 수치를 두지 않는다」, 결정 417): the line keeps them for this scene's
-	# tests and is not drawn; a press on the car opens its pane with them.
-	(c["values"] as Label3D).visible = false
 
 
 ## The shell model of this car's kind, with a material of its own so the
@@ -1661,18 +1711,27 @@ func _step_backdrop(delta: float) -> void:
 
 ## An iron stove with its pipe, an ember glow and the faint steam a car stove
 ## may make (fx/smoke.gd "stove").
-func _build_stove(c: Dictionary, at: Vector3) -> void:
+func _build_stove(c: Dictionary, at: Vector3, model: String = "") -> void:
 	var node: Node3D = c["node"]
 	var iron := Color(0.12, 0.12, 0.13)
+	var pipe_bottom: float = at.y + 0.7
+	var tier_path: String = "res://models/train_interior/" + model + ".glb"
+	if not model.is_empty() and model.is_valid_identifier() and ResourceLoader.exists(tier_path):
+		var stove := (load(tier_path) as PackedScene).instantiate() as Node3D
+		var bounds: AABB = Interior._bounds_of(stove)
+		stove.name = "Stove"
+		# Tier models have their origin at the floor, unlike the original centre-origin stove.
+		stove.position = at - Vector3(0, bounds.position.y, 0)
+		pipe_bottom = at.y + bounds.size.y
+		node.add_child(stove)
 	# The iron stove model of the furniture set (origin at its middle); a box without it.
-	if ResourceLoader.exists(STOVE_MODEL):
+	elif ResourceLoader.exists(STOVE_MODEL):
 		var stove := (load(STOVE_MODEL) as PackedScene).instantiate() as Node3D
 		stove.name = "Stove"
 		stove.position = at + Vector3(0, 0.35, 0)
 		node.add_child(stove)
 	else:
-		_box(node, Vector3(0.4, 0.7, 0.4), at + Vector3(0, 0.35, 0), iron)
-	var pipe_bottom: float = at.y + 0.7
+		_box(node, Vector3(0.4, 0.7, 0.4), at + Vector3(0, 0.35, 0), iron).name = "Stove"
 	var pipe_end: float = at.y + CAR_HEIGHT
 	var pipe_low: MeshInstance3D = _box(node, Vector3(0.1, SHELL_CUT_Y - pipe_bottom, 0.1),
 		Vector3(at.x, (pipe_bottom + SHELL_CUT_Y) * 0.5, at.z - 0.1), iron)

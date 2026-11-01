@@ -15,6 +15,44 @@ const LIVELY_DIR := "res://models/props_field/"
 const LIVELY_KINDS: Array[String] = ["dresser", "chair", "nightstand", "counter", "sink", "cupboard", "settee",
 	"armchair", "low_table", "side_table", "toilet", "washstand", "bathtub", "towel_shelf", "medicine_cabinet",
 	"waste_bin"]
+## Things set on top of the room furniture (map_view, mount "top"): indoors only (the map puts them in rooms,
+## never in a yard; the material is one per file, so one put outdoors would lose its rime too), so no rime on
+## them either; their own colours stay as baked (no lively grade).
+const TABLETOP_KINDS: Array[String] = ["vase", "alarm_clock", "mug", "teapot", "kettle", "kettle_enamel",
+	"cutting_board", "serving_bowl", "dinner_plate"]
+## Where something can be set on a piece of furniture: the flat top's height and the part of it with nothing
+## standing above, in the model's own frame (+Z its front, before map_view's PropFit turns or narrows it), as
+## [{y, rect: Rect2(x, z, width, depth)}]. Measured on the baked model's faces, each rect 1 cm inside the
+## edges found; test_prop_models probes every LOD's mesh under each rect, edges included, so a rebake that
+## moves a top fails there. By model file, since a kind can fall back to another model (cold_stove to
+## tiled_stove) whose top is elsewhere: that one has none.
+const TOPS: Dictionary = {
+	LIVELY_DIR + "nightstand.glb": [{"y": 0.55, "rect": Rect2(-0.24, -0.205, 0.48, 0.405)}],
+	LIVELY_DIR + "dresser.glb": [{"y": 1.0, "rect": Rect2(-0.87, -0.31, 1.74, 0.594)}],
+	LIVELY_DIR + "side_table.glb": [{"y": 0.6, "rect": Rect2(-0.27, -0.205, 0.54, 0.41)}],
+	LIVELY_DIR + "low_table.glb": [{"y": 0.45, "rect": Rect2(-0.35, -0.32, 0.7, 0.64)}],
+	# The radio cabinet's lid, in front of and behind the thin rail along it (z -0.246..-0.205, 0.10 proud).
+	LIVELY_DIR + "radio_set.glb": [
+		{"y": 0.35, "rect": Rect2(-0.95, -0.195, 1.9, 0.561)},
+		{"y": 0.35, "rect": Rect2(-0.95, -0.47, 1.9, 0.214)},
+	],
+	# The worktop, in front of the 6 cm splashback along the back edge.
+	LIVELY_DIR + "counter.glb": [{"y": 0.84, "rect": Rect2(-0.47, -0.276, 0.94, 0.596)}],
+	# The lid, three boards with 5 mm gaps between (z -0.188..-0.183, 0.129..0.134); its straps stand 1 cm
+	# proud, so things go on at their height.
+	"res://models/props_common/blanket_chest.glb": [
+		{"y": 0.65, "rect": Rect2(-0.99, -0.49, 1.98, 0.297)},
+		{"y": 0.65, "rect": Rect2(-0.99, -0.178, 1.98, 0.302)},
+		{"y": 0.65, "rect": Rect2(-0.99, 0.139, 1.98, 0.291)},
+	],
+	# Either side of the flue (back middle) and the round hob plate (front middle, centre z 0.135), and on
+	# the plate itself, the square inside its round.
+	"res://models/props_common/cold_stove.glb": [
+		{"y": 0.77, "rect": Rect2(-0.48, -0.48, 0.31, 0.89)},
+		{"y": 0.77, "rect": Rect2(0.17, -0.48, 0.31, 0.89)},
+		{"y": 0.79, "rect": Rect2(-0.09, 0.045, 0.18, 0.18)},
+	],
+}
 
 ## container id -> model file. Kinds follow the container's name (책상 desk,
 ## 선반 shelf, 옷장·사물함 wardrobe, 부엌 dining set, 찬장 bookcase-like
@@ -103,10 +141,12 @@ static func rows_path(path: String) -> Array:
 			var source := scene.instantiate()
 			_collect(source, Transform3D.IDENTITY, found)
 			source.free()
-	if lively(path):
+	var living := lively(path)
+	if living or tabletop(path):
 		for row: Dictionary in found:
 			var material := row["material"] as ShaderMaterial
-			material.set_shader_parameter("lively", 1.0)
+			if living:
+				material.set_shader_parameter("lively", 1.0)
 			# Indoors only: rime is not held off by `sheltered` and would grey the wood on a cold stop.
 			material.set_shader_parameter("rime_catch", 0.0)
 	_rows[path] = found
@@ -115,6 +155,15 @@ static func rows_path(path: String) -> Array:
 
 static func lively(path: String) -> bool:
 	return path.begins_with(LIVELY_DIR) and path.get_file().get_basename() in LIVELY_KINDS
+
+
+static func tabletop(path: String) -> bool:
+	return path.begins_with(LIVELY_DIR) and path.get_file().get_basename() in TABLETOP_KINDS
+
+
+## The tops of model `path` things can be set on (TOPS); [] when it has none.
+static func tops(path: String) -> Array:
+	return TOPS.get(path, [])
 
 
 ## 모델의 여러 노드도 LOD마다 메시 하나로 묶는다. 원래 재질과 노드 변환을 보존한다.

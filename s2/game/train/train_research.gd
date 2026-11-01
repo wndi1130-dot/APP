@@ -451,11 +451,11 @@ const TECHS: Dictionary = {
 		"id": "x2",
 		"branch": "expedition",
 		"tier": 2,
-		"name": "핸드카 정찰",
+		"name": "수동차 정찰",
 		"effect": "정차마다 장소 후보가 둘",
 		"variants": {
 			"a": {
-				"name": "페달 핸드카",
+				"name": "페달 궤도차",
 				"effect": "정찰 산출 깎임 −20% → −10%. 고요한 곳에선 덜컹이는 소리에 기척 +1",
 				"upkeep": {
 					"parts": 0.25
@@ -468,7 +468,7 @@ const TECHS: Dictionary = {
 				"say": "발로 밟아 조용히 다녀온다!"
 			},
 			"b": {
-				"name": "발동기 핸드카",
+				"name": "발동기 궤도차",
 				"effect": "정찰조 위험 ×0.4, 정찰 산출 깎임 없음. 발동기 소리에 늘 기척 +2",
 				"upkeep": {
 					"parts": 0.25

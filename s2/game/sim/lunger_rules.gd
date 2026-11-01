@@ -7,7 +7,7 @@ extends RefCounted
 ## Every number here is a first value, not a measured one. They are all here
 ## so that they are changed in one place.
 
-const OPTION: String = "lungers"        # game.opts key: true puts lungers in the field, absent or false leaves it as it was
+const OPTION: String = "lungers"        # true forces SHARE; otherwise follow act progress (decisions 383, 387, 134)
 const SHARE: float = 0.1                # of the dead that stand (not the ones that drift)
 const SEES: float = 8.0                 # a person seen within this many metres sets it off
 const TELL: float = 1.2                 # seconds it stays low before it runs
@@ -19,5 +19,5 @@ const AT_ONCE: int = 2                  # no more than this many in the tell or 
 
 
 ## Whether one of the dead is a lunger, from one roll (0..1) made when it is put in the field.
-static func picks(roll: float, stander: bool) -> bool:
-	return stander and roll < SHARE
+static func picks(roll: float, stander: bool, share: float = SHARE) -> bool:
+	return stander and roll < share
