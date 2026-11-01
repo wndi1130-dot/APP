@@ -481,7 +481,7 @@ func _ready() -> void:
 	snow_cover = SnowCover.new(season, open_ground, float(opts.get("storm_cm", storm.get("storm_cm", 0.0))), old_cm)
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
-	Engine.max_fps = int(opts.get("fps_cap", 60))
+	Engine.max_fps = fps_cap_for(Engine.max_fps, opts, OS.has_feature("mobile"))
 	place = map_id
 	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
@@ -1035,9 +1035,13 @@ func _set_sight_round() -> void:
 ## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
 func _update_light() -> void:
 	if storm.is_empty():
+		if ripples != null:
+			ripples.dusk = 0.0
 		_update_atmosphere()
 		return
 	var t := clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
+	if ripples != null:
+		ripples.dusk = t
 	# The night band is lamps only; the gray-box field has no lamps yet, so the
 	# floors keep people, doors and the platform edge readable after dark.
 	sun.light_energy = lerpf(float(fx_light["sun_energy"]), maxf(float(fx_light_night["sun_energy"]), NIGHT_SUN_MIN), t)
@@ -1425,6 +1429,15 @@ func contract_on() -> bool:
 ## How each car's people speak (ally_lines.gd), the field's first squad's by car.
 const VOICE_OF_COMM := {"guard": "rough", "medtech": "quiet", "tail": "fear", "engine": "rough", "front": "quiet"}
 const MEDICAL_OF_SKILL := ["none", "apprentice", "skilled", "master"]
+
+
+## The cap a field runs at. On a phone every stop keeps the cap the start menu set (boot.gd), so a
+## campaign stop, a loaded stop or an old save's start options (60 from before) never lift it; a
+## field with no cap set yet, and every field off the phone, takes its options' cap, 60 if none.
+static func fps_cap_for(current: int, field_opts: Dictionary, mobile: bool) -> int:
+	if mobile and current > 0:
+		return current
+	return int(field_opts.get("fps_cap", 60))
 
 
 ## The field's rows for people of the departure contract (field_departure.gd person): the same
@@ -1831,7 +1844,7 @@ func welcome_back() -> void:
 	away = false
 	if not ended:
 		if resume_announce and hud != null:
-			hud.toast("멈춰 둔 자리다.")
+			hud.toast("멈춰 둔 그대로다.")
 		begin_resume()
 
 
@@ -2466,7 +2479,7 @@ func _on_body_event(p: Person, ev: String) -> void:
 				say(p, "%s 열이 오른다." % p.display_name, false, "window_closed")
 		"exhausted_heavy":
 			if p == player:
-				hud.toast("숨참")
+				hud.toast("숨이 찬다.")
 
 
 func on_person_died(p: Person) -> void:
@@ -3818,7 +3831,7 @@ func _ate(p, id: String, plan: Dictionary) -> void:
 	var result: Dictionary = FieldItems.eat_result(id, float(plan["spill"]))
 	if bool(result["bad"]):
 		if p == player and hud != null:
-			hud.toast("상해 있었다.")
+			hud.toast("먹은 것이 상해 있었다.")
 		return
 	p.body.add_fatigue(-float(result["rest"]))
 
