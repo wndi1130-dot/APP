@@ -705,6 +705,15 @@ static func _restore_zombie_system(game, saved: Dictionary) -> void:
 		game.zombies.lunger_share = start_share
 
 
+## Old prologue saves can still be walking to a loud sound at the chase pace.
+static func _restore_noise_pace(game, z: Dictionary) -> void:
+	var all = game.zombies
+	if all.noise_hurry >= all.SPEED_HURRY:
+		return   # Act 1 on keeps the chase pace (the act's pace is set up before a restore).
+	if z.get("state", "") == "investigate" and z.get("clue_kind", "") == "sound" and float(z.get("speed", 0.0)) == all.SPEED_HURRY:
+		z["speed"] = all.noise_hurry
+
+
 static func _apply_exact(game, save: Dictionary) -> void:
 	var runtime: Dictionary = save["runtime"]
 	for kind: String in ["containers", "spots"]:
@@ -737,6 +746,7 @@ static func _apply_exact(game, save: Dictionary) -> void:
 		game.zombies.list.append({"id": int(row["id"])})
 	for i in game.zombies.list.size():
 		game.zombies.list[i].merge(_thaw(game, save["zombies"][i]), true)
+		_restore_noise_pace(game, game.zombies.list[i])
 	game.zombies._sense_cells_ready = false
 	for row: Dictionary in save["people"]:
 		var p = _person_with_id(game, String(row["pid"]))
@@ -781,6 +791,7 @@ static func _apply_exact(game, save: Dictionary) -> void:
 		var restored: Dictionary = _thaw(game, save["zombies"][i])
 		game.zombies.list[i].clear()
 		game.zombies.list[i].merge(restored)
+		_restore_noise_pace(game, game.zombies.list[i])
 	for row: Dictionary in save["people"]:
 		var p = _person_with_id(game, String(row["pid"]))
 		if p != null:
