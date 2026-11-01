@@ -96,6 +96,8 @@ static func _block_input(node: Node) -> void:
 
 
 static func _restore_input(node: Node) -> void:
+	if node.has_meta(&"row_keep_leaving"):
+		return
 	if node is Control:
 		var c: Control = node as Control
 		if c.has_meta(META_MOUSE):
