@@ -437,15 +437,18 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
   }
   // 남겨짐과 사라짐에 함께 든 사람은 한 번만 센다(묶음 점검 L2).
   const lost = [...new Set([...r.people.leftBehind, ...r.people.missing])].filter(p => !r.people.dead.includes(p));
+  let leftCount = 0;
   for (const [c, names] of byComm(departure, lost)) {
     const had = g.comms[c].pop;
     g.comms[c].pop = Math.max(1, had - names.length);
     // 하한 1에 막혀 빼지 못한 몫은 적어 두고, 구조되어 돌아올 때 그만큼은 다시 더하지 않는다(명단과 인구를 맞춘다, 묶음 점검 M1).
     const short = names.length - Math.max(0, had - g.comms[c].pop);
     if (short > 0) (g.leftShort ??= {})[c] = (g.leftShort[c] ?? 0) + short;
-    lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.join(', ')}이(가) 필드에 남았다.` });
-    journal(g, `${names.join(', ')}이(가) 필드에 남았다. 열차는 그들 없이 떠났다.`, 'dark');
+    lines.push({ k: 'people', comm: c, text: `${COMM_NAME[c]} ${names.length}명이 필드에 남았다.` });
+    leftCount += names.length;
   }
+  // 정차 끝에 남은 사람은 수로만 적고 이름은 적지 않는다(결정 147·183).
+  if (leftCount > 0) journal(g, `${leftCount}명을 필드에 남기고 열차가 떠났다.`, 'dark');
   // 앞 정차에 남았다가 살아서 구해져 돌아온 사람: 떠난 사람 명단에서 빼고 칸 인원으로 돌린다(서막 「기다렸다 태운다」와 같은 꼴).
   const rejoined = returnedOf(r).filter(p => p !== CAPTAIN_ID && r.people.rescued.includes(p) && (g.left ?? []).includes(personOf(departure, p).name));
   for (const [c, names] of byComm(departure, rejoined)) {
