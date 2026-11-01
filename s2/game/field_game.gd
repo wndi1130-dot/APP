@@ -2375,7 +2375,7 @@ func make_sound(at: Vector3, level: int, tag: String, from: Person = null) -> vo
 		level = SimNoise.clamp_level(level + 1)
 	if hole != "" and level >= SimNoise.Level.LOUD and director.call_from(hole):
 		if forecast_precision > 0 or player.position.distance_to(at) < 14.0:
-			set_radio("기관사: 굴 쪽이 울립니다. 다음 것들은 %s에서 나옵니다." % director.name_of(hole), "info", entry_pos(hole))
+			set_radio("기관사: 굴 쪽이 울립니다. 다음 무리는 %s에서 나옵니다." % director.name_of(hole), "info", entry_pos(hole))
 	var radius := SimNoise.radius(level, indoor, director.call_range_mult(now)) * weather.sound_mult(false) * SimNoise.reach(tag)
 	var reacted: int = zombies.hear(at, level, radius)
 	ledger.observe(level, tag, radius, reacted)
@@ -2544,7 +2544,7 @@ func _update_hordes(delta: float) -> void:
 		director.noticed(now)
 	elif director.update_lost(now):
 		telemetry.lost_at(now)
-		set_radio("기관사: 놓친 것 같습니다. 다음 것들이 늦어집니다. 숨 돌리십시오.")
+		set_radio("기관사: 놓친 것 같습니다. 다음 무리가 늦어집니다. 숨 돌리십시오.")
 	var h := director.update(now)
 	if not h.is_empty():
 		_start_horde(h)
@@ -2640,7 +2640,7 @@ func _start_horde(h: Dictionary) -> void:
 	if director.sewer(key):
 		set_radio("기관사: %s이 덜컹거린다. 올라온다." % director.name_of(key) if FieldMaps.lid(key) else "기관사: %s에서 소리가 울린다. 올라온다." % director.name_of(key), "urgent", entry_pos(key))
 	else:
-		set_radio("기관사: %s, 저것들이 들어온다." % director.name_of(key), "urgent", entry_pos(key))
+		set_radio("기관사: %s, 무리가 몰려온다." % director.name_of(key), "urgent", entry_pos(key))
 	# The first wave also pulls the dead of the street toward the train (front wave).
 	if int(h["index"]) == 0:
 		for z in zombies.list:

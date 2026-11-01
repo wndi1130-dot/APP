@@ -185,7 +185,7 @@ describe('상한', () => {
     picked(g, 2);
     addCard(g, { kind: 'birth', comm: 'tail', who: mother });
     g.born = { comm: 'tail', mother, weak: false, left: 0 };
-    expect(chooseCard(g, g.cards[0].uid, 0)).toBe(true); // 의무칸으로 옮긴다: 이름 카드가 맨 앞에 붙는다
+    expect(chooseCard(g, g.cards[0].uid, 0)).toBe(true); // 의무칸으로 데려간다: 이름 카드가 맨 앞에 붙는다
     expect(g.budget!.picked).toBe(3);
     expect(kinds(g)).toEqual([]);
     expect(deferredKinds(g)).toEqual(['naming']);

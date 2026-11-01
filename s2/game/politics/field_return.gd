@@ -340,7 +340,7 @@ static func _offend(g: Dictionary, comm: String) -> void:
 
 static func _voice_kept(g: Dictionary, t: Dictionary, comm: String) -> void:
 	var voices := {
-		"engine": ["말한 대로 왔군. 화부들한테 전하겠다.", "약속은 석탄 같은 거다. 넣은 만큼 간다."],
+		"engine": ["말한 대로 왔구나. 화부들한테 전하겠다.", "약속은 석탄 같은 거다. 넣은 만큼 간다."],
 		"tail": ["한다고 한 걸 했네. 여기서는 그게 드문 일이야.", "뒤쪽에서도 다 봤어. 잊지 않을게."],
 		"guard": ["명령이 아니라 약속이었지. 지킨 것으로 적어 둔다.", "말과 한 일이 같았다. 그거면 됐다."],
 		"medtech": ["말한 날에 말한 대로였다. 그렇게 적어 두겠다.", "지켜질 줄 몰랐다. 다음에도 묻겠다."],
@@ -646,6 +646,7 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		if not (receipt["people"]["dead"] as Array).has(person_id) and not lost_ids.has(person_id):
 			lost_ids.append(person_id)
 	var lost_by_comm := _by_comm(t, departure, lost_ids)
+	var left_count: int = 0
 	for comm: String in lost_by_comm:
 		var names: Array = lost_by_comm[comm]
 		var had := int(g["comms"][comm]["pop"])
@@ -657,8 +658,11 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 			if not g.get("leftShort") is Dictionary:
 				g["leftShort"] = {}
 			g["leftShort"][comm] = int(g["leftShort"].get(comm, 0)) + short
-		lines.append({"k": "people", "comm": comm, "text": "%s %s이(가) 필드에 남았다." % [t["COMM_NAME"][comm], ", ".join(names)]})
-		_journal(g, "%s이(가) 필드에 남았다. 열차는 그들 없이 떠났다." % ", ".join(names), "dark")
+		lines.append({"k": "people", "comm": comm, "text": "%s %d명이 필드에 남았다." % [t["COMM_NAME"][comm], names.size()]})
+		left_count += names.size()
+	# Those left at the end of a stop are counted, never named (결정 147·183; s1 the same).
+	if left_count > 0:
+		_journal(g, "%d명을 필드에 남기고 열차가 떠났다." % left_count, "dark")
 	# Left at an earlier stop and rescued alive this time: off the left list and back into the car's
 	# count (as the prologue's waiting for them does; s1 field_receipt.ts rejoined).
 	var rejoined: Array = []

@@ -86,8 +86,8 @@
   "godot_import_script": "res://models/train_interior/vertex_colors.gd",
   "godot_material": "built-in StandardMaterial3D, vertex colour enabled on import; no material file",
   "triangle_limit": 600,
-  "total_triangle_limit": 8000,
-  "total_triangles": 7570,
+  "total_triangle_limit": 10000,
+  "total_triangles": 9457,
   "assets": {
     "bench": {
       "status": "ready",
@@ -3079,11 +3079,2423 @@
           0.18
         ]
       }
+    },
+    "wall_patch": {
+      "status": "ready",
+      "path": "res://models/train_interior/wall_patch.glb",
+      "reference_size_m": [
+        0.48,
+        0.42,
+        0.02
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 60,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.48,
+            0.42,
+            0.02
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.48,
+        0.42,
+        0.02
+      ],
+      "bounds_m": [
+        [
+          -0.24,
+          0.0,
+          -0.01
+        ],
+        [
+          0.24,
+          0.42,
+          0.01
+        ]
+      ],
+      "use": "창 아래 벽의 덧댄 판자",
+      "lod0_tris": 54,
+      "colours": [
+        "wood",
+        "wood_dark"
+      ],
+      "bytes": 6548,
+      "sha256": "1f64b34e0a503d73db30b07630e9d6a0d78b3749692e09bacee479b8a808461f",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\resource-planks.glb",
+          "pack": "kenney_survival",
+          "file": "kenney_survival/x/Models/GLB format/resource-planks.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\License.txt",
+          "sha256": "d3804257474a3baab7ac067be91de5c3d6d18d5803775dc876cb6d9442c30873",
+          "original_triangles": 72,
+          "reduced_triangles": 54
+        }
+      ],
+      "tier": 0,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {},
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "346a59a750ded03d86eef0866a97b91a9672ec0ebf40f682c8a6fc6a0f52fbe3",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_survival / kenney_survival/x/Models/GLB format/resource-planks.glb (CC0-1.0)",
+      "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
+    },
+    "tarp_patch": {
+      "status": "ready",
+      "path": "res://models/train_interior/tarp_patch.glb",
+      "reference_size_m": [
+        0.48,
+        0.42,
+        0.01
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 16,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.48,
+            0.42,
+            0.01
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.48,
+        0.42,
+        0.01
+      ],
+      "bounds_m": [
+        [
+          -0.24,
+          0.0,
+          -0.005
+        ],
+        [
+          0.24,
+          0.42,
+          0.005
+        ]
+      ],
+      "use": "창 아래 벽에 못 두 개로 고정한 천 조각",
+      "lod0_tris": 16,
+      "colours": [
+        "cloth_blue",
+        "iron",
+        "wool_dark"
+      ],
+      "bytes": 2664,
+      "sha256": "92b6cf364c57d136c9e87c931dee177b13358a6a4381b1e98da76fff5ad72d36",
+      "sources": [],
+      "tier": 0,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wool_dark": [
+          0.21,
+          0.2,
+          0.19
+        ],
+        "cloth_blue": [
+          0.2,
+          0.25,
+          0.3
+        ]
+      },
+      "source_search": "CC0 structure-canvas·tent-canvas는 프레임/입체 지붕이라 평평한 벽 보수 천과 다름; 드라이브 파일명 목록에서 맞는 후보를 식별하지 못함. scenario의 불투명 ID는 부재 증거가 아님.",
+      "verification": {
+        "centred_check_glb_sha256": "801d2ec5c548e60fe4b995dbb2d10bb448be56ad0d69a82b1f16499fda5f5762",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)",
+      "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
+    },
+    "straw_mat": {
+      "status": "ready",
+      "path": "res://models/train_interior/straw_mat.glb",
+      "reference_size_m": [
+        0.6,
+        0.015,
+        0.2
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 24,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.6,
+            0.015,
+            0.2
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.6,
+        0.015,
+        0.2
+      ],
+      "bounds_m": [
+        [
+          -0.3,
+          0.0,
+          -0.1
+        ],
+        [
+          0.3,
+          0.015,
+          0.1
+        ]
+      ],
+      "use": "얇은 짚 마감",
+      "lod0_tris": 22,
+      "colours": [
+        "rope",
+        "wool_dark"
+      ],
+      "bytes": 3272,
+      "sha256": "70ce596ca53cfa0f7ab17c8666319322b9663639fc17e41ee0b826c1afd3bbed",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\Models\\GLTF format\\rugSquare.glb",
+          "pack": "kenney_furniture",
+          "file": "kenney_furniture/x/Models/GLTF format/rugSquare.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\License.txt",
+          "sha256": "18a63634e9bbdde0b309c008f4cd41df8455f7f2ffdb8fe8985fdf8c2cd06b3d",
+          "original_triangles": 28,
+          "reduced_triangles": 22
+        }
+      ],
+      "tier": 0,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wool_dark": [
+          0.21,
+          0.2,
+          0.19
+        ],
+        "rope": [
+          0.34,
+          0.29,
+          0.22
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "c079848373b8bd7698722f86768f59a45f34d4acbd8dd95d55f7dd7f7d58b45e",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_furniture / kenney_furniture/x/Models/GLTF format/rugSquare.glb (CC0-1.0)"
+    },
+    "stick_candle": {
+      "status": "ready",
+      "path": "res://models/train_interior/stick_candle.glb",
+      "reference_size_m": [
+        0.13,
+        0.32,
+        0.13
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.13,
+        0.32,
+        0.13
+      ],
+      "bounds_m": [
+        [
+          -0.065,
+          0.0,
+          -0.065
+        ],
+        [
+          0.065,
+          0.32,
+          0.065
+        ]
+      ],
+      "use": "사슬 없는 막대 고리의 초",
+      "lod0_tris": 46,
+      "colours": [
+        "cloth",
+        "iron",
+        "soot"
+      ],
+      "bytes": 4964,
+      "sha256": "4f76db2fec5a869fbfc217b0c1a0087b76fcd95b4844178a5537cb9010204761",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\gltf\\candle_thin.gltf.glb",
+          "pack": "kaykit_dungeon",
+          "file": "kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/candle_thin.gltf.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\LICENSE.txt",
+          "sha256": "76a3f0c92e9e0990229e480aceba0cb33865f9ae874f2bae5404445ceba9a8e5",
+          "original_triangles": 66,
+          "reduced_triangles": 18
+        }
+      ],
+      "tier": 0,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {},
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "c5a54e85ad048af68bde68a8e3a8a908106c64387bd9580028202be14647b411",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kaykit_dungeon / kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/candle_thin.gltf.glb (CC0-1.0)"
+    },
+    "tin_stove": {
+      "status": "ready",
+      "path": "res://models/train_interior/tin_stove.glb",
+      "reference_size_m": [
+        0.4,
+        0.58,
+        0.4
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 120,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.4,
+            0.58,
+            0.4
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.4,
+        0.58,
+        0.4
+      ],
+      "bounds_m": [
+        [
+          -0.2,
+          0.0,
+          -0.2
+        ],
+        [
+          0.2,
+          0.58,
+          0.2
+        ]
+      ],
+      "use": "낮고 삐뚤한 깡통 난로, 굽은 짧은 연통과 덧댄 양철",
+      "lod0_tris": 112,
+      "colours": [
+        "iron",
+        "iron_worn",
+        "rust_faded",
+        "soot"
+      ],
+      "bytes": 8940,
+      "sha256": "7fca23daa36eedb2fcad39b50af3910e0da238c670647309b00a2d6669435e72",
+      "sources": [],
+      "tier": 0,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "rust_faded": [
+          0.36,
+          0.19,
+          0.13
+        ]
+      },
+      "source_search": "2026-10-31 손질 발주: 깡통·덧댄 판·굽은 연통을 기본 도형으로 직접 구성.",
+      "verification": {
+        "centred_check_glb_sha256": "924ad9d63d2a81b303a21420765d7cde95ba1c0420721d09232d877966e13c5a",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
+    },
+    "sack_bunk_upper": {
+      "status": "ready",
+      "path": "res://models/train_interior/sack_bunk_upper.glb",
+      "reference_size_m": [
+        2.8,
+        0.14,
+        0.6
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 96,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            2.8,
+            0.14,
+            0.6
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        2.8,
+        0.14,
+        0.6
+      ],
+      "bounds_m": [
+        [
+          -1.4,
+          0.0,
+          -0.3
+        ],
+        [
+          1.4,
+          0.14,
+          0.3
+        ]
+      ],
+      "use": "자루 침구의 얇은 위 침상",
+      "lod0_tris": 58,
+      "colours": [
+        "cloth",
+        "wood_dark",
+        "wool",
+        "wool_dark"
+      ],
+      "bytes": 6576,
+      "sha256": "a41fe6cbf12ef1461b1a5910217900c875576ebceae2abca6f8316dd288c5651",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\bedroll.glb",
+          "pack": "kenney_survival",
+          "file": "kenney_survival/x/Models/GLB format/bedroll.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\License.txt",
+          "sha256": "2ad9baa2d800845195c7c92bd8423b0d99519530dee0afd3bd0ac4b2e255d728",
+          "original_triangles": 144,
+          "reduced_triangles": 46
+        }
+      ],
+      "tier": 0,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wool_dark": [
+          0.21,
+          0.2,
+          0.19
+        ],
+        "wool": [
+          0.26,
+          0.24,
+          0.22
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "41a69c95c7aae398a035470d1ca8815eaf24821737ccaaddaa16b3725bec5953",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0)"
+    },
+    "sack_bunk_lower": {
+      "status": "ready",
+      "path": "res://models/train_interior/sack_bunk_lower.glb",
+      "reference_size_m": [
+        1.75,
+        0.48,
+        0.58
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 120,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            1.75,
+            0.48,
+            0.58
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        1.75,
+        0.48,
+        0.58
+      ],
+      "bounds_m": [
+        [
+          -0.875,
+          0.0,
+          -0.29
+        ],
+        [
+          0.875,
+          0.48,
+          0.29
+        ]
+      ],
+      "use": "자루 침구의 다리 있는 아래 침상",
+      "lod0_tris": 106,
+      "colours": [
+        "cloth",
+        "wood_dark",
+        "wool",
+        "wool_dark"
+      ],
+      "bytes": 9912,
+      "sha256": "be304e936915de2f4364a125e7a120cb080203908855068735efec7c75de2255",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\bedroll.glb",
+          "pack": "kenney_survival",
+          "file": "kenney_survival/x/Models/GLB format/bedroll.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\License.txt",
+          "sha256": "2ad9baa2d800845195c7c92bd8423b0d99519530dee0afd3bd0ac4b2e255d728",
+          "original_triangles": 144,
+          "reduced_triangles": 46
+        }
+      ],
+      "tier": 0,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wool_dark": [
+          0.21,
+          0.2,
+          0.19
+        ],
+        "wool": [
+          0.26,
+          0.24,
+          0.22
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "817b556efb493d0b0de1f724975ea160c6443070b9d2a7cce357dda9ba8740ec",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0)"
+    },
+    "wood_wall_box": {
+      "status": "ready",
+      "path": "res://models/train_interior/wood_wall_box.glb",
+      "reference_size_m": [
+        0.48,
+        0.42,
+        0.28
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 120,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.48,
+            0.42,
+            0.28
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.48,
+        0.42,
+        0.28
+      ],
+      "bounds_m": [
+        [
+          -0.24,
+          0.0,
+          -0.14
+        ],
+        [
+          0.24,
+          0.42,
+          0.14
+        ]
+      ],
+      "use": "벽걸이 나무 보관함",
+      "lod0_tris": 100,
+      "colours": [
+        "iron",
+        "wood_mended",
+        "wood_mended_grain"
+      ],
+      "bytes": 7788,
+      "sha256": "4697891c7cdb9fcc47aa89c7a460ff6e7aaf4abaeda2da69530363d7bd82b920",
+      "sources": [],
+      "tier": 1,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wood_mended": [
+          0.2417722418198145,
+          0.157411015229534,
+          0.08959290545410033
+        ],
+        "wood_mended_grain": [
+          0.1552559521723492,
+          0.10208670681710084,
+          0.059034974448749014
+        ]
+      },
+      "source_search": "2026-10-31 벽걸이 손질: 가로 판자 세 장·뚜껑 테·나무 손잡이·L자 받침 쇠 둘을 기본 도형으로 구성. 이전 CC0 메시를 재사용하지 않음.",
+      "verification": {
+        "centred_check_glb_sha256": "7c6746f4d06a742457296ef0c30400f44d10c25e96849d72bb6b3ed60389b88e",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)",
+      "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
+    },
+    "wood_wall_box_shallow": {
+      "status": "ready",
+      "path": "res://models/train_interior/wood_wall_box_shallow.glb",
+      "reference_size_m": [
+        0.48,
+        0.22,
+        0.28
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 120,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.48,
+            0.22,
+            0.28
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.48,
+        0.22,
+        0.28
+      ],
+      "bounds_m": [
+        [
+          -0.24,
+          0.0,
+          -0.14
+        ],
+        [
+          0.24,
+          0.22,
+          0.14
+        ]
+      ],
+      "use": "열차장실 얕은 벽걸이 나무 보관함",
+      "lod0_tris": 88,
+      "colours": [
+        "iron",
+        "wood_mended",
+        "wood_mended_grain"
+      ],
+      "bytes": 6960,
+      "sha256": "16b2b8120444d09bd80f4d41866019d2ba0ad3a6af2a70bd2a578675a7eb8e47",
+      "sources": [],
+      "tier": 1,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wood_mended": [
+          0.2417722418198145,
+          0.157411015229534,
+          0.08959290545410033
+        ],
+        "wood_mended_grain": [
+          0.1552559521723492,
+          0.10208670681710084,
+          0.059034974448749014
+        ]
+      },
+      "source_search": "2026-10-31 벽걸이 손질: 가로 판자 두 장·뚜껑 테·나무 손잡이·L자 받침 쇠 둘을 기본 도형으로 구성. 이전 CC0 메시를 재사용하지 않음.",
+      "verification": {
+        "centred_check_glb_sha256": "c77318c5a91aefe511680edbcc9a8eef070694374fd479cb615d6685f3df7fd4",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)",
+      "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
+    },
+    "drum_stove": {
+      "status": "ready",
+      "path": "res://models/train_interior/drum_stove.glb",
+      "reference_size_m": [
+        0.4,
+        0.7,
+        0.4
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 144,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.4,
+            0.7,
+            0.4
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.4,
+        0.7,
+        0.4
+      ],
+      "bounds_m": [
+        [
+          -0.2,
+          0.0,
+          -0.2
+        ],
+        [
+          0.2,
+          0.7,
+          0.2
+        ]
+      ],
+      "use": "세운 드럼통 난로, 둘레 테 둘과 네모 문, 곧은 연통, 세 다리",
+      "lod0_tris": 140,
+      "colours": [
+        "iron",
+        "iron_worn",
+        "soot"
+      ],
+      "bytes": 10132,
+      "sha256": "444b0b91ae44ceffa8d9a01dbcdf3f8eee1ef4a92d3998b2cea1cdb54b636591",
+      "sources": [],
+      "tier": 1,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {},
+      "source_search": "2026-10-31 손질 발주: 세운 드럼통·둘레 테 둘·문·세 다리를 기본 도형으로 직접 구성.",
+      "verification": {
+        "centred_check_glb_sha256": "68a0755dafe57ab8926b98b1457b0a1a750f8a3805ef3082582eff0b88f5bd66",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
+    },
+    "end_shelf": {
+      "status": "ready",
+      "path": "res://models/train_interior/end_shelf.glb",
+      "reference_size_m": [
+        0.48,
+        0.9,
+        0.28
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 96,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.48,
+            0.9,
+            0.28
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.48,
+        0.9,
+        0.28
+      ],
+      "bounds_m": [
+        [
+          -0.24,
+          0.0,
+          -0.14
+        ],
+        [
+          0.24,
+          0.9,
+          0.14
+        ]
+      ],
+      "use": "판 사이가 열린 세 단 끝벽 선반",
+      "lod0_tris": 60,
+      "colours": [
+        "wood_oak",
+        "wood_oak_grain"
+      ],
+      "bytes": 5236,
+      "sha256": "f34a1ed982a3552cd1471ba4c1ce680b474dcd59ac253ace544bb4bf29eb5ec1",
+      "sources": [],
+      "tier": 2,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wood_oak": [
+          0.3143610328694773,
+          0.1517337575208318,
+          0.04835146363228673
+        ],
+        "wood_oak_grain": [
+          0.19846503807326873,
+          0.09738958255919998,
+          0.032239054338366116
+        ]
+      },
+      "source_search": "2026-10-31 손질 발주: 비어 있는 세 단 선반을 기본 도형으로 직접 구성.",
+      "verification": {
+        "centred_check_glb_sha256": "d9c5c07f3868b34e17d4a28cb604b44c6f3f52a129e0aaa7e4f3605df363a937",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)",
+      "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
+    },
+    "top_shelf": {
+      "status": "ready",
+      "path": "res://models/train_interior/top_shelf.glb",
+      "reference_size_m": [
+        0.48,
+        0.24,
+        0.28
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.48,
+            0.24,
+            0.28
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.48,
+        0.24,
+        0.28
+      ],
+      "bounds_m": [
+        [
+          -0.24,
+          0.0,
+          -0.14
+        ],
+        [
+          0.24,
+          0.24,
+          0.14
+        ]
+      ],
+      "use": "받침 쇠와 얇은 판 한 단의 윗벽 선반",
+      "lod0_tris": 40,
+      "colours": [
+        "iron",
+        "iron_worn",
+        "wood_oak",
+        "wood_oak_grain"
+      ],
+      "bytes": 3960,
+      "sha256": "1f48a550d3e3bf540d3bf3138f674f7ddaf2d5da3af844108660611f1642d9df",
+      "sources": [],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wood_oak": [
+          0.3143610328694773,
+          0.1517337575208318,
+          0.04835146363228673
+        ],
+        "wood_oak_grain": [
+          0.19846503807326873,
+          0.09738958255919998,
+          0.032239054338366116
+        ]
+      },
+      "source_search": "2026-10-31 손질 발주: 얇은 판 하나와 받침 쇠를 기본 도형으로 직접 구성.",
+      "verification": {
+        "centred_check_glb_sha256": "81d22899c90b70579578bea509ed451b4b93aaf18de0b887b24b1ef41bb867bb",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)",
+      "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
+    },
+    "pale_paneling": {
+      "status": "ready",
+      "path": "res://models/train_interior/pale_paneling.glb",
+      "reference_size_m": [
+        12.0,
+        0.42,
+        0.05
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 96,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            12.0,
+            0.42,
+            0.05
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        12.0,
+        0.42,
+        0.05
+      ],
+      "bounds_m": [
+        [
+          -6.0,
+          0.0,
+          -0.025
+        ],
+        [
+          6.0,
+          0.42,
+          0.025
+        ]
+      ],
+      "use": "창 아래 낮고 밝은 나무 판벽 띠",
+      "lod0_tris": 88,
+      "colours": [
+        "wood_pine",
+        "wood_pine_grain"
+      ],
+      "bytes": 9728,
+      "sha256": "6eae563fa07fa5b01295f60776a390b9e9c90e0c8182c1206bd5d3332c6a7545",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\Models\\GLTF format\\paneling.glb",
+          "pack": "kenney_furniture",
+          "file": "kenney_furniture/x/Models/GLTF format/paneling.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\License.txt",
+          "sha256": "69234bb71f54b0241ef6b78c3c7aa8aa855aae745475645f9adec4895296a96c",
+          "original_triangles": 40,
+          "reduced_triangles": 40
+        }
+      ],
+      "tier": 3,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wood_pine": [
+          0.5250175479249465,
+          0.2982992839050337,
+          0.08809660198891581
+        ],
+        "wood_pine_grain": [
+          0.40860440224058625,
+          0.21619478068833597,
+          0.050237900375232174
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "64d3da2a278f1b6792cc42560c1cbbbb29d75c776ec1fe1afeca89bada07b3e6",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_furniture / kenney_furniture/x/Models/GLTF format/paneling.glb (CC0-1.0)",
+      "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
+    },
+    "stick_lamp": {
+      "status": "ready",
+      "path": "res://models/train_interior/stick_lamp.glb",
+      "reference_size_m": [
+        0.13,
+        0.32,
+        0.13
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 80,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.13,
+            0.32,
+            0.13
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.13,
+        0.32,
+        0.13
+      ],
+      "bounds_m": [
+        [
+          -0.065,
+          0.0,
+          -0.065
+        ],
+        [
+          0.065,
+          0.32,
+          0.065
+        ]
+      ],
+      "use": "막대 고리와 갓·전구를 갖춘 전등",
+      "lod0_tris": 63,
+      "colours": [
+        "iron",
+        "linen_ochre",
+        "linen_warm"
+      ],
+      "bytes": 6312,
+      "sha256": "930a754e697091d32ebd8ffcbc5d27878093db249f4c6164264d345593f98771",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\Models\\GLTF format\\lampWall.glb",
+          "pack": "kenney_furniture",
+          "file": "kenney_furniture/x/Models/GLTF format/lampWall.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\License.txt",
+          "sha256": "a9679ecd3be05731846f22ade97c37069598ca7a06dd9319f50230e63a1ea83c",
+          "original_triangles": 42,
+          "reduced_triangles": 27
+        }
+      ],
+      "tier": 3,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "linen_ochre": [
+          0.5510026675461114,
+          0.37336323293703744,
+          0.15640967146267312
+        ],
+        "linen_warm": [
+          0.5147662505500094,
+          0.44349209276747903,
+          0.29014254460057515
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "34481e95ca276d2e283e9a34f6956e8baf6dc5500121bb081aaf235958f92be0",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_furniture / kenney_furniture/x/Models/GLTF format/lampWall.glb (CC0-1.0)"
+    },
+    "small_frame": {
+      "status": "ready",
+      "path": "res://models/train_interior/small_frame.glb",
+      "reference_size_m": [
+        0.3,
+        0.4,
+        0.025
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 28,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.3,
+            0.4,
+            0.025
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.3,
+        0.4,
+        0.025
+      ],
+      "bounds_m": [
+        [
+          -0.15,
+          0.0,
+          -0.0125
+        ],
+        [
+          0.15,
+          0.4,
+          0.0125
+        ]
+      ],
+      "use": "얼굴·글자 없는 추상 그림 액자",
+      "lod0_tris": 28,
+      "colours": [
+        "picture_field",
+        "picture_sky",
+        "wood_pine"
+      ],
+      "bytes": 3892,
+      "sha256": "e78ee22ff156e82464456bb21d73da93c870d3feb61af1258c1880bd003f5a74",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_furniture\\x\\KayKit-Furniture-Bits-1.0-main\\addons\\kaykit_furniture_bits\\Assets\\gltf\\pictureframe_small_A.gltf",
+          "pack": "kaykit_furniture",
+          "file": "kaykit_furniture/x/KayKit-Furniture-Bits-1.0-main/addons/kaykit_furniture_bits/Assets/gltf/pictureframe_small_A.gltf",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_furniture\\x\\KayKit-Furniture-Bits-1.0-main\\addons\\kaykit_furniture_bits\\Assets\\LICENSE.txt",
+          "sha256": "4482cf85a994f9ba3ef45fe490858e5633ef0f09767f79a8511b826024e1de85",
+          "picture_subdivision": "원래 그림 안쪽 2삼각형을 수평 2띠의 4삼각형으로 재분할; 바깥 24삼각형 유지",
+          "original_triangles": 60,
+          "reduced_triangles": 26
+        }
+      ],
+      "tier": 3,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "picture_field": [
+          0.5331774946706628,
+          0.41904645890949727,
+          0.19881949259540016
+        ],
+        "picture_sky": [
+          0.3677539482930253,
+          0.4793666580800945,
+          0.5698259323657623
+        ],
+        "wood_pine": [
+          0.5250175479249465,
+          0.2982992839050337,
+          0.08809660198891581
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "5d5a41206f69fc4bc5cfa6a1b484c82f26232804b68a4cdebd2038e50cc9c82e",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kaykit_furniture / kaykit_furniture/x/KayKit-Furniture-Bits-1.0-main/addons/kaykit_furniture_bits/Assets/gltf/pictureframe_small_A.gltf (CC0-1.0)",
+      "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
+    },
+    "wall_plant": {
+      "status": "ready",
+      "path": "res://models/train_interior/wall_plant.glb",
+      "reference_size_m": [
+        0.12,
+        0.2,
+        0.12
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 64,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.12,
+            0.2,
+            0.12
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.12,
+        0.2,
+        0.12
+      ],
+      "bounds_m": [
+        [
+          -0.06,
+          0.0,
+          -0.06
+        ],
+        [
+          0.06,
+          0.2,
+          0.06
+        ]
+      ],
+      "use": "등이 -Z인 벽걸이 화분",
+      "lod0_tris": 58,
+      "colours": [
+        "iron",
+        "leaf_green",
+        "pot_terracotta",
+        "soil_brown"
+      ],
+      "bytes": 6572,
+      "sha256": "79380f37a3ed8079decdd0c69268ebfbde9fd7757ee30b427c51b185711c1e0a",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\Models\\GLTF format\\pottedPlant.glb",
+          "pack": "kenney_furniture",
+          "file": "kenney_furniture/x/Models/GLTF format/pottedPlant.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\License.txt",
+          "sha256": "5b760eda2766f75fda36b2c5df652a1662f82981ef64cd8fa7fe7bcd386b3a15",
+          "original_triangles": 60,
+          "reduced_triangles": 46
+        }
+      ],
+      "tier": 3,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "leaf_green": [
+          0.05265539067515306,
+          0.21776217009086743,
+          0.038310727138227016
+        ],
+        "pot_terracotta": [
+          0.3310594953929438,
+          0.1051643025548399,
+          0.05063621699563651
+        ],
+        "soil_brown": [
+          0.056661978662884076,
+          0.03179091847591368,
+          0.016545282173014514
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "b3889447f11f230f37577ca718b4c10c546d1857429736de28cbbc12662ca477",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_furniture / kenney_furniture/x/Models/GLTF format/pottedPlant.glb (CC0-1.0)",
+      "wall_back": "-Z; back plane z = -depth / 2, floor/footprint centre origin"
+    },
+    "table_plant": {
+      "status": "ready",
+      "path": "res://models/train_interior/table_plant.glb",
+      "reference_size_m": [
+        0.12,
+        0.2,
+        0.12
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 64,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.12,
+            0.2,
+            0.12
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.12,
+        0.2,
+        0.12
+      ],
+      "bounds_m": [
+        [
+          -0.06,
+          0.0,
+          -0.06
+        ],
+        [
+          0.06,
+          0.2,
+          0.06
+        ]
+      ],
+      "use": "탁상 작은 화분",
+      "lod0_tris": 52,
+      "colours": [
+        "leaf_green",
+        "pot_terracotta",
+        "soil_brown"
+      ],
+      "bytes": 6344,
+      "sha256": "00809fb1232a0cc874e39fc21e28bcc32e380693d4b98275a2a1a40150dd2f9d",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\Models\\GLTF format\\pottedPlant.glb",
+          "pack": "kenney_furniture",
+          "file": "kenney_furniture/x/Models/GLTF format/pottedPlant.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_furniture\\x\\License.txt",
+          "sha256": "5b760eda2766f75fda36b2c5df652a1662f82981ef64cd8fa7fe7bcd386b3a15",
+          "original_triangles": 60,
+          "reduced_triangles": 52
+        }
+      ],
+      "tier": 3,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "leaf_green": [
+          0.05265539067515306,
+          0.21776217009086743,
+          0.038310727138227016
+        ],
+        "pot_terracotta": [
+          0.3310594953929438,
+          0.1051643025548399,
+          0.05063621699563651
+        ],
+        "soil_brown": [
+          0.056661978662884076,
+          0.03179091847591368,
+          0.016545282173014514
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "a21f4bd4a0f5681ea0cd10acdb5c1e1e7e8c6d7167dc63e9dae48aab63f5b083",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_furniture / kenney_furniture/x/Models/GLTF format/pottedPlant.glb (CC0-1.0)"
+    },
+    "open_bunk_upper": {
+      "status": "ready",
+      "path": "res://models/train_interior/open_bunk_upper.glb",
+      "reference_size_m": [
+        2.8,
+        0.14,
+        0.6
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 120,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            2.8,
+            0.14,
+            0.6
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        2.8,
+        0.14,
+        0.6
+      ],
+      "bounds_m": [
+        [
+          -1.4,
+          0.0,
+          -0.3
+        ],
+        [
+          1.4,
+          0.14,
+          0.3
+        ]
+      ],
+      "use": "문 없는 낮은 테두리의 위 침상",
+      "lod0_tris": 106,
+      "colours": [
+        "linen_warm",
+        "wood_pine",
+        "wood_pine_grain",
+        "wool_rust"
+      ],
+      "bytes": 9808,
+      "sha256": "f11f0769ecd0a27f12269acb5824c2cf70e619b404d738126fb2635ee5f2da08",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\bedroll.glb",
+          "pack": "kenney_survival",
+          "file": "kenney_survival/x/Models/GLB format/bedroll.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\License.txt",
+          "sha256": "2ad9baa2d800845195c7c92bd8423b0d99519530dee0afd3bd0ac4b2e255d728",
+          "original_triangles": 144,
+          "reduced_triangles": 42
+        }
+      ],
+      "tier": 3,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "linen_warm": [
+          0.5147662505500094,
+          0.44349209276747903,
+          0.29014254460057515
+        ],
+        "wood_pine": [
+          0.5250175479249465,
+          0.2982992839050337,
+          0.08809660198891581
+        ],
+        "wood_pine_grain": [
+          0.40860440224058625,
+          0.21619478068833597,
+          0.050237900375232174
+        ],
+        "wool_rust": [
+          0.23830868264658514,
+          0.06225464350678164,
+          0.03783744718423952
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "4a5511b61b5d832090048dd1b5c1095d4198646bc80f1255652db0a2554e67c5",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0)"
+    },
+    "open_bunk_lower": {
+      "status": "ready",
+      "path": "res://models/train_interior/open_bunk_lower.glb",
+      "reference_size_m": [
+        1.75,
+        0.48,
+        0.58
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 160,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            1.75,
+            0.48,
+            0.58
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        1.75,
+        0.48,
+        0.58
+      ],
+      "bounds_m": [
+        [
+          -0.875,
+          0.0,
+          -0.29
+        ],
+        [
+          0.875,
+          0.48,
+          0.29
+        ]
+      ],
+      "use": "문 없는 낮은 테두리의 아래 침상",
+      "lod0_tris": 154,
+      "colours": [
+        "linen_warm",
+        "wood_pine",
+        "wood_pine_grain",
+        "wool_teal"
+      ],
+      "bytes": 13144,
+      "sha256": "42f6a804ecebba036b77e09712ba584865184ea1747f7594ee53f8d95010c4e4",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\bedroll.glb",
+          "pack": "kenney_survival",
+          "file": "kenney_survival/x/Models/GLB format/bedroll.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\License.txt",
+          "sha256": "2ad9baa2d800845195c7c92bd8423b0d99519530dee0afd3bd0ac4b2e255d728",
+          "original_triangles": 144,
+          "reduced_triangles": 42
+        }
+      ],
+      "tier": 3,
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "linen_warm": [
+          0.5147662505500094,
+          0.44349209276747903,
+          0.29014254460057515
+        ],
+        "wood_pine": [
+          0.5250175479249465,
+          0.2982992839050337,
+          0.08809660198891581
+        ],
+        "wood_pine_grain": [
+          0.40860440224058625,
+          0.21619478068833597,
+          0.050237900375232174
+        ],
+        "wool_teal": [
+          0.04620366067963664,
+          0.15651246548215622,
+          0.18053915286280384
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "c1086df6e6ffb4239fd1ea10d99ff2d8544a620e354770b9043240bed74c63ec",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_survival / kenney_survival/x/Models/GLB format/bedroll.glb (CC0-1.0)"
+    },
+    "tiny_cup": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_cup.glb",
+      "reference_size_m": [
+        0.07,
+        0.09,
+        0.07
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.07,
+            0.09,
+            0.07
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.07,
+        0.09,
+        0.07
+      ],
+      "bounds_m": [
+        [
+          -0.035,
+          0.0,
+          -0.035
+        ],
+        [
+          0.035,
+          0.09,
+          0.035
+        ]
+      ],
+      "use": "손잡이 있는 빈 컵",
+      "lod0_tris": 40,
+      "colours": [
+        "enamel_blue_rim",
+        "enamel_cream"
+      ],
+      "bytes": 3960,
+      "sha256": "632dfdff64405cb796c172491ffdb7be2fa58cee6a7a2994c3c6aa2f695c8884",
+      "sources": [],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "enamel_blue_rim": [
+          0.036570090975536027,
+          0.07821284090558568,
+          0.18663235523638366
+        ],
+        "enamel_cream": [
+          0.6167892361083972,
+          0.5603681959314419,
+          0.4096849488702176
+        ]
+      },
+      "source_search": "2026-10-31 손질 발주: 스캔 원본을 쓰지 않고 빈 컵과 손잡이를 기본 도형 40삼각형으로 직접 구성.",
+      "verification": {
+        "centred_check_glb_sha256": "9643dacff8c3e2f42beea3997eca2a81bd0b727d843283c5bf2cf03ec955d400",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
+    },
+    "tiny_bowl": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_bowl.glb",
+      "reference_size_m": [
+        0.11,
+        0.045,
+        0.11
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.11,
+            0.045,
+            0.11
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.11,
+        0.045,
+        0.11
+      ],
+      "bounds_m": [
+        [
+          -0.055,
+          0.0,
+          -0.055
+        ],
+        [
+          0.055,
+          0.045,
+          0.055
+        ]
+      ],
+      "use": "빈 그릇 하나",
+      "lod0_tris": 42,
+      "colours": [
+        "enamel_blue_rim",
+        "enamel_cream"
+      ],
+      "bytes": 5324,
+      "sha256": "dc4b3ffed615b437391aea1143eb4c3315f6eebb3402862b20cf5ba9a0681986",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\gltf\\plate_small.gltf.glb",
+          "pack": "kaykit_dungeon",
+          "file": "kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/plate_small.gltf.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\LICENSE.txt",
+          "sha256": "4c76a077618c02f87dcd8b8a53c708983ac5cdbe7082a8d61dc4085db27a0181",
+          "original_triangles": 120,
+          "reduced_triangles": 42
+        }
+      ],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "enamel_blue_rim": [
+          0.036570090975536027,
+          0.07821284090558568,
+          0.18663235523638366
+        ],
+        "enamel_cream": [
+          0.6167892361083972,
+          0.5603681959314419,
+          0.4096849488702176
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "a0e0676ad8d216db251f80b0d6abfad93dd9375ee4b0e17cff2c5b5ce0863840",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kaykit_dungeon / kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/plate_small.gltf.glb (CC0-1.0)"
+    },
+    "tiny_plate": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_plate.glb",
+      "reference_size_m": [
+        0.12,
+        0.015,
+        0.12
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.12,
+            0.015,
+            0.12
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.12,
+        0.015,
+        0.12
+      ],
+      "bounds_m": [
+        [
+          -0.06,
+          0.0,
+          -0.06
+        ],
+        [
+          0.06,
+          0.015,
+          0.06
+        ]
+      ],
+      "use": "빈 접시 하나",
+      "lod0_tris": 42,
+      "colours": [
+        "enamel_blue_rim",
+        "enamel_cream"
+      ],
+      "bytes": 5324,
+      "sha256": "68b7a58903ad9135cb58165e93b0e5d655bb2b5d404627f6f7cbe214ff154ec9",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\gltf\\plate_small.gltf.glb",
+          "pack": "kaykit_dungeon",
+          "file": "kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/plate_small.gltf.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_dungeon\\x\\KayKit-Dungeon-Remastered-1.0-main\\addons\\kaykit_dungeon_remastered\\Assets\\LICENSE.txt",
+          "sha256": "4c76a077618c02f87dcd8b8a53c708983ac5cdbe7082a8d61dc4085db27a0181",
+          "original_triangles": 120,
+          "reduced_triangles": 42
+        }
+      ],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "enamel_blue_rim": [
+          0.036570090975536027,
+          0.07821284090558568,
+          0.18663235523638366
+        ],
+        "enamel_cream": [
+          0.6167892361083972,
+          0.5603681959314419,
+          0.4096849488702176
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "980ff60d1776ea80aaca8322c5c8881b398da5f6c2c460016aff161fc0d139bf",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kaykit_dungeon / kaykit_dungeon/x/KayKit-Dungeon-Remastered-1.0-main/addons/kaykit_dungeon_remastered/Assets/gltf/plate_small.gltf.glb (CC0-1.0)"
+    },
+    "tiny_bottle": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_bottle.glb",
+      "reference_size_m": [
+        0.06,
+        0.14,
+        0.06
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.06,
+            0.14,
+            0.06
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.06,
+        0.14,
+        0.06
+      ],
+      "bounds_m": [
+        [
+          -0.03,
+          0.0,
+          -0.03
+        ],
+        [
+          0.03,
+          0.14,
+          0.03
+        ]
+      ],
+      "use": "라벨 없는 작은 병",
+      "lod0_tris": 44,
+      "colours": [
+        "glass_dark"
+      ],
+      "bytes": 3992,
+      "sha256": "dde5fc279113d68ab70d9afdf7603cde02ad6ce93b7c97fac556cd6118695b82",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\bottle.glb",
+          "pack": "kenney_survival",
+          "file": "kenney_survival/x/Models/GLB format/bottle.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\License.txt",
+          "sha256": "23f847b8812838830df686fb8b472fa225693a3b85c526f2796f7b0790831a9a",
+          "original_triangles": 96,
+          "reduced_triangles": 44,
+          "reduction": "원본 높이별 외곽 반경 표본 기반 회전체 리토폴로지",
+          "source_profile": [
+            [
+              0,
+              0.7729023863360241
+            ],
+            [
+              0.6,
+              0.52275002674143
+            ],
+            [
+              0.82,
+              0.37035900862946
+            ],
+            [
+              1,
+              0.42569999738125247
+            ]
+          ]
+        }
+      ],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "glass_dark": [
+          0.1,
+          0.12,
+          0.13
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "b9f835ee41207f417e20e2d6d5b7a1d768b52cfa4cf4d3b397faa182c02c8d27",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_survival / kenney_survival/x/Models/GLB format/bottle.glb (CC0-1.0)"
+    },
+    "tiny_can": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_can.glb",
+      "reference_size_m": [
+        0.07,
+        0.09,
+        0.07
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.07,
+            0.09,
+            0.07
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.07,
+        0.09,
+        0.07
+      ],
+      "bounds_m": [
+        [
+          -0.035,
+          0.0,
+          -0.035
+        ],
+        [
+          0.035,
+          0.09,
+          0.035
+        ]
+      ],
+      "use": "라벨 없는 깡통",
+      "lod0_tris": 44,
+      "colours": [
+        "iron",
+        "iron_worn"
+      ],
+      "bytes": 3852,
+      "sha256": "3c5ae410962a71575ffda2c3843e22048054690572766ced96fdcba0f2813795",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\barrel.glb",
+          "pack": "kenney_survival",
+          "file": "kenney_survival/x/Models/GLB format/barrel.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\License.txt",
+          "sha256": "3a0d12f6bdd1badd361f64ce0fbbf878a4ccfc2de8ff1ac4ed4c1aea2a9ee04a",
+          "original_triangles": 412,
+          "reduced_triangles": 44,
+          "reduction": "원본 높이별 외곽 반경 표본 기반 회전체 리토폴로지",
+          "source_profile": [
+            [
+              0,
+              1.0
+            ],
+            [
+              0.5,
+              1.0
+            ],
+            [
+              1,
+              1.0
+            ]
+          ]
+        }
+      ],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {},
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "6c5e4d9468cf9e4491b8ffc8ee34a1a2a22fbcb9cc15a2e991918be52329ae1e",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_survival / kenney_survival/x/Models/GLB format/barrel.glb (CC0-1.0)"
+    },
+    "tiny_jar": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_jar.glb",
+      "reference_size_m": [
+        0.09,
+        0.1,
+        0.09
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.09,
+            0.1,
+            0.09
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.09,
+        0.1,
+        0.09
+      ],
+      "bounds_m": [
+        [
+          -0.045,
+          0.0,
+          -0.045
+        ],
+        [
+          0.045,
+          0.1,
+          0.045
+        ]
+      ],
+      "use": "짧은 목의 작은 단지",
+      "lod0_tris": 44,
+      "colours": [
+        "enamel_blue"
+      ],
+      "bytes": 3984,
+      "sha256": "7ea349cdd452175889dd9ccd54bde158bbccb077fdd31b21897046f408ec9181",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\Models\\GLB format\\barrel-open.glb",
+          "pack": "kenney_survival",
+          "file": "kenney_survival/x/Models/GLB format/barrel-open.glb",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kenney_survival\\x\\License.txt",
+          "sha256": "f24ab1c5ab3685fc758f7e7298bf4f255f039fc6dfc7463711fbe90c4c011a41",
+          "original_triangles": 380,
+          "reduced_triangles": 44,
+          "reduction": "원본 높이별 외곽 반경 표본 기반 회전체 리토폴로지",
+          "source_profile": [
+            [
+              0,
+              1.0
+            ],
+            [
+              0.5,
+              1.0
+            ],
+            [
+              1,
+              1.0
+            ]
+          ]
+        }
+      ],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "enamel_blue": [
+          0.04696420068912294,
+          0.10818963508065242,
+          0.27383841647314594
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "56889863df16bf091ad9102e1e83c721e4b96921ffde79ce3941a01f1adcae27",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kenney_survival / kenney_survival/x/Models/GLB format/barrel-open.glb (CC0-1.0)"
+    },
+    "tiny_teapot": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_teapot.glb",
+      "reference_size_m": [
+        0.14,
+        0.11,
+        0.1
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.14,
+            0.11,
+            0.1
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.14,
+        0.11,
+        0.1
+      ],
+      "bounds_m": [
+        [
+          -0.07,
+          0.0,
+          -0.05
+        ],
+        [
+          0.07,
+          0.11,
+          0.05
+        ]
+      ],
+      "use": "손잡이와 주둥이 있는 찻주전자",
+      "lod0_tris": 48,
+      "colours": [
+        "enamel_red",
+        "iron_worn"
+      ],
+      "bytes": 4716,
+      "sha256": "4052641ece1ba8f89135d468ba29ffbb64488323956f03529bcd64be20cf99fe",
+      "sources": [],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "enamel_red": [
+          0.27383841647314594,
+          0.07523514693099616,
+          0.04696420068912294
+        ]
+      },
+      "source_search": "CC0 teapot/kettle 후보 없음. G:/내 드라이브/좀비_공개자산/google_scanned_objects/Threshold_Porcelain_Teapot_White.zip을 실제 44면으로 축소했으나 주둥이·몸체 붕괴를 렌더에서 확인; 이 예산에 맞는 원본이 아니어서 기본 도형.",
+      "verification": {
+        "centred_check_glb_sha256": "11ad53339753d08c0ac6cce40ba36bb66d9bac38e48203b80641721c4bc858de",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
+    },
+    "tiny_tray": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_tray.glb",
+      "reference_size_m": [
+        0.18,
+        0.02,
+        0.12
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.18,
+            0.02,
+            0.12
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.18,
+        0.02,
+        0.12
+      ],
+      "bounds_m": [
+        [
+          -0.09,
+          0.0,
+          -0.06
+        ],
+        [
+          0.09,
+          0.02,
+          0.06
+        ]
+      ],
+      "use": "낮은 네모 테두리와 양쪽 뚫린 손잡이의 쟁반",
+      "lod0_tris": 44,
+      "colours": [
+        "iron_worn",
+        "slate_faded"
+      ],
+      "bytes": 4112,
+      "sha256": "7d4b885dd899de1617f7027e74e72182be6d5ae5abd1c7082af74092ce5dcc4f",
+      "sources": [],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "slate_faded": [
+          0.3,
+          0.32,
+          0.34
+        ]
+      },
+      "source_search": "2026-10-31 손질 발주: 네모 쟁반과 양쪽 손잡이를 기본 도형으로 직접 구성.",
+      "verification": {
+        "centred_check_glb_sha256": "63449d47ab1a3499fa3045fd75af65f5138da0e7965d89bb22b340d20e2760c5",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
+    },
+    "thread_spool": {
+      "status": "ready",
+      "path": "res://models/train_interior/thread_spool.glb",
+      "reference_size_m": [
+        0.05,
+        0.07,
+        0.05
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.05,
+            0.07,
+            0.05
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.05,
+        0.07,
+        0.05
+      ],
+      "bounds_m": [
+        [
+          -0.025,
+          0.0,
+          -0.025
+        ],
+        [
+          0.025,
+          0.07,
+          0.025
+        ]
+      ],
+      "use": "실을 감은 육각 실패",
+      "lod0_tris": 44,
+      "colours": [
+        "wool_rust"
+      ],
+      "bytes": 3992,
+      "sha256": "9997338bf84bde10ac42fc5571be5605ecd3ee767a82c2235f54cc0af91840de",
+      "sources": [],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wool_rust": [
+          0.23830868264658514,
+          0.06225464350678164,
+          0.03783744718423952
+        ]
+      },
+      "source_search": "네 CC0 팩 names.txt와 드라이브 파일명 목록에서 spool/thread/sewing에 맞는 소형 실패를 식별하지 못함. scenario의 불투명 ID는 부재 증거가 아님.",
+      "verification": {
+        "centred_check_glb_sha256": "3f4037f86a705022caf6f54b661b6b11ff09f0f5232ee3684c77c2eb395dd1c7",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
+    },
+    "tiny_brush": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_brush.glb",
+      "reference_size_m": [
+        0.04,
+        0.02,
+        0.14
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.04,
+            0.02,
+            0.14
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.04,
+        0.02,
+        0.14
+      ],
+      "bounds_m": [
+        [
+          -0.02,
+          0.0,
+          -0.07
+        ],
+        [
+          0.02,
+          0.02,
+          0.07
+        ]
+      ],
+      "use": "나무 손잡이와 솔 부분",
+      "lod0_tris": 36,
+      "colours": [
+        "wood_oak",
+        "wood_oak_grain",
+        "wool_dark"
+      ],
+      "bytes": 3556,
+      "sha256": "c51a971de91dc82f29f2a202920321ddc6bd1de91c8e92d6de040a0d2da52016",
+      "sources": [],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wood_oak": [
+          0.3143610328694773,
+          0.1517337575208318,
+          0.04835146363228673
+        ],
+        "wood_oak_grain": [
+          0.19846503807326873,
+          0.09738958255919998,
+          0.032239054338366116
+        ],
+        "wool_dark": [
+          0.21,
+          0.2,
+          0.19
+        ]
+      },
+      "source_search": "네 CC0 팩 names.txt와 드라이브 파일명 목록에서 손잡이 솔에 맞는 brush/broom을 식별하지 못함. brushed 재질 파일은 제외. scenario의 불투명 ID는 부재 증거가 아님.",
+      "verification": {
+        "centred_check_glb_sha256": "12ee2275a6b2a5748f32e8e638b2416eaeb77a97cfe3593ea1fa39a6c6f1da88",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
+    },
+    "tiny_clock": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_clock.glb",
+      "reference_size_m": [
+        0.09,
+        0.11,
+        0.04
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.09,
+            0.11,
+            0.04
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.09,
+        0.11,
+        0.04
+      ],
+      "bounds_m": [
+        [
+          -0.045,
+          0.0,
+          -0.02
+        ],
+        [
+          0.045,
+          0.11,
+          0.02
+        ]
+      ],
+      "use": "글자·숫자 없는 탁상시계와 두 바늘",
+      "lod0_tris": 26,
+      "colours": [
+        "cloth_faded",
+        "iron",
+        "slate_faded"
+      ],
+      "bytes": 2724,
+      "sha256": "3da30f05e35f6186c92dc614c2750960ee47463db1a2d40d7ab601678e323165",
+      "sources": [],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "slate_faded": [
+          0.3,
+          0.32,
+          0.34
+        ]
+      },
+      "source_search": "CC0 clock 후보 없음. G:/내 드라이브/좀비_공개자산/google_scanned_objects/Crosley_Alarm_Clock_Vintage_Metal.zip을 실제 38면 몸체로 축소했으나 몸체의 가시 같은 돌출을 렌더에서 확인; 이 예산에 맞지 않아 기본 도형.",
+      "verification": {
+        "centred_check_glb_sha256": "9dda3049c75fec5fa184889bcd4b571df02db4b276882e235187808fdff8b34e",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "기본 도형 (tools/blender/train_car_tiers.py)"
+    },
+    "tiny_book": {
+      "status": "ready",
+      "path": "res://models/train_interior/tiny_book.glb",
+      "reference_size_m": [
+        0.12,
+        0.025,
+        0.09
+      ],
+      "origin": "floor_center",
+      "triangle_limit": 48,
+      "uses": 1,
+      "size_variants": [
+        {
+          "size_m": [
+            0.12,
+            0.025,
+            0.09
+          ],
+          "uses": 1
+        }
+      ],
+      "source_materials": {},
+      "dimensions_m": [
+        0.12,
+        0.025,
+        0.09
+      ],
+      "bounds_m": [
+        [
+          -0.06,
+          0.0,
+          -0.045
+        ],
+        [
+          0.06,
+          0.025,
+          0.045
+        ]
+      ],
+      "use": "글자 없는 표지와 종이 단면의 책",
+      "lod0_tris": 42,
+      "colours": [
+        "paper_aged",
+        "wool_teal"
+      ],
+      "bytes": 5320,
+      "sha256": "ca44e2ce546dfd94e034772890513ed927c90f55db2fdd0ff3598222e9996770",
+      "sources": [
+        {
+          "path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_furniture\\x\\KayKit-Furniture-Bits-1.0-main\\addons\\kaykit_furniture_bits\\Assets\\gltf\\book_single.gltf",
+          "pack": "kaykit_furniture",
+          "file": "kaykit_furniture/x/KayKit-Furniture-Bits-1.0-main/addons/kaykit_furniture_bits/Assets/gltf/book_single.gltf",
+          "license": "CC0-1.0",
+          "license_path": "C:\\dev\\zombie\\wt\\open_assets\\kaykit_furniture\\x\\KayKit-Furniture-Bits-1.0-main\\addons\\kaykit_furniture_bits\\Assets\\LICENSE.txt",
+          "sha256": "7b86695b060681fc6de8ac70fc1f24b870edcaf84bfe4ed98b7e706ae594d464",
+          "original_triangles": 68,
+          "reduced_triangles": 42
+        }
+      ],
+      "tier": "2·3",
+      "generator": "tools/blender/train_car_tiers.py",
+      "palette_extra": {
+        "wool_teal": [
+          0.04620366067963664,
+          0.15651246548215622,
+          0.18053915286280384
+        ]
+      },
+      "source_search": "CC0 names.txt에서 의미가 맞는 후보를 먼저 선택; CC BY 불필요.",
+      "verification": {
+        "centred_check_glb_sha256": "678fec0fbfb7adf7ad2906a4145b9affeff7ab7515a3157d3887d0c7a5e845e8",
+        "floor_binary_check": "passed",
+        "godot": "not_run: 발주 세션 담당"
+      },
+      "source_asset": "kaykit_furniture / kaykit_furniture/x/KayKit-Furniture-Bits-1.0-main/addons/kaykit_furniture_bits/Assets/gltf/book_single.gltf (CC0-1.0)"
     }
   },
   "failures": [],
   "swapped": {
     "script": "tools/blender/train_interior_swap.py",
     "note": "공개 3D(CC0)에서 가져와 면을 줄이고 색 판으로 다시 칠한 소품. 권리 장부에 한 줄씩."
+  },
+  "tiers": {
+    "script": "tools/blender/train_car_tiers.py",
+    "new_triangle_limit": 2430,
+    "base_triangles": 7570,
+    "origin": "floor_center",
+    "placement": "새 31종은 바닥 원점. 기존 자산은 개별 origin 유지.",
+    "source_priority": "CC0 -> CC BY 4.0 -> 기본 도형"
   }
 }
