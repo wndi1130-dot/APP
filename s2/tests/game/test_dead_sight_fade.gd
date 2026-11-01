@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 
 const Zombies = preload("res://game/actors/zombies.gd")
 const DeadCast = preload("res://game/actors/dead_cast.gd")
+const DeadBody = preload("res://game/actors/dead_body.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const Wear = preload("res://game/sim/wear.gd")
 
@@ -583,6 +584,52 @@ func test_an_unread_body_waits_at_zero_then_fades_in() -> void:
 	assert_eq(int(dead._last_seen_draw[id]["b"]), 1)
 	assert_eq(dead.appearance_swaps, 0)
 	assert_false(dead._held_frames.has(id))
+
+
+func test_body_step_matches_before_and_after_appearance_read() -> void:
+	_field()
+	assert_true(dead.baked, "the baked pose accumulates body_step")
+	if not dead.baked:
+		return
+	dead.bodies_planned = 2
+	var picked_id: int = -1
+	for candidate: int in range(1, 65):
+		if DeadCast.body_of(candidate, 2) == 1:
+			picked_id = candidate
+			break
+	assert_gt(picked_id, 0, "the fixture wears the unread body")
+	if picked_id < 0:
+		return
+	dead.next_id = picked_id
+	var z: Dictionary = _spawn(origin)
+	z["state"] = "chase"
+	var motion: int = DeadBody.gait_of(z)
+	var assigned_rounds: Dictionary = dead.body_rounds[0].duplicate()
+	assigned_rounds[motion] = float(assigned_rounds.get(motion, DeadBody.STRIDE[motion])) * 2.0
+	dead._pose_rounds.assign([dead.body_rounds[0], assigned_rounds])
+	var initial: Dictionary = z.duplicate()
+	var waiting_steps: Array[float] = []
+	for frame: int in 4:
+		z["pos"] = origin + Vector3(0.1 * frame, 0, 0)
+		z["age"] = float(initial["age"]) + 0.05 * frame
+		dead.render(camera, {}, false, 0.05)
+		assert_eq(float(dead._shown[picked_id]), 0.0, "the appearance is still unread")
+		assert_true(z.has("body_step"), "waiting still advances the saved pose")
+		waiting_steps.append(float(z.get("body_step", -1.0)))
+	assert_ne(waiting_steps[0], waiting_steps[3], "movement must exercise stride accumulation")
+	# Replay the same movement with its appearance ready, using no MultiMesh readback.
+	dead.draws.append(dead.draws[0])
+	dead.wear_draws.append({})
+	dead.body_rounds.append(assigned_rounds)
+	z.clear()
+	z.merge(initial)
+	for frame: int in 4:
+		z["pos"] = origin + Vector3(0.1 * frame, 0, 0)
+		z["age"] = float(initial["age"]) + 0.05 * frame
+		dead.render(camera, {}, false, 0.05)
+		assert_eq(int(dead._last_seen_draw[picked_id]["b"]), 1, "the assigned appearance is ready")
+		assert_true(z.has("body_step"))
+		assert_eq(float(z.get("body_step", -1.0)), waiting_steps[frame], "appearance readiness cannot change body_step")
 
 
 func test_a_garment_is_requested_while_its_body_waits_at_zero() -> void:

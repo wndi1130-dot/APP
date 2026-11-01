@@ -84,6 +84,7 @@ var lunger_share: float = 0.0  # Act progress, or the forced share (decisions 38
 var draw: Dictionary = {}     # look -> MultiMeshInstance3D (the first body's)
 var draws: Array = []         # body (dead_cast.gd) -> look -> MultiMeshInstance3D; {} for one not in the build
 var body_rounds: Array = []   # body -> its walks' rounds (dead_body.gd rounds_of)
+var _pose_rounds: Array[Dictionary] = []   # assigned body -> stride, fixed before appearance reads
 var bodies_to_read: Array[String] = []   # bodies not read in yet: one a frame (render)
 var bodies_planned: int = 1
 var wear_draws: Array = []    # body -> garment (dead_cast.gd SHELLS) -> MultiMeshInstance3D, null for one it has none of; read when first worn
@@ -130,6 +131,17 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	body_rounds = [DeadBody.rounds]
 	bodies_to_read = DeadCast.others() if baked else ([] as Array[String])
 	bodies_planned = 1 + bodies_to_read.size()
+	# Pose clocks are saved: their strides cannot depend on mesh/VAT read timing.
+	_pose_rounds = [body_rounds[0]]
+	for dir: String in bodies_to_read:
+		var path: String = dir.path_join("clips.json")
+		var info: Variant = null
+		if FileAccess.file_exists(path):
+			info = JSON.parse_string(FileAccess.get_file_as_string(path))
+		var stride: Dictionary = body_rounds[0]
+		if info is Dictionary and DeadCast.lined_up(info, vat):
+			stride = DeadBody.rounds_of(info)
+		_pose_rounds.append(stride)
 	# Rising markers above corpses that will stand up.
 	markers = MultiMeshInstance3D.new()
 	var mm2 := MultiMesh.new()
@@ -1480,8 +1492,9 @@ func _sight_draw(z: Dictionary, b: int, look: String, over: Dictionary, garment:
 	if z["stun"] > 0.0:
 		shade = 0.8
 	var node: MultiMeshInstance3D = draws[b][look]
-	# Its walk goes by its own body's stride (dead_body.gd reads the rounds of the folder in use).
-	DeadBody.rounds = body_rounds[b]
+	# The drawn slot may be a fallback or an old appearance; the pose keeps its assigned stride.
+	var pose_body: int = DeadCast.body_of(int(z["id"]), bodies_planned)
+	DeadBody.rounds = _pose_rounds[pose_body] if pose_body < _pose_rounds.size() else _pose_rounds[0]
 	record["transform"] = Transform3D(basis, pos)
 	record["custom"] = DeadBody.custom(z, down, frozen_anim, shade, baked)
 	record["color"] = DeadCast.tear_of(z, bool(node.get_meta(&"hands_marked", false)))
@@ -1562,6 +1575,13 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 	for z in list:
 		var id: int = int(z["id"])
 		var at: Vector3 = z["pos"]
+		# The restored still is not a step on the body's timeline (field_save keeps
+		# the saved pose clocks): it draws from a copy, so z's clocks stay as saved.
+		var pose_z: Dictionary = z.duplicate() if immediate else z
+		if immediate and z["state"] == "grab" and DeadBody.bite_k(z) >= 0.0:
+			# yaw_of changes the copy before bite_k compares it with victim.grabbers[0].
+			# Keep that comparison on the original; field_save restores its saved clocks afterwards.
+			pose_z = z
 		var seen_now: bool = not mask_on or seen.has(game.seen_key(at))
 		var prev: float = float(_shown.get(id, 0.0))
 		var shown: float = 1.0 if (first or immediate) and seen_now else next_shown(prev, seen_now, step)
@@ -1589,7 +1609,8 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 				if not request_garment and _garment_reads > 0:
 					# Use the actual pose (including shove/grab offsets), without
 					# overwriting the last appearance before the garment is ready.
-					var probe: Dictionary = _sight_draw(z, wanted_b, wanted_look, over, null, {})
+					# A copy: whether this check runs depends on the read budget, never on rules.
+					var probe: Dictionary = _sight_draw(z.duplicate(), wanted_b, wanted_look, over, null, {})
 					var probe_transform: Transform3D = probe["transform"]
 					request_garment = in_sight_frustum(planes, probe_transform.origin)
 				if request_garment:
@@ -1598,6 +1619,9 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 			if not appearance_ready and (prev <= 0.0 or last.is_empty()):
 				# Even on arrival, an unread appearance never gets a visible placeholder.
 				shown_next[id] = 0.0
+				# Still advance the pose clocks kept in z (DeadBody.custom), as a drawn body
+				# would: when an appearance is read must never change the saved state.
+				_sight_draw(pose_z, 0, wanted_look, {}, null, {})
 				var held: int = int(_held_frames.get(id, 0)) + 1
 				held_next[id] = held
 				held_frames_max = maxi(held_frames_max, held)
@@ -1609,14 +1633,14 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 			var last_garment: MultiMeshInstance3D = last.get("garment", null)
 			var last_garment_color: Color = last.get("garment_color", Color.WHITE)
 			if appearance_ready:
-				record = _sight_draw(z, wanted_b, wanted_look, over, wanted_garment, last)
+				record = _sight_draw(pose_z, wanted_b, wanted_look, over, wanted_garment, last)
 				if not first and prev > 0.0 and had_last and (last_b != wanted_b or last_shell != record["shell"] or last_garment != record["garment"] or last_garment_color != record["garment_color"]):
 					appearance_swaps += 1
 			else:
 				# Keep only the old appearance while the next one loads. The visible
 				# body's place, pose, custom data and attachments still follow this frame.
 				var kept_over: Dictionary = {"shell": last_shell, "colour": last_garment_color}
-				record = _sight_draw(z, last_b, wanted_look, kept_over, last_garment, last)
+				record = _sight_draw(pose_z, last_b, wanted_look, kept_over, last_garment, last)
 			# Sight owns the latest pose even offscreen or while waiting for a draw slot.
 			seen_draw_next[id] = record
 		if shown <= 0.0 or record.is_empty():
