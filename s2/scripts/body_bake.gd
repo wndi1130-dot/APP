@@ -2624,20 +2624,46 @@ static func person_sole_vertices(rest: PackedVector3Array) -> Array:
 
 ## First downward entry into the lowest centimetre, including the loop seam.
 ## Interpolate the crossing between samples; -1 means no airborne-to-ground entry.
+## A sample may hold one height per sole vertex (PackedFloat32Array): the shader
+## moves each vertex on its own straight line between frames, so the entry is the
+## first vertex's own crossing, not that of the two frames' lowest points joined.
 static func person_contact_phase(heights: Array) -> float:
 	if heights.size() < 2:
 		return -1.0
-	for height: float in heights:
-		if not is_finite(height):
+	var lows: Array[float] = []
+	for sample: Variant in heights:
+		var low := _lowest_sole_height(sample)
+		if not is_finite(low):
 			return -1.0
-	var threshold := float(heights.min()) + PERSON_CONTACT_HEIGHT
-	for f in heights.size():
-		var previous := float(heights[(f + heights.size() - 1) % heights.size()])
-		var current := float(heights[f])
+		lows.append(low)
+	var threshold := float(lows.min()) + PERSON_CONTACT_HEIGHT
+	for f in lows.size():
+		var p := (f + lows.size() - 1) % lows.size()
+		var previous := lows[p]
+		var current := lows[f]
 		if previous > threshold and current <= threshold:
 			var fraction := (previous - threshold) / (previous - current)
-			return fposmod((float(f - 1) + fraction) / float(heights.size()), 1.0)
+			if typeof(heights[f]) == TYPE_PACKED_FLOAT32_ARRAY:
+				var before: PackedFloat32Array = heights[p]
+				var after: PackedFloat32Array = heights[f]
+				fraction = 1.0
+				for v in after.size():
+					if after[v] <= threshold and before[v] > threshold:
+						fraction = minf(fraction, (before[v] - threshold) / (before[v] - after[v]))
+			return fposmod((float(f - 1) + fraction) / float(lows.size()), 1.0)
 	return -1.0
+
+
+static func _lowest_sole_height(sample: Variant) -> float:
+	if typeof(sample) != TYPE_PACKED_FLOAT32_ARRAY:
+		return float(sample)
+	var values: PackedFloat32Array = sample
+	var low := INF
+	for height: float in values:
+		if not is_finite(height):
+			return NAN
+		low = minf(low, height)
+	return low
 
 
 ## The output samples source(u + shift). Minimise the larger circular error,
@@ -2669,7 +2695,8 @@ static func _person_sole_heights(ctx: Dictionary, entry: Array) -> Array:
 
 ## Reuse the same fixed body soles and skinning for the fit and final check.
 ## With a shell, frames still transform the original body's saved source skin.
-static func _person_sole_heights_from_frames(ctx: Dictionary, frames: Array) -> Array:
+## per_vertex keeps every sole vertex's height (for the few saved frames).
+static func _person_sole_heights_from_frames(ctx: Dictionary, frames: Array, per_vertex: bool = false) -> Array:
 	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var source: Array = mesh_node.get_meta(PERSON_PHASE_SOURCE) if mesh_node.has_meta(PERSON_PHASE_SOURCE) else mesh_node.mesh.surface_get_arrays(0)
 	var rest: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
@@ -2683,6 +2710,7 @@ static func _person_sole_heights_from_frames(ctx: Dictionary, frames: Array) -> 
 	for skin: Array in frames:
 		for side in 2:
 			var lowest := INF
+			var each := PackedFloat32Array()
 			for vertex: int in soles[side]:
 				var moved := Vector3.ZERO
 				var weight_sum := 0.0
@@ -2693,7 +2721,11 @@ static func _person_sole_heights_from_frames(ctx: Dictionary, frames: Array) -> 
 						weight_sum += weight
 				var point := moved / weight_sum if weight_sum > 0.0 else rest[vertex]
 				lowest = minf(lowest, point.y)
-			heights[side].append(lowest)
+				each.append(point.y)
+			if per_vertex:
+				heights[side].append(each)
+			else:
+				heights[side].append(lowest)
 	return heights
 
 
@@ -3413,7 +3445,7 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 			_note_reach(ctx, entry[0], reach)
 		var length := float(entry[5]) if entry[1] == "" else player.get_animation(entry[1]).length * _span_share(entry[4])
 		if not phase.is_empty():
-			_check_person_phase_final(ctx, entry[0], _person_sole_heights_from_frames(ctx, frames))
+			_check_person_phase_final(ctx, entry[0], _person_sole_heights_from_frames(ctx, frames, true))
 		var stride_round: float = _round(reach)
 		if PERSON_STRIDE_ROUNDS.has(entry[0]):
 			var grid_round := stride_round

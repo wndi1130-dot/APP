@@ -342,6 +342,14 @@ func test_final_phase_checks_saved_sole_frames_for_both_orders_missing_and_late_
 	assert_eq(BodyBake.person_contact_phase([0.0, INF, 0.02]), -1.0, "non-finite samples cannot establish a contact")
 
 
+func test_a_saved_frame_contact_is_the_first_sole_vertex_s_own_crossing() -> void:
+	# Heel just above the band then lifting, toe coming down: the lowest point switches vertex.
+	var rows: Array = [PackedFloat32Array([0.05, 0.05]), PackedFloat32Array([0.0101, 0.04]), PackedFloat32Array([0.04, 0.0]), PackedFloat32Array([0.05, 0.05])]
+	assert_almost_eq(BodyBake.person_contact_phase(rows), (1.0 + 0.75) / 4.0, 0.0001, "the toe enters three quarters of the way between frames 1 and 2")
+	assert_almost_eq(BodyBake.person_contact_phase([0.05, 0.0101, 0.0, 0.05]), (1.0 + 0.0001 / 0.0101) / 4.0, 0.0001, "joining the lowest points would put it at frame 1")
+	assert_eq(BodyBake.person_contact_phase([PackedFloat32Array([0.0, NAN]), PackedFloat32Array([0.02, 0.02])]), -1.0, "a non-finite vertex cannot establish a contact")
+
+
 func test_final_round_returns_measured_reach_and_rejects_wrong_strides_for_all_twelve_clips() -> void:
 	for clip: String in BodyBake.PERSON_STRIDE_ROUNDS:
 		var target: float = BodyBake.PERSON_STRIDE_ROUNDS[clip]
