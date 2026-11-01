@@ -1531,7 +1531,9 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 	var step: float = clampf(get_process_delta_time() if delta < 0.0 else delta, 0.0, 0.1)
 	step = 0.0 if bool(game.hitstop) else step * maxf(float(game.slow), 0.0)
 	var first: bool = not _rendered_once
-	var immediate: bool = first or bool(game.resume_pending)
+	# Only the restored still reads every seen appearance at once; a new field keeps
+	# one read a frame (test_dead_cast) and fades its unread dead in when ready.
+	var immediate: bool = bool(game.resume_pending)
 	_garment_reads = 0 if not bodies_to_read.is_empty() else 1   # one read a frame, body or garment
 	_read_a_body()
 	if immediate:
@@ -1562,7 +1564,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 		var at: Vector3 = z["pos"]
 		var seen_now: bool = not mask_on or seen.has(game.seen_key(at))
 		var prev: float = float(_shown.get(id, 0.0))
-		var shown: float = 1.0 if immediate and seen_now else next_shown(prev, seen_now, step)
+		var shown: float = 1.0 if (first or immediate) and seen_now else next_shown(prev, seen_now, step)
 		shown_next[id] = shown
 		var last: Dictionary = _last_seen_draw[id] if _last_seen_draw.has(id) else {}
 		var floor_at: Vector3 = at if seen_now or last.is_empty() else last["at"]

@@ -150,7 +150,7 @@ func test_leaving_sight_keeps_the_last_draw_until_reentry() -> void:
 	assert_false(z.has("last_seen_draw"))
 
 
-func test_first_or_resume_render_resolves_unread_bodies_and_garments() -> void:
+func test_resume_render_resolves_unread_appearances_but_a_new_field_reads_one_a_frame() -> void:
 	for resuming: bool in [false, true]:
 		_field(false, true)
 		var loading: QueuedAppearance = dead as QueuedAppearance
@@ -173,6 +173,11 @@ func test_first_or_resume_render_resolves_unread_bodies_and_garments() -> void:
 		assert_eq(dead.draws.size(), 1)
 		assert_true(loading.garment_reads.is_empty())
 		dead.render(camera, _seen(origin), true, 0.0)
+		if not resuming:
+			assert_lte(loading.body_reads + loading.garment_reads.size(), 1, "a new field keeps one read a frame")
+			for id: int in ids:
+				assert_false(dead._submitted_last.has(id), "an unread appearance waits at zero on a new field")
+			continue
 		assert_eq(loading.body_reads, 2, "the still resolves more than one pending body")
 		assert_eq(loading.garment_reads, ["coat_long", "vest"], "both garments resolve in the same render")
 		for id: int in ids:
