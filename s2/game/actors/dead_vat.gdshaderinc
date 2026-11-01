@@ -271,10 +271,6 @@ float sight_threshold(vec2 pixel) {
 #endif
 
 void fragment() {
-#ifdef SIGHT_FADE
-	float threshold = sight_threshold(FRAGCOORD.xy);
-	if (sight_k < 0.999 && sight_k <= threshold) discard;
-#endif
 	if (flat_normals) {
 		NORMAL = normalize(cross(dFdy(view_pos), dFdx(view_pos)));
 	}
@@ -307,5 +303,10 @@ void fragment() {
 	ROUGHNESS = 1.0;
 #ifdef FADED
 	ALPHA = 1.0 - fade;
+#endif
+#ifdef SIGHT_FADE
+	// Derivatives and implicit texture LOD must run before divergent discard.
+	float threshold = sight_threshold(FRAGCOORD.xy);
+	if (sight_k < 0.999 && sight_k <= threshold) discard;
 #endif
 }

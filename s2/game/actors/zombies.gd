@@ -92,12 +92,14 @@ var garments_drawn: Dictionary = {}   # garment multimesh -> the ids of the dead
 var _drawn_worn: Dictionary = {}   # id -> [worn_at, kind, what it has on] for one drawn before worn_of is asked (drawn_worn)
 var drawn_count: int = 0
 var drawn_at: Dictionary = {}          # id -> world place actually drawn this frame
+var _submitted_last: Dictionary = {}   # snapshot of drawn_at; membership owns next frame's cap priority
+var _submitted_markers: Dictionary = {} # id -> visibility sent to the rising marker this frame
 var _shown: Dictionary = {}            # id -> sight visibility; never part of a saved body
 var _last_seen_draw: Dictionary = {}   # id -> last in-sight appearance, before packing visibility
 var _held_frames: Dictionary = {}      # id -> consecutive in-sight frames waiting for its appearance
 var _rendered_once: bool = false
 var appearance_swaps: int = 0
-var cap_drops: int = 0                # previously shown candidates displaced by a full body/look
+var cap_drops: int = 0                # previous frame's submitted ids displaced by a full body/look
 var held_frames_max: int = 0
 var vat: Dictionary
 var baked: bool = false       # the dead are a baked body (dead_body.gd), not the boxes
@@ -132,11 +134,14 @@ func setup(field_game, vat_assets: Dictionary) -> void:
 	markers = MultiMeshInstance3D.new()
 	var mm2 := MultiMesh.new()
 	mm2.transform_format = MultiMesh.TRANSFORM_3D
+	mm2.use_colors = true
 	var ring := TorusMesh.new()
 	ring.inner_radius = 0.35
 	ring.outer_radius = 0.45
 	var rm := StandardMaterial3D.new()
 	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_HASH
+	rm.vertex_color_use_as_albedo = true
 	rm.albedo_color = Color(0.78, 0.76, 0.72)   # off-white: no red in the field (fx colour rule)
 	ring.material = rm
 	mm2.mesh = ring
@@ -1502,19 +1507,26 @@ func _submit_sight_draw(id: int, record: Dictionary, shown: float, counts: Array
 		garment.multimesh.set_instance_custom_data(w, custom)
 		garment.multimesh.set_instance_color(w, record["garment_color"])
 		worn_ids.append(id)
-	if shown >= 0.5:
-		if record.has("marker") and attachments.x < 32:
-			markers.multimesh.set_instance_transform(attachments.x, record["marker"])
-			attachments.x += 1
-		if embedded_draw != null and record.has("axe") and attachments.y < EMBED_MAX:
-			embedded_draw.multimesh.set_instance_transform(attachments.y, record["axe"])
-			attachments.y += 1
+	if record.has("marker") and attachments.x < 32:
+		markers.multimesh.set_instance_transform(attachments.x, record["marker"])
+		markers.multimesh.set_instance_color(attachments.x, Color(1, 1, 1, shown))
+		_submitted_markers[id] = shown
+		attachments.x += 1
+	# The axe uses PropModels' shared weathered shader, which has no sight fade.
+	# Keep its existing threshold until that material gains an opt-in fade path.
+	if shown >= 0.5 and embedded_draw != null and record.has("axe") and attachments.y < EMBED_MAX:
+		embedded_draw.multimesh.set_instance_transform(attachments.y, record["axe"])
+		attachments.y += 1
 	return attachments
 
 
 ## One MultiMesh per body and look; sight fades before floor and screen culling.
 func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1.0) -> void:
+	# delta is engine-scaled frame time, including the explicit test input. Match
+	# field_game's clamp before slow; hitstop holds the picture. Pause alone may
+	# finish a pending fade, as the field keeps calling render while paused.
 	var step: float = clampf(get_process_delta_time() if delta < 0.0 else delta, 0.0, 0.1)
+	step = 0.0 if bool(game.hitstop) else step * maxf(float(game.slow), 0.0)
 	var first: bool = not _rendered_once
 	_garment_reads = 0 if not bodies_to_read.is_empty() else 1   # one read a frame, body or garment
 	_read_a_body()
@@ -1528,6 +1540,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 	var overflow: Dictionary = {}   # body -> look -> ids; created only at the 161st candidate
 	garments_drawn = {}
 	drawn_at = {}
+	_submitted_markers.clear()
 	var attachments: Vector2i = Vector2i.ZERO
 	for z in list:
 		var id: int = int(z["id"])
@@ -1563,24 +1576,30 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 				held_next[id] = held
 				held_frames_max = maxi(held_frames_max, held)
 				continue
+			# The record is reused, so take appearance snapshots before overwriting it.
+			var had_last: bool = not last.is_empty()
+			var last_b: int = int(last.get("b", -1))
+			var last_shell: String = String(last.get("shell", ""))
+			var last_garment: MultiMeshInstance3D = last.get("garment", null)
+			var last_garment_color: Color = last.get("garment_color", Color.WHITE)
 			if appearance_ready:
-				# The record is reused, so compare snapshots taken before overwriting it.
-				var had_last: bool = not last.is_empty()
-				var last_b: int = int(last.get("b", -1))
-				var last_shell: String = String(last.get("shell", ""))
-				var last_garment: MultiMeshInstance3D = last.get("garment", null)
-				var last_garment_color: Color = last.get("garment_color", Color.WHITE)
 				record = _sight_draw(z, wanted_b, wanted_look, over, wanted_garment, last)
 				if not first and prev > 0.0 and had_last and (last_b != wanted_b or last_shell != record["shell"] or last_garment != record["garment"] or last_garment_color != record["garment_color"]):
 					appearance_swaps += 1
-				# Sight owns the latest pose even offscreen or while waiting for a draw slot.
-				seen_draw_next[id] = record
+			else:
+				# Keep only the old appearance while the next one loads. The visible
+				# body's place, pose, custom data and attachments still follow this frame.
+				var kept_over: Dictionary = {"shell": last_shell, "colour": last_garment_color}
+				record = _sight_draw(z, last_b, wanted_look, kept_over, last_garment, last)
+			# Sight owns the latest pose even offscreen or while waiting for a draw slot.
+			seen_draw_next[id] = record
 		if shown <= 0.0 or record.is_empty():
 			continue
 		# Unseen frames retain the last in-sight values without refreshing them.
 		if not last.is_empty():
 			seen_draw_next[id] = last
-		if not in_sight_frustum(planes, record["at"]):
+		var draw_transform: Transform3D = record["transform"]
+		if not in_sight_frustum(planes, draw_transform.origin):
 			continue
 		var b: int = int(record["b"])
 		var look: String = record["look"]
@@ -1606,10 +1625,10 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 			var candidates: Array = overflow[b][look]
 			var player_at: Vector3 = game.player.position
 			candidates.sort_custom(func(left: int, right: int) -> bool:
-				var left_was_shown: bool = float(_shown.get(left, 0.0)) > 0.0
-				var right_was_shown: bool = float(_shown.get(right, 0.0)) > 0.0
-				if left_was_shown != right_was_shown:
-					return left_was_shown
+				var left_was_submitted: bool = _submitted_last.has(left)
+				var right_was_submitted: bool = _submitted_last.has(right)
+				if left_was_submitted != right_was_submitted:
+					return left_was_submitted
 				# Use the cached position so an unseen move cannot change draw priority.
 				var left_at: Vector3 = seen_draw_next[left]["at"]
 				var right_at: Vector3 = seen_draw_next[right]["at"]
@@ -1625,7 +1644,7 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 						drawn_at[id] = selected_transform.origin
 						redraw = true
 				else:
-					if float(_shown.get(id, 0.0)) > 0.0:
+					if _submitted_last.has(id):
 						cap_drops += 1
 					shown_next[id] = 0.0   # a newcomer waits here, then fades in from zero
 					if drawn_at.erase(id):
@@ -1635,12 +1654,15 @@ func render(camera: Camera3D, seen: Dictionary, mask_on: bool, delta: float = -1
 		var selected_ids: Array = drawn_at.keys()
 		drawn_at.clear()
 		garments_drawn.clear()
+		_submitted_markers.clear()
 		attachments = Vector2i.ZERO
 		for b: int in counts.size():
 			for look: String in counts[b]:
 				counts[b][look] = 0
 		for id: int in selected_ids:
 			attachments = _submit_sight_draw(id, seen_draw_next[id], float(shown_next[id]), counts, attachments)
+	# Snapshot only the final submission, never the provisional overflow pass.
+	_submitted_last = drawn_at.duplicate()
 	_shown = shown_next
 	_last_seen_draw = seen_draw_next
 	_held_frames = held_next

@@ -151,6 +151,29 @@ func test_reentry_reverses_the_current_fade_and_mask_off_counts_as_seen() -> voi
 	assert_almost_eq(float(dead._shown[id]), 0.25, 0.0001, "render caps a long frame at 0.1 seconds")
 
 
+func test_sight_fade_follows_slow_holds_for_hitstop_and_finishes_paused() -> void:
+	_field()
+	var z: Dictionary = _spawn(origin)
+	var id: int = int(z["id"])
+	dead.render(camera, _seen(origin), true, 0.0)
+	game.slow = 0.5
+	dead.render(camera, {}, true, 0.1)
+	assert_almost_eq(float(dead._shown[id]), 0.75, 0.0001, "half-speed game time advances half a fade step")
+	game.hitstop = true
+	dead.render(camera, {}, true, 0.1)
+	assert_almost_eq(float(dead._shown[id]), 0.75, 0.0001, "hitstop holds the pending transition")
+	assert_true(dead._submitted_last.has(id))
+	game.hitstop = false
+	game.slow = 1.0
+	game.paused = true
+	dead.render(camera, {}, true, 0.1)
+	assert_almost_eq(float(dead._shown[id]), 0.25, 0.0001, "pause alone lets the pending transition finish")
+	dead.render(camera, {}, true, 0.05)
+	assert_eq(float(dead._shown[id]), 0.0)
+	assert_false(dead.drawn_at.has(id))
+	assert_false(dead._submitted_last.has(id))
+
+
 func test_a_hundred_sight_crossings_never_show_the_unseen_place() -> void:
 	_field()
 	var z: Dictionary = _spawn(origin)
@@ -189,6 +212,33 @@ func test_frustum_plane_sign_and_a_sphere_at_every_edge() -> void:
 		var away: Vector3 = on_plane + plane.normal * (Zombies.FRUSTUM_PAD + 0.01) - Vector3(0, 0.9, 0)
 		assert_true(Zombies.in_sight_frustum(one, close), "its centre is out but its body still reaches in")
 		assert_false(Zombies.in_sight_frustum(one, away), "the whole sphere is outside")
+
+
+func test_frustum_keeps_the_shoved_picture_until_its_drawn_origin_leaves() -> void:
+	_field()
+	var edge_at: Vector3 = origin
+	for plane: Plane in camera.get_frustum():
+		if plane.normal.x > 0.9:
+			edge_at -= plane.normal * plane.distance_to(origin + Vector3(0, 0.9, 0))
+			break
+	var z: Dictionary = _spawn(edge_at)
+	var id: int = int(z["id"])
+	z["shoved_from"] = edge_at
+	z["pos"] = edge_at + Vector3(1.3, 0, 0)
+	z["shoved_t"] = Zombies.SHOVED_TIME
+	dead.render(camera, _seen(z["pos"]), true, 0.0)
+	var record: Dictionary = dead._last_seen_draw[id]
+	var transform: Transform3D = record["transform"]
+	assert_eq(record["at"], z["pos"], "the draw record still knows the logical place")
+	assert_eq(transform.origin, edge_at)
+	assert_eq(dead.drawn_at.get(id, Vector3.INF), edge_at, "the body still on the screen survives a 1.3 m logical shove")
+	assert_true(dead._submitted_last.has(id))
+	assert_eq(float(dead._shown[id]), 1.0)
+	z["shoved_t"] = 0.0
+	dead.render(camera, _seen(z["pos"]), true, 0.0)
+	assert_false(dead.drawn_at.has(id), "cull only once the picture has reached the offscreen place")
+	assert_false(dead._submitted_last.has(id))
+	assert_eq(float(dead._shown[id]), 1.0, "frustum culling does not change sight visibility")
 
 
 func test_visibility_advances_offscreen_and_hidden_floors_stop_it() -> void:
@@ -316,7 +366,7 @@ func test_draw_cap_keeps_previous_ids_and_waits_at_zero_until_a_slot_opens() -> 
 	assert_almost_eq(float(dead._shown[newcomer_id]), 0.5, 0.0001, "the freed slot starts the usual fade from zero")
 
 
-func test_draw_cap_uses_distance_and_counts_excess_previous_visibility() -> void:
+func test_draw_cap_uses_distance_without_counting_unsubmitted_visibility() -> void:
 	_field()
 	var crowd_at: Vector3 = origin + Vector3(30, 0, 0)
 	for _index: int in Zombies.MAX_DRAW:
@@ -328,13 +378,39 @@ func test_draw_cap_uses_distance_and_counts_excess_previous_visibility() -> void
 	camera.look_at_from_position(crowd_at + Vector3(0, 40, 0.01), crowd_at)
 	dead.render(camera, {}, false, 0.09)
 	assert_eq(dead.drawn_at.size(), Zombies.MAX_DRAW)
-	assert_true(dead.drawn_at.has(nearest_id), "distance to the player wins inside the previously shown group")
-	assert_eq(dead.cap_drops, 1, "only the excess previously positive id is counted")
+	assert_true(dead.drawn_at.has(nearest_id), "distance to the player wins among never-submitted candidates")
+	assert_eq(dead.cap_drops, 0, "positive visibility offscreen was never an actual submission")
 	dead.render(camera, {}, false, 0.09)
-	assert_eq(dead.cap_drops, 1, "a zero-visibility waiting id is not counted again")
+	assert_eq(dead.cap_drops, 0, "a waiting id is not a displaced submission either")
 
 
-func test_markers_and_embedded_axes_stop_below_half_shown() -> void:
+func test_draw_cap_keeps_submitted_ids_over_a_charged_offscreen_candidate() -> void:
+	_field()
+	for _index: int in Zombies.MAX_DRAW:
+		_spawn(origin + Vector3(2, 0, 0))
+	var newcomer: Dictionary = _spawn(origin + Vector3(30, 0, 0))
+	var newcomer_id: int = int(newcomer["id"])
+	dead.render(camera, {}, false, 0.0)
+	var kept_ids: Array = dead._submitted_last.keys()
+	kept_ids.sort()
+	assert_eq(kept_ids.size(), Zombies.MAX_DRAW)
+	assert_eq(float(dead._shown[newcomer_id]), 1.0, "offscreen sight has already filled its visibility")
+	assert_false(dead._submitted_last.has(newcomer_id))
+	newcomer["pos"] = origin
+	dead.list.reverse()   # nearest and first, but never submitted in the preceding frame
+	dead.render(camera, {}, false, 0.09)
+	var drawn_ids: Array = dead.drawn_at.keys()
+	drawn_ids.sort()
+	var submitted_ids: Array = dead._submitted_last.keys()
+	submitted_ids.sort()
+	assert_eq(drawn_ids, kept_ids, "all previous submissions retain their slots")
+	assert_eq(submitted_ids, kept_ids, "the snapshot contains only the final cap selection")
+	assert_false(dead.drawn_at.has(newcomer_id))
+	assert_eq(float(dead._shown[newcomer_id]), 0.0, "the rejected candidate waits for a fresh fade-in")
+	assert_eq(dead._last_seen_draw[newcomer_id]["at"], origin, "waiting still tracks the seen place")
+
+
+func test_markers_fade_while_embedded_axes_keep_their_material_threshold() -> void:
 	_field()
 	# Supply an axe draw even when the optional model is not carried in a build.
 	if dead.embedded_draw == null:
@@ -345,18 +421,25 @@ func test_markers_and_embedded_axes_stop_below_half_shown() -> void:
 		dead.embedded_draw.multimesh.instance_count = Zombies.EMBED_MAX
 		dead.add_child(dead.embedded_draw)
 	var z: Dictionary = _spawn(origin)
+	var id: int = int(z["id"])
 	z["state"] = "rising"
 	z["embedded"] = {"id": "axe"}
 	dead.render(camera, _seen(origin), true, 0.0)
 	assert_eq(dead.markers.multimesh.visible_instance_count, 1)
+	assert_eq(float(dead._submitted_markers[id]), 1.0)
 	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 1)
 	dead.render(camera, {}, true, 0.1)
 	assert_eq(dead.markers.multimesh.visible_instance_count, 1, "half shown still has its marker")
+	assert_almost_eq(float(dead._submitted_markers[id]), 0.5, 0.0001)
 	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 1)
 	dead.render(camera, {}, true, 0.05)
-	assert_eq(dead.markers.multimesh.visible_instance_count, 0)
+	assert_eq(dead.markers.multimesh.visible_instance_count, 1, "the marker keeps fading below half shown")
+	assert_almost_eq(float(dead._submitted_markers[id]), 0.25, 0.0001)
 	assert_eq(dead.embedded_draw.multimesh.visible_instance_count, 0)
-	assert_eq(dead.drawn_count, 1, "the body still fades after its solid attachments stop")
+	assert_eq(dead.drawn_count, 1, "the body and marker still fade after the solid axe stops")
+	dead.render(camera, {}, true, 0.05)
+	assert_eq(dead.markers.multimesh.visible_instance_count, 0)
+	assert_false(dead._submitted_markers.has(id))
 
 
 func test_an_unread_body_waits_at_zero_then_fades_in() -> void:
@@ -411,6 +494,53 @@ func test_a_garment_is_requested_while_its_body_waits_at_zero() -> void:
 	assert_eq(dead.appearance_swaps, 0)
 
 
+func test_visible_garment_wait_keeps_appearance_but_refreshes_the_draw() -> void:
+	_field(true)
+	var waiting: WaitingGarment = dead as WaitingGarment
+	waiting.waiting = false
+	var z: Dictionary = _spawn(origin)
+	var id: int = int(z["id"])
+	z["worn"] = {"coat": Wear.make("coat_long")}
+	dead.render(camera, _seen(origin), true, 0.0)
+	var record: Dictionary = dead._last_seen_draw[id]
+	var kept_body: int = int(record["b"])
+	var kept_shell: String = String(record["shell"])
+	var kept_garment: MultiMeshInstance3D = record["garment"]
+	var kept_color: Color = record["garment_color"]
+	assert_eq(kept_shell, "coat_long")
+	waiting.waiting = true
+	z["worn"] = {"coat": Wear.make("vest_armor")}
+	z["kind"] = "fresh"
+	z["stun"] = 1.0
+	for offset: float in [1.0, 2.0]:
+		var current_at: Vector3 = origin + Vector3(offset, 0, 0)
+		z["pos"] = current_at
+		dead.render(camera, _seen(current_at), true, 0.09)
+		var transform: Transform3D = record["transform"]
+		var custom: Color = record["custom"]
+		assert_true(is_same(dead._last_seen_draw[id], record))
+		assert_eq(record["at"], current_at)
+		assert_eq(transform.origin, current_at)
+		assert_eq(dead.drawn_at.get(id, Vector3.INF), current_at, "waiting for clothes cannot freeze a visible body in place")
+		assert_eq(record["look"], "fresh")
+		assert_almost_eq(custom.a, 0.8, 0.0001, "current stun updates the unpacked custom shade")
+		assert_eq(int(record["b"]), kept_body)
+		assert_eq(String(record["shell"]), kept_shell)
+		assert_eq(record["garment"], kept_garment)
+		assert_eq(record["garment_color"], kept_color)
+		assert_eq(float(dead._shown[id]), 1.0)
+		assert_eq(dead.appearance_swaps, 0)
+	waiting.waiting = false
+	z["pos"] = origin + Vector3(3, 0, 0)
+	dead.render(camera, _seen(z["pos"]), true, 0.09)
+	assert_eq(dead.drawn_at.get(id, Vector3.INF), z["pos"])
+	assert_eq(String(record["shell"]), "vest")
+	assert_ne(record["garment_color"], kept_color)
+	assert_eq(dead.appearance_swaps, 1, "the ready appearance is counted once")
+	dead.render(camera, _seen(z["pos"]), true, 0.09)
+	assert_eq(dead.appearance_swaps, 1)
+
+
 func test_removed_ids_leave_no_visibility_or_last_draw() -> void:
 	_field()
 	var z: Dictionary = _spawn(origin)
@@ -423,6 +553,8 @@ func test_removed_ids_leave_no_visibility_or_last_draw() -> void:
 	assert_false(dead._last_seen_draw.has(id))
 	assert_false(dead._held_frames.has(id))
 	assert_false(dead.drawn_at.has(id))
+	assert_false(dead._submitted_last.has(id))
+	assert_false(dead._submitted_markers.has(id))
 	assert_eq(dead.drawn_count, 0)
 
 
