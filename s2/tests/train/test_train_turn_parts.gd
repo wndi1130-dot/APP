@@ -89,10 +89,12 @@ func test_stop_death_and_child_hands_match_s1() -> void:
 	assert_true(_errors.has("stop"), "stop fixtures must exist")
 	assert_eq(_errors.get("stop", []), [], "death and child hands in stop resolution")
 
-func test_unported_branches_return_unchanged_copy_with_error() -> void:
+func test_hub_boundary_returns_unchanged_copy_with_error() -> void:
 	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/turn_vectors.json"))
 	var original: Dictionary = data["runs"][0]["steps"][0]["before"].duplicate(true)
-	original["stranded"] = {"since": original["seg"]}
+	original["phase"] = "settle"
+	original["seg"] = 22
+	original["cards"] = []
 	var saved: Dictionary = original.duplicate(true)
 	var got: Dictionary = Advance.advance(original, data["tables"])
 	assert_true(str(got.get("_turn_port_error", "")).begins_with("F-NOT-PORTED: "))

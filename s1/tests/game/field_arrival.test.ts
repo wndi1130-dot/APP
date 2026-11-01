@@ -70,6 +70,28 @@ describe('둘째 역 도착', () => {
     expect(finishSlice(g)).toBe(false);
   });
 
+  it('끝 카드는 필드에 남기고 온 사람도 돌아오지 못한 수로 센다(결정 147·183)', () => {
+    const left = slice('case2_symbol_broken', true);
+    const rec = left.fieldReturns!.records[0];
+    expect(rec.dead).toEqual([]);
+    expect(rec.leftCount).toBe(1);
+    expect(endCard(left).lines[1]).toBe('1명이 돌아오지 못했다.');
+    // 죽은 사람과 남긴 사람은 한 수로 묶는다. 이름은 끝 카드에 없다.
+    rec.dead = ['가'];
+    rec.leftCount = 2;
+    expect(endCard(left).lines[1]).toBe('3명이 돌아오지 못했다.');
+    // 남긴 수 칸이 없는 옛 기록은 보관한 영수증에서 다시 센다(남겨짐 1명).
+    rec.dead = [];
+    delete rec.leftCount;
+    expect(endCard(left).lines[1]).toBe('1명이 돌아오지 못했다.');
+    // 영수증도 못 읽으면 죽은 사람만 센다.
+    left.fieldReturns!.applied[rec.receiptId] = '';
+    expect(endCard(left).lines[1]).toBe('나간 사람은 모두 열차로 돌아왔다.');
+    const all = slice('case3_nosymbol_kept');
+    expect(all.fieldReturns!.records[0].leftCount).toBeUndefined();
+    expect(endCard(all).lines[1]).toBe('나간 사람은 모두 열차로 돌아왔다.');
+  });
+
   it('첫 정차 자리에서는 끝낼 수 없고, 영수증 없는 판에는 도착 화면이 없다', () => {
     const plain = createGame('slice-seed-a');
     expect(secondStationReached(plain)).toBe(false);

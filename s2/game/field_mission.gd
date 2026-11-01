@@ -19,6 +19,7 @@ extends RefCounted
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Mission = preload("res://game/sim/mission.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 
 const INSPECT_TIME: float = 6.0
 const DEEP_TIME: float = 30.0
@@ -61,18 +62,24 @@ func active() -> bool:
 	return mission.kind != ""
 
 
+## The survey and depot cells are the first stop's own; the field's map may stand moved (stop_ground.gd).
+func _view_offset() -> Vector2i:
+	return StopGround.view_offset(game.data)
+
+
 ## Called once the map is built and before it is drawn.
 func place() -> void:
+	var offset: Vector2i = _view_offset()
 	if mission.kind == "depot":
-		game.data["spots"]["dp_conveyor"] = {"kind": "conveyor", "cell": CONVEYOR_CELL, "name": "적재 컨베이어", "state": "stopped"}
-		game.data["labels"].append({"text": "적재 컨베이어", "cell": CONVEYOR_CELL + Vector2i(0, 1)})
+		game.data["spots"]["dp_conveyor"] = {"kind": "conveyor", "cell": CONVEYOR_CELL + offset, "name": "적재 컨베이어", "state": "stopped"}
+		game.data["labels"].append({"text": "적재 컨베이어", "cell": CONVEYOR_CELL + offset + Vector2i(0, 1)})
 	if mission.kind != "survey":
 		return
 	for row: Array in SURVEY_SPOTS:
-		game.data["spots"][row[0]] = {"kind": row[3], "cell": row[2], "name": row[1], "state": "unseen", "goal": row[4], "part": row[5], "fact": row[6]}
-		game.data["labels"].append({"text": row[1], "cell": row[2] + Vector2i(0, 1)})
+		game.data["spots"][row[0]] = {"kind": row[3], "cell": row[2] + offset, "name": row[1], "state": "unseen", "goal": row[4], "part": row[5], "fact": row[6]}
+		game.data["labels"].append({"text": row[1], "cell": row[2] + offset + Vector2i(0, 1)})
 	for row: Array in SURVEY_LOGS:
-		game.data["containers"][row[0]] = {"id": row[0], "name": row[1], "cell": row[2], "building": row[3], "search": 5.0, "items": ["document"], "locked": true, "level": row[4], "searched": false, "pick": PICK_TIME}
+		game.data["containers"][row[0]] = {"id": row[0], "name": row[1], "cell": row[2] + offset, "building": row[3], "search": 5.0, "items": ["document"], "locked": true, "level": row[4], "searched": false, "pick": PICK_TIME}
 
 
 func opening_line() -> String:
@@ -250,7 +257,7 @@ func _conveyor_choice(choice: String, _p) -> void:
 ## A carrier told to mend the conveyor: walk there, then work in short steps.
 ## Returns the point to walk to, or null when the step was started here.
 func repair_step(p):
-	var at := FieldGrid.center(CONVEYOR_CELL) + Vector3(0.9 if int(p.brain.get("side", 0)) == 0 else -0.9, 0, 0)
+	var at := FieldGrid.center(CONVEYOR_CELL + _view_offset()) + Vector3(0.9 if int(p.brain.get("side", 0)) == 0 else -0.9, 0, 0)
 	if p.position.distance_to(at) > 1.6:
 		return at
 	p.start_action("repair", "설비 고치기", REPAIR_STEP, _repaired.bind(p))
@@ -280,7 +287,7 @@ func belt_noise(delta: float) -> bool:
 	belt_noise_t -= delta
 	if belt_noise_t <= 0.0:
 		belt_noise_t = BELT_NOISE
-		game.make_sound(FieldGrid.center(CONVEYOR_CELL), SimNoise.Level.NORMAL, "bang")
+		game.make_sound(FieldGrid.center(CONVEYOR_CELL + _view_offset()), SimNoise.Level.NORMAL, "bang")
 	return true
 
 

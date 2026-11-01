@@ -12,6 +12,8 @@ extends PanelContainer
 ## (ui_fonts.gd K).
 
 signal folded
+signal motion_finished
+signal left
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
@@ -60,9 +62,29 @@ const ARM: float = 12.0
 ## How the pane comes in (c4.css spIn: .15 s from 12 px to the left).
 const IN_S: float = 0.15
 const IN_FROM: float = 12.0
+const RIGHT_IN_S: float = 0.2
+const RIGHT_OUT_S: float = 0.16
+## The most of a slide one frame may take (s). The frame that built the pane is
+## skipped and a long frame after it (the phone busy) moves the pane no further
+## than this, so a slide never jumps to its end.
+const MOTION_STEP_MAX: float = 0.05
 
 var body: VBoxContainer
 var title_label: Label
+var motion_direction: Vector2 = Vector2.LEFT
+var _enter_pending: bool = false
+var _leaving: bool = false
+var _motion_on: bool = false
+var _motion_t: float = 0.0
+var _motion_len: float = 0.0
+var _motion_fade: float = 0.0
+var _motion_from: Vector2 = Vector2.ZERO
+var _motion_to: Vector2 = Vector2.ZERO
+var _alpha_from: float = 0.0
+var _alpha_to: float = 1.0
+var _shade_from: float = 0.0
+var _shade_to: float = 1.0
+var _motion_shade: CanvasItem
 
 
 func _init(width_css: float = 420.0, title: String = "", side: String = "", icon: String = "") -> void:
@@ -105,22 +127,134 @@ func _init(width_css: float = 420.0, title: String = "", side: String = "", icon
 	minimum_size_changed.connect(_fit)
 
 
-## At the left edge under the band. `slide`: it comes in as the short panel
-## does; a pane laid again over itself (a setting changed) does not.
-func pin(slide: bool) -> void:
+func _ready() -> void:
+	set_process(_enter_pending or _motion_on)
+
+
+func _process(delta: float) -> void:
+	motion_step(delta)
+
+
+## Pin once, before the caller fills the rows. Layout settles before the tween;
+## only position and opacity change while it runs. Rebuilt panes stand still.
+func pin(slide: bool, direction: Vector2 = Vector2.LEFT, shade: CanvasItem = null) -> void:
+	motion_direction = direction
 	_fit()
-	position = Vector2(0.0, UiFonts.px(TOP))
-	if not slide or not is_inside_tree():
-		return
+	if slide and is_inside_tree():
+		slide_in(direction, shade)
+
+
+func resting_position() -> Vector2:
+	return Vector2(get_viewport_rect().size.x - size.x if motion_direction.x > 0.0 else 0.0, UiFonts.px(TOP))
+
+
+func _travel(direction: Vector2) -> Vector2:
+	return direction * (size.x if direction.x > 0.0 else UiFonts.px(IN_FROM))
+
+
+## Reusable by other glass overlays: direction points toward the screen edge.
+## The pane waits out the frame it was built in, then slides.
+func slide_in(direction: Vector2, shade: CanvasItem = null) -> void:
+	motion_direction = direction
+	_motion_shade = shade
+	_leaving = false
+	_motion_on = false
+	_enter_pending = true
+	position = resting_position() + _travel(direction)
 	modulate.a = 0.0
-	position.x = -UiFonts.px(IN_FROM)
-	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_property(self, "modulate:a", 1.0, IN_S)
-	tw.tween_property(self, "position:x", 0.0, IN_S)
+	if is_instance_valid(shade):
+		shade.modulate.a = 0.0
+	set_process(true)
+
+
+## Leaving: from where it stands to the edge, fading, its shade with it; `left`
+## when done. The pane takes no input meanwhile (the caller mutes it).
+func slide_out(direction: Vector2, shade: CanvasItem = null) -> void:
+	_enter_pending = false
+	_leaving = true
+	_motion_shade = shade
+	_motion_len = RIGHT_OUT_S if direction.x > 0.0 else IN_S
+	_motion_fade = _motion_len
+	_motion_t = 0.0
+	_motion_from = position
+	_motion_to = position + _travel(direction)
+	_alpha_from = modulate.a
+	_alpha_to = 0.0
+	_shade_from = shade.modulate.a if is_instance_valid(shade) else 0.0
+	_shade_to = 0.0
+	_motion_on = true
+	set_process(true)
+
+
+## One frame of the slide, `delta` long but never more than MOTION_STEP_MAX
+## (tests drive it with fixed steps). The first call after slide_in only sets out.
+func motion_step(delta: float) -> void:
+	if _enter_pending:
+		_start_enter()
+		return
+	if not _motion_on:
+		set_process(false)
+		return
+	_motion_t = minf(_motion_t + clampf(delta, 0.0, MOTION_STEP_MAX), _motion_len)
+	if _motion_t >= _motion_len - 0.0001:
+		_motion_t = _motion_len
+	var k: float = _motion_t / _motion_len
+	var fade_k: float = minf(_motion_t / _motion_fade, 1.0)
+	position = _motion_from.lerp(_motion_to, _ease(k))
+	modulate.a = lerpf(_alpha_from, _alpha_to, _ease(fade_k))
+	if is_instance_valid(_motion_shade):
+		_motion_shade.modulate.a = lerpf(_shade_from, _shade_to, _ease(k))
+	if _motion_t < _motion_len:
+		return
+	_motion_on = false
+	set_process(false)
+	if _leaving:
+		left.emit()
+	else:
+		_fit()
+		motion_finished.emit()
+
+
+## Cubic: easing out as it comes in, easing in as it goes.
+func _ease(k: float) -> float:
+	return k * k * k if _leaving else 1.0 - pow(1.0 - k, 3.0)
+
+
+func _start_enter() -> void:
+	_enter_pending = false
+	if is_queued_for_deletion():
+		set_process(false)
+		return
+	_fit()
+	_motion_to = resting_position()
+	_motion_from = _motion_to + _travel(motion_direction)
+	position = _motion_from
+	_motion_len = RIGHT_IN_S if motion_direction.x > 0.0 else IN_S
+	_motion_fade = _motion_len * 0.5 if motion_direction.x > 0.0 else _motion_len
+	_motion_t = 0.0
+	_alpha_from = 0.0
+	_alpha_to = 1.0
+	_shade_from = 0.0
+	_shade_to = 1.0
+	_motion_on = true
+
+
+func is_moving() -> bool:
+	return _leaving or _motion_on
+
+
+## Still coming in or going out (the first frame's wait included).
+func is_sliding() -> bool:
+	return _enter_pending or _motion_on
 
 
 func _fit() -> void:
+	if is_moving():
+		return
 	size = get_combined_minimum_size()
+	position = resting_position()
+	if _enter_pending:
+		position += _travel(motion_direction)
 
 
 ## The head (.pane__head, items centred): the mark and the name (h3: 18/500,

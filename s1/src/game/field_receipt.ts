@@ -132,6 +132,9 @@ export interface FieldReturnRecord {
   sent?: string[];
   /** 판 5의 끝 상태(살아서 오른 사람) */
   crew?: FieldCrewRow[];
+  /** 이 정차에서 필드에 남기고 떠난 사람 수(남겨짐·사라짐, 죽은 사람은 빼고). 0이면 칸이 없다.
+   *  끝 카드가 읽고, 칸이 없는 옛 기록은 applied의 영수증에서 다시 센다(field_arrival.ts endCard). 이름은 두지 않는다(결정 147·183) */
+  leftCount?: number;
 }
 export interface FieldReturns {
   /** 반영한 영수증 id → 정규화한 내용. 같은 id가 다시 오면 내용을 견주고 아무것도 하지 않는다(T07·T08). */
@@ -526,6 +529,7 @@ export function applyFieldReturn(g: Game, departure: AnyDeparture, input: unknow
     symbol: r.symbol ? { ...r.symbol, use: null } : null, before, after: snapshot(g), lines,
     ...(departure.version === 2 ? { sent: [...r.people.sent] } : {}),
     ...(r.version === 5 ? { crew: structuredClone(r.crew) } : {}),
+    ...(leftCount > 0 ? { leftCount } : {}),
   };
   g.fieldReturns ??= { applied: {}, records: [] };
   Object.defineProperty(g.fieldReturns.applied, r.receiptId, { value: fingerprint, enumerable: true, configurable: true, writable: true });

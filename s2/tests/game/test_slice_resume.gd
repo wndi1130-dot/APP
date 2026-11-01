@@ -308,7 +308,8 @@ func test_train_slot_round_trip_with_late_papers_queues_and_cooldowns() -> void:
 	g["lateOn"] = true
 	g["lateCards"] = [{"uid": 9001, "kind": "demand", "comm": "tail", "late": 1, "who": null}]
 	g["deferred"] = [{"uid": 9002, "kind": "favor", "comm": "guard", "pushed": 1}]
-	g["budget"] = {"picked": int(flow.train_t["BUDGET"]["perSeg"]), "stats": {"deferred": {"5": 1}, "faded": {}, "dropped": {"6": 2}}}
+	# S1's budget always carries its stretch (budget.ts sync reads b.seg); the save check now asks for it.
+	g["budget"] = {"seg": int(g["seg"]), "picked": int(flow.train_t["BUDGET"]["perSeg"]), "stats": {"deferred": {"5": 1}, "faded": {}, "dropped": {"6": 2}}}
 	g["contentQueue"] = [{"id": "queued_now", "at": seg}]
 	g["contentDeals"] = [{"id": "deal_now", "comm": "front", "due": seg}]
 	g["comms"]["tail"]["demandCool"] = 3

@@ -28,10 +28,11 @@ const AFFORD_KINDS: Array[String] = ["travel", "demand", "ration_cut", "favor", 
 ## key?}. {} for a kind turn_cards.gd does not draw.
 static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	var v: Dictionary = TurnCards.view(g, t, card)
+	if g.get("stranded") != null and bool(g["stranded"]["captainAway"]) and card["kind"] in ["tension_crisis", "protest"]: v = Late.view(g, card, TurnCards._base_view(g, t, card))
 	if v.is_empty():
 		return {}
 	# Content carries S1's filled body/speaker/why/later/log and guarded choices already.
-	if card["kind"] in ["content", "content-deal"]:
+	if card["kind"] in ["content", "content-deal", "trip_depart", "trip_return", "trip_lost", "trip_extend"]:
 		var content: Dictionary = v.duplicate(true)
 		if not content.has("speaker"): content["speaker"] = null
 		if not content.has("focus"): content["focus"] = null
@@ -74,7 +75,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 		"bitten":
 			var past: Variant = _memo(g, "bitten")
 			var parts: Array = [["팔", "팔을"], ["다리", "다리를"], ["손", "손을"]][int(card["uid"]) % 3]
-			var echo: String = " 지난번 일 때문에 다들 상처부터 본다." if _was(past, "hide") else (" 지난번 역에 두고 온 사람을 다들 기억한다." if _was(past, "leave") else "")
+			var echo: String = " 지난번 일 때문에 다들 상처부터 본다." if _was(past, "hide") else (" 지난번에 남기고 온 사람을 다들 기억한다." if _was(past, "leave") else "")
 			out["speaker"] = {"name": str(card.get("who", "수색대원")), "role": String(t["COMM_NAME"][c])}
 			out["focus"] = c
 			out["body"] = "%s이(가) %s 물렸다. \"열차장…\" 수색대가 열차장의 말을 기다린다. \"감염 창이 닫히기 전에 잘라야 합니다.\"%s" % [str(card.get("who", "대원")), parts[1], echo]
@@ -236,7 +237,7 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 	_afford(g, after)
 	if after.any(func(ch: Dictionary) -> bool: return ch["disabled"] == ""):
 		out["choices"] = after
-	return out
+	return TurnCards.Trip.filter_view(g, card, out)
 
 
 ## S1 affordable: why a choice's cost cannot be paid now ("" when it can).

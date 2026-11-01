@@ -53,7 +53,7 @@ const RISK_FEEL: Dictionary = {
 		"이런 곳은 조용히 다니자",
 	],
 	"높다": [
-		"이런 곳은 정차하기 적합하지 않아",
+		"이런 곳엔 열차를 세우면 안 돼",
 		"이런 곳은 뒤탈이 잦아",
 		"느낌이 아주 안 좋아",
 		"이런 데선 곱게 못 떠날 때가 많아",
@@ -288,7 +288,7 @@ func watch(delta: float) -> void:
 	# What it says is so of this stop whatever is done next: it can have it.
 	if forecast and not forecast_said and game.clock.elapsed >= FORECAST_AT:
 		forecast_said = true
-		game.set_radio("무전수: 이 근처에 무리가 돈다. 소리 내면 열차로 몰려들어 떠날 때 붙들리겠다.", "must")
+		game.set_radio("무전수: 이 근처에 무리가 돕니다. 소리를 내면 열차로 몰려들어 떠날 때 붙들릴 겁니다.", "must")
 	watch_t -= delta
 	if watch_t > 0.0:
 		return
@@ -419,7 +419,7 @@ func tick(delta: float) -> void:
 			calling = false
 			# The train does not go without its chief: the call is lost.
 			if not game.aboard(game.player):
-				game.set_radio("기관사: 열차장님이 안 타셨습니다. 못 떠납니다.", "must")
+				game.set_radio("기관사: 열차장님, 아직 안 타셨습니다. 못 떠납니다.", "must")
 			else:
 				leaving_early()
 				game.audio.depart()

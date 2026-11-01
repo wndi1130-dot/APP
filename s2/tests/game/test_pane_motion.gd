@@ -1,489 +1,624 @@
 extends "res://addons/gut/test.gd"
-## Pinned panes, retiring cards and papers keep their logical slots separate.
+## Decisions 531/532: reusable glass motion, outside taps and sleeping bag HUD.
+## These tests use the same HUD input entry point as the neighboring touch tests.
 
-const PaneMotion = preload("res://game/ui/pane_motion.gd")
-const PaperMotion = preload("res://game/ui/paper_motion.gd")
-const CarPane = preload("res://game/ui/car_pane.gd")
-const SliceFlow = preload("res://game/slice_flow.gd")
-const TrainGauges = preload("res://game/ui/train_gauges.gd")
-
-
-func _pane() -> CarPane:
-	var host := Control.new()
-	host.size = Vector2(960.0, 640.0)
-	add_child_autofree(host)
-	var c: CarPane = CarPane.new()
-	c.name = "CarPane"
-	host.add_child(c)
-	c.pin(TrainGauges.BAND_H)
-	return c
+const FieldGame = preload("res://game/field_game.gd")
+const FieldHud = preload("res://game/ui/field_hud.gd")
+const GlassPane = preload("res://game/ui/glass_pane.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
-func _flow(seen: bool = false) -> SliceFlow:
-	var f: SliceFlow = SliceFlow.new()
-	f.opts = {"skip_field": true, "seed": 3, "cinema": false, "cinema_seen": seen}
-	add_child_autofree(f)
-	return f
+func _game() -> FieldGame:
+	var game: FieldGame = FieldGame.new()
+	game.opts = {"seed": 5, "raiders": false, "auto_pause": false, "arrive": false}
+	add_child_autofree(game)
+	game.set_process(false)
+	game.zombies.list.clear()
+	return game
 
 
-func _offsets(c: Control) -> Vector4:
-	return Vector4(c.offset_left, c.offset_top, c.offset_right, c.offset_bottom)
+func _settle() -> void:
+	await get_tree().create_timer(0.25).timeout
+	for node: Node in get_tree().root.find_children("Pane", "", true, false):
+		if node is GlassPane:
+			_land(node as GlassPane)
 
 
-func _finish_pane(c: Control) -> void:
-	var tw: Tween = c.get_meta(PaneMotion.META_TWEEN) as Tween
-	if tw.is_valid():
-		tw.custom_step(PaneMotion.OPEN_S + PaneMotion.CLOSE_S + 0.001)
+## Fixed 1/60 s steps of a pane's slide, the wall clock out of it.
+func _steps(pane: GlassPane, count: int) -> void:
+	pane.set_process(false)
+	for _i in range(count):
+		pane.motion_step(1.0 / 60.0)
 
 
-func _assert_quiet(node: Node) -> void:
+func _land(pane: GlassPane) -> void:
+	pane.set_process(false)
+	for _i in range(120):
+		if not pane.is_sliding():
+			return
+		pane.motion_step(1.0 / 60.0)
+
+
+func _touch(hud: FieldHud, at: Vector2, pressed: bool, index: int = 0, canceled: bool = false) -> void:
+	var event: InputEventScreenTouch = InputEventScreenTouch.new()
+	event.index = index
+	event.position = at
+	event.pressed = pressed
+	event.canceled = canceled
+	hud._input(event)
+
+
+func _drag(hud: FieldHud, at: Vector2, index: int = 0) -> void:
+	var event: InputEventScreenDrag = InputEventScreenDrag.new()
+	event.index = index
+	event.position = at
+	hud._input(event)
+
+
+func _mouse(hud: FieldHud, at: Vector2, pressed: bool, emulated: bool = false) -> void:
+	var event: InputEventMouseButton = InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.position = at
+	event.pressed = pressed
+	event.device = InputEvent.DEVICE_ID_EMULATION if emulated else 0
+	hud._input(event)
+
+
+func _outside(hud: FieldHud) -> Vector2:
+	return Vector2(4.0 if hud.modal_pane.motion_direction.x > 0.0 else hud._view_size().x - 4.0, hud._view_size().y - 4.0)
+
+
+func _assert_no_field_input(hud: FieldHud) -> void:
+	assert_eq(hud.stick_index, -1)
+	assert_eq(hud.game.player.stick, Vector2.ZERO)
+	assert_true(hud.fingers.is_empty())
+	assert_false(hud.pressing or hud.aiming or hud.auto_aim)
+
+
+func _assert_ignored(node: Node) -> void:
 	if node is Control:
-		var c: Control = node as Control
-		assert_eq(c.mouse_filter, Control.MOUSE_FILTER_IGNORE, String(c.name))
-		assert_eq(c.focus_mode, Control.FOCUS_NONE, String(c.name))
+		assert_eq((node as Control).mouse_filter, Control.MOUSE_FILTER_IGNORE)
 	for child: Node in node.get_children():
-		_assert_quiet(child)
+		_assert_ignored(child)
 
 
-func test_motion_spans_match_the_contract() -> void:
-	assert_eq(PaneMotion.OPEN_S, 0.18)
-	assert_eq(PaneMotion.CLOSE_S, 0.14)
-	assert_eq(PaneMotion.SHIFT_PX, 18.0)
-	assert_eq(SliceFlow.COUNCIL_OPEN_S, 0.24)
-	assert_eq(SliceFlow.COUNCIL_FROM_PX, 8.0)
-	assert_eq(SliceFlow.CARD_FADE_S, 0.18)
-	assert_eq(SliceFlow.PAPER_FOLDED_CLOSE_S, 0.12)
-	assert_eq(SliceFlow.PAPER_OPEN_CLOSE_S, 0.20)
-	assert_eq(SliceFlow.PAPER_DROP_PX, 24.0)
+func _box(game: FieldGame) -> String:
+	for id: String in game.data["containers"]:
+		var box: Dictionary = game.data["containers"][id]
+		if int(box.get("level", 0)) == 0 and not bool(box.get("locked", false)) and not box.has("pick") and not game.FieldMaps.by_train(game.data, box["cell"], "unloading"):
+			box["searched"] = true
+			box["items"] = ["food_pack"]
+			game.player.position = game.actions._container_at(box)
+			game.player.stop()
+			return id
+	fail_test("a searched box is available in the fixed map")
+	return ""
 
 
-func test_open_starts_right_and_finishes_at_the_pinned_offsets() -> void:
-	var c: CarPane = _pane()
-	var rest: Vector4 = _offsets(c)
-	var tw: Tween = PaneMotion.open(c)
-	assert_eq(c.offset_left, rest.x + PaneMotion.SHIFT_PX)
-	assert_eq(c.modulate.a, 0.0)
-	assert_true(PaneMotion.shown(c))
-	tw.custom_step(PaneMotion.OPEN_S * 0.5)
-	assert_gt(c.offset_left, rest.x)
-	assert_lt(c.offset_left, rest.x + PaneMotion.SHIFT_PX)
-	assert_gt(c.modulate.a, 0.0)
-	assert_lt(c.modulate.a, 1.0)
-	tw.custom_step(PaneMotion.OPEN_S)
-	assert_eq(_offsets(c), rest)
-	assert_eq(c.modulate.a, 1.0)
+func _start_take(game: FieldGame) -> String:
+	game.player.items.clear()
+	var id: String = _box(game)
+	game.hud.loot(id)
+	var rows: Node = game.hud.modal.find_child("Near", true, false)
+	for node: Node in rows.find_children("*", "Button", true, false):
+		var button: Button = node as Button
+		if String(button.get_meta("item_id", "")) == "food_pack":
+			button.pressed.emit()
+			return id
+	fail_test("the food row starts the take")
+	return id
 
 
-func test_open_repin_and_parent_resize_finish_at_the_latest_offsets() -> void:
-	var c: CarPane = _pane()
-	var tw: Tween = PaneMotion.open(c)
-	tw.custom_step(PaneMotion.OPEN_S * 0.4)
-	c.pin(TrainGauges.BAND_H + 23.0)
-	var rest: Vector4 = _offsets(c)
-	var host: Control = c.get_parent() as Control
-	host.size += Vector2(137.0, 79.0)
-	tw.custom_step(PaneMotion.OPEN_S)
-	assert_eq(_offsets(c), rest, "the new pin wins over the first rest")
-	assert_eq(c.get_global_rect().end.x, host.get_global_rect().end.x)
+func test_bag_enters_from_right_and_fades_before_it_stops() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	var pane: GlassPane = hud.modal_pane
+	var shade: ColorRect = hud.modal.get_node("Shade") as ColorRect
+	pane.set_process(false)
+	assert_almost_eq(pane.position.x, hud._view_size().x, 1.0, "the first picture is one pane width outside")
+	assert_almost_eq(pane.modulate.a, 0.0, 0.001)
+	assert_almost_eq(shade.modulate.a, 0.0, 0.001)
+	pane.motion_step(0.5)
+	assert_almost_eq(pane.position.x, hud._view_size().x, 1.0, "the frame that built it does not move it")
+	_steps(pane, 6)
+	assert_almost_eq(pane.modulate.a, 1.0, 0.02, "the pane fades in during the first half")
+	assert_gt(shade.modulate.a, 0.0)
+	assert_gt(pane.position.x, pane.resting_position().x + 0.5, "still coming in at 100 ms")
+	_steps(pane, 6)
+	assert_almost_eq(pane.position.x, pane.resting_position().x, 0.5)
+	assert_almost_eq(shade.modulate.a, 1.0, 0.001)
+	assert_false(pane.is_moving())
 
 
-func test_close_repin_finishes_hidden_at_the_latest_offsets() -> void:
-	var c: CarPane = _pane()
-	PaneMotion.open(c).custom_step(PaneMotion.OPEN_S + 0.001)
-	var tw: Tween = PaneMotion.close(c)
-	assert_false(PaneMotion.shown(c), "hidden logically at once")
-	assert_true(c.visible, "still drawn while leaving")
-	tw.custom_step(PaneMotion.CLOSE_S * 0.4)
-	c.pin(TrainGauges.BAND_H + 31.0)
-	var rest: Vector4 = _offsets(c)
-	tw.custom_step(PaneMotion.CLOSE_S)
-	assert_eq(_offsets(c), rest)
-	assert_false(c.visible)
-	assert_eq(c.modulate.a, 0.0)
+func test_rebuilding_or_switching_panes_does_not_slide() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	var first: Control = hud.modal
+	hud.bag_panel()
+	assert_ne(hud.modal, first)
+	assert_almost_eq(hud.modal_pane.position.x, hud.modal_pane.resting_position().x, 0.5)
+	assert_eq(hud.modal_pane.modulate.a, 1.0)
+	assert_false(hud.modal_pane.is_moving())
+	assert_null(hud.closing_modal)
+	hud.body_panel()
+	assert_eq(hud.modal_pane.position.x, 0.0)
+	assert_eq(hud.modal_pane.modulate.a, 1.0)
+	hud.bag_panel()
+	assert_almost_eq(hud.modal_pane.position.x, hud.modal_pane.resting_position().x, 0.5)
+	assert_eq(hud.modal_pane.modulate.a, 1.0)
+	await _settle()
+	assert_almost_eq(hud.modal_pane.position.x, hud.modal_pane.resting_position().x, 0.5)
 
 
-func test_close_then_open_continues_from_the_current_pose_without_drift() -> void:
-	var c: CarPane = _pane()
-	var key := Button.new()
-	c.add_child(key)
-	key.mouse_filter = Control.MOUSE_FILTER_STOP
-	key.focus_mode = Control.FOCUS_ALL
-	var rest: Vector4 = _offsets(c)
-	PaneMotion.open(c).custom_step(PaneMotion.OPEN_S + 0.001)
-	for _round in 3:
-		var leaving: Tween = PaneMotion.close(c)
-		leaving.custom_step(PaneMotion.CLOSE_S * 0.4)
-		var at: Vector4 = _offsets(c)
-		var alpha: float = c.modulate.a
-		var entering: Tween = PaneMotion.open(c)
-		assert_false(leaving.is_valid() and leaving.is_running())
-		assert_eq(_offsets(c), at, "no jump when the direction changes")
-		assert_eq(c.modulate.a, alpha)
-		assert_eq(key.mouse_filter, Control.MOUSE_FILTER_STOP)
-		assert_eq(key.focus_mode, Control.FOCUS_ALL)
-		entering.custom_step(PaneMotion.OPEN_S + 0.001)
-		assert_eq(_offsets(c), rest, "repeated reversals keep the pin")
-
-
-func test_retired_pane_blocks_children_renames_and_frees_after_close() -> void:
-	var c: CarPane = _pane()
-	var holder := Control.new()
-	c.add_child(holder)
-	var key := Button.new()
-	holder.add_child(key)
-	PaneMotion.open(c).custom_step(PaneMotion.OPEN_S + 0.001)
-	var host: Node = c.get_parent()
-	var tw: Tween = PaneMotion.close(c, true)
-	_assert_quiet(c)
-	assert_ne(String(c.name), "CarPane")
-	assert_null(host.get_node_or_null("CarPane"))
-	var replacement: CarPane = CarPane.new()
-	replacement.name = "CarPane"
-	host.add_child(replacement)
-	replacement.pin(TrainGauges.BAND_H)
-	PaneMotion.open(replacement)
-	assert_eq(String(replacement.name), "CarPane", "the name is free immediately")
-	tw.custom_step(PaneMotion.CLOSE_S * 0.99)
-	assert_false(c.is_queued_for_deletion())
-	tw.custom_step(PaneMotion.CLOSE_S * 0.02)
-	assert_true(c.is_queued_for_deletion())
+func test_close_restores_state_at_once_and_frees_the_exit_picture() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	_land(hud.modal_pane)
+	var old: Control = hud.modal
+	var pane: GlassPane = hud.modal_pane
+	var from_x: float = pane.position.x
+	pane.folded.emit()
+	pane.set_process(false)
+	assert_null(hud.modal)
+	assert_false(hud.modal_open)
+	assert_false(game.paused)
+	assert_eq(game.slow, 1.0)
+	assert_eq(hud.closing_modal, old)
+	_assert_ignored(old)
+	_steps(pane, 4)
+	assert_gt(pane.position.x, from_x)
+	assert_lt(pane.modulate.a, 1.0)
+	_steps(pane, 6)
+	assert_true(old.is_queued_for_deletion())
+	assert_null(hud.closing_modal)
 	await get_tree().process_frame
-	assert_false(is_instance_valid(c))
-	assert_true(is_instance_valid(replacement))
+	assert_false(is_instance_valid(old))
 
 
-func test_select_hides_logically_before_the_reusable_pane_disappears() -> void:
-	var f: SliceFlow = _flow()
-	_finish_pane(f.pane)
-	f._select("")
-	assert_eq(f.sel, "")
-	assert_false(PaneMotion.shown(f.pane))
-	assert_true(f.pane.visible)
-	_assert_quiet(f.pane)
-	f._update_decor_lock()
-	_assert_quiet(f.pane)
-	_finish_pane(f.pane)
-	assert_false(f.pane.visible)
-	assert_true(is_instance_valid(f.pane))
-	f._select(SliceFlow.FIRST_CAR)
-	assert_true(PaneMotion.shown(f.pane))
-	assert_eq(f.pane.modulate.a, 0.0)
+func test_fresh_field_touches_work_while_the_picture_leaves() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	await _settle()
+	hud._close_modal()
+	assert_not_null(hud.closing_modal)
+	var home: Vector2 = hud.stick_home()
+	_touch(hud, home, true, 2)
+	_drag(hud, home + Vector2(hud.STICK_R, 0.0), 2)
+	assert_eq(hud.stick_index, 2)
+	assert_ne(game.player.stick, Vector2.ZERO)
+	_touch(hud, home + Vector2(hud.STICK_R, 0.0), false, 2)
+	var run_at: Vector2 = hud.run_button.get_global_rect().get_center()
+	var running: bool = hud.run_button.button_pressed
+	_touch(hud, run_at, true, 3)
+	_touch(hud, run_at, false, 3)
+	assert_ne(hud.run_button.button_pressed, running, "a fresh HUD press works during the exit too")
 
 
-func test_room_slots_clear_while_the_old_panes_leave() -> void:
-	var f: SliceFlow = _flow()
-	f._open_workshop()
-	var workshop: Control = f.shop
-	assert_eq(workshop.modulate.a, 0.0)
-	_finish_pane(workshop)
-	f._open_mods()
-	assert_null(f.shop)
-	assert_ne(String(workshop.name), "WorkshopPane")
-	_assert_quiet(workshop)
-	var refit: Control = f.mods
-	assert_eq(refit.modulate.a, 0.0)
-	f._open_research()
-	assert_null(f.mods)
-	var study: Control = f.research
-	assert_eq(study.modulate.a, 0.0)
-	f._open_cost("coal")
-	assert_null(f.research)
-	var expense: Control = f.cost
-	assert_eq(expense.modulate.a, 0.0)
-	f._put_rooms_away()
-	assert_null(f.cost)
-	assert_eq(f.gauges.get("focus"), [], "the stock focus clears at once")
-	assert_false(PaneMotion.shown(f.pane))
-	for room: Control in [workshop, refit, study, expense]:
-		_assert_quiet(room)
-		assert_true(room.visible)
-		assert_true(room.has_meta(PaneMotion.META_RETIRING))
-		_finish_pane(room)
-		assert_true(room.is_queued_for_deletion())
+func test_reopening_drops_the_old_picture_and_enters_again() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	_land(hud.modal_pane)
+	hud._close_modal()
+	var old: Control = hud.closing_modal
+	hud.bag_panel()
+	assert_false(old.visible)
+	assert_true(old.is_queued_for_deletion())
+	assert_null(hud.closing_modal)
+	assert_true(hud.modal_open and game.paused)
+	assert_almost_eq(hud.modal_pane.position.x, hud._view_size().x, 1.0)
+	assert_eq(hud.modal_pane.modulate.a, 0.0)
+	_land(hud.modal_pane)
+	await get_tree().process_frame
+	assert_false(is_instance_valid(old))
+	assert_almost_eq(hud.modal_pane.position.x, hud.modal_pane.resting_position().x, 0.5)
 
 
-func test_set_cover_uses_the_resting_rect_and_matches_the_pane_spans() -> void:
-	var f: SliceFlow = _flow()
-	_finish_pane(f.pane)
-	f.train.set_view_mode("diag")
-	f._select("")
-	_finish_pane(f.pane)
-	f._cover_tween.custom_step(PaneMotion.CLOSE_S + 0.001)
-	var rest_rect: Rect2 = f.pane.get_global_rect()
-	var covered: float = f.get_viewport().get_visible_rect().size.x - rest_rect.position.x
-	f._select(SliceFlow.FIRST_CAR)
-	assert_eq(float(f.train.get("pane_px")), 0.0, "opening starts from the old width")
-	assert_gt(f.pane.get_global_rect().position.x, rest_rect.position.x)
-	f._set_cover()
-	assert_almost_eq(f._pane_cover(), covered, 0.001, "the moving right edge does not shrink the cover")
-	f._cover_tween.custom_step(PaneMotion.OPEN_S * 0.5)
-	assert_gt(float(f.train.get("pane_px")), 0.0)
-	assert_lt(float(f.train.get("pane_px")), covered)
-	var entering: Tween = f.pane.get_meta(PaneMotion.META_TWEEN) as Tween
-	entering.custom_step(PaneMotion.OPEN_S * 0.5)
-	f._set_cover()
-	f._cover_tween.custom_step(PaneMotion.OPEN_S)
-	assert_almost_eq(float(f.train.get("pane_px")), covered, 0.001)
-	_finish_pane(f.pane)
-	f._select("")
-	assert_almost_eq(float(f.train.get("pane_px")), covered, 0.001, "closing starts from the current width")
-	f._set_cover()
-	assert_eq(f._pane_cover(), 0.0, "a retiring pane covers no logical room")
-	f._cover_tween.custom_step(PaneMotion.CLOSE_S * 0.5)
-	assert_gt(float(f.train.get("pane_px")), 0.0)
-	assert_lt(float(f.train.get("pane_px")), covered)
-	f._cover_tween.custom_step(PaneMotion.CLOSE_S)
-	assert_eq(float(f.train.get("pane_px")), 0.0)
-
-
-func test_cover_reversal_keeps_the_current_width_and_the_latest_pin() -> void:
-	var f: SliceFlow = _flow()
-	_finish_pane(f.pane)
-	f.train.set_view_mode("diag")
-	f._set_cover()
-	if f._cover_tween != null and f._cover_tween.is_valid():
-		f._cover_tween.custom_step(PaneMotion.OPEN_S + 0.001)
-	f._select("")
-	f._cover_tween.custom_step(PaneMotion.CLOSE_S * 0.5)
-	var width: float = float(f.train.get("pane_px"))
-	var leaving: Tween = f._cover_tween
-	f._select(SliceFlow.FIRST_CAR)
-	assert_false(leaving.is_valid() and leaving.is_running())
-	assert_eq(float(f.train.get("pane_px")), width, "a reversal starts at the current width")
-	f.pane.call("pin", TrainGauges.BAND_H + 13.0)
-	var pinned: Vector4 = _offsets(f.pane)
-	f._cover_tween.custom_step(PaneMotion.OPEN_S + 0.001)
-	_finish_pane(f.pane)
-	assert_eq(_offsets(f.pane), pinned)
-	var rect: Rect2 = f.pane.get_global_rect()
-	var covered: float = f.get_viewport().get_visible_rect().size.x - rect.position.x
-	assert_almost_eq(float(f.train.get("pane_px")), covered, 0.001)
-
-
-func test_sheet_card_retirement_follows_the_fold_and_keeps_a_new_card() -> void:
-	var f: SliceFlow = _flow()
-	f.go(f._index_of("stop_pick"))
-	var old: Control = f.card
-	var old_name: String = String(old.name)
-	var sheet: Control = old.get("sheet") as Control
-	var tw: Tween = f._retire_card(old)
-	assert_null(f.card)
-	_assert_quiet(old)
-	assert_ne(String(old.name), old_name)
-	f._show_stop_pick()
-	var replacement: Control = f.card
-	# The new card is made without a name of its own (auto @Control@…): it only must not be the
-	# leaving one or carry its retiring mark.
-	assert_ne(replacement, old)
-	assert_false(replacement.has_meta(PaneMotion.META_RETIRING))
-	assert_false(String(replacement.name).contains("_retiring"))
-	tw.custom_step(PaperMotion.CLOSE_S * 0.5)
-	assert_lt(sheet.scale.x, 1.0, "the sheet folds instead of a plain fade")
-	assert_false(old.is_queued_for_deletion())
-	tw.custom_step(PaperMotion.CLOSE_S * 0.49)
-	assert_false(old.is_queued_for_deletion())
-	tw.custom_step(PaperMotion.CLOSE_S * 0.02)
+func test_left_pane_leaves_left_and_restores_the_body_rate() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.body_panel()
+	assert_almost_eq(hud.modal_pane.position.x, -UiFonts.px(GlassPane.IN_FROM), 0.5)
+	_land(hud.modal_pane)
+	var old: Control = hud.modal
+	var pane: GlassPane = hud.modal_pane
+	hud._close_modal()
+	pane.set_process(false)
+	assert_null(hud.modal)
+	assert_eq(game.slow, 1.0)
+	assert_false(game.paused)
+	_steps(pane, 4)
+	assert_lt(pane.position.x, 0.0)
+	assert_gte(pane.position.x, -UiFonts.px(GlassPane.IN_FROM) - 0.5)
+	assert_lt(pane.modulate.a, 1.0)
+	_steps(pane, 6)
 	assert_true(old.is_queued_for_deletion())
 	await get_tree().process_frame
 	assert_false(is_instance_valid(old))
-	assert_eq(f.card, replacement)
 
 
-func test_seen_sheet_card_retirement_uses_the_short_fold_span() -> void:
-	var f: SliceFlow = _flow(true)
-	f.go(f._index_of("stop_pick"))
-	var old: Control = f.card
-	var tw: Tween = f._retire_card(old)
-	var seconds: float = PaperMotion.CLOSE_S * PaperMotion.SHORT
-	tw.custom_step(seconds * 0.99)
-	assert_false(old.is_queued_for_deletion())
-	tw.custom_step(seconds * 0.02)
-	assert_true(old.is_queued_for_deletion())
+func test_outside_taps_fold_bag_body_and_settings_without_field_input() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	var target: Dictionary = game.zombies.spawn("dead", game.player.position + Vector3(3.0, 0.0, 0.0))
+	game.player.target_zombie = target
+	for open: Callable in [hud.bag_panel, hud.body_panel, hud.settings_panel]:
+		open.call()
+		await _settle()
+		var at: Vector2 = _outside(hud)
+		var running: bool = hud.run_button.button_pressed
+		var lamps: bool = game.lamps_on()
+		_touch(hud, at, true)
+		assert_true(hud.modal_open, "only a lift can fold it")
+		_touch(hud, at, false)
+		assert_null(hud.modal)
+		assert_false(hud.modal_open)
+		assert_eq(hud.run_button.button_pressed, running)
+		assert_eq(game.lamps_on(), lamps)
+		assert_eq(game.player.target_zombie, target, "no field tap called off the target")
+		_assert_no_field_input(hud)
 
 
-func test_receipt_and_arrival_open_their_sheets_with_paper_motion() -> void:
-	var f: SliceFlow = _flow()
-	for id: String in ["receipt", "arrive"]:
-		f.go(f._index_of(id))
-		var sheet: Control = f.card.get("sheet") as Control
-		assert_not_null(sheet)
-		assert_true(sheet.has_meta(PaperMotion.META_TWEEN), id)
-		assert_eq(sheet.modulate.a, 0.0)
-		assert_eq(sheet.scale.x, PaperMotion.FOLDED)
-		var tw: Tween = sheet.get_meta(PaperMotion.META_TWEEN) as Tween
-		tw.custom_step(PaperMotion.OPEN_S + 0.001)
-		assert_eq(sheet.scale, Vector2.ONE)
-		assert_eq(sheet.modulate.a, 1.0)
+func test_settings_outside_tap_returns_to_the_pause_screen() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	game.paused = true
+	hud.settings_panel()
+	await _settle()
+	var at: Vector2 = _outside(hud)
+	_mouse(hud, at, true)
+	_mouse(hud, at, false)
+	assert_null(hud.modal)
+	assert_true(game.paused)
+	hud.tick(0.016)
+	assert_true(hud.settings_button.visible)
+	_assert_no_field_input(hud)
 
 
-func test_council_rises_into_place_and_retires_with_a_plain_fade() -> void:
-	var f: SliceFlow = _flow()
-	f.go(f._index_of("council"))
-	var c: Control = f.card
-	var rest: Vector2 = c.position - Vector2(0.0, SliceFlow.COUNCIL_FROM_PX)
-	assert_eq(c.modulate.a, 0.0)
-	var entering: Tween = c.get_meta(SliceFlow.META_CARD_TWEEN) as Tween
-	entering.custom_step(SliceFlow.COUNCIL_OPEN_S * 0.5)
-	assert_gt(c.position.y, rest.y)
-	assert_lt(c.position.y, rest.y + SliceFlow.COUNCIL_FROM_PX)
-	assert_gt(c.modulate.a, 0.0)
-	assert_lt(c.modulate.a, 1.0)
-	entering.custom_step(SliceFlow.COUNCIL_OPEN_S)
-	assert_eq(c.position, rest)
-	assert_eq(c.modulate.a, 1.0)
-	var leaving: Tween = f._retire_card(c)
-	assert_null(f.card)
-	_assert_quiet(c)
-	assert_ne(String(c.name), "CouncilCard")
-	leaving.custom_step(SliceFlow.CARD_FADE_S * 0.99)
-	assert_false(c.is_queued_for_deletion())
-	leaving.custom_step(SliceFlow.CARD_FADE_S * 0.02)
-	assert_true(c.is_queued_for_deletion())
+func test_sleeping_hud_taps_only_fold_the_bag() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	for control: Control in [hud.run_button, hud.lamp_button, hud.bag_button, hud.portrait, hud.pause_button]:
+		hud.bag_panel()
+		hud.lamp_button.visible = true
+		await _settle()
+		var at: Vector2 = control.get_global_rect().get_center()
+		assert_false(hud.modal_pane.get_global_rect().has_point(at))
+		var running: bool = hud.run_button.button_pressed
+		var lamps: bool = game.lamps_on()
+		_touch(hud, at, true)
+		_touch(hud, at, false)
+		assert_null(hud.modal, "the sleeping key only folds the bag")
+		assert_eq(hud.run_button.button_pressed, running)
+		assert_eq(game.lamps_on(), lamps)
+		assert_false(game.paused, "the sleeping pause key did not toggle")
+		_assert_no_field_input(hud)
 
 
-func test_council_retirement_cancels_an_unfinished_entry() -> void:
-	var f: SliceFlow = _flow()
-	f.go(f._index_of("council"))
-	var c: Control = f.card
-	var entering: Tween = c.get_meta(SliceFlow.META_CARD_TWEEN) as Tween
-	entering.custom_step(SliceFlow.COUNCIL_OPEN_S * 0.4)
-	var alpha: float = c.modulate.a
-	var leaving: Tween = f._retire_card(c)
-	assert_false(entering.is_valid() and entering.is_running())
-	assert_eq(c.modulate.a, alpha, "the fade continues from the current alpha")
-	leaving.custom_step(SliceFlow.CARD_FADE_S + 0.001)
-	assert_true(c.is_queued_for_deletion())
+func test_inside_start_outside_lift_does_not_fold() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	await _settle()
+	var inside: Vector2 = hud.modal_pane.get_global_rect().get_center()
+	var outside: Vector2 = _outside(hud)
+	for index: int in [0, 1]:
+		_touch(hud, inside, true, index)
+		_drag(hud, outside, index)
+		_touch(hud, outside, false, index)
+		assert_true(hud.modal_open)
+	_assert_no_field_input(hud)
 
 
-func _check_paper_retirement(folded: bool) -> void:
-	var f: SliceFlow = _flow()
-	var old: Control = f.paper
-	if folded:
-		old.call("set_folded", true)
-	var at: Vector2 = old.position
-	var seconds: float = SliceFlow.PAPER_FOLDED_CLOSE_S if folded else SliceFlow.PAPER_OPEN_CLOSE_S
-	var tw: Tween = f._drop_paper()
-	assert_null(f.paper)
-	assert_false(bool(f.pane.get("choosing_paper")), "the decor lock releases at once")
-	_assert_quiet(old)
-	assert_ne(String(old.name), "Paper")
-	f._show_paper()
-	var replacement: Control = f.paper
-	assert_eq(String(replacement.name), "Paper")
-	tw.custom_step(seconds * 0.5)
-	assert_gt(old.position.y, at.y)
-	assert_lt(old.position.y, at.y + SliceFlow.PAPER_DROP_PX)
-	assert_gt(old.modulate.a, 0.0)
-	assert_lt(old.modulate.a, 1.0)
-	assert_false(old.is_queued_for_deletion())
-	tw.custom_step(seconds * 0.49)
-	assert_false(old.is_queued_for_deletion())
-	tw.custom_step(seconds * 0.02)
-	assert_true(old.is_queued_for_deletion())
-	assert_eq(old.position, at + Vector2(0.0, SliceFlow.PAPER_DROP_PX))
+func test_outside_drag_long_hold_cancel_and_inside_lift_do_not_fold() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	await _settle()
+	var at: Vector2 = _outside(hud)
+	_touch(hud, at, true)
+	_drag(hud, at + Vector2(hud.DRAG_PX * 2.0, 0.0))
+	_drag(hud, at)
+	_touch(hud, at, false)
+	assert_true(hud.modal_open, "returning after a drag is not a tap")
+	_touch(hud, at, true)
+	hud.modal_fingers[0]["ms"] = Time.get_ticks_msec() - 400
+	_touch(hud, at, false)
+	assert_true(hud.modal_open, "a long hold is not a short tap")
+	_touch(hud, at, true)
+	_touch(hud, at, false, 0, true)
+	assert_true(hud.modal_open, "a cancel is not a lift")
+	_touch(hud, at, true)
+	_touch(hud, hud.modal_pane.get_global_rect().get_center(), false)
+	assert_true(hud.modal_open, "the lift must also be outside")
+	_assert_no_field_input(hud)
+
+
+func test_other_outside_fingers_and_emulated_mouse_cannot_leak_after_close() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	await _settle()
+	var at: Vector2 = hud.stick_home()
+	_touch(hud, at, true)
+	_mouse(hud, at, true, true)
+	_touch(hud, at, true, 1)
+	_touch(hud, at, false)
+	assert_null(hud.modal)
+	_mouse(hud, at, false, true)
+	_drag(hud, at + Vector2(hud.STICK_R, 0.0), 1)
+	_touch(hud, at + Vector2(hud.STICK_R, 0.0), false, 1)
+	_assert_no_field_input(hud)
+	assert_eq(hud.stick_tap_ms, -10000, "no swallowed lift became a field tap")
+
+
+func test_cards_centered_choices_and_resume_block_outside_taps() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	var calls: Array[String] = []
+	hud.card("motion-test", "고르기. 한 가지를 고른다.", [{"id": "keep", "label": "그대로"}], func(choice: String) -> void: calls.append(choice))
+	var at: Vector2 = Vector2(2.0, hud._view_size().y - 2.0)
+	_touch(hud, at, true)
+	_touch(hud, at, false)
+	assert_true(hud.modal_open)
+	assert_true(calls.is_empty())
+	hud.depart_card()
+	_touch(hud, at, true, 1)
+	_touch(hud, at, false, 1)
+	assert_true(hud.modal_open)
+	assert_false(game.ended)
+	hud._open_modal()
+	_mouse(hud, at, true)
+	_mouse(hud, at, false)
+	assert_true(hud.modal_open)
+	hud.show_resume()
+	_touch(hud, at, true)
+	_touch(hud, at, false)
+	assert_true(hud.modal_open and game.resume_pending)
+	_assert_no_field_input(hud)
+	game.resume_pending = false
+	hud._close_modal()
+
+
+func test_back_uses_the_same_close_path() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	var quit_before: bool = get_tree().is_quit_on_go_back()
+	hud.bag_panel()
+	var event: InputEventAction = InputEventAction.new()
+	event.action = "ui_cancel"
+	event.pressed = true
+	hud._input(event)
+	assert_null(hud.modal)
+	assert_not_null(hud.closing_modal)
+	hud.bag_panel()
+	assert_false(get_tree().is_quit_on_go_back())
+	hud._notification(Node.NOTIFICATION_WM_GO_BACK_REQUEST)
+	assert_null(hud.modal)
+	assert_false(game.paused)
 	await get_tree().process_frame
+	assert_eq(get_tree().is_quit_on_go_back(), quit_before)
+	hud.bag_panel()
+	hud._open_modal()
+	await get_tree().process_frame
+	assert_eq(get_tree().is_quit_on_go_back(), quit_before, "a centered choice keeps its previous back behavior")
+
+
+func test_opening_releases_a_held_stick_and_consumes_its_lift() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	var at: Vector2 = hud.stick_home()
+	_touch(hud, at, true)
+	_drag(hud, at + Vector2(hud.STICK_R, 0.0))
+	assert_ne(game.player.stick, Vector2.ZERO)
+	hud.bag_panel()
+	_assert_no_field_input(hud)
+	_touch(hud, at, false)
+	assert_true(hud.modal_open, "a preexisting finger cannot fold the new pane")
+	assert_eq(hud.stick_tap_ms, -10000)
+	hud._close_modal()
+	_mouse(hud, at, false, true)
+	_assert_no_field_input(hud)
+
+
+func test_bag_stick_drag_keeps_player_and_clock_still() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	await _settle()
+	var at: Vector2 = hud.stick_home()
+	var before: Vector3 = game.player.position
+	var elapsed: float = game.clock.elapsed
+	_touch(hud, at, true)
+	_drag(hud, at + Vector2(hud.STICK_R, 0.0))
+	game._process(0.1)
+	assert_eq(game.player.position, before)
+	assert_eq(game.clock.elapsed, elapsed)
+	assert_true(game.paused)
+	_touch(hud, at + Vector2(hud.STICK_R, 0.0), false)
+	assert_true(hud.modal_open)
+	_assert_no_field_input(hud)
+
+
+func test_taking_runs_then_pauses_again_without_stick_input() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	var id: String = _start_take(game)
+	assert_eq(game.player.action, "take")
+	assert_eq(hud.taking_box, id)
+	assert_false(game.paused)
+	var elapsed: float = game.clock.elapsed
+	game._process(0.05)
+	assert_gt(game.clock.elapsed, elapsed)
+	game.player.action_t = 0.001
+	game._process(0.1)
+	assert_eq(int(game.player.items.get("food_pack", 0)), 1)
+	assert_true(hud.modal_open and game.paused)
+	assert_eq(hud.taking_box, "")
+	_assert_no_field_input(hud)
+
+
+func test_app_away_stays_paused_even_if_the_taking_pane_closes() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	_start_take(game)
+	assert_false(game.paused)
+	game.interrupt()
+	hud.tick(0.016)
+	assert_true(game.paused)
+	hud._close_modal()
+	assert_true(game.paused, "closing cannot resume a background app")
+
+
+## The coordinator's quality bars (HOQ): the bag comes in between 150 and 220 ms and
+## goes in between 100 and 180 ms.
+func test_hoq_bag_opens_in_150_to_220_ms_and_closes_in_100_to_180_ms() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	var pane: GlassPane = hud.modal_pane
+	pane.set_process(false)
+	pane.motion_step(1.0 / 60.0)
+	_steps(pane, 9)
+	assert_true(pane.is_moving(), "still coming in at 150 ms (+ the frame it was built in)")
+	assert_gt(pane.position.x, pane.resting_position().x + 0.5)
+	_steps(pane, 3)
+	assert_false(pane.is_moving(), "at rest at 200 ms (217 ms with the build frame)")
+	assert_almost_eq(pane.position.x, pane.resting_position().x, 0.5)
+	var old: Control = hud.modal
+	pane.folded.emit()
+	pane.set_process(false)
+	_steps(pane, 6)
+	assert_true(old.visible and not old.is_queued_for_deletion(), "still going out at 100 ms")
+	_steps(pane, 4)
+	assert_true(old.is_queued_for_deletion(), "gone by 167 ms")
+
+
+## HOQ on a busy phone: a long frame after the build moves the slide by 50 ms at
+## the most, so the pane never pops to its place.
+func test_hoq_a_long_frame_does_not_skip_the_slide() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	var pane: GlassPane = hud.modal_pane
+	pane.set_process(false)
+	pane.motion_step(0.5)
+	pane.motion_step(0.5)
+	assert_true(pane.is_moving())
+	assert_gt(pane.position.x, pane.resting_position().x + 0.5)
+	assert_lt(pane.position.x, hud._view_size().x - 0.5)
+
+
+## HOQ: with the bag up, a held stick and a held finger on the attack pad move,
+## swing and run the clock not at all; a finger held across the closing tap lifts
+## into nothing.
+func test_hoq_two_fingers_and_a_lift_after_closing_leak_nothing() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	var p = game.player
+	hud.bag_panel()
+	await _settle()
+	var before: Vector3 = p.position
+	var elapsed: float = game.clock.elapsed
+	var stick: Vector2 = hud.stick_home()
+	var attack: Vector2 = hud.attack_button.get_global_rect().get_center()
+	_touch(hud, stick, true, 0)
+	_drag(hud, stick + Vector2(hud.STICK_R, 0.0), 0)
+	_touch(hud, attack, true, 1)
+	for _i in range(3):
+		game._process(0.1)
+	assert_eq(p.position, before)
+	assert_eq(game.clock.elapsed, elapsed)
+	assert_eq(p.swing_t, 0.0)
+	assert_false(p.hold_attack)
+	assert_true(hud.modal_open)
+	# Both holds 400 ms old on the clock the tap rule reads (a timer's first tick
+	# can carry a whole busy frame, so waiting one is not the same).
+	for held: int in [0, 1]:
+		hud.modal_fingers[held]["ms"] = Time.get_ticks_msec() - 400
+	_touch(hud, attack, false, 1)
+	_touch(hud, stick + Vector2(hud.STICK_R, 0.0), false, 0)
+	assert_true(hud.modal_open, "long holds never fold the pane")
+	# A finger on the attack pad, a short tap outside folds the pane, then that finger lifts.
+	_touch(hud, attack, true, 2)
+	var out: Vector2 = _outside(hud)
+	_touch(hud, out, true, 3)
+	_touch(hud, out, false, 3)
+	assert_false(hud.modal_open)
+	_touch(hud, attack, false, 2)
+	for _i in range(3):
+		game._process(0.1)
+	assert_eq(p.swing_t, 0.0)
+	assert_false(p.hold_attack)
+	assert_eq(p.position, before)
+	_assert_no_field_input(hud)
+
+
+func _frames_until_still(pane: GlassPane) -> int:
+	var frames: int = 0
+	while is_instance_valid(pane) and pane.is_sliding() and frames < 120:
+		await get_tree().process_frame
+		frames += 1
+	return frames
+
+
+## The slide runs on the pane's own frames: no hand stepping, it comes in, says so
+## once, stops processing, and on close leaves and is freed the same way.
+func test_real_frames_bring_the_bag_in_and_out_once() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	var pane: GlassPane = hud.modal_pane
+	var settled: Array[int] = [0]
+	var gone: Array[int] = [0]
+	pane.motion_finished.connect(func() -> void: settled[0] += 1)
+	pane.left.connect(func() -> void: gone[0] += 1)
+	assert_true(pane.is_processing())
+	var frames: int = await _frames_until_still(pane)
+	assert_between(frames, 4, 120, "the pane's own frames bring it in")
+	assert_false(pane.is_sliding())
+	assert_almost_eq(pane.position.x, pane.resting_position().x, 0.5)
+	assert_eq(settled[0], 1)
+	assert_false(pane.is_processing(), "a pane at rest costs no frame")
+	var old: Control = hud.modal
+	pane.folded.emit()
+	assert_true(pane.is_processing())
+	assert_between(await _frames_until_still(pane), 3, 120, "and take it out")
+	await get_tree().process_frame
+	assert_eq(gone[0], 1)
+	assert_eq(settled[0], 1)
+	assert_null(hud.closing_modal)
 	assert_false(is_instance_valid(old))
-	assert_eq(f.paper, replacement)
 
 
-func test_open_turn_paper_retires_in_the_open_span() -> void:
-	await _check_paper_retirement(false)
-
-
-func test_folded_turn_paper_retires_in_the_folded_span() -> void:
-	await _check_paper_retirement(true)
-
-
-func test_freeing_the_train_stops_its_pending_cover_motion() -> void:
-	var f: SliceFlow = _flow()
-	f.train.set_view_mode("diag")
-	f._select("")
-	var cover: Tween = f._cover_tween
-	assert_true(cover.is_valid())
-	var old_train: Node3D = f.train
-	f.train = null
-	old_train.queue_free()
-	await get_tree().process_frame
-	assert_false(is_instance_valid(old_train))
-	# GUT also rejects any freed-capture errors on the tween's next frame.
-	await get_tree().process_frame
-	assert_true(is_instance_valid(f))
-	assert_eq(f._cover_tween, cover)
-	assert_false(f._cover_tween.is_valid())
-
-
-func test_retiring_turn_paper_stops_layout_and_ignores_old_choices() -> void:
-	var f: SliceFlow = _flow()
-	var old: Control = f.paper
-	var sheet: Control = old.get("sheet") as Control
-	var children: Array[Node] = old.get_children()
-	old.set_process(true)
-	var leaving: Tween = f._drop_paper()
-	assert_false(old.is_processing(), "layout retries cannot create new active buttons")
-	assert_false(old.is_connected("chose", f._paper_chosen))
-	assert_false(old.is_connected("fold_changed", f._paper_folded))
-	f._show_paper()
-	var replacement: Control = f.paper
-	var state: Dictionary = f.train_g.duplicate(true)
-	old.emit_signal("chose", state.duplicate(true))
-	assert_eq(f.paper, replacement, "a late choice cannot replace the current paper")
-	assert_eq(f.train_g, state)
-	leaving.custom_step(SliceFlow.PAPER_OPEN_CLOSE_S * 0.5)
-	assert_eq(old.get("sheet"), sheet)
-	assert_eq(old.get_children(), children)
-	_assert_quiet(old)
-	leaving.custom_step(SliceFlow.PAPER_OPEN_CLOSE_S)
-	assert_true(old.is_queued_for_deletion())
-
-
-func test_arrival_slip_follows_the_sheet_alpha_on_entry_and_retirement() -> void:
-	var f: SliceFlow = _flow()
-	f.go(f._index_of("arrive"))
-	var c: Control = f.card
-	var sheet: Control = c.get("sheet") as Control
-	var slip: Control = c.get("slip") as Control
-	assert_not_null(slip)
-	var at: Vector2 = slip.position
-	var turn: float = slip.rotation
-	var size: Vector2 = slip.size
-	assert_eq(slip.modulate.a, 0.0, "the slip cannot appear ahead of its sheet")
-	var entering: Tween = sheet.get_meta(PaperMotion.META_TWEEN) as Tween
-	entering.custom_step(PaperMotion.OPEN_S * 0.06)
-	assert_gt(sheet.modulate.a, 0.0)
-	assert_lt(sheet.modulate.a, 1.0)
-	assert_eq(slip.modulate.a, sheet.modulate.a)
-	entering.custom_step(PaperMotion.OPEN_S)
-	assert_eq(slip.modulate.a, 1.0)
-	var leaving: Tween = f._retire_card(c)
-	leaving.custom_step(PaperMotion.CLOSE_S * 0.9)
-	assert_gt(sheet.modulate.a, 0.0)
-	assert_lt(sheet.modulate.a, 1.0)
-	assert_eq(slip.modulate.a, sheet.modulate.a)
-	assert_eq(slip.position, at)
-	assert_eq(slip.rotation, turn)
-	assert_eq(slip.size, size)
-	leaving.custom_step(PaperMotion.CLOSE_S)
-	assert_almost_eq(slip.modulate.a, 0.0, 0.0001, "no slip remains visible after its sheet leaves")
-	assert_true(c.is_queued_for_deletion())
-	await get_tree().process_frame
-	assert_false(is_instance_valid(c))
-	assert_false(is_instance_valid(slip))
-
-
-func test_freeing_the_flow_stops_its_pending_motions() -> void:
-	var f: SliceFlow = _flow()
-	f.train.set_view_mode("diag")
-	f._select("")
-	var cover: Tween = f._cover_tween
-	var pane_out: Tween = f.pane.get_meta(PaneMotion.META_TWEEN) as Tween
-	f._open_workshop()
-	var room_in: Tween = f.shop.get_meta(PaneMotion.META_TWEEN) as Tween
-	var paper_out: Tween = f._drop_paper()
-	var card_out: Tween = f._retire_card(f.card)
-	f.queue_free()
-	await get_tree().process_frame
-	assert_false(is_instance_valid(f))
-	# A tween sees its bound node gone on its next step, one frame after the free.
-	await get_tree().process_frame
-	for tw: Tween in [cover, pane_out, room_in, paper_out, card_out]:
-		assert_false(tw.is_valid(), "a bound tween ends with its flow or control")
+## A key that was off when the finger came down presses nothing on the lift,
+## even if it woke meanwhile; one that was on still works.
+func test_a_key_off_at_the_touch_stays_unpressed_when_it_wakes() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	await _settle()
+	var key: Button = null
+	for node: Node in hud.modal_pane.find_children("*", "Button", true, false):
+		var b: Button = node as Button
+		if b.is_visible_in_tree() and b.mouse_filter != Control.MOUSE_FILTER_IGNORE and b.size.x > 8.0:
+			key = b
+			break
+	assert_not_null(key)
+	var presses: Array[int] = [0]
+	key.pressed.connect(func() -> void: presses[0] += 1)
+	var at: Vector2 = key.get_global_rect().get_center()
+	key.disabled = true
+	_touch(hud, at, true, 1)
+	key.disabled = false
+	_touch(hud, at, false, 1)
+	assert_eq(presses[0], 0, "the lift of a press that began on an off key does nothing")
+	if not is_instance_valid(key) or not key.is_visible_in_tree():
+		return
+	_touch(hud, at, true, 1)
+	_touch(hud, at, false, 1)
+	assert_eq(presses[0], 1, "the same key pressed while on still works")

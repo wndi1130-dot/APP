@@ -15,27 +15,32 @@ const Vote = preload("res://game/politics/council_vote.gd")
 const Ladder = preload("res://game/train/turn/turn_ladder.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
 const TrainDecor = preload("res://game/train/train_decor.gd")
+const Stranded = preload("res://game/train/turn/turn_stranded.gd")
 
 static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
-	if g0.get("stranded") != null: return C.unsupported(g0, "settle: stranded/trip")
 	if g0.get("deathWeight", false): return C.unsupported(g0, "settle: deathWeight")
 	for law: String in g0.get("ratify", []):
 		if St.law_active(g0, law): return C.unsupported(g0, "dropUnratified: repeal")
 	for law: String in g0.get("ratifyRepeal", []):
 		if not St.law_active(g0, law): return C.unsupported(g0, "dropUnratified: enact")
 	var g: Dictionary = g0.duplicate(true)
+	var was_stranded: bool = g.get("stranded") != null and int(g["stranded"]["since"]) < int(g["seg"])
 	var before: Dictionary = {}
 	for key: String in ["coal", "food", "med", "trust", "tension"]: before[key] = g[key]
+	if g.get("stranded") != null and g["stranded"]["since"] == g["seg"]: before["coal"] += float(g["stranded"].get("burned", 0))
 	before["rel"] = {}
 	for comm: String in t["COMMS"]: before["rel"][comm] = g["comms"][comm]["rel"]
 	var notes: Array = []
 	var f: Dictionary = Turn.forecast(g, t)
 	var p: Dictionary = t["P"]
 	var parts: Dictionary = Turn.forecast_parts(g, t)
-	if float(g["coal"]) - float(f["coal"]) <= 0: return C.unsupported(g0, "settle: enterStranded")
 	C.bump_parts(g, "coal", -float(f["coal"]), parts["coal"])
 	C.bump_parts(g, "food", -float(f["food"]), parts["food"])
+	if float(g["coal"]) <= 0 and g.get("stranded") == null: Stranded.enter_stranded(g, t, float(before["coal"]), float(f["coal"]))
 	if bool(g["inStrike"]): C.bump(g, "tension", 3, "strike")
+	elif was_stranded:
+		C.bump(g, "tension", float(p["strandedTension"]), "stranded")
+		Stranded.stranded_settle(g, t)
 	else: g["comms"]["engine"]["base"][3] += float(p["engineFatigue"])
 	if g.get("space") is Dictionary and g["space"].get("giver") != null and float(g["space"].get("step", 0)) > 0: C.bump_rel(g, g["space"]["giver"], float(p["spaceHoldRel"]) * float(g["space"]["step"]), "situation")
 	g["forcedRun"] = false
@@ -64,20 +69,22 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	g = Turn.meters(g, t)
 	if g["phase"] != "end": riot_tick(g, t, notes)
 	for comm: String in t["COMMS"]: g["comms"][comm]["away"] = 0
+	if was_stranded: Stranded.trip_tick(g, t)
+	Stranded.reapply_away(g)
+	# S1 arrivalsAway stands here; arrivals are outside this port.
 	# hands.ts handsSettle: the one rule for the hands, the S1a board's and the domestic train's alike (train_hands.gd).
 	g = TrainHands.settle(g, t, notes)
 	if g["phase"] != "end": g = Turn.check_end(g, t)
-	if g["phase"] == "end": return C.unsupported(g0, "settle: finish lookback")
 	# S1 disasterSettle stands here (no disasters in S2), then climateSettle: a frozen stretch goes by.
-	TrainClimate.settle(g, t)
+	if g["phase"] != "end": TrainClimate.settle(g, t)
 	# decor.ts reconcileStore: the dual-use tags melt, newest first, by what the settlement spent.
 	TrainDecor.reconcile_store(g)
-	Care.lookback(g)
+	Turn.track_lookback(g)
 	var receipt: Dictionary = {"rel": {}, "notes": notes}
 	for key: String in ["coal", "food", "med", "trust", "tension"]: receipt[key] = float(g[key]) - float(before[key])
 	for comm: String in t["COMMS"]: receipt["rel"][comm] = float(g["comms"][comm]["rel"]) - float(before["rel"][comm])
 	g["lastSettle"] = receipt
-	g["phase"] = "settle"
+	if g["phase"] != "end": g["phase"] = "settle"
 	return g
 
 static func hub_leak_tick(g: Dictionary, t: Dictionary, notes: Array) -> void:
