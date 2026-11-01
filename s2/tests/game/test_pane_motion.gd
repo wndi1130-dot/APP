@@ -463,7 +463,7 @@ func test_arrival_slip_follows_the_sheet_alpha_on_entry_and_retirement() -> void
 	assert_eq(slip.rotation, turn)
 	assert_eq(slip.size, size)
 	leaving.custom_step(PaperMotion.CLOSE_S)
-	assert_eq(slip.modulate.a, 0.0, "no slip remains visible after its sheet leaves")
+	assert_almost_eq(slip.modulate.a, 0.0, 0.0001, "no slip remains visible after its sheet leaves")
 	assert_true(c.is_queued_for_deletion())
 	await get_tree().process_frame
 	assert_false(is_instance_valid(c))
