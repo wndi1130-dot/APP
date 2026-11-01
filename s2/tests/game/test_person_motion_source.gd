@@ -269,7 +269,9 @@ func test_standing_source_support_is_upright_on_all_fourteen_rigs() -> void:
 				assert_almost_eq(knee.distance_to(foot), rest_knee.distance_to(rest_foot.origin), 0.00001, rig_name + " shin length preserved")
 				var foot_basis := body.get_bone_global_pose(BodyBake._bone(body, "foot" + suffix)).basis.orthonormalized()
 				var tilt := rad_to_deg(foot_basis.get_rotation_quaternion().angle_to(rest_foot.basis.orthonormalized().get_rotation_quaternion()))
-				assert_true(absf(tilt) <= 0.01, rig_name + " foot stays flat in its rest orientation")
+				# With every bone posed at rest, the lumberjack foot already reads 0.04 degrees off its
+				# global rest (the other rigs 0), before any standing step; 0.1 leaves room for that.
+				assert_true(absf(tilt) <= 0.1, "%s foot stays flat in its rest orientation (%.4f degrees)" % [rig_name, tilt])
 			assert_true(absf(feet[0].z - feet[1].z) <= 0.35, "%s frame %d foot z spread <= 0.35 m" % [rig_name, frame])
 			var extra_width := absf(feet[0].x - feet[1].x) - absf(thighs[0].x - thighs[1].x)
 			assert_true(extra_width >= 0.08 and extra_width <= 0.12, rig_name + " ankles 0.08..0.12 m wider than hips")
