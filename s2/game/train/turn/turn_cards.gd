@@ -16,6 +16,7 @@ const Late = preload("res://game/train/turn/turn_late.gd")
 const Budget = preload("res://game/train/turn/turn_budget.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
 const Content = preload("res://game/train/turn/turn_content.gd")
+const Trip = preload("res://game/train/turn/turn_trip_cards.gd")
 
 static func choice(id: String, label: String, effs: Array, special: String = "", witness: bool = false) -> Dictionary:
 	return {"id": id, "label": label, "effs": effs, "special": special, "witness": witness}
@@ -93,10 +94,11 @@ static func travel_view(g: Dictionary, t: Dictionary, id: String) -> Dictionary:
 	return {"title": title, "key": id, "choices": choices}
 
 static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
-	return Late.view(g, card, _base_view(g, t, card))
+	return Trip.filter_view(g, card, Late.view(g, card, _base_view(g, t, card)))
 
 
 static func _base_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
+	if card["kind"] in ["trip_depart", "trip_return", "trip_lost", "trip_extend"]: return Trip.view(g, t, card)
 	if card["kind"] in ["content", "content-deal"]: return Content.content_view(g, t, card)
 	var comm: String = card.get("comm", "tail")
 	var s: Dictionary = g["comms"][comm]
@@ -176,7 +178,7 @@ static func _base_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictio
 			options[1]["log"] = "%s이(가) 내민 약속 장부를 물리쳤다." % t["COMM_NAME"][comm]
 			return {"title": "약속 장부", "choices": options}
 		"tension_crisis":
-			# The ladder's last rung (정치 흐름 4.2): guard, yield, or nothing (the revolt end is not ported).
+			# The ladder's last rung (정치 흐름 4.2): guard, yield, or nothing (nothing ends the board in revolt).
 			var refused: Variant = Ladder.guard_refuses(g)
 			var hold: Dictionary = choice("", "경비대를 푼다", [["fear", 15], ["trust", -10], ["rel", "tail", -10]], "crisis_guard")
 			if refused != null: hold["disabled"] = refused
@@ -356,6 +358,8 @@ static func apply_effects(g: Dictionary, t: Dictionary, effs: Array, from: Strin
 			"grudge": Field._offend(g, e[1])
 
 static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dictionary:
+	# Trip views may consume pending lamp/snow flags, just as S1 tripPlan does.
+	g0 = g0.duplicate(true)
 	var card: Dictionary = {}
 	for row: Dictionary in g0["cards"]:
 		if int(row["uid"]) == uid:
@@ -368,7 +372,6 @@ static func choose(g0: Dictionary, t: Dictionary, uid: int, index: int) -> Dicti
 	var selected: Dictionary = v["choices"][index]
 	# Content.view already applies S1 guardCosts, including its all-unaffordable escape.
 	if selected.has("disabled") or (card["kind"] not in ["content", "content-deal"] and not affordable(g0, selected["effs"])): return g0.duplicate(true)
-	if selected["special"] == "revolt": return C.unsupported(g0, "chooseCard: revolt finish lookback")
 	if not St.is_s1a(g0) or g0.get("deathWeight", false): return C.unsupported(g0, "chooseCard: optional hooks")
 	if selected["special"] == "late":
 		if int(card.get("late", 0)) < int(Late.LATE.max):
@@ -399,9 +402,15 @@ static func _resolve_choice(g0: Dictionary, t: Dictionary, card: Dictionary, v: 
 	Budget.pick(g)
 	var sources: Dictionary = {"let_be": "brawl", "hold_post": "guard_post", "take_in": "rescue", "cut": "bite_cut"}
 	var from: String = sources.get(selected["id"], "bite_cut" if selected["special"] == "bite_cut" else "stop")
-	apply_effects(g, t, selected["effs"], from, card.get("comm", ""))
-	var comm: String = card.get("comm", "tail")
+	apply_effects(g, t, selected["effs"], from, str(card["comm"]) if card.get("comm") != null else "")
+	var comm: String = str(card["comm"]) if card.get("comm") != null else "tail"
 	match str(selected["special"]):
+		"revolt":
+			# S1 cards.ts 'revolt': the end and its lookback only (the end words are the settle's finish).
+			g["end"] = "revolt"
+			g["phase"] = "end"
+			load("res://game/train/train_turn.gd").write_lookback(g, t)
+		"trip_go_crew", "trip_go_captain", "trip_fire", "trip_stay": Trip.choose(g, t, selected)
 		"risk_injury":
 			if C.rnd(g) < 0.3 + 0.15 * mini(int(g.get("eventLog", {}).get("abandoned_tender", {}).get("n", 0)), 3):
 				g["injured"] += 1

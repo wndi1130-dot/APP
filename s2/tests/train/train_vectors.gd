@@ -102,6 +102,9 @@ static func _collect(want: Variant, got: Variant, path: String, limit: int, out:
 			else: _collect(want[key], got[key], "%s.%s" % [path, key], limit, out)
 		for key: Variant in got:
 			if out.size() >= limit: return
+			# Older whole-game vectors predate the four stranded flag conditions. S1's
+			# contentPool now materializes this empty map too; no nonempty flags are ignored.
+			if key == "contentFlags" and want.has("comms") and not want.has(key) and got[key] is Dictionary and got[key].is_empty(): continue
 			if not want.has(key): out.append("%s.%s: unexpected" % [path, key])
 	elif want is Array and got is Array:
 		if want.size() != got.size(): out.append("%s: want %d items, got %d" % [path, want.size(), got.size()])

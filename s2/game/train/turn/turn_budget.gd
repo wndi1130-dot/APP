@@ -103,6 +103,7 @@ static func on_add(g: Dictionary, t: Dictionary) -> void:
 
 static func next_segment(g: Dictionary, t: Dictionary) -> void:
 	if not g.get("budget") is Dictionary: return
+	if g["budget"]["seg"] == g["seg"]: return
 	_sync(g)
 	var back: Array = []
 	for card: Dictionary in g.get("deferred", []):
