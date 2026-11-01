@@ -215,10 +215,7 @@ func _ready() -> void:
 			people_view.setup(self)
 			add_child(people_view)
 		warm = TrainWarm.new()
-		var definitions: Array = []
-		for c: Dictionary in cars:
-			definitions.append(c["def"])
-		warm.begin(self, definitions)
+		warm.begin(self, cars)
 	else:
 		push_warning("train rules: %s" % ", ".join(problems))
 	if bool(opts.get("panel", true)):
@@ -234,12 +231,15 @@ func _process(delta: float) -> void:
 	_update_snow_ground()
 	step(delta)
 	music.tick(delta)
+	var busy := restaging()
 	_step_restages()
 	if warm != null:
-		warm.step()
+		warm.step(busy)
 
 
 func _exit_tree() -> void:
+	if warm != null:
+		warm.release()
 	_invalidate_restages("tree_exit")
 
 
