@@ -4,7 +4,7 @@ extends RefCounted
 ## going back: the last whole save is the only one, and a broken file falls
 ## back to the one before it (.bak).
 ##
-## capture() only reads the field; to_json/from_json and write/read are plain
+## capture() snapshots live picks; to_json/from_json and write/read are plain
 ## functions over a Dictionary. Only S2 reads this file (its keys are its own);
 ## the train keeps its own save (user://s1a_game_v2.json). On start the field
 ## save wins while its phase is "field", unless the train already applied its
@@ -21,6 +21,7 @@ const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
@@ -60,6 +61,8 @@ const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow
 
 ## What the field is now, as plain data. `game` is a field_game.gd.
 static func capture(game) -> Dictionary:
+	if game.get("work") != null:
+		game.work.prepare_digs()
 	var people: Array = []
 	for p in game.people:
 		people.append(_person(game, p))
@@ -466,10 +469,100 @@ static func apply(game, save: Dictionary) -> void:
 	_put_zombies(game, save.get("zombies", []))
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
+	if exact(save):
+		_restore_work_fallback(game, save)
 	game.cam_focus = game.player.position
 	game._update_camera(1.0)
 	_refresh_restored_view(game)
 	game.set_stop_form(form)
+
+
+## Keep the saved coal pool when grid paths cannot be restored.
+static func _restore_fallback_coal(game, runtime: Dictionary, saved_people: Array) -> bool:
+	var wagons: Array = game.data.get("wagons", [])
+	if not runtime.has("wagon_coal"):
+		var removed: float = maxf(game.actions.coal_delivered, 0.0)
+		for person: Dictionary in saved_people:
+			var brain: Dictionary = person.get("state", {}).get("brain", {})
+			if brain.get("load_kind", "coal") == "coal":
+				removed += maxf(float(brain.get("load", 0.0)), 0.0)
+		if game.work != null:
+			for pile: Dictionary in game.work.dropped:
+				if pile.get("kind", "") == "coal":
+					removed += maxf(float(pile.get("n", 0.0)), 0.0)
+		for wagon: Dictionary in wagons:
+			if wagon.has("work"):
+				var taken: float = minf(maxf(float(wagon.get("coal", 0.0)), 0.0), removed)
+				wagon["coal"] = maxf(float(wagon.get("coal", 0.0)) - taken, 0.0)
+				removed -= taken
+		return false
+	var coal: Array = runtime.get("wagon_coal", [])
+	var ids: Array = runtime.get("wagon_ids", [])
+	var matched: bool = wagons.size() == coal.size()
+	if runtime.has("wagon_ids"):
+		matched = matched and ids.size() == wagons.size()
+		if matched:
+			for i in wagons.size():
+				if String(ids[i]) != String(wagons[i].get("id", "")):
+					matched = false
+					break
+	if matched:
+		for i in wagons.size():
+			wagons[i]["coal"] = maxf(float(coal[i]), 0.0)
+		return true
+	var pool: float = 0.0
+	for amount: Variant in coal:
+		pool += maxf(float(amount), 0.0)
+	for wagon: Dictionary in wagons:
+		wagon["coal"] = 0.0
+	for wagon: Dictionary in wagons:
+		if wagon.has("work"):
+			wagon["coal"] = pool
+			pool = 0.0
+			break
+	if pool > 0.0 and game.work != null:
+		game.work.dropped.append({"pos": game.player.position, "kind": "coal", "n": pool})
+	return false
+
+
+## Rebuild routes on this grid. Interrupted picks keep seconds, never old callbacks.
+static func _restore_work_fallback(game, save: Dictionary) -> void:
+	var runtime: Dictionary = save["runtime"]
+	if game.work != null:
+		_restore_properties(game, game.work, runtime.get("components", {}).get("work", {}))
+	var matched: bool = _restore_fallback_coal(game, runtime, save.get("people", []))
+	for row: Dictionary in save.get("people", []):
+		var p = _person_with_id(game, String(row["pid"]))
+		if p == null:
+			continue
+		var brain: Dictionary = row.get("state", {}).get("brain", {})
+		for key: String in ["work_site", "job", "side", "load", "load_kind", "boarded", "board_at", "work_wait"]:
+			if brain.has(key):
+				p.brain[key] = brain[key]
+		p.brain.erase("coal_drop")
+	if game.work == null:
+		return
+	for id: String in game.work.sites.keys():
+		if not game.data["spots"].has(id):
+			game.work.sites.erase(id)
+			continue
+		var state: Dictionary = game.work.sites[id]
+		state["path"] = PackedVector3Array()
+		state["path_at"] = -INF
+		state["door"] = Vector3.ZERO
+		state["cells"] = -1
+		state["bright"] = false
+		if not matched:
+			state["dig_wagon"] = -1
+			state["dig_parts"] = []
+			state["dig_active"] = {}
+	game.work.restore_digs()
+	game.actions.work_started = false
+	for id: String in game.work.sites:
+		if not matched:
+			game.work.sites[id]["dig_wagon"] = -1
+		if game.work.phase(id) in ["working", "hold", "retreat"]:
+			game.actions.work_started = true
 
 
 static func _put_person(p, row: Dictionary) -> void:
@@ -518,9 +611,12 @@ static func _runtime(game) -> Dictionary:
 	# Coal dug from a wagon (field_ai.gd _dug, field_work.gd) is in the map's own rows, which a
 	# restart builds afresh: each wagon's coal, in the map's order.
 	var wagon_coal: Array = []
+	var wagon_ids: Array = []
 	for wagon: Dictionary in game.data.get("wagons", []):
 		wagon_coal.append(float(wagon.get("coal", 0.0)))
+		wagon_ids.append(String(wagon.get("id", "")))
 	out["wagon_coal"] = wagon_coal
+	out["wagon_ids"] = wagon_ids
 	return out
 
 
@@ -772,6 +868,8 @@ static func _apply_exact(game, save: Dictionary) -> void:
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	_restore_properties(game, game, runtime["game"])
+	if game.work != null:
+		game.work.restore_digs()
 	_refresh_restored_view(game)
 	# Sight/view rebuilding must not advance the saved simulation or random streams.
 	_restore_properties(game, game, runtime["game"])
@@ -793,6 +891,8 @@ static func _apply_exact(game, save: Dictionary) -> void:
 
 
 static func _refresh_restored_view(game) -> void:
+	if game.view == null:
+		return
 	# Boxes are drawn in shared chunk meshes (map_view.gd): ask the view, not its nodes.
 	for id in game.view.container_ids():
 		if not game.data["containers"].has(id):
@@ -805,6 +905,8 @@ static func _refresh_restored_view(game) -> void:
 	for id in game.data["spots"]:
 		if game.view.spot_nodes.has(id):
 			game.view.update_spot(id)
+	if game.work != null:
+		game.work.paint_digs()
 	for cell in game.grid.doors:
 		if game.view.door_nodes.has(cell) or (game.view.buildings and game.view.buildings.draws_cell(cell)):
 			game.view.update_door(cell)
@@ -1004,7 +1106,10 @@ static func _encode(v: Variant) -> Variant:
 			return {"$type": "Dictionary", "value": pairs}
 		var out := {}
 		for k in v:
-			out[String(k)] = _encode(v[k])
+			if k == "dig_parts":
+				out[String(k)] = _encode(FieldWork.clean_dig_parts(v[k], int(v.get("dig_wagon", -1))))
+			else:
+				out[String(k)] = _encode(v[k])
 		return out
 	if v is Array:
 		var out: Array = []
@@ -1042,6 +1147,8 @@ static func _decode(v: Variant) -> Variant:
 				out[k] = Vector3(float(e[0]), float(e[1]), float(e[2]))
 			else:
 				out[k] = _decode(e)
+		if out.has("dig_parts"):
+			out["dig_parts"] = FieldWork.clean_dig_parts(out["dig_parts"], int(out.get("dig_wagon", -1)))
 		return out
 	if v is Array:
 		var out: Array = []
