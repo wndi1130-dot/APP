@@ -764,6 +764,17 @@ func test_a_core_change_while_restaging_seats_people_at_once() -> void:
 	assert_eq(String(c["seat_core"]), s._seat_core(c), "seated at once, not left for the swap")
 	assert_eq(String(c["seat_key"]), s._seat_key(c))
 	assert_eq(s.life.rooms["dining"].root, old_root, "in the room that still shows")
+	var seated: int = (c["bodies"] as Array).size()
+	assert_gt(seated, 0, "the dining car has people to seat")
 	await _drain(s)
 	assert_true(c.has("reseat_at"), "the swap seats them again in the new room")
+	s.clock = float(c["reseat_at"]) + 0.01
+	s._step_reseat()
+	assert_false(c.has("reseat_at"), "seated again in the new room")
 	await _after_retirement(s, ["dining"])
+	var ids: Dictionary = {}
+	for body: Variant in c["bodies"]:
+		assert_true(is_instance_valid(body) and (body as Node).is_inside_tree(), "every person is still in the car")
+		ids[(body as Object).get_instance_id()] = true
+	assert_eq((c["bodies"] as Array).size(), seated, "the second seating neither doubles nor drops anyone")
+	assert_eq(ids.size(), seated, "no person is listed twice")
