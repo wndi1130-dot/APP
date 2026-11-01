@@ -232,7 +232,7 @@ func _phase_distance(a: float, b: float) -> float:
 	return minf(gap, 1.0 - gap)
 
 
-func test_walk_run_sole_contacts_are_within_fifty_milliseconds_of_steps() -> void:
+func test_run_sole_contacts_are_within_fifty_milliseconds_of_steps_walks_reported() -> void:
 	for fixture in _fixtures:
 		for group in ["walk", "run"]:
 			var period := float(SimNoise.STEP_ROUND[group]) / (2.1 if group == "walk" else 3.9)

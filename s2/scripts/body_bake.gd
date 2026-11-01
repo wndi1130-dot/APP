@@ -2419,14 +2419,15 @@ static func _person_stride_round(ctx: Dictionary, entry: Array) -> float:
 ## A new fit for this body and this clip, including motions retargeted from
 ## a source in future. The sampler and the saved round use the same poses.
 static func _fit_person_stride(ctx: Dictionary, entry: Array) -> void:
-	if not PERSON_STRIDE_ROUNDS.has(entry[0]):
-		return
 	var name: String = entry[0]
 	var layer: String = entry[4]
-	var body: Skeleton3D = ctx["body"]
 	var fits: Dictionary = ctx.get("stride_fits", {})
 	ctx["stride_fits"] = fits
+	# A clip outside the table that shares a fitted layer must not inherit its legs.
 	fits.erase(layer)
+	if not PERSON_STRIDE_ROUNDS.has(name):
+		return
+	var body: Skeleton3D = ctx["body"]
 	var bones := []
 	var samples := []
 	for bone_name: String in PERSON_STRIDE_BONES:
