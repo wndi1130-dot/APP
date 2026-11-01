@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 var game
 
@@ -162,3 +163,13 @@ func test_the_driver_says_there_are_no_more_politely() -> void:
 	game.director.budget_left = 0
 	assert_eq(game.driver_forecast(0.0, 0), "더 오는 기척은 없습니다.")
 	assert_eq(game.director.forecast(0.0, 1, game.clock), "더 오는 기척은 없다.", "from the signal box")
+
+
+func test_a_long_call_wraps_between_words_only() -> void:
+	var hud = game.hud
+	var line := "기관사: 제동 소리를 들었을 겁니다. 근처 망자들이 열차로 옵니다."
+	hud.radio_room = 300.0
+	hud.radio(line)
+	assert_eq(hud.radio_label.text, UiFonts.keep_all(line), "every letter of a word is joined to the next")
+	assert_eq(hud.radio_label.text.replace(UiFonts.WORD_JOINER, ""), line, "the words themselves are the call's")
+	assert_eq(hud.radio_label.autowrap_mode, TextServer.AUTOWRAP_WORD_SMART, "a call wider than its room wraps")
