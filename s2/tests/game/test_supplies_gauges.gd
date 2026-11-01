@@ -126,8 +126,10 @@ func test_four_digit_stocks_read_in_thousands_and_the_band_still_fits() -> void:
 			var g: Dictionary = _g.duplicate(true)
 			g["sup"] = case[0]
 			if every:
-				for id: String in ["coal", "food", "med", "lux"]:
-					g[id] = case[0]
+				# The other stocks at the edge of real runs (S1 fixtures top out near coal 200, food 500,
+				# med 84.5, lux 20): coal and food under 100 stretches, med and lux two digits.
+				for pair: Array in [["coal", 800], ["food", 800], ["med", 99], ["lux", 99]]:
+					g[pair[0]] = pair[1]
 			var strip: Gauges = Gauges.new()
 			strip.g = g
 			strip.t = _t
