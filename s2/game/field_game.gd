@@ -27,6 +27,7 @@ const Zombies = preload("res://game/actors/zombies.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
+const Sled = preload("res://game/sim/sled.gd")
 const NoiseLedger = preload("res://game/sim/noise_ledger.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const Receipt = preload("res://game/sim/receipt.gd")
@@ -315,6 +316,8 @@ var last_loud = null                   # where the last loud sound was (Vector3)
 var rattle: Dictionary = {}            # manhole key -> seconds of rattling left
 var lid_open: Dictionary = {}          # manhole key -> seconds the lid stays pushed aside (a body is coming up)
 var ground_items: Array = []           # {pos, id, n}
+var sleds: Array = []                  # {id, level, pos, items, puller}; field-only cargo
+var next_sled_id: int = 1
 var decisions: Array = []
 ## What LootDress did to this stop's boxes (empty when it was not asked).
 var loot_report: Dictionary = {}
@@ -2007,6 +2010,8 @@ func _update_zone(delta: float) -> void:
 	view.show_levels(pl)
 	view.cut_away(grid_at(player.position).building_at(FieldGrid.cell_of(player.position)), pl)
 	view.update_ground(ground_items)
+	if not sleds.is_empty():
+		view.update_sleds(sleds, people)
 
 
 # ---------------------------------------------------------------- people
@@ -2015,6 +2020,7 @@ func _update_person(p: Person, delta: float) -> void:
 	actions.validate_work(p)
 	if not p.is_alive():
 		return
+	Sled.tick_rearm(p, delta)
 	var cell := FieldGrid.cell_of(p.position)
 	var lg := grid_at(p.position)
 	var indoor := lg.indoor(cell)
@@ -2057,7 +2063,7 @@ func _update_person(p: Person, delta: float) -> void:
 		if p.action_t <= 0.0:
 			actions.complete_work(p)
 			var done := p.action_done
-			p.cancel_action()
+			p.cancel_action(true)
 			if done.is_valid():
 				done.call()
 		if not walking_work:
@@ -2082,6 +2088,11 @@ func _meets_door(p: Person, door: Dictionary) -> bool:
 ## the thumb at once; the body takes a moment to get going and to stop, more
 ## so loaded, worn out or on ice. A hard turn at a run drops to a walk first.
 func _drive(p: Person, delta: float) -> void:
+	var sled_mult: float = Sled.speed_mult(self, p)
+	if sled_mult <= 0.0:
+		p.drive_speed = 0.0
+		p.moving = false
+		return
 	var push := p.stick.length()
 	# A melee blow holds the feet from part way through it to its end (decision 425).
 	if push > 0.05 and combat.feet_held(p):
@@ -2114,7 +2125,7 @@ func _drive(p: Person, delta: float) -> void:
 		p.drive_speed = 0.0
 		p.moving = false
 		return
-	var step := p.drive_dir * p.drive_speed * delta
+	var step := p.drive_dir * p.drive_speed * delta * sled_mult
 	var dest := p.position + step
 	var dc := FieldGrid.cell_of(dest)
 	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
@@ -2129,12 +2140,18 @@ func _drive(p: Person, delta: float) -> void:
 			return
 		actions.vault_window(p, dc)
 	var gone := p.position.distance_to(dest)
+	Sled.before_move(self, p, dest)
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
 
 
 func _move_person(p: Person, delta: float) -> void:
+	var sled_mult: float = Sled.speed_mult(self, p)
+	if sled_mult <= 0.0:
+		p.drive_speed = 0.0
+		p.moving = false
+		return
 	# A walk along a path keeps the weapon's planted-feet span too (결정 441 (1)).
 	if combat.feet_held(p):
 		p.moving = false
@@ -2147,14 +2164,16 @@ func _move_person(p: Person, delta: float) -> void:
 	d.y = 0
 	if d.length() < 0.12:
 		# A stair: the next point is the same spot one floor up or down.
+		Sled.before_move(self, p, Vector3(p.position.x, next.y, p.position.z))
 		p.position.y = next.y
-		p.path.remove_at(0)
+		if not p.path.is_empty():
+			p.path.remove_at(0)
 		if p.path.is_empty():
 			p.moving = false
 		return
 	var cell := FieldGrid.cell_of(p.position)
 	var lg := grid_at(p.position)
-	var spd := p.speed(lg.floor_at(cell))
+	var spd := p.speed(lg.floor_at(cell)) * sled_mult
 	if spd <= 0.0:
 		p.moving = false
 		if p == player:
@@ -2195,6 +2214,7 @@ func _move_person(p: Person, delta: float) -> void:
 	var gone := p.position.distance_to(dest)
 	if absf(angle_difference(face, way)) > PI * 0.5:
 		gone = -gone   # stepping back: the walk's round runs back, so it is drawn backwards
+	Sled.before_move(self, p, dest)
 	p.position = dest
 	p.moving = true
 	_footsteps(p, delta, dc, gone)
@@ -2317,6 +2337,7 @@ func building_open(b: int) -> bool:
 func _on_body_event(p: Person, ev: String) -> void:
 	match ev:
 		"downed":
+			actions.release_sled(p, false)
 			p.cancel_action()
 			p.stop()
 			say(p, "%s 쓰러졌다." % p.display_name, false, "downed")
@@ -2337,6 +2358,7 @@ func _on_body_event(p: Person, ev: String) -> void:
 
 
 func on_person_died(p: Person) -> void:
+	actions.release_sled(p, false)
 	p.body.dead = true
 	p.cancel_action()
 	p.stop()
@@ -3311,6 +3333,22 @@ func finish(reason: String) -> void:
 	if ended:
 		return
 	ended = true
+	# Leaving: a sled standing in an unloading area has its cargo put aboard; one left
+	# outside stays in the field with what is on it (sled.md 2.1, 2.5).
+	for sled: Dictionary in sleds:
+		if Sled.in_unloading(self, sled):
+			for id: String in sled["items"].keys():
+				if not actions.goes_to_train(id):
+					continue
+				unloaded[id] = int(unloaded.get(id, 0)) + int(sled["items"][id])
+				sled["items"].erase(id)
+	for person: Person in people:
+		actions.release_sled(person, false)
+		if not person.sled_job.is_empty():
+			person.sled_job = {}
+			person.cancel_action()
+	for sled: Dictionary in sleds:
+		sled["puller"] = ""
 	var now := clock.elapsed
 	if reason == "departed":
 		make_sound(FieldGrid.center(data["anchors"]["whistle"]), SimNoise.Level.VERY_LOUD, "whistle")

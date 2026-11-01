@@ -7,6 +7,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const W = preload("res://game/sim/weapons.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Carry = preload("res://game/sim/carry.gd")
+const Sled = preload("res://game/sim/sled.gd")
 const HordeDirector = preload("res://game/sim/horde_director.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const Amputation = preload("res://game/sim/amputation.gd")
@@ -103,6 +104,9 @@ var taking: Dictionary = {}
 var glass_feet: Dictionary = {}
 ## Frames with glass in them the player was stopped at and asked about: cell -> when.
 var glass_asked: Dictionary = {}
+## Synchronous transfer tickets are consumed before changing either inventory.
+var sled_moves: Dictionary = {}
+var sled_move_serial: int = 0
 
 
 func _init(field_game) -> void:
@@ -201,6 +205,7 @@ func _begin_work(p, action: String, label: String, seconds: float, done: Callabl
 
 ## Called before the body/action tick, including for fallen or grabbed people.
 func validate_work(p) -> void:
+	_validate_sled_work(p)
 	_check_chain(p)
 	var id: int = p.get_instance_id()
 	if not ongoing.has(id):
@@ -216,6 +221,8 @@ func validate_work(p) -> void:
 
 ## Only the timed-action completion branch can issue a completion ticket.
 func complete_work(p) -> void:
+	if not p.sled_job.is_empty() and p.action_t <= 0.0 and _sled_job_valid(p, p.sled_job):
+		p.sled_job["ready"] = true
 	var id: int = p.get_instance_id()
 	if ongoing.has(id) and _work_valid(p, ongoing[id]):
 		ongoing[id]["ready"] = true
@@ -583,6 +590,8 @@ func _boards_changed(c: Vector2i, kind: String) -> void:
 
 ## A plank whittled to a stake (P22, P23): into a free hand.
 func whittle_stake(p) -> void:
+	if p.sled_weapon_stowed:
+		return
 	if _wait_blow(p, whittle_stake.bind(p)):
 		return
 	if int(p.items.get("plank", 0)) <= 0 or p.hands.size() >= 2:
@@ -591,14 +600,16 @@ func whittle_stake(p) -> void:
 
 
 func _whittled(p) -> void:
-	if p.hands.size() >= 2 or not p.take_item("plank"):
+	if p.sled_weapon_stowed or p.hands.size() >= 2 or not p.take_item("plank"):
 		return
 	_into_hand(p, "wood_stake")
 
 
 ## An improvised weapon goes straight into a free hand (P23: one tap). Returns
-## false when both hands are full.
+## false when both hands are full or the sled weapon is still stowed.
 func _into_hand(p, id: String) -> bool:
+	if p.sled_weapon_stowed:
+		return false
 	if p.hands.size() >= 2 or not W.is_known(id) or not (String(W.get_data(id).get("kind", "")) == "melee" or W.is_ranged(id)):
 		return false
 	var h := {"id": id, "quality": "factory", "condition": 1.0, "loaded": 0}
@@ -983,6 +994,7 @@ func vault_window(p, c: Vector2i) -> void:
 		return
 	if not can_vault_window(p, c):
 		return
+	release_sled(p, false, "썰매는 밖에 두었다")
 	var w: Dictionary = game.grid.windows[c]
 	if game.audio != null:
 		game.audio.window_vault(c, WindowRules.can_clear(w))   # the ear's; climbing through is quiet to the rules
@@ -1095,7 +1107,7 @@ func _companion_take(p, c: Dictionary) -> void:
 	var took: Array = []
 	for item in c["items"]:
 		# Clothes are put on, not bagged (wear.gd): a companion leaves them.
-		if Wear.is_garment(String(item)):
+		if Wear.is_garment(String(item)) or (p.sled_weapon_stowed and W.is_known(String(item))):
 			keep.append(item)
 		elif AMMO_ITEMS.has(item) or p.weight() + Carry.item_weight(item) <= p.carry_limit():
 			_receive(p, item, 1)
@@ -1173,6 +1185,8 @@ func taking_item(p) -> String:
 
 
 func _begin_take(p, id: String, item: String) -> bool:
+	if p.sled_weapon_stowed and W.is_known(item):
+		return false
 	var c: Dictionary = game.data["containers"].get(id, {})
 	if not _begin_work(p, "take", "챙기기", SearchRules.take_seconds(item), _take_done.bind(p, id, item), "container", id, _container_at(c)):
 		return false
@@ -1190,6 +1204,8 @@ func _take_next(p, id: String) -> void:
 	var left: Array = queue["left"]
 	while not left.is_empty():
 		var item: String = left.pop_front()
+		if p.sled_weapon_stowed and W.is_known(item):
+			continue
 		if c.get("items", []).has(item):
 			if _begin_take(p, id, item):
 				return
@@ -1201,6 +1217,9 @@ func _take_done(p, id: String, item: String) -> void:
 	var pid: int = p.get_instance_id()
 	taking.erase(pid)
 	if not _finished_work(p, "take"):
+		take_queue.erase(pid)
+		return
+	if p.sled_weapon_stowed and W.is_known(item):
 		take_queue.erase(pid)
 		return
 	var c: Dictionary = game.data["containers"].get(id, {})
@@ -1260,6 +1279,10 @@ func _body_searched(p, zid: int) -> void:
 			names.append(String(W.get_data(row["id"]).get("name", row["id"])))
 			game.ground_items.append({"pos": p.position, "id": row["id"], "n": 1, "weapon": row["weapon"]})
 			pick_up(p, game.ground_items.size() - 1)
+		elif p.sled_weapon_stowed and W.is_known(String(row["id"])):
+			# Keep a counted weapon at the feet until the hands are available.
+			names.append(game.item_name(row["id"]))
+			game.ground_items.append({"pos": p.position, "id": row["id"], "n": n})
 		else:
 			names.append(game.item_name(row["id"]) + (" %d" % n if n > 1 else ""))
 			_receive(p, row["id"], n)
@@ -1296,6 +1319,8 @@ func pick_up(p, idx: int, asked: bool = false) -> void:
 	if idx < 0 or idx >= game.ground_items.size():
 		return
 	var g: Dictionary = game.ground_items[idx]
+	if p.sled_weapon_stowed and (g.has("weapon") or W.is_known(String(g["id"]))):
+		return
 	if not _can_start(p, g["pos"]) or int(g.get("n", 0)) <= 0:
 		return
 	if g.has("garment"):
@@ -1660,6 +1685,7 @@ func _tower_choice(choice: String, p) -> void:
 			game.view.update_spot("water_tower")
 			who.stop()
 			var at := FieldGrid.center(tower["cell"]) + Vector3(1.0, 0, 0.6)
+			release_sled(who, false)
 			who.position = Vector3(at.x, who.position.y, at.z) if who.position.distance_to(at) < 3.0 else who.position
 			who.start_action("snow", "눈 퍼 넣기", SNOW_TIME, _thawed)
 			game.say(who, "%s 눈을 퍼 넣는다." % who.display_name)
@@ -2248,6 +2274,8 @@ func _object_context(p) -> Array:
 
 func context(p) -> Array:
 	var out: Array = _near_things(p)
+	if Sled.can_craft(game, p):
+		out.append({"label": "썰매 엮기", "call": craft_sled.bind(p)})
 	out.append_array(_object_context(p))
 	if p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit")):
 		out.append({"label": "붕대", "call": self_bandage.bind(p)})
@@ -2304,14 +2332,21 @@ const NEAR_USE: float = 1.7
 
 
 ## The situation pad (field_unified 10): what is within a step of the player
-## on their floor, closest first, at most two (stairs, a box, a door, a
-## window, something on the ground).
+## on their floor, closest first. Keep sled commands alongside the usual two.
 func _near_things(p) -> Array:
 	var rows: Array = []
 	var lv: int = game.level_of(p.position)
+	if p == game.player:
+		if p.sled_id != 0:
+			rows.append([-2.0, "놓는다", release_sled.bind(p)])
+		for sled_id: int in near_sleds(p):
+			var sled: Dictionary = Sled.find(game, sled_id)
+			rows.append([-0.5, "썰매 짐", open_sled.bind(p, sled_id)])
+			if Sled.can_pull(game, p, sled):
+				rows.append([-1.0, "끈다", pull_sled.bind(p, sled_id)])
 	# By the train with something to put aboard: that comes first.
-	if at_unloading(p) and not loadable(p).is_empty():
-		rows.append([0.0, "열차에 싣기", load_train.bind(p)])
+	if at_unloading(p) and has_load(p):
+		rows.append([(-1.5 if p.sled_id != 0 else -1.25) if not game.sleds.is_empty() else 0.0, "열차에 싣기", load_train.bind(p)])
 	for s in game.stairs:
 		if not (s["low"] == lv or s["high"] == lv):
 			continue
@@ -2398,7 +2433,12 @@ func _near_things(p) -> Array:
 				rows.append([d, spot["name"], go_and_do.bind(p, "spot", id, at)])
 	rows.sort_custom(func(a, b): return a[0] < b[0])
 	var out: Array = []
-	for row in rows.slice(0, 2):
+	var ordinary: int = 0
+	for row: Array in rows:
+		if String(row[1]) not in ["끈다", "썰매 짐", "놓는다"]:
+			if ordinary >= 2:
+				continue
+			ordinary += 1
 		var choice: Dictionary = {"label": row[1], "call": row[2]}
 		if row.size() > 3:
 			choice["work_ready"] = row[3]
@@ -2412,6 +2452,7 @@ func take_stairs(p, s: Dictionary) -> void:
 	var other: int = s["high"] if s["low"] == lv else s["low"]
 	var path: PackedVector3Array = game.find_path(p.position, game.lift(s["cell"], other), false)
 	if not path.is_empty():
+		release_sled(p, false, "썰매는 밖에 두었다")
 		p.brain.erase("goal")
 		p.drive_speed = 0.0
 		p.go_to(path, p.running)
@@ -2439,10 +2480,14 @@ func at_unloading(p) -> bool:
 
 ## What of one's bag goes aboard: all but a key, an empty tin and the can
 ## opener, a weapon, and the field's own stores (bandages, cloth, tools).
+static func goes_to_train(id: String) -> bool:
+	return not (UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id))
+
+
 func loadable(p) -> Array:
 	var out: Array = []
-	for id in p.items.keys():
-		if not (UNLOAD_KEEP.has(id) or W.is_known(id) or FieldItems.stays_on_body(id)):
+	for id: String in p.items.keys():
+		if goes_to_train(id):
 			out.append(id)
 	return out
 
@@ -2461,6 +2506,19 @@ func load_train(p, only: String = "") -> bool:
 		game.unloaded[id] = int(game.unloaded.get(id, 0)) + n
 		put.append("%s %d" % [game.item_name(id), n])
 		p.items.erase(id)
+	# Only an explicit whole-load press by the player touches the sled (sled.md 2.1).
+	if only == "":
+		for sled_id: int in unloading_sleds(p):
+			var sled: Dictionary = Sled.find(game, sled_id)
+			var cargo: Dictionary = sled["items"]
+			for item: String in cargo.keys():
+				if not goes_to_train(item):
+					continue
+				var count: int = int(cargo[item])
+				if count > 0:
+					game.unloaded[item] = int(game.unloaded.get(item, 0)) + count
+					put.append("%s %d" % [game.item_name(item), count])
+				cargo.erase(item)
 	if put.is_empty():
 		return false
 	game.telemetry.trip()
@@ -2469,6 +2527,144 @@ func load_train(p, only: String = "") -> bool:
 
 
 # ---------------------------------------------------------------- the bag and what is near
+
+## The field sled is a place in the existing bag, never a searched box (sled.md 4).
+func near_sleds(p: Variant) -> Array[int]:
+	var out: Array[int] = []
+	for row: Dictionary in game.sleds:
+		if Sled.reachable(game, p, row):
+			out.append(int(row["id"]))
+	return out
+
+
+func open_sled(p: Variant, sled_id: int) -> void:
+	if not Sled.reachable(game, p, Sled.find(game, sled_id)):
+		return
+	game.hud.sled_panel(sled_id)
+
+
+func pull_sled(p: Variant, sled_id: int) -> bool:
+	return Sled.pull(game, p, sled_id)
+
+
+func release_sled(p: Variant, _rearm: bool = true, message: String = "") -> void:
+	# Keep the legacy flag for callers; detaching now starts an independent timer.
+	if not Sled.detach(game, p):
+		return
+	if message != "" and p == game.player:
+		game.hud.toast(message)
+
+
+## Emitted only after start_action's refusal checks, never by opening a menu.
+func _sled_hands_work(p: Variant, action: String) -> void:
+	release_sled(p, false, "썰매는 밖에 두었다" if action == "climb" else "")
+
+
+func craft_sled(p: Variant) -> bool:
+	if not Sled.can_craft(game, p) or Sled.placement(game, p) == null:
+		return false
+	var token: int = p.sled_serial + 1
+	var sled_id: int = game.next_sled_id
+	p.start_action("craft", "썰매 엮기", Sled.CRAFT_SECONDS, _sled_crafted.bind(p, token, sled_id))
+	p.sled_serial = token
+	p.sled_job = {"kind": "craft", "token": token, "sled_id": sled_id, "at": p.position,
+		"injured_at": p.body.injured_at, "wounds": p.body.wounds.size(), "ready": false}
+	return true
+
+
+func _sled_job_valid(p: Variant, job: Dictionary, finishing: bool = false) -> bool:
+	if game.ended or not p.can_act() or int(job["token"]) != p.sled_serial:
+		return false
+	return (job["kind"] == "craft" and p == game.player and (finishing or p.action == "craft") and int(job["sled_id"]) == game.next_sled_id
+		and game.sleds.is_empty() and Sled.outside(game, p.position) and _in_reach(p, job["at"]) and Sled.materials(p)
+		and p.body.injured_at == job["injured_at"] and p.body.wounds.size() == int(job["wounds"]))
+
+
+func _validate_sled_work(p: Variant) -> void:
+	if p.sled_id != 0 and (not p.can_act() or p != game.player or p.carrying_wounded != null or Carry.has_big(p.items)):
+		release_sled(p, false)
+	if not p.sled_job.is_empty() and not _sled_job_valid(p, p.sled_job):
+		p.sled_job = {}
+		p.cancel_action()
+
+
+## Completion consumes the ticket first; stale, cancelled and repeated calls do nothing.
+func _sled_crafted(p: Variant, token: int, sled_id: int) -> void:
+	var job: Dictionary = p.sled_job
+	if job.is_empty() or int(job["token"]) != token or int(job["sled_id"]) != sled_id or not bool(job["ready"]) or job["kind"] != "craft":
+		return
+	p.sled_job = {}
+	if not _sled_job_valid(p, job, true):
+		return
+	var at: Variant = Sled.placement(game, p)
+	if at == null:
+		return
+	# All requirements are checked before either material changes.
+	p.take_item("plank", 2)
+	p.take_item("cloth", 1)
+	game.sleds.append({"id": sled_id, "level": 0, "pos": at, "items": {}, "puller": ""})
+	game.next_sled_id += 1
+
+
+func move_sled(p: Variant, sled_id: int, item: String, into_sled: bool) -> bool:
+	sled_move_serial += 1
+	var ticket: int = sled_move_serial
+	sled_moves[ticket] = {"pid": String(p.pid), "sled_id": sled_id, "item": item, "into": into_sled}
+	return _sled_moved(p, ticket)
+
+
+func _sled_moved(p: Variant, ticket: int) -> bool:
+	if not sled_moves.has(ticket):
+		return false
+	var job: Dictionary = sled_moves[ticket]
+	sled_moves.erase(ticket)
+	var sled: Dictionary = Sled.find(game, int(job["sled_id"]))
+	if String(job["pid"]) != String(p.pid) or not Sled.reachable(game, p, sled):
+		return false
+	var item: String = String(job["item"])
+	var into_sled: bool = bool(job["into"])
+	if into_sled and not goes_to_train(item):
+		game.hud.toast("이건 가방에 둔다")
+		return false
+	if not into_sled and p.sled_weapon_stowed and W.is_known(item):
+		return false
+	var cargo: Dictionary = sled["items"]
+	var have: int = int(cargo.get(item, 0))
+	var count: int = move_count(p, item) if into_sled else (have if Carry.item_weight(item) <= SMALL_THING else mini(have, 1))
+	if count <= 0:
+		return false
+	if into_sled:
+		if not p.take_item(item, count):
+			return false
+		cargo[item] = have + count
+	else:
+		if have == count:
+			cargo.erase(item)
+		else:
+			cargo[item] = have - count
+		_receive(p, item, count)
+		if p.sled_id != 0 and Carry.has_big(p.items):
+			release_sled(p)
+	return true
+
+
+func unloading_sleds(p: Variant) -> Array[int]:
+	var out: Array[int] = []
+	if p != game.player or not p.can_act() or game.ended or game.level_of(p.position) != 0 or not at_unloading(p):
+		return out
+	for row: Dictionary in game.sleds:
+		if int(row["level"]) != 0 or game.level_of(row["pos"]) != 0 or (row["items"] as Dictionary).is_empty():
+			continue
+		for area: Rect2i in game.data["unloading"]:
+			if area.has_point(FieldGrid.cell_of(row["pos"])):
+				out.append(int(row["id"]))
+				break
+	return out
+
+
+func has_load(p: Variant) -> bool:
+	return not loadable(p).is_empty() or not unloading_sleds(p).is_empty()
+
 
 ## How many of `id` a press on its row moves: the whole of a small thing
 ## (a handful of nails, a box of matches), else one (inventory.md 3절).

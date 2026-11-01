@@ -40,6 +40,7 @@ const Amputation = preload("res://game/sim/amputation.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
+const Sled = preload("res://game/sim/sled.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
@@ -287,7 +288,7 @@ const LONE_ICON: int = 40
 const LETTER_NUDGE: float = -3.5
 ## Leaving shows its word alone (user 2026-10-18: no train) on a slim lamp
 ## pill, the word as big as the 시안's lamp pill word (.fpad--ctx .lab 13).
-const DEPART_SEEN := Vector2(100.0, 56.0)
+const DEPART_SEEN: Vector2 = Vector2(116.0, 80.0)
 const DEPART_FONT: float = 13.0
 const FACE_SIZE: float = 84.0
 ## A companion's chip (시안 .fchip's face 32 across) folded to the face alone
@@ -378,7 +379,7 @@ var context_more: Label
 var all_aboard_size: Vector2            # its touch rect, as wide as its mark and words need
 var attack_icon: String = "-"           # the attack pad's picture now (_tick_attack_icon)
 var pause_shows_play: bool = false      # the pause key shows 'play' while paused
-var offer_box: HBoxContainer
+var offer_box: Control
 var toast_box: VBoxContainer
 var toasts: Array = []
 var grab_button: Button
@@ -1210,7 +1211,7 @@ func _build_thumbs() -> void:
 	context_badge.add_child(context_more)
 	context_badge.visible = false
 	context_button.add_child(context_badge)
-	# Leaving: its word alone on a slim pill (the same day: no train).
+	# Leaving: its word alone on a pill at least MIN_TOUCH high.
 	depart_button = _pad("출발", DEPART_AT, Vector2(140, 84), UiFonts.size(DEPART_FONT))
 	_dress(depart_button, "", DEPART_SEEN, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)
 	_bold(depart_button)
@@ -1355,11 +1356,11 @@ func _build_thumbs() -> void:
 	_dress(alarm_button, "clock", Vector2(48, 48), true, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 26)
 	alarm_button.visible = false
 	bag_box.add_child(alarm_button)
-	offer_box = HBoxContainer.new()
-	offer_box.set_anchors_preset(Control.PRESET_CENTER)
-	offer_box.position = Vector2(-260, 90)
-	offer_box.add_theme_constant_override("separation", 12)
+	offer_box = Control.new()
+	offer_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	offer_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(offer_box)
+	root.resized.connect(_layout_offer.call_deferred)
 
 
 func _build_toasts() -> void:
@@ -1597,6 +1598,18 @@ func tick(delta: float) -> void:
 			_set_running(p)
 	# The attack pad stays lit while the fight goes on (one press, field_unified 10).
 	attack_button.button_pressed = fighting(p)
+	if p.sled_weapon_stowed:
+		auto_aim = false
+		aiming = false
+		aim_target = null
+	for key: Button in [attack_button, aim_button, shove_button, manual_button]:
+		if p.sled_weapon_stowed and (key != shove_button or p.grabbers.is_empty()):
+			if not key.has_meta("sled_disabled"):
+				key.set_meta("sled_disabled", key.disabled)
+			key.disabled = true
+		elif key.has_meta("sled_disabled"):
+			key.disabled = bool(key.get_meta("sled_disabled"))
+			key.remove_meta("sled_disabled")
 	_tick_primary(p)
 	blood_button.visible = leaving.is_empty() and p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit"))
 	lamp_button.visible = leaving.is_empty() and game.clock.is_dark()
@@ -2379,14 +2392,64 @@ func _fit_radio() -> void:
 
 
 ## A short row of choices in the middle (break a window, how to climb...).
+## Wrap fixed-size choices before the right pads, then lift the whole group above the faces.
+static func offer_rects(sizes: Array[Vector2], view: Vector2, right_limit: float, bottom_limit: float) -> Array[Rect2]:
+	var rects: Array[Rect2] = []
+	var start: Vector2 = view * 0.5 + Vector2(-260, 90)
+	var cursor: Vector2 = start
+	var row_height: float = 0.0
+	var bottom: float = start.y
+	for key_size: Vector2 in sizes:
+		if cursor.x > start.x and cursor.x + key_size.x > minf(view.x, right_limit):
+			cursor.x = start.x
+			cursor.y += row_height + 12.0
+			row_height = 0.0
+		rects.append(Rect2(cursor, key_size))
+		bottom = maxf(bottom, cursor.y + key_size.y)
+		row_height = maxf(row_height, key_size.y)
+		cursor.x += key_size.x + 12.0
+	var lift: float = maxf(0.0, bottom - minf(view.y, bottom_limit))
+	for index: int in rects.size():
+		rects[index].position.y -= lift
+	return rects
+
+
+## Keep 24 px before the departure touch pad unless even one fixed-size choice cannot fit.
+static func offer_gap(sizes: Array[Vector2], view: Vector2, depart_left: float) -> float:
+	var widest: float = 0.0
+	for key_size: Vector2 in sizes:
+		widest = maxf(widest, key_size.x)
+	return 24.0 if view.x * 0.5 - 260.0 + widest <= depart_left - 24.0 else 12.0
+
+
+func _layout_offer() -> void:
+	if offer_box.get_child_count() == 0:
+		return
+	_place_allies()
+	var sizes: Array[Vector2] = []
+	for key: Control in offer_box.get_children():
+		sizes.append(key.custom_minimum_size)
+	var origin: Vector2 = offer_box.global_position
+	var depart_left: float = depart_button.get_global_rect().position.x - origin.x
+	var right_limit: float = depart_left - offer_gap(sizes, _view_size(), depart_left)
+	var bottom_limit: float = allies_box.get_global_rect().position.y - origin.y - 12.0
+	var rects: Array[Rect2] = offer_rects(sizes, _view_size(), right_limit, bottom_limit)
+	for index: int in rects.size():
+		var key: Control = offer_box.get_child(index)
+		key.position = rects[index].position
+		key.size = rects[index].size
+
+
 func offer(list: Array) -> void:
 	for c in offer_box.get_children():
+		offer_box.remove_child(c)
 		c.queue_free()
 	for row in list:
 		var key: Button = _offer_key(row["label"], _offer_pick.bind(row["call"]), Vector2(180, 72))
 		key.modulate = Color.WHITE if row.get("work_ready", true) else Color(0.5, 0.5, 0.5)
 		offer_box.add_child(key)
 	offer_box.add_child(_offer_key("그만", _offer_pick.bind(Callable()), Vector2(100, 72), true))
+	_layout_offer()
 
 
 ## A choice offered on the field: a glass pill of the field's (시안 .fglass) in
@@ -2406,6 +2469,7 @@ func _offer_key(word: String, cb: Callable, at_least: Vector2, quiet: bool = fal
 
 func _offer_pick(cb: Callable) -> void:
 	for c in offer_box.get_children():
+		offer_box.remove_child(c)
 		c.queue_free()
 	if cb.is_valid():
 		cb.call()
@@ -2939,6 +3003,8 @@ func _ink_lines(text: String, kind: int, css_px: float, line_css: float, color: 
 func _say(i: int, o: Dictionary, cb: Callable) -> Button:
 	var b := Button.new()
 	b.name = "Say_" + String(o["id"])
+	b.disabled = bool(o.get("off", false))
+	b.modulate = Color(0.5, 0.5, 0.5) if b.disabled else Color.WHITE
 	b.focus_mode = Control.FOCUS_NONE
 	b.clip_text = true
 	b.custom_minimum_size = Vector2(0, UiFonts.px(55.0))
@@ -3184,10 +3250,22 @@ func bag_panel() -> void:
 	InventoryPane.open(self, inv_near)
 
 
+func sled_panel(sled_id: int) -> void:
+	inv_view = "near"
+	InventoryPane.open(self, {"kind": "sled", "id": sled_id, "name": "썰매"})
+
+
+func _inv_sled_take(sled_id: int, item: String) -> void:
+	game.actions.move_sled(game.player, sled_id, item, false)
+	bag_panel()
+
+
 ## A row of the bag pressed: it goes across to the place shown at the right.
 func _inv_put(id: String) -> void:
 	var p = game.player
 	match String(inv_near.get("kind", "ground")):
+		"sled":
+			game.actions.move_sled(p, int(inv_near["id"]), id, true)
 		"box":
 			game.actions.store(p, String(inv_near["id"]), id)
 		"train":
@@ -3559,6 +3637,7 @@ func depart_card() -> void:
 	var text := "기적을 울리고 떠난다. 기적 소리는 멀리까지 간다."
 	if not left.is_empty():
 		text += "\n지금 떠나면 %d명이 그대로 남는다." % left.size()
+	text += Sled.leaving_note(game)
 	# Words, not seconds: arrival spreads too widely to promise a number
 	# (s2_play/measure_depart.md: 30 m leaves about 20 s to 10 m).
 	if horde_close():
@@ -3919,8 +3998,21 @@ func finger_down(index: int, pos: Vector2) -> bool:
 		stick_index = -1
 		stick_dash = false
 		_stick_release()
+	if offer_box.get_child_count() > 0:
+		# The last child is drawn on top; its full touch rect wins over every pad.
+		for choice_index: int in range(offer_box.get_child_count() - 1, -1, -1):
+			var choice: Button = offer_box.get_child(choice_index) as Button
+			if choice != null and choice.is_visible_in_tree() and touch_rect(choice).has_point(pos):
+				fingers[index] = {"kind": "button", "button": choice, "start": pos}
+				return true
+		# Only new presses are blocked. Existing pad fingers keep their move/lift rules.
+		for covered: Button in [depart_button, shove_button, attack_button, aim_button, manual_button]:
+			if covered.is_visible_in_tree() and touch_rect(covered).has_point(pos):
+				return true
 	for b in pads:
 		if b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
+			if _pad_blocked(b):
+				return true
 			fingers[index] = {"kind": "pad", "pad": b, "start": pos, "ms": Time.get_ticks_msec()}
 			_pad_down(b, pos)
 			return true
@@ -3948,6 +4040,8 @@ func finger_down(index: int, pos: Vector2) -> bool:
 	var near: Control = _skirt_at(pos)
 	if near != null:
 		if pads.has(near):
+			if _pad_blocked(near as Button):
+				return true
 			fingers[index] = {"kind": "pad", "pad": near, "start": pos, "ms": Time.get_ticks_msec()}
 			_pad_down(near as Button, pos)
 		elif near == portrait:
@@ -4375,7 +4469,17 @@ func _stick_release() -> void:
 
 # ---------------------------------------------------------------- pads
 
+## Custom touch hit testing must respect the same lock as native buttons.
+func _pad_blocked(b: Button) -> bool:
+	var p: Variant = game.player
+	if b == shove_button and not p.grabbers.is_empty():
+		return false
+	return b.disabled or (p.sled_weapon_stowed and b in [attack_button, aim_button, shove_button, manual_button])
+
+
 func _pad_down(b: Button, pos: Vector2) -> void:
+	if _pad_blocked(b):
+		return
 	var p = game.player
 	if b == aim_button and primary_melee(p):
 		b = attack_button
@@ -4444,6 +4548,8 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 
 
 func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
+	if _pad_blocked(b):
+		return
 	if b == lever_button:
 		# Pulled down it opens, pushed up it folds, as the thumb goes.
 		var dy: float = pos.y - Vector2(f["start"]).y
@@ -4483,6 +4589,10 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 
 
 func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
+	if _pad_blocked(b):
+		if b in [attack_button, aim_button, shove_button]:
+			b.button_pressed = false
+		return
 	if b == aim_button and primary_melee(game.player):
 		return
 	if b == aim_button:

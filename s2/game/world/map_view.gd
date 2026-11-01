@@ -6,6 +6,7 @@ extends Node3D
 ## player climbs to them, and the cellar shows alone.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const Carry = preload("res://game/sim/carry.gd")
 const FieldWork = preload("res://game/field_work.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LampLight = preload("res://game/sim/lamp_light.gd")
@@ -100,6 +101,8 @@ var container_chunks: Dictionary = {} # Vector3i(tile x, tile y, level) -> {node
 var _container_chunk: Dictionary = {} # id -> chunk key
 var _container_batching: bool = false
 var ground_nodes: Dictionary = {}       # level -> MeshInstance3D (what lies on the ground, ground_look.gd; its rims a child "Rim")
+var sled_mesh: MeshInstance3D
+var _sled_sig: int = 0
 var _ground_sig: int = 0
 var _contact_materials: Dictionary = {}   # "rim" / "prop" / "box" -> ShaderMaterial (contact_shade.gdshader)
 ## Every prop's contact shade (T0-6) in one MultiMesh, filled with the props in refresh_props.
@@ -787,6 +790,60 @@ static func _empty_rims(st: SurfaceTool, at: Vector3, sky: float) -> void:
 ## What lies on the ground (game.ground_items, shapes from ground_look.gd): one
 ## mesh a level, made again only when the list has changed; under it the things'
 ## dark rims (ground_look.rim), a child mesh drawn with contact_shade.gdshader.
+func update_sleds(sleds: Array, people: Array) -> void:
+	if not level_roots.has(0) or (sleds.is_empty() and sled_mesh == null):
+		return
+	var hands: Dictionary = {}
+	for person: Variant in people:
+		if person.sled_id != 0:
+			hands[String(person.pid)] = person.position + Vector3(0, 0.8, 0)
+	var signature: int = [sleds, hands].hash()
+	if signature == _sled_sig:
+		return
+	_sled_sig = signature
+	if sled_mesh == null:
+		sled_mesh = _mesh_node(0)
+		sled_mesh.name = "FieldSled"
+	if sleds.is_empty():
+		sled_mesh.mesh = null
+		return
+	var surface: SurfaceTool = _begin()
+	for sled: Dictionary in sleds:
+		var at: Vector3 = sled["pos"]
+		box(surface, Vector3(1.2, 0.12, 0.6), at + Vector3(0, 0.16, 0), Color(0.43, 0.44, 0.45))
+		for side: float in [-0.24, 0.24]:
+			box(surface, Vector3(1.2, 0.08, 0.05), at + Vector3(0, 0.06, side), Color(0.3, 0.31, 0.32))
+		# Cargo is only plain wooden crates (sled.md 6); decoration props stay separate.
+		var cargo: Dictionary = sled["items"]
+		var stacks: int = 0 if cargo.is_empty() else clampi(ceili(Carry.total_weight(cargo) / 4.0), 1, 3)
+		for stack: int in stacks:
+			box(surface, Vector3(0.32, 0.3, 0.42), at + Vector3(-0.4 + float(stack) * 0.4, 0.37, 0), Color(0.49, 0.39, 0.27))
+		var handle: Vector3 = hands.get(String(sled["puller"]), at + Vector3(1.15, 0.12, 0))
+		var trail: PackedVector3Array = sled.get("trail", PackedVector3Array())
+		if trail.size() >= 2 and hands.has(String(sled["puller"])):
+			# The drawn rope bends along the same outdoor trail as the simulation.
+			var rope_from: Vector3 = trail[0] + Vector3(0, 0.22, 0)
+			for index: int in range(1, trail.size()):
+				var height: float = lerpf(0.22, 0.8, float(index) / float(trail.size() - 1))
+				var rope_to: Vector3 = trail[index] + Vector3(0, height, 0)
+				_sled_rope(surface, rope_from, rope_to)
+				rope_from = rope_to
+		else:
+			_sled_rope(surface, at + Vector3(0.5, 0.22, -0.22), handle + Vector3(0, 0, -0.12))
+			_sled_rope(surface, at + Vector3(0.5, 0.22, 0.22), handle + Vector3(0, 0, 0.12))
+		_sled_rope(surface, handle + Vector3(0, 0, -0.12), handle + Vector3(0, 0, 0.12))
+	sled_mesh.mesh = surface.commit()
+
+
+static func _sled_rope(surface: SurfaceTool, from: Vector3, to: Vector3) -> void:
+	var side: Vector3 = (to - from).cross(Vector3.UP).normalized() * 0.018
+	var corners: Array[Vector3] = [from - side, from + side, to + side, to - side]
+	for index: int in [0, 1, 2, 0, 2, 3, 2, 1, 0, 3, 2, 0]:
+		surface.set_color(Color(0.66, 0.57, 0.36))
+		surface.set_normal(Vector3.UP)
+		surface.add_vertex(corners[index])
+
+
 func update_ground(items: Array) -> void:
 	var sig := items.hash()
 	if sig == _ground_sig or level_roots.is_empty():
