@@ -40,6 +40,10 @@ var go_word: String = ""
 ## (the field's end: its two copies).
 var side_keys: Array = []
 var sheet: Control
+## The paper's inside: the writing over the keys' foot.
+var page: VBoxContainer
+## The writing; it scrolls in what the foot leaves, so however long a receipt
+## runs its keys stay on the paper.
 var body: VBoxContainer
 var go_key: Button
 
@@ -66,12 +70,24 @@ func _ready() -> void:
 	paper.position = SHEET_AT * UiFonts.K
 	sheet = paper
 	add_child(paper)
+	page = VBoxContainer.new()
+	page.name = "Body"
+	page.add_theme_constant_override("separation", 0)
+	page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	page.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	paper.inner.add_child(page)
+	var scroll := ScrollContainer.new()
+	scroll.name = "Scroll"
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	page.add_child(scroll)
 	body = VBoxContainer.new()
-	body.name = "Body"
+	body.name = "Writing"
 	body.add_theme_constant_override("separation", 0)
 	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	body.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	paper.inner.add_child(body)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(body)
 	var m: Dictionary = model(result, seg)
 	if m.is_empty():
 		body.add_child(Paper.ink("영수증 없음", UiFonts.HAND, 400, 31.0))
@@ -83,10 +99,6 @@ func _ready() -> void:
 		if not (m["seen"] as Array).is_empty():
 			body.add_child(_rule())
 			_seen(m["seen"])
-	var room := Control.new()
-	room.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	room.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	body.add_child(room)
 	_keys()
 
 
@@ -231,7 +243,7 @@ func _keys() -> void:
 		return
 	var foot := Paper.line_box(48.0)
 	foot.name = "Foot"
-	body.add_child(foot)
+	page.add_child(foot)
 	for pair in side_keys:
 		var k := Paper.ghost(String(pair[0]))
 		# Each a full finger high on the foot's line of 48.
