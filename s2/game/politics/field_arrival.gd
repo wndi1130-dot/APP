@@ -22,6 +22,10 @@ static func _diff(before: Variant, after: Variant) -> String:
 
 
 static func second_station_reached(g: Dictionary) -> bool:
+	if g.get("campaign") is Dictionary and g["campaign"].get("mode") == "campaign":
+		var visit: Dictionary = g["campaign"].get("visit", {})
+		var campaign_stop: Variant = g.get("stop")
+		return visit.get("result") in ["returned", "passed"] and g.get("phase") == "stop" and int(g.get("seg", 0)) > int(visit.get("seg", 0)) and campaign_stop is Dictionary and not bool(campaign_stop.get("done", false))
 	var field_returns: Variant = g.get("fieldReturns")
 	if not field_returns is Dictionary or (field_returns.get("records", []) as Array).is_empty():
 		return false
@@ -31,6 +35,9 @@ static func second_station_reached(g: Dictionary) -> bool:
 
 
 static func arrival_summary(g: Dictionary, t: Dictionary) -> Variant:
+	if g.get("campaign") is Dictionary and g["campaign"].get("mode") == "campaign" and g["campaign"].get("visit", {}).get("result") == "passed":
+		return [{"k": "arrive", "title": "둘째 역", "lines": ["구벤에 닿았다."]},
+			{"k": "people", "title": "지나친 정차", "lines": ["이전 정차는 지나쳤다. 귀환 영수증과 특별 회기는 없다."]}]
 	var field_returns: Variant = g.get("fieldReturns")
 	if not field_returns is Dictionary or (field_returns.get("records", []) as Array).is_empty():
 		return null
