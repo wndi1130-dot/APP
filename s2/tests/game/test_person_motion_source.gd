@@ -62,7 +62,7 @@ func _assert_head_bake(folder: String, baked: Dictionary, bag: bool = false) -> 
 	assert_eq(baked.get("head", {}), info["head"], "load preserves head metadata")
 	var mesh: Mesh = baked["mesh"]
 	var arrays := mesh.surface_get_arrays(0)
-	var total := mesh.surface_get_array_len(0)
+	var total: int = (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
 	var look: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
 	var width := int(baked["width"])
 	var head: Dictionary = baked["head"]
