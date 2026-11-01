@@ -178,7 +178,7 @@ static func _base_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictio
 			options[1]["log"] = "%s이(가) 내민 약속 장부를 물리쳤다." % t["COMM_NAME"][comm]
 			return {"title": "약속 장부", "choices": options}
 		"tension_crisis":
-			# The ladder's last rung (정치 흐름 4.2): guard, yield, or nothing (the revolt end is not ported).
+			# The ladder's last rung (정치 흐름 4.2): guard, yield, or nothing (nothing ends the board in revolt).
 			var refused: Variant = Ladder.guard_refuses(g)
 			var hold: Dictionary = choice("", "경비대를 푼다", [["fear", 15], ["trust", -10], ["rel", "tail", -10]], "crisis_guard")
 			if refused != null: hold["disabled"] = refused
