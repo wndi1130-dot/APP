@@ -77,6 +77,9 @@ const SHORT_LEFT: int = 3
 const STOCKS: Array = [["coal", "coal", "석탄"], ["food", "food", "식량"], ["med", "med", "의약품"], ["lux", "lux", "사치품"]]
 ## The stocks whose press opens what a stretch costs (cost_pane.gd).
 const TAPPABLE: Array = ["coal", "food"]
+## A stock's figure past this reads in thousands (count_word): four digits would push the
+## middle band under STANDING_MIN at 1280×720 once the supplies stock is on.
+const STOCK_SHOWN_MAX: int = 999
 ## train_turn.gd meters writes these in order, or just drift for falling tension.
 const METER_SETTLE: Dictionary = {
 	"trust": ["mood"],
@@ -164,6 +167,10 @@ const OT_DELTA_INK := Color("d6e9f6")
 const NARROW_CSS: float = 840.0
 const METER_W: float = 104.0
 const METER_W_NARROW: float = 66.0
+## At 128/206 the 21 px standing digits remain at least 13 px wide.
+const STANDING_W: float = 206.0
+const STANDING_MIN: float = 128.0
+const BAND_GAP: float = 2.0
 ## The 위험 tag's glow, which the narrow band's lamp casts too.
 const TAG_GLOW := Color(242 / 255.0, 166 / 255.0, 60 / 255.0, 0.7)
 ## The thermometer's slip (.why · .why--cold): its ink, the marks between its
@@ -200,7 +207,9 @@ static func model(g0: Dictionary, t0: Dictionary) -> Dictionary:
 	var cost: Dictionary = TrainTurn.forecast(g0, t0)
 	var stand: Dictionary = TrainTurn.standings(g0, t0)
 	var stocks: Array = []
-	for s: Array in STOCKS:
+	var rows: Array = STOCKS.duplicate()
+	if bool(g0.get("supOn", false)): rows.append(["sup", "sup", "생필품"])
+	for s: Array in rows:
 		# The stretches it lasts come off the store as it is; only the number shown is whole.
 		var have: float = float(g0.get(s[0], 0))
 		var n: int = int(round(have))
@@ -248,6 +257,15 @@ static func level(key: String, v: int) -> int:
 ## 8.5 → "8.5", 10.0 → "10".
 static func _num(x: float) -> String:
 	return str(int(x)) if is_equal_approx(x, round(x)) else "%.1f" % x
+
+
+## A stock's figure as its key shows it, never wider than "999": the whole number up to
+## STOCK_SHOWN_MAX, then whole thousands rounded down, 1K–99K, held at 99K past that.
+## ("1.0K" or "999K" would take the middle band under STANDING_MIN at 1280×720.)
+static func count_word(n: int) -> String:
+	if n <= STOCK_SHOWN_MAX:
+		return str(n)
+	return "%dK" % mini(floori(n / 1000.0), 99)
 
 
 ## A temperature as the thermometer writes it: −3°, 5° (tfmt).
@@ -722,11 +740,44 @@ func _lay_out() -> void:
 		var width: float = minf(size.x, get_viewport_rect().size.x)
 		mid = clampf(mid, extent.x + 8.0 * k, maxf(extent.x + 8.0 * k, width - extent.x - 8.0 * k))
 		why.position = Vector2(mid - why.size.x * 0.5, 52.0 * k + extent.y - why.size.y * 0.5)
-	if mood:
-		mood.position = Vector2(size.x * 0.5 - 8.0 * k - mood.size.x * 0.5, 1.0 * k)
 	if right:
 		right.size = right.get_combined_minimum_size()
 		right.position = Vector2(size.x - 12.0 * k - right.size.x, 0)
+	if mood and right:
+		var left_end: float = outside.position.x + outside.size.x if outside else (tension.position.x + tension.size.x if tension else 12.0 * k)
+		var layout: Dictionary = band_layout(size.x, left_end, right.size.x)
+		_fit_standing(mood, float(layout["mood_width"]))
+		mood.position = Vector2(float(layout["mood_left"]), k)
+		mood.set_meta("band_layout", layout)
+
+
+## Horizontal bounds in logical canvas pixels. A false fits result is deliberately visible to
+## layout tests: a narrower design needs a separate decision, never hidden resource cells.
+static func band_layout(width: float, left_end: float, stocks_width: float) -> Dictionary:
+	var k: float = UiFonts.K
+	var stock_left: float = width - 12.0 * k - stocks_width
+	var left: float = left_end + BAND_GAP * k
+	var right: float = stock_left - BAND_GAP * k
+	var available: float = right - left
+	var mood_width: float = minf(STANDING_W * k, maxf(STANDING_MIN * k, available))
+	var x: float = clampf(width * 0.5 - 8.0 * k - mood_width * 0.5, left, maxf(left, right - mood_width))
+	return {"left_end": left_end, "stock_left": stock_left, "mood_left": x, "mood_width": mood_width,
+		"mood_right": x + mood_width, "scale": mood_width / (STANDING_W * k), "fits": available >= STANDING_MIN * k}
+
+
+## Scale the medals, digit anchors and bar together, always from their original coordinates:
+## evenly about the band's middle line, so a medal stays round and a digit keeps its shape.
+func _fit_standing(c: Control, width: float) -> void:
+	var ratio: float = width / (STANDING_W * UiFonts.K)
+	var mid: float = c.size.y * 0.5
+	for child: Node in c.get_children():
+		if not child is Control: continue
+		var part: Control = child as Control
+		if not part.has_meta("standing_at"): part.set_meta("standing_at", part.position)
+		var at: Vector2 = part.get_meta("standing_at", part.position)
+		part.position = Vector2(at.x * ratio, mid + (at.y - mid) * ratio)
+		part.scale = Vector2(ratio, ratio)
+	c.size.x = width
 
 
 func _label(text: String, kind: int, weight: int, css_px: float, color: Color, spacing: float = 0.0) -> Label:
@@ -1064,7 +1115,7 @@ func _standing(unrest: int, neutral: int, support: int) -> Control:
 	var c := Control.new()
 	c.name = "Standing"
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	c.size = Vector2(206, 50) * k
+	c.size = Vector2(STANDING_W, 50) * k
 	c.add_child(_medal("fist", RED, Vector2(0, 3), dim))
 	c.add_child(_medal("hand", SKY, Vector2(162, 3), dim))
 	var x0: float = 47.0
@@ -1236,13 +1287,29 @@ func _outside(o: Dictionary) -> Control:
 ## with it. Again whenever a roll changes the words, so a longer number never
 ## runs past it toward the mood.
 func _fit_outside(c: Control) -> void:
-	var right: float = 0.0
-	for id: String in ["Temp", "Stage"]:
-		var l: Control = c.get_node_or_null(id)
-		if l != null:
-			right = maxf(right, l.position.x + l.size.x)
-	var w_css: float = right / UiFonts.K + 2.0
-	c.custom_minimum_size = Vector2(w_css if _narrow else maxf(w_css, 58.0), 48.0) * UiFonts.K
+	if not c.has_meta("reserved_width"):
+		# All displayed temperatures and the integers crossed during a roll; no live-reading width.
+		var temps: Array = t.get("CL", {}).get("segTemp", [0.0])
+		var low: float = 0.0
+		var high: float = 0.0
+		for value: Variant in temps:
+			for weather: Variant in TrainClimate.WEATHER_TEMP.values():
+				low = minf(low, float(value) + float(weather))
+				high = maxf(high, float(value) + float(weather))
+		var right: float = 0.0
+		for id: String in ["Temp", "Stage"]:
+			var label: Label = c.get_node_or_null(id)
+			if label == null: continue
+			var words: Array = t.get("CL", {}).get("names", []).duplicate() if id == "Stage" else []
+			if id == "Temp":
+				for value: int in range(int(floor(low)), int(ceil(high)) + 1): words.append(deg(float(value)))
+			var face: Font = label.get_theme_font("font")
+			var px: int = label.get_theme_font_size("font_size")
+			for word: Variant in words:
+				right = maxf(right, label.position.x + face.get_string_size(str(word), HORIZONTAL_ALIGNMENT_LEFT, -1, px).x)
+		var width: float = right + 2.0 * UiFonts.K
+		c.set_meta("reserved_width", width if _narrow else maxf(width, 58.0 * UiFonts.K))
+	c.custom_minimum_size = Vector2(float(c.get_meta("reserved_width", 58.0 * UiFonts.K)), 48.0 * UiFonts.K)
 	c.size = c.custom_minimum_size
 
 
@@ -1572,7 +1639,7 @@ func _stock(s: Dictionary) -> Control:
 	mark.size = Vector2(px, px)
 	mark.position = Vector2(6.0, 14.0) * k
 	c.add_child(mark)
-	var n := _label(str(s["n"]), UiFonts.NUMBER, 500, 22.0, tone(INK, dim), 0.33)
+	var n := _label(count_word(int(s["n"])), UiFonts.NUMBER, 500, 22.0, tone(INK, dim), 0.33)
 	n.name = "Count"
 	c.add_child(n)
 	_sit(n, 30.0, 25.0)

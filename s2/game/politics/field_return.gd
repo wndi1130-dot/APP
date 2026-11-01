@@ -1,4 +1,5 @@
 extends RefCounted
+const Supplies = preload("res://game/train/train_supplies.gd")
 ## First field-return application for the S1a train. State-changing functions copy the supplied
 ## Dictionary, following the train port. Tables come from field-vectors-v1; game keys stay S1 keys.
 
@@ -590,6 +591,7 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 	var stock: Dictionary = receipt["stock"]
 	# Keep the pre-return balances for S1's shortage note, before the zero floor applies.
 	var have := {"coal": g["coal"], "food": g["food"], "medicine": g["med"], "luxury": g["lux"]}
+	if Supplies.asks(g): have["supplies"] = g.get("sup", 0)
 	if g.get("dom") is Dictionary:
 		for key: String in ["wood", "scrap", "cloth", "parts"]:
 			have[key] = g["dom"].get(key, 0)
@@ -603,6 +605,8 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		for key: String in ["wood", "scrap", "cloth", "parts"]:
 			if float(stock.get(key, 0)) != 0.0:
 				g["dom"][key] = maxf(0.0, float(g["dom"].get(key, 0)) + float(stock[key]))
+	if Supplies.asks(g) and float(stock.get("supplies", 0)) != 0.0:
+		Supplies.add(g, float(stock["supplies"]), "field.loot")
 	TrainDecor.receive_receipt(g, receipt)
 	# The decks' places (decision 474 S1): what the field left them at rides to the next contract.
 	if int(receipt["version"]) == 5 and receipt.get("lootDeck") is Dictionary:
@@ -614,7 +618,8 @@ static func apply_field_return(g0: Dictionary, t: Dictionary, departure: Diction
 		var back: int = mini(int(receipt["sledsBack"]), sleds_out(departure))
 		g["dom"]["sleds"] = maxf(0.0, float(g["dom"].get("sleds", 0)) + float(back - sleds_out(departure)))
 	var got: Array[String] = []
-	for row: Array in [["coal", "석탄"], ["food", "식량"], ["medicine", "의약품"], ["luxury", "사치품"], ["wood", "목재"], ["scrap", "고철"], ["cloth", "천"], ["parts", "부품"]]:
+	for row: Array in [["coal", "석탄"], ["food", "식량"], ["medicine", "의약품"], ["luxury", "사치품"], ["supplies", "생필품"], ["wood", "목재"], ["scrap", "고철"], ["cloth", "천"], ["parts", "부품"]]:
+		if row[0] == "supplies" and not Supplies.asks(g): continue
 		var amount := float(stock.get(row[0], 0))
 		if amount != 0.0:
 			var lack := maxf(0.0, -(float(have[row[0]]) + amount)) if have.has(row[0]) else 0.0

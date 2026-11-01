@@ -29,6 +29,7 @@ const WHY_NAME: Dictionary = {
 	"run": "기관 운행", "idle": "꼬리칸이 손을 놓음", "heat": "칸 난방", "calm.pot": "저녁 솥불",
 	"disaster": "재난", "loco": "기관차", "hands": "일손이 모자람", "upkeep": "열차 살림",
 	"ration": "배급", "freeze": "선로 결빙",
+	"sup": "생필품 배급", "sup.use": "생필품 사용", "sup.search": "맡긴 수색의 생필품 덤", "sup.make": "공방 생필품 만들기",
 }
 const SAVED := "단열로 아낌"
 const REST := "그 밖의 정산"

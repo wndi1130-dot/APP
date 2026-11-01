@@ -7,6 +7,7 @@ extends RefCounted
 ## (ui/turn_card.gd) only reads. Checked against card-vectors-v1
 ## (s1/tools/card_view_fixtures.ts).
 
+const Supplies = preload("res://game/train/train_supplies.gd")
 const St = preload("res://game/train/train_state.gd")
 const TurnCards = preload("res://game/train/turn/turn_cards.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
@@ -16,7 +17,7 @@ const People = preload("res://game/train/turn/turn_people.gd")
 const Late = preload("res://game/train/turn/turn_late.gd")
 
 const RES_NAME: Dictionary = {"coal": "석탄", "food": "식량", "med": "의약품", "lux": "사치품", "trust": "신임",
-	"tension": "긴장", "fear": "공포", "injured": "부상자"}
+	"tension": "긴장", "fear": "공포", "injured": "부상자", "sup": "생필품", "supFine": "좋은 물건"}
 const BASE_NAME: Array[String] = ["온기", "배급", "과밀", "노출"]
 ## The kinds whose S1 view runs withAfford itself (the rest only meet guardCosts).
 const AFFORD_KINDS: Array[String] = ["travel", "demand", "ration_cut", "favor", "rescue", "bitten", "rep_sick", "promise_ledger", "keepsake",
@@ -69,8 +70,12 @@ static func view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictionary:
 			out["speaker"] = _leader(g, t, c)
 			out["focus"] = c
 			out["body"] = String((FAVORS_AGAIN if past != null else FAVORS)[c])
+			if past == null and Supplies.asks(g):
+				if c == "tail": out["body"] = '"아이들 겨울옷이 모자라다. 두 벌만."'
+				elif c == "medtech": out["body"] = '"비누가 없어 손을 못 씻는다. 한 상자만."'
 			says = ["이번까지다. 다음은 없다." if past != null else "들어주마. 대신 이 일은 기억해 둬라.",
 				"한 번 들어줬다고 버릇이 되면 안 된다." if past != null else "사사로운 부탁은 받지 않는다."]
+			if Supplies.asks(g) and float(g.get("supFine", 0)) >= 1.0: says.insert(1, "") # S1 grant_fine has a label, but no say.
 		"rescue": _rescue(g, t, card, out, says)
 		"bitten":
 			var past: Variant = _memo(g, "bitten")
@@ -245,6 +250,8 @@ static func shortfall(g: Dictionary, effs: Array) -> String:
 	for e: Array in effs:
 		if e[0] in ["coal", "food", "med", "lux"] and float(e[1]) < 0 and float(g[e[0]]) < -float(e[1]):
 			return {"coal": "석탄이 모자라다", "food": "식량이 모자라다", "med": "의약품이 모자라다", "lux": "사치품이 모자라다"}[e[0]]
+		if e[0] in ["sup", "supFine"] and float(e[1]) < 0 and float(g.get(e[0], 0)) < -float(e[1]):
+			return "생필품이 모자라다" if e[0] == "sup" else "좋은 물건이 모자라다"
 		if e[0] == "lever" and float(e[3]) > 0 and float(g["comms"][e[1]][e[2]]) >= 4:
 			return "이미 최대다"
 	return ""
@@ -264,7 +271,7 @@ static func cost_lines(t: Dictionary, choice: Dictionary) -> Array[String]:
 	var names: Dictionary = t["COMM_NAME"]
 	for e: Array in choice["effs"]:
 		match str(e[0]):
-			"coal", "food", "med", "lux", "injured": out.append("%s %s" % [RES_NAME[e[0]], sign_of(float(e[1]))])
+			"coal", "food", "med", "lux", "sup", "supFine", "injured": out.append("%s %s" % [RES_NAME[e[0]], sign_of(float(e[1]))])
 			"base": out.append("%s %s %s" % [names[e[1]], BASE_NAME[int(e[2])], sign_of(float(e[3]))])
 			"lever": out.append("%s %s %s" % [names[e[1]], "난방" if e[2] == "heat" else "배급", sign_of(float(e[3]))])
 			"pop": out.append("%s %s명" % [names[e[1]], sign_of(float(e[2]))])
