@@ -14,6 +14,7 @@ var fill: DirectionalLight3D
 var renderer_before: Dictionary = {}
 var cloud_touched: bool = false
 var fields: Array[Node] = []
+var max_fps_before: int = 0
 
 
 func before_each() -> void:
@@ -26,6 +27,7 @@ func before_each() -> void:
 	cloud_touched = false
 	Switch.restore_renderer()   # start from the project baseline whatever ran before
 	fields = []
+	max_fps_before = Engine.max_fps
 
 
 func after_each() -> void:
@@ -36,6 +38,7 @@ func after_each() -> void:
 		assert_eq(DirAccess.remove_absolute(path), OK)
 	assert_false(FileAccess.file_exists(path))
 	Switch.restore_renderer()   # every test leaves the project baseline, touched or not
+	Engine.max_fps = max_fps_before
 	if not renderer_before.is_empty():
 		assert_eq(Switch.renderer_state(), renderer_before, "project baseline restored")
 	if cloud_touched:
@@ -276,6 +279,7 @@ func test_invalid_fill_diagnostics_keep_other_valid_keys_and_report_reasons() ->
 		"view_fill_specular": [-0.001, 1.001, "0", false, null, [], {}, INF, -INF, NAN],
 		"view_fill_energy": [0, 0.001, 4.001, "0.002", true, null, [], {}, INF, -INF, NAN],
 		"view_fill_cull_mask": [-1, 1048576, 0.5, "0", true, null, [], {}, INF, -INF, NAN],
+		"max_fps": [0, 45, 120, -30, 30.5, "60", true, null, [], {}, INF, -INF, NAN],
 	}
 	fill.light_energy = 2.5
 	fill.light_specular = 0.75
@@ -349,6 +353,32 @@ func test_view_fill_cull_mask_takes_whole_layer_masks_and_survives_minute_update
 		assert_eq(field.view_fill.light_cull_mask, 0)
 	assert_true(field.view_fill.visible)
 	assert_almost_eq(field.view_fill.light_energy, 2.0, 0.000001)
+
+
+func test_max_fps_takes_the_menu_caps_and_waits_until_the_field_is_shown() -> void:
+	for value in [30, 60, 30.0, 60.0]:
+		var diagnostic: Dictionary = {"reason": "previous read"}
+		_write(JSON.stringify({"max_fps": value}))
+		assert_eq(Switch.read(path, diagnostic), {"max_fps": int(value)})
+		assert_eq(diagnostic, {})
+	for cap: int in [60, 30]:
+		Engine.max_fps = 90 - cap
+		var field: FieldProbe = _field()
+		field.fx_light = {"fill_energy": 2.0}
+		field._set_view_fill()
+		field._apply_perf_settings({"max_fps": cap})
+		assert_eq(Engine.max_fps, 90 - cap, "a hidden build leaves the running cap alone")
+		field.visible = true
+		assert_eq(Engine.max_fps, cap)
+		field._set_view_fill()
+		assert_eq(Engine.max_fps, cap)
+		assert_eq(Switch.apply_max_fps({"max_fps": cap}), {})
+		_free_field(field)
+	Engine.max_fps = 30
+	var plain: FieldProbe = _field(false)
+	plain._apply_perf_settings(Switch.read(path + ".missing"))
+	plain._apply_perf_settings({"sun_shadow": true})
+	assert_eq(Engine.max_fps, 30, "no key, no change")
 
 
 func test_fill_energy_survives_minute_updates_and_keeps_specular() -> void:

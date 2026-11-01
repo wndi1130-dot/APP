@@ -1,5 +1,5 @@
 ## 폰에서 해 그림자와 시야 채움 빛 비용을 비교하는 개발용 파일 스위치.
-## 예: user://perf_switch.json → {"sun_shadow":false,"shadow_mode":"ortho","shadow_distance":30.0,"atlas_size":2048,"atlas_16_bits":true,"soft_quality":"hard","view_fill":true,"view_fill_specular":0.0,"view_fill_energy":0.002,"view_fill_cull_mask":0,"cloud":false}
+## 예: user://perf_switch.json → {"sun_shadow":false,"shadow_mode":"ortho","shadow_distance":30.0,"atlas_size":2048,"atlas_16_bits":true,"soft_quality":"hard","view_fill":true,"view_fill_specular":0.0,"view_fill_energy":0.002,"view_fill_cull_mask":0,"cloud":false,"max_fps":60}
 class_name PerfSwitch
 extends RefCounted
 
@@ -88,6 +88,10 @@ static func _valid(s: Dictionary) -> Dictionary:
 	if (mask is int or mask is float) and is_finite(float(mask)) and float(mask) == floorf(float(mask)) \
 			and float(mask) >= 0.0 and float(mask) <= float(MAX_CULL_MASK):
 		valid["view_fill_cull_mask"] = int(mask)
+	# The menu's two caps only: phone runs restart the app, which drops the menu pick back to 30.
+	var fps: Variant = s.get("max_fps")
+	if (fps is int or fps is float) and (float(fps) == 30.0 or float(fps) == 60.0):
+		valid["max_fps"] = int(fps)
 	for key in ["shadow_distance", "atlas_size", "view_fill_specular", "view_fill_energy"]:
 		var value: Variant = s.get(key)
 		if not (value is int or value is float):
@@ -165,6 +169,16 @@ static func apply_renderer(s: Dictionary, owner: int = 0) -> Dictionary:
 	if changed.has("soft_quality") and settings.has("soft_quality"):
 		changed["soft_quality"] = settings["soft_quality"]
 	return changed
+
+
+## Engine-wide like the renderer values, so only a shown field calls this. It is not restored on
+## exit: the next field reads the same file, and the train keeps the cap the run measured at.
+static func apply_max_fps(s: Dictionary) -> Dictionary:
+	var settings: Dictionary = _valid(s)
+	if not settings.has("max_fps") or Engine.max_fps == settings["max_fps"]:
+		return {}
+	Engine.max_fps = settings["max_fps"]
+	return {"max_fps": Engine.max_fps}
 
 
 static func restore_renderer(owner: int = 0) -> Dictionary:

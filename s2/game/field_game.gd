@@ -1907,6 +1907,10 @@ func _apply_perf_renderer() -> void:
 		_perf_renderer_active = true
 		if not _perf_settings.is_empty() and not changed.is_empty():
 			print("PERF_SWITCH ", changed)
+	# After _ready's own cap, so the file's cap wins for this field.
+	var fps_changed: Dictionary = PerfSwitch.apply_max_fps(_perf_settings)
+	if not fps_changed.is_empty():
+		print("PERF_SWITCH ", fps_changed)
 	if visibility_changed.is_connected(_apply_perf_renderer):
 		visibility_changed.disconnect(_apply_perf_renderer)
 
