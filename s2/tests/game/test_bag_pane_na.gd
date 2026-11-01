@@ -64,6 +64,12 @@ func _layout() -> void:
 	for _i in range(3):
 		await get_tree().process_frame
 	await get_tree().create_timer(0.25).timeout
+	# A slide still under way on a slow machine ends by fixed steps.
+	for node: Node in get_tree().root.find_children("Pane", "", true, false):
+		for _i in range(120):
+			if not node.has_method("is_sliding") or not bool(node.call("is_sliding")):
+				break
+			node.call("motion_step", 1.0 / 60.0)
 
 
 func _screen_rect(control: Control) -> Rect2:

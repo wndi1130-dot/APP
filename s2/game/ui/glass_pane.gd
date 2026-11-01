@@ -13,6 +13,7 @@ extends PanelContainer
 
 signal folded
 signal motion_finished
+signal left
 
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
@@ -63,13 +64,26 @@ const IN_S: float = 0.15
 const IN_FROM: float = 12.0
 const RIGHT_IN_S: float = 0.2
 const RIGHT_OUT_S: float = 0.16
+## The most of a slide one frame may take (s). The frame that built the pane is
+## skipped and a long frame after it (the phone busy) moves the pane no further
+## than this, so a slide never jumps to its end.
+const MOTION_STEP_MAX: float = 0.05
 
 var body: VBoxContainer
 var title_label: Label
 var motion_direction: Vector2 = Vector2.LEFT
-var _motion: Tween
 var _enter_pending: bool = false
 var _leaving: bool = false
+var _motion_on: bool = false
+var _motion_t: float = 0.0
+var _motion_len: float = 0.0
+var _motion_fade: float = 0.0
+var _motion_from: Vector2 = Vector2.ZERO
+var _motion_to: Vector2 = Vector2.ZERO
+var _alpha_from: float = 0.0
+var _alpha_to: float = 1.0
+var _shade_from: float = 0.0
+var _shade_to: float = 1.0
 var _motion_shade: CanvasItem
 
 
@@ -113,6 +127,14 @@ func _init(width_css: float = 420.0, title: String = "", side: String = "", icon
 	minimum_size_changed.connect(_fit)
 
 
+func _ready() -> void:
+	set_process(_enter_pending or _motion_on)
+
+
+func _process(delta: float) -> void:
+	motion_step(delta)
+
+
 ## Pin once, before the caller fills the rows. Layout settles before the tween;
 ## only position and opacity change while it runs. Rebuilt panes stand still.
 func pin(slide: bool, direction: Vector2 = Vector2.LEFT, shade: CanvasItem = null) -> void:
@@ -131,59 +153,99 @@ func _travel(direction: Vector2) -> Vector2:
 
 
 ## Reusable by other glass overlays: direction points toward the screen edge.
+## The pane waits out the frame it was built in, then slides.
 func slide_in(direction: Vector2, shade: CanvasItem = null) -> void:
-	if _motion != null:
-		_motion.kill()
-		_motion = null
 	motion_direction = direction
 	_motion_shade = shade
 	_leaving = false
+	_motion_on = false
 	_enter_pending = true
 	position = resting_position() + _travel(direction)
 	modulate.a = 0.0
 	if is_instance_valid(shade):
 		shade.modulate.a = 0.0
-	if not get_tree().process_frame.is_connected(_begin_slide_in):
-		get_tree().process_frame.connect(_begin_slide_in, CONNECT_ONE_SHOT)
+	set_process(true)
 
 
-func _begin_slide_in() -> void:
-	if not _enter_pending or is_queued_for_deletion():
-		return
-	_fit()
-	_enter_pending = false
-	var duration: float = RIGHT_IN_S if motion_direction.x > 0.0 else IN_S
-	var fade: float = duration * 0.5 if motion_direction.x > 0.0 else duration
-	_motion = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_motion.tween_property(self, "position", resting_position(), duration)
-	_motion.tween_property(self, "modulate:a", 1.0, fade)
-	if is_instance_valid(_motion_shade):
-		_motion.tween_property(_motion_shade, "modulate:a", 1.0, duration)
-	_motion.finished.connect(_finish_slide_in)
-
-
-func _finish_slide_in() -> void:
-	_motion = null
-	_fit()
-	motion_finished.emit()
-
-
-func slide_out(direction: Vector2, shade: CanvasItem = null) -> Tween:
+## Leaving: from where it stands to the edge, fading, its shade with it; `left`
+## when done. The pane takes no input meanwhile (the caller mutes it).
+func slide_out(direction: Vector2, shade: CanvasItem = null) -> void:
 	_enter_pending = false
 	_leaving = true
-	if _motion != null:
-		_motion.kill()
-	var duration: float = RIGHT_OUT_S if direction.x > 0.0 else IN_S
-	_motion = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	_motion.tween_property(self, "position", position + _travel(direction), duration)
-	_motion.tween_property(self, "modulate:a", 0.0, duration)
-	if is_instance_valid(shade):
-		_motion.tween_property(shade, "modulate:a", 0.0, duration)
-	return _motion
+	_motion_shade = shade
+	_motion_len = RIGHT_OUT_S if direction.x > 0.0 else IN_S
+	_motion_fade = _motion_len
+	_motion_t = 0.0
+	_motion_from = position
+	_motion_to = position + _travel(direction)
+	_alpha_from = modulate.a
+	_alpha_to = 0.0
+	_shade_from = shade.modulate.a if is_instance_valid(shade) else 0.0
+	_shade_to = 0.0
+	_motion_on = true
+	set_process(true)
+
+
+## One frame of the slide, `delta` long but never more than MOTION_STEP_MAX
+## (tests drive it with fixed steps). The first call after slide_in only sets out.
+func motion_step(delta: float) -> void:
+	if _enter_pending:
+		_start_enter()
+		return
+	if not _motion_on:
+		set_process(false)
+		return
+	_motion_t = minf(_motion_t + clampf(delta, 0.0, MOTION_STEP_MAX), _motion_len)
+	if _motion_t >= _motion_len - 0.0001:
+		_motion_t = _motion_len
+	var k: float = _motion_t / _motion_len
+	var fade_k: float = minf(_motion_t / _motion_fade, 1.0)
+	position = _motion_from.lerp(_motion_to, _ease(k))
+	modulate.a = lerpf(_alpha_from, _alpha_to, _ease(fade_k))
+	if is_instance_valid(_motion_shade):
+		_motion_shade.modulate.a = lerpf(_shade_from, _shade_to, _ease(k))
+	if _motion_t < _motion_len:
+		return
+	_motion_on = false
+	set_process(false)
+	if _leaving:
+		left.emit()
+	else:
+		_fit()
+		motion_finished.emit()
+
+
+## Cubic: easing out as it comes in, easing in as it goes.
+func _ease(k: float) -> float:
+	return k * k * k if _leaving else 1.0 - pow(1.0 - k, 3.0)
+
+
+func _start_enter() -> void:
+	_enter_pending = false
+	if is_queued_for_deletion():
+		set_process(false)
+		return
+	_fit()
+	_motion_to = resting_position()
+	_motion_from = _motion_to + _travel(motion_direction)
+	position = _motion_from
+	_motion_len = RIGHT_IN_S if motion_direction.x > 0.0 else IN_S
+	_motion_fade = _motion_len * 0.5 if motion_direction.x > 0.0 else _motion_len
+	_motion_t = 0.0
+	_alpha_from = 0.0
+	_alpha_to = 1.0
+	_shade_from = 0.0
+	_shade_to = 1.0
+	_motion_on = true
 
 
 func is_moving() -> bool:
-	return _leaving or _motion != null
+	return _leaving or _motion_on
+
+
+## Still coming in or going out (the first frame's wait included).
+func is_sliding() -> bool:
+	return _enter_pending or _motion_on
 
 
 func _fit() -> void:

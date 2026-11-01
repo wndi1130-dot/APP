@@ -19,6 +19,24 @@ func _game() -> FieldGame:
 
 func _settle() -> void:
 	await get_tree().create_timer(0.25).timeout
+	for node: Node in get_tree().root.find_children("Pane", "", true, false):
+		if node is GlassPane:
+			_land(node as GlassPane)
+
+
+## Fixed 1/60 s steps of a pane's slide, the wall clock out of it.
+func _steps(pane: GlassPane, count: int) -> void:
+	pane.set_process(false)
+	for _i in range(count):
+		pane.motion_step(1.0 / 60.0)
+
+
+func _land(pane: GlassPane) -> void:
+	pane.set_process(false)
+	for _i in range(120):
+		if not pane.is_sliding():
+			return
+		pane.motion_step(1.0 / 60.0)
 
 
 func _touch(hud: FieldHud, at: Vector2, pressed: bool, index: int = 0, canceled: bool = false) -> void:
@@ -97,15 +115,17 @@ func test_bag_enters_from_right_and_fades_before_it_stops() -> void:
 	hud.bag_panel()
 	var pane: GlassPane = hud.modal_pane
 	var shade: ColorRect = hud.modal.get_node("Shade") as ColorRect
+	pane.set_process(false)
 	assert_almost_eq(pane.position.x, hud._view_size().x, 1.0, "the first picture is one pane width outside")
 	assert_almost_eq(pane.modulate.a, 0.0, 0.001)
 	assert_almost_eq(shade.modulate.a, 0.0, 0.001)
-	await get_tree().process_frame
-	assert_gt(pane.position.x, pane.resting_position().x, "the first frame has not jumped to rest")
-	await get_tree().create_timer(0.12).timeout
+	pane.motion_step(0.5)
+	assert_almost_eq(pane.position.x, hud._view_size().x, 1.0, "the frame that built it does not move it")
+	_steps(pane, 6)
 	assert_almost_eq(pane.modulate.a, 1.0, 0.02, "the pane fades in during the first half")
 	assert_gt(shade.modulate.a, 0.0)
-	await get_tree().create_timer(0.13).timeout
+	assert_gt(pane.position.x, pane.resting_position().x + 0.5, "still coming in at 100 ms")
+	_steps(pane, 6)
 	assert_almost_eq(pane.position.x, pane.resting_position().x, 0.5)
 	assert_almost_eq(shade.modulate.a, 1.0, 0.001)
 	assert_false(pane.is_moving())
@@ -136,23 +156,26 @@ func test_close_restores_state_at_once_and_frees_the_exit_picture() -> void:
 	var game: FieldGame = _game()
 	var hud: FieldHud = game.hud
 	hud.bag_panel()
-	await _settle()
+	_land(hud.modal_pane)
 	var old: Control = hud.modal
 	var pane: GlassPane = hud.modal_pane
 	var from_x: float = pane.position.x
 	pane.folded.emit()
+	pane.set_process(false)
 	assert_null(hud.modal)
 	assert_false(hud.modal_open)
 	assert_false(game.paused)
 	assert_eq(game.slow, 1.0)
 	assert_eq(hud.closing_modal, old)
 	_assert_ignored(old)
-	await get_tree().create_timer(0.07).timeout
+	_steps(pane, 4)
 	assert_gt(pane.position.x, from_x)
 	assert_lt(pane.modulate.a, 1.0)
-	await get_tree().create_timer(0.18).timeout
-	assert_false(is_instance_valid(old))
+	_steps(pane, 6)
+	assert_true(old.is_queued_for_deletion())
 	assert_null(hud.closing_modal)
+	await get_tree().process_frame
+	assert_false(is_instance_valid(old))
 
 
 func test_fresh_field_touches_work_while_the_picture_leaves() -> void:
@@ -179,7 +202,7 @@ func test_reopening_drops_the_old_picture_and_enters_again() -> void:
 	var game: FieldGame = _game()
 	var hud: FieldHud = game.hud
 	hud.bag_panel()
-	await _settle()
+	_land(hud.modal_pane)
 	hud._close_modal()
 	var old: Control = hud.closing_modal
 	hud.bag_panel()
@@ -189,7 +212,8 @@ func test_reopening_drops_the_old_picture_and_enters_again() -> void:
 	assert_true(hud.modal_open and game.paused)
 	assert_almost_eq(hud.modal_pane.position.x, hud._view_size().x, 1.0)
 	assert_eq(hud.modal_pane.modulate.a, 0.0)
-	await _settle()
+	_land(hud.modal_pane)
+	await get_tree().process_frame
 	assert_false(is_instance_valid(old))
 	assert_almost_eq(hud.modal_pane.position.x, hud.modal_pane.resting_position().x, 0.5)
 
@@ -199,18 +223,21 @@ func test_left_pane_leaves_left_and_restores_the_body_rate() -> void:
 	var hud: FieldHud = game.hud
 	hud.body_panel()
 	assert_almost_eq(hud.modal_pane.position.x, -UiFonts.px(GlassPane.IN_FROM), 0.5)
-	await _settle()
+	_land(hud.modal_pane)
 	var old: Control = hud.modal
 	var pane: GlassPane = hud.modal_pane
 	hud._close_modal()
+	pane.set_process(false)
 	assert_null(hud.modal)
 	assert_eq(game.slow, 1.0)
 	assert_false(game.paused)
-	await get_tree().create_timer(0.06).timeout
+	_steps(pane, 4)
 	assert_lt(pane.position.x, 0.0)
 	assert_gte(pane.position.x, -UiFonts.px(GlassPane.IN_FROM) - 0.5)
 	assert_lt(pane.modulate.a, 1.0)
-	await get_tree().create_timer(0.19).timeout
+	_steps(pane, 6)
+	assert_true(old.is_queued_for_deletion())
+	await get_tree().process_frame
 	assert_false(is_instance_valid(old))
 
 
@@ -333,7 +360,7 @@ func test_cards_centered_choices_and_resume_block_outside_taps() -> void:
 	var game: FieldGame = _game()
 	var hud: FieldHud = game.hud
 	var calls: Array[String] = []
-	hud.card("motion-test", "고르기. 한 가지를 고른다.", [{"label": "그대로"}], func(choice: String) -> void: calls.append(choice))
+	hud.card("motion-test", "고르기. 한 가지를 고른다.", [{"id": "keep", "label": "그대로"}], func(choice: String) -> void: calls.append(choice))
 	var at: Vector2 = Vector2(2.0, hud._view_size().y - 2.0)
 	_touch(hud, at, true)
 	_touch(hud, at, false)
@@ -454,18 +481,36 @@ func test_hoq_bag_opens_in_150_to_220_ms_and_closes_in_100_to_180_ms() -> void:
 	var hud: FieldHud = game.hud
 	hud.bag_panel()
 	var pane: GlassPane = hud.modal_pane
-	await get_tree().create_timer(0.145).timeout
-	assert_true(pane.is_moving(), "still coming in at 145 ms")
+	pane.set_process(false)
+	pane.motion_step(1.0 / 60.0)
+	_steps(pane, 9)
+	assert_true(pane.is_moving(), "still coming in at 150 ms (+ the frame it was built in)")
 	assert_gt(pane.position.x, pane.resting_position().x + 0.5)
-	await get_tree().create_timer(0.09).timeout
-	assert_false(pane.is_moving(), "at rest by 235 ms")
+	_steps(pane, 3)
+	assert_false(pane.is_moving(), "at rest at 200 ms (217 ms with the build frame)")
 	assert_almost_eq(pane.position.x, pane.resting_position().x, 0.5)
 	var old: Control = hud.modal
 	pane.folded.emit()
-	await get_tree().create_timer(0.1).timeout
-	assert_true(is_instance_valid(old) and old.visible, "still going out at 100 ms")
-	await get_tree().create_timer(0.09).timeout
-	assert_false(is_instance_valid(old), "gone by 190 ms")
+	pane.set_process(false)
+	_steps(pane, 6)
+	assert_true(old.visible and not old.is_queued_for_deletion(), "still going out at 100 ms")
+	_steps(pane, 4)
+	assert_true(old.is_queued_for_deletion(), "gone by 167 ms")
+
+
+## HOQ on a busy phone: a long frame after the build moves the slide by 50 ms at
+## the most, so the pane never pops to its place.
+func test_hoq_a_long_frame_does_not_skip_the_slide() -> void:
+	var game: FieldGame = _game()
+	var hud: FieldHud = game.hud
+	hud.bag_panel()
+	var pane: GlassPane = hud.modal_pane
+	pane.set_process(false)
+	pane.motion_step(0.5)
+	pane.motion_step(0.5)
+	assert_true(pane.is_moving())
+	assert_gt(pane.position.x, pane.resting_position().x + 0.5)
+	assert_lt(pane.position.x, hud._view_size().x - 0.5)
 
 
 ## HOQ: with the bag up, a held stick and a held finger on the attack pad move,

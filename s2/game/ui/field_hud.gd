@@ -2549,8 +2549,8 @@ func _close_modal(animate: bool = true) -> void:
 		if animate and is_instance_valid(pane):
 			closing_modal = old
 			var shade: ColorRect = old.get_node("Shade") as ColorRect
-			var motion: Tween = pane.slide_out(pane.motion_direction, shade)
-			motion.finished.connect(func() -> void:
+			pane.slide_out(pane.motion_direction, shade)
+			pane.left.connect(func() -> void:
 				if closing_modal == old:
 					closing_modal = null
 				old.queue_free())
