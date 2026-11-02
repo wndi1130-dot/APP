@@ -5,9 +5,9 @@ const W = preload("res://game/sim/weapons.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 
 const BAGS: Dictionary = {
-	"pockets": {"name": "주머니만", "limit": 3},
-	"pack": {"name": "배낭", "limit": 8},
-	"big_pack": {"name": "큰 배낭", "limit": 12},
+	"pockets": {"name": "주머니만", "limit": 3, "relief": 0.0},
+	"pack": {"name": "배낭", "limit": 8, "relief": 0.3},
+	"big_pack": {"name": "큰 배낭", "limit": 12, "relief": 0.2},
 }
 
 const ITEM_WEIGHTS: Dictionary = {
@@ -69,6 +69,24 @@ static func limit(bag: String, strength: int) -> float:
 	elif strength <= WEAK:
 		l -= STRENGTH_CAPACITY
 	return maxf(0.0, l)
+
+
+## 2026-11-02 user's pick: only contents inside the bag receive relief, and only
+## up to the bag's limit; what is packed past it weighs in whole.
+## Hand/body loads stay whole; storage checks keep actual weight.
+static func body_burden(bag: String, packed: float, held: float = 0.0, p_limit: float = INF) -> float:
+	var row: Dictionary = BAGS.get(bag, BAGS["pockets"])
+	var inside: float = clampf(packed, 0.0, maxf(0.0, p_limit))
+	return maxf(0.0, held) + inside * (1.0 - float(row["relief"])) + maxf(0.0, packed - inside)
+
+
+## The same big things has_big() treats as held in both arms, not packed.
+static func held_weight(items: Dictionary) -> float:
+	var held := 0.0
+	for id: String in items:
+		if item_weight(id) >= BIG_THING and not W.is_known(id):
+			held += item_weight(id) * maxf(0.0, float(items[id]))
+	return held
 
 
 # 0 up to half, 1 up to limit, 2 up to double, 3 beyond double (cannot move).

@@ -577,7 +577,7 @@ static func _foot(hud, p, at: Dictionary, bag: bool) -> Label:
 	var word: String = "누르면 가방으로"
 	var seconds: float = 0.0
 	if bag:
-		word = UiFonts.josa("누르면 %s(으)로 · 가방 %.1f / %.0f" % [_place_name(hud.game, at), p.weight(), p.carry_limit()])
+		word = UiFonts.josa("누르면 %s(으)로 · 가방 %.1f / %.0f · 몸 부담 %.1f" % [_place_name(hud.game, at), p.weight(), p.carry_limit(), p.body_burden()])
 	elif at["kind"] == "train":
 		word = "열차에 실은 것"
 	elif at["kind"] == "box":

@@ -234,8 +234,23 @@ func carry_limit() -> float:
 	return Carry.limit(bag, int(skills["strength"]))
 
 
+## What the load weighs on the body (2026-11-02 user's pick): weight() with what is packed in the
+## bag lightened by the bag's relief, up to the bag's limit. weight() stays the bag's own budget;
+## what is packed past the limit and what is not in the bag (a big thing held in both arms, the
+## spare weapons, soaked or extra clothes) weigh in whole.
+func body_burden() -> float:
+	var packed := Carry.total_weight(items) - Carry.held_weight(items)
+	return Carry.body_burden(bag, packed, weight() - packed, carry_limit())
+
+
+## The body's load sets the state; a bag packed past its limit is over however the
+## bag lightens it (2026-11-02 user's pick): over-filling never runs, and past double
+## it still cannot move, as by the whole weight before.
 func carry_state() -> int:
-	return Carry.state(weight(), carry_limit())
+	var state: int = Carry.state(body_burden(), carry_limit())
+	if Carry.total_weight(items) - Carry.held_weight(items) > carry_limit():
+		state = maxi(state, maxi(2, Carry.state(weight(), carry_limit())))
+	return state
 
 
 ## The load lets one run: not over the limit and nothing held in both arms
