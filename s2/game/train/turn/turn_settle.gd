@@ -17,6 +17,7 @@ const Ladder = preload("res://game/train/turn/turn_ladder.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
 const TrainDecor = preload("res://game/train/train_decor.gd")
 const Stranded = preload("res://game/train/turn/turn_stranded.gd")
+const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 
 static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	if g0.get("deathWeight", false): return C.unsupported(g0, "settle: deathWeight")
@@ -50,7 +51,9 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	Care.child_settle(g, t, notes)
 	Care.heat_settle(g, t, notes)
 	var supplies: Dictionary = Supplies.use(g, t)
-	# 내정 훅 자리: domesticSettle(g, notes).
+	var shop: Dictionary = TrainWorkshop.settle_stretch(g, t)
+	if not shop.get("did", []).is_empty():
+		notes.append("공방: " + ", ".join(shop["did"]))
 	hub_leak_tick(g, t, notes)
 	g = Turn.drift(g, t)
 	Supplies.relations(g, t, supplies)
@@ -84,6 +87,8 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	TrainDecor.reconcile_store(g)
 	Turn.track_lookback(g)
 	var receipt: Dictionary = {"rel": {}, "notes": notes}
+	if not shop.is_empty():
+		receipt["workshop"] = {"seg": int(g0["seg"]), "events": shop["events"]}
 	for key: String in ["coal", "food", "med", "trust", "tension"]: receipt[key] = float(g[key]) - float(before[key])
 	for comm: String in t["COMMS"]: receipt["rel"][comm] = float(g["comms"][comm]["rel"]) - float(before["rel"][comm])
 	g["lastSettle"] = receipt

@@ -1,4 +1,4 @@
-// PR 1: S1a supplies answers come only from S1 functions. No workshop or S1 rule edits.
+// Supplies port answers come only from S1 functions. No S1 rule edits.
 // Run: node --import tsx tools/supplies_port_fixtures.ts
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -12,9 +12,75 @@ import { applyFieldReturn } from '../src/game/field_receipt';
 import type { FieldDeparture } from '../src/game/field_receipt';
 import { addSupplies, enableSupplies, SUP_YIELD, suppliesAsks, suppliesHygieneShort, suppliesNeed, suppliesRelations, suppliesUse } from '../src/game/supplies';
 import { tables } from './turn_port_fixtures';
+import { createS1cGame } from '../src/game/domestic/state';
+import type { Task } from '../src/game/domestic/state';
+import { payUpkeep, runWorkshop, workPower } from '../src/game/domestic/workshop';
+import { furnishTick } from '../src/game/domestic/lawtech';
 
 const plain = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
-const groups: Record<string, unknown[]> = { enable: [], use: [], ledger: [], stops: [], fields: [], departures: [], cards: [], conditions: [], settles: [] };
+const groups: Record<string, unknown[]> = { enable: [], use: [], ledger: [], stops: [], fields: [], departures: [], cards: [], conditions: [], settles: [], work_order: [], workshop_settles: [] };
+// DomState keys rejected by S2 is_store after PR 2a. Keep all other state,
+// including cards, RNG, journal and community relations, in both comparisons.
+const s2DomOmit = ['supWork', 'supFineOn', 'finds', 'manuals', 'offered', 'armored',
+  'greenhouse', 'extraCars', 'people', 'nextPersonId', 'countdown', 'hotWater', 'pot',
+  'lice', 'liceFree', 'pressureStage', 'typhus', 'bedding', 'penalties', 'sabotage',
+  'grants', 'stoker', 'stalled', 'flags', 'hung', 'escort', 'altPlace', 'reroutes',
+  'delegate', 'workDebt', 'researchPick', 'enginePick', 'sit', 'movedAt', 'stokingAt',
+  'bedOrder', 'fullRule', 'bury', 'cars', 'captainInBed', 'elder', 'pipeFlip',
+  'pipeMoved', 'log', 'h6', 'stats'];
+
+function workshopBoard(): Game {
+  const g = createS1cGame('sup-port-pr2a');
+  enableSupplies(g);
+  const d = g.dom!;
+  d.scrap = 30; d.wood = 20; d.parts = 0; d.target = 5;
+  // Match S2's original front workshop and its no-roster skilled craftsman.
+  for (const p of d.people) {
+    if (p.field === 'craft') { p.skill = 2; delete p.pupil; }
+  }
+  Object.assign(d, { experts: d.people.filter(p => p.alive && !p.gone).map(p =>
+    ({ name: p.name, field: p.field, comm: p.comm, skill: p.skill })) });
+  d.cars = ['workshop', ...d.cars.filter(c => c !== 'workshop')];
+  return g;
+}
+
+for (const order of [['parts', 'restore', 'modify'], ['restore', 'modify', 'parts'],
+  ['sup', 'modify', 'parts', 'restore']] as Task[][]) {
+  const g = workshopBoard();
+  g.dom!.order = order;
+  g.dom!.job = { kind: 'insulate', car: 'tail1', progress: 0, need: 10 };
+  g.dom!.restoring = 'w6';
+  g.dom!.techs.w6 = { stage: 'restoring', defect: false, progress: 0, need: 20 };
+  mutate('work_order', `user/${order.join(',')}`, g, runWorkshop);
+}
+for (const left of [0, 2]) {
+  const g = workshopBoard(), d = g.dom!;
+  d.order = ['restore', 'parts', 'modify']; d.target = 0; d.scrap = 0;
+  d.restoring = 'w6';
+  d.techs.w6 = { stage: 'restoring', defect: false, progress: 0, need: workPower(g) - left };
+  // No scrap: S1 visits the newly appended sup without PR 2b production.
+  // The raw whole-board answer deliberately retains completion news/order.
+  mutate('work_order', `w6-completes/left=${left}`, g, runWorkshop);
+}
+for (const mode of ['parts', 'starved', 'furnished', 'restore-progress'] as const) {
+  const g = workshopBoard(), d = g.dom!;
+  if (mode === 'starved') {
+    d.parts = 0; d.scrap = 0; d.wood = 0;
+    d.techs.w2 = { stage: 'done', defect: false, variant: 'a', progress: 0, need: 0 };
+  }
+  if (mode === 'furnished') {
+    d.furnish = { front: { work: 1, tier: 1, best: 1, furnPts: 0, jobs: [1], items: [] } };
+  }
+  if (mode === 'restore-progress') {
+    d.target = 0; d.restoring = 'w6';
+    d.techs.w6 = { stage: 'restoring', defect: false, progress: 0, need: 20 };
+  }
+  mutate('workshop_settles', mode, g, board => {
+    const starved = payUpkeep(board), result = runWorkshop(board);
+    furnishTick(board);
+    return { ...result, starved };
+  });
+}
 function fresh(on = true): Game {
   const g = S1.createGame('sup-port-pr1');
   if (on) enableSupplies(g);
@@ -213,7 +279,7 @@ const runs = [play(undefined), play(false), play(true)];
 const withoutFlag = (g: Game) => { const out = plain(g); delete out.supOn; return out; };
 assert.deepEqual(runs[0].steps.map(x => withoutFlag(x.after)), runs[1].steps.map(x => withoutFlag(x.after)));
 const gaugeBoard = fresh(); gaugeBoard.climate = true;
-const data = { format: 'supplies-vectors-v1', tables: tables(), yield: SUP_YIELD, groups, runs,
+const data = { format: 'supplies-vectors-v1', tables: tables(), yield: SUP_YIELD, groups, runs, s2DomOmit,
   gauges: { board: gaugeBoard, forecast: S1.forecast(gaugeBoard) } };
 const output = resolve(import.meta.dirname, '../../s2/tests/fixtures/train/supplies_vectors.json');
 const bytes = Buffer.from(JSON.stringify(data) + '\n');
