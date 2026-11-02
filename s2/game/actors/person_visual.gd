@@ -209,6 +209,8 @@ const CHAIN_GAP: float = 1.0
 const RECOVER_WALK_MIX: float = 0.12
 const RECOVER_GUARD_HOLD: float = 0.20
 const RECOVER_GUARD_LOWER: float = 0.40
+# Swings whose first frame is the guard they return to (body_bake.gd keys at 0 = at 0.8).
+const GUARD_START: Array[String] = ["p_swing_one", "p_swing_back"]
 # A door kick, and where in it the foot lands (body_bake.gd p_kick at 0.4): the
 # leg comes up over the last WIND of the try so it lands as the door is struck.
 const OWN_KICK: Array = ["p_kick", 0.4]
@@ -614,6 +616,8 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	_note_posture(p, note, delta)
 	note.erase("recover_walk_mix")
 	note.erase("guard_lower_mix")
+	note.erase("blow_from_guard")
+	note.erase("gait_pick")
 	var prior_motion: int = int(note.get("motion", -1)) - OWN_BASE
 	var blow := blow_of(p, own, note, t)
 	var blow_aim: float = float(note.get("blow_aim", 0.0))
@@ -684,6 +688,7 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		walking = true
 	if blow.y >= 0.0:
 		note["blow_aim"] = blow_aim
+		note["blow_from_guard"] = String(own[int(blow.y)].get("name", "")) in GUARD_START
 		note["motion"] = OWN_BASE + int(blow.y)
 		return blow
 	if p.shove_t > 0.0 or p.lunge_t > 0.0:
@@ -772,6 +777,7 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 			note["recover_walk_mix"] = true
 			note["recover_walk_from"] = prior_motion
 			note["recover_walk_to"] = own_gait
+		note["gait_pick"] = true
 		note["motion"] = OWN_BASE + own_gait
 		var stepped: float = _round(note, "step", signed_gone, _round_of(own, own_gait, 1.2))
 		if p.brain.has("step_r") and is_stepped(String(own[own_gait].get("name", ""))):
@@ -878,9 +884,11 @@ static func mix_recovery(note: Dictionary, mix: Dictionary, look: Color, t: floa
 
 
 ## A change of motion while the guard is still being lowered. The shader keeps one frame,
-## so a fresh ease would drop the guard share in one drawing. A blow starts from the guard
-## pose (body_bake.gd p_swing_one/back keys at 0 are those at 0.8), so it keeps the
-## standing frame at the share standing had; anything else keeps the guard frame at its share.
+## so a fresh ease would drop the guard share k in one drawing. A swing that starts from
+## the guard (GUARD_START) keeps the standing frame at 1 - k; a walk, whose start is near
+## standing, keeps the guard frame at k. Anything else starts elsewhere: it keeps the guard
+## frame while k is at least half and eases fresh from standing after, so it jumps no more
+## than half the way either side.
 static func _cut_guard_lowering(note: Dictionary, mix: Dictionary, look: Color, t: float, tab: Array, durations: Dictionary) -> void:
 	mix.erase("guard_lowering")
 	var lower: float = float(mix.get("body_mix", RECOVER_GUARD_LOWER))
@@ -888,9 +896,11 @@ static func _cut_guard_lowering(note: Dictionary, mix: Dictionary, look: Color, 
 	if left <= 0.0 or not mix.has("body_from"):
 		return
 	var keep: float = left * left * (3.0 - 2.0 * left)
-	if note.has("blow_aim"):
+	if bool(note.get("blow_from_guard", false)):
 		mix["body_from"] = DeadBody.frame_in(tab, int(mix["body_motion"]), float(mix["body_r"]))
 		keep = 1.0 - keep
+	elif not bool(note.get("gait_pick", false)) and keep < 0.5:
+		return
 	var target: int = int(look.g)
 	var mix_time: float = float(durations.get(target, DeadBody.MIX_TIME))
 	# The left whose smoothstep is keep, so DeadBody.mix_from goes on from that share.
@@ -928,7 +938,10 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 				note["blow_end"] = minf(t, float(note.get("blow_deadline", t)))
 			note.erase("blow_aim")
 			p.remove_meta(Pose.BLOW_WAY)
-		if note.has("blow_guard_clip") and p.shove_t <= 0.0 and t <= float(note.get("blow_guard_until", -1.0)):
+		# A shove takes the arms: the guard is not drawn again once it is done.
+		if p.shove_t > 0.0 or p.lunge_t > 0.0:
+			note.erase("blow_guard_clip")
+		if note.has("blow_guard_clip") and t <= float(note.get("blow_guard_until", -1.0)):
 			return Vector2(float(note["blow_guard_phase"]), int(note["blow_guard_clip"]))
 		return Vector2(0.0, -1.0)
 	# A new blow is drawn back: on to the next way if it follows on from the last.

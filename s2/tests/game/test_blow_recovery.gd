@@ -190,6 +190,38 @@ func _drawn_points(baked: Dictionary, ids: PackedInt32Array, drawn: Color, blend
 	return out
 
 
+func _mean(points: PackedVector3Array) -> Vector3:
+	var sum: Vector3 = Vector3.ZERO
+	for point: Vector3 in points:
+		sum += point
+	return sum / float(points.size())
+
+
+## A shove started while the guard is held takes the guard away for good: neither its
+## wind-up nor the arms-out after it draw the old guard again.
+func test_a_shove_during_the_held_guard_does_not_bring_the_guard_back() -> void:
+	var own: Array = _own()
+	for stage: String in ["shove", "lunge"]:
+		var p: Person = _person("axe")
+		var note: Dictionary = {}
+		_begin(p, own, note, 0.9)
+		assert_true(note.has("blow_guard_clip"), stage + " guard noted")
+		var until: float = float(note.get("blow_guard_until", 0.0))
+		p.swing_t = 0.0
+		Visual.blow_of(p, own, note, until - 0.06)
+		var held: Vector2 = Visual.blow_of(p, own, note, until - 0.05)
+		assert_eq(int(held.y), Visual.clip_named(own, "p_swing_one", -1), stage + " guard held before the shove")
+		if stage == "shove":
+			p.shove_t = 0.2
+		else:
+			p.lunge_t = 0.2
+		assert_eq(int(Visual.blow_of(p, own, note, until - 0.04).y), -1, stage)
+		p.shove_t = 0.0
+		p.lunge_t = 0.0
+		assert_eq(int(Visual.blow_of(p, own, note, until - 0.03).y), -1, stage + " the guard is not drawn again")
+		assert_false(note.has("blow_guard_clip"), stage)
+
+
 ## Over all vertices, how much further the drawing moves between two colours than
 ## the clip alone would: what the ease adds, not the motion itself.
 func _ease_adds(baked: Dictionary, ids: PackedInt32Array, from: Color, to: Color) -> float:
@@ -419,13 +451,18 @@ func test_shipped_guard_lowering_cut_by_walk_or_blow_does_not_jump() -> void:
 		if walk < 0:
 			continue
 		var round_m: float = float(own[walk]["round"])
+		# Motions that start away from both guard and standing, fed as motion_of picks them.
+		var elsewhere: Dictionary = {"stab": Visual.clip_named(own, "p_stab", -1), "held": Visual.clip_named(own, "p_held", -1)}
+		assert_gte(int(elsewhere["stab"]), 0, folder)
+		assert_gte(int(elsewhere["held"]), 0, folder)
 		var fps: int = 30
 		var dt: float = 1.0 / float(fps)
 		for way: String in ["p_swing_one", "p_swing_back"]:
 			var lower_at: int = -1
-			var worst: Dictionary = {"walk": 0.0, "blow": 0.0}
+			var worst: Dictionary = {"walk": 0.0, "blow": 0.0, "stab": 0.0, "held": 0.0}
+			var over: Dictionary = {"stab": -1.0, "held": -1.0}
 			for k: int in range(-1, int(ceil(Visual.RECOVER_GUARD_LOWER * float(fps))) + 2):
-				for kind: String in (["none"] if k < 0 else ["walk", "blow"]):
+				for kind: String in (["none"] if k < 0 else ["walk", "blow", "stab", "held"]):
 					var p: Person = _person("axe")
 					var wind: float = W.melee_windup("axe") / float(p.mults()["swing"])
 					var note: Dictionary = {"blow_n": 0, "blow_end": 0.0} if way == "p_swing_back" else {}
@@ -435,13 +472,20 @@ func test_shipped_guard_lowering_cut_by_walk_or_blow_does_not_jump() -> void:
 					var walked: float = 0.0
 					var began: float = -1.0
 					var before: Vector3 = Vector3.ZERO
+					var before_alone: Vector3 = Vector3.ZERO
 					for frame: int in range(int(ceil(2.4 * float(fps))) + 1):
 						var t: float = float(frame) * dt
 						var drawn: Color
 						if kind == "walk" and frame >= cut:
 							walked += Person.WALK * dt
 							note["t"] = float(note["t"]) + dt
+							note["gait_pick"] = true   # as motion_of notes it for a gait
 							drawn = Visual.mix_recovery(note, mix, Color(walked / round_m, walk, 1.0, 1.0), float(note["t"]), tab, times)
+						elif elsewhere.has(kind) and frame >= cut:
+							note["t"] = float(note["t"]) + dt
+							note.erase("gait_pick")
+							note["blow_from_guard"] = false
+							drawn = Visual.mix_recovery(note, mix, Color(0.0, int(elsewhere[kind]), 1.0, 1.0), float(note["t"]), tab, times)
 						else:
 							if kind == "blow" and frame >= cut:
 								if began < 0.0:
@@ -456,19 +500,22 @@ func test_shipped_guard_lowering_cut_by_walk_or_blow_does_not_jump() -> void:
 							if k < 0 and lower_at < 0 and String(own[int(picked.y)]["name"]) == "p_stand":
 								lower_at = frame
 							drawn = Visual.mix_recovery(note, mix, Color(picked.x, picked.y, 1.0, 1.0), float(note["t"]), tab, times)
-						var points: PackedVector3Array = _drawn_points(baked, ids, drawn)
-						var hand: Vector3 = Vector3.ZERO
-						for point: Vector3 in points:
-							hand += point
-						hand /= float(points.size())
+						var hand: Vector3 = _mean(_drawn_points(baked, ids, drawn))
 						if frame == cut:
 							worst[kind] = maxf(float(worst[kind]), hand.distance_to(before))
+							if over.has(kind):
+								# How far a fresh ease would have jumped: to standing at once.
+								over[kind] = maxf(float(over[kind]), hand.distance_to(before) - before.distance_to(before_alone))
 						before = hand
+						before_alone = _mean(_drawn_points(baked, ids, drawn, false))
 			assert_gt(lower_at, 0, folder + way)
 			var label: String = "%s %s" % [folder, way]
 			assert_lte(float(worst["walk"]), 0.15, label + " walk cut first drawing")
 			assert_lte(float(worst["blow"]), 0.15, label + " blow cut first drawing")
-			print("LOWER_CUT %s walk %.3f m blow %.3f m" % [label, worst["walk"], worst["blow"]])
+			# A stab or a grab starts elsewhere: never further than a fresh ease would jump.
+			assert_lte(float(over["stab"]), 0.005, label + " stab cut no worse than a fresh ease")
+			assert_lte(float(over["held"]), 0.005, label + " grab cut no worse than a fresh ease")
+			print("LOWER_CUT %s walk %.3f m blow %.3f m stab %.3f m held %.3f m" % [label, worst["walk"], worst["blow"], worst["stab"], worst["held"]])
 	assert_eq(folders, 14)
 
 
