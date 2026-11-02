@@ -63,7 +63,7 @@ func test_a_key_clicks_and_the_door_goes_softer_than_by_hand_and_the_dead_hear_n
 	_finish(p)
 	assert_eq(String(game.grid.doors[c]["state"]), "open", "the key opened it")
 	assert_true(a.played.has("door_unlock"), "the key's click")
-	assert_true(a.last_shot.stream.resource_path.get_file().begins_with(String(a.DOOR_KEY[4])), "played: the impact set's iron stands in")
+	assert_true(a.last_shot.stream in a.lib["door_unlock"], "played: the key's own click (the stand-in: test_own_voices)")
 	assert_false(a.played.has("door_open"), "the door a moment after")
 	await wait_seconds(a.DOOR_KEY_LAG + 0.15)
 	assert_true(a.played.has("door_open"), "then the door")
@@ -104,13 +104,13 @@ func test_a_locked_door_rattles_and_a_boarded_one_thuds_at_the_players_hand() ->
 	assert_eq(a.played.count("boarded"), 1, "held against it, it thuds once")
 	assert_eq(game.ledger.sound_events, heard, "nothing the dead hear")
 	assert_eq(a.last_tag_group, "none")
-	# Until their files are in, the impact set's wood and slam stand in.
+	# Each its own file (the stand-ins: test_own_voices).
 	for why: String in a.SHUT_FAST:
 		a.shut_heard.clear()
 		a.last_shot = null
 		a.shut_fast(c, why)
 		assert_not_null(a.last_shot, why + ": played")
-		assert_true(a.last_shot.stream.resource_path.get_file().begins_with(String(a.SHUT_FAST[why][4])), why)
+		assert_true(a.last_shot.stream in a.lib[String(a.SHUT_FAST[why][0])], why)
 
 
 func test_a_bite_is_heard_and_one_the_coat_took_is_softer() -> void:
