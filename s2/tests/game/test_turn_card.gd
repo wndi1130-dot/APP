@@ -208,7 +208,8 @@ func test_only_zero_turns_left_warns_that_deferring_picks_the_worst() -> void:
 func test_a_kind_not_drawn_hands_back_the_rule_error() -> void:
 	if _data.is_empty(): return
 	var g: Dictionary = _case(str(_data["cases"][0]["name"]))[0]
-	g["cards"] = [{"uid": 77, "kind": "trip_depart", "comm": "tail"}]
+	# An arrivals card: that branch is still outside the port (the handcar cards came in with #1251).
+	g["cards"] = [{"uid": 77, "kind": "bed_quarrel", "comm": "tail"}]
 	var c = TurnCard.new()
 	var got: Array = []
 	c.chose.connect(func(next: Dictionary) -> void: got.append(next))

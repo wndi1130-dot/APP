@@ -98,7 +98,7 @@ export const NEEDS: Record<NeedId, NeedDef> = {
     ],
     hit: [
       '치료 순서를 정한 법이 없어 침상을 두고 다툼이 났다. 의무진이 지쳐 간다.',
-      who => `침상 다툼을 말리던 ${who}이(가) 밀려 넘어졌다. 의무진이 한 손을 잃었다.`,
+      who => `침상 다툼을 말리던 ${who}이(가) 밀려 넘어졌다. 의무진 일손이 하나 줄었다.`,
       rep => `${rep}이(가) 이대로는 손을 놓겠다고 한다. 다음 회기에 답을 달라고 한다.`,
       '순서가 없으니 목소리 큰 쪽이 먼저 침상에 눕는다.',
     ],
@@ -169,7 +169,7 @@ export function needTick(g: Game, notes: string[]): void {
       bump(g, 'trust', -NEED_PROMISE.trust, 'promise');
       bump(g, 'tension', NEED_PROMISE.tension, 'promise');
       notes.push('열차장이 약속을 어겼다.');
-      journal(g, `${def.title}을 정하겠다던 열차장의 약속은 지켜지지 않았다.`, 'bad');
+      journal(g, `${def.title}을 정하겠다던 열차장은 약속을 지키지 않았다.`, 'bad');
     }
     def.apply(g, state.hits);
     const hit = needHit(g, id, state.hits);

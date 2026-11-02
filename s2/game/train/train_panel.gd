@@ -4,6 +4,7 @@ extends CanvasLayer
 ## come from the rules, and this panel goes when they do.
 
 const UiTheme = preload("res://game/ui/ui_theme.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const CaptainBoard = preload("res://game/train/train_captain.gd")
 const LifePanel = preload("res://game/train/train_life_panel.gd")
@@ -140,7 +141,7 @@ func fill() -> void:
 		return
 	if not scene.problems.is_empty():
 		title.text = "규칙 값 오류"
-		note.text = "\n".join(scene.problems)
+		note.text = UiFonts.keep_all("\n".join(scene.problems))
 		return
 	_filling = true
 	car_i = clampi(car_i, 0, scene.cars.size() - 1)
@@ -166,7 +167,7 @@ func fill() -> void:
 		if value != null:
 			slider.value = float(value)
 		(readouts[key] as Label).text = "–" if value == null else str(roundi(float(value)))
-	note.text = READS
+	note.text = UiFonts.keep_all(READS)
 	_filling = false
 	captain_board.show_captain(_captain(), scene.rules["cars"])
 

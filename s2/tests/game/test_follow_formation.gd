@@ -258,7 +258,7 @@ func test_one_wall_on_the_way_to_a_slot_uses_one_path_search_without_queueing() 
 	for tick in range(180):
 		game._turn_people(1.0 / 30.0)
 		game._move_person(p, 1.0 / 30.0)
-	assert_lte(p.position.distance_to(slot), FieldAi.FOLLOW_PATH_NEAR)
+	assert_lte(p.position.distance_to(slot), FieldAi.FOLLOW_SETTLE, "decision 442 settles within the existing arrival allowance")
 	assert_false(p.moving, "the chief is still: the detour finishes at the slot")
 
 

@@ -97,7 +97,8 @@ func _staged(place: String) -> Dictionary:
 	var loader = StopLoader.new()
 	root.add_child(loader)
 	var t0: int = Time.get_ticks_usec()
-	loader.prepare(place)
+	# The band the field picks for these options, so the field takes what was made ahead.
+	loader.prepare(place, -1, "", -1.0, "", FieldGame.region_for({"place": place}))
 	var longest_wait: float = 0.0
 	var last: int = Time.get_ticks_usec()
 	while not loader.has_data():

@@ -3,6 +3,7 @@ extends PanelContainer
 
 const Catalog = preload("res://game/train/train_catalog.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const LAW_NAMES := {
 	"common_kitchen": "공동 취사", "contribution_ration": "기여 배급", "common_heating": "공동 난방",
 	"heat_quota": "난방 배당", "child_labor": "아동 노동", "child_pack": "짐 꾸리기",
@@ -110,7 +111,7 @@ func fill() -> void:
 	if not c.is_empty():
 		var stage: int = int(scene.rules.get("view", {}).get("collapse_by_car", {}).get(id, -1))
 		stage_picker.select(stage + 1)
-		status.text = "%s · %s · 화면용 첫 값" % [scene.car(id)["def"]["name"], Catalog.data()["collapse"][int(c["stage"])]["name"]]
+		status.text = UiFonts.keep_all("%s · %s · 화면용 첫 값" % [scene.car(id)["def"]["name"], Catalog.data()["collapse"][int(c["stage"])]["name"]])
 	_filling = false
 
 
@@ -207,12 +208,12 @@ func _insulate() -> void:
 func _start() -> void:
 	var id: String = Catalog.data()["interactions"].keys()[interaction_picker.selected]
 	var started: bool = scene.life.start_interaction(id, _car_id())
-	status.text = "장면 시작" if started else "지금 자리가 닫혔거나 역할·빈자리가 모자람"
+	status.text = UiFonts.keep_all("장면 시작" if started else "지금 자리가 닫혔거나 역할·빈자리가 모자람")
 
 
 func _classroom_sample() -> void:
 	if scene.car(_car_id())["def"].get("kind") != "dining":
-		status.text = "식당칸에서 교실 역할을 본다"
+		status.text = UiFonts.keep_all("식당칸에서 교실 역할을 본다")
 		return
 	var actors: Dictionary = scene.rules.get("view", {}).get("actors", {}).duplicate(true)
 	actors[_car_id()] = {"0": {"role": "teacher"}, "1": {"child": true}, "2": {"child": true}, "3": {"child": true}}

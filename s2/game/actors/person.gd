@@ -2,6 +2,8 @@ extends Node3D
 ## One person in the field: the chief, a companion, a crew member or a raider.
 ## Holds body, heat, bag and hands; moves along a path; runs one timed action.
 
+signal sled_hands_work(person: Variant, action_id: String)
+
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 const BodyHeat = preload("res://game/sim/body_heat.gd")
@@ -13,6 +15,7 @@ const Pose = preload("res://game/actors/person_pose.gd")
 
 const WALK: float = 2.1
 const RUN: float = 3.9
+const MOVE_MIN: float = 0.25 # Decision 442: no slow input glide; decision 425 stays unchanged.
 const CROUCH: float = 1.1
 const CROUCH_NOISE_MULT: float = 0.5 # contract with the sound rules; no extra sound event
 const ROLE_COLORS: Dictionary = {
@@ -45,6 +48,13 @@ var aim := AimModel.new()
 var hands: Array = []                  # [{id, quality, condition, loaded}], index 0 = in hand
 var bag: String = "pack"
 var items: Dictionary = {}             # item id -> count
+## The slot remains intact while both hands hold the rope (sled.md 2.2).
+var sled_id: int = 0
+var sled_stowed_for: int = 0
+var sled_weapon_stowed: bool = false
+var sled_rearm_t: float = 0.0
+var sled_serial: int = 0
+var sled_job: Dictionary = {}
 ## What is worn, place by place (wear.gd, decision 434): {slot: garment state}.
 ## coat, hat and gloves are the old three places seen through it: the coat
 ## over the body (the coat over the jacket, else the jacket), what is on the
@@ -84,6 +94,9 @@ var facing: float = 0.0
 var turn_rate: float = 0.0
 var look: float = 0.0
 var moving: bool = false
+var visual_push: Vector3 = Vector3.ZERO # Cumulative world-space separation; drawing only, not saved.
+var ground_sample: Dictionary = {}     # Runtime tick identity; never restored from a saved clock.
+var motion_epoch: int = 0              # A rewind starts the drawing's samples again too.
 var stick := Vector2.ZERO               # player's left thumb: world x/z direction, length 0..1
 var drive_speed: float = 0.0            # body speed under the stick (eases in and out)
 var drive_dir := Vector3.ZERO
@@ -228,7 +241,7 @@ func carry_state() -> int:
 ## The load lets one run: not over the limit and nothing held in both arms
 ## (card G 가, decision 448-19: one walks with it).
 func load_lets_run() -> bool:
-	return carry_state() < 2 and not Carry.has_big(items)
+	return sled_id == 0 and carry_state() < 2 and not Carry.has_big(items)
 
 
 ## S2 keeps only the '추움' tier (on/off, s2_station 2.4 after the 2026-10-07
@@ -292,6 +305,15 @@ func speed(floor_kind: int) -> float:
 	return base * float(m["move"]) * FieldGrid.FLOOR_SPEED[floor_kind]
 
 
+## The same speed with only the run switched off.
+func walk_speed(floor_kind: int) -> float:
+	if carry_state() >= 3:
+		return 0.0
+	var base: float = CROUCH if crouched else WALK
+	var m: Dictionary = mults()
+	return base * float(m["move"]) * FieldGrid.FLOOR_SPEED[floor_kind]
+
+
 func is_running_now() -> bool:
 	return running and moving and not crouched and load_lets_run() and body.can_run()
 
@@ -326,6 +348,12 @@ func start_action(id: String, label: String, seconds: float, done: Callable) -> 
 		return
 	if id == "splint" and not _can_simple_splint():
 		return
+	if sled_weapon_stowed and id in ["aim", "swap"]:
+		return
+	if sled_id != 0:
+		sled_hands_work.emit(self, id)
+	if not sled_job.is_empty():
+		sled_job = {}
 	_free_busy()
 	action = id
 	action_label = label
@@ -350,7 +378,10 @@ func _complete_simple_splint(done: Callable) -> void:
 	done.call()
 
 
-func cancel_action() -> void:
+func cancel_action(completed: bool = false) -> void:
+	# A timed completion keeps its one-use ticket until the named callback runs.
+	if not sled_job.is_empty() and (not completed or not bool(sled_job.get("ready", false))):
+		sled_job = {}
 	_free_busy()
 	action = ""
 	action_label = ""
@@ -405,7 +436,7 @@ func set_weapon_slots(list: Array) -> void:
 
 
 func swap_weapons() -> void:
-	if hands.size() < 2:
+	if sled_weapon_stowed or hands.size() < 2:
 		return
 	var first = hands.pop_front()
 	hands.append(first)
@@ -434,7 +465,7 @@ func _refresh_weapon_mesh() -> void:
 	weapon_box.size = size
 	_fit_weapon_model(id)
 	weapon_mesh.mesh = weapon_box if weapon_model == null else null
-	weapon_mesh.visible = id != ""
+	weapon_mesh.visible = id != "" and not sled_weapon_stowed
 
 
 ## Puts the hand's weapon model under weapon_mesh (or takes it away) when the
@@ -488,8 +519,13 @@ func refresh_view(show_tag: bool) -> void:
 		body_mesh.rotation = Vector3(bend, 0, 0)
 		body_mesh.position = Vector3(0, 0.75 - bend * 0.25, 0)
 		head_mesh.position = Vector3(0, 1.6 - bend * 0.5, 0.04 + bend * 0.4)
-	weapon_mesh.visible = not lying and weapon_id() != ""
+	weapon_mesh.visible = not lying and weapon_id() != "" and not sled_weapon_stowed
 	Pose.apply(self, lying)
+	if sled_id != 0 and not lying and has_meta(Pose.META):
+		var arms: Array = get_meta(Pose.META)
+		for side: int in 2:
+			arms[side].position = Vector3(-0.25 if side == 0 else 0.25, 0.8 if crouched else 1.0, 0.3)
+			arms[side].rotation = Vector3(0.35, 0, 0)
 	if body.dead:
 		(body_mesh.mesh.material as StandardMaterial3D).albedo_color = Color(0.3, 0.28, 0.27)
 	var text := ""

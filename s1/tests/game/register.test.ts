@@ -171,6 +171,7 @@ const TS_VOICES: [file: string, quote: string, voice: Voice][] = [
   ['dark/cases.ts', '${name}이(가) 한 일이라는 건 소문뿐이었다. 억울하다.', '칸'],
   ['domestic/data.ts', "종자곡 풀기에 '반만 풀기' 변형이 열린다(식량 +15, 앞칸 −10)", '옮김'],
   ['domestic/data.ts', "아동 노동에 '짐 꾸리기만' 변형이 열린다(아이들은 내리지 않는다). 공방에서 썰매·들것을 만든다(S2)", '옮김'],
+  ['domestic/data.ts', "지나친 정차에서도 '짧게' 머문 몫의 절반을 얻는다(석탄 1)", '옮김'],
 ];
 
 const GAME = fileURLToPath(new URL('../../src/game/', import.meta.url));

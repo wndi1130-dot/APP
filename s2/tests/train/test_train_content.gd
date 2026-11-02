@@ -73,7 +73,7 @@ func _part(row: Dictionary) -> void:
 	_same(row["after"], g, row["name"])
 
 
-func test_fixture_contract_has_46_first_views_and_four_live_runs() -> void:
+func test_fixture_contract_keeps_46_first_views_and_adds_four_stranded_definitions() -> void:
 	assert_eq(_cards["format"], "content-vectors-v1")
 	assert_eq(_turns["format"], "turn-content-v1")
 	assert_eq(int(_cards["packCount"]), 46)
@@ -82,7 +82,7 @@ func test_fixture_contract_has_46_first_views_and_four_live_runs() -> void:
 	assert_eq(Content.data()["draw"], _cards["tables"]["DRAW"])
 	for ev: Dictionary in Content.data()["events"]:
 		assert_eq(ev["phase"], "travel")
-		assert_false(str(ev["id"]).begins_with("ev_str_"))
+	assert_eq((Content.data()["events"] as Array).filter(func(ev: Dictionary) -> bool: return str(ev["id"]).begins_with("ev_str_")).size(), 4)
 	for run: Dictionary in _turns["runs"]:
 		assert_gte((run["steps"] as Array).size(), 30)
 		assert_gt(int(run["contentChoices"]), 0)
@@ -295,7 +295,7 @@ func test_content_fields_of_a_wrong_shape_are_refused() -> void:
 		assert_ne(str(read.get("why", "")), "", str(patch) + " says why")
 
 
-func test_out_of_scope_branches_still_reject_actions() -> void:
+func test_optional_hooks_stay_blocked_and_stranded_depart_is_ported() -> void:
 	var initial: Dictionary = _turns["runs"][0]["steps"][0]["before"].duplicate(true)
 	initial["cards"] = []
 	initial["phase"] = "prep"
@@ -304,8 +304,12 @@ func test_out_of_scope_branches_still_reject_actions() -> void:
 		g[key] = true
 		assert_true(str(Advance.advance(g, _turns["tables"]).get("_turn_port_error", "")).begins_with("F-NOT-PORTED"), key)
 	var stranded: Dictionary = initial.duplicate(true)
-	stranded["stranded"] = {}
-	assert_true(str(Advance.advance(stranded, _turns["tables"]).get("_turn_port_error", "")).begins_with("F-NOT-PORTED"), "stranded")
+	stranded["coal"] = 3
+	load("res://game/train/turn/turn_stranded.gd").enter_stranded(stranded, _turns["tables"], 3, 10)
+	var departed: Dictionary = Advance.advance(stranded, _turns["tables"])
+	assert_false(departed.has("_turn_port_error"), "stranded departure is now ported")
+	assert_eq(departed["phase"], "travel")
+	assert_true((departed["cards"] as Array).any(func(card: Dictionary) -> bool: return card["kind"] == "trip_depart"))
 	var death_weight: Dictionary = _cards["views"][0]["state"].duplicate(true)
 	death_weight["deathWeight"] = true
 	assert_true(str(Cards.choose(death_weight, _cards["tables"], int(death_weight["cards"][0]["uid"]), 0).get("_turn_port_error", "")).begins_with("F-NOT-PORTED"), "deathWeight")

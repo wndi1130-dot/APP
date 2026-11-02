@@ -11,6 +11,7 @@ const Fonts = preload("res://game/ui/ui_fonts.gd")
 const Flow = preload("res://game/slice_flow.gd")
 const TurnCard = preload("res://game/ui/turn_card.gd")
 const Grid = preload("res://game/train/decor_grid.gd")
+const PaneMotion = preload("res://game/ui/pane_motion.gd")
 
 class PickScene extends Node:
 	var pick: Dictionary = {}
@@ -438,7 +439,7 @@ func test_legacy_wall_without_a_rule_slot_returns_its_exact_value() -> void:
 	assert_eq(Decor.read_store(g)["painting"]["n"], 1)
 	assert_eq(Decor.oldest(Decor.read_store(g)["painting"])["v"], 0.75)
 	assert_eq(g["lux"], 50.75)
-	assert_eq(ui.note_text, "놓을 자리가 없어 창고로 옮겼어요.")
+	assert_eq(ui.note_text, "놓을 자리가 없어 창고로 옮겼다.")
 	ui.show_car(g, "guard", ui.train)
 	assert_eq(g["lux"], 50.75, "opening again does not refund twice")
 
@@ -640,13 +641,17 @@ func test_leaving_decor_refreshes_both_lux_locks_and_keeps_fold_and_uid() -> voi
 	flow.leave_decor()
 	assert_true(card.folded)
 	assert_eq(card.uid, _lux_uid(g))
+	# The folded paper is refilled as it opens (turn_card set_folded), not under the fold.
+	card.set_folded(false)
 	assert_ne(_lux_key(card).tooltip_text, "")
+	card.set_folded(true)
 	assert_true(flow.open_decor("guard"))
 	flow.decor_pane.pick_up(1)
 	flow.decor_pane.return_selected()
 	flow.leave_decor()
 	assert_true(card.folded)
 	assert_eq(card.uid, _lux_uid(g))
+	card.set_folded(false)
 	assert_eq(_lux_key(card).tooltip_text, "")
 	await wait_process_frames(1)
 
@@ -741,7 +746,8 @@ func test_selected_plate_toggles_off_for_common_and_ordinary_cars() -> void:
 			event.pressed = false
 			flow._plate_input(event, id)
 			assert_eq(flow.sel, expected)
-			assert_eq(flow.pane.visible, expected != "")
+			# Shut at once; the pane itself slides off before it hides (pane_motion.gd).
+			assert_eq(PaneMotion.shown(flow.pane), expected != "")
 		flow._process(0.0)
 		var shown: int = 0
 		for plate: Control in flow.plates.get_children():

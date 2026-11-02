@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 const Captain = preload("res://game/train/train_captain.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const Hud = preload("res://game/ui/field_hud.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
 
 const THREE_WOUNDS: Array = [
@@ -216,12 +217,14 @@ func test_the_board_shows_the_rules_captain() -> void:
 	add_child_autofree(board)
 	var d := Rules.load_default()
 	board.show_captain(d["captain"], d["cars"])
-	assert_eq(board.line_label.text, "열차장실 · 멀쩡함")
-	assert_eq(board.weapon_label.text, "무기 · 손도끼")
-	assert_eq(board.tool_label.text, "도구 · 없음")
+	assert_eq(board.line_label.text.replace(UiFonts.WORD_JOINER, ""), "열차장실 · 멀쩡함")
+	assert_eq(board.weapon_label.text.replace(UiFonts.WORD_JOINER, ""), "무기 · 손도끼")
+	assert_eq(board.tool_label.text.replace(UiFonts.WORD_JOINER, ""), "도구 · 없음")
+	assert_eq(board.tool_label.get_theme_color("font_color"), Hud.DIM, "an empty hand stays dim through the word joiners")
+	assert_eq(board.weapon_label.get_theme_color("font_color"), Hud.INK)
 	assert_true(board.wound_lines.is_empty())
 	assert_eq(board.wound_box.get_child_count(), 1)
-	assert_eq((board.wound_box.get_child(0) as Label).text, "상처 없음")
+	assert_eq((board.wound_box.get_child(0) as Label).text.replace(UiFonts.WORD_JOINER, ""), "상처 없음")
 
 
 func test_the_board_lists_the_wounds_one_a_line() -> void:

@@ -18,6 +18,7 @@ const EPS = 1e-12;
 
 // [도구, 인자, 그 도구가 쓰는 표본(저장소 뿌리 기준)]
 const TOOLS: [string, string[], string[]][] = [
+  ['stranded_port_fixtures', [], [`${TRAIN}/stranded_vectors.json`, `${TRAIN}/stranded_content_vectors.json`]],
   ['content_port', [], ['s2/game/train/content_events.json', `${TRAIN}/turn_vectors_eventpack.json`, `${TRAIN}/content_vectors.json`]],
   ['card_view_fixtures', [], [`${TRAIN}/card_vectors.json`]],
   ['deal_port_fixtures', [], [`${TRAIN}/deal_vectors.json`]],
@@ -76,14 +77,18 @@ async function main(): Promise<void> {
   for (const [, , outs] of TOOLS) for (const f of outs) before.set(f, text(f));
   const t0 = Date.now();
   const results: { code: number; log: string; s: number }[] = new Array(TOOLS.length);
+  // Stranded inputs read slice_start.json; generate them after its owning tool completes.
+  const stranded = TOOLS.findIndex(([tool]) => tool === 'stranded_port_fixtures');
   let next = 0;
   const lane = async (): Promise<void> => {
     while (next < TOOLS.length) {
       const i = next++;
+      if (i === stranded) continue;
       results[i] = await run(TOOLS[i][0], TOOLS[i][1]);
     }
   };
   await Promise.all(Array.from({ length: Math.min(availableParallelism(), TOOLS.length) }, lane));
+  results[stranded] = await run(TOOLS[stranded][0], TOOLS[stranded][1]);
   let bad = 0;
   TOOLS.forEach(([tool, args], i) => {
     const r = results[i];

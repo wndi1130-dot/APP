@@ -22,6 +22,10 @@ static func _diff(before: Variant, after: Variant) -> String:
 
 
 static func second_station_reached(g: Dictionary) -> bool:
+	if g.get("campaign") is Dictionary and g["campaign"].get("mode") == "campaign":
+		var visit: Dictionary = g["campaign"].get("visit", {})
+		var campaign_stop: Variant = g.get("stop")
+		return visit.get("result") in ["returned", "passed"] and g.get("phase") == "stop" and int(g.get("seg", 0)) > int(visit.get("seg", 0)) and campaign_stop is Dictionary and not bool(campaign_stop.get("done", false))
 	var field_returns: Variant = g.get("fieldReturns")
 	if not field_returns is Dictionary or (field_returns.get("records", []) as Array).is_empty():
 		return false
@@ -31,6 +35,9 @@ static func second_station_reached(g: Dictionary) -> bool:
 
 
 static func arrival_summary(g: Dictionary, t: Dictionary) -> Variant:
+	if g.get("campaign") is Dictionary and g["campaign"].get("mode") == "campaign" and g["campaign"].get("visit", {}).get("result") == "passed":
+		return [{"k": "arrive", "title": "둘째 역", "lines": ["구벤에 닿았다."]},
+			{"k": "people", "title": "지나친 정차", "lines": ["이전 정차는 지나쳤다. 귀환 영수증과 특별 회기는 없다."]}]
 	var field_returns: Variant = g.get("fieldReturns")
 	if not field_returns is Dictionary or (field_returns.get("records", []) as Array).is_empty():
 		return null
@@ -95,15 +102,40 @@ static func arrival_summary(g: Dictionary, t: Dictionary) -> Variant:
 	return out
 
 
+## Who did not come back from the first stop: the dead and those left in the field
+## (left behind or missing), each once — counted, never named (결정 147·183). A
+## record from before leftCount counts its left again from the receipt kept in
+## applied, as the return did (left behind or missing, not dead); failing that,
+## only the dead. s1 field_arrival.ts notBack the same.
+static func not_back(g: Dictionary, rec: Dictionary) -> int:
+	var dead: int = (rec["dead"] as Array).size()
+	if rec.has("leftCount"):
+		return dead + int(rec["leftCount"])
+	var applied: Variant = g["fieldReturns"].get("applied")
+	var kept: Variant = (applied as Dictionary).get(rec.get("receiptId", ""), "") if applied is Dictionary else ""
+	var json := JSON.new()
+	if not kept is String or String(kept).is_empty() or json.parse(kept) != OK or not json.data is Dictionary or not json.data.get("people") is Dictionary:
+		return dead
+	var people: Dictionary = json.data["people"]
+	var gone: Array = people.get("dead", []) if people.get("dead") is Array else []
+	var left := {}
+	for key: String in ["leftBehind", "missing"]:
+		if people.get(key) is Array:
+			for id: Variant in people[key]:
+				if id is String and not gone.has(id):
+					left[id] = true
+	return dead + left.size()
+
+
 static func end_card(g: Dictionary) -> Dictionary:
 	var lost := 0
 	if g.get("fieldReturns") is Dictionary and not (g["fieldReturns"].get("records", []) as Array).is_empty():
-		lost = (g["fieldReturns"]["records"][0]["dead"] as Array).size()
+		lost = not_back(g, g["fieldReturns"]["records"][0])
 	return {
 		"title": "여기까지",
 		"lines": [
 			"첫 정차 한 번이 열차를 이만큼 바꿨다.",
-			"%d명은 그 역에 남았다." % lost if lost > 0 else "나간 사람은 모두 열차로 돌아왔다.",
+			"%d명이 돌아오지 못했다." % lost if lost > 0 else "나간 사람은 모두 열차로 돌아왔다.",
 			"이 시험판은 둘째 역에서 멈춘다.",
 		],
 	}

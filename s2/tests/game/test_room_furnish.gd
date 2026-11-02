@@ -124,7 +124,7 @@ func test_the_first_stop_keeps_its_own_cells() -> void:
 ## 벽 속에 없고, 문 안쪽 두 칸은 걸어서 지나간다. 지하에는 살림방·부엌·거실 묶음이 없다.
 func test_every_map_keeps_every_box_reachable_from_the_train() -> void:
 	var hatches := 0
-	for id in FieldMaps.ids():
+	for id in FieldMaps.all_ids():
 		if id == FieldMaps.DEFAULT_PLACE:
 			continue
 		var d := FieldMaps.build(id)

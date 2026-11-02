@@ -58,7 +58,7 @@ static func advance(g: Dictionary, t: Dictionary) -> Dictionary:
 			return Settle.settle(g, t)
 		"settle":
 			if Turn.next_segment_covers(g, t): return Turn.next_segment(g, t)
-			return _unported(g, "nextSegment: terminal/stranded/decree expiry")
+			return _unported(g, "nextSegment: terminal/decree expiry")
 		"prep": return Travel.depart(g, t)
 		"travel": return Travel.run_travel(g, t, after_stop)
 	return g.duplicate(true)
@@ -81,7 +81,9 @@ static func after_stop(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var g: Dictionary = g0.duplicate(true)
 	_stranger_corpse(g, t)
 	if not due or bool(stranded.get("captainAway", false)):
-		if due: g["councilOwed"] = true
+		if due:
+			if not bool(g.get("councilOwed", false)): load("res://game/train/turn/turn_common.gd").journal(g, "열차장이 돌아오면 회기를 연다.")
+			g["councilOwed"] = true
 		var settled: Dictionary = Settle.settle(g, t)
 		return _unported(g0, str(settled["_turn_port_error"]).trim_prefix("F-NOT-PORTED: ")) if settled.has("_turn_port_error") else settled
 	g["councilOwed"] = false

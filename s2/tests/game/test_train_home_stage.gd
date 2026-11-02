@@ -115,6 +115,7 @@ func test_a_stage_change_redresses_only_that_car_in_both_directions() -> void:
 		var before: Dictionary = _ids(s)
 		s.rules["train"]["home"]["guard"] = stage
 		s.apply_rules()
+		s.finish_restage_now()
 		assert_eq(s.get_instance_id(), scene_id, "the train scene stays open")
 		var after: Dictionary = _ids(s)
 		for id: String in after:
@@ -162,6 +163,7 @@ func test_a_restaged_car_keeps_its_room_traces() -> void:
 		var room_before: int = (s.life.rooms["tail1"].root as Node3D).get_instance_id()
 		s.rules["train"]["home"]["tail1"] = stage
 		s.apply_rules()
+		s.finish_restage_now()
 		var room = s.life.rooms["tail1"]
 		assert_ne((room.root as Node3D).get_instance_id(), room_before, "tail1 stage %d: dressed again" % stage)
 		assert_true(bool(room.traces["sacks"]["overturned"]), "tail1 stage %d: the sacks stay overturned" % stage)
@@ -191,6 +193,7 @@ func test_furnishing_a_car_shows_its_new_stage_when_decorating_ends() -> void:
 	assert_eq(tier, 1, "a chair and a table make the first stage")
 	var before: Dictionary = _ids(f.train)
 	f.leave_decor()
+	f.train.finish_restage_now()
 	var c: Dictionary = f.train.car("guard")
 	assert_eq(int(c["home_stage"]), tier, "the car shows its new stage on leaving")
 	var daytime: String = TrainLight.daytime_of(f.train.rules.get("view", {}))

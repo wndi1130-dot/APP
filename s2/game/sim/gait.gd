@@ -55,6 +55,19 @@ const STRIDE: Vector2 = Vector2(0.98, 1.02)
 const POSTURE: Vector2 = Vector2(0.0, 0.06)
 const RUN_POSTURE: float = 1.3
 const POSTURE_EASE: float = 4.0
+## Shared ground-speed gait; shorter than the drawing's 0.3 s stand filter.
+const GROUND_RUN: String = "ground_run"
+const RUN_TAU: float = 0.15
+const RUN_ON: float = 1.15
+const RUN_OFF: float = 1.05
+const BACKWARD_DEG: float = 100.0
+
+
+## Both stick and path movement sign the shared round against the drawn body.
+static func signed_distance(p: Variant, ground: Vector3) -> float:
+	var gone: float = ground.length()
+	var forward := Vector3(sin(p.rotation.y), 0.0, cos(p.rotation.y))
+	return -gone if ground.dot(forward) < gone * cos(deg_to_rad(BACKWARD_DEG)) else gone
 
 
 ## "long" (a two-handed gun), "pistol" (a one-handed gun), "axe" (a heavy
@@ -84,6 +97,36 @@ static func runs(p) -> bool:
 	return p.running and not p.crouched and p.load_lets_run() and p.body.can_run()
 
 
+## Read by both the drawn gait and the footstep round.
+static func ground_runs(p: Variant) -> bool:
+	var state: Dictionary = p.brain.get(GROUND_RUN, {})
+	return bool(state.get("running", false))
+
+
+## Sample the travelled ground distance once per simulation tick.
+static func update_ground_run(p: Variant, gone: float, delta: float, floor_kind: int) -> void:
+	var state: Dictionary = p.brain.get(GROUND_RUN, {})
+	var speed: float = float(state.get("speed", 0.0))
+	if not is_finite(speed) or speed < 0.0:
+		speed = 0.0
+	if is_finite(delta) and delta > 0.0:
+		var sample: float = absf(gone) / delta if is_finite(gone) else 0.0
+		if not is_finite(sample):
+			sample = 0.0
+		speed = lerpf(speed, sample, 1.0 - exp(-delta / RUN_TAU))
+		if not is_finite(speed):
+			speed = 0.0
+	var walking_speed: float = p.walk_speed(floor_kind)
+	var running: bool = bool(state.get("running", false))
+	if not runs(p) or not is_finite(walking_speed) or walking_speed <= 0.0:
+		running = false
+	elif speed >= walking_speed * RUN_ON:
+		running = true
+	elif speed <= walking_speed * RUN_OFF:
+		running = false
+	p.brain[GROUND_RUN] = {"speed": speed, "running": running}
+
+
 ## Reeling on its feet: spent, or bleeding hard (body_state.gd bleed_level 2,
 ## where the rules slow the walk and the body goes down in two minutes), and not
 ## running or crouched. Walking, a leg that limps shows its limp instead
@@ -97,6 +140,8 @@ static func reels(p) -> bool:
 ## aimed their own way), an arm too hurt to hold a weapon up, or the arms full
 ## (something big, or someone carried).
 static func ready_name(p) -> String:
+	if p.sled_weapon_stowed:
+		return ""
 	var wid: String = p.weapon_id()
 	if W.is_ranged(wid) or bool(p.mults()["one_hand"]) or p.carrying_wounded != null or Carry.has_big(p.items):
 		return ""
@@ -115,6 +160,8 @@ static func threatened(field, p) -> bool:
 
 ## The walk (or the run) for what is in the hand, "" for the plain one.
 static func gait_name(p, running: bool) -> String:
+	if p.sled_id != 0:
+		return CARRY_BIG
 	if weak_hold(p):
 		return ""
 	return String((RUN if running else WALK).get(kind_of(p.weapon_id()), ""))
@@ -123,6 +170,8 @@ static func gait_name(p, running: bool) -> String:
 ## Crouched, the walk (or the stand) for what is in the hand, "" for the plain
 ## one; a long weapon held in one hand (weak_hold) crouches the plain way too.
 static func crouch_name(p, walking: bool) -> String:
+	if p.sled_id != 0:
+		return CARRY_BIG
 	if weak_hold(p):
 		return ""
 	return String((CROUCH_WALK if walking else CROUCH_STAND).get(kind_of(p.weapon_id()), ""))
@@ -135,7 +184,7 @@ static func crouch_name(p, walking: bool) -> String:
 ## hard keeps the reel: the field camera barely tells the hurt walk from a walk,
 ## and that body goes down in two minutes. "" with neither.
 static func burden_name(p, shown: float) -> String:
-	if Carry.has_big(p.items):
+	if p.sled_id != 0 or Carry.has_big(p.items):
 		return CARRY_BIG
 	if p.body.torso_effort() - 1.0 >= shown:
 		return WALK_HURT

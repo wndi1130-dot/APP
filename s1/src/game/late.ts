@@ -124,7 +124,7 @@ export function lateLog(g: Game, card: Card): string {
   switch (lateKind(card)) {
     case 'demand': return `${comm}의 요구를 끝내 미뤘다. 답을 기다리던 ${comm}이(가) 등을 돌렸다.`;
     case 'favor': return `${name}의 부탁을 끝내 미뤘다. ${name}은(는) 다시 부탁하러 오지 않았다.`;
-    case 'promise_ledger': return `${comm}이(가) 내민 장부를 끝내 펼치지 않았다. ${comm}은(는) 그것을 물리친 것으로 기억한다.`;
+    case 'promise_ledger': return `${comm}이(가) 내민 장부를 끝내 펼치지 않았다. ${comm}은(는) 장부를 물리친 일로 기억한다.`;
     case 'ration_cut': return '감축 배급의 예외를 끝내 정하지 않았다. 꼬리칸 그릇부터 비었다.';
     case 'front_curtain': return '커튼 일을 끝내 미뤘다. 꼬리칸은 걸린 커튼을 열차장의 답으로 들었다.';
     default: return '';

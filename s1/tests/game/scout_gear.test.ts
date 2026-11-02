@@ -40,7 +40,7 @@ describe('scout_gear', () => {
     expect(fateOf(b)).toEqual(fateOf(a));
     expect([b.stop!.noise, b.stop!.scoutGear]).toEqual([undefined, undefined]);
     expect(scoutHaulNow(b.stop!)).toBe(P.scoutHaul);
-    // 켠 판에는 r4·w4와 핸드카 갈래가 있다
+    // 켠 판에는 r4·w4와 수동차 갈래가 있다
     expect(techVariants(b, 'x2')).toBeDefined();
     expect(techShown(b, 'w4')).toBe(true);
   });
@@ -115,7 +115,7 @@ describe('scout_gear', () => {
       expect(p.noise, String(threat)).toBe(threat === 0.8 ? 1 : 0);
       expect(p.risk).toBe(1);
     }
-    // 변형이 없는 옛 저장의 핸드카는 페달로 읽는다
+    // 변형이 없는 옛 저장의 수동차는 페달로 읽는다
     const old = mk('sg-6-old', [['x2', undefined]]);
     expect(gearOwned(old).pedal).toBeGreaterThan(0);
   });

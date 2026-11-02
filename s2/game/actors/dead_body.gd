@@ -18,6 +18,7 @@ const FOLDER: String = "user://dead_body"
 const BUILT_IN: String = "res://models/people/n3-body_tracksuit"
 const BUILT_IN_SETTING: String = "visuals/baked_dead_enabled"
 const ALBEDO_FILE: String = "albedo.png"     # a baked folder's colour picture, when it has one
+const SKIN_FILE: String = "skin_mask.png"    # which of that picture is skin (the dead's bodies)
 # Motion numbers, in the order body_bake.gd bakes them.
 const WALKS: int = 3                          # 0, 1, 2: three ways of walking
 const STAND: int = 3
@@ -143,6 +144,10 @@ static func with_albedo(got: Dictionary, dir: String) -> Dictionary:
 	var path := dir.path_join(ALBEDO_FILE)
 	if not got.is_empty() and ResourceLoader.exists(path):
 		got["albedo"] = load(path)
+		# Which of it is skin, for the dead's bodies (tools/dead_skin_mask.py): only that takes the dead's look.
+		var skin := dir.path_join(SKIN_FILE)
+		if ResourceLoader.exists(skin):
+			got["skin"] = load(skin)
 	return got
 
 

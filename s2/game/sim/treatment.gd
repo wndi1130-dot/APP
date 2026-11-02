@@ -174,7 +174,7 @@ static func steps_text(steps: Array) -> String:
 	for s: Dictionary in steps:
 		match s["state"]:
 			DONE:
-				parts.append("%s 함" % s["label"])
+				parts.append("%s 끝" % s["label"])
 			MISSING:
 				parts.append("%s (%s)" % [s["label"], s["need"]])
 			_:

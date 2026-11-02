@@ -5,6 +5,8 @@ const Person = preload("res://game/actors/person.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
+const Gait = preload("res://game/sim/gait.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 
 
 func _person() -> Node3D:
@@ -47,8 +49,13 @@ func test_the_motion_follows_what_the_person_is_doing() -> void:
 	p.position += Vector3(0.3, 0, 0)
 	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, []).y), 0)
 	p.running = true
-	p.position += Vector3(0.3, 0, 0)
-	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, []).y), DeadBody.RUN)
+	var run_motion: Vector2 = Vector2.ZERO
+	for _tick: int in range(6):
+		p.position += Vector3(0.3, 0.0, 0.0)
+		Gait.update_ground_run(p, 0.3, 0.1, FieldGrid.Floor.SNOW)
+		run_motion = PersonVisual.motion_of(p, note, 0.1, [])
+	assert_true(Gait.ground_runs(p))
+	assert_eq(int(run_motion.y), DeadBody.RUN)
 	# Knocked down it lies on its face; dead, on its back.
 	p.body.downed = true
 	assert_eq(int(PersonVisual.motion_of(p, note, 0.1, []).y), DeadBody.FALL_FRONT)
@@ -149,11 +156,17 @@ func test_the_living_walk_run_stand_and_crouch_in_their_own_motions() -> void:
 	p.position += Vector3(0.3, 0, 0)
 	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_WALK)
 	p.running = true
-	p.position += Vector3(0.3, 0, 0)
-	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_RUN)
+	var run_motion: Vector2 = Vector2.ZERO
+	for _tick: int in range(6):
+		p.position += Vector3(0.3, 0.0, 0.0)
+		Gait.update_ground_run(p, 0.3, 0.1, FieldGrid.Floor.SNOW)
+		run_motion = PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_true(Gait.ground_runs(p))
+	assert_eq(_named(own, run_motion), PersonVisual.OWN_RUN)
 	p.running = false
 	p.crouched = true
 	p.position += Vector3(0.3, 0, 0)
+	Gait.update_ground_run(p, 0.3, 0.1, FieldGrid.Floor.SNOW)
 	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CROUCH_WALK)
 	PersonVisual.motion_of(p, note, 0.3, [], own)
 	assert_eq(_named(own, PersonVisual.motion_of(p, note, 0.1, [], own)), PersonVisual.OWN_CROUCH_STAND)

@@ -1367,7 +1367,7 @@ func _meter_why(key: String) -> Control:
 	scroll.add_child(lines)
 	var height: float = 14.0 * k
 	for i in texts.size():
-		var label := _label(String(texts[i]), UiFonts.NUMBER, 600 if i == 0 else 500, 12.0, WHY_INK, 0.48)
+		var label := _label(UiFonts.keep_all(String(texts[i])), UiFonts.NUMBER, 600 if i == 0 else 500, 12.0, WHY_INK, 0.48)
 		label.name = "Head" if i == 0 else "Cause_" + String(m["rows"][i - 1]["why"])
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		label.size.x = maxf(1.0, width - 38.0 * k)

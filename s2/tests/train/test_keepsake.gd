@@ -40,7 +40,7 @@ func test_the_coat_and_boots_read_s1_s_words() -> void:
 	var v: Dictionary = CardText.view(g, _data["tables"], g["cards"][0])
 	assert_eq(v["title"], "외투와 장화")
 	assert_eq(v["focus"], "guard")
-	assert_string_starts_with(String(v["body"]), "%s의 외투와 장화가 남았다. 칸 사람들은 그를 '%s'" % [p["name"], p["like"]])
+	assert_string_starts_with(String(v["body"]), "%s의 외투와 장화가 남았다. 칸 사람들은 '%s'" % [p["name"], p["like"]])
 	assert_string_ends_with(String(v["body"]), "좋아하던 사람으로 기억한다. 누가 입을지 칸이 묻는다.")
 	var labels: Array = (v["choices"] as Array).map(func(c: Dictionary) -> String: return String(c["label"]))
 	assert_eq(labels, ["그 칸에 나눈다", "꼬리칸에 보낸다", "함께 보낸다"])

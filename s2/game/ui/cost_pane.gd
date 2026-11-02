@@ -13,6 +13,7 @@ extends Control
 
 signal folded
 
+const RowKeep = preload("res://game/ui/row_keep.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
@@ -52,6 +53,7 @@ var which: String = "coal"
 var g: Dictionary = {}
 var t: Dictionary = {}
 var _parts: Control
+var _into: Control = null
 
 
 ## What the pane says for `key` in state `g0` (tests read this; the pane draws
@@ -166,30 +168,74 @@ func show_state(g0: Dictionary, t0: Dictionary) -> void:
 func _draw_all() -> void:
 	if _parts == null:
 		return
-	for c in _parts.get_children():
-		_parts.remove_child(c)
-		c.queue_free()
 	var m: Dictionary = model(g, t, which)
+	_parts.visible = not m.is_empty()
 	if m.is_empty():
 		return
+	RowKeep.begin(_parts)
 	_head(m)
 	_heads()
-	var y: float = ROW_TOP
-	_line(TOTAL, "Total", float(m["now"]), m["last"], y, INK, 500)
-	_add(_rule(y + 8.0))
-	y += ROW_H + 4.0
-	for r: Dictionary in m["rows"]:
-		_line(String(r["word"]), "Row_" + String(r["why"]), float(r["now"]), r["last"], y, INK2, 400)
+	var ids: Array = ["total"]
+	var rows: Dictionary = {"total": {"word": TOTAL, "key": "Total", "now": float(m["now"]), "last": m["last"],
+		"base": ROW_TOP, "color": INK, "weight": 500}}
+	var y: float = ROW_TOP + ROW_H + 4.0
+	for data: Dictionary in m["rows"]:
+		var id: String = "why_" + String(data["why"])
+		ids.append(id)
+		rows[id] = {"word": String(data["word"]), "key": "Row_" + String(data["why"]), "now": float(data["now"]),
+			"last": data["last"], "base": y, "color": INK2, "weight": 400}
 		y += ROW_H
-		if r.has("saved"):
-			_line(SAVED, "Saved", float(r["saved"]), null, y, INK3, 400, 14.0, true)
+		if data.has("saved"):
+			var saved_id: String = "saved_" + String(data["why"])
+			ids.append(saved_id)
+			rows[saved_id] = {"word": SAVED, "key": "Saved", "now": float(data["saved"]), "last": null,
+				"base": y, "color": INK3, "weight": 400, "indent": 14.0, "no_last": true}
 			y += ROW_H
 	if m["rest"] != null:
-		_line(REST, "Rest", 0.0, m["rest"], y, INK3, 400, 0.0, false, true)
+		ids.append("rest")
+		rows["rest"] = {"word": REST, "key": "Rest", "now": 0.0, "last": m["rest"],
+			"base": y, "color": INK3, "weight": 400, "no_now": true}
+		y += ROW_H
+	var k: float = UiFonts.K
+	var top: float = ROW_TOP - 18.0
+	var fresh_scroll: bool = not _parts.has_node("List")
+	var s: ScrollContainer = RowKeep.part(_parts, "List", func() -> Control: return ScrollContainer.new()) as ScrollContainer
+	var saved: int = s.scroll_vertical
+	if fresh_scroll:
+		s.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		s.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+		RowKeep.pass_mouse(s)
+		s.position = Vector2(0.0, top) * k
+		s.size = Vector2(CSS_SIZE.x, CSS_SIZE.y - top) * k
+	var list: Control = RowKeep.part(s, "Rows", func() -> Control: return Control.new())
+	RowKeep.pass_mouse(list)
+	list.custom_minimum_size = Vector2(CSS_SIZE.x, y - top) * k
+	RowKeep.sync(list, ids, func(_id: String) -> Control:
+		var row := Control.new()
+		RowKeep.pass_mouse(row)
+		row.size = Vector2(CSS_SIZE.x, ROW_H) * k
+		return row,
+		func(row: Control, id: String, _index: int) -> void:
+			var data: Dictionary = rows[id]
+			row.position = Vector2(0.0, float(data["base"]) - ROW_TOP) * k
+			_into = row
+			RowKeep.begin(row)
+			_line(String(data["word"]), String(data["key"]), float(data["now"]), data["last"], 18.0,
+				data["color"], int(data["weight"]), float(data.get("indent", 0.0)), bool(data.get("no_last", false)), bool(data.get("no_now", false)))
+			if id == "total":
+				_add(_rule(26.0))
+			RowKeep.finish(row)
+			_into = null)
+	RowKeep.restore_scroll(s, saved)
+	RowKeep.finish(_parts)
 
 
 func _add(c: Control) -> Control:
-	_parts.add_child(c)
+	if c.get_parent() == null:
+		_host().add_child(c)
+	c.set_meta(RowKeep.USED_META, true)
+	if not c.visible:
+		c.show()
 	return c
 
 
@@ -201,18 +247,16 @@ func _text(l: Label, x_css: float, base_css: float) -> void:
 ## The stock's mark and word at the name's place, 접기 at the top right (workshop_pane.gd _head).
 func _head(m: Dictionary) -> void:
 	var k: float = UiFonts.K
-	_add(_mark(String(m["icon"]), 18.0, Vector2(18.0, 13.0)))
-	var name_l := UiFonts.label(String(m["word"]), UiFonts.WORD, 500, 18.0, INK, 2.16)
+	_add(_mark(String(m["icon"]), 18.0, Vector2(18.0, 13.0), INK2, "StockMark"))
+	var name_l := _label("Name", String(m["word"]), UiFonts.WORD, 500, 18.0, INK, 2.16)
 	name_l.name = "Name"
 	_text(name_l, 44.0, 27.0)
-	var fold := Button.new()
-	fold.name = "Fold"
-	fold.flat = true
-	fold.focus_mode = Control.FOCUS_NONE
-	for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
-		fold.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	var fold: Button = _bare("Fold")
 	fold.position = Vector2(266.0, 0.0) * k
 	fold.size = Vector2(56.0, 44.0) * k
+	if fold.has_meta("wired"):
+		return
+	fold.set_meta("wired", true)
 	fold.pressed.connect(func() -> void: folded.emit())
 	_add(fold)
 	var mark := _mark("fwd", 14.0, Vector2(36.0, 15.0))
@@ -225,7 +269,7 @@ func _head(m: Dictionary) -> void:
 ## 이번 and 지난 over their columns.
 func _heads() -> void:
 	for h: Array in [["이번", "HeadNow", NOW_X], ["지난", "HeadLast", LAST_X]]:
-		var l := UiFonts.label(String(h[0]), UiFonts.WORD, 400, 12.0, INK3, 0.24)
+		var l := _label(String(h[1]), String(h[0]), UiFonts.WORD, 400, 12.0, INK3, 0.24)
 		l.name = String(h[1])
 		_right(l, float(h[2]), 58.0)
 
@@ -234,11 +278,11 @@ func _heads() -> void:
 ## `last` null draws 「–」 for the total and nothing for a row.
 func _line(word: String, key_name: String, now: float, last: Variant, base: float, color: Color, weight: int,
 		indent: float = 0.0, no_last: bool = false, no_now: bool = false) -> void:
-	var w := UiFonts.label(word, UiFonts.WORD, weight, 13.0, color, 0.52)
+	var w := _label(key_name, word, UiFonts.WORD, weight, 13.0, color, 0.52)
 	w.name = key_name
 	_text(w, 44.0 + indent, base)
 	if not no_now:
-		var n := UiFonts.label(signed(now), UiFonts.NUMBER, weight, 13.0, color, 0.195)
+		var n := _label(key_name + "_now", signed(now), UiFonts.NUMBER, weight, 13.0, color, 0.195)
 		n.name = key_name + "_now"
 		_right(n, NOW_X, base)
 	if no_last:
@@ -246,7 +290,7 @@ func _line(word: String, key_name: String, now: float, last: Variant, base: floa
 	var text: String = signed(float(last)) if last != null else (NONE if key_name == "Total" else "")
 	if text == "":
 		return
-	var l := UiFonts.label(text, UiFonts.NUMBER, weight, 13.0, color, 0.195)
+	var l := _label(key_name + "_last", text, UiFonts.NUMBER, weight, 13.0, color, 0.195)
 	l.name = key_name + "_last"
 	_right(l, LAST_X, base)
 
@@ -258,25 +302,26 @@ func _right(l: Label, x_css: float, base_css: float) -> void:
 
 func _rule(base: float) -> Control:
 	var k: float = UiFonts.K
-	var r := Control.new()
-	r.name = "Rule"
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	r.position = Vector2(44.0, base) * k
-	r.size = Vector2(LAST_X - 44.0, 1.0) * k
-	r.draw.connect(func() -> void: r.draw_line(Vector2.ZERO, Vector2(r.size.x, 0), HAIR, 1.0 * k, true))
-	return r
+	var rule: Control = RowKeep.part(_host(), "Rule", func() -> Control: return Control.new())
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rule.position = Vector2(44.0, base) * k
+	rule.size = Vector2(LAST_X - 44.0, 1.0) * k
+	if not rule.has_meta("wired"):
+		rule.set_meta("wired", true)
+		rule.draw.connect(func() -> void: rule.draw_line(Vector2.ZERO, Vector2(rule.size.x, 0), HAIR, 1.0 * k, true))
+	return rule
 
 
-func _mark(icon: String, css: float, at: Vector2, color: Color = INK2) -> TextureRect:
-	var tr := TextureRect.new()
-	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+func _mark(icon: String, css: float, at: Vector2, color: Color = INK2, key_name: String = "") -> TextureRect:
+	var mark: TextureRect = TextureRect.new() if key_name == "" else RowKeep.part(_host(), key_name, func() -> Control: return TextureRect.new()) as TextureRect
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var px: int = int(round(css * UiFonts.K))
-	tr.texture = HudIcons.texture(icon, px, color, 2.0, SOOT_CUT)
-	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tr.size = Vector2(px, px)
-	tr.position = at * UiFonts.K
-	return tr
+	mark.texture = HudIcons.texture(icon, px, color, 2.0, SOOT_CUT) if icon != "" else null
+	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mark.size = Vector2(px, px)
+	mark.position = at * UiFonts.K
+	return mark
 
 
 ## −4, +0.5 or 0, with one decimal at most.
@@ -286,3 +331,26 @@ static func signed(v: float) -> String:
 		return "0"
 	var a: float = absf(r)
 	return ("−" if r < 0.0 else "+") + (str(int(a)) if is_equal_approx(a, roundf(a)) else "%.1f" % a)
+
+
+
+func _host() -> Control:
+	return _into if _into != null else _parts
+
+
+func _label(key_name: String, word: String, kind: int, weight: int, css: float, color: Color, spacing: float = 0.0) -> Label:
+	var lab: Label = RowKeep.part(_host(), key_name, func() -> Control:
+		return UiFonts.label("", kind, weight, css, color, spacing)) as Label
+	lab.text = word
+	lab.add_theme_color_override("font_color", color)
+	return lab
+
+
+func _bare(key_name: String) -> Button:
+	return RowKeep.part(_host(), key_name, func() -> Control:
+		var b := Button.new()
+		b.flat = true
+		b.focus_mode = Control.FOCUS_NONE
+		for state: String in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
+			b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+		return b) as Button

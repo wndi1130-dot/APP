@@ -13,6 +13,7 @@ const W = preload("res://game/sim/weapons.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Gait = preload("res://game/sim/gait.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 
 var game
 var p
@@ -136,11 +137,47 @@ func test_a_crawler_bites_later_and_none_bite_one_just_seen() -> void:
 		game.zombies.list.erase(z)
 
 
+## Every body the living are drawn in goes round with the footsteps (decision 425):
+## each walk, run and crouched walk that follows the footsteps (person_visual.gd
+## is_stepped) in every living body folder covers the rules' round within half a
+## percent, so the planted foot does not slide whichever body or fallback the
+## graphics settings pick (body_cast.gd), and the rules stay the one measure.
+func test_every_living_body_goes_round_with_the_footsteps() -> void:
+	var root := "res://models/people"
+	var folders := 0
+	for dir_name: String in DirAccess.get_directories_at(root):
+		if not dir_name.ends_with("_p"):
+			continue
+		var info: Variant = JSON.parse_string(FileAccess.get_file_as_string(root.path_join(dir_name).path_join("clips.json")))
+		assert_true(info is Dictionary, dir_name + ": its clips can be read")
+		if not info is Dictionary:
+			continue
+		folders += 1
+		var seen := {}
+		for clip: Dictionary in info["clips"]:
+			var clip_name := String(clip["name"])
+			if not PersonVisual.is_stepped(clip_name):
+				continue
+			seen[clip_name] = true
+			var want := float(SimNoise.STEP_ROUND[_stepped_gait(clip_name)])
+			assert_almost_eq(float(clip.get("round", 0.0)), want, 0.005 * want, "%s %s: the round is the footsteps' %.2f m" % [dir_name, clip_name, want])
+		for must: String in [PersonVisual.OWN_WALK, PersonVisual.OWN_RUN, PersonVisual.OWN_CROUCH_WALK]:
+			assert_true(seen.has(must), dir_name + ": has " + must)
+	assert_gt(folders, 0, "the living's body folders are found")
+
+
+## The footsteps' round a stepped clip goes by (field_game.gd steps_in): the runs
+## at the run's, the crouched walks at the crouched walk's, the rest at the walk's.
+func _stepped_gait(clip_name: String) -> String:
+	if clip_name == PersonVisual.OWN_RUN or Gait.RUN.values().has(clip_name):
+		return "run"
+	if clip_name == PersonVisual.OWN_CROUCH_WALK or Gait.CROUCH_WALK.values().has(clip_name):
+		return "crouch"
+	return "walk"
+
+
 func test_footsteps_go_by_the_walk_and_the_drawn_feet_with_them() -> void:
 	var own: Array = BodyBake.load_baked(PersonVisual.OWN_FOLDER).get("clips", [])
-	for gait in [["walk", "p_walk"], ["run", "p_run"], ["crouch", "p_crouch_walk"]]:
-		var n := PersonVisual.clip_named(own, String(gait[1]), -1)
-		assert_almost_eq(float(SimNoise.STEP_ROUND[gait[0]]), float(own[n]["round"]), 0.01 * float(own[n]["round"]), String(gait[0]) + ": the round is the drawn one")
 	# From the start of the round, at this person's own stride (decision 423 card 3).
 	p.brain["step_r"] = 0.0
 	var walk: float = float(SimNoise.STEP_ROUND["walk"]) * Gait.stride(p)
@@ -150,12 +187,17 @@ func test_footsteps_go_by_the_walk_and_the_drawn_feet_with_them() -> void:
 	assert_eq(game.steps_in(p, walk * 1.0), 2, "two to a round")
 	p.running = true
 	p.moving = true
+	var floor_kind: int = game.grid.floor_at(FieldGrid.cell_of(p.position))
+	Gait.update_ground_run(p, p.speed(floor_kind), 1.0, floor_kind)
+	assert_true(Gait.ground_runs(p), "a measured run uses the run round")
 	var before := float(p.brain["step_r"])
 	game.steps_in(p, 0.5)
 	assert_almost_eq(fposmod(float(p.brain["step_r"]) - before, 1.0), 0.5 / (float(SimNoise.STEP_ROUND["run"]) * Gait.stride(p)), 0.001, "a run goes round by its own")
 	# The drawn walk is where the footsteps are (the axe in the hand: its own walk).
 	p.running = false
 	p.moving = false
+	Gait.update_ground_run(p, 0.0, 0.05, floor_kind)
+	assert_false(Gait.ground_runs(p))
 	var note := {}
 	PersonVisual.motion_of(p, note, 0.05, [], own)
 	p.position += Vector3(0.1, 0, 0)

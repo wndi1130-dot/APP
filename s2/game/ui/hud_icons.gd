@@ -178,6 +178,7 @@ const PATHS: Dictionary = {
 	"window": '<path class="t" d="M5 3h14v16H5z"/><path d="M5 3h14v16H5zM12 3v16M5 11h14M3 21h18"/>',
 	"ladder": '<path d="M8 2.5v19M16 2.5v19M8 6h8M8 10.5h8M8 15h8M8 19.5h8"/>',
 	"pickup": '<path class="t" d="M6 15h12v6H6z"/><path d="M6 15h12v6H6zM3 21h18"/><path d="M12 12V3M8.5 6.5 12 3l3.5 3.5"/>',
+	"sled": '<path d="M3 13h12M5 13v5M13 13v5M2 18h13q4 0 4-4M15 13l6-7"/>',
 	"wear": '<path class="t" d="M8 3 4 6l-1 9h3v6h12v-6h3l-1-9-4-3-4 3z"/><path d="M8 3 4 6l-1 9h3v6h12v-6h3l-1-9-4-3-4 3zM12 6v15M14.5 14h2.5"/>',
 	"unlock": '<path class="t" d="M5 11h14v10H5z"/><path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.6-1.8"/><circle class="f" cx="12" cy="15.5" r="1.4"/><path d="M12 16.5v2"/>',
 	"barricade": '<path class="t" d="M7 3h10v18H7z"/><path d="M7 3h10v18H7zM4 21h16"/><path class="f" d="M4.5 8.5 19 6l.4 2.3L4.9 10.8zM4.6 15.7 19.3 13.2l.4 2.3-14.7 2.5z"/>',
@@ -194,6 +195,7 @@ const PATHS: Dictionary = {
 ## "ends" a part of it, "has" anywhere in it. The more particular go first (문
 ## 따기 before 문). A word no rule knows shows the magnifier (a place to look at).
 const CONTEXT_ICONS: Array = [
+	["is", "썰매 엮기", "sled"], ["is", "썰매 짐", "sled"], ["is", "끈다", "sled"], ["is", "놓는다", "sled"],
 	["ends", "치료", "bandage"], ["starts", "붕대", "bandage"], ["starts", "부목", "bandage"], ["ends", "문지름", "bandage"],
 	["starts", "맨홀", "manhole"],
 	["starts", "문 따기", "unlock"], ["starts", "문 막기", "barricade"], ["starts", "문", "door"],

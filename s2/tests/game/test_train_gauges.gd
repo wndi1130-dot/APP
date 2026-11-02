@@ -483,9 +483,9 @@ func test_meter_buttons_draw_the_model_have_finger_targets_and_toggle() -> void:
 		assert_not_null(why)
 		assert_eq(why.z_index, TrainGauges.OVER_PAPERS)
 		var m: Dictionary = TrainGauges.meter_why_model(strip.g, key)
-		assert_eq((why.find_child("Head", true, false) as Label).text, m["head"])
+		assert_eq((why.find_child("Head", true, false) as Label).text.replace(UiFonts.WORD_JOINER, ""), m["head"])
 		for row: Dictionary in m["rows"]:
-			assert_eq((why.find_child("Cause_" + row["why"], true, false) as Label).text, row["text"])
+			assert_eq((why.find_child("Cause_" + row["why"], true, false) as Label).text.replace(UiFonts.WORD_JOINER, ""), row["text"])
 		await wait_process_frames(2)
 		var scroll: ScrollContainer = why.find_child("SlipScroll", true, false)
 		var lines: Control = why.find_child("SlipRows", true, false)
@@ -494,7 +494,7 @@ func test_meter_buttons_draw_the_model_have_finger_targets_and_toggle() -> void:
 		assert_null(strip.find_child("Why", true, false), "the same key folds it")
 	strip.g.erase("ledger")
 	_tap_meter(strip, "trust")
-	assert_eq((strip.find_child("Head", true, false) as Label).text, "지난 정산 뒤 바뀐 것 없음")
+	assert_eq((strip.find_child("Head", true, false) as Label).text.replace(UiFonts.WORD_JOINER, ""), "지난 정산 뒤 바뀐 것 없음")
 
 
 func test_meter_slips_share_one_place_with_the_thermometer_and_keep_focus() -> void:
@@ -509,7 +509,7 @@ func test_meter_slips_share_one_place_with_the_thermometer_and_keep_focus() -> v
 	assert_true(strip._dim("trust"))
 	assert_false(strip._dim("coal"))
 	strip.refresh(_start()[0], _start()[1])
-	assert_eq((strip.find_child("Head", true, false) as Label).text, TrainGauges.meter_why_model(strip.g, "tension")["head"])
+	assert_eq((strip.find_child("Head", true, false) as Label).text.replace(UiFonts.WORD_JOINER, ""), TrainGauges.meter_why_model(strip.g, "tension")["head"])
 	strip.g["climate"] = false
 	strip.refresh(strip.g, strip.t)
 	assert_not_null(strip.find_child("Why", true, false), "meter slips also work without a thermometer")

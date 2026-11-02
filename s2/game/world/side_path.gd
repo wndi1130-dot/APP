@@ -14,6 +14,7 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const NAME := "희귀 창고"  # loot_dress.gd RARE_STORE
@@ -51,7 +52,7 @@ static func rolls(place_id: String, run_seed: int) -> bool:
 ## 지도를 지은 뒤, 그리기 전에 한 번. 샛길이 나면 띠를 붙인 자료(같은 사전), 아니면 받은 그대로.
 static func add(data: Dictionary, run_seed: int) -> Dictionary:
 	var place := String(data.get("place_id", ""))
-	if data.has("side_path") or place in ["", FIRST_STOP] or not data.get("grid") is FieldGrid:
+	if data.has("side_path") or place in ["", FIRST_STOP] or StoryMaps.is_story(place) or not data.get("grid") is FieldGrid:
 		return data
 	var rng := _rng(place, run_seed)
 	if rng.randf() >= CHANCE:

@@ -167,7 +167,7 @@ export interface DomState {
   hung: Comm[];
   /** 이번 정차에 데려간 전문가 id */
   escort: string | null;
-  /** 핸드카 정찰(X2)의 두 번째 후보 */
+  /** 수동차 정찰(X2)의 두 번째 후보 */
   altPlace: string | null;
   /** 장거리 무전(R3)으로 바꿀 수 있는 남은 횟수 */
   reroutes: number;
@@ -463,7 +463,7 @@ export function techMult(g: Game, id: TechId): number {
   return m * knowledgeMult(g, def.branch, def.tier) * fieldMult(g, def.branch);
 }
 
-/** 이 판에서 그 기술의 변형 둘. 정찰 장비를 켜지 않은 판의 핸드카(x2)는 옛날처럼 갈래가 없다(결정 371). */
+/** 이 판에서 그 기술의 변형 둘. 정찰 장비를 켜지 않은 판의 수동차(x2)는 옛날처럼 갈래가 없다(결정 371). */
 export function techVariants(g: Game, id: TechId): TechDef['variants'] {
   return id === 'x2' && !g.gearOn ? undefined : TECHS[id].variants;
 }

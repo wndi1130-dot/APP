@@ -82,8 +82,8 @@ static func job_check(g: Dictionary, kind: String, car: String, step: Variant = 
 		var cost: Dictionary = furnish_cost(n)
 		for key: String in ["wood", "scrap", "parts", "cloth"]:
 			if float(d.get(key, 0)) < float(cost[key]):
-				var word: String = {"wood": "목재", "scrap": "고철", "parts": "부품", "cloth": "천"}[key]
-				return {"ok": false, "why": "%s %d이 든다" % [word, int(cost[key])]}
+				var word: String = {"wood": "목재가", "scrap": "고철이", "parts": "부품이", "cloth": "천이"}[key]
+				return {"ok": false, "why": "%s %d 든다" % [word, int(cost[key])]}
 		return {"ok": true}
 	if not TrainResearch.usable(g, {}, "e5"):
 		return {"ok": false, "why": "단열 개조를 아직 모른다"}
@@ -92,7 +92,7 @@ static func job_check(g: Dictionary, kind: String, car: String, step: Variant = 
 	if (d.get("insulated", []) as Array).has(car):
 		return {"ok": false, "why": "이미 단열했다"}
 	if float(d.get("wood", 0)) < float(D["insulateWood"]):
-		return {"ok": false, "why": "목재 %d이 든다" % int(D["insulateWood"])}
+		return {"ok": false, "why": "목재가 %d 든다" % int(D["insulateWood"])}
 	return {"ok": true}
 
 

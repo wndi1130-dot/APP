@@ -206,7 +206,7 @@ const TECHS: Dictionary = {
 		"branch": "med",
 		"tier": 0,
 		"name": "약초와 민간요법",
-		"effect": "모두를 치료의 의약품 소모 ×1.6 → ×1.3, 이가 병으로 번질 확률 40% → 25%",
+		"effect": "모두를 치료: 의약품 소모 ×1.6 → ×1.3, 몸니가 병을 옮길 확률 40% → 25%",
 		"adapt": {
 			"parts": 0,
 			"wood": 2
@@ -451,11 +451,11 @@ const TECHS: Dictionary = {
 		"id": "x2",
 		"branch": "expedition",
 		"tier": 2,
-		"name": "핸드카 정찰",
+		"name": "수동차 정찰",
 		"effect": "정차마다 장소 후보가 둘",
 		"variants": {
 			"a": {
-				"name": "페달 핸드카",
+				"name": "페달 궤도차",
 				"effect": "정찰 산출 깎임 −20% → −10%. 고요한 곳에선 덜컹이는 소리에 기척 +1",
 				"upkeep": {
 					"parts": 0.25
@@ -468,7 +468,7 @@ const TECHS: Dictionary = {
 				"say": "발로 밟아 조용히 다녀온다!"
 			},
 			"b": {
-				"name": "발동기 핸드카",
+				"name": "발동기 궤도차",
 				"effect": "정찰조 위험 ×0.4, 정찰 산출 깎임 없음. 발동기 소리에 늘 기척 +2",
 				"upkeep": {
 					"parts": 0.25
@@ -498,7 +498,7 @@ const TECHS: Dictionary = {
 		"branch": "expedition",
 		"tier": 3,
 		"name": "궤도 모터카",
-		"effect": "지나쳐도 짧게의 절반을 얻는다(석탄 1)"
+		"effect": "지나친 정차에서도 '짧게' 머문 몫의 절반을 얻는다(석탄 1)"
 	},
 	"x4": {
 		"upkeep": {}, "like": ["tail"], "dislike": [],
