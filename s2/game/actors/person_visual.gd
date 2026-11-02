@@ -394,8 +394,15 @@ func is_worn() -> bool:
 static func frame_delta(field, delta: float) -> float:
 	if field.get("ended") == true:
 		return delta
-	if field.get("paused") == true or field.get("hitstop") == true:
+	if field.get("paused") == true:
 		return 0.0
+	if field.get("hitstop") == true:
+		# A hold that ends inside the frame: the pictures run the rules' remainder too.
+		var active: Variant = field.get("hitstop_active")
+		if active == null:
+			return 0.0
+		var rest: Variant = field.get("slow")
+		return minf(float(active), 0.1) * (float(rest) if rest != null else 1.0)
 	var slow: Variant = field.get("slow")
 	return minf(delta, 0.1) * (float(slow) if slow != null else 1.0)
 

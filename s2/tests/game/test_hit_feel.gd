@@ -176,14 +176,13 @@ func test_the_players_shot_kicks_back_from_where_it_went() -> void:
 	assert_false(game.feel.holding(), "a shot does not hold the field")
 
 
-# At 30 frames a second a frame is longer than the lightest holds: the hold is
-# read as the frame starts, so even those stand one whole frame.
+# The remainder of a partially held frame advances the rules.
 func test_a_hold_shorter_than_a_frame_still_stands_one_frame() -> void:
 	game.feel.hold_t = 0.03
 	var t0: float = game.clock.elapsed
 	game._process(1.0 / 30.0)
 	assert_true(game.hitstop)
-	assert_eq(game.clock.elapsed, t0)
+	assert_almost_eq(game.clock.elapsed - t0, 1.0 / 30.0 - 0.03, 0.000001)
 	game._process(1.0 / 30.0)
 	assert_false(game.hitstop)
 	assert_gt(game.clock.elapsed, t0)
@@ -726,3 +725,36 @@ func test_hit_power_never_changes_seen_pos_including_fallen_and_shoved_bodies() 
 				if down > 0.0:
 					assert_eq(drawn, old, "the whole ground pose is unchanged")
 	DeadBody.table = prior
+
+
+func test_hold_seconds_are_exact_at_thirty_and_sixty_hz() -> void:
+	game.resume_pending = false
+	game.paused = false
+	game.slow = 1.0
+	for fps: int in [30, 60]:
+		for hold: float in [2.0 / 60.0, 0.05, 0.08, 0.12]:
+			game.feel.hold_t = 0.0
+			game.feel.rest_t = 0.0
+			game.feel._hold(hold)
+			var start: float = game.clock.elapsed
+			var dt: float = 1.0 / float(fps)
+			for _frame: int in range(int(float(fps) * 0.5)):
+				game._process(dt)
+			assert_almost_eq(0.5 - (game.clock.elapsed - start), hold, 0.000001)
+
+
+func test_a_partial_hold_advances_the_remainder_on_its_last_frame() -> void:
+	game.resume_pending = false
+	game.paused = false
+	game.slow = 1.0
+	game.feel.hold_t = 0.01
+	var start: float = game.clock.elapsed
+	game._process(1.0 / 30.0)
+	assert_almost_eq(game.clock.elapsed - start, 1.0 / 30.0 - 0.01, 0.000001)
+	# The pictures run the same remainder as the rules on that frame, and nothing on a whole held frame.
+	assert_almost_eq(PersonVisual.frame_delta(game, 1.0 / 30.0), 1.0 / 30.0 - 0.01, 0.000001)
+	game.feel.rest_t = 0.0
+	game.feel.hold_t = 0.0
+	game.feel._hold(0.1)
+	game._process(1.0 / 30.0)
+	assert_eq(PersonVisual.frame_delta(game, 1.0 / 30.0), 0.0)

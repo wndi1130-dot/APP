@@ -264,6 +264,7 @@ var resume_ready_at_ms: int = 0
 var resume_announce: bool = false
 var slow: float = 1.0                    # the body picture up: the field runs at this rate (body_injury 4.6)
 var hitstop: bool = false                # a blow's hold this frame (hit_feel.gd): the rules and pictures stand
+var hitstop_active: float = 0.0          # of a held frame, the seconds the rules still ran after the hold ended
 var away: bool = false             # the app pushed the field into a pause; say so once on return
 var ended: bool = false
 var leave_t: float = -1.0          # since the train began to roll away (-1: it stands)
@@ -1929,11 +1930,13 @@ func _process(delta: float) -> void:
 	if arrive_t >= 0.0:
 		_arrive(delta)
 	elif not ended and not paused:
-		# Held as the frame starts: a hold shorter than a frame still stands one.
-		hitstop = feel.holding()
+		var held: float = minf(delta, maxf(0.0, feel.hold_t))
+		hitstop = held > 0.0
 		feel.tick(delta, true)
-		if not hitstop:
-			_step(delta * slow)
+		var active: float = delta - held
+		hitstop_active = maxf(active, 0.0)
+		if active >= 0.000001:
+			_step(active * slow)
 			_update_snow()
 	else:
 		hitstop = false
@@ -2238,68 +2241,83 @@ func _move_person(p: Person, delta: float) -> void:
 	if p.path.is_empty():
 		p.moving = false
 		return
-	var next := p.path[0]
-	var d := next - p.position
-	d.y = 0
-	if d.length() < 0.12:
-		# A stair: the next point is the same spot one floor up or down.
-		Sled.before_move(self, p, Vector3(p.position.x, next.y, p.position.z))
-		p.position.y = next.y
-		if not p.path.is_empty():
-			p.path.remove_at(0)
-		if p.path.is_empty():
-			p.moving = false
-		return
-	var cell := FieldGrid.cell_of(p.position)
-	var lg := grid_at(p.position)
-	var spd := p.speed(lg.floor_at(cell)) * sled_mult
-	var available_speed: float = spd
-	if spd <= 0.0:
-		p.moving = false
-		if p == player:
-			hud.toast("너무 무거움")
-			p.stop()
-		return
-	var way := atan2(d.x, d.z)
-	var face := way
-	if p != player:
-		# One the AI walks turns into the way before it goes (move_rules.gd); backing
-		# off a crowd it keeps its face to them and steps back (field_ai.gd _engage).
-		var hold: Variant = p.brain.get("face_hold")
-		if hold is Vector3 and clock.elapsed - float(p.brain.get("face_hold_t", -INF)) < MoveRules.FACE_HOLD:
-			var them: Vector3 = hold
-			face = atan2(them.x - p.position.x, them.z - p.position.z)
-			if absf(angle_difference(face, way)) > PI * 0.5:
-				spd = minf(spd, MoveRules.BACKPEDAL)   # none runs backwards
-		elif p.turn_rate > 0.0:
-			spd *= MoveRules.heading_share(absf(angle_difference(p.look, way)))
-		p.facing = face
-	var remaining: float = d.length()
-	for index: int in range(1, p.path.size()):
-		if remaining > AI.FOLLOW_SETTLE:
-			break
-		remaining += p.path[index - 1].distance_to(p.path[index])
-	if _slow_step_holds(p, spd, remaining, available_speed):
-		return
-	var step := d.normalized() * minf(spd * delta, d.length())
-	var dest := p.position + step
-	var dc := FieldGrid.cell_of(dest)
-	if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
-		actions.open_door_on_way(p, dc)
-		return
-	if lg.blocks_body(dc):
-		dest = _slide(p.position, step)
-	dc = FieldGrid.cell_of(dest)
-	if lg == grid and grid.windows.has(dc) and FieldGrid.cell_of(p.position) != dc:
-		if not actions.can_vault_window(p, dc):
+	var time_left: float = delta
+	for _segment: int in range(4):
+		if p.path.is_empty() or time_left <= 0.000000001:
 			return
-		actions.vault_window(p, dc)
-	p.facing = face
-	var gone := Gait.signed_distance(p, dest - p.position)
-	Sled.before_move(self, p, dest)
-	p.position = dest
-	p.moving = true
-	_footsteps(p, delta, dc, gone)
+		var next: Vector3 = p.path[0]
+		var d: Vector3 = next - p.position
+		d.y = 0.0
+		var game_level_changes: bool = level_of(next) != level_of(p.position)
+		if game_level_changes and d.length() < 0.12:
+			if time_left < delta:
+				return
+			Sled.before_move(self, p, Vector3(p.position.x, next.y, p.position.z))
+			p.position.y = next.y
+			p.path.remove_at(0)
+			if p.path.is_empty():
+				p.moving = false
+			return
+		if d.length() <= 0.00001:
+			p.path.remove_at(0)
+			continue
+		var cell := FieldGrid.cell_of(p.position)
+		var lg := grid_at(p.position)
+		var spd := p.speed(lg.floor_at(cell)) * sled_mult
+		var available_speed: float = spd
+		if spd <= 0.0:
+			p.moving = false
+			if p == player:
+				hud.toast("너무 무거움")
+				p.stop()
+			return
+		var way := atan2(d.x, d.z)
+		var face := way
+		if p != player:
+			# One the AI walks turns into the way before it goes (move_rules.gd); backing
+			# off a crowd it keeps its face to them and steps back (field_ai.gd _engage).
+			var hold: Variant = p.brain.get("face_hold")
+			if hold is Vector3 and clock.elapsed - float(p.brain.get("face_hold_t", -INF)) < MoveRules.FACE_HOLD:
+				var them: Vector3 = hold
+				face = atan2(them.x - p.position.x, them.z - p.position.z)
+				if absf(angle_difference(face, way)) > PI * 0.5:
+					spd = minf(spd, MoveRules.BACKPEDAL)   # none runs backwards
+			elif p.turn_rate > 0.0:
+				spd *= MoveRules.heading_share(absf(angle_difference(p.look, way)))
+			p.facing = face
+		var remaining: float = d.length()
+		for index: int in range(1, p.path.size()):
+			if remaining > AI.FOLLOW_SETTLE:
+				break
+			remaining += p.path[index - 1].distance_to(p.path[index])
+		if _slow_step_holds(p, spd, remaining, available_speed):
+			return
+		var segment_time: float = minf(time_left, d.length() / spd)
+		var step := d.normalized() * minf(spd * segment_time, d.length())
+		var dest := p.position + step
+		var dc := FieldGrid.cell_of(dest)
+		if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
+			actions.open_door_on_way(p, dc)
+			return
+		if lg.blocks_body(dc):
+			dest = _slide(p.position, step)
+		dc = FieldGrid.cell_of(dest)
+		if lg == grid and grid.windows.has(dc) and FieldGrid.cell_of(p.position) != dc:
+			if not actions.can_vault_window(p, dc):
+				return
+			actions.vault_window(p, dc)
+		p.facing = face
+		var gone := Gait.signed_distance(p, dest - p.position)
+		Sled.before_move(self, p, dest)
+		p.position = dest
+		p.moving = true
+		_footsteps(p, segment_time, dc, gone)
+		time_left -= segment_time
+		if p.position.distance_to(Vector3(next.x, p.position.y, next.z)) > 0.00001:
+			return
+		if game_level_changes:
+			return
+		p.path.remove_at(0)
 
 
 ## Decision 442: hold before distance clipping; turning keeps its usual clock.
@@ -3220,12 +3238,15 @@ func _update_camera(delta: float) -> void:
 	var aspect := screen.x / maxf(screen.y, 1.0)
 	focus = EdgeBand.clamp_focus(focus, EdgeBand.view_half(cam_size, aspect, CAM_PITCH, CAM_YAW), grid.width, grid.height)
 	focus = EdgeBand.keep_on_screen(focus, player.position, cam_size, aspect, CAM_PITCH, CAM_YAW)
-	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
+	# Tau matches the old per-frame share at 60 Hz: -(1/60) / log(1 - rate/60).
+	const FOCUS_TAU: float = 0.241570850835203
+	const SIZE_TAU: float = 0.158187026350498
+	cam_focus = cam_focus.lerp(focus, 1.0 - exp(-delta / FOCUS_TAU))
 	if map_edge != null:
 		map_edge.set_eye(player.position)
 		map_edge.set_room(_open_room())
 	_set_sight_round()
-	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
+	camera.size = lerpf(camera.size, cam_size, 1.0 - exp(-delta / SIZE_TAU))
 	var back := cam_back() * 60.0
 	# A blow's kick moves the eye, not the place it follows (hit_feel.gd).
 	var kick: Vector3 = feel.camera_offset() * camera.size if feel != null else Vector3.ZERO

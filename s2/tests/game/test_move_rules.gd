@@ -159,3 +159,141 @@ func test_the_player_on_a_path_still_goes_at_once() -> void:
 	game._move_person(p, 0.05)
 	assert_almost_eq(p.position.distance_to(at), top * 0.05, 0.001)
 	assert_almost_eq(p.facing, PI * 0.5, 0.0001)
+
+
+func _open_fps_lane() -> Vector3:
+	for x: int in range(60, 70):
+		for z: int in range(7, 10):
+			var cell := Vector2i(x, z)
+			game.grid.set_solid(cell, FieldGrid.Solid.NONE)
+			game.grid.floor[game.grid.index(cell)] = FieldGrid.Floor.SNOW
+			game.grid.doors.erase(cell)
+			game.grid.windows.erase(cell)
+	return Vector3(60.5, 0.0, 7.5)
+
+
+func _fps_route(start: Vector3, spacing: float) -> PackedVector3Array:
+	var route := PackedVector3Array()
+	for i: int in range(1, int(8.0 / spacing) + 1):
+		route.append(start + Vector3.RIGHT * spacing * float(i))
+	return route
+
+
+func test_person_waypoints_keep_pace_at_thirty_and_sixty_hz() -> void:
+	var start: Vector3 = _open_fps_lane()
+	var p = game.player
+	for spacing: float in [1.0, 0.5]:
+		for fps: int in [30, 60]:
+			p.stop()
+			p.position = start
+			p.running = false
+			p.path = _fps_route(start, spacing)
+			var speed: float = _top(p)
+			var dt: float = 1.0 / float(fps)
+			var frames: int = 0
+			while not p.path.is_empty() and frames < fps * 15:
+				var before: Vector3 = p.position
+				game._move_person(p, dt)
+				assert_gt(p.position.distance_to(before), 0.000001)
+				frames += 1
+			assert_true(p.path.is_empty())
+			assert_almost_eq(p.position.x, start.x + 8.0, 0.0001)
+			assert_almost_eq(float(frames) * dt, 8.0 / speed, dt + 0.0001)
+
+
+func test_dead_waypoints_keep_pace_without_reversal_at_thirty_and_sixty_hz() -> void:
+	var start: Vector3 = _open_fps_lane()
+	var z: Dictionary = game.zombies.spawn("dead", start)
+	game.zombies._people.clear()
+	for spacing: float in [1.0, 0.5]:
+		for fps: int in [30, 60]:
+			z["pos"] = start
+			z["state"] = "chase"
+			z["target"] = start + Vector3.RIGHT * 8.0
+			z["path"] = _fps_route(start, spacing)
+			z["path_t"] = 100.0
+			var dt: float = 1.0 / float(fps)
+			var speed: float = game.zombies._speed(z)
+			var frames: int = 0
+			while not (z["path"] as PackedVector3Array).is_empty() and frames < fps * 30:
+				var before: Vector3 = z["pos"]
+				game.zombies._move(z, dt)
+				var after: Vector3 = z["pos"]
+				assert_gt(after.x - before.x, 0.000001)
+				frames += 1
+			assert_true((z["path"] as PackedVector3Array).is_empty())
+			var end: Vector3 = z["pos"]
+			assert_almost_eq(end.x, start.x + 8.0, 0.0001)
+			assert_almost_eq(float(frames) * dt, 8.0 / speed, dt + 0.0001)
+
+
+func test_a_stair_waypoint_still_changes_only_height_for_both() -> void:
+	var start: Vector3 = _open_fps_lane()
+	var upper: Vector3 = start + Vector3.UP * game.level_y(1)
+	game.player.position = start
+	game.player.path = PackedVector3Array([upper, upper + Vector3.RIGHT])
+	game._move_person(game.player, 0.1)
+	assert_eq(game.player.position, upper)
+	assert_eq(game.player.path.size(), 1)
+	var z: Dictionary = game.zombies.spawn("dead", start)
+	z["state"] = "chase"
+	z["target"] = upper + Vector3.RIGHT * 8.0
+	z["path"] = PackedVector3Array([upper, upper + Vector3.RIGHT])
+	z["path_t"] = 100.0
+	game.zombies._move(z, 0.1)
+	assert_eq(z["pos"], upper)
+	assert_eq((z["path"] as PackedVector3Array).size(), 1)
+
+
+func test_heading_share_is_recomputed_after_a_waypoint() -> void:
+	var start: Vector3 = _open_fps_lane()
+	ally.position = start
+	ally.command = "wait"
+	ally.look = PI * 0.5
+	ally.turn_rate = 1.0
+	var corner: Vector3 = start + Vector3.RIGHT * 0.05
+	var diagonal: Vector3 = Vector3.RIGHT.rotated(Vector3.UP, -PI / 3.0)
+	ally.path = PackedVector3Array([corner, corner + diagonal * 2.0])
+	var speed: float = _top(ally)
+	var dt: float = 0.1
+	game._move_person(ally, dt)
+	var share: float = MoveRules.heading_share(PI / 3.0)
+	assert_almost_eq(ally.position.distance_to(corner), (dt - 0.05 / speed) * speed * share, 0.0001)
+	assert_almost_eq(ally.facing, atan2(diagonal.x, diagonal.z), 0.0001)
+
+
+func test_door_after_waypoint_starts_opening() -> void:
+	var start: Vector3 = _open_fps_lane()
+	var door := Vector2i(61, 7)
+	game.grid.set_solid(door, FieldGrid.Solid.DOOR)
+	game.grid.doors[door] = {"state": "closed", "planks": [0, 0]}
+	game.player.position = start + Vector3.RIGHT * 0.35
+	game.player.path = PackedVector3Array([start + Vector3.RIGHT * 0.4, start + Vector3.RIGHT])
+	game._move_person(game.player, 0.2)
+	assert_eq(game.player.action, "door")
+
+
+func test_camera_interpolation_matches_sixty_hz_and_time_partitions() -> void:
+	var start_focus: Vector3 = game.player.position + Vector3.RIGHT * 2.0
+	var start_size: float = game.cam_size + 3.0
+	var positions: Array[Vector3] = []
+	var sizes: Array[float] = []
+	game.cam_focus = start_focus
+	game.camera.size = start_size
+	game._update_camera(1.0 / 60.0)
+	assert_almost_eq(game.camera.size, lerpf(start_size, game.cam_size, 6.0 / 60.0), 0.00001)
+	var one: Vector3 = game.cam_focus
+	game.cam_focus = start_focus
+	game._update_camera(2.0 / 60.0)
+	var two: Vector3 = game.cam_focus
+	assert_almost_eq(two.distance_to(start_focus) / one.distance_to(start_focus), 2.0 - 4.0 / 60.0, 0.0001)
+	for pieces: int in [1, 3, 6]:
+		game.cam_focus = start_focus
+		game.camera.size = start_size
+		for _frame: int in range(pieces):
+			game._update_camera(0.1 / float(pieces))
+		positions.append(game.cam_focus)
+		sizes.append(game.camera.size)
+	for index: int in range(1, positions.size()):
+		assert_almost_eq(positions[index].distance_to(positions[0]), 0.0, 0.00001)
+		assert_almost_eq(sizes[index], sizes[0], 0.00001)
