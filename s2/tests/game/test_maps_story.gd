@@ -1,9 +1,15 @@
 extends "res://addons/gut/test.gd"
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
+const FreightReference = preload("res://game/world/maps/freight_06.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
-const MAPS = [preload("res://game/world/maps/story_01.gd")]
+const MAPS = [
+	preload("res://game/world/maps/story_01.gd"),
+	preload("res://game/world/maps/story_02.gd"),
+	preload("res://game/world/maps/story_03.gd"),
+]
 # test_maps_freight.gd의 KEYS와 같은 계약. place_kind는 빌린 갈래(StoryMaps.BASE)다.
 const KEYS = [
 	"grid", "levels", "stairs", "containers", "spots", "stoves", "entries", "entry_gap", "entry_levels",
@@ -19,6 +25,17 @@ const SPECS: Dictionary = {
 		"porter_steps": 130,
 		# 이 지도 절에는 별도로 지정된 망자 없는 건물이 없다.
 		"safe_buildings": []
+	},
+	"story_02": {
+		"width": 185, "height": 145, "area": 25375, "borrowed_kind": "freight", "min_zones": 4, "max_zones": 4,
+		"spots": ["work_site", "story_bridge_front", "story_machine_room", "story_rear_view"],
+		"spot_kinds": {"work_site": "work_site"},
+		"safe_buildings": ["기계실"]
+	},
+	"story_03": {
+		"width": 190, "height": 190, "area": 36100, "borrowed_kind": "office", "min_zones": 4, "max_zones": 5,
+		"spots": ["story_transmitter", "story_log", "story_generator", "story_boiler_path"],
+		"safe_buildings": ["송신실", "발전기 헛간"]
 	}
 }
 const STEP: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
@@ -106,6 +123,7 @@ func test_keys_sizes_ground_only_and_borrowed_kind() -> void:
 			assert_true(KEYS.has(key), data["place_id"] + " unexpected " + str(key))
 		# The game reads its loot, horde and roof rules by place_kind: a story map keeps its borrowed kind.
 		assert_eq(data["place_kind"], spec["borrowed_kind"])
+		assert_eq(data["place_kind"], StoryMaps.base_of(data["place_id"]))
 		assert_true(BASE_KINDS.has(data["place_kind"]))
 		assert_false(data.has("base_kind"))
 		assert_lte(g.width, spec["width"])
@@ -230,7 +248,7 @@ func test_spots_zone_labels_and_all_walkable_ground_are_reachable() -> void:
 		for key in spec["spots"]:
 			assert_true(data["spots"].has(key), key)
 			var spot: Dictionary = data["spots"][key]
-			assert_eq(spot["kind"], "story")
+			assert_eq(spot["kind"], spec.get("spot_kinds", {}).get(key, "story"))
 			assert_true(g.inside(spot["cell"]))
 			assert_true(spot["zone_rect"].has_point(spot["cell"]))
 			var distance: int = reached[g.index(spot["cell"])]
@@ -464,3 +482,341 @@ func test_two_builds_share_no_grid_or_nested_data() -> void:
 		for key in ["containers", "spots", "entries", "bands", "entry_names", "entry_weights"]:
 			a[key]["_probe"] = true
 			assert_false(b[key].has("_probe"), key)
+
+
+func _story(id: String) -> Dictionary:
+	for data in built:
+		if data["place_id"] == id:
+			return data
+	return {}
+
+
+func _plan_rect(row: Array) -> Rect2i:
+	return Rect2i(int(row[0]), int(row[1]), int(row[2]), int(row[3]))
+
+
+func _deep_exits(g: FieldGrid, deep: Rect2i) -> Dictionary:
+	var exits: Dictionary = {}
+	for c in _cells(deep):
+		if not g.people_can_walk(c):
+			continue
+		for step in STEP:
+			var to: Vector2i = c + step
+			if not deep.has_point(to) and g.people_can_walk(to):
+				exits[to] = true
+	return exits
+
+
+func _exterior_doors(g: FieldGrid, building: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for c: Vector2i in g.doors:
+		if int(g.doors[c]["building"]) != building:
+			continue
+		for step in STEP:
+			if g.building_at(c + step) < 0 and g.people_can_walk(c + step):
+				out.append(c)
+				break
+	return out
+
+
+func _first_entry_steps(data: Dictionary, reached: PackedInt32Array) -> int:
+	var g: FieldGrid = data["grid"]
+	var nearest: int = g.width * g.height
+	for c: Vector2i in data["entries"][data["first_entry"]]:
+		assert_gte(reached[g.index(c)], 0)
+		nearest = mini(nearest, reached[g.index(c)])
+	return nearest
+
+
+# 지정된 길의 바닥 안에서만 걷는다. 표시만 있고 바위나 벽으로 끊긴 길을 잡는다.
+func _route_exists(g: FieldGrid, rects: Array, start: Vector2i, goal: Vector2i) -> bool:
+	var allowed: Dictionary = {}
+	for row in rects:
+		for c in _cells(_plan_rect(row)):
+			if g.people_can_walk(c):
+				allowed[c] = true
+	if not allowed.has(start) or not allowed.has(goal):
+		return false
+	var seen: Dictionary = {}
+	seen[start] = true
+	var queue: Array[Vector2i] = [start]
+	var head: int = 0
+	while head < queue.size():
+		var c: Vector2i = queue[head]
+		head += 1
+		if c == goal:
+			return true
+		for step in STEP:
+			var to: Vector2i = c + step
+			if allowed.has(to) and not seen.has(to):
+				seen[to] = true
+				queue.append(to)
+	return false
+
+
+func test_entry_metadata_spawn_names_and_nested_build_isolation() -> void:
+	for script in MAPS:
+		var a: Dictionary = script.build()
+		var b: Dictionary = script.build()
+		var keys: Array = a["entries"].keys()
+		keys.sort()
+		for name in ["entry_names", "entry_weights", "entry_gap", "entry_levels"]:
+			var actual: Array = a[name].keys()
+			actual.sort()
+			assert_eq(actual, keys, name)
+		assert_true(a["hole_faces"].is_empty())
+		for key: String in a["spawns"]:
+			assert_true(["squad", "train_door"].has(key) or key.begins_with("dead_"), key)
+		var key: String = keys[0]
+		var original: Vector2i = b["entries"][key][0]
+		a["entries"][key][0] = Vector2i(-1, -1)
+		assert_eq(b["entries"][key][0], original)
+		a["props"][0]["note"] = "변경 확인"
+		assert_ne(b["props"][0]["note"], "변경 확인")
+		var box: String = a["containers"].keys()[0]
+		a["containers"][box]["items"].append("_probe")
+		assert_false(b["containers"][box]["items"].has("_probe"))
+		var later: Dictionary = script.build()
+		assert_eq(later["entries"][key][0], original)
+		assert_ne(later["props"][0]["note"], "변경 확인")
+		assert_false(later["containers"][box]["items"].has("_probe"))
+
+
+func test_story_02_canal_has_one_bridge_and_an_irregular_river_mouth() -> void:
+	var data: Dictionary = _story("story_02")
+	var g: FieldGrid = data["grid"]
+	var plan: Dictionary = MAPS[1].PLAN
+	var bridge := _plan_rect(plan["bridge"])
+	for y in range(g.height):
+		assert_eq(g.people_can_walk(Vector2i(135, y)), y >= bridge.position.y and y < bridge.end.y)
+	for x in range(bridge.position.x, bridge.end.x):
+		assert_eq(g.floor_at(Vector2i(x, 64)), F.RAIL)
+		assert_true(g.people_can_walk(Vector2i(x, 64)))
+	var water: Dictionary = _water(data)
+	var shores: Dictionary = {}
+	for y in range(117, g.height):
+		var first: int = g.width
+		var last: int = -1
+		for x in range(g.width):
+			if water.has(Vector2i(x, y)):
+				first = mini(first, x)
+				last = maxi(last, x)
+		shores[Vector2i(first, last)] = true
+	assert_gte(shores.size(), 3)
+	var piers: int = 0
+	var crossbars: int = 0
+	var reeds: int = 0
+	for prop in data["props"]:
+		var note: String = prop["note"]
+		if note.contains("철교") and note.contains("기둥"):
+			piers += 1
+			assert_eq(prop["solid"], "wall")
+		if note.contains("위 가로대"):
+			crossbars += 1
+			assert_eq(prop["solid"], "none")
+		if prop["kind"] == "frozen_reeds":
+			reeds += 1
+	assert_eq(piers, 4)
+	assert_eq(crossbars, 2)
+	assert_gte(reeds, 2)
+
+
+func test_story_02_open_wagons_siding_and_flat_loading_yard() -> void:
+	var data: Dictionary = _story("story_02")
+	var g: FieldGrid = data["grid"]
+	var plan: Dictionary = MAPS[1].PLAN
+	var train: Rect2i = data["train"]
+	assert_lte(train.position.x, 25)
+	assert_gte(data["wagons"].size(), 2)
+	assert_lte(data["wagons"].size(), 3)
+	for wagon in data["wagons"]:
+		var r: Rect2i = wagon["rect"]
+		assert_eq(r.position.y, train.position.y)
+		assert_gte(r.position.x, train.end.x)
+		assert_lte(r.end.x, 130)
+		assert_true(String(wagon["name"]).contains("열린"))
+		assert_eq(wagon["coal"], 0)
+		assert_true(g.people_can_walk(wagon["work"]))
+	var work: Dictionary = data["spots"]["work_site"]
+	assert_eq(work["kind"], "work_site")
+	assert_eq(work["state"], "closed")
+	assert_true(work["zone_rect"].has_point(work["cell"]))
+	assert_eq(g.floor_at(Vector2i(54, 93)), F.RAIL)
+	assert_eq(g.floor_at(Vector2i(91, 72)), F.RAIL)
+	var yard := _plan_rect(plan["loading_yard"])
+	for band: Rect2i in data["bands"].values():
+		assert_false(band.intersects(yard))
+		assert_false(band.intersects(work["zone_rect"]))
+	for c in _cells(yard):
+		assert_eq(g.floor_at(c), F.GRAVEL)
+		assert_true(g.people_can_walk(c))
+	assert_eq(_exterior_doors(g, 0), [Vector2i(78, 33)])
+
+
+func test_story_02_warehouse_has_one_visible_deep_door_and_split_tools() -> void:
+	var data: Dictionary = _story("story_02")
+	var g: FieldGrid = data["grid"]
+	var deep := _plan_rect(MAPS[1].PLAN["deep"]["rect"])
+	var exits := _deep_exits(g, deep)
+	assert_eq(exits.size(), 1)
+	assert_true(exits.has(Vector2i(78, 21)))
+	for y in range(21, 28):
+		assert_true(g.people_can_walk(Vector2i(78, y)))
+		assert_false(g.opaque(Vector2i(78, y)))
+	assert_false(deep.has_point(data["containers"]["tools_shallow"]["cell"]))
+	assert_true(deep.has_point(data["containers"]["tools_deep"]["cell"]))
+	assert_eq(data["containers"]["tools_shallow"]["items"], data["containers"]["tools_deep"]["items"])
+
+
+func test_story_02_west_wave_walks_in_earlier_than_the_freight_reference() -> void:
+	var data: Dictionary = _story("story_02")
+	assert_eq(data["first_entry"], "west_track")
+	assert_eq(data["entries"].size(), 3)
+	for key in data["entry_weights"]:
+		if key != data["first_entry"]:
+			assert_gt(data["entry_weights"][data["first_entry"]], data["entry_weights"][key])
+	var early: int = _first_entry_steps(data, walks["story_02"]["dead"])
+	var reference: Dictionary = FreightReference.build()
+	var ordinary: int = _first_entry_steps(reference, _flood(reference, true))
+	assert_lte(early, 45)
+	assert_lt(early, ordinary)
+	# 물결 시작 시각은 사건 코드 소유다. 여기서는 같은 네 방향 보행 거리만 비교한다.
+
+
+func test_story_02_east_field_is_open_and_machine_room_faces_it() -> void:
+	var data: Dictionary = _story("story_02")
+	var g: FieldGrid = data["grid"]
+	var field := _plan_rect(MAPS[1].PLAN["field"])
+	assert_gte(field.size.x, 40)
+	assert_eq(field.end.x, g.width)
+	for c in _cells(field):
+		if g.building_at(c) != 1:
+			assert_true(g.solid_at(c) != S.WALL and g.solid_at(c) != S.BLOCK)
+	for group in data["entries"].values():
+		for c: Vector2i in group:
+			assert_lt(c.x, 132)
+	for c in _dead_cells(data):
+		assert_lt(c.x, 132)
+	assert_eq(_exterior_doors(g, 1), [Vector2i(156, 52)])
+	assert_eq(g.doors[Vector2i(156, 52)]["state"], "open")
+	var outside: Vector2i = data["spots"]["story_machine_room"]["cell"]
+	assert_gt(outside.x, 156)
+	assert_eq(g.building_at(outside), -1)
+	assert_true(field.has_point(outside))
+	assert_true(field.has_point(data["spots"]["story_rear_view"]["cell"]))
+	assert_lt(data["spots"]["story_bridge_front"]["cell"].x, 132)
+
+
+func test_story_03_two_separate_climbs_reach_the_summit_from_a_southern_train() -> void:
+	var data: Dictionary = _story("story_03")
+	var g: FieldGrid = data["grid"]
+	var plan: Dictionary = MAPS[2].PLAN
+	var train: Rect2i = data["train"]
+	assert_gte(train.position.y, int(g.height * 0.8))
+	assert_lte(g.height - train.end.y, 30)
+	assert_true(_route_exists(g, plan["winding"], Vector2i(80, 127), Vector2i(80, 62)))
+	assert_true(_route_exists(g, plan["shortcut"], Vector2i(101, 127), Vector2i(114, 59)))
+	var yard := _plan_rect(plan["yard"])
+	for left in plan["winding"]:
+		for right in plan["shortcut"]:
+			var overlap := _plan_rect(left).intersection(_plan_rect(right))
+			assert_true(not overlap.has_area() or yard.encloses(overlap))
+	var boiler: Vector2i = data["spots"]["story_boiler_path"]["cell"]
+	assert_true(_route_exists(g, plan["shortcut"], boiler, Vector2i(101, 127)))
+	assert_lt(boiler.y, data["bands"]["upper"].position.y)
+
+
+func test_story_03_residents_only_circle_the_hill_in_forest_and_brush() -> void:
+	var data: Dictionary = _story("story_03")
+	var g: FieldGrid = data["grid"]
+	var dead := _dead_cells(data)
+	assert_gt(dead.size(), 0)
+	assert_lte(dead.size(), 60)
+	var groups: int = 0
+	for key: String in data["spawns"]:
+		if key.begins_with("dead_forest_"):
+			groups += 1
+			assert_lte(data["spawns"][key].size(), 15)
+	assert_eq(groups, 4)
+	for c in dead:
+		var in_forest: bool = false
+		for row in MAPS[2].PLAN["forests"]:
+			in_forest = in_forest or _plan_rect(row).has_point(c)
+		assert_true(in_forest)
+		assert_eq(g.floor_at(c), F.DEEP_SNOW)
+		assert_eq(g.building_at(c), -1)
+		assert_true(g.dead_can_walk(c))
+		var brush: bool = false
+		for prop in data["props"]:
+			if prop["kind"] == "dry_bush" and prop["rect"].has_point(c):
+				brush = true
+		assert_true(brush)
+	var entries: Array = data["entries"].keys()
+	entries.sort()
+	assert_eq(entries, ["forest_east", "forest_north", "forest_west", "west_track"])
+	for i in range(entries.size()):
+		var a: Vector2i = data["entries"][entries[i]][0]
+		for j in range(i):
+			var b: Vector2i = data["entries"][entries[j]][0]
+			assert_gte(maxi(absi(a.x - b.x), absi(a.y - b.y)), 45)
+
+
+func test_story_03_safe_equipment_rooms_keep_the_story_inside_and_tools_split() -> void:
+	var data: Dictionary = _story("story_03")
+	var g: FieldGrid = data["grid"]
+	assert_eq(data["buildings"].size(), 2)
+	assert_eq(data["buildings"][0]["role"], "office")
+	assert_eq(g.building_at(data["spots"]["story_transmitter"]["cell"]), 0)
+	assert_eq(g.building_at(data["spots"]["story_log"]["cell"]), 0)
+	assert_eq(g.building_at(data["spots"]["story_generator"]["cell"]), 1)
+	assert_eq(_exterior_doors(g, 0), [Vector2i(80, 62)])
+	assert_eq(_exterior_doors(g, 1), [Vector2i(114, 59)])
+	for door in g.doors.values():
+		assert_eq(door["state"], "open")
+	var deep := _plan_rect(MAPS[2].PLAN["deep"]["rect"])
+	var exits := _deep_exits(g, deep)
+	assert_eq(exits.size(), 1)
+	assert_true(exits.has(Vector2i(80, 54)))
+	for y in range(54, 59):
+		assert_true(g.people_can_walk(Vector2i(80, y)))
+		assert_false(g.opaque(Vector2i(80, y)))
+	assert_false(deep.has_point(data["containers"]["tools_shallow"]["cell"]))
+	assert_true(deep.has_point(data["containers"]["tools_deep"]["cell"]))
+	assert_eq(data["containers"]["tools_shallow"]["items"], data["containers"]["tools_deep"]["items"])
+	assert_true(data["stoves"].is_empty())
+	assert_eq(data["interior_kind_slots"], [{"zone": "D", "kinds": ["empty"]}])
+	var kinds: Array = []
+	for prop in data["props"]:
+		kinds.append(prop["kind"])
+	for kind in ["radio_set", "cold_stove", "notice_board", "generator_unit", "fuel_tank"]:
+		assert_true(kinds.has(kind), kind)
+
+
+func test_story_03_lattice_tower_has_four_piers_without_a_roof_or_standing_deck() -> void:
+	var data: Dictionary = _story("story_03")
+	var g: FieldGrid = data["grid"]
+	var tower := _plan_rect(MAPS[2].PLAN["tower"])
+	var piers: int = 0
+	for prop in data["props"]:
+		if String(prop["note"]).contains("격자 철탑"):
+			assert_eq(prop["solid"], "wall")
+			assert_eq(prop["rect"].size, Vector2i.ONE)
+			assert_true(tower.encloses(prop["rect"]))
+			piers += 1
+	assert_eq(piers, 4)
+	for c in _cells(tower):
+		assert_eq(g.building_at(c), -1)
+		assert_ne(g.floor_at(c), F.PLATFORM)
+	for building in data["buildings"]:
+		assert_false(tower.intersects(building["rect"]))
+	assert_eq(data["levels"].keys(), [0])
+	assert_true(data["upper_rects"].is_empty())
+
+
+func test_story_02_and_story_03_safe_maps_have_no_body_props_or_forbidden_set_dressing() -> void:
+	for id in ["story_02", "story_03"]:
+		var data := _story(id)
+		for prop in data["props"]:
+			var kind: String = prop["kind"]
+			for forbidden in ["corpse", "body", "barbed", "watchtower", "chimney", "smoke", "luggage", "shoe", "clothes", "ramp"]:
+				assert_false(kind.contains(forbidden), id + ": " + kind)
