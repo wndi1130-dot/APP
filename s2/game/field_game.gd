@@ -2245,6 +2245,7 @@ func _move_person(p: Person, delta: float) -> void:
 	# The ground covered over the whole frame, for the footsteps and the gait's pace:
 	# a walk that reaches its point early stood still for the rest of the frame.
 	var gone_total: float = 0.0
+	var signed_segments: PackedFloat64Array = PackedFloat64Array()
 	var last_cell: Vector2i = FieldGrid.cell_of(p.position)
 	var moved: bool = false
 	for _segment: int in range(4):
@@ -2312,7 +2313,9 @@ func _move_person(p: Person, delta: float) -> void:
 				break
 			actions.vault_window(p, dc)
 		p.facing = face
-		gone_total += Gait.signed_distance(p, dest - p.position)
+		var gone: float = Gait.signed_distance(p, dest - p.position)
+		gone_total += absf(gone)
+		signed_segments.append(gone)
 		Sled.before_move(self, p, dest)
 		p.position = dest
 		p.moving = true
@@ -2325,7 +2328,7 @@ func _move_person(p: Person, delta: float) -> void:
 			break
 		p.path.remove_at(0)
 	if moved:
-		_footsteps(p, delta, last_cell, gone_total)
+		_footsteps(p, delta, last_cell, gone_total, signed_segments)
 
 
 ## Decision 442: hold before distance clipping; turning keeps its usual clock.
@@ -2402,12 +2405,19 @@ func _update_ground_gait(p: Person, delta: float, gone: float = 0.0) -> void:
 	p.ground_sample = {"tick": _motion_tick, "clock": tick}
 
 
-func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0) -> void:
+func _footsteps(p: Person, delta: float, cell: Vector2i, gone: float = 0.0, signed_segments: PackedFloat64Array = PackedFloat64Array()) -> void:
 	_update_ground_gait(p, delta, gone)
 	var running := Gait.ground_runs(p)
 	var lg := grid_at(p.position)
 	var floor_kind := lg.floor_at(cell)
-	if steps_in(p, gone) > 0:
+	var contacts: int = 0
+	if signed_segments.is_empty():
+		contacts = steps_in(p, gone)
+	else:
+		# Preserve each reversal after sampling the whole frame once.
+		for distance: float in signed_segments:
+			contacts += steps_in(p, distance)
+	for _contact: int in range(contacts):
 		var glass: bool = lg.windows.has(cell) and lg.windows[cell]["glass"]
 		var trait_mult := 1.0
 		var r := SimNoise.footstep_radius(running, FieldGrid.FLOOR_SOUND[floor_kind], trait_mult, p.crouched, int(p.skills["stealth"]), glass, lg.indoor(cell)) * weather.sound_mult(true)

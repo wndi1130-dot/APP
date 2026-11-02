@@ -8,6 +8,7 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const HitFeel = preload("res://game/hit_feel.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
+const Zombies = preload("res://game/actors/zombies.gd")
 const W = preload("res://game/sim/weapons.gd")
 const FxState = preload("res://fx/fx_state.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
@@ -758,3 +759,29 @@ func test_a_partial_hold_advances_the_remainder_on_its_last_frame() -> void:
 	game.feel._hold(0.1)
 	game._process(1.0 / 30.0)
 	assert_eq(PersonVisual.frame_delta(game, 1.0 / 30.0), 0.0)
+
+
+func test_dead_sight_fade_uses_partial_hitstop_and_still_finishes_paused() -> void:
+	game.resume_pending = false
+	game.paused = false
+	game.slow = 0.5
+	var z: Dictionary = game.zombies.spawn("dead", p.position)
+	z["worn"] = {}
+	var id: int = int(z["id"])
+	game.zombies._rendered_once = true
+	game.zombies._shown[id] = 0.8
+	game.hitstop = true
+	game.hitstop_active = 1.0 / 30.0 - 0.01
+	game.zombies.render(game.camera, {}, true, 1.0 / 30.0)
+	var expected: float = 0.8 - (1.0 / 30.0 - 0.01) * 0.5 / Zombies.SIGHT_FADE_OUT
+	assert_almost_eq(float(game.zombies._shown[id]), expected, 0.000001)
+	game.hitstop_active = 0.0
+	game.zombies.render(game.camera, {}, true, 1.0 / 30.0)
+	assert_almost_eq(float(game.zombies._shown[id]), expected, 0.000001)
+	game.hitstop = false
+	game.paused = true
+	game.slow = 1.0
+	game.zombies.render(game.camera, {}, true, 0.1)
+	assert_almost_eq(float(game.zombies._shown[id]), expected - 0.5, 0.000001)
+	game.zombies.render(game.camera, {}, true, 0.1)
+	assert_eq(float(game.zombies._shown[id]), 0.0)

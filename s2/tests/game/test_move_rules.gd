@@ -10,6 +10,7 @@ const MoveRules = preload("res://game/sim/move_rules.gd")
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
+const Gait = preload("res://game/sim/gait.gd")
 
 var game
 var ally
@@ -297,3 +298,103 @@ func test_camera_interpolation_matches_sixty_hz_and_time_partitions() -> void:
 	for index: int in range(1, positions.size()):
 		assert_almost_eq(positions[index].distance_to(positions[0]), 0.0, 0.00001)
 		assert_almost_eq(sizes[index], sizes[0], 0.00001)
+
+
+func test_backpedal_then_sideways_keeps_distance_and_contacts_across_frames() -> void:
+	var start: Vector3 = _open_fps_lane()
+	var corner: Vector3 = start + Vector3.RIGHT * 0.105
+	var finish: Vector3 = corner + Vector3.FORWARD * 0.105
+	var counts: Array[int] = []
+	var phases: Array[float] = []
+	for pieces: int in [1, 2]:
+		ally.stop()
+		ally.position = start
+		ally.command = "wait"
+		ally.running = false
+		ally.crouched = false
+		ally.look = -PI * 0.5
+		ally.refresh_view(false)
+		ally.brain["face_hold"] = start + Vector3.LEFT
+		ally.brain["face_hold_t"] = game.clock.elapsed
+		ally.brain["step_r"] = 0.23
+		ally.brain.erase(Gait.GROUND_RUN)
+		ally.ground_sample.clear()
+		ally.path = PackedVector3Array([corner, finish])
+		var backward_dt: float = 0.105 / minf(_top(ally), MoveRules.BACKPEDAL)
+		var sideways_dt: float = 0.105 / _top(ally)
+		var total_dt: float = backward_dt + sideways_dt
+		var durations: PackedFloat64Array = PackedFloat64Array([total_dt]) if pieces == 1 else PackedFloat64Array([backward_dt, sideways_dt])
+		var before: int = game.ledger.sound_events
+		for dt: float in durations:
+			game._begin_motion_tick()
+			game._move_person(ally, dt)
+		assert_almost_eq(ally.position.distance_to(finish), 0.0, 0.00001)
+		counts.append(int(game.ledger.sound_events) - before)
+		phases.append(float(ally.brain["step_r"]))
+		if pieces == 1:
+			var ground: Dictionary = ally.brain[Gait.GROUND_RUN]
+			var expected: float = (0.21 / total_dt) * (1.0 - exp(-total_dt / Gait.RUN_TAU))
+			assert_almost_eq(float(ground["speed"]), expected, 0.0001, "one speed sample includes both distances")
+	assert_eq(counts[0], 2, "both crossings of the same contact survive the reversal")
+	assert_eq(counts[0], counts[1])
+	assert_almost_eq(phases[0], phases[1], 0.00001)
+	assert_almost_eq(phases[0], 0.23, 0.00001)
+
+
+func test_dead_passes_a_waypoint_beside_a_person_at_thirty_and_sixty_hz() -> void:
+	var waypoint: Vector3 = _open_fps_lane() + Vector3.RIGHT
+	game.player.position = waypoint + Vector3.RIGHT * 0.45
+	game.zombies._people = game.people
+	assert_true(game.zombies._people.has(game.player))
+	var z: Dictionary = game.zombies.spawn("dead", waypoint)
+	var positions: Array[Vector3] = []
+	var speed: float = 0.0
+	for fps: int in [30, 60]:
+		z["pos"] = waypoint + Vector3.LEFT * 0.12
+		z["state"] = "chase"
+		z["target"] = waypoint + Vector3.BACK * 2.0
+		z["path"] = PackedVector3Array([waypoint, z["target"]])
+		z["path_t"] = 100.0
+		speed = game.zombies._speed(z)
+		for frame: int in range(fps):
+			game.zombies._move(z, 1.0 / float(fps))
+			if frame == 2:
+				assert_eq((z["path"] as PackedVector3Array).size(), 1, "the nearby person does not pin the waypoint")
+		var after: Vector3 = z["pos"]
+		assert_gt(after.z, waypoint.z + 0.5, "the next leg makes progress with the person still present")
+		positions.append(after)
+	assert_lte(positions[0].distance_to(positions[1]), speed / 30.0 + 0.00001)
+
+
+func test_dead_waypoint_remainder_and_avoidance_respect_walls_and_doors() -> void:
+	var start: Vector3 = _open_fps_lane()
+	game.zombies._people = game.people
+	var blocked: Vector2i = Vector2i(60, 8)
+	for solid: int in [FieldGrid.Solid.WALL, FieldGrid.Solid.DOOR]:
+		game.grid.set_solid(blocked, solid)
+		if solid == FieldGrid.Solid.DOOR:
+			game.grid.doors[blocked] = {"state": "closed", "planks": [0, 0]}
+		var waypoint: Vector3 = start + Vector3(0.0, 0.0, 0.48)
+		game.player.position = waypoint + Vector3.RIGHT * 0.45
+		var z: Dictionary = game.zombies.spawn("dead", waypoint + Vector3.LEFT * 0.02)
+		z["state"] = "chase"
+		z["target"] = waypoint + Vector3.BACK * 2.0
+		z["path"] = PackedVector3Array([waypoint, z["target"]])
+		z["path_t"] = 100.0
+		game.zombies._move(z, 0.1)
+		var after: Vector3 = z["pos"]
+		assert_eq((z["path"] as PackedVector3Array).size(), 1)
+		assert_lt(after.z, 8.0, "the remaining time cannot cross the blocker")
+		assert_false(game.grid.blocks_body(FieldGrid.cell_of(after)))
+		if solid == FieldGrid.Solid.DOOR:
+			assert_true(z.has("bang_seen"), "the next leg still checks the closed door")
+		# A person pushing directly into the blocker cannot displace the body through it.
+		z["pos"] = waypoint
+		z["path"] = PackedVector3Array([waypoint + Vector3.LEFT * 2.0])
+		game.player.position = waypoint + Vector3.FORWARD * 0.45
+		game.zombies._move(z, 0.01)
+		after = z["pos"]
+		assert_lt(after.z, 8.0)
+		assert_false(game.grid.blocks_body(FieldGrid.cell_of(after)))
+		game.grid.doors.erase(blocked)
+		game.grid.set_solid(blocked, FieldGrid.Solid.NONE)
