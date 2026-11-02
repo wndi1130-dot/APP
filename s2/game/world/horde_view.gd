@@ -719,23 +719,80 @@ static func near_test_walls(spawn: Vector2, map_size: Vector2) -> Dictionary:
 ## 정차가 무리에 넘기는 벽: 지도의 edge_walls + opts의 test_edge_walls, 그리고 폰 재기용
 ## 성능 키 horde_test_walls(perf_switch.json은 안드로이드만 읽음, 기본 끔): true면 촬영 도구와 같은
 ## 구석 시험 벽, "near"면 도착 자리에서 가장 가까운 가장자리에 같은 두 토막(도착 화면 안 그리기 비용까지 재게).
-## 켬이 먹었는지는 logcat의 PERF_SWITCH 줄로 본다.
+## 넣은 시험 벽에는 test_mode("corner"/"near")를 달고, 켬이 먹었는지는 짓기가 끝난 뒤 setup이 찍는
+## PERF_SWITCH {"horde_test_walls": …, "ok": …} 한 줄로 본다(실제로 받아들인 시험 벽·무리 수까지).
+## 무리 꺼짐·도착 자리 없음은 여기서 "ok": false 줄을 찍고 시험 벽을 넣지 않는다.
 static func stop_walls(data: Dictionary, opts: Dictionary, settings: Dictionary, map_size: Vector2 = Vector2.ZERO) -> Array:
 	var walls: Array = (data.get("edge_walls", []) as Array) + (opts.get("test_edge_walls", []) as Array)
 	var mode: Variant = settings.get("horde_test_walls")
-	if mode is bool and bool(mode):
-		walls += test_walls()
-		print("PERF_SWITCH ", {"horde_test_walls": true, "walls": walls.size()})
-	elif mode is String and String(mode) == "near":
+	var label: String = "corner" if mode is bool and bool(mode) else ("near" if mode is String and String(mode) == "near" else "")
+	if label.is_empty():
+		return walls
+	if settings.get("horde") is bool and not bool(settings["horde"]):
+		print("PERF_SWITCH ", {"horde_test_walls": label, "ok": false, "reason": "horde off"})
+		return walls
+	var extra: Array = test_walls()
+	var edge_m: float = -1.0
+	if label == "near":
 		var spots: Array = (data.get("spawns", {}) as Dictionary).get("squad", [])
 		if spots.is_empty() or map_size.x <= 0.0 or map_size.y <= 0.0:
-			print("PERF_SWITCH ", {"horde_test_walls": "near", "walls": walls.size(), "error": "도착 자리나 지도 크기 없음"})
+			print("PERF_SWITCH ", {"horde_test_walls": label, "ok": false, "reason": "no arrival spot or map size"})
 			return walls
 		var cell: Vector2i = spots[0]
 		var near: Dictionary = near_test_walls(Vector2(cell) + Vector2(0.5, 0.5), map_size)
-		walls += near["walls"] as Array
-		print("PERF_SWITCH ", {"horde_test_walls": "near", "walls": walls.size(), "edge_m": snappedf(float(near["edge_m"]), 0.1)})
+		extra = near["walls"]
+		edge_m = snappedf(float(near["edge_m"]), 0.1)
+	var used_ids: Dictionary = {}
+	for wall: Variant in walls:
+		if wall is Dictionary:
+			used_ids[String((wall as Dictionary).get("id", ""))] = wall
+	for wall: Dictionary in extra:
+		var marked: Dictionary = wall.duplicate()
+		marked["test_mode"] = label
+		marked["test_edge_m"] = edge_m
+		var id: String = marked["id"]
+		if used_ids.has(id) and _same_wall(used_ids[id], wall):
+			# 같은 벽이 opts로 이미 왔으면 그것을 표시된 하나로 바꾼다(같은 id 둘은 둘 다 거부되므로).
+			walls.erase(used_ids[id])
+		else:
+			while used_ids.has(id):
+				id += "_test"
+			marked["id"] = id
+		walls.append(marked)
+		used_ids[id] = marked
 	return walls
+
+
+static func _same_wall(left: Variant, right: Dictionary) -> bool:
+	if not left is Dictionary:
+		return false
+	for key: String in ["a", "b", "out", "kind", "height"]:
+		if (left as Dictionary).get(key) != right.get(key):
+			return false
+	return true
+
+
+## 시험 벽을 넣은 짓기가 끝나면 한 줄: 받아들인 시험 벽 수·그 벽의 무리 수·전체 준비 여부.
+func _report_test_walls(walls: Array) -> void:
+	var asked: Array = walls.filter(func(wall: Variant) -> bool: return wall is Dictionary and (wall as Dictionary).has("test_mode"))
+	if asked.is_empty():
+		return
+	var used: Dictionary = {}
+	var people: int = 0
+	for chunk: Dictionary in chunks:
+		var wall: Dictionary = chunk["wall"]
+		if wall.has("test_mode"):
+			used[String(wall["id"])] = true
+			people += (chunk["people"] as Array).size()
+	var ok: bool = bool(stats.get("ready", false)) and used.size() == asked.size()
+	stats["test_walls_used"] = used.size()
+	stats["test_walls_ok"] = ok
+	var first: Dictionary = asked[0]
+	var line: Dictionary = {"horde_test_walls": first["test_mode"], "ok": ok, "test_walls": used.size(), "asked": asked.size(),
+		"test_instances": people, "instances": int(stats.get("instances", 0))}
+	if float(first.get("test_edge_m", -1.0)) >= 0.0:
+		line["edge_m"] = first["test_edge_m"]
+	print("PERF_SWITCH ", line)
 
 
 static func attach(parent: Node3D, walls: Array, vis: Dictionary, pace: BuildPace, settings: Dictionary) -> Node3D:
@@ -755,6 +812,7 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 	await _setup_body(walls, vis, pace)
 	# 취소·표 오류·빈 배치·읽기 실패로 일찍 끝나도, 등록한 스레드 읽기는 한 번씩 회수한다.
 	_release_requests()
+	_report_test_walls(walls)
 
 
 func _setup_body(walls: Array, vis: Dictionary, pace: BuildPace) -> void:

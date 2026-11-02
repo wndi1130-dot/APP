@@ -401,18 +401,62 @@ func test_perf_horde_false_creates_no_node_and_does_not_load_atlas() -> void:
 	assert_false(Switch._valid({"horde": "false"}).has("horde"))
 
 
+func _ids(walls: Array) -> Array:
+	return walls.map(func(wall: Dictionary) -> String: return String(wall["id"]))
+
+
 func test_phone_switch_horde_test_walls_adds_the_shot_walls_only_when_on() -> void:
 	# 폰 재기 길: perf_switch.json "horde_test_walls": true → 정차가 넘기는 벽에 촬영 도구와 같은 시험 벽.
 	assert_eq(Switch._valid({"horde_test_walls": true}), {"horde_test_walls": true})
 	assert_false(Switch._valid({"horde_test_walls": 1}).has("horde_test_walls"), "참/거짓만 받는다")
+	# 정본 두 벽은 함수 밖 값으로 확인(촬영 도구도 같은 벽).
+	var expected: Array = [
+		{"id": "h1_north_sheet", "a": Vector2(4, 0), "b": Vector2(28, 0), "out": Vector2(0, -1), "kind": "wall_sheet", "height": 3.0},
+		{"id": "h1_west_stack", "a": Vector2(0, 4), "b": Vector2(0, 28), "out": Vector2(-1, 0), "kind": "wall_stack", "height": 5.2},
+	]
+	assert_eq(Horde.test_walls(), expected)
+	assert_eq(Shots.test_walls(), expected)
 	var map_wall: Dictionary = {"id": "map_east", "a": Vector2(40, 4), "b": Vector2(40, 28), "out": Vector2(1, 0), "kind": "wall_plank", "height": 2.0}
 	var data: Dictionary = {"edge_walls": [map_wall]}
 	var opts: Dictionary = {"test_edge_walls": _walls(1.0)}
 	assert_eq(Horde.stop_walls(data, opts, {}), [map_wall] + _walls(1.0), "기본은 지도 + opts 그대로")
 	assert_eq(Horde.stop_walls(data, opts, Switch._valid({"horde_test_walls": false})), [map_wall] + _walls(1.0))
-	assert_eq(Horde.stop_walls(data, opts, Switch._valid({"horde_test_walls": true})), [map_wall] + _walls(1.0) + Horde.test_walls())
 	assert_eq(Horde.stop_walls({}, {}, {"horde_test_walls": "yes"}), [], "검사 안 거친 잘못된 값도 켬이 아니다")
-	assert_eq(Shots.test_walls(), Horde.test_walls(), "촬영 도구와 폰 재기가 같은 벽")
+	var on: Array = Horde.stop_walls(data, opts, Switch._valid({"horde_test_walls": true}))
+	assert_eq(_ids(on), ["map_east", "north", "west", "h1_north_sheet", "h1_west_stack"])
+	for index: int in range(3, 5):
+		assert_eq(on[index]["test_mode"], "corner")
+		for key: String in ["a", "b", "out", "kind", "height"]:
+			assert_eq(on[index][key], expected[index - 3][key])
+	# 무리 꺼짐이면 시험 벽을 넣지 않는다(켬 줄도 없음 — "ok": false 줄만).
+	assert_eq(Horde.stop_walls(data, {}, {"horde": false, "horde_test_walls": true}), [map_wall])
+	# 같은 시험 벽이 opts로 이미 오면 하나만(같은 id 둘은 둘 다 거부되므로), 다른 벽이 id를 쓰면 이름을 바꿔 둘 다.
+	var doubled: Array = Horde.stop_walls({}, {"test_edge_walls": Horde.test_walls()}, {"horde_test_walls": true})
+	assert_eq(_ids(doubled), ["h1_north_sheet", "h1_west_stack"])
+	assert_eq(doubled[0]["test_mode"], "corner")
+	var clash: Dictionary = map_wall.duplicate()
+	clash["id"] = "h1_north_sheet"
+	var renamed: Array = Horde.stop_walls({"edge_walls": [clash]}, {}, {"horde_test_walls": true})
+	assert_eq(_ids(renamed), ["h1_north_sheet", "h1_north_sheet_test", "h1_west_stack"])
+
+
+func test_phone_switch_reports_ok_only_after_the_test_walls_are_really_built() -> void:
+	# 켬 판정 줄은 짓기가 끝난 뒤: 받아들인 시험 벽·그 무리 수. 실제 자원·나눠 짓기 끔.
+	var parent := Node3D.new()
+	add_child_autofree(parent)
+	var settings: Dictionary = {"horde_test_walls": true}
+	var walls: Array = Horde.stop_walls({}, {}, settings)
+	var node: Horde = await Horde.attach(parent, walls, {"map_size": Vector2(120, 80)}, Pace.new(), settings)
+	assert_true(bool(node.stats["ready"]))
+	assert_eq(int(node.stats["test_walls_used"]), 2)
+	assert_true(bool(node.stats["test_walls_ok"]))
+	assert_eq(int(node.stats["instances"]), 432)
+	# 24 m 벽이 안 들어가는 작은 지도: 시험 벽이 거부돼 켬이 아니다.
+	var small_parent := Node3D.new()
+	add_child_autofree(small_parent)
+	var small: Horde = await Horde.attach(small_parent, Horde.stop_walls({}, {}, settings), {"map_size": Vector2(20, 20)}, Pace.new(), settings)
+	assert_eq(int(small.stats["test_walls_used"]), 0)
+	assert_false(bool(small.stats["test_walls_ok"]))
 
 
 func test_phone_switch_near_puts_the_two_test_walls_on_the_edge_nearest_the_arrival() -> void:
@@ -437,9 +481,15 @@ func test_phone_switch_near_puts_the_two_test_walls_on_the_edge_nearest_the_arri
 		assert_eq(wall["out"], Vector2(-1, 0))
 		assert_gte((wall["a"] as Vector2).y, 0.0)
 		assert_lte((wall["b"] as Vector2).y, 80.0)
-	# 정차 자료의 첫 도착 칸을 쓴다.
+	# 정차 자료의 첫 도착 칸을 쓰고, 넣은 벽에 "near"와 가장자리 거리를 단다.
 	var data: Dictionary = {"spawns": {"squad": [Vector2i(60, 74), Vector2i(61, 74)]}}
-	assert_eq(Horde.stop_walls(data, {}, {"horde_test_walls": "near"}, map_size), walls)
+	var placed: Array = Horde.stop_walls(data, {}, {"horde_test_walls": "near"}, map_size)
+	assert_eq(_ids(placed), _ids(walls))
+	for index: int in range(2):
+		assert_eq(placed[index]["test_mode"], "near")
+		assert_almost_eq(float(placed[index]["test_edge_m"]), 5.5, 0.0001)
+		for key: String in ["a", "b", "out", "kind", "height"]:
+			assert_eq(placed[index][key], walls[index][key])
 	assert_eq(Horde.stop_walls({}, {}, {"horde_test_walls": "near"}, map_size), [], "도착 자리 없으면 더하지 않음")
 
 
