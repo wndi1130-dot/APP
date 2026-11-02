@@ -162,6 +162,14 @@ func test_the_app_return_wait_fades_the_world_like_a_pause() -> void:
 		game._process(0.05)
 	assert_true(game.resume_pending)
 	assert_eq(float(game.fx_params["fx_fade"]), 1.0, "the world stays faded until play goes on")
+	# Pressing on: the next frames leave the wait branch and ease the fade back out.
+	game.resume_ready_at_ms = Time.get_ticks_msec()
+	assert_true(game.continue_resume())
+	game._process(0.05)
+	assert_almost_eq(float(game.fx_params["fx_fade"]), 1.0 - 0.05 / game.FADE_TIME, 0.0001, "play eases the fade out")
+	for _frame in 4:
+		game._process(0.05)
+	assert_almost_eq(float(game.fx_params["fx_fade"]), 0.0, 0.0001, "back to full colour once play goes on")
 
 
 func test_snowfall_is_drawn_by_the_fx_precip_shader() -> void:
