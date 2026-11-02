@@ -364,40 +364,42 @@ func _camera_point_count(state: Dictionary, camera_way: Vector3) -> int:
 func _assert_camera_watch_turn(state: Dictionary, base: Vector3, camera_way: Vector3, original: Dictionary = {}) -> void:
 	if original.is_empty():
 		original = ai._watch_state(watcher, base, 0, field.clock.elapsed)
-	var turn: float = angle_difference(float(original["yaw_0"]), float(state["yaw_0"]))
-	var degrees: float = absf(rad_to_deg(turn))
-	var chosen_count: int = _camera_point_count(state, camera_way)
-	assert_lte(degrees, FieldAi.LOOK_CAMERA_TURN_MAX_DEG + 0.0001)
-	assert_almost_eq(degrees, roundf(degrees), 0.0001, "turns use whole degrees")
+	var turn: float = ai._watch_camera_turn(watcher, original, base, camera_way)
+	assert_lte(absf(rad_to_deg(turn)), FieldAi.LOOK_CAMERA_TURN_MAX_DEG + 0.0001)
+	var centre: float = atan2(base.x, base.z)
+	var turned: Dictionary = original.duplicate()
 	for point: int in range(FieldAi.LOOK_POINTS):
-		assert_almost_eq(angle_difference(float(original["yaw_" + str(point)]) + turn, float(state["yaw_" + str(point)])), 0.0, 0.0001)
-	var counts: Dictionary = {}
-	var shortest: float = FieldAi.LOOK_CAMERA_TURN_MAX_DEG + 1.0
-	var fewest: int = FieldAi.LOOK_POINTS + 1
-	var shortest_minimum: float = shortest
+		var key: String = "yaw_" + str(point)
+		turned[key] = wrapf(float(original[key]) + turn, -PI, PI)
+		assert_lte(absf(angle_difference(centre, float(turned[key]))), PI * 0.5 + FieldAi.LOOK_ANGLE_EPS)
+		assert_lte(absf(angle_difference(centre, float(state[key]))), PI * 0.5 + FieldAi.LOOK_ANGLE_EPS)
+	assert_lte(_camera_point_count(state, camera_way), FieldAi.LOOK_CAMERA_MAX_POINTS)
+	var chosen_count: int = _camera_point_count(turned, camera_way)
 	for trial: int in range(-int(FieldAi.LOOK_CAMERA_TURN_MAX_DEG), int(FieldAi.LOOK_CAMERA_TURN_MAX_DEG) + 1):
 		var candidate: Dictionary = original.duplicate()
+		var valid: bool = true
 		for point: int in range(FieldAi.LOOK_POINTS):
-			candidate["yaw_" + str(point)] = float(original["yaw_" + str(point)]) + deg_to_rad(float(trial))
+			var key: String = "yaw_" + str(point)
+			candidate[key] = float(original[key]) + deg_to_rad(float(trial))
+			if absf(angle_difference(centre, float(candidate[key]))) > PI * 0.5 + FieldAi.LOOK_ANGLE_EPS:
+				valid = false
+		if not valid:
+			continue
 		var count: int = _camera_point_count(candidate, camera_way)
-		counts[trial] = count
-		if count <= FieldAi.LOOK_CAMERA_MAX_POINTS:
-			shortest = minf(shortest, absf(float(trial)))
-		if count < fewest:
-			fewest = count
-			shortest_minimum = absf(float(trial))
-		elif count == fewest:
-			shortest_minimum = minf(shortest_minimum, absf(float(trial)))
-	if shortest <= FieldAi.LOOK_CAMERA_TURN_MAX_DEG:
-		assert_lte(chosen_count, FieldAi.LOOK_CAMERA_MAX_POINTS)
-		assert_almost_eq(degrees, shortest, 0.0001, "use the shortest feasible turn on either side")
-	else:
-		assert_eq(chosen_count, fewest, "an unreachable limit keeps the fewest camera points")
-		assert_almost_eq(degrees, shortest_minimum, 0.0001, "the fallback also uses the shortest turn")
-	var opposite_count: int = int(counts[-int(roundf(rad_to_deg(turn)))])
-	if degrees > 0.0001 and ((chosen_count <= FieldAi.LOOK_CAMERA_MAX_POINTS and opposite_count <= FieldAi.LOOK_CAMERA_MAX_POINTS) or (chosen_count > FieldAi.LOOK_CAMERA_MAX_POINTS and opposite_count == chosen_count)):
-		var tie_side: float = -1.0 if watcher.name_unit("watch_turn") < 0.5 else 1.0
-		assert_eq(signf(turn), tie_side, "equal turns use the name hash")
+		if chosen_count <= FieldAi.LOOK_CAMERA_MAX_POINTS and count <= FieldAi.LOOK_CAMERA_MAX_POINTS:
+			assert_lte(absf(rad_to_deg(turn)), absf(float(trial)) + 0.0001)
+		elif chosen_count > FieldAi.LOOK_CAMERA_MAX_POINTS:
+			assert_lte(chosen_count, count)
+			if chosen_count == count:
+				assert_lte(absf(rad_to_deg(turn)), absf(float(trial)) + 0.0001)
+		if absf(turn) > 0.0001 and absf(absf(deg_to_rad(float(trial))) - absf(turn)) < 0.0001 and signf(float(trial)) != signf(turn):
+			if (chosen_count <= FieldAi.LOOK_CAMERA_MAX_POINTS and count <= FieldAi.LOOK_CAMERA_MAX_POINTS) or (chosen_count > FieldAi.LOOK_CAMERA_MAX_POINTS and count == chosen_count):
+				var tie_side: float = -1.0 if watcher.name_unit("watch_turn") < 0.5 else 1.0
+				assert_eq(signf(turn), tie_side, "equal valid turns use the name hash")
+	if chosen_count <= FieldAi.LOOK_CAMERA_MAX_POINTS:
+		for point: int in range(FieldAi.LOOK_POINTS):
+			var key: String = "yaw_" + str(point)
+			assert_almost_eq(angle_difference(float(turned[key]), float(state[key])), 0.0, 0.0001)
 
 
 func test_a_camera_facing_role_limits_points_with_the_smallest_turn() -> void:
@@ -442,26 +444,36 @@ func test_an_escort_limits_camera_points_with_the_same_turn_bound() -> void:
 
 
 func test_camera_boundary_points_use_the_best_reachable_turn() -> void:
+	var original: Dictionary = {"yaw_0": deg_to_rad(-46.89), "yaw_1": deg_to_rad(-15.90),
+		"yaw_2": deg_to_rad(15.09), "yaw_3": deg_to_rad(46.08)}
+	var rng_before: int = field.rng.state
+	for base_yaw: float in [0.0, PI, PI * 0.5]:
+		var base: Vector3 = Vector3(sin(base_yaw), 0.0, cos(base_yaw))
+		var initial: Dictionary = original.duplicate()
+		for point: int in range(FieldAi.LOOK_POINTS):
+			var key: String = "yaw_" + str(point)
+			initial[key] = wrapf(float(original[key]) + base_yaw, -PI, PI)
+		var state: Dictionary = initial.duplicate()
+		var turn: float = ai._watch_camera_turn(watcher, initial, base, base)
+		for point: int in range(FieldAi.LOOK_POINTS):
+			var key: String = "yaw_" + str(point)
+			state[key] = wrapf(float(initial[key]) + turn, -PI, PI)
+		ai._watch_camera_adjust(state, base, base)
+		_assert_camera_watch_turn(state, base, base, initial)
+	assert_eq(field.rng.state, rng_before)
+
+
+func test_camera_original_boundary_case_obeys_role_limit() -> void:
 	var edge: float = deg_to_rad(FieldAi.LOOK_CAMERA_TURN_MAX_DEG - FieldAi.LOOK_CAMERA_DEG)
 	var sector: float = deg_to_rad(FieldAi.LOOK_SECTOR_DEG)
 	var original: Dictionary = {"yaw_0": -sector, "yaw_1": -edge, "yaw_2": edge, "yaw_3": sector}
 	var state: Dictionary = original.duplicate()
-	var rng_before: int = field.rng.state
 	var turn: float = ai._watch_camera_turn(watcher, original, Vector3.BACK, Vector3.BACK)
 	for point: int in range(FieldAi.LOOK_POINTS):
-		state["yaw_" + str(point)] = wrapf(float(original["yaw_" + str(point)]) + turn, -PI, PI)
+		var key: String = "yaw_" + str(point)
+		state[key] = wrapf(float(original[key]) + turn, -PI, PI)
+	ai._watch_camera_adjust(state, Vector3.BACK, Vector3.BACK)
 	_assert_camera_watch_turn(state, Vector3.BACK, Vector3.BACK, original)
-	# The fewest camera points any turn within the cap reaches, counted the long way.
-	var expected_count: int = FieldAi.LOOK_POINTS + 1
-	var cap: int = int(FieldAi.LOOK_CAMERA_TURN_MAX_DEG)
-	for trial: int in range(-cap, cap + 1):
-		var candidate: Dictionary = {}
-		for point: int in range(FieldAi.LOOK_POINTS):
-			candidate["yaw_" + str(point)] = float(original["yaw_" + str(point)]) + deg_to_rad(float(trial))
-		expected_count = mini(expected_count, _camera_point_count(candidate, Vector3.BACK))
-	assert_eq(_camera_point_count(state, Vector3.BACK), expected_count)
-	assert_lte(expected_count, FieldAi.LOOK_CAMERA_MAX_POINTS + 1)
-	assert_eq(field.rng.state, rng_before)
 
 
 func test_watch_points_stay_in_the_sector_and_keep_their_world_yaws() -> void:
@@ -1853,3 +1865,62 @@ func test_a_rewound_clock_cannot_reuse_a_sample_even_at_the_same_elapsed_value()
 	game.clock.elapsed = 1.0
 	game._update_ground_gait(p, 0.1, 0.01)
 	assert_almost_eq(float(p.brain[Gait.GROUND_RUN]["speed"]), 0.1 * (1.0 - exp(-0.1 / Gait.RUN_TAU)), 0.000001)
+
+
+func test_far_body_turn_arrives_at_applied_command() -> void:
+	watcher.position = Vector3(100, 0, 100)
+	watcher.turn_rate = 1.0
+	watcher.look = 0.0
+	_set_watch(deg_to_rad(80.0))
+	_watch()
+	assert_eq(float(watcher.brain["watch_point"]["waiting"]), 1.0)
+	watcher.look = watcher.facing
+	field.clock.elapsed = 0.5
+	_watch()
+	assert_eq(float(watcher.brain["watch_point"]["waiting"]), 0.0)
+	assert_gt(float(watcher.brain["watch_point"]["until"]), field.clock.elapsed)
+
+
+func test_short_clock_rewind_resets_before_head_tick() -> void:
+	var game: FieldGame = _field()
+	var p: Person = game.squad[1]
+	game.clock.elapsed = 10.0
+	game.ai._look_out(p, "point", Vector3.BACK, Vector3.RIGHT)
+	game.ai.think_t = 100.0
+	p.brain["think_t"] = 100.0
+	game.clock.elapsed = 10.2
+	game.ai.update(0.01)
+	p.brain["watch_pick_count"] = 9
+	p.brain["watch_point"]["viewed_0"] = 10.2
+	game.clock.elapsed = 10.1
+	game.ai.update(0.01)
+	assert_eq(int(p.brain["watch_pick_count"]), 0)
+	assert_false(p.brain.has("watch_target_yaw"))
+	game.ai._look_out(p, "point", Vector3.BACK, Vector3.RIGHT)
+	assert_false(p.brain["watch_point"].has("viewed_0"))
+	assert_eq(int(p.brain["watch_point"]["step"]), -1)
+
+
+func test_watch_pick_counter_survives_stop_and_save() -> void:
+	var first: FieldGame = _field()
+	var p: Person = first.squad[1]
+	p.turn_rate = 0.0
+	first.clock.elapsed = 1.0
+	first.ai._look_out(p, "point", Vector3.BACK, Vector3.RIGHT)
+	first.clock.elapsed = float(p.brain["watch_point"]["until"]) + 0.01
+	first.ai._look_out(p, "point", Vector3.BACK, Vector3.RIGHT)
+	assert_eq(int(p.brain["watch_pick_count"]), 1)
+	first.ai._stop_watch(p)
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+	var resumed: FieldGame = _field(FieldSave.resume_opts(saved))
+	var q: Person = resumed.squad[1]
+	assert_eq(int(q.brain["watch_pick_count"]), 1)
+	resumed.ai._look_out(q, "point", Vector3.BACK, Vector3.RIGHT)
+	resumed.clock.elapsed = float(q.brain["watch_point"]["until"]) + 0.01
+	resumed.ai._look_out(q, "point", Vector3.BACK, Vector3.RIGHT)
+	assert_eq(int(q.brain["watch_point"]["pick_index"]), 1)
+	assert_eq(int(q.brain["watch_pick_count"]), 2)
+	q.brain.erase("watch_counter_version")
+	resumed.ai._stop_watch(q)
+	resumed.ai._look_out(q, "point", Vector3.BACK, Vector3.RIGHT)
+	assert_eq(int(q.brain["watch_pick_count"]), 0)

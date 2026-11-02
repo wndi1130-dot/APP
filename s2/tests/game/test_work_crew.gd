@@ -501,6 +501,66 @@ func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 	assert_gt(total_turn, deg_to_rad(5.0), "the posted watches move between their points")
 
 
+func _watch_fps_run(saved: Dictionary, guard_pid: String, fps: int) -> Array:
+	var field: FieldGame = FieldGame.new()
+	field.opts = FieldSave.resume_opts(saved)
+	add_child_autofree(field)
+	field.set_process(false)
+	var guard: Variant = null
+	for person in field.crew:
+		if String(person.pid) == guard_pid:
+			guard = person
+	assert_not_null(guard)
+	if not is_instance_valid(guard):
+		return []
+	var start: float = field.clock.elapsed
+	var delta: float = 1.0 / float(fps)
+	var samples: Array = []
+	for tick: int in range(1, 20 * fps + 1):
+		field.clock.elapsed = start + float(tick) / float(fps)
+		field._turn_people(delta)
+		field.ai.update(delta)
+		var state: Dictionary = guard.brain.get("watch_escort", {})
+		if state.is_empty():
+			fail_test("escort watch is missing at tick %d" % tick)
+			return samples
+		samples.append([int(state["step"]), int(state["point"]), float(state["waiting"]),
+			int(guard.brain.get("watch_pick_count", 0))])
+	return samples
+
+
+func test_escort_watch_matches_at_30_and_60_fps_from_the_same_save() -> void:
+	_send()
+	for guard in _role("escort"):
+		guard.position = _at() + Vector3(-4.0 if int(guard.brain.get("side", 0)) == 0 else 4.0, 0, 1.5)
+		guard.stop()
+		game.ai._escort_watch(guard, _at())
+	game._turn_people(0.0)
+	var guard_pid: String = String(_role("escort")[0].pid)
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	assert_false(saved.is_empty())
+	var slow: Array = _watch_fps_run(saved, guard_pid, 30)
+	var fast: Array = _watch_fps_run(saved, guard_pid, 60)
+	assert_eq(slow.size(), 20 * 30)
+	assert_eq(fast.size(), 20 * 60)
+	if slow.size() != 20 * 30 or fast.size() != 20 * 60:
+		return
+	# A decision may land within one 30 Hz frame of the sampled second.
+	for second: int in range(1, 21):
+		var sample: Array = slow[second * 30 - 1]
+		var centre: int = second * 60 - 1
+		var matched: bool = false
+		for offset: int in range(-2, 3):
+			var index: int = centre + offset
+			if index < 0 or index >= fast.size():
+				continue
+			var other: Array = fast[index]
+			if sample == other:
+				matched = true
+		assert_true(matched, "step, point, waiting and pick count at second %d within 1/30 s" % second)
+	assert_gt(int(slow[-1][3]), 1, "the restored watch makes multiple choices")
+
+
 ## The watch now: x 1 while it looks at a camera-side point, y the largest turn of its look
 ## points off the outward sector (degrees), z how many look points face the camera.
 func _watch_extent(guard) -> Vector3:

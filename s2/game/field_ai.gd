@@ -108,7 +108,10 @@ const LOOK_START_MIN_S: float = 0.15
 const LOOK_START_SLOT_S: float = 0.3
 const LOOK_START_SLOTS: int = 3
 const LOOK_DWELL_TRIES: int = 16
-const LOOK_STATE_VERSION: int = 4
+const LOOK_STATE_VERSION: int = 5
+const LOOK_ARRIVAL_DEG: float = 0.5
+const LOOK_CAMERA_MARGIN_DEG: float = 0.01
+const LOOK_PICK_LIMIT: int = 1000000000
 const LOOK_KEYS: Array[String] = ["watch_point", "watch_side", "watch_rear", "watch_aside", "watch_escort"]
 const LOOK_ANGLE_EPS: float = 0.000001
 const LOOK_HASH_MIN_UNIT: float = 0.001
@@ -203,6 +206,8 @@ func update(delta: float) -> void:
 		if p.sled_id != 0:
 			game.actions.release_sled(p, false)
 		_grab_reflex(p, delta)
+		if p.brain.has("watch_seen_t"):
+			_watch_clock(p)
 		if p.brain.has("watch_target_yaw"):
 			if p.team == "squad" and game.player.moving:
 				_stop_watch(p)
@@ -1202,13 +1207,26 @@ func _look_out(p, role: String, fwd: Vector3, right: Vector3) -> Vector3:
 
 
 ## Decision 535: keep world targets, leave neck room, then dwell.
+func _watch_clock(p: Variant) -> void:
+	var now: float = game.clock.elapsed
+	if now < float(p.brain.get("watch_seen_t", now)):
+		_stop_watch(p)
+		p.brain["watch_pick_count"] = 0
+		p.brain.erase("watch_body_turn_t")
+	p.brain["watch_seen_t"] = now
+
+
 func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: String) -> Vector3:
 	var now: float = game.clock.elapsed
+	_watch_clock(p)
+	if int(p.brain.get("watch_counter_version", 0)) != 1:
+		p.brain["watch_counter_version"] = 1
+		p.brain["watch_pick_count"] = 0
 	var state: Dictionary = p.brain.get(key, {})
-	if now < float(state.get("seen", now)) or now < float(p.brain.get("watch_seen_t", now)):
-		state = {}   # A rewound clock starts a fresh watch.
+	if now < float(state.get("seen", now)):
 		_stop_watch(p)
-	p.brain["watch_seen_t"] = now
+		p.brain["watch_pick_count"] = 0
+		state = {}
 	if int(state.get("version", 0)) != LOOK_STATE_VERSION:
 		state = _watch_state(p, base, k, now, camera_way)
 	state.erase("edge")   # Old saves may still carry the camera edge latch.
@@ -1222,7 +1240,10 @@ func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: St
 		return Vector3(sin(p.facing), 0.0, cos(p.facing))
 	if float(state["waiting"]) == 0.0 and now >= float(state["until"]):
 		state["step"] = int(state["step"]) + 1
-		var point: int = _watch_pick(p, state, int(state["step"]), now, camera_way)
+		var pick_index: int = clampi(int(p.brain.get("watch_pick_count", 0)), 0, LOOK_PICK_LIMIT - 1)
+		p.brain["watch_pick_count"] = (pick_index + 1) % LOOK_PICK_LIMIT
+		state["pick_index"] = pick_index
+		var point: int = _watch_pick(p, state, pick_index, now, camera_way)
 		state["point"] = point
 		state["target"] = float(state["yaw_" + str(point)])
 		state["waiting"] = 1.0
@@ -1247,11 +1268,14 @@ func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: St
 		state["turning"] = 0.0
 	var arrived: bool = absf(offset) <= deg_to_rad(LOOK_BODY_TURN_DEG) + LOOK_ANGLE_EPS
 	if float(state["body_turned"]) != 0.0:
-		arrived = absf(angle_difference(shown, body)) <= LOOK_ANGLE_EPS
+		if p.turn_rate > 0.0:
+			arrived = absf(angle_difference(p.facing, body)) <= deg_to_rad(LOOK_ARRIVAL_DEG) and absf(angle_difference(shown, p.facing)) <= deg_to_rad(LOOK_ARRIVAL_DEG)
+		else:
+			arrived = true
 	if float(state["waiting"]) != 0.0 and arrived:
 		state["waiting"] = 0.0
 		state["picked"] = now
-		state["until"] = now + _watch_dwell(p, int(state["step"]), _watch_faces_camera(float(state["target"]), camera_way))
+		state["until"] = now + _watch_dwell(p, int(state.get("pick_index", state["step"])), _watch_faces_camera(float(state["target"]), camera_way))
 	p.brain["watch_target_yaw"] = float(state["target"])
 	p.brain["watch_slot"] = LOOK_KEYS.find(key)
 	p.brain["watch_head_yaw"] = _watch_head_yaw(shown, float(state["target"]))
@@ -1271,6 +1295,7 @@ func _watch_state(p: Variant, base: Vector3, k: int, now: float, camera_way: Vec
 	if turn != 0.0:
 		for point: int in range(LOOK_POINTS):
 			state["yaw_" + str(point)] = wrapf(float(state["yaw_" + str(point)]) + turn, -PI, PI)
+	_watch_camera_adjust(state, base, camera_way)
 	state["target"] = float(state["yaw_0"])
 	return state
 
@@ -1292,9 +1317,16 @@ func _watch_camera_turn(p: Variant, state: Dictionary, base: Vector3, camera_way
 		for side: float in [away, -away]:
 			var turn: float = deg_to_rad(float(degrees)) * side
 			var camera_count: int = 0
+			var valid: bool = true
+			var centre: float = atan2(base.x, base.z)
 			for point: int in range(LOOK_POINTS):
-				if _watch_faces_camera(float(state["yaw_" + str(point)]) + turn, camera_way):
+				var yaw: float = float(state["yaw_" + str(point)]) + turn
+				if absf(angle_difference(centre, yaw)) > PI * 0.5 + LOOK_ANGLE_EPS:
+					valid = false
+				if _watch_faces_camera(yaw, camera_way):
 					camera_count += 1
+			if not valid:
+				continue
 			if camera_count <= LOOK_CAMERA_MAX_POINTS and (not found or side == tie_side):
 				found = true
 				found_turn = turn
@@ -1305,6 +1337,40 @@ func _watch_camera_turn(p: Variant, state: Dictionary, base: Vector3, camera_way
 			return found_turn
 	# At the boundary, the fewest reachable points may be one over the limit.
 	return best_turn
+
+
+func _watch_camera_adjust(state: Dictionary, base: Vector3, camera_way: Vector3) -> void:
+	camera_way.y = 0.0
+	if camera_way.length_squared() <= 0.0001:
+		return
+	var centre: float = atan2(base.x, base.z)
+	var camera: float = atan2(camera_way.x, camera_way.z)
+	var edge: float = deg_to_rad(LOOK_CAMERA_DEG + LOOK_CAMERA_MARGIN_DEG)
+	for _attempt: int in range(LOOK_POINTS):
+		var count: int = 0
+		var best: int = -1
+		var best_distance: float = INF
+		var destination: float = 0.0
+		for point: int in range(LOOK_POINTS):
+			var yaw: float = float(state["yaw_" + str(point)])
+			if not _watch_faces_camera(yaw, camera_way):
+				continue
+			count += 1
+			var offset: float = angle_difference(camera, yaw)
+			var side: float = -1.0 if offset < 0.0 else 1.0
+			var candidate: float = wrapf(camera + side * edge, -PI, PI)
+			if absf(angle_difference(centre, candidate)) > PI * 0.5 + LOOK_ANGLE_EPS:
+				candidate = wrapf(camera - side * edge, -PI, PI)
+			if absf(angle_difference(centre, candidate)) > PI * 0.5 + LOOK_ANGLE_EPS:
+				continue
+			var distance: float = absf(angle_difference(yaw, candidate))
+			if distance < best_distance:
+				best = point
+				best_distance = distance
+				destination = candidate
+		if count <= LOOK_CAMERA_MAX_POINTS or best < 0:
+			return
+		state["yaw_" + str(best)] = destination
 
 
 func _watch_weight(state: Dictionary, point: int, now: float) -> float:
