@@ -549,12 +549,15 @@ func test_time_budget_requests_rest_before_piece_cap() -> void:
 	node._begin_stats(null)
 	node._pieces = 1
 	node._work_start = Time.get_ticks_usec() - Horde.WORK_USEC
+	node._rest_from = node._work_start
 	assert_true(node._rest_due())
 	node._account()
 	assert_gte(float(node.stats["max_continuous_ms"]), 6.0)
+	assert_true(node._rest_due(), "단계를 바꾸며 시간을 셈해도 마지막 쉼 뒤 6 ms면 쉼 자리")
 	node._continuous_usec = 0
 	node._pieces = Horde.PIECE_CAP * 10
 	node._work_start = Time.get_ticks_usec()
+	node._rest_from = node._work_start
 	assert_false(node._rest_due(), "조각 수만으로 프레임을 양보하지 않는다")
 
 
