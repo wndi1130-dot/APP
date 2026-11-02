@@ -470,9 +470,12 @@ func test_walking_source_mid_knees_hips_and_footlock_on_all_fourteen_rigs() -> v
 			root.queue_free()
 			continue
 		var walk: Array = walks[0]
+		ctx["rig_label"] = rig_name
 		ctx["sink_scale"] = BodyBake._sink_scale(root, ctx["body"])
 		BodyBake._fit_person_stride(ctx, walk)
 		var phase: Dictionary = BodyBake._fit_person_phase(ctx, walk)
+		if not phase.is_empty():
+			BodyBake._fit_person_stride(ctx, walk, float(phase["shift"]))
 		var fit: Dictionary = BodyBake._fit_person_footlock(ctx, walk, phase)
 		assert_false(fit.is_empty(), rig_name + " canonical footlock fit")
 		if fit.is_empty():
@@ -506,6 +509,9 @@ func test_walking_source_mid_knees_hips_and_footlock_on_all_fourteen_rigs() -> v
 			if entry[0] != walk[0]:
 				BodyBake._fit_person_stride(ctx, entry)
 				phase = BodyBake._fit_person_phase(ctx, entry)
+				if not phase.is_empty():
+					BodyBake._fit_person_stride(ctx, entry, float(phase["shift"]))
+			ctx["walk_clip"] = entry[0]
 			var shared: Dictionary = BodyBake._fit_person_footlock(ctx, entry, phase)
 			assert_eq(shared["pelvis"]["values"], table["values"], rig_name + " canonical table shared by " + str(entry[0]))
 			var stats: Array = BodyBake._person_footlock_stats()

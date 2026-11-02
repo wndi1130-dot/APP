@@ -782,3 +782,88 @@ func test_the_hands_are_marked_for_the_shader_and_the_rest_left_as_it_was() -> v
 	assert_eq(BodyBake.mark_hands(root), marks)
 	var colours = (BodyBake.first_of(root, "MeshInstance3D") as MeshInstance3D).mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
 	assert_eq(colours, marks, "the body to bake has them")
+
+
+func test_walk_saved_stride_uses_rolling_skin_support_and_rejects_wrong_slope() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var bind_bone: Array = ctx["bind_bone"]
+	var frames: Array = []
+	var too_long: Array = []
+	for frame in 32:
+		var u: float = float(frame) / 32.0
+		var skin: Array = BodyBake._skin_frame(ctx)
+		for side in 2:
+			var bone: int = int(fit["legs"][side][2])
+			var bind: int = bind_bone.find(bone)
+			var ankle: Vector3 = fit["rest_ankles"][side]
+			var angle: float = 0.25 * sin(TAU * u + float(side))
+			var basis: Basis = Basis(Vector3.RIGHT, angle)
+			skin[bind] = Transform3D(basis, ankle - basis * ankle)
+		for side in 2:
+			var bind: int = bind_bone.find(int(fit["legs"][side][2]))
+			var probe: Dictionary = BodyBake._person_footlock_probes(fit, skin)[side]
+			var point: Vector3 = probe["point"]
+			var rest: Vector3 = probe["rest"]
+			var age: float = fposmod(u - float(fit["starts"][side]), 1.0)
+			var transform: Transform3D = skin[bind]
+			transform.origin.z += -1.64 * age - (point.z - rest.z)
+			skin[bind] = transform
+		frames.append(skin)
+		var longer: Array = skin.duplicate()
+		for side in 2:
+			var bind: int = bind_bone.find(int(fit["legs"][side][2]))
+			var transform: Transform3D = longer[bind]
+			var age: float = fposmod(u - float(fit["starts"][side]), 1.0)
+			transform.origin.z -= 0.02 * 1.64 * age
+			longer[bind] = transform
+		too_long.append(longer)
+	ctx["fit_failures"] = []
+	var measured: float = BodyBake._check_person_stride_final(ctx, "p_walk", frames, fit)
+	assert_almost_eq(measured, 1.64, 1.64 * 0.005, "rolling support stride is measured from saved frames")
+	assert_eq((ctx["fit_failures"] as Array).size(), 0, "correct support travel passes")
+	BodyBake._check_person_stride_final(ctx, "p_walk", too_long, fit)
+	assert_eq((ctx["fit_failures"] as Array).size(), 1, "two percent wrong support travel is refused")
+
+
+func test_walk_final_reach_failure_is_counted_separately_from_intermediate_clamps() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	var leg: Array = fit["legs"][0]
+	var hip: Vector3 = body.get_bone_global_pose(int(leg[0])).origin
+	var far: Dictionary = BodyBake._person_walk_reach_info(body, leg, hip + Vector3(0.0, -3.0, 0.0))
+	assert_gt(float(far["excess"]), 0.0, "unreachable final target has positive excess")
+	var u: float = 0.3
+	BodyBake.pose(ctx, "", "p_walk", u)
+	var before: Array = BodyBake._person_footlock_points(fit, BodyBake._skin_frame(ctx))
+	var drop: float = BodyBake._apply_person_walk_body(ctx, fit, u, u, "p_walk")
+	var misses: Array = BodyBake._apply_person_footlock(ctx, fit, u)
+	var after: Array = BodyBake._person_footlock_probes(fit, BodyBake._skin_frame(ctx))
+	fit["reach_clamped"] = [true, true]
+	fit["reach_final_failed"] = [false, true]
+	var stats: Array = BodyBake._person_footlock_stats()
+	BodyBake._note_person_footlock(ctx, fit, u, before, after, misses, stats, drop)
+	assert_eq(int(stats[0]["reach_clamp_frames"]), 1, "intermediate clamp retained")
+	assert_eq(int(stats[0]["reach_final_fail_frames"]), 0, "recovered final target")
+	assert_eq(int(stats[1]["reach_final_fail_frames"]), 1, "failed final target counted")
+
+
+func test_walk_stride_refit_samples_the_shifted_phase() -> void:
+	var entry: Array = BodyBake.PERSON_CLIPS[0]
+	var shift: float = 0.0137
+	var probe: Node3D = _stick_body_with_two_soles()
+	add_child_autofree(probe)
+	var probe_ctx: Dictionary = BodyBake.prepare_own(probe, [entry])
+	var raw: float = BodyBake._person_stride_round(probe_ctx, entry, shift)
+	assert_gt(raw, 0.0, "stick walk has measurable stride")
+	if raw <= 0.0:
+		return
+	var root: Node3D = _stick_body_with_two_soles(float(BodyBake.PERSON_STRIDE_ROUNDS["p_walk"]) / raw)
+	add_child_autofree(root)
+	var ctx: Dictionary = BodyBake.prepare_own(root, [entry])
+	ctx["fit_failures"] = []
+	BodyBake._fit_person_stride(ctx, entry, shift)
+	var measured: float = BodyBake._person_stride_round(ctx, entry, shift)
+	assert_almost_eq(measured, float(BodyBake.PERSON_STRIDE_ROUNDS["p_walk"]), float(BodyBake.PERSON_STRIDE_ROUNDS["p_walk"]) * BodyBake.STRIDE_TOLERANCE, "fit and sample use the same shifted phase")
+	assert_eq((ctx["fit_failures"] as Array).size(), 0, "shifted stride fit stays within its bounds")
