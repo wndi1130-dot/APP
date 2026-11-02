@@ -1,4 +1,5 @@
 extends RefCounted
+const Supplies = preload("res://game/train/train_supplies.gd")
 ## S1 cards.ts choices and function-valued travel effects.
 ## Internal effect tuples keep their S1 order; no fixture states are consulted.
 const C = preload("res://game/train/turn/turn_common.gd")
@@ -133,11 +134,18 @@ static func _base_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictio
 		"favor":
 			var again: bool = g.get("eventLog", {}).has("favor:" + comm)
 			var costs: Dictionary = {"tail": [["med", -2], ["base", "medtech", 2, 3]], "medtech": [["rel", "front", -3]] if again else [["base", "front", 2, 3]], "guard": [["rel", "engine", -2], ["rel", "tail", -1]] if again else [["rel", "engine", -2]], "front": [["lux", -3 if again else -2]], "engine": [["rel", "tail", -3 if again else -2]]}
+			if not again and Supplies.asks(g):
+				costs["tail"] = [["sup", -2]]
+				costs["medtech"] = [["sup", -1]]
 			var cost: Array = costs[comm]
 			cost.append(["debt", comm])
 			var options: Array = [choice("grant", "들어준다", cost, "favor_risk"), choice("refuse", "거절한다", [["rel", comm, -4 if again else -3]])]
 			options[0]["log"] = "%s의 사적인 부탁을 들어줬다." % s["leader"]["name"]
 			options[1]["log"] = "%s의 사적인 부탁을 거절했다." % s["leader"]["name"]
+			if Supplies.asks(g) and float(g.get("supFine", 0)) >= 1.0:
+				var fine: Dictionary = choice("grant_fine", "좋은 물건으로 들어준다", [["supFine", -1], ["debt", comm], ["rel", comm, 2]], "favor_risk")
+				fine["log"] = "%s의 사적인 부탁을 좋은 물건으로 들어줬다." % s["leader"]["name"]
+				options.insert(1, fine)
 			return {"title": "사적인 부탁", "key": "favor:" + comm, "choices": options}
 		"rescue":
 			var options: Array = []
@@ -335,6 +343,7 @@ static func _base_view(g: Dictionary, t: Dictionary, card: Dictionary) -> Dictio
 static func affordable(g: Dictionary, effs: Array) -> bool:
 	for e: Array in effs:
 		if e[0] in ["coal", "food", "med", "lux"] and float(e[1]) < 0 and float(g[e[0]]) < -float(e[1]): return false
+		if e[0] in ["sup", "supFine"] and float(e[1]) < 0 and float(g.get(e[0], 0)) < -float(e[1]): return false
 		if e[0] == "lever" and float(e[3]) > 0 and float(g["comms"][e[1]][e[2]]) >= 4: return false
 	return true
 
@@ -343,6 +352,9 @@ static func apply_effects(g: Dictionary, t: Dictionary, effs: Array, from: Strin
 		var kind: String = e[0]
 		match kind:
 			"coal", "food", "med", "lux", "trust", "tension": C.bump(g, kind, float(e[1]), "card", kind in ["med", "lux"])
+			"sup": C.bump(g, "sup", float(e[1]), "card")
+			"supFine":
+				if Supplies.asks(g): g["supFine"] = maxf(0.0, float(g.get("supFine", 0)) + float(e[1]))
 			"fear": g["fear"] = clampf(float(g["fear"]) + float(e[1]), 0, 100)
 			"injured":
 				var before: int = int(g["injured"])
