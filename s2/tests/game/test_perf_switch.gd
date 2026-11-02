@@ -2,6 +2,7 @@ extends "res://addons/gut/test.gd"
 ## 개발용 스위치의 파일을 격리하고 전역 그림자 설정은 시험 뒤 복원한다.
 
 const Switch = preload("res://game/perf_switch.gd")
+const NightView = preload("res://game/world/night_light_view.gd")
 
 class FieldProbe extends "res://game/field_game.gd":
 	func _ready() -> void:
@@ -967,3 +968,69 @@ func test_cloud_without_a_switch_leaves_params_and_metadata_unchanged() -> void:
 	var params: Dictionary = {"fx_cloud": Vector4(0.4, 0.8, 0.6, 9.0)}
 	assert_eq(Switch.cloud_params(sun, params), params)
 	assert_false(sun.has_meta(Switch.CLOUD_SOURCE))
+
+
+func test_night_sparks_accepts_only_bool_and_records_invalid_reasons() -> void:
+	for enabled: bool in [true, false]:
+		var diagnostic: Dictionary = {"reason": "old"}
+		_write(JSON.stringify({"night_sparks": enabled}))
+		assert_eq(Switch.read(path, diagnostic), {"night_sparks": enabled})
+		assert_eq(diagnostic, {})
+	for value in [0, 1, "false", "true", null, [], {}]:
+		var diagnostic: Dictionary = {}
+		_write(JSON.stringify({"night_sparks": value, "sun_shadow": false}))
+		assert_eq(Switch.read(path, diagnostic), {"sun_shadow": false})
+		assert_true(String(diagnostic["reason"]).contains("unsupported key or invalid value: night_sparks"))
+
+
+func test_fire_sparks_follow_the_drawn_weather_not_the_raw_kinds() -> void:
+	# Warm snow is drawn as rain and cold rain as snow (Atmosphere.drawn_kinds);
+	# the sparks thin out with what is drawn falling.
+	var field := _field()
+	field.night_view = NightView.new()
+	field.add_child(field.night_view)
+	field.night_view.build({"lights": [{"id": "fire", "kind": "campfire", "cell": Vector2i.ZERO}]})
+	var sparks: GPUParticles3D = field.night_view.parts["fire"]["sparks"]
+	for case: Array in [[["snow"], ["rain"], true], [["rain"], ["snow"], false], [["blizzard"], ["blizzard"], true], [["clear"], ["clear"], false]]:
+		field.look_kinds = case[0]
+		field.atmo = {"kinds": case[1]}
+		field._push_fire_weather()
+		var wet: bool = case[2]
+		assert_almost_eq(sparks.lifetime, NightView.SPARK_LIFE_WET if wet else NightView.SPARK_LIFE, 0.00001, str(case))
+		assert_almost_eq(sparks.amount_ratio, NightView.SPARK_WET_RATIO if wet else 1.0, 0.00001, str(case))
+
+
+func test_night_sparks_applies_after_build_and_on_later_settings_changes() -> void:
+	var field := _field()
+	field._apply_perf_settings({"night_sparks": false})
+	field.night_view = NightView.new()
+	field.add_child(field.night_view)
+	field.night_view.build({"lights": [{"id": "fire", "kind": "campfire", "cell": Vector2i.ZERO}]})
+	Switch.apply_night_sparks(field.night_view, field._perf_settings)
+	field.night_view.set_on("fire", true)
+	var sparks: GPUParticles3D = field.night_view.parts["fire"]["sparks"]
+	field.show()
+	assert_false(sparks.emitting)
+	field._apply_perf_settings({"night_sparks": true})
+	assert_true(sparks.emitting)
+	assert_eq(Switch.apply_night_sparks(field.night_view, {"night_sparks": true}), {})
+	field._apply_perf_settings({"night_sparks": false})
+	assert_false(sparks.emitting)
+	# A malformed value counts as missing, straight in or through read() (which
+	# drops it): both give the default, on.
+	assert_eq(Switch.apply_night_sparks(field.night_view, {"night_sparks": "false"}), {"night_sparks": true})
+	assert_true(sparks.emitting)
+	field._apply_perf_settings({"night_sparks": false})
+	assert_false(sparks.emitting)
+	_write(JSON.stringify({"night_sparks": "false"}))
+	field._apply_perf_settings(Switch.read(path))
+	assert_true(sparks.emitting, "malformed through read() is the same default")
+	field._apply_perf_settings({"night_sparks": false})
+	assert_false(sparks.emitting)
+	field.hide()
+	field._apply_perf_settings({})
+	assert_false(sparks.emitting)
+	field.show()
+	assert_true(sparks.emitting, "empty settings restore default on")
+	for node: MeshInstance3D in field.night_view.parts["fire"]["glow"]:
+		assert_true(node.visible)

@@ -581,6 +581,10 @@ func _ready() -> void:
 	night_view.name = "NightLights"
 	add_child(night_view)
 	night_view.build(data)
+	_push_fire_weather()
+	PerfSwitch.apply_night_sparks(night_view, _perf_settings)
+	visibility_changed.connect(night_view.refresh_visibility)
+	night_view.refresh_visibility()
 	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
 	map_edge = MapEdge.new()
 	add_child(map_edge)
@@ -712,6 +716,13 @@ func _apply_fx() -> void:
 		fx_light["sun_energy"] = float(clear_sky["sun_energy"]) * float(storm["sun"])
 		fx_light["sun_color"] = Color(fx_light["sun_color"]).lerp(storm["sun_color"], 0.6)
 		fx_light["ambient_color"] = Color(fx_light["ambient_color"]).lerp(storm["ambient_color"], 0.6)
+
+
+## The fires' sparks thin out in what is drawn falling (the atmosphere's kinds:
+## warm snow is drawn as rain, cold rain as snow), not the raw weather.
+func _push_fire_weather() -> void:
+	if night_view != null:
+		night_view.set_weather(fx_params, atmo.get("kinds", look_kinds))
 
 
 ## Snow keeps falling through the stop: lying snow deepens with the field clock
@@ -926,6 +937,7 @@ func _update_atmosphere() -> void:
 		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_set_view_fill()
 		_update_window_light()
+		_push_fire_weather()
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
@@ -1940,6 +1952,9 @@ func _apply_perf_settings(settings: Dictionary) -> Dictionary:
 	var mode_before: Variant = _perf_settings.get("view_fill_mode")
 	var fill_was: bool = view_fill != null and view_fill.visible
 	_perf_settings = settings
+	var spark_changed := PerfSwitch.apply_night_sparks(night_view, settings)
+	if not spark_changed.is_empty():
+		print("PERF_SWITCH ", spark_changed)
 	var changed: Dictionary = {}
 	if not settings.is_empty():
 		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
