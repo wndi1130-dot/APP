@@ -268,7 +268,9 @@ func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	assert_almost_eq(float(clear["pivot"]), Atmosphere.TONE_PIVOT_DAY, 0.0001)
 	# The faded day adds no colour on screen: the flattened spread gives the channels
 	# back through the saturation, never past what the unflattened grade showed
-	# (snow, grass, bare wood, brick, a coat, floor boards, dark cloth).
+	# (snow, grass, bare wood, brick, a coat, floor boards, dark cloth). The 0.01 slack
+	# is for the near-white snow, whose HSV saturation moves 0.048 -> 0.053: below what
+	# the eye reads on a white field, while every coloured sample loses saturation.
 	var unflat := _bcs_grade(Atmosphere.TONE_CONTRAST, float(clear["pivot"]), float(clear["saturation"]) * flat)
 	for sample: Color in [Color(0.86, 0.88, 0.90), Color(0.42, 0.45, 0.25), Color(0.30, 0.25, 0.20),
 			Color(0.55, 0.30, 0.25), Color(0.25, 0.27, 0.32), Color(0.45, 0.32, 0.20), Color(0.15, 0.13, 0.12)]:
