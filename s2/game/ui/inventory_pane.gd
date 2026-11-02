@@ -8,6 +8,7 @@ const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Sled = preload("res://game/sim/sled.gd")
 const W = preload("res://game/sim/weapons.gd")
+const WeaponWords = preload("res://game/sim/weapon_words.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 
@@ -424,6 +425,24 @@ static func _tools(hud, p, at: Dictionary, bag: bool) -> Control:
 	return row
 
 
+## What each weapon named at the bag's top does, one line each under that name
+## (결정 549; the words are weapon_words.gd DESC). With a second weapon named
+## too, each line starts with its own weapon's last word. Bare hands, none.
+static func weapon_lines(p) -> PackedStringArray:
+	var out: PackedStringArray = []
+	var shown: int = mini(p.hands.size(), 2)
+	for i: int in shown:
+		var id: String = String((p.hands[i] as Dictionary).get("id", ""))
+		if not WeaponWords.DESC.has(id):
+			continue
+		var line: String = String(WeaponWords.DESC[id])
+		if shown > 1:
+			var parts: PackedStringArray = String(W.get_data(id).get("name", id)).split(" ")
+			line = "%s · %s" % [parts[parts.size() - 1], line]
+		out.append(line)
+	return out
+
+
 ## Weapons, folded clothing and the bag share one item scroll (the rounds stay
 ## under it); taking from a box leaves all of these at hand, as before.
 static func _bag_rows(hud, p, at: Dictionary) -> Control:
@@ -432,7 +451,20 @@ static func _bag_rows(hud, p, at: Dictionary) -> Control:
 	var weapons: String = hud.short_weapon(p)
 	if p.hands.size() > 1:
 		weapons += " · " + String(W.get_data(p.hands[1]["id"]).get("name", ""))
-	col.add_child(_label(weapons, 12.0, GlassPane.INK))
+	var held := _column(2.0)
+	held.name = "Weapons"
+	held.add_child(_label(weapons, 12.0, GlassPane.INK))
+	var lines: PackedStringArray = weapon_lines(p)
+	for i: int in lines.size():
+		var line: String = lines[i]
+		var said := _label(line, 11.0, GlassPane.INK2)
+		said.name = "WeaponLine%d" % i
+		# A line is a sentence or two: it wraps whole on a narrow pane, never cut.
+		said.clip_text = false
+		said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		said.text = UiFonts.keep_all(line)
+		held.add_child(said)
+	col.add_child(held)
 	var worn := _column(0.0)
 	worn.name = "Worn"
 	var ids: Dictionary = Wear.worn_ids(p)

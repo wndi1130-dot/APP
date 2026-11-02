@@ -205,3 +205,45 @@ func test_the_bag_is_ordered_by_weight_or_by_name() -> void:
 	game.hud._inv_sort()
 	assert_eq(game.hud.inv_sort, "name")
 	game.hud._close_modal()
+
+
+func _hand(id: String) -> Dictionary:
+	return {"id": id, "quality": "factory", "condition": 1.0, "loaded": 0}
+
+
+## Under the weapons named at the bag's top, a line of what each does (결정 549):
+## whole on the pane, the weapon's own words; bare hands show none.
+func test_the_bag_says_what_each_weapon_in_hand_does() -> void:
+	var game = _game()
+	var p = game.player
+	var words: Dictionary = InventoryPane.WeaponWords.DESC
+	p.hands = [_hand("axe")]
+	game.hud.bag_panel()
+	var held: Node = game.hud.modal.find_child("Weapons", true, false)
+	assert_not_null(held, "the weapons' block at the bag's top")
+	var line: Label = held.find_child("WeaponLine0", false, false) as Label
+	assert_not_null(line)
+	assert_eq(line.text, UiFonts.keep_all(String(words["axe"])))
+	assert_false(line.clip_text, "it wraps whole rather than lose its end")
+	assert_null(held.find_child("WeaponLine1", false, false), "one weapon, one line")
+	game.hud._close_modal()
+	p.hands = [_hand("pistol"), _hand("knife")]
+	var knife_name: PackedStringArray = String(InventoryPane.W.get_data("knife")["name"]).split(" ")
+	assert_eq(InventoryPane.weapon_lines(p), PackedStringArray([
+		"%s · %s" % [game.hud.short_weapon(p), words["pistol"]],
+		"%s · %s" % [knife_name[knife_name.size() - 1], words["knife"]],
+	]), "two named, each line says whose it is")
+	for id in ["scrap", "wood", "cloth", "bandage", "plank", "flare", "document", "medkit", "bottle_spirit", "tweezers"]:
+		p.add_item(id, 1)
+	game.hud.bag_panel()
+	assert_not_null(game.hud.modal.find_child("WeaponLine1", true, false), "the second weapon's line")
+	# Wrapped lines (this and the bag's foot) only know their height once laid out.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var pane: Control = game.hud.modal.find_child("Pane", true, false)
+	assert_lte(pane.position.y + pane.get_combined_minimum_size().y, pane.get_viewport_rect().size.y, "two lines more and a full bag still on the screen")
+	game.hud._close_modal()
+	p.hands = []
+	assert_eq(InventoryPane.weapon_lines(p).size(), 0, "bare hands, no line")
+	p.hands = [_hand("pistol"), _hand("not_a_weapon")]
+	assert_eq(InventoryPane.weapon_lines(p).size(), 1, "a thing with no words gets no line")
