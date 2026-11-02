@@ -300,7 +300,7 @@ func test_supplies_save_rejects_wrong_types_nonfinite_and_unknown_cover() -> voi
 		assert_not_null(Save.shape_problem(g, _t), "reject " + str(pair))
 
 
-func test_supplies_slot_versions_one_and_two_read_three_refused() -> void:
+func test_supplies_slot_versions_one_to_three_read_four_refused() -> void:
 	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
 	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
 	# Version 1 without supplies keys: reads, supplies off.
@@ -309,16 +309,20 @@ func test_supplies_slot_versions_one_and_two_read_three_refused() -> void:
 	if one["ok"]:
 		assert_eq(int(one["g"]["version"]), 1)
 		assert_false(Supplies.asks(one["g"]), "a version 1 board reads with supplies off")
-	var two_board: Dictionary = on.duplicate(true)
-	two_board["version"] = 2
-	var two: Dictionary = Save.read_save(two_board, _t)
-	assert_true(two["ok"])
-	if two["ok"]: assert_true(Supplies.asks(two["g"]))
-	# A build that reads only 1 refuses 2 the same way this build refuses 3.
+	# 2: a supplies run from the builds that only turned it on in tests; 3: every supplies run now.
+	for version: int in [2, 3]:
+		var board_on: Dictionary = on.duplicate(true)
+		board_on["version"] = version
+		var read_on: Dictionary = Save.read_save(board_on, _t)
+		assert_true(read_on["ok"], "version %d reads" % version)
+		if read_on["ok"]:
+			assert_true(Supplies.asks(read_on["g"]))
+			assert_eq(int(read_on["g"]["version"]), version, "the version read stays as it was")
+	# A build that reads at most 2 refuses 3 the same way this build refuses 4.
 	for board: Dictionary in [old, on]:
-		var three: Dictionary = board.duplicate(true)
-		three["version"] = 3
-		var read: Dictionary = Save.read_save(three, _t)
+		var four: Dictionary = board.duplicate(true)
+		four["version"] = 4
+		var read: Dictionary = Save.read_save(four, _t)
 		assert_false(read["ok"])
 		assert_string_contains(String(read.get("why", "")), "더 새 빌드")
 
@@ -326,7 +330,7 @@ func test_supplies_slot_versions_one_and_two_read_three_refused() -> void:
 func test_supplies_train_slot_of_the_slice_writes_the_same_versions() -> void:
 	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
 	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
-	for pair: Array in [[old, 1], [on, 2]]:
+	for pair: Array in [[old, 1], [on, 3]]:
 		var g: Dictionary = pair[0]
 		var written: Dictionary = {}
 		assert_true(SliceSave.write_train(g, TRAIN_PATH, written))
