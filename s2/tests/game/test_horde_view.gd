@@ -544,6 +544,65 @@ func test_phone_switch_near_puts_the_two_test_walls_on_the_edge_nearest_the_arri
 	assert_eq(Horde.stop_walls(small, {}, {"horde_test_walls": "near"}, Vector2(20, 20)), [], "24 m 두 토막이 안 되는 가장자리면 넣지 않음")
 
 
+func test_phone_switch_view_puts_the_shot_walls_in_front_of_the_arrival_camera() -> void:
+	assert_eq(Switch._valid({"horde_test_walls": "view"}), {"horde_test_walls": "view"})
+	var map_size := Vector2(120, 80)
+	# 카메라는 +x·+z 쪽 위에서 -x·-z를 본다: 화면 위쪽(앞)은 도착 자리에서 (-x, -z) 쪽.
+	# 꼭짓점 = round((60.5, 50.5) + 16 m 앞) = (49, 39): 구석 시험 벽 둘을 그만큼 옮긴 것.
+	var walls: Array = Horde.view_test_walls(Vector2(60.5, 50.5))
+	assert_eq(walls, [
+		{"id": "h1_view_north_sheet", "a": Vector2(53, 39), "b": Vector2(77, 39), "out": Vector2(0, -1), "kind": "wall_sheet", "height": 3.0},
+		{"id": "h1_view_west_stack", "a": Vector2(49, 43), "b": Vector2(49, 67), "out": Vector2(-1, 0), "kind": "wall_stack", "height": 5.2},
+	])
+	var back: Vector3 = Horde.camera_back()
+	assert_almost_eq((Vector2(49, 39) - Vector2(60.5, 50.5)).dot(-Vector2(back.x, back.z).normalized()), 16.0, 0.5, "꼭짓점이 카메라 앞 16 m")
+	# 지도 안 벽: 시험 표시 "view"가 있어야 받아들이고, 좌표·법선 검사는 그대로.
+	for wall: Dictionary in walls:
+		assert_ne(Horde.wall_error(wall, map_size), "", "표시 없는 지도 안 벽은 거부")
+		var near_marked: Dictionary = wall.duplicate()
+		near_marked["test_mode"] = "near"
+		assert_ne(Horde.wall_error(near_marked, map_size), "", "건너뛰기는 view만")
+		var marked: Dictionary = wall.duplicate()
+		marked["test_mode"] = "view"
+		assert_eq(Horde.wall_error(marked, map_size), "", String(wall["id"]))
+	var bent: Dictionary = walls[0].duplicate()
+	bent["test_mode"] = "view"
+	bent["out"] = Vector2(0.6, -0.8)
+	assert_ne(Horde.wall_error(bent, map_size), "", "법선 검사는 그대로")
+	# 정차 자료의 첫 도착 칸을 쓰고, 넣은 벽에 "view"와 앞 거리를 단다.
+	var data: Dictionary = {"spawns": {"squad": [Vector2i(60, 50), Vector2i(61, 50)]}}
+	var placed: Array = Horde.stop_walls(data, {}, {"horde_test_walls": "view"}, map_size)
+	assert_eq(_ids(placed), ["h1_view_north_sheet", "h1_view_west_stack"])
+	for index: int in range(2):
+		assert_eq(placed[index]["test_mode"], "view")
+		assert_eq(float(placed[index]["test_ahead_m"]), 16.0)
+		for key: String in ["a", "b", "out", "kind", "height"]:
+			assert_eq(placed[index][key], walls[index][key])
+	assert_eq(Horde.stop_walls({}, {}, {"horde_test_walls": "view"}, map_size), [], "도착 자리 없으면 더하지 않음")
+	assert_eq(Horde.stop_walls(data, {}, {"horde": false, "horde_test_walls": "view"}, map_size), [], "무리 꺼짐이면 넣지 않음")
+	# 짓기: 두 벽 모두 받아들여 구석 시험 벽과 같은 짐, 도착 카메라 화면에 두 덩어리 모두.
+	var parent := Node3D.new()
+	add_child_autofree(parent)
+	var settings: Dictionary = {"horde_test_walls": "view"}
+	var node: Horde = await Horde.attach(parent, placed, {"map_size": map_size}, Pace.new(), settings)
+	assert_true(bool(node.stats["ready"]))
+	assert_true(bool(node.stats["test_walls_ok"]))
+	assert_eq(int(node.stats["test_walls_used"]), 2)
+	assert_eq(int(node.stats["instances"]), 432, "구석 시험 벽과 같은 무리 수")
+	var camera := Camera3D.new()
+	add_child_autofree(camera)
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = Horde.CAM_SIZE
+	camera.position = Vector3(60.5, 0, 50.5) + Horde.camera_back() * 60.0
+	camera.look_at(Vector3(60.5, 0, 50.5))
+	camera.make_current()
+	node.set_process(false)
+	node._update_visible()
+	assert_eq(node.visible_chunks.size(), node.chunks.size(), "도착 화면에 시험 무리 덩어리 모두")
+	assert_eq(int(node.stats["test_screen_max"]), 432)
+	assert_eq(int(node.stats["test_screen_first_frame"]), 1)
+
+
 func test_hiding_and_exit_clear_owned_focus() -> void:
 	var node := FixtureHorde.new()
 	add_child_autofree(node)

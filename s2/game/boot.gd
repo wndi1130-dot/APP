@@ -79,6 +79,7 @@ func _ready() -> void:
 		settings[row[0]] = row[2][0][0]
 	settings["fps_cap"] = default_fps_cap()
 	_cap_fps()
+	preload("res://game/world/horde_warm.gd").start(self, PerfSwitch.read() if OS.has_feature("android") else {}) # 무리 첫 그림 데우기(메뉴 동안)
 	var board: Array = SliceFlow.start_board()
 	var field_read: Dictionary = {}
 	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path, field_read)
