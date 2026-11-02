@@ -291,11 +291,21 @@ func test_the_shipped_files_load() -> void:
 func test_every_floor_ships_steps_of_its_own() -> void:
 	var a = game.audio
 	var g = game.grid
+	var FG = game.FieldGrid
 	var at: Vector3 = game.player.position
-	var cell: Vector2i = game.FieldGrid.cell_of(at)
+	var cell: Vector2i = FG.cell_of(at)
 	var was: int = g.floor_at(cell)
-	for kind in range(a.STEP_FLOORS.size()):
-		var own: String = a.STEP_FLOORS[kind][0][0]
+	# What each floor should sound like, written out apart from STEP_FLOORS, so a
+	# row moved to the wrong floor is caught.
+	var want: Dictionary = {
+		FG.Floor.SNOW: "step_snow", FG.Floor.ROAD: "step_concrete", FG.Floor.PLATFORM: "step_concrete",
+		FG.Floor.WOOD: "step_wood", FG.Floor.RAIL: "step_gravel", FG.Floor.DEEP_SNOW: "step_snow",
+		FG.Floor.ICE: "step_ice", FG.Floor.GRAVEL: "step_gravel",
+	}
+	assert_eq(want.size(), FG.Floor.size(), "every floor is written out here")
+	assert_eq(a.STEP_FLOORS.size(), FG.Floor.size(), "and has a row")
+	for kind in want:
+		var own: String = want[kind]
 		a.lib.erase(own)
 		g.floor[g.index(cell)] = kind
 		assert_eq(a._step_group(at)[0], own, "floor %d has steps of its own" % kind)
