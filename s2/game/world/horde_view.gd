@@ -203,10 +203,15 @@ static func wall_geometry(wall: Dictionary, head_max: float = HEAD_MAX_M) -> Dic
 
 
 static func hidden_local(geometry: Dictionary, along: float, depth: float) -> bool:
-	if depth < 0.0 or depth >= float(geometry["full"]):
+	return hidden_at(geometry["full"], geometry["slope"], geometry["margin"], geometry["length"], along, depth)
+
+
+## hidden_local의 몸통. 후보 고리는 벽마다 꺼내 둔 값으로 바로 부른다(시도마다 사전 넷을 읽지 않게).
+static func hidden_at(full: float, slope: float, margin: float, length_m: float, along: float, depth: float) -> bool:
+	if depth < 0.0 or depth >= full:
 		return false
-	var hit: float = along - depth * float(geometry["slope"])
-	return hit >= float(geometry["margin"]) and hit <= float(geometry["length"]) - float(geometry["margin"])
+	var hit: float = along - depth * slope
+	return hit >= margin and hit <= length_m - margin
 
 
 static func placement_floor(geometry: Dictionary, lo: float, hi: float) -> float:
@@ -270,7 +275,11 @@ static func _clearance(point: Vector2, bins: Dictionary) -> bool:
 	var cell := Vector2i(floori(point.x / MIN_GAP), floori(point.y / MIN_GAP))
 	for dx: int in range(-1, 2):
 		for dy: int in range(-1, 2):
-			for other: Vector2 in bins.get(cell + Vector2i(dx, dy), []):
+			var key: Vector2i = cell + Vector2i(dx, dy)
+			# 빈 칸마다 빈 배열을 새로 만들지 않는다(시도마다 아홉 칸).
+			if not bins.has(key):
+				continue
+			for other: Vector2 in bins[key]:
 				if point.distance_squared_to(other) < MIN_GAP * MIN_GAP:
 					return false
 	return true
@@ -560,6 +569,10 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 		var wall_id: String = wall["id"]
 		var contact_start: float = maxf(0.4, float(geometry["full"]))
 		var start_depth: float = plan["start"]
+		var hide_full: float = geometry["full"]
+		var hide_slope: float = geometry["slope"]
+		var hide_margin: float = geometry["margin"]
+		var hide_length: float = geometry["length"]
 		var chunk_i: int = plan["chunk_i"]
 		var lo: float = plan["lo"]
 		var hi: float = plan["hi"]
@@ -594,7 +607,7 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 			var depth: float = group_at.y + sin(ring) * minf(radius, minf(group_at.y - start_depth, depth_m - group_at.y))
 			var point: Vector2 = a + tangent * along + outward * depth
 			var wave: float = density_wave(point)
-			if hidden_local(geometry, along, depth) or stream(wall_seed, group_key, lane + 2) > wave or not _clearance(point, bins):
+			if hidden_at(hide_full, hide_slope, hide_margin, hide_length, along, depth) or stream(wall_seed, group_key, lane + 2) > wave or not _clearance(point, bins):
 				continue
 			var cell := Vector2i(floori(point.x * 4.0), floori(point.y * 4.0))
 			var motion: int = 1
