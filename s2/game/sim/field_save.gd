@@ -11,8 +11,10 @@ extends RefCounted
 ## receipt_id (S3 PR #428).
 
 ## Field save format number (this file's saves only). Not politics/save_slot.gd SAVE_VERSION,
-## which numbers the train's own save.
-const VERSION := 2
+## which numbers the train's own save. 3 writes byte and int32 runs (the grids, the sight
+## memory) as one base64 line each; 1 and 2 wrote them a typed number at a time and still read.
+const VERSION := 3
+const READ_VERSIONS: Array[int] = [1, 2, 3]
 const KIND := "s2_field"
 const PATH := "user://field_save.json"
 ## The train's own save (politics/save_slot.gd DEFAULT_PATH): read here only for what it applied.
@@ -35,6 +37,9 @@ const NOT_START := ["field_save", "field_save_path", "field_resume", "departure"
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
+## Set by _decode when a base64 run is not one; from_json then takes the save as broken.
+static var _decode_bad: bool = false
+static var _base64_line: RegEx = RegEx.create_from_string("^[A-Za-z0-9+/]*={0,2}$")
 ## Tests only: fail one step of the next write; empty is off, reset on entry.
 static var _test_fail_step: String = ""
 ## Tests only: counts actual parses of the previous slot, not new-file validation.
@@ -188,10 +193,12 @@ static func from_json(text: String) -> Dictionary:
 		return {}
 	if not is_finite(float(version)) or float(version) != floorf(float(version)):
 		return {}
-	if parsed.get("kind") != KIND or float(version) not in [1.0, float(VERSION)]:
+	if parsed.get("kind") != KIND or not int(version) in READ_VERSIONS:
 		return {}
+	_decode_bad = false
 	var decoded: Variant = _decode(parsed)
-	if not decoded is Dictionary or not _whole(decoded):
+	if _decode_bad or not decoded is Dictionary or not _whole(decoded):
+		_decode_bad = false
 		return {}
 	var d: Dictionary = decoded
 	d["version"] = int(d["version"])
@@ -1162,7 +1169,15 @@ static func _encode(v: Variant) -> Variant:
 		return {"$type": "Rect2i", "value": [v.position.x, v.position.y, v.size.x, v.size.y]}
 	if v is Color:
 		return {"$type": "Color", "value": [v.r, v.g, v.b, v.a]}
-	if v is PackedVector3Array or v is PackedByteArray or v is PackedInt32Array or v is PackedStringArray:
+	# A grid's cells and the sight memory are runs of bytes or int32s, tens of thousands
+	# long: one base64 line, not a typed object a number (about 30 bytes for each byte).
+	# (Marshalls reports an empty run as an error: that one is "".)
+	if v is PackedByteArray:
+		return {"$type": "PackedByteArray", "base64": "" if v.is_empty() else Marshalls.raw_to_base64(v)}
+	if v is PackedInt32Array:
+		# Little-endian, as on every device the game ships to (arm64, x86-64).
+		return {"$type": "PackedInt32Array", "base64": "" if v.is_empty() else Marshalls.raw_to_base64((v as PackedInt32Array).to_byte_array())}
+	if v is PackedVector3Array or v is PackedStringArray:
 		return {"$type": type_string(typeof(v)), "value": _encode(Array(v))}
 	if v is Dictionary:
 		var strings_only: bool = true
@@ -1188,6 +1203,8 @@ static func _encode(v: Variant) -> Variant:
 
 static func _decode(v: Variant) -> Variant:
 	if v is Dictionary:
+		if v.has("$type") and v.has("base64") and v.size() == 2:
+			return _unpack(String(v["$type"]), v["base64"])
 		if v.has("$type") and v.has("value"):
 			var value: Variant = v["value"]
 			match String(v["$type"]):
@@ -1221,3 +1238,22 @@ static func _decode(v: Variant) -> Variant:
 			out.append(_decode(e))
 		return out
 	return v
+
+
+## A base64 run back as the packed array it was (_encode); a line that is not base64, or an
+## int32 run cut between numbers, marks the save broken (_decode_bad) rather than guess.
+static func _unpack(kind: String, text: Variant) -> Variant:
+	if not text is String or (text as String).length() % 4 != 0 or _base64_line.search(text) == null:
+		_decode_bad = true
+		return null
+	var raw: PackedByteArray = PackedByteArray() if (text as String).is_empty() else Marshalls.base64_to_raw(text)
+	match kind:
+		"PackedByteArray":
+			return raw
+		"PackedInt32Array":
+			if raw.size() % 4 != 0:
+				_decode_bad = true
+				return null
+			return raw.to_int32_array()
+	_decode_bad = true
+	return null

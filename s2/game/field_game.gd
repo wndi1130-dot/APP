@@ -267,6 +267,7 @@ var resume_announce: bool = false
 var slow: float = 1.0                    # the body picture up: the field runs at this rate (body_injury 4.6)
 var hitstop: bool = false                # a blow's hold this frame (hit_feel.gd): the rules and pictures stand
 var away: bool = false             # the app pushed the field into a pause; say so once on return
+var away_saved: bool = false       # the slot was written as the field went away (interrupt)
 var ended: bool = false
 var leave_t: float = -1.0          # since the train began to roll away (-1: it stands)
 var arrive_t: float = -1.0         # since the train came into sight (-1: it stands)
@@ -1881,8 +1882,10 @@ func interrupt() -> void:
 	if hud != null:
 		hud.drop_touch()
 	# The one save slot, before the app may be shut (S3 spec 4). Off until the train side reads it.
-	if bool(opts.get("field_save", false)):
-		FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
+	# One home press sends focus-out and then pause: once away with the slot written, the stop
+	# has not played on (paused), so the second notice does not write the same save again.
+	if bool(opts.get("field_save", false)) and not (away and away_saved):
+		away_saved = FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
 	if ended:
 		return
 	if not away:
@@ -1897,6 +1900,7 @@ func welcome_back() -> void:
 	if not away:
 		return
 	away = false
+	away_saved = false
 	if not ended:
 		if resume_announce and hud != null:
 			hud.toast("멈춰 둔 그대로다.")
