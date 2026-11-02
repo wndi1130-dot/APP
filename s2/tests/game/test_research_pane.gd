@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 ## as a tooltip and no sentence, a start, a cancel that asks twice, the ways of
 ## an either-or, and the finishing of a defective plate.
 
+const RowKeep = preload("res://game/ui/row_keep.gd")
 const ResearchPane = preload("res://game/ui/research_pane.gd")
 const Research = preload("res://game/train/train_research.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
@@ -12,9 +13,10 @@ const TrainDom = preload("res://game/train/train_dom.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
+const PaneMotion = preload("res://game/ui/pane_motion.gd")
 
 
-## The rows a press draws again are freed a frame later; let them go before GUT counts orphans.
+## Let queued frees settle before GUT counts orphans.
 func after_each() -> void:
 	await wait_process_frames(1)
 
@@ -47,7 +49,7 @@ func _pane(g: Dictionary, ids: Array = []) -> Control:
 
 
 func _key(p: Control, key_name: String) -> Button:
-	return p.find_child(key_name, true, false) as Button
+	return _live(p, key_name) as Button
 
 
 func _row(m: Dictionary, id: String) -> Dictionary:
@@ -89,8 +91,8 @@ func test_a_key_that_cannot_is_dim_says_why_only_as_a_tooltip_and_shakes() -> vo
 	var key: Button = _key(p, "Key_w1")
 	assert_almost_eq(key.modulate.a, UiDeny.DIM, 1e-6)
 	assert_eq(key.tooltip_text, "설계도 조각이 모자라다")
-	assert_null(p.find_child("Why_w1", true, false), "no sentence on the pane (결정 417)")
-	var pips: Control = p.find_child("Pips_w1", true, false)
+	assert_null(_live(p, "Why_w1"), "no sentence on the pane (결정 417)")
+	var pips: Control = _live(p, "Pips_w1")
 	assert_eq([pips.get_meta("have"), pips.get_meta("need")], [0, 1])
 	key.pressed.emit()
 	assert_true(UiDeny.is_shaking(key))
@@ -105,7 +107,7 @@ func test_start_then_cancel_asks_twice() -> void:
 	assert_eq(g["dom"]["restoring"], "w1")
 	assert_eq(float(g["dom"]["wood"]), 6.0)
 	await wait_process_frames(1)
-	assert_not_null(p.find_child("Progress_w1", true, false), "its row shows how far along")
+	assert_not_null(_live(p, "Progress_w1"), "its row shows how far along")
 	assert_eq(_word(_key(p, "Key_w1")), "취소")
 	_key(p, "Key_w1").pressed.emit()
 	assert_eq(g["dom"]["restoring"], "w1", "the first press only asks")
@@ -134,7 +136,7 @@ func test_an_either_or_opens_its_ways_and_a_way_starts_it() -> void:
 	assert_eq(g["dom"]["restoring"], "w2")
 	assert_eq(g["dom"]["techs"]["w2"]["variant"], "a")
 	await wait_process_frames(1)
-	assert_eq((p.find_child("Name_w2", true, false) as Label).text, Research.TECHS["w2"]["variants"]["a"]["name"])
+	assert_eq((_live(p, "Name_w2") as Label).text, Research.TECHS["w2"]["variants"]["a"]["name"])
 
 
 func test_back_closes_the_ways() -> void:
@@ -143,10 +145,10 @@ func test_back_closes_the_ways() -> void:
 	await wait_process_frames(1)
 	_key(p, "Key_w2").pressed.emit()
 	await wait_process_frames(1)
-	assert_not_null(p.find_child("Way_w2_a", true, false))
+	assert_not_null(_live(p, "Way_w2_a"))
 	_key(p, "Key_w2").pressed.emit()
 	await wait_process_frames(1)
-	assert_null(p.find_child("Way_w2_a", true, false))
+	assert_null(_live(p, "Way_w2_a"))
 	assert_eq(_word(_key(p, "Key_w2")), "복원")
 
 
@@ -157,7 +159,7 @@ func test_a_defective_plate_is_finished_from_its_row() -> void:
 	var p := _pane(g, ["w2"])
 	await wait_process_frames(1)
 	assert_eq(_word(_key(p, "Key_w2")), "완성판")
-	assert_not_null(p.find_child("Effect_w2", true, false))
+	assert_not_null(_live(p, "Effect_w2"))
 	_key(p, "Key_w2").pressed.emit()
 	assert_true(bool(g["dom"]["techs"]["w2"]["finishing"]))
 	assert_eq(g["dom"]["restoring"], "w2")
@@ -168,7 +170,7 @@ func test_a_working_technology_says_what_it_does_and_has_no_key() -> void:
 	g["dom"]["techs"]["w1"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
 	var p := _pane(g)
 	await wait_process_frames(1)
-	assert_eq((p.find_child("Effect_w1", true, false) as Label).text, ResearchPane.EFFECT["w1"])
+	assert_eq((_live(p, "Effect_w1") as Label).text, ResearchPane.EFFECT["w1"])
 	assert_null(_key(p, "Key_w1"))
 
 
@@ -180,19 +182,19 @@ func test_a_law_technology_names_its_law_and_whether_it_stands() -> void:
 	var g := _game()
 	var p := _pane(g, ["e1"])
 	await wait_process_frames(1)
-	var tag: Label = p.find_child("Law_e1", true, false)
+	var tag: Label = _live(p, "Law_e1")
 	assert_not_null(tag)
 	assert_eq(tag.text, "눈 녹이기 당번 없음")
 	assert_eq(tag.get_theme_color("font_color"), ResearchPane.RED)
 	var key: Button = _key(p, "Key_e1")
 	assert_eq(key.tooltip_text, "쓸모: 눈 녹이기 당번이 서 있을 때(지금은 없다)")
-	var name: Label = p.find_child("Name_e1", true, false)
+	var name: Label = _live(p, "Name_e1")
 	assert_lt(name.position.x + name.size.x, tag.position.x, "the tag does not run over the name")
 	assert_lt(tag.position.x + tag.size.x, key.position.x, "nor under the key")
 	g["passed"] = {"snow_duty": 0}
 	p.show_state(g)
 	await wait_process_frames(1)
-	tag = p.find_child("Law_e1", true, false)
+	tag = _live(p, "Law_e1")
 	assert_eq(tag.text, "눈 녹이기 당번")
 	assert_eq(_row(ResearchPane.model(g), "e1")["law_on"], true)
 	assert_eq(_row(ResearchPane.model(g), "w1")["law"], "", "a technology no law touches has no tag")
@@ -206,8 +208,8 @@ func test_a_long_name_s_tag_goes_under_it() -> void:
 	g["dom"]["frags"]["expedition"] = 1
 	var p := _pane(g, ["x1"])
 	await wait_process_frames(1)
-	var tag: Label = p.find_child("Law_x1", true, false)
-	var name: Label = p.find_child("Name_x1", true, false)
+	var tag: Label = _live(p, "Law_x1")
+	var name: Label = _live(p, "Name_x1")
 	assert_not_null(tag)
 	assert_eq(tag.text, "아동 노동 없음")
 	assert_gt(tag.position.y, name.position.y + name.size.y * 0.5, "on the line under the name")
@@ -231,17 +233,17 @@ func test_more_rows_than_fit_scroll_inside_the_pane() -> void:
 	var p := _pane(_game(), ids)
 	await wait_process_frames(2)
 	assert_almost_eq(p.size.y / UiFonts.K, ResearchPane.CSS_H_MAX, 0.5, "no higher than the car's pane")
-	var s := p.find_child("List", true, false) as ScrollContainer
-	var rows := p.find_child("Rows", true, false) as Control
+	var s := _live(p, "List") as ScrollContainer
+	var rows := _live(p, "Rows") as Control
 	assert_gt(rows.size.y, s.size.y, "six rows are longer than the room for them")
-	var more := p.find_child("More", true, false) as Control
+	var more := _live(p, "More") as Control
 	assert_true(more != null and more.visible, "the glass darkens where rows are left below")
 	s.scroll_vertical = 10000
 	await wait_process_frames(2)
 	assert_false(more.visible, "dragged to the end, the shade goes")
 	var few := _pane(_game(), ["e5", "w1"])
 	await wait_process_frames(1)
-	assert_null(few.find_child("More", true, false), "rows that fit: no shade")
+	assert_null(_live(few, "More"), "rows that fit: no shade")
 
 
 func test_the_fold_key_folds() -> void:
@@ -266,7 +268,7 @@ func test_the_slice_opens_the_research_room() -> void:
 	f._open_room("papers")
 	assert_true(is_instance_valid(f.research), "the research pane is up")
 	assert_eq(String(f.research.name), "ResearchPane")
-	assert_false(f.pane.visible, "the car's pane makes way")
+	assert_false(PaneMotion.shown(f.pane), "the car's pane makes way")
 	f._open_room("wrench")
 	await wait_process_frames(1)
 	assert_false(is_instance_valid(f.research), "the refit room takes its place")
@@ -286,13 +288,13 @@ func test_a_running_technology_shows_its_upkeep_and_when_it_starves() -> void:
 	assert_eq(r["upkeep"], [{"key": "parts", "icon": "gear", "n": 0.25}])
 	assert_false(bool(r["starved"]))
 	var p := _pane(g, ["e2"])
-	var n := p.find_child("Upkeep_e2_parts", true, false) as Label
+	var n := _live(p, "Upkeep_e2_parts") as Label
 	assert_eq(n.text, "0.25")
-	assert_false((p.find_child("Effect_e2", true, false) as Label).text.begins_with("½"))
+	assert_false((_live(p, "Effect_e2") as Label).text.begins_with("½"))
 	g["dom"]["techs"]["e2"]["starved"] = true
 	var p2 := _pane(g, ["e2"])
-	assert_true((p2.find_child("Effect_e2", true, false) as Label).text.begins_with("½ "), "it runs at half")
-	assert_eq((p2.find_child("Upkeep_e2_parts", true, false) as Label).get_theme_color("font_color"), ResearchPane.RED)
+	assert_true((_live(p2, "Effect_e2") as Label).text.begins_with("½ "), "it runs at half")
+	assert_eq((_live(p2, "Upkeep_e2_parts") as Label).get_theme_color("font_color"), ResearchPane.RED)
 	g["dom"]["techs"]["e5"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
 	assert_null(_pane(g, ["e5"]).find_child("Upkeep_e5_parts", true, false), "no upkeep, nothing drawn")
 
@@ -310,8 +312,8 @@ func test_a_stood_down_technology_runs_again_from_its_row() -> void:
 	assert_false(bool(r["can"]))
 	var p := _pane(g, ["e2"])
 	await wait_process_frames(1)
-	assert_true((p.find_child("Effect_e2", true, false) as Label).text.begins_with("멈춤 "))
-	assert_null(p.find_child("Upkeep_e2_parts", true, false), "a stood-down technology pays no upkeep")
+	assert_true((_live(p, "Effect_e2") as Label).text.begins_with("멈춤 "))
+	assert_null(_live(p, "Upkeep_e2_parts"), "a stood-down technology pays no upkeep")
 	var key: Button = _key(p, "Key_e2")
 	assert_eq(_word(key), "다시 돌리기")
 	assert_eq(key.tooltip_text, "세울 때 돌려받은 부품 1이 든다")
@@ -331,7 +333,7 @@ func test_w4_row_names_the_clockwork_lure_without_scouting() -> void:
 	assert_eq(_row(ResearchPane.model(g), "w4").get("effect"), "태엽 미끼")
 	var p: Control = _pane(g)
 	await wait_process_frames(1)
-	var effect: Label = p.find_child("Effect_w4", true, false) as Label
+	var effect: Label = _live(p, "Effect_w4") as Label
 	assert_not_null(effect)
 	if effect != null:
 		assert_eq(effect.text, "태엽 미끼")
@@ -344,3 +346,53 @@ func test_w2_variants_name_their_workshop_recipes() -> void:
 	assert_eq(_row(ResearchPane.model(g), "w2").get("effect"), "고철로 권총탄")
 	g["dom"]["techs"]["w2"]["variant"] = "b"
 	assert_eq(_row(ResearchPane.model(g), "w2").get("effect"), "화살 깎기")
+
+
+
+func _live(p: Control, key_name: String) -> Control:
+	# Hidden parts and retiring rows no longer belong to the current list.
+	for found: Node in p.find_children(key_name, "Control", true, false):
+		var control: Control = found as Control
+		if not control.is_visible_in_tree():
+			continue
+		var ancestor: Node = control
+		var leaving: bool = false
+		while ancestor != null and ancestor != p:
+			if ancestor.has_meta(RowKeep.LEAVING_META):
+				leaving = true
+				break
+			ancestor = ancestor.get_parent()
+		if not leaving:
+			return control
+	return null
+
+
+func test_show_state_keeps_scroll_row_way_selection_and_pressed_key() -> void:
+	var g: Dictionary = _ready_for_w2()
+	var p: Control = _pane(g)
+	await wait_process_frames(2)
+	var scroll: ScrollContainer = p.get_node("Parts/List") as ScrollContainer
+	scroll.scroll_vertical = 80
+	await wait_process_frames(1)
+	var saved: int = scroll.scroll_vertical
+	assert_gt(saved, 0)
+	var row: Control = p.get_node("Parts/List/Rows/Item_w2") as Control
+	var row_id: int = row.get_instance_id()
+	var key: Button = row.get_node("Key_w2") as Button
+	var key_id: int = key.get_instance_id()
+	key.toggle_mode = true
+	key.set_pressed_no_signal(true)
+	key.pressed.emit()
+	var way: Button = row.get_node("Way_w2_a") as Button
+	var way_id: int = way.get_instance_id()
+	p.show_state(g)
+	assert_eq(scroll.scroll_vertical, saved)
+	await wait_process_frames(2)
+	assert_eq(scroll.scroll_vertical, saved)
+	assert_eq(p.get_node("Parts/List/Rows/Item_w2").get_instance_id(), row_id)
+	assert_eq(row.get_node("Key_w2").get_instance_id(), key_id)
+	assert_eq(row.get_node("Way_w2_a").get_instance_id(), way_id)
+	assert_eq(String(p.get("_choosing")), "w2")
+	assert_eq(_word(key), "뒤로")
+	assert_true(way.visible)
+	assert_true(key.button_pressed)

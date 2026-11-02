@@ -17,6 +17,7 @@ extends Control
 signal folded
 signal changed
 
+const RowKeep = preload("res://game/ui/row_keep.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
@@ -132,59 +133,79 @@ func show_state(g0: Dictionary) -> void:
 func _draw_all() -> void:
 	if _parts == null:
 		return
-	for c in _parts.get_children():
-		_parts.remove_child(c)
-		c.queue_free()
+	_parts.visible = not g.is_empty()
 	if g.is_empty():
 		return
 	var m: Dictionary = model(g)
+	RowKeep.begin(_parts)
 	_head()
 	_stores(m["stores"])
 	var rows: Array = m["rows"]
+	var ids: Array = ["parts"]
+	var by_id: Dictionary = {}
+	for data: Dictionary in rows:
+		var id: String = String(data["id"])
+		ids.append(id)
+		by_id[id] = data
 	var k: float = UiFonts.K
-	var list := Control.new()
-	list.name = "Rows"
-	list.mouse_filter = Control.MOUSE_FILTER_PASS
-	list.custom_minimum_size = Vector2(CSS_SIZE.x, ROW_H * (rows.size() + 1)) * k
-	var s := ScrollContainer.new()
-	s.name = "List"
+	var s: ScrollContainer = RowKeep.part(_parts, "List", func() -> Control: return ScrollContainer.new()) as ScrollContainer
+	var saved: int = s.scroll_vertical
 	s.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	s.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
-	s.mouse_filter = Control.MOUSE_FILTER_PASS
+	RowKeep.pass_mouse(s)
 	s.position = Vector2(0.0, ROW_TOP) * k
 	s.size = Vector2(CSS_SIZE.x, CSS_SIZE.y - ROW_TOP) * k
-	s.add_child(list)
-	_parts.add_child(s)
-	_into = list
-	_parts_row(m["parts"], 0.0)
-	for i in rows.size():
-		_row(rows[i], ROW_H * (i + 1))
-	_into = null
+	var list: Control = RowKeep.part(s, "Rows", func() -> Control: return Control.new())
+	RowKeep.pass_mouse(list)
+	list.custom_minimum_size = Vector2(CSS_SIZE.x, ROW_H * ids.size()) * k
+	RowKeep.sync(list, ids, func(_id: String) -> Control:
+		var row := Control.new()
+		RowKeep.pass_mouse(row)
+		row.size = Vector2(CSS_SIZE.x, ROW_H) * k
+		return row,
+		func(row: Control, id: String, index: int) -> void:
+			row.position = Vector2(0.0, ROW_H * index) * k
+			_into = row
+			RowKeep.begin(row)
+			if id == "parts":
+				_parts_row(m["parts"], 0.0)
+			else:
+				_row(by_id[id], 0.0)
+			RowKeep.finish(row)
+			_into = null)
+	RowKeep.restore_scroll(s, saved)
 	if list.custom_minimum_size.y > s.size.y + 0.5:
-		_parts.add_child(_more(s))
+		_more(s)
+	RowKeep.finish(_parts)
 
 
 ## While rows are left under the list's foot, the glass darkens there (a fold
 ## of shade 22 high), so the rows below are known to be there to drag up.
 func _more(s: ScrollContainer) -> Control:
 	var k: float = UiFonts.K
-	var fade := Control.new()
-	fade.name = "More"
+	var fade: Control = RowKeep.part(_parts, "More", func() -> Control: return Control.new())
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	fade.position = Vector2(0.0, s.position.y + s.size.y - 22.0 * k)
 	fade.size = Vector2(s.size.x, 22.0 * k)
-	fade.draw.connect(func() -> void:
-		var w: float = fade.size.x
-		var h: float = fade.size.y
-		fade.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, h), Vector2(0, h)]),
-			PackedColorArray([Color(SHADE, 0.0), Color(SHADE, 0.0), Color(SHADE, 0.85), Color(SHADE, 0.85)])))
 	var bar: ScrollBar = s.get_v_scroll_bar()
-	bar.value_changed.connect(func(v: float) -> void: fade.visible = v < bar.max_value - bar.page - 1.0)
+	if not fade.has_meta("wired"):
+		fade.set_meta("wired", true)
+		fade.draw.connect(func() -> void:
+			var w: float = fade.size.x
+			var h: float = fade.size.y
+			fade.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, h), Vector2(0, h)]),
+				PackedColorArray([Color(SHADE, 0.0), Color(SHADE, 0.0), Color(SHADE, 0.85), Color(SHADE, 0.85)])))
+		bar.value_changed.connect(func(v: float) -> void: fade.visible = v < bar.max_value - bar.page - 1.0)
+	fade.visible = s.scroll_vertical < (s.get_child(0) as Control).custom_minimum_size.y - s.size.y - 1.0
 	return fade
 
 
 func _add(c: Control) -> Control:
-	(_into if _into != null else _parts).add_child(c)
+	if c.get_parent() == null:
+		_host().add_child(c)
+	c.set_meta(RowKeep.USED_META, true)
+	if not c.visible:
+		c.show()
 	return c
 
 
@@ -196,12 +217,15 @@ func _text(l: Label, x_css: float, base_css: float) -> void:
 ## 공방 at the name's place, 접기 at the top right (car_pane.gd _head).
 func _head() -> void:
 	var k: float = UiFonts.K
-	var name_l := UiFonts.label("공방", UiFonts.WORD, 500, 18.0, INK, 2.16)
+	var name_l := _label("Name", "공방", UiFonts.WORD, 500, 18.0, INK, 2.16)
 	name_l.name = "Name"
 	_text(name_l, 44.0, 27.0)
 	var fold := _bare("Fold")
 	fold.position = Vector2(266.0, 0.0) * k
 	fold.size = Vector2(56.0, 44.0) * k
+	if fold.has_meta("wired"):
+		return
+	fold.set_meta("wired", true)
 	fold.pressed.connect(func() -> void: folded.emit())
 	_add(fold)
 	var mark := TextureRect.new()
@@ -222,8 +246,8 @@ func _stores(stores: Array) -> void:
 	for i in stores.size():
 		var s: Dictionary = stores[i]
 		var x: float = 44.0 + 68.0 * i
-		_add(_mark(String(s["icon"]), 18.0, Vector2(x, 39.0)))
-		var n := UiFonts.label(_num(float(s["n"])), UiFonts.NUMBER, 500, 15.0, INK, 0.225)
+		_add(_mark(String(s["icon"]), 18.0, Vector2(x, 39.0), INK2, "StoreMark_" + String(s["key"])))
+		var n := _label("Store_" + String(s["key"]), _num(float(s["n"])), UiFonts.NUMBER, 500, 15.0, INK, 0.225)
 		n.name = "Store_" + String(s["key"])
 		_text(n, x + 22.0, 54.0)
 
@@ -231,32 +255,37 @@ func _stores(stores: Array) -> void:
 ## The parts: their number over the target, what one costs, − and + for the target.
 func _parts_row(p: Dictionary, top: float) -> void:
 	var k: float = UiFonts.K
-	var word := UiFonts.label("부품", UiFonts.WORD, 500, 13.0, INK, 2.08)
+	var word := _label("PartsName", "부품", UiFonts.WORD, 500, 13.0, INK, 2.08)
 	_text(word, 44.0, top + 18.0)
-	var count := UiFonts.label("%s/%d" % [_num(float(p["n"])), int(p["target"])], UiFonts.NUMBER, 500, 15.0, INK, 0.225)
-	count.name = "PartsCount"
+	var count := _label("PartsCount", "%s/%d" % [_num(float(p["n"])), int(p["target"])], UiFonts.NUMBER, 500, 15.0, INK, 0.225)
 	_text(count, (word.position.x + GlassParts.text_w(word)) / k + 10.0, top + 18.0)
 	_cost(p["cost"], top + 40.0, "PartCost")
 	var down := _key("−", "TargetDown", bool(p["can_down"]))
-	_add(down)
 	down.position = Vector2(224.0, top + 5.0) * k
 	down.size = Vector2(KEY_H, KEY_H) * k
-	down.pressed.connect(func() -> void:
-		if not bool(p["can_down"]):
-			UiDeny.shake(down)
-			return
-		TrainWorkshop.set_target(g, int(p["target"]) - 1)
-		_after())
+	down.set_meta("parts", p)
+	if not down.has_meta("wired"):
+		down.set_meta("wired", true)
+		down.pressed.connect(func() -> void:
+			var current: Dictionary = down.get_meta("parts")
+			if not bool(current["can_down"]):
+				UiDeny.shake(down)
+				return
+			TrainWorkshop.set_target(g, int(current["target"]) - 1)
+			_after())
 	var up := _key("+", "TargetUp", bool(p["can_up"]))
-	_add(up)
 	up.position = Vector2(272.0, top + 5.0) * k
 	up.size = Vector2(KEY_H, KEY_H) * k
-	up.pressed.connect(func() -> void:
-		if not bool(p["can_up"]):
-			UiDeny.shake(up)
-			return
-		TrainWorkshop.set_target(g, int(p["target"]) + 1)
-		_after())
+	up.set_meta("parts", p)
+	if not up.has_meta("wired"):
+		up.set_meta("wired", true)
+		up.pressed.connect(func() -> void:
+			var current: Dictionary = up.get_meta("parts")
+			if not bool(current["can_up"]):
+				UiDeny.shake(up)
+				return
+			TrainWorkshop.set_target(g, int(current["target"]) + 1)
+			_after())
 
 
 ## A thing to make: its name; what it costs, or how far along it is on the
@@ -264,29 +293,16 @@ func _parts_row(p: Dictionary, top: float) -> void:
 func _row(r: Dictionary, top: float) -> void:
 	var k: float = UiFonts.K
 	var id: String = String(r["id"])
-	var word := UiFonts.label(String(r["name"]), UiFonts.WORD, 500, 13.0, INK, 2.08)
+	var word := _label("Name_" + id, String(r["name"]), UiFonts.WORD, 500, 13.0, INK, 2.08)
 	word.name = "Name_" + id
 	_text(word, 44.0, top + 18.0)
 	if int(r["have"]) > 0:
-		var have := UiFonts.label("×%d" % int(r["have"]), UiFonts.NUMBER, 500, 13.0, INK2, 0.52)
+		var have := _label("Have_" + id, "×%d" % int(r["have"]), UiFonts.NUMBER, 500, 13.0, INK2, 0.52)
 		have.name = "Have_" + id
 		_text(have, (word.position.x + GlassParts.text_w(word)) / k + 8.0, top + 18.0)
 	var on_line: bool = bool(r["on_line"])
 	if on_line:
-		var bar := Control.new()
-		bar.name = "Progress_" + id
-		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		bar.position = Vector2(44.0, top + 30.0) * k
-		bar.size = Vector2(164.0, 6.0) * k
-		var share: float = float(r["share"])
-		bar.draw.connect(func() -> void:
-			var rad: float = 3.0 * k
-			GlassParts.round_rect(bar, Rect2(Vector2.ZERO, bar.size), rad, WELL)
-			bar.draw_polyline(GlassParts.outline(Rect2(Vector2.ZERO, bar.size), rad), HAIR, 1.0 * k, true)
-			var w: float = bar.size.x * share
-			if w > 0.5:
-				GlassParts.round_rect(bar, Rect2(0, 0, maxf(w, rad * 2.0), bar.size.y), rad, ACCENT))
-		_add(bar)
+		_bar(id, float(r["share"]), top)
 	else:
 		_cost(r["cost"], top + 40.0, "Cost_" + id)
 	var can: bool = String(r["why"]) == "" or bool(r["can_cancel"])
@@ -295,8 +311,13 @@ func _row(r: Dictionary, top: float) -> void:
 	key.position = Vector2(232.0, top + 5.0) * k
 	key.size = Vector2(KEY_W, KEY_H) * k
 	key.tooltip_text = String(r["why"])
+	key.set_meta("row", r)
+	if key.has_meta("wired"):
+		return
+	key.set_meta("wired", true)
 	key.pressed.connect(func() -> void:
-		var ok: bool = TrainWorkshop.cancel(g) if on_line else TrainWorkshop.start(g, id)
+		var current: Dictionary = key.get_meta("row")
+		var ok: bool = TrainWorkshop.cancel(g) if bool(current["on_line"]) else TrainWorkshop.start(g, id)
 		if not ok:
 			UiDeny.shake(key)
 			return
@@ -309,8 +330,8 @@ func _cost(cost: Array, base: float, prefix: String) -> void:
 	var x: float = 44.0
 	for c: Dictionary in cost:
 		var short: bool = bool(c["short"])
-		_add(_mark(String(c["icon"]), 15.0, Vector2(x, base - 13.0), RED if short else INK2))
-		var n := UiFonts.label(_num(float(c["n"])), UiFonts.NUMBER, 400, 13.0, RED if short else INK2, 0.52)
+		_add(_mark(String(c["icon"]), 15.0, Vector2(x, base - 13.0), RED if short else INK2, prefix + "_mark_" + String(c["key"])))
+		var n := _label("%s_%s" % [prefix, c["key"]], _num(float(c["n"])), UiFonts.NUMBER, 400, 13.0, RED if short else INK2, 0.52)
 		n.name = "%s_%s" % [prefix, c["key"]]
 		_text(n, x + 19.0, base)
 		x += 19.0 + GlassParts.text_w(n) / k + 12.0
@@ -321,48 +342,81 @@ func _after() -> void:
 	changed.emit()
 
 
-func _mark(icon: String, css: float, at: Vector2, color: Color = INK2) -> Control:
-	var t := TextureRect.new()
-	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	if icon == "":
-		return t
+func _mark(icon: String, css: float, at: Vector2, color: Color = INK2, key_name: String = "") -> TextureRect:
+	var mark: TextureRect = TextureRect.new() if key_name == "" else RowKeep.part(_host(), key_name, func() -> Control: return TextureRect.new()) as TextureRect
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var px: int = int(round(css * UiFonts.K))
-	t.texture = HudIcons.texture(icon, px, color, 2.0, SOOT_CUT)
-	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	t.size = Vector2(px, px)
-	t.position = at * UiFonts.K
-	return t
+	mark.texture = HudIcons.texture(icon, px, color, 2.0, SOOT_CUT) if icon != "" else null
+	mark.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	mark.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	mark.size = Vector2(px, px)
+	mark.position = at * UiFonts.K
+	return mark
 
 
 ## A matte key with its word; dimmed when it cannot (a press then shakes it).
 func _key(word: String, key_name: String, can: bool) -> Button:
 	var k: float = UiFonts.K
-	var b := _bare(key_name)
-	b.draw.connect(func() -> void:
-		var rect := Rect2(Vector2(1, 1) * k, b.size - Vector2(2, 2) * k)
-		GlassParts.round_rect(b, rect, 8.0 * k, Color(1, 1, 1, 0.06))
-		b.draw_polyline(GlassParts.outline(rect, 8.0 * k), HAIR, 1.5 * k, true))
-	var lab := UiFonts.label(word, UiFonts.WORD, 500, 13.0, INK, 0.52)
-	lab.name = "Word"
-	lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lab.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lab.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	b.add_child(lab)
+	var b: Button = _bare(key_name)
+	var lab: Label = b.get_node_or_null("Word") as Label
+	if lab == null:
+		b.draw.connect(func() -> void:
+			var rect := Rect2(Vector2(1, 1) * k, b.size - Vector2(2, 2) * k)
+			GlassParts.round_rect(b, rect, 8.0 * k, Color(1, 1, 1, 0.06))
+			b.draw_polyline(GlassParts.outline(rect, 8.0 * k), HAIR, 1.5 * k, true))
+		lab = UiFonts.label("", UiFonts.WORD, 500, 13.0, INK, 0.52)
+		lab.name = "Word"
+		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lab.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lab.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		lab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(lab)
+	lab.text = word
 	UiDeny.dim(b, not can)
 	return b
 
 
 func _bare(key_name: String) -> Button:
-	var b := Button.new()
-	b.name = key_name
-	b.flat = true
-	b.focus_mode = Control.FOCUS_NONE
-	for state in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
-		b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
-	return b
+	return RowKeep.part(_host(), key_name, func() -> Control:
+		var b := Button.new()
+		b.flat = true
+		b.focus_mode = Control.FOCUS_NONE
+		for state: String in ["normal", "hover", "focus", "pressed", "hover_pressed", "disabled"]:
+			b.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+		return b) as Button
 
 
 static func _num(v: float) -> String:
 	return str(int(v)) if is_equal_approx(v, roundf(v)) else "%.1f" % v
+
+
+
+func _host() -> Control:
+	return _into if _into != null else _parts
+
+
+func _label(key_name: String, word: String, kind: int, weight: int, css: float, color: Color, spacing: float = 0.0) -> Label:
+	var lab: Label = RowKeep.part(_host(), key_name, func() -> Control:
+		return UiFonts.label("", kind, weight, css, color, spacing)) as Label
+	lab.text = word
+	lab.add_theme_color_override("font_color", color)
+	return lab
+
+
+func _bar(id: String, share: float, top: float) -> void:
+	var k: float = UiFonts.K
+	var bar: Control = RowKeep.part(_host(), "Progress_" + id, func() -> Control: return Control.new())
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.position = Vector2(44.0, top + 30.0) * k
+	bar.size = Vector2(164.0, 6.0) * k
+	bar.set_meta("share", share)
+	if not bar.has_meta("wired"):
+		bar.set_meta("wired", true)
+		bar.draw.connect(func() -> void:
+			var rad: float = 3.0 * k
+			GlassParts.round_rect(bar, Rect2(Vector2.ZERO, bar.size), rad, WELL)
+			bar.draw_polyline(GlassParts.outline(Rect2(Vector2.ZERO, bar.size), rad), HAIR, 1.0 * k, true)
+			var w: float = bar.size.x * float(bar.get_meta("share"))
+			if w > 0.5:
+				GlassParts.round_rect(bar, Rect2(0, 0, maxf(w, rad * 2.0), bar.size.y), rad, ACCENT))
+	bar.queue_redraw()

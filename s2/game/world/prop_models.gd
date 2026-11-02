@@ -5,6 +5,7 @@ extends RefCounted
 ## container's cell, search time and items do not change.
 
 const Weathered = preload("res://fx/shaders/weathered.gdshader")
+const WeatheredSightFade = preload("res://fx/shaders/weathered_sight_fade.gdshader")
 const DIR := "res://models/props_stop01/"
 const MODE_SETTING := "visuals/prop_models_enabled"
 ## How much darker a model is at the floor it stands on (weathered.gdshader contact_dark, T0-6).
@@ -186,6 +187,18 @@ static func batch_meshes(path: String) -> Dictionary:
 		meshes.clear()
 	_batches[path] = meshes
 	return meshes
+
+
+## Opt-in for embedded axes: keep the cached mesh and every shared material untouched.
+static func with_sight_fade(source: Mesh) -> Mesh:
+	var mesh := source.duplicate() as Mesh
+	for surface in range(mesh.get_surface_count()):
+		var material := mesh.surface_get_material(surface) as ShaderMaterial
+		if material != null and material.shader == Weathered:
+			var faded := material.duplicate() as ShaderMaterial
+			faded.shader = WeatheredSightFade
+			mesh.surface_set_material(surface, faded)
+	return mesh
 
 
 ## 정점색을 가진 모델(들판 소품 GLB)은 셰이더가 그 색을 곱하게 한다. 임포터는
