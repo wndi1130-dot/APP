@@ -14,7 +14,7 @@ import { addSupplies, enableSupplies, SUP_YIELD, suppliesAsks, suppliesHygieneSh
 import { tables } from './turn_port_fixtures';
 import { createS1cGame } from '../src/game/domestic/state';
 import type { Task } from '../src/game/domestic/state';
-import { payUpkeep, runWorkshop, workPower } from '../src/game/domestic/workshop';
+import { payUpkeep, restoreBlock, runWorkshop, setSupFine, startRestore, techShown, workPower } from '../src/game/domestic/workshop';
 import { furnishTick } from '../src/game/domestic/lawtech';
 import { D } from '../src/game/domestic/data';
 
@@ -22,7 +22,8 @@ const plain = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 const groups: Record<string, unknown[]> = { enable: [], use: [], ledger: [], stops: [], fields: [], departures: [], cards: [], conditions: [], settles: [], work_order: [], workshop_settles: [] };
 // DomState keys rejected by S2 is_store after PR 2a. Keep all other state,
 // including cards, RNG, journal and community relations, in both comparisons.
-const s2DomOmit = ['supWork', 'supFineOn', 'finds', 'manuals', 'offered', 'armored',
+// supWork and supFineOn are S2 store keys since supplies 2b (train_dom.gd is_store).
+const s2DomOmit = ['finds', 'manuals', 'offered', 'armored',
   'greenhouse', 'extraCars', 'people', 'nextPersonId', 'countdown', 'hotWater', 'pot',
   'lice', 'liceFree', 'pressureStage', 'typhus', 'bedding', 'penalties', 'sabotage',
   'grants', 'stoker', 'stalled', 'flags', 'hung', 'escort', 'altPlace', 'reroutes',
@@ -78,6 +79,144 @@ for (const mode of ['parts', 'starved', 'furnished', 'restore-progress'] as cons
     d.techs.w6 = { stage: 'restoring', defect: false, progress: 0, need: 20 };
   }
   mutate('workshop_settles', mode, g, board => {
+    const starved = payUpkeep(board), result = runWorkshop(board);
+    furnishTick(board);
+    return { ...result, starved };
+  });
+}
+// PR 2b production cases use real S1 workshop functions and retain full boards.
+groups.workshop = [];
+groups.fine_mode = [];
+groups.research = [];
+function productionBoard(): Game {
+  const g = workshopBoard(), d = g.dom!;
+  for (const p of d.people) if (p.field === 'craft') p.skill = 3;
+  Object.assign(d, { experts: d.people.filter(p => p.alive && !p.gone).map(p =>
+    ({ name: p.name, field: p.field, comm: p.comm, skill: p.skill })) });
+  d.parts = 100; d.scrap = 100; d.target = 0;
+  d.order = ['sup', 'parts', 'restore', 'modify'];
+  d.techs.w6 = { stage: 'done', defect: false, progress: 3, need: 3 };
+  d.techs.w7 = { stage: 'done', defect: false, progress: 3, need: 3, variant: 'a' };
+  d.techs.w8 = { stage: 'done', defect: false, progress: 3, need: 3 };
+  return g;
+}
+for (const variant of ['base', 'a', 'b'] as const) for (const fine of [false, true]) {
+  const g = productionBoard(), d = g.dom!;
+  if (variant === 'base') d.techs.w7!.off = true;
+  else d.techs.w7!.variant = variant;
+  d.supFineOn = fine;
+  mutate('workshop', `recipe/${variant}/fine=${fine}`, g, runWorkshop);
+}
+for (const mode of ['fractional-cap', 'zero-need', 'carry', 'short-scrap', 'defective', 'starved', 'off'] as const) {
+  const g = productionBoard(), d = g.dom!;
+  if (mode === 'fractional-cap') for (const c of S1.COMMS) g.comms[c].pop = 13;
+  if (mode === 'zero-need') for (const c of S1.COMMS) g.comms[c].pop = 0;
+  if (mode === 'carry') d.supWork = 0.2;
+  if (mode === 'short-scrap') d.scrap = 0;
+  if (mode === 'defective') { d.techs.w6!.stage = 'defective'; d.techs.w6!.defect = true; }
+  if (mode === 'starved') d.techs.w6!.starved = true;
+  if (mode === 'off') d.techs.w6!.off = true;
+  mutate('workshop', mode, g, runWorkshop);
+}
+for (const on of [false, true]) {
+  const g = productionBoard(); g.dom!.supWork = 0.2;
+  mutate('fine_mode', `switch/${on}`, g, board => setSupFine(board, on));
+}
+for (const on of [false, true]) for (const id of ['w6', 'w7', 'w8'] as const) {
+  const g = workshopBoard(); g.supOn = on;
+  mutate('research', `${id}/on=${on}`, g, board => ({ shown: techShown(board, id), block: restoreBlock(board, id) ?? null }));
+}
+// Save the unmodified S1 answer before temporarily filtering the source condition table.
+groups.fine_conditions = [];
+groups.fine_conditions_report = [];
+const allowedFine: unknown[] = [], allowedS1c: unknown[] = [];
+let sameFineCells = 0;
+function filteredConditions(g: Game, comm: Comm, omitS1c: boolean, omitFine: boolean) {
+  const original = S1.CONDITIONS[comm];
+  try {
+    S1.CONDITIONS[comm] = original.filter(c => !(omitS1c && c.s1c) && !(omitFine && c.kind === 'give_fine'));
+    return plain(S1.openConditions(g, comm));
+  } finally { S1.CONDITIONS[comm] = original; }
+}
+const conditionCases = ['mode-off', 'short-scrap', 'earlier-work', 'planned-make', 'stock', 'reserved'] as const;
+for (const name of conditionCases) {
+  const g = productionBoard(), d = g.dom!;
+  // Completed technologies retain the real restore work as their progress and need.
+  d.techs.w7!.progress = d.techs.w7!.need = 6;
+  d.techs.w8!.progress = d.techs.w8!.need = 12;
+  d.parts = 5; d.scrap = 20; d.wood = 10; d.target = 0;
+  d.supFineOn = name !== 'mode-off' && name !== 'stock' && name !== 'reserved';
+  g.supFine = name === 'stock' ? 2 : name === 'reserved' ? 1 : 0;
+  if (name === 'short-scrap') d.scrap = 0;
+  if (name === 'earlier-work') { d.parts = 0; d.target = 10; d.order = ['parts', 'sup', 'restore', 'modify']; }
+  if (name === 'reserved') {
+    const cond = S1.CONDITIONS.front.find(c => c.kind === 'give_fine')!;
+    g.comms.front.promise = { kind: 'open', cond, label: cond.label, due: g.seg + 3, madeSession: g.session };
+  }
+  const before = plain(g), preview = plain(g);
+  payUpkeep(preview); runWorkshop(preview); furnishTick(preview);
+  const reserved = S1.COMMS.reduce((sum, c) => {
+    const p = g.comms[c].promise;
+    return sum + (p?.cond.kind === 'give_fine' ? p.cond.amount ?? 0 : 0);
+  }, 0);
+  const room = (g.supFine ?? 0) + Math.max(0, (preview.supFine ?? 0) - (g.supFine ?? 0)) - reserved;
+  assert.equal(room >= 1, name === 'planned-make' || name === 'stock', `${name}: unexpected available fine goods`);
+  const rounds = [];
+  for (let session = 0; session < 12; session++) {
+    g.session = session;
+    const s1_raw = {} as Record<Comm, ReturnType<typeof S1.openConditions>>;
+    const s2_policy = {} as Record<Comm, ReturnType<typeof S1.openConditions>>;
+    for (const comm of S1.COMMS) {
+      const raw = plain(S1.openConditions(g, comm));
+      const noS1c = filteredConditions(g, comm, true, false);
+      const policy = filteredConditions(g, comm, true, room < 1);
+      s1_raw[comm] = raw; s2_policy[comm] = policy;
+      for (let index = 0; index < raw.length; index++) {
+        const equal = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+        if (equal(raw[index], policy[index])) { sameFineCells++; continue; }
+        const s1c = !equal(raw[index], noS1c[index]);
+        const fine = !equal(noS1c[index], policy[index]);
+        assert.notEqual(s1c, fine, `${name}/${comm}/${session}/${index}: ambiguous difference`);
+        assert.equal(s1c ? comm === 'engine' || comm === 'medtech' : comm === 'front', true);
+        (s1c ? allowedS1c : allowedFine).push({ name, comm, session, condition: index + 1, s1_raw: raw[index], s2_policy: policy[index] });
+      }
+    }
+    rounds.push({ session, s1_raw, s2_policy });
+  }
+  groups.fine_conditions.push({ name, before, room, rounds });
+}
+groups.fine_conditions_report.push({ s1c: allowedS1c, fine_policy: allowedFine,
+  same: sameFineCells, fine_count: allowedFine.length, s1c_count: allowedS1c.length });
+
+// Starting and completing a technology uses the real S1 APIs; snapshots retain whole boards.
+groups.research_actions = [];
+for (const on of [false, true]) for (const id of ['w6', 'w7', 'w8'] as const) {
+  const g = productionBoard(), d = g.dom!;
+  d.techs.w7!.progress = d.techs.w7!.need = 6;
+  d.techs.w8!.progress = d.techs.w8!.need = 12;
+  g.supOn = on; d.parts = 10; d.scrap = 15; d.wood = 10; d.cores = 5; d.frags.craft = 20;
+  for (const tech of ['w6', 'w7', 'w8'] as const) {
+    if (tech === id || (id === 'w6') || (id === 'w7' && tech === 'w8')) delete d.techs[tech];
+  }
+  const variant = id === 'w7' ? 'a' : undefined;
+  const before = plain(g), block = restoreBlock(g, id) ?? null;
+  const result = startRestore(g, id, 'full', variant);
+  assert.equal(result, on, `${id}/on=${on}: unexpected restore availability`);
+  const started = plain(g);
+  const work_steps = [];
+  if (result) {
+    d.order = ['restore', 'parts', 'modify', 'sup'];
+    while (d.restoring === id && work_steps.length < 20) {
+      const stepBefore = plain(g), value = runWorkshop(g);
+      work_steps.push({ before: stepBefore, value, after: plain(g) });
+    }
+    assert.notEqual(d.restoring, id, `${id} did not finish within 20 work steps`);
+  }
+  groups.research_actions.push({ name: `${id}/on=${on}`, id, variant: variant ?? null, before, block, result, started, work_steps });
+}
+for (const fine of [false, true]) {
+  const g = productionBoard(); g.dom!.supFineOn = fine;
+  mutate('workshop_settles', `supplies/fine=${fine}`, g, board => {
     const starved = payUpkeep(board), result = runWorkshop(board);
     furnishTick(board);
     return { ...result, starved };
@@ -290,3 +429,4 @@ mkdirSync(dirname(output), { recursive: true });
 let identical = false; try { identical = readFileSync(output).equals(bytes); } catch { /* first generation */ }
 if (!identical) writeFileSync(output, bytes);
 console.log(JSON.stringify({ output, bytes: bytes.length, identical, cases: Object.fromEntries(Object.entries(groups).map(([k, rows]) => [k, rows.length])), runs: runs.map(r => ({ name: r.name, steps: r.steps.length, settles: r.settles })) }));
+console.log(JSON.stringify({ fine_conditions_report: groups.fine_conditions_report[0] }));

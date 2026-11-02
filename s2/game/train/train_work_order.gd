@@ -27,3 +27,20 @@ static func normalized(g: Dictionary) -> Array[String]:
 	if d.get("techs", {}).get("w6", {}).get("stage") in ["done", "defective"] and not out.has("sup"):
 		out.append("sup")
 	return out
+
+
+static func move(g: Dictionary, task: String, step: int) -> void:
+	if not bool(g.get("supOn", false)) or not (step == -1 or step == 1):
+		return
+	# Loaded here to avoid a preload cycle with train_dom.gd.
+	var dom_script = load("res://game/train/train_dom.gd")
+	if not dom_script.is_store(g.get("dom")):
+		return
+	var order: Array[String] = normalized(g)
+	var i: int = order.find(task)
+	var j: int = i + step
+	if i < 0 or j < 0 or j >= order.size():
+		return
+	order[i] = order[j]
+	order[j] = task
+	g["dom"]["order"] = order

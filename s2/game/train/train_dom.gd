@@ -165,6 +165,12 @@ static func is_store(dom: Variant) -> bool:
 		elif key == "order":
 			if not TrainWorkOrder.is_order(v):
 				return false
+		elif key == "supWork":
+			if not (v is int or v is float) or not is_finite(float(v)) or float(v) < 0.0:
+				return false
+		elif key == "supFineOn":
+			if not v is bool:
+				return false
 		elif key == "target":
 			# The workshop's parts target (train_workshop.gd).
 			if not (v is int or v is float) or float(v) < 0.0 or float(v) > 10.0:
