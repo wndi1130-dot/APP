@@ -941,7 +941,9 @@ func _update_atmosphere() -> void:
 func _set_view_fill() -> void:
 	if view_fill == null:
 		return
-	view_fill.light_energy = float(fx_light.get("fill_energy", 0.0)) if storm.is_empty() else 0.0
+	var fill_energy: float = float(fx_light.get("fill_energy", 0.0)) if storm.is_empty() else 0.0
+	# Keep the diagnostic energy across minute updates without lighting night/storm.
+	view_fill.light_energy = float(view_fill.get_meta(PerfSwitch.FILL_ENERGY, fill_energy)) if fill_energy > 0.001 else fill_energy
 	view_fill.light_color = fx_light.get("fill_color", Color.WHITE)
 	view_fill.visible = view_fill.light_energy > 0.001
 
@@ -1890,6 +1892,8 @@ func _apply_perf_settings(settings: Dictionary) -> void:
 	if not settings.is_empty():
 		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
 		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false)
+		if view_fill.has_meta(PerfSwitch.FILL_ENERGY):
+			_set_view_fill()
 		if not changed.is_empty():
 			print("PERF_SWITCH ", changed)
 	# StopLoader builds with visible=false, even with processing disabled.
@@ -1908,6 +1912,10 @@ func _apply_perf_renderer() -> void:
 		_perf_renderer_active = true
 		if not _perf_settings.is_empty() and not changed.is_empty():
 			print("PERF_SWITCH ", changed)
+	# After _ready's own cap, so the file's cap wins for this field.
+	var fps_changed: Dictionary = PerfSwitch.apply_max_fps(_perf_settings)
+	if not fps_changed.is_empty():
+		print("PERF_SWITCH ", fps_changed)
 	if visibility_changed.is_connected(_apply_perf_renderer):
 		visibility_changed.disconnect(_apply_perf_renderer)
 
@@ -1926,7 +1934,7 @@ func _process(delta: float) -> void:
 		if not away and resume_ready_at_ms < 0:
 			resume_ready_at_ms = Time.get_ticks_msec() + 1000
 		return
-	delta = minf(delta, 0.1)
+	delta = minf(delta, PersonVisual.FRAME_MAX)
 	if arrive_t >= 0.0:
 		_arrive(delta)
 	elif not ended and not paused:
@@ -1958,6 +1966,7 @@ func _process(delta: float) -> void:
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
 		p.visible = level_shown(level_of(p.position)) and _person_visible(p) and not rode_off.has(p) and arrive_t < 0.0
+		p.set_meta(PersonVisual.Pose.PICTURE_TIME, float(p.get_meta(PersonVisual.Pose.PICTURE_TIME, 0.0)) + PersonVisual.frame_delta(self, delta))
 		p.refresh_view(p.visible)
 	hud.tick(delta)
 	audio.tick(delta)
@@ -2169,7 +2178,7 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	var push := p.stick.length()
 	# A melee blow holds the feet from part way through it to its end (decision 425).
-	if push > 0.05 and combat.feet_held(p):
+	if combat.feet_held(p):
 		p.drive_speed = 0.0
 		p.moving = false
 		return

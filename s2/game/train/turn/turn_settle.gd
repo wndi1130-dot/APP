@@ -4,6 +4,7 @@ const C = preload("res://game/train/turn/turn_common.gd")
 const St = preload("res://game/train/train_state.gd")
 const Turn = preload("res://game/train/train_turn.gd")
 const Care = preload("res://game/train/turn/turn_settle_care.gd")
+const Supplies = preload("res://game/train/train_supplies.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
 const W = preload("res://game/train/turn/turn_wounds.gd")
 const People = preload("res://game/train/turn/turn_people.gd")
@@ -48,9 +49,11 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	Care.medicine(g, t, notes)
 	Care.child_settle(g, t, notes)
 	Care.heat_settle(g, t, notes)
+	var supplies: Dictionary = Supplies.use(g, t)
 	# 내정 훅 자리: domesticSettle(g, notes).
 	hub_leak_tick(g, t, notes)
 	g = Turn.drift(g, t)
+	Supplies.relations(g, t, supplies)
 	Care.calm_settle(g, t)
 	check_due_promises(g, t)
 	# arrivalsSettle: gated at the action boundary until the arrivals branch is ported.
@@ -65,7 +68,7 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 			g["ratifyRepeal"] = []
 		bribe_detection(g, t)
 	leash_tick(g, t)
-	ai_leaders(g, t)
+	ai_leaders(g, t, bool(supplies.get("plenty", false)))
 	g = Turn.meters(g, t)
 	if g["phase"] != "end": riot_tick(g, t, notes)
 	for comm: String in t["COMMS"]: g["comms"][comm]["away"] = 0
@@ -147,6 +150,13 @@ static func check_due_promises(g: Dictionary, t: Dictionary) -> void:
 			var amount: float = float(promise["cond"].get("amount", 0))
 			ok = float(g[resource]) >= amount
 			if ok: C.bump(g, resource, -amount, "promise")
+		elif kind in ["give_sup", "give_fine"]:
+			var resource: String = "sup" if kind == "give_sup" else "supFine"
+			var amount: float = float(promise["cond"].get("amount", 0))
+			ok = Supplies.asks(g) and float(g.get(resource, 0)) >= amount
+			if ok:
+				if resource == "sup": C.bump(g, resource, -amount, "promise")
+				else: g[resource] = float(g.get(resource, 0)) - amount
 		if ok: Field._keep_promise(g, t, comm, str(promise.get("label", "")))
 		else: Field._break_promise(g, t, comm, str(promise.get("label", "")))
 
@@ -207,7 +217,7 @@ static func leash_tick(g: Dictionary, t: Dictionary) -> void:
 		else: keep.append(leash)
 	g["leashes"] = keep
 
-static func ai_leaders(g: Dictionary, t: Dictionary) -> void:
+static func ai_leaders(g: Dictionary, t: Dictionary, sup_plenty: bool = false) -> void:
 	var cards: int = 0
 	var worst: String = ""
 	var worst_gap: float = 0
@@ -225,6 +235,7 @@ static func ai_leaders(g: Dictionary, t: Dictionary) -> void:
 		C.card(g, {"kind": "demand", "comm": worst}, t)
 		var seen: int = maxi(int(g.get("eventLog", {}).get("demand:" + worst, {}).get("n", 0)), int(g.get("eventLog", {}).get("demand:engine_shift", {}).get("n", 0)) if worst == "engine" else 0)
 		g["comms"][worst]["demandCool"] = 3 + mini(seen, 2) * 3
+		if sup_plenty: g["comms"][worst]["demandCool"] += int(t["P"]["supDemandCool"])
 		cards += 1
 	var engine: Dictionary = g["comms"]["engine"]
 	var engine_sit: Array = St.situation(g, t, "engine")

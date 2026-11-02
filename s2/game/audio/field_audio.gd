@@ -123,6 +123,10 @@ const LID_STANDIN: String = "metal"    # the impact file that stands in for it
 ## and high. Until a file is in its group it is the impact set's wood, pitched well down.
 const CREAK_VOICE: Array = ["floor_creak", 0.35, 0.45, 0.55]
 const CREAK_STANDIN: String = "wooden"
+## The groups whose own files are heard at their own pitch (low, high), not at the
+## row's, which was set to bend the stand-in into shape (_voice_or_standin): a
+## creak recorded as a creak is not pitched an octave down.
+const OWN_PITCH: Dictionary = {"floor_creak": [0.92, 1.08]}
 ## A step by the floor underfoot (FieldGrid.Floor: SNOW, ROAD, PLATFORM, WOOD,
 ## RAIL, DEEP_SNOW, ICE, GRAVEL): the groups to try in turn, loudness and pitch.
 ## Rails are on ballast; deep snow is the snow, lower and muffled (as the dead
@@ -1841,6 +1845,8 @@ func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var lin: float = float(voice[1]) * clampf(1.0 - d / 60.0, 0.0, 1.0)
 	var pitch := randf_range(float(voice[2]), float(voice[3]))
 	if has(group):
+		if OWN_PITCH.has(group):
+			pitch = randf_range(float(OWN_PITCH[group][0]), float(OWN_PITCH[group][1]))
 		_one_shot(group, at, lin, pitch, null, _bus_at(at))
 		return
 	if standin.begins_with("@"):

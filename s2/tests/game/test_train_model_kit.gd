@@ -208,6 +208,88 @@ func test_step_and_patches_require_door_and_window_clearance() -> void:
 	assert_has(Kit.catalog()["part_rules"]["coach_window_frame"]["requires"], "frame_missing")
 
 
+func test_release_keeps_stage_nodes_and_recreates_equal_models() -> void:
+	var root := Kit.create_stage(autofree(Node3D.new()), true)
+	var batches: Dictionary = _release_batch_values(root)
+	assert_false(batches.is_empty())
+	var nodes: Array = root.get_children()
+	var meshes: Array[Mesh] = []
+	var surfaces: Array[int] = []
+	assert_false(nodes.is_empty())
+	for node: MultiMeshInstance3D in nodes:
+		meshes.append(node.multimesh.mesh)
+		surfaces.append(node.multimesh.mesh.get_surface_count())
+	assert_false(Kit._libraries.is_empty())
+	assert_false(Kit._cuts.is_empty())
+	var catalog: Dictionary = Kit._catalog.duplicate(true)
+	var porosity: ImageTexture = Kit._porosity_tex
+	var glow_mesh: QuadMesh = Kit._glow_quad()
+	var glow_material: StandardMaterial3D = Kit._glow_paint()
+	assert_not_null(glow_mesh)
+	assert_not_null(glow_material)
+	for i in 2:
+		Kit.release()
+		assert_true(Kit._libraries.is_empty())
+		assert_true(Kit._cuts.is_empty())
+	assert_eq(Kit._catalog, catalog)
+	assert_same(Kit._porosity_tex, porosity)
+	assert_same(Kit._glow_mesh, glow_mesh)
+	assert_same(Kit._glow_material, glow_material)
+	for i in nodes.size():
+		assert_true(is_instance_valid(nodes[i]))
+		assert_not_null(nodes[i].multimesh.mesh)
+		assert_same(nodes[i].multimesh.mesh, meshes[i])
+		assert_eq(nodes[i].multimesh.mesh.get_surface_count(), surfaces[i])
+	var fresh := Kit.create_stage(autofree(Node3D.new()), true)
+	assert_eq(fresh.get_child_count(), nodes.size(), "same model mesh count, both LODs")
+	for i in mini(fresh.get_child_count(), nodes.size()):
+		var node := fresh.get_child(i) as MultiMeshInstance3D
+		assert_eq(node.name, nodes[i].name)
+		assert_eq(node.multimesh.mesh.get_surface_count(), surfaces[i])
+		assert_eq(node.multimesh.instance_count, nodes[i].multimesh.instance_count)
+		assert_eq(node.transform, nodes[i].transform)
+	# Dummy rendering reads identity transforms; compare the builder's source data.
+	var fresh_batches: Dictionary = _release_batch_values(fresh)
+	assert_eq(fresh_batches.size(), batches.size())
+	for key: String in batches:
+		assert_true(fresh_batches.has(key), key)
+		if not fresh_batches.has(key):
+			continue
+		var before: Dictionary = batches[key]
+		var after: Dictionary = fresh_batches[key]
+		assert_eq(after["transforms"], before["transforms"], key)
+		assert_eq(after["mesh"], before["mesh"], key)
+		assert_eq(after["material"], before["material"], key)
+	assert_false(Kit._libraries.is_empty())
+	assert_false(Kit._cuts.is_empty())
+
+
+func _release_batch_values(root: Node3D) -> Dictionary:
+	var values: Dictionary = {}
+	for key: String in root._batches:
+		var row: Dictionary = root._batches[key]
+		var transforms: Array = row["transforms"]
+		var mesh: Mesh = row["mesh"]
+		var surfaces: Array = []
+		for surface: int in mesh.get_surface_count():
+			surfaces.append([mesh.surface_get_primitive_type(surface), mesh.surface_get_arrays(surface)])
+		values[key] = {"transforms": transforms.duplicate(), "mesh": surfaces,
+			"material": _release_material_values(row["material"])}
+	return values
+
+
+func _release_material_values(material: ShaderMaterial) -> Dictionary:
+	var values: Dictionary = {"shader": material.shader.code, "render_priority": material.render_priority}
+	for uniform: Dictionary in material.shader.get_shader_uniform_list():
+		var key: String = uniform["name"]
+		var value: Variant = material.get_shader_parameter(key)
+		if value is Texture2D:
+			var image: Image = value.get_image()
+			value = [image.get_size(), image.get_format(), image.has_mipmaps(), image.get_data()]
+		values[key] = value
+	return values
+
+
 func test_home_cutaway_removes_only_front_upper_middle_triangles() -> void:
 	for lod in 2:
 		var row: Dictionary = Kit.asset_meshes("coach_medic")[lod][0]

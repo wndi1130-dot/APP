@@ -68,6 +68,61 @@ func test_a_shove_pressed_mid_blow_goes_once_after_it() -> void:
 	assert_true(game.combat.shove_after.is_empty())
 
 
+func test_a_shove_pressed_mid_blow_during_rest_goes_once_after_both() -> void:
+	_start()
+	game.combat.start_shove(p)
+	game.combat.update(Combat.SHOVE_WINDUP + 0.01)
+	assert_gt(p.lunge_t, 0.0, "the first shove landed")
+	game.combat.update(maxf(p.swing_t, p.lunge_t))
+	assert_eq(p.lunge_t, 0.0, "the arms are back")
+	assert_false(game.combat.striking(p))
+	assert_gt(p.shove_rest_t, 0.0, "the rest still remains")
+	game.combat.start_swing(p, {})
+	assert_gt(p.strike_t, 0.0, "a melee blow starts during the rest")
+	game.combat.start_shove(p)
+	game.combat.start_shove(p)
+	assert_eq(p.shove_t, 0.0, "the blow is not interrupted")
+	assert_eq(game.combat.shove_after.size(), 1, "pressed twice, remembered once")
+	var shoves: int = 0
+	for _i: int in range(80):
+		var was: float = p.shove_t
+		game.combat.update(0.05)
+		if was <= 0.0 and p.shove_t > 0.0:
+			shoves += 1
+			assert_eq(p.strike_t, 0.0, "the blow has ended")
+			assert_eq(p.shove_rest_t, 0.0, "the rest has ended")
+	assert_eq(shoves, 1, "one shove after both the blow and the rest")
+	assert_true(game.combat.shove_after.is_empty())
+
+
+func test_a_shove_ending_a_fight_during_rest_waits_once() -> void:
+	_start()
+	game.combat.start_shove(p)
+	game.combat.update(Combat.SHOVE_WINDUP + 0.01)
+	game.combat.update(maxf(p.swing_t, p.lunge_t))
+	assert_false(game.combat.striking(p))
+	assert_gt(p.shove_rest_t, 0.0)
+	var z: Dictionary = _dead_at(0.9)
+	game.combat.fight(p, z, true)
+	assert_true(game.combat.fighting(p))
+	game.combat.start_shove(p)
+	game.combat.start_shove(p)
+	assert_false(game.combat.fighting(p), "the fight ends immediately")
+	assert_eq(game.combat.shove_after.size(), 1)
+	game.combat.update(p.shove_rest_t * 0.5)
+	assert_eq(p.shove_t, 0.0, "the rest still blocks the shove")
+	assert_eq(game.combat.shove_after.size(), 1, "the queue survives the rest")
+	var shoves: int = 0
+	for _i: int in range(80):
+		var was: float = p.shove_t
+		game.combat.update(0.05)
+		if was <= 0.0 and p.shove_t > 0.0:
+			shoves += 1
+			assert_eq(p.shove_rest_t, 0.0)
+	assert_eq(shoves, 1)
+	assert_true(game.combat.shove_after.is_empty())
+
+
 func test_breaking_free_loses_the_blow_drawn_back() -> void:
 	_start()
 	var z := _dead_at(1.0)
