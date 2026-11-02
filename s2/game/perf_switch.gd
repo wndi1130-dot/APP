@@ -31,6 +31,7 @@ static var _renderer_owner: int = 0
 
 # Fill ownership follows every visibility change, independently of the renderer.
 static var _fill_owner: int = 0
+static var _fill_mode: String = "light"
 static var _fill_state: Dictionary = {"fx_fill_dir": Vector3.ZERO, "fx_fill": Vector4.ZERO}
 
 
@@ -43,12 +44,13 @@ static func claim_fill(owner_id: int) -> void:
 		_fill_owner = owner_id
 
 
-static func publish_fill(owner_id: int, direction: Vector3, value: Vector4) -> void:
+static func publish_fill(owner_id: int, direction: Vector3, value: Vector4, mode: String = "light") -> void:
 	if owner_id == 0 or owner_id != _fill_owner:
 		return
 	RenderingServer.global_shader_parameter_set("fx_fill_dir", direction)
 	RenderingServer.global_shader_parameter_set("fx_fill", value)
 	_fill_state = {"fx_fill_dir": direction, "fx_fill": value}
+	_fill_mode = mode
 
 
 static func release_fill(owner_id: int) -> void:
@@ -65,6 +67,10 @@ static func fill_state() -> Dictionary:
 static func fill_on() -> bool:
 	var value: Vector4 = _fill_state["fx_fill"]
 	return value.w > 0.5
+
+
+static func fill_mode() -> String:
+	return _fill_mode
 
 
 static func read(path: String = FILE, diagnostic: Dictionary = {}) -> Dictionary:
@@ -97,6 +103,8 @@ static func _read_opened(file: FileAccess, open_error: Error, diagnostic: Dictio
 			reasons.append("atlas_size must be 1024, 2048, 4096 or 8192")
 		elif key == "view_fill_mode":
 			reasons.append("view_fill_mode must be light or shader")
+		elif key == "view_fill_cull_mask" and valid.get("view_fill_mode") == "shader":
+			reasons.append("view_fill_cull_mask must be 0 or %d in shader mode" % MAX_CULL_MASK)
 		else:
 			reasons.append("unsupported key or invalid value: " + key)
 	if valid.is_empty():
@@ -128,7 +136,8 @@ static func _valid(s: Dictionary) -> Dictionary:
 	var mask: Variant = s.get("view_fill_cull_mask")
 	if (mask is int or mask is float) and is_finite(float(mask)) and float(mask) == floorf(float(mask)) \
 			and float(mask) >= 0.0 and float(mask) <= float(MAX_CULL_MASK):
-		valid["view_fill_cull_mask"] = int(mask)
+		if valid.get("view_fill_mode") != "shader" or int(mask) in [0, MAX_CULL_MASK]:
+			valid["view_fill_cull_mask"] = int(mask)
 	# The menu's two caps only: phone runs restart the app, which drops the menu pick back to 30.
 	var fps: Variant = s.get("max_fps")
 	if (fps is int or fps is float) and (float(fps) == 30.0 or float(fps) == 60.0):
@@ -279,7 +288,7 @@ static func apply(sun: DirectionalLight3D, view_fill: Node3D, s: Dictionary, inc
 			if not visible and view_fill.visible:
 				view_fill.visible = false
 			if locked == visible:
-				changed["view_fill"] = visible
+				changed["view_fill_lock"] = not visible
 		elif view_fill.visible != visible or locked == visible:
 			view_fill.visible = visible
 			changed["view_fill"] = visible

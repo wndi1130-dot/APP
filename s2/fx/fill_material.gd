@@ -34,10 +34,11 @@ static func from_standard(src: BaseMaterial3D) -> Material:
 		return src
 	var material: ShaderMaterial
 	if _cache.has(source_id):
-		material = _cache[source_id]["material"]
-	else:
+		var material_ref: WeakRef = _cache[source_id]["material"]
+		material = material_ref.get_ref() as ShaderMaterial
+	if material == null:
 		material = make(src.albedo_color)
-		_cache[source_id] = {"source": weakref(src), "material": material}
+		_cache[source_id] = {"source": weakref(src), "material": weakref(material)}
 	# Refresh values without replacing the cached material's identity.
 	material.shader = TWO_SIDED_SHADER if src.cull_mode == BaseMaterial3D.CULL_DISABLED else SHADER
 	material.set_shader_parameter("albedo_color", src.albedo_color)
@@ -71,11 +72,12 @@ static func _supported(src: BaseMaterial3D) -> bool:
 
 
 static func _prune_cache() -> void:
-	# Weak sources do not keep imported materials alive. Sweep on conversion.
+	# Neither source nor derived material is owned here; sweep dead entries on conversion.
 	for source_id: int in _cache.keys():
 		var entry: Dictionary = _cache[source_id]
 		var source_ref: WeakRef = entry["source"]
-		if source_ref.get_ref() == null:
+		var material_ref: WeakRef = entry["material"]
+		if source_ref.get_ref() == null or material_ref.get_ref() == null:
 			_cache.erase(source_id)
 
 

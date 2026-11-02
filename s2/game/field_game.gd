@@ -954,11 +954,11 @@ func _set_view_fill() -> void:
 		return
 	var fill_dir: Vector3 = Vector3.ZERO
 	var fill_value: Vector4 = Vector4.ZERO
-	if fill_state == "shader" and lit:
+	if fill_state == "shader" and lit and view_fill.light_cull_mask != 0:
 		fill_dir = view_fill.global_transform.basis.z.normalized()
 		var linear: Color = view_fill.light_color.srgb_to_linear()
 		fill_value = Vector4(linear.r * applied, linear.g * applied, linear.b * applied, 1.0)
-	PerfSwitch.publish_fill(get_instance_id(), fill_dir, fill_value)
+	PerfSwitch.publish_fill(get_instance_id(), fill_dir, fill_value, _view_fill_state(false))
 
 
 func set_view_fill_mode(mode: String) -> void:
@@ -968,8 +968,8 @@ func set_view_fill_mode(mode: String) -> void:
 	_set_view_fill()
 
 
-func _view_fill_state() -> String:
-	if view_fill != null and view_fill.visibility_changed.is_connected(view_fill.hide):
+func _view_fill_state(include_lock: bool = true) -> String:
+	if include_lock and view_fill != null and view_fill.visibility_changed.is_connected(view_fill.hide):
 		return "off"
 	var mode: Variant = _perf_settings.get("view_fill_mode")
 	if mode is String and mode in ["light", "shader"]:
@@ -1935,7 +1935,7 @@ func _configure_perf_switch() -> void:
 		_apply_perf_settings(PerfSwitch.read())
 
 
-func _apply_perf_settings(settings: Dictionary) -> void:
+func _apply_perf_settings(settings: Dictionary) -> Dictionary:
 	var mode_before: Variant = _perf_settings.get("view_fill_mode")
 	var fill_was: bool = view_fill != null and view_fill.visible
 	_perf_settings = settings
@@ -1949,7 +1949,7 @@ func _apply_perf_settings(settings: Dictionary) -> void:
 	_set_view_fill()
 	# The switch only reports the lock; the fill's own change shows once the field has decided.
 	if not settings.is_empty():
-		if view_fill != null and not changed.has("view_fill") and view_fill.visible != fill_was:
+		if view_fill != null and view_fill.visible != fill_was:
 			changed["view_fill"] = view_fill.visible
 		if not changed.is_empty():
 			print("PERF_SWITCH ", changed)
@@ -1959,6 +1959,7 @@ func _apply_perf_settings(settings: Dictionary) -> void:
 	if not visibility_changed.is_connected(_apply_perf_renderer):
 		visibility_changed.connect(_apply_perf_renderer)
 	_apply_perf_renderer()
+	return changed
 
 
 func _apply_perf_renderer() -> void:
