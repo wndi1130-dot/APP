@@ -449,32 +449,81 @@ func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 		guard.position = _at() + Vector3(-4.0 if guard.brain.get("side", 0) == 0 else 4.0, 0, 1.5)
 		guard.stop()
 		guard.face_point(_at())
+		# Ordinary turns prefer a gap; requests past the head limit bypass it. Over 120 s the
+		# camera side stays a small share and the sector never turns past its cap (decision 536).
+		var camera_s: float = 0.0
+		var worst := Vector2.ZERO
+		for i in 240:
+			game.clock.elapsed += 0.5
+			var shown: float = guard.look if guard.turn_rate > 0.0 else guard.facing
+			var last_turn: float = float(guard.brain.get("watch_body_turn_t", game.clock.elapsed - game.ai.LOOK_BODY_TURN_GAP_S))
+			game.ai._crew(guard, 0.1, true)
+			var state: Dictionary = guard.brain["watch_escort"]
+			var target: float = float(state["target"])
+			var look := Vector3(sin(target), 0.0, cos(target))
+			assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 180.0 - game.ai.LOOK_SECTOR_DEG - game.ai.LOOK_CAMERA_TURN_MAX_DEG - 0.5, "within the turned outward sector")
+			assert_lte(absf(float(guard.brain["watch_head_yaw"])), deg_to_rad(game.ai.LOOK_HEAD_MAX_DEG))
+			var turned: float = float(guard.brain.get("watch_body_turn_t", last_turn))
+			if turned > last_turn and turned - last_turn < game.ai.LOOK_BODY_TURN_GAP_S:
+				assert_gt(absf(angle_difference(shown, target)), deg_to_rad(game.ai.LOOK_HEAD_MAX_DEG))
+			var seen: Vector3 = _watch_extent(guard)
+			camera_s += seen.x * 0.5
+			worst = Vector2(maxf(worst.x, seen.y), maxf(worst.y, seen.z))
+		_assert_watch_extent(worst, camera_s / 120.0)
+		# Drawn at 30 and 60 fps: the body turn keeps the game's rate and never flips.
 		game.ai._crew(guard, 0.0, true)
 		game._turn_people(0.0)
-		guard.look = guard.facing   # Start from the first posted watch, after arrival.
+		guard.look = guard.facing
 		guard.refresh_view(false)
 		assert_gt(guard.turn_rate, 0.0, "a posted escort uses the game's body turn rate")
 		for fps: int in [30, 60]:
 			var delta: float = 1.0 / float(fps)
 			var before: float = guard.rotation.y
-			# A whole sweep (about 12.6 s), advancing the rules and drawing each frame.
-			for _tick: int in range(13 * fps):
+			var drawn_camera_s: float = 0.0
+			var drawn_worst := Vector2.ZERO
+			for _tick: int in range(60 * fps):
 				game.clock.elapsed += delta
 				game._turn_people(delta)
 				game.ai._crew(guard, delta, true)
 				guard.refresh_view(false)
-				var screen: Vector3 = game.cam_back()
-				screen.y = 0.0
 				for yaw: float in [guard.facing, guard.rotation.y]:
-					var look := Vector3(sin(yaw), 0.0, cos(yaw))
-					assert_gt(rad_to_deg(look.angle_to(_at() - guard.position)), 119.5, "watching outward, the work behind")
-					assert_gt(rad_to_deg(look.angle_to(screen)), game.ai.LOOK_CAMERA_DEG - 0.5, "never into the screen")
-				var turned: float = absf(angle_difference(before, guard.rotation.y))
-				assert_lte(turned, guard.turn_rate * delta + 0.00001, "the drawn turn stays within its rate")
-				assert_lt(rad_to_deg(turned), 30.0, "the sweep turns slowly, never flips")
-				total_turn += turned
+					var out := Vector3(sin(yaw), 0.0, cos(yaw))
+					assert_gt(rad_to_deg(out.angle_to(_at() - guard.position)), 180.0 - game.ai.LOOK_SECTOR_DEG - game.ai.LOOK_CAMERA_TURN_MAX_DEG - 0.5, "watching outward, the work behind")
+				var turned_now: float = absf(angle_difference(before, guard.rotation.y))
+				assert_lte(turned_now, guard.turn_rate * delta + 0.00001, "the drawn turn stays within its rate")
+				assert_lt(rad_to_deg(turned_now), 30.0, "the watch turns slowly, never flips")
+				total_turn += turned_now
 				before = guard.rotation.y
-	assert_gt(total_turn, deg_to_rad(5.0), "the posted watches are not all frozen at a camera edge")
+				var drawn_seen: Vector3 = _watch_extent(guard)
+				drawn_camera_s += drawn_seen.x * delta
+				drawn_worst = Vector2(maxf(drawn_worst.x, drawn_seen.y), maxf(drawn_worst.y, drawn_seen.z))
+			_assert_watch_extent(drawn_worst, drawn_camera_s / 60.0)
+	assert_gt(total_turn, deg_to_rad(5.0), "the posted watches move between their points")
+
+
+## The watch now: x 1 while it looks at a camera-side point, y the largest turn of its look
+## points off the outward sector (degrees), z how many look points face the camera.
+func _watch_extent(guard) -> Vector3:
+	var out: Vector3 = guard.position - _at()
+	out.y = 0.0
+	var state: Dictionary = guard.brain["watch_escort"]
+	var turn: float = 0.0
+	var camera_points: int = 0
+	for point: int in range(game.ai.LOOK_POINTS):
+		var yaw: float = float(state["yaw_" + str(point)])
+		turn = maxf(turn, absf(angle_difference(game.ai._watch_target(guard, out, point), yaw)))
+		if game.ai._watch_faces_camera(yaw, game.cam_back()):
+			camera_points += 1
+	var on_camera: float = 1.0 if game.ai._watch_faces_camera(float(state["target"]), game.cam_back()) else 0.0
+	return Vector3(on_camera, rad_to_deg(turn), float(camera_points))
+
+
+## Decision 536: the sector turns at most its cap, few look points face the camera, and the
+## camera side stays a small share of the watch.
+func _assert_watch_extent(worst: Vector2, camera_share: float) -> void:
+	assert_lte(worst.x, game.ai.LOOK_CAMERA_TURN_MAX_DEG + 0.5, "the sector turns at most its cap")
+	assert_lte(int(worst.y), game.ai.LOOK_CAMERA_MAX_POINTS, "few look points toward the camera")
+	assert_lt(camera_share, 0.08, "the camera side stays a small share of the watch")
 
 
 func _cycle(id: String) -> void:
