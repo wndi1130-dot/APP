@@ -62,6 +62,11 @@ static func fill_state() -> Dictionary:
 	return _fill_state.duplicate()
 
 
+static func fill_on() -> bool:
+	var value: Vector4 = _fill_state["fx_fill"]
+	return value.w > 0.5
+
+
 static func read(path: String = FILE, diagnostic: Dictionary = {}) -> Dictionary:
 	diagnostic.clear()
 	if not FileAccess.file_exists(path):

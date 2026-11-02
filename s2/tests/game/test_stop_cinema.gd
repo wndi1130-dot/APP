@@ -10,10 +10,59 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const FieldAudio = preload("res://game/audio/field_audio.gd")
 const MapView = preload("res://game/world/map_view.gd")
+const FillSwitch = preload("res://game/perf_switch.gd")
+const FILL_TEST_OWNER: int = 4211102
 
 const TICK: float = 0.05
 
 static var _map: Dictionary = {}
+
+
+func after_each() -> void:
+	FillSwitch.release_fill(FILL_TEST_OWNER)
+
+
+func _publish_fill_on_done(_how: String) -> void:
+	FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.BACK, Vector4.ONE)
+
+
+func test_out_freezes_viewport_after_fill_is_published_and_keeps_fading() -> void:
+	FillSwitch.claim_fill(FILL_TEST_OWNER)
+	FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.ZERO, Vector4.ZERO)
+	var cinema: StopCinema = _scene()
+	cinema.done.connect(_publish_fill_on_done)
+	assert_false(FillSwitch.fill_on())
+	cinema._begin("out")
+	assert_true(FillSwitch.fill_on())
+	assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_DISABLED)
+	cinema.view.modulate.a = 1.0
+	cinema._process(TICK)
+	assert_almost_eq(cinema.view.modulate.a, 1.0 - TICK / StopCinema.FADE_S, 0.000001)
+	# A later field publication must also be caught in out and end.
+	for ending: String in ["out", "end"]:
+		cinema.beat = ending
+		cinema.port.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.ZERO, Vector4.ZERO)
+		cinema._process(0.0)
+		assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_ALWAYS)
+		FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.BACK, Vector4.ONE)
+		cinema._process(TICK)
+		assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_DISABLED)
+
+
+func test_out_without_fill_keeps_viewport_updating() -> void:
+	FillSwitch.claim_fill(FILL_TEST_OWNER)
+	FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.ZERO, Vector4.ZERO)
+	var cinema: StopCinema = _scene()
+	cinema._begin("out")
+	assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_ALWAYS)
+	cinema.view.modulate.a = 1.0
+	cinema._process(TICK)
+	assert_almost_eq(cinema.view.modulate.a, 1.0 - TICK / StopCinema.FADE_S, 0.000001)
+	assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_ALWAYS)
+	cinema.beat = "end"
+	cinema._process(TICK)
+	assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_ALWAYS)
 
 
 func _data() -> Dictionary:
