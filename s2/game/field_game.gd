@@ -1993,6 +1993,9 @@ func _process(delta: float) -> void:
 			hud.tick_resume()
 		if not away and resume_ready_at_ms < 0:
 			resume_ready_at_ms = Time.get_ticks_msec() + 1000
+		# The wait is a pause, so the world fades like any pause while the
+		# card is up; the first frame back may be long, so it eases in too.
+		_update_fade(minf(delta, PersonVisual.FRAME_MAX))
 		return
 	delta = minf(delta, PersonVisual.FRAME_MAX)
 	if arrive_t >= 0.0:
