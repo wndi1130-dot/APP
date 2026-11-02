@@ -237,11 +237,18 @@ func test_the_bag_says_what_each_weapon_in_hand_does() -> void:
 		p.add_item(id, 1)
 	game.hud.bag_panel()
 	assert_not_null(game.hud.modal.find_child("WeaponLine1", true, false), "the second weapon's line")
-	# Wrapped lines (this and the bag's foot) only know their height once laid out.
-	await get_tree().process_frame
-	await get_tree().process_frame
-	var pane: Control = game.hud.modal.find_child("Pane", true, false)
-	assert_lte(pane.position.y + pane.get_combined_minimum_size().y, pane.get_viewport_rect().size.y, "two lines more and a full bag still on the screen")
+	# The pane fits itself once its slide lands, and wrapped lines (this and the
+	# bag's foot) know their height only once laid out: land it, then lay out.
+	var glass = game.hud.modal_pane
+	glass.set_process(false)
+	for _i in range(120):
+		if not glass.is_sliding():
+			break
+		glass.motion_step(1.0 / 60.0)
+	assert_false(glass.is_sliding(), "the pane landed")
+	for _i in range(3):
+		await get_tree().process_frame
+	assert_lte(glass.get_global_rect().end.y, glass.get_viewport_rect().size.y, "two lines more and a full bag still on the screen")
 	game.hud._close_modal()
 	p.hands = []
 	assert_eq(InventoryPane.weapon_lines(p).size(), 0, "bare hands, no line")
