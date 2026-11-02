@@ -1925,7 +1925,7 @@ func _process(delta: float) -> void:
 		if not away and resume_ready_at_ms < 0:
 			resume_ready_at_ms = Time.get_ticks_msec() + 1000
 		return
-	delta = minf(delta, 0.1)
+	delta = minf(delta, PersonVisual.FRAME_MAX)
 	if arrive_t >= 0.0:
 		_arrive(delta)
 	elif not ended and not paused:
@@ -1955,6 +1955,7 @@ func _process(delta: float) -> void:
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
 		p.visible = level_shown(level_of(p.position)) and _person_visible(p) and not rode_off.has(p) and arrive_t < 0.0
+		p.set_meta(PersonVisual.Pose.PICTURE_TIME, float(p.get_meta(PersonVisual.Pose.PICTURE_TIME, 0.0)) + PersonVisual.frame_delta(self, delta))
 		p.refresh_view(p.visible)
 	hud.tick(delta)
 	audio.tick(delta)
@@ -2166,7 +2167,7 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	var push := p.stick.length()
 	# A melee blow holds the feet from part way through it to its end (decision 425).
-	if push > 0.05 and combat.feet_held(p):
+	if combat.feet_held(p):
 		p.drive_speed = 0.0
 		p.moving = false
 		return
