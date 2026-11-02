@@ -57,6 +57,7 @@ var _history_tick: int = -1
 var _work_start: int = 0
 var _continuous_usec: int = 0
 var _pieces: int = 0
+var _rest_from: int = 0
 var _piece_pace: BuildPace
 var _staged: bool = false
 var _build_cancelled: bool = false
@@ -387,6 +388,7 @@ func _begin_stats(pace: BuildPace) -> void:
 	stats["resource_first_ready_ms"] = 0.0
 	stats["resource_cached_ready_ms"] = 0.0
 	_work_start = Time.get_ticks_usec()
+	_rest_from = _work_start
 	_continuous_usec = 0
 	_pieces = 0
 	_piece_pace = pace if pace != null else BuildPace.new()
@@ -455,13 +457,17 @@ func _rest() -> void:
 		var stage: String = stats["stage"]
 		waits[stage] = int(waits.get(stage, 0)) + 1
 	_work_start = Time.get_ticks_usec()
+	_rest_from = _work_start
 	_pieces = 0
 	stats["pieces"] = int(stats["pieces"]) + 1
 
 
 func _rest_due() -> bool:
-	var accounted: int = _continuous_usec if _staged else 0
-	return accounted + Time.get_ticks_usec() - _work_start >= WORK_USEC
+	# 준비 단계(staged)는 계산한 작업 시간으로, 아니면 마지막 쉼 뒤 흐른 시간으로 본다.
+	# 단계가 바뀔 때 _account()가 _work_start를 다시 잡아도 쉼 자리는 6 ms마다 온다.
+	if _staged:
+		return _continuous_usec + Time.get_ticks_usec() - _work_start >= WORK_USEC
+	return Time.get_ticks_usec() - _rest_from >= WORK_USEC
 
 
 func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null, table: Dictionary = {}) -> Array[Dictionary]:
