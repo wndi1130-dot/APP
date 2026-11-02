@@ -27,6 +27,7 @@ const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const MapBounds = preload("res://game/world/map_bounds.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Sled = preload("res://game/sim/sled.gd")
 const NoiseLedger = preload("res://game/sim/noise_ledger.gd")
@@ -491,7 +492,8 @@ func _ready() -> void:
 	if opts.has("stop_view_rows") or opts.has("stop_view_cols"):
 		stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)),
 			ground_form, rng.seed, ground_m, fresh_map, end_gap)
-	_take_map(with_side_path(stop_map, rng.seed))
+	stop_map = with_side_path(stop_map, rng.seed)
+	_take_map(MapBounds.apply(stop_map, int(opts.get("bounds_rule", -1))))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.

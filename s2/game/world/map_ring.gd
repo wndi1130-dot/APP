@@ -56,7 +56,7 @@ static func build(script: Script, finish: Callable) -> Dictionary:
 	return data
 
 
-static func add(original: Dictionary) -> Dictionary:
+static func add(original: Dictionary, widths: Array[int] = [], inset: int = 0) -> Dictionary:
 	if StoryMaps.is_story(String(original.get("place_id", ""))):
 		return original
 	if original.get("place_id", "") == "first_leg_01_sulechow":
@@ -64,18 +64,28 @@ static func add(original: Dictionary) -> Dictionary:
 	var width := width_for(String(original.get("place_kind", "")))
 	if width == 0:
 		return original
+	var edges: Array[int] = [width, width, width, width]
+	if not widths.is_empty():
+		assert(widths.size() == 4 and widths.min() >= width)
+		edges.assign(widths)
+	assert(inset >= 0)
+	var left: int = edges[0]
+	var top: int = edges[1]
+	var right: int = edges[2]
+	var bottom: int = edges[3]
+	var town: bool = TOWN.has(String(original.get("place_kind", "")))
 	var look: Dictionary = RegionLooks.of(String(original.get("region_band", "")), String(original.get("place_kind", "")))
 	var lot_step: int = int(look.get("lot_step", LOT_STEP))
 	var old: FieldGrid = original["grid"]
-	var inner := Rect2i(width, width, old.width, old.height)
-	var data := MapShift.grow(original, width, width, width, width, false)
+	var inner := Rect2i(left, top, old.width, old.height)
+	var data := MapShift.grow(original, left, top, right, bottom, false)
 	var g: FieldGrid = data["grid"]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = (String(data["place_id"]) + "|outer-village").hash()
 	var seed_value := rng.seed
 	# 지역값이 있어도 원래 범위에서 한 번 뽑아 난수 차례를 지키고, 지역은 그 수를 lot_shift만큼 옮긴다.
 	# 지도마다 원래 마을 크기가 달라 고정 범위로 주면 상자 양이 지도마다 크게 갈린다(교회 지도 -19%).
-	var target: int = rng.randi_range(4, 8) if width == TOWN_WIDTH else rng.randi_range(1, 3)
+	var target: int = rng.randi_range(4, 8) if town else rng.randi_range(1, 3)
 	target = maxi(1, target + int(look.get("lot_shift", 0)))
 	# Work only on the ring. The solid mask prevents furnishing the old rooms.
 	var rg := FieldGrid.new(g.width, g.height)
@@ -88,20 +98,21 @@ static func add(original: Dictionary) -> Dictionary:
 		"place_kind": data["place_kind"], "buildings": [], "props": [], "containers": {},
 		"stairs": [], "low_blocks": [], "trees": [], "labels": [], "_defer_paths": true}
 	var roads: Array[Rect2i] = []
-	var mid := width / 2
-	for r in [Rect2i(mid, mid, g.width - mid * 2, ROAD_WIDTH),
-		Rect2i(mid, g.height - mid - ROAD_WIDTH, g.width - mid * 2, ROAD_WIDTH),
-		Rect2i(mid, mid, ROAD_WIDTH, g.height - mid * 2),
-		Rect2i(g.width - mid - ROAD_WIDTH, mid, ROAD_WIDTH, g.height - mid * 2)]:
+	# 집터의 변 순서: 위, 오른쪽, 아래, 왼쪽. 균일 폭의 난수 차례는 그대로 둔다.
+	var mids: Array[int] = [top >> 1, right >> 1, bottom >> 1, left >> 1]
+	for r in [Rect2i(mids[3], mids[0], g.width - mids[3] - mids[1], ROAD_WIDTH),
+		Rect2i(mids[3], g.height - mids[2] - ROAD_WIDTH, g.width - mids[3] - mids[1], ROAD_WIDTH),
+		Rect2i(mids[3], mids[0], ROAD_WIDTH, g.height - mids[0] - mids[2]),
+		Rect2i(g.width - mids[1] - ROAD_WIDTH, mids[0], ROAD_WIDTH, g.height - mids[0] - mids[2])]:
 		_paint_floor(rg, r, F.ROAD)
 		roads.append(r)
 	# Boundary lanes retain their whole width, including track on any side.
 	for y in range(old.height):
-		_extend(rg, old, Vector2i(0, y), Rect2i(0, y + width, width, 1), roads)
-		_extend(rg, old, Vector2i(old.width - 1, y), Rect2i(inner.end.x, y + width, width, 1), roads)
+		_extend(rg, old, Vector2i(0, y), Rect2i(0, y + top, left, 1), roads)
+		_extend(rg, old, Vector2i(old.width - 1, y), Rect2i(inner.end.x, y + top, right, 1), roads)
 	for x in range(old.width):
-		_extend(rg, old, Vector2i(x, 0), Rect2i(x + width, 0, 1, width), roads)
-		_extend(rg, old, Vector2i(x, old.height - 1), Rect2i(x + width, inner.end.y, 1, width), roads)
+		_extend(rg, old, Vector2i(x, 0), Rect2i(x + left, 0, 1, top), roads)
+		_extend(rg, old, Vector2i(x, old.height - 1), Rect2i(x + left, inner.end.y, 1, bottom), roads)
 	# A river the map names (edge_water) runs on to the new edge as it lies at the old one, its
 	# frozen bank and its deep water, so the ring road does not walk round it. Laid before the
 	# lots and trees, which stand only on clear snow.
@@ -109,14 +120,14 @@ static func add(original: Dictionary) -> Dictionary:
 	for r: Rect2i in original.get("edge_water", []):
 		for y in range(r.position.y, r.end.y):
 			if r.position.x == 0:
-				_run_water(rg, old, Vector2i(0, y), Rect2i(0, y + width, width, 1), water)
+				_run_water(rg, old, Vector2i(0, y), Rect2i(0, y + top, left, 1), water)
 			if r.end.x == old.width:
-				_run_water(rg, old, Vector2i(old.width - 1, y), Rect2i(inner.end.x, y + width, width, 1), water)
+				_run_water(rg, old, Vector2i(old.width - 1, y), Rect2i(inner.end.x, y + top, right, 1), water)
 		for x in range(r.position.x, r.end.x):
 			if r.position.y == 0:
-				_run_water(rg, old, Vector2i(x, 0), Rect2i(x + width, 0, 1, width), water)
+				_run_water(rg, old, Vector2i(x, 0), Rect2i(x + left, 0, 1, top), water)
 			if r.end.y == old.height:
-				_run_water(rg, old, Vector2i(x, old.height - 1), Rect2i(x + width, inner.end.y, 1, width), water)
+				_run_water(rg, old, Vector2i(x, old.height - 1), Rect2i(x + left, inner.end.y, 1, bottom), water)
 	for r in _merge_runs(water):
 		ring["props"].append({"kind": "water", "rect": r, "solid": "low", "facing": 0, "level": 0})
 		ring["low_blocks"].append(r)
@@ -124,10 +135,10 @@ static func add(original: Dictionary) -> Dictionary:
 	# its strip off an edge the river reaches, where it would walk round the river's end.
 	var reaches: Array[Rect2i] = []
 	for r: Rect2i in original.get("edge_water", []):
-		var x0 := 0 if r.position.x == 0 else r.position.x + width
-		var y0 := 0 if r.position.y == 0 else r.position.y + width
-		var x1 := g.width if r.end.x == old.width else r.end.x + width
-		var y1 := g.height if r.end.y == old.height else r.end.y + width
+		var x0 := 0 if r.position.x == 0 else r.position.x + left
+		var y0 := 0 if r.position.y == 0 else r.position.y + top
+		var x1 := g.width if r.end.x == old.width else r.end.x + left
+		var y1 := g.height if r.end.y == old.height else r.end.y + top
 		reaches.append(Rect2i(x0, y0, x1 - x0, y1 - y0))
 	if not reaches.is_empty():
 		data["edge_water"] = reaches
@@ -136,12 +147,12 @@ static func add(original: Dictionary) -> Dictionary:
 		next_id = maxi(next_id, int(b["id"]) + 1)
 	# Choose among all four sides. Try every candidate, with no random retry loop.
 	var sides: Array = [[], [], [], []]
-	for x in range(width, g.width - width - 12, lot_step):
-		sides[0].append(Rect2i(x, 2, 12, 7 if width == TOWN_WIDTH else 6))
-		sides[2].append(Rect2i(x, g.height - (9 if width == TOWN_WIDTH else 8), 12, 7 if width == TOWN_WIDTH else 6))
-	for y in range(width, g.height - width - 12, lot_step):
-		sides[1].append(Rect2i(g.width - (9 if width == TOWN_WIDTH else 8), y, 7 if width == TOWN_WIDTH else 6, 12))
-		sides[3].append(Rect2i(2, y, 7 if width == TOWN_WIDTH else 6, 12))
+	for x in range(inner.position.x, inner.end.x - 12, lot_step):
+		sides[0].append(Rect2i(x, 2 + inset, 12, 7 if town else 6))
+		sides[2].append(Rect2i(x, g.height - (9 if town else 8) - inset, 12, 7 if town else 6))
+	for y in range(inner.position.y, inner.end.y - 12, lot_step):
+		sides[1].append(Rect2i(g.width - (9 if town else 8) - inset, y, 7 if town else 6, 12))
+		sides[3].append(Rect2i(2 + inset, y, 7 if town else 6, 12))
 	for list: Array in sides:
 		for i in range(list.size() - 1, 0, -1):
 			var j := rng.randi_range(0, i)
@@ -158,16 +169,20 @@ static func add(original: Dictionary) -> Dictionary:
 			if lots.size() >= target or round_index >= sides[side].size():
 				continue
 			var r: Rect2i = sides[side][round_index]
+			var mid: int = mids[side]
 			var choice: Dictionary = {}
 			if not look.is_empty():
 				var neighbours: Array[Dictionary] = _regional_neighbours(r, side, placed)
 				choice = _regional_choice(look, rng, lots.size(), width, neighbours, placed)
 				if choice.is_empty():
 					continue
-				r = _regional_fit(rg, r, side, mid, inner, lots, choice, neighbours)
+				r = _regional_fit(rg, r, side, mid, inner, lots, choice, neighbours, inset)
 				if not r.has_area():
 					continue
 			if look.is_empty() and not _clear(rg, r.grow(1), inner, lots):
+				continue
+			# 들임이 큰 좁은 띠에서는 문이 길을 지나치지 않게 집터를 비운다.
+			if inset > 0 and inset + (r.size.y if side % 2 == 0 else r.size.x) + 2 > mid:
 				continue
 			_house(ring, r, next_id + lots.size(), lots.size(), side, mid)
 			if not look.is_empty():
@@ -181,8 +196,8 @@ static func add(original: Dictionary) -> Dictionary:
 			lots.append(r.grow(1))
 	# Snow-covered furrows are floor colour only; no props or collision rows.
 	var fields: Array[Rect2i] = []
-	for x in range(width, g.width - width - 10, LOT_STEP):
-		for y in [2, g.height - 8]:
+	for x in range(inner.position.x, inner.end.x - 10, LOT_STEP):
+		for y in [2 + inset, g.height - 8 - inset]:
 			var r := Rect2i(x, y, 10, 6)
 			if _clear(rg, r.grow(1), inner, lots):
 				for fy in range(r.position.y, r.end.y, 2):
@@ -229,7 +244,7 @@ static func add(original: Dictionary) -> Dictionary:
 	# The room kinds were numbered by room on the grid that was furnished: the grown grid numbers
 	# its rooms anew, so the old table would name the wrong rooms (box keys, room_furnish.gd).
 	data.erase("density_classes")
-	data["map_ring"] = {"width": width, "inner": inner, "seed": seed_value,
+	data["map_ring"] = {"width": width, "sides": edges, "inner": inner, "seed": seed_value,
 		"buildings": ring["buildings"].size(), "target": target, "roads": roads,
 		"fields": fields, "containers": ring["containers"].keys(), "rooms": ring["room_stats"]}
 	return data
@@ -311,14 +326,14 @@ static func _regional_choice(look: Dictionary, rng: RandomNumberGenerator, numbe
 
 
 ## 긴 변은 길을 따라 놓고 깊이는 길 앞까지만 쓴다. 길과 고리 너비는 늘리지 않는다.
-static func _regional_rect(g: FieldGrid, anchor: Rect2i, side: int, span: int, depth: int) -> Rect2i:
+static func _regional_rect(g: FieldGrid, anchor: Rect2i, side: int, span: int, depth: int, inset: int = 0) -> Rect2i:
 	if side == 0:
-		return Rect2i(anchor.position.x, 2, span, depth)
+		return Rect2i(anchor.position.x, 2 + inset, span, depth)
 	if side == 2:
-		return Rect2i(anchor.position.x, g.height - 2 - depth, span, depth)
+		return Rect2i(anchor.position.x, g.height - 2 - depth - inset, span, depth)
 	if side == 1:
-		return Rect2i(g.width - 2 - depth, anchor.position.y, depth, span)
-	return Rect2i(2, anchor.position.y, depth, span)
+		return Rect2i(g.width - 2 - depth - inset, anchor.position.y, depth, span)
+	return Rect2i(2 + inset, anchor.position.y, depth, span)
 
 
 ## 모든 바깥 건물은 기존처럼 지상 한 층이다. 긴 이웃은 길이를 세 칸 이상 달리한다.
@@ -337,27 +352,27 @@ static func _regional_size_distinct(rect: Rect2i, side: int, neighbours: Array[D
 ## 크기 범위 안을 먼저 훑는다. 빈 자리가 전혀 없을 때만 최소보다 줄여 맞춘다.
 ## 크기나 이름의 이웃 제한만 걸린 집터는 범위를 벗어나 억지로 채우지 않는다.
 static func _regional_fit(g: FieldGrid, anchor: Rect2i, side: int, road: int, inner: Rect2i,
-		lots: Array[Rect2i], choice: Dictionary, neighbours: Array[Dictionary]) -> Rect2i:
+		lots: Array[Rect2i], choice: Dictionary, neighbours: Array[Dictionary], inset: int = 0) -> Rect2i:
 	var size: Vector2i = choice["size"]
 	var axis: int = anchor.position.x if side % 2 == 0 else anchor.position.y
 	var available: int = (g.width if side % 2 == 0 else g.height) - 2 - axis
 	var high: int = mini(int(choice["max_width"]), available)
 	var low: int = mini(int(choice["min_width"]), high)
-	var depth: int = mini(size.y, road - 3)
+	var depth: int = mini(size.y, road - 3 - inset)
 	if low < 4 or depth < 4:
 		return Rect2i()
 	var first: int = clampi(size.x, low, high)
 	var has_space: bool = false
 	for offset in range(high - low + 1):
 		var span: int = low + (first - low + offset) % (high - low + 1)
-		var rect: Rect2i = _regional_rect(g, anchor, side, span, depth)
+		var rect: Rect2i = _regional_rect(g, anchor, side, span, depth, inset)
 		if _clear(g, rect.grow(1), inner, lots):
 			has_space = true
 			if _regional_size_distinct(rect, side, neighbours):
 				return rect
 	if not has_space:
 		for span in range(low - 1, 3, -1):
-			var rect: Rect2i = _regional_rect(g, anchor, side, span, depth)
+			var rect: Rect2i = _regional_rect(g, anchor, side, span, depth, inset)
 			if _clear(g, rect.grow(1), inner, lots) and _regional_size_distinct(rect, side, neighbours):
 				return rect
 	return Rect2i()

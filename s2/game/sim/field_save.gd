@@ -31,7 +31,7 @@ const StopGround = preload("res://game/world/stop_ground.gd")
 const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
 const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap",
-	"stop_view_rows", "stop_view_cols", "stop_view_rule"]
+	"stop_view_rows", "stop_view_cols", "stop_view_rule", "bounds_rule"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
@@ -95,6 +95,7 @@ static func capture(game) -> Dictionary:
 		"stop_id": stop_id, "place": game.place, "mission": game.mission,
 		"stop_form": game.stop_form, "stop_ground": String(game.data.get("stop_form", "")),
 		"stop_end_gap": int(game.data.get("stop_end_gap", -1)),
+		"bounds_rule": int(game.data.get("bounds_stamp", 0)),
 		"stop_view_rows": int(game.data.get("stop_view_rows", 0)),
 		"stop_view_cols": int(game.data.get("stop_view_cols", 0)),
 		"stop_view_rule": int(game.data.get("stop_view_rule", 0)),
@@ -438,6 +439,7 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 	opts["seed"] = int(save.get("seed", 0))
 	opts["place"] = String(save.get("place", ""))
 	opts["mission"] = String(save.get("mission", ""))
+	opts["bounds_rule"] = int(save.get("bounds_rule", 0))
 	if save.has("stop_form"):
 		opts["stop_form"] = save["stop_form"]
 	# The ground goes up as the save stood on it (field_game.gd shape_stop). One from before

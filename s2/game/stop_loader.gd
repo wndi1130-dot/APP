@@ -19,6 +19,7 @@ const RoomFinish = preload("res://game/world/room_finish.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const WorkSpots = preload("res://game/world/work_spots.gd")
 const SidePath = preload("res://game/world/side_path.gd")
+const MapBounds = preload("res://game/world/map_bounds.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
@@ -253,7 +254,7 @@ static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, fo
 ## (building_view.gd), the ground's and the floors' arrays (map_view.gd, 2a) with the
 ## maps they fit, the rooms' finish (room_finish.gd) and the plan of the woods round
 ## the map (edge_band.gd plan_ahead). Data only, no nodes.
-static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "") -> Dictionary:
+static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "", bounds_rule: int = -1) -> Dictionary:
 	var d: Dictionary = FieldMaps.build_from(script, band)
 	if not form.is_empty():
 		d = StopGround.apply(d, form, run_seed, form_m)
@@ -261,6 +262,7 @@ static func make_ready(script: Script, run_seed: int, form: String = "", form_m:
 	if run_seed >= 0:
 		d = SidePath.add(d, run_seed)
 		d["_side_seed"] = run_seed
+	d = MapBounds.apply(d, bounds_rule)
 	d["_building_plan"] = BuildingView.plan(d)
 	var g: FieldGrid = d["grid"]
 	d["_ground_arrays"] = MapView.ground_arrays(g, MapView.ground_details(g))
