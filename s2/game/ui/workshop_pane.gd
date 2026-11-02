@@ -260,7 +260,8 @@ func _supplies_row(data: Dictionary) -> void:
 	var progress := _label("SuppliesProgress", "이월 " + _supply_num(float(data["progress"])), UiFonts.WORD, 400, 13.0, INK2, 0.0)
 	_text(progress, 116.0, 40.0)
 	if bool(data["can_fine"]):
-		var key := _key("좋은 물건 켬" if bool(data["fine_on"]) else "좋은 물건 끔", "SuppliesFine", true)
+		# The key says the mode as it stands (a switch), not an order: 「좋은 물건: 끔」.
+		var key := _key("좋은 물건: 켬" if bool(data["fine_on"]) else "좋은 물건: 끔", "SuppliesFine", true)
 		key.position = Vector2(206.0, 5.0) * k
 		key.size = Vector2(110.0, KEY_H) * k
 		key.set_meta("fine_on", bool(data["fine_on"]))
