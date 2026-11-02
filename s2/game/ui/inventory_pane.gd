@@ -119,7 +119,7 @@ static func open(hud, want: Dictionary) -> void:
 	hud.take_bar = null
 	var bag: bool = hud.inv_view == "bag"
 	var title: String = String(Carry.BAGS[p.bag]["name"]) if bag else _place_name(game, at)
-	var side: String = "%.1f / %.0f · 몸 부담 %.1f · %s" % [p.weight(), p.carry_limit(), p.body_burden(), Carry.STATE_NAMES[p.carry_state()]] if bag else ""
+	var side: String = "%.1f / %.0f · %s" % [p.weight(), p.carry_limit(), Carry.STATE_NAMES[p.carry_state()]] if bag else ""
 	if not bag and at["kind"] == "box":
 		var c: Dictionary = game.data["containers"][at["id"]]
 		side = "담긴 %.1f / %.0f" % [Carry.box_load(c), Carry.box_limit(c)]
@@ -576,7 +576,7 @@ static func _foot(hud, p, at: Dictionary, bag: bool) -> Label:
 	var word: String = "누르면 가방으로"
 	var seconds: float = 0.0
 	if bag:
-		word = UiFonts.josa("누르면 %s(으)로 · 가방 %.1f / %.0f" % [_place_name(hud.game, at), p.weight(), p.carry_limit()])
+		word = UiFonts.josa("누르면 %s(으)로 · 가방 %.1f / %.0f · 몸 부담 %.1f" % [_place_name(hud.game, at), p.weight(), p.carry_limit(), p.body_burden()])
 	elif at["kind"] == "train":
 		word = "열차에 실은 것"
 	elif at["kind"] == "box":

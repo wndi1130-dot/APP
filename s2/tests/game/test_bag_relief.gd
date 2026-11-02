@@ -112,12 +112,21 @@ func test_companion_cannot_use_relief_as_extra_storage() -> void:
 	assert_eq(box["items"], ["wood"], "the item stays in the box")
 
 
-func test_body_number_is_on_the_person_bag_header() -> void:
+# The body's load is on the bag's weight line at the foot; the head keeps its
+# weight and its state whole (a longer head was cut off at the pane's edge).
+func test_body_number_is_on_the_bag_weight_line() -> void:
 	var game = _field()
 	game.hud._inv_bag()
 	var side := game.hud.modal.find_child("Side", true, false) as Label
 	assert_not_null(side)
 	if side != null:
-		var text := side.text.replace(UiFonts.WORD_JOINER, "")
-		assert_true(text.contains("8.0 / 8"))
-		assert_true(text.contains("몸 부담 5.6"))
+		var head := side.text.replace(UiFonts.WORD_JOINER, "")
+		assert_true(head.contains("8.0 / 8"))
+		assert_true(head.contains("절반 넘음"), "the state, whole")
+		assert_false(head.contains("몸 부담"))
+	var foot := game.hud.modal.find_child("MoveHint", true, false) as Label
+	assert_not_null(foot)
+	if foot != null:
+		var line := foot.text.replace(UiFonts.WORD_JOINER, "")
+		assert_true(line.contains("가방 8.0 / 8"))
+		assert_true(line.contains("몸 부담 5.6"))
