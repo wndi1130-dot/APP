@@ -10,6 +10,8 @@ extends RefCounted
 ## save wins while its phase is "field", unless the train already applied its
 ## receipt_id (S3 PR #428).
 
+## Field save format number (this file's saves only). Not politics/save_slot.gd SAVE_VERSION,
+## which numbers the train's own save.
 const VERSION := 2
 const KIND := "s2_field"
 const PATH := "user://field_save.json"
@@ -65,6 +67,8 @@ const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow
 
 ## What the field is now, as plain data. `game` is a field_game.gd.
 static func capture(game) -> Dictionary:
+	if game.ended:
+		return _capture_ended(game)
 	var people: Array = []
 	for p in game.people:
 		people.append(_person(game, p))
@@ -112,6 +116,27 @@ static func capture(game) -> Dictionary:
 	}
 	out["runtime"] = _runtime(game)
 	return out
+
+
+## Ended saves stay small.
+static func _capture_ended(game) -> Dictionary:
+	var said: Dictionary = game.receipt.to_dict() if game.receipt != null else {}
+	var departure: Dictionary = (game.opts.get("departure", {}) as Dictionary).duplicate(true)
+	var stop_id := String(departure.get("stopId", said.get("stopId", game.opts.get("stop_id", ""))))
+	var start_opts: Dictionary = {}
+	for key in ["slice", "slice_run", "visit_id"]:
+		if game.opts.has(key):
+			start_opts[key] = game.opts[key]
+	return {
+		"version": VERSION, "kind": KIND, "phase": "ended",
+		"receipt_id": String(said.get("receiptId", game.opts.get("receipt_id", ""))),
+		"receipt_state": _receipt_state(game.receipt) if game.receipt != null else {},
+		"place": game.place, "departure": departure,
+		"seed": int(game.rng.seed), "stop_id": stop_id,
+		"start_opts": start_opts.duplicate(true),
+		"clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
+		"coal": {"delivered": game.actions.coal_delivered if game.actions != null else 0, "spent": game.actions.coal_spent if game.actions != null else 0},
+	}
 
 
 static func _start_opts(opts: Dictionary) -> Dictionary:
@@ -407,6 +432,8 @@ static func train_applied(train_path: String = TRAIN_PATH) -> Dictionary:
 
 ## The options that build the same stop again and then put the save on it.
 static func resume_opts(save: Dictionary) -> Dictionary:
+	if save.get("phase") == "ended":
+		return {}
 	var opts: Dictionary = (save.get("start_opts", {}) as Dictionary).duplicate(true)
 	opts["seed"] = int(save.get("seed", 0))
 	opts["place"] = String(save.get("place", ""))
@@ -466,6 +493,8 @@ static func _grid_sizes_match(game, save: Dictionary) -> bool:
 
 ## Version 2 reconnects existing identities before restoring their clocks or callbacks.
 static func apply(game, save: Dictionary) -> void:
+	if save.get("phase") == "ended":
+		return
 	var form := StopForm.resolve(save if save.has("stop_form") else game.opts, String(game.data["place_kind"]))
 	game.skip_arrival()
 	game.begin_resume()
