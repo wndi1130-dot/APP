@@ -482,7 +482,8 @@ func test_dom_contract_accepts_only_the_insulation_subset() -> void:
 		var missing: Dictionary = valid.duplicate(true)
 		missing.erase(key)
 		assert_false(Dom.is_store({"job": missing}), "missing " + key)
-	for key: String in ["armored", "greenhouse", "order", "bedding", "sit", "workDebt"]:
+	# `order` (the workshop's task order) is open since supplies 2a (test_supplies_workshop_port.gd).
+	for key: String in ["armored", "greenhouse", "bedding", "sit", "workDebt"]:
 		assert_false(Dom.is_store({key: []}), "unported " + key)
 
 

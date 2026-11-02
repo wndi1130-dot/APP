@@ -8,6 +8,7 @@ extends RefCounted
 ## stop gives: the path and its store were there already.
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const LootTables = preload("res://game/sim/loot_tables.gd")
 
 const ID: String = "note_side"
 const CHANCE: float = 0.5
@@ -40,7 +41,7 @@ static func place(data: Dictionary, dead: Array, seed: int) -> String:
 	ids.sort()
 	for id: String in ids:
 		var c: Dictionary = data["containers"][id]
-		if DESKS.has(String(c.get("furniture", ""))) and not bool(c.get("locked", false)) and not c.has("pick") \
+		if DESKS.has(String(c.get("furniture", ""))) and not bool(c.get("locked", false)) and not c.has("pick") and not LootTables.as_placed(c) \
 				and not (spot.get("boxes", []) as Array).has(id):
 			desks.append(id)
 	var to_desk := rng.randf() < 0.5

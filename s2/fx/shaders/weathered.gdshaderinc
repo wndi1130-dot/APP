@@ -166,6 +166,10 @@ void fragment() {
 	ALBEDO = fx_photo(base, fx_fade);
 	ROUGHNESS = rough;
 	METALLIC = metallic * (1.0 - cover);
+	if (fx_fill.w > 0.5) {
+		float fill_metallic = metallic * (1.0 - cover);
+		EMISSION = fx_fill_term(ALBEDO, fill_metallic, normalize(mat3(INV_VIEW_MATRIX) * NORMAL));
+	}
 #ifdef SIGHT_FADE
 	// Derivatives and implicit texture LOD must run before divergent discard.
 	float threshold = sight_threshold(FRAGCOORD.xy);

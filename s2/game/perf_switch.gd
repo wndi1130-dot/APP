@@ -1,5 +1,5 @@
 ## 폰에서 해 그림자와 시야 채움 빛 비용을 비교하는 개발용 파일 스위치.
-## 예: user://perf_switch.json → {"sun_shadow":false,"shadow_mode":"ortho","shadow_distance":30.0,"atlas_size":2048,"atlas_16_bits":true,"soft_quality":"hard","view_fill":true,"view_fill_specular":0.0,"view_fill_energy":0.002,"view_fill_cull_mask":0,"cloud":false,"max_fps":60}
+## 예: user://perf_switch.json → {"sun_shadow":false,"shadow_mode":"ortho","shadow_distance":30.0,"atlas_size":2048,"atlas_16_bits":true,"soft_quality":"hard","view_fill":true,"view_fill_mode":"light","view_fill_specular":0.0,"view_fill_energy":0.002,"view_fill_cull_mask":0,"cloud":false,"max_fps":60}
 class_name PerfSwitch
 extends RefCounted
 
@@ -31,6 +31,49 @@ static var _renderer_baseline: Dictionary = {}
 static var _renderer_state: Dictionary = {}
 static var _renderer_owner: int = 0
 
+# Fill ownership follows every visibility change, independently of the renderer.
+static var _fill_owner: int = 0
+static var _fill_mode: String = "light"
+static var _fill_state: Dictionary = {"fx_fill_dir": Vector3.ZERO, "fx_fill": Vector4.ZERO}
+
+
+static func fill_owner() -> int:
+	return _fill_owner
+
+
+static func claim_fill(owner_id: int) -> void:
+	if owner_id != 0:
+		_fill_owner = owner_id
+
+
+static func publish_fill(owner_id: int, direction: Vector3, value: Vector4, mode: String = "light") -> void:
+	if owner_id == 0 or owner_id != _fill_owner:
+		return
+	RenderingServer.global_shader_parameter_set("fx_fill_dir", direction)
+	RenderingServer.global_shader_parameter_set("fx_fill", value)
+	_fill_state = {"fx_fill_dir": direction, "fx_fill": value}
+	_fill_mode = mode
+
+
+static func release_fill(owner_id: int) -> void:
+	if owner_id == 0 or owner_id != _fill_owner:
+		return
+	publish_fill(owner_id, Vector3.ZERO, Vector4.ZERO)
+	_fill_owner = 0
+
+
+static func fill_state() -> Dictionary:
+	return _fill_state.duplicate()
+
+
+static func fill_on() -> bool:
+	var value: Vector4 = _fill_state["fx_fill"]
+	return value.w > 0.5
+
+
+static func fill_mode() -> String:
+	return _fill_mode
+
 
 static func read(path: String = FILE, diagnostic: Dictionary = {}) -> Dictionary:
 	diagnostic.clear()
@@ -60,6 +103,10 @@ static func _read_opened(file: FileAccess, open_error: Error, diagnostic: Dictio
 			continue
 		if key == "atlas_size":
 			reasons.append("atlas_size must be 1024, 2048, 4096 or 8192")
+		elif key == "view_fill_mode":
+			reasons.append("view_fill_mode must be light or shader")
+		elif key == "view_fill_cull_mask" and valid.get("view_fill_mode") == "shader":
+			reasons.append("view_fill_cull_mask must be 0 or %d in shader mode" % MAX_CULL_MASK)
 		else:
 			reasons.append("unsupported key or invalid value: " + key)
 	if valid.is_empty():
@@ -85,11 +132,14 @@ static func _valid(s: Dictionary) -> Dictionary:
 		valid["shadow_mode"] = s["shadow_mode"]
 	if s.get("soft_quality") is String and QUALITIES.has(s["soft_quality"]):
 		valid["soft_quality"] = s["soft_quality"]
+	if s.get("view_fill_mode") is String and s["view_fill_mode"] in ["light", "shader"]:
+		valid["view_fill_mode"] = s["view_fill_mode"]
 	# JSON numbers arrive as floats; a mask must be a whole number of the 20 render layers.
 	var mask: Variant = s.get("view_fill_cull_mask")
 	if (mask is int or mask is float) and is_finite(float(mask)) and float(mask) == floorf(float(mask)) \
 			and float(mask) >= 0.0 and float(mask) <= float(MAX_CULL_MASK):
-		valid["view_fill_cull_mask"] = int(mask)
+		if valid.get("view_fill_mode") != "shader" or int(mask) in [0, MAX_CULL_MASK]:
+			valid["view_fill_cull_mask"] = int(mask)
 	# The menu's two caps only: phone runs restart the app, which drops the menu pick back to 30.
 	var fps: Variant = s.get("max_fps")
 	if (fps is int or fps is float) and (float(fps) == 30.0 or float(fps) == 60.0):
@@ -203,7 +253,7 @@ static func restore_renderer(owner: int = 0) -> Dictionary:
 	return changed
 
 
-static func apply(sun: DirectionalLight3D, view_fill: Node3D, s: Dictionary, include_renderer: bool = true) -> Dictionary:
+static func apply(sun: DirectionalLight3D, view_fill: Node3D, s: Dictionary, include_renderer: bool = true, write_fill_visible: bool = true) -> Dictionary:
 	var settings: Dictionary = _valid(s)
 	var changed: Dictionary = {}
 	if settings.has("sun_shadow") and sun.shadow_enabled != settings["sun_shadow"]:
@@ -246,7 +296,14 @@ static func apply(sun: DirectionalLight3D, view_fill: Node3D, s: Dictionary, inc
 			view_fill.visibility_changed.connect(view_fill.hide)
 		elif visible and locked:
 			view_fill.visibility_changed.disconnect(view_fill.hide)
-		if view_fill.visible != visible or locked == visible:
+		if not write_fill_visible:
+			# The field shows the fill itself (_set_view_fill): a shader-mode fill must
+			# never pass through visible on the way, so only hiding is written here.
+			if not visible and view_fill.visible:
+				view_fill.visible = false
+			if locked == visible:
+				changed["view_fill_lock"] = not visible
+		elif view_fill.visible != visible or locked == visible:
 			view_fill.visible = visible
 			changed["view_fill"] = visible
 	if settings.has("cloud"):

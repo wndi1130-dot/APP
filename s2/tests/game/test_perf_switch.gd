@@ -7,6 +7,8 @@ const NightView = preload("res://game/world/night_light_view.gd")
 class FieldProbe extends "res://game/field_game.gd":
 	func _ready() -> void:
 		set_process(false)
+		_configure_view_fill()
+		_sync_view_fill_owner()
 
 
 var path: String = ""
@@ -27,6 +29,7 @@ func before_each() -> void:
 	renderer_before = {}
 	cloud_touched = false
 	Switch.restore_renderer()   # start from the project baseline whatever ran before
+	Switch.release_fill(Switch.fill_owner())
 	fields = []
 	max_fps_before = Engine.max_fps
 
@@ -39,6 +42,7 @@ func after_each() -> void:
 		assert_eq(DirAccess.remove_absolute(path), OK)
 	assert_false(FileAccess.file_exists(path))
 	Switch.restore_renderer()   # every test leaves the project baseline, touched or not
+	Switch.release_fill(Switch.fill_owner())
 	Engine.max_fps = max_fps_before
 	if not renderer_before.is_empty():
 		assert_eq(Switch.renderer_state(), renderer_before, "project baseline restored")
@@ -69,8 +73,11 @@ func _renderer_config() -> Dictionary:
 	}
 
 
-func _field(hidden: bool = true) -> FieldProbe:
+func _field(hidden: bool = true, field_opts: Dictionary = {}, fill_source: Dictionary = {}, storm_look: Dictionary = {}) -> FieldProbe:
 	var field: FieldProbe = FieldProbe.new()
+	field.opts = field_opts.duplicate()
+	field.fx_light = fill_source.duplicate()
+	field.storm = storm_look.duplicate()
 	field.visible = not hidden
 	field.process_mode = Node.PROCESS_MODE_DISABLED
 	field.sun = DirectionalLight3D.new()
@@ -86,6 +93,19 @@ func _field(hidden: bool = true) -> FieldProbe:
 func _free_field(field: FieldProbe) -> void:
 	fields.erase(field)
 	field.free()
+
+
+func _assert_fill_values(direction: Vector3, value: Vector4) -> void:
+	var written: Dictionary = Switch.fill_state()
+	var actual_dir: Vector3 = written["fx_fill_dir"]
+	var actual_value: Vector4 = written["fx_fill"]
+	assert_almost_eq(actual_dir.x, direction.x, 0.000001)
+	assert_almost_eq(actual_dir.y, direction.y, 0.000001)
+	assert_almost_eq(actual_dir.z, direction.z, 0.000001)
+	assert_almost_eq(actual_value.x, value.x, 0.000001)
+	assert_almost_eq(actual_value.y, value.y, 0.000001)
+	assert_almost_eq(actual_value.z, value.z, 0.000001)
+	assert_almost_eq(actual_value.w, value.w, 0.000001)
 
 
 func test_read_missing_file_changes_nothing_and_has_no_reason() -> void:
@@ -356,6 +376,76 @@ func test_view_fill_cull_mask_takes_whole_layer_masks_and_survives_minute_update
 	assert_almost_eq(field.view_fill.light_energy, 2.0, 0.000001)
 
 
+func test_shader_rejects_partial_cull_masks_with_reason() -> void:
+	for mask: int in [1, 5, Switch.MAX_CULL_MASK - 1]:
+		var settings: Dictionary = {"view_fill_mode": "shader", "view_fill_cull_mask": mask, "sun_shadow": false}
+		var expected: Dictionary = {"view_fill_mode": "shader", "sun_shadow": false}
+		assert_eq(Switch._valid(settings), expected)
+		var diagnostic: Dictionary = {}
+		_write(JSON.stringify(settings))
+		assert_eq(Switch.read(path, diagnostic), expected)
+		assert_eq(diagnostic.get("reason"), "view_fill_cull_mask must be 0 or %d in shader mode" % Switch.MAX_CULL_MASK)
+		fill.light_cull_mask = Switch.MAX_CULL_MASK
+		Switch.apply(sun, fill, settings, false)
+		assert_eq(fill.light_cull_mask, Switch.MAX_CULL_MASK, "rejected mask is not applied")
+		settings["view_fill_mode"] = "light"
+		assert_eq(Switch._valid(settings), settings, "light still supports partial masks")
+	for mask: int in [0, Switch.MAX_CULL_MASK]:
+		var settings: Dictionary = {"view_fill_mode": "shader", "view_fill_cull_mask": mask}
+		var diagnostic: Dictionary = {}
+		_write(JSON.stringify(settings))
+		assert_eq(Switch.read(path, diagnostic), settings)
+		assert_eq(diagnostic, {})
+
+
+func test_zero_cull_mask_disables_fill_in_both_modes() -> void:
+	for mode: String in ["light", "shader"]:
+		var field: FieldProbe = _field(false, {"view_fill_mode": mode}, {"fill_energy": 2.0})
+		field._apply_perf_settings({"view_fill_mode": mode, "view_fill_cull_mask": 0})
+		for energy: float in [2.0, 0.0, 1.0]:
+			field.fx_light["fill_energy"] = energy
+			field._set_view_fill()
+			assert_eq(field.view_fill.light_cull_mask, 0, "the light reaches no render layers")
+			assert_eq(field.view_fill.visible, mode == "light" and energy > 0.001)
+			_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+		field._apply_perf_settings({"view_fill_mode": mode, "view_fill_cull_mask": Switch.MAX_CULL_MASK})
+		if mode == "shader":
+			_assert_fill_values(Vector3.BACK, Vector4.ONE)
+		else:
+			assert_true(field.view_fill.visible)
+			_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+		_free_field(field)
+
+
+func test_deferred_fill_visibility_reports_lock_separately() -> void:
+	assert_eq(Switch.apply(sun, fill, {"view_fill": false}, false, false), {"view_fill_lock": true})
+	assert_false(fill.visible)
+	assert_eq(Switch.apply(sun, fill, {"view_fill": false}, false, false), {})
+	assert_eq(Switch.apply(sun, fill, {"view_fill": true}, false, false), {"view_fill_lock": false})
+	assert_false(fill.visible, "unlock leaves visibility to the field")
+	assert_eq(Switch.apply(sun, fill, {"view_fill": true}, false, false), {})
+	assert_eq(Switch.apply(sun, fill, {"view_fill": true}, false), {"view_fill": true})
+	assert_true(fill.visible, "default callers still write and report visibility")
+
+
+func test_field_reports_only_final_fill_visibility_changes() -> void:
+	for setup: Dictionary in [
+		{"mode": "shader", "energy": 2.0},
+		{"mode": "light", "energy": 0.0},
+		{"mode": "light", "energy": 2.0},
+	]:
+		var field: FieldProbe = _field(false, {"view_fill_mode": setup["mode"]}, {"fill_energy": setup["energy"]})
+		var shows_light: bool = setup["mode"] == "light" and setup["energy"] > 0.001
+		for enabled: bool in [false, true]:
+			var expected: Dictionary = {"view_fill_lock": not enabled}
+			if shows_light:
+				expected["view_fill"] = enabled
+			assert_eq(field._apply_perf_settings({"view_fill": enabled}), expected)
+			assert_eq(field.view_fill.visible, shows_light and enabled)
+			assert_eq(field._apply_perf_settings({"view_fill": enabled}), {}, "unchanged state has no log values")
+		_free_field(field)
+
+
 func test_max_fps_takes_the_menu_caps_and_waits_until_the_field_is_shown() -> void:
 	for value in [30, 60, 30.0, 60.0]:
 		var diagnostic: Dictionary = {"reason": "previous read"}
@@ -513,6 +603,268 @@ func test_renderer_restore_is_idempotent_and_owner_scoped() -> void:
 	assert_false(Switch.restore_renderer(22).is_empty())
 	assert_eq(Switch.renderer_state(), renderer_before)
 	assert_eq(Switch.restore_renderer(22), {})
+
+
+func test_view_fill_mode_accepts_only_light_and_shader() -> void:
+	for mode: String in ["light", "shader"]:
+		var diagnostic: Dictionary = {"reason": "previous read"}
+		_write(JSON.stringify({"view_fill_mode": mode}))
+		assert_eq(Switch.read(path, diagnostic), {"view_fill_mode": mode})
+		assert_eq(diagnostic, {})
+
+
+func test_invalid_view_fill_mode_is_ignored_with_reason() -> void:
+	for invalid: Variant in ["off", "Shader", "", " shader", 0, 1.0, true, null, [], {}]:
+		var diagnostic: Dictionary = {}
+		_write(JSON.stringify({"view_fill_mode": invalid, "sun_shadow": false}))
+		assert_eq(Switch.read(path, diagnostic), {"sun_shadow": false})
+		assert_true(String(diagnostic.get("reason", "")).contains("view_fill_mode"))
+		assert_false(Switch._valid({"view_fill_mode": invalid}).has("view_fill_mode"))
+	_write(JSON.stringify({"view_fill_mode": "off"}))
+	assert_eq(Switch.read(path), {})
+
+
+func test_fill_helpers_guard_writes_and_release_without_a_field() -> void:
+	var idle: Dictionary = Switch.fill_state()
+	Switch.publish_fill(11, Vector3.RIGHT, Vector4.ONE)
+	assert_eq(Switch.fill_state(), idle, "no owner, no write")
+	Switch.claim_fill(11)
+	Switch.publish_fill(11, Vector3.BACK, Vector4(2.0, 1.0, 0.5, 1.0))
+	var first: Dictionary = Switch.fill_state()
+	Switch.claim_fill(22)
+	assert_eq(Switch.fill_owner(), 22)
+	Switch.publish_fill(11, Vector3.ZERO, Vector4.ZERO)
+	Switch.release_fill(11)
+	assert_eq(Switch.fill_state(), first, "old owner cannot publish or clear")
+	assert_eq(Switch.fill_owner(), 22)
+	Switch.publish_fill(22, Vector3.RIGHT, Vector4.ONE)
+	var copy: Dictionary = Switch.fill_state()
+	copy["fx_fill"] = Vector4.ZERO
+	_assert_fill_values(Vector3.RIGHT, Vector4.ONE)
+	Switch.release_fill(22)
+	assert_eq(Switch.fill_owner(), 0)
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+	Switch.publish_fill(0, Vector3.RIGHT, Vector4.ONE)
+	Switch.claim_fill(0)
+	assert_eq(Switch.fill_owner(), 0)
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+
+
+func test_fill_mode_tracks_owner_independently_of_energy() -> void:
+	assert_eq(Switch.fill_mode(), "light")
+	Switch.publish_fill(11, Vector3.ZERO, Vector4.ZERO, "shader")
+	assert_eq(Switch.fill_mode(), "light", "unowned publication cannot change mode")
+	Switch.claim_fill(11)
+	Switch.publish_fill(11, Vector3.ZERO, Vector4.ZERO, "shader")
+	assert_eq(Switch.fill_mode(), "shader")
+	assert_false(Switch.fill_on())
+	Switch.publish_fill(22, Vector3.ZERO, Vector4.ZERO, "light")
+	Switch.release_fill(22)
+	assert_eq(Switch.fill_mode(), "shader", "another owner cannot change or clear mode")
+	Switch.release_fill(11)
+	assert_eq(Switch.fill_mode(), "light")
+	var field: FieldProbe = _field(false, {"view_fill_mode": "shader"}, {"fill_energy": 0.0})
+	assert_eq(Switch.fill_mode(), "shader", "night still publishes the selected mode")
+	field._apply_perf_settings({"view_fill": false})
+	assert_eq(Switch.fill_mode(), "shader", "off lock does not change selected mode")
+	field._apply_perf_settings({"view_fill": true, "view_fill_mode": "light"})
+	assert_eq(Switch.fill_mode(), "light")
+	_free_field(field)
+	assert_eq(Switch.fill_mode(), "light")
+
+
+func test_fill_owner_follows_hide_show_hide_and_reshow() -> void:
+	var field: FieldProbe = _field(true, {"view_fill_mode": "shader"}, {"fill_energy": 2.0})
+	assert_eq(Switch.fill_owner(), 0)
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+	for _cycle: int in 2:
+		field.show()
+		assert_eq(Switch.fill_owner(), field.get_instance_id())
+		_assert_fill_values(Vector3.BACK, Vector4(2.0, 2.0, 2.0, 1.0))
+		assert_false(field.view_fill.visible)
+		assert_true(field.visibility_changed.is_connected(field._sync_view_fill_owner))
+		field.hide()
+		assert_eq(Switch.fill_owner(), 0)
+		_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+		assert_true(field.visibility_changed.is_connected(field._sync_view_fill_owner))
+	field.show()
+	_free_field(field)
+	assert_eq(Switch.fill_owner(), 0)
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+
+
+func test_next_visible_fill_owner_clears_for_light_night_storm_and_off() -> void:
+	for circumstance: String in ["light", "night", "storm", "off"]:
+		var active: FieldProbe = _field(false, {"view_fill_mode": "shader"}, {"fill_energy": 2.0})
+		var active_values: Dictionary = Switch.fill_state()
+		var successor: FieldProbe = _field(true,
+			{"view_fill_mode": "light" if circumstance == "light" else "shader"},
+			{"fill_energy": 0.0 if circumstance == "night" else 2.0},
+			{"stage": 1} if circumstance == "storm" else {})
+		if circumstance == "off":
+			successor._apply_perf_settings({"view_fill": false})
+		assert_eq(Switch.fill_state(), active_values, "hidden successor leaves current fill alone")
+		successor.show()
+		assert_eq(Switch.fill_owner(), successor.get_instance_id())
+		_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+		active._set_view_fill()
+		_free_field(active)
+		assert_eq(Switch.fill_owner(), successor.get_instance_id())
+		_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+		_free_field(successor)
+
+
+func test_old_field_updates_hiding_and_exit_preserve_new_fill_owner() -> void:
+	var old: FieldProbe = _field(false, {"view_fill_mode": "shader"}, {"fill_energy": 2.0, "fill_color": Color.RED})
+	# Already visible at construction: no later show signal is needed.
+	var current: FieldProbe = _field(false, {"view_fill_mode": "shader"}, {"fill_energy": 1.5, "fill_color": Color.BLUE})
+	assert_eq(Switch.fill_owner(), current.get_instance_id())
+	_assert_fill_values(Vector3.BACK, Vector4(0.0, 0.0, 1.5, 1.0))
+	var current_values: Dictionary = Switch.fill_state()
+	old._set_view_fill()
+	assert_eq(Switch.fill_state(), current_values, "late minute cannot replace successor colour")
+	old.fx_light["fill_energy"] = 0.0
+	old._set_view_fill()
+	old.set_view_fill_mode("light")
+	assert_eq(Switch.fill_state(), current_values, "old night/light cannot clear successor")
+	old.hide()
+	assert_eq(Switch.fill_state(), current_values)
+	_free_field(old)
+	assert_eq(Switch.fill_owner(), current.get_instance_id())
+	assert_eq(Switch.fill_state(), current_values)
+	_free_field(current)
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+
+
+func test_hidden_fill_builder_never_writes_even_zero() -> void:
+	var active: FieldProbe = _field(false, {"view_fill_mode": "shader"}, {"fill_energy": 2.0})
+	var active_values: Dictionary = Switch.fill_state()
+	var hidden: FieldProbe = _field()
+	assert_eq(Switch.fill_state(), active_values)
+	hidden._set_view_fill()
+	hidden.set_view_fill_mode("shader")
+	hidden._apply_perf_settings({"view_fill": false})
+	assert_eq(Switch.fill_owner(), active.get_instance_id())
+	assert_eq(Switch.fill_state(), active_values)
+	_free_field(hidden)
+	assert_eq(Switch.fill_state(), active_values)
+
+
+func test_desktop_fill_opts_setter_and_perf_precedence_without_energy_meta() -> void:
+	if OS.has_feature("android"):
+		pending("desktop-only opts and setter injection")
+		return
+	var field: FieldProbe = _field(false, {"view_fill_mode": "shader"}, {"fill_energy": 2.0})
+	field._configure_perf_switch()
+	assert_eq(field._perf_settings, {})
+	assert_false(field.view_fill.has_meta(Switch.FILL_ENERGY))
+	assert_eq(field._view_fill_state(), "shader")
+	assert_false(field.view_fill.visible)
+	_assert_fill_values(Vector3.BACK, Vector4(2.0, 2.0, 2.0, 1.0))
+	field.set_view_fill_mode("light")
+	assert_true(field.view_fill.visible)
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+	field.set_view_fill_mode("shader")
+	assert_false(field.view_fill.visible)
+	_assert_fill_values(Vector3.BACK, Vector4(2.0, 2.0, 2.0, 1.0))
+	field._apply_perf_settings({"view_fill_mode": "light"})
+	field.set_view_fill_mode("shader")
+	assert_eq(field._view_fill_state(), "light", "perf mode wins over opts and setter")
+	assert_true(field.view_fill.visible)
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+	field._apply_perf_settings({})
+	assert_eq(field._view_fill_state(), "shader")
+	_assert_fill_values(Vector3.BACK, Vector4(2.0, 2.0, 2.0, 1.0))
+	field.set_view_fill_mode("invalid")
+	assert_eq(field._view_fill_state(), "shader")
+	assert_false(field.view_fill.has_meta(Switch.FILL_ENERGY))
+
+
+func test_fill_off_lock_precedes_shader_and_light() -> void:
+	var field: FieldProbe = _field(false, {}, {"fill_energy": 2.0})
+	assert_eq(field._view_fill_state(), "light")
+	assert_true(field.view_fill.visible)
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+	field.set_view_fill_mode("shader")
+	assert_eq(field._view_fill_state(), "shader")
+	assert_false(field.view_fill.visible)
+	field._apply_perf_settings({"view_fill": false, "view_fill_mode": "shader"})
+	for mode: String in ["light", "shader"]:
+		field.set_view_fill_mode(mode)
+		field._apply_perf_settings({"view_fill_mode": mode})
+		field._set_view_fill()
+		assert_eq(field._view_fill_state(), "off")
+		assert_false(field.view_fill.visible)
+		assert_true(field.view_fill.visibility_changed.is_connected(field.view_fill.hide))
+		_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+	field._apply_perf_settings({"view_fill": true, "view_fill_mode": "shader"})
+	assert_eq(field._view_fill_state(), "shader")
+	assert_false(field.view_fill.visible)
+	_assert_fill_values(Vector3.BACK, Vector4(2.0, 2.0, 2.0, 1.0))
+	field._apply_perf_settings({"view_fill": true, "view_fill_mode": "light"})
+	assert_eq(field._view_fill_state(), "light")
+	assert_true(field.view_fill.visible)
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+
+
+func test_a_shader_fill_never_shows_on_the_way_back_on() -> void:
+	# The settings file turns the fill back on in shader mode: the light is never
+	# visible, not even between the switch and the field's own decision.
+	var field: FieldProbe = _field(false, {"view_fill_mode": "shader"}, {"fill_energy": 2.0})
+	var seen: Array[bool] = []
+	var observed_fill: DirectionalLight3D = field.view_fill
+	observed_fill.visibility_changed.connect(func() -> void: seen.append(observed_fill.visible))
+	field._apply_perf_settings({"view_fill": true})
+	field._apply_perf_settings({"view_fill": false, "view_fill_mode": "shader"})
+	field._apply_perf_settings({"view_fill": true, "view_fill_mode": "shader"})
+	field._set_view_fill()
+	assert_false(seen.has(true), "the fill showed on the way: %s" % [seen])
+	assert_false(observed_fill.visible)
+	_assert_fill_values(Vector3.BACK, Vector4(2.0, 2.0, 2.0, 1.0))
+	# Back to the light mode the fill shows as before.
+	field._apply_perf_settings({"view_fill": true, "view_fill_mode": "light"})
+	assert_true(observed_fill.visible)
+
+
+func test_shader_fill_stays_hidden_across_minutes_night_and_storm() -> void:
+	var field: FieldProbe = _field(false, {"view_fill_mode": "shader"}, {"fill_energy": 2.0})
+	for source_energy: float in [1.4, 0.0, 0.001, 0.002, 2.5]:
+		field.fx_light["fill_energy"] = source_energy
+		field._apply_perf_settings({"view_fill": true})
+		field._set_view_fill()
+		assert_false(field.view_fill.visible)
+		if source_energy > 0.001:
+			_assert_fill_values(Vector3.BACK, Vector4(source_energy, source_energy, source_energy, 1.0))
+		else:
+			_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+	field.storm = {"stage": 1}
+	field._apply_perf_settings({"view_fill": true, "view_fill_energy": 0.5})
+	assert_false(field.view_fill.visible)
+	assert_eq(field.view_fill.light_energy, 0.0)
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+	field.storm = {}
+	field.fx_light["fill_energy"] = 0.0
+	field._set_view_fill()
+	_assert_fill_values(Vector3.ZERO, Vector4.ZERO)
+	field.fx_light["fill_energy"] = 2.0
+	field._set_view_fill()
+	assert_false(field.view_fill.visible)
+	_assert_fill_values(Vector3.BACK, Vector4(0.5, 0.5, 0.5, 1.0))
+
+
+func test_shader_fill_linearizes_once_and_uses_world_direction_and_applied_energy() -> void:
+	var field: FieldProbe = _field(false, {"view_fill_mode": "shader"},
+		{"fill_energy": 2.0, "fill_color": Color(0.5, 0.25, 0.75)})
+	field.rotation_degrees = Vector3(0.0, 90.0, 0.0)
+	field.view_fill.scale = Vector3(2.0, 3.0, 4.0)
+	field._apply_perf_settings({"view_fill_energy": 0.5})
+	# Independent sRGB reference, multiplied by the diagnostic energy once.
+	for _minute: int in 2:
+		_assert_fill_values(Vector3.RIGHT, Vector4(0.10702057, 0.02543804, 0.26126078, 1.0))
+		assert_eq(field.view_fill.light_energy, 0.5)
+		assert_eq(field.view_fill.light_color, Color(0.5, 0.25, 0.75))
+		assert_false(field.view_fill.visible)
+		field._set_view_fill()
 
 
 func test_field_defers_globals_until_visible_and_restores_on_exit() -> void:
