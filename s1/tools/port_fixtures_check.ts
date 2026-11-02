@@ -33,6 +33,7 @@ const TOOLS: [string, string[], string[]][] = [
   ['turn_port_fixtures', [], [`${TRAIN}/turn_vectors.json`]],
   ['turn_port_fixtures', ['--climate'], [`${TRAIN}/turn_vectors_climate.json`]],
   ['field_port_fixtures', [], ['s2/tests/game/fixtures/field_port/field_vectors.json']],
+  ['end_port_fixtures', [], [`${TRAIN}/end_vectors.json`]],
 ];
 
 function text(path: string): string {

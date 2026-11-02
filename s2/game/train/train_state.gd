@@ -219,7 +219,7 @@ static func is_gone(g: Dictionary, person: String) -> bool:
 ## injured, council and so on) as before.
 static func to_rules(g: Dictionary, t: Dictionary) -> Dictionary:
 	var train := {}
-	for key: String in ["phase", "tension", "fear", "trust", "seg", "coal", "food", "med", "lux", "hunger", "stored", "decreeLeft", "passed", "stranded"]:
+	for key: String in ["phase", "tension", "fear", "trust", "seg", "coal", "food", "med", "lux", "hunger", "stored", "decreeLeft", "passed", "stranded", "dark"]:
 		if g.has(key):
 			train[key] = g[key]
 	var out_comms := {}
