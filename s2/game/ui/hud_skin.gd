@@ -11,8 +11,8 @@ const TOP_LIGHT := Color(1, 1, 1, 0.1)
 const INK := Color("eee9dc")
 const INK2 := Color(238 / 255.0, 233 / 255.0, 220 / 255.0, 0.7)
 const INK3 := Color(238 / 255.0, 233 / 255.0, 220 / 255.0, 0.54)
-## One even ring on every round key (the three-light brass rim is gone, user 2026-10-17).
-const RING := Color("6d5b3d")
+## A quiet steel ring, with small material marks on some keys.
+const RING := Color("5b5f63")
 ## Lamp light, darkened and cooled for the white snow (user 2026-10-17).
 const LAMP1 := Color("e9c886")
 const LAMP2 := Color("d18c32")
@@ -22,10 +22,10 @@ const LAMP_INK := Color("2a1804")
 const BRASS1 := Color("f3dfae")
 const BRASS2 := Color("caa45c")
 const BRASS3 := Color("7b5b26")
-## The brass rim of the lamp pills that are not round (뒤지기, 출발, 지혈).
-const RIM1 := Color("f7e6b4")
-const RIM2 := Color("caa45c")
-const RIM3 := Color("7b5b26")
+## The cool metal sweep on pills.
+const RIM1 := Color("8d9092")
+const RIM2 := Color("63676b")
+const RIM3 := Color("3f4347")
 const GOOD := Color("a8d29a")
 const BAD := Color("f5916f")
 const HEED := Color("f2a63c")
@@ -173,7 +173,7 @@ static func _knob() -> ImageTexture:
 ## The four looks of a key or pad, inside its touch rect: `seen` is the size
 ## drawn (zero: the whole rect), `round_key` a disc or else a pill. `on` is how
 ## it looks while on (a toggle that is set, a fight that goes on).
-static func key_styles(seen: Vector2, round_key: bool, on: int = Light.LAMP, rest_light: int = Light.NONE) -> Dictionary:
+static func key_styles(seen: Vector2, round_key: bool, on: int = Light.LAMP, rest_light: int = Light.NONE, motif: String = "") -> Dictionary:
 	var rest := Plate.new()
 	rest.setup(seen, round_key, rest_light)
 	var down := Plate.new()
@@ -185,7 +185,8 @@ static func key_styles(seen: Vector2, round_key: bool, on: int = Light.LAMP, res
 	var off := Plate.new()
 	off.setup(seen, round_key, Light.NONE)
 	off.dim = 0.34
-	for sb: StyleBox in [rest, down, lit, off]:
+	for sb: Plate in [rest, down, lit, off]:
+		sb.motif = motif
 		sb.content_margin_left = 6.0 if round_key else 12.0
 		sb.content_margin_right = 6.0 if round_key else 10.0
 		sb.content_margin_top = 4.0
@@ -195,20 +196,19 @@ static func key_styles(seen: Vector2, round_key: bool, on: int = Light.LAMP, res
 
 ## One plate: a disc or a pill of glass (or lamp light) with one ring, drawn
 ## centred in the rect it is given, a little lower while held down.
-## The 시안 lays the glass (padding-box) over the ring's colour (border-box),
-## so a key at rest is the glass over brass: warm and not see-through
-## (#302b21 over any ground, 시안 .fkey>i, .fpad), and a pill is the glass over
-## the brass sweep (.finv, .fall). With no ring the glass is see-through.
+## Glass lies over the base ring colour or a pill's metal sweep.
+## Material marks stay at the rim. With no ring the glass is see-through.
 class Plate extends StyleBox:
 	var seen: Vector2 = Vector2.ZERO
 	var round_key: bool = true
+	var motif: String = ""
 	var light: int = 0               # Light: NONE, LAMP, BRASS
 	var sink: float = 0.0
 	var dim: float = 1.0
 	var fill: Color = Color(8 / 255.0, 11 / 255.0, 15 / 255.0, 0.6)
-	var ring: Color = Color("6d5b3d")
+	var ring: Color = RING
 	var ring_w: float = 2.0 * K      # the 시안's 2px border
-	var brass_rim: bool = false      # a pill wears the brass sweep, lit or not
+	var brass_rim: bool = false      # a pill wears the metal sweep, lit or not
 	var over_ring: bool = true       # the glass lies over the ring's colour
 
 	static var _blob: ImageTexture
@@ -278,12 +278,93 @@ class Plate extends StyleBox:
 		var a: float = fill.a
 		return Color(fill.r * a + under.r * (1.0 - a), fill.g * a + under.g * (1.0 - a), fill.b * a + under.b * (1.0 - a), dim)
 
-	## A 140-degree brass sweep along the rim, light at the top left (시안 .fpad--ctx).
+	## A 140-degree metal sweep, light at the top left.
 	func _rim_at(p: Vector2, r: Rect2) -> Color:
 		var dir := Vector2(sin(deg_to_rad(140.0)), -cos(deg_to_rad(140.0)))
 		var span: float = absf(dir.x) * r.size.x + absf(dir.y) * r.size.y
 		var t: float = clampf((p - r.get_center()).dot(dir) / maxf(span, 1.0) + 0.5, 0.0, 1.0)
 		return RIM1.lerp(RIM3, t * 2.0) if t < 0.5 else RIM3.lerp(RIM2, (t - 0.5) * 2.0)
+
+	func _ring_color() -> Color:
+		match motif:
+			"stitch":
+				return Color("4d463f")
+			"tape":
+				return Color("6a675e")
+			"hammered":
+				return Color("41464c")
+			"twine":
+				return Color("706c5f")
+		return ring
+
+	## Fixed marks in the rim's inner band; r already carries the press sink.
+	func _draw_motif(ci: RID, r: Rect2) -> void:
+		var c := r.get_center()
+		var rad: float = r.size.x * 0.5
+		var w: float = ring_w
+		if w <= 0.0 or rad <= 1.5 * w:
+			return
+		match motif:
+			"stitch":
+				var thread := Color("aaa398")
+				thread.a = 0.3
+				for i in 28:
+					var a: float = TAU * float(i) / 28.0
+					_motif_arc(ci, c, rad - 1.15 * w, a, a + 0.55 * w / rad, thread, 0.18 * w)
+			"tape":
+				var cloth := Color("b0aea2")
+				cloth.a = 0.46
+				for a: float in [-2.4, -0.6, 1.8]:
+					var p := c + Vector2.from_angle(a - 0.06) * (rad - 1.6 * w)
+					var q := c + Vector2.from_angle(a + 0.06) * (rad - 0.15 * w)
+					_motif_line(ci, p, q, cloth, 0.9 * w)
+			"hammered":
+				var sheen := Color("92999e")
+				sheen.a = 0.28
+				_motif_arc(ci, c, rad - 0.7 * w, PI * 1.1, PI * 1.43, sheen, 0.16 * w)
+				var dent := Color("a1a8ad")
+				dent.a = 0.32
+				for i in 8:
+					var a: float = TAU * float(i) / 8.0 + 0.12
+					var p := c + Vector2.from_angle(a - 0.012) * (rad - 0.95 * w)
+					var q := c + Vector2.from_angle(a + 0.025) * (rad - 0.45 * w)
+					_motif_line(ci, p, q, dent, 0.24 * w)
+			"twine":
+				var fibre := Color("a7a397")
+				fibre.a = 0.3
+				for i in 36:
+					var a: float = TAU * float(i) / 36.0
+					var p := c + Vector2.from_angle(a - 0.025) * (rad - 0.95 * w)
+					var q := c + Vector2.from_angle(a + 0.025) * (rad - 0.15 * w)
+					_motif_line(ci, p, q, fibre, 0.23 * w)
+			"rivet":
+				var metal := Color("30353b")
+				metal.a = 0.88
+				var glint := Color("a2a8ad")
+				glint.a = 0.58
+				for i in 4:
+					var a: float = PI * 0.25 + float(i) * PI * 0.5
+					var p := c + Vector2.from_angle(a) * (rad - 0.55 * w)
+					_motif_dot(ci, p, 0.56 * w, metal)
+					_motif_dot(ci, p + Vector2(-0.14, -0.16) * w, 0.18 * w, glint)
+
+	func _motif_line(ci: RID, p: Vector2, q: Vector2, col: Color, width: float) -> void:
+		var ink := Color(col.r, col.g, col.b, col.a * dim * ring.a)
+		RenderingServer.canvas_item_add_polyline(ci, PackedVector2Array([p, q]), PackedColorArray([ink]), width, true)
+
+	func _motif_arc(ci: RID, c: Vector2, rad: float, start: float, end: float, col: Color, width: float) -> void:
+		var pts := PackedVector2Array()
+		for i in 13:
+			pts.append(c + Vector2.from_angle(lerpf(start, end, float(i) / 12.0)) * rad)
+		var ink := Color(col.r, col.g, col.b, col.a * dim * ring.a)
+		RenderingServer.canvas_item_add_polyline(ci, pts, PackedColorArray([ink]), width, true)
+
+	func _motif_dot(ci: RID, c: Vector2, rad: float, col: Color) -> void:
+		var pts := PackedVector2Array()
+		for i in 12:
+			pts.append(c + Vector2.from_angle(TAU * float(i) / 12.0) * rad)
+		var ink := Color(col.r, col.g, col.b, col.a * dim * ring.a)
+		RenderingServer.canvas_item_add_polygon(ci, pts, PackedColorArray([ink]))
 
 	func _draw(to_canvas_item: RID, rect: Rect2) -> void:
 		var rs := RenderingServer
@@ -329,4 +410,12 @@ class Plate extends StyleBox:
 				rim.append(Color(c.r, c.g, c.b, dim))
 			rs.canvas_item_add_polyline(to_canvas_item, loop, rim, ring_w, true)
 		elif ring.a > 0.0:
-			rs.canvas_item_add_polyline(to_canvas_item, loop, PackedColorArray([Color(ring.r, ring.g, ring.b, ring.a * dim)]), ring_w, true)
+			var width: float = ring_w
+			if round_key and motif == "hammered":
+				width *= 1.4
+				loop = _outline(r.grow(-width * 0.5))
+				loop.append(loop[0])
+			var ink: Color = _ring_color() if round_key else ring
+			rs.canvas_item_add_polyline(to_canvas_item, loop, PackedColorArray([Color(ink.r, ink.g, ink.b, ring.a * dim)]), width, true)
+			if round_key and motif != "":
+				_draw_motif(to_canvas_item, r)
