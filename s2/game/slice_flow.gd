@@ -322,6 +322,8 @@ class PassedArrival extends ArrivalSheet:
 
 
 func _ready() -> void:
+	var field_read: Dictionary = opts.get("_field_read", {})
+	opts.erase("_field_read")
 	theme = UiTheme.make(22)
 	theme.default_font = UiFonts.face(UiFonts.WORD, 400)
 	layer = CanvasLayer.new()
@@ -378,7 +380,7 @@ func _ready() -> void:
 				result = result_of(receipt)
 			start_step = SliceSave.resume_step(train_g, start_step)
 		if not _returned() and not passed and start_step in ["stop_pick", "field"]:
-			var saved: Dictionary = FieldSave.read(String(opts.get("field_save_path", FieldSave.PATH)))
+			var saved: Dictionary = FieldSave.read_for_start(String(opts.get("field_save_path", FieldSave.PATH)), field_read)
 			var order: Dictionary = saved["departure"] if saved.get("departure") is Dictionary else {}
 			var start_opts: Dictionary = saved["start_opts"] if saved.get("start_opts") is Dictionary else {}
 			var belongs: bool = bool(start_opts.get("slice", false)) \
@@ -408,6 +410,8 @@ func _ready() -> void:
 	if train_g.get("dom") == null:
 		train_g["dom"] = TrainDom.start()
 	TrainDom.ensure(train_g)
+	# Only field_resume owns the parsed save from here; release even rejected saves.
+	field_read.clear()
 	# S1's load defaults are already present before the first save.
 	TrainSave.fill_defaults(train_g)
 	marks = Control.new()
@@ -2373,7 +2377,7 @@ func _start_field() -> void:
 	if field_resume.is_empty():
 		field.opts = _field_opts()
 	else:
-		field.opts = field_resume.duplicate(true)
+		field.opts = field_resume
 		field.opts["field_save"] = bool(opts.get("save", false))
 		field.opts["field_save_path"] = String(opts.get("field_save_path", FieldSave.PATH))
 		field_resume = {}
