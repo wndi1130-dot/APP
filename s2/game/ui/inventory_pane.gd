@@ -577,7 +577,7 @@ static func _foot(hud, p, at: Dictionary, bag: bool) -> Label:
 	var word: String = "누르면 가방으로"
 	var seconds: float = 0.0
 	if bag:
-		word = UiFonts.josa("누르면 %s(으)로 · 가방 %.1f / %.0f" % [_place_name(hud.game, at), p.weight(), p.carry_limit()])
+		word = UiFonts.josa("누르면 %s(으)로 · 가방 %.1f / %.0f · 몸 부담 %.1f" % [_place_name(hud.game, at), p.weight(), p.carry_limit(), p.body_burden()])
 	elif at["kind"] == "train":
 		word = "열차에 실은 것"
 	elif at["kind"] == "box":
@@ -586,6 +586,11 @@ static func _foot(hud, p, at: Dictionary, bag: bool) -> Label:
 			word += " · 다 챙기면 %.1f초" % seconds
 	var label := _label(word, 11.0, GlassPane.INK3)
 	label.name = "TakeAll" if seconds > 0.0 else "MoveHint"
+	if bag:
+		# The body's number ends this line: it wraps whole rather than lose its end.
+		label.clip_text = false
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.text = UiFonts.keep_all(word)
 	return label
 
 
