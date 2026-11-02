@@ -166,8 +166,8 @@ void fragment() {
 	ALBEDO = fx_photo(base, fx_fade);
 	ROUGHNESS = rough;
 	METALLIC = metallic * (1.0 - cover);
-	float fill_metallic = metallic * (1.0 - cover);
 	if (fx_fill.w > 0.5) {
+		float fill_metallic = metallic * (1.0 - cover);
 		EMISSION = fx_fill_term(ALBEDO, fill_metallic, normalize(mat3(INV_VIEW_MATRIX) * NORMAL));
 	}
 #ifdef SIGHT_FADE

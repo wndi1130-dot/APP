@@ -230,7 +230,7 @@ static func restore_renderer(owner: int = 0) -> Dictionary:
 	return changed
 
 
-static func apply(sun: DirectionalLight3D, view_fill: Node3D, s: Dictionary, include_renderer: bool = true) -> Dictionary:
+static func apply(sun: DirectionalLight3D, view_fill: Node3D, s: Dictionary, include_renderer: bool = true, write_fill_visible: bool = true) -> Dictionary:
 	var settings: Dictionary = _valid(s)
 	var changed: Dictionary = {}
 	if settings.has("sun_shadow") and sun.shadow_enabled != settings["sun_shadow"]:
@@ -273,7 +273,14 @@ static func apply(sun: DirectionalLight3D, view_fill: Node3D, s: Dictionary, inc
 			view_fill.visibility_changed.connect(view_fill.hide)
 		elif visible and locked:
 			view_fill.visibility_changed.disconnect(view_fill.hide)
-		if view_fill.visible != visible or locked == visible:
+		if not write_fill_visible:
+			# The field shows the fill itself (_set_view_fill): a shader-mode fill must
+			# never pass through visible on the way, so only hiding is written here.
+			if not visible and view_fill.visible:
+				view_fill.visible = false
+			if locked == visible:
+				changed["view_fill"] = visible
+		elif view_fill.visible != visible or locked == visible:
 			view_fill.visible = visible
 			changed["view_fill"] = visible
 	if settings.has("cloud"):

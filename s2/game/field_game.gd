@@ -1940,7 +1940,7 @@ func _apply_perf_settings(settings: Dictionary) -> void:
 	_perf_settings = settings
 	if not settings.is_empty():
 		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
-		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false)
+		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false, false)
 		if settings.get("view_fill_mode") is String and settings["view_fill_mode"] in ["light", "shader"] \
 				and settings["view_fill_mode"] != mode_before:
 			changed["view_fill_mode"] = settings["view_fill_mode"]
