@@ -133,4 +133,5 @@ func test_inside_a_house_its_sounds_go_through_the_room_and_outside_they_do_not(
 	assert_eq(a.last_bus, FieldAudio.ROOM_DULL_BUS, "a dull weapon's own hit in the room")
 	var away: Vector2i = way[1] * 2 - way[0]   # two cells out from the door
 	a.lunge_tell(game.lift(away, 0))
-	assert_eq(a.last_bus, "SFX", "from out in the street it is not")
+	assert_ne(a.last_bus, FieldAudio.ROOM_BUS, "from out in the street it is not")
+	assert_eq(a.last_bus, a._bus_at(game.lift(away, 0)), "heard as any sound out there (through the wall, duller)")
