@@ -84,7 +84,7 @@ void vertex() {
 	float time = comparison_hold ? 0.0 : focus_clock;
 	float base_rate = 6.0 * speed / clip_lengths[body * 4 + motion];
 	float frame_clock = time * base_rate + 6.0 * phase;
-	// 틀 경계는 정수 틀 번호에서 바로 구한다. time - fract(frame_clock) / base_rate는
+	// 틀 경계는 정수 틀 번호에서 바로 구한다. 시각에서 틀 나이를 빼는 식은
 	// 단정도 반올림으로 같은 틀 안에서도 흔들려 이력 칸이 바뀔 수 있다.
 	float boundary_clock = max(0.0, (floor(frame_clock) - 6.0 * phase) / base_rate);
 	int history_index = int(mod(floor(boundary_clock * 30.0), 32.0));
