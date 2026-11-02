@@ -1024,6 +1024,7 @@ func test_walk_last_skin_proposal_is_not_reported_as_solved() -> void:
 func test_walk_rest_cap_fix_covers_entire_mid_window() -> void:
 	var ctx: Dictionary = _walk_feedback_context(true)
 	var fit: Dictionary = ctx["footlock_walk"]
+	fit["hip_over_stand_allowed"] = false
 	var body: Skeleton3D = ctx["body"]
 	var hip: Vector3 = body.get_bone_global_pose(int(fit["legs"][0][0])).origin
 	var duration: float = fit["durations"][0]
@@ -1043,6 +1044,27 @@ func test_walk_rest_cap_fix_covers_entire_mid_window() -> void:
 			assert_eq(int(bounds["lower_side"]), 0, "mid-stance leg owns the lower bound")
 			assert_eq(int(bounds["upper_side"]), -1, "rest cap owns the upper bound")
 	assert_gt(rejected, 0, "a later middle phase rejects the one-phase fix")
+
+
+func test_walk_rest_cap_tolerance_covers_entire_mid_window() -> void:
+	var ctx: Dictionary = _walk_feedback_context(true)
+	var fit: Dictionary = ctx["footlock_walk"]
+	fit["hip_over_stand_allowed"] = true
+	var body: Skeleton3D = ctx["body"]
+	var hip: Vector3 = body.get_bone_global_pose(int(fit["legs"][0][0])).origin
+	var duration: float = fit["durations"][0]
+	var start: float = fit["starts"][0]
+	var centre: float = 0.04 - 1.64 * duration * 0.1
+	var strict_conflicts: int = 0
+	for t: float in [0.4, 0.45, 0.5, 0.55, 0.6]:
+		var target: Vector3 = Vector3(hip.x, 0.0, hip.z + centre + 1.64 * duration * (0.5 - t))
+		var other: Vector3 = body.get_bone_global_pose(int(fit["legs"][1][0])).origin + Vector3(0.0, -0.5, 0.0)
+		var bounds: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, start + duration * t, [target, other])
+		assert_false(bool(bounds["empty"]), "the explicit tolerance opens every middle sample")
+		assert_almost_eq(float(bounds["upper"]), float(fit["rest_hips_y"]) + 0.0012, 0.000000001)
+		if float(bounds["lower"]) > float(fit["rest_hips_y"]):
+			strict_conflicts += 1
+	assert_gt(strict_conflicts, 0, "the tolerance is necessary for this fixture")
 
 
 func test_walk_exhausted_search_refuses_unfit_bake() -> void:
@@ -1308,6 +1330,9 @@ func test_walk_path_search_preserves_material_stance_slope_and_shared_table() ->
 	ctx["fit_failures"] = ["existing_failure"]
 	var searched: Dictionary = BodyBake._search_person_walk_path(ctx, ctx["footlock_walk"], specs)
 	assert_true(bool(searched["ok"]), "stick rig must provide an accepted bounded path")
+	assert_false(bool(searched["budget"]["exhausted"]), "the unchanged work budget must suffice")
+	for kind: String in ["bounds", "ik", "project", "paths"]:
+		assert_lte(int(searched["budget"]["used"].get(kind, 0)), int(searched["budget"]["limits"][kind]))
 	assert_eq(ctx["fit_failures"], ["existing_failure"], "successful search preserves the caller's refusal list")
 	if not bool(searched["ok"]):
 		return
@@ -1516,6 +1541,9 @@ func test_walk_original_ratio_full_search_keeps_all_saved_gates() -> void:
 			specs.append({"entry": entry, "shift": 0.0})
 	var result: Dictionary = BodyBake._search_person_walk_path(ctx, fit, specs)
 	assert_true(bool(result["ok"]), "short original proportions must pass the full search")
+	assert_false(bool(result["budget"]["exhausted"]), "the short rig uses the unchanged work budget")
+	for kind: String in ["bounds", "ik", "project", "paths"]:
+		assert_lte(int(result["budget"]["used"].get(kind, 0)), int(result["budget"]["limits"][kind]))
 	if not bool(result["ok"]):
 		print("WALK_RIG_DIAGNOSTIC " + JSON.stringify(result["witness"]))
 		print("WALK_STANCE_KNEE_MIN rig=original_ratio_short deg=UNMEASURED accepted=false")
@@ -1561,3 +1589,67 @@ func test_walk_allocation_covers_ends_positive_centers_lift_and_short_stance() -
 	assert_eq(high, Vector2(0.16, 0.16))
 	assert_true(positive)
 	assert_true(high_lift_short)
+
+
+func test_walk_first_block_visits_near_centers_before_joint_extremes() -> void:
+	var params: Dictionary = {"centers": [-0.08, -0.08], "lifts": [0.07, 0.07], "durations": [0.53, 0.57], "heel_end": 0.22, "toe_start": 0.55}
+	var item: Dictionary = {"params": params, "fit": {"starts": [0.2, 0.65]}, "center_intervals": [[Vector2(-0.16, 0.16)], [Vector2(-0.16, 0.16)]], "lift_estimates": [0.07, 0.07]}
+	var allocation: Dictionary = BodyBake._person_walk_allocate_paths(BodyBake._person_walk_path_block([item], 0), {var_to_str(params): true}, [0.2, 0.65], 24, params)
+	var selected: Array = allocation["selected"]
+	assert_eq(selected.size(), 24)
+	var previous: float = 0.0
+	for index: int in 16:
+		var distance: float = BodyBake._person_walk_path_distance(selected[index], params)
+		assert_gte(distance, previous)
+		assert_lte(distance, 0.04)
+		previous = distance
+	var low: Vector2 = Vector2(INF, INF)
+	var high: Vector2 = Vector2(-INF, -INF)
+	for choice: Dictionary in selected:
+		var center: Vector2 = Vector2(choice["centers"][0], choice["centers"][1])
+		low = low.min(center)
+		high = high.max(center)
+	assert_eq(low, Vector2(-0.16, -0.16))
+	assert_eq(high, Vector2(0.16, 0.16))
+
+
+func test_walk_necessary_conditions_reject_before_projection() -> void:
+	var candidate: Dictionary = {"complete": true, "gap": 0.0, "detail": {"horizontal_miss": false},
+		"fit": {"floor": 0.0, "stand_ref_m": 1.0}, "grid_cap": 0.96, "saved_cap": 0.96,
+		"center_intervals": [[Vector2(-0.16, 0.16)], [Vector2(-0.16, 0.16)]]}
+	assert_true(BodyBake._person_walk_candidate_possible(candidate))
+	for key: String in ["grid_cap", "saved_cap"]:
+		var low_mean: Dictionary = candidate.duplicate(true)
+		low_mean[key] = 0.94
+		assert_false(BodyBake._person_walk_candidate_possible(low_mean), key)
+	var horizontal: Dictionary = candidate.duplicate(true)
+	horizontal["detail"]["horizontal_miss"] = true
+	assert_false(BodyBake._person_walk_candidate_possible(horizontal))
+	var empty: Dictionary = candidate.duplicate(true)
+	empty["center_intervals"][1] = []
+	assert_false(BodyBake._person_walk_candidate_possible(empty))
+	var crossed: Dictionary = candidate.duplicate(true)
+	crossed["gap"] = 0.001
+	assert_false(BodyBake._person_walk_candidate_possible(crossed))
+
+
+func test_walk_deferred_projection_rows_are_checked_and_reinserted() -> void:
+	var phases: PackedFloat64Array = PackedFloat64Array()
+	var lowers: PackedFloat64Array = PackedFloat64Array()
+	var uppers: PackedFloat64Array = PackedFloat64Array()
+	for index: int in BodyBake.PERSON_WALK_HEIGHT_SAMPLES:
+		phases.append(float(index) / float(BodyBake.PERSON_WALK_HEIGHT_SAMPLES))
+		lowers.append(0.5)
+		uppers.append(1.0)
+	var initial: PackedFloat64Array = phases.duplicate()
+	phases.append(0.5 / float(BodyBake.PERSON_WALK_HEIGHT_SAMPLES))
+	lowers.append(0.5)
+	uppers.append(0.9)
+	var table: Dictionary = BodyBake._person_walk_project_table(phases, lowers, uppers, 0.5, false, 0.0, {}, initial)
+	assert_true(bool(table["ok"]))
+	if not bool(table["ok"]):
+		return
+	for index: int in phases.size():
+		var value: float = BodyBake._person_walk_height_at(table, phases[index])
+		assert_gte(value + BodyBake.PERSON_WALK_PROJECT_EPSILON, lowers[index])
+		assert_lte(value - BodyBake.PERSON_WALK_PROJECT_EPSILON, uppers[index])

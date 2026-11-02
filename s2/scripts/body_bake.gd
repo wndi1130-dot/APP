@@ -3190,7 +3190,7 @@ static func _project_person_walk_height(rows: Array, reference: PackedFloat64Arr
 	return {"coefficients": coefficients, "converged": false, "max_violation": violation, "sweeps": mini(max_sweeps, PERSON_WALK_PROJECT_SWEEPS)}
 
 
-static func _person_walk_project_table(phases: PackedFloat64Array, lowers: PackedFloat64Array, uppers: PackedFloat64Array, target: float, require_mean: bool = true, inset: float = 0.0, budget: Dictionary = {}) -> Dictionary:
+static func _person_walk_project_table(phases: PackedFloat64Array, lowers: PackedFloat64Array, uppers: PackedFloat64Array, target: float, require_mean: bool = true, inset: float = 0.0, budget: Dictionary = {}, projection_phases: PackedFloat64Array = PackedFloat64Array(), ctx: Dictionary = {}) -> Dictionary:
 	var count: int = PERSON_WALK_HEIGHT_SAMPLES
 	var table: Dictionary = {"ok": false, "reason": "", "values": PackedFloat64Array(), "slopes": PackedFloat64Array(),
 		"uppers": uppers, "lowers": lowers, "failed_samples": PackedInt32Array(), "mean": 0.0, "saved_mean": 0.0, "mean_feasible": false}
@@ -3217,6 +3217,7 @@ static func _person_walk_project_table(phases: PackedFloat64Array, lowers: Packe
 		table["reason"] = "MEAN_SAVED_CAP" if saved_cap + PERSON_WALK_MEAN_EPSILON < target else "MEAN_GRID_CAP"
 		return table
 	var rows: Array = []
+	var deferred: Array = []
 	for index in phases.size():
 		var basis: Dictionary = _person_walk_height_weights(phases[index], count)
 		var weights: PackedFloat64Array = basis["weights"]
@@ -3224,8 +3225,9 @@ static func _person_walk_project_table(phases: PackedFloat64Array, lowers: Packe
 		for weight: float in weights:
 			negative.append(-weight)
 		var margin: float = minf(inset, (uppers[index] - lowers[index]) * 0.25)
-		rows.append(_person_walk_height_row(basis["indices"], weights, uppers[index] - margin))
-		rows.append(_person_walk_height_row(basis["indices"], negative, -lowers[index] - margin))
+		var destination: Array = rows if projection_phases.is_empty() or projection_phases.has(phases[index]) else deferred
+		destination.append(_person_walk_height_row(basis["indices"], weights, uppers[index] - margin))
+		destination.append(_person_walk_height_row(basis["indices"], negative, -lowers[index] - margin))
 	if require_mean:
 		for samples: int in [count, PERSON_WALK_SAVED_SAMPLES]:
 			var weights: PackedFloat64Array = PackedFloat64Array()
@@ -3247,7 +3249,29 @@ static func _person_walk_project_table(phases: PackedFloat64Array, lowers: Packe
 				total += reference[posmod(index + neighbour, count)]
 			smoothed.append(total / float(2 * PERSON_WALK_HEIGHT_RADIUS + 1))
 		reference = smoothed
-	var projected: Dictionary = _project_person_walk_height(rows, reference, PERSON_WALK_PROJECT_SWEEPS, budget)
+	var projected: Dictionary = {}
+	# Add omitted constraints only when the solved table violates them.
+	for _refinement: int in deferred.size() + 1:
+		projected = _project_person_walk_height(rows, reference, PERSON_WALK_PROJECT_SWEEPS, budget)
+		if not bool(projected["converged"]):
+			if ctx.has("dump_projection"):
+				_person_walk_dump_projection(ctx, rows, reference, projected, phases, lowers, uppers, target, require_mean, inset)
+			break
+		var added: bool = false
+		var current: PackedFloat64Array = projected["coefficients"]
+		for row_id: int in range(deferred.size() - 1, -1, -1):
+			var row: Dictionary = deferred[row_id]
+			var indices: PackedInt32Array = row["indices"]
+			var weights: PackedFloat64Array = row["weights"]
+			var dot: float = 0.0
+			for slot: int in indices.size():
+				dot += current[indices[slot]] * weights[slot]
+			if dot - float(row["limit"]) > PERSON_WALK_PROJECT_EPSILON:
+				rows.append(row)
+				deferred.remove_at(row_id)
+				added = true
+		if not added:
+			break
 	table["projection"] = projected
 	if not bool(projected["converged"]):
 		table["reason"] = projected.get("reason", "HEIGHT_PROJECT_LIMIT")
@@ -3269,14 +3293,65 @@ static func _person_walk_project_table(phases: PackedFloat64Array, lowers: Packe
 	var mean_ok: bool = minf(mean, saved_mean) + PERSON_WALK_MEAN_EPSILON >= target
 	if require_mean and not mean_ok:
 		table["reason"] = "HEIGHT_PROJECT_LIMIT"
+		if ctx.has("dump_projection"):
+			_person_walk_dump_projection(ctx, rows, reference, projected, phases, lowers, uppers, target, require_mean, inset)
 		return table
 	table.merge({"ok": true, "values": values, "slopes": slopes, "coefficients": coefficients,
 		"mean": mean, "saved_mean": saved_mean, "mean_feasible": mean_ok}, true)
 	return table
 
 
+## Capture the first failed solve; coefficients have no independent box bounds.
+static func _person_walk_dump_projection(ctx: Dictionary, rows: Array, reference: PackedFloat64Array, projected: Dictionary, phases: PackedFloat64Array, lowers: PackedFloat64Array, uppers: PackedFloat64Array, target: float, require_mean: bool, inset: float) -> void:
+	var state: Dictionary = ctx.get_or_add("walk_projection_dump", {})
+	if bool(state.get("attempted", false)):
+		return
+	state["attempted"] = true
+	var matrix: Array = []
+	var limits: Array[float] = []
+	var variables: Array = []
+	for index: int in reference.size():
+		variables.append({"name": "pelvis_bspline_%03d" % index, "lower": null, "upper": null})
+	for row: Dictionary in rows:
+		var coefficients: Array[float] = []
+		coefficients.resize(reference.size())
+		coefficients.fill(0.0)
+		var indices: PackedInt32Array = row["indices"]
+		var weights: PackedFloat64Array = row["weights"]
+		for slot: int in indices.size():
+			coefficients[indices[slot]] += weights[slot]
+		matrix.append(coefficients)
+		limits.append(float(row["limit"]))
+	var residual: float = projected["max_violation"]
+	var payload: Dictionary = {"schema": "walk_projection_v1", "relation": "A*x <= b", "rows": rows.size(), "columns": reference.size(),
+		"A": matrix, "b": limits, "A_eq": [], "b_eq": [], "variables": variables, "x0": Array(reference),
+		"x_last": Array(projected["coefficients"]), "sweeps": projected["sweeps"], "max_sweeps": PERSON_WALK_PROJECT_SWEEPS,
+		"solver_converged": projected["converged"], "zero_initial_corrections": true,
+		"reason": projected.get("reason", "HEIGHT_PROJECT_LIMIT"), "max_violation": residual if is_finite(residual) else null,
+		"projection_epsilon_m": PERSON_WALK_PROJECT_EPSILON, "mean_epsilon_m": PERSON_WALK_MEAN_EPSILON,
+		"units": {"x": "m", "A": "dimensionless", "b": "m", "phase": "cycle"},
+		"rig": ctx.get("rig_label", "unknown"), "scope": "active rows of first failed projection call",
+		"input": {"phases": Array(phases), "lowers": Array(lowers), "uppers": Array(uppers), "target": target, "require_mean": require_mean, "inset": inset}}
+	var path: String = str(ctx["dump_projection"])
+	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	if not is_instance_valid(file):
+		state["error"] = int(FileAccess.get_open_error())
+		push_error("WALK_PROJECTION_DUMP_OPEN path=%s error=%d" % [path, state["error"]])
+		return
+	file.store_string(JSON.stringify(payload, "\t", true, true))
+	file.flush()
+	state["error"] = int(file.get_error())
+	file.close()
+	state["written"] = int(state["error"]) == int(OK)
+	state["path"] = path
+	state["rows"] = rows.size()
+	state["columns"] = reference.size()
+	if not bool(state["written"]):
+		push_error("WALK_PROJECTION_DUMP_WRITE path=%s error=%d" % [path, state["error"]])
+
+
 ## Keep the grid first so stored frames remain every eighth grid sample.
-static func _person_walk_validation_phases(fit: Dictionary) -> PackedFloat64Array:
+static func _person_walk_validation_phases(fit: Dictionary, include_mid: bool = true) -> PackedFloat64Array:
 	var phases: PackedFloat64Array = PackedFloat64Array()
 	for sample in PERSON_WALK_HEIGHT_SAMPLES:
 		phases.append(float(sample) / float(PERSON_WALK_HEIGHT_SAMPLES))
@@ -3285,7 +3360,7 @@ static func _person_walk_validation_phases(fit: Dictionary) -> PackedFloat64Arra
 	for side in 2:
 		for fraction: float in [0.0, float(params.get("heel_end", PERSON_WALK_HEEL_END)), 0.40, 0.60, float(params.get("toe_start", PERSON_WALK_TOE_START)), 1.0]:
 			boundaries.append(float(fit["starts"][side]) + float(fit["durations"][side]) * fraction)
-		for sample in 17:
+		for sample in (17 if include_mid else 0):
 			var mid_u: float = fposmod(float(fit["starts"][side]) + float(fit["durations"][side]) * (0.40 + 0.20 * float(sample) / 16.0), 1.0)
 			if not phases.has(mid_u):
 				phases.append(mid_u)
@@ -3366,7 +3441,7 @@ static func _fit_person_walk_height(ctx: Dictionary, fit: Dictionary, walk: Arra
 	if bounds.has("reason"):
 		return {"ok": false, "reason": bounds["reason"], "failed_samples": PackedInt32Array()}
 	var target: float = float(fit["floor"]) + PERSON_WALK_MEAN_MIN * float(fit["stand_ref_m"])
-	var table: Dictionary = _person_walk_project_table(bounds["phases"], bounds["lowers"], bounds["uppers"], target, require_mean, PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN, fit.get("work_budget", {}))
+	var table: Dictionary = _person_walk_project_table(bounds["phases"], bounds["lowers"], bounds["uppers"], target, require_mean, PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN, fit.get("work_budget", {}), _person_walk_validation_phases(fit, false), ctx)
 	table.merge({"phases": bounds["phases"], "details": bounds["details"], "rig_label": ctx.get("rig_label", "unknown"),
 		"clip": walk[0], "fit_failures": ctx.get_or_add("fit_failures", [])}, true)
 	if report and not bool(table["ok"]):
@@ -3630,7 +3705,7 @@ static func _person_walk_path_distance(a: Dictionary, b: Dictionary) -> float:
 
 
 ## Deduplicate before quota; farthest-first covers the remaining design box.
-static func _person_walk_allocate_paths(proposals: Array, seen: Dictionary, starts: Array, limit: int) -> Dictionary:
+static func _person_walk_allocate_paths(proposals: Array, seen: Dictionary, starts: Array, limit: int, nearby: Dictionary = {}) -> Dictionary:
 	var unique: Dictionary = {}
 	var remaining: Array = []
 	for params: Dictionary in proposals:
@@ -3639,7 +3714,13 @@ static func _person_walk_allocate_paths(proposals: Array, seen: Dictionary, star
 			unique[key] = true
 			remaining.append(params)
 	var selected: Array = []
-	var priority: int = mini(8, mini(limit, remaining.size()))
+	if not nearby.is_empty():
+		var local_order: Array = remaining.duplicate()
+		local_order.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _person_walk_path_distance(a, nearby) < _person_walk_path_distance(b, nearby))
+		for index: int in mini(16, mini(limit, local_order.size())):
+			selected.append(local_order[index])
+			remaining.erase(local_order[index])
+	var priority: int = mini(8, mini(limit - selected.size(), remaining.size()))
 	for _index in priority:
 		selected.append(remaining.pop_front())
 	while selected.size() < limit and not remaining.is_empty():
@@ -3705,6 +3786,8 @@ static func _person_walk_pose(ctx: Dictionary, fit: Dictionary, entry: Array, ke
 
 
 static func _fit_person_walk_candidate(ctx: Dictionary, source: Dictionary, specs: Array) -> Dictionary:
+	if ctx.has("dump_projection"):
+		ctx["walk_projection_dump"] = ctx.get("walk_projection_dump", {})
 	var local_ctx: Dictionary = ctx.duplicate()
 	local_ctx["fit_failures"] = []
 	var fit: Dictionary = source.duplicate()
@@ -3724,6 +3807,8 @@ static func _fit_person_walk_candidate(ctx: Dictionary, source: Dictionary, spec
 			return {"ok": false, "reason": "FOOT_PATH_BUDGET"}
 		var table: Dictionary = full
 		if not bool(full["ok"]):
+			if str(full["reason"]) in ["POINT_EMPTY", "CENTER_EMPTY", "MEAN_GRID_CAP", "MEAN_SAVED_CAP"]:
+				return {"ok": false, "reason": full["reason"], "joint_pass": joint_pass + 1, "table": full}
 			table = _fit_person_walk_height(local_ctx, fit, walk, float(first["shift"]), field, false, false)
 		if not bool(table["ok"]):
 			return {"ok": false, "reason": table["reason"], "joint_pass": joint_pass + 1, "table": table}
@@ -3843,11 +3928,24 @@ static func _person_walk_validate_saved(ctx: Dictionary, fit: Dictionary, specs:
 	return {"ok": true, "reason": "", "measurements": measurements}
 
 
+static func _person_walk_candidate_possible(candidate: Dictionary) -> bool:
+	if not bool(candidate.get("complete", false)) or float(candidate["gap"]) > 0.0:
+		return false
+	if bool(candidate["detail"].get("horizontal_miss", false)):
+		return false
+	for intervals: Array in candidate["center_intervals"]:
+		if intervals.is_empty():
+			return false
+	var fit: Dictionary = candidate["fit"]
+	var target: float = float(fit["floor"]) + PERSON_WALK_MEAN_MIN * float(fit["stand_ref_m"])
+	return minf(float(candidate["grid_cap"]), float(candidate["saved_cap"])) + PERSON_WALK_MEAN_EPSILON >= target
+
+
 static func _person_walk_try_beam(state: Dictionary, limit: int = 6) -> Dictionary:
 	var attempted: int = 0
 	for candidate: Dictionary in state["beam"]:
 		var id: int = candidate["id"]
-		if float(candidate["gap"]) > 0.0 or (state["skin_seen"] as Dictionary).has(id):
+		if not _person_walk_candidate_possible(candidate) or (state["skin_seen"] as Dictionary).has(id):
 			continue
 		if attempted >= limit:
 			break
@@ -3883,6 +3981,8 @@ static func _person_walk_try_beam(state: Dictionary, limit: int = 6) -> Dictiona
 
 ## Candidate failures are private; only the caller publishes final refusal.
 static func _search_person_walk_path(ctx: Dictionary, fit: Dictionary, specs: Array, geometry_limit: int = PERSON_WALK_SEARCH_GEOMETRY, skin_limit: int = PERSON_WALK_SEARCH_SKIN, budget_limits: Dictionary = {}) -> Dictionary:
+	if ctx.has("dump_projection"):
+		ctx["walk_projection_dump"] = ctx.get("walk_projection_dump", {})
 	var local_ctx: Dictionary = ctx.duplicate()
 	local_ctx["fit_failures"] = []
 	var base: Dictionary = fit.duplicate()
@@ -3901,16 +4001,20 @@ static func _search_person_walk_path(ctx: Dictionary, fit: Dictionary, specs: Ar
 			break
 		for block in 5:
 			var proposals: Array = _person_walk_path_block(state["beam"], block)
-			var allocation: Dictionary = _person_walk_allocate_paths(proposals, state["seen"], base["starts"], PERSON_WALK_BLOCK_PATHS)
+			var near_first: bool = _round_id == 0 and block == 0
+			var allocation: Dictionary = _person_walk_allocate_paths(proposals, state["seen"], base["starts"], PERSON_WALK_BLOCK_PATHS, _person_walk_default_params(base) if near_first else {})
 			state["block_limited"] = bool(state["block_limited"]) or int(allocation["omitted"]) > 0
 			var before_count: int = state["geometry_count"]
 			for params: Dictionary in allocation["selected"]:
 				_person_walk_add_path(state, params)
-				if bool(state["limited"]):
+				if near_first and not bool(state["limited"]):
+					result = _person_walk_try_beam(state, 1)
+				if not result.is_empty() or bool(state["limited"]):
 					break
 			var checked: int = int(state["geometry_count"]) - before_count
 			state["coverage"].append({"round": _round_id, "block": block, "generated": proposals.size(), "unique_unseen": allocation["unique"], "checked": checked, "omitted": int(allocation["unique"]) - checked})
-			result = _person_walk_try_beam(state)
+			if result.is_empty():
+				result = _person_walk_try_beam(state)
 			if not result.is_empty() or bool(state["limited"]):
 				break
 	if result.is_empty() and not bool(state["limited"]):
