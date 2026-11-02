@@ -10,6 +10,8 @@ extends RefCounted
 ## save wins while its phase is "field", unless the train already applied its
 ## receipt_id (S3 PR #428).
 
+## Field save format number (this file's saves only). Not politics/save_slot.gd SAVE_VERSION,
+## which numbers the train's own save.
 const VERSION := 2
 const KIND := "s2_field"
 const PATH := "user://field_save.json"
@@ -35,13 +37,17 @@ const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
 ## Tests only: fail one step of the next write; empty is off, reset on entry.
 static var _test_fail_step: String = ""
+## Tests only: counts actual parses of the previous slot, not new-file validation.
+static var _test_previous_parses: int = 0
+## Process-local hashes of exact disk bytes already accepted by from_json().
+static var _known_good: Dictionary = {}
 
 ## Only simulation state, never meshes, services or input widgets.
 const PERSON_FIELDS: Array[String] = [
 	"team", "role", "display_name", "skills", "medical", "hunger_level", "sore_level", "smell", "traits", "lamp", "lamp_on",
 	"path", "running", "crouched", "facing", "turn_rate", "look", "moving", "stick", "drive_speed", "drive_dir",
 	"command", "command_target", "action", "action_label", "action_t", "action_total", "action_done", "action_busy",
-	"action_noise_t", "swing_t", "shove_t", "lunge_t", "strike_t", "strike_total", "strike_at", "strike_kind",
+	"action_noise_t", "swing_t", "shove_t", "lunge_t", "shove_rest_t", "strike_t", "strike_total", "strike_at", "strike_kind",
 	"reload_t", "jam_t", "target_zombie", "target_person", "hold_attack", "grabbers", "grab_left", "grab_front",
 	"climbing", "carrying_wounded", "downed_marked", "dead_marked", "brain", "panic", "ice_t", "fallen_t",
 	"last_hurt_by", "blood_soaked", "close_kills",
@@ -65,6 +71,8 @@ const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow
 
 ## What the field is now, as plain data. `game` is a field_game.gd.
 static func capture(game) -> Dictionary:
+	if game.ended:
+		return _capture_ended(game)
 	var people: Array = []
 	for p in game.people:
 		people.append(_person(game, p))
@@ -112,6 +120,27 @@ static func capture(game) -> Dictionary:
 	}
 	out["runtime"] = _runtime(game)
 	return out
+
+
+## Ended saves stay small.
+static func _capture_ended(game) -> Dictionary:
+	var said: Dictionary = game.receipt.to_dict() if game.receipt != null else {}
+	var departure: Dictionary = (game.opts.get("departure", {}) as Dictionary).duplicate(true)
+	var stop_id := String(departure.get("stopId", said.get("stopId", game.opts.get("stop_id", ""))))
+	var start_opts: Dictionary = {}
+	for key in ["slice", "slice_run", "visit_id"]:
+		if game.opts.has(key):
+			start_opts[key] = game.opts[key]
+	return {
+		"version": VERSION, "kind": KIND, "phase": "ended",
+		"receipt_id": String(said.get("receiptId", game.opts.get("receipt_id", ""))),
+		"receipt_state": _receipt_state(game.receipt) if game.receipt != null else {},
+		"place": game.place, "departure": departure,
+		"seed": int(game.rng.seed), "stop_id": stop_id,
+		"start_opts": start_opts.duplicate(true),
+		"clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
+		"coal": {"delivered": game.actions.coal_delivered if game.actions != null else 0, "spent": game.actions.coal_spent if game.actions != null else 0},
+	}
 
 
 static func _start_opts(opts: Dictionary) -> Dictionary:
@@ -407,6 +436,8 @@ static func train_applied(train_path: String = TRAIN_PATH) -> Dictionary:
 
 ## The options that build the same stop again and then put the save on it.
 static func resume_opts(save: Dictionary) -> Dictionary:
+	if save.get("phase") == "ended":
+		return {}
 	var opts: Dictionary = (save.get("start_opts", {}) as Dictionary).duplicate(true)
 	opts["seed"] = int(save.get("seed", 0))
 	opts["place"] = String(save.get("place", ""))
@@ -466,6 +497,8 @@ static func _grid_sizes_match(game, save: Dictionary) -> bool:
 
 ## Version 2 reconnects existing identities before restoring their clocks or callbacks.
 static func apply(game, save: Dictionary) -> void:
+	if save.get("phase") == "ended":
+		return
 	var form := StopForm.resolve(save if save.has("stop_form") else game.opts, String(game.data["place_kind"]))
 	game.skip_arrival()
 	game.begin_resume()
@@ -1012,6 +1045,21 @@ static func _put_receipt(r, state: Dictionary) -> void:
 			r.set(name, String(v))
 
 
+static func _bytes_hash(bytes: PackedByteArray) -> PackedByteArray:
+	var context: HashingContext = HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK or context.update(bytes) != OK:
+		return PackedByteArray()
+	return context.finish()
+
+
+static func _remember_good(path: String, bytes: PackedByteArray) -> void:
+	var digest: PackedByteArray = _bytes_hash(bytes)
+	if digest.size() == 32:
+		_known_good[path] = digest
+	else:
+		_known_good.erase(path)
+
+
 ## Writes over the slot: the new file goes down whole first, the last one is kept as .bak.
 static func write(d: Dictionary, path: String = PATH) -> bool:
 	var fail_step := _test_fail_step
@@ -1057,8 +1105,13 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 		if error != OK or previous_bytes.size() != previous_length:
 			DirAccess.remove_absolute(tmp)
 			return false
-		var previous := from_json(previous_bytes.get_string_from_utf8())
-		var moved := backup if not previous.is_empty() else path + ".broken"
+		var previous_hash: PackedByteArray = _bytes_hash(previous_bytes)
+		var known_hash: PackedByteArray = _known_good.get(path, PackedByteArray())
+		var previous_good: bool = previous_hash.size() == 32 and previous_hash == known_hash
+		if not previous_good:
+			_test_previous_parses += 1
+			previous_good = not from_json(previous_bytes.get_string_from_utf8()).is_empty()
+		var moved: String = backup if previous_good else path + ".broken"
 		if FileAccess.file_exists(moved) and DirAccess.remove_absolute(moved) != OK:
 			DirAccess.remove_absolute(tmp)
 			return false
@@ -1066,6 +1119,7 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 			DirAccess.remove_absolute(tmp)
 			return false
 	if fail_step != "rename_tmp" and DirAccess.rename_absolute(tmp, path) == OK:
+		_remember_good(path, written)
 		return true
 	if not FileAccess.file_exists(path) and FileAccess.file_exists(backup):
 		DirAccess.rename_absolute(backup, path)
@@ -1077,13 +1131,17 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 static func read(path: String = PATH) -> Dictionary:
 	for at in [path, path + ".bak"]:
 		if FileAccess.file_exists(at):
-			var d := from_json(FileAccess.get_file_as_string(at))
+			var bytes: PackedByteArray = FileAccess.get_file_as_bytes(at)
+			var d: Dictionary = from_json(bytes.get_string_from_utf8())
 			if not d.is_empty():
+				if at == path:
+					_remember_good(path, bytes)
 				return d
 	return {}
 
 
 static func clear(path: String = PATH) -> void:
+	_known_good.erase(path)
 	for at in [path, path + ".tmp", path + ".bak", path + ".broken"]:
 		if FileAccess.file_exists(at):
 			DirAccess.remove_absolute(at)

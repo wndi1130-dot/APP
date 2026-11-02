@@ -285,6 +285,60 @@ func test_the_shipped_files_load() -> void:
 			assert_gt(s.get_length(), 0.1, g)
 
 
+## Every floor is heard as itself (STEP_FLOORS): with the shipped files no
+## floor falls through to the snow; each is a few short steps, and a loose
+## board has creaks of its own.
+func test_every_floor_ships_steps_of_its_own() -> void:
+	var a = game.audio
+	var g = game.grid
+	var FG = game.FieldGrid
+	var at: Vector3 = game.player.position
+	var cell: Vector2i = FG.cell_of(at)
+	var was: int = g.floor_at(cell)
+	# What each floor should sound like, written out apart from STEP_FLOORS, so a
+	# row moved to the wrong floor is caught.
+	var want: Dictionary = {
+		FG.Floor.SNOW: "step_snow", FG.Floor.ROAD: "step_concrete", FG.Floor.PLATFORM: "step_concrete",
+		FG.Floor.WOOD: "step_wood", FG.Floor.RAIL: "step_gravel", FG.Floor.DEEP_SNOW: "step_snow",
+		FG.Floor.ICE: "step_ice", FG.Floor.GRAVEL: "step_gravel",
+	}
+	assert_eq(want.size(), FG.Floor.size(), "every floor is written out here")
+	assert_eq(a.STEP_FLOORS.size(), FG.Floor.size(), "and has a row")
+	for kind in want:
+		var own: String = want[kind]
+		a.lib.erase(own)
+		g.floor[g.index(cell)] = kind
+		assert_eq(a._step_group(at)[0], own, "floor %d has steps of its own" % kind)
+		var list: Array = a._load_group(own)
+		assert_gte(list.size(), 4, own)
+		for s in list:
+			assert_between(s.get_length(), 0.1, 0.8, own)
+	g.floor[g.index(cell)] = was
+	var creaks: Array = a._load_group("floor_creak")
+	assert_gte(creaks.size(), 3, "a loose board's creaks")
+	for s in creaks:
+		assert_between(s.get_length(), 0.15, 1.0, "floor_creak")
+
+
+## A creak of its own is heard at its own pitch (OWN_PITCH); the wood that stands
+## in for it until then is pitched well down (CREAK_VOICE).
+func test_a_creak_of_its_own_is_not_pitched_down() -> void:
+	var a = game.audio
+	var at: Vector3 = game.player.position + Vector3(1, 0, 0)
+	a.lib["floor_creak"] = [_tone()]
+	for k in range(20):
+		a.floor_creak(at)
+		assert_not_null(a.last_shot, "it is heard")
+		assert_between(float(a.last_shot.pitch_scale), 0.92, 1.08, "its own pitch")
+	a.lib["floor_creak"] = []
+	if not a.lib.has("impact"):
+		a.lib["impact"] = a._load_group("impact")
+	for k in range(20):
+		a.floor_creak(at)
+		assert_not_null(a.last_shot, "the stand-in is heard")
+		assert_between(float(a.last_shot.pitch_scale), 0.45, 0.55, "the stand-in, pitched down")
+
+
 func test_the_radio_hisses_then_calls_and_an_urgent_call_is_the_loudest() -> void:
 	var a = game.audio
 	for g in ["radio_hiss", "radio"]:

@@ -259,6 +259,7 @@ var mods: Control = null           # the refit pane, where the workshop's stands
 var research: Control = null       # the research pane, where the workshop's stands (research_pane.gd)
 var cost: Control = null           # what a stretch costs and why, where the rooms stand (cost_pane.gd)
 var shop_seg: int = -1             # the stretch the workshop last worked (once each leaving)
+var shop_settle_seg: int = -1      # a supplies run: the settlement whose workshop news was last shown
 var outside: MeshInstance3D = null  # the world outside the train (fx/outside_view.gd)
 ## The land going by outside the train (결정 495, journey/journey.gd): shown on the
 ## diagonal view only (train_scene view_mode); visuals/journey_enabled turns it off.
@@ -348,9 +349,11 @@ func _ready() -> void:
 			train_g = RouteState.start(train_g, run)
 		if bool(opts.get("save", false)) and not train_g.is_empty():
 			_clear_slice_field()
+		_seed_shop_settle()
 	else:
 		run = String(resume["run"])
 		train_g = (resume["g"] as Dictionary).duplicate(true)
+		_seed_shop_settle()
 		contract = (resume.get("contract", {}) as Dictionary).duplicate(true)
 		receipt = (resume.get("receipt", {}) as Dictionary).duplicate(true)
 		passed = bool(resume.get("passed", false))
@@ -533,6 +536,11 @@ func _show_step(i: int) -> void:
 	soot_bot.visible = gauges.visible and not SHEET_STEPS.has(id)
 	if train_halt_line(train_g) != "":
 		_show_train("end" if train_g.get("phase") == "end" else "travel", int(train_g.get("seg", row[2])))
+		# A supplies run's workshop works inside the settlement even when the train halts
+		# or the run ends there: what it made is still seen, once.
+		if bool(train_g.get("supOn", false)):
+			_post_shop_events(pending_shop_events)
+			pending_shop_events = []
 		_show_panel("끝" if id == "end" else train_halt_title(train_g), load("res://game/train/turn/turn_end.gd").panel_lines(train_g, train_t, train_halt_line(train_g)), "처음으로" if id == "end" else "끝")
 		return
 	# The next stop is known on the train: its map is made ready off the main
@@ -553,15 +561,12 @@ func _show_step(i: int) -> void:
 	# stretch's work, once (train_workshop.gd stretch).
 	var shop_events: Array = pending_shop_events
 	pending_shop_events = []
-	if not _is_campaign() and id == "travel" and int(row[2]) != shop_seg:
+	if not bool(train_g.get("supOn", false)) and not _is_campaign() and id == "travel" and int(row[2]) != shop_seg:
 		shop_seg = int(row[2])
 		shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if String(row[1]) != "":
 		_show_train(String(row[1]), int(train_g["seg"]) if _is_campaign() else int(row[2]))
-		# What it made, for the people on the train to see (the train scene's events).
-		if is_instance_valid(train) and train.has_method("post_event"):
-			for ev: Dictionary in shop_events:
-				train.call("post_event", ev)
+		_post_shop_events(shop_events)
 	if id == "receipt":
 		_show_receipt("여기까지" if _is_campaign() and int(train_g["campaign"]["cursor"]) == CampaignRoute.size() - 1 else String(row[4]))
 		return
@@ -1293,6 +1298,39 @@ static func quiet_receipt(d: Dictionary) -> Dictionary:
 
 
 ## The board moves on: a step the port does not have yet is said, and the board stays.
+## A supplies run's workshop works inside the settlement (turn_settle.gd); the slice only
+## shows its news once. The settlement already shown is read from the board as it comes in,
+## before any return is applied, so a resumed run never shows an old stretch's news again.
+## What the workshop made, for the people on the train to see (the train scene's events).
+func _post_shop_events(events: Array) -> void:
+	if is_instance_valid(train) and train.has_method("post_event"):
+		for ev: Dictionary in events:
+			train.call("post_event", ev)
+
+
+func _seed_shop_settle() -> void:
+	shop_settle_seg = -1
+	if not bool(train_g.get("supOn", false)):
+		return
+	var last: Variant = train_g.get("lastSettle")
+	if last is Dictionary and last.get("workshop") is Dictionary:
+		shop_settle_seg = int(last["workshop"].get("seg", -1))
+
+
+func _take_shop_settle() -> void:
+	if not bool(train_g.get("supOn", false)):
+		return
+	var last: Variant = train_g.get("lastSettle")
+	if not last is Dictionary or not last.get("workshop") is Dictionary:
+		return
+	var shop: Dictionary = last["workshop"]
+	var settled: int = int(shop.get("seg", -1))
+	if settled == shop_settle_seg:
+		return
+	shop_settle_seg = settled
+	pending_shop_events.append_array((shop.get("events", []) as Array).duplicate(true))
+
+
 func _take(g: Dictionary) -> void:
 	if g.has("_turn_port_error"):
 		port_error = String(g["_turn_port_error"])
@@ -1308,7 +1346,8 @@ func _take(g: Dictionary) -> void:
 			_campaign_fail(issue)
 			return
 		train_g = next_g
-		if SliceSave.step_of_board(train_g) == "travel":
+		_take_shop_settle()
+		if not bool(train_g.get("supOn", false)) and SliceSave.step_of_board(train_g) == "travel":
 			var departure_id: String = String(train_g["campaign"]["visit"].get("departure_id", ""))
 			if RouteState.workshop_due(train_g, departure_id):
 				pending_shop_events = TrainWorkshop.stretch(train_g)["events"]
@@ -1319,8 +1358,9 @@ func _take(g: Dictionary) -> void:
 		return
 	var leaving: bool = SliceSave.step_of_board(g) == "travel" and SliceSave.step_of_board(train_g) != "travel"
 	train_g = g
+	_take_shop_settle()
 	# Departure and workshop work share one train write, including a closed vote.
-	if leaving and train_halt_line(train_g) == "" and shop_seg != int(STEPS[_index_of("travel")][2]):
+	if not bool(train_g.get("supOn", false)) and leaving and train_halt_line(train_g) == "" and shop_seg != int(STEPS[_index_of("travel")][2]):
 		shop_seg = int(STEPS[_index_of("travel")][2])
 		pending_shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if is_instance_valid(gauges):

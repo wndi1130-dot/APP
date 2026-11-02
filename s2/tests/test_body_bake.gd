@@ -486,6 +486,159 @@ func test_a_keyed_value_eases_from_key_to_key_and_holds_past_the_ends() -> void:
 	assert_eq(BodyBake._value(keys, TAU * 0.9), 3.0)
 
 
+func _legacy_keyed(keys: Array, u: float) -> float:
+	if u <= float(keys[0][0]):
+		return float(keys[0][1])
+	for n: int in range(1, keys.size()):
+		if u <= float(keys[n][0]):
+			var a: Array = keys[n - 1]
+			var b: Array = keys[n]
+			var t: float = (u - float(a[0])) / maxf(float(b[0]) - float(a[0]), 0.0001)
+			return lerpf(float(a[1]), float(b[1]), smoothstep(0.0, 1.0, t))
+	return float(keys[keys.size() - 1][1])
+
+
+func _collect_key_tracks(spec: Variant, tracks: Array) -> void:
+	if spec is Dictionary:
+		var fields: Dictionary = spec
+		for value: Variant in fields.values():
+			_collect_key_tracks(value, tracks)
+	elif spec is Array:
+		var parts: Array = spec
+		if parts.size() == 2 and typeof(parts[0]) == TYPE_STRING and String(parts[0]) == "keys":
+			tracks.append(parts[1])
+		else:
+			for value: Variant in parts:
+				_collect_key_tracks(value, tracks)
+
+
+func test_keyed_default_has_zero_difference_from_the_legacy_formula() -> void:
+	var tracks: Array = [
+		[[0.2, 1.0], [0.6, 3.0]],
+		[[0.0, -3.25], [0.13, 8.5], [0.51, -0.75], [1.0, 2.25]],
+		[[0.5, 7.0]],
+		[[0.0, 0.0], [0.00001, 1.0], [0.5, -1.0]],
+	]
+	_collect_key_tracks(BodyBake.LAYERS, tracks)
+	for keys: Array in tracks:
+		var phases: Array[float] = [-0.25, 0.0, 0.000005, 0.17, 0.5, 0.83, 1.0, 1.25]
+		for key: Array in keys:
+			phases.append(float(key[0]))
+		for n: int in range(1, keys.size()):
+			for fraction: float in [0.125, 0.5, 0.875]:
+				phases.append(lerpf(float(keys[n - 1][0]), float(keys[n][0]), fraction))
+		for u: float in phases:
+			var difference: float = BodyBake._keyed(keys, u) - _legacy_keyed(keys, u)
+			assert_almost_eq(difference, 0.0, 0.0, "legacy difference at %.9f" % u)
+
+
+func test_keyed_in_and_out_have_exact_endpoints_and_one_moving_end() -> void:
+	var h: float = 0.125
+	for ease: String in ["in", "out"]:
+		var keys: Array = [[0.0, 2.0, ease], [1.0, 6.0]]
+		var start: float = BodyBake._keyed(keys, 0.0)
+		var end: float = BodyBake._keyed(keys, 1.0)
+		assert_almost_eq(start - 2.0, 0.0, 0.0, ease + " start")
+		assert_almost_eq(end - 6.0, 0.0, 0.0, ease + " end")
+		for u: float in [0.125, 0.25, 0.5, 0.75, 0.875]:
+			var t: float = u * u if ease == "in" else 1.0 - (1.0 - u) * (1.0 - u)
+			assert_almost_eq(BodyBake._keyed(keys, u) - lerpf(2.0, 6.0, t), 0.0, 0.0, ease + " quadratic")
+		# Second-order one-sided differences are exact for a quadratic.
+		var start_speed: float = (-3.0 * start + 4.0 * BodyBake._keyed(keys, h) - BodyBake._keyed(keys, 2.0 * h)) / (2.0 * h)
+		var end_speed: float = (3.0 * end - 4.0 * BodyBake._keyed(keys, 1.0 - h) + BodyBake._keyed(keys, 1.0 - 2.0 * h)) / (2.0 * h)
+		if ease == "in":
+			assert_almost_eq(start_speed, 0.0, 0.0, "in starts at rest")
+			assert_gt(end_speed, 0.0, "in arrives moving")
+		else:
+			assert_gt(start_speed, 0.0, "out departs moving")
+			assert_almost_eq(end_speed, 0.0, 0.0, "out ends at rest")
+
+
+func test_key_ease_belongs_only_to_the_departure_key() -> void:
+	var plain: Array = [[0.0, 0.0], [0.5, 4.0], [1.0, 8.0]]
+	for ease: String in ["in", "out"]:
+		var keys: Array = [[0.0, 0.0], [0.5, 4.0, ease], [1.0, 8.0]]
+		for u: float in [0.125, 0.25, 0.375, 0.5]:
+			assert_almost_eq(BodyBake._keyed(keys, u) - _legacy_keyed(plain, u), 0.0, 0.0, "arrival tag leaves prior segment unchanged")
+		var expected: float = 5.0 if ease == "in" else 7.0
+		assert_almost_eq(BodyBake._keyed(keys, 0.75) - expected, 0.0, 0.0, "next segment uses the tag")
+		var mixed: Array = [[0.0, 0.0, "in"], [0.5, 4.0, ease], [1.0, 8.0, "out"]]
+		assert_almost_eq(BodyBake._keyed(mixed, 0.25) - 1.0, 0.0, 0.0, "arrival cannot override departure")
+
+
+func test_key_ease_reaches_aim_axes_swing_turn_sink_and_summed_values() -> void:
+	var root: Node3D = _stick_body()
+	add_child_autofree(root)
+	var body: Skeleton3D = BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
+	var keyed_in: Array = ["keys", [[0.0, 0.0, "in"], [1.0, 1.0]]]
+	var keyed_out: Array = ["keys", [[0.0, 0.0, "out"], [1.0, 1.0]]]
+	var summed: Array = [keyed_in, keyed_out]
+	var layer: Dictionary = {"steps": [
+		["turn", "chest", "x", summed],
+		["aim", "upper_arm.L", "forearm.L", [keyed_in, keyed_out, summed]],
+		["swing", "upper_arm.R", "forearm.R", keyed_in, keyed_out],
+	], "sink": keyed_in}
+	var expected: Dictionary = {"steps": [
+		["turn", "chest", "x", 1.0],
+		["aim", "upper_arm.L", "forearm.L", [0.25, 0.75, 1.0]],
+		["swing", "upper_arm.R", "forearm.R", 0.25, 0.75],
+	], "sink": 0.25}
+	BodyBake.apply_layer(body, layer, 0.5)
+	var actual: Array[Transform3D] = []
+	for bone: int in body.get_bone_count():
+		actual.append(body.get_bone_pose(bone))
+	body.reset_bone_poses()
+	BodyBake.apply_layer(body, expected, 0.5)
+	for bone: int in body.get_bone_count():
+		var wanted: Transform3D = body.get_bone_pose(bone)
+		assert_almost_eq(actual[bone].origin.distance_to(wanted.origin), 0.0, 0.0, "position")
+		for axis: int in 3:
+			assert_almost_eq(actual[bone].basis[axis].distance_to(wanted.basis[axis]), 0.0, 0.0, "rotation")
+
+
+func test_unknown_key_ease_records_failure_even_on_unreached_and_last_keys() -> void:
+	for bad: Variant in ["sideways", "", 7, null]:
+		for index: int in 3:
+			var keys: Array = [[0.2, 0.0], [0.6, 1.0], [1.0, 2.0]]
+			(keys[index] as Array).append(bad)
+			var spec: Dictionary = {"steps": [["aim", "upper_arm.L", "forearm.L", [0.0, ["keys", keys], 1.0]]]}
+			var failures: Array[String] = BodyBake._key_ease_failures(spec, "bad_clip")
+			assert_eq(failures.size(), 1, "one invalid key track")
+			assert_eq(failures[0], "KEY_EASE_UNKNOWN clip=bad_clip value=%s" % str(bad))
+			assert_true(is_nan(BodyBake._keyed(keys, 0.0)), "no endpoint shortcut hides an invalid tag")
+			assert_push_error("KEY_EASE_UNKNOWN clip=<direct> value=%s" % str(bad))
+	var valid: Dictionary = {"sink": ["keys", [[0.0, 0.0, "in"], [0.5, 1.0, "out"], [1.0, 2.0]]]}
+	assert_true(BodyBake._key_ease_failures(valid, "valid_clip").is_empty())
+
+
+func test_unknown_key_ease_refuses_save_before_creating_a_directory() -> void:
+	var spec: Array = ["keys", [[0.0, 0.0], [1.0, 1.0, "sideways"]]]
+	var failures: Array[String] = BodyBake._key_ease_failures(spec, "bad_clip")
+	var dir: String = "user://key_ease_refused_%d" % Time.get_ticks_usec()
+	assert_false(DirAccess.dir_exists_absolute(dir), "fresh destination")
+	BodyBake.save({"fit_failures": failures}, dir)
+	assert_push_error("KEY_EASE_UNKNOWN clip=bad_clip value=sideways")
+	assert_false(DirAccess.dir_exists_absolute(dir), "refusal precedes all file writes")
+
+
+func test_all_current_person_and_dead_key_tracks_have_only_two_fields() -> void:
+	for clips: Array in [BodyBake.PERSON_CLIPS, BodyBake.CLIPS, BodyBake.OWN_CLIPS]:
+		var tracks: Array = []
+		for entry: Array in clips:
+			_collect_key_tracks(BodyBake.LAYERS.get(entry[4], {}), tracks)
+		assert_gt(tracks.size(), 0, "each clip set exercises keyed tracks")
+		for keys: Array in tracks:
+			for key: Array in keys:
+				assert_eq(key.size(), 2, "no authored ease tags in this PR")
+		assert_true(BodyBake._clip_key_ease_failures(clips).is_empty())
+	var all_tracks: Array = []
+	_collect_key_tracks(BodyBake.LAYERS, all_tracks)
+	for keys: Array in all_tracks:
+		for key: Array in keys:
+			assert_eq(key.size(), 2, "all layers, including still poses")
+	assert_true(BodyBake._clip_key_ease_failures(BodyBake.OWN_CLIPS, BodyBake.OWN_POSES).is_empty())
+
+
 func test_a_shorter_body_lies_on_the_ground_not_in_it() -> void:
 	# Hips 0.85 m up, like a person 1.7 m tall: lowered as far in proportion
 	# as the 1 m body, its hips end the fall above the ground.

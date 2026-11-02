@@ -692,6 +692,10 @@ const VIEW_FILL_TILT := 5.0
 ## so the spread does not darken a dim picture (night stays where it was).
 const TONE_PIVOT_DAY := 0.4
 const TONE_PIVOT_NIGHT := 0.1
+## The day's faded print: the daylight hours flatten the spread by this much
+## (the picture's V p95−p5 stood near 0.63 against about 0.50 in the reference
+## scenes), the colour given back as for the rain's ease below.
+const TONE_DAY_FLAT := 0.85
 ## The field's exposure (WorldEnvironment tonemap): every colour, the floors
 ## too (world_vis), is read as sRGB, and the hour's light alone left a mid grey
 ## at 0.19 and white at 0.4 on an overcast noon. 1.8 brings them near the
@@ -721,6 +725,8 @@ static func grade(l: Dictionary) -> Dictionary:
 	if String(l.get("falls", "none")) == "rain":
 		rain_ease = 1.0 - TONE_RAIN_EASE * float(l.get("fall", 0.0)) * float(w["day"])
 	spread *= rain_ease
+	var day_flat := lerpf(1.0, TONE_DAY_FLAT, float(w["day"]))
+	spread *= day_flat
 	# A grey sky takes a tenth of the colour, no more: the grey is in the
 	# materials already, and 0.8 left an overcast day near colourless.
 	var sat := lerpf(1.0, 0.9, veil) * lerpf(1.0, 0.72, float(w["night"]))
@@ -728,7 +734,7 @@ static func grade(l: Dictionary) -> Dictionary:
 	sat *= float(l.get("region_sat", 1.0))
 	# The channels part by the spread too, so the rain's ease would grey the
 	# picture as much: the saturation gives it back (the darks come up, not the grey).
-	sat /= rain_ease
+	sat /= rain_ease * day_flat
 	# Godot multiplies the brightness, then turns the contrast about 0.5 (sRGB):
 	# 0.5 + k(b·c − 0.5) is the line spread·(c − pivot) + pivot when these hold.
 	var pivot := lerpf(TONE_PIVOT_NIGHT, TONE_PIVOT_DAY, float(l["lum"])) - TONE_PIVOT_DUSK_GREY * float(w["dusk"]) * veil

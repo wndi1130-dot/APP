@@ -127,12 +127,13 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 	return error == OK and _replace(path)
 
 
-## The S1 board as it is, through the same temporary-file boundary as the slice slot.
+## The S1 board as the train slot holds it (save_slot.gd slot_board: a supplies run carries its
+## version), through the same temporary-file boundary as the slice slot.
 static func write_train(g: Dictionary, path: String = TrainSave.DEFAULT_PATH, written: Dictionary = {}) -> bool:
 	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if file == null:
 		return false
-	var text := _text(g)
+	var text := _text(TrainSave.slot_board(g))
 	file.store_string(text)
 	file.flush()
 	var error: Error = file.get_error()

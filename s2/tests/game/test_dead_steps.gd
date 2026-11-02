@@ -227,7 +227,8 @@ func test_its_gait_follows_what_it_is_doing() -> void:
 	for gait: String in a.DEAD_GAITS:
 		var g: Dictionary = a.DEAD_GAITS[gait]
 		assert_true(float(g["loud"]) <= 0.3, "never louder than the player's walk")
-		assert_true(float(g["pitch"][1]) <= 0.9, "never above the player's own feet")
+		var lowest: float = float(a.STEP_PITCH[0]) * float(a.STEP_LOAD[a.STEP_LOAD.size() - 1][1])
+		assert_true(float(g["pitch"][1]) <= lowest, "never above the player's own feet, however laden")
 
 
 # An ally's feet (squad or crew) are heard too, softer than the player's own;
