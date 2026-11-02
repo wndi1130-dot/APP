@@ -1158,3 +1158,224 @@ func test_walk_paired_solver_preserves_saved_stride_final() -> void:
 		var measured: float = BodyBake._check_person_stride_final(ctx, entry[0], frames, fit)
 		assert_almost_eq(measured, 1.64, 1.64 * 0.005, "%s paired solve keeps the saved support stride" % entry[0])
 	assert_true((ctx["fit_failures"] as Array).is_empty(), "all six actual saved walks pass the unchanged stride gate")
+
+
+func test_walk_mean_gate_checks_saved_frames_as_well_as_256_knots() -> void:
+	var phases: PackedFloat64Array = PackedFloat64Array()
+	var lowers: PackedFloat64Array = PackedFloat64Array()
+	var uppers: PackedFloat64Array = PackedFloat64Array()
+	var cap_sum: float = 0.0
+	for sample in 256:
+		phases.append(float(sample) / 256.0)
+		lowers.append(0.8)
+		uppers.append(0.94 if sample % 8 == 0 else 1.0)
+		cap_sum += uppers[sample]
+	assert_almost_eq(cap_sum / 256.0, 0.9925, 0.000000001, "premise: grid mean alone is feasible")
+	var rejected: Dictionary = BodyBake._person_walk_project_table(phases, lowers, uppers, 0.95)
+	assert_false(bool(rejected["ok"]), "saved samples cannot reach 95 percent")
+	assert_eq(rejected["reason"], "MEAN_SAVED_CAP")
+	assert_true((rejected["values"] as PackedFloat64Array).is_empty(), "no low-mean table published")
+	uppers.fill(0.95)
+	var boundary: Dictionary = BodyBake._person_walk_project_table(phases, lowers, uppers, 0.95)
+	assert_true(bool(boundary["ok"]), "exactly 95 percent remains feasible")
+	assert_gte(float(boundary["mean"]) + 0.000000001, 0.95)
+	assert_gte(float(boundary["saved_mean"]) + 0.000000001, 0.95)
+	for u: float in phases:
+		assert_lte(BodyBake._person_walk_height_at(boundary, u), 0.95000001, "boundary never exceeds its cap")
+
+
+func test_walk_projected_spline_obeys_off_grid_bounds_and_periodic_weights() -> void:
+	var phases: PackedFloat64Array = PackedFloat64Array()
+	var lowers: PackedFloat64Array = PackedFloat64Array()
+	var uppers: PackedFloat64Array = PackedFloat64Array()
+	for sample in 256:
+		phases.append(float(sample) / 256.0)
+		lowers.append(0.93)
+		uppers.append(1.0)
+	phases.append(0.412)
+	lowers.append(0.955)
+	uppers.append(0.96)
+	var table: Dictionary = BodyBake._person_walk_project_table(phases, lowers, uppers, 0.95)
+	assert_true(bool(table["ok"]), "off-grid constraint has a feasible constant witness")
+	if not bool(table["ok"]):
+		return
+	for index in phases.size():
+		var height: float = BodyBake._person_walk_height_at(table, phases[index])
+		assert_gte(height + 0.0000001, lowers[index])
+		assert_lte(height, uppers[index] + 0.0000001)
+	for u: float in [0.0, 0.412, 0.999999, 1.0]:
+		var row: Dictionary = BodyBake._person_walk_height_weights(u, 256)
+		var value: float = 0.0
+		var weight_sum: float = 0.0
+		for slot in 4:
+			var weight: float = row["weights"][slot]
+			weight_sum += weight
+			value += weight * float(table["coefficients"][int(row["indices"][slot])])
+		assert_almost_eq(weight_sum, 1.0, 0.000000001)
+		assert_almost_eq(value, BodyBake._person_walk_height_at(table, u), 0.000000001, "Hermite evaluates the same cyclic spline")
+
+
+func test_walk_adjusted_paths_join_at_touchdown_toeoff_and_seam() -> void:
+	var epsilon: float = 0.00001
+	for duration: float in [0.50, 0.53, 0.55, 0.57]:
+		for lift: float in [0.02, 0.18]:
+			for roll: Vector2 in [Vector2(0.16, 0.45), Vector2(0.40, 0.80)]:
+				var params: Dictionary = {"swing_lift": lift, "heel_end": roll.x, "toe_start": roll.y}
+				for boundary: float in [0.0, duration, 1.0]:
+					var left: Vector3 = BodyBake._person_walk_path(fposmod(boundary - epsilon, 1.0), duration, 1.64, params)
+					var at: Vector3 = BodyBake._person_walk_path(fposmod(boundary, 1.0), duration, 1.64, params)
+					var right: Vector3 = BodyBake._person_walk_path(fposmod(boundary + epsilon, 1.0), duration, 1.64, params)
+					assert_lt(left.distance_to(right), 0.00004, "position joins at both contacts and seam")
+					assert_lt(((at - left) / epsilon).distance_to((right - at) / epsilon), 0.004, "velocity joins at float32 precision")
+				for sample in 65:
+					var age: float = duration * float(sample) / 64.0
+					var path: Vector3 = BodyBake._person_walk_path(age, duration, 1.64, params)
+					assert_almost_eq(path.x, 1.64 * (duration * 0.5 - age), 0.0000001, "unchanged stance slope")
+					assert_eq(path.y, 0.0, "stance sole stays on the floor")
+				assert_almost_eq(BodyBake._person_walk_path((1.0 + duration) * 0.5, duration, 1.64, params).y, lift, 0.0000001)
+
+
+func test_walk_path_parameters_and_phase_boundaries_stay_in_design_box() -> void:
+	var params: Dictionary = {"centers": [-0.16, 0.16], "lifts": [0.02, 0.18],
+		"heel_end": 0.40, "toe_start": 0.45, "durations": [0.50, 0.55]}
+	assert_true(BodyBake._person_walk_params_valid(params, [0.2, 0.65]))
+	for key: String in ["centers", "lifts", "durations"]:
+		var outside: Dictionary = params.duplicate(true)
+		outside[key][0] = 0.17 if key == "centers" else (0.19 if key == "lifts" else 0.49)
+		assert_false(BodyBake._person_walk_params_valid(outside, [0.2, 0.65]), key + " bounds cannot expand")
+	var crossed: Dictionary = params.duplicate(true)
+	crossed["toe_start"] = 0.44
+	assert_false(BodyBake._person_walk_params_valid(crossed, [0.2, 0.65]))
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = BodyBake._person_walk_with_params(ctx["footlock_walk"], params)
+	var phases: PackedFloat64Array = BodyBake._person_walk_validation_phases(fit)
+	for side in 2:
+		for fraction: float in [0.0, 0.40, 0.60, 1.0]:
+			var boundary: float = fposmod(float(fit["starts"][side]) + float(fit["durations"][side]) * fraction, 1.0)
+			assert_true(phases.has(boundary), "new durations recompute all exact stance boundaries")
+	assert_eq(fit["starts"], BodyBake.PERSON_STEP_AT, "touchdown phases remain fixed")
+	assert_eq(float(fit["round"]), 1.64, "stride remains fixed")
+
+
+func test_walk_swing_lift_opens_cross_leg_mid_entry_gap() -> void:
+	var ctx: Dictionary = _walk_feedback_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	body.reset_bone_poses()
+	var u: float = 225.0 / 256.0
+	var targets: Array = []
+	for side in 2:
+		targets.append(BodyBake._person_walk_ankle_goal(fit, side, u)["target"])
+	var initial: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, u, targets)
+	var support_lower: float = initial["per_side"][1]["lower"]
+	var swing_upper: float = initial["per_side"][0]["upper"]
+	var swing: Vector3 = targets[0]
+	swing.y += support_lower - swing_upper - 0.0348
+	targets[0] = swing
+	var closed: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, u, targets)
+	assert_true(bool(closed["empty"]), "premise: cross-leg interval is empty")
+	assert_almost_eq(float(closed["lower"]) - float(closed["upper"]), 0.0348, 0.000001)
+	var age: float = fposmod(u - float(fit["starts"][0]), 1.0)
+	var old_path: Vector3 = BodyBake._person_walk_path(age, float(fit["durations"][0]), 1.64)
+	var raised_path: Vector3 = BodyBake._person_walk_path(age, float(fit["durations"][0]), 1.64, {"swing_lift": 0.12})
+	swing.y += raised_path.y - old_path.y
+	targets[0] = swing
+	var opened: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, u, targets)
+	assert_false(bool(opened["empty"]), "bounded swing lift opens the measured gap")
+	assert_eq(old_path.x, raised_path.x, "lift leaves horizontal travel unchanged")
+
+
+func test_walk_bounded_search_reports_limit_without_poisoning_caller() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = (ctx["footlock_walk"] as Dictionary).duplicate(true)
+	fit["rest_hips_y"] = 0.5
+	ctx["fit_failures"] = ["existing_failure"]
+	var result: Dictionary = BodyBake._search_person_walk_path(ctx, fit, [{"entry": BodyBake.PERSON_CLIPS[0], "shift": 0.0}], 2, 1)
+	assert_false(bool(result["ok"]), "empty geometry is not accepted")
+	assert_eq(result["reason"], "SEARCH_LIMIT", "a budget is not an impossibility proof")
+	assert_eq(int(result["geometry_count"]), 2)
+	assert_lte(int(result["skin_count"]), 1)
+	assert_gt((result["trials"] as Array).size(), 0, "failed paths retain diagnostics")
+	assert_eq(ctx["fit_failures"], ["existing_failure"], "trial failures cannot enter the caller's save refusal list")
+
+
+func test_walk_path_search_preserves_material_stance_slope_and_shared_table() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var specs: Array = []
+	for entry: Array in BodyBake.PERSON_CLIPS:
+		if BodyBake.PERSON_FOOT_LOCK.has(entry[0]):
+			specs.append({"entry": entry, "shift": 0.0})
+	ctx["fit_failures"] = ["existing_failure"]
+	var searched: Dictionary = BodyBake._search_person_walk_path(ctx, ctx["footlock_walk"], specs)
+	assert_true(bool(searched["ok"]), "stick rig must provide an accepted bounded path")
+	assert_eq(ctx["fit_failures"], ["existing_failure"], "successful search preserves the caller's refusal list")
+	if not bool(searched["ok"]):
+		return
+	assert_lte(int(searched["geometry_count"]), 4096)
+	assert_lte(int(searched["skin_count"]), 64)
+	var fit: Dictionary = searched["fit"]
+	assert_true(BodyBake._person_walk_params_valid(fit["path_params"], fit["starts"]))
+	assert_eq((fit["target_field"] as Dictionary).size(), 6, "skin target fields are clip specific")
+	assert_eq((fit["height_extra_phases"] as PackedFloat64Array).size(), 1024, "accepted path includes the dense check")
+	var repeated: Dictionary = BodyBake._fit_person_walk_height(ctx, fit, BodyBake.PERSON_CLIPS[0], 0.0)
+	for key: String in ["values", "slopes", "uppers", "lowers"]:
+		assert_eq((repeated[key] as PackedFloat64Array).to_byte_array(), (fit["pelvis"][key] as PackedFloat64Array).to_byte_array(), "accepted field reproduces " + key)
+	for spec: Dictionary in specs:
+		var entry: Array = spec["entry"]
+		var note: Dictionary = searched["saved"]["measurements"][entry[0]]
+		for side in 2:
+			var stats: Dictionary = note["stats"][side]
+			assert_almost_eq(float(note["rounds"][side]), 1.64, 1.64 * 0.005, "actual saved material support has the fixed stance slope")
+			assert_lte(BodyBake._person_footlock_slide(stats["after"]), 2.0)
+			assert_gte(float(stats["contacts"]) / float(stats["frames"]), 0.5)
+			assert_gte(float(stats["hips_sum_m"]) / float(stats["frames"]) / float(fit["stand_ref_m"]), 0.95)
+
+
+func test_walk_total_budget_stops_search_and_is_shared_across_retries() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	ctx["rig_label"] = "budget_stick"
+	ctx["fit_failures"] = ["existing_failure"]
+	var specs: Array = [{"entry": BodyBake.PERSON_CLIPS[0], "shift": 0.0}]
+	var result: Dictionary = BodyBake._search_person_walk_path(ctx, ctx["footlock_walk"], specs, 4096, 64, {"bounds": 1, "clip_bounds": 1})
+	assert_false(bool(result["ok"]))
+	assert_eq(str(result["reason"]), "FOOT_PATH_BUDGET")
+	assert_true(str(result["failure"]).begins_with("FOOT_PATH_BUDGET rig=budget_stick clip=p_walk"))
+	assert_eq(int(result["budget"]["used"]["bounds"]), 1)
+	assert_eq(int(result["skin_count"]), 0)
+	var used: Dictionary = (result["budget"]["used"] as Dictionary).duplicate()
+	var retried: Dictionary = BodyBake._search_person_walk_path(ctx, ctx["footlock_walk"], specs)
+	assert_eq(str(retried["reason"]), "FOOT_PATH_BUDGET")
+	assert_eq(retried["budget"]["used"], used, "the rig cannot reset its ledger by retrying")
+	assert_eq(ctx["fit_failures"], ["existing_failure"])
+
+
+func test_walk_projection_budget_reserves_a_whole_sweep() -> void:
+	var budget: Dictionary = BodyBake._person_walk_budget({"project": 1})
+	var rows: Array = [BodyBake._person_walk_height_row(PackedInt32Array([0]), PackedFloat64Array([1.0]), 0.0)]
+	var result: Dictionary = BodyBake._project_person_walk_height(rows, PackedFloat64Array([2.0]), 512, budget)
+	assert_false(bool(result["converged"]))
+	assert_eq(str(result["reason"]), "FOOT_PATH_BUDGET")
+	assert_eq(int(result["sweeps"]), 1)
+	assert_eq(int(budget["used"]["project"]), 1)
+	assert_eq(float(result["coefficients"][0]), 0.0, "only the reserved sweep ran")
+
+
+func test_walk_clip_ik_budget_stops_before_the_next_pair() -> void:
+	var budget: Dictionary = BodyBake._person_walk_budget({"ik": 3, "clip_ik": 1})
+	assert_true(BodyBake._person_walk_spend(budget, "ik", "p_walk"))
+	assert_true(BodyBake._person_walk_spend(budget, "ik", "p_walk_long"))
+	assert_false(BodyBake._person_walk_spend(budget, "ik", "p_walk"))
+	assert_eq(int(budget["used"]["ik"]), 2)
+	assert_eq(int(budget["clips"]["p_walk"]["ik"]), 1)
+	assert_false(BodyBake._person_walk_spend(budget, "ik", "p_walk_long"))
+	assert_eq(int(budget["used"]["ik"]), 2, "exhaustion is sticky across clips")
+
+
+func test_walk_failed_bake_cannot_be_compacted_as_empty_bytes() -> void:
+	var failed: Dictionary = BodyBake._person_bake_failure({"rig_label": "budget_stick"}, "FOOT_PATH_BUDGET", "p_walk")
+	var compacted: Dictionary = BodyBake.compact(failed)
+	assert_false(bool(compacted["ok"]))
+	assert_eq(str(compacted["bake_error"]), "FOOT_PATH_BUDGET")
+	assert_false(compacted.has("image"))
+	assert_gt((compacted["fit_failures"] as Array).size(), 0)
+	assert_eq(BodyBake._person_bake_output_error({}), "BAKE_EMPTY_IMAGE")

@@ -257,6 +257,25 @@ const PERSON_WALK_REACH_MARGIN: float = 0.001  # one vertical millimetre below t
 const PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN: float = 0.00001  # 0.01 mm inside a ceiling knot
 const PERSON_WALK_SOLVE_PASSES: int = 6
 const PERSON_WALK_CONTACT_EPSILON: float = 0.005
+const PERSON_WALK_SAVED_SAMPLES: int = 32
+const PERSON_WALK_PROJECT_SWEEPS: int = 512
+const PERSON_WALK_PROJECT_EPSILON: float = 0.0000001
+const PERSON_WALK_JOINT_PASSES: int = 12
+const PERSON_WALK_SEARCH_GEOMETRY: int = 4096
+const PERSON_WALK_SEARCH_SKIN: int = 64
+const PERSON_WALK_SEARCH_BEAM: int = 8
+const PERSON_WALK_SEARCH_ROUNDS: int = 2
+const PERSON_WALK_DENSE_SAMPLES: int = 1024
+const PERSON_WALK_CENTER_LIMIT: float = 0.16
+const PERSON_WALK_LIFT_MIN: float = 0.02
+const PERSON_WALK_LIFT_MAX: float = 0.18
+const PERSON_WALK_BUDGET_BOUNDS: int = 131072
+const PERSON_WALK_BUDGET_CLIP_BOUNDS: int = 32768
+const PERSON_WALK_BUDGET_IK: int = 16384
+const PERSON_WALK_BUDGET_CLIP_IK: int = 4096
+const PERSON_WALK_BUDGET_PROJECT: int = 1048576
+const PERSON_WALK_BUDGET_PATHS: int = 128
+const PERSON_WALK_BLOCK_PATHS: int = 24
 const PERSON_PHASE_MAX_SECONDS: float = 0.05
 const STAND_KNEE_TOLERANCE: float = 0.5  # degrees
 const STAND_ANKLE_TOLERANCE: float = 0.001  # metres
@@ -2922,16 +2941,16 @@ static func _person_footlock_rotation(body: Skeleton3D, foot: int, rotation: Qua
 ## z travel, sole lift, foot pitch. The flat footprint is stationary in world
 ## space during stance. Swing is Hermite with the same endpoint velocity;
 ## both position and velocity join at toe-off, touchdown and the loop seam.
-static func _person_walk_path(age: float, duration: float, stride: float) -> Vector3:
+static func _person_walk_path(age: float, duration: float, stride: float, params: Dictionary = {}) -> Vector3:
 	if age <= duration:
 		var t := age / duration
-		var pitch := -PERSON_WALK_HEEL_PITCH * (1.0 - smoothstep(0.0, PERSON_WALK_HEEL_END, t))
-		pitch += PERSON_WALK_TOE_PITCH * smoothstep(PERSON_WALK_TOE_START, 1.0, t)
+		var pitch: float = -PERSON_WALK_HEEL_PITCH * (1.0 - smoothstep(0.0, float(params.get("heel_end", PERSON_WALK_HEEL_END)), t))
+		pitch += PERSON_WALK_TOE_PITCH * smoothstep(float(params.get("toe_start", PERSON_WALK_TOE_START)), 1.0, t)
 		return Vector3(stride * (duration * 0.5 - age), 0.0, pitch)
 	var t := (age - duration) / (1.0 - duration)
 	var h := t * t * (3.0 - 2.0 * t)
 	var z := stride * duration * (h - 0.5) - stride * (1.0 - duration) * (2.0 * t * t * t - 3.0 * t * t + t)
-	return Vector3(z, PERSON_WALK_SWING_LIFT * pow(sin(PI * t), 2.0), lerpf(PERSON_WALK_TOE_PITCH, -PERSON_WALK_HEEL_PITCH, h))
+	return Vector3(z, float(params.get("swing_lift", PERSON_WALK_SWING_LIFT)) * pow(sin(PI * t), 2.0), lerpf(PERSON_WALK_TOE_PITCH, -PERSON_WALK_HEEL_PITCH, h))
 
 
 ## Rotation only, also used while fitting the canonical p_walk height table.
@@ -2954,8 +2973,20 @@ static func _apply_person_walk_turn(ctx: Dictionary, fit: Dictionary, u: float, 
 ## The lowest rotated REST sole point rolls about its own flat footprint.
 ## Both the height solver and IK start from this same mesh-space ankle goal.
 static func _person_walk_ankle_goal(fit: Dictionary, side: int, u: float) -> Dictionary:
+	if fit.has("goal_cache"):
+		var cache: Dictionary = fit["goal_cache"].get_or_add(side, {})
+		if not cache.has(u):
+			cache[u] = _person_walk_ankle_goal_uncached(fit, side, u)
+		return cache[u]
+	return _person_walk_ankle_goal_uncached(fit, side, u)
+
+
+static func _person_walk_ankle_goal_uncached(fit: Dictionary, side: int, u: float) -> Dictionary:
 	var age: float = fposmod(u - float(fit["starts"][side]), 1.0)
-	var path: Vector3 = _person_walk_path(age, float(fit["durations"][side]), float(fit["round"]))
+	var params: Dictionary = fit.get("path_params", {})
+	var path_params: Dictionary = {"swing_lift": float(params.get("lifts", [PERSON_WALK_SWING_LIFT, PERSON_WALK_SWING_LIFT])[side]),
+		"heel_end": float(params.get("heel_end", PERSON_WALK_HEEL_END)), "toe_start": float(params.get("toe_start", PERSON_WALK_TOE_START))}
+	var path: Vector3 = _person_walk_path(age, float(fit["durations"][side]), float(fit["round"]), path_params)
 	var rest: PackedVector3Array = fit["rest"]
 	var ankle: Vector3 = fit["rest_ankles"][side]
 	var flat: Basis = fit["rotations"][side]
@@ -2987,9 +3018,24 @@ static func _person_walk_ankle_goal(fit: Dictionary, side: int, u: float) -> Dic
 ## With thigh = hips + offset, y = ankle.y - offset.y + sqrt(R^2 - dxz^2).
 ## Swing legs constrain the ceiling too; scheduled mid-stance never tests contact.
 static func _person_walk_height_bounds(ctx: Dictionary, fit: Dictionary, u: float, targets: Array = []) -> Dictionary:
+	return _person_walk_bounds_from_geometry(fit, u, targets, _person_walk_geometry(ctx, fit))
+
+
+static func _person_walk_geometry(ctx: Dictionary, fit: Dictionary) -> Dictionary:
 	var body: Skeleton3D = ctx["body"]
 	var to_mesh: Transform3D = ctx["to_mesh"]
 	var hips: Vector3 = to_mesh * body.get_bone_global_pose(_bone(body, "hips")).origin
+	var legs: Array = []
+	for leg: Array in fit["legs"]:
+		var thigh: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[0])).origin
+		var shin: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[1])).origin
+		var foot: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[2])).origin
+		legs.append({"thigh": thigh, "a": thigh.distance_to(shin), "b": shin.distance_to(foot)})
+	return {"hips": hips, "legs": legs}
+
+
+static func _person_walk_bounds_from_geometry(fit: Dictionary, u: float, targets: Array, geometry: Dictionary) -> Dictionary:
+	var hips: Vector3 = geometry["hips"]
 	var upper: float = fit["rest_hips_y"]
 	var lower: float = -INF
 	var horizontal_miss: bool = false
@@ -2997,12 +3043,9 @@ static func _person_walk_height_bounds(ctx: Dictionary, fit: Dictionary, u: floa
 	var lower_side: int = -1
 	var per_side: Array = []
 	for side in 2:
-		var leg: Array = fit["legs"][side]
-		var thigh: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[0])).origin
-		var shin: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[1])).origin
-		var foot: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[2])).origin
-		var a: float = thigh.distance_to(shin)
-		var b: float = shin.distance_to(foot)
+		var thigh: Vector3 = geometry["legs"][side]["thigh"]
+		var a: float = geometry["legs"][side]["a"]
+		var b: float = geometry["legs"][side]["b"]
 		var target: Vector3 = targets[side] if targets.size() == 2 else _person_walk_ankle_goal(fit, side, u)["target"]
 		var offset: Vector3 = thigh - hips
 		var horizontal: float = Vector2(thigh.x - target.x, thigh.z - target.z).length_squared()
@@ -3063,73 +3106,687 @@ static func _person_walk_raise_mean(values: PackedFloat64Array, ceilings: Packed
 	return {"values": raised, "mean": mean, "feasible": mean + PERSON_WALK_MEAN_EPSILON >= target}
 
 
-## Fixed-order Jacobi smoothing on a ring; projections preserve BOTH bounds.
-## Infeasible intervals retain their bounds but never publish a height table.
-static func _fit_person_walk_height(ctx: Dictionary, fit: Dictionary, walk: Array, shift: float) -> Dictionary:
-	var values: PackedFloat64Array = PackedFloat64Array()
-	var uppers: PackedFloat64Array = PackedFloat64Array()
-	var lowers: PackedFloat64Array = PackedFloat64Array()
+## Sparse periodic cubic B-spline weights, equivalent to the stored Hermite table.
+static func _person_walk_height_weights(u: float, count: int) -> Dictionary:
+	var position: float = fposmod(u, 1.0) * float(count)
+	var index: int = int(floor(position))
+	var t: float = position - float(index)
+	var t2: float = t * t
+	var t3: float = t2 * t
+	return {"indices": PackedInt32Array([posmod(index - 1, count), index, (index + 1) % count, (index + 2) % count]),
+		"weights": PackedFloat64Array([pow(1.0 - t, 3.0) / 6.0, (3.0 * t3 - 6.0 * t2 + 4.0) / 6.0,
+			(-3.0 * t3 + 3.0 * t2 + 3.0 * t + 1.0) / 6.0, t3 / 6.0])}
+
+
+static func _person_walk_height_row(indices: PackedInt32Array, weights: PackedFloat64Array, limit: float) -> Dictionary:
+	var norm: float = 0.0
+	for weight: float in weights:
+		norm += weight * weight
+	return {"indices": indices, "weights": weights, "limit": limit, "norm": norm}
+
+
+## Dykstra corrections are scalars because every constraint is a half-space.
+static func _project_person_walk_height(rows: Array, reference: PackedFloat64Array, max_sweeps: int = PERSON_WALK_PROJECT_SWEEPS, budget: Dictionary = {}) -> Dictionary:
+	var coefficients: PackedFloat64Array = reference.duplicate()
+	var corrections: PackedFloat64Array = PackedFloat64Array()
+	corrections.resize(rows.size())
+	var violation: float = INF
+	for sweep in mini(max_sweeps, PERSON_WALK_PROJECT_SWEEPS):
+		if not _person_walk_spend(budget, "project", "shared", rows.size()):
+			return {"coefficients": coefficients, "converged": false, "max_violation": violation, "sweeps": sweep, "reason": "FOOT_PATH_BUDGET"}
+		var before: PackedFloat64Array = coefficients.duplicate()
+		for row_id in rows.size():
+			var row: Dictionary = rows[row_id]
+			var indices: PackedInt32Array = row["indices"]
+			var weights: PackedFloat64Array = row["weights"]
+			var dot: float = 0.0
+			for slot in indices.size():
+				dot += coefficients[indices[slot]] * weights[slot]
+			var correction: float = maxf(0.0, (dot + corrections[row_id] * float(row["norm"]) - float(row["limit"])) / float(row["norm"]))
+			var step: float = corrections[row_id] - correction
+			for slot in indices.size():
+				coefficients[indices[slot]] += step * weights[slot]
+			corrections[row_id] = correction
+		violation = 0.0
+		for row: Dictionary in rows:
+			var indices: PackedInt32Array = row["indices"]
+			var weights: PackedFloat64Array = row["weights"]
+			var dot: float = 0.0
+			for slot in indices.size():
+				dot += coefficients[indices[slot]] * weights[slot]
+			violation = maxf(violation, dot - float(row["limit"]))
+		var change: float = 0.0
+		for index in coefficients.size():
+			change = maxf(change, absf(coefficients[index] - before[index]))
+		if violation <= PERSON_WALK_PROJECT_EPSILON and change <= PERSON_WALK_PROJECT_EPSILON:
+			return {"coefficients": coefficients, "converged": true, "max_violation": violation, "sweeps": sweep + 1}
+	return {"coefficients": coefficients, "converged": false, "max_violation": violation, "sweeps": mini(max_sweeps, PERSON_WALK_PROJECT_SWEEPS)}
+
+
+static func _person_walk_project_table(phases: PackedFloat64Array, lowers: PackedFloat64Array, uppers: PackedFloat64Array, target: float, require_mean: bool = true, inset: float = 0.0, budget: Dictionary = {}) -> Dictionary:
+	var count: int = PERSON_WALK_HEIGHT_SAMPLES
+	var table: Dictionary = {"ok": false, "reason": "", "values": PackedFloat64Array(), "slopes": PackedFloat64Array(),
+		"uppers": uppers, "lowers": lowers, "failed_samples": PackedInt32Array(), "mean": 0.0, "saved_mean": 0.0, "mean_feasible": false}
+	if phases.size() < count or lowers.size() != phases.size() or uppers.size() != phases.size():
+		table["reason"] = "HEIGHT_INPUT"
+		return table
 	var failed: PackedInt32Array = PackedInt32Array()
-	for sample in PERSON_WALK_HEIGHT_SAMPLES:
-		var u: float = float(sample) / float(PERSON_WALK_HEIGHT_SAMPLES)
-		var keyed_u: float = fposmod(u + shift, 1.0)
-		pose(ctx, walk[1], walk[4], keyed_u)
-		_apply_person_walk_turn(ctx, fit, u, keyed_u, walk[4])
-		var bounds: Dictionary = _person_walk_height_bounds(ctx, fit, u)
-		var upper: float = bounds["upper"]
-		var lower: float = bounds["lower"]
-		uppers.append(upper)
-		lowers.append(lower)
-		values.append(upper)  # highest feasible value, capped at rest hips
-		if lower > upper or bool(bounds["horizontal_miss"]):
-			failed.append(sample)
-			ctx.get_or_add("fit_failures", []).append("PELVIS_UNFIT rig %s clip p_walk sample %d phase %.9f lower %.9f lower_side %d upper %.9f upper_side %d horizontal_miss %s" % [ctx.get("rig_label", "unknown"), sample, u, lower, bounds["lower_side"], upper, bounds["upper_side"], bounds["horizontal_miss"]])
+	for index in phases.size():
+		if not is_finite(lowers[index]) or not is_finite(uppers[index]) or lowers[index] > uppers[index]:
+			failed.append(index)
 	if not failed.is_empty():
-		return {"values": PackedFloat64Array(), "slopes": PackedFloat64Array(), "uppers": uppers, "lowers": lowers,
-			"failed_samples": failed, "mean": 0.0, "mean_feasible": false,
-			"rig_label": ctx.get("rig_label", "unknown"), "clip": walk[0], "fit_failures": ctx.get_or_add("fit_failures", [])}
+		table["failed_samples"] = failed
+		table["reason"] = "POINT_EMPTY"
+		return table
+	var grid_cap: float = 0.0
+	var saved_cap: float = 0.0
+	for index in count:
+		grid_cap += uppers[index] / float(count)
+		if index % 8 == 0:
+			saved_cap += uppers[index] / float(PERSON_WALK_SAVED_SAMPLES)
+	table["grid_cap"] = grid_cap
+	table["saved_cap"] = saved_cap
+	if require_mean and minf(grid_cap, saved_cap) + PERSON_WALK_MEAN_EPSILON < target:
+		table["reason"] = "MEAN_SAVED_CAP" if saved_cap + PERSON_WALK_MEAN_EPSILON < target else "MEAN_GRID_CAP"
+		return table
+	var rows: Array = []
+	for index in phases.size():
+		var basis: Dictionary = _person_walk_height_weights(phases[index], count)
+		var weights: PackedFloat64Array = basis["weights"]
+		var negative: PackedFloat64Array = PackedFloat64Array()
+		for weight: float in weights:
+			negative.append(-weight)
+		var margin: float = minf(inset, (uppers[index] - lowers[index]) * 0.25)
+		rows.append(_person_walk_height_row(basis["indices"], weights, uppers[index] - margin))
+		rows.append(_person_walk_height_row(basis["indices"], negative, -lowers[index] - margin))
+	if require_mean:
+		for samples: int in [count, PERSON_WALK_SAVED_SAMPLES]:
+			var weights: PackedFloat64Array = PackedFloat64Array()
+			weights.resize(count)
+			for frame in samples:
+				var basis: Dictionary = _person_walk_height_weights(float(frame) / float(samples), count)
+				for slot in 4:
+					weights[int(basis["indices"][slot])] -= float(basis["weights"][slot]) / float(samples)
+			var indices: PackedInt32Array = PackedInt32Array()
+			for index in count:
+				indices.append(index)
+			rows.append(_person_walk_height_row(indices, weights, -target))
+	var reference: PackedFloat64Array = uppers.slice(0, count)
 	for _pass_id in PERSON_WALK_HEIGHT_PASSES:
 		var smoothed: PackedFloat64Array = PackedFloat64Array()
-		for sample in PERSON_WALK_HEIGHT_SAMPLES:
+		for index in count:
 			var total: float = 0.0
 			for neighbour in range(-PERSON_WALK_HEIGHT_RADIUS, PERSON_WALK_HEIGHT_RADIUS + 1):
-				total += values[posmod(sample + neighbour, PERSON_WALK_HEIGHT_SAMPLES)]
-			var average: float = total / float(2 * PERSON_WALK_HEIGHT_RADIUS + 1)
-			smoothed.append(minf(uppers[sample], maxf(lowers[sample], average)))
-		values = smoothed
-	# Keep exact-phase min() off a ceiling knot: otherwise its slope could
-	# differ from the interpolant on one side of u=0. With STEP_AT .2/.65 and
-	# these durations, neither leg is in mid-stance at that seam. This tiny
-	# interior margin therefore preserves the Hermite seam slope after min().
-	for sample in PERSON_WALK_HEIGHT_SAMPLES:
-		values[sample] = minf(uppers[sample], maxf(lowers[sample], values[sample] - PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN))
-	# Keep the interpolation margin wherever the lower bound permits it.
-	var mean_ceilings: PackedFloat64Array = PackedFloat64Array()
-	for sample in PERSON_WALK_HEIGHT_SAMPLES:
-		mean_ceilings.append(minf(uppers[sample], maxf(lowers[sample], uppers[sample] - PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN)))
-	var target_mean: float = float(fit["floor"]) + PERSON_WALK_MEAN_MIN * float(fit["stand_ref_m"])
-	var mean_fit: Dictionary = _person_walk_raise_mean(values, mean_ceilings, target_mean)
-	values = mean_fit["values"]
-	if not bool(mean_fit["feasible"]):
-		var mean_failure: String = "PELVIS_MEAN_UNFIT rig %s clip p_walk mean %.9f target %.9f" % [ctx.get("rig_label", "unknown"), mean_fit["mean"], target_mean]
-		var failures: Array = ctx.get_or_add("fit_failures", [])
-		if failed.is_empty():
-			failures.append(mean_failure)
-		else:
-			failures[failures.size() - 1] = str(failures[failures.size() - 1]) + "; " + mean_failure
-	# Periodic monotone Hermite tangents: no endpoint overshoot, shared seam slope.
+				total += reference[posmod(index + neighbour, count)]
+			smoothed.append(total / float(2 * PERSON_WALK_HEIGHT_RADIUS + 1))
+		reference = smoothed
+	var projected: Dictionary = _project_person_walk_height(rows, reference, PERSON_WALK_PROJECT_SWEEPS, budget)
+	table["projection"] = projected
+	if not bool(projected["converged"]):
+		table["reason"] = projected.get("reason", "HEIGHT_PROJECT_LIMIT")
+		return table
+	var coefficients: PackedFloat64Array = projected["coefficients"]
+	var values: PackedFloat64Array = PackedFloat64Array()
 	var slopes: PackedFloat64Array = PackedFloat64Array()
+	var mean: float = 0.0
+	var saved_mean: float = 0.0
+	for index in count:
+		var left: float = coefficients[posmod(index - 1, count)]
+		var right: float = coefficients[(index + 1) % count]
+		var value: float = (left + 4.0 * coefficients[index] + right) / 6.0
+		values.append(value)
+		slopes.append((right - left) * 0.5)
+		mean += value / float(count)
+		if index % 8 == 0:
+			saved_mean += value / float(PERSON_WALK_SAVED_SAMPLES)
+	var mean_ok: bool = minf(mean, saved_mean) + PERSON_WALK_MEAN_EPSILON >= target
+	if require_mean and not mean_ok:
+		table["reason"] = "HEIGHT_PROJECT_LIMIT"
+		return table
+	table.merge({"ok": true, "values": values, "slopes": slopes, "coefficients": coefficients,
+		"mean": mean, "saved_mean": saved_mean, "mean_feasible": mean_ok}, true)
+	return table
+
+
+## Keep the grid first so stored frames remain every eighth grid sample.
+static func _person_walk_validation_phases(fit: Dictionary) -> PackedFloat64Array:
+	var phases: PackedFloat64Array = PackedFloat64Array()
 	for sample in PERSON_WALK_HEIGHT_SAMPLES:
-		var left: float = values[sample] - values[posmod(sample - 1, PERSON_WALK_HEIGHT_SAMPLES)]
-		var right: float = values[(sample + 1) % PERSON_WALK_HEIGHT_SAMPLES] - values[sample]
-		slopes.append(2.0 * left * right / (left + right) if left * right > 0.0 else 0.0)
-	return {"values": values, "slopes": slopes, "uppers": uppers, "lowers": lowers, "failed_samples": failed, "mean": mean_fit["mean"], "mean_feasible": mean_fit["feasible"]}
+		phases.append(float(sample) / float(PERSON_WALK_HEIGHT_SAMPLES))
+	var params: Dictionary = fit.get("path_params", {})
+	var boundaries: Array[float] = [0.0]
+	for side in 2:
+		for fraction: float in [0.0, float(params.get("heel_end", PERSON_WALK_HEEL_END)), 0.40, 0.60, float(params.get("toe_start", PERSON_WALK_TOE_START)), 1.0]:
+			boundaries.append(float(fit["starts"][side]) + float(fit["durations"][side]) * fraction)
+	for boundary: float in boundaries:
+		for offset: float in [-0.000001, 0.0, 0.000001]:
+			var u: float = fposmod(boundary + offset, 1.0)
+			if not phases.has(u):
+				phases.append(u)
+	for u: float in fit.get("height_extra_phases", PackedFloat64Array()):
+		if not phases.has(u):
+			phases.append(u)
+	return phases
+
+
+static func _person_walk_collect_bounds(ctx: Dictionary, fit: Dictionary, specs: Array, field: Dictionary) -> Dictionary:
+	var phases: PackedFloat64Array = _person_walk_validation_phases(fit)
+	var uppers: PackedFloat64Array = PackedFloat64Array()
+	var lowers: PackedFloat64Array = PackedFloat64Array()
+	var details: Array = []
+	var cache: Dictionary = fit.get_or_add("geometry_cache", {})
+	for u: float in phases:
+		var rigid_targets: Array = [_person_walk_ankle_goal(fit, 0, u)["target"], _person_walk_ankle_goal(fit, 1, u)["target"]]
+		var shared: Dictionary = {"lower": -INF, "upper": float(fit["rest_hips_y"]), "lower_side": -1, "upper_side": -1,
+			"lower_clip": "", "upper_clip": "", "phase": u, "horizontal_miss": false, "reason": ""}
+		for spec: Dictionary in specs:
+			var entry: Array = spec["entry"]
+			var clip: String = entry[0]
+			if not _person_walk_spend(fit.get("work_budget", {}), "bounds", clip):
+				return {"phases": phases, "uppers": uppers, "lowers": lowers, "details": details, "reason": "FOOT_PATH_BUDGET"}
+			var cache_key: String = "%s:%.12f" % [clip, float(spec["shift"])]
+			var geometry_by_phase: Dictionary = cache.get_or_add(cache_key, {})
+			if not geometry_by_phase.has(u):
+				var keyed_u: float = fposmod(u + float(spec["shift"]), 1.0)
+				_person_walk_pose(ctx, fit, entry, keyed_u)
+				_apply_person_walk_turn(ctx, fit, u, keyed_u, entry[4])
+				geometry_by_phase[u] = _person_walk_geometry(ctx, fit)
+			var targets: Array = field.get(clip, {}).get(u, rigid_targets)
+			var bounds: Dictionary = _person_walk_bounds_from_geometry(fit, u, targets, geometry_by_phase[u])
+			if float(bounds["lower"]) > float(shared["lower"]):
+				shared["lower"] = bounds["lower"]
+				shared["lower_side"] = bounds["lower_side"]
+				shared["lower_clip"] = clip
+			if float(bounds["upper"]) < float(shared["upper"]):
+				shared["upper"] = bounds["upper"]
+				shared["upper_side"] = bounds["upper_side"]
+				shared["upper_clip"] = clip
+			shared["horizontal_miss"] = bool(shared["horizontal_miss"]) or bool(bounds["horizontal_miss"])
+			for side_bounds: Dictionary in bounds["per_side"]:
+				if not str(side_bounds["reason"]).is_empty():
+					shared["reason"] = side_bounds["reason"]
+		lowers.append(shared["lower"])
+		uppers.append(shared["upper"])
+		details.append(shared)
+	return {"phases": phases, "uppers": uppers, "lowers": lowers, "details": details}
+
+
+## Both means constrain the same coefficients and all clips share their bounds.
+static func _fit_person_walk_height(ctx: Dictionary, fit: Dictionary, walk: Array, shift: float, target_field: Dictionary = {}, require_mean: bool = true, report: bool = true) -> Dictionary:
+	if not fit.has("walk_specs"):
+		fit.erase("geometry_cache")
+	var specs: Array = fit.get("walk_specs", [{"entry": walk, "shift": shift}])
+	var field: Dictionary = fit.get("target_field", {}) if target_field.is_empty() else target_field
+	var bounds: Dictionary = _person_walk_collect_bounds(ctx, fit, specs, field)
+	if bounds.has("reason"):
+		return {"ok": false, "reason": bounds["reason"], "failed_samples": PackedInt32Array()}
+	var target: float = float(fit["floor"]) + PERSON_WALK_MEAN_MIN * float(fit["stand_ref_m"])
+	var table: Dictionary = _person_walk_project_table(bounds["phases"], bounds["lowers"], bounds["uppers"], target, require_mean, PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN, fit.get("work_budget", {}))
+	table.merge({"phases": bounds["phases"], "details": bounds["details"], "rig_label": ctx.get("rig_label", "unknown"),
+		"clip": walk[0], "fit_failures": ctx.get_or_add("fit_failures", [])}, true)
+	if report and not bool(table["ok"]):
+		var failed: PackedInt32Array = table["failed_samples"]
+		for sample in failed:
+			var detail: Dictionary = bounds["details"][sample]
+			ctx.get_or_add("fit_failures", []).append("PELVIS_UNFIT rig=%s clip=%s sample=%d phase=%.9f reason=%s lower=%.9f upper=%.9f lower_side=%d upper_side=%d" % [
+				ctx.get("rig_label", "unknown"), walk[0], sample, detail["phase"], table["reason"], detail["lower"], detail["upper"], detail["lower_side"], detail["upper_side"]])
+		if failed.is_empty():
+			ctx.get_or_add("fit_failures", []).append("PELVIS_MEAN_UNFIT rig=%s clip=%s reason=%s target=%.9f" % [ctx.get("rig_label", "unknown"), walk[0], table["reason"], target])
+	return table
+
+
+static func _person_walk_default_params(fit: Dictionary) -> Dictionary:
+	return fit.get("path_params", {"centers": [-PERSON_WALK_FOOTPRINT_BACK, -PERSON_WALK_FOOTPRINT_BACK],
+		"lifts": [PERSON_WALK_SWING_LIFT, PERSON_WALK_SWING_LIFT], "heel_end": PERSON_WALK_HEEL_END,
+		"toe_start": PERSON_WALK_TOE_START, "durations": (fit["durations"] as Array).duplicate()}).duplicate(true)
+
+
+static func _person_walk_params_valid(params: Dictionary, starts: Array) -> bool:
+	var heel: float = params["heel_end"]
+	var toe: float = params["toe_start"]
+	if heel < 0.16 or heel > 0.40 or toe < 0.45 or toe > 0.80 or toe < heel + 0.05 - 0.000000001:
+		return false
+	for side in 2:
+		var gap: float = fposmod(float(starts[1 - side]) - float(starts[side]), 1.0)
+		var duration: float = params["durations"][side]
+		if duration < (0.50 if gap < 0.5 else 0.55) or duration > (0.53 if gap < 0.5 else 0.57):
+			return false
+		if absf(float(params["centers"][side])) > PERSON_WALK_CENTER_LIMIT:
+			return false
+		if float(params["lifts"][side]) < PERSON_WALK_LIFT_MIN or float(params["lifts"][side]) > PERSON_WALK_LIFT_MAX:
+			return false
+	return true
+
+
+static func _person_walk_with_params(fit: Dictionary, params: Dictionary) -> Dictionary:
+	var candidate: Dictionary = fit.duplicate()
+	var previous: Dictionary = _person_walk_default_params(fit)
+	var anchors: Array = []
+	for side in 2:
+		var anchor: Vector3 = fit["anchors"][side]
+		anchor.z += float(params["centers"][side]) - float(previous["centers"][side])
+		anchors.append(anchor)
+	candidate["anchors"] = anchors
+	candidate["durations"] = (params["durations"] as Array).duplicate()
+	candidate["path_params"] = params.duplicate(true)
+	candidate["target_field"] = {}
+	candidate["height_extra_phases"] = PackedFloat64Array()
+	candidate["goal_cache"] = {}
+	return candidate
+
+
+static func _person_walk_rank_path(ctx: Dictionary, fit: Dictionary, specs: Array) -> Dictionary:
+	var collected: Dictionary = _person_walk_collect_bounds(ctx, fit, specs, {})
+	if collected.has("reason"):
+		return {"reason": collected["reason"]}
+	var target: float = float(fit["floor"]) + PERSON_WALK_MEAN_MIN * float(fit["stand_ref_m"])
+	var grid_cap: float = 0.0
+	var saved_cap: float = 0.0
+	var gap: float = 0.0
+	var worst: Dictionary = collected["details"][0]
+	var reason: String = ""
+	for index in (collected["phases"] as PackedFloat64Array).size():
+		var detail: Dictionary = collected["details"][index]
+		var local_gap: float = maxf(0.0, float(detail["lower"]) - float(detail["upper"]))
+		if local_gap > gap:
+			gap = local_gap
+			worst = detail
+		if not str(detail["reason"]).is_empty():
+			reason = detail["reason"]
+		if index < PERSON_WALK_HEIGHT_SAMPLES:
+			grid_cap += float(detail["upper"]) / float(PERSON_WALK_HEIGHT_SAMPLES)
+			if index % 8 == 0:
+				saved_cap += float(detail["upper"]) / float(PERSON_WALK_SAVED_SAMPLES)
+	var category: String = "FEASIBLE"
+	if gap > 0.0:
+		if reason.is_empty():
+			reason = "POINT_EMPTY"
+		category = "REST_CAP" if int(worst["upper_side"]) < 0 else "STANCE_CAP"
+		var side: int = worst["upper_side"]
+		if side >= 0 and fposmod(float(worst["phase"]) - float(fit["starts"][side]), 1.0) > float(fit["durations"][side]):
+			category = "SWING_CAP"
+	elif minf(grid_cap, saved_cap) < target:
+		category = "MEAN_CAP"
+		reason = "MEAN_SAVED_CAP" if saved_cap < target else "MEAN_GRID_CAP"
+	var score: float = 4.0 * gap + maxf(0.0, target - minf(grid_cap, saved_cap))
+	score += maxf(0.0, float(fit["rest_hips_y"]) - minf(grid_cap, saved_cap)) * 0.001
+	return {"fit": fit, "params": fit["path_params"], "score": score, "gap": gap, "detail": worst,
+		"grid_cap": grid_cap, "saved_cap": saved_cap, "category": category, "reason": reason}
+
+
+static func _person_walk_keep_candidate(beam: Array, candidate: Dictionary) -> Array:
+	var ordered: Array = beam.duplicate()
+	ordered.append(candidate)
+	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["score"]) < float(b["score"]))
+	var selected: Array = []
+	var categories: Array[String] = []
+	var ids: Array[int] = []
+	for item: Dictionary in ordered:
+		var category: String = item["category"]
+		if not categories.has(category) and selected.size() < PERSON_WALK_SEARCH_BEAM:
+			selected.append(item)
+			ids.append(int(item["id"]))
+			categories.append(category)
+	for item: Dictionary in ordered:
+		if selected.size() >= PERSON_WALK_SEARCH_BEAM:
+			break
+		if not ids.has(int(item["id"])):
+			selected.append(item)
+	selected.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return float(a["score"]) < float(b["score"]))
+	return selected
+
+
+static func _person_walk_add_path(state: Dictionary, params: Dictionary) -> void:
+	var base: Dictionary = state["base"]
+	if not _person_walk_params_valid(params, base["starts"]):
+		return
+	var key: String = var_to_str(params)
+	if (state["seen"] as Dictionary).has(key):
+		return
+	if int(state["geometry_count"]) >= int(state["geometry_limit"]):
+		state["limited"] = true
+		return
+	if not _person_walk_spend(base.get("work_budget", {}), "paths", "shared"):
+		state["limited"] = true
+		return
+	state["seen"][key] = true
+	state["geometry_count"] = int(state["geometry_count"]) + 1
+	var candidate: Dictionary = _person_walk_rank_path(state["ctx"], _person_walk_with_params(base, params), state["specs"])
+	if not candidate.has("score"):
+		state["geometry_count"] = int(state["geometry_count"]) - 1
+		state["limited"] = true
+		return
+	candidate["id"] = state["geometry_count"]
+	state["beam"] = _person_walk_keep_candidate(state["beam"], candidate)
+	state["trials"].append({"id": candidate["id"], "params": params.duplicate(true), "reason": candidate["reason"],
+		"gap": candidate["gap"], "detail": candidate["detail"], "grid_cap": candidate["grid_cap"], "saved_cap": candidate["saved_cap"]})
+
+
+static func _person_walk_path_block(beam: Array, block: int) -> Array:
+	var proposals: Array = []
+	if block == 0:
+		var initial: Dictionary = beam[0]["params"]
+		for left in 17:
+			for right in 17:
+				var params: Dictionary = initial.duplicate(true)
+				params["centers"] = [-0.16 + float(left) * 0.02, -0.16 + float(right) * 0.02]
+				proposals.append(params)
+		proposals.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			var origin: Vector2 = Vector2(float(initial["centers"][0]), float(initial["centers"][1]))
+			return Vector2(float(a["centers"][0]), float(a["centers"][1])).distance_squared_to(origin) < Vector2(float(b["centers"][0]), float(b["centers"][1])).distance_squared_to(origin))
+		return proposals
+	for item: Dictionary in beam:
+		var initial: Dictionary = item["params"]
+		if block == 1:
+			var choices: Array = [[], []]
+			for side in 2:
+				var values: Array = [float(initial["lifts"][side]), 0.02, 0.07, 0.12, 0.18]
+				var detail: Dictionary = item["detail"]
+				var age: float = fposmod(float(detail["phase"]) - float(item["fit"]["starts"][side]), 1.0)
+				var duration: float = initial["durations"][side]
+				if int(detail["upper_side"]) == side and age > duration and is_finite(float(item["gap"])):
+					var gain: float = pow(sin(PI * (age - duration) / (1.0 - duration)), 2.0)
+					if gain > 0.000001:
+						var estimate: float = float(initial["lifts"][side]) + float(item["gap"]) / gain
+						for offset: float in [-0.01, 0.0, 0.01]:
+							values.append(clampf(estimate + offset, PERSON_WALK_LIFT_MIN, PERSON_WALK_LIFT_MAX))
+				choices[side] = values
+			for left: float in choices[0]:
+				for right: float in choices[1]:
+					var params: Dictionary = initial.duplicate(true)
+					params["lifts"] = [left, right]
+					proposals.append(params)
+		elif block == 2:
+			for heel: float in [0.16, 0.22, 0.28, 0.34, 0.40]:
+				for toe: float in [0.45, 0.55, 0.65, 0.75, 0.80]:
+					var params: Dictionary = initial.duplicate(true)
+					params["heel_end"] = heel
+					params["toe_start"] = toe
+					proposals.append(params)
+		elif block == 3:
+			var starts: Array = item["fit"]["starts"]
+			var short_side: int = 0 if fposmod(float(starts[1]) - float(starts[0]), 1.0) < 0.5 else 1
+			for short_duration: float in [0.50, 0.51, 0.52, 0.53]:
+				for long_duration: float in [0.55, 0.56, 0.57]:
+					var params: Dictionary = initial.duplicate(true)
+					params["durations"][short_side] = short_duration
+					params["durations"][1 - short_side] = long_duration
+					proposals.append(params)
+		else:
+			for key: String in ["centers", "lifts", "roll"]:
+				var step: float = 0.025 if key == "roll" else 0.005
+				for left: float in [-step, 0.0, step]:
+					for right: float in [-step, 0.0, step]:
+						var params: Dictionary = initial.duplicate(true)
+						if key == "roll":
+							params["heel_end"] = float(params["heel_end"]) + left
+							params["toe_start"] = float(params["toe_start"]) + right
+						else:
+							params[key][0] = float(params[key][0]) + left
+							params[key][1] = float(params[key][1]) + right
+						proposals.append(params)
+	return proposals
+
+
+## One ledger covers all candidates and clips in this rig context.
+static func _person_walk_budget(limits: Dictionary = {}) -> Dictionary:
+	var caps: Dictionary = {"bounds": PERSON_WALK_BUDGET_BOUNDS, "clip_bounds": PERSON_WALK_BUDGET_CLIP_BOUNDS,
+		"ik": PERSON_WALK_BUDGET_IK, "clip_ik": PERSON_WALK_BUDGET_CLIP_IK,
+		"project": PERSON_WALK_BUDGET_PROJECT, "paths": PERSON_WALK_BUDGET_PATHS}
+	for key: String in caps:
+		caps[key] = clampi(int(limits.get(key, caps[key])), 0, int(caps[key]))
+	return {"limits": caps, "used": {}, "clips": {}, "exhausted": false, "kind": "", "clip": ""}
+
+
+static func _person_walk_spend(budget: Dictionary, kind: String, clip: String, amount: int = 1) -> bool:
+	if budget.is_empty():
+		return true
+	if bool(budget["exhausted"]):
+		return false
+	var used: Dictionary = budget["used"]
+	var by_clip: Dictionary = budget["clips"].get_or_add(clip, {})
+	var limits: Dictionary = budget["limits"]
+	if int(used.get(kind, 0)) + amount > int(limits[kind]) or (limits.has("clip_" + kind) and int(by_clip.get(kind, 0)) + amount > int(limits["clip_" + kind])):
+		budget.merge({"exhausted": true, "kind": kind, "clip": clip}, true)
+		return false
+	used[kind] = int(used.get(kind, 0)) + amount
+	by_clip[kind] = int(by_clip.get(kind, 0)) + amount
+	return true
+
+
+## Cache only frozen keyed poses, before path-dependent pelvis and IK edits.
+static func _person_walk_pose(ctx: Dictionary, fit: Dictionary, entry: Array, keyed_u: float) -> void:
+	if not fit.has("pose_cache"):
+		pose(ctx, entry[1], entry[4], keyed_u)
+		return
+	var body: Skeleton3D = ctx["body"]
+	var cache: Dictionary = fit["pose_cache"].get_or_add(str(entry[0]), {})
+	if cache.has(keyed_u):
+		var cached_poses: Array = cache[keyed_u]
+		for bone in body.get_bone_count():
+			body.set_bone_pose_position(bone, cached_poses[bone][0])
+			body.set_bone_pose_rotation(bone, cached_poses[bone][1])
+			body.set_bone_pose_scale(bone, cached_poses[bone][2])
+		return
+	pose(ctx, entry[1], entry[4], keyed_u)
+	var bone_poses: Array = []
+	for bone in body.get_bone_count():
+		bone_poses.append([body.get_bone_pose_position(bone), body.get_bone_pose_rotation(bone), body.get_bone_pose_scale(bone)])
+	cache[keyed_u] = bone_poses
+
+
+static func _fit_person_walk_candidate(ctx: Dictionary, source: Dictionary, specs: Array) -> Dictionary:
+	var local_ctx: Dictionary = ctx.duplicate()
+	local_ctx["fit_failures"] = []
+	var fit: Dictionary = source.duplicate()
+	fit["walk_specs"] = specs
+	fit["target_field"] = {}
+	var field: Dictionary = {}
+	var dense: bool = false
+	var first: Dictionary = specs[0]
+	var walk: Array = first["entry"]
+	var solved_cache: Dictionary = {}
+	fit["dense_refined_phases"] = {}
+	for joint_pass in PERSON_WALK_JOINT_PASSES:
+		var full: Dictionary = _fit_person_walk_height(local_ctx, fit, walk, float(first["shift"]), field, true, false)
+		if bool(fit.get("work_budget", {}).get("exhausted", false)):
+			return {"ok": false, "reason": "FOOT_PATH_BUDGET"}
+		var table: Dictionary = full
+		if not bool(full["ok"]):
+			table = _fit_person_walk_height(local_ctx, fit, walk, float(first["shift"]), field, false, false)
+		if not bool(table["ok"]):
+			return {"ok": false, "reason": table["reason"], "joint_pass": joint_pass + 1, "table": table}
+		fit["pelvis"] = table
+		var next_field: Dictionary = {}
+		var target_delta: float = 0.0
+		var height_delta: float = 0.0
+		for spec: Dictionary in specs:
+			var entry: Array = spec["entry"]
+			var clip: String = entry[0]
+			local_ctx["walk_clip"] = clip
+			var previous: Dictionary = field.get(clip, {})
+			var next: Dictionary = {}
+			var cached_phases: Dictionary = solved_cache.get_or_add(clip, {})
+			var correction: Array = [Vector3.ZERO, Vector3.ZERO]
+			var ordered: PackedFloat64Array = (table["phases"] as PackedFloat64Array).duplicate()
+			ordered.sort()
+			for u: float in ordered:
+				var keyed_u: float = fposmod(u + float(spec["shift"]), 1.0)
+				var rigid: Array = [_person_walk_ankle_goal(fit, 0, u)["target"], _person_walk_ankle_goal(fit, 1, u)["target"]]
+				var initial: Array = previous.get(u, [])
+				if initial.is_empty():
+					initial = [(rigid[0] as Vector3) + (correction[0] as Vector3), (rigid[1] as Vector3) + (correction[1] as Vector3)]
+				var height: float = _person_walk_height_at(table, u)
+				var cached: Dictionary = cached_phases.get(u, {})
+				var solved: Dictionary = {}
+				if not cached.is_empty() and float(cached["height"]) == height and (cached["initial"] as Array) == initial:
+					solved = cached["solved"]
+				else:
+					_person_walk_pose(local_ctx, fit, entry, keyed_u)
+					_apply_person_walk_body(local_ctx, fit, u, keyed_u, entry[4])
+					# Dense phases get one verification pass before local refinement.
+					solved = _solve_person_walk_frame(local_ctx, fit, u, initial, 1 if dense else PERSON_WALK_SOLVE_PASSES)
+					if dense and not bool(solved["ok"]) and not bool(fit.get("work_budget", {}).get("exhausted", false)):
+						fit["dense_refined_phases"].get_or_add(clip, {})[u] = true
+						var seed: Array = solved["proposed_targets"]
+						_person_walk_pose(local_ctx, fit, entry, keyed_u)
+						_apply_person_walk_body(local_ctx, fit, u, keyed_u, entry[4])
+						solved = _solve_person_walk_frame(local_ctx, fit, u, initial if seed.is_empty() else seed, PERSON_WALK_SOLVE_PASSES - 1)
+				if not bool(solved["ok"]):
+					return {"ok": false, "reason": solved["reason"], "joint_pass": joint_pass + 1, "clip": clip,
+						"phase": u, "solve": solved, "failures": local_ctx["fit_failures"]}
+				cached_phases[u] = {"height": height, "initial": initial.duplicate(), "solved": solved}
+				next[u] = (solved["proposed_targets"] as Array).duplicate()
+				for side in 2:
+					correction[side] = (next[u][side] as Vector3) - (rigid[side] as Vector3)
+					target_delta = maxf(target_delta, (initial[side] as Vector3).distance_to(next[u][side]))
+				height_delta = maxf(height_delta, absf(float(solved["final_hips_y"]) - _person_walk_height_at(table, u)))
+			next_field[clip] = next
+		if target_delta <= 0.0001 and height_delta <= 0.00005:
+			if not bool(full["ok"]):
+				return {"ok": false, "reason": full["reason"], "joint_pass": joint_pass + 1, "table": full}
+			if dense:
+				# Keep the exact field used to build this table for deterministic refits.
+				fit["target_field"] = field
+				var saved: Dictionary = _person_walk_validate_saved(local_ctx, fit, specs)
+				if bool(saved["ok"]):
+					fit["joint_passes"] = joint_pass + 1
+					fit.erase("work_budget")
+					fit.erase("pose_cache")
+					fit.erase("geometry_cache")
+					return {"ok": true, "reason": "", "fit": fit, "saved": saved, "target_delta": target_delta, "height_delta": height_delta}
+				return saved
+			var extra: PackedFloat64Array = PackedFloat64Array()
+			for sample in PERSON_WALK_DENSE_SAMPLES:
+				extra.append(float(sample) / float(PERSON_WALK_DENSE_SAMPLES))
+			fit["height_extra_phases"] = extra
+			dense = true
+		field = next_field
+	return {"ok": false, "reason": "JOINT_ITER_LIMIT", "joint_pass": PERSON_WALK_JOINT_PASSES}
+
+
+## Check fresh saved skin, including each foot's measured material stride.
+static func _person_walk_validate_saved(ctx: Dictionary, fit: Dictionary, specs: Array) -> Dictionary:
+	var measurements: Dictionary = {}
+	for spec: Dictionary in specs:
+		var entry: Array = spec["entry"]
+		var clip: String = entry[0]
+		ctx["walk_clip"] = clip
+		var frames: Array = []
+		var stats: Array = _person_footlock_stats()
+		for frame in int(entry[2]):
+			var u: float = float(frame) / float(entry[2])
+			var keyed_u: float = fposmod(u + float(spec["shift"]), 1.0)
+			pose(ctx, entry[1], entry[4], keyed_u)
+			var before: Array = _person_footlock_points(fit, _skin_frame(ctx))
+			var drop: float = _apply_person_walk_body(ctx, fit, u, keyed_u, entry[4])
+			var solved: Dictionary = _solve_person_walk_frame(ctx, fit, u)
+			if not bool(solved["ok"]):
+				return {"ok": false, "reason": solved["reason"], "clip": clip, "phase": u, "solve": solved}
+			var skin: Array = _skin_frame(ctx)
+			frames.append(skin)
+			_note_person_footlock(ctx, fit, u, before, _person_footlock_probes(fit, skin), solved["misses"], stats, drop)
+		var rounds: Array = _person_walk_saved_rounds(fit, frames)
+		for side in 2:
+			var note: Dictionary = stats[side]
+			var mean: float = float(note["hips_sum_m"]) / float(note["frames"])
+			var contact: float = float(note["contacts"]) / float(note["frames"])
+			var reason: String = ""
+			if absf(float(rounds[side]) - float(fit["round"])) > float(fit["round"]) * STRIDE_TOLERANCE:
+				reason = "SAVED_STRIDE"
+			elif mean < PERSON_WALK_MEAN_MIN * float(fit["stand_ref_m"]):
+				reason = "SAVED_MEAN"
+			elif contact < 0.5:
+				reason = "SAVED_CONTACT"
+			elif _person_footlock_slide(note["after"]) > 2.0 or _person_footlock_slide(note["contact_after"]) > 2.0:
+				reason = "SAVED_SLIDE"
+			elif int(note["mid_samples"]) < 1 or float(note["mid_knee_max_deg"]) > 15.0:
+				reason = "SAVED_MID_KNEE"
+			elif int(note["reach_clamp_frames"]) > 0 or int(note["reach_final_fail_frames"]) > 0 or int(note["height_fail_frames"]) > 0 or int(note["knee_backward_frames"]) > 0:
+				reason = "SAVED_REACH"
+			if not reason.is_empty():
+				return {"ok": false, "reason": reason, "clip": clip, "side": side, "stats": note, "rounds": rounds}
+		measurements[clip] = {"stats": stats, "rounds": rounds}
+	return {"ok": true, "reason": "", "measurements": measurements}
+
+
+static func _person_walk_try_beam(state: Dictionary, limit: int = 6) -> Dictionary:
+	var attempted: int = 0
+	for candidate: Dictionary in state["beam"]:
+		var id: int = candidate["id"]
+		if float(candidate["gap"]) > 0.0 or (state["skin_seen"] as Dictionary).has(id):
+			continue
+		if attempted >= limit:
+			break
+		if int(state["skin_count"]) >= int(state["skin_limit"]):
+			state["limited"] = true
+			break
+		state["skin_seen"][id] = true
+		state["skin_count"] = int(state["skin_count"]) + 1
+		attempted += 1
+		var result: Dictionary = _fit_person_walk_candidate(state["ctx"], candidate["fit"], state["specs"])
+		if bool(result["ok"]):
+			result["candidate"] = id
+			return result
+		state["trials"][id - 1]["skin"] = result
+		if bool(state["base"]["work_budget"]["exhausted"]):
+			state["limited"] = true
+			break
+	return {}
+
+
+## Candidate failures are private; only the caller publishes final refusal.
+static func _search_person_walk_path(ctx: Dictionary, fit: Dictionary, specs: Array, geometry_limit: int = PERSON_WALK_SEARCH_GEOMETRY, skin_limit: int = PERSON_WALK_SEARCH_SKIN, budget_limits: Dictionary = {}) -> Dictionary:
+	var local_ctx: Dictionary = ctx.duplicate()
+	local_ctx["fit_failures"] = []
+	var base: Dictionary = fit.duplicate()
+	base["walk_specs"] = specs
+	base["geometry_cache"] = {}
+	base["pose_cache"] = {}
+	base["work_budget"] = ctx.get_or_add("walk_work_budget", _person_walk_budget(budget_limits))
+	var state: Dictionary = {"ctx": local_ctx, "base": base, "specs": specs, "beam": [], "seen": {}, "skin_seen": {},
+		"geometry_count": 0, "skin_count": 0, "trials": [], "limited": false, "block_limited": false,
+		"geometry_limit": clampi(geometry_limit, 1, PERSON_WALK_SEARCH_GEOMETRY), "skin_limit": clampi(skin_limit, 1, PERSON_WALK_SEARCH_SKIN)}
+	_person_walk_add_path(state, _person_walk_default_params(base))
+	var result: Dictionary = _person_walk_try_beam(state, 1)
+	for _round_id in PERSON_WALK_SEARCH_ROUNDS:
+		if not result.is_empty() or bool(state["limited"]):
+			break
+		for block in 5:
+			var proposals: Array = _person_walk_path_block(state["beam"], block)
+			state["block_limited"] = bool(state["block_limited"]) or proposals.size() > PERSON_WALK_BLOCK_PATHS
+			for params: Dictionary in proposals.slice(0, PERSON_WALK_BLOCK_PATHS):
+				_person_walk_add_path(state, params)
+				if bool(state["limited"]):
+					break
+			result = _person_walk_try_beam(state)
+			if not result.is_empty() or bool(state["limited"]):
+				break
+	if result.is_empty() and not bool(state["limited"]):
+		result = _person_walk_try_beam(state, PERSON_WALK_SEARCH_SKIN)
+	if result.is_empty():
+		state["limited"] = bool(state["limited"]) or int(state["geometry_count"]) >= int(state["geometry_limit"]) or int(state["skin_count"]) >= int(state["skin_limit"])
+		if bool(state["block_limited"]) and not bool(state["limited"]):
+			base["work_budget"].merge({"exhausted": true, "kind": "block_paths", "clip": str(specs[0]["entry"][0])}, true)
+		var best: Dictionary = state["beam"][0] if not (state["beam"] as Array).is_empty() else {}
+		result = {"ok": false, "reason": "SEARCH_LIMIT" if bool(state["limited"]) else "PATH_NOT_FOUND", "best": best}
+		if bool(base["work_budget"]["exhausted"]):
+			result["reason"] = "FOOT_PATH_BUDGET"
+			var budget_clip: String = str(base["work_budget"]["clip"])
+			if budget_clip == "shared":
+				budget_clip = str(specs[0]["entry"][0])
+			result["failure"] = "FOOT_PATH_BUDGET rig=%s clip=%s kind=%s used=%s" % [ctx.get("rig_label", "unknown"), budget_clip, base["work_budget"]["kind"], base["work_budget"]["used"]]
+	result["budget"] = (base["work_budget"] as Dictionary).duplicate(true)
+	result["geometry_count"] = state["geometry_count"]
+	result["skin_count"] = state["skin_count"]
+	result["trials"] = state["trials"]
+	return result
 
 
 static func _note_person_walk_empty_height(ctx: Dictionary, table: Dictionary, u: float) -> void:
 	var failures: Array = ctx.get_or_add("fit_failures", []) if not ctx.is_empty() else table.get_or_add("fit_failures", [])
 	var failed: PackedInt32Array = table.get("failed_samples", PackedInt32Array())
-	var cause: String = "POINT_EMPTY" if not failed.is_empty() else "NOT_BUILT"
+	var cause: String = "POINT_EMPTY" if not failed.is_empty() else str(table.get("reason", "NOT_BUILT"))
 	var failure: String = "PELVIS_TABLE_EMPTY rig=%s clip=%s phase=%.9f cause=%s" % [
 		ctx.get("rig_label", table.get("rig_label", "unknown")), ctx.get("walk_clip", table.get("clip", "unknown")), u, cause]
 	if not failures.has(failure):
@@ -3182,14 +3839,48 @@ static func _set_person_walk_hips_y(ctx: Dictionary, height: float) -> void:
 	body.set_bone_pose_position(hips_id, position)
 
 
-## One set of anchors/sole probes per body, shared by all six walk layers.
-## Called after the stride fit and phase fit, never by pose() or their samplers.
+## Freeze every walk's stride and phase before searching any path.
+static func _prepare_person_walk_specs(ctx: Dictionary, requested: Array, phase: Dictionary) -> Array:
+	var walk: Array = PERSON_CLIPS[0]
+	var requested_name: String = requested[0]
+	var walk_name: String = walk[0]
+	if requested_name != walk_name:
+		ctx.get_or_add("phase_fits", {}).erase("p_walk")
+		_fit_person_stride(ctx, walk)
+		var canonical: Dictionary = _fit_person_phase(ctx, walk)
+		phase["shift"] = float(canonical.get("shift", 0.0))
+	var specs: Array = []
+	for entry: Array in PERSON_CLIPS:
+		var clip: String = entry[0]
+		if not PERSON_FOOT_LOCK.has(clip):
+			continue
+		if clip != requested_name:
+			_fit_person_stride(ctx, entry)
+		_fit_person_stride(ctx, entry, float(phase["shift"]))
+		specs.append({"entry": entry, "shift": float(phase["shift"])})
+	return specs
+
+
+## Only a successful joint bundle enters the shared walk cache.
 static func _fit_person_footlock(ctx: Dictionary, entry: Array, phase: Dictionary) -> Dictionary:
 	if not entry[0] in PERSON_FOOT_LOCK:
 		return {}
+	ctx["walk_clip"] = entry[0]
+	var refused: Dictionary = ctx.get("footlock_walk_refused", {})
+	if not refused.is_empty() and absf(float(refused["shift"]) - float(phase.get("shift", 0.0))) <= 0.000000001:
+		return refused["fit"]
 	if ctx.has("footlock_walk"):
-		return ctx["footlock_walk"]
-	ctx["footlock_walk"] = {}
+		var cached: Dictionary = ctx["footlock_walk"]
+		var matches: bool = true
+		for spec: Dictionary in cached.get("walk_specs", []):
+			if absf(float(spec["shift"]) - float(phase.get("shift", 0.0))) > 0.000000001:
+				matches = false
+		if matches:
+			return cached
+		ctx.erase("footlock_walk")
+	if phase.is_empty():
+		return {}
+	var specs: Array = _prepare_person_walk_specs(ctx, entry, phase)
 	var contacts: Dictionary = ctx.get("phase_fits", {}).get("p_walk", {})
 	if phase.is_empty() or contacts.is_empty() or float(contacts["left"]) < 0.0 or float(contacts["right"]) < 0.0:
 		push_error("FOOTLOCK_STOP %s F-INPUT-MISSING no_sole_contact" % entry[0])
@@ -3220,16 +3911,11 @@ static func _fit_person_footlock(ctx: Dictionary, entry: Array, phase: Dictionar
 		if soles[side].is_empty():
 			push_error("FOOTLOCK_STOP %s F-INPUT-MISSING empty_sole %s" % [entry[0], suffix])
 			return {}
-	var walk: Array = []
 	var stand: Array = []
 	for candidate: Array in PERSON_CLIPS:
-		if candidate[0] == "p_walk":
-			walk = candidate
-		elif candidate[0] == "p_stand":
+		var candidate_name: String = candidate[0]
+		if candidate_name == "p_stand":
 			stand = candidate
-	# A filtered bake may encounter a weapon walk before the base walk.
-	if entry[4] != walk[4]:
-		_fit_person_stride(ctx, walk)
 	var fit := {"rest": rest, "bones": bones, "weights": weights, "per": per, "soles": soles, "legs": legs,
 		"starts": [], "durations": [], "anchors": [], "rest_ankles": [], "rotations": [], "round": float(PERSON_STRIDE_ROUNDS["p_walk"])}
 	pose(ctx, stand[1], stand[4], 0.0)
@@ -3256,8 +3942,45 @@ static func _fit_person_footlock(ctx: Dictionary, entry: Array, phase: Dictionar
 		fit["rotations"].append(rest_foot.basis.orthonormalized())
 	fit["rest_hips_y"] = (to_mesh * body.get_bone_global_rest(_bone(body, "hips"))).origin.y
 	fit["stand_ref_m"] = float(fit["rest_hips_y"]) - float(fit["floor"])
-	fit["pelvis"] = _fit_person_walk_height(ctx, fit, walk, shift)
-	ctx["footlock_walk"] = fit
+	var searched: Dictionary = _search_person_walk_path(ctx, fit, specs)
+	if not bool(searched["ok"]) and str(searched["reason"]) == "FOOT_PATH_BUDGET":
+		fit["pelvis"] = {"ok": false, "values": PackedFloat64Array(), "slopes": PackedFloat64Array(), "reason": "FOOT_PATH_BUDGET",
+			"uppers": PackedFloat64Array(), "lowers": PackedFloat64Array(), "failed_samples": PackedInt32Array(),
+			"mean": 0.0, "saved_mean": 0.0, "mean_feasible": false, "fit_failures": ctx.get_or_add("fit_failures", [])}
+		fit["search"] = searched
+		ctx.get_or_add("fit_failures", []).append(searched["failure"])
+		ctx["footlock_walk_refused"] = {"shift": float(phase["shift"]), "fit": fit}
+		return fit
+	if bool(searched["ok"]):
+		fit = searched["fit"]
+		fit["search"] = {"candidate": searched["candidate"], "geometry_count": searched["geometry_count"],
+			"skin_count": searched["skin_count"], "trials": searched["trials"]}
+		fit["pelvis"]["fit_failures"] = ctx.get_or_add("fit_failures", [])
+		ctx["footlock_walk"] = fit
+	else:
+		var best: Dictionary = searched["best"]
+		fit = best["fit"]
+		var detail: Dictionary = best["detail"]
+		var params: Dictionary = best["params"]
+		var trial: Dictionary = searched["trials"][int(best["id"]) - 1]
+		var skin_failure: Dictionary = trial.get("skin", {})
+		var cause: String = skin_failure.get("reason", best["reason"])
+		if skin_failure.has("solve"):
+			detail = (skin_failure["solve"]["bounds"] as Dictionary).duplicate()
+			detail["phase"] = skin_failure["phase"]
+		fit["search"] = {"reason": searched["reason"], "geometry_count": searched["geometry_count"],
+			"skin_count": searched["skin_count"], "trials": searched["trials"], "best_params": params, "detail": detail}
+		fit["pelvis"] = {"values": PackedFloat64Array(), "slopes": PackedFloat64Array(), "uppers": PackedFloat64Array(),
+			"lowers": PackedFloat64Array(), "failed_samples": PackedInt32Array(), "reason": searched["reason"],
+			"mean": 0.0, "saved_mean": 0.0, "mean_feasible": false, "rig_label": ctx.get("rig_label", "unknown"),
+			"clip": entry[0], "fit_failures": ctx.get_or_add("fit_failures", [])}
+		ctx.get_or_add("fit_failures", []).append("WALK_SOLVE_FAIL rig=%s clip=%s stage=search reason=%s candidate=%d geometry=%d skin=%d phase=%.9f lower_m=%.9f upper_m=%.9f gap_mm=%.6f lower_side=%d upper_side=%d centers=%s lifts=%s heel_end=%.6f toe_start=%.6f durations=%s mean256_cap_ratio=%.9f mean_saved_cap_ratio=%.9f cause=%s" % [
+			ctx.get("rig_label", "unknown"), entry[0], searched["reason"], best["id"], searched["geometry_count"], searched["skin_count"],
+			detail["phase"], detail["lower"], detail["upper"], float(best["gap"]) * 1000.0, detail["lower_side"], detail["upper_side"],
+			params["centers"], params["lifts"], params["heel_end"], params["toe_start"], params["durations"],
+			(float(best["grid_cap"]) - float(fit["floor"])) / float(fit["stand_ref_m"]),
+			(float(best["saved_cap"]) - float(fit["floor"])) / float(fit["stand_ref_m"]), cause])
+		ctx["footlock_walk_refused"] = {"shift": float(phase["shift"]), "fit": fit}
 	return fit
 
 
@@ -3315,9 +4038,12 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 	var to_body: Transform3D = to_mesh.affine_inverse()
 	var goals: Array = []
 	var targets: Array = target_seed.duplicate()
+	if targets.is_empty():
+		targets = (fit.get("target_field", {}).get(str(ctx.get("walk_clip", "p_walk")), {}).get(fposmod(u, 1.0), []) as Array).duplicate()
+	var seeded: bool = not targets.is_empty()
 	for side in 2:
 		goals.append(_person_walk_ankle_goal(fit, side, u))
-		if target_seed.is_empty():
+		if not seeded:
 			targets.append(goals[side]["target"])
 	var result: Dictionary = {"ok": false, "reason": "", "targets_used": [], "proposed_targets": [],
 		"actual_ankles": [], "bounds": {}, "misses": [INF, INF], "skin_residual": INF,
@@ -3347,6 +4073,8 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 			reachable = reachable and not bool(fit["reach_final_failed"][side])
 		if not reachable:
 			return _finish_person_walk_frame(ctx, fit, u, result, "PRE_IK_REACH")
+		if not _person_walk_spend(fit.get("work_budget", {}), "ik", str(ctx.get("walk_clip", "unknown"))):
+			return _finish_person_walk_frame(ctx, fit, u, result, "FOOT_PATH_BUDGET")
 		result["targets_used"] = targets.duplicate()
 		result["proposed_targets"] = []
 		result["ik_passes"] = pass_id + 1
@@ -3421,6 +4149,8 @@ static func _finish_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float
 	result["ok"] = reason.is_empty()
 	result["reason"] = reason
 	result["final_hips_y"] = (to_mesh * body.get_bone_global_pose(_bone(body, "hips"))).origin.y
+	result["reach_clamped"] = (fit["reach_clamped"] as Array).duplicate()
+	result["reach_final_failed"] = (fit["reach_final_failed"] as Array).duplicate()
 	result["actual_ankles"] = []
 	for side in 2:
 		var ankle: Vector3 = to_mesh * body.get_bone_global_pose(int(fit["legs"][side][2])).origin
@@ -3649,6 +4379,13 @@ static func _bake_head(ctx: Dictionary, clips: Array) -> Dictionary:
 	var positions: PackedVector3Array = source[Mesh.ARRAY_VERTEX]
 	var bones: PackedInt32Array = source[Mesh.ARRAY_BONES]
 	var weights: PackedFloat32Array = source[Mesh.ARRAY_WEIGHTS]
+	if positions.is_empty() or bones.is_empty() or weights.size() != bones.size():
+		return _person_bake_failure(ctx, "BAKE_EMPTY_SKIN", "vat")
+	if clips.is_empty():
+		return _person_bake_failure(ctx, "BAKE_EMPTY_FRAMES", "vat")
+	for clip: Dictionary in clips:
+		if (clip.get("frames", []) as Array).is_empty():
+			return _person_bake_failure(ctx, "BAKE_EMPTY_FRAMES", str(clip.get("name", "unknown")))
 	var per: int = bones.size() / positions.size()
 	var head := _bone(body, "head")
 	var neck := _bone(body, "neck")
@@ -3667,7 +4404,47 @@ static func _bake_head(ctx: Dictionary, clips: Array) -> Dictionary:
 	var up := pivot + neck_rest.basis.y.normalized() * 0.1
 	var bind: int = (ctx["bind_bone"] as Array).size()
 	var probes := [{"rest": pivot, "bone": bind}, {"rest": up, "bone": bind}]
-	return _with_rounds(VatBaker.build_skinned(source, clips, VatBaker.MAX_WIDTH, probes), clips)
+	var out: Dictionary = _with_rounds(VatBaker.build_skinned(source, clips, VatBaker.MAX_WIDTH, probes), clips)
+	var reason: String = _person_bake_output_error(out)
+	if not reason.is_empty():
+		return _person_bake_failure(ctx, reason, "vat")
+	return out
+
+
+static func _person_bake_failure(ctx: Dictionary, reason: String, clip: String) -> Dictionary:
+	var failure: String = "%s rig=%s clip=%s" % [reason, ctx.get("rig_label", "unknown"), clip]
+	var failures: Array = ctx.get_or_add("fit_failures", [])
+	if not failures.has(failure):
+		failures.append(failure)
+	return {"ok": false, "bake_error": reason, "fit_failures": failures.duplicate()}
+
+
+static func _person_bake_output_error(assets: Dictionary) -> String:
+	if not (assets.get("fit_failures", []) as Array).is_empty():
+		return str(assets.get("bake_error", "BAKE_FIT_REFUSED"))
+	if not assets.get("image") is Image:
+		return "BAKE_EMPTY_IMAGE"
+	var image: Image = assets["image"]
+	if image.is_empty() or image.get_data().is_empty():
+		return "BAKE_EMPTY_IMAGE"
+	if not assets.get("mesh") is Mesh:
+		return "BAKE_EMPTY_MESH"
+	var mesh: Mesh = assets["mesh"]
+	if mesh.get_surface_count() < 1:
+		return "BAKE_EMPTY_MESH"
+	if assets.has("head"):
+		var arrays: Array = mesh.surface_get_arrays(0)
+		var custom: Variant = arrays[Mesh.ARRAY_CUSTOM0]
+		var count: int = (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()
+		if custom is PackedByteArray:
+			if (custom as PackedByteArray).size() != count * 4:
+				return "BAKE_EMPTY_CUSTOM0"
+		elif custom is PackedFloat32Array:
+			if (custom as PackedFloat32Array).size() != count:
+				return "BAKE_EMPTY_CUSTOM0"
+		else:
+			return "BAKE_EMPTY_CUSTOM0"
+	return ""
 
 
 ## Remove each bone's rest orientation before comparing anatomical +Z forwards.
@@ -4257,16 +5034,25 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 	ctx["phase_fits"] = {}
 	ctx["fit_failures"] = []
 	ctx.erase("footlock_walk")
+	ctx.erase("footlock_walk_refused")
+	ctx.erase("walk_work_budget")
 	ctx["stand_failures"] = {}
 	for entry: Array in list:
 		ctx["walk_clip"] = entry[0]
-		_fit_person_stride(ctx, entry)
-		var phase := _fit_person_phase(ctx, entry)
-		if entry[0] in PERSON_FOOT_LOCK and not phase.is_empty():
-			_fit_person_stride(ctx, entry, float(phase["shift"]))
+		var phase: Dictionary = {}
+		var prepared: Dictionary = ctx.get("footlock_walk", {})
+		if entry[0] in PERSON_FOOT_LOCK and prepared.has("walk_specs"):
+			phase = {"shift": float(prepared["walk_specs"][0]["shift"])}
+		else:
+			_fit_person_stride(ctx, entry)
+			phase = _fit_person_phase(ctx, entry)
+			if entry[0] in PERSON_FOOT_LOCK and not phase.is_empty():
+				_fit_person_stride(ctx, entry, float(phase["shift"]))
 		# The foot lock and pelvis table follow the phase on the fitted stride;
 		# the final phase check below reads the locked, saved frames.
 		var footlock := _fit_person_footlock(ctx, entry, phase)
+		if entry[0] in PERSON_FOOT_LOCK and (footlock.is_empty() or (footlock.get("pelvis", {}).get("values", PackedFloat64Array()) as PackedFloat64Array).is_empty()):
+			return _person_bake_failure(ctx, "BAKE_WALK_REFUSED", str(entry[0]))
 		var footlock_stats: Array = _person_footlock_stats() if not footlock.is_empty() else []
 		var head_yaws := []
 		var count: int = entry[2]
@@ -4285,7 +5071,7 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 				var misses := _apply_person_footlock(ctx, footlock, output_u)
 				# Failed solves must not publish the untouched keyed pose as a walk.
 				if not bool(footlock["walk_solve"]["ok"]):
-					return {"fit_failures": ctx["fit_failures"]}
+					return _person_bake_failure(ctx, "BAKE_WALK_REFUSED", str(entry[0]))
 				skin = _skin_frame(ctx)
 				_note_person_footlock(ctx, footlock, output_u, before, _person_footlock_probes(footlock, skin), misses, footlock_stats, hip_drop)
 			frames.append(skin)
@@ -4454,6 +5240,9 @@ const SMALL_DROPS: Array = ["hit"]             # the field never picks it: kept 
 ## 8 bits a channel inside that clip's own box, which clips.json carries as
 ## "lo" and "hi". The shader takes the box back (dead_vat.gdshader, quantized).
 static func compact(assets: Dictionary, keep_full: Array = []) -> Dictionary:
+	var reason: String = _person_bake_output_error(assets)
+	if not reason.is_empty():
+		return _person_bake_failure(assets, reason, "compact")
 	var image: Image = assets["image"]
 	var width := image.get_width()
 	var rows: int = int(assets["rows_per_frame"])
@@ -4506,6 +5295,8 @@ static func compact(assets: Dictionary, keep_full: Array = []) -> Dictionary:
 		start += spots.size()
 	var bytes := PackedByteArray()
 	bytes.resize(start * per_frame * 3)
+	if bytes.is_empty():
+		return _person_bake_failure(assets, "BAKE_EMPTY_COMPACT", "compact")
 	var at_byte := 0
 	for got: Array in picked:
 		var lo: Vector3 = got[1]
@@ -4535,6 +5326,11 @@ static func compact(assets: Dictionary, keep_full: Array = []) -> Dictionary:
 ## Writes vat.bin (the picture's half floats as they are: an exported game
 ## cannot read EXR; a compacted bake's bytes), mesh.res and clips.json into `dir`.
 static func save(assets: Dictionary, dir: String) -> void:
+	var reason: String = _person_bake_output_error(assets)
+	if not reason.is_empty():
+		var refused: Dictionary = _person_bake_failure(assets, reason, "save")
+		push_error(str(refused["fit_failures"][-1]))
+		return
 	DirAccess.make_dir_recursive_absolute(dir)
 	var image: Image = assets["image"]
 	var raw := FileAccess.open(dir.path_join("vat.bin"), FileAccess.WRITE)
