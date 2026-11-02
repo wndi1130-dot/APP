@@ -21,6 +21,10 @@ class LateField:
 	var is_built: bool = false
 	var pace: Pace
 
+	# 진짜 필드처럼 처리 함수가 있어 is_processing()이 켜진다.
+	func _process(_delta: float) -> void:
+		pass
+
 
 class FixtureHorde:
 	extends Horde
@@ -63,6 +67,36 @@ func _layout(walls: Array) -> Array[Dictionary]:
 	var node: Horde = Horde.new()
 	add_child_autofree(node)
 	return await node.build_layout(walls, {"map_size": Vector2(120, 80)})
+
+
+## 셰이더처럼 단정도로 한 번 반올림한 값.
+func _f32(value: float) -> float:
+	var one := PackedFloat32Array([value])
+	return one[0]
+
+
+func test_center_depth_follows_exposed_area_at_a_tall_wall_end() -> void:
+	# 점검이 든 반례: 길이 24 m·높이 5.2 m 북쪽 벽, 표 없음, 칸 2~22 m, 깊이 40 m.
+	var wall: Dictionary = {"id": "end", "a": Vector2(4, 0), "b": Vector2(28, 0), "out": Vector2(0, -1), "kind": "wall_stack", "height": 5.2}
+	var geometry: Dictionary = Horde.wall_geometry(wall)
+	var full: float = geometry["full"]
+	assert_gt(full, 2.0, "가려지는 띠가 있는 높은 벽")
+	var bins: PackedFloat64Array = Horde.placement_bins(geometry, 2.0, 22.0, 40.0)
+	var hidden_band: float = 0.0
+	var total: float = 0.0
+	for index: int in range(2, bins.size(), 3):
+		total += bins[index]
+		if bins[index - 1] <= full + 0.0001:
+			hidden_band += bins[index]
+	assert_almost_eq(total, Horde.placement_area(geometry, 2.0, 22.0, 40.0), 0.0001, "후보 수와 표본이 같은 적분")
+	var draws: int = 4000
+	var shallow_centers: int = 0
+	for draw: int in range(draws):
+		if Horde.sample_placed_depth(bins, (float(draw) + 0.5) / float(draws)) < full:
+			shallow_centers += 1
+	assert_almost_eq(float(shallow_centers) / float(draws), hidden_band / total, 0.005, "가려지는 띠의 중심 비율 = 그 띠의 노출 면적 비율")
+	var density_only: float = (Horde.density_area(full) - Horde.density_area(0.4)) / (Horde.density_area(40.0) - Horde.density_area(0.4))
+	assert_gt(density_only, 2.0 * hidden_band / total, "밀도만으로 뽑으면 좁은 끝 띠에 몰린다(고치기 전)")
 
 
 func test_same_input_same_placement() -> void:
@@ -554,11 +588,18 @@ func test_time_budget_requests_rest_before_piece_cap() -> void:
 	node._account()
 	assert_gte(float(node.stats["max_continuous_ms"]), 6.0)
 	assert_true(node._rest_due(), "단계를 바꾸며 시간을 셈해도 마지막 쉼 뒤 6 ms면 쉼 자리")
+	# 경계와 조각 수는 시각을 고정해 본다(CI 스케줄링에 흔들리지 않게).
+	var start: int = 1_000_000
 	node._continuous_usec = 0
 	node._pieces = Horde.PIECE_CAP * 10
-	node._work_start = Time.get_ticks_usec()
-	node._rest_from = node._work_start
-	assert_false(node._rest_due(), "조각 수만으로 프레임을 양보하지 않는다")
+	node._work_start = start
+	node._rest_from = start
+	assert_false(node._rest_due(start + Horde.WORK_USEC - 1), "조각 수만으로 프레임을 양보하지 않는다")
+	assert_true(node._rest_due(start + Horde.WORK_USEC))
+	node._staged = true
+	node._continuous_usec = Horde.WORK_USEC - 1
+	assert_false(node._rest_due(start))
+	assert_true(node._rest_due(start + 1), "준비 단계는 계산한 작업 시간까지 더해 본다")
 
 
 func test_late_field_player_reaches_focus_after_setup() -> void:
@@ -954,6 +995,24 @@ func test_real_assets_sync_cpu_budget_and_cache_classification() -> void:
 	assert_eq(cached.chunks, first.chunks)
 	assert_eq(int(cached.stats["uploaded_instances"]), 432)
 	assert_true(ResourceLoader.has_cached(Horde.SHADER_PATH), "컴파일한 셰이더는 정차 사이에 남는다")
+	assert_eq(int(first.stats["requests_released"]), 0, "다 받은 짓기는 넘길 요청이 없다")
+	assert_true(first._open_requests.is_empty())
+
+
+func test_unused_thread_reads_are_collected_after_an_early_return() -> void:
+	# 벽이 없어 배치가 비면 아틀라스·셰이더를 받지 않고 끝난다: 요청 하나에 get 하나는 수거 목록이 한다.
+	var node: Horde = Horde.new()
+	add_child_autofree(node)
+	await node.setup([], {"map_size": Vector2(120, 80)}, Pace.new())
+	assert_false(bool(node.stats["ready"]))
+	assert_eq(int(node.stats["resource_loads"]), 2)
+	assert_eq(int(node.stats["requests_released"]), 2, "등록한 요청 둘 다 수거 목록으로")
+	assert_true(node._open_requests.is_empty())
+	for _frame: int in range(600):
+		if Horde._orphan_paths.is_empty():
+			break
+		await get_tree().process_frame
+	assert_true(Horde._orphan_paths.is_empty(), "읽기가 끝나면 get으로 회수")
 
 
 func test_disabled_field_show_selects_chunks_without_advancing_clock() -> void:
@@ -983,12 +1042,38 @@ func test_disabled_field_show_selects_chunks_without_advancing_clock() -> void:
 	await get_tree().process_frame
 	assert_true(node.visible_chunks.is_empty())
 	assert_eq(node._focus_clock, clock_before)
+	# 처리 모드는 켜고 set_process(false)로만 멈춘 필드(물러나는 필드·촬영 도구 꼴)도 시계를 멈춘다.
+	camera.position -= Vector3(10000, 0, 10000)
+	field.process_mode = Node.PROCESS_MODE_INHERIT
+	field.set_process(false)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_eq(node._focus_clock, clock_before, "set_process(false) 필드")
+	field.set_process(true)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_gt(node._focus_clock, clock_before, "필드 처리가 돌면 시계도 간다")
 
 
 func test_shared_frame_clock_keeps_motion_until_visible_frame_boundary() -> void:
 	var source: String = FileAccess.get_file_as_string(Horde.SHADER_PATH)
 	assert_true(source.contains("float frame = mod(floor(frame_clock), 6.0)"))
-	assert_true(source.contains("float frame_age = fract(frame_clock) / base_rate"))
+	assert_true(source.contains("float boundary_clock = max(0.0, (floor(frame_clock) - 6.0 * phase) / base_rate)"))
+	assert_false(source.contains("fract(frame_clock)"), "경계를 시각에서 틀 나이를 빼서 구하지 않는다")
+	# 셰이더와 같은 단정도 계산으로, 한 그림 틀 동안 이력 칸이 그대로인지(점검이 찾은 사례 포함).
+	for case: Vector2 in [Vector2(0.4475752711, 4.0638699532), Vector2(0.13, 4.6), Vector2(0.91, 5.2)]:
+		var phase: float = case.x
+		var rate: float = case.y
+		var slot_of_frame: Dictionary = {}
+		for step: int in range(0, 6000):
+			var time_s: float = _f32(62.0 + float(step) * 0.0001)
+			var frame_clock: float = _f32(_f32(time_s * rate) + _f32(6.0 * phase))
+			var frame_n: float = floorf(frame_clock)
+			var boundary: float = maxf(0.0, _f32(_f32(frame_n - _f32(6.0 * phase)) / rate))
+			var slot: int = posmod(floori(_f32(boundary * 30.0)), 32)
+			if slot_of_frame.has(frame_n):
+				assert_eq(slot, int(slot_of_frame[frame_n]), "틀 %d 안에서 이력 칸이 바뀜 (phase %.4f)" % [int(frame_n), phase])
+			slot_of_frame[frame_n] = slot
 	assert_true(source.contains("if (base_motion == 0)"))
 	assert_true(source.contains("0.3 * (1.0 - reaction)"))
 	var fragment: String = source.get_slice("void fragment()", 1)

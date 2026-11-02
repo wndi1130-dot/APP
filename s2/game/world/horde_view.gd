@@ -45,6 +45,7 @@ const KINDS: Array[String] = ["wall_sheet", "wall_sound", "wall_plank", "wall_st
 static var resource_reads: int = 0 # 캐시 적중도 포함한 읽기 시도. 꺼짐 경로의 무읽기 계약 관측.
 static var _card_margin := AABB()
 static var _shader_kept: Shader # 한 번 컴파일한 셰이더를 정차 사이에 붙잡아 둔다.
+static var _orphan_paths: Array[String] = [] # 짓기가 일찍 끝나 받지 못한 스레드 읽기(끝나면 get으로 회수).
 var stats: Dictionary = {}
 var chunks: Array[Dictionary] = []
 var _sight: Dictionary = {}
@@ -66,6 +67,7 @@ var _sent_sight: Dictionary = {}
 var _resource_errors: Dictionary = {}
 var _resource_kinds: Dictionary = {}
 var _resource_starts: Dictionary = {}
+var _open_requests: Dictionary = {} # 이 짓기가 등록하고 아직 get하지 않은 경로
 var frame_material_writes: int = 0
 var frame_sight_reads: int = 0
 var visible_chunks: Array[int] = []
@@ -240,18 +242,43 @@ static func visible_span(geometry: Dictionary, depth: float, lo: float, hi: floa
 
 
 static func placement_area(geometry: Dictionary, lo: float, hi: float, depth: float) -> float:
-	var shallow: float = clampf(float(geometry["full"]), 0.4, depth)
-	var area: float = (hi - lo) * (density_area(depth) - density_area(shallow))
-	if shallow <= 0.4:
-		return area
-	# 가려지는 띠는 제외하고 유한 끝의 노출 면적만 8구간으로 적분한다.
-	for index: int in range(8):
-		var lower: float = lerpf(0.4, shallow, float(index) / 8.0)
-		var upper: float = lerpf(0.4, shallow, float(index + 1) / 8.0)
-		var shift: float = (lower + upper) * 0.5 * float(geometry["slope"])
-		var width: float = clampf(float(geometry["margin"]) + shift - lo, 0.0, hi - lo) + clampf(hi - float(geometry["length"]) + float(geometry["margin"]) - shift, 0.0, hi - lo)
-		area += minf(hi - lo, width) * (density_area(upper) - density_area(lower))
+	var bins: PackedFloat64Array = placement_bins(geometry, lo, hi, depth)
+	var area: float = 0.0
+	for index: int in range(2, bins.size(), 3):
+		area += bins[index]
 	return area
+
+
+## 노출 면적(밀도 × 그 깊이의 보이는 폭)을 깊이 구간으로 나눈 것: [아래, 위, 무게] 셋씩.
+## 가려지는 띠(0.4 ~ full)는 8구간, 그 뒤는 폭 전체인 한 구간. 후보 수와 중심 깊이 표본이 같은 적분을 쓴다.
+static func placement_bins(geometry: Dictionary, lo: float, hi: float, depth: float) -> PackedFloat64Array:
+	var bins := PackedFloat64Array()
+	var shallow: float = clampf(float(geometry["full"]), 0.4, depth)
+	if shallow > 0.4:
+		for index: int in range(8):
+			var lower: float = lerpf(0.4, shallow, float(index) / 8.0)
+			var upper: float = lerpf(0.4, shallow, float(index + 1) / 8.0)
+			var shift: float = (lower + upper) * 0.5 * float(geometry["slope"])
+			var width: float = clampf(float(geometry["margin"]) + shift - lo, 0.0, hi - lo) + clampf(hi - float(geometry["length"]) + float(geometry["margin"]) - shift, 0.0, hi - lo)
+			bins.append_array([lower, upper, minf(hi - lo, width) * (density_area(upper) - density_area(lower))])
+	bins.append_array([shallow, depth, (hi - lo) * (density_area(depth) - density_area(shallow))])
+	return bins
+
+
+## placement_bins의 누적 무게에서 unit(0..1) 자리의 깊이. 구간 안은 밀도만으로 나눈다.
+static func sample_placed_depth(bins: PackedFloat64Array, unit: float) -> float:
+	var total: float = 0.0
+	for index: int in range(2, bins.size(), 3):
+		total += bins[index]
+	var target: float = unit * total
+	for index: int in range(0, bins.size(), 3):
+		var weight: float = bins[index + 2]
+		if weight <= 0.0:
+			continue
+		if target <= weight or index + 3 >= bins.size():
+			return sample_depth(clampf(target / weight, 0.0, 1.0), bins[index + 1], bins[index])
+		target -= weight
+	return bins[bins.size() - 2]
 
 
 static func fully_hidden(wall: Dictionary, point: Vector2, head_max: float = HEAD_MAX_M) -> bool:
@@ -393,7 +420,7 @@ func _begin_stats(pace: BuildPace) -> void:
 		"cancelled": false, "resource_loads": 0, "table_error": "", "table_warning": "", "uploaded_instances": 0,
 		"stage": "layout", "wait_stages": {}, "resource_max_ms": 0.0,
 		"table_ms": 0.0, "candidates_ms": 0.0, "sort_ms": 0.0, "aabb_ms": 0.0, "upload_ms": 0.0, "material_ms": 0.0,
-		"resource_first": 0, "resource_cached": 0, "resource_first_ms": 0.0, "resource_cached_ms": 0.0}
+		"resource_first": 0, "resource_cached": 0, "resource_first_ms": 0.0, "resource_cached_ms": 0.0, "requests_released": 0}
 	stats["resource_first_ready_ms"] = 0.0
 	stats["resource_cached_ready_ms"] = 0.0
 	_work_start = Time.get_ticks_usec()
@@ -471,12 +498,14 @@ func _rest() -> void:
 	stats["pieces"] = int(stats["pieces"]) + 1
 
 
-func _rest_due() -> bool:
+func _rest_due(now_usec: int = -1) -> bool:
 	# 준비 단계(staged)는 계산한 작업 시간으로, 아니면 마지막 쉼 뒤 흐른 시간으로 본다.
 	# 단계가 바뀔 때 _account()가 _work_start를 다시 잡아도 쉼 자리는 6 ms마다 온다.
+	# now_usec는 시험이 시각을 고정할 때만 준다.
+	var now: int = Time.get_ticks_usec() if now_usec < 0 else now_usec
 	if _staged:
-		return _continuous_usec + Time.get_ticks_usec() - _work_start >= WORK_USEC
-	return Time.get_ticks_usec() - _rest_from >= WORK_USEC
+		return _continuous_usec + now - _work_start >= WORK_USEC
+	return now - _rest_from >= WORK_USEC
 
 
 func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null, table: Dictionary = {}) -> Array[Dictionary]:
@@ -546,8 +575,11 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 			var hi: float = minf(length_m - end_gap, float(chunk_i + 1) * CHUNK_M)
 			var start_depth: float = placement_floor(geometry, lo, hi)
 			if hi > lo and start_depth < depth_m:
-				var candidates: float = placement_area(geometry, lo, hi, depth_m)
-				plans.append({"wall": wall, "geometry": geometry, "wall_seed": wall_seed, "start": start_depth,
+				var bins: PackedFloat64Array = placement_bins(geometry, lo, hi, depth_m)
+				var candidates: float = 0.0
+				for weight_i: int in range(2, bins.size(), 3):
+					candidates += bins[weight_i]
+				plans.append({"wall": wall, "geometry": geometry, "wall_seed": wall_seed, "start": start_depth, "bins": bins,
 					"chunk_i": chunk_i, "lo": lo, "hi": hi, "depth": depth_m, "candidates": candidates})
 				candidate_sum += candidates
 	var density_scale: float = minf(1.0, float(MAP_CAP) / maxf(candidate_sum, 1.0))
@@ -569,6 +601,7 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 		var wall_id: String = wall["id"]
 		var contact_start: float = maxf(0.4, float(geometry["full"]))
 		var start_depth: float = plan["start"]
+		var placed_bins: PackedFloat64Array = plan["bins"]
 		var hide_full: float = geometry["full"]
 		var hide_slope: float = geometry["slope"]
 		var hide_margin: float = geometry["margin"]
@@ -593,7 +626,8 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 				group_key = Vector2i(int(round(a.x + tangent.x * lo)), int(round(a.y + tangent.y * lo))) + Vector2i(attempt, chunk_i)
 				group_size = 3 + int(stream(wall_seed, group_key, 11) * 6.0)
 				failures = 0
-				group_at.y = sample_depth(stream(wall_seed, group_key, 14), depth_m, start_depth)
+				# 깊이는 그 깊이의 보이는 폭까지 곱한 노출 면적으로 뽑는다(좁은 끝 띠에 중심이 몰리지 않게).
+				group_at.y = maxf(start_depth, sample_placed_depth(placed_bins, stream(wall_seed, group_key, 14)))
 				group_span = visible_span(geometry, group_at.y, lo, hi, stream(wall_seed, group_key, 12))
 				group_at.x = lerpf(group_span.x, group_span.y, stream(wall_seed, group_key, 13))
 			group_size -= 1 # 실패도 중심의 남은 시도를 소모한다.
@@ -661,6 +695,12 @@ static func attach(parent: Node3D, walls: Array, vis: Dictionary, pace: BuildPac
 
 
 func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
+	await _setup_body(walls, vis, pace)
+	# 취소·표 오류·빈 배치·읽기 실패로 일찍 끝나도, 등록한 스레드 읽기는 한 번씩 회수한다.
+	_release_requests()
+
+
+func _setup_body(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 	set_process(false)
 	_begin_stats(pace)
 	_staged = _staged or bool(vis.get("staged", false))
@@ -786,8 +826,40 @@ func _request_asset(path: String) -> void:
 	var started: int = Time.get_ticks_usec()
 	_resource_starts[path] = started
 	_resource_errors[path] = ResourceLoader.load_threaded_request(path)
+	if int(_resource_errors[path]) == OK:
+		_open_requests[path] = true
 	stats[key + "_ms"] = float(stats[key + "_ms"]) + float(Time.get_ticks_usec() - started) / 1000.0
 	_resource_account(started)
+
+
+## 받지 못한 요청을 필드보다 오래 사는 수거 목록에 넘긴다(StopLoader의 _retired_paths와 같은 원칙).
+## ResourceLoader는 요청마다 참조를 늘리고 get에서 줄이니, 요청 하나에 get 하나.
+func _release_requests() -> void:
+	for path: String in _open_requests:
+		_orphan_paths.append(path)
+		stats["requests_released"] = int(stats["requests_released"]) + 1
+	_open_requests.clear()
+	if not _orphan_paths.is_empty():
+		_reap_orphans()
+
+
+static func _reap_orphans() -> void:
+	var left: Array[String] = []
+	for path: String in _orphan_paths:
+		if ResourceLoader.load_threaded_get_status(path) == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			left.append(path)
+		else:
+			var _dropped: Resource = ResourceLoader.load_threaded_get(path)
+	_orphan_paths = left
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	var tick: Callable = _reap_orphans
+	if left.is_empty():
+		if tree.process_frame.is_connected(tick):
+			tree.process_frame.disconnect(tick)
+	elif not tree.process_frame.is_connected(tick):
+		tree.process_frame.connect(tick)
 
 
 func _ready_asset(path: String) -> Resource:
@@ -808,6 +880,7 @@ func _ready_asset(path: String) -> Resource:
 		return null
 	var started: int = Time.get_ticks_usec()
 	var asset: Resource = ResourceLoader.load_threaded_get(path)
+	_open_requests.erase(path)
 	var key: String = _resource_kinds[path]
 	stats[key + "_ms"] = float(stats[key + "_ms"]) + float(Time.get_ticks_usec() - started) / 1000.0
 	stats[key + "_ready_ms"] = float(stats[key + "_ready_ms"]) + float(Time.get_ticks_usec() - int(_resource_starts[path])) / 1000.0
@@ -918,7 +991,9 @@ func _process(delta: float) -> void:
 		return
 	var field: Node = _sight.get("field")
 	var player: Node3D = field.get("player") if is_instance_valid(field) else _sight.get("player")
-	var held: bool = get_tree().paused or (is_instance_valid(field) and (not field.can_process() or (bool(field.get("paused")) and not bool(field.get("ended")))))
+	# 필드가 멈추면 시계도 멈춘다: 트리 일시정지, 처리 모드 꺼짐, set_process(false)(물러나는 필드·촬영), 게임 일시정지.
+	var held: bool = get_tree().paused or (is_instance_valid(field) and (not field.can_process() or not field.is_processing()
+		or (bool(field.get("paused")) and not bool(field.get("ended")))))
 	if not held:
 		_focus_clock += delta
 		var target := Vector4.ZERO
@@ -994,3 +1069,9 @@ func _clear_focus() -> void:
 
 func _exit_tree() -> void:
 	_clear_focus()
+
+
+func _notification(what: int) -> void:
+	# 짓는 도중 노드가 지워져 setup이 끝나지 못해도 등록한 읽기는 수거 목록으로.
+	if what == NOTIFICATION_PREDELETE and not _open_requests.is_empty():
+		_release_requests()
