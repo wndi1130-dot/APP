@@ -718,18 +718,18 @@ func test_a_shader_fill_never_shows_on_the_way_back_on() -> void:
 	# visible, not even between the switch and the field's own decision.
 	var field: FieldProbe = _field(false, {"view_fill_mode": "shader"}, {"fill_energy": 2.0})
 	var seen: Array[bool] = []
-	var fill: DirectionalLight3D = field.view_fill
-	fill.visibility_changed.connect(func() -> void: seen.append(fill.visible))
+	var observed_fill: DirectionalLight3D = field.view_fill
+	observed_fill.visibility_changed.connect(func() -> void: seen.append(observed_fill.visible))
 	field._apply_perf_settings({"view_fill": true})
 	field._apply_perf_settings({"view_fill": false, "view_fill_mode": "shader"})
 	field._apply_perf_settings({"view_fill": true, "view_fill_mode": "shader"})
 	field._set_view_fill()
 	assert_false(seen.has(true), "the fill showed on the way: %s" % [seen])
-	assert_false(fill.visible)
+	assert_false(observed_fill.visible)
 	_assert_fill_values(Vector3.BACK, Vector4(2.0, 2.0, 2.0, 1.0))
 	# Back to the light mode the fill shows as before.
 	field._apply_perf_settings({"view_fill": true, "view_fill_mode": "light"})
-	assert_true(fill.visible)
+	assert_true(observed_fill.visible)
 
 
 func test_shader_fill_stays_hidden_across_minutes_night_and_storm() -> void:

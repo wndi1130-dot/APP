@@ -1937,16 +1937,22 @@ func _configure_perf_switch() -> void:
 
 func _apply_perf_settings(settings: Dictionary) -> void:
 	var mode_before: Variant = _perf_settings.get("view_fill_mode")
+	var fill_was: bool = view_fill != null and view_fill.visible
 	_perf_settings = settings
+	var changed: Dictionary = {}
 	if not settings.is_empty():
 		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
-		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false, false)
+		changed = PerfSwitch.apply(sun, view_fill, settings, false, false)
 		if settings.get("view_fill_mode") is String and settings["view_fill_mode"] in ["light", "shader"] \
 				and settings["view_fill_mode"] != mode_before:
 			changed["view_fill_mode"] = settings["view_fill_mode"]
+	_set_view_fill()
+	# The switch only reports the lock; the fill's own change shows once the field has decided.
+	if not settings.is_empty():
+		if view_fill != null and not changed.has("view_fill") and view_fill.visible != fill_was:
+			changed["view_fill"] = view_fill.visible
 		if not changed.is_empty():
 			print("PERF_SWITCH ", changed)
-	_set_view_fill()
 	# StopLoader builds with visible=false, even with processing disabled.
 	# Keep this one-shot connection for empty files too: another field may
 	# change the renderer before this hidden field is shown.
