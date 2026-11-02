@@ -33,7 +33,7 @@
  "tests/game/test_building_kit.gd": 1,
  "tests/game/test_building_rules.gd": 19,
  "tests/game/test_building_view.gd": 2,
- "tests/game/test_campaign_route.gd": 1056,
+ "tests/game/test_campaign_route.gd": 387,
  "tests/game/test_car_pane.gd": 4,
  "tests/game/test_carry.gd": 1,
  "tests/game/test_carry_detail.gd": 1,
