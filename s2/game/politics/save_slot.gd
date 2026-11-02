@@ -1,9 +1,13 @@
 extends RefCounted
 ## One JSON save slot compatible with the S1a Game object. Invalid text is preserved in a separate
 ## slot; the original is never deleted by load_slot.
-## 새 저장을 옛 빌드로 읽기는 지원하지 않음(생필품 정산·give_sup 약속이 빠짐), 출시 전 개발판만.
+## 판 번호: 생필품이 꺼진 판은 1 그대로, 켜진 판만 2로 저장한다(slot_board). 옛 빌드는 1까지만 읽어
+## 생필품 판을 「더 새 빌드」로 거절하므로, 생필품 쓰기와 give_sup·give_fine 약속을 모른 채 정산하지 않는다.
 
-const SAVE_VERSION := 1
+## The newest slot version this build reads (1 and 2). What a save writes is slot_board's.
+const SAVE_VERSION := 2
+## A run with supplies on is written with this version so a build that reads only 1 refuses it.
+const SUPPLIES_VERSION := 2
 const TrainDecor = preload("res://game/train/train_decor.gd")
 const Late = preload("res://game/train/turn/turn_late.gd")
 const RouteState = preload("res://game/train/route_state.gd")
@@ -176,12 +180,23 @@ static func read_save(raw: Variant, t: Dictionary) -> Dictionary:
 		return {"ok": false, "why": "판 번호가 없다"}
 	if int(version) > SAVE_VERSION:
 		return {"ok": false, "why": "더 새 빌드에서 저장한 판이다(판 번호 %d)" % int(version)}
-	# SAVE_VERSION is still 1, so there are no migration steps yet.
+	# 1 to 2 needs no step: a version 1 board has no supplies keys, so supplies read as off.
+	# The version read stays as it was; the next save writes slot_board's.
 	var problem: Variant = shape_problem(game, t)
 	if problem != null:
 		return {"ok": false, "why": problem}
 	fill_defaults(game)
 	return {"ok": true, "g": game}
+
+
+## The board as the slot holds it. A run with supplies on carries SUPPLIES_VERSION in a shallow
+## copy (the caller's board is untouched, key order kept); any other board is written as it is.
+static func slot_board(g: Dictionary) -> Dictionary:
+	if not bool(g.get("supOn", false)):
+		return g
+	var out: Dictionary = g.duplicate(false)
+	out["version"] = SUPPLIES_VERSION
+	return out
 
 
 static func save_slot(g: Dictionary, path: String = DEFAULT_PATH) -> bool:
@@ -190,7 +205,7 @@ static func save_slot(g: Dictionary, path: String = DEFAULT_PATH) -> bool:
 		return false
 	# Keys keep their order, as S1's JSON does: ties picked by insertion order
 	# (laws repealed in the same segment) stay the same after a load.
-	file.store_string(JSON.stringify(g, "", false))
+	file.store_string(JSON.stringify(slot_board(g), "", false))
 	file.close()
 	return true
 

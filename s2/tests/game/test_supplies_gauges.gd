@@ -144,6 +144,33 @@ func test_four_digit_stocks_read_in_thousands_and_the_band_still_fits() -> void:
 			assert_true(bool(bounds.get("fits", false)), at + " readable minimum")
 
 
+## Only the supplies cell reads in thousands; every other stock keeps its exact figure, and a run
+## with supplies off shows its stocks as it did before supplies.
+func test_only_the_supplies_stock_reads_in_thousands() -> void:
+	for sup_on: bool in [true, false]:
+		var g: Dictionary = _g.duplicate(true)
+		g["supOn"] = sup_on
+		for id: String in ["coal", "food", "med", "lux", "sup"]:
+			g[id] = 1234
+		var strip: Gauges = Gauges.new()
+		strip.g = g
+		strip.t = _t
+		add_child_autofree(strip)
+		strip.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		strip.size = Vector2(1280, Gauges.BAND_H)
+		strip._lay_out()
+		for id: String in ["coal", "food", "med", "lux"]:
+			var count: Label = strip.find_child("Stock_" + id, true, false).get_node("Count")
+			assert_eq(count.text.replace(Fonts.WORD_JOINER, ""), "1234", "%s with supplies %s" % [id, str(sup_on)])
+		var sup: Control = strip.find_child("Stock_sup", true, false)
+		if sup_on:
+			assert_eq((sup.get_node("Count") as Label).text.replace(Fonts.WORD_JOINER, ""), "1K", "the supplies cell")
+		else:
+			assert_null(sup, "no supplies cell when off")
+	# Four-digit stocks other than supplies (no S1 bot run gets past 160) may squeeze the band; the
+	# development build warns of that, which is not a failure, so the fit is not asserted here.
+
+
 func test_a_squeezed_band_warns_once_and_again_only_after_it_fits() -> void:
 	# Every stock three digits (no real run gets there) leaves 1280×720 about 118 dp, under the minimum.
 	var g: Dictionary = _g.duplicate(true)

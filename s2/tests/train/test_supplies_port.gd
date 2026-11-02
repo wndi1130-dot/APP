@@ -11,9 +11,13 @@ const Field = preload("res://game/politics/field_return.gd")
 const Departure = preload("res://game/politics/field_departure.gd")
 const Save = preload("res://game/politics/save_slot.gd")
 const State = preload("res://game/train/train_state.gd")
+const SliceSave = preload("res://game/sim/slice_save.gd")
+const TrainDom = preload("res://game/train/train_dom.gd")
+const Research = preload("res://game/train/train_research.gd")
 const PATH: String = "res://tests/fixtures/train/supplies_vectors.json"
 const SAVE_PATH: String = "user://supplies_pr1_gut_round_trip.json"
 const BROKEN_PATH: String = "user://supplies_pr1_gut_broken.json"
+const TRAIN_PATH: String = "user://supplies_pr1_gut_train_slot.json"
 
 var _data: Dictionary = {}
 var _t: Dictionary = {}
@@ -29,7 +33,7 @@ func before_all() -> void:
 
 
 func after_all() -> void:
-	for path: String in [SAVE_PATH, BROKEN_PATH]:
+	for path: String in [SAVE_PATH, BROKEN_PATH, TRAIN_PATH, TRAIN_PATH + ".tmp", TRAIN_PATH + ".bak", TRAIN_PATH + ".broken"]:
 		if FileAccess.file_exists(path): DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
@@ -238,8 +242,15 @@ func test_supplies_enabled_s1a_full_turns_match_s1() -> void:
 		if row["flag"] == true: _play(row)
 
 
+func _file_version(path: String) -> int:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	return int(parsed.get("version", -1)) if parsed is Dictionary else -1
+
+
 func test_supplies_save_legacy_and_round_trip() -> void:
-	assert_eq(Save.SAVE_VERSION, 1)
+	# Reads 1 and 2; a supplies board is written as 2 so a build that reads only 1 refuses it.
+	assert_eq(Save.SAVE_VERSION, 2)
+	assert_eq(Save.SUPPLIES_VERSION, 2)
 	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
 	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
 	on["sup"] = 1.5
@@ -250,14 +261,27 @@ func test_supplies_save_legacy_and_round_trip() -> void:
 	flag_only["supOn"] = true
 	var off: Dictionary = old.duplicate(true)
 	off["supOn"] = false
+	assert_eq(int(old["version"]), 1, "a new board starts at slot version 1")
 	for g: Dictionary in [old, on, flag_only, off]:
+		var want: int = 2 if bool(g.get("supOn", false)) else 1
+		var at: String = "supOn=%s" % str(g.get("supOn", "absent"))
 		assert_true(Save.save_slot(g, SAVE_PATH))
+		assert_eq(_file_version(SAVE_PATH), want, at + " slot version written")
+		assert_eq(int(g["version"]), 1, at + " the caller's board is untouched")
 		var loaded: Dictionary = Save.load_slot(_t, SAVE_PATH, BROKEN_PATH)
 		assert_null(loaded["why"])
 		if not loaded["g"] is Dictionary: continue
+		assert_eq(int(loaded["g"]["version"]), want, at + " slot version read")
 		var expected: Dictionary = g.duplicate(true)
+		expected["version"] = want
 		Save.fill_defaults(expected)
-		_same(expected, loaded["g"], "save round trip")
+		_same(expected, loaded["g"], "save round trip " + at)
+		# A second round from the loaded board keeps the same version and board.
+		assert_true(Save.save_slot(loaded["g"], SAVE_PATH))
+		assert_eq(_file_version(SAVE_PATH), want, at + " second save")
+		var again: Dictionary = Save.load_slot(_t, SAVE_PATH, BROKEN_PATH)
+		assert_null(again["why"])
+		if again["g"] is Dictionary: _same(expected, again["g"], "second round trip " + at)
 		var rules: Dictionary = State.to_rules(loaded["g"], _t)["train"]
 		for key: String in ["supOn", "sup", "supFine", "supCover"]:
 			assert_eq(loaded["g"].has(key), g.has(key), key + " presence")
@@ -274,3 +298,77 @@ func test_supplies_save_rejects_wrong_types_nonfinite_and_unknown_cover() -> voi
 		var g: Dictionary = old.duplicate(true)
 		g[pair[0]] = pair[1]
 		assert_not_null(Save.shape_problem(g, _t), "reject " + str(pair))
+
+
+func test_supplies_slot_versions_one_and_two_read_three_refused() -> void:
+	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
+	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
+	# Version 1 without supplies keys: reads, supplies off.
+	var one: Dictionary = Save.read_save(old, _t)
+	assert_true(one["ok"])
+	if one["ok"]:
+		assert_eq(int(one["g"]["version"]), 1)
+		assert_false(Supplies.asks(one["g"]), "a version 1 board reads with supplies off")
+	var two_board: Dictionary = on.duplicate(true)
+	two_board["version"] = 2
+	var two: Dictionary = Save.read_save(two_board, _t)
+	assert_true(two["ok"])
+	if two["ok"]: assert_true(Supplies.asks(two["g"]))
+	# A build that reads only 1 refuses 2 the same way this build refuses 3.
+	for board: Dictionary in [old, on]:
+		var three: Dictionary = board.duplicate(true)
+		three["version"] = 3
+		var read: Dictionary = Save.read_save(three, _t)
+		assert_false(read["ok"])
+		assert_string_contains(String(read.get("why", "")), "더 새 빌드")
+
+
+func test_supplies_train_slot_of_the_slice_writes_the_same_versions() -> void:
+	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
+	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
+	for pair: Array in [[old, 1], [on, 2]]:
+		var g: Dictionary = pair[0]
+		var written: Dictionary = {}
+		assert_true(SliceSave.write_train(g, TRAIN_PATH, written))
+		# This slot keeps every value's type (field_save.gd's codec), so read it through that codec.
+		assert_eq(int(SliceSave._parse(TRAIN_PATH).get("version", -1)), int(pair[1]), "train slot version")
+		assert_eq(int(g["version"]), 1, "the caller's board is untouched")
+		assert_eq(written["train_sha"], FileAccess.get_file_as_string(TRAIN_PATH).sha256_text(), "the slice slot keeps the written board's hash")
+		var source: Dictionary = {}
+		var back: Dictionary = SliceSave._train(TRAIN_PATH, _t, source)
+		assert_false(back.is_empty())
+		if not back.is_empty():
+			assert_eq(int(back["version"]), int(pair[1]))
+			assert_eq(source["train_sha"], written["train_sha"], "not a torn pair")
+
+
+## S1's front/true/<goods> conditions board, with w8 standing (its workshop branch at skill 3).
+func _w8_board(fine: float) -> Dictionary:
+	var g: Dictionary = {}
+	for row: Dictionary in _rows("conditions"):
+		if row["name"] == "front/true/%d" % (1 if fine >= 1.0 else 0): g = row["before"].duplicate(true)
+	assert_false(g.is_empty(), "the S1 conditions board")
+	g["dom"] = TrainDom.start()
+	for id: String in ["w6", "w7", "w8"]:
+		g["dom"]["techs"][id] = {"stage": "done", "defect": false, "progress": 3, "need": 3}
+	g["dom"]["experts"] = [{"field": "craft", "skill": 3}]
+	g["supFine"] = fine
+	return g
+
+
+func test_good_goods_ask_needs_the_goods_in_hand_even_with_w8() -> void:
+	# S2 makes no good goods yet, so w8 alone must not offer a promise that breaks at its due.
+	for fine: float in [0.0, 0.5, 1.0]:
+		var g: Dictionary = _w8_board(fine)
+		if g.is_empty(): continue
+		assert_gt(Research.mult(g, _t, "w8"), 0.0, "w8 is really on")
+		var offered: int = 0
+		for session: int in 12:
+			g["session"] = session
+			for cond: Dictionary in Vote.open_conditions(g, _t, "front"):
+				if cond["kind"] == "give_fine": offered += 1
+		if fine < 1.0:
+			assert_eq(offered, 0, "w8 on, %.1f good goods: no ask" % fine)
+		else:
+			# The same 4 of 12 sessions as S1's front/true/1 board, which holds the goods.
+			assert_eq(offered, 4, "w8 on, one good goods in hand: offered as with the goods alone")

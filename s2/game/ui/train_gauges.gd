@@ -77,8 +77,9 @@ const SHORT_LEFT: int = 3
 const STOCKS: Array = [["coal", "coal", "석탄"], ["food", "food", "식량"], ["med", "med", "의약품"], ["lux", "lux", "사치품"]]
 ## The stocks whose press opens what a stretch costs (cost_pane.gd).
 const TAPPABLE: Array = ["coal", "food"]
-## A stock's figure past this reads in thousands (count_word): four digits would push the
-## middle band under STANDING_MIN at 1280×720 once the supplies stock is on.
+## The supplies stock's figure past this reads in thousands (count_word): four digits would push
+## the middle band under STANDING_MIN at 1280×720 once that stock is on. The other stocks show
+## their exact figure, as before supplies.
 const STOCK_SHOWN_MAX: int = 999
 ## train_turn.gd meters writes these in order, or just drift for falling tension.
 const METER_SETTLE: Dictionary = {
@@ -1647,7 +1648,9 @@ func _stock(s: Dictionary) -> Control:
 	mark.size = Vector2(px, px)
 	mark.position = Vector2(6.0, 14.0) * k
 	c.add_child(mark)
-	var n := _label(count_word(int(s["n"])), UiFonts.NUMBER, 500, 22.0, tone(INK, dim), 0.33)
+	# Only the supplies stock (a supplies run's own cell) reads in thousands; the others keep their exact figure.
+	var shown: String = count_word(int(s["n"])) if id == "sup" else str(s["n"])
+	var n := _label(shown, UiFonts.NUMBER, 500, 22.0, tone(INK, dim), 0.33)
 	n.name = "Count"
 	c.add_child(n)
 	_sit(n, 30.0, 25.0)
