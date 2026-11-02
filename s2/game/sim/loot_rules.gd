@@ -229,7 +229,7 @@ static func fill(containers: Dictionary, seed: int, set_name: String = "base") -
 	var n := 0
 	for id: String in containers:
 		var c: Dictionary = containers[id]
-		if c.has("pick"):
+		if c.has("pick") or T.as_placed(c):
 			continue
 		if T.FIXED.has(id):
 			var fixed: Dictionary = T.FIXED[id]
