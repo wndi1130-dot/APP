@@ -1330,15 +1330,21 @@ const LAYERS: Dictionary = {
 	# Two-handed axe: both hands up over and behind the head, chopped down in
 	# front with the knees giving, lifted back.
 	"p_swing_axe": {
+		"forearm_arc": true,
 		"steps": [
 			["axe_support", ["keys", [[0.0, 4], [0.1005, 6], [0.2505, 8], [0.3255, 10, "in"], [0.4005, 26, "in"], [0.45, 36, "out"], [AXE_LOW_PHASE, 41], [AXE_HOLD_PHASE, 41], [AXE_BODY_PHASE, 4], [1.0, 4]]]],
 			["turn", "spine", "x", ["keys", [[0.0, 0.05], [0.1005, 0], [0.2505, -0.15], [0.3255, -0.2, "in"], [0.4005, 0.191566, "out"], [0.45, 0.45, "out"], [AXE_LOW_PHASE, 0.55], [AXE_HOLD_PHASE, 0.55], [AXE_BODY_PHASE, 0.05], [1.0, 0.05]]]],
-			["turn", "neck", "x", ["keys", [[0.0, 0], [0.1005, 0], [0.2505, -0.1], [0.3255, 0.2, "in"], [0.4005, -0.191566, "in"], [0.45, -0.45, "out"], [AXE_LOW_PHASE, 0.12], [AXE_HOLD_PHASE, 0.12], [AXE_BODY_PHASE, 0], [1.0, 0]]]],
+			# Body-space head target minus the exact spine track.
+			["turn", "neck", "x", [
+				["keys", [[0.0, 0.05], [0.1005, 0], [0.2505, -0.25], [0.3255, 0], [0.4005, 0], [0.45, 0], [AXE_HOLD_PHASE, 0.67], [AXE_BODY_PHASE, 0.05], [1.0, 0.05]]],
+				["keys", [[0.0, -0.05], [0.1005, 0], [0.2505, 0.15], [0.3255, 0.2, "in"], [0.4005, -0.191566, "out"], [0.45, -0.45, "out"], [AXE_LOW_PHASE, -0.55], [AXE_HOLD_PHASE, -0.55], [AXE_BODY_PHASE, -0.05], [1.0, -0.05]]],
+			]],
 			["turn", "chest", "y", ["keys", [[0.0, 0], [0.1005, 0.05], [0.2505, 0.1], [0.3255, 0.08, "in"], [0.4005, 0.03, "in"], [0.45, 0, "out"], [AXE_LOW_PHASE, -0.03], [AXE_HOLD_PHASE, -0.03], [AXE_BODY_PHASE, 0], [1.0, 0]]]],
 			["aim", "upper_arm.L", "forearm.L", [0.05, ["keys", [[0, -1.0], [0.33, 1.0], [0.45, -0.25], [1, -1.0]]], ["keys", [[0, 0.05], [0.33, -0.3], [0.45, 1.0], [1, 0.05]]]]],
 			["aim", "forearm.L", "hand.L", [-0.15, ["keys", [[0, -1.0], [0.33, 0.7], [0.45, -0.7], [1, -1.0]]], ["keys", [[0, 0.1], [0.33, -0.8], [0.45, 0.7], [1, 0.1]]]]],
 			["aim", "upper_arm.R", "forearm.R", [["keys", [[0.0, -0.05], [0.1005, -0.5], [0.2505, -0.88], [0.3255, -0.88, "in"], [0.4005, -0.27, "in"], [0.45, -0.1, "out"], [AXE_LOW_PHASE, 0.03], [AXE_HOLD_PHASE, 0.02], [AXE_BODY_PHASE, 0.03], [1.0, -0.05]]], ["keys", [[0.0, -1], [0.1005, -0.86], [0.2505, 0.26], [0.3255, 0.36, "in"], [0.4005, -0.51, "in"], [0.45, -0.32, "out"], [AXE_LOW_PHASE, -0.59], [AXE_HOLD_PHASE, -0.57], [AXE_BODY_PHASE, -0.72], [1.0, -1]]], ["keys", [[0.0, 0.05], [0.1005, 0.11], [0.2505, 0.4], [0.3255, 0.32, "in"], [0.4005, 0.82, "in"], [0.45, 0.94, "out"], [AXE_LOW_PHASE, 0.81], [AXE_HOLD_PHASE, 0.82], [AXE_BODY_PHASE, 0.69], [1.0, 0.05]]]]],
-			["aim", "forearm.R", "hand.R", [["keys", [[0.0, 0.15], [0.1005, 0.56], [0.2505, 0.44], [0.3255, 0.47, "in"], [0.4005, 0.39, "in"], [0.45, 0.53, "out"], [AXE_LOW_PHASE, 0.53], [AXE_HOLD_PHASE, 0.54], [AXE_BODY_PHASE, 0.53], [1.0, 0.15]]], ["keys", [[0.0, -1], [0.1005, -0.02], [0.2505, 0.68], [0.3255, 0.64, "in"], [0.4005, 0.89, "in"], [0.45, -0.81, "out"], [AXE_LOW_PHASE, -0.85], [AXE_HOLD_PHASE, -0.84], [AXE_BODY_PHASE, -0.84], [1.0, -1]]], ["keys", [[0.0, 0.1], [0.1005, 0.83], [0.2505, -0.59], [0.3255, -0.6, "in"], [0.4005, 0.25, "in"], [0.45, 0.24, "out"], [AXE_LOW_PHASE, 0.07], [AXE_HOLD_PHASE, 0.05], [AXE_BODY_PHASE, 0.06], [1.0, 0.1]]]]],
+			# Frame 13 splits the turn so saved-frame chords stay inside the limit.
+			["aim", "forearm.R", "hand.R", [["keys", [[0.0, 0.15], [0.1005, 0.56], [0.2505, 0.44], [0.3255, 0.47, "in"], [0.4005, 0.39, "in"], [13.0 / 31.0, 0.3, "in"], [0.45, 0.53, "out"], [AXE_LOW_PHASE, 0.53], [AXE_HOLD_PHASE, 0.54], [AXE_BODY_PHASE, 0.53], [1.0, 0.15]]], ["keys", [[0.0, -1], [0.1005, -0.02], [0.2505, 0.68], [0.3255, 0.64, "in"], [0.4005, 0.89, "in"], [13.0 / 31.0, 0.255177619, "in"], [0.45, -0.81, "out"], [AXE_LOW_PHASE, -0.85], [AXE_HOLD_PHASE, -0.84], [AXE_BODY_PHASE, -0.84], [1.0, -1]]], ["keys", [[0.0, 0.1], [0.1005, 0.83], [0.2505, -0.59], [0.3255, -0.6, "in"], [0.4005, 0.25, "in"], [13.0 / 31.0, 0.919175926, "in"], [0.45, 0.24, "out"], [AXE_LOW_PHASE, 0.07], [AXE_HOLD_PHASE, 0.05], [AXE_BODY_PHASE, 0.06], [1.0, 0.1]]]]],
 		],
 	},
 	# Knife: the right hand drawn back to the hip, thrust straight out with the
@@ -2371,6 +2377,31 @@ static func _keyed(keys: Array, u: float) -> float:
 	return float(keys[keys.size() - 1][1])
 
 
+## Interpolate lateral share and the unwrapped angle in the body's YZ plane.
+static func _axe_forearm_direction(axes: Array, u: float) -> Vector3:
+	var lateral: Array = []
+	var angles: Array = []
+	var x_keys: Array = axes[0][1]
+	for index: int in x_keys.size():
+		var key: Array = x_keys[index]
+		var direction: Vector3 = Vector3(float(key[1]), float(axes[1][1][index][1]), float(axes[2][1][index][1])).normalized()
+		var sample_angle: float = atan2(direction.z, direction.y)
+		if not angles.is_empty():
+			var previous: float = float(angles[-1][1])
+			sample_angle = previous + wrapf(sample_angle - previous, -PI, PI)
+		var x_key: Array = [float(key[0]), direction.x]
+		var angle_key: Array = [float(key[0]), sample_angle]
+		if key.size() > 2:
+			x_key.append(key[2])
+			angle_key.append(key[2])
+		lateral.append(x_key)
+		angles.append(angle_key)
+	var x: float = _keyed(lateral, u)
+	var angle: float = _keyed(angles, u)
+	var radius: float = sqrt(maxf(0.0, 1.0 - x * x))
+	return Vector3(x, radius * cos(angle), radius * sin(angle))
+
+
 static func _key_ease_error(keys: Array, clip: String) -> String:
 	for key: Array in keys:
 		if key.size() <= 2:
@@ -2608,7 +2639,10 @@ static func apply_layer(body: Skeleton3D, layer: Dictionary, u: float, sink_scal
 				turn(body, step[1], _value(step[3], w), AXES[step[2]])
 			"aim":
 				var dir: Array = step[3]
-				aim(body, step[1], step[2], Vector3(_value(dir[0], w), _value(dir[1], w), _value(dir[2], w)))
+				if bool(layer.get("forearm_arc", false)) and String(step[1]) == "forearm.R":
+					aim(body, step[1], step[2], _axe_forearm_direction(dir, u))
+				else:
+					aim(body, step[1], step[2], Vector3(_value(dir[0], w), _value(dir[1], w), _value(dir[2], w)))
 			"swing":
 				var angle := _value(step[4], w)
 				aim(body, step[1], step[2], Vector3(_value(step[3], w), -cos(angle), sin(angle)))

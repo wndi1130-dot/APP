@@ -686,7 +686,7 @@ func test_only_axe_authors_ease_tags_and_all_clip_tables_validate() -> void:
 	assert_true(BodyBake._clip_key_ease_failures(BodyBake.OWN_CLIPS, BodyBake.OWN_POSES).is_empty())
 
 
-## Three vertices per sole and hand, preserving the stick skeleton and binds.
+## Three vertices per sole, hand, head and forearm, with the original binds.
 func _axe_stick(size: float = 1.0) -> Node3D:
 	var root: Node3D = _stick_body(size)
 	var body: Skeleton3D = BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
@@ -698,7 +698,7 @@ func _axe_stick(size: float = 1.0) -> Node3D:
 	var bones: PackedInt32Array = PackedInt32Array()
 	var weights: PackedFloat32Array = PackedFloat32Array()
 	var indices: PackedInt32Array = PackedInt32Array()
-	for name_text: String in ["foot.L", "foot.R", "hand.R"]:
+	for name_text: String in ["foot.L", "foot.R", "hand.R", "head", "forearm.R"]:
 		var bone: int = body.find_bone(name_text)
 		var origin: Vector3 = body.get_bone_global_rest(bone).origin
 		for offset: Vector3 in [Vector3(-0.02, 0.0, -0.03), Vector3(0.02, 0.0, -0.03), Vector3(0.0, 0.0, 0.06)]:
@@ -860,34 +860,165 @@ func test_axe_support_rejects_impossible_knees_and_keeps_failure() -> void:
 		assert_eq(String(lopsided[0]["reason"]), "no_shared_height")
 
 
+## Recover the saved head basis from three non-collinear skin vertices.
+func _axe_head_basis(assets: Dictionary, u: float) -> Basis:
+	var left: Vector3 = _axe_vertex(assets, 9, u)
+	var right: Vector3 = _axe_vertex(assets, 10, u)
+	var front: Vector3 = _axe_vertex(assets, 11, u)
+	var x_axis: Vector3 = (right - left).normalized()
+	var z_axis: Vector3 = (front - (left + right) * 0.5).normalized()
+	return Basis(x_axis, z_axis.cross(x_axis).normalized(), z_axis).orthonormalized()
+
+
+func test_axe_saved_head_rotation_changes_by_at_most_twelve_degrees() -> void:
+	var root: Node3D = _axe_stick()
+	add_child_autofree(root)
+	var assets: Dictionary = BodyBake.bake_own(root, [_axe_entry()], [])
+	assert_true((assets.get("fit_failures", []) as Array).is_empty())
+	assert_eq(int(assets["clips"][0]["frames"]), 32)
+	# 0.67 rad over K5..K7 and 0.62 over K7..K8 need at most 10.1 deg
+	# per saved interval under smoothstep; 12 deg adds a 20 percent margin.
+	for frame: int in 31:
+		var before: Basis = _axe_head_basis(assets, float(frame) / 31.0)
+		var after: Basis = _axe_head_basis(assets, float(frame + 1) / 31.0)
+		assert_lte(absf(rad_to_deg(after.get_euler().x - before.get_euler().x)), 12.0, "saved head pitch")
+		assert_lte(rad_to_deg(before.get_rotation_quaternion().angle_to(after.get_rotation_quaternion())), 12.0, "saved head rotation")
+	var ctx: Dictionary = BodyBake.prepare_own(root)
+	var body: Skeleton3D = ctx["body"]
+	for sample: int in 101:
+		BodyBake.pose(ctx, "", "p_swing_axe", lerpf(0.3255, 0.45, float(sample) / 100.0))
+		var head: Basis = body.get_bone_global_pose(body.find_bone("head")).basis
+		assert_almost_eq(head.get_euler().x, 0.0, 0.00001, "K3..K5 cancellation")
+	assert_true(_axe_head_basis(assets, 0.0).is_equal_approx(_axe_head_basis(assets, 1.0)))
+
+
+func test_axe_forearm_lateral_limit_at_1001_phases_and_saved_blends() -> void:
+	var root: Node3D = _axe_stick()
+	add_child_autofree(root)
+	var assets: Dictionary = BodyBake.bake_own(root, [_axe_entry()], [])
+	assert_true((assets.get("fit_failures", []) as Array).is_empty())
+	var ctx: Dictionary = BodyBake.prepare_own(root)
+	var body: Skeleton3D = ctx["body"]
+	for sample: int in 1001:
+		var u: float = float(sample) / 1000.0
+		BodyBake.pose(ctx, "", "p_swing_axe", u)
+		var elbow: Vector3 = body.get_bone_global_pose(body.find_bone("forearm.R")).origin
+		var hand: Vector3 = body.get_bone_global_pose(body.find_bone("hand.R")).origin
+		assert_lte(absf((hand - elbow).normalized().x), 0.6, "posed forearm at %.3f" % u)
+		var saved_elbow: Vector3 = (_axe_vertex(assets, 12, u) + _axe_vertex(assets, 13, u) + _axe_vertex(assets, 14, u)) / 3.0
+		assert_lte(absf((_axe_hand(assets, u) - saved_elbow).normalized().x), 0.6, "saved forearm at %.3f" % u)
+	# Original authored directions remain exact at all ten keys.
+	var phases: Array[float] = [0.0, 0.1005, 0.2505, 0.3255, 0.4005, 0.45, BodyBake.AXE_LOW_PHASE, BodyBake.AXE_HOLD_PHASE, BodyBake.AXE_BODY_PHASE, 1.0]
+	var directions: Array[Vector3] = [Vector3(0.15, -1, 0.1), Vector3(0.56, -0.02, 0.83), Vector3(0.44, 0.68, -0.59),
+		Vector3(0.47, 0.64, -0.6), Vector3(0.39, 0.89, 0.25), Vector3(0.53, -0.81, 0.24),
+		Vector3(0.53, -0.85, 0.07), Vector3(0.54, -0.84, 0.05), Vector3(0.53, -0.84, 0.06), Vector3(0.15, -1, 0.1)]
+	for index: int in phases.size():
+		BodyBake.pose(ctx, "", "p_swing_axe", phases[index])
+		var elbow: Vector3 = body.get_bone_global_pose(body.find_bone("forearm.R")).origin
+		var hand: Vector3 = body.get_bone_global_pose(body.find_bone("hand.R")).origin
+		assert_lt((hand - elbow).normalized().distance_to(directions[index].normalized()), 0.00001, "authored direction")
+
+
+func _assert_axe_leg_fit(lengths: Array) -> void:
+	var root: Node3D = _axe_stick()
+	add_child_autofree(root)
+	var body: Skeleton3D = BodyBake.first_of(root, "Skeleton3D") as Skeleton3D
+	for index: int in 2:
+		var side: String = "L" if index == 0 else "R"
+		var pair: Vector2 = lengths[index]
+		var shin: int = body.find_bone("shin." + side)
+		var foot: int = body.find_bone("foot." + side)
+		body.set_bone_rest(shin, Transform3D(Basis(), Vector3(0, -pair.x, 0)))
+		body.set_bone_rest(foot, Transform3D(Basis(), Vector3(0, -pair.y, 0)))
+	for target_angle: float in [4.0, 10.0, 26.0, 36.0, 41.0]:
+		body.reset_bone_poses()
+		var failures: Array[Dictionary] = BodyBake._plant_axe_support(body, target_angle)
+		assert_true(failures.is_empty(), str(failures))
+		for side: String in ["L", "R"]:
+			var thigh_id: int = body.find_bone("thigh." + side)
+			var foot_id: int = body.find_bone("foot." + side)
+			var thigh_rest: Vector3 = body.get_bone_global_rest(thigh_id).origin
+			var target: Vector3 = body.get_bone_global_rest(foot_id).origin
+			target.x = thigh_rest.x + (0.05 if side == "L" else -0.05)
+			var thigh: Vector3 = body.get_bone_global_pose(thigh_id).origin
+			var shin: Vector3 = body.get_bone_global_pose(body.find_bone("shin." + side)).origin
+			var foot: Vector3 = body.get_bone_global_pose(foot_id).origin
+			var knee: float = rad_to_deg((shin - thigh).angle_to(foot - shin))
+			assert_gte(knee, maxf(0.0, target_angle - 5.0) - 0.001)
+			assert_lte(knee, minf(50.0, target_angle + 5.0) + 0.001)
+			assert_lte(foot.distance_to(target), 0.001, "actual ankle target error")
+			var axis: Vector3 = (foot - thigh).normalized()
+			assert_gt(((shin - thigh) - axis * (shin - thigh).dot(axis)).z, 0.0, "knee bends forward")
+
+
+func test_axe_support_fits_unequal_upper_and_lower_lengths() -> void:
+	_assert_axe_leg_fit([Vector2(0.62, 0.38), Vector2(0.62, 0.38)])
+
+
+func test_axe_support_fits_asymmetric_legs_with_shared_height() -> void:
+	_assert_axe_leg_fit([Vector2(0.62, 0.38), Vector2(0.55, 0.45)])
+
+
+func test_axe_support_rejects_actual_post_solve_ankle_error() -> void:
+	var root: Node3D = _axe_stick()
+	add_child_autofree(root)
+	var ctx: Dictionary = BodyBake.prepare_own(root)
+	var body: Skeleton3D = ctx["body"]
+	var foot: int = body.find_bone("foot.L")
+	# Rest geometry is feasible; a shorter posed shin defeats the actual solve.
+	body.set_bone_pose_position(foot, body.get_bone_rest(foot).origin * 0.8)
+	var failures: Array[Dictionary] = BodyBake._plant_axe_support(body, 36.0)
+	assert_eq(failures.size(), 1)
+	if failures.size() != 1:
+		return
+	assert_eq(String(failures[0]["reason"]), "post_solve")
+	assert_eq(String(failures[0]["side"]), "L")
+	assert_almost_eq(float(failures[0]["ankle_error"]), 0.1, 0.00001)
+	BodyBake._record_axe_failures(ctx, "p_swing_axe", failures)
+	assert_true(String(ctx["fit_failures"][0]).begins_with("AXE_SUPPORT_UNFIT"))
+	BodyBake.pose(ctx, "", "p_swing_axe", 0.0)
+	assert_true(String(ctx["fit_failures"][0]).begins_with("AXE_SUPPORT_UNFIT"))
+
+
 func test_other_clips_keep_legacy_bake_tables_layout_and_values() -> void:
+	var baseline: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/body_bake_08530f0a.json"))
+	var tables: Dictionary = {"CLIPS": BodyBake.CLIPS, "OWN_CLIPS": BodyBake.OWN_CLIPS,
+		"PERSON_CLIPS": BodyBake.PERSON_CLIPS, "POSES": BodyBake.POSES, "OWN_POSES": BodyBake.OWN_POSES,
+		"PERSON_KEEP": BodyBake.PERSON_KEEP, "DEAD_KEEP": BodyBake.DEAD_KEEP}
+	for name_text: String in tables:
+		var actual: Array = []
+		for entry: Variant in tables[name_text]:
+			var clip_name: String = String(entry[0]) if entry is Array else String(entry)
+			if clip_name != "p_swing_axe":
+				actual.append(entry)
+		# JSON normalizes numeric types without accepting a changed value.
+		var normalized: Array = JSON.parse_string(JSON.stringify(actual))
+		assert_eq(normalized, baseline[name_text] as Array, name_text + " at 08530f0a")
 	var source: String = FileAccess.get_file_as_string("res://scripts/body_bake.gd").replace("\r\n", "\n")
-	var start: int = source.find("\t\"p_swing_axe\": {")
-	var stop: int = source.find("\n\t# Knife:", start)
-	assert_gte(start, 0)
-	assert_gt(stop, start)
-	var old_layer: String = """	"p_swing_axe": {
-		"steps": [
-			["aim", "thigh.L", "shin.L", [0.1, -1.0, ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.25], [1, 0.0]]]]],
-			["aim", "shin.L", "foot.L", [0.08, -1.0, ["keys", [[0, -0.02], [0.33, -0.02], [0.45, -0.25], [1, -0.02]]]]],
-			["aim", "thigh.R", "shin.R", [-0.1, -1.0, ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.25], [1, 0.0]]]]],
-			["aim", "shin.R", "foot.R", [-0.08, -1.0, ["keys", [[0, -0.02], [0.33, -0.02], [0.45, -0.25], [1, -0.02]]]]],
-			["turn", "spine", "x", ["keys", [[0, 0.05], [0.33, -0.2], [0.45, 0.45], [1, 0.05]]]],
-			["turn", "neck", "x", ["keys", [[0, 0.0], [0.33, -0.2], [0.45, 0.15], [1, 0.0]]]],
-			["aim", "upper_arm.L", "forearm.L", [0.05, ["keys", [[0, -1.0], [0.33, 1.0], [0.45, -0.25], [1, -1.0]]], ["keys", [[0, 0.05], [0.33, -0.3], [0.45, 1.0], [1, 0.05]]]]],
-			["aim", "forearm.L", "hand.L", [-0.15, ["keys", [[0, -1.0], [0.33, 0.7], [0.45, -0.7], [1, -1.0]]], ["keys", [[0, 0.1], [0.33, -0.8], [0.45, 0.7], [1, 0.1]]]]],
-			["aim", "upper_arm.R", "forearm.R", [-0.05, ["keys", [[0, -1.0], [0.33, 1.0], [0.45, -0.25], [1, -1.0]]], ["keys", [[0, 0.05], [0.33, -0.3], [0.45, 1.0], [1, 0.05]]]]],
-			["aim", "forearm.R", "hand.R", [0.15, ["keys", [[0, -1.0], [0.33, 0.7], [0.45, -0.7], [1, -1.0]]], ["keys", [[0, 0.1], [0.33, -0.8], [0.45, 0.7], [1, 0.1]]]]],
-		],
-		"sink": ["keys", [[0, 0.0], [0.33, 0.0], [0.45, 0.12], [1, 0.0]]],
-	},"""
-	source = source.substr(0, start) + old_layer + source.substr(stop)
+	var first: int = source.find("const WALK_LEGS:")
+	var last: int = source.find("const AXES:", first)
+	var axe_start: int = source.find("\t\"p_swing_axe\": {", first)
+	var axe_end: int = source.find("\n\t# Knife:", axe_start)
+	assert_gte(first, 0)
+	assert_gt(last, first)
+	assert_gt(axe_start, first)
+	assert_gt(axe_end, axe_start)
+	if first < 0 or last < 0 or axe_start < 0 or axe_end < 0:
+		return
+	var fixed_layers: String = source.substr(first, axe_start - first) + source.substr(axe_end, last - axe_end)
+	assert_eq(fixed_layers.sha256_text(), String(baseline["layer_source_sha256"]), "other layers and shared tracks at 08530f0a")
+
+
+func test_other_clips_keep_untagged_bake_layout_and_values() -> void:
+	var source: String = FileAccess.get_file_as_string("res://scripts/body_bake.gd").replace("\r\n", "\n")
 	var tests: String = FileAccess.get_file_as_string("res://tests/test_body_bake.gd").replace("\r\n", "\n")
 	var formula_start: int = tests.find("func _legacy_keyed(")
 	var formula_end: int = tests.find("\n\nfunc _collect_key_tracks", formula_start)
 	var formula: String = tests.substr(formula_start, formula_end - formula_start).replace("func _legacy_keyed(", "static func _keyed(")
-	start = source.find("static func _keyed(")
-	stop = source.find("static func _key_ease_error(", start)
+	var start: int = source.find("static func _keyed(")
+	var stop: int = source.find("## Interpolate lateral share", start)
+	assert_gte(start, 0)
+	assert_gt(stop, start)
 	source = source.substr(0, start) + formula + "\n\n" + source.substr(stop)
 	var legacy: GDScript = GDScript.new()
 	legacy.source_code = source
