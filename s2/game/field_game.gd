@@ -211,6 +211,7 @@ var sun: DirectionalLight3D
 ## The light from the camera's side that keeps the walls turned from the sun out
 ## of the black (Atmosphere.VIEW_FILL): no shadow, by day only.
 var view_fill: DirectionalLight3D
+var _view_fill_mode: String = "light"
 var snow: GPUParticles3D
 ## Storm stop (weather_fx 14장, opts["storm"]: before, during, after): its look,
 ## the snow layers with their place relative to the view, and the screen layer
@@ -944,7 +945,51 @@ func _set_view_fill() -> void:
 	# Keep the diagnostic energy across minute updates without lighting night/storm.
 	view_fill.light_energy = float(view_fill.get_meta(PerfSwitch.FILL_ENERGY, fill_energy)) if fill_energy > 0.001 else fill_energy
 	view_fill.light_color = fx_light.get("fill_color", Color.WHITE)
-	view_fill.visible = view_fill.light_energy > 0.001
+	var fill_state: String = _view_fill_state()
+	view_fill.visible = fill_state == "light" and view_fill.light_energy > 0.001
+	if PerfSwitch.fill_owner() != get_instance_id():
+		return
+	var fill_dir: Vector3 = Vector3.ZERO
+	var fill_value: Vector4 = Vector4.ZERO
+	if fill_state == "shader" and view_fill.light_energy > 0.001:
+		fill_dir = view_fill.global_transform.basis.z.normalized()
+		var linear: Color = view_fill.light_color.srgb_to_linear()
+		var energy: float = view_fill.light_energy
+		fill_value = Vector4(linear.r * energy, linear.g * energy, linear.b * energy, 1.0)
+	PerfSwitch.publish_fill(get_instance_id(), fill_dir, fill_value)
+
+
+func set_view_fill_mode(mode: String) -> void:
+	if mode not in ["light", "shader"]:
+		return
+	_view_fill_mode = mode
+	_set_view_fill()
+
+
+func _view_fill_state() -> String:
+	if view_fill != null and view_fill.visibility_changed.is_connected(view_fill.hide):
+		return "off"
+	var mode: Variant = _perf_settings.get("view_fill_mode")
+	if mode is String and mode in ["light", "shader"]:
+		return String(mode)
+	return _view_fill_mode
+
+
+func _configure_view_fill() -> void:
+	# Desktop tools use opts/setter; this connection stays for the field's life.
+	if not visibility_changed.is_connected(_sync_view_fill_owner):
+		visibility_changed.connect(_sync_view_fill_owner)
+	set_view_fill_mode(String(opts.get("view_fill_mode", _view_fill_mode)))
+
+
+func _sync_view_fill_owner() -> void:
+	if view_fill == null:
+		return
+	if is_visible_in_tree():
+		PerfSwitch.claim_fill(get_instance_id())
+		_set_view_fill()
+	else:
+		PerfSwitch.release_fill(get_instance_id())
 
 
 ## Low sun through the windows (decision 474 B8): from 14:50 the pools on the
@@ -1083,6 +1128,7 @@ func _build_world() -> void:
 	add_child(view_fill)
 	_set_view_fill()
 	_configure_perf_switch()
+	_sync_view_fill_owner()
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
 	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
 	lantern.omni_attenuation = LANTERN_FALLOFF
@@ -1881,20 +1927,24 @@ func continue_resume() -> bool:
 
 
 func _configure_perf_switch() -> void:
+	_configure_view_fill()
 	# Phone measurements only; desktop fields never read the real user file.
 	if OS.has_feature("android"):
 		_apply_perf_settings(PerfSwitch.read())
 
 
 func _apply_perf_settings(settings: Dictionary) -> void:
+	var mode_before: Variant = _perf_settings.get("view_fill_mode")
 	_perf_settings = settings
 	if not settings.is_empty():
 		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
 		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false)
-		if view_fill.has_meta(PerfSwitch.FILL_ENERGY):
-			_set_view_fill()
+		if settings.get("view_fill_mode") is String and settings["view_fill_mode"] in ["light", "shader"] \
+				and settings["view_fill_mode"] != mode_before:
+			changed["view_fill_mode"] = settings["view_fill_mode"]
 		if not changed.is_empty():
 			print("PERF_SWITCH ", changed)
+	_set_view_fill()
 	# StopLoader builds with visible=false, even with processing disabled.
 	# Keep this one-shot connection for empty files too: another field may
 	# change the renderer before this hidden field is shown.
@@ -1920,6 +1970,7 @@ func _apply_perf_renderer() -> void:
 
 
 func _exit_tree() -> void:
+	PerfSwitch.release_fill(get_instance_id())
 	if _perf_renderer_active:
 		PerfSwitch.restore_renderer(get_instance_id())
 
