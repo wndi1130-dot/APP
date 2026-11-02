@@ -189,3 +189,31 @@ func test_a_squeezed_band_warns_once_and_again_only_after_it_fits() -> void:
 		assert_eq(fits, width > 1280.0, "width %d, every stock 999" % int(width))
 	# Squeezed, laid out again, fitting, squeezed again: two warnings, never a failure.
 	assert_push_warning_count(2)
+
+
+## A supplies run on the decision 100 ruler (2,000 runs, 42,544 settlements, 11-03) never had two
+## stocks at three digits at once (highest: coal 136, food 147, med 135, lux 20, sup 10). Two
+## stocks at 999 with the other three at 99 is twice that and keeps the band readable at both
+## phone widths. (Three at 999 leave 127.6 dp at 1280×720, 0.4 under the minimum: the
+## development warning of test_a_squeezed_band_warns_once_and_again_only_after_it_fits.)
+func test_the_worst_stocks_a_supplies_run_reaches_fit_both_phone_widths() -> void:
+	var g: Dictionary = _g.duplicate(true)
+	g["supOn"] = true
+	for id: String in ["coal", "food"]:
+		g[id] = 999
+	for id: String in ["med", "lux", "sup"]:
+		g[id] = 99
+	for resolution: Vector2i in [Vector2i(1280, 720), Vector2i(1688, 780)]:
+		var strip: Gauges = Gauges.new()
+		strip.g = g
+		strip.t = _t
+		add_child_autofree(strip)
+		strip.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		strip.size = Vector2(float(resolution.x) * 720.0 / float(resolution.y), Gauges.BAND_H)
+		strip._lay_out()
+		var mood: Control = strip.find_child("Standing", true, false)
+		var stocks: Control = strip.find_child("Stocks", true, false)
+		var at: String = "%dx%d" % [resolution.x, resolution.y]
+		assert_true(bool(mood.get_meta("band_layout", {}).get("fits", false)), at + " readable minimum")
+		assert_lte(mood.position.x + mood.size.x, stocks.position.x - Gauges.BAND_GAP * Fonts.K + 0.01, at + " clear of the stocks")
+		assert_eq(stocks.get_child_count(), 5, at + " all five stocks drawn")

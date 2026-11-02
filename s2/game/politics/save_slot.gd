@@ -102,6 +102,8 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 		return "미뤄 둔 카드 목록이 이상하다"
 	if g.has("lateOn") and not g["lateOn"] is bool:
 		return "서류 미루기 켜짐 값이 이상하다"
+	if g.has("shopSeen") and (not _is_number(g["shopSeen"]) or float(g["shopSeen"]) < -1.0 or float(g["shopSeen"]) != floorf(float(g["shopSeen"]))):
+		return "본 공방 소식 구간이 이상하다"
 	if g.has("lateCards") and not g["lateCards"] is Array:
 		return "미룬 서류 목록이 이상하다"
 	# Content (event pack) fields: absent or null is none (S1 `??`), anything else must have its shape.

@@ -70,6 +70,7 @@ const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainDecor = preload("res://game/train/train_decor.gd")
 const TrainTurn = preload("res://game/train/train_turn.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
+const TrainSupplies = preload("res://game/train/train_supplies.gd")
 const WorkshopPane = preload("res://game/ui/workshop_pane.gd")
 const ModsPane = preload("res://game/ui/mods_pane.gd")
 const ResearchPane = preload("res://game/ui/research_pane.gd")
@@ -352,6 +353,10 @@ func _ready() -> void:
 		if bool(opts.get("save", false)) and not train_g.is_empty():
 			_clear_slice_field()
 		_seed_shop_settle()
+		# A new supplies run has seen no settlement yet; a resume before the train first
+		# stands then still shows the first one.
+		if bool(train_g.get("supOn", false)) and not train_g.has("shopSeen"):
+			train_g["shopSeen"] = -1
 	else:
 		run = String(resume["run"])
 		train_g = (resume["g"] as Dictionary).duplicate(true)
@@ -543,7 +548,7 @@ func _show_step(i: int) -> void:
 		# A supplies run's workshop works inside the settlement even when the train halts
 		# or the run ends there: what it made is still seen, once.
 		if bool(train_g.get("supOn", false)):
-			_post_shop_events(pending_shop_events)
+			_show_shop_news(pending_shop_events)
 			pending_shop_events = []
 		_show_panel("끝" if id == "end" else train_halt_title(train_g), load("res://game/train/turn/turn_end.gd").panel_lines(train_g, train_t, train_halt_line(train_g)), "처음으로" if id == "end" else "끝")
 		return
@@ -570,7 +575,13 @@ func _show_step(i: int) -> void:
 		shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if String(row[1]) != "":
 		_show_train(String(row[1]), int(train_g["seg"]) if _is_campaign() else int(row[2]))
-		_post_shop_events(shop_events)
+		if bool(train_g.get("supOn", false)):
+			_show_shop_news(shop_events)
+		else:
+			_post_shop_events(shop_events)
+	elif bool(train_g.get("supOn", false)):
+		# No train on this step: a supplies run keeps its news for the next one.
+		pending_shop_events = shop_events
 	if id == "receipt":
 		_show_receipt("여기까지" if _is_campaign() and int(train_g["campaign"]["cursor"]) == CampaignRoute.size() - 1 else String(row[4]))
 		return
@@ -1012,6 +1023,9 @@ static func start_board() -> Array:
 		return [{}, {}]
 	d["state"]["lateOn"] = true
 	d["state"]["eventPack"] = true
+	# Decision 490: a new run carries supplies, one number on the top bar shared by
+	# the ration law. A saved run keeps what it was saved with (save_slot.gd).
+	TrainSupplies.enable(d["state"], d["tables"])
 	return [d["state"], d["tables"]]
 
 
@@ -1312,13 +1326,34 @@ func _post_shop_events(events: Array) -> void:
 			train.call("post_event", ev)
 
 
+## A run saved with `shopSeen` (the settlement whose news the train last showed)
+## shows the newer settlement's news once more after a resume: the run was left
+## before the train stood. A run saved without it (before that key) treats the last
+## settlement as seen, as it did.
 func _seed_shop_settle() -> void:
 	shop_settle_seg = -1
 	if not bool(train_g.get("supOn", false)):
 		return
 	var last: Variant = train_g.get("lastSettle")
+	var settled: int = -1
 	if last is Dictionary and last.get("workshop") is Dictionary:
-		shop_settle_seg = int(last["workshop"].get("seg", -1))
+		settled = int(last["workshop"].get("seg", -1))
+	if not train_g.has("shopSeen"):
+		shop_settle_seg = settled
+		return
+	shop_settle_seg = int(train_g["shopSeen"])
+	_take_shop_settle()
+
+
+## The news a supplies run's settlement left, on the train once: the settlement it
+## came from is written as seen and kept at once, so a resume shows it no more.
+func _show_shop_news(events: Array) -> void:
+	_post_shop_events(events)
+	if shop_settle_seg < 0 or int(train_g.get("shopSeen", -1)) == shop_settle_seg:
+		return
+	train_g["shopSeen"] = shop_settle_seg
+	if not events.is_empty():
+		_save_slice()
 
 
 func _take_shop_settle() -> void:
@@ -2683,6 +2718,8 @@ func _starting_board() -> Array:
 	if not state.is_empty():
 		state["lateOn"] = true
 		state["eventPack"] = true
+		if not tables.is_empty():
+			TrainSupplies.enable(state, tables)
 	return [state, tables]
 
 

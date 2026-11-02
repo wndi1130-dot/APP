@@ -57,10 +57,15 @@ func _picked(t: Dictionary) -> Dictionary:
 	return SliceSave.pick(_slot + "slice.json", _slot + "train.json", t, _slot + "field.json")
 
 
-func _old_shop(flow: ResumeProbe) -> void:
+## Old news on the board. By default it was shown before the save (the train stood
+## after that settlement), as in play; `seen = false` leaves it unshown.
+func _old_shop(flow: ResumeProbe, seen: bool = true) -> void:
 	flow.train_g["supOn"] = true
-	flow.train_g["lastSettle"] = {"workshop": {"seg": int(flow.train_g["seg"]) - 1,
+	var seg: int = int(flow.train_g["seg"]) - 1
+	flow.train_g["lastSettle"] = {"workshop": {"seg": seg,
 		"events": [{"kind": "made", "car": "", "comm": "", "sign": 1, "size": 0.4, "day": 0, "test_old_shop": true}]}}
+	if seen:
+		flow.train_g["shopSeen"] = seg
 	assert_true(flow._save_slice())
 
 
@@ -166,6 +171,85 @@ func test_enabled_resume_with_unapplied_field_end_keeps_old_shop_events_out() ->
 		assert_false(resumed.replayed, "old receipt was seeded before the first field return")
 		assert_true(resumed.pending_shop_events.is_empty())
 		after_each()
+
+
+## A new run carries supplies and has seen no settlement: `shopSeen` -1 from the start.
+func test_a_new_run_starts_with_supplies_on_and_no_news_seen() -> void:
+	for campaign: bool in [false, true]:
+		var flow: ResumeProbe = _flow(campaign)
+		assert_true(bool(flow.train_g.get("supOn", false)), "campaign %s" % campaign)
+		assert_eq(int(flow.train_g.get("shopSeen", -9)), -1)
+		after_each()
+
+
+## Left before the train stood after a settlement: the resumed run shows that
+## settlement's news once, writes it seen at once, and a second resume shows none.
+func test_unseen_workshop_news_shows_once_after_resume() -> void:
+	for campaign: bool in [false, true]:
+		var flow: ResumeProbe = _flow(campaign)
+		_old_shop(flow, false)
+		var t: Dictionary = flow.train_t
+		var made: Array = flow.train_g["lastSettle"]["workshop"]["events"].duplicate(true)
+		var seg: int = int(flow.train_g["lastSettle"]["workshop"]["seg"])
+		flow.free()
+		var resumed: ResumeProbe = _flow(campaign, _picked(t))
+		var waiting: Array = resumed.pending_shop_events.duplicate(true)
+		assert_eq(resumed.posted + waiting, made, "campaign %s: shown as the train stands, or waiting for it" % campaign)
+		if not waiting.is_empty():
+			resumed._show_shop_news(waiting)
+			resumed.pending_shop_events = []
+		assert_eq(resumed.posted, made, "shown once")
+		assert_eq(int(resumed.train_g["shopSeen"]), seg)
+		var saved: Dictionary = _picked(t)
+		assert_eq(int(saved["g"].get("shopSeen", -9)), seg, "written seen at once")
+		resumed.free()
+		var again: ResumeProbe = _flow(campaign, saved)
+		assert_true(again.pending_shop_events.is_empty() and again.posted.is_empty(), "a second resume shows none")
+		after_each()
+
+
+## A run saved before `shopSeen` (2b and earlier) reads its last settlement as seen.
+func test_a_save_without_shop_seen_keeps_the_old_reading() -> void:
+	var flow: ResumeProbe = _flow(false)
+	_old_shop(flow, false)
+	flow.train_g.erase("shopSeen")
+	assert_true(flow._save_slice())
+	var t: Dictionary = flow.train_t
+	flow.free()
+	var picked: Dictionary = _picked(t)
+	assert_false(picked["g"].has("shopSeen"), "the save carries no shopSeen")
+	var resumed: ResumeProbe = _flow(false, picked)
+	assert_true(resumed.pending_shop_events.is_empty() and resumed.posted.is_empty(), "nothing shown again")
+	# The train standing again writes that last settlement as the one seen.
+	if resumed.train_g.has("shopSeen"):
+		assert_eq(int(resumed.train_g["shopSeen"]), int(picked["g"]["lastSettle"]["workshop"]["seg"]))
+
+
+## `shopSeen` stands beside the board, not in its dom: a board carrying it is still an
+## S2 board (State.is_s1a, Dom.is_store), saves and reads, and its workshop still works.
+func test_shop_seen_keeps_the_board_an_s2_board() -> void:
+	var flow: ResumeProbe = _flow(false)
+	var g: Dictionary = flow.train_g.duplicate(true)
+	g["shopSeen"] = 3
+	assert_true(State.is_s1a(g))
+	assert_true(Dom.is_store(g["dom"]))
+	assert_null(Save.shape_problem(g, flow.train_t))
+	for bad: Variant in [-2, 1.5, "3", true]:
+		var odd: Dictionary = g.duplicate(true)
+		odd["shopSeen"] = bad
+		assert_not_null(Save.shape_problem(odd, flow.train_t), "shopSeen %s" % str(bad))
+	g["dom"]["target"] = 0
+	g["coal"] = 10000.0
+	assert_true(Workshop.start(g, "bow"))
+	var after: Dictionary = Settle.settle(g, flow.train_t)
+	assert_eq(after["lastSettle"]["workshop"]["events"].size(), 1, "the workshop still works its stretch")
+	assert_eq(int(after["shopSeen"]), 3, "the settlement leaves it as it was")
+	flow._take(after)
+	assert_true(flow._save_slice())
+	var t: Dictionary = flow.train_t
+	flow.free()
+	var resumed: ResumeProbe = _flow(false, _picked(t))
+	assert_true(State.is_s1a(resumed.train_g), "still an S2 board after the resume")
 
 
 func before_all() -> void:
