@@ -91,7 +91,9 @@ static func can_grow(data: Dictionary) -> bool:
 
 
 static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int, refresh_ground: bool = true, carry_paths: bool = false) -> Dictionary:
-	assert(can_grow(data), "찍힌 경계 뒤에는 지도를 키울 수 없습니다")
+	if not can_grow(data):
+		push_error("찍힌 경계 뒤에는 지도를 키울 수 없습니다")
+		return data
 	assert(mini(mini(left, top), mini(right, bottom)) >= 0)
 	if left + top + right + bottom == 0:
 		return data

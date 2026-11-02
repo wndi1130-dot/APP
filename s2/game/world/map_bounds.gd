@@ -79,7 +79,18 @@ static func check(bounds: Dictionary, grid: FieldGrid) -> Array[String]:
 	return errors
 
 
+## 찍힌 자료의 판이 다르면 호출자가 원본부터 다시 준비해야 한다.
+static func can_reuse(data: Dictionary, bounds_rule: int = -1) -> bool:
+	if not data.has("bounds_stamp"):
+		return true
+	var requested: int = bounds_rule if bounds_rule >= 0 else int(data.get("bounds", {}).get("rule", 0))
+	return int(data["bounds_stamp"]) == requested
+
+
 static func apply(data: Dictionary, bounds_rule: int = -1) -> Dictionary:
+	if not can_reuse(data, bounds_rule):
+		push_error("다른 판의 경계는 원본부터 다시 준비해야 합니다")
+		return data
 	var bounds: Dictionary = data.get("bounds", {})
 	if bounds.is_empty() or bounds_rule == 0 or bounds.get("rule", 0) == 0:
 		return data
@@ -92,7 +103,6 @@ static func apply(data: Dictionary, bounds_rule: int = -1) -> Dictionary:
 	if bounds_rule > 0 and bounds_rule != rule:
 		return data
 	if data.has("bounds_stamp"):
-		assert(int(data["bounds_stamp"]) == rule, "다른 판의 경계를 다시 찍을 수 없습니다")
 		return data
 	data["bounds_stamp"] = rule
 	return data

@@ -244,6 +244,8 @@ static func _counts(d: Dictionary) -> bool:
 
 
 static func _whole(d: Dictionary) -> bool:
+	if d.has("bounds_rule") and not _valid_bounds_rule(d["bounds_rule"]):
+		return false
 	if not _fields(d, {"clock": TYPE_DICTIONARY, "coal": TYPE_DICTIONARY}, {
 		"people": TYPE_ARRAY, "zombies": TYPE_ARRAY, "ground_items": TYPE_ARRAY,
 		"containers": TYPE_DICTIONARY, "spots": TYPE_DICTIONARY, "ammo": TYPE_DICTIONARY, "unloaded": TYPE_DICTIONARY,
@@ -287,6 +289,13 @@ static func _whole(d: Dictionary) -> bool:
 	if not _whole_departure(opts.get("departure", {}) if departure.is_empty() else departure):
 		return false
 	return not exact(d) or _whole_runtime(d)
+
+
+static func _valid_bounds_rule(value: Variant) -> bool:
+	if value is int:
+		return value >= 0
+	# JSON의 정수도 float로 온다. int 범위를 벗어난 값은 변환 전에 거부한다.
+	return value is float and is_finite(value) and value >= 0.0 and value < 9223372036854775808.0 and floor(value) == value
 
 
 ## Sled rows as the restore reads them: a bad one sends the read to the backup

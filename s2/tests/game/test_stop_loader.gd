@@ -194,6 +194,79 @@ func test_an_empty_region_band_keeps_the_original_build_result() -> void:
 		assert_eq((built["grid"] as FieldGrid).solid, (original["grid"] as FieldGrid).solid)
 
 
+func test_prepare_reuses_only_the_requested_rule_and_matching_stamp() -> void:
+	var loader = StopLoader.new()
+	loader.threaded = false
+	add_child_autofree(loader)
+	loader.prepare("", 7, "", -1.0, "", "", 0)
+	var generation: int = loader._generation
+	var original: Dictionary = loader.data
+	loader.prepare("", 7, "", -1.0, "", "", 0)
+	assert_eq(loader._generation, generation)
+	assert_true(is_same(loader.data, original))
+	for rule: int in [1, 99, 0]:
+		loader.prepare("", 7, "", -1.0, "", "", rule)
+		generation += 1
+		assert_eq(loader._generation, generation, "판만 달라도 다시 준비")
+		assert_eq(loader.bounds_rule_for, rule)
+	original = loader.data
+	original["bounds_stamp"] = 1
+	original["bounds_probe"] = true
+	loader.prepare("", 7, "", -1.0, "", "", 0)
+	assert_eq(loader._generation, generation + 1, "같은 요청도 찍힌 판이 다르면 다시 준비")
+	assert_false(is_same(loader.data["grid"], original["grid"]), "원본부터 다시 지음")
+	assert_false(loader.data.has("bounds_probe"))
+	assert_false(loader.data.has("bounds_stamp"))
+	assert_eq(original["bounds_stamp"], 1, "기존 자료의 표시만 지우지 않음")
+
+
+## 씨앗을 모르고 미리 지은 자료는 그대로 쓰고(다시 짓지 않음), 경계는 필드가 샛길 다음에 찍는다.
+func test_seedless_ready_leaves_the_bounds_to_the_field() -> void:
+	var seedless: Dictionary = StopLoader.make_ready(load(FieldMaps.path_of(FieldMaps.resolve(""))), -1)
+	assert_false(seedless.has("bounds_stamp"), "샛길 전에는 찍지 않는다")
+	assert_false(seedless.has("_side_seed"))
+	assert_true(seedless.has("_building_plan"), "미리 짓는 계획은 지금처럼 만든다")
+	var loader = StopLoader.new()
+	loader.threaded = false
+	add_child_autofree(loader)
+	loader.prepare("", -1, "", -1.0, "", FieldGame.region_for(OPTS), 0)
+	var generation: int = loader._generation
+	var holder := Node3D.new()
+	add_child_autofree(holder)
+	var options: Dictionary = OPTS.duplicate()
+	options["bounds_rule"] = 0
+	loader.build_field(holder, options)
+	assert_eq(loader._generation, generation, "씨앗만 정해졌다고 다시 짓지 않는다")
+	if not loader.field.is_built:
+		await wait_for_signal(loader.field_built, 60)
+	assert_true(loader.field.is_built)
+	assert_false(loader.field.data.has("bounds_stamp"))
+
+
+func test_build_field_rebuilds_stamped_data_for_zero_and_unavailable_rules() -> void:
+	for rule: int in [0, 99]:
+		var loader = StopLoader.new()
+		loader.threaded = false
+		add_child_autofree(loader)
+		loader.prepare("", 7, "", -1.0, "", FieldGame.region_for(OPTS), 0)
+		var original: Dictionary = loader.data
+		original["bounds_stamp"] = 1
+		var generation: int = loader._generation
+		var holder := Node3D.new()
+		add_child_autofree(holder)
+		var options: Dictionary = OPTS.duplicate()
+		options["bounds_rule"] = rule
+		loader.build_field(holder, options)
+		assert_eq(loader._generation, generation + 1)
+		assert_eq(loader.bounds_rule_for, rule)
+		assert_eq(original["bounds_stamp"], 1)
+		if not loader.field.is_built:
+			await wait_for_signal(loader.field_built, 60)
+		assert_true(loader.field.is_built)
+		assert_false(is_same(loader.field.data["grid"], original["grid"]))
+		assert_false(loader.field.data.has("bounds_stamp"))
+
+
 func test_prepare_rebuilds_when_only_the_region_band_changes() -> void:
 	var loader = StopLoader.new()
 	loader.threaded = false

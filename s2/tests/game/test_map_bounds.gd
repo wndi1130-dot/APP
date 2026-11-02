@@ -11,9 +11,27 @@ const StopLoader = preload("res://game/stop_loader.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
+const SidePath = preload("res://game/world/side_path.gd")
 const BASELINE: String = "res://tests/fixtures/bounds_baseline_sample_09e963af.json"
 const WIDTHS: Array[int] = [30, 36, 42, 48]
 const SHIFT: Vector2i = Vector2i(30, 36)
+
+
+class BoundedLine extends RefCounted:
+	static func build() -> Dictionary:
+		var data: Dictionary = preload("res://tests/game/fixtures/bare_line_map.gd").build()
+		data["bounds"] = {"rule": 1, "made_by": "hand", "outline": [Vector2i(0, 0), Vector2i(12, 0),
+			Vector2i(12, 12), Vector2i(0, 12)], "runs": [{"from": 0, "to": 4, "kind": "forest"}],
+			"gaps": [], "sides": [0, 0, 0, 0]}
+		return data
+
+
+class BoundedSideLine extends RefCounted:
+	static func build() -> Dictionary:
+		var data: Dictionary = BoundedLine.build()
+		data = MapShift.grow(data, 0, 0, 80, 100)
+		data["place_id"] = "bounds_probe"
+		return data
 
 
 func _sample() -> Dictionary:
@@ -52,6 +70,11 @@ func test_sample_20_matches_09e963af() -> void:
 		var changed: Array[String] = _changed_items(cases[key], BoundsDigest.digest(data))
 		assert_true(changed.is_empty(), "%s changed=%s" % [key, str(changed)])
 		assert_false(data.has("bounds_stamp"), key + ": 꺼진 지도에는 찍기 표시가 없습니다")
+		var ring: Dictionary = data.get("map_ring", {})
+		if not ring.is_empty():
+			assert_true(ring.has("sides"), key + ": 네 폭 기록")
+			var width: int = int(ring["width"])
+			assert_eq(ring.get("sides"), [width, width, width, width], key + ": 균일한 네 폭")
 		data.clear()
 
 
@@ -179,7 +202,8 @@ func test_ring_four_different_widths_keeps_inner_and_moves_entries_to_edge() -> 
 	var now: Dictionary = MapRing.add(was, WIDTHS)
 	_assert_shifted(was, now)
 	assert_eq(now["map_ring"]["inner"], Rect2i(30, 36, 24, 18))
-	assert_eq(now["map_ring"]["sides"], WIDTHS)
+	assert_true(now["map_ring"].has("sides"))
+	assert_eq(now["map_ring"].get("sides"), WIDTHS)
 	assert_eq(now["map_ring"]["roads"].slice(0, 4), [Rect2i(15, 18, 60, 2),
 		Rect2i(15, 76, 60, 2), Rect2i(15, 18, 2, 60), Rect2i(73, 18, 2, 60)], "네 폭 각각의 둘레 길")
 	assert_eq(now["entries"], {"west": [Vector2i(0, 44)], "east": [Vector2i(95, 44)],
@@ -265,9 +289,109 @@ func test_empty_and_rule_zero_are_off_and_stamp_blocks_grow() -> void:
 	assert_false(active.has("bounds_stamp"), "알 수 없는 저장 판을 다른 판으로 찍지 않습니다")
 	MapBounds.apply(active)
 	assert_eq(active["bounds_stamp"], 1)
-	assert_false(MapShift.can_grow(active), "grow의 assert 조건을 직접 검사합니다")
+	assert_false(MapShift.can_grow(active), "찍힌 뒤 확대 금지")
 	assert_true(is_same(MapBounds.apply(active, 1), active), "같은 판은 한 번만 찍습니다")
 	assert_eq(grid.solid.count(FieldGrid.Solid.NONE), 144, "계약만으로 지형을 바꾸지 않습니다")
+
+
+func _assert_bounds_unchanged(data: Dictionary, snapshot: Dictionary, fingerprint: Dictionary) -> void:
+	assert_eq_deep(data, snapshot, "자료와 경계 기록 보존")
+	assert_eq(BoundsDigest.digest(data), fingerprint, "격자와 경로 및 계획 지문 보존")
+	for level: Variant in snapshot["levels"]:
+		assert_true(is_same(data["levels"][level], snapshot["levels"][level]), "격자 객체 보존")
+
+
+func test_stamped_grow_and_side_path_growth_are_rejected_without_mutation() -> void:
+	var data: Dictionary = StopLoader.make_ready(BoundedLine, 71)
+	data["place_id"] = "bounds_probe"
+	var snapshot: Dictionary = data.duplicate(true)
+	var fingerprint: Dictionary = BoundsDigest.digest(data)
+	assert_true(is_same(MapShift.grow(data, 1, 2, 3, 4), data))
+	assert_push_error("찍힌 경계 뒤에는 지도를 키울 수 없습니다")
+	_assert_bounds_unchanged(data, snapshot, fingerprint)
+	for side: int in [1, 2]:
+		assert_true(is_same(SidePath._grow(data, side), data))
+		assert_push_error("찍힌 경계 뒤에는 샛길을 넓힐 수 없습니다")
+		_assert_bounds_unchanged(data, snapshot, fingerprint)
+	assert_true(is_same(SidePath.add(data, 71), data))
+	assert_push_error("찍힌 경계 뒤에는 샛길을 더할 수 없습니다")
+	_assert_bounds_unchanged(data, snapshot, fingerprint)
+
+
+func test_same_rule_apply_twice_preserves_data_and_digest() -> void:
+	var data: Dictionary = StopLoader.make_ready(BoundedLine, 71, "", -1.0, "", 0)
+	MapBounds.apply(data, 1)
+	assert_eq(data.get("bounds_stamp"), 1)
+	var snapshot: Dictionary = data.duplicate(true)
+	var fingerprint: Dictionary = BoundsDigest.digest(data)
+	assert_true(is_same(MapBounds.apply(data, 1), data))
+	_assert_bounds_unchanged(data, snapshot, fingerprint)
+	assert_push_error_count(0)
+
+
+func test_unknown_seed_defers_bounds_and_all_ahead_plans() -> void:
+	var data: Dictionary = StopLoader.make_ready(BoundedSideLine, -1)
+	assert_false(data.has("bounds_stamp"))
+	assert_false(data.has("_side_seed"))
+	assert_false(data.has("_edge_plan"))
+	for key: String in FieldGame.AHEAD_KEYS:
+		assert_false(data.has(key), key)
+	var run_seed: int = -1
+	for candidate: int in range(1, 200):
+		if SidePath.rolls("bounds_probe", candidate):
+			run_seed = candidate
+			break
+	assert_gt(run_seed, 0)
+	var before: Vector2i = Vector2i(data["grid"].width, data["grid"].height)
+	data = FieldGame.with_side_path(data, run_seed)
+	assert_true(data.has("side_path"), "경계를 찍기 전에 실제 샛길 확대")
+	assert_ne(Vector2i(data["grid"].width, data["grid"].height), before)
+	MapBounds.apply(data)
+	assert_eq(data.get("bounds_stamp"), 1, "씨앗 확정과 샛길 뒤 찍기")
+	var ready: Dictionary = StopLoader.make_ready(BoundedSideLine, run_seed)
+	assert_eq(ready.get("_side_seed"), run_seed)
+	assert_eq(ready.get("bounds_stamp"), 1)
+	assert_true(ready.has("_edge_plan"))
+	assert_eq(ready["grid"].solid, data["grid"].solid)
+	assert_eq(ready["grid"].floor, data["grid"].floor)
+	assert_eq_deep(ready["side_path"], data["side_path"])
+	assert_eq_deep(ready["bounds"], data["bounds"])
+	assert_true(is_same(FieldGame.with_side_path(ready, run_seed), ready))
+	assert_push_error_count(0)
+
+
+func test_worker_receives_requested_rule() -> void:
+	for rule: int in [0, 1, 99]:
+		var box: Dictionary = {}
+		StopLoader._build_off_thread(box, BoundedLine, 71, "", -1.0, "", 0, rule)
+		var data: Dictionary = box["data"]
+		assert_eq(int(data.get("bounds_stamp", 0)), 1 if rule == 1 else 0)
+
+
+func test_thread_binding_passes_the_requested_rule() -> void:
+	for rule: int in [0, 1, 99]:
+		var loader = StopLoader.new()
+		add_child_autofree(loader)
+		loader.seed_for = 71
+		loader.bounds_rule_for = rule
+		loader.vat = {"skip_baking": true}
+		loader._start_task(BoundedLine)
+		if not loader.has_data():
+			await wait_for_signal(loader.data_ready, 30)
+		assert_true(loader.has_data())
+		assert_eq(int(loader.data.get("bounds_stamp", 0)), 1 if rule == 1 else 0)
+
+
+func test_direct_field_rebuilds_a_different_stamped_rule() -> void:
+	var prepared: Dictionary = StopLoader.make_ready(BoundedLine, 71)
+	var game = FieldGame.new()
+	game.opts = {"seed": 71, "auto_pause": false, "bounds_rule": 0, "map_data": prepared}
+	game.map_script = BoundedLine
+	add_child_autofree(game)
+	game.set_process(false)
+	assert_false(is_same(game.data["grid"], prepared["grid"]))
+	assert_false(game.data.has("bounds_stamp"))
+	assert_eq(prepared.get("bounds_stamp"), 1)
 
 
 func test_bounds_rule_capture_json_resume_and_legacy_zero() -> void:

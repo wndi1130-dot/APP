@@ -483,6 +483,8 @@ func _ready() -> void:
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
 	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script, region) if map_script != null else FieldMaps.build(place, region)
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary else fresh_map.call()
+	if not MapBounds.can_reuse(stop_map, int(opts.get("bounds_rule", -1))):
+		stop_map = fresh_map.call()
 	var ground_form := String(opts.get("stop_ground", opts.get("stop_form", "")))
 	var ground_m := float(opts.get("stop_form_m", -1.0))
 	var end_gap := int(opts.get("stop_end_gap", -1))
@@ -1609,6 +1611,8 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 ## ahead from the map as it was no longer fits: dropped first (a shift would move it
 ## all), made again from the map as it is now.
 static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
+	if map.has("bounds_stamp") and map.has("_side_seed") and int(map["_side_seed"]) == run_seed:
+		return map
 	var place_id := String(map.get("place_id", ""))
 	if StoryMaps.is_story(place_id):
 		return map
