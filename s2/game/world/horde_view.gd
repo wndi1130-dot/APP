@@ -26,6 +26,9 @@ const CHUNK_CAP: int = 216 # 여섯 덩어리 = 1296, 화면 상한 1300 이내.
 const MAP_CAP: int = 3000
 const VISIBLE_CAP: int = 6
 const PIECE_CAP: int = 256
+const CHECK_STRIDE: int = 32
+const KEEP_DISTANCE: float = 2.0
+const SOLE_LIFT: float = 0.02
 const WORK_USEC: int = 6000
 const HEAD_MAX_M: float = 1.95
 const MAX_SCALE: float = 1.08
@@ -36,9 +39,12 @@ const HISTORY_SIZE: int = 32
 const HISTORY_STEP: float = 1.0 / 30.0
 const ATLAS_PATH: String = "res://models/horde/horde_atlas.png"
 const TABLE_PATH: String = "res://models/horde/horde_atlas.json"
+const SHADER_PATH: String = "res://fx/shaders/horde_far.gdshader"
 const KINDS: Array[String] = ["wall_sheet", "wall_sound", "wall_plank", "wall_stack", "overpass"]
 
 static var resource_reads: int = 0 # 캐시 적중도 포함한 읽기 시도. 꺼짐 경로의 무읽기 계약 관측.
+static var _card_margin := AABB()
+static var _shader_kept: Shader # 한 번 컴파일한 셰이더를 정차 사이에 붙잡아 둔다.
 var stats: Dictionary = {}
 var chunks: Array[Dictionary] = []
 var _sight: Dictionary = {}
@@ -55,6 +61,10 @@ var _piece_pace: BuildPace
 var _staged: bool = false
 var _build_cancelled: bool = false
 var _sight_cache: Dictionary = {}
+var _sent_sight: Dictionary = {}
+var _resource_errors: Dictionary = {}
+var _resource_kinds: Dictionary = {}
+var _resource_starts: Dictionary = {}
 var frame_material_writes: int = 0
 var frame_sight_reads: int = 0
 var visible_chunks: Array[int] = []
@@ -172,29 +182,86 @@ static func full_depth(wall: Dictionary, head_max: float = HEAD_MAX_M) -> float:
 	return maxf(0.0, (float(wall["height"]) - head_max * MAX_SCALE) / tan(deg_to_rad(CAM_PITCH)) * maxf(0.0, (wall["out"] as Vector2).dot(away)) - ORBIT_M)
 
 
-static func fully_hidden(wall: Dictionary, point: Vector2, head_max: float = HEAD_MAX_M) -> bool:
+static func wall_geometry(wall: Dictionary, head_max: float = HEAD_MAX_M) -> Dictionary:
 	var a: Vector2 = wall["a"]
 	var b: Vector2 = wall["b"]
 	var outward: Vector2 = wall["out"]
-	var depth: float = (point - a).dot(outward)
-	if depth < 0.0 or depth >= full_depth(wall, head_max):
-		return false
 	var back: Vector3 = camera_back()
 	var toward := Vector2(back.x, back.z).normalized()
+	var tangent: Vector2 = (b - a).normalized()
+	var right := Vector2(toward.y, -toward.x)
 	var denom: float = toward.dot(outward)
-	if denom >= -0.0001:
+	var slope: float = toward.dot(tangent) / denom if denom < -0.0001 else 0.0
+	# 칸 전체 ±발 x 범위와 고리/쏠림을 벽 교점으로 투영한다.
+	var width: float = float(CELL.x - 2) * MAX_SCALE / PX_PER_M
+	var margin: float = width * absf(right.dot(tangent) - right.dot(outward) * slope) + 0.6 * sqrt(1.0 + slope * slope)
+	var full: float = 0.0 if wall.get("kind") == "overpass" else maxf(0.0, (float(wall["height"]) - head_max * MAX_SCALE) / tan(deg_to_rad(CAM_PITCH)) * maxf(0.0, -denom) - ORBIT_M)
+	return {"a": a, "tangent": tangent, "out": outward, "length": a.distance_to(b),
+		"full": full, "slope": slope, "margin": margin,
+		"theta": atan2(-outward.x, -outward.y), "floor": float(wall.get("floor_y", 0.0))}
+
+
+static func hidden_local(geometry: Dictionary, along: float, depth: float) -> bool:
+	if depth < 0.0 or depth >= float(geometry["full"]):
 		return false
-	var hit: Vector2 = point + toward * (-depth / denom)
-	var along: float = (hit - a).dot((b - a).normalized())
-	return along >= 0.0 and along <= a.distance_to(b)
+	var hit: float = along - depth * float(geometry["slope"])
+	return hit >= float(geometry["margin"]) and hit <= float(geometry["length"]) - float(geometry["margin"])
 
 
-static func stream(id: String, cell: Vector2i, lane: int) -> float:
+static func placement_floor(geometry: Dictionary, lo: float, hi: float) -> float:
+	var full: float = maxf(0.4, float(geometry["full"]))
+	var slope: float = geometry["slope"]
+	var margin: float = geometry["margin"]
+	var length_m: float = geometry["length"]
+	if lo < margin or hi > length_m - margin:
+		return 0.4
+	if slope < -0.0001:
+		return minf(full, maxf(0.4, (length_m - margin - hi) / -slope))
+	if slope > 0.0001:
+		return minf(full, maxf(0.4, (lo - margin) / slope))
+	return full
+
+
+static func visible_span(geometry: Dictionary, depth: float, lo: float, hi: float, unit: float) -> Vector2:
+	if depth >= float(geometry["full"]):
+		return Vector2(lo, hi)
+	var shift: float = depth * float(geometry["slope"])
+	var left_end: float = clampf(float(geometry["margin"]) + shift, lo, hi)
+	var right_start: float = clampf(float(geometry["length"]) - float(geometry["margin"]) + shift, lo, hi)
+	var left_width: float = left_end - lo
+	var right_width: float = hi - right_start
+	return Vector2(lo, left_end) if unit * (left_width + right_width) < left_width else Vector2(right_start, hi)
+
+
+static func placement_area(geometry: Dictionary, lo: float, hi: float, depth: float) -> float:
+	var shallow: float = clampf(float(geometry["full"]), 0.4, depth)
+	var area: float = (hi - lo) * (density_area(depth) - density_area(shallow))
+	if shallow <= 0.4:
+		return area
+	# 가려지는 띠는 제외하고 유한 끝의 노출 면적만 8구간으로 적분한다.
+	for index: int in range(8):
+		var lower: float = lerpf(0.4, shallow, float(index) / 8.0)
+		var upper: float = lerpf(0.4, shallow, float(index + 1) / 8.0)
+		var shift: float = (lower + upper) * 0.5 * float(geometry["slope"])
+		var width: float = clampf(float(geometry["margin"]) + shift - lo, 0.0, hi - lo) + clampf(hi - float(geometry["length"]) + float(geometry["margin"]) - shift, 0.0, hi - lo)
+		area += minf(hi - lo, width) * (density_area(upper) - density_area(lower))
+	return area
+
+
+static func fully_hidden(wall: Dictionary, point: Vector2, head_max: float = HEAD_MAX_M) -> bool:
+	var geometry: Dictionary = wall_geometry(wall, head_max)
+	var relative: Vector2 = point - (wall["a"] as Vector2)
+	return hidden_local(geometry, relative.dot(geometry["tangent"]), relative.dot(geometry["out"]))
+
+
+static func stream(wall_seed: int, cell: Vector2i, lane: int) -> float:
 	# 정수 31비트 안에서 계산. 배열 순서나 전역 RNG 상태를 읽지 않는다.
-	var value: int = int(id.hash()) & 0x7fffffff
-	for part: int in [cell.x, cell.y, lane]:
-		value = ((value ^ (part & 0x7fffffff)) * 1103515245 + 12345) & 0x7fffffff
-		value = value ^ (value >> 13)
+	var value: int = ((wall_seed ^ (cell.x & 0x7fffffff)) * 1103515245 + 12345) & 0x7fffffff
+	value = value ^ (value >> 13)
+	value = ((value ^ (cell.y & 0x7fffffff)) * 1103515245 + 12345) & 0x7fffffff
+	value = value ^ (value >> 13)
+	value = ((value ^ lane) * 1103515245 + 12345) & 0x7fffffff
+	value = value ^ (value >> 13)
 	return float(value & 0x00ffffff) / 16777216.0
 
 
@@ -213,7 +280,7 @@ static func upright_corner(foot: Vector3, corner: Vector2) -> Vector3:
 	if corner.y < 0.0:
 		# 발 아래로 내려간 그림(카메라 쪽으로 딛는 발)은 땅 밑이 아니라 땅 위 카메라 쪽으로: 화면 자리는 같다.
 		var back_h := Vector3(camera_back().x, 0.0, camera_back().z).normalized()
-		return foot + right_h * corner.x + back_h * (-corner.y) / sin(deg_to_rad(CAM_PITCH))
+		return foot + right_h * corner.x + back_h * (-corner.y) / sin(deg_to_rad(CAM_PITCH)) + Vector3.UP * SOLE_LIFT * minf(1.0, -corner.y / ((CELL.y - FOOT.y) * MAX_SCALE / PX_PER_M))
 	return foot + right_h * corner.x + Vector3.UP * corner.y / cos(deg_to_rad(CAM_PITCH))
 
 
@@ -262,10 +329,14 @@ static func density_area(depth: float) -> float:
 	return 0.5 * (d - 0.4) - 0.38 * (8.0 * (t * t * t - 0.5 * t * t * t * t) + maxf(0.0, d - 26.0))
 
 
-static func sample_depth(unit: float, depth_m: float) -> float:
-	var lo: float = 0.4
-	var hi: float = depth_m
-	var target: float = unit * density_area(depth_m)
+static func sample_depth(unit: float, depth_m: float, start: float = 0.4) -> float:
+	var target: float = lerpf(density_area(start), density_area(depth_m), unit)
+	if target <= density_area(18.0):
+		return 0.4 + target * 2.0
+	if target >= density_area(26.0):
+		return 26.0 + (target - density_area(26.0)) / 0.12
+	var lo: float = maxf(start, 18.0)
+	var hi: float = minf(depth_m, 26.0)
 	for _step: int in range(16):
 		var mid: float = (lo + hi) * 0.5
 		if density_area(mid) < target:
@@ -282,15 +353,15 @@ static func density_wave(point: Vector2) -> float:
 static func card_aabb(people: Array[Dictionary]) -> AABB:
 	if people.is_empty():
 		return AABB()
-	var first: Vector3 = people[0]["position"]
-	var box := AABB(first, Vector3.ZERO)
-	# 전체 칸으로 보수적으로 감싼다. 실제 카드는 합 테두리만 쓴다.
+	var low: Vector3 = people[0]["position"]
+	var high: Vector3 = low
 	for person: Dictionary in people:
 		var foot: Vector3 = person["position"]
-		# 발 x는 (방향, 동작)마다 2..CELL.x-2 안이라 칸 가로 전체를 양쪽으로 감싼다.
-		box = _expand_card(box, foot)
-	# 고리 반지름 0.3 + 벽 쪽 쏠림 0.3. 수직 여유도 보수적으로 둔다.
-	return box.grow(0.6)
+		low = low.min(foot)
+		high = high.max(foot)
+	if _card_margin.size == Vector3.ZERO:
+		_card_margin = _expand_card(AABB(Vector3.ZERO, Vector3.ZERO), Vector3.ZERO).grow(0.6)
+	return AABB(low + _card_margin.position, high - low + _card_margin.size)
 
 
 static func _expand_card(box: AABB, foot: Vector3) -> AABB:
@@ -301,19 +372,20 @@ static func _expand_card(box: AABB, foot: Vector3) -> AABB:
 
 
 func _card_aabb(people: Array[Dictionary]) -> AABB:
-	var box := AABB(people[0]["position"], Vector3.ZERO)
-	for person: Dictionary in people:
-		if not await _checkpoint():
-			return AABB()
-		box = _expand_card(box, person["position"])
-	return box.grow(0.6)
+	if not await _checkpoint():
+		return AABB()
+	return card_aabb(people)
 
 
 func _begin_stats(pace: BuildPace) -> void:
 	stats = {"instances": 0, "chunks": 0, "invalid_walls": 0, "attempts": 0,
 		"cpu_ms": 0.0, "max_continuous_ms": 0.0, "resource_ms": 0.0, "pieces": 0, "ready": false,
 		"cancelled": false, "resource_loads": 0, "table_error": "", "table_warning": "", "uploaded_instances": 0,
-		"stage": "layout", "wait_stages": {}, "resource_max_ms": 0.0}
+		"stage": "layout", "wait_stages": {}, "resource_max_ms": 0.0,
+		"table_ms": 0.0, "candidates_ms": 0.0, "sort_ms": 0.0, "aabb_ms": 0.0, "upload_ms": 0.0, "material_ms": 0.0,
+		"resource_first": 0, "resource_cached": 0, "resource_first_ms": 0.0, "resource_cached_ms": 0.0}
+	stats["resource_first_ready_ms"] = 0.0
+	stats["resource_cached_ready_ms"] = 0.0
 	_work_start = Time.get_ticks_usec()
 	_continuous_usec = 0
 	_pieces = 0
@@ -332,47 +404,37 @@ func _cancelled() -> bool:
 	return _build_cancelled
 
 
-func _checkpoint(force: bool = false) -> bool:
+func _checkpoint() -> bool:
 	if _cancelled():
 		return false
 	_pieces += 1
-	if force or _rest_due():
+	if _rest_due():
 		await _rest()
 	return not _cancelled()
 
 
 func _sort_rows(rows: Array[Dictionary], by_wall: bool) -> Array[Dictionary]:
-	# 합병 한 항목마다 쉼/취소 확인. 전체 벽 수와 무관하게 한 조각을 제한한다.
-	var source: Array[Dictionary] = rows
-	var width: int = 1
-	var forward: Vector3 = -camera_back()
-	while width < source.size():
-		var merged: Array[Dictionary] = []
-		for start: int in range(0, source.size(), width * 2):
-			var middle: int = mini(start + width, source.size())
-			var end: int = mini(start + width * 2, source.size())
-			var left: int = start
-			var right: int = middle
-			while left < middle or right < end:
-				if not await _checkpoint():
-					return []
-				var take_left: bool = right >= end
-				if left < middle and right < end:
-					take_left = String(source[left]["id"]) <= String(source[right]["id"]) if by_wall else (source[left]["position"] as Vector3).dot(forward) <= (source[right]["position"] as Vector3).dot(forward)
-				if left < middle and take_left:
-					merged.append(source[left])
-					left += 1
-				else:
-					merged.append(source[right])
-					right += 1
-		source = merged
-		width *= 2
-	return source
+	if not await _checkpoint():
+		return []
+	if by_wall:
+		rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return String(left["id"]) < String(right["id"]))
+	else:
+		rows.sort_custom(func(left: Dictionary, right: Dictionary) -> bool:
+			return int(left["order"]) < int(right["order"]) if left["sort_depth"] == right["sort_depth"] else float(left["sort_depth"]) < float(right["sort_depth"]))
+	return rows
+
+
+func _set_stage(stage: String) -> void:
+	_account()
+	stats["stage"] = stage
 
 
 func _account() -> void:
 	var used: int = Time.get_ticks_usec() - _work_start
 	stats["cpu_ms"] = float(stats["cpu_ms"]) + float(used) / 1000.0
+	var key: String = "sort_ms" if String(stats["stage"]) in ["wall_sort", "people_sort"] else String(stats["stage"]) + "_ms"
+	if stats.has(key):
+		stats[key] = float(stats[key]) + float(used) / 1000.0
 	_continuous_usec += used
 	stats["max_continuous_ms"] = maxf(float(stats["max_continuous_ms"]), float(_continuous_usec) / 1000.0)
 	_work_start = Time.get_ticks_usec()
@@ -399,7 +461,7 @@ func _rest() -> void:
 
 func _rest_due() -> bool:
 	var accounted: int = _continuous_usec if _staged else 0
-	return _pieces >= PIECE_CAP or accounted + Time.get_ticks_usec() - _work_start >= WORK_USEC
+	return accounted + Time.get_ticks_usec() - _work_start >= WORK_USEC
 
 
 func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null, table: Dictionary = {}) -> Array[Dictionary]:
@@ -409,8 +471,9 @@ func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null, table: 
 
 
 func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Dictionary]:
-	stats["stage"] = "validate"
+	_set_stage("validate")
 	var head_max: float = head_height(table)
+	var forward: Vector3 = -camera_back()
 	var map_size: Vector2 = vis.get("map_size", Vector2.ZERO)
 	var valid: Array[Dictionary] = []
 	var ids: Dictionary = {}
@@ -432,12 +495,12 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 			push_warning("HordeView 벽 무시: %s (%s)" % [String(wall.get("id", "?")).replace("\n", " ").replace("\r", " "), why])
 		else:
 			valid.append(wall)
-	stats["stage"] = "wall_sort"
+	_set_stage("wall_sort")
 	valid = await _sort_rows(valid, true)
 	if _cancelled():
 		return []
 	var endpoints: Dictionary = {}
-	stats["stage"] = "endpoints"
+	_set_stage("endpoints")
 	for wall: Dictionary in valid:
 		if not await _checkpoint():
 			return []
@@ -447,7 +510,7 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 	# 모든 유효 벽의 후보를 먼저 센다. 같은 배율과 내림으로 지도 상한을 지킨다.
 	var plans: Array[Dictionary] = []
 	var candidate_sum: float = 0.0
-	stats["stage"] = "plans"
+	_set_stage("plans")
 	for wall: Dictionary in valid:
 		if not await _checkpoint():
 			return []
@@ -457,6 +520,8 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 		var depth_m: float = minf(40.0, float(wall.get("depth", 40.0)))
 		if depth_m <= 0.4:
 			continue
+		var geometry: Dictionary = wall_geometry(wall, head_max)
+		var wall_seed: int = int(String(wall["id"]).hash()) & 0x7fffffff
 		var start_gap: float = 2.0 if int(endpoints[Vector2i(a)]) == 1 else 0.0
 		var end_gap: float = 2.0 if int(endpoints[Vector2i(b)]) == 1 else 0.0
 		for chunk_i: int in range(int(ceil(length_m / CHUNK_M))):
@@ -464,9 +529,11 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 				return []
 			var lo: float = maxf(start_gap, float(chunk_i) * CHUNK_M)
 			var hi: float = minf(length_m - end_gap, float(chunk_i + 1) * CHUNK_M)
-			if hi > lo:
-				var candidates: float = (hi - lo) * density_area(depth_m)
-				plans.append({"wall": wall, "chunk_i": chunk_i, "lo": lo, "hi": hi, "depth": depth_m, "candidates": candidates})
+			var start_depth: float = placement_floor(geometry, lo, hi)
+			if hi > lo and start_depth < depth_m:
+				var candidates: float = placement_area(geometry, lo, hi, depth_m)
+				plans.append({"wall": wall, "geometry": geometry, "wall_seed": wall_seed, "start": start_depth,
+					"chunk_i": chunk_i, "lo": lo, "hi": hi, "depth": depth_m, "candidates": candidates})
 				candidate_sum += candidates
 	var density_scale: float = minf(1.0, float(MAP_CAP) / maxf(candidate_sum, 1.0))
 	stats["density_scale"] = density_scale
@@ -474,80 +541,87 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 	var result: Array[Dictionary] = []
 	var bins: Dictionary = {}
 	for plan: Dictionary in plans:
-		stats["stage"] = "candidates"
+		_set_stage("candidates")
 		if not await _checkpoint():
 			return []
 		var wall: Dictionary = plan["wall"]
+		var geometry: Dictionary = plan["geometry"]
+		var wall_seed: int = plan["wall_seed"]
 		var a: Vector2 = wall["a"]
-		var b: Vector2 = wall["b"]
-		var tangent: Vector2 = (b - a).normalized()
+		var tangent: Vector2 = geometry["tangent"]
 		var outward: Vector2 = wall["out"]
 		var depth_m: float = plan["depth"]
 		var wall_id: String = wall["id"]
-		var contact_start: float = maxf(0.4, full_depth(wall, head_max))
+		var contact_start: float = maxf(0.4, float(geometry["full"]))
+		var start_depth: float = plan["start"]
 		var chunk_i: int = plan["chunk_i"]
 		var lo: float = plan["lo"]
 		var hi: float = plan["hi"]
 		var target: int = mini(CHUNK_CAP, int(floor(float(plan["candidates"]) * density_scale)))
 		var people: Array[Dictionary] = []
 		var group_size: int = 0
-		var group_attempts: int = 0
+		var failures: int = 0
+		var attempts: int = 0
 		var group_at := Vector2.ZERO
+		var group_span := Vector2.ZERO
 		var group_key := Vector2i.ZERO
 		for attempt: int in range(target * MAX_TRIES):
 			if people.size() >= target:
 				break
-			if group_size <= 0 or group_attempts >= 8 * MAX_TRIES:
+			if attempt % CHECK_STRIDE == 0 and not await _checkpoint():
+				return []
+			if group_size <= 0 or failures >= 3:
 				group_key = Vector2i(int(round(a.x + tangent.x * lo)), int(round(a.y + tangent.y * lo))) + Vector2i(attempt, chunk_i)
-				group_size = 3 + int(stream(wall_id, group_key, 11) * 6.0)
-				group_attempts = 0
-				group_at = Vector2(lerpf(lo, hi, stream(wall_id, group_key, 13)), sample_depth(stream(wall_id, group_key, 14), depth_m))
-			group_attempts += 1
+				group_size = 3 + int(stream(wall_seed, group_key, 11) * 6.0)
+				failures = 0
+				group_at.y = sample_depth(stream(wall_seed, group_key, 14), depth_m, start_depth)
+				group_span = visible_span(geometry, group_at.y, lo, hi, stream(wall_seed, group_key, 12))
+				group_at.x = lerpf(group_span.x, group_span.y, stream(wall_seed, group_key, 13))
+			group_size -= 1 # 실패도 중심의 남은 시도를 소모한다.
+			failures += 1
+			attempts += 1
 			var lane: int = 100 + attempt * 7
-			var ring: float = TAU * stream(wall_id, group_key, lane)
-			var radius: float = 1.8 * sqrt(stream(wall_id, group_key, lane + 1))
-			var along: float = group_at.x + cos(ring) * radius
-			var depth: float = group_at.y + sin(ring) * radius
+			var ring: float = TAU * stream(wall_seed, group_key, lane)
+			var radius: float = 1.8 * sqrt(stream(wall_seed, group_key, lane + 1))
+			# 경계에서는 고리 반경만 줄여 처음부터 유효한 띠에서 뽑는다.
+			var along: float = group_at.x + cos(ring) * minf(radius, minf(group_at.x - group_span.x, group_span.y - group_at.x))
+			var depth: float = group_at.y + sin(ring) * minf(radius, minf(group_at.y - start_depth, depth_m - group_at.y))
 			var point: Vector2 = a + tangent * along + outward * depth
 			var wave: float = density_wave(point)
-			stats["attempts"] = int(stats["attempts"]) + 1
-			if not await _checkpoint():
-				return []
-			if along < lo or along > hi or depth < 0.4 or depth > depth_m:
-				continue
-			if stream(wall_id, group_key, lane + 2) > wave or fully_hidden(wall, point, head_max) or not _clearance(point, bins):
+			if hidden_local(geometry, along, depth) or stream(wall_seed, group_key, lane + 2) > wave or not _clearance(point, bins):
 				continue
 			var cell := Vector2i(floori(point.x * 4.0), floori(point.y * 4.0))
 			var motion: int = 1
 			if depth >= contact_start and depth <= contact_start + 0.8:
-				motion = 2 + int(stream(wall_id, cell, 21) * 2.0)
-			elif depth > contact_start + 1.1 and along > lo + 0.3 and along < hi - 0.3 and not fully_hidden(wall, point - outward * 0.3, head_max):
-				motion = 0 if stream(wall_id, cell, 22) < 0.3 else 1
-			var theta: float = atan2(-outward.x, -outward.y)
-			if stream(wall_id, cell, 23) < 0.1:
-				theta = TAU * stream(wall_id, cell, 24)
+				motion = 2 + int(stream(wall_seed, cell, 21) * 2.0)
+			elif depth > contact_start + 1.1 and along > lo + 0.3 and along < hi - 0.3:
+				motion = 0 if stream(wall_seed, cell, 22) < 0.3 else 1
+			var theta: float = geometry["theta"]
+			if stream(wall_seed, cell, 23) < 0.1:
+				theta = TAU * stream(wall_seed, cell, 24)
 			else:
-				theta += deg_to_rad(80.0) * (stream(wall_id, cell, 24) - 0.5)
-			var position3 := Vector3(point.x, float(wall.get("floor_y", 0.0)), point.y)
-			people.append({"position": position3, "depth": depth, "motion": motion,
-				"custom": Color(stream(wall_id, cell, 25), float(motion), fposmod(theta, TAU) / TAU, stream(wall_id, cell, 26)), "cell": cell})
-			group_size -= 1
+				theta += deg_to_rad(80.0) * (stream(wall_seed, cell, 24) - 0.5)
+			var position3 := Vector3(point.x, float(geometry["floor"]), point.y)
+			people.append({"position": position3, "depth": depth, "motion": motion, "sort_depth": position3.dot(forward), "order": attempt,
+				"custom": Color(stream(wall_seed, cell, 25), float(motion), fposmod(theta, TAU) / TAU, stream(wall_seed, cell, 26)), "cell": cell})
+			failures = 0
 			var bin := Vector2i(floori(point.x / MIN_GAP), floori(point.y / MIN_GAP))
 			if not bins.has(bin):
 				bins[bin] = []
 			(bins[bin] as Array).append(point)
-		stats["stage"] = "people_sort"
+		stats["attempts"] = int(stats["attempts"]) + attempts
+		_set_stage("people_sort")
 		people = await _sort_rows(people, false)
 		if _cancelled():
 			return []
 		if not people.is_empty():
-			stats["stage"] = "aabb"
+			_set_stage("aabb")
 			var box: AABB = await _card_aabb(people)
 			if _cancelled():
 				return []
 			result.append({"id": "%s:%d" % [wall_id, chunk_i], "wall": wall, "people": people, "aabb": box})
 			stats["instances"] = int(stats["instances"]) + people.size()
-		if not await _checkpoint(true):
+		if not await _checkpoint():
 			return []
 	stats["chunks"] = result.size()
 	_account()
@@ -575,16 +649,20 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 	_history.resize(HISTORY_SIZE)
 	_history.fill(Vector4.ZERO)
 	visibility_changed.connect(_visibility_reset)
-	stats["stage"] = "table"
-	# 표/아틀라스/셰이더는 각각 독립된 준비 조각. 동기 load 자체의 시간도 계측한다.
-	if not await _checkpoint(true):
+	if _cancelled():
+		return
+	_request_asset(ATLAS_PATH)
+	_request_asset(SHADER_PATH)
+	_set_stage("table")
+	# 작은 JSON만 동기로 읽는다. 큰 자원은 위 요청과 배치를 겹친다.
+	if not await _checkpoint():
 		return
 	var table_start: int = Time.get_ticks_usec()
 	var table_result: Dictionary = _read_table_result()
 	var table: Dictionary = table_result["table"]
 	stats["table_error"] = table_result["error"]
 	_resource_account(table_start)
-	if not await _checkpoint(true):
+	if not await _checkpoint():
 		return
 	# 깊이 0은 정상 무배치. 실제 배치를 요청한 벽의 표 오류는 가림 제거 전에 알린다.
 	for entry: Variant in walls:
@@ -600,31 +678,33 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 		return
 	if chunks.is_empty():
 		return
-	stats["stage"] = "atlas"
-	if not await _checkpoint(true):
+	_set_stage("atlas")
+	if not await _checkpoint():
 		return
 	var resource_start: int = Time.get_ticks_usec()
-	stats["resource_loads"] = int(stats["resource_loads"]) + 1
-	var atlas: Texture2D = _load_atlas()
-	_resource_account(resource_start)
-	if not await _checkpoint(true):
+	var atlas: Texture2D = await _load_atlas()
+	_resource_account(resource_start, true)
+	if not await _checkpoint():
 		return
-	stats["stage"] = "shader"
+	_set_stage("shader")
 	resource_start = Time.get_ticks_usec()
-	stats["resource_loads"] = int(stats["resource_loads"]) + 1
-	var shader: Shader = _load_shader()
-	_resource_account(resource_start)
-	if not await _checkpoint(true):
+	var shader: Shader = await _load_shader()
+	_resource_account(resource_start, true)
+	if not await _checkpoint():
 		return
 	if atlas == null or shader == null or atlas.get_size() != Vector2(ATLAS_SIZE):
 		push_warning("HordeView: 아틀라스 크기 또는 셰이더 자원 오류")
 		return
+	# 셰이더는 첫 재질에서 컴파일된다(PC Intel Xe 첫 회 약 55 ms, 그다음 0.1 ms 밑).
+	# 붙잡아 두면 다음 정차부터는 다시 읽지도 컴파일하지도 않는다. 아틀라스는 붙잡지 않는다.
+	_shader_kept = shader
 	var mesh: ArrayMesh = card_mesh()
-	stats["stage"] = "upload"
+	_set_stage("upload")
 	for chunk: Dictionary in chunks:
 		if not await _checkpoint():
 			return
 		var wall: Dictionary = chunk["wall"]
+		var material_start: int = Time.get_ticks_usec()
 		var mat := ShaderMaterial.new()
 		mat.shader = shader
 		mat.set_shader_parameter("atlas", atlas)
@@ -632,6 +712,7 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 		mat.set_shader_parameter("wall_a", wall["a"])
 		mat.set_shader_parameter("wall_b", wall["b"])
 		mat.set_shader_parameter("wall_out", wall["out"])
+		stats["material_ms"] = float(stats["material_ms"]) + float(Time.get_ticks_usec() - material_start) / 1000.0
 		mat.set_shader_parameter("focus_history", _history)
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -641,7 +722,7 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 		mm.instance_count = people.size()
 		mm.custom_aabb = chunk["aabb"]
 		for index: int in range(people.size()):
-			if not await _checkpoint():
+			if index % CHECK_STRIDE == 0 and not await _checkpoint():
 				return
 			mm.set_instance_transform(index, Transform3D(Basis.IDENTITY, people[index]["position"]))
 			mm.set_instance_custom_data(index, people[index]["custom"])
@@ -655,17 +736,18 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 		add_child(draw)
 		_draws.append(draw)
 		_materials.append(mat)
-		if not await _checkpoint(true):
+		if not await _checkpoint():
 			return
-	_sync_sight()
 	stats["ready"] = true
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	set_process(true)
+	_update_visible()
 	_account()
 	print("HORDE_BUILD ", stats)
 
 
-func _resource_account(start: int) -> void:
-	var elapsed_ms: float = float(Time.get_ticks_usec() - start) / 1000.0
+func _resource_account(start: int, waited: bool = false) -> void:
+	var elapsed_ms: float = float(Time.get_ticks_usec() - (_work_start if waited else start)) / 1000.0
 	stats["resource_ms"] = float(stats["resource_ms"]) + elapsed_ms
 	stats["resource_max_ms"] = maxf(float(stats["resource_max_ms"]), elapsed_ms)
 	_account()
@@ -675,14 +757,52 @@ func _read_table_result() -> Dictionary:
 	return read_table_result()
 
 
-func _load_atlas() -> Texture2D:
+func _request_asset(path: String) -> void:
 	resource_reads += 1
-	return load(ATLAS_PATH) if ResourceLoader.exists(ATLAS_PATH) else null
+	stats["resource_loads"] = int(stats["resource_loads"]) + 1
+	var cached: bool = ResourceLoader.has_cached(path)
+	var key: String = "resource_cached" if cached else "resource_first"
+	_resource_kinds[path] = key
+	stats[key] = int(stats[key]) + 1
+	var started: int = Time.get_ticks_usec()
+	_resource_starts[path] = started
+	_resource_errors[path] = ResourceLoader.load_threaded_request(path)
+	stats[key + "_ms"] = float(stats[key + "_ms"]) + float(Time.get_ticks_usec() - started) / 1000.0
+	_resource_account(started)
+
+
+func _ready_asset(path: String) -> Resource:
+	if int(_resource_errors.get(path, FAILED)) != OK:
+		return null
+	# 나눠 짓기 켬은 읽기가 끝날 때까지 조각마다 쉰다. 끔은 한 번에 끝나는 짓기라
+	# (StopLoader.abandon 계약) 프레임을 넘기지 않는다 — 넘기면 짓는 중인 필드의
+	# _process가 먼저 돈다. 남은 읽기는 아래 load_threaded_get이 그 자리에서 기다리고,
+	# 요청은 배치 전에 해 두었으니 배치 시간만큼은 겹친다.
+	while _piece_pace.on and not _cancelled():
+		var status: int = ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			break
+		if status != ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			return null
+		await _rest()
+	if _cancelled():
+		return null
+	var started: int = Time.get_ticks_usec()
+	var asset: Resource = ResourceLoader.load_threaded_get(path)
+	var key: String = _resource_kinds[path]
+	stats[key + "_ms"] = float(stats[key + "_ms"]) + float(Time.get_ticks_usec() - started) / 1000.0
+	stats[key + "_ready_ms"] = float(stats[key + "_ready_ms"]) + float(Time.get_ticks_usec() - int(_resource_starts[path])) / 1000.0
+	return asset
+
+
+func _load_atlas() -> Texture2D:
+	var asset: Resource = await _ready_asset(ATLAS_PATH)
+	return asset as Texture2D
 
 
 func _load_shader() -> Shader:
-	resource_reads += 1
-	return load("res://fx/shaders/horde_far.gdshader")
+	var asset: Resource = await _ready_asset(SHADER_PATH)
+	return asset as Shader
 
 
 static func read_table() -> Dictionary:
@@ -757,11 +877,14 @@ func _sync_sight() -> void:
 				values[key] = value
 	for key: String in values:
 		var value: Variant = values[key]
-		if _sight_cache.has(key) and _sight_cache[key] == value:
-			continue
 		_sight_cache[key] = value
-		for mat: ShaderMaterial in _materials:
-			_write_frame_parameter(mat, key, value)
+	for index: int in visible_chunks:
+		var sent: Dictionary = _sent_sight.get(index, {})
+		for key: String in _sight_cache:
+			if not sent.has(key) or sent[key] != _sight_cache[key]:
+				_write_frame_parameter(_materials[index], key, _sight_cache[key])
+				sent[key] = _sight_cache[key]
+		_sent_sight[index] = sent
 
 
 func _write_frame_parameter(mat: ShaderMaterial, key: String, value: Variant) -> void:
@@ -776,7 +899,7 @@ func _process(delta: float) -> void:
 		return
 	var field: Node = _sight.get("field")
 	var player: Node3D = field.get("player") if is_instance_valid(field) else _sight.get("player")
-	var held: bool = is_instance_valid(field) and bool(field.get("paused")) and not bool(field.get("ended"))
+	var held: bool = get_tree().paused or (is_instance_valid(field) and (not field.can_process() or (bool(field.get("paused")) and not bool(field.get("ended")))))
 	if not held:
 		_focus_clock += delta
 		var target := Vector4.ZERO
@@ -789,12 +912,16 @@ func _process(delta: float) -> void:
 		for step: int in range(maxi(_history_tick + 1, tick - HISTORY_SIZE + 1), tick + 1):
 			_history[posmod(step, HISTORY_SIZE)] = _focus
 		_history_tick = tick
-	_sync_sight()
+	_update_visible()
+
+
+func _update_visible() -> void:
 	# 개체가 아닌 소수 덩어리만 추려 여섯 개 상한을 지킨다.
 	var camera: Camera3D = get_viewport().get_camera_3d()
 	visible_chunks = _select_visible(camera)
 	for index: int in range(_draws.size()):
 		_draws[index].visible = visible_chunks.has(index)
+	_sync_sight()
 	for index: int in visible_chunks:
 		var mat: ShaderMaterial = _materials[index]
 		_write_frame_parameter(mat, "focus", _focus)
@@ -821,7 +948,11 @@ func _select_visible(camera: Camera3D) -> Array[int]:
 				break
 		if not outside:
 			candidates.append(index)
-	candidates.sort_custom(func(left: int, right: int) -> bool: return camera.global_position.distance_squared_to((chunks[left]["aabb"] as AABB).get_center()) < camera.global_position.distance_squared_to((chunks[right]["aabb"] as AABB).get_center()))
+	var distances: Dictionary = {}
+	for index: int in candidates:
+		distances[index] = camera.global_position.distance_to((chunks[index]["aabb"] as AABB).get_center()) - (KEEP_DISTANCE if visible_chunks.has(index) else 0.0)
+	candidates.sort_custom(func(left: int, right: int) -> bool:
+		return left < right if distances[left] == distances[right] else float(distances[left]) < float(distances[right]))
 	if candidates.size() > VISIBLE_CAP:
 		candidates.resize(VISIBLE_CAP)
 	return candidates
@@ -830,6 +961,8 @@ func _select_visible(camera: Camera3D) -> Array[int]:
 func _visibility_reset() -> void:
 	if not is_visible_in_tree():
 		_clear_focus()
+	elif bool(stats.get("ready", false)):
+		_update_visible()
 
 
 func _clear_focus() -> void:

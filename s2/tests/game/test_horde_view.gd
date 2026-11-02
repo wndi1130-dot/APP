@@ -32,8 +32,14 @@ class FixtureHorde:
 	func _read_table_result() -> Dictionary:
 		read_frames.append(Engine.get_process_frames())
 		if after_table.is_valid():
-			get_tree().process_frame.connect(after_table, CONNECT_ONE_SHOT)
+			after_table.call()
 		return {"table": fixture, "error": table_failure}
+
+	func _request_asset(path: String) -> void:
+		if path == ATLAS_PATH:
+			stats["resource_loads"] = int(stats["resource_loads"]) + 1
+			return
+		super._request_asset(path)
 
 	func _load_atlas() -> Texture2D:
 		read_frames.append(Engine.get_process_frames())
@@ -43,7 +49,7 @@ class FixtureHorde:
 
 	func _load_shader() -> Shader:
 		read_frames.append(Engine.get_process_frames())
-		return super._load_shader()
+		return await super._load_shader()
 
 
 func _walls(height: float = 3.0) -> Array:
@@ -327,8 +333,8 @@ func test_instances_are_sorted_by_camera_forward_projection() -> void:
 
 func test_separate_seed_lanes_and_custom_ranges() -> void:
 	var cell := Vector2i(3, -6)
-	assert_ne(Horde.stream("north", cell, 25), Horde.stream("north", cell, 26))
-	assert_ne(Horde.stream("north", cell, 25), Horde.stream("west", cell, 25))
+	assert_ne(Horde.stream("north".hash(), cell, 25), Horde.stream("north".hash(), cell, 26))
+	assert_ne(Horde.stream("north".hash(), cell, 25), Horde.stream("west".hash(), cell, 25))
 	for chunk: Dictionary in await _layout(_walls()):
 		for person: Dictionary in chunk["people"]:
 			var custom: Color = person["custom"]
@@ -388,12 +394,13 @@ func test_upright_head_depth_and_screen_size() -> void:
 			var old: Vector3 = foot + right * corner.x + up * corner.y
 			var upright: Vector3 = Horde.upright_corner(foot, corner)
 			assert_almost_eq(upright.dot(right), old.dot(right), 0.0001)
-			assert_almost_eq(upright.dot(up), old.dot(up), 0.0001)
+			assert_almost_eq(upright.dot(up), old.dot(up) + maxf(0.0, upright.y - foot.y) * up.y if py > 64.0 else old.dot(up), 0.0001)
 			if py < 64.0:
 				assert_lt(upright.dot(-back), foot.dot(-back))
 			elif py > 64.0:
 				# 발 아래 그림은 땅 밑이 아니라 땅 위, 카메라 쪽으로.
-				assert_almost_eq(upright.y, foot.y, 0.0001)
+				assert_gt(upright.y, foot.y)
+				assert_lte(upright.y - foot.y, Horde.SOLE_LIFT + 0.0001)
 				assert_lt(upright.dot(-back), foot.dot(-back))
 	var people: Array[Dictionary] = [{"position": foot}]
 	var box: AABB = Horde.card_aabb(people)
@@ -545,6 +552,10 @@ func test_time_budget_requests_rest_before_piece_cap() -> void:
 	assert_true(node._rest_due())
 	node._account()
 	assert_gte(float(node.stats["max_continuous_ms"]), 6.0)
+	node._continuous_usec = 0
+	node._pieces = Horde.PIECE_CAP * 10
+	node._work_start = Time.get_ticks_usec()
+	assert_false(node._rest_due(), "조각 수만으로 프레임을 양보하지 않는다")
 
 
 func test_late_field_player_reaches_focus_after_setup() -> void:
@@ -612,14 +623,15 @@ func test_card_mesh_foot_edge_and_triangle_interiors() -> void:
 				var corner := Vector2(pixel.x - foot_x, 64.0 - pixel.y) * (Horde.MAX_SCALE / Horde.PX_PER_M)
 				assert_true(box.has_point(point))
 				assert_almost_eq((point - foot).dot(right), corner.x, 0.0001)
-				assert_almost_eq((point - foot).dot(up), corner.y, 0.0001)
+				assert_almost_eq((point - foot).dot(up), corner.y + ((point.y - foot.y) * up.y if triangle >= 2 else 0.0), 0.0001)
 				if triangle < 2:
 					var height: float = corner.y / cos(deg_to_rad(Horde.CAM_PITCH))
 					assert_almost_eq(point.y - foot.y, height, 0.0001)
 					assert_almost_eq((point - foot).dot(-back), -height * back.y, 0.0001)
 				else:
-					assert_almost_eq(point.y, foot.y, 0.0001)
-					assert_almost_eq((point - foot).dot(-back), corner.y / tan(deg_to_rad(Horde.CAM_PITCH)), 0.0001)
+					assert_gt(point.y, foot.y)
+					assert_lte(point.y - foot.y, Horde.SOLE_LIFT)
+					assert_almost_eq((point - foot).dot(-back), corner.y / tan(deg_to_rad(Horde.CAM_PITCH)) - (point.y - foot.y) * back.y, 0.0001)
 
 
 func test_comparison_and_uploaded_cards_share_all_foot_x_values() -> void:
@@ -665,6 +677,7 @@ func test_camera_selection_and_frame_writes_scale_with_visible_chunks() -> void:
 	assert_eq(selected.size(), 6)
 	node._process(0.1)
 	assert_eq(node.visible_chunks, selected)
+	node._process(0.1) # 새로 들어온 덩어리의 최초 전송 뒤 정상 프레임.
 	assert_eq(node.frame_material_writes, selected.size() * 3)
 	assert_eq(node.frame_sight_reads, 5)
 	var drawn: int = 0
@@ -675,18 +688,31 @@ func test_camera_selection_and_frame_writes_scale_with_visible_chunks() -> void:
 	assert_lte(drawn, 1296)
 	sight.set_shader_parameter("eye_r", 12.0)
 	node._process(0.1)
-	assert_eq(node.frame_material_writes, selected.size() * 3 + 40)
-	for mat: ShaderMaterial in node._materials:
-		assert_eq(mat.get_shader_parameter("eye_r"), 12.0)
+	assert_eq(node.frame_material_writes, selected.size() * 4)
+	for index: int in selected:
+		assert_eq(node._materials[index].get_shader_parameter("eye_r"), 12.0)
+	var previous: Array[int] = selected.duplicate()
+	sight.set_shader_parameter("eye_xz", Vector2(15, 2))
+	node._process(0.1)
+	assert_eq(node.frame_material_writes, selected.size() * 4)
+	for index: int in range(node._materials.size()):
+		if not previous.has(index):
+			assert_false(node._sent_sight.has(index), "화면 밖에는 시야를 전송하지 않는다")
 	node._process(0.1)
 	assert_eq(node.frame_material_writes, selected.size() * 3)
 	camera.position += Vector3(10000, 0, 10000)
 	assert_true(node._select_visible(camera).is_empty())
 	node._process(0.1)
 	assert_eq(node.frame_material_writes, 0)
+	camera.position -= Vector3(10000, 0, 10000)
+	camera.position.x += 300.0
+	node._process(0.1)
+	for index: int in node.visible_chunks:
+		assert_eq(node._materials[index].get_shader_parameter("eye_xz"), Vector2(15, 2))
+		assert_eq(node._materials[index].get_shader_parameter("eye_r"), 12.0)
 
 
-func test_staged_zero_depth_planning_and_sort_wait_real_frames() -> void:
+func test_staged_zero_depth_planning_and_sort_use_time_budget() -> void:
 	var node: Horde = Horde.new()
 	add_child_autofree(node)
 	var pace := Pace.new(get_tree(), true)
@@ -694,14 +720,17 @@ func test_staged_zero_depth_planning_and_sort_wait_real_frames() -> void:
 	for index: int in range(600):
 		walls.append({"id": "skip_%04d" % (599 - index), "a": Vector2(index, 0), "b": Vector2(index + 1, 0),
 			"out": Vector2(0, -1), "kind": "wall_sheet", "height": 1.0, "depth": 0.0 if index % 2 == 0 else 0.4})
-	var before: int = Engine.get_process_frames()
 	var layout: Array[Dictionary] = await node.build_layout(walls, {"map_size": Vector2(600, 80)}, pace)
 	assert_true(layout.is_empty())
+	node._continuous_usec = Horde.WORK_USEC
+	var before: int = Engine.get_process_frames()
+	var sorted: Array[Dictionary] = []
+	for wall: Dictionary in walls:
+		sorted.append(wall)
+	sorted = await node._sort_rows(sorted, true)
 	assert_gt(Engine.get_process_frames(), before)
 	assert_gt(pace.waits, 0)
-	var waits: Dictionary = node.stats["wait_stages"]
-	assert_gt(int(waits.get("wall_sort", 0)), 0)
-	assert_gt(int(waits.get("plans", 0)), 0)
+	assert_eq(String(sorted[0]["id"]), "skip_0000")
 	assert_false(bool(node.stats["cancelled"]))
 
 
@@ -710,20 +739,23 @@ func test_people_sort_and_aabb_yield_at_remaining_budget() -> void:
 	add_child_autofree(node)
 	var pace := Pace.new(get_tree(), true)
 	var people: Array[Dictionary] = [{"position": Vector3(1, 0, -2)}, {"position": Vector3(3, 0, -4)}]
+	for index: int in range(people.size()):
+		people[index]["sort_depth"] = (people[index]["position"] as Vector3).dot(-Horde.camera_back())
+		people[index]["order"] = index
 	node._begin_stats(pace)
-	node._pieces = Horde.PIECE_CAP - 1
+	node._continuous_usec = Horde.WORK_USEC
 	var before: int = Engine.get_process_frames()
 	var sorted: Array[Dictionary] = await node._sort_rows(people, false)
 	assert_gt(Engine.get_process_frames(), before)
 	assert_eq(sorted.size(), people.size())
-	node._pieces = Horde.PIECE_CAP - 1
+	node._continuous_usec = Horde.WORK_USEC
 	before = Engine.get_process_frames()
 	var box: AABB = await node._card_aabb(sorted)
 	assert_gt(Engine.get_process_frames(), before)
 	assert_eq(box, Horde.card_aabb(sorted))
 
 
-func test_hidden_staged_setup_accounts_separate_resource_frames() -> void:
+func test_hidden_staged_setup_accounts_resources_without_forced_frames() -> void:
 	var node := FixtureHorde.new()
 	add_child_autofree(node)
 	node.hide()
@@ -734,15 +766,15 @@ func test_hidden_staged_setup_accounts_separate_resource_frames() -> void:
 	assert_true(bool(node.stats["ready"]))
 	assert_false(bool(node.stats["cancelled"]))
 	assert_eq(node.read_frames.size(), 3)
-	assert_gt(node.read_frames[1], node.read_frames[0])
-	assert_gt(node.read_frames[2], node.read_frames[1])
+	assert_gte(node.read_frames[1], node.read_frames[0])
+	assert_gte(node.read_frames[2], node.read_frames[1])
 	assert_gte(float(node.stats["cpu_ms"]), float(node.stats["resource_ms"]))
 	assert_gte(float(node.stats["max_continuous_ms"]), float(node.stats["resource_max_ms"]))
 	assert_eq(int(node.stats["resource_loads"]), 2)
-	assert_gt(pace.waits, 0)
+	assert_eq(int(node.stats["resource_first"]) + int(node.stats["resource_cached"]), 1)
 
 
-func test_abandon_after_table_skips_layout_and_resource_loads() -> void:
+func test_abandon_after_table_skips_layout_and_resource_connection() -> void:
 	var field := LateField.new()
 	add_child_autofree(field)
 	field.pace = Pace.new(get_tree(), true)
@@ -757,7 +789,7 @@ func test_abandon_after_table_skips_layout_and_resource_loads() -> void:
 	assert_true(bool(node.stats["cancelled"]))
 	assert_false(bool(node.stats["ready"]))
 	assert_eq(node.read_frames.size(), 1)
-	assert_eq(int(node.stats["resource_loads"]), 0)
+	assert_eq(int(node.stats["resource_loads"]), 2, "처음 요청은 허용하되 연결과 배치는 취소한다")
 	assert_eq(int(node.stats["attempts"]), 0)
 	assert_true(node._draws.is_empty())
 	field.built.emit()
@@ -777,7 +809,7 @@ func test_abandon_during_layout_exits_next_piece() -> void:
 	assert_true(layout.is_empty())
 	assert_true(bool(node.stats["cancelled"]))
 	assert_eq(field.pace.waits, 1)
-	assert_lte(int(node.stats["attempts"]), Horde.PIECE_CAP)
+	assert_lte(int(node.stats["attempts"]), Horde.MAP_CAP * Horde.MAX_TRIES)
 	field.built.emit()
 
 
@@ -807,7 +839,10 @@ func test_table_failure_reasons_warn_before_empty_layout_except_zero_depth() -> 
 	var wrong: Dictionary = Horde.parse_table_result("{}")
 	assert_eq(wrong["error"], "계약 다름")
 	var high_wall: Dictionary = _walls(100.0)[0].merged({"depth": 1.0}, true)
-	assert_true((await _layout([high_wall])).is_empty())
+	for chunk: Dictionary in await _layout([high_wall]):
+		for person: Dictionary in chunk["people"]:
+			var position3: Vector3 = person["position"]
+			assert_false(Horde.fully_hidden(high_wall, Vector2(position3.x, position3.z)), "높은 벽도 끝의 부분 노출은 보존")
 	for issue: Dictionary in [absent, broken, wrong]:
 		var node := FixtureHorde.new()
 		add_child_autofree(node)
@@ -816,10 +851,178 @@ func test_table_failure_reasons_warn_before_empty_layout_except_zero_depth() -> 
 		assert_eq(node.stats["table_error"], issue["error"])
 		assert_eq(node.stats["table_warning"], issue["error"])
 		assert_true(node.chunks.is_empty())
-		assert_eq(int(node.stats["resource_loads"]), 0)
+		assert_eq(int(node.stats["resource_loads"]), 2)
 	var empty := FixtureHorde.new()
 	add_child_autofree(empty)
 	empty.table_failure = absent["error"]
 	await empty.setup([high_wall.merged({"depth": 0.0}, true)], {"map_size": Vector2(120, 80)}, null)
 	assert_eq(empty.stats["table_warning"], "")
 	assert_true(empty.chunks.is_empty())
+
+
+func test_wall_end_keeps_partly_exposed_card_width_and_motion() -> void:
+	var wall: Dictionary = Shots.test_walls()[0].merged({"height": 5.2}, true)
+	assert_false(Horde.fully_hidden(wall, Vector2(25.6, -2.2)), "끝 교점 27.8에서도 카드 오른쪽은 노출된다")
+	assert_true(Horde.fully_hidden(wall, Vector2(16, -1.0)))
+	var geometry: Dictionary = Horde.wall_geometry(wall)
+	var span: Vector2 = Horde.visible_span(geometry, 2.2, 2.0, 22.0, 0.99)
+	assert_lt(span.x, 21.6)
+	assert_gte(span.y, 21.6)
+	var node: Horde = Horde.new()
+	add_child_autofree(node)
+	var exposed: int = 0
+	for chunk: Dictionary in await node.build_layout([wall], {"map_size": Vector2(120, 80)}):
+		for person: Dictionary in chunk["people"]:
+			if float(person["depth"]) < float(geometry["full"]):
+				exposed += 1
+	assert_gt(exposed, 0, "배치도 벽 끝의 얕은 노출 구간을 남긴다")
+
+
+func test_test_walls_keep_432_and_stage_timings() -> void:
+	var node := FixtureHorde.new()
+	add_child_autofree(node)
+	node.fixture = Horde.read_table()
+	assert_false(node.fixture.is_empty(), "실제 칸 표와 시험 벽으로 같은 432명을 확인")
+	await node.setup(Shots.test_walls(), {"map_size": Vector2(120, 80)}, Pace.new())
+	assert_true(bool(node.stats["ready"]))
+	assert_eq(int(node.stats["instances"]), 432)
+	assert_eq(int(node.stats["uploaded_instances"]), 432)
+	for key: String in ["table_ms", "candidates_ms", "sort_ms", "aabb_ms", "upload_ms"]:
+		assert_gte(float(node.stats[key]), 0.0)
+		assert_lte(float(node.stats[key]), float(node.stats["cpu_ms"]))
+	assert_lt(int(node.stats["attempts"]), 4169, "이전 432명 기준보다 거절 후보를 줄인다")
+	# CPU 30ms는 실제 아틀라스 최초/캐시 적중 촬영에서 호출자가 판정한다.
+	var paced: Horde = Horde.new()
+	add_child_autofree(paced)
+	var paced_layout: Array[Dictionary] = await paced.build_layout(Shots.test_walls(), {"map_size": Vector2(120, 80)}, Pace.new(get_tree(), true), node.fixture)
+	assert_eq(paced_layout, node.chunks, "쉼 시점과 무관하게 자리·동작·방향·씨앗이 같다")
+
+
+func test_visible_six_keep_tie_until_distance_margin_is_crossed() -> void:
+	var node: Horde = Horde.new()
+	add_child_autofree(node)
+	for index: int in range(7):
+		var x: float = 0.0 if index < 5 else (-10.0 if index == 5 else 10.0)
+		node.chunks.append({"aabb": AABB(Vector3(x - 0.1, -0.1, -0.1), Vector3.ONE * 0.2)})
+	var camera := Camera3D.new()
+	add_child_autofree(camera)
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 60.0
+	camera.position = Vector3(-0.01, 10, 30)
+	camera.look_at(Vector3.ZERO)
+	node.visible_chunks = node._select_visible(camera)
+	assert_eq(node.visible_chunks.size(), 6)
+	assert_true(node.visible_chunks.has(5))
+	for x: float in [0.01, -0.01, 0.1, -0.1]:
+		camera.position.x = x
+		var chosen: Array[int] = node._select_visible(camera)
+		assert_eq(chosen.size(), 6)
+		assert_true(chosen.has(5))
+		assert_false(chosen.has(6))
+	camera.position.x = 10.0
+	var changed: Array[int] = node._select_visible(camera)
+	assert_eq(changed.size(), 6)
+	assert_true(changed.has(6))
+	assert_false(changed.has(5))
+
+
+func test_real_assets_sync_cpu_budget_and_cache_classification() -> void:
+	var expected_cached: int = int(ResourceLoader.has_cached(Horde.ATLAS_PATH)) + int(ResourceLoader.has_cached(Horde.SHADER_PATH))
+	var first: Horde = Horde.new()
+	add_child_autofree(first)
+	# 나눠 짓기 끔은 한 번에 끝난다: 자원 읽기를 기다리며 프레임을 넘기면 짓는 중인
+	# 필드의 _process가 먼저 돈다(촬영에서 feel 없는 필드가 돎).
+	var frame_before: int = Engine.get_process_frames()
+	await first.setup(Shots.test_walls(), {"map_size": Vector2(120, 80)}, Pace.new())
+	assert_eq(Engine.get_process_frames(), frame_before, "끔 짓기는 프레임을 넘기지 않는다")
+	assert_true(bool(first.stats["ready"]))
+	assert_eq(int(first.stats["resource_cached"]), expected_cached)
+	assert_eq(int(first.stats["resource_first"]), 2 - expected_cached)
+	assert_eq(int(first.stats["instances"]), 432)
+	# 30 ms 문턱은 실제 렌더러 촬영에서 잰다(CI 기계 속도에 기대지 않는다). 여기선 단계 합만.
+	assert_gt(float(first.stats["cpu_ms"]), 0.0)
+	assert_lte(float(first.stats["material_ms"]), float(first.stats["upload_ms"]))
+	var cached: Horde = Horde.new()
+	add_child_autofree(cached)
+	await cached.setup(Shots.test_walls(), {"map_size": Vector2(120, 80)}, Pace.new())
+	assert_true(bool(cached.stats["ready"]))
+	assert_eq(int(cached.stats["resource_cached"]), 2)
+	assert_eq(int(cached.stats["resource_first"]), 0)
+	assert_eq(cached.chunks, first.chunks)
+	assert_eq(int(cached.stats["uploaded_instances"]), 432)
+	assert_true(ResourceLoader.has_cached(Horde.SHADER_PATH), "컴파일한 셰이더는 정차 사이에 남는다")
+
+
+func test_disabled_field_show_selects_chunks_without_advancing_clock() -> void:
+	var field := LateField.new()
+	add_child_autofree(field)
+	field.process_mode = Node.PROCESS_MODE_DISABLED
+	field.hide()
+	var camera := Camera3D.new()
+	add_child_autofree(camera)
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 100.0
+	camera.position = Vector3(10, 0, 10) + Horde.camera_back() * 80.0
+	camera.look_at(Vector3(10, 0, 10))
+	camera.make_current()
+	var node := FixtureHorde.new()
+	field.add_child(node)
+	node.fixture = _baked_table()
+	await node.setup(Shots.test_walls(), {"map_size": Vector2(120, 80), "field": field}, null)
+	field.show()
+	assert_false(node.visible_chunks.is_empty())
+	assert_true(node.can_process())
+	var clock_before: float = node._focus_clock
+	await get_tree().process_frame
+	assert_eq(node._focus_clock, clock_before)
+	camera.position += Vector3(10000, 0, 10000)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_true(node.visible_chunks.is_empty())
+	assert_eq(node._focus_clock, clock_before)
+
+
+func test_shared_frame_clock_keeps_motion_until_visible_frame_boundary() -> void:
+	var source: String = FileAccess.get_file_as_string(Horde.SHADER_PATH)
+	assert_true(source.contains("float frame = mod(floor(frame_clock), 6.0)"))
+	assert_true(source.contains("float frame_age = fract(frame_clock) / base_rate"))
+	assert_true(source.contains("if (base_motion == 0)"))
+	assert_true(source.contains("0.3 * (1.0 - reaction)"))
+	var fragment: String = source.get_slice("void fragment()", 1)
+	assert_false(fragment.contains("clip_lengths"))
+	assert_false(fragment.contains("floor("))
+	# 기본 길이 1.4/1.3 어느 쪽도 진입·이탈 판정은 현재 표시 틀의 경계에 고정.
+	for length_s: float in [1.4, 1.3]:
+		for speed: float in [0.85, 1.0, 1.15]:
+			var duration: float = length_s / (6.0 * speed)
+			var previous_motion: int = 0
+			var previous_frame: int = -1
+			var transitions: int = 0
+			for step: int in range(1, 1500):
+				var time_s: float = float(step) * 0.001
+				var frame: int = floori(time_s / duration + 0.37)
+				var boundary: float = maxf(0.0, (float(frame) - 0.37) * duration)
+				var motion: int = 2 if boundary >= 0.31 and boundary < 0.91 else 0
+				if motion != previous_motion:
+					assert_ne(frame, previous_frame)
+					transitions += 1
+				previous_frame = frame
+				previous_motion = motion
+			assert_eq(transitions, 2)
+	# 반응 문턱 양쪽에서 반경/발 좌표가 연속이고, 완전 반응에서 고리는 0이다.
+	var before: Vector2 = Vector2.RIGHT * 0.3 * (1.0 - 0.19999)
+	var after: Vector2 = Vector2.RIGHT * 0.3 * (1.0 - 0.20001)
+	assert_lt(before.distance_to(after), 0.00001)
+
+
+func test_night_mask_capture_is_explicit_and_unexplored() -> void:
+	var count: int = 0
+	for scene: Dictionary in Shots.SCENES:
+		if bool(scene.get("mask", false)):
+			assert_eq(String(scene["name"]), "night_mask")
+			assert_eq(float(scene["hour"]), 19.0)
+			count += 1
+	assert_eq(count, 1)
+	var source: String = FileAccess.get_file_as_string("res://tools/horde_shots.gd")
+	assert_true(source.contains("vis_image.fill(Color(0, 0, 0, 1))"))
+	assert_true(source.contains('"mask": masked'))

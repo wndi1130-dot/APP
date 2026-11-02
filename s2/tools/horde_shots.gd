@@ -15,6 +15,7 @@ const SCENES: Array[Dictionary] = [
 	{"name": "day", "hour": 12.0, "cold": 0.0, "weather": ["clear"]},
 	{"name": "dusk", "hour": 16.1667, "cold": 0.0, "weather": ["clear"]},
 	{"name": "night", "hour": 19.0, "cold": 0.0, "weather": ["clear"]},
+	{"name": "night_mask", "hour": 19.0, "cold": 0.0, "weather": ["clear"], "mask": true},
 	{"name": "snow", "hour": 12.0, "cold": 0.8, "weather": ["snow"]},
 	{"name": "blizzard", "hour": 12.0, "cold": 1.0, "weather": ["blizzard"]},
 ]
@@ -93,8 +94,9 @@ func _shot(scene: Dictionary) -> bool:
 	game.clock.elapsed = maxf(float(scene["hour"]) - 10.5, 0.0) * 240.0
 	game.player.position = Vector3(5.0, 0.0, 5.0)
 	game.cam_push = Vector3(4.0, 0.0, 4.0)
-	game.mask_on = false
-	game.view.set_mask_enabled(false)
+	var masked: bool = bool(scene.get("mask", false))
+	game.mask_on = masked
+	game.view.set_mask_enabled(masked)
 	_fixture_walls(game)
 	for _frame: int in range(4):
 		await process_frame
@@ -103,6 +105,12 @@ func _shot(scene: Dictionary) -> bool:
 	game.fx_params["fx_fade"] = 0.0
 	FxState.apply({"fx_fade": 0.0})
 	game._update_light()
+	if masked:
+		# 필드 처리를 멈춘 뒤 미탐색 경계를 고정해 시야 갱신이 덮지 않게 한다.
+		game.view.vis_image.fill(Color(0, 0, 0, 1))
+		game.view.vis_texture.update(game.view.vis_image)
+		game.view.set_mask_shade(1.0)
+		game.view.material.set_shader_parameter("round_day", 0.0)
 	var fill: Vector4 = game.fx_params.get("fx_fill", Vector4.ZERO)
 	fill.w = 1.0 if _fill_enabled else 0.0
 	game.fx_params["fx_fill"] = fill
@@ -130,7 +138,7 @@ func _shot(scene: Dictionary) -> bool:
 	_index.append({"shot": name_tag, "scene": scene, "horde": _enabled,
 		"stats": horde.get("stats") if horde != null else {}, "camera_size": 24.0,
 		"camera_pitch": FieldGame.CAM_PITCH, "camera_yaw": FieldGame.CAM_YAW,
-		"test_walls": "north wall_sheet 3.0m / west wall_stack 5.2m; each 24m", "mask": false,
+		"test_walls": "north wall_sheet 3.0m / west wall_stack 5.2m; each 24m", "mask": masked,
 		"comparison": _comparison if _enabled else {}, "fill": game.fx_params.get("fx_fill", Vector4.ZERO)})
 	game.queue_free()
 	await process_frame
