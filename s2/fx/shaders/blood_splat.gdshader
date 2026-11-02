@@ -89,5 +89,8 @@ void fragment() {
 	ALBEDO = fx_photo(col, fx_fade) * lit;
 	ROUGHNESS = mix(0.28, 0.92, dry);
 	SPECULAR = 0.5 * (1.0 - dry) * (1.0 - snow * 0.5);
+	if (fx_fill.w > 0.5) {
+		EMISSION = fx_fill_term(ALBEDO, 0.0, normalize(mat3(INV_VIEW_MATRIX) * NORMAL));
+	}
 	ALPHA = alpha;
 }

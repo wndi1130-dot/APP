@@ -80,12 +80,14 @@ func _ready() -> void:
 	settings["fps_cap"] = default_fps_cap()
 	_cap_fps()
 	var board: Array = SliceFlow.start_board()
-	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path)
+	var field_read: Dictionary = {}
+	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path, field_read)
 	if not slice_resume.is_empty():
+		slice_resume["_field_read"] = field_read
 		_start_slice(slice_resume)
 		return
 	# A stop the app was shut in the middle of comes back where it was (user decision 296).
-	var resume := FieldSave.pick_start(field_save_path, train_save_path)
+	var resume: Dictionary = FieldSave.pick_start(field_save_path, train_save_path, field_read)
 	if bool(resume.get("slice", false)):
 		_show_menu()
 		return
@@ -240,8 +242,12 @@ static func default_fps_cap(mobile: bool = OS.has_feature("mobile")) -> int:
 
 func _make_slice(resume: Dictionary = {}) -> Node:
 	var flow = SliceFlow.new()
+	var slice_resume: Dictionary = resume.duplicate()
+	var field_read: Dictionary = slice_resume.get("_field_read", {})
+	slice_resume.erase("_field_read")
 	flow.opts = {
-		"save": true, "resume": resume, "slice_save_path": slice_save_path,
+		"save": true, "resume": slice_resume, "slice_save_path": slice_save_path,
+		"_field_read": field_read,
 		"train_save_path": train_save_path, "field_save_path": field_save_path,
 		"intro": resume.is_empty(),
 	}

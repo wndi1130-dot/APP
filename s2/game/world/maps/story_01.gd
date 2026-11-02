@@ -145,8 +145,8 @@ const PLAN: Dictionary = {
 	# 사건용 석탄 빈칸 8개와 별도로, 뒤질 상자 39개에 무게 54.3을 고르게 둔다.
 	# 깊은 방 남쪽의 코어 후보는 비운다. 기존 공구 상자 두 개는 같은 내용물을 유지한다.
 	"containers": [
-		{"id":"tools_shallow","name":"기관고 앞방 공구 상자","cell":[35,78],"building":0,"search":4,"items":["nails","gears","wire_coil"],"locked":false,"level":0,"searched":false},
-		{"id":"tools_deep","name":"기관고 안쪽 공구 상자","cell":[40,90],"building":0,"search":4,"items":["nails","gears","wire_coil"],"locked":false,"level":0,"searched":false},
+		{"id":"tools_shallow","name":"기관고 앞방 공구 상자","cell":[35,78],"building":0,"search":4,"items":["nails","gears","wire_coil"],"locked":false,"level":0,"searched":false,"as_placed":true},
+		{"id":"tools_deep","name":"기관고 안쪽 공구 상자","cell":[40,90],"building":0,"search":4,"items":["nails","gears","wire_coil"],"locked":false,"level":0,"searched":false,"as_placed":true},
 		{"id":"roundhouse_loot_01","name":"기관고 서쪽 정비칸 공구함","cell":[29,73],"building":0,"search":5,"items":["nails","nails","junk_rag","sewing_kit"],"locked":false,"level":0,"searched":false},
 		{"id":"roundhouse_loot_02","name":"기관고 서쪽 정비칸 부품 선반","cell":[29,81],"building":0,"search":5,"items":["gears","wire_coil","springs"],"locked":false,"level":0,"searched":false},
 		{"id":"roundhouse_loot_03","name":"기관고 서쪽 정비칸 작업대 서랍","cell":[27,74],"building":0,"search":5,"items":["nails","nails","gears"],"locked":false,"level":0,"searched":false},

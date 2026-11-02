@@ -37,6 +37,12 @@ const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
 ## Tests only: fail one step of the next write; empty is off, reset on entry.
 static var _test_fail_step: String = ""
+## Tests only: counts actual parses of the previous slot, not new-file validation.
+static var _test_previous_parses: int = 0
+## Tests only: actual file parse attempts in read(), including a broken primary.
+static var _test_reads: int = 0
+## Process-local hashes of exact disk bytes already accepted by from_json().
+static var _known_good: Dictionary = {}
 
 ## Only simulation state, never meshes, services or input widgets.
 const PERSON_FIELDS: Array[String] = [
@@ -418,8 +424,8 @@ static func should_resume(save: Dictionary, applied = {}) -> bool:
 ## Where the app starts (S3 spec 4, user decision 296): the field save and the
 ## train save are read, and a stop still being played whose return the train has
 ## not taken in comes back. Returns the start options for it, or {} to start fresh.
-static func pick_start(field_path: String = PATH, train_path: String = TRAIN_PATH) -> Dictionary:
-	var save := read(field_path)
+static func pick_start(field_path: String = PATH, train_path: String = TRAIN_PATH, read_context: Variant = null) -> Dictionary:
+	var save: Dictionary = read_for_start(field_path, read_context) if read_context is Dictionary else read(field_path)
 	if not should_resume(save, train_applied(train_path)):
 		return {}
 	var opts := resume_opts(save)
@@ -1052,6 +1058,21 @@ static func _put_receipt(r, state: Dictionary) -> void:
 			r.set(name, String(v))
 
 
+static func _bytes_hash(bytes: PackedByteArray) -> PackedByteArray:
+	var context: HashingContext = HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK or context.update(bytes) != OK:
+		return PackedByteArray()
+	return context.finish()
+
+
+static func _remember_good(path: String, bytes: PackedByteArray) -> void:
+	var digest: PackedByteArray = _bytes_hash(bytes)
+	if digest.size() == 32:
+		_known_good[path] = digest
+	else:
+		_known_good.erase(path)
+
+
 ## Writes over the slot: the new file goes down whole first, the last one is kept as .bak.
 static func write(d: Dictionary, path: String = PATH) -> bool:
 	var fail_step := _test_fail_step
@@ -1097,8 +1118,13 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 		if error != OK or previous_bytes.size() != previous_length:
 			DirAccess.remove_absolute(tmp)
 			return false
-		var previous := from_json(previous_bytes.get_string_from_utf8())
-		var moved := backup if not previous.is_empty() else path + ".broken"
+		var previous_hash: PackedByteArray = _bytes_hash(previous_bytes)
+		var known_hash: PackedByteArray = _known_good.get(path, PackedByteArray())
+		var previous_good: bool = previous_hash.size() == 32 and previous_hash == known_hash
+		if not previous_good:
+			_test_previous_parses += 1
+			previous_good = not from_json(previous_bytes.get_string_from_utf8()).is_empty()
+		var moved: String = backup if previous_good else path + ".broken"
 		if FileAccess.file_exists(moved) and DirAccess.remove_absolute(moved) != OK:
 			DirAccess.remove_absolute(tmp)
 			return false
@@ -1106,6 +1132,7 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 			DirAccess.remove_absolute(tmp)
 			return false
 	if fail_step != "rename_tmp" and DirAccess.rename_absolute(tmp, path) == OK:
+		_remember_good(path, written)
 		return true
 	if not FileAccess.file_exists(path) and FileAccess.file_exists(backup):
 		DirAccess.rename_absolute(backup, path)
@@ -1117,13 +1144,32 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 static func read(path: String = PATH) -> Dictionary:
 	for at in [path, path + ".bak"]:
 		if FileAccess.file_exists(at):
-			var d := from_json(FileAccess.get_file_as_string(at))
+			var bytes: PackedByteArray = FileAccess.get_file_as_bytes(at)
+			_test_reads += 1
+			var d: Dictionary = from_json(bytes.get_string_from_utf8())
 			if not d.is_empty():
+				if at == path:
+					_remember_good(path, bytes)
 				return d
 	return {}
 
 
+## A caller-owned, short-lived boot read, including an empty result. Hashes stream
+## both candidates: a deferred scene switch can see a write, clear, or backup change.
+## This stores no parsed save globally and does not change the write-validation cache.
+static func read_for_start(path: String, context: Dictionary) -> Dictionary:
+	var files: Array[String] = []
+	for at: String in [path, path + ".bak"]:
+		files.append(FileAccess.get_sha256(at) if FileAccess.file_exists(at) else "")
+	if context.get("path") != path or context.get("files") != files:
+		context["path"] = path
+		context["files"] = files
+		context["saved"] = read(path)
+	return context["saved"]
+
+
 static func clear(path: String = PATH) -> void:
+	_known_good.erase(path)
 	for at in [path, path + ".tmp", path + ".bak", path + ".broken"]:
 		if FileAccess.file_exists(at):
 			DirAccess.remove_absolute(at)

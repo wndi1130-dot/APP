@@ -320,7 +320,7 @@ func test_every_floor_ships_steps_of_its_own() -> void:
 		assert_between(s.get_length(), 0.15, 1.0, "floor_creak")
 
 
-## A creak of its own is heard at its own pitch (OWN_PITCH); the wood that stands
+## A creak of its own is heard at its own pitch (OWN_VOICE); the wood that stands
 ## in for it until then is pitched well down (CREAK_VOICE).
 func test_a_creak_of_its_own_is_not_pitched_down() -> void:
 	var a = game.audio
