@@ -285,6 +285,31 @@ func test_the_shipped_files_load() -> void:
 			assert_gt(s.get_length(), 0.1, g)
 
 
+## Every floor is heard as itself (STEP_FLOORS): with the shipped files no
+## floor falls through to the snow; each is a few short steps, and a loose
+## board has creaks of its own.
+func test_every_floor_ships_steps_of_its_own() -> void:
+	var a = game.audio
+	var g = game.grid
+	var at: Vector3 = game.player.position
+	var cell: Vector2i = game.FieldGrid.cell_of(at)
+	var was: int = g.floor_at(cell)
+	for kind in range(a.STEP_FLOORS.size()):
+		var own: String = a.STEP_FLOORS[kind][0][0]
+		a.lib.erase(own)
+		g.floor[g.index(cell)] = kind
+		assert_eq(a._step_group(at)[0], own, "floor %d has steps of its own" % kind)
+		var list: Array = a._load_group(own)
+		assert_gte(list.size(), 4, own)
+		for s in list:
+			assert_between(s.get_length(), 0.1, 0.8, own)
+	g.floor[g.index(cell)] = was
+	var creaks: Array = a._load_group("floor_creak")
+	assert_gte(creaks.size(), 3, "a loose board's creaks")
+	for s in creaks:
+		assert_between(s.get_length(), 0.15, 1.0, "floor_creak")
+
+
 func test_the_radio_hisses_then_calls_and_an_urgent_call_is_the_loudest() -> void:
 	var a = game.audio
 	for g in ["radio_hiss", "radio"]:
