@@ -75,6 +75,15 @@ var _lit_slots: Array[int] = []
 var _lit_rects: Array[Rect2i] = []
 
 
+## Call on the main thread after the old field/train scenes and their StopLoader
+## and scenery workers have stopped accessing these caches. Safe to call twice.
+## Drop only outer dictionary references; live nodes/MultiMeshes keep their meshes.
+## The next access reloads the same libraries and rebuilds the same cutaways.
+static func release() -> void:
+	_libraries.clear()
+	_cuts.clear()
+
+
 static func catalog() -> Dictionary:
 	if _catalog.is_empty():
 		_catalog = load_catalog(CATALOG_PATH)
