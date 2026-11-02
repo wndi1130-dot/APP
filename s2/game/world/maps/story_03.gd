@@ -181,6 +181,9 @@ static func build() -> Dictionary:
 		_fill_floor(g, Rect2i(102 - i, 38 + i, 1, 1), F.RAIL)
 	for row in PLAN["boxes"]:
 		data["containers"][row[0]] = {"id": row[0], "name": row[1], "cell": _cell(row[2]), "building": int(row[3]), "search": 4.0, "items": row[4].duplicate(true), "locked": false, "level": 0, "searched": false}
+	# The two tool boxes hold the same things on purpose: no top-up roll may split them.
+	for pair_id: String in ["tools_shallow", "tools_deep"]:
+		data["containers"][pair_id]["as_placed"] = true
 	for row in PLAN["entries"]:
 		var cells: Array[Vector2i] = []
 		for c in row[1]:

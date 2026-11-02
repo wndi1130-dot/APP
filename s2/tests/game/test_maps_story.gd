@@ -683,6 +683,8 @@ func test_story_02_warehouse_has_one_visible_deep_door_and_split_tools() -> void
 	assert_false(deep.has_point(data["containers"]["tools_shallow"]["cell"]))
 	assert_true(deep.has_point(data["containers"]["tools_deep"]["cell"]))
 	assert_eq(data["containers"]["tools_shallow"]["items"], data["containers"]["tools_deep"]["items"])
+	for pair_id: String in ["tools_shallow", "tools_deep"]:
+		assert_true(bool(data["containers"][pair_id].get("as_placed", false)), "%s as_placed" % pair_id)
 
 
 func test_story_02_west_wave_walks_in_earlier_than_the_freight_reference() -> void:
@@ -800,6 +802,8 @@ func test_story_03_safe_equipment_rooms_keep_the_story_inside_and_tools_split() 
 	assert_false(deep.has_point(data["containers"]["tools_shallow"]["cell"]))
 	assert_true(deep.has_point(data["containers"]["tools_deep"]["cell"]))
 	assert_eq(data["containers"]["tools_shallow"]["items"], data["containers"]["tools_deep"]["items"])
+	for pair_id: String in ["tools_shallow", "tools_deep"]:
+		assert_true(bool(data["containers"][pair_id].get("as_placed", false)), "%s as_placed" % pair_id)
 	assert_true(data["stoves"].is_empty())
 	assert_eq(data["interior_kind_slots"], [{"zone": "D", "kinds": ["empty"]}])
 	var kinds: Array = []

@@ -97,7 +97,7 @@ const PLAN: Dictionary = {
 		["receiving_03","입고 견인 부품 상자",[73,24],0,["gears","gears","springs"]],
 		["receiving_04","입고 배선 공구 상자",[83,24],0,["wire_coil","wire_coil","springs"]],
 		["receiving_05","입고 윤활 정비 상자",[88,24],0,["fuel_can","junk_rag"]],
-		["receiving_06","입고 작업복 상자",[93,24],0,["old_clothes","old_clothes","sewing_kit"]],
+		["receiving_06","입고 근무복 상자",[93,24],0,["old_clothes","old_clothes","sewing_kit"]],
 		["receiving_07","입고 포장 공구 상자",[63,30],0,["nails","wire_coil","springs"]],
 		["receiving_08","입고 철교 부품 상자",[68,30],0,["gears","gears","junk_rag"]],
 		["receiving_09","입고 조명 자재함 상자",[73,30],0,["wire_coil","wire_coil","candle","candle"]],
@@ -179,6 +179,9 @@ static func build() -> Dictionary:
 		_fill_solid(g, wagon["rect"], S.BLOCK)
 	for row in PLAN["boxes"]:
 		data["containers"][row[0]] = {"id": row[0], "name": row[1], "cell": _cell(row[2]), "building": int(row[3]), "search": 4.0, "items": row[4].duplicate(true), "locked": false, "level": 0, "searched": false}
+	# The two tool boxes hold the same things on purpose: no top-up roll may split them.
+	for pair_id: String in ["tools_shallow", "tools_deep"]:
+		data["containers"][pair_id]["as_placed"] = true
 	for row in PLAN["entries"]:
 		var cells: Array[Vector2i] = []
 		for c in row[1]:
