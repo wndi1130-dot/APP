@@ -4,6 +4,7 @@ extends Node
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 const SliceSave = preload("res://game/sim/slice_save.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
@@ -72,6 +73,7 @@ func _ready() -> void:
 	theme = UiTheme.make(24)
 	for row in CHOICES:
 		settings[row[0]] = row[2][0][0]
+	settings["fps_cap"] = default_fps_cap()
 	_cap_fps()
 	var board: Array = SliceFlow.start_board()
 	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path)
@@ -197,10 +199,17 @@ func _pick(key: String, value) -> void:
 
 
 ## The menu, the train and the stop card run at the field's cap too: the menu's 「FPS 상한」,
-## 60 unless picked. Uncapped they ran at the phone's 120 Hz beat (80 fps on the stop card)
-## and warmed it (phone night run 2026-10-31).
+## the default unless picked. Uncapped they ran at the phone's 120 Hz beat (80 fps on the stop
+## card) and warmed it (phone night run 2026-10-31).
 func _cap_fps() -> void:
-	Engine.max_fps = int(settings.get("fps_cap", 60))
+	Engine.max_fps = int(settings.get("fps_cap", default_fps_cap()))
+
+
+## 30 on a phone, 60 anywhere else (2026-11-02 user's pick): over a 30-minute phone run a cap of
+## 60 heated the phone until its clock was held down (20.1 fps by minute 25) while 30 held 29.84
+## fps all the way. 60 stays in the menu; the PC and the tests keep the 60 they always ran at.
+static func default_fps_cap(mobile: bool = OS.has_feature("mobile")) -> int:
+	return 30 if mobile else 60
 
 
 func _make_slice(resume: Dictionary = {}) -> Node:
@@ -241,6 +250,8 @@ func _start(resume: Dictionary = {}) -> void:
 		var seed_env: String = OS.get_environment("S2_SEED")
 		if seed_env != "":
 			opts["seed"] = int(seed_env)
+		# A new stop has the first stop's view ground (stop_ground.gd); a resumed one, its save's.
+		StopGround.ask_view(opts)
 	# The one save slot: written when the app is pushed away and when the stop ends.
 	opts["field_save"] = true
 	opts["field_save_path"] = field_save_path

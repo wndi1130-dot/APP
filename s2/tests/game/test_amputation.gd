@@ -49,18 +49,18 @@ func test_what_a_cut_takes_and_why_not() -> void:
 	assert_true(plan["ok"])
 	assert_eq(plan["uses"], {"cloth": 1, "plank": 1}, "a tourniquet made on the spot")
 	assert_almost_eq(float(plan["seconds"]), 20.0, 0.001, "no medical knowledge: 20 s")
-	assert_eq(Amputation.plan_text(plan), "칼 · 지혈대(천+판자) · 20초 · 비명이 온 지도에 들린다")
+	assert_eq(Amputation.plan_text(plan), "칼 · 지혈대(천+판자) · 20초 · 비명이 멀리까지 들린다")
 	have = {"tourniquet": 1, "medkit": 1}
 	plan = Amputation.plan(o, o, "arm_left", have)
 	assert_eq(plan["uses"], {"tourniquet": 1, "medkit": 1})
 	assert_true(plan["kit"])
-	assert_eq(Amputation.plan_text(plan), "칼 · 지혈대 · 구급함 · 20초 · 비명이 온 지도에 들린다")
+	assert_eq(Amputation.plan_text(plan), "칼 · 지혈대 · 구급함 · 20초 · 비명이 멀리까지 들린다")
 	assert_eq(_why(o, o, "torso", have), "팔이나 다리만 자를 수 있다")
 	assert_eq(_why(o, o, "leg_left", have), "자를 까닭이 없다", "nothing there to cut for")
 	o.body.window_left = 15.0
-	assert_eq(_why(o, o, "arm_left", have), "창이 15초 남아 다 자르기 전에 닫힌다", "20 s of work in a window of 15")
+	assert_eq(_why(o, o, "arm_left", have), "자를 수 있는 시간이 15초뿐이라 다 자르기 전에 끝난다", "20 s of work in a window of 15")
 	o.body.window_left = 0.0
-	assert_eq(_why(o, o, "arm_left", have), "감염 창이 닫혀 소용없다")
+	assert_eq(_why(o, o, "arm_left", have), "자를 수 있는 시간이 지나 소용없다")
 	for row in [["none", 20.0], ["apprentice", 16.0], ["skilled", 12.0], ["master", 8.0]]:
 		assert_almost_eq(Amputation.seconds(String(row[0])), float(row[1]), 0.001)
 
@@ -200,12 +200,12 @@ func test_the_window_says_what_to_cut() -> void:
 	var o := _bitten("arm_left")
 	var row: Dictionary = o.body.status_notes()[0]
 	assert_eq(String(row["id"]), "infection")
-	assert_eq(String(row["text"]), "감염 창이 8분 00초 남았다. 닫히기 전에 정해야 한다: 왼팔을 자르면 막는다")
+	assert_eq(String(row["text"]), "자를 수 있는 시간이 8분 00초 남았다. 그 안에 정해야 한다: 왼팔을 자르면 막는다")
 	o.body.apply_bite(RandomNumberGenerator.new(), "leg_right", 1.0)
-	assert_eq(String(o.body.status_notes()[0]["text"]), "감염 창이 8분 00초 남았다. 닫히기 전에 정해야 한다: 왼팔·오른다리를 자르면 막는다")
+	assert_eq(String(o.body.status_notes()[0]["text"]), "자를 수 있는 시간이 8분 00초 남았다. 그 안에 정해야 한다: 왼팔·오른다리를 자르면 막는다")
 	var scratched := _person()
 	scratched.body.apply_scratch(RandomNumberGenerator.new(), 0.0, "arm_right")
-	assert_eq(String(scratched.body.status_notes()[0]["text"]), "감염됐는지 아직 모른다. 창이 끝나야 안다. 오른팔을 자르면 감염이어도 막는다")
+	assert_eq(String(scratched.body.status_notes()[0]["text"]), "감염됐는지 아직 모른다. 좀 더 지나야 안다. 오른팔을 자르면 감염이어도 막는다")
 
 
 ## 결정 441 (4): a bite no cut reaches says why and how long until the fever,
@@ -220,10 +220,10 @@ func test_a_bite_no_cut_reaches_says_why_and_how_long() -> void:
 	assert_eq(String(both.body.status_notes()[0]["text"]), "몸통이라 자를 수 없다. 열이 오르기까지 8분 00초", "the arm would not save it")
 	var scratched := _person()
 	scratched.body.apply_scratch(RandomNumberGenerator.new(), 0.0, "torso")
-	assert_eq(String(scratched.body.status_notes()[0]["text"]), "감염됐는지 아직 모른다. 몸통이라 자를 수 없다. 8분 00초 뒤 창이 끝나면 안다")
+	assert_eq(String(scratched.body.status_notes()[0]["text"]), "감염됐는지 아직 모른다. 몸통이라 자를 수 없다. 8분 00초 뒤면 안다")
 	var mixed := _bitten("arm_right")
 	mixed.body.apply_scratch(RandomNumberGenerator.new(), 1.0, "torso")
-	assert_eq(String(mixed.body.status_notes()[0]["text"]), "감염 창이 8분 00초 남았다. 닫히기 전에 정해야 한다: 오른팔을 자르면 막는다. 몸통 긁힘은 자를 수 없다")
+	assert_eq(String(mixed.body.status_notes()[0]["text"]), "자를 수 있는 시간이 8분 00초 남았다. 그 안에 정해야 한다: 오른팔을 자르면 막는다. 몸통 긁힘은 자를 수 없다")
 
 
 func test_a_clean_scratch_leaves_nothing_to_cut_for() -> void:

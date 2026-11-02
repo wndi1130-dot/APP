@@ -7,6 +7,8 @@ shader_type canvas_item;
 // as the browser mixes them, in sRGB, straight alpha.
 
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+// The card's entry/exit alpha; 1 keeps the original full-strength backdrop.
+uniform float motion_alpha = 1.0;
 // The softening: blur(1.8px), as a mip level of the screen.
 uniform float lod = 1.6;
 uniform float brightness = 0.4;
@@ -25,5 +27,5 @@ void fragment() {
 	// An ellipse of `radius` (fractions of the rect) round `at`; 1 on its edge.
 	float r = length((UV - at) / radius);
 	vec4 s = r < mid ? mix(c0, c1, r / mid) : mix(c1, c2, clamp((r - mid) / (1.0 - mid), 0.0, 1.0));
-	COLOR = vec4(mix(c, s.rgb, s.a), 1.0);
+	COLOR = vec4(mix(c, s.rgb, s.a), motion_alpha);
 }

@@ -39,6 +39,7 @@ var seed_for: int = -1
 ## walk-off asked for (-1: the seed's).
 var form_for: String = ""
 var form_m_for: float = -1.0
+var band_for: String = ""
 var data: Dictionary = {}
 var vat: Dictionary = {}
 var field: Node = null
@@ -71,12 +72,12 @@ func _ready() -> void:
 ## Start on the map of `place_id` (the default map when there is none), with the
 ## field's seed when it is known (its side path is then put on the map here; -1: the
 ## field puts it on), in the stop's form when it is known (its ground then goes on
-## here, off the main thread, before the side path). The same place, seed and form
+## here, off the main thread, before the side path). The same place, seed, form and band
 ## again keeps what is under way.
-func prepare(place_id: String, run_seed: int = -1, form: String = "", form_m: float = -1.0, visit_id: String = "") -> void:
+func prepare(place_id: String, run_seed: int = -1, form: String = "", form_m: float = -1.0, visit_id: String = "", band: String = "") -> void:
 	var strict: bool = not visit_id.is_empty()
 	var id: String = place_id if strict else FieldMaps.resolve(place_id)
-	if _state in ["loading", "building", "ready"] and id == place and visit_id == visit_for and run_seed == seed_for and form == form_for and form_m == form_m_for:
+	if _state in ["loading", "building", "ready"] and id == place and visit_id == visit_for and run_seed == seed_for and form == form_for and form_m == form_m_for and band == band_for:
 		return
 	_generation += 1
 	if not _loading_path.is_empty():
@@ -94,6 +95,7 @@ func prepare(place_id: String, run_seed: int = -1, form: String = "", form_m: fl
 	seed_for = run_seed
 	form_for = form
 	form_m_for = form_m
+	band_for = band
 	data = {}
 	if strict and (id.is_empty() or not FieldMaps.has(id)):
 		error = "F-CAMPAIGN-MAP: unregistered loader map"
@@ -104,7 +106,7 @@ func prepare(place_id: String, run_seed: int = -1, form: String = "", form_m: fl
 	_path = FieldMaps.path_of(place)
 	_data_from = Time.get_ticks_usec()
 	if not threaded:
-		_take(FieldMaps.build(place))
+		_take(FieldMaps.build(place, band))
 		return
 	if ResourceLoader.load_threaded_request(_path, "", false) != OK:
 		_start_task(load(_path))
@@ -129,12 +131,13 @@ func build_field(parent: Node, opts: Dictionary) -> void:
 	# So is one made in another form than the field's, so its ground goes on off the main thread too.
 	var form := String(opts.get("stop_form", ""))
 	var form_m := float(opts.get("stop_form_m", -1.0))
+	var band := FieldGame.region_for(opts)
 	var visit_id: String = String(opts.get("visit_id", ""))
 	var requested: String = String(opts.get("place", ""))
 	if visit_id.is_empty():
 		requested = FieldMaps.resolve(requested)
-	if _state == "idle" or requested != place or visit_id != visit_for or (seed_for >= 0 and want != seed_for) or form != form_for or form_m != form_m_for:
-		prepare(requested, want, form, form_m, visit_id)
+	if _state == "idle" or requested != place or visit_id != visit_for or (seed_for >= 0 and want != seed_for) or form != form_for or form_m != form_m_for or band != band_for:
+		prepare(requested, want, form, form_m, visit_id, band)
 	var generation: int = _generation
 	if _state == "failed":
 		return
@@ -218,7 +221,7 @@ func _process(_delta: float) -> void:
 		if _box.get("vat") is Dictionary:
 			vat = _box["vat"]
 		var generation: int = int(_box.get("generation", -1))
-		_take(built if built is Dictionary and not (built as Dictionary).is_empty() else FieldMaps.build(place), generation)
+		_take(built if built is Dictionary and not (built as Dictionary).is_empty() else FieldMaps.build(place, band_for), generation)
 	if is_instance_valid(field) and not field.is_built:
 		var now: int = Time.get_ticks_usec()
 		stats["longest_frame_ms"] = maxf(float(stats.get("longest_frame_ms", 0.0)), float(now - _last_frame) / 1000.0)
@@ -230,14 +233,14 @@ func _process(_delta: float) -> void:
 func _start_task(script: Script) -> void:
 	_box = {"generation": _generation}
 	_state = "building"
-	_task = WorkerThreadPool.add_task(_build_off_thread.bind(_box, script, seed_for, form_for, form_m_for, VAT_VERTICES if vat.is_empty() else 0), false, "stop map")
+	_task = WorkerThreadPool.add_task(_build_off_thread.bind(_box, script, seed_for, form_for, form_m_for, band_for, VAT_VERTICES if vat.is_empty() else 0), false, "stop map")
 	set_process(true)
 
 
 ## On the worker: the map and what is made ahead from it (make_ready), nothing in
 ## the scene tree.
-static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, form: String, form_m: float, vat_vertices: int) -> void:
-	box["data"] = make_ready(script, run_seed, form, form_m)
+static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, form: String, form_m: float, band: String, vat_vertices: int) -> void:
+	box["data"] = make_ready(script, run_seed, form, form_m, band)
 	if vat_vertices > 0:
 		box["vat"] = VatBaker.build(vat_vertices)
 
@@ -250,10 +253,11 @@ static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, fo
 ## (building_view.gd), the ground's and the floors' arrays (map_view.gd, 2a) with the
 ## maps they fit, the rooms' finish (room_finish.gd) and the plan of the woods round
 ## the map (edge_band.gd plan_ahead). Data only, no nodes.
-static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0) -> Dictionary:
-	var d: Dictionary = FieldMaps.build_from(script)
+static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "") -> Dictionary:
+	var d: Dictionary = FieldMaps.build_from(script, band)
 	if not form.is_empty():
 		d = StopGround.apply(d, form, run_seed, form_m)
+	d = StopGround.widen_view(d)
 	if run_seed >= 0:
 		d = SidePath.add(d, run_seed)
 		d["_side_seed"] = run_seed

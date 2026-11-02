@@ -9,6 +9,15 @@ extends Node3D
 signal rules_applied
 ## Decorating closed here (exit_decor), also when the train closes it itself before a rebuild.
 signal decor_closed
+## The replacement is visible and all room references have been published (rules_applied only accepts rules).
+signal room_restaged(id: String)
+## Invalidates UI waits as well as builders when this layout or scene lifetime ends.
+signal restages_invalidated
+
+## One main-thread budget shared by every car, checked only between indivisible build/swap units.
+const RESTAGE_BUDGET_USEC: int = 6000
+const RESTAGE_FRAME_HISTORY_LIMIT: int = 120
+const RESTAGE_JOB_HISTORY_LIMIT: int = 32
 
 const Rules = preload("res://game/train/train_rules.gd")
 const Look = preload("res://game/train/train_look.gd")
@@ -18,6 +27,7 @@ const HandPanel = preload("res://game/train/train_panel.gd")
 const Gesture = preload("res://game/train/train_gesture.gd")
 const Life = preload("res://game/train/train_life.gd")
 const Interior = preload("res://game/train/train_interior.gd")
+const TrainWarm = preload("res://game/train/train_warm.gd")
 const DecorView = preload("res://game/train/decor_view.gd")
 const DecorGrid = preload("res://game/train/decor_grid.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
@@ -172,8 +182,18 @@ var _highlight_id: String = ""
 var people_view: Node3D                  # the baked bodies drawn over the stand-in capsules
 var _scroll: float = 0.0
 var life = Life.new()
+var warm: TrainWarm
 var decor = null                         # the decorating view (decor_view.gd) while a car is decorated
 var music: MusicPlayer                  # the faint train piece by the train's state (briefs/bgm.md 3.1)
+var _restage_batch: int = 0
+var _restage_generations: Dictionary = {}
+var _restage_jobs: Dictionary = {}
+var _restage_queue: Array[String] = []
+## Per-job samples include cancelled work. Frame samples measure scheduler CPU work, not rendering
+## or the later queue_free flush; forced samples are the test-only drain and have no frame budget.
+## Keep recent detail across batch invalidations; counters and peaks cover the scene's lifetime.
+var restage_stats: Dictionary = {"jobs": {}, "frames": [], "max_frame_usec": 0,
+	"max_unit_usec": 0, "max_unit_name": "", "jobs_total": 0, "frames_total": 0, "forced_frames_total": 0}
 
 
 func _ready() -> void:
@@ -194,6 +214,8 @@ func _ready() -> void:
 			people_view = PeopleView.new()
 			people_view.setup(self)
 			add_child(people_view)
+		warm = TrainWarm.new()
+		warm.begin(self, cars)
 	else:
 		push_warning("train rules: %s" % ", ".join(problems))
 	if bool(opts.get("panel", true)):
@@ -209,6 +231,16 @@ func _process(delta: float) -> void:
 	_update_snow_ground()
 	step(delta)
 	music.tick(delta)
+	var busy := restaging()
+	_step_restages()
+	if warm != null:
+		warm.step(busy)
+
+
+func _exit_tree() -> void:
+	if warm != null:
+		warm.release()
+	_invalidate_restages("tree_exit")
 
 
 func phase() -> String:
@@ -237,24 +269,20 @@ func apply_rules(event: String = "rules") -> void:
 		life.before_refresh()
 		_rebuild_layout()
 	else:
-		# A car whose home stage changed (결정 517: furnishing raised it) is dressed again on its own.
-		var restage: Array = []
+		# Register only. The active tier and its room stay intact until the scheduler's swap.
 		for c in cars:
-			if int(c.get("home_stage", -1)) != _home_stage_of(String(c["id"])):
-				restage.append(c["id"])
-		if not restage.is_empty():
-			life.before_reseat(restage)
-			for c in cars:
-				if restage.has(c["id"]):
-					_restage_car(c)
+			_restage_car(c)
 	for i in cars.size():
 		cars[i]["def"] = definitions[i]
 	var reseat: Array = []
 	for c in cars:
 		var key := _seat_key(c)
 		if key != String(c.get("seat_key", "")):
-			c["seat_key"] = key
 			var core := _seat_core(c)
+			if is_car_restaging(String(c["id"])) and core == String(c.get("seat_core", "")):
+				continue  # only the car's state changed: the swap seats them after the new room shows
+			# People, the run's phase or the council changed: seat them now in the room that shows.
+			c["seat_key"] = key
 			if room_lead > 0.0 and not rebuild and core == String(c.get("seat_core", "")):
 				# Only the car's state changed: the room turns first, the people after.
 				c["reseat_at"] = clock + room_lead
@@ -275,6 +303,7 @@ func apply_rules(event: String = "rules") -> void:
 
 
 func _rebuild_layout() -> void:
+	_invalidate_restages("layout")
 	exit_decor()
 	var traces: Dictionary = {}
 	for id in life.rooms:
@@ -407,7 +436,7 @@ func can_enter_decor(id: String) -> bool:
 ## its people seen through. Only the cars the decor table has; false for any other, and while the
 ## council sits. The strip, the rules and when it may open are the domestic side's (decor_strip.gd).
 func enter_decor(id: String) -> bool:
-	if not can_enter_decor(id):
+	if not can_enter_decor(id) or is_car_restaging(id):
 		return false
 	if decor != null:
 		exit_decor()
@@ -478,7 +507,7 @@ func _apply_view() -> void:
 	_apply_highlight()
 
 
-func _apply_shell_view(c: Dictionary) -> void:
+func _apply_shell_view(c: Dictionary, room: Interior = null) -> void:
 	# Decorating looks down into the car from either view, so its shell is cut as on the diagonal.
 	var diagonal: bool = view_mode == "diag" or decor != null
 	for top_node: Node3D in c.get("shell_top", []):
@@ -489,14 +518,16 @@ func _apply_shell_view(c: Dictionary) -> void:
 		(c["front_wall"] as MeshInstance3D).visible = diagonal and not (decor != null and c["id"] == decor.car.get("id"))
 	for prop: Dictionary in c.get("high_props", []):
 		(prop["node"] as Node3D).transform = prop["diag"] if diagonal else prop["section"]
-	_show_dress(c)
+	_show_dress(c, room)
 
 
 ## A car's small things (train_interior.gd dress) show up close and on the side view, not on
 ## the wide diagonal, where the draw budget is already spent (결정 505 잰 값).
-func _show_dress(c: Dictionary) -> void:
+func _show_dress(c: Dictionary, room: Interior = null) -> void:
 	var near: bool = decor != null or view_mode != "diag" or zoom == "near"
-	if life.rooms.has(c["id"]):
+	if room != null:
+		room.show_dress(near)
+	elif life.rooms.has(c["id"]):
 		life.rooms[c["id"]].show_dress(near)
 	if c.get("lamp_pool") != null:
 		(c["lamp_pool"] as MeshInstance3D).visible = near
@@ -635,6 +666,8 @@ func _seat_core(c: Dictionary) -> String:
 func _step_reseat() -> void:
 	var due: Array = []
 	for c in cars:
+		if is_car_restaging(String(c["id"])) or decorating() == String(c["id"]):
+			continue
 		if c.has("reseat_at") and clock >= float(c["reseat_at"]):
 			due.append(c["id"])
 	if due.is_empty():
@@ -643,6 +676,8 @@ func _step_reseat() -> void:
 	for c in cars:
 		if due.has(c["id"]):
 			c.erase("reseat_at")
+			c["seat_key"] = _seat_key(c)
+			c["seat_core"] = _seat_core(c)
 			_seat_car(c, true)
 	life.refresh("rules")
 
@@ -1402,9 +1437,9 @@ func _build_front_wall(c: Dictionary) -> void:
 	c["front_wall"] = wall_band
 
 
-func _remember_high_props(c: Dictionary) -> void:
+func _remember_high_props(c: Dictionary, room: Interior = null) -> void:
 	c["high_props"] = []
-	var prop_nodes: Dictionary = life.rooms[c["id"]].props
+	var prop_nodes: Dictionary = room.props if room != null else life.rooms[c["id"]].props
 	for prop_id: String in prop_nodes:
 		var prop_node: Node3D = prop_nodes[prop_id]
 		var local_box: AABB = (prop_node as MeshInstance3D).get_aabb() if prop_node is MeshInstance3D else Interior._bounds_of(prop_node)
@@ -1529,8 +1564,13 @@ func _shell_box(c: Dictionary, size: Vector3, at: Vector3, color: Color) -> void
 
 func _build_car_rest(c: Dictionary, node: Node3D, def: Dictionary, l: float, h: float) -> void:
 	_read_stove_share(c)
-	life.add_car(c)
-	_build_lamp(c, node, l)
+	life.add_car(c, func(at: Vector3, model: String = "") -> void:
+		_install_stove(c, _build_stove(node, at, model)))
+	c.merge(_build_lamp(node, l, TrainLight.stage_of(c)), true)
+	var room_nodes: Array = [life.rooms[c["id"]].root]
+	room_nodes.append_array(c.get("stove_nodes", []))
+	room_nodes.append_array([c["lamp"], c["lamp_pool"]])
+	c["room_nodes"] = room_nodes
 	c["name"] = _label(node, String(def.get("name", def["id"])), Vector3(l * 0.5, h + 1.2, 0), 72, Color(0.93, 0.91, 0.86))
 	c["values"] = _label(node, "", Vector3(l * 0.5, h + 0.55, 0), 44, Color(0.7, 0.7, 0.68))
 	# The car's numbers are not on the everyday screen (decisions.md 「평소 화면에는
@@ -1545,48 +1585,294 @@ func _read_stove_share(c: Dictionary) -> void:
 	c["stove_share"] = float(TrainLight.spec(TrainLight.stage_of(c), daytime)["stove"])
 
 
-## A car whose home stage changed in this scene: its room (the furniture, the dress, the stove)
-## and its lamp are built again at the new stage. The shell, the places, the people and the
-## room's traces stay, so only this car is redone (on the phone a whole rebuild stutters).
+## Request only: no nodes are made and no active room/tier/light reference is changed here.
 func _restage_car(c: Dictionary) -> void:
-	var node: Node3D = c["node"]
-	for part: String in ["Stove", "StovePipeLow", "StovePipeTop"]:
-		var old: Node = node.get_node_or_null(part)
-		if old != null:
-			(c["shell_top"] as Array).erase(old)
-			old.free()
-	for key: String in ["stove_light", "steam", "lamp", "lamp_pool"]:
-		if c.get(key) is Node and is_instance_valid(c[key]):
-			(c[key] as Node).free()
-		c.erase(key)
-	c["home_stage"] = _home_stage_of(String(c["id"]))
-	_read_stove_share(c)
-	life.restage_room(c)
-	_build_lamp(c, node, CAR_LENGTH)
-	_remember_high_props(c)
-	_apply_shell_view(c)
-	if c.has("room_vis"):
-		_show_room(c)
+	var id: String = String(c["id"])
+	var target_stage: int = _home_stage_of(id)
+	if _restage_jobs.has(id):
+		var previous: Dictionary = _restage_jobs[id]
+		if int(previous["target_stage"]) == target_stage and _valid_restage(previous):
+			return
+		_cancel_restage(id, "superseded")
+	if int(c["home_stage"]) == target_stage:
+		return  # reverting to the still-visible stage cancels rather than rebuilding it
+	var generation: int = int(_restage_generations.get(id, 0)) + 1
+	_restage_generations[id] = generation
+	var stats_key: String = "%d:%s:%d" % [_restage_batch, id, generation]
+	var stats: Dictionary = {"id": id, "target_stage": target_stage, "state": "queued",
+		"frames": 0, "forced_frames": 0, "max_frame_usec": 0, "max_unit_usec": 0, "max_unit_name": ""}
+	var job_samples: Dictionary = restage_stats["jobs"]
+	job_samples[stats_key] = stats
+	if job_samples.size() > RESTAGE_JOB_HISTORY_LIMIT:
+		job_samples.erase(job_samples.keys()[0])  # Dictionary order is registration order.
+	restage_stats["jobs_total"] = int(restage_stats["jobs_total"]) + 1
+	_restage_jobs[id] = {"id": id, "target_stage": target_stage, "batch": _restage_batch,
+		"generation": generation, "node": c["node"], "phase": "begin", "bundle": null,
+		"room": null, "parts": {}, "stats_key": stats_key, "stats": stats}
+	_restage_queue.append(id)
+
+
+func restaging() -> bool:
+	return not _restage_jobs.is_empty()
+
+
+func is_car_restaging(id: String) -> bool:
+	return _restage_jobs.has(id)
+
+
+## Tests only. Gameplay must leave all work to _process and its one shared budget.
+func finish_restage_now() -> void:
+	_step_restages(RESTAGE_BUDGET_USEC, true)
+
+
+func _valid_restage(job: Dictionary) -> bool:
+	if not is_inside_tree() or is_queued_for_deletion() or int(job["batch"]) != _restage_batch:
+		return false
+	var id: String = String(job["id"])
+	if int(job["generation"]) != int(_restage_generations.get(id, -1)) or not _restage_jobs.has(id):
+		return false
+	var c: Dictionary = car(id)
+	if not is_instance_valid(job["node"]):
+		return false
+	var car_node: Node3D = job["node"]
+	if car_node.is_queued_for_deletion() or not car_node.is_inside_tree() or c.is_empty() or c["node"] != car_node:
+		return false
+	if String(job["phase"]) != "begin":
+		if not is_instance_valid(job["bundle"]):
+			return false
+		var bundle: Node3D = job["bundle"]
+		if bundle.is_queued_for_deletion() or bundle.get_parent() != car_node:
+			return false
+	return true
+
+
+func _cancel_restage(id: String, reason: String) -> void:
+	if not _restage_jobs.has(id):
+		return
+	var job: Dictionary = _restage_jobs[id]
+	_restage_jobs.erase(id)
+	_restage_queue.erase(id)
+	_restage_generations[id] = int(_restage_generations.get(id, 0)) + 1
+	job["stats"]["state"] = "cancelled"
+	job["stats"]["reason"] = reason
+	if is_instance_valid(job["bundle"]):
+		var bundle: Node3D = job["bundle"]
+		bundle.hide()
+		if bundle.get_parent() != null:
+			bundle.get_parent().remove_child(bundle)
+		bundle.queue_free()
+	job["bundle"] = null
+	job["room"] = null  # release the partial SurfaceTool as well as the pending nodes
+	job["parts"] = {}
+
+
+func _invalidate_restages(reason: String) -> void:
+	_restage_batch += 1
+	for id: String in _restage_jobs.keys():
+		_cancel_restage(id, reason)
+	_restage_queue.clear()
+	restages_invalidated.emit()
+
+
+## Round-robin units share this deadline. Timing a dispatch from the preceding boundary also
+## includes scheduler/bookkeeping overhead between units. Telemetry publication follows the span.
+func _step_restages(budget_usec: int = RESTAGE_BUDGET_USEC, forced: bool = false) -> void:
+	if _restage_queue.is_empty() or not is_inside_tree():
+		return
+	var frame_started: int = Time.get_ticks_usec()
+	var boundary: int = frame_started
+	var touched: Dictionary = {}
+	var spent: Dictionary = {}
+	var frame_ids: Array[String] = []
+	var largest_usec: int = 0
+	var largest_name: String = ""
+	var units: int = 0
+	while not _restage_queue.is_empty():
+		if not forced and boundary - frame_started >= budget_usec:
+			break
+		var id: String = _restage_queue.pop_front()
+		var job: Dictionary = _restage_jobs.get(id, {})
+		var unit_name: String = "discard"
+		if not job.is_empty():
+			if _valid_restage(job):
+				unit_name = _advance_restage(job)
+			else:
+				_cancel_restage(id, "stale")
+			# A completion signal may enqueue a different generation of the same car.
+			if _valid_restage(job):
+				_restage_queue.append(id)
+		var ended: int = Time.get_ticks_usec()
+		var unit_usec: int = ended - boundary
+		boundary = ended
+		units += 1
+		if unit_usec >= largest_usec:
+			largest_usec = unit_usec
+			largest_name = id + "/" + unit_name
+		if not job.is_empty():
+			var stats: Dictionary = job["stats"]
+			var stats_key: String = String(job["stats_key"])
+			touched[stats_key] = stats
+			spent[stats_key] = int(spent.get(stats_key, 0)) + unit_usec
+			if not frame_ids.has(id):
+				frame_ids.append(id)
+			if unit_usec >= int(stats["max_unit_usec"]):
+				stats["max_unit_usec"] = unit_usec
+				stats["max_unit_name"] = unit_name
+	var elapsed: int = boundary - frame_started
+	for stats_key: String in touched:
+		var stats: Dictionary = touched[stats_key]
+		stats["frames"] = int(stats["frames"]) + 1
+		if forced:
+			stats["forced_frames"] = int(stats["forced_frames"]) + 1
+		else:
+			stats["max_frame_usec"] = maxi(int(stats["max_frame_usec"]), int(spent[stats_key]))
+	_record_restage_frame({"frame": Engine.get_process_frames(), "usec": elapsed,
+		"budget_usec": budget_usec, "max_unit_usec": largest_usec, "max_unit_name": largest_name,
+		"jobs": frame_ids, "job_usec": spent, "units": units, "forced": forced})
+
+
+## Telemetry only: eviction never changes a live job's own stats or the scheduler's queue.
+func _record_restage_frame(sample: Dictionary) -> void:
+	var frame_samples: Array = restage_stats["frames"]
+	frame_samples.append(sample)
+	if frame_samples.size() > RESTAGE_FRAME_HISTORY_LIMIT:
+		frame_samples.pop_front()
+	restage_stats["frames_total"] = int(restage_stats["frames_total"]) + 1
+	if bool(sample["forced"]):
+		restage_stats["forced_frames_total"] = int(restage_stats["forced_frames_total"]) + 1
+	else:
+		restage_stats["max_frame_usec"] = maxi(int(restage_stats["max_frame_usec"]), int(sample["usec"]))
+	if int(sample["max_unit_usec"]) >= int(restage_stats["max_unit_usec"]):
+		restage_stats["max_unit_usec"] = int(sample["max_unit_usec"])
+		restage_stats["max_unit_name"] = String(sample["max_unit_name"])
+
+
+func _advance_restage(job: Dictionary) -> String:
+	var bundle: Node3D = job["bundle"]
+	match String(job["phase"]):
+		"begin":
+			bundle = Node3D.new()
+			bundle.name = "PendingRoomDecoration"
+			bundle.visible = false
+			(job["node"] as Node3D).add_child(bundle)
+			job["bundle"] = bundle
+			var room := Interior.new()
+			room.begin_build(bundle, car(String(job["id"]))["def"], int(job["target_stage"]))
+			job["room"] = room
+			job["parts"] = {"home_stage": int(job["target_stage"]),
+				"stove_share": float(TrainLight.spec(int(job["target_stage"]),
+					TrainLight.daytime_of(rules.get("view", {})))["stove"])}
+			job["phase"] = "interior"
+			job["stats"]["state"] = "building"
+			return "begin"
+		"interior":
+			var room: Interior = job["room"]
+			var unit_name: String = room.build_step(func(at: Vector3, model: String = "") -> void:
+				(job["parts"] as Dictionary).merge(_build_stove(bundle, at, model), true))
+			if not room.building():
+				job["phase"] = "lamp"
+			return unit_name
+		"lamp":
+			(job["parts"] as Dictionary).merge(_build_lamp(bundle, CAR_LENGTH, int(job["target_stage"])), true)
+			job["phase"] = "swap"
+			return "lamp"
+		"swap":
+			_swap_restage(job)
+			return "swap"
+	return "discard"
+
+
+## No await: only completed candidates reach this function. The hidden tree is prepared with
+## current traces/context/view before any active reference changes. Children return to the car
+## itself at publication, preserving the existing Interior/Stove/Lamp0 node paths.
+func _swap_restage(job: Dictionary) -> bool:
+	if not _valid_restage(job) or String(job["phase"]) != "swap":
+		return false
+	var id: String = String(job["id"])
+	var c: Dictionary = car(id)
+	var room: Interior = job["room"]
+	var bundle: Node3D = job["bundle"]
+	life.before_reseat([id])
+	var context: Dictionary = life.prepare_restage_room(c, room)
+	# This explicit view descriptor never shares an array that construction appends to.
+	var next: Dictionary = {"id": id, "index": c["index"], "glass": c["glass"], "shell_mats": c["shell_mats"],
+		"shell_colors": c.get("shell_colors", []), "shell_top": (c["shell_top"] as Array).duplicate(),
+		"room_vis": (c["room_vis"] as Dictionary).duplicate(), "dimmed": c.get("dimmed", false)}
+	next.merge(job["parts"], true)
+	if c.has("shell_mat"):
+		next["shell_mat"] = c["shell_mat"]
+	if c.has("front_wall"):
+		next["front_wall"] = c["front_wall"]
+	(next["shell_top"] as Array).erase(c.get("stove_top"))
+	if next.has("stove_top"):
+		(next["shell_top"] as Array).append(next["stove_top"])
+	var comm: Dictionary = Rules.comm_of(rules, c["def"])
+	var look: Dictionary = Look.mood_look(Look.mood(comm, rules.get("train", {})))
+	var daytime: String = TrainLight.daytime_of(rules.get("view", {}))
+	var light_spec: Dictionary = TrainLight.spec(int(job["target_stage"]), daytime)
+	next["stove_share"] = float(light_spec["stove"])
+	next.merge(TrainLight.target(int(job["target_stage"]), daytime, look), true)
+	var lamp: OmniLight3D = next["lamp"]
+	var lamp_spec: Dictionary = light_spec["lamps"][0]
+	# Preserve the first-build/rebuild lamp contract, even if the hour changed during preparation.
+	lamp.light_color = TrainLight.kelvin(float(lamp_spec["kelvin"]))
+	lamp.light_energy = float(lamp_spec["energy"])
+	lamp.omni_range = float(lamp_spec["range"])
+	_remember_high_props(next, room)
+	_apply_shell_view(next, room)
+	_show_room(next)  # use the current point of room_ease, not a snapshot from build start
+	life._apply_light(next, context)
+	_step_lamp(next, 0.0)
+	var old_nodes: Array = c["room_nodes"]
+	var new_nodes: Array[Node] = bundle.get_children()
+	var car_node: Node3D = c["node"]
+	bundle.show()
+	for old_node: Node in old_nodes:
+		car_node.remove_child(old_node)
+	for new_node: Node in new_nodes:
+		bundle.remove_child(new_node)
+		car_node.add_child(new_node)
+	# Reuse the now-empty candidate holder to own the exact retired references until queue_free.
+	bundle.hide()
+	for old_node: Node in old_nodes:
+		bundle.add_child(old_node)
+	next["room_nodes"] = new_nodes
+	for key: String in ["home_stage", "stove_share", "stove_light", "steam", "lamp", "lamp_pool",
+		"lamp_color", "lamp_energy", "lamp_sway", "stove_nodes", "stove_top", "shell_top", "high_props", "room_nodes"]:
+		if next.has(key):
+			c[key] = next[key]
+		else:
+			c.erase(key)
+	life.rooms[id] = room
+	life.contexts[id] = context
+	c["seat_key"] = _seat_key(c)
+	c["reseat_at"] = clock + maxf(room_lead, 0.0)
+	_restage_jobs.erase(id)
+	_restage_queue.erase(id)
+	job["stats"]["state"] = "complete"
+	car_node.remove_child(bundle)
+	bundle.queue_free()
+	job["bundle"] = null
+	room_restaged.emit(id)
+	return true
 
 
 ## The car's lamp by its home stage and the hour (train_light.gd, 결정 486), easing toward
 ## the mood. One lamp a car and no shadow on the phone: a swaying lamp's shadow is drawn
 ## again every frame (+29k primitives on the first diagonal screen), and the second lamp and
 ## the window glow added no draw call but 39 lights over the train's 24.
-func _build_lamp(c: Dictionary, node: Node3D, l: float) -> void:
-	var lamps: Array[OmniLight3D] = TrainLight.build(node, l, TrainLight.stage_of(c), TrainLight.daytime_of(rules.get("view", {})))
+func _build_lamp(node: Node3D, l: float, stage: int) -> Dictionary:
+	var lamps: Array[OmniLight3D] = TrainLight.build(node, l, stage, TrainLight.daytime_of(rules.get("view", {})))
 	var lamp: OmniLight3D = lamps[0]
 	lamp.shadow_enabled = false
 	for extra: OmniLight3D in lamps.slice(1):
 		extra.free()
 	for i: int in TrainLight.WINDOW_SHARES.size():
 		node.get_node("Window%d" % i).free()
-	c["lamp"] = lamp
-	c["lamp_color"] = lamp.light_color
-	c["lamp_energy"] = lamp.light_energy
-	c["lamp_sway"] = 1.0
-	c["lamp_pool"] = _lamp_pool(node, lamp.position)
-	_tint_pool(c)
+	var parts: Dictionary = {"lamp": lamp, "lamp_color": lamp.light_color,
+		"lamp_energy": lamp.light_energy, "lamp_sway": 1.0, "lamp_pool": _lamp_pool(node, lamp.position)}
+	_tint_pool(parts)
+	return parts
 
 
 ## The shell model of this car's kind, with a material of its own so the
@@ -1711,13 +1997,13 @@ func _step_backdrop(delta: float) -> void:
 
 ## An iron stove with its pipe, an ember glow and the faint steam a car stove
 ## may make (fx/smoke.gd "stove").
-func _build_stove(c: Dictionary, at: Vector3, model: String = "") -> void:
-	var node: Node3D = c["node"]
+func _build_stove(node: Node3D, at: Vector3, model: String = "") -> Dictionary:
 	var iron := Color(0.12, 0.12, 0.13)
 	var pipe_bottom: float = at.y + 0.7
 	var tier_path: String = "res://models/train_interior/" + model + ".glb"
+	var stove: Node3D
 	if not model.is_empty() and model.is_valid_identifier() and ResourceLoader.exists(tier_path):
-		var stove := (load(tier_path) as PackedScene).instantiate() as Node3D
+		stove = (load(tier_path) as PackedScene).instantiate() as Node3D
 		var bounds: AABB = Interior._bounds_of(stove)
 		stove.name = "Stove"
 		# Tier models have their origin at the floor, unlike the original centre-origin stove.
@@ -1726,12 +2012,13 @@ func _build_stove(c: Dictionary, at: Vector3, model: String = "") -> void:
 		node.add_child(stove)
 	# The iron stove model of the furniture set (origin at its middle); a box without it.
 	elif ResourceLoader.exists(STOVE_MODEL):
-		var stove := (load(STOVE_MODEL) as PackedScene).instantiate() as Node3D
+		stove = (load(STOVE_MODEL) as PackedScene).instantiate() as Node3D
 		stove.name = "Stove"
 		stove.position = at + Vector3(0, 0.35, 0)
 		node.add_child(stove)
 	else:
-		_box(node, Vector3(0.4, 0.7, 0.4), at + Vector3(0, 0.35, 0), iron).name = "Stove"
+		stove = _box(node, Vector3(0.4, 0.7, 0.4), at + Vector3(0, 0.35, 0), iron)
+		stove.name = "Stove"
 	var pipe_end: float = at.y + CAR_HEIGHT
 	var pipe_low: MeshInstance3D = _box(node, Vector3(0.1, SHELL_CUT_Y - pipe_bottom, 0.1),
 		Vector3(at.x, (pipe_bottom + SHELL_CUT_Y) * 0.5, at.z - 0.1), iron)
@@ -1740,19 +2027,25 @@ func _build_stove(c: Dictionary, at: Vector3, model: String = "") -> void:
 		Vector3(at.x, (SHELL_CUT_Y + pipe_end) * 0.5, at.z - 0.1), iron)
 	pipe_top.name = "StovePipeTop"
 	pipe_top.visible = view_mode != "diag"
-	c["shell_top"].append(pipe_top)
 	var glow := OmniLight3D.new()
+	glow.name = "StoveLight"
 	glow.light_color = STOVE_COLOR
 	glow.light_energy = 0.0
 	glow.omni_range = 3.0
 	glow.position = at + Vector3(0, 0.5, 0.35)
 	node.add_child(glow)
-	c["stove_light"] = glow
 	var steam: GPUParticles3D = Smoke.build("stove")
 	steam.position = at + Vector3(0, 0.75, 0)
 	steam.emitting = false
 	node.add_child(steam)
-	c["steam"] = steam
+	return {"stove_nodes": [stove, pipe_low, pipe_top, glow, steam],
+		"stove_top": pipe_top, "stove_light": glow, "steam": steam}
+
+
+## Only the first build registers directly; restages keep this result in their hidden holder.
+func _install_stove(c: Dictionary, parts: Dictionary) -> void:
+	c.merge(parts, true)
+	(c["shell_top"] as Array).append(parts["stove_top"])
 
 
 func _box(parent: Node3D, size: Vector3, at: Vector3, color: Color) -> MeshInstance3D:

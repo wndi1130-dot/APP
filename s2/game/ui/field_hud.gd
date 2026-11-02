@@ -40,6 +40,7 @@ const Amputation = preload("res://game/sim/amputation.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const GrabRules = preload("res://game/sim/grab_rules.gd")
+const Sled = preload("res://game/sim/sled.gd")
 
 const PANEL_BG := Color(0.07, 0.075, 0.08, 0.78)
 const INK := Color(0.93, 0.91, 0.86)
@@ -287,7 +288,7 @@ const LONE_ICON: int = 40
 const LETTER_NUDGE: float = -3.5
 ## Leaving shows its word alone (user 2026-10-18: no train) on a slim lamp
 ## pill, the word as big as the 시안's lamp pill word (.fpad--ctx .lab 13).
-const DEPART_SEEN := Vector2(100.0, 56.0)
+const DEPART_SEEN: Vector2 = Vector2(116.0, 80.0)
 const DEPART_FONT: float = 13.0
 const FACE_SIZE: float = 84.0
 ## A companion's chip (시안 .fchip's face 32 across) folded to the face alone
@@ -378,7 +379,7 @@ var context_more: Label
 var all_aboard_size: Vector2            # its touch rect, as wide as its mark and words need
 var attack_icon: String = "-"           # the attack pad's picture now (_tick_attack_icon)
 var pause_shows_play: bool = false      # the pause key shows 'play' while paused
-var offer_box: HBoxContainer
+var offer_box: Control
 var toast_box: VBoxContainer
 var toasts: Array = []
 var grab_button: Button
@@ -422,6 +423,12 @@ var debug_label: Label
 var modal: Control
 var modal_paused_before: bool = false
 var modal_open: bool = false
+var modal_pane: GlassPane
+var closing_modal: Control
+var modal_fingers: Dictionary = {}     # touches stay consumed through their lift, even after closing
+var modal_emulated_blocked: bool = false
+var modal_back_captured: bool = false
+var modal_quit_on_back: bool = false
 ## The bag pane keeps its destination while the bag tab is shown (decision 488).
 var inv_near: Dictionary = {}
 var inv_sort: String = "weight"
@@ -429,11 +436,14 @@ var inv_view: String = "near"
 var inv_worn_open: bool = false
 ## Optional item art supplied locally; an empty entry falls back to the resource path.
 var item_px_override: Dictionary = {}
-## The places the bag pane listed when it was laid (InventoryPane.place_keys): a
-## walk with the pane up that changes them lays it again.
+## The places the bag pane listed when it was laid (InventoryPane.place_keys):
+## changes to nearby places refresh it even though its stick sleeps (532).
 var bag_places: Array = []
 ## What sleeps under the bag pane, each with the alpha it had: [CanvasItem, a].
 var bag_dimmed: Array = []
+## What is put away under the end card (show_end), to come back when it closes.
+var end_cleared: Array = []
+var end_up: bool = false
 ## How far a key that sleeps under the bag pane fades (its alpha times this).
 const BAG_DIM: float = 0.38
 ## The box shown while the player takes a thing out of it (card R1 가): the field
@@ -488,6 +498,7 @@ func setup(field_game) -> void:
 	touch.set_anchors_preset(Control.PRESET_FULL_RECT)
 	touch.mouse_filter = Control.MOUSE_FILTER_STOP
 	touch.gui_input.connect(_on_touch)
+	touch.draw.connect(_draw_stick)
 	root.add_child(touch)
 	overlay = Control.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1203,7 +1214,7 @@ func _build_thumbs() -> void:
 	context_badge.add_child(context_more)
 	context_badge.visible = false
 	context_button.add_child(context_badge)
-	# Leaving: its word alone on a slim pill (the same day: no train).
+	# Leaving: its word alone on a pill at least MIN_TOUCH high.
 	depart_button = _pad("출발", DEPART_AT, Vector2(140, 84), UiFonts.size(DEPART_FONT))
 	_dress(depart_button, "", DEPART_SEEN, false, HudSkin.Light.LAMP, HudSkin.Light.LAMP)
 	_bold(depart_button)
@@ -1348,11 +1359,11 @@ func _build_thumbs() -> void:
 	_dress(alarm_button, "clock", Vector2(48, 48), true, HudSkin.Light.LAMP, HudSkin.Light.LAMP, 26)
 	alarm_button.visible = false
 	bag_box.add_child(alarm_button)
-	offer_box = HBoxContainer.new()
-	offer_box.set_anchors_preset(Control.PRESET_CENTER)
-	offer_box.position = Vector2(-260, 90)
-	offer_box.add_theme_constant_override("separation", 12)
+	offer_box = Control.new()
+	offer_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	offer_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(offer_box)
+	root.resized.connect(_layout_offer.call_deferred)
 
 
 func _build_toasts() -> void:
@@ -1564,7 +1575,7 @@ func tick(delta: float) -> void:
 	_tick_portrait(p)
 	_tick_allies()
 	_tick_take()
-	_tick_bag_walk()
+	_tick_bag_pause()
 	if box_shown != "" and (not modal_open or not is_instance_valid(box_pane) or modal != box_pane):
 		box_shown_now("")
 	_tick_grab(p, delta)
@@ -1590,6 +1601,18 @@ func tick(delta: float) -> void:
 			_set_running(p)
 	# The attack pad stays lit while the fight goes on (one press, field_unified 10).
 	attack_button.button_pressed = fighting(p)
+	if p.sled_weapon_stowed:
+		auto_aim = false
+		aiming = false
+		aim_target = null
+	for key: Button in [attack_button, aim_button, shove_button, manual_button]:
+		if p.sled_weapon_stowed and (key != shove_button or p.grabbers.is_empty()):
+			if not key.has_meta("sled_disabled"):
+				key.set_meta("sled_disabled", key.disabled)
+			key.disabled = true
+		elif key.has_meta("sled_disabled"):
+			key.disabled = bool(key.get_meta("sled_disabled"))
+			key.remove_meta("sled_disabled")
 	_tick_primary(p)
 	blood_button.visible = leaving.is_empty() and p.body.bleed > 0 and (p.items.has("bandage") or p.items.has("medkit"))
 	lamp_button.visible = leaving.is_empty() and game.clock.is_dark()
@@ -1606,8 +1629,8 @@ func tick(delta: float) -> void:
 		_beckon(blood_button)
 	_tick_status(p)
 	_place_messages()
-	# Under the bag pane each push and lift of the stick runs and stops the
-	# field: the key at the top left reads as stopped, as under any pane.
+	# The sleeping pause key keeps its play face while the bag is up, even
+	# while taking advances the field (decision 532).
 	var shows_play: bool = game.paused or _bag_up()
 	if pause_shows_play != shows_play:
 		pause_shows_play = shows_play
@@ -1625,6 +1648,8 @@ func tick(delta: float) -> void:
 		fps_t = 0.25
 		_tick_debug()
 	overlay.queue_redraw()
+	touch.queue_redraw()
+	_keep_end_clear()
 
 
 ## The promises the stop goes with: what the train sent (opts promises: [{kind,
@@ -2348,7 +2373,8 @@ func radio(text: String) -> void:
 	var words: String = text
 	if text.begins_with(HISS_TEXT):
 		words = text.substr(HISS_TEXT.length()).lstrip("… ")
-	radio_label.text = words if words != "" else text
+	# A long call wraps between words only, like the goal and feel lines.
+	radio_label.text = UiFonts.keep_all(words) if words != "" else text
 	radio_label.visible = words != ""
 	_fit_radio()
 	radio_left = 8.0
@@ -2371,14 +2397,64 @@ func _fit_radio() -> void:
 
 
 ## A short row of choices in the middle (break a window, how to climb...).
+## Wrap fixed-size choices before the right pads, then lift the whole group above the faces.
+static func offer_rects(sizes: Array[Vector2], view: Vector2, right_limit: float, bottom_limit: float) -> Array[Rect2]:
+	var rects: Array[Rect2] = []
+	var start: Vector2 = view * 0.5 + Vector2(-260, 90)
+	var cursor: Vector2 = start
+	var row_height: float = 0.0
+	var bottom: float = start.y
+	for key_size: Vector2 in sizes:
+		if cursor.x > start.x and cursor.x + key_size.x > minf(view.x, right_limit):
+			cursor.x = start.x
+			cursor.y += row_height + 12.0
+			row_height = 0.0
+		rects.append(Rect2(cursor, key_size))
+		bottom = maxf(bottom, cursor.y + key_size.y)
+		row_height = maxf(row_height, key_size.y)
+		cursor.x += key_size.x + 12.0
+	var lift: float = maxf(0.0, bottom - minf(view.y, bottom_limit))
+	for index: int in rects.size():
+		rects[index].position.y -= lift
+	return rects
+
+
+## Keep 24 px before the departure touch pad unless even one fixed-size choice cannot fit.
+static func offer_gap(sizes: Array[Vector2], view: Vector2, depart_left: float) -> float:
+	var widest: float = 0.0
+	for key_size: Vector2 in sizes:
+		widest = maxf(widest, key_size.x)
+	return 24.0 if view.x * 0.5 - 260.0 + widest <= depart_left - 24.0 else 12.0
+
+
+func _layout_offer() -> void:
+	if offer_box.get_child_count() == 0:
+		return
+	_place_allies()
+	var sizes: Array[Vector2] = []
+	for key: Control in offer_box.get_children():
+		sizes.append(key.custom_minimum_size)
+	var origin: Vector2 = offer_box.global_position
+	var depart_left: float = depart_button.get_global_rect().position.x - origin.x
+	var right_limit: float = depart_left - offer_gap(sizes, _view_size(), depart_left)
+	var bottom_limit: float = allies_box.get_global_rect().position.y - origin.y - 12.0
+	var rects: Array[Rect2] = offer_rects(sizes, _view_size(), right_limit, bottom_limit)
+	for index: int in rects.size():
+		var key: Control = offer_box.get_child(index)
+		key.position = rects[index].position
+		key.size = rects[index].size
+
+
 func offer(list: Array) -> void:
 	for c in offer_box.get_children():
+		offer_box.remove_child(c)
 		c.queue_free()
 	for row in list:
 		var key: Button = _offer_key(row["label"], _offer_pick.bind(row["call"]), Vector2(180, 72))
 		key.modulate = Color.WHITE if row.get("work_ready", true) else Color(0.5, 0.5, 0.5)
 		offer_box.add_child(key)
 	offer_box.add_child(_offer_key("그만", _offer_pick.bind(Callable()), Vector2(100, 72), true))
+	_layout_offer()
 
 
 ## A choice offered on the field: a glass pill of the field's (시안 .fglass) in
@@ -2398,6 +2474,7 @@ func _offer_key(word: String, cb: Callable, at_least: Vector2, quiet: bool = fal
 
 func _offer_pick(cb: Callable) -> void:
 	for c in offer_box.get_children():
+		offer_box.remove_child(c)
 		c.queue_free()
 	if cb.is_valid():
 		cb.call()
@@ -2441,14 +2518,11 @@ func _set_radio() -> void:
 ## The shade over the playing screen while a panel is up (시안 .mscrim), the
 ## panel laid on it by the caller. pauses false: the field goes on at
 ## BODY_SLOW under it (the body picture).
-func _open_shade(pauses: bool = true, keep_stick: bool = false) -> Control:
-	_close_modal()
-	# Fingers held now will lift under the panel: let go of them first (the bag
-	# pane keeps a thumb on the stick, decision 488).
-	if keep_stick:
-		_drop_touch_but_stick()
-	else:
-		drop_touch()
+func _open_shade(pauses: bool = true) -> Control:
+	_close_modal(false)
+	_discard_closing_modal()
+	# Decision 532: opening the bag releases every field finger too.
+	drop_touch()
 	modal_slows = not pauses
 	if pauses:
 		modal_paused_before = game.paused
@@ -2474,30 +2548,28 @@ func _open_shade(pauses: bool = true, keep_stick: bool = false) -> Control:
 ## A glass pane (glass_pane.gd) at the left under the band, `width_css` wide in
 ## the mockup's px; its 접기 closes it. A pane laid over one already up (a
 ## setting changed, a row taken) stands where it is rather than coming in again.
-## The inventory alone pins to the right without the left-edge slide.
+## The inventory comes in by its width from the right (decision 532).
 func _open_pane(title: String, side: String = "", icon: String = "", width_css: float = PANE_W, pauses: bool = true, right_edge: bool = false) -> GlassPane:
 	var again: bool = modal != null
-	var shade := _open_shade(pauses, right_edge)
-	var pane := GlassPane.new(width_css, title, side, icon)
+	var shade: Control = _open_shade(pauses)
+	var pane: GlassPane = GlassPane.new(width_css, title, side, icon)
+	modal_pane = pane
+	_capture_modal_back()
 	pane.folded.connect(_close_modal)
 	shade.add_child(pane)
-	pane.pin(not again and not right_edge)
+	var dim: ColorRect = shade.get_node("Shade") as ColorRect
 	if right_edge:
-		pane.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-		pane.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-		pane.resized.connect(func() -> void: pane.position.x = pane.get_viewport_rect().size.x - pane.size.x)
-		pane.position.x = pane.get_viewport_rect().size.x - pane.size.x
-		# The field and the stick at the left stay clear (decision 488): the shade
-		# lies under the pane alone, and _bag_stick lets the stick's finger through.
-		var dim := shade.get_node("Shade") as ColorRect
+		# Decision 532: the shade stays behind the pane; the visible HUD sleeps.
 		dim.anchor_left = 1.0
 		dim.offset_left = -UiFonts.px(width_css)
+	pane.pin(not again, Vector2.RIGHT if right_edge else Vector2.LEFT, dim)
 	return pane
 
 
 ## pauses false: the field goes on at BODY_SLOW under the panel (the body picture).
 func _open_modal(width: float = 640.0, pauses: bool = true) -> VBoxContainer:
-	_close_modal()
+	_close_modal(false)
+	_discard_closing_modal()
 	# Fingers held now will lift under the panel: let go of them first.
 	drop_touch()
 	modal_slows = not pauses
@@ -2528,29 +2600,87 @@ func _open_modal(width: float = 640.0, pauses: bool = true) -> VBoxContainer:
 	return v
 
 
-func _close_modal() -> void:
+func _close_modal(animate: bool = true) -> void:
 	if game.resume_pending:
 		return
 	# A thing still coming out goes on in the field (field_actions.gd take).
 	taking_box = ""
 	_wake_under_bag()
+	_bring_back_under_end()
 	if modal != null:
-		modal.queue_free()
+		var old: Control = modal
+		var pane: GlassPane = modal_pane
 		modal = null
+		modal_pane = null
 		if modal_open and not modal_slows:
-			game.paused = modal_paused_before
+			game.paused = modal_paused_before or game.away
 		game.slow = 1.0
 		modal_slows = false
 		modal_open = false
+		_restore_modal_back.call_deferred()
+		# The remaining picture has no input ownership. Existing touches must
+		# still finish here; fresh touches already belong to the field.
+		for index: int in modal_fingers:
+			if modal_fingers[index].get("owner") == old:
+				modal_fingers[index]["owner"] = null
+				finger_cancel(index)
+		_mute_modal(old)
+		_discard_closing_modal()
+		if animate and is_instance_valid(pane):
+			closing_modal = old
+			var shade: ColorRect = old.get_node("Shade") as ColorRect
+			pane.slide_out(pane.motion_direction, shade)
+			pane.left.connect(func() -> void:
+				if closing_modal == old:
+					closing_modal = null
+				old.queue_free())
+		else:
+			old.hide()
+			old.queue_free()
 
 
-## Under the bag pane (decision 488, coordinator 10-30) the stick, RUN and the lamp
-## listen; every other key on the open left half sleeps, dimmed so it reads as
-## asleep, and wakes with the pane put away. Words (toasts, the radio line) and
-## what draws the stick stay as they are. Called each time the pane is laid.
+func _mute_modal(node: Node) -> void:
+	if node is Control:
+		var control: Control = node as Control
+		control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		control.focus_mode = Control.FOCUS_NONE
+	for child: Node in node.get_children():
+		_mute_modal(child)
+
+
+func _discard_closing_modal() -> void:
+	if is_instance_valid(closing_modal):
+		closing_modal.hide()
+		closing_modal.queue_free()
+	closing_modal = null
+
+
+## Android back must reach the pane before the tree's default quit behavior.
+func _capture_modal_back() -> void:
+	if not modal_back_captured:
+		modal_quit_on_back = get_tree().is_quit_on_go_back()
+		modal_back_captured = true
+	get_tree().set_quit_on_go_back(false)
+
+
+func _restore_modal_back() -> void:
+	if modal_back_captured and modal_pane == null:
+		get_tree().set_quit_on_go_back(modal_quit_on_back)
+		modal_back_captured = false
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST and modal_open and modal_pane != null:
+		_close_modal()
+	elif what == NOTIFICATION_EXIT_TREE and modal_back_captured:
+		get_tree().set_quit_on_go_back(modal_quit_on_back)
+
+
+## Decision 532: all field controls, including the stick, RUN and lamp, sleep
+## dimmed under the bag. Words and world overlays keep their normal opacity.
 func dim_under_bag() -> void:
 	_wake_under_bag()
-	var awake: Array = [modal, touch, overlay, pause_veil, map_stamp, toast_box, radio_pill, run_button, lamp_button]
+	var awake: Array = [modal, closing_modal, overlay, pause_veil, map_stamp, toast_box, radio_pill]
 	for c: Node in root.get_children():
 		if c is CanvasItem and not awake.has(c):
 			var item := c as CanvasItem
@@ -2879,6 +3009,8 @@ func _ink_lines(text: String, kind: int, css_px: float, line_css: float, color: 
 func _say(i: int, o: Dictionary, cb: Callable) -> Button:
 	var b := Button.new()
 	b.name = "Say_" + String(o["id"])
+	b.disabled = bool(o.get("off", false))
+	b.modulate = Color(0.5, 0.5, 0.5) if b.disabled else Color.WHITE
 	b.focus_mode = Control.FOCUS_NONE
 	b.clip_text = true
 	b.custom_minimum_size = Vector2(0, UiFonts.px(55.0))
@@ -3001,37 +3133,25 @@ func _loot_stop(id: String) -> void:
 func run_while_taking() -> void:
 	var p = game.player
 	taking_box = InventoryPane.taking_id(game, p) if modal_open else ""
-	if taking_box != "" and not game.away:
+	if taking_box != "" and not game.away and not game.resume_pending:
 		game.paused = false
 
 
-## The bag pane and the stick (decision 488): the field runs while the stick walks
-## or a thing comes out, and waits again when both stop. A take the stick let go
-## of (field_game.gd STICK_BREAKS — the thing stays in the box) lays the pane
-## again (_tick_take).
-func _tick_bag_walk() -> void:
+## Decision 532: only taking a thing advances the field under the bag pane.
+func _tick_bag_pause() -> void:
 	if _bag_up():
-		_bag_pause(game.player)
+		_bag_pause()
 
 
-## The field under the bag pane: still unless the stick walks or a thing comes
-## out. The app away (field_game.gd interrupt) holds it still whatever.
-func _bag_pause(p) -> void:
+## The app away (field_game.gd interrupt) holds the field still whatever.
+func _bag_pause() -> void:
 	if game.away or game.resume_pending:
 		return
-	var walking: bool = stick_index >= 0 and p.stick != Vector2.ZERO
-	game.paused = not walking and taking_box == ""
+	game.paused = taking_box == ""
 
 
-## The stick, not a blow, a grab or a fall, let the work go (field_game.gd
-## _update_person breaks it past 0.3 of a push).
-func _stick_let_go(p) -> bool:
-	return _bag_up() and stick_index >= 0 and p.stick.length() > 0.3 and p.grabbers.is_empty() and p.fallen_t <= 0.0 and not p.body.downed
-
-
-## A walk with the bag up brings places near or leaves them behind (the same
-## places() reach, no distance of its own): lay the pane again. The same places
-## in another order of distance are no walk off.
+## External changes to nearby places refresh the pane using the same reach.
+## A different distance order alone does not require a rebuild.
 func _bag_places_moved() -> void:
 	if not _bag_up():
 		return
@@ -3044,7 +3164,7 @@ func _bag_places_moved() -> void:
 
 
 ## Lay the bag pane again where it is; a place shown that is no longer near hands
-## over to the bag tab. A destination walked away from falls to the floor, never
+## over to the bag tab. A destination no longer in reach falls to the floor, never
 ## on its own to the train's hold: a thing loaded there cannot be taken back from
 ## this pane (coordinator 10-30). The places keep their order and the lists their
 ## scroll; the field goes on without a frame's stop.
@@ -3057,7 +3177,7 @@ func _lay_bag_again() -> void:
 		inv_near = {"kind": "ground", "id": ""}
 	InventoryPane.open(self, inv_near)
 	_bag_scrolls_back(kept)
-	_bag_pause(game.player)
+	_bag_pause()
 
 
 ## The bag pane's two scrolls as they stand, with the tab and place they show.
@@ -3115,16 +3235,13 @@ func took(id: String) -> void:
 
 ## Each frame while taking with the pane up: the row's bar fills; a blow or a
 ## grab that lets the work go puts the pane away, the field already running, so
-## it can be met. The stick letting it go (STICK_BREAKS) lays the bag pane again.
+## it can be met. The sleeping stick cannot interrupt this work (decision 532).
 func _tick_take() -> void:
 	if taking_box == "":
 		return
 	var p = game.player
 	if p.action != "take":
-		if _stick_let_go(p):
-			_lay_bag_again()
-			return
-		_close_modal()
+		_close_modal(false)
 		toast("챙기다 손을 뗐다")
 		return
 	if take_bar != null and is_instance_valid(take_bar):
@@ -3139,10 +3256,22 @@ func bag_panel() -> void:
 	InventoryPane.open(self, inv_near)
 
 
+func sled_panel(sled_id: int) -> void:
+	inv_view = "near"
+	InventoryPane.open(self, {"kind": "sled", "id": sled_id, "name": "썰매"})
+
+
+func _inv_sled_take(sled_id: int, item: String) -> void:
+	game.actions.move_sled(game.player, sled_id, item, false)
+	bag_panel()
+
+
 ## A row of the bag pressed: it goes across to the place shown at the right.
 func _inv_put(id: String) -> void:
 	var p = game.player
 	match String(inv_near.get("kind", "ground")):
+		"sled":
+			game.actions.move_sled(p, int(inv_near["id"]), id, true)
 		"box":
 			game.actions.store(p, String(inv_near["id"]), id)
 		"train":
@@ -3514,6 +3643,7 @@ func depart_card() -> void:
 	var text := "기적을 울리고 떠난다. 기적 소리는 멀리까지 간다."
 	if not left.is_empty():
 		text += "\n지금 떠나면 %d명이 그대로 남는다." % left.size()
+	text += Sled.leaving_note(game)
 	# Words, not seconds: arrival spreads too widely to promise a number
 	# (s2_play/measure_depart.md: 30 m leaves about 20 s to 10 m).
 	if horde_close():
@@ -3560,7 +3690,7 @@ func _depart_pick(choice: String) -> void:
 ## still field, the lines come up with what the stop came to side by side
 ## under them ([title, [rows]] columns), and after LEAVE_BEAT_S the end card.
 func leave_beat(result: Dictionary, lines: Array, columns: Array = []) -> void:
-	_close_modal()
+	_close_modal(false)
 	context_rows = []
 	var veil := ColorRect.new()
 	veil.color = Color(0, 0, 0, 0)
@@ -3696,19 +3826,25 @@ func _tick_leave(delta: float) -> void:
 
 
 ## The end of a stop played alone: on the shade, the return receipt on the
-## stop's own sheet at the left, as the slice hands it back (receipt_sheet.gd,
-## its foot bare), and at the right, from under the band to the sheet's foot,
-## what the play came to (the real time and the noise, the holdout's lines) in
-## glass ink over the keys: copy the receipt, copy the record, again. The
-## stop's choices are in the receipt it copies.
+## stop's own sheet at the left, as the slice hands it back (receipt_sheet.gd),
+## its keys on its own foot: copy the receipt, copy the record as small paper
+## keys, again as the main key. At the right, from under the band, what the play
+## came to (the real time and the noise, the holdout's lines) in glass ink. The
+## field's own keys and words are put away under it, so the paper is the end's
+## only face. The stop's choices are in the receipt it copies.
 func show_end(result: Dictionary) -> void:
-	_close_modal()
+	_close_modal(false)
 	context_rows = []
 	var shade := _open_shade()
+	_clear_under_end()
 	var sheet = ReceiptSheet.new()
 	sheet.name = "Receipt"
 	sheet.result = result
 	sheet.seg = 0
+	sheet.go_word = "다시"
+	sheet.side_keys = [["영수증 복사", _copy.bind(result["receipt_json"], "영수증 복사됨")],
+		["기록 복사", _copy.bind(result["telemetry"], "기록 복사됨")]]
+	sheet.went_on.connect(_restart)
 	shade.add_child(sheet)
 	var side := VBoxContainer.new()
 	side.name = "Record"
@@ -3728,18 +3864,35 @@ func show_end(result: Dictionary) -> void:
 		var l := UiFonts.label(UiFonts.keep_all(String(line)), UiFonts.WORD, 400, 13.0, GlassPane.INK2, 0.39)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		side.add_child(l)
-	var room := Control.new()
-	room.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	room.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	side.add_child(room)
-	# On no pane: the keys take the pane's dark for their ground.
-	var ground: Color = GlassPane.BACKING[0][1]
-	var keys := GlassPane.row()
-	keys.name = "Keys"
-	side.add_child(keys)
-	keys.add_child(GlassPane.key("영수증 복사", _copy.bind(result["receipt_json"], "영수증 복사됨"), "", ground))
-	keys.add_child(GlassPane.key("기록 복사", _copy.bind(result["telemetry"], "기록 복사됨"), "", ground))
-	keys.add_child(GlassPane.key("다시", _restart, "", ground))
+
+
+## The field's keys and words under the end card go, all but the notes (a copy's
+## 「복사됨」); tick keeps them gone however it would show them (the lamp key at
+## dusk too), and closing the card brings back what was up.
+func _clear_under_end() -> void:
+	for c: Node in root.get_children():
+		if c is CanvasItem and c != modal and c != toast_box and (c as CanvasItem).visible:
+			end_cleared.append(c)
+	end_up = true
+	_keep_end_clear()
+
+
+func _keep_end_clear() -> void:
+	if not end_up:
+		return
+	for c: Node in root.get_children():
+		if c is CanvasItem and c != modal and c != toast_box:
+			(c as CanvasItem).visible = false
+
+
+func _bring_back_under_end() -> void:
+	if not end_up:
+		return
+	end_up = false
+	for c in end_cleared:
+		if is_instance_valid(c):
+			(c as CanvasItem).visible = true
+	end_cleared = []
 
 
 func _copy(text: String, note: String) -> void:
@@ -3814,17 +3967,16 @@ func _input(event: InputEvent) -> void:
 			game.skip_arrival()
 			get_viewport().set_input_as_handled()
 		return
-	# A mouse that set the stick down under the bag pane lets it go wherever the
-	# lift lands, the pane put away meanwhile or not (the GUI never had the press).
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed and event.device != InputEvent.DEVICE_ID_EMULATION and stick_index == 0 and not _bag_up():
-		finger_up(0, event.position)
+	if _modal_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if modal_open:
-		# A panel is up: its buttons get the touch, but a lift or cancel still
-		# clears any finger the field held (never fires, never taps). The bag
-		# pane leaves the stick free (decision 488).
-		if _bag_stick(event):
+		if event.is_action_pressed("ui_cancel"):
+			if modal_pane != null:
+				_close_modal()
 			get_viewport().set_input_as_handled()
-			return
+		# No field input under any panel (decision 532). The GUI keeps the
+		# first finger inside; extra fingers use the same pane hit test.
 		if event is InputEventScreenTouch and not event.pressed:
 			finger_cancel(event.index)
 		return
@@ -3845,7 +3997,7 @@ func _input(event: InputEvent) -> void:
 ## A desktop mouse is one finger (index 0). Mouse events a touch screen makes
 ## up for its first finger are skipped: _input already has that finger.
 func _on_touch(event: InputEvent) -> void:
-	if game == null or game.ended:
+	if game == null or game.ended or modal_open:
 		return
 	if event.device == InputEvent.DEVICE_ID_EMULATION:
 		return
@@ -3866,6 +4018,8 @@ func _on_touch(event: InputEvent) -> void:
 ## first finger, pressed by hand for the others), the stick on the left
 ## half, or the right hand (aim in manual mode, an enemy, a thing to use).
 func finger_down(index: int, pos: Vector2) -> bool:
+	if modal_open:
+		return true
 	# The same index again means its lift was lost (the app went away): let the
 	# old stick go before the new finger is read.
 	if fingers.has(index) and fingers[index]["kind"] == "stick":
@@ -3873,8 +4027,21 @@ func finger_down(index: int, pos: Vector2) -> bool:
 		stick_index = -1
 		stick_dash = false
 		_stick_release()
+	if offer_box.get_child_count() > 0:
+		# The last child is drawn on top; its full touch rect wins over every pad.
+		for choice_index: int in range(offer_box.get_child_count() - 1, -1, -1):
+			var choice: Button = offer_box.get_child(choice_index) as Button
+			if choice != null and choice.is_visible_in_tree() and touch_rect(choice).has_point(pos):
+				fingers[index] = {"kind": "button", "button": choice, "start": pos}
+				return true
+		# Only new presses are blocked. Existing pad fingers keep their move/lift rules.
+		for covered: Button in [depart_button, shove_button, attack_button, aim_button, manual_button]:
+			if covered.is_visible_in_tree() and touch_rect(covered).has_point(pos):
+				return true
 	for b in pads:
 		if b.is_visible_in_tree() and b.get_global_rect().has_point(pos):
+			if _pad_blocked(b):
+				return true
 			fingers[index] = {"kind": "pad", "pad": b, "start": pos, "ms": Time.get_ticks_msec()}
 			_pad_down(b, pos)
 			return true
@@ -3893,7 +4060,7 @@ func finger_down(index: int, pos: Vector2) -> bool:
 	var ui := _button_at(pos)
 	if ui != null:
 		if index != 0:
-			fingers[index] = {"kind": "button", "button": ui, "start": pos}
+			fingers[index] = {"kind": "button", "button": ui, "start": pos, "off": ui.disabled}
 			return true
 		return false
 	# Nothing drawn under the finger: a small key whose 48 dp skirt holds it
@@ -3902,12 +4069,14 @@ func finger_down(index: int, pos: Vector2) -> bool:
 	var near: Control = _skirt_at(pos)
 	if near != null:
 		if pads.has(near):
+			if _pad_blocked(near as Button):
+				return true
 			fingers[index] = {"kind": "pad", "pad": near, "start": pos, "ms": Time.get_ticks_msec()}
 			_pad_down(near as Button, pos)
 		elif near == portrait:
 			fingers[index] = {"kind": "portrait", "start": pos}
 		elif near is Button:
-			fingers[index] = {"kind": "button", "button": near, "start": pos}
+			fingers[index] = {"kind": "button", "button": near, "start": pos, "off": (near as Button).disabled}
 		else:
 			fingers[index] = {"kind": "fold", "start": pos, "glass": near}
 		return true
@@ -3950,72 +4119,81 @@ func _by_stick_keys(pos: Vector2) -> bool:
 	return false
 
 
-## With the bag pane up the stick still walks (decision 488): a finger (or the
-## mouse) set down outside the pane in the stick's reach, then its drags and lift.
-## Everything else stays the pane's: Godot makes a mouse of the first finger only,
-## so with a thumb on the stick another finger on the pane presses its keys and
-## drags its lists by hand, as finger_down does for the HUD's.
-func _bag_stick(event: InputEvent) -> bool:
-	if not _bag_up():
-		return false
+## Own each modal gesture until its lift, even if another finger closes or
+## rebuilds the pane. Outside taps close only glass panes with a fold key.
+## A touch-generated mouse is consumed along with its outside first finger.
+func _modal_input(event: InputEvent) -> bool:
+	if event.device == InputEvent.DEVICE_ID_EMULATION and modal_emulated_blocked:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+			modal_emulated_blocked = false
+		return true
 	var index: int = -1
-	var pos := Vector2.ZERO
+	var pos: Vector2 = Vector2.ZERO
 	var down: bool = false
 	var up: bool = false
+	var canceled: bool = false
 	if event is InputEventScreenTouch:
-		# A cancelled touch is not a lift: no tap, no key pressed.
-		if event.canceled:
-			return finger_cancel(event.index)
 		index = event.index
 		pos = event.position
 		down = event.pressed
 		up = not event.pressed
+		canceled = event.canceled
 	elif event is InputEventScreenDrag:
 		index = event.index
 		pos = event.position
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.device != InputEvent.DEVICE_ID_EMULATION:
-		index = 0
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		# A real mouse has its own slot, separate from touch index zero.
 		pos = event.position
 		down = event.pressed
 		up = not event.pressed
-	elif event is InputEventMouseMotion and event.device != InputEvent.DEVICE_ID_EMULATION:
-		index = 0
+	elif event is InputEventMouseMotion:
 		pos = event.position
 	else:
 		return false
-	if down:
-		var pane: Control = box_pane.find_child("Pane", true, false)
-		if pane != null and pane.get_global_rect().has_point(pos):
-			if index == 0 or not event is InputEventScreenTouch:
-				return false
-			var under: Dictionary = _pane_under(pane, pos)
-			var list: ScrollContainer = under["scroll"]
-			fingers[index] = {"kind": "button", "button": under["button"], "start": pos, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false}
-			return true
-		# RUN and the lamp over the stick answer under the pane too (decision 488:
-		# when the dead come one runs); the rest of the HUD sleeps there, dimmed.
-		for key: Button in [run_button, lamp_button]:
-			if key.is_visible_in_tree() and touch_rect(key).has_point(pos):
-				fingers[index] = {"kind": "pad", "pad": key, "start": pos, "ms": Time.get_ticks_msec()}
-				_pad_down(key, pos)
-				return true
-		if _by_stick_keys(pos):
-			return true
-		if not _stick_down(index, pos):
+	if down and not canceled:
+		modal_fingers.erase(index)
+		if event is InputEventScreenTouch and index == 0:
+			modal_emulated_blocked = false
+		if not modal_open:
 			return false
-		# The stick under the pane is never the world: a short touch taps nothing.
-		fingers[index]["fixed"] = true
-		return true
-	if not fingers.has(index):
+		var outside: bool = modal_pane != null and not modal_pane.get_global_rect().has_point(pos)
+		var manual: bool = event is InputEventScreenTouch and index > 0 and not outside
+		modal_fingers[index] = {"owner": modal, "outside": outside, "manual": manual, "start": pos, "ms": Time.get_ticks_msec(), "dragged": false}
+		if outside:
+			if event is InputEventScreenTouch and index == 0:
+				modal_emulated_blocked = true
+			return true
+		if manual:
+			var under: Dictionary = _pane_under(modal, pos)
+			var list: ScrollContainer = under["scroll"]
+			var key: Button = under["button"]
+			fingers[index] = {"kind": "button", "button": key, "start": pos, "off": key != null and key.disabled, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false}
+			return true
 		return false
-	return finger_up(index, pos) if up else finger_move(index, pos)
+	if not modal_fingers.has(index):
+		return false
+	var held: Dictionary = modal_fingers[index]
+	if up or canceled:
+		modal_fingers.erase(index)
+	if canceled or held.get("owner") == null or held["owner"] != modal:
+		finger_cancel(index)
+		return true
+	if pos.distance_to(held["start"]) >= DRAG_PX:
+		held["dragged"] = true
+	if held["outside"]:
+		if up and not held["dragged"] and Time.get_ticks_msec() - int(held["ms"]) < 350 and modal_pane != null and not modal_pane.get_global_rect().has_point(pos):
+			_close_modal()
+		return true
+	if held["manual"]:
+		return finger_up(index, pos) if up else finger_move(index, pos)
+	return false
 
 
 func _bag_up() -> bool:
 	return modal_open and is_instance_valid(box_pane) and modal == box_pane
 
 
-## The key and the list under a finger on the bag pane; a list holds only what
+## The key and the list under a finger on a pane; a list holds only what
 ## shows through it (a row scrolled out of it is not under the finger).
 func _pane_under(pane: Control, pos: Vector2) -> Dictionary:
 	var under := {"button": null, "scroll": null}
@@ -4078,12 +4256,13 @@ func finger_up(index: int, pos: Vector2) -> bool:
 			_pad_up(f["pad"], pos, f)
 		"button":
 			# A bag pane finger may hold no key (a gap in a list), or one laid away
-			# since, or have dragged its list: then the lift presses nothing.
+			# since, or have dragged its list, or have come down on a key still off
+			# (it may wake before the lift): then the lift presses nothing.
 			var held: Variant = f["button"]
-			if not is_instance_valid(held) or f.get("dragged", false):
+			if not is_instance_valid(held) or f.get("dragged", false) or f.get("off", false):
 				return true
 			var b: Button = held
-			if b.is_visible_in_tree() and touch_rect(b).has_point(pos):
+			if not b.disabled and b.is_visible_in_tree() and touch_rect(b).has_point(pos):
 				if b.toggle_mode:
 					b.button_pressed = not b.button_pressed
 				b.pressed.emit()
@@ -4319,7 +4498,17 @@ func _stick_release() -> void:
 
 # ---------------------------------------------------------------- pads
 
+## Custom touch hit testing must respect the same lock as native buttons.
+func _pad_blocked(b: Button) -> bool:
+	var p: Variant = game.player
+	if b == shove_button and not p.grabbers.is_empty():
+		return false
+	return b.disabled or (p.sled_weapon_stowed and b in [attack_button, aim_button, shove_button, manual_button])
+
+
 func _pad_down(b: Button, pos: Vector2) -> void:
+	if _pad_blocked(b):
+		return
 	var p = game.player
 	if b == aim_button and primary_melee(p):
 		b = attack_button
@@ -4388,6 +4577,8 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 
 
 func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
+	if _pad_blocked(b):
+		return
 	if b == lever_button:
 		# Pulled down it opens, pushed up it folds, as the thumb goes.
 		var dy: float = pos.y - Vector2(f["start"]).y
@@ -4427,6 +4618,10 @@ func _pad_move(b: Button, pos: Vector2, f: Dictionary) -> void:
 
 
 func _pad_up(b: Button, pos: Vector2, f: Dictionary = {}) -> void:
+	if _pad_blocked(b):
+		if b in [attack_button, aim_button, shove_button]:
+			b.button_pressed = false
+		return
 	if b == aim_button and primary_melee(game.player):
 		return
 	if b == aim_button:
@@ -4595,30 +4790,16 @@ func _aim_from(pos: Vector2) -> void:
 	aim_point = _on_target_floor(world, aim_target)
 
 
-## drop_touch, but a thumb on the stick stays down (the bag pane, decision 488).
-func _drop_touch_but_stick() -> void:
-	if stick_index < 0 or not fingers.has(stick_index):
-		drop_touch()
-		return
-	var index: int = stick_index
-	var held: Dictionary = fingers[index]
-	var dash: bool = stick_dash
-	# A run at the rim stays a run (stick_rim_run, a setting): its dwell is not
-	# begun again each time the pane is laid.
-	var push: float = stick_push
-	var rim: Array = [rim_t, rim_run]
-	drop_touch()
-	fingers[index] = held
-	stick_index = index
-	stick_dash = dash
-	stick_push = push
-	rim_t = rim[0]
-	rim_run = rim[1]
-	_apply_stick()
-
-
 func drop_touch() -> void:
 	# The finger that was down when the app lost focus never comes back up.
+	# If it does lift after a pane opened, consume it without a tap or shot.
+	for held_index: int in modal_fingers:
+		modal_fingers[held_index] = {"owner": null}
+	for index: int in fingers:
+		modal_fingers[index] = {"owner": null}
+	if fingers.has(0):
+		modal_fingers[-1] = {"owner": null}
+		modal_emulated_blocked = true
 	fingers.clear()
 	stick_index = -1
 	auto_aim = false
@@ -4927,6 +5108,19 @@ func _project(at: Vector3) -> Vector2:
 	return game.camera.unproject_position(at)
 
 
+## A separate canvas lets the stick dim with the sleeping HUD (decision 532)
+## without dimming world cues, speech or aiming marks on the overlay.
+func _draw_stick() -> void:
+	if game == null or game.player == null or game.ended:
+		return
+	var fixed: bool = not stick_floats()
+	if fixed or stick_index >= 0:
+		var base: Vector2 = stick_home() if fixed else stick_origin
+		var held: bool = stick_index >= 0
+		var knob: Vector2 = base + ((stick_at - base).limit_length(STICK_R) if held else Vector2.ZERO)
+		HudSkin.draw_stick(touch, base, knob, STICK_RING, STICK_KNOB, held, game.player.running)
+
+
 func _draw_overlay() -> void:
 	if game == null or game.player == null:
 		return
@@ -4972,15 +5166,6 @@ func _draw_overlay() -> void:
 	for m: Dictionary in game.lure_marks:
 		var fade: float = 1.0 - (now - float(m["t"])) / game.LURE_MARK_S
 		overlay.draw_arc(_project(m["pos"]), 12.0, 0, TAU, 24, Color(1, 0.85, 0.6, 0.8 * fade), 2.0)
-	# The stick under the left thumb (시안 .fstick): its ring and the knob in it,
-	# which follows the thumb (the rim = run). The fixed one stays where it is,
-	# the knob resting in its middle; the floating one is there only while held.
-	var fixed := not stick_floats()
-	if fixed or stick_index >= 0:
-		var base := stick_home() if fixed else stick_origin
-		var held: bool = stick_index >= 0
-		var knob: Vector2 = base + ((stick_at - base).limit_length(STICK_R) if held else Vector2.ZERO)
-		HudSkin.draw_stick(overlay, base, knob, STICK_RING, STICK_KNOB, held, p.running)
 	# Sharp shooters see the dangerous ones marked while aiming (not chosen for them).
 	if auto_aim and int(p.skills.get("shooting", 0)) >= 7:
 		for z in game.zombies.list:

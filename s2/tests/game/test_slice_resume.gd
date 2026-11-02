@@ -308,7 +308,8 @@ func test_train_slot_round_trip_with_late_papers_queues_and_cooldowns() -> void:
 	g["lateOn"] = true
 	g["lateCards"] = [{"uid": 9001, "kind": "demand", "comm": "tail", "late": 1, "who": null}]
 	g["deferred"] = [{"uid": 9002, "kind": "favor", "comm": "guard", "pushed": 1}]
-	g["budget"] = {"picked": int(flow.train_t["BUDGET"]["perSeg"]), "stats": {"deferred": {"5": 1}, "faded": {}, "dropped": {"6": 2}}}
+	# S1's budget always carries its stretch (budget.ts sync reads b.seg); the save check now asks for it.
+	g["budget"] = {"seg": int(g["seg"]), "picked": int(flow.train_t["BUDGET"]["perSeg"]), "stats": {"deferred": {"5": 1}, "faded": {}, "dropped": {"6": 2}}}
 	g["contentQueue"] = [{"id": "queued_now", "at": seg}]
 	g["contentDeals"] = [{"id": "deal_now", "comm": "front", "due": seg}]
 	g["comms"]["tail"]["demandCool"] = 3
@@ -1010,6 +1011,7 @@ func test_ended_field_returns_once_from_a_train_backup_before_the_return() -> vo
 	var flow = _flow({"skip_field": false})
 	flow.go(flow._index_of("field"))
 	var train_text: String = FileAccess.get_file_as_string(TRAIN)
+	var stores_before: String = _json(_stores(flow.train_g))
 	flow.field.finish("departed")
 	var expected: Dictionary = flow.receipt.duplicate(true)
 	assert_true(flow._returned())
@@ -1027,12 +1029,24 @@ func test_ended_field_returns_once_from_a_train_backup_before_the_return() -> vo
 	assert_eq(_type_gap(expected, resumed.receipt), "")
 	assert_eq(resumed.train_g["fieldReturns"]["records"].size(), 1)
 	assert_eq(SliceSave.applied_ids(resumed.train_g), [expected["receiptId"]])
+	var stores_once: String = _json(_stores(resumed.train_g))
+	assert_ne(stores_once, stores_before, "the field brings stock home")
 	resumed.free()
 	var again = _flow({"resume": _pick()})
 	assert_eq(again.current(), "receipt")
 	assert_eq(_json(again.receipt), _json(expected))
 	assert_eq(again.train_g["fieldReturns"]["records"].size(), 1)
+	assert_eq(_json(_stores(again.train_g)), stores_once, "the ended field's stock comes onto the train once")
 	_finish(again)
+
+
+## The train's stores a field return can move.
+func _stores(g: Dictionary) -> Dictionary:
+	var out: Dictionary = {"coal": g["coal"], "food": g["food"], "med": g["med"], "lux": g["lux"]}
+	if g.get("dom") is Dictionary:
+		for key: String in ["wood", "scrap", "cloth", "parts"]:
+			out[key] = g["dom"].get(key, 0)
+	return out
 
 
 func test_writing_after_backup_recovery_keeps_the_good_backups() -> void:

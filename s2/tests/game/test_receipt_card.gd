@@ -85,13 +85,18 @@ func test_the_promise_line_is_up_only_with_promises() -> void:
 	assert_false(sent.hud.promise_key.visible)
 
 
-func test_the_end_card_is_the_paper_slip_with_its_keys_under_it() -> void:
+func test_the_end_card_is_the_paper_slip_with_its_keys_on_its_foot() -> void:
 	var game = _game()
 	var got: Array = []
 	game.finished.connect(func(r): got.append(r))
 	game.finish("departed")
 	assert_eq(got.size(), 1)
-	game.hud.show_end(got[0])
+	var up_before: Array = game.hud.root.get_children().filter(func(c): return c is CanvasItem and c.visible and c != game.hud.toast_box)
+	assert_gt(up_before.size(), 3, "the field's keys and words were up")
+	# The train's going is a beat before the card, as in play: it runs out, then the card.
+	game.hud._tick_leave(game.hud.LEAVE_BEAT_S + 0.01)
+	assert_true(game.hud.leaving.is_empty(), "the beat is over")
+	up_before = up_before.filter(func(c): return not c.is_queued_for_deletion())
 	assert_true(game.hud.modal_open)
 	var slip: Control = game.hud.modal.find_child("Receipt", true, false)
 	assert_not_null(slip, "the slip is on the card")
@@ -102,5 +107,37 @@ func test_the_end_card_is_the_paper_slip_with_its_keys_under_it() -> void:
 	for b in game.hud.modal.find_children("*", "Button", true, false):
 		keys.append((b as Button).text)
 	assert_eq(keys, ["영수증 복사", "기록 복사", "다시"])
+	var foot: Control = slip.find_child("Foot", true, false)
+	assert_not_null(foot, "the keys stand on the slip's foot")
 	for b in game.hud.modal.find_children("*", "Button", true, false):
-		assert_false(slip.is_ancestor_of(b), "the keys are glass, off the slip")
+		assert_true(foot.is_ancestor_of(b), "%s is on the paper" % (b as Button).text)
+		assert_gte((b as Button).get_combined_minimum_size().y, UiFonts.px(48.0) - 0.5, "a finger high")
+		assert_eq((b as Button).pressed.get_connections().size(), 1, "%s does its one thing" % (b as Button).text)
+	# Each copy hands over its own text: the receipt, then the record.
+	var copies: Array = game.hud.modal.find_children("*", "Button", true, false).slice(0, 2)
+	var receipt_call: Callable = (copies[0] as Button).pressed.get_connections()[0]["callable"]
+	var record_call: Callable = (copies[1] as Button).pressed.get_connections()[0]["callable"]
+	assert_eq(receipt_call.get_method(), &"_copy")
+	assert_eq(receipt_call.get_bound_arguments(), [got[0]["receipt_json"], "영수증 복사됨"])
+	assert_eq(record_call.get_method(), &"_copy")
+	assert_eq(record_call.get_bound_arguments(), [got[0]["telemetry"], "기록 복사됨"])
+	assert_eq((slip.go_key as Button).text, "다시", "again is the paper's main key")
+	assert_true(slip.went_on.is_connected(game.hud._restart), "and it starts again")
+	# The field's keys and words go under the card and stay gone as the HUD ticks,
+	# the lamp key that dusk brings up too; only the notes stay up, for a copy's word.
+	game.clock.arrive_min = float(game.clock.SUNSET_MIN) + 10.0
+	assert_true(game.clock.is_dark(), "dusk has come")
+	# The map mark that shows itself on its own frame stays down too.
+	game.hud.map_stamp.aim(game.player.position + Vector3(6.0, 0.0, 6.0))
+	game.hud.tick(0.1)
+	game.hud.map_stamp._process(0.1)
+	for c in game.hud.root.get_children():
+		if c != game.hud.modal and c != game.hud.toast_box and c is CanvasItem:
+			assert_false((c as CanvasItem).visible, "%s is put away" % c.name)
+	assert_true(game.hud.toast_box.visible)
+	game.hud._close_modal(false)
+	for c in up_before:
+		assert_true((c as CanvasItem).visible, "%s is back" % c.name)
+	assert_eq(game.hud.end_cleared, [], "closing brings them back")
+	game.hud.tick(0.1)
+	assert_true(game.hud.lamp_button.visible, "and the lamp key dusk brought comes up as it would")

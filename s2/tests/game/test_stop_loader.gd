@@ -13,6 +13,8 @@ const MapView = preload("res://game/world/map_view.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
 const SidePath = preload("res://game/world/side_path.gd")
+const MapRing = preload("res://game/world/map_ring.gd")
+const NightLights = preload("res://game/world/night_lights.gd")
 
 const OPTS := {"seed": 7, "arrive": false}
 
@@ -36,7 +38,7 @@ func _snapshot(f) -> Dictionary:
 func _loader() -> Node:
 	var loader = StopLoader.new()
 	add_child_autofree(loader)
-	loader.prepare("")
+	loader.prepare("", -1, "", -1.0, "", FieldGame.region_for(OPTS))
 	if not loader.has_data():
 		await wait_for_signal(loader.data_ready, 30)
 	return loader
@@ -44,7 +46,8 @@ func _loader() -> Node:
 
 func test_a_stop_built_over_frames_is_the_stop_built_at_once_and_stands_till_shown() -> void:
 	var whole = FieldGame.new()
-	whole.opts = OPTS.duplicate()
+	# Started as the game starts a stop: the first stop with its view ground, as the loader's map has it.
+	whole.opts = StopGround.ask_view(OPTS.duplicate())
 	add_child_autofree(whole)
 	assert_true(whole.is_built, "built in the one call, as before")
 	assert_eq(whole.pace.waits, 0)
@@ -154,3 +157,76 @@ func test_an_edge_stop_is_made_on_the_worker_before_the_side_path() -> void:
 	var city: Dictionary = StopLoader.make_ready(script, run_seed)
 	assert_false(city.has("stop_form"))
 	assert_lt((city["grid"] as FieldGrid).width, g.width)
+
+
+func test_region_band_is_on_the_original_before_the_outer_village() -> void:
+	var script: Script = load(FieldMaps.path_of("houses_01"))
+	var original := MapRing.plain_build(script, FieldMaps.finish_with_band("K4"))
+	assert_eq(original.get("region_band", ""), "K4")
+	assert_false(original.has("map_ring"), "the band is present before the ring is added")
+	var grown := FieldMaps.build_from(script, "K4")
+	assert_eq(grown.get("region_band", ""), "K4")
+	assert_true(grown.has("map_ring"), "this map grows an outer village")
+
+
+func test_make_ready_plans_the_edge_in_the_requested_region_band() -> void:
+	var script: Script = load(FieldMaps.path_of("houses_01"))
+	var d := StopLoader.make_ready(script, 7, "", -1.0, "K4")
+	assert_eq(d.get("region_band", ""), "K4")
+	assert_eq_deep(d["_edge_plan"]["key"], EdgeBand.plan_key(d["grid"], EdgeBand.seed_of(d), EdgeBand.look_of(d), d.get("deep_forest", [])))
+	var no_band := d.duplicate()
+	no_band.erase("region_band")
+	assert_ne(EdgeBand.look_of(d), EdgeBand.look_of(no_band), "K4 has a different forest share from the default")
+
+
+func test_an_empty_region_band_keeps_the_original_build_result() -> void:
+	var script: Script = load(FieldMaps.path_of("houses_01"))
+	# The former entry point: finish the plain map, add its ring, then extend its lights.
+	var original := MapRing.build(script, FieldMaps.build_from)
+	NightLights.extend(original)
+	for built: Dictionary in [FieldMaps.build_from(script), FieldMaps.build_from(script, "")]:
+		assert_false(built.has("region_band"))
+		assert_eq(built["map_ring"]["buildings"], original["map_ring"]["buildings"])
+		assert_eq(built["containers"].size(), original["containers"].size())
+		assert_eq_deep(built["buildings"], original["buildings"])
+		assert_eq_deep(built["containers"], original["containers"])
+		assert_eq((built["grid"] as FieldGrid).floor, (original["grid"] as FieldGrid).floor)
+		assert_eq((built["grid"] as FieldGrid).solid, (original["grid"] as FieldGrid).solid)
+
+
+func test_prepare_rebuilds_when_only_the_region_band_changes() -> void:
+	var loader = StopLoader.new()
+	loader.threaded = false
+	add_child_autofree(loader)
+	loader.prepare("", 7, "edge", -1.0, "", "K1")
+	var generation: int = loader._generation
+	var first: Dictionary = loader.data
+	loader.prepare("", 7, "edge", -1.0, "", "K1")
+	assert_eq(loader._generation, generation, "the same band keeps the prepared map")
+	assert_true(is_same(loader.data, first))
+	loader.prepare("", 7, "edge", -1.0, "", "K4")
+	assert_eq(loader._generation, generation + 1, "another band starts a new build")
+	assert_eq(loader.band_for, "K4")
+	assert_eq(loader.data.get("region_band", ""), "K4")
+	assert_false(is_same(loader.data, first))
+
+
+func test_region_resolution_keeps_the_fields_existing_precedence() -> void:
+	assert_eq(FieldGame.region_for({"place": "houses_01", "region": "region_04", "departure": {"segment": 2}}), "K4")
+	assert_eq(FieldGame.region_for({"place": "houses_01", "departure": {"segment": 3}}), "K4")
+	assert_eq(FieldGame.region_for({"place": "houses_01"}), "K1")
+	assert_eq(FieldGame.region_for({"departure": {"segment": 3}}), "K1", "a stop's own map keeps its own band")
+
+
+func test_two_maps_built_at_once_both_grow_their_outer_village() -> void:
+	# A build the loader left running and a new one overlap on worker threads (MapRing's shared flags).
+	var script: Script = load(FieldMaps.path_of("houses_01"))
+	var out: Array = [{}, {}]
+	var first := WorkerThreadPool.add_task(func() -> void: out[0] = FieldMaps.build_from(script, "K1"))
+	var second := WorkerThreadPool.add_task(func() -> void: out[1] = FieldMaps.build_from(script, "K4"))
+	WorkerThreadPool.wait_for_task_completion(first)
+	WorkerThreadPool.wait_for_task_completion(second)
+	for i: int in 2:
+		assert_true((out[i] as Dictionary).has("map_ring"), "build %d keeps its outer village" % i)
+	assert_eq(out[0].get("region_band", ""), "K1")
+	assert_eq(out[1].get("region_band", ""), "K4")

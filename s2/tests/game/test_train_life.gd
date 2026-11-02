@@ -3,6 +3,7 @@ extends "res://addons/gut/test.gd"
 const Scene = preload("res://game/train/train_scene.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const Catalog = preload("res://game/train/train_catalog.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Context = preload("res://game/train/train_context.gd")
 const Body = preload("res://game/train/train_body.gd")
 const SeasonTable = preload("res://game/season_table.gd")
@@ -1213,7 +1214,7 @@ func test_the_life_panel_follows_a_shortened_train_without_reading_past_its_end(
 	assert_eq(s.cars.size(), 13)
 	assert_eq(s.panel.car_i, 12, "칸이 줄면 고른 칸 번호부터 고친다")
 	assert_eq(panel._car_id(), String(s.cars[12]["id"]))
-	assert_true(panel.status.text.begins_with(String(s.cars[12]["def"]["name"])), "생활 판이 새 편성의 칸으로 다시 그려졌다")
+	assert_true(panel.status.text.replace(UiFonts.WORD_JOINER, "").begins_with(String(s.cars[12]["def"]["name"])), "생활 판이 새 편성의 칸으로 다시 그려졌다")
 
 
 func test_old_setters_check_the_whole_snapshot_before_touching_the_cars() -> void:

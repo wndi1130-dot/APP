@@ -20,6 +20,7 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const MapRing = preload("res://game/world/map_ring.gd")
 const RoomSplit = preload("res://game/world/room_split.gd")
 const NightLights = preload("res://game/world/night_lights.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
 
 ## Floors are stacked this far apart on every map (map_view draws by it too).
 const LEVEL_H: float = 3.0
@@ -66,6 +67,8 @@ static func path_of(place_id: String) -> String:
 static func has(place_id: String) -> bool:
 	if BUILT_IN.has(place_id):
 		return true
+	if StoryMaps.is_story(place_id):
+		return ResourceLoader.exists(path_of(place_id))
 	# Only <kind>_<NN>: a place id never walks out of the maps folder.
 	var parts: PackedStringArray = place_id.rsplit("_", true, 1)
 	if parts.size() != 2 or not KINDS.has(parts[0]) or parts[1].length() != 2 or not parts[1].is_valid_int():
@@ -98,20 +101,58 @@ static func ids() -> Array[String]:
 	return out
 
 
+## Story maps join the registry only once their hand-made scripts exist.
+static func story_ids() -> Array[String]:
+	var out: Array[String] = []
+	for id: String in StoryMaps.BASE:
+		if has(id):
+			out.append(id)
+	return out
+
+
+## Every map for checks and measurements; random picks use ids().
+static func all_ids() -> Array[String]:
+	return ids() + story_ids()
+
+
 ## The map's data, ready for the field. An unknown place gives the default map.
-static func build(place_id: String) -> Dictionary:
-	return build_from(load(path_of(resolve(place_id))))
+static func build(place_id: String, band: String = "") -> Dictionary:
+	return build_from(load(path_of(resolve(place_id))), band)
 
 
-static func build_from(script: Script) -> Dictionary:
+static var _build_lock := Mutex.new()
+
+
+## Finish the original map in its band before MapRing adds the outer village.
+static func finish_with_band(band: String) -> Callable:
+	if band.is_empty():
+		return build_from
+	return func(script: Script) -> Dictionary: return build_from(script, band)
+
+
+static func build_from(script: Script, band: String = "") -> Dictionary:
 	# A stop map is finished as it is, then grows its outer village (map_ring.gd).
+	# MapRing marks its plain build in shared static flags, so one map is built at a
+	# time: a worker's build left running by the stop loader would otherwise make
+	# another thread's build skip its ring. The lock is the same thread's again
+	# on the plain build inside (Mutex is reentrant).
+	_build_lock.lock()
 	if MapRing.enabled(script):
-		var grown := MapRing.build(script, build_from)
+		var grown := MapRing.build(script, finish_with_band(band))
+		_build_lock.unlock()
 		# The lights people left: the grown map's share by its whole area, the
 		# ones planned on the stop map kept where they are (T0-9).
 		NightLights.extend(grown)
 		return grown
+	var data: Dictionary = _build_plain(script, band)
+	_build_lock.unlock()
+	return data
+
+
+static func _build_plain(script: Script, band: String) -> Dictionary:
 	var data: Dictionary = script.build()
+	if not band.is_empty():
+		data["region_band"] = band
 	var consts: Dictionary = script.get_script_constant_map()
 	if not data.has("place_id"):
 		data["place_id"] = String(consts.get("PLACE_ID", DEFAULT_PLACE))
