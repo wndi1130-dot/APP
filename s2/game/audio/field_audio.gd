@@ -163,11 +163,12 @@ const COMPANY_STEP_LOUD: float = 0.7
 const FEET_PLAYERS: int = 5            # players the steps of others than the player go out on
 ## By its gait: stride in m (low, high), loudness, the share of steps without a
 ## sound, and pitch (low, high; times its floor's) — never above the player's
-## lowest (0.9), so the ear tells their feet from its own. First values.
+## lowest (STEP_PITCH low under the heaviest STEP_LOAD: 0.95 × 0.94), so the ear
+## tells their feet from its own. First values.
 const DEAD_GAITS: Dictionary = {
 	"shamble": {"stride": [0.45, 0.8], "loud": 0.16, "skip": 0.3, "pitch": [0.72, 0.86]},
 	"chase": {"stride": [0.6, 0.9], "loud": 0.22, "skip": 0.12, "pitch": [0.78, 0.88]},
-	"dash": {"stride": [0.9, 1.3], "loud": 0.3, "skip": 0.0, "pitch": [0.82, 0.9]},
+	"dash": {"stride": [0.9, 1.3], "loud": 0.3, "skip": 0.0, "pitch": [0.8, 0.88]},
 }
 ## The rasp of one of the dead that is about to run (lunger_rules): the group
 ## its file goes in, how loud, heard to this many metres, and the pitch of the
@@ -2150,9 +2151,46 @@ func _building_door_bang(at: Vector3, level: int) -> bool:
 	return true
 
 
+## No two steps alike (as a weapon's blows): each one a little louder or softer
+## (STEP_GAIN_DB) and higher or lower (STEP_PITCH), so a walk is not a machine.
+const STEP_GAIN_DB: float = 2.0
+const STEP_PITCH: Array = [0.95, 1.05]
+## The player's own steps by how it moves: crouched, softer; under a load
+## (Person.carry_state: 1 heavy, 2 over, 3 cannot move), louder and lower.
+## Loudness, pitch.
+const STEP_CROUCH: Array = [0.55, 1.0]
+const STEP_LOAD: Array = [[1.0, 1.0], [1.12, 0.97], [1.25, 0.94], [1.25, 0.94]]
+
+
+## How the player's own step sounds by how it moves (STEP_CROUCH, STEP_LOAD):
+## [loudness, pitch], times its floor's.
+func step_feel() -> Array:
+	var p = game.player if game != null else null
+	if p == null:
+		return [1.0, 1.0]
+	return feel_of(bool(p.crouched), int(p.carry_state()))
+
+
+## [loudness, pitch] of a step crouched or not, under a load of this carry state.
+static func feel_of(crouched: bool, carry: int) -> Array:
+	var carried: Array = STEP_LOAD[clampi(carry, 0, STEP_LOAD.size() - 1)]
+	var loud: float = float(carried[0])
+	var pitch: float = float(carried[1])
+	if crouched:
+		loud *= float(STEP_CROUCH[0])
+		pitch *= float(STEP_CROUCH[1])
+	return [loud, pitch]
+
+
+## A step's own wobble: [loudness, pitch] times (STEP_GAIN_DB, STEP_PITCH).
+static func step_wobble() -> Array:
+	return [db_to_linear(randf_range(-STEP_GAIN_DB, STEP_GAIN_DB)), randf_range(float(STEP_PITCH[0]), float(STEP_PITCH[1]))]
+
+
 ## The player's own step, by what is underfoot (FieldGrid.Floor): its own
 ## group, or down the row to one that has files (snow at the last); glass on
-## the floor crunches over it. Never the same file twice running.
+## the floor crunches over it. Never the same file twice running, never the
+## same loudness and pitch, and by how the player moves (step_feel).
 func footstep(at: Vector3, running: bool) -> void:
 	var g = game.grid_at(at)
 	var cell: Vector2i = game.FieldGrid.cell_of(at)
@@ -2164,7 +2202,9 @@ func footstep(at: Vector3, running: bool) -> void:
 		steps.append([group, pick])
 		if steps.size() > STEPS_KEPT:
 			steps = steps.slice(steps.size() - STEPS_KEPT)
-		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]), randf_range(0.9, 1.1) * float(row[2]), lib[group][pick], _bus_at(at))
+		var feel := step_feel()
+		var wob := step_wobble()
+		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]) * float(feel[0]) * float(wob[0]), float(wob[1]) * float(row[2]) * float(feel[1]), lib[group][pick], _bus_at(at))
 	if g.floor_glass.has(cell):
 		_voice_or_standin(STEP_GLASS, GLASS_STANDIN, at)
 
@@ -2248,8 +2288,9 @@ func company_step(at: Vector3, running: bool) -> void:
 		return
 	var row: Array = found[1]
 	var pick: int = _other_than(group, company_step_last)
-	if not _foot(group, pick, at, (0.5 if running else 0.3) * COMPANY_STEP_LOUD * float(row[1]) * (1.0 - d / DEAD_STEP_RANGE),
-			randf_range(0.9, 1.1) * float(row[2])):
+	var wob := step_wobble()
+	if not _foot(group, pick, at, (0.5 if running else 0.3) * COMPANY_STEP_LOUD * float(row[1]) * (1.0 - d / DEAD_STEP_RANGE) * float(wob[0]),
+			float(wob[1]) * float(row[2])):
 		return
 	company_steps.append([group, pick])
 	if company_steps.size() > STEPS_KEPT:
