@@ -14,6 +14,8 @@ const COLD_FIRE_MODEL := "res://models/props_field/cold_campfire.glb"
 ## Warm lamp colours, never red (atmosphere 6): flame about 28 degrees,
 ## candle about 32, headlights a warm white.
 const FLAME_TINT := Color(1.0, 0.62, 0.28)
+## Linear, like the old in-shader constant: the core uniform has no
+## source_color hint, so this pale yolk is not darkened to orange on the way.
 const CORE_TINT := Color(1.0, 0.86, 0.58)
 const BED_TINT := Color(1.0, 0.55, 0.20)
 const SPARK_TINT := Color(1.0, 0.72, 0.36)
@@ -28,32 +30,28 @@ const BARREL_BED_Y := 0.89
 ## Sparks leave from the flame's upper half so they clear its tip. Launched from
 ## the embers they died inside the main flame quad and never showed (probe 11-03).
 const CAMP_SPARK_Y := CAMP_BED_Y + 0.55
+const BARREL_SPARK_Y := BARREL_BED_Y + 0.40
 ## Downward pull on a spark (m/s²): light and buoyant, it slows but keeps climbing.
 const SPARK_FALL := 0.35
-const BARREL_SPARK_Y := BARREL_BED_Y + 0.40
+## Seconds a spark lives; rain, sleet and blizzard quench it sooner and thin
+## it out, but it still clears the flame tip before it fades.
+const SPARK_LIFE := 1.1
+const SPARK_LIFE_WET := 0.9
+const SPARK_WET_RATIO := 0.6
 
 ## light id -> {glow: Array[MeshInstance3D], sparks: GPUParticles3D, on: bool}.
 ## The stone model is deliberately outside these entries.
 var parts: Dictionary = {}
 var sparks_enabled := true
-## The field supplies its current CPU weather values; never read back the GPU.
-var weather_source: Callable
+## How many times a spark emitter was switched on or off (tests: a repeated
+## LampLight result must not switch it again).
+var emit_writes := 0
 var _weather_key: Array = []
 
 
 func _ready() -> void:
 	visibility_changed.connect(refresh_visibility)
 	refresh_visibility()
-
-
-func _process(_delta: float) -> void:
-	_refresh_weather()
-
-
-func _refresh_weather() -> void:
-	if weather_source.is_valid():
-		var weather: Dictionary = weather_source.call()
-		set_weather(weather.get("params", {}), weather.get("kinds", []))
 
 
 ## Build one heart for each night light in data["lights"]; all start out.
@@ -151,7 +149,7 @@ func _sparks(at: Vector3) -> GPUParticles3D:
 	node.emitting = false
 	node.visible = false
 	node.amount = 10
-	node.lifetime = 1.1
+	node.lifetime = SPARK_LIFE
 	node.randomness = 0.35
 	node.local_coords = true
 	node.process_material = motion
@@ -202,7 +200,6 @@ func set_sparks_enabled(enabled: bool) -> void:
 
 
 func refresh_visibility() -> void:
-	_refresh_weather()
 	for entry: Dictionary in parts.values():
 		_sync(entry)
 
@@ -218,8 +215,11 @@ func _sync(entry: Dictionary) -> void:
 		# Do not assign again, or restart: repeated LampLight results are idempotent.
 		if sparks.emitting != emitting:
 			sparks.emitting = emitting
+			emit_writes += 1
 
 
+## The field calls this when the weather drawn changes (its atmosphere kinds:
+## warm snow is drawn as rain), not every frame.
 func set_weather(params: Dictionary, kinds: Array) -> void:
 	var wind: Vector3 = params.get("fx_wind", Vector3.ZERO)
 	var wet := kinds.has("rain") or kinds.has("sleet") or kinds.has("blizzard")
@@ -232,6 +232,6 @@ func set_weather(params: Dictionary, kinds: Array) -> void:
 		var sparks: GPUParticles3D = entry["sparks"]
 		if sparks == null:
 			continue
-		sparks.amount_ratio = 0.6 if wet else 1.0
-		sparks.lifetime = 0.8 if wet else 1.1
+		sparks.amount_ratio = SPARK_WET_RATIO if wet else 1.0
+		sparks.lifetime = SPARK_LIFE_WET if wet else SPARK_LIFE
 		(sparks.process_material as ParticleProcessMaterial).gravity = Vector3(drift.x, -SPARK_FALL, drift.y)

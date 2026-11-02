@@ -183,15 +183,12 @@ static func apply_max_fps(s: Dictionary) -> Dictionary:
 	return {"max_fps": Engine.max_fps}
 
 
-## Missing key restores the default-on setting; other night light parts stay lit.
+## A missing or malformed key restores the default-on setting, the same as
+## through read() (which drops a malformed one); other night light parts stay lit.
 static func apply_night_sparks(view: NightLightView, s: Dictionary) -> Dictionary:
 	if view == null:
 		return {}
-	var settings := _valid(s)
-	# An explicitly malformed value is ignored, including after a valid override.
-	if s.has("night_sparks") and not settings.has("night_sparks"):
-		return {}
-	var enabled: bool = settings.get("night_sparks", true)
+	var enabled: bool = _valid(s).get("night_sparks", true)
 	if view.sparks_enabled == enabled:
 		return {}
 	view.set_sparks_enabled(enabled)

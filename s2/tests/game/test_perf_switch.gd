@@ -631,6 +631,23 @@ func test_night_sparks_accepts_only_bool_and_records_invalid_reasons() -> void:
 		assert_true(String(diagnostic["reason"]).contains("unsupported key or invalid value: night_sparks"))
 
 
+func test_fire_sparks_follow_the_drawn_weather_not_the_raw_kinds() -> void:
+	# Warm snow is drawn as rain and cold rain as snow (Atmosphere.drawn_kinds);
+	# the sparks thin out with what is drawn falling.
+	var field := _field()
+	field.night_view = NightView.new()
+	field.add_child(field.night_view)
+	field.night_view.build({"lights": [{"id": "fire", "kind": "campfire", "cell": Vector2i.ZERO}]})
+	var sparks: GPUParticles3D = field.night_view.parts["fire"]["sparks"]
+	for case: Array in [[["snow"], ["rain"], true], [["rain"], ["snow"], false], [["blizzard"], ["blizzard"], true], [["clear"], ["clear"], false]]:
+		field.look_kinds = case[0]
+		field.atmo = {"kinds": case[1]}
+		field._push_fire_weather()
+		var wet: bool = case[2]
+		assert_almost_eq(sparks.lifetime, NightView.SPARK_LIFE_WET if wet else NightView.SPARK_LIFE, 0.00001, str(case))
+		assert_almost_eq(sparks.amount_ratio, NightView.SPARK_WET_RATIO if wet else 1.0, 0.00001, str(case))
+
+
 func test_night_sparks_applies_after_build_and_on_later_settings_changes() -> void:
 	var field := _field()
 	field._apply_perf_settings({"night_sparks": false})
@@ -647,8 +664,17 @@ func test_night_sparks_applies_after_build_and_on_later_settings_changes() -> vo
 	assert_eq(Switch.apply_night_sparks(field.night_view, {"night_sparks": true}), {})
 	field._apply_perf_settings({"night_sparks": false})
 	assert_false(sparks.emitting)
-	assert_eq(Switch.apply_night_sparks(field.night_view, {"night_sparks": "true"}), {})
-	assert_false(sparks.emitting, "invalid direct input preserves a prior override")
+	# A malformed value counts as missing, straight in or through read() (which
+	# drops it): both give the default, on.
+	assert_eq(Switch.apply_night_sparks(field.night_view, {"night_sparks": "false"}), {"night_sparks": true})
+	assert_true(sparks.emitting)
+	field._apply_perf_settings({"night_sparks": false})
+	assert_false(sparks.emitting)
+	_write(JSON.stringify({"night_sparks": "false"}))
+	field._apply_perf_settings(Switch.read(path))
+	assert_true(sparks.emitting, "malformed through read() is the same default")
+	field._apply_perf_settings({"night_sparks": false})
+	assert_false(sparks.emitting)
 	field.hide()
 	field._apply_perf_settings({})
 	assert_false(sparks.emitting)

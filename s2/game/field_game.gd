@@ -579,8 +579,7 @@ func _ready() -> void:
 	night_view.name = "NightLights"
 	add_child(night_view)
 	night_view.build(data)
-	night_view.weather_source = func() -> Dictionary:
-		return {"params": fx_params, "kinds": look_kinds}
+	_push_fire_weather()
 	PerfSwitch.apply_night_sparks(night_view, _perf_settings)
 	visibility_changed.connect(night_view.refresh_visibility)
 	night_view.refresh_visibility()
@@ -715,6 +714,13 @@ func _apply_fx() -> void:
 		fx_light["sun_energy"] = float(clear_sky["sun_energy"]) * float(storm["sun"])
 		fx_light["sun_color"] = Color(fx_light["sun_color"]).lerp(storm["sun_color"], 0.6)
 		fx_light["ambient_color"] = Color(fx_light["ambient_color"]).lerp(storm["ambient_color"], 0.6)
+
+
+## The fires' sparks thin out in what is drawn falling (the atmosphere's kinds:
+## warm snow is drawn as rain, cold rain as snow), not the raw weather.
+func _push_fire_weather() -> void:
+	if night_view != null:
+		night_view.set_weather(fx_params, atmo.get("kinds", look_kinds))
 
 
 ## Snow keeps falling through the stop: lying snow deepens with the field clock
@@ -929,6 +935,7 @@ func _update_atmosphere() -> void:
 		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_set_view_fill()
 		_update_window_light()
+		_push_fire_weather()
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]

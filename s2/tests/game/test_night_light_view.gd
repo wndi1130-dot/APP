@@ -119,11 +119,20 @@ func test_parent_and_view_visibility_restore_emission_without_restart() -> void:
 		surface.show()
 		assert_true(sparks.emitting)
 	var material := sparks.process_material
+	# Every switch of an emitter goes through one counted write; a repeated
+	# LampLight result and a visibility refresh must not switch it again.
+	var writes: int = view.emit_writes
 	for i in 3:
 		view.set_on("camp", true)
+		view.refresh_visibility()
 		assert_eq(view.parts["camp"]["sparks"], sparks)
 		assert_eq(sparks.process_material, material)
 		assert_true(sparks.emitting)
+	assert_eq(view.emit_writes, writes, "no emitter switch on a repeated on")
+	view.set_on("camp", false)
+	assert_eq(view.emit_writes, writes + 1)
+	view.set_on("camp", true)
+	assert_eq(view.emit_writes, writes + 2)
 	# Count call sites instead of trusting a counter that nobody increments.
 	var source := FileAccess.get_file_as_string("res://game/world/night_light_view.gd")
 	var calls := RegEx.new()
@@ -167,6 +176,11 @@ func test_no_smoke_or_extra_lights_and_correct_spark_shader() -> void:
 		assert_true(shader.code.contains("fx_common.gdshaderinc"))
 		assert_true(shader.code.contains("fx_photo("))
 	assert_true(View.SPARK.code.contains("INSTANCE_CUSTOM.y"))
+	# The pale core stays the old linear constant: a source_color hint would
+	# turn (1, 0.86, 0.58) into about (1, 0.71, 0.30) on the way in.
+	var core := RegEx.new()
+	core.compile("uniform\\s+vec3\\s+core_tint\\s*=")
+	assert_not_null(core.search(View.FLAME.code), "core_tint has no colour hint")
 	assert_true(View.SPARK.code.contains("COLOR.a"))
 	assert_true(View.SPARK.code.contains("length(MODEL_MATRIX[0].xyz)"))
 
@@ -205,8 +219,8 @@ func test_built_particle_settings_bound_height_and_respond_to_weather() -> void:
 			assert_eq(motion.tangential_accel_max, 0.0)
 			assert_lte(motion.gravity.y, 0.0)
 			assert_almost_eq(motion.gravity.x, 0.2, 0.00001)
-			assert_almost_eq(sparks.amount_ratio, 1.0 if kinds.is_empty() else 0.6, 0.00001)
-			assert_almost_eq(sparks.lifetime, 1.1 if kinds.is_empty() else 0.8, 0.00001)
+			assert_almost_eq(sparks.amount_ratio, 1.0 if kinds.is_empty() else View.SPARK_WET_RATIO, 0.00001)
+			assert_almost_eq(sparks.lifetime, View.SPARK_LIFE if kinds.is_empty() else View.SPARK_LIFE_WET, 0.00001)
 			assert_lte(_rise_bound(sparks), 1.5, id + str(kinds))
 			# Even omitting gravity and drag stays safe with discrete GPU time steps.
 			var quad := sparks.draw_pass_1 as QuadMesh
@@ -226,18 +240,28 @@ func test_built_particle_settings_bound_height_and_respond_to_weather() -> void:
 func test_sparks_leave_inside_the_flame_and_clear_its_tip() -> void:
 	# Launched from the embers they died inside the main flame quad and never showed.
 	var view := _view()
-	for id: String in ["camp", "drum"]:
-		var sparks: GPUParticles3D = view.parts[id]["sparks"]
-		var main: MeshInstance3D = view.parts[id]["glow"][0]
-		assert_eq(String(main.get_meta("fire_role")), "flame")
-		var top: float = main.position.y + (main.mesh as QuadMesh).size.y * 0.5
-		assert_lt(sparks.position.y, top, id)
-		assert_gt(sparks.position.y, main.position.y - (main.mesh as QuadMesh).size.y * 0.5, id)
-		# The slowest spark, without drag, by the time it starts to fade.
-		var motion := sparks.process_material as ParticleProcessMaterial
-		var t := sparks.lifetime * 0.8
-		var climb := motion.initial_velocity_min * t + 0.5 * motion.gravity.y * t * t
-		assert_gt(sparks.position.y + climb, top, id)
+	for kinds: Array in [[], ["rain"]]:
+		view.set_weather({}, kinds)
+		for id: String in ["camp", "drum"]:
+			var sparks: GPUParticles3D = view.parts[id]["sparks"]
+			var main: MeshInstance3D = view.parts[id]["glow"][0]
+			assert_eq(String(main.get_meta("fire_role")), "flame")
+			var height: float = (main.mesh as QuadMesh).size.y
+			var bottom: float = main.position.y - height * 0.5
+			assert_lt(sparks.position.y, bottom + height, id)
+			assert_gt(sparks.position.y, bottom, id)
+			# A spark of mean speed born at the bottom of the emission box, tilted
+			# by the spread and slowed by gravity and the strongest drag, at age 0.7
+			# (still about half opaque: colour ramp 0.68 x the shader's fade 0.84)
+			# is above the flame's visible tip (the tongue fades out over its top
+			# sixth). Slower ones may fade inside the flame; enough clear it.
+			var motion := sparks.process_material as ParticleProcessMaterial
+			var v := (motion.initial_velocity_min + motion.initial_velocity_max) * 0.5 * cos(deg_to_rad(motion.spread))
+			var slow := -motion.gravity.y + motion.damping_max
+			var t := sparks.lifetime * 0.7
+			var climb := v * t - 0.5 * slow * t * t
+			var born := sparks.position.y - motion.emission_box_extents.y
+			assert_gt(born + climb, bottom + height * 0.85, id + str(kinds))
 
 
 func _alarm_red(c: Color) -> bool:

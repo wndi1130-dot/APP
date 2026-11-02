@@ -6,7 +6,8 @@ render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabl
 #include "res://fx/shaders/fx_common.gdshaderinc"
 
 uniform vec3 tint : source_color = vec3(1.0, 0.62, 0.28);
-uniform vec3 core_tint : source_color = vec3(1.0, 0.86, 0.58);
+// Linear on purpose (no source_color): the pale yolk this shader always had.
+uniform vec3 core_tint = vec3(1.0, 0.86, 0.58);
 uniform bool bed = false;
 uniform float seed = 0.0;
 uniform float phase = 0.0;
