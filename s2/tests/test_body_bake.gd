@@ -1379,3 +1379,185 @@ func test_walk_failed_bake_cannot_be_compacted_as_empty_bytes() -> void:
 	assert_false(compacted.has("image"))
 	assert_gt((compacted["fit_failures"] as Array).size(), 0)
 	assert_eq(BodyBake._person_bake_output_error({}), "BAKE_EMPTY_IMAGE")
+
+
+## Frozen targets isolate the original proportions from skin iteration.
+func _walk_original_ratio_case(kind: String) -> Dictionary:
+	var fit: Dictionary = {"rest_hips_y": 0.850, "stand_ref_m": 0.850, "floor": 0.0,
+		"starts": [0.2, 0.65], "durations": [0.53, 0.57], "hip_over_stand_allowed": false}
+	var geometry: Dictionary = {"hips": Vector3(0.0, 0.85, 0.0), "legs": [
+		{"thigh": Vector3(0.1, 0.85, 0.0), "a": 0.391, "b": 0.374},
+		{"thigh": Vector3(-0.1, 0.85, 0.0), "a": 0.391, "b": 0.374}]}
+	var targets: Array = [Vector3(0.1, 0.11224412552, 0.30), Vector3(-0.1, 0.09230130925, 0.05)]
+	var phase: float = 225.0 / 256.0
+	if kind == "guard_f":
+		phase = 106.0 / 256.0
+		targets = [Vector3(0.1, 0.09382130925, 0.05), Vector3(-0.1, 0.12, 0.05)]
+	elif kind == "sheepskin":
+		targets = [Vector3(0.1, 0.06936412552, 0.30), Vector3(-0.1, 0.09197130925, 0.05)]
+	return {"fit": fit, "geometry": geometry, "targets": targets, "phase": phase}
+
+
+func test_walk_original_ratio_fitter_225_swing_owner_and_gap() -> void:
+	var frozen: Dictionary = _walk_original_ratio_case("fitter")
+	var bounds: Dictionary = BodyBake._person_walk_bounds_from_geometry(frozen["fit"], frozen["phase"], frozen["targets"], frozen["geometry"])
+	assert_eq(int(bounds["lower_side"]), 1)
+	assert_eq(int(bounds["upper_side"]), 0)
+	assert_almost_eq(float(bounds["lower"]) - float(bounds["upper"]), 0.03465, 0.000001)
+	assert_true(bool(bounds["empty"]))
+	var gain: float = pow(sin(PI * ((225.0 / 256.0 - 0.2) - 0.53) / 0.47), 2.0)
+	var targets: Array = (frozen["targets"] as Array).duplicate()
+	var swing: Vector3 = targets[0]
+	var lift_delta: float = (float(bounds["lower"]) - float(bounds["upper"])) / gain
+	swing.y += (lift_delta + 0.001) * gain
+	targets[0] = swing
+	assert_lt(0.07 + lift_delta, 0.18)
+	assert_false(bool(BodyBake._person_walk_bounds_from_geometry(frozen["fit"], frozen["phase"], targets, frozen["geometry"])["empty"]))
+
+
+func test_walk_original_ratio_guard_106_stand_tolerance_keeps_bent_knee() -> void:
+	var frozen: Dictionary = _walk_original_ratio_case("guard_f")
+	var fit: Dictionary = frozen["fit"]
+	var bounds: Dictionary = BodyBake._person_walk_bounds_from_geometry(fit, frozen["phase"], frozen["targets"], frozen["geometry"])
+	assert_eq(int(bounds["lower_side"]), 0)
+	assert_eq(int(bounds["upper_side"]), -1)
+	assert_almost_eq(float(bounds["lower"]) - float(bounds["upper"]), 0.00063, 0.000001)
+	assert_true(bool(bounds["empty"]))
+	fit["hip_over_stand_allowed"] = true
+	var opened: Dictionary = BodyBake._person_walk_bounds_from_geometry(fit, frozen["phase"], frozen["targets"], frozen["geometry"])
+	assert_false(bool(opened["empty"]))
+	assert_almost_eq(float(opened["upper"]), 0.8512, 0.0000001)
+	var height: float = (float(opened["lower"]) + float(opened["upper"])) * 0.5
+	var ankle: Vector3 = frozen["targets"][0]
+	var distance_squared: float = Vector3(0.1, height, 0.0).distance_squared_to(ankle)
+	var knee_deg: float = rad_to_deg(acos(clampf((distance_squared - 0.391 * 0.391 - 0.374 * 0.374) / (2.0 * 0.391 * 0.374), -1.0, 1.0)))
+	assert_gte(knee_deg, rad_to_deg(BodyBake.PERSON_WALK_KNEE_MIN))
+	assert_lte(knee_deg, 15.0)
+	assert_false(BodyBake._person_walk_tolerance_knee_ok(fit, height, 0.0))
+	assert_true(BodyBake._person_walk_tolerance_knee_ok(fit, height, knee_deg))
+	assert_eq(float(fit["rest_hips_y"]), 0.850)
+	assert_eq(float(fit["stand_ref_m"]), 0.850)
+	print("WALK_STANCE_KNEE_MIN rig=guard_f_frozen deg=%.6f" % knee_deg)
+
+
+func test_walk_original_ratio_sheepskin_owners_and_both_mean_caps() -> void:
+	var frozen: Dictionary = _walk_original_ratio_case("sheepskin")
+	var bounds: Dictionary = BodyBake._person_walk_bounds_from_geometry(frozen["fit"], frozen["phase"], frozen["targets"], frozen["geometry"])
+	assert_eq(int(bounds["lower_side"]), 1)
+	assert_eq(int(bounds["upper_side"]), 0)
+	assert_almost_eq(float(bounds["lower"]) - float(bounds["upper"]), 0.0772, 0.000001)
+	var grid_cap: float = 0.0
+	var saved_cap: float = 0.0
+	for index in 256:
+		var point: Dictionary = BodyBake._person_walk_bounds_from_geometry(frozen["fit"], float(index) / 256.0, frozen["targets"], frozen["geometry"])
+		grid_cap += float(point["upper"]) / 256.0
+		if index % 8 == 0:
+			saved_cap += float(point["upper"]) / 32.0
+	assert_lt(grid_cap, 0.95 * 0.85)
+	assert_lt(saved_cap, 0.95 * 0.85)
+	assert_almost_eq(grid_cap, 0.77158, 0.000001)
+	assert_almost_eq(saved_cap, grid_cap, 0.0000001)
+
+
+func test_walk_center_intersection_rejects_later_mid_collision() -> void:
+	var entry: Array = BodyBake._person_walk_center_intersection([Vector2(-0.16, 0.16)], Vector2(-0.1, 0.04))
+	var whole: Array = BodyBake._person_walk_center_intersection(entry, Vector2(0.02, 0.12))
+	assert_eq(whole.size(), 2)
+	assert_almost_eq((whole[1] as Vector2).x, 0.12, 0.00000001)
+	assert_gt((whole[1] as Vector2).x, (entry[1] as Vector2).x)
+
+
+func test_walk_budget_witness_keeps_completed_candidate_and_partial_means_flag() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = (ctx["footlock_walk"] as Dictionary).duplicate(true)
+	fit["rest_hips_y"] = 0.5
+	var specs: Array = [{"entry": BodyBake.PERSON_CLIPS[0], "shift": 0.0}]
+	var result: Dictionary = BodyBake._search_person_walk_path(ctx, fit, specs, 4096, 64, {"paths": 1})
+	var witness: Dictionary = result["witness"]
+	assert_eq(str(witness["budget_kind"]), "paths")
+	assert_eq(str(witness["geometry_reason"]), "POINT_EMPTY")
+	assert_true(bool(witness["candidate_complete"]))
+	assert_true(bool(witness["means_complete"]))
+	assert_true((witness["params"] as Dictionary).has("centers"))
+	assert_true((witness["detail"] as Dictionary).has("lower_clip"))
+	assert_true((witness["detail"] as Dictionary).has("upper_clip"))
+	assert_false(bool(result["global_infeasible"]))
+	ctx.erase("walk_work_budget")
+	var partial: Dictionary = BodyBake._search_person_walk_path(ctx, fit, specs, 4096, 64, {"bounds": 1})
+	assert_false(bool(partial["witness"]["means_complete"]))
+	assert_false(bool(partial["witness"]["candidate_complete"]))
+
+
+func test_walk_original_ratio_full_search_keeps_all_saved_gates() -> void:
+	var ctx: Dictionary = _walk_feedback_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	body.set_bone_rest(body.find_bone("hips"), Transform3D(Basis(), Vector3(0.0, 0.85, 0.0)))
+	var rest: PackedVector3Array = fit["rest"]
+	for side in 2:
+		var leg: Array = fit["legs"][side]
+		fit["rest_ankles"][side] = body.get_bone_global_rest(int(leg[2])).origin
+		fit["anchors"][side] = body.get_bone_global_rest(int(leg[0])).origin - Vector3(0.0, 0.0, 0.08)
+		for vertex: int in fit["soles"][side]:
+			var position: Vector3 = rest[vertex]
+			position.y = 0.0
+			rest[vertex] = position
+	fit["rest"] = rest
+	fit["floor"] = 0.0
+	fit["rest_hips_y"] = 0.85
+	fit["stand_ref_m"] = 0.85
+	body.reset_bone_poses()
+	var skin: Skin = ctx["skin"]
+	for bind in skin.get_bind_count():
+		skin.set_bind_pose(bind, body.get_bone_global_rest(skin.get_bind_bone(bind)).affine_inverse())
+	var specs: Array = []
+	for entry: Array in BodyBake.PERSON_CLIPS:
+		if BodyBake.PERSON_FOOT_LOCK.has(entry[0]):
+			specs.append({"entry": entry, "shift": 0.0})
+	var result: Dictionary = BodyBake._search_person_walk_path(ctx, fit, specs)
+	assert_true(bool(result["ok"]), "short original proportions must pass the full search")
+	if not bool(result["ok"]):
+		print("WALK_RIG_DIAGNOSTIC " + JSON.stringify(result["witness"]))
+		print("WALK_STANCE_KNEE_MIN rig=original_ratio_short deg=UNMEASURED accepted=false")
+		return
+	var accepted: Dictionary = result["fit"]
+	var minimum: float = accepted["stance_knee_min_deg"]
+	print("WALK_STANCE_KNEE_MIN rig=original_ratio_short deg=%.6f accepted=true" % minimum)
+	assert_gt(minimum, 0.0)
+	for spec: Dictionary in specs:
+		var measurement: Dictionary = result["saved"]["measurements"][spec["entry"][0]]
+		for side in 2:
+			var stats: Dictionary = measurement["stats"][side]
+			assert_almost_eq(float(measurement["rounds"][side]), 1.64, 1.64 * 0.005)
+			assert_lte(BodyBake._person_footlock_slide(stats["after"]), 2.0)
+			assert_lte(BodyBake._person_footlock_slide(stats["contact_after"]), 2.0)
+			assert_gte(float(stats["contacts"]) / float(stats["frames"]), 0.5)
+			assert_lte(float(stats["mid_knee_max_deg"]), 15.0)
+			assert_gte(float(stats["hips_sum_m"]) / float(stats["frames"]), 0.95 * 0.85)
+			assert_eq(int(stats["reach_clamp_frames"]), 0)
+			assert_eq(int(stats["reach_final_fail_frames"]), 0)
+
+
+func test_walk_allocation_covers_ends_positive_centers_lift_and_short_stance() -> void:
+	var params: Dictionary = {"centers": [-0.08, -0.08], "lifts": [0.07, 0.07], "durations": [0.53, 0.57], "heel_end": 0.22, "toe_start": 0.55}
+	var item: Dictionary = {"params": params, "fit": {"starts": [0.2, 0.65]}, "center_intervals": [[Vector2(0.04, 0.16)], [Vector2(0.04, 0.16)]], "lift_estimates": [0.12, 0.13]}
+	var proposals: Array = BodyBake._person_walk_path_block([item], 0)
+	proposals.append_array(proposals.duplicate(true))
+	var allocation: Dictionary = BodyBake._person_walk_allocate_paths(proposals, {}, [0.2, 0.65], 24)
+	assert_eq((allocation["selected"] as Array).size(), 24)
+	assert_gt(int(allocation["omitted"]), 0)
+	assert_lte(int(allocation["unique"]), 297)
+	var low: Vector2 = Vector2(INF, INF)
+	var high: Vector2 = Vector2(-INF, -INF)
+	var high_lift_short: bool = false
+	var positive: bool = false
+	for selected: Dictionary in allocation["selected"]:
+		var center: Vector2 = Vector2(selected["centers"][0], selected["centers"][1])
+		low = low.min(center)
+		high = high.max(center)
+		positive = positive or (center.x > 0.0 and center.y > 0.0)
+		high_lift_short = high_lift_short or (float(selected["lifts"][0]) >= 0.18 and float(selected["lifts"][1]) >= 0.18 and float(selected["durations"][0]) <= 0.50 and float(selected["durations"][1]) <= 0.55)
+	assert_eq(low, Vector2(-0.16, -0.16))
+	assert_eq(high, Vector2(0.16, 0.16))
+	assert_true(positive)
+	assert_true(high_lift_short)
