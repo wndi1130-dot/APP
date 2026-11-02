@@ -389,6 +389,63 @@ func test_the_shove_pad_does_nothing_inside_the_lockout() -> void:
 	assert_ne(pos1, p.position + Vector3(0.8, 0, 0))
 
 
+## The shove key pressed `per_s` times a second for `press_for` seconds, the rules
+## stepped at 30 fps until `total`: when each shove lands (the arms going out).
+func _shoves_landed(per_s: float, press_for: float, total: float) -> Array:
+	var p = game.player
+	var dt: float = 1.0 / 30.0
+	var t: float = 0.0
+	var next_press: float = 0.0
+	var lands: Array = []
+	var last_lunge: float = p.lunge_t
+	for i in range(roundi(total * 30.0)):
+		while next_press <= t + 0.000001 and next_press < press_for - 0.000001:
+			game.hud._shove()
+			next_press += 1.0 / per_s
+		game.combat.update(dt)
+		t += dt
+		if p.lunge_t > last_lunge:
+			lands.append(t)
+		last_lunge = p.lunge_t
+	return lands
+
+
+# Pressed fast, shoves went out back to back, two a second: a press kept from
+# the middle of one went out the moment it ended. Now it is not kept, and the
+# body rests once the arms are back.
+func test_ten_presses_in_a_second_send_out_two_shoves_with_a_rest_between() -> void:
+	var lands: Array = _shoves_landed(10.0, 1.0, 2.5)
+	assert_eq(lands.size(), 2, "it was three, the last one after the presses had stopped")
+	var least: float = game.combat.SHOVE_WINDUP + game.combat.SHOVE_LUNGE + game.combat.SHOVE_REST
+	assert_gt(float(lands[1]) - float(lands[0]), least - 0.001, "drawn back, out and back, then the rest")
+	assert_eq(_shoves_landed(10.0, 3.0, 4.5).size(), 4, "three seconds of it: four, it was seven")
+
+
+func test_the_shove_key_works_again_only_after_the_rest() -> void:
+	var p = game.player
+	var hud = game.hud
+	hud._shove()
+	game.combat.update(game.combat.SHOVE_WINDUP + 0.01)
+	assert_gt(p.lunge_t, 0.0, "it landed")
+	game.combat.update(game.combat.SHOVE_LUNGE)
+	assert_eq(p.lunge_t, 0.0, "the arms are back")
+	assert_false(game.combat.striking(p), "the hands are free for other work")
+	hud._shove()
+	assert_eq(p.shove_t, 0.0, "resting: the key does nothing")
+	assert_true(game.combat.shove_after.is_empty(), "and nothing is kept for later")
+	game.combat.update(game.combat.SHOVE_REST + 0.001)
+	hud._shove()
+	assert_gt(p.shove_t, 0.0, "after the rest it shoves")
+
+
+func test_a_companion_shoving_on_reflex_keeps_its_pace() -> void:
+	var q = game.squad[1]
+	game.combat.shove(q)
+	game.combat.update(game.combat.SHOVE_TIME / float(q.mults()["swing"]) + 0.01)
+	game.combat.shove(q)
+	assert_gt(q.lunge_t, game.combat.SHOVE_LUNGE - 0.001, "the rest is only the player's key's")
+
+
 # ---------------------------------------------------------------- a raider who gave up
 
 func test_a_fleeing_raider_is_not_a_target_any_more() -> void:

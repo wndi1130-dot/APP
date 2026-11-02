@@ -30,6 +30,11 @@ const SHOVE_LUNGE: float = 0.35
 ## The feet stay planted from the arms coming back until this long after it lands, the
 ## first half of the shove: the body does not slide on under its own push.
 const SHOVE_PLANT: float = 0.1
+## The player's shove key, pressed fast, sent shoves out back to back (two a
+## second, no breath between). Now a press while a shove is on does nothing and
+## is not kept for later, and once the arms are back the body rests this long
+## before the key shoves again: one shove in about 0.8 s at most.
+const SHOVE_REST: float = 0.25
 ## What stops a melee blow while it is drawn back (opts["melee_break"], to be
 ## shown on the phone): "grab" a grab on the one swinging stops it (as with the
 ## shove), "none" nothing does. The time is spent either way.
@@ -177,6 +182,7 @@ func update(delta: float) -> void:
 		var m: Dictionary = p.mults()
 		p.swing_t = maxf(0.0, p.swing_t - delta)
 		p.lunge_t = maxf(0.0, p.lunge_t - delta)
+		p.shove_rest_t = maxf(0.0, p.shove_rest_t - delta)
 		if p.shove_t > 0.0:
 			p.shove_t -= delta
 			if p.shove_t <= 0.0:
@@ -989,9 +995,12 @@ func _kill(p, z: Dictionary, msg: String) -> void:
 ## The player's shove key: the arms come back for a moment, then it lands.
 ## Companions shove on reflex (shove itself).
 ## The shove key ends a one-press fight (decision 420: one press, one thing);
-## pressed mid-blow it goes once the blow is over.
+## pressed mid-blow it goes once the blow is over. Pressed while a shove of the
+## player's is on, or in the rest after it, it does nothing (SHOVE_REST).
 func start_shove(p) -> void:
 	if game.paused:
+		return
+	if p == game.player and shoving(p):
 		return
 	if p == game.player and fighting(p):
 		call_off(p)
@@ -1004,7 +1013,7 @@ func start_shove(p) -> void:
 
 ## The shove itself, drawn back first (start_shove; a blow at a run).
 func _shove_now(p) -> void:
-	if striking(p) or not _hands_free_for_blow(p):
+	if striking(p) or (p == game.player and shoving(p)) or not _hands_free_for_blow(p):
 		return
 	blows.erase(p.get_instance_id())
 	p.shove_t = SHOVE_WINDUP / float(p.mults()["swing"])
@@ -1015,6 +1024,12 @@ func _shove_now(p) -> void:
 ## In a blow or a shove: drawn back, landing, or coming back from it.
 func striking(p) -> bool:
 	return p.swing_t > 0.0 or p.strike_t > 0.0 or p.shove_t > 0.0
+
+
+## A shove is on: drawn back, the arms out and back, or the rest after it. Only
+## the player's key waits for this; the hands are free for other work meanwhile.
+func shoving(p) -> bool:
+	return p.shove_t > 0.0 or p.lunge_t > 0.0 or p.shove_rest_t > 0.0
 
 
 ## Free to start a blow or a shove (decision 420): a work it breaks off is let
@@ -1041,6 +1056,7 @@ func shove(p) -> void:
 	p.swing_t = SHOVE_TIME / float(m["swing"])
 	# Every shove is seen, the reflex ones (not drawn back first) too: the arms out and back.
 	p.lunge_t = SHOVE_LUNGE
+	p.shove_rest_t = maxf(p.swing_t, SHOVE_LUNGE) + SHOVE_REST
 	p.body.add_fatigue(0.003)
 	var forward := Vector3(sin(p.facing), 0, cos(p.facing))
 	var hit := 0
@@ -1085,6 +1101,7 @@ func break_grab(p) -> bool:
 	p.grab_left = 0.0
 	p.swing_t = SHOVE_TIME
 	p.lunge_t = SHOVE_LUNGE      # the arms seen thrown out as it breaks free
+	p.shove_rest_t = maxf(p.swing_t, SHOVE_LUNGE) + SHOVE_REST
 	# A blow drawn back as it was grabbed is lost when it breaks free, as the
 	# grab rule says (decision 420); with "none" it still lands.
 	if String(game.opts.get("melee_break", "grab")) == "grab" and p.strike_t > 0.0:
