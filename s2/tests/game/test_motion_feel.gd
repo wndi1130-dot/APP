@@ -1093,7 +1093,7 @@ func test_all_six_one_hand_weapons_alternate_without_two_hand_clips() -> void:
 			assert_eq(String(own[int(back.y)]["name"]), clip, "the return keeps the picked way")
 			p.swing_t = 0.0
 			PersonVisual.blow_of(p, own, note, t + 0.6)
-	# A long rule wait must not count as a rest after the early visual return.
+	# Random rest starts after the capped recovery, without resetting the chain.
 	p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
 	var chain: Dictionary = {}
 	p.strike_total = 0.2
@@ -1104,7 +1104,9 @@ func test_all_six_one_hand_weapons_alternate_without_two_hand_clips() -> void:
 	p.swing_t = 3.0
 	PersonVisual.blow_of(p, own, chain, 0.2)
 	p.swing_t = 2.649999
-	assert_lt(PersonVisual.blow_of(p, own, chain, 0.550001).y, 0.0, "the picture has returned")
+	assert_gte(PersonVisual.blow_of(p, own, chain, 0.550001).y, 0.0, "the return fills the player wait")
+	p.swing_t = 2.0
+	assert_lt(PersonVisual.blow_of(p, own, chain, 1.2).y, 0.0, "random rest cannot stretch the picture")
 	p.swing_t = 0.0
 	PersonVisual.blow_of(p, own, chain, 3.2)
 	p.strike_t = 0.2
@@ -1147,7 +1149,7 @@ func test_recovery_seconds_depend_on_weight_without_using_the_attack_wait() -> v
 		assert_eq(p.swing_t, before, "reading the picture leaves the rule clock alone")
 
 
-func test_a_heavy_blow_returns_to_standing_before_its_unchanged_next_attack_time() -> void:
+func test_a_heavy_blow_returns_to_standing_at_its_unchanged_next_attack_time() -> void:
 	for fps: int in [30, 60]:
 		var game: FieldGame = _motion_field()
 		var p: Person = game.player
@@ -1168,7 +1170,7 @@ func test_a_heavy_blow_returns_to_standing_before_its_unchanged_next_attack_time
 		assert_eq(String(own[int(landed.y)]["name"]), "p_swing_one")
 		assert_almost_eq(landed.x, 0.45, 0.000001)
 		var gone: float = 0.0
-		var deadline: float = Pose.recover_seconds("axe") + 0.000001
+		var deadline: float = wait - 0.001
 		var drawn: Vector2 = landed
 		while gone < deadline:
 			var delta: float = minf(1.0 / float(fps), deadline - gone)
@@ -1177,13 +1179,13 @@ func test_a_heavy_blow_returns_to_standing_before_its_unchanged_next_attack_time
 			gone += delta
 			drawn = PersonVisual.motion_of(p, note, delta, [], own)
 			assert_almost_eq(p.swing_t, wait - gone, 0.000001, "only the rule update consumes the wait")
-		assert_eq(String(own[int(drawn.y)]["name"]), "p_stand", "recovered within the fixed duration")
+		assert_eq(String(own[int(drawn.y)]["name"]), "p_swing_one", "the return lasts until the rule deadline")
 		assert_gt(p.swing_t, 0.0)
 		var left: float = p.swing_t
 		game.combat.start_swing(p, {})
 		assert_eq(p.strike_t, 0.0, "the early visual return cannot start another blow")
 		assert_eq(p.swing_t, left)
-		var to_edge: float = left - 0.001
+		var to_edge: float = maxf(0.0, left - 0.0001)
 		game.clock.elapsed += to_edge
 		game.combat.update(to_edge)
 		game.combat.start_swing(p, {})
@@ -1192,6 +1194,8 @@ func test_a_heavy_blow_returns_to_standing_before_its_unchanged_next_attack_time
 		game.clock.elapsed += to_ready
 		game.combat.update(to_ready)
 		assert_almost_eq(game.clock.elapsed - started, windup + wait, 0.000001)
+		drawn = PersonVisual.motion_of(p, note, to_ready, [], own)
+		assert_eq(String(own[int(drawn.y)]["name"]), "p_stand", "standing at the unchanged deadline")
 		game.combat.start_swing(p, {})
 		assert_gt(p.strike_t, 0.0, "available at the original attack time")
 

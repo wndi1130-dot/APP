@@ -343,8 +343,12 @@ func test_blow_after_blow_goes_through_the_ways() -> void:
 	p.strike_t = 0.0
 	p.swing_t = 0.6
 	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 1.6).x, 0.33, 0.001, "where it lands")
+	# The one-hand backswing fills the rule wait: not back at the old fixed time,
+	# fully back as the wait ends.
 	p.swing_t = 0.6 - PersonVisual.Pose.recover_seconds("axe") + 0.001
-	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 1.9).x, 1.0, 0.01, "the backswing returns fully")
+	assert_lt(PersonVisual.blow_of(p, own, gone, 1.9).x, 0.99, "still on the way back at the old fixed time")
+	p.swing_t = 0.001
+	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 2.2).x, 1.0, 0.01, "the backswing returns fully")
 
 
 # The weapon goes in the worn body's right hand: hanging at the side the head

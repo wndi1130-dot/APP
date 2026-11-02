@@ -206,6 +206,7 @@ const OWN_BLOW_AIM: Dictionary = {"p_stab": 0.53, "p_swing_axe": 0.35}
 # A blow drawn back within this long of the last one ending goes on to the next
 # way; after a longer rest it starts again from the first.
 const CHAIN_GAP: float = 1.0
+const RECOVER_WALK_MIX: float = 0.12
 # A door kick, and where in it the foot lands (body_bake.gd p_kick at 0.4): the
 # leg comes up over the last WIND of the try so it lands as the door is struck.
 const OWN_KICK: Array = ["p_kick", 0.4]
@@ -439,7 +440,7 @@ func _process(delta: float) -> void:
 		var mix: Dictionary = note.get_or_add("mix_own" if own else "mix_dead", {})
 		var drawn: Color
 		if own:
-			drawn = DeadBody.mix_from(mix, look, float(note["t"]), d["own_table"], d["own_mix"])
+			drawn = mix_recovery(note, mix, look, float(note["t"]), d["own_table"], d["own_mix"])
 			own_mm.set_instance_transform(k, at)
 			own_mm.set_instance_custom_data(k, drawn)
 			if own_mm.use_colors:
@@ -610,6 +611,13 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	var turned := _turned(p, note, t)
 	_note_posture(p, note, delta)
 	var blow := blow_of(p, own, note, t)
+	if blow.y >= 0.0 and p.strike_t <= 0.0 and Pose.extended_recovery(p) and Pose.recovery_feet_free(p) and (p.moving or walking):
+		p.remove_meta(Pose.SWING)
+		p.remove_meta(Pose.MODE)
+		note["recover_walk_mix"] = true
+		note.erase("blow_aim")
+		blow = Vector2(0.0, -1.0)
+		walking = true
 	var blow_aim: float = float(note.get("blow_aim", 0.0))
 	note.erase("blow_aim")
 	var lying: bool = p.body.downed or p.body.dead or p.fallen_t > 0.0
@@ -836,6 +844,15 @@ static func fall_name(p, own: Array) -> String:
 	if posmod(hash(String(p.pid)), 2) == 1 and clip_named(own, OWN_FALL_SLUMP, -1) >= 0:
 		return OWN_FALL_SLUMP
 	return OWN_FALL if p.body.dead else OWN_FALL_FRONT
+
+
+static func mix_recovery(note: Dictionary, mix: Dictionary, look: Color, t: float, tab: Array, times: Dictionary) -> Color:
+	var durations: Dictionary = times
+	if bool(note.get("recover_walk_mix", false)):
+		durations = times.duplicate()
+		durations[int(look.g)] = RECOVER_WALK_MIX
+		note.erase("recover_walk_mix")
+	return DeadBody.mix_from(mix, look, t, tab, durations)
 
 
 static func blow_kind(wid: String, hands: int, mode: String = "swing") -> String:
