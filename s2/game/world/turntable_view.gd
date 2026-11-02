@@ -1,6 +1,8 @@
 extends RefCounted
 ## 보행 판정 없이 그리는 얕은 작업 바닥. 재질과 시야는 지도와 공유한다.
 
+const FieldGrid = preload("res://game/world/field_grid.gd")
+
 const SEGMENTS: int = 32
 const RAIL_WIDTH: float = 0.20
 const GAUGE_HALF: float = 0.72
@@ -14,11 +16,11 @@ const SLEEPER := Color(0.24, 0.21, 0.19)
 const STEEL := Color(0.66, 0.66, 0.66)
 
 
-static func build(parent: Node3D, material: Material, spec: Dictionary) -> MeshInstance3D:
+static func build(parent: Node3D, material: Material, spec: Dictionary, grid: FieldGrid = null, bank_row: Callable = Callable()) -> MeshInstance3D:
 	if spec.is_empty():
 		return null
 	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays(spec))
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays(spec, grid, bank_row))
 	var node := MeshInstance3D.new()
 	node.name = "Turntable"
 	node.mesh = mesh
@@ -28,7 +30,7 @@ static func build(parent: Node3D, material: Material, spec: Dictionary) -> MeshI
 	return node
 
 
-static func arrays(spec: Dictionary) -> Array:
+static func arrays(spec: Dictionary, grid: FieldGrid = null, bank_row: Callable = Callable()) -> Array:
 	if spec.is_empty():
 		return []
 	var st := SurfaceTool.new()
@@ -62,14 +64,26 @@ static func arrays(spec: Dictionary) -> Array:
 		var start: Vector2 = fan["start"]
 		var direction: Vector2 = fan["direction"]
 		var length: float = fan["length"]
-		_strip(st, start, direction, length, BED_WIDTH, 0.0, 0.05, BED, wall)
+		# 폭 전체가 32각형의 내접원 안으로 들어간다. 안쪽 연장은 침목과 멈춤 턱을 옮기지 않는다.
+		var overlap := fan_overlap(spec)
+		var joined := start - direction * overlap
+		_strip(st, joined, direction, length + overlap, BED_WIDTH, 0.0, 0.05, BED, wall)
 		for i in 4:
 			var sleeper_start := start + direction * (length * (float(i) + 0.5) / 4.0 - 0.12)
 			_strip(st, sleeper_start, direction, 0.24, BED_WIDTH, 0.05, 0.10, SLEEPER, wall, false)
-		_rails(st, start, direction, length, 0.10, 0.18, wall)
+		_rails(st, joined, direction, length + overlap, 0.10, 0.18, wall)
 		if fan["stop"]:
 			_strip(st, start + direction * (length - STOP_LENGTH), direction, STOP_LENGTH, BED_WIDTH, 0.05, 0.20, BRIDGE, wall)
-	return st.commit_to_arrays()
+	var raw := st.commit_to_arrays()
+	if grid == null:
+		return raw
+	return _banked_arrays(raw, grid, bank_row)
+
+
+static func fan_overlap(spec: Dictionary) -> float:
+	var outer: float = spec["outer_radius"]
+	var apothem := outer * cos(PI / SEGMENTS)
+	return outer - sqrt(apothem * apothem - BED_WIDTH * BED_WIDTH * 0.25) + 0.01
 
 
 ## 두 문 방향은 벽 앞까지, 나머지는 3 m에서 끝난다. 폭의 벽 넘침도 _face에서 자른다.
@@ -80,7 +94,7 @@ static func fans(spec: Dictionary) -> Array[Dictionary]:
 		var direction := Vector2(sin(deg_to_rad(angle)), cos(deg_to_rad(angle)))
 		var start := center + direction * float(spec["outer_radius"])
 		var stop := absf(angle) > 30.0
-		var length := 3.0 if stop else (float(spec["wall_z"]) - start.y) / direction.y
+		var length := 3.0 if stop else (float(spec["wall_z"]) - start.y + absf(direction.x) * BED_WIDTH * 0.5) / direction.y
 		out.append({"start": start, "direction": direction, "length": length, "stop": stop})
 	return out
 
@@ -95,7 +109,7 @@ static func _rails(st: SurfaceTool, start: Vector2, direction: Vector2, length: 
 		_strip(st, start + across * side * GAUGE_HALF, direction, length, RAIL_WIDTH, bottom, top, STEEL, wall)
 
 
-## 바닥 없는 상자. 침목은 윗면만 그려 전체 삼각형 수를 600 이하로 유지한다.
+## 바닥 없는 상자. 침목은 윗면만 그린다.
 static func _strip(st: SurfaceTool, start: Vector2, direction: Vector2, length: float, width: float, bottom: float, top: float, color: Color, wall: float, sides: bool = true) -> void:
 	var across := Vector2(direction.y, -direction.x) * width * 0.5
 	var corners: Array[Vector2] = [start - across, start + across, start + direction * length + across, start + direction * length - across]
@@ -126,4 +140,91 @@ static func _face(st: SurfaceTool, points: Array, color: Color, kind: float, wal
 			st.set_color(color)
 			st.set_uv(Vector2.ZERO)
 			st.set_uv2(Vector2(kind, 0))
+			st.add_vertex(vertex)
+
+
+## 땅과 같은 함수로 얻은 둑 표만 사용한다. MapView를 preload하지 않아 순환 의존도 없다.
+static func _banked_arrays(raw: Array, grid: FieldGrid, bank_row: Callable) -> Array:
+	var banks := PackedVector2Array()
+	for row in range(grid.height + 1):
+		bank_row.call(grid, row, banks)
+	var vertices: PackedVector3Array = raw[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = raw[Mesh.ARRAY_NORMAL]
+	var colors: PackedColorArray = raw[Mesh.ARRAY_COLOR]
+	var kinds: PackedVector2Array = raw[Mesh.ARRAY_TEX_UV2]
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(0, vertices.size(), 3):
+		var pending: Array = [[vertices[i], vertices[i + 1], vertices[i + 2]]]
+		var lo := Vector2(minf(vertices[i].x, minf(vertices[i + 1].x, vertices[i + 2].x)), minf(vertices[i].z, minf(vertices[i + 1].z, vertices[i + 2].z)))
+		var hi := Vector2(maxf(vertices[i].x, maxf(vertices[i + 1].x, vertices[i + 2].x)), maxf(vertices[i].z, maxf(vertices[i + 1].z, vertices[i + 2].z)))
+		for z in range(maxi(0, floori(lo.y)), mini(grid.height, floori(hi.y) + 1)):
+			for x in range(maxi(0, floori(lo.x)), mini(grid.width, floori(hi.x) + 1)):
+				var k := z * (grid.width + 1) + x
+				if banks[k] == Vector2.ZERO and banks[k + 1] == Vector2.ZERO and banks[k + grid.width + 1] == Vector2.ZERO and banks[k + grid.width + 2] == Vector2.ZERO:
+					continue
+				var rest: Array = []
+				for polygon: Array in pending:
+					var inside: Array = polygon
+					# 각 칸 밖 조각은 다음 칸으로, 안 조각은 땅과 같은 대각선으로 나눈다.
+					for plane: Vector3 in [Vector3(-1, 0, -x), Vector3(1, 0, x + 1), Vector3(0, -1, -z), Vector3(0, 1, z + 1)]:
+						var halves := _split(inside, Vector2(plane.x, plane.y), plane.z)
+						inside = halves[0]
+						if not (halves[1] as Array).is_empty():
+							rest.append(halves[1])
+					var diagonal := _split(inside, Vector2(-1, 1), float(z - x))
+					for piece: Array in diagonal:
+						_emit_banked(st, piece, normals[i], colors[i], kinds[i], grid, banks)
+				pending = rest
+		for polygon: Array in pending:
+			_emit_banked(st, polygon, normals[i], colors[i], kinds[i], grid, banks)
+	return st.commit_to_arrays()
+
+
+## 수직 면도 보존하는 xz 평면 자르기. 경계에 놓인 면은 한쪽에만 넣는다.
+static func _split(points: Array, axis: Vector2, limit: float) -> Array:
+	var negative: Array[Vector3] = []
+	var positive: Array[Vector3] = []
+	if points.is_empty():
+		return [negative, positive]
+	var previous: Vector3 = points.back()
+	var before := axis.dot(Vector2(previous.x, previous.z)) - limit
+	for current: Vector3 in points:
+		var after := axis.dot(Vector2(current.x, current.z)) - limit
+		if (before <= 0.0) != (after <= 0.0):
+			var crossing := previous.lerp(current, before / (before - after))
+			negative.append(crossing)
+			positive.append(crossing)
+		if after <= 0.0:
+			negative.append(current)
+		else:
+			positive.append(current)
+		previous = current
+		before = after
+	return [negative, positive]
+
+
+static func _bank_uv(vertex: Vector3, grid: FieldGrid, banks: PackedVector2Array) -> Vector2:
+	var x := clampi(floori(vertex.x), 0, grid.width - 1)
+	var z := clampi(floori(vertex.z), 0, grid.height - 1)
+	var dx := clampf(vertex.x - x, 0.0, 1.0)
+	var dz := clampf(vertex.z - z, 0.0, 1.0)
+	var k := z * (grid.width + 1) + x
+	if dx >= dz:
+		return banks[k] * (1.0 - dx) + banks[k + 1] * (dx - dz) + banks[k + grid.width + 2] * dz
+	return banks[k] * (1.0 - dz) + banks[k + grid.width + 2] * dx + banks[k + grid.width + 1] * (dz - dx)
+
+
+static func _emit_banked(st: SurfaceTool, polygon: Array, normal: Vector3, color: Color, kind: Vector2, grid: FieldGrid, banks: PackedVector2Array) -> void:
+	for i in range(1, polygon.size() - 1):
+		var a: Vector3 = polygon[0]
+		var b: Vector3 = polygon[i]
+		var c: Vector3 = polygon[i + 1]
+		if (c - a).cross(b - a).length_squared() < 0.000000000001:
+			continue
+		for vertex: Vector3 in [a, b, c]:
+			st.set_normal(normal)
+			st.set_color(color)
+			st.set_uv(_bank_uv(vertex, grid, banks))
+			st.set_uv2(kind)
 			st.add_vertex(vertex)

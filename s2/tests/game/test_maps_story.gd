@@ -9,6 +9,7 @@ const MapView = preload("res://game/world/map_view.gd")
 const TrackView = preload("res://game/world/track_view.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
+const StopLoader = preload("res://game/stop_loader.gd")
 # test_maps_freight.gd의 KEYS와 같은 계약. place_kind는 빌린 갈래(StoryMaps.BASE)다.
 const KEYS = [
 	"grid", "levels", "stairs", "containers", "spots", "stoves", "entries", "entry_gap", "entry_levels",
@@ -62,16 +63,28 @@ func test_story_look_matches_constants_and_only_six_exact_props() -> void:
 
 ## 실제 표시 켬/끔 경로를 거쳐 전체 자료와 두 AStar의 입력을 비교한다.
 func test_story_look_draw_toggle_preserves_map_and_path_inputs() -> void:
-	var data: Dictionary = MAPS[0].build()
-	var before := _look_snapshot(data)
-	var g: FieldGrid = data["grid"]
-	var people_before := _flood(data)
-	var dead_before := _flood(data, true)
 	var collision_counts: Array[int] = []
+	var ground_states: Array = []
+	var inputs: Array = []
+	var grids: Array[FieldGrid] = []
 	for enabled: bool in [false, true]:
+		# setup은 미리 만든 자료를 소비한다. 두 번 모두 실제 로더에서 새로 짓는다.
+		var data := StopLoader.make_ready(MAPS[0], -1)
+		var before := _look_snapshot(data)
+		var g: FieldGrid = data["grid"]
+		grids.append(g)
+		inputs.append(before)
+		var people_before := _flood(data)
+		var dead_before := _flood(data, true)
+		var expected_ground := _loader_ground_state(data["_ground_arrays"])
+		assert_eq(data["_ground_key"], MapView.ground_key(g))
 		var view := MapView.new()
 		view.story_look_enabled = enabled
 		await view.setup(data)
+		assert_true(view.ground_from_loader, "켬/끔 모두 미리 지은 땅을 사용한다")
+		var actual_ground := _drawn_ground_state(view, g)
+		assert_eq(actual_ground, expected_ground, "로더 배열의 크기와 경계 그대로 메시를 짓는다")
+		ground_states.append(actual_ground)
 		assert_eq(_look_snapshot(data), before, "표시만 바뀌고 원본·경로 입력은 같다")
 		assert_eq(_flood(data), people_before)
 		assert_eq(_flood(data, true), dead_before)
@@ -96,6 +109,42 @@ func test_story_look_draw_toggle_preserves_map_and_path_inputs() -> void:
 		assert_eq(track.multimesh.instance_count, expected)
 		view.free()
 	assert_eq(collision_counts[0], collision_counts[1], "새 충돌체 0")
+	assert_ne(grids[0], grids[1], "로더 자료를 재사용하지 않는다")
+	assert_eq(inputs[0], inputs[1])
+	assert_eq(ground_states[0], ground_states[1], "켬/끔 땅 노드 수·AABB·정점 수가 같다")
+
+
+func _loader_ground_state(ground: Dictionary) -> Array:
+	var state: Array = []
+	for tile: Vector2i in ground:
+		var vertices: PackedVector3Array = ground[tile][Mesh.ARRAY_VERTEX]
+		var bounds := AABB(vertices[0], Vector3.ZERO)
+		for vertex: Vector3 in vertices:
+			bounds = bounds.expand(vertex)
+		state.append([_snap_box(bounds), vertices.size()])
+	assert_gt(state.size(), 0)
+	return state
+
+
+func _drawn_ground_state(view: MapView, g: FieldGrid) -> Array:
+	var state: Array = []
+	var count := MapView.ground_tiles(g).size()
+	var root: Node3D = view.level_roots[0]
+	# 첫 연속 메시들은 땅 타일이고 그 뒤는 EdgeBand/Track 묶음이다.
+	# 기대 개수만 읽지 않고 실제 노드 수를 세어 누락·추가도 잡는다.
+	for child: Node in root.get_children():
+		if not child is MeshInstance3D:
+			break
+		var mesh: ArrayMesh = (child as MeshInstance3D).mesh
+		assert_eq(mesh.get_surface_count(), 1)
+		state.append([_snap_box(mesh.get_aabb()), mesh.surface_get_array_len(0)])
+	assert_eq(state.size(), count)
+	return state
+
+
+## 엔진은 평평한 메시의 경계 상자에 아주 작은 두께(약 0.00001)를 더하므로 1 mm 단위로 맞춰 견준다.
+static func _snap_box(box: AABB) -> AABB:
+	return AABB(box.position.snapped(Vector3.ONE * 0.001), box.size.snapped(Vector3.ONE * 0.001))
 
 
 func test_map_without_look_keeps_track_props_and_inputs() -> void:
@@ -137,6 +186,10 @@ func _look_snapshot(data: Dictionary) -> Dictionary:
 	# 그리기가 원래 한 번 읽고 지우거나 다시 쓰는 키(숲 무리·미리 만든 바닥 등)는 표시 켬/끔과 상관없다.
 	for key: String in StopGround.VIEW_AHEAD_KEYS:
 		snapshot.erase(key)
+	# 짓기에 걸린 시간(yard_dress_ms 등)은 재기 값이라 판마다 다르다.
+	for key: Variant in data:
+		if String(key).ends_with("_ms"):
+			snapshot.erase(key)
 	var grids: Dictionary = {}
 	for level: int in data["levels"]:
 		var g: FieldGrid = data["levels"][level]

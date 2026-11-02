@@ -44,7 +44,13 @@ func test_skip_all_omits_track_map_and_empty_skip_matches_default() -> void:
 	var empty_root := TrackView.build(autofree(Node3D.new()), g, material, [], [], [])
 	var default_map: MultiMeshInstance3D = default_root.get_node("TrackMap")
 	var empty_map: MultiMeshInstance3D = empty_root.get_node("TrackMap")
-	assert_eq(default_map.multimesh.buffer, empty_map.multimesh.buffer)
+	var line_runs := TrackView.runs(g)
+	var expected := TrackView.spots(line_runs)
+	assert_gt(expected.size(), 0)
+	assert_eq(TrackView.kept_spots(line_runs), expected)
+	assert_eq(TrackView.kept_spots(line_runs, []), expected)
+	assert_eq(default_map.multimesh.instance_count, expected.size())
+	assert_eq(empty_map.multimesh.instance_count, expected.size())
 
 
 ## 본선(1~3줄, 3칸 폭) 끝까지, 나란히 붙은 두 줄(6~11줄, 6칸 폭) x 4~9, 1칸 곁선(14줄) x 12~14.
