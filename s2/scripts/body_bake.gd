@@ -261,6 +261,11 @@ const PERSON_WALK_CONTACT_EPSILON: float = 0.005
 const PERSON_WALK_SAVED_SAMPLES: int = 32
 const PERSON_WALK_PROJECT_SWEEPS: int = 512
 const PERSON_WALK_PROJECT_EPSILON: float = 0.0000001
+# One micrometre: 1/20000 of the 2 cm slip gate, below the 10 um inset.
+# Dense skin and saved-frame gates still validate the accepted table.
+const PERSON_WALK_PROJECT_FEASIBILITY_M: float = 0.000001
+const PERSON_WALK_PROJECT_STALL_SWEEPS: int = 32
+const PERSON_WALK_PROJECT_PROGRESS_M: float = 0.000000000001  # one picometre
 const PERSON_WALK_JOINT_PASSES: int = 12
 const PERSON_WALK_SEARCH_GEOMETRY: int = 4096
 const PERSON_WALK_SEARCH_SKIN: int = 64
@@ -3158,10 +3163,11 @@ static func _project_person_walk_height(rows: Array, reference: PackedFloat64Arr
 	var corrections: PackedFloat64Array = PackedFloat64Array()
 	corrections.resize(rows.size())
 	var violation: float = INF
+	var best_excess: float = INF
+	var stale_sweeps: int = 0
 	for sweep in mini(max_sweeps, PERSON_WALK_PROJECT_SWEEPS):
 		if not _person_walk_spend(budget, "project", "shared", rows.size()):
 			return {"coefficients": coefficients, "converged": false, "max_violation": violation, "sweeps": sweep, "reason": "FOOT_PATH_BUDGET"}
-		var before: PackedFloat64Array = coefficients.duplicate()
 		for row_id in rows.size():
 			var row: Dictionary = rows[row_id]
 			var indices: PackedInt32Array = row["indices"]
@@ -3175,6 +3181,7 @@ static func _project_person_walk_height(rows: Array, reference: PackedFloat64Arr
 				coefficients[indices[slot]] += step * weights[slot]
 			corrections[row_id] = correction
 		violation = 0.0
+		var excess: float = 0.0
 		for row: Dictionary in rows:
 			var indices: PackedInt32Array = row["indices"]
 			var weights: PackedFloat64Array = row["weights"]
@@ -3182,11 +3189,18 @@ static func _project_person_walk_height(rows: Array, reference: PackedFloat64Arr
 			for slot in indices.size():
 				dot += coefficients[indices[slot]] * weights[slot]
 			violation = maxf(violation, dot - float(row["limit"]))
-		var change: float = 0.0
-		for index in coefficients.size():
-			change = maxf(change, absf(coefficients[index] - before[index]))
-		if violation <= PERSON_WALK_PROJECT_EPSILON and change <= PERSON_WALK_PROJECT_EPSILON:
+			excess = maxf(excess, dot - float(row["limit"]) - float(row.get("epsilon_m", PERSON_WALK_PROJECT_FEASIBILITY_M)))
+		# Feasibility is sufficient; nearest-point optimality is not a bake gate.
+		if excess <= 0.0:
 			return {"coefficients": coefficients, "converged": true, "max_violation": violation, "sweeps": sweep + 1}
+		if excess < best_excess - PERSON_WALK_PROJECT_PROGRESS_M:
+			best_excess = excess
+			stale_sweeps = 0
+		else:
+			stale_sweeps += 1
+		if stale_sweeps >= PERSON_WALK_PROJECT_STALL_SWEEPS:
+			return {"coefficients": coefficients, "converged": false, "max_violation": violation,
+				"sweeps": sweep + 1, "stale_sweeps": stale_sweeps, "reason": "HEIGHT_PROJECT_STALLED"}
 	return {"coefficients": coefficients, "converged": false, "max_violation": violation, "sweeps": mini(max_sweeps, PERSON_WALK_PROJECT_SWEEPS)}
 
 
@@ -3239,7 +3253,9 @@ static func _person_walk_project_table(phases: PackedFloat64Array, lowers: Packe
 			var indices: PackedInt32Array = PackedInt32Array()
 			for index in count:
 				indices.append(index)
-			rows.append(_person_walk_height_row(indices, weights, -target))
+			var mean_row: Dictionary = _person_walk_height_row(indices, weights, -target)
+			mean_row["epsilon_m"] = PERSON_WALK_MEAN_EPSILON
+			rows.append(mean_row)
 	var reference: PackedFloat64Array = uppers.slice(0, count)
 	for _pass_id in PERSON_WALK_HEIGHT_PASSES:
 		var smoothed: PackedFloat64Array = PackedFloat64Array()
@@ -3309,6 +3325,7 @@ static func _person_walk_dump_projection(ctx: Dictionary, rows: Array, reference
 	state["attempted"] = true
 	var matrix: Array = []
 	var limits: Array[float] = []
+	var row_epsilons: Array[float] = []
 	var variables: Array = []
 	for index: int in reference.size():
 		variables.append({"name": "pelvis_bspline_%03d" % index, "lower": null, "upper": null})
@@ -3322,13 +3339,15 @@ static func _person_walk_dump_projection(ctx: Dictionary, rows: Array, reference
 			coefficients[indices[slot]] += weights[slot]
 		matrix.append(coefficients)
 		limits.append(float(row["limit"]))
+		row_epsilons.append(float(row.get("epsilon_m", PERSON_WALK_PROJECT_FEASIBILITY_M)))
 	var residual: float = projected["max_violation"]
 	var payload: Dictionary = {"schema": "walk_projection_v1", "relation": "A*x <= b", "rows": rows.size(), "columns": reference.size(),
 		"A": matrix, "b": limits, "A_eq": [], "b_eq": [], "variables": variables, "x0": Array(reference),
 		"x_last": Array(projected["coefficients"]), "sweeps": projected["sweeps"], "max_sweeps": PERSON_WALK_PROJECT_SWEEPS,
 		"solver_converged": projected["converged"], "zero_initial_corrections": true,
 		"reason": projected.get("reason", "HEIGHT_PROJECT_LIMIT"), "max_violation": residual if is_finite(residual) else null,
-		"projection_epsilon_m": PERSON_WALK_PROJECT_EPSILON, "mean_epsilon_m": PERSON_WALK_MEAN_EPSILON,
+		"projection_epsilon_m": PERSON_WALK_PROJECT_FEASIBILITY_M, "mean_epsilon_m": PERSON_WALK_MEAN_EPSILON,
+		"row_epsilon_m": row_epsilons, "stale_sweeps": projected.get("stale_sweeps", 0),
 		"units": {"x": "m", "A": "dimensionless", "b": "m", "phase": "cycle"},
 		"rig": ctx.get("rig_label", "unknown"), "scope": "active rows of first failed projection call",
 		"input": {"phases": Array(phases), "lowers": Array(lowers), "uppers": Array(uppers), "target": target, "require_mean": require_mean, "inset": inset}}
@@ -4052,7 +4071,9 @@ static func _search_person_walk_path(ctx: Dictionary, fit: Dictionary, specs: Ar
 
 static func _person_walk_skin_witness(failure: Dictionary) -> Dictionary:
 	var solve: Dictionary = failure.get("solve", {})
+	var projection: Dictionary = failure.get("table", {}).get("projection", {})
 	return {"reason": failure.get("reason", "UNTRIED"), "clip": failure.get("clip", ""), "phase": failure.get("phase", -1.0),
+		"projection_sweeps": projection.get("sweeps", 0), "projection_max_violation": projection.get("max_violation", 0.0),
 		"bounds": solve.get("bounds", {}), "targets_used": solve.get("targets_used", []), "ik_passes": solve.get("ik_passes", 0)}
 
 

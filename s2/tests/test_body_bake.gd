@@ -1056,15 +1056,35 @@ func test_walk_rest_cap_tolerance_covers_entire_mid_window() -> void:
 	var start: float = fit["starts"][0]
 	var centre: float = 0.04 - 1.64 * duration * 0.1
 	var strict_conflicts: int = 0
+	var reach_limited: int = 0
+	var stand_cap: float = float(fit["rest_hips_y"]) + 0.0012
+	assert_almost_eq(stand_cap, 0.75897956482943, 0.000000001)
 	for t: float in [0.4, 0.45, 0.5, 0.55, 0.6]:
 		var target: Vector3 = Vector3(hip.x, 0.0, hip.z + centre + 1.64 * duration * (0.5 - t))
 		var other: Vector3 = body.get_bone_global_pose(int(fit["legs"][1][0])).origin + Vector3(0.0, -0.5, 0.0)
 		var bounds: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, start + duration * t, [target, other])
 		assert_false(bool(bounds["empty"]), "the explicit tolerance opens every middle sample")
-		assert_almost_eq(float(bounds["upper"]), float(fit["rest_hips_y"]) + 0.0012, 0.000000001)
+		# The rest cap competes with each leg's four-degree reach sphere.
+		var expected_upper: float = stand_cap
+		var targets: Array[Vector3] = [target, other]
+		var hips: Vector3 = body.get_bone_global_pose(body.find_bone("hips")).origin
+		for side: int in 2:
+			var leg: Array = fit["legs"][side]
+			var thigh: Vector3 = body.get_bone_global_pose(int(leg[0])).origin
+			var shin: Vector3 = body.get_bone_global_pose(int(leg[1])).origin
+			var ankle: Vector3 = body.get_bone_global_pose(int(leg[2])).origin
+			var a: float = thigh.distance_to(shin)
+			var b: float = shin.distance_to(ankle)
+			var horizontal: float = Vector2(thigh.x - targets[side].x, thigh.z - targets[side].z).length_squared()
+			var reach_cap: float = targets[side].y - (thigh - hips).y + sqrt(a * a + b * b + 2.0 * a * b * cos(BodyBake.PERSON_WALK_KNEE_MIN) - horizontal) - 0.001
+			expected_upper = minf(expected_upper, reach_cap)
+		assert_almost_eq(float(bounds["upper"]), expected_upper, 0.000000001)
+		if expected_upper < stand_cap:
+			reach_limited += 1
 		if float(bounds["lower"]) > float(fit["rest_hips_y"]):
 			strict_conflicts += 1
 	assert_gt(strict_conflicts, 0, "the tolerance is necessary for this fixture")
+	assert_eq(reach_limited, 2, "the last two samples are limited by leg reach")
 
 
 func test_walk_exhausted_search_refuses_unfit_bake() -> void:
@@ -1329,12 +1349,14 @@ func test_walk_path_search_preserves_material_stance_slope_and_shared_table() ->
 			specs.append({"entry": entry, "shift": 0.0})
 	ctx["fit_failures"] = ["existing_failure"]
 	var searched: Dictionary = BodyBake._search_person_walk_path(ctx, ctx["footlock_walk"], specs)
+	print("WALK_SEARCH_WORK fixture=stick ok=%s geometry=%d skin=%d budget=%s" % [str(searched["ok"]), int(searched["geometry_count"]), int(searched["skin_count"]), JSON.stringify(searched["budget"])])
 	assert_true(bool(searched["ok"]), "stick rig must provide an accepted bounded path")
 	assert_false(bool(searched["budget"]["exhausted"]), "the unchanged work budget must suffice")
 	for kind: String in ["bounds", "ik", "project", "paths"]:
 		assert_lte(int(searched["budget"]["used"].get(kind, 0)), int(searched["budget"]["limits"][kind]))
 	assert_eq(ctx["fit_failures"], ["existing_failure"], "successful search preserves the caller's refusal list")
 	if not bool(searched["ok"]):
+		print("WALK_STICK_DIAGNOSTIC " + JSON.stringify(searched["witness"]))
 		return
 	assert_lte(int(searched["geometry_count"]), 4096)
 	assert_lte(int(searched["skin_count"]), 64)
@@ -1375,13 +1397,15 @@ func test_walk_total_budget_stops_search_and_is_shared_across_retries() -> void:
 
 
 func test_walk_projection_budget_reserves_a_whole_sweep() -> void:
-	var budget: Dictionary = BodyBake._person_walk_budget({"project": 1})
-	var rows: Array = [BodyBake._person_walk_height_row(PackedInt32Array([0]), PackedFloat64Array([1.0]), 0.0)]
-	var result: Dictionary = BodyBake._project_person_walk_height(rows, PackedFloat64Array([2.0]), 512, budget)
+	# Two rows leave one credit, insufficient to reserve the next whole sweep.
+	var budget: Dictionary = BodyBake._person_walk_budget({"project": 3})
+	var rows: Array = [BodyBake._person_walk_height_row(PackedInt32Array([0, 1]), PackedFloat64Array([1.0, 1.0]), 0.0),
+		BodyBake._person_walk_height_row(PackedInt32Array([1]), PackedFloat64Array([-1.0]), -1.0)]
+	var result: Dictionary = BodyBake._project_person_walk_height(rows, PackedFloat64Array([2.0, 2.0]), 512, budget)
 	assert_false(bool(result["converged"]))
 	assert_eq(str(result["reason"]), "FOOT_PATH_BUDGET")
 	assert_eq(int(result["sweeps"]), 1)
-	assert_eq(int(budget["used"]["project"]), 1)
+	assert_eq(int(budget["used"]["project"]), 2)
 	assert_eq(float(result["coefficients"][0]), 0.0, "only the reserved sweep ran")
 
 
@@ -1394,6 +1418,58 @@ func test_walk_clip_ik_budget_stops_before_the_next_pair() -> void:
 	assert_eq(int(budget["clips"]["p_walk"]["ik"]), 1)
 	assert_false(BodyBake._person_walk_spend(budget, "ik", "p_walk_long"))
 	assert_eq(int(budget["used"]["ik"]), 2, "exhaustion is sticky across clips")
+
+
+func test_walk_projection_accepts_feasibility_before_small_coefficient_change() -> void:
+	var rows: Array = [BodyBake._person_walk_height_row(PackedInt32Array([0]), PackedFloat64Array([1.0]), 0.0)]
+	var budget: Dictionary = BodyBake._person_walk_budget({"project": 1})
+	var result: Dictionary = BodyBake._project_person_walk_height(rows, PackedFloat64Array([2.0]), 512, budget)
+	assert_true(bool(result["converged"]), "a two-metre correction already reaches the feasible set")
+	assert_eq(int(result["sweeps"]), 1)
+	assert_eq(float(result["max_violation"]), 0.0)
+	assert_eq(float(result["coefficients"][0]), 0.0)
+	assert_false(bool(budget["exhausted"]))
+	assert_eq(int(budget["used"]["project"]), 1)
+
+
+func test_walk_projection_uses_one_micrometre_feasibility() -> void:
+	var rows: Array = [BodyBake._person_walk_height_row(PackedInt32Array([0]), PackedFloat64Array([1.0]), 0.0),
+		BodyBake._person_walk_height_row(PackedInt32Array([0]), PackedFloat64Array([-1.0]), -0.0000005)]
+	var result: Dictionary = BodyBake._project_person_walk_height(rows, PackedFloat64Array([0.0]))
+	assert_eq(BodyBake.PERSON_WALK_PROJECT_FEASIBILITY_M, 0.000001)
+	assert_true(bool(result["converged"]))
+	assert_eq(int(result["sweeps"]), 1)
+	assert_almost_eq(float(result["max_violation"]), 0.0000005, 0.000000000001)
+
+
+func test_walk_projection_stall_records_residual_and_spent_sweeps() -> void:
+	var rows: Array = [BodyBake._person_walk_height_row(PackedInt32Array([0]), PackedFloat64Array([1.0]), 0.0),
+		BodyBake._person_walk_height_row(PackedInt32Array([0]), PackedFloat64Array([-1.0]), -0.01)]
+	var budget: Dictionary = BodyBake._person_walk_budget()
+	var result: Dictionary = BodyBake._project_person_walk_height(rows, PackedFloat64Array([0.0]), 512, budget)
+	assert_false(bool(result["converged"]))
+	assert_eq(str(result["reason"]), "HEIGHT_PROJECT_STALLED")
+	assert_eq(int(result["stale_sweeps"]), BodyBake.PERSON_WALK_PROJECT_STALL_SWEEPS)
+	assert_eq(int(result["sweeps"]), BodyBake.PERSON_WALK_PROJECT_STALL_SWEEPS + 1)
+	assert_lt(int(result["sweeps"]), BodyBake.PERSON_WALK_PROJECT_SWEEPS)
+	assert_almost_eq(float(result["max_violation"]), 0.01, 0.000000001)
+	assert_eq(int(budget["used"]["project"]), int(result["sweeps"]) * rows.size())
+	assert_false(bool(budget["exhausted"]))
+	var witness: Dictionary = BodyBake._person_walk_skin_witness({"reason": result["reason"], "table": {"projection": result}})
+	assert_eq(int(witness["projection_sweeps"]), int(result["sweeps"]))
+	assert_eq(float(witness["projection_max_violation"]), float(result["max_violation"]))
+
+
+func test_walk_projection_keeps_mean_rows_at_one_nanometre() -> void:
+	var mean_row: Dictionary = BodyBake._person_walk_height_row(PackedInt32Array([0]), PackedFloat64Array([-1.0]), -0.95)
+	mean_row["epsilon_m"] = BodyBake.PERSON_WALK_MEAN_EPSILON
+	var rows: Array = [mean_row, BodyBake._person_walk_height_row(PackedInt32Array([0]), PackedFloat64Array([1.0]), 0.9499995)]
+	var result: Dictionary = BodyBake._project_person_walk_height(rows, PackedFloat64Array([0.95]))
+	assert_eq(BodyBake.PERSON_WALK_MEAN_EPSILON, 0.000000001)
+	assert_false(bool(result["converged"]), "half a micrometre cannot pass a mean row")
+	assert_eq(str(result["reason"]), "HEIGHT_PROJECT_STALLED")
+	assert_lt(float(result["max_violation"]), BodyBake.PERSON_WALK_PROJECT_FEASIBILITY_M)
+	assert_gt(float(result["max_violation"]), BodyBake.PERSON_WALK_MEAN_EPSILON)
 
 
 func test_walk_failed_bake_cannot_be_compacted_as_empty_bytes() -> void:
@@ -1540,6 +1616,7 @@ func test_walk_original_ratio_full_search_keeps_all_saved_gates() -> void:
 		if BodyBake.PERSON_FOOT_LOCK.has(entry[0]):
 			specs.append({"entry": entry, "shift": 0.0})
 	var result: Dictionary = BodyBake._search_person_walk_path(ctx, fit, specs)
+	print("WALK_SEARCH_WORK fixture=original_ratio_short ok=%s geometry=%d skin=%d budget=%s" % [str(result["ok"]), int(result["geometry_count"]), int(result["skin_count"]), JSON.stringify(result["budget"])])
 	assert_true(bool(result["ok"]), "short original proportions must pass the full search")
 	assert_false(bool(result["budget"]["exhausted"]), "the short rig uses the unchanged work budget")
 	for kind: String in ["bounds", "ik", "project", "paths"]:
