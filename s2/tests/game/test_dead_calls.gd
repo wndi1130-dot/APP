@@ -237,6 +237,24 @@ func test_the_rasp_before_a_run_is_its_own_once_in() -> void:
 	assert_almost_eq(float(a.last_shot.pitch_scale), float(a.TELL_STANDIN_PITCH), 0.001, "a moan pitched up stands in")
 
 
+## The rasp before a run is a rule's warning, heard even from one of the dead
+## out of sight (decision 509's own exception): behind the player it still rasps.
+func test_the_rasp_before_a_run_is_heard_out_of_sight_too() -> void:
+	var at := _face_east()
+	var a = game.audio
+	a.lib[a.TELL_GROUP] = [_tone(1), _tone(2)]
+	var behind: Vector3 = at + Vector3(-3, 0, 0)
+	assert_false(a.in_view(behind), "behind the player: out of sight")
+	a.played.clear()
+	a.last_shot = null
+	a.lunge_tell(behind)
+	assert_eq(a.played.count(a.TELL_GROUP), 1, "the warning is given")
+	assert_not_null(a.last_shot, "and heard")
+	if a.last_shot != null:
+		assert_true(a.last_shot.stream in a.lib[a.TELL_GROUP], "its own rasp")
+		assert_gt(float(a.last_shot.volume_db), -40.0, "not muted for being unseen")
+
+
 func test_the_shipped_calls_are_short() -> void:
 	var a = game.audio
 	for g in ["dead_notice", "dead_hit", "dead_fall", "lunge_tell"]:
