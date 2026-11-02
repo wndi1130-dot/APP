@@ -38,3 +38,18 @@ func test_ring_and_rim_colours_have_low_saturation() -> void:
 	for name: String in colours:
 		var colour: Color = colours[name]
 		assert_lt(colour.s, 0.25, "%s stays quiet on snow" % name)
+
+
+func test_every_motif_keeps_the_ring_outer_edge() -> void:
+	var rect := Rect2(0, 0, 84, 84)
+	var plain := HudSkin.Plate.new()
+	plain.setup(Vector2.ONE * 84.0, true, HudSkin.Light.NONE)
+	var edge: Vector2 = plain.ring_band(plain._shape(rect))
+	for motif: String in ["stitch", "tape", "hammered", "twine", "rivet"]:
+		var plate := HudSkin.Plate.new()
+		plate.setup(Vector2.ONE * 84.0, true, HudSkin.Light.NONE)
+		plate.motif = motif
+		var band: Vector2 = plate.ring_band(plate._shape(rect))
+		assert_almost_eq(band.y, edge.y, 0.001, motif + ": outer edge where it was")
+		assert_true(band.x <= edge.x + 0.001, motif + ": a thicker ring grows inward")
+		assert_true(band.x > 0.0, motif + ": the ring leaves the middle open")

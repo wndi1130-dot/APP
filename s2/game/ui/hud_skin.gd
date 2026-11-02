@@ -285,6 +285,14 @@ class Plate extends StyleBox:
 		var t: float = clampf((p - r.get_center()).dot(dir) / maxf(span, 1.0) + 0.5, 0.0, 1.0)
 		return RIM1.lerp(RIM3, t * 2.0) if t < 0.5 else RIM3.lerp(RIM2, (t - 0.5) * 2.0)
 
+	## Inner and outer radius of a round key's drawn ring, line width included. A thicker
+	## ring grows inward only, so the key's outer edge stays where it was.
+	func ring_band(r: Rect2) -> Vector2:
+		var rad: float = r.size.x * 0.5
+		var width: float = ring_w * (1.4 if motif == "hammered" else 1.0)
+		var outer: float = rad + ring_w * 0.5
+		return Vector2(outer - width, outer)
+
 	func _ring_color() -> Color:
 		match motif:
 			"stitch":
@@ -412,8 +420,9 @@ class Plate extends StyleBox:
 		elif ring.a > 0.0:
 			var width: float = ring_w
 			if round_key and motif == "hammered":
-				width *= 1.4
-				loop = _outline(r.grow(-width * 0.5))
+				var band := ring_band(r)
+				width = band.y - band.x
+				loop = _outline(r.grow((band.x + band.y) * 0.5 - r.size.x * 0.5))
 				loop.append(loop[0])
 			var ink: Color = _ring_color() if round_key else ring
 			rs.canvas_item_add_polyline(to_canvas_item, loop, PackedColorArray([Color(ink.r, ink.g, ink.b, ring.a * dim)]), width, true)
