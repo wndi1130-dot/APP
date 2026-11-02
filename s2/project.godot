@@ -32,6 +32,7 @@ common/physics_ticks_per_second=30
 [shader_globals]
 ; Weather state for every fx shader. Only fx/fx_state.gd writes these
 ; (docs/design/briefs/shaders.md 3장).
+; Exception: fx_fill* is written only by field_game.gd's fill state functions.
 
 fx_wet={
 "type": "float",
@@ -68,6 +69,14 @@ fx_still={
 fx_cold={
 "type": "vec4",
 "value": Vector4(1, 1, 0, 0)
+}
+fx_fill_dir={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+fx_fill={
+"type": "vec4",
+"value": Vector4(0, 0, 0, 0)
 }
 fx_sky={
 "type": "color",
