@@ -590,6 +590,13 @@ func _ready() -> void:
 	map_edge = MapEdge.new()
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
+	# 경계 무리의 시야/반응 갱신은 자식이 맡는다. 꺼짐 판은 자원 로드 전 반환.
+	var horde_settings: Dictionary = _perf_settings.duplicate()
+	horde_settings.merge(PerfSwitch._valid(opts.get("perf", {})), true)
+	await preload("res://game/world/horde_view.gd").attach(self,
+		preload("res://game/world/horde_view.gd").stop_walls(data, opts, horde_settings, Vector2(view.grid.width, view.grid.height)),
+		{"map_size": Vector2(view.grid.width, view.grid.height), "grid": view.grid, "vis_texture": view.vis_texture,
+			"material": view.material, "field": self, "staged": bool(opts.get("staged", false))}, pace, horde_settings)
 	blood_fx = BloodFx.new()
 	add_child(blood_fx)
 	blood_fx.begin_stop(int(opts.get("seed", 1)))
