@@ -536,6 +536,8 @@ static func _resolve_choice(g0: Dictionary, t: Dictionary, card: Dictionary, v: 
 			if selected["special"] == "crisis_guard": Ladder.guard(g, "tail")
 			else: Ladder.concede(g)
 	Content.content_choose(g, t, card, selected)
+	# S1 dark card extension closes after special handling, before the choice log.
+	if g.get("phase") == "end": load("res://game/train/train_chronicle.gd").close_chronicle(g, t)
 	# hub.ts registers hubChoose for every accepted card, including non-hub cards.
 	var hub: Dictionary = C.hub(g)
 	if not hub.has("lines"): hub["lines"] = []

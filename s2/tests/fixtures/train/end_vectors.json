@@ -1,5 +1,5 @@
 {
-  "format": "end-vectors-v2",
+  "format": "end-vectors-v3",
   "darkGameplay": false,
   "loco": "c3",
   "cases": [
@@ -15291,7 +15291,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [],
       "expectedState": {
@@ -15299,7 +15326,27 @@
         "crossed": [],
         "nightmareUntil": -1,
         "nightmareCards": 0,
-        "numb": false
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "hope",
@@ -15623,7 +15670,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [],
       "expectedState": {
@@ -15631,7 +15705,27 @@
         "crossed": [],
         "nightmareUntil": -1,
         "nightmareCards": 0,
-        "numb": false
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "hope_cost",
@@ -15955,7 +16049,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "exiles"
@@ -15972,7 +16093,27 @@
         ],
         "nightmareUntil": 6,
         "nightmareCards": 3,
-        "numb": false
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "shade",
@@ -16296,7 +16437,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "exiles"
@@ -16313,7 +16481,27 @@
         ],
         "nightmareUntil": 6,
         "nightmareCards": 3,
-        "numb": false
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "tragedy",
@@ -16637,7 +16825,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "assn_ordered",
@@ -16660,7 +16875,27 @@
         ],
         "nightmareUntil": 6,
         "nightmareCards": 3,
-        "numb": true
+        "numb": true,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "worth",
@@ -16984,7 +17219,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "assn_ordered",
@@ -17007,7 +17269,27 @@
         ],
         "nightmareUntil": 6,
         "nightmareCards": 3,
-        "numb": true
+        "numb": true,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "despair",
@@ -17331,7 +17613,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "martial",
@@ -17356,7 +17665,27 @@
         ],
         "nightmareUntil": 6,
         "nightmareCards": 3,
-        "numb": true
+        "numb": true,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "worth",
@@ -17680,7 +18009,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "martial",
@@ -17705,7 +18061,27 @@
         ],
         "nightmareUntil": 6,
         "nightmareCards": 3,
-        "numb": true
+        "numb": true,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "despair",
@@ -18029,7 +18405,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "martial",
@@ -18050,7 +18453,27 @@
         ],
         "nightmareUntil": 6,
         "nightmareCards": 3,
-        "numb": false
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "shade",
@@ -18374,7 +18797,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "martial",
@@ -18395,7 +18845,27 @@
         ],
         "nightmareUntil": 6,
         "nightmareCards": 3,
-        "numb": false
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "tragedy",
@@ -18727,7 +19197,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "harsh_chosen"
@@ -18739,7 +19236,27 @@
         "crossed": [],
         "nightmareUntil": -1,
         "nightmareCards": 0,
-        "numb": false
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "hope_cost",
@@ -19071,7 +19588,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "harsh_chosen"
@@ -19083,7 +19627,27 @@
         "crossed": [],
         "nightmareUntil": -1,
         "nightmareCards": 0,
-        "numb": false
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "hope_cost",
@@ -19407,7 +19971,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "assn_ordered",
@@ -19490,7 +20081,27 @@
         ],
         "nightmareUntil": 6,
         "nightmareCards": 3,
-        "numb": true
+        "numb": true,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "worth",
@@ -19814,7 +20425,34 @@
           "drops": 0,
           "freezes": 0
         },
-        "loco": "c3"
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
       },
       "operations": [
         "assn_ordered",
@@ -19897,7 +20535,27 @@
         ],
         "nightmareUntil": 6,
         "nightmareCards": 3,
-        "numb": true
+        "numb": true,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       },
       "expected": {
         "tone": "despair",
@@ -20255,6 +20913,8 @@
           "기록 시험 이름": "tail"
         }
       },
+      "uid": -1,
+      "index": -1,
       "end": "ousted",
       "journal": [
         {
@@ -20280,27 +20940,32 @@
           "text": "기록: 징후 0, 폭력 0(사망 0), 선을 넘음 0, 수단 0, 망설임 0배."
         }
       ],
-      "h7": {
-        "hesitation": 0,
-        "hesitationN": 0,
-        "crossingShown": 0,
-        "crossingShownWithAlt": 0,
-        "crossings": 0,
-        "means": 0,
-        "signs": 0,
-        "imminent": 0,
-        "violent": 0,
-        "violentDeaths": 0,
-        "cases": 0,
-        "solved": 0,
-        "misjudged": 0,
-        "trials": 0,
-        "scapegoats": 0,
-        "lynches": 0,
-        "orders": 0,
-        "revealed": 0,
-        "risen": 0,
-        "cardsDeferred": 0
+      "dark": {
+        "means": {},
+        "crossed": [],
+        "nightmareUntil": -1,
+        "nightmareCards": 0,
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": true
       },
       "toneLine": "많이 잃었다. 이름들. 그래도 열차장은 끝까지 사람을 팔지 않았다."
     },
@@ -20626,6 +21291,379 @@
           "기록 시험 이름": "tail"
         }
       },
+      "uid": -1,
+      "index": -1,
+      "end": "revolt",
+      "journal": [
+        {
+          "seg": 1,
+          "text": "볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간."
+        },
+        {
+          "seg": 4,
+          "text": "돌이켜 보면, 4째 정산에서 석탄과 식량이 함께 바닥을 보였다.",
+          "tone": "dark"
+        }
+      ],
+      "dark": {
+        "means": {},
+        "crossed": [],
+        "nightmareUntil": -1,
+        "nightmareCards": 0,
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
+      },
+      "toneLine": "많이 잃었다. 이름들. 그래도 열차장은 끝까지 사람을 팔지 않았다."
+    },
+    {
+      "kind": "choose_card",
+      "input": {
+        "version": 1,
+        "seed": "end-hook-choose_card",
+        "rng": {
+          "algorithm": "mulberry32-v1",
+          "state": 1647472003
+        },
+        "seg": 4,
+        "phase": "prep",
+        "session": 0,
+        "coal": 10,
+        "food": 20,
+        "med": 20,
+        "lux": 8,
+        "trust": 50,
+        "tension": 20,
+        "fear": 0,
+        "injured": 0,
+        "symbols": 0,
+        "comms": {
+          "tail": {
+            "base": [
+              35,
+              40,
+              75,
+              60
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": -20,
+            "coh": 0.55,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 90,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_025",
+              "name": "유제프 켕지에르스키",
+              "age": 45,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "medtech": {
+            "base": [
+              55,
+              50,
+              45,
+              25
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 5,
+            "coh": 0.7,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_139",
+              "name": "카밀라 호르바트호바",
+              "age": 62,
+              "trait": "greed",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "guard": {
+            "base": [
+              55,
+              55,
+              45,
+              55
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 15,
+            "coh": 0.8,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_158",
+              "name": "톰 나우만",
+              "age": 48,
+              "trait": "ideal",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "front": {
+            "base": [
+              75,
+              65,
+              20,
+              10
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 20,
+            "coh": 0.65,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_102",
+              "name": "마리안나 카스프샤크",
+              "age": 60,
+              "trait": "ambition",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "engine": {
+            "base": [
+              80,
+              55,
+              40,
+              45
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 10,
+            "coh": 0.85,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_181",
+              "name": "야르밀라 부레쇼바",
+              "age": 64,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          }
+        },
+        "passed": {},
+        "repealedAt": {},
+        "boughtBy": {},
+        "secrets": [
+          {
+            "id": 1,
+            "text": "앞칸 사람에게 빚이 있다",
+            "weight": 1,
+            "about": "engine",
+            "uses": 0
+          }
+        ],
+        "nextSecretId": 2,
+        "leashes": [],
+        "blackmails": 0,
+        "corpseIssue": false,
+        "thrown": 0,
+        "stored": 0,
+        "deaths": [],
+        "strikes": 0,
+        "inStrike": false,
+        "strikeWarned": -99,
+        "lostSegments": 0,
+        "trustCrisis": null,
+        "tensionWarned": false,
+        "tensionCrisisUsed": 0,
+        "riot": {
+          "prev": 20,
+          "stage": 0,
+          "fire": [],
+          "scorched": [],
+          "spilled": 0,
+          "riots": 0,
+          "protests": 0,
+          "riotCards": 0,
+          "fell": 0,
+          "died": 0
+        },
+        "emergencyUsed": false,
+        "guidedLeft": 0,
+        "decreeLeft": 0,
+        "guardEscort": false,
+        "forcedRun": false,
+        "autoLevers": false,
+        "actedSeg": 0,
+        "proposals": [],
+        "agendaHolder": null,
+        "cards": [
+          {
+            "uid": 1,
+            "kind": "tension_crisis",
+            "comm": "tail"
+          }
+        ],
+        "recentEvents": [],
+        "eventLog": {},
+        "needs": {},
+        "emergencyCalls": [],
+        "hunger": 0,
+        "linesSeen": [],
+        "hiddenBites": [],
+        "nextCardUid": 2,
+        "stop": null,
+        "council": null,
+        "lastSettle": null,
+        "journal": [
+          {
+            "seg": 1,
+            "text": "볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간."
+          }
+        ],
+        "usedProfiles": [
+          "p_025",
+          "p_139",
+          "p_158",
+          "p_102",
+          "p_181"
+        ],
+        "end": null,
+        "stats": {
+          "dealsMade": 0,
+          "promisesKept": 0,
+          "promisesBroken": 0,
+          "lawsPassed": 0,
+          "lawsFailed": 0,
+          "repeals": 0,
+          "bribes": 0,
+          "blackmails": 0
+        },
+        "story": {
+          "stage": 1,
+          "flags": {
+            "first_death": false,
+            "first_corpse_agenda": "none"
+          }
+        },
+        "climate": true,
+        "outside": 1,
+        "freeze": 0,
+        "climateStats": {
+          "drops": 0,
+          "freezes": 0
+        },
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        },
+        "raised": {
+          "기록 시험 이름": "tail"
+        }
+      },
+      "uid": 1,
+      "index": 2,
       "end": "revolt",
       "journal": [
         {
@@ -20640,31 +21678,362 @@
         {
           "seg": 4,
           "text": "기록: 징후 0, 폭력 0(사망 0), 선을 넘음 0, 수단 0, 망설임 0배."
+        },
+        {
+          "seg": 4,
+          "text": "통로가 막혀도 아무것도 하지 않았다."
         }
       ],
-      "h7": {
-        "hesitation": 0,
-        "hesitationN": 0,
-        "crossingShown": 0,
-        "crossingShownWithAlt": 0,
-        "crossings": 0,
-        "means": 0,
-        "signs": 0,
-        "imminent": 0,
-        "violent": 0,
-        "violentDeaths": 0,
-        "cases": 0,
-        "solved": 0,
-        "misjudged": 0,
-        "trials": 0,
-        "scapegoats": 0,
-        "lynches": 0,
-        "orders": 0,
-        "revealed": 0,
-        "risen": 0,
-        "cardsDeferred": 0
+      "dark": {
+        "means": {},
+        "crossed": [],
+        "nightmareUntil": -1,
+        "nightmareCards": 0,
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": true
       },
       "toneLine": "많이 잃었다. 이름들. 그래도 열차장은 끝까지 사람을 팔지 않았다."
+    },
+    {
+      "kind": "choose_card_off",
+      "input": {
+        "version": 1,
+        "seed": "end-hook-choose_card_off",
+        "rng": {
+          "algorithm": "mulberry32-v1",
+          "state": 4070821577
+        },
+        "seg": 4,
+        "phase": "prep",
+        "session": 0,
+        "coal": 10,
+        "food": 20,
+        "med": 20,
+        "lux": 8,
+        "trust": 50,
+        "tension": 20,
+        "fear": 0,
+        "injured": 0,
+        "symbols": 0,
+        "comms": {
+          "tail": {
+            "base": [
+              35,
+              40,
+              75,
+              60
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": -20,
+            "coh": 0.55,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 90,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_025",
+              "name": "유제프 켕지에르스키",
+              "age": 45,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "medtech": {
+            "base": [
+              55,
+              50,
+              45,
+              25
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 5,
+            "coh": 0.7,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_139",
+              "name": "카밀라 호르바트호바",
+              "age": 62,
+              "trait": "greed",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "guard": {
+            "base": [
+              55,
+              55,
+              45,
+              55
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 15,
+            "coh": 0.8,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_158",
+              "name": "톰 나우만",
+              "age": 48,
+              "trait": "ideal",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "front": {
+            "base": [
+              75,
+              65,
+              20,
+              10
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 20,
+            "coh": 0.65,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_102",
+              "name": "마리안나 카스프샤크",
+              "age": 60,
+              "trait": "ambition",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "engine": {
+            "base": [
+              80,
+              55,
+              40,
+              45
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 10,
+            "coh": 0.85,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_181",
+              "name": "야르밀라 부레쇼바",
+              "age": 64,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          }
+        },
+        "passed": {},
+        "repealedAt": {},
+        "boughtBy": {},
+        "secrets": [
+          {
+            "id": 1,
+            "text": "앞칸 사람에게 빚이 있다",
+            "weight": 1,
+            "about": "engine",
+            "uses": 0
+          }
+        ],
+        "nextSecretId": 2,
+        "leashes": [],
+        "blackmails": 0,
+        "corpseIssue": false,
+        "thrown": 0,
+        "stored": 0,
+        "deaths": [],
+        "strikes": 0,
+        "inStrike": false,
+        "strikeWarned": -99,
+        "lostSegments": 0,
+        "trustCrisis": null,
+        "tensionWarned": false,
+        "tensionCrisisUsed": 0,
+        "riot": {
+          "prev": 20,
+          "stage": 0,
+          "fire": [],
+          "scorched": [],
+          "spilled": 0,
+          "riots": 0,
+          "protests": 0,
+          "riotCards": 0,
+          "fell": 0,
+          "died": 0
+        },
+        "emergencyUsed": false,
+        "guidedLeft": 0,
+        "decreeLeft": 0,
+        "guardEscort": false,
+        "forcedRun": false,
+        "autoLevers": false,
+        "actedSeg": 0,
+        "proposals": [],
+        "agendaHolder": null,
+        "cards": [
+          {
+            "uid": 1,
+            "kind": "tension_crisis",
+            "comm": "tail"
+          }
+        ],
+        "recentEvents": [],
+        "eventLog": {},
+        "needs": {},
+        "emergencyCalls": [],
+        "hunger": 0,
+        "linesSeen": [],
+        "hiddenBites": [],
+        "nextCardUid": 2,
+        "stop": null,
+        "council": null,
+        "lastSettle": null,
+        "journal": [
+          {
+            "seg": 1,
+            "text": "볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간."
+          }
+        ],
+        "usedProfiles": [
+          "p_025",
+          "p_139",
+          "p_158",
+          "p_102",
+          "p_181"
+        ],
+        "end": null,
+        "stats": {
+          "dealsMade": 0,
+          "promisesKept": 0,
+          "promisesBroken": 0,
+          "lawsPassed": 0,
+          "lawsFailed": 0,
+          "repeals": 0,
+          "bribes": 0,
+          "blackmails": 0
+        },
+        "story": {
+          "stage": 1,
+          "flags": {
+            "first_death": false,
+            "first_corpse_agenda": "none"
+          }
+        },
+        "climate": true,
+        "outside": 1,
+        "freeze": 0,
+        "climateStats": {
+          "drops": 0,
+          "freezes": 0
+        },
+        "loco": "c3",
+        "raised": {
+          "기록 시험 이름": "tail"
+        }
+      },
+      "uid": 1,
+      "index": 2,
+      "end": "revolt",
+      "journal": [
+        {
+          "seg": 1,
+          "text": "볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간."
+        },
+        {
+          "seg": 4,
+          "text": "돌이켜 보면, 4째 정산에서 석탄과 식량이 함께 바닥을 보였다.",
+          "tone": "dark"
+        },
+        {
+          "seg": 4,
+          "text": "통로가 막혀도 아무것도 하지 않았다."
+        }
+      ],
+      "dark": null,
+      "toneLine": ""
     }
   ],
   "wall": {
@@ -21123,6 +22492,33 @@
         },
         "skip": {},
         "coalStops": 0
+      },
+      "dark": {
+        "means": {},
+        "crossed": [],
+        "nightmareUntil": -1,
+        "nightmareCards": 0,
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
       }
     },
     "expected": {
@@ -21472,7 +22868,34 @@
         "drops": 0,
         "freezes": 0
       },
-      "loco": "c3"
+      "loco": "c3",
+      "dark": {
+        "means": {},
+        "crossed": [],
+        "nightmareUntil": -1,
+        "nightmareCards": 0,
+        "numb": false,
+        "h7": [],
+        "stats": {
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "joined": [],
+        "scenes": [],
+        "closed": false
+      }
     },
     "picks": [
       {
@@ -21562,319 +22985,1785 @@
       "closeLine": "기록: 징후 0, 폭력 0(사망 0), 선을 넘음 0, 수단 0, 망설임 3배."
     }
   },
-  "card": {
-    "input": {
-      "version": 1,
-      "seed": "end-h7-card",
-      "rng": {
-        "algorithm": "mulberry32-v1",
-        "state": 2389294573
-      },
-      "seg": 1,
-      "phase": "prep",
-      "session": 0,
-      "coal": 100,
-      "food": 100,
-      "med": 20,
-      "lux": 8,
-      "trust": 50,
-      "tension": 20,
-      "fear": 0,
-      "injured": 0,
-      "symbols": 0,
-      "comms": {
-        "tail": {
-          "base": [
-            35,
-            40,
-            75,
-            60
-          ],
-          "heat": 2,
-          "ration": 2,
-          "rel": -20,
-          "coh": 0.55,
-          "fervor": 0,
-          "badStreak": 0,
-          "backStreak": 0,
-          "grudge": 0,
-          "lastOffense": 0,
-          "demandCool": 1,
-          "favorCool": 2,
-          "agitateCool": 2,
-          "pop": 90,
-          "away": 0,
-          "debt": false,
-          "leader": {
-            "personId": "p_025",
-            "name": "유제프 켕지에르스키",
-            "age": 45,
-            "trait": "fear",
-            "traitShown": 0
-          },
-          "promise": null,
-          "supportedAt": -99,
-          "cutAt": [],
-          "disgraced": false
+  "cards": [
+    {
+      "id": "demand",
+      "input": {
+        "version": 1,
+        "seed": "end-h7-card",
+        "rng": {
+          "algorithm": "mulberry32-v1",
+          "state": 2389294573
         },
-        "medtech": {
-          "base": [
-            55,
-            50,
-            45,
-            25
-          ],
-          "heat": 2,
-          "ration": 2,
-          "rel": 5,
-          "coh": 0.7,
-          "fervor": 0,
-          "badStreak": 0,
-          "backStreak": 0,
-          "grudge": 0,
-          "lastOffense": 0,
-          "demandCool": 1,
-          "favorCool": 2,
-          "agitateCool": 2,
-          "pop": 30,
-          "away": 0,
-          "debt": false,
-          "leader": {
-            "personId": "p_139",
-            "name": "카밀라 호르바트호바",
-            "age": 62,
-            "trait": "greed",
-            "traitShown": 0
+        "seg": 1,
+        "phase": "prep",
+        "session": 0,
+        "coal": 100,
+        "food": 100,
+        "med": 20,
+        "lux": 8,
+        "trust": 50,
+        "tension": 20,
+        "fear": 0,
+        "injured": 0,
+        "symbols": 0,
+        "comms": {
+          "tail": {
+            "base": [
+              35,
+              40,
+              75,
+              60
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": -20,
+            "coh": 0.55,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 90,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_025",
+              "name": "유제프 켕지에르스키",
+              "age": 45,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
           },
-          "promise": null,
-          "supportedAt": -99,
-          "cutAt": [],
-          "disgraced": false
+          "medtech": {
+            "base": [
+              55,
+              50,
+              45,
+              25
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 5,
+            "coh": 0.7,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_139",
+              "name": "카밀라 호르바트호바",
+              "age": 62,
+              "trait": "greed",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "guard": {
+            "base": [
+              55,
+              55,
+              45,
+              55
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 15,
+            "coh": 0.8,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_158",
+              "name": "톰 나우만",
+              "age": 48,
+              "trait": "ideal",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "front": {
+            "base": [
+              75,
+              65,
+              20,
+              10
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 20,
+            "coh": 0.65,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_102",
+              "name": "마리안나 카스프샤크",
+              "age": 60,
+              "trait": "ambition",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "engine": {
+            "base": [
+              80,
+              55,
+              40,
+              45
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 10,
+            "coh": 0.85,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_181",
+              "name": "야르밀라 부레쇼바",
+              "age": 64,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          }
         },
-        "guard": {
-          "base": [
-            55,
-            55,
-            45,
-            55
-          ],
-          "heat": 2,
-          "ration": 2,
-          "rel": 15,
-          "coh": 0.8,
-          "fervor": 0,
-          "badStreak": 0,
-          "backStreak": 0,
-          "grudge": 0,
-          "lastOffense": 0,
-          "demandCool": 1,
-          "favorCool": 2,
-          "agitateCool": 2,
-          "pop": 25,
-          "away": 0,
-          "debt": false,
-          "leader": {
-            "personId": "p_158",
-            "name": "톰 나우만",
-            "age": 48,
-            "trait": "ideal",
-            "traitShown": 0
-          },
-          "promise": null,
-          "supportedAt": -99,
-          "cutAt": [],
-          "disgraced": false
+        "passed": {},
+        "repealedAt": {},
+        "boughtBy": {},
+        "secrets": [
+          {
+            "id": 1,
+            "text": "앞칸 사람에게 빚이 있다",
+            "weight": 1,
+            "about": "engine",
+            "uses": 0
+          }
+        ],
+        "nextSecretId": 2,
+        "leashes": [],
+        "blackmails": 0,
+        "corpseIssue": false,
+        "thrown": 0,
+        "stored": 0,
+        "deaths": [],
+        "strikes": 0,
+        "inStrike": false,
+        "strikeWarned": -99,
+        "lostSegments": 0,
+        "trustCrisis": null,
+        "tensionWarned": false,
+        "tensionCrisisUsed": 0,
+        "riot": {
+          "prev": 20,
+          "stage": 0,
+          "fire": [],
+          "scorched": [],
+          "spilled": 0,
+          "riots": 0,
+          "protests": 0,
+          "riotCards": 0,
+          "fell": 0,
+          "died": 0
         },
-        "front": {
-          "base": [
-            75,
-            65,
-            20,
-            10
-          ],
-          "heat": 2,
-          "ration": 2,
-          "rel": 20,
-          "coh": 0.65,
-          "fervor": 0,
-          "badStreak": 0,
-          "backStreak": 0,
-          "grudge": 0,
-          "lastOffense": 0,
-          "demandCool": 1,
-          "favorCool": 2,
-          "agitateCool": 2,
-          "pop": 30,
-          "away": 0,
-          "debt": false,
-          "leader": {
-            "personId": "p_102",
-            "name": "마리안나 카스프샤크",
-            "age": 60,
-            "trait": "ambition",
-            "traitShown": 0
-          },
-          "promise": null,
-          "supportedAt": -99,
-          "cutAt": [],
-          "disgraced": false
+        "emergencyUsed": false,
+        "guidedLeft": 0,
+        "decreeLeft": 0,
+        "guardEscort": false,
+        "forcedRun": false,
+        "autoLevers": false,
+        "actedSeg": 0,
+        "proposals": [],
+        "agendaHolder": null,
+        "cards": [
+          {
+            "uid": 1,
+            "kind": "demand",
+            "comm": "tail"
+          }
+        ],
+        "recentEvents": [],
+        "eventLog": {},
+        "needs": {},
+        "emergencyCalls": [],
+        "hunger": 0,
+        "linesSeen": [],
+        "hiddenBites": [],
+        "nextCardUid": 2,
+        "stop": null,
+        "council": null,
+        "lastSettle": null,
+        "journal": [
+          {
+            "seg": 1,
+            "text": "볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간."
+          }
+        ],
+        "usedProfiles": [
+          "p_025",
+          "p_139",
+          "p_158",
+          "p_102",
+          "p_181"
+        ],
+        "end": null,
+        "stats": {
+          "dealsMade": 0,
+          "promisesKept": 0,
+          "promisesBroken": 0,
+          "lawsPassed": 0,
+          "lawsFailed": 0,
+          "repeals": 0,
+          "bribes": 0,
+          "blackmails": 0
         },
-        "engine": {
-          "base": [
-            80,
-            55,
-            40,
-            45
-          ],
-          "heat": 2,
-          "ration": 2,
-          "rel": 10,
-          "coh": 0.85,
-          "fervor": 0,
-          "badStreak": 0,
-          "backStreak": 0,
-          "grudge": 0,
-          "lastOffense": 0,
-          "demandCool": 1,
-          "favorCool": 2,
-          "agitateCool": 2,
-          "pop": 25,
-          "away": 0,
-          "debt": false,
-          "leader": {
-            "personId": "p_181",
-            "name": "야르밀라 부레쇼바",
-            "age": 64,
-            "trait": "fear",
-            "traitShown": 0
+        "story": {
+          "stage": 1,
+          "flags": {
+            "first_death": false,
+            "first_corpse_agenda": "none"
+          }
+        },
+        "climate": true,
+        "outside": 1,
+        "freeze": 0,
+        "climateStats": {
+          "drops": 0,
+          "freezes": 0
+        },
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
           },
-          "promise": null,
-          "supportedAt": -99,
-          "cutAt": [],
-          "disgraced": false
+          "joined": [],
+          "scenes": [],
+          "closed": false
         }
       },
-      "passed": {},
-      "repealedAt": {},
-      "boughtBy": {},
-      "secrets": [
+      "uid": 1,
+      "index": 0,
+      "ms": 1200.5,
+      "expected": [
         {
-          "id": 1,
-          "text": "앞칸 사람에게 빚이 있다",
-          "weight": 1,
-          "about": "engine",
-          "uses": 0
-        }
-      ],
-      "nextSecretId": 2,
-      "leashes": [],
-      "blackmails": 0,
-      "corpseIssue": false,
-      "thrown": 0,
-      "stored": 0,
-      "deaths": [],
-      "strikes": 0,
-      "inStrike": false,
-      "strikeWarned": -99,
-      "lostSegments": 0,
-      "trustCrisis": null,
-      "tensionWarned": false,
-      "tensionCrisisUsed": 0,
-      "riot": {
-        "prev": 20,
-        "stage": 0,
-        "fire": [],
-        "scorched": [],
-        "spilled": 0,
-        "riots": 0,
-        "protests": 0,
-        "riotCards": 0,
-        "fell": 0,
-        "died": 0
-      },
-      "emergencyUsed": false,
-      "guidedLeft": 0,
-      "decreeLeft": 0,
-      "guardEscort": false,
-      "forcedRun": false,
-      "autoLevers": false,
-      "actedSeg": 0,
-      "proposals": [],
-      "agendaHolder": null,
-      "cards": [
-        {
-          "uid": 1,
           "kind": "demand",
-          "comm": "tail"
+          "chars": 121,
+          "ms": 1201,
+          "choices": 2,
+          "crossing": false,
+          "picked": false,
+          "alt": true,
+          "seg": 1
         }
-      ],
-      "recentEvents": [],
-      "eventLog": {},
-      "needs": {},
-      "emergencyCalls": [],
-      "hunger": 0,
-      "linesSeen": [],
-      "hiddenBites": [],
-      "nextCardUid": 2,
-      "stop": null,
-      "council": null,
-      "lastSettle": null,
-      "journal": [
-        {
-          "seg": 1,
-          "text": "볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간."
-        }
-      ],
-      "usedProfiles": [
-        "p_025",
-        "p_139",
-        "p_158",
-        "p_102",
-        "p_181"
-      ],
-      "end": null,
-      "stats": {
-        "dealsMade": 0,
-        "promisesKept": 0,
-        "promisesBroken": 0,
-        "lawsPassed": 0,
-        "lawsFailed": 0,
-        "repeals": 0,
-        "bribes": 0,
-        "blackmails": 0
-      },
-      "story": {
-        "stage": 1,
-        "flags": {
-          "first_death": false,
-          "first_corpse_agenda": "none"
-        }
-      },
-      "climate": true,
-      "outside": 1,
-      "freeze": 0,
-      "climateStats": {
-        "drops": 0,
-        "freezes": 0
-      },
-      "loco": "c3"
+      ]
     },
-    "uid": 1,
-    "index": 0,
-    "ms": 1200.5,
-    "expected": [
-      {
-        "kind": "demand",
-        "chars": 121,
-        "ms": 1201,
-        "choices": 2,
-        "crossing": false,
-        "picked": false,
-        "alt": true,
-        "seg": 1
+    {
+      "id": "deal-open",
+      "input": {
+        "version": 1,
+        "seed": "end-h7-deal",
+        "rng": {
+          "algorithm": "mulberry32-v1",
+          "state": 3341276677
+        },
+        "seg": 1,
+        "phase": "prep",
+        "session": 0,
+        "coal": 100,
+        "food": 100,
+        "med": 20,
+        "lux": 8,
+        "trust": 50,
+        "tension": 20,
+        "fear": 0,
+        "injured": 0,
+        "symbols": 0,
+        "comms": {
+          "tail": {
+            "base": [
+              35,
+              40,
+              75,
+              60
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": -20,
+            "coh": 0.55,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 90,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_025",
+              "name": "유제프 켕지에르스키",
+              "age": 45,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "medtech": {
+            "base": [
+              55,
+              50,
+              45,
+              25
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 5,
+            "coh": 0.7,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_139",
+              "name": "카밀라 호르바트호바",
+              "age": 62,
+              "trait": "greed",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "guard": {
+            "base": [
+              55,
+              55,
+              45,
+              55
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 15,
+            "coh": 0.8,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_158",
+              "name": "톰 나우만",
+              "age": 48,
+              "trait": "ideal",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "front": {
+            "base": [
+              75,
+              65,
+              20,
+              10
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 20,
+            "coh": 0.65,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_102",
+              "name": "마리안나 카스프샤크",
+              "age": 60,
+              "trait": "ambition",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "engine": {
+            "base": [
+              80,
+              55,
+              40,
+              45
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 10,
+            "coh": 0.85,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_181",
+              "name": "야르밀라 부레쇼바",
+              "age": 64,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          }
+        },
+        "passed": {},
+        "repealedAt": {},
+        "boughtBy": {},
+        "secrets": [
+          {
+            "id": 1,
+            "text": "앞칸 사람에게 빚이 있다",
+            "weight": 1,
+            "about": "engine",
+            "uses": 0
+          }
+        ],
+        "nextSecretId": 2,
+        "leashes": [],
+        "blackmails": 0,
+        "corpseIssue": false,
+        "thrown": 0,
+        "stored": 0,
+        "deaths": [],
+        "strikes": 0,
+        "inStrike": false,
+        "strikeWarned": -99,
+        "lostSegments": 0,
+        "trustCrisis": null,
+        "tensionWarned": false,
+        "tensionCrisisUsed": 0,
+        "riot": {
+          "prev": 20,
+          "stage": 0,
+          "fire": [],
+          "scorched": [],
+          "spilled": 0,
+          "riots": 0,
+          "protests": 0,
+          "riotCards": 0,
+          "fell": 0,
+          "died": 0
+        },
+        "emergencyUsed": false,
+        "guidedLeft": 0,
+        "decreeLeft": 0,
+        "guardEscort": false,
+        "forcedRun": false,
+        "autoLevers": false,
+        "actedSeg": 0,
+        "proposals": [],
+        "agendaHolder": null,
+        "cards": [
+          {
+            "uid": 1,
+            "kind": "content-deal",
+            "text": "deal_tail_heat",
+            "comm": "tail"
+          }
+        ],
+        "recentEvents": [],
+        "eventLog": {},
+        "needs": {},
+        "emergencyCalls": [],
+        "hunger": 0,
+        "linesSeen": [],
+        "hiddenBites": [],
+        "nextCardUid": 2,
+        "stop": null,
+        "council": null,
+        "lastSettle": null,
+        "journal": [
+          {
+            "seg": 1,
+            "text": "볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간."
+          }
+        ],
+        "usedProfiles": [
+          "p_025",
+          "p_139",
+          "p_158",
+          "p_102",
+          "p_181"
+        ],
+        "end": null,
+        "stats": {
+          "dealsMade": 0,
+          "promisesKept": 0,
+          "promisesBroken": 0,
+          "lawsPassed": 0,
+          "lawsFailed": 0,
+          "repeals": 0,
+          "bribes": 0,
+          "blackmails": 0
+        },
+        "story": {
+          "stage": 1,
+          "flags": {
+            "first_death": false,
+            "first_corpse_agenda": "none"
+          }
+        },
+        "climate": true,
+        "outside": 1,
+        "freeze": 0,
+        "climateStats": {
+          "drops": 0,
+          "freezes": 0
+        },
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
+      },
+      "uid": 1,
+      "index": 0,
+      "ms": 1200.5,
+      "expected": [
+        {
+          "kind": "content-deal",
+          "chars": 44,
+          "ms": 1201,
+          "choices": 2,
+          "crossing": false,
+          "picked": false,
+          "alt": true,
+          "seg": 1
+        }
+      ]
+    },
+    {
+      "id": "blocked-choice",
+      "input": {
+        "version": 1,
+        "seed": "end-h7-blocked",
+        "rng": {
+          "algorithm": "mulberry32-v1",
+          "state": 1227278917
+        },
+        "seg": 1,
+        "phase": "prep",
+        "session": 0,
+        "coal": 0,
+        "food": 0,
+        "med": 20,
+        "lux": 8,
+        "trust": 50,
+        "tension": 20,
+        "fear": 0,
+        "injured": 0,
+        "symbols": 0,
+        "comms": {
+          "tail": {
+            "base": [
+              35,
+              40,
+              75,
+              60
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": -20,
+            "coh": 0.55,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 90,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_025",
+              "name": "유제프 켕지에르스키",
+              "age": 45,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "medtech": {
+            "base": [
+              55,
+              50,
+              45,
+              25
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 5,
+            "coh": 0.7,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_139",
+              "name": "카밀라 호르바트호바",
+              "age": 62,
+              "trait": "greed",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "guard": {
+            "base": [
+              55,
+              55,
+              45,
+              55
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 15,
+            "coh": 0.8,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_158",
+              "name": "톰 나우만",
+              "age": 48,
+              "trait": "ideal",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "front": {
+            "base": [
+              75,
+              65,
+              20,
+              10
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 20,
+            "coh": 0.65,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_102",
+              "name": "마리안나 카스프샤크",
+              "age": 60,
+              "trait": "ambition",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "engine": {
+            "base": [
+              80,
+              55,
+              40,
+              45
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 10,
+            "coh": 0.85,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_181",
+              "name": "야르밀라 부레쇼바",
+              "age": 64,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          }
+        },
+        "passed": {},
+        "repealedAt": {},
+        "boughtBy": {},
+        "secrets": [
+          {
+            "id": 1,
+            "text": "앞칸 사람에게 빚이 있다",
+            "weight": 1,
+            "about": "engine",
+            "uses": 0
+          }
+        ],
+        "nextSecretId": 2,
+        "leashes": [],
+        "blackmails": 0,
+        "corpseIssue": false,
+        "thrown": 0,
+        "stored": 0,
+        "deaths": [],
+        "strikes": 0,
+        "inStrike": false,
+        "strikeWarned": -99,
+        "lostSegments": 0,
+        "trustCrisis": null,
+        "tensionWarned": false,
+        "tensionCrisisUsed": 0,
+        "riot": {
+          "prev": 20,
+          "stage": 0,
+          "fire": [],
+          "scorched": [],
+          "spilled": 0,
+          "riots": 0,
+          "protests": 0,
+          "riotCards": 0,
+          "fell": 0,
+          "died": 0
+        },
+        "emergencyUsed": false,
+        "guidedLeft": 0,
+        "decreeLeft": 0,
+        "guardEscort": false,
+        "forcedRun": false,
+        "autoLevers": false,
+        "actedSeg": 0,
+        "proposals": [],
+        "agendaHolder": null,
+        "cards": [
+          {
+            "uid": 1,
+            "kind": "tension_crisis",
+            "comm": "tail"
+          }
+        ],
+        "recentEvents": [],
+        "eventLog": {},
+        "needs": {},
+        "emergencyCalls": [],
+        "hunger": 0,
+        "linesSeen": [],
+        "hiddenBites": [],
+        "nextCardUid": 2,
+        "stop": null,
+        "council": null,
+        "lastSettle": null,
+        "journal": [
+          {
+            "seg": 1,
+            "text": "볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간."
+          }
+        ],
+        "usedProfiles": [
+          "p_025",
+          "p_139",
+          "p_158",
+          "p_102",
+          "p_181"
+        ],
+        "end": null,
+        "stats": {
+          "dealsMade": 0,
+          "promisesKept": 0,
+          "promisesBroken": 0,
+          "lawsPassed": 0,
+          "lawsFailed": 0,
+          "repeals": 0,
+          "bribes": 0,
+          "blackmails": 0
+        },
+        "story": {
+          "stage": 1,
+          "flags": {
+            "first_death": false,
+            "first_corpse_agenda": "none"
+          }
+        },
+        "climate": true,
+        "outside": 1,
+        "freeze": 0,
+        "climateStats": {
+          "drops": 0,
+          "freezes": 0
+        },
+        "loco": "c3",
+        "dark": {
+          "means": {},
+          "crossed": [],
+          "nightmareUntil": -1,
+          "nightmareCards": 0,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
+      },
+      "uid": 1,
+      "index": 0,
+      "ms": 1200.5,
+      "expected": [
+        {
+          "kind": "tension_crisis",
+          "chars": 94,
+          "ms": 1201,
+          "choices": 2,
+          "crossing": false,
+          "picked": false,
+          "alt": true,
+          "seg": 1
+        }
+      ]
+    }
+  ],
+  "restored": [
+    {
+      "id": "s1-shade",
+      "input": {
+        "version": 1,
+        "seed": "end-restored",
+        "rng": {
+          "algorithm": "mulberry32-v1",
+          "state": 2256625707
+        },
+        "seg": 5,
+        "phase": "end",
+        "session": 0,
+        "coal": 100,
+        "food": 100,
+        "med": 20,
+        "lux": 8,
+        "trust": 50,
+        "tension": 20,
+        "fear": 0,
+        "injured": 0,
+        "symbols": 0,
+        "comms": {
+          "tail": {
+            "base": [
+              35,
+              40,
+              75,
+              60
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": -20,
+            "coh": 0.55,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 90,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_025",
+              "name": "유제프 켕지에르스키",
+              "age": 45,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "medtech": {
+            "base": [
+              55,
+              50,
+              45,
+              25
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 5,
+            "coh": 0.7,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_139",
+              "name": "카밀라 호르바트호바",
+              "age": 62,
+              "trait": "greed",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "guard": {
+            "base": [
+              55,
+              55,
+              45,
+              55
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 15,
+            "coh": 0.8,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_158",
+              "name": "톰 나우만",
+              "age": 48,
+              "trait": "ideal",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "front": {
+            "base": [
+              75,
+              65,
+              20,
+              10
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 20,
+            "coh": 0.65,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_102",
+              "name": "마리안나 카스프샤크",
+              "age": 60,
+              "trait": "ambition",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "engine": {
+            "base": [
+              80,
+              55,
+              40,
+              45
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 10,
+            "coh": 0.85,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_181",
+              "name": "야르밀라 부레쇼바",
+              "age": 64,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          }
+        },
+        "passed": {},
+        "repealedAt": {},
+        "boughtBy": {},
+        "secrets": [
+          {
+            "id": 1,
+            "text": "앞칸 사람에게 빚이 있다",
+            "weight": 1,
+            "about": "engine",
+            "uses": 0
+          }
+        ],
+        "nextSecretId": 2,
+        "leashes": [],
+        "blackmails": 0,
+        "corpseIssue": false,
+        "thrown": 0,
+        "stored": 0,
+        "deaths": [],
+        "strikes": 0,
+        "inStrike": false,
+        "strikeWarned": -99,
+        "lostSegments": 0,
+        "trustCrisis": null,
+        "tensionWarned": false,
+        "tensionCrisisUsed": 0,
+        "riot": {
+          "prev": 20,
+          "stage": 0,
+          "fire": [],
+          "scorched": [],
+          "spilled": 0,
+          "riots": 0,
+          "protests": 0,
+          "riotCards": 0,
+          "fell": 0,
+          "died": 0
+        },
+        "emergencyUsed": false,
+        "guidedLeft": 0,
+        "decreeLeft": 0,
+        "guardEscort": false,
+        "forcedRun": false,
+        "autoLevers": false,
+        "actedSeg": 0,
+        "proposals": [],
+        "agendaHolder": null,
+        "cards": [],
+        "recentEvents": [],
+        "eventLog": {},
+        "needs": {},
+        "emergencyCalls": [],
+        "hunger": 0,
+        "linesSeen": [],
+        "hiddenBites": [],
+        "nextCardUid": 1,
+        "stop": null,
+        "council": null,
+        "lastSettle": null,
+        "journal": [
+          {
+            "seg": 1,
+            "text": "볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간."
+          }
+        ],
+        "usedProfiles": [
+          "p_025",
+          "p_139",
+          "p_158",
+          "p_102",
+          "p_181"
+        ],
+        "end": "complete",
+        "stats": {
+          "dealsMade": 0,
+          "promisesKept": 0,
+          "promisesBroken": 0,
+          "lawsPassed": 0,
+          "lawsFailed": 0,
+          "repeals": 0,
+          "bribes": 0,
+          "blackmails": 0
+        },
+        "story": {
+          "stage": 1,
+          "flags": {
+            "first_death": false,
+            "first_corpse_agenda": "none"
+          }
+        },
+        "climate": true,
+        "outside": 1,
+        "freeze": 0,
+        "climateStats": {
+          "drops": 0,
+          "freezes": 0
+        },
+        "loco": "c3",
+        "dark": {
+          "means": {
+            "exiles": 1
+          },
+          "crossed": [
+            {
+              "key": "exiles",
+              "seg": 5
+            }
+          ],
+          "nightmareUntil": 6,
+          "nightmareCards": 3,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": false
+        }
+      },
+      "expected": {
+        "tone": "shade",
+        "toneLine": "열차는 닿았다. 다만 5구간의 하차 명령의 일은 아무도 잊지 않는다.",
+        "means": 2,
+        "layer": "shaken",
+        "h7": {
+          "hesitation": 0,
+          "hesitationN": 0,
+          "crossingShown": 0,
+          "crossingShownWithAlt": 0,
+          "crossings": 1,
+          "means": 2,
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "wall": [],
+        "wallLines": [],
+        "closeLine": "기록: 징후 0, 폭력 0(사망 0), 선을 넘음 1, 수단 2, 망설임 0배."
       }
-    ]
-  },
+    },
+    {
+      "id": "s1-closed",
+      "input": {
+        "version": 1,
+        "seed": "end-restored",
+        "rng": {
+          "algorithm": "mulberry32-v1",
+          "state": 2256625707
+        },
+        "seg": 5,
+        "phase": "end",
+        "session": 0,
+        "coal": 100,
+        "food": 100,
+        "med": 20,
+        "lux": 8,
+        "trust": 50,
+        "tension": 20,
+        "fear": 0,
+        "injured": 0,
+        "symbols": 0,
+        "comms": {
+          "tail": {
+            "base": [
+              35,
+              40,
+              75,
+              60
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": -20,
+            "coh": 0.55,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 90,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_025",
+              "name": "유제프 켕지에르스키",
+              "age": 45,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "medtech": {
+            "base": [
+              55,
+              50,
+              45,
+              25
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 5,
+            "coh": 0.7,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_139",
+              "name": "카밀라 호르바트호바",
+              "age": 62,
+              "trait": "greed",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "guard": {
+            "base": [
+              55,
+              55,
+              45,
+              55
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 15,
+            "coh": 0.8,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_158",
+              "name": "톰 나우만",
+              "age": 48,
+              "trait": "ideal",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "front": {
+            "base": [
+              75,
+              65,
+              20,
+              10
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 20,
+            "coh": 0.65,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 30,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_102",
+              "name": "마리안나 카스프샤크",
+              "age": 60,
+              "trait": "ambition",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          },
+          "engine": {
+            "base": [
+              80,
+              55,
+              40,
+              45
+            ],
+            "heat": 2,
+            "ration": 2,
+            "rel": 10,
+            "coh": 0.85,
+            "fervor": 0,
+            "badStreak": 0,
+            "backStreak": 0,
+            "grudge": 0,
+            "lastOffense": 0,
+            "demandCool": 1,
+            "favorCool": 2,
+            "agitateCool": 2,
+            "pop": 25,
+            "away": 0,
+            "debt": false,
+            "leader": {
+              "personId": "p_181",
+              "name": "야르밀라 부레쇼바",
+              "age": 64,
+              "trait": "fear",
+              "traitShown": 0
+            },
+            "promise": null,
+            "supportedAt": -99,
+            "cutAt": [],
+            "disgraced": false
+          }
+        },
+        "passed": {},
+        "repealedAt": {},
+        "boughtBy": {},
+        "secrets": [
+          {
+            "id": 1,
+            "text": "앞칸 사람에게 빚이 있다",
+            "weight": 1,
+            "about": "engine",
+            "uses": 0
+          }
+        ],
+        "nextSecretId": 2,
+        "leashes": [],
+        "blackmails": 0,
+        "corpseIssue": false,
+        "thrown": 0,
+        "stored": 0,
+        "deaths": [],
+        "strikes": 0,
+        "inStrike": false,
+        "strikeWarned": -99,
+        "lostSegments": 0,
+        "trustCrisis": null,
+        "tensionWarned": false,
+        "tensionCrisisUsed": 0,
+        "riot": {
+          "prev": 20,
+          "stage": 0,
+          "fire": [],
+          "scorched": [],
+          "spilled": 0,
+          "riots": 0,
+          "protests": 0,
+          "riotCards": 0,
+          "fell": 0,
+          "died": 0
+        },
+        "emergencyUsed": false,
+        "guidedLeft": 0,
+        "decreeLeft": 0,
+        "guardEscort": false,
+        "forcedRun": false,
+        "autoLevers": false,
+        "actedSeg": 0,
+        "proposals": [],
+        "agendaHolder": null,
+        "cards": [],
+        "recentEvents": [],
+        "eventLog": {},
+        "needs": {},
+        "emergencyCalls": [],
+        "hunger": 0,
+        "linesSeen": [],
+        "hiddenBites": [],
+        "nextCardUid": 1,
+        "stop": null,
+        "council": null,
+        "lastSettle": null,
+        "journal": [
+          {
+            "seg": 1,
+            "text": "볼슈틴 차고를 떠났다. 여섯 번째 겨울, 200명이 탔다. 라이프치히 중앙역까지 24구간."
+          },
+          {
+            "seg": 5,
+            "text": "기록: 징후 0, 폭력 0(사망 0), 선을 넘음 1, 수단 2, 망설임 0배."
+          }
+        ],
+        "usedProfiles": [
+          "p_025",
+          "p_139",
+          "p_158",
+          "p_102",
+          "p_181"
+        ],
+        "end": "complete",
+        "stats": {
+          "dealsMade": 0,
+          "promisesKept": 0,
+          "promisesBroken": 0,
+          "lawsPassed": 0,
+          "lawsFailed": 0,
+          "repeals": 0,
+          "bribes": 0,
+          "blackmails": 0
+        },
+        "story": {
+          "stage": 1,
+          "flags": {
+            "first_death": false,
+            "first_corpse_agenda": "none"
+          }
+        },
+        "climate": true,
+        "outside": 1,
+        "freeze": 0,
+        "climateStats": {
+          "drops": 0,
+          "freezes": 0
+        },
+        "loco": "c3",
+        "dark": {
+          "means": {
+            "exiles": 1
+          },
+          "crossed": [
+            {
+              "key": "exiles",
+              "seg": 5
+            }
+          ],
+          "nightmareUntil": 6,
+          "nightmareCards": 3,
+          "numb": false,
+          "h7": [],
+          "stats": {
+            "signs": 0,
+            "imminent": 0,
+            "violent": 0,
+            "violentDeaths": 0,
+            "cases": 0,
+            "solved": 0,
+            "misjudged": 0,
+            "trials": 0,
+            "scapegoats": 0,
+            "lynches": 0,
+            "orders": 0,
+            "revealed": 0,
+            "risen": 0,
+            "cardsDeferred": 0
+          },
+          "joined": [],
+          "scenes": [],
+          "closed": true
+        }
+      },
+      "expected": {
+        "tone": "shade",
+        "toneLine": "열차는 닿았다. 다만 5구간의 하차 명령의 일은 아무도 잊지 않는다.",
+        "means": 2,
+        "layer": "shaken",
+        "h7": {
+          "hesitation": 0,
+          "hesitationN": 0,
+          "crossingShown": 0,
+          "crossingShownWithAlt": 0,
+          "crossings": 1,
+          "means": 2,
+          "signs": 0,
+          "imminent": 0,
+          "violent": 0,
+          "violentDeaths": 0,
+          "cases": 0,
+          "solved": 0,
+          "misjudged": 0,
+          "trials": 0,
+          "scapegoats": 0,
+          "lynches": 0,
+          "orders": 0,
+          "revealed": 0,
+          "risen": 0,
+          "cardsDeferred": 0
+        },
+        "wall": [],
+        "wallLines": [],
+        "closeLine": "기록: 징후 0, 폭력 0(사망 0), 선을 넘음 1, 수단 2, 망설임 0배."
+      }
+    }
+  ],
+  "deals": [
+    {
+      "id": "deal_tail_heat",
+      "tool": "open",
+      "from": "tail",
+      "ask": [
+        {
+          "type": "community.warmth",
+          "target": "tail",
+          "amount": 1
+        }
+      ],
+      "deadline": 3,
+      "gives": [
+        {
+          "type": "votes",
+          "target": "tail",
+          "amount": 10
+        }
+      ],
+      "breach": [
+        {
+          "type": "trust",
+          "amount": -3
+        }
+      ],
+      "arc_tags": [
+        "promise_heat"
+      ]
+    }
+  ],
   "rounding": [
     {
       "value": 0,

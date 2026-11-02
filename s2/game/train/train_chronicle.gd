@@ -30,23 +30,20 @@ const BOARDING := {"refugee": "피난길에 탔다", "bought": "자리를 사서
 
 
 static func enabled(g: Dictionary) -> bool:
-	var dark: Variant = g.get("dark")
-	# JS objects, including an empty object, are truthy.
-	return dark != null and (dark is Dictionary or bool(dark))
+	# S1 darkFinish: a dark state object is active, including an empty object.
+	return g.get("dark") is Dictionary
 
 
-static func state(g: Dictionary, create: bool = false) -> Dictionary:
-	if g.get("endChronicle") is Dictionary:
-		return g["endChronicle"]
-	var d := {"means": {}, "crossed": [], "nightmareUntil": -1, "nightmareCards": 0,
+static func state(g: Dictionary) -> Dictionary:
+	if enabled(g): return g["dark"]
+	# Detached defaults keep read-only queries from creating a dark game.
+	return {"means": {}, "crossed": [], "nightmareUntil": -1, "nightmareCards": 0,
 		"numb": false, "h7": [], "stats": {}, "joined": [], "closed": false}
-	if create: g["endChronicle"] = d
-	return d
 
 
 static func cross(g: Dictionary, key: String) -> void:
 	assert(MEANS.has(key))
-	var d: Dictionary = state(g, true)
+	var d: Dictionary = state(g)
 	d["means"][key] = int(d["means"].get(key, 0)) + 1
 	if key not in CROSSINGS: return
 	if int(d["nightmareUntil"]) >= int(g["seg"]): d["numb"] = true
@@ -90,9 +87,10 @@ static func tone_line(g: Dictionary) -> String:
 
 
 static func log_pick(g: Dictionary, pick: Dictionary) -> void:
+	if not enabled(g): return
 	var row: Dictionary = pick.duplicate(true)
 	row["seg"] = g["seg"]
-	state(g, true)["h7"].append(row)
+	state(g)["h7"].append(row)
 
 
 static func _median(values: Array) -> float:
@@ -157,6 +155,7 @@ static func _disabled(choice: Dictionary) -> bool:
 
 
 static func log_card_pick(g: Dictionary, t: Dictionary, uid: int, index: int, ms: float) -> void:
+	if not enabled(g): return
 	if not is_finite(ms) or ms <= 0.0: return
 	for card: Dictionary in g.get("cards", []):
 		if int(card["uid"]) != uid: continue
@@ -179,7 +178,7 @@ static func _log_card_view_pick(g: Dictionary, kind: String, view: Dictionary, i
 		if _disabled(choice): continue
 		count += 1
 		var say: Variant = choice.get("say")
-		chars += _utf16_length(String(choice.get("label", "") if say == null else say))
+		chars += _utf16_length(String(choice.get("label", "") if say == null or str(say).is_empty() else say))
 		if choice.has("cross"): crossing = true
 		else: alternative = true
 	log_pick(g, {"kind": kind, "chars": chars, "ms": int(floor(ms + 0.5)), "choices": count,
@@ -205,16 +204,12 @@ static func wall_line(wall_name: Dictionary) -> String:
 
 
 ## The rules close the record once, after lookback and any raised-child lines.
-static func close_chronicle(g: Dictionary, t: Dictionary) -> Dictionary:
+static func close_chronicle(g: Dictionary, _t: Dictionary) -> Dictionary:
 	if not enabled(g): return {}
-	var d: Dictionary = state(g, true)
+	var d: Dictionary = state(g)
 	if bool(d["closed"]): return d
 	d["closed"] = true
 	var record: Dictionary = h7_record(g)
-	d["record"] = record
-	d["tone"] = tone(g)
-	d["toneLine"] = tone_line(g)
-	d["wall"] = wall_names(g, t)
 	var line: String = "기록: 징후 %d, 폭력 %d(사망 %d), 선을 넘음 %d, 수단 %d, 망설임 %s배." % [record["signs"], record["violent"], record["violentDeaths"], record["crossings"], record["means"], str(record["hesitation"])]
 	# JS prints integer-valued numbers without a decimal suffix.
 	line = line.replace(".0배.", "배.")

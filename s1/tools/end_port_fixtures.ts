@@ -9,6 +9,8 @@ import { END_LINK } from '../src/game/state';
 import { cross, closeChronicle, darkEnd, logPick, wallLine } from '../src/game/dark/chronicle';
 import type { H7Pick } from '../src/game/dark/chronicle';
 import { logCardPick } from '../src/game/dark/h7';
+import { registerContentDeals } from '../src/game/content';
+import type { ContentDeal } from '../src/game/content';
 import { MEANS } from '../src/game/dark/data';
 import { playGame } from './s1c_bot';
 
@@ -39,27 +41,45 @@ function oracle(g: Game): Game {
 function answer(g: Game) {
   const d = darkEnd(g);
   const at = g.journal.length;
+  const wasClosed = g.dark!.closed;
   closeChronicle(g);
   closeChronicle(g);
-  assert.equal(g.journal.length, at + 1);
+  assert.equal(g.journal.length, at + (wasClosed ? 0 : 1));
   return { tone: d.tone, toneLine: d.toneLine, means: d.means, layer: d.layer,
     h7: d.h7, wall: d.wall, wallLines: d.wall.map(wallLine), closeLine: g.journal.at(-1)!.text };
 }
 type Action = { kind: string; uid?: number; index?: number };
 const cases: { id: string; action: Action; before: Game; after: Game; lookback: string[]; reason: string; panelLines: string[] }[] = [];
+// The S2 end panel names an ending with finish()'s own sentence. A card-picked revolt ends
+// without writing it, so ask finish() on a copy of the ended game instead of searching the journal.
+function finishLine(id: string, after: Game): string {
+  const probe = plain(after);
+  probe.phase = 'settle';
+  const at = probe.journal.length;
+  END_LINK.finish(probe, after.end!);
+  const line = probe.journal[at];
+  assert.equal(line?.tone, after.end === 'complete' ? 'good' : 'bad', id + ': finish line tone');
+  assert(line.text.length > 0, id + ': empty finish line');
+  return line.text;
+}
 function record(id: string, before: Game, after: Game, action: Action) {
   assert.equal(after.phase, 'end', id);
   assert(!after.dark, id + ': dark gameplay stays off');
   assert.equal(after.loco ?? S1.LOCO_DEFAULT, 'c3');
-  const reason = after.end === 'revolt' && after.stranded
-    ? '솥에 넣을 것이 없었다. 열차장은 끌려 내려왔다.'
-    : [...after.journal].reverse().find(x => x.text === ({
-      ousted: '의회가 열차장을 끌어내렸다. 아무도 소리치지 않았다. 사람들이 길을 비켜 섰다.',
-      revolt: '반란이 일어났다. 식당칸 탁자가 엎어지고 고함이 칸을 넘어왔다.',
-      lost_captain: '열차장은 돌아오지 않았다. 선로 끝에 수동차 자국만 남았다.',
-    } as Record<string, string>)[after.end!])?.text ?? '';
   assert(!after.journal.some(x => x.text.startsWith('기록: 징후')), id + ': no dark closing line');
   const lookback = S1.lookbackLines(after);
+  assert(lookback.length > 0, id + ': finish must write a lookback');
+  let at = -1;
+  for (let i = after.journal.length - 1; i >= 0; i--) {
+    if (after.journal[i].tone === 'dark'
+      && lookback.every((line, n) => after.journal[i + n]?.text === line)) { at = i; break; }
+  }
+  assert(at > 0, id + ': missing lookback in the journal');
+  const reason = finishLine(id, after);
+  // An ending reached through finish() wrote the same sentence just before its lookback.
+  const ending = after.journal[at - 1];
+  const viaFinish = ending.text === reason && ending.seg === after.seg;
+  assert(viaFinish || action.kind === 'ended', id + ': finish journal before lookback');
   cases.push({ id, action, before: plain(before), after: plain(after), lookback,
     reason, panelLines: [reason, ...lookback.slice(0, 1)] });
 }
@@ -110,12 +130,11 @@ for (const [i, operations] of [
     g.end = end; g.phase = 'end'; g.seg = 5;
     g.deaths = i === 5 ? Array.from({ length: 7 }, (_, n) => '이름 ' + n) : [];
     g.stats.blackmails = i === 5 ? 9 : 0;
-    const input = plain(g);
-    const o = oracle(g);
+    const input = oracle(g);
+    const o = plain(input);
     for (const key of operations) cross(o, key as keyof typeof MEANS);
     const d = o.dark!;
-    const expectedState = plain({ means: d.means, crossed: d.crossed, nightmareUntil: d.nightmareUntil,
-      nightmareCards: d.nightmareCards, numb: d.numb });
+    const expectedState = plain(d);
     math.push({ id: i + '-' + end, input, operations, expectedState, expected: answer(o) });
   }
 }
@@ -129,35 +148,89 @@ const picks: Omit<H7Pick, 'seg'>[] = [
   { kind: 'choices', chars: 100, ms: 12000, choices: 3, crossing: true, picked: true, alt: true },
 ];
 for (const p of picks) logPick(h, p);
-const cardInput = fresh('end-h7-card');
+function cardSample(id: string, input: Game) {
+  const card = input.cards[0];
+  const view = S1.viewCard(input, card);
+  const index = view.choices.findIndex(c => !c.disabled);
+  assert(index >= 0, id + ': an open choice');
+  const g = plain(input);
+  logCardPick(g, card.uid, index, 1200.5);
+  assert.equal(g.dark!.h7.length, 1);
+  return { id, input, uid: card.uid, index, ms: 1200.5, expected: plain(g.dark!.h7) };
+}
+const cardInput = oracle(fresh('end-h7-card'));
 S1.addCard(cardInput, { kind: 'demand', comm: 'tail' });
-const uid = cardInput.cards[0].uid;
-const index = S1.viewCard(cardInput, cardInput.cards[0]).choices.findIndex(c => !c.disabled);
-assert(index >= 0);
-const cardOracle = oracle(cardInput);
-logCardPick(cardOracle, uid, index, 1200.5);
-assert.equal(cardOracle.dark!.h7.length, 1);
+const cards = [cardSample('demand', cardInput)];
+// Use the repository's valid S1 deal input even when optional data/deals is absent.
+const deals = [JSON.parse(readFileSync(resolve(ROOT, 's1/fixtures/valid/deal.json'), 'utf8')) as ContentDeal];
+registerContentDeals(deals);
+const dealInput = oracle(fresh('end-h7-deal'));
+S1.addCard(dealInput, { kind: 'content-deal', text: deals[0].id, comm: 'tail' });
+const dealView = S1.viewCard(dealInput, dealInput.cards[0]);
+assert.equal(dealView.choices.length, 2);
+assert(dealView.choices.every(c => !c.disabled && c.say === undefined));
+cards.push(cardSample('deal-open', dealInput));
+const blockedInput = oracle(fresh('end-h7-blocked'));
+blockedInput.food = 0; blockedInput.coal = 0;
+S1.addCard(blockedInput, { kind: 'tension_crisis', comm: 'tail' });
+assert(S1.viewCard(blockedInput, blockedInput.cards[0]).choices.some(c => c.disabled));
+cards.push(cardSample('blocked-choice', blockedInput));
+for (const row of cards) {
+  for (const dark of [undefined, false]) {
+    const g = plain(row.input);
+    delete g.dark;
+    if (dark === false) Object.assign(g, { dark });
+    const before = plain(g);
+    logCardPick(g, row.uid, row.index, row.ms);
+    logPick(g, picks[0]);
+    assert.deepEqual(g, before, row.id + ': disabled H7 does not mutate any field');
+  }
+}
+const restoredInput = oracle(fresh('end-restored'));
+restoredInput.end = 'complete'; restoredInput.phase = 'end'; restoredInput.seg = 5;
+cross(restoredInput, 'exiles');
+const restoredExpected = answer(plain(restoredInput));
+assert.equal(restoredExpected.tone, 'shade');
+const closedInput = plain(restoredInput);
+closeChronicle(closedInput);
+const closedBefore = plain(closedInput);
+closeChronicle(closedInput);
+assert.deepEqual(closedInput, closedBefore, 'already closed S1 state stays unchanged');
+const restored = [
+  { id: 's1-shade', input: restoredInput, expected: restoredExpected },
+  { id: 's1-closed', input: closedInput, expected: answer(plain(closedInput)) },
+];
 const roundValues = [0, 0.005, 1.005, 1.125, 2.675, 2.685, 0.00001, 1234.56789];
 // Isolated rule hooks verify journal order without enabling dark gameplay.
-const ruleHooks = ['finish', 'write_lookback'].map(kind => {
-  const g = oracle(fresh('end-hook-' + kind));
+const ruleHooks = ['finish', 'write_lookback', 'choose_card', 'choose_card_off'].map(kind => {
+  const g = kind === 'choose_card_off' ? fresh('end-hook-' + kind) : oracle(fresh('end-hook-' + kind));
   g.seg = 4; g.coal = 10; g.food = 20;
   g.raised = { '기록 시험 이름': 'tail' };
+  let uid = -1; let index = -1;
+  if (kind.startsWith('choose_card')) {
+    S1.addCard(g, { kind: 'tension_crisis', comm: 'tail' });
+    uid = g.cards[0].uid;
+    index = S1.viewCard(g, g.cards[0]).choices.findIndex(c => c.special === 'revolt');
+    assert(index >= 0, 'real revolt choice');
+  }
   if (kind === 'write_lookback') { g.end = 'revolt'; g.phase = 'end'; }
   const input = plain(g);
   if (kind === 'finish') END_LINK.finish(g, 'ousted');
-  else { S1.writeLookback(g); closeChronicle(g); }
-  return { kind, input, end: g.end, journal: plain(g.journal), h7: darkEnd(g).h7, toneLine: darkEnd(g).toneLine };
+  else if (kind === 'write_lookback') S1.writeLookback(g);
+  else assert(S1.chooseCard(g, uid, index), 'real chooseCard succeeds');
+  assert.equal(g.dark?.closed ?? false, kind === 'finish' || kind === 'choose_card');
+  return { kind, input, uid, index, end: g.end, journal: plain(g.journal), dark: plain(g.dark ?? null),
+    toneLine: g.dark ? darkEnd(g).toneLine : '' };
 });
 const coverage = new Set(cases.map(c => c.after.end));
 for (const end of ['ousted', 'revolt', 'lost_captain']) assert(coverage.has(end as Game['end']));
 assert(cases.some(c => c.after.stranded && c.after.end === 'revolt'));
 const wallInput = plain(cases.find(c => c.after.end === 'lost_captain')!.after);
-const output = { format: 'end-vectors-v2', darkGameplay: false, loco: 'c3', cases, math, ruleHooks,
-	wall: { input: wallInput, expected: answer(oracle(wallInput)) },
-  h7: { input: fresh('end-h7'), picks, expected: answer(h) },
-  card: { input: cardInput, uid, index, ms: 1200.5, expected: cardOracle.dark!.h7 },
+const output = { format: 'end-vectors-v3', darkGameplay: false, loco: 'c3', cases, math, ruleHooks,
+	wall: { input: oracle(wallInput), expected: answer(oracle(wallInput)) },
+  h7: { input: oracle(fresh('end-h7')), picks, expected: answer(h) },
+  cards, restored, deals,
   rounding: roundValues.map(value => ({ value, expected: +value.toFixed(2) })) };
 writeFileSync(OUTPUT, JSON.stringify(output, null, 2) + '\n');
-console.log(JSON.stringify({ output: OUTPUT, cases: cases.length, ends: [...coverage], math: math.length }));
+console.log(JSON.stringify({ output: OUTPUT, cases: cases.length, ends: [...coverage], math: math.length, cards: cards.length, restored: restored.length, ruleHooks: ruleHooks.length }));
 
