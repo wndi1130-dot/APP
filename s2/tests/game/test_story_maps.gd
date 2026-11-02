@@ -32,15 +32,13 @@ func test_only_the_three_exact_names_are_story_maps() -> void:
 
 
 func test_missing_story_scripts_resolve_to_the_default_without_joining_the_registry() -> void:
-	for id: String in StoryMaps.BASE:
-		if ResourceLoader.exists(FieldMaps.path_of(id)):
-			pending("The missing-script case only applies before the story maps are added.")
-			return
-	for id: String in StoryMaps.BASE:
-		assert_false(FieldMaps.has(id), id)
-		assert_eq(FieldMaps.resolve(id), FieldMaps.DEFAULT_PLACE, id)
+	# Story maps never join the random picks; a story name whose script is not there yet resolves to the default.
 	assert_eq(FieldMaps.ids().size(), 82)
-	assert_eq(FieldMaps.story_ids(), [])
+	for id: String in StoryMaps.BASE:
+		assert_false(FieldMaps.ids().has(id), id)
+		if not ResourceLoader.exists(FieldMaps.path_of(id)):
+			assert_false(FieldMaps.has(id), id)
+			assert_eq(FieldMaps.resolve(id), FieldMaps.DEFAULT_PLACE, id)
 
 
 func test_story_registry_only_lists_scripts_that_exist() -> void:
