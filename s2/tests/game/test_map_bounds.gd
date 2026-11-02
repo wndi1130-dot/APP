@@ -295,7 +295,8 @@ func test_empty_and_rule_zero_are_off_and_stamp_blocks_grow() -> void:
 
 
 func _assert_bounds_unchanged(data: Dictionary, snapshot: Dictionary, fingerprint: Dictionary) -> void:
-	assert_eq_deep(data, snapshot, "자료와 경계 기록 보존")
+	# 자료와 경계 기록 보존(이 GUT의 assert_eq_deep은 메시지 인자를 받지 않는다).
+	assert_eq_deep(data, snapshot)
 	assert_eq(BoundsDigest.digest(data), fingerprint, "격자와 경로 및 계획 지문 보존")
 	for level: Variant in snapshot["levels"]:
 		assert_true(is_same(data["levels"][level], snapshot["levels"][level]), "격자 객체 보존")
@@ -329,13 +330,13 @@ func test_same_rule_apply_twice_preserves_data_and_digest() -> void:
 	assert_push_error_count(0)
 
 
-func test_unknown_seed_defers_bounds_and_all_ahead_plans() -> void:
+func test_unknown_seed_defers_bounds_until_side_path() -> void:
 	var data: Dictionary = StopLoader.make_ready(BoundedSideLine, -1)
-	assert_false(data.has("bounds_stamp"))
+	assert_false(data.has("bounds_stamp"), "씨앗을 모르면 경계를 찍지 않음")
 	assert_false(data.has("_side_seed"))
-	assert_false(data.has("_edge_plan"))
-	for key: String in FieldGame.AHEAD_KEYS:
-		assert_false(data.has(key), key)
+	# 미리 짓기는 꺼진 지도와 같이 그대로 한다. 샛길이 붙으면 필드가 버리고 다시 짓는다.
+	assert_true(data.has("_edge_plan"))
+	assert_true(data.has("_building_plan"))
 	var run_seed: int = -1
 	for candidate: int in range(1, 200):
 		if SidePath.rolls("bounds_probe", candidate):
@@ -346,6 +347,8 @@ func test_unknown_seed_defers_bounds_and_all_ahead_plans() -> void:
 	data = FieldGame.with_side_path(data, run_seed)
 	assert_true(data.has("side_path"), "경계를 찍기 전에 실제 샛길 확대")
 	assert_ne(Vector2i(data["grid"].width, data["grid"].height), before)
+	for key: String in FieldGame.AHEAD_KEYS:
+		assert_false(data.has(key), "샛길이 붙으면 옛 미리 짓기는 버림: " + key)
 	MapBounds.apply(data)
 	assert_eq(data.get("bounds_stamp"), 1, "씨앗 확정과 샛길 뒤 찍기")
 	var ready: Dictionary = StopLoader.make_ready(BoundedSideLine, run_seed)

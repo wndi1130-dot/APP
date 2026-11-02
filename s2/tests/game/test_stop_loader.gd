@@ -235,6 +235,7 @@ func test_seedless_ready_leaves_the_bounds_to_the_field() -> void:
 	add_child_autofree(holder)
 	var options: Dictionary = OPTS.duplicate()
 	options["bounds_rule"] = 0
+	loader.resting = true
 	loader.build_field(holder, options)
 	assert_eq(loader._generation, generation, "씨앗만 정해졌다고 다시 짓지 않는다")
 	if not loader.field.is_built:
@@ -256,6 +257,7 @@ func test_build_field_rebuilds_stamped_data_for_zero_and_unavailable_rules() -> 
 		add_child_autofree(holder)
 		var options: Dictionary = OPTS.duplicate()
 		options["bounds_rule"] = rule
+		loader.resting = true
 		loader.build_field(holder, options)
 		assert_eq(loader._generation, generation + 1)
 		assert_eq(loader.bounds_rule_for, rule)
