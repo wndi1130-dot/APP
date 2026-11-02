@@ -185,6 +185,33 @@ func test_camera_contract_matches_field_and_foot_is_shared() -> void:
 	assert_eq(Horde.table_contract()["padding_px"], 2)
 
 
+func _baked_table() -> Dictionary:
+	# The same keys horde_bake.gd writes, with integer lists like the bake's.
+	var table: Dictionary = Horde.table_contract()
+	var bounds: Array = []
+	var feet: Array = []
+	for i: int in 32:
+		bounds.append([4, 18, 33, 50])
+		feet.append(21)
+	table["bounds_px"] = bounds
+	table["foot_px_x"] = feet
+	table["clip_lengths"] = [1.0, 0.8, 0.6, 0.7, 1.0, 0.8, 0.6, 0.7, 1.0, 0.8, 0.6, 0.7]
+	return table
+
+
+func test_baked_table_reads_back_through_json() -> void:
+	# JSON turns every number into a float; integer contract lists must still match.
+	var table: Dictionary = Horde.parse_table(JSON.stringify(_baked_table(), "\t"))
+	assert_false(table.is_empty())
+	assert_eq(table.get("cell_px"), [42.0, 80.0])
+	var wrong: Dictionary = _baked_table()
+	wrong["cell_px"] = [40, 80]
+	assert_true(Horde.parse_table(JSON.stringify(wrong)).is_empty())
+	var outside: Dictionary = _baked_table()
+	outside["foot_px_x"][3] = 41
+	assert_true(Horde.parse_table(JSON.stringify(outside)).is_empty())
+
+
 func test_direction_boundaries_plus_minus_pi_over_eight() -> void:
 	var zero: float = Horde.camera_theta() + Horde.THETA_ZERO
 	var epsilon: float = 0.00001

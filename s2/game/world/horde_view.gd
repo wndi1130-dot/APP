@@ -515,11 +515,18 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 static func read_table() -> Dictionary:
 	if not FileAccess.file_exists(TABLE_PATH):
 		return {}
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(TABLE_PATH))
+	return parse_table(FileAccess.get_file_as_string(TABLE_PATH))
+
+
+## The baked table's text -> the table, or {} when it does not match this code.
+static func parse_table(text: String) -> Dictionary:
+	var parsed: Variant = JSON.parse_string(text)
 	if not parsed is Dictionary:
 		return {}
 	var table: Dictionary = parsed
-	var contract: Dictionary = table_contract()
+	# JSON gives every number back as a float, and Array == is strict about int
+	# against float, so compare with the contract after the same round trip.
+	var contract: Dictionary = JSON.parse_string(JSON.stringify(table_contract()))
 	for key: String in contract:
 		if table.get(key) != contract[key]:
 			return {}
