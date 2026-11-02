@@ -24,6 +24,15 @@ static var _files: Dictionary = {}
 static var _made: Dictionary = {}
 
 
+## Call on the main thread after the old field/train scenes and their StopLoader
+## and scenery workers have stopped accessing these caches. Safe to call twice.
+## Drop only outer dictionary references; live Labels keep their fonts and files.
+## The next access reloads the files and recreates the same font variations.
+static func release() -> void:
+	_made.clear()
+	_files.clear()
+
+
 ## A mockup length in game px.
 static func px(css: float) -> float:
 	return css * K

@@ -32,6 +32,41 @@ func test_the_faces_are_the_mockups_with_their_licences() -> void:
 		assert_true(FileAccess.file_exists(UiFonts.DIR + f), f)
 
 
+func test_font_release_keeps_labels_and_recreates_equal_faces() -> void:
+	var labels: Array[Label] = []
+	var fonts: Array[FontVariation] = []
+	for kind in [UiFonts.WORD, UiFonts.NUMBER, UiFonts.HAND]:
+		var label: Label = autofree(UiFonts.label("열차 123", kind, 600, 13.0, Color.WHITE, 0.5))
+		labels.append(label)
+		fonts.append(label.get_theme_font("font"))
+	assert_false(UiFonts._made.is_empty())
+	assert_false(UiFonts._files.is_empty())
+	for i in 2:
+		UiFonts.release()
+		assert_true(UiFonts._made.is_empty())
+		assert_true(UiFonts._files.is_empty())
+	for kind in [UiFonts.WORD, UiFonts.NUMBER, UiFonts.HAND]:
+		var old: FontVariation = fonts[kind]
+		assert_true(is_instance_valid(labels[kind]))
+		assert_same(labels[kind].get_theme_font("font"), old)
+		assert_false(old.get_font_name().is_empty())
+		assert_eq(labels[kind].get_theme_font_size("font_size"), UiFonts.size(13.0))
+		var label: Label = autofree(UiFonts.label("열차 123", kind, 600, 13.0, Color.WHITE, 0.5))
+		var fresh: FontVariation = label.get_theme_font("font")
+		assert_not_same(fresh, old, "the variation is recreated")
+		assert_eq(fresh.get_font_name(), old.get_font_name())
+		assert_eq(fresh.get_font_style_name(), old.get_font_style_name())
+		assert_eq(fresh.base_font.resource_path, old.base_font.resource_path)
+		assert_eq(label.get_theme_font_size("font_size"), labels[kind].get_theme_font_size("font_size"))
+		for property: String in ["spacing_glyph", "variation_opentype", "variation_embolden",
+				"variation_transform", "variation_face_index", "opentype_features"]:
+			assert_eq(fresh.get(property), old.get(property), property)
+		assert_eq(fresh.fallbacks.size(), old.fallbacks.size())
+		for i in fresh.fallbacks.size():
+			assert_eq(fresh.fallbacks[i].get_font_name(), old.fallbacks[i].get_font_name())
+			assert_eq(fresh.fallbacks[i].resource_path, old.fallbacks[i].resource_path)
+
+
 func test_the_lamp_key_is_148_by_48_and_goes_dim_when_off() -> void:
 	var k = LampKey.new("보내기")
 	add_child_autofree(k)

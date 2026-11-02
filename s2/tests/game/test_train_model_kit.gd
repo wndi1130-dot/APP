@@ -208,6 +208,48 @@ func test_step_and_patches_require_door_and_window_clearance() -> void:
 	assert_has(Kit.catalog()["part_rules"]["coach_window_frame"]["requires"], "frame_missing")
 
 
+func test_release_keeps_stage_nodes_and_recreates_equal_models() -> void:
+	var root := Kit.create_stage(autofree(Node3D.new()), true)
+	var nodes: Array = root.get_children()
+	var meshes: Array[Mesh] = []
+	var surfaces: Array[int] = []
+	assert_false(nodes.is_empty())
+	for node: MultiMeshInstance3D in nodes:
+		meshes.append(node.multimesh.mesh)
+		surfaces.append(node.multimesh.mesh.get_surface_count())
+	assert_false(Kit._libraries.is_empty())
+	assert_false(Kit._cuts.is_empty())
+	var catalog: Dictionary = Kit._catalog.duplicate(true)
+	var porosity: ImageTexture = Kit._porosity_tex
+	var glow_mesh: QuadMesh = Kit._glow_mesh
+	var glow_material: StandardMaterial3D = Kit._glow_material
+	for i in 2:
+		Kit.release()
+		assert_true(Kit._libraries.is_empty())
+		assert_true(Kit._cuts.is_empty())
+	assert_eq(Kit._catalog, catalog)
+	assert_same(Kit._porosity_tex, porosity)
+	assert_same(Kit._glow_mesh, glow_mesh)
+	assert_same(Kit._glow_material, glow_material)
+	for i in nodes.size():
+		assert_true(is_instance_valid(nodes[i]))
+		assert_not_null(nodes[i].multimesh.mesh)
+		assert_same(nodes[i].multimesh.mesh, meshes[i])
+		assert_eq(nodes[i].multimesh.mesh.get_surface_count(), surfaces[i])
+	var fresh := Kit.create_stage(autofree(Node3D.new()), true)
+	assert_eq(fresh.get_child_count(), nodes.size(), "same model mesh count, both LODs")
+	for i in mini(fresh.get_child_count(), nodes.size()):
+		var node := fresh.get_child(i) as MultiMeshInstance3D
+		assert_eq(node.name, nodes[i].name)
+		assert_eq(node.multimesh.mesh.get_surface_count(), surfaces[i])
+		assert_eq(node.multimesh.instance_count, nodes[i].multimesh.instance_count)
+		assert_eq(node.transform, nodes[i].transform)
+		for instance in mini(node.multimesh.instance_count, nodes[i].multimesh.instance_count):
+			assert_eq(node.multimesh.get_instance_transform(instance), nodes[i].multimesh.get_instance_transform(instance))
+	assert_false(Kit._libraries.is_empty())
+	assert_false(Kit._cuts.is_empty())
+
+
 func test_home_cutaway_removes_only_front_upper_middle_triangles() -> void:
 	for lod in 2:
 		var row: Dictionary = Kit.asset_meshes("coach_medic")[lod][0]
