@@ -39,7 +39,8 @@ const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
 ## Set by _decode when a base64 run is not one; from_json then takes the save as broken.
 static var _decode_bad: bool = false
-static var _base64_line: RegEx = RegEx.create_from_string("^[A-Za-z0-9+/]*={0,2}$")
+## The whole string (\z: a line end before the end is not one), padding only at the end.
+static var _base64_line: RegEx = RegEx.create_from_string("^[A-Za-z0-9+/]*={0,2}\\z")
 ## Tests only: fail one step of the next write; empty is off, reset on entry.
 static var _test_fail_step: String = ""
 ## Tests only: counts actual parses of the previous slot, not new-file validation.
@@ -195,10 +196,8 @@ static func from_json(text: String) -> Dictionary:
 		return {}
 	if parsed.get("kind") != KIND or not int(version) in READ_VERSIONS:
 		return {}
-	_decode_bad = false
-	var decoded: Variant = _decode(parsed)
-	if _decode_bad or not decoded is Dictionary or not _whole(decoded):
-		_decode_bad = false
+	var decoded: Variant = decode_checked(parsed)
+	if not decoded is Dictionary or not _whole(decoded):
 		return {}
 	var d: Dictionary = decoded
 	d["version"] = int(d["version"])
@@ -1203,7 +1202,11 @@ static func _encode(v: Variant) -> Variant:
 
 static func _decode(v: Variant) -> Variant:
 	if v is Dictionary:
-		if v.has("$type") and v.has("base64") and v.size() == 2:
+		# A packed tag is these two keys and nothing else (no old "value" beside it).
+		if v.has("$type") and v.has("base64"):
+			if v.size() != 2:
+				_decode_bad = true
+				return null
 			return _unpack(String(v["$type"]), v["base64"])
 		if v.has("$type") and v.has("value"):
 			var value: Variant = v["value"]
@@ -1240,13 +1243,30 @@ static func _decode(v: Variant) -> Variant:
 	return v
 
 
+## A whole parsed save decoded (_decode), or null when a packed run in it is broken: the field
+## slot and the slice and train slots (slice_save.gd) read through here.
+static func decode_checked(v: Variant) -> Variant:
+	_decode_bad = false
+	var decoded: Variant = _decode(v)
+	if _decode_bad:
+		_decode_bad = false
+		return null
+	return decoded
+
+
 ## A base64 run back as the packed array it was (_encode); a line that is not base64, or an
 ## int32 run cut between numbers, marks the save broken (_decode_bad) rather than guess.
 static func _unpack(kind: String, text: Variant) -> Variant:
 	if not text is String or (text as String).length() % 4 != 0 or _base64_line.search(text) == null:
 		_decode_bad = true
 		return null
-	var raw: PackedByteArray = PackedByteArray() if (text as String).is_empty() else Marshalls.base64_to_raw(text)
+	var line: String = text
+	var raw: PackedByteArray = PackedByteArray() if line.is_empty() else Marshalls.base64_to_raw(line)
+	var padding: int = 2 if line.ends_with("==") else (1 if line.ends_with("=") else 0)
+	# Three bytes a four-letter group, less the padding: what a real base64 line decodes to.
+	if raw.size() != (line.length() >> 2) * 3 - padding:
+		_decode_bad = true
+		return null
 	match kind:
 		"PackedByteArray":
 			return raw

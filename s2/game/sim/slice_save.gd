@@ -109,7 +109,10 @@ static func _parse(at: String, source: Dictionary = {}) -> Dictionary:
 	var json := JSON.new()
 	if json.parse(text) != OK or not json.data is Dictionary:
 		return {}
-	var decoded: Dictionary = FieldSave._decode(json.data)
+	# A broken packed run in it is a broken file, as a cut-off one (FieldSave.decode_checked).
+	var decoded: Variant = FieldSave.decode_checked(json.data)
+	if not decoded is Dictionary:
+		return {}
 	source["train_sha"] = text.sha256_text()
 	return decoded
 

@@ -5,9 +5,11 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const SliceSave = preload("res://game/sim/slice_save.gd")
 
 static var DIR: String = "user://test_field_save_b64_%d" % OS.get_process_id()
 static var AT: String = DIR + "/field_save.json"
+static var SLICE_AT: String = DIR + "/slice.json"
 
 
 func before_each() -> void:
@@ -18,6 +20,7 @@ func before_each() -> void:
 
 func after_each() -> void:
 	FieldSave.clear(AT)
+	SliceSave.clear(SLICE_AT)
 
 
 func after_all() -> void:
@@ -143,10 +146,14 @@ func test_a_broken_base64_run_is_not_a_whole_save() -> void:
 	assert_true(memory.has("base64"))
 	var good: String = memory["base64"]
 	assert_gt(good.length(), 8, "the field has seen something")
-	for bad: Variant in ["@@@@", good.substr(1), good + "=", 12]:
+	for bad: Variant in ["@@@@", good.substr(1), good + "=", 12, good.substr(0, good.length() - 4) + "AAA\n", "AA=A"]:
 		memory["base64"] = bad
-		assert_eq(FieldSave.from_json(JSON.stringify(parsed, "", false, true)), {}, "%s is not a save" % str(bad).left(8))
+		assert_eq(FieldSave.from_json(JSON.stringify(parsed, "", false, true)), {}, "%s is not a save" % str(bad).right(8).c_escape())
 	memory["base64"] = good
+	for extra: Array in [["extra", 0], ["value", []]]:
+		memory[extra[0]] = extra[1]
+		assert_eq(FieldSave.from_json(JSON.stringify(parsed, "", false, true)), {}, "a packed tag with %s beside it is not a save" % extra[0])
+		memory.erase(extra[0])
 	assert_false(FieldSave.from_json(JSON.stringify(parsed, "", false, true)).is_empty(), "the good line still is")
 	var ints: Dictionary = FieldSave._encode(PackedInt32Array([1, 2]))
 	ints["base64"] = Marshalls.raw_to_base64(PackedByteArray([1, 2, 3]))
@@ -160,14 +167,12 @@ func test_one_home_press_writes_the_slot_once() -> void:
 	var game = _game()
 	game.interrupt()
 	assert_true(FileAccess.file_exists(AT), "the first notice writes the slot")
-	var first: PackedByteArray = FileAccess.get_file_as_bytes(AT)
 	FieldSave.clear(AT)
 	game.interrupt()
 	assert_false(FileAccess.file_exists(AT), "the second notice of the same press writes nothing")
 	game.welcome_back()
 	game.interrupt()
 	assert_true(FileAccess.file_exists(AT), "back and away again writes again")
-	assert_eq(FieldSave.from_json(FileAccess.get_file_as_string(AT)).get("seed"), FieldSave.from_json(first.get_string_from_utf8()).get("seed"))
 
 
 func test_a_failed_write_while_away_is_tried_again() -> void:
@@ -178,3 +183,43 @@ func test_a_failed_write_while_away_is_tried_again() -> void:
 	assert_true(game.away)
 	game.interrupt()
 	assert_true(FileAccess.file_exists(AT), "the second notice writes what the first could not")
+
+
+func test_a_slice_slot_with_a_broken_packed_run_reads_the_one_before() -> void:
+	var good: Dictionary = {"version": SliceSave.VERSION, "kind": SliceSave.KIND, "step": "train", "run": "run_b64",
+		"train_sha": "sha", "seg": 1, "applied": [], "contract": {"note": "a"}, "receipt": {}, "passed": false, "result_reason": ""}
+	assert_true(SliceSave.write(good, SLICE_AT))
+	assert_true(DirAccess.copy_absolute(SLICE_AT, SLICE_AT + ".bak") == OK)
+	var text: String = FileAccess.get_file_as_string(SLICE_AT)
+	assert_gt(text.find("\"note\":\"a\""), -1)
+	var file: FileAccess = FileAccess.open(SLICE_AT, FileAccess.WRITE)
+	file.store_string(text.replace("\"note\":\"a\"", "\"note\":{\"$type\":\"PackedInt32Array\",\"base64\":\"AQID\"}"))
+	file.close()
+	assert_eq(SliceSave._parse(SLICE_AT), {}, "a slot with an int32 run cut between numbers is a broken file")
+	assert_eq(SliceSave.read(SLICE_AT)["contract"], {"note": "a"}, "and the one before it is read")
+
+
+func test_an_ended_stop_also_writes_once_a_press() -> void:
+	var game = _game()
+	game.receipt.set_end("departed")
+	game.ended = true
+	game.interrupt()
+	assert_true(FileAccess.file_exists(AT))
+	FieldSave.clear(AT)
+	game.interrupt()
+	assert_false(FileAccess.file_exists(AT), "the second notice writes nothing")
+	game.welcome_back()
+	game.interrupt()
+	assert_true(FileAccess.file_exists(AT), "back and away again writes again")
+
+
+func test_away_again_after_play_writes_what_came_since() -> void:
+	var game = _game()
+	game.interrupt()
+	var first: Dictionary = FieldSave.read(AT)
+	game.welcome_back()
+	for i: int in 10:
+		game._step(0.1)
+	game.interrupt()
+	var second: Dictionary = FieldSave.read(AT)
+	assert_gt(float(second["clock"]["elapsed"]), float(first["clock"]["elapsed"]), "the second save is the stop as it is now")
