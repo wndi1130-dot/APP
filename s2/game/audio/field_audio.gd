@@ -125,8 +125,21 @@ const CREAK_VOICE: Array = ["floor_creak", 0.35, 0.45, 0.55]
 const CREAK_STANDIN: String = "wooden"
 ## The groups whose own files are heard at their own pitch (low, high), not at the
 ## row's, which was set to bend the stand-in into shape (_voice_or_standin): a
-## creak recorded as a creak is not pitched an octave down.
-const OWN_PITCH: Dictionary = {"floor_creak": [0.92, 1.08]}
+## creak recorded as a creak is not pitched an octave down. Third, dB on the row's
+## loudness so that the file is as loud as its stand-in was (0.4 s loudness,
+## measured; at most +6): the rows were set by the stand-ins.
+const OWN_VOICE: Dictionary = {
+	"floor_creak": [0.92, 1.08, 6.0],
+	"door_open": [0.96, 1.04, 4.8],
+	"door_close": [0.96, 1.04, 4.1],
+	"door_unlock": [0.97, 1.03, 3.0],
+	"door_locked": [0.94, 1.06, 2.7],     # one file: a wider wobble
+	"boarded": [0.94, 1.04, 6.0],
+	"window_open": [0.96, 1.04, 1.3],
+	"window_close": [0.96, 1.04, 5.6],
+	"curtain": [0.94, 1.06, -2.6],
+	"window_vault": [0.94, 1.06, -2.3],
+}
 ## A step by the floor underfoot (FieldGrid.Floor: SNOW, ROAD, PLATFORM, WOOD,
 ## RAIL, DEEP_SNOW, ICE, GRAVEL): the groups to try in turn, loudness and pitch.
 ## Rails are on ballast; deep snow is the snow, lower and muffled (as the dead
@@ -1845,9 +1858,11 @@ func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var lin: float = float(voice[1]) * clampf(1.0 - d / 60.0, 0.0, 1.0)
 	var pitch := randf_range(float(voice[2]), float(voice[3]))
 	if has(group):
-		if OWN_PITCH.has(group):
-			pitch = randf_range(float(OWN_PITCH[group][0]), float(OWN_PITCH[group][1]))
-		_one_shot(group, at, lin, pitch, null, _bus_at(at))
+		if OWN_VOICE.has(group):
+			var mine: Array = OWN_VOICE[group]
+			pitch = randf_range(float(mine[0]), float(mine[1]))
+			lin *= db_to_linear(float(mine[2]))
+		_one_shot(group, at, lin, pitch, lib[group][_fresh_file(group)], _bus_at(at))
 		return
 	if standin.begins_with("@"):
 		var own: String = standin.substr(1)
