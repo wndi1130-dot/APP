@@ -1,6 +1,8 @@
 extends "res://addons/gut/test.gd"
 
 const FieldGrid = preload("res://game/world/field_grid.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
+const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const StoryMaps = preload("res://game/world/story_maps.gd")
 const FreightReference = preload("res://game/world/maps/freight_06.gd")
 const S = FieldGrid.Solid
@@ -20,6 +22,7 @@ const KEYS = [
 const BASE_KINDS: Array[String] = ["mine", "lodge", "sawmill", "lake", "freight", "houses", "hospital", "factory", "church", "office", "summit", "bare_line"]
 const SPECS: Dictionary = {
 	"story_01": {
+		"sides": ["upper", "lower"],
 		"width": 140, "height": 100, "area": 14000, "borrowed_kind": "freight", "min_zones": 3, "max_zones": 4,
 		"spots": ["story_porter_01", "story_porter_02", "story_porter_03", "story_porter_04", "story_porter_05", "story_platform_end"],
 		"porter_steps": 130,
@@ -27,12 +30,14 @@ const SPECS: Dictionary = {
 		"safe_buildings": []
 	},
 	"story_02": {
+		"sides": ["upper", "lower"],
 		"width": 185, "height": 145, "area": 25375, "borrowed_kind": "freight", "min_zones": 4, "max_zones": 4,
 		"spots": ["work_site", "story_bridge_front", "story_machine_room", "story_rear_view"],
 		"spot_kinds": {"work_site": "work_site"},
 		"safe_buildings": ["기계실"]
 	},
 	"story_03": {
+		"sides": ["upper", "lower"],
 		"width": 190, "height": 190, "area": 36100, "borrowed_kind": "office", "min_zones": 4, "max_zones": 5,
 		"spots": ["story_transmitter", "story_log", "story_generator", "story_boiler_path"],
 		"safe_buildings": ["송신실", "발전기 헛간"]
@@ -169,7 +174,7 @@ func test_all_recorded_coordinates_fit_the_final_grid() -> void:
 			assert_true(g.inside(c), str(c))
 
 
-func test_horizontal_train_clear_doors_and_both_returns() -> void:
+func test_horizontal_train_clear_doors_and_specified_returns() -> void:
 	for data in built:
 		var g: FieldGrid = data["grid"]
 		var train: Rect2i = data["train"]
@@ -178,10 +183,15 @@ func test_horizontal_train_clear_doors_and_both_returns() -> void:
 		assert_lt(train.end.y, g.height)
 		assert_eq(data["train_cars"].size(), 5)
 		assert_eq(data["train_cars"][-1]["kind"], "engine")
-		assert_eq(data["spawns"]["train_door"], data["train_doors"]["upper"] + data["train_doors"]["lower"])
-		for side in ["upper", "lower"]:
+		var sides: Array = SPECS[data["place_id"]]["sides"]
+		assert_eq(data["bands"].size(), sides.size())
+		assert_eq(data["train_doors"].size(), sides.size())
+		var doors: Array = []
+		for side: String in sides:
 			assert_true(data["bands"].has(side))
+			assert_true(data["train_doors"].has(side))
 			assert_true(data["spots"].has("unload_" + side))
+			doors.append_array(data["train_doors"][side])
 			var band: Rect2i = data["bands"][side]
 			assert_eq(band.size.x, 120)
 			assert_eq(band.position.x, train.position.x - 20)
@@ -198,6 +208,7 @@ func test_horizontal_train_clear_doors_and_both_returns() -> void:
 			var unload: Dictionary = data["spots"]["unload_" + side]
 			assert_eq(unload["kind"], "unload")
 			assert_true(band.encloses(unload["zone_rect"]))
+		assert_eq(data["spawns"]["train_door"], doors)
 		for crossing in data["crossings"]:
 			for c: Vector2i in crossing["cells"]:
 				assert_false(train.has_point(c))
@@ -277,7 +288,7 @@ func test_barricades_leave_a_broad_open_side() -> void:
 		var reached: PackedInt32Array = walks[data["place_id"]]["blocked"]
 		for c: Vector2i in data["barricade_slots"]:
 			assert_true(g.people_can_walk(c))
-		for side in ["upper", "lower"]:
+		for side: String in SPECS[data["place_id"]]["sides"]:
 			var band: Rect2i = data["bands"][side]
 			var y: int = band.position.y if side == "upper" else band.end.y - 1
 			var run: int = 0
@@ -820,3 +831,97 @@ func test_story_02_and_story_03_safe_maps_have_no_body_props_or_forbidden_set_dr
 			var kind: String = prop["kind"]
 			for forbidden in ["corpse", "body", "barbed", "watchtower", "chimney", "smoke", "luggage", "shoe", "clothes", "ramp"]:
 				assert_false(kind.contains(forbidden), id + ": " + kind)
+
+
+func test_story_03_furnished_transmitter_keeps_story_props() -> void:
+	var data: Dictionary = FieldMaps.build("story_03")
+	var g: FieldGrid = data["grid"]
+	assert_gt(data["room_stats"]["placed"], 0)
+	for source: Dictionary in MAPS[2].PLAN["props"]:
+		if source.get("keep", false) != true:
+			continue
+		var matches: Array = []
+		for prop: Dictionary in data["props"]:
+			if prop["kind"] == source["kind"] and prop.get("keep", false) == true:
+				matches.append(prop)
+		assert_eq(matches.size(), 1, source["kind"])
+		if matches.size() != 1:
+			continue
+		assert_eq(matches[0]["rect"], _plan_rect(source["rect"]), source["kind"])
+		assert_eq(matches[0]["facing"], source["facing"], source["kind"])
+		assert_eq(g.building_at(matches[0]["rect"].position), 0, source["kind"])
+
+
+func test_story_03_unmarked_transmitter_props_are_replaced() -> void:
+	for explicit_false in [false, true]:
+		var data: Dictionary = MAPS[2].build()
+		for prop: Dictionary in data["props"]:
+			if prop["kind"] in ["radio_set", "cold_stove"]:
+				prop.erase("keep")
+				if explicit_false:
+					prop["keep"] = false
+		RoomFurnish.furnish_rooms(data)
+		for prop: Dictionary in data["props"]:
+			assert_false(prop["kind"] in ["radio_set", "cold_stove"], prop["kind"])
+
+
+func test_story_03_keep_prevents_front_relocation() -> void:
+	for keep in [true, false]:
+		var data: Dictionary = MAPS[2].build()
+		var g: FieldGrid = data["grid"]
+		var radio: Dictionary = {}
+		for prop: Dictionary in data["props"]:
+			if prop["kind"] == "radio_set":
+				radio = prop
+				break
+		for c in _cells(radio["rect"]):
+			g.set_solid(c, S.NONE)
+		var front := Rect2i(80, 61, 2, 1)
+		radio["rect"] = front
+		radio["keep"] = keep
+		for c in _cells(front):
+			g.set_solid(c, S.LOW)
+		RoomFurnish.clear_fronts(data)
+		if keep:
+			assert_true(data["props"].has(radio))
+			assert_eq(radio["rect"], front)
+		else:
+			assert_true(not data["props"].has(radio) or radio["rect"] != front)
+
+
+func test_story_03_only_two_climbs_enter_the_summit() -> void:
+	var data: Dictionary = _story("story_03")
+	var g: FieldGrid = data["grid"]
+	var plan: Dictionary = MAPS[2].PLAN
+	var yard := _plan_rect(plan["yard"])
+	# 길 자체와 한 칸 둘레를 각각 닫아도 다른 축으로 마당에 들어갈 수 없어야 한다.
+	for padding in [0, 1]:
+		var blocked: Dictionary = {}
+		for route in ["winding", "shortcut"]:
+			for row in plan[route]:
+				for c in _cells(_plan_rect(row).grow(padding)):
+					blocked[c] = true
+		var reached := _flood(data, false, blocked)
+		var checked: int = 0
+		for c in _cells(yard):
+			if g.people_can_walk(c) and not blocked.has(c):
+				assert_gte(walks["story_03"]["people"][g.index(c)], 0, str(c))
+				assert_eq(reached[g.index(c)], -1, str(c))
+				checked += 1
+		assert_gt(checked, 0)
+	assert_eq(g.solid_at(Vector2i(130, 76)), S.WALL)
+
+
+func test_story_03_climb_floors_are_road_and_gravel() -> void:
+	var g: FieldGrid = _story("story_03")["grid"]
+	var plan: Dictionary = MAPS[2].PLAN
+	for route in ["winding", "shortcut"]:
+		var expected: int = F.ROAD if route == "winding" else F.GRAVEL
+		var checked: int = 0
+		for row in plan[route]:
+			for c in _cells(_plan_rect(row)):
+				# 문턱의 실내 나무 바닥은 기존 건물 계약을 따른다.
+				if g.building_at(c) < 0:
+					assert_eq(g.floor_at(c), expected, route + ": " + str(c))
+					checked += 1
+		assert_gt(checked, 0)
