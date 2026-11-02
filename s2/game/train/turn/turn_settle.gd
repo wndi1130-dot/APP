@@ -53,7 +53,7 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var supplies: Dictionary = Supplies.use(g, t)
 	var shop: Dictionary = TrainWorkshop.settle_stretch(g, t)
 	if not shop.get("did", []).is_empty():
-		notes.append("공방: " + ", ".join(shop["did"]))
+		notes.append("공방: " + ", ".join(shop["did"]) + ".")
 	hub_leak_tick(g, t, notes)
 	g = Turn.drift(g, t)
 	Supplies.relations(g, t, supplies)

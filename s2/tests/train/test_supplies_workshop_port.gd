@@ -20,6 +20,10 @@ var _t: Dictionary
 
 class ResumeProbe extends SliceFlow:
 	var replayed: bool = false
+	var posted: Array = []
+	func _post_shop_events(events: Array) -> void:
+		posted.append_array(events)
+		super._post_shop_events(events)
 	func _take(g: Dictionary) -> void:
 		super._take(g)
 		for event: Dictionary in pending_shop_events:
@@ -86,6 +90,27 @@ func test_enabled_board_one_stretch_per_settle_through_slice() -> void:
 		assert_eq(var_to_bytes(flow.train_g), bytes)
 		assert_true(flow.pending_shop_events.is_empty())
 		after_each()
+
+
+func test_enabled_halted_settle_still_shows_workshop_news_once() -> void:
+	var flow: ResumeProbe = _flow(false)
+	var g: Dictionary = flow.train_g.duplicate(true)
+	g["supOn"] = true
+	g["dom"]["target"] = 0
+	assert_true(Workshop.start(g, "bow"))
+	g["coal"] = 0.0
+	var after: Dictionary = Settle.settle(g, flow.train_t)
+	assert_ne(SliceFlow.train_halt_line(after), "", "this settlement halts the train")
+	var made: Array = after["lastSettle"]["workshop"]["events"]
+	assert_eq(made.size(), 1)
+	flow._take(after)
+	flow.go(flow._index_of("travel"))
+	await wait_process_frames(2)
+	assert_eq(flow.posted, made, "the halt screen still shows what was made")
+	assert_true(flow.pending_shop_events.is_empty())
+	flow.go(flow._index_of("travel"))
+	await wait_process_frames(2)
+	assert_eq(flow.posted, made, "once")
 
 
 func test_enabled_workshop_events_not_replayed_on_resume() -> void:
@@ -231,7 +256,7 @@ func test_enabled_settle_runs_one_stretch_after_use_before_leak() -> void:
 	assert_true(after["lastSettle"].has("workshop"))
 	assert_eq(after["lastSettle"]["workshop"]["seg"], int(g["seg"]))
 	assert_eq(int(after["dom"]["parts"]), per_stretch, "one stretch only")
-	assert_eq(after["lastSettle"]["notes"].count("공방: 부품 %d" % per_stretch), 1)
+	assert_eq(after["lastSettle"]["notes"].count("공방: 부품 %d." % per_stretch), 1, "S1 hooks.ts note")
 	# Check the placement as well as the observable one-stretch receipt.
 	var source: String = FileAccess.get_file_as_string("res://game/train/turn/turn_settle.gd")
 	assert_lt(source.find("Supplies.use(g, t)"), source.find("TrainWorkshop.settle_stretch(g, t)"))

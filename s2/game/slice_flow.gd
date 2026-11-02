@@ -536,6 +536,11 @@ func _show_step(i: int) -> void:
 	soot_bot.visible = gauges.visible and not SHEET_STEPS.has(id)
 	if train_halt_line(train_g) != "":
 		_show_train("end" if train_g.get("phase") == "end" else "travel", int(train_g.get("seg", row[2])))
+		# A supplies run's workshop works inside the settlement even when the train halts
+		# or the run ends there: what it made is still seen, once.
+		if bool(train_g.get("supOn", false)):
+			_post_shop_events(pending_shop_events)
+			pending_shop_events = []
 		_show_panel("끝" if id == "end" else train_halt_title(train_g), load("res://game/train/turn/turn_end.gd").panel_lines(train_g, train_t, train_halt_line(train_g)), "처음으로" if id == "end" else "끝")
 		return
 	# The next stop is known on the train: its map is made ready off the main
@@ -561,10 +566,7 @@ func _show_step(i: int) -> void:
 		shop_events = TrainWorkshop.stretch(train_g)["events"]
 	if String(row[1]) != "":
 		_show_train(String(row[1]), int(train_g["seg"]) if _is_campaign() else int(row[2]))
-		# What it made, for the people on the train to see (the train scene's events).
-		if is_instance_valid(train) and train.has_method("post_event"):
-			for ev: Dictionary in shop_events:
-				train.call("post_event", ev)
+		_post_shop_events(shop_events)
 	if id == "receipt":
 		_show_receipt("여기까지" if _is_campaign() and int(train_g["campaign"]["cursor"]) == CampaignRoute.size() - 1 else String(row[4]))
 		return
@@ -1299,6 +1301,13 @@ static func quiet_receipt(d: Dictionary) -> Dictionary:
 ## A supplies run's workshop works inside the settlement (turn_settle.gd); the slice only
 ## shows its news once. The settlement already shown is read from the board as it comes in,
 ## before any return is applied, so a resumed run never shows an old stretch's news again.
+## What the workshop made, for the people on the train to see (the train scene's events).
+func _post_shop_events(events: Array) -> void:
+	if is_instance_valid(train) and train.has_method("post_event"):
+		for ev: Dictionary in events:
+			train.call("post_event", ev)
+
+
 func _seed_shop_settle() -> void:
 	shop_settle_seg = -1
 	if not bool(train_g.get("supOn", false)):
