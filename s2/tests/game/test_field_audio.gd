@@ -310,6 +310,25 @@ func test_every_floor_ships_steps_of_its_own() -> void:
 		assert_between(s.get_length(), 0.15, 1.0, "floor_creak")
 
 
+## A creak of its own is heard at its own pitch (OWN_PITCH); the wood that stands
+## in for it until then is pitched well down (CREAK_VOICE).
+func test_a_creak_of_its_own_is_not_pitched_down() -> void:
+	var a = game.audio
+	var at: Vector3 = game.player.position + Vector3(1, 0, 0)
+	a.lib["floor_creak"] = [_tone()]
+	for k in range(20):
+		a.floor_creak(at)
+		assert_not_null(a.last_shot, "it is heard")
+		assert_between(float(a.last_shot.pitch_scale), 0.92, 1.08, "its own pitch")
+	a.lib["floor_creak"] = []
+	if not a.lib.has("impact"):
+		a.lib["impact"] = a._load_group("impact")
+	for k in range(20):
+		a.floor_creak(at)
+		assert_not_null(a.last_shot, "the stand-in is heard")
+		assert_between(float(a.last_shot.pitch_scale), 0.45, 0.55, "the stand-in, pitched down")
+
+
 func test_the_radio_hisses_then_calls_and_an_urgent_call_is_the_loudest() -> void:
 	var a = game.audio
 	for g in ["radio_hiss", "radio"]:
