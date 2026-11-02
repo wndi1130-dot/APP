@@ -585,6 +585,11 @@ static func _foot(hud, p, at: Dictionary, bag: bool) -> Label:
 			word += " · 다 챙기면 %.1f초" % seconds
 	var label := _label(word, 11.0, GlassPane.INK3)
 	label.name = "TakeAll" if seconds > 0.0 else "MoveHint"
+	if bag:
+		# The body's number ends this line: it wraps whole rather than lose its end.
+		label.clip_text = false
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.text = UiFonts.keep_all(word)
 	return label
 
 

@@ -74,7 +74,7 @@ static func limit(bag: String, strength: int) -> float:
 ## 2026-11-02 user's pick: only contents inside the bag receive relief, and only
 ## up to the bag's limit; what is packed past it weighs in whole.
 ## Hand/body loads stay whole; storage checks keep actual weight.
-static func body_burden(bag: String, packed: float, held: float = 0.0, p_limit: float = INF) -> float:
+static func body_burden(bag: String, packed: float, held: float, p_limit: float) -> float:
 	var row: Dictionary = BAGS.get(bag, BAGS["pockets"])
 	var inside: float = clampf(packed, 0.0, maxf(0.0, p_limit))
 	return maxf(0.0, held) + inside * (1.0 - float(row["relief"])) + maxf(0.0, packed - inside)

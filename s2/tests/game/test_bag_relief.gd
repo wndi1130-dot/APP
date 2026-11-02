@@ -42,7 +42,7 @@ func test_packed_past_the_limit_is_not_relieved() -> void:
 	var big = _person("big_pack", 15)
 	assert_almost_eq(big.body_burden(), 12.0 * 0.8 + 3.0, 0.00001)
 	assert_almost_eq(Carry.body_burden("pack", 10.0, 1.0, 8.0), 1.0 + 5.6 + 2.0, 0.00001)
-	assert_almost_eq(Carry.body_burden("pack", 10.0, 1.0), 1.0 + 7.0, 0.00001, "with no limit given, all of it lightened")
+	assert_almost_eq(Carry.body_burden("pack", 10.0, 1.0, 10.0), 1.0 + 7.0, 0.00001, "a strong carrier's limit lightens all ten")
 
 
 # Over (no running) is the bag packed past its limit, the weight outside the bag
@@ -63,6 +63,12 @@ func test_a_full_bag_runs_and_an_over_filled_one_does_not() -> void:
 	bare.items = {"wood": 17}
 	assert_lt(bare.body_burden(), 2.0 * bare.carry_limit(), "lightened short of double")
 	assert_eq(bare.carry_state(), 3, "packed past double still cannot move")
+	# Packed past the limit but short of double, the bell in the arms takes the whole past double.
+	bare.items = {"wood": 13, "symbol_bell": 1}
+	assert_almost_eq(bare.weight(), 17.0, 0.00001)
+	assert_eq(bare.carry_state(), 3, "the whole weight past double, not only what is packed")
+	bare.items = {"wood": 16}
+	assert_eq(bare.carry_state(), 2, "exactly double still moves")
 
 
 func test_what_is_held_can_put_the_body_over() -> void:
@@ -77,7 +83,7 @@ func test_pockets_have_no_relief() -> void:
 	var p = _person("pockets", 3)
 	assert_eq(p.body_burden(), p.weight())
 	assert_eq(p.carry_limit(), 3.0)
-	assert_eq(Carry.body_burden("unknown", 3.0, 2.0), 5.0)
+	assert_eq(Carry.body_burden("unknown", 3.0, 2.0, 3.0), 5.0)
 
 
 func test_the_weapon_in_hand_weighs_as_it_did() -> void:
@@ -153,6 +159,11 @@ func test_companion_cannot_use_relief_as_extra_storage() -> void:
 	game.actions._companion_take(p, box)
 	assert_eq(p.items["wood"], 8, "a full bag cannot accept another item")
 	assert_eq(box["items"], ["wood"], "the item stays in the box")
+	# With room by the actual weight the same call does take it.
+	p.items = {"wood": 7}
+	game.actions._companion_take(p, box)
+	assert_eq(int(p.items.get("wood", 0)), 8, "room in the bag takes the item")
+	assert_true((box["items"] as Array).is_empty(), "the box gives it up")
 
 
 # The body's load is on the bag's weight line at the foot; the head keeps its
@@ -173,3 +184,5 @@ func test_body_number_is_on_the_bag_weight_line() -> void:
 		var line := foot.text.replace(UiFonts.WORD_JOINER, "")
 		assert_true(line.contains("가방 8.0 / 8"))
 		assert_true(line.contains("몸 부담 5.6"))
+		assert_false(foot.clip_text, "the line wraps, its end is never cut off")
+		assert_eq(foot.autowrap_mode, TextServer.AUTOWRAP_WORD_SMART)
