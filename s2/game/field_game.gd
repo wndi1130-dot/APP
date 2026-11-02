@@ -2242,22 +2242,27 @@ func _move_person(p: Person, delta: float) -> void:
 		p.moving = false
 		return
 	var time_left: float = delta
+	# The ground covered over the whole frame, for the footsteps and the gait's pace:
+	# a walk that reaches its point early stood still for the rest of the frame.
+	var gone_total: float = 0.0
+	var last_cell: Vector2i = FieldGrid.cell_of(p.position)
+	var moved: bool = false
 	for _segment: int in range(4):
 		if p.path.is_empty() or time_left <= 0.000000001:
-			return
+			break
 		var next: Vector3 = p.path[0]
 		var d: Vector3 = next - p.position
 		d.y = 0.0
 		var game_level_changes: bool = level_of(next) != level_of(p.position)
 		if game_level_changes and d.length() < 0.12:
 			if time_left < delta:
-				return
+				break
 			Sled.before_move(self, p, Vector3(p.position.x, next.y, p.position.z))
 			p.position.y = next.y
 			p.path.remove_at(0)
 			if p.path.is_empty():
 				p.moving = false
-			return
+			break
 		if d.length() <= 0.00001:
 			p.path.remove_at(0)
 			continue
@@ -2270,7 +2275,7 @@ func _move_person(p: Person, delta: float) -> void:
 			if p == player:
 				hud.toast("너무 무거움")
 				p.stop()
-			return
+			break
 		var way := atan2(d.x, d.z)
 		var face := way
 		if p != player:
@@ -2291,33 +2296,36 @@ func _move_person(p: Person, delta: float) -> void:
 				break
 			remaining += p.path[index - 1].distance_to(p.path[index])
 		if _slow_step_holds(p, spd, remaining, available_speed):
-			return
+			break
 		var segment_time: float = minf(time_left, d.length() / spd)
 		var step := d.normalized() * minf(spd * segment_time, d.length())
 		var dest := p.position + step
 		var dc := FieldGrid.cell_of(dest)
 		if lg == grid and grid.doors.has(dc) and _meets_door(p, grid.doors[dc]):
 			actions.open_door_on_way(p, dc)
-			return
+			break
 		if lg.blocks_body(dc):
 			dest = _slide(p.position, step)
 		dc = FieldGrid.cell_of(dest)
 		if lg == grid and grid.windows.has(dc) and FieldGrid.cell_of(p.position) != dc:
 			if not actions.can_vault_window(p, dc):
-				return
+				break
 			actions.vault_window(p, dc)
 		p.facing = face
-		var gone := Gait.signed_distance(p, dest - p.position)
+		gone_total += Gait.signed_distance(p, dest - p.position)
 		Sled.before_move(self, p, dest)
 		p.position = dest
 		p.moving = true
-		_footsteps(p, segment_time, dc, gone)
+		moved = true
+		last_cell = dc
 		time_left -= segment_time
 		if p.position.distance_to(Vector3(next.x, p.position.y, next.z)) > 0.00001:
-			return
+			break
 		if game_level_changes:
-			return
+			break
 		p.path.remove_at(0)
+	if moved:
+		_footsteps(p, delta, last_cell, gone_total)
 
 
 ## Decision 442: hold before distance clipping; turning keeps its usual clock.
