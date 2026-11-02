@@ -386,8 +386,11 @@ func test_story_01_roundhouse_has_two_front_doors_and_one_visible_deep_door() ->
 	assert_true(exits.has(Vector2i(40, 83)))
 	var front_doors: int = 0
 	for c: Vector2i in g.doors:
+		# Each door's own building number must match the grid under it,
+		# so a door tagged with the wrong building cannot slip out of the count.
+		assert_eq(int(g.doors[c]["building"]), g.building_at(c), "door %s building" % c)
 		# The roundhouse's own outer doors (the platform-side buildings have theirs).
-		if int(g.doors[c]["building"]) != 0:
+		if g.building_at(c) != 0:
 			continue
 		var exterior: bool = false
 		for step in STEP:
