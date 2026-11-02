@@ -18,19 +18,20 @@ jobs:
   # GUT was most of a run (20 of 27 minutes on main 10-26), so its scripts run in
   # parallel shards. Each shard takes every GUT_SHARDS-th script of the sorted list,
   # which split the 10-26 scripts 9.9 / 10.8 minutes. test-and-apk keeps the parse
-  # checks and the export.
+  # checks and the export. Three shards since 11-03: with two, one shard ran 40~60
+  # minutes and #1359's was cancelled by the hour limit just after all its tests passed.
   gut:
-    name: GUT ${{ matrix.shard }}/2
+    name: GUT ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     env:
       GODOT_VERSION: 4.7.2
       GUT_VERSION: 9.7.1
-      GUT_SHARDS: 2
+      GUT_SHARDS: 3
     steps:
       - uses: actions/checkout@v5
 
