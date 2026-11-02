@@ -441,6 +441,9 @@ var item_px_override: Dictionary = {}
 var bag_places: Array = []
 ## What sleeps under the bag pane, each with the alpha it had: [CanvasItem, a].
 var bag_dimmed: Array = []
+## What is put away under the end card (show_end), to come back when it closes.
+var end_cleared: Array = []
+var end_up: bool = false
 ## How far a key that sleeps under the bag pane fades (its alpha times this).
 const BAG_DIM: float = 0.38
 ## The box shown while the player takes a thing out of it (card R1 가): the field
@@ -1646,6 +1649,7 @@ func tick(delta: float) -> void:
 		_tick_debug()
 	overlay.queue_redraw()
 	touch.queue_redraw()
+	_keep_end_clear()
 
 
 ## The promises the stop goes with: what the train sent (opts promises: [{kind,
@@ -2602,6 +2606,7 @@ func _close_modal(animate: bool = true) -> void:
 	# A thing still coming out goes on in the field (field_actions.gd take).
 	taking_box = ""
 	_wake_under_bag()
+	_bring_back_under_end()
 	if modal != null:
 		var old: Control = modal
 		var pane: GlassPane = modal_pane
@@ -3821,19 +3826,25 @@ func _tick_leave(delta: float) -> void:
 
 
 ## The end of a stop played alone: on the shade, the return receipt on the
-## stop's own sheet at the left, as the slice hands it back (receipt_sheet.gd,
-## its foot bare), and at the right, from under the band to the sheet's foot,
-## what the play came to (the real time and the noise, the holdout's lines) in
-## glass ink over the keys: copy the receipt, copy the record, again. The
-## stop's choices are in the receipt it copies.
+## stop's own sheet at the left, as the slice hands it back (receipt_sheet.gd),
+## its keys on its own foot: copy the receipt, copy the record as small paper
+## keys, again as the main key. At the right, from under the band, what the play
+## came to (the real time and the noise, the holdout's lines) in glass ink. The
+## field's own keys and words are put away under it, so the paper is the end's
+## only face. The stop's choices are in the receipt it copies.
 func show_end(result: Dictionary) -> void:
 	_close_modal(false)
 	context_rows = []
 	var shade := _open_shade()
+	_clear_under_end()
 	var sheet = ReceiptSheet.new()
 	sheet.name = "Receipt"
 	sheet.result = result
 	sheet.seg = 0
+	sheet.go_word = "다시"
+	sheet.side_keys = [["영수증 복사", _copy.bind(result["receipt_json"], "영수증 복사됨")],
+		["기록 복사", _copy.bind(result["telemetry"], "기록 복사됨")]]
+	sheet.went_on.connect(_restart)
 	shade.add_child(sheet)
 	var side := VBoxContainer.new()
 	side.name = "Record"
@@ -3853,18 +3864,35 @@ func show_end(result: Dictionary) -> void:
 		var l := UiFonts.label(UiFonts.keep_all(String(line)), UiFonts.WORD, 400, 13.0, GlassPane.INK2, 0.39)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		side.add_child(l)
-	var room := Control.new()
-	room.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	room.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	side.add_child(room)
-	# On no pane: the keys take the pane's dark for their ground.
-	var ground: Color = GlassPane.BACKING[0][1]
-	var keys := GlassPane.row()
-	keys.name = "Keys"
-	side.add_child(keys)
-	keys.add_child(GlassPane.key("영수증 복사", _copy.bind(result["receipt_json"], "영수증 복사됨"), "", ground))
-	keys.add_child(GlassPane.key("기록 복사", _copy.bind(result["telemetry"], "기록 복사됨"), "", ground))
-	keys.add_child(GlassPane.key("다시", _restart, "", ground))
+
+
+## The field's keys and words under the end card go, all but the notes (a copy's
+## 「복사됨」); tick keeps them gone however it would show them (the lamp key at
+## dusk too), and closing the card brings back what was up.
+func _clear_under_end() -> void:
+	for c: Node in root.get_children():
+		if c is CanvasItem and c != modal and c != toast_box and (c as CanvasItem).visible:
+			end_cleared.append(c)
+	end_up = true
+	_keep_end_clear()
+
+
+func _keep_end_clear() -> void:
+	if not end_up:
+		return
+	for c: Node in root.get_children():
+		if c is CanvasItem and c != modal and c != toast_box:
+			(c as CanvasItem).visible = false
+
+
+func _bring_back_under_end() -> void:
+	if not end_up:
+		return
+	end_up = false
+	for c in end_cleared:
+		if is_instance_valid(c):
+			(c as CanvasItem).visible = true
+	end_cleared = []
 
 
 func _copy(text: String, note: String) -> void:

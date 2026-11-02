@@ -10,22 +10,24 @@ class FieldProbe extends "res://game/field_game.gd":
 
 var path: String = ""
 var sun: DirectionalLight3D
-var fill: Node3D
+var fill: DirectionalLight3D
 var renderer_before: Dictionary = {}
 var cloud_touched: bool = false
 var fields: Array[Node] = []
+var max_fps_before: int = 0
 
 
 func before_each() -> void:
 	path = "user://test_perf_switch_%d_%d.json" % [OS.get_process_id(), Time.get_ticks_usec()]
 	sun = DirectionalLight3D.new()
-	fill = Node3D.new()
+	fill = DirectionalLight3D.new()
 	add_child_autofree(sun)
 	add_child_autofree(fill)
 	renderer_before = {}
 	cloud_touched = false
 	Switch.restore_renderer()   # start from the project baseline whatever ran before
 	fields = []
+	max_fps_before = Engine.max_fps
 
 
 func after_each() -> void:
@@ -36,6 +38,7 @@ func after_each() -> void:
 		assert_eq(DirAccess.remove_absolute(path), OK)
 	assert_false(FileAccess.file_exists(path))
 	Switch.restore_renderer()   # every test leaves the project baseline, touched or not
+	Engine.max_fps = max_fps_before
 	if not renderer_before.is_empty():
 		assert_eq(Switch.renderer_state(), renderer_before, "project baseline restored")
 	if cloud_touched:
@@ -86,6 +89,8 @@ func _free_field(field: FieldProbe) -> void:
 
 func test_read_missing_file_changes_nothing_and_has_no_reason() -> void:
 	var diagnostic: Dictionary = {}
+	fill.light_energy = 2.5
+	fill.light_specular = 0.75
 	var old_cache: Dictionary = Switch._renderer_state.duplicate()
 	var old_baseline: Dictionary = Switch._renderer_baseline.duplicate()
 	var shadow_before: bool = sun.shadow_enabled
@@ -96,6 +101,9 @@ func test_read_missing_file_changes_nothing_and_has_no_reason() -> void:
 	assert_eq(Switch.restore_renderer(), {})
 	assert_eq(sun.shadow_enabled, shadow_before)
 	assert_true(fill.visible)
+	assert_eq(fill.light_energy, 2.5)
+	assert_eq(fill.light_specular, 0.75)
+	assert_false(fill.has_meta(Switch.FILL_ENERGY))
 	assert_false(sun.has_meta(Switch.CLOUD_OFF))
 	assert_eq(Switch._renderer_state, old_cache)
 	assert_eq(Switch._renderer_baseline, old_baseline)
@@ -218,13 +226,22 @@ func test_empty_and_unknown_settings_leave_the_light_and_fill_unchanged() -> voi
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	sun.directional_shadow_max_distance = 73.0
 	sun.light_energy = 2.5
+	fill.light_energy = 1.5
+	fill.light_specular = 0.75
+	fill.light_color = Color.RED
+	fill.light_cull_mask = 5
 	var old_cache: Dictionary = Switch._renderer_state.duplicate()
-	for settings in [{}, {"unknown": false}]:
+	for settings in [{}, {"unknown": false}, {"sun_shadow": true}]:
 		assert_eq(Switch.apply(sun, fill, settings), {})
 		assert_true(sun.shadow_enabled)
 		assert_eq(sun.directional_shadow_mode, DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS)
 		assert_eq(sun.directional_shadow_max_distance, 73.0)
 		assert_eq(sun.light_energy, 2.5)
+		assert_eq(fill.light_energy, 1.5)
+		assert_eq(fill.light_specular, 0.75)
+		assert_eq(fill.light_color, Color.RED)
+		assert_eq(fill.light_cull_mask, 5)
+		assert_false(fill.has_meta(Switch.FILL_ENERGY))
 		assert_true(fill.visible)
 		assert_false(fill.visibility_changed.is_connected(fill.hide))
 		assert_false(sun.has_meta(Switch.CLOUD_OFF))
@@ -240,6 +257,225 @@ func test_view_fill_stays_hidden_when_the_atmosphere_sets_it_visible() -> void:
 	assert_eq(Switch.apply(sun, fill, {"view_fill": true}), {"view_fill": true})
 	assert_true(fill.visible)
 	assert_false(fill.visibility_changed.is_connected(fill.hide))
+
+
+func test_view_fill_diagnostic_ranges_accept_boundaries_and_clear_reasons() -> void:
+	var values: Dictionary = {"view_fill_specular": [0, 0.5, 1.0], "view_fill_energy": [0.002, 2.5, 4.0, 4]}
+	for key: String in values:
+		for value in values[key]:
+			var settings: Dictionary = {}
+			settings[key] = value
+			var expected: Dictionary = {}
+			expected[key] = float(value)
+			var diagnostic: Dictionary = {"reason": "previous read"}
+			assert_eq(Switch._valid(settings), expected)
+			_write(JSON.stringify(settings))
+			assert_eq(Switch.read(path, diagnostic), expected)
+			assert_eq(diagnostic, {})
+
+
+func test_invalid_fill_diagnostics_keep_other_valid_keys_and_report_reasons() -> void:
+	var invalid: Dictionary = {
+		"view_fill_specular": [-0.001, 1.001, "0", false, null, [], {}, INF, -INF, NAN],
+		"view_fill_energy": [0, 0.001, 4.001, "0.002", true, null, [], {}, INF, -INF, NAN],
+		"view_fill_cull_mask": [-1, 1048576, 0.5, "0", true, null, [], {}, INF, -INF, NAN],
+		"max_fps": [0, 45, 120, -30, 30.5, "60", true, null, [], {}, INF, -INF, NAN],
+	}
+	fill.light_energy = 2.5
+	fill.light_specular = 0.75
+	var mask_before: int = fill.light_cull_mask
+	for key: String in invalid:
+		for value in invalid[key]:
+			var settings: Dictionary = {"sun_shadow": false}
+			settings[key] = value
+			assert_eq(Switch._valid(settings), {"sun_shadow": false})
+			sun.shadow_enabled = true
+			assert_eq(Switch.apply(sun, fill, settings, false), {"sun_shadow": false})
+			assert_false(sun.shadow_enabled)
+			assert_eq(fill.light_energy, 2.5)
+			assert_eq(fill.light_specular, 0.75)
+			assert_eq(fill.light_cull_mask, mask_before)
+			assert_false(fill.has_meta(Switch.FILL_ENERGY))
+			# JSON has no non-finite literals; exercise those through _valid/apply.
+			if value is float and not is_finite(value):
+				continue
+			var diagnostic: Dictionary = {}
+			_write(JSON.stringify(settings))
+			assert_eq(Switch.read(path, diagnostic), {"sun_shadow": false})
+			assert_true(String(diagnostic["reason"]).contains(key))
+			assert_false(String(diagnostic["reason"]).contains("\n"))
+
+
+func test_view_fill_specular_applies_and_reports_only_changes() -> void:
+	fill.light_specular = 0.5
+	fill.light_energy = 2.5
+	for specular: float in [0.0, 1.0]:
+		var settings: Dictionary = {"view_fill_specular": specular}
+		assert_eq(Switch.apply(sun, fill, settings, false), settings)
+		assert_eq(fill.light_specular, specular)
+		assert_eq(fill.light_energy, 2.5)
+		assert_true(fill.visible)
+		assert_eq(Switch.apply(sun, fill, settings, false), {})
+
+
+func test_view_fill_energy_applies_and_reports_only_changes() -> void:
+	fill.light_energy = 2.5
+	fill.light_specular = 0.75
+	# Even matching the current energy must install the minute-update override.
+	for energy: float in [2.5, 0.002, 4.0]:
+		var settings: Dictionary = {"view_fill_energy": energy}
+		assert_eq(Switch.apply(sun, fill, settings, false), settings)
+		assert_almost_eq(fill.light_energy, energy, 0.000001)
+		assert_eq(fill.get_meta(Switch.FILL_ENERGY), energy)
+		assert_eq(fill.light_specular, 0.75)
+		assert_true(fill.visible)
+		assert_eq(Switch.apply(sun, fill, settings, false), {})
+
+
+func test_view_fill_cull_mask_takes_whole_layer_masks_and_survives_minute_updates() -> void:
+	for value in [0, 1, 1048575, 1048575.0]:
+		var diagnostic: Dictionary = {"reason": "previous read"}
+		_write(JSON.stringify({"view_fill_cull_mask": value}))
+		assert_eq(Switch.read(path, diagnostic), {"view_fill_cull_mask": int(value)})
+		assert_eq(diagnostic, {})
+	var field: FieldProbe = _field()
+	field.fx_light = {"fill_energy": 2.0}
+	field._set_view_fill()
+	for mask: int in [1, 5, 1048575, 0]:
+		var settings: Dictionary = {"view_fill_cull_mask": mask}
+		assert_eq(Switch.apply(field.sun, field.view_fill, settings, false), settings)
+		assert_eq(field.view_fill.light_cull_mask, mask)
+		assert_eq(Switch.apply(field.sun, field.view_fill, settings, false), {})
+	# Night hides the light and day brings it back; the mask stays through both.
+	for source_energy: float in [1.0, 0.0, 2.0]:
+		field.fx_light["fill_energy"] = source_energy
+		field._set_view_fill()
+		assert_eq(field.view_fill.light_cull_mask, 0)
+	assert_true(field.view_fill.visible)
+	assert_almost_eq(field.view_fill.light_energy, 2.0, 0.000001)
+
+
+func test_max_fps_takes_the_menu_caps_and_waits_until_the_field_is_shown() -> void:
+	for value in [30, 60, 30.0, 60.0]:
+		var diagnostic: Dictionary = {"reason": "previous read"}
+		_write(JSON.stringify({"max_fps": value}))
+		assert_eq(Switch.read(path, diagnostic), {"max_fps": int(value)})
+		assert_eq(diagnostic, {})
+	for cap: int in [60, 30]:
+		Engine.max_fps = 90 - cap
+		var field: FieldProbe = _field()
+		field.fx_light = {"fill_energy": 2.0}
+		field._set_view_fill()
+		field._apply_perf_settings({"max_fps": cap})
+		assert_eq(Engine.max_fps, 90 - cap, "a hidden build leaves the running cap alone")
+		field.visible = true
+		assert_eq(Engine.max_fps, cap)
+		field._set_view_fill()
+		assert_eq(Engine.max_fps, cap)
+		assert_eq(Switch.apply_max_fps({"max_fps": cap}), {})
+		_free_field(field)
+	# Start at 60 so a stray default of 30 would show.
+	Engine.max_fps = 60
+	var plain: FieldProbe = _field(false)
+	plain._apply_perf_settings(Switch.read(path + ".missing"))
+	assert_eq(Engine.max_fps, 60, "no file, no change")
+	plain._apply_perf_settings({"sun_shadow": true})
+	assert_eq(Engine.max_fps, 60, "no key, no change")
+
+
+func test_fill_energy_survives_minute_updates_and_keeps_specular() -> void:
+	var field: FieldProbe = _field()
+	field.fx_light = {"fill_energy": 2.0, "fill_color": Color.RED}
+	field._set_view_fill()
+	field._apply_perf_settings({"view_fill_energy": 0.002, "view_fill_specular": 0.0})
+	assert_almost_eq(field.view_fill.light_energy, 0.002, 0.000001)
+	for source_energy: float in [1.4, 2.5]:
+		field.fx_light["fill_energy"] = source_energy
+		field._set_view_fill()
+		assert_almost_eq(field.view_fill.light_energy, 0.002, 0.000001)
+		assert_eq(field.view_fill.light_specular, 0.0)
+		assert_eq(field.view_fill.light_color, Color.RED)
+		assert_true(field.view_fill.visible)
+		assert_eq(field.fx_light["fill_energy"], source_energy)
+
+
+func test_fill_energy_preserves_night_and_storm_hiding() -> void:
+	var field: FieldProbe = _field()
+	for source_energy: float in [0.0, 2.0]:
+		field.fx_light = {"fill_energy": source_energy}
+		field.storm = {"stage": 1} if source_energy == 2.0 else {}
+		field._set_view_fill()
+		# Explicit true must not override the source's night/storm hiding.
+		field._apply_perf_settings({"view_fill": true, "view_fill_energy": 0.002})
+		assert_false(field.view_fill.visible)
+		field._set_view_fill()
+		assert_false(field.view_fill.visible)
+		assert_almost_eq(field.view_fill.light_energy, 0.0 if source_energy == 2.0 else source_energy, 0.000001)
+		assert_eq(field.view_fill.get_meta(Switch.FILL_ENERGY), 0.002)
+	field.storm = {}
+	field.fx_light["fill_energy"] = 2.0
+	field._set_view_fill()
+	assert_true(field.view_fill.visible)
+	assert_almost_eq(field.view_fill.light_energy, 0.002, 0.000001)
+
+
+func test_view_fill_false_wins_over_diagnostics_on_minute_updates() -> void:
+	var field: FieldProbe = _field()
+	field.fx_light = {"fill_energy": 2.0}
+	field._set_view_fill()
+	field._apply_perf_settings({"view_fill": false, "view_fill_energy": 0.002, "view_fill_specular": 0.0})
+	assert_false(field.view_fill.visible)
+	field.fx_light["fill_energy"] = 2.5
+	field._set_view_fill()
+	assert_false(field.view_fill.visible)
+	assert_true(field.view_fill.visibility_changed.is_connected(field.view_fill.hide))
+	assert_almost_eq(field.view_fill.light_energy, 0.002, 0.000001)
+	assert_eq(field.view_fill.light_specular, 0.0)
+
+
+func test_missing_file_keeps_field_fill_properties_and_normal_updates() -> void:
+	var field: FieldProbe = _field()
+	field.fx_light = {"fill_energy": 2.0, "fill_color": Color.RED}
+	field.view_fill.light_specular = 0.75
+	field.view_fill.light_cull_mask = 5
+	field._set_view_fill()
+	field._apply_perf_settings(Switch.read(path))
+	assert_eq(field.view_fill.light_energy, 2.0)
+	assert_eq(field.view_fill.light_specular, 0.75)
+	assert_eq(field.view_fill.light_color, Color.RED)
+	assert_eq(field.view_fill.light_cull_mask, 5)
+	assert_false(field.view_fill.has_meta(Switch.FILL_ENERGY))
+	field.fx_light["fill_energy"] = 1.5
+	field._set_view_fill()
+	assert_eq(field.view_fill.light_energy, 1.5)
+	assert_eq(field.view_fill.light_specular, 0.75)
+	assert_eq(field.view_fill.light_color, Color.RED)
+	assert_eq(field.view_fill.light_cull_mask, 5)
+	assert_true(field.view_fill.visible)
+
+
+func test_diagnostics_and_fill_lock_survive_showing_a_hidden_field() -> void:
+	_save_renderer()
+	for locked: bool in [false, true]:
+		var field: FieldProbe = _field()
+		field.fx_light = {"fill_energy": 2.0, "fill_color": Color.RED}
+		field._set_view_fill()
+		var settings: Dictionary = {"view_fill_energy": 0.002, "view_fill_specular": 0.0, "view_fill_cull_mask": 5}
+		if locked:
+			settings["view_fill"] = false
+		field._apply_perf_settings(settings)
+		field.visible = true
+		# Right after showing, then after the next minute update.
+		for update: int in 2:
+			assert_almost_eq(field.view_fill.light_energy, 0.002, 0.000001)
+			assert_eq(field.view_fill.light_specular, 0.0)
+			assert_eq(field.view_fill.light_color, Color.RED)
+			assert_eq(field.view_fill.light_cull_mask, 5)
+			assert_eq(field.view_fill.is_visible_in_tree(), not locked)
+			assert_eq(field.view_fill.visibility_changed.is_connected(field.view_fill.hide), locked)
+			field._set_view_fill()
+		_free_field(field)
+	assert_eq(Switch.renderer_state(), renderer_before)
 
 
 func test_omitted_atlas_partner_and_filter_return_to_baseline() -> void:

@@ -1,6 +1,6 @@
 extends "res://addons/gut/test.gd"
 ## 소리 물결(결정 471 H1): 우리 쪽이 문을 차거나 창을 깨거나 장작을 패면, 또 플레이어가 뛰면 그 소리가
-## 닿는 넓이가 바닥에 옅은 동그라미로 1초 보인다. 반경은 make_sound가 잰 그대로(누가 듣는지는 그대로),
+## 닿는 넓이가 바닥에 옅은 동그라미로 잠깐 보인다. 반경은 make_sound가 잰 그대로(누가 듣는지는 그대로),
 ## 망자·열차·다른 소리는 그리지 않는다.
 
 const FieldGame = preload("res://game/field_game.gd")
@@ -42,8 +42,9 @@ func test_the_ring_grows_and_is_gone_after_a_second() -> void:
 	game.ripples.advance(0.5)
 	assert_gt((ring["node"] as Node3D).scale.x, first, "it spreads out")
 	assert_eq(game.ripples.rings.size(), 1)
-	game.ripples.advance(0.6)
-	assert_eq(game.ripples.rings.size(), 0)
+	game.ripples.advance(SoundRipple.FADE_OUT_END - 0.5)
+	assert_eq(game.ripples.rings.size(), 0, "gone once it has faded out")
+	assert_true((ring["node"] as Node).is_queued_for_deletion(), "and its node goes with it")
 
 
 func test_other_sounds_draw_nothing() -> void:
@@ -70,3 +71,48 @@ func test_running_draws_a_ring_a_second_at_most_and_only_the_player() -> void:
 	game.clock.elapsed = 20.0
 	game._ripple_run(other, 12.0)
 	assert_eq(game.ripples.rings.size(), 3, "a companion running draws none")
+
+
+func test_a_thin_ring_faint_at_night_and_a_little_stronger_by_day() -> void:
+	assert_almost_eq(SoundRipple.WIDTH, 0.09, 0.0001)
+	assert_almost_eq(SoundRipple.ALPHA, 0.15, 0.0001)
+	assert_almost_eq(SoundRipple.DAY_ALPHA, 0.30, 0.0001)
+	game.make_sound(game.player.position, SimNoise.Level.LOUD, "kick", game.player)
+	var mat: ShaderMaterial = game.ripples.rings[0]["mat"]
+	assert_almost_eq(float(mat.get_shader_parameter("night_alpha")), 0.15, 0.0001)
+	assert_almost_eq(float(mat.get_shader_parameter("day_alpha")), 0.30, 0.0001)
+	game.ripples.advance(0.3)
+	assert_almost_eq(float(mat.get_shader_parameter("fade")), 1.0, 0.0001, "held while it spreads")
+
+
+func test_envelope_fades_in_holds_and_fades_out_early() -> void:
+	assert_almost_eq(SoundRipple.envelope(0.0), 0.0, 0.0001)
+	assert_almost_eq(SoundRipple.envelope(0.06), 1.0, 0.0001)
+	assert_almost_eq(SoundRipple.envelope(0.3), 1.0, 0.0001)
+	assert_almost_eq(SoundRipple.envelope(0.45), 1.0, 0.0001, "held up to the fade-out")
+	assert_lt(SoundRipple.envelope(0.46), 1.0)
+	var fading: float = SoundRipple.envelope(0.65)
+	assert_gt(fading, 0.0)
+	assert_lt(fading, 1.0)
+	assert_almost_eq(SoundRipple.envelope(0.55), 0.5625, 0.0001, "(1 - u)^2: a quarter into the fade-out it is already down to 0.56")
+	assert_almost_eq(SoundRipple.envelope(0.85), 0.0, 0.0001)
+	assert_almost_eq(SoundRipple.envelope(0.9), 0.0, 0.0001)
+	assert_almost_eq(SoundRipple.envelope(1.0), 0.0, 0.0001)
+
+## A storm keeps its stage's sky colour all day, so the ring takes the dusk from the hour instead.
+func test_in_a_storm_the_ring_still_goes_faint_after_dusk() -> void:
+	game.make_sound(game.player.position, SimNoise.Level.LOUD, "kick", game.player)
+	var mat: ShaderMaterial = game.ripples.rings[0]["mat"]
+	game.clock.elapsed = 0.0
+	game.clock.arrive_min = 1000.0
+	game._update_light()
+	game.ripples.advance(0.1)
+	assert_almost_eq(float(mat.get_shader_parameter("dusk")), 0.0, 0.0001, "no storm: the sky colour already tells day from night")
+	game.storm = {"sun": 1.0}
+	game._update_light()
+	game.ripples.advance(0.1)
+	assert_almost_eq(float(mat.get_shader_parameter("dusk")), 1.0, 0.0001, "a storm after 16:30")
+	game.clock.arrive_min = 600.0
+	game._update_light()
+	game.ripples.advance(0.1)
+	assert_almost_eq(float(mat.get_shader_parameter("dusk")), 0.0, 0.0001, "a storm at 10:00")

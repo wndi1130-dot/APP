@@ -1884,7 +1884,7 @@ func _raider_morale(r) -> void:
 		b["state"] = "flee"
 		b["aiming"] = false
 		r.aim.stop()
-		game.say(r, "약탈자 하나가 남쪽 길로 달아난다.")
+		game.say(r, "약탈자 한 명이 남쪽 길로 달아난다.")
 
 
 func _surrender(r) -> void:

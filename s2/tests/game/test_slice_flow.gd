@@ -4,6 +4,7 @@ extends "res://addons/gut/test.gd"
 ## reads a receipt, and the boot menu has the key that starts it.
 
 const SliceFlow = preload("res://game/slice_flow.gd")
+const PaneMotion = preload("res://game/ui/pane_motion.gd")
 const ReceiptSheet = preload("res://game/ui/receipt_sheet.gd")
 const Boot = preload("res://game/boot.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
@@ -23,7 +24,19 @@ func _assert_halt_panel(f, kind: String) -> void:
 	var reason: String = HaltTurn.END_TEXT["stranded" if kind == "stranded" else "ousted"]
 	assert_true(f.panel.visible)
 	assert_eq(f.title.text, "열차가 멈췄다" if kind == "stranded" else "축출", "an ending without stranding names its S1 ending")
-	assert_eq(_texts(f), [reason])
+	var shown: Array = _texts(f)
+	assert_eq(shown[0], reason, "the end words remain first")
+	if kind == "stranded":
+		assert_eq(shown, [reason], "a stopped train has not ended")
+		assert_false(f.train_g.has("endChronicle"))
+	else:
+		var lookback: Array = HaltTurn.lookback_lines(f.train_g, f.train_t)
+		var expected: Array = [reason]
+		expected.append_array(lookback.slice(0, 1))
+		assert_eq(shown, expected)
+		assert_false(f.train_g.has("endChronicle"))
+		assert_false((f.train_g["journal"] as Array).any(func(line: Dictionary) -> bool: return String(line["text"]).begins_with("기록: 징후")))
+		assert_lte(shown.size(), 2, "dark-off endings have no tone block")
 	assert_eq(f.next_button.text, "끝")
 	assert_eq(f.port_error, "", "game halt does not enter the port_error path")
 	assert_false(is_instance_valid(f.paper))
@@ -37,7 +50,7 @@ func _assert_halt_panel(f, kind: String) -> void:
 	var held: Dictionary = f.train_g.duplicate(true)
 	f.next_button.pressed.emit()
 	assert_eq(f.current(), "end")
-	assert_eq(_texts(f), [reason], "the end step retains the same game words")
+	assert_eq(_texts(f), shown, "the end step retains the same game words")
 	assert_eq(HaltVectors.full_diffs(held, f.train_g), [], "end button does not turn a halt into a slice ending")
 
 
@@ -102,6 +115,30 @@ func test_halt_words_prioritize_the_real_ending_and_exclude_slice_finish() -> vo
 		assert_eq(SliceFlow.train_halt_title({"phase": "end", "end": end, "stranded": {}}), HaltTurn.END_TITLE[end])
 	assert_eq(SliceFlow.train_halt_title({"stranded": {}}), "열차가 멈췄다")
 	assert_eq(SliceFlow.train_halt_title({"phase": "end", "end": "slice"}), "")
+
+
+func test_real_end_panel_words_fit_and_never_mutate_the_record() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/end_vectors.json"))
+	for row: Dictionary in data["cases"]:
+		var f = _flow()
+		f.train_g = row["after"].duplicate(true)
+		var before_draw: Dictionary = f.train_g.duplicate(true)
+		f.go(f._index_of("receipt"))
+		await wait_frames(2)
+		var shown: Array = _texts(f)
+		assert_eq(shown[0], SliceFlow.train_halt_line(f.train_g))
+		assert_eq(shown, row["panelLines"])
+		assert_lte(shown.size(), 2)
+		assert_eq(HaltVectors.full_diffs(before_draw, f.train_g), [], "first drawing is read-only")
+		assert_false(f.train_g.has("endChronicle"))
+		var viewport: Rect2 = f.get_viewport().get_visible_rect()
+		assert_true(viewport.encloses(f.panel.get_global_rect()), row["id"] + " panel stays on screen")
+		var held: Dictionary = f.train_g.duplicate(true)
+		f._show_end("처음으로")
+		assert_eq(_texts(f), shown, "both real-end entry points agree")
+		assert_eq(HaltVectors.full_diffs(held, f.train_g), [], "redrawing changes no state or journal entries")
+		remove_child(f)
+		f.queue_free()
 
 
 ## Without the stop scene (cinema off) unless asked: the card at once, as the
@@ -202,12 +239,16 @@ func test_diag_selection_uses_the_covered_pane_width_and_clears_it() -> void:
 	await wait_process_frames(2)
 	flow.train.set_view_mode("diag")
 	flow._select(SliceFlow.FIRST_CAR)
-	var pane_rect: Rect2 = flow.pane.get_global_rect()
+	var pane_rect: Rect2 = PaneMotion.rest_rect(flow.pane)
 	var covered_px: float = flow.get_viewport().get_visible_rect().size.x - pane_rect.position.x
 	assert_gt(pane_rect.size.x, 0.0)
+	if flow._cover_tween != null and flow._cover_tween.is_valid():
+		flow._cover_tween.custom_step(PaneMotion.OPEN_S + 0.001)
 	assert_almost_eq(float(flow.train.pane_px), covered_px, 0.001)
 	assert_eq(str(flow.train.zoom), "near")
 	flow._select("")
+	assert_false(PaneMotion.shown(flow.pane), "hidden logically before the camera finishes")
+	flow._cover_tween.custom_step(PaneMotion.CLOSE_S + 0.001)
 	assert_eq(float(flow.train.pane_px), 0.0)
 	assert_eq(str(flow.train.zoom), "wide")
 	assert_eq(float(flow.train.camera.h_offset), 0.0)

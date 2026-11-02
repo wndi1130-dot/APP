@@ -21,6 +21,7 @@ signal went_on
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Paper = preload("res://game/ui/paper_parts.gd")
 const PaperSheet = preload("res://game/ui/paper_sheet.gd")
+const PaperMotion = preload("res://game/ui/paper_motion.gd")
 const LampKey = preload("res://game/ui/lamp_key.gd")
 const TypeLine = preload("res://game/ui/type_line.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
@@ -379,6 +380,7 @@ func _build_slip(c: Dictionary) -> void:
 	slip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slip.position = SLIP_AT * k
 	add_child(slip)
+	sheet.set_meta(PaperMotion.META_ALPHA_PEER, slip)
 	var parts := Control.new()
 	parts.name = "Parts"
 	parts.mouse_filter = Control.MOUSE_FILTER_IGNORE

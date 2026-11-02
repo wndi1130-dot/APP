@@ -453,13 +453,7 @@ func _ready() -> void:
 	# The stop's band (decision 494): a stop's own map shows its own stop's band on any
 	# stretch, any other map the band of the departure's stretch; a bare start the default.
 	var map_id := FieldMaps.resolve(String(opts.get("place", "")))
-	var departure_seg := int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else 0
-	if opts.has("region"):
-		region = Atmosphere.region_key(String(opts["region"]))
-	elif opts.get("departure") is Dictionary or not RouteBands.place_stop(map_id).is_empty():
-		region = RouteBands.band_of(map_id, act, departure_seg, float(opts.get("act_progress", 0.0)))
-	else:
-		region = Atmosphere.DEFAULT_REGION
+	region = region_for(opts)
 	look_hour = float(opts.get("look_hour", -1.0))
 	# Lying snow on arrival follows the cold, deeper stop by stop (picture: nothing
 	# in the rules reads it). A storm stop keeps its season's depth.
@@ -481,14 +475,13 @@ func _ready() -> void:
 	snow_cover = SnowCover.new(season, open_ground, float(opts.get("storm_cm", storm.get("storm_cm", 0.0))), old_cm)
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
-	Engine.max_fps = int(opts.get("fps_cap", 60))
+	Engine.max_fps = fps_cap_for(Engine.max_fps, opts, OS.has_feature("mobile"))
 	place = map_id
 	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
-	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
-		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
-	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
+	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script, region) if map_script != null else FieldMaps.build(place, region)
+	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary else fresh_map.call()
 	var ground_form := String(opts.get("stop_ground", opts.get("stop_form", "")))
 	var ground_m := float(opts.get("stop_form_m", -1.0))
 	var end_gap := int(opts.get("stop_end_gap", -1))
@@ -947,7 +940,9 @@ func _update_atmosphere() -> void:
 func _set_view_fill() -> void:
 	if view_fill == null:
 		return
-	view_fill.light_energy = float(fx_light.get("fill_energy", 0.0)) if storm.is_empty() else 0.0
+	var fill_energy: float = float(fx_light.get("fill_energy", 0.0)) if storm.is_empty() else 0.0
+	# Keep the diagnostic energy across minute updates without lighting night/storm.
+	view_fill.light_energy = float(view_fill.get_meta(PerfSwitch.FILL_ENERGY, fill_energy)) if fill_energy > 0.001 else fill_energy
 	view_fill.light_color = fx_light.get("fill_color", Color.WHITE)
 	view_fill.visible = view_fill.light_energy > 0.001
 
@@ -1035,9 +1030,13 @@ func _set_sight_round() -> void:
 ## Dusk dims the arrival light towards the night band between 15:00 and 16:30.
 func _update_light() -> void:
 	if storm.is_empty():
+		if ripples != null:
+			ripples.dusk = 0.0
 		_update_atmosphere()
 		return
 	var t := clampf((clock.game_minutes() - 900.0) / 90.0, 0.0, 1.0)
+	if ripples != null:
+		ripples.dusk = t
 	# The night band is lamps only; the gray-box field has no lamps yet, so the
 	# floors keep people, doors and the platform edge readable after dark.
 	sun.light_energy = lerpf(float(fx_light["sun_energy"]), maxf(float(fx_light_night["sun_energy"]), NIGHT_SUN_MIN), t)
@@ -1427,6 +1426,15 @@ const VOICE_OF_COMM := {"guard": "rough", "medtech": "quiet", "tail": "fear", "e
 const MEDICAL_OF_SKILL := ["none", "apprentice", "skilled", "master"]
 
 
+## The cap a field runs at. On a phone every stop keeps the cap the start menu set (boot.gd), so a
+## campaign stop, a loaded stop or an old save's start options (60 from before) never lift it; a
+## field with no cap set yet, and every field off the phone, takes its options' cap, 60 if none.
+static func fps_cap_for(current: int, field_opts: Dictionary, mobile: bool) -> int:
+	if mobile and current > 0:
+		return current
+	return int(field_opts.get("fps_cap", 60))
+
+
 ## The field's rows for people of the departure contract (field_departure.gd person): the same
 ## id and name as the train's roll, their body skills, kit, car and how it stands with the chief,
 ## what they know of medicine and how hungry and sore they go out. One of the medical staff with
@@ -1552,6 +1560,17 @@ func allies_alive() -> Array:
 ## the rooms' finish, the walk from the train and the trees to fell (work_spots.gd).
 const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground_arrays", "_ground_key",
 	"_floor_arrays", "_floor_keys", "_room_finish", "_walk_field", "_walk_key", "fell_groves"]
+
+
+## The field and its loader resolve the same band, including starts without an override.
+static func region_for(options: Dictionary) -> String:
+	if options.has("region"):
+		return Atmosphere.region_key(String(options["region"]))
+	var map_id := FieldMaps.resolve(String(options.get("place", "")))
+	var departure_seg := int((options["departure"] as Dictionary).get("segment", 0)) if options.get("departure") is Dictionary else 0
+	if options.get("departure") is Dictionary or not RouteBands.place_stop(map_id).is_empty():
+		return RouteBands.band_of(map_id, String(options.get("act", "prologue")), departure_seg, float(options.get("act_progress", 0.0)))
+	return Atmosphere.DEFAULT_REGION
 
 
 ## The ground of the stop's form (stop_ground.gd), put on before the side path
@@ -1831,7 +1850,7 @@ func welcome_back() -> void:
 	away = false
 	if not ended:
 		if resume_announce and hud != null:
-			hud.toast("멈춰 둔 자리다.")
+			hud.toast("멈춰 둔 그대로다.")
 		begin_resume()
 
 
@@ -1872,6 +1891,8 @@ func _apply_perf_settings(settings: Dictionary) -> void:
 	if not settings.is_empty():
 		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
 		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false)
+		if view_fill.has_meta(PerfSwitch.FILL_ENERGY):
+			_set_view_fill()
 		if not changed.is_empty():
 			print("PERF_SWITCH ", changed)
 	# StopLoader builds with visible=false, even with processing disabled.
@@ -1890,6 +1911,10 @@ func _apply_perf_renderer() -> void:
 		_perf_renderer_active = true
 		if not _perf_settings.is_empty() and not changed.is_empty():
 			print("PERF_SWITCH ", changed)
+	# After _ready's own cap, so the file's cap wins for this field.
+	var fps_changed: Dictionary = PerfSwitch.apply_max_fps(_perf_settings)
+	if not fps_changed.is_empty():
+		print("PERF_SWITCH ", fps_changed)
 	if visibility_changed.is_connected(_apply_perf_renderer):
 		visibility_changed.disconnect(_apply_perf_renderer)
 
@@ -2466,7 +2491,7 @@ func _on_body_event(p: Person, ev: String) -> void:
 				say(p, "%s 열이 오른다." % p.display_name, false, "window_closed")
 		"exhausted_heavy":
 			if p == player:
-				hud.toast("숨참")
+				hud.toast("숨이 찬다.")
 
 
 func on_person_died(p: Person) -> void:
@@ -3818,7 +3843,7 @@ func _ate(p, id: String, plan: Dictionary) -> void:
 	var result: Dictionary = FieldItems.eat_result(id, float(plan["spill"]))
 	if bool(result["bad"]):
 		if p == player and hud != null:
-			hud.toast("상해 있었다.")
+			hud.toast("먹은 것이 상해 있었다.")
 		return
 	p.body.add_fatigue(-float(result["rest"]))
 
