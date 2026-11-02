@@ -16,10 +16,13 @@ concurrency:
 
 jobs:
   # GUT was most of a run (20 of 27 minutes on main 10-26), so its scripts run in
-  # parallel shards. Each shard takes every GUT_SHARDS-th script of the sorted list,
-  # which split the 10-26 scripts 9.9 / 10.8 minutes. test-and-apk keeps the parse
-  # checks and the export. Three shards since 11-03: with two, one shard ran 40~60
-  # minutes and #1359's was cancelled by the hour limit just after all its tests passed.
+  # parallel shards. test-and-apk keeps the parse checks and the export. Three shards
+  # since 11-03: with two, one shard ran 40~60 minutes and #1359's was cancelled by
+  # the hour limit just after all its tests passed. Taking every third script of the
+  # sorted list still gave 12 / 42 / 19 minutes (test_campaign_route.gd alone is 18),
+  # so scripts go longest first to the least loaded shard by the seconds in
+  # .github/gut-times.json (from the shards' gut-results.xml of run 2243; a script
+  # not in it counts 10 s). That table splits the same scripts 24 / 24 / 24 minutes.
   gut:
     name: GUT ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
@@ -96,14 +99,23 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import os, pathlib
+          import json, os, pathlib
           shard, total = int(os.environ['SHARD']), int(os.environ['GUT_SHARDS'])
           scripts = sorted(p.relative_to('s2').as_posix() for p in pathlib.Path('s2/tests').rglob('test_*.gd'))
-          mine = scripts[shard - 1::total]
+          seconds = json.loads(pathlib.Path('.github/gut-times.json').read_text())
+          loads = [0.0] * total
+          mine = []
+          for script in sorted(scripts, key=lambda s: (-seconds.get(s, 10), s)):
+              least = min(range(total), key=lambda k: (loads[k], k))
+              loads[least] += seconds.get(script, 10)
+              if least == shard - 1:
+                  mine.append(script)
+          mine.sort()
           if not mine:
               raise SystemExit(f'shard {shard}/{total} got no test scripts')
           pathlib.Path('s2/build/gut-shard.txt').write_text(''.join(f'res://{s}\n' for s in mine))
-          print(f'shard {shard}/{total}: {len(mine)} of {len(scripts)} test scripts')
+          print(f'shard {shard}/{total}: {len(mine)} of {len(scripts)} test scripts, '
+                f'about {loads[shard - 1] / 60:.1f} of {sum(loads) / 60:.1f} minutes by the table')
           PY
           "$GODOT_BIN" --headless --path s2 --script addons/gut/gut_cmdln.gd \
             -gtest="$(paste -sd, s2/build/gut-shard.txt)" -gexit \
