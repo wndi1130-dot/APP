@@ -126,7 +126,8 @@ static func _ignored(reason: String, diagnostic: Dictionary) -> void:
 static func _valid(s: Dictionary) -> Dictionary:
 	var valid: Dictionary = {}
 	# 무리는 필드 생성 전에 적용한다. false면 자원도 노드도 만들지 않는다.
-	for key in ["sun_shadow", "atlas_16_bits", "view_fill", "cloud", "night_sparks", "horde"]:
+	# horde_test_walls: 폰 재기 전용 — 켜면 정차마다 촬영 도구와 같은 시험 벽에 무리(HordeView.stop_walls).
+	for key in ["sun_shadow", "atlas_16_bits", "view_fill", "cloud", "night_sparks", "horde", "horde_test_walls"]:
 		if s.get(key) is bool:
 			valid[key] = s[key]
 	if s.get("shadow_mode") is String and MODES.has(s["shadow_mode"]):

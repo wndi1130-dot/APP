@@ -681,6 +681,26 @@ func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Di
 	return result
 
 
+## 시험 벽: 북 3.0 m 판자벽 + 서 5.2 m 쌓은 벽, 각 24 m(지도 구석, 바깥이 무리 쪽).
+## 촬영 도구와 폰 재기(성능 키 horde_test_walls)가 같은 벽을 쓴다.
+static func test_walls() -> Array:
+	return [
+		{"id": "h1_north_sheet", "a": Vector2(4, 0), "b": Vector2(28, 0), "out": Vector2(0, -1), "kind": "wall_sheet", "height": 3.0},
+		{"id": "h1_west_stack", "a": Vector2(0, 4), "b": Vector2(0, 28), "out": Vector2(-1, 0), "kind": "wall_stack", "height": 5.2},
+	]
+
+
+## 정차가 무리에 넘기는 벽: 지도의 edge_walls + opts의 test_edge_walls, 그리고 폰 재기용
+## 성능 키 horde_test_walls가 켜졌으면 시험 벽(perf_switch.json은 안드로이드만 읽음, 기본 끔).
+## 켬이 먹었는지는 logcat의 PERF_SWITCH 줄로 본다.
+static func stop_walls(data: Dictionary, opts: Dictionary, settings: Dictionary) -> Array:
+	var walls: Array = (data.get("edge_walls", []) as Array) + (opts.get("test_edge_walls", []) as Array)
+	if settings.get("horde_test_walls") is bool and bool(settings["horde_test_walls"]):
+		walls += test_walls()
+		print("PERF_SWITCH ", {"horde_test_walls": true, "walls": walls.size()})
+	return walls
+
+
 static func attach(parent: Node3D, walls: Array, vis: Dictionary, pace: BuildPace, settings: Dictionary) -> Node3D:
 	if settings.get("horde", true) == false:
 		print("PERF_SWITCH ", {"horde": false})

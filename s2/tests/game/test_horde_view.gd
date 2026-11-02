@@ -401,6 +401,20 @@ func test_perf_horde_false_creates_no_node_and_does_not_load_atlas() -> void:
 	assert_false(Switch._valid({"horde": "false"}).has("horde"))
 
 
+func test_phone_switch_horde_test_walls_adds_the_shot_walls_only_when_on() -> void:
+	# 폰 재기 길: perf_switch.json "horde_test_walls": true → 정차가 넘기는 벽에 촬영 도구와 같은 시험 벽.
+	assert_eq(Switch._valid({"horde_test_walls": true}), {"horde_test_walls": true})
+	assert_false(Switch._valid({"horde_test_walls": 1}).has("horde_test_walls"), "참/거짓만 받는다")
+	var map_wall: Dictionary = {"id": "map_east", "a": Vector2(40, 4), "b": Vector2(40, 28), "out": Vector2(1, 0), "kind": "wall_plank", "height": 2.0}
+	var data: Dictionary = {"edge_walls": [map_wall]}
+	var opts: Dictionary = {"test_edge_walls": _walls(1.0)}
+	assert_eq(Horde.stop_walls(data, opts, {}), [map_wall] + _walls(1.0), "기본은 지도 + opts 그대로")
+	assert_eq(Horde.stop_walls(data, opts, Switch._valid({"horde_test_walls": false})), [map_wall] + _walls(1.0))
+	assert_eq(Horde.stop_walls(data, opts, Switch._valid({"horde_test_walls": true})), [map_wall] + _walls(1.0) + Horde.test_walls())
+	assert_eq(Horde.stop_walls({}, {}, {"horde_test_walls": "yes"}), [], "검사 안 거친 잘못된 값도 켬이 아니다")
+	assert_eq(Shots.test_walls(), Horde.test_walls(), "촬영 도구와 폰 재기가 같은 벽")
+
+
 func test_hiding_and_exit_clear_owned_focus() -> void:
 	var node := FixtureHorde.new()
 	add_child_autofree(node)

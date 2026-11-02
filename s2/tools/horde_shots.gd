@@ -32,10 +32,8 @@ func _initialize() -> void:
 
 
 static func test_walls() -> Array:
-	return [
-		{"id": "h1_north_sheet", "a": Vector2(4, 0), "b": Vector2(28, 0), "out": Vector2(0, -1), "kind": "wall_sheet", "height": 3.0},
-		{"id": "h1_west_stack", "a": Vector2(0, 4), "b": Vector2(0, 28), "out": Vector2(-1, 0), "kind": "wall_stack", "height": 5.2},
-	]
+	# 폰 재기(성능 키 horde_test_walls)와 같은 벽 — 정본은 HordeView.test_walls().
+	return Horde.test_walls()
 
 
 func _run() -> void:
