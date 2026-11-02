@@ -250,6 +250,9 @@ const PERSON_WALK_MID_KNEE_MAX: float = 0.26179939  # 15 degrees
 const PERSON_WALK_HEIGHT_SAMPLES: int = 256
 const PERSON_WALK_HEIGHT_RADIUS: int = 2  # five cyclic neighbours, including self
 const PERSON_WALK_HEIGHT_PASSES: int = 4
+const PERSON_WALK_MEAN_MIN: float = 0.95  # minimum mean height relative to standing
+const PERSON_WALK_MEAN_PASSES: int = PERSON_WALK_HEIGHT_SAMPLES + 1  # one saturation per sample
+const PERSON_WALK_MEAN_EPSILON: float = 0.000000001  # numerical convergence in metres
 const PERSON_WALK_REACH_MARGIN: float = 0.001  # one vertical millimetre below the ceiling
 const PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN: float = 0.00001  # 0.01 mm inside a ceiling knot
 const PERSON_WALK_SOLVE_PASSES: int = 6
@@ -2981,7 +2984,7 @@ static func _person_walk_ankle_goal(fit: Dictionary, side: int, u: float) -> Dic
 ## R(theta)^2 = thigh^2 + shin^2 + 2*thigh*shin*cos(theta).
 ## With thigh = hips + offset, y = ankle.y - offset.y + sqrt(R^2 - dxz^2).
 ## Swing legs constrain the ceiling too; scheduled mid-stance never tests contact.
-static func _person_walk_height_bounds(ctx: Dictionary, fit: Dictionary, u: float) -> Dictionary:
+static func _person_walk_height_bounds(ctx: Dictionary, fit: Dictionary, u: float, targets: Array = []) -> Dictionary:
 	var body: Skeleton3D = ctx["body"]
 	var to_mesh: Transform3D = ctx["to_mesh"]
 	var hips: Vector3 = to_mesh * body.get_bone_global_pose(_bone(body, "hips")).origin
@@ -2998,7 +3001,7 @@ static func _person_walk_height_bounds(ctx: Dictionary, fit: Dictionary, u: floa
 		var a: float = thigh.distance_to(shin)
 		var b: float = shin.distance_to(foot)
 		var goal: Dictionary = _person_walk_ankle_goal(fit, side, u)
-		var target: Vector3 = goal["target"]
+		var target: Vector3 = targets[side] if targets.size() == 2 else goal["target"]
 		var offset: Vector3 = thigh - hips
 		var horizontal: float = Vector2(thigh.x - target.x, thigh.z - target.z).length_squared()
 		var reach_squared: float = a * a + b * b + 2.0 * a * b * cos(PERSON_WALK_KNEE_MIN)
@@ -3018,6 +3021,31 @@ static func _person_walk_height_bounds(ctx: Dictionary, fit: Dictionary, u: floa
 					lower = candidate_lower
 					lower_side = side
 	return {"upper": upper, "lower": lower, "horizontal_miss": horizontal_miss, "upper_side": upper_side, "lower_side": lower_side}
+
+
+## Raise the mean without exceeding any ceiling. Every pass saturates a
+## ceiling or reaches the target, so the sample count bounds the loop.
+static func _person_walk_raise_mean(values: PackedFloat64Array, ceilings: PackedFloat64Array, target: float) -> Dictionary:
+	var raised: PackedFloat64Array = values.duplicate()
+	if raised.is_empty() or raised.size() != ceilings.size():
+		return {"values": raised, "mean": 0.0, "feasible": false}
+	var mean: float = 0.0
+	for _pass_id in PERSON_WALK_MEAN_PASSES:
+		var total: float = 0.0
+		var available: int = 0
+		for sample in raised.size():
+			total += raised[sample]
+			if ceilings[sample] - raised[sample] > PERSON_WALK_MEAN_EPSILON:
+				available += 1
+		mean = total / float(raised.size())
+		var deficit: float = (target - mean) * float(raised.size())
+		if deficit <= PERSON_WALK_MEAN_EPSILON * float(raised.size()) or available == 0:
+			break
+		var increment: float = deficit / float(available)
+		for sample in raised.size():
+			if ceilings[sample] - raised[sample] > PERSON_WALK_MEAN_EPSILON:
+				raised[sample] = minf(ceilings[sample], raised[sample] + increment)
+	return {"values": raised, "mean": mean, "feasible": mean + PERSON_WALK_MEAN_EPSILON >= target}
 
 
 ## Fixed-order Jacobi smoothing on a ring; projections preserve BOTH bounds.
@@ -3056,13 +3084,27 @@ static func _fit_person_walk_height(ctx: Dictionary, fit: Dictionary, walk: Arra
 	# interior margin therefore preserves the Hermite seam slope after min().
 	for sample in PERSON_WALK_HEIGHT_SAMPLES:
 		values[sample] = minf(uppers[sample], maxf(lowers[sample], values[sample] - PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN))
+	# Keep the interpolation margin wherever the lower bound permits it.
+	var mean_ceilings: PackedFloat64Array = PackedFloat64Array()
+	for sample in PERSON_WALK_HEIGHT_SAMPLES:
+		mean_ceilings.append(minf(uppers[sample], maxf(lowers[sample], uppers[sample] - PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN)))
+	var target_mean: float = float(fit["floor"]) + PERSON_WALK_MEAN_MIN * float(fit["stand_ref_m"])
+	var mean_fit: Dictionary = _person_walk_raise_mean(values, mean_ceilings, target_mean)
+	values = mean_fit["values"]
+	if not bool(mean_fit["feasible"]):
+		var mean_failure: String = "PELVIS_MEAN_UNFIT rig %s clip p_walk mean %.9f target %.9f" % [ctx.get("rig_label", "unknown"), mean_fit["mean"], target_mean]
+		var failures: Array = ctx.get_or_add("fit_failures", [])
+		if failed.is_empty():
+			failures.append(mean_failure)
+		else:
+			failures[failures.size() - 1] = str(failures[failures.size() - 1]) + "; " + mean_failure
 	# Periodic monotone Hermite tangents: no endpoint overshoot, shared seam slope.
 	var slopes: PackedFloat64Array = PackedFloat64Array()
 	for sample in PERSON_WALK_HEIGHT_SAMPLES:
 		var left: float = values[sample] - values[posmod(sample - 1, PERSON_WALK_HEIGHT_SAMPLES)]
 		var right: float = values[(sample + 1) % PERSON_WALK_HEIGHT_SAMPLES] - values[sample]
 		slopes.append(2.0 * left * right / (left + right) if left * right > 0.0 else 0.0)
-	return {"values": values, "slopes": slopes, "uppers": uppers, "lowers": lowers, "failed_samples": failed}
+	return {"values": values, "slopes": slopes, "uppers": uppers, "lowers": lowers, "failed_samples": failed, "mean": mean_fit["mean"], "mean_feasible": mean_fit["feasible"]}
 
 
 static func _person_walk_height_at(table: Dictionary, u: float) -> float:

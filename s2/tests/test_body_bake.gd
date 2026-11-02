@@ -867,3 +867,49 @@ func test_walk_stride_refit_samples_the_shifted_phase() -> void:
 	var measured: float = BodyBake._person_stride_round(ctx, entry, shift)
 	assert_almost_eq(measured, float(BodyBake.PERSON_STRIDE_ROUNDS["p_walk"]), float(BodyBake.PERSON_STRIDE_ROUNDS["p_walk"]) * BodyBake.STRIDE_TOLERANCE, "fit and sample use the same shifted phase")
 	assert_eq((ctx["fit_failures"] as Array).size(), 0, "shifted stride fit stays within its bounds")
+
+
+func test_walk_height_bounds_accept_corrected_targets_for_both_legs() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var u: float = 0.0
+	BodyBake.pose(ctx, "", "p_walk", u)
+	BodyBake._apply_person_walk_turn(ctx, fit, u, u, "p_walk")
+	var original: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, u)
+	var targets: Array = []
+	for side in 2:
+		var goal: Dictionary = BodyBake._person_walk_ankle_goal(fit, side, u)
+		var target: Vector3 = goal["target"]
+		target.y -= 0.3
+		targets.append(target)
+	var corrected: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, u, targets)
+	assert_lt(float(corrected["upper"]), float(original["upper"]) - 0.1, "both corrected ankle targets lower the reachable ceiling")
+
+
+func test_walk_height_mean_is_raised_within_ceilings_or_reported_unfit() -> void:
+	var values: PackedFloat64Array = PackedFloat64Array([0.8, 0.9])
+	var ceilings: PackedFloat64Array = PackedFloat64Array([1.0, 0.95])
+	var fitted: Dictionary = BodyBake._person_walk_raise_mean(values, ceilings, 0.95)
+	var raised: PackedFloat64Array = fitted["values"]
+	assert_true(bool(fitted["feasible"]), "a feasible mean is reached")
+	assert_almost_eq(float(fitted["mean"]), 0.95, 0.00000001, "mean is the requested height")
+	assert_lte(raised[0], ceilings[0], "first height stays below its ceiling")
+	assert_lte(raised[1], ceilings[1], "second height stays below its ceiling")
+	var impossible: Dictionary = BodyBake._person_walk_raise_mean(values, ceilings, 1.1)
+	assert_false(bool(impossible["feasible"]), "an impossible mean is reported")
+	assert_almost_eq(float(impossible["mean"]), 0.975, 0.00000001, "best ceiling-limited mean is retained")
+
+
+func test_walk_stick_height_table_meets_mean_constraint_when_feasible() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var table: Dictionary = fit["pelvis"]
+	var heights: PackedFloat64Array = table["values"]
+	var total: float = 0.0
+	for height: float in heights:
+		total += height
+	var mean: float = total / float(heights.size())
+	var minimum: float = float(fit["floor"]) + 0.95 * float(fit["stand_ref_m"])
+	assert_true(bool(table["mean_feasible"]), "stick height table has a feasible 95 percent mean")
+	assert_gte(mean + 0.000000001, minimum, "fitted sample mean reaches the 95 percent constraint")
+	assert_almost_eq(float(table["mean"]), mean, 0.000000001, "recorded mean matches the fitted table")
