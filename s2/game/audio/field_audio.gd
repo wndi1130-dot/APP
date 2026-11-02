@@ -1011,7 +1011,7 @@ func _next_file(kind: String, last: int) -> int:
 
 ## What a call is said with: [group, file index, stream, pitch before distance]
 ## — a file of its own call (SAY_GROUPS) while it has any, else a moan the voice
-## did not say last (`last`), pitched as SAYS has it.
+## did not say last (`last`), pitched as SAYS has it; [] with neither.
 func _call_for(what: String, v: Dictionary, last: int) -> Array:
 	var own: String = String(SAY_GROUPS.get(what, ""))
 	if own != "":
@@ -1020,6 +1020,8 @@ func _call_for(what: String, v: Dictionary, last: int) -> Array:
 		var j := _fresh_file(own)
 		if j >= 0:
 			return [own, j, lib[own][j], float(v["pitch"])]
+	if not has("moan"):
+		return []
 	var i := _next_file(String(v["kind"]), last)
 	return ["moan", i, lib["moan"][i], float(v["pitch"]) * float(SAYS[what]["pitch"])]
 
@@ -1031,6 +1033,8 @@ func _say(s: Dictionary, z: Dictionary, what: String, d: float) -> void:
 	var p: AudioStreamPlayer3D = s["player"]
 	var band: Array = moan_band(d)
 	var call := _call_for(what, v, int(s.get("file", -1)))
+	if call.is_empty():
+		return
 	if String(call[0]) == "moan":
 		s["file"] = int(call[1])
 	s["loud"] = float(row["loud"])
@@ -1077,8 +1081,10 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 	s["was"] = row
 	s["stun"] = float(z.get("stun", 0.0))
 	s["wait"] = float(s["wait"]) - delta
-	if not has("moan") or z["state"] == "tell":
+	if z["state"] == "tell":
 		return   # about to run: its own rasp is heard (lunge_tell)
+	if not in_view(z["pos"]):
+		return   # gone out of sight: what it was saying runs out (VOICE_KEEP), nothing new
 	if cue != "" or float(s["wait"]) <= 0.0:
 		s["fading"] = false
 		_say(s, z, cue if cue != "" else row, d)
@@ -1087,12 +1093,14 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 ## One of the dead in sight goes down: a short breath out in its own voice,
 ## under the fall's beats. Not through a slot (the slot lets go of it).
 func _fall_voice(z: Dictionary, at: Vector3) -> void:
-	if not has("moan") or not in_view(z["pos"]):
+	if not in_view(z["pos"]):
 		return
 	var row: Dictionary = SAYS["fall"]
 	var v := voice_of(z)
 	var d: float = at.distance_to(z["pos"])
 	var call := _call_for("fall", v, -1)
+	if call.is_empty():
+		return
 	var band: Array = moan_band(d)
 	said.append([int(z["id"]), "fall", int(call[1]), String(call[0])])
 	var bus: String = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
@@ -1918,7 +1926,7 @@ func lunge_tell(at: Vector3) -> void:
 	var own: bool = has(TELL_GROUP)
 	var d: float = at.distance_to(game.player.position)
 	var lin: float = TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0)
-	var bus: String = ROOM_BUS if in_room(at) else "SFX"
+	var bus: String = _bus_at(at)
 	if own:
 		var j := _fresh_file(TELL_GROUP)
 		_one_shot(TELL_GROUP, at, lin, randf_range(float(TELL_OWN_PITCH[0]), float(TELL_OWN_PITCH[1])), lib[TELL_GROUP][j], bus)

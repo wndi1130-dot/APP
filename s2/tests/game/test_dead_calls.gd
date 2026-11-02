@@ -162,6 +162,49 @@ func test_going_down_in_sight_breathes_out_its_own_fall() -> void:
 	assert_eq(fell[0][3], "dead_fall")
 
 
+## Its own call does not wait on the moans: with no moan at all, a fall still
+## breathes out its own file; with neither, nothing is said.
+func test_its_own_call_needs_no_moan() -> void:
+	var at := _face_east()
+	var a = game.audio
+	a.lib["moan"] = []
+	a.lib["dead_fall"] = [_tone(1)]
+	var z: Dictionary = game.zombies.spawn("dead", at + Vector3(3, 0, 0))
+	assert_true(a.in_view(z["pos"]))
+	a._fall_voice(z, game.player.position)
+	assert_eq(a.said.size(), 1, "heard without a moan")
+	assert_eq(a.said.back()[3], "dead_fall")
+	a.lib["dead_fall"] = []
+	assert_eq(a._call_for("fall", a.voice_of(z), -1), [], "neither: nothing to say with")
+	a._fall_voice(z, game.player.position)
+	assert_eq(a.said.size(), 1, "and nothing said")
+
+
+## Gone out of sight, one of the dead says nothing new, struck or not, while
+## its slot keeps what it was saying a moment (VOICE_KEEP).
+func test_out_of_sight_it_starts_no_new_call() -> void:
+	var at := _face_east()
+	var a = game.audio
+	a.lib["dead_hit"] = [_tone(1), _tone(2)]
+	var z: Dictionary = game.zombies.spawn("dead", at + Vector3(3, 0, 0))
+	z["state"] = "chase"
+	a.pick_t = 0.0
+	for s in a.slots:
+		s["wait"] = 0.0
+	a.tick(0.05)
+	var heard: int = a.said.size()
+	assert_gt(heard, 0, "in sight, it calls")
+	game.player.facing = -PI * 0.5
+	game._refresh_vision()
+	assert_false(a.in_view(z["pos"]))
+	z["stun"] = 0.6
+	for s in a.slots:
+		s["wait"] = 0.0
+	a.pick_t = 1.0
+	a.tick(0.05)
+	assert_eq(a.said.size(), heard, "out of sight: no new call, not even a blow's")
+
+
 ## About to run: its own rasp once the files are in, read the first time it is
 ## heard, never the one just heard, a little higher or lower each time.
 func test_the_rasp_before_a_run_is_its_own_once_in() -> void:
@@ -170,6 +213,15 @@ func test_the_rasp_before_a_run_is_its_own_once_in() -> void:
 	a.lib.erase(a.TELL_GROUP)
 	a.lunge_tell(at + Vector3(3, 0, 0))
 	assert_true(a.lib.has(a.TELL_GROUP), "read on first use")
+	assert_gte((a.lib[a.TELL_GROUP] as Array).size(), 3, "the shipped files, read")
+	assert_not_null(a.last_shot)
+	assert_true(a.last_shot.stream in a.lib[a.TELL_GROUP], "and heard the first time")
+	# One file only: heard each time, never stuck on avoiding it.
+	var one: Array = [_tone(4)]
+	a.lib[a.TELL_GROUP] = one
+	for k in range(3):
+		a.lunge_tell(at + Vector3(3, 0, 0))
+		assert_eq(a.last_shot.stream, one[0], "the one file")
 	var files: Array = [_tone(1), _tone(2), _tone(3)]
 	a.lib[a.TELL_GROUP] = files
 	var last: AudioStream = null
