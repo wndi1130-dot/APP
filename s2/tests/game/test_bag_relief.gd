@@ -1,5 +1,5 @@
 extends "res://addons/gut/test.gd"
-## 2026-11-02 사용자 결정: body burden and actual storage weight stay separate.
+## 2026-11-02 user's pick: body burden and actual storage weight stay separate.
 
 const Carry = preload("res://game/sim/carry.gd")
 const Person = preload("res://game/actors/person.gd")
@@ -30,6 +30,47 @@ func test_big_pack_twelve_becomes_9_6() -> void:
 	assert_almost_eq(p.body_burden(), 9.6, 0.00001)
 	assert_eq(p.weight(), 12.0)
 	assert_eq(p.carry_limit(), 12.0)
+
+
+# What is packed past the bag's limit is not lightened: it weighs in whole on top
+# of the lightened full bag (2026-11-02 user's pick, over-filling never runs free).
+func test_packed_past_the_limit_is_not_relieved() -> void:
+	var p = _person("pack", 10)
+	assert_almost_eq(p.body_burden(), 8.0 * 0.7 + 2.0, 0.00001)
+	p.items = {"wood": 8}
+	assert_almost_eq(p.body_burden(), 5.6, 0.00001, "a full bag, all of it lightened")
+	var big = _person("big_pack", 15)
+	assert_almost_eq(big.body_burden(), 12.0 * 0.8 + 3.0, 0.00001)
+	assert_almost_eq(Carry.body_burden("pack", 10.0, 1.0, 8.0), 1.0 + 5.6 + 2.0, 0.00001)
+	assert_almost_eq(Carry.body_burden("pack", 10.0, 1.0), 1.0 + 7.0, 0.00001, "with no limit given, all of it lightened")
+
+
+# Over (no running) is the bag packed past its limit, the weight outside the bag
+# left out; or the body's load past the limit (2026-11-02 user's pick).
+func test_a_full_bag_runs_and_an_over_filled_one_does_not() -> void:
+	var p = _person("pack", 8)
+	p.heat.wet = 1.0
+	assert_almost_eq(p.weight(), 9.0, 0.00001, "a full pack and soaked clothes")
+	assert_eq(p.carry_state(), 1, "a full pack with a start weight runs, short of breath sooner")
+	assert_true(p.load_lets_run())
+	p.items = {"wood": 10}
+	assert_eq(p.carry_state(), 2, "packed past the limit: over")
+	assert_false(p.load_lets_run())
+	var bare = _person("pack", 10)
+	assert_almost_eq(bare.body_burden(), 7.6, 0.00001, "lightened under the limit")
+	assert_eq(bare.carry_state(), 2, "with no start weight an over-filled pack is still over")
+	assert_false(bare.load_lets_run())
+	bare.items = {"wood": 17}
+	assert_lt(bare.body_burden(), 2.0 * bare.carry_limit(), "lightened short of double")
+	assert_eq(bare.carry_state(), 3, "packed past double still cannot move")
+
+
+func test_what_is_held_can_put_the_body_over() -> void:
+	var p = _person("pack", 6)
+	p.items["symbol_bell"] = 1
+	assert_almost_eq(p.body_burden(), 6.0 * 0.7 + 4.0, 0.00001, "the bell in the arms weighs in whole")
+	assert_gt(p.body_burden(), p.carry_limit())
+	assert_eq(p.carry_state(), 2, "the body's load past the limit: over")
 
 
 func test_pockets_have_no_relief() -> void:
@@ -68,7 +109,9 @@ func test_body_state_drops_one_tier_at_half_and_full_boundaries() -> void:
 	var p = _person("pack", 5)
 	assert_eq(Carry.state(p.weight(), p.carry_limit()), 1)
 	assert_eq(p.carry_state(), 0)
-	p.items = {"wood": 9}
+	# A full pack and a spare axe: over by the whole weight, not by the body's load.
+	p.items = {"wood": 8}
+	p.hands = [{"id": ""}, {"id": "axe"}]
 	assert_eq(Carry.state(p.weight(), p.carry_limit()), 2)
 	assert_eq(p.carry_state(), 1)
 	assert_true(p.load_lets_run(), "small packed items allow running here")
