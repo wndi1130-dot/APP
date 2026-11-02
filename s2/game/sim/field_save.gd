@@ -32,6 +32,7 @@ const NOT_START := ["field_save", "field_save_path", "field_resume", "departure"
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
 ## Only simulation state, never meshes, services or input widgets.
+## The whole brain includes work_haul_flee and its cached unloading destination.
 const PERSON_FIELDS: Array[String] = [
 	"team", "role", "display_name", "skills", "medical", "hunger_level", "sore_level", "smell", "traits", "lamp", "lamp_on",
 	"path", "running", "crouched", "facing", "turn_rate", "look", "moving", "stick", "drive_speed", "drive_dir",
@@ -371,7 +372,7 @@ static func _restore_work_fallback(game, save: Dictionary) -> void:
 		if p == null:
 			continue
 		var brain: Dictionary = row.get("state", {}).get("brain", {})
-		for key: String in ["work_site", "job", "side", "load", "load_kind", "boarded", "board_at", "work_wait"]:
+		for key: String in ["work_site", "job", "side", "load", "load_kind", "boarded", "board_at", "work_wait", "work_run", "work_haul_flee"]:
 			if brain.has(key):
 				p.brain[key] = brain[key]
 		p.brain.erase("coal_drop")

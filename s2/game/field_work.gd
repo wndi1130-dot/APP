@@ -31,6 +31,8 @@ const NO_HANDS_S: float = 10.0
 const HOLD_SHARE: float = 0.4
 const WORKER_BACK_R: float = 8.0
 const WORKER_RUN_R: float = 3.0
+const ESCORT_NEAR_M: float = 30.0
+const HAUL_STUCK_S: float = 15.0
 const BEHIND_M: float = 2.0
 const START_SPREAD: float = 6.0
 const BOARD_R: float = 1.5
@@ -562,7 +564,7 @@ func _disembark(id: String, row: Dictionary, side: int) -> void:
 	var belt: Dictionary = game.mission_play.conveyor()
 	var mending: bool = p.brain.get("mender", false) and not belt.is_empty() and belt["state"] == "part"
 	p.brain.merge({"work_site": id, "job": "repair" if mending else "dig", "side": side % 2, "load": 0.0,
-		"load_kind": job(id)["yield"], "boarded": false, "fleeing": false, "work_run": false,
+		"load_kind": job(id)["yield"], "boarded": false, "fleeing": false, "work_run": false, "work_haul_flee": false,
 		"work_wait": -1.0}, true)
 	p.brain.erase("board_at")
 	p.brain.erase("dest")
@@ -762,10 +764,13 @@ func crew_step(p, think: bool) -> bool:
 		_return_dig(id, String(p.pid))
 		return true
 	if phase(id) in ["retreat", "done"] or p.brain.get("job", "") == "home":
+		p.brain["work_haul_flee"] = false
 		_go_home(p, id, think)
 		return true
 	if p.role == "escort":
 		return false
+	if phase(id) == "hold":
+		p.brain["work_haul_flee"] = false
 	if not think:
 		return true
 	var threat: Dictionary = nearest_threat(p.position, WORKER_BACK_R)
@@ -775,7 +780,18 @@ func crew_step(p, think: bool) -> bool:
 		if p.position.distance_to(threat["pos"]) <= WORKER_RUN_R:
 			drop_load(p)
 			p.brain["work_run"] = true
-		if not p.brain.get("work_run", false):
+			p.brain["work_haul_flee"] = false
+		elif phase(id) == "working" and float(p.brain.get("load", 0.0)) > EMPTY \
+				and not p.brain.get("work_run", false) and not _escort_near(p, id):
+			if not p.brain.get("work_haul_flee", false):
+				# 2026-11-02: keep the load until unloading, even after the threat is gone.
+				p.brain["work_haul_flee"] = true
+				p.brain.erase("haul_best")
+				p.brain.erase("haul_best_at")
+				# _walk reuses a live path before it can change walking to running.
+				p.stop()
+				p.brain.erase("dest")
+		if not p.brain.get("work_run", false) and not p.brain.get("work_haul_flee", false):
 			var shelter: Vector3 = _behind_escort(p, threat, id)
 			if shelter.is_finite():
 				game.ai._walk(p, shelter, true)
@@ -787,6 +803,19 @@ func crew_step(p, think: bool) -> bool:
 			game.ai._walk(p, door_of(id), true)
 			return true
 		p.brain["work_run"] = false
+	if p.brain.get("work_haul_flee", false) and not _haul_flee_holds(p):
+		p.brain["work_haul_flee"] = false
+		p.brain.erase("haul_best")
+		p.brain.erase("haul_best_at")
+		p.stop()
+		p.brain.erase("dest")
+	if p.brain.get("work_haul_flee", false):
+		p.brain["fleeing"] = true
+		_deliver(p, id, true)
+		if float(p.brain.get("load", 0.0)) <= EMPTY:
+			p.brain["work_haul_flee"] = false
+			p.brain["fleeing"] = false
+		return true
 	p.brain["fleeing"] = false
 	if phase(id) == "hold":
 		_cancel_dig(p, id)
@@ -1178,6 +1207,33 @@ func nearest_threat(at: Vector3, radius: float) -> Dictionary:
 	return best
 
 
+## A flight with the load goes on while there is a load to bring and the carrier
+## keeps getting nearer the drop: a dropped load ends it, and so does no metre won
+## for HAUL_STUCK_S (a blocked way), when the old shelter rules take over.
+func _haul_flee_holds(p) -> bool:
+	if float(p.brain.get("load", 0.0)) <= EMPTY:
+		return false
+	var drop: Variant = p.brain.get("coal_drop")
+	if not drop is Vector3:
+		return true
+	var now: float = game.clock.elapsed
+	var d: float = p.position.distance_to(drop)
+	if d < float(p.brain.get("haul_best", INF)) - 1.0:
+		p.brain["haul_best"] = d
+		p.brain["haul_best_at"] = now
+		return true
+	return now - float(p.brain.get("haul_best_at", now)) <= HAUL_STUCK_S
+
+
+func _escort_near(p, id: String) -> bool:
+	for escort in members(id):
+		if escort.role != "escort" or not escort.can_act() or escort.brain.get("boarded", false):
+			continue
+		if p.position.distance_to(escort.position) <= ESCORT_NEAR_M:
+			return true
+	return false
+
+
 func _behind_escort(p, threat: Dictionary, id: String) -> Vector3:
 	var nearest: Variant = null
 	var distance: float = INF
@@ -1277,7 +1333,7 @@ func _can_drop_at(p, at: Vector3) -> bool:
 	return not path.is_empty() and path[-1].distance_to(at) <= DROP_R
 
 
-func _deliver(p, id: String) -> void:
+func _deliver(p, id: String, run: bool = false) -> void:
 	var drop: Vector3 = door_of(id)
 	if job_id(id) == "coal_wagon":
 		# Taken where the load is picked up, so the carrier's own steps do not move it and send
@@ -1297,7 +1353,7 @@ func _deliver(p, id: String) -> void:
 			p.brain["coal_drop"] = drop
 		drop = p.brain["coal_drop"]
 	if p.position.distance_to(drop) > DROP_R:
-		game.ai._walk(p, drop, false)
+		game.ai._walk(p, drop, run)
 		return
 	if p.brain.get("load_kind", "coal") == "coal":
 		game.actions.coal_delivered += float(p.brain.get("load", 0.0))
