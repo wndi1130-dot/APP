@@ -24,12 +24,18 @@ const GlassParts = preload("res://game/ui/glass_parts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const TrainWorkshop = preload("res://game/train/train_workshop.gd")
+const TrainWorkOrder = preload("res://game/train/train_work_order.gd")
+const TrainResearch = preload("res://game/train/train_research.gd")
+const Supplies = preload("res://game/train/train_supplies.gd")
 const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
 const CSS_SIZE := Vector2(330, 286)
 ## The stores and their marks (hud_icons.gd).
 const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"], ["cloth", "it_cloth"]]
 const ICON: Dictionary = {"scrap": "it_nails", "wood": "it_plank", "parts": "gear", "cloth": "it_cloth"}
+const TASK_NAMES: Dictionary = {"parts": "부품", "restore": "복원", "modify": "개조", "sup": "생필품 만들기"}
+const START_TABLES := "res://game/train/slice_start.json"
+static var _tables_cache: Dictionary = {}
 ## Rows: parts, then open recipes, including x1/x4's five transport tools.
 ## Caps stay visible through the existing row's why tooltip and dimmed key.
 const ROW_TOP: float = 66.0
@@ -47,13 +53,14 @@ const SOOT_CUT := Color("10151a")
 const SHADE := Color("0b0e12")
 
 var g: Dictionary = {}
+var _rules_tables: Dictionary = {}
 var _parts: Control
 ## Where a row's parts go while the rows are laid (the scrolled list), else the pane.
 var _into: Control = null
 
 
 ## What the pane says for state `g0` (tests read this; the pane draws it).
-static func model(g0: Dictionary) -> Dictionary:
+static func model(g0: Dictionary, tables: Dictionary = {}) -> Dictionary:
 	var dom: Dictionary = g0.get("dom", {}) if g0.get("dom") is Dictionary else {}
 	var stores: Array = []
 	for row: Array in STORES:
@@ -88,13 +95,36 @@ static func model(g0: Dictionary) -> Dictionary:
 			"can_cancel": on_line and bool(now["can_cancel"]),
 			"why": TrainWorkshop.why_not(g0, id),
 		})
-	return {
+	var out: Dictionary = {
 		"stores": stores,
 		"parts": {"n": float(dom.get("parts", 0)), "target": tgt, "can_down": tgt > 0, "can_up": tgt < TrainWorkshop.TARGET_MAX,
 			"cost": [{"key": "scrap", "icon": ICON["scrap"], "n": TrainWorkshop.PART_SCRAP, "short": float(dom.get("scrap", 0)) < TrainWorkshop.PART_SCRAP},
 				{"key": "wood", "icon": ICON["wood"], "n": TrainWorkshop.PART_WOOD, "short": float(dom.get("wood", 0)) < TrainWorkshop.PART_WOOD}]},
 		"rows": rows,
 	}
+	if bool(g0.get("supOn", false)):
+		var order: Array[String] = TrainWorkOrder.normalized(g0) if g0.get("dom") is Dictionary else TrainWorkOrder.DEFAULT.duplicate()
+		out["order"] = order
+		if TrainDom.is_store(g0.get("dom")) and TrainResearch.mult(g0, {}, "w6") > 0.0:
+			var t: Dictionary = tables if not tables.is_empty() else _supply_tables()
+			if not t.is_empty() and g0.get("comms") is Dictionary:
+				var recipe: Dictionary = TrainWorkshop._supplies_recipe(g0, t)
+				var cap: float = float(Supplies.MAKE["supMakeCap"]) * Supplies.need(g0, t)
+				var amount: float = minf(cap, float(recipe["amount"]))
+				var scrap: float = float(recipe["scrap"]) * amount / float(recipe["amount"])
+				out["supplies"] = {"fine": bool(recipe["fine"]), "fine_on": bool(dom.get("supFineOn", false)),
+					"can_fine": TrainResearch.mult(g0, t, "w8") > 0.0, "cap": cap,
+					"progress": float(dom.get("supWork", 0.0)), "scrap": scrap,
+					"short": float(dom.get("scrap", 0)) < scrap - 1e-9}
+	return out
+
+
+static func _supply_tables() -> Dictionary:
+	if _tables_cache.is_empty():
+		var source: Variant = JSON.parse_string(FileAccess.get_file_as_string(START_TABLES))
+		if source is Dictionary and source.get("tables") is Dictionary:
+			_tables_cache = source["tables"]
+	return _tables_cache
 
 
 func _ready() -> void:
@@ -125,8 +155,9 @@ func pin(top: float) -> void:
 	offset_bottom = top + s.y
 
 
-func show_state(g0: Dictionary) -> void:
+func show_state(g0: Dictionary, tables: Dictionary = {}) -> void:
 	g = g0
+	_rules_tables = tables
 	_draw_all()
 
 
@@ -136,17 +167,27 @@ func _draw_all() -> void:
 	_parts.visible = not g.is_empty()
 	if g.is_empty():
 		return
-	var m: Dictionary = model(g)
+	var m: Dictionary = model(g, _rules_tables)
 	RowKeep.begin(_parts)
 	_head()
 	_stores(m["stores"])
 	var rows: Array = m["rows"]
 	var ids: Array = ["parts"]
 	var by_id: Dictionary = {}
+	# A supplies run: what it makes stands under the parts, the task order (changed now
+	# and then) at the foot, so the making keys stay where they were.
+	if m.has("supplies"):
+		ids.append("supplies")
 	for data: Dictionary in rows:
 		var id: String = String(data["id"])
 		ids.append(id)
 		by_id[id] = data
+	if m.has("order"):
+		for index: int in (m["order"] as Array).size():
+			var task: String = String(m["order"][index])
+			var order_id: String = "order_" + task
+			ids.append(order_id)
+			by_id[order_id] = {"task": task, "index": index, "count": m["order"].size()}
 	var k: float = UiFonts.K
 	var s: ScrollContainer = RowKeep.part(_parts, "List", func() -> Control: return ScrollContainer.new()) as ScrollContainer
 	var saved: int = s.scroll_vertical
@@ -169,6 +210,10 @@ func _draw_all() -> void:
 			RowKeep.begin(row)
 			if id == "parts":
 				_parts_row(m["parts"], 0.0)
+			elif id.begins_with("order_"):
+				_order_row(by_id[id])
+			elif id == "supplies":
+				_supplies_row(m["supplies"])
 			else:
 				_row(by_id[id], 0.0)
 			RowKeep.finish(row)
@@ -177,6 +222,55 @@ func _draw_all() -> void:
 	if list.custom_minimum_size.y > s.size.y + 0.5:
 		_more(s)
 	RowKeep.finish(_parts)
+
+
+func _order_row(data: Dictionary) -> void:
+	var k: float = UiFonts.K
+	var task: String = String(data["task"])
+	var index: int = int(data["index"])
+	var title := _label("OrderName_" + task, "차례 %d · %s" % [index + 1, TASK_NAMES[task]], UiFonts.WORD, 500, 13.0, INK, 0.52)
+	_text(title, 44.0, 31.0)
+	for step: int in [-1, 1]:
+		var can: bool = index > 0 if step < 0 else index + 1 < int(data["count"])
+		var key := _key("↑" if step < 0 else "↓", "Order_%s_%s" % [task, "up" if step < 0 else "down"], can)
+		key.position = Vector2(224.0 if step < 0 else 272.0, 5.0) * k
+		key.size = Vector2(KEY_H, KEY_H) * k
+		key.set_meta("can_move", can)
+		if not key.has_meta("wired"):
+			key.set_meta("wired", true)
+			key.pressed.connect(func() -> void:
+				if not bool(key.get_meta("can_move")):
+					UiDeny.shake(key)
+					return
+				var before: Array[String] = TrainWorkOrder.normalized(g)
+				TrainWorkOrder.move(g, task, step)
+				if TrainWorkOrder.normalized(g) == before:
+					UiDeny.shake(key)
+					return
+				_after())
+
+
+func _supplies_row(data: Dictionary) -> void:
+	var k: float = UiFonts.K
+	var name_l := _label("SuppliesName", "좋은 물건" if bool(data["fine"]) else "생필품", UiFonts.WORD, 500, 13.0, INK, 0.52)
+	_text(name_l, 44.0, 18.0)
+	var cap := _label("SuppliesCap", "상한 " + _supply_num(float(data["cap"])), UiFonts.WORD, 400, 13.0, INK2, 0.0)
+	_text(cap, 116.0, 18.0)
+	_cost([{"key": "scrap", "icon": ICON["scrap"], "n": data["scrap"], "short": data["short"], "precise": true}], 40.0, "SuppliesCost")
+	var progress := _label("SuppliesProgress", "이월 " + _supply_num(float(data["progress"])), UiFonts.WORD, 400, 13.0, INK2, 0.0)
+	_text(progress, 116.0, 40.0)
+	if bool(data["can_fine"]):
+		var key := _key("좋은 물건 켬" if bool(data["fine_on"]) else "좋은 물건 끔", "SuppliesFine", true)
+		key.position = Vector2(206.0, 5.0) * k
+		key.size = Vector2(110.0, KEY_H) * k
+		key.set_meta("fine_on", bool(data["fine_on"]))
+		if not key.has_meta("wired"):
+			key.set_meta("wired", true)
+			key.pressed.connect(func() -> void:
+				if not TrainWorkshop.set_sup_fine(g, not bool(key.get_meta("fine_on"))):
+					UiDeny.shake(key)
+					return
+				_after())
 
 
 ## While rows are left under the list's foot, the glass darkens there (a fold
@@ -331,7 +425,8 @@ func _cost(cost: Array, base: float, prefix: String) -> void:
 	for c: Dictionary in cost:
 		var short: bool = bool(c["short"])
 		_add(_mark(String(c["icon"]), 15.0, Vector2(x, base - 13.0), RED if short else INK2, prefix + "_mark_" + String(c["key"])))
-		var n := _label("%s_%s" % [prefix, c["key"]], _num(float(c["n"])), UiFonts.NUMBER, 400, 13.0, RED if short else INK2, 0.52)
+		var amount_text: String = _supply_num(float(c["n"])) if bool(c.get("precise", false)) else _num(float(c["n"]))
+		var n := _label("%s_%s" % [prefix, c["key"]], amount_text, UiFonts.NUMBER, 400, 13.0, RED if short else INK2, 0.52)
 		n.name = "%s_%s" % [prefix, c["key"]]
 		_text(n, x + 19.0, base)
 		x += 19.0 + GlassParts.text_w(n) / k + 12.0
@@ -388,6 +483,14 @@ func _bare(key_name: String) -> Button:
 
 static func _num(v: float) -> String:
 	return str(int(v)) if is_equal_approx(v, roundf(v)) else "%.1f" % v
+
+
+## A supplies amount on a phone: at most two places (0.58, not 0.583333).
+static func _supply_num(v: float) -> String:
+	var text: String = "%.2f" % v
+	while text.ends_with("0"):
+		text = text.trim_suffix("0")
+	return text.trim_suffix(".")
 
 
 

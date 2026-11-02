@@ -2233,9 +2233,13 @@ func _open_workshop() -> void:
 	var w = WorkshopPane.new()
 	w.name = "WorkshopPane"
 	w.folded.connect(_close_room)
+	# A supplies run's workshop keys (task order, good goods) change the train state:
+	# saved and redrawn as the other rooms are. Without supplies the pane is as it was.
+	if bool(train_g.get("supOn", false)):
+		w.changed.connect(_room_changed)
 	home.add_child(w)
 	w.pin(TrainGauges.BAND_H)
-	w.show_state(train_g)
+	w.show_state(train_g, train_t)
 	PaneMotion.open(w)
 	shop = w
 
