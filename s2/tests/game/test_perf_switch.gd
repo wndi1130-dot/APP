@@ -374,11 +374,13 @@ func test_max_fps_takes_the_menu_caps_and_waits_until_the_field_is_shown() -> vo
 		assert_eq(Engine.max_fps, cap)
 		assert_eq(Switch.apply_max_fps({"max_fps": cap}), {})
 		_free_field(field)
-	Engine.max_fps = 30
+	# Start at 60 so a stray default of 30 would show.
+	Engine.max_fps = 60
 	var plain: FieldProbe = _field(false)
 	plain._apply_perf_settings(Switch.read(path + ".missing"))
+	assert_eq(Engine.max_fps, 60, "no file, no change")
 	plain._apply_perf_settings({"sun_shadow": true})
-	assert_eq(Engine.max_fps, 30, "no key, no change")
+	assert_eq(Engine.max_fps, 60, "no key, no change")
 
 
 func test_fill_energy_survives_minute_updates_and_keeps_specular() -> void:
