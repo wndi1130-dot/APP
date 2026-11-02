@@ -41,7 +41,7 @@ const PERSON_FIELDS: Array[String] = [
 	"team", "role", "display_name", "skills", "medical", "hunger_level", "sore_level", "smell", "traits", "lamp", "lamp_on",
 	"path", "running", "crouched", "facing", "turn_rate", "look", "moving", "stick", "drive_speed", "drive_dir",
 	"command", "command_target", "action", "action_label", "action_t", "action_total", "action_done", "action_busy",
-	"action_noise_t", "swing_t", "shove_t", "lunge_t", "strike_t", "strike_total", "strike_at", "strike_kind",
+	"action_noise_t", "swing_t", "shove_t", "lunge_t", "shove_rest_t", "strike_t", "strike_total", "strike_at", "strike_kind",
 	"reload_t", "jam_t", "target_zombie", "target_person", "hold_attack", "grabbers", "grab_left", "grab_front",
 	"climbing", "carrying_wounded", "downed_marked", "dead_marked", "brain", "panic", "ice_t", "fallen_t",
 	"last_hurt_by", "blood_soaked", "close_kills",
