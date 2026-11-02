@@ -38,8 +38,20 @@ func _rows() -> Array:
 	return out
 
 
+## The files shipped in each group (rights_ledger), so a lost one is caught.
+## The locked door has one file only: it cannot avoid itself, its wider pitch
+## wobble (OWN_VOICE) keeps it from sounding the same.
+const SHIPPED: Dictionary = {
+	"floor_creak": 3, "door_open": 4, "door_close": 4, "door_unlock": 3, "door_locked": 1,
+	"boarded": 4, "window_open": 3, "window_close": 3, "curtain": 2, "window_vault": 6,
+}
+
+
 func test_every_turned_thing_ships_files_of_its_own() -> void:
 	var a = game.audio
+	assert_eq(SHIPPED.size(), a.OWN_VOICE.size(), "every own group counted here")
+	for group: String in SHIPPED:
+		assert_eq(a._load_group(group).size(), int(SHIPPED[group]), group + ": as many files as shipped")
 	var named: Array = []
 	for pair: Array in _rows():
 		named.append(String(pair[0][0]))
@@ -81,6 +93,44 @@ func test_an_own_file_at_its_own_pitch_and_loudness_never_twice_running() -> voi
 			assert_almost_eq(float(a.last_shot.volume_db), a._db(float(row[1])) + float(own[2]), 0.01, g + ": as loud as the stand-in")
 			assert_ne(a.last_shot.stream, last, g + ": not the same file twice running")
 			last = a.last_shot.stream
+
+
+## Too far to hear (past 60 m), nothing is picked: the file heard last stays
+## the one not to play again, so near, far, near never repeats what was heard.
+func test_one_too_far_to_hear_does_not_count_as_heard() -> void:
+	var a = game.audio
+	var near: Vector3 = game.player.position
+	var far: Vector3 = near + Vector3(70, 0, 0)
+	for pair: Array in _rows():
+		var row: Array = pair[0]
+		var g: String = row[0]
+		if not a.OWN_VOICE.has(g):
+			continue
+		a.lib[g] = [_tone(), _tone()]
+		a._voice_or_standin(row, String(pair[1]), near)
+		var first: AudioStream = a.last_shot.stream
+		a._voice_or_standin(row, String(pair[1]), far)
+		assert_null(a.last_shot, g + ": too far, nothing played")
+		a._voice_or_standin(row, String(pair[1]), near)
+		assert_ne(a.last_shot.stream, first, g + ": not the one heard last")
+
+
+## Other rows that go through the same way (the glass in a frame, a manhole
+## lid, glass underfoot, a box): when files come into one of them, it needs its
+## own pitch and loudness too (OWN_VOICE), or its row's stand-in bending is
+## put on its own recording.
+func test_any_other_row_with_files_has_its_own_voice() -> void:
+	var a = game.audio
+	var rows: Array = [a.VAULT_GLASS, a.LID_VOICE, a.STEP_GLASS, a.CREAK_VOICE]
+	for kind: String in a.BOX_VOICES:
+		rows += (a.BOX_VOICES[kind] as Dictionary).values()
+	rows += a.BOX_RUSTLE.values()
+	for row: Array in rows:
+		var g: String = row[0]
+		if not a._load_group(g).is_empty():
+			assert_true(a.OWN_VOICE.has(g), g + " ships files: give it a row in OWN_VOICE")
+		else:
+			assert_false(a.OWN_VOICE.has(g), g + ": no files, no own row")
 
 
 func test_with_no_files_the_stand_in_as_before() -> void:

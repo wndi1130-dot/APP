@@ -1857,6 +1857,9 @@ func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var d: float = at.distance_to(game.player.position)
 	var lin: float = float(voice[1]) * clampf(1.0 - d / 60.0, 0.0, 1.0)
 	var pitch := randf_range(float(voice[2]), float(voice[3]))
+	if lin <= 0.01:
+		last_shot = null
+		return   # too far to hear: nothing is picked, so the last file heard stays the last
 	if has(group):
 		if OWN_VOICE.has(group):
 			var mine: Array = OWN_VOICE[group]
