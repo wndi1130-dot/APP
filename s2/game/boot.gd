@@ -10,6 +10,9 @@ const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const ScreenLift = preload("res://game/ui/screen_lift.gd")
+const PropModels = preload("res://game/world/prop_models.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const TrainModels = preload("res://game/world/train_model_kit.gd")
 ## Shader gallery (fx library), opened from the menu for a look on the phone.
 const GALLERY_SCENE := "res://fx/gallery.tscn"
 const TRAIN_SCENE := "res://game/train/train.tscn"
@@ -96,6 +99,7 @@ func _ready() -> void:
 
 
 func _show_menu() -> void:
+	_release_menu_caches()
 	if menu != null:
 		menu.get_parent().queue_free()
 	var layer := CanvasLayer.new()
@@ -187,6 +191,18 @@ func _show_menu() -> void:
 	if menu_scroll > 0:
 		scroll.set_deferred("scroll_vertical", menu_scroll)
 	scroll.get_v_scroll_bar().value_changed.connect(func(x: float) -> void: menu_scroll = int(x))
+
+
+## queue_free in _on_restart is flushed at frame end. Resume next frame, after
+## the old scene exits (StopLoader/scenery workers are joined by their exits).
+func _release_menu_caches() -> void:
+	await get_tree().process_frame
+	# A start or scene change during the wait must not clear the new game's caches.
+	if not is_inside_tree() or is_queued_for_deletion() or not is_instance_valid(menu) or field != null:
+		return
+	PropModels.release()
+	UiFonts.release()
+	TrainModels.release()
 
 
 func _pick(key: String, value) -> void:

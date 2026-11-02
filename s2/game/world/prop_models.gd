@@ -85,6 +85,15 @@ static var _rows: Dictionary = {}   # model name -> [{mesh, transform, material}
 static var _batches: Dictionary = {} # path -> LOD 번호별 합친 메시
 
 
+## Call on the main thread after the old field/train scenes and their StopLoader
+## and scenery workers have stopped accessing these caches. Safe to call twice.
+## Drop only outer dictionary references; live nodes/MultiMeshes keep their meshes.
+## The next access reloads the same model data and rebuilds the same batches.
+static func release() -> void:
+	_rows.clear()
+	_batches.clear()
+
+
 static func enabled() -> bool:
 	return bool(ProjectSettings.get_setting(MODE_SETTING, true))
 
