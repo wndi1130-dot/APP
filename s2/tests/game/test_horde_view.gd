@@ -143,12 +143,11 @@ func test_depth_zero_places_no_one_and_warns_nothing() -> void:
 	walls[0] = (walls[0] as Dictionary).merged({"depth": 0.0}, true)
 	var node: Horde = Horde.new()
 	add_child_autofree(node)
-	var people: Array[Dictionary] = await node.build_layout(walls, {"map_size": Vector2(120, 80)})
+	var chunks: Array[Dictionary] = await node.build_layout(walls, {"map_size": Vector2(120, 80)})
 	assert_eq(int(node.stats["invalid_walls"]), 0)
-	assert_false(people.is_empty(), "the other wall still has its horde")
-	# Behind the north piece is z < 0; the west piece's people stand at x < 0, z 4..52.
-	for person: Dictionary in people:
-		assert_gte((person["position"] as Vector3).z, 0.0, "no one behind a depth 0 piece")
+	assert_false(chunks.is_empty(), "the other wall still has its horde")
+	for chunk: Dictionary in chunks:
+		assert_ne(String((chunk["wall"] as Dictionary)["id"]), "north", "no one behind a depth 0 piece")
 
 
 func test_duplicate_ids_are_rejected_without_order_tiebreak() -> void:
