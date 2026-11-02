@@ -167,6 +167,147 @@ func test_fine_offer_subtracts_unpaid_fine_promises() -> void:
 		var reserved: float = 0.0
 		for amount: float in amounts: reserved += amount
 		assert_almost_eq(Vote.fine_room(g, tables), 4.0 - reserved, 0.000000001)
+	var t: Dictionary = tables.duplicate(true)
+	var fine: Dictionary = {}
+	for cond: Dictionary in t["CONDITIONS"]["front"]:
+		if cond["kind"] == "give_fine": fine = cond.duplicate(true)
+	assert_false(fine.is_empty())
+	t["CONDITIONS"]["guard"].append(fine.duplicate(true))
+	g = _board()
+	g["supFine"] = 1.0
+	var shared_session: int = -1
+	for session: int in 12:
+		g["session"] = session
+		if _offered(g, t, "front") and _offered(g, t, "guard"):
+			shared_session = session
+			break
+	assert_gte(shared_session, 0, "both cars have an offer in one session")
+	if shared_session < 0: return
+	# First car makes a promise in this session; the second car cannot reuse it.
+	g["comms"]["front"]["promise"] = {"kind": "open", "cond": fine.duplicate(true), "due": int(g["seg"]) + 3, "madeSession": shared_session}
+	assert_false(_offered(g, t, "guard"), "same session reservation")
+	# The front car's earlier promise must also reserve the stock now.
+	g["comms"]["front"]["promise"]["madeSession"] = shared_session - 1
+	assert_false(_offered(g, t, "guard"), "earlier session reservation")
+	g["comms"]["front"]["promise"] = null
+	# One settlement can make exactly one: once promised, no second offer can spend it.
+	for comm: String in t["COMMS"]: g["comms"][comm]["pop"] = 40
+	g["supFine"] = 0.0
+	g["dom"]["supFineOn"] = true
+	assert_almost_eq(Vote.fine_room(g, t), 1.0, 0.000000001)
+	assert_true(_offered(g, t, "guard"), "planned goods open the offer")
+	g["comms"]["front"]["promise"] = {"kind": "open", "cond": fine.duplicate(true), "due": int(g["seg"]) + 3, "madeSession": shared_session}
+	assert_false(_offered(g, t, "guard"), "planned goods already promised")
+
+func _offered(g: Dictionary, t: Dictionary, comm: String) -> bool:
+	for cond: Dictionary in Vote.open_conditions(g, t, comm):
+		if cond.get("kind") == "give_fine": return true
+	return false
+
+func test_fine_condition_cycles_and_classified_differences() -> void:
+	var rows: Array = data["groups"].get("fine_conditions", [])
+	var reports: Array = data["groups"].get("fine_conditions_report", [])
+	assert_eq(rows.size(), 6, "regenerate fine condition fixtures")
+	assert_eq(reports.size(), 1, "missing classified difference report")
+	if reports.size() != 1: return
+	var report: Dictionary = reports[0]
+	var allowed: Dictionary = {}
+	for category: String in ["s1c", "fine_policy"]:
+		for entry: Dictionary in report[category]:
+			var key: String = "%s/%s/%d/%d" % [entry["name"], entry["comm"], int(entry["session"]), int(entry["condition"])]
+			assert_false(allowed.has(key), "duplicate allowed cell " + key)
+			allowed[key] = {"category": category, "entry": entry}
+	var same: int = 0
+	var fine_count: int = 0
+	var s1c_count: int = 0
+	var seen: Dictionary = {}
+	for row: Dictionary in rows:
+		var g: Dictionary = _project(row["before"])
+		assert_eq((row["rounds"] as Array).size(), 12, row["name"])
+		for round: Dictionary in row["rounds"]:
+			g["session"] = int(round["session"])
+			for comm: String in tables["COMMS"]:
+				var raw: Array = round["s1_raw"][comm]
+				var expected: Array = round["s2_policy"][comm]
+				var actual: Array = Vote.open_conditions(g, tables, comm)
+				assert_eq(V.diff(expected, actual), "", "%s/%s/%d policy" % [row["name"], comm, int(g["session"])])
+				assert_eq(raw.size(), 3)
+				assert_eq(expected.size(), 3)
+				if raw.size() != 3 or expected.size() != 3: continue
+				for i: int in 3:
+					var key: String = "%s/%s/%d/%d" % [row["name"], comm, int(g["session"]), i + 1]
+					if V.diff(raw[i], expected[i]) == "":
+						same += 1
+						assert_false(allowed.has(key), "equal cell listed: " + key)
+						continue
+					assert_true(allowed.has(key), "unlisted difference: " + key)
+					if not allowed.has(key): continue
+					var item: Dictionary = allowed[key]
+					assert_eq(V.diff(raw[i], item["entry"]["s1_raw"]), "", key + " raw")
+					assert_eq(V.diff(expected[i], item["entry"]["s2_policy"]), "", key + " policy")
+					seen[key] = true
+					if item["category"] == "s1c": s1c_count += 1
+					else: fine_count += 1
+	assert_eq(seen.size(), allowed.size(), "unused allowed cells")
+	assert_eq(same, int(report["same"]))
+	assert_eq(fine_count, int(report["fine_count"]))
+	assert_eq(s1c_count, int(report["s1c_count"]))
+	assert_eq(same + fine_count + s1c_count, 6 * 12 * (tables["COMMS"] as Array).size() * 3)
+
+## S1 startRestore also journals 「공방이 … 복원을 시작했다.」 and moves the relations a
+## technology's sides want (with their "tech" ledger lines); completeRestore journals
+## 「…을(를) 복원했다.」. S2's research port has never done these for any technology, on
+## any board (as in supplies 2a), so only those S1 lines are taken out; the rest compares.
+func _without_s1_restore_news(want: Dictionary, before: Dictionary) -> Dictionary:
+	var out: Dictionary = want.duplicate(true)
+	var news := RegEx.create_from_string("^(공방이 .+ 복원을 시작했다|[^:]+: .+을\\(를\\) (결함판으로 )?복원했다\\.)")
+	# Only what this step added: lines already on the board going in stay on both sides.
+	if out.get("journal") is Array:
+		var had: int = (before["journal"] as Array).size() if before.get("journal") is Array else 0
+		var kept: Array = (out["journal"] as Array).slice(0, had)
+		for row: Variant in (out["journal"] as Array).slice(had):
+			if not (row is Dictionary and news.search(String(row.get("text", ""))) != null):
+				kept.append(row)
+		out["journal"] = kept
+	if out.get("comms") is Dictionary and before.get("comms") is Dictionary:
+		for comm: String in out["comms"]:
+			if (before["comms"] as Dictionary).has(comm):
+				out["comms"][comm]["rel"] = before["comms"][comm].get("rel")
+	if out.get("ledger") is Array:
+		var had_lines: int = (before["ledger"] as Array).size() if before.get("ledger") is Array else 0
+		var lines: Array = (out["ledger"] as Array).slice(0, had_lines)
+		for e: Variant in (out["ledger"] as Array).slice(had_lines):
+			if not (e is Dictionary and e.get("why") == "tech"):
+				lines.append(e)
+		if lines.is_empty() and not before.get("ledger") is Array:
+			if before.has("ledger"):
+				out["ledger"] = before["ledger"]
+			else:
+				out.erase("ledger")
+		else:
+			out["ledger"] = lines
+	return out
+
+
+func test_supplies_research_start_and_completion_whole_board() -> void:
+	var rows: Array = data["groups"].get("research_actions", [])
+	assert_eq(rows.size(), 6, "regenerate research action fixtures")
+	for row: Dictionary in rows:
+		var g: Dictionary = _project(row["before"])
+		var id: String = row["id"]
+		assert_eq(Research.restore_block(g, id), row["block"], row["name"] + " block")
+		assert_eq(bool(row["result"]), bool(g.get("supOn", false)), row["name"] + " expected availability")
+		assert_eq(Research.start_restore(g, id, "full", row["variant"]), row["result"], row["name"] + " start")
+		assert_eq(V.diff(_without_s1_restore_news(_project(row["started"]), row["before"]), g), "", row["name"] + " started whole board")
+		for step: Dictionary in row["work_steps"]:
+			g = _project(step["before"])
+			var got: Dictionary = Workshop.run(g, tables)
+			assert_eq(V.diff(step["value"], {"used": got["used"], "did": got["did"]}), "", row["name"] + " work result")
+			assert_eq(V.diff(_without_s1_restore_news(_project(step["after"]), step["before"]), g), "", row["name"] + " work whole board")
+		if bool(row["result"]):
+			assert_gt((row["work_steps"] as Array).size(), 0)
+			if not (row["work_steps"] as Array).is_empty():
+				assert_eq(row["work_steps"][-1]["after"]["dom"]["techs"][id]["stage"], "done")
 
 func test_supplies_store_accepts_only_valid_progress_and_mode() -> void:
 	var d: Dictionary = Dom.start()
