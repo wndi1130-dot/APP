@@ -82,7 +82,7 @@ static func strew(containers: Dictionary, seed: int, rooms: Dictionary) -> int:
 
 
 static func _strewn(id: String, c: Dictionary) -> bool:
-	return not (c.has("pick") or LootTables.FIXED.has(id) or bool(c.get("locked", false)) or int(c.get("building", -1)) < 0)
+	return not (c.has("pick") or LootTables.as_placed(c) or LootTables.FIXED.has(id) or bool(c.get("locked", false)) or int(c.get("building", -1)) < 0)
 
 
 static func _room_key(c: Dictionary, rooms: Dictionary, id: String) -> String:
@@ -118,7 +118,7 @@ static func spill_looted(data: Dictionary, stories: Array, seed: int) -> Array:
 			if bool(box.get("searched", false)) and (box.get("items", []) as Array).is_empty():
 				emptied.append(id)
 			elif kept == "" and not bool(box.get("searched", false)) and not bool(box.get("locked", false)) \
-					and not box.has("pick") and _things(box.get("items", [])) > 0:
+					and not box.has("pick") and not LootTables.as_placed(box) and _things(box.get("items", [])) > 0:
 				kept = id
 		if kept == "" or emptied.is_empty():
 			continue

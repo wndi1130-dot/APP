@@ -46,6 +46,7 @@ const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
+const LootTables = preload("res://game/sim/loot_tables.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const SmellRules = preload("res://game/sim/smell_rules.gd")
@@ -3957,7 +3958,7 @@ func _give_finds() -> void:
 			var boxes: Array = []
 			for id: String in data["containers"]:
 				var c: Dictionary = data["containers"][id]
-				if int(c.get("building", -1)) == b and not bool(c.get("locked", false)) and not c.has("pick"):
+				if int(c.get("building", -1)) == b and not bool(c.get("locked", false)) and not c.has("pick") and not LootTables.as_placed(c):
 					boxes.append(id)
 			if boxes.is_empty():
 				way = "none"
