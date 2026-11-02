@@ -4,6 +4,11 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const MAPS = [preload("res://game/world/maps/story_01.gd")]
+const StoryLook = preload("res://game/world/story_look.gd")
+const MapView = preload("res://game/world/map_view.gd")
+const TrackView = preload("res://game/world/track_view.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 # test_maps_freight.gd의 KEYS와 같은 계약. place_kind는 빌린 갈래(StoryMaps.BASE)다.
 const KEYS = [
 	"grid", "levels", "stairs", "containers", "spots", "stoves", "entries", "entry_gap", "entry_levels",
@@ -24,6 +29,128 @@ const SPECS: Dictionary = {
 const STEP: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 var built: Array[Dictionary] = []
 var walks: Dictionary = {}
+
+
+func test_story_look_matches_constants_and_only_six_exact_props() -> void:
+	var data: Dictionary = built[0]
+	var look := StoryLook.for_place("story_01")
+	var spec: Dictionary = look["turntable"]
+	assert_eq(spec["center"], Vector2(MAPS[0].TURNTABLE_CENTER) + Vector2(0.5, 0.5))
+	assert_eq(spec["radius"], MAPS[0].TURNTABLE_RADIUS)
+	assert_eq(spec["outer_radius"], 8.55)
+	assert_eq(look["rail_skip"], [Rect2(32, 62, 17, 1)])
+	assert_eq((look["prop_skip"] as Array).size(), 6)
+	var skipped: int = 0
+	for prop: Dictionary in data["props"]:
+		if StoryLook.skips_prop(look, prop):
+			skipped += 1
+			assert_eq(prop["kind"], "mine_track")
+	assert_eq(skipped, 6)
+	assert_false(StoryLook.skips_prop(look, {"kind": "mine_track", "rect": Rect2i(36, 68, 1, 1)}))
+	assert_false(StoryLook.skips_prop(look, {"kind": "crate", "rect": Rect2i(36, 68, 1, 2)}))
+	assert_false(StoryLook.skips_prop(look, {"kind": "mine_track", "rect": Rect2i(36, 68, 1, 2), "level": 1}))
+	var g: FieldGrid = data["grid"]
+	for x in range(32, 49):
+		assert_eq(g.floor_at(Vector2i(x, 62)), F.RAIL)
+	assert_eq(g.doors.size(), 5)
+	assert_true(g.doors.has(Vector2i(35, 71)))
+	assert_true(g.doors.has(Vector2i(45, 71)))
+	assert_true(TrackView.runs(g).has({"x0": 32.0, "x1": 49.0, "z": 62.5}))
+	look["turntable"]["outer_radius"] = 1.0
+	assert_eq(StoryLook.for_place("story_01")["turntable"]["outer_radius"], 8.55, "표 사본을 바꿔도 다음 지도는 같다")
+
+
+## 실제 표시 켬/끔 경로를 거쳐 전체 자료와 두 AStar의 입력을 비교한다.
+func test_story_look_draw_toggle_preserves_map_and_path_inputs() -> void:
+	var data: Dictionary = MAPS[0].build()
+	var before := _look_snapshot(data)
+	var g: FieldGrid = data["grid"]
+	var people_before := _flood(data)
+	var dead_before := _flood(data, true)
+	var collision_counts: Array[int] = []
+	for enabled: bool in [false, true]:
+		var view := MapView.new()
+		view.story_look_enabled = enabled
+		await view.setup(data)
+		assert_eq(_look_snapshot(data), before, "표시만 바뀌고 원본·경로 입력은 같다")
+		assert_eq(_flood(data), people_before)
+		assert_eq(_flood(data, true), dead_before)
+		collision_counts.append(_look_collisions(view))
+		var level: Node3D = view.level_roots[0]
+		assert_eq(level.has_node("Turntable"), enabled)
+		if enabled:
+			var turntable: MeshInstance3D = level.get_node("Turntable")
+			assert_eq(turntable.material_override, view.material)
+			assert_eq(_look_collisions(turntable), 0)
+		var shown: int = 0
+		for path: String in view.prop_batches:
+			for item: Dictionary in view.prop_batches[path]["items"]:
+				if StoryLook.skips_prop(StoryLook.for_place("story_01"), item["prop"]):
+					shown += 1
+		assert_eq(shown, 0 if enabled else 6, "여섯 소품의 그림만 빠진다")
+		var expected: int = 0
+		for point: Vector3 in TrackView.spots(TrackView.runs(g)):
+			if not enabled or not Rect2(32, 62, 17, 1).has_point(Vector2(point.x, point.z)):
+				expected += 1
+		var track: MultiMeshInstance3D = level.get_node("Track/TrackMap")
+		assert_eq(track.multimesh.instance_count, expected)
+		view.free()
+	assert_eq(collision_counts[0], collision_counts[1], "새 충돌체 0")
+
+
+func test_map_without_look_keeps_track_props_and_inputs() -> void:
+	var data: Dictionary = FieldMaps.build_from(load(FieldMaps.path_of("mine_01")))
+	assert_eq(StoryLook.for_place(String(data["place_id"])), {})
+	var before := _look_snapshot(data)
+	var draw_states: Array = []
+	for enabled: bool in [false, true]:
+		var view := MapView.new()
+		view.story_look_enabled = enabled
+		await view.setup(data)
+		assert_eq(_look_snapshot(data), before)
+		assert_false(view.level_roots[0].has_node("Turntable"))
+		var props: Array = []
+		for path: String in view.prop_batches:
+			for item: Dictionary in view.prop_batches[path]["items"]:
+				props.append([path, item["xf"], item["rect"], item["prop"]])
+		var tracks: Array = []
+		for child: Node in view.level_roots[0].get_node("Track").get_children():
+			if child is MultiMeshInstance3D:
+				# 화면 없는 시험은 MultiMesh 값을 0으로 읽어 개수로 본다.
+				tracks.append([child.name, child.multimesh.instance_count])
+		draw_states.append([props, tracks, _look_collisions(view)])
+		view.free()
+	assert_eq(draw_states[0], draw_states[1], "표가 없는 지도는 그림과 자료 모두 같다")
+
+
+func _look_collisions(node: Node) -> int:
+	var count: int = 1 if node is CollisionObject3D or node is CollisionShape3D or node is CollisionPolygon3D else 0
+	for child: Node in node.get_children():
+		count += _look_collisions(child)
+	return count
+
+
+func _look_snapshot(data: Dictionary) -> Dictionary:
+	var snapshot := data.duplicate(true)
+	snapshot.erase("grid")
+	snapshot.erase("levels")
+	# 그리기가 원래 한 번 읽고 지우거나 다시 쓰는 키(숲 무리·미리 만든 바닥 등)는 표시 켬/끔과 상관없다.
+	for key: String in StopGround.VIEW_AHEAD_KEYS:
+		snapshot.erase(key)
+	var grids: Dictionary = {}
+	for level: int in data["levels"]:
+		var g: FieldGrid = data["levels"][level]
+		var paths: Array = []
+		for path: AStarGrid2D in [g.people_path, g.dead_path]:
+			var points: Array = []
+			for y in g.height:
+				for x in g.width:
+					var cell := Vector2i(x, y)
+					points.append([path.is_point_solid(cell), path.get_point_weight_scale(cell)])
+			paths.append([path.region, path.cell_size, path.offset, path.diagonal_mode, path.default_compute_heuristic, path.default_estimate_heuristic, path.jumping_enabled, points])
+		grids[level] = [g.solid.duplicate(), g.floor.duplicate(), g.building.duplicate(), g.zone.duplicate(), g.doors.duplicate(true), g.windows.duplicate(true), g.floor_glass.duplicate(true), g.opq.duplicate(), g.walk_people.duplicate(), g.walk_dead.duplicate(), g.revision, paths]
+	snapshot["grid_inputs"] = grids
+	return snapshot
 
 
 func before_all() -> void:
@@ -405,6 +532,8 @@ func test_story_01_roundhouse_has_two_front_doors_and_one_visible_deep_door() ->
 	assert_false(deep.has_point(data["containers"]["tools_shallow"]["cell"]))
 	assert_true(deep.has_point(data["containers"]["tools_deep"]["cell"]))
 	assert_eq(data["containers"]["tools_shallow"]["items"], data["containers"]["tools_deep"]["items"])
+	for pair_id: String in ["tools_shallow", "tools_deep"]:
+		assert_true(bool(data["containers"][pair_id].get("as_placed", false)), "%s as_placed" % pair_id)
 
 
 func test_story_01_first_ice_approach_is_about_two_minutes_of_walking() -> void:

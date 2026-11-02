@@ -11,6 +11,42 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const F = FieldGrid.Floor
 
 
+func test_skip_filters_only_inside_piece_centers_without_changing_sources() -> void:
+	var g := _grid()
+	var before_floor := g.floor.duplicate()
+	var before_runs := TrackView.runs(g)
+	var before_spots := TrackView.spots(before_runs)
+	var skip := [Rect2(5, 2, 4, 1), Rect2(-60, 1, 60, 3)]
+	var expected: Array[Vector3] = []
+	for point: Vector3 in before_spots:
+		if not (skip[0] as Rect2).has_point(Vector2(point.x, point.z)):
+			expected.append(point)
+	var outside := [Rect2(-60, 1, 60, 3)]
+	var root := TrackView.build(autofree(Node3D.new()), g, StandardMaterial3D.new(), outside, [], skip)
+	var inside: MultiMeshInstance3D = root.get_node("TrackMap")
+	var edge: MultiMeshInstance3D = root.get_node("TrackOutside")
+	# 화면 없는 시험에선 MultiMesh 자리를 다시 읽으면 0이라, 채우는 목록과 개수로 본다.
+	assert_eq(TrackView.kept_spots(before_runs, skip), expected)
+	assert_eq(inside.multimesh.instance_count, expected.size())
+	assert_eq(edge.multimesh.instance_count, TrackView.spots(TrackView.outside_runs(outside, 20.0)).size())
+	assert_eq(g.floor, before_floor)
+	assert_eq(TrackView.runs(g), before_runs)
+	assert_eq(TrackView.spots(TrackView.runs(g)), before_spots)
+
+
+func test_skip_all_omits_track_map_and_empty_skip_matches_default() -> void:
+	var g := _grid()
+	var material := StandardMaterial3D.new()
+	var omitted := TrackView.build(autofree(Node3D.new()), g, material, [], [], [Rect2(0, 0, 20, 16)])
+	assert_false(omitted.has_node("TrackMap"))
+	assert_eq(omitted.get_child_count(), 0)
+	var default_root := TrackView.build(autofree(Node3D.new()), g, material)
+	var empty_root := TrackView.build(autofree(Node3D.new()), g, material, [], [], [])
+	var default_map: MultiMeshInstance3D = default_root.get_node("TrackMap")
+	var empty_map: MultiMeshInstance3D = empty_root.get_node("TrackMap")
+	assert_eq(default_map.multimesh.buffer, empty_map.multimesh.buffer)
+
+
 ## 본선(1~3줄, 3칸 폭) 끝까지, 나란히 붙은 두 줄(6~11줄, 6칸 폭) x 4~9, 1칸 곁선(14줄) x 12~14.
 func _grid() -> FieldGrid:
 	var g := FieldGrid.new(20, 16)

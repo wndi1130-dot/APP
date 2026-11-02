@@ -144,13 +144,13 @@ static func crossing_mesh(pieces: Array) -> ArrayMesh:
 ## 지도 안 선로와 지도 밖 선로를 묶음 하나씩, 건널목이 있으면 판자 메시 하나. 모두 그림자를 드리우지
 ## 않는다: 0.22 m 높이라 그림자는 거의 안 보이는데, 그림자 그리기마다 조각이 다시 들어가 삼각형이 네 배가
 ## 됐다(첫 정차 지도 +5.8만).
-static func build(parent: Node3D, grid: FieldGrid, material: Material, outside: Array = [], crossings: Array = []) -> Node3D:
+static func build(parent: Node3D, grid: FieldGrid, material: Material, outside: Array = [], crossings: Array = [], skip: Array = []) -> Node3D:
 	var root := Node3D.new()
 	root.name = "Track"
 	parent.add_child(root)
 	var inside := runs(grid)
 	for line: Array in [["TrackMap", inside], ["TrackOutside", outside_runs(outside, float(grid.width))]]:
-		var node := _instances(String(line[0]), line[1], material)
+		var node := _instances(String(line[0]), line[1], material, skip if line[0] == "TrackMap" else [])
 		if node != null:
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			root.add_child(node)
@@ -205,8 +205,20 @@ static func piece() -> ArrayMesh:
 	return st.commit()
 
 
-static func _instances(name: String, line_runs: Array, material: Material) -> MultiMeshInstance3D:
+## 그릴 조각 자리: 기본 간격(spots)은 그대로 두고 skip 네모 안에 중심이 든 조각만 뺀다.
+static func kept_spots(line_runs: Array, skip: Array = []) -> Array[Vector3]:
 	var at := spots(line_runs)
+	for i in range(at.size() - 1, -1, -1):
+		for rect: Rect2 in skip:
+			if rect.has_point(Vector2(at[i].x, at[i].z)):
+				at.remove_at(i)
+				break
+	return at
+
+
+static func _instances(name: String, line_runs: Array, material: Material, skip: Array = []) -> MultiMeshInstance3D:
+	# 자료와 기본 조각 간격은 보존하고 지도 안 그림을 채우기 직전에만 거른다.
+	var at := kept_spots(line_runs, skip)
 	if at.is_empty():
 		return null
 	var mm := MultiMesh.new()

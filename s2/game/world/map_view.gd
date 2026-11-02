@@ -14,6 +14,8 @@ const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const TrackView = preload("res://game/world/track_view.gd")
+const StoryLook = preload("res://game/world/story_look.gd")
+const TurntableView = preload("res://game/world/turntable_view.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
 const RoomDecor = preload("res://game/world/room_decor.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
@@ -134,10 +136,14 @@ var pace = null
 ## The ground and the floors (by level) were laid from the stop loader's arrays (2a).
 var ground_from_loader: bool = false
 var floor_from_loader: Dictionary = {}
+## 시험과 장면 비교용 표시 스위치. setup 전에 정하며 지도 자료에는 넣지 않는다.
+var story_look_enabled: bool = true
+var story_look: Dictionary = {}
 
 
 func setup(map_data: Dictionary) -> void:
 	data = map_data
+	story_look = StoryLook.for_place(String(data.get("place_id", ""))) if story_look_enabled else {}
 	grid = data["grid"]
 	levels = data.get("levels", {0: grid})
 	for lv in levels:
@@ -173,7 +179,8 @@ func setup(map_data: Dictionary) -> void:
 	# 지도 칸 밖: 숲 띠·눈둑·밖으로 이어지는 길과 선로(edge_band.gd, 결정 448 17번).
 	edge_band = await EdgeBand.build(level_roots[0], grid, data, material, FLOOR_COLORS, pace)
 	# 선로 칸의 침목과 레일, 지도 밖으로 이어지는 것까지, 건널목 판자(track_view.gd, 결정 476·M1).
-	TrackView.build(level_roots[0], grid, material, edge_band.get("rail_runs", []), data.get("rail_crossings", []))
+	TrackView.build(level_roots[0], grid, material, edge_band.get("rail_runs", []), data.get("rail_crossings", []), story_look.get("rail_skip", []))
+	TurntableView.build(level_roots[0], material, story_look.get("turntable", {}))
 	_build_walls()
 	await BuildPace.rest(pace)
 	await _build_props()
@@ -1764,6 +1771,8 @@ func _build_props() -> void:
 	var top_props: Array = []
 	var hosts: Dictionary = {}
 	for prop: Dictionary in data.get("props", []):
+		if StoryLook.skips_prop(story_look, prop):
+			continue
 		if String(prop.get("mount", "")) == "top":
 			top_props.append(prop)
 			continue
