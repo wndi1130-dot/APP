@@ -943,19 +943,21 @@ func _set_view_fill() -> void:
 		return
 	var fill_energy: float = float(fx_light.get("fill_energy", 0.0)) if storm.is_empty() else 0.0
 	# Keep the diagnostic energy across minute updates without lighting night/storm.
-	view_fill.light_energy = float(view_fill.get_meta(PerfSwitch.FILL_ENERGY, fill_energy)) if fill_energy > 0.001 else fill_energy
+	var applied: float = float(view_fill.get_meta(PerfSwitch.FILL_ENERGY, fill_energy)) if fill_energy > 0.001 else fill_energy
+	view_fill.light_energy = applied
 	view_fill.light_color = fx_light.get("fill_color", Color.WHITE)
 	var fill_state: String = _view_fill_state()
-	view_fill.visible = fill_state == "light" and view_fill.light_energy > 0.001
+	# Judge on the value set, not the light's stored float32 (0.001 reads back as 0.0010000000475).
+	var lit: bool = applied > 0.001
+	view_fill.visible = fill_state == "light" and lit
 	if PerfSwitch.fill_owner() != get_instance_id():
 		return
 	var fill_dir: Vector3 = Vector3.ZERO
 	var fill_value: Vector4 = Vector4.ZERO
-	if fill_state == "shader" and view_fill.light_energy > 0.001:
+	if fill_state == "shader" and lit:
 		fill_dir = view_fill.global_transform.basis.z.normalized()
 		var linear: Color = view_fill.light_color.srgb_to_linear()
-		var energy: float = view_fill.light_energy
-		fill_value = Vector4(linear.r * energy, linear.g * energy, linear.b * energy, 1.0)
+		fill_value = Vector4(linear.r * applied, linear.g * applied, linear.b * applied, 1.0)
 	PerfSwitch.publish_fill(get_instance_id(), fill_dir, fill_value)
 
 
