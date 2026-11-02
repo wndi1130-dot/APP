@@ -126,10 +126,13 @@ static func _ignored(reason: String, diagnostic: Dictionary) -> void:
 static func _valid(s: Dictionary) -> Dictionary:
 	var valid: Dictionary = {}
 	# 무리는 필드 생성 전에 적용한다. false면 자원도 노드도 만들지 않는다.
-	# horde_test_walls: 폰 재기 전용 — 켜면 정차마다 촬영 도구와 같은 시험 벽에 무리(HordeView.stop_walls).
+	# horde_test_walls: 폰 재기 전용 — true면 정차마다 촬영 도구와 같은 구석 시험 벽, "near"면 도착 자리에서
+	# 가장 가까운 가장자리에 같은 두 토막(HordeView.stop_walls).
 	for key in ["sun_shadow", "atlas_16_bits", "view_fill", "cloud", "night_sparks", "horde", "horde_test_walls"]:
 		if s.get(key) is bool:
 			valid[key] = s[key]
+	if s.get("horde_test_walls") is String and String(s["horde_test_walls"]) == "near":
+		valid["horde_test_walls"] = "near"
 	if s.get("shadow_mode") is String and MODES.has(s["shadow_mode"]):
 		valid["shadow_mode"] = s["shadow_mode"]
 	if s.get("soft_quality") is String and QUALITIES.has(s["soft_quality"]):

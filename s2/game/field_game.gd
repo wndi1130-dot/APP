@@ -593,7 +593,7 @@ func _ready() -> void:
 	var horde_settings: Dictionary = _perf_settings.duplicate()
 	horde_settings.merge(PerfSwitch._valid(opts.get("perf", {})), true)
 	await preload("res://game/world/horde_view.gd").attach(self,
-		preload("res://game/world/horde_view.gd").stop_walls(data, opts, horde_settings),
+		preload("res://game/world/horde_view.gd").stop_walls(data, opts, horde_settings, Vector2(view.grid.width, view.grid.height)),
 		{"map_size": Vector2(view.grid.width, view.grid.height), "grid": view.grid, "vis_texture": view.vis_texture,
 			"material": view.material, "field": self, "staged": bool(opts.get("staged", false))}, pace, horde_settings)
 	blood_fx = BloodFx.new()

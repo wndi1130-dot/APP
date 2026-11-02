@@ -690,14 +690,51 @@ static func test_walls() -> Array:
 	]
 
 
+## 도착 자리에서 가장 가까운 지도 가장자리에 같은 두 토막(3.0 m 판자벽·5.2 m 쌓은 벽, 각 24 m),
+## 도착 자리 맞은편 가운데. 가장자리 벽이라 바깥(무리 쪽)은 늘 지도 밖이다. edge_m = 도착 자리에서 그 가장자리까지.
+static func near_test_walls(spawn: Vector2, map_size: Vector2) -> Dictionary:
+	var gaps: Array[float] = [spawn.y, map_size.y - spawn.y, spawn.x, map_size.x - spawn.x] # 북·남·서·동
+	var side: int = 0
+	for index: int in range(1, 4):
+		if gaps[index] < gaps[side]:
+			side = index
+	var along_len: float = map_size.x if side < 2 else map_size.y
+	var center: float = spawn.x if side < 2 else spawn.y
+	var start: float = float(floori(clampf(center - 24.0, 0.0, maxf(0.0, along_len - 48.0))))
+	var walls: Array = []
+	for piece: int in range(2):
+		var lo: float = start + 24.0 * float(piece)
+		var hi: float = minf(lo + 24.0, float(floori(along_len)))
+		if hi - lo < 4.0:
+			continue
+		var line: float = [0.0, map_size.y, 0.0, map_size.x][side]
+		var a := Vector2(lo, line) if side < 2 else Vector2(line, lo)
+		var b := Vector2(hi, line) if side < 2 else Vector2(line, hi)
+		var out: Vector2 = [Vector2(0, -1), Vector2(0, 1), Vector2(-1, 0), Vector2(1, 0)][side]
+		walls.append({"id": "h1_near_%d" % piece, "a": a, "b": b, "out": out,
+			"kind": "wall_sheet" if piece == 0 else "wall_stack", "height": 3.0 if piece == 0 else 5.2})
+	return {"walls": walls, "edge_m": gaps[side]}
+
+
 ## 정차가 무리에 넘기는 벽: 지도의 edge_walls + opts의 test_edge_walls, 그리고 폰 재기용
-## 성능 키 horde_test_walls가 켜졌으면 시험 벽(perf_switch.json은 안드로이드만 읽음, 기본 끔).
+## 성능 키 horde_test_walls(perf_switch.json은 안드로이드만 읽음, 기본 끔): true면 촬영 도구와 같은
+## 구석 시험 벽, "near"면 도착 자리에서 가장 가까운 가장자리에 같은 두 토막(도착 화면 안 그리기 비용까지 재게).
 ## 켬이 먹었는지는 logcat의 PERF_SWITCH 줄로 본다.
-static func stop_walls(data: Dictionary, opts: Dictionary, settings: Dictionary) -> Array:
+static func stop_walls(data: Dictionary, opts: Dictionary, settings: Dictionary, map_size: Vector2 = Vector2.ZERO) -> Array:
 	var walls: Array = (data.get("edge_walls", []) as Array) + (opts.get("test_edge_walls", []) as Array)
-	if settings.get("horde_test_walls") is bool and bool(settings["horde_test_walls"]):
+	var mode: Variant = settings.get("horde_test_walls")
+	if mode is bool and bool(mode):
 		walls += test_walls()
 		print("PERF_SWITCH ", {"horde_test_walls": true, "walls": walls.size()})
+	elif mode is String and String(mode) == "near":
+		var spots: Array = (data.get("spawns", {}) as Dictionary).get("squad", [])
+		if spots.is_empty() or map_size.x <= 0.0 or map_size.y <= 0.0:
+			print("PERF_SWITCH ", {"horde_test_walls": "near", "walls": walls.size(), "error": "도착 자리나 지도 크기 없음"})
+			return walls
+		var cell: Vector2i = spots[0]
+		var near: Dictionary = near_test_walls(Vector2(cell) + Vector2(0.5, 0.5), map_size)
+		walls += near["walls"] as Array
+		print("PERF_SWITCH ", {"horde_test_walls": "near", "walls": walls.size(), "edge_m": snappedf(float(near["edge_m"]), 0.1)})
 	return walls
 
 

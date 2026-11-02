@@ -415,6 +415,34 @@ func test_phone_switch_horde_test_walls_adds_the_shot_walls_only_when_on() -> vo
 	assert_eq(Shots.test_walls(), Horde.test_walls(), "촬영 도구와 폰 재기가 같은 벽")
 
 
+func test_phone_switch_near_puts_the_two_test_walls_on_the_edge_nearest_the_arrival() -> void:
+	assert_eq(Switch._valid({"horde_test_walls": "near"}), {"horde_test_walls": "near"})
+	assert_false(Switch._valid({"horde_test_walls": "far"}).has("horde_test_walls"))
+	var map_size := Vector2(120, 80)
+	# 남쪽 가장자리(y = 80)에서 6 m, 동서로는 가운데쯤.
+	var near: Dictionary = Horde.near_test_walls(Vector2(60.5, 74.5), map_size)
+	assert_almost_eq(float(near["edge_m"]), 5.5, 0.0001)
+	var walls: Array = near["walls"]
+	assert_eq(walls.size(), 2)
+	for wall: Dictionary in walls:
+		assert_eq(Horde.wall_error(wall, map_size), "", String(wall["id"]))
+		assert_eq(wall["out"], Vector2(0, 1), "바깥이 무리 쪽(지도 밖)")
+		assert_eq((wall["a"] as Vector2).y, 80.0)
+	assert_eq([float(walls[0]["height"]), float(walls[1]["height"])], [3.0, 5.2], "구석 시험 벽과 같은 두 높이")
+	assert_true((walls[0]["a"] as Vector2).x <= 60.5 and (walls[1]["b"] as Vector2).x >= 60.5, "도착 자리 맞은편 가운데")
+	# 서쪽 구석에 가까운 도착 자리는 서쪽 가장자리, 지도 안으로 잘림.
+	var west: Dictionary = Horde.near_test_walls(Vector2(3.5, 10.5), map_size)
+	for wall: Dictionary in west["walls"]:
+		assert_eq(Horde.wall_error(wall, map_size), "", String(wall["id"]))
+		assert_eq(wall["out"], Vector2(-1, 0))
+		assert_gte((wall["a"] as Vector2).y, 0.0)
+		assert_lte((wall["b"] as Vector2).y, 80.0)
+	# 정차 자료의 첫 도착 칸을 쓴다.
+	var data: Dictionary = {"spawns": {"squad": [Vector2i(60, 74), Vector2i(61, 74)]}}
+	assert_eq(Horde.stop_walls(data, {}, {"horde_test_walls": "near"}, map_size), walls)
+	assert_eq(Horde.stop_walls({}, {}, {"horde_test_walls": "near"}, map_size), [], "도착 자리 없으면 더하지 않음")
+
+
 func test_hiding_and_exit_clear_owned_focus() -> void:
 	var node := FixtureHorde.new()
 	add_child_autofree(node)
