@@ -68,7 +68,9 @@ func _dig_save(parts: Array, wagon_index: int = -1) -> Dictionary:
 	var site: Dictionary = {"dig_parts": parts}
 	if wagon_index >= 0:
 		site["dig_wagon"] = wagon_index
-	saved["runtime"] = {"components": {"work": {"sites": {"work_site": site}}}}
+	# The other runtime fields an exact save must carry (FieldSave._whole_runtime), empty here.
+	saved["runtime"] = {"spots": {}, "levels": {}, "mission": {}, "holdout_doors": [], "game": {},
+		"components": {"work": {"sites": {"work_site": site}}}}
 	return saved
 
 
