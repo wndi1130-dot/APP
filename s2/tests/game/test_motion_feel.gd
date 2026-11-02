@@ -1105,8 +1105,8 @@ func test_all_six_one_hand_weapons_alternate_without_two_hand_clips() -> void:
 	PersonVisual.blow_of(p, own, chain, 0.2)
 	p.swing_t = 2.649999
 	assert_gte(PersonVisual.blow_of(p, own, chain, 0.550001).y, 0.0, "the return fills the player wait")
-	p.swing_t = 2.0
-	assert_lt(PersonVisual.blow_of(p, own, chain, 1.2).y, 0.0, "random rest cannot stretch the picture")
+	p.swing_t = 1.79
+	assert_lt(PersonVisual.blow_of(p, own, chain, 1.41).y, 0.0, "random rest cannot stretch recovery or guard")
 	p.swing_t = 0.0
 	PersonVisual.blow_of(p, own, chain, 3.2)
 	p.strike_t = 0.2
@@ -1149,7 +1149,7 @@ func test_recovery_seconds_depend_on_weight_without_using_the_attack_wait() -> v
 		assert_eq(p.swing_t, before, "reading the picture leaves the rule clock alone")
 
 
-func test_a_heavy_blow_returns_to_standing_at_its_unchanged_next_attack_time() -> void:
+func test_a_heavy_blow_holds_guard_at_its_unchanged_next_attack_time() -> void:
 	for fps: int in [30, 60]:
 		var game: FieldGame = _motion_field()
 		var p: Person = game.player
@@ -1195,7 +1195,8 @@ func test_a_heavy_blow_returns_to_standing_at_its_unchanged_next_attack_time() -
 		game.combat.update(to_ready)
 		assert_almost_eq(game.clock.elapsed - started, windup + wait, 0.000001)
 		drawn = PersonVisual.motion_of(p, note, to_ready, [], own)
-		assert_eq(String(own[int(drawn.y)]["name"]), "p_stand", "standing at the unchanged deadline")
+		assert_eq(String(own[int(drawn.y)]["name"]), "p_swing_one", "guard at the unchanged deadline")
+		assert_almost_eq(drawn.x, Pose.RECOVER_ONE_END, 0.000001)
 		game.combat.start_swing(p, {})
 		assert_gt(p.strike_t, 0.0, "available at the original attack time")
 

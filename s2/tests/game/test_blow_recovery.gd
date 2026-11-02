@@ -10,6 +10,7 @@ const DeadBody = preload("res://game/actors/dead_body.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 const Source = preload("res://tests/game/test_person_motion_source.gd")
 const FieldGame = preload("res://game/field_game.gd")
+const Chain = preload("res://tests/game/test_blow_chain_motion.gd")
 const PEOPLE: String = "res://models/people"
 const WEAPONS: Array[String] = ["knife", "crowbar", "axe", "frying_pan", "broken_bottle", "wood_stake"]
 
@@ -163,8 +164,9 @@ func test_hitstop_keeps_recovery_and_mix_clocks_still() -> void:
 		assert_eq(float(note["t"]), t)
 
 
-## Decode the actual packed shader mix, including its frozen source frame.
-func _drawn_points(baked: Dictionary, ids: PackedInt32Array, drawn: Color) -> PackedVector3Array:
+## Decode the actual packed shader mix, including its frozen source frame
+## (blended false: the clip alone at the same place).
+func _drawn_points(baked: Dictionary, ids: PackedInt32Array, drawn: Color, blended: bool = true) -> PackedVector3Array:
 	var arrays: Array = (baked["mesh"] as Mesh).surface_get_arrays(0)
 	var rest: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var look: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV2]
@@ -182,10 +184,23 @@ func _drawn_points(baked: Dictionary, ids: PackedInt32Array, drawn: Color) -> Pa
 	var out: PackedVector3Array = PackedVector3Array()
 	for id: int in ids:
 		var point: Vector3 = Visual.vertex_at(baked, rest, look, id, first + a).lerp(Visual.vertex_at(baked, rest, look, id, first + b), at - float(a))
-		if share > 0.0:
+		if blended and share > 0.0:
 			point = point.lerp(Visual.vertex_at(baked, rest, look, id, kept), share / DeadBody.MIX_STEPS)
 		out.append(point)
 	return out
+
+
+## Over all vertices, how much further the drawing moves between two colours than
+## the clip alone would: what the ease adds, not the motion itself.
+func _ease_adds(baked: Dictionary, ids: PackedInt32Array, from: Color, to: Color) -> float:
+	var a: PackedVector3Array = _drawn_points(baked, ids, from)
+	var b: PackedVector3Array = _drawn_points(baked, ids, to)
+	var a_alone: PackedVector3Array = _drawn_points(baked, ids, from, false)
+	var b_alone: PackedVector3Array = _drawn_points(baked, ids, to, false)
+	var most: float = 0.0
+	for i: int in a.size():
+		most = maxf(most, a[i].distance_to(b[i]) - a_alone[i].distance_to(b_alone[i]))
+	return most
 
 
 ## How far the planted soles slide while an ease into the walk runs: the eased-from
@@ -195,7 +210,7 @@ func _drawn_points(baked: Dictionary, ids: PackedInt32Array, drawn: Color) -> Pa
 func _start_slip(baked: Dictionary, feet: PackedInt32Array, tab: Array, from: Color, walk: int, round_m: float, phase: float, fps: int, from_blow: bool) -> Array:
 	var mix: Dictionary = {}
 	DeadBody.mix_from(mix, from, 0.0, tab)
-	var note: Dictionary = {"recover_walk_mix": from_blow}
+	var note: Dictionary = {"recover_walk_mix": from_blow, "recover_walk_from": int(from.g), "recover_walk_to": walk}
 	var walk_mix: float = Visual.RECOVER_WALK_MIX if from_blow else float(Visual.OWN_MIX.get("p_walk", Visual.OWN_MIX_TIME))
 	var times: Dictionary = {walk: float(Visual.OWN_MIX.get("p_walk", Visual.OWN_MIX_TIME))}
 	var start_s: float = float(FieldGame.INERTIA["now"][0])
@@ -204,8 +219,9 @@ func _start_slip(baked: Dictionary, feet: PackedInt32Array, tab: Array, from: Co
 	var touched: int = 0
 	var worst: float = 0.0
 	var t: float = 0.0
-	var speed: float = 0.0
-	var distance: float = 0.0
+	var speed: float = minf(Person.WALK, maxf(Person.MOVE_MIN, Person.WALK / start_s * dt))
+	var distance: float = speed * dt
+	var origin: float = distance
 	while true:
 		var look: Color = Color(phase + distance / round_m, walk, 1.0, 1.0)
 		var drawn: Color = Visual.mix_recovery(note, mix, look, t, tab, times)
@@ -216,7 +232,7 @@ func _start_slip(baked: Dictionary, feet: PackedInt32Array, tab: Array, from: Co
 		for i: int in points.size():
 			if start[i].y <= 0.02 and points[i].y <= 0.02:
 				touched += 1
-				var drift: Vector3 = points[i] + Vector3(0.0, 0.0, distance) - start[i]
+				var drift: Vector3 = points[i] + Vector3(0.0, 0.0, distance - origin) - start[i]
 				drift.y = 0.0
 				worst = maxf(worst, drift.length())
 		if t >= walk_mix:
@@ -235,7 +251,6 @@ func test_shipped_vat_blow_to_walk_slides_no_more_than_a_standing_start() -> voi
 	var source: Source = Source.new()
 	add_child_autofree(source)
 	var folders: int = 0
-	var released: float = Pose.recovery_phase(0.6, 0.9, 0.35)
 	for folder: String in DirAccess.get_directories_at(PEOPLE):
 		if not folder.ends_with("_p"):
 			continue
@@ -264,6 +279,8 @@ func test_shipped_vat_blow_to_walk_slides_no_more_than_a_standing_start() -> voi
 				if swing < 0:
 					continue
 				var lands: float = 0.45 if way == "p_swing_one" else 0.33
+				var end: float = Pose.RECOVER_ONE_END if way == "p_swing_one" else Pose.RECOVER_BACK_END
+				var released: float = Pose.recovery_phase(0.6, 0.9, 0.35, (end - lands) / (1.0 - lands))
 				var from_blow: Color = Color(lerpf(lands, 1.0, released), swing, 1.0, 1.0)
 				for fps: int in [30, 60]:
 					var blow_best: float = INF
@@ -290,6 +307,8 @@ func test_shipped_vat_blow_to_walk_slides_no_more_than_a_standing_start() -> voi
 
 
 func test_shipped_vat_next_blow_starts_from_the_last_pose() -> void:
+	var chain: Chain = Chain.new()
+	add_child_autofree(chain)
 	var folders: int = 0
 	for folder: String in DirAccess.get_directories_at(PEOPLE):
 		if not folder.ends_with("_p"):
@@ -302,24 +321,200 @@ func test_shipped_vat_next_blow_starts_from_the_last_pose() -> void:
 		var ids: PackedInt32Array = PackedInt32Array()
 		for id: int in int(baked["vertices"]):
 			ids.append(id)
+		for wid: String in ["axe", "knife"]:
+			for fps: int in [30, 60]:
+				var measured: Dictionary = chain.measure_chain(baked, fps, wid)
+				assert_false(measured.is_empty(), folder)
+				if measured.is_empty():
+					continue
+				var frames: Array[Color] = measured["frames"]
+				var starts: Array[int] = measured["starts"]
+				for start: int in starts.slice(1):
+					var before: PackedVector3Array = _drawn_points(baked, ids, frames[start - 1])
+					var after: PackedVector3Array = _drawn_points(baked, ids, frames[start])
+					var jump: float = 0.0
+					for id: int in ids.size():
+						jump = maxf(jump, before[id].distance_to(after[id]))
+					assert_lte(jump, 0.02, "%s %s %d frame %d frozen source" % [folder, wid, fps, start])
+					# Then until the ease is over, reported only: how much faster the held-frame
+					# ease makes it move than the new blow alone (it catches the blow up, as every
+					# motion change does on main; inertial easing is its own job).
+					var most: float = 0.0
+					for frame: int in range(start + 1, mini(frames.size(), start + int(ceil(0.15 * float(fps))) + 2)):
+						most = maxf(most, _ease_adds(baked, ids, frames[frame - 1], frames[frame]) * float(fps) / 30.0)
+					print("NEXT_BLOW_EASE %s %s %d frame %d adds %.3f m per 1/30 s" % [folder, wid, fps, start, most])
+	assert_eq(folders, 14)
+
+
+func test_shipped_guard_lowering_hand_step_stays_within_fifteen_cm() -> void:
+	for folder: String in DirAccess.get_directories_at(PEOPLE):
+		if not folder.ends_with("_p"):
+			continue
+		var baked: Dictionary = BodyBake.load_baked(PEOPLE.path_join(folder))
+		assert_false(baked.is_empty(), folder)
+		if baked.is_empty():
+			continue
+		var arm: Dictionary = Visual.hand_of(baked)
+		assert_false(arm.is_empty(), folder)
+		if arm.is_empty():
+			continue
+		var ids: PackedInt32Array = arm["hand"]
 		var own: Array = baked["clips"]
 		var tab: Array = DeadBody.table_of(baked)
-		for pair: Array in [["p_swing_one", "p_swing_back"], ["p_swing_back", "p_swing_one"], ["p_swing_one", "p_stab"]]:
-			var first: int = Visual.clip_named(own, String(pair[0]), -1)
-			var next: int = Visual.clip_named(own, String(pair[1]), -1)
-			assert_gte(first, 0)
-			assert_gte(next, 0)
-			if first < 0 or next < 0:
-				continue
-			for fps: int in [30, 60]:
-				var r: float = lerpf(0.45 if String(pair[0]) == "p_swing_one" else 0.33, 1.0, Pose.recovery_phase(0.9 - 1.0 / float(fps), 0.9, 0.35))
+		var times: Dictionary = {}
+		for i: int in own.size():
+			times[i] = float(Visual.OWN_MIX.get(String(own[i]["name"]), Visual.OWN_MIX_TIME))
+		for fps: int in [30, 60]:
+			for way: String in ["p_swing_one", "p_swing_back"]:
+				var p: Person = _person("axe")
+				var note: Dictionary = {"blow_n": 0, "blow_end": 0.0} if way == "p_swing_back" else {}
+				_begin(p, own, note, 0.9)
 				var mix: Dictionary = {}
-				var before: Color = DeadBody.mix_from(mix, Color(r, first, 1.0, 1.0), 0.0, tab)
-				var after: Color = Visual.mix_recovery({}, mix, Color(0.0, next, 1.0, 1.0), 1.0 / float(fps), tab, {next: float(Visual.OWN_MIX[String(pair[1])])})
-				var a: PackedVector3Array = _drawn_points(baked, ids, before)
-				var b: PackedVector3Array = _drawn_points(baked, ids, after)
-				var jump: float = 0.0
-				for id: int in ids.size():
-					jump = maxf(jump, a[id].distance_to(b[id]))
-				assert_lte(jump, 0.02, "%s %s %d jump %.6f m" % [folder, str(pair), fps, jump])
+				var centers: PackedVector3Array = PackedVector3Array()
+				var step: int = maxi(1, int(roundf(float(fps) / 30.0)))
+				var saw_stand: bool = false
+				var max_step: float = 0.0
+				for frame: int in range(int(ceil(1.6 * float(fps))) + 1):
+					var t: float = float(frame) / float(fps)
+					p.swing_t = maxf(0.0, 0.9 - t)
+					var picked: Vector2 = Visual.motion_of(p, note, 1.0 / float(fps) if frame > 0 else 0.0, [], own)
+					var drawn: Color = Visual.mix_recovery(note, mix, Color(picked.x, picked.y, 1.0, 1.0), float(note["t"]), tab, times)
+					var points: PackedVector3Array = _drawn_points(baked, ids, drawn)
+					var center: Vector3 = Vector3.ZERO
+					for point: Vector3 in points:
+						center += point
+					centers.append(center / float(points.size()))
+					if String(own[int(picked.y)]["name"]) == "p_stand":
+						saw_stand = true
+						assert_almost_eq(float(mix["body_mix"]), Visual.RECOVER_GUARD_LOWER, 0.000001)
+						if frame >= step:
+							max_step = maxf(max_step, centers[frame].distance_to(centers[frame - step]))
+				assert_true(saw_stand, folder + way)
+				assert_lte(max_step, 0.15, "%s %s %dfps lower hand" % [folder, way, fps])
+
+
+## The guard lowering cut at each of its drawings by a walk and by the next blow:
+## the first drawing of the new motion moves the hand no more than one drawing of
+## the lowering itself may (0.15 m, as at a hand-over). With a fresh ease the guard
+## share fell away at once and the hand jumped 0.70 to 0.96 m.
+func test_shipped_guard_lowering_cut_by_walk_or_blow_does_not_jump() -> void:
+	var folders: int = 0
+	for folder: String in DirAccess.get_directories_at(PEOPLE):
+		if not folder.ends_with("_p"):
+			continue
+		folders += 1
+		var baked: Dictionary = BodyBake.load_baked(PEOPLE.path_join(folder))
+		assert_false(baked.is_empty(), folder)
+		if baked.is_empty():
+			continue
+		var arm: Dictionary = Visual.hand_of(baked)
+		var ids: PackedInt32Array = arm["hand"]
+		var own: Array = baked["clips"]
+		var tab: Array = DeadBody.table_of(baked)
+		var times: Dictionary = {}
+		for i: int in own.size():
+			times[i] = float(Visual.OWN_MIX.get(String(own[i]["name"]), Visual.OWN_MIX_TIME))
+		var walk: int = Visual.clip_named(own, "p_walk_axe", -1)
+		assert_gte(walk, 0, folder)
+		if walk < 0:
+			continue
+		var round_m: float = float(own[walk]["round"])
+		var fps: int = 30
+		var dt: float = 1.0 / float(fps)
+		for way: String in ["p_swing_one", "p_swing_back"]:
+			var lower_at: int = -1
+			var worst: Dictionary = {"walk": 0.0, "blow": 0.0}
+			for k: int in range(-1, int(ceil(Visual.RECOVER_GUARD_LOWER * float(fps))) + 2):
+				for kind: String in (["none"] if k < 0 else ["walk", "blow"]):
+					var p: Person = _person("axe")
+					var wind: float = W.melee_windup("axe") / float(p.mults()["swing"])
+					var note: Dictionary = {"blow_n": 0, "blow_end": 0.0} if way == "p_swing_back" else {}
+					_begin(p, own, note, 0.9)
+					var mix: Dictionary = {}
+					var cut: int = lower_at + k if k >= 0 else 1 << 30
+					var walked: float = 0.0
+					var began: float = -1.0
+					var before: Vector3 = Vector3.ZERO
+					for frame: int in range(int(ceil(2.4 * float(fps))) + 1):
+						var t: float = float(frame) * dt
+						var drawn: Color
+						if kind == "walk" and frame >= cut:
+							walked += Person.WALK * dt
+							note["t"] = float(note["t"]) + dt
+							drawn = Visual.mix_recovery(note, mix, Color(walked / round_m, walk, 1.0, 1.0), float(note["t"]), tab, times)
+						else:
+							if kind == "blow" and frame >= cut:
+								if began < 0.0:
+									began = t
+									p.strike_total = wind
+								var age: float = t - began
+								p.strike_t = maxf(0.000000001, wind - age) if age < wind - 0.000000001 else 0.0
+								p.swing_t = p.strike_t if p.strike_t > 0.0 else maxf(0.0, 0.9 - (age - wind))
+							else:
+								p.swing_t = maxf(0.0, 0.9 - t)
+							var picked: Vector2 = Visual.motion_of(p, note, dt if frame > 0 else 0.0, [], own)
+							if k < 0 and lower_at < 0 and String(own[int(picked.y)]["name"]) == "p_stand":
+								lower_at = frame
+							drawn = Visual.mix_recovery(note, mix, Color(picked.x, picked.y, 1.0, 1.0), float(note["t"]), tab, times)
+						var points: PackedVector3Array = _drawn_points(baked, ids, drawn)
+						var hand: Vector3 = Vector3.ZERO
+						for point: Vector3 in points:
+							hand += point
+						hand /= float(points.size())
+						if frame == cut:
+							worst[kind] = maxf(float(worst[kind]), hand.distance_to(before))
+						before = hand
+			assert_gt(lower_at, 0, folder + way)
+			var label: String = "%s %s" % [folder, way]
+			assert_lte(float(worst["walk"]), 0.15, label + " walk cut first drawing")
+			assert_lte(float(worst["blow"]), 0.15, label + " blow cut first drawing")
+			print("LOWER_CUT %s walk %.3f m blow %.3f m" % [label, worst["walk"], worst["blow"]])
 	assert_eq(folders, 14)
+
+
+func test_active_return_endpoints_and_continuous_speed() -> void:
+	var p: Person = _person("axe")
+	for way: String in ["p_swing_one", "p_swing_back"]:
+		p.set_meta(Pose.BLOW_WAY, way)
+		var end: float = Pose.recovery_end(p)
+		var base: float = Pose.recover_seconds("axe")
+		for duration: float in [0.9, 2.0, 6.0]:
+			var join: float = base * Pose.RECOVER_FOLLOW
+			var h: float = 0.000001
+			var left: float = (Pose.recovery_phase(join, duration, base, end) - Pose.recovery_phase(join - h, duration, base, end)) / h
+			var right: float = (Pose.recovery_phase(join + h, duration, base, end) - Pose.recovery_phase(join, duration, base, end)) / h
+			assert_almost_eq(left, right, 0.001)
+			assert_almost_eq(Pose.recovery_phase(duration, duration, base, end), end, 0.000001)
+			assert_lt((end - Pose.recovery_phase(duration - h, duration, base, end)) / h, 0.001)
+			var previous: float = 0.0
+			for tick: int in range(601):
+				var phase: float = Pose.recovery_phase(duration * float(tick) / 600.0, duration, base, end)
+				assert_gte(phase + 0.000001, previous)
+				assert_lte(phase, end + 0.000001)
+				previous = phase
+
+
+func test_recovery_walk_mix_does_not_override_held_hit_or_fall() -> void:
+	for state: String in ["held", "hit", "fall"]:
+		var p: Person = _person("axe")
+		var own: Array = _own()
+		own.append({"name": "p_held", "length": 1.0})
+		own.append({"name": "p_bitten", "length": 0.6})
+		own.append({"name": "p_fall_front", "length": 1.0})
+		var note: Dictionary = {}
+		_begin(p, own, note, _wait(p))
+		Visual.motion_of(p, note, 0.0, [], own)
+		p.set_meta(Pose.RECOVER_RELEASE, 0.6)
+		p.swing_t = 0.2
+		p.moving = true
+		match state:
+			"held":
+				p.grabbers.append({"state": "grab"})
+			"hit":
+				note["hurt_at"] = float(note["t"])
+			"fall":
+				p.fallen_t = 1.0
+		var picked: Vector2 = Visual.motion_of(p, note, 1.0 / 30.0, [], own)
+		assert_ne(String(own[int(picked.y)]["name"]), "p_walk", state)
+		assert_false(bool(note.get("recover_walk_mix", false)), state)
+		assert_true(p.has_meta(Pose.SWING), state + " priority must not consume recovery")

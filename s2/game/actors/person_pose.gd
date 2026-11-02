@@ -23,6 +23,13 @@ const RECOVER_WAIT: String = "pose_recover_wait"
 const RECOVER_RELEASE: String = "pose_recover_release"
 # Keep the first 35 percent at contact speed; ease only the return to rest.
 const RECOVER_FOLLOW: float = 0.35
+# body_bake p_swing_one/back: arm/chest keys reach final values at 0.8, but the clip is
+# baked in 24 frames and frame 18 (0.783) already holds the weapon within 1 cm of it,
+# so a return that runs on to 0.8 spends its last drawings almost still.
+# Leg settling continues to 1.0; only the weapon return stops here.
+const RECOVER_ONE_END: float = 0.783
+const RECOVER_BACK_END: float = 0.783
+const RECOVER_RAMP: float = 0.05
 # rest - swing_t and the cap are the same sum taken apart; this absorbs its rounding.
 const RECOVER_END_EPS: float = 0.000000001
 const Protest = preload("res://game/actors/person_protest.gd")
@@ -110,7 +117,7 @@ static func swing_state(p) -> Array:
 	var elapsed: float = rest - p.swing_t
 	var recover: float = elapsed / duration
 	if duration > recover_seconds(p.weapon_id()):
-		recover = recovery_phase(elapsed, duration, recover_seconds(p.weapon_id()))
+		recover = recovery_phase(elapsed, duration, recover_seconds(p.weapon_id()), recovery_end(p))
 	if elapsed >= duration - RECOVER_END_EPS:
 		p.remove_meta(SWING)
 		p.remove_meta(MODE)
@@ -135,17 +142,35 @@ static func recovery_duration(p, rest: float) -> float:
 	return minf(rest, cap)
 
 
-static func recovery_phase(elapsed: float, duration: float, base: float) -> float:
+static func recovery_end(p) -> float:
+	var way: String = String(p.get_meta(BLOW_WAY, ""))
+	if way == "p_swing_one":
+		return (RECOVER_ONE_END - 0.45) / (1.0 - 0.45)
+	if way == "p_swing_back":
+		return (RECOVER_BACK_END - 0.33) / (1.0 - 0.33)
+	return 1.0
+
+
+static func recovery_phase(elapsed: float, duration: float, base: float, end: float = 1.0) -> float:
 	if duration <= base:
 		return clampf(elapsed / duration, 0.0, 1.0)
 	var follow: float = base * RECOVER_FOLLOW
 	if elapsed <= follow:
 		return maxf(elapsed, 0.0) / base
 	var tail: float = duration - follow
-	var u: float = clampf((elapsed - follow) / tail, 0.0, 1.0)
-	# Match the incoming derivative, stay monotone, and stop at the deadline.
-	var power: float = tail / (base * (1.0 - RECOVER_FOLLOW))
-	return 1.0 - (1.0 - RECOVER_FOLLOW) * pow(1.0 - u, power)
+	var gone: float = clampf(elapsed - follow, 0.0, tail)
+	var span: float = end - RECOVER_FOLLOW
+	var speed: float = 1.0 / base
+	# Integrate continuous velocity: brake, cruise, then stop at the deadline.
+	# The short ramps avoid spending the tail almost still.
+	var ramp: float = minf(RECOVER_RAMP, minf(tail * 0.25, span / speed))
+	var cruise: float = (span - speed * ramp * 0.5) / (tail - ramp)
+	if gone < ramp:
+		return RECOVER_FOLLOW + speed * gone + (cruise - speed) * gone * gone / (2.0 * ramp)
+	if gone > tail - ramp:
+		var left: float = tail - gone
+		return end - cruise * left * left / (2.0 * ramp)
+	return RECOVER_FOLLOW + (speed + cruise) * ramp * 0.5 + cruise * (gone - ramp)
 
 
 static func recovery_feet_free(p) -> bool:

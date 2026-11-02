@@ -207,6 +207,8 @@ const OWN_BLOW_AIM: Dictionary = {"p_stab": 0.53, "p_swing_axe": 0.35}
 # way; after a longer rest it starts again from the first.
 const CHAIN_GAP: float = 1.0
 const RECOVER_WALK_MIX: float = 0.12
+const RECOVER_GUARD_HOLD: float = 0.20
+const RECOVER_GUARD_LOWER: float = 0.40
 # A door kick, and where in it the foot lands (body_bake.gd p_kick at 0.4): the
 # leg comes up over the last WIND of the try so it lands as the door is struck.
 const OWN_KICK: Array = ["p_kick", 0.4]
@@ -610,14 +612,10 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	# Noted every drawing, so a turn made in another motion (aiming, a blow) is not stepped later.
 	var turned := _turned(p, note, t)
 	_note_posture(p, note, delta)
+	note.erase("recover_walk_mix")
+	note.erase("guard_lower_mix")
+	var prior_motion: int = int(note.get("motion", -1)) - OWN_BASE
 	var blow := blow_of(p, own, note, t)
-	if blow.y >= 0.0 and p.strike_t <= 0.0 and Pose.extended_recovery(p) and Pose.recovery_feet_free(p) and (p.moving or walking):
-		p.remove_meta(Pose.SWING)
-		p.remove_meta(Pose.MODE)
-		note["recover_walk_mix"] = true
-		note.erase("blow_aim")
-		blow = Vector2(0.0, -1.0)
-		walking = true
 	var blow_aim: float = float(note.get("blow_aim", 0.0))
 	note.erase("blow_aim")
 	var lying: bool = p.body.downed or p.body.dead or p.fallen_t > 0.0
@@ -676,6 +674,14 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	if bitten < 0 and hurt_k(note, t) > 0.0:
 		note["motion"] = HIT
 		return Vector2(0.0, HIT)
+	var recovery_from: int = int(blow.y)
+	var cancel_recovery: bool = blow.y >= 0.0 and p.strike_t <= 0.0 and (p.moving or walking) and ((Pose.extended_recovery(p) and Pose.recovery_feet_free(p)) or note.has("blow_guard_clip") and not p.has_meta(Pose.SWING))
+	if cancel_recovery:
+		p.remove_meta(Pose.SWING)
+		p.remove_meta(Pose.MODE)
+		note.erase("blow_guard_clip")
+		blow = Vector2(0.0, -1.0)
+		walking = true
 	if blow.y >= 0.0:
 		note["blow_aim"] = blow_aim
 		note["motion"] = OWN_BASE + int(blow.y)
@@ -740,6 +746,9 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		if not p.crouched and Gait.weak_hold(p) and clip_named(own, Gait.HOLD_WEAK, -1) >= 0:
 			own_stand = clip_named(own, Gait.HOLD_WEAK, -1)   # a broken arm: the long weapon held low in one hand
 		if own_stand >= 0:
+			if prior_motion == int(note.get("blow_guard_clip", -2)):
+				note["guard_lower_mix"] = prior_motion
+				note.erase("blow_guard_clip")
 			return Vector2(_own_cycle(note, OWN_BASE + own_stand, t, _length(own, own_stand, 1.0), unit), own_stand)
 		if p.crouched:
 			note["motion"] = TELL
@@ -759,6 +768,10 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	note["gait_backward"] = backward
 	var signed_gone: float = -ground_gone if backward else ground_gone
 	if own_gait >= 0:
+		if cancel_recovery and prior_motion == recovery_from:
+			note["recover_walk_mix"] = true
+			note["recover_walk_from"] = prior_motion
+			note["recover_walk_to"] = own_gait
 		note["motion"] = OWN_BASE + own_gait
 		var stepped: float = _round(note, "step", signed_gone, _round_of(own, own_gait, 1.2))
 		if p.brain.has("step_r") and is_stepped(String(own[own_gait].get("name", ""))):
@@ -848,11 +861,44 @@ static func fall_name(p, own: Array) -> String:
 
 static func mix_recovery(note: Dictionary, mix: Dictionary, look: Color, t: float, tab: Array, times: Dictionary) -> Color:
 	var durations: Dictionary = times
-	if bool(note.get("recover_walk_mix", false)):
+	var previous: int = int(mix.get("body_motion", -1))
+	var target: int = int(look.g)
+	if bool(note.get("recover_walk_mix", false)) and previous == int(note.get("recover_walk_from", -2)) and target == int(note.get("recover_walk_to", -3)) and previous != target:
 		durations = times.duplicate()
-		durations[int(look.g)] = RECOVER_WALK_MIX
+		durations[target] = RECOVER_WALK_MIX
 		note.erase("recover_walk_mix")
+	if note.has("guard_lower_mix") and previous == int(note["guard_lower_mix"]) and previous != target:
+		durations = times.duplicate()
+		durations[target] = RECOVER_GUARD_LOWER
+		note.erase("guard_lower_mix")
+		mix["guard_lowering"] = true
+	elif previous != target and mix.has("guard_lowering"):
+		_cut_guard_lowering(note, mix, look, t, tab, durations)
 	return DeadBody.mix_from(mix, look, t, tab, durations)
+
+
+## A change of motion while the guard is still being lowered. The shader keeps one frame,
+## so a fresh ease would drop the guard share in one drawing. A blow starts from the guard
+## pose (body_bake.gd p_swing_one/back keys at 0 are those at 0.8), so it keeps the
+## standing frame at the share standing had; anything else keeps the guard frame at its share.
+static func _cut_guard_lowering(note: Dictionary, mix: Dictionary, look: Color, t: float, tab: Array, durations: Dictionary) -> void:
+	mix.erase("guard_lowering")
+	var lower: float = float(mix.get("body_mix", RECOVER_GUARD_LOWER))
+	var left: float = 1.0 - (t - float(mix.get("body_changed", t))) / lower
+	if left <= 0.0 or not mix.has("body_from"):
+		return
+	var keep: float = left * left * (3.0 - 2.0 * left)
+	if note.has("blow_aim"):
+		mix["body_from"] = DeadBody.frame_in(tab, int(mix["body_motion"]), float(mix["body_r"]))
+		keep = 1.0 - keep
+	var target: int = int(look.g)
+	var mix_time: float = float(durations.get(target, DeadBody.MIX_TIME))
+	# The left whose smoothstep is keep, so DeadBody.mix_from goes on from that share.
+	var from_left: float = 0.5 - sin(asin(clampf(1.0 - 2.0 * keep, -1.0, 1.0)) / 3.0)
+	mix["body_motion"] = target
+	mix["body_r"] = look.r
+	mix["body_mix"] = mix_time
+	mix["body_changed"] = t - (1.0 - from_left) * mix_time
 
 
 static func blow_kind(wid: String, hands: int, mode: String = "swing") -> String:
@@ -882,9 +928,13 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 				note["blow_end"] = minf(t, float(note.get("blow_deadline", t)))
 			note.erase("blow_aim")
 			p.remove_meta(Pose.BLOW_WAY)
+		if note.has("blow_guard_clip") and p.shove_t <= 0.0 and t <= float(note.get("blow_guard_until", -1.0)):
+			return Vector2(float(note["blow_guard_phase"]), int(note["blow_guard_clip"]))
 		return Vector2(0.0, -1.0)
 	# A new blow is drawn back: on to the next way if it follows on from the last.
 	var drawing: bool = not sw[2]
+	if drawing:
+		note.erase("blow_guard_clip")
 	if drawing and not note.get("blow_drawing", false):
 		var follows: bool = note.get("blow_on", false) or (note.has("blow_end") and t - float(note["blow_end"]) <= CHAIN_GAP)
 		note["blow_n"] = int(note.get("blow_n", -1)) + 1 if follows else 0
@@ -914,6 +964,13 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 	var r: float = lands + (ends - lands) * float(sw[1]) if sw[2] else lands * float(sw[0])
 	note["blow_aim"] = float(OWN_BLOW_AIM.get(String(way[0]), 0.0))
 	note["blow_r"] = Vector3(r, lands, ends)
+	if not drawing and Pose.extended_recovery(p) and p.has_meta(Pose.SWING):
+		var rest: float = float(p.get_meta(Pose.SWING))
+		var duration: float = Pose.recovery_duration(p, rest)
+		if duration > Pose.recover_seconds(wid):
+			note["blow_guard_clip"] = clip
+			note["blow_guard_phase"] = lerpf(lands, ends, Pose.recovery_end(p))
+			note["blow_guard_until"] = t + duration - (rest - p.swing_t) + RECOVER_GUARD_HOLD
 	return Vector2(r, clip)
 
 

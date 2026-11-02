@@ -6,6 +6,10 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
+const Pose = preload("res://game/actors/person_pose.gd")
+const Visual = preload("res://game/actors/person_visual.gd")
+const Person = preload("res://game/actors/person.gd")
+const Stamina = preload("res://game/sim/stamina.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 
 ## A folder of this run's own: another run of the trials at the same time (another
@@ -610,3 +614,53 @@ func test_the_slice_marker_survives_capture_and_resume_options() -> void:
 	var resumed: Dictionary = FieldSave.resume_opts(saved)
 	assert_true(bool(resumed["slice"]))
 	assert_false(saved["start_opts"].has("field_save_path"))
+
+
+func test_recovery_clocks_round_trip_after_fatigue_and_ally_rest() -> void:
+	for ally: bool in [false, true]:
+		var game: FieldGame = _game()
+		var p: Person = game.player
+		if ally:
+			for other: Person in game.people:
+				if not is_same(other, game.player) and other.team == game.player.team:
+					p = other
+					break
+			assert_false(is_same(p, game.player), "fixture needs a companion")
+		p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+		p.body.exhaustion = Stamina.FATIGUE_LIGHT * p.body._stamina_share() - 0.000001
+		var before_mult: float = float(p.mults()["swing"])
+		var own: Array = [{"name": "p_stand"}, {"name": "p_swing_one"}, {"name": "p_swing_back"}]
+		var note: Dictionary = {}
+		game.combat.start_swing(p, {})
+		assert_gt(p.strike_t, 0.0)
+		Visual.motion_of(p, note, 0.0, [], own)
+		var wind: float = p.strike_t
+		game.clock.elapsed += wind
+		game.combat.update(wind)
+		assert_lt(float(p.mults()["swing"]), before_mult, "the attack crosses a fatigue boundary")
+		Visual.motion_of(p, note, wind, [], own)
+		assert_true(p.has_meta(Pose.RECOVER_WAIT))
+		assert_true(p.has_meta(Pose.RECOVER_RELEASE))
+		if not p.has_meta(Pose.RECOVER_WAIT) or not p.has_meta(Pose.RECOVER_RELEASE):
+			continue
+		var wait: float = float(p.get_meta(Pose.RECOVER_WAIT))
+		var release: float = float(p.get_meta(Pose.RECOVER_RELEASE))
+		if ally:
+			assert_gt(p.swing_t, wait, "random rest remains in the rule wait")
+		var original: Array = Pose.swing_state(p)
+		var duration: float = Pose.recovery_duration(p, float(p.get_meta(Pose.SWING)))
+		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+		p.set_meta(Pose.RECOVER_WAIT, 99.0)
+		p.set_meta(Pose.RECOVER_RELEASE, 99.0)
+		FieldSave.apply(game, saved)
+		assert_almost_eq(float(p.get_meta(Pose.RECOVER_WAIT)), wait, 0.000001)
+		assert_almost_eq(float(p.get_meta(Pose.RECOVER_RELEASE)), release, 0.000001)
+		assert_eq(Pose.swing_state(p), original)
+		assert_almost_eq(Pose.recovery_duration(p, float(p.get_meta(Pose.SWING))), duration, 0.000001)
+		for row: Dictionary in saved["people"]:
+			var metadata: Dictionary = row.get("meta", {})
+			metadata.erase(Pose.RECOVER_WAIT)
+			metadata.erase(Pose.RECOVER_RELEASE)
+		FieldSave.apply(game, saved)
+		assert_false(p.has_meta(Pose.RECOVER_WAIT), "old saves clear existing clocks")
+		assert_false(p.has_meta(Pose.RECOVER_RELEASE), "old saves clear existing clocks")
