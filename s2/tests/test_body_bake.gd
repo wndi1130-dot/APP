@@ -886,6 +886,201 @@ func test_walk_height_bounds_accept_corrected_targets_for_both_legs() -> void:
 	assert_lt(float(corrected["upper"]), float(original["upper"]) - 0.1, "both corrected ankle targets lower the reachable ceiling")
 
 
+## Short legs and mixed sole weights belong only to these regression fixtures.
+func _walk_feedback_context(bent: bool = false) -> Dictionary:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	var a: float = 0.391
+	var b: float = 0.374
+	var r15: float = sqrt(a * a + b * b + 2.0 * a * b * cos(deg_to_rad(15.0)))
+	var height: float = r15 - 0.000679 if bent else a + b
+	var knee_y: float = (a * a + height * height - b * b) / (2.0 * height)
+	var knee_z: float = sqrt(maxf(0.0, a * a - knee_y * knee_y))
+	body.set_bone_rest(body.find_bone("hips"), Transform3D(Basis(), Vector3(0.0, height, 0.0)))
+	var rest: PackedVector3Array = fit["rest"]
+	var bones: PackedInt32Array = fit["bones"]
+	var weights: PackedFloat32Array = fit["weights"]
+	for side in 2:
+		var leg: Array = fit["legs"][side]
+		body.set_bone_rest(int(leg[1]), Transform3D(Basis(), Vector3(0.0, -knee_y, knee_z)))
+		body.set_bone_rest(int(leg[2]), Transform3D(Basis(), Vector3(0.0, knee_y - height, -knee_z)))
+		var ankle: Vector3 = body.get_bone_global_rest(int(leg[2])).origin
+		fit["rest_ankles"][side] = ankle
+		fit["anchors"][side] = body.get_bone_global_rest(int(leg[0])).origin - Vector3(0.0, 0.0, BodyBake.PERSON_WALK_FOOTPRINT_BACK)
+		for vertex: int in fit["soles"][side]:
+			var offset: Vector3 = rest[vertex] - Vector3(0.1 if side == 0 else -0.1, 0.0, 0.0)
+			# Unequal heel/toe distances on each side, with an exactly flat sole.
+			offset.z *= 1.0 if side == 0 else 0.8
+			rest[vertex] = ankle + offset
+			for slot in 4:
+				bones[vertex * 4 + slot] = int(leg[2 - slot]) if slot < 3 else 0
+				weights[vertex * 4 + slot] = [0.65, 0.30, 0.05, 0.0][slot]
+		assert_almost_eq(body.get_bone_global_rest(int(leg[0])).origin.distance_to(body.get_bone_global_rest(int(leg[1])).origin), a, 0.000001, "fixture thigh length")
+		assert_almost_eq(body.get_bone_global_rest(int(leg[1])).origin.distance_to(ankle), b, 0.000001, "fixture shin length")
+	fit["rest"] = rest
+	fit["bones"] = bones
+	fit["weights"] = weights
+	fit["rest_hips_y"] = height
+	fit["stand_ref_m"] = height - float(fit["floor"])
+	body.reset_bone_poses()
+	var skin: Skin = ctx["skin"]
+	for bind in skin.get_bind_count():
+		skin.set_bind_pose(bind, body.get_bone_global_rest(skin.get_bind_bone(bind)).affine_inverse())
+	ctx["fit_failures"] = []
+	ctx["walk_clip"] = "p_walk"
+	return ctx
+
+
+func _walk_feedback_frame(ctx: Dictionary, u: float, seed_offset: Vector3 = Vector3.ZERO, iteration_limit: int = BodyBake.PERSON_WALK_SOLVE_PASSES) -> Dictionary:
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	body.reset_bone_poses()
+	var targets: Array = []
+	for side in 2:
+		targets.append((BodyBake._person_walk_ankle_goal(fit, side, u)["target"] as Vector3) + seed_offset)
+	var bounds: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, u, targets)
+	if bool(bounds["empty"]):
+		return {}
+	fit["pelvis"] = {"values": PackedFloat64Array([bounds["upper"]]), "slopes": PackedFloat64Array([0.0])}
+	ctx["fit_failures"] = []
+	return BodyBake._solve_person_walk_frame(ctx, fit, u, targets, iteration_limit)
+
+
+func test_walk_skin_feedback_refits_both_targets_before_ik() -> void:
+	var ctx: Dictionary = _walk_feedback_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	# Fixed fixture, bounded phase witnesses; never skip a missing premise.
+	for sample in 32:
+		var result: Dictionary = _walk_feedback_frame(ctx, float(sample) / 32.0)
+		if result.is_empty() or not bool(result["ok"]):
+			continue
+		var passes: Array = result["passes"]
+		var first: Dictionary = passes[0]
+		var excess: float = 0.0
+		for info: Dictionary in first["proposal_reach"]:
+			excess = maxf(excess, float(info["excess"]))
+		if excess <= 0.0:
+			continue
+		assert_false(bool(first["bounds"]["empty"]), "premise: rigid pair is feasible")
+		assert_gt(excess, 0.0, "premise: skin proposal exhausts reach at the old height")
+		assert_gt(passes.size(), 1, "skin correction needs another paired solve")
+		assert_lte(passes.size(), 6, "no seventh IK")
+		for side in 2:
+			assert_gt((first["targets_used"][side] as Vector3).distance_to(first["proposed_targets"][side]), 0.000001, "both feet have real skin feedback")
+		for pass_id in range(1, passes.size()):
+			var previous: Dictionary = passes[pass_id - 1]
+			var alpha: float = previous["alpha"]
+			assert_true(alpha in [1.0, 0.5, 0.25, 0.125], "only the four designed damping steps")
+			for side in 2:
+				var expected_target: Vector3 = (previous["targets_used"][side] as Vector3).lerp(previous["proposed_targets"][side], alpha)
+				assert_lt(expected_target.distance_to(passes[pass_id]["targets_used"][side]), 0.000001, "both targets advance with the same damping step")
+		for pass_note: Dictionary in passes:
+			assert_false(bool(pass_note["bounds"]["empty"]), "paired interval before every IK")
+			assert_gte(float(pass_note["height"]), float(pass_note["bounds"]["lower"]), "height meets both lower bounds")
+			assert_lte(float(pass_note["height"]), float(pass_note["bounds"]["upper"]), "height meets both upper bounds")
+			for side in 2:
+				assert_false(bool(pass_note["pre_reach"][side]["invalid"]))
+				assert_eq(float(pass_note["pre_reach"][side]["excess"]), 0.0, "both targets reachable before either IK")
+				var goal: Dictionary = BodyBake._person_walk_ankle_goal(fit, side, float(sample) / 32.0)
+				var probe: Dictionary = pass_note["probes"][side]
+				var offset: Vector3 = (probe["point"] as Vector3) - (pass_note["actual_ankles"][side] as Vector3)
+				var expected: Vector3 = goal["base"] + (probe["rest"] as Vector3) - (fit["rest_ankles"][side] as Vector3) - offset
+				expected.y = float(fit["floor"]) + (goal["path"] as Vector3).y - offset.y
+				assert_lt(expected.distance_to(pass_note["proposed_targets"][side]), 0.000001, "both proposals use the same post-IK skin")
+		assert_eq(fit["reach_clamped"], [false, false], "no intermediate cuts")
+		assert_eq(fit["reach_final_failed"], [false, false], "no final target failures")
+		assert_lte(float(result["skin_residual"]), 0.0001, "undamped target residual")
+		assert_lte(float(result["height_residual"]), 0.00005, "next height residual")
+		assert_true((ctx["fit_failures"] as Array).is_empty(), "converged frame is accepted")
+		return
+	assert_true(false, "mixed skin must provide a convergent corrected-reach witness")
+
+
+func test_walk_last_skin_proposal_is_not_reported_as_solved() -> void:
+	var ctx: Dictionary = _walk_feedback_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	# One pass leaves the deliberate lateral seed error unresolved.
+	var result: Dictionary = _walk_feedback_frame(ctx, 0.0, Vector3(0.12, 0.0, 0.0), 1)
+	assert_false(result.is_empty(), "premise: fixed phase has a feasible seeded interval")
+	if result.is_empty():
+		return
+	assert_eq(BodyBake.PERSON_WALK_SOLVE_PASSES, 6, "production budget stays six")
+	assert_false(bool(result["ok"]), "nonconvergence is not solved")
+	assert_eq(result["reason"], "SKIN_ITER_LIMIT", "last unsolved proposal exhausts the test budget")
+	assert_eq(int(result["ik_passes"]), 1, "exactly the requested paired IK budget")
+	assert_eq((result["passes"] as Array).size(), 1, "no hidden solve after the limit")
+	assert_eq(fit["reach_clamped"], [false, false], "premise: no distance cut needed")
+	assert_gt(float(result["skin_residual"]), 0.0001, "premise: last proposal still changes")
+	for side: int in 2:
+		assert_lt((result["actual_ankles"][side] as Vector3).distance_to(result["targets_used"][side]), 0.0001, "ankle solves the used target")
+		assert_almost_eq(float(result["misses"][side]), (result["actual_ankles"][side] as Vector3).distance_to(result["targets_used"][side]), 0.000001, "miss is measured against used target")
+	assert_ne(result["targets_used"], result["proposed_targets"], "last proposal is recorded separately")
+	assert_eq((ctx["fit_failures"] as Array).size(), 1, "nonconvergence reaches save refusal")
+	assert_true(str(ctx["fit_failures"][0]).begins_with("WALK_SOLVE_FAIL "))
+	assert_true(str(ctx["fit_failures"][0]).contains("reason=SKIN_ITER_LIMIT"))
+
+
+func test_walk_rest_cap_fix_covers_entire_mid_window() -> void:
+	var ctx: Dictionary = _walk_feedback_context(true)
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	var hip: Vector3 = body.get_bone_global_pose(int(fit["legs"][0][0])).origin
+	var duration: float = fit["durations"][0]
+	var start: float = fit["starts"][0]
+	# One constant centre fixes entry, but the same -1.64 slope crosses the hip later.
+	var centre: float = 0.04 - 1.64 * duration * 0.1
+	var rejected: int = 0
+	for t: float in [0.4, 0.45, 0.5, 0.55, 0.6]:
+		var target: Vector3 = Vector3(hip.x, 0.0, hip.z + centre + 1.64 * duration * (0.5 - t))
+		var other: Vector3 = body.get_bone_global_pose(int(fit["legs"][1][0])).origin + Vector3(0.0, -0.5, 0.0)
+		var bounds: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, start + duration * t, [target, other])
+		if t == 0.4:
+			assert_false(bool(bounds["empty"]), "premise: the single-phase repair works at entry")
+		if bool(bounds["empty"]):
+			rejected += 1
+			assert_gt(float(bounds["lower"]), float(bounds["upper"]), "keep the conflicting interval")
+			assert_eq(int(bounds["lower_side"]), 0, "mid-stance leg owns the lower bound")
+			assert_eq(int(bounds["upper_side"]), -1, "rest cap owns the upper bound")
+	assert_gt(rejected, 0, "a later middle phase rejects the one-phase fix")
+
+
+func test_walk_exhausted_search_refuses_unfit_bake() -> void:
+	# Only the empty-interval part is in scope; path search comes later.
+	var ctx: Dictionary = _walk_feedback_context(true)
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	var u: float = float(fit["starts"][0]) + 0.5 * float(fit["durations"][0])
+	fit["rest_hips_y"] = 0.5
+	var targets: Array = []
+	for side in 2:
+		targets.append(BodyBake._person_walk_ankle_goal(fit, side, u)["target"])
+	var bounds: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, u, targets)
+	assert_gt(float(bounds["lower"]), float(bounds["upper"]), "premise: genuinely empty interval")
+	assert_true(bool(bounds["empty"]))
+	fit["pelvis"] = {"values": PackedFloat64Array([0.5]), "slopes": PackedFloat64Array([0.0])}
+	var before: Transform3D = body.get_bone_global_pose(body.find_bone("hips"))
+	var result: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, u, targets)
+	assert_false(bool(result["ok"]))
+	assert_eq(result["reason"], "POINT_EMPTY")
+	assert_eq(int(result["ik_passes"]), 0, "empty interval never reaches IK")
+	assert_gt(float(result["bounds"]["lower"]), float(result["bounds"]["upper"]), "failure retains L > U")
+	assert_eq(body.get_bone_global_pose(body.find_bone("hips")), before, "no fabricated clamped height")
+	assert_eq((ctx["fit_failures"] as Array).size(), 1, "failure reaches the existing save refusal")
+	assert_true(str(ctx["fit_failures"][0]).contains("reason=POINT_EMPTY"))
+	var table: Dictionary = BodyBake._fit_person_walk_height(ctx, fit, BodyBake.PERSON_CLIPS[0], 0.0)
+	assert_gt((table["failed_samples"] as PackedInt32Array).size(), 0, "infeasible cycle is retained as failure")
+	assert_true((table["values"] as PackedFloat64Array).is_empty(), "no folded single-value solution is published")
+	body.reset_bone_poses()
+	var hip: Vector3 = body.get_bone_global_pose(int(fit["legs"][0][0])).origin
+	var far: Array = [hip + Vector3(2.0, 0.0, 0.0), targets[1]]
+	var far_bounds: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, 0.0, far)
+	assert_true(bool(far_bounds["empty"]), "horizontal unreachability is not sqrt-clamped away")
+	assert_eq(far_bounds["per_side"][0]["reason"], "HORIZONTAL_REACH")
+	var near_bounds: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, 0.0, [hip, targets[1]])
+	assert_gt(float(near_bounds["per_side"][0]["lower"]), hip.y + 0.0169, "internal radius enforces the positive-branch lower bound")
+
+
 func test_walk_height_mean_is_raised_within_ceilings_or_reported_unfit() -> void:
 	var values: PackedFloat64Array = PackedFloat64Array([0.8, 0.9])
 	var ceilings: PackedFloat64Array = PackedFloat64Array([1.0, 0.95])
@@ -913,3 +1108,53 @@ func test_walk_stick_height_table_meets_mean_constraint_when_feasible() -> void:
 	assert_true(bool(table["mean_feasible"]), "stick height table has a feasible 95 percent mean")
 	assert_gte(mean + 0.000000001, minimum, "fitted sample mean reaches the 95 percent constraint")
 	assert_almost_eq(float(table["mean"]), mean, 0.000000001, "recorded mean matches the fitted table")
+
+
+func test_walk_empty_height_table_records_direct_and_solver_failures() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	ctx["rig_label"] = "empty_table_stick"
+	ctx["walk_clip"] = "p_walk"
+	ctx["fit_failures"] = []
+	fit["rest_hips_y"] = 0.5
+	var table: Dictionary = BodyBake._fit_person_walk_height(ctx, fit, BodyBake.PERSON_CLIPS[0], 0.0)
+	fit["pelvis"] = table
+	assert_true((table["values"] as PackedFloat64Array).is_empty(), "premise: failed cycle publishes no heights")
+	assert_gt((table["failed_samples"] as PackedInt32Array).size(), 0, "empty table comes from infeasible intervals")
+	assert_true(is_nan(BodyBake._person_walk_height_at(table, 0.0)), "direct query returns an invalid sentinel without modulo")
+	assert_true(is_nan(BodyBake._person_walk_height_at(table, 1.0)), "seam query is guarded too")
+	assert_true((ctx["fit_failures"] as Array).has("PELVIS_TABLE_EMPTY rig=empty_table_stick clip=p_walk phase=0.000000000 cause=POINT_EMPTY"), "direct query retains the originating refusal sink")
+	ctx["walk_clip"] = "p_walk_pistol"
+	BodyBake.pose(ctx, "", "p_walk_pistol", 0.0)
+	var body: Skeleton3D = ctx["body"]
+	var before_y: float = body.get_bone_global_pose(body.find_bone("hips")).origin.y
+	BodyBake._apply_person_walk_body(ctx, fit, 0.0, 0.0, "p_walk_pistol")
+	assert_almost_eq(body.get_bone_global_pose(body.find_bone("hips")).origin.y, before_y, 0.000001, "invalid height never reaches the skeleton")
+	var result: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0)
+	assert_false(bool(result["ok"]), "empty table cannot produce a saved frame")
+	assert_eq(result["reason"], "PELVIS_TABLE_EMPTY")
+	assert_eq(int(result["ik_passes"]), 0, "no IK without a height table")
+	assert_true((ctx["fit_failures"] as Array).has("PELVIS_TABLE_EMPTY rig=empty_table_stick clip=p_walk_pistol phase=0.000000000 cause=POINT_EMPTY"), "shared table reports the current clip")
+	assert_true(is_nan(BodyBake._person_walk_height_at({}, 0.25, ctx)), "unbuilt tables are guarded too")
+	assert_true((ctx["fit_failures"] as Array).has("PELVIS_TABLE_EMPTY rig=empty_table_stick clip=p_walk_pistol phase=0.250000000 cause=NOT_BUILT"))
+
+
+func test_walk_paired_solver_preserves_saved_stride_final() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	ctx["fit_failures"] = []
+	for entry: Array in BodyBake.PERSON_CLIPS:
+		if not BodyBake.PERSON_FOOT_LOCK.has(entry[0]):
+			continue
+		ctx["walk_clip"] = entry[0]
+		var frames: Array = []
+		for frame: int in int(entry[2]):
+			var u: float = float(frame) / float(entry[2])
+			BodyBake.pose(ctx, entry[1], entry[4], u)
+			BodyBake._apply_person_walk_body(ctx, fit, u, u, entry[4])
+			BodyBake._apply_person_footlock(ctx, fit, u)
+			assert_true(bool(fit["walk_solve"]["ok"]), "%s frame %d solves before saving" % [entry[0], frame])
+			frames.append(BodyBake._skin_frame(ctx))
+		var measured: float = BodyBake._check_person_stride_final(ctx, entry[0], frames, fit)
+		assert_almost_eq(measured, 1.64, 1.64 * 0.005, "%s paired solve keeps the saved support stride" % entry[0])
+	assert_true((ctx["fit_failures"] as Array).is_empty(), "all six actual saved walks pass the unchanged stride gate")

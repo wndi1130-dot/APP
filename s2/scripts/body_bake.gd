@@ -2977,7 +2977,9 @@ static func _person_walk_ankle_goal(fit: Dictionary, side: int, u: float) -> Dic
 	target += reference / float(count) - offset_sum / float(count)
 	target.z += path.x
 	target.y = float(fit["floor"]) + path.y - lowest
-	return {"target": target, "rotation": roll * flat}
+	var base: Vector3 = fit["anchors"][side]
+	base.z += path.x
+	return {"target": target, "rotation": roll * flat, "base": base, "path": path, "age": age}
 
 
 ## Bounds on absolute hips y in mesh space, AFTER the pelvis rotation.
@@ -2993,6 +2995,7 @@ static func _person_walk_height_bounds(ctx: Dictionary, fit: Dictionary, u: floa
 	var horizontal_miss: bool = false
 	var upper_side: int = -1
 	var lower_side: int = -1
+	var per_side: Array = []
 	for side in 2:
 		var leg: Array = fit["legs"][side]
 		var thigh: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[0])).origin
@@ -3000,27 +3003,39 @@ static func _person_walk_height_bounds(ctx: Dictionary, fit: Dictionary, u: floa
 		var foot: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[2])).origin
 		var a: float = thigh.distance_to(shin)
 		var b: float = shin.distance_to(foot)
-		var goal: Dictionary = _person_walk_ankle_goal(fit, side, u)
-		var target: Vector3 = targets[side] if targets.size() == 2 else goal["target"]
+		var target: Vector3 = targets[side] if targets.size() == 2 else _person_walk_ankle_goal(fit, side, u)["target"]
 		var offset: Vector3 = thigh - hips
 		var horizontal: float = Vector2(thigh.x - target.x, thigh.z - target.z).length_squared()
 		var reach_squared: float = a * a + b * b + 2.0 * a * b * cos(PERSON_WALK_KNEE_MIN)
-		horizontal_miss = horizontal_miss or horizontal > reach_squared or minf(a, b) < 0.000001
 		var base_y: float = target.y - offset.y
-		var candidate_upper: float = base_y + sqrt(maxf(0.0, reach_squared - horizontal)) - PERSON_WALK_REACH_MARGIN
+		var invalid: bool = minf(a, b) < 0.000001 or horizontal > reach_squared
+		var candidate_upper: float = -INF
+		var candidate_lower: float = base_y
+		var reason: String = ""
+		if invalid:
+			horizontal_miss = true
+			reason = "DEGENERATE_LEG" if minf(a, b) < 0.000001 else "HORIZONTAL_REACH"
+		else:
+			candidate_upper = base_y + sqrt(reach_squared - horizontal) - PERSON_WALK_REACH_MARGIN
+			# Positive vertical branch, including the internal reach sphere.
+			var minimum: float = maxf(absf(a - b), 0.000001)
+			if horizontal < minimum * minimum:
+				candidate_lower += sqrt(minimum * minimum - horizontal) + 0.000001
 		if candidate_upper < upper:
 			upper = candidate_upper
 			upper_side = side
 		var age: float = fposmod(u - float(fit["starts"][side]), 1.0)
 		var mid: float = age / float(fit["durations"][side])
-		if mid >= 0.40 and mid <= 0.60:
+		if not invalid and mid >= 0.40 and mid <= 0.60:
 			var mid_squared: float = a * a + b * b + 2.0 * a * b * cos(PERSON_WALK_MID_KNEE_MAX)
 			if mid_squared > horizontal:
-				var candidate_lower: float = base_y + sqrt(mid_squared - horizontal)
-				if candidate_lower > lower:
-					lower = candidate_lower
-					lower_side = side
-	return {"upper": upper, "lower": lower, "horizontal_miss": horizontal_miss, "upper_side": upper_side, "lower_side": lower_side}
+				candidate_lower = maxf(candidate_lower, base_y + sqrt(mid_squared - horizontal))
+		if candidate_lower > lower:
+			lower = candidate_lower
+			lower_side = side
+		per_side.append({"lower": candidate_lower, "upper": candidate_upper, "target": target, "reason": reason})
+	return {"upper": upper, "lower": lower, "empty": horizontal_miss or lower > upper, "per_side": per_side,
+		"horizontal_miss": horizontal_miss, "upper_side": upper_side, "lower_side": lower_side}
 
 
 ## Raise the mean without exceeding any ceiling. Every pass saturates a
@@ -3049,7 +3064,7 @@ static func _person_walk_raise_mean(values: PackedFloat64Array, ceilings: Packed
 
 
 ## Fixed-order Jacobi smoothing on a ring; projections preserve BOTH bounds.
-## Infeasible samples retain the reach-safe upper bound and reject saving.
+## Infeasible intervals retain their bounds but never publish a height table.
 static func _fit_person_walk_height(ctx: Dictionary, fit: Dictionary, walk: Array, shift: float) -> Dictionary:
 	var values: PackedFloat64Array = PackedFloat64Array()
 	var uppers: PackedFloat64Array = PackedFloat64Array()
@@ -3069,6 +3084,10 @@ static func _fit_person_walk_height(ctx: Dictionary, fit: Dictionary, walk: Arra
 		if lower > upper or bool(bounds["horizontal_miss"]):
 			failed.append(sample)
 			ctx.get_or_add("fit_failures", []).append("PELVIS_UNFIT rig %s clip p_walk sample %d phase %.9f lower %.9f lower_side %d upper %.9f upper_side %d horizontal_miss %s" % [ctx.get("rig_label", "unknown"), sample, u, lower, bounds["lower_side"], upper, bounds["upper_side"], bounds["horizontal_miss"]])
+	if not failed.is_empty():
+		return {"values": PackedFloat64Array(), "slopes": PackedFloat64Array(), "uppers": uppers, "lowers": lowers,
+			"failed_samples": failed, "mean": 0.0, "mean_feasible": false,
+			"rig_label": ctx.get("rig_label", "unknown"), "clip": walk[0], "fit_failures": ctx.get_or_add("fit_failures", [])}
 	for _pass_id in PERSON_WALK_HEIGHT_PASSES:
 		var smoothed: PackedFloat64Array = PackedFloat64Array()
 		for sample in PERSON_WALK_HEIGHT_SAMPLES:
@@ -3107,8 +3126,21 @@ static func _fit_person_walk_height(ctx: Dictionary, fit: Dictionary, walk: Arra
 	return {"values": values, "slopes": slopes, "uppers": uppers, "lowers": lowers, "failed_samples": failed, "mean": mean_fit["mean"], "mean_feasible": mean_fit["feasible"]}
 
 
-static func _person_walk_height_at(table: Dictionary, u: float) -> float:
-	var values: PackedFloat64Array = table["values"]
+static func _note_person_walk_empty_height(ctx: Dictionary, table: Dictionary, u: float) -> void:
+	var failures: Array = ctx.get_or_add("fit_failures", []) if not ctx.is_empty() else table.get_or_add("fit_failures", [])
+	var failed: PackedInt32Array = table.get("failed_samples", PackedInt32Array())
+	var cause: String = "POINT_EMPTY" if not failed.is_empty() else "NOT_BUILT"
+	var failure: String = "PELVIS_TABLE_EMPTY rig=%s clip=%s phase=%.9f cause=%s" % [
+		ctx.get("rig_label", table.get("rig_label", "unknown")), ctx.get("walk_clip", table.get("clip", "unknown")), u, cause]
+	if not failures.has(failure):
+		failures.append(failure)
+
+
+static func _person_walk_height_at(table: Dictionary, u: float, ctx: Dictionary = {}) -> float:
+	var values: PackedFloat64Array = table.get("values", PackedFloat64Array())
+	if values.is_empty():
+		_note_person_walk_empty_height(ctx, table, u)
+		return NAN
 	var slopes: PackedFloat64Array = table["slopes"]
 	var position: float = fposmod(u, 1.0) * float(values.size())
 	var index: int = int(floor(position))
@@ -3126,25 +3158,28 @@ static func _apply_person_walk_body(ctx: Dictionary, fit: Dictionary, u: float, 
 	var to_mesh: Transform3D = ctx["to_mesh"]
 	var hips_id: int = _bone(body, "hips")
 	_apply_person_walk_turn(ctx, fit, u, keyed_u, layer)
+	var before_y: float = (to_mesh * body.get_bone_global_pose(hips_id)).origin.y
+	fit["keyed_hips_y"] = before_y
+	# The paired solver alone projects height against its current skin targets.
+	var height: float = _person_walk_height_at(fit["pelvis"], u, ctx)
+	if not is_finite(height):
+		fit["height_frame_failed"] = true
+		return 0.0
+	_set_person_walk_hips_y(ctx, height)
+	return before_y - height
+
+
+static func _set_person_walk_hips_y(ctx: Dictionary, height: float) -> void:
+	var body: Skeleton3D = ctx["body"]
+	var to_mesh: Transform3D = ctx["to_mesh"]
+	var hips_id: int = _bone(body, "hips")
 	var hips: Vector3 = to_mesh * body.get_bone_global_pose(hips_id).origin
-	var before_y: float = hips.y
-	var bounds: Dictionary = _person_walk_height_bounds(ctx, fit, u)
-	var upper: float = bounds["upper"]
-	var lower: float = bounds["lower"]
-	# Recheck the exact bake phase, including phases between the 256 knots.
-	hips.y = minf(upper, maxf(lower, _person_walk_height_at(fit["pelvis"], u)))
-	fit["height_frame_failed"] = lower > upper or bool(bounds["horizontal_miss"])
-	if bool(fit["height_frame_failed"]):
-		var failure: String = "PELVIS_UNFIT %s rig %s phase %.9f lower %.9f lower_side %d upper %.9f upper_side %d" % [layer, ctx.get("rig_label", "unknown"), u, lower, bounds["lower_side"], upper, bounds["upper_side"]]
-		var failures: Array = ctx.get_or_add("fit_failures", [])
-		if not failures.has(failure):
-			failures.append(failure)
+	hips.y = height
 	var position: Vector3 = to_mesh.affine_inverse() * hips
 	var parent: int = body.get_bone_parent(hips_id)
 	if parent >= 0:
 		position = body.get_bone_global_pose(parent).affine_inverse() * position
 	body.set_bone_pose_position(hips_id, position)
-	return before_y - hips.y
 
 
 ## One set of anchors/sole probes per body, shared by all six walk layers.
@@ -3269,47 +3304,141 @@ static func _person_walk_reach_info(body: Skeleton3D, leg: Array, target: Vector
 
 
 static func _apply_person_footlock(ctx: Dictionary, fit: Dictionary, u: float) -> Array:
+	return _solve_person_walk_frame(ctx, fit, u)["misses"]
+
+
+## The caller restores the keyed pose and applies walk turn once. Every pass
+## then projects one shared absolute height and solves BOTH feet before skinning.
+static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float, target_seed: Array = [], iteration_limit: int = PERSON_WALK_SOLVE_PASSES) -> Dictionary:
 	var body: Skeleton3D = ctx["body"]
 	var to_mesh: Transform3D = ctx["to_mesh"]
-	var to_body := to_mesh.affine_inverse()
-	var misses := []
+	var to_body: Transform3D = to_mesh.affine_inverse()
+	var goals: Array = []
+	var targets: Array = target_seed.duplicate()
+	for side in 2:
+		goals.append(_person_walk_ankle_goal(fit, side, u))
+		if target_seed.is_empty():
+			targets.append(goals[side]["target"])
+	var result: Dictionary = {"ok": false, "reason": "", "targets_used": [], "proposed_targets": [],
+		"actual_ankles": [], "bounds": {}, "misses": [INF, INF], "skin_residual": INF,
+		"height_residual": INF, "ik_passes": 0, "passes": []}
 	fit["reach_clamped"] = [false, false]
 	fit["reach_final_failed"] = [false, false]
+	fit["height_frame_failed"] = false
+	var wanted_h: float = _person_walk_height_at(fit["pelvis"], u, ctx)
+	if not is_finite(wanted_h):
+		result["bounds"] = _person_walk_height_bounds(ctx, fit, u, targets)
+		return _finish_person_walk_frame(ctx, fit, u, result, "PELVIS_TABLE_EMPTY")
+	# Tests may shorten the budget; production never exceeds six passes.
+	var pass_limit: int = clampi(iteration_limit, 1, PERSON_WALK_SOLVE_PASSES)
+	for pass_id: int in pass_limit:
+		var bounds: Dictionary = _person_walk_height_bounds(ctx, fit, u, targets)
+		result["bounds"] = bounds
+		if bool(bounds["empty"]):
+			return _finish_person_walk_frame(ctx, fit, u, result, "POINT_EMPTY")
+		var height: float = clampf(wanted_h, float(bounds["lower"]), float(bounds["upper"]))
+		_set_person_walk_hips_y(ctx, height)
+		var pre_reach: Array = []
+		var reachable: bool = true
+		for side in 2:
+			var info: Dictionary = _person_walk_reach_info(body, fit["legs"][side], to_body * (targets[side] as Vector3))
+			pre_reach.append(info)
+			fit["reach_final_failed"][side] = bool(info["invalid"]) or float(info["excess"]) > 0.0
+			reachable = reachable and not bool(fit["reach_final_failed"][side])
+		if not reachable:
+			return _finish_person_walk_frame(ctx, fit, u, result, "PRE_IK_REACH")
+		result["targets_used"] = targets.duplicate()
+		result["proposed_targets"] = []
+		result["ik_passes"] = pass_id + 1
+		for side in 2:
+			fit["reach_clamped"][side] = _solve_person_footlock_leg(body, fit["legs"][side], to_body * (targets[side] as Vector3), to_body.basis * Vector3.BACK)
+		if bool(fit["reach_clamped"][0]) or bool(fit["reach_clamped"][1]):
+			return _finish_person_walk_frame(ctx, fit, u, result, "IK_CUT")
+		for side in 2:
+			var rotation: Quaternion = (to_body.basis * (goals[side]["rotation"] as Basis)).orthonormalized().get_rotation_quaternion()
+			_person_footlock_rotation(body, int(fit["legs"][side][2]), rotation)
+		var probes: Array = _person_footlock_probes(fit, _skin_frame(ctx))
+		var proposed: Array = []
+		var ankles: Array = []
+		var proposal_reach: Array = []
+		var residual: float = 0.0
+		var actual_ok: bool = true
+		for side in 2:
+			var leg: Array = fit["legs"][side]
+			var ankle: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[2])).origin
+			ankles.append(ankle)
+			var offset: Vector3 = (probes[side]["point"] as Vector3) - ankle
+			var flat_offset: Vector3 = (probes[side]["rest"] as Vector3) - (fit["rest_ankles"][side] as Vector3)
+			var target: Vector3 = (goals[side]["base"] as Vector3) + flat_offset - offset
+			target.y = float(fit["floor"]) + (goals[side]["path"] as Vector3).y - offset.y
+			proposed.append(target)
+			proposal_reach.append(_person_walk_reach_info(body, leg, to_body * target))
+			residual = maxf(residual, (targets[side] as Vector3).distance_to(target))
+			var miss: float = ankle.distance_to(targets[side])
+			result["misses"][side] = miss
+			fit["reach_final_failed"][side] = miss > 0.0001
+			actual_ok = actual_ok and not bool(fit["reach_final_failed"][side])
+			var mid: float = float(goals[side]["age"]) / float(fit["durations"][side])
+			if mid >= 0.40 and mid <= 0.60:
+				var thigh: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[0])).origin
+				var knee: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[1])).origin
+				actual_ok = actual_ok and (knee - thigh).angle_to(ankle - knee) <= PERSON_WALK_MID_KNEE_MAX
+		var next_bounds: Dictionary = _person_walk_height_bounds(ctx, fit, u, proposed)
+		var height_residual: float = INF
+		if not bool(next_bounds["empty"]):
+			height_residual = absf(clampf(wanted_h, float(next_bounds["lower"]), float(next_bounds["upper"])) - height)
+		result["proposed_targets"] = proposed.duplicate()
+		result["actual_ankles"] = ankles
+		result["skin_residual"] = residual
+		result["height_residual"] = height_residual
+		result["next_bounds"] = next_bounds
+		result["passes"].append({"targets_used": targets.duplicate(), "proposed_targets": proposed.duplicate(),
+			"actual_ankles": ankles, "probes": probes, "bounds": bounds, "height": height,
+			"pre_reach": pre_reach, "proposal_reach": proposal_reach})
+		if residual <= 0.0001 and height_residual <= 0.00005 and not bool(next_bounds["empty"]) \
+				and height >= float(next_bounds["lower"]) and height <= float(next_bounds["upper"]) and actual_ok:
+			return _finish_person_walk_frame(ctx, fit, u, result, "")
+		if pass_id == pass_limit - 1:
+			return _finish_person_walk_frame(ctx, fit, u, result, "SKIN_ITER_LIMIT")
+		var accepted: bool = false
+		for alpha: float in [1.0, 0.5, 0.25, 0.125]:
+			var trial: Array = []
+			for side in 2:
+				trial.append((targets[side] as Vector3).lerp(proposed[side], alpha))
+			if not bool(_person_walk_height_bounds(ctx, fit, u, trial)["empty"]):
+				result["passes"][-1]["alpha"] = alpha
+				targets = trial
+				accepted = true
+				break
+		if not accepted:
+			return _finish_person_walk_frame(ctx, fit, u, result, "SKIN_STEP_INFEASIBLE")
+	return _finish_person_walk_frame(ctx, fit, u, result, "SKIN_ITER_LIMIT")
+
+
+static func _finish_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float, result: Dictionary, reason: String) -> Dictionary:
+	var body: Skeleton3D = ctx["body"]
+	var to_mesh: Transform3D = ctx["to_mesh"]
+	result["ok"] = reason.is_empty()
+	result["reason"] = reason
+	result["final_hips_y"] = (to_mesh * body.get_bone_global_pose(_bone(body, "hips"))).origin.y
+	result["actual_ankles"] = []
 	for side in 2:
-		var leg: Array = fit["legs"][side]
-		# A forward pole is intentional: a noisy/straight keyed knee cannot
-		# select the backwards branch of the two-bone solution.
-		var pole := to_body.basis * Vector3.BACK
-		var age := fposmod(u - float(fit["starts"][side]), 1.0)
-		var path := _person_walk_path(age, fit["durations"][side], fit["round"])
-		var base: Vector3 = fit["anchors"][side]
-		base.z += path.x
-		var goal: Dictionary = _person_walk_ankle_goal(fit, side, u)
-		var goal_rotation: Basis = goal["rotation"]
-		var rotation: Quaternion = (to_body.basis * goal_rotation).orthonormalized().get_rotation_quaternion()
-		var target: Vector3 = goal["target"]
-		for pass_id in PERSON_WALK_SOLVE_PASSES:
-			var distance_info: Dictionary = _person_walk_reach_info(body, leg, to_body * target)
-			var clamped: bool = _solve_person_footlock_leg(body, leg, to_body * target, pole)
-			if clamped:
-				print("IK_CLAMP rig %s clip %s phase %.9f side %d pass %d wanted %.9f minimum %.9f limit %.9f excess %.9f" % [ctx.get("rig_label", "unknown"), ctx.get("walk_clip", "unknown"), u, side, pass_id, distance_info["wanted"], distance_info["minimum"], distance_info["limit"], distance_info["excess"]])
-			fit["reach_clamped"][side] = bool(fit["reach_clamped"][side]) or clamped
-			_person_footlock_rotation(body, leg[2], rotation)
-			var probe: Dictionary = _person_footlock_probes(fit, _skin_frame(ctx))[side]
-			var ankle := to_mesh * body.get_bone_global_pose(leg[2]).origin
-			var offset: Vector3 = (probe["point"] as Vector3) - ankle
-			var flat_offset: Vector3 = (probe["rest"] as Vector3) - (fit["rest_ankles"][side] as Vector3)
-			# A material sole point stays over its own flat footprint while
-			# the ankle rolls around it. Re-evaluate the support after skinning.
-			target = base + flat_offset - offset
-			target.y = float(fit["floor"]) + path.y - offset.y
-		var final_info: Dictionary = _person_walk_reach_info(body, leg, to_body * target)
-		fit["reach_final_failed"][side] = bool(final_info["invalid"]) or float(final_info["excess"]) > 0.0
-		if bool(fit["reach_final_failed"][side]):
-			print("IK_FINAL rig %s clip %s phase %.9f side %d pass %d wanted %.9f minimum %.9f limit %.9f excess %.9f" % [ctx.get("rig_label", "unknown"), ctx.get("walk_clip", "unknown"), u, side, PERSON_WALK_SOLVE_PASSES, final_info["wanted"], final_info["minimum"], final_info["limit"], final_info["excess"]])
-		var reached := to_mesh * body.get_bone_global_pose(leg[2]).origin
-		misses.append(reached.distance_to(target))
-	return misses
+		var ankle: Vector3 = to_mesh * body.get_bone_global_pose(int(fit["legs"][side][2])).origin
+		result["actual_ankles"].append(ankle)
+		if (result["targets_used"] as Array).size() == 2:
+			result["misses"][side] = ankle.distance_to(result["targets_used"][side])
+	fit["height_frame_failed"] = not reason.is_empty()
+	fit["walk_solve"] = result
+	if not reason.is_empty():
+		var bounds: Dictionary = result["bounds"]
+		var failure: String = "WALK_SOLVE_FAIL rig=%s clip=%s stage=skin reason=%s ik_pass=%d phase=%.9f lower_m=%.9f upper_m=%.9f gap_mm=%.6f lower_side=%d upper_side=%d target_delta_mm=%.6f height_delta_mm=%.6f" % [
+			ctx.get("rig_label", "unknown"), ctx.get("walk_clip", "unknown"), reason, result["ik_passes"], u,
+			bounds["lower"], bounds["upper"], (float(bounds["lower"]) - float(bounds["upper"])) * 1000.0,
+			bounds["lower_side"], bounds["upper_side"], float(result["skin_residual"]) * 1000.0, float(result["height_residual"]) * 1000.0]
+		var failures: Array = ctx.get_or_add("fit_failures", [])
+		if not failures.has(failure):
+			failures.append(failure)
+	return result
 
 
 ## Sample the same frames that enter the VAT, with stance-relative travel
@@ -3328,6 +3457,8 @@ static func _note_person_footlock(ctx: Dictionary, fit: Dictionary, u: float, be
 	var body: Skeleton3D = ctx["body"]
 	var to_mesh: Transform3D = ctx["to_mesh"]
 	var hips: Vector3 = to_mesh * body.get_bone_global_pose(_bone(body, "hips")).origin
+	if fit.has("keyed_hips_y"):
+		hip_drop = float(fit["keyed_hips_y"]) - hips.y
 	for side in 2:
 		var note: Dictionary = stats[side]
 		var age := fposmod(u - float(fit["starts"][side]), 1.0)
@@ -4152,6 +4283,9 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 				var before := _person_footlock_points(footlock, skin)
 				var hip_drop := _apply_person_walk_body(ctx, footlock, output_u, u, entry[4])
 				var misses := _apply_person_footlock(ctx, footlock, output_u)
+				# Failed solves must not publish the untouched keyed pose as a walk.
+				if not bool(footlock["walk_solve"]["ok"]):
+					return {"fit_failures": ctx["fit_failures"]}
 				skin = _skin_frame(ctx)
 				_note_person_footlock(ctx, footlock, output_u, before, _person_footlock_probes(footlock, skin), misses, footlock_stats, hip_drop)
 			frames.append(skin)
