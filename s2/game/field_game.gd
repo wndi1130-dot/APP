@@ -590,7 +590,7 @@ func _ready() -> void:
 	await preload("res://game/world/horde_view.gd").attach(self,
 		(data.get("edge_walls", []) as Array) + (opts.get("test_edge_walls", []) as Array),
 		{"map_size": Vector2(view.grid.width, view.grid.height), "grid": view.grid, "vis_texture": view.vis_texture,
-			"material": view.material, "player": player, "field": self}, pace, horde_settings)
+			"material": view.material, "field": self, "staged": bool(opts.get("staged", false))}, pace, horde_settings)
 	blood_fx = BloodFx.new()
 	add_child(blood_fx)
 	blood_fx.begin_stop(int(opts.get("seed", 1)))

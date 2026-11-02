@@ -200,21 +200,14 @@ func _comparison_pair(game: Node3D) -> bool:
 	var card := MultiMesh.new()
 	card.transform_format = MultiMesh.TRANSFORM_3D
 	card.use_custom_data = true
-	card.mesh = QuadMesh.new()
+	card.mesh = Horde.card_mesh()
 	card.instance_count = 1
 	card.set_instance_transform(0, Transform3D(Basis.IDENTITY, card_at))
 	card.set_instance_custom_data(0, Color(0.0, 1.0, theta / TAU, seed))
 	var people: Array[Dictionary] = [{"position": card_at}]
 	card.custom_aabb = Horde.card_aabb(people)
-	var card_mat := ShaderMaterial.new()
-	card_mat.shader = load("res://fx/shaders/horde_far.gdshader")
+	var card_mat: ShaderMaterial = comparison_card_material(table)
 	card_mat.set_shader_parameter("atlas", load(Horde.ATLAS_PATH))
-	var rects := PackedVector4Array()
-	for rect: Array in table["bounds_px"]:
-		rects.append(Vector4(rect[0], rect[1], rect[2], rect[3]))
-	card_mat.set_shader_parameter("bounds_px", rects)
-	card_mat.set_shader_parameter("clip_lengths", PackedFloat32Array(table["clip_lengths"]))
-	card_mat.set_shader_parameter("camera_pitch", deg_to_rad(Horde.CAM_PITCH))
 	card_mat.set_shader_parameter("comparison_hold", true)
 	card_mat.set_shader_parameter("mask_on", 0.0)
 	card_mat.set_shader_parameter("wall_a", Vector2(-6, -6))
@@ -241,6 +234,13 @@ func _comparison_pair(game: Node3D) -> bool:
 		"theta": theta, "scale": size, "vat_position": vat_at, "card_position": card_at,
 		"depth_difference": (card_at - vat_at).dot(-Horde.camera_back()), "left": "VAT", "right": "card"}
 	return true
+
+
+static func comparison_card_material(table: Dictionary) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://fx/shaders/horde_far.gdshader")
+	Horde.configure_card(mat, table)
+	return mat
 
 
 func _gray_pair(camera: Camera3D) -> void:

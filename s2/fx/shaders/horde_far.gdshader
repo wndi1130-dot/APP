@@ -30,7 +30,7 @@ const float CAMERA_THETA = 0.785398163397; // cam_back().xz의 방위, 보는 �
 const float THETA_ZERO = 0.0;
 const vec2 CELL_PX = vec2(42.0, 80.0);
 const vec2 ATLAS_PX = vec2(2048.0, 1024.0);
-const vec2 FOOT_PX = vec2(20.0, 64.0);
+const vec2 FOOT_PX = vec2(21.0, 64.0);
 const float PX_PER_M = 30.0;
 // 위쪽 0.87 + 카메라 쪽 0.35, 모든 카드에서 같은 세계 법선(카드를 세워도 몸의 평균 법선은 그대로). PC 그림에서 확인할 값.
 const vec3 CARD_NORMAL = vec3(0.3495, 0.8690, 0.3495);
@@ -64,6 +64,12 @@ float response(vec4 sample_focus, vec2 foot) {
 	return sample_focus.z * inside * near_wall * local;
 }
 
+// HordeView.upright_corner 계약: 위 면은 수직, 발 아래 면은 지면 위.
+// 카메라 축은 부르는 vertex()가 넘긴다(INV_VIEW_MATRIX는 처리 함수 안에서만 쓸 수 있음).
+vec3 upright_corner(vec3 foot, vec2 corner, vec3 right_h, vec3 back_h) {
+	return foot + right_h * corner.x + (corner.y >= 0.0 ? vec3(0.0, 1.0, 0.0) * corner.y / cos(camera_pitch) : back_h * (-corner.y) / sin(camera_pitch));
+}
+
 void vertex() {
 	vec3 foot = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	vec3 original_foot = foot;
@@ -93,12 +99,15 @@ void vertex() {
 	float theta = INSTANCE_CUSTOM.b * TAU_H;
 	int direction = int(mod(floor((theta - CAMERA_THETA - THETA_ZERO + TAU_H / 16.0) / (TAU_H / 8.0)), 8.0));
 	vec4 rect = bounds_px[direction * 4 + motion];
-	picture_px = rect.xy + UV * rect.zw;
+	// 실제 메시의 중간 꼭짓점 줄 UV.y=0.8이 항상 발 높이를 지나도록 한다.
+	// 테두리가 발을 포함하지 않으면 한 면이 퇴화하여 테두리 밖을 그리지 않는다.
+	float split_y = clamp(FOOT_PX.y, rect.y, rect.y + rect.w);
+	float pixel_y = UV.y <= 0.8 ? mix(rect.y, split_y, UV.y / 0.8) : mix(split_y, rect.y + rect.w, (UV.y - 0.8) / 0.2);
+	picture_px = vec2(rect.x + UV.x * rect.z, pixel_y);
 	vec2 corner = vec2(picture_px.x - foot_px_x[direction * 4 + motion], FOOT_PX.y - picture_px.y) * person_size / PX_PER_M;
 	vec3 right_h = normalize(vec3(INV_VIEW_MATRIX[0].x, 0.0, INV_VIEW_MATRIX[0].z));
-	// 발 아래로 내려간 그림은 땅 밑 대신 땅 위 카메라 쪽으로(화면 자리 같음).
 	vec3 back_h = normalize(vec3(INV_VIEW_MATRIX[2].x, 0.0, INV_VIEW_MATRIX[2].z));
-	vec3 world = foot + right_h * corner.x + (corner.y >= 0.0 ? vec3(0.0, 1.0, 0.0) * corner.y / cos(camera_pitch) : back_h * (-corner.y) / sin(camera_pitch));
+	vec3 world = upright_corner(foot, corner, right_h, back_h);
 	VERTEX = (VIEW_MATRIX * vec4(world, 1.0)).xyz;
 	NORMAL = normalize(mat3(VIEW_MATRIX) * CARD_NORMAL);
 	cell_info = vec4(float(body), float(direction), float(motion), phase);

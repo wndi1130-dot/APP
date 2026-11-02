@@ -7,6 +7,43 @@ const Switch = preload("res://game/perf_switch.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const Bake = preload("res://tools/horde_bake.gd")
 const Grid = preload("res://game/world/field_grid.gd")
+const Pace = preload("res://game/world/build_pace.gd")
+const Loader = preload("res://game/stop_loader.gd")
+const Shots = preload("res://tools/horde_shots.gd")
+
+
+class LateField:
+	extends Node3D
+	signal built
+	var player: Node3D
+	var paused: bool = false
+	var ended: bool = false
+	var is_built: bool = false
+	var pace: Pace
+
+
+class FixtureHorde:
+	extends Horde
+	var fixture: Dictionary = {}
+	var table_failure: String = ""
+	var read_frames: Array[int] = []
+	var after_table: Callable
+
+	func _read_table_result() -> Dictionary:
+		read_frames.append(Engine.get_process_frames())
+		if after_table.is_valid():
+			get_tree().process_frame.connect(after_table, CONNECT_ONE_SHOT)
+		return {"table": fixture, "error": table_failure}
+
+	func _load_atlas() -> Texture2D:
+		read_frames.append(Engine.get_process_frames())
+		var texture := PlaceholderTexture2D.new()
+		texture.size = Vector2(ATLAS_SIZE)
+		return texture
+
+	func _load_shader() -> Shader:
+		read_frames.append(Engine.get_process_frames())
+		return super._load_shader()
 
 
 func _walls(height: float = 3.0) -> Array:
@@ -192,7 +229,7 @@ func _baked_table() -> Dictionary:
 	var feet: Array = []
 	for i: int in 32:
 		bounds.append([4, 18, 33, 50])
-		feet.append(21)
+		feet.append(5 + i)
 	table["bounds_px"] = bounds
 	table["foot_px_x"] = feet
 	table["clip_lengths"] = [1.0, 0.8, 0.6, 0.7, 1.0, 0.8, 0.6, 0.7, 1.0, 0.8, 0.6, 0.7]
@@ -314,30 +351,30 @@ func test_dilation_keeps_transparent_padding_and_nearest_rgb() -> void:
 func test_perf_horde_false_creates_no_node_and_does_not_load_atlas() -> void:
 	var parent := Node3D.new()
 	add_child_autofree(parent)
-	var cached_before: bool = ResourceLoader.has_cached(Horde.ATLAS_PATH)
+	var reads_before: int = Horde.resource_reads
 	var node: Node3D = await Horde.attach(parent, _walls(), {}, null, Switch._valid({"horde": false}))
 	assert_null(node)
 	assert_null(parent.get_node_or_null("HordeView"))
 	assert_eq(parent.get_child_count(), 0)
-	assert_eq(ResourceLoader.has_cached(Horde.ATLAS_PATH), cached_before)
+	assert_eq(Horde.resource_reads, reads_before)
 	assert_eq(Switch._valid({"horde": true}), {"horde": true})
 	assert_false(Switch._valid({"horde": "false"}).has("horde"))
 
 
 func test_hiding_and_exit_clear_owned_focus() -> void:
-	var node: Horde = Horde.new()
+	var node := FixtureHorde.new()
 	add_child_autofree(node)
-	node._history.resize(Horde.HISTORY_SIZE)
+	await node.setup([], {}, null)
 	node._history.fill(Vector4.ONE)
 	node._focus = Vector4.ONE
 	node.hide()
-	node._visibility_reset()
 	assert_eq(node._focus, Vector4.ZERO)
 	for sample: Vector4 in node._history:
 		assert_eq(sample, Vector4.ZERO)
 	node._focus = Vector4.ONE
-	node._exit_tree()
+	remove_child(node)
 	assert_eq(node._focus, Vector4.ZERO)
+	add_child(node)
 
 
 func test_upright_head_depth_and_screen_size() -> void:
@@ -508,3 +545,281 @@ func test_time_budget_requests_rest_before_piece_cap() -> void:
 	assert_true(node._rest_due())
 	node._account()
 	assert_gte(float(node.stats["max_continuous_ms"]), 6.0)
+
+
+func test_late_field_player_reaches_focus_after_setup() -> void:
+	var field := LateField.new()
+	add_child_autofree(field)
+	var node := FixtureHorde.new()
+	node.fixture = _baked_table()
+	field.add_child(node)
+	await node.setup(_walls(1.0), {"map_size": Vector2(120, 80), "field": field}, null)
+	node.set_process(false)
+	assert_true(bool(node.stats["ready"]))
+	node._process(0.1)
+	assert_eq(node._focus.z, 0.0)
+	field.player = Node3D.new()
+	field.add_child(field.player)
+	field.player.position = Vector3(12, 0, 2)
+	node._process(0.5)
+	assert_gt(node._focus.z, 0.0)
+	assert_eq(Vector2(node._focus.x, node._focus.y), Vector2(12, 2))
+	field.player.position.x = 18.0
+	node._process(0.5)
+	assert_gt(node._focus.x, 12.0)
+	field.player = null
+	node._process(0.5)
+	assert_lt(node._focus.z, 1.0)
+
+
+func test_card_mesh_foot_edge_and_triangle_interiors() -> void:
+	var mesh: ArrayMesh = Horde.card_mesh()
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var uv: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	assert_eq(vertices.size(), 6)
+	assert_eq(indices.size(), 12)
+	assert_almost_eq(uv[2].y, 0.8, 0.00001)
+	assert_almost_eq(uv[3].y, 0.8, 0.00001)
+	var rect := Rect2(2, 13, 37, 61)
+	var foot := Vector3(15, 2, -5)
+	var back: Vector3 = Horde.camera_back()
+	var right: Vector3 = Vector3.UP.cross(back).normalized()
+	var up: Vector3 = back.cross(right).normalized()
+	for foot_x: float in [5.0, 21.0, 36.0]:
+		var world := PackedVector3Array()
+		var pixels := PackedVector2Array()
+		for index: int in range(vertices.size()):
+			var pixel: Vector2 = Horde.card_pixel(uv[index], rect)
+			pixels.append(pixel)
+			world.append(Horde.upright_corner(foot, Vector2(pixel.x - foot_x, 64.0 - pixel.y) * (Horde.MAX_SCALE / Horde.PX_PER_M)))
+		# 실제 두 가운데 정점을 잇는 삼각형 변 내부의 발 원점 화소.
+		var along: float = (foot_x - rect.position.x) / rect.size.x
+		var foot_sample: Vector3 = world[2].lerp(world[3], along)
+		assert_almost_eq(foot_sample.distance_to(foot), 0.0, 0.0001)
+		assert_almost_eq(foot_sample.dot(-back), foot.dot(-back), 0.0001)
+		var people: Array[Dictionary] = [{"position": foot}]
+		var box: AABB = Horde.card_aabb(people)
+		# 보조식을 내부 화소에 직접 적용하지 않고 실제 삼각형 정점을 보간한다.
+		for triangle: int in range(4):
+			for weight: Vector3 in [Vector3(0.2, 0.3, 0.5), Vector3(0.6, 0.2, 0.2)]:
+				var a: int = indices[triangle * 3]
+				var b: int = indices[triangle * 3 + 1]
+				var c: int = indices[triangle * 3 + 2]
+				var point: Vector3 = world[a] * weight.x + world[b] * weight.y + world[c] * weight.z
+				var pixel: Vector2 = pixels[a] * weight.x + pixels[b] * weight.y + pixels[c] * weight.z
+				var corner := Vector2(pixel.x - foot_x, 64.0 - pixel.y) * (Horde.MAX_SCALE / Horde.PX_PER_M)
+				assert_true(box.has_point(point))
+				assert_almost_eq((point - foot).dot(right), corner.x, 0.0001)
+				assert_almost_eq((point - foot).dot(up), corner.y, 0.0001)
+				if triangle < 2:
+					var height: float = corner.y / cos(deg_to_rad(Horde.CAM_PITCH))
+					assert_almost_eq(point.y - foot.y, height, 0.0001)
+					assert_almost_eq((point - foot).dot(-back), -height * back.y, 0.0001)
+				else:
+					assert_almost_eq(point.y, foot.y, 0.0001)
+					assert_almost_eq((point - foot).dot(-back), corner.y / tan(deg_to_rad(Horde.CAM_PITCH)), 0.0001)
+
+
+func test_comparison_and_uploaded_cards_share_all_foot_x_values() -> void:
+	var node := FixtureHorde.new()
+	add_child_autofree(node)
+	node.fixture = _baked_table()
+	await node.setup(_walls(1.0), {"map_size": Vector2(120, 80)}, null)
+	node.set_process(false)
+	var expected := PackedFloat32Array(node.fixture["foot_px_x"])
+	var comparison: ShaderMaterial = Shots.comparison_card_material(node.fixture)
+	assert_eq(comparison.get_shader_parameter("foot_px_x"), expected)
+	assert_eq(expected.size(), 32)
+	var submitted: int = 0
+	assert_gt(node._draws.size(), 0)
+	for draw: MultiMeshInstance3D in node._draws:
+		var mat: ShaderMaterial = draw.material_override
+		assert_eq(mat.get_shader_parameter("foot_px_x"), expected)
+		assert_true(draw.multimesh.mesh is ArrayMesh)
+		submitted += draw.multimesh.instance_count
+	assert_eq(submitted, int(node.stats["instances"]))
+	assert_eq(submitted, int(node.stats["uploaded_instances"]))
+
+
+func test_camera_selection_and_frame_writes_scale_with_visible_chunks() -> void:
+	var node := FixtureHorde.new()
+	add_child_autofree(node)
+	node.fixture = _baked_table()
+	var sight := ShaderMaterial.new()
+	sight.shader = load("res://fx/shaders/horde_far.gdshader")
+	await node.setup(_large_walls("frame"), {"map_size": Vector2(800, 80), "material": sight}, null)
+	node.set_process(false)
+	assert_eq(node._draws.size(), 40)
+	var camera := Camera3D.new()
+	add_child_autofree(camera)
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 2000.0
+	camera.far = 3000.0
+	var target := Vector3(400, 0, -20)
+	camera.position = target + Horde.camera_back() * 1200.0
+	camera.look_at(target)
+	camera.make_current()
+	var selected: Array[int] = node._select_visible(camera)
+	assert_eq(selected.size(), 6)
+	node._process(0.1)
+	assert_eq(node.visible_chunks, selected)
+	assert_eq(node.frame_material_writes, selected.size() * 3)
+	assert_eq(node.frame_sight_reads, 5)
+	var drawn: int = 0
+	for index: int in range(node._draws.size()):
+		assert_eq(node._draws[index].visible, selected.has(index))
+		if node._draws[index].visible:
+			drawn += node._draws[index].multimesh.instance_count
+	assert_lte(drawn, 1296)
+	sight.set_shader_parameter("eye_r", 12.0)
+	node._process(0.1)
+	assert_eq(node.frame_material_writes, selected.size() * 3 + 40)
+	for mat: ShaderMaterial in node._materials:
+		assert_eq(mat.get_shader_parameter("eye_r"), 12.0)
+	node._process(0.1)
+	assert_eq(node.frame_material_writes, selected.size() * 3)
+	camera.position += Vector3(10000, 0, 10000)
+	assert_true(node._select_visible(camera).is_empty())
+	node._process(0.1)
+	assert_eq(node.frame_material_writes, 0)
+
+
+func test_staged_zero_depth_planning_and_sort_wait_real_frames() -> void:
+	var node: Horde = Horde.new()
+	add_child_autofree(node)
+	var pace := Pace.new(get_tree(), true)
+	var walls: Array = []
+	for index: int in range(600):
+		walls.append({"id": "skip_%04d" % (599 - index), "a": Vector2(index, 0), "b": Vector2(index + 1, 0),
+			"out": Vector2(0, -1), "kind": "wall_sheet", "height": 1.0, "depth": 0.0 if index % 2 == 0 else 0.4})
+	var before: int = Engine.get_process_frames()
+	var layout: Array[Dictionary] = await node.build_layout(walls, {"map_size": Vector2(600, 80)}, pace)
+	assert_true(layout.is_empty())
+	assert_gt(Engine.get_process_frames(), before)
+	assert_gt(pace.waits, 0)
+	var waits: Dictionary = node.stats["wait_stages"]
+	assert_gt(int(waits.get("wall_sort", 0)), 0)
+	assert_gt(int(waits.get("plans", 0)), 0)
+	assert_false(bool(node.stats["cancelled"]))
+
+
+func test_people_sort_and_aabb_yield_at_remaining_budget() -> void:
+	var node: Horde = Horde.new()
+	add_child_autofree(node)
+	var pace := Pace.new(get_tree(), true)
+	var people: Array[Dictionary] = [{"position": Vector3(1, 0, -2)}, {"position": Vector3(3, 0, -4)}]
+	node._begin_stats(pace)
+	node._pieces = Horde.PIECE_CAP - 1
+	var before: int = Engine.get_process_frames()
+	var sorted: Array[Dictionary] = await node._sort_rows(people, false)
+	assert_gt(Engine.get_process_frames(), before)
+	assert_eq(sorted.size(), people.size())
+	node._pieces = Horde.PIECE_CAP - 1
+	before = Engine.get_process_frames()
+	var box: AABB = await node._card_aabb(sorted)
+	assert_gt(Engine.get_process_frames(), before)
+	assert_eq(box, Horde.card_aabb(sorted))
+
+
+func test_hidden_staged_setup_accounts_separate_resource_frames() -> void:
+	var node := FixtureHorde.new()
+	add_child_autofree(node)
+	node.hide()
+	node.fixture = _baked_table()
+	var pace := Pace.new(get_tree(), true)
+	await node.setup(_walls(1.0), {"map_size": Vector2(120, 80), "staged": true}, pace)
+	node.set_process(false)
+	assert_true(bool(node.stats["ready"]))
+	assert_false(bool(node.stats["cancelled"]))
+	assert_eq(node.read_frames.size(), 3)
+	assert_gt(node.read_frames[1], node.read_frames[0])
+	assert_gt(node.read_frames[2], node.read_frames[1])
+	assert_gte(float(node.stats["cpu_ms"]), float(node.stats["resource_ms"]))
+	assert_gte(float(node.stats["max_continuous_ms"]), float(node.stats["resource_max_ms"]))
+	assert_eq(int(node.stats["resource_loads"]), 2)
+	assert_gt(pace.waits, 0)
+
+
+func test_abandon_after_table_skips_layout_and_resource_loads() -> void:
+	var field := LateField.new()
+	add_child_autofree(field)
+	field.pace = Pace.new(get_tree(), true)
+	var loader := Loader.new()
+	add_child_autofree(loader)
+	loader.field = field
+	var node := FixtureHorde.new()
+	add_child_autofree(node)
+	node.fixture = _baked_table()
+	node.after_table = loader.abandon
+	await node.setup(_large_walls("cancel"), {"map_size": Vector2(800, 80), "staged": true}, field.pace)
+	assert_true(bool(node.stats["cancelled"]))
+	assert_false(bool(node.stats["ready"]))
+	assert_eq(node.read_frames.size(), 1)
+	assert_eq(int(node.stats["resource_loads"]), 0)
+	assert_eq(int(node.stats["attempts"]), 0)
+	assert_true(node._draws.is_empty())
+	field.built.emit()
+
+
+func test_abandon_during_layout_exits_next_piece() -> void:
+	var field := LateField.new()
+	add_child_autofree(field)
+	field.pace = Pace.new(get_tree(), true)
+	var loader := Loader.new()
+	add_child_autofree(loader)
+	loader.field = field
+	var node: Horde = Horde.new()
+	add_child_autofree(node)
+	get_tree().process_frame.connect(loader.abandon, CONNECT_ONE_SHOT)
+	var layout: Array[Dictionary] = await node.build_layout(_large_walls("cancel_layout"), {"map_size": Vector2(800, 80)}, field.pace)
+	assert_true(layout.is_empty())
+	assert_true(bool(node.stats["cancelled"]))
+	assert_eq(field.pace.waits, 1)
+	assert_lte(int(node.stats["attempts"]), Horde.PIECE_CAP)
+	field.built.emit()
+
+
+func test_cancel_before_setup_skips_table_but_sync_setup_is_valid() -> void:
+	var node := FixtureHorde.new()
+	add_child_autofree(node)
+	node.fixture = _baked_table()
+	var pace := Pace.new(get_tree(), true)
+	pace.on = false
+	await node.setup(_walls(), {"map_size": Vector2(120, 80), "staged": true}, pace)
+	assert_true(bool(node.stats["cancelled"]))
+	assert_true(node.read_frames.is_empty())
+	assert_eq(int(node.stats["resource_loads"]), 0)
+	var sync_node := FixtureHorde.new()
+	add_child_autofree(sync_node)
+	sync_node.fixture = _baked_table()
+	await sync_node.setup(_walls(1.0), {"map_size": Vector2(120, 80)}, Pace.new())
+	sync_node.set_process(false)
+	assert_true(bool(sync_node.stats["ready"]))
+
+
+func test_table_failure_reasons_warn_before_empty_layout_except_zero_depth() -> void:
+	var absent: Dictionary = Horde.read_table_result("res://models/horde/__missing_h1_table__.json")
+	assert_true(String(absent["error"]).begins_with("없음:"))
+	var broken: Dictionary = Horde.parse_table_result("{broken")
+	assert_true(String(broken["error"]).begins_with("파싱:"))
+	var wrong: Dictionary = Horde.parse_table_result("{}")
+	assert_eq(wrong["error"], "계약 다름")
+	var high_wall: Dictionary = _walls(100.0)[0].merged({"depth": 1.0}, true)
+	assert_true((await _layout([high_wall])).is_empty())
+	for issue: Dictionary in [absent, broken, wrong]:
+		var node := FixtureHorde.new()
+		add_child_autofree(node)
+		node.table_failure = issue["error"]
+		await node.setup([high_wall], {"map_size": Vector2(120, 80)}, null)
+		assert_eq(node.stats["table_error"], issue["error"])
+		assert_eq(node.stats["table_warning"], issue["error"])
+		assert_true(node.chunks.is_empty())
+		assert_eq(int(node.stats["resource_loads"]), 0)
+	var empty := FixtureHorde.new()
+	add_child_autofree(empty)
+	empty.table_failure = absent["error"]
+	await empty.setup([high_wall.merged({"depth": 0.0}, true)], {"map_size": Vector2(120, 80)}, null)
+	assert_eq(empty.stats["table_warning"], "")
+	assert_true(empty.chunks.is_empty())

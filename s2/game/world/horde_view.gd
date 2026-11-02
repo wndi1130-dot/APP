@@ -38,6 +38,7 @@ const ATLAS_PATH: String = "res://models/horde/horde_atlas.png"
 const TABLE_PATH: String = "res://models/horde/horde_atlas.json"
 const KINDS: Array[String] = ["wall_sheet", "wall_sound", "wall_plank", "wall_stack", "overpass"]
 
+static var resource_reads: int = 0 # 캐시 적중도 포함한 읽기 시도. 꺼짐 경로의 무읽기 계약 관측.
 var stats: Dictionary = {}
 var chunks: Array[Dictionary] = []
 var _sight: Dictionary = {}
@@ -51,6 +52,18 @@ var _work_start: int = 0
 var _continuous_usec: int = 0
 var _pieces: int = 0
 var _piece_pace: BuildPace
+var _staged: bool = false
+var _build_cancelled: bool = false
+var _sight_cache: Dictionary = {}
+var frame_material_writes: int = 0
+var frame_sight_reads: int = 0
+var visible_chunks: Array[int] = []
+
+
+func _init() -> void:
+	# _process can tick while a staged build is still resting, before setup() runs.
+	_history.resize(HISTORY_SIZE)
+	_history.fill(Vector4.ZERO)
 
 
 static func camera_back() -> Vector3:
@@ -204,6 +217,40 @@ static func upright_corner(foot: Vector3, corner: Vector2) -> Vector3:
 	return foot + right_h * corner.x + Vector3.UP * corner.y / cos(deg_to_rad(CAM_PITCH))
 
 
+static func card_mesh() -> ArrayMesh:
+	# UV v=64/80 줄을 공유하는 위/아래 두 면. 발 원점이 실제 모서리 위에 있다.
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array([
+		Vector3(-0.5, 0.5, 0), Vector3(0.5, 0.5, 0),
+		Vector3(-0.5, -0.3, 0), Vector3(0.5, -0.3, 0),
+		Vector3(-0.5, -0.5, 0), Vector3(0.5, -0.5, 0)])
+	arrays[Mesh.ARRAY_TEX_UV] = PackedVector2Array([
+		Vector2(0, 0), Vector2(1, 0), Vector2(0, 0.8),
+		Vector2(1, 0.8), Vector2(0, 1), Vector2(1, 1)])
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 1, 2, 1, 3, 2, 2, 3, 4, 3, 5, 4])
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+static func card_pixel(uv: Vector2, rect: Rect2) -> Vector2:
+	# horde_far.vertex와 같은 계약. 발이 테두리 밖이면 해당 면만 퇴화한다.
+	var split: float = clampf(FOOT.y, rect.position.y, rect.end.y)
+	var py: float = lerpf(rect.position.y, split, uv.y / 0.8) if uv.y <= 0.8 else lerpf(split, rect.end.y, (uv.y - 0.8) / 0.2)
+	return Vector2(lerpf(rect.position.x, rect.end.x, uv.x), py)
+
+
+static func configure_card(mat: ShaderMaterial, table: Dictionary) -> void:
+	var rects := PackedVector4Array()
+	for rect: Array in table["bounds_px"]:
+		rects.append(Vector4(rect[0], rect[1], rect[2], rect[3]))
+	mat.set_shader_parameter("bounds_px", rects)
+	mat.set_shader_parameter("foot_px_x", PackedFloat32Array(table["foot_px_x"]))
+	mat.set_shader_parameter("clip_lengths", PackedFloat32Array(table["clip_lengths"]))
+	mat.set_shader_parameter("camera_pitch", deg_to_rad(CAM_PITCH))
+
+
 static func density(depth: float) -> float:
 	return lerpf(0.5, 0.12, smoothstep(18.0, 26.0, depth))
 
@@ -241,21 +288,86 @@ static func card_aabb(people: Array[Dictionary]) -> AABB:
 	for person: Dictionary in people:
 		var foot: Vector3 = person["position"]
 		# 발 x는 (방향, 동작)마다 2..CELL.x-2 안이라 칸 가로 전체를 양쪽으로 감싼다.
-		for dx: float in [-float(CELL.x), float(CELL.x)]:
-			for py: float in [0.0, float(CELL.y)]:
-				var corner: Vector3 = upright_corner(foot, Vector2(dx, FOOT.y - py) * (MAX_SCALE / PX_PER_M))
-				box = box.expand(corner)
+		box = _expand_card(box, foot)
 	# 고리 반지름 0.3 + 벽 쪽 쏠림 0.3. 수직 여유도 보수적으로 둔다.
+	return box.grow(0.6)
+
+
+static func _expand_card(box: AABB, foot: Vector3) -> AABB:
+	for dx: float in [-float(CELL.x), float(CELL.x)]:
+		for py: float in [0.0, FOOT.y, float(CELL.y)]:
+			box = box.expand(upright_corner(foot, Vector2(dx, FOOT.y - py) * (MAX_SCALE / PX_PER_M)))
+	return box
+
+
+func _card_aabb(people: Array[Dictionary]) -> AABB:
+	var box := AABB(people[0]["position"], Vector3.ZERO)
+	for person: Dictionary in people:
+		if not await _checkpoint():
+			return AABB()
+		box = _expand_card(box, person["position"])
 	return box.grow(0.6)
 
 
 func _begin_stats(pace: BuildPace) -> void:
 	stats = {"instances": 0, "chunks": 0, "invalid_walls": 0, "attempts": 0,
-		"cpu_ms": 0.0, "max_continuous_ms": 0.0, "resource_ms": 0.0, "pieces": 0, "ready": false}
+		"cpu_ms": 0.0, "max_continuous_ms": 0.0, "resource_ms": 0.0, "pieces": 0, "ready": false,
+		"cancelled": false, "resource_loads": 0, "table_error": "", "table_warning": "", "uploaded_instances": 0,
+		"stage": "layout", "wait_stages": {}, "resource_max_ms": 0.0}
 	_work_start = Time.get_ticks_usec()
 	_continuous_usec = 0
 	_pieces = 0
 	_piece_pace = pace if pace != null else BuildPace.new()
+	_staged = _piece_pace.on
+	_build_cancelled = false
+
+
+func _cancelled() -> bool:
+	if _staged and not _piece_pace.on and not _build_cancelled:
+		_build_cancelled = true
+		stats["cancelled"] = true
+		stats["ready"] = false
+		_account()
+		set_process(false)
+	return _build_cancelled
+
+
+func _checkpoint(force: bool = false) -> bool:
+	if _cancelled():
+		return false
+	_pieces += 1
+	if force or _rest_due():
+		await _rest()
+	return not _cancelled()
+
+
+func _sort_rows(rows: Array[Dictionary], by_wall: bool) -> Array[Dictionary]:
+	# 합병 한 항목마다 쉼/취소 확인. 전체 벽 수와 무관하게 한 조각을 제한한다.
+	var source: Array[Dictionary] = rows
+	var width: int = 1
+	var forward: Vector3 = -camera_back()
+	while width < source.size():
+		var merged: Array[Dictionary] = []
+		for start: int in range(0, source.size(), width * 2):
+			var middle: int = mini(start + width, source.size())
+			var end: int = mini(start + width * 2, source.size())
+			var left: int = start
+			var right: int = middle
+			while left < middle or right < end:
+				if not await _checkpoint():
+					return []
+				var take_left: bool = right >= end
+				if left < middle and right < end:
+					take_left = String(source[left]["id"]) <= String(source[right]["id"]) if by_wall else (source[left]["position"] as Vector3).dot(forward) <= (source[right]["position"] as Vector3).dot(forward)
+				if left < middle and take_left:
+					merged.append(source[left])
+					left += 1
+				else:
+					merged.append(source[right])
+					right += 1
+		source = merged
+		width *= 2
+	return source
 
 
 func _account() -> void:
@@ -277,32 +389,40 @@ func _rest() -> void:
 	_piece_pace.budget_usec = budget_before
 	if Engine.get_process_frames() != before:
 		_continuous_usec = 0
+		var waits: Dictionary = stats["wait_stages"]
+		var stage: String = stats["stage"]
+		waits[stage] = int(waits.get(stage, 0)) + 1
 	_work_start = Time.get_ticks_usec()
 	_pieces = 0
 	stats["pieces"] = int(stats["pieces"]) + 1
 
 
 func _rest_due() -> bool:
-	return _pieces >= PIECE_CAP or Time.get_ticks_usec() - _work_start >= WORK_USEC
+	var accounted: int = _continuous_usec if _staged else 0
+	return _pieces >= PIECE_CAP or accounted + Time.get_ticks_usec() - _work_start >= WORK_USEC
 
 
 func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null, table: Dictionary = {}) -> Array[Dictionary]:
 	_begin_stats(pace)
+	_staged = _staged or bool(vis.get("staged", false))
+	return await _build_layout(walls, vis, table)
+
+
+func _build_layout(walls: Array, vis: Dictionary, table: Dictionary) -> Array[Dictionary]:
+	stats["stage"] = "validate"
 	var head_max: float = head_height(table)
 	var map_size: Vector2 = vis.get("map_size", Vector2.ZERO)
 	var valid: Array[Dictionary] = []
 	var ids: Dictionary = {}
 	for entry: Variant in walls:
-		_pieces += 1
-		if _rest_due():
-			await _rest()
+		if not await _checkpoint():
+			return []
 		if entry is Dictionary:
 			var id: String = String(entry.get("id", ""))
 			ids[id] = int(ids.get(id, 0)) + 1
 	for entry: Variant in walls:
-		_pieces += 1
-		if _rest_due():
-			await _rest()
+		if not await _checkpoint():
+			return []
 		var wall: Dictionary = entry if entry is Dictionary else {}
 		var why: String = wall_error(wall, map_size, vis.get("grid"))
 		if why.is_empty() and int(ids.get(String(wall["id"]), 0)) != 1:
@@ -312,19 +432,25 @@ func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null, table: 
 			push_warning("HordeView 벽 무시: %s (%s)" % [String(wall.get("id", "?")).replace("\n", " ").replace("\r", " "), why])
 		else:
 			valid.append(wall)
-	valid.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return String(left["id"]) < String(right["id"]))
+	stats["stage"] = "wall_sort"
+	valid = await _sort_rows(valid, true)
+	if _cancelled():
+		return []
 	var endpoints: Dictionary = {}
+	stats["stage"] = "endpoints"
 	for wall: Dictionary in valid:
+		if not await _checkpoint():
+			return []
 		for key: String in ["a", "b"]:
 			var endpoint := Vector2i(wall[key])
 			endpoints[endpoint] = int(endpoints.get(endpoint, 0)) + 1
-		_pieces += 1
-		if _rest_due():
-			await _rest()
 	# 모든 유효 벽의 후보를 먼저 센다. 같은 배율과 내림으로 지도 상한을 지킨다.
 	var plans: Array[Dictionary] = []
 	var candidate_sum: float = 0.0
+	stats["stage"] = "plans"
 	for wall: Dictionary in valid:
+		if not await _checkpoint():
+			return []
 		var a: Vector2 = wall["a"]
 		var b: Vector2 = wall["b"]
 		var length_m: float = a.distance_to(b)
@@ -334,21 +460,23 @@ func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null, table: 
 		var start_gap: float = 2.0 if int(endpoints[Vector2i(a)]) == 1 else 0.0
 		var end_gap: float = 2.0 if int(endpoints[Vector2i(b)]) == 1 else 0.0
 		for chunk_i: int in range(int(ceil(length_m / CHUNK_M))):
+			if not await _checkpoint():
+				return []
 			var lo: float = maxf(start_gap, float(chunk_i) * CHUNK_M)
 			var hi: float = minf(length_m - end_gap, float(chunk_i + 1) * CHUNK_M)
 			if hi > lo:
 				var candidates: float = (hi - lo) * density_area(depth_m)
 				plans.append({"wall": wall, "chunk_i": chunk_i, "lo": lo, "hi": hi, "depth": depth_m, "candidates": candidates})
 				candidate_sum += candidates
-			_pieces += 1
-			if _rest_due():
-				await _rest()
 	var density_scale: float = minf(1.0, float(MAP_CAP) / maxf(candidate_sum, 1.0))
 	stats["density_scale"] = density_scale
 	stats["candidate_sum"] = candidate_sum
 	var result: Array[Dictionary] = []
 	var bins: Dictionary = {}
 	for plan: Dictionary in plans:
+		stats["stage"] = "candidates"
+		if not await _checkpoint():
+			return []
 		var wall: Dictionary = plan["wall"]
 		var a: Vector2 = wall["a"]
 		var b: Vector2 = wall["b"]
@@ -383,9 +511,8 @@ func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null, table: 
 			var point: Vector2 = a + tangent * along + outward * depth
 			var wave: float = density_wave(point)
 			stats["attempts"] = int(stats["attempts"]) + 1
-			_pieces += 1
-			if _rest_due():
-				await _rest()
+			if not await _checkpoint():
+				return []
 			if along < lo or along > hi or depth < 0.4 or depth > depth_m:
 				continue
 			if stream(wall_id, group_key, lane + 2) > wave or fully_hidden(wall, point, head_max) or not _clearance(point, bins):
@@ -409,13 +536,19 @@ func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null, table: 
 			if not bins.has(bin):
 				bins[bin] = []
 			(bins[bin] as Array).append(point)
-		# 정렬 한 번은 최대 216개. 카메라 전방 투영 깊이가 작은 순서.
-		var forward: Vector3 = -camera_back()
-		people.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return (left["position"] as Vector3).dot(forward) < (right["position"] as Vector3).dot(forward))
+		stats["stage"] = "people_sort"
+		people = await _sort_rows(people, false)
+		if _cancelled():
+			return []
 		if not people.is_empty():
-			result.append({"id": "%s:%d" % [wall_id, chunk_i], "wall": wall, "people": people, "aabb": card_aabb(people)})
+			stats["stage"] = "aabb"
+			var box: AABB = await _card_aabb(people)
+			if _cancelled():
+				return []
+			result.append({"id": "%s:%d" % [wall_id, chunk_i], "wall": wall, "people": people, "aabb": box})
 			stats["instances"] = int(stats["instances"]) + people.size()
-		await _rest()
+		if not await _checkpoint(true):
+			return []
 	stats["chunks"] = result.size()
 	_account()
 	return result
@@ -435,48 +568,67 @@ static func attach(parent: Node3D, walls: Array, vis: Dictionary, pace: BuildPac
 
 
 func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
+	set_process(false)
+	_begin_stats(pace)
+	_staged = _staged or bool(vis.get("staged", false))
 	_sight = vis
 	_history.resize(HISTORY_SIZE)
 	_history.fill(Vector4.ZERO)
-	var table_start: int = Time.get_ticks_usec()
-	var table: Dictionary = read_table()
-	var table_ms: float = float(Time.get_ticks_usec() - table_start) / 1000.0
-	chunks = await build_layout(walls, vis, pace, table)
-	stats["resource_ms"] = table_ms
 	visibility_changed.connect(_visibility_reset)
+	stats["stage"] = "table"
+	# 표/아틀라스/셰이더는 각각 독립된 준비 조각. 동기 load 자체의 시간도 계측한다.
+	if not await _checkpoint(true):
+		return
+	var table_start: int = Time.get_ticks_usec()
+	var table_result: Dictionary = _read_table_result()
+	var table: Dictionary = table_result["table"]
+	stats["table_error"] = table_result["error"]
+	_resource_account(table_start)
+	if not await _checkpoint(true):
+		return
+	# 깊이 0은 정상 무배치. 실제 배치를 요청한 벽의 표 오류는 가림 제거 전에 알린다.
+	for entry: Variant in walls:
+		if not await _checkpoint():
+			return
+		if entry is Dictionary and wall_error(entry, vis.get("map_size", Vector2.ZERO), vis.get("grid")).is_empty() and float(entry.get("depth", 40.0)) > 0.0 and not String(table_result["error"]).is_empty():
+			stats["table_warning"] = table_result["error"]
+			push_warning("HordeView 칸 표: " + String(table_result["error"]))
+			_account()
+			return
+	chunks = await _build_layout(walls, vis, table)
+	if _cancelled():
+		return
 	if chunks.is_empty():
-		set_process(false)
+		return
+	stats["stage"] = "atlas"
+	if not await _checkpoint(true):
 		return
 	var resource_start: int = Time.get_ticks_usec()
-	if table.is_empty() or not ResourceLoader.exists(ATLAS_PATH):
-		stats["resource_ms"] = table_ms + float(Time.get_ticks_usec() - resource_start) / 1000.0
-		_account()
-		push_warning("HordeView: 아틀라스 또는 칸 표 없음/불일치. horde_bake를 먼저 실행해야 합니다.")
-		set_process(false)
+	stats["resource_loads"] = int(stats["resource_loads"]) + 1
+	var atlas: Texture2D = _load_atlas()
+	_resource_account(resource_start)
+	if not await _checkpoint(true):
 		return
-	var atlas: Texture2D = load(ATLAS_PATH)
-	var shader: Shader = load("res://fx/shaders/horde_far.gdshader")
-	stats["resource_ms"] = table_ms + float(Time.get_ticks_usec() - resource_start) / 1000.0
+	stats["stage"] = "shader"
+	resource_start = Time.get_ticks_usec()
+	stats["resource_loads"] = int(stats["resource_loads"]) + 1
+	var shader: Shader = _load_shader()
+	_resource_account(resource_start)
+	if not await _checkpoint(true):
+		return
 	if atlas == null or shader == null or atlas.get_size() != Vector2(ATLAS_SIZE):
-		_account()
 		push_warning("HordeView: 아틀라스 크기 또는 셰이더 자원 오류")
-		set_process(false)
 		return
-	_account()
-	await _rest()
-	var rects := PackedVector4Array()
-	for rect: Array in table["bounds_px"]:
-		rects.append(Vector4(rect[0], rect[1], rect[2], rect[3]))
-	var lengths := PackedFloat32Array(table["clip_lengths"])
+	var mesh: ArrayMesh = card_mesh()
+	stats["stage"] = "upload"
 	for chunk: Dictionary in chunks:
+		if not await _checkpoint():
+			return
 		var wall: Dictionary = chunk["wall"]
 		var mat := ShaderMaterial.new()
 		mat.shader = shader
 		mat.set_shader_parameter("atlas", atlas)
-		mat.set_shader_parameter("bounds_px", rects)
-		mat.set_shader_parameter("foot_px_x", PackedFloat32Array(table["foot_px_x"]))
-		mat.set_shader_parameter("clip_lengths", lengths)
-		mat.set_shader_parameter("camera_pitch", deg_to_rad(CAM_PITCH))
+		configure_card(mat, table)
 		mat.set_shader_parameter("wall_a", wall["a"])
 		mat.set_shader_parameter("wall_b", wall["b"])
 		mat.set_shader_parameter("wall_out", wall["out"])
@@ -484,18 +636,16 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_3D
 		mm.use_custom_data = true
-		var quad := QuadMesh.new()
-		quad.size = Vector2.ONE
-		mm.mesh = quad
+		mm.mesh = mesh
 		var people: Array[Dictionary] = chunk["people"]
 		mm.instance_count = people.size()
 		mm.custom_aabb = chunk["aabb"]
 		for index: int in range(people.size()):
-			_pieces += 1
-			if _rest_due():
-				await _rest()
+			if not await _checkpoint():
+				return
 			mm.set_instance_transform(index, Transform3D(Basis.IDENTITY, people[index]["position"]))
 			mm.set_instance_custom_data(index, people[index]["custom"])
+			stats["uploaded_instances"] = int(stats["uploaded_instances"]) + 1
 		var draw := MultiMeshInstance3D.new()
 		draw.name = "HordeChunk_%d" % _draws.size()
 		draw.multimesh = mm
@@ -505,22 +655,64 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 		add_child(draw)
 		_draws.append(draw)
 		_materials.append(mat)
-		await _rest()
+		if not await _checkpoint(true):
+			return
 	_sync_sight()
 	stats["ready"] = true
+	set_process(true)
 	_account()
 	print("HORDE_BUILD ", stats)
 
 
+func _resource_account(start: int) -> void:
+	var elapsed_ms: float = float(Time.get_ticks_usec() - start) / 1000.0
+	stats["resource_ms"] = float(stats["resource_ms"]) + elapsed_ms
+	stats["resource_max_ms"] = maxf(float(stats["resource_max_ms"]), elapsed_ms)
+	_account()
+
+
+func _read_table_result() -> Dictionary:
+	return read_table_result()
+
+
+func _load_atlas() -> Texture2D:
+	resource_reads += 1
+	return load(ATLAS_PATH) if ResourceLoader.exists(ATLAS_PATH) else null
+
+
+func _load_shader() -> Shader:
+	resource_reads += 1
+	return load("res://fx/shaders/horde_far.gdshader")
+
+
 static func read_table() -> Dictionary:
-	if not FileAccess.file_exists(TABLE_PATH):
-		return {}
-	return parse_table(FileAccess.get_file_as_string(TABLE_PATH))
+	return read_table_result()["table"]
+
+
+static func read_table_result(path: String = TABLE_PATH) -> Dictionary:
+	resource_reads += 1
+	if not FileAccess.file_exists(path):
+		return {"table": {}, "error": "없음: " + path}
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return {"table": {}, "error": "읽기 실패: %s (%d)" % [path, FileAccess.get_open_error()]}
+	return parse_table_result(file.get_as_text())
+
+
+static func parse_table_result(text: String) -> Dictionary:
+	var json := JSON.new()
+	if json.parse(text) != OK:
+		return {"table": {}, "error": "파싱: %s (%d줄)" % [json.get_error_message(), json.get_error_line()]}
+	var table: Dictionary = _validated_table(json.data)
+	return {"table": table, "error": "계약 다름" if table.is_empty() else ""}
 
 
 ## The baked table's text -> the table, or {} when it does not match this code.
 static func parse_table(text: String) -> Dictionary:
-	var parsed: Variant = JSON.parse_string(text)
+	return parse_table_result(text)["table"]
+
+
+static func _validated_table(parsed: Variant) -> Dictionary:
 	if not parsed is Dictionary:
 		return {}
 	var table: Dictionary = parsed
@@ -535,7 +727,7 @@ static func parse_table(text: String) -> Dictionary:
 	if not table.get("foot_px_x") is Array or (table["foot_px_x"] as Array).size() != 32:
 		return {}
 	for foot_x: Variant in table["foot_px_x"]:
-		if not (foot_x is float or foot_x is int) or float(foot_x) < 2.0 or float(foot_x) > float(CELL.x - 2):
+		if not (foot_x is float or foot_x is int) or not is_finite(float(foot_x)) or float(foot_x) < 2.0 or float(foot_x) > float(CELL.x - 2):
 			return {}
 	if not table.get("clip_lengths") is Array or (table["clip_lengths"] as Array).size() != 12:
 		return {}
@@ -556,22 +748,35 @@ static func parse_table(text: String) -> Dictionary:
 
 func _sync_sight() -> void:
 	var source: ShaderMaterial = _sight.get("material")
-	for mat: ShaderMaterial in _materials:
-		mat.set_shader_parameter("vis_texture", _sight.get("vis_texture"))
-		mat.set_shader_parameter("map_size", _sight.get("map_size", Vector2.ONE))
+	var values: Dictionary = {"vis_texture": _sight.get("vis_texture"), "map_size": _sight.get("map_size", Vector2.ONE)}
+	if source != null:
 		for key: String in ["mask_on", "eye_xz", "eye_r", "round_day", "round_floor"]:
-			if source != null:
-				var value: Variant = source.get_shader_parameter(key)
-				if value != null:
-					mat.set_shader_parameter(key, value)
+			var value: Variant = source.get_shader_parameter(key)
+			frame_sight_reads += 1
+			if value != null:
+				values[key] = value
+	for key: String in values:
+		var value: Variant = values[key]
+		if _sight_cache.has(key) and _sight_cache[key] == value:
+			continue
+		_sight_cache[key] = value
+		for mat: ShaderMaterial in _materials:
+			_write_frame_parameter(mat, key, value)
+
+
+func _write_frame_parameter(mat: ShaderMaterial, key: String, value: Variant) -> void:
+	mat.set_shader_parameter(key, value)
+	frame_material_writes += 1
 
 
 func _process(delta: float) -> void:
+	frame_material_writes = 0
+	frame_sight_reads = 0
 	if not is_visible_in_tree():
 		return
-	var player: Node3D = _sight.get("player")
 	var field: Node = _sight.get("field")
-	var held: bool = field != null and bool(field.get("paused")) and not bool(field.get("ended"))
+	var player: Node3D = field.get("player") if is_instance_valid(field) else _sight.get("player")
+	var held: bool = is_instance_valid(field) and bool(field.get("paused")) and not bool(field.get("ended"))
 	if not held:
 		_focus_clock += delta
 		var target := Vector4.ZERO
@@ -584,19 +789,25 @@ func _process(delta: float) -> void:
 		for step: int in range(maxi(_history_tick + 1, tick - HISTORY_SIZE + 1), tick + 1):
 			_history[posmod(step, HISTORY_SIZE)] = _focus
 		_history_tick = tick
-	for mat: ShaderMaterial in _materials:
-		mat.set_shader_parameter("focus", _focus)
-		mat.set_shader_parameter("focus_clock", _focus_clock)
-		mat.set_shader_parameter("focus_history", _history)
 	_sync_sight()
 	# 개체가 아닌 소수 덩어리만 추려 여섯 개 상한을 지킨다.
 	var camera: Camera3D = get_viewport().get_camera_3d()
-	if camera == null:
-		return
-	var candidates: Array[int] = []
-	var planes: Array[Plane] = camera.get_frustum()
+	visible_chunks = _select_visible(camera)
 	for index: int in range(_draws.size()):
-		_draws[index].visible = false
+		_draws[index].visible = visible_chunks.has(index)
+	for index: int in visible_chunks:
+		var mat: ShaderMaterial = _materials[index]
+		_write_frame_parameter(mat, "focus", _focus)
+		_write_frame_parameter(mat, "focus_clock", _focus_clock)
+		_write_frame_parameter(mat, "focus_history", _history)
+
+
+func _select_visible(camera: Camera3D) -> Array[int]:
+	var candidates: Array[int] = []
+	if camera == null:
+		return candidates
+	var planes: Array[Plane] = camera.get_frustum()
+	for index: int in range(chunks.size()):
 		var box: AABB = chunks[index]["aabb"]
 		var outside: bool = false
 		for plane: Plane in planes:
@@ -611,8 +822,9 @@ func _process(delta: float) -> void:
 		if not outside:
 			candidates.append(index)
 	candidates.sort_custom(func(left: int, right: int) -> bool: return camera.global_position.distance_squared_to((chunks[left]["aabb"] as AABB).get_center()) < camera.global_position.distance_squared_to((chunks[right]["aabb"] as AABB).get_center()))
-	for slot: int in range(mini(VISIBLE_CAP, candidates.size())):
-		_draws[candidates[slot]].visible = true
+	if candidates.size() > VISIBLE_CAP:
+		candidates.resize(VISIBLE_CAP)
+	return candidates
 
 
 func _visibility_reset() -> void:
