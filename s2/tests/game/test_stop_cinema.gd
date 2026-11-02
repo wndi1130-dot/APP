@@ -23,7 +23,7 @@ func after_each() -> void:
 
 
 func _publish_fill_on_done(_how: String) -> void:
-	FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.BACK, Vector4.ONE)
+	FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.BACK, Vector4.ONE, "shader")
 
 
 func test_out_freezes_viewport_after_fill_is_published_and_keeps_fading() -> void:
@@ -45,9 +45,30 @@ func test_out_freezes_viewport_after_fill_is_published_and_keeps_fading() -> voi
 		FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.ZERO, Vector4.ZERO)
 		cinema._process(0.0)
 		assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_ALWAYS)
-		FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.BACK, Vector4.ONE)
+		FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.BACK, Vector4.ONE, "shader")
 		cinema._process(TICK)
 		assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_DISABLED)
+
+
+func test_zero_energy_shader_freezes_before_later_publication() -> void:
+	FillSwitch.claim_fill(FILL_TEST_OWNER)
+	FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.ZERO, Vector4.ZERO, "shader")
+	var cinema: StopCinema = _scene()
+	assert_false(FillSwitch.fill_on())
+	cinema._begin("out")
+	assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_DISABLED)
+	for ending: String in ["out", "end"]:
+		cinema.beat = ending
+		cinema.port.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+		FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.ZERO, Vector4.ZERO, "shader")
+		cinema.view.modulate.a = 1.0
+		cinema._process(TICK)
+		assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_DISABLED)
+		# The field runs after the cinema: no extra cinema tick before the render.
+		FillSwitch.publish_fill(FILL_TEST_OWNER, Vector3.BACK, Vector4.ONE, "shader")
+		assert_eq(cinema.port.render_target_update_mode, SubViewport.UPDATE_DISABLED)
+		if ending == "out":
+			assert_almost_eq(cinema.view.modulate.a, 1.0 - TICK / StopCinema.FADE_S, 0.000001)
 
 
 func test_out_without_fill_keeps_viewport_updating() -> void:

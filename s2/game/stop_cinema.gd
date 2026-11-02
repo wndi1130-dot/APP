@@ -438,8 +438,8 @@ func _begin(b: String) -> void:
 
 
 func _freeze_for_fill() -> void:
-	# Keep the last picture while the field owns shared shader light.
-	if port != null and PerfSwitch.fill_on():
+	# Freeze even at night: the shader owner may publish energy after this tick.
+	if port != null and PerfSwitch.fill_mode() == "shader":
 		port.render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 

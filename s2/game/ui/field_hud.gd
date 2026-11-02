@@ -583,8 +583,8 @@ func _icon_rect(id: String, px: int, color: Color) -> TextureRect:
 ## Dress a key or pad in the 시안 look: a matte disc (or a pill) `seen` across
 ## inside its touch rect, which stays as it is; an icon over its word. `on` is
 ## how it looks while set or held; `rest` lights it even at rest (lamp pills).
-func _dress(b: Button, icon: String, seen: Vector2, round_key: bool, on: int = HudSkin.Light.LAMP, rest: int = HudSkin.Light.NONE, icon_px: int = 32) -> void:
-	var st: Dictionary = HudSkin.key_styles(seen, round_key, on, rest)
+func _dress(b: Button, icon: String, seen: Vector2, round_key: bool, on: int = HudSkin.Light.LAMP, rest: int = HudSkin.Light.NONE, icon_px: int = 32, motif: String = "") -> void:
+	var st: Dictionary = HudSkin.key_styles(seen, round_key, on, rest, motif)
 	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		b.add_theme_stylebox_override(k, st[k])
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
@@ -712,7 +712,7 @@ func _build_top() -> void:
 	# tall as the clock's glass beside it (user 2026-10-18).
 	var pause_mid := Vector2(16.0, 14.0) + Vector2.ONE * TOP_ROW_H * 0.5
 	pause_button = _pad("", pause_mid - Vector2.ONE * PAUSE_TOUCH * 0.5, Vector2.ONE * PAUSE_TOUCH, 22, Control.PRESET_TOP_LEFT)
-	_dress(pause_button, "pause", Vector2.ONE * TOP_ROW_H, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, PAUSE_ICON)
+	_dress(pause_button, "pause", Vector2.ONE * TOP_ROW_H, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, PAUSE_ICON, "stitch")
 	pause_button.tooltip_text = "멈춤"
 	# The clock is one glass line (시안 2차 11절 「12:42 · 1일째 · −14℃」), the
 	# weather beside it; the share of daylight left runs as a hairline under it.
@@ -1180,25 +1180,25 @@ func _build_thumbs() -> void:
 	# the only one, so it takes the big place.
 	var one: bool = bool(game.opts.get("primary_one", false))
 	attack_button = _pad("A", ATTACK_AT, ATTACK_SIZE, 20)
-	_dress(attack_button, "", Vector2.ONE * ATTACK_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON)
+	_dress(attack_button, "", Vector2.ONE * ATTACK_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON, "hammered")
 	_letter(attack_button, ATTACK_LETTER)
 	_nudge(attack_button, LETTER_NUDGE)
 	attack_button.tooltip_text = "공격"
 	# Aim: its mark alone in the middle of its disc (user 2026-10-18: no word).
 	aim_button = _pad("", ATTACK_AT if one else AIM_AT, ATTACK_SIZE if one else AIM_SIZE, 20 if one else 17)
-	_dress(aim_button, "aim", Vector2.ONE * (ATTACK_SEEN if one else 84.0), true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON if one else LONE_ICON)
+	_dress(aim_button, "aim", Vector2.ONE * (ATTACK_SEEN if one else 84.0), true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON if one else LONE_ICON, "hammered")
 	aim_button.tooltip_text = "조준"
 	manual_button = _pad("수동", AIM_AT if one else AIM_AT + Vector2(-(MANUAL_SIZE.x + 8.0), 0), MANUAL_SIZE, 18)
 	_dress(manual_button, "", Vector2.ONE * 76.0, true)
 	# The shove mark alone in the middle of its disc (user 2026-10-18: no word).
 	shove_button = _pad("", SHOVE_AT, SHOVE_SIZE, UiFonts.size(11))
-	_dress(shove_button, "shove", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, LONE_ICON)
+	_dress(shove_button, "shove", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, LONE_ICON, "rivet")
 	shove_button.tooltip_text = "밀치기"
 	# Crouch: a round key on the right edge over attack (decision 293), a figure
 	# on one knee (user 2026-10-18). It lights brass from inside while on.
 	var key := 11.0 * PX_PER_MM
 	crouch_button = _pad("", Vector2(-16.0 - key, ATTACK_AT.y - 8.0 - key), Vector2(key, key), 20)
-	_dress(crouch_button, "crouch", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.BRASS, HudSkin.Light.NONE, 44)
+	_dress(crouch_button, "crouch", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.BRASS, HudSkin.Light.NONE, 44, "twine")
 	crouch_button.tooltip_text = "웅크림"
 	# The situation pad and leaving burn like lamps with a brass rim (시안 3절,
 	# .fpad--ctx); dark ink on the light. Their touch rects stay as they were.
@@ -1283,7 +1283,7 @@ func _build_thumbs() -> void:
 	# shows RUN (user 2026-10-18); a key that is on lights from inside, running
 	# and the lamp amber, crouching brass.
 	run_button = _pad("RUN", Vector2(run_x, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
-	_dress(run_button, "", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 40)
+	_dress(run_button, "", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 40, "tape")
 	_letter(run_button, RUN_WORD, 1.5)
 	run_button.tooltip_text = "뛰기"
 	# The lantern key, right of run 3 mm apart; it is there only after sunset.
@@ -5065,6 +5065,9 @@ func _tap_thing(p, world: Vector3) -> bool:
 		return false
 	for id in game.data["spots"]:
 		var spot: Dictionary = game.data["spots"][id]
+		# A story map's scene marker only holds a place: nothing is drawn there to walk over and do.
+		if spot.get("kind") == "story":
+			continue
 		if FieldGrid.center(spot["cell"]).distance_to(world) < 1.3:
 			_go_and_do(p, "spot", id, FieldGrid.center(spot["cell"]))
 			return true

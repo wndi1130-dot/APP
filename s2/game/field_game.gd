@@ -46,6 +46,7 @@ const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
+const LootTables = preload("res://game/sim/loot_tables.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const SmellRules = preload("res://game/sim/smell_rules.gd")
@@ -580,6 +581,10 @@ func _ready() -> void:
 	night_view.name = "NightLights"
 	add_child(night_view)
 	night_view.build(data)
+	_push_fire_weather()
+	PerfSwitch.apply_night_sparks(night_view, _perf_settings)
+	visibility_changed.connect(night_view.refresh_visibility)
+	night_view.refresh_visibility()
 	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
 	map_edge = MapEdge.new()
 	add_child(map_edge)
@@ -718,6 +723,13 @@ func _apply_fx() -> void:
 		fx_light["sun_energy"] = float(clear_sky["sun_energy"]) * float(storm["sun"])
 		fx_light["sun_color"] = Color(fx_light["sun_color"]).lerp(storm["sun_color"], 0.6)
 		fx_light["ambient_color"] = Color(fx_light["ambient_color"]).lerp(storm["ambient_color"], 0.6)
+
+
+## The fires' sparks thin out in what is drawn falling (the atmosphere's kinds:
+## warm snow is drawn as rain, cold rain as snow), not the raw weather.
+func _push_fire_weather() -> void:
+	if night_view != null:
+		night_view.set_weather(fx_params, atmo.get("kinds", look_kinds))
 
 
 ## Snow keeps falling through the stop: lying snow deepens with the field clock
@@ -932,6 +944,7 @@ func _update_atmosphere() -> void:
 		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_set_view_fill()
 		_update_window_light()
+		_push_fire_weather()
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
@@ -961,11 +974,11 @@ func _set_view_fill() -> void:
 		return
 	var fill_dir: Vector3 = Vector3.ZERO
 	var fill_value: Vector4 = Vector4.ZERO
-	if fill_state == "shader" and lit:
+	if fill_state == "shader" and lit and view_fill.light_cull_mask != 0:
 		fill_dir = view_fill.global_transform.basis.z.normalized()
 		var linear: Color = view_fill.light_color.srgb_to_linear()
 		fill_value = Vector4(linear.r * applied, linear.g * applied, linear.b * applied, 1.0)
-	PerfSwitch.publish_fill(get_instance_id(), fill_dir, fill_value)
+	PerfSwitch.publish_fill(get_instance_id(), fill_dir, fill_value, _view_fill_state(false))
 
 
 func set_view_fill_mode(mode: String) -> void:
@@ -975,8 +988,8 @@ func set_view_fill_mode(mode: String) -> void:
 	_set_view_fill()
 
 
-func _view_fill_state() -> String:
-	if view_fill != null and view_fill.visibility_changed.is_connected(view_fill.hide):
+func _view_fill_state(include_lock: bool = true) -> String:
+	if include_lock and view_fill != null and view_fill.visibility_changed.is_connected(view_fill.hide):
 		return "off"
 	var mode: Variant = _perf_settings.get("view_fill_mode")
 	if mode is String and mode in ["light", "shader"]:
@@ -1942,24 +1955,34 @@ func _configure_perf_switch() -> void:
 		_apply_perf_settings(PerfSwitch.read())
 
 
-func _apply_perf_settings(settings: Dictionary) -> void:
+func _apply_perf_settings(settings: Dictionary) -> Dictionary:
 	var mode_before: Variant = _perf_settings.get("view_fill_mode")
+	var fill_was: bool = view_fill != null and view_fill.visible
 	_perf_settings = settings
+	var spark_changed := PerfSwitch.apply_night_sparks(night_view, settings)
+	if not spark_changed.is_empty():
+		print("PERF_SWITCH ", spark_changed)
+	var changed: Dictionary = {}
 	if not settings.is_empty():
 		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
-		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false)
+		changed = PerfSwitch.apply(sun, view_fill, settings, false, false)
 		if settings.get("view_fill_mode") is String and settings["view_fill_mode"] in ["light", "shader"] \
 				and settings["view_fill_mode"] != mode_before:
 			changed["view_fill_mode"] = settings["view_fill_mode"]
+	_set_view_fill()
+	# The switch only reports the lock; the fill's own change shows once the field has decided.
+	if not settings.is_empty():
+		if view_fill != null and view_fill.visible != fill_was:
+			changed["view_fill"] = view_fill.visible
 		if not changed.is_empty():
 			print("PERF_SWITCH ", changed)
-	_set_view_fill()
 	# StopLoader builds with visible=false, even with processing disabled.
 	# Keep this one-shot connection for empty files too: another field may
 	# change the renderer before this hidden field is shown.
 	if not visibility_changed.is_connected(_apply_perf_renderer):
 		visibility_changed.connect(_apply_perf_renderer)
 	_apply_perf_renderer()
+	return changed
 
 
 func _apply_perf_renderer() -> void:
@@ -1993,7 +2016,7 @@ func _process(delta: float) -> void:
 		if not away and resume_ready_at_ms < 0:
 			resume_ready_at_ms = Time.get_ticks_msec() + 1000
 		return
-	delta = minf(delta, 0.1)
+	delta = minf(delta, PersonVisual.FRAME_MAX)
 	if arrive_t >= 0.0:
 		_arrive(delta)
 	elif not ended and not paused:
@@ -2023,6 +2046,7 @@ func _process(delta: float) -> void:
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
 		p.visible = level_shown(level_of(p.position)) and _person_visible(p) and not rode_off.has(p) and arrive_t < 0.0
+		p.set_meta(PersonVisual.Pose.PICTURE_TIME, float(p.get_meta(PersonVisual.Pose.PICTURE_TIME, 0.0)) + PersonVisual.frame_delta(self, delta))
 		p.refresh_view(p.visible)
 	hud.tick(delta)
 	audio.tick(delta)
@@ -2234,7 +2258,7 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	var push := p.stick.length()
 	# A melee blow holds the feet from part way through it to its end (decision 425).
-	if push > 0.05 and combat.feet_held(p):
+	if combat.feet_held(p):
 		p.drive_speed = 0.0
 		p.moving = false
 		return
@@ -3956,7 +3980,7 @@ func _give_finds() -> void:
 			var boxes: Array = []
 			for id: String in data["containers"]:
 				var c: Dictionary = data["containers"][id]
-				if int(c.get("building", -1)) == b and not bool(c.get("locked", false)) and not c.has("pick"):
+				if int(c.get("building", -1)) == b and not bool(c.get("locked", false)) and not c.has("pick") and not LootTables.as_placed(c):
 					boxes.append(id)
 			if boxes.is_empty():
 				way = "none"

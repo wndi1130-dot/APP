@@ -192,21 +192,10 @@ const OWN_WORK: Dictionary = {
 	# Climbing up into a car at its door (field_ai.gd retreat; a climb of its own is to come).
 	"board": ["p_climb", 0.0],
 }
-# A melee blow in the living's own motions: the ways each weapon is swung, and
-# where in each the blow lands (body_bake.gd keys; for UAL's chop, where the
-# right hand goes fastest) and, if not at its end, where the way back stops
-# (the chop is a loop that lifts the axe again: it stops with the axe low, so
-# the next way does not drop the arm and lift it once more). Blow after blow goes through them in turn, so the
-# same one is not seen twice running (decision 411): the reference game swings a
-# one-handed weapon across, overhead or up from below and mixes three swings
-# across, and a hand-to-hand mod for it changes hands each blow. A knife stabs, then cuts
-# across; an axe comes down from overhead, then chops in from the side; the
-# rest swing across, back the other way, then come down from overhead.
-# A blow at a body on the ground is struck down in front of the feet, and a
-# stomp drives the heel into it. The way back across lands a third of the way
-# in, where its tip crosses the front (J2 ③: at 0.45 it was 0.9 m off to the side).
+# Alternate compatible swings, with their contact and recovery phases.
+# Keep the legacy two-hand chop low before its loop lifts the axe again.
 const OWN_BLOWS: Dictionary = {
-	"one": [["p_swing_one", 0.45], ["p_swing_back", 0.33], ["p_swing_axe", 0.45]],
+	"one": [["p_swing_one", 0.45], ["p_swing_back", 0.33]],
 	"axe": [["p_swing_axe", 0.45], ["p_chop_side", 0.16, 0.45]],
 	"stab": [["p_stab", 0.35], ["p_swing_one", 0.45]],
 	"floor": [["p_floor_strike", 0.5]], "stomp": [["p_stomp", 0.5]]}
@@ -229,7 +218,8 @@ const HAND_R: float = 0.1
 const ELBOW_R: float = 0.05
 const ELBOW_SPARE: float = 0.02
 const FOREARM: float = 0.32
-const GRIP_FOLLOW: float = 0.5           # how far the weapon turns toward the hand's way each frame
+const GRIP_TAU: float = 0.0480898347     # Half the remaining angle in 1/30 second.
+const FRAME_MAX: float = 0.1            # Shared with the field's rule clock.
 const OWN_MIX_TIME: float = 0.35
 # The own shove's arms are back at 0.3 of it and out at 0.4 (body_bake.gd p_shove):
 # drawn back over the rules' wind-up, out as it lands, all the way back by the lunge's end.
@@ -392,12 +382,14 @@ func is_worn() -> bool:
 ## still then (field_game.gd still shading), and through a blow's hold (hit_feel.gd);
 ## at the end, the train leaving, they go on.
 static func frame_delta(field, delta: float) -> float:
-	if field.get("ended") == true:
-		return delta
-	if field.get("paused") == true or field.get("hitstop") == true:
+	var ended: bool = field.get("ended") == true
+	if not ended and (field.get("paused") == true or field.get("hitstop") == true):
 		return 0.0
+	var step: float = minf(delta, FRAME_MAX)
+	if ended:
+		return step
 	var slow: Variant = field.get("slow")
-	return minf(delta, 0.1) * (float(slow) if slow != null else 1.0)
+	return step * (float(slow) if slow != null else 1.0)
 
 
 func _process(delta: float) -> void:
@@ -475,7 +467,7 @@ func _process(delta: float) -> void:
 		var baked: Dictionary = b_own if own else b_vat
 		if baked.has("arm") and (not gun_busy(p) or (own and loading(note, b_own.get("clips", [])))):
 			var hand := arm_at(baked["arm"], b_own_frames if own else b_frames, drawn)
-			var grip := grip_of(hand[0], hand[1], note.get("grip", Basis()))
+			var grip: Basis = grip_of(hand[0], hand[1], note.get("grip", Basis()), delta, note.has("grip"))
 			note["grip"] = grip
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * grip, lean * hand[0])
@@ -485,7 +477,7 @@ func _process(delta: float) -> void:
 			var hand := arm_at(baked["arm"], b_own_frames, drawn)
 			var hold := Pose.hold_of(p.weapon_id())
 			var still: Vector3 = Pose.aim_at(hold)["weapon"]["pos"]
-			var shot: Dictionary = Pose.aim_at(hold, Pose._kick(p, Time.get_ticks_msec()))["weapon"]
+			var shot: Dictionary = Pose.aim_at(hold, Pose._kick(p, float(p.get_meta(Pose.PICTURE_TIME, 0.0))))["weapon"]
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * Basis.from_euler(shot["rot"]), lean * (hand[0] + shot["pos"] - still))
 	for d: Dictionary in worn.values():
@@ -581,7 +573,13 @@ func _hide_boxes(p) -> void:
 ## the living's own folder's motions: when y is one of those, is_own(note).
 static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Array = []) -> Vector2:
 	if int(note.get("epoch", p.motion_epoch)) != p.motion_epoch:
+		var had_blow: bool = note.has("blow_n") or bool(note.get("blow_on", false)) or p.has_meta(Pose.SWING)
 		note.clear()
+		p.remove_meta(Pose.BLOW_WAY)
+		if had_blow and p.strike_t <= 0.0 and p.swing_t > 0.0 and p.shove_t <= 0.0:
+			p.set_meta(Pose.SWING, p.swing_t)
+			if not p.has_meta(Pose.MODE):
+				p.set_meta(Pose.MODE, Pose.strike_mode(p.strike_kind, p.strike_at))
 	note["epoch"] = p.motion_epoch
 	if not note.has("ground_walk"):
 		# Decision 425: rebuild from the saved movement, without adding save fields.
@@ -611,6 +609,9 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	# Noted every drawing, so a turn made in another motion (aiming, a blow) is not stepped later.
 	var turned := _turned(p, note, t)
 	_note_posture(p, note, delta)
+	var blow := blow_of(p, own, note, t)
+	var blow_aim: float = float(note.get("blow_aim", 0.0))
+	note.erase("blow_aim")
 	var lying: bool = p.body.downed or p.body.dead or p.fallen_t > 0.0
 	if lying:
 		# Dead or knocked down it goes over on its back; down and still alive
@@ -667,8 +668,8 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	if bitten < 0 and hurt_k(note, t) > 0.0:
 		note["motion"] = HIT
 		return Vector2(0.0, HIT)
-	var blow := blow_of(p, own, note, t)
 	if blow.y >= 0.0:
+		note["blow_aim"] = blow_aim
 		note["motion"] = OWN_BASE + int(blow.y)
 		return blow
 	if p.shove_t > 0.0 or p.lunge_t > 0.0:
@@ -837,19 +838,31 @@ static func fall_name(p, own: Array) -> String:
 	return OWN_FALL if p.body.dead else OWN_FALL_FRONT
 
 
+static func blow_kind(wid: String, hands: int, mode: String = "swing") -> String:
+	if mode == "stomp" or mode == "floor":
+		return mode
+	if wid == "axe" and hands > 1:
+		return "axe"
+	if wid == "knife":
+		return "stab"
+	return "one"
+
+
 ## A melee blow in the living's own motions (y) and how far through it (x):
 ## drawn back up to where the blow lands while the rules wind it up, the rest
 ## on the way back. y is -1 with no blow, or none of its own. `note` keeps which
 ## way the last blow went and when it ended (at the visual's own time t).
 static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vector2:
-	if own.is_empty():
-		return Vector2(0.0, -1.0)
 	var sw: Array = Pose.swing_state(p)
 	if sw.is_empty():
 		if note.get("blow_on", false):
-			note["blow_on"] = false
+			# Chain timing ends with the rule's wait, even after the picture returns.
+			note["blow_on"] = p.swing_t > 0.0 and p.shove_t <= 0.0
 			note["blow_drawing"] = false
-			note["blow_end"] = t
+			if bool(note["blow_on"]):
+				note["blow_deadline"] = t + p.swing_t
+			else:
+				note["blow_end"] = minf(t, float(note.get("blow_deadline", t)))
 			note.erase("blow_aim")
 			p.remove_meta(Pose.BLOW_WAY)
 		return Vector2(0.0, -1.0)
@@ -858,16 +871,17 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 	if drawing and not note.get("blow_drawing", false):
 		var follows: bool = note.get("blow_on", false) or (note.has("blow_end") and t - float(note["blow_end"]) <= CHAIN_GAP)
 		note["blow_n"] = int(note.get("blow_n", -1)) + 1 if follows else 0
+		note.erase("blow_deadline")
 	note["blow_drawing"] = drawing
 	note["blow_on"] = true
+	if not drawing:
+		note["blow_deadline"] = t + p.swing_t
+	if own.is_empty():
+		return Vector2(0.0, -1.0)
 	var mode: String = p.get_meta(Pose.MODE, "swing")
-	var kind := "one"
-	if mode == "stomp" or mode == "floor":
-		kind = mode
-	elif p.weapon_id() == "axe":
-		kind = "axe"
-	elif p.weapon_id() == "knife":
-		kind = "stab"
+	var wid: String = p.weapon_id()
+	var hands: int = int(Pose.W.get_data(wid).get("hands", 1))
+	var kind: String = blow_kind(wid, hands, mode)
 	var ways: Array = OWN_BLOWS[kind]
 	var way: Array = ways[int(note.get("blow_n", 0)) % ways.size()]
 	var clip := clip_named(own, String(way[0]), -1)
@@ -1221,7 +1235,7 @@ static func arm_at(arm: PackedVector3Array, tab: Array, drawn: Color) -> Array:
 ## fails, so it turns toward the way the forearm points about the up axis
 ## instead; and it only goes part way toward the new way each frame (from
 ## `was`), so it never flips in one frame.
-static func grip_of(hand: Vector3, elbow: Vector3, was: Basis) -> Basis:
+static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.0 / 30.0, initialized: bool = true) -> Basis:
 	var f := (hand - elbow).normalized()
 	if f == Vector3.ZERO:
 		return was
@@ -1234,9 +1248,10 @@ static func grip_of(hand: Vector3, elbow: Vector3, was: Basis) -> Basis:
 	if x == Vector3.ZERO:
 		x = f
 	var want := Basis(x, z.cross(x), z).orthonormalized()
-	if was == Basis() or not was.is_finite():
+	if not initialized or not was.is_finite():
 		return want
-	return was.orthonormalized().slerp(want, GRIP_FOLLOW)
+	var follow: float = 1.0 - exp(-maxf(delta, 0.0) / GRIP_TAU)
+	return was.orthonormalized().slerp(want, follow)
 
 
 ## True when the motion last picked for this person is one of the living's own.

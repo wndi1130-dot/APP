@@ -119,7 +119,7 @@ func test_a_companion_climbing_through_is_softer_the_farther_off_and_the_dead_he
 	game.actions.vault_window(q, c)
 	assert_true(a.played.has("window_vault"), "a companion's climb is heard")
 	assert_not_null(a.last_shot)
-	assert_true(a.last_shot.stream in a.lib["swing_light"], "a light swing stands in")
+	assert_true(a.last_shot.stream in a.lib["window_vault"], "cloth over the sill, its own file (the stand-in: test_own_voices)")
 	var near_db: float = a.last_shot.volume_db
 	game.player.position = FieldGrid.center(c) + Vector3(30, 0, 0)
 	game.actions.vault_window(q, c)

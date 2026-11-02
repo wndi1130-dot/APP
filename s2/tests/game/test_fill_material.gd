@@ -85,6 +85,43 @@ func test_uncopied_features_keep_the_original_material() -> void:
 	assert_eq(FillMaterial.from_standard(orm), orm)
 
 
+func test_cache_releases_material_and_texture_without_another_conversion() -> void:
+	var source: StandardMaterial3D = StandardMaterial3D.new()
+	var texture: GradientTexture2D = GradientTexture2D.new()
+	source.albedo_texture = texture
+	var material: Material = FillMaterial.from_standard(source)
+	assert_true(material is ShaderMaterial)
+	var source_ref: WeakRef = weakref(source)
+	var material_ref: WeakRef = weakref(material)
+	var texture_ref: WeakRef = weakref(texture)
+	var user: MeshInstance3D = MeshInstance3D.new()
+	user.material_override = material
+	source = null
+	texture = null
+	material = null
+	assert_null(source_ref.get_ref())
+	assert_not_null(material_ref.get_ref(), "the last user still owns the material")
+	assert_not_null(texture_ref.get_ref())
+	user.free()
+	assert_null(material_ref.get_ref(), "no conversion or cache sweep is needed")
+	assert_null(texture_ref.get_ref())
+
+
+func test_cache_recreates_material_after_last_user_releases_it() -> void:
+	var source: StandardMaterial3D = StandardMaterial3D.new()
+	var material: Material = FillMaterial.from_standard(source)
+	var previous_id: int = material.get_instance_id()
+	var material_ref: WeakRef = weakref(material)
+	material = null
+	assert_null(material_ref.get_ref(), "a live source does not retain its derived material")
+	source.albedo_color = Color.BLUE
+	material = FillMaterial.from_standard(source)
+	assert_true(material is ShaderMaterial)
+	assert_ne(material.get_instance_id(), previous_id)
+	assert_eq(FillMaterial.color_of(material), Color.BLUE)
+	assert_eq(FillMaterial.from_standard(source), material, "reuse while a user is alive")
+
+
 func test_cache_does_not_keep_source_alive_and_prunes_dead_entries() -> void:
 	var source: StandardMaterial3D = StandardMaterial3D.new()
 	var source_id: int = source.get_instance_id()

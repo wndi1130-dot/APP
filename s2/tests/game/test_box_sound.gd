@@ -150,6 +150,7 @@ func test_the_box_sounds_are_no_world_sound_and_a_stand_in_plays() -> void:
 		assert_true(a.box_sound(c, what), what)
 	assert_eq(game.sounds.size(), 0, "nothing the dead hear")
 	a.box_quiet_until = 0
+	a.lib["box_open_drawer"] = []   # as though its files were not in, whether or not they are
 	assert_true(a.box_sound(c, "open"))
 	assert_not_null(a.last_shot, "the stand-in is heard")
 	if a.last_shot != null:

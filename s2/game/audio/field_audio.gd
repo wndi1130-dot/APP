@@ -123,6 +123,23 @@ const LID_STANDIN: String = "metal"    # the impact file that stands in for it
 ## and high. Until a file is in its group it is the impact set's wood, pitched well down.
 const CREAK_VOICE: Array = ["floor_creak", 0.35, 0.45, 0.55]
 const CREAK_STANDIN: String = "wooden"
+## The groups whose own files are heard at their own pitch (low, high), not at the
+## row's, which was set to bend the stand-in into shape (_voice_or_standin): a
+## creak recorded as a creak is not pitched an octave down. Third, dB on the row's
+## loudness so that the file is as loud as its stand-in was (0.4 s loudness,
+## measured; at most +6): the rows were set by the stand-ins.
+const OWN_VOICE: Dictionary = {
+	"floor_creak": [0.92, 1.08, 6.0],
+	"door_open": [0.96, 1.04, 4.8],
+	"door_close": [0.96, 1.04, 4.1],
+	"door_unlock": [0.97, 1.03, 3.0],
+	"door_locked": [0.94, 1.06, 2.7],     # one file: a wider wobble
+	"boarded": [0.94, 1.04, 6.0],
+	"window_open": [0.96, 1.04, 1.3],
+	"window_close": [0.96, 1.04, 5.6],
+	"curtain": [0.94, 1.06, -2.6],
+	"window_vault": [0.94, 1.06, -2.3],
+}
 ## A step by the floor underfoot (FieldGrid.Floor: SNOW, ROAD, PLATFORM, WOOD,
 ## RAIL, DEEP_SNOW, ICE, GRAVEL): the groups to try in turn, loudness and pitch.
 ## Rails are on ballast; deep snow is the snow, lower and muffled (as the dead
@@ -159,11 +176,12 @@ const COMPANY_STEP_LOUD: float = 0.7
 const FEET_PLAYERS: int = 5            # players the steps of others than the player go out on
 ## By its gait: stride in m (low, high), loudness, the share of steps without a
 ## sound, and pitch (low, high; times its floor's) — never above the player's
-## lowest (0.9), so the ear tells their feet from its own. First values.
+## lowest (STEP_PITCH low under the heaviest STEP_LOAD: 0.95 × 0.94), so the ear
+## tells their feet from its own. First values.
 const DEAD_GAITS: Dictionary = {
 	"shamble": {"stride": [0.45, 0.8], "loud": 0.16, "skip": 0.3, "pitch": [0.72, 0.86]},
 	"chase": {"stride": [0.6, 0.9], "loud": 0.22, "skip": 0.12, "pitch": [0.78, 0.88]},
-	"dash": {"stride": [0.9, 1.3], "loud": 0.3, "skip": 0.0, "pitch": [0.82, 0.9]},
+	"dash": {"stride": [0.9, 1.3], "loud": 0.3, "skip": 0.0, "pitch": [0.8, 0.88]},
 }
 ## The rasp of one of the dead that is about to run (lunger_rules): the group
 ## its file goes in, how loud, heard to this many metres, and the pitch of the
@@ -179,6 +197,7 @@ const BRAKE_STAND_AT: float = 2.4
 const FEEL_LOUD: float = 0.25
 const TELL_RANGE: float = 40.0
 const TELL_STANDIN_PITCH: float = 1.5
+const TELL_OWN_PITCH: Array = [0.94, 1.06]
 const DEPART_BEATS: Array = [["impact", 0.0], ["pen", 0.12], ["whistle", 0.75]]
 const MOAN_SLOTS: int = 6
 const MOAN_RANGE: float = 25.0
@@ -241,6 +260,11 @@ const SAYS: Dictionary = {
 	"fall": {"loud": 0.7, "pitch": 0.82, "gap": [0.0, 0.0], "cut": 0.5},
 }
 const STATE_SAYS: Dictionary = {"chase": "chase", "dash": "chase", "attack": "bite", "grab": "bite"}   # the rest: idle
+## The calls that have files of their own once those are in: noticing you, taking
+## a blow, going down. Said in the body's own voice (its pitch, nothing more) and
+## never the file just heard; until then one of the moans, pitched as SAYS has it.
+## Wandering, chasing and biting stay with the moans.
+const SAY_GROUPS: Dictionary = {"notice": "dead_notice", "hit": "dead_hit", "fall": "dead_fall"}
 const CUT_FADE: float = 400.0         # dB a second: a cut voice ends without a click
 ## A horde setting off: birds at most this often, and a far thud each time
 ## (an impact file this low, through the dullest bus).
@@ -1003,23 +1027,43 @@ func _next_file(kind: String, last: int) -> int:
 	return pick
 
 
+## What a call is said with: [group, file index, stream, pitch before distance]
+## — a file of its own call (SAY_GROUPS) while it has any, else a moan the voice
+## did not say last (`last`), pitched as SAYS has it; [] with neither.
+func _call_for(what: String, v: Dictionary, last: int) -> Array:
+	var own: String = String(SAY_GROUPS.get(what, ""))
+	if own != "":
+		if not lib.has(own):
+			lib[own] = _load_group(own)
+		var j := _fresh_file(own)
+		if j >= 0:
+			return [own, j, lib[own][j], float(v["pitch"])]
+	if not has("moan"):
+		return []
+	var i := _next_file(String(v["kind"]), last)
+	return ["moan", i, lib["moan"][i], float(v["pitch"]) * float(SAYS[what]["pitch"])]
+
+
 ## One of the dead says something through its slot.
 func _say(s: Dictionary, z: Dictionary, what: String, d: float) -> void:
 	var row: Dictionary = SAYS[what]
 	var v := voice_of(z)
 	var p: AudioStreamPlayer3D = s["player"]
 	var band: Array = moan_band(d)
-	var i := _next_file(String(v["kind"]), int(s.get("file", -1)))
-	s["file"] = i
+	var call := _call_for(what, v, int(s.get("file", -1)))
+	if call.is_empty():
+		return
+	if String(call[0]) == "moan":
+		s["file"] = int(call[1])
 	s["loud"] = float(row["loud"])
 	s["cut"] = float(row["cut"])
 	s["wait"] = randf_range(float(row["gap"][0]), float(row["gap"][1]))
-	p.stream = lib["moan"][i]
-	p.pitch_scale = float(v["pitch"]) * float(row["pitch"]) * float(band[1]) * randf_range(0.97, 1.03)
+	p.stream = call[2]
+	p.pitch_scale = float(call[3]) * float(band[1]) * randf_range(0.97, 1.03)
 	p.bus = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
 	p.volume_db = _db(clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0) * float(s["loud"]))
 	p.play()
-	said.append([int(z["id"]), what, i])
+	said.append([int(z["id"]), what, int(call[1]), String(call[0])])
 
 
 func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
@@ -1055,8 +1099,10 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 	s["was"] = row
 	s["stun"] = float(z.get("stun", 0.0))
 	s["wait"] = float(s["wait"]) - delta
-	if not has("moan") or z["state"] == "tell":
+	if z["state"] == "tell":
 		return   # about to run: its own rasp is heard (lunge_tell)
+	if not in_view(z["pos"]):
+		return   # gone out of sight: what it was saying runs out (VOICE_KEEP), nothing new
 	if cue != "" or float(s["wait"]) <= 0.0:
 		s["fading"] = false
 		_say(s, z, cue if cue != "" else row, d)
@@ -1065,16 +1111,18 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 ## One of the dead in sight goes down: a short breath out in its own voice,
 ## under the fall's beats. Not through a slot (the slot lets go of it).
 func _fall_voice(z: Dictionary, at: Vector3) -> void:
-	if not has("moan") or not in_view(z["pos"]):
+	if not in_view(z["pos"]):
 		return
 	var row: Dictionary = SAYS["fall"]
 	var v := voice_of(z)
 	var d: float = at.distance_to(z["pos"])
-	var i := _next_file(String(v["kind"]), -1)
+	var call := _call_for("fall", v, -1)
+	if call.is_empty():
+		return
 	var band: Array = moan_band(d)
-	said.append([int(z["id"]), "fall", i])
+	said.append([int(z["id"]), "fall", int(call[1]), String(call[0])])
 	var bus: String = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
-	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], bus, float(row["cut"]))
+	_one_shot(String(call[0]), z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(call[3]) * float(band[1]), call[2], bus, float(row["cut"]))
 
 
 # ---------------------------------------------------------------- wind
@@ -1840,8 +1888,15 @@ func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var d: float = at.distance_to(game.player.position)
 	var lin: float = float(voice[1]) * clampf(1.0 - d / 60.0, 0.0, 1.0)
 	var pitch := randf_range(float(voice[2]), float(voice[3]))
+	if lin <= 0.01:
+		last_shot = null
+		return   # too far to hear: nothing is picked, so the last file heard stays the last
 	if has(group):
-		_one_shot(group, at, lin, pitch, null, _bus_at(at))
+		if OWN_VOICE.has(group):
+			var mine: Array = OWN_VOICE[group]
+			pitch = randf_range(float(mine[0]), float(mine[1]))
+			lin *= db_to_linear(float(mine[2]))
+		_one_shot(group, at, lin, pitch, lib[group][_fresh_file(group)], _bus_at(at))
 		return
 	if standin.begins_with("@"):
 		var own: String = standin.substr(1)
@@ -1886,12 +1941,22 @@ func chief_feel(number: int) -> void:
 
 
 ## One of the dead drops low before it runs: its rasp, for the player's ear
-## only. Until the file is in, it is a moan pitched up.
+## only. Until the file is in, it is a moan pitched up. Its own files are read
+## the first time one is heard (it is not in GROUPS), never the one just heard,
+## each a little higher or lower (TELL_OWN_PITCH).
 func lunge_tell(at: Vector3) -> void:
 	played.append(TELL_GROUP)
+	if not lib.has(TELL_GROUP):
+		lib[TELL_GROUP] = _load_group(TELL_GROUP)
 	var own: bool = has(TELL_GROUP)
 	var d: float = at.distance_to(game.player.position)
-	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH, null, ROOM_BUS if in_room(at) else "SFX")
+	var lin: float = TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0)
+	var bus: String = _bus_at(at)
+	if own:
+		var j := _fresh_file(TELL_GROUP)
+		_one_shot(TELL_GROUP, at, lin, randf_range(float(TELL_OWN_PITCH[0]), float(TELL_OWN_PITCH[1])), lib[TELL_GROUP][j], bus)
+	else:
+		_one_shot("moan", at, lin, TELL_STANDIN_PITCH, null, bus)
 
 
 ## A blow's own sound (hit_feel.gd), heard to `reach` m and duller through a
@@ -2144,9 +2209,46 @@ func _building_door_bang(at: Vector3, level: int) -> bool:
 	return true
 
 
+## No two steps alike (as a weapon's blows): each one a little louder or softer
+## (STEP_GAIN_DB) and higher or lower (STEP_PITCH), so a walk is not a machine.
+const STEP_GAIN_DB: float = 2.0
+const STEP_PITCH: Array = [0.95, 1.05]
+## The player's own steps by how it moves: crouched, softer; under a load
+## (Person.carry_state: 1 heavy, 2 over, 3 cannot move), louder and lower.
+## Loudness, pitch.
+const STEP_CROUCH: Array = [0.55, 1.0]
+const STEP_LOAD: Array = [[1.0, 1.0], [1.12, 0.97], [1.25, 0.94], [1.25, 0.94]]
+
+
+## How the player's own step sounds by how it moves (STEP_CROUCH, STEP_LOAD):
+## [loudness, pitch], times its floor's.
+func step_feel() -> Array:
+	var p = game.player if game != null else null
+	if p == null:
+		return [1.0, 1.0]
+	return feel_of(bool(p.crouched), int(p.carry_state()))
+
+
+## [loudness, pitch] of a step crouched or not, under a load of this carry state.
+static func feel_of(crouched: bool, carry: int) -> Array:
+	var carried: Array = STEP_LOAD[clampi(carry, 0, STEP_LOAD.size() - 1)]
+	var loud: float = float(carried[0])
+	var pitch: float = float(carried[1])
+	if crouched:
+		loud *= float(STEP_CROUCH[0])
+		pitch *= float(STEP_CROUCH[1])
+	return [loud, pitch]
+
+
+## A step's own wobble: [loudness, pitch] times (STEP_GAIN_DB, STEP_PITCH).
+static func step_wobble() -> Array:
+	return [db_to_linear(randf_range(-STEP_GAIN_DB, STEP_GAIN_DB)), randf_range(float(STEP_PITCH[0]), float(STEP_PITCH[1]))]
+
+
 ## The player's own step, by what is underfoot (FieldGrid.Floor): its own
 ## group, or down the row to one that has files (snow at the last); glass on
-## the floor crunches over it. Never the same file twice running.
+## the floor crunches over it. Never the same file twice running, never the
+## same loudness and pitch, and by how the player moves (step_feel).
 func footstep(at: Vector3, running: bool) -> void:
 	var g = game.grid_at(at)
 	var cell: Vector2i = game.FieldGrid.cell_of(at)
@@ -2158,7 +2260,9 @@ func footstep(at: Vector3, running: bool) -> void:
 		steps.append([group, pick])
 		if steps.size() > STEPS_KEPT:
 			steps = steps.slice(steps.size() - STEPS_KEPT)
-		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]), randf_range(0.9, 1.1) * float(row[2]), lib[group][pick], _bus_at(at))
+		var feel := step_feel()
+		var wob := step_wobble()
+		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]) * float(feel[0]) * float(wob[0]), float(wob[1]) * float(row[2]) * float(feel[1]), lib[group][pick], _bus_at(at))
 	if g.floor_glass.has(cell):
 		_voice_or_standin(STEP_GLASS, GLASS_STANDIN, at)
 
@@ -2242,8 +2346,9 @@ func company_step(at: Vector3, running: bool) -> void:
 		return
 	var row: Array = found[1]
 	var pick: int = _other_than(group, company_step_last)
-	if not _foot(group, pick, at, (0.5 if running else 0.3) * COMPANY_STEP_LOUD * float(row[1]) * (1.0 - d / DEAD_STEP_RANGE),
-			randf_range(0.9, 1.1) * float(row[2])):
+	var wob := step_wobble()
+	if not _foot(group, pick, at, (0.5 if running else 0.3) * COMPANY_STEP_LOUD * float(row[1]) * (1.0 - d / DEAD_STEP_RANGE) * float(wob[0]),
+			float(wob[1]) * float(row[2])):
 		return
 	company_steps.append([group, pick])
 	if company_steps.size() > STEPS_KEPT:
