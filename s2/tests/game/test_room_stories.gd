@@ -146,7 +146,8 @@ func test_a_field_keeps_its_stories_in_the_place_state() -> void:
 	add_child_autofree(game)
 	game.set_process(false)
 	var kept: Array = game.receipt.to_dict()["placeState"].get("roomStories", [])
-	var d := FieldMaps.build("houses_01")
+	# The field builds its map in its stop's band (the outer village takes the region's look).
+	var d := FieldMaps.build("houses_01", FieldGame.region_for(game.opts))
 	assert_eq(kept, RoomStories.apply(d, _dice(d, 5)))
 	assert_gt(kept.size(), 0)
 
