@@ -3,6 +3,8 @@ extends GutTest
 
 const Person = preload("res://game/actors/person.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
+const Pose = preload("res://game/actors/person_pose.gd")
+const Motion = preload("res://game/sim/motion.gd")
 const FieldAi = preload("res://game/field_ai.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -1053,6 +1055,454 @@ func test_follow_start_arrival_and_turn_have_zero_standing_translation_ticks() -
 		var slot: Vector3 = p.brain["follow_slot"]
 		assert_lte(p.position.distance_to(slot), FieldAi.FOLLOW_SETTLE + 0.00001)
 		assert_eq(game.rng.state, rng_before)
+
+
+func _combat_own() -> Array:
+	var own: Array = _own()
+	for ways: Array in PersonVisual.OWN_BLOWS.values():
+		for way: Array in ways:
+			var clip: String = String(way[0])
+			if PersonVisual.clip_named(own, clip, -1) < 0:
+				own.append({"name": clip, "length": 1.0})
+	return own
+
+
+func test_all_six_one_hand_weapons_alternate_without_two_hand_clips() -> void:
+	var own: Array = _combat_own()
+	var p: Person = _person()
+	for wid: String in ["axe", "knife", "crowbar", "frying_pan", "broken_bottle", "wood_stake"]:
+		assert_eq(int(Pose.W.get_data(wid)["hands"]), 1, wid)
+		p.hands = [{"id": wid, "quality": "factory", "condition": 1.0, "loaded": 0}]
+		p.strike_kind = "swing"
+		p.strike_at = {}
+		var note: Dictionary = {}
+		var expected: Array[String] = ["p_swing_one", "p_swing_back"]
+		if wid == "knife":
+			expected = ["p_stab", "p_swing_one"]
+		for index: int in range(8):
+			var t: float = float(index) * 0.8
+			p.strike_total = 0.2
+			p.strike_t = 0.2
+			var picked: Vector2 = PersonVisual.blow_of(p, own, note, t)
+			var clip: String = String(own[int(picked.y)]["name"])
+			assert_false(clip in ["p_swing_axe", "p_chop_side"], wid)
+			assert_eq(clip, expected[index % expected.size()], wid + " alternates")
+			p.strike_t = 0.0
+			p.swing_t = 0.6
+			var back: Vector2 = PersonVisual.blow_of(p, own, note, t + 0.2)
+			assert_eq(String(own[int(back.y)]["name"]), clip, "the return keeps the picked way")
+			p.swing_t = 0.0
+			PersonVisual.blow_of(p, own, note, t + 0.6)
+	# A long rule wait must not count as a rest after the early visual return.
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	var chain: Dictionary = {}
+	p.strike_total = 0.2
+	p.strike_t = 0.2
+	var first: Vector2 = PersonVisual.blow_of(p, own, chain, 0.0)
+	assert_eq(String(own[int(first.y)]["name"]), "p_swing_one")
+	p.strike_t = 0.0
+	p.swing_t = 3.0
+	PersonVisual.blow_of(p, own, chain, 0.2)
+	p.swing_t = 2.649999
+	assert_lt(PersonVisual.blow_of(p, own, chain, 0.550001).y, 0.0, "the picture has returned")
+	p.swing_t = 0.0
+	PersonVisual.blow_of(p, own, chain, 3.2)
+	p.strike_t = 0.2
+	var next: Vector2 = PersonVisual.blow_of(p, own, chain, 3.3)
+	assert_eq(String(own[int(next.y)]["name"]), "p_swing_back", "the wait did not reset the chain")
+
+
+func test_two_hand_axe_selection_and_its_legacy_phases_stay_available() -> void:
+	assert_eq(PersonVisual.blow_kind("axe", 1), "one")
+	assert_eq(PersonVisual.blow_kind("axe", 2), "axe")
+	var ways: Array = PersonVisual.OWN_BLOWS["axe"]
+	assert_eq(ways, [["p_swing_axe", 0.45], ["p_chop_side", 0.16, 0.45]])
+	assert_eq(PersonVisual.blow_kind("axe", 1, "floor"), "floor")
+	assert_eq(PersonVisual.blow_kind("axe", 1, "stomp"), "stomp")
+
+
+func test_recovery_seconds_depend_on_weight_without_using_the_attack_wait() -> void:
+	assert_almost_eq(Pose.recover_seconds("knife"), 0.25, 0.000001)
+	assert_almost_eq(Pose.recover_seconds("crowbar"), 0.30, 0.000001)
+	assert_almost_eq(Pose.recover_seconds("axe"), 0.35, 0.000001)
+	for wid: String in ["knife", "crowbar", "axe", "frying_pan", "broken_bottle", "wood_stake"]:
+		assert_between(Pose.recover_seconds(wid), 0.25, 0.35, wid)
+	var p: Person = _person()
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	for wait: float in [1.0, 3.0]:
+		p.strike_t = 0.2
+		p.strike_total = 0.2
+		Pose.swing_state(p)
+		p.strike_t = 0.0
+		p.swing_t = wait
+		Pose.swing_state(p)
+		p.swing_t = wait - 0.175
+		var sw: Array = Pose.swing_state(p)
+		assert_eq(sw.size(), 3)
+		if sw.size() > 1:
+			assert_almost_eq(float(sw[1]), 0.5, 0.000001, "the same seconds give the same return")
+		p.swing_t = wait - 0.350001
+		var before: float = p.swing_t
+		assert_true(Pose.swing_state(p).is_empty(), "recovered while the next blow still waits")
+		assert_eq(p.swing_t, before, "reading the picture leaves the rule clock alone")
+
+
+func test_a_heavy_blow_returns_to_standing_before_its_unchanged_next_attack_time() -> void:
+	for fps: int in [30, 60]:
+		var game: FieldGame = _motion_field()
+		var p: Person = game.player
+		p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+		var own: Array = _combat_own()
+		var note: Dictionary = {}
+		var mult: float = float(p.mults()["swing"])
+		var windup: float = Pose.W.melee_windup("axe") / mult
+		var started: float = game.clock.elapsed
+		game.combat.start_swing(p, {})
+		assert_almost_eq(p.strike_t, windup, 0.000001)
+		PersonVisual.motion_of(p, note, 0.0, [], own)
+		game.clock.elapsed += windup
+		game.combat.update(windup)
+		var wait: float = maxf(float(Pose.W.get_data("axe")["swing"]) / mult - windup, game.combat.WHIFF_RECOVER) + Pose.W.melee_gap("axe")
+		assert_almost_eq(p.swing_t, wait, 0.000001, "the original swing minus windup plus gap")
+		var landed: Vector2 = PersonVisual.motion_of(p, note, 0.0, [], own)
+		assert_eq(String(own[int(landed.y)]["name"]), "p_swing_one")
+		assert_almost_eq(landed.x, 0.45, 0.000001)
+		var gone: float = 0.0
+		var deadline: float = Pose.recover_seconds("axe") + 0.000001
+		var drawn: Vector2 = landed
+		while gone < deadline:
+			var delta: float = minf(1.0 / float(fps), deadline - gone)
+			game.clock.elapsed += delta
+			game.combat.update(delta)
+			gone += delta
+			drawn = PersonVisual.motion_of(p, note, delta, [], own)
+			assert_almost_eq(p.swing_t, wait - gone, 0.000001, "only the rule update consumes the wait")
+		assert_eq(String(own[int(drawn.y)]["name"]), "p_stand", "recovered within the fixed duration")
+		assert_gt(p.swing_t, 0.0)
+		var left: float = p.swing_t
+		game.combat.start_swing(p, {})
+		assert_eq(p.strike_t, 0.0, "the early visual return cannot start another blow")
+		assert_eq(p.swing_t, left)
+		var to_edge: float = left - 0.001
+		game.clock.elapsed += to_edge
+		game.combat.update(to_edge)
+		game.combat.start_swing(p, {})
+		assert_eq(p.strike_t, 0.0, "still locked just before the original attack time")
+		var to_ready: float = p.swing_t
+		game.clock.elapsed += to_ready
+		game.combat.update(to_ready)
+		assert_almost_eq(game.clock.elapsed - started, windup + wait, 0.000001)
+		game.combat.start_swing(p, {})
+		assert_gt(p.strike_t, 0.0, "available at the original attack time")
+
+
+func _grip_samples(fps: int) -> Array[Basis]:
+	var samples: Array[Basis] = []
+	var grip: Basis = Basis(Vector3.UP, 0.2)
+	for _sample: int in range(5):
+		for _tick: int in range(int(roundf(float(fps) * 0.1))):
+			grip = PersonVisual.grip_of(Vector3.BACK, Vector3.ZERO, grip, 1.0 / float(fps))
+		samples.append(grip)
+	return samples
+
+
+func _assert_same_grip(a: Basis, b: Basis) -> void:
+	assert_almost_eq(a.x.distance_to(b.x), 0.0, 0.00001)
+	assert_almost_eq(a.y.distance_to(b.y), 0.0, 0.00001)
+	assert_almost_eq(a.z.distance_to(b.z), 0.0, 0.00001)
+
+
+func test_grip_follow_matches_at_thirty_and_sixty_hz_and_keeps_the_thirty_hz_feel() -> void:
+	var at_thirty: Array[Basis] = _grip_samples(30)
+	var at_sixty: Array[Basis] = _grip_samples(60)
+	for index: int in range(at_thirty.size()):
+		_assert_same_grip(at_thirty[index], at_sixty[index])
+	var start: Basis = Basis(Vector3.UP, 0.2)
+	var target: Basis = PersonVisual.grip_of(Vector3.BACK, Vector3.ZERO, Basis(), 1.0 / 30.0, false)
+	_assert_same_grip(PersonVisual.grip_of(Vector3.BACK, Vector3.ZERO, start, 1.0 / 30.0), start.slerp(target, 0.5))
+	_assert_same_grip(PersonVisual.grip_of(Vector3.BACK, Vector3.ZERO, start, 0.0), start)
+
+
+func test_a_long_frame_advances_the_picture_clock_by_only_one_tenth() -> void:
+	var state: Dictionary = {"paused": false, "hitstop": false, "ended": false}
+	var p: Person = _person()
+	var note: Dictionary = {}
+	_draw(p, note, PersonVisual.frame_delta(state, 0.3))
+	assert_almost_eq(float(note["t"]), 0.1, 0.000001)
+	assert_almost_eq(PersonVisual.FRAME_MAX, 0.1, 0.000001)
+	state["paused"] = true
+	_draw(p, note, PersonVisual.frame_delta(state, 0.3))
+	assert_almost_eq(float(note["t"]), 0.1, 0.000001)
+	state["paused"] = false
+	state["hitstop"] = true
+	_draw(p, note, PersonVisual.frame_delta(state, 0.3))
+	assert_almost_eq(float(note["t"]), 0.1, 0.000001)
+	state["ended"] = true
+	_draw(p, note, PersonVisual.frame_delta(state, 0.3))
+	assert_almost_eq(float(note["t"]), 0.2, 0.000001, "the departing scene still uses the cap")
+
+
+func test_short_miss_recovery_reaches_the_end_before_the_next_blow() -> void:
+	for wid: String in ["axe", "knife", "crowbar"]:
+		var p: Person = _person()
+		p.hands = [{"id": wid, "quality": "factory", "condition": 1.0, "loaded": 0}]
+		var note: Dictionary = {}
+		var own: Array = _combat_own()
+		p.strike_total = 0.2
+		p.strike_t = 0.2
+		p.swing_t = 0.2
+		PersonVisual.motion_of(p, note, 0.0, [], own)
+		p.strike_t = 0.0
+		p.swing_t = 0.2
+		var landed: Vector2 = PersonVisual.motion_of(p, note, 0.0, [], own)
+		p.swing_t = 0.1
+		var middle: Vector2 = PersonVisual.motion_of(p, note, 0.1, [], own)
+		assert_eq(int(middle.y), int(landed.y), wid)
+		assert_almost_eq(middle.x, lerpf(landed.x, 1.0, 0.5), 0.00001, wid)
+		p.swing_t = 0.000001
+		var end: Vector2 = PersonVisual.motion_of(p, note, 0.099999, [], own)
+		assert_eq(int(end.y), int(landed.y), wid)
+		assert_almost_eq(end.x, 1.0, 0.00001, wid)
+		p.swing_t = 0.0
+		p.strike_t = 0.2
+		var next: Vector2 = PersonVisual.motion_of(p, note, 0.000001, [], own)
+		assert_almost_eq(next.x, 0.0, 0.00001, wid)
+		assert_eq(String(own[int(next.y)]["name"]), "p_swing_one" if wid == "knife" else "p_swing_back", wid)
+
+
+func test_combat_miss_keeps_its_wait_and_allows_the_next_attack_on_time() -> void:
+	for wid: String in ["axe", "knife", "crowbar"]:
+		var game: FieldGame = _motion_field()
+		var p: Person = game.player
+		p.hands = [{"id": wid, "quality": "factory", "condition": 1.0, "loaded": 0}]
+		var note: Dictionary = {}
+		var own: Array = _combat_own()
+		game.combat.start_swing(p, game.squad[1])
+		var windup: float = p.strike_t
+		assert_gt(windup, 0.0, wid)
+		PersonVisual.motion_of(p, note, 0.0, [], own)
+		game.combat.update(windup)
+		assert_almost_eq(p.swing_t, game.combat.WHIFF_RECOVER, 0.000001, wid)
+		var landed: Vector2 = PersonVisual.motion_of(p, note, 0.0, [], own)
+		game.combat.update(0.1)
+		var middle: Vector2 = PersonVisual.motion_of(p, note, 0.1, [], own)
+		assert_eq(int(middle.y), int(landed.y), wid)
+		game.combat.update(0.099999)
+		var end: Vector2 = PersonVisual.motion_of(p, note, 0.099999, [], own)
+		assert_eq(int(end.y), int(landed.y), wid)
+		assert_almost_eq(end.x, 1.0, 0.00001, wid)
+		game.combat.update(p.swing_t)
+		game.combat.start_swing(p, game.squad[1])
+		assert_gt(p.strike_t, 0.0, wid)
+		var next: Vector2 = PersonVisual.motion_of(p, note, 0.000001, [], own)
+		assert_almost_eq(next.x, 0.0, 0.00001, wid)
+
+
+func test_hidden_blow_ends_during_the_hold_and_the_chain_expires() -> void:
+	var p: Person = _person()
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	var own: Array = _combat_own()
+	var note: Dictionary = {}
+	p.strike_total = 0.2
+	p.strike_t = 0.2
+	p.swing_t = 0.2
+	PersonVisual.motion_of(p, note, 0.0, [], own)
+	p.grabbers = [{}]
+	p.strike_t = 0.0
+	p.swing_t = 0.2
+	PersonVisual.motion_of(p, note, 0.2, [], own)
+	p.swing_t = 0.0
+	PersonVisual.motion_of(p, note, 0.2, [], own)
+	assert_almost_eq(float(note["blow_end"]), 0.4, 0.00001)
+	PersonVisual.motion_of(p, note, 2.0, [], own)
+	p.grabbers.clear()
+	PersonVisual.motion_of(p, note, 0.0, [], own)
+	p.strike_t = 0.2
+	p.swing_t = 0.2
+	var next: Vector2 = PersonVisual.motion_of(p, note, 0.0, [], own)
+	assert_eq(String(own[int(next.y)]["name"]), "p_swing_one")
+
+
+func test_a_hidden_cancel_does_not_hide_the_next_windup() -> void:
+	var p: Person = _person()
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	var own: Array = _combat_own()
+	var note: Dictionary = {}
+	p.strike_total = 0.2
+	p.strike_t = 0.2
+	p.swing_t = 0.2
+	PersonVisual.motion_of(p, note, 0.0, [], own)
+	p.grabbers = [{}]
+	p.strike_t = 0.0
+	p.swing_t = 0.0
+	PersonVisual.motion_of(p, note, 0.1, [], own)
+	assert_false(bool(note["blow_drawing"]))
+	p.strike_t = 0.2
+	p.swing_t = 0.2
+	PersonVisual.motion_of(p, note, 0.1, [], own)
+	p.grabbers.clear()
+	var next: Vector2 = PersonVisual.motion_of(p, note, 0.0, [], own)
+	assert_eq(String(own[int(next.y)]["name"]), "p_swing_back")
+
+
+func _kick_after_freeze(fps: int) -> float:
+	var p: Person = _person()
+	p.hands = [{"id": "pistol", "quality": "factory", "condition": 1.0, "loaded": 8}]
+	var state: Dictionary = {"paused": false, "hitstop": false, "ended": false, "slow": 1.0}
+	var t: float = 0.0
+	Pose._kick(p, t)
+	p.weapon()["loaded"] = 7
+	var start: float = Pose._kick(p, t)
+	var rotation: Vector3 = Pose.aim_at("one", start)["weapon"]["rot"]
+	var angle: float = rotation.x
+	for frozen: String in ["paused", "hitstop"]:
+		state[frozen] = true
+		for _tick: int in range(fps):
+			t += PersonVisual.frame_delta(state, 1.0 / float(fps))
+			var kick: float = Pose._kick(p, t)
+			rotation = Pose.aim_at("one", kick)["weapon"]["rot"]
+			assert_almost_eq(rotation.x, angle, 0.000001)
+		state[frozen] = false
+	for _tick: int in range(int(float(fps) / 10.0)):
+		t += PersonVisual.frame_delta(state, 1.0 / float(fps))
+	var resumed: float = Pose._kick(p, t)
+	assert_lt(resumed, start)
+	assert_gt(resumed, 0.0)
+	return resumed
+
+
+func test_recoil_freezes_with_the_picture_clock_at_thirty_and_sixty_hz() -> void:
+	assert_almost_eq(_kick_after_freeze(30), _kick_after_freeze(60), 0.000001)
+
+
+func test_grip_interpolates_from_an_initialized_identity_rotation() -> void:
+	var start: Basis = PersonVisual.grip_of(Vector3.DOWN, Vector3.ZERO, Basis(), 0.0, false)
+	_assert_same_grip(start, Basis())
+	var target: Basis = PersonVisual.grip_of(Vector3.BACK, Vector3.ZERO, start, 0.0, false)
+	_assert_same_grip(PersonVisual.grip_of(Vector3.BACK, Vector3.ZERO, start, 0.0), start)
+	_assert_same_grip(PersonVisual.grip_of(Vector3.BACK, Vector3.ZERO, start, 1.0 / 30.0), start.slerp(target, 0.5))
+
+
+func test_recovery_save_round_trip_and_epoch_rebuild() -> void:
+	var first: FieldGame = _field()
+	var p: Person = first.player
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	p.strike_total = 0.2
+	p.strike_t = 0.2
+	p.swing_t = 0.2
+	Pose.swing_state(p)
+	p.strike_t = 0.0
+	p.swing_t = 0.2
+	Pose.swing_state(p)
+	p.swing_t = 0.1
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+	var resumed: FieldGame = _field(FieldSave.resume_opts(saved))
+	var q: Person = resumed.player
+	var recovered: Array = Pose.swing_state(q)
+	assert_eq(recovered.size(), 3)
+	if recovered.size() > 1:
+		assert_almost_eq(float(recovered[1]), 0.5, 0.00001)
+	var note: Dictionary = {}
+	PersonVisual.motion_of(q, note, 0.0, [], _combat_own())
+	assert_true(bool(note.get("blow_on", false)), "recovery was observed after loading")
+	assert_false(note.has("blow_n"), "no windup was observed by this note")
+	q.remove_meta(Pose.SWING)
+	q.swing_t = 0.12
+	q.motion_epoch += 1
+	var rebuilt: Vector2 = PersonVisual.motion_of(q, note, 0.0, [], _combat_own())
+	assert_eq(String(_combat_own()[int(rebuilt.y)]["name"]), "p_swing_one")
+	assert_almost_eq(float(q.get_meta(Pose.SWING, -1.0)), 0.12, 0.00001)
+	assert_almost_eq(rebuilt.x, 0.45, 0.00001)
+	q.swing_t = 0.06
+	var middle: Vector2 = PersonVisual.motion_of(q, note, 0.06, [], _combat_own())
+	assert_eq(String(_combat_own()[int(middle.y)]["name"]), "p_swing_one")
+	assert_almost_eq(middle.x, 0.725, 0.00001)
+
+
+func test_epoch_does_not_invent_a_blow_from_an_unrelated_wait() -> void:
+	var p: Person = _person()
+	var note: Dictionary = {}
+	var own: Array = _combat_own()
+	PersonVisual.motion_of(p, note, 0.0, [], own)
+	p.swing_t = 0.12
+	p.motion_epoch += 1
+	var motion: Vector2 = PersonVisual.motion_of(p, note, 0.0, [], own)
+	assert_false(p.has_meta(Pose.SWING))
+	assert_eq(String(own[int(motion.y)]["name"]), "p_stand")
+
+
+func test_running_release_then_attack_holds_all_inertia_through_the_shove_plant() -> void:
+	for fps: int in [30, 60]:
+		var game: FieldGame = _motion_field()
+		var p: Person = game.player
+		var delta: float = 1.0 / float(fps)
+		p.running = true
+		p.stick = Vector2.RIGHT
+		for _tick: int in range(fps):
+			game._drive(p, delta)
+		assert_true(p.is_running_now())
+		assert_gt(p.drive_speed, 0.0)
+		p.stick = Vector2.ZERO
+		game.combat.start_swing(p, {})
+		assert_gt(p.shove_t, 0.0, "a running attack keeps decision 425's shove")
+		var before: Vector3 = p.position
+		var held_ticks: int = 0
+		while game.combat.feet_held(p):
+			game._drive(p, delta)
+			assert_eq(p.position, before, "letting go cannot coast through planted feet")
+			assert_eq(p.drive_speed, 0.0)
+			assert_false(p.moving)
+			game.combat.update(delta)
+			held_ticks += 1
+			if held_ticks > fps:
+				fail_test("the shove plant did not release")
+				break
+		assert_gt(held_ticks, 0)
+		game._drive(p, delta)
+		assert_eq(p.drive_speed, 0.0, "no input remains stopped after the plant")
+		p.stick = Vector2(0.051, 0.0)
+		game._drive(p, delta)
+		assert_gte(p.drive_speed, Person.MOVE_MIN, "the first input tick skips the standing band")
+
+
+func test_a_melee_plant_holds_released_inertia_until_the_existing_swing_end() -> void:
+	for fps: int in [30, 60]:
+		var game: FieldGame = _motion_field()
+		var p: Person = game.player
+		var delta: float = 1.0 / float(fps)
+		p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+		p.moving = true
+		p.drive_speed = 1.0
+		p.drive_dir = Vector3.RIGHT
+		p.stick = Vector2.ZERO
+		var mult: float = float(p.mults()["swing"])
+		var row: Dictionary = Motion.swing_row("axe")
+		var start: float = game.clock.elapsed
+		game.combat.start_swing(p, {})
+		var to_plant: float = float(row["feet"].x) / mult + 0.000001
+		game.clock.elapsed += to_plant
+		game.combat.update(to_plant)
+		assert_true(game.combat.feet_held(p))
+		var before: Vector3 = p.position
+		var held_ticks: int = 0
+		while game.combat.feet_held(p):
+			game._drive(p, delta)
+			assert_eq(p.position, before)
+			assert_eq(p.drive_speed, 0.0)
+			assert_false(p.moving)
+			game.clock.elapsed += delta
+			game.combat.update(delta)
+			held_ticks += 1
+			if held_ticks > fps * 3:
+				fail_test("the melee plant did not release")
+				break
+		assert_gt(held_ticks, 0)
+		assert_between(game.clock.elapsed - start, float(row["feet"].y) / mult, float(row["feet"].y) / mult + delta + 0.00001)
+		game._drive(p, delta)
+		assert_eq(p.drive_speed, 0.0)
+		p.stick = Vector2(0.051, 0.0)
+		game._drive(p, delta)
+		assert_gte(p.drive_speed, Person.MOVE_MIN)
 
 
 func test_a_thirty_degree_wall_start_keeps_accelerating_at_thirty_and_sixty_hz() -> void:
