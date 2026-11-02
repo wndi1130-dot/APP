@@ -581,7 +581,8 @@ static func _restore_work_fallback(game, save: Dictionary) -> void:
 		if p == null:
 			continue
 		var brain: Dictionary = row.get("state", {}).get("brain", {})
-		for key: String in ["work_site", "job", "side", "load", "load_kind", "boarded", "board_at", "work_wait", "work_run", "work_haul_flee"]:
+		for key: String in ["work_site", "job", "side", "load", "load_kind", "boarded", "board_at", "work_wait", "work_run", "work_haul_flee",
+				"work_haul_gave_up", "haul_best_at"]:
 			if brain.has(key):
 				p.brain[key] = brain[key]
 		p.brain.erase("coal_drop")

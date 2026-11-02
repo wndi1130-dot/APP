@@ -565,7 +565,7 @@ func _disembark(id: String, row: Dictionary, side: int) -> void:
 	var mending: bool = p.brain.get("mender", false) and not belt.is_empty() and belt["state"] == "part"
 	p.brain.merge({"work_site": id, "job": "repair" if mending else "dig", "side": side % 2, "load": 0.0,
 		"load_kind": job(id)["yield"], "boarded": false, "fleeing": false, "work_run": false, "work_haul_flee": false,
-		"work_wait": -1.0}, true)
+		"work_wait": -1.0, "work_haul_gave_up": false}, true)
 	p.brain.erase("board_at")
 	p.brain.erase("dest")
 	if p.role == "worker" and not _site(id)["workers_out"].has(String(p.pid)):
@@ -698,6 +698,8 @@ func _finished(id: String) -> bool:
 ## Wood goes down as a ground item (the player can take it too, and the field save keeps
 ## it with the ground); coal goes down as a pile only the crew picks up again.
 func drop_load(p) -> void:
+	p.brain["work_haul_gave_up"] = false
+	_end_haul_flee(p)
 	var n: float = float(p.brain.get("load", 0.0))
 	if n <= EMPTY:
 		return
@@ -738,6 +740,7 @@ func _take_drop(p, row: Dictionary, id: String) -> void:
 	var wood: bool = job(id)["yield"] == "wood"
 	var take: float = minf(_trip(id), float(row["n"]))
 	p.brain["load"] = take
+	p.brain["work_haul_gave_up"] = false
 	p.brain["load_kind"] = job(id)["yield"]
 	p.brain["job"] = "carry"
 	row["n"] = float(row["n"]) - take
@@ -760,37 +763,50 @@ func _trip(id: String) -> float:
 ## True consumes this AI turn. False lets the existing escort fight as before.
 func crew_step(p, think: bool) -> bool:
 	var id: String = String(p.brain.get("work_site", "work_site"))
+	if phase(id) != "working" or float(p.brain.get("load", 0.0)) <= EMPTY:
+		p.brain["work_haul_gave_up"] = false
+		if p.brain.get("work_haul_flee", false):
+			_end_haul_flee(p)
 	if p.brain.get("boarded", false):
+		_end_haul_flee(p)
 		_return_dig(id, String(p.pid))
 		return true
 	if phase(id) in ["retreat", "done"] or p.brain.get("job", "") == "home":
-		p.brain["work_haul_flee"] = false
+		_end_haul_flee(p)
 		_go_home(p, id, think)
 		return true
 	if p.role == "escort":
 		return false
 	if phase(id) == "hold":
-		p.brain["work_haul_flee"] = false
+		_end_haul_flee(p)
 	if not think:
 		return true
 	var threat: Dictionary = nearest_threat(p.position, WORKER_BACK_R)
+	if threat.is_empty():
+		p.brain["work_haul_gave_up"] = false
+	if p.brain.get("work_haul_flee", false) and not _haul_flee_holds(p):
+		_end_haul_flee(p)
+		p.brain["work_haul_gave_up"] = not threat.is_empty()
+		p.stop()
+		p.brain.erase("dest")
 	if not threat.is_empty():
 		_cancel_dig(p, id)
-		p.brain["fleeing"] = true
 		if p.position.distance_to(threat["pos"]) <= WORKER_RUN_R:
 			drop_load(p)
 			p.brain["work_run"] = true
-			p.brain["work_haul_flee"] = false
 		elif phase(id) == "working" and float(p.brain.get("load", 0.0)) > EMPTY \
-				and not p.brain.get("work_run", false) and not _escort_near(p, id):
+				and not p.brain.get("work_run", false) and not p.brain.get("work_haul_gave_up", false) \
+				and not _escort_near(p, id):
 			if not p.brain.get("work_haul_flee", false):
 				# 2026-11-02: keep the load until unloading, even after the threat is gone.
 				p.brain["work_haul_flee"] = true
 				p.brain.erase("haul_best")
-				p.brain.erase("haul_best_at")
+				p.brain["haul_best_at"] = game.clock.elapsed
+				_haul_flee_holds(p)
 				# _walk reuses a live path before it can change walking to running.
 				p.stop()
 				p.brain.erase("dest")
+		p.brain["fleeing"] = true
 		if not p.brain.get("work_run", false) and not p.brain.get("work_haul_flee", false):
 			var shelter: Vector3 = _behind_escort(p, threat, id)
 			if shelter.is_finite():
@@ -803,18 +819,11 @@ func crew_step(p, think: bool) -> bool:
 			game.ai._walk(p, door_of(id), true)
 			return true
 		p.brain["work_run"] = false
-	if p.brain.get("work_haul_flee", false) and not _haul_flee_holds(p):
-		p.brain["work_haul_flee"] = false
-		p.brain.erase("haul_best")
-		p.brain.erase("haul_best_at")
-		p.stop()
-		p.brain.erase("dest")
 	if p.brain.get("work_haul_flee", false):
 		p.brain["fleeing"] = true
 		_deliver(p, id, true)
 		if float(p.brain.get("load", 0.0)) <= EMPTY:
-			p.brain["work_haul_flee"] = false
-			p.brain["fleeing"] = false
+			_end_haul_flee(p)
 		return true
 	p.brain["fleeing"] = false
 	if phase(id) == "hold":
@@ -1213,16 +1222,26 @@ func nearest_threat(at: Vector3, radius: float) -> Dictionary:
 func _haul_flee_holds(p) -> bool:
 	if float(p.brain.get("load", 0.0)) <= EMPTY:
 		return false
-	var drop: Variant = p.brain.get("coal_drop")
-	if not drop is Vector3:
-		return true
 	var now: float = game.clock.elapsed
-	var d: float = p.position.distance_to(drop)
-	if d < float(p.brain.get("haul_best", INF)) - 1.0:
-		p.brain["haul_best"] = d
+	if not p.brain.has("haul_best_at"):
 		p.brain["haul_best_at"] = now
-		return true
-	return now - float(p.brain.get("haul_best_at", now)) <= HAUL_STUCK_S
+	var drop: Variant = p.brain.get("coal_drop")
+	if drop is Vector3 and drop.is_finite():
+		var d: float = p.position.distance_to(drop)
+		if not p.brain.has("haul_best"):
+			# A newly found drop is a baseline, not ground won.
+			p.brain["haul_best"] = d
+		elif d <= float(p.brain["haul_best"]) - 1.0:
+			p.brain["haul_best"] = d
+			p.brain["haul_best_at"] = now
+	return now - float(p.brain["haul_best_at"]) <= HAUL_STUCK_S
+
+
+func _end_haul_flee(p) -> void:
+	p.brain["work_haul_flee"] = false
+	p.brain["fleeing"] = false
+	p.brain.erase("haul_best")
+	p.brain.erase("haul_best_at")
 
 
 func _escort_near(p, id: String) -> bool:
@@ -1293,6 +1312,7 @@ func _worked(p, id: String, wagon_index: int = -1) -> void:
 	var take: float = minf(_trip(id), float(source.get(key, 0.0)))
 	source[key] = maxf(float(source.get(key, 0.0)) - take, 0.0)
 	p.brain["load"] = take
+	p.brain["work_haul_gave_up"] = false
 	p.brain["load_kind"] = job(id)["yield"]
 	p.brain["job"] = "carry"
 	if coal and float(source[key]) <= EMPTY:
@@ -1362,6 +1382,7 @@ func _deliver(p, id: String, run: bool = false) -> void:
 		game.actions.wood_delivered += float(p.brain.get("load", 0.0))
 	game.telemetry.trip()
 	p.brain["load"] = 0.0
+	p.brain["work_haul_gave_up"] = false
 	p.brain["job"] = "dig"
 	p.brain.erase("coal_drop")
 

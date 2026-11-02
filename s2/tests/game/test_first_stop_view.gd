@@ -477,16 +477,35 @@ func test_water_tower_follows_view() -> void:
 ## Coal goes down beside the moved train, not in the forest over the old platform: field_work.gd
 ## counts the drop from the train's rectangle, which the view ground moves with the map.
 func test_coal_drop_follows_view() -> void:
-	var drops: Array[Vector2i] = []
-	for offset: Vector2i in [OFFSET, Vector2i.ZERO]:
-		var game: FieldGame = _game({"stop_view_rows": offset.y, "stop_view_cols": offset.x})
-		var train: Rect2i = game.data["train"]
-		game.player.position = FieldGrid.center(Vector2i(39 + offset.x, train.end.y + FieldWork.COAL_DROP_OUT))
-		var drop: Vector3 = game.work.coal_drop(game.player)
-		assert_true(drop.is_finite())
-		var cell: Vector2i = FieldGrid.cell_of(drop)
-		assert_true((game.levels[0] as FieldGrid).people_can_walk(cell))
-		assert_false(_forest_has(game.data, cell), "drop %s in the forest" % cell)
-		assert_true(cell.x > train.position.x and cell.x < train.end.x - 1, "a cell in from either end of the train")
-		drops.append(cell - offset)
-	assert_eq(drops[0], drops[1], "the same place on the moved map")
+	var base: FieldGame = _game({"stop_view_rows": 0, "stop_view_cols": 0})
+	var moved: FieldGame = _game({"stop_view_rows": OFFSET.y, "stop_view_cols": OFFSET.x})
+	var base_train: Rect2i = base.data["train"]
+	var shift := Vector3(OFFSET.x, 0, OFFSET.y)
+	for x: int in [39, 0]:
+		base.player.position = base.walkable_near(FieldGrid.center(Vector2i(x, base_train.position.y - 1)))
+		moved.player.position = base.player.position + shift
+		var drops: Array[Vector2i] = []
+		for game: FieldGame in [base, moved]:
+			var train: Rect2i = game.data["train"]
+			var row: int = train.end.y + FieldWork.COAL_DROP_OUT
+			assert_lt(row, game.grid.height)
+			assert_true(game.grid.people_can_walk(FieldGrid.cell_of(game.player.position)))
+			assert_ne(FieldGrid.cell_of(game.player.position).y, row, "carrier starts away from unloading")
+			var expected: Vector3 = game.walkable_near(FieldGrid.center(Vector2i(
+				clampi(int(game.player.position.x), train.position.x + 1, train.end.x - 2), row)))
+			assert_true(game.work._can_drop_at(game.player, expected), "the expected cell is reachable")
+			var drop: Vector3 = game.work.coal_drop(game.player)
+			assert_true(drop.is_finite())
+			if not drop.is_finite():
+				return
+			assert_eq(drop, expected)
+			var cell: Vector2i = FieldGrid.cell_of(drop)
+			assert_eq(cell.y, row)
+			assert_true(game.grid.people_can_walk(cell))
+			assert_false(_forest_has(game.data, cell), "drop %s in the forest" % cell)
+			assert_true(cell.x > train.position.x and cell.x < train.end.x - 1, "a cell in from either end of the train")
+			if x == 0:
+				assert_lt(game.player.position.x, float(train.position.x))
+				assert_eq(cell.x, train.position.x + 1, "left end clamps one cell inside")
+			drops.append(cell)
+		assert_eq(drops[1], drops[0] + OFFSET, "the base drop plus the view offset")

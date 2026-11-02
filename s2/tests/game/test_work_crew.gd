@@ -537,7 +537,7 @@ func _haul_worker(escort_distance: float = 100.0) -> Variant:
 	worker.cancel_action()
 	worker.position = _at()
 	worker.brain.merge({"load": 0.25, "load_kind": "coal", "job": "carry",
-		"work_haul_flee": false, "work_run": false, "fleeing": false}, true)
+		"work_haul_flee": false, "work_haul_gave_up": false, "work_run": false, "fleeing": false}, true)
 	var drop: Vector3 = game.work.coal_drop(worker)
 	assert_true(drop.is_finite())
 	assert_gt(worker.position.distance_to(drop), FieldWork.DROP_R)
@@ -656,6 +656,150 @@ func test_haul_flee_persists_until_unloaded_after_threat_disappears() -> void:
 
 # A blocked way: no metre won toward the drop for HAUL_STUCK_S gives the flight up
 # (the load kept), and the old shelter rules take over.
+func test_haul_flee_timeout_shelters_without_reentering() -> void:
+	_send()
+	var worker: Variant = _haul_worker()
+	var drop: Vector3 = worker.brain["coal_drop"]
+	var z: Dictionary = _spawn(worker.position + Vector3(8, 0, 0))
+	game.ai._crew(worker, 0.1, true)
+	game.clock.elapsed += FieldWork.HAUL_STUCK_S + 1.0
+	for turn in 2:
+		game.ai._crew(worker, 0.1, true)
+		assert_false(bool(worker.brain.get("work_haul_flee", false)), str(turn))
+		assert_true(bool(worker.brain.get("work_haul_gave_up", false)), str(turn))
+		assert_eq(worker.brain["dest"], game.work._behind_escort(worker, z, "work_site"))
+		assert_ne(worker.brain["dest"], drop)
+		assert_eq(float(worker.brain["load"]), 0.25)
+		game.clock.elapsed += 1.0
+
+
+func test_haul_flee_missing_drop_still_times_out() -> void:
+	_send()
+	var worker: Variant = _haul_worker()
+	var cell: Vector2i = FieldGrid.cell_of(worker.position)
+	worker.position = FieldGrid.center(cell)
+	worker.stop()
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if dx != 0 or dy != 0:
+				game.grid.set_solid(cell + Vector2i(dx, dy), FieldGrid.Solid.BLOCK)
+	game.grid.refresh_paths()
+	assert_true(game.grid.people_can_walk(cell))
+	assert_false(game.work.coal_drop(worker).is_finite())
+	_spawn(worker.position + Vector3(8, 0, 0))
+	var began: float = game.clock.elapsed
+	game.ai._crew(worker, 0.1, true)
+	assert_true(bool(worker.brain.get("work_haul_flee", false)))
+	assert_false(worker.brain.has("coal_drop"), "failed delivery clears its cached drop")
+	assert_eq(float(worker.brain["haul_best_at"]), began)
+	game.clock.elapsed += FieldWork.HAUL_STUCK_S - 1.0
+	game.ai._crew(worker, 0.1, true)
+	assert_true(bool(worker.brain.get("work_haul_flee", false)))
+	assert_eq(float(worker.brain["haul_best_at"]), began)
+	game.clock.elapsed += 2.0
+	game.ai._crew(worker, 0.1, true)
+	assert_false(bool(worker.brain.get("work_haul_flee", false)))
+	assert_true(bool(worker.brain.get("work_haul_gave_up", false)))
+	assert_eq(float(worker.brain["load"]), 0.25)
+
+
+func test_haul_flee_progress_metre_boundary() -> void:
+	_send()
+	var worker: Variant = _haul_worker()
+	var at: Vector3 = worker.position
+	var began: float = game.clock.elapsed
+	game.clock.elapsed += FieldWork.HAUL_STUCK_S + 1.0
+	for won: float in [0.5, 1.0, 1.5]:
+		worker.brain["coal_drop"] = at + Vector3(10, 0, 0)
+		worker.brain["haul_best"] = 10.0
+		worker.brain["haul_best_at"] = began
+		worker.position = at + Vector3(won, 0, 0)
+		assert_eq(game.work._haul_flee_holds(worker), won >= 1.0, str(won))
+		assert_eq(float(worker.brain["haul_best_at"]), game.clock.elapsed if won >= 1.0 else began)
+		assert_eq(float(worker.brain["haul_best"]), 10.0 - won if won >= 1.0 else 10.0)
+
+
+func test_haul_flee_phase_and_home_clear_fleeing() -> void:
+	_send()
+	for next_phase: String in ["retreat", "done", "hold", "home"]:
+		game.work._site("work_site")["phase"] = "working"
+		game.zombies.list.clear()
+		var worker: Variant = _haul_worker()
+		_spawn(worker.position + Vector3(8, 0, 0))
+		game.ai._crew(worker, 0.1, true)
+		assert_true(bool(worker.brain.get("fleeing", false)))
+		if next_phase == "home":
+			worker.brain["job"] = "home"
+		else:
+			game.work._site("work_site")["phase"] = next_phase
+		game.ai._crew(worker, 0.1, false)
+		assert_false(bool(worker.brain.get("work_haul_flee", false)), next_phase)
+		assert_false(bool(worker.brain.get("fleeing", false)), next_phase)
+		game.zombies.list.clear()
+		game.ai._crew(worker, 0.1, true)
+		assert_false(bool(worker.brain.get("fleeing", false)), next_phase)
+
+
+func test_haul_flee_give_up_resets_after_threat_leaves() -> void:
+	_send()
+	var worker: Variant = _haul_worker()
+	var z: Dictionary = _spawn(worker.position + Vector3(8, 0, 0))
+	game.ai._crew(worker, 0.1, true)
+	game.clock.elapsed += FieldWork.HAUL_STUCK_S + 1.0
+	game.ai._crew(worker, 0.1, true)
+	assert_true(bool(worker.brain.get("work_haul_gave_up", false)))
+	z["pos"] = worker.position + Vector3(8.01, 0, 0)
+	game.ai._crew(worker, 0.1, true)
+	assert_false(bool(worker.brain.get("work_haul_gave_up", true)))
+	z["pos"] = worker.position + Vector3(8, 0, 0)
+	game.ai._crew(worker, 0.1, true)
+	assert_true(bool(worker.brain.get("work_haul_flee", false)))
+
+
+func test_haul_flee_give_up_resets_with_load_or_phase() -> void:
+	_send()
+	var worker: Variant = _haul_worker()
+	worker.brain["work_haul_gave_up"] = true
+	game.work.drop_load(worker)
+	assert_false(bool(worker.brain.get("work_haul_gave_up", true)))
+	worker.brain["work_haul_gave_up"] = true
+	game.work._take_drop(worker, game.work.dropped[0], "work_site")
+	assert_false(bool(worker.brain.get("work_haul_gave_up", true)))
+	worker.brain["work_haul_gave_up"] = true
+	worker.brain["coal_drop"] = game.work.coal_drop(worker)
+	worker.position = worker.brain["coal_drop"]
+	game.work._deliver(worker, "work_site")
+	assert_eq(float(worker.brain["load"]), 0.0)
+	assert_false(bool(worker.brain.get("work_haul_gave_up", true)))
+	worker.brain["load"] = 0.25
+	worker.brain["work_haul_gave_up"] = true
+	game.work._site("work_site")["phase"] = "hold"
+	game.ai._crew(worker, 0.1, false)
+	assert_false(bool(worker.brain.get("work_haul_gave_up", true)))
+
+
+func test_haul_flee_grid_fallback_keeps_give_up() -> void:
+	_send()
+	var worker: Variant = _haul_worker()
+	_spawn(worker.position + Vector3(8, 0, 0))
+	game.ai._crew(worker, 0.1, true)
+	game.clock.elapsed += FieldWork.HAUL_STUCK_S + 1.0
+	game.ai._crew(worker, 0.1, true)
+	assert_true(bool(worker.brain.get("work_haul_gave_up", false)))
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	var resumed: FieldGame = FieldGame.new()
+	resumed.opts = FieldSave.resume_opts(saved)
+	add_child_autofree(resumed)
+	resumed.set_process(false)
+	var back: Variant = resumed.work._person(worker.pid)
+	assert_not_null(back)
+	if back == null:
+		return
+	assert_true(bool(back.brain.get("work_haul_gave_up", false)))
+	assert_false(bool(back.brain.get("work_haul_flee", true)))
+
+
 func test_haul_flee_gives_up_when_it_wins_no_ground() -> void:
 	_send()
 	var worker: Variant = _haul_worker()
@@ -748,8 +892,11 @@ func test_haul_flee_new_disembark_resets_state() -> void:
 	var worker: Variant = _role("worker")[0]
 	assert_false(bool(worker.brain.get("work_haul_flee", true)))
 	worker.brain["work_haul_flee"] = true
+	worker.brain["work_haul_gave_up"] = true
 	game.work._disembark("work_site", {"id": worker.pid}, 0)
 	assert_false(bool(worker.brain.get("work_haul_flee", true)))
+	assert_false(bool(worker.brain.get("work_haul_gave_up", true)))
+	assert_false(bool(worker.brain.get("fleeing", true)))
 
 
 func _haul_flee_save_round_trip(grid_mismatch: bool) -> void:
@@ -772,6 +919,7 @@ func _haul_flee_save_round_trip(grid_mismatch: bool) -> void:
 	if back == null:
 		return
 	assert_true(bool(back.brain.get("work_haul_flee", false)))
+	assert_eq(back.brain.get("haul_best_at"), worker.brain["haul_best_at"])
 	assert_eq(float(back.brain["load"]), 0.25)
 	if grid_mismatch:
 		assert_false(back.brain.has("coal_drop"), "new grid chooses its own unloading route")
