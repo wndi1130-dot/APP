@@ -45,7 +45,7 @@ func test_soaked_clothes_add_weight_but_do_not_lower_capacity() -> void:
 
 func test_immobile_load_cannot_start_a_climb() -> void:
 	var p := Person.new()
-	p.items = {"wood": 17}
+	p.items = {"wood": 23} # 23 * 0.7 > twice the unchanged pack limit.
 	assert_eq(p.carry_state(), 3)
 	p.start_action("climb", "넘기", 2.0, Callable())
 	assert_eq(p.action, "")

@@ -204,7 +204,7 @@ func test_over_the_load_or_with_a_big_thing_the_run_on_walks() -> void:
 	assert_false(Gait.runs(p))
 	assert_eq(_drawn(p, note, own, true), Gait.CARRY_BIG, "the bell in the arms: it walks, carrying it")
 	p.items.clear()
-	p.add_item("scrap", int(ceil(p.carry_limit() * 1.25)))
+	p.add_item("scrap", int(ceil(p.carry_limit() * 1.5)))
 	assert_eq(p.carry_state(), 2)
 	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_WALK, "over the load: it walks")
 	p.items.clear()

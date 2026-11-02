@@ -39,7 +39,7 @@ func test_over_the_limit_or_with_a_big_thing_the_feet_walk() -> void:
 	assert_eq(p.carry_state(), 1)
 	assert_true(p.load_lets_run(), "past half still runs, short of breath sooner")
 	p.items.clear()
-	p.add_item("scrap", int(ceil(p.carry_limit() * 1.25)))
+	p.add_item("scrap", int(ceil(p.carry_limit() * 1.5)))
 	assert_eq(p.carry_state(), 2)
 	assert_false(p.load_lets_run(), "over the limit: a walk")
 	p.items.clear()
