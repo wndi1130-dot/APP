@@ -467,7 +467,7 @@ func _process(delta: float) -> void:
 		var baked: Dictionary = b_own if own else b_vat
 		if baked.has("arm") and (not gun_busy(p) or (own and loading(note, b_own.get("clips", [])))):
 			var hand := arm_at(baked["arm"], b_own_frames if own else b_frames, drawn)
-			var grip: Basis = grip_of(hand[0], hand[1], note.get("grip", Basis()), delta)
+			var grip: Basis = grip_of(hand[0], hand[1], note.get("grip", Basis()), delta, note.has("grip"))
 			note["grip"] = grip
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * grip, lean * hand[0])
@@ -477,7 +477,7 @@ func _process(delta: float) -> void:
 			var hand := arm_at(baked["arm"], b_own_frames, drawn)
 			var hold := Pose.hold_of(p.weapon_id())
 			var still: Vector3 = Pose.aim_at(hold)["weapon"]["pos"]
-			var shot: Dictionary = Pose.aim_at(hold, Pose._kick(p, Time.get_ticks_msec()))["weapon"]
+			var shot: Dictionary = Pose.aim_at(hold, Pose._kick(p, float(p.get_meta(Pose.PICTURE_TIME, 0.0))))["weapon"]
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * Basis.from_euler(shot["rot"]), lean * (hand[0] + shot["pos"] - still))
 	for d: Dictionary in worn.values():
@@ -573,7 +573,13 @@ func _hide_boxes(p) -> void:
 ## the living's own folder's motions: when y is one of those, is_own(note).
 static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Array = []) -> Vector2:
 	if int(note.get("epoch", p.motion_epoch)) != p.motion_epoch:
+		var had_blow: bool = note.has("blow_n") or bool(note.get("blow_on", false)) or p.has_meta(Pose.SWING)
 		note.clear()
+		p.remove_meta(Pose.BLOW_WAY)
+		if had_blow and p.strike_t <= 0.0 and p.swing_t > 0.0 and p.shove_t <= 0.0:
+			p.set_meta(Pose.SWING, p.swing_t)
+			if not p.has_meta(Pose.MODE):
+				p.set_meta(Pose.MODE, Pose.strike_mode(p.strike_kind, p.strike_at))
 	note["epoch"] = p.motion_epoch
 	if not note.has("ground_walk"):
 		# Decision 425: rebuild from the saved movement, without adding save fields.
@@ -603,6 +609,9 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	# Noted every drawing, so a turn made in another motion (aiming, a blow) is not stepped later.
 	var turned := _turned(p, note, t)
 	_note_posture(p, note, delta)
+	var blow := blow_of(p, own, note, t)
+	var blow_aim: float = float(note.get("blow_aim", 0.0))
+	note.erase("blow_aim")
 	var lying: bool = p.body.downed or p.body.dead or p.fallen_t > 0.0
 	if lying:
 		# Dead or knocked down it goes over on its back; down and still alive
@@ -659,8 +668,8 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	if bitten < 0 and hurt_k(note, t) > 0.0:
 		note["motion"] = HIT
 		return Vector2(0.0, HIT)
-	var blow := blow_of(p, own, note, t)
 	if blow.y >= 0.0:
+		note["blow_aim"] = blow_aim
 		note["motion"] = OWN_BASE + int(blow.y)
 		return blow
 	if p.shove_t > 0.0 or p.lunge_t > 0.0:
@@ -844,15 +853,16 @@ static func blow_kind(wid: String, hands: int, mode: String = "swing") -> String
 ## on the way back. y is -1 with no blow, or none of its own. `note` keeps which
 ## way the last blow went and when it ended (at the visual's own time t).
 static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vector2:
-	if own.is_empty():
-		return Vector2(0.0, -1.0)
 	var sw: Array = Pose.swing_state(p)
 	if sw.is_empty():
 		if note.get("blow_on", false):
 			# Chain timing ends with the rule's wait, even after the picture returns.
 			note["blow_on"] = p.swing_t > 0.0 and p.shove_t <= 0.0
 			note["blow_drawing"] = false
-			note["blow_end"] = t
+			if bool(note["blow_on"]):
+				note["blow_deadline"] = t + p.swing_t
+			else:
+				note["blow_end"] = minf(t, float(note.get("blow_deadline", t)))
 			note.erase("blow_aim")
 			p.remove_meta(Pose.BLOW_WAY)
 		return Vector2(0.0, -1.0)
@@ -861,8 +871,13 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 	if drawing and not note.get("blow_drawing", false):
 		var follows: bool = note.get("blow_on", false) or (note.has("blow_end") and t - float(note["blow_end"]) <= CHAIN_GAP)
 		note["blow_n"] = int(note.get("blow_n", -1)) + 1 if follows else 0
+		note.erase("blow_deadline")
 	note["blow_drawing"] = drawing
 	note["blow_on"] = true
+	if not drawing:
+		note["blow_deadline"] = t + p.swing_t
+	if own.is_empty():
+		return Vector2(0.0, -1.0)
 	var mode: String = p.get_meta(Pose.MODE, "swing")
 	var wid: String = p.weapon_id()
 	var hands: int = int(Pose.W.get_data(wid).get("hands", 1))
@@ -1220,7 +1235,7 @@ static func arm_at(arm: PackedVector3Array, tab: Array, drawn: Color) -> Array:
 ## fails, so it turns toward the way the forearm points about the up axis
 ## instead; and it only goes part way toward the new way each frame (from
 ## `was`), so it never flips in one frame.
-static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.0 / 30.0) -> Basis:
+static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.0 / 30.0, initialized: bool = true) -> Basis:
 	var f := (hand - elbow).normalized()
 	if f == Vector3.ZERO:
 		return was
@@ -1233,7 +1248,7 @@ static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.
 	if x == Vector3.ZERO:
 		x = f
 	var want := Basis(x, z.cross(x), z).orthonormalized()
-	if was == Basis() or not was.is_finite():
+	if not initialized or not was.is_finite():
 		return want
 	var follow: float = 1.0 - exp(-maxf(delta, 0.0) / GRIP_TAU)
 	return was.orthonormalized().slerp(want, follow)

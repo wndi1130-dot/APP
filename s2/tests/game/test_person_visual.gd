@@ -251,7 +251,7 @@ func test_a_blow_is_the_living_own_swing() -> void:
 		p.strike_t = 0.0
 		p.swing_t = 0.3
 		assert_almost_eq(PersonVisual.blow_of(p, own).x, float(want[2]), 0.001, "the blow lands")
-		p.swing_t = 0.3 - PersonVisual.Pose.recover_seconds(String(want[0])) * 0.5
+		p.swing_t = 0.3 - minf(0.3, PersonVisual.Pose.recover_seconds(String(want[0]))) * 0.5
 		assert_almost_eq(PersonVisual.blow_of(p, own).x, float(want[2]) + (1.0 - float(want[2])) * 0.5, 0.001, "half way back")
 		p.swing_t = 0.0
 		PersonVisual.blow_of(p, own)
@@ -362,11 +362,11 @@ func test_the_weapon_sits_in_the_baked_right_hand() -> void:
 	assert_lt(at[0].x, -0.2, "on the right (-x, the body facing +z)")
 	assert_between(at[0].y, 0.5, 1.0, "at the hip")
 	assert_lt(at[0].y, at[1].y, "hanging below the elbow")
-	assert_gt(PersonVisual.grip_of(at[0], at[1], Basis()).z.z, 0.8, "hanging, the head forward")
+	assert_gt(PersonVisual.grip_of(at[0], at[1], Basis(), 1.0 / 30.0, false).z.z, 0.8, "hanging, the head forward")
 	var out := PersonVisual.arm_at(table, frames, Color(0.4, PersonVisual.clip_named(clips, PersonVisual.OWN_SHOVE, -1), 1.0, 1.0))
 	assert_gt(out[0].z, 0.5, "thrust out")
-	assert_gt(PersonVisual.grip_of(out[0], out[1], Basis()).z.y, 0.8, "the head up")
-	var turned := PersonVisual.grip_of(out[0], out[1], PersonVisual.grip_of(at[0], at[1], Basis()))
+	assert_gt(PersonVisual.grip_of(out[0], out[1], Basis(), 1.0 / 30.0, false).z.y, 0.8, "the head up")
+	var turned := PersonVisual.grip_of(out[0], out[1], PersonVisual.grip_of(at[0], at[1], Basis(), 1.0 / 30.0, false))
 	assert_between(turned.z.y, 0.1, 0.95, "it turns part way in one frame, not all at once")
 
 

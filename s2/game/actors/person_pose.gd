@@ -23,6 +23,7 @@ const Protest = preload("res://game/actors/person_protest.gd")
 const W = preload("res://game/sim/weapons.gd")
 const LOADED: String = "pose_loaded"  # rounds in the hand's weapon last frame; one fewer is a shot
 const KICK_AT: String = "pose_kick_at"
+const PICTURE_TIME: String = "pose_picture_time"
 const KICK_MS: float = 180.0          # how long a shot throws the gun back, milliseconds (picture only)
 
 
@@ -99,7 +100,7 @@ static func swing_state(p) -> Array:
 	if rest < p.swing_t:
 		rest = p.swing_t
 		p.set_meta(SWING, rest)
-	var recover: float = (rest - p.swing_t) / recover_seconds(p.weapon_id())
+	var recover: float = (rest - p.swing_t) / minf(rest, recover_seconds(p.weapon_id()))
 	if recover >= 1.0:
 		p.remove_meta(SWING)
 		p.remove_meta(MODE)
@@ -286,7 +287,7 @@ static func held_at(front: bool, t: float) -> Dictionary:
 
 ## The kick of a shot, 0..1: watches the rounds in the hand's gun, and one
 ## fewer than last frame is a shot (reloading only ever adds).
-static func _kick(p, now_ms: int) -> float:
+static func _kick(p, now: float) -> float:
 	var h: Dictionary = p.weapon()
 	var loaded := int(h.get("loaded", 0)) if not h.is_empty() else 0
 	# A weapon swapped into the hand starts its own count.
@@ -294,10 +295,10 @@ static func _kick(p, now_ms: int) -> float:
 	var was: String = String(p.get_meta(LOADED, key))
 	p.set_meta(LOADED, key)
 	if was.get_slice(":", 0) == p.weapon_id() and loaded < int(was.get_slice(":", 1)):
-		p.set_meta(KICK_AT, now_ms)
+		p.set_meta(KICK_AT, now)
 	if not p.has_meta(KICK_AT):
 		return 0.0
-	return 1.0 - clampf(float(now_ms - int(p.get_meta(KICK_AT))) / KICK_MS, 0.0, 1.0)
+	return 1.0 - clampf((now - float(p.get_meta(KICK_AT))) / (KICK_MS / 1000.0), 0.0, 1.0)
 
 
 ## How far a bow is drawn: the aim circle from its widest (0) to its floor (1).
@@ -315,7 +316,7 @@ static func _hands_busy(p, arms: Array) -> bool:
 	var now_ms := Time.get_ticks_msec()
 	var t := float(now_ms) / 1000.0
 	var hold := hold_of(p.weapon_id())
-	var kick := _kick(p, now_ms)
+	var kick := _kick(p, float(p.get_meta(PICTURE_TIME, 0.0)))
 	var pose: Dictionary = {}
 	if not p.grabbers.is_empty():
 		pose = held_at(p.grab_front, t)
