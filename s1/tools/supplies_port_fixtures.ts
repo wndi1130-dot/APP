@@ -16,6 +16,7 @@ import { createS1cGame } from '../src/game/domestic/state';
 import type { Task } from '../src/game/domestic/state';
 import { payUpkeep, runWorkshop, workPower } from '../src/game/domestic/workshop';
 import { furnishTick } from '../src/game/domestic/lawtech';
+import { D } from '../src/game/domestic/data';
 
 const plain = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 const groups: Record<string, unknown[]> = { enable: [], use: [], ledger: [], stops: [], fields: [], departures: [], cards: [], conditions: [], settles: [], work_order: [], workshop_settles: [] };
@@ -48,7 +49,8 @@ for (const order of [['parts', 'restore', 'modify'], ['restore', 'modify', 'part
   ['sup', 'modify', 'parts', 'restore']] as Task[][]) {
   const g = workshopBoard();
   g.dom!.order = order;
-  g.dom!.job = { kind: 'insulate', car: 'tail1', progress: 0, need: 10 };
+  // startJob always keeps what the job paid (insulation: wood only).
+  g.dom!.job = { kind: 'insulate', car: 'tail1', progress: 0, need: 10, paid: { wood: D.insulateWood, scrap: 0, parts: 0 } };
   g.dom!.restoring = 'w6';
   g.dom!.techs.w6 = { stage: 'restoring', defect: false, progress: 0, need: 20 };
   mutate('work_order', `user/${order.join(',')}`, g, runWorkshop);

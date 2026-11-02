@@ -11,6 +11,7 @@ const PATH = "res://tests/fixtures/train/supplies_vectors.json"
 const SliceFlow = preload("res://game/slice_flow.gd")
 const SliceSave = preload("res://game/sim/slice_save.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const RouteState = preload("res://game/train/route_state.gd")
 var _flows: Array = []
 var _slot: String = "user://supplies_2a_%d_" % OS.get_process_id()
 var _data: Dictionary
@@ -69,6 +70,14 @@ func test_enabled_board_one_stretch_per_settle_through_slice() -> void:
 		assert_true(Workshop.start(g, "bow"))
 		var after: Dictionary = Settle.settle(g, flow.train_t)
 		assert_eq(after["lastSettle"]["workshop"]["events"].size(), 1)
+		if campaign:
+			# A bare settlement leaves no valid route around it (an open visit needs a
+			# stop), so carry its results onto the flow's own route board.
+			var routed: Dictionary = flow.train_g.duplicate(true)
+			for key: String in ["supOn", "dom", "lastSettle"]:
+				routed[key] = after[key]
+			assert_eq(RouteState.problem(routed, flow.train_t), "")
+			after = routed
 		flow._take(after)
 		assert_eq(flow.pending_shop_events, after["lastSettle"]["workshop"]["events"])
 		flow.pending_shop_events.clear()
@@ -205,13 +214,24 @@ func test_s1_workshop_settles_whole_board_vectors() -> void:
 func test_enabled_settle_runs_one_stretch_after_use_before_leak() -> void:
 	var g: Dictionary = _board()
 	g["dom"]["parts"] = 0
+	g["dom"]["target"] = Workshop.TARGET_MAX
+	g["dom"]["scrap"] = 100.0
+	g["dom"]["wood"] = 100.0
+	# One stretch's parts on this board (its craftsman and hands set the work), and
+	# proof that a second stretch would show in the count.
+	var one: Dictionary = g.duplicate(true)
+	Workshop.settle_stretch(one, _t)
+	var per_stretch: int = int(one["dom"]["parts"])
+	Workshop.settle_stretch(one, _t)
+	assert_gt(per_stretch, 0)
+	assert_gt(int(one["dom"]["parts"]), per_stretch, "a second stretch would add parts")
 	var before: String = JSON.stringify(g)
 	var after: Dictionary = Settle.settle(g, _t)
 	assert_eq(JSON.stringify(g), before, "settle preserves input")
 	assert_true(after["lastSettle"].has("workshop"))
 	assert_eq(after["lastSettle"]["workshop"]["seg"], int(g["seg"]))
-	assert_eq(after["dom"]["parts"], 4.0, "one stretch only")
-	assert_eq(after["lastSettle"]["notes"].count("공방: 부품 4"), 1)
+	assert_eq(int(after["dom"]["parts"]), per_stretch, "one stretch only")
+	assert_eq(after["lastSettle"]["notes"].count("공방: 부품 %d" % per_stretch), 1)
 	# Check the placement as well as the observable one-stretch receipt.
 	var source: String = FileAccess.get_file_as_string("res://game/train/turn/turn_settle.gd")
 	assert_lt(source.find("Supplies.use(g, t)"), source.find("TrainWorkshop.settle_stretch(g, t)"))
@@ -272,7 +292,10 @@ func test_work_order_keeps_user_order_and_visits_new_sup_once() -> void:
 	assert_eq(result["used"], 1.0)
 	assert_eq(result["did"].count("생활 공방 복원"), 1)
 	assert_eq(Order.normalized(g), ["restore", "parts", "modify", "sup"] as Array[String])
-	assert_eq(g["dom"]["order"], before, "normalization is read-only")
+	# S1 completeRestore: w6 done on a supplies run puts sup at the end of the stored order, once.
+	assert_eq(g["dom"]["order"], before + ["sup"])
+	Workshop.run(g, _t)
+	assert_eq(g["dom"]["order"].count("sup"), 1, "once")
 	assert_false(g["dom"].has("supWork"), "2a does not produce supplies")
 
 
