@@ -184,6 +184,7 @@ const BRAKE_STAND_AT: float = 2.4
 const FEEL_LOUD: float = 0.25
 const TELL_RANGE: float = 40.0
 const TELL_STANDIN_PITCH: float = 1.5
+const TELL_OWN_PITCH: Array = [0.94, 1.06]
 const DEPART_BEATS: Array = [["impact", 0.0], ["pen", 0.12], ["whistle", 0.75]]
 const MOAN_SLOTS: int = 6
 const MOAN_RANGE: float = 25.0
@@ -246,6 +247,11 @@ const SAYS: Dictionary = {
 	"fall": {"loud": 0.7, "pitch": 0.82, "gap": [0.0, 0.0], "cut": 0.5},
 }
 const STATE_SAYS: Dictionary = {"chase": "chase", "dash": "chase", "attack": "bite", "grab": "bite"}   # the rest: idle
+## The calls that have files of their own once those are in: noticing you, taking
+## a blow, going down. Said in the body's own voice (its pitch, nothing more) and
+## never the file just heard; until then one of the moans, pitched as SAYS has it.
+## Wandering, chasing and biting stay with the moans.
+const SAY_GROUPS: Dictionary = {"notice": "dead_notice", "hit": "dead_hit", "fall": "dead_fall"}
 const CUT_FADE: float = 400.0         # dB a second: a cut voice ends without a click
 ## A horde setting off: birds at most this often, and a far thud each time
 ## (an impact file this low, through the dullest bus).
@@ -1008,23 +1014,43 @@ func _next_file(kind: String, last: int) -> int:
 	return pick
 
 
+## What a call is said with: [group, file index, stream, pitch before distance]
+## — a file of its own call (SAY_GROUPS) while it has any, else a moan the voice
+## did not say last (`last`), pitched as SAYS has it; [] with neither.
+func _call_for(what: String, v: Dictionary, last: int) -> Array:
+	var own: String = String(SAY_GROUPS.get(what, ""))
+	if own != "":
+		if not lib.has(own):
+			lib[own] = _load_group(own)
+		var j := _fresh_file(own)
+		if j >= 0:
+			return [own, j, lib[own][j], float(v["pitch"])]
+	if not has("moan"):
+		return []
+	var i := _next_file(String(v["kind"]), last)
+	return ["moan", i, lib["moan"][i], float(v["pitch"]) * float(SAYS[what]["pitch"])]
+
+
 ## One of the dead says something through its slot.
 func _say(s: Dictionary, z: Dictionary, what: String, d: float) -> void:
 	var row: Dictionary = SAYS[what]
 	var v := voice_of(z)
 	var p: AudioStreamPlayer3D = s["player"]
 	var band: Array = moan_band(d)
-	var i := _next_file(String(v["kind"]), int(s.get("file", -1)))
-	s["file"] = i
+	var call := _call_for(what, v, int(s.get("file", -1)))
+	if call.is_empty():
+		return
+	if String(call[0]) == "moan":
+		s["file"] = int(call[1])
 	s["loud"] = float(row["loud"])
 	s["cut"] = float(row["cut"])
 	s["wait"] = randf_range(float(row["gap"][0]), float(row["gap"][1]))
-	p.stream = lib["moan"][i]
-	p.pitch_scale = float(v["pitch"]) * float(row["pitch"]) * float(band[1]) * randf_range(0.97, 1.03)
+	p.stream = call[2]
+	p.pitch_scale = float(call[3]) * float(band[1]) * randf_range(0.97, 1.03)
 	p.bus = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
 	p.volume_db = _db(clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0) * float(s["loud"]))
 	p.play()
-	said.append([int(z["id"]), what, i])
+	said.append([int(z["id"]), what, int(call[1]), String(call[0])])
 
 
 func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
@@ -1060,8 +1086,10 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 	s["was"] = row
 	s["stun"] = float(z.get("stun", 0.0))
 	s["wait"] = float(s["wait"]) - delta
-	if not has("moan") or z["state"] == "tell":
+	if z["state"] == "tell":
 		return   # about to run: its own rasp is heard (lunge_tell)
+	if not in_view(z["pos"]):
+		return   # gone out of sight: what it was saying runs out (VOICE_KEEP), nothing new
 	if cue != "" or float(s["wait"]) <= 0.0:
 		s["fading"] = false
 		_say(s, z, cue if cue != "" else row, d)
@@ -1070,16 +1098,18 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 ## One of the dead in sight goes down: a short breath out in its own voice,
 ## under the fall's beats. Not through a slot (the slot lets go of it).
 func _fall_voice(z: Dictionary, at: Vector3) -> void:
-	if not has("moan") or not in_view(z["pos"]):
+	if not in_view(z["pos"]):
 		return
 	var row: Dictionary = SAYS["fall"]
 	var v := voice_of(z)
 	var d: float = at.distance_to(z["pos"])
-	var i := _next_file(String(v["kind"]), -1)
+	var call := _call_for("fall", v, -1)
+	if call.is_empty():
+		return
 	var band: Array = moan_band(d)
-	said.append([int(z["id"]), "fall", i])
+	said.append([int(z["id"]), "fall", int(call[1]), String(call[0])])
 	var bus: String = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
-	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], bus, float(row["cut"]))
+	_one_shot(String(call[0]), z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(call[3]) * float(band[1]), call[2], bus, float(row["cut"]))
 
 
 # ---------------------------------------------------------------- wind
@@ -1893,12 +1923,22 @@ func chief_feel(number: int) -> void:
 
 
 ## One of the dead drops low before it runs: its rasp, for the player's ear
-## only. Until the file is in, it is a moan pitched up.
+## only. Until the file is in, it is a moan pitched up. Its own files are read
+## the first time one is heard (it is not in GROUPS), never the one just heard,
+## each a little higher or lower (TELL_OWN_PITCH).
 func lunge_tell(at: Vector3) -> void:
 	played.append(TELL_GROUP)
+	if not lib.has(TELL_GROUP):
+		lib[TELL_GROUP] = _load_group(TELL_GROUP)
 	var own: bool = has(TELL_GROUP)
 	var d: float = at.distance_to(game.player.position)
-	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH, null, ROOM_BUS if in_room(at) else "SFX")
+	var lin: float = TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0)
+	var bus: String = _bus_at(at)
+	if own:
+		var j := _fresh_file(TELL_GROUP)
+		_one_shot(TELL_GROUP, at, lin, randf_range(float(TELL_OWN_PITCH[0]), float(TELL_OWN_PITCH[1])), lib[TELL_GROUP][j], bus)
+	else:
+		_one_shot("moan", at, lin, TELL_STANDIN_PITCH, null, bus)
 
 
 ## A blow's own sound (hit_feel.gd), heard to `reach` m and duller through a
