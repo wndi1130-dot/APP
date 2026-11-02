@@ -2296,7 +2296,12 @@ static func _value(spec: Variant, w: float) -> float:
 
 
 ## A keyed value at progress u: eased from key to key, held past the ends.
+## Optional departure tags: "in" accelerates, "out" decelerates.
 static func _keyed(keys: Array, u: float) -> float:
+	var failure: String = _key_ease_error(keys, "<direct>")
+	if not failure.is_empty():
+		push_error(failure)
+		return NAN
 	if u <= float(keys[0][0]):
 		return float(keys[0][1])
 	for n in range(1, keys.size()):
@@ -2304,8 +2309,57 @@ static func _keyed(keys: Array, u: float) -> float:
 			var a: Array = keys[n - 1]
 			var b: Array = keys[n]
 			var t := (u - float(a[0])) / maxf(float(b[0]) - float(a[0]), 0.0001)
+			# The departure key owns this segment.
+			if a.size() > 2:
+				if u >= float(b[0]):
+					return float(b[1])
+				var ease: String = String(a[2])
+				if ease == "in":
+					return lerpf(float(a[1]), float(b[1]), t * t)
+				if ease == "out":
+					return lerpf(float(a[1]), float(b[1]), 1.0 - (1.0 - t) * (1.0 - t))
 			return lerpf(float(a[1]), float(b[1]), smoothstep(0.0, 1.0, t))
 	return float(keys[keys.size() - 1][1])
+
+
+static func _key_ease_error(keys: Array, clip: String) -> String:
+	for key: Array in keys:
+		if key.size() <= 2:
+			continue
+		if typeof(key[2]) == TYPE_STRING:
+			var ease: String = String(key[2])
+			if ease == "in" or ease == "out":
+				continue
+		return "KEY_EASE_UNKNOWN clip=%s value=%s" % [clip, str(key[2])]
+	return ""
+
+
+## Scan nested values, including aim axes and sums, before sampling.
+static func _key_ease_failures(spec: Variant, clip: String) -> Array[String]:
+	var failures: Array[String] = []
+	if spec is Dictionary:
+		var fields: Dictionary = spec
+		for value: Variant in fields.values():
+			failures.append_array(_key_ease_failures(value, clip))
+	elif spec is Array:
+		var parts: Array = spec
+		if parts.size() == 2 and typeof(parts[0]) == TYPE_STRING and String(parts[0]) == "keys":
+			var failure: String = _key_ease_error(parts[1], clip)
+			if not failure.is_empty():
+				failures.append(failure)
+		else:
+			for value: Variant in parts:
+				failures.append_array(_key_ease_failures(value, clip))
+	return failures
+
+
+static func _clip_key_ease_failures(list: Array, own_poses: Array = []) -> Array[String]:
+	var failures: Array[String] = []
+	for entry: Array in list:
+		failures.append_array(_key_ease_failures(LAYERS.get(entry[4], {}), String(entry[0])))
+	for entry: Array in own_poses:
+		failures.append_array(_key_ease_failures(LAYERS.get(entry[0], {}), String(entry[0])))
+	return failures
 
 
 ## Relax neutral standing legs without changing their lengths. Place each
@@ -3429,6 +3483,9 @@ static func _span_share(layer: String) -> float:
 
 
 static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary:
+	var key_failures: Array[String] = _clip_key_ease_failures(list)
+	if not key_failures.is_empty():
+		return {"fit_failures": key_failures}
 	var player: AnimationPlayer = ctx["player"]
 	var mesh_node: MeshInstance3D = ctx["mesh_node"]
 	var clips := []
@@ -3481,6 +3538,9 @@ static func _bake_list(ctx: Dictionary, list: Array, poses: Array) -> Dictionary
 ## then one POSES_CLIP of `poses` when there are any. Nothing in the result
 ## comes from a motion set. {} if something is missing.
 static func bake_own(body_root: Node3D, list: Array = OWN_CLIPS, poses: Array = OWN_POSES) -> Dictionary:
+	var key_failures: Array[String] = _clip_key_ease_failures(list, poses)
+	if not key_failures.is_empty():
+		return {"fit_failures": key_failures}
 	var ctx := prepare_own(body_root, list + poses)
 	if ctx.is_empty():
 		return {}
@@ -3661,6 +3721,10 @@ static func compact(assets: Dictionary, keep_full: Array = []) -> Dictionary:
 ## Writes vat.bin (the picture's half floats as they are: an exported game
 ## cannot read EXR; a compacted bake's bytes), mesh.res and clips.json into `dir`.
 static func save(assets: Dictionary, dir: String) -> void:
+	for failure: String in assets.get("fit_failures", []):
+		if failure.begins_with("KEY_EASE_UNKNOWN "):
+			push_error("body_bake: refusing save: " + failure)
+			return
 	DirAccess.make_dir_recursive_absolute(dir)
 	var image: Image = assets["image"]
 	var raw := FileAccess.open(dir.path_join("vat.bin"), FileAccess.WRITE)
