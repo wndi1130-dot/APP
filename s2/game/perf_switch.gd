@@ -3,6 +3,8 @@
 class_name PerfSwitch
 extends RefCounted
 
+const NightLightView = preload("res://game/world/night_light_view.gd")
+
 const FILE := "user://perf_switch.json"
 const CLOUD_SOURCE := &"_perf_cloud_source"
 const CLOUD_OFF := &"_perf_cloud_off"
@@ -76,7 +78,7 @@ static func _ignored(reason: String, diagnostic: Dictionary) -> void:
 
 static func _valid(s: Dictionary) -> Dictionary:
 	var valid: Dictionary = {}
-	for key in ["sun_shadow", "atlas_16_bits", "view_fill", "cloud"]:
+	for key in ["sun_shadow", "atlas_16_bits", "view_fill", "cloud", "night_sparks"]:
 		if s.get(key) is bool:
 			valid[key] = s[key]
 	if s.get("shadow_mode") is String and MODES.has(s["shadow_mode"]):
@@ -179,6 +181,21 @@ static func apply_max_fps(s: Dictionary) -> Dictionary:
 		return {}
 	Engine.max_fps = settings["max_fps"]
 	return {"max_fps": Engine.max_fps}
+
+
+## Missing key restores the default-on setting; other night light parts stay lit.
+static func apply_night_sparks(view: NightLightView, s: Dictionary) -> Dictionary:
+	if view == null:
+		return {}
+	var settings := _valid(s)
+	# An explicitly malformed value is ignored, including after a valid override.
+	if s.has("night_sparks") and not settings.has("night_sparks"):
+		return {}
+	var enabled: bool = settings.get("night_sparks", true)
+	if view.sparks_enabled == enabled:
+		return {}
+	view.set_sparks_enabled(enabled)
+	return {"night_sparks": enabled}
 
 
 static func restore_renderer(owner: int = 0) -> Dictionary:

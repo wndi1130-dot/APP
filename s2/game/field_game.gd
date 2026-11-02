@@ -579,6 +579,11 @@ func _ready() -> void:
 	night_view.name = "NightLights"
 	add_child(night_view)
 	night_view.build(data)
+	night_view.weather_source = func() -> Dictionary:
+		return {"params": fx_params, "kinds": look_kinds}
+	PerfSwitch.apply_night_sparks(night_view, _perf_settings)
+	visibility_changed.connect(night_view.refresh_visibility)
+	night_view.refresh_visibility()
 	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
 	map_edge = MapEdge.new()
 	add_child(map_edge)
@@ -1888,6 +1893,9 @@ func _configure_perf_switch() -> void:
 
 func _apply_perf_settings(settings: Dictionary) -> void:
 	_perf_settings = settings
+	var spark_changed := PerfSwitch.apply_night_sparks(night_view, settings)
+	if not spark_changed.is_empty():
+		print("PERF_SWITCH ", spark_changed)
 	if not settings.is_empty():
 		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
 		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false)
