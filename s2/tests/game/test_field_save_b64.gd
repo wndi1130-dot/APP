@@ -6,10 +6,14 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const SliceSave = preload("res://game/sim/slice_save.gd")
+const TrainSave = preload("res://game/politics/save_slot.gd")
+const TrainDom = preload("res://game/train/train_dom.gd")
+const SliceFlow = preload("res://game/slice_flow.gd")
 
 static var DIR: String = "user://test_field_save_b64_%d" % OS.get_process_id()
 static var AT: String = DIR + "/field_save.json"
 static var SLICE_AT: String = DIR + "/slice.json"
+static var TRAIN_AT: String = DIR + "/train.json"
 
 
 func before_each() -> void:
@@ -21,6 +25,7 @@ func before_each() -> void:
 func after_each() -> void:
 	FieldSave.clear(AT)
 	SliceSave.clear(SLICE_AT)
+	SliceSave.clear(TRAIN_AT)
 
 
 func after_all() -> void:
@@ -223,3 +228,22 @@ func test_away_again_after_play_writes_what_came_since() -> void:
 	game.interrupt()
 	var second: Dictionary = FieldSave.read(AT)
 	assert_gt(float(second["clock"]["elapsed"]), float(first["clock"]["elapsed"]), "the second save is the stop as it is now")
+
+
+func test_a_train_slot_with_a_broken_packed_run_is_not_loaded() -> void:
+	var board: Array = SliceFlow.start_board()
+	var g: Dictionary = (board[0] as Dictionary).duplicate(true)
+	if g.get("dom") == null:
+		g["dom"] = TrainDom.start()
+	TrainDom.ensure(g)
+	TrainSave.fill_defaults(g)
+	assert_true(SliceSave.write_train(g, TRAIN_AT))
+	assert_not_null(TrainSave.load_slot(board[1], TRAIN_AT, TRAIN_AT + ".broken")["g"], "the slot as written loads")
+	var parsed: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(TRAIN_AT))
+	parsed["packed_run"] = {"$type": "PackedInt32Array", "base64": "AQID"}
+	var file: FileAccess = FileAccess.open(TRAIN_AT, FileAccess.WRITE)
+	file.store_string(JSON.stringify(parsed, "", false, true))
+	file.close()
+	var loaded: Dictionary = TrainSave.load_slot(board[1], TRAIN_AT, TRAIN_AT + ".broken")
+	assert_null(loaded["g"], "an int32 run cut between numbers is no board")
+	assert_not_null(loaded["why"])
