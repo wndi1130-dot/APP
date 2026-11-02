@@ -28,6 +28,9 @@ func _tone() -> AudioStreamWAV:
 
 
 func test_no_two_steps_are_alike() -> void:
+	seed(7)   # again after the field is set up: its setting up draws numbers too
+	assert_eq(FieldAudio.STEP_GAIN_DB, 2.0, "two dB either way")
+	assert_eq(FieldAudio.STEP_PITCH, [0.95, 1.05], "five per cent either way")
 	var gains: Dictionary = {}
 	var pitches: Dictionary = {}
 	for k in range(200):
@@ -52,6 +55,27 @@ func test_a_step_by_how_one_moves() -> void:
 	assert_lt(float(heavy[1]), 1.0, "and lower")
 	assert_lt(float(over[1]), float(heavy[1]))
 	assert_eq(FieldAudio.feel_of(false, 9), FieldAudio.feel_of(false, 3), "past the last state, the last")
+	assert_eq(FieldAudio.feel_of(false, -1), plain, "below the first, the first")
+	# The values themselves (first values).
+	assert_almost_eq(float(crouched[0]), 0.55, 0.0001)
+	assert_almost_eq(float(heavy[0]), 1.12, 0.0001)
+	assert_almost_eq(float(heavy[1]), 0.97, 0.0001)
+	assert_almost_eq(float(over[0]), 1.25, 0.0001)
+	assert_almost_eq(float(over[1]), 0.94, 0.0001)
+	var both: Array = FieldAudio.feel_of(true, 2)
+	assert_almost_eq(float(both[0]), 0.55 * 1.25, 0.0001, "crouched under a load: both")
+	assert_almost_eq(float(both[1]), 0.94, 0.0001)
+
+
+## The player's own feel is its crouch and its real load (Person.carry_state).
+func test_the_players_feel_is_its_own() -> void:
+	var a = game.audio
+	var p = game.player
+	p.crouched = false
+	assert_eq(a.step_feel(), FieldAudio.feel_of(false, int(p.carry_state())))
+	p.crouched = true
+	assert_eq(a.step_feel(), FieldAudio.feel_of(true, int(p.carry_state())))
+	p.crouched = false
 
 
 ## Crouched, every step is softer than any step standing (the wobble is
@@ -60,6 +84,7 @@ func test_crouched_steps_are_always_softer() -> void:
 	var a = game.audio
 	var p = game.player
 	var at: Vector3 = p.position
+	assert_false(game.grid.floor_glass.has(game.FieldGrid.cell_of(at)), "no glass underfoot (its crunch would be the last heard)")
 	var g = a._step_group(at)[0]
 	a.lib[g] = [_tone(), _tone(), _tone()]
 	var standing: Array = []

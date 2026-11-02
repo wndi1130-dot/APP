@@ -159,11 +159,12 @@ const COMPANY_STEP_LOUD: float = 0.7
 const FEET_PLAYERS: int = 5            # players the steps of others than the player go out on
 ## By its gait: stride in m (low, high), loudness, the share of steps without a
 ## sound, and pitch (low, high; times its floor's) — never above the player's
-## lowest (0.9), so the ear tells their feet from its own. First values.
+## lowest (STEP_PITCH low under the heaviest STEP_LOAD: 0.95 × 0.94), so the ear
+## tells their feet from its own. First values.
 const DEAD_GAITS: Dictionary = {
 	"shamble": {"stride": [0.45, 0.8], "loud": 0.16, "skip": 0.3, "pitch": [0.72, 0.86]},
 	"chase": {"stride": [0.6, 0.9], "loud": 0.22, "skip": 0.12, "pitch": [0.78, 0.88]},
-	"dash": {"stride": [0.9, 1.3], "loud": 0.3, "skip": 0.0, "pitch": [0.82, 0.9]},
+	"dash": {"stride": [0.9, 1.3], "loud": 0.3, "skip": 0.0, "pitch": [0.8, 0.88]},
 }
 ## The rasp of one of the dead that is about to run (lunger_rules): the group
 ## its file goes in, how loud, heard to this many metres, and the pitch of the
