@@ -28,6 +28,7 @@ const VISIBLE_CAP: int = 6
 const PIECE_CAP: int = 256
 const CHECK_STRIDE: int = 32
 const KEEP_DISTANCE: float = 2.0
+const SCREEN_REPORT_FRAMES: int = 300 # 폰 재기: 보이는 처음 300프레임(30 fps면 10초) 동안 시험 무리가 화면에 들었는지
 const SOLE_LIFT: float = 0.02
 const WORK_USEC: int = 6000
 const HEAD_MAX_M: float = 1.95
@@ -68,6 +69,9 @@ var _resource_errors: Dictionary = {}
 var _resource_kinds: Dictionary = {}
 var _resource_starts: Dictionary = {}
 var _open_requests: Dictionary = {} # 이 짓기가 등록하고 아직 get하지 않은 경로
+var _test_asked: Array = [] # 폰 재기 시험 벽(test_mode 표시) — 결과 줄은 한 번만
+var _test_reported: bool = false
+var _test_screen_frames: int = 0
 var frame_material_writes: int = 0
 var frame_sight_reads: int = 0
 var visible_chunks: Array[int] = []
@@ -742,41 +746,55 @@ static func stop_walls(data: Dictionary, opts: Dictionary, settings: Dictionary,
 		var near: Dictionary = near_test_walls(Vector2(cell) + Vector2(0.5, 0.5), map_size)
 		extra = near["walls"]
 		edge_m = snappedf(float(near["edge_m"]), 0.1)
-	var used_ids: Dictionary = {}
-	for wall: Variant in walls:
-		if wall is Dictionary:
-			used_ids[String((wall as Dictionary).get("id", ""))] = wall
+		# 측정 조건은 24 m 두 토막(구석 시험 벽과 같은 짐). 가장자리가 짧으면 줄인 판을 성공으로 재지 않는다.
+		var lengths: Array = extra.map(func(wall: Dictionary) -> float: return (wall["a"] as Vector2).distance_to(wall["b"]))
+		if extra.size() < 2 or lengths.any(func(length_m: float) -> bool: return length_m < 23.999):
+			print("PERF_SWITCH ", {"horde_test_walls": label, "ok": false, "reason": "edge shorter than two 24 m pieces", "lengths_m": lengths, "edge_m": edge_m})
+			return walls
 	for wall: Dictionary in extra:
 		var marked: Dictionary = wall.duplicate()
 		marked["test_mode"] = label
 		marked["test_edge_m"] = edge_m
 		var id: String = marked["id"]
-		if used_ids.has(id) and _same_wall(used_ids[id], wall):
-			# 같은 벽이 opts로 이미 왔으면 그것을 표시된 하나로 바꾼다(같은 id 둘은 둘 다 거부되므로).
-			walls.erase(used_ids[id])
+		var same_id: Array = walls.filter(func(other: Variant) -> bool: return _wall_id(other) == id)
+		if not same_id.is_empty() and same_id.all(func(other: Variant) -> bool: return _same_wall(other, wall)):
+			# 같은 시험 벽만 이미 왔으면 모두 빼고 표시된 하나로(같은 id 둘은 둘 다 거부되므로).
+			walls = walls.filter(func(other: Variant) -> bool: return _wall_id(other) != id)
 		else:
-			while used_ids.has(id):
+			# 같은 id의 다른 벽이 하나라도 있으면 그 벽은 두고 시험 벽 id를 바꾼다.
+			while walls.any(func(other: Variant) -> bool: return _wall_id(other) == id):
 				id += "_test"
 			marked["id"] = id
 		walls.append(marked)
-		used_ids[id] = marked
 	return walls
 
 
+static func _wall_id(wall: Variant) -> String:
+	return String((wall as Dictionary).get("id", "")) if wall is Dictionary else ""
+
+
+## 배치를 바꾸는 값까지 같아야 같은 벽(depth 기본 40, floor_y 기본 0).
 static func _same_wall(left: Variant, right: Dictionary) -> bool:
 	if not left is Dictionary:
 		return false
+	var other: Dictionary = left
 	for key: String in ["a", "b", "out", "kind", "height"]:
-		if (left as Dictionary).get(key) != right.get(key):
+		if other.get(key) != right.get(key):
+			return false
+	for pair: Array in [["depth", 40.0], ["floor_y", 0.0]]:
+		var mine: Variant = other.get(pair[0], pair[1])
+		var theirs: Variant = right.get(pair[0], pair[1])
+		if not (mine is float or mine is int) or not (theirs is float or theirs is int) or float(mine) != float(theirs):
 			return false
 	return true
 
 
-## 시험 벽을 넣은 짓기가 끝나면 한 줄: 받아들인 시험 벽 수·그 벽의 무리 수·전체 준비 여부.
-func _report_test_walls(walls: Array) -> void:
-	var asked: Array = walls.filter(func(wall: Variant) -> bool: return wall is Dictionary and (wall as Dictionary).has("test_mode"))
-	if asked.is_empty():
+## 시험 벽을 넣은 짓기가 끝나면(또는 끝나기 전에 노드가 지워지면) 한 번만 한 줄:
+## 받아들인 시험 벽 수·그 벽의 무리 수·전체 준비 여부. 화면에 보였는지는 _report_test_screen이 따로.
+func _report_test_walls(reason: String = "") -> void:
+	if _test_asked.is_empty() or _test_reported:
 		return
+	_test_reported = true
 	var used: Dictionary = {}
 	var people: int = 0
 	for chunk: Dictionary in chunks:
@@ -784,15 +802,37 @@ func _report_test_walls(walls: Array) -> void:
 		if wall.has("test_mode"):
 			used[String(wall["id"])] = true
 			people += (chunk["people"] as Array).size()
-	var ok: bool = bool(stats.get("ready", false)) and used.size() == asked.size()
+	var ok: bool = reason.is_empty() and bool(stats.get("ready", false)) and used.size() == _test_asked.size()
 	stats["test_walls_used"] = used.size()
 	stats["test_walls_ok"] = ok
-	var first: Dictionary = asked[0]
-	var line: Dictionary = {"horde_test_walls": first["test_mode"], "ok": ok, "test_walls": used.size(), "asked": asked.size(),
+	var first: Dictionary = _test_asked[0]
+	var line: Dictionary = {"horde_test_walls": first["test_mode"], "ok": ok, "test_walls": used.size(), "asked": _test_asked.size(),
 		"test_instances": people, "instances": int(stats.get("instances", 0))}
+	if not reason.is_empty():
+		line["reason"] = reason
 	if float(first.get("test_edge_m", -1.0)) >= 0.0:
 		line["edge_m"] = first["test_edge_m"]
 	print("PERF_SWITCH ", line)
+
+
+## 짓기가 된 시험 벽이 실제 화면(카메라 시야의 덩어리)에 들어왔는지: 보이는 처음 SCREEN_REPORT_FRAMES
+## 프레임 동안 가장 많이 보인 시험 무리 수와 처음 보인 프레임을 한 줄로. 0이면 그리기 비용은 안 잰 판이다.
+func _track_test_screen() -> void:
+	if _test_screen_frames < 0 or not bool(stats.get("test_walls_ok", false)):
+		return
+	_test_screen_frames += 1
+	var seen: int = 0
+	for index: int in visible_chunks:
+		var chunk: Dictionary = chunks[index]
+		if (chunk["wall"] as Dictionary).has("test_mode"):
+			seen += (chunk["people"] as Array).size()
+	if seen > 0 and int(stats.get("test_screen_first_frame", -1)) < 0:
+		stats["test_screen_first_frame"] = _test_screen_frames
+	stats["test_screen_max"] = maxi(int(stats.get("test_screen_max", 0)), seen)
+	if _test_screen_frames >= SCREEN_REPORT_FRAMES:
+		_test_screen_frames = -1
+		print("PERF_SWITCH ", {"horde_test_walls": (_test_asked[0] as Dictionary)["test_mode"], "on_screen": int(stats["test_screen_max"]) > 0,
+			"screen_instances_max": int(stats["test_screen_max"]), "first_frame": int(stats.get("test_screen_first_frame", -1)), "frames": SCREEN_REPORT_FRAMES})
 
 
 static func attach(parent: Node3D, walls: Array, vis: Dictionary, pace: BuildPace, settings: Dictionary) -> Node3D:
@@ -809,10 +849,11 @@ static func attach(parent: Node3D, walls: Array, vis: Dictionary, pace: BuildPac
 
 
 func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
+	_test_asked = walls.filter(func(wall: Variant) -> bool: return wall is Dictionary and (wall as Dictionary).has("test_mode"))
 	await _setup_body(walls, vis, pace)
 	# 취소·표 오류·빈 배치·읽기 실패로 일찍 끝나도, 등록한 스레드 읽기는 한 번씩 회수한다.
 	_release_requests()
-	_report_test_walls(walls)
+	_report_test_walls()
 
 
 func _setup_body(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
@@ -1128,6 +1169,8 @@ func _update_visible() -> void:
 	# 개체가 아닌 소수 덩어리만 추려 여섯 개 상한을 지킨다.
 	var camera: Camera3D = get_viewport().get_camera_3d()
 	visible_chunks = _select_visible(camera)
+	if camera != null:
+		_track_test_screen()
 	for index: int in range(_draws.size()):
 		_draws[index].visible = visible_chunks.has(index)
 	_sync_sight()
@@ -1188,5 +1231,7 @@ func _exit_tree() -> void:
 
 func _notification(what: int) -> void:
 	# 짓는 도중 노드가 지워져 setup이 끝나지 못해도 등록한 읽기는 수거 목록으로.
-	if what == NOTIFICATION_PREDELETE and not _open_requests.is_empty():
-		_release_requests()
+	if what == NOTIFICATION_PREDELETE:
+		if not _open_requests.is_empty():
+			_release_requests()
+		_report_test_walls("freed before build end")

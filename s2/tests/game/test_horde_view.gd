@@ -438,6 +438,18 @@ func test_phone_switch_horde_test_walls_adds_the_shot_walls_only_when_on() -> vo
 	clash["id"] = "h1_north_sheet"
 	var renamed: Array = Horde.stop_walls({"edge_walls": [clash]}, {}, {"horde_test_walls": true})
 	assert_eq(_ids(renamed), ["h1_north_sheet", "h1_north_sheet_test", "h1_west_stack"])
+	# 지도·opts 양쪽에 같은 시험 벽이 와도 하나로.
+	var twice: Array = Horde.stop_walls({"edge_walls": Horde.test_walls()}, {"test_edge_walls": Horde.test_walls()}, {"horde_test_walls": true})
+	assert_eq(_ids(twice), ["h1_north_sheet", "h1_west_stack"])
+	# 같은 id에 같은 벽과 다른 벽이 섞이면 둘 다 두고 시험 벽 id를 바꾼다.
+	var mixed: Array = Horde.stop_walls({"edge_walls": [clash]}, {"test_edge_walls": [Horde.test_walls()[0]]}, {"horde_test_walls": true})
+	assert_eq(_ids(mixed), ["h1_north_sheet", "h1_north_sheet", "h1_north_sheet_test", "h1_west_stack"])
+	# 배치를 바꾸는 depth·floor_y가 다르면 다른 벽.
+	var shallow: Dictionary = Horde.test_walls()[0]
+	shallow["depth"] = 0.0
+	var kept: Array = Horde.stop_walls({}, {"test_edge_walls": [shallow]}, {"horde_test_walls": true})
+	assert_eq(_ids(kept), ["h1_north_sheet", "h1_north_sheet_test", "h1_west_stack"])
+	assert_eq(float(kept[0]["depth"]), 0.0, "무배치 벽은 그대로")
 
 
 func test_phone_switch_reports_ok_only_after_the_test_walls_are_really_built() -> void:
@@ -457,6 +469,38 @@ func test_phone_switch_reports_ok_only_after_the_test_walls_are_really_built() -
 	var small: Horde = await Horde.attach(small_parent, Horde.stop_walls({}, {}, settings), {"map_size": Vector2(20, 20)}, Pace.new(), settings)
 	assert_eq(int(small.stats["test_walls_used"]), 0)
 	assert_false(bool(small.stats["test_walls_ok"]))
+	# 결과 줄은 한 번만(해제 때 다시 부르면 아무것도 안 함).
+	node._report_test_walls("freed before build end")
+	assert_true(bool(node.stats["test_walls_ok"]), "끝난 판의 결과를 덮지 않는다")
+
+
+func test_phone_switch_counts_test_horde_on_screen_after_arrival() -> void:
+	var camera := Camera3D.new()
+	add_child_autofree(camera)
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 60.0
+	camera.position = Vector3(12, 0, 12) + Horde.camera_back() * 80.0
+	camera.look_at(Vector3(12, 0, 12))
+	camera.make_current()
+	var parent := Node3D.new()
+	add_child_autofree(parent)
+	var settings: Dictionary = {"horde_test_walls": true}
+	var node: Horde = await Horde.attach(parent, Horde.stop_walls({}, {}, settings), {"map_size": Vector2(120, 80)}, Pace.new(), settings)
+	node.set_process(false)
+	for _frame: int in range(Horde.SCREEN_REPORT_FRAMES):
+		node._update_visible()
+	assert_gt(int(node.stats["test_screen_max"]), 0, "시험 무리가 화면에 들었다")
+	assert_gte(int(node.stats["test_screen_first_frame"]), 0)
+	assert_eq(node._test_screen_frames, -1, "한 번 찍고 멈춘다")
+	# 카메라가 먼 곳이면 화면에 0명 — 그리기 비용은 안 잰 판.
+	var far_parent := Node3D.new()
+	add_child_autofree(far_parent)
+	var far: Horde = await Horde.attach(far_parent, Horde.stop_walls({}, {}, settings), {"map_size": Vector2(120, 80)}, Pace.new(), settings)
+	far.set_process(false)
+	camera.position += Vector3(5000, 0, 5000)
+	for _frame: int in range(Horde.SCREEN_REPORT_FRAMES):
+		far._update_visible()
+	assert_eq(int(far.stats.get("test_screen_max", 0)), 0)
 
 
 func test_phone_switch_near_puts_the_two_test_walls_on_the_edge_nearest_the_arrival() -> void:
@@ -468,6 +512,8 @@ func test_phone_switch_near_puts_the_two_test_walls_on_the_edge_nearest_the_arri
 	assert_almost_eq(float(near["edge_m"]), 5.5, 0.0001)
 	var walls: Array = near["walls"]
 	assert_eq(walls.size(), 2)
+	assert_eq([walls[0]["a"], walls[0]["b"], walls[0]["kind"], walls[1]["a"], walls[1]["b"], walls[1]["kind"]],
+		[Vector2(36, 80), Vector2(60, 80), "wall_sheet", Vector2(60, 80), Vector2(84, 80), "wall_stack"])
 	for wall: Dictionary in walls:
 		assert_eq(Horde.wall_error(wall, map_size), "", String(wall["id"]))
 		assert_eq(wall["out"], Vector2(0, 1), "바깥이 무리 쪽(지도 밖)")
@@ -476,6 +522,9 @@ func test_phone_switch_near_puts_the_two_test_walls_on_the_edge_nearest_the_arri
 	assert_true((walls[0]["a"] as Vector2).x <= 60.5 and (walls[1]["b"] as Vector2).x >= 60.5, "도착 자리 맞은편 가운데")
 	# 서쪽 구석에 가까운 도착 자리는 서쪽 가장자리, 지도 안으로 잘림.
 	var west: Dictionary = Horde.near_test_walls(Vector2(3.5, 10.5), map_size)
+	assert_eq((west["walls"] as Array).size(), 2)
+	assert_eq([west["walls"][0]["a"], west["walls"][0]["b"], west["walls"][1]["a"], west["walls"][1]["b"]],
+		[Vector2(0, 0), Vector2(0, 24), Vector2(0, 24), Vector2(0, 48)])
 	for wall: Dictionary in west["walls"]:
 		assert_eq(Horde.wall_error(wall, map_size), "", String(wall["id"]))
 		assert_eq(wall["out"], Vector2(-1, 0))
@@ -491,6 +540,8 @@ func test_phone_switch_near_puts_the_two_test_walls_on_the_edge_nearest_the_arri
 		for key: String in ["a", "b", "out", "kind", "height"]:
 			assert_eq(placed[index][key], walls[index][key])
 	assert_eq(Horde.stop_walls({}, {}, {"horde_test_walls": "near"}, map_size), [], "도착 자리 없으면 더하지 않음")
+	var small: Dictionary = {"spawns": {"squad": [Vector2i(10, 18)]}}
+	assert_eq(Horde.stop_walls(small, {}, {"horde_test_walls": "near"}, Vector2(20, 20)), [], "24 m 두 토막이 안 되는 가장자리면 넣지 않음")
 
 
 func test_hiding_and_exit_clear_owned_focus() -> void:
