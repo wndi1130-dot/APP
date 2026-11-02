@@ -1,6 +1,9 @@
 // Shared weather state and cheap noise for every fx shader.
 // The globals live in project.godot [shader_globals]; fx/fx_state.gd is the
 // only writer (docs/design/briefs/shaders.md 3장).
+// Exception: field_game.gd's fill state functions write fx_fill*.
+global uniform vec3 fx_fill_dir; // world space, surface toward light
+global uniform vec4 fx_fill; // rgb = linear colour * energy, w = enabled 0/1
 global uniform float fx_wet;    // 0 dry .. 1 soaked (rain, sleet, thaw)
 global uniform float fx_snow;   // 0 bare .. 1 deep snow lying on up-facing faces
 global uniform float fx_frost;  // 0 none .. 1 hard rime (glass, metal edges)
@@ -21,6 +24,10 @@ global uniform vec4 fx_cloud;
 // The sight mask's floors: x for ground never seen, y for ground seen before
 // (seen now is full). Lighter by day, dark after dark (fx/fx_state.gd sight_floor).
 global uniform vec2 fx_sight;
+
+vec3 fx_fill_term(vec3 albedo, float metallic, vec3 n_world) {
+	return albedo * fx_fill.rgb * max(dot(n_world, fx_fill_dir), 0.0) * (1.0 - metallic);
+}
 
 // Mobile budget: value noise with two octaves, no textures.
 float fx_hash(vec2 p) {

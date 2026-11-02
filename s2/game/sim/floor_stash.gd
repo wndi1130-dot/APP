@@ -6,6 +6,8 @@ extends RefCounted
 ## rounds. One always, a second now and then, on dice of its own, so nothing else
 ## of the stop changes. The rare store (#689) and the named finds are apart.
 
+const LootTables = preload("res://game/sim/loot_tables.gd")
+
 ## [weight, item, count] rows.
 const TABLE: Array = [
 	[3, "pocket_watch", 1],
@@ -23,7 +25,7 @@ static func fill(data: Dictionary, seed: int) -> Array:
 	var out: Array = []
 	for s: Dictionary in data.get("floor_stashes", []):
 		var box: Dictionary = data.get("containers", {}).get(String(s["id"]), {})
-		if box.is_empty() or not (box.get("items", []) as Array).is_empty():
+		if box.is_empty() or LootTables.as_placed(box) or not (box.get("items", []) as Array).is_empty():
 			continue
 		var rng := RandomNumberGenerator.new()
 		rng.seed = ("%d:floor_stash:%s" % [seed, s["id"]]).hash()

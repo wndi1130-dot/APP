@@ -13,6 +13,7 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const BuildingRules = preload("res://game/sim/building_rules.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
+const LootTables = preload("res://game/sim/loot_tables.gd")
 const S = FieldGrid.Solid
 const DIRS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 
@@ -231,7 +232,7 @@ static func _boxes(data: Dictionary, b: int) -> Array:
 		var box: Dictionary = containers[id]
 		var lv := int(box.get("level", 0))
 		var c: Variant = RoomFurnish._cell(box.get("cell"))
-		if c == null or not levels.has(lv) or box.has("pick") or bool(box.get("searched", false)) or bool(box.get("locked", false)):
+		if c == null or not levels.has(lv) or box.has("pick") or LootTables.as_placed(box) or bool(box.get("searched", false)) or bool(box.get("locked", false)):
 			continue
 		if (levels[lv] as FieldGrid).building_at(c) == b:
 			out.append(id)

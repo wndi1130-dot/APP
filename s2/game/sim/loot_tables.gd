@@ -200,3 +200,9 @@ const SETS: Dictionary = {
 ## Going through a container is heard this often at "quiet" (spec 4, open
 ## question 4). 0 is silent, as it is today. Not read by the game yet.
 const SEARCH_NOISE_EVERY: Dictionary = {"conservative": 3.0, "base": 4.0, "aggressive": 0.0}
+
+
+## A box the map left as placed ("as_placed": a story pair that must hold the same things):
+## no stop dressing rule adds to it, takes from it or moves its things.
+static func as_placed(c: Dictionary) -> bool:
+	return bool(c.get("as_placed", false))

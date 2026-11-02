@@ -15,6 +15,7 @@ const Weapons = preload("res://game/sim/weapons.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 const TrainDecor = preload("res://game/train/train_decor.gd")
+const TrainWorkOrder = preload("res://game/train/train_work_order.gd")
 
 const AMOUNTS: Array[String] = ["scrap", "wood", "parts", "cores", "cloth", "ammo_pistol", "ammo_shell", "ammo_craft", "lures", "sleds", "stretchers", "carts", "long_sleds", "runners"]
 ## S1's Field, the receipt's FRAGMENT_KINDS.
@@ -161,6 +162,15 @@ static func is_store(dom: Variant) -> bool:
 			for c: Variant in v:
 				if not is_wearable(c):
 					return false
+		elif key == "order":
+			if not TrainWorkOrder.is_order(v):
+				return false
+		elif key == "supWork":
+			if not (v is int or v is float) or not is_finite(float(v)) or float(v) < 0.0:
+				return false
+		elif key == "supFineOn":
+			if not v is bool:
+				return false
 		elif key == "target":
 			# The workshop's parts target (train_workshop.gd).
 			if not (v is int or v is float) or float(v) < 0.0 or float(v) > 10.0:

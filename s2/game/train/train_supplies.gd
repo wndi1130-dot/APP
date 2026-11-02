@@ -5,6 +5,8 @@ const St = preload("res://game/train/train_state.gd")
 const Hands = preload("res://game/train/train_hands.gd")
 
 const YIELD: Dictionary = {"houses": 3.5, "church": 2.5, "office": 2.25, "hospital": 1.75, "freight": 1.0, "factory": 1.5}
+const MAKE: Dictionary = {"supMakeWork": 0.5, "supMakeScrap": 1.0, "supMakeCap": 0.25, "fineScrap": 2.0,
+	"variants": {"a": {"work": 0.7, "scrap": 1.25, "yield": 1.0}, "b": {"work": 1.3, "scrap": 1.5, "yield": 1.5}}}
 const EPS: float = 1e-9
 
 

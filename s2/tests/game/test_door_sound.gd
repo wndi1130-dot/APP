@@ -62,9 +62,7 @@ func test_until_its_files_are_in_a_door_is_the_wood_pitched_down() -> void:
 		fail_test("the map has a shut building door")
 		return
 	var a = game.audio
-	if a.has("door_open"):
-		pass_test("the door has files of its own")
-		return
+	a.lib["door_open"] = []    # as though its files were not in (they are: test_own_voices)
 	game.player.position = game.lift(way[1], 0)
 	a.door_turn(way[0], "open")
 	var o: AudioStreamPlayer3D = a.last_shot
