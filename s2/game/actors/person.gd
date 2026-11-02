@@ -112,6 +112,7 @@ var action_noise_t: float = 0.0
 var swing_t: float = 0.0
 var shove_t: float = 0.0                # the shove is winding up (field_combat.start_shove)
 var lunge_t: float = 0.0                # the shove just landed: arms out
+var shove_rest_t: float = 0.0           # from a shove landing to the end of the rest after it (field_combat.SHOVE_REST)
 var strike_t: float = 0.0               # a melee blow is drawn back (field_combat.start_swing)
 var strike_total: float = 0.0           # how long this draw-back is in all (for the motion)
 var strike_at = null                    # what it will land on: a zombie's Dictionary or a person
