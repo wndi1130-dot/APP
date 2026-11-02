@@ -390,15 +390,15 @@ func test_the_shove_pad_does_nothing_inside_the_lockout() -> void:
 
 
 ## The shove key pressed `per_s` times a second for `press_for` seconds, the rules
-## stepped at 30 fps until `total`: when each shove lands (the arms going out).
-func _shoves_landed(per_s: float, press_for: float, total: float) -> Array:
+## stepped at `fps` until `total`: when each shove lands (the arms going out).
+func _shoves_landed(per_s: float, press_for: float, total: float, fps: int = 30) -> Array:
 	var p = game.player
-	var dt: float = 1.0 / 30.0
+	var dt: float = 1.0 / float(fps)
 	var t: float = 0.0
 	var next_press: float = 0.0
 	var lands: Array = []
 	var last_lunge: float = p.lunge_t
-	for i in range(roundi(total * 30.0)):
+	for i in range(roundi(total * float(fps))):
 		while next_press <= t + 0.000001 and next_press < press_for - 0.000001:
 			game.hud._shove()
 			next_press += 1.0 / per_s
@@ -419,6 +419,14 @@ func test_ten_presses_in_a_second_send_out_two_shoves_with_a_rest_between() -> v
 	var least: float = game.combat.SHOVE_WINDUP + game.combat.SHOVE_LUNGE + game.combat.SHOVE_REST
 	assert_gt(float(lands[1]) - float(lands[0]), least - 0.001, "drawn back, out and back, then the rest")
 	assert_eq(_shoves_landed(10.0, 3.0, 4.5).size(), 4, "three seconds of it: four, it was seven")
+
+
+func test_every_frame_at_sixty_fps_sends_four_shoves_in_three_seconds() -> void:
+	var lands: Array = _shoves_landed(60.0, 3.0, 4.5, 60)
+	assert_eq(lands.size(), 4, "one press per frame for three seconds")
+	var least: float = game.combat.SHOVE_WINDUP + game.combat.SHOVE_LUNGE + game.combat.SHOVE_REST
+	for i: int in range(1, lands.size()):
+		assert_true(float(lands[i]) - float(lands[i - 1]) >= least - 0.001, "every shove waits for the full cycle")
 
 
 func test_the_shove_key_works_again_only_after_the_rest() -> void:

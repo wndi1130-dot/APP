@@ -197,7 +197,7 @@ func update(delta: float) -> void:
 		if shove_after.has(p.get_instance_id()):
 			if not p.can_act():
 				shove_after.erase(p.get_instance_id())
-			elif not striking(p):
+			elif not striking(p) and p.shove_rest_t <= 0.0:
 				shove_after.erase(p.get_instance_id())
 				start_shove(p)
 		if p.jam_t > 0.0:
@@ -994,19 +994,23 @@ func _kill(p, z: Dictionary, msg: String) -> void:
 ## Shove: a short cone in front, breaks a grab, sometimes knocks down.
 ## The player's shove key: the arms come back for a moment, then it lands.
 ## Companions shove on reflex (shove itself).
-## The shove key ends a one-press fight (decision 420: one press, one thing);
-## pressed mid-blow it goes once the blow is over. Pressed while a shove of the
-## player's is on, or in the rest after it, it does nothing (SHOVE_REST).
+## The player's key ends a fight and queues once during a blow or a fight's rest.
+## The queue waits for both blow and rest; presses during a shove or idle rest drop.
 func start_shove(p) -> void:
 	if game.paused:
 		return
-	if p == game.player and shoving(p):
-		return
-	if p == game.player and fighting(p):
-		call_off(p)
-	if striking(p):
-		if p == game.player:
+	if p == game.player:
+		if p.shove_t > 0.0 or (p.lunge_t > 0.0 and p.strike_t <= 0.0):
+			return
+		var was_fighting: bool = fighting(p)
+		if was_fighting:
+			call_off(p)
+		if striking(p) or (p.shove_rest_t > 0.0 and was_fighting):
 			shove_after[p.get_instance_id()] = true
+			return
+		if p.shove_rest_t > 0.0:
+			return
+	elif striking(p):
 		return
 	_shove_now(p)
 
@@ -1029,7 +1033,7 @@ func striking(p) -> bool:
 ## A shove is on: drawn back, the arms out and back, or the rest after it. Only
 ## the player's key waits for this; the hands are free for other work meanwhile.
 func shoving(p) -> bool:
-	return p.shove_t > 0.0 or p.lunge_t > 0.0 or p.shove_rest_t > 0.0
+	return p.shove_t > 0.0 or (p.lunge_t > 0.0 and p.strike_t <= 0.0) or p.shove_rest_t > 0.0
 
 
 ## Free to start a blow or a shove (decision 420): a work it breaks off is let
