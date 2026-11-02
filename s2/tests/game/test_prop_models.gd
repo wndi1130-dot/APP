@@ -8,6 +8,22 @@ const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
 
 
+class MenuCacheReleaseProbe:
+	extends Node
+	var previous: Node3D
+	var saw_release: bool = false
+	var released_with_live_field: bool = false
+
+	func _process(_delta: float) -> void:
+		var empty: Array[bool] = [Props._rows.is_empty(), Props._batches.is_empty(),
+			UiFonts._made.is_empty(), UiFonts._files.is_empty(),
+			TrainModels._libraries.is_empty(), TrainModels._cuts.is_empty()]
+		if empty.has(true) and is_instance_valid(previous):
+			released_with_live_field = true
+		if not empty.has(false):
+			saw_release = true
+
+
 func after_each() -> void:
 	ProjectSettings.set_setting(Props.MODE_SETTING, true)
 
@@ -227,6 +243,78 @@ func test_direct_field_restart_leaves_all_three_caches_empty_in_menu() -> void:
 	assert_true(is_instance_valid(boot.menu))
 	# Observe a settled menu across further frames, rather than counting releases.
 	for i in 4:
+		assert_true(Props._rows.is_empty())
+		assert_true(Props._batches.is_empty())
+		assert_true(UiFonts._made.is_empty())
+		assert_true(UiFonts._files.is_empty())
+		assert_true(TrainModels._libraries.is_empty())
+		assert_true(TrainModels._cuts.is_empty())
+		await get_tree().process_frame
+	Engine.max_fps = old_cap
+
+
+func test_physics_frame_restart_frees_previous_field_before_releasing_caches() -> void:
+	var old_cap: int = Engine.max_fps
+	var had_auto: bool = OS.has_environment("S2_AUTOSTART")
+	var old_auto: String = OS.get_environment("S2_AUTOSTART")
+	var boot: Node = BootScene.instantiate()
+	var slot := "user://test_physics_menu_cache_release_%d_%d" % [OS.get_process_id(), Time.get_ticks_usec()]
+	boot.slice_save_path = slot + "_slice.json"
+	boot.field_save_path = slot + "_field.json"
+	boot.train_save_path = slot + "_train.json"
+	for path: String in [boot.slice_save_path, boot.field_save_path, boot.train_save_path]:
+		assert_false(FileAccess.file_exists(path))
+	OS.set_environment("S2_AUTOSTART", "")
+	add_child_autofree(boot)
+	if had_auto:
+		OS.set_environment("S2_AUTOSTART", old_auto)
+	else:
+		OS.unset_environment("S2_AUTOSTART")
+	assert_not_null(boot.menu)
+	boot._start({"seed": 1, "weather": ["clear"], "raiders": false})
+	var previous: Node3D = boot.field
+	assert_true(previous.is_built, "the direct field is built synchronously")
+	previous.opts["field_save"] = false
+	UiFonts.face(UiFonts.NUMBER, 500, 0.5)
+	TrainModels.cutaway_mesh("coach_medic", 0, TrainModels.asset_meshes("coach_medic")[0][0])
+	for _frame: int in 2:
+		await get_tree().process_frame
+	assert_false(Props._rows.is_empty())
+	assert_false(Props._batches.is_empty())
+	assert_false(UiFonts._made.is_empty())
+	assert_false(UiFonts._files.is_empty())
+	assert_false(TrainModels._libraries.is_empty())
+	assert_false(TrainModels._cuts.is_empty())
+	var probe := MenuCacheReleaseProbe.new()
+	probe.previous = previous
+	# Observe just after process_frame resumes the release, before field processing.
+	probe.process_priority = -1000000
+	add_child_autofree(probe)
+	probe.set_process(false)
+	get_tree().physics_frame.connect(func() -> void:
+		boot._on_restart()
+		assert_true(is_instance_valid(previous), "restart only queues the old field")
+		assert_true(previous.is_queued_for_deletion())
+		probe.set_process(true)
+		# Connected after the release coroutine: one wait must still keep all caches.
+		get_tree().process_frame.connect(func() -> void:
+			assert_false(Props._rows.is_empty())
+			assert_false(Props._batches.is_empty())
+			assert_false(UiFonts._made.is_empty())
+			assert_false(UiFonts._files.is_empty())
+			assert_false(TrainModels._libraries.is_empty())
+			assert_false(TrainModels._cuts.is_empty())
+		, CONNECT_ONE_SHOT)
+	, CONNECT_ONE_SHOT)
+	await get_tree().physics_frame
+	for _frame: int in 8:
+		await get_tree().process_frame
+	assert_true(probe.saw_release, "all caches were observed empty after restart")
+	assert_false(probe.released_with_live_field, "no cache emptied while the old field was valid")
+	assert_false(is_instance_valid(previous))
+	assert_null(boot.field)
+	assert_true(is_instance_valid(boot.menu))
+	for _frame: int in 4:
 		assert_true(Props._rows.is_empty())
 		assert_true(Props._batches.is_empty())
 		assert_true(UiFonts._made.is_empty())

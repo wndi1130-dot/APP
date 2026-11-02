@@ -69,6 +69,7 @@ var train_save_path: String = FieldSave.TRAIN_PATH
 var menu_scroll: int = 0
 var menu: Control
 var field: Node3D
+var _retiring_field: WeakRef
 var theme: Theme
 
 
@@ -193,12 +194,21 @@ func _show_menu() -> void:
 	scroll.get_v_scroll_bar().value_changed.connect(func(x: float) -> void: menu_scroll = int(x))
 
 
-## queue_free in _on_restart is flushed at frame end. Resume next frame, after
-## the old scene exits (StopLoader/scenery workers are joined by their exits).
+## Two process_frame waits cross a frame-end deletion flush even when restart
+## runs before this iteration's process_frame (e.g. during input handling).
 func _release_menu_caches() -> void:
-	await get_tree().process_frame
+	var tree: SceneTree = get_tree()
+	await tree.process_frame
+	await tree.process_frame
+	for _extra_frame: int in 4:
+		if _retiring_field == null or _retiring_field.get_ref() == null:
+			break
+		await tree.process_frame
 	# A start or scene change during the wait must not clear the new game's caches.
 	if not is_inside_tree() or is_queued_for_deletion() or not is_instance_valid(menu) or field != null:
+		return
+	# Scene exits join StopLoader/scenery workers; leave caches intact if still live.
+	if _retiring_field != null and _retiring_field.get_ref() != null:
 		return
 	PropModels.release()
 	UiFonts.release()
@@ -290,6 +300,7 @@ func place_picked() -> String:
 
 func _on_restart() -> void:
 	if field != null:
+		_retiring_field = weakref(field)
 		field.queue_free()
 		field = null
 	_cap_fps()
