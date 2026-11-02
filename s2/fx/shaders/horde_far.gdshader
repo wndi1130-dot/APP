@@ -21,6 +21,8 @@ uniform vec2 wall_out;
 // 플레이어가 경계를 넘은 중간 틀에 동작이 바뀌지 않는다. CPU는 개체를 순회하지 않는다.
 uniform vec4 focus_history[32];
 uniform float focus_clock = 0.0;
+uniform float camera_pitch; // HordeView.CAM_PITCH를 라디안으로 전달.
+uniform bool comparison_hold = false; // 촬영의 같은 몸/방향/첫 틀 비교만 정지.
 
 const float TAU_H = 6.28318530718;
 const float CAMERA_THETA = 0.785398163397; // cam_back().xz의 방위, 보는 쪽이 아님.
@@ -29,7 +31,7 @@ const vec2 CELL_PX = vec2(40.0, 80.0);
 const vec2 ATLAS_PX = vec2(2048.0, 1024.0);
 const vec2 FOOT_PX = vec2(20.0, 64.0);
 const float PX_PER_M = 30.0;
-// 위쪽 0.87 + 카메라 쪽 0.35, 모든 카드에서 같은 세계 법선. PC 그림에서 확인할 값.
+// 위쪽 0.87 + 카메라 쪽 0.35, 모든 카드에서 같은 세계 법선(카드를 세워도 몸의 평균 법선은 그대로). PC 그림에서 확인할 값.
 const vec3 CARD_NORMAL = vec3(0.3495, 0.8690, 0.3495);
 
 varying flat vec4 cell_info; // body, direction, motion, phase
@@ -70,7 +72,7 @@ void vertex() {
 	float phase = INSTANCE_CUSTOM.r;
 	float speed = mix(0.85, 1.15, person_hash(seed, 2.0));
 	float person_size = mix(0.92, 1.08, person_hash(seed, 3.0));
-	float time = TIME - fx_still;
+	float time = comparison_hold ? 0.0 : TIME - fx_still;
 	float base_rate = 6.0 * speed / clip_lengths[body * 4 + motion];
 	float frame_age = fract(time * base_rate + 6.0 * phase) / base_rate;
 	float boundary_clock = max(0.0, focus_clock - frame_age);
@@ -92,15 +94,14 @@ void vertex() {
 	vec4 rect = bounds_px[direction * 4 + motion];
 	picture_px = rect.xy + UV * rect.zw;
 	vec2 corner = vec2(picture_px.x - FOOT_PX.x, FOOT_PX.y - picture_px.y) * person_size / PX_PER_M;
-	// 원점을 먼저 뷰 공간에 옮기고 x/y만 편다. 모든 모서리의 깊이는 발 깊이.
-	VERTEX = (VIEW_MATRIX * vec4(foot, 1.0)).xyz + vec3(corner, 0.0);
+	vec3 right_h = normalize(vec3(INV_VIEW_MATRIX[0].x, 0.0, INV_VIEW_MATRIX[0].z));
+	vec3 world = foot + right_h * corner.x + vec3(0.0, 1.0, 0.0) * corner.y / cos(camera_pitch);
+	VERTEX = (VIEW_MATRIX * vec4(world, 1.0)).xyz;
 	NORMAL = normalize(mat3(VIEW_MATRIX) * CARD_NORMAL);
 	cell_info = vec4(float(body), float(direction), float(motion), phase);
 	person_speed = speed;
 	float colour = person_hash(seed, 5.0);
-	// 먹색·남색·바랜 적갈색. 옷을 새로 그리지 않고 낮은 채도의 어두운 변주만 곱한다.
-	cloth_mul = mix(vec3(0.65, 0.66, 0.69), vec3(0.71, 0.58, 0.58), colour);
-	cloth_mul *= mix(0.82, 1.0, person_hash(seed, 6.0));
+	cloth_mul = mix(0.85, 1.0, colour) * mix(vec3(0.97, 0.98, 1.0), vec3(1.0, 0.98, 0.96), person_hash(seed, 6.0));
 	// 변형 전 발 위치를 가장 가까운 경계 칸 중심에 묶는다.
 	vec2 nearest_cell = clamp(original_foot.xz, vec2(0.5), map_size - vec2(0.5));
 	vec2 seen = textureLod(vis_texture, nearest_cell / map_size, 0.0).rg;
@@ -119,7 +120,8 @@ void fragment() {
 	int body = int(cell_info.x);
 	int direction = int(cell_info.y);
 	int motion = int(cell_info.z);
-	float frame = mod(floor((TIME - fx_still) * (6.0 / clip_lengths[body * 4 + motion]) * person_speed + 6.0 * cell_info.w), 6.0);
+	float time = comparison_hold ? 0.0 : TIME - fx_still;
+	float frame = mod(floor(time * (6.0 / clip_lengths[body * 4 + motion]) * person_speed + 6.0 * cell_info.w), 6.0);
 	float index = ((float(body) * 8.0 + float(direction)) * 4.0 + float(motion)) * 6.0 + frame;
 	vec2 cell_origin = vec2(mod(index, 51.0), floor(index / 51.0)) * CELL_PX;
 	vec2 atlas_uv = (cell_origin + clamp(picture_px, vec2(0.5), CELL_PX - vec2(0.5))) / ATLAS_PX;

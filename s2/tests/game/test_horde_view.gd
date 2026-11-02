@@ -65,7 +65,7 @@ func test_fully_hidden_heads_are_removed_but_segment_ends_are_finite() -> void:
 	var north: Dictionary = walls[0]
 	assert_true(Horde.fully_hidden(north, Vector2(20, -1)))
 	assert_false(Horde.fully_hidden(north, Vector2(90, -1)), "벽 끝 밖의 연장선은 벽이 아니다")
-	var expected: float = (5.2 - 1.7) / tan(deg_to_rad(35.0)) / sqrt(2.0)
+	var expected: float = (5.2 - Horde.HEAD_MAX_M * Horde.MAX_SCALE) / tan(deg_to_rad(35.0)) / sqrt(2.0) - Horde.ORBIT_M
 	assert_almost_eq(Horde.full_depth(north), expected, 0.0001)
 
 
@@ -233,16 +233,13 @@ func test_vat_upper_clip_motion_packing() -> void:
 
 
 func test_chunk_aabb_contains_max_cards_orbit_and_lean() -> void:
-	var back: Vector3 = Horde.camera_back()
-	var right: Vector3 = Vector3.UP.cross(back).normalized()
-	var up: Vector3 = back.cross(right).normalized()
 	for chunk: Dictionary in await _layout(_walls(1.0)):
 		var box: AABB = chunk["aabb"]
 		for person: Dictionary in chunk["people"]:
 			var foot: Vector3 = person["position"]
 			for px: float in [0.0, 40.0]:
 				for py: float in [0.0, 80.0]:
-					var corner: Vector3 = foot + (right * (px - 20.0) + up * (64.0 - py)) * (1.08 / 30.0)
+					var corner: Vector3 = Horde.upright_corner(foot, Vector2(px - 20.0, 64.0 - py) * (1.08 / 30.0))
 					for shift: Vector3 in [Vector3(0.3, 0, 0.3), Vector3(-0.3, 0, -0.3)]:
 						assert_true(box.has_point(corner + shift))
 
@@ -307,3 +304,169 @@ func test_hiding_and_exit_clear_owned_focus() -> void:
 	node._focus = Vector4.ONE
 	node._exit_tree()
 	assert_eq(node._focus, Vector4.ZERO)
+
+
+func test_upright_head_depth_and_screen_size() -> void:
+	var back: Vector3 = Horde.camera_back()
+	var right: Vector3 = Vector3.UP.cross(back).normalized()
+	var up: Vector3 = back.cross(right).normalized()
+	var foot := Vector3(15.0, 0.0, -5.0)
+	for px: float in [0.0, 40.0]:
+		for py: float in [0.0, 64.0, 80.0]:
+			var corner := Vector2(px - 20.0, 64.0 - py) * (Horde.MAX_SCALE / Horde.PX_PER_M)
+			var old: Vector3 = foot + right * corner.x + up * corner.y
+			var upright: Vector3 = Horde.upright_corner(foot, corner)
+			assert_almost_eq(upright.dot(right), old.dot(right), 0.0001)
+			assert_almost_eq(upright.dot(up), old.dot(up), 0.0001)
+			if py < 64.0:
+				assert_lt(upright.dot(-back), foot.dot(-back))
+	var people: Array[Dictionary] = [{"position": foot}]
+	var box: AABB = Horde.card_aabb(people)
+	assert_almost_eq(box.end.y - foot.y, 64.0 / Horde.PX_PER_M / cos(deg_to_rad(Horde.CAM_PITCH)) * Horde.MAX_SCALE + 0.6, 0.0001)
+
+
+func test_contact_row_tracks_first_visible_depth_on_both_sides() -> void:
+	for height: float in [3.0, 5.2]:
+		var walls: Array = _walls(height)
+		walls.append({"id": "south", "a": Vector2(4, 80), "b": Vector2(116, 80), "out": Vector2(0, 1), "kind": "wall_sheet", "height": height})
+		var counts: Dictionary = {"north": 0, "west": 0, "south": 0}
+		for chunk: Dictionary in await _layout(walls):
+			var wall: Dictionary = chunk["wall"]
+			var first: float = maxf(0.4, Horde.full_depth(wall))
+			for person: Dictionary in chunk["people"]:
+				if int(person["motion"]) in [2, 3]:
+					counts[wall["id"]] += 1
+					assert_gte(float(person["depth"]), first)
+					assert_lte(float(person["depth"]), first + 0.8)
+		for id: String in counts:
+			assert_gt(int(counts[id]), 0, "%s 높이 %.1f의 접촉 줄" % [id, height])
+		assert_eq(Horde.full_depth(walls[2]), 0.0)
+
+
+func test_conservative_height_uses_atlas_and_keeps_overpass() -> void:
+	var wall: Dictionary = _walls(5.2)[0]
+	var old_depth: float = (5.2 - 1.7) / tan(deg_to_rad(Horde.CAM_PITCH)) / sqrt(2.0)
+	assert_lt(Horde.full_depth(wall), old_depth)
+	assert_eq(Horde.head_height({}), Horde.HEAD_MAX_M)
+	var table: Dictionary = {"bounds_px": [[2, 8, 36, 68], [3, 4, 34, 72]]}
+	var height: float = 60.0 / Horde.PX_PER_M / cos(deg_to_rad(Horde.CAM_PITCH))
+	assert_almost_eq(Horde.head_height(table), height, 0.0001)
+	assert_lt(Horde.full_depth(wall, height), Horde.full_depth(wall))
+	var bridge: Dictionary = wall.merged({"kind": "overpass"}, true)
+	var hidden: int = 0
+	for step: int in range(1, 80):
+		if Horde.fully_hidden(bridge, Vector2(20.0, -float(step) * 0.1)):
+			hidden += 1
+	assert_eq(hidden, 0)
+	var near_bridge: int = 0
+	for chunk: Dictionary in await _layout([bridge]):
+		for person: Dictionary in chunk["people"]:
+			if float(person["depth"]) < Horde.full_depth(wall):
+				near_bridge += 1
+	assert_gt(near_bridge, 0)
+	var node: Horde = Horde.new()
+	add_child_autofree(node)
+	var table_contacts: int = 0
+	for chunk: Dictionary in await node.build_layout([wall], {"map_size": Vector2(120, 80)}, null, table):
+		for person: Dictionary in chunk["people"]:
+			if int(person["motion"]) in [2, 3]:
+				table_contacts += 1
+				assert_gte(float(person["depth"]), Horde.full_depth(wall, height))
+				assert_lte(float(person["depth"]), Horde.full_depth(wall, height) + 0.8)
+	assert_gt(table_contacts, 0)
+
+
+func test_joined_segments_keep_people_at_shared_endpoint() -> void:
+	var first: Dictionary = {"id": "a", "a": Vector2(4, 0), "b": Vector2(28, 0), "out": Vector2(0, -1), "kind": "wall_plank", "height": 1.0}
+	var second: Dictionary = first.merged({"id": "b", "a": Vector2(28, 0), "b": Vector2(52, 0)}, true)
+	var walls: Array = [first, second]
+	var layout: Array[Dictionary] = await _layout(walls)
+	var before: int = 0
+	var after: int = 0
+	for chunk: Dictionary in layout:
+		for person: Dictionary in chunk["people"]:
+			var x: float = (person["position"] as Vector3).x
+			if x > 26.0 and x < 28.0:
+				before += 1
+			if x >= 28.0 and x < 30.0:
+				after += 1
+	assert_gt(before, 0)
+	assert_gt(after, 0)
+	walls.reverse()
+	assert_eq(layout, await _layout(walls))
+	for chunk: Dictionary in await _layout([first]):
+		for person: Dictionary in chunk["people"]:
+			var x: float = (person["position"] as Vector3).x
+			assert_gte(x, 6.0)
+			assert_lte(x, 26.0)
+
+
+func _large_walls(prefix: String) -> Array:
+	var walls: Array = []
+	for index: int in range(20):
+		walls.append({"id": "%s_%02d" % [prefix, index], "a": Vector2(index * 40, 0), "b": Vector2((index + 1) * 40, 0), "out": Vector2(0, -1), "kind": "wall_sheet", "height": 1.0})
+	return walls
+
+
+func _wall_counts(layout: Array[Dictionary]) -> Dictionary:
+	var counts: Dictionary = {}
+	for chunk: Dictionary in layout:
+		var id: String = chunk["wall"]["id"]
+		counts[id] = int(counts.get(id, 0)) + (chunk["people"] as Array).size()
+	return counts
+
+
+func test_density_has_no_half_step_from_17_to_27_metres() -> void:
+	var bins: Array[int] = []
+	bins.resize(10)
+	bins.fill(0)
+	var node: Horde = Horde.new()
+	add_child_autofree(node)
+	# 12개의 고정 씨앗, 각 800m. 1m 구간의 면적은 같으며 지도 상한도 동일.
+	for sample: int in range(12):
+		var layout: Array[Dictionary] = await node.build_layout(_large_walls("density_%d" % sample), {"map_size": Vector2(800, 80)})
+		for chunk: Dictionary in layout:
+			for person: Dictionary in chunk["people"]:
+				var index: int = floori(float(person["depth"])) - 17
+				if index >= 0 and index < bins.size():
+					bins[index] += 1
+	for index: int in range(bins.size()):
+		assert_gt(bins[index], 100, "표본 부족: %dm" % (index + 17))
+		if index > 0:
+			assert_lte(absf(float(bins[index] - bins[index - 1])) / float(mini(bins[index], bins[index - 1])), 0.5, "%d~%dm 밀도 계단" % [index + 16, index + 18])
+	assert_eq(Horde.density(18.0), 0.5)
+	assert_almost_eq(Horde.density(26.0), 0.12, 0.00001)
+	# 적분/역함수가 연속 밀도를 함께 사용한다.
+	for index: int in range(17, 28):
+		var depth: float = float(index)
+		assert_almost_eq((Horde.density_area(depth + 0.001) - Horde.density_area(depth - 0.001)) / 0.002, Horde.density(depth), 0.0001)
+		assert_almost_eq(Horde.sample_depth(Horde.density_area(depth) / Horde.density_area(40.0), 40.0), depth, 0.001)
+
+
+func test_map_cap_scales_all_800m_walls_independent_of_order() -> void:
+	var node: Horde = Horde.new()
+	add_child_autofree(node)
+	var walls: Array = _large_walls("cap")
+	var first: Array[Dictionary] = await node.build_layout(walls, {"map_size": Vector2(800, 80)})
+	var counts: Dictionary = _wall_counts(first)
+	assert_lte(int(node.stats["instances"]), 3000)
+	assert_lt(float(node.stats["density_scale"]), 1.0)
+	assert_almost_eq(float(node.stats["candidate_sum"]) * float(node.stats["density_scale"]), 3000.0, 0.0001)
+	assert_eq(counts.size(), walls.size())
+	assert_gt(int(counts.get("cap_19", 0)), 0)
+	for chunk: Dictionary in first:
+		assert_lte((chunk["people"] as Array).size(), 216)
+	walls.reverse()
+	assert_eq(counts, _wall_counts(await node.build_layout(walls, {"map_size": Vector2(800, 80)})))
+	assert_lte(int(node.stats["instances"]), 3000)
+
+
+func test_time_budget_requests_rest_before_piece_cap() -> void:
+	var node: Horde = Horde.new()
+	add_child_autofree(node)
+	node._begin_stats(null)
+	node._pieces = 1
+	node._work_start = Time.get_ticks_usec() - Horde.WORK_USEC
+	assert_true(node._rest_due())
+	node._account()
+	assert_gte(float(node.stats["max_continuous_ms"]), 6.0)

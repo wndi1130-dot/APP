@@ -24,6 +24,10 @@ const CHUNK_CAP: int = 216 # 여섯 덩어리 = 1296, 화면 상한 1300 이내.
 const MAP_CAP: int = 3000
 const VISIBLE_CAP: int = 6
 const PIECE_CAP: int = 256
+const WORK_USEC: int = 6000
+const HEAD_MAX_M: float = 1.95
+const MAX_SCALE: float = 1.08
+const ORBIT_M: float = 0.3
 const MIN_GAP: float = 0.65
 const MAX_TRIES: int = 12
 const HISTORY_SIZE: int = 32
@@ -136,18 +140,27 @@ static func wall_error(wall: Dictionary, map_size: Vector2, grid: FieldGrid = nu
 	return ""
 
 
-static func full_depth(wall: Dictionary) -> float:
+static func head_height(table: Dictionary) -> float:
+	var highest: float = 0.0
+	for rect: Array in table.get("bounds_px", []):
+		highest = maxf(highest, (FOOT.y - float(rect[1])) / PX_PER_M / cos(deg_to_rad(CAM_PITCH)))
+	return highest if highest > 0.0 else HEAD_MAX_M
+
+
+static func full_depth(wall: Dictionary, head_max: float = HEAD_MAX_M) -> float:
+	if wall.get("kind") == "overpass":
+		return 0.0 # 틈은 실제 깊이 검사에 맡긴다.
 	var back: Vector3 = camera_back()
 	var away := -Vector2(back.x, back.z).normalized()
-	return maxf(0.0, (float(wall["height"]) - 1.7) / tan(deg_to_rad(CAM_PITCH))) * maxf(0.0, (wall["out"] as Vector2).dot(away))
+	return maxf(0.0, (float(wall["height"]) - head_max * MAX_SCALE) / tan(deg_to_rad(CAM_PITCH)) * maxf(0.0, (wall["out"] as Vector2).dot(away)) - ORBIT_M)
 
 
-static func fully_hidden(wall: Dictionary, point: Vector2) -> bool:
+static func fully_hidden(wall: Dictionary, point: Vector2, head_max: float = HEAD_MAX_M) -> bool:
 	var a: Vector2 = wall["a"]
 	var b: Vector2 = wall["b"]
 	var outward: Vector2 = wall["out"]
 	var depth: float = (point - a).dot(outward)
-	if depth < 0.0 or depth >= full_depth(wall):
+	if depth < 0.0 or depth >= full_depth(wall, head_max):
 		return false
 	var back: Vector3 = camera_back()
 	var toward := Vector2(back.x, back.z).normalized()
@@ -178,12 +191,42 @@ static func _clearance(point: Vector2, bins: Dictionary) -> bool:
 	return true
 
 
+static func upright_corner(foot: Vector3, corner: Vector2) -> Vector3:
+	var right_h: Vector3 = Vector3.UP.cross(camera_back()).normalized()
+	return foot + right_h * corner.x + Vector3.UP * corner.y / cos(deg_to_rad(CAM_PITCH))
+
+
+static func density(depth: float) -> float:
+	return lerpf(0.5, 0.12, smoothstep(18.0, 26.0, depth))
+
+
+static func density_area(depth: float) -> float:
+	# density의 적분. 후보 수와 역누적분포 표본이 같은 함수를 쓴다.
+	var d: float = clampf(depth, 0.4, 40.0)
+	var t: float = clampf((d - 18.0) / 8.0, 0.0, 1.0)
+	return 0.5 * (d - 0.4) - 0.38 * (8.0 * (t * t * t - 0.5 * t * t * t * t) + maxf(0.0, d - 26.0))
+
+
+static func sample_depth(unit: float, depth_m: float) -> float:
+	var lo: float = 0.4
+	var hi: float = depth_m
+	var target: float = unit * density_area(depth_m)
+	for _step: int in range(16):
+		var mid: float = (lo + hi) * 0.5
+		if density_area(mid) < target:
+			lo = mid
+		else:
+			hi = mid
+	return (lo + hi) * 0.5
+
+
+static func density_wave(point: Vector2) -> float:
+	return 0.65 + 0.35 * sin(point.x * 0.17 + point.y * 0.11)
+
+
 static func card_aabb(people: Array[Dictionary]) -> AABB:
 	if people.is_empty():
 		return AABB()
-	var back: Vector3 = camera_back()
-	var right: Vector3 = Vector3.UP.cross(back).normalized()
-	var up: Vector3 = back.cross(right).normalized()
 	var first: Vector3 = people[0]["position"]
 	var box := AABB(first, Vector3.ZERO)
 	# 전체 칸으로 보수적으로 감싼다. 실제 카드는 합 테두리만 쓴다.
@@ -191,7 +234,7 @@ static func card_aabb(people: Array[Dictionary]) -> AABB:
 		var foot: Vector3 = person["position"]
 		for px: float in [0.0, float(CELL.x)]:
 			for py: float in [0.0, float(CELL.y)]:
-				var corner: Vector3 = foot + (right * (px - FOOT.x) + up * (FOOT.y - py)) * (1.08 / PX_PER_M)
+				var corner: Vector3 = upright_corner(foot, Vector2(px - FOOT.x, FOOT.y - py) * (MAX_SCALE / PX_PER_M))
 				box = box.expand(corner)
 	# 고리 반지름 0.3 + 벽 쪽 쏠림 0.3. 수직 여유도 보수적으로 둔다.
 	return box.grow(0.6)
@@ -230,21 +273,26 @@ func _rest() -> void:
 	stats["pieces"] = int(stats["pieces"]) + 1
 
 
-func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null) -> Array[Dictionary]:
+func _rest_due() -> bool:
+	return _pieces >= PIECE_CAP or Time.get_ticks_usec() - _work_start >= WORK_USEC
+
+
+func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null, table: Dictionary = {}) -> Array[Dictionary]:
 	_begin_stats(pace)
+	var head_max: float = head_height(table)
 	var map_size: Vector2 = vis.get("map_size", Vector2.ZERO)
 	var valid: Array[Dictionary] = []
 	var ids: Dictionary = {}
 	for entry: Variant in walls:
 		_pieces += 1
-		if _pieces >= PIECE_CAP:
+		if _rest_due():
 			await _rest()
 		if entry is Dictionary:
 			var id: String = String(entry.get("id", ""))
 			ids[id] = int(ids.get(id, 0)) + 1
 	for entry: Variant in walls:
 		_pieces += 1
-		if _pieces >= PIECE_CAP:
+		if _rest_due():
 			await _rest()
 		var wall: Dictionary = entry if entry is Dictionary else {}
 		var why: String = wall_error(wall, map_size, vis.get("grid"))
@@ -256,83 +304,109 @@ func build_layout(walls: Array, vis: Dictionary, pace: BuildPace = null) -> Arra
 		else:
 			valid.append(wall)
 	valid.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return String(left["id"]) < String(right["id"]))
+	var endpoints: Dictionary = {}
+	for wall: Dictionary in valid:
+		for key: String in ["a", "b"]:
+			var endpoint := Vector2i(wall[key])
+			endpoints[endpoint] = int(endpoints.get(endpoint, 0)) + 1
+		_pieces += 1
+		if _rest_due():
+			await _rest()
+	# 모든 유효 벽의 후보를 먼저 센다. 같은 배율과 내림으로 지도 상한을 지킨다.
+	var plans: Array[Dictionary] = []
+	var candidate_sum: float = 0.0
+	for wall: Dictionary in valid:
+		var a: Vector2 = wall["a"]
+		var b: Vector2 = wall["b"]
+		var length_m: float = a.distance_to(b)
+		var depth_m: float = minf(40.0, float(wall.get("depth", 40.0)))
+		if depth_m <= 0.4:
+			continue
+		var start_gap: float = 2.0 if int(endpoints[Vector2i(a)]) == 1 else 0.0
+		var end_gap: float = 2.0 if int(endpoints[Vector2i(b)]) == 1 else 0.0
+		for chunk_i: int in range(int(ceil(length_m / CHUNK_M))):
+			var lo: float = maxf(start_gap, float(chunk_i) * CHUNK_M)
+			var hi: float = minf(length_m - end_gap, float(chunk_i + 1) * CHUNK_M)
+			if hi > lo:
+				var candidates: float = (hi - lo) * density_area(depth_m)
+				plans.append({"wall": wall, "chunk_i": chunk_i, "lo": lo, "hi": hi, "depth": depth_m, "candidates": candidates})
+				candidate_sum += candidates
+			_pieces += 1
+			if _rest_due():
+				await _rest()
+	var density_scale: float = minf(1.0, float(MAP_CAP) / maxf(candidate_sum, 1.0))
+	stats["density_scale"] = density_scale
+	stats["candidate_sum"] = candidate_sum
 	var result: Array[Dictionary] = []
 	var bins: Dictionary = {}
-	for wall: Dictionary in valid:
+	for plan: Dictionary in plans:
+		var wall: Dictionary = plan["wall"]
 		var a: Vector2 = wall["a"]
 		var b: Vector2 = wall["b"]
 		var tangent: Vector2 = (b - a).normalized()
 		var outward: Vector2 = wall["out"]
-		var length_m: float = a.distance_to(b)
-		var depth_m: float = minf(40.0, float(wall.get("depth", 40.0)))
-		if depth_m < 0.4:
-			continue
+		var depth_m: float = plan["depth"]
 		var wall_id: String = wall["id"]
-		for chunk_i: int in range(int(ceil(length_m / CHUNK_M))):
-			if int(stats["instances"]) >= MAP_CAP:
+		var contact_start: float = maxf(0.4, full_depth(wall, head_max))
+		var chunk_i: int = plan["chunk_i"]
+		var lo: float = plan["lo"]
+		var hi: float = plan["hi"]
+		var target: int = mini(CHUNK_CAP, int(floor(float(plan["candidates"]) * density_scale)))
+		var people: Array[Dictionary] = []
+		var group_size: int = 0
+		var group_attempts: int = 0
+		var group_at := Vector2.ZERO
+		var group_key := Vector2i.ZERO
+		for attempt: int in range(target * MAX_TRIES):
+			if people.size() >= target:
 				break
-			var lo: float = maxf(2.0, float(chunk_i) * CHUNK_M)
-			var hi: float = minf(length_m - 2.0, float(chunk_i + 1) * CHUNK_M)
-			if hi <= lo:
+			if group_size <= 0 or group_attempts >= 8 * MAX_TRIES:
+				group_key = Vector2i(int(round(a.x + tangent.x * lo)), int(round(a.y + tangent.y * lo))) + Vector2i(attempt, chunk_i)
+				group_size = 3 + int(stream(wall_id, group_key, 11) * 6.0)
+				group_attempts = 0
+				group_at = Vector2(lerpf(lo, hi, stream(wall_id, group_key, 13)), sample_depth(stream(wall_id, group_key, 14), depth_m))
+			group_attempts += 1
+			var lane: int = 100 + attempt * 7
+			var ring: float = TAU * stream(wall_id, group_key, lane)
+			var radius: float = 1.8 * sqrt(stream(wall_id, group_key, lane + 1))
+			var along: float = group_at.x + cos(ring) * radius
+			var depth: float = group_at.y + sin(ring) * radius
+			var point: Vector2 = a + tangent * along + outward * depth
+			var wave: float = density_wave(point)
+			stats["attempts"] = int(stats["attempts"]) + 1
+			_pieces += 1
+			if _rest_due():
+				await _rest()
+			if along < lo or along > hi or depth < 0.4 or depth > depth_m:
 				continue
-			var dense: float = maxf(0.0, minf(22.0, depth_m) - 0.4) * 0.5
-			var sparse: float = maxf(0.0, depth_m - 22.0) * 0.12
-			var target: int = mini(CHUNK_CAP, int(round((hi - lo) * (dense + sparse))))
-			target = mini(target, MAP_CAP - int(stats["instances"]))
-			var people: Array[Dictionary] = []
-			var group_size: int = 0
-			var group_attempts: int = 0
-			var group_at := Vector2.ZERO
-			var group_key := Vector2i.ZERO
-			for attempt: int in range(target * MAX_TRIES):
-				if people.size() >= target:
-					break
-				if group_size <= 0 or group_attempts >= 8 * MAX_TRIES:
-					group_key = Vector2i(int(round(a.x + tangent.x * lo)), int(round(a.y + tangent.y * lo))) + Vector2i(attempt, chunk_i)
-					group_size = 3 + int(stream(wall_id, group_key, 11) * 6.0)
-					group_attempts = 0
-					var far_band: bool = stream(wall_id, group_key, 12) >= dense / maxf(dense + sparse, 0.001)
-					group_at = Vector2(lerpf(lo, hi, stream(wall_id, group_key, 13)), lerpf(22.0 if far_band else 0.4, depth_m if far_band else minf(22.0, depth_m), stream(wall_id, group_key, 14)))
-				group_attempts += 1
-				var lane: int = 100 + attempt * 7
-				var ring: float = TAU * stream(wall_id, group_key, lane)
-				var radius: float = 1.8 * sqrt(stream(wall_id, group_key, lane + 1))
-				var along: float = clampf(group_at.x + cos(ring) * radius, lo, hi)
-				var depth: float = clampf(group_at.y + sin(ring) * radius, 0.4, depth_m)
-				var point: Vector2 = a + tangent * along + outward * depth
-				var wave: float = 0.65 + 0.35 * sin(point.x * 0.17 + point.y * 0.11 + TAU * stream(wall_id, Vector2i.ZERO, 15))
-				stats["attempts"] = int(stats["attempts"]) + 1
-				_pieces += 1
-				if _pieces >= PIECE_CAP:
-					await _rest()
-				if stream(wall_id, group_key, lane + 2) > wave or fully_hidden(wall, point) or not _clearance(point, bins):
-					continue
-				var cell := Vector2i(floori(point.x * 4.0), floori(point.y * 4.0))
-				var motion: int = 1
-				if depth <= 1.2:
-					motion = 2 + int(stream(wall_id, cell, 21) * 2.0)
-				elif depth > 1.5 and along > lo + 0.3 and along < hi - 0.3 and not fully_hidden(wall, point - outward * 0.3):
-					motion = 0 if stream(wall_id, cell, 22) < 0.3 else 1
-				var theta: float = atan2(-outward.x, -outward.y)
-				if stream(wall_id, cell, 23) < 0.1:
-					theta = TAU * stream(wall_id, cell, 24)
-				else:
-					theta += deg_to_rad(80.0) * (stream(wall_id, cell, 24) - 0.5)
-				var position3 := Vector3(point.x, float(wall.get("floor_y", 0.0)), point.y)
-				people.append({"position": position3, "depth": depth, "motion": motion,
-					"custom": Color(stream(wall_id, cell, 25), float(motion), fposmod(theta, TAU) / TAU, stream(wall_id, cell, 26)), "cell": cell})
-				group_size -= 1
-				var bin := Vector2i(floori(point.x / MIN_GAP), floori(point.y / MIN_GAP))
-				if not bins.has(bin):
-					bins[bin] = []
-				(bins[bin] as Array).append(point)
-			# 정렬 한 번은 최대 216개. 카메라 전방 투영 깊이가 작은 순서.
-			var forward: Vector3 = -camera_back()
-			people.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return (left["position"] as Vector3).dot(forward) < (right["position"] as Vector3).dot(forward))
-			if not people.is_empty():
-				result.append({"id": "%s:%d" % [wall_id, chunk_i], "wall": wall, "people": people, "aabb": card_aabb(people)})
-				stats["instances"] = int(stats["instances"]) + people.size()
-			await _rest()
+			if stream(wall_id, group_key, lane + 2) > wave or fully_hidden(wall, point, head_max) or not _clearance(point, bins):
+				continue
+			var cell := Vector2i(floori(point.x * 4.0), floori(point.y * 4.0))
+			var motion: int = 1
+			if depth >= contact_start and depth <= contact_start + 0.8:
+				motion = 2 + int(stream(wall_id, cell, 21) * 2.0)
+			elif depth > contact_start + 1.1 and along > lo + 0.3 and along < hi - 0.3 and not fully_hidden(wall, point - outward * 0.3, head_max):
+				motion = 0 if stream(wall_id, cell, 22) < 0.3 else 1
+			var theta: float = atan2(-outward.x, -outward.y)
+			if stream(wall_id, cell, 23) < 0.1:
+				theta = TAU * stream(wall_id, cell, 24)
+			else:
+				theta += deg_to_rad(80.0) * (stream(wall_id, cell, 24) - 0.5)
+			var position3 := Vector3(point.x, float(wall.get("floor_y", 0.0)), point.y)
+			people.append({"position": position3, "depth": depth, "motion": motion,
+				"custom": Color(stream(wall_id, cell, 25), float(motion), fposmod(theta, TAU) / TAU, stream(wall_id, cell, 26)), "cell": cell})
+			group_size -= 1
+			var bin := Vector2i(floori(point.x / MIN_GAP), floori(point.y / MIN_GAP))
+			if not bins.has(bin):
+				bins[bin] = []
+			(bins[bin] as Array).append(point)
+		# 정렬 한 번은 최대 216개. 카메라 전방 투영 깊이가 작은 순서.
+		var forward: Vector3 = -camera_back()
+		people.sort_custom(func(left: Dictionary, right: Dictionary) -> bool: return (left["position"] as Vector3).dot(forward) < (right["position"] as Vector3).dot(forward))
+		if not people.is_empty():
+			result.append({"id": "%s:%d" % [wall_id, chunk_i], "wall": wall, "people": people, "aabb": card_aabb(people)})
+			stats["instances"] = int(stats["instances"]) + people.size()
+		await _rest()
 	stats["chunks"] = result.size()
 	_account()
 	return result
@@ -355,22 +429,25 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 	_sight = vis
 	_history.resize(HISTORY_SIZE)
 	_history.fill(Vector4.ZERO)
-	chunks = await build_layout(walls, vis, pace)
+	var table_start: int = Time.get_ticks_usec()
+	var table: Dictionary = read_table()
+	var table_ms: float = float(Time.get_ticks_usec() - table_start) / 1000.0
+	chunks = await build_layout(walls, vis, pace, table)
+	stats["resource_ms"] = table_ms
 	visibility_changed.connect(_visibility_reset)
 	if chunks.is_empty():
 		set_process(false)
 		return
 	var resource_start: int = Time.get_ticks_usec()
-	var table: Dictionary = read_table()
 	if table.is_empty() or not ResourceLoader.exists(ATLAS_PATH):
-		stats["resource_ms"] = float(Time.get_ticks_usec() - resource_start) / 1000.0
+		stats["resource_ms"] = table_ms + float(Time.get_ticks_usec() - resource_start) / 1000.0
 		_account()
 		push_warning("HordeView: 아틀라스 또는 칸 표 없음/불일치. horde_bake를 먼저 실행해야 합니다.")
 		set_process(false)
 		return
 	var atlas: Texture2D = load(ATLAS_PATH)
 	var shader: Shader = load("res://fx/shaders/horde_far.gdshader")
-	stats["resource_ms"] = float(Time.get_ticks_usec() - resource_start) / 1000.0
+	stats["resource_ms"] = table_ms + float(Time.get_ticks_usec() - resource_start) / 1000.0
 	if atlas == null or shader == null or atlas.get_size() != Vector2(ATLAS_SIZE):
 		_account()
 		push_warning("HordeView: 아틀라스 크기 또는 셰이더 자원 오류")
@@ -389,6 +466,7 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 		mat.set_shader_parameter("atlas", atlas)
 		mat.set_shader_parameter("bounds_px", rects)
 		mat.set_shader_parameter("clip_lengths", lengths)
+		mat.set_shader_parameter("camera_pitch", deg_to_rad(CAM_PITCH))
 		mat.set_shader_parameter("wall_a", wall["a"])
 		mat.set_shader_parameter("wall_b", wall["b"])
 		mat.set_shader_parameter("wall_out", wall["out"])
@@ -403,6 +481,9 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 		mm.instance_count = people.size()
 		mm.custom_aabb = chunk["aabb"]
 		for index: int in range(people.size()):
+			_pieces += 1
+			if _rest_due():
+				await _rest()
 			mm.set_instance_transform(index, Transform3D(Basis.IDENTITY, people[index]["position"]))
 			mm.set_instance_custom_data(index, people[index]["custom"])
 		var draw := MultiMeshInstance3D.new()
