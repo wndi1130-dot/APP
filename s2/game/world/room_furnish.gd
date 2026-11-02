@@ -548,6 +548,8 @@ static func clear_fronts(data: Dictionary) -> Dictionary:
 			var room_boxes: Array = boxes_in.get(ri, [])
 			for i: int in todo:
 				var p: Dictionary = props[i]
+				if p.get("keep", false) == true:
+					continue
 				var kind := String(p.get("kind", ""))
 				var old: Rect2i = _rect(p["rect"])
 				# 다른 소품(바닥에 깔린 것까지)과 바닥 상자가 선 칸. 막는 가구는 앞도 지킨다.
@@ -2041,6 +2043,8 @@ static func furnish_rooms(data: Dictionary) -> Dictionary:
 			var taken: Dictionary = {}
 			for i: int in idxs:
 				var p: Dictionary = props[i]
+				if p.get("keep", false) == true:
+					continue
 				var rect: Rect2i = _rect(p.get("rect"))
 				if REPLACED.has(String(p.get("kind", ""))):
 					drop[i] = true
