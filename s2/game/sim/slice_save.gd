@@ -224,12 +224,12 @@ static func receipt_of_field(saved: Dictionary) -> Dictionary:
 	return ended.to_dict()
 
 
-static func pick(slice_path: String, train_path: String, t: Dictionary, field_path: String = FieldSave.PATH) -> Dictionary:
+static func pick(slice_path: String, train_path: String, t: Dictionary, field_path: String = FieldSave.PATH, read_context: Variant = null) -> Dictionary:
 	var d := read(slice_path)
 	var source: Dictionary = {}
 	var g := _train(train_path, t, source)
 	if RouteState.is_campaign(g):
-		return _pick_campaign(d, g, source, field_path)
+		return _pick_campaign(d, g, source, field_path, read_context)
 	if d.is_empty():
 		return {}
 	if g.is_empty() or String(g.get("phase", "")) == "end":
@@ -246,7 +246,7 @@ static func pick(slice_path: String, train_path: String, t: Dictionary, field_pa
 		if d["receipt"].get("receiptId") == receipt.get("receiptId"):
 			receipt = d["receipt"].duplicate(true)
 		else:
-			var saved: Dictionary = FieldSave.read(field_path)
+			var saved: Dictionary = FieldSave.read_for_start(field_path, read_context) if read_context is Dictionary else FieldSave.read(field_path)
 			if saved.get("phase") == "ended" and saved.get("receipt_id") == receipt.get("receiptId"):
 				receipt = receipt_of_field(saved)
 			# Without either typed copy, the canonical train text loses number types.
@@ -316,7 +316,7 @@ static func field_belongs(g: Dictionary, saved: Dictionary) -> bool:
 	return field_opts_belong(g, options) and saved.get("stop_id") == g["campaign"]["visit"].get("stop_id") and saved.get("receipt_id") == "ret_" + String(g["campaign"]["visit"].get("departure_id", "")).trim_prefix("dep_")
 
 
-static func _pick_campaign(d: Dictionary, g: Dictionary, source: Dictionary, field_path: String) -> Dictionary:
+static func _pick_campaign(d: Dictionary, g: Dictionary, source: Dictionary, field_path: String, read_context: Variant = null) -> Dictionary:
 	if RouteState.problem(g) != "" or step_of_board(g) == "end":
 		return {}
 	var route: Dictionary = g["campaign"]
@@ -324,7 +324,7 @@ static func _pick_campaign(d: Dictionary, g: Dictionary, source: Dictionary, fie
 	var torn: bool = d.is_empty() or d.get("mode") != "campaign" or d.get("run") != route["run"] or d.get("visit_id") != visit.get("id", "") or d.get("train_sha") != source.get("train_sha") or d.get("seg") != g["seg"] or d.get("applied") != applied_ids(g)
 	var at: String = step_of_board(g) if torn else resume_step(g, String(d["step"]))
 	var receipt: Dictionary = receipt_of_board(g)
-	var saved: Dictionary = FieldSave.read(field_path)
+	var saved: Dictionary = FieldSave.read_for_start(field_path, read_context) if read_context is Dictionary else FieldSave.read(field_path)
 	if not receipt.is_empty():
 		var fingerprint: String = FieldReturn.canonical(receipt)
 		if not torn and RouteState.owns_receipt(g, d["receipt"]) and FieldReturn.canonical(d["receipt"]) == fingerprint:

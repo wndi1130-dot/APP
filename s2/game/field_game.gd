@@ -666,6 +666,7 @@ func _ready() -> void:
 		# A version-1 save kept no guard state: the brakes were heard before it was left.
 		if not FieldSave.exact(opts["field_resume"]):
 			train_guard.resumed()
+		opts.erase("field_resume")
 	elif data["anchors"].has("whistle") and bool(opts.get("arrival_horde", true)):
 		# The train has just stood: its brakes are heard as the clock starts,
 		# the scene of it rolling in or not (decision 416).
