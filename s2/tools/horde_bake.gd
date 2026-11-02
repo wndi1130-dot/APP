@@ -8,7 +8,10 @@ const VatBaker = preload("res://scripts/vat_baker.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
 const DeadCast = preload("res://game/actors/dead_cast.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
-const CROP_ORIGIN := Vector2i(340, 320) # 720 정방형의 중심에서 40×80칸을 자른다.
+## 720 정방형 가운데에서 42×80칸을 자르는 기본 자리(발 x 21). 실제 자리는 (방향, 동작)마다
+## 자세 쪽으로 옮기고(crop_shift_px) 그만큼 칸 안 발 x(foot_px_x)를 칸 표에 적는다 —
+## 몸을 줄이거나 몰래 옮기는 것이 아니라 셰이더가 같은 값으로 되돌려 놓는다.
+const CROP_ORIGIN := Vector2i(339, 320)
 
 var _port: SubViewport
 var _stage: Node3D
@@ -18,6 +21,9 @@ var _bounds: Array[Rect2i] = []
 var _lengths: Array[float] = []
 var _encode_srgb: bool = false
 var _last_full_rect := Rect2i()
+# --survey: 1차 재기만 하고 (방향, 동작)별 테두리·옮김을 찍는다(저장 안 함).
+var _survey: bool = "--survey" in OS.get_cmdline_user_args()
+var _unions: Array[Rect2i] = []
 
 
 func _initialize() -> void:
@@ -48,41 +54,32 @@ func _run() -> void:
 		_fail("회색 기준값 불일치: %.4f (선형 .18 또는 sRGB %.4f 필요)" % [raw_gray, expected])
 		return
 	_encode_image(gray)
-	_store_cell(Horde.CELL_COUNT, gray)
-	for body_index: int in range(Horde.BODIES.size()):
-		var body_folder: String = DeadCast.ROOT + Horde.BODIES[body_index]
-		var assets: Dictionary = DeadBody.with_albedo(BodyBake.load_baked(body_folder), body_folder)
-		if assets.is_empty() or not assets.get("albedo") is Texture2D or not assets.get("skin") is Texture2D:
-			_fail("몸·알베도·피부 마스크 누락: " + body_folder)
+	# 회색 기준은 48열 뒤 오른쪽 띠(GRAY_RECT)에 — 칸 가운데 32 px.
+	_atlas.blit_rect(gray, Rect2i(Vector2i(floori(float(Horde.CELL.x - Horde.GRAY_RECT.size.x) * 0.5), 0), Horde.GRAY_RECT.size), Horde.GRAY_RECT.position)
+	_unions.resize(Horde.DIRECTIONS * Horde.MOTIONS.size())
+	var none: Array[int] = []
+	if not await _pose_pass(true, none):
+		return
+	var shifts: Array[int] = []
+	var foot_x: Array[float] = []
+	for i: int in range(_unions.size()):
+		var u: Rect2i = _unions[i]
+		var lo: int = u.end.x - (Horde.CELL.x - 2)
+		var hi: int = u.position.x - 2
+		if lo > hi or u.position.y < 2 or u.end.y > Horde.CELL.y - 2:
+			_fail("자세가 42×80칸 2px 여백에 안 들어감: 방향%d %s %s" % [floori(float(i) / float(Horde.MOTIONS.size())), Horde.MOTIONS[i % Horde.MOTIONS.size()], u])
 			return
-		var clips: Array = assets["clips"]
-		var selected: Array[int] = Horde.clip_indices(clips)
-		if selected.size() != Horde.MOTIONS.size():
-			_fail("clips.json 이름/길이 오류: " + body_folder)
-			return
-		for clip_index: int in selected:
-			_lengths.append(float(clips[clip_index]["length"]))
-		var body: MultiMeshInstance3D = _body_node(assets, body_index)
-		_stage.add_child(body)
-		for direction: int in range(Horde.DIRECTIONS):
-			var theta: float = Horde.camera_theta() + Horde.THETA_ZERO + TAU * float(direction) / float(Horde.DIRECTIONS)
-			body.multimesh.set_instance_transform(0, Transform3D(Basis(Vector3.UP, theta), Vector3.ZERO))
-			for motion: int in range(Horde.MOTIONS.size()):
-				for frame: int in range(Horde.FRAMES):
-					body.multimesh.set_instance_custom_data(0, Color(float(frame) / float(Horde.FRAMES), VatBaker.pack_motion(selected[motion]), 1.0, 1.0))
-					var picture: Image = await _capture()
-					# 잘라낸 그림만 보면 화면 밖으로 잘린 팔을 놓친다. 전체 렌더 경계를 검사한다.
-					var rect := Rect2i(_last_full_rect.position - CROP_ORIGIN, _last_full_rect.size)
-					if not rect.has_area() or not Rect2i(2, 2, 36, 76).encloses(rect):
-						_fail("40×80 칸의 2px 여백 초과/빈 그림: %s %s 방향%d 틀%d %s" % [Horde.BODIES[body_index], Horde.MOTIONS[motion], direction, frame, rect])
-						return
-					var bound_index: int = direction * Horde.MOTIONS.size() + motion
-					_bounds[bound_index] = _bounds[bound_index].merge(rect) if _bounds[bound_index].has_area() else rect
-					_encode_image(picture)
-					_dilate(picture)
-					_store_cell(Horde.atlas_index(body_index, direction, motion, frame), picture)
-		body.free()
-		assets.clear()
+		var shift: int = clampi(roundi((u.position.x + u.end.x) * 0.5 - Horde.CELL.x * 0.5), lo, hi)
+		shifts.append(shift)
+		foot_x.append(Horde.FOOT.x - float(shift))
+		if _survey:
+			print("SURVEY 방향%d %s x %d..%d y %d..%d 옮김 %d 발x %.0f" % [floori(float(i) / float(Horde.MOTIONS.size())), Horde.MOTIONS[i % Horde.MOTIONS.size()], u.position.x, u.end.x, u.position.y, u.end.y, shift, Horde.FOOT.x - float(shift)])
+	if _survey:
+		print("SURVEY_DONE %d" % _unions.size())
+		quit()
+		return
+	if not await _pose_pass(false, shifts):
+		return
 	var table: Dictionary = Horde.table_contract()
 	var bounds_json: Array = []
 	for rect: Rect2i in _bounds:
@@ -91,9 +88,11 @@ func _run() -> void:
 	table["bounds_order"] = "direction * 4 + motion; union over all bodies and frames"
 	table["bake_viewport_px"] = [Horde.REFERENCE_HEIGHT, Horde.REFERENCE_HEIGHT]
 	table["crop_origin_px"] = [CROP_ORIGIN.x, CROP_ORIGIN.y]
+	table["crop_shift_px"] = shifts
+	table["foot_px_x"] = foot_x
 	table["clip_lengths"] = _lengths
 	table["clip_lengths_order"] = "body * 4 + motion"
-	table["gray_reference"] = {"cell": Horde.CELL_COUNT, "linear": 0.18, "png_srgb": expected,
+	table["gray_reference"] = {"rect": [Horde.GRAY_RECT.position.x, Horde.GRAY_RECT.position.y, Horde.GRAY_RECT.size.x, Horde.GRAY_RECT.size.y], "linear": 0.18, "png_srgb": expected,
 		"captured": raw_gray, "encode_after_capture": _encode_srgb, "runtime_sampler": "source_color"}
 	table["alpha_padding_checked"] = true
 	table["dilation"] = "nearest opaque RGB throughout each cell, original alpha retained"
@@ -205,13 +204,13 @@ func _gray_cell() -> Image:
 	return picture
 
 
-func _capture() -> Image:
+func _capture(origin: Vector2i = CROP_ORIGIN) -> Image:
 	await process_frame
 	await RenderingServer.frame_post_draw
 	var picture: Image = _port.get_texture().get_image()
 	picture.convert(Image.FORMAT_RGBA8)
 	_last_full_rect = picture.get_used_rect()
-	return picture.get_region(Rect2i(CROP_ORIGIN, Horde.CELL))
+	return picture.get_region(Rect2i(origin, Horde.CELL))
 
 
 func _encode_image(picture: Image) -> void:
@@ -258,3 +257,50 @@ static func _dilate(picture: Image) -> void:
 func _store_cell(index: int, picture: Image) -> void:
 	var origin := Vector2i((index % Horde.COLUMNS) * Horde.CELL.x, int(floor(float(index) / float(Horde.COLUMNS))) * Horde.CELL.y)
 	_atlas.blit_rect(picture, Rect2i(Vector2i.ZERO, Horde.CELL), origin)
+
+
+## measure: 기본 자리로 찍어 (방향, 동작)별 실제 테두리만 모은다(_unions). 아니면 shifts만큼 옮긴 자리로 굽는다.
+func _pose_pass(measure: bool, shifts: Array[int]) -> bool:
+	for body_index: int in range(Horde.BODIES.size()):
+		var body_folder: String = DeadCast.ROOT + Horde.BODIES[body_index]
+		var assets: Dictionary = DeadBody.with_albedo(BodyBake.load_baked(body_folder), body_folder)
+		if assets.is_empty() or not assets.get("albedo") is Texture2D or not assets.get("skin") is Texture2D:
+			_fail("몸·알베도·피부 마스크 누락: " + body_folder)
+			return false
+		var clips: Array = assets["clips"]
+		var selected: Array[int] = Horde.clip_indices(clips)
+		if selected.size() != Horde.MOTIONS.size():
+			_fail("clips.json 이름/길이 오류: " + body_folder)
+			return false
+		if not measure:
+			for clip_index: int in selected:
+				_lengths.append(float(clips[clip_index]["length"]))
+		var body: MultiMeshInstance3D = _body_node(assets, body_index)
+		_stage.add_child(body)
+		for direction: int in range(Horde.DIRECTIONS):
+			var theta: float = Horde.camera_theta() + Horde.THETA_ZERO + TAU * float(direction) / float(Horde.DIRECTIONS)
+			body.multimesh.set_instance_transform(0, Transform3D(Basis(Vector3.UP, theta), Vector3.ZERO))
+			for motion: int in range(Horde.MOTIONS.size()):
+				var i: int = direction * Horde.MOTIONS.size() + motion
+				var origin: Vector2i = CROP_ORIGIN if measure else CROP_ORIGIN + Vector2i(shifts[i], 0)
+				for frame: int in range(Horde.FRAMES):
+					body.multimesh.set_instance_custom_data(0, Color(float(frame) / float(Horde.FRAMES), VatBaker.pack_motion(selected[motion]), 1.0, 1.0))
+					var picture: Image = await _capture(origin)
+					# 잘라낸 그림만 보면 화면 밖으로 잘린 팔을 놓친다. 전체 렌더 경계를 검사한다.
+					var rect := Rect2i(_last_full_rect.position - origin, _last_full_rect.size)
+					if not rect.has_area():
+						_fail("빈 그림: %s %s 방향%d 틀%d" % [Horde.BODIES[body_index], Horde.MOTIONS[motion], direction, frame])
+						return false
+					if measure:
+						_unions[i] = _unions[i].merge(rect) if _unions[i].has_area() else rect
+						continue
+					if not Rect2i(2, 2, Horde.CELL.x - 4, Horde.CELL.y - 4).encloses(rect):
+						_fail("42×80 칸의 2px 여백 초과: %s %s 방향%d 틀%d %s" % [Horde.BODIES[body_index], Horde.MOTIONS[motion], direction, frame, rect])
+						return false
+					_bounds[i] = _bounds[i].merge(rect) if _bounds[i].has_area() else rect
+					_encode_image(picture)
+					_dilate(picture)
+					_store_cell(Horde.atlas_index(body_index, direction, motion, frame), picture)
+		body.free()
+		assets.clear()
+	return true

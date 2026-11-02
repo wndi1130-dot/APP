@@ -175,7 +175,13 @@ func test_camera_contract_matches_field_and_foot_is_shared() -> void:
 	assert_eq(Horde.camera_back(), Field.cam_back())
 	assert_eq(Horde.PX_PER_M, 720.0 / 24.0)
 	assert_eq(float(Horde.REFERENCE_HEIGHT) / Horde.CAM_SIZE, Horde.PX_PER_M)
-	assert_eq(Horde.table_contract()["foot_px"], [20.0, 64.0])
+	assert_eq(Horde.table_contract()["foot_px"], [21.0, 64.0])
+	# 회색 기준 칸은 576칸(48열 x 42 px = 2016) 뒤 오른쪽 띠, 발 x는 (방향, 동작)마다 칸 표에.
+	assert_eq(Horde.table_contract()["gray_rect"], [2016, 0, 32, 80])
+	assert_eq(Horde.table_contract()["foot_px_x_order"], "direction * 4 + motion")
+	assert_lte(Horde.COLUMNS * Horde.CELL.x, Horde.GRAY_RECT.position.x)
+	assert_lte(Horde.GRAY_RECT.end.x, Horde.ATLAS_SIZE.x)
+	assert_eq(Horde.COLUMNS * 12, Horde.CELL_COUNT)
 	assert_eq(Horde.table_contract()["padding_px"], 2)
 
 
@@ -237,9 +243,10 @@ func test_chunk_aabb_contains_max_cards_orbit_and_lean() -> void:
 		var box: AABB = chunk["aabb"]
 		for person: Dictionary in chunk["people"]:
 			var foot: Vector3 = person["position"]
-			for px: float in [0.0, 40.0]:
+			# 발 x는 칸 안 2..40이라 모서리는 발에서 가로 ±40 px 안.
+			for dx: float in [-40.0, 40.0]:
 				for py: float in [0.0, 80.0]:
-					var corner: Vector3 = Horde.upright_corner(foot, Vector2(px - 20.0, 64.0 - py) * (1.08 / 30.0))
+					var corner: Vector3 = Horde.upright_corner(foot, Vector2(dx, 64.0 - py) * (1.08 / 30.0))
 					for shift: Vector3 in [Vector3(0.3, 0, 0.3), Vector3(-0.3, 0, -0.3)]:
 						assert_true(box.has_point(corner + shift))
 
@@ -319,6 +326,10 @@ func test_upright_head_depth_and_screen_size() -> void:
 			assert_almost_eq(upright.dot(right), old.dot(right), 0.0001)
 			assert_almost_eq(upright.dot(up), old.dot(up), 0.0001)
 			if py < 64.0:
+				assert_lt(upright.dot(-back), foot.dot(-back))
+			elif py > 64.0:
+				# 발 아래 그림은 땅 밑이 아니라 땅 위, 카메라 쪽으로.
+				assert_almost_eq(upright.y, foot.y, 0.0001)
 				assert_lt(upright.dot(-back), foot.dot(-back))
 	var people: Array[Dictionary] = [{"position": foot}]
 	var box: AABB = Horde.card_aabb(people)

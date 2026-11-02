@@ -254,7 +254,7 @@ func _gray_pair(camera: Camera3D) -> void:
 		swatch.position = Vector3(18.0 + float(side), 10.0, -5.0)
 		swatch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var shader := Shader.new()
-		shader.code = "shader_type spatial; render_mode unshaded, fog_disabled; uniform sampler2D atlas : source_color, filter_nearest; void fragment() { ALBEDO = " + ("texture(atlas, vec2(620.0/2048.0, 920.0/1024.0)).rgb" if side == 0 else "vec3(0.18)") + "; }"
+		shader.code = "shader_type spatial; render_mode unshaded, fog_disabled; uniform sampler2D atlas : source_color, filter_nearest; void fragment() { ALBEDO = " + ("texture(atlas, vec2(2032.0/2048.0, 40.0/1024.0)).rgb" if side == 0 else "vec3(0.18)") + "; }"
 		var material := ShaderMaterial.new()
 		material.shader = shader
 		if side == 0:

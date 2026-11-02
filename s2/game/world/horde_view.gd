@@ -6,13 +6,15 @@ const BuildPace = preload("res://game/world/build_pace.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const BODIES: Array[String] = ["n3-body_tracksuit", "n10-body_denim-m", "n10-body_poncho-f"]
 const MOTIONS: Array[String] = ["walk_a", "stagger", "thump", "claw"]
-const CELL := Vector2i(40, 80)
+const CELL := Vector2i(42, 80)
 const ATLAS_SIZE := Vector2i(2048, 1024)
-const COLUMNS: int = 51
+const COLUMNS: int = 48
 const DIRECTIONS: int = 8
 const FRAMES: int = 6
 const CELL_COUNT: int = 576
-const FOOT := Vector2(20.0, 64.0)
+const FOOT := Vector2(21.0, 64.0) # x는 기본값 — 실제 발 x는 (방향, 동작)마다 칸 표 foot_px_x.
+## 회색 기준 칸: 48열 x 42 px = 2016 뒤 오른쪽 띠.
+const GRAY_RECT := Rect2i(2016, 0, 32, 80)
 const PX_PER_M: float = 30.0
 const CAM_SIZE: float = 24.0
 const REFERENCE_HEIGHT: int = 720
@@ -93,6 +95,8 @@ static func table_contract() -> Dictionary:
 		"foot_px": [FOOT.x, FOOT.y], "px_per_m": PX_PER_M, "theta_zero": THETA_ZERO,
 		"camera_pitch": CAM_PITCH, "camera_yaw": CAM_YAW, "camera_size": CAM_SIZE,
 		"reference_height": REFERENCE_HEIGHT, "padding_px": 2,
+		"gray_rect": [GRAY_RECT.position.x, GRAY_RECT.position.y, GRAY_RECT.size.x, GRAY_RECT.size.y],
+		"foot_px_x_order": "direction * 4 + motion",
 		"index_formula": "(((body * 8 + direction) * 4 + motion) * 6 + frame)",
 		"direction_formula": "posmod(floor((theta - theta_cam - theta_zero + PI/8)/(PI/4)), 8)"}
 
@@ -193,6 +197,10 @@ static func _clearance(point: Vector2, bins: Dictionary) -> bool:
 
 static func upright_corner(foot: Vector3, corner: Vector2) -> Vector3:
 	var right_h: Vector3 = Vector3.UP.cross(camera_back()).normalized()
+	if corner.y < 0.0:
+		# 발 아래로 내려간 그림(카메라 쪽으로 딛는 발)은 땅 밑이 아니라 땅 위 카메라 쪽으로: 화면 자리는 같다.
+		var back_h := Vector3(camera_back().x, 0.0, camera_back().z).normalized()
+		return foot + right_h * corner.x + back_h * (-corner.y) / sin(deg_to_rad(CAM_PITCH))
 	return foot + right_h * corner.x + Vector3.UP * corner.y / cos(deg_to_rad(CAM_PITCH))
 
 
@@ -232,9 +240,10 @@ static func card_aabb(people: Array[Dictionary]) -> AABB:
 	# 전체 칸으로 보수적으로 감싼다. 실제 카드는 합 테두리만 쓴다.
 	for person: Dictionary in people:
 		var foot: Vector3 = person["position"]
-		for px: float in [0.0, float(CELL.x)]:
+		# 발 x는 (방향, 동작)마다 2..CELL.x-2 안이라 칸 가로 전체를 양쪽으로 감싼다.
+		for dx: float in [-float(CELL.x), float(CELL.x)]:
 			for py: float in [0.0, float(CELL.y)]:
-				var corner: Vector3 = upright_corner(foot, Vector2(px - FOOT.x, FOOT.y - py) * (MAX_SCALE / PX_PER_M))
+				var corner: Vector3 = upright_corner(foot, Vector2(dx, FOOT.y - py) * (MAX_SCALE / PX_PER_M))
 				box = box.expand(corner)
 	# 고리 반지름 0.3 + 벽 쪽 쏠림 0.3. 수직 여유도 보수적으로 둔다.
 	return box.grow(0.6)
@@ -465,6 +474,7 @@ func setup(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 		mat.shader = shader
 		mat.set_shader_parameter("atlas", atlas)
 		mat.set_shader_parameter("bounds_px", rects)
+		mat.set_shader_parameter("foot_px_x", PackedFloat32Array(table["foot_px_x"]))
 		mat.set_shader_parameter("clip_lengths", lengths)
 		mat.set_shader_parameter("camera_pitch", deg_to_rad(CAM_PITCH))
 		mat.set_shader_parameter("wall_a", wall["a"])
@@ -515,6 +525,11 @@ static func read_table() -> Dictionary:
 			return {}
 	if not table.get("bounds_px") is Array or (table["bounds_px"] as Array).size() != 32:
 		return {}
+	if not table.get("foot_px_x") is Array or (table["foot_px_x"] as Array).size() != 32:
+		return {}
+	for foot_x: Variant in table["foot_px_x"]:
+		if not (foot_x is float or foot_x is int) or float(foot_x) < 2.0 or float(foot_x) > float(CELL.x - 2):
+			return {}
 	if not table.get("clip_lengths") is Array or (table["clip_lengths"] as Array).size() != 12:
 		return {}
 	for duration: Variant in table["clip_lengths"]:
@@ -527,7 +542,7 @@ static func read_table() -> Dictionary:
 			if not (value is float or value is int) or not is_finite(float(value)):
 				return {}
 		var rect := Rect2(float(entry[0]), float(entry[1]), float(entry[2]), float(entry[3]))
-		if not rect.has_area() or not Rect2(2, 2, 36, 76).encloses(rect):
+		if not rect.has_area() or not Rect2(2, 2, CELL.x - 4, CELL.y - 4).encloses(rect):
 			return {}
 	return table
 

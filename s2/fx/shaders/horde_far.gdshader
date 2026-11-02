@@ -21,13 +21,14 @@ uniform vec2 wall_out;
 // 플레이어가 경계를 넘은 중간 틀에 동작이 바뀌지 않는다. CPU는 개체를 순회하지 않는다.
 uniform vec4 focus_history[32];
 uniform float focus_clock = 0.0;
+uniform float foot_px_x[32]; // (방향, 동작)마다 칸 안 발 x — 자르기 자리를 자세 쪽으로 옮긴 만큼.
 uniform float camera_pitch; // HordeView.CAM_PITCH를 라디안으로 전달.
 uniform bool comparison_hold = false; // 촬영의 같은 몸/방향/첫 틀 비교만 정지.
 
 const float TAU_H = 6.28318530718;
 const float CAMERA_THETA = 0.785398163397; // cam_back().xz의 방위, 보는 쪽이 아님.
 const float THETA_ZERO = 0.0;
-const vec2 CELL_PX = vec2(40.0, 80.0);
+const vec2 CELL_PX = vec2(42.0, 80.0);
 const vec2 ATLAS_PX = vec2(2048.0, 1024.0);
 const vec2 FOOT_PX = vec2(20.0, 64.0);
 const float PX_PER_M = 30.0;
@@ -93,9 +94,11 @@ void vertex() {
 	int direction = int(mod(floor((theta - CAMERA_THETA - THETA_ZERO + TAU_H / 16.0) / (TAU_H / 8.0)), 8.0));
 	vec4 rect = bounds_px[direction * 4 + motion];
 	picture_px = rect.xy + UV * rect.zw;
-	vec2 corner = vec2(picture_px.x - FOOT_PX.x, FOOT_PX.y - picture_px.y) * person_size / PX_PER_M;
+	vec2 corner = vec2(picture_px.x - foot_px_x[direction * 4 + motion], FOOT_PX.y - picture_px.y) * person_size / PX_PER_M;
 	vec3 right_h = normalize(vec3(INV_VIEW_MATRIX[0].x, 0.0, INV_VIEW_MATRIX[0].z));
-	vec3 world = foot + right_h * corner.x + vec3(0.0, 1.0, 0.0) * corner.y / cos(camera_pitch);
+	// 발 아래로 내려간 그림은 땅 밑 대신 땅 위 카메라 쪽으로(화면 자리 같음).
+	vec3 back_h = normalize(vec3(INV_VIEW_MATRIX[2].x, 0.0, INV_VIEW_MATRIX[2].z));
+	vec3 world = foot + right_h * corner.x + (corner.y >= 0.0 ? vec3(0.0, 1.0, 0.0) * corner.y / cos(camera_pitch) : back_h * (-corner.y) / sin(camera_pitch));
 	VERTEX = (VIEW_MATRIX * vec4(world, 1.0)).xyz;
 	NORMAL = normalize(mat3(VIEW_MATRIX) * CARD_NORMAL);
 	cell_info = vec4(float(body), float(direction), float(motion), phase);
@@ -123,7 +126,7 @@ void fragment() {
 	float time = comparison_hold ? 0.0 : TIME - fx_still;
 	float frame = mod(floor(time * (6.0 / clip_lengths[body * 4 + motion]) * person_speed + 6.0 * cell_info.w), 6.0);
 	float index = ((float(body) * 8.0 + float(direction)) * 4.0 + float(motion)) * 6.0 + frame;
-	vec2 cell_origin = vec2(mod(index, 51.0), floor(index / 51.0)) * CELL_PX;
+	vec2 cell_origin = vec2(mod(index, 48.0), floor(index / 48.0)) * CELL_PX;
 	vec2 atlas_uv = (cell_origin + clamp(picture_px, vec2(0.5), CELL_PX - vec2(0.5))) / ATLAS_PX;
 	// 샘플과 미분은 알파 잘라냄보다 먼저. 모바일에서도 지원되는 미분으로 LOD를 추정.
 	vec2 dx = dFdx(atlas_uv * ATLAS_PX);
