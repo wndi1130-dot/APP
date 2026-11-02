@@ -14,7 +14,7 @@ import { addSupplies, enableSupplies, SUP_YIELD, suppliesAsks, suppliesHygieneSh
 import { tables } from './turn_port_fixtures';
 import { createS1cGame } from '../src/game/domestic/state';
 import type { Task } from '../src/game/domestic/state';
-import { payUpkeep, runWorkshop, workPower } from '../src/game/domestic/workshop';
+import { payUpkeep, restoreBlock, runWorkshop, setSupFine, techShown, workPower } from '../src/game/domestic/workshop';
 import { furnishTick } from '../src/game/domestic/lawtech';
 import { D } from '../src/game/domestic/data';
 
@@ -22,7 +22,8 @@ const plain = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 const groups: Record<string, unknown[]> = { enable: [], use: [], ledger: [], stops: [], fields: [], departures: [], cards: [], conditions: [], settles: [], work_order: [], workshop_settles: [] };
 // DomState keys rejected by S2 is_store after PR 2a. Keep all other state,
 // including cards, RNG, journal and community relations, in both comparisons.
-const s2DomOmit = ['supWork', 'supFineOn', 'finds', 'manuals', 'offered', 'armored',
+// supWork and supFineOn are S2 store keys since supplies 2b (train_dom.gd is_store).
+const s2DomOmit = ['finds', 'manuals', 'offered', 'armored',
   'greenhouse', 'extraCars', 'people', 'nextPersonId', 'countdown', 'hotWater', 'pot',
   'lice', 'liceFree', 'pressureStage', 'typhus', 'bedding', 'penalties', 'sabotage',
   'grants', 'stoker', 'stalled', 'flags', 'hung', 'escort', 'altPlace', 'reroutes',
@@ -78,6 +79,56 @@ for (const mode of ['parts', 'starved', 'furnished', 'restore-progress'] as cons
     d.techs.w6 = { stage: 'restoring', defect: false, progress: 0, need: 20 };
   }
   mutate('workshop_settles', mode, g, board => {
+    const starved = payUpkeep(board), result = runWorkshop(board);
+    furnishTick(board);
+    return { ...result, starved };
+  });
+}
+// PR 2b production cases use real S1 workshop functions and retain full boards.
+groups.workshop = [];
+groups.fine_mode = [];
+groups.research = [];
+function productionBoard(): Game {
+  const g = workshopBoard(), d = g.dom!;
+  for (const p of d.people) if (p.field === 'craft') p.skill = 3;
+  Object.assign(d, { experts: d.people.filter(p => p.alive && !p.gone).map(p =>
+    ({ name: p.name, field: p.field, comm: p.comm, skill: p.skill })) });
+  d.parts = 100; d.scrap = 100; d.target = 0;
+  d.order = ['sup', 'parts', 'restore', 'modify'];
+  d.techs.w6 = { stage: 'done', defect: false, progress: 3, need: 3 };
+  d.techs.w7 = { stage: 'done', defect: false, progress: 3, need: 3, variant: 'a' };
+  d.techs.w8 = { stage: 'done', defect: false, progress: 3, need: 3 };
+  return g;
+}
+for (const variant of ['base', 'a', 'b'] as const) for (const fine of [false, true]) {
+  const g = productionBoard(), d = g.dom!;
+  if (variant === 'base') d.techs.w7!.off = true;
+  else d.techs.w7!.variant = variant;
+  d.supFineOn = fine;
+  mutate('workshop', `recipe/${variant}/fine=${fine}`, g, runWorkshop);
+}
+for (const mode of ['fractional-cap', 'zero-need', 'carry', 'short-scrap', 'defective', 'starved', 'off'] as const) {
+  const g = productionBoard(), d = g.dom!;
+  if (mode === 'fractional-cap') for (const c of S1.COMMS) g.comms[c].pop = 13;
+  if (mode === 'zero-need') for (const c of S1.COMMS) g.comms[c].pop = 0;
+  if (mode === 'carry') d.supWork = 0.2;
+  if (mode === 'short-scrap') d.scrap = 0;
+  if (mode === 'defective') { d.techs.w6!.stage = 'defective'; d.techs.w6!.defect = true; }
+  if (mode === 'starved') d.techs.w6!.starved = true;
+  if (mode === 'off') d.techs.w6!.off = true;
+  mutate('workshop', mode, g, runWorkshop);
+}
+for (const on of [false, true]) {
+  const g = productionBoard(); g.dom!.supWork = 0.2;
+  mutate('fine_mode', `switch/${on}`, g, board => setSupFine(board, on));
+}
+for (const on of [false, true]) for (const id of ['w6', 'w7', 'w8'] as const) {
+  const g = workshopBoard(); g.supOn = on;
+  mutate('research', `${id}/on=${on}`, g, board => ({ shown: techShown(board, id), block: restoreBlock(board, id) ?? null }));
+}
+for (const fine of [false, true]) {
+  const g = productionBoard(); g.dom!.supFineOn = fine;
+  mutate('workshop_settles', `supplies/fine=${fine}`, g, board => {
     const starved = payUpkeep(board), result = runWorkshop(board);
     furnishTick(board);
     return { ...result, starved };

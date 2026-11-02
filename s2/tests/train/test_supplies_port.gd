@@ -357,10 +357,11 @@ func _w8_board(fine: float) -> Dictionary:
 
 
 func test_good_goods_ask_needs_the_goods_in_hand_even_with_w8() -> void:
-	# S2 makes no good goods yet, so w8 alone must not offer a promise that breaks at its due.
+	# With good-goods mode off, the one-settlement preview adds nothing.
 	for fine: float in [0.0, 0.5, 1.0]:
 		var g: Dictionary = _w8_board(fine)
 		if g.is_empty(): continue
+		g["dom"]["supFineOn"] = false
 		assert_gt(Research.mult(g, _t, "w8"), 0.0, "w8 is really on")
 		var offered: int = 0
 		for session: int in 12:

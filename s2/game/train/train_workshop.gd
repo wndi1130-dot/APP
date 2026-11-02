@@ -38,6 +38,7 @@ const TrainResearch = preload("res://game/train/train_research.gd")
 const TrainLawTech = preload("res://game/train/train_lawtech.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 const TrainWorkOrder = preload("res://game/train/train_work_order.gd")
+const Supplies = preload("res://game/train/train_supplies.gd")
 
 ## S1 D.work, D.workSkill[2] (숙련), ZONE_WORK.front, W1 off: a stretch's work.
 const WORK: float = 4.0
@@ -192,6 +193,23 @@ static func _stretch_body(g: Dictionary, t: Dictionary) -> Dictionary:
 	return out
 
 
+static func set_sup_fine(g: Dictionary, on: bool) -> bool:
+	if not bool(g.get("supOn", false)) or not TrainDom.is_store(g.get("dom")) or TrainResearch.mult(g, {}, "w8") <= 0.0:
+		return false
+	g["dom"]["supFineOn"] = on
+	return true
+
+
+static func _supplies_recipe(g: Dictionary, t: Dictionary) -> Dictionary:
+	var dom: Dictionary = g["dom"]
+	var variant: String = str(dom.get("techs", {}).get("w7", {}).get("variant", "")) if TrainResearch.mult(g, t, "w7") > 0.0 else ""
+	var values: Dictionary = Supplies.MAKE["variants"].get(variant, {})
+	var fine: bool = bool(dom.get("supFineOn", false)) and TrainResearch.mult(g, t, "w8") > 0.0
+	return {"fine": fine, "amount": 1.0 if fine else float(values.get("yield", 1.0)),
+		"work": float(Supplies.MAKE["supMakeWork"]) * float(values.get("work", 1.0)),
+		"scrap": float(Supplies.MAKE["supMakeScrap"]) * float(values.get("scrap", 1.0)) * (float(Supplies.MAKE["fineScrap"]) if fine else 1.0)}
+
+
 ## A stretch of work (the train leaving a stop): parts up to the target while
 ## the stores last, then the line. {"parts": made, "made": [ids], "events": [...]}
 ## — the events in the train scene's form (train_scene post_event).
@@ -263,7 +281,33 @@ static func run(g: Dictionary, t: Dictionary = {}) -> Dictionary:
 			w -= float(modified["used"])
 			did.append_array(modified["did"])
 			events.append_array(modified["events"])
-		# The sup task is visited without production until PR 2b.
+		elif task == "sup" and bool(g.get("supOn", false)) and TrainResearch.mult(g, t, "w6") > 0.0:
+			var recipe: Dictionary = _supplies_recipe(g, t)
+			var cap: float = float(Supplies.MAKE["supMakeCap"]) * Supplies.need(g, t)
+			var amount_made: float = 0.0
+			while w > 0.0 and cap - amount_made > 1e-9:
+				var amount: float = minf(float(recipe["amount"]), cap - amount_made)
+				var fraction: float = amount / float(recipe["amount"])
+				var need: float = float(recipe["work"]) * fraction
+				var scrap: float = float(recipe["scrap"]) * fraction
+				if float(dom.get("scrap", 0)) < scrap - 1e-9:
+					break
+				var progress: float = float(dom.get("supWork", 0.0))
+				var spend: float = minf(w, maxf(0.0, need - progress))
+				dom["supWork"] = progress + spend
+				w -= spend
+				if float(dom["supWork"]) < need - 1e-9:
+					break
+				dom["supWork"] = maxf(0.0, float(dom["supWork"]) - need)
+				dom["scrap"] = maxf(0.0, float(dom.get("scrap", 0)) - scrap)
+				if bool(recipe["fine"]):
+					g["supFine"] = float(g.get("supFine", 0)) + amount
+				else:
+					Supplies.add(g, amount, "sup.make")
+				amount_made += amount
+			if amount_made > 0.0:
+				var amount_text: String = str(int(amount_made)) if amount_made == floorf(amount_made) else str(amount_made)
+				did.append("%s %s" % ["좋은 물건" if bool(recipe["fine"]) else "생필품", amount_text])
 	return {"parts": parts_made, "made": made, "events": events, "used": initial_work - w, "did": did}
 
 

@@ -310,6 +310,7 @@ func test_work_order_keeps_user_order_and_visits_new_sup_once() -> void:
 	var g: Dictionary = _board()
 	g["dom"]["order"] = ["restore", "parts", "modify"]
 	g["dom"]["target"] = 0
+	g["dom"]["scrap"] = 0
 	g["dom"]["restoring"] = "w6"
 	g["dom"]["techs"] = {"w6": {"stage": "restoring", "defect": false, "progress": 0.0, "need": 1.0}}
 	var before: Array = g["dom"]["order"].duplicate()
@@ -321,7 +322,7 @@ func test_work_order_keeps_user_order_and_visits_new_sup_once() -> void:
 	assert_eq(g["dom"]["order"], before + ["sup"])
 	Workshop.run(g, _t)
 	assert_eq(g["dom"]["order"].count("sup"), 1, "once")
-	assert_false(g["dom"].has("supWork"), "2a does not produce supplies")
+	assert_false(g["dom"].has("supWork"), "no scrap means no supplies work was spent")
 
 
 func test_enabled_dom_with_order_stays_s1a() -> void:

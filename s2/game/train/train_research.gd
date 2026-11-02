@@ -675,6 +675,9 @@ static func visible(g: Dictionary, _t: Dictionary = {}) -> Array[String]:
 	for id: String in VISIBLE:
 		if shown.has(id) and not NOT_YET.has(id):
 			out.append(id)
+	for id: String in ["w6", "w7", "w8"]:
+		if shown.has(id) and not NOT_YET.has(id):
+			out.append(id)
 	return out
 
 
