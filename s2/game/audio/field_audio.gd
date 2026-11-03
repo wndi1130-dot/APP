@@ -1091,7 +1091,7 @@ func wall_bump(d: float) -> bool:
 	var near: Vector3 = wall_point[0]
 	var q: Vector2 = Geometry2D.get_closest_point_to_segment(Vector2(near.x, near.z) + (b - a).normalized() * randf_range(-WALL_BUMP_SPREAD, WALL_BUMP_SPREAD), a, b)
 	var bus: String = "SFX" if d < WALL_BUMP_NEAR else ("SFX_FAR" if AudioServer.get_bus_index("SFX_FAR") >= 0 else "SFX")
-	played.append("wall_bump")
+	# An ambience, as the wind's gusts: its own log, not `played` (the groups the rules' events sound).
 	wall_bump_log.append([heard_t, (list[pick] as AudioStream).resource_path.get_file()])
 	_one_shot("wall_bump", Vector3(q.x, near.y, q.y), WALL_BUMP_LOUD * clampf(1.0 - d / WALL_FAR_FROM, 0.0, 1.0), randf_range(0.94, 1.06), list[pick], bus)
 	return true
@@ -1149,8 +1149,7 @@ func train_metal(at: Vector3, r: Rect2) -> bool:
 		roll -= float(weights[i])
 	blow_last["train_metal"] = pick
 	var spot := Vector3(randf_range(r.position.x, r.end.x), 0.0, randf_range(r.position.y, r.end.y))
-	played.append("train_metal")
-	train_metal_log.append([heard_t, (list[pick] as AudioStream).resource_path.get_file()])
+	train_metal_log.append([heard_t, (list[pick] as AudioStream).resource_path.get_file()])   # its own log, as wall_bump's
 	_one_shot("train_metal", spot, TRAIN_METAL_LOUD * clampf(1.0 - at.distance_to(spot) / (TRAIN_METAL_REACH + 10.0), 0.2, 1.0), randf_range(0.96, 1.04), list[pick], _bus_at(spot))
 	return true
 
