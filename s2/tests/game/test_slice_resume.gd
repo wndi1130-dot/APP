@@ -70,13 +70,25 @@ func _pick() -> Dictionary:
 	return SliceSave.pick(SLICE, TRAIN, start[1], FIELD)
 
 
+## A train board as its slot writes it (save_slot.gd slot_board): a supplies run is
+## written as slot version 3 whatever version the board in hand carries, and a board
+## read back carries the 3. So a board in hand and one read back, or a run resumed and
+## one never cut, are held side by side in the written form; anything else is itself.
+## The slot version itself is test_supplies_port's.
+func _slot(value: Variant) -> Variant:
+	return TrainSave.slot_board(value) if value is Dictionary else value
+
+
 ## Every type and every float digit: a 9 that comes back as 9.0 is a different board.
 func _json(value: Variant) -> String:
-	return JSON.stringify(value, "", true, true)
+	return JSON.stringify(_slot(value), "", true, true)
 
 
 ## The first place where a value read back is not the same type as the one saved, or "".
 func _type_gap(saved: Variant, back: Variant, at: String = "g") -> String:
+	if at == "g":
+		saved = _slot(saved)
+		back = _slot(back)
 	if typeof(saved) != typeof(back):
 		return "%s: %s -> %s" % [at, type_string(typeof(saved)), type_string(typeof(back))]
 	if saved is Dictionary:

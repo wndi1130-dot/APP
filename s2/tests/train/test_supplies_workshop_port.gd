@@ -173,6 +173,25 @@ func test_enabled_resume_with_unapplied_field_end_keeps_old_shop_events_out() ->
 		after_each()
 
 
+## A start board handed in that already says supplies are off keeps them off (and gets
+## no supplies keys); the campaign starts say nothing, so they begin with supplies on.
+func test_a_start_board_that_says_supplies_off_keeps_them_off() -> void:
+	var start: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/game/fixtures/campaign_starts.json"))[0]
+	assert_false((start["state"] as Dictionary).has("supOn"), "the campaign starts say nothing")
+	start["state"]["supOn"] = false
+	var flow := ResumeProbe.new()
+	flow.opts = {"save": true, "seed": 1, "cinema": false, "map_threads": false, "still": true,
+		"slice_save_path": _slot + "slice.json", "train_save_path": _slot + "train.json",
+		"field_save_path": _slot + "field.json", "resume": {},
+		"mode": "campaign", "run": "supplies_2a_campaign", "start_board": start}
+	_flows.append(flow)
+	add_child(flow)
+	flow.set_process(false)
+	assert_false(bool(flow.train_g.get("supOn", true)), "kept off")
+	assert_false(flow.train_g.has("sup"), "no supplies stock put on")
+	assert_false(flow.train_g.has("shopSeen"), "no news key for a run without supplies")
+
+
 ## A new run carries supplies and has seen no settlement: `shopSeen` -1 from the start.
 func test_a_new_run_starts_with_supplies_on_and_no_news_seen() -> void:
 	for campaign: bool in [false, true]:
@@ -220,9 +239,33 @@ func test_a_save_without_shop_seen_keeps_the_old_reading() -> void:
 	assert_false(picked["g"].has("shopSeen"), "the save carries no shopSeen")
 	var resumed: ResumeProbe = _flow(false, picked)
 	assert_true(resumed.pending_shop_events.is_empty() and resumed.posted.is_empty(), "nothing shown again")
-	# The train standing again writes that last settlement as the one seen.
-	if resumed.train_g.has("shopSeen"):
-		assert_eq(int(resumed.train_g["shopSeen"]), int(picked["g"]["lastSettle"]["workshop"]["seg"]))
+	# The resume writes that last settlement as the one seen, so a later one is tracked.
+	assert_true(resumed.train_g.has("shopSeen"), "the resumed run gets the key")
+	assert_eq(int(resumed.train_g.get("shopSeen", -9)), int(picked["g"]["lastSettle"]["workshop"]["seg"]))
+
+
+## A supplies run saved without `shopSeen` before any settlement: the resume gives it
+## −1, so its first settlement, saved before the train stood, still shows after the next
+## resume (without the key that settlement read as seen and its news was lost).
+func test_a_save_without_shop_seen_before_any_settlement_tracks_the_next_one() -> void:
+	var flow: ResumeProbe = _flow(false)
+	assert_true(bool(flow.train_g.get("supOn", false)))
+	flow.train_g["lastSettle"] = null
+	flow.train_g.erase("shopSeen")
+	assert_true(flow._save_slice())
+	var t: Dictionary = flow.train_t
+	flow.free()
+	var picked: Dictionary = _picked(t)
+	assert_false(picked.is_empty())
+	assert_false(picked["g"].has("shopSeen"), "the save carries no shopSeen")
+	var resumed: ResumeProbe = _flow(false, picked)
+	assert_eq(int(resumed.train_g.get("shopSeen", -9)), -1, "no settlement seen yet")
+	assert_true(resumed.pending_shop_events.is_empty() and resumed.posted.is_empty())
+	_old_shop(resumed, false)
+	var made: Array = resumed.train_g["lastSettle"]["workshop"]["events"].duplicate(true)
+	resumed.free()
+	var again: ResumeProbe = _flow(false, _picked(t))
+	assert_eq(again.posted + again.pending_shop_events, made, "the first settlement's news is not lost")
 
 
 ## `shopSeen` stands beside the board, not in its dom: a board carrying it is still an

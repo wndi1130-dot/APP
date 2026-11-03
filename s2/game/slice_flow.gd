@@ -1329,7 +1329,9 @@ func _post_shop_events(events: Array) -> void:
 ## A run saved with `shopSeen` (the settlement whose news the train last showed)
 ## shows the newer settlement's news once more after a resume: the run was left
 ## before the train stood. A run saved without it (before that key) treats the last
-## settlement as seen, as it did.
+## settlement as seen, as it did, and gets the key now (−1 before any settlement):
+## otherwise a settlement saved after the resume but left before the train stood
+## would read as seen too.
 func _seed_shop_settle() -> void:
 	shop_settle_seg = -1
 	if not bool(train_g.get("supOn", false)):
@@ -1340,6 +1342,7 @@ func _seed_shop_settle() -> void:
 		settled = int(last["workshop"].get("seg", -1))
 	if not train_g.has("shopSeen"):
 		shop_settle_seg = settled
+		train_g["shopSeen"] = settled
 		return
 	shop_settle_seg = int(train_g["shopSeen"])
 	_take_shop_settle()
@@ -2718,7 +2721,9 @@ func _starting_board() -> Array:
 	if not state.is_empty():
 		state["lateOn"] = true
 		state["eventPack"] = true
-		if not tables.is_empty():
+		# A start board that already says whether it carries supplies keeps that
+		# (and its stock); one that says nothing begins as a new run does.
+		if not tables.is_empty() and not state.has("supOn"):
 			TrainSupplies.enable(state, tables)
 	return [state, tables]
 

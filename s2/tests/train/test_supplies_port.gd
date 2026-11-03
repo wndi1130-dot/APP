@@ -248,9 +248,9 @@ func _file_version(path: String) -> int:
 
 
 func test_supplies_save_legacy_and_round_trip() -> void:
-	# Reads 1 and 2; a supplies board is written as 2 so a build that reads only 1 refuses it.
-	assert_eq(Save.SAVE_VERSION, 2)
-	assert_eq(Save.SUPPLIES_VERSION, 2)
+	# Reads 1 to 3; a supplies board is written as 3 so a build that reads at most 2 refuses it.
+	assert_eq(Save.SAVE_VERSION, 3)
+	assert_eq(Save.SUPPLIES_VERSION, 3)
 	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
 	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
 	on["sup"] = 1.5
@@ -263,7 +263,7 @@ func test_supplies_save_legacy_and_round_trip() -> void:
 	off["supOn"] = false
 	assert_eq(int(old["version"]), 1, "a new board starts at slot version 1")
 	for g: Dictionary in [old, on, flag_only, off]:
-		var want: int = 2 if bool(g.get("supOn", false)) else 1
+		var want: int = Save.SUPPLIES_VERSION if bool(g.get("supOn", false)) else 1
 		var at: String = "supOn=%s" % str(g.get("supOn", "absent"))
 		assert_true(Save.save_slot(g, SAVE_PATH))
 		assert_eq(_file_version(SAVE_PATH), want, at + " slot version written")
