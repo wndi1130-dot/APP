@@ -205,3 +205,134 @@ func test_the_bag_is_ordered_by_weight_or_by_name() -> void:
 	game.hud._inv_sort()
 	assert_eq(game.hud.inv_sort, "name")
 	game.hud._close_modal()
+
+
+func _hand(id: String) -> Dictionary:
+	return {"id": id, "quality": "factory", "condition": 1.0, "loaded": 0}
+
+
+## The weapons at the bag's top are their names only; a press on one shows how
+## fast it attacks and its weight, a second press hides them (결정 555). No
+## words about what it does.
+func test_the_bag_names_its_weapons_and_a_press_shows_speed_and_weight() -> void:
+	var game = _game()
+	var p = game.player
+	p.hands = [_hand("axe"), _hand("pistol")]
+	game.hud.bag_panel()
+	var held: Node = game.hud.modal.find_child("Weapons", true, false)
+	assert_not_null(held, "the weapons' block at the bag's top")
+	var first: Button = held.find_child("WeaponName0", true, false) as Button
+	var second: Button = held.find_child("WeaponName1", true, false) as Button
+	assert_not_null(first)
+	assert_not_null(second)
+	assert_eq(first.text, game.hud.short_weapon(p))
+	assert_eq(second.text, String(InventoryPane.W.get_data("pistol")["name"]))
+	assert_null(held.find_child("WeaponStats", true, false), "names only until one is pressed")
+	# Nothing but the names: one row of the two name keys with a dot between, and no
+	# other words anywhere in the block (no line under them, however short).
+	assert_eq(held.get_child_count(), 1, "the names' row alone")
+	var names_row: Node = held.get_child(0)
+	assert_eq(names_row.get_children().map(func(n: Node) -> String: return String(n.name) if n is Button else (n as Label).text if n is Label else n.get_class()), ["WeaponName0", "·", "WeaponName1"])
+	var words: Array = held.find_children("*", "Label", true, false) + held.find_children("*", "RichTextLabel", true, false)
+	assert_eq(words.map(func(n: Node) -> String: return String(n.get("text"))), ["·"], "no words but the dot")
+	first.pressed.emit()
+	held = game.hud.modal.find_child("Weapons", true, false)
+	assert_not_null(held.find_child("WeaponStats", true, false), "a press shows the numbers")
+	assert_eq((held.find_child("WeaponSpeed", true, false) as Label).text, "1.2초", "a hatchet's swing 0.9 and rest 0.3")
+	assert_eq((held.find_child("WeaponWeight", true, false) as Label).text, "3.0")
+	(held.find_child("WeaponName1", true, false) as Button).pressed.emit()
+	held = game.hud.modal.find_child("Weapons", true, false)
+	assert_eq((held.find_child("WeaponSpeed", true, false) as Label).text, "1.0초", "the other weapon's numbers instead")
+	assert_eq((held.find_child("WeaponWeight", true, false) as Label).text, "2.0")
+	(held.find_child("WeaponName1", true, false) as Button).pressed.emit()
+	held = game.hud.modal.find_child("Weapons", true, false)
+	assert_null(held.find_child("WeaponStats", true, false), "pressed again, hidden")
+	(held.find_child("WeaponName0", true, false) as Button).pressed.emit()
+	game.hud._close_modal()
+	game.hud.bag_panel()
+	assert_null(game.hud.modal.find_child("WeaponStats", true, false), "a bag opened afresh shows the names only")
+	game.hud._close_modal()
+	p.hands = []
+	game.hud.bag_panel()
+	assert_null(game.hud.modal.find_child("WeaponName0", true, false), "bare hands: no weapon to press")
+	game.hud._close_modal()
+
+
+## A pane opened afresh another way than the bag key (a box) names the weapons
+## only too, however it was left.
+func test_a_box_opening_the_pane_afresh_shows_the_names_only() -> void:
+	var game = _game()
+	var p = game.player
+	p.hands = [_hand("axe"), _hand("pistol")]
+	game.hud.bag_panel()
+	game.hud._inv_weapon(0)
+	assert_not_null(game.hud.modal.find_child("WeaponStats", true, false))
+	game.hud._close_modal()
+	game.hud.loot(_at_a_box(game))
+	game.hud._inv_bag()
+	assert_not_null(game.hud.modal.find_child("WeaponName0", true, false))
+	assert_null(game.hud.modal.find_child("WeaponStats", true, false), "opened by the box: names only")
+	game.hud._close_modal()
+
+
+## The numbers stay with the weapon pressed: one taken into the hand goes first and
+## the pressed one moves to the second place, its numbers with it; gone, they close.
+func test_the_numbers_follow_the_weapon_pressed() -> void:
+	var game = _game()
+	var p = game.player
+	p.hands = [_hand("axe"), _hand("pistol")]
+	game.hud.bag_panel()
+	game.hud._inv_weapon(0)
+	p.hands.insert(0, _hand("knife"))
+	game.hud.bag_panel()
+	var held: Node = game.hud.modal.find_child("Weapons", true, false)
+	assert_eq((held.find_child("WeaponSpeed", true, false) as Label).text, "1.2초", "still the hatchet's numbers")
+	assert_eq(game.hud.inv_weapon_open, 1, "now the second named")
+	assert_eq((held.find_child("WeaponName1", true, false) as Button).get_theme_color("font_color"), InventoryPane.GlassPane.INK, "its name the lit one")
+	p.hands.remove_at(1)
+	game.hud.bag_panel()
+	assert_null(game.hud.modal.find_child("WeaponStats", true, false), "the hatchet gone from the two: closed")
+	assert_eq(game.hud.inv_weapon_open, -1)
+	game.hud._close_modal()
+
+
+## Two weapons, a full bag and one weapon's numbers open (a row more at the
+## bag's top): the pane still lands on the screen.
+func test_a_full_bag_with_a_weapons_numbers_open_stays_on_the_screen() -> void:
+	var game = _game()
+	var p = game.player
+	p.hands = [_hand("pistol"), _hand("knife")]
+	for id in ["scrap", "wood", "cloth", "bandage", "plank", "flare", "document", "medkit", "bottle_spirit", "tweezers"]:
+		p.add_item(id, 1)
+	game.hud.bag_panel()
+	game.hud._inv_weapon(1)
+	assert_not_null(game.hud.modal.find_child("WeaponStats", true, false), "the numbers are open")
+	# The pane fits itself once its slide lands, and the bag's wrapped foot knows
+	# its height only once laid out: land it, then lay out.
+	var glass = game.hud.modal_pane
+	glass.set_process(false)
+	for _i in range(120):
+		if not glass.is_sliding():
+			break
+		glass.motion_step(1.0 / 60.0)
+	assert_false(glass.is_sliding(), "the pane landed")
+	for _i in range(3):
+		await get_tree().process_frame
+	assert_lte(glass.get_global_rect().end.y, glass.get_viewport_rect().size.y, "a full bag with the numbers open still on the screen")
+	game.hud._close_modal()
+
+
+## Seconds an attack: a melee blow's swing and rest, a gun's aim closing again,
+## a single-round weapon's reload; as they read (two places only when needed).
+func test_attack_seconds_read_as_the_weapon_paces() -> void:
+	assert_almost_eq(InventoryPane.attack_seconds("knife"), 0.6, 0.001)
+	assert_almost_eq(InventoryPane.attack_seconds("crowbar"), 0.85, 0.001)
+	assert_almost_eq(InventoryPane.attack_seconds("pistol"), 1.0, 0.001)
+	assert_almost_eq(InventoryPane.attack_seconds("pipe_shotgun"), 3.0, 0.001, "one round: its reload")
+	assert_almost_eq(InventoryPane.attack_seconds("bow"), 1.6, 0.001, "one round, but the aim takes longer")
+	assert_eq(InventoryPane.attack_seconds(""), 0.0)
+	assert_eq(InventoryPane.seconds_word(0.85), "0.85")
+	assert_eq(InventoryPane.seconds_word(0.6), "0.6")
+	assert_eq(InventoryPane.seconds_word(3.0), "3.0")
+	for id in InventoryPane.W.DATA.keys() + InventoryPane.W.IMPROVISED.keys():
+		assert_gt(InventoryPane.attack_seconds(String(id)), 0.0, "%s has a pace" % id)
