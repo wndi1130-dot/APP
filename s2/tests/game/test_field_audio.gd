@@ -995,16 +995,16 @@ func test_the_player_grunts_now_and_then() -> void:
 	a.effort_rest = 0.0
 	assert_false(a.effort("heavy", 0.99), "not this time")
 	assert_true(a.effort("heavy", 0.0))
-	assert_true(a.last_shot.stream.resource_path.ends_with("pv_effort_01.ogg"), "the named grunt first")
+	var last: AudioStream = a.last_shot.stream
+	assert_true(last.resource_path.ends_with("pv_effort_01.ogg"), "the named grunt first")
 	assert_false(a.effort("heavy", 0.0), "not again so soon")
 	a.tick(a.EFFORT_REST + 0.1)
-	var last: AudioStream = a.last_shot.stream
-	assert_true(a.effort("vault", 0.0), "after its rest, again")
+	assert_eq(a.effort_rest, 0.0, "its rest runs down with the field")
 	for i in range(8):
+		a.effort_rest = 0.0
+		assert_true(a.effort("vault" if i == 0 else "light", 0.0), "after its rest, again")
 		assert_ne(a.last_shot.stream, last, "never the one just heard")
 		last = a.last_shot.stream
-		a.effort_rest = 0.0
-		assert_true(a.effort("light", 0.0))
 	# Through the swing: the player's own, now and then; a mate's, never.
 	var mate = game.squad[1]
 	var n: int = a.played.count(a.EFFORT_GROUP)
@@ -1025,40 +1025,47 @@ func test_the_player_grunts_now_and_then() -> void:
 	assert_eq(a.played.count(a.EFFORT_GROUP), n, "a mate's climb, no grunt")
 
 
+## What the ear reads of a horde (HordeView's public chunks and stats).
+class FakeHorde extends Node3D:
+	var chunks: Array = []
+	var stats: Dictionary = {"ready": false}
+
+
 # Decision 548: the horde behind the walls is heard as it is drawn — nothing
-# with no horde drawn (decision 509) or a wall it did not take, the far loop
-# from WALL_FAR_FROM in, the near loop close up; knocks on the wall at random
-# times, closer together nearer, of the wall's own stuff, never the same file
-# twice running; an overpass does not knock.
+# with no horde drawn (decision 509), one that has not finished building or is
+# hidden, or a wall none of its pieces stand behind; the far loop from
+# WALL_FAR_FROM in, the near loop close up, both lower while a note is up;
+# knocks on the wall at random times, closer together nearer, of the wall's own
+# stuff, never the same file twice running; an overpass does not knock.
 func test_the_horde_behind_the_walls_is_heard_as_it_is_drawn() -> void:
 	var a = game.audio
 	assert_eq((a.lib["wall_horde_far"] as Array).size(), 1)
 	assert_eq((a.lib["wall_horde_near"] as Array).size(), 1)
 	assert_eq((a.lib["wall_bump"] as Array).size(), 8)
-	var keep_walls: Array = game.horde_walls
 	var keep_view = game.horde_view
 	var end: int = mini(game.grid.width - 2, 26)
 	var wall := {"id": "t_north", "a": Vector2(2, 0), "b": Vector2(end, 0), "out": Vector2(0, -1), "kind": "wall_sheet", "height": 3.0}
 	var x: float = (2.0 + float(end)) / 2.0
-	game.horde_walls = [wall]
 	game.horde_view = null
 	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "no horde drawn: nothing (decision 509)")
-	var drawn := Node3D.new()
+	var drawn := FakeHorde.new()
 	add_child_autofree(drawn)
+	drawn.chunks = [{"id": "t_north:0", "wall": wall}, {"id": "t_north:1", "wall": wall}]
 	game.horde_view = drawn
+	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "not built to the end (none placed, a piece failed, called off): nothing")
+	drawn.stats["ready"] = true
+	assert_eq(a.drawn_walls(drawn).size(), 1, "a wall of two pieces, once")
 	var hit = a.nearest_wall(Vector3(x, 0, 5))
 	assert_not_null(hit, "drawn: heard")
 	assert_almost_eq(float(hit[1]), 5.0, 0.001, "from the wall's nearest point")
 	assert_eq(hit[3], Vector3(0, 0, -1), "the dead are out past it")
-	var inward: Dictionary = wall.duplicate()
-	inward["out"] = Vector2(0, 1)
-	game.horde_walls = [inward]
-	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "a wall the horde did not take: nothing")
-	var empty: Dictionary = wall.duplicate()
-	empty["depth"] = 0.0
-	game.horde_walls = [empty]
-	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "no one behind it: nothing")
-	game.horde_walls = [wall]
+	drawn.visible = false
+	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "hidden: nothing")
+	drawn.visible = true
+	# A nearer wall no piece stands behind is not heard; the drawn one is.
+	var bare := {"id": "t_west", "a": Vector2(0, 2), "b": Vector2(0, 26), "out": Vector2(-1, 0), "kind": "wall_plank", "height": 3.0}
+	assert_almost_eq(float(a.nearest_wall(Vector3(1, 0, 5))[1]), Vector2(1, 5).distance_to(Vector2(2, 0)), 0.001, "only the drawn wall, not the bare one 1 m off")
+	assert_false(a.drawn_walls(drawn).has(bare))
 	# The two loops by distance.
 	assert_eq(a.wall_far_level(31.0) + a.wall_near_level(31.0), 0.0, "past 30 m: nothing")
 	assert_gt(a.wall_far_level(20.0), 0.0)
@@ -1076,6 +1083,11 @@ func test_the_horde_behind_the_walls_is_heard_as_it_is_drawn() -> void:
 	assert_false(a.wall_near.playing, "not yet the near one")
 	assert_true((a.wall_far.stream as AudioStreamOggVorbis).loop, "it loops in itself, no gap")
 	assert_almost_eq(a.wall_far.position.z, -a.WALL_INSIDE, 0.001, "heard from among the dead")
+	var level: float = a.wall_far.volume_db
+	a.hold(true)
+	assert_almost_eq(a.wall_far.volume_db, level - 9.0, 0.01, "lower while the note is up")
+	a.hold(false)
+	assert_almost_eq(a.wall_far.volume_db, level, 0.01, "and back after")
 	a.wall_look_t = 0.0
 	for i in range(100):
 		a._tick_walls(Vector3(x, 0, 40), 0.1)
@@ -1109,7 +1121,11 @@ func test_the_horde_behind_the_walls_is_heard_as_it_is_drawn() -> void:
 	over["kind"] = "overpass"
 	a.wall_point = [Vector3(x, 0, 0), 1.0, over, Vector3(0, 0, -1)]
 	assert_false(a.wall_bump(1.0), "an overpass does not knock")
-	game.horde_walls = keep_walls
+	# A knock too far to hear picks nothing: the last one heard stays the last.
+	a.wall_point = [Vector3(x, 0, 0), 1.0, wall, Vector3(0, 0, -1)]
+	var heard_last: int = int(a.blow_last.get("wall_bump", -1))
+	assert_false(a.wall_bump(a.WALL_FAR_FROM - 0.01), "too far to hear")
+	assert_eq(int(a.blow_last.get("wall_bump", -1)), heard_last)
 	game.horde_view = keep_view
 	a.wall_point = null
 	a.wall_far.stop()

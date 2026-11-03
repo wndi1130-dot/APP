@@ -244,8 +244,8 @@ const EDGE_PITCH: float = 0.85
 ## The horde behind the walls at the map's edge (decision 548; horde_view.gd
 ## draws it) is heard from far before the player gets there, so the ear knows
 ## first that way is shut. Only a horde that is drawn (field_game.horde_view,
-## decision 509) and only by the walls it took (HordeView.wall_error, a depth
-## above 0), from the nearest point of them: a far loop from WALL_FAR_FROM m,
+## decision 509) and only by the walls its drawn pieces stand behind
+## (drawn_walls), from the nearest point of them: a far loop from WALL_FAR_FROM m,
 ## at its fullest by WALL_NEAR_TO and half that at WALL_NEAR_FULL; a near loop
 ## from WALL_NEAR_FROM, full at WALL_NEAR_FULL; both a little past the wall,
 ## among the dead (WALL_INSIDE). The dead knock on the wall at random times (no
@@ -1022,24 +1022,30 @@ func _bed_to(p: AudioStreamPlayer3D, lin: float, delta: float) -> void:
 		p.stop()
 
 
-## The nearest point of the walls the drawn horde stands behind, as [point
-## (Vector3, on the wall's floor), distance (m, on the ground), the wall's row,
-## its outward way (Vector3)], or null: no horde drawn (off, no walls), or none
-## of its walls taken.
+## The walls of a horde that is drawn (field_game.horde_view): those its pieces
+## stand behind (its public `chunks`), each once, once it has built them all
+## and they are drawn (its `stats` "ready" — not if it placed no one, a piece
+## failed to load or the build was called off) and it is shown. Else none.
+static func drawn_walls(view) -> Array:
+	if view == null or not is_instance_valid(view) or not ("chunks" in view) or not ("stats" in view):
+		return []
+	if not bool((view.stats as Dictionary).get("ready", false)) or not (view as Node3D).is_visible_in_tree():
+		return []
+	var out: Array = []
+	for chunk in view.chunks:
+		var w = (chunk as Dictionary).get("wall")
+		if w is Dictionary and not out.has(w):
+			out.append(w)
+	return out
+
+
+## The nearest point of the walls the drawn horde stands behind (drawn_walls),
+## as [point (Vector3, on the wall's floor), distance (m, on the ground), the
+## wall's row, its outward way (Vector3)], or null: no horde drawn.
 func nearest_wall(at: Vector3):
-	var drawn = game.get("horde_view")
-	if drawn == null or not is_instance_valid(drawn):
-		return null
-	var grid = game.get("grid")
-	var walls = game.get("horde_walls")
-	if grid == null or not walls is Array:
-		return null
-	var size := Vector2(grid.width, grid.height)
 	var here := Vector2(at.x, at.z)
 	var best = null
-	for w in walls:
-		if not w is Dictionary or float((w as Dictionary).get("depth", 40.0)) <= 0.0 or not HordeView.wall_error(w, size, grid).is_empty():
-			continue
+	for w in drawn_walls(game.get("horde_view")):
 		var q: Vector2 = Geometry2D.get_closest_point_to_segment(here, w["a"], w["b"])
 		var dist: float = here.distance_to(q)
 		if best == null or dist < float(best[1]):
@@ -1071,8 +1077,9 @@ static func wall_bump_gap(d: float) -> float:
 ## own stuff, never the one just heard, somewhere along it near its nearest
 ## point; past WALL_BUMP_NEAR duller. False if the wall has no knock.
 func wall_bump(d: float) -> bool:
-	if wall_point == null or not has("wall_bump"):
-		return false
+	var lin: float = WALL_BUMP_LOUD * clampf(1.0 - d / WALL_FAR_FROM, 0.0, 1.0)
+	if wall_point == null or not has("wall_bump") or lin <= 0.01:
+		return false   # too far to hear: nothing is picked, so the last knock heard stays the last
 	var w: Dictionary = wall_point[2]
 	var stuff: Array = WALL_BUMP_KINDS.get(String(w.get("kind", "")), [])
 	var list: Array = lib["wall_bump"]
@@ -1093,7 +1100,7 @@ func wall_bump(d: float) -> bool:
 	var bus: String = "SFX" if d < WALL_BUMP_NEAR else ("SFX_FAR" if AudioServer.get_bus_index("SFX_FAR") >= 0 else "SFX")
 	# An ambience, as the wind's gusts: its own log, not `played` (the groups the rules' events sound).
 	wall_bump_log.append([heard_t, (list[pick] as AudioStream).resource_path.get_file()])
-	_one_shot("wall_bump", Vector3(q.x, near.y, q.y), WALL_BUMP_LOUD * clampf(1.0 - d / WALL_FAR_FROM, 0.0, 1.0), randf_range(0.94, 1.06), list[pick], bus)
+	_one_shot("wall_bump", Vector3(q.x, near.y, q.y), lin, randf_range(0.94, 1.06), list[pick], bus)
 	return true
 
 
@@ -1880,7 +1887,9 @@ func howl() -> void:
 ## The depart note goes up (true) or away (false; the mix is back in 0.3 s).
 func hold(on: bool) -> void:
 	held = on
-	bed.volume_db += -9.0 if on else 9.0
+	# The mass holds low while the note is up, the horde behind the walls with it.
+	for p in [bed, wall_far, wall_near]:
+		p.volume_db += -9.0 if on else 9.0
 
 
 ## When each beat of a fall comes, in seconds from its start.
