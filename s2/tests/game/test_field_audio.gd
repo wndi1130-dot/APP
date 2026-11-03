@@ -995,11 +995,16 @@ func test_light_and_blunt_blows_are_recorded_by_tier() -> void:
 	for group: String in ["blow_light_t1", "blow_blunt_t1"]:
 		a.blow_last.erase(group)
 		var n: int = a.blow_log.size()
-		a.blow({"weapon": "knife" if group == "blow_light_t1" else "crowbar", "target": "standing", "result": "body", "edge": 0, "tier": 1, "at": at, "by_player": true})
-		assert_eq(a.blow_log[n][0], group)
-		for k in range(6):
+		for k in range(7):
 			a.blow({"weapon": "knife" if group == "blow_light_t1" else "crowbar", "target": "standing", "result": "body", "edge": 0, "tier": 1, "at": at, "by_player": true})
-			assert_ne(a.blow_log[-1][1], a.blow_log[-2][1], "not twice running")
+		assert_eq(a.blow_log[n][0], group, "the body first")
+		var files: Array = []
+		for e: Array in a.blow_log.slice(n):
+			if e[0] == group:   # a knife's grain is logged between its bodies
+				files.append(e[1])
+		assert_eq(files.size(), 7, group + ": one body a blow")
+		for k in range(1, files.size()):
+			assert_ne(files[k], files[k - 1], group + ": not twice running")
 
 
 # Decision 554: a file the user picked (PICKED) is twice as likely as another
