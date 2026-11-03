@@ -1237,6 +1237,83 @@ func test_the_train_metal_now_and_then() -> void:
 		assert_eq(a.train_metal_log.size(), 0, "far from the train: nothing")
 
 
+# The pool and the mix at their edges: a fade begun for one sound is not laid
+# on the next sound its player is taken for; a 401st voice is kept; the depart
+# note told twice lowers the mix once; a blow too faint to hear picks no file;
+# the knock and metal logs keep their last KNOCKS_KEPT; once the field has
+# ended the loops behind the walls stop.
+func test_the_pool_and_the_mix_hold_at_their_edges() -> void:
+	var a = game.audio
+	var at: Vector3 = game.player.position + Vector3(1.0, 0, 0)
+	var stream: AudioStream = a.lib["blow_cut"][0]
+	a._one_shot("blow_cut", at, 0.5, 1.0, stream, "SFX", 0.3)
+	var o = a.last_shot
+	assert_not_null(o)
+	if o != null:
+		assert_true(o.playing)
+		a._end_cut(o, int(o.get_meta("cut", 0)))
+		assert_true(o.has_meta("fade"), "its fade begun")
+		var fade = o.get_meta("fade") if o.has_meta("fade") else null
+		var keep: Array = a.one_shots
+		a.one_shots = [o]   # every other one busy: this one gives way
+		a._one_shot("blow_cut", at, 0.5, 1.0, stream)
+		a.one_shots = keep
+		assert_eq(a.last_shot, o, "the same player, taken for the next sound")
+		assert_true(fade is Tween and not (fade as Tween).is_valid(), "the fade before it no longer runs")
+		assert_false(o.has_meta("fade"))
+		assert_almost_eq(float(o.volume_db), a._db(0.5), 0.01, "the next sound at its own loudness")
+		o.stop()
+	# A 401st voice (and on) is kept, and the same as it was before the cache was cleared.
+	a.voices.clear()
+	var first: Dictionary = a.voice_of({"id": 900000, "kind": "old", "phase": 0.3})
+	var lost: int = 0
+	for i in range(1, 450):
+		var v = a.voice_of({"id": 900000 + i, "kind": "old", "phase": fposmod(float(i) * 0.37, 1.0)})
+		if not (v is Dictionary and (v as Dictionary).has("pitch")):
+			lost += 1
+	assert_eq(lost, 0, "no voice lost as the cache is cleared")
+	assert_eq(a.voice_of({"id": 900000, "kind": "old", "phase": 0.3}), first, "the same voice after it")
+	# The depart note told twice lowers the mix once, and lifts it once.
+	var beds: Array = [a.bed, a.wall_far, a.wall_near]
+	for p in beds:
+		p.volume_db = -20.0
+	a.held = false
+	a.hold(true)
+	a.hold(true)
+	for p in beds:
+		assert_almost_eq(float(p.volume_db), -29.0, 0.001, "lowered once")
+	a.hold(false)
+	a.hold(false)
+	for p in beds:
+		assert_almost_eq(float(p.volume_db), -20.0, 0.001, "lifted once")
+	# A blow too faint to hear (at the edge of BLOW_REACH) picks no file.
+	var last_files: Dictionary = a.blow_last.duplicate()
+	var n: int = a.blow_log.size()
+	a.blow({"weapon": "crowbar", "target": "standing", "result": "body", "edge": 0, "tier": 2, "at": game.player.position + Vector3(a.BLOW_REACH - 0.1, 0, 0), "by_player": true})
+	assert_eq(a.blow_log.size(), n, "too faint: nothing heard")
+	assert_eq(a.blow_last, last_files, "nor picked, so the last heard stays the last")
+	# The metal log keeps its last KNOCKS_KEPT (the knocks' does the same).
+	var cars: Array = game.data.get("train_cars", [])
+	assert_false(cars.is_empty())
+	if not cars.is_empty():
+		var r := Rect2(Rect2i(cars[0]["rect"]))
+		var on := Vector3(r.get_center().x, 0, r.get_center().y)
+		a.train_metal_log.clear()
+		for i in range(a.KNOCKS_KEPT + 40):
+			a.heard_t += 1.0
+			a.train_metal(on, r)
+		assert_eq(a.train_metal_log.size(), a.KNOCKS_KEPT, "the last %d" % a.KNOCKS_KEPT)
+		assert_almost_eq(float(a.train_metal_log[-1][0]), float(a.heard_t), 0.001, "the newest kept")
+	# Once the field has ended the loops behind the walls stop.
+	a.wall_far.volume_db = -20.0
+	a.wall_far.play()
+	assert_true(a.wall_far.playing)
+	game.ended = true
+	a.tick(0.1)
+	assert_false(a.wall_far.playing, "stopped once the field has ended")
+	game.ended = false
+
+
 # Told by the combat, a blow on one of the dead is heard by its layers alone:
 # the old hit_* at the same place in the same frame is listed, not played, and
 # one that went first (a stomp is felt before it is told) is stopped. A door or

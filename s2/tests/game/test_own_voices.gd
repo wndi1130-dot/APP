@@ -111,6 +111,24 @@ func test_one_too_far_to_hear_does_not_count_as_heard() -> void:
 		assert_null(a.last_shot, g + ": too far, nothing played")
 		a._voice_or_standin(row, String(pair[1]), near)
 		assert_ne(a.last_shot.stream, first, g + ": not the one heard last")
+	# An own file quieter than its stand-in (OWN_VOICE dB below 0): just inside
+	# the stand-in's reach it is too faint as well, and nothing is picked.
+	var quieter: int = 0
+	for pair: Array in _rows():
+		var row: Array = pair[0]
+		var g: String = row[0]
+		if not a.OWN_VOICE.has(g) or float(a.OWN_VOICE[g][2]) > -0.5:
+			continue
+		quieter += 1
+		a.lib[g] = [_tone(), _tone()]
+		a._voice_or_standin(row, String(pair[1]), near)
+		var first: AudioStream = a.last_shot.stream
+		var edge: float = 60.0 * (1.0 - 0.0105 / float(row[1]))   # the stand-in at 0.0105 there
+		a._voice_or_standin(row, String(pair[1]), near + Vector3(edge, 0, 0))
+		assert_null(a.last_shot, g + ": too faint for its own file")
+		a._voice_or_standin(row, String(pair[1]), near)
+		assert_ne(a.last_shot.stream, first, g + ": not the one heard last")
+	assert_gt(quieter, 0, "a quieter own file to try (curtain, the climb)")
 
 
 ## Other rows that go through the same way (the glass in a frame, a manhole

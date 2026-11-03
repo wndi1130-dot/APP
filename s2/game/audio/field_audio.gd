@@ -186,6 +186,7 @@ const STEP_FLOORS: Array = [
 const STEP_GLASS: Array = ["step_glass", 0.25, 1.2, 1.4]
 const GLASS_STANDIN: String = "glass"
 const STEPS_KEPT: int = 256            # steps remembered (tests); older ones go
+const KNOCKS_KEPT: int = 256           # wall knocks and the train's metal remembered (tests), as steps
 ## The dead in sight are heard walking, as they are heard speaking (결정 509,
 ## user 2026-10-24: only the dead the player can see; out of sight their feet
 ## are silent too): the nearest few of the voiced dead that move, by the floor under them,
@@ -499,8 +500,8 @@ var wall_far: AudioStreamPlayer3D      # the horde behind the walls, its far loo
 var wall_near: AudioStreamPlayer3D     # and its near one
 var wall_look_t: float = 0.0           # s to the next look for the nearest wall
 var wall_point = null                  # nearest_wall's last answer, or null
-var wall_bump_log: Array = []          # knocks [heard_t, file] (tests)
-var train_metal_log: Array = []        # the train's metal [heard_t, file] (tests)
+var wall_bump_log: Array = []          # knocks [heard_t, file], the last KNOCKS_KEPT (tests)
+var train_metal_log: Array = []        # the train's metal [heard_t, file], the last KNOCKS_KEPT (tests)
 var blow_mark: Array = [-1, Vector3.ZERO]          # frame and place of the last blow
 var hit_mark: Array = [-1, Vector3.ZERO, null, 0]  # frame, place, player and its cut of the last hit_*
 var hits_stopped: int = 0              # hit_* stopped for a blow told after them (tests)
@@ -946,6 +947,9 @@ func tick(delta: float) -> void:
 			p.volume_db = -80.0
 		for g: Dictionary in gusts:
 			(g["player"] as AudioStreamPlayer).volume_db = -80.0
+		for p in [wall_far, wall_near]:
+			if p.playing:
+				p.stop()   # as they would once quiet (_bed_to), which no longer runs
 		return
 	_tick_room(at)
 	if held:
@@ -1117,6 +1121,8 @@ func wall_bump(d: float) -> bool:
 	var bus: String = "SFX" if d < WALL_BUMP_NEAR else ("SFX_FAR" if AudioServer.get_bus_index("SFX_FAR") >= 0 else "SFX")
 	# An ambience, as the wind's gusts: its own log, not `played` (the groups the rules' events sound).
 	wall_bump_log.append([heard_t, (list[pick] as AudioStream).resource_path.get_file()])
+	if wall_bump_log.size() > KNOCKS_KEPT:
+		wall_bump_log = wall_bump_log.slice(wall_bump_log.size() - KNOCKS_KEPT)
 	_one_shot("wall_bump", Vector3(q.x, near.y, q.y), lin, randf_range(0.94, 1.06), list[pick], bus)
 	return true
 
@@ -1174,6 +1180,8 @@ func train_metal(at: Vector3, r: Rect2) -> bool:
 	blow_last["train_metal"] = pick
 	var spot := Vector3(randf_range(r.position.x, r.end.x), 0.0, randf_range(r.position.y, r.end.y))
 	train_metal_log.append([heard_t, (list[pick] as AudioStream).resource_path.get_file()])   # its own log, as wall_bump's
+	if train_metal_log.size() > KNOCKS_KEPT:
+		train_metal_log = train_metal_log.slice(train_metal_log.size() - KNOCKS_KEPT)
 	_one_shot("train_metal", spot, TRAIN_METAL_LOUD * clampf(1.0 - at.distance_to(spot) / (TRAIN_METAL_REACH + 10.0), 0.2, 1.0), randf_range(0.96, 1.04), list[pick], _bus_at(spot))
 	return true
 
@@ -1253,9 +1261,9 @@ func voice_of(z: Dictionary) -> Dictionary:
 	var u: float = float(z.get("phase", 0.0))
 	var kind: String = "rough" if z["kind"] == "fresh" else PLAIN_VOICES[int(u * 3.0) % 3]
 	var spread: float = (fposmod(u * 7.31, 1.0) * 2.0 - 1.0) * VOICE_SPREAD
+	if voices.size() >= 400:
+		voices.clear()   # the same again if it is asked for: it comes from the seed
 	voices[id] = {"kind": kind, "pitch": float(VOICES[kind]["pitch"]) * (1.0 + spread)}
-	if voices.size() > 400:
-		voices.clear()
 	return voices[id]
 
 
@@ -1903,6 +1911,8 @@ func howl() -> void:
 
 ## The depart note goes up (true) or away (false; the mix is back in 0.3 s).
 func hold(on: bool) -> void:
+	if on == held:
+		return   # told twice: lowered (or raised) once
 	held = on
 	# The mass holds low while the note is up, the horde behind the walls with it.
 	for p in [bed, wall_far, wall_near]:
@@ -2194,6 +2204,9 @@ func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 			var mine: Array = OWN_VOICE[group]
 			pitch = randf_range(float(mine[0]), float(mine[1]))
 			lin *= db_to_linear(float(mine[2]))
+			if lin <= 0.01:
+				last_shot = null
+				return   # its own file, quieter than its stand-in: too far as well
 		_one_shot(group, at, lin, pitch, lib[group][_fresh_file(group)], _bus_at(at))
 		return
 	if standin.begins_with("@"):
@@ -2359,12 +2372,15 @@ func blow(info: Dictionary) -> void:
 		var layer: Array = layers[i]
 		var group: String = layer[0]
 		var bus: String = dull if i == 0 or BLOW_GRAIN.has(group) else plain   # the body and its grain
-		var file: int = _fresh_file(group)
 		played.append(group)
+		var lin: float = BLOW_LOUD * float(layer[1]) * near * randf_range(float(BLOW_GAIN[0]), float(BLOW_GAIN[1]))
+		if lin <= 0.01:
+			continue   # too faint to hear: nothing is picked, so the last file heard stays the last
+		var file: int = _fresh_file(group)
 		if file < 0:
 			continue
 		blow_log.append([group, file])
-		_one_shot(group, at, BLOW_LOUD * float(layer[1]) * near * randf_range(float(BLOW_GAIN[0]), float(BLOW_GAIN[1])), float(layer[2]) * randf_range(float(BLOW_PITCH[0]), float(BLOW_PITCH[1])), lib[group][file], bus)
+		_one_shot(group, at, lin, float(layer[2]) * randf_range(float(BLOW_PITCH[0]), float(BLOW_PITCH[1])), lib[group][file], bus)
 
 
 ## The weights (BLOW_WEIGHT) whose three tiers all have files.
@@ -2770,6 +2786,12 @@ func _one_shot(group: String, at: Vector3, lin: float, pitch: float, stream: Aud
 		for p in one_shots:
 			if int(p.get_meta("cut", 0)) < int(o.get_meta("cut", 0)):
 				o = p
+	if o.has_meta("fade"):
+		# The sound before it was fading out: that fade is not this one's.
+		var fade = o.get_meta("fade")
+		if fade is Tween and (fade as Tween).is_valid():
+			(fade as Tween).kill()
+		o.remove_meta("fade")
 	o.bus = bus
 	last_bus = bus
 	o.position = at
@@ -2791,6 +2813,7 @@ func _end_cut(o: AudioStreamPlayer3D, mine: int) -> void:
 	var fade := o.create_tween()
 	fade.tween_property(o, "volume_db", -80.0, 0.08)
 	fade.tween_callback(_stop_if.bind(o, mine))
+	o.set_meta("fade", fade)   # killed should the player be taken for another sound (_one_shot)
 
 
 func _stop_if(o: AudioStreamPlayer3D, mine: int) -> void:
