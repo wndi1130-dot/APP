@@ -1681,7 +1681,10 @@ static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 	if not map.has("side_path") and place_id not in ["", SidePath.FIRST_STOP] and SidePath.rolls(place_id, run_seed):
 		for key in AHEAD_KEYS:
 			map.erase(key)
-	return SidePath.add(map, run_seed)
+	var shaped: Dictionary = SidePath.add(map, run_seed)
+	if place_id in MapBounds.Rule.ON:
+		shaped["_side_seed"] = run_seed
+	return shaped
 
 
 ## A handed view is reusable only on the requested rows and columns.

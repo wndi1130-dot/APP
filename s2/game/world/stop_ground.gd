@@ -228,7 +228,10 @@ static func _view_walk_edge(g: FieldGrid, rect: Rect2i, edge: Vector2i) -> bool:
 
 
 ## The same spacing as remote spruce, along each side that meets walkable ground.
-static func view_forest_trees(data: Dictionary, forest: Array[Rect2i], rng: RandomNumberGenerator) -> void:
+static func view_forest_trees(data: Dictionary, forest: Array[Rect2i], rng: RandomNumberGenerator, front_spacing: int = 0) -> void:
+	if front_spacing > 0:
+		_bounds_forest_trees(data, forest, front_spacing)
+		return
 	var g: FieldGrid = data["grid"]
 	var trees: Array = data.get("trees", [])
 	var planted: Dictionary = {}
@@ -251,6 +254,31 @@ static func view_forest_trees(data: Dictionary, forest: Array[Rect2i], rng: Rand
 						rng.randi_range(0, 3)  # Retain the old facing draw, keeping every later cell in place.
 					along += rng.randi_range(2, 3)
 				row += rng.randi_range(2, 3)
+	data["trees"] = trees
+
+
+## 경계 전용. 기존 시야 숲의 난수 호출과 간격은 위 함수 본문 그대로 둔다.
+static func _bounds_forest_trees(data: Dictionary, forest: Array[Rect2i], spacing: int) -> void:
+	var g: FieldGrid = data["grid"]
+	var trees: Array = data.get("trees", [])
+	var planted: Dictionary = {}
+	for cell: Vector2i in trees:
+		planted[cell] = true
+	for rect: Rect2i in forest:
+		for edge: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var vertical: bool = edge.x != 0
+			var length: int = rect.size.y if vertical else rect.size.x
+			var depth: int = mini(REMOTE_FOREST_EDGE, rect.size.x if vertical else rect.size.y)
+			for along: int in range(0, length, spacing):
+				var front := Vector2i(rect.end.x - 1 if edge.x > 0 else rect.position.x, rect.position.y + along) if vertical \
+					else Vector2i(rect.position.x + along, rect.end.y - 1 if edge.y > 0 else rect.position.y)
+				if not g.people_can_walk(front + edge):
+					continue
+				for row: int in range(0, depth, 2):
+					var cell: Vector2i = front - edge * row
+					if not planted.has(cell):
+						trees.append(cell)
+						planted[cell] = true
 	data["trees"] = trees
 
 

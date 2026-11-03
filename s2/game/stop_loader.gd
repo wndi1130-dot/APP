@@ -305,9 +305,6 @@ static func make_ready(script: Script, run_seed: int, form: String = "", form_m:
 	ms["work_spots"] = float(Time.get_ticks_usec() - mark) / 1000.0
 	ms["total"] = float(Time.get_ticks_usec() - started) / 1000.0
 	d["_ms"] = ms
-	d["_memory"] = {"static_bytes": int(Performance.get_monitor(Performance.MEMORY_STATIC)),
-		"static_max_bytes": int(Performance.get_monitor(Performance.MEMORY_STATIC_MAX)),
-		"peak_bytes": OS.get_static_memory_peak_usage()}
 	return d
 
 

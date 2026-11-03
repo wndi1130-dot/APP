@@ -406,7 +406,20 @@ static func plan(g: FieldGrid, seed: int, look: Dictionary = {}, forest: Array =
 
 
 ## 가장 가까운 윤곽 변의 갈래. 동거리에서는 앞 변을 택한다.
-static func bounds_skip(_g: FieldGrid, bounds: Dictionary, at: Vector2) -> bool:
+static func bounds_skip(g: FieldGrid, bounds: Dictionary, at: Vector2) -> bool:
+	# 가장 가까운 물 변이 꺾인 숲 앞줄이나 정차 꼴의 숲까지 가리지 않게 한다.
+	var origin := Vector2i(clampi(floori(at.x), 0, g.width - 1), clampi(floori(at.y), 0, g.height - 1))
+	if _forest_cell(bounds.get("form_forest", []), origin):
+		return false
+	for tile: Dictionary in bounds.get("tiles", []):
+		if tile["kind"] == "forest" and (tile["rect"] as Rect2i).has_point(origin):
+			return false
+	if bounds.has("tiles"):
+		for tile: Dictionary in bounds["tiles"]:
+			if tile["kind"] in ["water", "rock", "cliff", "mine", "quarry"] and (tile["rect"] as Rect2i).has_point(origin):
+				return true
+		# 깊이 0인 보호 틈에는 새 물이 없다. runs 이름만으로 기존 벌목 나무를 가리지 않는다.
+		return false
 	var outline: Array = bounds.get("outline", [])
 	var nearest: float = INF
 	var chosen: int = -1
