@@ -109,6 +109,10 @@ static func keep_order(all: Array, shown: Array) -> Array:
 static func open(hud, want: Dictionary) -> void:
 	var game = hud.game
 	var p = game.player
+	# A pane opened afresh (the bag key, a box, a sled) names its weapons only.
+	if hud.modal == null or hud.modal != hud.box_pane:
+		hud.inv_weapon_open = -1
+		hud.inv_weapon_open_id = ""
 	var all: Array = places(game, p)
 	# Laid again over itself (a row taken): the places keep their order.
 	if hud.modal != null and hud.modal == hud.box_pane:
@@ -447,6 +451,27 @@ static func seconds_word(s: float) -> String:
 	return ("%.1f" % two) if is_equal_approx(snappedf(two, 0.1), two) else ("%.2f" % two)
 
 
+## Which of the weapons named at the bag's top shows its numbers (-1 none): the
+## one pressed, followed to wherever it now stands among the two (a weapon taken
+## into the hand goes first); gone from them, none — and the HUD forgets it.
+static func open_weapon(hud, p) -> int:
+	var want: String = String(hud.inv_weapon_open_id)
+	var shown: int = mini(p.hands.size(), 2)
+	var at: int = -1
+	if want != "" and int(hud.inv_weapon_open) >= 0:
+		var was: int = int(hud.inv_weapon_open)
+		if was < shown and String((p.hands[was] as Dictionary).get("id", "")) == want:
+			at = was
+		else:
+			for i: int in shown:
+				if String((p.hands[i] as Dictionary).get("id", "")) == want:
+					at = i
+					break
+	hud.inv_weapon_open = at
+	hud.inv_weapon_open_id = want if at >= 0 else ""
+	return at
+
+
 ## The weapons named at the bag's top (in hand, then the one carried after it),
 ## each a press that shows or hides its two numbers (결정 555: the name only,
 ## and on a press how fast it attacks and its weight).
@@ -460,7 +485,7 @@ static func _weapons(hud, p) -> Control:
 	if shown == 0:
 		row.add_child(_label(hud.short_weapon(p), 12.0, GlassPane.INK))
 		return held
-	var open: int = int(hud.inv_weapon_open)
+	var open: int = open_weapon(hud, p)
 	for i: int in shown:
 		var id: String = String((p.hands[i] as Dictionary).get("id", ""))
 		if i > 0:
