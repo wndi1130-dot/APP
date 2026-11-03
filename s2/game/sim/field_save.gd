@@ -74,7 +74,7 @@ const GAME_FIELDS: Array[String] = [
 ]
 const COMPONENTS: Array[String] = ["director", "ledger", "mission_play", "holdout", "actions", "ai", "combat", "lines", "weather", "telemetry", "train_guard", "work"]
 ## "dead_eaten_seconds" is EatRules.EATEN_META (결정 441 (3)).
-const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow_way", "pose_care", "pose_swing", "dead_eaten_seconds"]
+const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow_way", "pose_care", "pose_swing", "pose_recover_wait", "pose_recover_release", "dead_eaten_seconds"]
 
 
 ## What the field is now, as plain data. `game` is a field_game.gd.

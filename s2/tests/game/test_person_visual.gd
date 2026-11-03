@@ -9,6 +9,36 @@ const Gait = preload("res://game/sim/gait.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 
 
+func test_guard_holds_then_lowers_with_its_own_mix_time() -> void:
+	var p: Person = _person() as Person
+	p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+	var own: Array = _own()
+	var note: Dictionary = {}
+	var mix: Dictionary = {}
+	var tab: Array = []
+	for clip: Dictionary in own:
+		tab.append([tab.size() * 24, 24, String(clip["name"]) == "p_stand"])
+	var times: Dictionary = {}
+	p.strike_kind = "swing"
+	p.strike_at = {}
+	p.strike_total = 0.3
+	p.strike_t = 0.3
+	PersonVisual.motion_of(p, note, 0.0, [], own)
+	p.strike_t = 0.0
+	p.swing_t = 0.9
+	PersonVisual.motion_of(p, note, 0.3, [], own)
+	p.swing_t = 0.0
+	var guard: Vector2 = PersonVisual.motion_of(p, note, 0.9, [], own)
+	assert_eq(_named(own, guard), "p_swing_one")
+	PersonVisual.mix_recovery(note, mix, Color(guard.x, guard.y, 1.0, 1.0), float(note["t"]), tab, times)
+	guard = PersonVisual.motion_of(p, note, PersonVisual.RECOVER_GUARD_HOLD - 0.001, [], own)
+	assert_eq(_named(own, guard), "p_swing_one")
+	var stand: Vector2 = PersonVisual.motion_of(p, note, 0.002, [], own)
+	assert_eq(_named(own, stand), "p_stand")
+	PersonVisual.mix_recovery(note, mix, Color(stand.x, stand.y, 1.0, 1.0), float(note["t"]), tab, times)
+	assert_almost_eq(float(mix["body_mix"]), PersonVisual.RECOVER_GUARD_LOWER, 0.000001)
+
+
 func _person() -> Node3D:
 	var p := Person.new()
 	add_child_autofree(p)
@@ -343,8 +373,12 @@ func test_blow_after_blow_goes_through_the_ways() -> void:
 	p.strike_t = 0.0
 	p.swing_t = 0.6
 	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 1.6).x, 0.33, 0.001, "where it lands")
+	# The one-hand backswing fills the rule wait: not back at the old fixed time,
+	# fully back as the wait ends.
 	p.swing_t = 0.6 - PersonVisual.Pose.recover_seconds("axe") + 0.001
-	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 1.9).x, 1.0, 0.01, "the backswing returns fully")
+	assert_lt(PersonVisual.blow_of(p, own, gone, 1.9).x, 0.99, "still on the way back at the old fixed time")
+	p.swing_t = 0.001
+	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 2.2).x, PersonVisual.Pose.RECOVER_BACK_END, 0.01, "the backswing reaches its moving end")
 
 
 # The weapon goes in the worn body's right hand: hanging at the side the head

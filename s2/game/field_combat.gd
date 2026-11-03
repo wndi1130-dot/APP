@@ -39,7 +39,7 @@ const SHOVE_REST: float = 0.25
 ## shown on the phone): "grab" a grab on the one swinging stops it (as with the
 ## shove), "none" nothing does. The time is spent either way.
 const WINDUP_BREAKS: Array[String] = ["grab", "none"]
-const WHIFF_RECOVER: float = 0.2        # the least a missed or stopped blow still costs
+const WHIFF_RECOVER: float = W.WHIFF_RECOVER
 ## One lying there and no melee weapon in the hand: the boot comes down (user
 ## 2026-10-11). Slow on purpose, so a weapon stays worth carrying: it lands
 ## later than the heaviest weapon and takes several to end it, where a weapon
@@ -540,6 +540,8 @@ func start_swing(p, at) -> void:
 		_strike(p, at)
 		return
 	p.strike_at = at
+	p.remove_meta(Pose.RECOVER_WAIT)
+	p.remove_meta(Pose.RECOVER_RELEASE)
 	p.strike_t = windup
 	p.strike_total = windup
 	p.swing_t = windup
@@ -730,11 +732,19 @@ func _land_strike(p) -> void:
 	else:
 		_strike(p, at)
 	# The draw-back was the front of the swing time, not extra.
-	p.swing_t = maxf(p.swing_t - windup, WHIFF_RECOVER)
+	var swing_seconds: float = p.swing_t
+	p.swing_t = W.melee_recover(swing_seconds, windup)
+	# Capture before random rest and before the next frame's fatigue changes.
+	p.set_meta(Pose.RECOVER_WAIT, W.melee_recover(swing_seconds, windup, W.melee_gap(p.weapon_id())))
+	if blows.has(p.get_instance_id()):
+		var blow: Dictionary = blows[p.get_instance_id()]
+		var row: Dictionary = blow["row"]
+		var feet: Vector2 = row.get("feet", Vector2.ZERO)
+		p.set_meta(Pose.RECOVER_RELEASE, maxf(0.0, feet.y / float(blow["mult"]) - (game.clock.elapsed - float(blow["at"]))))
 	if _is_ally(p):
 		p.swing_t += _pace(ALLY_REST_MIN, ALLY_REST_MAX)
 	elif p == game.player and not stomp_it:
-		p.swing_t += W.melee_gap(p.weapon_id())
+		p.swing_t = W.melee_recover(swing_seconds, windup, W.melee_gap(p.weapon_id()))
 
 
 func _strike_reaches(p, at) -> bool:
