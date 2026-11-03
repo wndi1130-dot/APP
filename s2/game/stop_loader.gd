@@ -259,28 +259,55 @@ static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, fo
 ## maps they fit, the rooms' finish (room_finish.gd) and the plan of the woods round
 ## the map (edge_band.gd plan_ahead). Data only, no nodes.
 static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "", bounds_rule: int = -1) -> Dictionary:
-	var d: Dictionary = FieldMaps.build_from(script, band)
+	var started: int = Time.get_ticks_usec()
+	var mark: int = started
+	var ms: Dictionary = {}
+	var d: Dictionary = FieldMaps.build_from(script, band, bounds_rule)
+	ms["build_from"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	if not form.is_empty():
 		d = StopGround.apply(d, form, run_seed, form_m)
+	ms["stop_ground"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	d = StopGround.widen_view(d)
+	ms["widen_view"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	if run_seed >= 0:
 		d = SidePath.add(d, run_seed)
 		d["_side_seed"] = run_seed
+		ms["side_path"] = float(Time.get_ticks_usec() - mark) / 1000.0
+		mark = Time.get_ticks_usec()
 		# 경계는 샛길이 확정된 자료에만 찍는다. 씨앗을 모르면 필드 시작이 샛길 다음에 찍는다
 		# (field_game.gd with_side_path 뒤 MapBounds.apply).
 		d = MapBounds.apply(d, bounds_rule)
+	ms["bounds"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	d["_building_plan"] = BuildingView.plan(d)
+	ms["building_plan"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	var g: FieldGrid = d["grid"]
 	d["_ground_arrays"] = MapView.ground_arrays(g, MapView.ground_details(g))
 	d["_ground_key"] = MapView.ground_key(g)
 	var keys: Dictionary = {}
 	d["_floor_arrays"] = MapView.level_floor_arrays(d.get("levels", {}), keys)
 	d["_floor_keys"] = keys
+	ms["ground_arrays"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	d["_room_finish"] = RoomFinish.build(d)
+	ms["room_finish"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	d["_edge_plan"] = EdgeBand.plan_ahead(d)
+	ms["edge_plan"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	# The walk from the train doors and the clumps of trees to fell (work_spots.gd);
 	# the field's dress adds the stretch's food depot from the same walk.
 	WorkSpots.dress(d, -1, run_seed)
+	ms["work_spots"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	ms["total"] = float(Time.get_ticks_usec() - started) / 1000.0
+	d["_ms"] = ms
+	d["_memory"] = {"static_bytes": int(Performance.get_monitor(Performance.MEMORY_STATIC)),
+		"static_max_bytes": int(Performance.get_monitor(Performance.MEMORY_STATIC_MAX)),
+		"peak_bytes": OS.get_static_memory_peak_usage()}
 	return d
 
 

@@ -9,6 +9,7 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
 const RegionLooks = preload("res://game/world/region_looks.gd")
 const StoryMaps = preload("res://game/world/story_maps.gd")
+const BoundsRule = preload("res://game/world/map_bounds_rule.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const TOWN: Array[String] = ["houses", "freight", "office", "factory", "hospital", "church"]
@@ -45,11 +46,16 @@ static func plain_build(script: Script, finish: Callable) -> Dictionary:
 	return data
 
 
-static func build(script: Script, finish: Callable) -> Dictionary:
+static func build(script: Script, finish: Callable, bounds_rule: int = -1) -> Dictionary:
 	skip_paths = true
 	var plain := plain_build(script, finish)
 	skip_paths = false
-	var data := add(plain)
+	var edges: Array[int] = []
+	var inset: int = 0
+	if BoundsRule.enabled(String(plain.get("place_id", "")), bounds_rule):
+		edges = BoundsRule.sides(plain, width_for(String(plain.get("place_kind", ""))))
+		inset = BoundsRule.DEPTH
+	var data := add(plain, edges, inset)
 	if is_same(data, plain):
 		for g: FieldGrid in plain.get("levels", {0: plain["grid"]}).values():
 			g.refresh_paths()
@@ -100,6 +106,9 @@ static func add(original: Dictionary, widths: Array[int] = [], inset: int = 0) -
 	var roads: Array[Rect2i] = []
 	# 집터의 변 순서: 위, 오른쪽, 아래, 왼쪽. 균일 폭의 난수 차례는 그대로 둔다.
 	var mids: Array[int] = [top >> 1, right >> 1, bottom >> 1, left >> 1]
+	if inset > 0:
+		for side: int in range(mids.size()):
+			mids[side] = maxi(mids[side], inset + 8)
 	for r in [Rect2i(mids[3], mids[0], g.width - mids[3] - mids[1], ROAD_WIDTH),
 		Rect2i(mids[3], g.height - mids[2] - ROAD_WIDTH, g.width - mids[3] - mids[1], ROAD_WIDTH),
 		Rect2i(mids[3], mids[0], ROAD_WIDTH, g.height - mids[0] - mids[2]),

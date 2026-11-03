@@ -483,7 +483,7 @@ func _ready() -> void:
 	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
-	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script, region) if map_script != null else FieldMaps.build(place, region)
+	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script, region, int(opts.get("bounds_rule", -1))) if map_script != null else FieldMaps.build(place, region, int(opts.get("bounds_rule", -1)))
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary else fresh_map.call()
 	if not MapBounds.can_reuse(stop_map, int(opts.get("bounds_rule", -1))):
 		stop_map = fresh_map.call()

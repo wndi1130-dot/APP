@@ -157,7 +157,7 @@ static func widen_view(data: Dictionary, rows: int = -1, cols: int = -1) -> Dict
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("%s:view:%d" % [String(out["place_id"]), VIEW_RULE])
 	var first_tree: int = (out.get("trees", []) as Array).size()
-	_view_forest_trees(out, forest, rng)
+	view_forest_trees(out, forest, rng)
 	for rect: Rect2i in snow:
 		_add_trees(out, rect, rng)
 	for i: int in range(first_tree, (out["trees"] as Array).size()):
@@ -228,7 +228,7 @@ static func _view_walk_edge(g: FieldGrid, rect: Rect2i, edge: Vector2i) -> bool:
 
 
 ## The same spacing as remote spruce, along each side that meets walkable ground.
-static func _view_forest_trees(data: Dictionary, forest: Array[Rect2i], rng: RandomNumberGenerator) -> void:
+static func view_forest_trees(data: Dictionary, forest: Array[Rect2i], rng: RandomNumberGenerator) -> void:
 	var g: FieldGrid = data["grid"]
 	var trees: Array = data.get("trees", [])
 	var planted: Dictionary = {}

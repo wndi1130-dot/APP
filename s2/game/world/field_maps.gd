@@ -117,8 +117,8 @@ static func all_ids() -> Array[String]:
 
 
 ## The map's data, ready for the field. An unknown place gives the default map.
-static func build(place_id: String, band: String = "") -> Dictionary:
-	return build_from(load(path_of(resolve(place_id))), band)
+static func build(place_id: String, band: String = "", bounds_rule: int = -1) -> Dictionary:
+	return build_from(load(path_of(resolve(place_id))), band, bounds_rule)
 
 
 static var _build_lock := Mutex.new()
@@ -131,7 +131,7 @@ static func finish_with_band(band: String) -> Callable:
 	return func(script: Script) -> Dictionary: return build_from(script, band)
 
 
-static func build_from(script: Script, band: String = "") -> Dictionary:
+static func build_from(script: Script, band: String = "", bounds_rule: int = -1) -> Dictionary:
 	# A stop map is finished as it is, then grows its outer village (map_ring.gd).
 	# MapRing marks its plain build in shared static flags, so one map is built at a
 	# time: a worker's build left running by the stop loader would otherwise make
@@ -139,7 +139,7 @@ static func build_from(script: Script, band: String = "") -> Dictionary:
 	# on the plain build inside (Mutex is reentrant).
 	_build_lock.lock()
 	if MapRing.enabled(script):
-		var grown := MapRing.build(script, finish_with_band(band))
+		var grown := MapRing.build(script, finish_with_band(band), bounds_rule)
 		_build_lock.unlock()
 		# The lights people left: the grown map's share by its whole area, the
 		# ones planned on the stop map kept where they are (T0-9).

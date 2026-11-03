@@ -209,9 +209,12 @@ static func look_of(data: Dictionary) -> Dictionary:
 
 ## Everything plan() reads: of the map only its size and where roads and rails cross
 ## its edges and the deep forest, of the data the place (seed) and region band (look).
-static func plan_key(g: FieldGrid, seed: int, look: Dictionary, forest: Array = []) -> Dictionary:
-	return {"size": Vector2i(g.width, g.height), "openings": openings(g), "seed": seed, "look": look,
+static func plan_key(g: FieldGrid, seed: int, look: Dictionary, forest: Array = [], bounds: Dictionary = {}) -> Dictionary:
+	var key := {"size": Vector2i(g.width, g.height), "openings": openings(g), "seed": seed, "look": look,
 		"deep_forest": forest.duplicate()}
+	if not bounds.is_empty():
+		key["bounds"] = [bounds.get("outline", []), bounds.get("runs", [])].duplicate(true)
+	return key
 
 
 ## The plan made ahead off the main thread (stop_loader.make_ready), with the key it
@@ -222,7 +225,8 @@ static func plan_ahead(d: Dictionary) -> Dictionary:
 	var seed := seed_of(d)
 	var look := look_of(d)
 	var forest: Array = d.get("deep_forest", [])
-	return {"key": plan_key(g, seed, look, forest), "plan": plan(g, seed, look, forest)}
+	var bounds: Dictionary = d.get("bounds", {}) if d.has("bounds_stamp") else {}
+	return {"key": plan_key(g, seed, look, forest, bounds), "plan": plan(g, seed, look, forest, bounds)}
 
 
 ## Where a road or the rails cross an edge: {"side": 0 west 1 east 2 north 3 south,
@@ -350,7 +354,7 @@ static func woods_depth(g: FieldGrid, forest: Array, x: float, z: float, borders
 ## Everything the band places, the same for the same map: trees {at, yaw, model,
 ## height and spread, or scale for what grows low}, blocks {at, yaw, model}, the clear
 ## corridors and the openings they come from. `look`: look_of, "mixed" when empty.
-static func plan(g: FieldGrid, seed: int, look: Dictionary = {}, forest: Array = []) -> Dictionary:
+static func plan(g: FieldGrid, seed: int, look: Dictionary = {}, forest: Array = [], bounds: Dictionary = {}) -> Dictionary:
 	var lk := look if not look.is_empty() else look_of({})
 	var profile: Dictionary = PROFILES[lk["profile"]]
 	var rng := RandomNumberGenerator.new()
@@ -392,7 +396,35 @@ static func plan(g: FieldGrid, seed: int, look: Dictionary = {}, forest: Array =
 		for key: String in ["trees", "glades", "far", "fields"]:
 			_skip_forest(g, forest, p[key])
 		trees.append_array(_forest_trees(g, seed, clear, lk, forest))
+	if not bounds.is_empty():
+		for key: String in ["trees", "glades", "far", "fields"]:
+			for item: Dictionary in p[key]:
+				var at: Vector2 = Vector2(item["at"].x, item["at"].z) if item.has("at") else (item["rect"] as Rect2).get_center()
+				if bounds_skip(g, bounds, at):
+					item["skip"] = true
 	return p
+
+
+## 가장 가까운 윤곽 변의 갈래. 동거리에서는 앞 변을 택한다.
+static func bounds_skip(_g: FieldGrid, bounds: Dictionary, at: Vector2) -> bool:
+	var outline: Array = bounds.get("outline", [])
+	var nearest: float = INF
+	var chosen: int = -1
+	var outside_edge: bool = false
+	for i: int in range(outline.size()):
+		var a := Vector2(outline[i])
+		var b := Vector2(outline[(i + 1) % outline.size()])
+		var delta: Vector2 = b - a
+		var foot: Vector2 = a + delta * clampf((at - a).dot(delta) / delta.length_squared(), 0.0, 1.0)
+		var distance: float = at.distance_squared_to(foot)
+		if distance < nearest:
+			nearest = distance
+			chosen = i
+			outside_edge = (at - foot).dot(Vector2(delta.y, -delta.x).normalized()) >= 0.0
+	for run: Dictionary in bounds.get("runs", []):
+		if chosen >= int(run["from"]) and chosen < int(run["to"]):
+			return outside_edge and run["kind"] in ["water", "rock", "cliff", "mine", "quarry"]
+	return false
 
 
 static func _skip_forest(g: FieldGrid, forest: Array, items: Array) -> void:
@@ -509,6 +541,33 @@ static func fell_groves(g: FieldGrid, p: Dictionary, data: Dictionary) -> Array:
 	var out: Array = []
 	for i: int in range(mini(2, candidates.size())):
 		out.append(candidates[i]["grove"])
+	if data.has("bounds_stamp"):
+		out.append_array(_bounds_groves(g, data))
+	return out
+
+
+static func _bounds_groves(g: FieldGrid, data: Dictionary) -> Array:
+	var spans: Dictionary = {}
+	for cell: Vector2i in data.get("trees", []):
+		for tile: Dictionary in data.get("bounds", {}).get("tiles", []):
+			var rect: Rect2i = tile["rect"]
+			if tile["kind"] != "forest" or not rect.has_point(cell):
+				continue
+			var key := Vector2i(cell.x / FELL_SPAN, cell.y / FELL_SPAN)
+			spans.get_or_add(key, []).append(cell)
+			break
+	var field: PackedInt32Array = WorkSpots.field_of(data)
+	var out: Array = []
+	for cells: Array in spans.values():
+		var stand: Array[Vector2i] = []
+		for cell: Vector2i in cells:
+			for offset: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+				for step: int in range(1, FOREST_ROWS + 2):
+					var at: Vector2i = cell + offset * step
+					if g.people_can_walk(at) and WorkSpots.reach(data, at, field) >= 0.0 and not stand.has(at):
+						stand.append(at)
+		if not stand.is_empty():
+			out.append({"kind": "fell", "cells": cells, "stand": stand, "trees": cells.size(), "level": 0, "edge": false, "bounds": true})
 	return out
 
 
@@ -980,8 +1039,9 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 	# was made from the same inputs; else made here, on the main thread.
 	var ahead: Dictionary = data.get("_edge_plan", {})
 	data.erase("_edge_plan")
-	var planned_ahead: bool = not ahead.is_empty() and ahead["key"] == plan_key(g, seed, look, forest)
-	var p: Dictionary = (ahead["plan"] as Dictionary) if planned_ahead else plan(g, seed, look, forest)
+	var bounds: Dictionary = data.get("bounds", {}) if data.has("bounds_stamp") else {}
+	var planned_ahead: bool = not ahead.is_empty() and ahead["key"] == plan_key(g, seed, look, forest, bounds)
+	var p: Dictionary = (ahead["plan"] as Dictionary) if planned_ahead else plan(g, seed, look, forest, bounds)
 	var root := Node3D.new()
 	root.name = "EdgeBand"
 	parent.add_child(root)
@@ -1119,7 +1179,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 	# The band's groves are this build's: a band drawn again replaces them.
 	var groves: Array = []
 	for grove: Dictionary in data.get("fell_groves", []) as Array:
-		if not bool(grove.get("edge", false)):
+		if not bool(grove.get("edge", false)) and not bool(grove.get("bounds", false)):
 			groves.append(grove)
 	groves.append_array(fell_groves(g, p, data))
 	data["fell_groves"] = groves
