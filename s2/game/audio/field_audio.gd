@@ -153,7 +153,7 @@ const OWN_VOICE: Dictionary = {
 	"boarded": [0.94, 1.04, 6.0],
 	"window_open": [0.96, 1.04, 1.3],
 	"window_close": [0.96, 1.04, 5.6],
-	"curtain": [0.94, 1.06, -2.6],
+	"curtain": [0.91, 1.09, -3.3],         # one file: a wider wobble
 	"window_vault": [0.94, 1.06, -2.3],
 }
 ## A step by the floor underfoot (FieldGrid.Floor: SNOW, ROAD, PLATFORM, WOOD,

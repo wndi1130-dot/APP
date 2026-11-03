@@ -41,7 +41,7 @@ func _rows() -> Array:
 ## The files shipped in each group (rights_ledger), so a lost one is caught.
 const SHIPPED: Dictionary = {
 	"floor_creak": 11, "door_open": 8, "door_close": 6, "door_unlock": 7, "door_locked": 5,
-	"boarded": 8, "window_open": 4, "window_close": 4, "curtain": 2, "window_vault": 6,
+	"boarded": 8, "window_open": 4, "window_close": 4, "curtain": 1, "window_vault": 6,
 }
 
 
