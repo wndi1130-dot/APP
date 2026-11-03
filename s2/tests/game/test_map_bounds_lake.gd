@@ -289,15 +289,33 @@ func test_f_steps_corners_and_straight_limit() -> void:
 		var b: Dictionary = data.get("bounds", {})
 		var points: Array = b.get("outline", [])
 		var form_forest: Array = []
-		if form == "remote":
-			form_forest.assign(b.get("form_forest", []))
-		print("bounds/f form=%s form_forest_m=%s exceptions=%s" % [form, str(b.get("form_forest_m", 0)), str(b.get("exceptions", []))])
+		var pre: Dictionary = cases[form]["pre"]
+		if form == "remote" and pre.get("stop_form", "") == "remote" and pre.get("stop_old_ground") is Rect2i:
+			var old_ground: Rect2i = pre["stop_old_ground"]
+			for rect: Rect2i in pre.get("deep_forest", []):
+				if not old_ground.intersects(rect):
+					form_forest.append(rect)
+		# 생성기의 예외 함수나 bounds.form_forest를 기준으로 삼지 않고 찍기 전 자료에서 다시 센다.
+		var expected: Array[Dictionary] = _expected_remote_edges(points, form_forest)
+		var actual: Array = b.get("exceptions", [])
+		var verified: bool = actual == expected and b.get("form_forest", []) == form_forest
+		assert_true(verified, "%s: 예외 명단 expected=%s actual=%s" % [form, str(expected), str(actual)])
+		var checked: Array[Dictionary] = []
+		if verified:
+			checked.assign(actual)
+		var omitted_edges: Dictionary = {}
+		var excluded: int = 0
+		for exception: Dictionary in checked:
+			omitted_edges[exception["edge"]] = true
+			excluded += int(exception["metres"])
+		print("예외: %s 통로 숲 변 %d개, 길이 %dm — %s" % [form, checked.size(), excluded, str(checked)])
+		print("bounds/f violations=" + str(b.get("violations", [])))
 		var corner_points: Array[Vector2i] = [Vector2i.ZERO, Vector2i(g.width, 0), Vector2i(g.width, g.height), Vector2i(0, g.height)]
 		for i: int in 4:
 			var omitted: bool = false
 			var at: Vector2i = corner_points[i]
-			for rect: Rect2i in form_forest:
-				omitted = omitted or (at.x >= rect.position.x and at.x <= rect.end.x and at.y >= rect.position.y and at.y <= rect.end.y)
+			for exception: Dictionary in checked:
+				omitted = omitted or _on_segment(at, exception["a"], exception["b"])
 			if not omitted:
 				assert_gte(int(b.get("corners", [0, 0, 0, 0])[i]), 10, form + ": 모서리 " + str(at))
 		assert_gt(points.size(), 8, form)
@@ -310,7 +328,10 @@ func test_f_steps_corners_and_straight_limit() -> void:
 					continue
 				var a: Vector2i = Rule.point(g, side, step["from"], step["depth"])
 				var z: Vector2i = Rule.point(g, side, step["to"], step["depth"])
-				if Rule.measured_segments(a, z, form_forest).is_empty():
+				var omitted: bool = false
+				for exception: Dictionary in checked:
+					omitted = omitted or (_on_segment(a, exception["a"], exception["b"]) and _on_segment(z, exception["a"], exception["b"]))
+				if omitted:
 					previous = -1
 					continue
 				measured += 1
@@ -321,20 +342,44 @@ func test_f_steps_corners_and_straight_limit() -> void:
 				previous = int(step["depth"])
 			if measured > 0:
 				assert_gte(changes, 2, form + ": 변마다 깊이 변화 side=" + str(side))
-		var excluded: int = 0
 		for i: int in range(points.size()):
+			if omitted_edges.has(i):
+				continue
 			var delta: Vector2i = points[(i + 1) % points.size()] - points[i]
-			var segments: Array[Dictionary] = Rule.measured_segments(points[i], points[(i + 1) % points.size()], form_forest)
-			excluded += absi(delta.x) + absi(delta.y)
-			for segment: Dictionary in segments:
-				excluded -= int(segment["length"])
-				assert_lte(int(segment["length"]), 24, "%s: 윤곽 직선 %s 예외=%s" % [form, str(segment), str(b.get("exceptions", []))])
+			var length: int = absi(delta.x) + absi(delta.y)
+			assert_lte(length, 24, "%s: 윤곽 변 %d %s→%s violations=%s" % [form, i, str(points[i]),
+				str(points[(i + 1) % points.size()]), str(b.get("violations", []))])
 			var bend: Vector2i = points[(i + 2) % points.size()] - points[(i + 1) % points.size()]
-			if absi(bend.x) + absi(bend.y) < 2 and not segments.is_empty():
-				var following: Array[Dictionary] = Rule.measured_segments(points[(i + 2) % points.size()], points[(i + 3) % points.size()], form_forest)
-				if not following.is_empty():
-					assert_lte(int(segments[-1]["length"]) + int(following[0]["length"]), 24, form + ": 2m 미만 꺾임 합산")
+			if absi(bend.x) + absi(bend.y) < 2 and not omitted_edges.has((i + 1) % points.size()) and not omitted_edges.has((i + 2) % points.size()):
+				var following: Vector2i = points[(i + 3) % points.size()] - points[(i + 2) % points.size()]
+				assert_lte(length + absi(following.x) + absi(following.y), 24, form + ": 2m 미만 꺾임 합산")
 		assert_eq(excluded, int(b.get("form_forest_m", 0)), form + ": 기존 숲 제외 길이")
+
+
+func _expected_remote_edges(points: Array, forest: Array) -> Array[Dictionary]:
+	var expected: Array[Dictionary] = []
+	for i: int in range(points.size()):
+		var a: Vector2i = points[i]
+		var b: Vector2i = points[(i + 1) % points.size()]
+		var hit: bool = false
+		for rect: Rect2i in forest:
+			if a.y == b.y:
+				hit = hit or (a.y >= rect.position.y and a.y <= rect.end.y \
+					and maxi(mini(a.x, b.x), rect.position.x) <= mini(maxi(a.x, b.x), rect.end.x))
+			else:
+				hit = hit or (a.x >= rect.position.x and a.x <= rect.end.x \
+					and maxi(mini(a.y, b.y), rect.position.y) <= mini(maxi(a.y, b.y), rect.end.y))
+		if hit:
+			var direction: String = ("north" if a.x < b.x else "south") if a.y == b.y else ("east" if a.y < b.y else "west")
+			expected.append({"edge": i, "direction": direction, "name": "edge %d %s" % [i, direction],
+				"metres": absi(a.x - b.x) + absi(a.y - b.y), "a": a, "b": b})
+	return expected
+
+
+func _on_segment(point: Vector2i, a: Vector2i, b: Vector2i) -> bool:
+	return (point.x - a.x) * (b.y - a.y) == (point.y - a.y) * (b.x - a.x) \
+		and point.x >= mini(a.x, b.x) and point.x <= maxi(a.x, b.x) \
+		and point.y >= mini(a.y, b.y) and point.y <= maxi(a.y, b.y)
 
 
 func test_g_water_terrain_mix() -> void:
@@ -393,7 +438,8 @@ func test_i_walkable_area_and_ring_area() -> void:
 		assert_gte(float(numerator) / float(denominator), 1.25, metrics)
 		var sides: Array = d["map_ring"]["sides"]
 		var area: int = (170 + sides[0] + sides[2]) * (106 + sides[1] + sides[3])
-		assert_between(float(area) / (210.0 * 146.0), 1.5 * 0.97, 1.5 * 1.03, form)
+		print("bounds/ring form=%s sides=%s cells=%d" % [form, str(sides), area])
+		assert_between(float(area) / (210.0 * 146.0), 1.55 * 0.97, 1.55 * 1.03, form)
 
 
 func test_j_forest_union_front_and_plan_key() -> void:

@@ -22,7 +22,7 @@ static func sides(data: Dictionary, width: int) -> Array[int]:
 	var deep_x: int = rng.randi_range(0, 1) * 2
 	var deep_y: int = rng.randi_range(0, 1) * 2 + 1
 	var ratio: float = rng.randf_range(2.0, 3.0)
-	var target: float = float((g.width + width * 2) * (g.height + width * 2)) * 1.5
+	var target: float = float((g.width + width * 2) * (g.height + width * 2)) * 1.55
 	var best: Array[int] = [width, width, width, width]
 	var error: float = INF
 	for shallow: int in range(1, 80):
@@ -160,11 +160,34 @@ static func _row(g: FieldGrid, mask: PackedByteArray, side: int, start: int, fin
 	return row
 
 
+## 시계 방향 윤곽의 바깥쪽 방위. 예외는 맞닿은 변 전체의 길이를 기록한다.
+static func remote_exceptions(points: Array[Vector2i], forest: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for i: int in range(points.size()):
+		var a: Vector2i = points[i]
+		var b: Vector2i = points[(i + 1) % points.size()]
+		var touches: bool = false
+		for rect: Rect2i in forest:
+			touches = touches or (maxi(a.x, b.x) >= rect.position.x and mini(a.x, b.x) <= rect.end.x \
+				and maxi(a.y, b.y) >= rect.position.y and mini(a.y, b.y) <= rect.end.y)
+		if not touches:
+			continue
+		var direction: String = "north" if b.x > a.x else ("east" if b.y > a.y else ("south" if b.x < a.x else "west"))
+		out.append({"edge": i, "direction": direction, "name": "edge %d %s" % [i, direction],
+			"metres": absi(b.x - a.x) + absi(b.y - a.y), "a": a, "b": b})
+	return out
+
+
 static func outline(data: Dictionary, mask: PackedByteArray, protection: Array[Dictionary] = []) -> Dictionary:
 	var g: FieldGrid = data["grid"]
 	var rng := random_of(String(data["place_id"]))
 	var corners: Array[int] = [10, 10, 10, 10]
-	var form_forest: Array = data.get("deep_forest", []).duplicate()
+	var form_forest: Array = []
+	if data.get("stop_form", "") == "remote" and data.get("stop_old_ground") is Rect2i:
+		var old_ground: Rect2i = data["stop_old_ground"]
+		for rect: Rect2i in data.get("deep_forest", []):
+			if not old_ground.intersects(rect):
+				form_forest.append(rect)
 	for side: int in 4:
 		var length: int = g.width if side % 2 == 0 else g.height
 		corners[side] = mini(corners[side], _limit(g, mask, side, 0, 26))
@@ -242,25 +265,27 @@ static func outline(data: Dictionary, mask: PackedByteArray, protection: Array[D
 	for key: String in data.get("entries", {}):
 		gaps.append(key)
 	var excluded: int = 0
-	var exceptions: Array[Dictionary] = []
+	var exceptions: Array[Dictionary] = remote_exceptions(vertices, form_forest)
+	var exempt_edges: Dictionary = {}
+	for exception: Dictionary in exceptions:
+		exempt_edges[exception["edge"]] = true
+		excluded += int(exception["metres"])
+	var violations: Array[Dictionary] = []
 	for i: int in range(vertices.size()):
 		var a: Vector2i = vertices[i]
 		var b: Vector2i = vertices[(i + 1) % vertices.size()]
-		excluded += absi(a.x - b.x) + absi(a.y - b.y)
-		for segment: Dictionary in measured_segments(a, b, form_forest):
-			excluded -= int(segment["length"])
-			if int(segment["length"]) <= 24:
-				continue
-			var kinds_blocking: Array[String] = []
-			var area := Rect2i(segment["a"], segment["b"] - segment["a"]).grow(DEPTH)
-			for item: Dictionary in protection:
-				if area.intersects(item["rect"]) and not kinds_blocking.has(item["kind"]):
-					kinds_blocking.append(item["kind"])
-			exceptions.append({"a": segment["a"], "b": segment["b"], "metres": segment["length"],
-				"protection": kinds_blocking})
+		var metres: int = absi(a.x - b.x) + absi(a.y - b.y)
+		if exempt_edges.has(i) or metres <= 24:
+			continue
+		var kinds_blocking: Array[String] = []
+		var area := Rect2i(a.min(b), (b - a).abs()).grow(DEPTH)
+		for item: Dictionary in protection:
+			if area.intersects(item["rect"]) and not kinds_blocking.has(item["kind"]):
+				kinds_blocking.append(item["kind"])
+		violations.append({"edge": i, "a": a, "b": b, "metres": metres, "protection": kinds_blocking})
 	return {"rule": RULE, "made_by": "rule", "outline": vertices, "runs": runs,
 		"sides": data.get("map_ring", {}).get("sides", []), "gaps": gaps, "tiles": tiles,
-		"corner": corners.min(), "corners": corners, "steps": steps, "exceptions": exceptions,
+		"corner": corners.min(), "corners": corners, "steps": steps, "exceptions": exceptions, "violations": violations,
 		"form_forest": form_forest, "form_forest_m": excluded}
 
 
