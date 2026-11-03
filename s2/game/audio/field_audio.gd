@@ -133,7 +133,7 @@ const OWN_VOICE: Dictionary = {
 	"door_open": [0.96, 1.04, 4.8],
 	"door_close": [0.96, 1.04, 4.1],
 	"door_unlock": [0.97, 1.03, 3.0],
-	"door_locked": [0.94, 1.06, 2.7],     # one file: a wider wobble
+	"door_locked": [0.96, 1.04, 2.7],
 	"boarded": [0.94, 1.04, 6.0],
 	"window_open": [0.96, 1.04, 1.3],
 	"window_close": [0.96, 1.04, 5.6],

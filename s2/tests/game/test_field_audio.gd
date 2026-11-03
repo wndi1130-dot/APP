@@ -304,13 +304,17 @@ func test_every_floor_ships_steps_of_its_own() -> void:
 	}
 	assert_eq(want.size(), FG.Floor.size(), "every floor is written out here")
 	assert_eq(a.STEP_FLOORS.size(), FG.Floor.size(), "and has a row")
+	# The files shipped for each floor (rights_ledger), so a lost one is caught.
+	var shipped: Dictionary = {
+		"step_snow": 7, "step_concrete": 14, "step_wood": 11, "step_gravel": 12, "step_ice": 10,
+	}
 	for kind in want:
 		var own: String = want[kind]
 		a.lib.erase(own)
 		g.floor[g.index(cell)] = kind
 		assert_eq(a._step_group(at)[0], own, "floor %d has steps of its own" % kind)
 		var list: Array = a._load_group(own)
-		assert_gte(list.size(), 4, own)
+		assert_eq(list.size(), int(shipped[own]), own + ": as many files as shipped")
 		for s in list:
 			assert_between(s.get_length(), 0.1, 0.8, own)
 	g.floor[g.index(cell)] = was

@@ -39,11 +39,9 @@ func _rows() -> Array:
 
 
 ## The files shipped in each group (rights_ledger), so a lost one is caught.
-## The locked door has one file only: it cannot avoid itself, its wider pitch
-## wobble (OWN_VOICE) keeps it from sounding the same.
 const SHIPPED: Dictionary = {
-	"floor_creak": 3, "door_open": 4, "door_close": 4, "door_unlock": 3, "door_locked": 1,
-	"boarded": 4, "window_open": 3, "window_close": 3, "curtain": 2, "window_vault": 6,
+	"floor_creak": 11, "door_open": 8, "door_close": 6, "door_unlock": 7, "door_locked": 5,
+	"boarded": 8, "window_open": 4, "window_close": 4, "curtain": 2, "window_vault": 6,
 }
 
 
