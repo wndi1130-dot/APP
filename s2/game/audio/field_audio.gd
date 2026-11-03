@@ -43,10 +43,18 @@ const W = preload("res://game/sim/weapons.gd")
 const Grid = preload("res://game/world/field_grid.gd")
 
 const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking", "blow_light_t0", "blow_light_t1", "blow_light_t2", "blow_blunt_t0", "blow_blunt_t1", "blow_blunt_t2", "pv_effort", "wall_horde_far", "wall_horde_near", "wall_bump", "train_metal"]
-## The groups whose file the user named first (decision 554: 「첫째로」): the
-## first time one is heard at a stop it is its _01; after that any of them,
-## never the one just heard (_fresh_file).
-const LEAD_FIRST: Array[String] = ["window_vault", "blow_light_t1", "blow_blunt_t1", "pv_effort"]
+## The files the user picked in a group (decision 554, by name): each weighs
+## PICK_WEIGHT against the others' 1, and still never the one just heard
+## (_fresh_file). Over a long stop a picked file is then heard 40% of the time
+## among three [2, 1, 1], 37.5% each of two among three [2, 2, 1], 25% among
+## six [2, 1, 1, 1, 1, 1].
+const PICKED: Dictionary = {
+	"window_vault": ["window_vault_01"],
+	"blow_light_t1": ["blow_light_t1_01"],
+	"blow_blunt_t1": ["blow_blunt_t1_01", "blow_blunt_t1_02"],
+	"pv_effort": ["pv_effort_01"],
+}
+const PICK_WEIGHT: float = 2.0
 ## The player's own short grunt of effort (decision 554): now and then on a
 ## heavy swing (from hit_feel's HEAVY_KG), a light one, a shove or a climb
 ## through a window — never every time (EFFORT_CHANCE), never within
@@ -2357,24 +2365,44 @@ func recorded_weights() -> Array:
 	return out
 
 
-## A file of the group other than the one it played last (-1: none there); a
-## LEAD_FIRST group's first is its _01.
+## A file of the group other than the one it played last (-1: none there), a
+## PICKED one twice as likely as another.
 func _fresh_file(group: String) -> int:
 	var list: Array = lib.get(group, [])
 	var count: int = list.size()
 	if count == 0:
 		return -1
-	if not blow_last.has(group) and LEAD_FIRST.has(group):
-		for i in count:
-			if (list[i] as AudioStream).resource_path.get_basename().ends_with("_01"):
-				blow_last[group] = i
-				return i
 	var last: int = int(blow_last.get(group, -1))
-	var pick: int = randi() % count
-	if count > 1 and pick == last:
-		pick = (pick + 1 + randi() % (count - 1)) % count
+	var weights: Array = pick_weights(group, list, last)
+	var total: float = 0.0
+	for w: float in weights:
+		total += w
+	var roll: float = randf() * total
+	var pick: int = -1
+	for i in count:
+		if float(weights[i]) <= 0.0:
+			continue
+		pick = i   # the last one that may be heard, should the roll reach the end
+		roll -= float(weights[i])
+		if roll < 0.0:
+			break
 	blow_last[group] = pick
 	return pick
+
+
+## How likely each file of a group is to be heard next (_fresh_file): PICKED
+## ones PICK_WEIGHT, others 1, the one heard last (`last`) none unless it is
+## the only one.
+static func pick_weights(group: String, list: Array, last: int) -> Array:
+	var picked: Array = PICKED.get(group, [])
+	var out: Array = []
+	for i in list.size():
+		if i == last and list.size() > 1:
+			out.append(0.0)
+		else:
+			var file_name: String = (list[i] as AudioStream).resource_path.get_file().get_basename()
+			out.append(PICK_WEIGHT if picked.has(file_name) else 1.0)
+	return out
 
 
 ## A sound the dead can hear is also one the player hears (field make_sound).

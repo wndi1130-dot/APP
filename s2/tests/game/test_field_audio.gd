@@ -927,8 +927,8 @@ func test_no_blow_file_twice_running() -> void:
 # Decision 554: a light weapon's and a heavy blunt one's body hit is a
 # recording for each tier of the blow, three files a tier, longer as the tier
 # goes up in the files themselves (so the tier's loudness and pitch are not
-# laid on them); the axe and the boot keep their own. The file the user named
-# is the first heard.
+# laid on them); the axe and the boot keep their own. (The files the user
+# picked are heard more often: test_picked_files_are_heard_more_often.)
 func test_light_and_blunt_blows_are_recorded_by_tier() -> void:
 	var a = game.audio
 	var rec: Array = a.recorded_weights()
@@ -965,26 +965,70 @@ func test_light_and_blunt_blows_are_recorded_by_tier() -> void:
 	a.lib["blow_blunt_t2"] = []
 	assert_eq(a.recorded_weights(), ["blow_light"], "a weight short of a tier is not recorded")
 	a.lib["blow_blunt_t2"] = kept
-	# The rules' blow is heard by its tier, the named file first, then never twice running.
+	# The rules' blow is heard by its tier, never the same file twice running.
 	var at: Vector3 = game.player.position + Vector3(1.0, 0, 0)
 	for group: String in ["blow_light_t1", "blow_blunt_t1"]:
 		a.blow_last.erase(group)
 		var n: int = a.blow_log.size()
 		a.blow({"weapon": "knife" if group == "blow_light_t1" else "crowbar", "target": "standing", "result": "body", "edge": 0, "tier": 1, "at": at, "by_player": true})
 		assert_eq(a.blow_log[n][0], group)
-		var first: AudioStream = a.lib[group][int(a.blow_log[n][1])]
-		assert_true(first.resource_path.ends_with(group + "_01.ogg"), group + ": the named file first")
 		for k in range(6):
 			a.blow({"weapon": "knife" if group == "blow_light_t1" else "crowbar", "target": "standing", "result": "body", "edge": 0, "tier": 1, "at": at, "by_player": true})
 			assert_ne(a.blow_log[-1][1], a.blow_log[-2][1], "not twice running")
+
+
+# Decision 554: a file the user picked (PICKED) is twice as likely as another
+# of its group, and still never twice running: over a long stop it is heard
+# 40% of the time among three [2, 1, 1], 37.5% each of two among three
+# [2, 2, 1], 25% among six [2, 1, 1, 1, 1, 1]. Every picked file is shipped.
+func test_picked_files_are_heard_more_often() -> void:
+	var a = game.audio
 	a.lib["window_vault"] = a._load_group("window_vault")
-	a.blow_last.erase("window_vault")
-	assert_true((a.lib["window_vault"][a._fresh_file("window_vault")] as AudioStream).resource_path.ends_with("window_vault_01.ogg"), "the climb's named file first")
+	var want: Dictionary = {"window_vault": 0.25, "blow_light_t1": 0.4, "blow_blunt_t1": 0.375, "pv_effort": 0.4}
+	assert_eq(want.size(), a.PICKED.size(), "every picked group has its share here")
+	seed(554)
+	for group: String in a.PICKED:
+		var list: Array = a.lib.get(group, [])
+		var picked: Array = a.PICKED[group]
+		var is_picked: Array = []
+		for s: AudioStream in list:
+			is_picked.append(picked.has(s.resource_path.get_file().get_basename()))
+		assert_eq(is_picked.count(true), picked.size(), group + ": every picked file is shipped")
+		if list.is_empty():
+			continue
+		var weights: Array = a.pick_weights(group, list, -1)
+		for i in list.size():
+			assert_eq(float(weights[i]), a.PICK_WEIGHT if is_picked[i] else 1.0, group + ": its weight")
+		var heard: Array = []
+		heard.resize(list.size())
+		heard.fill(0)
+		a.blow_last.erase(group)
+		var last: int = -1
+		var again: int = 0
+		var draws: int = 4000
+		for k in range(draws):
+			var f: int = a._fresh_file(group)
+			if f == last:
+				again += 1
+			last = f
+			heard[f] += 1
+		assert_eq(again, 0, group + ": never twice running")
+		for i in list.size():
+			var share: float = float(heard[i]) / float(draws)
+			if is_picked[i]:
+				assert_almost_eq(share, float(want[group]), 0.04, group + ": a picked file's share")
+			else:
+				assert_lt(share, float(want[group]) - 0.04, group + ": another file, less often")
+		gut.p("%s: %s of %d" % [group, str(heard), draws])
+	# The one heard last weighs nothing, unless it is the only one.
+	var three: Array = a.lib["blow_blunt_t1"]
+	assert_eq(a.pick_weights("blow_blunt_t1", three, 1)[1], 0.0, "not the one just heard")
+	assert_eq(a.pick_weights("curtain", [three[0]], 0), [1.0], "a group of one: that one again")
 
 
 # Decision 554: the player grunts now and then — on a heavy swing more often
 # than a light one, never within EFFORT_REST of the last, never the file just
-# heard, the named file first; a mate's swing makes none.
+# heard; a mate's swing makes none.
 func test_the_player_grunts_now_and_then() -> void:
 	var a = game.audio
 	assert_eq((a.lib[a.EFFORT_GROUP] as Array).size(), 3, "three grunts")
@@ -996,7 +1040,6 @@ func test_the_player_grunts_now_and_then() -> void:
 	assert_false(a.effort("heavy", 0.99), "not this time")
 	assert_true(a.effort("heavy", 0.0))
 	var last: AudioStream = a.last_shot.stream
-	assert_true(last.resource_path.ends_with("pv_effort_01.ogg"), "the named grunt first")
 	assert_false(a.effort("heavy", 0.0), "not again so soon")
 	a.tick(a.EFFORT_REST + 0.1)
 	assert_eq(a.effort_rest, 0.0, "its rest runs down with the field")
