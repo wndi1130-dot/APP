@@ -42,11 +42,21 @@ const Atmosphere = preload("res://fx/atmosphere.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Grid = preload("res://game/world/field_grid.gd")
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking", "blow_light_t0", "blow_light_t1", "blow_light_t2", "blow_blunt_t0", "blow_blunt_t1", "blow_blunt_t2"]
+const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking", "blow_light_t0", "blow_light_t1", "blow_light_t2", "blow_blunt_t0", "blow_blunt_t1", "blow_blunt_t2", "pv_effort"]
 ## The groups whose file the user named first (decision 554: 「첫째로」): the
 ## first time one is heard at a stop it is its _01; after that any of them,
 ## never the one just heard (_fresh_file).
-const LEAD_FIRST: Array[String] = ["window_vault", "blow_light_t1", "blow_blunt_t1"]
+const LEAD_FIRST: Array[String] = ["window_vault", "blow_light_t1", "blow_blunt_t1", "pv_effort"]
+## The player's own short grunt of effort (decision 554): now and then on a
+## heavy swing (from hit_feel's HEAVY_KG), a light one, a shove or a climb
+## through a window — never every time (EFFORT_CHANCE), never within
+## EFFORT_REST of the last, never the file just heard. The player's ear only:
+## the dead hear the swing, not the grunt; a mate's swing makes none.
+const EFFORT_GROUP: String = "pv_effort"
+const EFFORT_CHANCE: Dictionary = {"heavy": 0.5, "light": 0.2, "shove": 0.35, "vault": 0.6}
+const EFFORT_REST: float = 1.8        # s from one grunt to the next, at least
+const EFFORT_LOUD: float = 0.45       # just under a heavy swing's whoosh (0.4 s loudness)
+const EFFORT_PITCH: Array = [0.97, 1.03]
 ## One of the dead going down is heard in four beats, as it is drawn (the
 ## fall's own times: dead_pose, motion "dead_fall"). Only the player hears it:
 ## it is no sound of the rules. Each: group, loudness, lowest and highest pitch.
@@ -433,6 +443,7 @@ var gust_gaps: Array = []              # every gap between gusts (tests)
 var blow_wired: bool = false           # the combat tells its blows (struck): hit_* stay quiet
 var blow_last: Dictionary = {}         # blow group -> index of the file it played last
 var blow_log: Array = []               # every layer played [group, file index] (tests)
+var effort_rest: float = 0.0           # s until the player may grunt again (effort)
 var blow_mark: Array = [-1, Vector3.ZERO]          # frame and place of the last blow
 var hit_mark: Array = [-1, Vector3.ZERO, null, 0]  # frame, place, player and its cut of the last hit_*
 var hits_stopped: int = 0              # hit_* stopped for a blow told after them (tests)
@@ -886,6 +897,7 @@ func tick(delta: float) -> void:
 		_tick_wind(at, delta)   # the wind goes on (it is not the field's time)
 		return
 	heard_t += delta
+	effort_rest = maxf(0.0, effort_rest - delta)
 	pick_t -= delta
 	if pick_t <= 0.0:
 		pick_t = 0.4
@@ -1804,13 +1816,33 @@ func window_turn(c: Vector2i, what: String) -> void:
 
 ## Someone climbing through the window at `c`, heard from it; `glass`: broken
 ## glass still in its frame, heard too.
-func window_vault(c: Vector2i, glass: bool) -> void:
+func window_vault(c: Vector2i, glass: bool, mine: bool = false) -> void:
 	if quiet or game == null or game.player == null:
 		return
 	var at: Vector3 = game.FieldGrid.center(c)
 	_voice_or_standin(VAULT_VOICE, String(VAULT_VOICE[4]), at)
 	if glass:
 		_voice_or_standin(VAULT_GLASS, String(VAULT_GLASS[4]), at)
+	if mine:
+		effort("vault")
+
+
+## The player's grunt of effort (EFFORT_CHANCE's kind: heavy, light, shove,
+## vault), if this one comes up (`roll`, in 0..1; tests pass their own) and
+## the last is EFFORT_REST behind. True if one was heard.
+func effort(kind: String, roll: float = -1.0) -> bool:
+	if quiet or game == null or game.player == null or effort_rest > 0.0:
+		return false
+	if (randf() if roll < 0.0 else roll) >= float(EFFORT_CHANCE.get(kind, 0.0)):
+		return false
+	var file: int = _fresh_file(EFFORT_GROUP)
+	if file < 0:
+		return false
+	effort_rest = EFFORT_REST
+	played.append(EFFORT_GROUP)
+	var at: Vector3 = game.player.position
+	_one_shot(EFFORT_GROUP, at, EFFORT_LOUD, randf_range(float(EFFORT_PITCH[0]), float(EFFORT_PITCH[1])), lib[EFFORT_GROUP][file], _bus_at(at))
+	return true
 
 
 ## A door or a window that would not give to the player's hand (SHUT_FAST:

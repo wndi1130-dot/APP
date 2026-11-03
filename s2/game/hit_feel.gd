@@ -183,6 +183,10 @@ func swing(p, weapon_id: String) -> void:
 	var d: Dictionary = W.get_data(weapon_id)
 	var heavy: bool = d.get("kind", "") == "melee" and float(d.get("weight", 0.0)) >= HEAVY_KG
 	_sound("swing_heavy" if heavy else "swing_light", p.position, SWING_LOUD, SWING_REACH)
+	# The player's own grunt now and then (field_audio.effort, decision 554).
+	var audio = game.get("audio")
+	if p == game.player and audio != null and audio.has_method("effort"):
+		audio.effort("heavy" if heavy else ("light" if d.get("kind", "") == "melee" else "shove"))
 
 
 ## A melee blow landed on a body at `at` (where it is seen, on the ground);

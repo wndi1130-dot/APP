@@ -982,6 +982,49 @@ func test_light_and_blunt_blows_are_recorded_by_tier() -> void:
 	assert_true((a.lib["window_vault"][a._fresh_file("window_vault")] as AudioStream).resource_path.ends_with("window_vault_01.ogg"), "the climb's named file first")
 
 
+# Decision 554: the player grunts now and then — on a heavy swing more often
+# than a light one, never within EFFORT_REST of the last, never the file just
+# heard, the named file first; a mate's swing makes none.
+func test_the_player_grunts_now_and_then() -> void:
+	var a = game.audio
+	assert_eq((a.lib[a.EFFORT_GROUP] as Array).size(), 3, "three grunts")
+	assert_gt(float(a.EFFORT_CHANCE["heavy"]), float(a.EFFORT_CHANCE["light"]), "a heavy swing more often")
+	for kind: String in a.EFFORT_CHANCE:
+		assert_lt(float(a.EFFORT_CHANCE[kind]), 1.0, kind + ": never every time")
+	a.blow_last.erase(a.EFFORT_GROUP)
+	a.effort_rest = 0.0
+	assert_false(a.effort("heavy", 0.99), "not this time")
+	assert_true(a.effort("heavy", 0.0))
+	assert_true(a.last_shot.stream.resource_path.ends_with("pv_effort_01.ogg"), "the named grunt first")
+	assert_false(a.effort("heavy", 0.0), "not again so soon")
+	a.tick(a.EFFORT_REST + 0.1)
+	var last: AudioStream = a.last_shot.stream
+	assert_true(a.effort("vault", 0.0), "after its rest, again")
+	for i in range(8):
+		assert_ne(a.last_shot.stream, last, "never the one just heard")
+		last = a.last_shot.stream
+		a.effort_rest = 0.0
+		assert_true(a.effort("light", 0.0))
+	# Through the swing: the player's own, now and then; a mate's, never.
+	var mate = game.squad[1]
+	var n: int = a.played.count(a.EFFORT_GROUP)
+	for i in range(40):
+		a.effort_rest = 0.0
+		game.feel.swing(mate, "axe")
+	assert_eq(a.played.count(a.EFFORT_GROUP), n, "a mate's swing, no grunt")
+	for i in range(60):
+		a.effort_rest = 0.0
+		game.feel.swing(game.player, "axe")
+	var heard: int = a.played.count(a.EFFORT_GROUP) - n
+	assert_between(heard, 12, 48, "a heavy swing grunts about half the time")
+	# Nor does a mate climbing through a window.
+	n = a.played.count(a.EFFORT_GROUP)
+	a.effort_rest = 0.0
+	for i in range(10):
+		a.window_vault(Vector2i(2, 2), false, false)
+	assert_eq(a.played.count(a.EFFORT_GROUP), n, "a mate's climb, no grunt")
+
+
 # Told by the combat, a blow on one of the dead is heard by its layers alone:
 # the old hit_* at the same place in the same frame is listed, not played, and
 # one that went first (a stomp is felt before it is told) is stopped. A door or
