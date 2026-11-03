@@ -42,7 +42,7 @@ const Atmosphere = preload("res://fx/atmosphere.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Grid = preload("res://game/world/field_grid.gd")
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking", "blow_light_t0", "blow_light_t1", "blow_light_t2", "blow_blunt_t0", "blow_blunt_t1", "blow_blunt_t2", "pv_effort"]
+const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking", "blow_light_t0", "blow_light_t1", "blow_light_t2", "blow_blunt_t0", "blow_blunt_t1", "blow_blunt_t2", "pv_effort", "wall_horde_far", "wall_horde_near", "wall_bump", "train_metal"]
 ## The groups whose file the user named first (decision 554: 「첫째로」): the
 ## first time one is heard at a stop it is its _01; after that any of them,
 ## never the one just heard (_fresh_file).
@@ -241,6 +241,40 @@ const ROOM_LOOK: int = 400                  # cells of floor counted at most
 const EDGE_RANGE: float = 45.0
 const EDGE_LOUD: float = 0.35
 const EDGE_PITCH: float = 0.85
+## The horde behind the walls at the map's edge (decision 548; horde_view.gd
+## draws it) is heard from far before the player gets there, so the ear knows
+## first that way is shut. Only a horde that is drawn (field_game.horde_view,
+## decision 509) and only by the walls it took (HordeView.wall_error, a depth
+## above 0), from the nearest point of them: a far loop from WALL_FAR_FROM m,
+## at its fullest by WALL_NEAR_TO and half that at WALL_NEAR_FULL; a near loop
+## from WALL_NEAR_FROM, full at WALL_NEAR_FULL; both a little past the wall,
+## among the dead (WALL_INSIDE). The dead knock on the wall at random times (no
+## beat): within WALL_BUMP_NEAR m the nearer, the closer together (WALL_BUMP_GAP);
+## farther, now and then and dull. A wall knocks with its own stuff
+## (WALL_BUMP_KINDS; an overpass has none). The player's ear only.
+const WALL_FAR_FROM: float = 30.0
+const WALL_NEAR_TO: float = 10.0
+const WALL_NEAR_FROM: float = 14.0
+const WALL_NEAR_FULL: float = 3.0
+const WALL_INSIDE: float = 6.0
+const WALL_FAR_LOUD: float = 0.6      # as loud as the map edge's bed at its fullest (0.4 s loudness)
+const WALL_NEAR_LOUD: float = 0.8     # as a full horde bed in sight
+const WALL_LOOK: float = 0.25         # s between looks for the nearest wall
+const WALL_BUMP_NEAR: float = 10.0
+const WALL_BUMP_GAP: Array = [4.0, 0.8]   # mean s between knocks at WALL_BUMP_NEAR m, at the wall
+const WALL_BUMP_FAR_GAP: float = 14.0     # mean s between far knocks, out to WALL_FAR_FROM
+const WALL_BUMP_LOUD: float = 0.7
+const WALL_BUMP_SPREAD: float = 6.0       # m either way along the wall from its nearest point
+const WALL_BUMP_KINDS: Dictionary = {"wall_sheet": ["sheet_rattle", "sheet_body"], "wall_sound": ["sheet_body", "sheet_rattle"], "wall_plank": ["plank_creak"], "wall_stack": ["car_door", "sheet_body"], "overpass": []}
+## The stopped train's cold metal — a tick, a ding, a long creak, a knock in a
+## car's body, a coupler — now and then from somewhere on the nearest car,
+## heard within TRAIN_METAL_REACH m at random times (mean TRAIN_METAL_GAP s, no
+## beat), the long creak less often (TRAIN_METAL_WEIGHT), never the file just
+## heard. Over the waiting engine's breath; the player's ear only.
+const TRAIN_METAL_REACH: float = 15.0
+const TRAIN_METAL_GAP: float = 9.0
+const TRAIN_METAL_LOUD: float = 0.6
+const TRAIN_METAL_WEIGHT: Dictionary = {"creak": 0.35}
 const BED_RANGE: float = 40.0
 const BED_FULL: float = 12.0          # this much weighted crowd is a full bed
 ## A voice is given only to one of the dead in sight; one that has a voice
@@ -444,6 +478,12 @@ var blow_wired: bool = false           # the combat tells its blows (struck): hi
 var blow_last: Dictionary = {}         # blow group -> index of the file it played last
 var blow_log: Array = []               # every layer played [group, file index] (tests)
 var effort_rest: float = 0.0           # s until the player may grunt again (effort)
+var wall_far: AudioStreamPlayer3D      # the horde behind the walls, its far loop (_tick_walls)
+var wall_near: AudioStreamPlayer3D     # and its near one
+var wall_look_t: float = 0.0           # s to the next look for the nearest wall
+var wall_point = null                  # nearest_wall's last answer, or null
+var wall_bump_log: Array = []          # knocks [heard_t, file] (tests)
+var train_metal_log: Array = []        # the train's metal [heard_t, file] (tests)
 var blow_mark: Array = [-1, Vector3.ZERO]          # frame and place of the last blow
 var hit_mark: Array = [-1, Vector3.ZERO, null, 0]  # frame, place, player and its cut of the last hit_*
 var hits_stopped: int = 0              # hit_* stopped for a blow told after them (tests)
@@ -541,6 +581,8 @@ func setup(field_game) -> void:
 	edge_bed = _loop_player("horde_bed")
 	edge_bed.bus = "SFX_FAR" if AudioServer.get_bus_index("SFX_FAR") >= 0 else "SFX"
 	edge_bed.pitch_scale = EDGE_PITCH
+	wall_far = _wall_loop("wall_horde_far")
+	wall_near = _wall_loop("wall_horde_near")
 	# This stop's wind: one bed of many, never the last stop's.
 	beds = _load_named("wind", "wind")
 	gust_files = _load_named("wind_gust", "gust")
@@ -883,7 +925,7 @@ func tick(delta: float) -> void:
 		return
 	var at: Vector3 = game.player.position
 	if game.ended:
-		for p in [bed, edge_bed] + bed_players + spot_players.values():
+		for p in [bed, edge_bed, wall_far, wall_near] + bed_players + spot_players.values():
 			p.volume_db = -80.0
 		for g: Dictionary in gusts:
 			(g["player"] as AudioStreamPlayer).volume_db = -80.0
@@ -910,6 +952,8 @@ func tick(delta: float) -> void:
 	# The mass: one bed scaled by how many dead are near and how near.
 	bed.volume_db = lerpf(bed.volume_db, _db(clampf(crowd / BED_FULL, 0.0, 1.0) * 0.8), minf(1.0, delta * 2.0))
 	_tick_edge(at, delta)
+	_tick_walls(at, delta)
+	_tick_train_metal(at, delta)
 	birds_t = maxf(0.0, birds_t - delta)
 	_tick_wind(at, delta)
 	engine.volume_db = _db(clampf(1.0 - at.distance_to(engine.position) / 70.0, 0.0, 1.0) * 0.5)
@@ -929,6 +973,186 @@ func _tick_edge(at: Vector3, delta: float) -> void:
 		near = minf(near, Vector2(s.x - at.x, s.z - at.z).length())
 	var want := _db(clampf(1.0 - near / EDGE_RANGE, 0.0, 1.0) * EDGE_LOUD)
 	edge_bed.volume_db = lerpf(edge_bed.volume_db, want, minf(1.0, delta * 2.0))
+
+
+## A loop for the horde behind the walls: its file loops in itself (no gap at
+## the seam), silent until it is wanted.
+func _wall_loop(group: String) -> AudioStreamPlayer3D:
+	var p := AudioStreamPlayer3D.new()
+	p.bus = "SFX"
+	p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
+	p.volume_db = -80.0
+	add_child(p)
+	if has(group):
+		var s: AudioStream = lib[group][0]
+		if s is AudioStreamOggVorbis:
+			(s as AudioStreamOggVorbis).loop = true
+		p.stream = s
+	return p
+
+
+## The horde behind the walls (WALL_*): the two loops by the nearest wall,
+## and now and then a knock on it.
+func _tick_walls(at: Vector3, delta: float) -> void:
+	wall_look_t -= delta
+	if wall_look_t <= 0.0:
+		wall_look_t = WALL_LOOK
+		wall_point = nearest_wall(at)
+	var d: float = INF if wall_point == null else float(wall_point[1])
+	if wall_point != null:
+		var spot: Vector3 = (wall_point[0] as Vector3) + (wall_point[3] as Vector3) * WALL_INSIDE
+		wall_far.position = spot
+		wall_near.position = spot
+	_bed_to(wall_far, wall_far_level(d) * WALL_FAR_LOUD, delta)
+	_bed_to(wall_near, wall_near_level(d) * WALL_NEAR_LOUD, delta)
+	if d < WALL_FAR_FROM and randf() < delta / wall_bump_gap(d):
+		wall_bump(d)
+
+
+## A loop toward `lin`: started at a new place in its file when it is first
+## wanted, stopped once it has gone quiet.
+func _bed_to(p: AudioStreamPlayer3D, lin: float, delta: float) -> void:
+	if p.stream == null:
+		return
+	if lin > 0.001 and not p.playing:
+		p.volume_db = -80.0
+		p.play(randf() * p.stream.get_length())
+	p.volume_db = lerpf(p.volume_db, _db(lin), minf(1.0, delta * 2.0))
+	if lin <= 0.001 and p.playing and p.volume_db < -60.0:
+		p.stop()
+
+
+## The nearest point of the walls the drawn horde stands behind, as [point
+## (Vector3, on the wall's floor), distance (m, on the ground), the wall's row,
+## its outward way (Vector3)], or null: no horde drawn (off, no walls), or none
+## of its walls taken.
+func nearest_wall(at: Vector3):
+	var drawn = game.get("horde_view")
+	if drawn == null or not is_instance_valid(drawn):
+		return null
+	var grid = game.get("grid")
+	var walls = game.get("horde_walls")
+	if grid == null or not walls is Array:
+		return null
+	var size := Vector2(grid.width, grid.height)
+	var here := Vector2(at.x, at.z)
+	var best = null
+	for w in walls:
+		if not w is Dictionary or float((w as Dictionary).get("depth", 40.0)) <= 0.0 or not HordeView.wall_error(w, size, grid).is_empty():
+			continue
+		var q: Vector2 = Geometry2D.get_closest_point_to_segment(here, w["a"], w["b"])
+		var dist: float = here.distance_to(q)
+		if best == null or dist < float(best[1]):
+			var out: Vector2 = w["out"]
+			best = [Vector3(q.x, float(w.get("floor_y", 0.0)), q.y), dist, w, Vector3(out.x, 0.0, out.y)]
+	return best
+
+
+## The far loop's share at d m from the wall: none from WALL_FAR_FROM, full by
+## WALL_NEAR_TO, half by WALL_NEAR_FULL (the near loop takes over).
+static func wall_far_level(d: float) -> float:
+	var come: float = clampf((WALL_FAR_FROM - d) / (WALL_FAR_FROM - WALL_NEAR_TO), 0.0, 1.0)
+	return come * (1.0 - 0.5 * clampf((WALL_NEAR_TO - d) / (WALL_NEAR_TO - WALL_NEAR_FULL), 0.0, 1.0))
+
+
+## The near loop's share at d m: none from WALL_NEAR_FROM, full by WALL_NEAR_FULL.
+static func wall_near_level(d: float) -> float:
+	return clampf((WALL_NEAR_FROM - d) / (WALL_NEAR_FROM - WALL_NEAR_FULL), 0.0, 1.0)
+
+
+## The mean s between knocks at d m from the wall.
+static func wall_bump_gap(d: float) -> float:
+	if d >= WALL_BUMP_NEAR:
+		return WALL_BUMP_FAR_GAP
+	return lerpf(float(WALL_BUMP_GAP[0]), float(WALL_BUMP_GAP[1]), 1.0 - maxf(0.0, d) / WALL_BUMP_NEAR)
+
+
+## One knock on the nearest wall (wall_point), d m away: a file of the wall's
+## own stuff, never the one just heard, somewhere along it near its nearest
+## point; past WALL_BUMP_NEAR duller. False if the wall has no knock.
+func wall_bump(d: float) -> bool:
+	if wall_point == null or not has("wall_bump"):
+		return false
+	var w: Dictionary = wall_point[2]
+	var stuff: Array = WALL_BUMP_KINDS.get(String(w.get("kind", "")), [])
+	var list: Array = lib["wall_bump"]
+	var last: int = int(blow_last.get("wall_bump", -1))
+	var fit: Array = []
+	for i in list.size():
+		var file: String = (list[i] as AudioStream).resource_path.get_file()
+		if i != last and stuff.any(func(s: Variant) -> bool: return file.contains(String(s))):
+			fit.append(i)
+	if fit.is_empty():
+		return false
+	var pick: int = fit[randi() % fit.size()]
+	blow_last["wall_bump"] = pick
+	var a: Vector2 = w["a"]
+	var b: Vector2 = w["b"]
+	var near: Vector3 = wall_point[0]
+	var q: Vector2 = Geometry2D.get_closest_point_to_segment(Vector2(near.x, near.z) + (b - a).normalized() * randf_range(-WALL_BUMP_SPREAD, WALL_BUMP_SPREAD), a, b)
+	var bus: String = "SFX" if d < WALL_BUMP_NEAR else ("SFX_FAR" if AudioServer.get_bus_index("SFX_FAR") >= 0 else "SFX")
+	played.append("wall_bump")
+	wall_bump_log.append([heard_t, (list[pick] as AudioStream).resource_path.get_file()])
+	_one_shot("wall_bump", Vector3(q.x, near.y, q.y), WALL_BUMP_LOUD * clampf(1.0 - d / WALL_FAR_FROM, 0.0, 1.0), randf_range(0.94, 1.06), list[pick], bus)
+	return true
+
+
+## The train's cold metal now and then, within TRAIN_METAL_REACH m of a car.
+func _tick_train_metal(at: Vector3, delta: float) -> void:
+	if not has("train_metal") or randf() >= delta / TRAIN_METAL_GAP:
+		return
+	var car = nearest_car(at)
+	if car != null and float(car[1]) < TRAIN_METAL_REACH:
+		train_metal(at, car[0])
+
+
+## The nearest of the train's cars to at, as [its rect (Rect2, m on the
+## ground), distance (m)], or null: no train here.
+func nearest_car(at: Vector3):
+	var here := Vector2(at.x, at.z)
+	var best = null
+	for c: Dictionary in game.data.get("train_cars", []):
+		var r := Rect2(Rect2i(c["rect"]))
+		var dist: float = here.distance_to(here.clamp(r.position, r.end))
+		if best == null or dist < float(best[1]):
+			best = [r, dist]
+	return best
+
+
+## One sound of the train's metal from somewhere on the car `r`: weighted by
+## TRAIN_METAL_WEIGHT, never the file just heard.
+func train_metal(at: Vector3, r: Rect2) -> bool:
+	var list: Array = lib.get("train_metal", [])
+	var last: int = int(blow_last.get("train_metal", -1))
+	var weights: Array = []
+	var total: float = 0.0
+	for i in list.size():
+		var w: float = 0.0
+		if i != last or list.size() == 1:
+			w = 1.0
+			var file: String = (list[i] as AudioStream).resource_path.get_file()
+			for kind: String in TRAIN_METAL_WEIGHT:
+				if file.contains(kind):
+					w = float(TRAIN_METAL_WEIGHT[kind])
+		weights.append(w)
+		total += w
+	if total <= 0.0:
+		return false
+	var roll: float = randf() * total
+	var pick: int = -1
+	for i in list.size():
+		if float(weights[i]) <= 0.0:
+			continue
+		pick = i   # the last with any weight, should the roll run past the end
+		if roll < float(weights[i]):
+			break
+		roll -= float(weights[i])
+	blow_last["train_metal"] = pick
+	var spot := Vector3(randf_range(r.position.x, r.end.x), 0.0, randf_range(r.position.y, r.end.y))
+	played.append("train_metal")
+	train_metal_log.append([heard_t, (list[pick] as AudioStream).resource_path.get_file()])
+	_one_shot("train_metal", spot, TRAIN_METAL_LOUD * clampf(1.0 - at.distance_to(spot) / (TRAIN_METAL_REACH + 10.0), 0.2, 1.0), randf_range(0.96, 1.04), list[pick], _bus_at(spot))
+	return true
 
 
 ## Can the player see this spot as one of the dead is drawn there? The same

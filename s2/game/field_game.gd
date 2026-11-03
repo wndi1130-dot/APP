@@ -204,6 +204,8 @@ var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upsta
 var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
 var map_edge: MapEdge                   # ground and fog past the map's edge (fx/map_edge.gd)
+var horde_walls: Array = []             # the walls a horde was asked to stand behind (horde_view.stop_walls)
+var horde_view: Node3D = null           # that horde, drawn (null: off or no walls); field_audio hears it
 var night_view: NightLightView          # the hearts of the lights people left (decision 471 B4)
 var zombies: Zombies
 var camera: Camera3D
@@ -593,8 +595,9 @@ func _ready() -> void:
 	# 경계 무리의 시야/반응 갱신은 자식이 맡는다. 꺼짐 판은 자원 로드 전 반환.
 	var horde_settings: Dictionary = _perf_settings.duplicate()
 	horde_settings.merge(PerfSwitch._valid(opts.get("perf", {})), true)
-	await preload("res://game/world/horde_view.gd").attach(self,
-		preload("res://game/world/horde_view.gd").stop_walls(data, opts, horde_settings, Vector2(view.grid.width, view.grid.height)),
+	# 소리(field_audio)는 이 둘만 읽는다: 넘긴 벽과 무리 노드(null이면 무리 꺼짐·벽 없음 — 무음).
+	horde_walls = preload("res://game/world/horde_view.gd").stop_walls(data, opts, horde_settings, Vector2(view.grid.width, view.grid.height))
+	horde_view = await preload("res://game/world/horde_view.gd").attach(self, horde_walls,
 		{"map_size": Vector2(view.grid.width, view.grid.height), "grid": view.grid, "vis_texture": view.vis_texture,
 			"material": view.material, "field": self, "staged": bool(opts.get("staged", false))}, pace, horde_settings)
 	blood_fx = BloodFx.new()

@@ -1025,6 +1025,129 @@ func test_the_player_grunts_now_and_then() -> void:
 	assert_eq(a.played.count(a.EFFORT_GROUP), n, "a mate's climb, no grunt")
 
 
+# Decision 548: the horde behind the walls is heard as it is drawn — nothing
+# with no horde drawn (decision 509) or a wall it did not take, the far loop
+# from WALL_FAR_FROM in, the near loop close up; knocks on the wall at random
+# times, closer together nearer, of the wall's own stuff, never the same file
+# twice running; an overpass does not knock.
+func test_the_horde_behind_the_walls_is_heard_as_it_is_drawn() -> void:
+	var a = game.audio
+	assert_eq((a.lib["wall_horde_far"] as Array).size(), 1)
+	assert_eq((a.lib["wall_horde_near"] as Array).size(), 1)
+	assert_eq((a.lib["wall_bump"] as Array).size(), 8)
+	var keep_walls: Array = game.horde_walls
+	var keep_view = game.horde_view
+	var end: int = mini(game.grid.width - 2, 26)
+	var wall := {"id": "t_north", "a": Vector2(2, 0), "b": Vector2(end, 0), "out": Vector2(0, -1), "kind": "wall_sheet", "height": 3.0}
+	var x: float = (2.0 + float(end)) / 2.0
+	game.horde_walls = [wall]
+	game.horde_view = null
+	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "no horde drawn: nothing (decision 509)")
+	var drawn := Node3D.new()
+	add_child_autofree(drawn)
+	game.horde_view = drawn
+	var hit = a.nearest_wall(Vector3(x, 0, 5))
+	assert_not_null(hit, "drawn: heard")
+	assert_almost_eq(float(hit[1]), 5.0, 0.001, "from the wall's nearest point")
+	assert_eq(hit[3], Vector3(0, 0, -1), "the dead are out past it")
+	var inward: Dictionary = wall.duplicate()
+	inward["out"] = Vector2(0, 1)
+	game.horde_walls = [inward]
+	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "a wall the horde did not take: nothing")
+	var empty: Dictionary = wall.duplicate()
+	empty["depth"] = 0.0
+	game.horde_walls = [empty]
+	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "no one behind it: nothing")
+	game.horde_walls = [wall]
+	# The two loops by distance.
+	assert_eq(a.wall_far_level(31.0) + a.wall_near_level(31.0), 0.0, "past 30 m: nothing")
+	assert_gt(a.wall_far_level(20.0), 0.0)
+	assert_eq(a.wall_near_level(20.0), 0.0, "at 20 m the far loop only")
+	assert_almost_eq(a.wall_far_level(10.0), 1.0, 0.0001)
+	assert_almost_eq(a.wall_far_level(3.0), 0.5, 0.0001, "close up the far loop gives way")
+	assert_almost_eq(a.wall_near_level(3.0), 1.0, 0.0001)
+	for d: float in [29.0, 20.0, 12.0, 6.0, 1.0]:
+		assert_gte(a.wall_far_level(d) + a.wall_near_level(d), a.wall_far_level(d + 1.0) + a.wall_near_level(d + 1.0), "louder as one comes (%.0f m)" % d)
+	a.wall_look_t = 0.0
+	for i in range(60):
+		a._tick_walls(Vector3(x, 0, 20), 0.1)
+	assert_true(a.wall_far.playing, "the far loop at 20 m")
+	assert_gt(a.wall_far.volume_db, -30.0)
+	assert_false(a.wall_near.playing, "not yet the near one")
+	assert_true((a.wall_far.stream as AudioStreamOggVorbis).loop, "it loops in itself, no gap")
+	assert_almost_eq(a.wall_far.position.z, -a.WALL_INSIDE, 0.001, "heard from among the dead")
+	a.wall_look_t = 0.0
+	for i in range(100):
+		a._tick_walls(Vector3(x, 0, 40), 0.1)
+	assert_false(a.wall_far.playing, "past 30 m: gone")
+	# Knocks: closer together nearer, no beat, the wall's own stuff, never twice running.
+	var counts: Array = []
+	for d: float in [1.0, 8.0]:
+		a.wall_bump_log.clear()
+		a.wall_look_t = 0.0
+		for i in range(2400):
+			a.heard_t += 0.05
+			a._tick_walls(Vector3(x, 0, d), 0.05)
+		counts.append(a.wall_bump_log.size())
+		var gaps: Array = []
+		for k in range(1, a.wall_bump_log.size()):
+			gaps.append(float(a.wall_bump_log[k][0]) - float(a.wall_bump_log[k - 1][0]))
+			assert_ne(a.wall_bump_log[k][1], a.wall_bump_log[k - 1][1], "never the same knock twice running")
+		for e: Array in a.wall_bump_log:
+			assert_true(String(e[1]).contains("sheet_"), "a sheet wall knocks as sheet metal")
+		if d == 1.0:
+			var mean: float = 0.0
+			for g: float in gaps:
+				mean += g / gaps.size()
+			var spread: float = 0.0
+			for g: float in gaps:
+				spread += (g - mean) * (g - mean) / gaps.size()
+			assert_gt(sqrt(spread) / mean, 0.5, "no beat: the gaps are all over")
+	assert_between(int(counts[0]), 60, 170, "at 1 m about one a second")
+	assert_lt(float(counts[1]), float(counts[0]) * 0.5, "farther, fewer")
+	var over: Dictionary = wall.duplicate()
+	over["kind"] = "overpass"
+	a.wall_point = [Vector3(x, 0, 0), 1.0, over, Vector3(0, 0, -1)]
+	assert_false(a.wall_bump(1.0), "an overpass does not knock")
+	game.horde_walls = keep_walls
+	game.horde_view = keep_view
+	a.wall_point = null
+	a.wall_far.stop()
+	a.wall_near.stop()
+
+
+# The stopped train's cold metal now and then (mean TRAIN_METAL_GAP s) within
+# TRAIN_METAL_REACH m of a car, never the file just heard, the long creak less
+# often; farther off, nothing.
+func test_the_train_metal_now_and_then() -> void:
+	var a = game.audio
+	assert_eq((a.lib["train_metal"] as Array).size(), 10)
+	var cars: Array = game.data.get("train_cars", [])
+	assert_false(cars.is_empty(), "the stop has its train")
+	var r := Rect2(Rect2i(cars[0]["rect"]))
+	var at := Vector3(r.get_center().x, 0, r.get_center().y)
+	assert_almost_eq(float(a.nearest_car(at)[1]), 0.0, 0.001, "on the car")
+	a.train_metal_log.clear()
+	for i in range(3000):
+		a.heard_t += 0.1
+		a._tick_train_metal(at, 0.1)
+	var n: int = a.train_metal_log.size()
+	assert_between(n, 15, 60, "about one in %.0f s" % a.TRAIN_METAL_GAP)
+	var creaks := 0
+	for k in range(n):
+		if String(a.train_metal_log[k][1]).contains("creak"):
+			creaks += 1
+		if k > 0:
+			assert_ne(a.train_metal_log[k][1], a.train_metal_log[k - 1][1], "never the same twice running")
+	assert_lt(float(creaks), float(n) * 0.2, "the long creak less often")
+	var far := Vector3(r.position.x, 0, r.position.y) + Vector3(0, 0, -60)
+	if float(a.nearest_car(far)[1]) > a.TRAIN_METAL_REACH:
+		a.train_metal_log.clear()
+		for i in range(1000):
+			a._tick_train_metal(far, 0.1)
+		assert_eq(a.train_metal_log.size(), 0, "far from the train: nothing")
+
+
 # Told by the combat, a blow on one of the dead is heard by its layers alone:
 # the old hit_* at the same place in the same frame is listed, not played, and
 # one that went first (a stomp is felt before it is told) is stopped. A door or
