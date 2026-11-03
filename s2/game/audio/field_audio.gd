@@ -18,7 +18,9 @@ extends Node3D
 ##              Heard only while the rules tell no blow of their own (below)
 ##   blow_*     a blow on one of the dead, as the rules tell it (combat
 ##              `struck`): by the weapon, what it hit and what came of it,
-##              and the weapon's own state (blow, BLOW_FAMILY)
+##              and the weapon's own state (blow, BLOW_FAMILY); a light or a
+##              heavy blunt weapon's body hit is a recording for each tier of
+##              the blow (blow_light_t0..2, blow_blunt_t0..2, BLOW_WEIGHT)
 ##   gun        shots (falls back to impact, lower)
 ##   step_snow  the player's footsteps
 ##   wind       outdoor bed, wandering, with gusts over it (WIND_DRIFT, _gust);
@@ -40,7 +42,11 @@ const Atmosphere = preload("res://fx/atmosphere.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Grid = preload("res://game/world/field_grid.gd")
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking"]
+const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking", "blow_light_t0", "blow_light_t1", "blow_light_t2", "blow_blunt_t0", "blow_blunt_t1", "blow_blunt_t2"]
+## The groups whose file the user named first (decision 554: 「첫째로」): the
+## first time one is heard at a stop it is its _01; after that any of them,
+## never the one just heard (_fresh_file).
+const LEAD_FIRST: Array[String] = ["window_vault", "blow_light_t1", "blow_blunt_t1"]
 ## One of the dead going down is heard in four beats, as it is drawn (the
 ## fall's own times: dead_pose, motion "dead_fall"). Only the player hears it:
 ## it is no sound of the rules. Each: group, loudness, lowest and highest pitch.
@@ -375,6 +381,17 @@ const BLOW_GAIN: Array = [0.85, 1.0]
 const BLOW_DULL_PITCH: float = 0.92   # a dull weapon, lower (and through the duller bus)
 const BLOW_DOWN_PITCH: float = 0.94   # one that is down, lower
 const BLOW_SAME_M: float = 2.0        # hit_* this near a blow in the same frame is that blow
+## Decision 554: a light weapon's body hit (a shove, a knife, a broken bottle)
+## and a heavy blunt one's (crowbar, frying pan, wooden stake) are recordings,
+## three for each tier of the blow (decision 501: 툭 · 퍽 · 퍽!) — the tiers
+## differ in the files themselves (stuff, length, tail; −24 · −20 · −17 dBFS),
+## so the tier's loudness and pitch (blow_layers) are not laid on them too. A
+## weight with a tier short of files keeps its own families as before; so do
+## the axe and the boot (theirs are still to be picked).
+const BLOW_WEIGHT: Dictionary = {"blow_cut": "blow_light", "blow_shove": "blow_light", "blow_thud": "blow_blunt", "blow_clang": "blow_blunt", "blow_wood": "blow_blunt"}
+## dB on a weight's layer so that a middle blow is as loud as the families it
+## takes over were (0.4 s loudness and active RMS, the mean of the two).
+const BLOW_WEIGHT_DB: Dictionary = {"blow_light": -1.0, "blow_blunt": 1.0}
 ## Melee blows ("melee", "fight") are not here: hit_feel.gd voices them by
 ## the weapon (a miss: the swing and a short breath of air, blow_miss, no
 ## hit_*), where any of these files would do.
@@ -1994,8 +2011,9 @@ static func _same_blow(mark: Array, at: Vector3) -> bool:
 
 ## The layers of one blow [group, loudness, pitch] from what the combat tells
 ## of it (`struck`'s info): weapon, target, result, edge (-1 none, 0 keen,
-## 1 dull, 2 about to give).
-static func blow_layers(info: Dictionary) -> Array:
+## 1 dull, 2 about to give), tier. `recorded`: the weights (BLOW_WEIGHT) whose
+## tiers all have files (recorded_weights).
+static func blow_layers(info: Dictionary, recorded: Array = []) -> Array:
 	var result: String = String(info.get("result", "body"))
 	if result == "miss":
 		return [["blow_miss", 0.6, 1.0]]
@@ -2014,7 +2032,11 @@ static func blow_layers(info: Dictionary) -> Array:
 	var out: Array = [[family, float(BLOW_UNDER.get(result, 1.0)), pitch]]
 	# Decision 501: only the body's first layer follows the blow's tier.
 	var tier: int = int(info.get("tier", -1))
-	if tier == 0 or tier == 2:
+	var weight: String = String(BLOW_WEIGHT.get(family, ""))
+	if recorded.has(weight):
+		out[0][0] = "%s_t%d" % [weight, tier if tier >= 0 and tier <= 2 else 1]
+		out[0][1] *= db_to_linear(float(BLOW_WEIGHT_DB[weight]))
+	elif tier == 0 or tier == 2:
 		out[0][1] *= 0.6 if tier == 0 else 1.12
 		out[0][2] *= 1.1 if tier == 0 else 0.95
 	if BLOW_LAYER.has(result):
@@ -2049,7 +2071,7 @@ func blow(info: Dictionary) -> void:
 	var plain: String = _bus_at(at)
 	# A dull weapon's own hit is duller; what came of it is heard as it is.
 	var dull: String = (ROOM_DULL_BUS if plain == ROOM_BUS else "SFX_MID") if int(info.get("edge", -1)) >= 1 else plain
-	var layers: Array = blow_layers(info)
+	var layers: Array = blow_layers(info, recorded_weights())
 	for i in layers.size():
 		var layer: Array = layers[i]
 		var group: String = layer[0]
@@ -2062,11 +2084,27 @@ func blow(info: Dictionary) -> void:
 		_one_shot(group, at, BLOW_LOUD * float(layer[1]) * near * randf_range(float(BLOW_GAIN[0]), float(BLOW_GAIN[1])), float(layer[2]) * randf_range(float(BLOW_PITCH[0]), float(BLOW_PITCH[1])), lib[group][file], bus)
 
 
-## A file of the group other than the one it played last (-1: none there).
+## The weights (BLOW_WEIGHT) whose three tiers all have files.
+func recorded_weights() -> Array:
+	var out: Array = []
+	for weight: String in BLOW_WEIGHT_DB:
+		if has(weight + "_t0") and has(weight + "_t1") and has(weight + "_t2"):
+			out.append(weight)
+	return out
+
+
+## A file of the group other than the one it played last (-1: none there); a
+## LEAD_FIRST group's first is its _01.
 func _fresh_file(group: String) -> int:
-	var count: int = (lib.get(group, []) as Array).size()
+	var list: Array = lib.get(group, [])
+	var count: int = list.size()
 	if count == 0:
 		return -1
+	if not blow_last.has(group) and LEAD_FIRST.has(group):
+		for i in count:
+			if (list[i] as AudioStream).resource_path.get_basename().ends_with("_01"):
+				blow_last[group] = i
+				return i
 	var last: int = int(blow_last.get(group, -1))
 	var pick: int = randi() % count
 	if count > 1 and pick == last:

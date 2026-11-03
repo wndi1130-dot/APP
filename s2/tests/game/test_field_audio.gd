@@ -924,6 +924,64 @@ func test_no_blow_file_twice_running() -> void:
 	gut.p("600 blows: %d layers, %d files twice running" % [a.blow_log.size(), again])
 
 
+# Decision 554: a light weapon's and a heavy blunt one's body hit is a
+# recording for each tier of the blow, three files a tier, longer as the tier
+# goes up in the files themselves (so the tier's loudness and pitch are not
+# laid on them); the axe and the boot keep their own. The file the user named
+# is the first heard.
+func test_light_and_blunt_blows_are_recorded_by_tier() -> void:
+	var a = game.audio
+	var rec: Array = a.recorded_weights()
+	assert_eq(rec, ["blow_light", "blow_blunt"], "both weights have all three tiers")
+	for weight: String in rec:
+		var shorter := 0.0
+		for t in 3:
+			var list: Array = a.lib["%s_t%d" % [weight, t]]
+			assert_eq(list.size(), 3, "%s t%d: three files" % [weight, t])
+			var mean := 0.0
+			for s: AudioStream in list:
+				mean += s.get_length() / 3.0
+			assert_gt(mean, shorter, "%s: a harder tier is longer" % weight)
+			shorter = mean
+	var by: Dictionary = {"knife": "blow_light", "broken_bottle": "blow_light", "": "blow_light", "pistol": "blow_light",
+		"crowbar": "blow_blunt", "frying_pan": "blow_blunt", "wood_stake": "blow_blunt"}
+	for w: String in by:
+		for tier in [-1, 0, 1, 2]:
+			var info := {"weapon": w, "target": "standing", "result": "body", "edge": 0, "tier": tier}
+			var got: Array = a.blow_layers(info, rec)
+			assert_eq(got[0][0], "%s_t%d" % [by[w], 1 if tier < 0 else tier], "%s, tier %d" % [w, tier])
+			assert_almost_eq(float(got[0][1]), db_to_linear(float(a.BLOW_WEIGHT_DB[by[w]])), 0.0001, "the tier is in the file")
+			assert_almost_eq(float(got[0][2]), 1.0, 0.0001, "not pitched by the tier")
+			assert_eq(got.slice(1), a.blow_layers(info).slice(1), "the other layers as before")
+	for w: String in ["axe", "boot"]:
+		var info := {"weapon": w, "target": "standing", "result": "body", "edge": 0, "tier": 2}
+		assert_eq(a.blow_layers(info, rec), a.blow_layers(info), w + " keeps its own")
+	var dull: Array = a.blow_layers({"weapon": "crowbar", "result": "body", "target": "downed", "edge": 1, "tier": 0}, rec)
+	assert_almost_eq(float(dull[0][2]), a.BLOW_DULL_PITCH * a.BLOW_DOWN_PITCH, 0.0001, "dull and down still lower")
+	var coat: Array = a.blow_layers({"weapon": "knife", "result": "blocked", "target": "standing", "edge": 0, "tier": 1}, rec)
+	assert_almost_eq(float(coat[0][1]), float(a.BLOW_UNDER["blocked"]) * db_to_linear(float(a.BLOW_WEIGHT_DB["blow_light"])), 0.0001, "under a coat as before")
+	# A weight short of a tier keeps its families.
+	var kept: Array = a.lib["blow_blunt_t2"]
+	a.lib["blow_blunt_t2"] = []
+	assert_eq(a.recorded_weights(), ["blow_light"], "a weight short of a tier is not recorded")
+	a.lib["blow_blunt_t2"] = kept
+	# The rules' blow is heard by its tier, the named file first, then never twice running.
+	var at: Vector3 = game.player.position + Vector3(1.0, 0, 0)
+	for group: String in ["blow_light_t1", "blow_blunt_t1"]:
+		a.blow_last.erase(group)
+		var n: int = a.blow_log.size()
+		a.blow({"weapon": "knife" if group == "blow_light_t1" else "crowbar", "target": "standing", "result": "body", "edge": 0, "tier": 1, "at": at, "by_player": true})
+		assert_eq(a.blow_log[n][0], group)
+		var first: AudioStream = a.lib[group][int(a.blow_log[n][1])]
+		assert_true(first.resource_path.ends_with(group + "_01.ogg"), group + ": the named file first")
+		for k in range(6):
+			a.blow({"weapon": "knife" if group == "blow_light_t1" else "crowbar", "target": "standing", "result": "body", "edge": 0, "tier": 1, "at": at, "by_player": true})
+			assert_ne(a.blow_log[-1][1], a.blow_log[-2][1], "not twice running")
+	a.lib["window_vault"] = a._load_group("window_vault")
+	a.blow_last.erase("window_vault")
+	assert_true((a.lib["window_vault"][a._fresh_file("window_vault")] as AudioStream).resource_path.ends_with("window_vault_01.ogg"), "the climb's named file first")
+
+
 # Told by the combat, a blow on one of the dead is heard by its layers alone:
 # the old hit_* at the same place in the same frame is listed, not played, and
 # one that went first (a stomp is felt before it is told) is stopped. A door or
