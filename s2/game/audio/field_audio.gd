@@ -20,7 +20,9 @@ extends Node3D
 ##              `struck`): by the weapon, what it hit and what came of it,
 ##              and the weapon's own state (blow, BLOW_FAMILY); a light or a
 ##              heavy blunt weapon's body hit is a recording for each tier of
-##              the blow (blow_light_t0..2, blow_blunt_t0..2, BLOW_WEIGHT)
+##              the blow (blow_light_t0..2, blow_blunt_t0..2, BLOW_WEIGHT),
+##              a blade's, a pan's or a stake's old grain thin over it
+##              (BLOW_GRAIN)
 ##   gun        shots (falls back to impact, lower)
 ##   step_snow  the player's footsteps
 ##   wind       outdoor bed, wandering, with gusts over it (WIND_DRIFT, _gust);
@@ -444,6 +446,13 @@ const BLOW_WEIGHT: Dictionary = {"blow_cut": "blow_light", "blow_shove": "blow_l
 ## dB on a weight's layer so that a middle blow is as loud as the families it
 ## takes over were (0.4 s loudness and active RMS, the mean of the two).
 const BLOW_WEIGHT_DB: Dictionary = {"blow_light": -1.0, "blow_blunt": 1.0}
+## Over a recorded body hit, the weapon's own grain is kept, thin: the made
+## family it had before — a blade's edge (knife, broken bottle), a pan's ring,
+## a stake's wood — BLOW_GRAIN_DB under its old loudness, at its old tier and
+## pitch, through the same bus as the body. A shove and a crowbar are the
+## recording alone (decisions 554, 442).
+const BLOW_GRAIN: Array[String] = ["blow_cut", "blow_clang", "blow_wood"]
+const BLOW_GRAIN_DB: float = -9.0
 ## Melee blows ("melee", "fight") are not here: hit_feel.gd voices them by
 ## the weapon (a miss: the swing and a short breath of air, blow_miss, no
 ## hit_*), where any of these files would do.
@@ -2302,15 +2311,17 @@ static func blow_layers(info: Dictionary, recorded: Array = []) -> Array:
 	if target == "downed":
 		pitch *= BLOW_DOWN_PITCH
 	var out: Array = [[family, float(BLOW_UNDER.get(result, 1.0)), pitch]]
-	# Decision 501: only the body's first layer follows the blow's tier.
+	# Decision 501: only the body follows the blow's tier — a made family by
+	# its loudness and pitch, a recording (and a grain over it) by its files.
 	var tier: int = int(info.get("tier", -1))
-	var weight: String = String(BLOW_WEIGHT.get(family, ""))
-	if recorded.has(weight):
-		out[0][0] = "%s_t%d" % [weight, tier if tier >= 0 and tier <= 2 else 1]
-		out[0][1] *= db_to_linear(float(BLOW_WEIGHT_DB[weight]))
-	elif tier == 0 or tier == 2:
+	if tier == 0 or tier == 2:
 		out[0][1] *= 0.6 if tier == 0 else 1.12
 		out[0][2] *= 1.1 if tier == 0 else 0.95
+	var weight: String = String(BLOW_WEIGHT.get(family, ""))
+	if recorded.has(weight):
+		if BLOW_GRAIN.has(family):
+			out.append([family, float(out[0][1]) * db_to_linear(BLOW_GRAIN_DB), float(out[0][2])])
+		out[0] = ["%s_t%d" % [weight, tier if tier >= 0 and tier <= 2 else 1], float(BLOW_UNDER.get(result, 1.0)) * db_to_linear(float(BLOW_WEIGHT_DB[weight])), pitch]
 	if BLOW_LAYER.has(result):
 		out.append([BLOW_LAYER[result], 0.9, 1.0])
 	if target == "frozen" and result != "shatter" and result != "stuck":
@@ -2347,7 +2358,7 @@ func blow(info: Dictionary) -> void:
 	for i in layers.size():
 		var layer: Array = layers[i]
 		var group: String = layer[0]
-		var bus: String = dull if i == 0 else plain
+		var bus: String = dull if i == 0 or BLOW_GRAIN.has(group) else plain   # the body and its grain
 		var file: int = _fresh_file(group)
 		played.append(group)
 		if file < 0:

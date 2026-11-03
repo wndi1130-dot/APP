@@ -952,7 +952,26 @@ func test_light_and_blunt_blows_are_recorded_by_tier() -> void:
 			assert_eq(got[0][0], "%s_t%d" % [by[w], 1 if tier < 0 else tier], "%s, tier %d" % [w, tier])
 			assert_almost_eq(float(got[0][1]), db_to_linear(float(a.BLOW_WEIGHT_DB[by[w]])), 0.0001, "the tier is in the file")
 			assert_almost_eq(float(got[0][2]), 1.0, 0.0001, "not pitched by the tier")
-			assert_eq(got.slice(1), a.blow_layers(info).slice(1), "the other layers as before")
+			# The blade, the pan and the stake keep their old grain over it, thin.
+			var old: Array = a.blow_layers(info)
+			var grain: bool = ["knife", "broken_bottle", "frying_pan", "wood_stake"].has(w)
+			assert_eq(a.BLOW_GRAIN.has(String(old[0][0])), grain, "%s: a grain of its own, or the recording alone" % w)
+			if grain:
+				assert_eq(got[1][0], old[0][0], "%s: its old family over the recording" % w)
+				assert_almost_eq(float(got[1][1]), float(old[0][1]) * db_to_linear(a.BLOW_GRAIN_DB), 0.0001, "%s, tier %d: at its old tier, BLOW_GRAIN_DB under" % [w, tier])
+				assert_almost_eq(float(got[1][2]), float(old[0][2]), 0.0001, "%s, tier %d: at its old pitch" % [w, tier])
+			assert_eq(got.slice(2 if grain else 1), old.slice(1), "the other layers as before")
+	for w: String in ["knife", "frying_pan", "wood_stake"]:
+		for result: String in ["body", "head", "finish", "blocked", "shatter", "stuck"]:
+			for target: String in ["standing", "downed", "frozen"]:
+				for edge: int in [-1, 0, 1, 2]:
+					var info := {"weapon": w, "target": target, "result": result, "edge": edge, "tier": 0}
+					var got: Array = a.blow_layers(info, rec)
+					var old: Array = a.blow_layers(info)
+					assert_eq(got.size(), old.size() + 1, "%s %s %s %d: one layer more, the grain" % [w, result, target, edge])
+					assert_eq([got[1][0], snappedf(float(got[1][2]), 0.0001)], [old[0][0], snappedf(float(old[0][2]), 0.0001)], "dull and down lower, as before")
+					assert_almost_eq(float(got[1][1]), float(old[0][1]) * db_to_linear(a.BLOW_GRAIN_DB), 0.0001, "under a coat or ice as before")
+					assert_eq(got.slice(2), old.slice(1), "what came of it as before")
 	for w: String in ["axe", "boot"]:
 		var info := {"weapon": w, "target": "standing", "result": "body", "edge": 0, "tier": 2}
 		assert_eq(a.blow_layers(info, rec), a.blow_layers(info), w + " keeps its own")
@@ -965,8 +984,14 @@ func test_light_and_blunt_blows_are_recorded_by_tier() -> void:
 	a.lib["blow_blunt_t2"] = []
 	assert_eq(a.recorded_weights(), ["blow_light"], "a weight short of a tier is not recorded")
 	a.lib["blow_blunt_t2"] = kept
-	# The rules' blow is heard by its tier, never the same file twice running.
 	var at: Vector3 = game.player.position + Vector3(1.0, 0, 0)
+	# A dull knife's grain is as dull as its body (the same bus); the coat's is plain.
+	var n0: int = a.blow_log.size()
+	a.blow({"weapon": "knife", "target": "standing", "result": "body", "edge": 1, "tier": 1, "at": at, "by_player": true})
+	assert_eq([a.blow_log[n0][0], a.blow_log[-1][0]], ["blow_light_t1", "blow_cut"], "the recording, then the blade's grain")
+	var plain: String = a._bus_at(at)
+	assert_eq(a.last_bus, a.ROOM_DULL_BUS if plain == a.ROOM_BUS else "SFX_MID", "the grain through the dull weapon's bus")
+	# The rules' blow is heard by its tier, never the same file twice running.
 	for group: String in ["blow_light_t1", "blow_blunt_t1"]:
 		a.blow_last.erase(group)
 		var n: int = a.blow_log.size()
