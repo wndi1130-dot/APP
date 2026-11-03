@@ -8,7 +8,6 @@ const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const Sled = preload("res://game/sim/sled.gd")
 const W = preload("res://game/sim/weapons.gd")
-const WeaponWords = preload("res://game/sim/weapon_words.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 
@@ -425,22 +424,80 @@ static func _tools(hud, p, at: Dictionary, bag: bool) -> Control:
 	return row
 
 
-## What each weapon named at the bag's top does, one line each under that name
-## (결정 549; the words are weapon_words.gd DESC). With a second weapon named
-## too, each line starts with its own weapon's last word. Bare hands, none.
-static func weapon_lines(p) -> PackedStringArray:
-	var out: PackedStringArray = []
+## Seconds from one attack to the next with this weapon: a melee blow is its
+## swing and the rest after it (weapons.gd swing + melee_gap); a gun or bow
+## waits for its aim to close again (shrink_time), and one that holds a single
+## round for its reload too. 0 for no weapon.
+static func attack_seconds(id: String) -> float:
+	var d: Dictionary = W.get_data(id)
+	if d.is_empty():
+		return 0.0
+	if String(d.get("kind", "")) == "melee":
+		return float(d.get("swing", 0.0)) + W.melee_gap(id)
+	var wait: float = float(d.get("shrink_time", 0.0))
+	if int(d.get("mag", 0)) <= 1:
+		wait = maxf(wait, float(d.get("reload", 0.0)))
+	return wait
+
+
+## A number of seconds as it reads on the screen: one place, or two when that
+## is what it is (0.85, not 0.8).
+static func seconds_word(s: float) -> String:
+	var two: float = snappedf(s, 0.01)
+	return ("%.1f" % two) if is_equal_approx(snappedf(two, 0.1), two) else ("%.2f" % two)
+
+
+## The weapons named at the bag's top (in hand, then the one carried after it),
+## each a press that shows or hides its two numbers (결정 555: the name only,
+## and on a press how fast it attacks and its weight).
+static func _weapons(hud, p) -> Control:
+	var held := _column(2.0)
+	held.name = "Weapons"
+	var row := GlassPane.row()
+	row.add_theme_constant_override("separation", GlassPane.px(2.0))
+	held.add_child(row)
 	var shown: int = mini(p.hands.size(), 2)
+	if shown == 0:
+		row.add_child(_label(hud.short_weapon(p), 12.0, GlassPane.INK))
+		return held
+	var open: int = int(hud.inv_weapon_open)
 	for i: int in shown:
 		var id: String = String((p.hands[i] as Dictionary).get("id", ""))
-		if not WeaponWords.DESC.has(id):
-			continue
-		var line: String = String(WeaponWords.DESC[id])
-		if shown > 1:
-			var parts: PackedStringArray = String(W.get_data(id).get("name", id)).split(" ")
-			line = "%s · %s" % [parts[parts.size() - 1], line]
-		out.append(line)
-	return out
+		if i > 0:
+			row.add_child(_label("·", 12.0, GlassPane.INK3))
+		var word: String = hud.short_weapon(p) if i == 0 else String(W.get_data(id).get("name", id))
+		var key := Button.new()
+		key.name = "WeaponName%d" % i
+		key.text = word
+		key.tooltip_text = word
+		key.focus_mode = Control.FOCUS_NONE
+		key.flat = true
+		key.custom_minimum_size.y = UiFonts.px(TOUCH_MIN)
+		UiFonts.style(key, UiFonts.WORD, 500, 12.0, GlassPane.INK if open == i else GlassPane.INK2, 0.2)
+		key.add_theme_color_override("font_hover_color", GlassPane.INK)
+		key.pressed.connect(hud._inv_weapon.bind(i))
+		row.add_child(key)
+	if open >= 0 and open < shown:
+		held.add_child(_weapon_numbers(hud, String((p.hands[open] as Dictionary).get("id", ""))))
+	return held
+
+
+## A weapon's two numbers: a clock and its seconds an attack, a scale and its weight.
+static func _weapon_numbers(hud, id: String) -> Control:
+	var row := GlassPane.row()
+	row.name = "WeaponStats"
+	row.add_theme_constant_override("separation", GlassPane.px(6.0))
+	for pair: Array in [["clock", seconds_word(attack_seconds(id)) + "초", "WeaponSpeed"], ["scale", "%.1f" % float(W.get_data(id).get("weight", 0.0)), "WeaponWeight"]]:
+		row.add_child(hud._icon_rect(String(pair[0]), UiFonts.size(ITEM_ICON), GlassPane.INK2))
+		var number := UiFonts.label(String(pair[1]), UiFonts.NUMBER, 500, 13.0, GlassPane.INK)
+		number.name = String(pair[2])
+		number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(number)
+		var gap := Control.new()
+		gap.custom_minimum_size.x = UiFonts.px(8.0)
+		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(gap)
+	return row
 
 
 ## Weapons, folded clothing and the bag share one item scroll (the rounds stay
@@ -448,23 +505,7 @@ static func weapon_lines(p) -> PackedStringArray:
 static func _bag_rows(hud, p, at: Dictionary) -> Control:
 	var game = hud.game
 	var col := _column()
-	var weapons: String = hud.short_weapon(p)
-	if p.hands.size() > 1:
-		weapons += " · " + String(W.get_data(p.hands[1]["id"]).get("name", ""))
-	var held := _column(2.0)
-	held.name = "Weapons"
-	held.add_child(_label(weapons, 12.0, GlassPane.INK))
-	var lines: PackedStringArray = weapon_lines(p)
-	for i: int in lines.size():
-		var line: String = lines[i]
-		var said := _label(line, 11.0, GlassPane.INK2)
-		said.name = "WeaponLine%d" % i
-		# A line is a sentence or two: it wraps whole on a narrow pane, never cut.
-		said.clip_text = false
-		said.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		said.text = UiFonts.keep_all(line)
-		held.add_child(said)
-	col.add_child(held)
+	col.add_child(_weapons(hud, p))
 	var worn := _column(0.0)
 	worn.name = "Worn"
 	var ids: Dictionary = Wear.worn_ids(p)

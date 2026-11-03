@@ -434,6 +434,9 @@ var inv_near: Dictionary = {}
 var inv_sort: String = "weight"
 var inv_view: String = "near"
 var inv_worn_open: bool = false
+## Which weapon named at the bag's top shows its numbers (hand index, -1 none);
+## a bag opened afresh shows the names only.
+var inv_weapon_open: int = -1
 ## Optional item art supplied locally; an empty entry falls back to the resource path.
 var item_px_override: Dictionary = {}
 ## The places the bag pane listed when it was laid (InventoryPane.place_keys):
@@ -3253,6 +3256,7 @@ func bag_panel() -> void:
 	if modal == null or not is_instance_valid(box_pane) or modal != box_pane:
 		inv_near = {}
 		inv_view = "bag"
+		inv_weapon_open = -1
 	InventoryPane.open(self, inv_near)
 
 
@@ -3304,6 +3308,12 @@ func _inv_bag() -> void:
 
 func _inv_worn() -> void:
 	inv_worn_open = not inv_worn_open
+	bag_panel()
+
+
+## A weapon's name pressed at the bag's top: its numbers show, or hide again.
+func _inv_weapon(i: int) -> void:
+	inv_weapon_open = -1 if inv_weapon_open == i else i
 	bag_panel()
 
 
