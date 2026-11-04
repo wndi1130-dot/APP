@@ -96,7 +96,10 @@ func test_by_the_train_the_hold_is_chosen_and_what_stays_cannot_go() -> void:
 	assert_eq(String(game.hud.inv_near["kind"]), "train", "the train's hold first by the train")
 	for b in game.hud.modal.find_child("Bag", true, false).find_children("*", "Button", true, false):
 		if String(b.text).begins_with(game.item_name("bandage")):
-			assert_true(b.disabled, "a bandage stays on the body")
+			assert_false(b.disabled, "a bandage stays available to a long press")
+			var before: Dictionary = p.items.duplicate()
+			b.pressed.emit()
+			assert_eq(p.items, before, "a short press moves nothing")
 	game.hud._inv_put("scrap")
 	assert_eq(int(game.unloaded.get("scrap", 0)), 2, "the kind goes aboard")
 	assert_false(p.items.has("scrap"))
@@ -130,7 +133,9 @@ func test_a_box_takes_from_the_bag_only_up_to_its_limit() -> void:
 	game.hud.bag_panel()
 	for b in game.hud.modal.find_child("Bag", true, false).find_children("*", "Button", true, false):
 		if String(b.text).begins_with(game.item_name("scrap")):
-			assert_true(b.disabled, "no room for the second")
+			assert_false(b.disabled, "a full box still allows a long press")
+			b.pressed.emit()
+			assert_eq(int(p.items.get("scrap", 0)), 1)
 	game.hud._inv_put("scrap")
 	assert_eq(int(p.items.get("scrap", 0)), 1, "it stays in the bag")
 	# A handful goes in as far as it fits.

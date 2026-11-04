@@ -194,3 +194,19 @@ func test_body_number_is_on_the_bag_weight_line() -> void:
 		assert_eq(burden.text.replace(UiFonts.WORD_JOINER, ""), "5.6")
 		assert_eq(burden.tooltip_text, "몸 부담")
 		assert_eq(String(burden.get_parent().name), "Ammo", "on the rounds' line")
+
+
+# 결정 560: worn clothes keep bone bars even when their condition is low.
+func test_worn_condition_bars_keep_one_bone_colour() -> void:
+	var game = _field()
+	for slot: String in InventoryPane.Wear.SLOTS:
+		var garment: Dictionary = InventoryPane.Wear.occupant(game.player, slot)
+		if not garment.is_empty():
+			garment["wear"] = 0.9
+	var parts: Array = InventoryPane._worn(game.hud, game.player)
+	add_child_autofree(parts[0])
+	add_child_autofree(parts[1])
+	var bars: Array = parts[0].find_children("*", "ProgressBar", true, false)
+	assert_gt(bars.size(), 0)
+	for bar: ProgressBar in bars:
+		assert_eq((bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color, InventoryPane.BONE)

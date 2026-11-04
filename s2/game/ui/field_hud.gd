@@ -439,8 +439,16 @@ var inv_worn_open: bool = false
 var inv_weapon_open: int = -1
 var inv_weapon_open_id: String = ""
 ## The row held open under itself (결정 558: a long press), {"side": "bag" | "near",
-## "id"}; a pane opened afresh opens none (InventoryPane.open).
+## "id", "i", "at"}; a pane opened afresh opens none (InventoryPane.open).
 var inv_expand: Dictionary = {}
+var inv_fold_until_ms: int = 0
+var inv_fold_open: bool = false
+var inv_laid_place: String = ""
+var inv_bag_scroll: int = 0
+## The scrolls waiting to be put back the frame after a laying: a second laying in
+## the same frame (a thing out of a box lays the pane twice) keeps these, not the
+## new pane's tops.
+var inv_scroll_pending: Dictionary = {}
 ## The bag pane's scrolls, kept where they were when it is laid again.
 const BAG_SCROLLS: Array[String] = ["BagScroll", "NearScroll", "PlaceScroll"]
 ## Optional item art supplied locally; an empty entry falls back to the resource path.
@@ -3132,6 +3140,7 @@ func _loot_stop(id: String) -> void:
 	if p.action == "take":
 		p.cancel_action()
 	taking_box = ""
+	inv_fold_until_ms = 0
 	InventoryPane.open(self, inv_near if not inv_near.is_empty() else {"kind": "box", "id": id})
 
 
@@ -3176,24 +3185,25 @@ func _bag_places_moved() -> void:
 ## this pane (coordinator 10-30). The places keep their order and the lists their
 ## scroll; the field goes on without a frame's stop.
 func _lay_bag_again() -> void:
-	var kept: Dictionary = _bag_scrolls()
 	var near: Array = InventoryPane.place_keys(InventoryPane.places(game, game.player))
 	if not near.has(InventoryPane.place_key(inv_near)):
 		inv_near = {"kind": "ground", "id": ""}
 	InventoryPane.open(self, inv_near)
-	_bag_scrolls_back(kept)
 	_bag_pause()
 
 
 ## The bag pane's three scrolls as they stand (the bag's rows, the place's rows,
 ## the places rail), with the place they show.
 func _bag_scrolls() -> Dictionary:
-	var kept := {"at": InventoryPane.place_key(inv_near)}
+	if not inv_scroll_pending.is_empty():
+		return inv_scroll_pending.duplicate()
+	var kept := {"at": inv_laid_place, "BagScroll": inv_bag_scroll}
 	if _bag_up():
 		for scroll_name: String in BAG_SCROLLS:
 			var list := box_pane.find_child(scroll_name, true, false) as ScrollContainer
 			if list != null:
 				kept[scroll_name] = list.scroll_vertical
+	inv_bag_scroll = int(kept["BagScroll"])
 	return kept
 
 
@@ -3201,15 +3211,31 @@ func _bag_scrolls() -> Dictionary:
 ## rows are sized falls to the top): the bag's rows and the places rail always,
 ## the place's rows while they are the same place's.
 func _bag_scrolls_back(kept: Dictionary) -> void:
-	var pane: Control = box_pane
+	var pane_ref: WeakRef = weakref(box_pane)
+	var hud_ref: WeakRef = weakref(self)
 	var same: bool = kept["at"] == InventoryPane.place_key(inv_near)
+	inv_scroll_pending = kept.duplicate()
+	# Rows sized a frame late clamp a scroll set too soon: try again, three frames
+	# at most, until each list holds its old place.
+	var tries: Array = [0]
+	var holder: Array = []
 	var back := func() -> void:
-		if not is_instance_valid(pane) or modal != pane:
+		var pane := pane_ref.get_ref() as Control
+		var hud_now: Object = hud_ref.get_ref()
+		if pane == null or hud_now == null or hud_now.get("modal") != pane:
 			return
+		var short: bool = false
 		for scroll_name: String in BAG_SCROLLS:
 			var list := pane.find_child(scroll_name, true, false) as ScrollContainer
 			if list != null and kept.has(scroll_name) and (same or scroll_name != "NearScroll"):
 				list.scroll_vertical = int(kept[scroll_name])
+				short = short or list.scroll_vertical < int(kept[scroll_name])
+		tries[0] = int(tries[0]) + 1
+		if short and int(tries[0]) < 3:
+			(hud_now as Node).get_tree().process_frame.connect(holder[0], CONNECT_ONE_SHOT)
+			return
+		hud_now.set("inv_scroll_pending", {})
+	holder.append(back)
 	get_tree().process_frame.connect(back, CONNECT_ONE_SHOT)
 
 
@@ -3251,6 +3277,10 @@ func _tick_take() -> void:
 		return
 	if take_bar != null and is_instance_valid(take_bar):
 		take_bar.value = 1.0 - p.action_t / maxf(p.action_total, 0.001)
+	if is_instance_valid(box_pane):
+		var left := box_pane.find_child("TakeLeft", true, false) as Label
+		if left != null:
+			left.text = "%.1f초" % InventoryPane.take_left(game, p)
 
 
 ## Open the bag pane afresh (beside the first place near), or lay it again with
@@ -3302,6 +3332,11 @@ func _inv_place(place: Dictionary) -> void:
 	bag_panel()
 
 
+func _inv_unfold() -> void:
+	inv_fold_open = true
+	_lay_bag_again()
+
+
 func _inv_worn() -> void:
 	inv_worn_open = not inv_worn_open
 	bag_panel()
@@ -3321,11 +3356,11 @@ func _inv_weapon(i: int) -> void:
 
 ## A row held (결정 558): it opens under itself with what it can do, or closes
 ## again; one at a time. The pane is laid again where it is, its lists unmoved.
-func _inv_expand(side: String, id: String) -> void:
-	if String(inv_expand.get("side", "")) == side and String(inv_expand.get("id", "")) == id:
+func _inv_expand(side: String, id: String, i: int = -1) -> void:
+	if InventoryPane._expanded(self, side, id, i):
 		inv_expand = {}
 	else:
-		inv_expand = {"side": side, "id": id}
+		inv_expand = {"side": side, "id": id, "i": i, "at": InventoryPane.place_key(inv_near)}
 	_lay_bag_again()
 
 
@@ -4190,7 +4225,7 @@ func _modal_input(event: InputEvent) -> bool:
 			var under: Dictionary = _pane_under(modal, pos)
 			var list: ScrollContainer = under["scroll"]
 			var key: Button = under["button"]
-			fingers[index] = {"kind": "button", "button": key, "start": pos, "off": key != null and key.disabled, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false}
+			fingers[index] = {"kind": "button", "button": key, "start": pos, "off": key != null and key.disabled, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false, "hold": key != null and key.has_node("Hold")}
 			# The key feels this finger come down as the first finger's press: a
 			# held row opens under itself, a hold to confirm fills (결정 558·559).
 			if key != null and not key.disabled:
@@ -4254,15 +4289,26 @@ func finger_move(index: int, pos: Vector2) -> bool:
 			_hand_move(pos)
 		"button":
 			# A finger on the bag pane drags its list once it goes past a tap.
+			var held_key: Variant = f.get("button")
+			var key: Button = held_key if is_instance_valid(held_key) else null
+			var start: Vector2 = f.get("start", pos)
+			if bool(f.get("hold", false)):
+				if is_instance_valid(key):
+					var local: Vector2 = key.get_global_transform_with_canvas().affine_inverse() * pos
+					if not InventoryPane.HoldConfirm.holds(local, key.size, UiFonts.px(InventoryPane.HoldConfirm.SLIP_DP * InventoryPane.HoldConfirm.CSS_PER_DP)):
+						f["off"] = true
+						_finger_key_up(f)
+				return true # A finger born on a hold key never scrolls a list.
+			if is_instance_valid(key) and key.has_meta("press_n") and pos.distance_to(start) > UiFonts.px(InventoryPane.DRAG_CSS):
+				key.set_meta("dragged", true)
 			var list: Variant = f.get("scroll")
-			var moved: bool = f["dragged"] or pos.distance_to(f["start"]) >= DRAG_PX
+			var moved: bool = bool(f.get("dragged", false)) or pos.distance_to(start) >= DRAG_PX
 			if moved:
-				# Moved past a tap the key lets go: no row opens, a hold winds back.
 				_finger_key_up(f)
 			if is_instance_valid(list) and moved:
 				f["dragged"] = true
 				var scroll: ScrollContainer = list
-				scroll.scroll_vertical = int(f["from"]) - int(pos.y - f["start"].y)
+				scroll.scroll_vertical = int(f.get("from", 0)) - int(pos.y - start.y)
 	return true
 
 
@@ -4302,7 +4348,7 @@ func finger_up(index: int, pos: Vector2) -> bool:
 			# since, or have dragged its list, or have come down on a key still off
 			# (it may wake before the lift): then the lift presses nothing. The key
 			# is let go after its press, as a mouse's lift does.
-			var held: Variant = f["button"]
+			var held: Variant = f.get("button")
 			if not is_instance_valid(held) or f.get("dragged", false) or f.get("off", false):
 				_finger_key_up(f)
 				return true
@@ -4844,6 +4890,8 @@ func drop_touch() -> void:
 	for held_index: int in modal_fingers:
 		modal_fingers[held_index] = {"owner": null}
 	for index: int in fingers:
+		if String(fingers[index].get("kind", "")) == "button":
+			_finger_key_up(fingers[index])
 		modal_fingers[index] = {"owner": null}
 	if fingers.has(0):
 		modal_fingers[-1] = {"owner": null}

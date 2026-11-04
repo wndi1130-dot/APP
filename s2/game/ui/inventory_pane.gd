@@ -23,6 +23,9 @@ const COL_W: float = 200.0
 const COL_GAP: float = 8.0
 const RAIL_GAP: float = 10.0
 const EDGE_L: float = 16.0
+const FOLD_EDGE_L: float = 12.0
+const FOLD_W: float = 52.0
+const FOLD_LINGER_S: float = 1.0
 const EDGE_R: float = 2.0
 const EDGE_T: float = 4.0
 const EDGE_B: float = 6.0
@@ -153,6 +156,18 @@ static func open(hud, want: Dictionary) -> void:
 		hud.inv_weapon_open = -1
 		hud.inv_weapon_open_id = ""
 		hud.inv_expand = {}
+		hud.inv_fold_until_ms = 0
+		hud.inv_fold_open = false
+		hud.inv_bag_scroll = 0
+		hud.inv_scroll_pending = {}
+	var taking: bool = taking_id(game, p) != ""
+	var now_ms: int = Time.get_ticks_msec()
+	if taking:
+		hud.inv_fold_until_ms = now_ms + int(FOLD_LINGER_S * 1000.0)
+	elif now_ms >= hud.inv_fold_until_ms:
+		hud.inv_fold_open = false
+	var folded: bool = not hud.inv_fold_open and (taking or now_ms < hud.inv_fold_until_ms)
+	var kept: Dictionary = hud._bag_scrolls() if again else {}
 	var all: Array = places(game, p)
 	# Laid again over itself (a row taken): the places keep their order.
 	if again:
@@ -161,15 +176,17 @@ static func open(hud, want: Dictionary) -> void:
 	hud.inv_near = at
 	hud.bag_places = place_keys(all)
 	hud.take_bar = null
-	var pane: GlassPane = hud._open_pane(_place_name(game, at), "", _place_icon(at), pane_px() / UiFonts.px(1.0), true, true)
-	_bare(pane)
+	var pane: GlassPane = hud._open_pane(_place_name(game, at), "", _place_icon(at), pane_px(folded) / UiFonts.px(1.0), true, true)
+	_bare(pane, folded)
 	var layout := GlassPane.row()
 	layout.name = "Layout"
 	layout.add_theme_constant_override("separation", 0)
 	pane.body.add_child(layout)
-	var bag_side: VBoxContainer = _bag_side(hud, p, at)
-	layout.add_child(bag_side)
-	layout.add_child(_gap(COL_GAP))
+	if folded:
+		layout.add_child(_bag_strip(hud, p))
+	else:
+		layout.add_child(_bag_side(hud, p, at))
+		layout.add_child(_gap(COL_GAP))
 	var place_side: VBoxContainer = _place_side(hud, p, at)
 	layout.add_child(place_side)
 	layout.add_child(_gap(RAIL_GAP))
@@ -195,7 +212,13 @@ static func open(hud, want: Dictionary) -> void:
 				(entry as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				(entry as Label).text = UiFonts.keep_all((entry as Label).text)
 		journal.minimum_size_changed.connect(fit, CONNECT_DEFERRED)
-		pane.body.add_child(journal)
+		journal.custom_minimum_size.x = 0.0
+		journal.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var journal_scroll := ScrollContainer.new()
+		journal_scroll.name = "JournalScroll"
+		journal_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		journal_scroll.add_child(journal)
+		pane.body.add_child(journal_scroll)
 	for list_name: String in ["Bag", "Near", "Places"]:
 		var list: Control = layout.find_child(list_name, true, false) as Control
 		if list != null:
@@ -210,15 +233,28 @@ static func open(hud, want: Dictionary) -> void:
 	fit.call_deferred()
 	hud.run_while_taking()
 	hud.box_pane = hud.modal
+	hud.inv_laid_place = place_key(at)
+	if again:
+		hud._bag_scrolls_back(kept)
+	if not taking and now_ms < hud.inv_fold_until_ms:
+		# The lingering pane owns one timer, with no strong Node captures.
+		var hud_ref: WeakRef = weakref(hud)
+		pane.get_tree().create_timer(float(hud.inv_fold_until_ms - now_ms) / 1000.0).timeout.connect(func() -> void:
+			var hud_now: Object = hud_ref.get_ref()
+			var shown: GlassPane = pane_ref.get_ref() as GlassPane
+			if hud_now != null and shown != null and hud_now.get("modal_pane") == shown and hud_now.get("modal") == hud_now.get("box_pane"):
+				var game_now: Variant = hud_now.get("game")
+				if taking_id(game_now, game_now.player) == "":
+					hud_now.call("_lay_bag_again"))
 	hud.box_shown_now(String(at.get("id", "")) if String(at.get("kind", "")) == "box" else "")
 	hud.dim_under_bag()
 
 
 ## The glass without its common head (each column has its own, the fold stands
 ## at the rail's top), its rows edged as the mockup.
-static func _bare(pane: GlassPane) -> void:
+static func _bare(pane: GlassPane, folded: bool = false) -> void:
 	var margin: MarginContainer = pane.get_node("Rows")
-	margin.add_theme_constant_override("margin_left", GlassPane.px(EDGE_L))
+	margin.add_theme_constant_override("margin_left", GlassPane.px(FOLD_EDGE_L if folded else EDGE_L))
 	margin.add_theme_constant_override("margin_right", GlassPane.px(EDGE_R))
 	margin.add_theme_constant_override("margin_top", GlassPane.px(EDGE_T))
 	margin.add_theme_constant_override("margin_bottom", GlassPane.px(EDGE_B))
@@ -238,7 +274,9 @@ static func whole(css: float) -> float:
 
 ## The pane's width: the edges, the two columns, their gaps and the rail (PANE_W
 ## css, give or take a pixel a part).
-static func pane_px() -> float:
+static func pane_px(folded: bool = false) -> float:
+	if folded:
+		return float(GlassPane.px(FOLD_EDGE_L) + GlassPane.px(EDGE_R)) + whole(FOLD_W) + whole(COL_W) + whole(RAIL_GAP) + whole(KEY)
 	return float(GlassPane.px(EDGE_L) + GlassPane.px(EDGE_R)) + whole(COL_W) * 2.0 + whole(COL_GAP) + whole(RAIL_GAP) + whole(KEY)
 
 
@@ -262,6 +300,9 @@ static func _fit_screen(pane: GlassPane, layout: Control) -> void:
 	if not is_instance_valid(pane) or not pane.is_inside_tree() or pane.is_moving():
 		return
 	var room: float = pane.get_viewport_rect().size.y - pane.position.y - UiFonts.px(FOOT_GAP)
+	var journal_scroll := pane.body.get_node_or_null("JournalScroll") as ScrollContainer
+	if journal_scroll != null:
+		journal_scroll.custom_minimum_size.y = (journal_scroll.get_child(0) as Control).get_combined_minimum_size().y
 	var fits: float = room - (pane.get_combined_minimum_size().y - layout.get_combined_minimum_size().y)
 	for side: String in ["BagSide", "PlaceSide"]:
 		var col: Control = layout.get_node_or_null(side) as Control
@@ -282,6 +323,11 @@ static func _fit_screen(pane: GlassPane, layout: Control) -> void:
 		rail.custom_minimum_size.y = 0.0
 		var fixed_rail: float = rail_col.get_combined_minimum_size().y
 		rail.custom_minimum_size.y = maxf(UiFonts.px(PLACE_H), minf(minf(keys.get_combined_minimum_size().y, UiFonts.px(RAIL_MAX)), fits - fixed_rail))
+	# The journal gives up height only after each list reaches its minimum.
+	if journal_scroll != null:
+		var journal_h: float = journal_scroll.custom_minimum_size.y
+		var overflow: float = pane.get_combined_minimum_size().y - room
+		journal_scroll.custom_minimum_size.y = maxf(0.0, journal_h - maxf(0.0, overflow))
 	pane._fit()
 
 
@@ -598,7 +644,7 @@ static func _worn(hud, p) -> Array:
 		var icon: String = String(game.item_icon(id))
 		cell.add_child(GlassPane.mark(icon if HudIcons.PATHS.has(icon) else "wear", 20.0, GlassPane.INK2))
 		var cond: float = 1.0 - float(Wear.occupant(p, slot).get("wear", 0.0))
-		var bar := _thin_bar(hud, GlassPane.RED_L if cond < 0.7 else Color(BONE, 0.62), cond)
+		var bar := _thin_bar(hud, BONE, cond)
 		bar.custom_minimum_size = Vector2(UiFonts.px(18.0), UiFonts.px(2.5))
 		bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		cell.add_child(bar)
@@ -623,6 +669,43 @@ static func _ammo(game, p) -> Control:
 	burden.tooltip_text = "몸 부담"
 	row.add_child(burden)
 	return row
+
+
+## The bag folded while things come out of a box (결정 558: the field runs then,
+## so the pane covers no more than the old one): a strip key, 52 css, with the
+## bag's mark, its weight and a standing bar on the carry scale. Pressed, the bag
+## opens again while the taking goes on (결정 488: the bag stays at hand).
+static func _bag_strip(hud, p) -> Button:
+	var strip := _key("가방 펴기", hud._inv_unfold, false, FOLD_W, KEY)
+	strip.name = "BagStrip"
+	strip.tooltip_text = strip.text
+	_hide_text(strip)
+	strip.custom_minimum_size.x = whole(FOLD_W)
+	strip.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var row := GlassPane.row()
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = UiFonts.px(8.0)
+	row.offset_right = -UiFonts.px(8.0)
+	row.offset_top = UiFonts.px(8.0)
+	row.offset_bottom = -UiFonts.px(8.0)
+	row.add_theme_constant_override("separation", GlassPane.px(4.0))
+	var words := _column()
+	words.alignment = BoxContainer.ALIGNMENT_CENTER
+	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	words.add_child(GlassPane.mark("pack", 20.0, GlassPane.INK2))
+	var weight := _number("%.1f" % p.weight(), 13.0, carry_ink(p.carry_state()))
+	weight.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	words.add_child(weight)
+	row.add_child(words)
+	var bar := _thin_bar(hud, carry_bar(p.carry_state()), p.weight() / maxf(p.carry_limit(), 0.001))
+	bar.fill_mode = ProgressBar.FILL_BOTTOM_TO_TOP
+	bar.custom_minimum_size = Vector2(UiFonts.px(2.0), 0.0)
+	bar.size_flags_horizontal = Control.SIZE_FILL
+	bar.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	row.add_child(bar)
+	strip.add_child(row)
+	GlassPane.sinks(strip, row)
+	return strip
 
 
 ## The bag's column: its head with the weight on the carry scale, the weapons'
@@ -652,6 +735,7 @@ static func _bag_side(hud, p, at: Dictionary) -> VBoxContainer:
 	for id: String in bag_order(game, p, hud.inv_sort):
 		var can_move: bool = loadable.has(id) if at["kind"] in ["train", "sled"] else (box.is_empty() or Carry.box_room(box, id) > 0)
 		var n: int = int(p.items[id])
+		# 결정 559: moving one kind is one press, including beside the train.
 		list.add_child(_row(hud, id, game.item_name(id), n, Carry.item_weight(id) * n, hud._inv_put.bind(id), not can_move, "bag"))
 		if _expanded(hud, "bag", id):
 			list.add_child(_bag_more(hud, p, id, at, can_move))
@@ -668,9 +752,9 @@ static func _bag_side(hud, p, at: Dictionary) -> VBoxContainer:
 	return col
 
 
-static func _expanded(hud, side: String, id: String) -> bool:
+static func _expanded(hud, side: String, id: String, i: int = -1) -> bool:
 	var e: Dictionary = hud.inv_expand
-	return String(e.get("side", "")) == side and String(e.get("id", "")) == id
+	return String(e.get("side", "")) == side and String(e.get("id", "")) == id and e.get("i") == i and e.get("at") == place_key(hud.inv_near)
 
 
 ## A bag row held open: its weight and count, and what it can do — eat it, throw
@@ -704,6 +788,7 @@ static func _bag_more(hud, p, id: String, at: Dictionary, can_move: bool) -> Con
 		HoldConfirm.attach(throw, hud._throw.bind(id))
 		keys.add_child(throw)
 	else:
+		# 결정 559: only loading everything is held; this move stays one press.
 		var move := _key("옮기기", hud._inv_put.bind(id), true)
 		move.name = "Move"
 		move.disabled = not can_move
@@ -747,7 +832,7 @@ static func _more(id: String, weight: float, n: int) -> Control:
 
 
 ## The selected place's column: its head (the box's load against its limit, a
-## sled's on the carry scale, the floor's or the hold's weight), then its rows.
+## sled's against its limit, the floor's or the hold's weight), then its rows.
 static func _place_side(hud, p, at: Dictionary) -> VBoxContainer:
 	var game = hud.game
 	var col := _column()
@@ -766,8 +851,6 @@ static func _place_side(hud, p, at: Dictionary) -> VBoxContainer:
 			var sled: Dictionary = Sled.find(game, int(at["id"]))
 			side = "%.1f / %.0f" % [Sled.weight(sled), Sled.LIMIT]
 			frac = Sled.weight(sled) / maxf(Sled.LIMIT, 0.001)
-			ink = carry_ink(Sled.state(sled))
-			bar_ink = carry_bar(Sled.state(sled))
 		"ground":
 			var held: float = 0.0
 			for i: int in game.actions.near_ground(p):
@@ -818,12 +901,12 @@ static func _near_rows(hud, p, at: Dictionary) -> Control:
 			for i: int in indices:
 				var id: String = String(items[i])
 				var cb: Callable = hud._loot_take.bind(String(at["id"]), i)
-				var row := _row(hud, id, game.item_name(id), 1, Carry.item_weight(id), cb, now != "", "near")
+				var row := _row(hud, id, game.item_name(id), 1, Carry.item_weight(id), cb, now != "", "near", i)
 				if id == now and not barred:
 					barred = true
 					row.add_child(_take_bar(hud, p))
 				list.add_child(row)
-				if now == "" and not opened and _expanded(hud, "near", id):
+				if now == "" and not opened and _expanded(hud, "near", id, i):
 					opened = true
 					list.add_child(_near_more(hud, id, Carry.item_weight(id), 1, cb))
 			empty = "빈 곳"
@@ -839,8 +922,8 @@ static func _near_rows(hud, p, at: Dictionary) -> Control:
 				var id: String = String(g["id"])
 				var word: String = game.item_name(id) + (" · 입기" if g.has("garment") else "")
 				var cb_g: Callable = hud._inv_pick.bind(i)
-				list.add_child(_row(hud, id, word, int(g["n"]), Carry.item_weight(id) * int(g["n"]), cb_g, false, "near"))
-				if not opened_g and _expanded(hud, "near", id):
+				list.add_child(_row(hud, id, word, int(g["n"]), Carry.item_weight(id) * int(g["n"]), cb_g, false, "near", i))
+				if not opened_g and _expanded(hud, "near", id, i):
 					opened_g = true
 					list.add_child(_near_more(hud, id, Carry.item_weight(id) * int(g["n"]), int(g["n"]), cb_g))
 			empty = "발밑에 아무것도 없다"
@@ -889,7 +972,7 @@ static func _steady(x: Variant, y: Variant, a: int, b: int) -> bool:
 ## One row, COL_W × ROW_H: the thing's picture, its name on one line (cut with …
 ## when long), its count and its weight. A press moves it (`cb`); held LONG_S
 ## without moving, it opens under itself instead (`side` is the column).
-static func _row(hud, id: String, word: String, n: int, weight: float, cb: Callable, dim: bool, side: String) -> Button:
+static func _row(hud, id: String, word: String, n: int, weight: float, cb: Callable, dim: bool, side: String, i: int = -1) -> Button:
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_NONE
 	b.custom_minimum_size = Vector2(UiFonts.px(COL_W), UiFonts.px(ROW_H))
@@ -897,17 +980,20 @@ static func _row(hud, id: String, word: String, n: int, weight: float, cb: Calla
 	b.text = word if n <= 1 else "%s ×%d" % [word, n]
 	b.clip_text = true
 	b.tooltip_text = b.text
-	b.disabled = dim
+	b.disabled = dim and side != "bag"
 	b.set_meta("item_id", id)
 	UiFonts.style(b, UiFonts.WORD, 500, 12.0, GlassPane.INK, 0.2)
 	_hide_text(b)
-	var open: bool = _expanded(hud, side, id)
+	var open: bool = _expanded(hud, side, id, i)
 	var edge: Color = BONE if open else GlassPane.HAIR
 	for state: String in ["normal", "hover", "focus"]:
 		b.add_theme_stylebox_override(state, _skin(Color(BONE, 0.08) if open else GlassPane.CELL, edge, 0.0))
 	for state: String in ["pressed", "hover_pressed"]:
 		b.add_theme_stylebox_override(state, _skin(Color(BONE, 0.07), BONE, UiFonts.px(1.0)))
 	b.add_theme_stylebox_override("disabled", _skin(Color(0, 0, 0, 0.12), Color(GlassPane.HAIR, 0.5), 0.0))
+	if dim and side == "bag":
+		for state: String in ["normal", "hover", "focus", "pressed", "hover_pressed"]:
+			b.add_theme_stylebox_override(state, b.get_theme_stylebox("disabled"))
 	var row := GlassPane.row()
 	row.name = "Line"
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -932,13 +1018,13 @@ static func _row(hud, id: String, word: String, n: int, weight: float, cb: Calla
 		row.modulate = Color(1, 1, 1, 0.5)
 	b.add_child(row)
 	GlassPane.sinks(b, row)
-	if cb.is_valid():
+	if cb.is_valid() and not dim:
 		b.pressed.connect(func() -> void:
-			if bool(b.get_meta("held_long", false)):
+			if bool(b.get_meta("held_long", false)) or bool(b.get_meta("dragged", false)):
 				b.set_meta("held_long", false)
 				return
 			cb.call())
-	_long_press(hud, b, side, id)
+	_long_press(hud, b, side, id, i)
 	return b
 
 
@@ -948,7 +1034,7 @@ static func _row(hud, id: String, word: String, n: int, weight: float, cb: Calla
 ## (field_hud.gd), the button's own pressed state never set. The timer holds
 ## the row and the HUD weakly: a tap that moves the row lays the pane again and
 ## frees the row before the timer ends (a lambda calling a freed capture errors).
-static func _long_press(hud, b: Button, side: String, id: String) -> void:
+static func _long_press(hud, b: Button, side: String, id: String, i: int) -> void:
 	b.set_meta("press_n", 0)
 	var row_ref: WeakRef = weakref(b)
 	var hud_ref: WeakRef = weakref(hud)
@@ -963,7 +1049,7 @@ static func _long_press(hud, b: Button, side: String, id: String) -> void:
 			if row == null or hud_now == null or int(row.get_meta("press_n")) != n or bool(row.get_meta("dragged")):
 				return
 			row.set_meta("held_long", true)
-			hud_now.call("_inv_expand", side, id)))
+			hud_now.call("_inv_expand", side, id, i)))
 	b.button_up.connect(func() -> void: b.set_meta("press_n", int(b.get_meta("press_n")) + 1))
 	b.gui_input.connect(func(event: InputEvent) -> void:
 		if (event is InputEventMouseMotion or event is InputEventScreenDrag) and b.is_pressed() and b.has_meta("press_at"):
@@ -979,11 +1065,19 @@ static func _item_icon(hud, id: String) -> Control:
 	if texture == null and ResourceLoader.exists(path):
 		texture = load(path) as Texture2D
 	if texture == null:
-		var line: TextureRect = hud._icon_rect(hud.game.item_icon(id), UiFonts.size(ITEM_ICON), GlassPane.INK2)
+		var line := TextureRect.new()
 		line.name = "ItemIcon"
-		line.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
-		line.custom_minimum_size = Vector2.ONE * UiFonts.px(ART)
-		return line
+		line.texture = HudIcons.texture(hud.game.item_icon(id), UiFonts.size(ITEM_ICON), GlassPane.INK2, 1.0 / HudIcons.LINE)
+		line.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		line.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		line.custom_minimum_size = Vector2.ONE * UiFonts.px(ITEM_ICON)
+		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var line_slot := CenterContainer.new()
+		line_slot.name = "ItemSlot"
+		line_slot.custom_minimum_size = Vector2.ONE * UiFonts.px(ART)
+		line_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line_slot.add_child(line)
+		return line_slot
 	var art := TextureRect.new()
 	art.name = "ItemIcon"
 	art.texture = texture
