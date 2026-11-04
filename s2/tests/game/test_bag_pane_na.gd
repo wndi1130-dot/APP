@@ -456,7 +456,7 @@ func test_the_bag_foot_says_where_with_the_right_particle() -> void:
 	var foot := game.hud.modal.find_child("MoveHint", true, false) as Label
 	assert_not_null(foot)
 	if foot != null:
-		assert_true(foot.text.begins_with("누르면 냉장고로 · 가방"), foot.text)
+		assert_true(foot.text.replace(UiFonts.WORD_JOINER, "").begins_with("누르면 냉장고로 · 가방"), foot.text)
 	game.hud._close_modal()
 
 

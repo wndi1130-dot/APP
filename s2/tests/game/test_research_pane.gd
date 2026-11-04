@@ -11,6 +11,8 @@ const Research = preload("res://game/train/train_research.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
 const TrainDom = preload("res://game/train/train_dom.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const HudIcons = preload("res://game/ui/hud_icons.gd")
+const GlassParts = preload("res://game/ui/glass_parts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const PaneMotion = preload("res://game/ui/pane_motion.gd")
@@ -279,8 +281,9 @@ func test_the_slice_opens_the_research_room() -> void:
 	assert_eq(f.sel, was, "folding brings back the car picked before the rooms")
 
 
-## A running technology shows what it takes a stretch where its key would be;
-## when the stores could not pay it, the amount turns red and it runs at ½.
+## A running technology shows what it takes a stretch where its key would be,
+## in S1 upkeepText's words (「유지 ⚙ 0.25/구간」); when the stores could not
+## pay it, the line turns red and it runs at ½.
 func test_a_running_technology_shows_its_upkeep_and_when_it_starves() -> void:
 	var g := _game()
 	g["dom"]["techs"]["e2"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
@@ -290,13 +293,60 @@ func test_a_running_technology_shows_its_upkeep_and_when_it_starves() -> void:
 	var p := _pane(g, ["e2"])
 	var n := _live(p, "Upkeep_e2_parts") as Label
 	assert_eq(n.text, "0.25")
+	var word := _live(p, "UpkeepWord_e2") as Label
+	var per := _live(p, "UpkeepPer_e2") as Label
+	assert_eq(word.text, "유지")
+	assert_eq(per.text, "/구간")
+	var mark := _live(p, "UpkeepMark_e2_parts") as Control
+	assert_lte(word.position.x + GlassParts.text_w(word), mark.position.x, "유지 ends before the mark")
+	assert_lte(mark.position.x + mark.size.x, n.position.x, "the mark ends before the amount")
+	assert_lte(n.position.x + GlassParts.text_w(n), per.position.x, "the amount ends before /구간")
+	assert_almost_eq(per.position.x + GlassParts.text_w(per), 316.0 * UiFonts.K, 1.0, "the line ends where the key would")
+	var tag := _live(p, "Law_e2") as Label
+	assert_not_null(tag, "e2 carries a law tag")
+	var tag_box := _ink_box(tag)
+	assert_gt(tag_box.size.y, 0.0, "the tag has a height to compare")
+	for part: Control in [word, mark, n, per]:
+		assert_false(tag_box.intersects(_ink_box(part)), "the law tag keeps clear of " + String(part.name))
 	assert_false((_live(p, "Effect_e2") as Label).text.begins_with("½"))
 	g["dom"]["techs"]["e2"]["starved"] = true
 	var p2 := _pane(g, ["e2"])
 	assert_true((_live(p2, "Effect_e2") as Label).text.begins_with("½ "), "it runs at half")
 	assert_eq((_live(p2, "Upkeep_e2_parts") as Label).get_theme_color("font_color"), ResearchPane.RED)
+	assert_eq((_live(p2, "UpkeepWord_e2") as Label).get_theme_color("font_color"), ResearchPane.RED)
+	assert_eq((_live(p2, "UpkeepPer_e2") as Label).get_theme_color("font_color"), ResearchPane.RED)
 	g["dom"]["techs"]["e5"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
-	assert_null(_pane(g, ["e5"]).find_child("Upkeep_e5_parts", true, false), "no upkeep, nothing drawn")
+	var p3 := _pane(g, ["e5"])
+	assert_null(p3.find_child("Upkeep_e5_parts", true, false), "no upkeep, nothing drawn")
+	assert_null(p3.find_child("UpkeepWord_e5", true, false), "no upkeep, no words either")
+	assert_null(p3.find_child("UpkeepPer_e5", true, false))
+
+
+## The upkeep line is redrawn in place: red while starved and back again, the
+## mark with it, gone while the technology is stood down and back when it runs.
+func test_the_upkeep_line_follows_its_row_when_redrawn() -> void:
+	var g := _game()
+	g["dom"]["techs"]["e2"] = {"stage": "done", "defect": false, "progress": 2, "need": 2}
+	var p := _pane(g, ["e2"])
+	var px: int = int(round(15.0 * UiFonts.K))
+	var look := func(color: Color) -> void:
+		for key: String in ["UpkeepWord_e2", "Upkeep_e2_parts", "UpkeepPer_e2"]:
+			assert_eq((_live(p, key) as Label).get_theme_color("font_color"), color, key)
+		assert_eq((_live(p, "UpkeepMark_e2_parts") as TextureRect).texture, HudIcons.texture("gear", px, color, 2.0, ResearchPane.SOOT_CUT), "the mark's colour")
+	look.call(ResearchPane.INK2)
+	g["dom"]["techs"]["e2"]["starved"] = true
+	p.show_state(g)
+	look.call(ResearchPane.RED)
+	g["dom"]["techs"]["e2"]["starved"] = false
+	p.show_state(g)
+	look.call(ResearchPane.INK2)
+	g["dom"]["techs"]["e2"]["off"] = true
+	p.show_state(g)
+	for key: String in ["UpkeepWord_e2", "Upkeep_e2_parts", "UpkeepPer_e2", "UpkeepMark_e2_parts"]:
+		assert_null(_live(p, key), key + " hides while it is stood down")
+	g["dom"]["techs"]["e2"].erase("off")
+	p.show_state(g)
+	look.call(ResearchPane.INK2)
 
 
 ## A technology stood down (the 「부품이 모자란다」 paper's 「하나를 세운다」,
@@ -314,6 +364,8 @@ func test_a_stood_down_technology_runs_again_from_its_row() -> void:
 	await wait_process_frames(1)
 	assert_true((_live(p, "Effect_e2") as Label).text.begins_with("멈춤 "))
 	assert_null(_live(p, "Upkeep_e2_parts"), "a stood-down technology pays no upkeep")
+	assert_null(_live(p, "UpkeepWord_e2"))
+	assert_null(_live(p, "UpkeepPer_e2"))
 	var key: Button = _key(p, "Key_e2")
 	assert_eq(_word(key), "다시 돌리기")
 	assert_eq(key.tooltip_text, "세울 때 돌려받은 부품 1이 든다")
@@ -396,3 +448,12 @@ func test_show_state_keeps_scroll_row_way_selection_and_pressed_key() -> void:
 	assert_eq(_word(key), "뒤로")
 	assert_true(way.visible)
 	assert_true(key.button_pressed)
+
+## Where a part's ink sits in its row: a label by its text width and line
+## height (its box may be wider, or not sized yet), a mark by its square.
+func _ink_box(c: Control) -> Rect2:
+	if c is Label:
+		var l := c as Label
+		var h: float = l.get_theme_font("font").get_height(l.get_theme_font_size("font_size"))
+		return Rect2(l.position, Vector2(GlassParts.text_w(l), h))
+	return Rect2(c.position, c.size)

@@ -53,6 +53,13 @@ const DATA: Dictionary = {
 	},
 }
 
+const WHIFF_RECOVER: float = 0.2
+
+
+## The windup is already included in the rule's swing duration.
+static func melee_recover(swing_seconds: float, windup: float, gap: float = 0.0) -> float:
+	return maxf(swing_seconds - windup, WHIFF_RECOVER) + gap
+
 # Crafted-gun quality. Factory guns always use "factory".
 const QUALITY: Dictionary = {
 	"crude": {"name": "조잡", "min_mult": 1.8, "wear_mult": 2.0, "burst": 0.03},

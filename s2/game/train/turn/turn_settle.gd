@@ -4,6 +4,7 @@ const C = preload("res://game/train/turn/turn_common.gd")
 const St = preload("res://game/train/train_state.gd")
 const Turn = preload("res://game/train/train_turn.gd")
 const Care = preload("res://game/train/turn/turn_settle_care.gd")
+const Supplies = preload("res://game/train/train_supplies.gd")
 const TrainHands = preload("res://game/train/train_hands.gd")
 const W = preload("res://game/train/turn/turn_wounds.gd")
 const People = preload("res://game/train/turn/turn_people.gd")
@@ -16,6 +17,7 @@ const Ladder = preload("res://game/train/turn/turn_ladder.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
 const TrainDecor = preload("res://game/train/train_decor.gd")
 const Stranded = preload("res://game/train/turn/turn_stranded.gd")
+const TrainWorkshop = preload("res://game/train/train_workshop.gd")
 
 static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	if g0.get("deathWeight", false): return C.unsupported(g0, "settle: deathWeight")
@@ -48,9 +50,13 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	Care.medicine(g, t, notes)
 	Care.child_settle(g, t, notes)
 	Care.heat_settle(g, t, notes)
-	# 내정 훅 자리: domesticSettle(g, notes).
+	var supplies: Dictionary = Supplies.use(g, t)
+	var shop: Dictionary = TrainWorkshop.settle_stretch(g, t)
+	if not shop.get("did", []).is_empty():
+		notes.append("공방: " + ", ".join(shop["did"]) + ".")
 	hub_leak_tick(g, t, notes)
 	g = Turn.drift(g, t)
+	Supplies.relations(g, t, supplies)
 	Care.calm_settle(g, t)
 	check_due_promises(g, t)
 	# arrivalsSettle: gated at the action boundary until the arrivals branch is ported.
@@ -65,7 +71,7 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 			g["ratifyRepeal"] = []
 		bribe_detection(g, t)
 	leash_tick(g, t)
-	ai_leaders(g, t)
+	ai_leaders(g, t, bool(supplies.get("plenty", false)))
 	g = Turn.meters(g, t)
 	if g["phase"] != "end": riot_tick(g, t, notes)
 	for comm: String in t["COMMS"]: g["comms"][comm]["away"] = 0
@@ -81,6 +87,8 @@ static func settle(g0: Dictionary, t: Dictionary) -> Dictionary:
 	TrainDecor.reconcile_store(g)
 	Turn.track_lookback(g)
 	var receipt: Dictionary = {"rel": {}, "notes": notes}
+	if not shop.is_empty():
+		receipt["workshop"] = {"seg": int(g0["seg"]), "events": shop["events"]}
 	for key: String in ["coal", "food", "med", "trust", "tension"]: receipt[key] = float(g[key]) - float(before[key])
 	for comm: String in t["COMMS"]: receipt["rel"][comm] = float(g["comms"][comm]["rel"]) - float(before["rel"][comm])
 	g["lastSettle"] = receipt
@@ -147,6 +155,13 @@ static func check_due_promises(g: Dictionary, t: Dictionary) -> void:
 			var amount: float = float(promise["cond"].get("amount", 0))
 			ok = float(g[resource]) >= amount
 			if ok: C.bump(g, resource, -amount, "promise")
+		elif kind in ["give_sup", "give_fine"]:
+			var resource: String = "sup" if kind == "give_sup" else "supFine"
+			var amount: float = float(promise["cond"].get("amount", 0))
+			ok = Supplies.asks(g) and float(g.get(resource, 0)) >= amount
+			if ok:
+				if resource == "sup": C.bump(g, resource, -amount, "promise")
+				else: g[resource] = float(g.get(resource, 0)) - amount
 		if ok: Field._keep_promise(g, t, comm, str(promise.get("label", "")))
 		else: Field._break_promise(g, t, comm, str(promise.get("label", "")))
 
@@ -207,7 +222,7 @@ static func leash_tick(g: Dictionary, t: Dictionary) -> void:
 		else: keep.append(leash)
 	g["leashes"] = keep
 
-static func ai_leaders(g: Dictionary, t: Dictionary) -> void:
+static func ai_leaders(g: Dictionary, t: Dictionary, sup_plenty: bool = false) -> void:
 	var cards: int = 0
 	var worst: String = ""
 	var worst_gap: float = 0
@@ -225,6 +240,7 @@ static func ai_leaders(g: Dictionary, t: Dictionary) -> void:
 		C.card(g, {"kind": "demand", "comm": worst}, t)
 		var seen: int = maxi(int(g.get("eventLog", {}).get("demand:" + worst, {}).get("n", 0)), int(g.get("eventLog", {}).get("demand:engine_shift", {}).get("n", 0)) if worst == "engine" else 0)
 		g["comms"][worst]["demandCool"] = 3 + mini(seen, 2) * 3
+		if sup_plenty: g["comms"][worst]["demandCool"] += int(t["P"]["supDemandCool"])
 		cards += 1
 	var engine: Dictionary = g["comms"]["engine"]
 	var engine_sit: Array = St.situation(g, t, "engine")

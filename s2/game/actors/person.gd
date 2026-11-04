@@ -112,6 +112,7 @@ var action_noise_t: float = 0.0
 var swing_t: float = 0.0
 var shove_t: float = 0.0                # the shove is winding up (field_combat.start_shove)
 var lunge_t: float = 0.0                # the shove just landed: arms out
+var shove_rest_t: float = 0.0           # from a shove landing to the end of the rest after it (field_combat.SHOVE_REST)
 var strike_t: float = 0.0               # a melee blow is drawn back (field_combat.start_swing)
 var strike_total: float = 0.0           # how long this draw-back is in all (for the motion)
 var strike_at = null                    # what it will land on: a zombie's Dictionary or a person
@@ -234,8 +235,23 @@ func carry_limit() -> float:
 	return Carry.limit(bag, int(skills["strength"]))
 
 
+## What the load weighs on the body (2026-11-02 user's pick): weight() with what is packed in the
+## bag lightened by the bag's relief, up to the bag's limit. weight() stays the bag's own budget;
+## what is packed past the limit and what is not in the bag (a big thing held in both arms, the
+## spare weapons, soaked or extra clothes) weigh in whole.
+func body_burden() -> float:
+	var packed := Carry.total_weight(items) - Carry.held_weight(items)
+	return Carry.body_burden(bag, packed, weight() - packed, carry_limit())
+
+
+## The body's load sets the state; a bag packed past its limit is over however the
+## bag lightens it (2026-11-02 user's pick): over-filling never runs, and past double
+## it still cannot move, as by the whole weight before.
 func carry_state() -> int:
-	return Carry.state(weight(), carry_limit())
+	var state: int = Carry.state(body_burden(), carry_limit())
+	if Carry.total_weight(items) - Carry.held_weight(items) > carry_limit():
+		state = maxi(state, maxi(2, Carry.state(weight(), carry_limit())))
+	return state
 
 
 ## The load lets one run: not over the limit and nothing held in both arms

@@ -18,7 +18,11 @@ extends Node3D
 ##              Heard only while the rules tell no blow of their own (below)
 ##   blow_*     a blow on one of the dead, as the rules tell it (combat
 ##              `struck`): by the weapon, what it hit and what came of it,
-##              and the weapon's own state (blow, BLOW_FAMILY)
+##              and the weapon's own state (blow, BLOW_FAMILY); a light or a
+##              heavy blunt weapon's body hit is a recording for each tier of
+##              the blow (blow_light_t0..2, blow_blunt_t0..2, BLOW_WEIGHT),
+##              a blade's, a pan's or a stake's old grain thin over it
+##              (BLOW_GRAIN)
 ##   gun        shots (falls back to impact, lower)
 ##   step_snow  the player's footsteps
 ##   wind       outdoor bed, wandering, with gusts over it (WIND_DRIFT, _gust);
@@ -40,7 +44,29 @@ const Atmosphere = preload("res://fx/atmosphere.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Grid = preload("res://game/world/field_grid.gd")
 
-const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking"]
+const GROUPS: Array[String] = ["moan", "horde_bed", "birds", "impact", "gun", "step_snow", "wind", "train_idle", "whistle", "train_brake", "pen", "radio_hiss", "radio", "fall_hit", "fall_reel", "fall_knee", "fall_land", "door_bang", "door_wall", "door_break", "building_alarm", "swing_light", "swing_heavy", "hit_blunt", "hit_blade", "hit_stomp", "blow_cut", "blow_chop", "blow_thud", "blow_clang", "blow_wood", "blow_shove", "blow_stomp", "blow_head", "blow_finish", "blow_blocked", "blow_shatter", "blow_stuck", "blow_miss", "blow_ground", "blow_breaking", "blow_light_t0", "blow_light_t1", "blow_light_t2", "blow_blunt_t0", "blow_blunt_t1", "blow_blunt_t2", "pv_effort", "wall_horde_far", "wall_horde_near", "wall_bump", "train_metal"]
+## The files the user picked in a group (decision 554, by name): each weighs
+## PICK_WEIGHT against the others' 1, and still never the one just heard
+## (_fresh_file). Over a long stop a picked file is then heard 40% of the time
+## among three [2, 1, 1], 37.5% each of two among three [2, 2, 1], 25% among
+## six [2, 1, 1, 1, 1, 1].
+const PICKED: Dictionary = {
+	"window_vault": ["window_vault_01"],
+	"blow_light_t1": ["blow_light_t1_01"],
+	"blow_blunt_t1": ["blow_blunt_t1_01", "blow_blunt_t1_02"],
+	"pv_effort": ["pv_effort_01"],
+}
+const PICK_WEIGHT: float = 2.0
+## The player's own short grunt of effort (decision 554): now and then on a
+## heavy swing (from hit_feel's HEAVY_KG), a light one, a shove or a climb
+## through a window — never every time (EFFORT_CHANCE), never within
+## EFFORT_REST of the last, never the file just heard. The player's ear only:
+## the dead hear the swing, not the grunt; a mate's swing makes none.
+const EFFORT_GROUP: String = "pv_effort"
+const EFFORT_CHANCE: Dictionary = {"heavy": 0.5, "light": 0.2, "shove": 0.35, "vault": 0.6}
+const EFFORT_REST: float = 1.8        # s from one grunt to the next, at least
+const EFFORT_LOUD: float = 0.45       # just under a heavy swing's whoosh (0.4 s loudness)
+const EFFORT_PITCH: Array = [0.97, 1.03]
 ## One of the dead going down is heard in four beats, as it is drawn (the
 ## fall's own times: dead_pose, motion "dead_fall"). Only the player hears it:
 ## it is no sound of the rules. Each: group, loudness, lowest and highest pitch.
@@ -123,6 +149,23 @@ const LID_STANDIN: String = "metal"    # the impact file that stands in for it
 ## and high. Until a file is in its group it is the impact set's wood, pitched well down.
 const CREAK_VOICE: Array = ["floor_creak", 0.35, 0.45, 0.55]
 const CREAK_STANDIN: String = "wooden"
+## The groups whose own files are heard at their own pitch (low, high), not at the
+## row's, which was set to bend the stand-in into shape (_voice_or_standin): a
+## creak recorded as a creak is not pitched an octave down. Third, dB on the row's
+## loudness so that the file is as loud as its stand-in was (0.4 s loudness,
+## measured; at most +6): the rows were set by the stand-ins.
+const OWN_VOICE: Dictionary = {
+	"floor_creak": [0.92, 1.08, 6.0],
+	"door_open": [0.96, 1.04, 4.8],
+	"door_close": [0.96, 1.04, 4.1],
+	"door_unlock": [0.97, 1.03, 3.0],
+	"door_locked": [0.96, 1.04, 2.7],
+	"boarded": [0.94, 1.04, 6.0],
+	"window_open": [0.96, 1.04, 1.3],
+	"window_close": [0.96, 1.04, 5.6],
+	"curtain": [0.91, 1.09, -3.3],         # one file: a wider wobble
+	"window_vault": [0.94, 1.06, -2.3],
+}
 ## A step by the floor underfoot (FieldGrid.Floor: SNOW, ROAD, PLATFORM, WOOD,
 ## RAIL, DEEP_SNOW, ICE, GRAVEL): the groups to try in turn, loudness and pitch.
 ## Rails are on ballast; deep snow is the snow, lower and muffled (as the dead
@@ -143,6 +186,7 @@ const STEP_FLOORS: Array = [
 const STEP_GLASS: Array = ["step_glass", 0.25, 1.2, 1.4]
 const GLASS_STANDIN: String = "glass"
 const STEPS_KEPT: int = 256            # steps remembered (tests); older ones go
+const KNOCKS_KEPT: int = 256           # wall knocks and the train's metal remembered (tests), as steps
 ## The dead in sight are heard walking, as they are heard speaking (결정 509,
 ## user 2026-10-24: only the dead the player can see; out of sight their feet
 ## are silent too): the nearest few of the voiced dead that move, by the floor under them,
@@ -159,11 +203,12 @@ const COMPANY_STEP_LOUD: float = 0.7
 const FEET_PLAYERS: int = 5            # players the steps of others than the player go out on
 ## By its gait: stride in m (low, high), loudness, the share of steps without a
 ## sound, and pitch (low, high; times its floor's) — never above the player's
-## lowest (0.9), so the ear tells their feet from its own. First values.
+## lowest (STEP_PITCH low under the heaviest STEP_LOAD: 0.95 × 0.94), so the ear
+## tells their feet from its own. First values.
 const DEAD_GAITS: Dictionary = {
 	"shamble": {"stride": [0.45, 0.8], "loud": 0.16, "skip": 0.3, "pitch": [0.72, 0.86]},
 	"chase": {"stride": [0.6, 0.9], "loud": 0.22, "skip": 0.12, "pitch": [0.78, 0.88]},
-	"dash": {"stride": [0.9, 1.3], "loud": 0.3, "skip": 0.0, "pitch": [0.82, 0.9]},
+	"dash": {"stride": [0.9, 1.3], "loud": 0.3, "skip": 0.0, "pitch": [0.8, 0.88]},
 }
 ## The rasp of one of the dead that is about to run (lunger_rules): the group
 ## its file goes in, how loud, heard to this many metres, and the pitch of the
@@ -179,6 +224,7 @@ const BRAKE_STAND_AT: float = 2.4
 const FEEL_LOUD: float = 0.25
 const TELL_RANGE: float = 40.0
 const TELL_STANDIN_PITCH: float = 1.5
+const TELL_OWN_PITCH: Array = [0.94, 1.06]
 const DEPART_BEATS: Array = [["impact", 0.0], ["pen", 0.12], ["whistle", 0.75]]
 const MOAN_SLOTS: int = 6
 const MOAN_RANGE: float = 25.0
@@ -206,6 +252,40 @@ const ROOM_LOOK: int = 400                  # cells of floor counted at most
 const EDGE_RANGE: float = 45.0
 const EDGE_LOUD: float = 0.35
 const EDGE_PITCH: float = 0.85
+## The horde behind the walls at the map's edge (decision 548; horde_view.gd
+## draws it) is heard from far before the player gets there, so the ear knows
+## first that way is shut. Only a horde that is drawn (field_game.horde_view,
+## decision 509) and only by the walls its drawn pieces stand behind
+## (drawn_walls), from the nearest point of them: a far loop from WALL_FAR_FROM m,
+## at its fullest by WALL_NEAR_TO and half that at WALL_NEAR_FULL; a near loop
+## from WALL_NEAR_FROM, full at WALL_NEAR_FULL; both a little past the wall,
+## among the dead (WALL_INSIDE). The dead knock on the wall at random times (no
+## beat): within WALL_BUMP_NEAR m the nearer, the closer together (WALL_BUMP_GAP);
+## farther, now and then and dull. A wall knocks with its own stuff
+## (WALL_BUMP_KINDS; an overpass has none). The player's ear only.
+const WALL_FAR_FROM: float = 30.0
+const WALL_NEAR_TO: float = 10.0
+const WALL_NEAR_FROM: float = 14.0
+const WALL_NEAR_FULL: float = 3.0
+const WALL_INSIDE: float = 6.0
+const WALL_FAR_LOUD: float = 0.6      # as loud as the map edge's bed at its fullest (0.4 s loudness)
+const WALL_NEAR_LOUD: float = 0.8     # as a full horde bed in sight
+const WALL_LOOK: float = 0.25         # s between looks for the nearest wall
+const WALL_BUMP_NEAR: float = 10.0
+const WALL_BUMP_GAP: Array = [4.0, 0.8]   # mean s between knocks at WALL_BUMP_NEAR m, at the wall
+const WALL_BUMP_FAR_GAP: float = 14.0     # mean s between far knocks, out to WALL_FAR_FROM
+const WALL_BUMP_LOUD: float = 0.7
+const WALL_BUMP_SPREAD: float = 6.0       # m either way along the wall from its nearest point
+const WALL_BUMP_KINDS: Dictionary = {"wall_sheet": ["sheet_rattle", "sheet_body"], "wall_sound": ["sheet_body", "sheet_rattle"], "wall_plank": ["plank_creak"], "wall_stack": ["car_door", "sheet_body"], "overpass": []}
+## The stopped train's cold metal — a tick, a ding, a long creak, a knock in a
+## car's body, a coupler — now and then from somewhere on the nearest car,
+## heard within TRAIN_METAL_REACH m at random times (mean TRAIN_METAL_GAP s, no
+## beat), the long creak less often (TRAIN_METAL_WEIGHT), never the file just
+## heard. Over the waiting engine's breath; the player's ear only.
+const TRAIN_METAL_REACH: float = 15.0
+const TRAIN_METAL_GAP: float = 9.0
+const TRAIN_METAL_LOUD: float = 0.6
+const TRAIN_METAL_WEIGHT: Dictionary = {"creak": 0.35}
 const BED_RANGE: float = 40.0
 const BED_FULL: float = 12.0          # this much weighted crowd is a full bed
 ## A voice is given only to one of the dead in sight; one that has a voice
@@ -241,6 +321,11 @@ const SAYS: Dictionary = {
 	"fall": {"loud": 0.7, "pitch": 0.82, "gap": [0.0, 0.0], "cut": 0.5},
 }
 const STATE_SAYS: Dictionary = {"chase": "chase", "dash": "chase", "attack": "bite", "grab": "bite"}   # the rest: idle
+## The calls that have files of their own once those are in: noticing you, taking
+## a blow, going down. Said in the body's own voice (its pitch, nothing more) and
+## never the file just heard; until then one of the moans, pitched as SAYS has it.
+## Wandering, chasing and biting stay with the moans.
+const SAY_GROUPS: Dictionary = {"notice": "dead_notice", "hit": "dead_hit", "fall": "dead_fall"}
 const CUT_FADE: float = 400.0         # dB a second: a cut voice ends without a click
 ## A horde setting off: birds at most this often, and a far thud each time
 ## (an impact file this low, through the dullest bus).
@@ -351,6 +436,24 @@ const BLOW_GAIN: Array = [0.85, 1.0]
 const BLOW_DULL_PITCH: float = 0.92   # a dull weapon, lower (and through the duller bus)
 const BLOW_DOWN_PITCH: float = 0.94   # one that is down, lower
 const BLOW_SAME_M: float = 2.0        # hit_* this near a blow in the same frame is that blow
+## Decision 554: a light weapon's body hit (a shove, a knife, a broken bottle)
+## and a heavy blunt one's (crowbar, frying pan, wooden stake) are recordings,
+## three for each tier of the blow (decision 501: 툭 · 퍽 · 퍽!) — the tiers
+## differ in the files themselves (stuff, length, tail; −24 · −20 · −17 dBFS),
+## so the tier's loudness and pitch (blow_layers) are not laid on them too. A
+## weight with a tier short of files keeps its own families as before; so do
+## the axe and the boot (theirs are still to be picked).
+const BLOW_WEIGHT: Dictionary = {"blow_cut": "blow_light", "blow_shove": "blow_light", "blow_thud": "blow_blunt", "blow_clang": "blow_blunt", "blow_wood": "blow_blunt"}
+## dB on a weight's layer so that a middle blow is as loud as the families it
+## takes over were (0.4 s loudness and active RMS, the mean of the two).
+const BLOW_WEIGHT_DB: Dictionary = {"blow_light": -1.0, "blow_blunt": 1.0}
+## Over a recorded body hit, the weapon's own grain is kept, thin: the made
+## family it had before — a blade's edge (knife, broken bottle), a pan's ring,
+## a stake's wood — BLOW_GRAIN_DB under its old loudness, at its old tier and
+## pitch, through the same bus as the body. A shove and a crowbar are the
+## recording alone (decisions 554, 442).
+const BLOW_GRAIN: Array[String] = ["blow_cut", "blow_clang", "blow_wood"]
+const BLOW_GRAIN_DB: float = -9.0
 ## Melee blows ("melee", "fight") are not here: hit_feel.gd voices them by
 ## the weapon (a miss: the swing and a short breath of air, blow_miss, no
 ## hit_*), where any of these files would do.
@@ -392,6 +495,13 @@ var gust_gaps: Array = []              # every gap between gusts (tests)
 var blow_wired: bool = false           # the combat tells its blows (struck): hit_* stay quiet
 var blow_last: Dictionary = {}         # blow group -> index of the file it played last
 var blow_log: Array = []               # every layer played [group, file index] (tests)
+var effort_rest: float = 0.0           # s until the player may grunt again (effort)
+var wall_far: AudioStreamPlayer3D      # the horde behind the walls, its far loop (_tick_walls)
+var wall_near: AudioStreamPlayer3D     # and its near one
+var wall_look_t: float = 0.0           # s to the next look for the nearest wall
+var wall_point = null                  # nearest_wall's last answer, or null
+var wall_bump_log: Array = []          # knocks [heard_t, file], the last KNOCKS_KEPT (tests)
+var train_metal_log: Array = []        # the train's metal [heard_t, file], the last KNOCKS_KEPT (tests)
 var blow_mark: Array = [-1, Vector3.ZERO]          # frame and place of the last blow
 var hit_mark: Array = [-1, Vector3.ZERO, null, 0]  # frame, place, player and its cut of the last hit_*
 var hits_stopped: int = 0              # hit_* stopped for a blow told after them (tests)
@@ -489,6 +599,8 @@ func setup(field_game) -> void:
 	edge_bed = _loop_player("horde_bed")
 	edge_bed.bus = "SFX_FAR" if AudioServer.get_bus_index("SFX_FAR") >= 0 else "SFX"
 	edge_bed.pitch_scale = EDGE_PITCH
+	wall_far = _wall_loop("wall_horde_far")
+	wall_near = _wall_loop("wall_horde_near")
 	# This stop's wind: one bed of many, never the last stop's.
 	beds = _load_named("wind", "wind")
 	gust_files = _load_named("wind_gust", "gust")
@@ -831,10 +943,13 @@ func tick(delta: float) -> void:
 		return
 	var at: Vector3 = game.player.position
 	if game.ended:
-		for p in [bed, edge_bed] + bed_players + spot_players.values():
+		for p in [bed, edge_bed, wall_far, wall_near] + bed_players + spot_players.values():
 			p.volume_db = -80.0
 		for g: Dictionary in gusts:
 			(g["player"] as AudioStreamPlayer).volume_db = -80.0
+		for p in [wall_far, wall_near]:
+			if p.playing:
+				p.stop()   # as they would once quiet (_bed_to), which no longer runs
 		return
 	_tick_room(at)
 	if held:
@@ -845,6 +960,7 @@ func tick(delta: float) -> void:
 		_tick_wind(at, delta)   # the wind goes on (it is not the field's time)
 		return
 	heard_t += delta
+	effort_rest = maxf(0.0, effort_rest - delta)
 	pick_t -= delta
 	if pick_t <= 0.0:
 		pick_t = 0.4
@@ -857,6 +973,8 @@ func tick(delta: float) -> void:
 	# The mass: one bed scaled by how many dead are near and how near.
 	bed.volume_db = lerpf(bed.volume_db, _db(clampf(crowd / BED_FULL, 0.0, 1.0) * 0.8), minf(1.0, delta * 2.0))
 	_tick_edge(at, delta)
+	_tick_walls(at, delta)
+	_tick_train_metal(at, delta)
 	birds_t = maxf(0.0, birds_t - delta)
 	_tick_wind(at, delta)
 	engine.volume_db = _db(clampf(1.0 - at.distance_to(engine.position) / 70.0, 0.0, 1.0) * 0.5)
@@ -876,6 +994,196 @@ func _tick_edge(at: Vector3, delta: float) -> void:
 		near = minf(near, Vector2(s.x - at.x, s.z - at.z).length())
 	var want := _db(clampf(1.0 - near / EDGE_RANGE, 0.0, 1.0) * EDGE_LOUD)
 	edge_bed.volume_db = lerpf(edge_bed.volume_db, want, minf(1.0, delta * 2.0))
+
+
+## A loop for the horde behind the walls: its file loops in itself (no gap at
+## the seam), silent until it is wanted.
+func _wall_loop(group: String) -> AudioStreamPlayer3D:
+	var p := AudioStreamPlayer3D.new()
+	p.bus = "SFX"
+	p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
+	p.volume_db = -80.0
+	add_child(p)
+	if has(group):
+		var s: AudioStream = lib[group][0]
+		if s is AudioStreamOggVorbis:
+			(s as AudioStreamOggVorbis).loop = true
+		p.stream = s
+	return p
+
+
+## The horde behind the walls (WALL_*): the two loops by the nearest wall,
+## and now and then a knock on it.
+func _tick_walls(at: Vector3, delta: float) -> void:
+	wall_look_t -= delta
+	if wall_look_t <= 0.0:
+		wall_look_t = WALL_LOOK
+		wall_point = nearest_wall(at)
+	var d: float = INF if wall_point == null else float(wall_point[1])
+	if wall_point != null:
+		var spot: Vector3 = (wall_point[0] as Vector3) + (wall_point[3] as Vector3) * WALL_INSIDE
+		wall_far.position = spot
+		wall_near.position = spot
+	_bed_to(wall_far, wall_far_level(d) * WALL_FAR_LOUD, delta)
+	_bed_to(wall_near, wall_near_level(d) * WALL_NEAR_LOUD, delta)
+	if d < WALL_FAR_FROM and randf() < delta / wall_bump_gap(d):
+		wall_bump(d)
+
+
+## A loop toward `lin`: started at a new place in its file when it is first
+## wanted, stopped once it has gone quiet.
+func _bed_to(p: AudioStreamPlayer3D, lin: float, delta: float) -> void:
+	if p.stream == null:
+		return
+	if lin > 0.001 and not p.playing:
+		p.volume_db = -80.0
+		p.play(randf() * p.stream.get_length())
+	p.volume_db = lerpf(p.volume_db, _db(lin), minf(1.0, delta * 2.0))
+	if lin <= 0.001 and p.playing and p.volume_db < -60.0:
+		p.stop()
+
+
+## The walls of a horde that is drawn (field_game.horde_view): those its pieces
+## stand behind (its public `chunks`), each once, once it has built them all
+## and they are drawn (its `stats` "ready" — not if it placed no one, a piece
+## failed to load or the build was called off) and it is shown. Else none.
+static func drawn_walls(view) -> Array:
+	if view == null or not is_instance_valid(view) or not ("chunks" in view) or not ("stats" in view):
+		return []
+	if not bool((view.stats as Dictionary).get("ready", false)) or not (view as Node3D).is_visible_in_tree():
+		return []
+	var out: Array = []
+	for chunk in view.chunks:
+		var w = (chunk as Dictionary).get("wall")
+		if w is Dictionary and not out.has(w):
+			out.append(w)
+	return out
+
+
+## The nearest point of the walls the drawn horde stands behind (drawn_walls),
+## as [point (Vector3, on the wall's floor), distance (m, on the ground), the
+## wall's row, its outward way (Vector3)], or null: no horde drawn.
+func nearest_wall(at: Vector3):
+	var here := Vector2(at.x, at.z)
+	var best = null
+	for w in drawn_walls(game.get("horde_view")):
+		var q: Vector2 = Geometry2D.get_closest_point_to_segment(here, w["a"], w["b"])
+		var dist: float = here.distance_to(q)
+		if best == null or dist < float(best[1]):
+			var out: Vector2 = w["out"]
+			best = [Vector3(q.x, float(w.get("floor_y", 0.0)), q.y), dist, w, Vector3(out.x, 0.0, out.y)]
+	return best
+
+
+## The far loop's share at d m from the wall: none from WALL_FAR_FROM, full by
+## WALL_NEAR_TO, half by WALL_NEAR_FULL (the near loop takes over).
+static func wall_far_level(d: float) -> float:
+	var come: float = clampf((WALL_FAR_FROM - d) / (WALL_FAR_FROM - WALL_NEAR_TO), 0.0, 1.0)
+	return come * (1.0 - 0.5 * clampf((WALL_NEAR_TO - d) / (WALL_NEAR_TO - WALL_NEAR_FULL), 0.0, 1.0))
+
+
+## The near loop's share at d m: none from WALL_NEAR_FROM, full by WALL_NEAR_FULL.
+static func wall_near_level(d: float) -> float:
+	return clampf((WALL_NEAR_FROM - d) / (WALL_NEAR_FROM - WALL_NEAR_FULL), 0.0, 1.0)
+
+
+## The mean s between knocks at d m from the wall.
+static func wall_bump_gap(d: float) -> float:
+	if d >= WALL_BUMP_NEAR:
+		return WALL_BUMP_FAR_GAP
+	return lerpf(float(WALL_BUMP_GAP[0]), float(WALL_BUMP_GAP[1]), 1.0 - maxf(0.0, d) / WALL_BUMP_NEAR)
+
+
+## One knock on the nearest wall (wall_point), d m away: a file of the wall's
+## own stuff, never the one just heard, somewhere along it near its nearest
+## point; past WALL_BUMP_NEAR duller. False if the wall has no knock.
+func wall_bump(d: float) -> bool:
+	var lin: float = WALL_BUMP_LOUD * clampf(1.0 - d / WALL_FAR_FROM, 0.0, 1.0)
+	if wall_point == null or not has("wall_bump") or lin <= 0.01:
+		return false   # too far to hear: nothing is picked, so the last knock heard stays the last
+	var w: Dictionary = wall_point[2]
+	var stuff: Array = WALL_BUMP_KINDS.get(String(w.get("kind", "")), [])
+	var list: Array = lib["wall_bump"]
+	var last: int = int(blow_last.get("wall_bump", -1))
+	var fit: Array = []
+	for i in list.size():
+		var file: String = (list[i] as AudioStream).resource_path.get_file()
+		if i != last and stuff.any(func(s: Variant) -> bool: return file.contains(String(s))):
+			fit.append(i)
+	if fit.is_empty():
+		return false
+	var pick: int = fit[randi() % fit.size()]
+	blow_last["wall_bump"] = pick
+	var a: Vector2 = w["a"]
+	var b: Vector2 = w["b"]
+	var near: Vector3 = wall_point[0]
+	var q: Vector2 = Geometry2D.get_closest_point_to_segment(Vector2(near.x, near.z) + (b - a).normalized() * randf_range(-WALL_BUMP_SPREAD, WALL_BUMP_SPREAD), a, b)
+	var bus: String = "SFX" if d < WALL_BUMP_NEAR else ("SFX_FAR" if AudioServer.get_bus_index("SFX_FAR") >= 0 else "SFX")
+	# An ambience, as the wind's gusts: its own log, not `played` (the groups the rules' events sound).
+	wall_bump_log.append([heard_t, (list[pick] as AudioStream).resource_path.get_file()])
+	if wall_bump_log.size() > KNOCKS_KEPT:
+		wall_bump_log = wall_bump_log.slice(wall_bump_log.size() - KNOCKS_KEPT)
+	_one_shot("wall_bump", Vector3(q.x, near.y, q.y), lin, randf_range(0.94, 1.06), list[pick], bus)
+	return true
+
+
+## The train's cold metal now and then, within TRAIN_METAL_REACH m of a car.
+func _tick_train_metal(at: Vector3, delta: float) -> void:
+	if not has("train_metal") or randf() >= delta / TRAIN_METAL_GAP:
+		return
+	var car = nearest_car(at)
+	if car != null and float(car[1]) < TRAIN_METAL_REACH:
+		train_metal(at, car[0])
+
+
+## The nearest of the train's cars to at, as [its rect (Rect2, m on the
+## ground), distance (m)], or null: no train here.
+func nearest_car(at: Vector3):
+	var here := Vector2(at.x, at.z)
+	var best = null
+	for c: Dictionary in game.data.get("train_cars", []):
+		var r := Rect2(Rect2i(c["rect"]))
+		var dist: float = here.distance_to(here.clamp(r.position, r.end))
+		if best == null or dist < float(best[1]):
+			best = [r, dist]
+	return best
+
+
+## One sound of the train's metal from somewhere on the car `r`: weighted by
+## TRAIN_METAL_WEIGHT, never the file just heard.
+func train_metal(at: Vector3, r: Rect2) -> bool:
+	var list: Array = lib.get("train_metal", [])
+	var last: int = int(blow_last.get("train_metal", -1))
+	var weights: Array = []
+	var total: float = 0.0
+	for i in list.size():
+		var w: float = 0.0
+		if i != last or list.size() == 1:
+			w = 1.0
+			var file: String = (list[i] as AudioStream).resource_path.get_file()
+			for kind: String in TRAIN_METAL_WEIGHT:
+				if file.contains(kind):
+					w = float(TRAIN_METAL_WEIGHT[kind])
+		weights.append(w)
+		total += w
+	if total <= 0.0:
+		return false
+	var roll: float = randf() * total
+	var pick: int = -1
+	for i in list.size():
+		if float(weights[i]) <= 0.0:
+			continue
+		pick = i   # the last with any weight, should the roll run past the end
+		if roll < float(weights[i]):
+			break
+		roll -= float(weights[i])
+	blow_last["train_metal"] = pick
+	var spot := Vector3(randf_range(r.position.x, r.end.x), 0.0, randf_range(r.position.y, r.end.y))
+	train_metal_log.append([heard_t, (list[pick] as AudioStream).resource_path.get_file()])   # its own log, as wall_bump's
+	if train_metal_log.size() > KNOCKS_KEPT:
+		train_metal_log = train_metal_log.slice(train_metal_log.size() - KNOCKS_KEPT)
+	_one_shot("train_metal", spot, TRAIN_METAL_LOUD * clampf(1.0 - at.distance_to(spot) / (TRAIN_METAL_REACH + 10.0), 0.2, 1.0), randf_range(0.96, 1.04), list[pick], _bus_at(spot))
+	return true
 
 
 ## Can the player see this spot as one of the dead is drawn there? The same
@@ -953,9 +1261,9 @@ func voice_of(z: Dictionary) -> Dictionary:
 	var u: float = float(z.get("phase", 0.0))
 	var kind: String = "rough" if z["kind"] == "fresh" else PLAIN_VOICES[int(u * 3.0) % 3]
 	var spread: float = (fposmod(u * 7.31, 1.0) * 2.0 - 1.0) * VOICE_SPREAD
+	if voices.size() >= 400:
+		voices.clear()   # the same again if it is asked for: it comes from the seed
 	voices[id] = {"kind": kind, "pitch": float(VOICES[kind]["pitch"]) * (1.0 + spread)}
-	if voices.size() > 400:
-		voices.clear()
 	return voices[id]
 
 
@@ -1003,23 +1311,43 @@ func _next_file(kind: String, last: int) -> int:
 	return pick
 
 
+## What a call is said with: [group, file index, stream, pitch before distance]
+## — a file of its own call (SAY_GROUPS) while it has any, else a moan the voice
+## did not say last (`last`), pitched as SAYS has it; [] with neither.
+func _call_for(what: String, v: Dictionary, last: int) -> Array:
+	var own: String = String(SAY_GROUPS.get(what, ""))
+	if own != "":
+		if not lib.has(own):
+			lib[own] = _load_group(own)
+		var j := _fresh_file(own)
+		if j >= 0:
+			return [own, j, lib[own][j], float(v["pitch"])]
+	if not has("moan"):
+		return []
+	var i := _next_file(String(v["kind"]), last)
+	return ["moan", i, lib["moan"][i], float(v["pitch"]) * float(SAYS[what]["pitch"])]
+
+
 ## One of the dead says something through its slot.
 func _say(s: Dictionary, z: Dictionary, what: String, d: float) -> void:
 	var row: Dictionary = SAYS[what]
 	var v := voice_of(z)
 	var p: AudioStreamPlayer3D = s["player"]
 	var band: Array = moan_band(d)
-	var i := _next_file(String(v["kind"]), int(s.get("file", -1)))
-	s["file"] = i
+	var call := _call_for(what, v, int(s.get("file", -1)))
+	if call.is_empty():
+		return
+	if String(call[0]) == "moan":
+		s["file"] = int(call[1])
 	s["loud"] = float(row["loud"])
 	s["cut"] = float(row["cut"])
 	s["wait"] = randf_range(float(row["gap"][0]), float(row["gap"][1]))
-	p.stream = lib["moan"][i]
-	p.pitch_scale = float(v["pitch"]) * float(row["pitch"]) * float(band[1]) * randf_range(0.97, 1.03)
+	p.stream = call[2]
+	p.pitch_scale = float(call[3]) * float(band[1]) * randf_range(0.97, 1.03)
 	p.bus = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
 	p.volume_db = _db(clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0) * float(s["loud"]))
 	p.play()
-	said.append([int(z["id"]), what, i])
+	said.append([int(z["id"]), what, int(call[1]), String(call[0])])
 
 
 func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
@@ -1055,8 +1383,10 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 	s["was"] = row
 	s["stun"] = float(z.get("stun", 0.0))
 	s["wait"] = float(s["wait"]) - delta
-	if not has("moan") or z["state"] == "tell":
+	if z["state"] == "tell":
 		return   # about to run: its own rasp is heard (lunge_tell)
+	if not in_view(z["pos"]):
+		return   # gone out of sight: what it was saying runs out (VOICE_KEEP), nothing new
 	if cue != "" or float(s["wait"]) <= 0.0:
 		s["fading"] = false
 		_say(s, z, cue if cue != "" else row, d)
@@ -1065,16 +1395,18 @@ func _tick_slot(s: Dictionary, at: Vector3, delta: float) -> void:
 ## One of the dead in sight goes down: a short breath out in its own voice,
 ## under the fall's beats. Not through a slot (the slot lets go of it).
 func _fall_voice(z: Dictionary, at: Vector3) -> void:
-	if not has("moan") or not in_view(z["pos"]):
+	if not in_view(z["pos"]):
 		return
 	var row: Dictionary = SAYS["fall"]
 	var v := voice_of(z)
 	var d: float = at.distance_to(z["pos"])
-	var i := _next_file(String(v["kind"]), -1)
+	var call := _call_for("fall", v, -1)
+	if call.is_empty():
+		return
 	var band: Array = moan_band(d)
-	said.append([int(z["id"]), "fall", i])
+	said.append([int(z["id"]), "fall", int(call[1]), String(call[0])])
 	var bus: String = ROOM_BUS if String(band[2]) == "SFX" and in_room(z["pos"]) else String(band[2])
-	_one_shot("moan", z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(v["pitch"]) * float(row["pitch"]) * float(band[1]), lib["moan"][i], bus, float(row["cut"]))
+	_one_shot(String(call[0]), z["pos"], float(row["loud"]) * clampf(1.0 - d / MOAN_RANGE, 0.0, 1.0), float(call[3]) * float(band[1]), call[2], bus, float(row["cut"]))
 
 
 # ---------------------------------------------------------------- wind
@@ -1579,8 +1911,12 @@ func howl() -> void:
 
 ## The depart note goes up (true) or away (false; the mix is back in 0.3 s).
 func hold(on: bool) -> void:
+	if on == held:
+		return   # told twice: lowered (or raised) once
 	held = on
-	bed.volume_db += -9.0 if on else 9.0
+	# The mass holds low while the note is up, the horde behind the walls with it.
+	for p in [bed, wall_far, wall_near]:
+		p.volume_db += -9.0 if on else 9.0
 
 
 ## When each beat of a fall comes, in seconds from its start.
@@ -1739,13 +2075,33 @@ func window_turn(c: Vector2i, what: String) -> void:
 
 ## Someone climbing through the window at `c`, heard from it; `glass`: broken
 ## glass still in its frame, heard too.
-func window_vault(c: Vector2i, glass: bool) -> void:
+func window_vault(c: Vector2i, glass: bool, mine: bool = false) -> void:
 	if quiet or game == null or game.player == null:
 		return
 	var at: Vector3 = game.FieldGrid.center(c)
 	_voice_or_standin(VAULT_VOICE, String(VAULT_VOICE[4]), at)
 	if glass:
 		_voice_or_standin(VAULT_GLASS, String(VAULT_GLASS[4]), at)
+	if mine:
+		effort("vault")
+
+
+## The player's grunt of effort (EFFORT_CHANCE's kind: heavy, light, shove,
+## vault), if this one comes up (`roll`, in 0..1; tests pass their own) and
+## the last is EFFORT_REST behind. True if one was heard.
+func effort(kind: String, roll: float = -1.0) -> bool:
+	if quiet or game == null or game.player == null or effort_rest > 0.0:
+		return false
+	if (randf() if roll < 0.0 else roll) >= float(EFFORT_CHANCE.get(kind, 0.0)):
+		return false
+	var file: int = _fresh_file(EFFORT_GROUP)
+	if file < 0:
+		return false
+	effort_rest = EFFORT_REST
+	played.append(EFFORT_GROUP)
+	var at: Vector3 = game.player.position
+	_one_shot(EFFORT_GROUP, at, EFFORT_LOUD, randf_range(float(EFFORT_PITCH[0]), float(EFFORT_PITCH[1])), lib[EFFORT_GROUP][file], _bus_at(at))
+	return true
 
 
 ## A door or a window that would not give to the player's hand (SHUT_FAST:
@@ -1840,8 +2196,18 @@ func _voice_or_standin(voice: Array, standin: String, at: Vector3) -> void:
 	var d: float = at.distance_to(game.player.position)
 	var lin: float = float(voice[1]) * clampf(1.0 - d / 60.0, 0.0, 1.0)
 	var pitch := randf_range(float(voice[2]), float(voice[3]))
+	if lin <= 0.01:
+		last_shot = null
+		return   # too far to hear: nothing is picked, so the last file heard stays the last
 	if has(group):
-		_one_shot(group, at, lin, pitch, null, _bus_at(at))
+		if OWN_VOICE.has(group):
+			var mine: Array = OWN_VOICE[group]
+			pitch = randf_range(float(mine[0]), float(mine[1]))
+			lin *= db_to_linear(float(mine[2]))
+			if lin <= 0.01:
+				last_shot = null
+				return   # its own file, quieter than its stand-in: too far as well
+		_one_shot(group, at, lin, pitch, lib[group][_fresh_file(group)], _bus_at(at))
 		return
 	if standin.begins_with("@"):
 		var own: String = standin.substr(1)
@@ -1886,12 +2252,22 @@ func chief_feel(number: int) -> void:
 
 
 ## One of the dead drops low before it runs: its rasp, for the player's ear
-## only. Until the file is in, it is a moan pitched up.
+## only. Until the file is in, it is a moan pitched up. Its own files are read
+## the first time one is heard (it is not in GROUPS), never the one just heard,
+## each a little higher or lower (TELL_OWN_PITCH).
 func lunge_tell(at: Vector3) -> void:
 	played.append(TELL_GROUP)
+	if not lib.has(TELL_GROUP):
+		lib[TELL_GROUP] = _load_group(TELL_GROUP)
 	var own: bool = has(TELL_GROUP)
 	var d: float = at.distance_to(game.player.position)
-	_one_shot(TELL_GROUP if own else "moan", at, TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0), 1.0 if own else TELL_STANDIN_PITCH, null, ROOM_BUS if in_room(at) else "SFX")
+	var lin: float = TELL_LOUD * clampf(1.0 - d / TELL_RANGE, 0.0, 1.0)
+	var bus: String = _bus_at(at)
+	if own:
+		var j := _fresh_file(TELL_GROUP)
+		_one_shot(TELL_GROUP, at, lin, randf_range(float(TELL_OWN_PITCH[0]), float(TELL_OWN_PITCH[1])), lib[TELL_GROUP][j], bus)
+	else:
+		_one_shot("moan", at, lin, TELL_STANDIN_PITCH, null, bus)
 
 
 ## A blow's own sound (hit_feel.gd), heard to `reach` m and duller through a
@@ -1929,8 +2305,9 @@ static func _same_blow(mark: Array, at: Vector3) -> bool:
 
 ## The layers of one blow [group, loudness, pitch] from what the combat tells
 ## of it (`struck`'s info): weapon, target, result, edge (-1 none, 0 keen,
-## 1 dull, 2 about to give).
-static func blow_layers(info: Dictionary) -> Array:
+## 1 dull, 2 about to give), tier. `recorded`: the weights (BLOW_WEIGHT) whose
+## tiers all have files (recorded_weights).
+static func blow_layers(info: Dictionary, recorded: Array = []) -> Array:
 	var result: String = String(info.get("result", "body"))
 	if result == "miss":
 		return [["blow_miss", 0.6, 1.0]]
@@ -1947,11 +2324,17 @@ static func blow_layers(info: Dictionary) -> Array:
 	if target == "downed":
 		pitch *= BLOW_DOWN_PITCH
 	var out: Array = [[family, float(BLOW_UNDER.get(result, 1.0)), pitch]]
-	# Decision 501: only the body's first layer follows the blow's tier.
+	# Decision 501: only the body follows the blow's tier — a made family by
+	# its loudness and pitch, a recording (and a grain over it) by its files.
 	var tier: int = int(info.get("tier", -1))
 	if tier == 0 or tier == 2:
 		out[0][1] *= 0.6 if tier == 0 else 1.12
 		out[0][2] *= 1.1 if tier == 0 else 0.95
+	var weight: String = String(BLOW_WEIGHT.get(family, ""))
+	if recorded.has(weight):
+		if BLOW_GRAIN.has(family):
+			out.append([family, float(out[0][1]) * db_to_linear(BLOW_GRAIN_DB), float(out[0][2])])
+		out[0] = ["%s_t%d" % [weight, tier if tier >= 0 and tier <= 2 else 1], float(BLOW_UNDER.get(result, 1.0)) * db_to_linear(float(BLOW_WEIGHT_DB[weight])), pitch]
 	if BLOW_LAYER.has(result):
 		out.append([BLOW_LAYER[result], 0.9, 1.0])
 	if target == "frozen" and result != "shatter" and result != "stuck":
@@ -1984,30 +2367,69 @@ func blow(info: Dictionary) -> void:
 	var plain: String = _bus_at(at)
 	# A dull weapon's own hit is duller; what came of it is heard as it is.
 	var dull: String = (ROOM_DULL_BUS if plain == ROOM_BUS else "SFX_MID") if int(info.get("edge", -1)) >= 1 else plain
-	var layers: Array = blow_layers(info)
+	var layers: Array = blow_layers(info, recorded_weights())
 	for i in layers.size():
 		var layer: Array = layers[i]
 		var group: String = layer[0]
-		var bus: String = dull if i == 0 else plain
-		var file: int = _fresh_file(group)
+		var bus: String = dull if i == 0 or BLOW_GRAIN.has(group) else plain   # the body and its grain
 		played.append(group)
+		var lin: float = BLOW_LOUD * float(layer[1]) * near * randf_range(float(BLOW_GAIN[0]), float(BLOW_GAIN[1]))
+		if lin <= 0.01:
+			continue   # too faint to hear: nothing is picked, so the last file heard stays the last
+		var file: int = _fresh_file(group)
 		if file < 0:
 			continue
 		blow_log.append([group, file])
-		_one_shot(group, at, BLOW_LOUD * float(layer[1]) * near * randf_range(float(BLOW_GAIN[0]), float(BLOW_GAIN[1])), float(layer[2]) * randf_range(float(BLOW_PITCH[0]), float(BLOW_PITCH[1])), lib[group][file], bus)
+		_one_shot(group, at, lin, float(layer[2]) * randf_range(float(BLOW_PITCH[0]), float(BLOW_PITCH[1])), lib[group][file], bus)
 
 
-## A file of the group other than the one it played last (-1: none there).
+## The weights (BLOW_WEIGHT) whose three tiers all have files.
+func recorded_weights() -> Array:
+	var out: Array = []
+	for weight: String in BLOW_WEIGHT_DB:
+		if has(weight + "_t0") and has(weight + "_t1") and has(weight + "_t2"):
+			out.append(weight)
+	return out
+
+
+## A file of the group other than the one it played last (-1: none there), a
+## PICKED one twice as likely as another.
 func _fresh_file(group: String) -> int:
-	var count: int = (lib.get(group, []) as Array).size()
+	var list: Array = lib.get(group, [])
+	var count: int = list.size()
 	if count == 0:
 		return -1
 	var last: int = int(blow_last.get(group, -1))
-	var pick: int = randi() % count
-	if count > 1 and pick == last:
-		pick = (pick + 1 + randi() % (count - 1)) % count
+	var weights: Array = pick_weights(group, list, last)
+	var total: float = 0.0
+	for w: float in weights:
+		total += w
+	var roll: float = randf() * total
+	var pick: int = -1
+	for i in count:
+		if float(weights[i]) <= 0.0:
+			continue
+		pick = i   # the last one that may be heard, should the roll reach the end
+		roll -= float(weights[i])
+		if roll < 0.0:
+			break
 	blow_last[group] = pick
 	return pick
+
+
+## How likely each file of a group is to be heard next (_fresh_file): PICKED
+## ones PICK_WEIGHT, others 1, the one heard last (`last`) none unless it is
+## the only one.
+static func pick_weights(group: String, list: Array, last: int) -> Array:
+	var picked: Array = PICKED.get(group, [])
+	var out: Array = []
+	for i in list.size():
+		if i == last and list.size() > 1:
+			out.append(0.0)
+		else:
+			var file_name: String = (list[i] as AudioStream).resource_path.get_file().get_basename()
+			out.append(PICK_WEIGHT if picked.has(file_name) else 1.0)
+	return out
 
 
 ## A sound the dead can hear is also one the player hears (field make_sound).
@@ -2144,9 +2566,46 @@ func _building_door_bang(at: Vector3, level: int) -> bool:
 	return true
 
 
+## No two steps alike (as a weapon's blows): each one a little louder or softer
+## (STEP_GAIN_DB) and higher or lower (STEP_PITCH), so a walk is not a machine.
+const STEP_GAIN_DB: float = 2.0
+const STEP_PITCH: Array = [0.95, 1.05]
+## The player's own steps by how it moves: crouched, softer; under a load
+## (Person.carry_state: 1 heavy, 2 over, 3 cannot move), louder and lower.
+## Loudness, pitch.
+const STEP_CROUCH: Array = [0.55, 1.0]
+const STEP_LOAD: Array = [[1.0, 1.0], [1.12, 0.97], [1.25, 0.94], [1.25, 0.94]]
+
+
+## How the player's own step sounds by how it moves (STEP_CROUCH, STEP_LOAD):
+## [loudness, pitch], times its floor's.
+func step_feel() -> Array:
+	var p = game.player if game != null else null
+	if p == null:
+		return [1.0, 1.0]
+	return feel_of(bool(p.crouched), int(p.carry_state()))
+
+
+## [loudness, pitch] of a step crouched or not, under a load of this carry state.
+static func feel_of(crouched: bool, carry: int) -> Array:
+	var carried: Array = STEP_LOAD[clampi(carry, 0, STEP_LOAD.size() - 1)]
+	var loud: float = float(carried[0])
+	var pitch: float = float(carried[1])
+	if crouched:
+		loud *= float(STEP_CROUCH[0])
+		pitch *= float(STEP_CROUCH[1])
+	return [loud, pitch]
+
+
+## A step's own wobble: [loudness, pitch] times (STEP_GAIN_DB, STEP_PITCH).
+static func step_wobble() -> Array:
+	return [db_to_linear(randf_range(-STEP_GAIN_DB, STEP_GAIN_DB)), randf_range(float(STEP_PITCH[0]), float(STEP_PITCH[1]))]
+
+
 ## The player's own step, by what is underfoot (FieldGrid.Floor): its own
 ## group, or down the row to one that has files (snow at the last); glass on
-## the floor crunches over it. Never the same file twice running.
+## the floor crunches over it. Never the same file twice running, never the
+## same loudness and pitch, and by how the player moves (step_feel).
 func footstep(at: Vector3, running: bool) -> void:
 	var g = game.grid_at(at)
 	var cell: Vector2i = game.FieldGrid.cell_of(at)
@@ -2158,7 +2617,9 @@ func footstep(at: Vector3, running: bool) -> void:
 		steps.append([group, pick])
 		if steps.size() > STEPS_KEPT:
 			steps = steps.slice(steps.size() - STEPS_KEPT)
-		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]), randf_range(0.9, 1.1) * float(row[2]), lib[group][pick], _bus_at(at))
+		var feel := step_feel()
+		var wob := step_wobble()
+		_one_shot(group, at, (0.5 if running else 0.3) * float(row[1]) * float(feel[0]) * float(wob[0]), float(wob[1]) * float(row[2]) * float(feel[1]), lib[group][pick], _bus_at(at))
 	if g.floor_glass.has(cell):
 		_voice_or_standin(STEP_GLASS, GLASS_STANDIN, at)
 
@@ -2242,8 +2703,9 @@ func company_step(at: Vector3, running: bool) -> void:
 		return
 	var row: Array = found[1]
 	var pick: int = _other_than(group, company_step_last)
-	if not _foot(group, pick, at, (0.5 if running else 0.3) * COMPANY_STEP_LOUD * float(row[1]) * (1.0 - d / DEAD_STEP_RANGE),
-			randf_range(0.9, 1.1) * float(row[2])):
+	var wob := step_wobble()
+	if not _foot(group, pick, at, (0.5 if running else 0.3) * COMPANY_STEP_LOUD * float(row[1]) * (1.0 - d / DEAD_STEP_RANGE) * float(wob[0]),
+			float(wob[1]) * float(row[2])):
 		return
 	company_steps.append([group, pick])
 	if company_steps.size() > STEPS_KEPT:
@@ -2324,6 +2786,12 @@ func _one_shot(group: String, at: Vector3, lin: float, pitch: float, stream: Aud
 		for p in one_shots:
 			if int(p.get_meta("cut", 0)) < int(o.get_meta("cut", 0)):
 				o = p
+	if o.has_meta("fade"):
+		# The sound before it was fading out: that fade is not this one's.
+		var fade = o.get_meta("fade")
+		if fade is Tween and (fade as Tween).is_valid():
+			(fade as Tween).kill()
+		o.remove_meta("fade")
 	o.bus = bus
 	last_bus = bus
 	o.position = at
@@ -2345,6 +2813,7 @@ func _end_cut(o: AudioStreamPlayer3D, mine: int) -> void:
 	var fade := o.create_tween()
 	fade.tween_property(o, "volume_db", -80.0, 0.08)
 	fade.tween_callback(_stop_if.bind(o, mine))
+	o.set_meta("fade", fade)   # killed should the player be taken for another sound (_one_shot)
 
 
 func _stop_if(o: AudioStreamPlayer3D, mine: int) -> void:

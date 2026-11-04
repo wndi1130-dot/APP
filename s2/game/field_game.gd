@@ -46,6 +46,7 @@ const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
+const LootTables = preload("res://game/sim/loot_tables.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const SmellRules = preload("res://game/sim/smell_rules.gd")
@@ -203,6 +204,7 @@ var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upsta
 var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
 var map_edge: MapEdge                   # ground and fog past the map's edge (fx/map_edge.gd)
+var horde_view: Node3D = null           # the horde behind the edge walls (null: off or no walls); field_audio hears it
 var night_view: NightLightView          # the hearts of the lights people left (decision 471 B4)
 var zombies: Zombies
 var camera: Camera3D
@@ -211,6 +213,7 @@ var sun: DirectionalLight3D
 ## The light from the camera's side that keeps the walls turned from the sun out
 ## of the black (Atmosphere.VIEW_FILL): no shadow, by day only.
 var view_fill: DirectionalLight3D
+var _view_fill_mode: String = "light"
 var snow: GPUParticles3D
 ## Storm stop (weather_fx 14장, opts["storm"]: before, during, after): its look,
 ## the snow layers with their place relative to the view, and the screen layer
@@ -265,6 +268,7 @@ var resume_announce: bool = false
 var slow: float = 1.0                    # the body picture up: the field runs at this rate (body_injury 4.6)
 var hitstop: bool = false                # a blow's hold this frame (hit_feel.gd): the rules and pictures stand
 var away: bool = false             # the app pushed the field into a pause; say so once on return
+var away_saved: bool = false       # the slot was written as the app went (interrupt), till it is back
 var ended: bool = false
 var leave_t: float = -1.0          # since the train began to roll away (-1: it stands)
 var arrive_t: float = -1.0         # since the train came into sight (-1: it stands)
@@ -579,10 +583,22 @@ func _ready() -> void:
 	night_view.name = "NightLights"
 	add_child(night_view)
 	night_view.build(data)
+	_push_fire_weather()
+	PerfSwitch.apply_night_sparks(night_view, _perf_settings)
+	visibility_changed.connect(night_view.refresh_visibility)
+	night_view.refresh_visibility()
 	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
 	map_edge = MapEdge.new()
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
+	# 경계 무리의 시야/반응 갱신은 자식이 맡는다. 꺼짐 판은 자원 로드 전 반환.
+	var horde_settings: Dictionary = _perf_settings.duplicate()
+	horde_settings.merge(PerfSwitch._valid(opts.get("perf", {})), true)
+	# 소리(field_audio.drawn_walls)는 돌려받은 무리 노드만 읽는다(null이면 무리 꺼짐·벽 없음 — 무음).
+	horde_view = await preload("res://game/world/horde_view.gd").attach(self,
+		preload("res://game/world/horde_view.gd").stop_walls(data, opts, horde_settings, Vector2(view.grid.width, view.grid.height)),
+		{"map_size": Vector2(view.grid.width, view.grid.height), "grid": view.grid, "vis_texture": view.vis_texture,
+			"material": view.material, "field": self, "staged": bool(opts.get("staged", false))}, pace, horde_settings)
 	blood_fx = BloodFx.new()
 	add_child(blood_fx)
 	blood_fx.begin_stop(int(opts.get("seed", 1)))
@@ -660,6 +676,7 @@ func _ready() -> void:
 		# A version-1 save kept no guard state: the brakes were heard before it was left.
 		if not FieldSave.exact(opts["field_resume"]):
 			train_guard.resumed()
+		opts.erase("field_resume")
 	elif data["anchors"].has("whistle") and bool(opts.get("arrival_horde", true)):
 		# The train has just stood: its brakes are heard as the clock starts,
 		# the scene of it rolling in or not (decision 416).
@@ -710,6 +727,13 @@ func _apply_fx() -> void:
 		fx_light["sun_energy"] = float(clear_sky["sun_energy"]) * float(storm["sun"])
 		fx_light["sun_color"] = Color(fx_light["sun_color"]).lerp(storm["sun_color"], 0.6)
 		fx_light["ambient_color"] = Color(fx_light["ambient_color"]).lerp(storm["ambient_color"], 0.6)
+
+
+## The fires' sparks thin out in what is drawn falling (the atmosphere's kinds:
+## warm snow is drawn as rain, cold rain as snow), not the raw weather.
+func _push_fire_weather() -> void:
+	if night_view != null:
+		night_view.set_weather(fx_params, atmo.get("kinds", look_kinds))
 
 
 ## Snow keeps falling through the stop: lying snow deepens with the field clock
@@ -924,6 +948,7 @@ func _update_atmosphere() -> void:
 		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_set_view_fill()
 		_update_window_light()
+		_push_fire_weather()
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
@@ -942,9 +967,55 @@ func _set_view_fill() -> void:
 		return
 	var fill_energy: float = float(fx_light.get("fill_energy", 0.0)) if storm.is_empty() else 0.0
 	# Keep the diagnostic energy across minute updates without lighting night/storm.
-	view_fill.light_energy = float(view_fill.get_meta(PerfSwitch.FILL_ENERGY, fill_energy)) if fill_energy > 0.001 else fill_energy
+	var applied: float = float(view_fill.get_meta(PerfSwitch.FILL_ENERGY, fill_energy)) if fill_energy > 0.001 else fill_energy
+	view_fill.light_energy = applied
 	view_fill.light_color = fx_light.get("fill_color", Color.WHITE)
-	view_fill.visible = view_fill.light_energy > 0.001
+	var fill_state: String = _view_fill_state()
+	# Judge on the value set, not the light's stored float32 (0.001 reads back as 0.0010000000475).
+	var lit: bool = applied > 0.001
+	view_fill.visible = fill_state == "light" and lit
+	if PerfSwitch.fill_owner() != get_instance_id():
+		return
+	var fill_dir: Vector3 = Vector3.ZERO
+	var fill_value: Vector4 = Vector4.ZERO
+	if fill_state == "shader" and lit and view_fill.light_cull_mask != 0:
+		fill_dir = view_fill.global_transform.basis.z.normalized()
+		var linear: Color = view_fill.light_color.srgb_to_linear()
+		fill_value = Vector4(linear.r * applied, linear.g * applied, linear.b * applied, 1.0)
+	PerfSwitch.publish_fill(get_instance_id(), fill_dir, fill_value, _view_fill_state(false))
+
+
+func set_view_fill_mode(mode: String) -> void:
+	if mode not in ["light", "shader"]:
+		return
+	_view_fill_mode = mode
+	_set_view_fill()
+
+
+func _view_fill_state(include_lock: bool = true) -> String:
+	if include_lock and view_fill != null and view_fill.visibility_changed.is_connected(view_fill.hide):
+		return "off"
+	var mode: Variant = _perf_settings.get("view_fill_mode")
+	if mode is String and mode in ["light", "shader"]:
+		return String(mode)
+	return _view_fill_mode
+
+
+func _configure_view_fill() -> void:
+	# Desktop tools use opts/setter; this connection stays for the field's life.
+	if not visibility_changed.is_connected(_sync_view_fill_owner):
+		visibility_changed.connect(_sync_view_fill_owner)
+	set_view_fill_mode(String(opts.get("view_fill_mode", _view_fill_mode)))
+
+
+func _sync_view_fill_owner() -> void:
+	if view_fill == null:
+		return
+	if is_visible_in_tree():
+		PerfSwitch.claim_fill(get_instance_id())
+		_set_view_fill()
+	else:
+		PerfSwitch.release_fill(get_instance_id())
 
 
 ## Low sun through the windows (decision 474 B8): from 14:50 the pools on the
@@ -1083,6 +1154,7 @@ func _build_world() -> void:
 	add_child(view_fill)
 	_set_view_fill()
 	_configure_perf_switch()
+	_sync_view_fill_owner()
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
 	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
 	lantern.omni_attenuation = LANTERN_FALLOFF
@@ -1832,8 +1904,12 @@ func interrupt() -> void:
 	if hud != null:
 		hud.drop_touch()
 	# The one save slot, before the app may be shut (S3 spec 4). Off until the train side reads it.
-	if bool(opts.get("field_save", false)):
-		FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
+	# One home press sends focus-out and then pause: with the slot written as the app went, the
+	# second notice does not write it again (seconds for a big stop). The play stands still till
+	# the app is back (paused, or the stop ended); only the picture (camera, sight, the train
+	# rolling in) moves on meanwhile.
+	if bool(opts.get("field_save", false)) and not away_saved:
+		away_saved = FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
 	if ended:
 		return
 	if not away:
@@ -1845,6 +1921,8 @@ func interrupt() -> void:
 ## Back from an interrupt: one line, once (ui_states N4). Only when the app
 ## paused the field; a pause the player chose is not announced again.
 func welcome_back() -> void:
+	# Back: the next time the app goes, the slot is written again (an ended stop is never away).
+	away_saved = false
 	if not away:
 		return
 	away = false
@@ -1881,18 +1959,31 @@ func continue_resume() -> bool:
 
 
 func _configure_perf_switch() -> void:
+	_configure_view_fill()
 	# Phone measurements only; desktop fields never read the real user file.
 	if OS.has_feature("android"):
 		_apply_perf_settings(PerfSwitch.read())
 
 
-func _apply_perf_settings(settings: Dictionary) -> void:
+func _apply_perf_settings(settings: Dictionary) -> Dictionary:
+	var mode_before: Variant = _perf_settings.get("view_fill_mode")
+	var fill_was: bool = view_fill != null and view_fill.visible
 	_perf_settings = settings
+	var spark_changed := PerfSwitch.apply_night_sparks(night_view, settings)
+	if not spark_changed.is_empty():
+		print("PERF_SWITCH ", spark_changed)
+	var changed: Dictionary = {}
 	if not settings.is_empty():
 		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
-		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false)
-		if view_fill.has_meta(PerfSwitch.FILL_ENERGY):
-			_set_view_fill()
+		changed = PerfSwitch.apply(sun, view_fill, settings, false, false)
+		if settings.get("view_fill_mode") is String and settings["view_fill_mode"] in ["light", "shader"] \
+				and settings["view_fill_mode"] != mode_before:
+			changed["view_fill_mode"] = settings["view_fill_mode"]
+	_set_view_fill()
+	# The switch only reports the lock; the fill's own change shows once the field has decided.
+	if not settings.is_empty():
+		if view_fill != null and view_fill.visible != fill_was:
+			changed["view_fill"] = view_fill.visible
 		if not changed.is_empty():
 			print("PERF_SWITCH ", changed)
 	# StopLoader builds with visible=false, even with processing disabled.
@@ -1901,6 +1992,7 @@ func _apply_perf_settings(settings: Dictionary) -> void:
 	if not visibility_changed.is_connected(_apply_perf_renderer):
 		visibility_changed.connect(_apply_perf_renderer)
 	_apply_perf_renderer()
+	return changed
 
 
 func _apply_perf_renderer() -> void:
@@ -1920,6 +2012,7 @@ func _apply_perf_renderer() -> void:
 
 
 func _exit_tree() -> void:
+	PerfSwitch.release_fill(get_instance_id())
 	if _perf_renderer_active:
 		PerfSwitch.restore_renderer(get_instance_id())
 
@@ -1932,8 +2025,11 @@ func _process(delta: float) -> void:
 			hud.tick_resume()
 		if not away and resume_ready_at_ms < 0:
 			resume_ready_at_ms = Time.get_ticks_msec() + 1000
+		# The wait is a pause, so the world fades like any pause while the
+		# card is up; the first frame back may be long, so it eases in too.
+		_update_fade(minf(delta, PersonVisual.FRAME_MAX))
 		return
-	delta = minf(delta, 0.1)
+	delta = minf(delta, PersonVisual.FRAME_MAX)
 	if arrive_t >= 0.0:
 		_arrive(delta)
 	elif not ended and not paused:
@@ -1963,6 +2059,7 @@ func _process(delta: float) -> void:
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
 		p.visible = level_shown(level_of(p.position)) and _person_visible(p) and not rode_off.has(p) and arrive_t < 0.0
+		p.set_meta(PersonVisual.Pose.PICTURE_TIME, float(p.get_meta(PersonVisual.Pose.PICTURE_TIME, 0.0)) + PersonVisual.frame_delta(self, delta))
 		p.refresh_view(p.visible)
 	hud.tick(delta)
 	audio.tick(delta)
@@ -2174,7 +2271,7 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	var push := p.stick.length()
 	# A melee blow holds the feet from part way through it to its end (decision 425).
-	if push > 0.05 and combat.feet_held(p):
+	if combat.feet_held(p):
 		p.drive_speed = 0.0
 		p.moving = false
 		return
@@ -3896,7 +3993,7 @@ func _give_finds() -> void:
 			var boxes: Array = []
 			for id: String in data["containers"]:
 				var c: Dictionary = data["containers"][id]
-				if int(c.get("building", -1)) == b and not bool(c.get("locked", false)) and not c.has("pick"):
+				if int(c.get("building", -1)) == b and not bool(c.get("locked", false)) and not c.has("pick") and not LootTables.as_placed(c):
 					boxes.append(id)
 			if boxes.is_empty():
 				way = "none"

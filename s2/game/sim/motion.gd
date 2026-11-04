@@ -24,7 +24,8 @@ const OPEN: String = "open"
 const END: String = "end"
 
 ## The times are today's rules (field_combat.gd), written down as rows: the
-## shove winds up 0.15 s, lands, and the next one comes 0.35 s after that.
+## shove winds up 0.15 s, lands, and the arms are back 0.35 s after that (the
+## player's key then rests SHOVE_REST before the next one).
 const TABLE: Dictionary = {
 	"shove": {"len": 0.5, "hit": 0.15, "feet": Vector2(0.0, 0.15), "open": 0.3, "sound": 0.15, "upper": true, "loop": false},
 	# A dead body goes over (0.25 s in it meets the ground) and, at the end of its

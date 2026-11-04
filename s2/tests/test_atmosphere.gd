@@ -246,11 +246,13 @@ func test_the_night_light_is_a_neutral_grey() -> void:
 
 
 func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
-	# Contrast 1.2 about the hour's grey under a clear sky; an overcast, a fog or
-	# a sleet spreads the tones further, never less, and takes colour out (the
-	# grey day used to go flat).
-	var clear := Atmosphere.grade(Atmosphere.look(12.0, ["clear"], "K1", 0.0))
-	assert_almost_eq(float(clear["spread"]), Atmosphere.TONE_CONTRAST, 0.0001)
+	# Contrast 1.2 about the hour's grey under a clear sky, flattened by day to the
+	# faded print (TONE_DAY_FLAT); an overcast, a fog or a sleet spreads the tones
+	# further, never less, and takes colour out (the grey day used to go flat).
+	var clear_l := Atmosphere.look(12.0, ["clear"], "K1", 0.0)
+	var clear := Atmosphere.grade(clear_l)
+	var flat: float = lerpf(1.0, Atmosphere.TONE_DAY_FLAT, float(clear_l["weights"]["day"]))
+	assert_almost_eq(float(clear["spread"]), Atmosphere.TONE_CONTRAST * flat, 0.0001)
 	for kinds in [["overcast"], ["fog"], ["sleet"], ["blizzard"]]:
 		var g := Atmosphere.grade(Atmosphere.look(12.0, kinds, "K1", 0.0))
 		assert_gt(float(g["spread"]), float(clear["spread"]), "%s spreads the tones more" % [kinds])
@@ -259,12 +261,46 @@ func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 			var out: float = 0.5 + float(g["contrast"]) * (float(g["brightness"]) * c - 0.5)
 			assert_almost_eq(out, float(g["spread"]) * (c - 0.4) + 0.4, 0.0001, "%s turns about the day's grey" % [kinds])
 		assert_lt(float(g["saturation"]), float(clear["saturation"]), "%s takes colour out" % [kinds])
-	# Godot: 0.5 + k(b·c − 0.5). By day that is 1.2(c − 0.4) + 0.4.
+	# Godot: 0.5 + k(b·c − 0.5). By day that is 1.2·flat(c − 0.4) + 0.4.
 	for c: float in [0.1, 0.4, 0.8]:
 		var out: float = 0.5 + float(clear["contrast"]) * (float(clear["brightness"]) * c - 0.5)
-		assert_almost_eq(out, 1.2 * (c - 0.4) + 0.4, 0.0001)
+		assert_almost_eq(out, Atmosphere.TONE_CONTRAST * flat * (c - 0.4) + 0.4, 0.0001)
 	assert_almost_eq(float(clear["pivot"]), Atmosphere.TONE_PIVOT_DAY, 0.0001)
-	assert_lte(float(clear["saturation"]), 1.0, "the grade never adds colour by day")
+	# The faded day parts the channels as before: spread x saturation keeps the
+	# unflattened grade's product, that saturation read from the weather, the hour
+	# and the region alone (not back from this result).
+	var cw: Dictionary = clear_l["weights"]
+	var cveil := float(clear_l["veil"])
+	var plain_sat: float = lerpf(1.0, 0.9, cveil) * lerpf(1.0, 0.72, float(cw["night"])) \
+			* (1.0 + 0.1 * (float(cw["dawn"]) + float(cw["dusk"])) * (1.0 - cveil)) * float(clear_l.get("region_sat", 1.0))
+	assert_almost_eq(float(clear["saturation"]) * float(clear["spread"]), plain_sat * Atmosphere.TONE_CONTRAST, 0.0001,
+			"the faded day parts the channels as before")
+	var unflat := _bcs_grade(Atmosphere.TONE_CONTRAST, float(clear["pivot"]), plain_sat)
+	var b := float(clear["brightness"])
+	var k := float(clear["contrast"])
+	var s := float(clear["saturation"])
+	# On screen the mid tones (snow, grass, bare wood, brick, a coat, floor boards, dark
+	# cloth) gain no HSV saturation past 0.01. The slack is the near-white snow,
+	# 0.048 -> 0.053: below what the eye reads on a white field, while every coloured
+	# sample loses some.
+	var mids: Array[Color] = [Color(0.86, 0.88, 0.90), Color(0.42, 0.45, 0.25), Color(0.30, 0.25, 0.20),
+			Color(0.55, 0.30, 0.25), Color(0.25, 0.27, 0.32), Color(0.45, 0.32, 0.20), Color(0.15, 0.13, 0.12)]
+	for sample: Color in mids:
+		var now: Color = _bcs(sample, b, k, s)
+		var before: Color = _bcs(sample, unflat.x, unflat.y, unflat.z)
+		assert_lte(now.s, before.s + 0.01, "the faded day adds no colour to %s" % [sample])
+	# The ends the old contrast clipped to white or to black (a warm highlight, a
+	# near-black cloth, a bright orange) come back a little, as a faded print keeps its
+	# highlights and blacks: their HSV saturation can rise (0 -> 0.10 on the highlight,
+	# 0 -> 0.85 on the cloth at V 0.06). No colour parts its channels on screen further
+	# than the old grade did before its clip.
+	var ends: Array[Color] = [Color(0.98, 0.92, 0.90), Color(0.06, 0.04, 0.02), Color(0.90, 0.60, 0.20)]
+	for sample: Color in mids + ends:
+		var raw_now := _bcs_raw(sample, b, k, s)
+		var raw_before := _bcs_raw(sample, unflat.x, unflat.y, unflat.z)
+		assert_almost_eq(_channel_spread(raw_now), _channel_spread(raw_before), 0.0001, "the channels part as before the clip: %s" % [sample])
+		var now: Color = _bcs(sample, b, k, s)
+		assert_lte(_channel_spread(Vector3(now.r, now.g, now.b)), _channel_spread(raw_before) + 0.0001, "no further apart on screen: %s" % [sample])
 	# At night the grey sinks with the light, so the spread keeps the night's level.
 	var t := Atmosphere.sun_times(0.0)
 	var night := Atmosphere.grade(Atmosphere.look(t.y + 3.0, ["clear"], "K1", 0.0))
@@ -272,6 +308,36 @@ func test_the_tone_holds_in_every_weather_and_only_colour_goes() -> void:
 	assert_lt(p, 0.15)
 	assert_gt(float(night["spread"]), Atmosphere.TONE_CONTRAST, "the night spreads the lamps from the dark")
 	assert_almost_eq(0.5 + float(night["contrast"]) * (float(night["brightness"]) * p - 0.5), p, 0.0001)
+
+
+func test_the_faded_day_eases_in_with_the_day_weight_only() -> void:
+	# The flattening follows the day's weight: none where it is 0 (a pure dawn, dusk or
+	# night keeps its grade as it was), part way through the hours where dawn or dusk
+	# meets the day (so the picture does not step), full at noon. The channels part as
+	# before at every hour.
+	var untouched := 0
+	var between := 0
+	for region: String in Atmosphere.REGIONS:
+		for q in range(0, 96):
+			var l := Atmosphere.look(q * 0.25, ["clear"], region, 0.0)
+			var g := Atmosphere.grade(l)
+			var w: Dictionary = l["weights"]
+			var veil := float(l["veil"])
+			var day := float(w["day"])
+			var plain_spread: float = lerpf(Atmosphere.TONE_CONTRAST, Atmosphere.TONE_CONTRAST_DIM, maxf(veil, float(w["night"]))) \
+					* (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(w["dusk"]))
+			var plain_sat: float = lerpf(1.0, 0.9, veil) * lerpf(1.0, 0.72, float(w["night"])) \
+					* (1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - veil)) * float(l.get("region_sat", 1.0))
+			var at := "%s %.2f h" % [region, q * 0.25]
+			assert_almost_eq(float(g["spread"]), plain_spread * lerpf(1.0, Atmosphere.TONE_DAY_FLAT, day), 0.0001, at)
+			assert_almost_eq(float(g["saturation"]) * float(g["spread"]), plain_sat * plain_spread, 0.0001, "the channels part as before: " + at)
+			if day <= 0.0:
+				assert_almost_eq(float(g["spread"]), plain_spread, 0.000001, "no day, no flattening: " + at)
+				untouched += 1
+			elif day < 1.0 and float(w["dawn"]) + float(w["dusk"]) > 0.0:
+				between += 1
+	assert_gt(untouched, 0, "pure dawn, dusk and night hours were met")
+	assert_gt(between, 0, "the hours where dawn or dusk meets the day were met")
 
 
 func test_snow_in_the_sun_takes_the_exposure_down() -> void:
@@ -308,10 +374,11 @@ func test_rain_by_day_eases_the_spread_and_keeps_the_grey() -> void:
 	var overcast := Atmosphere.grade(Atmosphere.look(12.0, ["overcast"], "K1", 0.0))
 	var veiled: float = lerpf(Atmosphere.TONE_CONTRAST, Atmosphere.TONE_CONTRAST_DIM, float(l["veil"]))
 	var w: Dictionary = l["weights"]
-	assert_almost_eq(float(rain["spread"]), veiled * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(w["dusk"])) * (1.0 - Atmosphere.TONE_RAIN_EASE * float(l["fall"]) * float(w["day"])), 0.0001)
+	var day_flat: float = lerpf(1.0, Atmosphere.TONE_DAY_FLAT, float(w["day"]))
+	assert_almost_eq(float(rain["spread"]), veiled * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(w["dusk"])) * (1.0 - Atmosphere.TONE_RAIN_EASE * float(l["fall"]) * float(w["day"])) * day_flat, 0.0001)
 	assert_gt(float(w["day"]), 0.9, "noon is the day")
 	assert_lt(float(rain["spread"]), float(overcast["spread"]), "rain eases the spread")
-	assert_gt(float(rain["spread"]), Atmosphere.TONE_CONTRAST, "never flatter than a clear day")
+	assert_gt(float(rain["spread"]), Atmosphere.TONE_CONTRAST * day_flat, "never flatter than a clear day")
 	assert_almost_eq(float(rain["pivot"]), float(overcast["pivot"]), 0.0001, "about the same grey")
 	# Godot parts the channels by the spread times the saturation: the ease keeps the colour.
 	var sat_plain: float = lerpf(1.0, 0.9, float(l["veil"])) * (1.0 + 0.1 * (float(w["dawn"]) + float(w["dusk"])) * (1.0 - float(l["veil"]))) * float(l.get("region_sat", 1.0))
@@ -328,7 +395,7 @@ func test_rain_by_day_eases_the_spread_and_keeps_the_grey() -> void:
 	var snow_l := Atmosphere.look(12.0, ["snow"], "K1", 0.9)
 	assert_ne(String(snow_l["falls"]), "rain")
 	var snow_veiled: float = lerpf(Atmosphere.TONE_CONTRAST, Atmosphere.TONE_CONTRAST_DIM, float(snow_l["veil"]))
-	assert_almost_eq(float(Atmosphere.grade(snow_l)["spread"]), snow_veiled * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(snow_l["weights"]["dusk"])), 0.0001)
+	assert_almost_eq(float(Atmosphere.grade(snow_l)["spread"]), snow_veiled * (1.0 + Atmosphere.TONE_CONTRAST_DUSK * float(snow_l["weights"]["dusk"])) * lerpf(1.0, Atmosphere.TONE_DAY_FLAT, float(snow_l["weights"]["day"])), 0.0001)
 	# Every region, the day through (dawn and dusk meeting the day too): never
 	# flatter than a clear day at that hour, the channels parted as without the
 	# ease, no more colour than a clear day.
@@ -347,7 +414,8 @@ func test_rain_by_day_eases_the_spread_and_keeps_the_grey() -> void:
 			assert_gte(float(rg["spread"]) + 0.0001, float(cg["spread"]), "never flatter than a clear day: " + at)
 			assert_almost_eq(float(rg["saturation"]) * float(rg["spread"]), plain_sat * plain_spread, 0.0001, "the channels part as before: " + at)
 			assert_lte(float(rg["saturation"]), float(cg["saturation"]) + 0.0001, "no more colour than a clear day: " + at)
-			eased += 1 if float(rg["spread"]) < plain_spread - 0.0001 else 0
+			var flat_h: float = lerpf(1.0, Atmosphere.TONE_DAY_FLAT, float(rw["day"]))
+			eased += 1 if float(rg["spread"]) < plain_spread * flat_h - 0.0001 else 0
 	assert_gt(eased, 0, "the ease is on by day somewhere")
 
 
@@ -821,6 +889,30 @@ func test_region_looks_keep_the_light_of_a_sun_at_full_red() -> void:
 
 func _region_rgb_distance(a: Color, b: Color) -> float:
 	return maxf(absf(a.r - b.r), maxf(absf(a.g - b.g), absf(a.b - b.b)))
+
+
+# Godot's brightness and contrast for a spread about a grey: k = 1 + 2·pivot(spread − 1), b = spread / k.
+func _bcs_grade(spread: float, pivot: float, sat: float) -> Vector3:
+	var k := 1.0 + 2.0 * pivot * (spread - 1.0)
+	return Vector3(spread / k, k, sat)
+
+
+# Godot's tonemap order: brightness, contrast about 0.5, saturation about the channel mean.
+func _bcs_raw(c: Color, b: float, k: float, s: float) -> Vector3:
+	var v := Vector3(c.r, c.g, c.b) * b
+	v = Vector3(0.5, 0.5, 0.5) + (v - Vector3(0.5, 0.5, 0.5)) * k
+	var m := (v.x + v.y + v.z) / 3.0
+	return Vector3(m, m, m) + (v - Vector3(m, m, m)) * s
+
+
+# The same, clipped to the screen.
+func _bcs(c: Color, b: float, k: float, s: float) -> Color:
+	var v := _bcs_raw(c, b, k, s).clamp(Vector3.ZERO, Vector3.ONE)
+	return Color(v.x, v.y, v.z)
+
+
+func _channel_spread(v: Vector3) -> float:
+	return maxf(v.x, maxf(v.y, v.z)) - minf(v.x, minf(v.y, v.z))
 
 
 func test_neighbouring_region_looks_have_distinct_light_colours() -> void:

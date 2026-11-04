@@ -55,6 +55,8 @@ const EFFECT: Dictionary = {
 	"x1": "아동 노동: 짐 꾸리기만", "m2": "중환자 분류: 기준 변형",
 	"m3a": "종자곡 풀기: 반만 변형", "m3b": "공동 식당: 식량 −1.5",
 	"w2a": "고철로 권총탄", "w2b": "화살 깎기", "w4": "태엽 미끼",
+	"w6": "공방 생필품 만들기", "w7a": "일 −30% · 고철 +25%", "w7b": "일 +30% · 생산 1.5 · 고철 +50%",
+	"w7": "생필품 조리법 선택", "w8": "고철 두 배로 좋은 물건",
 }
 const ROW_TOP: float = 66.0
 const ROW_H: float = 54.0
@@ -412,9 +414,16 @@ func _upkeep(r: Dictionary, top: float) -> float:
 	var k: float = UiFonts.K
 	var x: float = 316.0
 	var upkeep: Array = r["upkeep"]
+	# S1 upkeepText's words around the marks: 「유지 ⚙ 0.25/구간」, what it takes a stretch.
+	var tint: Color = RED if bool(r["starved"]) else INK2
+	var per := _label("UpkeepPer_" + String(r["id"]), "/구간", UiFonts.WORD, 400, 12.0, tint, 0.0)
+	per.name = "UpkeepPer_" + String(r["id"])
+	x -= GlassParts.text_w(per) / k
+	_text(per, x, top + 26.0)
+	x -= 1.0
 	for i in range(upkeep.size() - 1, -1, -1):
 		var u: Dictionary = upkeep[i]
-		var color: Color = RED if bool(r["starved"]) else INK2
+		var color: Color = tint
 		var n := _label("Upkeep_%s_%s" % [r["id"], u["key"]], str(snappedf(float(u["n"]), 0.01)), UiFonts.NUMBER, 400, 13.0, color, 0.52)
 		n.name = "Upkeep_%s_%s" % [r["id"], u["key"]]
 		x -= GlassParts.text_w(n) / k
@@ -422,7 +431,11 @@ func _upkeep(r: Dictionary, top: float) -> float:
 		x -= 19.0
 		_add(_mark(String(u["icon"]), 15.0, Vector2(x, top + 13.0), color, "UpkeepMark_%s_%s" % [r["id"], u["key"]]))
 		x -= 10.0
-	return x + 10.0
+	var word := _label("UpkeepWord_" + String(r["id"]), "유지", UiFonts.WORD, 400, 12.0, tint, 0.0)
+	word.name = "UpkeepWord_" + String(r["id"])
+	x += 4.0 - GlassParts.text_w(word) / k
+	_text(word, x, top + 26.0)
+	return x
 
 
 ## The ways a restoration can go, a full key each, in the row's place (its
