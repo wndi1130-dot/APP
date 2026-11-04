@@ -3780,14 +3780,27 @@ static func _person_walk_allocate_paths(proposals: Array, seen: Dictionary, star
 	return {"selected": selected, "unique": unique.size(), "omitted": remaining.size()}
 
 
+## Explicit diagnostics opt in through a temporary project setting.
+static func _person_walk_budget_scale_for_tests() -> float:
+	var value: Variant = ProjectSettings.get_setting("body_bake/walk_budget_scale_for_tests", 1.0)
+	if not (value is float or value is int):
+		return 1.0
+	var scale: float = float(value)
+	return maxf(1.0, scale) if is_finite(scale) else 1.0
+
+
 ## One ledger covers all candidates and clips in this rig context.
 static func _person_walk_budget(limits: Dictionary = {}) -> Dictionary:
 	var caps: Dictionary = {"bounds": PERSON_WALK_BUDGET_BOUNDS, "clip_bounds": PERSON_WALK_BUDGET_CLIP_BOUNDS,
 		"ik": PERSON_WALK_BUDGET_IK, "clip_ik": PERSON_WALK_BUDGET_CLIP_IK,
 		"project": PERSON_WALK_BUDGET_PROJECT, "paths": PERSON_WALK_BUDGET_PATHS}
+	var scale: float = _person_walk_budget_scale_for_tests()
 	for key: String in caps:
+		if scale > 1.0:
+			caps[key] = ceili(float(caps[key]) * scale)
+		# Explicit small limits remain absolute for exhaustion fixtures.
 		caps[key] = clampi(int(limits.get(key, caps[key])), 0, int(caps[key]))
-	return {"limits": caps, "used": {}, "clips": {}, "exhausted": false, "kind": "", "clip": ""}
+	return {"limits": caps, "used": {}, "clips": {}, "exhausted": false, "kind": "", "clip": "", "scale": scale}
 
 
 static func _person_walk_spend(budget: Dictionary, kind: String, clip: String, amount: int = 1) -> bool:
@@ -4551,7 +4564,8 @@ static func _fit_person_footlock(ctx: Dictionary, entry: Array, phase: Dictionar
 	if bool(searched["ok"]):
 		fit = searched["fit"]
 		fit["search"] = {"candidate": searched["candidate"], "geometry_count": searched["geometry_count"],
-			"skin_count": searched["skin_count"], "trials": searched["trials"], "coverage": searched["coverage"], "budget": searched["budget"]}
+			"skin_count": searched["skin_count"], "trials": searched["trials"], "coverage": searched["coverage"], "budget": searched["budget"],
+			"joint": searched.get("joint", {})}
 		fit["pelvis"]["fit_failures"] = ctx.get_or_add("fit_failures", [])
 		ctx["footlock_walk"] = fit
 	else:

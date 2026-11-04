@@ -2256,3 +2256,72 @@ func test_walk_stage_ledger_and_failure_witness_keep_last_joint_attempt() -> voi
 	var joint: Dictionary = {"stage": "dense", "reprojections": 2, "knee_feedbacks": 1, "stage_ik": budget["stages"]}
 	var witness: Dictionary = BodyBake._person_walk_skin_witness({"reason": "DENSE_ITER_LIMIT", "joint": joint})
 	assert_eq(witness["joint"], joint)
+
+
+func _walk_budget_at_test_scale(value: Variant, limits: Dictionary = {}) -> Dictionary:
+	var key: String = "body_bake/walk_budget_scale_for_tests"
+	var previous: Variant = ProjectSettings.get_setting(key, null)
+	ProjectSettings.set_setting(key, value)
+	var budget: Dictionary = BodyBake._person_walk_budget(limits)
+	ProjectSettings.set_setting(key, previous)
+	return budget
+
+
+func test_walk_budget_default_and_unit_scale_keep_original_caps() -> void:
+	var expected: Dictionary = {"bounds": 131072, "clip_bounds": 32768, "ik": 16384,
+		"clip_ik": 4096, "project": 1048576, "paths": 128}
+	for value: Variant in [null, 1.0]:
+		var budget: Dictionary = _walk_budget_at_test_scale(value)
+		assert_eq(budget["limits"], expected)
+		assert_almost_eq(float(budget["scale"]), 1.0, 0.000001)
+		assert_true((budget["used"] as Dictionary).is_empty())
+		assert_true((budget["clips"] as Dictionary).is_empty())
+		assert_false(bool(budget["exhausted"]))
+		assert_eq(_walk_budget_at_test_scale(value, {"ik": 999999, "paths": -1})["limits"]["ik"], 16384)
+		assert_eq(_walk_budget_at_test_scale(value, {"paths": -1})["limits"]["paths"], 0)
+
+
+func test_walk_budget_scale_multiplies_every_cap_once_and_keeps_explicit_limits() -> void:
+	var base: Dictionary = _walk_budget_at_test_scale(1.0)["limits"]
+	for scale: float in [2.0, 4.0, 10.0, 1.1]:
+		var budget: Dictionary = _walk_budget_at_test_scale(scale)
+		assert_almost_eq(float(budget["scale"]), scale, 0.000001)
+		for key: String in base:
+			assert_eq(int(budget["limits"][key]), ceili(float(base[key]) * scale), key)
+		var limited: Dictionary = _walk_budget_at_test_scale(scale, {"ik": 3, "clip_ik": 1})
+		assert_eq(int(limited["limits"]["ik"]), 3)
+		assert_eq(int(limited["limits"]["clip_ik"]), 1)
+		assert_true(BodyBake._person_walk_spend(limited, "ik", "p_walk"))
+		assert_false(BodyBake._person_walk_spend(limited, "ik", "p_walk"))
+		assert_eq(int(limited["used"]["ik"]), 1)
+
+
+func test_walk_budget_scale_rejects_non_numeric_and_non_finite_values() -> void:
+	var expected: Dictionary = _walk_budget_at_test_scale(1.0)["limits"]
+	var setting: String = "body_bake/walk_budget_scale_for_tests"
+	var previous: Variant = ProjectSettings.get_setting(setting, null)
+	for value: Variant in [0, -2.0, 0.5, NAN, INF, -INF, "4", true]:
+		var budget: Dictionary = _walk_budget_at_test_scale(value)
+		assert_eq(budget["limits"], expected)
+		assert_almost_eq(float(budget["scale"]), 1.0, 0.000001)
+	assert_eq(ProjectSettings.get_setting(setting, null), previous, "temporary scales restore the prior setting")
+
+
+func test_walk_scaled_shared_and_clip_ledgers_stop_at_their_limits() -> void:
+	for kind: String in ["ik", "bounds"]:
+		var shared: Dictionary = _walk_budget_at_test_scale(2.0)
+		var clip_cap: int = int(shared["limits"]["clip_" + kind])
+		for clip: String in ["p_walk", "p_walk_long", "p_walk_axe", "p_walk_pistol"]:
+			assert_true(BodyBake._person_walk_spend(shared, kind, clip, clip_cap))
+		assert_eq(int(shared["used"][kind]), int(shared["limits"][kind]))
+		assert_false(BodyBake._person_walk_spend(shared, kind, "p_carry_big"))
+		var single: Dictionary = _walk_budget_at_test_scale(2.0)
+		assert_true(BodyBake._person_walk_spend(single, kind, "p_walk", clip_cap))
+		assert_false(BodyBake._person_walk_spend(single, kind, "p_walk"))
+		assert_eq(int(single["used"][kind]), clip_cap)
+	for kind: String in ["project", "paths"]:
+		var budget: Dictionary = _walk_budget_at_test_scale(2.0)
+		var cap: int = int(budget["limits"][kind])
+		assert_true(BodyBake._person_walk_spend(budget, kind, "shared", cap))
+		assert_false(BodyBake._person_walk_spend(budget, kind, "shared"))
+		assert_eq(int(budget["used"][kind]), cap)

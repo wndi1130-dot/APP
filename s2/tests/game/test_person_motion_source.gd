@@ -17,6 +17,8 @@ const SOURCE_RIGS: Array[String] = ["driver", "duffel_b1v2", "fitter", "guard", 
 
 var _fixtures: Array[Dictionary] = []
 var _folder_count: int = 0
+var _walk_budget_scale_changed: bool = false
+var _walk_budget_scale_before: Variant = null
 
 
 ## Decision 535 drafts: run only in the bake/test session, after rebuilding bodies
@@ -182,6 +184,58 @@ func before_all() -> void:
 
 func after_all() -> void:
 	_fixtures.clear()
+
+
+func after_each() -> void:
+	if _walk_budget_scale_changed:
+		ProjectSettings.set_setting("body_bake/walk_budget_scale_for_tests", _walk_budget_scale_before)
+		_walk_budget_scale_changed = false
+
+
+func _configure_walk_budget_scale_for_tests() -> bool:
+	if not OS.has_environment("BODY_BAKE_WALK_BUDGET_SCALE_FOR_TESTS"):
+		return true
+	var text: String = OS.get_environment("BODY_BAKE_WALK_BUDGET_SCALE_FOR_TESTS").strip_edges()
+	var scale: float = text.to_float() if text.is_valid_float() else NAN
+	var valid: bool = is_finite(scale) and scale >= 1.0
+	assert_true(valid, "walk budget scale must be a finite number >= 1")
+	if not valid:
+		return false
+	_walk_budget_scale_before = ProjectSettings.get_setting("body_bake/walk_budget_scale_for_tests", null)
+	_walk_budget_scale_changed = true
+	ProjectSettings.set_setting("body_bake/walk_budget_scale_for_tests", scale)
+	return true
+
+
+func _print_walk_rig_budget_use(rig_name: String, ctx: Dictionary, fit: Dictionary, ok: bool, stop_reason: String = "") -> void:
+	var search: Dictionary = fit.get("search", {})
+	var budget: Dictionary = ctx.get("walk_work_budget", search.get("budget", {}))
+	var witness: Dictionary = search.get("witness", {})
+	var skin: Dictionary = witness.get("last_skin_failure", {})
+	var joint: Dictionary = search.get("joint", witness.get("last_joint_attempt", {}))
+	var used: Dictionary = {}
+	for kind: String in ["ik", "bounds", "project", "paths"]:
+		used[kind] = int(budget.get("used", {}).get(kind, 0))
+	var clips: Dictionary = {}
+	for clip: String in GROUPS["walk"]:
+		clips[clip] = {"ik": 0, "bounds": 0, "project": 0, "paths": 0}
+	for clip: String in budget.get("clips", {}):
+		var counts: Dictionary = {}
+		for kind: String in used:
+			counts[kind] = int(budget["clips"][clip].get(kind, 0))
+		clips[clip] = counts
+	if stop_reason.is_empty():
+		stop_reason = "OK" if ok else str(search.get("reason", "ASSERTION_FAILED"))
+	print("WALK_RIG_BUDGET_USE " + JSON.stringify({"rig": rig_name, "ok": ok,
+		"scale": budget.get("scale", BodyBake._person_walk_budget_scale_for_tests()), "used": used, "clips": clips,
+		"stop_reason": stop_reason, "skin_reason": skin.get("reason", "OK" if ok else "UNTRIED"),
+		"passes": {"joint": joint.get("stage_passes", {}), "skin": int(skin.get("ik_passes", 0)),
+			"ik_by_stage": budget.get("stages", {})}}))
+
+
+func _print_walk_unavailable_budgets(reason: String) -> void:
+	for rig_name: String in SOURCE_RIGS:
+		_print_walk_rig_budget_use(rig_name, {}, {}, false, reason)
 
 
 func _clip(fixture: Dictionary, name_text: String) -> Dictionary:
@@ -441,17 +495,23 @@ func test_standing_source_support_is_upright_on_all_fourteen_rigs() -> void:
 ## VAT contains no joint origins: knee/hip checks use the original rigs.
 ## Missing source files are pending; present files that fail to import are failures.
 func test_walking_source_mid_knees_hips_and_footlock_on_all_fourteen_rigs() -> void:
+	if not _configure_walk_budget_scale_for_tests():
+		_print_walk_unavailable_budgets("INVALID_BUDGET_SCALE")
+		return
 	var directory: String = ProjectSettings.globalize_path("res://").path_join("../../_motion_src").simplify_path()
 	var names: Array[String] = ["driver", "duffel_b1v2", "fitter", "guard", "guard_f", "hunter_f", "lumberjack", "medic", "overalls", "railman_old", "seamstress", "sheepskin", "stoker", "woodsman"]
 	if not FileAccess.file_exists(directory.path_join("UAL1.glb")):
 		pending("walking joint checks require original _motion_src/UAL1.glb")
+		_print_walk_unavailable_budgets("MOTION_SOURCE_MISSING")
 		return
 	for rig_name: String in names:
 		if not FileAccess.file_exists(directory.path_join("rig").path_join(rig_name + ".glb")):
 			pending("walking joint checks require original rig " + rig_name)
+			_print_walk_unavailable_budgets("RIG_SOURCE_MISSING:" + rig_name)
 			return
 	var motion: Node3D = _stand_source_scene(directory.path_join("UAL1.glb"))
 	if motion == null:
+		_print_walk_unavailable_budgets("MOTION_LOAD_FAILED")
 		return
 	add_child(motion)
 	var walks: Array = []
@@ -460,13 +520,16 @@ func test_walking_source_mid_knees_hips_and_footlock_on_all_fourteen_rigs() -> v
 			walks.append(entry)
 	var checked: int = 0
 	for rig_name: String in names:
+		var failures_before: int = get_fail_count()
 		var root: Node3D = _stand_source_scene(directory.path_join("rig").path_join(rig_name + ".glb"))
 		if root == null:
+			_print_walk_rig_budget_use(rig_name, {}, {}, false, "RIG_LOAD_FAILED")
 			continue
 		add_child(root)
 		var ctx: Dictionary = BodyBake.prepare(root, motion, walks + [BodyBake.PERSON_CLIPS[2]], [])
 		assert_false(ctx.is_empty(), rig_name + " walking context")
 		if ctx.is_empty():
+			_print_walk_rig_budget_use(rig_name, ctx, {}, false, "CONTEXT_EMPTY")
 			root.queue_free()
 			continue
 		var walk: Array = walks[0]
@@ -479,6 +542,7 @@ func test_walking_source_mid_knees_hips_and_footlock_on_all_fourteen_rigs() -> v
 		var fit: Dictionary = BodyBake._fit_person_footlock(ctx, walk, phase)
 		assert_false(fit.is_empty(), rig_name + " canonical footlock fit")
 		if fit.is_empty():
+			_print_walk_rig_budget_use(rig_name, ctx, fit, false, "FIT_EMPTY")
 			root.queue_free()
 			continue
 		var table: Dictionary = fit["pelvis"]
@@ -538,6 +602,7 @@ func test_walking_source_mid_knees_hips_and_footlock_on_all_fourteen_rigs() -> v
 				assert_eq(int(note["height_fail_frames"]), 0, label + " exact bake phase height feasible")
 				assert_gte(float(note["knee_forward_min_m"]), -0.00001, label + " fixed forward knee branch")
 				assert_eq(int(note["knee_backward_frames"]), 0, label + " no backward knee")
+		_print_walk_rig_budget_use(rig_name, ctx, fit, get_fail_count() == failures_before and bool(table.get("ok", false)))
 		checked += 1
 		root.queue_free()
 	assert_eq(checked, 14, "all original living rigs checked")
