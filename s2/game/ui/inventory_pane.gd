@@ -157,14 +157,19 @@ static func open(hud, want: Dictionary) -> void:
 		hud.inv_weapon_open_id = ""
 		hud.inv_expand = {}
 		hud.inv_fold_until_ms = 0
+		hud.inv_fold_taking = false
 		hud.inv_fold_open = false
 		hud.inv_bag_scroll = 0
 		hud.inv_scroll_pending = {}
 	var taking: bool = taking_id(game, p) != ""
 	var now_ms: int = Time.get_ticks_msec()
 	if taking:
+		hud.inv_fold_taking = true
+	elif hud.inv_fold_taking:
+		# The last thing is out: the fold stays FOLD_LINGER_S from this moment on.
+		hud.inv_fold_taking = false
 		hud.inv_fold_until_ms = now_ms + int(FOLD_LINGER_S * 1000.0)
-	elif now_ms >= hud.inv_fold_until_ms:
+	if not taking and now_ms >= hud.inv_fold_until_ms:
 		hud.inv_fold_open = false
 	var folded: bool = not hud.inv_fold_open and (taking or now_ms < hud.inv_fold_until_ms)
 	var kept: Dictionary = hud._bag_scrolls() if again else {}

@@ -697,16 +697,19 @@ func test_by_touch_the_can_is_thrown_only_when_its_key_is_held_full() -> void:
 	if throw == null:
 		hud._close_modal()
 		return
-	var hold := throw.get_node("Hold") as Control
+	var hold = throw.get_node("Hold")
 	var home: Vector2 = hud.stick_home()
 	_touch(hud, home, true)
 	var at: Vector2 = throw.get_global_rect().get_center()
 	_touch(hud, at, true, 1)
-	await _wait(HoldConfirm.HOLD_S * 0.5)
-	var half: float = float(hold.get("state")["fill"])
-	assert_between(half, 0.25, 0.85, "the line fills while the finger stays")
+	# The half hold by fixed steps, not the clock: a slow frame past HOLD_S would
+	# fire it and free the hold under the check.
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S * 0.5)
+	assert_almost_eq(float(hold.state["fill"]), 0.5, 0.01, "the line fills while the finger stays")
 	_touch(hud, at, false, 1)
-	await _wait(HoldConfirm.BACK_S + 0.1)
+	hold.set_process(false)
+	hold.advance(HoldConfirm.BACK_S + 0.01)
 	assert_eq(int(p.items.get("can_empty", 0)), 2, "a short press throws nothing")
 	assert_true(hud.modal_open, "the pane stays up")
 	assert_eq(float(hold.get("state")["fill"]), 0.0, "the line wound back")
@@ -741,21 +744,26 @@ func test_by_touch_a_second_finger_loads_the_train_only_when_held_full() -> void
 	var home: Vector2 = hud.stick_home()
 	_touch(hud, home, true)
 	var at: Vector2 = key.get_global_rect().get_center()
+	var hold = key.get_node("Hold")
+	# Half holds by fixed steps, not the clock (a slow frame would fire them).
 	_touch(hud, at, true, 1)
-	await _wait(HoldConfirm.HOLD_S * 0.5)
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S * 0.5)
 	_touch(hud, at, false, 1)
 	assert_eq(int(p.items.get("scrap", 0)), 1, "a short press loads nothing")
 	# Let the line wind back first: pressed again while winding back it fills on
 	# from where it stood (hold_step), which would fire before the check below.
-	await _wait(HoldConfirm.BACK_S + 0.1)
-	var hold := key.get_node("Hold") as Control
-	assert_eq(float(hold.get("state")["fill"]), 0.0, "the short press wound back")
+	hold.set_process(false)
+	hold.advance(HoldConfirm.BACK_S + 0.01)
+	assert_eq(float(hold.state["fill"]), 0.0, "the short press wound back")
 	_touch(hud, at, true, 1)
 	_drag(hud, at + Vector2(30, 0), 1)
-	await _wait(HoldConfirm.HOLD_S * 0.5)
-	assert_true(is_instance_valid(hold), "half a hold loads nothing yet")
-	if is_instance_valid(hold):
-		assert_between(float(hold.get("state")["fill"]), 0.25, 0.85, "30 canvas px inside the key keeps filling")
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S * 0.5)
+	assert_almost_eq(float(hold.state["fill"]), 0.5, 0.01, "30 canvas px inside the key keeps filling")
+	assert_eq(int(p.items.get("scrap", 0)), 1, "half a hold loads nothing yet")
+	# The rest by the clock: the frames themselves fill it.
+	hold.set_process(true)
 	await _wait(HoldConfirm.HOLD_S * 0.5 + 0.25)
 	_touch(hud, at, false, 1)
 	assert_false(p.items.has("scrap"), "a full hold loads it")
@@ -922,15 +930,60 @@ func test_taking_folds_to_the_old_width_then_lingers_and_unfolds() -> void:
 	assert_almost_eq(pane.get_global_rect().end.x, pane.get_viewport_rect().end.x, 1.0)
 	assert_almost_eq(float(hud.modal.find_child("NearScroll", true, false).global_position.x), near_x, 1.0)
 	assert_not_null(hud.modal.find_child("BagStrip", true, false))
+	# Taking for longer than the linger (the field stands still here, so the thing
+	# is still coming out): the fold's second runs from the last thing out, not
+	# from the laying that began it.
+	await _wait(InventoryPane.FOLD_LINGER_S + 0.1)
+	assert_eq(p.action, "take")
 	p.action_t = 0.001
+	# The pane is laid somewhere between these two ticks (laying it takes time).
+	var before_ms: int = Time.get_ticks_msec()
 	game._update_person(p, 0.1)
+	var after_ms: int = Time.get_ticks_msec()
 	assert_eq(p.action, "")
 	assert_not_null(hud.modal.find_child("BagStrip", true, false), "the last thing out keeps the fold briefly")
+	var linger_ms: int = int(InventoryPane.FOLD_LINGER_S * 1000.0)
+	assert_between(hud.inv_fold_until_ms, before_ms + linger_ms, after_ms + linger_ms, "a second from the last thing out")
 	await _wait(maxf(0.0, float(hud.inv_fold_until_ms - Time.get_ticks_msec()) / 1000.0) + 0.15)
 	await _layout()
 	assert_null(hud.modal.find_child("BagStrip", true, false))
 	assert_not_null(hud.modal.find_child("Bag", true, false))
 	assert_false(hud.inv_fold_open)
+	hud._close_modal()
+
+
+## 「모두 담기」 keeps the bag folded from one thing to the next and lingers its
+## second from the last thing out, however long the box took.
+func test_taking_everything_folds_until_the_last_is_out() -> void:
+	var game = _game()
+	var hud = game.hud
+	var p = game.player
+	p.items.clear()
+	var id: String = _box(game, ["scrap", "wood"])
+	hud.loot(id)
+	await _layout()
+	hud._loot_all(id)
+	await _layout()
+	assert_eq(p.action, "take")
+	assert_not_null(hud.modal.find_child("BagStrip", true, false), "taking everything folds the bag")
+	p.action_t = 0.001
+	game._update_person(p, 0.1)
+	assert_eq(p.action, "take", "the next thing is coming out")
+	assert_not_null(hud.modal.find_child("BagStrip", true, false), "between two things the bag stays folded")
+	await _wait(InventoryPane.FOLD_LINGER_S + 0.1)
+	p.action_t = 0.001
+	var before_ms: int = Time.get_ticks_msec()
+	game._update_person(p, 0.1)
+	var after_ms: int = Time.get_ticks_msec()
+	assert_eq(p.action, "")
+	assert_true((game.data["containers"][id]["items"] as Array).is_empty(), "the box is empty")
+	assert_not_null(hud.modal.find_child("BagStrip", true, false), "the last thing out keeps the fold its second")
+	var linger_ms: int = int(InventoryPane.FOLD_LINGER_S * 1000.0)
+	assert_between(hud.inv_fold_until_ms, before_ms + linger_ms, after_ms + linger_ms, "a second from the box's last thing out")
+	await _wait(maxf(0.0, float(hud.inv_fold_until_ms - Time.get_ticks_msec()) / 1000.0) + 0.15)
+	await _layout()
+	assert_null(hud.modal.find_child("BagStrip", true, false))
+	assert_not_null(hud.modal.find_child("Bag", true, false))
 	hud._close_modal()
 
 
@@ -1063,7 +1116,13 @@ func test_a_hold_dragged_past_its_edge_lets_go_without_scrolling() -> void:
 	assert_eq(float(hold.state["fill"]), 0.0)
 	assert_eq(list.scroll_vertical, was, "a finger born on a hold never scrolls")
 	assert_eq(int(game.player.items["can_empty"]), 2)
-	_touch(hud, at + Vector2(0, -200), false, 1)
+	# Back on the key without lifting: the slip let go for good (as by the GUI).
+	_drag(hud, at, 1)
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S + 0.01)
+	assert_eq(float(hold.state["fill"]), 0.0, "back on the key it fills nothing")
+	_touch(hud, at, false, 1)
+	assert_eq(int(game.player.items["can_empty"]), 2, "and nothing is thrown")
 	hud._close_modal()
 
 
@@ -1107,6 +1166,14 @@ func _mouse(viewport: SubViewport, at: Vector2, pressed: bool) -> void:
 	viewport.push_input(event, true)
 
 
+func _motion(viewport: SubViewport, at: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT
+	event.position = at
+	event.global_position = at
+	viewport.push_input(event, true)
+
+
 ## 결정 558: real GUI dispatch in the game's own viewport, not the runner window.
 func test_by_gui_a_held_bag_row_opens_without_moving() -> void:
 	var viewport := _input_viewport()
@@ -1138,16 +1205,53 @@ func test_by_gui_the_can_needs_a_full_hold() -> void:
 	var hold = key.get_node("Hold")
 	var at: Vector2 = key.get_global_rect().get_center()
 	_mouse(viewport, at, true)
-	await _wait(HoldConfirm.HOLD_S * 0.5)
-	assert_between(float(hold.state["fill"]), 0.25, 0.85)
+	assert_true(bool(hold.get("_down")), "the GUI press reached the hold")
+	# The half hold by fixed steps, not the clock (a slow frame would fire it).
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S * 0.5)
+	assert_almost_eq(float(hold.state["fill"]), 0.5, 0.01)
 	_mouse(viewport, at, false)
-	await _wait(HoldConfirm.BACK_S + 0.15)
+	hold.set_process(false)
+	hold.advance(HoldConfirm.BACK_S + 0.01)
 	assert_eq(int(game.player.items.get("can_empty", 0)), 2)
 	assert_eq(float(hold.state["fill"]), 0.0)
 	_mouse(viewport, at, true)
 	await _wait(HoldConfirm.HOLD_S + 0.25)
 	_mouse(viewport, at, false)
 	assert_eq(int(game.player.items.get("can_empty", 0)), 1)
+	if game.hud.modal_open:
+		game.hud._close_modal()
+
+
+## 결정 559 by the GUI: dragged past the key's edge the hold lets go for good —
+## back on the key without lifting fills nothing (as a second finger's does).
+func test_by_gui_a_hold_slipped_off_and_back_stays_let_go() -> void:
+	var viewport := _input_viewport()
+	var game = _game(viewport)
+	game.player.items = {"can_empty": 2}
+	game.hud.bag_panel()
+	game.hud._inv_expand("bag", "can_empty")
+	await _layout()
+	var key := game.hud.modal.find_child("Throw", true, false) as Button
+	var hold = key.get_node("Hold")
+	var at: Vector2 = key.get_global_rect().get_center()
+	_mouse(viewport, at, true)
+	assert_true(bool(hold.get("_down")))
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S * 0.5)
+	# Off the key's top or bottom, whichever stays on the screen.
+	_motion(viewport, at + (Vector2(0, -200) if at.y > 300.0 else Vector2(0, 200)))
+	assert_false(bool(hold.get("_down")), "past the slip the press is let go")
+	_motion(viewport, at)
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S + 0.01)
+	assert_eq(float(hold.state["fill"]), 0.0, "back on the key it fills nothing")
+	_mouse(viewport, at, false)
+	assert_eq(int(game.player.items.get("can_empty", 0)), 2, "nothing is thrown")
+	# A new press is a new hold.
+	_mouse(viewport, at, true)
+	assert_true(bool(hold.get("_down")))
+	_mouse(viewport, at, false)
 	if game.hud.modal_open:
 		game.hud._close_modal()
 
@@ -1175,6 +1279,17 @@ func test_real_place_and_row_paths_keep_bag_and_rail_scrolls() -> void:
 	var rail_y: int = rail.scroll_vertical
 	assert_gt(bag_y, 0)
 	assert_gt(rail_y, 0)
+	assert_gt(near.scroll_vertical, 0)
+	# Away and straight back before a frame has put the scrolls back: the place
+	# comes back at its top as it would a frame later, not where it was left.
+	_tab(hud, "box", "scroll_box_0").pressed.emit()
+	_tab(hud, "box", id).pressed.emit()
+	await _layout()
+	assert_eq(int(hud.modal.find_child("NearScroll", true, false).scroll_vertical), 0, "back within a frame, the place starts at the top")
+	assert_eq(int(hud.modal.find_child("BagScroll", true, false).scroll_vertical), bag_y)
+	assert_eq(int(hud.modal.find_child("PlaceScroll", true, false).scroll_vertical), rail_y)
+	near = hud.modal.find_child("NearScroll", true, false) as ScrollContainer
+	near.scroll_vertical = 60
 	assert_gt(near.scroll_vertical, 0)
 	_tab(hud, "box", "scroll_box_0").pressed.emit()
 	await _layout()
@@ -1220,4 +1335,13 @@ func test_a_long_journal_fits_above_the_foot_at_720_high() -> void:
 		assert_lte(pane.get_global_rect().end.y, float(viewport.size.y) - UiFonts.px(InventoryPane.FOOT_GAP) + 1.0)
 		journal.scroll_vertical = 100000
 		assert_gt(journal.scroll_vertical, 0, "the rest of the journal remains reachable")
+		# Laid again over itself (a row taken, a row opened): the journal stays
+		# where it was read to.
+		var read_to: int = journal.scroll_vertical
+		InventoryPane.open(game.hud, game.hud.inv_near)
+		await _layout()
+		var again := game.hud.modal.find_child("JournalScroll", true, false) as ScrollContainer
+		assert_not_null(again)
+		if again != null:
+			assert_eq(again.scroll_vertical, read_to, "laid again, the journal keeps its place")
 	game.hud._close_modal()

@@ -3,7 +3,8 @@ extends Control
 ## can, loading everything on the train) does it only when held. A line fills along
 ## the key's edge from twelve o'clock clockwise in HOLD_S, at one pace; let go early,
 ## or slip more than SLIP_DP past the key's edge, and it winds back in BACK_S with
-## nothing done; full, the work runs once with a short buzz. The times are the
+## nothing done — a slip lets go for good, coming back on the key fills nothing
+## until a new press; full, the work runs once with a short buzz. The times are the
 ## council's lever's (vote and departure), the line the field keys' own.
 ## The timing is hold_step(), a pure function the tests drive with their own clock;
 ## this node only feeds it the finger and the frame time, and draws the line.
@@ -151,8 +152,11 @@ func _finger(event: InputEvent) -> void:
 		at = (event as InputEventMouseMotion).position
 	elif event is InputEventScreenDrag:
 		at = (event as InputEventScreenDrag).position
-	if at != Vector2.INF and _key != null:
-		_inside = holds(at, _key.size, UiFonts.px(SLIP_DP * CSS_PER_DP))
+	# Slipped past the edge the press is let go for good: coming back on the key
+	# does not fill on (a second finger's path does the same, field_hud.gd).
+	if at != Vector2.INF and _key != null and not holds(at, _key.size, UiFonts.px(SLIP_DP * CSS_PER_DP)):
+		_inside = false
+		_down = false
 
 
 ## The frame's step; tests call it with their own `dt`.

@@ -441,7 +441,10 @@ var inv_weapon_open_id: String = ""
 ## The row held open under itself (결정 558: a long press), {"side": "bag" | "near",
 ## "id", "i", "at"}; a pane opened afresh opens none (InventoryPane.open).
 var inv_expand: Dictionary = {}
+## The bag folds while things come out of a box (결정 558) and for a second after
+## the last is out (until this tick), unless pressed open while taking.
 var inv_fold_until_ms: int = 0
+var inv_fold_taking: bool = false
 var inv_fold_open: bool = false
 var inv_laid_place: String = ""
 var inv_bag_scroll: int = 0
@@ -450,7 +453,7 @@ var inv_bag_scroll: int = 0
 ## new pane's tops.
 var inv_scroll_pending: Dictionary = {}
 ## The bag pane's scrolls, kept where they were when it is laid again.
-const BAG_SCROLLS: Array[String] = ["BagScroll", "NearScroll", "PlaceScroll"]
+const BAG_SCROLLS: Array[String] = ["BagScroll", "NearScroll", "PlaceScroll", "JournalScroll"]
 ## Optional item art supplied locally; an empty entry falls back to the resource path.
 var item_px_override: Dictionary = {}
 ## The places the bag pane listed when it was laid (InventoryPane.place_keys):
@@ -3141,6 +3144,7 @@ func _loot_stop(id: String) -> void:
 		p.cancel_action()
 	taking_box = ""
 	inv_fold_until_ms = 0
+	inv_fold_taking = false
 	InventoryPane.open(self, inv_near if not inv_near.is_empty() else {"kind": "box", "id": id})
 
 
@@ -3211,32 +3215,35 @@ func _bag_scrolls() -> Dictionary:
 ## rows are sized falls to the top): the bag's rows and the places rail always,
 ## the place's rows while they are the same place's.
 func _bag_scrolls_back(kept: Dictionary) -> void:
-	var pane_ref: WeakRef = weakref(box_pane)
-	var hud_ref: WeakRef = weakref(self)
-	var same: bool = kept["at"] == InventoryPane.place_key(inv_near)
-	inv_scroll_pending = kept.duplicate()
-	# Rows sized a frame late clamp a scroll set too soon: try again, three frames
-	# at most, until each list holds its old place.
-	var tries: Array = [0]
-	var holder: Array = []
-	var back := func() -> void:
+	var aim: Dictionary = kept.duplicate()
+	if kept["at"] != InventoryPane.place_key(inv_near):
+		# Another place: its list starts at the top, and a second laying before the
+		# scrolls are back must not bring the old place's back either.
+		aim["at"] = InventoryPane.place_key(inv_near)
+		aim["NearScroll"] = 0
+	inv_scroll_pending = aim
+	_queue_scroll_restore(weakref(box_pane), aim, 3)
+
+
+## One try at putting the scrolls back, the frame after. Rows sized a frame late
+## clamp a scroll set too soon, so a short one tries again, `tries` frames at most;
+## each try is a new lambda that nothing holds but the signal (no cycle).
+func _queue_scroll_restore(pane_ref: WeakRef, aim: Dictionary, tries: int) -> void:
+	var restore := func() -> void:
 		var pane := pane_ref.get_ref() as Control
-		var hud_now: Object = hud_ref.get_ref()
-		if pane == null or hud_now == null or hud_now.get("modal") != pane:
+		if pane == null or modal != pane:
 			return
 		var short: bool = false
 		for scroll_name: String in BAG_SCROLLS:
 			var list := pane.find_child(scroll_name, true, false) as ScrollContainer
-			if list != null and kept.has(scroll_name) and (same or scroll_name != "NearScroll"):
-				list.scroll_vertical = int(kept[scroll_name])
-				short = short or list.scroll_vertical < int(kept[scroll_name])
-		tries[0] = int(tries[0]) + 1
-		if short and int(tries[0]) < 3:
-			(hud_now as Node).get_tree().process_frame.connect(holder[0], CONNECT_ONE_SHOT)
+			if list != null and aim.has(scroll_name):
+				list.scroll_vertical = int(aim[scroll_name])
+				short = short or list.scroll_vertical < int(aim[scroll_name])
+		if short and tries > 1:
+			_queue_scroll_restore(pane_ref, aim, tries - 1)
 			return
-		hud_now.set("inv_scroll_pending", {})
-	holder.append(back)
-	get_tree().process_frame.connect(back, CONNECT_ONE_SHOT)
+		inv_scroll_pending = {}
+	get_tree().process_frame.connect(restore, CONNECT_ONE_SHOT)
 
 
 ## The pane now shows box `id` ("" for none): the box it comes to opens with its sound,
