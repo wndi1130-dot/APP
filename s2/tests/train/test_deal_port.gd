@@ -113,25 +113,28 @@ func test_fixture_contract_holds_its_fixed_sets_and_properties() -> void:
 	assert_gt(tie, 0, "a row where the best score ties")
 
 
-## The papers taken as the slice takes them (slice_flow.gd pick_first, kept here so this test
-## does not load the field game): from the front, each on its first way that can be taken, a
-## card no way takes put aside.
+## The papers taken from the front, each on its first way that can be taken (as slice_flow.gd
+## pick_first, kept here so this test does not load the field game) — but strict (재점검 2):
+## a way the port refuses comes back as the error, and a paper no way takes is an error too,
+## so no paper is dropped by the test and the flow's last check sees it.
 static func _take_papers(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var g: Dictionary = g0
 	for _n: int in 50:
 		if not (g.get("cards") is Array) or (g["cards"] as Array).is_empty() or g.has("_turn_port_error"): break
-		var uid: int = int((g["cards"] as Array)[0]["uid"])
+		var card: Dictionary = (g["cards"] as Array)[0]
+		var uid: int = int(card["uid"])
 		var taken := false
 		for i: int in 12:
 			var out: Dictionary = Advance.choose_card(g, t, uid, i)
-			if out.has("_turn_port_error"): break
+			if out.has("_turn_port_error"): return out
 			if not (out["cards"] as Array).any(func(c: Dictionary) -> bool: return int(c["uid"]) == uid):
 				g = out
 				taken = true
 				break
 		if not taken:
-			g = g.duplicate(true)
-			g["cards"] = (g["cards"] as Array).filter(func(c: Dictionary) -> bool: return int(c["uid"]) != uid)
+			var stuck: Dictionary = g.duplicate(true)
+			stuck["_turn_port_error"] = "paper %s (uid %d) taken by no way" % [card.get("kind", "?"), uid]
+			return stuck
 	return g
 
 
@@ -264,12 +267,24 @@ func test_a_holder_picks_the_best_agenda_s2_can_vote_on_by_s1_scores() -> void:
 	for row: Dictionary in _data["cases"]:
 		var at: String = str(row["name"])
 		if not at.begins_with("holderedge/"): continue
-		kinds[at.get_slice("/", 1)] = true
+		var kind: String = at.get_slice("/", 1)
+		kinds[kind] = int(kinds.get(kind, 0)) + 1
 		var out: Dictionary = row["out"]
 		var scores: Array = out["without"]
 		var want: Dictionary = row["after"].duplicate(true)
 		var options: Array = want["council"]["options"]
-		assert_false(_votable_by_hand(options[int(want["council"]["idx"])], at), at + ": S1 picked one S2 cannot vote on")
+		var s1_pick: Dictionary = options[int(want["council"]["idx"])]
+		assert_false(_votable_by_hand(s1_pick, at), at + ": S1 picked one S2 cannot vote on")
+		# Each kind is the agenda its name says (재점검 L4), not just a name.
+		match kind:
+			"powers": assert_true(s1_pick.get("law") == "emergency_powers" and not bool(s1_pick.get("ratify", false)), at + ": the emergency powers law")
+			"ratify": assert_true(bool(s1_pick.get("ratify", false)) and bool(s1_pick.get("repeal", false)), at + ": a repeal ratification")
+			"motion": assert_true(s1_pick.get("kind") == "motion" and s1_pick.get("motion") == "share", at + ": the share motion")
+			_: fail_test(at + ": unknown holderedge kind")
+		# S1 starts its best at -99 and S2 at the first votable agenda: the same pick while every
+		# score stays above -99 (재점검 L5).
+		for s: Variant in scores:
+			assert_gt(float(s), -99.0, at + ": S1 scores stay above -99")
 		var e: int = -1
 		for i: int in options.size():
 			if _votable_by_hand(options[i], at) and (e < 0 or float(scores[i]) > float(scores[e])): e = i
@@ -290,7 +305,7 @@ func test_a_holder_picks_the_best_agenda_s2_can_vote_on_by_s1_scores() -> void:
 		var bad: Array = V.full_diffs(_snap_ledger(want), _snap_ledger(got), at, 8)
 		assert_eq(bad.size(), 0, "\n".join(bad))
 	for kind: String in ["powers", "ratify", "motion"]:
-		assert_true(kinds.has(kind), "holderedge " + kind)
+		assert_eq(int(kinds.get(kind, 0)), 1, "holderedge " + kind)
 
 
 ## Agendas, but none S2 votes on: the agenda is spent and the session opens free, no pick
@@ -327,6 +342,37 @@ func test_a_holder_with_no_agenda_s2_votes_on_spends_it_and_opens_free() -> void
 	assert_false(council.has("holder"))
 	assert_eq(got.get("agendaHolder"), null, "the agenda is spent")
 	assert_eq(int(got["session"]), next)
+	for i: int in range(lines, (got["journal"] as Array).size()):
+		assert_false(str(got["journal"][i].get("text", "")).contains("안건을 골랐다"), "no pick written")
+
+
+## No agenda at all (no ratification, proposal or forced one; every law kept off this session):
+## S1 still locks a held session and writes no pick (재점검 L3), and the agenda is spent.
+func test_a_holder_with_no_agenda_at_all_locks_like_s1_and_spends_it() -> void:
+	if _data.is_empty(): return
+	var t: Dictionary = _data["tables"]
+	var row: Dictionary = {}
+	for r: Dictionary in _data["cases"]:
+		if str(r["name"]) == "holder/deal-0/guard/regular": row = r
+	assert_false(row.is_empty(), "holder/deal-0/guard/regular")
+	if row.is_empty(): return
+	var g: Dictionary = row["before"].duplicate(true)
+	var next: int = int(g["session"]) + 1
+	for law: String in t["LAW_IDS"]:
+		if State.law_active(g, law): g["passed"][law] = next
+		else: g["repealedAt"][law] = next
+	g["proposals"] = []
+	g["ratify"] = []
+	g["ratifyRepeal"] = []
+	var lines: int = (g["journal"] as Array).size()
+	var got: Dictionary = Advance.open_council(g, t, false)
+	assert_false(got.has("_turn_port_error"), str(got.get("_turn_port_error", "")))
+	if got.has("_turn_port_error"): return
+	var council: Dictionary = got["council"]
+	assert_true((council["options"] as Array).is_empty(), "no agenda reached the session: %s" % [council["options"]])
+	assert_true(bool(council["locked"]), "locked as S1 locks a held session")
+	assert_false(council.has("holder"), "no pick, so no holder")
+	assert_eq(got.get("agendaHolder"), null, "the agenda is spent")
 	for i: int in range(lines, (got["journal"] as Array).size()):
 		assert_false(str(got["journal"][i].get("text", "")).contains("안건을 골랐다"), "no pick written")
 

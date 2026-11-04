@@ -140,11 +140,13 @@ static func open_council(g0: Dictionary, t: Dictionary, emergency: bool = false)
 	var idx: int = 0
 	var picked: bool = false
 	if holder != null:
-		var best: float = -99.0
+		# S1 starts its best at -99; scores stay above that (test_deal_port holds it on S1's own
+		# scores), so taking the first votable agenda as the floor picks the same agenda.
+		var best: float = -INF
 		for i: int in options.size():
 			if not votable(options[i]): continue
 			var score: float = float(Vote.stance(g, t, String(holder), options[i], false)["score"])
-			if score > best:
+			if not picked or score > best:
 				best = score
 				idx = i
 				picked = true
