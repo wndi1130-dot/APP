@@ -19,7 +19,6 @@ const RIG_AT := Vector3(0.0, -500.0, 0.0) # 필드 카메라에 들지 않는 �
 static var last_stats: Dictionary = {} # 끝난 데우기의 결과(시험·로그용)
 static var warmed: bool = false # 실제로 그려 데웠으면 다시 부팅해도 되풀이하지 않는다
 static var _keep_paths: Array[String] = [] # 데우기가 먼저 끝나 받지 못한 읽기: 끝나면 get해서 붙잡는다
-static var rig_without_screen: bool = false # 시험만 켬: 화면 없는 판에서도 숨은 그림을 세워 카메라 처리를 본다
 
 # 기본값은 만들 때부터: 트리에 들기 전(_ready 전)에 지워져도 끝 처리가 같은 키를 읽는다.
 var stats: Dictionary = {"atlas": false, "shader": false, "drawn": false, "post_draws": 0, "frames": 0, "ms": 0.0, "reason": ""}
@@ -32,6 +31,7 @@ var _rig: Node3D
 var _camera: Camera3D
 var _report_switch: bool = false
 var _done: bool = false
+var rig_without_screen: bool = false # 시험만 그 노드에 켬: 화면 없는 판에서도 숨은 그림을 세워 카메라 처리를 본다(다른 노드로 새지 않게 노드마다)
 
 
 ## boot._ready에서 한 줄. settings는 폰 성능 스위치(안드로이드만 읽음, 그 밖은 {}).
