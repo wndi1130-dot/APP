@@ -320,7 +320,8 @@ static func outline(data: Dictionary, mask: PackedByteArray, protection: Array[D
 	return result
 
 
-## 실제 이름 있는 보호 자료가 깊이 0 변 전체를 덮을 때만 열린 자리다.
+## 깊이 0 변에서 이름 있는 보호 사이의 보호 없는 틈만 8m 미만이면 합친다.
+## 양 끝 빈칸과 이름 없는 보호는 합치지 않으며 전체 길이에 상한을 건다.
 static func open_exceptions(g: FieldGrid, points: Array, protection: Array[Dictionary], maximum: int = 32) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for edge: int in range(points.size()):
@@ -333,6 +334,8 @@ static func open_exceptions(g: FieldGrid, points: Array, protection: Array[Dicti
 			continue
 		var names: Array[String] = []
 		var covered: bool = true
+		var gap: int = 0
+		var gap_cells: int = 0
 		var direction: Vector2i = Vector2i(signi(b.x - a.x), signi(b.y - a.y))
 		for metre: int in range(metres):
 			var cell: Vector2i = a + direction * metre
@@ -340,16 +343,28 @@ static func open_exceptions(g: FieldGrid, points: Array, protection: Array[Dicti
 			if direction.y < 0: cell.y -= 1
 			cell = cell.clamp(Vector2i.ZERO, Vector2i(g.width - 1, g.height - 1))
 			var hit: bool = false
+			var protected_cell: bool = false
 			for item: Dictionary in protection:
+				if not (item["rect"] as Rect2i).has_point(cell): continue
+				protected_cell = true
 				var name: String = item["kind"]
-				if (name.begins_with("entry/") or name == "road_rail") and (item["rect"] as Rect2i).has_point(cell):
+				if name.begins_with("entry/") or name == "road_rail":
 					hit = true
 					if not names.has(name): names.append(name)
-			covered = covered and hit
-		if covered and metres > 0:
+			if hit:
+				gap_cells += gap
+				gap = 0
+			else:
+				gap += 1
+				if names.is_empty() or protected_cell or gap >= 8:
+					covered = false
+					break
+		# 마지막 빈칸은 뒤쪽 이름 있는 보호가 없으므로 내부 틈이 아니다.
+		if covered and gap == 0 and metres > 0:
 			names.sort()
 			var facing: String = ("north" if a.x < b.x else "south") if a.y == b.y else ("east" if a.y < b.y else "west")
-			out.append({"edge": edge, "direction": facing, "name": "+".join(names), "metres": metres, "a": a, "b": b})
+			out.append({"edge": edge, "direction": facing, "name": "+".join(names), "metres": metres,
+				"a": a, "b": b, "gap_cells": gap_cells})
 	return out
 
 

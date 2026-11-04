@@ -369,7 +369,7 @@ func test_f_steps_corners_and_straight_limit() -> void:
 		var actual_open: Array = b.get("open_exceptions", [])
 		var verified: bool = actual == expected and b.get("form_forest", []) == form_forest
 		verified = verified and expected_open == actual_open
-		assert_eq(actual_open, expected_open, form + ": 열린 자리 보호 자료 대조")
+		assert_eq(actual_open, expected_open, form + ": 열린 자리 이름·길이·끝점·끼인 틈 칸 수 대조")
 		assert_true(verified, "%s: 예외 명단 expected=%s actual=%s" % [form, str(expected), str(actual)])
 		var checked: Array[Dictionary] = []
 		if verified:
@@ -454,34 +454,49 @@ func _max_joined(points: Array, omitted: Dictionary) -> int:
 ## 보호 네모를 경계 칸 표로 펼쳐 생성기의 구간 계산과 독립 대조한다.
 func _expected_open_edges(g: Grid, points: Array, protection: Array[Dictionary], maximum: int = 32) -> Array[Dictionary]:
 	var names_by_cell: Dictionary = {}
+	var other_protected: Dictionary = {}
 	for item: Dictionary in protection:
 		var name: String = item["kind"]
-		if not (name.begins_with("entry/") or name == "road_rail"): continue
+		var named: bool = name.begins_with("entry/") or name == "road_rail"
 		var rect: Rect2i = item["rect"]
 		for y: int in range(rect.position.y, rect.end.y):
 			for x: int in range(rect.position.x, rect.end.x):
 				if x in [0, g.width - 1] or y in [0, g.height - 1]:
-					names_by_cell.get_or_add(Vector2i(x, y), {})[name] = true
+					if named:
+						names_by_cell.get_or_add(Vector2i(x, y), {})[name] = true
+					else:
+						other_protected[Vector2i(x, y)] = true
 	var expected: Array[Dictionary] = []
 	for edge: int in range(points.size()):
 		var a: Vector2i = points[edge]
 		var b: Vector2i = points[(edge + 1) % points.size()]
 		var horizontal: bool = a.y == b.y
-		if not ((horizontal and a.y in [0, g.height]) or (not horizontal and a.x in [0, g.width])): continue
+		if not ((horizontal and a.y in [0, g.height]) or (a.x == b.x and a.x in [0, g.width])): continue
 		var length: int = absi(b.x - a.x) + absi(b.y - a.y)
 		if length > maximum: continue
 		var names: Dictionary = {}
-		var covered: int = 0
-		for along: int in range(mini(a.x, b.x) if horizontal else mini(a.y, b.y), maxi(a.x, b.x) if horizontal else maxi(a.y, b.y)):
+		var named_offsets: Array[int] = []
+		var blocked_gap: bool = false
+		var low: int = mini(a.x, b.x) if horizontal else mini(a.y, b.y)
+		for along: int in range(low, low + length):
 			var cell := Vector2i(along, mini(a.y, g.height - 1)) if horizontal else Vector2i(mini(a.x, g.width - 1), along)
 			if names_by_cell.has(cell):
-				covered += 1
+				named_offsets.append(along - low)
 				names.merge(names_by_cell[cell])
-		if covered == length and length > 0:
+			elif other_protected.has(cell):
+				blocked_gap = true
+		if named_offsets.is_empty() or blocked_gap: continue
+		# 생성기의 순차 틈 누적과 독립적으로, 보호 칸들의 위치 차이와 양 끝을 검사한다.
+		var enclosed: bool = named_offsets[0] == 0 and named_offsets[-1] == length - 1
+		for i: int in range(1, named_offsets.size()):
+			if named_offsets[i] - named_offsets[i - 1] - 1 >= 8:
+				enclosed = false
+		if enclosed:
 			var sorted_names: Array = names.keys()
 			sorted_names.sort()
 			var direction: String = ("north" if a.x < b.x else "south") if horizontal else ("east" if a.y < b.y else "west")
-			expected.append({"edge": edge, "direction": direction, "name": "+".join(sorted_names), "metres": length, "a": a, "b": b})
+			expected.append({"edge": edge, "direction": direction, "name": "+".join(sorted_names), "metres": length,
+				"a": a, "b": b, "gap_cells": length - named_offsets.size()})
 	return expected
 
 
@@ -851,6 +866,78 @@ func test_n_opening_cap_and_shape_gate() -> void:
 	var square: Array[Vector2i] = [Vector2i.ZERO, Vector2i(80, 0), Vector2i(80, 80), Vector2i(0, 80)]
 	var invalid: Dictionary = {"outline": square, "steps": [], "corners": [0, 0, 0, 0]}
 	assert_false(Rule.shape_errors(g, invalid).is_empty(), "긴 직선과 낮은 모서리는 도장 전에 거부")
+
+
+## 실측 동쪽 y=73..85 길·철길, 2칸 틈, y=88..101 진입로를 그대로 재현한다.
+func _opening_gap_case(gap: int, tail: int = 14) -> Dictionary:
+	var g := Grid.new(251, 187)
+	var finish: int = 73 + 13 + gap + tail
+	var points: Array[Vector2i] = [Vector2i(251, 73), Vector2i(251, finish),
+		Vector2i(235, finish), Vector2i(235, 90), Vector2i(233, 90), Vector2i(233, 73)]
+	var protection: Array[Dictionary] = [
+		{"kind": "road_rail", "rect": Rect2i(250, 73, 1, 13)},
+		{"kind": "entry/shore_east", "rect": Rect2i(250, 86 + gap, 1, tail)}]
+	return {"grid": g, "points": points, "protection": protection}
+
+
+func test_r1_opening_gap_2m_joins_29m() -> void:
+	var fixture: Dictionary = _opening_gap_case(2)
+	var g: Grid = fixture["grid"]
+	var points: Array[Vector2i] = fixture["points"]
+	var protection: Array[Dictionary] = fixture["protection"]
+	var expected: Array[Dictionary] = [{"edge": 0, "direction": "east", "name": "entry/shore_east+road_rail",
+		"metres": 29, "a": Vector2i(251, 73), "b": Vector2i(251, 102), "gap_cells": 2}]
+	var actual: Array[Dictionary] = Rule.open_exceptions(g, points, protection)
+	assert_eq(actual, expected, "13+2+14=29m 열린 자리 한 개와 끼인 틈 2칸")
+	assert_eq(_expected_open_edges(g, points, protection), expected, "독립 계산도 끝점·이름·길이·틈 일치")
+	var bounds: Dictionary = {"outline": points, "steps": [], "corners": [10, 10, 10, 10], "open_exceptions": actual}
+	var report: Dictionary = Rule.shape_report(g, bounds)
+	assert_true(report["errors"].is_empty(), "29m 병합 변만 직선 검사에서 제외")
+	assert_eq(report["open_exceptions"], expected, "시도 기록 shape에 병합 근거 보존")
+	# 반대 진행 방향에서도 칸 수와 끝점 보존.
+	points.reverse()
+	assert_eq(Rule.open_exceptions(g, points, protection), _expected_open_edges(g, points, protection), "역방향 독립 대조")
+	assert_eq(Rule.open_exceptions(g, points, protection).size(), 1, "역방향도 한 열린 자리")
+
+
+func test_r2_opening_gap_8m_and_unbounded_gaps_rejected() -> void:
+	# 전체 32m라서 길이 상한 때문이 아니라 8m 틈 때문에 실패해야 한다.
+	var fixture: Dictionary = _opening_gap_case(8, 11)
+	var g: Grid = fixture["grid"]
+	var points: Array[Vector2i] = fixture["points"]
+	var protection: Array[Dictionary] = fixture["protection"]
+	assert_true(Rule.open_exceptions(g, points, protection).is_empty(), "13+8+11=32m: 8m 틈 병합 금지")
+	assert_true(_expected_open_edges(g, points, protection).is_empty(), "독립 계산도 8m 틈 거부")
+	fixture = _opening_gap_case(2)
+	points = fixture["points"]
+	protection = fixture["protection"]
+	for kind: String in ["building", "door", "box"]:
+		var blocked: Array[Dictionary] = protection.duplicate(true)
+		blocked.append({"kind": kind, "rect": Rect2i(250, 86, 1, 1)})
+		assert_true(Rule.open_exceptions(g, points, blocked).is_empty(), kind + ": 보호 있는 틈 병합 금지")
+		assert_true(_expected_open_edges(g, points, blocked).is_empty(), kind + ": 독립 계산도 거부")
+	for at: int in [0, 1]:
+		var extended: Array[Vector2i] = points.duplicate()
+		extended[at] += Vector2i(0, -1 if at == 0 else 1)
+		assert_true(Rule.open_exceptions(g, extended, protection).is_empty(), "구간 양 끝의 빈칸 확장 금지")
+		assert_true(_expected_open_edges(g, extended, protection).is_empty(), "독립 계산도 끝 빈칸 거부")
+
+
+func test_r3_opening_joined_33m_fails_shape_gate() -> void:
+	var fixture: Dictionary = _opening_gap_case(2, 18)
+	var g: Grid = fixture["grid"]
+	var points: Array[Vector2i] = fixture["points"]
+	var protection: Array[Dictionary] = fixture["protection"]
+	assert_true(Rule.open_exceptions(g, points, protection).is_empty(), "13+2+18=33m: 합친 전체에 32m 상한")
+	assert_true(_expected_open_edges(g, points, protection).is_empty(), "독립 계산도 33m 제외 금지")
+	var oversized: Array[Dictionary] = Rule.open_exceptions(g, points, protection, g.height)
+	var expected: Array[Dictionary] = [{"edge": 0, "direction": "east", "name": "entry/shore_east+road_rail",
+		"metres": 33, "a": Vector2i(251, 73), "b": Vector2i(251, 106), "gap_cells": 2}]
+	assert_eq(oversized, expected, "길이 초과 기록에도 병합 끝점·이름·틈 보존")
+	assert_eq(_expected_open_edges(g, points, protection, g.height), expected, "길이 초과 독립 대조")
+	var bounds: Dictionary = {"outline": points, "steps": [], "corners": [10, 10, 10, 10],
+		"open_exceptions": [], "oversized_openings": oversized}
+	assert_true(Rule.shape_errors(g, bounds).has("열린 자리 32m 초과"), "33m 병합은 모양 문에서 실패")
 
 
 func test_o_dead_detour_and_route_deduplication() -> void:
