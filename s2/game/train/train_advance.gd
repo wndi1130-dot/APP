@@ -89,7 +89,7 @@ static func after_stop(g0: Dictionary, t: Dictionary) -> Dictionary:
 		return _unported(g0, str(settled["_turn_port_error"]).trim_prefix("F-NOT-PORTED: ")) if settled.has("_turn_port_error") else settled
 	g["councilOwed"] = false
 	var opened: Dictionary = open_council(g, t)
-	if opened.has("_turn_port_error"): return _unported(g0, str(opened["_turn_port_error"]))
+	if opened.has("_turn_port_error"): return _unported(g0, str(opened["_turn_port_error"]).trim_prefix("F-NOT-PORTED: "))
 	opened["phase"] = "council"
 	return opened
 
@@ -112,9 +112,14 @@ static func _new_secret(g: Dictionary, t: Dictionary) -> Dictionary:
 
 ## S1 politics.ts openCouncil. A group that took the agenda in a deal (`agendaHolder`) picks
 ## this session's agenda, the one it likes best (its stance without grudge; the first of equal
-## best), and the agenda is locked to it (council_card.gd turn). Where S2 could not then vote
-## on that pick (an agenda cast_vote refuses), or S1 would drop the pick (a martial session,
-## whose agenda filter S2 has not ported), the session is refused before anything is spent.
+## best), and the agenda is locked to it (council_card.gd turn).
+## S1과 다른 점(코디 11-04 9-1, 이식 전 경계 규칙): 선택권 칸은 S2가 표결할 수 있는 후보
+## (votable — 지금 못 하는 것은 비상대권 법·추인·S2 밖 동의) 가운데 최고점을 고른다. S1의 고름이
+## 표결할 수 있는 안건이면 S1과 같고, 아니면 여기서만 갈라진다. 표결할 수 있는 후보가 하나도 없으면
+## 선택권은 쓰이고 회기는 잠금 없이 열린다. 비상대권 법 표결을 옮기면(9-2) 이 경계 규칙을 지운다.
+## 못 하는 후보에는 점수도 세지 않는다(_motion_lean은 S2가 옮긴 동의만 셈 — 재점검 M2).
+## A martial session, whose agenda filter S2 has not ported (S1 drops the pick there), is still
+## refused before anything is spent.
 static func open_council(g0: Dictionary, t: Dictionary, emergency: bool = false) -> Dictionary:
 	var held: bool = g0.get("agendaHolder") != null
 	if held and not emergency and g0.get("dark") is Dictionary and bool((g0["dark"] as Dictionary).get("martial", false)):
@@ -133,18 +138,21 @@ static func open_council(g0: Dictionary, t: Dictionary, emergency: bool = false)
 	var options: Array = Agenda.agenda_options(g, t)["options"]
 	var holder: Variant = g.get("agendaHolder")
 	var idx: int = 0
+	var picked: bool = false
 	if holder != null:
 		var best: float = -99.0
 		for i: int in options.size():
+			if not votable(options[i]): continue
 			var score: float = float(Vote.stance(g, t, String(holder), options[i], false)["score"])
 			if score > best:
 				best = score
 				idx = i
-		if not options.is_empty() and not votable(options[idx]):
-			return _unported(g0, "openCouncil: agendaHolder picks %s, which S2 cannot vote on yet" % Vote.agenda_title(t, options[idx]))
-	g["council"] = {"options": options, "idx": idx, "locked": holder != null, "deals": [], "result": null}
+				picked = true
+	# S1 locks a held session even with no agenda; with agendas but none S2 votes on, it opens free.
+	var locked: bool = holder != null and (options.is_empty() or picked)
+	g["council"] = {"options": options, "idx": idx, "locked": locked, "deals": [], "result": null}
 	if emergency: g["council"]["emergency"] = true
-	if holder != null and not options.is_empty():
+	if picked:
 		g["council"]["holder"] = holder
 		Turn._journal(g, "%s이(가) 안건을 골랐다: %s." % [t["COMM_NAME"][holder], Vote.agenda_title(t, options[idx])])
 	g["agendaHolder"] = null

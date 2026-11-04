@@ -138,7 +138,11 @@ function dealVectors() {
           const tieHere = without.filter(x => x === without[picked]).length > 1;
           if (splitHere) split += 1;
           if (tieHere) tie += 1;
-          if (splitHere || tieHere) add(`holderpick/${name}${splitHere ? '-grudge' : ''}${tieHere ? '-tie' : ''}`, g, { kind: 'open_council', emergency: false }, () => { S1.openCouncil(g, false); });
+          // S1이 센 점수(원한 뺌·셈)를 같이 싣는다: S2 시험이 갈림·동점 성질을 S2 코드 없이 확인한다.
+          if (splitHere || tieHere) add(`holderpick/${name}${splitHere ? '-grudge' : ''}${tieHere ? '-tie' : ''}`, g, { kind: 'open_council', emergency: false }, () => {
+            S1.openCouncil(g, false);
+            return { holder: c, without: scores(g, c, false), withGrudge: scores(g, c, true) };
+          });
         }
       }
     }
@@ -146,18 +150,67 @@ function dealVectors() {
   if (split === 0) throw new Error('원한을 셈하면 갈리는 선택권 판을 못 찾음');
   if (tie === 0) throw new Error('최고점이 같은 선택권 판을 못 찾음');
   // 실제 흐름: 선택권을 거래로 사고 → 이번 안건 표결 → 다음 회기에서 그 칸이 고름 → 고른 안건 표결 → 그다음 회기.
+  // 칸이 선택권 조건을 내놓아도 신념·적의·살 표 때문에 거래를 거절할 수 있으니, 거래가 실제로 되는 첫 칸을 고르고
+  // 단계마다 확인한다(어긋나면 멈춤): 선택권을 산 흐름이 아닌데 이름만 holderflow로 남지 않게.
   for (const seed of SEEDS) {
     const base = table(seed, 'patrol', false);
-    const c = S1.COMMS.find(x => S1.openConditions(base, x).some(k => k.kind === 'agenda'));
-    if (!c) throw new Error(`선택권 조건을 내놓는 칸이 없음: ${seed}`);
-    const i = S1.openConditions(base, c).findIndex(k => k.kind === 'agenda');
+    let pick: { c: Comm; i: number } | null = null;
+    for (const x of S1.COMMS) {
+      const k = S1.openConditions(base, x).findIndex(o => o.kind === 'agenda');
+      if (k < 0) continue;
+      const probe = plain(base);
+      if (S1.makeDeal(probe, x, 'open', k).ok && probe.agendaHolder === x) { pick = { c: x, i: k }; break; }
+    }
+    if (!pick) throw new Error(`선택권 거래가 되는 칸이 없음: ${seed}`);
+    const { c, i } = pick;
+    const must = (ok: boolean, what: string) => { if (!ok) throw new Error(`holderflow/${seed}: ${what}`); };
     const g = plain(base);
     add(`holderflow/${seed}/1-deal`, g, { kind: 'deal', comm: c, tool: 'open', cond: i }, () => S1.makeDeal(g, c, 'open', i));
+    must(g.agendaHolder === c, '거래 뒤 그 칸이 선택권을 쥠');
     add(`holderflow/${seed}/2-vote`, g, { kind: 'cast_vote' }, () => { S1.castVote(g); });
+    must(g.council?.result != null && g.agendaHolder === c, '이번 안건 표결, 선택권은 남음');
     add(`holderflow/${seed}/3-open`, g, { kind: 'open_council', emergency: false }, () => { S1.openCouncil(g, false); });
+    must(g.council?.holder === c && g.council.locked && g.agendaHolder === null, '다음 회기에서 그 칸이 고르고 잠김, 선택권은 씀');
     add(`holderflow/${seed}/4-vote`, g, { kind: 'cast_vote' }, () => { S1.castVote(g); });
+    must(g.council?.result != null, '고른 안건 표결');
     add(`holderflow/${seed}/5-open`, g, { kind: 'open_council', emergency: false }, () => { S1.openCouncil(g, false); });
+    must(g.council?.locked === false && g.council.holder === undefined, '그다음 회기는 잠금 없음');
   }
+  // 선택권 칸의 S1 최고점이 S2가 아직 표결 못 하는 안건인 판(S2 경계 규칙의 입력 — 선택권 칸은 S2가 표결할 수 있는
+  // 후보 중 최고점, 코디 11-04 9-1): 비상대권 법, 폐지 추인, S2 밖 동의(몫 나누기). S1 점수와 제목을 같이 싣는다:
+  // S2 시험이 S2 코드 없이 「표결할 수 있는 후보 중 첫 최고점」을 따로 세고 S1 판과 나머지를 견준다.
+  const edge = (kind: string, variants: ((g: Game) => void)[], target: (a: S1.Agenda) => boolean) => {
+    for (const seed of [...SEEDS, 'deal-2', 'deal-3']) {
+      for (const c of S1.COMMS) {
+        for (const make of variants) {
+          const g = council(seed);
+          g.agendaHolder = c;
+          g.comms[c].lastOffense = g.session + 1;
+          make(g);
+          const probe = plain(g);
+          S1.openCouncil(probe, false);
+          const opts = probe.council?.options ?? [];
+          if (opts.length < 2 || !target(opts[probe.council!.idx])) continue;
+          add(`holderedge/${kind}/${seed}/${c}`, g, { kind: 'open_council', emergency: false }, () => {
+            S1.openCouncil(g, false);
+            return { holder: c, without: scores(g, c, false), titles: (g.council?.options ?? []).map(o => S1.agendaTitle(o)) };
+          });
+          return;
+        }
+      }
+    }
+    throw new Error(`선택권 칸이 ${kind}을(를) 고르는 판을 못 찾음`);
+  };
+  const isLaw = (a: S1.Agenda): a is S1.LawAgenda => S1.isLawAgenda(a);
+  // 비상대권: 긴장 60에 다른 제정 안건은 하나(keep)만 남기고 이번 회기 폐지 냉각으로 쉬게 해, 비상대권을 그 하나보다
+  // 좋아하는 칸이 고르는 판을 찾는다(남은 하나는 S2가 표결할 수 있는 법이어야 S2 쪽 고르기가 생긴다 — 시험이 확인).
+  const powersWith = (keep: S1.LawId) => (g: Game) => {
+    g.tension = 60;
+    for (const law of S1.LAW_IDS) if (law !== 'emergency_powers' && law !== keep && !S1.lawActive(g, law)) g.repealedAt[law] = g.session + 1;
+  };
+  edge('powers', [g => { g.tension = 60; }, ...S1.LAW_IDS.filter(l => l !== 'emergency_powers').map(powersWith)], a => isLaw(a) && a.law === 'emergency_powers' && !a.ratify);
+  edge('ratify', S1.LAW_IDS.map(law => (g: Game) => { if (!S1.lawActive(g, law)) g.ratifyRepeal = [law]; }), a => isLaw(a) && !!a.ratify);
+  edge('motion', S1.COMMS.map(s => (g: Game) => { g.proposals = [...g.proposals, { kind: 'motion', motion: 'share', subject: s, by: s }]; }), a => !isLaw(a) && a.motion === 'share');
   return cases;
 }
 
