@@ -7,25 +7,26 @@ import { CONTENT_EVENTS, CONTENT_SECRETS, CONTENT_DEALS, DRAW } from '../src/gam
 import { inEventPack } from '../src/game/event_pack';
 
 const bundle = buildContentBundle();
-const fixtures = buildContentFixtures(bundle);
+const legacyBundle = { ...bundle, events: bundle.events.filter(ev => !ev.id.startsWith('ev_str_')) };
+const fixtures = buildContentFixtures(legacyBundle);
 const root = resolve(import.meta.dirname, '../..');
 
 describe('S2 content export tool (S1 rules remain the oracle)', () => {
-  it('exports all 46 pack events in filesystem order, retaining the original text and log fields', () => {
+  it('exports 46 pack events and four stranded events in filesystem order, retaining original words', () => {
     const source = readContentEvents() as { id: string; phase: string }[];
-    expect(bundle.events).toEqual(source.filter(ev => ev.phase === 'travel' && !ev.id.startsWith('ev_str_')));
+    expect(bundle.events).toEqual(source.filter(ev => ev.phase === 'travel'));
     expect(bundle.events.filter(ev => inEventPack(ev.id))).toHaveLength(46);
-    expect(bundle.events.some(ev => ev.id.startsWith('ev_str_'))).toBe(false);
+    expect(bundle.events.filter(ev => ev.id.startsWith('ev_str_'))).toHaveLength(4);
     expect(bundle.draw).toEqual(DRAW);
-    expect(bundle._note).toContain('ev_str_* excluded');
+    expect(bundle._note).toContain('including ev_str_*');
   });
 
-  it('includes a future ordinary travel event and excludes stop/stranded content', () => {
+  it('includes ordinary and stranded travel events and excludes stop content', () => {
     const base = bundle.events[0];
     const result = buildContentBundle([
       { ...base, id: 'ev_future' }, { ...base, id: 'ev_str_future' }, { ...base, id: 'ev_stop', phase: 'stop' }, base,
     ], [], []);
-    expect(result.events.map(ev => ev.id)).toEqual(['ev_future', base.id]);
+    expect(result.events.map(ev => ev.id)).toEqual(['ev_future', 'ev_str_future', base.id]);
     expect(result.secrets).toEqual([]);
     expect(result.deals).toEqual([]);
   });
@@ -43,7 +44,7 @@ describe('S2 content export tool (S1 rules remain the oracle)', () => {
 
   it('covers every first view and every enabled first-view answer, including the existing journal path', () => {
     const rows = fixtures.cards.views.filter(row => row.name.startsWith('first/'));
-    expect(rows.map(row => row.card.text)).toEqual(bundle.events.map(ev => ev.id));
+    expect(rows.map(row => row.card.text)).toEqual(legacyBundle.events.map(ev => ev.id));
     for (const row of rows) {
       expect(row.choices.length).toBe(row.view.choices.filter(ch => !ch.disabled).length);
       for (const result of row.choices) {
@@ -74,7 +75,7 @@ describe('S2 content export tool (S1 rules remain the oracle)', () => {
 
   it('selects three real card shots and keeps source registries intact across deterministic generation', () => {
     const before = JSON.stringify([CONTENT_EVENTS, CONTENT_SECRETS, CONTENT_DEALS]);
-    expect(buildContentFixtures(bundle)).toEqual(fixtures);
+    expect(buildContentFixtures(legacyBundle)).toEqual(fixtures);
     expect(JSON.stringify([CONTENT_EVENTS, CONTENT_SECRETS, CONTENT_DEALS])).toBe(before);
     expect(fixtures.cards.shots.map(shot => shot.name)).toEqual(['short', 'longest', 'why_later']);
     for (const shot of fixtures.cards.shots) expect(fixtures.cards.views.some(row => row.name === shot.case && row.name.startsWith('first/'))).toBe(true);

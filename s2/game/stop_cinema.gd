@@ -330,6 +330,8 @@ func _pause(on: bool) -> void:
 
 
 func _process(delta: float) -> void:
+	if beat in ["out", "end"]:
+		_freeze_for_fill()
 	if paused:
 		return
 	_step(minf(delta, 0.1))
@@ -430,8 +432,15 @@ func _begin(b: String) -> void:
 		if not seen and remember:
 			mark_seen()
 		done.emit(how)
+		_freeze_for_fill()
 	elif b == "end":
 		queue_free()
+
+
+func _freeze_for_fill() -> void:
+	# Freeze even at night: the shader owner may publish energy after this tick.
+	if port != null and PerfSwitch.fill_mode() == "shader":
+		port.render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 
 func _view_input(e: InputEvent) -> void:
@@ -691,11 +700,8 @@ func _build_station() -> void:
 		var mid := Vector3(r.position.x + r.size.x * 0.5, 0, r.position.y + r.size.y * 0.5)
 		MapView.box(st, Vector3(r.size.x - 0.1, 1.0, r.size.y - 0.1), mid + Vector3(0, 0.5, 0), Color(0.42, 0.4, 0.38))
 	if (data.get("spots", {}) as Dictionary).has("water_tower"):
-		for y in range(mini(14, g.height)):
-			for x in range(mini(14, g.width)):
-				var c := Vector2i(x, y)
-				if g.solid_at(c) == FieldGrid.Solid.BLOCK and g.building_at(c) < 0:
-					MapView.box(st, Vector3(1, 6.0, 1), Vector3(x + 0.5, 3.0, y + 0.5), Color(0.4, 0.37, 0.35))
+		for c: Vector2i in MapView.water_tower_cells(g, data):
+			MapView.box(st, Vector3(1, 6.0, 1), Vector3(c.x + 0.5, 3.0, c.y + 0.5), Color(0.4, 0.37, 0.35))
 	else:
 		for r in MapView.outdoor_block_runs(g, data):
 			MapView.box(st, Vector3(r.size.x, 2.4, 1), Vector3(r.position.x + r.size.x * 0.5, 1.2, r.position.y + 0.5), Color(0.44, 0.43, 0.42))

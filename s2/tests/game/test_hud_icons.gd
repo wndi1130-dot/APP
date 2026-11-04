@@ -34,6 +34,24 @@ func test_a_see_through_colour_is_the_whole_icons_alpha() -> void:
 	assert_almost_eq(top, 0.5, 0.02, "no part is more solid than the colour says")
 
 
+func test_sled_context_icons_resolve_and_draw_visible_pixels() -> void:
+	for label: String in ["썰매 엮기", "썰매 짐", "끈다", "놓는다"]:
+		assert_eq(HudIcons.context_icon(label), "sled", label)
+		assert_ne(HudIcons.context_icon(label), "search", label)
+	var tex: Texture2D = HudIcons.texture("sled", 24, Color.WHITE)
+	assert_not_null(tex)
+	if tex == null:
+		return
+	assert_eq(tex.get_size(), Vector2(48, 48))
+	var img: Image = tex.get_image()
+	var visible: int = 0
+	for y: int in img.get_height():
+		for x: int in img.get_width():
+			if img.get_pixel(x, y).a > 0.0:
+				visible += 1
+	assert_gt(visible, 0, "the sled path must produce a nonempty picture")
+
+
 ## Every thing the situation pad can offer shows a picture of that thing, not
 ## the magnifier (user 2026-10-25: a key whose picture does not say what it does).
 func test_each_situation_shows_its_own_picture() -> void:

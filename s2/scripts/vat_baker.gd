@@ -195,7 +195,8 @@ static func shader_tables(assets: Dictionary) -> Dictionary:
 		starts.append(float(clip["start"]))
 		counts.append(float(clip["frames"]))
 		rates.append(float(clip["frames"]) / maxf(float(clip["length"]), 0.001))
-		loops.append(1.0 if clip["loop"] else 0.0)
+		# 1 loops; 2 more for a motion on the ground (dead_vat.gdshaderinc lying: its normals from the moved surface).
+		loops.append((1.0 if clip["loop"] else 0.0) + (2.0 if GROUND_CLIPS.has(String(clip["name"])) else 0.0))
 	for table in [starts, counts, rates, loops]:
 		table.resize(TABLE_SIZE)
 	# A compacted bake (body_bake.gd compact) keeps each clip in 8 bits inside its own box.
@@ -213,4 +214,14 @@ static func shader_tables(assets: Dictionary) -> Dictionary:
 	# A body that brings its colour picture (dead_body.gd with_albedo) is drawn with it.
 	if out["has_albedo"]:
 		out["albedo_tex"] = assets["albedo"]
+	# And the dead's bodies their skin mask (only the skin takes the dead's look).
+	if assets.get("skin") is Texture2D:
+		out["has_skin"] = true
+		out["skin_tex"] = assets["skin"]
 	return out
+
+
+## The dead's motions on the ground (body_bake.gd OWN_CLIPS names): a body in one
+## lies, crawls or crouches, so its baked standing normals do not fit it.
+const GROUND_CLIPS: Array[String] = ["fall", "fall_front", "fall_thrown", "fall_slump", "crawl", "rise",
+	"rise_front", "eat_start", "eat", "eat_rise"]

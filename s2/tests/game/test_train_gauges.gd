@@ -180,7 +180,7 @@ func test_a_narrow_band_packs_the_left_gauges() -> void:
 	assert_almost_eq(trust.size.x, 66.0 * k, 0.01, "narrow bars")
 	var o: Control = strip.find_child("Outside", true, false)
 	assert_null(o.find_child("Stage", true, false), "no stage name on a narrow band")
-	assert_lte(o.position.x + o.size.x, 230.0 * k, "the thermometer ends before the mood")
+	assert_lte(o.position.x + o.size.x, strip.find_child("Standing", true, false).position.x, "the reserved thermometer ends before the mood")
 	strip.size = Vector2(1558, TrainGauges.BAND_H)
 	strip._lay_out()
 	trust = strip.find_child("MeterTrust", true, false)
@@ -306,8 +306,8 @@ func test_the_narrow_line_keeps_the_thermometer_off_the_mood() -> void:
 		assert_lte(o.position.x + o.size.x, mood.position.x, "and so does its key at %d" % css)
 
 
-## A roll to a longer number widens the thermometer and its key with it.
-func test_a_roll_to_a_longer_number_widens_the_thermometer() -> void:
+## A roll reserves the longest reading at creation, keeping the key and standing still.
+func test_a_roll_to_a_longer_number_keeps_the_reserved_thermometer_width() -> void:
 	var s: Array = _start()
 	var strip = TrainGauges.new()
 	strip.g = s[0]
@@ -322,7 +322,7 @@ func test_a_roll_to_a_longer_number_widens_the_thermometer() -> void:
 	var temp: Control = o.find_child("Temp", true, false)
 	assert_eq((temp as Label).text, "−15°")
 	assert_gte(o.size.x, temp.position.x + temp.size.x, "the number stays inside it")
-	assert_gt(o.size.x, before, "−3° grew to −15°")
+	assert_almost_eq(o.size.x, before, 0.01, "−3° to −15° keeps the longest-reading reservation")
 
 
 ## 결정 502: old settles, the newest meter blocks, then choices and small causes.
@@ -483,9 +483,9 @@ func test_meter_buttons_draw_the_model_have_finger_targets_and_toggle() -> void:
 		assert_not_null(why)
 		assert_eq(why.z_index, TrainGauges.OVER_PAPERS)
 		var m: Dictionary = TrainGauges.meter_why_model(strip.g, key)
-		assert_eq((why.find_child("Head", true, false) as Label).text, m["head"])
+		assert_eq((why.find_child("Head", true, false) as Label).text.replace(UiFonts.WORD_JOINER, ""), m["head"])
 		for row: Dictionary in m["rows"]:
-			assert_eq((why.find_child("Cause_" + row["why"], true, false) as Label).text, row["text"])
+			assert_eq((why.find_child("Cause_" + row["why"], true, false) as Label).text.replace(UiFonts.WORD_JOINER, ""), row["text"])
 		await wait_process_frames(2)
 		var scroll: ScrollContainer = why.find_child("SlipScroll", true, false)
 		var lines: Control = why.find_child("SlipRows", true, false)
@@ -494,7 +494,7 @@ func test_meter_buttons_draw_the_model_have_finger_targets_and_toggle() -> void:
 		assert_null(strip.find_child("Why", true, false), "the same key folds it")
 	strip.g.erase("ledger")
 	_tap_meter(strip, "trust")
-	assert_eq((strip.find_child("Head", true, false) as Label).text, "지난 정산 뒤 바뀐 것 없음")
+	assert_eq((strip.find_child("Head", true, false) as Label).text.replace(UiFonts.WORD_JOINER, ""), "지난 정산 뒤 바뀐 것 없음")
 
 
 func test_meter_slips_share_one_place_with_the_thermometer_and_keep_focus() -> void:
@@ -509,7 +509,7 @@ func test_meter_slips_share_one_place_with_the_thermometer_and_keep_focus() -> v
 	assert_true(strip._dim("trust"))
 	assert_false(strip._dim("coal"))
 	strip.refresh(_start()[0], _start()[1])
-	assert_eq((strip.find_child("Head", true, false) as Label).text, TrainGauges.meter_why_model(strip.g, "tension")["head"])
+	assert_eq((strip.find_child("Head", true, false) as Label).text.replace(UiFonts.WORD_JOINER, ""), TrainGauges.meter_why_model(strip.g, "tension")["head"])
 	strip.g["climate"] = false
 	strip.refresh(strip.g, strip.t)
 	assert_not_null(strip.find_child("Why", true, false), "meter slips also work without a thermometer")

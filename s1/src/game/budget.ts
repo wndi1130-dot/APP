@@ -270,6 +270,7 @@ BUDGET_HOOK.onAdd = onAdd;
 export function budgetNextSeg(g: Game): void {
   const b = g.budget;
   if (!b) return;
+  if (b.seg === g.seg) return;
   sync(g);
   const back: Card[] = [];
   for (const c of g.deferred ?? []) {

@@ -4,6 +4,8 @@ extends RefCounted
 ## 그게 이긴다(night_lights.gd와 같은 꼴). 지역은 지도 갈래 무리(map-layout 확정 10-27,
 ## 근거 docs/design/briefs/places.md 2.7).
 
+const StoryMaps = preload("res://game/world/story_maps.gd")
+
 ## 지도 갈래 -> 지역. 손으로 만든 첫 정차(역 구내)는 철도 공업지.
 const REGION_OF_GROUP: Dictionary = {
 	"houses": "town", "office": "town", "hospital": "town", "church": "town",
@@ -56,6 +58,8 @@ const NAME_USE: Array = [
 
 ## 지도 갈래(「church_03」 -> 「church」, 첫 정차는 「first_stop」).
 static func group_of(map_id: String) -> String:
+	if StoryMaps.is_story(map_id):
+		return StoryMaps.base_of(map_id)
 	if map_id == FIRST_STOP_ID:
 		return "first_stop"
 	var cut := map_id.rfind("_")

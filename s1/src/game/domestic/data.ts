@@ -123,7 +123,7 @@ export const D = {
   // 6.4 맡기기(S1c 시험판 인구 기준은 시작 인구 + 5)
   delegatePop: 5, delegateAfter: 6, delegateOff: 15, delegateOn: 20,
   // 정찰 장비(결정 360·371·373, fun 구현명세_정찰_연구_v2 2장, 모두 가안): 망원경 정찰조 위험 ×(1 − glassRisk·m)와 만들 때 부품 glassParts,
-  // 수신호 정찰조 signalSize명·위험 ×signalRisk, 핸드카 정찰 산출 깎임 덜기 페달 +pedalHaul·m / 발동기 +motorHaul·m, 발동기 정찰조 위험 ×(1 − motorRisk·m)(결정 394)·기척 +motorNoise(결정 396), 미끼 한 번에 부품 lureParts
+  // 수신호 정찰조 signalSize명·위험 ×signalRisk, 수동차 정찰 산출 깎임 덜기 페달 +pedalHaul·m / 발동기 +motorHaul·m, 발동기 정찰조 위험 ×(1 − motorRisk·m)(결정 394)·기척 +motorNoise(결정 396), 미끼 한 번에 부품 lureParts
   glassRisk: 0.6, glassParts: 2, signalSize: 1, signalRisk: 2, pedalHaul: 0.1, motorHaul: 0.2, motorRisk: 0.6, motorNoise: 2, lureParts: 1,
 };
 
@@ -195,7 +195,7 @@ export const TECHS: Record<TechId, TechDef> = {
     },
   }),
   m4: T({ id: 'm4', branch: 'med', tier: 3, name: '온실칸', effect: '칸 하나를 온실로(식량 +1.5~4.5/구간)', upkeep: { coal: 1, parts: 0.5 }, like: ['tail'] }),
-  m5: T({ id: 'm5', branch: 'med', tier: 0, name: '약초와 민간요법', effect: '모두를 치료의 의약품 소모 ×1.6 → ×1.3, 이가 병으로 번질 확률 40% → 25%', like: ['tail'], dislike: ['medtech'], adapt: { parts: 0, wood: 2 } }),
+  m5: T({ id: 'm5', branch: 'med', tier: 0, name: '약초와 민간요법', effect: '모두를 치료: 의약품 소모 ×1.6 → ×1.3, 몸니가 병을 옮길 확률 40% → 25%', like: ['tail'], dislike: ['medtech'], adapt: { parts: 0, wood: 2 } }),
   w1: T({ id: 'w1', branch: 'craft', tier: 1, name: '공구 수리', effect: '공방 작업량 ×1.25', like: ['medtech'] }),
   w2: T({
     id: 'w2', branch: 'craft', tier: 2, name: '사냥과 방어', effect: '변형 둘 중 하나',
@@ -237,13 +237,13 @@ export const TECHS: Record<TechId, TechDef> = {
   x1: T({ id: 'x1', branch: 'expedition', tier: 1, name: '짐 꾸리기·방한 장비', effect: "아동 노동에 '짐 꾸리기만' 변형이 열린다(아이들은 내리지 않는다). 공방에서 썰매·들것을 만든다(S2)", like: ['tail'] }),
   // 변형(결정 371): 페달은 조용히 조금, 발동기는 시끄럽게 많이 정찰 산출 깎임을 덜어 준다. 변형이 없는 옛 저장은 페달로 읽는다(scout_gear.ts).
   x2: T({
-    id: 'x2', branch: 'expedition', tier: 2, name: '핸드카 정찰', effect: '정차마다 장소 후보가 둘', upkeep: { parts: 0.25 }, like: ['guard'],
+    id: 'x2', branch: 'expedition', tier: 2, name: '수동차 정찰', effect: '정차마다 장소 후보가 둘', upkeep: { parts: 0.25 }, like: ['guard'],
     variants: {
-      a: { name: '페달 핸드카', effect: '정찰 산출 깎임 −20% → −10%. 고요한 곳에선 덜컹이는 소리에 기척 +1', upkeep: { parts: 0.25 }, like: ['tail'], dislike: [], label: '페달을 단다', say: '발로 밟아 조용히 다녀온다!' },
-      b: { name: '발동기 핸드카', effect: '정찰조 위험 ×0.4, 정찰 산출 깎임 없음. 발동기 소리에 늘 기척 +2', upkeep: { parts: 0.25 }, like: ['guard'], dislike: ['engine'], label: '발동기를 얹는다', say: '들어갔다 바로 빠진다. 소리는 감수한다!' },
+      a: { name: '페달 궤도차', effect: '정찰 산출 깎임 −20% → −10%. 고요한 곳에선 덜컹이는 소리에 기척 +1', upkeep: { parts: 0.25 }, like: ['tail'], dislike: [], label: '페달을 단다', say: '발로 밟아 조용히 다녀온다!' },
+      b: { name: '발동기 궤도차', effect: '정찰조 위험 ×0.4, 정찰 산출 깎임 없음. 발동기 소리에 늘 기척 +2', upkeep: { parts: 0.25 }, like: ['guard'], dislike: ['engine'], label: '발동기를 얹는다', say: '들어갔다 바로 빠진다. 소리는 감수한다!' },
     },
   }),
-  x3: T({ id: 'x3', branch: 'expedition', tier: 3, name: '궤도 모터카', effect: '지나쳐도 짧게의 절반을 얻는다(석탄 1)', upkeep: { parts: 0.5 }, like: ['guard'], dislike: ['engine'] }),
+  x3: T({ id: 'x3', branch: 'expedition', tier: 3, name: '궤도 모터카', effect: "지나친 정차에서도 '짧게' 머문 몫의 절반을 얻는다(석탄 1)", upkeep: { parts: 0.5 }, like: ['guard'], dislike: ['engine'] }),
   x4: T({ id: 'x4', branch: 'expedition', tier: 2, name: '운반 수레', effect: '공방 만들기: 손수레·긴 썰매·쇠 날(S2)', like: ['tail'] }),
 };
 export const TECH_IDS = Object.keys(TECHS) as TechId[];

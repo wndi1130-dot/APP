@@ -96,9 +96,11 @@ static func draw_event(g: Dictionary, t: Dictionary, extra: Array = []) -> Strin
 	return id
 
 static func depart(g0: Dictionary, t: Dictionary) -> Dictionary:
-	if g0.get("stranded") != null: return C.unsupported(g0, "depart: strandedDepart")
 	var g: Dictionary = g0.duplicate(true)
 	g.erase("platform")
+	if g.get("stranded") != null:
+		load("res://game/train/turn/turn_stranded.gd").stranded_depart(g, t)
+		return g
 	var p: Dictionary = t["P"]
 	# With climate on the season table's stage replaces the regular winter drop (S1 climateDepart, decision 370 1).
 	var shift: Variant = TrainClimate.depart(g, t)
@@ -287,8 +289,10 @@ static func arrive_stop(g: Dictionary, t: Dictionary) -> void:
 	g["phase"] = "stop"
 
 static func run_travel(g0: Dictionary, t: Dictionary, after_stop: Callable) -> Dictionary:
-	if bool(g0["inStrike"]): return after_stop.call(g0, t)
-	if g0.get("stranded") != null or Turn.stalls_en_route(g0, t): return C.unsupported(g0, "runTravel: enterStranded/afterStop")
+	if bool(g0["inStrike"]) or g0.get("stranded") != null: return after_stop.call(g0, t)
 	var g: Dictionary = g0.duplicate(true)
+	if Turn.stalls_en_route(g, t):
+		load("res://game/train/turn/turn_stranded.gd").enter_stranded(g, t, float(g["coal"]), float(Turn.forecast(g, t)["coal"]))
+		return after_stop.call(g, t)
 	arrive_stop(g, t)
 	return g

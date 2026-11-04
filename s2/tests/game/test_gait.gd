@@ -8,6 +8,7 @@ const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Person = preload("res://game/actors/person.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 
 
@@ -48,8 +49,14 @@ func _named(own: Array, c: Vector2) -> String:
 func _drawn(p, note: Dictionary, own: Array, move: bool) -> String:
 	if move:
 		p.moving = true
-		p.position += Vector3(0.3, 0, 0)
-		return _named(own, PersonVisual.motion_of(p, note, 0.1, [], own))
+		var drawn: String = ""
+		# Let the shared speed filter settle at the sampled ground pace.
+		for _tick: int in range(6):
+			var gone: float = 0.3
+			p.position += Vector3(gone, 0.0, 0.0)
+			Gait.update_ground_run(p, gone, 0.1, FieldGrid.Floor.SNOW)
+			drawn = _named(own, PersonVisual.motion_of(p, note, 0.1, [], own))
+		return drawn
 	p.moving = false
 	PersonVisual.motion_of(p, note, 0.3, [], own)
 	var got := _named(own, PersonVisual.motion_of(p, note, 0.1, [], own))
@@ -197,7 +204,7 @@ func test_over_the_load_or_with_a_big_thing_the_run_on_walks() -> void:
 	assert_false(Gait.runs(p))
 	assert_eq(_drawn(p, note, own, true), Gait.CARRY_BIG, "the bell in the arms: it walks, carrying it")
 	p.items.clear()
-	p.add_item("scrap", int(ceil(p.carry_limit() * 1.25)))
+	p.add_item("scrap", int(ceil(p.carry_limit() * 1.5)))
 	assert_eq(p.carry_state(), 2)
 	assert_eq(_drawn(p, note, own, true), PersonVisual.OWN_WALK, "over the load: it walks")
 	p.items.clear()

@@ -121,7 +121,7 @@ func test_the_child_s_name_reads_s1() -> void:
 	var v: Dictionary = CardText.view(g, _t(), g["cards"][0])
 	assert_eq(v["title"], "아이의 이름")
 	assert_eq(v["speaker"], {"name": mother["name"], "role": "앞칸", "comm": "front"})
-	assert_eq(v["body"], "%s의 아이에게 이름이 필요하다. 칸 사람들이 열차장을 쳐다본다." % mother["name"])
+	assert_eq(v["body"], "%s의 아이 이름을 지어야 한다. 칸 사람들이 열차장을 쳐다본다." % mother["name"])
 	assert_eq(_labels(v), ["엄마가 짓는다", "열차 이름을 준다", "내 이름을 준다"])
 	var train := _pick(g, 1)
 	assert_almost_eq(float(train["comms"]["front"]["coh"]), minf(1.0, float(g["comms"]["front"]["coh"]) + 0.02), 0.0001)

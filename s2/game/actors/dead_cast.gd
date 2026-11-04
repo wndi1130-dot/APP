@@ -89,8 +89,25 @@ static func garment_of(worn: Dictionary, tint: Color, id: int = -1) -> Dictionar
 		if id >= 0 and SHADED.has(kind):
 			var s: Color = COAT_SHADES[posmod(id, COAT_SHADES.size())]
 			c = Color(s.r, s.g, s.b, c.a)
-		return {"shell": look[0], "colour": Color(c.r * tint.r / 0.5, c.g * tint.g / 0.5, c.b * tint.b / 0.5, c.a)}
+		# Cloth takes the state's look only by CLOTH_STATE, as the clothes of the body under it do
+		# (dead_vat.gdshaderinc cloth_state): the skin is what says dead.
+		var state := Vector3(1.0, 1.0, 1.0).lerp(Vector3(tint.r, tint.g, tint.b) / 0.5, CLOTH_STATE)
+		return {"shell": look[0], "colour": Color(c.r * state.x, c.g * state.y, c.b * state.z, c.a)}
 	return {}
+
+
+## How much of the state's tint (zombies.gd TINTS, / 0.5) the clothes take, the
+## body's and the garments' over it alike; the skin takes all of it.
+const CLOTH_STATE: float = 0.25
+## How much of its look's colour the skin takes (dead_vat.gdshaderinc skin_tint; the rest only its
+## darkness): the dead, the corpses and the newly risen little, so their skin stays apart from the
+## living's, never redder (decision 432, tools/dead_skin_split.py); the layered and the frozen all of it,
+## their cold blue is what they are.
+const SKIN_TINT: Dictionary = {"dead": 0.1, "corpse": 0.1, "fresh": 0.1, "clothed": 1.0, "frozen": 1.0}
+## How far the skin has gone off at the least, by look (dead_vat.gdshaderinc skin_gone_least): a body
+## lying dead for good has none of its own left, whatever it was standing; the rest 0.82, the newly risen
+## kept just short of the living (decision 432, tools/dead_skin_split.py).
+const SKIN_GONE_LEAST: Dictionary = {"dead": 0.82, "corpse": 1.0, "fresh": 0.82, "clothed": 0.82, "frozen": 0.82}
 
 
 ## Plain long winter coats in faded shades, so a crowd in them is not one coat
@@ -101,7 +118,7 @@ const COAT_SHADES: Array[Color] = [
 	Color(0.12, 0.1, 0.085),    # brown, the coat's own
 	Color(0.095, 0.098, 0.1),   # charcoal
 	Color(0.075, 0.09, 0.14),   # navy
-	Color(0.1, 0.105, 0.07),    # olive
+	Color(0.108, 0.096, 0.07),  # khaki brown (not olive: no army green on the dead)
 	Color(0.13, 0.085, 0.08),   # faded maroon
 ]
 const SHADED: Array[String] = ["coat_long", "coat_wool_long"]

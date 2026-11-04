@@ -228,6 +228,8 @@ function partVectors(runs: ReturnType<typeof play>[]) {
   dropped.comms.guard.heat = 4; dropped.comms.guard.ration = 4;
   dropped.deferred = [{ uid: 1, kind: 'demand', comm: 'guard', pushed: 1 }];
   dropped.lateCards = [{ uid: 2, kind: 'demand', comm: 'guard', late: 1 }];
+  // 실제 nextSegment는 seg를 올린 뒤 부르므로 들어올 때 예산은 앞 구간에 맞춰져 있다(같은 구간 두 번 부름 막기와 같은 호출 계약).
+  dropped.budget!.seg = dropped.seg - 1;
   add('late/budget/gone', dropped, { kind: 'budget_next' }, () => { S1.budgetNextSeg(dropped); });
   add('late/budget/gone-player', dropped, { kind: 'late_next' }, () => { lateNextSeg(dropped); });
   for (const a of answers) add(a.name, a.g, { kind: 'choose_card', uid: a.uid, index: a.index }, () => { S1.chooseCard(a.g, a.uid, a.index); });

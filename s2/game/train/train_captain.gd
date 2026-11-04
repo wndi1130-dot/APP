@@ -15,6 +15,7 @@ const Treatment = preload("res://game/sim/treatment.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 
 const WOUND_FLAGS: Array = ["bandaged", "disinfected", "splinted", "festering", "pulled", "sutured"]
@@ -161,11 +162,11 @@ func _init() -> void:
 func show_captain(captain: Dictionary, cars: Array) -> void:
 	var body := body_of(captain)
 	looks = part_looks(body)
-	line_label.text = line(captain, cars, body.status_words())
-	weapon_label.text = hand_text(captain, "weapon")
-	tool_label.text = hand_text(captain, "tool")
+	line_label.text = UiFonts.keep_all(line(captain, cars, body.status_words()))
+	weapon_label.text = UiFonts.keep_all(hand_text(captain, "weapon"))
+	tool_label.text = UiFonts.keep_all(hand_text(captain, "tool"))
 	for l: Label in [weapon_label, tool_label]:
-		l.add_theme_color_override("font_color", Hud.DIM if l.text.ends_with(NOTHING) else Hud.INK)
+		l.add_theme_color_override("font_color", Hud.DIM if l.text.replace(UiFonts.WORD_JOINER, "").ends_with(NOTHING) else Hud.INK)
 	wound_lines = PackedStringArray()
 	for w: Dictionary in body.wounds:
 		wound_lines.append(Treatment.wound_text(w))
@@ -173,9 +174,9 @@ func show_captain(captain: Dictionary, cars: Array) -> void:
 		wound_box.remove_child(old)
 		old.queue_free()
 	if wound_lines.is_empty():
-		_text(wound_box, 16, Hud.DIM).text = NO_WOUND
+		_text(wound_box, 16, Hud.DIM).text = UiFonts.keep_all(NO_WOUND)
 	for text in wound_lines:
-		_text(wound_box, 16, Hud.INK).text = text
+		_text(wound_box, 16, Hud.INK).text = UiFonts.keep_all(text)
 	figure.queue_redraw()
 
 

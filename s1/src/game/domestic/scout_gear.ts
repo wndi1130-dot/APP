@@ -37,7 +37,7 @@ export function effThreat(stop: StopState | null | undefined): number {
   return THREAT_STEPS[Math.max(0, Math.min(2, threatStep(t) + n))];
 }
 
-/** 정찰 장비를 켠다. 켜지 않은 판은 r4·w4를 못 복원하고 핸드카에 갈래가 없어 지금과 똑같다 */
+/** 정찰 장비를 켠다. 켜지 않은 판은 r4·w4를 못 복원하고 수동차에 갈래가 없어 지금과 똑같다 */
 export function enableScoutGear(g: Game): void {
   g.gearOn = true;
 }

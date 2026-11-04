@@ -69,7 +69,7 @@ const ITEMS: Dictionary = {
 	# A wrist watch; one still set rings in the bag later unless switched off.
 	"wrist_watch": {"name": "손목시계", "icon": "clock", "weight": 0.25, "stock": "luxury", "melt": 0.25, "group": "lux", "tag": "시계"},
 	"wrist_watch_set": {"name": "손목시계", "icon": "clock", "weight": 0.25, "stock": "luxury", "melt": 0.25, "group": "lux", "tag": "시계", "alarm": true, "looks_like": "wrist_watch"},
-	"can_opener": {"name": "깡통 따개", "icon": "it_opener", "weight": 0.1, "group": "tool", "keep": true},
+	"can_opener": {"name": "깡통따개", "icon": "it_opener", "weight": 0.1, "group": "tool", "keep": true},
 	"nails": {"name": "못 한 줌", "icon": "it_nails", "weight": 0.5, "stock": "scrap", "melt": 0.5, "group": "material"},
 	"fuel_can": {"name": "연료 통", "icon": "it_fuel", "weight": 1.5, "stock": "coal", "melt": 1.0, "group": "material"},
 	# What the train's workshop makes parts of, picked up as it lies (decision 426 D2).

@@ -61,3 +61,40 @@ func test_with_models_off_the_trees_are_boxes_again() -> void:
 	view.setup(FieldMaps.build_from(load(FieldMaps.path_of("bare_line_01"))))
 	for node in view.level_roots[0].get_children():
 		assert_false(String(node.name).begins_with("Trees_"), "no tree models")
+
+
+func test_forced_spruce_keeps_the_cell_seed_and_uses_its_own_size() -> void:
+	for i: int in 8:
+		var c := Vector2i(10 + i, 12)
+		var mixed := MapView.tree_plant("houses_01", c)
+		var spruce := MapView.tree_plant("houses_01", c, MapView.TREE_SPRUCE)
+		assert_eq(spruce, MapView.tree_plant("houses_01", c, MapView.TREE_SPRUCE))
+		assert_eq(spruce["model"], MapView.TREE_SPRUCE)
+		assert_eq(spruce["at"], mixed["at"], "the same seed draws still place the tree within its cell")
+		assert_eq(spruce["yaw"], mixed["yaw"])
+		var size: Array = MapView.TREE_SIZE[MapView.TREE_SPRUCE]
+		assert_between(float(spruce["height"]), float(size[0]), float(size[1]))
+		assert_eq(float(spruce["spread"]), float(size[2]))
+
+
+func test_deep_forest_tree_cells_build_always_visible_spruce_in_a_town() -> void:
+	var view: Node3D = autofree(MapView.new())
+	var ground := Node3D.new()
+	view.add_child(ground)
+	view.level_roots[0] = ground
+	view.data = {"place_id": "houses_01", "deep_forest": [Rect2i(10, 10, 8, 4)]}
+	var cells: Array = []
+	for y: int in range(10, 14):
+		for x: int in range(10, 18):
+			cells.append(Vector2i(x, y))
+	assert_eq(view._build_tree_models(cells), [], "every forest cell gets its spruce model")
+	var planted: int = 0
+	for node in ground.get_children():
+		assert_true(node is MultiMeshInstance3D)
+		assert_true(String(node.name).begins_with("Trees_spruce_"), "forest overrides the town's TREE_MIX")
+		if node is MultiMeshInstance3D:
+			assert_true((node as MultiMeshInstance3D).visible, "these models do not wait for prop discovery")
+			planted += (node as MultiMeshInstance3D).multimesh.instance_count
+	assert_eq(planted, cells.size())
+	for c: Vector2i in cells:
+		assert_false(view.modelled_prop_cells.has(c), "forest rows never enter the prop exclusion set")

@@ -292,7 +292,7 @@ export const TRAVEL_EVENTS: TravelEvent[] = [
     view: (g, past) => ({
       title: '눈더미', speaker: leader(g, 'engine'), focus: 'engine', required: true,
       body: again(past, '선로가 눈더미에 묻혔다. 삽이 열두 자루 있다.', {
-        dig_all: '또 눈더미다. 사람들이 지난번 일을 아직 말한다. "다 같이 파면 금방 끝난다." 앞칸 몇은 벌써 삽을 들었다.',
+        dig_all: '또 눈더미다. 사람들이 아직 지난번 얘기를 한다. "다 같이 파면 금방 끝난다." 앞칸 몇은 벌써 삽을 들었다.',
         dig_tail: '또 눈더미다. 꼬리칸 사람들이 삽을 내려놓고 앉아 있다. "이번엔 앞칸 차례다."',
         plow: '또 눈더미다. 지난번 밀어붙인 뒤로 앞바퀴에서 쇳소리가 난다.',
       }, '선로가 또 눈에 묻혔다.'),
@@ -650,7 +650,7 @@ function baseView(g: Game, card: Card): CardView {
     case 'bitten': {
       const past = memo(g, 'bitten');
       const [part, partObj] = ([['팔', '팔을'], ['다리', '다리를'], ['손', '손을']] as const)[card.uid % 3];
-      const echo = was(past, 'hide') ? ' 지난번 일 때문에 다들 상처부터 본다.' : was(past, 'leave') ? ' 지난번 역에 두고 온 사람을 다들 기억한다.' : '';
+      const echo = was(past, 'hide') ? ' 지난번 일 때문에 다들 상처부터 본다.' : was(past, 'leave') ? ' 지난번에 남기고 온 사람을 다들 기억한다.' : '';
       return {
         title: '물렸다', speaker: { name: card.who ?? '수색대원', role: COMM_NAME[c] }, focus: c, required: true, key: 'bitten',
         // 첫 줄: 정하는 건 열차장이다(물린 사람이 스스로 정한 일이 아니다, 정치 디테일 조사 안 3).
@@ -658,7 +658,7 @@ function baseView(g: Game, card: Card): CardView {
         choices: withAfford(g, [
           { id: 'cut', label: `${partObj} 자른다`, log: `물린 ${card.who ?? '대원'}의 ${partObj} 잘랐다.`, say: `지금 ${partObj} 잘라라! 망설이면 늦는다.`, effs: [{ t: 'med', v: -3 }, { t: 'injured', v: 1 }, { t: 'rel', c, v: 2 }], witness: true },
           { id: 'hide', label: '숨겨 준다', log: `물린 ${card.who ?? '대원'}을(를) 숨겨 태웠다.`, say: was(past, 'hide') ? '지난번엔 운이 좋았다. 이번에도 감아서 태워라.' : `아무도 못 본 거다. ${part}에 붕대를 감고 태워라.`, effs: [], special: 'hide_bite', witness: true },
-          { id: 'leave', label: '두고 온다', log: `물린 ${card.who ?? '대원'}을(를) 두고 왔다.`, say: '물린 사람은 못 태운다. 미안하다고 전해라.', effs: [{ t: 'rel', c, v: -8 }, { t: 'tension', v: 2 }], special: 'leave_bitten', witness: true },
+          { id: 'leave', label: '두고 온다', log: '물린 한 명을 남기고 왔다.', say: '물린 사람은 못 태운다. 미안하다고 전해라.', effs: [{ t: 'rel', c, v: -8 }, { t: 'tension', v: 2 }], special: 'leave_bitten', witness: true },
         ]),
       };
     }
@@ -802,7 +802,7 @@ function baseView(g: Game, card: Card): CardView {
         : { label: '함께 보낸다', log: `${dead}을(를) 보낼 때 외투와 장화도 함께 보냈다.`, say: burn ? '그 옷은 그와 함께 불에 들어간다.' : '그 옷은 그와 함께 간다. 손대지 마라.', effs: [{ t: 'rel', c, v: 4 }] });
       return {
         title: '외투와 장화', focus: c, required: true,
-        body: `${field ? `${dead}은(는) 정차에서 돌아오지 못했다. 침상 밑에 여벌 외투와 장화가 남았다.` : `${dead}의 외투와 장화가 남았다.`}${like ? ` 칸 사람들은 그를 '${like}'${eul(like)} 좋아하던 사람으로 기억한다.` : ''} 누가 입을지 칸이 묻는다.`,
+        body: `${field ? `${dead}은(는) 정차에서 돌아오지 못했다. 침상 밑에 여벌 외투와 장화가 남았다.` : `${dead}의 외투와 장화가 남았다.`}${like ? ` 칸 사람들은 '${like}'${eul(like)} 좋아하던 사람으로 기억한다.` : ''} 누가 입을지 칸이 묻는다.`,
         choices: withAfford(g, choices),
       };
     }
@@ -832,7 +832,7 @@ function baseView(g: Game, card: Card): CardView {
         choices: withAfford(g, [
           { label: '붙잡는다', log: `다음 역에서 내리겠다던 ${who}을(를) 붙잡았다.`, say: '아무도 혼자 내리지 않는다. 자리로 돌아가라.', effs: [{ t: 'rel', c, v: 3 }], special: 'elder_hold' },
           { label: '보내 준다', log: `내리겠다던 ${who}을(를) 막지 않고 보내 줬다.`, say: '원한다면 막지 않겠다. 몫은 아이들에게 간다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'rel', c, v: -5 }, { t: 'trust', v: -2 }], special: 'elder_leave', witness: true },
-          { label: '작별을 치른다', log: `모두 모여 ${who}의 작별을 치렀다.`, say: '모두 모여라. 그를 그냥 보내지는 않는다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'lux', v: -1 }, { t: 'tension', v: -3 }, { t: 'rel', c, v: 2 }], special: 'elder_leave' },
+          { label: '작별을 치른다', log: `모두 모여 ${who}의 작별을 치렀다.`, say: '모두 모여라. 그냥 보내지는 않는다.', effs: [{ t: 'pop', c, v: -1 }, { t: 'lux', v: -1 }, { t: 'tension', v: -3 }, { t: 'rel', c, v: 2 }], special: 'elder_leave' },
         ]),
       };
     }
@@ -853,7 +853,7 @@ function baseView(g: Game, card: Card): CardView {
       const mother = card.who ?? '';
       return {
         title: '아이의 이름', speaker: { name: mother, role: COMM_NAME[c], comm: c }, focus: c, required: true,
-        body: `${mother}의 아이에게 이름이 필요하다. 칸 사람들이 열차장을 쳐다본다.`,
+        body: `${mother}의 아이 이름을 지어야 한다. 칸 사람들이 열차장을 쳐다본다.`,
         choices: withAfford(g, [
           { label: '엄마가 짓는다', log: '아이의 이름은 엄마가 짓게 뒀다.', say: '이름은 엄마가 짓는 거다. 내가 끼어들 일 아니다.', effs: [{ t: 'rel', c, v: 3 }] },
           { label: '열차 이름을 준다', log: '아이에게 열차의 이름을 줬다.', say: '이 아이는 열차 모두의 아이다. 열차 이름을 줘라.', effs: [], special: 'name_train' },
@@ -1050,7 +1050,7 @@ function resolveCardChoice(g: Game, card: Card, view: CardView, choice: Choice):
       g.comms[c].pop = Math.max(1, g.comms[c].pop - 1);
       g.deaths.push(card.who ?? '이름 모를 대원');
       logDeath(g, [card.who ?? '이름 모를 대원'], 'chosen', true, c);
-      journal(g, `${card.who ?? '대원'}을(를) 역에 두고 왔다.`, 'dark');
+      // 일지는 고른 줄(log) 한 줄만, 이름 없이 수로 적는다(정차 끝에 남은 사람은 수만, 결정 183).
       break;
     case 'need_promise': {
       const st = g.needs?.[card.text as NeedId];

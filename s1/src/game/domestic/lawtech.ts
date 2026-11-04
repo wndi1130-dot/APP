@@ -190,7 +190,7 @@ export function insulateCarNote(g: Game, car: string): string {
   return parts.length ? `단열: ${parts.join('. ')}.` : '';
 }
 
-/** 기술로 바뀐 법의 수치(res). 지금은 M5: 모두를 치료의 의약품 소모 ×1.6 → ×1.3. */
+/** 기술로 바뀐 법의 수치(res). 지금은 M5: 모두를 치료 의약품 소모 ×1.6 → ×1.3. */
 export function lawTechRes(g: Game, law: LawId): LawRes {
   const res = LAWS[law].res;
   if (law === 'treat_all' && res.medMult !== undefined) {

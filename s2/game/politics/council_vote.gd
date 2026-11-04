@@ -10,6 +10,8 @@ const Budget = preload("res://game/train/turn/turn_budget.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const VoteCount = preload("res://game/politics/vote_count.gd")
 const CouncilAgenda = preload("res://game/politics/council_agenda.gd")
+const Supplies = preload("res://game/train/train_supplies.gd")
+const Workshop = preload("res://game/train/train_workshop.gd")
 const St = preload("res://game/train/train_state.gd")
 const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 const Stop = preload("res://game/train/train_stop.gd")
@@ -640,12 +642,27 @@ static func tool_status(g: Dictionary, t: Dictionary, comm: String, tool: String
 
 
 ## S1 openConditions: the car's worst-off ask, one of its own and one common,
-## the same within a session. S1c and supplies conditions stay off in S2.
+## the same within a session. Unported S1c conditions stay off; supplies follow the run flag.
+## Good-goods asks reserve existing promises and count one workshop settlement on a copy.
+static func fine_room(g: Dictionary, t: Dictionary) -> float:
+	var stock: float = float(g.get("supFine", 0))
+	var copy: Dictionary = g.duplicate(true)
+	Workshop.settle_stretch(copy, t)
+	var room: float = stock + maxf(0.0, float(copy.get("supFine", 0)) - stock)
+	for comm: Variant in g.get("comms", {}):
+		var promise: Variant = g["comms"][comm].get("promise")
+		if promise is Dictionary and promise.get("cond") is Dictionary and promise["cond"].get("kind") == "give_fine":
+			room -= float(promise["cond"].get("amount", 0))
+	return room
+
+
 static func open_conditions(g: Dictionary, t: Dictionary, comm: String) -> Array:
 	var pool: Array = []
 	for cond: Dictionary in t["CONDITIONS"][comm]:
-		if not bool(cond.get("s1c", false)) and not bool(cond.get("sup", false)):
-			pool.append(cond)
+		if bool(cond.get("s1c", false)): continue
+		if bool(cond.get("sup", false)) and not Supplies.asks(g): continue
+		if cond["kind"] == "give_fine" and fine_room(g, t) < float(cond.get("amount", 0)): continue
+		pool.append(cond)
 	var sit: Array[float] = St.situation(g, t, comm)
 	var want := "relocate" if comm == "tail" and sit[2] >= 70.0 else ("heat" if sit[0] < sit[1] else "ration")
 	var first: int = 0

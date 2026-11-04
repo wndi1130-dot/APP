@@ -1,4 +1,5 @@
 extends RefCounted
+const Supplies = preload("res://game/train/train_supplies.gd")
 ## Partial S1a turn port. Every public action returns a deep copy.
 ## Unported branches return that copy with _turn_port_error = F-NOT-PORTED: ...;
 ## callers must reject that result. No fixture answers are read by these rules.
@@ -58,7 +59,7 @@ static func advance(g: Dictionary, t: Dictionary) -> Dictionary:
 			return Settle.settle(g, t)
 		"settle":
 			if Turn.next_segment_covers(g, t): return Turn.next_segment(g, t)
-			return _unported(g, "nextSegment: terminal/stranded/decree expiry")
+			return _unported(g, "nextSegment: terminal/decree expiry")
 		"prep": return Travel.depart(g, t)
 		"travel": return Travel.run_travel(g, t, after_stop)
 	return g.duplicate(true)
@@ -81,7 +82,9 @@ static func after_stop(g0: Dictionary, t: Dictionary) -> Dictionary:
 	var g: Dictionary = g0.duplicate(true)
 	_stranger_corpse(g, t)
 	if not due or bool(stranded.get("captainAway", false)):
-		if due: g["councilOwed"] = true
+		if due:
+			if not bool(g.get("councilOwed", false)): load("res://game/train/turn/turn_common.gd").journal(g, "열차장이 돌아오면 회기를 연다.")
+			g["councilOwed"] = true
 		var settled: Dictionary = Settle.settle(g, t)
 		return _unported(g0, str(settled["_turn_port_error"]).trim_prefix("F-NOT-PORTED: ")) if settled.has("_turn_port_error") else settled
 	g["councilOwed"] = false
@@ -308,6 +311,14 @@ static func resolve_stop(g0: Dictionary, t: Dictionary, go: bool = true) -> Dict
 	if chore != "": notes.append(chore)
 	_crew_rest(g, t, comm)
 	g["lastCrew"] = comm
+	if Supplies.asks(g):
+		var mult: float = float(stay["mult"]) * State.law_mult(g, t, "haulMult")
+		var before_sup: float = float(g.get("sup", 0))
+		Supplies.add(g, float(Supplies.YIELD.get(stop["place"], 0)) * mult, "stop.loot")
+		var cut: float = float(State.law_res(t, "emergency_ration", g).get("haulMult", 1)) if State.law_active(g, "emergency_ration") else 1.0
+		Supplies.add(g, float(p["supSearch"]) * cut, "sup.search")
+		var got_sup: int = int(floor(float(g.get("sup", 0)) - before_sup + 0.5))
+		if got_sup > 0: notes.append("생필품 %d을(를) 실어 왔다." % got_sup)
 	# 내정 훅 자리: domesticStop(g, false, 0).
 	stop["result"] = {"passed": false, "gains": gains, "injured": hurt, "dead": dead, "notes": notes}
 	var gained: Array[String] = []

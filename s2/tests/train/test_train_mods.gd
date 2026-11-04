@@ -247,7 +247,7 @@ func test_furnish_cloth_and_recorded_four_store_refund() -> void:
 	g["dom"]["techs"]["w5"] = {"stage": "done", "defect": false, "need": 3, "progress": 3}
 	g["dom"]["cloth"] = 1.0
 	var before: Dictionary = g.duplicate(true)
-	assert_eq(Mods.job_check(g, "furnish", "front")["why"], "천 2이 든다")
+	assert_eq(Mods.job_check(g, "furnish", "front")["why"], "천이 2 든다")
 	assert_false(Mods.start_job(g, "furnish", "front"))
 	assert_eq(g, before)
 	g["dom"]["cloth"] = 4.0
@@ -482,7 +482,8 @@ func test_dom_contract_accepts_only_the_insulation_subset() -> void:
 		var missing: Dictionary = valid.duplicate(true)
 		missing.erase(key)
 		assert_false(Dom.is_store({"job": missing}), "missing " + key)
-	for key: String in ["armored", "greenhouse", "order", "bedding", "sit", "workDebt"]:
+	# `order` (the workshop's task order) is open since supplies 2a (test_supplies_workshop_port.gd).
+	for key: String in ["armored", "greenhouse", "bedding", "sit", "workDebt"]:
 		assert_false(Dom.is_store({key: []}), "unported " + key)
 
 

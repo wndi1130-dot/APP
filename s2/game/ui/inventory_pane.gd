@@ -6,6 +6,7 @@ extends RefCounted
 const GlassPane = preload("res://game/ui/glass_pane.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Carry = preload("res://game/sim/carry.gd")
+const Sled = preload("res://game/sim/sled.gd")
 const W = preload("res://game/sim/weapons.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
@@ -56,6 +57,8 @@ static func places(game, p) -> Array:
 		out.append({"kind": "train", "id": "", "name": "열차 짐칸"})
 	for id: String in game.actions.near_boxes(p):
 		out.append({"kind": "box", "id": id, "name": String(game.data["containers"][id]["name"])})
+	for sled_id: int in game.actions.near_sleds(p):
+		out.append({"kind": "sled", "id": sled_id, "name": "썰매"})
 	out.append({"kind": "ground", "id": "", "name": "바닥"})
 	return out
 
@@ -94,7 +97,7 @@ static func bag_order(game, p, by: String) -> Array:
 static func keep_order(all: Array, shown: Array) -> Array:
 	var rank := func(i: int) -> int:
 		var place: Dictionary = all[i]
-		if place["kind"] != "box":
+		if place["kind"] not in ["box", "sled"]:
 			return -1 if place["kind"] == "train" else all.size() + shown.size()
 		var at: int = shown.find(place_key(place))
 		return at if at >= 0 else shown.size() + i
@@ -106,8 +109,12 @@ static func keep_order(all: Array, shown: Array) -> Array:
 static func open(hud, want: Dictionary) -> void:
 	var game = hud.game
 	var p = game.player
+	# A pane opened afresh (the bag key, a box, a sled) names its weapons only.
+	if hud.modal == null or hud.modal != hud.box_pane:
+		hud.inv_weapon_open = -1
+		hud.inv_weapon_open_id = ""
 	var all: Array = places(game, p)
-	# Laid again over itself (a walk, a row taken): the places keep their order.
+	# Laid again over itself (a row taken): the places keep their order.
 	if hud.modal != null and hud.modal == hud.box_pane:
 		all = keep_order(all, hud.bag_places)
 	var at: Dictionary = chosen(all, want)
@@ -120,6 +127,9 @@ static func open(hud, want: Dictionary) -> void:
 	if not bag and at["kind"] == "box":
 		var c: Dictionary = game.data["containers"][at["id"]]
 		side = "담긴 %.1f / %.0f" % [Carry.box_load(c), Carry.box_limit(c)]
+	elif not bag and at["kind"] == "sled":
+		var sled: Dictionary = Sled.find(game, int(at["id"]))
+		side = "%.1f / %.0f · %s" % [Sled.weight(sled), Sled.LIMIT, Carry.STATE_NAMES[Sled.state(sled)]]
 	var pane: GlassPane = hud._open_pane(title, side, "pack" if bag else _place_icon(at), PANE_W, true, true)
 	_slim_head(pane, hud, title, side, "pack" if bag else _place_icon(at))
 	var layout := GlassPane.row()
@@ -149,7 +159,7 @@ static func open(hud, want: Dictionary) -> void:
 	var main_ref: WeakRef = weakref(main)
 	var rail_ref: WeakRef = weakref(rail)
 	var fit: Callable = func() -> void:
-		var shown: Control = pane_ref.get_ref() as Control
+		var shown: GlassPane = pane_ref.get_ref() as GlassPane
 		var col: Control = main_ref.get_ref() as Control
 		var strip: ScrollContainer = rail_ref.get_ref() as ScrollContainer
 		if shown != null and col != null and strip != null:
@@ -161,10 +171,12 @@ static func open(hud, want: Dictionary) -> void:
 		for entry: Node in entries.get_children():
 			if entry is Label:
 				(entry as Label).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				(entry as Label).text = UiFonts.keep_all((entry as Label).text)
 		journal.minimum_size_changed.connect(fit, CONNECT_DEFERRED)
 		pane.body.add_child(journal)
 	rows.minimum_size_changed.connect(fit, CONNECT_DEFERRED)
 	place_col.minimum_size_changed.connect(fit, CONNECT_DEFERRED)
+	pane.motion_finished.connect(fit)
 	var screen: Viewport = pane.get_viewport()
 	screen.size_changed.connect(fit)
 	pane.tree_exiting.connect(func() -> void:
@@ -263,8 +275,8 @@ static func _slim_head(pane: GlassPane, hud, title: String, side: String, icon: 
 
 ## The pane stays inside the screen: the item scroll gives up height first, then
 ## the places rail (down to one place); each shows all it holds while it fits.
-static func _fit_screen(pane: Control, main: Control, rail: ScrollContainer) -> void:
-	if not is_instance_valid(pane) or not pane.is_inside_tree():
+static func _fit_screen(pane: GlassPane, main: Control, rail: ScrollContainer) -> void:
+	if not is_instance_valid(pane) or not pane.is_inside_tree() or pane.is_moving():
 		return
 	for child: Node in main.get_children():
 		if child is ScrollContainer:
@@ -281,8 +293,7 @@ static func _fit_screen(pane: Control, main: Control, rail: ScrollContainer) -> 
 			var scroll := child as ScrollContainer
 			scroll.custom_minimum_size.y = maxf(UiFonts.px(ROW_H), scroll.custom_minimum_size.y - over)
 	rail.custom_minimum_size.y = maxf(UiFonts.px(PLACE_H), minf(rail.custom_minimum_size.y, fits))
-	pane.size = pane.get_combined_minimum_size()
-	pane.position.x = pane.get_viewport_rect().size.x - pane.size.x
+	pane._fit()
 
 
 static func _column(gap: float = 6.0) -> VBoxContainer:
@@ -309,7 +320,7 @@ static func _place_name(game, place: Dictionary, short: bool = false) -> String:
 
 
 static func _place_icon(place: Dictionary) -> String:
-	return "train" if place["kind"] == "train" else ("fetch" if place["kind"] == "box" else "drop")
+	return "train" if place["kind"] == "train" else ("fetch" if place["kind"] in ["box", "sled"] else "drop")
 
 
 ## With the bag shown, the place a pressed row goes to keeps an amber edge.
@@ -412,8 +423,105 @@ static func _tools(hud, p, at: Dictionary, bag: bool) -> Control:
 	elif not bag and at["kind"] == "box":
 		if not (hud.game.data["containers"][at["id"]]["items"] as Array).is_empty():
 			row.add_child(_icon_key("pickup", "모두 담기", hud._loot_all.bind(String(at["id"])), true))
-	if at["kind"] == "train" and not hud.game.actions.loadable(p).is_empty():
+	if (at["kind"] == "train" or not hud.game.sleds.is_empty()) and hud.game.actions.at_unloading(p) and hud.game.actions.has_load(p):
 		row.add_child(_icon_key("train", "열차에 싣기", hud._load_train, true))
+	return row
+
+
+## Seconds from one attack to the next with this weapon: a melee blow is its
+## swing and the rest after it (weapons.gd swing + melee_gap); a gun or bow
+## waits for its aim to close again (shrink_time), and one that holds a single
+## round for its reload too. 0 for no weapon.
+static func attack_seconds(id: String) -> float:
+	var d: Dictionary = W.get_data(id)
+	if d.is_empty():
+		return 0.0
+	if String(d.get("kind", "")) == "melee":
+		return float(d.get("swing", 0.0)) + W.melee_gap(id)
+	var wait: float = float(d.get("shrink_time", 0.0))
+	if int(d.get("mag", 0)) <= 1:
+		wait = maxf(wait, float(d.get("reload", 0.0)))
+	return wait
+
+
+## A number of seconds as it reads on the screen: one place, or two when that
+## is what it is (0.85, not 0.8).
+static func seconds_word(s: float) -> String:
+	var two: float = snappedf(s, 0.01)
+	return ("%.1f" % two) if is_equal_approx(snappedf(two, 0.1), two) else ("%.2f" % two)
+
+
+## Which of the weapons named at the bag's top shows its numbers (-1 none): the
+## one pressed, followed to wherever it now stands among the two (a weapon taken
+## into the hand goes first); gone from them, none — and the HUD forgets it.
+static func open_weapon(hud, p) -> int:
+	var want: String = String(hud.inv_weapon_open_id)
+	var shown: int = mini(p.hands.size(), 2)
+	var at: int = -1
+	if want != "" and int(hud.inv_weapon_open) >= 0:
+		var was: int = int(hud.inv_weapon_open)
+		if was < shown and String((p.hands[was] as Dictionary).get("id", "")) == want:
+			at = was
+		else:
+			for i: int in shown:
+				if String((p.hands[i] as Dictionary).get("id", "")) == want:
+					at = i
+					break
+	hud.inv_weapon_open = at
+	hud.inv_weapon_open_id = want if at >= 0 else ""
+	return at
+
+
+## The weapons named at the bag's top (in hand, then the one carried after it),
+## each a press that shows or hides its two numbers (결정 555: the name only,
+## and on a press how fast it attacks and its weight).
+static func _weapons(hud, p) -> Control:
+	var held := _column(2.0)
+	held.name = "Weapons"
+	var row := GlassPane.row()
+	row.add_theme_constant_override("separation", GlassPane.px(2.0))
+	held.add_child(row)
+	var shown: int = mini(p.hands.size(), 2)
+	if shown == 0:
+		row.add_child(_label(hud.short_weapon(p), 12.0, GlassPane.INK))
+		return held
+	var open: int = open_weapon(hud, p)
+	for i: int in shown:
+		var id: String = String((p.hands[i] as Dictionary).get("id", ""))
+		if i > 0:
+			row.add_child(_label("·", 12.0, GlassPane.INK3))
+		var word: String = hud.short_weapon(p) if i == 0 else String(W.get_data(id).get("name", id))
+		var key := Button.new()
+		key.name = "WeaponName%d" % i
+		key.text = word
+		key.tooltip_text = word
+		key.focus_mode = Control.FOCUS_NONE
+		key.flat = true
+		key.custom_minimum_size.y = UiFonts.px(TOUCH_MIN)
+		UiFonts.style(key, UiFonts.WORD, 500, 12.0, GlassPane.INK if open == i else GlassPane.INK2, 0.2)
+		key.add_theme_color_override("font_hover_color", GlassPane.INK)
+		key.pressed.connect(hud._inv_weapon.bind(i))
+		row.add_child(key)
+	if open >= 0 and open < shown:
+		held.add_child(_weapon_numbers(hud, String((p.hands[open] as Dictionary).get("id", ""))))
+	return held
+
+
+## A weapon's two numbers: a clock and its seconds an attack, a scale and its weight.
+static func _weapon_numbers(hud, id: String) -> Control:
+	var row := GlassPane.row()
+	row.name = "WeaponStats"
+	row.add_theme_constant_override("separation", GlassPane.px(6.0))
+	for pair: Array in [["clock", seconds_word(attack_seconds(id)) + "초", "WeaponSpeed"], ["scale", "%.1f" % float(W.get_data(id).get("weight", 0.0)), "WeaponWeight"]]:
+		row.add_child(hud._icon_rect(String(pair[0]), UiFonts.size(ITEM_ICON), GlassPane.INK2))
+		var number := UiFonts.label(String(pair[1]), UiFonts.NUMBER, 500, 13.0, GlassPane.INK)
+		number.name = String(pair[2])
+		number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		row.add_child(number)
+		var gap := Control.new()
+		gap.custom_minimum_size.x = UiFonts.px(8.0)
+		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(gap)
 	return row
 
 
@@ -422,10 +530,7 @@ static func _tools(hud, p, at: Dictionary, bag: bool) -> Control:
 static func _bag_rows(hud, p, at: Dictionary) -> Control:
 	var game = hud.game
 	var col := _column()
-	var weapons: String = hud.short_weapon(p)
-	if p.hands.size() > 1:
-		weapons += " · " + String(W.get_data(p.hands[1]["id"]).get("name", ""))
-	col.add_child(_label(weapons, 12.0, GlassPane.INK))
+	col.add_child(_weapons(hud, p))
 	var worn := _column(0.0)
 	worn.name = "Worn"
 	var ids: Dictionary = Wear.worn_ids(p)
@@ -448,7 +553,7 @@ static func _bag_rows(hud, p, at: Dictionary) -> Control:
 	var loadable: Array = game.actions.loadable(p)
 	var box: Dictionary = game.data["containers"][at["id"]] if at["kind"] == "box" else {}
 	for id: String in bag_order(game, p, hud.inv_sort):
-		var can_move: bool = loadable.has(id) if at["kind"] == "train" else (box.is_empty() or Carry.box_room(box, id) > 0)
+		var can_move: bool = loadable.has(id) if at["kind"] in ["train", "sled"] else (box.is_empty() or Carry.box_room(box, id) > 0)
 		list.add_child(_bag_row(hud, p, id, can_move))
 	if list.get_child_count() == 0:
 		list.add_child(_label("빈 가방", 12.0, GlassPane.INK3))
@@ -500,6 +605,16 @@ static func _near_rows(hud, p, at: Dictionary) -> Control:
 	list.name = "Near"
 	var empty: String = ""
 	match String(at["kind"]):
+		"sled":
+			var cargo: Dictionary = Sled.find(game, int(at["id"])).get("items", {})
+			var keys: Array = cargo.keys()
+			var ids: Array = keys.duplicate()
+			ids.sort_custom(func(a: String, b: String) -> bool:
+				return _steady(_order_key(hud, a, int(cargo[a])), _order_key(hud, b, int(cargo[b])), keys.find(a), keys.find(b)))
+			for item: String in ids:
+				var count: int = int(cargo[item])
+				list.add_child(_thin_row(hud, item, "%s ×%d" % [game.item_name(item), count], Carry.item_weight(item) * count, hud._inv_sled_take.bind(int(at["id"]), item)))
+			empty = "빈 썰매"
 		"box":
 			var c: Dictionary = game.data["containers"][at["id"]]
 			var items: Array = c["items"]
@@ -560,7 +675,7 @@ static func _foot(hud, p, at: Dictionary, bag: bool) -> Label:
 	var word: String = "누르면 가방으로"
 	var seconds: float = 0.0
 	if bag:
-		word = UiFonts.josa("누르면 %s(으)로 · 가방 %.1f / %.0f" % [_place_name(hud.game, at), p.weight(), p.carry_limit()])
+		word = UiFonts.josa("누르면 %s(으)로 · 가방 %.1f / %.0f · 몸 부담 %.1f" % [_place_name(hud.game, at), p.weight(), p.carry_limit(), p.body_burden()])
 	elif at["kind"] == "train":
 		word = "열차에 실은 것"
 	elif at["kind"] == "box":
@@ -569,6 +684,11 @@ static func _foot(hud, p, at: Dictionary, bag: bool) -> Label:
 			word += " · 다 챙기면 %.1f초" % seconds
 	var label := _label(word, 11.0, GlassPane.INK3)
 	label.name = "TakeAll" if seconds > 0.0 else "MoveHint"
+	if bag:
+		# The body's number ends this line: it wraps whole rather than lose its end.
+		label.clip_text = false
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.text = UiFonts.keep_all(word)
 	return label
 
 

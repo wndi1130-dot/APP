@@ -396,7 +396,7 @@ func test_the_last_call_is_lost_if_the_chief_is_not_at_the_train() -> void:
 	assert_false(game.ended, "it waits")
 	assert_false(h.calling)
 	assert_true(h.on, "and the doors are still to be held")
-	assert_string_contains(String(game.radio_wait["text"]), "열차장님이 안 타셨습니다", "the driver says why")
+	assert_string_contains(String(game.radio_wait["text"]), "열차장님, 아직 안 타셨습니다", "the driver says why")
 
 
 # User decision 146: ready, a quiet while; after it part of every wave stands

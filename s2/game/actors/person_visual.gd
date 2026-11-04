@@ -36,6 +36,7 @@ const InjuryRules = preload("res://game/sim/injury_rules.gd")
 const BodyCast = preload("res://game/actors/body_cast.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Gait = preload("res://game/sim/gait.gd")
+const SimNoise = preload("res://game/sim/noise.gd")
 
 const FOLDER: String = "res://models/people/n5-crew_seamstress"
 const OWN_FOLDER: String = "res://models/people/n5-crew_seamstress_p"
@@ -78,6 +79,11 @@ const TELL: int = DeadBody.TELL
 const SHADE: float = 1.0
 const STRIDE_CAP: float = 0.5            # more than this between two drawings is not a step
 const STILL_AFTER: float = 0.2           # stands once it has kept its place this long
+const GROUND_TAU: float = 0.3
+const WALK_OFF: float = 0.15             # m/s, filtered ground speed
+const WALK_ON: float = 0.25
+const GROUND_MIN: float = 0.000001       # metres; ignore subtraction noise
+const BACKWARD_DEG: float = Gait.BACKWARD_DEG
 # Held by the dead (after the reference game's struck state, 상태표 2.3): the arms
 # out against them (the lunge's reach), leaning back from one in front and
 # bent under one behind, twisting to get free.
@@ -98,8 +104,10 @@ const HURT_SIDE_ROLL: float = 0.6        # of the lean, rolled away from one at 
 # TURN_FOOT metres round the walk, so a half turn is about two steps.
 const TURN_FOOT: float = 0.35
 const TURN_HOLD: float = 0.15            # it keeps stepping this long after the turn stops
-const TURN_MIN: float = 0.002            # less than this between two drawings is not a turn
-const TURN_CAP: float = 1.2              # more than this at once is a snap round, not stepped
+const TURN_ANGLE: float = PI / 9.0       # twenty degrees accumulated in TURN_WINDOW
+const TURN_RATE: float = 0.6             # radians per second
+const TURN_WINDOW: float = 1.0
+const TURN_NOISE: float = 0.000001
 # The living's own motions in OWN_FOLDER, by name; where the build has no such
 # folder, the dead's that read closest. Crouched (the reference game's sneak: its
 # own stand and walk) it stands low as the dead do before they run, and walks
@@ -184,21 +192,10 @@ const OWN_WORK: Dictionary = {
 	# Climbing up into a car at its door (field_ai.gd retreat; a climb of its own is to come).
 	"board": ["p_climb", 0.0],
 }
-# A melee blow in the living's own motions: the ways each weapon is swung, and
-# where in each the blow lands (body_bake.gd keys; for UAL's chop, where the
-# right hand goes fastest) and, if not at its end, where the way back stops
-# (the chop is a loop that lifts the axe again: it stops with the axe low, so
-# the next way does not drop the arm and lift it once more). Blow after blow goes through them in turn, so the
-# same one is not seen twice running (decision 411): the reference game swings a
-# one-handed weapon across, overhead or up from below and mixes three swings
-# across, and a hand-to-hand mod for it changes hands each blow. A knife stabs, then cuts
-# across; an axe comes down from overhead, then chops in from the side; the
-# rest swing across, back the other way, then come down from overhead.
-# A blow at a body on the ground is struck down in front of the feet, and a
-# stomp drives the heel into it. The way back across lands a third of the way
-# in, where its tip crosses the front (J2 ③: at 0.45 it was 0.9 m off to the side).
+# Alternate compatible swings, with their contact and recovery phases.
+# Keep the legacy two-hand chop low before its loop lifts the axe again.
 const OWN_BLOWS: Dictionary = {
-	"one": [["p_swing_one", 0.45], ["p_swing_back", 0.33], ["p_swing_axe", 0.45]],
+	"one": [["p_swing_one", 0.45], ["p_swing_back", 0.33]],
 	"axe": [["p_swing_axe", 0.45], ["p_chop_side", 0.16, 0.45]],
 	"stab": [["p_stab", 0.35], ["p_swing_one", 0.45]],
 	"floor": [["p_floor_strike", 0.5]], "stomp": [["p_stomp", 0.5]]}
@@ -209,6 +206,11 @@ const OWN_BLOW_AIM: Dictionary = {"p_stab": 0.53, "p_swing_axe": 0.35}
 # A blow drawn back within this long of the last one ending goes on to the next
 # way; after a longer rest it starts again from the first.
 const CHAIN_GAP: float = 1.0
+const RECOVER_WALK_MIX: float = 0.12
+const RECOVER_GUARD_HOLD: float = 0.20
+const RECOVER_GUARD_LOWER: float = 0.40
+# Swings whose first frame is the guard they return to (body_bake.gd keys at 0 = at 0.8).
+const GUARD_START: Array[String] = ["p_swing_one", "p_swing_back"]
 # A door kick, and where in it the foot lands (body_bake.gd p_kick at 0.4): the
 # leg comes up over the last WIND of the try so it lands as the door is struck.
 const OWN_KICK: Array = ["p_kick", 0.4]
@@ -221,7 +223,8 @@ const HAND_R: float = 0.1
 const ELBOW_R: float = 0.05
 const ELBOW_SPARE: float = 0.02
 const FOREARM: float = 0.32
-const GRIP_FOLLOW: float = 0.5           # how far the weapon turns toward the hand's way each frame
+const GRIP_TAU: float = 0.0480898347     # Half the remaining angle in 1/30 second.
+const FRAME_MAX: float = 0.1            # Shared with the field's rule clock.
 const OWN_MIX_TIME: float = 0.35
 # The own shove's arms are back at 0.3 of it and out at 0.4 (body_bake.gd p_shove):
 # drawn back over the rules' wind-up, out as it lands, all the way back by the lunge's end.
@@ -384,7 +387,14 @@ func is_worn() -> bool:
 ## still then (field_game.gd still shading), and through a blow's hold (hit_feel.gd);
 ## at the end, the train leaving, they go on.
 static func frame_delta(field, delta: float) -> float:
-	return 0.0 if (field.get("paused") == true or field.get("hitstop") == true) and field.get("ended") != true else delta
+	var ended: bool = field.get("ended") == true
+	if not ended and (field.get("paused") == true or field.get("hitstop") == true):
+		return 0.0
+	var step: float = minf(delta, FRAME_MAX)
+	if ended:
+		return step
+	var slow: Variant = field.get("slow")
+	return step * (float(slow) if slow != null else 1.0)
 
 
 func _process(delta: float) -> void:
@@ -401,6 +411,8 @@ func _process(delta: float) -> void:
 	var reads := READS_PER_FRAME
 	for p in game.people:
 		_hide_boxes(p)
+		if p.sled_weapon_stowed and p.weapon_mesh != null:
+			p.weapon_mesh.visible = false
 		if not p.visible or count >= MAX_PEOPLE:
 			continue
 		var had := worn.size()
@@ -432,7 +444,7 @@ func _process(delta: float) -> void:
 		var mix: Dictionary = note.get_or_add("mix_own" if own else "mix_dead", {})
 		var drawn: Color
 		if own:
-			drawn = DeadBody.mix_from(mix, look, float(note["t"]), d["own_table"], d["own_mix"])
+			drawn = mix_recovery(note, mix, look, float(note["t"]), d["own_table"], d["own_mix"])
 			own_mm.set_instance_transform(k, at)
 			own_mm.set_instance_custom_data(k, drawn)
 			if own_mm.use_colors:
@@ -460,7 +472,7 @@ func _process(delta: float) -> void:
 		var baked: Dictionary = b_own if own else b_vat
 		if baked.has("arm") and (not gun_busy(p) or (own and loading(note, b_own.get("clips", [])))):
 			var hand := arm_at(baked["arm"], b_own_frames if own else b_frames, drawn)
-			var grip := grip_of(hand[0], hand[1], note.get("grip", Basis()))
+			var grip: Basis = grip_of(hand[0], hand[1], note.get("grip", Basis()), delta, note.has("grip"))
 			note["grip"] = grip
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * grip, lean * hand[0])
@@ -470,7 +482,7 @@ func _process(delta: float) -> void:
 			var hand := arm_at(baked["arm"], b_own_frames, drawn)
 			var hold := Pose.hold_of(p.weapon_id())
 			var still: Vector3 = Pose.aim_at(hold)["weapon"]["pos"]
-			var shot: Dictionary = Pose.aim_at(hold, Pose._kick(p, Time.get_ticks_msec()))["weapon"]
+			var shot: Dictionary = Pose.aim_at(hold, Pose._kick(p, float(p.get_meta(Pose.PICTURE_TIME, 0.0))))["weapon"]
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * Basis.from_euler(shot["rot"]), lean * (hand[0] + shot["pos"] - still))
 	for d: Dictionary in worn.values():
@@ -565,16 +577,51 @@ func _hide_boxes(p) -> void:
 ## by the ground covered and a fall plays once from where it started. `own` is
 ## the living's own folder's motions: when y is one of those, is_own(note).
 static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Array = []) -> Vector2:
+	if int(note.get("epoch", p.motion_epoch)) != p.motion_epoch:
+		var had_blow: bool = note.has("blow_n") or bool(note.get("blow_on", false)) or p.has_meta(Pose.SWING)
+		note.clear()
+		p.remove_meta(Pose.BLOW_WAY)
+		if had_blow and p.strike_t <= 0.0 and p.swing_t > 0.0 and p.shove_t <= 0.0:
+			p.set_meta(Pose.SWING, p.swing_t)
+			if not p.has_meta(Pose.MODE):
+				p.set_meta(Pose.MODE, Pose.strike_mode(p.strike_kind, p.strike_at))
+	note["epoch"] = p.motion_epoch
+	if not note.has("ground_walk"):
+		# Decision 425: rebuild from the saved movement, without adding save fields.
+		var state: Dictionary = p.brain.get(Gait.GROUND_RUN, {})
+		var speed: float = float(state.get("speed", 0.0))
+		var walking_now: bool = p.moving and is_finite(speed) and speed >= WALK_OFF
+		note["ground_speed"] = speed if walking_now else 0.0
+		note["ground_walk"] = walking_now
+		if walking_now:
+			note["moved"] = float(note.get("t", 0.0))
 	note.erase("blow_aim")   # Only a blow drawn this frame restores its turn.
 	var t: float = float(note.get("t", 0.0)) + delta
 	note["t"] = t
 	var at: Vector3 = p.global_position
-	var gone: float = at.distance_to(note.get("at", at))
+	var previous: Vector3 = note.get("at", at)
+	var gone: float = at.distance_to(previous)
 	note["at"] = at
+	var push: Vector3 = p.visual_push
+	var previous_push: Vector3 = note.get("push_at", push)
+	var pushed: Vector3 = push - previous_push
+	note["push_at"] = push
+	var ground: Vector3 = at - previous - pushed
+	ground.y = 0.0
+	var ground_gone: float = ground.length()
+	var walking: bool = _ground_walk(note, ground_gone, delta, t)
 	_note_hurt(p, note, t)
 	# Noted every drawing, so a turn made in another motion (aiming, a blow) is not stepped later.
 	var turned := _turned(p, note, t)
 	_note_posture(p, note, delta)
+	note.erase("recover_walk_mix")
+	note.erase("guard_lower_mix")
+	note.erase("blow_from_guard")
+	note.erase("gait_pick")
+	var prior_motion: int = int(note.get("motion", -1)) - OWN_BASE
+	var blow := blow_of(p, own, note, t)
+	var blow_aim: float = float(note.get("blow_aim", 0.0))
+	note.erase("blow_aim")
 	var lying: bool = p.body.downed or p.body.dead or p.fallen_t > 0.0
 	if lying:
 		# Dead or knocked down it goes over on its back; down and still alive
@@ -631,8 +678,17 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	if bitten < 0 and hurt_k(note, t) > 0.0:
 		note["motion"] = HIT
 		return Vector2(0.0, HIT)
-	var blow := blow_of(p, own, note, t)
+	var recovery_from: int = int(blow.y)
+	var cancel_recovery: bool = blow.y >= 0.0 and p.strike_t <= 0.0 and (p.moving or walking) and ((Pose.extended_recovery(p) and Pose.recovery_feet_free(p)) or note.has("blow_guard_clip") and not p.has_meta(Pose.SWING))
+	if cancel_recovery:
+		p.remove_meta(Pose.SWING)
+		p.remove_meta(Pose.MODE)
+		note.erase("blow_guard_clip")
+		blow = Vector2(0.0, -1.0)
+		walking = true
 	if blow.y >= 0.0:
+		note["blow_aim"] = blow_aim
+		note["blow_from_guard"] = String(own[int(blow.y)].get("name", "")) in GUARD_START
 		note["motion"] = OWN_BASE + int(blow.y)
 		return blow
 	if p.shove_t > 0.0 or p.lunge_t > 0.0:
@@ -648,36 +704,40 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	var work := work_of(p, note, t, own)
 	if work.y >= 0.0:
 		return work
-	if gone > 0.001:
-		note["moved"] = t
 	var load := reload_of(p, note, t, own)
-	if load.y >= 0.0 and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+	if load.y >= 0.0 and not walking:
 		return load
 	var aim := aim_of(p, own)
-	if aim >= 0 and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+	if aim >= 0 and not walking:
 		return Vector2(_own_cycle(note, OWN_BASE + aim, t, _length(own, aim, 1.0), p.name_unit("aim")), aim)
 	var unit: float = p.name_unit("stand")
-	# The run as the feet go: out of breath or spent with the run still on, it walks.
-	var running: bool = Gait.runs(p)
+	# The same ground-speed decision sets the footstep round.
+	var running: bool = Gait.ground_runs(p)
 	# Spent or bleeding hard it reels (gait.gd reels; the dead's reel in a folder
 	# without its own), still reeling where it stops.
+	# The rope keeps both arms occupied, even standing or crouched (sled.md 2.2).
+	if p.sled_id != 0:
+		var sled_carry: int = clip_named(own, Gait.CARRY_BIG, -1)
+		if sled_carry >= 0:
+			note["motion"] = OWN_BASE + sled_carry
+			return Vector2(_round(note, "step", gone, _round_of(own, sled_carry, 1.2)), sled_carry)
 	var reeling: bool = Gait.reels(p)
 	var own_reel := clip_named(own, OWN_SPENT, -1) if reeling else -1
-	if reeling and t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+	if reeling and not walking:
 		if own_reel >= 0:
 			return Vector2(_own_cycle(note, OWN_BASE + own_reel, t, _length(own, own_reel, 1.0) * 2.0, unit), own_reel)
 		return Vector2(_own_cycle(note, STAGGER, t, _length(clips, STAGGER, 1.0) * 2.0, unit), STAGGER)
-	if t - float(note.get("moved", -10.0)) >= STILL_AFTER and t - float(note.get("turned", -10.0)) < TURN_HOLD:
+	if not walking and t - float(note.get("turned", -10.0)) < TURN_HOLD:
 		# Turning on the spot: the walk goes round by the turn, not by ground covered.
 		var own_turn := gait_of(p, own, false)
-		var foot := turned * TURN_FOOT
+		var foot: float = minf(turned * TURN_FOOT, STRIDE_CAP)
 		if own_turn >= 0:
 			note["motion"] = OWN_BASE + own_turn
 			return Vector2(_round(note, "step", foot, _round_of(own, own_turn, 1.2)), own_turn)
 		var turn_gait := CROUCH_WALK if p.crouched else WALK
 		note["motion"] = turn_gait
 		return Vector2(_round(note, "step", foot, _round_of(clips, turn_gait, float(DeadBody.STRIDE.get(turn_gait, 1.2)))), turn_gait)
-	if t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+	if not walking:
 		# Danger near (guard_note): the hand weapon held up, on guard.
 		var ready := clip_named(own, Gait.ready_name(p), -1) if not p.crouched and t < float(note.get("guard_until", -1.0)) else -1
 		if ready >= 0:
@@ -691,6 +751,9 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		if not p.crouched and Gait.weak_hold(p) and clip_named(own, Gait.HOLD_WEAK, -1) >= 0:
 			own_stand = clip_named(own, Gait.HOLD_WEAK, -1)   # a broken arm: the long weapon held low in one hand
 		if own_stand >= 0:
+			if prior_motion == int(note.get("blow_guard_clip", -2)):
+				note["guard_lower_mix"] = prior_motion
+				note.erase("blow_guard_clip")
 			return Vector2(_own_cycle(note, OWN_BASE + own_stand, t, _length(own, own_stand, 1.0), unit), own_stand)
 		if p.crouched:
 			note["motion"] = TELL
@@ -704,9 +767,19 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 		own_gait = clip_named(own, Gait.burden_name(p, PAIN_SHOWN), -1)
 	if own_gait < 0:
 		own_gait = own_reel if reeling else gait_of(p, own, running)
+	var backward: bool = bool(note.get("gait_backward", false))
+	if ground_gone > GROUND_MIN:
+		backward = Gait.signed_distance(p, ground) < 0.0
+	note["gait_backward"] = backward
+	var signed_gone: float = -ground_gone if backward else ground_gone
 	if own_gait >= 0:
+		if cancel_recovery and prior_motion == recovery_from:
+			note["recover_walk_mix"] = true
+			note["recover_walk_from"] = prior_motion
+			note["recover_walk_to"] = own_gait
+		note["gait_pick"] = true
 		note["motion"] = OWN_BASE + own_gait
-		var stepped := _round(note, "step", gone, _round_of(own, own_gait, 1.2))
+		var stepped: float = _round(note, "step", signed_gone, _round_of(own, own_gait, 1.2))
 		if p.brain.has("step_r") and is_stepped(String(own[own_gait].get("name", ""))):
 			stepped = float(p.brain["step_r"])   # the feet land with the footsteps (field_game.gd steps_in)
 		return Vector2(stepped, own_gait)
@@ -718,7 +791,28 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	elif reeling:
 		gait = STAGGER
 	note["motion"] = gait
-	return Vector2(_round(note, "step", gone, _round_of(clips, gait, float(DeadBody.STRIDE.get(gait, 1.2)))), gait)
+	return Vector2(_round(note, "step", signed_gone, _round_of(clips, gait, float(DeadBody.STRIDE.get(gait, 1.2)))), gait)
+
+
+## User feedback 2026-11-01: ground speed gates the drawing, not the rules.
+static func _ground_walk(note: Dictionary, gone: float, delta: float, t: float) -> bool:
+	var speed: float = float(note.get("ground_speed", 0.0))
+	var walking: bool = bool(note.get("ground_walk", false))
+	if delta > 0.0:
+		speed = lerpf(speed, gone / delta, 1.0 - exp(-delta / GROUND_TAU))
+	if gone > GROUND_MIN:
+		note["moved"] = t
+	elif t - float(note.get("moved", -10.0)) >= STILL_AFTER:
+		# Preserve the existing release after a complete stop.
+		speed = 0.0
+	# Decision 442: enter now; distance comparison tolerates coordinate subtraction noise.
+	if delta > 0.0 and gone > GROUND_MIN and (gone >= WALK_ON * delta or is_equal_approx(gone, WALK_ON * delta)):
+		walking = true
+	elif speed < WALK_OFF:
+		walking = false
+	note["ground_speed"] = speed
+	note["ground_walk"] = walking
+	return walking
 
 
 ## The living's own walk (or run) for what is in the hand (gait.gd), the plain
@@ -771,37 +865,103 @@ static func fall_name(p, own: Array) -> String:
 	return OWN_FALL if p.body.dead else OWN_FALL_FRONT
 
 
+static func mix_recovery(note: Dictionary, mix: Dictionary, look: Color, t: float, tab: Array, times: Dictionary) -> Color:
+	var durations: Dictionary = times
+	var previous: int = int(mix.get("body_motion", -1))
+	var target: int = int(look.g)
+	if bool(note.get("recover_walk_mix", false)) and previous == int(note.get("recover_walk_from", -2)) and target == int(note.get("recover_walk_to", -3)) and previous != target:
+		durations = times.duplicate()
+		durations[target] = RECOVER_WALK_MIX
+		note.erase("recover_walk_mix")
+	if note.has("guard_lower_mix") and previous == int(note["guard_lower_mix"]) and previous != target:
+		durations = times.duplicate()
+		durations[target] = RECOVER_GUARD_LOWER
+		note.erase("guard_lower_mix")
+		mix["guard_lowering"] = true
+	elif previous != target and mix.has("guard_lowering"):
+		_cut_guard_lowering(note, mix, look, t, tab, durations)
+	return DeadBody.mix_from(mix, look, t, tab, durations)
+
+
+## A change of motion while the guard is still being lowered. The shader keeps one frame,
+## so a fresh ease would drop the guard share k in one drawing. A swing that starts from
+## the guard (GUARD_START) keeps the standing frame at 1 - k; a walk, whose start is near
+## standing, keeps the guard frame at k. Anything else starts elsewhere: it keeps the guard
+## frame while k is at least half and eases fresh from standing after, so it jumps no more
+## than half the way either side.
+static func _cut_guard_lowering(note: Dictionary, mix: Dictionary, look: Color, t: float, tab: Array, durations: Dictionary) -> void:
+	mix.erase("guard_lowering")
+	var lower: float = float(mix.get("body_mix", RECOVER_GUARD_LOWER))
+	var left: float = 1.0 - (t - float(mix.get("body_changed", t))) / lower
+	if left <= 0.0 or not mix.has("body_from"):
+		return
+	var keep: float = left * left * (3.0 - 2.0 * left)
+	if bool(note.get("blow_from_guard", false)):
+		mix["body_from"] = DeadBody.frame_in(tab, int(mix["body_motion"]), float(mix["body_r"]))
+		keep = 1.0 - keep
+	elif not bool(note.get("gait_pick", false)) and keep < 0.5:
+		return
+	var target: int = int(look.g)
+	var mix_time: float = float(durations.get(target, DeadBody.MIX_TIME))
+	# The left whose smoothstep is keep, so DeadBody.mix_from goes on from that share.
+	var from_left: float = 0.5 - sin(asin(clampf(1.0 - 2.0 * keep, -1.0, 1.0)) / 3.0)
+	mix["body_motion"] = target
+	mix["body_r"] = look.r
+	mix["body_mix"] = mix_time
+	mix["body_changed"] = t - (1.0 - from_left) * mix_time
+
+
+static func blow_kind(wid: String, hands: int, mode: String = "swing") -> String:
+	if mode == "stomp" or mode == "floor":
+		return mode
+	if wid == "axe" and hands > 1:
+		return "axe"
+	if wid == "knife":
+		return "stab"
+	return "one"
+
+
 ## A melee blow in the living's own motions (y) and how far through it (x):
 ## drawn back up to where the blow lands while the rules wind it up, the rest
 ## on the way back. y is -1 with no blow, or none of its own. `note` keeps which
 ## way the last blow went and when it ended (at the visual's own time t).
 static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vector2:
-	if own.is_empty():
-		return Vector2(0.0, -1.0)
 	var sw: Array = Pose.swing_state(p)
 	if sw.is_empty():
 		if note.get("blow_on", false):
-			note["blow_on"] = false
+			# Chain timing ends with the rule's wait, even after the picture returns.
+			note["blow_on"] = p.swing_t > 0.0 and p.shove_t <= 0.0
 			note["blow_drawing"] = false
-			note["blow_end"] = t
+			if bool(note["blow_on"]):
+				note["blow_deadline"] = t + p.swing_t
+			else:
+				note["blow_end"] = minf(t, float(note.get("blow_deadline", t)))
 			note.erase("blow_aim")
 			p.remove_meta(Pose.BLOW_WAY)
+		# A shove takes the arms: the guard is not drawn again once it is done.
+		if p.shove_t > 0.0 or p.lunge_t > 0.0:
+			note.erase("blow_guard_clip")
+		if note.has("blow_guard_clip") and t <= float(note.get("blow_guard_until", -1.0)):
+			return Vector2(float(note["blow_guard_phase"]), int(note["blow_guard_clip"]))
 		return Vector2(0.0, -1.0)
 	# A new blow is drawn back: on to the next way if it follows on from the last.
 	var drawing: bool = not sw[2]
+	if drawing:
+		note.erase("blow_guard_clip")
 	if drawing and not note.get("blow_drawing", false):
 		var follows: bool = note.get("blow_on", false) or (note.has("blow_end") and t - float(note["blow_end"]) <= CHAIN_GAP)
 		note["blow_n"] = int(note.get("blow_n", -1)) + 1 if follows else 0
+		note.erase("blow_deadline")
 	note["blow_drawing"] = drawing
 	note["blow_on"] = true
+	if not drawing:
+		note["blow_deadline"] = t + p.swing_t
+	if own.is_empty():
+		return Vector2(0.0, -1.0)
 	var mode: String = p.get_meta(Pose.MODE, "swing")
-	var kind := "one"
-	if mode == "stomp" or mode == "floor":
-		kind = mode
-	elif p.weapon_id() == "axe":
-		kind = "axe"
-	elif p.weapon_id() == "knife":
-		kind = "stab"
+	var wid: String = p.weapon_id()
+	var hands: int = int(Pose.W.get_data(wid).get("hands", 1))
+	var kind: String = blow_kind(wid, hands, mode)
 	var ways: Array = OWN_BLOWS[kind]
 	var way: Array = ways[int(note.get("blow_n", 0)) % ways.size()]
 	var clip := clip_named(own, String(way[0]), -1)
@@ -817,6 +977,13 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 	var r: float = lands + (ends - lands) * float(sw[1]) if sw[2] else lands * float(sw[0])
 	note["blow_aim"] = float(OWN_BLOW_AIM.get(String(way[0]), 0.0))
 	note["blow_r"] = Vector3(r, lands, ends)
+	if not drawing and Pose.extended_recovery(p) and p.has_meta(Pose.SWING):
+		var rest: float = float(p.get_meta(Pose.SWING))
+		var duration: float = Pose.recovery_duration(p, rest)
+		if duration > Pose.recover_seconds(wid):
+			note["blow_guard_clip"] = clip
+			note["blow_guard_phase"] = lerpf(lands, ends, Pose.recovery_end(p))
+			note["blow_guard_until"] = t + duration - (rest - p.swing_t) + RECOVER_GUARD_HOLD
 	return Vector2(r, clip)
 
 
@@ -1155,7 +1322,7 @@ static func arm_at(arm: PackedVector3Array, tab: Array, drawn: Color) -> Array:
 ## fails, so it turns toward the way the forearm points about the up axis
 ## instead; and it only goes part way toward the new way each frame (from
 ## `was`), so it never flips in one frame.
-static func grip_of(hand: Vector3, elbow: Vector3, was: Basis) -> Basis:
+static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.0 / 30.0, initialized: bool = true) -> Basis:
 	var f := (hand - elbow).normalized()
 	if f == Vector3.ZERO:
 		return was
@@ -1168,9 +1335,10 @@ static func grip_of(hand: Vector3, elbow: Vector3, was: Basis) -> Basis:
 	if x == Vector3.ZERO:
 		x = f
 	var want := Basis(x, z.cross(x), z).orthonormalized()
-	if was == Basis() or not was.is_finite():
+	if not initialized or not was.is_finite():
 		return want
-	return was.orthonormalized().slerp(want, GRIP_FOLLOW)
+	var follow: float = 1.0 - exp(-maxf(delta, 0.0) / GRIP_TAU)
+	return was.orthonormalized().slerp(want, follow)
 
 
 ## True when the motion last picked for this person is one of the living's own.
@@ -1211,17 +1379,37 @@ static func hurt_from(p) -> Vector2:
 	return from
 
 
-## How far the body has turned since it was last drawn (radians); notes when it
-## last turned. A snap round (TURN_CAP) or a tremble (TURN_MIN) is not a turn.
+## User feedback 2026-11-01: small, slow turns leave the standing feet alone.
 static func _turned(p, note: Dictionary, t: float) -> float:
 	var yaw: float = p.rotation.y
 	var was: float = float(note.get("yaw", yaw))
+	var delta: float = t - float(note.get("yaw_at", t))
 	note["yaw"] = yaw
-	var d := absf(angle_difference(was, yaw))
-	if d < TURN_MIN or d > TURN_CAP:
+	note["yaw_at"] = t
+	var turn: float = angle_difference(was, yaw)
+	var d: float = absf(turn)
+	if d < TURN_NOISE or delta <= 0.0:
 		return 0.0
+	var samples: Array = note.get("turn_samples", [])
+	samples.append(Vector3(t - delta, t, turn))
+	var cutoff: float = t - TURN_WINDOW
+	while not samples.is_empty() and samples[0].y <= cutoff:
+		samples.pop_front()
+	if not samples.is_empty() and samples[0].x < cutoff:
+		var first: Vector3 = samples[0]
+		first.z *= (first.y - cutoff) / (first.y - first.x)
+		first.x = cutoff
+		samples[0] = first
+	var total: float = 0.0
+	for sample: Vector3 in samples:
+		total += sample.z
+	note["turn_samples"] = samples
+	var active: bool = t - float(note.get("turned", -10.0)) < TURN_HOLD
+	if not active and absf(total) <= TURN_ANGLE and d / delta <= TURN_RATE:
+		return 0.0
+	samples.clear()
 	note["turned"] = t
-	return d
+	return absf(total)
 
 
 ## 1 as a wound comes, down to 0 HURT_TIME after.
@@ -1315,7 +1503,7 @@ static func _cycle(note: Dictionary, motion: int, t: float, clips: Array) -> flo
 ## A motion that goes round by the ground covered (walk, run, crawl).
 static func _round(note: Dictionary, key: String, gone: float, size: float) -> float:
 	var at: float = float(note.get(key, 0.0))
-	if gone <= STRIDE_CAP:
+	if absf(gone) <= STRIDE_CAP:
 		at = fposmod(at + gone / maxf(size, 0.01), 1.0)
 	note[key] = at
 	return at

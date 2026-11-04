@@ -7,6 +7,7 @@ extends RefCounted
 
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
 
 const BANDS: Dictionary = {
 	"prologue": ["K1", "K3", "K4", "K4", "K6"],
@@ -33,6 +34,8 @@ static func stop_band(act: String, stop: int, act_progress: float = 0.0) -> Stri
 static func place_stop(place_id: String) -> Array:
 	if place_id == FieldMaps.DEFAULT_PLACE:
 		return ["prologue", 1]
+	if StoryMaps.is_story(place_id):
+		return StoryMaps.stop_of(place_id)
 	return []
 
 

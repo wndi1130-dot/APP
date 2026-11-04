@@ -35,6 +35,7 @@ const PATHS: Dictionary = {
 	"lux": '<path class="f" d="M6 21v-9.500c0-1.300.8-2.300 1.800-2.900V3.200h2.600v5.400c1 .6 1.800 1.600 1.800 2.900V21zM14.150 16h6.100l-.45 5h-5.200z"/><path class="c" d="M7.800 5h2.600M6 14h6.200M6 18h6.200M6.700 10.700c1-.6 3.800-.6 4.800 0"/><path d="M13.800 12.500l.8 8.500h5.200l.8-8.500" stroke-width="1.6"/>',
 	"fist": '<path class="f" d="M5 9.6a1.8 1.8 0 0 1 3.6 0V13H5zM8.6 8.6a1.8 1.8 0 0 1 3.6 0V13H8.6zM12.2 8.8a1.8 1.8 0 0 1 3.6 0V13h-3.6zM15.8 10a1.7 1.7 0 0 1 3.4 0v3h-3.4zM5 12.4h14.2v3.1c0 1.900-1.400 3.100-3.200 3.100H8.200C6.400 18.600 5 17.400 5 15.500zM7.800 18h8.600v3.500H7.800z"/><path class="c" d="M8.600 9.400v3.300M12.200 8.800v3.900M15.800 9.800v2.900M5 13.600c2.200-.9 5.400-.8 8.200.2.900.4 1.100 1.300.3 1.800M7.800 19.500h8.600"/><path d="M2.300 6.600 3.800 5 2.700 3.900 4.200 2.300M21.700 6.600 20.200 5l1.100-1.100-1.500-1.600" stroke-width="1.5"/>',
 	"hand": '<path class="f" d="M6.600 6.450a1.050 1.050 0 0 1 2.100 0V12H6.600zM9.600 4.850a1.050 1.050 0 0 1 2.100 0V12H9.600zM12.600 5.650a1.050 1.050 0 0 1 2.100 0V12h-2.100zM15.600 7.800a1 1 0 0 1 2 0V12h-2zM6.600 11.400h11v2.900c0 2.100-1.500 3.600-3.600 3.600h-3.600c-2.200 0-3.800-1.500-3.800-3.800zM7.600 15.900 4.200 12.100a1.200 1.200 0 0 1 1.800-1.600l3.200 3.500zM9.100 17.200h5.800v4.600H9.100z"/><path class="c" d="M9.100 19.500h5.800"/>',
+	"sup": '<path class="t" d="M4 13h8a2 2 0 0 1 2 2v4H2v-4a2 2 0 0 1 2-2z M16 4h4v15h-4"/><path d="M4 13h8a2 2 0 0 1 2 2v4H2v-4a2 2 0 0 1 2-2z M5 16h6 M16 4h4v15h-4 M16 4a3 3 0 1 0 0 6 M16 7h4 M7 8h.01 M10 5h.01"/>',
 	"book": '<path class="t" d="M5 4.500h12.500c.8 0 1.500.7 1.500 1.500v12.500c0 .8-.7 1.500-1.500 1.500H5z"/><path d="M5 4.500h12.500c.8 0 1.500.7 1.500 1.500v12.500c0 .8-.7 1.500-1.500 1.500H5z"/><path d="M8.250 4.500V20M11.500 9H16M11.500 12.500h3"/><path d="M13.500 20v3l1.500-1.200 1.500 1.200v-3"/>',
 	"menu": '<path d="M4 7h16M4 12h11M4 17h14"/>',
 	"overview": '<path class="t" d="M2.500 9.500h5v5h-5zM9.500 9.500h5v5h-5zM16.500 9.500h5v5h-5z"/><path d="M2.500 9.500h5v5h-5zM9.500 9.500h5v5h-5zM16.500 9.500h5v5h-5z"/><path d="M7.500 12h2M14.500 12h2M2 5.500h20M2 18.500h20"/>',
@@ -77,7 +78,7 @@ const PATHS: Dictionary = {
 	"crouch": '<circle class="f" cx="18" cy="5.6" r="2.5"/><path d="M15.6 7.6C12.8 7.8 9.8 11.6 10.3 15.2L11.4 19.8 4.4 20.1l1.5-1.1M10.3 15.2L17 13.8l-.4 6h2.6M14.1 9l-1.1 3.6 4.1-.5"/>',
 	# The load one carries (the field's bag key, user 2026-10-25: the grid did not read on the
 	# phone): a rucksack, its top loop, the flap's edge and one front pocket.
-	"pack": '<path class="t" d="M7 9.500a3.500 3.500 0 0 1 3.500-3.500h3a3.500 3.500 0 0 1 3.500 3.500v10a1.500 1.500 0 0 1-1.500 1.500h-7A1.500 1.500 0 0 1 7 19.500z"/><path d="M7 9.500a3.500 3.500 0 0 1 3.500-3.500h3a3.500 3.500 0 0 1 3.500 3.500v10a1.500 1.500 0 0 1-1.500 1.500h-7A1.500 1.500 0 0 1 7 19.500z"/><path d="M10 6V4.500a2 2 0 0 1 4 0V6M7 12c2.700 1.300 7.300 1.300 10 0M9.500 15.500h5V19h-5z"/>',
+	"pack": '<path class="t" d="M6.5 10a3 3 0 0 1 3-3h5a3 3 0 0 1 3 3v9.5a1.5 1.5 0 0 1-1.5 1.5h-8a1.5 1.5 0 0 1-1.5-1.5z"/><path class="t" d="M9 3.6h6a1.7 1.7 0 0 1 0 3.4h-6a1.7 1.7 0 0 1 0-3.4z"/><path d="M6.5 10a3 3 0 0 1 3-3h5a3 3 0 0 1 3 3v9.5a1.5 1.5 0 0 1-1.5 1.5h-8a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M9 3.6h6a1.7 1.7 0 0 1 0 3.4h-6a1.7 1.7 0 0 1 0-3.4z"/><path d="M6.5 10.4C6.5 12.9 8.6 14.1 12 14.1S17.5 12.9 17.5 10.4"/><path d="M6.5 11.6C5.1 12.7 4.9 16.2 5.5 19.3M17.5 11.6C18.9 12.7 19.1 16.2 18.5 19.3"/><path d="M9 16.2h6v2.2a.8 .8 0 0 1-.8.8h-4.4a.8 .8 0 0 1-.8-.8z"/><path d="M9.8 3.3v4.4M14.2 3.3v4.4"/><path stroke-width="0.7" stroke-dasharray="0.6 0.8" d="M9.7 17.7h4.6"/>',
 	"inv": '<path class="t" d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4z"/><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
 	"bandage": '<path class="t" d="M4 9l11-5 5 11-11 5z"/><path d="M4 9l11-5 5 11-11 5z"/><path d="M9 7l5 11"/>',
 	"aim": '<circle cx="12" cy="12" r="8"/><circle class="f" cx="12" cy="12" r="1.600"/><path d="M12 2v4M12 18v4"/>',
@@ -178,6 +179,7 @@ const PATHS: Dictionary = {
 	"window": '<path class="t" d="M5 3h14v16H5z"/><path d="M5 3h14v16H5zM12 3v16M5 11h14M3 21h18"/>',
 	"ladder": '<path d="M8 2.5v19M16 2.5v19M8 6h8M8 10.5h8M8 15h8M8 19.5h8"/>',
 	"pickup": '<path class="t" d="M6 15h12v6H6z"/><path d="M6 15h12v6H6zM3 21h18"/><path d="M12 12V3M8.5 6.5 12 3l3.5 3.5"/>',
+	"sled": '<path d="M3 13h12M5 13v5M13 13v5M2 18h13q4 0 4-4M15 13l6-7"/>',
 	"wear": '<path class="t" d="M8 3 4 6l-1 9h3v6h12v-6h3l-1-9-4-3-4 3z"/><path d="M8 3 4 6l-1 9h3v6h12v-6h3l-1-9-4-3-4 3zM12 6v15M14.5 14h2.5"/>',
 	"unlock": '<path class="t" d="M5 11h14v10H5z"/><path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.6-1.8"/><circle class="f" cx="12" cy="15.5" r="1.4"/><path d="M12 16.5v2"/>',
 	"barricade": '<path class="t" d="M7 3h10v18H7z"/><path d="M7 3h10v18H7zM4 21h16"/><path class="f" d="M4.5 8.5 19 6l.4 2.3L4.9 10.8zM4.6 15.7 19.3 13.2l.4 2.3-14.7 2.5z"/>',
@@ -194,6 +196,7 @@ const PATHS: Dictionary = {
 ## "ends" a part of it, "has" anywhere in it. The more particular go first (문
 ## 따기 before 문). A word no rule knows shows the magnifier (a place to look at).
 const CONTEXT_ICONS: Array = [
+	["is", "썰매 엮기", "sled"], ["is", "썰매 짐", "sled"], ["is", "끈다", "sled"], ["is", "놓는다", "sled"],
 	["ends", "치료", "bandage"], ["starts", "붕대", "bandage"], ["starts", "부목", "bandage"], ["ends", "문지름", "bandage"],
 	["starts", "맨홀", "manhole"],
 	["starts", "문 따기", "unlock"], ["starts", "문 막기", "barricade"], ["starts", "문", "door"],

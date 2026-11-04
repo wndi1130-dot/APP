@@ -99,3 +99,39 @@ func test_a_harder_stop_says_its_dead_as_a_count_only() -> void:
 	var c = _sheet(result)
 	for s in _said(c):
 		assert_false(String(s).contains("p_152"), "a number, never a name")
+
+
+# However long a receipt runs (its promise lines have no cap), the writing scrolls
+# over the foot and the keys stay on the paper, never pushed off it.
+func test_a_long_receipt_scrolls_its_writing_and_keeps_its_keys_on_the_paper() -> void:
+	var result: Dictionary = SliceFlow.result_of(_receipt("case1_symbol_kept"))
+	var r: Dictionary = result["receipt"]
+	r["people"]["bitten"] = ["p_151"]
+	r["people"]["injured"] = ["p_152"]
+	r["people"]["dead"] = ["p_153"]
+	r["people"]["leftBehind"] = ["p_122"]
+	r["placeState"] = {"looted": 0.2, "remainingRisk": 3, "waterTower": "frozen"}
+	result["dead_about"] = 12
+	r["fieldPromises"] = []
+	for i in range(12):
+		r["fieldPromises"].append({"kind": "skip_dispatch", "witnesses": ["p_151", "p_152"], "heardBy": ["tail", "guard"]})
+	var c = ReceiptSheet.new()
+	c.result = result
+	c.go_word = "다시"
+	c.side_keys = [["영수증 복사", func() -> void: pass], ["기록 복사", func() -> void: pass]]
+	add_child_autofree(c)
+	await wait_physics_frames(3)
+	var scroll: ScrollContainer = c.find_child("Scroll", true, false)
+	assert_not_null(scroll)
+	assert_gt(c.body.get_combined_minimum_size().y, scroll.size.y, "the writing is longer than its room")
+	# In the paper's own frame, the sheet lying a little askew.
+	var into_paper: Transform2D = c.sheet.get_global_transform().affine_inverse()
+	var paper := Rect2(Vector2.ZERO, c.sheet.size).grow(0.5)
+	var keys: Array = c.find_child("Foot", true, false).find_children("*", "Button", true, false)
+	assert_eq(keys.size(), 3)
+	for b in keys:
+		var key := b as Control
+		var on := true
+		for corner in [Vector2.ZERO, Vector2(key.size.x, 0.0), key.size, Vector2(0.0, key.size.y)]:
+			on = on and paper.has_point(into_paper * (key.get_global_transform() * corner))
+		assert_true(on, "%s stays on the paper" % key.text)

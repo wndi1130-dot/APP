@@ -4,6 +4,7 @@ extends GutTest
 
 const DeadCast = preload("res://game/actors/dead_cast.gd")
 const DeadBody = preload("res://game/actors/dead_body.gd")
+const VatBaker = preload("res://scripts/vat_baker.gd")
 const BodyBake = preload("res://scripts/body_bake.gd")
 const BodyCast = preload("res://game/actors/body_cast.gd")
 const PersonVisual = preload("res://game/actors/person_visual.gd")
@@ -11,6 +12,10 @@ const Zombies = preload("res://game/actors/zombies.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const LootTables = preload("res://game/sim/loot_tables.gd")
+## The dead's motions that lie, crawl or kneel on the ground, written out here and not read from
+## vat_baker.gd: a motion dropped from its list would light a lying body as if it stood.
+const ON_THE_GROUND: Array[String] = ["fall", "fall_front", "fall_thrown", "fall_slump", "crawl", "rise",
+	"rise_front", "eat_start", "eat", "eat_rise"]
 
 
 func _build_bodies_in_use() -> bool:
@@ -219,6 +224,60 @@ func test_what_is_drawn_over_the_body_is_what_is_worn() -> void:
 	assert_gt(frozen.get_luminance(), corpse.get_luminance(), "in the body's look: the frozen frosted, the lying dead darker")
 
 
+# Only the skin takes the dead's look (A6-3): every body the dead wear brings a
+# skin mask beside its colour picture, handed to the shader, covering a little
+# of the picture (head, neck, hands, bare forearms), not the clothes; the
+# clothes, the body's and the garments' over it, take the state only by
+# CLOTH_STATE. And the motions on the ground are marked for the shader, so a
+# body lying or crawling is lit by its moved surface (A6-1).
+func test_only_the_skin_takes_the_dead_look_and_the_ground_motions_are_marked() -> void:
+	assert_between(DeadCast.CLOTH_STATE, 0.0, 0.5, "the clothes keep most of their own colour")
+	for look: String in Zombies.TINTS:
+		assert_between(float(DeadCast.SKIN_TINT.get(look, 1.0)), 0.0, 1.0, look + ": a share of its colour on the skin")
+	for look: String in ["dead", "corpse", "fresh"]:
+		assert_lt(float(DeadCast.SKIN_TINT[look]), 0.5, look + ": its skin never takes the look's colour above the living's")
+	for look: String in Zombies.TINTS:
+		assert_between(float(DeadCast.SKIN_GONE_LEAST.get(look, 0.82)), 0.5, 1.0, look + ": its skin mostly gone off at the least")
+	assert_eq(float(DeadCast.SKIN_GONE_LEAST["corpse"]), 1.0, "a body lying dead for good has none of its own skin left")
+	if not _build_bodies_in_use():
+		pending("a folder put in place of the build's own")
+		return
+	for body: String in DeadCast.BODIES:
+		var dir := DeadCast.ROOT + body
+		var got := DeadBody.with_albedo(BodyBake.load_baked(dir), dir)
+		assert_true(got.get("skin") is Texture2D, body + " has its skin mask")
+		var tables := VatBaker.shader_tables(got)
+		assert_true(bool(tables.get("has_skin", false)), body + ": the shader gets it")
+		var image := Image.load_from_file(ProjectSettings.globalize_path(dir.path_join(DeadBody.SKIN_FILE)))
+		assert_not_null(image, body)
+		if image == null:
+			continue
+		var sum := 0.0
+		var hood := 0.0
+		for y in image.get_height():
+			for x in image.get_width():
+				sum += image.get_pixel(x, y).r
+				hood += image.get_pixel(x, y).g
+		var share := sum / float(image.get_width() * image.get_height())
+		assert_between(share, 0.01, 0.25, body + ": a little of the picture, not the clothes")
+		# Green: the light red hood the grade would press pink (only the hooded body has one).
+		var hood_share := hood / float(image.get_width() * image.get_height())
+		if body == "n3-body_hoodie":
+			assert_between(hood_share, 0.01, 0.15, body + ": its hood marked to be darkened")
+		else:
+			assert_lt(hood_share, 0.001, body + ": no light red head cloth")
+		for i in (got["clips"] as Array).size():
+			var name := String(got["clips"][i]["name"])
+			var code: float = tables["clip_loop"][i]
+			assert_eq(code >= 2.0, ON_THE_GROUND.has(name), body + " " + name + " marked as on the ground or not")
+			assert_eq(fmod(code, 2.0), 1.0 if got["clips"][i]["loop"] else 0.0, body + " " + name + " still loops as baked")
+	var frozen := Zombies.TINTS["frozen"] as Color
+	var over := DeadCast.garment_of({"coat": Wear.make("fire_suit")}, frozen)["colour"] as Color
+	var tint: Array = Wear.KINDS["fire_suit"]["tint"]
+	var state := 1.0 + (frozen.r / 0.5 - 1.0) * DeadCast.CLOTH_STATE
+	assert_almost_eq(over.r, float(tint[0]) * state, 0.0001, "a garment takes the state as the clothes do")
+
+
 # A crowd in plain long coats is not one coat copied (COAT_SHADES): a shade by
 # the dead one's number, numbers one after another never the same, four or more
 # in all, about as light as the coat's own; the padded coat, the fire suit and
@@ -228,6 +287,7 @@ func test_plain_long_coats_come_in_shades_by_number() -> void:
 	assert_gte(DeadCast.COAT_SHADES.size(), 4)
 	for s: Color in DeadCast.COAT_SHADES:
 		assert_between(s.get_luminance(), 0.07, 0.13, "a shade about as light as the coat's own")
+		assert_false(s.g > s.r and s.g > s.b, "%s: no army green among the coats" % s)
 	for kind: String in DeadCast.SHADED:
 		var on := {"coat": Wear.make(kind)}
 		var seen := {}

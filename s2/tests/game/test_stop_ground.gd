@@ -485,7 +485,7 @@ func test_both_directions_move_only_train_attachments_and_extend_open_rows() -> 
 			assert_true(tree.x >= start and tree.x < end)
 			assert_true(tree.y < moved.position.y - 3 or tree.y > moved.end.y + 2)
 			assert_eq(g.solid_at(tree), FieldGrid.Solid.BLOCK)
-		assert_eq(now["trees"].size(), now["props"].size())
+		assert_eq((now["trees"] as Array).filter(func(c: Vector2i) -> bool: return not _in_forest(now, c)).size(), now["props"].size(), "only trees outside deep forest carry props")
 		for prop: Dictionary in now["props"]:
 			assert_eq(prop["kind"], "bare_tree")
 		assert_eq(was["train"], train)
@@ -695,25 +695,25 @@ func test_remote_trees_are_sparse_inside_and_dense_only_at_forest_edge() -> void
 		var placed: bool = true
 		var shallow: bool = true
 		for c: Vector2i in now["trees"]:
-			placed = placed and added.has_point(c) and tree_props.has(c)
-			if not tree_props.has(c):
-				continue
-			var prop: Dictionary = tree_props[c]
-			placed = placed and prop["rect"] == Rect2i(c, Vector2i.ONE) and int(prop["level"]) == 0
+			placed = placed and added.has_point(c)
 			if strip.has_point(c):
 				sparse += 1
-				placed = placed and prop["kind"] == "bare_tree"
+				placed = placed and tree_props.has(c)
+				if tree_props.has(c):
+					var prop: Dictionary = tree_props[c]
+					placed = placed and prop["kind"] == "bare_tree" and prop["rect"] == Rect2i(c, Vector2i.ONE) and int(prop["level"]) == 0
 			else:
 				dense += 1
 				var depth: int = strip.position.y - c.y if c.y < strip.position.y else c.y - strip.end.y + 1
-				shallow = shallow and _in_forest(now, c) and depth >= 1 and depth <= 6
-				placed = placed and prop["kind"] == "spruce"
+				shallow = shallow and _in_forest(now, c) and depth >= 1 and depth <= StopGround.REMOTE_FOREST_EDGE
+				placed = placed and not tree_props.has(c)
 				if not dense_rows.has(c.y):
 					dense_rows[c.y] = []
 				(dense_rows[c.y] as Array).append(c.x)
 		assert_gt(sparse, 0, "the open strip keeps sparse trees")
 		assert_gt(dense, 0, "the forest edge has dense spruce")
-		assert_true(placed, "every new tree has a one-cell ground prop of the existing tree kind")
+		assert_eq(tree_props.size(), sparse, "only sparse trees on the walking strip carry props")
+		assert_true(placed, "forest trees are cells without props; walking-strip trees keep their one-cell ground props")
 		assert_true(shallow, "no tree is drawn beyond the first six metres of deep forest")
 		for rect: Rect2i in now["deep_forest"]:
 			var rows: Array[int] = []

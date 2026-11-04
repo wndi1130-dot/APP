@@ -112,3 +112,58 @@ func test_field_return_council_votes_and_arrival_match_s1() -> void:
 	assert_eq(seen_cases, 27)
 	assert_eq(seen_votes, 72)
 	assert_eq(bad, [] as Array[String])
+
+
+func _stock_line(record: Dictionary) -> String:
+	for line: Dictionary in record["lines"]:
+		if line["k"] == "stock":
+			return line["text"]
+	return ""
+
+
+func test_stock_balance_and_shortage_match_s1() -> void:
+	# Same seed, departure and receipt as S1 field_receipt.test.ts T09, plus a fractional balance.
+	var rows: Array = V.data().get("stockCases", [])
+	var expected := ["석탄 +1", "석탄 -5 (모자라 0, 부족 2)", "석탄 -5", "석탄 -5 (모자라 0, 부족 1.5)"]
+	assert_eq(rows.size(), expected.size())
+	if rows.size() != expected.size():
+		return
+	var bad: Array[String] = []
+	for i in range(rows.size()):
+		var row: Dictionary = rows[i]
+		var applied := FieldReturn.apply_field_return(row["state"], _tables, row["departure"], row["receipt"])
+		var at := "stock %d" % i
+		assert_eq(_stock_line(applied["record"]), expected[i], at)
+		_check(bad, at + " status", row["apply"]["status"], applied["status"])
+		_check(bad, at + " record", row["apply"]["record"], applied["record"])
+		_check(bad, at + " after", row["apply"]["after"], applied["g"])
+	assert_eq(bad, [] as Array[String])
+
+
+func test_stock_shortage_keeps_resource_order_and_s2_cloth() -> void:
+	var row: Dictionary = V.data()["contracts"][1]  # The first contract with domestic stores.
+	var state: Dictionary = row["state"].duplicate(true)
+	state["coal"] = 3
+	state["food"] = 1
+	state["med"] = 0
+	state["lux"] = 1.5
+	for key: String in ["wood", "scrap", "cloth", "parts"]:
+		state["dom"][key] = 1
+	var receipt: Dictionary = row["receipt"].duplicate(true)
+	# Reverse insertion order must not reorder the stock line.
+	receipt["stock"] = {"parts": -2, "cloth": -2, "scrap": -2, "wood": -2, "luxury": -2, "medicine": -2, "food": 2, "coal": -5}
+	var applied := FieldReturn.apply_field_return(state, _tables, row["departure"], receipt)
+	assert_eq(_stock_line(applied["record"]), "석탄 -5 (모자라 0, 부족 2), 식량 +2, 의약품 -2 (모자라 0, 부족 2), 사치품 -2 (모자라 0, 부족 0.5), 목재 -2 (모자라 0, 부족 1), 고철 -2 (모자라 0, 부족 1), 천 -2 (모자라 0, 부족 1), 부품 -2 (모자라 0, 부족 1)")
+	for key: String in ["coal", "med", "lux"]:
+		assert_eq(float(applied["g"][key]), 0.0, key)
+	assert_eq(float(applied["g"]["food"]), 3.0)
+	for key: String in ["wood", "scrap", "cloth", "parts"]:
+		assert_eq(float(applied["g"]["dom"][key]), 0.0, key)
+
+
+func test_stock_without_domestic_stores_has_no_shortage_note() -> void:
+	var row: Dictionary = V.data()["stockCases"][0]
+	var receipt: Dictionary = row["receipt"].duplicate(true)
+	receipt["stock"] = {"parts": -2, "wood": -3, "scrap": 0}
+	var applied := FieldReturn.apply_field_return(row["state"], _tables, row["departure"], receipt)
+	assert_eq(_stock_line(applied["record"]), "목재 -3, 부품 -2")

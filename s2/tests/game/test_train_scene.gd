@@ -6,6 +6,7 @@ extends "res://addons/gut/test.gd"
 ## few take trips and come home.
 
 const Scene = preload("res://game/train/train_scene.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const Rules = preload("res://game/train/train_rules.gd")
 const Gesture = preload("res://game/train/train_gesture.gd")
 const Look = preload("res://game/train/train_look.gd")
@@ -649,7 +650,7 @@ func test_the_panel_has_a_captain_board_that_starts_hidden_and_flips() -> void:
 
 func test_the_board_first_shows_the_rules_captain() -> void:
 	var s = _scene(true)
-	assert_eq(s.panel.captain_board.line_label.text, "열차장실 · 멀쩡함")
+	assert_eq(s.panel.captain_board.line_label.text.replace(UiFonts.WORD_JOINER, ""), "열차장실 · 멀쩡함")
 
 
 func test_every_captain_to_look_at_passes_the_rules_check() -> void:
@@ -679,7 +680,7 @@ func test_after_a_round_the_rules_own_captain_is_back() -> void:
 func test_a_captain_who_is_out_reads_so_on_the_line() -> void:
 	var s = _scene(true)
 	_show_captain_at(s, "out")
-	assert_eq(s.panel.captain_board.line_label.text, "밖에 나감 · 멀쩡함")
+	assert_eq(s.panel.captain_board.line_label.text.replace(UiFonts.WORD_JOINER, ""), "밖에 나감 · 멀쩡함")
 
 
 func test_changing_the_captain_leaves_the_people_of_the_cars_as_they_are() -> void:

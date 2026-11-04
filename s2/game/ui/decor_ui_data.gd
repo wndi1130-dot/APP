@@ -17,8 +17,8 @@ const NAMES := {
 	"bottle_spirit": "술 한 병", # The legacy stock name in carry.gd.
 }
 const HINT := "끌어서 놓기 · 길게 눌러 집기 · 두 손가락으로 돌리기 · 창고 띠로 끌면 거두기"
-const PAPER_LOCK := "종이 카드를 고르는 동안에는 꾸밀 수 없어요."
-const COUNCIL_LOCK := "의회 중에는 꾸밀 수 없어요."
+const PAPER_LOCK := "종이 카드를 고르는 동안에는 꾸밀 수 없다."
+const COUNCIL_LOCK := "의회 중에는 꾸밀 수 없다."
 
 
 static func lock_reason(g: Dictionary, choosing_paper: bool = true) -> String:

@@ -78,7 +78,7 @@ static func strew(containers: Dictionary, seed: int, rooms: Dictionary, building
 
 
 static func _strewn(id: String, c: Dictionary) -> bool:
-	return not (c.has("pick") or LootTables.FIXED.has(id) or bool(c.get("locked", false)) or int(c.get("building", -1)) < 0 or bool(c.get("searched", false)))
+	return not (c.has("pick") or LootTables.as_placed(c) or LootTables.FIXED.has(id) or bool(c.get("locked", false)) or int(c.get("building", -1)) < 0 or bool(c.get("searched", false)))
 
 
 static func _room_key(c: Dictionary, rooms: Dictionary, id: String) -> String:

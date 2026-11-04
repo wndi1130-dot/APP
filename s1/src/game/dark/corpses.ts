@@ -112,7 +112,7 @@ export function corpseTick(g: Game): void {
     } else {
       g.injured += 1;
       noteInjury(g, 1, 'rise', COMM_NAME[x.comm], { comm: x.comm });
-      journal(g, `${COMM_NAME[x.comm]}에 두었던 ${x.name}이(가) 일어났다. 하나가 다쳤다.`, 'bad');
+      journal(g, `${COMM_NAME[x.comm]}에 두었던 ${x.name}이(가) 일어났다. 한 명이 다쳤다.`, 'bad');
     }
   }
   d.unchecked = [];

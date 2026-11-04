@@ -20,8 +20,9 @@ extends SceneTree
 ## stops. A cell is a metre (field_grid.gd), so the sizes are metres too.
 ## --all takes every map there is; --size-only builds the maps alone (size,
 ## zones, map_ms, no field), headless too. --weather clear lifts the default
-## fog off the pictures. The numbers are this PC's; the phone check comes in
-## the test stage.
+## fog off the pictures. --zooms 20,24 takes the start picture at each zoom
+## (cam_size) as well; --form edge|remote stands the stop in that ground form.
+## The numbers are this PC's; the phone check comes in the test stage.
 
 const FieldMaps = preload("res://game/world/field_maps.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -30,6 +31,7 @@ const MapView = preload("res://game/world/map_view.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
 const VatBaker = preload("res://scripts/vat_baker.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
+const StopGround = preload("res://game/world/stop_ground.gd")
 
 ## Frames the field runs before it is measured (the first still load and
 ## compile), the frames measured, how long the camera is given to come to rest
@@ -56,6 +58,9 @@ var edges: bool = false
 var size_only: bool = false
 ## The field's own weather when empty (fog and snow); "clear" shows the edges.
 var weather: Array = []
+## Zooms the start picture is taken at too (--zooms), and the ground form (--form).
+var zooms: Array = []
+var form: String = ""
 var vat: Dictionary = {}
 var _held: int = 0
 
@@ -82,11 +87,16 @@ func _initialize() -> void:
 			"--edges":
 				edges = true
 			"--all":
-				places = Array(FieldMaps.ids())
+				places = Array(FieldMaps.all_ids())
 			"--size-only":
 				size_only = true
 			"--weather":
 				weather = Array(value.split(","))
+			"--zooms":
+				for z: String in value.split(","):
+					zooms.append(float(z))
+			"--form":
+				form = value
 	_run.call_deferred()
 
 
@@ -104,6 +114,10 @@ func _field(place: String, data: Dictionary):
 		"fps_cap": 0, "map_data": data, "vat": vat}
 	if not weather.is_empty():
 		f.opts["weather"] = weather
+	if form != "":
+		f.opts["stop_ground"] = form
+	# As the game starts a stop: the first stop with its view ground (stop_ground.gd).
+	StopGround.ask_view(f.opts)
 	return f
 
 
@@ -217,6 +231,13 @@ func _measure(place: String, vp: RID) -> Dictionary:
 		# row keeps what it was at the shot, so a faded picture shows in the numbers.
 		r["fx_fade_at_shot"] = snappedf(float(f.fx_params["fx_fade"]), 0.01)
 		await _shot("%s_start" % place)
+		for z: float in zooms:
+			f.cam_size = z
+			await _settle(f)
+			await _shot("%s_start_z%d" % [place, int(z)])
+		if not zooms.is_empty():
+			f.cam_size = opening
+			await _settle(f)
 		if edges:
 			# Round the edges: what the stop holds at each (the edge is where a
 			# wider ground's memory jumps, card O1).

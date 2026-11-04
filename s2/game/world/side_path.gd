@@ -14,6 +14,7 @@ const BuildingRules = preload("res://game/sim/building_rules.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
 const PropKinds = preload("res://game/world/prop_kinds.gd")
 const MapShift = preload("res://game/world/map_shift.gd")
+const StoryMaps = preload("res://game/world/story_maps.gd")
 const S = FieldGrid.Solid
 const F = FieldGrid.Floor
 const NAME := "희귀 창고"  # loot_dress.gd RARE_STORE
@@ -51,7 +52,10 @@ static func rolls(place_id: String, run_seed: int) -> bool:
 ## 지도를 지은 뒤, 그리기 전에 한 번. 샛길이 나면 띠를 붙인 자료(같은 사전), 아니면 받은 그대로.
 static func add(data: Dictionary, run_seed: int) -> Dictionary:
 	var place := String(data.get("place_id", ""))
-	if data.has("side_path") or place in ["", FIRST_STOP] or not data.get("grid") is FieldGrid:
+	if data.has("side_path") or place in ["", FIRST_STOP] or StoryMaps.is_story(place) or not data.get("grid") is FieldGrid:
+		return data
+	if not MapShift.can_grow(data):
+		push_error("찍힌 경계 뒤에는 샛길을 더할 수 없습니다")
 		return data
 	var rng := _rng(place, run_seed)
 	if rng.randf() >= CHANCE:
@@ -63,7 +67,7 @@ static func add(data: Dictionary, run_seed: int) -> Dictionary:
 	if side == 0 or side == 3:
 		data = MapShift.grow(data, STRIP if side == 3 else 0, STRIP if side == 0 else 0, 0, 0, false)
 	else:
-		_grow(data, side)
+		data = _grow(data, side)
 	_build(data, spot, rng, run_seed)
 	data["side_path"] = spot
 	return data
@@ -190,7 +194,10 @@ static func _belt_trees(data: Dictionary, g: FieldGrid, cells: Array[Vector2i], 
 
 
 ## 모든 층 격자를 오른쪽(1)이나 아래(2)로 STRIP칸 넓힌다. 옛 칸·좌표·문·창은 그대로다.
-static func _grow(data: Dictionary, side: int) -> void:
+static func _grow(data: Dictionary, side: int) -> Dictionary:
+	if not MapShift.can_grow(data):
+		push_error("찍힌 경계 뒤에는 샛길을 넓힐 수 없습니다")
+		return data
 	var levels: Dictionary = data.get("levels", {0: data["grid"]})
 	for lv in levels:
 		var g: FieldGrid = levels[lv]
@@ -214,6 +221,7 @@ static func _grow(data: Dictionary, side: int) -> void:
 		levels[lv] = n
 	data["levels"] = levels
 	data["grid"] = levels[0]
+	return data
 
 
 ## 띠의 u(끝을 따라)·v(새 끝에서 안쪽으로) 칸. v = STRIP이 옛 지도 끝 칸이다.

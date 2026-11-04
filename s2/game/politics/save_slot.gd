@@ -1,10 +1,16 @@
 extends RefCounted
 ## One JSON save slot compatible with the S1a Game object. Invalid text is preserved in a separate
 ## slot; the original is never deleted by load_slot.
+## 판 번호: 생필품이 꺼진 판은 1 그대로, 켜진 판만 2로 저장한다(slot_board). 옛 빌드는 1까지만 읽어
+## 생필품 판을 「더 새 빌드」로 거절하므로, 생필품 쓰기와 give_sup·give_fine 약속을 모른 채 정산하지 않는다.
 
-const SAVE_VERSION := 1
+## The newest slot version this build reads (1 and 2). What a save writes is slot_board's.
+const SAVE_VERSION := 2
+## A run with supplies on is written with this version so a build that reads only 1 refuses it.
+const SUPPLIES_VERSION := 2
 const TrainDecor = preload("res://game/train/train_decor.gd")
 const Late = preload("res://game/train/turn/turn_late.gd")
+const RouteState = preload("res://game/train/route_state.gd")
 const DEFAULT_PATH := "user://s1a_game_v2.json"
 const DEFAULT_BROKEN_PATH := "user://s1a_game_broken.json"
 const PHASES := ["prep", "travel", "stop", "council", "settle", "end"]
@@ -13,6 +19,43 @@ const CREW_COMMS := ["tail", "medtech", "guard", "front"]
 
 static func _is_number(value: Variant) -> bool:
 	return (value is int or value is float) and is_finite(float(value))
+
+
+static func _natural(value: Variant) -> bool:
+	return _is_number(value) and float(value) >= 0 and float(value) == floorf(float(value))
+
+
+static func _strings(value: Variant) -> bool:
+	if not value is Array: return false
+	for item: Variant in value:
+		if not item is String: return false
+	return true
+
+
+static func _stranded_problem(st: Dictionary, t: Dictionary) -> Variant:
+	for key: String in ["since", "turns", "segKm", "atKm", "toNextKm", "lostTrips"]:
+		if not _natural(st.get(key)): return "멈춘 열차 수치가 이상하다: " + key
+	if not _strings(st.get("seen")): return "멈춘 열차 사건 목록이 이상하다"
+	for key: String in ["captainAway", "lamp"]:
+		if not st.get(key) is bool: return "멈춘 열차 표식이 이상하다: " + key
+	if not st.has("deputy") or (st["deputy"] != null and st["deputy"] not in t["COMMS"]): return "열차를 맡은 칸이 이상하다"
+	if not st.has("snow") or st["snow"] not in [null, "all", "guard", "none"]: return "선로의 눈 기록이 이상하다"
+	if st.has("burned") and not _is_number(st["burned"]): return "태운 석탄 수치가 이상하다"
+	if not st.has("trip") or (st["trip"] != null and not st["trip"] is Dictionary): return "수동차 원정 칸이 이상하다"
+	if st["trip"] == null: return null
+	var trip: Dictionary = st["trip"]
+	for key: String in ["leaderGoes", "forced", "known"]:
+		if not trip.get(key) is bool: return "수동차 표식이 이상하다: " + key
+	if trip.get("comm") not in t["COMMS"]: return "수동차 칸 이름이 이상하다"
+	if not _strings(trip.get("names")): return "수동차 사람 목록이 이상하다"
+	for key: String in ["size", "distKm", "extends", "goTurns", "searchTurns", "backTurns", "plannedTurns", "turn"]:
+		if not _natural(trip.get(key)): return "수동차 수치가 이상하다: " + key
+	if trip.get("phase") not in ["go", "search", "back"]: return "수동차 단계가 이상하다"
+	for key: String in ["posKm", "baseFood", "foodShort", "foodOwed"]:
+		if not _is_number(trip.get(key)): return "수동차 수치가 이상하다: " + key
+	if not trip.has("outcome") or trip["outcome"] not in [null, "coal", "lost"]: return "수동차 결과가 이상하다"
+	if not trip.has("promise") or trip["promise"] not in [null, "yes", "no"]: return "수동차 약속이 이상하다"
+	return null
 
 
 static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
@@ -27,6 +70,14 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 	for key: String in ["coal", "food", "med", "trust", "tension"]:
 		if not _is_number(g.get(key)):
 			return "수치가 이상하다: %s" % key
+	if g.has("supOn") and not g["supOn"] is bool: return "생필품 켜짐 값이 이상하다"
+	for key: String in ["sup", "supFine"]:
+		if g.has(key) and (not _is_number(g[key]) or float(g[key]) < 0.0): return "생필품 수치가 이상하다: " + key
+	if g.has("supCover"):
+		if not g["supCover"] is Dictionary: return "생필품 몫이 이상하다"
+		for comm: Variant in g["supCover"]:
+			var f: Variant = g["supCover"][comm]
+			if comm not in t["COMMS"] or not _is_number(f) or float(f) < 0.0 or float(f) > 1.0: return "생필품 몫이 이상하다: " + str(comm)
 	if not (g.get("comms") is Dictionary):
 		return "공동체 칸이 없다"
 	for comm: String in t["COMMS"]:
@@ -40,6 +91,13 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 		return "통과한 법 칸이 없다"
 	if g.has("dom") and g["dom"] != null and not g["dom"] is Dictionary:
 		return "내정 칸이 이상하다"
+	if g.get("stranded") != null:
+		if not g["stranded"] is Dictionary: return "멈춘 열차 칸이 이상하다"
+		var problem: Variant = _stranded_problem(g["stranded"], t)
+		if problem != null: return problem
+	if g.get("budget") is Dictionary:
+		for key: String in ["seg", "picked"]:
+			if not _is_number(g["budget"].get(key)): return "서류 예산 수치가 이상하다: " + key
 	if g.has("deferred") and g["deferred"] != null and not g["deferred"] is Array:
 		return "미뤄 둔 카드 목록이 이상하다"
 	if g.has("lateOn") and not g["lateOn"] is bool:
@@ -77,6 +135,10 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 		var field_returns: Variant = g["fieldReturns"]
 		if not (field_returns is Dictionary) or not (field_returns.get("applied") is Dictionary) or not (field_returns.get("records") is Array):
 			return "필드 귀환 기록이 이상하다"
+	if g.has("campaign"):
+		var issue: String = RouteState.problem(g, t)
+		if issue != "":
+			return issue
 	return null
 
 
@@ -118,12 +180,23 @@ static func read_save(raw: Variant, t: Dictionary) -> Dictionary:
 		return {"ok": false, "why": "판 번호가 없다"}
 	if int(version) > SAVE_VERSION:
 		return {"ok": false, "why": "더 새 빌드에서 저장한 판이다(판 번호 %d)" % int(version)}
-	# SAVE_VERSION is still 1, so there are no migration steps yet.
+	# 1 to 2 needs no step: a version 1 board has no supplies keys, so supplies read as off.
+	# The version read stays as it was; the next save writes slot_board's.
 	var problem: Variant = shape_problem(game, t)
 	if problem != null:
 		return {"ok": false, "why": problem}
 	fill_defaults(game)
 	return {"ok": true, "g": game}
+
+
+## The board as the slot holds it. A run with supplies on carries SUPPLIES_VERSION in a shallow
+## copy (the caller's board is untouched, key order kept); any other board is written as it is.
+static func slot_board(g: Dictionary) -> Dictionary:
+	if not bool(g.get("supOn", false)):
+		return g
+	var out: Dictionary = g.duplicate(false)
+	out["version"] = SUPPLIES_VERSION
+	return out
 
 
 static func save_slot(g: Dictionary, path: String = DEFAULT_PATH) -> bool:
@@ -132,7 +205,7 @@ static func save_slot(g: Dictionary, path: String = DEFAULT_PATH) -> bool:
 		return false
 	# Keys keep their order, as S1's JSON does: ties picked by insertion order
 	# (laws repealed in the same segment) stay the same after a load.
-	file.store_string(JSON.stringify(g, "", false))
+	file.store_string(JSON.stringify(slot_board(g), "", false))
 	file.close()
 	return true
 
@@ -165,7 +238,8 @@ static func load_slot(t: Dictionary, path: String = DEFAULT_PATH, broken_path: S
 	if parser.parse(raw) != OK:
 		read = {"ok": false, "why": "저장 글이 깨졌다"}
 	else:
-		read = read_save(preload("res://game/sim/field_save.gd")._decode(parser.data), t)
+		# A broken packed run in it reads as no board (null), as a broken file does.
+		read = read_save(preload("res://game/sim/field_save.gd").decode_checked(parser.data), t)
 	if bool(read["ok"]):
 		return {"g": read["g"], "why": null}
 	if _preserve_broken(raw, broken_path):

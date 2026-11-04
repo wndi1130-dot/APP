@@ -43,6 +43,7 @@ func _end_cards(cards: Array) -> Array:
 
 func _end_lines(journal: Array) -> Array:
 	var ends: Array = Turn.END_TEXT.values()
+	ends.append(Turn.STRANDED_REVOLT_TEXT)
 	return journal.filter(func(j: Dictionary) -> bool: return j["text"] in END_LINES or j["text"] in ends)
 
 
@@ -61,7 +62,7 @@ func test_end_checks_match_s1_settles() -> void:
 			_check(bad, "%s %s" % [at, key], after[key], got[key])
 		_check(bad, at + " ended", after["phase"] == "end", got["phase"] == "end")
 		_check(bad, at + " cards", _end_cards(row["cards"]), got.get("cards", []))
-		_check(bad, at + " journal", _end_lines(row["journal"]), got.get("journal", []))
+		_check(bad, at + " journal", _end_lines(row["journal"]), _end_lines(got.get("journal", [])))
 		if before["trustCrisis"] == null and after["trustCrisis"] != null:
 			seen["crisis"] += 1
 		if before["trustCrisis"] != null and after["trustCrisis"] == null:

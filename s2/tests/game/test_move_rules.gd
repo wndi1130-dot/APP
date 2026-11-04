@@ -8,6 +8,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const MoveRules = preload("res://game/sim/move_rules.gd")
 const Person = preload("res://game/actors/person.gd")
+const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
 
 var game
@@ -88,8 +89,12 @@ func test_swarmed_it_steps_back_with_its_face_to_them_and_the_walk_runs_back() -
 	ally.brain["face_hold"] = them
 	ally.brain["face_hold_t"] = game.clock.elapsed
 	ally.look = -PI * 0.5
+	ally.refresh_view(false)   # The shared phase reads the body actually drawn.
 	ally.running = true
 	ally.brain["step_r"] = 0.5
+	var note: Dictionary = {}
+	var own: Array = [{"name": "p_walk", "round": 1.64}]
+	PersonVisual.motion_of(ally, note, 0.0, [], own)
 	_east(ally)
 	var at: Vector3 = ally.position
 	game._move_person(ally, 0.1)
@@ -99,6 +104,9 @@ func test_swarmed_it_steps_back_with_its_face_to_them_and_the_walk_runs_back() -
 	assert_lte(MoveRules.BACKPEDAL, Person.WALK)
 	assert_gt(MoveRules.BACKPEDAL, Zombies.SPEED_HURRY, "it gains on the hurrying dead as it backs off")
 	assert_lt(float(ally.brain["step_r"]), 0.5, "the walk's round runs back: it is drawn stepping backwards")
+	var motion: Vector2 = PersonVisual.motion_of(ally, note, 0.1, [], own)
+	assert_eq(int(motion.y), 0, "the backward walk is drawn")
+	assert_almost_eq(motion.x, float(ally.brain["step_r"]), 0.0001, "the drawing uses the same backward round")
 	ally.brain["face_hold_t"] = game.clock.elapsed - MoveRules.FACE_HOLD - 0.1
 	game._move_person(ally, 0.1)
 	assert_almost_eq(ally.facing, PI * 0.5, 0.0001, "the hold over, it turns to the way")
