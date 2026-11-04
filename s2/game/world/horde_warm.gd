@@ -18,9 +18,10 @@ static var last_stats: Dictionary = {} # 끝난 데우기의 결과(시험·로�
 static var warmed: bool = false # 실제로 그려 데웠으면 다시 부팅해도 되풀이하지 않는다
 static var _keep_paths: Array[String] = [] # 데우기가 먼저 끝나 받지 못한 읽기: 끝나면 get해서 붙잡는다
 
-var stats: Dictionary = {}
+# 기본값은 만들 때부터: 트리에 들기 전(_ready 전)에 지워져도 끝 처리가 같은 키를 읽는다.
+var stats: Dictionary = {"atlas": false, "shader": false, "drawn": false, "post_draws": 0, "frames": 0, "ms": 0.0, "reason": ""}
 var _open: Dictionary = {} # 요청하고 아직 get하지 않은 경로(요청 하나에 get 하나)
-var _started_usec: int = 0
+var _started_usec: int = 0 # 0 = 아직 시작 안 함(_ready 전)
 var _frames: int = 0
 var _rig_frames: int = 0
 var _post_draws: int = 0
@@ -45,16 +46,21 @@ static func start(parent: Node, settings: Dictionary) -> Node:
 	node.set("_report_switch", asked is bool)
 	var tree: SceneTree = parent.get_tree() if parent.is_inside_tree() else null
 	if tree != null:
-		# 부팅은 뿌리에 들어가는 중이라 바로 붙이지 못한다: 다음 틈에 뿌리로.
-		tree.root.add_child.call_deferred(node)
+		# 부팅은 뿌리에 들어가는 중이라 바로 붙이지 못한다: 다음 틈에 뿌리로. 그사이 지워졌으면 붙이지 않는다.
+		_attach.call_deferred(weakref(node), tree.root)
 	else:
 		parent.add_child(node)
 	return node
 
 
+static func _attach(ref: WeakRef, root: Node) -> void:
+	var node: Node = ref.get_ref() as Node
+	if node != null and is_instance_valid(root) and not node.is_inside_tree() and node.get_parent() == null:
+		root.add_child(node)
+
+
 func _ready() -> void:
 	_started_usec = Time.get_ticks_usec()
-	stats = {"atlas": false, "shader": false, "drawn": false, "post_draws": 0, "frames": 0, "ms": 0.0, "reason": ""}
 	for path: String in [Horde.ATLAS_PATH, Horde.SHADER_PATH]:
 		Horde.resource_reads += 1
 		if ResourceLoader.load_threaded_request(path) == OK:
@@ -83,11 +89,11 @@ func _process(_delta: float) -> void:
 			_build_rig()
 		return
 	_rig_frames += 1
-	if get_viewport().get_camera_3d() != _camera:
-		_finish("camera taken before drawn")
-	elif _post_draws >= DRAW_FRAMES:
-		stats["drawn"] = true
+	# 다 그렸는지 먼저: 두 번째 렌더 끝 뒤 카메라가 바로 바뀌어도 그린 것은 그린 것.
+	if bool(stats["drawn"]):
 		_finish("")
+	elif get_viewport().get_camera_3d() != _camera:
+		_finish("camera taken before drawn")
 	elif _rig_frames >= DRAW_WAIT_FRAMES:
 		_finish("no render finished")
 
@@ -166,6 +172,8 @@ func _build_rig() -> void:
 func _on_post_draw() -> void:
 	if is_instance_valid(_camera) and _camera.is_current():
 		_post_draws += 1
+		if _post_draws >= DRAW_FRAMES:
+			stats["drawn"] = true # 그 자리에서: 다음 처리 전에 카메라가 바뀌거나 지워져도 남게
 
 
 func _finish(reason: String, freeing: bool = false) -> void:
@@ -176,7 +184,7 @@ func _finish(reason: String, freeing: bool = false) -> void:
 	stats["reason"] = reason
 	stats["frames"] = _frames
 	stats["post_draws"] = _post_draws
-	stats["ms"] = snappedf(float(Time.get_ticks_usec() - _started_usec) / 1000.0, 0.1)
+	stats["ms"] = snappedf(float(Time.get_ticks_usec() - _started_usec) / 1000.0, 0.1) if _started_usec > 0 else 0.0
 	# 다 받지 못한 요청은 붙잡는 수거로(요청 하나에 get 하나, 받으면 HordeView 자리에).
 	for path: String in _open:
 		_keep_paths.append(path)
