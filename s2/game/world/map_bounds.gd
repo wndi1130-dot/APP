@@ -208,7 +208,8 @@ static func _water_regions(data: Dictionary) -> void:
 	regions.resize(g.width * g.height)
 	var outside := PackedByteArray()
 	outside.resize(regions.size())
-	for tile: Dictionary in data["bounds"]["tiles"]:
+	# 손으로 만든 계약 자료(PR1a 시험)엔 tiles가 없다 — 물 칸도 없다.
+	for tile: Dictionary in data["bounds"].get("tiles", []):
 		var rect: Rect2i = tile["rect"]
 		for y: int in range(rect.position.y, rect.end.y):
 			for x: int in range(rect.position.x, rect.end.x):
