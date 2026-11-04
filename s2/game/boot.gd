@@ -80,6 +80,10 @@ func _ready() -> void:
 	settings["fps_cap"] = default_fps_cap()
 	_cap_fps()
 	preload("res://game/world/horde_warm.gd").start(self, PerfSwitch.read() if OS.has_feature("android") else {}) # 무리 첫 그림 데우기(메뉴 동안)
+	if OS.has_feature("android") and get_tree().root.get_node_or_null("FrameWatch") == null: # 측정용(합치지 않음, 폰 N13b) — 폰에서만
+		var watch: Node = (load("res://game/_frame_watch.gd") as GDScript).new()
+		watch.name = "FrameWatch"
+		get_tree().root.add_child.call_deferred(watch)
 	var board: Array = SliceFlow.start_board()
 	var field_read: Dictionary = {}
 	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path, field_read)
