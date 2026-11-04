@@ -1196,7 +1196,7 @@ func test_a_heavy_blow_holds_guard_at_its_unchanged_next_attack_time() -> void:
 		assert_almost_eq(game.clock.elapsed - started, windup + wait, 0.000001)
 		drawn = PersonVisual.motion_of(p, note, to_ready, [], own)
 		assert_eq(String(own[int(drawn.y)]["name"]), "p_swing_one", "guard at the unchanged deadline")
-		assert_almost_eq(drawn.x, Pose.RECOVER_ONE_END, 0.000001)
+		assert_almost_eq(drawn.x, Pose.SWING_GUARD_PHASE, 0.000001)
 		game.combat.start_swing(p, {})
 		assert_gt(p.strike_t, 0.0, "available at the original attack time")
 
@@ -1422,6 +1422,31 @@ func test_recovery_save_round_trip_and_epoch_rebuild() -> void:
 	var middle: Vector2 = PersonVisual.motion_of(q, note, 0.06, [], _combat_own())
 	assert_eq(String(_combat_own()[int(middle.y)]["name"]), "p_swing_one")
 	assert_almost_eq(middle.x, 0.725, 0.00001)
+
+
+func test_saved_onehand_recovery_keeps_its_clip_and_elapsed_time() -> void:
+	for way: String in ["p_swing_one", "p_swing_back"]:
+		var first: FieldGame = _field()
+		var p: Person = first.player
+		p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+		p.strike_t = 0.0
+		p.swing_t = 0.45
+		p.set_meta(Pose.SWING, 0.9)
+		p.set_meta(Pose.MODE, "swing")
+		p.set_meta(Pose.BLOW_WAY, way)
+		p.set_meta(Pose.RECOVER_WAIT, 0.9)
+		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
+		var resumed: FieldGame = _field(FieldSave.resume_opts(saved))
+		var q: Person = resumed.player
+		var note: Dictionary = {"epoch": q.motion_epoch - 1, "blow_n": 0, "blow_on": true}
+		var drawn: Vector2 = PersonVisual.motion_of(q, note, 0.0, [], _combat_own())
+		assert_eq(String(_combat_own()[int(drawn.y)]["name"]), way)
+		var hit: float = 0.45 if way == "p_swing_one" else 0.33
+		assert_almost_eq(drawn.x, lerpf(hit, Pose.SWING_GUARD_PHASE, (0.70 - 0.45) / (18.0 / 23.0 - 0.45)), 0.000001)
+		assert_almost_eq(float(q.get_meta(Pose.SWING)), 0.9, 0.000001)
+		assert_almost_eq(q.swing_t, 0.45, 0.000001)
+		q.swing_t -= 1.0 / 30.0
+		assert_gt(PersonVisual.motion_of(q, note, 1.0 / 30.0, [], _combat_own()).x, drawn.x)
 
 
 func test_epoch_does_not_invent_a_blow_from_an_unrelated_wait() -> void:

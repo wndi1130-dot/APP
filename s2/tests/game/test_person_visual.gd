@@ -378,7 +378,7 @@ func test_blow_after_blow_goes_through_the_ways() -> void:
 	p.swing_t = 0.6 - PersonVisual.Pose.recover_seconds("axe") + 0.001
 	assert_lt(PersonVisual.blow_of(p, own, gone, 1.9).x, 0.99, "still on the way back at the old fixed time")
 	p.swing_t = 0.001
-	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 2.2).x, PersonVisual.Pose.RECOVER_BACK_END, 0.01, "the backswing reaches its moving end")
+	assert_almost_eq(PersonVisual.blow_of(p, own, gone, 2.2).x, PersonVisual.Pose.SWING_GUARD_PHASE, 0.01, "the backswing reaches its moving end")
 
 
 # The weapon goes in the worn body's right hand: hanging at the side the head

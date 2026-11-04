@@ -195,9 +195,9 @@ const OWN_WORK: Dictionary = {
 # Alternate compatible swings, with their contact and recovery phases.
 # Keep the legacy two-hand chop low before its loop lifts the axe again.
 const OWN_BLOWS: Dictionary = {
-	"one": [["p_swing_one", 0.45], ["p_swing_back", 0.33]],
+	"one": [["p_swing_one", Pose.SWING_ONE_HIT], ["p_swing_back", Pose.SWING_BACK_HIT]],
 	"axe": [["p_swing_axe", 0.45], ["p_chop_side", 0.16, 0.45]],
-	"stab": [["p_stab", 0.35], ["p_swing_one", 0.45]],
+	"stab": [["p_stab", 0.35], ["p_swing_one", Pose.SWING_ONE_HIT]],
 	"floor": [["p_floor_strike", 0.5]], "stomp": [["p_stomp", 0.5]]}
 # The ways whose tip goes past to one side of where the body faces turn the body
 # that far toward it as they land (radians; J2 ③ measured the stab 30 and the
@@ -224,6 +224,7 @@ const ELBOW_R: float = 0.05
 const ELBOW_SPARE: float = 0.02
 const FOREARM: float = 0.32
 const GRIP_TAU: float = 0.0480898347     # Half the remaining angle in 1/30 second.
+const WRIST_DOWN: float = 38.0 * PI / 180.0
 const FRAME_MAX: float = 0.1            # Shared with the field's rule clock.
 const OWN_MIX_TIME: float = 0.35
 # The own shove's arms are back at 0.3 of it and out at 0.4 (body_bake.gd p_shove):
@@ -472,7 +473,8 @@ func _process(delta: float) -> void:
 		var baked: Dictionary = b_own if own else b_vat
 		if baked.has("arm") and (not gun_busy(p) or (own and loading(note, b_own.get("clips", [])))):
 			var hand := arm_at(baked["arm"], b_own_frames if own else b_frames, drawn)
-			var grip: Basis = grip_of(hand[0], hand[1], note.get("grip", Basis()), delta, note.has("grip"))
+			var wrist: float = drawn_wrist_weight(b_own.get("clips", []), b_own_frames, drawn) if own else 0.0
+			var grip: Basis = grip_of(hand[0], hand[1], note.get("grip", Basis()), delta, note.has("grip"), wrist)
 			note["grip"] = grip
 			var lean := lean_of(p, note)
 			p.weapon_mesh.transform = Transform3D(lean * grip, lean * hand[0])
@@ -580,9 +582,12 @@ static func motion_of(p, note: Dictionary, delta: float, clips: Array, own: Arra
 	if int(note.get("epoch", p.motion_epoch)) != p.motion_epoch:
 		var had_blow: bool = note.has("blow_n") or bool(note.get("blow_on", false)) or p.has_meta(Pose.SWING)
 		note.clear()
-		p.remove_meta(Pose.BLOW_WAY)
+		# Saved recovery carries its clip and elapsed time; a bare rewind does not.
+		if not p.has_meta(Pose.SWING):
+			p.remove_meta(Pose.BLOW_WAY)
 		if had_blow and p.strike_t <= 0.0 and p.swing_t > 0.0 and p.shove_t <= 0.0:
-			p.set_meta(Pose.SWING, p.swing_t)
+			if not p.has_meta(Pose.SWING):
+				p.set_meta(Pose.SWING, p.swing_t)
 			if not p.has_meta(Pose.MODE):
 				p.set_meta(Pose.MODE, Pose.strike_mode(p.strike_kind, p.strike_at))
 	note["epoch"] = p.motion_epoch
@@ -926,6 +931,33 @@ static func blow_kind(wid: String, hands: int, mode: String = "swing") -> String
 ## on the way back. y is -1 with no blow, or none of its own. `note` keeps which
 ## way the last blow went and when it ended (at the visual's own time t).
 static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vector2:
+	# Select the clip before swing_state reads its recovery contract. New drawings
+	# advance the chain; a restored recovery uses the saved clip without advancing it.
+	var drawing: bool = p.strike_t > 0.0
+	var way: Array = []
+	var clip: int = -1
+	var wid: String = p.weapon_id()
+	if drawing and not note.get("blow_drawing", false):
+		var follows: bool = note.get("blow_on", false) or (note.has("blow_end") and t - float(note["blow_end"]) <= CHAIN_GAP)
+		note["blow_n"] = int(note.get("blow_n", -1)) + 1 if follows else 0
+		note.erase("blow_deadline")
+	if not own.is_empty() and (drawing or (p.has_meta(Pose.SWING) and p.swing_t > 0.0 and p.shove_t <= 0.0)):
+		var mode: String = Pose.strike_mode(p.get("strike_kind"), p.strike_at) if drawing else String(p.get_meta(Pose.MODE, "swing"))
+		var hands: int = int(Pose.W.get_data(wid).get("hands", 1))
+		var ways: Array = OWN_BLOWS[blow_kind(wid, hands, mode)]
+		if not drawing and not note.has("blow_n"):
+			var saved: String = String(p.get_meta(Pose.BLOW_WAY, ""))
+			for i: int in ways.size():
+				if String(ways[i][0]) == saved:
+					note["blow_n"] = i
+					break
+		way = ways[int(note.get("blow_n", 0)) % ways.size()]
+		clip = clip_named(own, String(way[0]), -1)
+		if clip < 0:
+			way = ways[0]
+			clip = clip_named(own, String(way[0]), -1)
+		if clip >= 0:
+			p.set_meta(Pose.BLOW_WAY, String(way[0]))
 	var sw: Array = Pose.swing_state(p)
 	if sw.is_empty():
 		if note.get("blow_on", false):
@@ -945,33 +977,14 @@ static func blow_of(p, own: Array, note: Dictionary = {}, t: float = 0.0) -> Vec
 			return Vector2(float(note["blow_guard_phase"]), int(note["blow_guard_clip"]))
 		return Vector2(0.0, -1.0)
 	# A new blow is drawn back: on to the next way if it follows on from the last.
-	var drawing: bool = not sw[2]
 	if drawing:
 		note.erase("blow_guard_clip")
-	if drawing and not note.get("blow_drawing", false):
-		var follows: bool = note.get("blow_on", false) or (note.has("blow_end") and t - float(note["blow_end"]) <= CHAIN_GAP)
-		note["blow_n"] = int(note.get("blow_n", -1)) + 1 if follows else 0
-		note.erase("blow_deadline")
 	note["blow_drawing"] = drawing
 	note["blow_on"] = true
 	if not drawing:
 		note["blow_deadline"] = t + p.swing_t
-	if own.is_empty():
-		return Vector2(0.0, -1.0)
-	var mode: String = p.get_meta(Pose.MODE, "swing")
-	var wid: String = p.weapon_id()
-	var hands: int = int(Pose.W.get_data(wid).get("hands", 1))
-	var kind: String = blow_kind(wid, hands, mode)
-	var ways: Array = OWN_BLOWS[kind]
-	var way: Array = ways[int(note.get("blow_n", 0)) % ways.size()]
-	var clip := clip_named(own, String(way[0]), -1)
-	if clip < 0:
-		# A body baked before the later ways were added swings its first each time.
-		way = ways[0]
-		clip = clip_named(own, String(way[0]), -1)
 	if clip < 0:
 		return Vector2(0.0, -1.0)
-	p.set_meta(Pose.BLOW_WAY, String(way[0]))   # what it strikes is seen thrown that way (dead_body.gd)
 	var lands: float = way[1]
 	var ends: float = way[2] if way.size() > 2 else 1.0
 	var r: float = lands + (ends - lands) * float(sw[1]) if sw[2] else lands * float(sw[0])
@@ -1348,12 +1361,11 @@ static func drawn_snapshot(visual, p) -> Dictionary:
 ## hanging, the head forward; thrust out, the head up; raised over the
 ## shoulder, the head back. Where the forearm runs out sideways that reading
 ## fails, so it turns toward the way the forearm points about the up axis
-## instead; and it only goes part way toward the new way each frame (from
-## `was`), so it never flips in one frame.
-static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.0 / 30.0, initialized: bool = true) -> Basis:
+## instead. This target has no filter history.
+static func grip_target(hand: Vector3, elbow: Vector3, fallback: Basis = Basis()) -> Basis:
 	var f := (hand - elbow).normalized()
 	if f == Vector3.ZERO:
-		return was
+		return fallback
 	var a := f.cross(Vector3.RIGHT)
 	var b := f.cross(Vector3.UP)
 	if a.dot(b) < 0.0:
@@ -1362,7 +1374,72 @@ static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.
 	var x := (Vector3.RIGHT - z * Vector3.RIGHT.dot(z)).normalized()
 	if x == Vector3.ZERO:
 		x = f
-	var want := Basis(x, z.cross(x), z).orthonormalized()
+	return Basis(x, z.cross(x), z).orthonormalized()
+
+
+## Positive angles point the weapon's +Z down in body space.
+static func grip_down_angle(grip: Basis) -> float:
+	return atan2(-grip.z.y, Vector2(grip.z.x, grip.z.z).length())
+
+
+static func wrist_correction(want: Basis, weight: float) -> float:
+	return clampf(weight, 0.0, 1.0) * maxf(0.0, WRIST_DOWN - grip_down_angle(want))
+
+
+## Measure and rotate in the same body space. The grip's local X can point
+## the other way after the forearm passes vertical, even with positive correction.
+static func wrist_target(want: Basis, weight: float) -> Basis:
+	var angle: float = wrist_correction(want, weight)
+	if angle <= 0.0:
+		return want
+	var axis: Vector3 = Vector3.UP.cross(want.z)
+	if axis.length_squared() < 0.000000000001:
+		# At the vertical pole the fist supplies the otherwise undefined azimuth.
+		axis = want.x.slide(Vector3.UP)
+	return Basis(axis.normalized(), angle) * want
+
+
+static func wrist_weight(way: String, phase: float) -> float:
+	if way not in ["p_swing_one", "p_swing_back"]:
+		return 0.0
+	var hit: float = Pose.SWING_ONE_HIT if way == "p_swing_one" else Pose.SWING_BACK_HIT
+	if phase <= hit or phase >= Pose.SWING_GUARD_PHASE:
+		return 0.0
+	var follow: float = lerpf(hit, Pose.SWING_GUARD_PHASE, Pose.RECOVER_FOLLOW_SHARE)
+	var sag: float = lerpf(hit, Pose.SWING_GUARD_PHASE, Pose.RECOVER_SAG_SHARE)
+	if phase < follow:
+		return smoothstep(hit, follow, phase)
+	return 1.0 - smoothstep(sag, Pose.SWING_GUARD_PHASE, phase)
+
+
+## Read the final shader packing, after guard-lowering cuts have chosen the held row.
+## Both corrections use the same blended arm target, so blending their weights is exact.
+static func drawn_wrist_weight(clips: Array, tab: Array, drawn: Color) -> float:
+	var motion: int = DeadBody.motion_in(drawn.g)
+	if motion < 0 or motion >= clips.size() or motion >= tab.size():
+		return 0.0
+	var weight: float = wrist_weight(String(clips[motion]["name"]), drawn.r)
+	var packed: float = fposmod(floorf(drawn.g + 0.5), VatBaker.UPPER)
+	var share: float = floorf(packed / 65536.0)
+	if share <= 0.0:
+		return weight
+	var kept: int = int(floorf((packed - share * 65536.0) / 16.0))
+	for i: int in mini(tab.size(), clips.size()):
+		var first: int = int(tab[i][0])
+		var count: int = int(tab[i][1])
+		if kept >= first and kept < first + count:
+			var phase: float = float(kept - first) / float(maxi(1, count - 1))
+			var held: float = wrist_weight(String(clips[i]["name"]), phase)
+			return lerpf(weight, held, share / DeadBody.MIX_STEPS)
+	return weight
+
+
+## Correct the target first, then follow it once on the drawing clock.
+static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.0 / 30.0, initialized: bool = true, wrist: float = 0.0) -> Basis:
+	if hand == elbow:
+		return was
+	var want: Basis = grip_target(hand, elbow, was)
+	want = wrist_target(want, wrist)
 	if not initialized or not was.is_finite():
 		return want
 	var follow: float = 1.0 - exp(-maxf(delta, 0.0) / GRIP_TAU)

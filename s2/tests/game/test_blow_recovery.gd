@@ -93,17 +93,17 @@ func test_recovery_deadline_and_ally_cap_at_both_rates() -> void:
 func test_follow_through_speed_join_and_slow_stop() -> void:
 	for wid: String in WEAPONS:
 		var base: float = Pose.recover_seconds(wid)
-		var join: float = base * Pose.RECOVER_FOLLOW
 		for duration: float in [base, 0.9, 6.0]:
-			for fps: int in [30, 60]:
-				var t: float = 0.0
-				while t <= join:
-					assert_almost_eq(Pose.recovery_phase(t, duration, base), t / base, 0.000001)
-					t += 1.0 / float(fps)
 			var h: float = 0.000001
-			var left: float = (Pose.recovery_phase(join, duration, base) - Pose.recovery_phase(join - h, duration, base)) / h
-			var right: float = (Pose.recovery_phase(join + h, duration, base) - Pose.recovery_phase(join, duration, base)) / h
-			assert_almost_eq(left, right, 0.001, "continuous speed at the join")
+			var speed: float = 1.0 / base
+			if duration > base:
+				speed = minf(speed, 3.0 * Pose.RECOVER_FOLLOW_SHARE / (Pose.RECOVER_FOLLOW_TIME * duration))
+			assert_almost_eq(Pose.recovery_phase(h, duration, base) / h, speed, 0.001)
+			for ratio: float in [Pose.RECOVER_FOLLOW_TIME, Pose.RECOVER_SAG_TIME]:
+				var join: float = duration * ratio
+				var left: float = (Pose.recovery_phase(join, duration, base) - Pose.recovery_phase(join - h, duration, base)) / h
+				var right: float = (Pose.recovery_phase(join + h, duration, base) - Pose.recovery_phase(join, duration, base)) / h
+				assert_almost_eq(left, right, 0.001, "continuous speed at the join")
 			assert_almost_eq(Pose.recovery_phase(duration, duration, base), 1.0, 0.000001)
 			if duration > base:
 				assert_lt((1.0 - Pose.recovery_phase(duration - h, duration, base)) / h, 0.001)
@@ -312,7 +312,7 @@ func test_shipped_vat_blow_to_walk_slides_no_more_than_a_standing_start() -> voi
 					continue
 				var lands: float = 0.45 if way == "p_swing_one" else 0.33
 				var end: float = Pose.RECOVER_ONE_END if way == "p_swing_one" else Pose.RECOVER_BACK_END
-				var released: float = Pose.recovery_phase(0.6, 0.9, 0.35, (end - lands) / (1.0 - lands))
+				var released: float = Pose.recovery_phase(0.6, 0.9, 0.35, end)
 				var from_blow: Color = Color(lerpf(lands, 1.0, released), swing, 1.0, 1.0)
 				for fps: int in [30, 60]:
 					var blow_best: float = INF
@@ -526,11 +526,12 @@ func test_active_return_endpoints_and_continuous_speed() -> void:
 		var end: float = Pose.recovery_end(p)
 		var base: float = Pose.recover_seconds("axe")
 		for duration: float in [0.9, 2.0, 6.0]:
-			var join: float = base * Pose.RECOVER_FOLLOW
 			var h: float = 0.000001
-			var left: float = (Pose.recovery_phase(join, duration, base, end) - Pose.recovery_phase(join - h, duration, base, end)) / h
-			var right: float = (Pose.recovery_phase(join + h, duration, base, end) - Pose.recovery_phase(join, duration, base, end)) / h
-			assert_almost_eq(left, right, 0.001)
+			for ratio: float in [Pose.RECOVER_FOLLOW_TIME, Pose.RECOVER_SAG_TIME]:
+				var join: float = duration * ratio
+				var left: float = (Pose.recovery_phase(join, duration, base, end) - Pose.recovery_phase(join - h, duration, base, end)) / h
+				var right: float = (Pose.recovery_phase(join + h, duration, base, end) - Pose.recovery_phase(join, duration, base, end)) / h
+				assert_almost_eq(left, right, 0.001)
 			assert_almost_eq(Pose.recovery_phase(duration, duration, base, end), end, 0.000001)
 			assert_lt((end - Pose.recovery_phase(duration - h, duration, base, end)) / h, 0.001)
 			var previous: float = 0.0

@@ -21,15 +21,21 @@ const RECOVER_PER_KG: float = 0.05
 const RECOVER_MAX: float = 0.35
 const RECOVER_WAIT: String = "pose_recover_wait"
 const RECOVER_RELEASE: String = "pose_recover_release"
-# Keep the first 35 percent at contact speed; ease only the return to rest.
-const RECOVER_FOLLOW: float = 0.35
-# body_bake p_swing_one/back: arm/chest keys reach final values at 0.8, but the clip is
-# baked in 24 frames and frame 18 (0.783) already holds the weapon within 1 cm of it,
-# so a return that runs on to 0.8 spends its last drawings almost still.
-# Leg settling continues to 1.0; only the weapon return stops here.
-const RECOVER_ONE_END: float = 0.783
-const RECOVER_BACK_END: float = 0.783
-const RECOVER_RAMP: float = 0.05
+# Clip phases and recovery fractions share one contract. The guard is row 18 of 24.
+const SWING_ONE_HIT: float = 0.45
+const SWING_BACK_HIT: float = 0.33
+const SWING_GUARD_PHASE: float = 18.0 / 23.0
+const SWING_FOLLOW_PHASE: float = 0.62
+const SWING_SAG_PHASE: float = 0.70
+const RECOVER_ONE_END: float = (SWING_GUARD_PHASE - SWING_ONE_HIT) / (1.0 - SWING_ONE_HIT)
+const RECOVER_BACK_END: float = (SWING_GUARD_PHASE - SWING_BACK_HIT) / (1.0 - SWING_BACK_HIT)
+const RECOVER_FOLLOW: float = (SWING_FOLLOW_PHASE - SWING_ONE_HIT) / (1.0 - SWING_ONE_HIT)
+const RECOVER_SAG: float = (SWING_SAG_PHASE - SWING_ONE_HIT) / (1.0 - SWING_ONE_HIT)
+# Internal knots share the part of the actual hit-to-guard return, not the unused tail to 1.
+const RECOVER_FOLLOW_SHARE: float = RECOVER_FOLLOW / RECOVER_ONE_END
+const RECOVER_SAG_SHARE: float = RECOVER_SAG / RECOVER_ONE_END
+const RECOVER_FOLLOW_TIME: float = 0.17
+const RECOVER_SAG_TIME: float = 0.50
 # rest - swing_t and the cap are the same sum taken apart; this absorbs its rounding.
 const RECOVER_END_EPS: float = 0.000000001
 const Protest = preload("res://game/actors/person_protest.gd")
@@ -145,32 +151,47 @@ static func recovery_duration(p, rest: float) -> float:
 static func recovery_end(p) -> float:
 	var way: String = String(p.get_meta(BLOW_WAY, ""))
 	if way == "p_swing_one":
-		return (RECOVER_ONE_END - 0.45) / (1.0 - 0.45)
+		return RECOVER_ONE_END
 	if way == "p_swing_back":
-		return (RECOVER_BACK_END - 0.33) / (1.0 - 0.33)
+		return RECOVER_BACK_END
 	return 1.0
 
 
 static func recovery_phase(elapsed: float, duration: float, base: float, end: float = 1.0) -> float:
 	if duration <= base:
 		return clampf(elapsed / duration, 0.0, 1.0)
-	var follow: float = base * RECOVER_FOLLOW
-	if elapsed <= follow:
-		return maxf(elapsed, 0.0) / base
-	var tail: float = duration - follow
-	var gone: float = clampf(elapsed - follow, 0.0, tail)
-	var span: float = end - RECOVER_FOLLOW
-	var speed: float = 1.0 / base
-	# Integrate continuous velocity: brake, cruise, then stop at the deadline.
-	# The short ramps avoid spending the tail almost still.
-	var ramp: float = minf(RECOVER_RAMP, minf(tail * 0.25, span / speed))
-	var cruise: float = (span - speed * ramp * 0.5) / (tail - ramp)
-	if gone < ramp:
-		return RECOVER_FOLLOW + speed * gone + (cruise - speed) * gone * gone / (2.0 * ramp)
-	if gone > tail - ramp:
-		var left: float = tail - gone
-		return end - cruise * left * left / (2.0 * ramp)
-	return RECOVER_FOLLOW + (speed + cruise) * ramp * 0.5 + cruise * (gone - ramp)
+	var times := PackedFloat64Array([0.0, RECOVER_FOLLOW_TIME, RECOVER_SAG_TIME, 1.0])
+	var values := PackedFloat64Array([0.0, RECOVER_FOLLOW_SHARE * end, RECOVER_SAG_SHARE * end, end])
+	var slopes := PackedFloat64Array()
+	for i: int in 3:
+		slopes.append((values[i + 1] - values[i]) / (times[i + 1] - times[i]))
+	# Derivatives are with respect to t/D. Preserve the old initial 1/base speed
+	# up to the first secant's threefold limit, with one shared tangent per knot.
+	var tangents := PackedFloat64Array([minf(duration / base, 3.0 * slopes[0]),
+		(slopes[0] + slopes[1]) * 0.5, (slopes[1] + slopes[2]) * 0.5, 0.0])
+	# Fritsch-Carlson's radius-three bound; preserve the chosen contact tangent
+	# by limiting its neighbour first. Later reductions retain earlier bounds.
+	var alpha: float = tangents[0] / slopes[0]
+	tangents[1] = minf(tangents[1], slopes[0] * sqrt(maxf(0.0, 9.0 - alpha * alpha)))
+	for i: int in range(1, 3):
+		if slopes[i] <= 0.0:
+			tangents[i] = 0.0
+			tangents[i + 1] = 0.0
+			continue
+		var a: float = tangents[i] / slopes[i]
+		var b: float = tangents[i + 1] / slopes[i]
+		var radius: float = sqrt(a * a + b * b)
+		if radius > 3.0:
+			tangents[i] *= 3.0 / radius
+			tangents[i + 1] *= 3.0 / radius
+	var at: float = clampf(elapsed / duration, 0.0, 1.0)
+	var segment: int = 0 if at < times[1] else (1 if at < times[2] else 2)
+	var span: float = times[segment + 1] - times[segment]
+	var u: float = (at - times[segment]) / span
+	var u2: float = u * u
+	var u3: float = u2 * u
+	return (2.0 * u3 - 3.0 * u2 + 1.0) * values[segment] + (u3 - 2.0 * u2 + u) * span * tangents[segment] \
+		+ (-2.0 * u3 + 3.0 * u2) * values[segment + 1] + (u3 - u2) * span * tangents[segment + 1]
 
 
 static func recovery_feet_free(p) -> bool:
