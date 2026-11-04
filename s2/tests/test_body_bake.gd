@@ -1821,14 +1821,139 @@ func test_walk_last_evaluated_skin_state_can_succeed() -> void:
 	assert_true(false, "mixed skin must supply a multi-evaluation success")
 
 
+func test_walk_fixed_support_keeps_matching_references_and_full_sole_minimum() -> void:
+	var fit: Dictionary = {"rest": PackedVector3Array([
+		Vector3(-0.04, 0.0, -0.08), Vector3(0.04, 0.0, -0.08),
+		Vector3(-0.04, 0.0, 0.16), Vector3(0.04, 0.0, 0.16), Vector3(-0.1, 0.0, 0.0)]),
+		"bones": PackedInt32Array([0, 0, 1, 1, 2]), "weights": PackedFloat32Array([1, 1, 1, 1, 1]),
+		"per": 1, "soles": [PackedInt32Array([0, 1, 2, 3]), PackedInt32Array([4])]}
+	var selected: Array = [PackedInt32Array([0, 1]), PackedInt32Array([4])]
+	var expected: Array = [PackedInt32Array([0, 1]), PackedInt32Array([2, 3]), PackedInt32Array([0, 1, 2, 3]), PackedInt32Array([0, 1])]
+	var heights: Array = [Vector2(0.0, 0.0002), Vector2(0.0002, -0.0003), Vector2(0.0, 0.00005), Vector2(-0.0002, 0.0002)]
+	for index in heights.size():
+		var h: Vector2 = heights[index]
+		var skin: Array = [Transform3D(Basis(), Vector3(0.003, h.x, 0.002)), Transform3D(Basis(), Vector3(-0.002, h.y, -0.003)), Transform3D.IDENTITY]
+		var dynamic: Array = BodyBake._person_footlock_probes(fit, skin)
+		var fixed: Array = BodyBake._person_footlock_probes(fit, skin, selected)
+		assert_eq(dynamic[0]["vertices"], expected[index], "A, B, union, A must all occur")
+		assert_eq(fixed[0]["vertices"], selected[0])
+		assert_almost_eq((fixed[0]["rest"] as Vector3).z, -0.08, 0.000001)
+		assert_almost_eq((fixed[0]["point"] as Vector3).z, -0.078, 0.000001)
+		assert_almost_eq((fixed[0]["point"] as Vector3).y, minf(h.x, h.y), 0.00000001, "the excluded group still supplies penetration height")
+
+
+## A flat, reachable two-leg pose with an analytically known rolled-sole solution.
+func _walk_fixed_contact_case() -> Dictionary:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	var roll: Basis = Basis(Vector3.RIGHT, 0.2)
+	var known: Array = []
+	var wrong: Array = []
+	var sets: Array = []
+	var goals: Array = []
+	fit["starts"] = [0.9, 0.9]
+	fit["durations"] = [0.6, 0.6]
+	fit["goal_cache"] = {}
+	fit["pelvis"] = {"values": PackedFloat64Array([0.9]), "slopes": PackedFloat64Array([0.0])}
+	fit["reach_clamped"] = [false, false]
+	fit["reach_final_failed"] = [false, false]
+	fit["height_frame_failed"] = false
+	for side in 2:
+		var ankle: Vector3 = fit["rest_ankles"][side]
+		var heel: PackedInt32Array = PackedInt32Array()
+		var lowest: float = INF
+		for vertex: int in fit["soles"][side]:
+			var offset: Vector3 = (fit["rest"][vertex] as Vector3) - ankle
+			lowest = minf(lowest, (roll * offset).y)
+			if offset.z < 0.0:
+				heel.append(vertex)
+		var toe_offset: Vector3 = Vector3(0.0, -0.04, 0.16)
+		var heel_offset: Vector3 = Vector3(0.0, -0.04, -0.08)
+		var target: Vector3 = ankle + toe_offset - roll * toe_offset
+		var seed: Vector3 = ankle + heel_offset - roll * heel_offset
+		target.y = float(fit["floor"]) - lowest
+		seed.y = target.y
+		known.append(target)
+		wrong.append(seed)
+		sets.append(heel)
+		var goal: Dictionary = {"target": target, "base": ankle, "rotation": roll, "path": Vector3.ZERO, "age": 0.1}
+		goals.append(goal)
+		fit["goal_cache"][side] = {0.0: goal}
+	body.reset_bone_poses()
+	ctx["walk_clip"] = "p_walk"
+	ctx["fit_failures"] = []
+	return {"ctx": ctx, "known": known, "wrong": wrong, "sets": sets, "goals": goals}
+
+
+func test_walk_dynamic_verification_rejects_a_fixed_support_only_solution() -> void:
+	var fixture: Dictionary = _walk_fixed_contact_case()
+	var ctx: Dictionary = fixture["ctx"]
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	var baseline: Dictionary = BodyBake._person_walk_skin_snapshot(body, fit)
+	var fixed: Dictionary = BodyBake._person_walk_skin_evaluate(ctx, fit, 0.0, fixture["goals"], fixture["wrong"], 0.9, baseline, fixture["sets"])
+	assert_true(BodyBake._person_walk_skin_ready(fixed), "premise: the frozen heel equations have a solution")
+	assert_false(BodyBake._person_walk_skin_ready(fixed["dynamic"]), "the real toe contact rejects that solution")
+	assert_gt(float(fixed["dynamic"]["skin_residual"]), BodyBake.PERSON_WALK_SKIN_TOL_M)
+	assert_ne(fixed["support_signature"], fixed["dynamic"]["support_signature"])
+	var known: Dictionary = BodyBake._person_walk_skin_evaluate(ctx, fit, 0.0, fixture["goals"], fixture["known"], 0.9, baseline)
+	assert_true(BodyBake._person_walk_skin_ready(known, true), "the independent target is physically reachable")
+	var skin: Array = BodyBake._skin_frame(ctx)
+	for side in 2:
+		var minimum: float = INF
+		for vertex: int in fit["soles"][side]:
+			var point: Vector3 = Vector3.ZERO
+			for slot in int(fit["per"]):
+				var weight: float = fit["weights"][vertex * int(fit["per"]) + slot]
+				point += (skin[fit["bones"][vertex * int(fit["per"]) + slot]] as Transform3D) * (fit["rest"][vertex] as Vector3) * weight
+			minimum = minf(minimum, point.y)
+		assert_almost_eq(minimum, float(fit["floor"]), 0.000001, "independent full-sole skin contact")
+	body.reset_bone_poses()
+	var solved: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0, fixture["wrong"], BodyBake.PERSON_WALK_SKIN_EVALUATIONS, true, {}, false, true)
+	assert_true(bool(solved["ok"]))
+	assert_true(bool(solved.get("dynamic_verified", false)))
+	assert_true(BodyBake._person_walk_skin_ready(solved, true))
+	for side in 2:
+		assert_lt((solved["targets_used"][side] as Vector3).distance_to(fixture["known"][side]), BodyBake.PERSON_WALK_JOINT_TARGET_TOL_M)
+
+
+func test_walk_joint_refinement_moves_a_small_inner_success_and_checks_true_residual() -> void:
+	var fixture: Dictionary = _walk_fixed_contact_case()
+	var ctx: Dictionary = fixture["ctx"]
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	var seed: Array = (fixture["known"] as Array).duplicate()
+	seed[1] += Vector3(0.0008, 0.0, 0.0)
+	var inner: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0, seed)
+	assert_true(bool(inner["ok"]), "premise: the named inner tolerance already accepts the seed")
+	assert_eq(int(inner["ik_passes"]), 1)
+	var old_errors: Dictionary = BodyBake._person_walk_joint_errors(inner, seed, 0.9)
+	assert_eq(float(old_errors["displacement_m"]), 0.0)
+	assert_gt(float(old_errors["fixed_point_m"]), BodyBake.PERSON_WALK_JOINT_TARGET_TOL_M)
+	assert_gt(float(old_errors["target_m"]), BodyBake.PERSON_WALK_JOINT_TARGET_TOL_M, "a stationary field must not falsely converge")
+	body.reset_bone_poses()
+	var joint: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0, seed, BodyBake.PERSON_WALK_SKIN_EVALUATIONS, true, {}, false, true)
+	assert_true(bool(joint["ok"]))
+	assert_gt(int(joint["ik_passes"]), int(inner["ik_passes"]), "outer precision requires an actually evaluated update")
+	assert_gt((joint["targets_used"][1] as Vector3).distance_to(seed[1]), BodyBake.PERSON_WALK_JOINT_TARGET_TOL_M)
+	var errors: Dictionary = BodyBake._person_walk_joint_errors(joint, joint["targets_used"], 0.9)
+	assert_lte(float(errors["target_m"]), BodyBake.PERSON_WALK_JOINT_TARGET_TOL_M)
+	assert_lte(float(errors["height_m"]), BodyBake.PERSON_WALK_JOINT_HEIGHT_TOL_M)
+	joint["final_hips_y"] = 0.9 - 0.00042
+	errors = BodyBake._person_walk_joint_errors(joint, joint["targets_used"], 0.9)
+	assert_gt(float(errors["height_m"]), BodyBake.PERSON_WALK_JOINT_HEIGHT_TOL_M, "small target error cannot hide a mismatched pelvis table")
+
+
 func test_walk_vector_aitken_uses_both_feet_and_resets_history() -> void:
 	var old: Dictionary = {"signature": "stable", "residual_vector": [Vector3(0.004, 0.0, 0.0), Vector3(0.0, 0.002, 0.0)]}
 	var current: Dictionary = {"signature": "stable", "residual_vector": [Vector3(0.002, 0.0, 0.0), Vector3(0.0, 0.0, 0.0)]}
 	assert_almost_eq(BodyBake._person_walk_aitken(old, current, 1.0), 1.5, 0.000001, "six dimensional dot product, not separate component factors")
 	assert_almost_eq(BodyBake._person_walk_aitken({}, current, 1.0), 1.0, 0.000001)
-	assert_almost_eq(BodyBake._person_walk_aitken(old, old, 1.5), 1.0, 0.000001, "tiny denominator resets")
+	assert_almost_eq(BodyBake._person_walk_aitken(old, old, 1.5), 1.5, 0.000001, "tiny denominator discards the secant, retaining accepted damping")
 	current["signature"] = "changed_probe_or_bound"
-	assert_almost_eq(BodyBake._person_walk_aitken(old, current, 1.5), 1.0, 0.000001)
+	assert_almost_eq(BodyBake._person_walk_aitken(old, current, 1.5), 1.5, 0.000001)
+	assert_almost_eq(BodyBake._person_walk_aitken(old, current, 0.5), 0.5, 0.000001, "a branch change keeps the accepted half-step")
 	current["signature"] = "stable"
 	current["residual_vector"] = [Vector3(0.0036, 0.0, 0.0), Vector3(0.0, 0.0018, 0.0)]
 	assert_almost_eq(BodyBake._person_walk_aitken(old, current, 1.0), 2.0, 0.000001)
@@ -2186,11 +2311,15 @@ func test_walk_dense_continuation_matches_uninterrupted_trials_pose_and_ledger()
 	if not first.has("continuation"):
 		return
 	assert_eq(int(first["ik_passes"]), 1)
+	assert_eq(first["continuation"]["support_sets"], first["continuation"]["current"]["support_sets"], "the suspended map keeps its exact support set")
+	assert_eq(first["continuation"]["accepted_pose"]["support_sets"], first["continuation"]["support_sets"])
 	split_budget["active_stage"] = "dense_refine"
 	var resumed: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, u, [], BodyBake.PERSON_WALK_SKIN_EVALUATIONS - 1, true, first["continuation"])
 	assert_eq(resumed["reason"], direct["reason"])
 	assert_eq(int(resumed["ik_passes"]), int(direct["ik_passes"]))
 	assert_eq(int(resumed["rejections"]), int(direct["rejections"]))
+	assert_eq(resumed["support_history"], direct["support_history"])
+	assert_eq(fit["skin_support_sets"], direct_pose["support_sets"], "resume restores the accepted contact state with the pose")
 	assert_eq(int(split_budget["used"]["ik"]), int(resumed["ik_passes"]))
 	assert_eq(int(split_budget["stages"]["dense_verify"]["ik"]), 1)
 	assert_eq(int(split_budget["stages"].get("dense_refine", {}).get("ik", 0)), int(resumed["ik_passes"]) - 1)

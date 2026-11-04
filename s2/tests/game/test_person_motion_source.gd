@@ -229,6 +229,7 @@ func _print_walk_rig_budget_use(rig_name: String, ctx: Dictionary, fit: Dictiona
 	print("WALK_RIG_BUDGET_USE " + JSON.stringify({"rig": rig_name, "ok": ok,
 		"scale": budget.get("scale", BodyBake._person_walk_budget_scale_for_tests()), "used": used, "clips": clips,
 		"stop_reason": stop_reason, "skin_reason": skin.get("reason", "OK" if ok else "UNTRIED"),
+		"frame_ok": skin.get("frame_ok", false), "frame_evaluated": skin.get("frame_evaluated", false),
 		"passes": {"joint": joint.get("stage_passes", {}), "skin": int(skin.get("ik_passes", 0)),
 			"ik_by_stage": budget.get("stages", {})}}))
 
