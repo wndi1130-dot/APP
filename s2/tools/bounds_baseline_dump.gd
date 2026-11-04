@@ -190,6 +190,30 @@ static func progress_header(selected: Array[String], keys: Array[String], revisi
 	}
 
 
+## JSON은 수를 float로 읽는다. 안전한 정수만 되돌리고 배열의 순서는 보존한다.
+static func _normalize_json(value: Variant) -> Variant:
+	if value is float:
+		var number: float = value
+		if is_finite(number) and absf(number) <= 9007199254740991.0 and number == floor(number):
+			return int(number)
+	elif value is Array:
+		var normalized_array: Array = []
+		for item: Variant in value:
+			normalized_array.append(_normalize_json(item))
+		return normalized_array
+	elif value is Dictionary:
+		var normalized_dictionary: Dictionary = {}
+		for key: String in value:
+			normalized_dictionary[key] = _normalize_json(value[key])
+		return normalized_dictionary
+	return value
+
+
+static func _canonical_json(value: Variant) -> String:
+	# 사전 키만 정렬한다. keys/forms/bands의 순서와 소수 값은 비교 대상이다.
+	return JSON.stringify(_normalize_json(value), "", true, true)
+
+
 ## error가 빈 상태만 쓸 수 있다. 깨진 중간 줄·중복·대상 밖 기록은 복구하지 않는다.
 static func read_progress(output: String, header: Dictionary) -> Dictionary:
 	if FileAccess.file_exists(output):
@@ -197,7 +221,7 @@ static func read_progress(output: String, header: Dictionary) -> Dictionary:
 	var path: String = output + ".jsonl"
 	var cases: Dictionary = {}
 	if not FileAccess.file_exists(path):
-		var create_error: String = _replace_text(path, JSON.stringify(header) + "\n")
+		var create_error: String = _replace_text(path, _canonical_json(header) + "\n")
 		if not create_error.is_empty():
 			return {"error": create_error}
 		return {"error": "", "header": header, "cases": cases, "repaired": false}
@@ -217,7 +241,7 @@ static func read_progress(output: String, header: Dictionary) -> Dictionary:
 	var parser: JSON = JSON.new()
 	if lines.is_empty() or parser.parse(lines[0]) != OK or not parser.data is Dictionary:
 		return {"error": "진행 파일 머리가 깨졌습니다: " + path}
-	if JSON.stringify(parser.data) != JSON.stringify(header):
+	if _canonical_json(parser.data) != _canonical_json(header):
 		return {"error": "진행 파일 판 정보가 다릅니다: " + path}
 	var retained: String = lines[0] + "\n"
 	var repaired: bool = not contents.ends_with("\n")
@@ -311,7 +335,7 @@ static func finish_progress(output: String, progress: Dictionary, total_ms: floa
 	if not write_error.is_empty():
 		return write_error
 	var parser: JSON = JSON.new()
-	if parser.parse(FileAccess.get_file_as_string(temporary)) != OK or JSON.stringify(parser.data) != JSON.stringify(receipt):
+	if parser.parse(FileAccess.get_file_as_string(temporary)) != OK or _canonical_json(parser.data) != _canonical_json(receipt):
 		return "다시 읽은 최종 JSON이 다릅니다: " + temporary
 	if FileAccess.file_exists(output):
 		return "기존 파일을 덮어쓰지 않습니다: " + output
