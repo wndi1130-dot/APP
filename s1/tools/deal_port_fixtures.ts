@@ -12,7 +12,7 @@ const LIMIT = 16 * 1024 * 1024;
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const TOOLS: DealTool[] = ['open', 'fetch', 'favor', 'bribe', 'blackmail', 'persuade'];
 
-type Action = { kind: 'status' | 'deal'; comm: Comm; tool: DealTool; cond?: number; cut?: Comm } | { kind: 'cast_vote' } | { kind: 'advance' };
+type Action = { kind: 'status' | 'deal'; comm: Comm; tool: DealTool; cond?: number; cut?: Comm } | { kind: 'cast_vote' } | { kind: 'advance' } | { kind: 'open_council'; emergency: boolean };
 
 /** 거래가 다 열리게 손본 회기: 사치품·빚·비밀을 두고, 안건 하나를 올린다. coalLow면 석탄 위기라 난방 배당이 설득 근거가 된다. */
 function table(seed: string, law: LawId, coalLow: boolean): Game {
@@ -100,6 +100,16 @@ function dealVectors() {
           add(`settle/${seed}/${c}/open${i}-${keep ? 'kept' : 'broken'}`, g, { kind: 'advance' }, () => { S1.advance(g); });
         }
       });
+    }
+  }
+  // 거래로 안건 선택권을 넘겨받은 칸이 다음 회기를 열 때 안건을 고른다(openCouncil): 칸마다, 정기·비상 회기.
+  for (const seed of SEEDS) {
+    for (const c of S1.COMMS) {
+      for (const emergency of [false, true]) {
+        const g = council(seed);
+        g.agendaHolder = c;
+        add(`holder/${seed}/${c}/${emergency ? 'emergency' : 'regular'}`, g, { kind: 'open_council', emergency }, () => { S1.openCouncil(g, emergency); });
+      }
     }
   }
   return cases;

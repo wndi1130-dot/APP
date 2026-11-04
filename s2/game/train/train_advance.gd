@@ -110,8 +110,10 @@ static func _new_secret(g: Dictionary, t: Dictionary) -> Dictionary:
 	return secret
 
 
+## S1 politics.ts openCouncil. A group that took the agenda in a deal (`agendaHolder`) picks
+## this session's agenda, the one it likes best (its stance without grudge; the first of equal
+## best), and the agenda is locked to it (council_card.gd turn).
 static func open_council(g0: Dictionary, t: Dictionary, emergency: bool = false) -> Dictionary:
-	if g0.get("agendaHolder") != null: return _unported(g0, "openCouncil: agendaHolder stance")
 	var g: Dictionary = g0.duplicate(true)
 	g["session"] = int(g["session"]) + 1
 	for comm: String in t["COMMS"]:
@@ -123,9 +125,21 @@ static func open_council(g0: Dictionary, t: Dictionary, emergency: bool = false)
 	if not emergency and State.law_active(g, "patrol") and _rnd(g) < 0.25:
 		var secret: Dictionary = _new_secret(g, t)
 		Turn._journal(g, "귀환 검사에서 %s 대표의 약점이 드러났다." % t["COMM_NAME"][secret["about"]], "dark")
-	var regular: Dictionary = Agenda.agenda_options(g, t)
-	g["council"] = {"options": regular["options"], "idx": 0, "locked": false, "deals": [], "result": null}
+	var options: Array = Agenda.agenda_options(g, t)["options"]
+	var holder: Variant = g.get("agendaHolder")
+	var idx: int = 0
+	if holder != null:
+		var best: float = -99.0
+		for i: int in options.size():
+			var score: float = float(Vote.stance(g, t, String(holder), options[i], false)["score"])
+			if score > best:
+				best = score
+				idx = i
+	g["council"] = {"options": options, "idx": idx, "locked": holder != null, "deals": [], "result": null}
 	if emergency: g["council"]["emergency"] = true
+	if holder != null and not options.is_empty():
+		g["council"]["holder"] = holder
+		Turn._journal(g, "%s이(가) 안건을 골랐다: %s." % [t["COMM_NAME"][holder], Vote.agenda_title(t, options[idx])])
 	g["agendaHolder"] = null
 	# 내정 훅 자리: COUNCIL_HOOKS.open.
 	return g

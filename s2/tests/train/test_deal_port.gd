@@ -58,6 +58,7 @@ func test_every_deal_case_matches_s1() -> void:
 				got = r["g"]
 			"cast_vote": got = Advance.cast_vote(input, t)
 			"advance": got = Advance.advance(input, t)
+			"open_council": got = Advance.open_council(input, t, bool(action.get("emergency", false)))
 		if got.has("_turn_port_error"):
 			bad.append("%s: %s" % [at, got["_turn_port_error"]])
 		else:
