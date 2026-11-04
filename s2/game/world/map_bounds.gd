@@ -5,6 +5,8 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const Rule = preload("res://game/world/map_bounds_rule.gd")
 const StopGround = preload("res://game/world/stop_ground.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
+## 경계 보호에 넣는 샛길 몫. 띠(`belt`)·성긴 숲(`woods`)은 나무라 넣지 않는다.
+const SIDE_PATH_WALK: Array[String] = ["gap", "entrance", "store", "door"]
 
 
 static func check(bounds: Dictionary, grid: FieldGrid) -> Array[String]:
@@ -274,7 +276,16 @@ static func protected_cells(data: Dictionary, details: Array[Dictionary] = []) -
 	var mask := PackedByteArray()
 	mask.resize(g.width * g.height)
 	for key: String in ["train", "platform", "boarding", "unloading", "train_doors", "bands", "side_path", "spots", "stairs", "anchors", "village_middle", "deep_forest"]:
-		_protect(mask, g, data.get(key), 2, details, key)
+		var value: Variant = data.get(key)
+		if key == "side_path" and value is Dictionary:
+			# 샛길은 지나가는 몫(틈·입구·창고·문)만 지킨다. 띠·성긴 숲 나무까지 지키면 띠 줄 전체와
+			# 모서리가 깊이 0으로 묶여 깊이 풀이가 해 없음이 된다(북·서 샛길).
+			var spot: Dictionary = value
+			var walk: Dictionary = {}
+			for part: String in SIDE_PATH_WALK:
+				if spot.has(part): walk[part] = spot[part]
+			value = walk
+		_protect(mask, g, value, 2, details, key)
 	for building: Dictionary in data.get("buildings", []):
 		_protect(mask, g, building["rect"], 3, details, "building")
 	for grid: FieldGrid in data.get("levels", {0: g}).values():
