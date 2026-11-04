@@ -1,5 +1,5 @@
 extends "res://addons/gut/test.gd"
-## PR1a 계약. 전체 492건 비교는 리드가 같은 덤프 도구로 별도 수행한다.
+## PR1a 계약. 전체 504건 비교는 리드가 같은 뽑기 도구(tools/bounds_baseline_dump.gd)로 별도 수행한다.
 
 const BoundsDigest = preload("res://tests/game/bounds_digest.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -12,7 +12,9 @@ const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 const SidePath = preload("res://game/world/side_path.gd")
-const BASELINE: String = "res://tests/fixtures/bounds_baseline_sample_09e963af.json"
+## 경계를 켜지 않은 지도 20장면의 지문. 표본에 든 지도를 일부러 바꾼 PR은 다시 뽑아 같이 커밋한다(REDUMP).
+const BASELINE: String = "res://tests/fixtures/bounds_baseline_sample.json"
+const REDUMP: String = "godot --headless --path s2 -s res://tools/bounds_baseline_dump.gd -- --sample"
 const WIDTHS: Array[int] = [30, 36, 42, 48]
 const SHIFT: Vector2i = Vector2i(30, 36)
 
@@ -39,8 +41,8 @@ func _sample() -> Dictionary:
 	assert_true(parsed is Dictionary, "표본 JSON을 읽을 수 있어야 합니다")
 	if not parsed is Dictionary:
 		return {}
-	assert_eq(int(parsed.get("digest_version", -1)), BoundsDigest.VERSION)
-	assert_eq(parsed.get("base_revision", ""), "09e963af54409f54bbda3e9324cd4a6407bc8dcb")
+	assert_eq(int(parsed.get("digest_version", -1)), BoundsDigest.VERSION, "지문 판이 바뀌었으면 표본을 다시 뽑는다: " + REDUMP)
+	assert_true(bool(parsed.get("sample", false)), "표본 모드로 뽑은 파일")
 	return parsed.get("cases", {})
 
 
@@ -62,13 +64,14 @@ static func _changed_items(first: Dictionary, second: Dictionary) -> Array[Strin
 	return changed
 
 
-func test_sample_20_matches_09e963af() -> void:
+func test_sample_20_matches_baseline() -> void:
 	var cases: Dictionary = _sample()
 	assert_eq(cases.size(), 20)
 	for key: String in cases:
 		var data: Dictionary = _built_case(key)
 		var changed: Array[String] = _changed_items(cases[key], BoundsDigest.digest(data))
-		assert_true(changed.is_empty(), "%s changed=%s" % [key, str(changed)])
+		assert_true(changed.is_empty(), ("%s changed=%s — 이 PR이 그 지도를 일부러 바꿨으면 표본을 다시 뽑아 같이 커밋: %s"
+			+ " / 지도를 안 건드렸는데 달라졌으면 경계·로더·고리 회귀다.") % [key, str(changed), REDUMP])
 		assert_false(data.has("bounds_stamp"), key + ": 꺼진 지도에는 찍기 표시가 없습니다")
 		var ring: Dictionary = data.get("map_ring", {})
 		if not ring.is_empty():
@@ -409,7 +412,8 @@ func test_bounds_rule_capture_json_resume_and_legacy_zero() -> void:
 			game.data["bounds_stamp"] = rule
 		var saved: Dictionary = FieldSave.capture(game)
 		assert_eq(saved["bounds_rule"], rule)
-		assert_eq(saved["version"], 2, "저장 판 번호를 올리지 않습니다")
+		# 경계 판은 키로만 남기고 저장 판 번호는 건드리지 않는다 — 숫자는 main의 FieldSave 것을 따른다.
+		assert_eq(saved["version"], FieldSave.VERSION, "저장은 지금 판 번호로 씁니다(경계 판 때문에 올리지 않음)")
 		assert_false(saved["start_opts"].has("bounds_rule"))
 		var back: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
 		assert_false(back.is_empty())
