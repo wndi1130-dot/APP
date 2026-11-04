@@ -545,6 +545,9 @@ func start_swing(p, at) -> void:
 	p.strike_t = windup
 	p.strike_total = windup
 	p.swing_t = windup
+	if p is Object and not (p as Object).has_meta("_n13b_swung"): # 측정용(N13b): 사람마다 첫 공격 시작 한 번
+		(p as Object).set_meta("_n13b_swung", true)
+		print("SWING_FIRST ", {"who": str((p as Object).get("pid")), "msec": Time.get_ticks_msec(), "frame": Engine.get_process_frames()})
 	if not stomp_it:
 		blows[p.get_instance_id()] = {"at": game.clock.elapsed, "row": Motion.swing_row(p.weapon_id()), "mult": float(p.mults()["swing"])}
 

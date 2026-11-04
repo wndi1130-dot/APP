@@ -500,6 +500,7 @@ func _fit_weapon_model(id: String) -> void:
 	if scene == null:
 		return
 	weapon_model = scene.instantiate() as Node3D
+	print("WEAPON_MODEL_FIRST ", {"id": id, "msec": Time.get_ticks_msec(), "frame": Engine.get_process_frames()}) # 측정용(N13b)
 	if weapon_model == null:
 		return
 	weapon_model.rotation = WEAPON_TURN.get(id, Vector3.ZERO)
