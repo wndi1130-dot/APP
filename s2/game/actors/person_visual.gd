@@ -1316,6 +1316,34 @@ static func arm_at(arm: PackedVector3Array, tab: Array, drawn: Color) -> Array:
 	return [hand, elbow]
 
 
+## The frame and transform last sent for this person's body, for measuring:
+## read without asking the render server back, and changing nothing.
+static func drawn_snapshot(visual, p) -> Dictionary:
+	if not visual.notes.has(p) or not visual.body_by.has(p):
+		return {}
+	var note: Dictionary = visual.notes[p]
+	var body: String = String(visual.body_by[p])
+	var dressed: Dictionary = visual.worn.get(body, {})
+	if dressed.is_empty() or not note.has("drawn_own"):
+		return {}
+	var own: bool = bool(note["drawn_own"])
+	var mix: Dictionary = note.get("mix_own" if own else "mix_dead", {})
+	var tab: Array = dressed["own_table" if own else "table"]
+	var draw_node: MultiMeshInstance3D = dressed["own_draw" if own else "draw"]
+	if draw_node == null or not mix.has("body_motion") or not mix.has("body_r") or tab.is_empty():
+		return {}
+	var look := Color(float(mix["body_r"]), float(mix["body_motion"]), 1.0, SHADE)
+	# The pick and the recovery mix are done already; repeat only the packing,
+	# on a copy, at the same time.
+	var drawn := DeadBody.mix_from(mix.duplicate(true), look, float(note["t"]), tab)
+	var at := Transform3D(Basis(Vector3.UP, p.rotation.y) * lean_of(p, note), p.global_position)
+	return {"drawn": drawn, "instance_transform": at,
+		"world_transform": draw_node.global_transform * at,
+		"own": own, "visual_s": float(note["t"]),
+		"baked": dressed["own_vat" if own else "vat"],
+		"frames": dressed["own_frames" if own else "frames"]}
+
+
 ## How a weapon sits in a fist on the end of this forearm, held as a hammer is:
 ## hanging, the head forward; thrust out, the head up; raised over the
 ## shoulder, the head back. Where the forearm runs out sideways that reading
