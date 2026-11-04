@@ -258,11 +258,11 @@ static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, fo
 ## (building_view.gd), the ground's and the floors' arrays (map_view.gd, 2a) with the
 ## maps they fit, the rooms' finish (room_finish.gd) and the plan of the woods round
 ## the map (edge_band.gd plan_ahead). Data only, no nodes.
-static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "", bounds_rule: int = -1, bounds_solver: Callable = Callable()) -> Dictionary:
+static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "", bounds_rule: int = -1, bounds_solver: Callable = Callable(), sweep_times: Dictionary = {}) -> Dictionary:
 	var started: int = Time.get_ticks_usec()
 	var mark: int = started
 	var ms: Dictionary = {}
-	var d: Dictionary = FieldMaps.build_from(script, band, bounds_rule)
+	var d: Dictionary = FieldMaps.build_from(script, band, bounds_rule, sweep_times)
 	ms["build_from"] = float(Time.get_ticks_usec() - mark) / 1000.0
 	mark = Time.get_ticks_usec()
 	if not form.is_empty():
@@ -303,12 +303,15 @@ static func make_ready(script: Script, run_seed: int, form: String = "", form_m:
 	d["_room_finish"] = RoomFinish.build(d)
 	ms["room_finish"] = float(Time.get_ticks_usec() - mark) / 1000.0
 	mark = Time.get_ticks_usec()
-	d["_edge_plan"] = EdgeBand.plan_ahead(d)
+	d["_edge_plan"] = EdgeBand.plan_ahead(d, sweep_times)
 	ms["edge_plan"] = float(Time.get_ticks_usec() - mark) / 1000.0
 	mark = Time.get_ticks_usec()
 	# The walk from the train doors and the clumps of trees to fell (work_spots.gd);
 	# the field's dress adds the stretch's food depot from the same walk.
-	WorkSpots.dress(d, -1, run_seed)
+	if d.has("bounds_stamp"):
+		EdgeBand.dress_bounds_work(d, -1, run_seed)
+	else:
+		WorkSpots.dress(d, -1, run_seed)
 	ms["work_spots"] = float(Time.get_ticks_usec() - mark) / 1000.0
 	if d.has("bounds_stamp"):
 		mark = Time.get_ticks_usec()
@@ -316,6 +319,9 @@ static func make_ready(script: Script, run_seed: int, form: String = "", form_m:
 		ms["bounds_groves"] = float(Time.get_ticks_usec() - mark) / 1000.0
 	ms["total"] = float(Time.get_ticks_usec() - started) / 1000.0
 	ms.merge(d.get("_ms", {}))
+	if d.has("bounds_stamp") and bool(sweep_times.get("_sweep", false)):
+		for key: String in sweep_times:
+			if key != "_sweep": ms[key] = sweep_times[key]
 	d["_ms"] = ms
 	return d
 

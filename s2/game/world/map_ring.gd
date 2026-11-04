@@ -46,18 +46,27 @@ static func plain_build(script: Script, finish: Callable) -> Dictionary:
 	return data
 
 
-static func build(script: Script, finish: Callable, bounds_rule: int = -1) -> Dictionary:
+static func build(script: Script, finish: Callable, bounds_rule: int = -1, sweep_times: Dictionary = {}) -> Dictionary:
+	var started: int = Time.get_ticks_usec()
 	skip_paths = true
 	var plain := plain_build(script, finish)
 	skip_paths = false
+	var plain_ms: float = float(Time.get_ticks_usec() - started) / 1000.0
+	var ring_started: int = Time.get_ticks_usec()
 	var edges: Array[int] = []
 	var inset: int = 0
 	if BoundsRule.enabled(String(plain.get("place_id", "")), bounds_rule):
 		edges = BoundsRule.sides(plain, width_for(String(plain.get("place_kind", ""))))
 		inset = BoundsRule.DEPTH
 	var data := add(plain, edges, inset)
+	# 쓸어 보기만 쓰는 관측 통로. 판 0 자료/_ms에는 새 키를 넣지 않는다.
+	if bool(sweep_times.get("_sweep", false)):
+		sweep_times["build_plain"] = plain_ms
+		sweep_times["ring_expand"] = float(Time.get_ticks_usec() - ring_started) / 1000.0
 	if not edges.is_empty():
 		data["bounds_ring_rule"] = BoundsRule.RULE
+		data.get_or_add("_ms", {})["build_plain"] = plain_ms
+		data["_ms"]["ring_expand"] = float(Time.get_ticks_usec() - ring_started) / 1000.0
 	if is_same(data, plain):
 		for g: FieldGrid in plain.get("levels", {0: plain["grid"]}).values():
 			g.refresh_paths()

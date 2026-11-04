@@ -97,7 +97,7 @@ static func lengths(total: int, rng: RandomNumberGenerator) -> Array[int]:
 
 
 ## 17개 깊이 상태의 동적 계획. 보호 밖의 깊이 0과 작은 꺾임을 만들지 않는다.
-static func depths(row: Array[Dictionary], rng: RandomNumberGenerator, first: int, last: int, economy: int = 0) -> Array[int]:
+static func depths(row: Array[Dictionary], rng: RandomNumberGenerator, first: int, last: int, economy: int = 0, failure: Dictionary = {}) -> Array[int]:
 	var costs := PackedInt32Array()
 	costs.resize(DEPTH + 1)
 	costs.fill(100000000)
@@ -123,6 +123,12 @@ static func depths(row: Array[Dictionary], rng: RandomNumberGenerator, first: in
 				if cost < next[depth]:
 					next[depth] = cost
 					parent[depth] = previous
+		if next.min() >= 100000000 and failure.is_empty():
+			var reachable: Array[int] = []
+			for depth: int in range(costs.size()):
+				if costs[depth] < 100000000: reachable.append(depth)
+			failure.merge({"step_index": i, "step": row[i].duplicate(), "previous_depths": reachable,
+				"first": first, "last": last, "min_bend": 2, "max_neighbour": 6})
 		costs = next
 		parents.append(parent)
 	if costs[last] >= 100000000:
@@ -229,10 +235,13 @@ static func outline(data: Dictionary, mask: PackedByteArray, protection: Array[D
 		var length: int = g.width if side % 2 == 0 else g.height
 		var ending: int = corners[(side + 1) % 4]
 		var row: Array[Dictionary] = _row(side, corners[side], length - ending, rng, profiles[side])
-		var picked: Array[int] = depths(row, rng, corners[side], ending, mini(candidate, DEPTH))
+		var failure: Dictionary = {}
+		var picked: Array[int] = depths(row, rng, corners[side], ending, mini(candidate, DEPTH), failure)
 		if picked.is_empty():
 			# 모서리를 0으로 낮추어 다른 완료 문에서 탈락시키지 않는다.
-			return {"solver_error": "깊이 전이 해 없음", "failed_side": side, "corners": corners, "steps": row, "corner10_hits": corner_hits}
+			return {"solver_error": "깊이 전이 해 없음", "failed_side": side, "corners": corners, "steps": row,
+				"corner10_hits": corner_hits, "depth_failure": failure, "boundary_protection": boundary_protection(g, protection),
+				"forced_open_conflicts": forced_open_conflicts(g, protection)}
 		for i: int in range(row.size()):
 			row[i]["depth"] = picked[i]
 		rows.append(row)
@@ -356,7 +365,7 @@ static func open_exceptions(g: FieldGrid, points: Array, protection: Array[Dicti
 				gap = 0
 			else:
 				gap += 1
-				if names.is_empty() or protected_cell or gap >= 8:
+				if names.is_empty() or protected_cell or gap >= 8 or g.walk_people[g.index(cell)] != 1:
 					covered = false
 					break
 		# 마지막 빈칸은 뒤쪽 이름 있는 보호가 없으므로 내부 틈이 아니다.
@@ -368,8 +377,39 @@ static func open_exceptions(g: FieldGrid, points: Array, protection: Array[Dicti
 	return out
 
 
+## 보호 때문에 깊이 0이어야 하지만 이름 있는 보호로 덮이지 않는 끝칸.
+## 보호된 칸은 '보호 없는 걷는 틈'에도 해당하지 않는다. remote 숲 예외는 호출자가 따로 대조한다.
+static func forced_open_conflicts(g: FieldGrid, protection: Array[Dictionary]) -> Array[Dictionary]:
+	var cells: Dictionary = {}
+	for item: Dictionary in boundary_protection(g, protection):
+		var rect: Rect2i = item["rect"]
+		for y: int in range(rect.position.y, rect.end.y):
+			for x: int in range(rect.position.x, rect.end.x):
+				var cell: Vector2i = Vector2i(x, y)
+				var row: Dictionary = cells.get_or_add(cell, {"cell": cell, "kinds": [], "named": false})
+				row["named"] = bool(row["named"]) or bool(item["named"])
+				if not row["kinds"].has(item["kind"]): row["kinds"].append(item["kind"])
+	var out: Array[Dictionary] = []
+	for row: Dictionary in cells.values():
+		if not bool(row["named"]): out.append(row)
+	return out
+
+
 static func on_segment(p: Vector2i, a: Vector2i, b: Vector2i) -> bool:
 	return (p.x - a.x) * (b.y - a.y) == (p.y - a.y) * (b.x - a.x) and p.x >= mini(a.x, b.x) and p.x <= maxi(a.x, b.x) and p.y >= mini(a.y, b.y) and p.y <= maxi(a.y, b.y)
+
+
+## 실제 보호가 끝칸까지 닿은 자리. named=false이면 열린 자리 예외로 덮이는지 리드가 대조한다.
+static func boundary_protection(g: FieldGrid, protection: Array[Dictionary]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var borders: Array[Rect2i] = [Rect2i(0, 0, g.width, 1), Rect2i(g.width - 1, 0, 1, g.height),
+		Rect2i(0, g.height - 1, g.width, 1), Rect2i(0, 0, 1, g.height)]
+	for item: Dictionary in protection:
+		for side: int in 4:
+			var hit: Rect2i = (item["rect"] as Rect2i).intersection(borders[side])
+			if hit.has_area(): out.append({"side": side, "kind": item["kind"], "rect": hit,
+				"named": String(item["kind"]).begins_with("entry/") or item["kind"] == "road_rail"})
+	return out
 
 
 ## 2m 미만 꺾임을 사이에 둔 같은 방향 구간 전체를 누적한다.
@@ -407,6 +447,9 @@ static func shape_report(g: FieldGrid, bounds: Dictionary) -> Dictionary:
 		errors.append(String(bounds.get("solver_error", "윤곽 없음")))
 		report["failed_side"] = bounds.get("failed_side", -1)
 		report["steps"] = bounds.get("steps", [])
+		report["depth_failure"] = bounds.get("depth_failure", {})
+		report["boundary_protection"] = bounds.get("boundary_protection", [])
+		report["forced_open_conflicts"] = bounds.get("forced_open_conflicts", [])
 		return report
 	report["oversized_openings"] = bounds.get("oversized_openings", [])
 	report["violations"] = bounds.get("violations", [])

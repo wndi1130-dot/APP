@@ -14,10 +14,13 @@ const Save = preload("res://game/sim/field_save.gd")
 const Digest = preload("res://tests/game/bounds_digest.gd")
 const Work = preload("res://game/world/work_spots.gd")
 const Lake = preload("res://game/world/maps/lake_01.gd")
+const Sweep = preload("res://tools/bounds_ratio_sweep.gd")
 const FORMS: Array[String] = ["", "edge", "remote"]
+const RATIO_SEEDS: Array[int] = [71]
 const DIRS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 var cases: Dictionary = {}
 var cores: Dictionary = {}
+var ratio_cases: Dictionary = {}
 
 
 func before_all() -> void:
@@ -54,6 +57,7 @@ func _require_stamp(data: Dictionary, context: String) -> bool:
 func after_all() -> void:
 	cases.clear()
 	cores.clear()
+	ratio_cases.clear()
 
 
 func _direct(form: String, seed_value: int, rule: int = -1, stamp: bool = true) -> Dictionary:
@@ -89,7 +93,10 @@ func _copy_map(source: Dictionary) -> Dictionary:
 
 func _finish(data: Dictionary) -> void:
 	data["_edge_plan"] = Edge.plan_ahead(data)
-	Work.dress(data, -1, 71)
+	if data.has("bounds_stamp"):
+		Edge.dress_bounds_work(data, -1, 71)
+	else:
+		Work.dress(data, -1, 71)
 	if data.has("bounds_stamp"): Edge.prepare_bounds_groves(data)
 
 
@@ -483,7 +490,7 @@ func _expected_open_edges(g: Grid, points: Array, protection: Array[Dictionary],
 			if names_by_cell.has(cell):
 				named_offsets.append(along - low)
 				names.merge(names_by_cell[cell])
-			elif other_protected.has(cell):
+			elif other_protected.has(cell) or g.walk_people[g.index(cell)] != 1:
 				blocked_gap = true
 		if named_offsets.is_empty() or blocked_gap: continue
 		# 생성기의 순차 틈 누적과 독립적으로, 보호 칸들의 위치 차이와 양 끝을 검사한다.
@@ -557,24 +564,26 @@ func test_g_water_terrain_mix() -> void:
 
 
 func test_h_newly_blocked_share() -> void:
-	for form: String in FORMS:
-		if not _require_stamp(cases[form]["active"], form): continue
-		var row: Dictionary = cases[form]
+	for key: String in _ratio_cases():
+		var row: Dictionary = ratio_cases[key]
+		if not _require_stamp(row["active"], key): continue
 		var d: Dictionary = row["active"]
 		var g: Grid = d["grid"]
+		assert_gt(_playable_walk(row["base"]), 0, key + ": 시험에서 지은 판 0")
 		var count: int = 0
 		for i: int in range(g.solid.size()):
 			count += int(row["before_solid"][i] == Grid.Solid.NONE and g.solid[i] != Grid.Solid.NONE)
-		assert_eq(count, int(d.get("bounds_blocked", -1)), form)
-		assert_lte(float(count) / float(g.width * g.height), 0.18, form)
+		assert_eq(count, int(d.get("bounds_blocked", -1)), key)
+		assert_lte(float(count) / float(g.width * g.height), 0.18, key)
 
 
 func test_i_walkable_area_and_ring_area() -> void:
-	for form: String in FORMS:
-		if not _require_stamp(cases[form]["active"], form): continue
-		var d: Dictionary = cases[form]["active"]
+	for form: String in _ratio_cases():
+		var row: Dictionary = ratio_cases[form]
+		if not _require_stamp(row["active"], form): continue
+		var d: Dictionary = row["active"]
 		var g: Grid = d["grid"]
-		var bg: Grid = cases[form]["base"]["grid"]
+		var bg: Grid = row["base"]["grid"]
 		var numerator: int = g.walk_people.count(1)
 		var denominator: int = bg.walk_people.count(1)
 		var blocked: int = int(d.get("bounds_blocked", 0))
@@ -583,7 +592,7 @@ func test_i_walkable_area_and_ring_area() -> void:
 			numerator, denominator, float(numerator) / denominator, blocked, cells, float(blocked) / cells]
 		print("bounds/i " + metrics)
 		var new_numerator: int = _playable_walk(d)
-		var new_denominator: int = _playable_walk(cases[form]["base"])
+		var new_denominator: int = _playable_walk(row["base"])
 		print("잣대 바꿈 — 코디 판정 ② 11-04, 통로 띠 칸 뺌, 옛 셈 %.9f (%d/%d) / 새 셈 %.9f (%d/%d) form=%s" % [float(numerator) / denominator, numerator, denominator, float(new_numerator) / new_denominator, new_numerator, new_denominator, form])
 		assert_gte(float(new_numerator) / new_denominator, 1.25, metrics)
 		var sides: Array = d["map_ring"]["sides"]
@@ -592,10 +601,29 @@ func test_i_walkable_area_and_ring_area() -> void:
 		assert_between(float(area) / (210.0 * 146.0), 1.55 * 0.97, 1.55 * 1.03, form)
 
 
+## 판 0 분모는 시험 소유다. h/i가 같은 표본을 재사용한다.
+func _ratio_cases() -> Dictionary:
+	if not ratio_cases.is_empty(): return ratio_cases
+	for seed_value: int in RATIO_SEEDS:
+		for form: String in FORMS:
+			var base: Dictionary = Loader.make_ready(Lake, seed_value, form, -1.0, "", 0)
+			var active: Dictionary = cases[form]["active"] if seed_value == 71 else Loader.make_ready(Lake, seed_value, form)
+			var pre: Dictionary = cases[form]["pre"] if seed_value == 71 else _direct(form, seed_value, -1, false)
+			var grid: Grid = pre["grid"]
+			ratio_cases["%s|%d" % [form, seed_value]] = {"base": base, "active": active, "before_solid": grid.solid}
+	return ratio_cases
+
+
 func _playable_walk(data: Dictionary) -> int:
 	var g: Grid = data["grid"]
 	var total: int = 0
 	var area: Rect2i = data.get("stop_old_ground", Rect2i(0, 0, g.width, g.height))
+	if data.has("map_ring"):
+		var inner: Rect2i = data["map_ring"]["inner"]
+		var widths: Array = data["map_ring"]["sides"]
+		var start: Vector2i = inner.position - Vector2i(widths[0], widths[1])
+		var finish: Vector2i = inner.end + Vector2i(widths[2], widths[3])
+		area = Rect2i(start, finish - start)
 	for index: int in range(g.walk_people.size()):
 		var cell := Vector2i(index % g.width, floori(float(index) / g.width))
 		if area.has_point(cell): total += int(g.walk_people[index] == 1)
@@ -744,6 +772,7 @@ func test_k5_side_path_absent_present_and_north_west_shift() -> void:
 		var before_reached: PackedByteArray = _flood(before, "walk_people")
 		var protection: PackedByteArray = Bounds.protected_cells(before)
 		Bounds.apply(probe)
+		print("bounds/k5 side=%d side_path=%s attempts=%s" % [side, str(probe.get("side_path", {})), JSON.stringify(probe.get("bounds_attempts", []))])
 		if not _require_stamp(probe, "북/서 샛길"): continue
 		assert_eq(probe["train"].position, train.position + shift)
 		for key: String in old:
@@ -782,7 +811,10 @@ func test_l_grove_count_and_reachable_stands() -> void:
 		var base: Dictionary = cases[form]["base"].duplicate(true)
 		var groves: Array = Edge.fell_groves(data["grid"], data["_edge_plan"]["plan"], data)
 		var old: Array = Edge.fell_groves(base["grid"], base["_edge_plan"]["plan"], base)
-		assert_gte(groves.size(), old.size(), "%s: 이전=%s 이후=%s" % [form, str(old), str(groves)])
+		var old_all: Array = base.get("fell_groves", []) + old
+		var new_all: Array = data.get("fell_groves", []) + groves
+		assert_gte(groves.size(), old.size(), "%s: 바깥 띠를 경계 벌목지가 대체: 이전=%s 이후=%s" % [form, str(old), str(groves)])
+		assert_gte(new_all.size(), old_all.size(), form + ": 지도 안과 경계의 전체 벌목지 수 보존")
 		var owners: Dictionary = {}
 		var duplicate_cells: Array[Vector2i] = []
 		var all_groves: Array = data.get("fell_groves", []) + groves
@@ -871,6 +903,7 @@ func test_n_opening_cap_and_shape_gate() -> void:
 ## 실측 동쪽 y=73..85 길·철길, 2칸 틈, y=88..101 진입로를 그대로 재현한다.
 func _opening_gap_case(gap: int, tail: int = 14) -> Dictionary:
 	var g := Grid.new(251, 187)
+	g.refresh_paths()
 	var finish: int = 73 + 13 + gap + tail
 	var points: Array[Vector2i] = [Vector2i(251, 73), Vector2i(251, finish),
 		Vector2i(235, finish), Vector2i(235, 90), Vector2i(233, 90), Vector2i(233, 73)]
@@ -921,6 +954,54 @@ func test_r2_opening_gap_8m_and_unbounded_gaps_rejected() -> void:
 		extended[at] += Vector2i(0, -1 if at == 0 else 1)
 		assert_true(Rule.open_exceptions(g, extended, protection).is_empty(), "구간 양 끝의 빈칸 확장 금지")
 		assert_true(_expected_open_edges(g, extended, protection).is_empty(), "독립 계산도 끝 빈칸 거부")
+
+
+func test_r4_opening_gap_requires_walkable_ground() -> void:
+	for solid: int in [Grid.Solid.WALL, Grid.Solid.LOW]:
+		var fixture: Dictionary = _opening_gap_case(2)
+		var grid: Grid = fixture["grid"]
+		grid.set_solid(Vector2i(250, 86), solid)
+		grid.refresh_paths()
+		assert_true(Rule.open_exceptions(grid, fixture["points"], fixture["protection"]).is_empty(), "벽/물 틈 병합 금지")
+		assert_true(_expected_open_edges(grid, fixture["points"], fixture["protection"]).is_empty(), "독립 계산도 걷기 캐시 확인")
+
+
+func test_r5_success_does_not_build_baseline() -> void:
+	var calls: Array[int] = [0]
+	var factory: Callable = func() -> Dictionary:
+		calls[0] += 1
+		return _direct("", 71, 0, false)
+	var data: Dictionary = Bounds.finish(_copy_map(cases[""]["pre"]), factory)
+	assert_true(_require_stamp(data, "성공 때 판 0 생략"))
+	assert_eq(calls[0], 0, "분모 때문에 판 0을 짓지 않음")
+	assert_eq(float(data.get("_ms", {}).get("bounds_baseline", -1)), 0.0)
+
+
+func test_t_playable_scope_excludes_shifted_side_strip() -> void:
+	for shift: Vector2i in [Vector2i(0, 14), Vector2i(14, 0)]:
+		var g := Grid.new(16 + shift.x, 16 + shift.y)
+		g.walk_people.fill(1)
+		var data: Dictionary = {"grid": g, "map_ring": {
+			"inner": Rect2i(Vector2i(2, 3) + shift, Vector2i(10, 8)), "sides": [2, 3, 4, 5]}}
+		assert_eq(Bounds.playable_rect(data), Rect2i(shift, Vector2i(16, 16)))
+		assert_eq(Bounds.count_playable(data), 256, "북/서 샛길 14칸 띠 제외")
+		assert_eq(_playable_walk(data), 256, "시험의 독립 셈도 원래 지도와 고리만")
+		assert_eq(g.walk_people.count(1), 480, "옛 셈은 샛길 띠 포함")
+
+
+func test_s_sweep_seeds_and_sorted_fingerprint() -> void:
+	assert_eq(Sweep._seeds("1-3,71,2"), [1, 2, 3, 71])
+	assert_true(Sweep._seeds("3-1").is_empty())
+	assert_true(Sweep._seeds("-1").is_empty())
+	assert_eq(Sweep._seeds("1-50,71").size(), 51)
+	var points: Array[Vector2i] = [Vector2i.ZERO, Vector2i(8, 0), Vector2i(8, 8), Vector2i(0, 8)]
+	var first: Dictionary = {"outline": points, "runs": [{"from": 0, "to": 4, "kind": "forest"}],
+		"tiles": [{"kind": "forest", "rect": Rect2i(0, 0, 8, 1)}, {"kind": "water", "rect": Rect2i(0, 7, 8, 1)}]}
+	var second: Dictionary = first.duplicate(true)
+	second["tiles"].reverse()
+	assert_eq(Sweep._fingerprint(first), Sweep._fingerprint(second), "네모 순서와 무관한 지문")
+	second["tiles"][0]["kind"] = "forest"
+	assert_ne(Sweep._fingerprint(first), Sweep._fingerprint(second), "찍는 재질 변화 검출")
 
 
 func test_r3_opening_joined_33m_fails_shape_gate() -> void:

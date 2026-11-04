@@ -220,13 +220,18 @@ static func plan_key(g: FieldGrid, seed: int, look: Dictionary, forest: Array = 
 ## The plan made ahead off the main thread (stop_loader.make_ready), with the key it
 ## was made from: {key, plan}. build() uses it only while the key still fits; a field
 ## given another region band than the loader saw plans again on the main thread.
-static func plan_ahead(d: Dictionary) -> Dictionary:
+static func plan_ahead(d: Dictionary, sweep_times: Dictionary = {}) -> Dictionary:
 	var g: FieldGrid = d["grid"]
 	var seed := seed_of(d)
 	var look := look_of(d)
 	var forest: Array = d.get("deep_forest", [])
 	var bounds: Dictionary = d.get("bounds", {}) if d.has("bounds_stamp") else {}
-	return {"key": plan_key(g, seed, look, forest, bounds), "plan": plan(g, seed, look, forest, bounds)}
+	var times: Dictionary = d.get_or_add("_ms", {}) if d.has("bounds_stamp") else {}
+	if bool(sweep_times.get("_sweep", false)): times = sweep_times
+	var mark: int = Time.get_ticks_usec()
+	var key: Dictionary = plan_key(g, seed, look, forest, bounds)
+	if not bounds.is_empty() or bool(times.get("_sweep", false)): times["edge_plan_key"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	return {"key": key, "plan": plan(g, seed, look, forest, bounds, times)}
 
 
 ## Where a road or the rails cross an edge: {"side": 0 west 1 east 2 north 3 south,
@@ -354,7 +359,8 @@ static func woods_depth(g: FieldGrid, forest: Array, x: float, z: float, borders
 ## Everything the band places, the same for the same map: trees {at, yaw, model,
 ## height and spread, or scale for what grows low}, blocks {at, yaw, model}, the clear
 ## corridors and the openings they come from. `look`: look_of, "mixed" when empty.
-static func plan(g: FieldGrid, seed: int, look: Dictionary = {}, forest: Array = [], bounds: Dictionary = {}) -> Dictionary:
+static func plan(g: FieldGrid, seed: int, look: Dictionary = {}, forest: Array = [], bounds: Dictionary = {}, times: Dictionary = {}) -> Dictionary:
+	var mark: int = Time.get_ticks_usec()
 	var lk := look if not look.is_empty() else look_of({})
 	var profile: Dictionary = PROFILES[lk["profile"]]
 	var rng := RandomNumberGenerator.new()
@@ -378,16 +384,24 @@ static func plan(g: FieldGrid, seed: int, look: Dictionary = {}, forest: Array =
 			var at := Vector3(across.position.x + across.size.x * t, 0, at_end.y) if along_x \
 				else Vector3(at_end.x, 0, across.position.y + across.size.y * t)
 			blocks.append({"at": at, "yaw": 0.0 if along_x else PI * 0.5, "model": BLOCK_MODELS[k % 2 if rng.randf() < 0.7 else 1]})
+	if not bounds.is_empty() or bool(times.get("_sweep", false)): times["edge_plan_openings"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	var glades := _glades(g, seed, clear)
 	var no_trees: Array[Rect2] = clear.duplicate()
 	for gl: Dictionary in glades:
 		no_trees.append((gl["rect"] as Rect2).grow(0.5))  # no trunk against the trace's edge
+	if not bounds.is_empty() or bool(times.get("_sweep", false)): times["edge_plan_glades"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	var trees: Array = []
 	_scatter(g, rng, no_trees, trees, float(profile["edge"]), TRUNK_GAP, INNER_ROW, "edge", lk)
 	_scatter(g, rng, no_trees, trees, float(profile["canopy"]), INNER_ROW, BAND, "canopy", lk)
 	_scatter(g, rng, no_trees, trees, float(profile["under"]), INNER_ROW, BAND, "under", lk)
+	if not bounds.is_empty() or bool(times.get("_sweep", false)): times["edge_plan_scatter"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	# New scenery never consumes a draw from the woods or the glades.
 	var distant := _far_plan(g, seed, runs, lk)
+	if not bounds.is_empty() or bool(times.get("_sweep", false)): times["edge_plan_far"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	var p := {"trees": trees, "blocks": blocks, "glades": glades, "clear": clear, "runs": runs,
 		"far": distant["far"], "fields": distant["fields"], "tracks": distant["tracks"], "sounds": distant["sounds"]}
 	if not forest.is_empty():
@@ -396,12 +410,16 @@ static func plan(g: FieldGrid, seed: int, look: Dictionary = {}, forest: Array =
 		for key: String in ["trees", "glades", "far", "fields"]:
 			_skip_forest(g, forest, p[key])
 		trees.append_array(_forest_trees(g, seed, clear, lk, forest))
+	if not bounds.is_empty() or bool(times.get("_sweep", false)):
+		times["edge_plan_forest"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	mark = Time.get_ticks_usec()
 	if not bounds.is_empty():
 		for key: String in ["trees", "glades", "far", "fields"]:
 			for item: Dictionary in p[key]:
 				var at: Vector2 = Vector2(item["at"].x, item["at"].z) if item.has("at") else (item["rect"] as Rect2).get_center()
 				if bounds_skip(g, bounds, at):
 					item["skip"] = true
+	if not bounds.is_empty() or bool(times.get("_sweep", false)): times["edge_plan_bounds_filter"] = float(Time.get_ticks_usec() - mark) / 1000.0
 	return p
 
 
@@ -560,6 +578,26 @@ static func fell_groves(g: FieldGrid, p: Dictionary, data: Dictionary) -> Array:
 		else:
 			out.append_array(_bounds_groves(g, data))
 	return out
+
+
+## 경계 앞줄은 일반 지도 벌목지의 세 자리 제한과 경쟁하지 않는다.
+## 같은 나무를 두 작업지에 배정하지 않고 바깥 띠의 일을 경계 벌목지가 이어받는다.
+static func dress_bounds_work(data: Dictionary, segment: int, run_seed: int) -> void:
+	var mark: int = Time.get_ticks_usec()
+	var trees: Array = data.get("trees", [])
+	var inland: Array = []
+	for cell: Vector2i in trees:
+		if not _bounds_tree(data, cell): inland.append(cell)
+	data["trees"] = inland
+	data.get_or_add("_ms", {})["bounds_work_prepare"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	WorkSpots.dress(data, segment, run_seed)
+	data["trees"] = trees
+
+
+static func _bounds_tree(data: Dictionary, cell: Vector2i) -> bool:
+	for tile: Dictionary in data.get("bounds", {}).get("tiles", []):
+		if tile["kind"] == "forest" and (tile["rect"] as Rect2i).has_point(cell): return true
+	return false
 
 
 static func prepare_bounds_groves(data: Dictionary) -> void:

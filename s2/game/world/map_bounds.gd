@@ -98,12 +98,12 @@ static func finish(data: Dictionary, base_factory: Callable, bounds_rule: int = 
 		return data
 	if data.has("bounds_stamp") or not Rule.enabled(String(data.get("place_id", "")), bounds_rule):
 		return apply(data, bounds_rule)
-	var mark: int = Time.get_ticks_usec()
-	var base: Dictionary = base_factory.call()
-	var base_walk: int = count_playable(base)
-	data.get_or_add("_ms", {})["bounds_baseline"] = float(Time.get_ticks_usec() - mark) / 1000.0
-	var result: Dictionary = apply(data, bounds_rule, base_walk, solver)
+	data.get_or_add("_ms", {})["bounds_baseline"] = 0.0
+	var result: Dictionary = apply(data, bounds_rule, -1, solver)
 	if result.has("bounds_failure"):
+		var mark: int = Time.get_ticks_usec()
+		var base: Dictionary = base_factory.call()
+		result.get_or_add("_ms", {})["bounds_fallback"] = float(Time.get_ticks_usec() - mark) / 1000.0
 		base["bounds_failure"] = result["bounds_failure"]
 		base["bounds_attempts"] = result.get("bounds_attempts", [])
 		base["_ms"] = result.get("_ms", {})
@@ -114,6 +114,13 @@ static func finish(data: Dictionary, base_factory: Callable, bounds_rule: int = 
 ## 원래 지도+고리. 정차 꼴이 붙인 통로 띠는 분자와 분모 양쪽에서 제외한다.
 static func playable_rect(data: Dictionary) -> Rect2i:
 	var g: FieldGrid = data["grid"]
+	# map_shift가 inner도 옮긴다. 샛길/정차 통로가 붙기 전 고리의 범위를 복원한다.
+	var ring: Dictionary = data.get("map_ring", {})
+	if ring.has("inner") and ring.has("sides"):
+		var inner: Rect2i = ring["inner"]
+		var widths: Array = ring["sides"]
+		return Rect2i(inner.position - Vector2i(widths[0], widths[1]),
+			inner.size + Vector2i(widths[0] + widths[2], widths[1] + widths[3]))
 	return data.get("stop_old_ground", Rect2i(0, 0, g.width, g.height))
 
 
@@ -128,7 +135,7 @@ static func count_playable(data: Dictionary, blocked: PackedByteArray = PackedBy
 	return count
 
 
-static func apply(data: Dictionary, bounds_rule: int = -1, base_walk: int = -1, solver: Callable = Callable()) -> Dictionary:
+static func apply(data: Dictionary, bounds_rule: int = -1, _base_walk: int = -1, solver: Callable = Callable()) -> Dictionary:
 	if not can_reuse(data, bounds_rule):
 		push_error("다른 판의 경계는 원본부터 다시 준비해야 합니다")
 		data["bounds_failure"] = "판 불일치"
@@ -140,9 +147,9 @@ static func apply(data: Dictionary, bounds_rule: int = -1, base_walk: int = -1, 
 		var protection: Array[Dictionary] = []
 		mask = protected_cells(data, protection)
 		data.get_or_add("_ms", {})["bounds_protect"] = float(Time.get_ticks_usec() - mark) / 1000.0
-		bounds = solver.call(data, mask, protection) if solver.is_valid() else _connected_outline(data, mask, protection, base_walk)
+		bounds = solver.call(data, mask, protection) if solver.is_valid() else _connected_outline(data, mask, protection)
 		if bounds.is_empty():
-			data["bounds_failure"] = "해 없음: 모양/놀 땅/연결 또는 17회 한도"
+			data["bounds_failure"] = "해 없음: 모양/보호/연결 또는 17회 한도"
 			return data
 	if bounds.is_empty() or bounds_rule == 0 or bounds.get("rule", 0) == 0:
 		return data
@@ -298,7 +305,7 @@ static func protected_cells(data: Dictionary, details: Array[Dictionary] = []) -
 
 
 ## 찍기 전에 연결성을 검사한다. 끊길 통로는 원래 걷기 경로를 보호하고 윤곽을 다시 푼다.
-static func _connected_outline(data: Dictionary, mask: PackedByteArray, protection: Array[Dictionary], base_walk: int = -1) -> Dictionary:
+static func _connected_outline(data: Dictionary, mask: PackedByteArray, protection: Array[Dictionary]) -> Dictionary:
 	var times: Dictionary = data.get_or_add("_ms", {})
 	for key: String in ["bounds_outline", "bounds_connect", "bounds_loss", "bounds_shape", "bounds_prepare"]:
 		times[key] = 0.0
@@ -357,12 +364,9 @@ static func _connected_outline(data: Dictionary, mask: PackedByteArray, protecti
 						walk_loss += int(g.walk_people[index] == 1)
 		var new_walk: int = playable_before - walk_loss
 		record.merge({"area_checked": true, "playable_before": playable_before, "walk_loss": walk_loss,
-			"playable_walk": new_walk, "base_walk": base_walk,
-			"playable_ratio": float(new_walk) / base_walk if base_walk > 0 else -1.0,
+			"playable_walk": new_walk, "ratio_checked": false,
 			"newly_blocked": newly_blocked, "blocked_share": float(newly_blocked) / blocked.size(),
 			"protected_hits": protected_hits})
-		if base_walk > 0 and new_walk * 4 < base_walk * 5: record["rejected"].append("놀 땅 비 1.25 미만")
-		if float(newly_blocked) / blocked.size() > 0.18: record["rejected"].append("막은 몫 18% 초과")
 		if protected_hits > 0: record["rejected"].append("보호 칸 침범")
 		times["bounds_loss"] += float(Time.get_ticks_usec() - mark) / 1000.0
 		if not record["rejected"].is_empty(): continue
@@ -388,7 +392,6 @@ static func _connected_outline(data: Dictionary, mask: PackedByteArray, protecti
 		if not dead_lost.is_empty(): record["rejected"].append("망자 진입로 연결 단절")
 		if record["rejected"].is_empty():
 			bounds["playable_walk"] = new_walk
-			bounds["base_walk"] = base_walk
 			bounds["unreachable_before"] = preexisting
 			bounds["protected_routes"] = routes
 			times["bounds_connect"] += float(Time.get_ticks_usec() - mark) / 1000.0

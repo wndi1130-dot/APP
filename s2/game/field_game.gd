@@ -508,7 +508,10 @@ func _ready() -> void:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
 	if opts.get("departure") is Dictionary:
 		RouteStops.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)))
-	WorkSpots.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else -1, rng.seed)
+	if data.has("bounds_stamp"):
+		EdgeBand.dress_bounds_work(data, int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else -1, rng.seed)
+	else:
+		WorkSpots.dress(data, int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else -1, rng.seed)
 	# Where the fallen stood is read into keys once (J06; the boxes' are in dress).
 	LootRules.place_keys(data.get("buildings", []))
 	# The boxes get their named things, from this run's seed (decision 423-8).
