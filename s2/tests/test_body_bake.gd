@@ -1863,7 +1863,25 @@ func test_walk_mixed_skin_aitken_needs_no_more_evaluations_than_plain() -> void:
 	print("WALK_AITKEN_COMPARE phases=%d plain=%d accelerated=%d" % [compared, plain_count, fast_count])
 
 
+## Scalar float products keep conjugate(a) * b in 64-bit arithmetic. Using
+## atan2 avoids angle_to's acos near 1, which can give a nonzero self-angle.
+func _walk_pose_rotation_error(a: Quaternion, b: Quaternion) -> float:
+	if not a.is_finite() or not b.is_finite() or a.length_squared() == 0.0 or b.length_squared() == 0.0:
+		return INF
+	var x: float = a.w * b.x - a.x * b.w - a.y * b.z + a.z * b.y
+	var y: float = a.w * b.y + a.x * b.z - a.y * b.w - a.z * b.x
+	var z: float = a.w * b.z - a.x * b.y + a.y * b.x - a.z * b.w
+	var w: float = a.w * b.w + a.x * b.x + a.y * b.y + a.z * b.z
+	return 2.0 * atan2(sqrt(x * x + y * y + z * z), absf(w))
+
+
 func test_walk_rejected_aitken_trial_restores_pose_and_gate_state() -> void:
+	var rounded_rotation: Quaternion = Quaternion(Vector3.RIGHT, PI * 0.5)
+	assert_eq(_walk_pose_rotation_error(rounded_rotation, rounded_rotation), 0.0, "an identical float32 quaternion has zero rotation error")
+	assert_eq(_walk_pose_rotation_error(rounded_rotation, -rounded_rotation), 0.0, "q and -q represent the same rotation")
+	assert_lt(_walk_pose_rotation_error(rounded_rotation, rounded_rotation * Quaternion(Vector3.UP, 0.000005)), 0.00001, "a real 5 microradian difference remains below the unchanged gate")
+	assert_gt(_walk_pose_rotation_error(rounded_rotation, rounded_rotation * Quaternion(Vector3.UP, 0.00002)), 0.00001, "a real 20 microradian difference must still fail the unchanged gate")
+	assert_true(is_inf(_walk_pose_rotation_error(Quaternion(0.0, 0.0, 0.0, 0.0), rounded_rotation)), "an invalid quaternion cannot pass as zero rotation")
 	var ctx: Dictionary = _walk_stick_context()
 	var fit: Dictionary = ctx["footlock_walk"]
 	var body: Skeleton3D = ctx["body"]
@@ -1955,9 +1973,18 @@ func test_walk_rejected_aitken_trial_restores_pose_and_gate_state() -> void:
 	assert_eq(restored["reach_final_failed"], fit["reach_final_failed"])
 	assert_true(bool(restored["height_frame_failed"]), "final refusal is separate from rolled-back trial gates")
 	for bone in body.get_bone_count():
-		assert_lt((restored["pose"][bone][0] as Vector3).distance_to(body.get_bone_pose_position(bone)), 0.000001)
-		assert_lt((restored["pose"][bone][1] as Quaternion).angle_to(body.get_bone_pose_rotation(bone)), 0.00001)
-		assert_lt((restored["pose"][bone][2] as Vector3).distance_to(body.get_bone_pose_scale(bone)), 0.000001)
+		var bone_name: String = body.get_bone_name(bone)
+		assert_lt((restored["pose"][bone][0] as Vector3).distance_to(body.get_bone_pose_position(bone)), 0.000001, "%s position restored vs replay" % bone_name)
+		var saved_rotation: Quaternion = restored["pose"][bone][1]
+		var replayed_rotation: Quaternion = body.get_bone_pose_rotation(bone)
+		var rotation_error: float = _walk_pose_rotation_error(saved_rotation, replayed_rotation)
+		var legacy_error: float = saved_rotation.angle_to(replayed_rotation)
+		var rotation_detail: String = "bone=%s rotation_rad=%.12f angle_to_rad=%.12f saved_self_rad=%.12f replay_self_rad=%.12f equal_components=%s" % [
+			bone_name, rotation_error, legacy_error, saved_rotation.angle_to(saved_rotation), replayed_rotation.angle_to(replayed_rotation), str(saved_rotation == replayed_rotation)]
+		if legacy_error >= 0.00001:
+			print("WALK_AITKEN_ROTATION " + rotation_detail)
+		assert_lt(rotation_error, 0.00001, rotation_detail)
+		assert_lt((restored["pose"][bone][2] as Vector3).distance_to(body.get_bone_pose_scale(bone)), 0.000001, "%s scale restored vs replay" % bone_name)
 
 
 func test_walk_skin_ledger_counts_exactly_the_evaluated_pairs() -> void:
