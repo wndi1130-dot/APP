@@ -1,6 +1,6 @@
 extends "res://addons/gut/test.gd"
-## 가방 창 「나」(결정 488·489): 오른쪽 창, 세로 장소 줄과 얇은 물건 줄을 살핀다.
-## 탭을 바꿔도 이동 대상·챙기는 시간·상자 소리는 이어지고, 도트 그림은 정수배로 보인다.
+## 가방 창 「나」(결정 558): 가방과 고른 곳을 나란히 둔 두 칸과 오른쪽 장소 줄을 살핀다.
+## 장소를 바꿔도 이동 대상·챙기는 시간·상자 소리는 이어지고, 도트 그림은 정수배로 보인다.
 ## 창 폭·가림은 캔버스 단위로 프로젝트 기본 창 1280×720에 대어 재고, 도트 그림의 기기 픽셀 정수배는 셈으로 본다.
 
 const FieldGame = preload("res://game/field_game.gd")
@@ -9,6 +9,7 @@ const GlassPane = preload("res://game/ui/glass_pane.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
+const HoldConfirm = preload("res://game/ui/hold_confirm.gd")
 
 
 func _game() -> Node:
@@ -76,11 +77,12 @@ func _screen_rect(control: Control) -> Rect2:
 	return control.get_screen_transform() * Rect2(Vector2.ZERO, control.size)
 
 
-## The mockup card's share of the screen the pane covers: 43% at 1280×720 (35% on a
-## 1688x780 phone, where the canvas is wider); the dimmed HUD stays visible at left.
+## The mockup card's width (결정 558 「나」): the bag and the place side by side and
+## the rail, 488 css — 70% of a 1280×720 screen's width while looking (the field
+## stands still), 58% on a 2316×1080 phone; the dimmed HUD at the left stays visible.
 ## In canvas units against the project's 1280×720 window: a headless run's own
 ## window is a small square whose screen transform says nothing about a phone.
-func test_the_pane_keeps_the_left_half_free_and_covers_at_most_the_mockup_share() -> void:
+func test_the_pane_keeps_the_left_free_and_covers_at_most_the_mockup_width() -> void:
 	var game = _game()
 	game.hud.loot(_box(game))
 	await _layout()
@@ -88,13 +90,15 @@ func test_the_pane_keeps_the_left_half_free_and_covers_at_most_the_mockup_share(
 	var base := Vector2(float(ProjectSettings.get_setting("display/window/size/viewport_width")), float(ProjectSettings.get_setting("display/window/size/viewport_height")))
 	var canvas: Rect2 = pane.get_viewport_rect()
 	var rect: Rect2 = pane.get_global_rect()
-	var share: float = (rect.size.x * rect.size.y) / (base.x * base.y)
-	var message: String = "canvas %.0f×%.0f; pane %.1f×%.1f at (%.1f, %.1f); covers %.4f of %.0f×%.0f" % [canvas.size.x, canvas.size.y, rect.size.x, rect.size.y, rect.position.x, rect.position.y, share, base.x, base.y]
+	var width_share: float = rect.size.x / base.x
+	var message: String = "canvas %.0f×%.0f; pane %.1f×%.1f at (%.1f, %.1f); %.4f of %.0f wide" % [canvas.size.x, canvas.size.y, rect.size.x, rect.size.y, rect.position.x, rect.position.y, width_share, base.x]
 	gut.p(message)
 	assert_almost_eq(rect.end.x, canvas.end.x, 1.0, message)
-	assert_gt(rect.position.x, canvas.position.x + canvas.size.x * 0.5, message)
-	assert_almost_eq(pane.size.x, UiFonts.px(330.0), 1.0, "the requested fixed css width")
-	assert_lte(share, 0.43, message)
+	assert_gt(rect.position.x, canvas.position.x + canvas.size.x * 0.25, message)
+	assert_almost_eq(pane.size.x, InventoryPane.pane_px(), 0.5, "the fixed width, whole pixels: no content widens it")
+	assert_almost_eq(InventoryPane.pane_px(), UiFonts.px(InventoryPane.PANE_W), 5.0, "within a pixel a part of the css width")
+	assert_almost_eq(InventoryPane.PANE_W, 488.0, 0.01, "two columns of 200 and the rail of 52")
+	assert_lte(width_share, 0.71, message)
 	assert_lte(rect.end.y, base.y, "the lists leave the foot inside a phone's 720-high canvas")
 	game.hud._close_modal()
 
@@ -110,10 +114,10 @@ func test_places_keep_their_order_short_names_empty_mark_and_selection() -> void
 	game.hud.loot(id)
 	await _layout()
 	var places: Node = game.hud.modal.find_child("Places", true, false)
-	assert_eq(places.get_child_count(), expected.size() + 1)
-	assert_eq((places.get_child(0) as Button).text, "가방")
+	# The bag is always shown beside the place (결정 558): the rail holds places only.
+	assert_eq(places.get_child_count(), expected.size())
 	for i in expected.size():
-		var key := places.get_child(i + 1) as Button
+		var key := places.get_child(i) as Button
 		assert_true(key.has_meta("place_kind") and key.has_meta("place_id"))
 		if key.has_meta("place_kind") and key.has_meta("place_id"):
 			assert_eq(String(key.get_meta("place_kind")), String(expected[i]["kind"]))
@@ -128,8 +132,8 @@ func test_places_keep_their_order_short_names_empty_mark_and_selection() -> void
 	if chosen.has_meta("selected"):
 		assert_true(bool(chosen.get_meta("selected")))
 	var skin := chosen.get_theme_stylebox("normal") as StyleBoxFlat
-	assert_eq(skin.border_color, GlassPane.AMBER)
-	assert_gt(skin.bg_color.a, GlassPane.CELL.a)
+	assert_eq(skin.border_color, InventoryPane.BONE, "the chosen place's edge in bone: amber is the main key's (결정 560)")
+	assert_gt(skin.border_color.a, GlassPane.HAIR.a)
 	var label := chosen.find_children("*", "Label", true, false)[0] as Label
 	assert_eq(label.get_theme_color("font_color"), GlassPane.INK3)
 	var mark := chosen.find_children("*", "TextureRect", true, false)[0] as TextureRect
@@ -162,29 +166,28 @@ func test_a_row_starts_taking_with_stop_bar_and_total_time() -> void:
 	assert_eq(game.hud.take_bar, bar)
 	for key: Button in game.hud.modal.find_child("Near", true, false).find_children("*", "Button", true, false):
 		assert_true(key.disabled, "no second row can start while taking")
-	var total := game.hud.modal.find_child("TakeAll", true, false) as Label
-	assert_not_null(total)
-	if total != null:
-		assert_true(total.text.contains("다 챙기면"))
+	# The main key turned 멈추기 shows the seconds left of this thing.
+	var left := game.hud.modal.find_child("TakeLeft", true, false) as Label
+	assert_not_null(left)
+	if left != null:
+		assert_eq(left.text, "%.1f초" % p.action_t)
 	_key(game.hud, "멈추기").pressed.emit()
 	assert_eq(p.action, "")
 	assert_eq(game.data["containers"][id]["items"], ["bandage", "food_pack"], "stopping keeps what was not taken")
 	game.hud._close_modal()
 
 
-func test_the_bag_tab_sends_its_row_to_the_last_box() -> void:
+## The bag and the place side by side (결정 558): a bag row goes to the place shown.
+func test_the_bag_beside_a_box_sends_its_row_to_the_box() -> void:
 	var game = _game()
 	var p = game.player
 	p.items.clear()
 	p.add_item("scrap", 1)
 	var id: String = _box(game, [])
 	game.hud.loot(id)
-	_tab(game.hud, "bag").pressed.emit()
-	assert_eq(game.hud.inv_view, "bag")
 	assert_eq(String(game.hud.inv_near["id"]), id)
-	var bag: Node = game.hud.modal.find_child("Bag", true, false)
-	assert_not_null(bag)
-	assert_null(game.hud.modal.find_child("Near", true, false), "only one inventory list is shown")
+	assert_not_null(game.hud.modal.find_child("Bag", true, false), "the bag's rows")
+	assert_not_null(game.hud.modal.find_child("Near", true, false), "and the box's, side by side")
 	var row: Button = _row(game.hud, "Bag", "scrap")
 	assert_not_null(row)
 	if row == null:
@@ -193,7 +196,7 @@ func test_the_bag_tab_sends_its_row_to_the_last_box() -> void:
 	row.pressed.emit()
 	assert_has(game.data["containers"][id]["items"], "scrap")
 	assert_false(p.items.has("scrap"))
-	assert_eq(game.hud.inv_view, "bag", "a refresh keeps the bag tab")
+	assert_eq(String(game.hud.inv_near["id"]), id, "a refresh keeps the box")
 	game.hud._close_modal()
 
 
@@ -213,24 +216,25 @@ func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() 
 	assert_eq(icon.texture, texture)
 	assert_eq(icon.texture_filter, CanvasItem.TEXTURE_FILTER_NEAREST)
 	# A 720-high phone draws the canvas 1:1, a 1080-high one at 1.5, a 1440-high one at 2.
+	var room: float = UiFonts.px(InventoryPane.ROW_H - 4.0)
 	for s: float in [1.0, 1.5, 2.0, 3.0]:
-		var whole: float = InventoryPane.whole_pixels(UiFonts.px(15.0) * s, UiFonts.px(32.0) * s)
+		var whole: float = InventoryPane.whole_pixels(UiFonts.px(InventoryPane.ART) * s, room * s)
 		gut.p("stretch %.1f: art %.0f device px" % [s, whole])
 		assert_gt(whole, 0.0)
 		assert_eq(fmod(whole, 32.0), 0.0)
-		assert_lte(whole, UiFonts.px(32.0) * s)
+		assert_lte(whole, room * s)
 	assert_eq(InventoryPane.whole_pixels(1.0, 8.0), 0.0, "a window too small for 32 pixels")
 	var scale: Vector2 = (icon.get_viewport().get_final_transform() * icon.get_global_transform_with_canvas()).get_scale().abs()
 	var s_here: float = minf(scale.x, scale.y)
-	var expected: float = InventoryPane.whole_pixels(UiFonts.px(15.0) * s_here, UiFonts.px(32.0) * s_here)
+	var expected: float = InventoryPane.whole_pixels(UiFonts.px(InventoryPane.ART) * s_here, room * s_here)
 	gut.p("this window: stretch %.3f, art %.2f device px" % [s_here, icon.size.x * s_here])
 	if expected > 0.0:
 		assert_almost_eq(icon.size.x * s_here, expected, 0.01, "the art lands on whole device pixels")
 	else:
-		assert_almost_eq(icon.size.x, UiFonts.px(15.0), 0.01, "too small a window keeps the line icon's size")
+		assert_almost_eq(icon.size.x, UiFonts.px(InventoryPane.ITEM_ICON), 0.01, "too small a window keeps the line icon's size")
 	assert_almost_eq(icon.size.x, icon.size.y, 0.01)
 	var fallback := _row(game.hud, "Near", "bandage").find_child("ItemIcon", true, false) as TextureRect
-	assert_eq(fallback.texture, HudIcons.texture(game.item_icon("bandage"), UiFonts.size(15.0), GlassPane.INK2), "a missing png uses the existing line icon")
+	assert_eq(fallback.texture, HudIcons.texture(game.item_icon("bandage"), UiFonts.size(InventoryPane.ITEM_ICON), GlassPane.INK2), "a missing png uses the existing line icon")
 	game.hud._close_modal()
 
 
@@ -245,7 +249,7 @@ func _touch_sizes(hud, where: String) -> void:
 		var pixels: Vector2 = _screen_rect(key).size
 		var short_side: float = minf(pixels.x, pixels.y)
 		var scale: Vector2 = key.get_screen_transform().get_scale().abs()
-		var minimum: float = UiFonts.px(32.0) * minf(scale.x, scale.y)
+		var minimum: float = UiFonts.px(InventoryPane.KEY) * minf(scale.x, scale.y)
 		if short_side < least:
 			least = short_side
 			least_word = key.text if key.text != "" else key.tooltip_text
@@ -253,16 +257,23 @@ func _touch_sizes(hud, where: String) -> void:
 	gut.p("%s: smallest key %.2f screen px (%s)" % [where, least, least_word])
 
 
-func test_every_touch_target_is_at_least_32_css_and_clothing_folds() -> void:
+## Every press is 48 dp = 52 css (결정 558); the clothes fold into one key beside
+## the floor (and away beside a box), and a row held open keeps its keys as big.
+func test_every_touch_target_is_at_least_48_dp_and_clothing_folds() -> void:
 	var game = _game()
 	var id: String = _box(game)
 	game.player.add_item("food_pack", 1)
 	game.hud.loot(id)
 	await _layout()
-	_touch_sizes(game.hud, "near")
-	_tab(game.hud, "bag").pressed.emit()
+	_touch_sizes(game.hud, "box")
+	assert_null(game.hud.modal.find_child("WornFold", true, false), "beside a box the clothes fold away")
+	game.hud._inv_expand("bag", "food_pack")
 	await _layout()
-	_touch_sizes(game.hud, "bag")
+	assert_not_null(game.hud.modal.find_child("More", true, false), "the row held open")
+	_touch_sizes(game.hud, "held open")
+	_tab(game.hud, "ground").pressed.emit()
+	await _layout()
+	_touch_sizes(game.hud, "floor")
 	var worn := game.hud.modal.find_child("Worn", true, false) as Control
 	assert_false(worn.visible)
 	var fold := game.hud.modal.find_child("WornFold", true, false) as Button
@@ -275,34 +286,37 @@ func test_every_touch_target_is_at_least_32_css_and_clothing_folds() -> void:
 	_touch_sizes(game.hud, "worn")
 	var pane: Control = game.hud.modal.find_child("Pane", true, false)
 	assert_lte(pane.position.y + pane.size.y, pane.get_viewport_rect().size.y, "expanded clothes still fit")
+	assert_almost_eq(pane.size.x, InventoryPane.pane_px(), 0.5, "the clothes key keeps its long word inside the fixed width")
 	(game.hud.modal.find_child("WornFold", true, false) as Button).pressed.emit()
 	assert_false((game.hud.modal.find_child("Worn", true, false) as Control).visible)
 	game.hud._close_modal()
 
 
-func test_the_bag_tab_keeps_taking_and_stays_selected_when_it_finishes() -> void:
+## Another place chosen while a thing comes out: the taking goes on, and when it is
+## out the place chosen stays, the field still again.
+func test_another_place_keeps_taking_and_stays_chosen_when_it_finishes() -> void:
 	var game = _game()
 	var p = game.player
 	p.items.clear()
 	var id: String = _box(game, ["food_pack"])
 	game.hud.loot(id)
 	_row(game.hud, "Near", "food_pack").pressed.emit()
-	_tab(game.hud, "bag").pressed.emit()
-	assert_eq(game.hud.inv_view, "bag")
+	_tab(game.hud, "ground").pressed.emit()
+	assert_eq(String(game.hud.inv_near.get("kind", "")), "ground")
 	assert_eq(p.action, "take")
 	assert_false(game.paused)
 	assert_eq(game.hud.taking_box, id)
 	p.action_t = 0.001
 	game._update_person(p, 0.1)
 	assert_eq(p.action, "")
-	assert_eq(game.hud.inv_view, "bag")
+	assert_eq(String(game.hud.inv_near.get("kind", "")), "ground")
 	assert_eq(int(p.items.get("food_pack", 0)), 1)
 	assert_true(game.paused)
 	assert_eq(game.hud.taking_box, "")
 	game.hud._close_modal()
 
 
-func test_the_bag_tab_shuts_the_box_and_returning_opens_it_once() -> void:
+func test_another_place_shuts_the_box_and_returning_opens_it_once() -> void:
 	var game = _game()
 	var id: String = _box(game)
 	var audio = game.audio
@@ -310,7 +324,7 @@ func test_the_bag_tab_shuts_the_box_and_returning_opens_it_once() -> void:
 	var before: int = audio.played.size()
 	game.hud.loot(id)
 	audio.box_quiet_until = 0
-	_tab(game.hud, "bag").pressed.emit()
+	_tab(game.hud, "ground").pressed.emit()
 	assert_eq(game.hud.box_shown, "")
 	audio.box_quiet_until = 0
 	_tab(game.hud, "box", id).pressed.emit()
@@ -323,21 +337,22 @@ func test_the_bag_tab_shuts_the_box_and_returning_opens_it_once() -> void:
 	assert_eq(audio.played.slice(before), ["box_open_drawer", "box_close_drawer", "box_open_drawer", "box_close_drawer"])
 
 
-## A short list still shows every place: the rail scrolls only when the screen runs out.
+## A short list still shows every place: the rail scrolls only when the screen runs
+## out (between the fold at its top and the main key at its foot, three show).
 func test_a_short_list_still_shows_every_place() -> void:
 	var game = _game()
 	var id: String = _box(game, [])
 	var c: Dictionary = game.data["containers"][id]
-	for i in range(2):
+	for i in range(1):
 		game.data["containers"]["na_near_%d" % i] = c.duplicate(true)
 	game.hud.loot(id)
 	await _layout()
 	var places: Control = game.hud.modal.find_child("Places", true, false)
 	var rail := game.hud.modal.find_child("PlaceScroll", true, false) as ScrollContainer
-	assert_eq(places.get_child_count(), 5, "the bag, three boxes and the ground")
+	assert_eq(places.get_child_count(), 3, "two boxes and the ground")
 	var need: float = places.get_combined_minimum_size().y
 	assert_gte(rail.size.y + 0.5, need, "rail %.1f px for places %.1f px" % [rail.size.y, need])
-	assert_false(game.hud.modal.find_child("PlaceMore", true, false).visible, "five keys all show: no fade")
+	assert_false(game.hud.modal.find_child("PlaceMore", true, false).visible, "all three show: no fade")
 	game.hud._close_modal()
 
 
@@ -355,7 +370,7 @@ func test_the_places_rail_stops_at_five_keys_and_fades_while_more_lie_below() ->
 	var places: Control = hud.modal.find_child("Places", true, false)
 	var rail := hud.modal.find_child("PlaceScroll", true, false) as ScrollContainer
 	var more := hud.modal.find_child("PlaceMore", true, false) as Control
-	assert_eq(places.get_child_count(), 9, "the bag, seven boxes and the ground")
+	assert_eq(places.get_child_count(), 8, "seven boxes and the ground")
 	assert_lte(rail.custom_minimum_size.y, UiFonts.px(InventoryPane.RAIL_MAX) + 0.5, "five keys high at most")
 	assert_lt(rail.size.y + 0.5, places.get_combined_minimum_size().y, "the rail scrolls the rest")
 	assert_true(more.visible, "the foot fades while more lie below")
@@ -385,22 +400,21 @@ func test_run_and_the_rest_sleep_dimmed_until_the_pane_closes() -> void:
 	assert_almost_eq(hud.portrait.modulate.a, 1.0, 0.001, "the pane put away wakes it")
 
 
-## The bag key over another pane opens on the bag, not on the last place's tab.
+## The bag key over another pane opens the bag afresh, beside the first place near.
 func test_the_bag_over_another_pane_opens_on_the_bag() -> void:
 	var game = _game()
 	var id: String = _box(game)
 	game.hud.loot(id)
 	game.hud._close_modal()
-	assert_eq(game.hud.inv_view, "near")
 	game.hud.body_panel()
 	game.hud.bag_panel()
-	assert_eq(game.hud.inv_view, "bag")
 	assert_not_null(game.hud.modal.find_child("Bag", true, false))
+	assert_eq(String(game.hud.inv_near.get("kind", "")), "box", "beside the first place near, afresh")
 	game.hud._close_modal()
 
 
-## While a thing comes out of a box the bag stays at hand as before (its rows and
-## jobs); only the rows of that box wait.
+## While a thing comes out of a box the bag stays at hand as before (its rows and,
+## held open, what a row can do); only the rows of that box wait.
 func test_taking_leaves_the_bag_at_hand() -> void:
 	var game = _game()
 	var p = game.player
@@ -411,57 +425,42 @@ func test_taking_leaves_the_bag_at_hand() -> void:
 	game.hud.loot(id)
 	_row(game.hud, "Near", "food_pack").pressed.emit()
 	assert_eq(p.action, "take")
-	_tab(game.hud, "bag").pressed.emit()
-	assert_eq(p.action, "take")
 	var row: Button = _row(game.hud, "Bag", "scrap")
 	assert_not_null(row)
 	if row != null:
 		assert_false(row.disabled, "a bag row still goes across while taking")
-	var eat: Button = null
-	for key: Button in game.hud.modal.find_child("Bag", true, false).find_children("*", "Button", true, false):
-		if key.tooltip_text == "먹기":
-			eat = key
-	assert_not_null(eat)
+	game.hud._inv_expand("bag", "can_beans")
+	assert_eq(p.action, "take", "holding a row open does not stop the taking")
+	var eat := game.hud.modal.find_child("Eat", true, false) as Button
+	assert_not_null(eat, "the held row offers eating")
 	if eat != null:
 		assert_false(eat.disabled, "eating stays open while taking")
-	_tab(game.hud, "box", id).pressed.emit()
 	for key: Button in game.hud.modal.find_child("Near", true, false).find_children("*", "Button", true, false):
 		assert_true(key.disabled, "the box being taken from waits")
 	game.hud._close_modal()
 
 
-## With the bag shown, the place a pressed row goes to keeps an amber edge.
-func test_the_bag_tab_marks_where_a_row_goes() -> void:
-	var game = _game()
-	var id: String = _box(game)
-	game.hud.loot(id)
-	_tab(game.hud, "bag").pressed.emit()
-	var aim: Button = _tab(game.hud, "box", id)
-	assert_not_null(aim)
-	if aim != null:
-		assert_true(bool(aim.get_meta("aim")))
-		assert_false(bool(aim.get_meta("selected")))
-		assert_eq((aim.get_theme_stylebox("normal") as StyleBoxFlat).border_color, GlassPane.AMBER)
-	assert_false(bool(_tab(game.hud, "ground").get_meta("aim")))
-	game.hud._close_modal()
-
-
-## The foot's particle follows the place's last letter (UiFonts.josa).
-func test_the_bag_foot_says_where_with_the_right_particle() -> void:
+## The place a bag row goes to is the one shown beside the bag: its key on the rail
+## is the chosen one, its name heads the right column.
+func test_the_place_beside_the_bag_is_where_a_row_goes() -> void:
 	var game = _game()
 	var id: String = _box(game)
 	game.data["containers"][id]["furniture"] = "fridge_open"
 	game.hud.loot(id)
-	_tab(game.hud, "bag").pressed.emit()
-	var foot := game.hud.modal.find_child("MoveHint", true, false) as Label
-	assert_not_null(foot)
-	if foot != null:
-		assert_true(foot.text.replace(UiFonts.WORD_JOINER, "").begins_with("누르면 냉장고로 · 가방"), foot.text)
+	var chosen: Button = _tab(game.hud, "box", id)
+	assert_not_null(chosen)
+	if chosen != null:
+		assert_true(bool(chosen.get_meta("selected")))
+		assert_eq((chosen.get_theme_stylebox("normal") as StyleBoxFlat).border_color, InventoryPane.BONE)
+	assert_false(bool(_tab(game.hud, "ground").get_meta("selected")))
+	var title := game.hud.modal.find_child("Title", true, false) as Label
+	assert_eq(title.text, "냉장고", "the right column is the fridge")
 	game.hud._close_modal()
 
 
-## By the train with two weapons the bag tab has three keys; the pane keeps its width.
-func test_the_bag_tab_by_the_train_keeps_the_width() -> void:
+## By the train with two weapons: the swap key, and 싣기 at the rail's foot; the pane
+## keeps its width.
+func test_the_bag_by_the_train_keeps_the_width() -> void:
 	var game = _game()
 	var p = game.player
 	assert_gt(p.hands.size(), 1)
@@ -474,7 +473,7 @@ func test_the_bag_tab_by_the_train_keeps_the_width() -> void:
 	assert_not_null(_key(game.hud, "바꾸기"))
 	assert_not_null(_key(game.hud, "열차에 싣기"))
 	var pane: Control = game.hud.modal.find_child("Pane", true, false)
-	assert_almost_eq(pane.size.x, UiFonts.px(330.0), 1.0, "three keys fit in the fixed width")
+	assert_almost_eq(pane.size.x, InventoryPane.pane_px(), 0.5, "the keys fit in the fixed width")
 	game.hud._close_modal()
 
 
@@ -610,7 +609,7 @@ func test_a_second_finger_drags_the_list_with_the_first_outside() -> void:
 	await _layout()
 	var home: Vector2 = hud.stick_home()
 	_touch(hud, home, true)
-	var list := hud.modal.find_child("List", true, false) as ScrollContainer
+	var list := hud.modal.find_child("NearScroll", true, false) as ScrollContainer
 	var row: Button = list.find_children("*", "Button", true, false)[0]
 	var at: Vector2 = row.get_global_rect().get_center()
 	_touch(hud, at, true, 1)
@@ -618,6 +617,119 @@ func test_a_second_finger_drags_the_list_with_the_first_outside() -> void:
 	_touch(hud, at + Vector2(0, -80), false, 1)
 	assert_gt(list.scroll_vertical, 0, "the second finger dragged the list")
 	assert_ne(p.action, "take", "a drag takes no row")
+	_touch(hud, home, false)
+	hud._close_modal()
+
+
+func _wait(seconds: float) -> void:
+	await get_tree().create_timer(seconds).timeout
+
+
+## 결정 558 by the touch path itself: a second finger, the first resting outside
+## (a thumb left on the stick), held on a bag row opens it under itself and moves
+## nothing; a tap of the same finger still moves it across.
+func test_by_touch_a_second_finger_held_on_a_row_opens_it_and_moves_nothing() -> void:
+	var game = _game()
+	var p = game.player
+	var hud = game.hud
+	p.items.clear()
+	p.add_item("scrap", 1)
+	var id: String = _box(game, ["food_pack"])
+	hud.loot(id)
+	await _layout()
+	var home: Vector2 = hud.stick_home()
+	_touch(hud, home, true)
+	var at: Vector2 = _row(hud, "Bag", "scrap").get_global_rect().get_center()
+	_touch(hud, at, true, 1)
+	await _wait(InventoryPane.LONG_S + 0.2)
+	_touch(hud, at, false, 1)
+	assert_eq(int(p.items.get("scrap", 0)), 1, "a held row stays in the bag")
+	assert_does_not_have(game.data["containers"][id]["items"], "scrap")
+	assert_eq(String(hud.inv_expand.get("id", "")), "scrap", "the held row opened under itself")
+	assert_not_null(hud.modal.find_child("More", true, false), "its keys show under it")
+	await _layout()
+	at = _row(hud, "Bag", "scrap").get_global_rect().get_center()
+	_touch(hud, at, true, 1)
+	_touch(hud, at, false, 1)
+	assert_false(p.items.has("scrap"), "a tap moves the row across")
+	assert_has(game.data["containers"][id]["items"], "scrap")
+	_touch(hud, home, false)
+	hud._close_modal()
+
+
+## 결정 559 by the touch path: an empty can calls the dead, so its key under the
+## held row throws only when held full — a short press lets the line wind back
+## unthrown. (A mouse pushed into the test runner's own window does not reach the
+## pane's keys, so the second finger's path stands for both: the first finger's
+## press reaches the key's same signals through the GUI.)
+func test_by_touch_the_can_is_thrown_only_when_its_key_is_held_full() -> void:
+	var game = _game()
+	var p = game.player
+	var hud = game.hud
+	p.items.clear()
+	p.add_item("can_empty", 2)
+	hud.bag_panel()
+	await _layout()
+	hud._inv_expand("bag", "can_empty")
+	await _layout()
+	var throw := hud.modal.find_child("Throw", true, false) as Button
+	assert_not_null(throw, "the held can offers throwing")
+	if throw == null:
+		hud._close_modal()
+		return
+	var hold := throw.get_node("Hold") as Control
+	var home: Vector2 = hud.stick_home()
+	_touch(hud, home, true)
+	var at: Vector2 = throw.get_global_rect().get_center()
+	_touch(hud, at, true, 1)
+	await _wait(HoldConfirm.HOLD_S * 0.5)
+	var half: float = float(hold.get("state")["fill"])
+	assert_between(half, 0.25, 0.85, "the line fills while the finger stays")
+	_touch(hud, at, false, 1)
+	await _wait(HoldConfirm.BACK_S + 0.1)
+	assert_eq(int(p.items.get("can_empty", 0)), 2, "a short press throws nothing")
+	assert_true(hud.modal_open, "the pane stays up")
+	assert_eq(float(hold.get("state")["fill"]), 0.0, "the line wound back")
+	_touch(hud, at, true, 1)
+	await _wait(HoldConfirm.HOLD_S + 0.25)
+	_touch(hud, at, false, 1)
+	assert_eq(int(p.items.get("can_empty", 0)), 1, "a full hold throws one can")
+	_touch(hud, home, false)
+	if hud.modal_open:
+		hud._close_modal()
+
+
+## 결정 559 with a second finger: what goes aboard is the train's, so 싣기 loads
+## only when held full, while the first finger rests outside the pane.
+func test_by_touch_a_second_finger_loads_the_train_only_when_held_full() -> void:
+	var game = _game()
+	var p = game.player
+	var hud = game.hud
+	p.items.clear()
+	p.add_item("scrap", 1)
+	var unload: Rect2i = game.data["unload"]
+	p.position = game.lift(unload.position + Vector2i(3, 1), 0)
+	p.stop()
+	hud.bag_panel()
+	await _layout()
+	var key := hud.modal.find_child("MainKey", true, false) as Button
+	assert_not_null(key)
+	if key == null:
+		hud._close_modal()
+		return
+	assert_eq(key.text, "열차에 싣기")
+	var home: Vector2 = hud.stick_home()
+	_touch(hud, home, true)
+	var at: Vector2 = key.get_global_rect().get_center()
+	_touch(hud, at, true, 1)
+	await _wait(HoldConfirm.HOLD_S * 0.5)
+	_touch(hud, at, false, 1)
+	assert_eq(int(p.items.get("scrap", 0)), 1, "a short press loads nothing")
+	_touch(hud, at, true, 1)
+	await _wait(HoldConfirm.HOLD_S + 0.25)
+	_touch(hud, at, false, 1)
+	assert_false(p.items.has("scrap"), "a full hold loads it")
+	assert_eq(int(game.unloaded.get("scrap", 0)), 1, "aboard once")
 	_touch(hud, home, false)
 	hud._close_modal()
 
@@ -654,13 +766,13 @@ func test_laying_again_keeps_the_list_where_it_was() -> void:
 	var hud = game.hud
 	hud.loot(_box(game, LONG_BOX))
 	await _layout()
-	var list := hud.modal.find_child("List", true, false) as ScrollContainer
+	var list := hud.modal.find_child("NearScroll", true, false) as ScrollContainer
 	list.scroll_vertical = 60
 	var was: int = list.scroll_vertical
 	assert_gt(was, 0, "the list scrolls")
 	hud._lay_bag_again()
 	await _layout()
-	var again := hud.modal.find_child("List", true, false) as ScrollContainer
+	var again := hud.modal.find_child("NearScroll", true, false) as ScrollContainer
 	assert_ne(again, list, "the pane was laid again")
 	assert_eq(again.scroll_vertical, was, "the list is where it was")
 	hud._close_modal()
@@ -707,13 +819,11 @@ func test_external_relocation_drops_a_box_place_and_shows_the_bag() -> void:
 	var hud = game.hud
 	var id: String = _box(game)
 	hud.loot(id)
-	assert_eq(hud.inv_view, "near")
 	assert_not_null(_tab(hud, "box", id))
 	var unload: Rect2i = game.data["unload"]
 	game.player.position = game.lift(unload.position + Vector2i(3, 1), 0)
 	hud.tick(0.5)
 	assert_null(_tab(hud, "box", id), "the box left behind is off the rail")
-	assert_eq(hud.inv_view, "bag")
 	assert_not_null(hud.modal.find_child("Bag", true, false))
 	# Its destination falls to the floor, not on its own to the train's hold
 	# though it is near now: a thing loaded there cannot come back from here.
@@ -754,7 +864,7 @@ func test_the_bag_shade_leaves_the_left_clear() -> void:
 	var dim := game.hud.modal.get_node("Shade") as ColorRect
 	var canvas: Rect2 = dim.get_viewport_rect()
 	var rect: Rect2 = dim.get_global_rect()
-	assert_gt(rect.position.x, canvas.size.x * 0.5, "the shade starts at %.1f of %.1f" % [rect.position.x, canvas.size.x])
+	assert_gt(rect.position.x, canvas.size.x * 0.25, "the shade starts at %.1f of %.1f" % [rect.position.x, canvas.size.x])
 	assert_almost_eq(rect.end.x, canvas.end.x, 1.0)
 	game.hud._close_modal()
 	game.hud.body_panel()

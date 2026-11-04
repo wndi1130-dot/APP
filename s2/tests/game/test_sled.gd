@@ -1020,7 +1020,7 @@ func test_d10_pane_moves_counts_immediately_past_capacity() -> void:
 	var start: Dictionary = _counts(game)
 	game.hud.sled_panel(id)
 	assert_false(_buttons(game).has("모두 담기"))
-	game.hud._inv_bag()
+	game.hud.bag_panel()
 	game.hud._inv_put("junk_nails")
 	assert_eq(int(sled["items"]["junk_nails"]), 25)
 	assert_false(p.items.has("junk_nails"))
@@ -1306,7 +1306,7 @@ func test_d7_sled_refuses_body_items_and_dims_bag_rows() -> void:
 	var bag: Dictionary = p.items.duplicate(true)
 	var sled: Dictionary = _sled(game)
 	var id: int = int(sled["id"])
-	var pane: Control = InventoryPane._bag_rows(game.hud, p, {"kind": "sled", "id": id})
+	var pane: Control = InventoryPane._bag_side(game.hud, p, {"kind": "sled", "id": id})
 	add_child(pane)
 	var disabled: Dictionary = {}
 	for key: Button in pane.find_children("*", "Button", true, false):
@@ -1317,7 +1317,7 @@ func test_d7_sled_refuses_body_items_and_dims_bag_rows() -> void:
 		assert_eq(game.actions.goes_to_train(item), item == "scrap", item)
 	pane.free()
 	game.hud.sled_panel(id)
-	game.hud._inv_bag()
+	game.hud.bag_panel()
 	for item: String in bag:
 		if item == "scrap":
 			continue

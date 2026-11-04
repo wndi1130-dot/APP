@@ -1,6 +1,6 @@
 extends "res://addons/gut/test.gd"
-## The bag and the selected place have separate tabs (decision 488). A press
-## still moves a thing to the remembered box, ground or train's hold.
+## The bag and the selected place side by side (결정 558 「나」). A press still
+## moves a thing to the place shown, box, ground or train's hold.
 
 const FieldGame = preload("res://game/field_game.gd")
 const InventoryPane = preload("res://game/ui/inventory_pane.gd")
@@ -35,7 +35,7 @@ func _at_a_box(game) -> String:
 	return ""
 
 
-func test_the_bag_and_what_is_near_have_separate_tabs() -> void:
+func test_the_bag_and_what_is_near_stand_side_by_side() -> void:
 	var game = _game()
 	var p = game.player
 	var box := _at_a_box(game)
@@ -103,12 +103,10 @@ func test_by_the_train_the_hold_is_chosen_and_what_stays_cannot_go() -> void:
 	game.hud._close_modal()
 
 
+## The box's load against its limit, at the head of the place's column.
 func _box_load_text(hud) -> String:
-	var node: Node = hud.modal.find_child("BoxLoad", true, false)
-	if node == null:
-		return ""
-	var words: Array = node.find_children("*", "Label", true, false).map(func(l) -> String: return String(l.text))
-	return "".join(words).replace(UiFonts.WORD_JOINER, "")
+	var node := hud.modal.find_child("Side", true, false) as Label
+	return "" if node == null else node.text.replace(UiFonts.WORD_JOINER, "")
 
 
 func test_a_box_takes_from_the_bag_only_up_to_its_limit() -> void:
@@ -125,11 +123,11 @@ func test_a_box_takes_from_the_bag_only_up_to_its_limit() -> void:
 	c["items"] = ["food_pack", "food_pack", "food_pack", "food_pack", "food_pack"]
 	p.add_item("scrap", 2)
 	game.hud.loot(box)
-	assert_eq(_box_load_text(game.hud), "담긴 무게 5.0 / 6")
+	assert_eq(_box_load_text(game.hud), "5.0 / 6")
 	game.hud._inv_put("scrap")
 	assert_eq(c["items"].count("scrap"), 1, "one more fits")
-	assert_eq(_box_load_text(game.hud), "담긴 무게 6.0 / 6")
-	game.hud._inv_bag()
+	assert_eq(_box_load_text(game.hud), "6.0 / 6")
+	game.hud.bag_panel()
 	for b in game.hud.modal.find_child("Bag", true, false).find_children("*", "Button", true, false):
 		if String(b.text).begins_with(game.item_name("scrap")):
 			assert_true(b.disabled, "no room for the second")
@@ -157,7 +155,7 @@ func test_a_box_dressed_over_its_limit_still_gives() -> void:
 	c["furniture"] = "nightstand"
 	c["items"] = ["food_pack", "food_pack", "food_pack", "food_pack", "food_pack", "food_pack", "food_pack"]
 	game.hud.loot(box)
-	assert_eq(_box_load_text(game.hud), "담긴 무게 7.0 / 6", "what the map put there stays")
+	assert_eq(_box_load_text(game.hud), "7.0 / 6", "what the map put there stays")
 	game.hud._loot_take(box, 0)
 	while p.action == "take":
 		p.action_t = 0.001
@@ -226,15 +224,16 @@ func test_the_bag_names_its_weapons_and_a_press_shows_speed_and_weight() -> void
 	assert_not_null(first)
 	assert_not_null(second)
 	assert_eq(first.text, game.hud.short_weapon(p))
-	assert_eq(second.text, String(InventoryPane.W.get_data("pistol")["name"]))
+	assert_eq(second.text, InventoryPane._last_word(String(InventoryPane.W.get_data("pistol")["name"])))
 	assert_null(held.find_child("WeaponStats", true, false), "names only until one is pressed")
-	# Nothing but the names: one row of the two name keys with a dot between, and no
-	# other words anywhere in the block (no line under them, however short).
-	assert_eq(held.get_child_count(), 1, "the names' row alone")
+	# Nothing but the names: one row of the two weapon keys and the swap key (결정
+	# 558), and no other words anywhere in the block (no line under them, however
+	# short) — each key's own name the only word on it.
+	assert_eq(held.get_child_count(), 1, "the keys' row alone")
 	var names_row: Node = held.get_child(0)
-	assert_eq(names_row.get_children().map(func(n: Node) -> String: return String(n.name) if n is Button else (n as Label).text if n is Label else n.get_class()), ["WeaponName0", "·", "WeaponName1"])
+	assert_eq(names_row.get_children().map(func(n: Node) -> String: return String(n.name)), ["WeaponName0", "WeaponName1", "Swap"])
 	var words: Array = held.find_children("*", "Label", true, false) + held.find_children("*", "RichTextLabel", true, false)
-	assert_eq(words.map(func(n: Node) -> String: return String(n.get("text"))), ["·"], "no words but the dot")
+	assert_eq(words.map(func(n: Node) -> String: return String(n.get("text"))), [first.text, second.text], "no words but the two names")
 	first.pressed.emit()
 	held = game.hud.modal.find_child("Weapons", true, false)
 	assert_not_null(held.find_child("WeaponStats", true, false), "a press shows the numbers")
@@ -269,7 +268,7 @@ func test_a_box_opening_the_pane_afresh_shows_the_names_only() -> void:
 	assert_not_null(game.hud.modal.find_child("WeaponStats", true, false))
 	game.hud._close_modal()
 	game.hud.loot(_at_a_box(game))
-	game.hud._inv_bag()
+	game.hud.bag_panel()
 	assert_not_null(game.hud.modal.find_child("WeaponName0", true, false))
 	assert_null(game.hud.modal.find_child("WeaponStats", true, false), "opened by the box: names only")
 	game.hud._close_modal()
@@ -288,7 +287,8 @@ func test_the_numbers_follow_the_weapon_pressed() -> void:
 	var held: Node = game.hud.modal.find_child("Weapons", true, false)
 	assert_eq((held.find_child("WeaponSpeed", true, false) as Label).text, "1.2초", "still the hatchet's numbers")
 	assert_eq(game.hud.inv_weapon_open, 1, "now the second named")
-	assert_eq((held.find_child("WeaponName1", true, false) as Button).get_theme_color("font_color"), InventoryPane.GlassPane.INK, "its name the lit one")
+	assert_eq(((held.find_child("WeaponName1", true, false) as Button).get_theme_stylebox("normal") as StyleBoxFlat).border_color, InventoryPane.BONE, "its key the lit one")
+	assert_eq(((held.find_child("WeaponName0", true, false) as Button).get_theme_stylebox("normal") as StyleBoxFlat).border_color, InventoryPane.GlassPane.HAIR, "the new one unlit")
 	p.hands.remove_at(1)
 	game.hud.bag_panel()
 	assert_null(game.hud.modal.find_child("WeaponStats", true, false), "the hatchet gone from the two: closed")
