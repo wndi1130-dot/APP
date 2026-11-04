@@ -1185,6 +1185,7 @@ static func _remember_good(path: String, bytes: PackedByteArray) -> void:
 
 ## Writes over the slot: the new file goes down whole first, the last one is kept as .bak.
 static func write(d: Dictionary, path: String = PATH) -> bool:
+	print("SAVE_WRITE ", {"path": path, "msec": Time.get_ticks_msec(), "frame": Engine.get_process_frames()}) # 측정용(N13b)
 	var fail_step := _test_fail_step
 	_test_fail_step = ""
 	var text := to_json(d)
