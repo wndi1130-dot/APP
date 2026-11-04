@@ -269,6 +269,49 @@ func setup(field_game) -> void:
 	own_frames = d["own_frames"]
 	frames = d["frames"]
 	wear_draws = d["wear"]
+	# Saved work crews and their visibility are restored after this setup.
+	if game != null:
+		if game.is_built:
+			_prewarm_built()
+		else:
+			game.built.connect(_prewarm_built, CONNECT_ONE_SHOT)
+
+
+func _prewarm_built() -> void:
+	var people: Array = []
+	for p in game.people:
+		# Arrival temporarily hides everyone; warm the view it will uncover.
+		if game.level_shown(game.level_of(p.position)) and game._person_visible(p) and not game.rode_off.has(p):
+			people.append(p)
+	print("PERSON_PREWARM %s" % JSON.stringify(prewarm(people)))
+
+
+## Fill the body cache for an ordered list of people eligible for the view.
+## Replay the read budget without drawing: unread people do not consume a
+## visible slot, so a cold frame can assign bodies beyond MAX_PEOPLE. Keeping
+## that order also keeps BodyCast's counts and the eventual cache unchanged.
+## count includes cached fallback entries, as the frame read budget does.
+func prewarm(people: Array) -> Dictionary:
+	var started: int = Time.get_ticks_usec()
+	var before: int = worn.size()
+	if draw != null:
+		# Each changing pass adds a cache key; one last pass proves it settled.
+		for _frame in range(people.size() + 1):
+			var had: int = worn.size()
+			var count := 0
+			var reads := READS_PER_FRAME
+			for p in people:
+				if count >= MAX_PEOPLE:
+					break
+				var cached: int = worn.size()
+				var d := worn_of(p, reads > 0)
+				if worn.size() > cached:
+					reads -= 1
+				if not d.is_empty():
+					count += 1
+			if worn.size() == had:
+				break
+	return {"count": worn.size() - before, "ms": float(Time.get_ticks_usec() - started) / 1000.0}
 
 
 ## One body's two pictures: the dead's folder (the struck pose, and a build
@@ -319,8 +362,8 @@ func garment_of(d: Dictionary, kind: String) -> MultiMeshInstance3D:
 	return wear[kind]
 
 
-## The body one person wears, picked the first time they are drawn and read in
-## the first time anyone wears it; FOLDER / OWN_FOLDER's when theirs is not in
+## The body one person wears, picked when first warmed or drawn and read in
+## the first time anyone needs it; FOLDER / OWN_FOLDER's when theirs is not in
 ## the build. {} when it is not read in yet and `may_read` is false.
 func worn_of(p, may_read: bool = true) -> Dictionary:
 	if not body_by.has(p):
