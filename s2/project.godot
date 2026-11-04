@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 config/name="S2 Sulechow Graybox"
-run/main_scene="res://scenes/boot.tscn"
+run/main_scene="res://tools/_bench/bench_fine_room.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 
 [display]
