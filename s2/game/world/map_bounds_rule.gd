@@ -173,6 +173,7 @@ static func measured_segments(a: Vector2i, b: Vector2i, forest: Array) -> Array[
 
 ## 보호 틈의 시작/끝에서 먼저 나눈다. 임의 걸음 두 개가 틈을 과하게 넓히지 않게 한다.
 static func _row(side: int, start: int, finish: int, rng: RandomNumberGenerator, profile: PackedInt32Array) -> Array[Dictionary]:
+	if finish <= start: return []
 	var cuts: Array[int] = [start]
 	var previous_zero: bool = profile[start] == 0
 	for along: int in range(start + 1, finish):
@@ -188,6 +189,67 @@ static func _row(side: int, start: int, finish: int, rng: RandomNumberGenerator,
 			row.append({"side": side, "from": along, "to": along + size,
 				"cap": _cap(profile, along, along + size)})
 			along += size
+	return row
+
+
+## 이름 있는 열린 자리는 8~16m 걸음에서 제외된다. 샛길 보호가 있는 판의
+## 재시도에서는 그 정확한 끝에서 먼저 자르고 일반 구간만 기존 걸음으로 나눈다.
+static func _opening_row(g: FieldGrid, side: int, start: int, finish: int, rng: RandomNumberGenerator, profile: PackedInt32Array, protection: Array[Dictionary]) -> Array[Dictionary]:
+	var named := PackedByteArray()
+	var guarded := PackedByteArray()
+	named.resize(profile.size())
+	guarded.resize(profile.size())
+	var direction: Vector2i = point(g, side, 1, 0) - point(g, side, 0, 0)
+	for item: Dictionary in protection:
+		var rect: Rect2i = item["rect"]
+		var name: String = String(item.get("open_name", item["kind"]))
+		var is_named: bool = name.begins_with("entry/") or name == "road_rail" or name.begins_with("side_path/")
+		var low: int = 0
+		var high: int = 0
+		match side:
+			0:
+				if rect.position.y != 0: continue
+				low = rect.position.x
+				high = rect.end.x
+			1:
+				if rect.end.x != g.width: continue
+				low = rect.position.y
+				high = rect.end.y
+			2:
+				if rect.end.y != g.height: continue
+				low = g.width - rect.end.x
+				high = g.width - rect.position.x
+			3:
+				if rect.position.x != 0: continue
+				low = g.height - rect.end.y
+				high = g.height - rect.position.y
+		for along: int in range(maxi(start, low), mini(finish, high)):
+			guarded[along] = 1
+			if is_named: named[along] = 1
+	var spans: Array[Vector2i] = []
+	for along: int in range(start, finish):
+		if named[along] == 0: continue
+		var joined: bool = not spans.is_empty() and along - spans[-1].y < 8
+		if joined:
+			for gap: int in range(spans[-1].y, along):
+				var cell: Vector2i = point(g, side, gap, 0)
+				if direction.x < 0: cell.x -= 1
+				if direction.y < 0: cell.y -= 1
+				cell = cell.clamp(Vector2i.ZERO, Vector2i(g.width - 1, g.height - 1))
+				if guarded[gap] != 0 or g.walk_people[g.index(cell)] != 1: joined = false
+		if joined:
+			spans[-1] = Vector2i(spans[-1].x, along + 1)
+		else:
+			spans.append(Vector2i(along, along + 1))
+	var row: Array[Dictionary] = []
+	var cursor: int = start
+	for span: Vector2i in spans:
+		if span.x > cursor and span.x - cursor < 8: return []
+		row.append_array(_row(side, cursor, span.x, rng, profile))
+		row.append({"side": side, "from": span.x, "to": span.y, "cap": 0})
+		cursor = span.y
+	if finish > cursor and finish - cursor < 8: return []
+	row.append_array(_row(side, cursor, finish, rng, profile))
 	return row
 
 
@@ -227,6 +289,9 @@ static func outline(data: Dictionary, mask: PackedByteArray, protection: Array[D
 		corners[side] = mini(corners[side], _cap(profiles[side], 0, 26))
 		corners[(side + 1) % 4] = mini(corners[(side + 1) % 4], _cap(profiles[side], length - 26, length))
 	var rows: Array = []
+	var has_side_opening: bool = false
+	for item: Dictionary in protection:
+		has_side_opening = has_side_opening or String(item.get("open_name", "")).begins_with("side_path/")
 	var corner_hits: Array[Dictionary] = []
 	for corner_index: int in 4:
 		var corner_at := Vector2i(0 if corner_index in [0, 3] else g.width - 10, 0 if corner_index < 2 else g.height - 10)
@@ -238,8 +303,17 @@ static func outline(data: Dictionary, mask: PackedByteArray, protection: Array[D
 		var length: int = g.width if side % 2 == 0 else g.height
 		var ending: int = corners[(side + 1) % 4]
 		var row: Array[Dictionary] = _row(side, corners[side], length - ending, rng, profiles[side])
+		if candidate > 0 and has_side_opening:
+			var named_row: Array[Dictionary] = _opening_row(g, side, corners[side], length - ending, rng, profiles[side], protection)
+			if not named_row.is_empty(): row = named_row
 		var failure: Dictionary = {}
 		var picked: Array[int] = depths(row, rng, corners[side], ending, mini(candidate, DEPTH), failure)
+		if picked.is_empty() and has_side_opening:
+			var exact: Array[Dictionary] = _opening_row(g, side, corners[side], length - ending, rng, profiles[side], protection)
+			if not exact.is_empty():
+				row = exact
+				failure.clear()
+				picked = depths(row, rng, corners[side], ending, mini(candidate, DEPTH), failure)
 		if picked.is_empty():
 			# 모서리를 0으로 낮추어 다른 완료 문에서 탈락시키지 않는다.
 			return {"solver_error": "깊이 전이 해 없음", "failed_side": side, "corners": corners, "steps": row,
@@ -359,8 +433,8 @@ static func open_exceptions(g: FieldGrid, points: Array, protection: Array[Dicti
 			for item: Dictionary in protection:
 				if not (item["rect"] as Rect2i).has_point(cell): continue
 				protected_cell = true
-				var name: String = item["kind"]
-				if name.begins_with("entry/") or name == "road_rail":
+				var name: String = String(item.get("open_name", item["kind"]))
+				if name.begins_with("entry/") or name == "road_rail" or name.begins_with("side_path/"):
 					hit = true
 					if not names.has(name): names.append(name)
 			if hit:
@@ -411,7 +485,7 @@ static func boundary_protection(g: FieldGrid, protection: Array[Dictionary]) -> 
 		for side: int in 4:
 			var hit: Rect2i = (item["rect"] as Rect2i).intersection(borders[side])
 			if hit.has_area(): out.append({"side": side, "kind": item["kind"], "rect": hit,
-				"named": String(item["kind"]).begins_with("entry/") or item["kind"] == "road_rail"})
+				"named": String(item["kind"]).begins_with("entry/") or item["kind"] == "road_rail" or String(item.get("open_name", "")).begins_with("side_path/")})
 	return out
 
 

@@ -301,7 +301,83 @@ static func protected_cells(data: Dictionary, details: Array[Dictionary] = []) -
 			area.position.x -= 3
 			area.size.x += 6
 		_protect(mask, g, area, 2, details, "road_rail")
+	_name_side_path(data, details)
 	return mask
+
+
+## 잠긴 문을 통과시키지 않는다. 샛길 통행 칸에서 문 바로 앞 바깥 칸까지 걷는다.
+## 이름은 보호 정보에만 붙이며 보호 마스크와 배치는 그대로 둔다.
+static func _name_side_path(data: Dictionary, details: Array[Dictionary]) -> void:
+	if details.is_empty(): return
+	var spot: Dictionary = data.get("side_path", {})
+	var g: FieldGrid = data["grid"]
+	if not spot.get("store") is Rect2i or not spot.get("door") is Vector2i: return
+	var side: int = int(spot.get("side", -1))
+	if side < 0 or side > 3: return
+	var store_rect: Rect2i = spot["store"]
+	var door: Vector2i = spot["door"]
+	var building_id: int = int(spot.get("building", -1))
+	if building_id < 0 or not g.doors.has(door) or int(g.doors[door].get("building", -2)) != building_id: return
+	var owned: Array[Rect2i] = []
+	owned.append(store_rect.grow(3).intersection(Rect2i(0, 0, g.width, g.height)))
+	for cell: Vector2i in g.doors:
+		if int(g.doors[cell].get("building", -2)) == building_id:
+			owned.append(Rect2i(cell, Vector2i.ONE).grow(5).intersection(Rect2i(0, 0, g.width, g.height)))
+	for cell: Vector2i in g.windows:
+		if int(g.windows[cell].get("building", -2)) == building_id:
+			owned.append(Rect2i(cell, Vector2i.ONE).grow(5).intersection(Rect2i(0, 0, g.width, g.height)))
+	var candidates: Array[int] = []
+	var domain := PackedByteArray()
+	domain.resize(g.width * g.height)
+	for i: int in range(details.size()):
+		var item: Dictionary = details[i]
+		var rect: Rect2i = item["rect"]
+		if item["kind"] != "side_path" and not (item["kind"] in ["building", "door", "window"] and owned.has(rect)): continue
+		candidates.append(i)
+		for y: int in range(rect.position.y, rect.end.y):
+			for x: int in range(rect.position.x, rect.end.x): domain[g.index(Vector2i(x, y))] = 1
+	var seen := PackedByteArray()
+	seen.resize(domain.size())
+	var connected := PackedByteArray()
+	connected.resize(domain.size())
+	var directions: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
+	# entrance는 숲 띠 바로 안쪽의 실제 입구다. gap만 고립되어도 허용하지 않는다.
+	for root: Vector2i in spot.get("entrance", []):
+		if not g.inside(root): continue
+		var root_index: int = g.index(root)
+		if domain[root_index] == 0 or g.walk_people[root_index] != 1 or seen[root_index] != 0: continue
+		var queue: Array[Vector2i] = [root]
+		seen[root_index] = 1
+		var cursor: int = 0
+		var reached_door: bool = false
+		var reached_gap: bool = false
+		while cursor < queue.size():
+			var cell: Vector2i = queue[cursor]
+			cursor += 1
+			reached_gap = reached_gap or spot.get("gap", []).has(cell)
+			if not store_rect.has_point(cell) and absi(cell.x - door.x) + absi(cell.y - door.y) == 1:
+				reached_door = true
+			for direction: Vector2i in directions:
+				var next: Vector2i = cell + direction
+				if not g.inside(next): continue
+				var index: int = g.index(next)
+				if domain[index] == 1 and seen[index] == 0 and g.walk_people[index] == 1:
+					seen[index] = 1
+					queue.append(next)
+		if reached_door and reached_gap:
+			for cell: Vector2i in queue: connected[g.index(cell)] = 1
+	var name: String = "side_path/" + String(["north", "east", "south", "west"][side])
+	# 같은 side_path 사전의 멀리 떨어진 woods까지 이름을 퍼뜨리지 않는다.
+	for i: int in candidates:
+		var rect: Rect2i = details[i]["rect"]
+		var touches: bool = false
+		for y: int in range(rect.position.y, rect.end.y):
+			for x: int in range(rect.position.x, rect.end.x):
+				if connected[g.index(Vector2i(x, y))] == 1:
+					touches = true
+					break
+			if touches: break
+		if touches: details[i]["open_name"] = name
 
 
 ## 찍기 전에 연결성을 검사한다. 끊길 통로는 원래 걷기 경로를 보호하고 윤곽을 다시 푼다.

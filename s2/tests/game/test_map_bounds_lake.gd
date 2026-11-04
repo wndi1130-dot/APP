@@ -16,7 +16,7 @@ const Work = preload("res://game/world/work_spots.gd")
 const Lake = preload("res://game/world/maps/lake_01.gd")
 const Sweep = preload("res://tools/bounds_ratio_sweep.gd")
 const FORMS: Array[String] = ["", "edge", "remote"]
-const RATIO_SEEDS: Array[int] = [71]
+const RATIO_SEEDS: Dictionary = {"": [1, 71], "edge": [19, 71], "remote": [48, 71]}
 const DIRS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 var cases: Dictionary = {}
 var cores: Dictionary = {}
@@ -370,8 +370,8 @@ func test_f_steps_corners_and_straight_limit() -> void:
 		var actual: Array = b.get("exceptions", [])
 		var protection: Array[Dictionary] = []
 		Bounds.protected_cells(pre, protection)
-		var expected_open: Array[Dictionary] = _expected_open_edges(g, points, protection)
-		for opening: Dictionary in _expected_open_edges(g, points, protection, maxi(g.width, g.height)):
+		var expected_open: Array[Dictionary] = _expected_open_edges(g, points, protection, 32, pre)
+		for opening: Dictionary in _expected_open_edges(g, points, protection, maxi(g.width, g.height), pre):
 			assert_lte(int(opening["metres"]), 32, form + ": 너무 긴 보호 틈은 예외 불가 " + str(opening))
 		var actual_open: Array = b.get("open_exceptions", [])
 		var verified: bool = actual == expected and b.get("form_forest", []) == form_forest
@@ -459,12 +459,17 @@ func _max_joined(points: Array, omitted: Dictionary) -> int:
 
 
 ## 보호 네모를 경계 칸 표로 펼쳐 생성기의 구간 계산과 독립 대조한다.
-func _expected_open_edges(g: Grid, points: Array, protection: Array[Dictionary], maximum: int = 32) -> Array[Dictionary]:
+func _expected_open_edges(g: Grid, points: Array, protection: Array[Dictionary], maximum: int = 32, source: Dictionary = {}) -> Array[Dictionary]:
 	var names_by_cell: Dictionary = {}
 	var other_protected: Dictionary = {}
-	for item: Dictionary in protection:
+	var side_names: Dictionary = _expected_side_names(source, protection)
+	for index: int in range(protection.size()):
+		var item: Dictionary = protection[index]
 		var name: String = item["kind"]
 		var named: bool = name.begins_with("entry/") or name == "road_rail"
+		if side_names.has(index):
+			name = side_names[index]
+			named = true
 		var rect: Rect2i = item["rect"]
 		for y: int in range(rect.position.y, rect.end.y):
 			for x: int in range(rect.position.x, rect.end.x):
@@ -505,6 +510,61 @@ func _expected_open_edges(g: Grid, points: Array, protection: Array[Dictionary],
 			expected.append({"edge": edge, "direction": direction, "name": "+".join(sorted_names), "metres": length,
 				"a": a, "b": b, "gap_cells": length - named_offsets.size()})
 	return expected
+
+
+## open_name을 읽지 않고 원본 건물 소속과 보호 범위로 문 앞→입구를 역방향 탐색한다.
+func _expected_side_names(source: Dictionary, protection: Array[Dictionary]) -> Dictionary:
+	var result: Dictionary = {}
+	var spot: Dictionary = source.get("side_path", {})
+	if not source.get("grid") is Grid or not spot.get("store") is Rect2i or not spot.get("door") is Vector2i: return result
+	var g: Grid = source["grid"]
+	var store_rect: Rect2i = spot["store"]
+	var door: Vector2i = spot["door"]
+	var side: int = int(spot.get("side", -1))
+	var owner: int = int(spot.get("building", -1))
+	if side not in [0, 1, 2, 3] or owner < 0 or not g.doors.has(door): return result
+	if int(g.doors[door].get("building", -2)) != owner: return result
+	var rects: Array[Rect2i] = [store_rect.grow(3).intersection(Rect2i(0, 0, g.width, g.height))]
+	for collection: Dictionary in [g.doors, g.windows]:
+		for cell: Vector2i in collection:
+			if int(collection[cell].get("building", -2)) == owner:
+				rects.append(Rect2i(cell, Vector2i.ONE).grow(5).intersection(Rect2i(0, 0, g.width, g.height)))
+	var eligible: Array[int] = []
+	var domain: Dictionary = {}
+	for i: int in range(protection.size()):
+		var rect: Rect2i = protection[i]["rect"]
+		var kind: String = protection[i]["kind"]
+		if kind != "side_path" and not (kind in ["building", "door", "window"] and rects.has(rect)): continue
+		eligible.append(i)
+		for y: int in range(rect.position.y, rect.end.y):
+			for x: int in range(rect.position.x, rect.end.x):
+				var cell := Vector2i(x, y)
+				if g.walk_people[g.index(cell)] == 1: domain[cell] = true
+	# 문 앞 연결 영역을 따로 따라가며 서로 고립된 gap과 입구를 섞지 않는다.
+	for delta: Vector2i in DIRS:
+		var front: Vector2i = door + delta
+		if store_rect.has_point(front) or not domain.has(front): continue
+		var visited: Dictionary = {front: true}
+		var stack: Array[Vector2i] = [front]
+		while not stack.is_empty():
+			var cell: Vector2i = stack.pop_back()
+			for direction: Vector2i in DIRS:
+				var next: Vector2i = cell + direction
+				if domain.has(next) and not visited.has(next):
+					visited[next] = true
+					stack.append(next)
+		var entrance_reached: bool = false
+		var gap_reached: bool = false
+		for cell: Vector2i in spot.get("entrance", []): entrance_reached = entrance_reached or visited.has(cell)
+		for cell: Vector2i in spot.get("gap", []): gap_reached = gap_reached or visited.has(cell)
+		if not entrance_reached or not gap_reached: continue
+		for i: int in eligible:
+			var rect: Rect2i = protection[i]["rect"]
+			for cell: Vector2i in visited:
+				if rect.has_point(cell):
+					result[i] = "side_path/" + String(["north", "east", "south", "west"][side])
+					break
+	return result
 
 
 func _expected_remote_edges(points: Array, forest: Array) -> Array[Dictionary]:
@@ -604,9 +664,9 @@ func test_i_walkable_area_and_ring_area() -> void:
 ## 판 0 분모는 시험 소유다. h/i가 같은 표본을 재사용한다.
 func _ratio_cases() -> Dictionary:
 	if not ratio_cases.is_empty(): return ratio_cases
-	for seed_value: int in RATIO_SEEDS:
-		for form: String in FORMS:
-			var base: Dictionary = Loader.make_ready(Lake, seed_value, form, -1.0, "", 0)
+	for form: String in FORMS:
+		for seed_value: int in RATIO_SEEDS[form]:
+			var base: Dictionary = cases[form]["base"] if seed_value == 71 else Loader.make_ready(Lake, seed_value, form, -1.0, "", 0)
 			var active: Dictionary = cases[form]["active"] if seed_value == 71 else Loader.make_ready(Lake, seed_value, form)
 			var pre: Dictionary = cases[form]["pre"] if seed_value == 71 else _direct(form, seed_value, -1, false)
 			var grid: Grid = pre["grid"]
@@ -771,6 +831,8 @@ func test_k5_side_path_absent_present_and_north_west_shift() -> void:
 		var before: Dictionary = _copy_map(probe)
 		var before_reached: PackedByteArray = _flood(before, "walk_people")
 		var protection: PackedByteArray = Bounds.protected_cells(before)
+		var protection_details: Array[Dictionary] = []
+		Bounds.protected_cells(before, protection_details)
 		Bounds.apply(probe)
 		print("bounds/k5 side=%d side_path=%s attempts=%s" % [side, str(probe.get("side_path", {})), JSON.stringify(probe.get("bounds_attempts", []))])
 		if not _require_stamp(probe, "북/서 샛길"): continue
@@ -779,6 +841,18 @@ func test_k5_side_path_absent_present_and_north_west_shift() -> void:
 			assert_eq(probe["containers"][key]["cell"], old[key]["cell"] + shift, key)
 		assert_true(Bounds.check(probe.get("bounds", {}), probe["grid"]).is_empty())
 		var final_grid: Grid = probe["grid"]
+		var points: Array = probe["bounds"]["outline"]
+		var expected_open: Array[Dictionary] = _expected_open_edges(final_grid, points, protection_details, 32, before)
+		assert_eq(probe["bounds"].get("open_exceptions", []), expected_open, "k5 독립 도달·이름·길이")
+		assert_false(_expected_side_names(probe, protection_details).is_empty(), "찍은 뒤에도 샛길에서 창고 문 앞 도달")
+		var found_side: bool = false
+		for opening: Dictionary in expected_open:
+			found_side = found_side or String(opening["name"]).contains("side_path/")
+			print("bounds/k5 샛길 입구(창고 앞) side=%d edge=%d metres=%d name=%s" % [side, opening["edge"], opening["metres"], opening["name"]])
+		assert_true(found_side, "북/서 샛길 이름 있는 열린 자리")
+		for opening: Dictionary in _expected_open_edges(final_grid, points, protection_details, maxi(final_grid.width, final_grid.height), before):
+			assert_lte(int(opening["metres"]), 32, "k5 합친 전체 길이")
+		assert_true(Rule.shape_errors(final_grid, probe["bounds"]).is_empty(), "k5 모양 문 유지")
 		var after_reached: PackedByteArray = _flood(probe, "walk_people")
 		var bad: int = 0
 		for i: int in range(final_grid.walk_people.size()):
@@ -964,6 +1038,102 @@ func test_r4_opening_gap_requires_walkable_ground() -> void:
 		grid.refresh_paths()
 		assert_true(Rule.open_exceptions(grid, fixture["points"], fixture["protection"]).is_empty(), "벽/물 틈 병합 금지")
 		assert_true(_expected_open_edges(grid, fixture["points"], fixture["protection"]).is_empty(), "독립 계산도 걷기 캐시 확인")
+
+
+## 좁은 통로만 걷게 하여 다른 방향으로 돌아가는 우연한 연결을 없앤다.
+func _side_open_case(side: int) -> Dictionary:
+	var g := Grid.new(64, 64)
+	g.solid.fill(Grid.Solid.BLOCK)
+	var store_rect := Rect2i(20, 1, 8, 6) if side == 0 else Rect2i(1, 20, 6, 8)
+	var door := Vector2i(25, 6) if side == 0 else Vector2i(6, 25)
+	var window := Vector2i(20, 3) if side == 0 else Vector2i(3, 20)
+	for depth: int in range(7, 15):
+		var cell := Vector2i(25, depth) if side == 0 else Vector2i(depth, 25)
+		g.solid[g.index(cell)] = Grid.Solid.NONE
+	g.solid[g.index(door)] = Grid.Solid.DOOR
+	g.doors[door] = {"state": "locked", "building": 7, "planks": [0, 0]}
+	g.windows[window] = {"building": 7}
+	g.refresh_paths()
+	var gap := Vector2i(25, 12) if side == 0 else Vector2i(12, 25)
+	var entrance := Vector2i(25, 14) if side == 0 else Vector2i(14, 25)
+	var woods := Vector2i(45, 1) if side == 0 else Vector2i(1, 45)
+	return {"grid": g, "side_path": {"side": side, "store": store_rect, "door": door,
+		"building": 7, "gap": [gap], "entrance": [entrance], "woods": [woods]},
+		"buildings": [{"id": 7, "rect": store_rect}], "levels": {0: g}}
+
+
+func test_r6_side_opening_requires_walk_cache_connection() -> void:
+	for side: int in [0, 3]:
+		for connected: bool in [true, false]:
+			var data: Dictionary = _side_open_case(side)
+			var g: Grid = data["grid"]
+			if not connected:
+				var cut := Vector2i(25, 10) if side == 0 else Vector2i(10, 25)
+				g.set_solid(cut, Grid.Solid.WALL)
+				g.refresh_paths()
+			var details: Array[Dictionary] = []
+			var mask: PackedByteArray = Bounds.protected_cells(data, details)
+			assert_eq(mask, Bounds.protected_cells(data), "이름 지정은 보호 마스크 불변")
+			var expected_names: Dictionary = _expected_side_names(data, details)
+			var actual_names: Dictionary = {}
+			for i: int in range(details.size()):
+				if details[i].has("open_name"): actual_names[i] = details[i]["open_name"]
+			assert_eq(actual_names, expected_names, "정방향/역방향 독립 탐색")
+			assert_eq(not actual_names.is_empty(), connected, "문 잠금은 유지하고 문 앞까지만 도달")
+			var points: Array[Vector2i] = [Vector2i(15, 0), Vector2i(31, 0), Vector2i(31, 20), Vector2i(15, 20)]
+			if side == 3:
+				points.assign([Vector2i(0, 31), Vector2i(0, 15), Vector2i(20, 15), Vector2i(20, 31)])
+			var actual: Array[Dictionary] = Rule.open_exceptions(g, points, details)
+			assert_eq(actual, _expected_open_edges(g, points, details, 32, data))
+			assert_eq(actual.size(), 1 if connected else 0, "끊긴 창고 보호는 이름 없는 열린 자리")
+			for item: Dictionary in details:
+				var rect: Rect2i = item["rect"]
+				if rect.has_point(data["side_path"]["woods"][0]):
+					assert_false(item.has("open_name"), "고립된 woods는 같은 사전이어도 이름 없음")
+
+
+func test_r7_side_opening_join_keeps_32m_cap() -> void:
+	var data: Dictionary = _side_open_case(0)
+	var g: Grid = data["grid"]
+	var details: Array[Dictionary] = []
+	Bounds.protected_cells(data, details)
+	# 실제 도달로 얻은 창고 이름과 바로 이웃한 기존 진입로 이름을 합친다.
+	for total: int in [32, 33]:
+		var joined: Array[Dictionary] = details.duplicate(true)
+		joined.append({"kind": "entry/test", "rect": Rect2i(31, 0, total - 16, 1)})
+		var points: Array[Vector2i] = [Vector2i(15, 0), Vector2i(15 + total, 0), Vector2i(15 + total, 20), Vector2i(15, 20)]
+		var actual: Array[Dictionary] = Rule.open_exceptions(g, points, joined)
+		assert_eq(actual, _expected_open_edges(g, points, joined, 32, data))
+		assert_eq(actual.size(), 1 if total == 32 else 0, "샛길+진입로 전체 길이 상한")
+		var full: Array[Dictionary] = Rule.open_exceptions(g, points, joined, 64)
+		assert_eq(full.size(), 1)
+		if not full.is_empty():
+			assert_eq(full[0]["metres"], total)
+			assert_eq(full[0]["name"], "entry/test+side_path/north")
+
+
+func test_r8_named_side_opening_uses_exact_endpoints() -> void:
+	var g := Grid.new(100, 80)
+	g.refresh_paths()
+	var profile := PackedInt32Array()
+	profile.resize(100)
+	profile.fill(16)
+	for along: int in range(40, 45): profile[along] = 0
+	var protection: Array[Dictionary] = [{"kind": "side_path", "open_name": "side_path/north", "rect": Rect2i(40, 0, 5, 10)}]
+	var row: Array[Dictionary] = Rule._opening_row(g, 0, 10, 90, Rule.random_of("lake_01"), profile, protection)
+	var depths: Array[int] = Rule.depths(row, Rule.random_of("lake_01"), 10, 10)
+	assert_eq(depths.size(), row.size(), "5m 이름 있는 열린 자리도 깊이 전이 가능")
+	assert_false(depths.is_empty())
+	if depths.size() != row.size(): return
+	var open_metres: int = 0
+	for i: int in range(row.size()):
+		if depths[i] == 0:
+			assert_eq(row[i]["from"], 40)
+			assert_eq(row[i]["to"], 45)
+			open_metres += int(row[i]["to"]) - int(row[i]["from"])
+		else:
+			assert_between(int(row[i]["to"]) - int(row[i]["from"]), 8, 16)
+	assert_eq(open_metres, 5, "이름 없는 바깥칸까지 열린 자리를 늘리지 않음")
 
 
 func test_r5_success_does_not_build_baseline() -> void:
