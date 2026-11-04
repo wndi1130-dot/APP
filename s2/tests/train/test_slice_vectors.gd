@@ -44,6 +44,9 @@ func test_the_start_asset_is_s1s_new_game() -> void:
 	var live: Array = SliceFlow.start_board()
 	assert_eq(live[0].get("lateOn"), true, "new playable S2 boards enable decision 514")
 	assert_false(_start["state"].has("lateOn"), "the old reference input stays unchanged")
+	assert_eq(live[0].get("supOn"), true, "new playable S2 boards carry supplies (decision 490)")
+	assert_eq(float(live[0].get("sup", -1)), float(_start["tables"]["P"]["sup0"]), "with S1's starting supplies")
+	assert_false(_start["state"].has("supOn"), "the reference input stays without supplies")
 
 
 func test_the_slice_reaches_its_first_stop_as_s1() -> void:

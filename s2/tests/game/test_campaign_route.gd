@@ -186,7 +186,30 @@ func _json(value: Variant) -> String:
 	return JSON.stringify(value, "", true, true)
 
 
+## A train board as its slot writes it (save_slot.gd slot_board): a supplies run is
+## written as slot version 3 whatever version the board in hand carries, and a board
+## read back carries the 3. Boards kept, read back or never cut are held side by side in
+## the written form; anything else is itself. That puts the number read back out of these
+## comparisons: `_version_gap` checks it.
+func _slot(value: Variant) -> Variant:
+	return TrainSave.slot_board(value) if value is Dictionary else value
+
+
+## The slot version a board read back carries, against what slot_board writes for the board
+## in hand, value and type (a supplies run's int 3), before `_slot` puts both in the written
+## form. A train slot written without slot_board reads back as the board in hand and shows here.
+func _version_gap(kept: Dictionary, back: Dictionary) -> String:
+	var want: Variant = TrainSave.slot_board(kept).get("version")
+	var got: Variant = back.get("version")
+	if typeof(want) != typeof(got) or want != got:
+		return "version: %s %s -> %s %s" % [type_string(typeof(want)), str(want), type_string(typeof(got)), str(got)]
+	return ""
+
+
 func _type_gap(saved: Variant, back: Variant, at: String = "g") -> String:
+	if at == "g":
+		saved = _slot(saved)
+		back = _slot(back)
 	if typeof(saved) != typeof(back):
 		return "%s: %s -> %s" % [at, type_string(typeof(saved)), type_string(typeof(back))]
 	if saved is Dictionary:
@@ -212,6 +235,9 @@ func _type_gap(saved: Variant, back: Variant, at: String = "g") -> String:
 ## Types and every other value must match exactly; a float may come back one last bit off
 ## (Godot's JSON reader rounds some 17-digit numbers the other way), so floats match to 1e-12.
 func _board_gap(kept: Variant, back: Variant, at: String = "g") -> String:
+	if at == "g":
+		kept = _slot(kept)
+		back = _slot(back)
 	if typeof(kept) != typeof(back):
 		return "%s: %s -> %s" % [at, type_string(typeof(kept)), type_string(typeof(back))]
 	if kept is Dictionary:
@@ -697,6 +723,7 @@ func test_campaign_second_stop_resume_matches_uninterrupted() -> void:
 			if picked.is_empty():
 				return
 			assert_eq(int(picked["g"]["campaign"]["cursor"]), 1)
+			assert_eq(_version_gap(expected, picked["g"]), "", "%s board %d slot version" % [cut, i])
 			var resumed: CampaignProbe = _flow(i, {"resume": picked})
 			_finish_second(resumed)
 			assert_eq(_board_gap(expected, resumed.train_g), "", "%s board %d values" % [cut, i])
@@ -727,6 +754,7 @@ func test_campaign_save_identity_and_shape() -> void:
 	SliceSave.clear(SLICE)
 	var missing: Dictionary = _pick()
 	assert_eq(missing["step"], "stop_pick")
+	assert_eq(_version_gap(second, missing["g"]), "")
 	assert_eq(_board_gap(second, missing["g"]), "")
 	assert_false(SliceSave.field_belongs(second, old_field))
 	_drop(flow)
@@ -841,8 +869,21 @@ func test_campaign_passed_stop_advances_without_receipt() -> void:
 		_drop(flow)
 
 
+## A run saved before every new run carried supplies: the keys Supplies.enable and the
+## new run put on (slice_flow.gd _starting_board), taken off again. The start board is
+## only read when the run begins, so the run goes on with supplies off, as such a save does.
+func _supplies_off(flow: CampaignProbe) -> void:
+	for key: String in ["supOn", "sup", "supCover", "shopSeen"]:
+		flow.train_g.erase(key)
+
+
+## An old save with supplies off: the departure's workshop works once as the train
+## leaves (slice_flow.gd _take, RouteState.mark_workshop), and not again after a resume.
+## A supplies run's workshop works inside the settlement instead (turn_settle.gd).
 func test_campaign_departure_workshop_runs_once_after_resume() -> void:
 	var flow: CampaignProbe = _flow()
+	_supplies_off(flow)
+	assert_false(bool(flow.train_g.get("supOn", false)), "an old save with supplies off")
 	_reach(flow, "stop_pick")
 	_play_field(flow)
 	var departure_id: String = String(flow.train_g["campaign"]["visit"]["departure_id"])
@@ -854,6 +895,7 @@ func test_campaign_departure_workshop_runs_once_after_resume() -> void:
 	_drop(flow)
 	var resumed: CampaignProbe = _flow(0, {"resume": _pick()})
 	assert_eq(resumed.current(), "travel")
+	assert_eq(_version_gap(before, resumed.train_g), "", "supplies off: the board's own number")
 	assert_eq(_board_gap(before, resumed.train_g), "")
 	resumed.go(resumed._index_of("travel"))
 	resumed._take(resumed.train_g.duplicate(true))
