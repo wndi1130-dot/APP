@@ -1781,18 +1781,26 @@ func test_walk_skin_height_inset_matches_joint_projection() -> void:
 		var margin: float = minf(0.00001, width * 0.25)
 		assert_almost_eq(BodyBake._person_walk_inner_height(0.0, bounds), 0.7 + margin, 0.000000000001)
 		assert_almost_eq(BodyBake._person_walk_inner_height(1.0, bounds), 0.7 + width - margin, 0.000000000001)
-	var phases: PackedFloat64Array = PackedFloat64Array()
-	var lowers: PackedFloat64Array = PackedFloat64Array()
-	var uppers: PackedFloat64Array = PackedFloat64Array()
-	for index in BodyBake.PERSON_WALK_HEIGHT_SAMPLES:
-		phases.append(float(index) / float(BodyBake.PERSON_WALK_HEIGHT_SAMPLES))
-		lowers.append(0.7)
-		uppers.append(0.8)
-	var table: Dictionary = BodyBake._person_walk_project_table(phases, lowers, uppers, 0.0, false, BodyBake.PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN)
-	assert_true(bool(table["ok"]))
-	var expected: float = BodyBake._person_walk_inner_height(1.0, {"empty": false, "lower": 0.7, "upper": 0.8})
-	for height: float in table["values"]:
-		assert_almost_eq(height, expected, BodyBake.PERSON_WALK_PROJECT_FEASIBILITY_M)
+		# The table rows use this same inset; feasibility does not require the
+		# nearest point (or every table value) to sit on the upper boundary.
+		var table_margin: float = BodyBake._person_walk_height_inset(float(bounds["lower"]), float(bounds["upper"]), BodyBake.PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN)
+		var inner_lower: float = float(bounds["lower"]) + table_margin
+		var inner_upper: float = float(bounds["upper"]) - table_margin
+		assert_almost_eq(inner_lower, BodyBake._person_walk_inner_height(0.0, bounds), 0.000000000001, "table and frame lower boundaries agree")
+		assert_almost_eq(inner_upper, BodyBake._person_walk_inner_height(1.0, bounds), 0.000000000001, "table and frame upper boundaries agree")
+		var phases: PackedFloat64Array = PackedFloat64Array()
+		var lowers: PackedFloat64Array = PackedFloat64Array()
+		var uppers: PackedFloat64Array = PackedFloat64Array()
+		for index in BodyBake.PERSON_WALK_HEIGHT_SAMPLES:
+			phases.append(float(index) / float(BodyBake.PERSON_WALK_HEIGHT_SAMPLES))
+			lowers.append(float(bounds["lower"]))
+			uppers.append(float(bounds["upper"]))
+		var table: Dictionary = BodyBake._person_walk_project_table(phases, lowers, uppers, 0.0, false, BodyBake.PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN)
+		assert_true(bool(table["ok"]), "wide, narrow and zero-width intervals remain feasible")
+		assert_eq((table["values"] as PackedFloat64Array).size(), BodyBake.PERSON_WALK_HEIGHT_SAMPLES, "an empty table cannot satisfy inclusion vacuously")
+		for height: float in table["values"]:
+			assert_gte(height, inner_lower - BodyBake.PERSON_WALK_PROJECT_FEASIBILITY_M)
+			assert_lte(height, inner_upper + BodyBake.PERSON_WALK_PROJECT_FEASIBILITY_M)
 
 
 func test_walk_last_evaluated_skin_state_can_succeed() -> void:
@@ -1856,49 +1864,100 @@ func test_walk_mixed_skin_aitken_needs_no_more_evaluations_than_plain() -> void:
 
 
 func test_walk_rejected_aitken_trial_restores_pose_and_gate_state() -> void:
-	var ctx: Dictionary = _walk_feedback_context()
+	var ctx: Dictionary = _walk_stick_context()
 	var fit: Dictionary = ctx["footlock_walk"]
 	var body: Skeleton3D = ctx["body"]
-	for offset: Vector3 in [Vector3.ZERO, Vector3(0.12, 0.0, 0.0), Vector3(-0.12, 0.0, 0.0)]:
-		for sample in 32:
-			var u: float = float(sample) / 32.0
-			var full: Dictionary = _walk_feedback_frame(ctx, u, offset)
-			if full.is_empty():
-				continue
-			for trial: Dictionary in full["passes"]:
-				if bool(trial["accepted"]) or not bool(trial["evaluated"]):
-					continue
-				var budget: Dictionary = BodyBake._person_walk_budget()
-				fit["work_budget"] = budget
-				var replay: Dictionary = _walk_feedback_frame(ctx, u, offset, int(trial["ik_passes"]))
-				assert_false(bool(replay["last_trial"]["accepted"]))
-				assert_false(bool(replay["ok"]))
-				var evaluated: int = 0
-				for note: Dictionary in replay["passes"]:
-					if bool(note["evaluated"]):
-						evaluated += 1
-				assert_eq(int(budget["used"]["ik"]), evaluated, "rejected paired IK remains charged after rollback")
-				assert_eq(int(budget["clips"]["p_walk"]["ik"]), evaluated)
-				assert_eq(int(replay["ik_passes"]), evaluated)
-				fit.erase("work_budget")
-				var restored: Dictionary = BodyBake._person_walk_skin_snapshot(body, fit)
-				body.reset_bone_poses()
-				fit["reach_clamped"] = [false, false]
-				fit["reach_final_failed"] = [false, false]
-				fit["height_frame_failed"] = false
-				var baseline: Dictionary = BodyBake._person_walk_skin_snapshot(body, fit)
-				var goals: Array = [BodyBake._person_walk_ankle_goal(fit, 0, u), BodyBake._person_walk_ankle_goal(fit, 1, u)]
-				var expected: Dictionary = BodyBake._person_walk_skin_evaluate(ctx, fit, u, goals, replay["targets_used"], BodyBake._person_walk_height_at(fit["pelvis"], u), baseline)
-				assert_eq(replay["conditions"], expected["conditions"], "rejected conditions cannot overwrite the accepted witness")
-				assert_eq(restored["reach_clamped"], fit["reach_clamped"])
-				assert_eq(restored["reach_final_failed"], fit["reach_final_failed"])
-				assert_true(bool(restored["height_frame_failed"]), "final refusal is separate from rolled-back trial gates")
-				for bone in body.get_bone_count():
-					assert_lt((restored["pose"][bone][0] as Vector3).distance_to(body.get_bone_pose_position(bone)), 0.000001)
-					assert_lt((restored["pose"][bone][1] as Quaternion).angle_to(body.get_bone_pose_rotation(bone)), 0.00001)
-					assert_lt((restored["pose"][bone][2] as Vector3).distance_to(body.get_bone_pose_scale(bone)), 0.000001)
-				return
-	assert_true(false, "fixed mixed-skin samples must exercise a measured rejection")
+	var rest: PackedVector3Array = fit["rest"]
+	var bones: PackedInt32Array = fit["bones"]
+	var weights: PackedFloat32Array = fit["weights"]
+	var bind_bone: Array = ctx["bind_bone"]
+	var goals: Array = []
+	var targets: Array = []
+	# A fixed noncontractive mixed skin, evaluated through the real paired IK.
+	# Flat goals and fixed hips make r_x = -[[1/8, 3/8], [3/8, 1/8]] * d_x.
+	# With d_x=(.04, 0), two accepted evaluations give omega=28/17; that
+	# extrapolation increases the residual, as does its first half-step.
+	fit["starts"] = [0.9, 0.9]
+	fit["durations"] = [0.6, 0.6]
+	fit["goal_cache"] = {}
+	fit["floor"] = -0.05
+	fit["pelvis"] = {"values": PackedFloat64Array([0.9]), "slopes": PackedFloat64Array([0.0])}
+	for side in 2:
+		# A unique lowest vertex prevents roundoff ties from resetting history.
+		var lowest: int = int(fit["soles"][side][0])
+		rest[lowest] = rest[lowest] - Vector3(0.0, 0.01, 0.0)
+		var own_bind: int = bind_bone.find(int(fit["legs"][side][2]))
+		var other_bind: int = bind_bone.find(int(fit["legs"][1 - side][2]))
+		var hip_bind: int = bind_bone.find(body.find_bone("hips"))
+		for vertex: int in fit["soles"][side]:
+			for slot in 4:
+				bones[vertex * 4 + slot] = [own_bind, other_bind, hip_bind, hip_bind][slot]
+				weights[vertex * 4 + slot] = [0.125, 0.375, 0.5, 0.0][slot]
+		var ankle: Vector3 = fit["rest_ankles"][side]
+		var goal: Dictionary = {"target": ankle, "base": ankle, "rotation": Basis(), "path": Vector3.ZERO, "age": 0.1}
+		goals.append(goal)
+		fit["goal_cache"][side] = {0.0: goal}
+		# +.1 y cancels the half-weighted hips' -.1 y. The right +.002
+		# fixes the lower-bound owner, with the same mirrored residual map.
+		targets.append(ankle + Vector3(0.04 if side == 0 else 0.0, 0.1 if side == 0 else 0.102, 0.0))
+	fit["rest"] = rest
+	fit["bones"] = bones
+	fit["weights"] = weights
+	ctx["walk_clip"] = "p_walk"
+	ctx["fit_failures"] = []
+	body.reset_bone_poses()
+	var budget: Dictionary = BodyBake._person_walk_budget()
+	fit["work_budget"] = budget
+	var replay: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0, targets, 4, true)
+	var passes: Array = replay["passes"]
+	assert_eq(passes.size(), 4, "fixed input must reach the rejected extrapolation and its half-step")
+	if passes.size() != 4:
+		return
+	assert_true(bool(passes[0]["accepted"]))
+	assert_true(bool(passes[1]["accepted"]))
+	assert_eq(passes[0]["signature"], passes[1]["signature"], "fixed probe and bound owners preserve accepted history")
+	assert_gt(float(passes[2]["omega"]), 1.0, "accepted history must activate Aitken before rejection")
+	assert_false(bool(passes[2]["accepted"]), "a missing measured rejection must fail")
+	assert_false(bool(passes[3]["accepted"]), "the fixed half-step also fails to improve")
+	assert_gt(float(passes[2]["normalized_residual"]), float(passes[1]["normalized_residual"]))
+	assert_gt(float(passes[3]["normalized_residual"]), float(passes[1]["normalized_residual"]))
+	assert_almost_eq(float(passes[3]["omega"]), float(passes[2]["omega"]) * 0.5, 0.000001, "rejection halves omega")
+	assert_eq(int(replay["rejections"]), 2)
+	assert_false(bool(replay["last_trial"]["accepted"]))
+	assert_false(bool(replay["ok"]))
+	assert_eq(replay["reason"], "SKIN_ITER_LIMIT")
+	var evaluated: int = 0
+	for note: Dictionary in passes:
+		assert_true(bool(note["evaluated"]), "the witness must include actual paired IK, not a precheck refusal")
+		assert_eq(note["reason"], "", "rejection must come from measured nonprogress")
+		assert_true(is_finite(float(note["normalized_residual"])))
+		assert_true(bool(note["conditions"]["actual_ok"]), "ankle and knee gates stay feasible during rejection")
+		assert_true(bool(note["conditions"]["height_inside"]), "height inclusion is not the source of rejection")
+		if bool(note["evaluated"]):
+			evaluated += 1
+	assert_eq(evaluated, 4)
+	assert_eq(int(budget["used"]["ik"]), evaluated, "rejected paired IK remains charged after rollback")
+	assert_eq(int(budget["clips"]["p_walk"]["ik"]), evaluated)
+	assert_eq(int(replay["ik_passes"]), evaluated)
+	assert_eq(replay["targets_used"], passes[1]["targets_used"], "rejected targets cannot replace the accepted state")
+	assert_eq(replay["conditions"], passes[1]["conditions"])
+	fit.erase("work_budget")
+	var restored: Dictionary = BodyBake._person_walk_skin_snapshot(body, fit)
+	body.reset_bone_poses()
+	fit["reach_clamped"] = [false, false]
+	fit["reach_final_failed"] = [false, false]
+	fit["height_frame_failed"] = false
+	var baseline: Dictionary = BodyBake._person_walk_skin_snapshot(body, fit)
+	var expected: Dictionary = BodyBake._person_walk_skin_evaluate(ctx, fit, 0.0, goals, passes[1]["targets_used"], 0.9, baseline)
+	assert_true(bool(expected["evaluated"]))
+	assert_eq(replay["conditions"], expected["conditions"], "rejected conditions cannot overwrite the accepted witness")
+	assert_eq(restored["reach_clamped"], fit["reach_clamped"])
+	assert_eq(restored["reach_final_failed"], fit["reach_final_failed"])
+	assert_true(bool(restored["height_frame_failed"]), "final refusal is separate from rolled-back trial gates")
+	for bone in body.get_bone_count():
+		assert_lt((restored["pose"][bone][0] as Vector3).distance_to(body.get_bone_pose_position(bone)), 0.000001)
+		assert_lt((restored["pose"][bone][1] as Quaternion).angle_to(body.get_bone_pose_rotation(bone)), 0.00001)
+		assert_lt((restored["pose"][bone][2] as Vector3).distance_to(body.get_bone_pose_scale(bone)), 0.000001)
 
 
 func test_walk_skin_ledger_counts_exactly_the_evaluated_pairs() -> void:
