@@ -311,6 +311,11 @@ func _measure_filtered_wrist(way: String, fps: int) -> void:
 	var landed: bool = false
 	var good: int = 0
 	var first_good: float = -1.0
+	var peak_active_down: float = -90.0
+	var previous_down: float = 0.0
+	var previous_axis: Vector3 = Vector3.ZERO
+	var max_down_step: float = 0.0
+	var max_axis_step: float = 0.0
 	p.strike_total = wind
 	for frame: int in range(int(ceil((wind + wait) * float(fps))) + 1):
 		var t: float = float(frame) * dt
@@ -333,11 +338,21 @@ func _measure_filtered_wrist(way: String, fps: int) -> void:
 		var clip: int = DeadBody.motion_in(drawn.g)
 		assert_eq(String(baked["clips"][clip]["name"]), way)
 		var weight: float = Visual.drawn_wrist_weight(baked["clips"], snapshot["frames"], drawn)
-		if weight < 1.0 - 0.000001:
-			continue
 		var axis_node: Node3D = p.weapon_model if p.weapon_model != null else p.weapon_mesh
 		var actual: Basis = p.global_basis.inverse() * axis_node.global_basis
 		var down: float = rad_to_deg(Visual.grip_down_angle(actual))
+		var axis: Vector3 = actual.z.normalized()
+		# Report the 0.4-to-0.5-second turn, without adding a speed threshold.
+		if frame > 0 and t > 0.4 + 0.000001 and t <= 0.5 + 0.000001:
+			max_down_step = maxf(max_down_step, absf(down - previous_down) * float(fps) / 30.0)
+			max_axis_step = maxf(max_axis_step, rad_to_deg(acos(clampf(axis.dot(previous_axis), -1.0, 1.0))) * float(fps) / 30.0)
+		previous_down = down
+		previous_axis = axis
+		if weight > 0.0:
+			peak_active_down = maxf(peak_active_down, down)
+			assert_lte(down, 45.0 + 3.0, "%s %d at %.6f phase %.6f" % [way, fps, t, drawn.r])
+		if weight < 1.0 - 0.000001:
+			continue
 		if down >= 30.0 and down <= 45.0:
 			good += 1
 			if first_good < 0.0:
@@ -346,4 +361,23 @@ func _measure_filtered_wrist(way: String, fps: int) -> void:
 	var delay: float = first_good - (wind + Pose.RECOVER_FOLLOW_TIME * wait)
 	if first_good >= 0.0:
 		assert_lte(delay, 4.0 * Visual.GRIP_TAU + dt)
-	print("ONEHAND_WRIST_SETTLE " + JSON.stringify({"clip": way, "fps": fps, "good_frames": good, "delay_s": delay, "allowed_delay_s": 4.0 * Visual.GRIP_TAU + dt}))
+	print("ONEHAND_WRIST_SETTLE " + JSON.stringify({"clip": way, "fps": fps, "good_frames": good, "delay_s": delay, "allowed_delay_s": 4.0 * Visual.GRIP_TAU + dt, "max_active_down_deg": peak_active_down, "max_down_step_per_30th_deg": max_down_step, "max_axis_step_per_30th_deg": max_axis_step}))
+
+
+func test_active_wrist_filter_stays_between_endpoint_elevations() -> void:
+	var start: Basis = Basis(Vector3.RIGHT, deg_to_rad(38.0))
+	var reversed: Basis = Basis(Vector3.RIGHT, deg_to_rad(142.0))
+	# Both endpoints look down 38 degrees; their shortest rotation passes through down.
+	assert_gt(rad_to_deg(Visual.grip_down_angle(start.slerp(reversed, 0.5))), 48.0)
+	assert_almost_eq(Visual.grip_down_angle(Visual.wrist_follow(start, reversed, 0.5)), deg_to_rad(38.0), 0.000001)
+	_same_basis(Visual.wrist_follow(start, reversed, 0.0), start)
+	_same_basis(Visual.wrist_follow(start, reversed, 1.0), reversed)
+	for from_deg: float in [-70.0, 0.0, 38.0]:
+		for to_deg: float in [-20.0, 20.0, 38.0]:
+			for yaw: float in [0.0, PI / 2.0, PI]:
+				for roll: float in [0.0, PI / 2.0, PI]:
+					var was: Basis = Basis(Vector3.RIGHT, deg_to_rad(from_deg))
+					var want: Basis = Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, deg_to_rad(to_deg)) * Basis(Vector3.BACK, roll)
+					for share: float in [0.0, 0.1, 0.5, 0.9, 1.0]:
+						var filtered: Basis = Visual.wrist_follow(was, want, share)
+						assert_between(Visual.grip_down_angle(filtered), deg_to_rad(minf(from_deg, to_deg)) - 0.000001, deg_to_rad(maxf(from_deg, to_deg)) + 0.000001)

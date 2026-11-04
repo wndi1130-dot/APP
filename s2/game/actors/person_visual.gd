@@ -1434,6 +1434,47 @@ static func drawn_wrist_weight(clips: Array, tab: Array, drawn: Color) -> float:
 	return weight
 
 
+## A shortest 3D rotation can pass below both endpoint elevations when their
+## headings oppose. Keep ordinary slerp when it stays between the endpoints;
+## otherwise interpolate elevation, heading and roll with the same time share.
+static func wrist_follow(was: Basis, want: Basis, share: float) -> Basis:
+	if share <= 0.0:
+		return was
+	if share >= 1.0:
+		return want
+	var mixed: Basis = was.slerp(want, share)
+	var before: float = grip_down_angle(was)
+	var after: float = grip_down_angle(want)
+	var down: float = grip_down_angle(mixed)
+	if down >= minf(before, after) and down <= maxf(before, after):
+		return mixed
+	var a: Vector3 = _wrist_angles(was)
+	var b: Vector3 = _wrist_angles(want)
+	var elevation: float = lerpf(a.x, b.x, share)
+	var yaw_step: float = angle_difference(a.y, b.y) * share
+	# The longer route around the vertical must not turn the weapon axis further
+	# in this frame than the original filter would. This adds no second clock.
+	var span: float = cos(a.x) * cos(elevation)
+	if span > 0.000000000001:
+		var step_cos: float = was.z.normalized().dot(mixed.z.normalized())
+		var yaw_limit: float = acos(clampf((step_cos - sin(a.x) * sin(elevation)) / span, -1.0, 1.0))
+		yaw_step = clampf(yaw_step, -yaw_limit, yaw_limit)
+	return (
+		Basis(Vector3.UP, a.y + yaw_step)
+		* Basis(Vector3.RIGHT, elevation)
+		* Basis(Vector3.BACK, lerp_angle(a.z, b.z, share))
+	)
+
+
+## Elevation is independent of heading and roll in this order of rotations.
+static func _wrist_angles(grip: Basis) -> Vector3:
+	var down: float = grip_down_angle(grip)
+	var heading: float = atan2(grip.z.x, grip.z.z)
+	var level: Basis = Basis(Vector3.UP, heading) * Basis(Vector3.RIGHT, down)
+	var roll: float = atan2(grip.x.dot(level.y), grip.x.dot(level.x))
+	return Vector3(down, heading, roll)
+
+
 ## Correct the target first, then follow it once on the drawing clock.
 static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.0 / 30.0, initialized: bool = true, wrist: float = 0.0) -> Basis:
 	if hand == elbow:
@@ -1443,7 +1484,8 @@ static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.
 	if not initialized or not was.is_finite():
 		return want
 	var follow: float = 1.0 - exp(-maxf(delta, 0.0) / GRIP_TAU)
-	return was.orthonormalized().slerp(want, follow)
+	var previous: Basis = was.orthonormalized()
+	return wrist_follow(previous, want, follow) if wrist > 0.0 else previous.slerp(want, follow)
 
 
 ## True when the motion last picked for this person is one of the living's own.
