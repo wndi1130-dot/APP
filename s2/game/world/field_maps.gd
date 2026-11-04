@@ -33,6 +33,7 @@ const KINDS: Array[String] = ["mine", "lodge", "sawmill", "lake", "freight", "ho
 const MOST_PER_KIND: int = 9
 ## Keys a map may leave out, and what they read as then.
 const OPTIONAL: Dictionary = {
+	"bounds": {},
 	"entry_levels": {}, "manholes": {}, "manhole_levels": {}, "sewer_names": {},
 	"bands": {}, "train_doors": {}, "crossings": [], "barricade_slots": [], "interior_kind_slots": [],
 	"zone_names": {},

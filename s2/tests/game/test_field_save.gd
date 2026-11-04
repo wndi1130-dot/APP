@@ -87,6 +87,36 @@ func test_fractional_or_non_numeric_versions_are_not_whole_saves() -> void:
 		assert_false(FieldSave.from_json(JSON.stringify(data)).is_empty(), "an integral JSON number is allowed")
 
 
+func test_bounds_rule_accepts_only_nonnegative_whole_numbers_or_absence() -> void:
+	var saved: Dictionary = _sample()
+	assert_eq(FieldSave.resume_opts(FieldSave.from_json(FieldSave.to_json(saved)))["bounds_rule"], 0)
+	for rule: Variant in [0, 1, 99, 0.0, 1.0, 99.0]:
+		saved["bounds_rule"] = rule
+		assert_true(FieldSave._whole(saved), str(rule))
+		var restored: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
+		assert_false(restored.is_empty(), str(rule))
+		assert_eq(FieldSave.resume_opts(restored)["bounds_rule"], int(rule))
+	for rule: Variant in [-1, -1.0, 1.5, "1", true, false, null, [], {}, INF, -INF, NAN, 1.0e30]:
+		saved["bounds_rule"] = rule
+		assert_false(FieldSave._whole(saved), str(rule))
+		assert_eq(FieldSave.from_json(FieldSave.to_json(saved)), {}, str(rule))
+
+
+func test_invalid_bounds_rule_falls_back_to_the_previous_save() -> void:
+	var previous: Dictionary = _sample()
+	previous["bounds_rule"] = 1
+	assert_true(FieldSave.write(previous, AT))
+	var current: Dictionary = _sample()
+	current["clock"]["elapsed"] = 99.0
+	assert_true(FieldSave.write(current, AT))
+	for rule: Variant in [-1, 1.5, "1", true, null, [], {}]:
+		current["bounds_rule"] = rule
+		var file := FileAccess.open(AT, FileAccess.WRITE)
+		file.store_string(FieldSave.to_json(current))
+		file.close()
+		assert_eq(FieldSave.read(AT), previous, str(rule))
+
+
 func test_required_nested_fields_must_have_the_expected_types() -> void:
 	var cases: Array = [
 		[["clock"], []], [["clock", "elapsed"], "12.5"], [["clock", "speed"], null],

@@ -27,6 +27,7 @@ const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const MapBounds = preload("res://game/world/map_bounds.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Sled = preload("res://game/sim/sled.gd")
 const NoiseLedger = preload("res://game/sim/noise_ledger.gd")
@@ -486,6 +487,8 @@ func _ready() -> void:
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
 	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script, region) if map_script != null else FieldMaps.build(place, region)
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary else fresh_map.call()
+	if not MapBounds.can_reuse(stop_map, int(opts.get("bounds_rule", -1))):
+		stop_map = fresh_map.call()
 	var ground_form := String(opts.get("stop_ground", opts.get("stop_form", "")))
 	var ground_m := float(opts.get("stop_form_m", -1.0))
 	var end_gap := int(opts.get("stop_end_gap", -1))
@@ -495,7 +498,8 @@ func _ready() -> void:
 	if opts.has("stop_view_rows") or opts.has("stop_view_cols"):
 		stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)),
 			ground_form, rng.seed, ground_m, fresh_map, end_gap)
-	_take_map(with_side_path(stop_map, rng.seed))
+	stop_map = with_side_path(stop_map, rng.seed)
+	_take_map(MapBounds.apply(stop_map, int(opts.get("bounds_rule", -1))))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
@@ -1679,6 +1683,8 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 ## ahead from the map as it was no longer fits: dropped first (a shift would move it
 ## all), made again from the map as it is now.
 static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
+	if map.has("bounds_stamp") and map.has("_side_seed") and int(map["_side_seed"]) == run_seed:
+		return map
 	var place_id := String(map.get("place_id", ""))
 	if StoryMaps.is_story(place_id):
 		return map
