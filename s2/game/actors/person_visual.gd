@@ -331,7 +331,9 @@ func worn_of(p, may_read: bool = true) -> Dictionary:
 			return {}
 		var d := {}
 		if ResourceLoader.exists(BodyCast.own_folder(body).path_join("clips.json")):
+			var t0 := Time.get_ticks_usec()
 			d = _dress(BodyCast.dead_folder(body), BodyCast.own_folder(body))
+			print("WORN_FIRST ", {"body": body, "ms": (Time.get_ticks_usec() - t0) / 1000.0, "msec": Time.get_ticks_msec(), "frame": Engine.get_process_frames()})
 		worn[body] = d if not d.is_empty() and d["own_draw"] != null else worn[""]
 	return worn[body]
 
