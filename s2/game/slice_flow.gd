@@ -1336,10 +1336,7 @@ func _seed_shop_settle() -> void:
 	shop_settle_seg = -1
 	if not bool(train_g.get("supOn", false)):
 		return
-	var last: Variant = train_g.get("lastSettle")
-	var settled: int = -1
-	if last is Dictionary and last.get("workshop") is Dictionary:
-		settled = int(last["workshop"].get("seg", -1))
+	var settled: int = settled_shop_seg(train_g)
 	if not train_g.has("shopSeen"):
 		shop_settle_seg = settled
 		train_g["shopSeen"] = settled
@@ -1362,15 +1359,27 @@ func _show_shop_news(events: Array) -> void:
 func _take_shop_settle() -> void:
 	if not bool(train_g.get("supOn", false)):
 		return
-	var last: Variant = train_g.get("lastSettle")
-	if not last is Dictionary or not last.get("workshop") is Dictionary:
+	var settled: int = settled_shop_seg(train_g)
+	if settled < 0 or settled == shop_settle_seg:
 		return
-	var shop: Dictionary = last["workshop"]
-	var settled: int = int(shop.get("seg", -1))
-	if settled == shop_settle_seg:
-		return
+	var shop: Dictionary = train_g["lastSettle"]["workshop"]
 	shop_settle_seg = settled
-	pending_shop_events.append_array((shop.get("events", []) as Array).duplicate(true))
+	var events: Variant = shop.get("events", [])
+	pending_shop_events.append_array((events as Array).duplicate(true) if events is Array else [])
+
+
+## The stretch of the last settlement the workshop worked in, or −1 when there is none.
+## Only a whole, finite stretch number from 0 counts: the save check does not look inside
+## `lastSettle`, and this number is written on as `shopSeen` (save_slot.gd shape_problem: a
+## whole number from −1), so a damaged one reads as no settlement rather than being kept.
+static func settled_shop_seg(g: Dictionary) -> int:
+	var last: Variant = g.get("lastSettle")
+	if not last is Dictionary or not last.get("workshop") is Dictionary:
+		return -1
+	var seg: Variant = last["workshop"].get("seg")
+	if not (seg is int or seg is float) or not is_finite(float(seg)) or float(seg) < 0.0 or float(seg) != floorf(float(seg)):
+		return -1
+	return int(seg)
 
 
 func _take(g: Dictionary) -> void:

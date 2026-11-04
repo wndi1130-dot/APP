@@ -268,6 +268,52 @@ func test_a_save_without_shop_seen_before_any_settlement_tracks_the_next_one() -
 	assert_eq(again.posted + again.pending_shop_events, made, "the first settlement's news is not lost")
 
 
+## The save check does not look inside `lastSettle`, so a damaged settlement stretch can be
+## read back. A supplies run saved without `shopSeen` then starts from −1 (no settlement
+## seen) instead of writing that stretch on as `shopSeen`: −2 would make the next save one
+## the save check refuses, and 1.5 or "3" would be cut or read as a stretch that never was.
+func test_a_damaged_settlement_stretch_is_read_as_no_settlement() -> void:
+	for bad: Variant in [-2, 1.5, "3", null]:
+		var flow: ResumeProbe = _flow(false)
+		_old_shop(flow, false)
+		flow.train_g["lastSettle"]["workshop"]["seg"] = bad
+		flow.train_g.erase("shopSeen")
+		assert_eq(SliceFlow.settled_shop_seg(flow.train_g), -1, "seg %s" % str(bad))
+		assert_true(flow._save_slice())
+		var t: Dictionary = flow.train_t
+		flow.free()
+		var picked: Dictionary = _picked(t)
+		assert_false(picked.is_empty(), "seg %s: the save still reads" % str(bad))
+		if picked.is_empty():
+			after_each()
+			continue
+		var resumed: ResumeProbe = _flow(false, picked)
+		assert_true(resumed.train_g.get("shopSeen") is int, "seg %s" % str(bad))
+		assert_eq(resumed.train_g.get("shopSeen"), -1, "seg %s: no settlement seen" % str(bad))
+		assert_null(Save.shape_problem(resumed.train_g, t), "seg %s" % str(bad))
+		resumed._take(resumed.train_g.duplicate(true))
+		assert_true(resumed.posted.is_empty() and resumed.pending_shop_events.is_empty(), "seg %s: no news from it" % str(bad))
+		assert_true(resumed._save_slice())
+		resumed.free()
+		var again: Dictionary = _picked(t)
+		assert_false(again.is_empty(), "seg %s: the next save reads too" % str(bad))
+		if not again.is_empty():
+			assert_eq(again["g"].get("shopSeen"), -1)
+		after_each()
+
+
+## The stretch number the news is tracked by: a whole, finite number from 0, or −1.
+func test_settled_shop_seg_reads_only_a_whole_stretch() -> void:
+	assert_eq(SliceFlow.settled_shop_seg({}), -1)
+	assert_eq(SliceFlow.settled_shop_seg({"lastSettle": null}), -1)
+	assert_eq(SliceFlow.settled_shop_seg({"lastSettle": {"notes": []}}), -1)
+	assert_eq(SliceFlow.settled_shop_seg({"lastSettle": {"workshop": {"events": []}}}), -1)
+	for good: Array in [[0, 0], [4, 4], [4.0, 4]]:
+		assert_eq(SliceFlow.settled_shop_seg({"lastSettle": {"workshop": {"seg": good[0]}}}), good[1], str(good))
+	for bad: Variant in [-1, -2, 1.5, "3", null, true, INF, NAN, [], {}]:
+		assert_eq(SliceFlow.settled_shop_seg({"lastSettle": {"workshop": {"seg": bad}}}), -1, str(bad))
+
+
 ## `shopSeen` stands beside the board, not in its dom: a board carrying it is still an
 ## S2 board (State.is_s1a, Dom.is_store), saves and reads, and its workshop still works.
 func test_shop_seen_keeps_the_board_an_s2_board() -> void:

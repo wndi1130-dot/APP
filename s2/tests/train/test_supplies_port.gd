@@ -335,7 +335,10 @@ func test_supplies_train_slot_of_the_slice_writes_the_same_versions() -> void:
 		var written: Dictionary = {}
 		assert_true(SliceSave.write_train(g, TRAIN_PATH, written))
 		# This slot keeps every value's type (field_save.gd's codec), so read it through that codec.
-		assert_eq(int(SliceSave._parse(TRAIN_PATH).get("version", -1)), int(pair[1]), "train slot version")
+		# A supplies run's 3 is slot_board's int; any other board's number keeps the type it had.
+		var on_disk: Variant = SliceSave._parse(TRAIN_PATH).get("version")
+		assert_eq(int(on_disk if on_disk != null else -1), int(pair[1]), "train slot version")
+		assert_eq(typeof(on_disk), TYPE_INT if bool(g.get("supOn", false)) else typeof(g["version"]), "train slot version type")
 		assert_eq(int(g["version"]), 1, "the caller's board is untouched")
 		assert_eq(written["train_sha"], FileAccess.get_file_as_string(TRAIN_PATH).sha256_text(), "the slice slot keeps the written board's hash")
 		var source: Dictionary = {}
@@ -343,6 +346,7 @@ func test_supplies_train_slot_of_the_slice_writes_the_same_versions() -> void:
 		assert_false(back.is_empty())
 		if not back.is_empty():
 			assert_eq(int(back["version"]), int(pair[1]))
+			assert_eq(typeof(back["version"]), typeof(on_disk), "read back with the type written")
 			assert_eq(source["train_sha"], written["train_sha"], "not a torn pair")
 
 

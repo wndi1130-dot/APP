@@ -189,9 +189,21 @@ func _json(value: Variant) -> String:
 ## A train board as its slot writes it (save_slot.gd slot_board): a supplies run is
 ## written as slot version 3 whatever version the board in hand carries, and a board
 ## read back carries the 3. Boards kept, read back or never cut are held side by side in
-## the written form; anything else is itself. The slot version is test_supplies_port's.
+## the written form; anything else is itself. That puts the number read back out of these
+## comparisons: `_version_gap` checks it.
 func _slot(value: Variant) -> Variant:
 	return TrainSave.slot_board(value) if value is Dictionary else value
+
+
+## The slot version a board read back carries, against what slot_board writes for the board
+## in hand, value and type (a supplies run's int 3), before `_slot` puts both in the written
+## form. A train slot written without slot_board reads back as the board in hand and shows here.
+func _version_gap(kept: Dictionary, back: Dictionary) -> String:
+	var want: Variant = TrainSave.slot_board(kept).get("version")
+	var got: Variant = back.get("version")
+	if typeof(want) != typeof(got) or want != got:
+		return "version: %s %s -> %s %s" % [type_string(typeof(want)), str(want), type_string(typeof(got)), str(got)]
+	return ""
 
 
 func _type_gap(saved: Variant, back: Variant, at: String = "g") -> String:
@@ -711,6 +723,7 @@ func test_campaign_second_stop_resume_matches_uninterrupted() -> void:
 			if picked.is_empty():
 				return
 			assert_eq(int(picked["g"]["campaign"]["cursor"]), 1)
+			assert_eq(_version_gap(expected, picked["g"]), "", "%s board %d slot version" % [cut, i])
 			var resumed: CampaignProbe = _flow(i, {"resume": picked})
 			_finish_second(resumed)
 			assert_eq(_board_gap(expected, resumed.train_g), "", "%s board %d values" % [cut, i])
@@ -741,6 +754,7 @@ func test_campaign_save_identity_and_shape() -> void:
 	SliceSave.clear(SLICE)
 	var missing: Dictionary = _pick()
 	assert_eq(missing["step"], "stop_pick")
+	assert_eq(_version_gap(second, missing["g"]), "")
 	assert_eq(_board_gap(second, missing["g"]), "")
 	assert_false(SliceSave.field_belongs(second, old_field))
 	_drop(flow)
@@ -881,6 +895,7 @@ func test_campaign_departure_workshop_runs_once_after_resume() -> void:
 	_drop(flow)
 	var resumed: CampaignProbe = _flow(0, {"resume": _pick()})
 	assert_eq(resumed.current(), "travel")
+	assert_eq(_version_gap(before, resumed.train_g), "", "supplies off: the board's own number")
 	assert_eq(_board_gap(before, resumed.train_g), "")
 	resumed.go(resumed._index_of("travel"))
 	resumed._take(resumed.train_g.duplicate(true))
