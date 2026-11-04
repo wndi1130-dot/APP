@@ -29,6 +29,7 @@ const PIECE_CAP: int = 256
 const CHECK_STRIDE: int = 32
 const KEEP_DISTANCE: float = 2.0
 const SCREEN_REPORT_FRAMES: int = 300 # 폰 재기: 보이는 처음 300프레임(30 fps면 10초) 동안 시험 무리가 화면에 들었는지
+const VIEW_AHEAD_M: float = 16.0 # 폰 재기 "view": 시험 벽 꼭짓점이 도착 자리에서 카메라 앞 이만큼
 const SOLE_LIFT: float = 0.02
 const WORK_USEC: int = 6000
 const HEAD_MAX_M: float = 1.95
@@ -46,6 +47,7 @@ const KINDS: Array[String] = ["wall_sheet", "wall_sound", "wall_plank", "wall_st
 static var resource_reads: int = 0 # 캐시 적중도 포함한 읽기 시도. 꺼짐 경로의 무읽기 계약 관측.
 static var _card_margin := AABB()
 static var _shader_kept: Shader # 한 번 컴파일한 셰이더를 정차 사이에 붙잡아 둔다.
+static var _atlas_kept: Texture2D # 한 번 읽은 아틀라스도(VRAM 압축 2048x1024, 약 2 MB). 부팅 데우기(horde_warm.gd)가 미리 채운다.
 static var _orphan_paths: Array[String] = [] # 짓기가 일찍 끝나 받지 못한 스레드 읽기(끝나면 get으로 회수).
 var stats: Dictionary = {}
 var chunks: Array[Dictionary] = []
@@ -157,6 +159,9 @@ static func wall_error(wall: Dictionary, map_size: Vector2, grid: FieldGrid = nu
 		return "바깥 법선은 단위이며 수직이어야 함"
 	if map_size.x <= 0.0 or map_size.y <= 0.0:
 		return "지도 크기 누락"
+	if String(wall.get("test_mode", "")) == "view":
+		# 폰 재기 전용 시험 벽(stop_walls "view"): 도착 화면 안에 세운 벽이라 바깥이 지도 밖인지 보지 않는다.
+		return ""
 	var bounds := Rect2(Vector2.ZERO, map_size)
 	# 격자 가장자리, 또는 안쪽으로 들인 경계의 통행 가능/불가 양쪽을 검사한다.
 	var tangent: Vector2 = (b - a).normalized()
@@ -720,16 +725,38 @@ static func near_test_walls(spawn: Vector2, map_size: Vector2) -> Dictionary:
 	return {"walls": walls, "edge_m": gaps[side]}
 
 
+## 도착 화면 안: 구석 시험 벽(test_walls)과 같은 두 토막을, 꼭짓점이 도착 자리에서 카메라 앞(화면 위쪽)
+## VIEW_AHEAD_M에 오게 옮긴 것. 화면에서는 Λ 꼴로 꼭짓점 양옆 아래로 내려오고 무리는 그 바깥(위쪽 양옆)에
+## 선다. 벽 모양·바깥 방향이 구석 시험 벽과 같아 무리 수도 같다. 지도 안 벽이라 시험 표시가 있어야 받아들인다.
+static func view_test_walls(spawn: Vector2) -> Array:
+	var back: Vector3 = camera_back()
+	var ahead: Vector2 = -Vector2(back.x, back.z).normalized() * VIEW_AHEAD_M
+	var corner := Vector2(roundf(spawn.x + ahead.x), roundf(spawn.y + ahead.y))
+	var walls: Array = []
+	for wall: Dictionary in test_walls():
+		var moved: Dictionary = wall.duplicate()
+		moved["id"] = String(wall["id"]).replace("h1_", "h1_view_")
+		moved["a"] = (wall["a"] as Vector2) + corner
+		moved["b"] = (wall["b"] as Vector2) + corner
+		walls.append(moved)
+	return walls
+
+
 ## 정차가 무리에 넘기는 벽: 지도의 edge_walls + opts의 test_edge_walls, 그리고 폰 재기용
 ## 성능 키 horde_test_walls(perf_switch.json은 안드로이드만 읽음, 기본 끔): true면 촬영 도구와 같은
-## 구석 시험 벽, "near"면 도착 자리에서 가장 가까운 가장자리에 같은 두 토막(도착 화면 안 그리기 비용까지 재게).
-## 넣은 시험 벽에는 test_mode("corner"/"near")를 달고, 켬이 먹었는지는 짓기가 끝난 뒤 setup이 찍는
+## 구석 시험 벽, "near"면 도착 자리에서 가장 가까운 가장자리에 같은 두 토막, "view"면 같은 두 토막을
+## 도착 화면 안 카메라 앞에(view_test_walls — 첫 무리 그림·화면 안 그리기 비용을 재게).
+## 넣은 시험 벽에는 test_mode("corner"/"near"/"view")를 달고, 켬이 먹었는지는 짓기가 끝난 뒤 setup이 찍는
 ## PERF_SWITCH {"horde_test_walls": …, "ok": …} 한 줄로 본다(실제로 받아들인 시험 벽·무리 수까지).
 ## 무리 꺼짐·도착 자리 없음은 여기서 "ok": false 줄을 찍고 시험 벽을 넣지 않는다.
 static func stop_walls(data: Dictionary, opts: Dictionary, settings: Dictionary, map_size: Vector2 = Vector2.ZERO) -> Array:
 	var walls: Array = (data.get("edge_walls", []) as Array) + (opts.get("test_edge_walls", []) as Array)
 	var mode: Variant = settings.get("horde_test_walls")
-	var label: String = "corner" if mode is bool and bool(mode) else ("near" if mode is String and String(mode) == "near" else "")
+	var label: String = ""
+	if mode is bool and bool(mode):
+		label = "corner"
+	elif mode is String and String(mode) in ["near", "view"]:
+		label = String(mode)
 	if label.is_empty():
 		return walls
 	if settings.get("horde") is bool and not bool(settings["horde"]):
@@ -737,24 +764,30 @@ static func stop_walls(data: Dictionary, opts: Dictionary, settings: Dictionary,
 		return walls
 	var extra: Array = test_walls()
 	var edge_m: float = -1.0
-	if label == "near":
+	if label == "near" or label == "view":
 		var spots: Array = (data.get("spawns", {}) as Dictionary).get("squad", [])
 		if spots.is_empty() or map_size.x <= 0.0 or map_size.y <= 0.0:
 			print("PERF_SWITCH ", {"horde_test_walls": label, "ok": false, "reason": "no arrival spot or map size"})
 			return walls
 		var cell: Vector2i = spots[0]
-		var near: Dictionary = near_test_walls(Vector2(cell) + Vector2(0.5, 0.5), map_size)
-		extra = near["walls"]
-		edge_m = snappedf(float(near["edge_m"]), 0.1)
-		# 측정 조건은 24 m 두 토막(구석 시험 벽과 같은 짐). 가장자리가 짧으면 줄인 판을 성공으로 재지 않는다.
-		var lengths: Array = extra.map(func(wall: Dictionary) -> float: return (wall["a"] as Vector2).distance_to(wall["b"]))
-		if extra.size() < 2 or lengths.any(func(length_m: float) -> bool: return length_m < 23.999):
-			print("PERF_SWITCH ", {"horde_test_walls": label, "ok": false, "reason": "edge shorter than two 24 m pieces", "lengths_m": lengths, "edge_m": edge_m})
-			return walls
+		var spawn: Vector2 = Vector2(cell) + Vector2(0.5, 0.5)
+		if label == "view":
+			extra = view_test_walls(spawn)
+		else:
+			var near: Dictionary = near_test_walls(spawn, map_size)
+			extra = near["walls"]
+			edge_m = snappedf(float(near["edge_m"]), 0.1)
+			# 측정 조건은 24 m 두 토막(구석 시험 벽과 같은 짐). 가장자리가 짧으면 줄인 판을 성공으로 재지 않는다.
+			var lengths: Array = extra.map(func(wall: Dictionary) -> float: return (wall["a"] as Vector2).distance_to(wall["b"]))
+			if extra.size() < 2 or lengths.any(func(length_m: float) -> bool: return length_m < 23.999):
+				print("PERF_SWITCH ", {"horde_test_walls": label, "ok": false, "reason": "edge shorter than two 24 m pieces", "lengths_m": lengths, "edge_m": edge_m})
+				return walls
 	for wall: Dictionary in extra:
 		var marked: Dictionary = wall.duplicate()
 		marked["test_mode"] = label
 		marked["test_edge_m"] = edge_m
+		if label == "view":
+			marked["test_ahead_m"] = VIEW_AHEAD_M
 		var id: String = marked["id"]
 		var same_id: Array = walls.filter(func(other: Variant) -> bool: return _wall_id(other) == id)
 		if not same_id.is_empty() and same_id.all(func(other: Variant) -> bool: return _same_wall(other, wall)):
@@ -812,6 +845,8 @@ func _report_test_walls(reason: String = "") -> void:
 		line["reason"] = reason
 	if float(first.get("test_edge_m", -1.0)) >= 0.0:
 		line["edge_m"] = first["test_edge_m"]
+	if first.has("test_ahead_m"):
+		line["ahead_m"] = first["test_ahead_m"]
 	print("PERF_SWITCH ", line)
 
 
@@ -828,6 +863,9 @@ func _track_test_screen() -> void:
 			seen += (chunk["people"] as Array).size()
 	if seen > 0 and int(stats.get("test_screen_first_frame", -1)) < 0:
 		stats["test_screen_first_frame"] = _test_screen_frames
+		# 그 자리에서 한 줄: 로그 시각이 첫 무리 그림 프레임을 가리킨다(폰 프레임 시각과 맞추기용).
+		print("HORDE_SEEN ", {"horde_test_walls": (_test_asked[0] as Dictionary)["test_mode"], "test_instances": seen,
+			"frame": _test_screen_frames, "msec": Time.get_ticks_msec()})
 	stats["test_screen_max"] = maxi(int(stats.get("test_screen_max", 0)), seen)
 	if _test_screen_frames >= SCREEN_REPORT_FRAMES:
 		_test_screen_frames = -1
@@ -910,9 +948,10 @@ func _setup_body(walls: Array, vis: Dictionary, pace: BuildPace) -> void:
 	if atlas == null or shader == null or atlas.get_size() != Vector2(ATLAS_SIZE):
 		push_warning("HordeView: 아틀라스 크기 또는 셰이더 자원 오류")
 		return
-	# 셰이더는 첫 재질에서 컴파일된다(PC Intel Xe 첫 회 약 55 ms, 그다음 0.1 ms 밑).
-	# 붙잡아 두면 다음 정차부터는 다시 읽지도 컴파일하지도 않는다. 아틀라스는 붙잡지 않는다.
+	# 셰이더는 첫 재질에서 컴파일된다(PC Intel Xe 첫 회 약 55 ms, 그다음 0.1 ms 밑), 아틀라스는 첫 읽기가
+	# 길다. 둘 다 붙잡아 두면 다음 정차부터는 다시 읽지도 컴파일하지도 않는다(첫 정차 몫은 부팅 데우기가).
 	_shader_kept = shader
+	_atlas_kept = atlas
 	var mesh: ArrayMesh = card_mesh()
 	_set_stage("upload")
 	for chunk: Dictionary in chunks:
