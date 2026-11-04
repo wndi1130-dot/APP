@@ -112,6 +112,52 @@ function dealVectors() {
       }
     }
   }
+  // 고르기는 원한을 빼고 센다(stance(..., false)), 같은 최고점이면 앞의 것. 그것이 갈리는 판을 찾아 둔다:
+  // 원한을 셈했으면 다른 안건을 골랐을 판, 최고점이 둘 이상인 판. 회기를 열 때 원한이 줄지 않게 마지막 잘못을 미룬다.
+  const scores = (g: Game, c: Comm, withGrudge: boolean) => (g.council?.options ?? []).map(o => S1.stance(g, c, o, withGrudge).score);
+  const first = (xs: number[]) => xs.reduce((at, x, i) => (x > xs[at] ? i : at), 0);
+  let split = 0;
+  let tie = 0;
+  for (const seed of [...SEEDS, 'deal-2', 'deal-3']) {
+    for (const c of S1.COMMS) {
+      for (const grudge of [1, S1.P.hostileGrudge]) {
+        for (const tension of [0, 60]) {
+          const g = council(seed);
+          g.agendaHolder = c;
+          g.comms[c].grudge = grudge;
+          g.comms[c].lastOffense = g.session + 1;
+          if (tension) g.tension = tension;
+          const probe = plain(g);
+          S1.openCouncil(probe, false);
+          const without = scores(probe, c, false);
+          if (without.length === 0) continue;
+          const picked = probe.council!.idx;
+          if (picked !== first(without)) throw new Error(`고르기 규칙이 다름: ${seed}/${c}`);
+          const name = `${seed}/${c}/g${grudge}${tension ? '-t' + tension : ''}`;
+          const splitHere = first(scores(probe, c, true)) !== picked;
+          const tieHere = without.filter(x => x === without[picked]).length > 1;
+          if (splitHere) split += 1;
+          if (tieHere) tie += 1;
+          if (splitHere || tieHere) add(`holderpick/${name}${splitHere ? '-grudge' : ''}${tieHere ? '-tie' : ''}`, g, { kind: 'open_council', emergency: false }, () => { S1.openCouncil(g, false); });
+        }
+      }
+    }
+  }
+  if (split === 0) throw new Error('원한을 셈하면 갈리는 선택권 판을 못 찾음');
+  if (tie === 0) throw new Error('최고점이 같은 선택권 판을 못 찾음');
+  // 실제 흐름: 선택권을 거래로 사고 → 이번 안건 표결 → 다음 회기에서 그 칸이 고름 → 고른 안건 표결 → 그다음 회기.
+  for (const seed of SEEDS) {
+    const base = table(seed, 'patrol', false);
+    const c = S1.COMMS.find(x => S1.openConditions(base, x).some(k => k.kind === 'agenda'));
+    if (!c) throw new Error(`선택권 조건을 내놓는 칸이 없음: ${seed}`);
+    const i = S1.openConditions(base, c).findIndex(k => k.kind === 'agenda');
+    const g = plain(base);
+    add(`holderflow/${seed}/1-deal`, g, { kind: 'deal', comm: c, tool: 'open', cond: i }, () => S1.makeDeal(g, c, 'open', i));
+    add(`holderflow/${seed}/2-vote`, g, { kind: 'cast_vote' }, () => { S1.castVote(g); });
+    add(`holderflow/${seed}/3-open`, g, { kind: 'open_council', emergency: false }, () => { S1.openCouncil(g, false); });
+    add(`holderflow/${seed}/4-vote`, g, { kind: 'cast_vote' }, () => { S1.castVote(g); });
+    add(`holderflow/${seed}/5-open`, g, { kind: 'open_council', emergency: false }, () => { S1.openCouncil(g, false); });
+  }
   return cases;
 }
 

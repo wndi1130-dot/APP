@@ -112,8 +112,13 @@ static func _new_secret(g: Dictionary, t: Dictionary) -> Dictionary:
 
 ## S1 politics.ts openCouncil. A group that took the agenda in a deal (`agendaHolder`) picks
 ## this session's agenda, the one it likes best (its stance without grudge; the first of equal
-## best), and the agenda is locked to it (council_card.gd turn).
+## best), and the agenda is locked to it (council_card.gd turn). Where S2 could not then vote
+## on that pick (an agenda cast_vote refuses), or S1 would drop the pick (a martial session,
+## whose agenda filter S2 has not ported), the session is refused before anything is spent.
 static func open_council(g0: Dictionary, t: Dictionary, emergency: bool = false) -> Dictionary:
+	var held: bool = g0.get("agendaHolder") != null
+	if held and not emergency and g0.get("dark") is Dictionary and bool((g0["dark"] as Dictionary).get("martial", false)):
+		return _unported(g0, "openCouncil: agendaHolder in a martial session")
 	var g: Dictionary = g0.duplicate(true)
 	g["session"] = int(g["session"]) + 1
 	for comm: String in t["COMMS"]:
@@ -135,6 +140,8 @@ static func open_council(g0: Dictionary, t: Dictionary, emergency: bool = false)
 			if score > best:
 				best = score
 				idx = i
+		if not options.is_empty() and not votable(options[idx]):
+			return _unported(g0, "openCouncil: agendaHolder picks %s, which S2 cannot vote on yet" % Vote.agenda_title(t, options[idx]))
 	g["council"] = {"options": options, "idx": idx, "locked": holder != null, "deals": [], "result": null}
 	if emergency: g["council"]["emergency"] = true
 	if holder != null and not options.is_empty():
@@ -153,11 +160,18 @@ static func cast_vote(g: Dictionary, t: Dictionary) -> Dictionary:
 	if options.is_empty(): return g.duplicate(true)
 	var agenda: Dictionary = options[int(council["idx"])]
 	if bool(council.get("martial", false)): return _unported(g, "castVote: martial")
-	if agenda.get("kind") == "motion":
-		if not Vote.SUPPORTED_MOTIONS.has(agenda.get("motion")): return _unported(g, "castVote: motion " + str(agenda.get("motion")))
-	elif not Vote.supported_law(agenda.get("law")) or bool(agenda.get("ratify", false)):
+	if not votable(agenda):
+		if agenda.get("kind") == "motion": return _unported(g, "castVote: motion " + str(agenda.get("motion")))
 		return _unported(g, "castVote: law " + str(agenda.get("law")))
 	return Vote.cast_vote(g, t)["g"]
+
+
+## Whether S2 casts a vote on `agenda` yet: a motion or law council_vote.gd supports, not a
+## ratification (cast_vote's check; open_council keeps a group's pick to these).
+static func votable(agenda: Dictionary) -> bool:
+	if agenda.get("kind") == "motion":
+		return Vote.SUPPORTED_MOTIONS.has(agenda.get("motion"))
+	return Vote.supported_law(agenda.get("law")) and not bool(agenda.get("ratify", false))
 
 
 static func choose_card(g: Dictionary, t: Dictionary, uid: int, index: int) -> Dictionary:
