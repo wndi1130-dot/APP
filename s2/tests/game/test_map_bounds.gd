@@ -412,7 +412,8 @@ func test_bounds_rule_capture_json_resume_and_legacy_zero() -> void:
 			game.data["bounds_stamp"] = rule
 		var saved: Dictionary = FieldSave.capture(game)
 		assert_eq(saved["bounds_rule"], rule)
-		assert_eq(saved["version"], 2, "저장 판 번호를 올리지 않습니다")
+		# 경계 판은 키로만 남기고 저장 판 번호는 건드리지 않는다 — 숫자는 main의 FieldSave 것을 따른다.
+		assert_eq(saved["version"], FieldSave.VERSION, "저장은 지금 판 번호로 씁니다(경계 판 때문에 올리지 않음)")
 		assert_false(saved["start_opts"].has("bounds_rule"))
 		var back: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
 		assert_false(back.is_empty())
