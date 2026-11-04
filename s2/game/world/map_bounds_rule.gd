@@ -123,7 +123,10 @@ static func depths(row: Array[Dictionary], rng: RandomNumberGenerator, first: in
 				if cost < next[depth]:
 					next[depth] = cost
 					parent[depth] = previous
-		if next.min() >= 100000000 and failure.is_empty():
+		var best_next: int = 100000000
+		for value: int in next:
+			best_next = mini(best_next, value)
+		if best_next >= 100000000 and failure.is_empty():
 			var reachable: Array[int] = []
 			for depth: int in range(costs.size()):
 				if costs[depth] < 100000000: reachable.append(depth)
