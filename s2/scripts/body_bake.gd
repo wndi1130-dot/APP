@@ -3436,7 +3436,10 @@ static func _person_walk_collect_bounds(ctx: Dictionary, fit: Dictionary, specs:
 				_person_walk_pose(ctx, fit, entry, keyed_u)
 				_apply_person_walk_turn(ctx, fit, u, keyed_u, entry[4])
 				geometry_by_phase[u] = _person_walk_geometry(ctx, fit)
-			var targets: Array = field.get(clip, {}).get(u, rigid_targets)
+			var phase_field: Dictionary = field.get(clip, {})
+			var targets: Array = phase_field.get(u, rigid_targets)
+			if not (fit.get("height_extra_phases", PackedFloat64Array()) as PackedFloat64Array).is_empty():
+				targets = _person_walk_field_seed(fit, phase_field, u, rigid_targets)
 			# Exact serialized inputs only; rounded keys can hide a narrow collision.
 			var bound_key: String = var_to_bytes([u, geometry_by_phase[u], targets, fit["starts"], fit["durations"], fit.get("path_params", {}), _person_walk_stand_cap(fit)]).hex_encode()
 			var bounds: Dictionary = bound_cache.get(bound_key, {})
@@ -3481,7 +3484,7 @@ static func _fit_person_walk_height(ctx: Dictionary, fit: Dictionary, walk: Arra
 		return {"ok": false, "reason": bounds["reason"], "failed_samples": PackedInt32Array()}
 	var target: float = float(fit["floor"]) + PERSON_WALK_MEAN_MIN * float(fit["stand_ref_m"])
 	var table: Dictionary = _person_walk_project_table(bounds["phases"], bounds["lowers"], bounds["uppers"], target, require_mean, PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN, fit.get("work_budget", {}), _person_walk_validation_phases(fit, false), ctx)
-	table.merge({"phases": bounds["phases"], "details": bounds["details"], "rig_label": ctx.get("rig_label", "unknown"),
+	table.merge({"phases": bounds["phases"], "details": bounds["details"], "center_intervals": bounds["center_intervals"], "rig_label": ctx.get("rig_label", "unknown"),
 		"clip": walk[0], "fit_failures": ctx.get_or_add("fit_failures", [])}, true)
 	if report and not bool(table["ok"]):
 		var failed: PackedInt32Array = table["failed_samples"]
@@ -3800,6 +3803,11 @@ static func _person_walk_spend(budget: Dictionary, kind: String, clip: String, a
 		return false
 	used[kind] = int(used.get(kind, 0)) + amount
 	by_clip[kind] = int(by_clip.get(kind, 0)) + amount
+	var stage: String = str(budget.get("active_stage", "search"))
+	var stage_used: Dictionary = budget.get_or_add("stages", {}).get_or_add(stage, {})
+	stage_used[kind] = int(stage_used.get(kind, 0)) + amount
+	var stage_clip: Dictionary = budget.get_or_add("stage_clips", {}).get_or_add(stage, {}).get_or_add(clip, {})
+	stage_clip[kind] = int(stage_clip.get(kind, 0)) + amount
 	return true
 
 
@@ -3824,6 +3832,180 @@ static func _person_walk_pose(ctx: Dictionary, fit: Dictionary, entry: Array, ke
 	cache[keyed_u] = bone_poses
 
 
+## Only evaluated, uncut frames may return their correction to the shared table.
+static func _person_walk_joint_feedback(solved: Dictionary) -> Dictionary:
+	var conditions: Dictionary = solved.get("conditions", {})
+	var targets: Array = solved.get("proposed_targets", [])
+	var valid: bool = bool(solved.get("evaluated", false)) and not bool(solved.get("bounds", {}).get("empty", true)) and targets.size() == 2
+	for target: Vector3 in targets:
+		valid = valid and target.is_finite()
+	for cut: bool in solved.get("reach_clamped", [true, true]):
+		valid = valid and not cut
+	for ankle_ok: bool in conditions.get("ankle_ok", [false, false]):
+		valid = valid and ankle_ok
+	var knee: bool = false
+	for gate: String in ["mid_knee_ok", "stance_knee_ok"]:
+		for passed: bool in conditions.get(gate, []):
+			knee = knee or not passed
+	var recoverable: bool = str(solved.get("reason", "")) in ["SKIN_ITER_LIMIT", "SKIN_STALLED", "SKIN_CYCLE"]
+	return {"retry": valid and recoverable, "knee": valid and knee,
+		"targets": targets.duplicate(), "needs_projection": valid and (recoverable or absf(float(solved.get("height_table_delta_m", 0.0))) > PERSON_WALK_JOINT_HEIGHT_TOL_M)}
+
+
+## Periodic interpolation predicts only a seed; every new phase is still evaluated.
+static func _person_walk_field_seed(fit: Dictionary, field: Dictionary, u: float, rigid: Array) -> Array:
+	if field.has(u):
+		return (field[u] as Array).duplicate()
+	if field.is_empty():
+		return rigid.duplicate()
+	var phases: Array = field.keys()
+	phases.sort()
+	var left: float = float(phases.back())
+	var right: float = float(phases.front())
+	var before: float = left - 1.0
+	var after: float = right + 1.0
+	for phase: float in phases:
+		if phase < u:
+			before = phase
+			left = phase
+		elif phase > u:
+			after = phase
+			right = phase
+			break
+	var weight: float = (u - before) / (after - before)
+	var seed: Array = []
+	for side in 2:
+		var a: Vector3 = (field[left][side] as Vector3) - (_person_walk_ankle_goal(fit, side, left)["target"] as Vector3)
+		var b: Vector3 = (field[right][side] as Vector3) - (_person_walk_ankle_goal(fit, side, right)["target"] as Vector3)
+		seed.append((rigid[side] as Vector3) + a.lerp(b, weight))
+	return seed
+
+
+## Constant center intervals at the actual height: R15 <= distance <= R4.
+static func _person_walk_center_window(fit: Dictionary, u: float, targets: Array, geometry: Dictionary, height: float) -> Dictionary:
+	var intervals: Array = []
+	var evidence: Array = []
+	var centers: Array = _person_walk_default_params(fit)["centers"]
+	for side in 2:
+		var leg: Dictionary = geometry["legs"][side]
+		var thigh: Vector3 = leg["thigh"]
+		var target: Vector3 = targets[side]
+		var a: float = leg["a"]
+		var b: float = leg["b"]
+		var vertical: float = height + thigh.y - (geometry["hips"] as Vector3).y - target.y
+		var fixed_squared: float = vertical * vertical + pow(thigh.x - target.x, 2.0)
+		var r4: float = sqrt(a * a + b * b + 2.0 * a * b * cos(PERSON_WALK_KNEE_MIN))
+		var r15: float = sqrt(a * a + b * b + 2.0 * a * b * cos(PERSON_WALK_MID_KNEE_MAX))
+		var distance: float = sqrt(fixed_squared + pow(thigh.z - target.z, 2.0))
+		var center: float = float(centers[side]) + thigh.z - target.z
+		var mid: float = fposmod(u - float(fit["starts"][side]), 1.0) / float(fit["durations"][side])
+		var allowed: Array = []
+		var outer_squared: float = r4 * r4 - fixed_squared
+		if minf(a, b) > 0.000001 and vertical >= 0.0 and outer_squared >= 0.0:
+			var outer: float = sqrt(outer_squared)
+			var lo: float = maxf(-PERSON_WALK_CENTER_LIMIT, center - outer)
+			var hi: float = minf(PERSON_WALK_CENTER_LIMIT, center + outer)
+			if lo <= hi:
+				allowed.append(Vector2(lo, hi))
+			if mid >= 0.40 and mid <= 0.60 and r15 * r15 > fixed_squared:
+				var inner: float = sqrt(r15 * r15 - fixed_squared)
+				allowed = _person_walk_center_intersection(allowed, Vector2(center - inner, center + inner))
+		intervals.append(allowed)
+		evidence.append({"mid": mid, "distance_minus_r15_m": distance - r15, "r4_minus_distance_m": r4 - distance,
+			"predicted_knee_deg": rad_to_deg(acos(clampf((distance * distance - a * a - b * b) / maxf(2.0 * a * b, 0.000000001), -1.0, 1.0))), "intervals": allowed})
+	return {"intervals": intervals, "sides": evidence}
+
+
+static func _person_walk_overlap_centers(a: Array, b: Array) -> Array:
+	var result: Array = []
+	for left: Vector2 in a:
+		for right: Vector2 in b:
+			var lo: float = maxf(left.x, right.x)
+			var hi: float = minf(left.y, right.y)
+			if lo <= hi:
+				result.append(Vector2(lo, hi))
+	return result
+
+
+static func _person_walk_nearest_center(intervals: Array, origin: float) -> float:
+	var nearest: float = INF
+	for interval: Vector2 in intervals:
+		var inset: float = _person_walk_height_inset(interval.x, interval.y)
+		var choice: float = clampf(origin, interval.x + inset, interval.y - inset)
+		if absf(choice - origin) < absf(nearest - origin):
+			nearest = choice
+	return nearest
+
+
+## Intersect every clip and phase, not just the first offending middle frame.
+static func _person_walk_feedback_centers(ctx: Dictionary, fit: Dictionary, specs: Array, field: Dictionary, heights: Dictionary) -> Dictionary:
+	var intervals: Array = [[Vector2(-PERSON_WALK_CENTER_LIMIT, PERSON_WALK_CENTER_LIMIT)], [Vector2(-PERSON_WALK_CENTER_LIMIT, PERSON_WALK_CENTER_LIMIT)]]
+	var witness: Dictionary = {}
+	var active: Array = [{}, {}]
+	var violations: Array = [-INF, -INF]
+	for spec: Dictionary in specs:
+		var entry: Array = spec["entry"]
+		var clip: String = entry[0]
+		for u: float in field[clip]:
+			if not _person_walk_spend(fit.get("work_budget", {}), "bounds", clip):
+				return {"ok": false, "reason": "FOOT_PATH_BUDGET", "center_intervals": intervals}
+			var keyed_u: float = fposmod(u + float(spec["shift"]), 1.0)
+			_person_walk_pose(ctx, fit, entry, keyed_u)
+			_apply_person_walk_turn(ctx, fit, u, keyed_u, entry[4])
+			var window: Dictionary = _person_walk_center_window(fit, u, field[clip][u], _person_walk_geometry(ctx, fit), float(heights[clip][u]))
+			for side in 2:
+				intervals[side] = _person_walk_overlap_centers(intervals[side], window["intervals"][side])
+				var evidence: Dictionary = window["sides"][side]
+				var violation: float = -float(evidence["r4_minus_distance_m"])
+				if float(evidence["mid"]) >= 0.40 and float(evidence["mid"]) <= 0.60:
+					violation = maxf(violation, -float(evidence["distance_minus_r15_m"]))
+				if violation > float(violations[side]):
+					violations[side] = violation
+					active[side] = {"clip": clip, "phase": u, "side": side, "window": evidence}
+				if (intervals[side] as Array).is_empty() and witness.is_empty():
+					witness = {"clip": clip, "phase": u, "side": side, "window": window}
+	var params: Dictionary = _person_walk_default_params(fit)
+	for side in 2:
+		var center: float = _person_walk_nearest_center(intervals[side], float(params["centers"][side]))
+		if not is_finite(center):
+			return {"ok": false, "reason": "CENTER_EMPTY", "center_intervals": intervals, "detail": witness, "constraints": active}
+		params["centers"][side] = center
+	return {"ok": true, "params": params, "center_intervals": intervals, "constraints": active}
+
+
+static func _person_walk_joint_transition(stage: String, passes: int, converged: bool, limit: int) -> String:
+	if converged:
+		return "dense" if stage == "coarse" else "saved"
+	if passes >= limit:
+		return "COARSE_ITER_LIMIT" if stage == "coarse" else "DENSE_ITER_LIMIT"
+	return stage
+
+
+static func _person_walk_joint_progress(history: Array, signature: String, score: float) -> String:
+	if not history.is_empty() and str(history.back()["signature"]) == signature:
+		return "JOINT_STALLED"
+	if history.size() > 1 and str(history[history.size() - 2]["signature"]) == signature:
+		return "JOINT_CYCLE"
+	var stalled: int = 0
+	if not history.is_empty() and not score < float(history.back()["score"]) - PERSON_WALK_SKIN_PROGRESS:
+		stalled = int(history.back()["stalled"]) + 1
+	history.append({"signature": signature, "score": score, "stalled": stalled})
+	return "JOINT_STALLED" if stalled >= PERSON_WALK_SKIN_STALL_TRIALS else ""
+
+
+static func _person_walk_dense_reserve(budget: Dictionary, specs: Array, phases: int) -> bool:
+	if budget.is_empty():
+		return true
+	var total: int = 0
+	for spec: Dictionary in specs:
+		var clip: String = str(spec["entry"][0])
+		var required: int = phases + int(spec["entry"][2])
+		total += required
+		if int(budget["clips"].get(clip, {}).get("ik", 0)) + required > int(budget["limits"]["clip_ik"]):
+			return false
+	return int(budget["used"].get("ik", 0)) + total <= int(budget["limits"]["ik"])
+
+
 static func _fit_person_walk_candidate(ctx: Dictionary, source: Dictionary, specs: Array) -> Dictionary:
 	if ctx.has("dump_projection"):
 		ctx["walk_projection_dump"] = ctx.get("walk_projection_dump", {})
@@ -3831,105 +4013,188 @@ static func _fit_person_walk_candidate(ctx: Dictionary, source: Dictionary, spec
 	local_ctx["fit_failures"] = []
 	var fit: Dictionary = source.duplicate()
 	fit["walk_specs"] = specs
-	fit["target_field"] = {}
-	fit["stance_knee_min_deg"] = INF
-	var field: Dictionary = {}
-	var dense: bool = false
+	fit["target_field"] = (source.get("target_field", {}) as Dictionary).duplicate(true)
+	fit["dense_refined_phases"] = {}
+	if not fit.has("work_budget") or (fit["work_budget"] as Dictionary).is_empty():
+		fit["work_budget"] = _person_walk_budget()
+	var budget: Dictionary = fit.get("work_budget", {})
+	var old_stage: String = str(budget.get("active_stage", "search"))
+	var before: Dictionary = (budget.get("stages", {}) as Dictionary).duplicate(true)
+	# Reserve half of the unchanged twelve passes for dense continuation.
+	var coarse_limit: int = PERSON_WALK_JOINT_PASSES >> 1
+	var joint: Dictionary = {"stage": "coarse", "stage_limits": {"coarse": coarse_limit, "dense": PERSON_WALK_JOINT_PASSES - coarse_limit},
+		"stage_passes": {"coarse": 0, "dense": 0}, "reprojections": 0, "feedback_frames": 0,
+		"knee_feedbacks": 0, "center_updates": 0, "cache_hits": 0, "passes": [], "stage_ik": {}}
+	var result: Dictionary = _person_walk_joint_candidate(local_ctx, fit, specs, joint)
+	for stage: String in budget.get("stages", {}):
+		joint["stage_ik"][stage] = int(budget["stages"][stage].get("ik", 0)) - int(before.get(stage, {}).get("ik", 0))
+	joint["exit_reason"] = result.get("reason", "")
+	result["joint"] = joint
+	result["target_field"] = fit["target_field"]
+	budget["active_stage"] = old_stage
+	if bool(result["ok"]):
+		fit["joint_passes"] = int(joint["stage_passes"]["coarse"]) + int(joint["stage_passes"]["dense"])
+		for key: String in ["work_budget", "pose_cache", "geometry_cache", "bound_cache"]:
+			fit.erase(key)
+	return result
+
+
+static func _person_walk_joint_candidate(ctx: Dictionary, fit: Dictionary, specs: Array, joint: Dictionary) -> Dictionary:
 	var first: Dictionary = specs[0]
 	var walk: Array = first["entry"]
+	var field: Dictionary = fit["target_field"]
 	var solved_cache: Dictionary = {}
-	fit["dense_refined_phases"] = {}
-	for joint_pass in PERSON_WALK_JOINT_PASSES:
-		fit["stance_knee_min_deg"] = INF
-		var full: Dictionary = _fit_person_walk_height(local_ctx, fit, walk, float(first["shift"]), field, true, false)
-		if bool(fit.get("work_budget", {}).get("exhausted", false)):
-			return {"ok": false, "reason": "FOOT_PATH_BUDGET"}
-		var table: Dictionary = full
-		if not bool(full["ok"]):
-			if str(full["reason"]) in ["POINT_EMPTY", "CENTER_EMPTY", "MEAN_GRID_CAP", "MEAN_SAVED_CAP"]:
-				return {"ok": false, "reason": full["reason"], "joint_pass": joint_pass + 1, "table": full}
-			table = _fit_person_walk_height(local_ctx, fit, walk, float(first["shift"]), field, false, false)
-		if not bool(table["ok"]):
-			return {"ok": false, "reason": table["reason"], "joint_pass": joint_pass + 1, "table": table}
-		fit["pelvis"] = table
-		var next_field: Dictionary = {}
-		var target_delta: float = 0.0
-		var height_delta: float = 0.0
-		for spec: Dictionary in specs:
-			var entry: Array = spec["entry"]
-			var clip: String = entry[0]
-			local_ctx["walk_clip"] = clip
-			var previous: Dictionary = field.get(clip, {})
-			var next: Dictionary = {}
-			var cached_phases: Dictionary = solved_cache.get_or_add(clip, {})
-			var correction: Array = [Vector3.ZERO, Vector3.ZERO]
-			var ordered: PackedFloat64Array = (table["phases"] as PackedFloat64Array).duplicate()
-			ordered.sort()
-			for u: float in ordered:
-				var keyed_u: float = fposmod(u + float(spec["shift"]), 1.0)
-				var rigid: Array = [_person_walk_ankle_goal(fit, 0, u)["target"], _person_walk_ankle_goal(fit, 1, u)["target"]]
-				var initial: Array = previous.get(u, [])
-				if initial.is_empty():
-					initial = [(rigid[0] as Vector3) + (correction[0] as Vector3), (rigid[1] as Vector3) + (correction[1] as Vector3)]
-				var height: float = _person_walk_height_at(table, u)
-				var cached: Dictionary = cached_phases.get(u, {})
-				var solved: Dictionary = {}
-				if not cached.is_empty() and float(cached["height"]) == height and (cached["initial"] as Array) == initial:
-					solved = cached["solved"]
-				else:
-					_person_walk_pose(local_ctx, fit, entry, keyed_u)
-					_apply_person_walk_body(local_ctx, fit, u, keyed_u, entry[4])
-					# Dense phases get one verification pass before local refinement.
-					solved = _solve_person_walk_frame(local_ctx, fit, u, initial, 1 if dense else PERSON_WALK_SKIN_EVALUATIONS)
-					if dense and not bool(solved["ok"]) and not bool(fit.get("work_budget", {}).get("exhausted", false)):
-						fit["dense_refined_phases"].get_or_add(clip, {})[u] = true
-						var verification: Dictionary = solved
-						var seed: Array = solved["proposed_targets"]
-						_person_walk_pose(local_ctx, fit, entry, keyed_u)
-						_apply_person_walk_body(local_ctx, fit, u, keyed_u, entry[4])
-						solved = _solve_person_walk_frame(local_ctx, fit, u, initial if seed.is_empty() else seed, PERSON_WALK_SKIN_EVALUATIONS - 1)
-						# The existing dense restart remains; include its first evaluation in diagnostics.
-						var verified_pairs: int = int(verification["ik_passes"])
-						for note: Dictionary in solved["passes"]:
-							note["ik_passes"] = int(note["ik_passes"]) + verified_pairs
-							note["dense_restart"] = true
-						solved["passes"] = (verification["passes"] as Array) + (solved["passes"] as Array)
-						solved["ik_passes"] = int(solved["ik_passes"]) + verified_pairs
-						if solved.has("last_trial"):
-							solved["last_trial"]["ik_passes"] = int(solved["last_trial"]["ik_passes"]) + verified_pairs
-				if not bool(solved["ok"]):
-					return {"ok": false, "reason": solved["reason"], "joint_pass": joint_pass + 1, "clip": clip,
-						"phase": u, "solve": solved, "failures": local_ctx["fit_failures"]}
-				fit["stance_knee_min_deg"] = minf(float(fit["stance_knee_min_deg"]), float(solved["stance_knee_min_deg"]))
-				cached_phases[u] = {"height": height, "initial": initial.duplicate(), "solved": solved}
-				next[u] = (solved["proposed_targets"] as Array).duplicate()
-				for side in 2:
-					correction[side] = (next[u][side] as Vector3) - (rigid[side] as Vector3)
-					target_delta = maxf(target_delta, (initial[side] as Vector3).distance_to(next[u][side]))
-				height_delta = maxf(height_delta, absf(float(solved["final_hips_y"]) - _person_walk_height_at(table, u)))
-			next_field[clip] = next
-		if target_delta <= PERSON_WALK_JOINT_TARGET_TOL_M and height_delta <= PERSON_WALK_JOINT_HEIGHT_TOL_M:
+	var budget: Dictionary = fit.get("work_budget", {})
+	for stage: String in ["coarse", "dense"]:
+		var dense: bool = stage == "dense"
+		joint["stage"] = stage
+		var history: Array = []
+		var limit: int = joint["stage_limits"][stage]
+		for stage_pass in limit:
+			budget["active_stage"] = stage
+			var ik_before: int = int(budget.get("used", {}).get("ik", 0))
+			if int(joint["stage_passes"]["coarse"]) + int(joint["stage_passes"]["dense"]) > 0:
+				joint["reprojections"] = int(joint["reprojections"]) + 1
+			joint["stage_passes"][stage] = stage_pass + 1
+			fit["stance_knee_min_deg"] = INF
+			var full: Dictionary = _fit_person_walk_height(ctx, fit, walk, float(first["shift"]), field, true, false)
+			if bool(budget.get("exhausted", false)):
+				return {"ok": false, "reason": "FOOT_PATH_BUDGET", "table": full}
+			var table: Dictionary = full
 			if not bool(full["ok"]):
-				return {"ok": false, "reason": full["reason"], "joint_pass": joint_pass + 1, "table": full}
-			if dense:
-				# Keep the exact field used to build this table for deterministic refits.
+				if str(full["reason"]) in ["POINT_EMPTY", "CENTER_EMPTY", "MEAN_GRID_CAP", "MEAN_SAVED_CAP"]:
+					return {"ok": false, "reason": full["reason"], "table": full}
+				table = _fit_person_walk_height(ctx, fit, walk, float(first["shift"]), field, false, false)
+			if not bool(table["ok"]):
+				return {"ok": false, "reason": table["reason"], "table": table}
+			fit["pelvis"] = table
+			var next_field: Dictionary = {}
+			var heights: Dictionary = {}
+			var target_delta: float = 0.0
+			var height_delta: float = 0.0
+			var unresolved: int = 0
+			var knee_feedback: bool = false
+			var worst: Dictionary = {}
+			var worst_score: float = -1.0
+			for spec: Dictionary in specs:
+				var entry: Array = spec["entry"]
+				var clip: String = entry[0]
+				ctx["walk_clip"] = clip
+				var previous: Dictionary = field.get(clip, {})
+				var next: Dictionary = {}
+				var clip_heights: Dictionary = {}
+				var cached_phases: Dictionary = solved_cache.get_or_add(clip, {})
+				var correction: Array = [Vector3.ZERO, Vector3.ZERO]
+				var ordered: PackedFloat64Array = (table["phases"] as PackedFloat64Array).duplicate()
+				ordered.sort()
+				for u: float in ordered:
+					var keyed_u: float = fposmod(u + float(spec["shift"]), 1.0)
+					var rigid: Array = [_person_walk_ankle_goal(fit, 0, u)["target"], _person_walk_ankle_goal(fit, 1, u)["target"]]
+					var initial: Array = _person_walk_field_seed(fit, previous, u, rigid) if dense else (previous.get(u, []) as Array).duplicate()
+					if initial.is_empty():
+						initial = [(rigid[0] as Vector3) + (correction[0] as Vector3), (rigid[1] as Vector3) + (correction[1] as Vector3)]
+					var height: float = _person_walk_height_at(table, u)
+					var cache_key: PackedByteArray = var_to_bytes([height, initial])
+					var cached: Dictionary = cached_phases.get(u, {})
+					var solved: Dictionary = {}
+					if not cached.is_empty() and (cached["key"] as PackedByteArray) == cache_key:
+						solved = cached["solved"]
+						joint["cache_hits"] = int(joint["cache_hits"]) + 1
+					else:
+						_person_walk_pose(ctx, fit, entry, keyed_u)
+						_apply_person_walk_body(ctx, fit, u, keyed_u, entry[4])
+						budget["active_stage"] = "dense_verify" if dense else "coarse"
+						solved = _solve_person_walk_frame(ctx, fit, u, initial, 1 if dense else PERSON_WALK_SKIN_EVALUATIONS, true, {}, dense)
+						if dense and solved.has("continuation") and not bool(budget.get("exhausted", false)):
+							fit["dense_refined_phases"].get_or_add(clip, {})[u] = true
+							budget["active_stage"] = "dense_refine"
+							solved = _solve_person_walk_frame(ctx, fit, u, [], PERSON_WALK_SKIN_EVALUATIONS - 1, true, solved["continuation"])
+					var feedback: Dictionary = _person_walk_joint_feedback(solved)
+					if not bool(solved["ok"]):
+						if not bool(feedback["retry"]):
+							next_field[clip] = next
+							return {"ok": false, "reason": solved["reason"], "clip": clip, "phase": u, "solve": solved, "partial_target_field": next_field}
+						unresolved += 1
+						joint["feedback_frames"] = int(joint["feedback_frames"]) + 1
+					else:
+						cached_phases[u] = {"key": cache_key, "solved": solved}
+						fit["stance_knee_min_deg"] = minf(float(fit["stance_knee_min_deg"]), float(solved["stance_knee_min_deg"]))
+					knee_feedback = knee_feedback or bool(feedback["knee"]) or bool(solved.get("next_bounds", {}).get("empty", false))
+					next[u] = (solved["proposed_targets"] as Array).duplicate()
+					clip_heights[u] = solved["final_hips_y"]
+					for side in 2:
+						correction[side] = (next[u][side] as Vector3) - (rigid[side] as Vector3)
+						target_delta = maxf(target_delta, (initial[side] as Vector3).distance_to(next[u][side]))
+					height_delta = maxf(height_delta, absf(float(solved["final_hips_y"]) - height))
+					var score: float = float(solved["normalized_residual"])
+					if score > worst_score:
+						worst_score = score
+						worst = {"reason": solved["reason"], "clip": clip, "phase": u, "solve": solved}
+				next_field[clip] = next
+				heights[clip] = clip_heights
+			budget["active_stage"] = stage
+			var note: Dictionary = {"stage": stage, "pass": stage_pass + 1, "unresolved": unresolved,
+				"target_delta_m": target_delta, "height_delta_m": height_delta,
+				"mean": full.get("mean", 0.0), "saved_mean": full.get("saved_mean", 0.0), "table_ok": full["ok"],
+				"ik_pairs": int(budget.get("used", {}).get("ik", 0)) - ik_before,
+				"worst": _person_walk_skin_witness(worst)}
+			joint["passes"].append(note)
+			var converged: bool = unresolved == 0 and target_delta <= PERSON_WALK_JOINT_TARGET_TOL_M and height_delta <= PERSON_WALK_JOINT_HEIGHT_TOL_M
+			if knee_feedback:
+				joint["knee_feedbacks"] = int(joint["knee_feedbacks"]) + 1
+				var center_result: Dictionary = _person_walk_feedback_centers(ctx, fit, specs, next_field, heights)
+				note["center_feedback"] = center_result
+				if not bool(center_result["ok"]):
+					fit["target_field"] = next_field
+					return center_result
+				var old_params: Dictionary = _person_walk_default_params(fit)
+				var params: Dictionary = center_result["params"]
+				var change: Array = [float(params["centers"][0]) - float(old_params["centers"][0]), float(params["centers"][1]) - float(old_params["centers"][1])]
+				if maxf(absf(float(change[0])), absf(float(change[1]))) > 0.0:
+					if not _person_walk_spend(budget, "paths", "shared"):
+						return {"ok": false, "reason": "FOOT_PATH_BUDGET"}
+					for clip: String in next_field:
+						for u: float in next_field[clip]:
+							for side in 2:
+								next_field[clip][u][side] += Vector3(0.0, 0.0, float(change[side]))
+					var extra: PackedFloat64Array = fit.get("height_extra_phases", PackedFloat64Array())
+					fit.merge(_person_walk_with_params(fit, params), true)
+					fit["height_extra_phases"] = extra
+					solved_cache.clear()
+					joint["center_updates"] = int(joint["center_updates"]) + 1
+				converged = false
+			if converged and not bool(full["ok"]):
+				return {"ok": false, "reason": full["reason"], "table": full}
+			var transition: String = _person_walk_joint_transition(stage, stage_pass + 1, converged, limit)
+			if transition == "saved":
+				# Only a fully solved field/table pair may reach fresh saved-frame checks.
 				fit["target_field"] = field
-				var saved: Dictionary = _person_walk_validate_saved(local_ctx, fit, specs)
-				if bool(saved["ok"]):
-					fit["joint_passes"] = joint_pass + 1
-					fit.erase("work_budget")
-					fit.erase("pose_cache")
-					fit.erase("geometry_cache")
-					fit.erase("bound_cache")
-					return {"ok": true, "reason": "", "fit": fit, "saved": saved, "target_delta": target_delta, "height_delta": height_delta}
-				return saved
+				budget["active_stage"] = "saved"
+				joint["stage"] = "saved"
+				var saved: Dictionary = _person_walk_validate_saved(ctx, fit, specs)
+				if not bool(saved["ok"]):
+					return saved
+				return {"ok": true, "reason": "", "fit": fit, "saved": saved, "target_delta": target_delta, "height_delta": height_delta}
+			field = next_field
+			fit["target_field"] = field
+			if transition == "dense" and not dense:
+				break
+			if transition.ends_with("_ITER_LIMIT"):
+				return {"ok": false, "reason": transition, "clip": worst.get("clip", ""), "phase": worst.get("phase", -1.0), "solve": worst.get("solve", {})}
+			var signature: String = var_to_bytes([field, table["values"], _person_walk_default_params(fit)]).hex_encode().sha256_text()
+			var score: float = maxf(worst_score, maxf(target_delta / PERSON_WALK_JOINT_TARGET_TOL_M, height_delta / PERSON_WALK_JOINT_HEIGHT_TOL_M))
+			var stopped: String = _person_walk_joint_progress(history, signature, score)
+			if not stopped.is_empty():
+				return {"ok": false, "reason": stopped, "clip": worst.get("clip", ""), "phase": worst.get("phase", -1.0), "solve": worst.get("solve", {})}
+		if not dense:
 			var extra: PackedFloat64Array = PackedFloat64Array()
 			for sample in PERSON_WALK_DENSE_SAMPLES:
 				extra.append(float(sample) / float(PERSON_WALK_DENSE_SAMPLES))
 			fit["height_extra_phases"] = extra
-			dense = true
-		field = next_field
-	return {"ok": false, "reason": "JOINT_ITER_LIMIT", "joint_pass": PERSON_WALK_JOINT_PASSES}
+			if not _person_walk_dense_reserve(budget, specs, _person_walk_validation_phases(fit).size()):
+				joint["stage"] = "dense_reserve"
+				return {"ok": false, "reason": "DENSE_BUDGET_RESERVE"}
+	return {"ok": false, "reason": "DENSE_ITER_LIMIT"}
 
 
 ## Check fresh saved skin, including each foot's measured material stride.
@@ -4007,6 +4272,7 @@ static func _person_walk_try_beam(state: Dictionary, limit: int = 6) -> Dictiona
 		var source: Dictionary = (candidate["fit"] as Dictionary).duplicate()
 		source["hip_over_stand_allowed"] = bool(state["base"].get("hip_over_stand_allowed", true))
 		var result: Dictionary = _fit_person_walk_candidate(state["ctx"], source, state["specs"])
+		state["last_joint_attempt"] = result.get("joint", {})
 		if str(result.get("reason", "")) == "HIP_TOL_STRAIGHT_KNEE":
 			state["base"]["hip_over_stand_allowed"] = false
 			source["hip_over_stand_allowed"] = false
@@ -4014,12 +4280,18 @@ static func _person_walk_try_beam(state: Dictionary, limit: int = 6) -> Dictiona
 			if int(state["skin_count"]) < int(state["skin_limit"]):
 				state["skin_count"] = int(state["skin_count"]) + 1
 				result = _fit_person_walk_candidate(state["ctx"], source, state["specs"])
+				state["last_joint_attempt"] = result.get("joint", {})
 			else:
 				state["limited"] = true
 		if bool(result["ok"]):
 			result["candidate"] = id
 			return result
 		state["trials"][id - 1]["skin"] = result
+		var corrected_table: Dictionary = result.get("table", {})
+		if corrected_table.has("center_intervals"):
+			candidate["center_intervals"] = corrected_table["center_intervals"]
+		if result.has("center_intervals"):
+			candidate["center_intervals"] = result["center_intervals"]
 		if str(result.get("reason", "")) != "FOOT_PATH_BUDGET":
 			state["last_skin_failure"] = result
 		if bool(state["base"]["work_budget"]["exhausted"]):
@@ -4095,7 +4367,10 @@ static func _search_person_walk_path(ctx: Dictionary, fit: Dictionary, specs: Ar
 			"grid_cap": best.get("grid_cap", 0.0), "saved_cap": best.get("saved_cap", 0.0), "means_complete": best.get("means_complete", false),
 			"candidate_complete": best.get("complete", false), "phases_checked": best.get("phases_checked", 0), "phases_total": best.get("phases_total", 0),
 			"last_skin_failure": _person_walk_skin_witness(state["last_skin_failure"]), "coverage": state["coverage"],
+			"last_joint_attempt": state.get("last_joint_attempt", {}),
 			"hip_over_stand_allowed": base.get("hip_over_stand_allowed", true), "global_infeasible": false}
+	print("WALK_RIG_DIAGNOSTIC " + JSON.stringify({"rig": ctx.get("rig_label", "unknown"), "ok": result["ok"],
+		"budget": result["budget"], "witness": result.get("witness", {}), "joint": result.get("joint", {})}))
 	return result
 
 
@@ -4106,6 +4381,9 @@ static func _person_walk_skin_witness(failure: Dictionary) -> Dictionary:
 		"projection_sweeps": projection.get("sweeps", 0), "projection_max_violation": projection.get("max_violation", 0.0),
 		"bounds": solve.get("bounds", {}), "targets_used": solve.get("targets_used", []), "ik_passes": solve.get("ik_passes", 0),
 		"conditions": solve.get("conditions", {}), "passes": solve.get("passes", []),
+		"joint": failure.get("joint", {}), "next_bounds": solve.get("next_bounds", {}),
+		"proposed_targets": solve.get("proposed_targets", []), "residual_vector": solve.get("residual_vector", []),
+		"probes": solve.get("probes", []), "height_table_delta_m": solve.get("height_table_delta_m", 0.0),
 		"rejections": solve.get("rejections", 0), "last_trial": solve.get("last_trial", {}),
 		"skin_residual": solve.get("skin_residual", INF), "height_residual": solve.get("height_residual", INF)}
 
@@ -4535,7 +4813,7 @@ static func _person_walk_skin_cycle(older: Dictionary, trial: Dictionary) -> boo
 
 
 ## Every trial restarts from the keyed pose. Only measured improvements commit.
-static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float, target_seed: Array = [], iteration_limit: int = PERSON_WALK_SKIN_EVALUATIONS, accelerate: bool = true) -> Dictionary:
+static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float, target_seed: Array = [], iteration_limit: int = PERSON_WALK_SKIN_EVALUATIONS, accelerate: bool = true, continuation: Dictionary = {}, suspend: bool = false) -> Dictionary:
 	var body: Skeleton3D = ctx["body"]
 	var goals: Array = []
 	var targets: Array = target_seed.duplicate()
@@ -4566,6 +4844,21 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 	var omega: float = 1.0
 	var reason: String = "SKIN_ITER_LIMIT"
 	var last_trial: Dictionary = {}
+	if not continuation.is_empty():
+		baseline = continuation["baseline"]
+		goals = continuation["goals"]
+		targets = (continuation["targets"] as Array).duplicate()
+		wanted_h = float(continuation["wanted_h"])
+		current = continuation["current"]
+		previous = continuation["previous"]
+		accepted_pose = continuation["accepted_pose"]
+		omega = float(continuation["omega"])
+		evaluations = int(continuation["evaluations"])
+		rejections = int(continuation["rejections"])
+		stalled = int(continuation["stalled"])
+		passes = (continuation["passes"] as Array).duplicate()
+		limit = mini(PERSON_WALK_SKIN_EVALUATIONS, evaluations + limit)
+		_person_walk_skin_restore(body, fit, accepted_pose)
 	while evaluations < limit:
 		var trial: Dictionary = _person_walk_skin_evaluate(ctx, fit, u, goals, targets, wanted_h, baseline)
 		if bool(trial["evaluated"]):
@@ -4604,7 +4897,7 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 		if cycle or stalled >= PERSON_WALK_SKIN_STALL_TRIALS:
 			reason = "SKIN_CYCLE" if cycle else "SKIN_STALLED"
 			break
-		if evaluations >= limit:
+		if evaluations >= limit and not suspend:
 			break
 		if accepted:
 			omega = _person_walk_aitken(previous, current, omega) if accelerate else 1.0
@@ -4616,6 +4909,12 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 	_person_walk_skin_restore(body, fit, accepted_pose)
 	current = current.duplicate(true)
 	current.merge({"ik_passes": evaluations, "passes": passes, "rejections": rejections, "last_trial": last_trial.duplicate(true)}, true)
+	if suspend and reason == "SKIN_ITER_LIMIT" and evaluations < PERSON_WALK_SKIN_EVALUATIONS:
+		# This is the next bounded trial, not the untested full F(t) proposal.
+		current["continuation"] = {"baseline": baseline, "goals": goals, "targets": targets.duplicate(),
+			"wanted_h": wanted_h, "current": current.duplicate(true), "previous": previous,
+			"accepted_pose": accepted_pose, "omega": omega, "evaluations": evaluations,
+			"rejections": rejections, "stalled": stalled, "passes": passes.duplicate()}
 	return _finish_person_walk_frame(ctx, fit, u, current, reason)
 
 

@@ -2022,3 +2022,237 @@ func test_walk_skin_rejects_nonprogress_and_detects_two_state_cycle() -> void:
 	var moved: Dictionary = state.duplicate(true)
 	moved["targets_used"][1] += Vector3(0.0, 0.0, 0.0001)
 	assert_false(BodyBake._person_walk_skin_cycle(state, moved))
+
+
+func _walk_joint_feedback_case() -> Dictionary:
+	return {"ok": false, "reason": "SKIN_STALLED", "evaluated": true,
+		"bounds": {"empty": false, "lower": 0.7, "upper": 0.8, "lower_side": 0, "upper_side": 1},
+		"targets_used": [Vector3(0.1, 0.0, 0.0), Vector3(-0.1, 0.0, 0.0)],
+		"proposed_targets": [Vector3(0.1, 0.001, 0.0), Vector3(-0.1, 0.002, 0.0)],
+		"reach_clamped": [false, false], "height_table_delta_m": 0.001,
+		"conditions": {"ankle_ok": [true, true], "mid_knee_ok": [true, true], "stance_knee_ok": [true, true]}}
+
+
+func test_walk_joint_reprojection_keeps_valid_failed_targets_but_never_accepts_them() -> void:
+	var solved: Dictionary = _walk_joint_feedback_case()
+	for reason: String in ["SKIN_STALLED", "SKIN_ITER_LIMIT", "SKIN_CYCLE"]:
+		solved["reason"] = reason
+		var feedback: Dictionary = BodyBake._person_walk_joint_feedback(solved)
+		assert_true(bool(feedback["retry"]))
+		assert_true(bool(feedback["needs_projection"]))
+		assert_eq(feedback["targets"], solved["proposed_targets"])
+		assert_false(bool(solved["ok"]), "reprojection is not a solved frame")
+	for reason: String in ["IK_CUT", "PRE_IK_REACH", "FOOT_PATH_BUDGET"]:
+		solved["reason"] = reason
+		assert_false(bool(BodyBake._person_walk_joint_feedback(solved)["retry"]))
+	solved["reason"] = "SKIN_STALLED"
+	solved["reach_clamped"] = [true, false]
+	assert_false(bool(BodyBake._person_walk_joint_feedback(solved)["retry"]))
+	solved["reach_clamped"] = [false, false]
+	solved["bounds"]["empty"] = true
+	assert_false(bool(BodyBake._person_walk_joint_feedback(solved)["retry"]))
+
+
+func test_walk_joint_reprojection_collects_remaining_phases_with_measured_skin_targets() -> void:
+	for ctx: Dictionary in [_walk_stick_context(), _walk_feedback_context()]:
+		var fit: Dictionary = ctx["footlock_walk"]
+		var solved: Dictionary = _walk_feedback_frame(ctx, 0.0, Vector3(0.12, 0.0, 0.0), 1)
+		assert_false(solved.is_empty(), "the seeded frame has a valid height interval")
+		if solved.is_empty():
+			continue
+		var feedback: Dictionary = BodyBake._person_walk_joint_feedback(solved)
+		assert_true(bool(feedback["retry"]), "one evaluated pass remains unresolved")
+		var walk: Array = BodyBake.PERSON_CLIPS[0]
+		var specs: Array = [{"entry": walk, "shift": 0.0}]
+		fit["walk_specs"] = specs
+		fit["geometry_cache"] = {}
+		fit["bound_cache"] = {}
+		var before: Dictionary = BodyBake._person_walk_collect_bounds(ctx, fit, specs, {"p_walk": {0.0: solved["targets_used"]}})
+		var field: Dictionary = {"p_walk": {0.0: feedback["targets"]}}
+		var after: Dictionary = BodyBake._person_walk_collect_bounds(ctx, fit, specs, field)
+		assert_true(bool(after["complete"]))
+		assert_eq((after["details"] as Array).size(), (before["details"] as Array).size())
+		assert_gte((after["details"] as Array).size(), BodyBake.PERSON_WALK_HEIGHT_SAMPLES)
+		assert_eq(after["details"][0]["lower_targets"], feedback["targets"])
+		assert_gt(absf(float(after["uppers"][0]) - float(before["uppers"][0])), 0.000001)
+		var projected: Dictionary = BodyBake._fit_person_walk_height(ctx, fit, walk, 0.0, field, true, false)
+		if bool(projected["ok"]):
+			var minimum: float = float(fit["floor"]) + BodyBake.PERSON_WALK_MEAN_MIN * float(fit["stand_ref_m"])
+			assert_gte(float(projected["mean"]) + BodyBake.PERSON_WALK_MEAN_EPSILON, minimum)
+			assert_gte(float(projected["saved_mean"]) + BodyBake.PERSON_WALK_MEAN_EPSILON, minimum)
+		else:
+			assert_false(str(projected["reason"]).is_empty(), "an infeasible corrected table remains a failure")
+
+
+func test_walk_knee_feedback_checks_four_degrees_below_rest_and_fifteen_in_middle() -> void:
+	var solved: Dictionary = _walk_joint_feedback_case()
+	solved["conditions"] = BodyBake._person_walk_skin_conditions(0.0, 0.0, 0.75,
+		{"empty": false, "lower": 0.7, "upper": 0.8}, [0.0, 0.0],
+		[BodyBake.PERSON_WALK_KNEE_MIN - 0.0001, 0.15], [false, false], [true, true])
+	assert_true(bool(BodyBake._person_walk_joint_feedback(solved)["knee"]))
+	assert_false(bool(solved["conditions"]["ok"]))
+	solved["conditions"] = BodyBake._person_walk_skin_conditions(0.0, 0.0, 0.75,
+		{"empty": false, "lower": 0.7, "upper": 0.8}, [0.0, 0.0],
+		[BodyBake.PERSON_WALK_MID_KNEE_MAX + 0.0001, 0.15], [true, false], [true, true])
+	assert_true(bool(BodyBake._person_walk_joint_feedback(solved)["knee"]))
+	assert_false(bool(solved["conditions"]["ok"]))
+
+
+func test_walk_skin_corrected_center_intersection_keeps_later_middle_and_r4_ceiling() -> void:
+	var fit: Dictionary = {"starts": [0.0, 0.5], "durations": [0.5, 0.5],
+		"path_params": {"centers": [0.0, 0.0]}}
+	var geometry: Dictionary = {"hips": Vector3(0.0, 1.0, 0.0), "legs": [
+		{"thigh": Vector3(0.1, 1.0, 0.0), "a": 0.5, "b": 0.5},
+		{"thigh": Vector3(-0.1, 1.0, 0.0), "a": 0.5, "b": 0.5}]}
+	var entry: Dictionary = BodyBake._person_walk_center_window(fit, 0.20, [Vector3(0.1, 0.0, 0.0), Vector3(-0.1, 0.0, 0.0)], geometry, 0.99)
+	var later: Dictionary = BodyBake._person_walk_center_window(fit, 0.30, [Vector3(0.1, 0.0, 0.04), Vector3(-0.1, 0.0, 0.0)], geometry, 0.99)
+	var whole: Array = BodyBake._person_walk_overlap_centers(entry["intervals"][0], later["intervals"][0])
+	assert_false(whole.is_empty())
+	var center: float = BodyBake._person_walk_nearest_center(whole, 0.0)
+	assert_gt(center, 0.05, "the nearer negative entry branch collides later")
+	assert_lt(center, 0.10, "R4 bounds the outer branch")
+	for offset: float in [0.0, 0.04]:
+		var distance: float = Vector2(0.99, center + offset).length()
+		var r15: float = sqrt(0.5 + 0.5 * cos(BodyBake.PERSON_WALK_MID_KNEE_MAX))
+		var r4: float = sqrt(0.5 + 0.5 * cos(BodyBake.PERSON_WALK_KNEE_MIN))
+		assert_gte(distance, r15)
+		assert_lte(distance, r4)
+	var corrected: Dictionary = BodyBake._person_walk_center_window(fit, 0.25,
+		[Vector3(0.1, 0.0, 0.08), Vector3(-0.1, 0.0, 0.0)], geometry, 0.99)
+	assert_ne(corrected["intervals"][0], entry["intervals"][0], "skin correction changes the entire center constraint")
+	assert_false(is_finite(BodyBake._person_walk_nearest_center([], 0.0)))
+
+
+func test_walk_feedback_center_translation_preserves_stance_slope_and_path_parameters() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var params: Dictionary = BodyBake._person_walk_default_params(fit)
+	params["centers"] = [0.06, -0.12]
+	var changed: Dictionary = BodyBake._person_walk_with_params(fit, params)
+	for side in 2:
+		var old_z: float = 0.0
+		var new_z: float = 0.0
+		for fraction: float in [0.40, 0.50, 0.60]:
+			var u: float = float(fit["starts"][side]) + float(fit["durations"][side]) * fraction
+			var original: Vector3 = BodyBake._person_walk_ankle_goal(fit, side, u)["target"]
+			var translated: Vector3 = BodyBake._person_walk_ankle_goal(changed, side, u)["target"]
+			assert_almost_eq(translated.z - original.z, float(params["centers"][side]) + BodyBake.PERSON_WALK_FOOTPRINT_BACK, 0.000001)
+			if fraction > 0.40:
+				assert_almost_eq(translated.z - new_z, original.z - old_z, 0.000001)
+			old_z = original.z
+			new_z = translated.z
+	assert_eq(changed["durations"], fit["durations"])
+	assert_almost_eq(float(changed["round"]), float(fit["round"]), 0.000000001)
+
+
+func test_walk_dense_seed_interpolates_skin_correction_across_periodic_seam() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var field: Dictionary = {}
+	for u: float in [0.2, 0.7]:
+		var offset: float = 0.01 if u < 0.5 else 0.03
+		field[u] = [(BodyBake._person_walk_ankle_goal(fit, 0, u)["target"] as Vector3) + Vector3(0.0, offset, 0.0),
+			(BodyBake._person_walk_ankle_goal(fit, 1, u)["target"] as Vector3) + Vector3(0.0, 2.0 * offset, 0.0)]
+	for u: float in [0.25, 0.95, 0.2]:
+		var rigid: Array = [BodyBake._person_walk_ankle_goal(fit, 0, u)["target"], BodyBake._person_walk_ankle_goal(fit, 1, u)["target"]]
+		var seed: Array = BodyBake._person_walk_field_seed(fit, field, u, rigid)
+		var expected: float = 0.012 if u < 0.5 and u > 0.2 else (0.01 if u < 0.5 else 0.02)
+		for side in 2:
+			assert_almost_eq((seed[side] as Vector3).y - (rigid[side] as Vector3).y, expected * float(side + 1), 0.000001)
+	assert_eq(field.size(), 2, "predicting a seed does not publish a solved phase")
+
+
+func test_walk_dense_continuation_matches_uninterrupted_trials_pose_and_ledger() -> void:
+	var ctx: Dictionary = _walk_feedback_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	var u: float = 0.0
+	var targets: Array = []
+	for side in 2:
+		targets.append((BodyBake._person_walk_ankle_goal(fit, side, u)["target"] as Vector3) + Vector3(0.12, 0.0, 0.0))
+	var bounds: Dictionary = BodyBake._person_walk_height_bounds(ctx, fit, u, targets)
+	assert_false(bool(bounds["empty"]))
+	fit["pelvis"] = {"values": PackedFloat64Array([bounds["upper"]]), "slopes": PackedFloat64Array([0.0])}
+	var direct_budget: Dictionary = BodyBake._person_walk_budget()
+	fit["work_budget"] = direct_budget
+	var direct: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, u, targets)
+	var direct_pose: Dictionary = BodyBake._person_walk_skin_snapshot(body, fit)
+	body.reset_bone_poses()
+	var split_budget: Dictionary = BodyBake._person_walk_budget()
+	fit["work_budget"] = split_budget
+	split_budget["active_stage"] = "dense_verify"
+	var first: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, u, targets, 1, true, {}, true)
+	assert_true(first.has("continuation"), "one pass suspends an unresolved valid evaluation")
+	if not first.has("continuation"):
+		return
+	assert_eq(int(first["ik_passes"]), 1)
+	split_budget["active_stage"] = "dense_refine"
+	var resumed: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, u, [], BodyBake.PERSON_WALK_SKIN_EVALUATIONS - 1, true, first["continuation"])
+	assert_eq(resumed["reason"], direct["reason"])
+	assert_eq(int(resumed["ik_passes"]), int(direct["ik_passes"]))
+	assert_eq(int(resumed["rejections"]), int(direct["rejections"]))
+	assert_eq(int(split_budget["used"]["ik"]), int(resumed["ik_passes"]))
+	assert_eq(int(split_budget["stages"]["dense_verify"]["ik"]), 1)
+	assert_eq(int(split_budget["stages"].get("dense_refine", {}).get("ik", 0)), int(resumed["ik_passes"]) - 1)
+	assert_lte(int(resumed["ik_passes"]), BodyBake.PERSON_WALK_SKIN_EVALUATIONS)
+	assert_eq((resumed["passes"] as Array).size(), (direct["passes"] as Array).size())
+	for index in mini((resumed["passes"] as Array).size(), (direct["passes"] as Array).size()):
+		assert_almost_eq(float(resumed["passes"][index]["omega"]), float(direct["passes"][index]["omega"]), 0.00000001)
+		assert_eq(bool(resumed["passes"][index]["accepted"]), bool(direct["passes"][index]["accepted"]))
+	for bone in body.get_bone_count():
+		assert_lt(body.get_bone_pose_position(bone).distance_to(direct_pose["pose"][bone][0]), 0.000001)
+		assert_lt(_walk_pose_rotation_error(body.get_bone_pose_rotation(bone), direct_pose["pose"][bone][1]), 0.00001)
+
+
+func test_walk_last_coarse_pass_enters_dense_without_spending_its_passes() -> void:
+	var coarse: int = BodyBake.PERSON_WALK_JOINT_PASSES >> 1
+	var dense: int = BodyBake.PERSON_WALK_JOINT_PASSES - coarse
+	assert_eq(coarse + dense, 12)
+	assert_eq(BodyBake._person_walk_joint_transition("coarse", coarse, true, coarse), "dense")
+	assert_eq(BodyBake._person_walk_joint_transition("coarse", coarse, false, coarse), "COARSE_ITER_LIMIT")
+	assert_eq(BodyBake._person_walk_joint_transition("dense", 1, false, dense), "dense")
+	assert_eq(BodyBake._person_walk_joint_transition("dense", dense, true, dense), "saved")
+	assert_eq(BodyBake._person_walk_joint_transition("dense", dense, false, dense), "DENSE_ITER_LIMIT")
+
+
+func test_walk_joint_cycle_and_stall_remain_failures_when_inner_frames_pass() -> void:
+	var cycle: Array = []
+	assert_eq(BodyBake._person_walk_joint_progress(cycle, "field_a", 2.0), "")
+	assert_eq(BodyBake._person_walk_joint_progress(cycle, "field_b", 2.0), "")
+	assert_eq(BodyBake._person_walk_joint_progress(cycle, "field_a", 2.0), "JOINT_CYCLE")
+	var repeated: Array = []
+	BodyBake._person_walk_joint_progress(repeated, "same_table", 2.0)
+	assert_eq(BodyBake._person_walk_joint_progress(repeated, "same_table", 2.0), "JOINT_STALLED")
+	var stalled: Array = []
+	for index in 3:
+		assert_eq(BodyBake._person_walk_joint_progress(stalled, str(index), 2.0), "")
+	assert_eq(BodyBake._person_walk_joint_progress(stalled, "3", 2.0), "JOINT_STALLED")
+	var improving: Array = []
+	for index in 6:
+		assert_eq(BodyBake._person_walk_joint_progress(improving, str(index), 6.0 - float(index)), "")
+
+
+func test_walk_dense_reservation_keeps_saved_pairs_and_does_not_raise_caps() -> void:
+	var budget: Dictionary = BodyBake._person_walk_budget({"ik": 8, "clip_ik": 4})
+	var specs: Array = [{"entry": ["p_walk", [], 2]}, {"entry": ["p_walk_axe", [], 2]}]
+	assert_true(BodyBake._person_walk_dense_reserve(budget, specs, 2))
+	assert_true((budget["used"] as Dictionary).is_empty(), "reservation does not pretend to evaluate IK")
+	assert_true(BodyBake._person_walk_spend(budget, "ik", "p_walk"))
+	assert_false(BodyBake._person_walk_dense_reserve(budget, specs, 2))
+	assert_eq(int(budget["limits"]["ik"]), 8)
+	assert_eq(int(budget["limits"]["clip_ik"]), 4)
+
+
+func test_walk_stage_ledger_and_failure_witness_keep_last_joint_attempt() -> void:
+	var budget: Dictionary = BodyBake._person_walk_budget({"ik": 4, "clip_ik": 4})
+	var measured: int = 0
+	for stage: String in ["coarse", "dense_verify", "dense_refine", "saved"]:
+		budget["active_stage"] = stage
+		assert_true(BodyBake._person_walk_spend(budget, "ik", "p_walk"))
+		measured += int(budget["stages"][stage]["ik"])
+		assert_eq(int(budget["stage_clips"][stage]["p_walk"]["ik"]), 1)
+	assert_eq(measured, int(budget["used"]["ik"]))
+	assert_false(BodyBake._person_walk_spend(budget, "ik", "p_walk"))
+	var joint: Dictionary = {"stage": "dense", "reprojections": 2, "knee_feedbacks": 1, "stage_ik": budget["stages"]}
+	var witness: Dictionary = BodyBake._person_walk_skin_witness({"reason": "DENSE_ITER_LIMIT", "joint": joint})
+	assert_eq(witness["joint"], joint)
