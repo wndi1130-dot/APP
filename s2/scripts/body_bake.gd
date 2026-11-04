@@ -256,7 +256,22 @@ const PERSON_WALK_MEAN_PASSES: int = PERSON_WALK_HEIGHT_SAMPLES + 1  # one satur
 const PERSON_WALK_MEAN_EPSILON: float = 0.000000001  # numerical convergence in metres
 const PERSON_WALK_REACH_MARGIN: float = 0.001  # one vertical millimetre below the ceiling
 const PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN: float = 0.00001  # 0.01 mm inside a ceiling knot
-const PERSON_WALK_SOLVE_PASSES: int = 6
+const PERSON_WALK_SOLVE_PASSES: int = 6  # legacy fixed-point pass count
+# solver tolerance only, decision 534/442: 1 mm = 1/20 of 2 cm slip, 0.04 px.
+# These are NOT the 1 um projection gate, outer joint convergence or 95% mean gate.
+const PERSON_WALK_SKIN_TOL_M: float = 0.001
+const PERSON_WALK_SKIN_HEIGHT_TOL_M: float = 0.0005
+const PERSON_WALK_ANKLE_TOL_M: float = 0.001
+const PERSON_WALK_JOINT_TARGET_TOL_M: float = 0.0001
+const PERSON_WALK_JOINT_HEIGHT_TOL_M: float = 0.00005
+# Paired IK evaluations, including rejected trials; shared work budgets stay fixed.
+const PERSON_WALK_SKIN_EVALUATIONS: int = 2 * PERSON_WALK_SOLVE_PASSES
+const PERSON_WALK_AITKEN_MIN: float = 0.25
+const PERSON_WALK_AITKEN_MAX: float = 2.0
+const PERSON_WALK_SKIN_STALL_TRIALS: int = 3
+const PERSON_WALK_SKIN_PROGRESS: float = 0.000001  # dimensionless normalized residual
+const PERSON_WALK_AITKEN_DENOM_M2: float = 0.00000000000001
+const PERSON_WALK_SKIN_CYCLE_M: float = 0.0000001
 const PERSON_WALK_CONTACT_EPSILON: float = 0.005
 const PERSON_WALK_SAVED_SAMPLES: int = 32
 const PERSON_WALK_PROJECT_SWEEPS: int = 512
@@ -2904,6 +2919,7 @@ static func _person_footlock_probes(fit: Dictionary, skin: Array) -> Array:
 	for side in 2:
 		var moved := []
 		var lowest := INF
+		var lowest_vertex: int = -1
 		for vertex: int in fit["soles"][side]:
 			var point := Vector3.ZERO
 			var total := 0.0
@@ -2914,19 +2930,23 @@ static func _person_footlock_probes(fit: Dictionary, skin: Array) -> Array:
 					total += weight
 			point = point / total if total > 0.0 else rest[vertex]
 			moved.append(point)
+			if point.y < lowest:
+				lowest_vertex = vertex
 			lowest = minf(lowest, point.y)
 		var centre := Vector3.ZERO
 		var reference := Vector3.ZERO
 		var count := 0
+		var vertices: PackedInt32Array = PackedInt32Array()
 		for index in moved.size():
 			var point: Vector3 = moved[index]
 			if point.y <= lowest + PERSON_SOLE_EPSILON:
 				centre += point
 				reference += rest[fit["soles"][side][index]]
 				count += 1
+				vertices.append(int(fit["soles"][side][index]))
 		centre /= float(count)
 		centre.y = lowest
-		points.append({"point": centre, "rest": reference / float(count)})
+		points.append({"point": centre, "rest": reference / float(count), "vertices": vertices, "lowest_vertex": lowest_vertex})
 	return points
 
 
@@ -3238,7 +3258,7 @@ static func _person_walk_project_table(phases: PackedFloat64Array, lowers: Packe
 		var negative: PackedFloat64Array = PackedFloat64Array()
 		for weight: float in weights:
 			negative.append(-weight)
-		var margin: float = minf(inset, (uppers[index] - lowers[index]) * 0.25)
+		var margin: float = _person_walk_height_inset(lowers[index], uppers[index], inset)
 		var destination: Array = rows if projection_phases.is_empty() or projection_phases.has(phases[index]) else deferred
 		destination.append(_person_walk_height_row(basis["indices"], weights, uppers[index] - margin))
 		destination.append(_person_walk_height_row(basis["indices"], negative, -lowers[index] - margin))
@@ -3860,13 +3880,23 @@ static func _fit_person_walk_candidate(ctx: Dictionary, source: Dictionary, spec
 					_person_walk_pose(local_ctx, fit, entry, keyed_u)
 					_apply_person_walk_body(local_ctx, fit, u, keyed_u, entry[4])
 					# Dense phases get one verification pass before local refinement.
-					solved = _solve_person_walk_frame(local_ctx, fit, u, initial, 1 if dense else PERSON_WALK_SOLVE_PASSES)
+					solved = _solve_person_walk_frame(local_ctx, fit, u, initial, 1 if dense else PERSON_WALK_SKIN_EVALUATIONS)
 					if dense and not bool(solved["ok"]) and not bool(fit.get("work_budget", {}).get("exhausted", false)):
 						fit["dense_refined_phases"].get_or_add(clip, {})[u] = true
+						var verification: Dictionary = solved
 						var seed: Array = solved["proposed_targets"]
 						_person_walk_pose(local_ctx, fit, entry, keyed_u)
 						_apply_person_walk_body(local_ctx, fit, u, keyed_u, entry[4])
-						solved = _solve_person_walk_frame(local_ctx, fit, u, initial if seed.is_empty() else seed, PERSON_WALK_SOLVE_PASSES - 1)
+						solved = _solve_person_walk_frame(local_ctx, fit, u, initial if seed.is_empty() else seed, PERSON_WALK_SKIN_EVALUATIONS - 1)
+						# The existing dense restart remains; include its first evaluation in diagnostics.
+						var verified_pairs: int = int(verification["ik_passes"])
+						for note: Dictionary in solved["passes"]:
+							note["ik_passes"] = int(note["ik_passes"]) + verified_pairs
+							note["dense_restart"] = true
+						solved["passes"] = (verification["passes"] as Array) + (solved["passes"] as Array)
+						solved["ik_passes"] = int(solved["ik_passes"]) + verified_pairs
+						if solved.has("last_trial"):
+							solved["last_trial"]["ik_passes"] = int(solved["last_trial"]["ik_passes"]) + verified_pairs
 				if not bool(solved["ok"]):
 					return {"ok": false, "reason": solved["reason"], "joint_pass": joint_pass + 1, "clip": clip,
 						"phase": u, "solve": solved, "failures": local_ctx["fit_failures"]}
@@ -3878,7 +3908,7 @@ static func _fit_person_walk_candidate(ctx: Dictionary, source: Dictionary, spec
 					target_delta = maxf(target_delta, (initial[side] as Vector3).distance_to(next[u][side]))
 				height_delta = maxf(height_delta, absf(float(solved["final_hips_y"]) - _person_walk_height_at(table, u)))
 			next_field[clip] = next
-		if target_delta <= 0.0001 and height_delta <= 0.00005:
+		if target_delta <= PERSON_WALK_JOINT_TARGET_TOL_M and height_delta <= PERSON_WALK_JOINT_HEIGHT_TOL_M:
 			if not bool(full["ok"]):
 				return {"ok": false, "reason": full["reason"], "joint_pass": joint_pass + 1, "table": full}
 			if dense:
@@ -4074,7 +4104,10 @@ static func _person_walk_skin_witness(failure: Dictionary) -> Dictionary:
 	var projection: Dictionary = failure.get("table", {}).get("projection", {})
 	return {"reason": failure.get("reason", "UNTRIED"), "clip": failure.get("clip", ""), "phase": failure.get("phase", -1.0),
 		"projection_sweeps": projection.get("sweeps", 0), "projection_max_violation": projection.get("max_violation", 0.0),
-		"bounds": solve.get("bounds", {}), "targets_used": solve.get("targets_used", []), "ik_passes": solve.get("ik_passes", 0)}
+		"bounds": solve.get("bounds", {}), "targets_used": solve.get("targets_used", []), "ik_passes": solve.get("ik_passes", 0),
+		"conditions": solve.get("conditions", {}), "passes": solve.get("passes", []),
+		"rejections": solve.get("rejections", 0), "last_trial": solve.get("last_trial", {}),
+		"skin_residual": solve.get("skin_residual", INF), "height_residual": solve.get("height_residual", INF)}
 
 
 static func _note_person_walk_empty_height(ctx: Dictionary, table: Dictionary, u: float) -> void:
@@ -4309,12 +4342,201 @@ static func _apply_person_footlock(ctx: Dictionary, fit: Dictionary, u: float) -
 	return _solve_person_walk_frame(ctx, fit, u)["misses"]
 
 
-## The caller restores the keyed pose and applies walk turn once. Every pass
-## then projects one shared absolute height and solves BOTH feet before skinning.
-static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float, target_seed: Array = [], iteration_limit: int = PERSON_WALK_SOLVE_PASSES) -> Dictionary:
+## Shared by the height-table projection and each actual frame evaluation.
+static func _person_walk_height_inset(lower: float, upper: float, inset: float = PERSON_WALK_HEIGHT_INTERPOLATION_MARGIN) -> float:
+	return minf(inset, maxf(0.0, upper - lower) * 0.25)
+
+
+static func _person_walk_inner_height(wanted: float, bounds: Dictionary) -> float:
+	var margin: float = _person_walk_height_inset(float(bounds["lower"]), float(bounds["upper"]))
+	return clampf(wanted, float(bounds["lower"]) + margin, float(bounds["upper"]) - margin)
+
+
+static func _person_walk_skin_conditions(residual: float, height_residual: float, height: float, next_bounds: Dictionary, misses: Array, knees: Array, middles: Array, stances: Array) -> Dictionary:
+	var empty: bool = bool(next_bounds["empty"])
+	var lower_gap: float = height - float(next_bounds["lower"])
+	var upper_gap: float = float(next_bounds["upper"]) - height
+	var ankle_ok: Array = []
+	var mid_ok: Array = []
+	var stance_ok: Array = []
+	var actual_ok: bool = true
+	for side in 2:
+		ankle_ok.append(float(misses[side]) <= PERSON_WALK_ANKLE_TOL_M)
+		mid_ok.append(not bool(middles[side]) or float(knees[side]) <= PERSON_WALK_MID_KNEE_MAX)
+		stance_ok.append(not bool(stances[side]) or float(knees[side]) >= PERSON_WALK_KNEE_MIN)
+		actual_ok = actual_ok and bool(ankle_ok[side]) and bool(mid_ok[side]) and bool(stance_ok[side])
+	var target_ok: bool = residual <= PERSON_WALK_SKIN_TOL_M
+	var height_ok: bool = height_residual <= PERSON_WALK_SKIN_HEIGHT_TOL_M
+	var inside: bool = not empty and lower_gap >= 0.0 and upper_gap >= 0.0
+	return {"target_residual_m": residual, "target_ok": target_ok, "height_residual_m": height_residual,
+		"height_ok": height_ok, "next_bounds_empty": empty, "next_bounds_ok": not empty,
+		"height_minus_next_lower_m": lower_gap, "next_upper_minus_height_m": upper_gap,
+		"lower_ok": lower_gap >= 0.0, "upper_ok": upper_gap >= 0.0, "height_inside": inside,
+		"ankle_miss_m": misses.duplicate(), "ankle_ok": ankle_ok, "knee_rad": knees.duplicate(),
+		"knee_deg": [rad_to_deg(float(knees[0])), rad_to_deg(float(knees[1]))],
+		"middle": middles.duplicate(), "mid_knee_ok": mid_ok, "stance": stances.duplicate(),
+		"stance_knee_ok": stance_ok, "actual_ok": actual_ok,
+		"ok": target_ok and height_ok and inside and actual_ok}
+
+
+## Snapshot only state mutated by a trial; the budget ledger is never rolled back.
+static func _person_walk_skin_snapshot(body: Skeleton3D, fit: Dictionary) -> Dictionary:
+	var pose: Array = []
+	for bone in body.get_bone_count():
+		pose.append([body.get_bone_pose_position(bone), body.get_bone_pose_rotation(bone), body.get_bone_pose_scale(bone)])
+	return {"pose": pose, "reach_clamped": (fit["reach_clamped"] as Array).duplicate(),
+		"reach_final_failed": (fit["reach_final_failed"] as Array).duplicate(), "height_frame_failed": fit["height_frame_failed"]}
+
+
+static func _person_walk_skin_restore(body: Skeleton3D, fit: Dictionary, state: Dictionary) -> void:
+	for bone in body.get_bone_count():
+		body.set_bone_pose_position(bone, state["pose"][bone][0])
+		body.set_bone_pose_rotation(bone, state["pose"][bone][1])
+		body.set_bone_pose_scale(bone, state["pose"][bone][2])
+	fit["reach_clamped"] = (state["reach_clamped"] as Array).duplicate()
+	fit["reach_final_failed"] = (state["reach_final_failed"] as Array).duplicate()
+	fit["height_frame_failed"] = bool(state["height_frame_failed"])
+
+
+## Evaluate F(t) from the same keyed pose, including both IK solves and new skin.
+static func _person_walk_skin_evaluate(ctx: Dictionary, fit: Dictionary, u: float, goals: Array, targets: Array, wanted_h: float, baseline: Dictionary) -> Dictionary:
 	var body: Skeleton3D = ctx["body"]
 	var to_mesh: Transform3D = ctx["to_mesh"]
 	var to_body: Transform3D = to_mesh.affine_inverse()
+	_person_walk_skin_restore(body, fit, baseline)
+	var bounds: Dictionary = _person_walk_height_bounds(ctx, fit, u, targets)
+	var result: Dictionary = {"reason": "", "evaluated": false, "bounds": bounds, "targets_used": targets.duplicate(),
+		"proposed_targets": [], "misses": [INF, INF], "skin_residual": INF, "height_residual": INF,
+		"normalized_residual": INF, "conditions": {"ok": false}}
+	if bool(bounds["empty"]):
+		result["reason"] = "POINT_EMPTY"
+		return result
+	var height: float = _person_walk_inner_height(wanted_h, bounds)
+	_set_person_walk_hips_y(ctx, height)
+	var pre_reach: Array = []
+	for side in 2:
+		var info: Dictionary = _person_walk_reach_info(body, fit["legs"][side], to_body * (targets[side] as Vector3))
+		pre_reach.append(info)
+		fit["reach_final_failed"][side] = bool(info["invalid"]) or float(info["excess"]) > 0.0
+	if bool(fit["reach_final_failed"][0]) or bool(fit["reach_final_failed"][1]):
+		result["reason"] = "PRE_IK_REACH"
+		return result
+	if not _person_walk_spend(fit.get("work_budget", {}), "ik", str(ctx.get("walk_clip", "unknown"))):
+		result["reason"] = "FOOT_PATH_BUDGET"
+		return result
+	result["evaluated"] = true
+	for side in 2:
+		fit["reach_clamped"][side] = _solve_person_footlock_leg(body, fit["legs"][side], to_body * (targets[side] as Vector3), to_body.basis * Vector3.BACK)
+	var cut: bool = bool(fit["reach_clamped"][0]) or bool(fit["reach_clamped"][1])
+	for side in 2:
+		var rotation: Quaternion = (to_body.basis * (goals[side]["rotation"] as Basis)).orthonormalized().get_rotation_quaternion()
+		_person_footlock_rotation(body, int(fit["legs"][side][2]), rotation)
+	var probes: Array = _person_footlock_probes(fit, _skin_frame(ctx))
+	var proposed: Array = []
+	var ankles: Array = []
+	var proposal_reach: Array = []
+	var residual_vector: Array = []
+	var knees: Array = []
+	var middles: Array = []
+	var stances: Array = []
+	var residual: float = 0.0
+	var norm_squared: float = 0.0
+	for side in 2:
+		var leg: Array = fit["legs"][side]
+		var ankle: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[2])).origin
+		ankles.append(ankle)
+		var offset: Vector3 = (probes[side]["point"] as Vector3) - ankle
+		var flat_offset: Vector3 = (probes[side]["rest"] as Vector3) - (fit["rest_ankles"][side] as Vector3)
+		var target: Vector3 = (goals[side]["base"] as Vector3) + flat_offset - offset
+		target.y = float(fit["floor"]) + (goals[side]["path"] as Vector3).y - offset.y
+		proposed.append(target)
+		proposal_reach.append(_person_walk_reach_info(body, leg, to_body * target))
+		var delta: Vector3 = target - (targets[side] as Vector3)
+		residual_vector.append(delta)
+		residual = maxf(residual, delta.length())
+		var miss: float = ankle.distance_to(targets[side])
+		result["misses"][side] = miss
+		fit["reach_final_failed"][side] = miss > PERSON_WALK_ANKLE_TOL_M
+		norm_squared += delta.length_squared() / (PERSON_WALK_SKIN_TOL_M * PERSON_WALK_SKIN_TOL_M) + pow(miss / PERSON_WALK_ANKLE_TOL_M, 2.0)
+		var mid: float = float(goals[side]["age"]) / float(fit["durations"][side])
+		middles.append(mid >= 0.40 and mid <= 0.60)
+		stances.append(float(goals[side]["age"]) <= float(fit["durations"][side]))
+		var thigh: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[0])).origin
+		var knee: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[1])).origin
+		knees.append((knee - thigh).angle_to(ankle - knee))
+	# Measure the actual hips after IK; a small height residual never waives inclusion.
+	var actual_h: float = (to_mesh * body.get_bone_global_pose(_bone(body, "hips"))).origin.y
+	var next_bounds: Dictionary = _person_walk_height_bounds(ctx, fit, u, proposed)
+	var height_residual: float = INF
+	if not bool(next_bounds["empty"]):
+		height_residual = absf(_person_walk_inner_height(wanted_h, next_bounds) - actual_h)
+	var conditions: Dictionary = _person_walk_skin_conditions(residual, height_residual, actual_h, next_bounds, result["misses"], knees, middles, stances)
+	norm_squared += pow(height_residual / PERSON_WALK_SKIN_HEIGHT_TOL_M, 2.0)
+	norm_squared += pow(maxf(0.0, -float(conditions["height_minus_next_lower_m"])) / PERSON_WALK_SKIN_HEIGHT_TOL_M, 2.0)
+	norm_squared += pow(maxf(0.0, -float(conditions["next_upper_minus_height_m"])) / PERSON_WALK_SKIN_HEIGHT_TOL_M, 2.0)
+	for side in 2:
+		if bool(middles[side]):
+			norm_squared += pow(maxf(0.0, float(knees[side]) - PERSON_WALK_MID_KNEE_MAX) / PERSON_WALK_MID_KNEE_MAX, 2.0)
+		if bool(stances[side]):
+			norm_squared += pow(maxf(0.0, PERSON_WALK_KNEE_MIN - float(knees[side])) / PERSON_WALK_KNEE_MIN, 2.0)
+	var branch: int = _person_walk_skin_height_branch(wanted_h, bounds)
+	# Owners and lower/free/upper branch, plus the exact selected sole vertices.
+	var signature: String = str([probes[0]["vertices"], probes[1]["vertices"], int(probes[0]["lowest_vertex"]), int(probes[1]["lowest_vertex"]), int(bounds["lower_side"]), int(bounds["upper_side"]),
+		int(next_bounds["lower_side"]), int(next_bounds["upper_side"]), branch, _person_walk_skin_height_branch(wanted_h, next_bounds)])
+	result.merge({"proposed_targets": proposed, "actual_ankles": ankles, "probes": probes, "pre_reach": pre_reach,
+		"proposal_reach": proposal_reach, "height": actual_h, "command_height": height, "table_height": wanted_h,
+		"height_command_error_m": actual_h - height, "height_table_delta_m": actual_h - wanted_h,
+		"skin_residual": residual, "height_residual": height_residual, "next_bounds": next_bounds,
+		"residual_vector": residual_vector, "normalized_residual": sqrt(norm_squared), "conditions": conditions,
+		"signature": signature, "reason": "IK_CUT" if cut else ""}, true)
+	return result
+
+
+static func _person_walk_skin_height_branch(wanted: float, bounds: Dictionary) -> int:
+	if bool(bounds["empty"]):
+		return 2
+	var margin: float = _person_walk_height_inset(float(bounds["lower"]), float(bounds["upper"]))
+	if wanted < float(bounds["lower"]) + margin:
+		return -1
+	if wanted > float(bounds["upper"]) - margin:
+		return 1
+	return 0
+
+
+## Vector Aitken uses the dot product over BOTH three-dimensional foot residuals.
+static func _person_walk_aitken(previous: Dictionary, current: Dictionary, previous_omega: float) -> float:
+	if previous.is_empty() or str(previous["signature"]) != str(current["signature"]):
+		return 1.0
+	var numerator: float = 0.0
+	var denominator: float = 0.0
+	for side in 2:
+		var old: Vector3 = previous["residual_vector"][side]
+		var delta: Vector3 = (current["residual_vector"][side] as Vector3) - old
+		numerator += old.dot(delta)
+		denominator += delta.length_squared()
+	if denominator <= PERSON_WALK_AITKEN_DENOM_M2:
+		return 1.0
+	return clampf(-previous_omega * numerator / denominator, PERSON_WALK_AITKEN_MIN, PERSON_WALK_AITKEN_MAX)
+
+
+static func _person_walk_skin_improves(previous: Dictionary, trial: Dictionary) -> bool:
+	return str(trial["reason"]).is_empty() and float(trial["normalized_residual"]) < float(previous["normalized_residual"]) - PERSON_WALK_SKIN_PROGRESS
+
+
+static func _person_walk_skin_cycle(older: Dictionary, trial: Dictionary) -> bool:
+	if older.is_empty() or not trial.has("height"):
+		return false
+	if absf(float(older["height"]) - float(trial["height"])) > PERSON_WALK_SKIN_CYCLE_M:
+		return false
+	for side in 2:
+		if (older["targets_used"][side] as Vector3).distance_to(trial["targets_used"][side]) > PERSON_WALK_SKIN_CYCLE_M:
+			return false
+	return true
+
+
+## Every trial restarts from the keyed pose. Only measured improvements commit.
+static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float, target_seed: Array = [], iteration_limit: int = PERSON_WALK_SKIN_EVALUATIONS, accelerate: bool = true) -> Dictionary:
+	var body: Skeleton3D = ctx["body"]
 	var goals: Array = []
 	var targets: Array = target_seed.duplicate()
 	if targets.is_empty():
@@ -4324,102 +4546,77 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 		goals.append(_person_walk_ankle_goal(fit, side, u))
 		if not seeded:
 			targets.append(goals[side]["target"])
-	var result: Dictionary = {"ok": false, "reason": "", "targets_used": [], "proposed_targets": [],
-		"actual_ankles": [], "bounds": {}, "misses": [INF, INF], "skin_residual": INF,
-		"height_residual": INF, "ik_passes": 0, "passes": []}
 	fit["reach_clamped"] = [false, false]
 	fit["reach_final_failed"] = [false, false]
 	fit["height_frame_failed"] = false
+	var baseline: Dictionary = _person_walk_skin_snapshot(body, fit)
 	var wanted_h: float = _person_walk_height_at(fit["pelvis"], u, ctx)
+	var current: Dictionary = {"targets_used": [], "proposed_targets": [], "misses": [INF, INF],
+		"skin_residual": INF, "height_residual": INF, "bounds": _person_walk_height_bounds(ctx, fit, u, targets)}
 	if not is_finite(wanted_h):
-		result["bounds"] = _person_walk_height_bounds(ctx, fit, u, targets)
-		return _finish_person_walk_frame(ctx, fit, u, result, "PELVIS_TABLE_EMPTY")
-	# Tests may shorten the budget; production never exceeds six passes.
-	var pass_limit: int = clampi(iteration_limit, 1, PERSON_WALK_SOLVE_PASSES)
-	for pass_id: int in pass_limit:
-		var bounds: Dictionary = _person_walk_height_bounds(ctx, fit, u, targets)
-		result["bounds"] = bounds
-		if bool(bounds["empty"]):
-			return _finish_person_walk_frame(ctx, fit, u, result, "POINT_EMPTY")
-		var height: float = clampf(wanted_h, float(bounds["lower"]), float(bounds["upper"]))
-		_set_person_walk_hips_y(ctx, height)
-		var pre_reach: Array = []
-		var reachable: bool = true
-		for side in 2:
-			var info: Dictionary = _person_walk_reach_info(body, fit["legs"][side], to_body * (targets[side] as Vector3))
-			pre_reach.append(info)
-			fit["reach_final_failed"][side] = bool(info["invalid"]) or float(info["excess"]) > 0.0
-			reachable = reachable and not bool(fit["reach_final_failed"][side])
-		if not reachable:
-			return _finish_person_walk_frame(ctx, fit, u, result, "PRE_IK_REACH")
-		if not _person_walk_spend(fit.get("work_budget", {}), "ik", str(ctx.get("walk_clip", "unknown"))):
-			return _finish_person_walk_frame(ctx, fit, u, result, "FOOT_PATH_BUDGET")
-		result["targets_used"] = targets.duplicate()
-		result["proposed_targets"] = []
-		result["ik_passes"] = pass_id + 1
-		for side in 2:
-			fit["reach_clamped"][side] = _solve_person_footlock_leg(body, fit["legs"][side], to_body * (targets[side] as Vector3), to_body.basis * Vector3.BACK)
-		if bool(fit["reach_clamped"][0]) or bool(fit["reach_clamped"][1]):
-			return _finish_person_walk_frame(ctx, fit, u, result, "IK_CUT")
-		for side in 2:
-			var rotation: Quaternion = (to_body.basis * (goals[side]["rotation"] as Basis)).orthonormalized().get_rotation_quaternion()
-			_person_footlock_rotation(body, int(fit["legs"][side][2]), rotation)
-		var probes: Array = _person_footlock_probes(fit, _skin_frame(ctx))
-		var proposed: Array = []
-		var ankles: Array = []
-		var proposal_reach: Array = []
-		var residual: float = 0.0
-		var actual_ok: bool = true
-		for side in 2:
-			var leg: Array = fit["legs"][side]
-			var ankle: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[2])).origin
-			ankles.append(ankle)
-			var offset: Vector3 = (probes[side]["point"] as Vector3) - ankle
-			var flat_offset: Vector3 = (probes[side]["rest"] as Vector3) - (fit["rest_ankles"][side] as Vector3)
-			var target: Vector3 = (goals[side]["base"] as Vector3) + flat_offset - offset
-			target.y = float(fit["floor"]) + (goals[side]["path"] as Vector3).y - offset.y
-			proposed.append(target)
-			proposal_reach.append(_person_walk_reach_info(body, leg, to_body * target))
-			residual = maxf(residual, (targets[side] as Vector3).distance_to(target))
-			var miss: float = ankle.distance_to(targets[side])
-			result["misses"][side] = miss
-			fit["reach_final_failed"][side] = miss > 0.0001
-			actual_ok = actual_ok and not bool(fit["reach_final_failed"][side])
-			var mid: float = float(goals[side]["age"]) / float(fit["durations"][side])
-			if mid >= 0.40 and mid <= 0.60:
-				var thigh: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[0])).origin
-				var knee: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[1])).origin
-				actual_ok = actual_ok and (knee - thigh).angle_to(ankle - knee) <= PERSON_WALK_MID_KNEE_MAX
-		var next_bounds: Dictionary = _person_walk_height_bounds(ctx, fit, u, proposed)
-		var height_residual: float = INF
-		if not bool(next_bounds["empty"]):
-			height_residual = absf(clampf(wanted_h, float(next_bounds["lower"]), float(next_bounds["upper"])) - height)
-		result["proposed_targets"] = proposed.duplicate()
-		result["actual_ankles"] = ankles
-		result["skin_residual"] = residual
-		result["height_residual"] = height_residual
-		result["next_bounds"] = next_bounds
-		result["passes"].append({"targets_used": targets.duplicate(), "proposed_targets": proposed.duplicate(),
-			"actual_ankles": ankles, "probes": probes, "bounds": bounds, "height": height,
-			"pre_reach": pre_reach, "proposal_reach": proposal_reach})
-		if residual <= 0.0001 and height_residual <= 0.00005 and not bool(next_bounds["empty"]) \
-				and height >= float(next_bounds["lower"]) and height <= float(next_bounds["upper"]) and actual_ok:
-			return _finish_person_walk_frame(ctx, fit, u, result, "")
-		if pass_id == pass_limit - 1:
-			return _finish_person_walk_frame(ctx, fit, u, result, "SKIN_ITER_LIMIT")
-		var accepted: bool = false
-		for alpha: float in [1.0, 0.5, 0.25, 0.125]:
-			var trial: Array = []
-			for side in 2:
-				trial.append((targets[side] as Vector3).lerp(proposed[side], alpha))
-			if not bool(_person_walk_height_bounds(ctx, fit, u, trial)["empty"]):
-				result["passes"][-1]["alpha"] = alpha
-				targets = trial
-				accepted = true
-				break
+		current.merge({"ik_passes": 0, "passes": []})
+		return _finish_person_walk_frame(ctx, fit, u, current, "PELVIS_TABLE_EMPTY")
+	var limit: int = clampi(iteration_limit, 1, PERSON_WALK_SKIN_EVALUATIONS)
+	var evaluations: int = 0
+	var rejections: int = 0
+	var stalled: int = 0
+	var passes: Array = []
+	var previous: Dictionary = {}
+	var accepted_pose: Dictionary = baseline
+	var omega: float = 1.0
+	var reason: String = "SKIN_ITER_LIMIT"
+	var last_trial: Dictionary = {}
+	while evaluations < limit:
+		var trial: Dictionary = _person_walk_skin_evaluate(ctx, fit, u, goals, targets, wanted_h, baseline)
+		if bool(trial["evaluated"]):
+			evaluations += 1
+		var initial: bool = passes.is_empty()
+		var accepted: bool = initial or _person_walk_skin_improves(current, trial)
+		var cycle: bool = not initial and _person_walk_skin_cycle(previous, trial)
+		if cycle:
+			accepted = false
 		if not accepted:
-			return _finish_person_walk_frame(ctx, fit, u, result, "SKIN_STEP_INFEASIBLE")
-	return _finish_person_walk_frame(ctx, fit, u, result, "SKIN_ITER_LIMIT")
+			rejections += 1
+			stalled += 1
+		trial["omega"] = omega
+		trial["accepted"] = accepted
+		trial["rejections"] = rejections
+		trial["ik_passes"] = evaluations
+		passes.append(trial.duplicate(true))
+		last_trial = trial
+		if accepted:
+			previous = current if not initial else {}
+			current = trial
+			accepted_pose = _person_walk_skin_snapshot(body, fit)
+			stalled = 0
+		else:
+			_person_walk_skin_restore(body, fit, accepted_pose)
+		if str(trial["reason"]) == "FOOT_PATH_BUDGET":
+			reason = "FOOT_PATH_BUDGET"
+			break
+		if initial and not str(trial["reason"]).is_empty():
+			reason = str(trial["reason"])
+			break
+		# Success precedes the limit: the final evaluated state can still converge.
+		if accepted and bool(current["conditions"]["ok"]):
+			reason = ""
+			break
+		if cycle or stalled >= PERSON_WALK_SKIN_STALL_TRIALS:
+			reason = "SKIN_CYCLE" if cycle else "SKIN_STALLED"
+			break
+		if evaluations >= limit:
+			break
+		if accepted:
+			omega = _person_walk_aitken(previous, current, omega) if accelerate else 1.0
+		else:
+			omega = maxf(PERSON_WALK_AITKEN_MIN, omega * 0.5)
+		for side in 2:
+			targets[side] = (current["targets_used"][side] as Vector3) + omega * (current["residual_vector"][side] as Vector3)
+	# Keep failed trial diagnostics, but return only the last accepted pose/state.
+	_person_walk_skin_restore(body, fit, accepted_pose)
+	current = current.duplicate(true)
+	current.merge({"ik_passes": evaluations, "passes": passes, "rejections": rejections, "last_trial": last_trial.duplicate(true)}, true)
+	return _finish_person_walk_frame(ctx, fit, u, current, reason)
 
 
 static func _finish_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float, result: Dictionary, reason: String) -> Dictionary:
