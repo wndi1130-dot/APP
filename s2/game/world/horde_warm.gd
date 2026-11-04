@@ -7,6 +7,8 @@ extends Node3D
 ## 두어 장면이 바뀌어도(이어 하기로 곧장 정차) 읽기를 끝까지 받는다. 그사이 다른 카메라가 켜져 있으면
 ## 그리지 않고 읽기·붙잡기만 한다(그 판의 파이프라인은 Godot가 무리 인스턴스를 만들 때 미리 컴파일).
 ## 무리 꺼짐(horde false)·데우기 꺼짐(horde_warm false, 폰 재기의 끔 판)이면 아무것도 읽지 않는다.
+## 그릴 화면이 없는 실행(headless — 시험·도구)도 읽기·붙잡기만 한다: 렌더 끝 신호가 오지 않아 숨은 카메라가
+## 기다림 상한까지 뿌리 뷰포트의 current로 남고, 그사이 다른 장면(건물 뷰의 가까운 건물 고르기 등)이 그 카메라를 읽는다.
 
 const Horde = preload("res://game/world/horde_view.gd")
 const DRAW_FRAMES: int = 2 # 그 카메라로 끝난 렌더 수: 첫 번에 컴파일, 하나 더는 그 그림이 실제로 나간 뒤 거두려고
@@ -17,6 +19,7 @@ const RIG_AT := Vector3(0.0, -500.0, 0.0) # 필드 카메라에 들지 않는 �
 static var last_stats: Dictionary = {} # 끝난 데우기의 결과(시험·로그용)
 static var warmed: bool = false # 실제로 그려 데웠으면 다시 부팅해도 되풀이하지 않는다
 static var _keep_paths: Array[String] = [] # 데우기가 먼저 끝나 받지 못한 읽기: 끝나면 get해서 붙잡는다
+static var rig_without_screen: bool = false # 시험만 켬: 화면 없는 판에서도 숨은 그림을 세워 카메라 처리를 본다
 
 # 기본값은 만들 때부터: 트리에 들기 전(_ready 전)에 지워져도 끝 처리가 같은 키를 읽는다.
 var stats: Dictionary = {"atlas": false, "shader": false, "drawn": false, "post_draws": 0, "frames": 0, "ms": 0.0, "reason": ""}
@@ -85,6 +88,8 @@ func _process(_delta: float) -> void:
 			_finish("asset error")
 		elif get_viewport().get_camera_3d() != null:
 			_finish("another camera is up; read only")
+		elif DisplayServer.get_name() == "headless" and not rig_without_screen:
+			_finish("no screen; read only")
 		else:
 			_build_rig()
 		return

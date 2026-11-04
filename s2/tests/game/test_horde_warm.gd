@@ -20,10 +20,13 @@ func before_each() -> void:
 	Warm.last_stats = {}
 	Horde._shader_kept = null
 	Horde._atlas_kept = null
+	# 이 파일의 시험은 화면 없는 판에서도 숨은 그림·카메라 처리를 본다(다른 시험 파일에서는 꺼져 있다).
+	Warm.rig_without_screen = true
 
 
 func after_each() -> void:
 	await _clear_left()
+	Warm.rig_without_screen = false
 
 
 func _clear_left() -> void:
@@ -189,6 +192,33 @@ func test_drawn_counts_even_if_the_camera_changes_right_after() -> void:
 	assert_eq(String(Warm.last_stats.get("reason", "?")), "")
 	assert_true(Warm.warmed)
 	assert_eq(get_viewport().get_camera_3d(), game_camera, "필드 카메라는 그대로")
+
+
+func test_no_screen_reads_only_and_never_holds_a_camera() -> void:
+	# 부팅을 띄우는 다른 시험(화면 없음)의 데우기: 숨은 카메라를 한 프레임도 current로 두지 않고, 읽기·붙잡기만 하고 걷힌다.
+	# (카메라가 남으면 뒤 시험 파일의 건물 뷰가 그 카메라로 가까운 건물을 고른다 — #1399 GUT 3/3.)
+	if DisplayServer.get_name() != "headless":
+		pass_test("화면 있는 실행: 숨은 그림을 세우는 판")
+		return
+	Warm.rig_without_screen = false
+	var parent := Node.new()
+	add_child_autofree(parent)
+	var node: Node = Warm.start(parent, {})
+	var held: int = 0
+	for _frame: int in range(GONE_FRAMES):
+		if not is_instance_valid(node):
+			break
+		if get_viewport().get_camera_3d() != null or node.get("_rig") != null:
+			held += 1
+		await get_tree().process_frame
+	assert_false(is_instance_valid(node), "읽기가 끝나면 바로 걷힌다(렌더 끝 기다림 없음)")
+	assert_eq(held, 0, "숨은 그림·카메라를 세우지 않는다")
+	assert_eq(String(Warm.last_stats.get("reason", "?")), "no screen; read only", str(Warm.last_stats))
+	assert_false(bool(Warm.last_stats.get("drawn", true)))
+	assert_false(Warm.warmed, "그리지 않았으니 다음 부팅은 다시 데운다")
+	assert_true(Horde._shader_kept is Shader, "읽기·붙잡기는 한다")
+	assert_true(Horde._atlas_kept is Texture2D)
+	assert_null(get_viewport().get_camera_3d())
 
 
 func test_boot_starts_the_warm_right_after_the_fps_cap() -> void:
