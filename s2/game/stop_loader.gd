@@ -258,7 +258,7 @@ static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, fo
 ## (building_view.gd), the ground's and the floors' arrays (map_view.gd, 2a) with the
 ## maps they fit, the rooms' finish (room_finish.gd) and the plan of the woods round
 ## the map (edge_band.gd plan_ahead). Data only, no nodes.
-static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "", bounds_rule: int = -1) -> Dictionary:
+static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "", bounds_rule: int = -1, bounds_solver: Callable = Callable()) -> Dictionary:
 	var started: int = Time.get_ticks_usec()
 	var mark: int = started
 	var ms: Dictionary = {}
@@ -278,8 +278,15 @@ static func make_ready(script: Script, run_seed: int, form: String = "", form_m:
 		ms["side_path"] = float(Time.get_ticks_usec() - mark) / 1000.0
 		mark = Time.get_ticks_usec()
 		# 경계는 샛길이 확정된 자료에만 찍는다. 씨앗을 모르면 필드 시작이 샛길 다음에 찍는다
-		# (field_game.gd with_side_path 뒤 MapBounds.apply).
-		d = MapBounds.apply(d, bounds_rule)
+		# (field_game.gd with_side_path 뒤 MapBounds.finish).
+		var base_factory: Callable = func() -> Dictionary:
+			var base: Dictionary = FieldMaps.build_from(script, band, 0)
+			base = StopGround.apply(base, form, run_seed, form_m)
+			base = StopGround.widen_view(base)
+			base = SidePath.add(base, run_seed)
+			base["_side_seed"] = run_seed
+			return base
+		d = MapBounds.finish(d, base_factory, bounds_rule, bounds_solver)
 	ms["bounds"] = float(Time.get_ticks_usec() - mark) / 1000.0
 	mark = Time.get_ticks_usec()
 	d["_building_plan"] = BuildingView.plan(d)
@@ -303,7 +310,12 @@ static func make_ready(script: Script, run_seed: int, form: String = "", form_m:
 	# the field's dress adds the stretch's food depot from the same walk.
 	WorkSpots.dress(d, -1, run_seed)
 	ms["work_spots"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	if d.has("bounds_stamp"):
+		mark = Time.get_ticks_usec()
+		EdgeBand.prepare_bounds_groves(d)
+		ms["bounds_groves"] = float(Time.get_ticks_usec() - mark) / 1000.0
 	ms["total"] = float(Time.get_ticks_usec() - started) / 1000.0
+	ms.merge(d.get("_ms", {}))
 	d["_ms"] = ms
 	return d
 

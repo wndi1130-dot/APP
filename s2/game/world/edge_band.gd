@@ -555,13 +555,26 @@ static func fell_groves(g: FieldGrid, p: Dictionary, data: Dictionary) -> Array:
 	for i: int in range(mini(2, candidates.size())):
 		out.append(candidates[i]["grove"])
 	if data.has("bounds_stamp"):
-		out.append_array(_bounds_groves(g, data))
+		if data.has("_bounds_groves"):
+			out.append_array(data["_bounds_groves"])
+		else:
+			out.append_array(_bounds_groves(g, data))
 	return out
+
+
+static func prepare_bounds_groves(data: Dictionary) -> void:
+	data["_bounds_groves"] = _bounds_groves(data["grid"], data)
 
 
 static func _bounds_groves(g: FieldGrid, data: Dictionary) -> Array:
 	var spans: Dictionary = {}
+	var owned: Dictionary = {}
+	for grove: Dictionary in data.get("fell_groves", []):
+		if not bool(grove.get("bounds", false)):
+			for cell: Vector2i in grove.get("cells", []): owned[cell] = true
 	for cell: Vector2i in data.get("trees", []):
+		if owned.has(cell): continue
+		owned[cell] = true
 		for tile: Dictionary in data.get("bounds", {}).get("tiles", []):
 			var rect: Rect2i = tile["rect"]
 			if tile["kind"] != "forest" or not rect.has_point(cell):
@@ -573,11 +586,13 @@ static func _bounds_groves(g: FieldGrid, data: Dictionary) -> Array:
 	var out: Array = []
 	for cells: Array in spans.values():
 		var stand: Array[Vector2i] = []
+		var stands: Dictionary = {}
 		for cell: Vector2i in cells:
 			for offset: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 				for step: int in range(1, FOREST_ROWS + 2):
 					var at: Vector2i = cell + offset * step
-					if g.people_can_walk(at) and WorkSpots.reach(data, at, field) >= 0.0 and not stand.has(at):
+					if not stands.has(at) and g.people_can_walk(at) and WorkSpots.reach(data, at, field) >= 0.0:
+						stands[at] = true
 						stand.append(at)
 		if not stand.is_empty():
 			out.append({"kind": "fell", "cells": cells, "stand": stand, "trees": cells.size(), "level": 0, "edge": false, "bounds": true})
@@ -1194,7 +1209,10 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 	for grove: Dictionary in data.get("fell_groves", []) as Array:
 		if not bool(grove.get("edge", false)) and not bool(grove.get("bounds", false)):
 			groves.append(grove)
+	var grove_started: int = Time.get_ticks_usec()
 	groves.append_array(fell_groves(g, p, data))
+	if data.has("bounds_stamp"):
+		data.get_or_add("_ms", {})["bounds_groves_main"] = float(Time.get_ticks_usec() - grove_started) / 1000.0
 	data["fell_groves"] = groves
 	return counts
 

@@ -56,6 +56,8 @@ static func build(script: Script, finish: Callable, bounds_rule: int = -1) -> Di
 		edges = BoundsRule.sides(plain, width_for(String(plain.get("place_kind", ""))))
 		inset = BoundsRule.DEPTH
 	var data := add(plain, edges, inset)
+	if not edges.is_empty():
+		data["bounds_ring_rule"] = BoundsRule.RULE
 	if is_same(data, plain):
 		for g: FieldGrid in plain.get("levels", {0: plain["grid"]}).values():
 			g.refresh_paths()

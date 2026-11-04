@@ -84,26 +84,73 @@ static func check(bounds: Dictionary, grid: FieldGrid) -> Array[String]:
 
 ## 찍힌 자료의 판이 다르면 호출자가 원본부터 다시 준비해야 한다.
 static func can_reuse(data: Dictionary, bounds_rule: int = -1) -> bool:
+	var requested: int = Rule.RULE if Rule.enabled(String(data.get("place_id", "")), bounds_rule) else maxi(bounds_rule, 0)
+	if data.has("bounds_failure") and int(data.get("bounds_ring_rule", 0)) == 0:
+		return requested in [0, Rule.RULE]
 	if not data.has("bounds_stamp"):
-		return true
-	var requested: int = bounds_rule if bounds_rule >= 0 else int(data.get("bounds", {}).get("rule", 0))
+		return int(data.get("bounds_ring_rule", 0)) == requested or not data.has("map_ring")
 	return int(data["bounds_stamp"]) == requested
 
 
-static func apply(data: Dictionary, bounds_rule: int = -1) -> Dictionary:
+## 실패 자료를 반환하지 않고 같은 입력의 원본 판 0 전체를 돌려준다.
+static func finish(data: Dictionary, base_factory: Callable, bounds_rule: int = -1, solver: Callable = Callable()) -> Dictionary:
+	if data.has("bounds_failure") and int(data.get("bounds_ring_rule", 0)) == 0:
+		return data
+	if data.has("bounds_stamp") or not Rule.enabled(String(data.get("place_id", "")), bounds_rule):
+		return apply(data, bounds_rule)
+	var mark: int = Time.get_ticks_usec()
+	var base: Dictionary = base_factory.call()
+	var base_walk: int = count_playable(base)
+	data.get_or_add("_ms", {})["bounds_baseline"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	var result: Dictionary = apply(data, bounds_rule, base_walk, solver)
+	if result.has("bounds_failure"):
+		base["bounds_failure"] = result["bounds_failure"]
+		base["bounds_attempts"] = result.get("bounds_attempts", [])
+		base["_ms"] = result.get("_ms", {})
+		return base
+	return result
+
+
+## 원래 지도+고리. 정차 꼴이 붙인 통로 띠는 분자와 분모 양쪽에서 제외한다.
+static func playable_rect(data: Dictionary) -> Rect2i:
+	var g: FieldGrid = data["grid"]
+	return data.get("stop_old_ground", Rect2i(0, 0, g.width, g.height))
+
+
+static func count_playable(data: Dictionary, blocked: PackedByteArray = PackedByteArray()) -> int:
+	var g: FieldGrid = data["grid"]
+	var area: Rect2i = playable_rect(data)
+	var count: int = 0
+	for y: int in range(area.position.y, area.end.y):
+		for x: int in range(area.position.x, area.end.x):
+			var i: int = g.index(Vector2i(x, y))
+			count += int(g.walk_people[i] == 1 and (blocked.is_empty() or blocked[i] == 0))
+	return count
+
+
+static func apply(data: Dictionary, bounds_rule: int = -1, base_walk: int = -1, solver: Callable = Callable()) -> Dictionary:
 	if not can_reuse(data, bounds_rule):
 		push_error("다른 판의 경계는 원본부터 다시 준비해야 합니다")
+		data["bounds_failure"] = "판 불일치"
 		return data
 	var bounds: Dictionary = data.get("bounds", {})
 	var mask := PackedByteArray()
 	if bounds.is_empty() and Rule.enabled(String(data.get("place_id", "")), bounds_rule):
+		var mark: int = Time.get_ticks_usec()
 		var protection: Array[Dictionary] = []
 		mask = protected_cells(data, protection)
-		bounds = _connected_outline(data, mask, protection)
+		data.get_or_add("_ms", {})["bounds_protect"] = float(Time.get_ticks_usec() - mark) / 1000.0
+		bounds = solver.call(data, mask, protection) if solver.is_valid() else _connected_outline(data, mask, protection, base_walk)
+		if bounds.is_empty():
+			data["bounds_failure"] = "해 없음: 모양/놀 땅/연결 또는 17회 한도"
+			return data
 	if bounds.is_empty() or bounds_rule == 0 or bounds.get("rule", 0) == 0:
 		return data
 	var errors: Array[String] = check(bounds, data["grid"])
+	if bounds.get("made_by") == "rule":
+		errors.append_array(Rule.shape_errors(data["grid"], bounds))
 	if not errors.is_empty():
+		data["bounds_failure"] = "; ".join(errors)
 		push_error("경계 검사 실패: " + "; ".join(errors))
 		return data
 	# 요청한 저장 판의 자료가 없으면 다른 판으로 표시하지 않는다(설계 7a).
@@ -119,9 +166,11 @@ static func apply(data: Dictionary, bounds_rule: int = -1) -> Dictionary:
 		for y: int in range(rect.position.y, rect.end.y):
 			for x: int in range(rect.position.x, rect.end.x):
 				if not mask.is_empty() and mask[g.index(Vector2i(x, y))] != 0:
+					data["bounds_failure"] = "보호 칸 침범"
 					push_error("경계가 보호 칸에 닿았습니다")
 					return data
 	var forest: Array[Rect2i] = []
+	var stamp_started: int = Time.get_ticks_usec()
 	var blocked: int = 0
 	for tile: Dictionary in tiles:
 		var rect: Rect2i = tile["rect"]
@@ -139,7 +188,34 @@ static func apply(data: Dictionary, bounds_rule: int = -1) -> Dictionary:
 		StopGround.view_forest_trees(data, forest, Rule.random_of(String(data["place_id"])), 1)
 		_remove_trees(data)
 	data["bounds_stamp"] = rule
+	_water_regions(data)
+	if Rule.enabled(String(data.get("place_id", "")), bounds_rule):
+		data.get_or_add("_ms", {})["bounds_stamp_ms"] = float(Time.get_ticks_usec() - stamp_started) / 1000.0
 	return data
+
+
+## 물 enum이 없어 ICE를 유지하되 1=윤곽 쪽 한 칸 물가, 2=물 바닥으로 구별한다.
+static func _water_regions(data: Dictionary) -> void:
+	var g: FieldGrid = data["grid"]
+	var regions := PackedByteArray()
+	regions.resize(g.width * g.height)
+	var outside := PackedByteArray()
+	outside.resize(regions.size())
+	for tile: Dictionary in data["bounds"]["tiles"]:
+		var rect: Rect2i = tile["rect"]
+		for y: int in range(rect.position.y, rect.end.y):
+			for x: int in range(rect.position.x, rect.end.x):
+				var i: int = g.index(Vector2i(x, y))
+				outside[i] = 1
+				if tile["kind"] == "water": regions[i] = 2
+	for i: int in range(regions.size()):
+		if regions[i] != 2: continue
+		var cell := Vector2i(i % g.width, floori(float(i) / g.width))
+		for delta: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+			var next: Vector2i = cell + delta
+			if g.inside(next) and outside[g.index(next)] == 0:
+				regions[i] = 1
+	data["bounds_water_regions"] = regions
 
 
 static func _paint(g: FieldGrid, rect: Rect2i, water: bool) -> int:
@@ -222,68 +298,205 @@ static func protected_cells(data: Dictionary, details: Array[Dictionary] = []) -
 
 
 ## 찍기 전에 연결성을 검사한다. 끊길 통로는 원래 걷기 경로를 보호하고 윤곽을 다시 푼다.
-static func _connected_outline(data: Dictionary, mask: PackedByteArray, protection: Array[Dictionary]) -> Dictionary:
+static func _connected_outline(data: Dictionary, mask: PackedByteArray, protection: Array[Dictionary], base_walk: int = -1) -> Dictionary:
+	var times: Dictionary = data.get_or_add("_ms", {})
+	for key: String in ["bounds_outline", "bounds_connect", "bounds_loss", "bounds_shape", "bounds_prepare"]:
+		times[key] = 0.0
+	var mark: int = Time.get_ticks_usec()
 	var g: FieldGrid = data["grid"]
-	var before: PackedInt32Array = walk_parents(data)
+	var area: Rect2i = playable_rect(data)
+	var playable_before: int = count_playable(data)
+	var profiles: Array[PackedInt32Array] = Rule.limits(g, mask)
+	var component_roots: Array[int] = []
+	var before := PackedInt32Array()
+	var dead_before: Dictionary = {}
 	var preexisting: Array[Vector2i] = []
-	for i: int in range(before.size()):
-		if g.walk_people[i] == 1 and before[i] < 0:
-			preexisting.append(Vector2i(i % g.width, i / g.width))
 	var routes: Array[Vector2i] = []
-	for _attempt: int in range(Rule.DEPTH + 1):
-		var bounds: Dictionary = Rule.outline(data, mask, protection)
-		if bounds.is_empty():
-			return {}
-		var blocked := PackedByteArray()
-		blocked.resize(g.width * g.height)
+	var route_cells: Dictionary = {}
+	var blocked := PackedByteArray()
+	blocked.resize(g.width * g.height)
+	var touched: Array[int] = []
+	var attempts: Array[Dictionary] = []
+	# ON 지도의 생성 분기에서만 호출한다.
+	data["bounds_attempts"] = attempts
+	times["bounds_prepare"] = float(Time.get_ticks_usec() - mark) / 1000.0
+	for attempt: int in range(Rule.DEPTH + 1):
+		mark = Time.get_ticks_usec()
+		var bounds: Dictionary = Rule.outline(data, mask, protection, attempt, profiles)
+		times["bounds_outline"] += float(Time.get_ticks_usec() - mark) / 1000.0
+		mark = Time.get_ticks_usec()
+		var shape: Dictionary = Rule.shape_report(g, bounds)
+		var record: Dictionary = {"attempt": attempt + 1, "candidate": attempt, "shape": shape,
+			"grid_size": Vector2i(g.width, g.height), "playable_rect": area,
+			"rejected": [], "detached_people": -1, "detached_dead_pairs": -1, "connect_checked": false}
+		attempts.append(record)
+		record["rejected"].append_array(shape["errors"])
+		times["bounds_shape"] += float(Time.get_ticks_usec() - mark) / 1000.0
+		if not bounds.has("outline"):
+			record["area_checked"] = false
+			continue
+		mark = Time.get_ticks_usec()
+		# 전체 재집계 대신 이전 후보의 표시만 지우고 이번 네모만 센다.
+		for index: int in touched: blocked[index] = 0
+		touched.clear()
+		var walk_loss: int = 0
+		var newly_blocked: int = 0
+		var protected_hits: int = 0
 		for tile: Dictionary in bounds["tiles"]:
 			var rect: Rect2i = tile["rect"]
 			for y: int in range(rect.position.y, rect.end.y):
+				var row_index: int = y * g.width
 				for x: int in range(rect.position.x, rect.end.x):
-					blocked[g.index(Vector2i(x, y))] = 1
+					var index: int = row_index + x
+					if blocked[index] != 0: continue
+					blocked[index] = 1
+					touched.append(index)
+					newly_blocked += int(g.solid[index] == FieldGrid.Solid.NONE)
+					protected_hits += int(mask[index] != 0)
+					if x >= area.position.x and x < area.end.x and y >= area.position.y and y < area.end.y:
+						walk_loss += int(g.walk_people[index] == 1)
+		var new_walk: int = playable_before - walk_loss
+		record.merge({"area_checked": true, "playable_before": playable_before, "walk_loss": walk_loss,
+			"playable_walk": new_walk, "base_walk": base_walk,
+			"playable_ratio": float(new_walk) / base_walk if base_walk > 0 else -1.0,
+			"newly_blocked": newly_blocked, "blocked_share": float(newly_blocked) / blocked.size(),
+			"protected_hits": protected_hits})
+		if base_walk > 0 and new_walk * 4 < base_walk * 5: record["rejected"].append("놀 땅 비 1.25 미만")
+		if float(newly_blocked) / blocked.size() > 0.18: record["rejected"].append("막은 몫 18% 초과")
+		if protected_hits > 0: record["rejected"].append("보호 칸 침범")
+		times["bounds_loss"] += float(Time.get_ticks_usec() - mark) / 1000.0
+		if not record["rejected"].is_empty(): continue
+		# 모든 변과 면적을 고른 뒤에만 한 번 확인한다. 실패한 통로를 보호한 경우에만 다시 한다.
+		mark = Time.get_ticks_usec()
+		if before.is_empty():
+			before = walk_parents(data)
+			dead_before = _scan_walk(g, g.walk_dead, PackedByteArray(), component_roots, true)
+			for index: int in range(before.size()):
+				if g.walk_people[index] == 1 and before[index] < 0:
+					preexisting.append(Vector2i(index % g.width, floori(float(index) / g.width)))
 		var after: PackedInt32Array = walk_parents(data, blocked)
+		var dead_after: Dictionary = _scan_walk(g, g.walk_dead, blocked, component_roots, true)
 		var detached: Array[int] = []
-		for i: int in range(before.size()):
-			if before[i] >= 0 and blocked[i] == 0 and after[i] < 0:
-				detached.append(i)
-		if detached.is_empty():
+		for index: int in range(before.size()):
+			if before[index] >= 0 and blocked[index] == 0 and after[index] < 0: detached.append(index)
+		var dead_lost: Array[Dictionary] = _dead_lost(data, dead_before, dead_after)
+		record["connect_checked"] = true
+		record["detached_people"] = detached.size()
+		record["detached_dead_pairs"] = dead_lost.size()
+		record["dead_lost"] = dead_lost
+		if not detached.is_empty(): record["rejected"].append("새 사람 미도달 칸")
+		if not dead_lost.is_empty(): record["rejected"].append("망자 진입로 연결 단절")
+		if record["rejected"].is_empty():
+			bounds["playable_walk"] = new_walk
+			bounds["base_walk"] = base_walk
 			bounds["unreachable_before"] = preexisting
 			bounds["protected_routes"] = routes
+			times["bounds_connect"] += float(Time.get_ticks_usec() - mark) / 1000.0
 			return bounds
-		for first: int in detached:
-			var at: int = first
-			while before[at] != at:
-				if blocked[at] != 0:
-					var cell := Vector2i(at % g.width, at / g.width)
-					if not routes.has(cell):
-						routes.append(cell)
-						_protect(mask, g, cell, 2, protection, "walk_route")
-				at = before[at]
-	push_error("경계 연결성 보정 한도에 도달했습니다: " + str(routes))
+		_add_routes(g, before, detached, blocked, mask, protection, routes, route_cells)
+		var dead_detached: Array[int] = []
+		for pair: Dictionary in dead_lost:
+			dead_detached.append(pair["home_index"])
+			dead_detached.append_array(pair["entry_indices"])
+		_add_routes(g, dead_before["parents"], dead_detached, blocked, mask, protection, routes, route_cells)
+		times["bounds_connect"] += float(Time.get_ticks_usec() - mark) / 1000.0
+		mark = Time.get_ticks_usec()
+		profiles = Rule.limits(g, mask)
+		times["bounds_prepare"] += float(Time.get_ticks_usec() - mark) / 1000.0
 	return {}
 
 
-static func walk_parents(data: Dictionary, blocked: PackedByteArray = PackedByteArray()) -> PackedInt32Array:
+## 연결 영역 번호로 각 진입로와 각 둥지의 원래 연결을 함께 대조한다.
+static func _dead_lost(data: Dictionary, before: Dictionary, after: Dictionary) -> Array[Dictionary]:
 	var g: FieldGrid = data["grid"]
-	var parent := PackedInt32Array()
-	parent.resize(g.width * g.height)
-	parent.fill(-1)
-	var queue: Array[Vector2i] = []
-	for cells: Array in data.get("train_doors", {}).values():
+	var old_labels: PackedInt32Array = before["labels"]
+	var new_labels: PackedInt32Array = after["labels"]
+	var lost: Array[Dictionary] = []
+	for key: String in data.get("entries", {}):
+		if int(data.get("entry_levels", {}).get(key, 0)) != 0 or data.get("manholes", {}).has(key): continue
+		var old_starts: Dictionary = {}
+		var new_starts: Dictionary = {}
+		for cell: Vector2i in data["entries"][key]:
+			if not g.inside(cell): continue
+			var index: int = g.index(cell)
+			if old_labels[index] >= 0: old_starts.get_or_add(old_labels[index], []).append(index)
+			if new_labels[index] >= 0: new_starts[new_labels[index]] = true
+		for name: String in data.get("anchors", {}):
+			if not name.begins_with("horde_home") or not data["anchors"][name] is Vector2i: continue
+			var home: Vector2i = data["anchors"][name]
+			if not g.inside(home): continue
+			var index: int = g.index(home)
+			if old_starts.has(old_labels[index]) and not new_starts.has(new_labels[index]):
+				lost.append({"entry": key, "home": name, "home_index": index, "home_cell": home,
+					"entry_indices": old_starts[old_labels[index]]})
+	return lost
+
+
+static func _add_routes(g: FieldGrid, parents: PackedInt32Array, detached: Array[int], blocked: PackedByteArray, mask: PackedByteArray, protection: Array[Dictionary], routes: Array[Vector2i], route_cells: Dictionary) -> void:
+	var processed: Dictionary = {}
+	for first: int in detached:
+		var at: int = first
+		while at >= 0 and parents[at] != at and not processed.has(at):
+			processed[at] = true
+			if blocked[at] != 0 and not route_cells.has(at):
+				route_cells[at] = true
+				var cell := Vector2i(at % g.width, floori(float(at) / g.width))
+				routes.append(cell)
+				_protect(mask, g, cell, 2, protection, "walk_route")
+			at = parents[at]
+
+
+static func walk_parents(data: Dictionary, blocked: PackedByteArray = PackedByteArray(), dead: bool = false, roots: Array = []) -> PackedInt32Array:
+	var g: FieldGrid = data["grid"]
+	var walk: PackedByteArray = g.walk_dead if dead else g.walk_people
+	var starts: Array = data.get("train_doors", {}).values()
+	if dead:
+		starts = []
+		for key: String in data.get("entries", {}):
+			if int(data.get("entry_levels", {}).get(key, 0)) == 0 and not data.get("manholes", {}).has(key):
+				starts.append(data["entries"][key])
+	if not roots.is_empty(): starts = [roots]
+	var seeds: Array[int] = []
+	for cells: Array in starts:
 		for cell: Vector2i in cells:
-			if queue.is_empty() and g.people_can_walk(cell) and (blocked.is_empty() or blocked[g.index(cell)] == 0):
-				queue.append(cell)
-				parent[g.index(cell)] = g.index(cell)
-	var cursor: int = 0
-	while cursor < queue.size():
-		var cell: Vector2i = queue[cursor]
-		cursor += 1
-		for direction: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
-			var next: Vector2i = cell + direction
-			if g.people_can_walk(next) and parent[g.index(next)] < 0 and (blocked.is_empty() or blocked[g.index(next)] == 0):
-				parent[g.index(next)] = g.index(cell)
-				queue.append(next)
-	return parent
+			if (dead or seeds.is_empty()) and g.inside(cell):
+				var index: int = g.index(cell)
+				if walk[index] == 1 and (blocked.is_empty() or blocked[index] == 0): seeds.append(index)
+	return _scan_walk(g, walk, blocked, seeds)["parents"]
+
+
+## 정수 큐와 걷기 캐시를 재사용한다. 망자는 전체 연결 영역을 한 번만 돈다.
+static func _scan_walk(g: FieldGrid, walk: PackedByteArray, blocked: PackedByteArray, seeds: Array[int], components: bool = false) -> Dictionary:
+	var parent := PackedInt32Array()
+	parent.resize(walk.size())
+	parent.fill(-1)
+	var labels: PackedInt32Array = parent.duplicate()
+	var queue := PackedInt32Array()
+	queue.resize(walk.size())
+	var read: int = 0
+	var write: int = 0
+	var directions: Array[int] = [-1, 1, -g.width, g.width]
+	for seed_offset: int in range(walk.size() if components else seeds.size()):
+		var root: int = seed_offset if components else seeds[seed_offset]
+		if walk[root] == 0 or parent[root] >= 0 or (not blocked.is_empty() and blocked[root] != 0): continue
+		parent[root] = root
+		labels[root] = root
+		queue[write] = root
+		write += 1
+		while read < write:
+			var at: int = queue[read]
+			read += 1
+			var x: int = at % g.width
+			for direction: int in directions:
+				if (direction == -1 and x == 0) or (direction == 1 and x == g.width - 1): continue
+				var next: int = at + direction
+				if next < 0 or next >= walk.size() or parent[next] >= 0 or walk[next] == 0: continue
+				if not blocked.is_empty() and blocked[next] != 0: continue
+				parent[next] = at
+				labels[next] = root
+				queue[write] = next
+				write += 1
+	return {"parents": parent, "labels": labels}
 
 
 static func _remove_trees(data: Dictionary) -> void:
