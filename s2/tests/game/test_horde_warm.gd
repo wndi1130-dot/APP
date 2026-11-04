@@ -237,12 +237,15 @@ func test_boot_starts_the_warm_right_after_the_fps_cap() -> void:
 	boot.train_save_path = "user://_test_horde_warm_none_train.save"
 	var auto: String = OS.get_environment("S2_AUTOSTART")
 	OS.unset_environment("S2_AUTOSTART")
+	var reads: int = Horde.resource_reads
 	add_child_autofree(boot)
 	if auto != "":
 		OS.set_environment("S2_AUTOSTART", auto)
 	await get_tree().process_frame
+	# 화면 없는 실행은 읽기가 곧바로 끝나 이 프레임에 벌써 걷혔을 수 있다: 노드 또는 결과 줄 하나로 시작을 본다.
 	var warm: Node = get_tree().root.get_node_or_null("HordeWarm")
-	assert_not_null(warm, "부팅 메뉴 동안 데운다")
+	assert_true(warm != null or not Warm.last_stats.is_empty(), "부팅 메뉴 동안 데운다")
+	assert_true(Horde.resource_reads - reads >= 2, "데우기가 아틀라스·셰이더를 요청했다")
 	assert_not_null(boot.get("menu"), "저장이 없으면 메뉴")
 	await _wait_gone(warm)
 	assert_false(Warm.last_stats.is_empty(), "결과 줄 한 번")
