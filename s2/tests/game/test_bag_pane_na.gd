@@ -944,6 +944,17 @@ func test_taking_folds_to_the_old_width_then_lingers_and_unfolds() -> void:
 	assert_not_null(hud.modal.find_child("BagStrip", true, false), "the last thing out keeps the fold briefly")
 	var linger_ms: int = int(InventoryPane.FOLD_LINGER_S * 1000.0)
 	assert_between(hud.inv_fold_until_ms, before_ms + linger_ms, after_ms + linger_ms, "a second from the last thing out")
+	# Laid again while it lingers (a row opened, a place shown): still folded, and
+	# the second is not stretched.
+	var deadline: int = hud.inv_fold_until_ms
+	InventoryPane.open(hud, hud.inv_near)
+	assert_not_null(hud.modal.find_child("BagStrip", true, false), "laid again within the second, still folded")
+	assert_eq(hud.inv_fold_until_ms, deadline, "the second is not stretched")
+	# Short of the deadline it is still folded (checked only while the clock is
+	# short of it: a stalled frame says nothing either way).
+	await _wait(maxf(0.0, float(deadline - Time.get_ticks_msec()) / 1000.0 - 0.4))
+	if Time.get_ticks_msec() < deadline - 50:
+		assert_not_null(hud.modal.find_child("BagStrip", true, false), "folded until the second is up")
 	await _wait(maxf(0.0, float(hud.inv_fold_until_ms - Time.get_ticks_msec()) / 1000.0) + 0.15)
 	await _layout()
 	assert_null(hud.modal.find_child("BagStrip", true, false))
@@ -1248,9 +1259,14 @@ func test_by_gui_a_hold_slipped_off_and_back_stays_let_go() -> void:
 	assert_eq(float(hold.state["fill"]), 0.0, "back on the key it fills nothing")
 	_mouse(viewport, at, false)
 	assert_eq(int(game.player.items.get("can_empty", 0)), 2, "nothing is thrown")
-	# A new press is a new hold.
+	# A new press is a new hold: it fills again and a full one throws just one.
 	_mouse(viewport, at, true)
 	assert_true(bool(hold.get("_down")))
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S * 0.5)
+	assert_almost_eq(float(hold.state["fill"]), 0.5, 0.01, "a new press fills again")
+	hold.advance(HoldConfirm.HOLD_S * 0.5 + 0.01)
+	assert_eq(int(game.player.items.get("can_empty", 0)), 1, "held full, one can is thrown")
 	_mouse(viewport, at, false)
 	if game.hud.modal_open:
 		game.hud._close_modal()

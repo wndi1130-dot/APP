@@ -242,9 +242,11 @@ static func open(hud, want: Dictionary) -> void:
 	if again:
 		hud._bag_scrolls_back(kept)
 	if not taking and now_ms < hud.inv_fold_until_ms:
-		# The lingering pane owns one timer, with no strong Node captures.
+		# The lingering pane owns one timer, with no strong Node captures. It counts
+		# from now, after the laying (which takes its own time), to the deadline.
 		var hud_ref: WeakRef = weakref(hud)
-		pane.get_tree().create_timer(float(hud.inv_fold_until_ms - now_ms) / 1000.0).timeout.connect(func() -> void:
+		var left_s: float = maxf(0.0, float(hud.inv_fold_until_ms - Time.get_ticks_msec()) / 1000.0)
+		pane.get_tree().create_timer(left_s).timeout.connect(func() -> void:
 			var hud_now: Object = hud_ref.get_ref()
 			var shown: GlassPane = pane_ref.get_ref() as GlassPane
 			if hud_now != null and shown != null and hud_now.get("modal_pane") == shown and hud_now.get("modal") == hud_now.get("box_pane"):
