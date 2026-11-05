@@ -179,6 +179,8 @@ const PATHS: Dictionary = {
 	"window": '<path class="t" d="M5 3h14v16H5z"/><path d="M5 3h14v16H5zM12 3v16M5 11h14M3 21h18"/>',
 	"ladder": '<path d="M8 2.5v19M16 2.5v19M8 6h8M8 10.5h8M8 15h8M8 19.5h8"/>',
 	"pickup": '<path class="t" d="M6 15h12v6H6z"/><path d="M6 15h12v6H6zM3 21h18"/><path d="M12 12V3M8.5 6.5 12 3l3.5 3.5"/>',
+	# The bag's weapon swap (결정 558): two arrows, the two weapons trading places.
+	"swap": '<path d="M4 8h15M15 4l4 4-4 4M20 16H5M9 12l-4 4 4 4"/>',
 	"sled": '<path d="M3 13h12M5 13v5M13 13v5M2 18h13q4 0 4-4M15 13l6-7"/>',
 	"wear": '<path class="t" d="M8 3 4 6l-1 9h3v6h12v-6h3l-1-9-4-3-4 3z"/><path d="M8 3 4 6l-1 9h3v6h12v-6h3l-1-9-4-3-4 3zM12 6v15M14.5 14h2.5"/>',
 	"unlock": '<path class="t" d="M5 11h14v10H5z"/><path d="M5 11h14v10H5zM8 11V7a4 4 0 0 1 7.6-1.8"/><circle class="f" cx="12" cy="15.5" r="1.4"/><path d="M12 16.5v2"/>',

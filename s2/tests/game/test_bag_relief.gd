@@ -7,6 +7,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const Sled = preload("res://game/sim/sled.gd")
 const Stamina = preload("res://game/sim/stamina.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const InventoryPane = preload("res://game/ui/inventory_pane.gd")
 
 
 func _person(bag: String = "pack", count: int = 8):
@@ -166,23 +167,46 @@ func test_companion_cannot_use_relief_as_extra_storage() -> void:
 	assert_true((box["items"] as Array).is_empty(), "the box gives it up")
 
 
-# The body's load is on the bag's weight line at the foot; the head keeps its
-# weight and its state whole (a longer head was cut off at the pane's edge).
+# The bag's head keeps its weight against the limit, its stage in the number's
+# colour (결정 560: the same scale's stage, no state words to cut off); the body's
+# load is its own number by the running mark on the rounds' line (결정 558).
 func test_body_number_is_on_the_bag_weight_line() -> void:
 	var game = _field()
-	game.hud._inv_bag()
-	var side := game.hud.modal.find_child("Side", true, false) as Label
-	assert_not_null(side)
-	if side != null:
-		var head := side.text.replace(UiFonts.WORD_JOINER, "")
-		assert_true(head.contains("8.0 / 8"))
-		assert_true(head.contains("절반 넘음"), "the state, whole")
-		assert_false(head.contains("몸 부담"))
-	var foot := game.hud.modal.find_child("MoveHint", true, false) as Label
-	assert_not_null(foot)
-	if foot != null:
-		var line := foot.text.replace(UiFonts.WORD_JOINER, "")
-		assert_true(line.contains("가방 8.0 / 8"))
-		assert_true(line.contains("몸 부담 5.6"))
-		assert_false(foot.clip_text, "the line wraps, its end is never cut off")
-		assert_eq(foot.autowrap_mode, TextServer.AUTOWRAP_WORD_SMART)
+	game.hud.bag_panel()
+	var p = game.player
+	var load_l := game.hud.modal.find_child("BagLoad", true, false) as Label
+	assert_not_null(load_l)
+	if load_l != null:
+		var head := load_l.text.replace(UiFonts.WORD_JOINER, "")
+		assert_eq(head, "8.0 / 8")
+		assert_eq(p.carry_state(), 1, "a full pack is past half")
+		assert_eq(load_l.get_theme_color("font_color"), InventoryPane.carry_ink(1), "the stage in the number's ink")
+		assert_true(load_l.tooltip_text.contains(Carry.STATE_NAMES[1]), "the state's word kept for a long look")
+	var head_node: Node = game.hud.modal.find_child("BagHead", true, false)
+	assert_not_null(head_node)
+	if head_node != null:
+		var words: Array = head_node.find_children("*", "Label", true, false).map(func(l) -> String: return String(l.text))
+		assert_false("".join(words).contains("몸 부담"), "the head holds the bag alone")
+	var burden := game.hud.modal.find_child("Burden", true, false) as Label
+	assert_not_null(burden)
+	if burden != null:
+		assert_eq(burden.text.replace(UiFonts.WORD_JOINER, ""), "%.1f" % p.body_burden())
+		assert_eq(burden.text.replace(UiFonts.WORD_JOINER, ""), "5.6")
+		assert_eq(burden.tooltip_text, "몸 부담")
+		assert_eq(String(burden.get_parent().name), "Ammo", "on the rounds' line")
+
+
+# 결정 560: worn clothes keep bone bars even when their condition is low.
+func test_worn_condition_bars_keep_one_bone_colour() -> void:
+	var game = _field()
+	for slot: String in InventoryPane.Wear.SLOTS:
+		var garment: Dictionary = InventoryPane.Wear.occupant(game.player, slot)
+		if not garment.is_empty():
+			garment["wear"] = 0.9
+	var parts: Array = InventoryPane._worn(game.hud, game.player)
+	add_child_autofree(parts[0])
+	add_child_autofree(parts[1])
+	var bars: Array = parts[0].find_children("*", "ProgressBar", true, false)
+	assert_gt(bars.size(), 0)
+	for bar: ProgressBar in bars:
+		assert_eq((bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color, InventoryPane.BONE)
