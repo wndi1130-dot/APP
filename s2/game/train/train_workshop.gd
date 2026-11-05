@@ -39,6 +39,7 @@ const TrainLawTech = preload("res://game/train/train_lawtech.gd")
 const TrainMods = preload("res://game/train/train_mods.gd")
 const TrainWorkOrder = preload("res://game/train/train_work_order.gd")
 const Supplies = preload("res://game/train/train_supplies.gd")
+const CouncilLog = preload("res://game/politics/council_log.gd")
 
 ## S1 D.work, D.workSkill[2] (숙련), ZONE_WORK.front, W1 off: a stretch's work.
 const WORK: float = 4.0
@@ -266,16 +267,8 @@ static func run(g: Dictionary, t: Dictionary = {}) -> Dictionary:
 			var restored: Dictionary = TrainResearch.advance_restore(g, w)
 			w -= float(restored["used"])
 			did.append_array(restored["did"])
-			# S1 completeRestore: w6 done on a supplies run puts the supplies job at the end of a
-			# stored order, once (an order never stored is read with it, train_work_order.gd).
-			if restored.get("done") == "w6" and bool(g.get("supOn", false)) and g["dom"].get("order") is Array and not (g["dom"]["order"] as Array).has("sup"):
-				(g["dom"]["order"] as Array).append("sup")
-			# A standing law the restored technology bends says so (S1 completeTech's lawTechNews).
 			if restored.get("done") != null:
-				for news: String in TrainLawTech.news(g, String(restored["done"])):
-					if not g.get("journal") is Array:
-						g["journal"] = []
-					g["journal"].append({"seg": int(g.get("seg", 0)), "text": news, "tone": "good"})
+				after_restore(g, t, String(restored["done"]), bool(restored["finishing"]))
 		elif task == "modify":
 			var modified: Dictionary = TrainMods.advance_job(g, w)
 			w -= float(modified["used"])
@@ -320,6 +313,27 @@ static func now(g: Dictionary) -> Dictionary:
 		return {"id": String(m["id"]), "share": clampf(float(m["progress"]) / maxf(float(m["need"]), 1e-9), 0.0, 1.0),
 			"can_cancel": float(m["progress"]) <= 0.0}
 	return {"id": "", "share": 0.0, "can_cancel": false}
+
+
+## S1 completeRestore's effects, once after either workshop work or immediate pipe ratification.
+static func after_restore(g: Dictionary, t: Dictionary, id: String, finishing: bool) -> void:
+	var dom: Dictionary = g["dom"]
+	if finishing:
+		CouncilLog._journal(g, "%s이(가) 완성판이 됐다." % TrainResearch.title(g, id), "good")
+		return
+	if id == "w6" and bool(g.get("supOn", false)) and dom.get("order") is Array and not (dom["order"] as Array).has("sup"):
+		(dom["order"] as Array).append("sup")
+	TrainDom.init_log(dom)
+	var st: Dictionary = dom["techs"][id]
+	var def: Dictionary = TrainResearch.TECHS[id]
+	dom["stats"]["restored"] += 1
+	if int(def["tier"]) == 3:
+		dom["stats"]["tier3"] += 1
+	if bool(st["defect"]):
+		dom["stats"]["defective"] += 1
+	CouncilLog._journal(g, "%s: %s을(를) %s복원했다.%s" % [TrainResearch.BRANCH_NAME[def["branch"]], TrainResearch.title(g, id), "결함판으로 " if bool(st["defect"]) else "", TrainResearch.reaction(id, st.get("variant"), t)], "good")
+	for news: String in TrainLawTech.news(g, id):
+		CouncilLog._journal(g, news, "good")
 
 
 static func _deliver(dom: Dictionary, id: String) -> void:

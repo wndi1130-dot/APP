@@ -4,6 +4,7 @@ const V = preload("res://tests/politics/field_vectors.gd")
 const Workshop = preload("res://game/train/train_workshop.gd")
 const Order = preload("res://game/train/train_work_order.gd")
 const Dom = preload("res://game/train/train_dom.gd")
+const RestoreVectors = preload("res://tests/train/restore_vectors.gd")
 const State = preload("res://game/train/train_state.gd")
 const Settle = preload("res://game/train/turn/turn_settle.gd")
 const Save = preload("res://game/politics/save_slot.gd")
@@ -350,27 +351,11 @@ func before_all() -> void:
 
 
 func _convert(g: Dictionary) -> Dictionary:
-	var out: Dictionary = g.duplicate(true)
+	var out: Dictionary = RestoreVectors.project(g)
 	if out.get("dom") is Dictionary:
 		for key: String in _data.get("s2DomOmit", []):
 			out["dom"].erase(key)
 	return out
-
-
-## S1 completeRestore also writes 「…을(를) 복원했다.」 to the journal. S2 has never ported
-## that line (nor its stats or the m4 card), on any board, so 2a leaves it out: porting it
-## would change the supplies-off board. Only that line is dropped; other journal lines compare.
-func _drop_s1_restore_line(g: Dictionary) -> Dictionary:
-	if not g.get("journal") is Array:
-		return g
-	var line := RegEx.create_from_string("^[^:]+: .+을\\(를\\) (결함판으로 )?복원했다\\.")
-	var kept: Array = []
-	for row: Variant in g["journal"]:
-		if row is Dictionary and line.search(String(row.get("text", ""))) != null:
-			continue
-		kept.append(row)
-	g["journal"] = kept
-	return g
 
 
 func _same(want: Variant, got: Variant, label: String) -> void:
@@ -396,7 +381,7 @@ func test_s1_work_order_whole_board_vectors() -> void:
 		assert_true(Dom.is_store(g["dom"]), row["name"])
 		var result: Dictionary = Workshop.run(g, _t)
 		_same(row["value"], {"used": result["used"], "did": result["did"]}, row["name"])
-		_same(_drop_s1_restore_line(_convert(row["after"])), _convert(g), row["name"] + " whole board")
+		_same(_convert(row["after"]), g, row["name"] + " whole board")
 
 
 func test_s1_workshop_settles_whole_board_vectors() -> void:

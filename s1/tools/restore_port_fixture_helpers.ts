@@ -57,6 +57,12 @@ export function restorationBoard(seed: string, targets: TechId[]): Game {
     assert.equal(techUsable(g, first), true);
   };
   for (const id of targets) prepare(id);
+  // 「설계도가 맞았다」 제안(offerRestores, dom:fit 카드·일지)은 이미 다 나온 판으로 둔다: S2에 옮기지 않은
+  // S1 몫이라(offered는 s2DomOmit) 정산을 도는 표본이 그 카드로 갈리지 않게. 정산 자체는 그대로 돈다.
+  d.offered = Object.keys(TECHS) as TechId[];
+  // 공방장 맡기기(delegate.ts)도 S2에 옮기지 않았다(설계 1장): 탐욕한 공방장이 정산마다 부품을 빼돌리는
+  // 난수 한 번(delegateTick)이 판을 가르지 않게, 이 판의 사람에게서 탐욕 기질만 뺀다(사람은 S2에 experts로만 보임).
+  for (const p of d.people) if (p.trait === 'greed') delete p.trait;
   d.order = ['restore'];
   for (const c of COMMS) g.comms[c].rel = 0;
   assertNoSuppliesHooks(g);

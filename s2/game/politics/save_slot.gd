@@ -1,17 +1,19 @@
 extends RefCounted
 ## One JSON save slot compatible with the S1a Game object. Invalid text is preserved in a separate
 ## slot; the original is never deleted by load_slot.
-## 열차 판 저장 번호(필드 저장의 field_save.gd VERSION과 다른 수): 생필품이 꺼진 판은 판 안의 번호
-## 그대로(1), 켜진 판은 3으로 저장한다(slot_board). 2는 생필품을 켜는 길이 시험뿐이던 빌드의 켠 판이다.
+## 열차 판 저장 번호(필드 저장의 field_save.gd VERSION과 다른 수): dom이 있는 판은 4,
+## dom 없이 생필품이 켜진 판은 3, 나머지는 판 안의 번호로 저장한다(slot_board).
 ## 옛 빌드는 자기 상한까지만 읽어 새 판을 「더 새 빌드」로 거절하므로, 생필품 쓰기·give_sup·give_fine
 ## 약속과 본 공방 소식(shopSeen)을 모른 채 정산하지 않는다.
 
-## The newest train slot version this build reads (1 to 3). What a save writes is slot_board's.
-const SAVE_VERSION := 3
+## The newest train slot version this build reads (1 to 4). What a save writes is slot_board's.
+const SAVE_VERSION := 4
+const DOM_LOG_VERSION := 4
 ## A run with supplies on is written with this version, so a build from before supplies were on
 ## for every new run (it reads at most 2) refuses it.
 const SUPPLIES_VERSION := 3
 const TrainDecor = preload("res://game/train/train_decor.gd")
+const TrainDom = preload("res://game/train/train_dom.gd")
 const Late = preload("res://game/train/turn/turn_late.gd")
 const RouteState = preload("res://game/train/route_state.gd")
 const DEFAULT_PATH := "user://s1a_game_v2.json"
@@ -149,6 +151,7 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 
 static func fill_defaults(g: Dictionary) -> void:
 	TrainDecor.migrate(g)
+	TrainDom.migrate_log(g)
 	if not g.has("lateOn"): g["lateOn"] = false
 	if not g.has("lateCards"): g["lateCards"] = []
 	if not g.has("eventLog") or g["eventLog"] == null:
@@ -196,13 +199,13 @@ static func read_save(raw: Variant, t: Dictionary) -> Dictionary:
 	return {"ok": true, "g": game}
 
 
-## The board as the slot holds it. A run with supplies on carries SUPPLIES_VERSION in a shallow
-## copy (the caller's board is untouched, key order kept); any other board is written as it is.
+## The board as the slot holds it: domestic logs require 4, supplies without dom require 3.
+## A shallow copy keeps the caller's board and key order untouched.
 static func slot_board(g: Dictionary) -> Dictionary:
-	if not bool(g.get("supOn", false)):
+	if not g.get("dom") is Dictionary and not bool(g.get("supOn", false)):
 		return g
 	var out: Dictionary = g.duplicate(false)
-	out["version"] = SUPPLIES_VERSION
+	out["version"] = DOM_LOG_VERSION if g.get("dom") is Dictionary else SUPPLIES_VERSION
 	return out
 
 

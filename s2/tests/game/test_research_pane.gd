@@ -23,8 +23,12 @@ func after_each() -> void:
 	await wait_process_frames(1)
 
 
+## A small board with what a restore start writes to (its journal line, the cars' relations).
 func _game(craft: int = 1) -> Dictionary:
-	var g := {"seg": 1, "gearOn": false, "dom": TrainDom.start()}
+	var comms: Dictionary = {}
+	for comm: String in ["tail", "medtech", "guard", "front", "engine"]:
+		comms[comm] = {"rel": 0}
+	var g := {"seg": 1, "gearOn": false, "journal": [], "comms": comms, "dom": TrainDom.start()}
 	g["dom"]["frags"]["craft"] = craft
 	return g
 

@@ -34,6 +34,8 @@ const CouncilVote = preload("res://game/politics/council_vote.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const FieldCouncil = preload("res://game/politics/field_council.gd")
 const LawTech = preload("res://game/train/train_lawtech.gd")
+const TrainPipe = preload("res://game/train/train_pipe.gd")
+const TrainResearch = preload("res://game/train/train_research.gd")
 const PANE_TEX := preload("res://game/ui/tex/council_pane.png")
 const BUSTS := preload("res://game/ui/tex/busts.png")
 const PAPER_TEX := preload("res://game/ui/tex/paper.png")
@@ -269,6 +271,15 @@ static func kinds_after(g0: Dictionary, t0: Dictionary, at: int, comm: String, t
 static func change_rows(t0: Dictionary, agenda: Dictionary, g0: Dictionary = {}) -> Array:
 	var out: Array = []
 	if agenda.get("kind") == "motion":
+		if agenda.get("motion") == "pipe":
+			var variant: Variant = TrainPipe.pending(g0)
+			if variant == null:
+				return [["추인할 배관이 없다", "", ""]]
+			var chosen: Dictionary = TrainResearch.TECHS["e3"]["variants"][variant]
+			var other: Dictionary = TrainResearch.TECHS["e3"]["variants"]["b" if variant == "a" else "a"]
+			return [["통과", "%s: %s" % [chosen["name"], chosen["effect"]], ""],
+				["부결", "반대쪽으로 놓는다. %s: %s" % [other["name"], other["effect"]], ""],
+				["관계 ±5는 이 표결 결과의 쪽으로 움직인다", "", ""]]
 		var f: Dictionary = t0.get("FIELD", {})
 		var name: String = String((t0.get("COMM_NAME", {}) as Dictionary).get(agenda.get("subject"), "그 칸"))
 		if agenda.get("motion") == "field_symbol":

@@ -5,6 +5,8 @@ const Order = preload("res://game/train/train_work_order.gd")
 const Research = preload("res://game/train/train_research.gd")
 const Supplies = preload("res://game/train/train_supplies.gd")
 const Workshop = preload("res://game/train/train_workshop.gd")
+const Save = preload("res://game/politics/save_slot.gd")
+const RestoreVectors = preload("res://tests/train/restore_vectors.gd")
 const Vote = preload("res://game/politics/council_vote.gd")
 const Settle = preload("res://game/train/turn/turn_settle.gd")
 const V = preload("res://tests/politics/field_vectors.gd")
@@ -32,7 +34,7 @@ func _board() -> Dictionary:
 	return g
 
 func _project(g: Dictionary) -> Dictionary:
-	var out: Dictionary = g.duplicate(true)
+	var out: Dictionary = RestoreVectors.project(g)
 	for key: String in data["s2DomOmit"]:
 		out["dom"].erase(key)
 	return out
@@ -254,41 +256,6 @@ func test_fine_condition_cycles_and_classified_differences() -> void:
 	assert_eq(s1c_count, int(report["s1c_count"]))
 	assert_eq(same + fine_count + s1c_count, 6 * 12 * (tables["COMMS"] as Array).size() * 3)
 
-## S1 startRestore also journals 「공방이 … 복원을 시작했다.」 and moves the relations a
-## technology's sides want (with their "tech" ledger lines); completeRestore journals
-## 「…을(를) 복원했다.」. S2's research port has never done these for any technology, on
-## any board (as in supplies 2a), so only those S1 lines are taken out; the rest compares.
-func _without_s1_restore_news(want: Dictionary, before: Dictionary) -> Dictionary:
-	var out: Dictionary = want.duplicate(true)
-	var news := RegEx.create_from_string("^(공방이 .+ 복원을 시작했다|[^:]+: .+을\\(를\\) (결함판으로 )?복원했다\\.)")
-	# Only what this step added: lines already on the board going in stay on both sides.
-	if out.get("journal") is Array:
-		var had: int = (before["journal"] as Array).size() if before.get("journal") is Array else 0
-		var kept: Array = (out["journal"] as Array).slice(0, had)
-		for row: Variant in (out["journal"] as Array).slice(had):
-			if not (row is Dictionary and news.search(String(row.get("text", ""))) != null):
-				kept.append(row)
-		out["journal"] = kept
-	if out.get("comms") is Dictionary and before.get("comms") is Dictionary:
-		for comm: String in out["comms"]:
-			if (before["comms"] as Dictionary).has(comm):
-				out["comms"][comm]["rel"] = before["comms"][comm].get("rel")
-	if out.get("ledger") is Array:
-		var had_lines: int = (before["ledger"] as Array).size() if before.get("ledger") is Array else 0
-		var lines: Array = (out["ledger"] as Array).slice(0, had_lines)
-		for e: Variant in (out["ledger"] as Array).slice(had_lines):
-			if not (e is Dictionary and e.get("why") == "tech"):
-				lines.append(e)
-		if lines.is_empty() and not before.get("ledger") is Array:
-			if before.has("ledger"):
-				out["ledger"] = before["ledger"]
-			else:
-				out.erase("ledger")
-		else:
-			out["ledger"] = lines
-	return out
-
-
 func test_supplies_research_start_and_completion_whole_board() -> void:
 	var rows: Array = data["groups"].get("research_actions", [])
 	assert_eq(rows.size(), 6, "regenerate research action fixtures")
@@ -298,12 +265,12 @@ func test_supplies_research_start_and_completion_whole_board() -> void:
 		assert_eq(Research.restore_block(g, id), row["block"], row["name"] + " block")
 		assert_eq(bool(row["result"]), bool(g.get("supOn", false)), row["name"] + " expected availability")
 		assert_eq(Research.start_restore(g, id, "full", row["variant"]), row["result"], row["name"] + " start")
-		assert_eq(V.diff(_without_s1_restore_news(_project(row["started"]), row["before"]), g), "", row["name"] + " started whole board")
+		assert_eq(V.diff(_project(row["started"]), g), "", row["name"] + " started whole board")
 		for step: Dictionary in row["work_steps"]:
 			g = _project(step["before"])
 			var got: Dictionary = Workshop.run(g, tables)
 			assert_eq(V.diff(step["value"], {"used": got["used"], "did": got["did"]}), "", row["name"] + " work result")
-			assert_eq(V.diff(_without_s1_restore_news(_project(step["after"]), step["before"]), g), "", row["name"] + " work whole board")
+			assert_eq(V.diff(_project(step["after"]), g), "", row["name"] + " work whole board")
 		if bool(row["result"]):
 			assert_gt((row["work_steps"] as Array).size(), 0)
 			if not (row["work_steps"] as Array).is_empty():
@@ -320,3 +287,46 @@ func test_supplies_store_accepts_only_valid_progress_and_mode() -> void:
 	d["supWork"] = 0.0
 	d["supFineOn"] = 1
 	assert_false(Dom.is_store(d))
+
+
+func test_restore_relations_history_finish_cancel_and_reload_sequences_match_s1() -> void:
+	var rows: Array = data["groups"]["restore_sequences"]
+	assert_eq(rows.size(), 11)
+	for row: Dictionary in rows:
+		var g: Dictionary = _project(row["initial"])
+		var reloaded: bool = false
+		for step: Dictionary in row["steps"]:
+			var at: String = String(row["name"]) + "/" + String(step["action"]["kind"])
+			var expected_before: Dictionary = _project(step["before"])
+			if reloaded:
+				expected_before["lateOn"] = false
+				expected_before["lateCards"] = []
+			assert_eq(V.diff(expected_before, g), "", at + " input")
+			var action: Dictionary = step["action"]
+			var value: Variant = null
+			match String(action["kind"]):
+				"start_restore": value = Research.start_restore(g, String(action["id"]), String(action["mode"]), action.get("variant"))
+				"cancel_restore": Research.cancel_restore(g)
+				"start_finish": value = Research.start_finish(g, String(action["id"]))
+				"run_workshop":
+					var result: Dictionary = Workshop.run(g, tables)
+					value = {"used": result["used"], "did": result["did"]}
+				"add_frags":
+					var field: String = String(Research.TECHS[action["id"]]["branch"])
+					g["dom"]["frags"][field] = float(g["dom"]["frags"][field]) + float(action["amount"])
+				"save_load":
+					# The S1 action is a raw JSON/read round trip, not slot_board's version upgrade.
+					var loaded: Dictionary = Save.read_save(JSON.parse_string(JSON.stringify(g)), tables)
+					value = loaded["ok"]
+					assert_true(loaded["ok"], at)
+					if loaded["ok"]: g = loaded["g"]
+					reloaded = true
+				_: fail_test("Unknown restore action: " + str(action))
+			assert_eq(V.diff(step["value"], value), "", at + " returned value")
+			var expected_after: Dictionary = _project(step["after"])
+			if reloaded:
+				# S2-only late-event defaults are literal expectations, never computed by Save.
+				expected_after["lateOn"] = false
+				expected_after["lateCards"] = []
+			assert_eq(V.diff(expected_after, g), "", at + " whole board")
+			assert_true(Dom.is_store(g["dom"]), at + " store")

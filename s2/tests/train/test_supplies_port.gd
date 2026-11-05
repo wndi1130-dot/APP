@@ -248,8 +248,8 @@ func _file_version(path: String) -> int:
 
 
 func test_supplies_save_legacy_and_round_trip() -> void:
-	# Reads 1 to 3; a supplies board is written as 3 so a build that reads at most 2 refuses it.
-	assert_eq(Save.SAVE_VERSION, 3)
+	# Reads 1 to 4; supplies without domestic stores still write version 3.
+	assert_eq(Save.SAVE_VERSION, 4)
 	assert_eq(Save.SUPPLIES_VERSION, 3)
 	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
 	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
@@ -263,7 +263,7 @@ func test_supplies_save_legacy_and_round_trip() -> void:
 	off["supOn"] = false
 	assert_eq(int(old["version"]), 1, "a new board starts at slot version 1")
 	for g: Dictionary in [old, on, flag_only, off]:
-		var want: int = Save.SUPPLIES_VERSION if bool(g.get("supOn", false)) else 1
+		var want: int = 3 if bool(g.get("supOn", false)) else 1
 		var at: String = "supOn=%s" % str(g.get("supOn", "absent"))
 		assert_true(Save.save_slot(g, SAVE_PATH))
 		assert_eq(_file_version(SAVE_PATH), want, at + " slot version written")
@@ -300,7 +300,7 @@ func test_supplies_save_rejects_wrong_types_nonfinite_and_unknown_cover() -> voi
 		assert_not_null(Save.shape_problem(g, _t), "reject " + str(pair))
 
 
-func test_supplies_slot_versions_one_to_three_read_four_refused() -> void:
+func test_supplies_slot_versions_one_to_four_read_five_refused() -> void:
 	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
 	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
 	# Version 1 without supplies keys: reads, supplies off.
@@ -310,7 +310,7 @@ func test_supplies_slot_versions_one_to_three_read_four_refused() -> void:
 		assert_eq(int(one["g"]["version"]), 1)
 		assert_false(Supplies.asks(one["g"]), "a version 1 board reads with supplies off")
 	# 2: a supplies run from the builds that only turned it on in tests; 3: every supplies run now.
-	for version: int in [2, 3]:
+	for version: int in [2, 3, 4]:
 		var board_on: Dictionary = on.duplicate(true)
 		board_on["version"] = version
 		var read_on: Dictionary = Save.read_save(board_on, _t)
@@ -318,11 +318,11 @@ func test_supplies_slot_versions_one_to_three_read_four_refused() -> void:
 		if read_on["ok"]:
 			assert_true(Supplies.asks(read_on["g"]))
 			assert_eq(int(read_on["g"]["version"]), version, "the version read stays as it was")
-	# A build that reads at most 2 refuses 3 the same way this build refuses 4.
+	# The current reader rejects 5; the pre-2c-1 reader's literal ceiling was 3.
 	for board: Dictionary in [old, on]:
-		var four: Dictionary = board.duplicate(true)
-		four["version"] = 4
-		var read: Dictionary = Save.read_save(four, _t)
+		var five: Dictionary = board.duplicate(true)
+		five["version"] = 5
+		var read: Dictionary = Save.read_save(five, _t)
 		assert_false(read["ok"])
 		assert_string_contains(String(read.get("why", "")), "더 새 빌드")
 
