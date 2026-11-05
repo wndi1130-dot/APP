@@ -114,6 +114,11 @@ function rowsFor(seed: string): Row[] {
   for (const id of ['c1', 'c2'] as const) {
     const g = base(); g.loco = id;
     record(rows, `loco-${id}`, seed, g, { expect: 'refuse', refusal: `domesticDepart: breakdown (${id})` }, (_after, hook) => assert.ok(hook >= 1));
+    // c1·c2는 누구나 몰지 않으므로 기관 0이면 S1도 고장·압력 판정 전에 끝난다 — 이식한 길이라 거절하지 않는다.
+    const idle = base(); idle.loco = id; for (const p of engineHands(idle)) p.skill = 0;
+    record(rows, `loco-${id}/engine-0`, seed, idle, match, (after, hook) => {
+      assert.equal(hook, 0); assert.equal(after.phase, 'end'); assert.equal(after.end, 'stranded');
+    });
   }
   // 파업 갈래: 기관실이 기본 문턱(매뉴얼 없음) 아래로 성났다. 사건을 뽑지 않는 갈래에서도 훅 난수는 하나.
   const strike = (g: Game) => { g.comms.engine.fervor = 1; g.comms.engine.rel = S1.P.strikeRel; };
@@ -160,7 +165,7 @@ export function departPortVectors() {
     assert.throws(() => s2State(g), /F-NOT-PROJECTABLE: engine manual/); }
   const rows = SEEDS.flatMap(rowsFor);
   return { format: FORMAT, seeds: SEEDS,
-    scope: 'S1c restoration board at a later stretch\'s prep; domesticDepart / domesticStrikeRuns paths: c3 default/explicit/null, defective techs, engine 0 (no manual), engine 1 pressure, locomotives c1/c2/c4, strike stop/ban, substitute driver, prologue deal, no dom',
+    scope: 'S1c restoration board at a later stretch\'s prep; domesticDepart / domesticStrikeRuns paths: c3 default/explicit/null, defective techs, engine 0 (no manual), engine 1 pressure, locomotives c1/c2/c4 (c1/c2/c4 with engine 0 too), strike stop/ban, substitute driver, prologue deal, no dom',
     tables: tables(), rows };
 }
 

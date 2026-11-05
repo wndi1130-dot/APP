@@ -48,7 +48,7 @@ func test_fixture_contract() -> void:
 	if _data.is_empty(): return
 	assert_eq(_data.get("format"), "depart-vectors-v1")
 	var rows: Array = _data["rows"]
-	assert_eq(rows.size(), 17 * (_data["seeds"] as Array).size())
+	assert_eq(rows.size(), 19 * (_data["seeds"] as Array).size())
 	var refusals: Array = []
 	for row: Dictionary in rows:
 		if row["expect"] == "refuse":
@@ -84,21 +84,25 @@ func test_every_departure_matches_s1_or_comes_back_refused_and_unchanged() -> vo
 			back.erase("_turn_port_error")
 			_same(before, back, at + " refused board as it came in")
 			refused += 1
-	assert_eq(matched, 11 * (_data["seeds"] as Array).size(), "match rows")
+	assert_eq(matched, 13 * (_data["seeds"] as Array).size(), "match rows")
 	assert_eq(refused, 6 * (_data["seeds"] as Array).size(), "refuse rows")
 	assert_eq(_bad, [] as Array[String])
 
 
 ## S1 rolls the breakdown before testing its chance, so a departure that does not draw a travel
 ## event (a strike, the prologue deal) still moves the generator one step; one that ends stranded
-## does not reach the roll.
+## (engine 0 on c3, c1 or c2: no engine anyone drives) does not reach the roll.
 func test_hook_draws_on_every_branch_that_reaches_the_roll() -> void:
 	if _data.is_empty(): return
 	for row: Dictionary in _data["rows"]:
 		if row["expect"] != "match": continue
 		var name: String = String(row["name"])
-		var want: int = 0 if name.begins_with("engine-0") or name.begins_with("no-dom") else 1
+		var stranded: bool = name.begins_with("engine-0") or name.contains("/engine-0/")
+		var want: int = 0 if stranded or name.begins_with("no-dom") else 1
 		assert_eq(int(row["hookDraws"]), want, name + " hook draws")
+		assert_eq(row["end"] == "stranded", stranded, name + " ends stranded only without an engine hand")
+	for id: String in ["c1", "c2"]:
+		assert_eq(_rows("loco-%s/engine-0/" % id).size(), (_data["seeds"] as Array).size(), id + " engine 0 departs as S1 (ends), not refused")
 	for prefix: String in ["strike/stops", "strike/ban", "prologue-deal", "substitute/strike-ban"]:
 		assert_false(_rows(prefix).is_empty(), prefix + " rows")
 
