@@ -153,6 +153,58 @@ func test_bounds_rule_accepts_only_nonnegative_whole_numbers_or_absence() -> voi
 		assert_eq(FieldSave.from_json(FieldSave.to_json(saved)), {}, str(rule))
 
 
+func test_side_path_rule_round_trips_and_absence_resumes_legacy() -> void:
+	var saved: Dictionary = _sample()
+	saved["start_opts"] = {"side_path_rule": 1}  # 전용 칸이 없던 저장은 시작 옵션보다 0을 우선한다.
+	var legacy: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
+	assert_false(legacy.is_empty())
+	assert_eq(int(FieldSave.resume_opts(legacy).get("side_path_rule", -1)), 0)
+	for rule: Variant in [0, 1, 0.0, 1.0]:
+		saved["side_path_rule"] = rule
+		assert_true(FieldSave._whole(saved), str(rule))
+		var restored: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
+		assert_false(restored.is_empty())
+		assert_eq(int(restored.get("side_path_rule", -1)), int(rule))
+		assert_eq(int(FieldSave.resume_opts(restored).get("side_path_rule", -1)), int(rule))
+
+
+func test_side_path_rule_capture_keeps_new_and_resumed_rules() -> void:
+	var fresh: FieldGame = _game()
+	var fresh_save: Dictionary = FieldSave.capture(fresh)
+	assert_eq(int(fresh_save.get("side_path_rule", -1)), 1)
+	assert_false(fresh_save.get("start_opts", {}).has("side_path_rule"))
+	var old: FieldGame = _game({"side_path_rule": 0})
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(old)))
+	assert_eq(int(saved.get("side_path_rule", -1)), 0)
+	assert_false(saved.get("start_opts", {}).has("side_path_rule"))
+	var resumed: FieldGame = _game(FieldSave.resume_opts(saved))
+	assert_eq(int(FieldSave.capture(resumed).get("side_path_rule", -1)), 0)
+
+
+func test_side_path_rule_rejects_unknown_fractional_and_non_numeric_values() -> void:
+	var saved: Dictionary = _sample()
+	for rule: Variant in [-1, -1.0, 2, 99, 2.0, 0.5, 1.5, "1", true, false, null, [], {}, INF, -INF, NAN, 1.0e30]:
+		saved["side_path_rule"] = rule
+		assert_false(FieldSave._whole(saved), str(rule))
+		assert_eq(FieldSave.from_json(FieldSave.to_json(saved)), {}, str(rule))
+
+
+func test_invalid_side_path_rule_falls_back_to_the_previous_save() -> void:
+	var previous: Dictionary = _sample()
+	previous["side_path_rule"] = 0
+	assert_true(FieldSave.write(previous, AT))
+	var current: Dictionary = _sample()
+	current["side_path_rule"] = 1
+	current["clock"]["elapsed"] = 99.0
+	assert_true(FieldSave.write(current, AT))
+	for rule: Variant in [-1, 2, 1.5, "1", true, null, [], {}]:
+		current["side_path_rule"] = rule
+		var file := FileAccess.open(AT, FileAccess.WRITE)
+		file.store_string(FieldSave.to_json(current))
+		file.close()
+		assert_eq(FieldSave.read(AT), previous, str(rule))
+
+
 func test_invalid_bounds_rule_falls_back_to_the_previous_save() -> void:
 	var previous: Dictionary = _sample()
 	previous["bounds_rule"] = 1
