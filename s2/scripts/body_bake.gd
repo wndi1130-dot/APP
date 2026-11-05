@@ -2954,6 +2954,82 @@ static func _person_footlock_probes(fit: Dictionary, skin: Array, support_sets: 
 	return points
 
 
+## Read-only measurement: actual weighted sole vertices, never F(target)-target.
+static func _person_walk_physical_error(fit: Dictionary, skin: Array, goals: Array, hips_y: float, wanted_h: float) -> Dictionary:
+	var invalid: Dictionary = {"valid": false, "sides": [], "max_abs_m": INF, "height_abs_m": INF}
+	var rest: PackedVector3Array = fit.get("rest", PackedVector3Array())
+	var bones: PackedInt32Array = fit.get("bones", PackedInt32Array())
+	var weights: PackedFloat32Array = fit.get("weights", PackedFloat32Array())
+	var soles: Array = fit.get("soles", [])
+	var per: int = int(fit.get("per", 0))
+	var floor_y: float = float(fit.get("floor", INF))
+	if rest.is_empty() or per <= 0 or soles.size() != 2 or goals.size() != 2 or bones.size() != rest.size() * per or weights.size() != bones.size():
+		return invalid
+	if not is_finite(hips_y) or not is_finite(wanted_h) or not is_finite(floor_y):
+		return invalid
+	var sides: Array = []
+	var maximum: float = 0.0
+	for side in 2:
+		var lowest: float = INF
+		for vertex: int in soles[side]:
+			if vertex < 0 or vertex >= rest.size():
+				return invalid
+			var point: Vector3 = Vector3.ZERO
+			var total: float = 0.0
+			for slot in per:
+				var index: int = vertex * per + slot
+				var weight: float = weights[index]
+				if not is_finite(weight) or weight < 0.0:
+					return invalid
+				if weight > 0.0:
+					if bones[index] < 0 or bones[index] >= skin.size():
+						return invalid
+					point += ((skin[bones[index]] as Transform3D) * rest[vertex]) * weight
+					total += weight
+			point = point / total if total > 0.0 else rest[vertex]
+			if not point.is_finite():
+				return invalid
+			lowest = minf(lowest, point.y)
+		var target_y: float = floor_y + (goals[side].get("path", Vector3(INF, INF, INF)) as Vector3).y
+		if not is_finite(lowest) or not is_finite(target_y):
+			return invalid
+		var error: float = lowest - target_y
+		sides.append({"lowest_y": lowest, "target_y": target_y, "signed_m": error, "abs_m": absf(error)})
+		maximum = maxf(maximum, absf(error))
+	return {"valid": true, "sides": sides, "max_abs_m": maximum, "height_abs_m": absf(hips_y - wanted_h)}
+
+
+## Observation belongs to ctx, outside fit/caches/budget and all solve decisions.
+static func _person_walk_observe(ctx: Dictionary, fit: Dictionary, u: float, event: String, detail: Dictionary = {}) -> void:
+	var note: Dictionary = ctx.get_or_add("walk_observation", {"actual_pairs": 0, "outside_pairs": 0})
+	var budget: Dictionary = fit.get("work_budget", {})
+	var stage: String = str(budget.get("active_stage", "search")) if not budget.is_empty() else "outside"
+	var clip: String = str(ctx.get("walk_clip", "unknown"))
+	if event == "attempt":
+		note["last_attempt"] = {"rig": ctx.get("rig_label", "unknown"), "clip": clip, "phase": u, "stage": stage,
+			"candidate": note.get("candidate", 0), "skin_count": note.get("skin_count", 0), "evaluated": false}
+	elif event == "pair":
+		note["actual_pairs"] = int(note.get("actual_pairs", 0)) + 1
+		note["outside_pairs"] = int(note.get("outside_pairs", 0)) + (1 if budget.is_empty() else 0)
+		note["last_attempt"]["evaluated"] = true
+		note["last_evaluated"] = (note["last_attempt"] as Dictionary).duplicate(true)
+		var by_clip: Dictionary = note.get_or_add("pair_stage_clips", {}).get_or_add(stage, {})
+		by_clip[clip] = int(by_clip.get(clip, 0)) + 1
+	elif event == "frame":
+		var frame: Dictionary = {"rig": ctx.get("rig_label", "unknown"), "clip": clip, "phase": u, "stage": stage,
+			"candidate": note.get("candidate", 0), "reason": detail.get("reason", ""), "evaluated": detail.get("evaluated", false), "suspended": detail.has("continuation")}
+		note["last_frame"] = frame
+		if not str(frame["reason"]).is_empty() and not bool(frame["suspended"]) and not note.has("first_failure"):
+			note["first_failure"] = frame.duplicate(true)
+		if bool(frame["evaluated"]):
+			var goals: Array = [_person_walk_ankle_goal_uncached(fit, 0, u), _person_walk_ankle_goal_uncached(fit, 1, u)]
+			var physical: Dictionary = _person_walk_physical_error(fit, _skin_frame(ctx), goals, float(detail["final_hips_y"]), float(detail.get("table_height", INF)))
+			note["last_physical"] = physical
+			if bool(physical["valid"]):
+				note["max_physical_m"] = maxf(float(note.get("max_physical_m", 0.0)), float(physical["max_abs_m"]))
+				note["max_height_m"] = maxf(float(note.get("max_height_m", 0.0)), float(physical["height_abs_m"]))
+
+
 static func _person_footlock_points(fit: Dictionary, skin: Array) -> Array:
 	var points := []
 	for probe: Dictionary in _person_footlock_probes(fit, skin):
@@ -4024,6 +4100,7 @@ static func _person_walk_dense_reserve(budget: Dictionary, specs: Array, phases:
 
 
 static func _fit_person_walk_candidate(ctx: Dictionary, source: Dictionary, specs: Array) -> Dictionary:
+	ctx.get_or_add("walk_observation", {"actual_pairs": 0, "outside_pairs": 0})
 	if ctx.has("dump_projection"):
 		ctx["walk_projection_dump"] = ctx.get("walk_projection_dump", {})
 	var local_ctx: Dictionary = ctx.duplicate()
@@ -4301,6 +4378,7 @@ static func _person_walk_try_beam(state: Dictionary, limit: int = 6) -> Dictiona
 		attempted += 1
 		var source: Dictionary = (candidate["fit"] as Dictionary).duplicate()
 		source["hip_over_stand_allowed"] = bool(state["base"].get("hip_over_stand_allowed", true))
+		state["ctx"].get_or_add("walk_observation", {"actual_pairs": 0, "outside_pairs": 0}).merge({"candidate": id, "skin_count": state["skin_count"]}, true)
 		var result: Dictionary = _fit_person_walk_candidate(state["ctx"], source, state["specs"])
 		state["last_joint_attempt"] = result.get("joint", {})
 		if str(result.get("reason", "")) == "HIP_TOL_STRAIGHT_KNEE":
@@ -4309,10 +4387,12 @@ static func _person_walk_try_beam(state: Dictionary, limit: int = 6) -> Dictiona
 			state["last_skin_failure"] = result
 			if int(state["skin_count"]) < int(state["skin_limit"]):
 				state["skin_count"] = int(state["skin_count"]) + 1
+				state["ctx"]["walk_observation"]["skin_count"] = state["skin_count"]
 				result = _fit_person_walk_candidate(state["ctx"], source, state["specs"])
 				state["last_joint_attempt"] = result.get("joint", {})
 			else:
 				state["limited"] = true
+		state["ctx"]["walk_observation"]["last_candidate"] = {"reason": result.get("reason", ""), "candidate": id, "skin_count": state["skin_count"]}
 		if bool(result["ok"]):
 			result["candidate"] = id
 			return result
@@ -4332,6 +4412,7 @@ static func _person_walk_try_beam(state: Dictionary, limit: int = 6) -> Dictiona
 
 ## Candidate failures are private; only the caller publishes final refusal.
 static func _search_person_walk_path(ctx: Dictionary, fit: Dictionary, specs: Array, geometry_limit: int = PERSON_WALK_SEARCH_GEOMETRY, skin_limit: int = PERSON_WALK_SEARCH_SKIN, budget_limits: Dictionary = {}) -> Dictionary:
+	ctx.get_or_add("walk_observation", {"actual_pairs": 0, "outside_pairs": 0})
 	if ctx.has("dump_projection"):
 		ctx["walk_projection_dump"] = ctx.get("walk_projection_dump", {})
 	var local_ctx: Dictionary = ctx.duplicate()
@@ -4396,18 +4477,22 @@ static func _search_person_walk_path(ctx: Dictionary, fit: Dictionary, specs: Ar
 			"geometry_reason": best.get("reason", "UNSAMPLED"), "budget_reason": result["reason"], "budget_kind": base["work_budget"]["kind"],
 			"grid_cap": best.get("grid_cap", 0.0), "saved_cap": best.get("saved_cap", 0.0), "means_complete": best.get("means_complete", false),
 			"candidate_complete": best.get("complete", false), "phases_checked": best.get("phases_checked", 0), "phases_total": best.get("phases_total", 0),
-			"last_skin_failure": _person_walk_skin_witness(state["last_skin_failure"]), "coverage": state["coverage"],
+			"last_skin_failure": _person_walk_skin_witness(state["last_skin_failure"], ctx["walk_observation"]), "coverage": state["coverage"],
 			"last_joint_attempt": state.get("last_joint_attempt", {}),
 			"hip_over_stand_allowed": base.get("hip_over_stand_allowed", true), "global_infeasible": false}
 	print("WALK_RIG_DIAGNOSTIC " + JSON.stringify({"rig": ctx.get("rig_label", "unknown"), "ok": result["ok"],
 		"budget": result["budget"], "witness": result.get("witness", {}), "joint": result.get("joint", {})}))
+	print("WALK_RIG_BUDGET_USE " + JSON.stringify({"source": "body_bake", "scope": "fit", "rig": ctx.get("rig_label", "unknown"), "ok": result["ok"],
+		"used": result["budget"]["used"], "clips": result["budget"]["clips"], "stages": result["budget"].get("stages", {}),
+		"stage_clips": result["budget"].get("stage_clips", {}), "skin_count": state["skin_count"], "observed": ctx["walk_observation"]}))
 	return result
 
 
-static func _person_walk_skin_witness(failure: Dictionary) -> Dictionary:
+static func _person_walk_skin_witness(failure: Dictionary, observed: Dictionary = {}) -> Dictionary:
 	var solve: Dictionary = failure.get("solve", {})
 	var projection: Dictionary = failure.get("table", {}).get("projection", {})
-	return {"reason": failure.get("reason", "UNTRIED"), "clip": failure.get("clip", ""), "phase": failure.get("phase", -1.0),
+	return {"reason": observed.get("last_candidate", {}).get("reason", failure.get("reason", "UNTRIED")), "clip": failure.get("clip", ""), "phase": failure.get("phase", -1.0),
+		"last_attempt": observed.get("last_attempt", {}), "last_evaluated": observed.get("last_evaluated", {}), "skin_count": observed.get("skin_count", 0),
 		"frame_ok": solve.get("ok", false), "frame_evaluated": solve.get("evaluated", false),
 		"dynamic_verified": solve.get("dynamic_verified", false), "support_history": solve.get("support_history", []),
 		"support_cycle_brackets": solve.get("support_cycle_brackets", 0),
@@ -4713,6 +4798,7 @@ static func _person_walk_skin_restore(body: Skeleton3D, fit: Dictionary, state: 
 
 ## Evaluate F(t) from the same keyed pose, including both IK solves and new skin.
 static func _person_walk_skin_evaluate(ctx: Dictionary, fit: Dictionary, u: float, goals: Array, targets: Array, wanted_h: float, baseline: Dictionary, support_sets: Array = []) -> Dictionary:
+	_person_walk_observe(ctx, fit, u, "attempt")
 	var body: Skeleton3D = ctx["body"]
 	var to_mesh: Transform3D = ctx["to_mesh"]
 	var to_body: Transform3D = to_mesh.affine_inverse()
@@ -4738,6 +4824,7 @@ static func _person_walk_skin_evaluate(ctx: Dictionary, fit: Dictionary, u: floa
 		result["reason"] = "FOOT_PATH_BUDGET"
 		return result
 	result["evaluated"] = true
+	_person_walk_observe(ctx, fit, u, "pair")
 	for side in 2:
 		fit["reach_clamped"][side] = _solve_person_footlock_leg(body, fit["legs"][side], to_body * (targets[side] as Vector3), to_body.basis * Vector3.BACK)
 	var cut: bool = bool(fit["reach_clamped"][0]) or bool(fit["reach_clamped"][1])
@@ -5165,6 +5252,7 @@ static func _finish_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float
 		var failures: Array = ctx.get_or_add("fit_failures", [])
 		if not failures.has(failure):
 			failures.append(failure)
+	_person_walk_observe(ctx, fit, u, "frame", result)
 	return result
 
 

@@ -2516,11 +2516,14 @@ func test_walk_dense_continuation_matches_uninterrupted_trials_pose_and_ledger()
 	body.reset_bone_poses()
 	var split_budget: Dictionary = BodyBake._person_walk_budget()
 	fit["work_budget"] = split_budget
+	ctx["walk_observation"] = {"actual_pairs": 0, "outside_pairs": 0}
 	split_budget["active_stage"] = "dense_verify"
 	var first: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, u, targets, 1, true, {}, true)
 	assert_true(first.has("continuation"), "one pass suspends an unresolved valid evaluation")
 	if not first.has("continuation"):
 		return
+	assert_true(bool(ctx["walk_observation"]["last_frame"].get("suspended", false)), "a resumable phase is explicitly marked")
+	assert_false(ctx["walk_observation"].has("first_failure"), "suspending a valid evaluation is not a terminal failure")
 	assert_eq(int(first["ik_passes"]), 1)
 	assert_eq(first["continuation"]["support_sets"], first["continuation"]["current"]["support_sets"], "the suspended map keeps its exact support set")
 	assert_eq(first["continuation"]["accepted_pose"]["support_sets"], first["continuation"]["support_sets"])
@@ -2597,6 +2600,145 @@ func test_walk_stage_ledger_and_failure_witness_keep_last_joint_attempt() -> voi
 	var joint: Dictionary = {"stage": "dense", "reprojections": 2, "knee_feedbacks": 1, "stage_ik": budget["stages"]}
 	var witness: Dictionary = BodyBake._person_walk_skin_witness({"reason": "DENSE_ITER_LIMIT", "joint": joint})
 	assert_eq(witness["joint"], joint)
+
+
+func test_walk_physical_measurement_is_pure_and_uses_weighted_vertices() -> void:
+	var fit: Dictionary = {"rest": PackedVector3Array([Vector3.ZERO, Vector3.ZERO]),
+		"bones": PackedInt32Array([0, 1, 0, 1]), "weights": PackedFloat32Array([0.75, 0.25, 0.75, 0.25]),
+		"per": 2, "soles": [PackedInt32Array([0]), PackedInt32Array([1])], "floor": 0.0, "durations": [0.6, 0.6]}
+	var skin: Array = [Transform3D.IDENTITY, Transform3D(Basis(), Vector3(0.0, 0.002, 0.0))]
+	var goals: Array = [{"path": Vector3.ZERO, "age": 0.1}, {"path": Vector3(0.0, 0.0002, 0.0), "age": 0.8}]
+	var before: PackedByteArray = var_to_bytes([fit, skin, goals])
+	var measured: Dictionary = BodyBake._person_walk_physical_error(fit, skin, goals, 0.9, 0.9004)
+	assert_true(bool(measured["valid"]))
+	assert_almost_eq(float(measured["sides"][0]["signed_m"]), 0.0005, 0.00000001)
+	assert_almost_eq(float(measured["sides"][1]["signed_m"]), 0.0003, 0.00000001, "swing path lift is subtracted")
+	assert_almost_eq(float(measured["height_abs_m"]), 0.0004, 0.00000001)
+	assert_eq(before, var_to_bytes([fit, skin, goals]), "measurement cannot mutate inputs or caches")
+	assert_false(bool(BodyBake._person_walk_physical_error({}, [], [], 0.0, 0.0)["valid"]))
+	assert_false(bool(BodyBake._person_walk_physical_error(fit, skin, goals, NAN, 0.0)["valid"]))
+
+
+func test_walk_fixed_phase_checks_actual_skin_and_height_without_success_flags() -> void:
+	var fixture: Dictionary = _walk_fixed_contact_case()
+	var ctx: Dictionary = fixture["ctx"]
+	var fit: Dictionary = ctx["footlock_walk"]
+	var solved: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0, fixture["known"])
+	var body: Skeleton3D = ctx["body"]
+	var actual_h: float = ((ctx["to_mesh"] as Transform3D) * body.get_bone_global_pose(body.find_bone("hips"))).origin.y
+	var measured: Dictionary = BodyBake._person_walk_physical_error(fit, BodyBake._skin_frame(ctx), fixture["goals"], actual_h, 0.9)
+	assert_true(bool(measured["valid"]))
+	assert_lte(float(measured["max_abs_m"]), 0.001, "actual sole height, not a fixed-point residual")
+	assert_lte(float(measured["height_abs_m"]), 0.0005, "actual hips minus fixed input height")
+	assert_true(bool(solved.get("ok", false)), "solver success is a separate assertion")
+	assert_true(bool(solved.get("dynamic_verified", false)))
+
+
+func test_walk_height_contract_recomputes_two_independent_contexts() -> void:
+	var a: Dictionary = _walk_stick_context()
+	var b: Dictionary = _walk_stick_context()
+	assert_ne((a["body"] as Skeleton3D).get_instance_id(), (b["body"] as Skeleton3D).get_instance_id())
+	var fit_a: Dictionary = a["footlock_walk"]
+	var fit_b: Dictionary = b["footlock_walk"]
+	assert_false(is_same(fit_a, fit_b), "new fit dictionaries cannot share a cache")
+	var specs: Array = []
+	for entry: Array in BodyBake.PERSON_CLIPS:
+		if BodyBake.PERSON_FOOT_LOCK.has(entry[0]):
+			specs.append({"entry": entry, "shift": 0.0})
+	var found_a: Dictionary = BodyBake._search_person_walk_path(a, fit_a, specs.duplicate(true))
+	var found_b: Dictionary = BodyBake._search_person_walk_path(b, fit_b, specs.duplicate(true))
+	assert_true(bool(found_a["ok"]), "independent complete computation A")
+	assert_true(bool(found_b["ok"]), "independent complete computation B")
+	if not bool(found_a["ok"]) or not bool(found_b["ok"]):
+		return
+	fit_a = found_a["fit"]
+	fit_b = found_b["fit"]
+	for fit: Dictionary in [fit_a, fit_b]:
+		assert_true(bool(fit["pelvis"]["ok"]), "both independent computations must succeed")
+		assert_eq((fit["pelvis"]["values"] as PackedFloat64Array).size(), 256)
+	for key: String in ["values", "slopes"]:
+		assert_eq((fit_a["pelvis"][key] as PackedFloat64Array).to_byte_array(),
+			(fit_b["pelvis"][key] as PackedFloat64Array).to_byte_array(), "independent height computation: " + key)
+
+
+func test_walk_returned_field_contract_rebuilds_height_from_frozen_inputs() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	var walk: Array = BodyBake.PERSON_CLIPS[0]
+	var specs: Array = []
+	for entry: Array in BodyBake.PERSON_CLIPS:
+		if BodyBake.PERSON_FOOT_LOCK.has(entry[0]):
+			specs.append({"entry": entry, "shift": 0.0})
+	var found: Dictionary = BodyBake._search_person_walk_path(ctx, ctx["footlock_walk"], specs)
+	assert_true(bool(found["ok"]), "a successful returned field is required, not an empty-table comparison")
+	if not bool(found["ok"]):
+		return
+	var fit: Dictionary = found["fit"]
+	assert_false(fit.has("work_budget"), "successful publication removes only the budget contract")
+	var frozen: PackedByteArray = var_to_bytes([fit.get("path_params", {}), fit["target_field"]])
+	var replay: Dictionary = fit.duplicate(true)
+	for key: String in ["pose_cache", "geometry_cache", "bound_cache", "goal_cache", "work_budget"]:
+		replay.erase(key)
+	var fresh: Dictionary = _walk_stick_context()
+	var rebuilt: Dictionary = BodyBake._fit_person_walk_height(fresh, replay, walk, 0.0, replay["target_field"])
+	assert_true(bool(rebuilt["ok"]))
+	for key: String in ["values", "slopes"]:
+		assert_eq((fit["pelvis"][key] as PackedFloat64Array).to_byte_array(),
+			(rebuilt[key] as PackedFloat64Array).to_byte_array(), "returned field regeneration: " + key)
+	assert_eq(frozen, var_to_bytes([replay.get("path_params", {}), replay["target_field"]]))
+	# Re-enter the real saved-frame path after successful publication removed work_budget.
+	var ledger: Dictionary = ctx["walk_work_budget"]
+	var observed: Dictionary = ctx["walk_observation"]
+	var ledger_before: int = int(ledger["used"].get("ik", 0))
+	var outside_before: int = int(observed.get("outside_pairs", 0))
+	var saved: Dictionary = BodyBake._person_walk_validate_saved(ctx, fit, specs)
+	assert_true(bool(saved["ok"]), "published field saved-frame reevaluation: " + str(saved.get("reason", "")))
+	assert_eq(int(ledger["used"].get("ik", 0)), ledger_before, "the existing budget scope stays unchanged")
+	assert_gt(int(observed.get("outside_pairs", 0)), outside_before, "real saved frames count outside the fit budget")
+	assert_eq(ledger_before + int(observed.get("outside_pairs", 0)), int(observed.get("actual_pairs", -1)), "all real saved-frame pairs are accounted for")
+	assert_eq(frozen, var_to_bytes([fit.get("path_params", {}), fit["target_field"]]), "saved reevaluation keeps returned inputs fixed")
+
+
+func test_walk_skin_budget_contract_keeps_the_last_real_attempt() -> void:
+	var ctx: Dictionary = _walk_stick_context()
+	ctx["rig_label"] = "stick-budget-contract"
+	var specs: Array = [{"entry": BodyBake.PERSON_CLIPS[0], "shift": 0.0}]
+	var found: Dictionary = BodyBake._search_person_walk_path(ctx, ctx["footlock_walk"], specs,
+		BodyBake.PERSON_WALK_SEARCH_GEOMETRY, BodyBake.PERSON_WALK_SEARCH_SKIN, {"ik": 1, "clip_ik": 1})
+	assert_false(bool(found["ok"]))
+	assert_eq(found["reason"], "FOOT_PATH_BUDGET")
+	assert_eq(int(found["budget"]["used"].get("ik", 0)), 1, "budget must end after real skin work")
+	var witness: Dictionary = found.get("witness", {}).get("last_skin_failure", {})
+	assert_ne(witness.get("reason", "UNTRIED"), "UNTRIED")
+	assert_eq(witness.get("reason", ""), "FOOT_PATH_BUDGET")
+	var actual: Dictionary = witness.get("last_evaluated", {})
+	assert_true(bool(actual.get("evaluated", false)))
+	assert_eq(actual.get("rig", ""), "stick-budget-contract")
+	assert_eq(actual.get("clip", ""), "p_walk")
+	assert_gte(float(actual.get("phase", -1.0)), 0.0)
+	assert_gt(int(actual.get("candidate", 0)), 0)
+	assert_gt(int(witness.get("skin_count", 0)), 0)
+	assert_false(str(actual.get("stage", "")).is_empty())
+
+
+func test_walk_skin_contract_counts_evaluations_after_budget_is_removed() -> void:
+	var fixture: Dictionary = _walk_fixed_contact_case()
+	var ctx: Dictionary = fixture["ctx"]
+	var fit: Dictionary = ctx["footlock_walk"]
+	var budget: Dictionary = BodyBake._person_walk_budget()
+	fit["work_budget"] = budget
+	var expected_pairs: int = 0
+	for attempt in 3:
+		if attempt == 1:
+			fit.erase("work_budget")
+		var solved: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0, fixture["known"])
+		expected_pairs += int(solved["ik_passes"])
+		assert_true(bool(solved.get("ok", false)), "the fixed phase succeeds before and after removing its budget")
+		assert_true(bool(solved.get("evaluated", false)))
+	var observed: Dictionary = ctx.get("walk_observation", {})
+	var outside: int = int(observed.get("outside_pairs", 0))
+	assert_gt(outside, 0, "additional and saved-frame-style reevaluations must be visible")
+	assert_eq(int(observed.get("actual_pairs", -1)), expected_pairs, "independent solver pass count")
+	assert_eq(int(budget["used"].get("ik", 0)) + outside, expected_pairs, "ledger plus outside equals actual paired IK")
 
 
 func _walk_budget_at_test_scale(value: Variant, limits: Dictionary = {}) -> Dictionary:
