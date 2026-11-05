@@ -74,7 +74,7 @@ it_pocket_watch res://tools/item_models.gd 35 55 0 0.08
 it_sewing_kit res://tools/item_models.gd 35 48 0 0.08
 it_needle res://tools/item_models.gd 35 28 30 0.06
 it_doctor_box res://tools/item_models.gd 35 28 0 0.10
-book res://tools/item_models.gd 35 58 0 0.08
+herbal_book res://tools/item_models.gd 35 58 0 0.08
 it_saline res://tools/item_models.gd 35 28 0 0.08
 # 저장소 모형(결정 424 공개 자산 먼저 — 무기·소품, 꼭짓점 색은 굽기 도구가 sRGB로 읽음)
 shotgun res://models/weapons/shotgun.glb 35 28 30 0.06

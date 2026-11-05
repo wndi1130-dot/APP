@@ -1473,6 +1473,14 @@ func test_a_thing_without_its_own_picture_takes_its_line_icons_bake() -> void:
 	assert_null(InventoryPane.art_texture("no_such_thing"))
 	# A line icon drawn like a baked thing (ICON_ALIAS): notes take the document's.
 	assert_eq(InventoryPane.art_texture("note_map", "papers"), InventoryPane.art_texture("document"))
+	# The herbal's line icon "book" is the plain book's id: each keeps its own picture.
+	var plain_book: Texture2D = InventoryPane.art_texture("book", "it_book")
+	var herbal: Texture2D = InventoryPane.art_texture("rare_herbal", "book")
+	assert_not_null(plain_book)
+	assert_not_null(herbal)
+	assert_eq(plain_book, InventoryPane.art_texture("it_book"), "the book shows the book")
+	assert_eq(herbal, InventoryPane.art_texture("herbal_book"), "the herbal shows the green herbal")
+	assert_ne(plain_book, herbal)
 	for icon: String in InventoryPane.ICON_ALIAS:
 		assert_not_null(InventoryPane.art_texture("no_such_thing", icon), icon)
 

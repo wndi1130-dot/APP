@@ -65,6 +65,8 @@ const ART_ALIAS: Dictionary = {
 const ICON_ALIAS: Dictionary = {
 	"papers": "document", "it_cigarettes": "cigarettes", "it_sack": "oats", "med": "medkit",
 	"it_plank": "wood",
+	# The herbal's line icon "book" is also the plain book's id (its picture is it_book).
+	"book": "herbal_book",
 }
 ## The places rail shows five keys at most, then scrolls, fading at its foot while
 ## more lie below (MORE_H); a short screen cuts it sooner.

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dk62231t7rhn5"
-path="res://.godot/imported/book.png-2452cd5466757c9c91e0a7320679d5e9.ctex"
+uid="uid://c7f1fcwr550b2"
+path="res://.godot/imported/herbal_book.png-8d44d201f499ba334301d3c8904ac135.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/icons/items/book.png"
-dest_files=["res://.godot/imported/book.png-2452cd5466757c9c91e0a7320679d5e9.ctex"]
+source_file="res://assets/icons/items/herbal_book.png"
+dest_files=["res://.godot/imported/herbal_book.png-8d44d201f499ba334301d3c8904ac135.ctex"]
 
 [params]
 

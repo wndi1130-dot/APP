@@ -12,7 +12,7 @@ const NEW_KEYS: Array[String] = [
 	"it_bottle_broken", "it_stake",
 	"it_coat", "it_jacket", "it_vest", "it_hat", "it_hood", "pack", "it_wire",
 	"it_syrup", "clock", "it_pocket_watch", "it_sewing_kit", "it_needle",
-	"it_doctor_box", "book", "it_saline", "it_toy",
+	"it_doctor_box", "herbal_book", "it_saline", "it_toy",
 ]
 
 

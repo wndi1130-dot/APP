@@ -99,7 +99,8 @@ const RECIPES: Dictionary = {
 	"it_sewing_kit": {"shape": "sewing_kit"},
 	"it_needle": {"shape": "needle"},
 	"it_doctor_box": {"shape": "doctor_box"},
-	"book": {"shape": "book"},
+	# The herbal's line icon is "book", which is also the plain book's id: its own name.
+	"herbal_book": {"shape": "book"},
 	"it_saline": {"shape": "saline"},
 	"it_toy": {"shape": "teddy"},
 }
