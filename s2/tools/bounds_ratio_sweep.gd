@@ -66,13 +66,17 @@ func _run() -> void:
 		return
 	var script: Script = load(Maps.path_of(place))
 	var started: int = Time.get_ticks_usec()
+	var fingerprint_time: Dictionary = {"usec": 0}
 	for form: String in forms:
 		for seed_value: int in seeds:
 			var key: String = "%s|%s|%d|" % [place, form, seed_value]
 			if progress["cases"].has(key): continue
 			var mark: int = Time.get_ticks_usec()
-			var record: Dictionary = _case(script, place, form, seed_value)
-			var error: String = Dump.append_case(output, progress, key, record, float(Time.get_ticks_usec() - mark) / 1000.0)
+			var fingerprint_before: int = int(fingerprint_time.get("usec", 0))
+			var record: Dictionary = _case(script, place, form, seed_value, fingerprint_time)
+			var fingerprint_usec: int = int(fingerprint_time.get("usec", 0)) - fingerprint_before
+			var case_ms: float = float(Time.get_ticks_usec() - mark - fingerprint_usec) / 1000.0
+			var error: String = Dump.append_case(output, progress, key, record, case_ms)
 			if not error.is_empty():
 				_fail(error)
 				return
@@ -86,8 +90,8 @@ func _run() -> void:
 		_fail("실행 중 소스 또는 HEAD 변경: 기존 진행 파일을 다른 판과 섞지 않습니다")
 		return
 	var receipt: Dictionary = {"header": header, "case_count": keys.size(), "forms": _summary(progress["cases"], forms),
-		"elapsed_this_run_ms": float(Time.get_ticks_usec() - started) / 1000.0,
-		"timing_note": "paired_ms의 null은 해당 단계 없음. budget_delta_ms는 ring_expand+ring_lights+bounds+bounds_work_prepare+bounds_groves+edge_plan의 판 1 - 판 0 차이. build_plain은 제외."}
+		"elapsed_this_run_ms": float(Time.get_ticks_usec() - started - int(fingerprint_time.get("usec", 0))) / 1000.0,
+		"timing_note": "paired_ms의 null은 해당 단계 없음. budget_delta_ms는 ring_expand+ring_lights+bounds+bounds_work_prepare+bounds_groves+edge_plan의 판 1 - 판 0 차이. build_plain은 제외. 새 tree/connect 지문 계산은 단계 측정 뒤 실행하며 JSONL ms와 elapsed_this_run_ms에서도 제외."}
 	if FileAccess.file_exists(output):
 		_fail("기존 최종 파일을 덮어쓰지 않습니다: " + output)
 		return
@@ -114,7 +118,7 @@ static func _seeds(value: String) -> Array[int]:
 	return out
 
 
-static func _case(script: Script, place: String, form: String, seed_value: int) -> Dictionary:
+static func _case(script: Script, place: String, form: String, seed_value: int, fingerprint_time: Dictionary = {}) -> Dictionary:
 	var on_observed: Dictionary = {"_sweep": true}
 	var zero_observed: Dictionary = {"_sweep": true}
 	var active: Dictionary = Loader.make_ready(script, seed_value, form, -1.0, "", -1, Callable(), on_observed)
@@ -144,6 +148,12 @@ static func _case(script: Script, place: String, form: String, seed_value: int) 
 	var blocked: int = int(active.get("bounds_blocked", -1))
 	var new_ratio: Variant = float(numerator) / denominator if stamped and denominator > 0 else null
 	var blocked_share: Variant = float(blocked) / (grid.width * grid.height) if stamped else null
+	# 게임 생성과 모든 단계 측정이 끝난 뒤 읽기만 한다. 바깥 경과 시간에서도 이 구간을 뺀다.
+	var fingerprint_started: int = Time.get_ticks_usec()
+	var tree_fingerprint: String = _tree_fingerprint(active)
+	var tree_fingerprint_zero: String = _tree_fingerprint(base)
+	var connect_fingerprint: String = _connect_fingerprint(attempts)
+	fingerprint_time["usec"] = int(fingerprint_time.get("usec", 0)) + Time.get_ticks_usec() - fingerprint_started
 	return {"place": place, "form": form, "seed": seed_value, "stamped": stamped,
 		"bounds_stamp": active.get("bounds_stamp"), "failure": active.get("bounds_failure", ""),
 		"attempt_count": attempts.size(), "attempts": attempts,
@@ -154,7 +164,9 @@ static func _case(script: Script, place: String, form: String, seed_value: int) 
 		"blocked_share": blocked_share, "ratio_pass": stamped and denominator > 0 and numerator * 4 >= denominator * 5,
 		"blocked_pass": stamped and blocked >= 0 and float(blocked) / (grid.width * grid.height) <= 0.18,
 		"paired_ms": paired, "budget_delta_ms": envelope, "budget_pass": stamped and envelope <= 100.0,
-		"outline_fingerprint": _fingerprint(active.get("bounds", {})) if stamped else ""}
+		"outline_fingerprint": _fingerprint(active.get("bounds", {})) if stamped else "",
+		"tree_fingerprint": tree_fingerprint, "tree_fingerprint_zero": tree_fingerprint_zero,
+		"connect_fingerprint": connect_fingerprint}
 
 
 ## 각 항목을 문자열로 정규화해 정렬한다. 실행 순서와 Dictionary 삽입 순서에 기대지 않는다.
@@ -174,17 +186,104 @@ static func _fingerprint(bounds: Dictionary) -> String:
 	return "\n".join(parts).sha256_text().left(16)
 
 
+## 소수를 반올림하지 않고 64비트 실수 바이트를 고정 길이 16진수로 담는다.
+static func _float_fingerprint(value: float) -> String:
+	var bytes: PackedByteArray = PackedByteArray()
+	bytes.resize(8)
+	bytes.encode_double(0, value)
+	return bytes.hex_encode()
+
+
+## 키 삽입 순서 대신 이 순서로 읽는다. skip과 크기 키의 유무도 구별한다.
+static func _tree_item_parts(parts: Array[String], item: Dictionary) -> void:
+	var at: Vector3 = item.get("at", Vector3.ZERO)
+	parts.append("at:%d:%s:%s:%s" % [int(item.has("at")), _float_fingerprint(at.x), _float_fingerprint(at.y), _float_fingerprint(at.z)])
+	parts.append("model:" + String(item.get("model", "")).to_utf8_buffer().hex_encode())
+	for field: String in ["yaw", "height", "spread", "scale"]:
+		parts.append("%s:%d:%s" % [field, int(item.has(field)), _float_fingerprint(float(item.get(field, 0.0)))])
+	parts.append("skip:%d" % int(bool(item.get("skip", false))))
+
+
+## trees의 첨자가 fell_groves의 plan_idx다. 숨긴 나무도 포함하고 배열을 정렬하지 않는다.
+static func _tree_fingerprint(data: Dictionary) -> String:
+	var plan: Dictionary = data.get("_edge_plan", {}).get("plan", {})
+	var trees: Array = plan.get("trees", [])
+	var parts: Array[String] = ["trees-v1", "plan:%d" % int(not plan.is_empty()), "trees:%d" % trees.size()]
+	for plan_idx: int in range(trees.size()):
+		parts.append("plan_idx:%d" % plan_idx)
+		var tree: Dictionary = trees[plan_idx]
+		_tree_item_parts(parts, tree)
+	var glades: Array = plan.get("glades", [])
+	parts.append("glades:%d" % glades.size())
+	for glade: Dictionary in glades:
+		var rect: Rect2 = glade.get("rect", Rect2())
+		parts.append("glade:%s:%d:%s:%s:%s:%s" % [String(glade.get("kind", "")).to_utf8_buffer().hex_encode(), int(bool(glade.get("skip", false))), _float_fingerprint(rect.position.x), _float_fingerprint(rect.position.y), _float_fingerprint(rect.size.x), _float_fingerprint(rect.size.y)])
+		var props: Array = glade.get("props", [])
+		parts.append("props:%d" % props.size())
+		for prop: Dictionary in props: _tree_item_parts(parts, prop)
+	var clear: Array = plan.get("clear", [])
+	parts.append("clear:%d" % clear.size())
+	for rect: Rect2 in clear:
+		parts.append("rect:%s:%s:%s:%s" % [_float_fingerprint(rect.position.x), _float_fingerprint(rect.position.y), _float_fingerprint(rect.size.x), _float_fingerprint(rect.size.y)])
+	for key: String in ["fell_groves", "_bounds_groves"]:
+		var groves: Array = data.get(key, [])
+		parts.append("%s:%d" % [key, groves.size()])
+		for grove: Dictionary in groves:
+			parts.append("grove:%s:%d:%d:%d:%d" % [String(grove.get("kind", "")).to_utf8_buffer().hex_encode(), int(grove.get("level", 0)), int(grove.get("trees", 0)), int(bool(grove.get("edge", false))), int(bool(grove.get("bounds", false)))])
+			for field: String in ["cells", "stand"]:
+				var cells: Array = grove.get(field, [])
+				parts.append("%s:%d" % [field, cells.size()])
+				for cell: Vector2i in cells: parts.append("%d,%d" % [cell.x, cell.y])
+			var indices: Array = grove.get("plan_idx", [])
+			parts.append("indices:%d" % indices.size())
+			for plan_idx: int in indices: parts.append("%d" % plan_idx)
+	return "\n".join(parts).sha256_text().left(16)
+
+
+## 이번 from부터 다음 from 직전까지(마지막은 배열 끝)가 새로 더한 보호 경로다.
+static func _connect_fingerprint(attempts: Array) -> String:
+	var parts: Array[String] = ["connect-v1", "attempts:%d" % attempts.size()]
+	for i: int in range(attempts.size()):
+		var record: Dictionary = attempts[i]
+		var checked: bool = bool(record.get("connect_checked", false))
+		var rejected: Array = record.get("rejected", [])
+		var outcome: String = "rejected" if not rejected.is_empty() else ("accepted" if checked else "unchecked")
+		parts.append("attempt:%d:%d:%d:%s:%d:%d" % [i, int(record.get("candidate", -1)), int(checked), outcome, int(record.get("detached_people", -1)), int(record.get("detached_dead_pairs", -1))])
+		parts.append("reasons:%d" % rejected.size())
+		for reason: String in rejected: parts.append(reason.to_utf8_buffer().hex_encode())
+		var trace: Dictionary = record.get("connect_routes", {})
+		var cells: Array = trace.get("cells", [])
+		var first: int = int(trace.get("from", 0))
+		var last: int = cells.size()
+		if i + 1 < attempts.size():
+			var next: Dictionary = attempts[i + 1]
+			last = int(next.get("connect_routes", {}).get("from", last))
+		parts.append("routes:%d:%d" % [int(record.has("connect_routes")), last - first])
+		for route_idx: int in range(first, last):
+			var cell: Vector2i = cells[route_idx]
+			parts.append("%d,%d" % [cell.x, cell.y])
+	return "\n".join(parts).sha256_text().left(16)
+
+
 static func _summary(cases: Dictionary, forms: Array[String]) -> Dictionary:
 	var out: Dictionary = {}
 	for form: String in forms:
 		var row: Dictionary = {"count": 0, "failures": 0, "ratio_failures": 0, "blocked_failures": 0,
 			"min_ratio": null, "max_ratio": null, "min_seed": null, "max_seed": null,
 			"min_old_ratio": null, "max_old_ratio": null, "min_blocked_share": null, "max_blocked_share": null,
-			"min_budget_delta_ms": null, "max_budget_delta_ms": null, "budget_failures": 0, "fingerprints": {}}
+			"min_budget_delta_ms": null, "max_budget_delta_ms": null, "budget_failures": 0, "fingerprints": {},
+			"tree_fingerprints": {}, "tree_fingerprints_zero": {}, "connect_fingerprints": {}}
 		for key: String in cases:
 			var record: Dictionary = cases[key]
 			if record["form"] != form: continue
 			row["count"] += 1
+			# 탈락 판도 지문을 남긴다. 기존 윤곽/비율 집계의 성공 판 조건은 유지한다.
+			for field: String in ["tree_fingerprint", "tree_fingerprint_zero", "connect_fingerprint"]:
+				var new_fingerprint: String = String(record.get(field, ""))
+				if new_fingerprint.is_empty(): continue
+				var group_key: String = "tree_fingerprints_zero" if field == "tree_fingerprint_zero" else field + "s"
+				var groups: Dictionary = row.get(group_key, {})
+				groups.get_or_add(new_fingerprint, []).append(record.get("seed", -1))
 			if not bool(record["stamped"]):
 				row["failures"] += 1
 				continue

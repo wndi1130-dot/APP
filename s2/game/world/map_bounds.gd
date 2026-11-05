@@ -423,7 +423,9 @@ static func _connected_outline(data: Dictionary, mask: PackedByteArray, protecti
 		var shape: Dictionary = Rule.shape_report(g, bounds)
 		var record: Dictionary = {"attempt": attempt + 1, "candidate": attempt, "shape": shape,
 			"grid_size": Vector2i(g.width, g.height), "playable_rect": area,
-			"rejected": [], "detached_people": -1, "detached_dead_pairs": -1, "connect_checked": false}
+			"rejected": [], "detached_people": -1, "detached_dead_pairs": -1, "connect_checked": false,
+			# routes는 공유 배열이다. 다음 시도의 from(마지막은 최종 길이)까지가 이번에 더한 칸이다.
+			"connect_routes": {"from": routes.size(), "cells": routes}}
 		attempts.append(record)
 		record["rejected"].append_array(shape["errors"])
 		times["bounds_shape"] += float(Time.get_ticks_usec() - mark) / 1000.0
