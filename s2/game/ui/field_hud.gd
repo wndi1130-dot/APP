@@ -2108,6 +2108,7 @@ func grab_alert(front: bool) -> void:
 ## hurts him shows at the screen's edges and in the state icons instead, and
 ## his plain notes stay notes.
 func say(p, text: String, hurt: bool = false) -> void:
+	print("SAY ", {"player": p == game.player, "hurt": hurt, "msec": Time.get_ticks_msec(), "frame": Engine.get_process_frames()}) # 측정용(N13c)
 	if p == game.player:
 		if hurt:
 			hurt_flash = HURT_FLASH_S
@@ -2131,6 +2132,7 @@ func say(p, text: String, hurt: bool = false) -> void:
 ## A companion shouts: the line goes over their head, above the note of what
 ## happened if one is up.
 func shout(p, line: String) -> void:
+	print("SHOUT ", {"line": line, "msec": Time.get_ticks_msec(), "frame": Engine.get_process_frames()}) # 측정용(N13c)
 	for s in says:
 		if s["p"] == p:
 			s["line"] = line
@@ -5350,8 +5352,14 @@ func tells() -> Array:
 	return out
 
 
+var _n13c_tell: bool = false # 측정용(N13c): 덤빌 망자 경고 고리를 처음 그린 때 한 번
+
+
 ## Over each of them, a ring that closes as its beat runs out, and a mark.
 func _draw_tells() -> void:
+	if not _n13c_tell and not tells().is_empty():
+		_n13c_tell = true
+		print("TELL_FIRST ", {"msec": Time.get_ticks_msec(), "frame": Engine.get_process_frames()})
 	for z in tells():
 		var left: float = clampf(float(z["t"]) / LungerRules.TELL, 0.0, 1.0)
 		var at: Vector2 = _project(z["pos"] + Vector3(0, 1.0, 0))

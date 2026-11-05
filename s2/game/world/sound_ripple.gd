@@ -53,6 +53,7 @@ func show_ring(at: Vector3, radius: float) -> void:
 	if r <= 0.5:
 		return
 	if _shader == null:
+		print("RIPPLE_FIRST ", {"radius": r, "msec": Time.get_ticks_msec(), "frame": Engine.get_process_frames()}) # 측정용(N13c)
 		_shader = Shader.new()
 		_shader.code = SHADER
 	var mesh := PlaneMesh.new()
