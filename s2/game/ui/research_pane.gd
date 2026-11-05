@@ -31,6 +31,7 @@ const GlassParts = preload("res://game/ui/glass_parts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const Research = preload("res://game/train/train_research.gd")
 const LawTech = preload("res://game/train/train_lawtech.gd")
+const Workshop = preload("res://game/train/train_workshop.gd")
 const GLASS := preload("res://game/ui/tex/pane_glass.png")
 
 ## As tall as the workshop's pane while four rows fit; longer lists grow it.
@@ -45,6 +46,8 @@ const ABOVE_H: float = 30.0
 ## Where that shade starts across: the rows' branch marks stand at 44.
 const ABOVE_X: float = 40.0
 const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"]]
+## From one store's mark to the next (mark 18 + name + count + a gap), _stores.
+const STORE_STEP: float = 92.0
 const ICON: Dictionary = {"scrap": "it_nails", "wood": "it_plank", "parts": "gear", "core": "gear"}
 ## S1 ui/domestic.ts BRANCH_ICON.
 const BRANCH_ICON: Dictionary = {"engine": "gear", "med": "med", "craft": "wrench", "radio": "radio", "expedition": "compass"}
@@ -392,14 +395,23 @@ func _head() -> void:
 	GlassParts.put_on(word, mark.position.x - 3.0 * k - GlassParts.text_w(word), 26.5 * k)
 
 
+## The stores row: each store's mark, its name in the workshop's own words (STORE_NAME, no new
+## word) and how many, on one line; a step wide enough that a count of three digits stays clear of
+## the next mark and the last count ends inside the keys' edge (316). Player review round 1, item 8:
+## the bare marks were not read as 고철·목재·부품.
 func _stores(stores: Array) -> void:
+	var k: float = UiFonts.K
 	for i in stores.size():
 		var s: Dictionary = stores[i]
-		var x: float = 44.0 + 68.0 * i
-		_add(_mark(String(s["icon"]), 18.0, Vector2(x, 39.0), INK2, "StoreMark_" + String(s["key"])))
-		var n := _label("Store_" + String(s["key"]), _num(float(s["n"])), UiFonts.NUMBER, 500, 15.0, INK, 0.225)
-		n.name = "Store_" + String(s["key"])
-		_text(n, x + 22.0, 54.0)
+		var key: String = String(s["key"])
+		var x: float = 44.0 + STORE_STEP * i
+		_add(_mark(String(s["icon"]), 18.0, Vector2(x, 39.0), INK2, "StoreMark_" + key))
+		var word := _label("StoreName_" + key, String(Workshop.STORE_NAME[key]), UiFonts.WORD, 400, 12.0, INK2, 0.0)
+		word.name = "StoreName_" + key
+		_text(word, x + 22.0, 54.0)
+		var n := _label("Store_" + key, _num(float(s["n"])), UiFonts.NUMBER, 500, 15.0, INK, 0.225)
+		n.name = "Store_" + key
+		_text(n, x + 22.0 + GlassParts.text_w(word) / k + 4.0, 54.0)
 
 
 ## A technology: its branch mark and name; what it needs, how far it is, or

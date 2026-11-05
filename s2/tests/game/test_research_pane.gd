@@ -334,6 +334,38 @@ func test_a_running_technology_shows_its_upkeep_and_when_it_starves() -> void:
 	assert_null(p3.find_child("UpkeepPer_e5", true, false))
 
 
+## The stores row names each mark in the workshop's words (player review round 1, item 8): mark,
+## name, count from left to right on one line, each store clear of the one before, and the last
+## count inside the keys' edge (316, as the upkeep line) — for three-digit and four-digit counts,
+## at both resolutions.
+func test_the_stores_row_names_each_mark_before_its_count() -> void:
+	var names: Dictionary = {"scrap": "고철", "wood": "목재", "parts": "부품"}
+	for count: int in [999, 9999]:
+		for res: Vector2 in [Vector2(1280.0, 720.0), Vector2(1688.0, 780.0)]:
+			var g := _game()
+			for key: String in names:
+				g["dom"][key] = count
+			var p := _pane(g, [], res)
+			await wait_process_frames(1)
+			var at: String = "%d at %s" % [count, res]
+			var end_before: float = -1.0
+			for key: String in names:
+				var mark := _live(p, "StoreMark_" + key)
+				var word := _live(p, "StoreName_" + key) as Label
+				var n := _live(p, "Store_" + key) as Label
+				assert_not_null(word, key + " has a name")
+				if mark == null or word == null or n == null:
+					continue
+				assert_eq(word.text, names[key], at)
+				assert_eq(n.text, str(count), at)
+				assert_gt(mark.position.x, end_before, "%s %s keeps clear of the store before" % [at, key])
+				assert_lte(mark.position.x + mark.size.x, word.position.x, "%s %s mark before its name" % [at, key])
+				assert_lte(word.position.x + GlassParts.text_w(word), n.position.x, "%s %s name before its count" % [at, key])
+				assert_almost_eq(_ink_box(word).end.y, _ink_box(n).end.y, 4.0 * UiFonts.K, "%s %s name and count share a line" % [at, key])
+				end_before = n.position.x + GlassParts.text_w(n)
+			assert_lte(end_before, 316.0 * UiFonts.K, at + " the last count ends inside the keys' edge")
+
+
 ## The upkeep line is redrawn in place: red while starved and back again, the
 ## mark with it, gone while the technology is stood down and back when it runs.
 func test_the_upkeep_line_follows_its_row_when_redrawn() -> void:
