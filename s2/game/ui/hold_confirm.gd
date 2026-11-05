@@ -4,7 +4,8 @@ extends Control
 ## the key's edge from twelve o'clock clockwise in HOLD_S, at one pace; let go early,
 ## or slip more than SLIP_DP past the key's edge, and it winds back in BACK_S with
 ## nothing done — a slip lets go for good, coming back on the key fills nothing
-## until a new press; full, the work runs once with a short buzz. The times are the
+## until a new press; full, a short buzz and one flash of the face, and the work
+## runs once as the flash ends (결정 561 ④). The times are the
 ## council's lever's (vote and departure), the line the field keys' own.
 ## The timing is hold_step(), a pure function the tests drive with their own clock;
 ## this node only feeds it the finger and the frame time, and draws the line.
@@ -23,11 +24,19 @@ const LINE_INK := GlassPane.AMBER_L
 ## The key's own edge darkens under the line while it is held.
 const UNDER_INK := Color(0.16, 0.19, 0.21, 0.95)
 const ARC_STEPS: int = 8
+## Full, the key flashes once (결정 561 ④): the face lit with the line's ink,
+## fading over FLASH_S; the work runs as the flash ends, so the key is still there
+## to be seen (the pane may lay itself again on the work). No repeat, no shake.
+const FLASH_S: float = 0.16
+const FLASH_ALPHA: float = 0.37
 
 signal confirmed
 
 var state: Dictionary = fresh()
 var work: Callable = Callable()
+## Seconds of the confirm flash left; the work waits for it.
+var flash: float = 0.0
+var _work_pending: bool = false
 var _key: Button = null
 var _down: bool = false
 var _inside: bool = true
@@ -162,13 +171,23 @@ func _finger(event: InputEvent) -> void:
 ## The frame's step; tests call it with their own `dt`.
 func advance(dt: float) -> void:
 	state = hold_step(state, dt, _down and _inside)
+	if flash > 0.0:
+		flash = maxf(0.0, flash - dt)
+		if flash <= 0.0 and _work_pending:
+			_work_pending = false
+			queue_redraw()
+			# The work may lay the pane again and free this node: last thing here.
+			if work.is_valid():
+				work.call()
+			return
 	if bool(state["fired"]):
+		# Owed first: a listener that frees the hold still finds the work owed.
+		flash = FLASH_S
+		_work_pending = true
 		Input.vibrate_handheld(BUZZ_MS)
 		confirmed.emit()
-		if work.is_valid():
-			work.call()
 	queue_redraw()
-	if not _down and float(state["fill"]) <= 0.0:
+	if not _down and float(state["fill"]) <= 0.0 and flash <= 0.0:
 		set_process(false)
 
 
@@ -176,12 +195,38 @@ func _process(delta: float) -> void:
 	advance(delta)
 
 
+## Gone mid-flash (the pane laid again as a thing came out, or shut): the hold was
+## full and buzzed, so its work still runs, once, at the end of this frame — each
+## hold its own deferred call, so two owed works stay two. The work's owner is the
+## HUD, which outlives its panes; what the work does to a pane shut or opened since
+## is its own (field_hud.gd _throw, _load_train: only the pane that held it).
+func _exit_tree() -> void:
+	if not _work_pending:
+		return
+	_work_pending = false
+	flash = 0.0
+	Callable(get_script(), "_run_owed").call_deferred(work)
+
+
+## The owed work at the frame's end, run by the script (the hold itself is gone).
+## Its owner gone first — the HUD freed with its field — it is dropped with it: a
+## field torn down takes its unfinished confirm along, as it does its other work.
+static func _run_owed(owed: Callable) -> void:
+	if owed.is_valid():
+		owed.call()
+
+
 func _draw() -> void:
 	var fill: float = float(state["fill"])
+	var radius: float = float(GlassPane.px(GlassPane.RADIUS))
+	if flash > 0.0:
+		var face := StyleBoxFlat.new()
+		face.bg_color = Color(LINE_INK, FLASH_ALPHA * flash / FLASH_S)
+		face.set_corner_radius_all(int(radius))
+		draw_style_box(face, Rect2(Vector2.ZERO, size))
 	if fill <= 0.0:
 		return
 	var width: float = UiFonts.px(LINE_DP * CSS_PER_DP)
-	var radius: float = float(GlassPane.px(GlassPane.RADIUS))
 	draw_polyline(edge_path(size, radius, width * 0.5, 1.0), UNDER_INK, width, true)
 	var line: PackedVector2Array = edge_path(size, radius, width * 0.5, fill)
 	if line.size() >= 2:

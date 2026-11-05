@@ -362,10 +362,11 @@ static func _skin(b: Button, fill: Color = CELL) -> void:
 	b.add_theme_stylebox_override("disabled", _box(Color(fill, fill.a * 0.5), Color(HAIR, HAIR.a * 0.5), 0.0))
 
 
-## What is laid on a key sinks with it while it is held.
-static func sinks(b: Button, c: Control) -> void:
-	b.button_down.connect(func() -> void: c.position.y += UiFonts.px(1.0))
-	b.button_up.connect(func() -> void: c.position.y -= UiFonts.px(1.0))
+## What is laid on a key sinks with it while it is held, as far as its pressed
+## face (`css`: 1 for these keys, the bag pane's own sink for its keys and rows).
+static func sinks(b: Button, c: Control, css: float = 1.0) -> void:
+	b.button_down.connect(func() -> void: c.position.y += UiFonts.px(css))
+	b.button_up.connect(func() -> void: c.position.y -= UiFonts.px(css))
 
 
 ## A cell (.mn__b): 44 high, corners of 6, its word at 13/500 (.03em) in a 2 px

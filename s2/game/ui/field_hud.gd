@@ -424,6 +424,10 @@ var modal: Control
 var modal_paused_before: bool = false
 var modal_open: bool = false
 var modal_pane: GlassPane
+## The panes as the player sees them: one laid again over itself (a row taken, a
+## thing come out) is the same pane; shut and another opened is a new one. A
+## confirm's late work (hold_confirm.gd) touches only its own pane (_throw, _load_train).
+var pane_era: int = 0
 var closing_modal: Control
 var modal_fingers: Dictionary = {}     # touches stay consumed through their lift, even after closing
 var modal_emulated_blocked: bool = false
@@ -456,6 +460,8 @@ var inv_scroll_pending: Dictionary = {}
 const BAG_SCROLLS: Array[String] = ["BagScroll", "NearScroll", "PlaceScroll", "JournalScroll"]
 ## Optional item art supplied locally; an empty entry falls back to the resource path.
 var item_px_override: Dictionary = {}
+## The field bag key's pack (결정 561 ③: 1.3 times the old 30).
+const BAG_KEY_ICON_PX: int = 39
 ## The places the bag pane listed when it was laid (InventoryPane.place_keys):
 ## changes to nearby places refresh it even though its stick sleeps (532).
 var bag_places: Array = []
@@ -1367,7 +1373,8 @@ func _build_thumbs() -> void:
 	# 시안 .finv: the mark 15, the weight in Barlow 14.
 	bag_button = _button("0.0/8", bag_panel, Vector2(124, 52), UiFonts.size(14))
 	bag_button.tooltip_text = "인벤토리"
-	_dress(bag_button, "pack", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 30)
+	# The pack 1.3 times its old 30 (결정 561 ③).
+	_dress(bag_button, "pack", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, BAG_KEY_ICON_PX)
 	# Plain glass like the orders and 모두 열차로: a key that is not lit wears no
 	# brass sweep (user 2026-10-25 on the phone: 「배낭 버튼 유광」).
 	_matte(bag_button)
@@ -2539,6 +2546,8 @@ func _set_radio() -> void:
 ## panel laid on it by the caller. pauses false: the field goes on at
 ## BODY_SLOW under it (the body picture).
 func _open_shade(pauses: bool = true) -> Control:
+	if modal == null:
+		pane_era += 1
 	_close_modal(false)
 	_discard_closing_modal()
 	# Decision 532: opening the bag releases every field finger too.
@@ -2588,6 +2597,8 @@ func _open_pane(title: String, side: String = "", icon: String = "", width_css: 
 
 ## pauses false: the field goes on at BODY_SLOW under the panel (the body picture).
 func _open_modal(width: float = 640.0, pauses: bool = true) -> VBoxContainer:
+	if modal == null:
+		pane_era += 1
 	_close_modal(false)
 	_discard_closing_modal()
 	# Fingers held now will lift under the panel: let go of them first.
@@ -3376,9 +3387,14 @@ func _inv_sort() -> void:
 	bag_panel()
 
 
-func _load_train() -> void:
+## `era`: the pane that held the load (pane_era); -1 for any pane up.
+func _load_train(era: int = -1) -> void:
 	game.actions.load_train(game.player)
-	bag_panel()
+	# The load is held to confirm and done as its flash ends (hold_confirm.gd): the
+	# bag is shown again only on the pane that held it, still up — a pane shut in
+	# that flash stays shut, one opened since is left alone.
+	if modal_open and (era < 0 or era == pane_era):
+		bag_panel()
 
 
 ## One thing worn: its picture and name, how worn it is once it shows
@@ -3551,8 +3567,12 @@ func _eat(id: String) -> void:
 
 
 ## Throw an empty tin where the chief faces (a lure): the bag closes.
-func _throw(id: String) -> void:
-	_close_modal()
+## `era`: the pane that held the throw (pane_era); -1 for any pane up.
+func _throw(id: String, era: int = -1) -> void:
+	# Held to confirm, thrown as its flash ends: only the pane that held it is shut
+	# (one already shut, or another opened since, is left alone).
+	if modal_open and (era < 0 or era == pane_era):
+		_close_modal()
 	game.throw_lure(game.player, id)
 
 
@@ -4237,6 +4257,9 @@ func _modal_input(event: InputEvent) -> bool:
 			# held row opens under itself, a hold to confirm fills (결정 558·559).
 			if key != null and not key.disabled:
 				fingers[index]["down"] = true
+				# Its face goes down with its marks: this path sets no pressed state
+				# of the button's own (결정 561 ④).
+				fingers[index]["faces"] = _press_face(key)
 				key.button_down.emit()
 			return true
 		return false
@@ -4327,7 +4350,27 @@ func _finger_key_up(f: Dictionary) -> void:
 	f["down"] = false
 	var key: Variant = f.get("button")
 	if is_instance_valid(key):
-		(key as Button).button_up.emit()
+		var b := key as Button
+		if f.has("faces"):
+			var faces: Dictionary = f["faces"]
+			for state: String in ["normal", "hover"]:
+				if faces.has(state):
+					b.add_theme_stylebox_override(state, faces[state])
+				else:
+					b.remove_theme_stylebox_override(state)
+		b.button_up.emit()
+
+
+## The pressed face shown on a key a manual finger holds (on this path the button's
+## own pressed state is never set); returns the faces it covered, to give back.
+func _press_face(key: Button) -> Dictionary:
+	var faces: Dictionary = {}
+	var pressed: StyleBox = key.get_theme_stylebox("pressed")
+	for state: String in ["normal", "hover"]:
+		if key.has_theme_stylebox_override(state):
+			faces[state] = key.get_theme_stylebox(state)
+		key.add_theme_stylebox_override(state, pressed)
+	return faces
 
 
 func finger_up(index: int, pos: Vector2) -> bool:

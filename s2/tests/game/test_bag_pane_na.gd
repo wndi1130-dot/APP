@@ -215,7 +215,8 @@ func test_the_bag_beside_a_box_sends_its_row_to_the_box() -> void:
 ## the count — the multiple nearest the line icon's size that fits the row.
 func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() -> void:
 	var game = _game()
-	var id: String = _box(game)
+	# The can opener has no baked picture: it keeps its line icon.
+	var id: String = _box(game, ["food_pack", "can_opener"])
 	var picture := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	picture.fill(Color("ffc66c"))
 	var texture := ImageTexture.create_from_image(picture)
@@ -244,11 +245,11 @@ func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() 
 	else:
 		assert_almost_eq(icon.size.x, UiFonts.px(InventoryPane.ITEM_ICON), 0.01, "too small a window keeps the line icon's size")
 	assert_almost_eq(icon.size.x, icon.size.y, 0.01)
-	var fallback := _row(game.hud, "Near", "bandage").find_child("ItemIcon", true, false) as TextureRect
+	var fallback := _row(game.hud, "Near", "can_opener").find_child("ItemIcon", true, false) as TextureRect
 	assert_eq(fallback.stretch_mode, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
 	assert_almost_eq(fallback.size.x, UiFonts.px(InventoryPane.ITEM_ICON), 1.0)
 	assert_almost_eq(fallback.size.y, UiFonts.px(InventoryPane.ITEM_ICON), 1.0)
-	assert_eq(fallback.texture, HudIcons.texture(game.item_icon("bandage"), UiFonts.size(InventoryPane.ITEM_ICON), GlassPane.INK2, 1.0 / HudIcons.LINE), "a missing png uses the existing line icon")
+	assert_eq(fallback.texture, HudIcons.texture(game.item_icon("can_opener"), UiFonts.size(InventoryPane.ITEM_ICON), GlassPane.INK2, 1.0 / HudIcons.LINE), "a missing png uses the existing line icon")
 	game.hud._close_modal()
 
 
@@ -661,7 +662,20 @@ func test_by_touch_a_second_finger_held_on_a_row_opens_it_and_moves_nothing() ->
 	await _layout()
 	var home: Vector2 = hud.stick_home()
 	_touch(hud, home, true)
-	var at: Vector2 = _row(hud, "Bag", "scrap").get_global_rect().get_center()
+	var row: Button = _row(hud, "Bag", "scrap")
+	var rest: StyleBox = row.get_theme_stylebox("normal")
+	var line_y: float = (row.get_node("Line") as Control).position.y
+	var at: Vector2 = row.get_global_rect().get_center()
+	_touch(hud, at, true, 1)
+	# 결정 561 ④ on this path too: the face shown is the pressed one, as far down
+	# as the line (the button's own pressed state is not set here).
+	assert_eq(row.get_theme_stylebox("normal"), row.get_theme_stylebox("pressed"), "a second finger's press shows the pressed face")
+	assert_almost_eq((row.get_node("Line") as Control).position.y - line_y, UiFonts.px(InventoryPane.PRESS_SINK), 0.01, "with the line sunk as far")
+	# Taken away (not a tap, so nothing moves): its own face again, the line up.
+	_touch(hud, at, false, 1, true)
+	assert_eq(row.get_theme_stylebox("normal"), rest, "taken away, its own face again")
+	assert_almost_eq((row.get_node("Line") as Control).position.y, line_y, 0.01, "and its line back up")
+	assert_eq(int(p.items.get("scrap", 0)), 1, "a finger taken away moves nothing")
 	_touch(hud, at, true, 1)
 	await _wait(InventoryPane.LONG_S + 0.2)
 	_touch(hud, at, false, 1)
@@ -714,7 +728,7 @@ func test_by_touch_the_can_is_thrown_only_when_its_key_is_held_full() -> void:
 	assert_true(hud.modal_open, "the pane stays up")
 	assert_eq(float(hold.get("state")["fill"]), 0.0, "the line wound back")
 	_touch(hud, at, true, 1)
-	await _wait(HoldConfirm.HOLD_S + 0.25)
+	await _wait(HoldConfirm.HOLD_S + HoldConfirm.FLASH_S + 0.25)
 	_touch(hud, at, false, 1)
 	assert_eq(int(p.items.get("can_empty", 0)), 1, "a full hold throws one can")
 	_touch(hud, home, false)
@@ -764,7 +778,7 @@ func test_by_touch_a_second_finger_loads_the_train_only_when_held_full() -> void
 	assert_eq(int(p.items.get("scrap", 0)), 1, "half a hold loads nothing yet")
 	# The rest by the clock: the frames themselves fill it.
 	hold.set_process(true)
-	await _wait(HoldConfirm.HOLD_S * 0.5 + 0.25)
+	await _wait(HoldConfirm.HOLD_S * 0.5 + HoldConfirm.FLASH_S + 0.25)
 	_touch(hud, at, false, 1)
 	assert_false(p.items.has("scrap"), "a full hold loads it")
 	assert_eq(int(game.unloaded.get("scrap", 0)), 1, "aboard once")
@@ -1227,7 +1241,7 @@ func test_by_gui_the_can_needs_a_full_hold() -> void:
 	assert_eq(int(game.player.items.get("can_empty", 0)), 2)
 	assert_eq(float(hold.state["fill"]), 0.0)
 	_mouse(viewport, at, true)
-	await _wait(HoldConfirm.HOLD_S + 0.25)
+	await _wait(HoldConfirm.HOLD_S + HoldConfirm.FLASH_S + 0.25)
 	_mouse(viewport, at, false)
 	assert_eq(int(game.player.items.get("can_empty", 0)), 1)
 	if game.hud.modal_open:
@@ -1266,8 +1280,41 @@ func test_by_gui_a_hold_slipped_off_and_back_stays_let_go() -> void:
 	hold.advance(HoldConfirm.HOLD_S * 0.5)
 	assert_almost_eq(float(hold.state["fill"]), 0.5, 0.01, "a new press fills again")
 	hold.advance(HoldConfirm.HOLD_S * 0.5 + 0.01)
+	# Full: the buzz and the flash at once, the throw as the flash ends (결정 561 ④).
+	assert_gt(float(hold.get("flash")), 0.0, "full, the face flashes")
+	assert_eq(int(game.player.items.get("can_empty", 0)), 2, "the throw waits for the flash")
+	hold.advance(HoldConfirm.FLASH_S + 0.01)
 	assert_eq(int(game.player.items.get("can_empty", 0)), 1, "held full, one can is thrown")
 	_mouse(viewport, at, false)
+	if game.hud.modal_open:
+		game.hud._close_modal()
+
+
+## 결정 561 ④: the work waits for the flash, and a pane laid again in that 0.16 s
+## (a thing coming out of the box lays it) frees the hold; the throw it buzzed for
+## still happens, once.
+func test_a_hold_gone_mid_flash_still_does_its_work_once() -> void:
+	var game = _game()
+	await _layout()
+	game.player.items = {"can_empty": 2}
+	game.hud.bag_panel()
+	game.hud._inv_expand("bag", "can_empty")
+	await _layout()
+	var key := game.hud.modal.find_child("Throw", true, false) as Button
+	var hold = key.get_node("Hold")
+	key.button_down.emit()
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S + 0.01)
+	assert_gt(float(hold.get("flash")), 0.0, "full, it flashes")
+	assert_eq(int(game.player.items.get("can_empty", 0)), 2, "not thrown yet")
+	game.hud.bag_panel()
+	for _i in range(4):
+		await get_tree().process_frame
+	assert_false(is_instance_valid(hold), "the pane laid again freed the hold")
+	assert_eq(int(game.player.items.get("can_empty", 0)), 1, "the throw it buzzed for is not lost")
+	for _i in range(3):
+		await get_tree().process_frame
+	assert_eq(int(game.player.items.get("can_empty", 0)), 1, "and it is done once")
 	if game.hud.modal_open:
 		game.hud._close_modal()
 
@@ -1361,3 +1408,260 @@ func test_a_long_journal_fits_above_the_foot_at_720_high() -> void:
 		if again != null:
 			assert_eq(again.scroll_vertical, read_to, "laid again, the journal keeps its place")
 	game.hud._close_modal()
+
+
+## 결정 550·561 ①: the baked 3D pictures are painted art — drawn smooth from
+## their mipmaps, filling the row's picture square; a thing that shares a model
+## shows the same picture.
+func test_baked_pictures_are_smooth_and_fill_the_art_square() -> void:
+	var game = _game()
+	var id: String = _box(game, ["can_beans", "rusk", "can_opener"])
+	game.hud.loot(id)
+	await _layout()
+	var beans := _row(game.hud, "Near", "can_beans").find_child("ItemIcon", true, false) as TextureRect
+	assert_not_null(beans.texture)
+	assert_eq(beans.texture, InventoryPane.art_texture("can_beans"))
+	assert_true(InventoryPane.is_painted(beans.texture), "a 256 px bake")
+	assert_true(beans.texture.get_image().has_mipmaps(), "imported with mipmaps")
+	assert_eq(beans.texture_filter, CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS)
+	assert_almost_eq(beans.size.x, UiFonts.px(InventoryPane.ART), 1.0)
+	assert_almost_eq(beans.size.y, UiFonts.px(InventoryPane.ART), 1.0)
+	var rusk := _row(game.hud, "Near", "rusk").find_child("ItemIcon", true, false) as TextureRect
+	assert_eq(rusk.texture, InventoryPane.art_texture("hardtack"), "rusk shares the hardtack's picture")
+	assert_null(InventoryPane.art_texture("can_opener"))
+	game.hud._close_modal()
+
+
+## Every baked picture is a square painted one with mipmaps (결정 561 ①).
+func test_every_baked_picture_is_square_painted_and_mipmapped() -> void:
+	var dir := DirAccess.open("res://assets/icons/items")
+	assert_not_null(dir)
+	if dir == null:
+		return
+	var seen: int = 0
+	for file: String in dir.get_files():
+		if not file.ends_with(".png"):
+			continue
+		var texture := load("res://assets/icons/items/" + file) as Texture2D
+		assert_not_null(texture, file)
+		if texture == null:
+			continue
+		assert_eq(texture.get_width(), texture.get_height(), file)
+		assert_true(InventoryPane.is_painted(texture), file)
+		assert_true(texture.get_image().has_mipmaps(), file + " has mipmaps")
+		seen += 1
+	assert_gte(seen, 22)
+	for alias: String in InventoryPane.ART_ALIAS:
+		assert_not_null(InventoryPane.art_texture(alias), alias)
+
+
+## 결정 561 ③: the bag's mark 1.3 times — in its column head, on the folded
+## strip, and on the field's bag key.
+func test_the_bag_mark_is_one_point_three_times() -> void:
+	var game = _game()
+	var hud = game.hud
+	game.player.items = {"scrap": 1}
+	var id: String = _box(game, ["wood"])
+	hud.loot(id)
+	await _layout()
+	var head_mark := hud.modal.find_child("BagHead", true, false).find_children("*", "TextureRect", true, false)[0] as TextureRect
+	assert_almost_eq(head_mark.custom_minimum_size.x, float(GlassPane.px(InventoryPane.BAG_ICON)), 0.5)
+	assert_almost_eq(InventoryPane.BAG_ICON, InventoryPane.HEAD_ICON * 1.3, 0.01)
+	_row(hud, "Near", "wood").pressed.emit()
+	await _layout()
+	var strip: Node = hud.modal.find_child("BagStrip", true, false)
+	assert_not_null(strip)
+	if strip != null:
+		var strip_mark := strip.find_children("*", "TextureRect", true, false)[0] as TextureRect
+		assert_almost_eq(strip_mark.custom_minimum_size.x, float(GlassPane.px(InventoryPane.BAG_ICON)), 0.5)
+	assert_eq(hud.bag_button.get_theme_constant("icon_max_width"), hud.BAG_KEY_ICON_PX)
+	assert_eq(hud.BAG_KEY_ICON_PX, 39)
+	hud._close_modal()
+
+
+## 결정 561 ④: a pressed key's marks sink with its face and a one-press key
+## buzzes very short on the way down; a hold key keeps its buzz for the full hold.
+func test_a_pressed_key_sinks_and_a_one_press_key_buzzes() -> void:
+	assert_eq(InventoryPane.PRESS_SINK, 1.5, "결정 561 ④: pressed, 1.5 css")
+	var game = _game()
+	var hud = game.hud
+	game.player.items = {"can_empty": 1, "scrap": 1}
+	# Something on the ground, so the rail has a place key.
+	game.ground_items.append({"pos": game.player.position, "id": "cloth", "n": 1})
+	hud.bag_panel()
+	hud._inv_expand("bag", "can_empty")
+	await _layout()
+	var row: Button = _row(hud, "Bag", "scrap")
+	_sinks_with_face(row, [row.get_node("Line")], "a row")
+	assert_eq(int(row.get_meta("tap_buzz", 0)), 1, "a one-press row buzzes once")
+	assert_eq((row.get_theme_stylebox("pressed") as StyleBoxFlat).border_color, GlassPane.INK, "the pressed rim lights")
+	var throw := hud.modal.find_child("Throw", true, false) as Button
+	# Its mark, its word and its hold's line (and flash) all keep to the face.
+	var parts: Array = throw.get_children().filter(func(c: Node) -> bool: return c is Control)
+	assert_true(parts.has(throw.get_node("Hold")))
+	_sinks_with_face(throw, parts, "the throw key")
+	assert_eq(int(throw.get_meta("tap_buzz", 0)), 0, "a hold key does not buzz on the way down")
+	var place: Button = null
+	for node: Node in hud.modal.find_children("*", "Button", true, false):
+		if node.has_meta("place_kind"):
+			place = node as Button
+			break
+	assert_not_null(place, "a place key on the rail")
+	if place != null:
+		_sinks_with_face(place, place.get_children().filter(func(c: Node) -> bool: return c is Control), "a place key")
+		assert_eq(int(place.get_meta("tap_buzz", 0)), 1, "a place key buzzes once")
+		assert_eq((place.get_theme_stylebox("pressed") as StyleBoxFlat).border_color, GlassPane.INK, "its pressed rim lights")
+	hud._close_modal()
+
+
+## 결정 561 ④: the pressed face goes down PRESS_SINK (its box's margins) and each
+## part laid on it as far, and all come back up on the way up.
+func _sinks_with_face(b: Button, parts: Array, what: String) -> void:
+	var sink: float = UiFonts.px(InventoryPane.PRESS_SINK)
+	for state: String in ["pressed", "hover_pressed"]:
+		var box := b.get_theme_stylebox(state) as StyleBoxFlat
+		assert_almost_eq(box.expand_margin_bottom, sink, 0.01, "%s: the %s face goes down" % [what, state])
+		assert_almost_eq(box.expand_margin_top, -sink, 0.01, "%s: its top with it" % what)
+	var y0: Array = []
+	for c: Control in parts:
+		y0.append(c.position.y)
+	b.button_down.emit()
+	for k: int in parts.size():
+		assert_almost_eq((parts[k] as Control).position.y - float(y0[k]), sink, 0.01, "%s: %s sinks with the face" % [what, (parts[k] as Node).name])
+	b.button_up.emit()
+	for k: int in parts.size():
+		assert_almost_eq((parts[k] as Control).position.y, float(y0[k]), 0.01, "%s: %s comes back up" % [what, (parts[k] as Node).name])
+
+
+## 결정 561 ④: a bag row dimmed (here it cannot go aboard) still opens on a long
+## press, so its face sinks with its line.
+func test_a_dim_bag_row_sinks_whole() -> void:
+	var game = _game()
+	var p = game.player
+	p.items = {"can_opener": 1, "food_pack": 1}
+	var rect: Rect2i = game.data["unload"]
+	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
+	game.hud.bag_panel()
+	game.hud._inv_place({"kind": "train", "id": "", "name": "열차 짐칸"})
+	await _layout()
+	var row: Button = _row(game.hud, "Bag", "can_opener")
+	assert_false(row.disabled, "a dim bag row still takes a long press")
+	assert_eq(row.get_theme_stylebox("normal"), row.get_theme_stylebox("disabled"), "dim at rest")
+	_sinks_with_face(row, [row.get_node("Line")], "a dim row")
+	game.hud._close_modal()
+
+
+## 결정 561 ④ with the load: shut in the confirm's flash, the pane stays shut and
+## what was held for still goes aboard, once.
+func test_a_load_held_full_then_shut_in_its_flash_loads_and_stays_shut() -> void:
+	var game = _game()
+	var p = game.player
+	p.items = {"food_pack": 1}
+	var rect: Rect2i = game.data["unload"]
+	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
+	game.hud.bag_panel()
+	game.hud._inv_place({"kind": "train", "id": "", "name": "열차 짐칸"})
+	await _layout()
+	var key := game.hud.modal.find_child("MainKey", true, false) as Button
+	assert_not_null(key, "the load key by the train")
+	# Its mark, its word and its hold keep to the pressed face too.
+	_sinks_with_face(key, key.get_children().filter(func(c: Node) -> bool: return c is Control), "the load key")
+	var hold = key.get_node("Hold")
+	var held_work: Callable = hold.work
+	var calls: Array = [0]
+	hold.work = func() -> void:
+		calls[0] += 1
+		held_work.call()
+	key.button_down.emit()
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S + 0.01)
+	assert_gt(float(hold.get("flash")), 0.0, "full, it flashes")
+	assert_eq(int(game.unloaded.get("food_pack", 0)), 0, "not aboard yet")
+	key.button_up.emit()
+	game.hud._close_modal()
+	await _layout()
+	assert_eq(int(game.unloaded.get("food_pack", 0)), 1, "what was held for goes aboard")
+	assert_false(game.hud.modal_open, "the shut pane stays shut")
+	await _layout()
+	assert_eq(int(calls[0]), 1, "the load's work ran once")
+
+
+## 결정 561 ④: a throw held full, its pane shut and another opened within the
+## flash: the can is thrown, and the pane opened since is left alone.
+func test_a_throw_held_full_then_another_pane_opened_leaves_that_pane() -> void:
+	var game = _game()
+	var hud = game.hud
+	await _layout()
+	game.player.items = {"can_empty": 2}
+	hud.bag_panel()
+	hud._inv_expand("bag", "can_empty")
+	await _layout()
+	var key := hud.modal.find_child("Throw", true, false) as Button
+	var hold = key.get_node("Hold")
+	key.button_down.emit()
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S + 0.01)
+	key.button_up.emit()
+	hold.set_process(false)
+	assert_gt(float(hold.get("flash")), 0.0, "full, it flashes")
+	var held_era: int = hud.pane_era
+	hud._close_modal()
+	hud.bag_panel()
+	var era: int = hud.pane_era
+	assert_eq(era, held_era + 1, "shut and opened again: another pane")
+	if is_instance_valid(hold):
+		hold.advance(HoldConfirm.FLASH_S + 0.01)
+	for _i in range(4):
+		await get_tree().process_frame
+	assert_eq(int(game.player.items.get("can_empty", 0)), 1, "the can held for is thrown")
+	assert_true(hud.modal_open, "the pane opened since stays up")
+	assert_eq(hud.pane_era, era, "and is not shut and opened again")
+	hud._close_modal()
+
+
+## 결정 561 ④ by the GUI: a real press keeps the pressed face (its draw mode) and
+## the row's line sunk with it across frames; let go off the row, both come back.
+func test_by_gui_a_held_row_stays_sunk_with_its_face() -> void:
+	var viewport := _input_viewport()
+	var game = _game(viewport)
+	game.player.items = {"scrap": 1}
+	game.hud.bag_panel()
+	await _layout()
+	var row: Button = _row(game.hud, "Bag", "scrap")
+	var line := row.get_node("Line") as Control
+	var y0: float = line.position.y
+	var at: Vector2 = row.get_global_rect().get_center()
+	_mouse(viewport, at, true)
+	for _i in range(3):
+		await get_tree().process_frame
+	assert_eq(row.get_draw_mode(), BaseButton.DRAW_PRESSED, "the face is the pressed one")
+	assert_almost_eq(line.position.y - y0, UiFonts.px(InventoryPane.PRESS_SINK), 0.01, "its line stays sunk with it")
+	# Let go off the row, so it moves nothing and the pane is not laid again.
+	var away: Vector2 = at + (Vector2(0, -260) if at.y > 360.0 else Vector2(0, 260))
+	_motion(viewport, away)
+	_mouse(viewport, away, false)
+	for _i in range(2):
+		await get_tree().process_frame
+	assert_true(is_instance_valid(line), "the row is still the one pressed")
+	if is_instance_valid(line):
+		assert_almost_eq(line.position.y, y0, 0.01, "let go, its line comes back up")
+	if game.hud.modal_open:
+		game.hud._close_modal()
+
+
+## 결정 561 ②: the weight mark is a weight with a ring, not a box with a handle —
+## in the bag pane only; the train's home bar keeps its 정치 mark.
+func test_the_weight_mark_is_a_ringed_weight() -> void:
+	assert_true(String(HudIcons.PATHS["weight"]).contains("<circle"), "a ring on top")
+	assert_false(String(HudIcons.PATHS["weight"]).contains("M8.500 11V3.500"), "no handle")
+	assert_true(String(HudIcons.PATHS["scale"]).contains("M8.500 11V3.500"), "정치 keeps its own mark")
+	# The ring is drawn: at twice the size, the column through the middle has ink
+	# above the weight's top (y 10) and none in the ring's hole.
+	var image: Image = HudIcons.texture("weight", 24, Color.WHITE).get_image()
+	var ring: float = 0.0
+	for y: int in range(4, 10):
+		ring = maxf(ring, image.get_pixel(24, y).a)
+	assert_gt(ring, 0.5, "the ring's top is drawn")
+	assert_lt(image.get_pixel(24, 12).a, 0.5, "the ring is open in the middle")
+	var pane_src: String = (load("res://game/ui/inventory_pane.gd") as GDScript).source_code
+	assert_false(pane_src.contains("\"scale\""), "the bag pane asks for the weight mark only")

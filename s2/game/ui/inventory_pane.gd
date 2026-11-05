@@ -43,6 +43,23 @@ const ART: float = 44.0
 const ITEM_ICON: float = 26.0
 const BAR_H: float = 4.0 * 390.0 / 360.0
 const HEAD_ICON: float = 20.0
+## The bag's own mark, in its column's head and on the folded strip: 1.3 times
+## the heads' (결정 561 ③).
+const BAG_ICON: float = 26.0
+## A key or row pressed sinks this far and its rim lights (결정 561 ④).
+const PRESS_SINK: float = 1.5
+## A one-press key's buzz on the way down, very short (결정 561 ④, the system
+## key-click's length); the hold keys have their own at the full hold.
+const TAP_BUZZ_MS: int = 10
+## Painted art (결정 550·561 ①: the baked 3D pictures, 256 px) is at least this
+## wide: drawn smooth from its mipmaps at ART, not snapped like pixel art.
+const PAINTED_MIN_PX: int = 128
+## Things that share another's picture (the same model would be baked twice).
+const ART_ALIAS: Dictionary = {
+	"rusk": "hardtack", "can_dented_bad": "can_dented", "peas": "oats", "flour": "oats",
+	"jar_cabbage": "jar_jam", "jar_honey": "jar_jam", "fever_pills": "painkillers",
+	"junk_rag": "cloth", "info_timetable": "document", "info_telegraph": "document",
+}
 ## The places rail shows five keys at most, then scrolls, fading at its foot while
 ## more lie below (MORE_H); a short screen cuts it sooner.
 const RAIL_MAX: float = PLACE_H * 5.0 + 4.0 * 4.0
@@ -407,12 +424,23 @@ static func _key(word: String, cb: Callable, main: bool = false, w: float = KEY,
 	for state: String in ["normal", "hover", "focus"]:
 		b.add_theme_stylebox_override(state, _skin(fill, edge, 0.0))
 	for state: String in ["pressed", "hover_pressed"]:
-		b.add_theme_stylebox_override(state, _skin(fill.darkened(0.25), GlassPane.AMBER_L if main else GlassPane.INK2, UiFonts.px(1.0)))
+		b.add_theme_stylebox_override(state, _skin(fill.darkened(0.25), GlassPane.AMBER_L if main else GlassPane.INK, UiFonts.px(PRESS_SINK)))
 	b.add_theme_stylebox_override("disabled", _skin(Color(fill, fill.a * 0.5), Color(edge, edge.a * 0.4), 0.0))
 	_hide_text(b)
+	_press_feel(b)
 	if cb.is_valid():
 		b.pressed.connect(cb)
 	return b
+
+
+## Pressed, a one-press key buzzes very short; a hold key (its "Hold" child) keeps
+## its buzz for the full hold (결정 561 ④). Its marks and words sink PRESS_SINK with
+## its face (GlassPane.sinks, laid with them), as its pressed stylebox moves the face.
+static func _press_feel(b: Button) -> void:
+	b.button_down.connect(func() -> void:
+		if b.get_node_or_null("Hold") == null:
+			Input.vibrate_handheld(TAP_BUZZ_MS)
+			b.set_meta("tap_buzz", int(b.get_meta("tap_buzz", 0)) + 1))
 
 
 static func _skin(fill: Color, edge: Color, sink: float) -> StyleBoxFlat:
@@ -432,7 +460,7 @@ static func _key_icon(hud, key: Button, icon: String, css: float, ink: Color, dy
 	key.add_child(mark)
 	mark.size = Vector2.ONE * UiFonts.size(css)
 	mark.position = (key.custom_minimum_size - mark.size) * 0.5 + Vector2(0, UiFonts.px(dy))
-	GlassPane.sinks(key, mark)
+	GlassPane.sinks(key, mark, PRESS_SINK)
 	return mark
 
 
@@ -446,7 +474,7 @@ static func _key_word(key: Button, word: String, top: float, ink: Color, css: fl
 	key.add_child(label)
 	label.position = Vector2(UiFonts.px(2.0), UiFonts.px(top))
 	label.size = Vector2(key.custom_minimum_size.x - UiFonts.px(4.0), UiFonts.px(css * 1.3))
-	GlassPane.sinks(key, label)
+	GlassPane.sinks(key, label, PRESS_SINK)
 	return label
 
 
@@ -461,7 +489,7 @@ static func _hide_text(b: Button) -> void:
 
 ## A column's head, 52 high: its mark, name and weight (a bar under them while
 ## the place has a limit), the sort key at its right end (away from the weapons).
-static func _head(hud, prefix: String, icon: String, title: String, side: String, frac: float, ink: Color, bar_ink: Color) -> Control:
+static func _head(hud, prefix: String, icon: String, title: String, side: String, frac: float, ink: Color, bar_ink: Color, icon_css: float = HEAD_ICON) -> Control:
 	var head := GlassPane.row()
 	head.name = prefix + "Head"
 	head.add_theme_constant_override("separation", GlassPane.px(6.0))
@@ -471,7 +499,7 @@ static func _head(hud, prefix: String, icon: String, title: String, side: String
 	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var line := GlassPane.row()
 	line.add_theme_constant_override("separation", GlassPane.px(7.0))
-	line.add_child(GlassPane.mark(icon, HEAD_ICON, GlassPane.INK2))
+	line.add_child(GlassPane.mark(icon, icon_css, GlassPane.INK2))
 	var name_l := _label(title, 15.0, GlassPane.INK)
 	name_l.name = "Title" if prefix == "Place" else prefix + "Title"
 	UiFonts.style(name_l, UiFonts.WORD, 500, 15.0, GlassPane.INK, 1.2)
@@ -489,7 +517,7 @@ static func _head(hud, prefix: String, icon: String, title: String, side: String
 	head.add_child(words)
 	var sort := _key("이름순" if hud.inv_sort == "name" else "무게순", hud._inv_sort)
 	sort.name = prefix + "Sort"
-	_key_icon(hud, sort, "scale", 24.0, GlassPane.INK2)
+	_key_icon(hud, sort, "weight", 24.0, GlassPane.INK2)
 	head.add_child(sort)
 	return head
 
@@ -610,7 +638,7 @@ static func _weapon_numbers(hud, id: String) -> Control:
 	var row := GlassPane.row()
 	row.name = "WeaponStats"
 	row.add_theme_constant_override("separation", GlassPane.px(6.0))
-	for pair: Array in [["clock", seconds_word(attack_seconds(id)) + "초", "WeaponSpeed"], ["scale", "%.1f" % float(W.get_data(id).get("weight", 0.0)), "WeaponWeight"]]:
+	for pair: Array in [["clock", seconds_word(attack_seconds(id)) + "초", "WeaponSpeed"], ["weight", "%.1f" % float(W.get_data(id).get("weight", 0.0)), "WeaponWeight"]]:
 		row.add_child(hud._icon_rect(String(pair[0]), UiFonts.size(15.0), GlassPane.INK2))
 		var number := UiFonts.label(String(pair[1]), UiFonts.NUMBER, 500, 15.0, GlassPane.INK)
 		number.name = String(pair[2])
@@ -638,7 +666,7 @@ static func _worn(hud, p) -> Array:
 	strip.offset_left = UiFonts.px(6.0)
 	strip.offset_right = -UiFonts.px(6.0)
 	fold.add_child(strip)
-	GlassPane.sinks(fold, strip)
+	GlassPane.sinks(fold, strip, PRESS_SINK)
 	for slot: String in Wear.SLOTS:
 		var id: String = String(ids[slot])
 		if id == "":
@@ -699,7 +727,7 @@ static func _bag_strip(hud, p) -> Button:
 	var words := _column()
 	words.alignment = BoxContainer.ALIGNMENT_CENTER
 	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	words.add_child(GlassPane.mark("pack", 20.0, GlassPane.INK2))
+	words.add_child(GlassPane.mark("pack", BAG_ICON, GlassPane.INK2))
 	var weight := _number("%.1f" % p.weight(), 13.0, carry_ink(p.carry_state()))
 	weight.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	words.add_child(weight)
@@ -711,7 +739,7 @@ static func _bag_strip(hud, p) -> Button:
 	bar.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_child(bar)
 	strip.add_child(row)
-	GlassPane.sinks(strip, row)
+	GlassPane.sinks(strip, row, PRESS_SINK)
 	return strip
 
 
@@ -724,7 +752,7 @@ static func _bag_side(hud, p, at: Dictionary) -> VBoxContainer:
 	col.name = "BagSide"
 	col.custom_minimum_size.x = whole(COL_W)
 	var state: int = p.carry_state()
-	var head := _head(hud, "Bag", "pack", String(Carry.BAGS[p.bag]["name"]), "%.1f / %.0f" % [p.weight(), p.carry_limit()], p.weight() / maxf(p.carry_limit(), 0.001), carry_ink(state), carry_bar(state))
+	var head := _head(hud, "Bag", "pack", String(Carry.BAGS[p.bag]["name"]), "%.1f / %.0f" % [p.weight(), p.carry_limit()], p.weight() / maxf(p.carry_limit(), 0.001), carry_ink(state), carry_bar(state), BAG_ICON)
 	var load_l: Label = head.find_child("BagLoad", true, false) as Label
 	load_l.tooltip_text = "%.1f / %.0f · %s" % [p.weight(), p.carry_limit(), Carry.STATE_NAMES[state]]
 	col.add_child(head)
@@ -791,8 +819,9 @@ static func _bag_more(hud, p, id: String, at: Dictionary, can_move: bool) -> Con
 		throw.add_child(word)
 		word.position = Vector2(UiFonts.px(42.0), UiFonts.px(16.0))
 		word.size = Vector2(UiFonts.px(54.0), UiFonts.px(20.0))
-		GlassPane.sinks(throw, word)
-		HoldConfirm.attach(throw, hud._throw.bind(id))
+		GlassPane.sinks(throw, word, PRESS_SINK)
+		# The hold's line and flash keep to the pressed face (결정 561 ④).
+		GlassPane.sinks(throw, HoldConfirm.attach(throw, hud._throw.bind(id, hud.pane_era)), PRESS_SINK)
 		keys.add_child(throw)
 	else:
 		# 결정 559: only loading everything is held; this move stays one press.
@@ -823,7 +852,7 @@ static func _more(id: String, weight: float, n: int) -> Control:
 	facts.add_theme_constant_override("separation", GlassPane.px(4.0))
 	facts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	facts.add_child(_gap(4.0))
-	facts.add_child(GlassPane.mark("scale", 11.0, GlassPane.INK3))
+	facts.add_child(GlassPane.mark("weight", 11.0, GlassPane.INK3))
 	facts.add_child(_number("%.1f" % weight, 13.0, GlassPane.INK2))
 	facts.add_child(_gap(4.0))
 	facts.add_child(_number("×%d" % n, 13.0, GlassPane.INK2))
@@ -996,11 +1025,15 @@ static func _row(hud, id: String, word: String, n: int, weight: float, cb: Calla
 	for state: String in ["normal", "hover", "focus"]:
 		b.add_theme_stylebox_override(state, _skin(Color(BONE, 0.08) if open else GlassPane.CELL, edge, 0.0))
 	for state: String in ["pressed", "hover_pressed"]:
-		b.add_theme_stylebox_override(state, _skin(Color(BONE, 0.07), BONE, UiFonts.px(1.0)))
+		b.add_theme_stylebox_override(state, _skin(Color(BONE, 0.07), GlassPane.INK, UiFonts.px(PRESS_SINK)))
 	b.add_theme_stylebox_override("disabled", _skin(Color(0, 0, 0, 0.12), Color(GlassPane.HAIR, 0.5), 0.0))
 	if dim and side == "bag":
-		for state: String in ["normal", "hover", "focus", "pressed", "hover_pressed"]:
+		# Dim, it still opens on a long press: its face sinks with its line.
+		for state: String in ["normal", "hover", "focus"]:
 			b.add_theme_stylebox_override(state, b.get_theme_stylebox("disabled"))
+		for state: String in ["pressed", "hover_pressed"]:
+			b.add_theme_stylebox_override(state, _skin(Color(0, 0, 0, 0.12), Color(GlassPane.HAIR, 0.5), UiFonts.px(PRESS_SINK)))
+	_press_feel(b)
 	var row := GlassPane.row()
 	row.name = "Line"
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1024,7 +1057,7 @@ static func _row(hud, id: String, word: String, n: int, weight: float, cb: Calla
 	if dim:
 		row.modulate = Color(1, 1, 1, 0.5)
 	b.add_child(row)
-	GlassPane.sinks(b, row)
+	GlassPane.sinks(b, row, PRESS_SINK)
 	if cb.is_valid() and not dim:
 		b.pressed.connect(func() -> void:
 			if bool(b.get_meta("held_long", false)) or bool(b.get_meta("dragged", false)):
@@ -1065,12 +1098,13 @@ static func _long_press(hud, b: Button, side: String, id: String, i: int) -> voi
 				b.set_meta("dragged", true))
 
 
-## Optional 32-pixel art uses whole multiples in screen pixels, not canvas units.
+## The thing's art: the baked painted picture (결정 550·561, 256 px) is drawn
+## smooth at ART; small pixel art (32 px) uses whole multiples in screen pixels;
+## with neither, the line icon.
 static func _item_icon(hud, id: String) -> Control:
 	var texture: Texture2D = hud.item_px_override.get(id) as Texture2D
-	var path: String = "res://assets/icons/items/%s.png" % id
-	if texture == null and ResourceLoader.exists(path):
-		texture = load(path) as Texture2D
+	if texture == null:
+		texture = art_texture(id)
 	if texture == null:
 		var line := TextureRect.new()
 		line.name = "ItemIcon"
@@ -1088,6 +1122,18 @@ static func _item_icon(hud, id: String) -> Control:
 	var art := TextureRect.new()
 	art.name = "ItemIcon"
 	art.texture = texture
+	if is_painted(texture):
+		art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		art.custom_minimum_size = Vector2.ONE * UiFonts.px(ART)
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var painted_slot := CenterContainer.new()
+		painted_slot.name = "ItemSlot"
+		painted_slot.custom_minimum_size = Vector2.ONE * UiFonts.px(ART)
+		painted_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		painted_slot.add_child(art)
+		return painted_slot
 	art.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art.stretch_mode = TextureRect.STRETCH_SCALE
@@ -1112,6 +1158,21 @@ static func _item_icon(hud, id: String) -> Control:
 		if screen.size_changed.is_connected(fit):
 			screen.size_changed.disconnect(fit))
 	return slot
+
+
+## The thing's baked picture (res://assets/icons/items/<id>.png, or the one it
+## shares, ART_ALIAS), null without one.
+static func art_texture(id: String) -> Texture2D:
+	for name: String in [id, String(ART_ALIAS.get(id, ""))]:
+		var path: String = "res://assets/icons/items/%s.png" % name
+		if name != "" and ResourceLoader.exists(path):
+			return load(path) as Texture2D
+	return null
+
+
+## Painted art, not pixel art: wide enough to be shrunk smooth.
+static func is_painted(texture: Texture2D) -> bool:
+	return texture != null and texture.get_width() >= PAINTED_MIN_PX
 
 
 ## From the art's canvas to the device's pixels: the window's stretch times the
@@ -1205,10 +1266,15 @@ static func _place_key(hud, icon: String, word: String, on: bool, empty: bool, c
 	b.set_meta("place_kind", place["kind"])
 	b.set_meta("place_id", place["id"])
 	b.set_meta("selected", on)
-	var sb := _skin(Color(BONE, 0.08) if on else GlassPane.CELL, BONE if on else GlassPane.HAIR, 0.0)
-	for state: String in ["normal", "hover", "pressed", "hover_pressed", "focus", "disabled"]:
+	var fill: Color = Color(BONE, 0.08) if on else GlassPane.CELL
+	var sb := _skin(fill, BONE if on else GlassPane.HAIR, 0.0)
+	for state: String in ["normal", "hover", "focus", "disabled"]:
 		b.add_theme_stylebox_override(state, sb)
+	# Pressed, it sinks and its rim lights as the pane's other keys (결정 561 ④).
+	for state: String in ["pressed", "hover_pressed"]:
+		b.add_theme_stylebox_override(state, _skin(fill.darkened(0.25), GlassPane.INK, UiFonts.px(PRESS_SINK)))
 	_hide_text(b)
+	_press_feel(b)
 	var col := _column(1.0)
 	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1223,6 +1289,7 @@ static func _place_key(hud, icon: String, word: String, on: bool, empty: bool, c
 	else:
 		col.add_child(label)
 	b.add_child(col)
+	GlassPane.sinks(b, col, PRESS_SINK)
 	b.pressed.connect(cb)
 	return b
 
@@ -1317,7 +1384,7 @@ static func _main_key(hud, p, at: Dictionary) -> Button:
 		load_key.name = "MainKey"
 		_key_icon(hud, load_key, "train", 24.0, GlassPane.AMBER_L, -9.0)
 		_key_word(load_key, "싣기", 40.0, GlassPane.AMBER_L, 12.0)
-		HoldConfirm.attach(load_key, hud._load_train)
+		GlassPane.sinks(load_key, HoldConfirm.attach(load_key, hud._load_train.bind(hud.pane_era)), PRESS_SINK)
 		return load_key
 	return null
 

@@ -61,6 +61,9 @@ const PATHS: Dictionary = {
 	"papers": '<path class="t" d="M7.500 3.500h8L19 7v11H7.500z"/><path d="M7.500 3.500h8L19 7v11H7.500z"/><path d="M15.500 3.500V7H19M10.500 10.500H16M10.500 14H16"/><path d="M4.500 7.500v13H15"/>',
 	"numbers": '<path d="M5 20V11M10 20V5M15 20v-7M20 20v-4"/>',
 	"scale": '<path class="t" d="M4 11h16v9.500H4z"/><path d="M4 11h16v9.500H4z"/><path d="M8.500 11V3.500h7V11M8.500 14.500h7M11 6.500h2"/>',
+	# A weight with a ring on top (결정 561 ②: the bag pane's weight sort, a row's and
+	# a weapon's weight). The train's home bar keeps "scale" for its 정치 key.
+	"weight": '<path class="t" d="M9 10h6l6 11H3z"/><path d="M9 10h6l6 11H3z"/><circle cx="12" cy="6.2" r="3"/>',
 	"bed": '<path d="M3 6v13M3 15.500h18V19M7.500 15.500V12H19c1.100 0 2 .9 2 2v1.500"/><circle cx="5.300" cy="11.500" r="1.600"/>',
 	"gear": '<path d="M19.48 13.32 22.07 14.60 20.96 17.28 18.23 16.36 16.36 18.23 17.28 20.96 14.60 22.07 13.32 19.48 10.68 19.48 9.40 22.07 6.72 20.96 7.64 18.23 5.77 16.36 3.04 17.28 1.93 14.60 4.52 13.32 4.52 10.68 1.93 9.40 3.04 6.72 5.77 7.64 7.64 5.77 6.72 3.04 9.40 1.93 10.68 4.52 13.32 4.52 14.60 1.93 17.28 3.04 16.36 5.77 18.23 7.64 20.96 6.72 22.07 9.40 19.48 10.68z"/><circle cx="12" cy="12" r="3.2"/>',
 	"wrench": '<path class="t" d="M14 6a4 4 0 0 0 5 5l-9 9-3-3 9-9"/><path d="M14 6a4 4 0 0 0 5 5l-9 9-3-3 9-9"/><path d="M14 6l3 1 1 3"/>',
