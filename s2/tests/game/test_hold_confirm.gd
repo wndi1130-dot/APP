@@ -104,9 +104,14 @@ func test_a_key_given_a_hold_works_only_when_held_full() -> void:
 	assert_eq(int(worked[0]), 0, "let go at half: nothing")
 	assert_eq(float(hold.state["fill"]), 0.0, "wound back")
 	key.button_down.emit()
-	for _i in range(int(ceil(HoldConfirm.HOLD_S / STEP)) + 2):
+	for _i in range(int(ceil(HoldConfirm.HOLD_S / STEP)) + 1):
 		hold.advance(STEP)
-	assert_eq(int(worked[0]), 1, "held full: the work, once")
+	assert_gt(float(hold.flash), 0.0, "full: the face flashes first (결정 561 ④)")
+	assert_eq(int(worked[0]), 0, "the work waits for the flash")
+	for _i in range(int(ceil(HoldConfirm.FLASH_S / STEP)) + 2):
+		hold.advance(STEP)
+	assert_eq(float(hold.flash), 0.0)
+	assert_eq(int(worked[0]), 1, "held full: the work, once, as the flash ends")
 	key.button_up.emit()
 	hold.advance(STEP)
 	assert_eq(float(hold.state["fill"]), 0.0)

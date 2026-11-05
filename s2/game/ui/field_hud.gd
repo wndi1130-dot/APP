@@ -456,6 +456,8 @@ var inv_scroll_pending: Dictionary = {}
 const BAG_SCROLLS: Array[String] = ["BagScroll", "NearScroll", "PlaceScroll", "JournalScroll"]
 ## Optional item art supplied locally; an empty entry falls back to the resource path.
 var item_px_override: Dictionary = {}
+## The field bag key's pack (결정 561 ③: 1.3 times the old 30).
+const BAG_KEY_ICON_PX: int = 39
 ## The places the bag pane listed when it was laid (InventoryPane.place_keys):
 ## changes to nearby places refresh it even though its stick sleeps (532).
 var bag_places: Array = []
@@ -1367,7 +1369,8 @@ func _build_thumbs() -> void:
 	# 시안 .finv: the mark 15, the weight in Barlow 14.
 	bag_button = _button("0.0/8", bag_panel, Vector2(124, 52), UiFonts.size(14))
 	bag_button.tooltip_text = "인벤토리"
-	_dress(bag_button, "pack", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 30)
+	# The pack 1.3 times its old 30 (결정 561 ③).
+	_dress(bag_button, "pack", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, BAG_KEY_ICON_PX)
 	# Plain glass like the orders and 모두 열차로: a key that is not lit wears no
 	# brass sweep (user 2026-10-25 on the phone: 「배낭 버튼 유광」).
 	_matte(bag_button)
