@@ -84,10 +84,15 @@ vec3 fx_pool_color(vec3 base, vec3 under, vec2 xz, float time, float ice, float 
 		rip = (1.0 - smoothstep(0.0, 0.06, abs(length(f) - t * 0.5))) * (1.0 - t) * rain;
 	}
 	vec3 water = mix(base * 0.35, sky * 0.62, 0.7) + rip * 0.12;
-	// The crack: where the noise crosses its middle, about a pixel and a half wide (no
-	// narrower than 0.04 of the noise), so it neither shimmers nor thickens into a ring.
-	float off = abs(fx_vnoise(xz * 3.3 + 11.0) * 2.0 - 1.0);
-	float crack = 1.0 - smoothstep(0.0, max(0.04, px * 3.3 * 3.0), off);
+	// The crack: where the noise crosses its middle, about one pixel wide and eased over
+	// half a pixel, so it neither shimmers nor swells into a band where the noise is flat.
+	// The noise's change over a pixel comes from two more reads a pixel (px) away; this
+	// runs only where a pool stands, inside a branch, so no screen derivative is taken.
+	float s0 = fx_vnoise(xz * 3.3 + 11.0) * 2.0 - 1.0;
+	float sx = fx_vnoise((xz + vec2(px, 0.0)) * 3.3 + 11.0) * 2.0 - 1.0;
+	float sz = fx_vnoise((xz + vec2(0.0, px)) * 3.3 + 11.0) * 2.0 - 1.0;
+	float ds = max(abs(sx - s0) + abs(sz - s0), 1e-4);
+	float crack = 1.0 - smoothstep(0.5 * ds, 1.5 * ds, abs(s0));
 	vec3 frozen = mix(under * 0.62, sky * 0.9, 0.25) * (0.94 + 0.06 * fx_vnoise(xz * 1.7));
 	frozen *= 1.0 - 0.12 * crack;
 	return mix(water, frozen, clamp(ice, 0.0, 1.0));
