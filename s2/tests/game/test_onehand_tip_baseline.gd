@@ -72,6 +72,17 @@ func test_measurement_gate_rejects_static_walk_and_wrong_space() -> void:
 		row["hand_world"] = _vector(ORIGIN + up_hand)
 		row["tip_world"] = _vector(ORIGIN + up_hand + Vector3(0.0, 0.0, 0.3))
 	assert_true(bool(_measurement_checks(raised, 0.4, "single_air")["valid"]), "머리 위로 든 손은 유효")
+	var too_high: Array[Dictionary] = rows.duplicate(true)
+	for row: Dictionary in too_high:
+		var high_hand: Vector3 = _point(row, "hand_body") + Vector3(0.0, 3.0, 0.0)
+		row["hand_body"] = _vector(high_hand)
+		row["hand_world"] = _vector(ORIGIN + high_hand)
+		row["tip_world"] = _vector(ORIGIN + high_hand + Vector3(0.0, 0.0, 0.3))
+	checks = _measurement_checks(too_high, 0.4, "single_air")
+	assert_false(bool(checks["valid"]), "높이만 범위를 벗어나도 출력 차단")
+	assert_eq(int(checks["hand_origin_outside_frames"]), 2, "높이 초과 장 수")
+	assert_eq(int(checks["hand_tip_outside_frames"]), 0, "손과 끝 거리는 정상인 음성 대조")
+	assert_lte(float(checks["max_hand_origin_distance_m"]), HAND_ORIGIN_LIMIT_M, "바닥 방향 거리는 정상인 음성 대조")
 
 
 func _measure(scene: String, fps: int) -> void:
@@ -409,6 +420,8 @@ func _measurement_checks(rows: Array[Dictionary], length_m: float, scene: String
 
 
 func _assert_measurement(checks: Dictionary, label: String) -> bool:
+	assert_true(checks["valid"] == true, label + " 측정 전체 유효")
+	assert_eq(int(checks["hand_origin_outside_frames"]), 0, label + " 손 높이와 바닥 방향 거리 초과 장 없음")
 	assert_true(bool(checks["finite"]), label + " 유한한 좌표")
 	for attack: Dictionary in checks["attacks"]:
 		var attack_label: String = label + " 공격 " + str(attack["attack"])

@@ -225,6 +225,8 @@ const ELBOW_SPARE: float = 0.02
 const FOREARM: float = 0.32
 const GRIP_TAU: float = 0.0480898347     # Half the remaining angle in 1/30 second.
 const WRIST_DOWN: float = 38.0 * PI / 180.0
+const WRIST_REPLAY_HZ: float = 120.0
+const WRIST_REPLAY_MAX_STEPS: int = 2048
 const FRAME_MAX: float = 0.1            # Shared with the field's rule clock.
 const OWN_MIX_TIME: float = 0.35
 # The own shove's arms are back at 0.3 of it and out at 0.4 (body_bake.gd p_shove):
@@ -471,12 +473,55 @@ func _process(delta: float) -> void:
 				mm.set_instance_color(n, hands_colour(p))
 			d["n"] = n + 1
 		var baked: Dictionary = b_own if own else b_vat
+		var was_recovery: bool = bool(note.get("wrist_recovery", false))
+		note["wrist_recovery"] = false
 		if baked.has("arm") and (not gun_busy(p) or (own and loading(note, b_own.get("clips", [])))):
 			var hand := arm_at(baked["arm"], b_own_frames if own else b_frames, drawn)
 			var wrist: float = drawn_wrist_weight(b_own.get("clips", []), b_own_frames, drawn) if own else 0.0
-			var grip: Basis = grip_of(hand[0], hand[1], note.get("grip", Basis()), delta, note.has("grip"), wrist)
-			note["grip"] = grip
+			wrist = wrist_for_weapon(p, wrist)
+			var eligible: bool = wrist_for_weapon(p, 1.0) > 0.0
+			var recovery: bool = eligible and own and drawn_wrist_recovery(b_own.get("clips", []), b_own_frames, drawn)
+			# Bound the transition out as well: packing rounds the last held share to zero.
+			var limited: bool = eligible and (recovery or was_recovery)
+			# Leave 0.001 degree per 1/30 s for float32 basis composition/orthonormalization.
+			# The displayed contract remains <= 45 degrees, including at 60 fps.
+			var budget: float = deg_to_rad(45.0 - 0.001) * 30.0 * maxf(delta, 0.0) if limited else INF
 			var lean := lean_of(p, note)
+			var previous_grip: Basis = note.get("grip", Basis())
+			if limited and note.has("grip"):
+				# Express the last displayed orientation in this frame's lean space,
+				# so the budget includes the body's lean as well as wrist and roll.
+				previous_grip = (lean.transposed() * p.weapon_mesh.basis).orthonormalized()
+			var replay: Dictionary = {}
+			if eligible and own:
+				var clip: int = DeadBody.motion_in(drawn.g)
+				var context: Dictionary = _onehand_clock(p, String(b_own["clips"][clip]["name"])) if clip >= 0 and clip < b_own["clips"].size() else {}
+				if not context.is_empty():
+					var cache: Dictionary = note.get_or_add("wrist_replay", {})
+					replay = onehand_replay_at(baked["arm"], b_own_frames, clip, context["clock"],
+						float(context["age"]), cache, int(baked["mesh"].get_instance_id()))
+			var packed: float = fposmod(floorf(drawn.g + 0.5), VatBaker.UPPER)
+			var unmixed: bool = floorf(packed / 65536.0) <= 0.0
+			var phase_matches: bool = bool(replay.get("valid", false)) and absf(float(replay["phase"]) - drawn.r) <= 0.00001
+			var use_replay: bool = phase_matches and unmixed
+			note["wrist_replay_used"] = use_replay
+			note["wrist_replay_error"] = String(replay.get("reason", ""))
+			if bool(replay.get("valid", false)) and unmixed and not phase_matches:
+				note["wrist_replay_error"] = "phase_mismatch"
+			var grip: Basis
+			if use_replay:
+				grip = replay["grip"]
+				if limited and note.has("grip"):
+					# A completed body blend can join a reconstructed trajectory.
+					# This is a geometric budget, without another time filter.
+					var span: float = previous_grip.get_rotation_quaternion().angle_to(grip.get_rotation_quaternion())
+					if span > budget and span > 0.0:
+						grip = previous_grip.slerp(grip, budget / span)
+			else:
+				grip = grip_of(hand[0], hand[1], previous_grip, delta, note.has("grip"), wrist, budget, 1.0)
+			note["grip"] = grip
+			# A zero-time draw must not consume the one exit step waiting to be drawn.
+			note["wrist_recovery"] = recovery or (limited and delta <= 0.0)
 			p.weapon_mesh.transform = Transform3D(lean * grip, lean * hand[0])
 		elif baked.has("arm") and own and aiming(note, b_own.get("clips", [])):
 			# The gun in the hand held out, the muzzle ahead, kicking back as it fires
@@ -1366,14 +1411,15 @@ static func grip_target(hand: Vector3, elbow: Vector3, fallback: Basis = Basis()
 	var f := (hand - elbow).normalized()
 	if f == Vector3.ZERO:
 		return fallback
-	var a := f.cross(Vector3.RIGHT)
-	var b := f.cross(Vector3.UP)
-	if a.dot(b) < 0.0:
-		b = -b
-	var z := a.lerp(b, clampf((absf(f.x) - 0.6) / 0.35, 0.0, 1.0)).normalized()
-	var x := (Vector3.RIGHT - z * Vector3.RIGHT.dot(z)).normalized()
-	if x == Vector3.ZERO:
-		x = f
+	# Project one reference axis instead of changing a second axis's sign at f.y=0.
+	# Carry the previous transverse axis only when the reference is parallel.
+	var x: Vector3 = Vector3.RIGHT.slide(f)
+	if x.length_squared() < 0.000000000001:
+		x = fallback.x.slide(f)
+		if x.length_squared() < 0.000000000001:
+			x = fallback.z.slide(f)
+	x = x.normalized()
+	var z: Vector3 = f.cross(x).normalized()
 	return Basis(x, z.cross(x), z).orthonormalized()
 
 
@@ -1386,17 +1432,29 @@ static func wrist_correction(want: Basis, weight: float) -> float:
 	return clampf(weight, 0.0, 1.0) * maxf(0.0, WRIST_DOWN - grip_down_angle(want))
 
 
-## Measure and rotate in the same body space. The grip's local X can point
-## the other way after the forearm passes vertical, even with positive correction.
+## Continue azimuth through the up pole using the whole grip rotation.
+## The pole contribution vanishes quadratically with the correction, including
+## at weight zero; elevation still follows the original requested amount exactly.
 static func wrist_target(want: Basis, weight: float) -> Basis:
 	var angle: float = wrist_correction(want, weight)
 	if angle <= 0.0:
 		return want
-	var axis: Vector3 = Vector3.UP.cross(want.z)
-	if axis.length_squared() < 0.000000000001:
-		# At the vertical pole the fist supplies the otherwise undefined azimuth.
-		axis = want.x.slide(Vector3.UP)
-	return Basis(axis.normalized(), angle) * want
+	var rotation: Quaternion = want.get_rotation_quaternion()
+	var confidence: float = rotation.w * rotation.w + rotation.y * rotation.y
+	var anchor: float = 2.0 * atan2(rotation.y, rotation.w)
+	var horizontal: Vector3 = want.z.slide(Vector3.UP)
+	var heading: float = atan2(horizontal.x, horizontal.z)
+	# This chart crosses the vertical through a shared side, rather than choosing
+	# opposite shortest arcs independently on the two sides of the pole.
+	var offset: float = fposmod(heading - anchor + PI / 2.0, TAU) - PI / 2.0
+	# A vanishing vertical twist cannot supply a heading; fade its contribution
+	# instead of switching to a different transverse axis.
+	var amount: float = (1.0 - cos(angle)) * confidence
+	var influence: float = amount / maxf(0.000000000001, amount + horizontal.length_squared())
+	var yaw: float = anchor + offset * (1.0 - influence)
+	var down: float = grip_down_angle(want) + angle
+	var z: Vector3 = Vector3(sin(yaw) * cos(down), -sin(down), cos(yaw) * cos(down))
+	return (Basis(Quaternion(want.z.normalized(), z.normalized())) * want).orthonormalized()
 
 
 static func wrist_weight(way: String, phase: float) -> float:
@@ -1406,14 +1464,55 @@ static func wrist_weight(way: String, phase: float) -> float:
 	if phase <= hit or phase >= Pose.SWING_GUARD_PHASE:
 		return 0.0
 	var follow: float = lerpf(hit, Pose.SWING_GUARD_PHASE, Pose.RECOVER_FOLLOW_SHARE)
+	# Reach the target before the measured tip minimum; the one grip filter
+	# still has to settle after the target reaches its plateau.
+	var rise_end: float = lerpf(hit, follow, 0.2)
 	var sag: float = lerpf(hit, Pose.SWING_GUARD_PHASE, Pose.RECOVER_SAG_SHARE)
-	if phase < follow:
-		return smoothstep(hit, follow, phase)
+	if phase < rise_end:
+		var u: float = clampf((phase - hit) / (rise_end - hit), 0.0, 1.0)
+		return u * u * u * (10.0 + u * (-15.0 + 6.0 * u))
 	return 1.0 - smoothstep(sag, Pose.SWING_GUARD_PHASE, phase)
 
 
+static func wrist_for_weapon(p, weight: float) -> float:
+	var wid: String = p.weapon_id()
+	var weapon: Dictionary = Pose.W.get_data(wid)
+	if weapon.is_empty() or String(weapon.get("kind", "")) != "melee" or Pose.hold_of(wid) != "" or int(weapon.get("hands", 1)) != 1:
+		return 0.0
+	return weight
+
+
+static func _wrist_recovering(way: String, phase: float) -> bool:
+	if way == "p_swing_one":
+		return phase + 0.000001 >= Pose.SWING_ONE_HIT
+	if way == "p_swing_back":
+		return phase + 0.000001 >= Pose.SWING_BACK_HIT
+	return false
+
+
+## Include the held recovery row through walking, lowering and chain blends.
+## This is read from the displayed packing, without remembering an attack name.
+static func drawn_wrist_recovery(clips: Array, tab: Array, drawn: Color) -> bool:
+	var motion: int = DeadBody.motion_in(drawn.g)
+	if motion < 0 or motion >= clips.size() or motion >= tab.size():
+		return false
+	if _wrist_recovering(String(clips[motion]["name"]), drawn.r):
+		return true
+	var packed: float = fposmod(floorf(drawn.g + 0.5), VatBaker.UPPER)
+	var share: float = floorf(packed / 65536.0)
+	if share <= 0.0:
+		return false
+	var kept: int = int(floorf((packed - share * 65536.0) / 16.0))
+	for i: int in mini(tab.size(), clips.size()):
+		var first: int = int(tab[i][0])
+		var count: int = int(tab[i][1])
+		if kept >= first and kept < first + count:
+			return _wrist_recovering(String(clips[i]["name"]), float(kept - first) / float(maxi(1, count - 1)))
+	return false
+
+
 ## Read the final shader packing, after guard-lowering cuts have chosen the held row.
-## Both corrections use the same blended arm target, so blending their weights is exact.
+## The two source weights use the same blended arm target and the displayed share.
 static func drawn_wrist_weight(clips: Array, tab: Array, drawn: Color) -> float:
 	var motion: int = DeadBody.motion_in(drawn.g)
 	if motion < 0 or motion >= clips.size() or motion >= tab.size():
@@ -1434,49 +1533,69 @@ static func drawn_wrist_weight(clips: Array, tab: Array, drawn: Color) -> float:
 	return weight
 
 
-## A shortest 3D rotation can pass below both endpoint elevations when their
-## headings oppose. Keep ordinary slerp when it stays between the endpoints;
-## otherwise interpolate elevation, heading and roll with the same time share.
-static func wrist_follow(was: Basis, want: Basis, share: float) -> Basis:
+## Follow one quaternion path. Only the excess elevation is projected back;
+## crossing the elevation bound therefore starts with a zero correction.
+## Strength fades this projection continuously with the drawing's wrist weight.
+static func wrist_follow(was: Basis, want: Basis, share: float, strength: float = 1.0) -> Basis:
 	if share <= 0.0:
 		return was
 	if share >= 1.0:
 		return want
 	var mixed: Basis = was.slerp(want, share)
+	return _wrist_bound(was, want, mixed, share, strength)
+
+
+static func _wrist_bound(was: Basis, want: Basis, mixed: Basis, share: float, strength: float) -> Basis:
 	var before: float = grip_down_angle(was)
 	var after: float = grip_down_angle(want)
 	var down: float = grip_down_angle(mixed)
-	if down >= minf(before, after) and down <= maxf(before, after):
+	var bounded: float = clampf(down, minf(before, after), maxf(before, after))
+	var correction: float = (bounded - down) * clampf(strength, 0.0, 1.0)
+	if absf(correction) <= 0.000000000001:
 		return mixed
-	var a: Vector3 = _wrist_angles(was)
-	var b: Vector3 = _wrist_angles(want)
-	var elevation: float = lerpf(a.x, b.x, share)
-	var yaw_step: float = angle_difference(a.y, b.y) * share
-	# The longer route around the vertical must not turn the weapon axis further
-	# in this frame than the original filter would. This adds no second clock.
-	var span: float = cos(a.x) * cos(elevation)
-	if span > 0.000000000001:
-		var step_cos: float = was.z.normalized().dot(mixed.z.normalized())
-		var yaw_limit: float = acos(clampf((step_cos - sin(a.x) * sin(elevation)) / span, -1.0, 1.0))
-		yaw_step = clampf(yaw_step, -yaw_limit, yaw_limit)
-	return (
-		Basis(Vector3.UP, a.y + yaw_step)
-		* Basis(Vector3.RIGHT, elevation)
-		* Basis(Vector3.BACK, lerp_angle(a.z, b.z, share))
-	)
+	var a: float = atan2(was.z.x, was.z.z)
+	var b: float = atan2(want.z.x, want.z.z)
+	var turn: Quaternion = (want * was.transposed()).get_rotation_quaternion()
+	if turn.w < 0.0:
+		turn = -turn
+	var twist: float = 2.0 * atan2(turn.y, turn.w)
+	var heading_step: float = angle_difference(a, b)
+	heading_step += TAU * roundf((twist - heading_step) / TAU)
+	var yaw: float = a + heading_step * share
+	var guide: Vector3 = Vector3(sin(yaw), 0.0, cos(yaw))
+	# The guide remains defined when the quaternion path itself reaches a pole.
+	var horizontal: Vector3 = mixed.z.slide(Vector3.UP) + guide * sin(absf(correction))
+	if horizontal.length_squared() < 0.000000000001:
+		horizontal = guide
+	var elevation: float = down + correction
+	var z: Vector3 = horizontal.normalized() * cos(elevation) - Vector3.UP * sin(elevation)
+	return (Basis(Quaternion(mixed.z.normalized(), z.normalized())) * mixed).orthonormalized()
 
 
-## Elevation is independent of heading and roll in this order of rotations.
-static func _wrist_angles(grip: Basis) -> Vector3:
-	var down: float = grip_down_angle(grip)
-	var heading: float = atan2(grip.z.x, grip.z.z)
-	var level: Basis = Basis(Vector3.UP, heading) * Basis(Vector3.RIGHT, down)
-	var roll: float = atan2(grip.x.dot(level.y), grip.x.dot(level.x))
-	return Vector3(down, heading, roll)
+## Compensate the elevation lag in the target of the same filter. Its visible
+## elevation is still bounded by the original endpoints, not the lead target.
+static func _wrist_filter(was: Basis, want: Basis, share: float, weight: float, lead_gain: float) -> Basis:
+	var baseline: Basis = wrist_follow(was, want, share, weight)
+	if lead_gain <= 0.0 or weight <= 0.0:
+		return baseline
+	var after: float = grip_down_angle(want)
+	var lead: float = clampf(weight, 0.0, 1.0) * lead_gain * maxf(0.0, after - grip_down_angle(was))
+	lead = minf(lead, maxf(0.0, PI * 0.49 - after))
+	if lead <= 0.0:
+		return baseline
+	var input: Basis = want
+	if lead > 0.0:
+		var axis: Vector3 = Vector3.UP.cross(want.z)
+		if axis.length_squared() > 0.000000000001:
+			input = Basis(axis.normalized(), lead) * want
+	var filtered: Basis = wrist_follow(was, input, share, weight)
+	# Never add an overshoot beyond the ordinary filter and the original goal.
+	# At zero lead this interval already contains baseline, so it adds no gate.
+	return _wrist_bound(baseline, want, filtered, share, 1.0)
 
 
 ## Correct the target first, then follow it once on the drawing clock.
-static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.0 / 30.0, initialized: bool = true, wrist: float = 0.0) -> Basis:
+static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.0 / 30.0, initialized: bool = true, wrist: float = 0.0, rotation_budget: float = INF, lead_gain: float = 0.0) -> Basis:
 	if hand == elbow:
 		return was
 	var want: Basis = grip_target(hand, elbow, was)
@@ -1485,7 +1604,140 @@ static func grip_of(hand: Vector3, elbow: Vector3, was: Basis, delta: float = 1.
 		return want
 	var follow: float = 1.0 - exp(-maxf(delta, 0.0) / GRIP_TAU)
 	var previous: Basis = was.orthonormalized()
-	return wrist_follow(previous, want, follow) if wrist > 0.0 else previous.slerp(want, follow)
+	var result: Basis = _wrist_filter(previous, want, follow, wrist, lead_gain)
+	# Limit the one filter's interpolation parameter, not a second filtered pose.
+	# The caller supplies the post-contact budget through the guard and blend.
+	var before_q: Quaternion = previous.get_rotation_quaternion()
+	if before_q.angle_to(result.get_rotation_quaternion()) > rotation_budget:
+		var lo: float = 0.0
+		var hi: float = follow
+		for _step: int in 16:
+			var candidate: float = (lo + hi) * 0.5
+			var bounded: Basis = _wrist_filter(previous, want, candidate, wrist, lead_gain)
+			if before_q.angle_to(bounded.get_rotation_quaternion()) <= rotation_budget:
+				lo = candidate
+				result = bounded
+			else:
+				hi = candidate
+		if lo == 0.0:
+			return previous
+	return result
+
+
+## The current attack's saved rule clock, without reading visual history.
+static func _onehand_clock(p, way: String) -> Dictionary:
+	if way not in ["p_swing_one", "p_swing_back"] or String(p.get_meta(Pose.MODE, "swing")) != "swing":
+		return {}
+	var wind: float = float(p.strike_total)
+	if not is_finite(wind) or wind <= 0.0 or not is_finite(p.strike_t) or not is_finite(p.swing_t):
+		return {}
+	wind = maxf(0.01, wind)
+	var rest: float = float(p.get_meta(Pose.SWING, -1.0))
+	var age: float
+	if p.strike_t > 0.0:
+		var rate: float = float(p.mults()["swing"])
+		if not is_finite(rate) or rate <= 0.0:
+			return {}
+		rest = Pose.W.melee_recover(float(Pose.W.get_data(p.weapon_id())["swing"]) / rate, wind, Pose.W.melee_gap(p.weapon_id()))
+		age = maxf(0.0, wind - p.strike_t)
+	elif rest > 0.0 and p.swing_t > 0.0:
+		age = wind + rest - p.swing_t
+	else:
+		return {}
+	var duration: float = Pose.recovery_duration(p, rest)
+	var base: float = Pose.recover_seconds(p.weapon_id())
+	var hit: float = Pose.SWING_ONE_HIT if way == "p_swing_one" else Pose.SWING_BACK_HIT
+	var end: float = (Pose.SWING_GUARD_PHASE - hit) / (1.0 - hit) if duration > base else 1.0
+	return {"age": age, "clock": {"wind": wind, "duration": duration, "base": base,
+		"hit": hit, "end": end, "aim": float(OWN_BLOW_AIM.get(way, 0.0))}}
+
+
+static func _onehand_phase_at(clock: Dictionary, age: float) -> float:
+	var wind: float = float(clock["wind"])
+	var hit: float = float(clock["hit"])
+	if age <= wind:
+		return hit * clampf(age / wind, 0.0, 1.0)
+	var returned: float = Pose.recovery_phase(age - wind, float(clock["duration"]), float(clock["base"]), float(clock["end"]))
+	return lerpf(hit, 1.0, returned)
+
+
+static func _onehand_lean_at(clock: Dictionary, phase: float) -> Basis:
+	return Basis(Vector3.UP, float(clock["aim"]) * blow_aim_k(Vector3(phase, float(clock["hit"]), 1.0)))
+
+
+static func _onehand_replay_step(arm: PackedVector3Array, tab: Array, clip: int, clock: Dictionary, at: float, delta: float, before: Basis) -> Basis:
+	var drawn: Color = DeadBody.packed(Color(_onehand_phase_at(clock, at), 0.0, 1.0, 1.0), clip, 0, 0.0)
+	var hand: Array = arm_at(arm, tab, drawn)
+	var lean: Basis = _onehand_lean_at(clock, drawn.r)
+	var way: String = "p_swing_one" if float(clock["hit"]) == Pose.SWING_ONE_HIT else "p_swing_back"
+	var weight: float = wrist_weight(way, drawn.r)
+	var budget: float = deg_to_rad(45.0) * 30.0 * delta if at + 0.000000001 >= float(clock["wind"]) else INF
+	var grip: Basis = grip_of(hand[0], hand[1], (lean.transposed() * before).orthonormalized(), delta, true, weight, budget, 1.0)
+	return (lean * grip).orthonormalized()
+
+
+## One fixed time lattice is used both live and before a restored first draw.
+## Only full ticks are cached; a partial tick is evaluated without committing it.
+## The baked arm/table are immutable while their resource revision is unchanged.
+static func onehand_replay_at(arm: PackedVector3Array, tab: Array, clip: int, clock: Dictionary, age: float, cache: Dictionary, revision: int = 0) -> Dictionary:
+	for key: String in ["wind", "duration", "base", "hit", "end", "aim"]:
+		var value: Variant = clock.get(key)
+		if not (value is float or value is int) or not is_finite(float(value)):
+			return {"valid": false, "reason": "invalid_clock"}
+	if float(clock["wind"]) <= 0.0 or float(clock["duration"]) <= 0.0 or float(clock["base"]) <= 0.0 \
+			or float(clock["hit"]) not in [Pose.SWING_ONE_HIT, Pose.SWING_BACK_HIT] \
+			or float(clock["end"]) <= 0.0 or float(clock["end"]) > 1.0:
+		return {"valid": false, "reason": "invalid_clock"}
+	if not is_finite(age) or age < 0.0 or age > float(clock["wind"]) + float(clock["duration"]) + 0.000000001:
+		return {"valid": false, "reason": "invalid_age"}
+	if age > float(WRIST_REPLAY_MAX_STEPS) / WRIST_REPLAY_HZ:
+		return {"valid": false, "reason": "replay_work_limit"}
+	if clip < 0 or clip >= tab.size() or not tab[clip] is Array or tab[clip].size() < 3:
+		return {"valid": false, "reason": "invalid_table"}
+	if not tab[clip][0] is int or not tab[clip][1] is int or not tab[clip][2] is bool or bool(tab[clip][2]):
+		return {"valid": false, "reason": "invalid_table"}
+	var first: int = int(tab[clip][0])
+	var count: int = int(tab[clip][1])
+	var pairs: int = arm.size() >> 1
+	if arm.size() % 2 != 0 or first < 0 or count < 2 or first > pairs or count > pairs - first:
+		return {"valid": false, "reason": "invalid_arm"}
+	if count > WRIST_REPLAY_MAX_STEPS:
+		return {"valid": false, "reason": "replay_work_limit"}
+	var signature: Array = [revision, clip, first, count, clock["wind"], clock["duration"], clock["base"], clock["hit"], clock["end"], clock["aim"]]
+	var target_tick: int = int(floorf(age * WRIST_REPLAY_HZ + 0.0000001))
+	var stored_tick: Variant = cache.get("tick", -1)
+	var stored_basis: Variant = cache.get("basis")
+	var reusable: bool = stored_tick is int and stored_tick >= 0 and stored_tick <= target_tick \
+		and stored_basis is Basis and stored_basis.is_finite() and cache.get("signature", []) == signature
+	var rebuilt: bool = not reusable
+	var tick: int = 0 if rebuilt else int(cache["tick"])
+	var before: Basis
+	if rebuilt:
+		for index: int in range(first * 2, (first + count) * 2):
+			if not arm[index].is_finite():
+				return {"valid": false, "reason": "nonfinite_arm"}
+		var initial: Array = arm_at(arm, tab, DeadBody.packed(Color(0.0, 0.0, 1.0, 1.0), clip, 0, 0.0))
+		before = _onehand_lean_at(clock, 0.0) * grip_of(initial[0], initial[1], Basis(), 0.0, false)
+	else:
+		before = cache["basis"]
+	var steps: int = target_tick - tick
+	for next: int in range(tick + 1, target_tick + 1):
+		before = _onehand_replay_step(arm, tab, clip, clock, float(next) / WRIST_REPLAY_HZ, 1.0 / WRIST_REPLAY_HZ, before)
+		if not before.is_finite():
+			return {"valid": false, "reason": "nonfinite_replay"}
+	var sampled: Basis = before
+	var remainder: float = maxf(0.0, age - float(target_tick) / WRIST_REPLAY_HZ)
+	if remainder > 0.000000001:
+		sampled = _onehand_replay_step(arm, tab, clip, clock, age, remainder, before)
+		steps += 1
+	if not sampled.is_finite():
+		return {"valid": false, "reason": "nonfinite_replay"}
+	cache["signature"] = signature
+	cache["tick"] = target_tick
+	cache["basis"] = before
+	var phase: float = float(Color(_onehand_phase_at(clock, age), clip, 1.0, 1.0).r)
+	return {"valid": true, "grip": (_onehand_lean_at(clock, phase).transposed() * sampled).orthonormalized(),
+		"steps": steps, "rebuilt": rebuilt, "tick": target_tick, "phase": phase}
 
 
 ## True when the motion last picked for this person is one of the living's own.
