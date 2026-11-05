@@ -404,11 +404,15 @@ func test_the_chief_stopped_each_looks_its_own_way() -> void:
 	var right := Vector3(0, 0, -1)
 	# Straight overhead there is no camera side to turn from (decision 486).
 	game.camera.global_position = ally.global_position + Vector3(0, 30, 0)
-	var a: Vector3 = game.ai._look_out(ally, "point", fwd, right)
-	var b: Vector3 = game.ai._look_out(ally, "rear", fwd, right)
-	var c: Vector3 = game.ai._look_out(ally, "aside", fwd, right)
-	assert_gt(rad_to_deg(a.angle_to(b)), 90.0)
-	assert_gt(rad_to_deg(a.angle_to(c)), 40.0)
-	var then: Vector3 = a
-	game.clock.elapsed += 3.0
-	assert_gt(rad_to_deg(then.angle_to(game.ai._look_out(ally, "point", fwd, right))), 5.0, "and sweeps")
+	for role: String in ["point", "rear", "aside"]:
+		game.ai._look_out(ally, role, fwd, right)
+		var target: float = float(ally.brain["watch_" + role]["target"])
+		var gaze := Vector3(sin(target), 0.0, cos(target))
+		var base: Vector3 = fwd if role == "point" else (-fwd if role == "rear" else -right)
+		assert_lte(rad_to_deg(gaze.angle_to(base)), game.ai.LOOK_SECTOR_DEG + 0.001)
+	var state: Dictionary = ally.brain["watch_point"]
+	game.clock.elapsed = float(state["until"]) + 0.01
+	game.ai._look_out(ally, "point", fwd, right)
+	assert_eq(int(ally.brain["watch_point"]["step"]), 0)
+	assert_gte(int(ally.brain["watch_point"]["point"]), 0)
+	assert_lt(int(ally.brain["watch_point"]["point"]), game.ai.LOOK_POINTS)

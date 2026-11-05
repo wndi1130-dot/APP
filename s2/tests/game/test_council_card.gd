@@ -9,6 +9,9 @@ const SliceSamples = preload("res://tests/game/slice_samples.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const FieldHud = preload("res://game/ui/field_hud.gd")
 const DEALS := "res://tests/fixtures/train/deal_vectors.json"
+const RestoreVectors = preload("res://tests/train/restore_vectors.gd")
+const Research = preload("res://game/train/train_research.gd")
+const Advance = preload("res://game/train/train_advance.gd")
 
 
 func _card(g: Dictionary = {}, t: Dictionary = {}):
@@ -18,6 +21,106 @@ func _card(g: Dictionary = {}, t: Dictionary = {}):
 	c.t = t if not t.is_empty() else s[1]
 	add_child_autofree(c)
 	return c
+
+
+func _pipe_fixture() -> Dictionary:
+	return JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/lawtech_vectors.json"))
+
+
+func test_pipe_card_changes_use_literal_s1_lines_for_both_variants_and_no_pending() -> void:
+	var data: Dictionary = _pipe_fixture()
+	var agenda: Dictionary = {"kind": "motion", "motion": "pipe"}
+	var expected: Dictionary = {
+		"a": [["통과", "꼬리칸까지: 공동 난방의 석탄 +1.25 → +0.6/구간", ""], ["부결", "반대쪽으로 놓는다. 앞칸 직결: 난방 배당: 경비대 벌 없음, 앞칸 온기 +5", ""], ["관계 ±5는 이 표결 결과의 쪽으로 움직인다", "", ""]],
+		"b": [["통과", "앞칸 직결: 난방 배당: 경비대 벌 없음, 앞칸 온기 +5", ""], ["부결", "반대쪽으로 놓는다. 꼬리칸까지: 공동 난방의 석탄 +1.25 → +0.6/구간", ""], ["관계 ±5는 이 표결 결과의 쪽으로 움직인다", "", ""]]}
+	for variant: String in ["a", "b"]:
+		var g: Dictionary = RestoreVectors.project(data["sequences"][0]["steps"][0]["after"])
+		g["dom"]["techs"]["e3"]["variant"] = variant
+		assert_eq(CouncilCard.change_rows(data["tables"], agenda, g), expected[variant])
+		for comm: String in data["tables"]["COMMS"]:
+			assert_eq(CouncilCard.stake_of(data["tables"], agenda, comm), [])
+		g["dom"]["techs"]["e3"]["pending"] = false
+		assert_eq(CouncilCard.change_rows(data["tables"], agenda, g), [["추인할 배관이 없다", "", ""]])
+
+
+func test_pipe_model_and_deal_previews_keep_the_original_board_for_each_variant() -> void:
+	var data: Dictionary = _pipe_fixture()
+	var previews: Dictionary = {}
+	for variant: String in ["a", "b", "none"]:
+		var g: Dictionary = RestoreVectors.project(data["sequences"][0]["steps"][0]["after"])
+		g["council"] = {"options": [{"kind": "motion", "motion": "pipe"}], "idx": 0, "deals": [], "result": null}
+		g["dom"]["techs"]["e3"]["pending"] = variant != "none"
+		if variant != "none": g["dom"]["techs"]["e3"]["variant"] = variant
+		var before: String = JSON.stringify(g, "", false)
+		var model: Dictionary = CouncilCard.model(g, data["tables"], 0)
+		assert_eq(model["title"], "배관 추인")
+		assert_eq(model["need"], 51)
+		assert_eq((model["changes"] as Array).size(), 1 if variant == "none" else 3)
+		for comm: String in data["tables"]["COMMS"]:
+			assert_eq((CouncilCard.tools_of(g, data["tables"], 0, comm) as Array).size(), 6)
+			assert_false(CouncilCard.kinds_after(g, data["tables"], 0, comm, "favor").is_empty())
+		previews[variant] = {"tools": CouncilCard.tools_of(g, data["tables"], 0, "tail"), "kinds": CouncilCard.kinds_after(g, data["tables"], 0, "tail", "favor")}
+		assert_eq(JSON.stringify(g, "", false), before, variant + " preview is a copy")
+	assert_ne(previews["a"]["tools"], previews["b"]["tools"], "tools read the pending variant")
+	assert_ne(previews["a"]["kinds"], previews["b"]["kinds"], "seat previews read the same pending variant")
+	# Pending a gives the tail the better stance than pending b, in the visible seat forecast.
+	var a: Dictionary = RestoreVectors.project(data["sequences"][0]["steps"][0]["after"])
+	a["council"] = {"options": [{"kind": "motion", "motion": "pipe"}], "idx": 0, "deals": [], "result": null}
+	var b: Dictionary = a.duplicate(true)
+	b["dom"]["techs"]["e3"]["variant"] = "b"
+	assert_ne(CouncilCard.model(a, data["tables"], 0), CouncilCard.model(b, data["tables"], 0))
+
+
+func test_agenda_holder_opens_pipe_card_on_its_pick_and_casts_subjectless_vote() -> void:
+	var data: Dictionary = _pipe_fixture()
+	var g: Dictionary = RestoreVectors.project(data["sequences"][0]["steps"][0]["after"])
+	var t: Dictionary = data["tables"].duplicate(true)
+	t["LAW_IDS"] = []
+	g["ratify"] = ["common_heating"]
+	g["proposals"] = [{"kind": "motion", "motion": "field_symbol", "subject": "engine"}]
+	g["agendaHolder"] = "tail"
+	g["council"] = null
+	g = Advance.open_council(g, t)
+	assert_eq(int(g["council"]["idx"]), 1, "law ratification then pipe, better than the unrelated symbol")
+	assert_true(g["council"]["locked"])
+	var card = _card(g, t)
+	assert_eq(card.idx, 1)
+	assert_eq(card.m["title"], "배관 추인")
+	var voted: Dictionary = Advance.cast_vote(g, t)
+	assert_false(voted.has("_turn_port_error"))
+	assert_eq(int(voted["council"]["result"]["need"]), 51)
+	assert_false(voted["dom"]["techs"]["e3"]["pending"])
+	assert_eq(bool(voted.get("contentFlags", {}).get("ev_achieved", false)), bool(voted["council"]["result"]["passed"]))
+
+
+func test_cancelled_pipe_reopens_card_from_current_options_and_empty_council_advances() -> void:
+	var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://tests/fixtures/train/tech_vectors.json"))
+	var tables: Dictionary = _pipe_fixture()["tables"]
+	var count: int = 0
+	for row: Dictionary in data["cancel_cases"]:
+		if row["name"] not in ["cancel-council/selected", "cancel-council/before", "cancel-council/after", "cancel-council/only", "cancel-council/voted"]:
+			continue
+		count += 1
+		var g: Dictionary = RestoreVectors.project(row["before"])
+		Research.cancel_restore(g)
+		var card = _card(g, tables)
+		assert_eq(card.idx, int(row["after"]["council"]["idx"]))
+		if row["name"] == "cancel-council/only":
+			assert_true(card.m.is_empty(), "_show stops before tools_of/kinds_after on an empty session")
+			# The tech fixture keeps only the research part of a board; the turn needs a whole one.
+			# A whole S1 board (lawtech pipe sequence) at its council with the agenda the cancel left.
+			var whole: Dictionary = RestoreVectors.project(_pipe_fixture()["sequences"][0]["initial"])
+			whole["phase"] = "council"
+			whole["cards"] = []
+			whole["council"] = g["council"].duplicate(true)
+			assert_true((whole["council"]["options"] as Array).is_empty(), "the cancel left no agenda")
+			var advanced: Dictionary = Advance.advance(whole, tables)
+			assert_false(advanced.has("_turn_port_error"), str(advanced.get("_turn_port_error", "")))
+			assert_eq(advanced.get("phase"), "settle", "an empty council does not stall")
+		else:
+			var options: Array = row["after"]["council"]["options"]
+			assert_eq(card.m["title"], CouncilVote.agenda_title(tables, options[int(row["after"]["council"]["idx"])]))
+	assert_eq(count, 5)
 
 
 ## The words of the labels under `n`, without the joiners that keep words whole.
@@ -86,6 +189,31 @@ func test_a_law_s_lines_split_as_the_mockup_s_bill() -> void:
 	assert_eq(CouncilCard.stance_of(2), ["y", "찬성"])
 	assert_eq(CouncilCard.stance_of(0), ["", "망설임"])
 	assert_eq(CouncilCard.stance_of(-1), ["n", "반대 쪽"])
+
+
+## A session a group opened with the agenda it took in a deal (S1 openCouncil, the deal
+## vectors' holder cases): the bill opens on the group's pick and keeps it (S1 setAgenda).
+func test_a_picked_agenda_opens_the_bill_and_stays() -> void:
+	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(DEALS))
+	var row: Dictionary = {}
+	for r: Dictionary in d["cases"]:
+		if String(r["name"]).begins_with("holder/") and int(r["after"]["council"]["idx"]) > 0:
+			row = r
+			break
+	assert_false(row.is_empty(), "a holder case that picks past the first agenda")
+	if row.is_empty():
+		return
+	var picked: int = int(row["after"]["council"]["idx"])
+	var c = _card(row["after"], d["tables"])
+	assert_eq(c.idx, picked, "the bill opens on the group's pick")
+	assert_true(bool(c.m["locked"]))
+	var prev: Button = c.bill.find_child("Prev", true, false)
+	var nxt: Button = c.bill.find_child("Next", true, false)
+	assert_true(prev.disabled and nxt.disabled, "both arrows hold")
+	c.turn(1)
+	c.turn(-1)
+	assert_eq(c.idx, picked)
+	assert_eq(c.m["title"], CouncilVote.agenda_title(c.t, row["after"]["council"]["options"][picked]))
 
 
 func test_the_bill_turns_between_agendas_and_a_group_opens_its_pane() -> void:

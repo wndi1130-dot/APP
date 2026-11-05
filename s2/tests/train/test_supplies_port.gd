@@ -248,9 +248,9 @@ func _file_version(path: String) -> int:
 
 
 func test_supplies_save_legacy_and_round_trip() -> void:
-	# Reads 1 and 2; a supplies board is written as 2 so a build that reads only 1 refuses it.
-	assert_eq(Save.SAVE_VERSION, 2)
-	assert_eq(Save.SUPPLIES_VERSION, 2)
+	# Reads 1 to 4; supplies without domestic stores still write version 3.
+	assert_eq(Save.SAVE_VERSION, 4)
+	assert_eq(Save.SUPPLIES_VERSION, 3)
 	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
 	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
 	on["sup"] = 1.5
@@ -263,7 +263,7 @@ func test_supplies_save_legacy_and_round_trip() -> void:
 	off["supOn"] = false
 	assert_eq(int(old["version"]), 1, "a new board starts at slot version 1")
 	for g: Dictionary in [old, on, flag_only, off]:
-		var want: int = 2 if bool(g.get("supOn", false)) else 1
+		var want: int = 3 if bool(g.get("supOn", false)) else 1
 		var at: String = "supOn=%s" % str(g.get("supOn", "absent"))
 		assert_true(Save.save_slot(g, SAVE_PATH))
 		assert_eq(_file_version(SAVE_PATH), want, at + " slot version written")
@@ -300,7 +300,7 @@ func test_supplies_save_rejects_wrong_types_nonfinite_and_unknown_cover() -> voi
 		assert_not_null(Save.shape_problem(g, _t), "reject " + str(pair))
 
 
-func test_supplies_slot_versions_one_and_two_read_three_refused() -> void:
+func test_supplies_slot_versions_one_to_four_read_five_refused() -> void:
 	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
 	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
 	# Version 1 without supplies keys: reads, supplies off.
@@ -309,16 +309,20 @@ func test_supplies_slot_versions_one_and_two_read_three_refused() -> void:
 	if one["ok"]:
 		assert_eq(int(one["g"]["version"]), 1)
 		assert_false(Supplies.asks(one["g"]), "a version 1 board reads with supplies off")
-	var two_board: Dictionary = on.duplicate(true)
-	two_board["version"] = 2
-	var two: Dictionary = Save.read_save(two_board, _t)
-	assert_true(two["ok"])
-	if two["ok"]: assert_true(Supplies.asks(two["g"]))
-	# A build that reads only 1 refuses 2 the same way this build refuses 3.
+	# 2: a supplies run from the builds that only turned it on in tests; 3: every supplies run now.
+	for version: int in [2, 3, 4]:
+		var board_on: Dictionary = on.duplicate(true)
+		board_on["version"] = version
+		var read_on: Dictionary = Save.read_save(board_on, _t)
+		assert_true(read_on["ok"], "version %d reads" % version)
+		if read_on["ok"]:
+			assert_true(Supplies.asks(read_on["g"]))
+			assert_eq(int(read_on["g"]["version"]), version, "the version read stays as it was")
+	# The current reader rejects 5; the pre-2c-1 reader's literal ceiling was 3.
 	for board: Dictionary in [old, on]:
-		var three: Dictionary = board.duplicate(true)
-		three["version"] = 3
-		var read: Dictionary = Save.read_save(three, _t)
+		var five: Dictionary = board.duplicate(true)
+		five["version"] = 5
+		var read: Dictionary = Save.read_save(five, _t)
 		assert_false(read["ok"])
 		assert_string_contains(String(read.get("why", "")), "더 새 빌드")
 
@@ -326,12 +330,15 @@ func test_supplies_slot_versions_one_and_two_read_three_refused() -> void:
 func test_supplies_train_slot_of_the_slice_writes_the_same_versions() -> void:
 	var old: Dictionary = _data["runs"][0]["initial"].duplicate(true)
 	var on: Dictionary = _data["runs"][2]["initial"].duplicate(true)
-	for pair: Array in [[old, 1], [on, 2]]:
+	for pair: Array in [[old, 1], [on, 3]]:
 		var g: Dictionary = pair[0]
 		var written: Dictionary = {}
 		assert_true(SliceSave.write_train(g, TRAIN_PATH, written))
 		# This slot keeps every value's type (field_save.gd's codec), so read it through that codec.
-		assert_eq(int(SliceSave._parse(TRAIN_PATH).get("version", -1)), int(pair[1]), "train slot version")
+		# A supplies run's 3 is slot_board's int; any other board's number keeps the type it had.
+		var on_disk: Variant = SliceSave._parse(TRAIN_PATH).get("version")
+		assert_eq(int(on_disk if on_disk != null else -1), int(pair[1]), "train slot version")
+		assert_eq(typeof(on_disk), TYPE_INT if bool(g.get("supOn", false)) else typeof(g["version"]), "train slot version type")
 		assert_eq(int(g["version"]), 1, "the caller's board is untouched")
 		assert_eq(written["train_sha"], FileAccess.get_file_as_string(TRAIN_PATH).sha256_text(), "the slice slot keeps the written board's hash")
 		var source: Dictionary = {}
@@ -339,6 +346,7 @@ func test_supplies_train_slot_of_the_slice_writes_the_same_versions() -> void:
 		assert_false(back.is_empty())
 		if not back.is_empty():
 			assert_eq(int(back["version"]), int(pair[1]))
+			assert_eq(typeof(back["version"]), typeof(on_disk), "read back with the type written")
 			assert_eq(source["train_sha"], written["train_sha"], "not a torn pair")
 
 

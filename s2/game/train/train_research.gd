@@ -508,6 +508,7 @@ const TECHS: Dictionary = {
 }
 const PREREQ: Dictionary = {"x2": ["x1"], "x4": ["x1"], "x3": ["x2"], "w2": ["w1"], "w3": ["w2"], "w7": ["w6"], "w8": ["w7"]}
 const D: Dictionary = {
+	"techRel": 5,
 	"restoreWork": [
 		3,
 		3,
@@ -577,6 +578,7 @@ const BRANCH_NAME: Dictionary = {
 	"radio": "통신·정보",
 	"expedition": "원정·파견"
 }
+const COMM_NAME: Dictionary = {"tail": "꼬리칸", "medtech": "기술·의무진", "guard": "경비대", "front": "앞칸", "engine": "기관실"}
 const ZONE_WORK: Dictionary = {
 	"front": 1,
 	"middle": 0.8,
@@ -613,9 +615,12 @@ static func _dom(g: Dictionary) -> Dictionary:
 
 
 static func _ensure(g: Dictionary) -> Dictionary:
-	if not g.get("dom") is Dictionary:
-		g["dom"] = {}
+	# Dom -> Mods -> Research; CouncilLog -> State -> LawTech -> Research.
+	# Load those two owners only when called, after their scripts have finished loading.
+	var train_dom: Script = load("res://game/train/train_dom.gd")
+	train_dom.call("ensure", g)
 	var d: Dictionary = g["dom"]
+	train_dom.call("init_log", d)
 	if not d.has("techs"):
 		d["techs"] = {}
 	if not d.has("restoring"):
@@ -623,6 +628,11 @@ static func _ensure(g: Dictionary) -> Dictionary:
 	if not d.has("frags"):
 		d["frags"] = {}
 	return d
+
+
+static func _journal(g: Dictionary, text: String, tone: Variant = null) -> void:
+	var council_log: Script = load("res://game/politics/council_log.gd")
+	council_log.call("_journal", g, text, tone)
 
 
 static func top_skill(g: Dictionary, field: String) -> int:
@@ -786,11 +796,63 @@ static func variants(g: Dictionary, id: String) -> Dictionary:
 	return {} if id == "x2" and not bool(g.get("gearOn", false)) else TECHS[id].get("variants", {})
 
 
+## S1 techRelSides: without a disliking side, neither side receives a change.
+static func rel_sides(id: String, variant: Variant = null) -> Dictionary:
+	var def: Dictionary = TECHS[id]
+	var sides: Dictionary = def["variants"][variant] if def.has("variants") and variant != null else def
+	return {"like": [], "dislike": []} if (sides["dislike"] as Array).is_empty() else {"like": sides["like"], "dislike": sides["dislike"]}
+
+
+static func _add_rel_delta(out: Dictionary, id: String, variant: Variant, sign_value: float) -> void:
+	var sides: Dictionary = rel_sides(id, variant)
+	for comm: String in sides["like"]:
+		out[comm] = float(out.get(comm, 0)) + sign_value * float(D["techRel"])
+	for comm: String in sides["dislike"]:
+		out[comm] = float(out.get(comm, 0)) - sign_value * float(D["techRel"])
+
+
+static func rel_delta(g: Dictionary, id: String, variant: Variant = null) -> Dictionary:
+	var out: Dictionary = {}
+	if id == "e3":
+		return out
+	var last: Dictionary = {}
+	var restores: Array = _dom(g).get("log", {}).get("restores", [])
+	for at: int in range(restores.size() - 1, -1, -1):
+		if restores[at]["id"] == id:
+			last = restores[at]
+			break
+	if not last.is_empty() and (last.get("v") == variant or (not variants(g, id).is_empty() and not last.has("v"))):
+		return out
+	if not last.is_empty():
+		_add_rel_delta(out, id, last.get("v"), -1.0)
+	_add_rel_delta(out, id, variant, 1.0)
+	for comm: String in out.keys():
+		if float(out[comm]) == 0.0:
+			out.erase(comm)
+	return out
+
+
+## S1's literal journal wording, shared by completion and pipe ratification.
+static func reaction(id: String, variant: Variant, t: Dictionary = {}) -> String:
+	var sides: Dictionary = rel_sides(id, variant)
+	var names: Dictionary = t.get("COMM_NAME", COMM_NAME)
+	var parts: Array[String] = []
+	for side: String in ["like", "dislike"]:
+		var who: Array[String] = []
+		for comm: String in sides[side]:
+			who.append(String(names[comm]))
+		if not who.is_empty():
+			parts.append("·".join(who) + ("이(가) 반긴다" if side == "like" else "은(는) 못마땅하다"))
+	return " " + ", ".join(parts) + "." if not parts.is_empty() else ""
+
+
 static func start_restore(g: Dictionary, id: String, mode: String, variant: Variant = null) -> bool:
 	if not TECHS.has(id) or mode not in ["full", "defect"]:
 		return false
 	if restore_check(g, id).get(mode) != null:
 		return false
+	if id == "e3" and _dom(g).has("pipeFlip"):
+		variant = _dom(g)["pipeFlip"]
 	if not variants(g, id).is_empty() and variant == null:
 		return false
 	if variant != null and variant not in ["a", "b"]:
@@ -808,10 +870,20 @@ static func start_restore(g: Dictionary, id: String, mode: String, variant: Vari
 	var st: Dictionary = {"stage": "restoring", "defect": mode == "defect", "progress": 0, "need": cost["work"]}
 	if variant != null:
 		st["variant"] = variant
-	if id == "e3":
+	var asked: bool = id == "e3" and not d.has("pipeFlip")
+	if asked:
 		st["pending"] = true
 	d["techs"][id] = st
 	d["restoring"] = id
+	var delta: Dictionary = rel_delta(g, id, variant)
+	var record: Dictionary = {"seg": g["seg"], "id": id}
+	if variant != null:
+		record["v"] = variant
+	(d["log"]["restores"] as Array).append(record)
+	var council_log: Script = load("res://game/politics/council_log.gd")
+	for comm: String in delta:
+		council_log.call("_bump_rel", g, comm, float(delta[comm]), "tech")
+	_journal(g, "공방이 %s 복원을 시작했다%s.%s" % [title(g, id), "(결함판)" if mode == "defect" else "", " 다음 회기에 배관 추인을 받아야 끝난다." if asked else ""])
 	return true
 
 
@@ -827,7 +899,25 @@ static func start_finish(g: Dictionary, id: String) -> bool:
 	st["progress"] = 0
 	st["need"] = D["finishWork"]
 	d["restoring"] = id
+	_journal(g, "%s의 나머지 설계도를 맞추기 시작했다." % title(g, id))
 	return true
+
+
+static func _drop_pipe_agenda(g: Dictionary) -> void:
+	if not g.get("council") is Dictionary or g["council"].get("result") != null:
+		return
+	var council: Dictionary = g["council"]
+	var options: Array = council["options"]
+	for at: int in options.size():
+		if options[at].get("kind") != "motion" or options[at].get("motion") != "pipe":
+			continue
+		options.remove_at(at)
+		if at == int(council["idx"]):
+			council["idx"] = 0
+			council["deals"] = []
+		elif at < int(council["idx"]):
+			council["idx"] = int(council["idx"]) - 1
+		return
 
 
 static func cancel_restore(g: Dictionary) -> void:
@@ -846,7 +936,24 @@ static func cancel_restore(g: Dictionary) -> void:
 		d["frags"][field] = float(d["frags"].get(field, 0)) + float(cost["defectFrags"] if bool(st.get("defect", false)) else cost["frags"])
 		d["cores"] = float(d.get("cores", 0)) + float(cost["core"])
 		d["techs"].erase(id)
+		if id == "e3":
+			_drop_pipe_agenda(g)
 	d["restoring"] = null
+	_journal(g, "%s 복원을 멈췄다. 쓴 자재는 돌아오지 않는다." % TECHS[id]["name"], "bad")
+
+
+## Return the old finishing flag before clearing it, for the caller's one after_restore.
+static func finish(g: Dictionary, id: String) -> bool:
+	var d: Dictionary = _dom(g)
+	var st: Dictionary = d["techs"][id]
+	var finishing: bool = bool(st.get("finishing", false))
+	d["restoring"] = null
+	if finishing:
+		st["finishing"] = false
+		st["stage"] = "done"
+	else:
+		st["stage"] = "defective" if bool(st.get("defect", false)) else "done"
+	return finishing
 
 
 ## Spend only the work remaining after parts and the S2 making line.
@@ -860,14 +967,9 @@ static func advance_restore(g: Dictionary, work: float) -> Dictionary:
 	st["progress"] = float(st["progress"]) + spend
 	var did: Array[String] = []
 	if float(st["progress"]) >= float(st["need"]) - 1e-9 and not bool(st.get("pending", false)):
-		d["restoring"] = null
-		if bool(st.get("finishing", false)):
-			st["finishing"] = false
-			st["stage"] = "done"
-		else:
-			st["stage"] = "defective" if bool(st.get("defect", false)) else "done"
+		var finishing: bool = finish(g, id)
 		did.append(String(TECHS[id]["name"]) + " 복원")
-		return {"used": spend, "did": did, "done": id}
+		return {"used": spend, "did": did, "done": id, "finishing": finishing}
 	return {"used": spend, "did": did}
 
 

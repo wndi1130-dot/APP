@@ -42,6 +42,7 @@ var form_for: String = ""
 var form_m_for: float = -1.0
 var band_for: String = ""
 var bounds_rule_for: int = -1
+var side_path_rule_for: int = SidePath.RULE
 var data: Dictionary = {}
 var vat: Dictionary = {}
 var field: Node = null
@@ -76,10 +77,10 @@ func _ready() -> void:
 ## field puts it on), in the stop's form when it is known (its ground then goes on
 ## here, off the main thread, before the side path). The same place, seed, form and band
 ## again keeps what is under way.
-func prepare(place_id: String, run_seed: int = -1, form: String = "", form_m: float = -1.0, visit_id: String = "", band: String = "", bounds_rule: int = -1) -> void:
+func prepare(place_id: String, run_seed: int = -1, form: String = "", form_m: float = -1.0, visit_id: String = "", band: String = "", bounds_rule: int = -1, side_path_rule: int = SidePath.RULE) -> void:
 	var strict: bool = not visit_id.is_empty()
 	var id: String = place_id if strict else FieldMaps.resolve(place_id)
-	if _state in ["loading", "building", "ready"] and id == place and visit_id == visit_for and run_seed == seed_for and form == form_for and form_m == form_m_for and band == band_for and bounds_rule == bounds_rule_for and MapBounds.can_reuse(data, bounds_rule):
+	if _state in ["loading", "building", "ready"] and id == place and visit_id == visit_for and run_seed == seed_for and form == form_for and form_m == form_m_for and band == band_for and bounds_rule == bounds_rule_for and side_path_rule == side_path_rule_for and MapBounds.can_reuse(data, bounds_rule):
 		return
 	_generation += 1
 	if not _loading_path.is_empty():
@@ -99,6 +100,7 @@ func prepare(place_id: String, run_seed: int = -1, form: String = "", form_m: fl
 	form_m_for = form_m
 	band_for = band
 	bounds_rule_for = bounds_rule
+	side_path_rule_for = side_path_rule
 	data = {}
 	if strict and (id.is_empty() or not FieldMaps.has(id)):
 		error = "F-CAMPAIGN-MAP: unregistered loader map"
@@ -137,12 +139,13 @@ func build_field(parent: Node, opts: Dictionary) -> void:
 	var form_m := float(opts.get("stop_form_m", -1.0))
 	var band := FieldGame.region_for(opts)
 	var bounds_rule: int = int(opts.get("bounds_rule", -1))
+	var side_path_rule: int = int(opts.get("side_path_rule", SidePath.RULE))
 	var visit_id: String = String(opts.get("visit_id", ""))
 	var requested: String = String(opts.get("place", ""))
 	if visit_id.is_empty():
 		requested = FieldMaps.resolve(requested)
-	if _state == "idle" or requested != place or visit_id != visit_for or (seed_for >= 0 and want != seed_for) or form != form_for or form_m != form_m_for or band != band_for or bounds_rule != bounds_rule_for or not MapBounds.can_reuse(data, bounds_rule):
-		prepare(requested, want, form, form_m, visit_id, band, bounds_rule)
+	if _state == "idle" or requested != place or visit_id != visit_for or (seed_for >= 0 and want != seed_for) or form != form_for or form_m != form_m_for or band != band_for or bounds_rule != bounds_rule_for or side_path_rule != side_path_rule_for or not MapBounds.can_reuse(data, bounds_rule):
+		prepare(requested, want, form, form_m, visit_id, band, bounds_rule, side_path_rule)
 	var generation: int = _generation
 	if _state == "failed":
 		return
@@ -238,15 +241,15 @@ func _process(_delta: float) -> void:
 func _start_task(script: Script) -> void:
 	_box = {"generation": _generation}
 	_state = "building"
-	_task = WorkerThreadPool.add_task(_build_off_thread.bind(_box, script, seed_for, form_for, form_m_for, band_for, VAT_VERTICES if vat.is_empty() else 0, bounds_rule_for), false, "stop map")
+	_task = WorkerThreadPool.add_task(_build_off_thread.bind(_box, script, seed_for, form_for, form_m_for, band_for, VAT_VERTICES if vat.is_empty() else 0, bounds_rule_for, side_path_rule_for), false, "stop map")
 	set_process(true)
 
 
 ## On the worker: the map and what is made ahead from it (make_ready), nothing in
 ## the scene tree.
-static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, form: String, form_m: float, band: String, vat_vertices: int, bounds_rule: int = -1) -> void:
+static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, form: String, form_m: float, band: String, vat_vertices: int, bounds_rule: int = -1, side_path_rule: int = SidePath.RULE) -> void:
 	var started: int = Time.get_ticks_usec()
-	box["data"] = make_ready(script, run_seed, form, form_m, band, bounds_rule)
+	box["data"] = make_ready(script, run_seed, form, form_m, band, bounds_rule, side_path_rule)
 	var times: Dictionary = box["data"].get_or_add("_ms", {})
 	times["worker_make_ready"] = float(Time.get_ticks_usec() - started) / 1000.0
 	var mark: int = Time.get_ticks_usec()
@@ -264,7 +267,7 @@ static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, fo
 ## (building_view.gd), the ground's and the floors' arrays (map_view.gd, 2a) with the
 ## maps they fit, the rooms' finish (room_finish.gd) and the plan of the woods round
 ## the map (edge_band.gd plan_ahead). Data only, no nodes.
-static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "", bounds_rule: int = -1, bounds_solver: Callable = Callable(), sweep_times: Dictionary = {}) -> Dictionary:
+static func make_ready(script: Script, run_seed: int, form: String = "", form_m: float = -1.0, band: String = "", bounds_rule: int = -1, side_path_rule: int = SidePath.RULE, bounds_solver: Callable = Callable(), sweep_times: Dictionary = {}) -> Dictionary:
 	var started: int = Time.get_ticks_usec()
 	var mark: int = started
 	var ms: Dictionary = {}
@@ -279,7 +282,8 @@ static func make_ready(script: Script, run_seed: int, form: String = "", form_m:
 	ms["widen_view"] = float(Time.get_ticks_usec() - mark) / 1000.0
 	mark = Time.get_ticks_usec()
 	if run_seed >= 0:
-		d = SidePath.add(d, run_seed)
+		d = SidePath.add(d, run_seed, side_path_rule)
+		d["side_path_rule"] = side_path_rule  # 샛길 대상이 아닌 첫 정차·이야기 지도도 같은 옵션으로 재사용.
 		d["_side_seed"] = run_seed
 		ms["side_path"] = float(Time.get_ticks_usec() - mark) / 1000.0
 		mark = Time.get_ticks_usec()
@@ -289,7 +293,8 @@ static func make_ready(script: Script, run_seed: int, form: String = "", form_m:
 			var base: Dictionary = FieldMaps.build_from(script, band, 0)
 			base = StopGround.apply(base, form, run_seed, form_m)
 			base = StopGround.widen_view(base)
-			base = SidePath.add(base, run_seed)
+			base = SidePath.add(base, run_seed, side_path_rule)
+			base["side_path_rule"] = side_path_rule
 			base["_side_seed"] = run_seed
 			return base
 		d = MapBounds.finish(d, base_factory, bounds_rule, bounds_solver)

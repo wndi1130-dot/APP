@@ -6,7 +6,11 @@
 // 씨앗마다 상태 여덟 꼴 × 기술 21개를 정해 둔 난수(tech-port-v1)로 흔들고, 바꾸는 함수는 복제본에 불러 전/후를 적는다.
 // train_vectors.json(S1a 판 계약)과 섞지 않는다.
 
+import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { castVote } from '../src/game';
+import { assertNoSuppliesHooks, projectDom, restorationBoard } from './restore_port_fixture_helpers';
+assertNoSuppliesHooks();
 import { dirname, resolve } from 'node:path';
 import { createRng, randomInt } from '../src/core/rng';
 import { PROFILES } from '../src/game/state';
@@ -31,15 +35,20 @@ const n = (lo: number, hi: number): number => {
   rng = next.rng;
   return next.value;
 };
-const clone = (g: Game): Game => structuredClone(g);
+const clone = (g: Game): Game => {
+  assertNoSuppliesHooks(g);
+  const copy = structuredClone(g); assertNoSuppliesHooks(copy); return copy;
+};
 const experts = (g: Game) => g.dom!.people.filter(p => p.alive && !p.gone)
   .map(({ name, comm, field, skill }) => ({ name, comm, field, skill }));
 // 이 PR이 옮기는 상태만. S1 사람 명부(people)는 계약의 experts로 비춘다.
 function state(g: Game) {
-  const d = g.dom!;
-  return { seg: g.seg, gearOn: !!g.gearOn, hands: g.hands ?? null,
-    dom: { parts: d.parts, wood: d.wood, scrap: d.scrap, cores: d.cores, frags: d.frags,
-      target: d.target, partWork: d.partWork, techs: d.techs, restoring: d.restoring, experts: experts(g) } };
+  const copy = clone(g);
+  return { seg: copy.seg, gearOn: !!copy.gearOn, hands: copy.hands ?? null,
+    comms: copy.comms, journal: copy.journal,
+    ...(Object.hasOwn(copy, 'ledger') ? { ledger: copy.ledger } : {}),
+    ...(Object.hasOwn(copy, 'council') ? { council: copy.council } : {}),
+    dom: projectDom(copy) };
 }
 function mutation(g: Game, f: (copy: Game) => unknown) {
   const copy = clone(g);
@@ -49,6 +58,7 @@ function mutation(g: Game, f: (copy: Game) => unknown) {
 }
 function prepare(seed: string): Game {
   const g = createS1cGame(seed);
+  assertNoSuppliesHooks(g);
   const d = g.dom!;
   // PR 6에 없는 것: 견습 가르치기·교본·교실·늙은 장인·정치 배수
   for (const p of d.people) { delete p.pupil; delete p.learn; delete p.writing; delete p.resting; }
@@ -114,9 +124,45 @@ for (const seed of seeds) for (let profile = 0; profile < 8; profile++) for (con
       prereqs: prereqs(id), visible: visibleTechs(g), skills: Object.fromEntries(FIELDS.map(f => [f, topSkill(g, f)])) },
     starts, finish, cancel: mutation(g, cancelRestore), run: mutation(g, runWorkshop), upkeep: mutation(g, payUpkeep), chains });
 }
-const dKeys = ['restoreWork', 'restoreParts', 'restoreWood', 'restoreScrap', 'restoreFrags', 'defectFrags', 'adaptWork', 'finishWork',
+// 10-7: 고른/앞쪽/뒤쪽/유일/표결 뒤와 회기 부재·null을 각각 보존한다.
+const cancel_cases = [];
+for (const kind of ['selected', 'before', 'after', 'only', 'voted', 'absent', 'null'] as const) {
+  const g = restorationBoard(`cancel-council-${kind}`, ['e3']);
+  assert.equal(startRestore(g, 'e3', 'full', 'a'), true);
+  const pipe = { kind: 'motion' as const, motion: 'pipe' as const };
+  const a = { law: 'heat_quota' as const, repeal: false };
+  const b = { law: 'common_heating' as const, repeal: false };
+  if (kind === 'absent') delete (g as Partial<Game>).council;
+  else if (kind === 'null') g.council = null;
+  else {
+    g.council = { options: kind === 'only' ? [pipe] : [a, pipe, b],
+      idx: kind === 'before' ? 2 : kind === 'after' || kind === 'only' ? 0 : 1,
+      locked: false, deals: [{ comm: 'tail', tool: 'persuade', label: '취소 보존 거래' }], result: null };
+    if (kind === 'voted') assert.ok(castVote(g));
+  }
+  assert.equal(g.dom!.restoring, 'e3');
+  assert.ok(g.dom!.techs.e3!.progress < g.dom!.techs.e3!.need);
+  const c = structuredClone(g.council), present = Object.hasOwn(g, 'council');
+  const result = mutation(g, copy => {
+    cancelRestore(copy);
+    assert.equal(copy.dom!.restoring, null); assert.equal(copy.dom!.techs.e3, undefined);
+    assert.equal(Object.hasOwn(copy, 'council'), present);
+    if (!c || kind === 'voted') assert.deepEqual(copy.council, c);
+    else {
+      assert.deepEqual(copy.council!.options, c.options.filter(o => !(o.kind === 'motion' && o.motion === 'pipe')));
+      assert.equal(copy.council!.idx, kind === 'selected' || kind === 'only' ? 0 : kind === 'before' ? c.idx - 1 : c.idx);
+      assert.deepEqual(copy.council!.deals, kind === 'selected' || kind === 'only' ? [] : c.deals);
+      assert.equal(copy.council!.result, null);
+    }
+  });
+  assert.equal(Object.hasOwn(result.before, 'council'), present);
+  assert.equal(Object.hasOwn(result.after, 'council'), present);
+  cancel_cases.push({ name: `cancel-council/${kind}`, action: { kind: 'cancel_restore' }, ...result });
+}
+const dKeys = ['techRel', 'restoreWork', 'restoreParts', 'restoreWood', 'restoreScrap', 'restoreFrags', 'defectFrags', 'adaptWork', 'finishWork',
   'work', 'workSkill', 'w1Work', 'partWork', 'partScrap', 'partWood', 'target0', 'targetMax', 'defectMult', 'knowledgeLow', 'glassParts'] as const;
 const start = createS1cGame('research-start');
+assertNoSuppliesHooks(start);
 // TrainDom.start()는 판·난수를 받지 않는다. 전문가마다 그 칸의 아직 안 쓴 첫 이름을 PROFILES 차례로 고른다(나이·몸·건강은 안 따지고 난수도 안 씀).
 const usedNames = new Set<string>();
 const startExperts = experts(start).map(expert => {
@@ -126,14 +172,14 @@ const startExperts = experts(start).map(expert => {
   return { ...expert, name: person.name };
 });
 const output = { format: FORMAT, seeds, profiles: 8,
-  scope: 'PR6 experts only; no teaching/manuals/classroom/elder; mutations project owned inventory/tech state, not political cards/journal/stats',
+  scope: '2c-1 experts; inventory, techs, relations, journal, ledger, restore log/stats, council and pipe state; no S1-only dom systems',
   tables: { TECHS, TECH_IDS, FIELDS, BRANCH_NAME, SPECIALISTS, ZONE_WORK, ZONE0, NOT_YET, GEAR_TECHS,
     D: Object.fromEntries(dKeys.map(k => [k, D[k]])),
     prereqs: Object.fromEntries(TECH_IDS.map(id => [id, prereqs(id)])), skillNeed: Object.fromEntries(TECH_IDS.map(id => [id, skillNeed(id)])) },
-  start: { referenceSeed: 'research-start', nameMethod: 'first unused community name in S1 PROFILES order', experts: startExperts, frags: start.dom!.frags }, cases };
-const out = resolve(process.argv.find(a => a.endsWith('.json')) ?? '../s2/tests/fixtures/train/tech_vectors.json');
+  start: { referenceSeed: 'research-start', nameMethod: 'first unused community name in S1 PROFILES order', experts: startExperts, frags: start.dom!.frags }, cases, cancel_cases };
+const out = resolve(process.argv.find(a => a.endsWith('.json')) ?? resolve(import.meta.dirname, '../../s2/tests/fixtures/train/tech_vectors.json'));
 mkdirSync(dirname(out), { recursive: true });
 // 전/후는 통째로 둔다. 빈칸 없는 JSON이라 같은 꼴이 되풀이돼도 덜 커진다.
 const text = JSON.stringify(output) + '\n';
 writeFileSync(out, text);
-console.log(JSON.stringify({ format: FORMAT, seeds: seeds.length, cases: cases.length, bytes: Buffer.byteLength(text), out }));
+console.log(JSON.stringify({ format: FORMAT, seeds: seeds.length, cases: cases.length, cancel_cases: cancel_cases.length, bytes: Buffer.byteLength(text), out }));

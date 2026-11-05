@@ -19,6 +19,19 @@ const SWING: String = "pose_swing"    # Cooldown remaining when the picture's re
 const RECOVER_BASE: float = 0.25
 const RECOVER_PER_KG: float = 0.05
 const RECOVER_MAX: float = 0.35
+const RECOVER_WAIT: String = "pose_recover_wait"
+const RECOVER_RELEASE: String = "pose_recover_release"
+# Keep the first 35 percent at contact speed; ease only the return to rest.
+const RECOVER_FOLLOW: float = 0.35
+# body_bake p_swing_one/back: arm/chest keys reach final values at 0.8, but the clip is
+# baked in 24 frames and frame 18 (0.783) already holds the weapon within 1 cm of it,
+# so a return that runs on to 0.8 spends its last drawings almost still.
+# Leg settling continues to 1.0; only the weapon return stops here.
+const RECOVER_ONE_END: float = 0.783
+const RECOVER_BACK_END: float = 0.783
+const RECOVER_RAMP: float = 0.05
+# rest - swing_t and the cap are the same sum taken apart; this absorbs its rounding.
+const RECOVER_END_EPS: float = 0.000000001
 const Protest = preload("res://game/actors/person_protest.gd")
 const W = preload("res://game/sim/weapons.gd")
 const LOADED: String = "pose_loaded"  # rounds in the hand's weapon last frame; one fewer is a shot
@@ -86,7 +99,7 @@ static func _protest(p, arms: Array, mark: Dictionary) -> void:
 
 
 ## Where a melee swing is: [windup 0..1, way back 0..1, landed], or [] with no
-## swing. Recovery uses elapsed seconds, independent of the next blow's wait.
+## swing. Only the two one-hand sweeps fill the remaining rule wait.
 static func swing_state(p) -> Array:
 	if p.strike_t > 0.0:
 		p.set_meta(SWING, -1.0)
@@ -100,12 +113,75 @@ static func swing_state(p) -> Array:
 	if rest < p.swing_t:
 		rest = p.swing_t
 		p.set_meta(SWING, rest)
-	var recover: float = (rest - p.swing_t) / minf(rest, recover_seconds(p.weapon_id()))
-	if recover >= 1.0:
+	var duration: float = recovery_duration(p, rest)
+	var elapsed: float = rest - p.swing_t
+	var recover: float = elapsed / duration
+	if duration > recover_seconds(p.weapon_id()):
+		recover = recovery_phase(elapsed, duration, recover_seconds(p.weapon_id()), recovery_end(p))
+	if elapsed >= duration - RECOVER_END_EPS:
 		p.remove_meta(SWING)
 		p.remove_meta(MODE)
 		return []
 	return [1.0, clampf(recover, 0.0, 1.0), true]
+
+
+static func extended_recovery(p) -> bool:
+	var way: String = String(p.get_meta(BLOW_WAY, ""))
+	return way in ["p_swing_one", "p_swing_back"] and String(p.get_meta(MODE, "swing")) == "swing"
+
+
+static func recovery_duration(p, rest: float) -> float:
+	var base: float = recover_seconds(p.weapon_id())
+	if not extended_recovery(p):
+		return minf(rest, base)
+	var m: float = float(p.mults()["swing"])
+	var total: float = float(W.get_data(p.weapon_id()).get("swing", 0.0)) / m
+	var cap: float = W.melee_recover(total, W.melee_windup(p.weapon_id()) / m, W.melee_gap(p.weapon_id()))
+	if p.has_meta(RECOVER_WAIT):
+		cap = float(p.get_meta(RECOVER_WAIT))
+	return minf(rest, cap)
+
+
+static func recovery_end(p) -> float:
+	var way: String = String(p.get_meta(BLOW_WAY, ""))
+	if way == "p_swing_one":
+		return (RECOVER_ONE_END - 0.45) / (1.0 - 0.45)
+	if way == "p_swing_back":
+		return (RECOVER_BACK_END - 0.33) / (1.0 - 0.33)
+	return 1.0
+
+
+static func recovery_phase(elapsed: float, duration: float, base: float, end: float = 1.0) -> float:
+	if duration <= base:
+		return clampf(elapsed / duration, 0.0, 1.0)
+	var follow: float = base * RECOVER_FOLLOW
+	if elapsed <= follow:
+		return maxf(elapsed, 0.0) / base
+	var tail: float = duration - follow
+	var gone: float = clampf(elapsed - follow, 0.0, tail)
+	var span: float = end - RECOVER_FOLLOW
+	var speed: float = 1.0 / base
+	# Integrate continuous velocity: brake, cruise, then stop at the deadline.
+	# The short ramps avoid spending the tail almost still.
+	var ramp: float = minf(RECOVER_RAMP, minf(tail * 0.25, span / speed))
+	var cruise: float = (span - speed * ramp * 0.5) / (tail - ramp)
+	if gone < ramp:
+		return RECOVER_FOLLOW + speed * gone + (cruise - speed) * gone * gone / (2.0 * ramp)
+	if gone > tail - ramp:
+		var left: float = tail - gone
+		return end - cruise * left * left / (2.0 * ramp)
+	return RECOVER_FOLLOW + (speed + cruise) * ramp * 0.5 + cruise * (gone - ramp)
+
+
+static func recovery_feet_free(p) -> bool:
+	if not p.has_meta(SWING) or p.strike_t > 0.0:
+		return false
+	var rest: float = float(p.get_meta(SWING))
+	var m: float = float(p.mults()["swing"])
+	var release: float = (float(W.get_data(p.weapon_id()).get("swing", 0.0)) - W.melee_windup(p.weapon_id())) / m
+	if p.has_meta(RECOVER_RELEASE):
+		release = float(p.get_meta(RECOVER_RELEASE))
+	return rest - p.swing_t >= release
 
 
 static func recover_seconds(wid: String) -> float:

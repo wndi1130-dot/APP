@@ -189,8 +189,8 @@ func _take(focus: Vector3, size: float, pixels: Vector2i, file: String, back := 
 	await RenderingServer.frame_post_draw
 	if stats:
 		# 지금 찍는 뷰포트의 보이는 패스. 지도 전체의 삼각형 합이나 그림자 패스가 아니다.
-		var triangles := RenderingServer.viewport_get_render_info(viewport.get_viewport_rid(), RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE)
-		var calls := RenderingServer.viewport_get_render_info(viewport.get_viewport_rid(), RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME, RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE)
+		var triangles := RenderingServer.viewport_get_render_info(viewport.get_viewport_rid(), RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_PRIMITIVES_IN_FRAME)
+		var calls := RenderingServer.viewport_get_render_info(viewport.get_viewport_rid(), RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE, RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME)
 		print("map_preview_stats file=%s triangles=%d draw_calls=%d pixels=%dx%d" % [file.get_file(), triangles, calls, pixels.x, pixels.y])
 	var image := viewport.get_texture().get_image()
 	if image == null or image.save_png(file) != OK:

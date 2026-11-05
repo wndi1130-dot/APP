@@ -896,7 +896,7 @@ func test_k5_side_path_absent_present_and_north_west_shift() -> void:
 func test_k6_failed_solver_rebuilds_original_zero() -> void:
 	var fail: Callable = func(_data: Dictionary, _mask: PackedByteArray, _protection: Array[Dictionary]) -> Dictionary: return {}
 	for form: String in FORMS:
-		var loaded: Dictionary = Loader.make_ready(Lake, 71, form, -1.0, "", -1, fail)
+		var loaded: Dictionary = Loader.make_ready(Lake, 71, form, -1.0, "", -1, Side.RULE, fail)
 		assert_true(loaded.has("bounds_failure"), form + ": 실패 명시")
 		assert_false(loaded.has("bounds_stamp"), form)
 		assert_eq(Digest.digest(loaded), Digest.digest(cases[form]["base"]), form + ": 원본 판 0 재생성 지문")

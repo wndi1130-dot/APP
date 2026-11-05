@@ -1,14 +1,19 @@
 extends RefCounted
 ## One JSON save slot compatible with the S1a Game object. Invalid text is preserved in a separate
 ## slot; the original is never deleted by load_slot.
-## 판 번호: 생필품이 꺼진 판은 1 그대로, 켜진 판만 2로 저장한다(slot_board). 옛 빌드는 1까지만 읽어
-## 생필품 판을 「더 새 빌드」로 거절하므로, 생필품 쓰기와 give_sup·give_fine 약속을 모른 채 정산하지 않는다.
+## 열차 판 저장 번호(필드 저장의 field_save.gd VERSION과 다른 수): dom이 있는 판은 4,
+## dom 없이 생필품이 켜진 판은 3, 나머지는 판 안의 번호로 저장한다(slot_board).
+## 옛 빌드는 자기 상한까지만 읽어 새 판을 「더 새 빌드」로 거절하므로, 생필품 쓰기·give_sup·give_fine
+## 약속과 본 공방 소식(shopSeen)을 모른 채 정산하지 않는다.
 
-## The newest slot version this build reads (1 and 2). What a save writes is slot_board's.
-const SAVE_VERSION := 2
-## A run with supplies on is written with this version so a build that reads only 1 refuses it.
-const SUPPLIES_VERSION := 2
+## The newest train slot version this build reads (1 to 4). What a save writes is slot_board's.
+const SAVE_VERSION := 4
+const DOM_LOG_VERSION := 4
+## A run with supplies on is written with this version, so a build from before supplies were on
+## for every new run (it reads at most 2) refuses it.
+const SUPPLIES_VERSION := 3
 const TrainDecor = preload("res://game/train/train_decor.gd")
+const TrainDom = preload("res://game/train/train_dom.gd")
 const Late = preload("res://game/train/turn/turn_late.gd")
 const RouteState = preload("res://game/train/route_state.gd")
 const DEFAULT_PATH := "user://s1a_game_v2.json"
@@ -102,6 +107,8 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 		return "미뤄 둔 카드 목록이 이상하다"
 	if g.has("lateOn") and not g["lateOn"] is bool:
 		return "서류 미루기 켜짐 값이 이상하다"
+	if g.has("shopSeen") and (not _is_number(g["shopSeen"]) or float(g["shopSeen"]) < -1.0 or float(g["shopSeen"]) != floorf(float(g["shopSeen"]))):
+		return "본 공방 소식 구간이 이상하다"
 	if g.has("lateCards") and not g["lateCards"] is Array:
 		return "미룬 서류 목록이 이상하다"
 	# Content (event pack) fields: absent or null is none (S1 `??`), anything else must have its shape.
@@ -144,6 +151,7 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 
 static func fill_defaults(g: Dictionary) -> void:
 	TrainDecor.migrate(g)
+	TrainDom.migrate_log(g)
 	if not g.has("lateOn"): g["lateOn"] = false
 	if not g.has("lateCards"): g["lateCards"] = []
 	if not g.has("eventLog") or g["eventLog"] == null:
@@ -180,8 +188,10 @@ static func read_save(raw: Variant, t: Dictionary) -> Dictionary:
 		return {"ok": false, "why": "판 번호가 없다"}
 	if int(version) > SAVE_VERSION:
 		return {"ok": false, "why": "더 새 빌드에서 저장한 판이다(판 번호 %d)" % int(version)}
-	# 1 to 2 needs no step: a version 1 board has no supplies keys, so supplies read as off.
-	# The version read stays as it was; the next save writes slot_board's.
+	# No step between versions: a version 1 board has no supplies keys, so supplies read as off;
+	# a version 2 board (supplies on, before shopSeen) reads its last settlement as seen
+	# (slice_flow.gd _seed_shop_settle). The version read stays as it was; the next save writes
+	# slot_board's.
 	var problem: Variant = shape_problem(game, t)
 	if problem != null:
 		return {"ok": false, "why": problem}
@@ -189,13 +199,13 @@ static func read_save(raw: Variant, t: Dictionary) -> Dictionary:
 	return {"ok": true, "g": game}
 
 
-## The board as the slot holds it. A run with supplies on carries SUPPLIES_VERSION in a shallow
-## copy (the caller's board is untouched, key order kept); any other board is written as it is.
+## The board as the slot holds it: domestic logs require 4, supplies without dom require 3.
+## A shallow copy keeps the caller's board and key order untouched.
 static func slot_board(g: Dictionary) -> Dictionary:
-	if not bool(g.get("supOn", false)):
+	if not g.get("dom") is Dictionary and not bool(g.get("supOn", false)):
 		return g
 	var out: Dictionary = g.duplicate(false)
-	out["version"] = SUPPLIES_VERSION
+	out["version"] = DOM_LOG_VERSION if g.get("dom") is Dictionary else SUPPLIES_VERSION
 	return out
 
 
@@ -238,7 +248,8 @@ static func load_slot(t: Dictionary, path: String = DEFAULT_PATH, broken_path: S
 	if parser.parse(raw) != OK:
 		read = {"ok": false, "why": "저장 글이 깨졌다"}
 	else:
-		read = read_save(preload("res://game/sim/field_save.gd")._decode(parser.data), t)
+		# A broken packed run in it reads as no board (null), as a broken file does.
+		read = read_save(preload("res://game/sim/field_save.gd").decode_checked(parser.data), t)
 	if bool(read["ok"]):
 		return {"g": read["g"], "why": null}
 	if _preserve_broken(raw, broken_path):

@@ -205,6 +205,7 @@ var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upsta
 var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
 var map_edge: MapEdge                   # ground and fog past the map's edge (fx/map_edge.gd)
+var horde_view: Node3D = null           # the horde behind the edge walls (null: off or no walls); field_audio hears it
 var night_view: NightLightView          # the hearts of the lights people left (decision 471 B4)
 var zombies: Zombies
 var camera: Camera3D
@@ -268,6 +269,7 @@ var resume_announce: bool = false
 var slow: float = 1.0                    # the body picture up: the field runs at this rate (body_injury 4.6)
 var hitstop: bool = false                # a blow's hold this frame (hit_feel.gd): the rules and pictures stand
 var away: bool = false             # the app pushed the field into a pause; say so once on return
+var away_saved: bool = false       # the slot was written as the app went (interrupt), till it is back
 var ended: bool = false
 var leave_t: float = -1.0          # since the train began to roll away (-1: it stands)
 var arrive_t: float = -1.0         # since the train came into sight (-1: it stands)
@@ -485,7 +487,8 @@ func _ready() -> void:
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
 	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script, region, int(opts.get("bounds_rule", -1))) if map_script != null else FieldMaps.build(place, region, int(opts.get("bounds_rule", -1)))
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary else fresh_map.call()
-	if not MapBounds.can_reuse(stop_map, int(opts.get("bounds_rule", -1))):
+	var side_path_rule: int = int(opts.get("side_path_rule", SidePath.RULE))
+	if not MapBounds.can_reuse(stop_map, int(opts.get("bounds_rule", -1))) or ((stop_map.has("side_path") or stop_map.has("_side_seed")) and int(stop_map.get("side_path_rule", 0)) != side_path_rule):
 		stop_map = fresh_map.call()
 	var ground_form := String(opts.get("stop_ground", opts.get("stop_form", "")))
 	var ground_m := float(opts.get("stop_form_m", -1.0))
@@ -496,12 +499,12 @@ func _ready() -> void:
 	if opts.has("stop_view_rows") or opts.has("stop_view_cols"):
 		stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)),
 			ground_form, rng.seed, ground_m, fresh_map, end_gap)
-	stop_map = with_side_path(stop_map, rng.seed)
+	stop_map = with_side_path(stop_map, rng.seed, side_path_rule)
 	var base_factory: Callable = func() -> Dictionary:
 		var base: Dictionary = FieldMaps.build_from(map_script, region, 0) if map_script != null else FieldMaps.build(place, region, 0)
 		base = StopGround.apply(base, ground_form, rng.seed, ground_m, end_gap)
 		base = StopGround.widen_view(base, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)))
-		return with_side_path(base, rng.seed)
+		return with_side_path(base, rng.seed, side_path_rule)
 	_take_map(MapBounds.finish(stop_map, base_factory, int(opts.get("bounds_rule", -1))))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
@@ -601,6 +604,14 @@ func _ready() -> void:
 	map_edge = MapEdge.new()
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
+	# 경계 무리의 시야/반응 갱신은 자식이 맡는다. 꺼짐 판은 자원 로드 전 반환.
+	var horde_settings: Dictionary = _perf_settings.duplicate()
+	horde_settings.merge(PerfSwitch._valid(opts.get("perf", {})), true)
+	# 소리(field_audio.drawn_walls)는 돌려받은 무리 노드만 읽는다(null이면 무리 꺼짐·벽 없음 — 무음).
+	horde_view = await preload("res://game/world/horde_view.gd").attach(self,
+		preload("res://game/world/horde_view.gd").stop_walls(data, opts, horde_settings, Vector2(view.grid.width, view.grid.height)),
+		{"map_size": Vector2(view.grid.width, view.grid.height), "grid": view.grid, "vis_texture": view.vis_texture,
+			"material": view.material, "field": self, "staged": bool(opts.get("staged", false))}, pace, horde_settings)
 	blood_fx = BloodFx.new()
 	add_child(blood_fx)
 	blood_fx.begin_stop(int(opts.get("seed", 1)))
@@ -668,6 +679,12 @@ func _ready() -> void:
 		arrive_t = 0.0
 		hud.visible = false
 		view.slide_train(-train_in(0.0, arrive_far()))
+		# While it rolls in no step runs, so the floors are chosen here as a restored
+		# stop chooses them (field_save.gd): else every floor stands at once, the upper
+		# ones on the ground floor of a building near enough to lose its roof.
+		var lv := level_of(player.position)
+		view.show_levels(lv)
+		view.cut_away(grid_at(player.position).building_at(FieldGrid.cell_of(player.position)), lv)
 	cam_focus = player.position
 	_update_camera(1.0)
 	_refresh_vision()
@@ -1680,8 +1697,8 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 ## and as it can grow the map, shift it and put its store on it, what the loader made
 ## ahead from the map as it was no longer fits: dropped first (a shift would move it
 ## all), made again from the map as it is now.
-static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
-	if map.has("bounds_stamp") and map.has("_side_seed") and int(map["_side_seed"]) == run_seed:
+static func with_side_path(map: Dictionary, run_seed: int, side_path_rule: int = SidePath.RULE) -> Dictionary:
+	if map.has("bounds_stamp") and map.has("_side_seed") and int(map["_side_seed"]) == run_seed and int(map.get("side_path_rule", 0)) == side_path_rule:
 		return map
 	var place_id := String(map.get("place_id", ""))
 	if StoryMaps.is_story(place_id):
@@ -1689,7 +1706,7 @@ static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 	if not map.has("side_path") and place_id not in ["", SidePath.FIRST_STOP] and SidePath.rolls(place_id, run_seed):
 		for key in AHEAD_KEYS:
 			map.erase(key)
-	var shaped: Dictionary = SidePath.add(map, run_seed)
+	var shaped: Dictionary = SidePath.add(map, run_seed, side_path_rule)
 	if place_id in MapBounds.Rule.ON:
 		shaped["_side_seed"] = run_seed
 	return shaped
@@ -1911,8 +1928,12 @@ func interrupt() -> void:
 	if hud != null:
 		hud.drop_touch()
 	# The one save slot, before the app may be shut (S3 spec 4). Off until the train side reads it.
-	if bool(opts.get("field_save", false)):
-		FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
+	# One home press sends focus-out and then pause: with the slot written as the app went, the
+	# second notice does not write it again (seconds for a big stop). The play stands still till
+	# the app is back (paused, or the stop ended); only the picture (camera, sight, the train
+	# rolling in) moves on meanwhile.
+	if bool(opts.get("field_save", false)) and not away_saved:
+		away_saved = FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
 	if ended:
 		return
 	if not away:
@@ -1924,6 +1945,8 @@ func interrupt() -> void:
 ## Back from an interrupt: one line, once (ui_states N4). Only when the app
 ## paused the field; a pause the player chose is not announced again.
 func welcome_back() -> void:
+	# Back: the next time the app goes, the slot is written again (an ended stop is never away).
+	away_saved = false
 	if not away:
 		return
 	away = false

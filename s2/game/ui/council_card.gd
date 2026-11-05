@@ -34,6 +34,8 @@ const CouncilVote = preload("res://game/politics/council_vote.gd")
 const CouncilMath = preload("res://game/politics/council_math.gd")
 const FieldCouncil = preload("res://game/politics/field_council.gd")
 const LawTech = preload("res://game/train/train_lawtech.gd")
+const TrainPipe = preload("res://game/train/train_pipe.gd")
+const TrainResearch = preload("res://game/train/train_research.gd")
 const PANE_TEX := preload("res://game/ui/tex/council_pane.png")
 const BUSTS := preload("res://game/ui/tex/busts.png")
 const PAPER_TEX := preload("res://game/ui/tex/paper.png")
@@ -196,6 +198,7 @@ static func model(g0: Dictionary, t0: Dictionary, at: int) -> Dictionary:
 		"idx": i, "count": options.size(),
 		"seg": int(g0.get("seg", 1)), "segments": int((t0.get("P", {}) as Dictionary).get("segments", 24)),
 		"dealing": can_deal(t0), "deals": (council.get("deals", []) as Array).size(),
+		"locked": bool(council.get("locked", false)),
 		"deal_max": int((t0.get("P", {}) as Dictionary).get("maxDealsPerSession", 3)),
 	}
 
@@ -268,6 +271,15 @@ static func kinds_after(g0: Dictionary, t0: Dictionary, at: int, comm: String, t
 static func change_rows(t0: Dictionary, agenda: Dictionary, g0: Dictionary = {}) -> Array:
 	var out: Array = []
 	if agenda.get("kind") == "motion":
+		if agenda.get("motion") == "pipe":
+			var variant: Variant = TrainPipe.pending(g0)
+			if variant == null:
+				return [["추인할 배관이 없다", "", ""]]
+			var chosen: Dictionary = TrainResearch.TECHS["e3"]["variants"][variant]
+			var other: Dictionary = TrainResearch.TECHS["e3"]["variants"]["b" if variant == "a" else "a"]
+			return [["통과", "%s: %s" % [chosen["name"], chosen["effect"]], ""],
+				["부결", "반대쪽으로 놓는다. %s: %s" % [other["name"], other["effect"]], ""],
+				["관계 ±5는 이 표결 결과의 쪽으로 움직인다", "", ""]]
 		var f: Dictionary = t0.get("FIELD", {})
 		var name: String = String((t0.get("COMM_NAME", {}) as Dictionary).get(agenda.get("subject"), "그 칸"))
 		if agenda.get("motion") == "field_symbol":
@@ -426,7 +438,13 @@ func _ready() -> void:
 	bar.lever_small = ""
 	bar.main_word = "표결"
 	bar.main_pressed.connect(_on_main)
+	# The bill opens on the session's own agenda: the one a group picked with the agenda it took
+	# in a deal (train_advance.gd open_council), or the one the deals were made on.
+	var council: Variant = g.get("council")
+	if council is Dictionary:
+		idx = maxi(0, int(council.get("idx", 0)))
 	m = model(g, t, idx)
+	idx = int(m.get("idx", idx))
 	bar.route = {"seg": int(m.get("seg", 1)), "total": int(m.get("segments", 24)), "phase": "의회", "km": -1.0}
 	add_child(bar)
 	resized.connect(_lay_out)
@@ -489,9 +507,10 @@ func _show() -> void:
 	_fill_pane()
 
 
-## Another agenda on the bill (the arrows), before the vote and before any deal.
+## Another agenda on the bill (the arrows), before the vote and before any deal. A session
+## whose agenda a group picked (S1 setAgenda: council.locked) keeps it.
 func turn(step: int) -> void:
-	if not result.is_empty() or m.is_empty() or int(m.get("deals", 0)) > 0:
+	if not result.is_empty() or m.is_empty() or int(m.get("deals", 0)) > 0 or bool(m.get("locked", false)):
 		return
 	var to: int = clampi(idx + step, 0, int(m["count"]) - 1)
 	if to == idx:
@@ -736,8 +755,8 @@ func _lay_bill() -> void:
 	title.size = Vector2(room, line_h * float(lines))
 	title.position = Vector2(TITLE_X0 * k, (24.0 + nav_h * 0.5) * k - title.size.y * 0.5)
 	_on_bill(title)
-	# The agenda holds once a deal is made on it (the deals stand on it).
-	var after: bool = not result.is_empty() or int(m.get("deals", 0)) > 0
+	# The agenda holds once a deal is made on it (the deals stand on it), or when a group picked it.
+	var after: bool = not result.is_empty() or int(m.get("deals", 0)) > 0 or bool(m.get("locked", false))
 	_on_bill(_arrow("back", Vector2(2.0, 24.0 + nav_h * 0.5 - 22.0), -1, after or int(m["idx"]) <= 0))
 	_on_bill(_arrow("fwd", Vector2(136.0, 24.0 + nav_h * 0.5 - 22.0), 1, after or int(m["idx"]) >= int(m["count"]) - 1))
 	# The tags: what it needs, open or secret, the law's own word.

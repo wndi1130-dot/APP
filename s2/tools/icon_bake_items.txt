@@ -1,0 +1,26 @@
+# 물건 아이콘 굽기 목록(결정 550·561): <id> <res://모형 또는 tools/item_models.gd> [yaw] [pitch] [roll] [margin]
+# 굽기: godot --path s2 --resolution 512x512 -s res://tools/icon_bake.gd -- <out_dir> res://tools/icon_bake_items.txt
+# 넣기: <out_dir>/<id>_256_muted.png 를 assets/icons/items/<id>.png 로(가져오기에서 mipmaps/generate=true).
+# 길쭉한 물건(목재·고철·조명탄·손도끼·권총)은 roll로 칸 대각선에 눕히고 여백 0.06.
+can_beans res://tools/item_models.gd
+can_meat res://tools/item_models.gd
+can_dented res://tools/item_models.gd
+hardtack res://tools/item_models.gd
+sugar res://tools/item_models.gd
+oats res://tools/item_models.gd
+jar_jam res://tools/item_models.gd
+coffee res://tools/item_models.gd
+cigarettes res://tools/item_models.gd
+antiseptic res://tools/item_models.gd
+painkillers res://tools/item_models.gd
+bottle_spirit res://tools/item_models.gd
+bandage res://tools/item_models.gd
+document res://tools/item_models.gd
+cloth res://tools/item_models.gd
+can_empty res://tools/item_models.gd
+medkit res://tools/item_models.gd
+wood res://tools/item_models.gd 35 28 30 0.06
+scrap res://tools/item_models.gd 35 28 -30 0.06
+flare res://tools/item_models.gd 35 28 30 0.06
+axe res://models/weapons/axe.glb 35 28 -30 0.06
+pistol res://models/weapons/pistol.glb 35 28 30 0.06

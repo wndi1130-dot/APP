@@ -155,7 +155,7 @@ func test_an_old_remote_save_resumes_exactly_on_the_ground_it_stood_on() -> void
 	var first: FieldGame = _game({"stop_form": "city"})
 	first.clock.elapsed = 321.0
 	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(first)))
-	assert_eq(int(saved["version"]), 2)
+	assert_eq(int(saved["version"]), FieldSave.VERSION)
 	assert_eq(saved["runtime"]["levels"][0]["solid"].size(), 1800, "the old remote map was 60 by 30")
 	saved["stop_form"] = "remote"
 	saved.erase("stop_ground")

@@ -16,23 +16,27 @@ import { createS1cGame } from '../src/game/domestic/state';
 import type { Task } from '../src/game/domestic/state';
 import { payUpkeep, restoreBlock, runWorkshop, setSupFine, startRestore, techShown, workPower } from '../src/game/domestic/workshop';
 import { furnishTick } from '../src/game/domestic/lawtech';
-import { D } from '../src/game/domestic/data';
+import { D, TECHS } from '../src/game/domestic/data';
+import type { TechId, Variant } from '../src/game/domestic/data';
+import { cancelRestore, restoreCost, startFinish, techTitle } from '../src/game/domestic/workshop';
+import { readSave } from '../src/ui/repro';
+import { assertNoSuppliesHooks, relations, restorationBoard, restoreStats, s2DomOmit } from './restore_port_fixture_helpers';
+assertNoSuppliesHooks();
 
-const plain = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
+const plain = <T>(x: T): T => {
+  if (x && typeof x === 'object' && 'comms' in x) assertNoSuppliesHooks(x as unknown as Game);
+  const copy = JSON.parse(JSON.stringify(x)) as T;
+  if (copy && typeof copy === 'object' && 'comms' in copy) assertNoSuppliesHooks(copy as unknown as Game);
+  return copy;
+};
 const groups: Record<string, unknown[]> = { enable: [], use: [], ledger: [], stops: [], fields: [], departures: [], cards: [], conditions: [], settles: [], work_order: [], workshop_settles: [] };
 // DomState keys rejected by S2 is_store after PR 2a. Keep all other state,
 // including cards, RNG, journal and community relations, in both comparisons.
 // supWork and supFineOn are S2 store keys since supplies 2b (train_dom.gd is_store).
-const s2DomOmit = ['finds', 'manuals', 'offered', 'armored',
-  'greenhouse', 'extraCars', 'people', 'nextPersonId', 'countdown', 'hotWater', 'pot',
-  'lice', 'liceFree', 'pressureStage', 'typhus', 'bedding', 'penalties', 'sabotage',
-  'grants', 'stoker', 'stalled', 'flags', 'hung', 'escort', 'altPlace', 'reroutes',
-  'delegate', 'workDebt', 'researchPick', 'enginePick', 'sit', 'movedAt', 'stokingAt',
-  'bedOrder', 'fullRule', 'bury', 'cars', 'captainInBed', 'elder', 'pipeFlip',
-  'pipeMoved', 'log', 'h6', 'stats'];
 
 function workshopBoard(): Game {
   const g = createS1cGame('sup-port-pr2a');
+  assertNoSuppliesHooks(g);
   enableSupplies(g);
   const d = g.dom!;
   d.scrap = 30; d.wood = 20; d.parts = 0; d.target = 5;
@@ -214,6 +218,133 @@ for (const on of [false, true]) for (const id of ['w6', 'w7', 'w8'] as const) {
   }
   groups.research_actions.push({ name: `${id}/on=${on}`, id, variant: variant ?? null, before, block, result, started, work_steps });
 }
+// 2c-1: 단계마다 같은 S1 판을 이어 쓰고 결과를 직접 확인한다.
+groups.restore_sequences = [];
+type RestoreAction = { kind: string; id?: TechId; mode?: 'full' | 'defect'; variant?: Variant; amount?: number };
+function restoreSequence(name: string, initial: Game, body: (step: (action: RestoreAction, run: () => unknown) => unknown, board: () => Game, reload: () => boolean) => void) {
+  let g = initial;
+  const before = plain(g), steps: unknown[] = [];
+  const step = (action: RestoreAction, run: () => unknown) => {
+    assertNoSuppliesHooks(g);
+    const before = plain(g), value = run() ?? null;
+    assertNoSuppliesHooks(g);
+    steps.push({ action, before, value: plain(value), after: plain(g) });
+    return value;
+  };
+  body(step, () => g, () => {
+    const saved = JSON.stringify(g);
+    const read = readSave(JSON.parse(saved));
+    if (!read.ok) throw new Error(read.why);
+    g = read.g; assertNoSuppliesHooks(g);
+    return true;
+  });
+  groups.restore_sequences.push({ name, initial: before, steps });
+}
+for (const mode of ['same', 'roundtrip', 'reload', 'interleaved', 'same-seg', 'legacy', 'cap'] as const) {
+  const id: TechId = mode === 'cap' ? 'w7' : 'r2';
+  const g = restorationBoard(`restore-${mode}`, [id, 'm2']);
+  if (mode === 'cap') { g.comms.tail.rel = 98; g.comms.guard.rel = -98; }
+  // 옛 저장 입력만 v 없는 꼴로 만든다. 시작/취소 결과는 모두 S1이 낸다.
+  if (mode === 'legacy') g.dom!.log.restores.push({ seg: g.seg, id });
+  restoreSequence(`restore-rel/${mode}`, g, (step, board, reload) => {
+    const start = (tech: TechId, variant?: Variant) => {
+      const g = board(), count = g.dom!.log.restores.length;
+      assert.equal(step({ kind: 'start_restore', id: tech, mode: 'full', variant }, () => startRestore(g, tech, 'full', variant)), true);
+      assert.equal(g.dom!.log.restores.length, count + 1);
+      assert.deepEqual(g.dom!.log.restores.at(-1), { seg: g.seg, id: tech, ...(variant ? { v: variant } : {}) });
+    };
+    const cancel = () => {
+      const g = board(), history = plain(g.dom!.log.restores), rel = relations(g);
+      step({ kind: 'cancel_restore' }, () => cancelRestore(g));
+      assert.equal(g.dom!.restoring, null); assert.deepEqual(g.dom!.log.restores, history);
+      assert.deepEqual(relations(g), rel);
+      assert.equal(g.journal.at(-1)?.tone, 'bad');
+    };
+    const initialRel = relations(board());
+    if (mode === 'legacy') {
+      start(id, 'b'); assert.deepEqual(relations(board()), initialRel);
+      cancel(); start(id, 'a'); assert.notDeepEqual(relations(board()), initialRel);
+      return;
+    }
+    start(id, 'a');
+    let expected = relations(board());
+    cancel();
+    if (mode === 'reload') {
+      const history = plain(board().dom!.log.restores);
+      assert.equal(step({ kind: 'save_load' }, reload), true);
+      assert.deepEqual(board().dom!.log.restores, history);
+    }
+    if (mode === 'interleaved') { start('m2'); cancel(); expected = relations(board()); }
+    if (mode === 'roundtrip' || mode === 'same-seg' || mode === 'cap') { start(id, 'b'); cancel(); }
+    start(id, 'a');
+    if (mode === 'cap') {
+      assert.equal(board().comms.tail.rel, 95); assert.equal(board().comms.guard.rel, -95);
+    } else assert.deepEqual(relations(board()), expected);
+    if (mode === 'same-seg') assert.ok(board().dom!.log.restores.every(r => r.seg === g.seg));
+  });
+}
+{
+  const g = restorationBoard('restore-no-dislike', ['w7']);
+  restoreSequence('restore-rel/no-dislike', g, (step, board) => {
+    const rel = relations(board()), ledger = plain(board().ledger ?? null);
+    assert.equal(step({ kind: 'start_restore', id: 'w7', mode: 'full', variant: 'a' }, () => startRestore(board(), 'w7', 'full', 'a')), true);
+    assert.deepEqual(relations(board()), rel); assert.deepEqual(board().ledger ?? null, ledger);
+  });
+}
+for (const cancelFinish of [false, true]) {
+  const g = restorationBoard(`restore-finish-${cancelFinish}`, ['e2']);
+  const d = g.dom!, cost = restoreCost('e2');
+  d.frags.engine = cost.defectFrags; g.passed.heat_quota = 0;
+  restoreSequence(`restore-finish/${cancelFinish ? 'cancel-finish' : 'defect-finish'}`, g, (step, board) => {
+    const beforeStats = restoreStats(g);
+    assert.equal(step({ kind: 'start_restore', id: 'e2', mode: 'defect' }, () => startRestore(g, 'e2', 'defect')), true);
+    const work = () => {
+      for (let i = 0; d.restoring && i < 32; i++) step({ kind: 'run_workshop' }, () => runWorkshop(board()));
+      assert.equal(d.restoring, null);
+    };
+    work(); assert.equal(d.techs.e2!.stage, 'defective');
+    assert.deepEqual(restoreStats(g), { ...beforeStats, restored: beforeStats.restored + 1, defective: beforeStats.defective + 1 });
+    // 찾은 조각을 입력 행동으로 기록해 연속 판의 경계를 보존한다.
+    const amount = cost.frags - cost.defectFrags;
+    step({ kind: 'add_frags', id: 'e2', amount }, () => { d.frags.engine += amount; });
+    const history = plain(d.log.restores), rel = relations(g), stats = restoreStats(g);
+    assert.equal(step({ kind: 'start_finish', id: 'e2' }, () => startFinish(g, 'e2')), true);
+    assert.deepEqual(d.log.restores, history); assert.deepEqual(relations(g), rel);
+    assert.equal(g.journal.at(-1)?.text, `${techTitle(g, 'e2')}의 나머지 설계도를 맞추기 시작했다.`);
+    if (cancelFinish) {
+      const need = d.techs.e2!.need;
+      step({ kind: 'cancel_restore' }, () => cancelRestore(g));
+      assert.equal(d.restoring, null); assert.equal(d.techs.e2!.stage, 'defective');
+      assert.equal(d.techs.e2!.finishing, false); assert.equal(d.techs.e2!.progress, 0);
+      assert.equal(d.techs.e2!.need, need); assert.equal(g.journal.at(-1)?.tone, 'bad');
+      assert.deepEqual(d.log.restores, history); assert.deepEqual(relations(g), rel);
+      assert.deepEqual(restoreStats(g), stats);
+      assert.equal(step({ kind: 'start_finish', id: 'e2' }, () => startFinish(g, 'e2')), true);
+    }
+    const journalAt = g.journal.length;
+    work();
+    assert.equal(d.techs.e2!.stage, 'done'); assert.equal(d.techs.e2!.finishing, false);
+    assert.deepEqual(restoreStats(g), stats);
+    assert.deepEqual(g.journal.slice(journalAt), [{ seg: g.seg, text: `${techTitle(g, 'e2')}이(가) 완성판이 됐다.`, tone: 'good' }]);
+  });
+}
+{
+  const g = restorationBoard('restore-cancel', ['w8']), d = g.dom!, id = 'w8';
+  restoreSequence('restore-cancel/materials', g, step => {
+    const paidFrom = { parts: d.parts, wood: d.wood, scrap: d.scrap, cores: d.cores, frags: d.frags.craft };
+    assert.equal(step({ kind: 'start_restore', id, mode: 'full' }, () => startRestore(g, id, 'full')), true);
+    const paid = { parts: d.parts, wood: d.wood, scrap: d.scrap }, rel = relations(g), history = plain(d.log.restores);
+    step({ kind: 'cancel_restore' }, () => cancelRestore(g));
+    assert.equal(d.restoring, null); assert.equal(d.techs[id], undefined);
+    assert.equal(d.cores, paidFrom.cores); assert.equal(d.frags.craft, paidFrom.frags);
+    assert.deepEqual({ parts: d.parts, wood: d.wood, scrap: d.scrap }, paid);
+    const cost = restoreCost(id, g);
+    assert.deepEqual(paid, { parts: paidFrom.parts - cost.parts, wood: paidFrom.wood - cost.wood, scrap: paidFrom.scrap - cost.scrap });
+    assert.deepEqual(relations(g), rel); assert.deepEqual(d.log.restores, history);
+    assert.deepEqual(g.journal.at(-1), { seg: g.seg, text: `${TECHS[id].name} 복원을 멈췄다. 쓴 자재는 돌아오지 않는다.`, tone: 'bad' });
+  });
+}
+
 for (const fine of [false, true]) {
   const g = productionBoard(); g.dom!.supFineOn = fine;
   mutate('workshop_settles', `supplies/fine=${fine}`, g, board => {
@@ -224,6 +355,7 @@ for (const fine of [false, true]) {
 }
 function fresh(on = true): Game {
   const g = S1.createGame('sup-port-pr1');
+  assertNoSuppliesHooks(g);
   if (on) enableSupplies(g);
   return g;
 }

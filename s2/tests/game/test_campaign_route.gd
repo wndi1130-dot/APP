@@ -13,6 +13,8 @@ const Catalog = preload("res://game/train/campaign_route.gd")
 const StopLoader = preload("res://game/stop_loader.gd")
 const ArrivalSheet = preload("res://game/ui/arrival_sheet.gd")
 const Boot = preload("res://game/boot.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
 const STARTS: String = "res://tests/game/fixtures/campaign_starts.json"
 const SLICE: String = "user://test_campaign_slice.json"
 const TRAIN: String = "user://test_campaign_train.json"
@@ -21,13 +23,83 @@ const RESUME_BOARDS: int = 10
 const CUTS: Array[String] = ["entry", "contract", "field", "ended_before_train", "train_before_meta", "receipt"]
 var roots: Array = []
 var starts: Array = []
+## Each board's two stops played through without a break or a save, once for the script
+## (_straight_run): board index -> the train at the end and what the run counted.
+var straight: Dictionary = {}
 
 
 class CampaignProbe extends SliceFlow:
+	## The stops' maps as FieldMaps.build makes them, once for the script: a stop's map is a
+	## function of its place and band, and the second stop's took seconds on the runner each time.
+	static var built_maps: Dictionary = {}
 	var cut_before_meta: bool = false
 	var field_entries: int = 0
 	var applied_returns: int = 0
 	var real_receipts: Array[String] = []
+	## Called once as the field's end reaches the train, before the train takes it in.
+	var before_return: Callable = Callable()
+
+	## The field step makes its map with FieldMaps.build (slice_flow.gd go); here it is handed a
+	## copy of the one built for the script instead, unless the test asks for its own map.
+	func go(i: int) -> void:
+		var lent: bool = _is_campaign() and i >= 0 and i < STEPS.size() and String(STEPS[i][0]) == "field" \
+			and not opts.has("map_data") and not opts.has("place") and not is_instance_valid(pending_field)
+		if lent:
+			opts["map_data"] = lend_map(_field_place(), _stop_band(_field_seg()))
+		super.go(i)
+		if lent:
+			opts.erase("map_data")
+
+	static func lend_map(place: String, band: String) -> Dictionary:
+		var key: String = place + "|" + band
+		if not built_maps.has(key):
+			built_maps[key] = FieldMaps.build(place, band)
+		return copy_map(built_maps[key])
+
+	## A map the field may change as its own: Dictionary.duplicate does not copy the grids
+	## (FieldGrid objects), so each is copied once and put back wherever it stood.
+	static func copy_map(data: Dictionary) -> Dictionary:
+		var out: Dictionary = data.duplicate(true)
+		_own_grids(out, {})
+		return out
+
+	static func _own_grids(v: Variant, copies: Dictionary) -> void:
+		if v is Dictionary:
+			for key: Variant in (v as Dictionary).keys():
+				if v[key] is FieldGrid:
+					v[key] = _grid_copy(v[key], copies)
+				else:
+					_own_grids(v[key], copies)
+		elif v is Array:
+			for i: int in (v as Array).size():
+				if v[i] is FieldGrid:
+					v[i] = _grid_copy(v[i], copies)
+				else:
+					_own_grids(v[i], copies)
+
+	static func _grid_copy(source: FieldGrid, copies: Dictionary) -> FieldGrid:
+		var id: int = source.get_instance_id()
+		if copies.has(id):
+			return copies[id]
+		var g := FieldGrid.new(source.width, source.height)
+		for prop: Dictionary in source.get_property_list():
+			if not int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE:
+				continue
+			var value: Variant = source.get(prop["name"])
+			if value is AStarGrid2D:
+				continue
+			if value is Dictionary or value is Array:
+				value = value.duplicate(true)
+			elif typeof(value) >= TYPE_PACKED_BYTE_ARRAY:
+				value = value.duplicate()
+			g.set(prop["name"], value)
+		# The path grids from the walk caches, as a grown grid takes them (field_grid.gd adopt_paths);
+		# that counts as a change there, and the copy keeps the source's count (saves carry it).
+		if source.paths_ready():
+			g.adopt_paths()
+		g.revision = source.revision
+		copies[id] = g
+		return g
 
 	func _save_slice() -> bool:
 		if cut_before_meta and bool(opts.get("save", false)) and step >= 0:
@@ -39,6 +111,10 @@ class CampaignProbe extends SliceFlow:
 		super._start_field()
 
 	func _field_done(said: Dictionary) -> void:
+		if before_return.is_valid():
+			var hook: Callable = before_return
+			before_return = Callable()
+			hook.call()
 		if said.get("receipt") is Dictionary and is_instance_valid(field) and field.ended:
 			real_receipts.append(String(said["receipt"]["receiptId"]))
 		super._field_done(said)
@@ -110,7 +186,30 @@ func _json(value: Variant) -> String:
 	return JSON.stringify(value, "", true, true)
 
 
+## A train board as its slot writes it (save_slot.gd slot_board): a supplies run is
+## written as slot version 3 whatever version the board in hand carries, and a board
+## read back carries the 3. Boards kept, read back or never cut are held side by side in
+## the written form; anything else is itself. That puts the number read back out of these
+## comparisons: `_version_gap` checks it.
+func _slot(value: Variant) -> Variant:
+	return TrainSave.slot_board(value) if value is Dictionary else value
+
+
+## The slot version a board read back carries, against what slot_board writes for the board
+## in hand, value and type (a supplies run's int 3), before `_slot` puts both in the written
+## form. A train slot written without slot_board reads back as the board in hand and shows here.
+func _version_gap(kept: Dictionary, back: Dictionary) -> String:
+	var want: Variant = TrainSave.slot_board(kept).get("version")
+	var got: Variant = back.get("version")
+	if typeof(want) != typeof(got) or want != got:
+		return "version: %s %s -> %s %s" % [type_string(typeof(want)), str(want), type_string(typeof(got)), str(got)]
+	return ""
+
+
 func _type_gap(saved: Variant, back: Variant, at: String = "g") -> String:
+	if at == "g":
+		saved = _slot(saved)
+		back = _slot(back)
 	if typeof(saved) != typeof(back):
 		return "%s: %s -> %s" % [at, type_string(typeof(saved)), type_string(typeof(back))]
 	if saved is Dictionary:
@@ -136,6 +235,9 @@ func _type_gap(saved: Variant, back: Variant, at: String = "g") -> String:
 ## Types and every other value must match exactly; a float may come back one last bit off
 ## (Godot's JSON reader rounds some 17-digit numbers the other way), so floats match to 1e-12.
 func _board_gap(kept: Variant, back: Variant, at: String = "g") -> String:
+	if at == "g":
+		kept = _slot(kept)
+		back = _slot(back)
 	if typeof(kept) != typeof(back):
 		return "%s: %s -> %s" % [at, type_string(typeof(kept)), type_string(typeof(back))]
 	if kept is Dictionary:
@@ -298,32 +400,120 @@ func test_campaign_uses_ten_distinct_train_boards() -> void:
 	assert_true(Catalog.stop_at(1)["placeholder"])
 
 
+## The first place where two maps differ, or "": values and types as _board_gap, a grid by its
+## fields and both path grids cell by cell, and a grid that stands in two places in one map
+## (grid and levels[0]) stands in the same two in the other.
+func _map_gap(a: Variant, b: Variant) -> String:
+	return _map_gap_at(a, b, "m", {})
+
+
+func _map_gap_at(a: Variant, b: Variant, at: String, seen: Dictionary) -> String:
+	if typeof(a) != typeof(b):
+		return "%s: %s -> %s" % [at, type_string(typeof(a)), type_string(typeof(b))]
+	if a is FieldGrid:
+		var id: int = (a as Object).get_instance_id()
+		if seen.has(id):
+			return "" if is_same(seen[id], b) else at + ": shared grid split"
+		if not b is FieldGrid:
+			return at + ": not a grid"
+		seen[id] = b
+		for prop: Dictionary in (a as Object).get_property_list():
+			if not int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE:
+				continue
+			var name: String = prop["name"]
+			if a.get(name) is AStarGrid2D:
+				var pa: AStarGrid2D = a.get(name)
+				var pb: AStarGrid2D = b.get(name)
+				if pa.region != pb.region:
+					return "%s.%s: region" % [at, name]
+				for y: int in range(pa.region.position.y, pa.region.end.y):
+					for x: int in range(pa.region.position.x, pa.region.end.x):
+						var c := Vector2i(x, y)
+						if pa.is_point_solid(c) != pb.is_point_solid(c) or pa.get_point_weight_scale(c) != pb.get_point_weight_scale(c):
+							return "%s.%s: cell %s" % [at, name, str(c)]
+			elif a.get(name) != b.get(name):
+				return "%s.%s: differs" % [at, name]
+		return ""
+	if a is Object:
+		return at + ": an object the map copy does not know: " + (a as Object).get_class()
+	if a is Dictionary:
+		if (a as Dictionary).size() != (b as Dictionary).size():
+			return at + ": keys differ"
+		for key: Variant in a:
+			if not (b as Dictionary).has(key):
+				return "%s.%s: missing" % [at, str(key)]
+			# How long the yard dressing took (yard_dress.gd): a clock reading, other on every build.
+			if key is String and key == "yard_dress_ms":
+				continue
+			var gap: String = _map_gap_at(a[key], b[key], "%s.%s" % [at, str(key)], seen)
+			if gap != "":
+				return gap
+		return ""
+	if a is Array:
+		if (a as Array).size() != (b as Array).size() or not (a as Array).is_same_typed(b):
+			return at + ": length or type differs"
+		for i: int in (a as Array).size():
+			var gap: String = _map_gap_at(a[i], b[i], "%s[%d]" % [at, i], seen)
+			if gap != "":
+				return gap
+		return ""
+	return "" if a == b else "%s: %s -> %s" % [at, str(a), str(b)]
+
+
+func test_campaign_shared_maps_match_fresh_builds() -> void:
+	for i: int in Catalog.size():
+		var stop: Dictionary = Catalog.stop_at(i)
+		var lent: Dictionary = CampaignProbe.lend_map(stop["map"], stop["band"])
+		assert_eq(_map_gap(FieldMaps.build(stop["map"], stop["band"]), lent), "", "%s is lent as built" % stop["map"])
+		# A copy is the field's own: what one field does to it is not in the next one.
+		var grid: FieldGrid = lent["grid"]
+		assert_true(is_same(grid, lent["levels"][0]))
+		grid.revision += 1
+		lent["containers"].clear()
+		var again: Dictionary = CampaignProbe.lend_map(stop["map"], stop["band"])
+		assert_false(is_same(again["grid"], grid))
+		assert_eq(_map_gap(CampaignProbe.built_maps[stop["map"] + "|" + stop["band"]], again), "", "%s: the next copy is as built" % stop["map"])
+		assert_ne(_map_gap(lent, again), "", "%s: the changed copy is changed" % stop["map"])
+
+
+## Board i played through both stops without a break or a save; kept for the script, so the
+## resume test compares its cuts against the same runs this one checks.
+func _straight_run(i: int) -> Dictionary:
+	var flow: CampaignProbe = _flow(i, {"save": false})
+	assert_false(flow.opts.has("skip_field"))
+	assert_eq(_record_count(flow), 0)
+	assert_eq(SliceSave.applied_ids(flow.train_g).size(), 0)
+	_to_second(flow)
+	var first_session: String = _json(flow.train_g["fieldReturns"].get("special"))
+	_play_field(flow)
+	assert_eq(_record_count(flow), 2)
+	assert_eq(SliceSave.applied_ids(flow.train_g).size(), 2)
+	assert_eq(_json(flow.train_g["fieldReturns"].get("special")), first_session)
+	flow.next()
+	assert_eq(flow.current(), "end")
+	assert_eq(flow.title.text, "여기까지 — 다음 정차는 아직")
+	assert_ne(flow.train_g.get("end", ""), "slice")
+	assert_eq(int(flow.train_g["campaign"]["cursor"]), Catalog.size())
+	assert_eq(RouteState.problem(flow.train_g), "")
+	# Every applied id came from an actual FieldGame.finish signal.
+	for id: String in SliceSave.applied_ids(flow.train_g):
+		assert_true(flow.real_receipts.has(id))
+	var run: Dictionary = {"g": flow.train_g.duplicate(true), "entries": flow.field_entries,
+		"returns": flow.applied_returns, "quiet": flow.applied_returns - flow.real_receipts.size()}
+	_drop(flow)
+	straight[i] = run
+	return run
+
+
 func test_campaign_two_real_fields_apply_each_return_once() -> void:
 	var entries: int = 0
 	var returns: int = 0
 	var quiet_returns: int = 0
 	for i: int in 10:
-		var flow: CampaignProbe = _flow(i, {"save": false})
-		assert_false(flow.opts.has("skip_field"))
-		assert_eq(_record_count(flow), 0)
-		assert_eq(SliceSave.applied_ids(flow.train_g).size(), 0)
-		_to_second(flow)
-		var first_session: String = _json(flow.train_g["fieldReturns"].get("special"))
-		_play_field(flow)
-		assert_eq(_record_count(flow), 2)
-		assert_eq(SliceSave.applied_ids(flow.train_g).size(), 2)
-		assert_eq(_json(flow.train_g["fieldReturns"].get("special")), first_session)
-		flow.next()
-		assert_eq(flow.current(), "end")
-		assert_eq(flow.title.text, "여기까지 — 다음 정차는 아직")
-		assert_ne(flow.train_g.get("end", ""), "slice")
-		entries += flow.field_entries
-		returns += flow.applied_returns
-		# Every applied id came from an actual FieldGame.finish signal.
-		quiet_returns += flow.applied_returns - flow.real_receipts.size()
-		for id: String in SliceSave.applied_ids(flow.train_g):
-			assert_true(flow.real_receipts.has(id))
-		_drop(flow)
+		var run: Dictionary = _straight_run(i)
+		entries += int(run["entries"])
+		returns += int(run["returns"])
+		quiet_returns += int(run["quiet"])
 	assert_eq(entries, 20)
 	assert_eq(returns, 20)
 	assert_eq(quiet_returns, 0)
@@ -447,7 +637,36 @@ func test_campaign_return_replay_is_idempotent() -> void:
 	assert_eq(resumed.applied_returns, 0, "no return was applied again")
 
 
-func _cut_second(board_index: int, cut: String) -> void:
+## The three slots as a kill at this moment leaves them: each file with its .tmp, .bak and
+## .broken, as bytes.
+func _disk() -> Dictionary:
+	var files: Dictionary = {}
+	for path: String in [SLICE, TRAIN, FIELD]:
+		for at: String in [path, path + ".tmp", path + ".bak", path + ".broken"]:
+			if FileAccess.file_exists(at):
+				files[at] = FileAccess.get_file_as_bytes(at)
+	return files
+
+
+## The slots put back as _disk found them, for a new start to pick up.
+func _restore(files: Dictionary) -> void:
+	_clear_slots()
+	for at: String in files:
+		var file: FileAccess = FileAccess.open(at, FileAccess.WRITE)
+		assert_not_null(file)
+		if file != null:
+			file.store_buffer(files[at])
+			file.close()
+
+
+## Board i played to the second stop's receipt once, with the slots copied at each of the six
+## cuts on the way. A kill at a cut leaves those files, and a run cut there takes the same steps
+## up to it, so one run stands for six runs each stopped at its own cut. Two cuts fall inside
+## the field's finish: its ended save is written before the train hears of it (field_game.gd
+## finish), and the train's slot is written before the slice's.
+func _cut_points(board_index: int) -> Dictionary:
+	_clear_slots()
+	var cuts: Dictionary = {}
 	var flow: CampaignProbe = _flow(board_index)
 	_to_arrival(flow)
 	assert_true(flow._begin_campaign_stop())
@@ -458,47 +677,53 @@ func _cut_second(board_index: int, cut: String) -> void:
 	assert_eq(flow.council_g, {})
 	assert_eq(flow.arrival_g, {})
 	assert_eq(flow.field_resume, {})
-	if cut != "entry":
-		flow.go(flow._index_of("stop_pick"))
-		assert_false(flow.contract.is_empty())
-	if cut in ["field", "ended_before_train", "train_before_meta", "receipt"]:
-		flow.next()
-		_freeze_field(flow)
-		flow.field.interrupt()
-	if cut == "ended_before_train":
-		flow.field.finished.disconnect(Callable(flow, "_field_done"))
-		flow.field.finish("departed")
+	cuts["entry"] = _disk()
+	flow.go(flow._index_of("stop_pick"))
+	assert_false(flow.contract.is_empty())
+	cuts["contract"] = _disk()
+	flow.next()
+	_freeze_field(flow)
+	if not is_instance_valid(flow.field):
+		_drop(flow)
+		return cuts
+	flow.field.interrupt()
+	cuts["field"] = _disk()
+	flow.before_return = func() -> void:
 		assert_eq(FieldSave.read(FIELD).get("phase"), "ended")
 		assert_false(flow._returned())
-	elif cut == "train_before_meta":
-		flow.cut_before_meta = true
-		flow.field.finish("departed")
-		assert_true(flow._returned())
-		assert_eq(SliceSave.read(SLICE)["step"], "field")
-	elif cut == "receipt":
-		flow.field.finish("departed")
-		flow.next()
-		assert_eq(flow.current(), "receipt")
+		cuts["ended_before_train"] = _disk()
+	flow.cut_before_meta = true
+	flow.field.finish("departed")
+	assert_true(cuts.has("ended_before_train"))
+	assert_true(flow._returned())
+	assert_eq(SliceSave.read(SLICE)["step"], "field")
+	cuts["train_before_meta"] = _disk()
+	# The slice's write the cut held back, as the finish makes it without one.
+	flow.cut_before_meta = false
+	assert_true(flow._save_slice())
+	flow.next()
+	assert_eq(flow.current(), "receipt")
+	cuts["receipt"] = _disk()
 	_drop(flow)
+	return cuts
 
 
 func test_campaign_second_stop_resume_matches_uninterrupted() -> void:
 	var checked: int = 0
 	for i: int in RESUME_BOARDS:
-		_clear_slots()
-		var straight: CampaignProbe = _flow(i, {"save": false})
-		_to_second(straight)
-		_finish_second(straight)
-		var expected: Dictionary = straight.train_g.duplicate(true)
-		_drop(straight)
+		var expected: Dictionary = (straight[i] if straight.has(i) else _straight_run(i))["g"]
+		var cuts: Dictionary = _cut_points(i)
 		for cut: String in CUTS:
-			_clear_slots()
-			_cut_second(i, cut)
+			assert_true(cuts.has(cut), "%s board %d" % [cut, i])
+			if not cuts.has(cut):
+				return
+			_restore(cuts[cut])
 			var picked: Dictionary = _pick()
 			assert_false(picked.is_empty(), "%s board %d" % [cut, i])
 			if picked.is_empty():
 				return
 			assert_eq(int(picked["g"]["campaign"]["cursor"]), 1)
+			assert_eq(_version_gap(expected, picked["g"]), "", "%s board %d slot version" % [cut, i])
 			var resumed: CampaignProbe = _flow(i, {"resume": picked})
 			_finish_second(resumed)
 			assert_eq(_board_gap(expected, resumed.train_g), "", "%s board %d values" % [cut, i])
@@ -529,6 +754,7 @@ func test_campaign_save_identity_and_shape() -> void:
 	SliceSave.clear(SLICE)
 	var missing: Dictionary = _pick()
 	assert_eq(missing["step"], "stop_pick")
+	assert_eq(_version_gap(second, missing["g"]), "")
 	assert_eq(_board_gap(second, missing["g"]), "")
 	assert_false(SliceSave.field_belongs(second, old_field))
 	_drop(flow)
@@ -643,8 +869,21 @@ func test_campaign_passed_stop_advances_without_receipt() -> void:
 		_drop(flow)
 
 
+## A run saved before every new run carried supplies: the keys Supplies.enable and the
+## new run put on (slice_flow.gd _starting_board), taken off again. The start board is
+## only read when the run begins, so the run goes on with supplies off, as such a save does.
+func _supplies_off(flow: CampaignProbe) -> void:
+	for key: String in ["supOn", "sup", "supCover", "shopSeen"]:
+		flow.train_g.erase(key)
+
+
+## An old save with supplies off: the departure's workshop works once as the train
+## leaves (slice_flow.gd _take, RouteState.mark_workshop), and not again after a resume.
+## A supplies run's workshop works inside the settlement instead (turn_settle.gd).
 func test_campaign_departure_workshop_runs_once_after_resume() -> void:
 	var flow: CampaignProbe = _flow()
+	_supplies_off(flow)
+	assert_false(bool(flow.train_g.get("supOn", false)), "an old save with supplies off")
 	_reach(flow, "stop_pick")
 	_play_field(flow)
 	var departure_id: String = String(flow.train_g["campaign"]["visit"]["departure_id"])
@@ -656,6 +895,7 @@ func test_campaign_departure_workshop_runs_once_after_resume() -> void:
 	_drop(flow)
 	var resumed: CampaignProbe = _flow(0, {"resume": _pick()})
 	assert_eq(resumed.current(), "travel")
+	assert_eq(_version_gap(before, resumed.train_g), "", "supplies off: the board's own number")
 	assert_eq(_board_gap(before, resumed.train_g), "")
 	resumed.go(resumed._index_of("travel"))
 	resumed._take(resumed.train_g.duplicate(true))

@@ -304,13 +304,17 @@ func test_every_floor_ships_steps_of_its_own() -> void:
 	}
 	assert_eq(want.size(), FG.Floor.size(), "every floor is written out here")
 	assert_eq(a.STEP_FLOORS.size(), FG.Floor.size(), "and has a row")
+	# The files shipped for each floor (rights_ledger), so a lost one is caught.
+	var shipped: Dictionary = {
+		"step_snow": 7, "step_concrete": 14, "step_wood": 11, "step_gravel": 12, "step_ice": 10,
+	}
 	for kind in want:
 		var own: String = want[kind]
 		a.lib.erase(own)
 		g.floor[g.index(cell)] = kind
 		assert_eq(a._step_group(at)[0], own, "floor %d has steps of its own" % kind)
 		var list: Array = a._load_group(own)
-		assert_gte(list.size(), 4, own)
+		assert_eq(list.size(), int(shipped[own]), own + ": as many files as shipped")
 		for s in list:
 			assert_between(s.get_length(), 0.1, 0.8, own)
 	g.floor[g.index(cell)] = was
@@ -918,6 +922,396 @@ func test_no_blow_file_twice_running() -> void:
 	assert_gt(a.blow_log.size(), 600, "layers heard")
 	assert_eq(again, 0, "no file twice running in a layer")
 	gut.p("600 blows: %d layers, %d files twice running" % [a.blow_log.size(), again])
+
+
+# Decision 554: a light weapon's and a heavy blunt one's body hit is a
+# recording for each tier of the blow, three files a tier, longer as the tier
+# goes up in the files themselves (so the tier's loudness and pitch are not
+# laid on them); the axe and the boot keep their own. (The files the user
+# picked are heard more often: test_picked_files_are_heard_more_often.)
+func test_light_and_blunt_blows_are_recorded_by_tier() -> void:
+	var a = game.audio
+	var rec: Array = a.recorded_weights()
+	assert_eq(rec, ["blow_light", "blow_blunt"], "both weights have all three tiers")
+	for weight: String in rec:
+		var shorter := 0.0
+		for t in 3:
+			var list: Array = a.lib["%s_t%d" % [weight, t]]
+			assert_eq(list.size(), 3, "%s t%d: three files" % [weight, t])
+			var mean := 0.0
+			for s: AudioStream in list:
+				mean += s.get_length() / 3.0
+			assert_gt(mean, shorter, "%s: a harder tier is longer" % weight)
+			shorter = mean
+	var by: Dictionary = {"knife": "blow_light", "broken_bottle": "blow_light", "": "blow_light", "pistol": "blow_light",
+		"crowbar": "blow_blunt", "frying_pan": "blow_blunt", "wood_stake": "blow_blunt"}
+	for w: String in by:
+		for tier in [-1, 0, 1, 2]:
+			var info := {"weapon": w, "target": "standing", "result": "body", "edge": 0, "tier": tier}
+			var got: Array = a.blow_layers(info, rec)
+			assert_eq(got[0][0], "%s_t%d" % [by[w], 1 if tier < 0 else tier], "%s, tier %d" % [w, tier])
+			assert_almost_eq(float(got[0][1]), db_to_linear(float(a.BLOW_WEIGHT_DB[by[w]])), 0.0001, "the tier is in the file")
+			assert_almost_eq(float(got[0][2]), 1.0, 0.0001, "not pitched by the tier")
+			# The blade, the pan and the stake keep their old grain over it, thin.
+			var old: Array = a.blow_layers(info)
+			var grain: bool = ["knife", "broken_bottle", "frying_pan", "wood_stake"].has(w)
+			assert_eq(a.BLOW_GRAIN.has(String(old[0][0])), grain, "%s: a grain of its own, or the recording alone" % w)
+			if grain:
+				assert_eq(got[1][0], old[0][0], "%s: its old family over the recording" % w)
+				assert_almost_eq(float(got[1][1]), float(old[0][1]) * db_to_linear(a.BLOW_GRAIN_DB), 0.0001, "%s, tier %d: at its old tier, BLOW_GRAIN_DB under" % [w, tier])
+				assert_almost_eq(float(got[1][2]), float(old[0][2]), 0.0001, "%s, tier %d: at its old pitch" % [w, tier])
+			assert_eq(got.slice(2 if grain else 1), old.slice(1), "the other layers as before")
+	for w: String in ["knife", "frying_pan", "wood_stake"]:
+		for result: String in ["body", "head", "finish", "blocked", "shatter", "stuck"]:
+			for target: String in ["standing", "downed", "frozen"]:
+				for edge: int in [-1, 0, 1, 2]:
+					var info := {"weapon": w, "target": target, "result": result, "edge": edge, "tier": 0}
+					var got: Array = a.blow_layers(info, rec)
+					var old: Array = a.blow_layers(info)
+					assert_eq(got.size(), old.size() + 1, "%s %s %s %d: one layer more, the grain" % [w, result, target, edge])
+					assert_eq([got[1][0], snappedf(float(got[1][2]), 0.0001)], [old[0][0], snappedf(float(old[0][2]), 0.0001)], "dull and down lower, as before")
+					assert_almost_eq(float(got[1][1]), float(old[0][1]) * db_to_linear(a.BLOW_GRAIN_DB), 0.0001, "under a coat or ice as before")
+					assert_eq(got.slice(2), old.slice(1), "what came of it as before")
+	for w: String in ["axe", "boot"]:
+		var info := {"weapon": w, "target": "standing", "result": "body", "edge": 0, "tier": 2}
+		assert_eq(a.blow_layers(info, rec), a.blow_layers(info), w + " keeps its own")
+	var dull: Array = a.blow_layers({"weapon": "crowbar", "result": "body", "target": "downed", "edge": 1, "tier": 0}, rec)
+	assert_almost_eq(float(dull[0][2]), a.BLOW_DULL_PITCH * a.BLOW_DOWN_PITCH, 0.0001, "dull and down still lower")
+	var coat: Array = a.blow_layers({"weapon": "knife", "result": "blocked", "target": "standing", "edge": 0, "tier": 1}, rec)
+	assert_almost_eq(float(coat[0][1]), float(a.BLOW_UNDER["blocked"]) * db_to_linear(float(a.BLOW_WEIGHT_DB["blow_light"])), 0.0001, "under a coat as before")
+	# A weight short of a tier keeps its families.
+	var kept: Array = a.lib["blow_blunt_t2"]
+	a.lib["blow_blunt_t2"] = []
+	assert_eq(a.recorded_weights(), ["blow_light"], "a weight short of a tier is not recorded")
+	a.lib["blow_blunt_t2"] = kept
+	var at: Vector3 = game.player.position + Vector3(1.0, 0, 0)
+	# A dull knife's grain is as dull as its body (the same bus); the coat's is plain.
+	var n0: int = a.blow_log.size()
+	a.blow({"weapon": "knife", "target": "standing", "result": "body", "edge": 1, "tier": 1, "at": at, "by_player": true})
+	assert_eq([a.blow_log[n0][0], a.blow_log[-1][0]], ["blow_light_t1", "blow_cut"], "the recording, then the blade's grain")
+	var plain: String = a._bus_at(at)
+	assert_eq(a.last_bus, a.ROOM_DULL_BUS if plain == a.ROOM_BUS else "SFX_MID", "the grain through the dull weapon's bus")
+	# The rules' blow is heard by its tier, never the same file twice running.
+	for group: String in ["blow_light_t1", "blow_blunt_t1"]:
+		a.blow_last.erase(group)
+		var n: int = a.blow_log.size()
+		for k in range(7):
+			a.blow({"weapon": "knife" if group == "blow_light_t1" else "crowbar", "target": "standing", "result": "body", "edge": 0, "tier": 1, "at": at, "by_player": true})
+		assert_eq(a.blow_log[n][0], group, "the body first")
+		var files: Array = []
+		for e: Array in a.blow_log.slice(n):
+			if e[0] == group:   # a knife's grain is logged between its bodies
+				files.append(e[1])
+		assert_eq(files.size(), 7, group + ": one body a blow")
+		for k in range(1, files.size()):
+			assert_ne(files[k], files[k - 1], group + ": not twice running")
+
+
+# Decision 554: a file the user picked (PICKED) is twice as likely as another
+# of its group, and still never twice running: over a long stop it is heard
+# 40% of the time among three [2, 1, 1], 37.5% each of two among three
+# [2, 2, 1], 25% among six [2, 1, 1, 1, 1, 1]. Every picked file is shipped.
+func test_picked_files_are_heard_more_often() -> void:
+	var a = game.audio
+	a.lib["window_vault"] = a._load_group("window_vault")
+	var want: Dictionary = {"window_vault": 0.25, "blow_light_t1": 0.4, "blow_blunt_t1": 0.375, "pv_effort": 0.4}
+	assert_eq(want.size(), a.PICKED.size(), "every picked group has its share here")
+	seed(554)
+	for group: String in a.PICKED:
+		var list: Array = a.lib.get(group, [])
+		var picked: Array = a.PICKED[group]
+		var is_picked: Array = []
+		for s: AudioStream in list:
+			is_picked.append(picked.has(s.resource_path.get_file().get_basename()))
+		assert_eq(is_picked.count(true), picked.size(), group + ": every picked file is shipped")
+		if list.is_empty():
+			continue
+		var weights: Array = a.pick_weights(group, list, -1)
+		for i in list.size():
+			assert_eq(float(weights[i]), a.PICK_WEIGHT if is_picked[i] else 1.0, group + ": its weight")
+		var heard: Array = []
+		heard.resize(list.size())
+		heard.fill(0)
+		a.blow_last.erase(group)
+		var last: int = -1
+		var again: int = 0
+		var draws: int = 4000
+		for k in range(draws):
+			var f: int = a._fresh_file(group)
+			if f == last:
+				again += 1
+			last = f
+			heard[f] += 1
+		assert_eq(again, 0, group + ": never twice running")
+		for i in list.size():
+			var share: float = float(heard[i]) / float(draws)
+			if is_picked[i]:
+				assert_almost_eq(share, float(want[group]), 0.04, group + ": a picked file's share")
+			else:
+				assert_lt(share, float(want[group]) - 0.04, group + ": another file, less often")
+		gut.p("%s: %s of %d" % [group, str(heard), draws])
+	# The one heard last weighs nothing, unless it is the only one.
+	var three: Array = a.lib["blow_blunt_t1"]
+	assert_eq(a.pick_weights("blow_blunt_t1", three, 1)[1], 0.0, "not the one just heard")
+	assert_eq(a.pick_weights("curtain", [three[0]], 0), [1.0], "a group of one: that one again")
+
+
+# Decision 554: the player grunts now and then — on a heavy swing more often
+# than a light one, never within EFFORT_REST of the last, never the file just
+# heard; a mate's swing makes none.
+func test_the_player_grunts_now_and_then() -> void:
+	var a = game.audio
+	assert_eq((a.lib[a.EFFORT_GROUP] as Array).size(), 3, "three grunts")
+	assert_gt(float(a.EFFORT_CHANCE["heavy"]), float(a.EFFORT_CHANCE["light"]), "a heavy swing more often")
+	for kind: String in a.EFFORT_CHANCE:
+		assert_lt(float(a.EFFORT_CHANCE[kind]), 1.0, kind + ": never every time")
+	a.blow_last.erase(a.EFFORT_GROUP)
+	a.effort_rest = 0.0
+	assert_false(a.effort("heavy", 0.99), "not this time")
+	assert_true(a.effort("heavy", 0.0))
+	var last: AudioStream = a.last_shot.stream
+	assert_false(a.effort("heavy", 0.0), "not again so soon")
+	a.tick(a.EFFORT_REST + 0.1)
+	assert_eq(a.effort_rest, 0.0, "its rest runs down with the field")
+	for i in range(8):
+		a.effort_rest = 0.0
+		assert_true(a.effort("vault" if i == 0 else "light", 0.0), "after its rest, again")
+		assert_ne(a.last_shot.stream, last, "never the one just heard")
+		last = a.last_shot.stream
+	# Through the swing: the player's own, now and then; a mate's, never.
+	var mate = game.squad[1]
+	var n: int = a.played.count(a.EFFORT_GROUP)
+	for i in range(40):
+		a.effort_rest = 0.0
+		game.feel.swing(mate, "axe")
+	assert_eq(a.played.count(a.EFFORT_GROUP), n, "a mate's swing, no grunt")
+	for i in range(60):
+		a.effort_rest = 0.0
+		game.feel.swing(game.player, "axe")
+	var heard: int = a.played.count(a.EFFORT_GROUP) - n
+	assert_between(heard, 12, 48, "a heavy swing grunts about half the time")
+	# Nor does a mate climbing through a window.
+	n = a.played.count(a.EFFORT_GROUP)
+	a.effort_rest = 0.0
+	for i in range(10):
+		a.window_vault(Vector2i(2, 2), false, false)
+	assert_eq(a.played.count(a.EFFORT_GROUP), n, "a mate's climb, no grunt")
+
+
+## What the ear reads of a horde (HordeView's public chunks and stats).
+class FakeHorde extends Node3D:
+	var chunks: Array = []
+	var stats: Dictionary = {"ready": false}
+
+
+# Decision 548: the horde behind the walls is heard as it is drawn — nothing
+# with no horde drawn (decision 509), one that has not finished building or is
+# hidden, or a wall none of its pieces stand behind; the far loop from
+# WALL_FAR_FROM in, the near loop close up, both lower while a note is up;
+# knocks on the wall at random times, closer together nearer, of the wall's own
+# stuff, never the same file twice running; an overpass does not knock.
+func test_the_horde_behind_the_walls_is_heard_as_it_is_drawn() -> void:
+	var a = game.audio
+	assert_eq((a.lib["wall_horde_far"] as Array).size(), 1)
+	assert_eq((a.lib["wall_horde_near"] as Array).size(), 1)
+	assert_eq((a.lib["wall_bump"] as Array).size(), 8)
+	var keep_view = game.horde_view
+	var end: int = mini(game.grid.width - 2, 26)
+	var wall := {"id": "t_north", "a": Vector2(2, 0), "b": Vector2(end, 0), "out": Vector2(0, -1), "kind": "wall_sheet", "height": 3.0}
+	var x: float = (2.0 + float(end)) / 2.0
+	game.horde_view = null
+	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "no horde drawn: nothing (decision 509)")
+	var drawn := FakeHorde.new()
+	add_child_autofree(drawn)
+	drawn.chunks = [{"id": "t_north:0", "wall": wall}, {"id": "t_north:1", "wall": wall}]
+	game.horde_view = drawn
+	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "not built to the end (none placed, a piece failed, called off): nothing")
+	drawn.stats["ready"] = true
+	assert_eq(a.drawn_walls(drawn).size(), 1, "a wall of two pieces, once")
+	var hit = a.nearest_wall(Vector3(x, 0, 5))
+	assert_not_null(hit, "drawn: heard")
+	assert_almost_eq(float(hit[1]), 5.0, 0.001, "from the wall's nearest point")
+	assert_eq(hit[3], Vector3(0, 0, -1), "the dead are out past it")
+	drawn.visible = false
+	assert_null(a.nearest_wall(Vector3(x, 0, 5)), "hidden: nothing")
+	drawn.visible = true
+	# A nearer wall no piece stands behind is not heard; the drawn one is.
+	var bare := {"id": "t_west", "a": Vector2(0, 2), "b": Vector2(0, 26), "out": Vector2(-1, 0), "kind": "wall_plank", "height": 3.0}
+	assert_almost_eq(float(a.nearest_wall(Vector3(1, 0, 5))[1]), Vector2(1, 5).distance_to(Vector2(2, 0)), 0.001, "only the drawn wall, not the bare one 1 m off")
+	assert_false(a.drawn_walls(drawn).has(bare))
+	# The two loops by distance.
+	assert_eq(a.wall_far_level(31.0) + a.wall_near_level(31.0), 0.0, "past 30 m: nothing")
+	assert_gt(a.wall_far_level(20.0), 0.0)
+	assert_eq(a.wall_near_level(20.0), 0.0, "at 20 m the far loop only")
+	assert_almost_eq(a.wall_far_level(10.0), 1.0, 0.0001)
+	assert_almost_eq(a.wall_far_level(3.0), 0.5, 0.0001, "close up the far loop gives way")
+	assert_almost_eq(a.wall_near_level(3.0), 1.0, 0.0001)
+	for d: float in [29.0, 20.0, 12.0, 6.0, 1.0]:
+		assert_gte(a.wall_far_level(d) + a.wall_near_level(d), a.wall_far_level(d + 1.0) + a.wall_near_level(d + 1.0), "louder as one comes (%.0f m)" % d)
+	a.wall_look_t = 0.0
+	for i in range(60):
+		a._tick_walls(Vector3(x, 0, 20), 0.1)
+	assert_true(a.wall_far.playing, "the far loop at 20 m")
+	assert_gt(a.wall_far.volume_db, -30.0)
+	assert_false(a.wall_near.playing, "not yet the near one")
+	assert_true((a.wall_far.stream as AudioStreamOggVorbis).loop, "it loops in itself, no gap")
+	assert_almost_eq(a.wall_far.position.z, -a.WALL_INSIDE, 0.001, "heard from among the dead")
+	var level: float = a.wall_far.volume_db
+	a.hold(true)
+	assert_almost_eq(a.wall_far.volume_db, level - 9.0, 0.01, "lower while the note is up")
+	a.hold(false)
+	assert_almost_eq(a.wall_far.volume_db, level, 0.01, "and back after")
+	a.wall_look_t = 0.0
+	for i in range(100):
+		a._tick_walls(Vector3(x, 0, 40), 0.1)
+	assert_false(a.wall_far.playing, "past 30 m: gone")
+	# Knocks: closer together nearer, no beat, the wall's own stuff, never twice running.
+	var counts: Array = []
+	for d: float in [1.0, 8.0]:
+		a.wall_bump_log.clear()
+		a.wall_look_t = 0.0
+		for i in range(2400):
+			a.heard_t += 0.05
+			a._tick_walls(Vector3(x, 0, d), 0.05)
+		counts.append(a.wall_bump_log.size())
+		var gaps: Array = []
+		for k in range(1, a.wall_bump_log.size()):
+			gaps.append(float(a.wall_bump_log[k][0]) - float(a.wall_bump_log[k - 1][0]))
+			assert_ne(a.wall_bump_log[k][1], a.wall_bump_log[k - 1][1], "never the same knock twice running")
+		for e: Array in a.wall_bump_log:
+			assert_true(String(e[1]).contains("sheet_"), "a sheet wall knocks as sheet metal")
+		if d == 1.0:
+			var mean: float = 0.0
+			for g: float in gaps:
+				mean += g / gaps.size()
+			var spread: float = 0.0
+			for g: float in gaps:
+				spread += (g - mean) * (g - mean) / gaps.size()
+			assert_gt(sqrt(spread) / mean, 0.5, "no beat: the gaps are all over")
+	assert_between(int(counts[0]), 60, 170, "at 1 m about one a second")
+	assert_lt(float(counts[1]), float(counts[0]) * 0.5, "farther, fewer")
+	var over: Dictionary = wall.duplicate()
+	over["kind"] = "overpass"
+	a.wall_point = [Vector3(x, 0, 0), 1.0, over, Vector3(0, 0, -1)]
+	assert_false(a.wall_bump(1.0), "an overpass does not knock")
+	# A knock too far to hear picks nothing: the last one heard stays the last.
+	a.wall_point = [Vector3(x, 0, 0), 1.0, wall, Vector3(0, 0, -1)]
+	var heard_last: int = int(a.blow_last.get("wall_bump", -1))
+	assert_false(a.wall_bump(a.WALL_FAR_FROM - 0.01), "too far to hear")
+	assert_eq(int(a.blow_last.get("wall_bump", -1)), heard_last)
+	game.horde_view = keep_view
+	a.wall_point = null
+	a.wall_far.stop()
+	a.wall_near.stop()
+
+
+# The stopped train's cold metal now and then (mean TRAIN_METAL_GAP s) within
+# TRAIN_METAL_REACH m of a car, never the file just heard, the long creak less
+# often; farther off, nothing.
+func test_the_train_metal_now_and_then() -> void:
+	var a = game.audio
+	assert_eq((a.lib["train_metal"] as Array).size(), 10)
+	var cars: Array = game.data.get("train_cars", [])
+	assert_false(cars.is_empty(), "the stop has its train")
+	var r := Rect2(Rect2i(cars[0]["rect"]))
+	var at := Vector3(r.get_center().x, 0, r.get_center().y)
+	assert_almost_eq(float(a.nearest_car(at)[1]), 0.0, 0.001, "on the car")
+	a.train_metal_log.clear()
+	for i in range(3000):
+		a.heard_t += 0.1
+		a._tick_train_metal(at, 0.1)
+	var n: int = a.train_metal_log.size()
+	assert_between(n, 15, 60, "about one in %.0f s" % a.TRAIN_METAL_GAP)
+	var creaks := 0
+	for k in range(n):
+		if String(a.train_metal_log[k][1]).contains("creak"):
+			creaks += 1
+		if k > 0:
+			assert_ne(a.train_metal_log[k][1], a.train_metal_log[k - 1][1], "never the same twice running")
+	assert_lt(float(creaks), float(n) * 0.2, "the long creak less often")
+	var far := Vector3(r.position.x, 0, r.position.y) + Vector3(0, 0, -60)
+	if float(a.nearest_car(far)[1]) > a.TRAIN_METAL_REACH:
+		a.train_metal_log.clear()
+		for i in range(1000):
+			a._tick_train_metal(far, 0.1)
+		assert_eq(a.train_metal_log.size(), 0, "far from the train: nothing")
+
+
+# The pool and the mix at their edges: a fade begun for one sound is not laid
+# on the next sound its player is taken for; a 401st voice is kept; the depart
+# note told twice lowers the mix once; a blow too faint to hear picks no file;
+# the knock and metal logs keep their last KNOCKS_KEPT; once the field has
+# ended the loops behind the walls stop.
+func test_the_pool_and_the_mix_hold_at_their_edges() -> void:
+	var a = game.audio
+	var at: Vector3 = game.player.position + Vector3(1.0, 0, 0)
+	var stream: AudioStream = a.lib["blow_cut"][0]
+	a._one_shot("blow_cut", at, 0.5, 1.0, stream, "SFX", 0.3)
+	var o = a.last_shot
+	assert_not_null(o)
+	if o != null:
+		assert_true(o.playing)
+		a._end_cut(o, int(o.get_meta("cut", 0)))
+		assert_true(o.has_meta("fade"), "its fade begun")
+		var fade = o.get_meta("fade") if o.has_meta("fade") else null
+		var keep: Array = a.one_shots
+		a.one_shots = [o]   # every other one busy: this one gives way
+		a._one_shot("blow_cut", at, 0.5, 1.0, stream)
+		a.one_shots = keep
+		assert_eq(a.last_shot, o, "the same player, taken for the next sound")
+		assert_true(fade is Tween and not (fade as Tween).is_valid(), "the fade before it no longer runs")
+		assert_false(o.has_meta("fade"))
+		assert_almost_eq(float(o.volume_db), a._db(0.5), 0.01, "the next sound at its own loudness")
+		o.stop()
+	# A 401st voice (and on) is kept, and the same as it was before the cache was cleared.
+	a.voices.clear()
+	var first: Dictionary = a.voice_of({"id": 900000, "kind": "old", "phase": 0.3})
+	var lost: int = 0
+	for i in range(1, 450):
+		var v = a.voice_of({"id": 900000 + i, "kind": "old", "phase": fposmod(float(i) * 0.37, 1.0)})
+		if not (v is Dictionary and (v as Dictionary).has("pitch")):
+			lost += 1
+	assert_eq(lost, 0, "no voice lost as the cache is cleared")
+	assert_eq(a.voice_of({"id": 900000, "kind": "old", "phase": 0.3}), first, "the same voice after it")
+	# The depart note told twice lowers the mix once, and lifts it once.
+	var beds: Array = [a.bed, a.wall_far, a.wall_near]
+	for p in beds:
+		p.volume_db = -20.0
+	a.held = false
+	a.hold(true)
+	a.hold(true)
+	for p in beds:
+		assert_almost_eq(float(p.volume_db), -29.0, 0.001, "lowered once")
+	a.hold(false)
+	a.hold(false)
+	for p in beds:
+		assert_almost_eq(float(p.volume_db), -20.0, 0.001, "lifted once")
+	# A blow too faint to hear (at the edge of BLOW_REACH) picks no file.
+	var last_files: Dictionary = a.blow_last.duplicate()
+	var n: int = a.blow_log.size()
+	a.blow({"weapon": "crowbar", "target": "standing", "result": "body", "edge": 0, "tier": 2, "at": game.player.position + Vector3(a.BLOW_REACH - 0.1, 0, 0), "by_player": true})
+	assert_eq(a.blow_log.size(), n, "too faint: nothing heard")
+	assert_eq(a.blow_last, last_files, "nor picked, so the last heard stays the last")
+	# The metal log keeps its last KNOCKS_KEPT (the knocks' does the same).
+	var cars: Array = game.data.get("train_cars", [])
+	assert_false(cars.is_empty())
+	if not cars.is_empty():
+		var r := Rect2(Rect2i(cars[0]["rect"]))
+		var on := Vector3(r.get_center().x, 0, r.get_center().y)
+		a.train_metal_log.clear()
+		for i in range(a.KNOCKS_KEPT + 40):
+			a.heard_t += 1.0
+			a.train_metal(on, r)
+		assert_eq(a.train_metal_log.size(), a.KNOCKS_KEPT, "the last %d" % a.KNOCKS_KEPT)
+		assert_almost_eq(float(a.train_metal_log[-1][0]), float(a.heard_t), 0.001, "the newest kept")
+	# Once the field has ended the loops behind the walls stop.
+	a.wall_far.volume_db = -20.0
+	a.wall_far.play()
+	assert_true(a.wall_far.playing)
+	game.ended = true
+	a.tick(0.1)
+	assert_false(a.wall_far.playing, "stopped once the field has ended")
+	game.ended = false
 
 
 # Told by the combat, a blow on one of the dead is heard by its layers alone:

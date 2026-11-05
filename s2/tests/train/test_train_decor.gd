@@ -385,7 +385,7 @@ func test_old_save_migration_keeps_version_rng_tier_and_unassigned_coordinates()
 	var loaded: Dictionary = Save.read_save(g, TV.tables())
 	assert_true(loaded["ok"])
 	if not loaded["ok"]: return
-	assert_eq(Save.SAVE_VERSION, 2, "this build reads 1 and 2 (2 = a supplies run)")
+	assert_eq(Save.SAVE_VERSION, 4, "this build reads 1 to 4; domestic restore logs are written with 4")
 	assert_eq(int(loaded["g"]["version"]), 1)
 	assert_eq(loaded["g"]["dom"]["store"], {})
 	assert_eq(loaded["g"]["dom"]["decor80"], [])

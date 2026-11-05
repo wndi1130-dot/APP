@@ -16,6 +16,8 @@ const St = preload("res://game/train/train_state.gd")
 const RationCut = preload("res://game/train/turn/turn_ration_cut.gd")
 const Stop = preload("res://game/train/train_stop.gd")
 const CouncilLog = preload("res://game/politics/council_log.gd")
+const TrainPipe = preload("res://game/train/train_pipe.gd")
+const TrainResearch = preload("res://game/train/train_research.gd")
 
 const LEDGER_MAX := 64
 const SUPPORTED_LAWS := [
@@ -27,7 +29,7 @@ const SUPPORTED_LAWS := [
 ## S1C_LAWS a technology opens in place of a harsh law (LAW_VARIANT_OF, domestic/laws.ts).
 const VARIANT_LAWS := ["seed_half", "child_pack", "triage_std"]
 const CHILD_LAWS := ["child_labor", "child_pack"]
-const SUPPORTED_MOTIONS := ["field_symbol", "field_promise"]
+const SUPPORTED_MOTIONS := ["field_symbol", "field_promise", "pipe"]
 
 
 static func _clamp(value: float, lo: float, hi: float) -> float:
@@ -88,7 +90,11 @@ static func _assert_supported(agenda: Dictionary) -> void:
 		assert(SUPPORTED_MOTIONS.has(agenda.get("motion")), "지원하지 않는 동의 안건: %s" % agenda.get("motion"))
 
 
-static func _motion_lean(t: Dictionary, comm: String, agenda: Dictionary) -> Dictionary:
+static func _motion_lean(g: Dictionary, t: Dictionary, comm: String, agenda: Dictionary) -> Dictionary:
+	if agenda["motion"] == "pipe":
+		var variant: Variant = TrainPipe.pending(g)
+		var sides: Dictionary = TrainResearch.TECHS["e3"]["variants"][variant] if variant != null else {"like": [], "dislike": []}
+		return {"mat": 2.0 if (sides["like"] as Array).has(comm) else (-2.0 if (sides["dislike"] as Array).has(comm) else 0.0), "ideo": 0.0}
 	var amount := 0.0
 	if agenda["motion"] == "field_symbol":
 		amount = float(t["FIELD"]["symbolLean"])
@@ -104,7 +110,7 @@ static func stance(g: Dictionary, t: Dictionary, comm: String, agenda: Dictionar
 	var mat := 0.0
 	var ideology := 0.0
 	if not _is_law(agenda):
-		var lean := _motion_lean(t, comm, agenda)
+		var lean := _motion_lean(g, t, comm, agenda)
 		mat = float(lean["mat"])
 		ideology = float(lean["ideo"])
 	else:
@@ -274,6 +280,8 @@ static func agenda_need(t: Dictionary, agenda: Dictionary) -> int:
 static func agenda_title(t: Dictionary, agenda: Dictionary) -> String:
 	# A table-driven title is also needed for AI proposals outside executable votes.
 	if not _is_law(agenda):
+		if agenda["motion"] == "pipe":
+			return "배관 추인"
 		var name: String = String(t["COMM_NAME"].get(agenda.get("subject"), "그 칸"))
 		if agenda["motion"] == "field_symbol":
 			return "%s의 상징물을 열차 앞에 세우기" % name
@@ -295,6 +303,9 @@ static func _sign(value: float) -> String:
 
 
 static func _motion_effect(g: Dictionary, t: Dictionary, agenda: Dictionary, passed: bool) -> void:
+	if agenda["motion"] == "pipe":
+		TrainPipe.ratify(g, t, passed)
+		return
 	var comm: Variant = agenda.get("subject")
 	if comm == null:
 		return

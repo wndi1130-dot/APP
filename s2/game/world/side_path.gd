@@ -28,6 +28,22 @@ const BELT := 2
 const GAP := 2
 const STRIP := DEPTH + BELT
 const STORE_SIZE := Vector2i(8, 6)
+const RULE := 1
+## PR1b protected_cells: 진입 칸은 끝을 따라 ±4에 _protect의 덧칸 2 = ±6.
+const ENTRY_EDGE_PAD := 4 + 2
+## PR1b: 창·문 +5. _build의 양옆 창(u=a+2,a+9; v=4)이 새 끝 v=0에 닿는다.
+## 건물 +3은 [a-1,a+12], 샛길 자체 +2는 그 안. 앞 창·문은 v=6이라 끝에 안 닿는다.
+## 따라서 끝 보호는 [a-3,a+14], 반열린 구간으로 [a-3,a+15).
+const WINDOW_EDGE_PAD := 5
+const STORE_EDGE_FROM := (LOT_WIDTH - STORE_SIZE.x) / 2 - WINDOW_EDGE_PAD
+const STORE_EDGE_END := (LOT_WIDTH - STORE_SIZE.x) / 2 + STORE_SIZE.x + WINDOW_EDGE_PAD
+const ENTRY_CLEAR_CELLS := 8  # 1칸=1m. 보호 구간 사이 빈 칸이 8개 미만이면 합쳐진다.
+## 진입 칸 중심 u의 제외 범위 [a+x,a+y). 판마다 폭만 다르고 후보·난수 경로는 같다.
+const ENTRY_EXCLUSION: Array[Vector2i] = [
+	Vector2i(-BELT - 2, LOT_WIDTH + BELT + 2),  # 0: 옛 빈터+띠 앞뒤 2칸, [-4,16).
+	Vector2i(STORE_EDGE_FROM - ENTRY_EDGE_PAD - ENTRY_CLEAR_CELLS,
+		STORE_EDGE_END + ENTRY_EDGE_PAD + ENTRY_CLEAR_CELLS),  # 1: [-17,29).
+]
 const BOXES := Vector2i(4, 6)
 const DEAD := Vector2i(2, 4)
 const BOARDED_SHARE := 0.5
@@ -50,17 +66,18 @@ static func rolls(place_id: String, run_seed: int) -> bool:
 
 
 ## 지도를 지은 뒤, 그리기 전에 한 번. 샛길이 나면 띠를 붙인 자료(같은 사전), 아니면 받은 그대로.
-static func add(data: Dictionary, run_seed: int) -> Dictionary:
+static func add(data: Dictionary, run_seed: int, rule: int = RULE) -> Dictionary:
 	var place := String(data.get("place_id", ""))
 	if data.has("side_path") or place in ["", FIRST_STOP] or StoryMaps.is_story(place) or not data.get("grid") is FieldGrid:
 		return data
 	if not MapShift.can_grow(data):
 		push_error("찍힌 경계 뒤에는 샛길을 더할 수 없습니다")
 		return data
+	data["side_path_rule"] = rule
 	var rng := _rng(place, run_seed)
 	if rng.randf() >= CHANCE:
 		return data
-	var spot := pick(data, rng)
+	var spot := pick(data, rng, rule)
 	if spot.is_empty():
 		return data
 	var side := int(spot["side"])
@@ -96,9 +113,32 @@ static func _rng(place_id: String, run_seed: int) -> RandomNumberGenerator:
 ## 끝에서 틈 자리를 훑어, 걷는 시간이 맞는 곳 가운데 하나. 오른쪽·아래를 열차에서 먼 쪽부터
 ## 보고, 둘 다 없으면 위·왼쪽을 먼 쪽부터 본다. 틈 바로 앞(옛 지도 끝 칸 GAP개)은 걸을 수 있는
 ## 바깥 땅이어야 한다. 지도가 이름 붙인 강이 닿는 끝은 보지 않는다(띠가 강 끝을 돌아가는 길이 된다).
-static func pick(data: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
+## 판 1부터는 옛 판(0)이 고른 자리를 먼저 본다: 같은 변 진입 칸과 그 판의 폭만큼 떨어져 있으면 그대로
+## 둔다(자리도 난수도 옛 판과 같아 지도가 안 바뀐다). 붙어 있을 때만 난수를 고르기 전으로 되돌리고
+## 그 판의 폭으로 걸러진 후보에서 다시 고른다.
+static func pick(data: Dictionary, rng: RandomNumberGenerator, rule: int = RULE) -> Dictionary:
 	var g: FieldGrid = data["grid"]
 	var dist := _walk_from_train(data, g)
+	if rule == 0:
+		return _pick_with(data, g, dist, rng, ENTRY_EXCLUSION[0])
+	var before: int = rng.state
+	var old := _pick_with(data, g, dist, rng, ENTRY_EXCLUSION[0])
+	if old.is_empty() or _clear_of_entries(data, g, old, ENTRY_EXCLUSION[rule]):
+		return old
+	rng.state = before
+	return _pick_with(data, g, dist, rng, ENTRY_EXCLUSION[rule])
+
+
+## 자리 a의 제외 구간 [a+x, a+y) 안에 같은 변 진입 칸 중심이 하나도 없는가.
+static func _clear_of_entries(data: Dictionary, g: FieldGrid, spot: Dictionary, exclusion: Vector2i) -> bool:
+	var a := int(spot["along"])
+	for u: int in _entry_lanes(data, g, int(spot["side"])):
+		if u >= a + exclusion.x and u < a + exclusion.y:
+			return false
+	return true
+
+
+static func _pick_with(data: Dictionary, g: FieldGrid, dist: PackedInt32Array, rng: RandomNumberGenerator, exclusion: Vector2i) -> Dictionary:
 	var at := Vector2(g.width, g.height) * 0.5
 	if data.get("train") is Rect2i:
 		at = Vector2((data["train"] as Rect2i).get_center())
@@ -113,7 +153,7 @@ static func pick(data: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
 		for a in range(BELT, length - LOT_WIDTH - BELT + 1, 2):
 			var clash := false
 			for u: int in ways:
-				clash = clash or (u >= a - BELT - 2 and u < a + LOT_WIDTH + BELT + 2)
+				clash = clash or (u >= a + exclusion.x and u < a + exclusion.y)
 			if clash:
 				continue
 			var gap_u := a + LOT_WIDTH / 2 - GAP / 2

@@ -1,6 +1,7 @@
 extends SceneTree
 ## 한 out은 한 프로세스가 소유한다. JSONL은 뽑기 도구와 같은 {key,digest,ms} 꼴이다.
 const Loader = preload("res://game/stop_loader.gd")
+const SidePath = preload("res://game/world/side_path.gd")
 const Maps = preload("res://game/world/field_maps.gd")
 const Bounds = preload("res://game/world/map_bounds.gd")
 const Rule = preload("res://game/world/map_bounds_rule.gd")
@@ -121,8 +122,8 @@ static func _seeds(value: String) -> Array[int]:
 static func _case(script: Script, place: String, form: String, seed_value: int, fingerprint_time: Dictionary = {}) -> Dictionary:
 	var on_observed: Dictionary = {"_sweep": true}
 	var zero_observed: Dictionary = {"_sweep": true}
-	var active: Dictionary = Loader.make_ready(script, seed_value, form, -1.0, "", -1, Callable(), on_observed)
-	var base: Dictionary = Loader.make_ready(script, seed_value, form, -1.0, "", 0, Callable(), zero_observed)
+	var active: Dictionary = Loader.make_ready(script, seed_value, form, -1.0, "", -1, SidePath.RULE, Callable(), on_observed)
+	var base: Dictionary = Loader.make_ready(script, seed_value, form, -1.0, "", 0, SidePath.RULE, Callable(), zero_observed)
 	var stamped: bool = int(active.get("bounds_stamp", 0)) == Rule.RULE
 	var grid: Grid = active["grid"]
 	var base_grid: Grid = base["grid"]

@@ -70,13 +70,36 @@ func _pick() -> Dictionary:
 	return SliceSave.pick(SLICE, TRAIN, start[1], FIELD)
 
 
+## A train board as its slot writes it (save_slot.gd slot_board): a supplies run is
+## written as slot version 3 whatever version the board in hand carries, and a board
+## read back carries the 3. So a board in hand and one read back, or a run resumed and
+## one never cut, are held side by side in the written form; anything else is itself.
+## That puts the number read back out of these comparisons: `_version_gap` checks it.
+func _slot(value: Variant) -> Variant:
+	return TrainSave.slot_board(value) if value is Dictionary else value
+
+
+## The slot version a board read back carries, against what slot_board writes for the board
+## in hand, value and type (a supplies run's int 3), before `_slot` puts both in the written
+## form. A train slot written without slot_board reads back as the board in hand and shows here.
+func _version_gap(kept: Dictionary, back: Dictionary) -> String:
+	var want: Variant = TrainSave.slot_board(kept).get("version")
+	var got: Variant = back.get("version")
+	if typeof(want) != typeof(got) or want != got:
+		return "version: %s %s -> %s %s" % [type_string(typeof(want)), str(want), type_string(typeof(got)), str(got)]
+	return ""
+
+
 ## Every type and every float digit: a 9 that comes back as 9.0 is a different board.
 func _json(value: Variant) -> String:
-	return JSON.stringify(value, "", true, true)
+	return JSON.stringify(_slot(value), "", true, true)
 
 
 ## The first place where a value read back is not the same type as the one saved, or "".
 func _type_gap(saved: Variant, back: Variant, at: String = "g") -> String:
+	if at == "g":
+		saved = _slot(saved)
+		back = _slot(back)
 	if typeof(saved) != typeof(back):
 		return "%s: %s -> %s" % [at, type_string(typeof(saved)), type_string(typeof(back))]
 	if saved is Dictionary:
@@ -144,6 +167,7 @@ func _cut(at: String, seed_value: int) -> void:
 	assert_false(picked.is_empty(), "%s seed %d can be picked" % [at, seed_value])
 	if picked.is_empty():
 		return
+	assert_eq(_version_gap(before_g, picked["g"]), "", "%s seed %d slot version" % [at, seed_value])
 	var resumed = _flow({"seed": seed_value, "resume": picked})
 	assert_eq(resumed.current(), at)
 	assert_eq(_json(resumed.train_g), before, "%s seed %d keeps the board" % [at, seed_value])
@@ -219,6 +243,7 @@ func test_ten_seeds_resume_the_running_field() -> void:
 		_exercise_field(original.field)
 		var before: Dictionary = FieldSave.capture(original.field)
 		var board_before: String = _json(original.train_g)
+		var board_g: Dictionary = original.train_g.duplicate(true)
 		assert_gt(float(before["clock"]["elapsed"]), 30.0)
 		# The OS delivers this to both nodes. The slice must not write FIELD again.
 		original.propagate_notification(NOTIFICATION_APPLICATION_PAUSED)
@@ -232,6 +257,7 @@ func test_ten_seeds_resume_the_running_field() -> void:
 		assert_false(picked.is_empty())
 		if picked.is_empty():
 			return
+		assert_eq(_version_gap(board_g, picked["g"]), "", "seed %d slot version" % seed_value)
 		var resumed = _flow({"resume": picked, "skip_field": false})
 		assert_eq(resumed.current(), "field")
 		assert_eq(_json(resumed.train_g), board_before)
@@ -272,6 +298,7 @@ func _train_round_trip(at: String) -> void:
 	assert_true(SliceSave.write_train(flow.train_g, ROUND_TRIP))
 	var loaded: Dictionary = SliceSave._train(ROUND_TRIP, flow.train_t)
 	assert_false(loaded.is_empty(), at + " reads back through the S1 shape check")
+	assert_eq(_version_gap(flow.train_g, loaded), "", at + " slot version")
 	assert_eq(_json(loaded), _json(flow.train_g), at + " every value and digit")
 	assert_eq(_type_gap(flow.train_g, loaded), "", at + " every type")
 
@@ -318,6 +345,7 @@ func test_train_slot_round_trip_with_late_papers_queues_and_cooldowns() -> void:
 	assert_true(SliceSave.write_train(g, ROUND_TRIP))
 	var loaded: Dictionary = SliceSave._train(ROUND_TRIP, flow.train_t)
 	assert_false(loaded.is_empty(), "it reads back through the S1 shape check")
+	assert_eq(_version_gap(g, loaded), "", "slot version")
 	assert_eq(_json(loaded), _json(g), "every value and digit")
 	assert_eq(_type_gap(g, loaded), "", "every type")
 
@@ -636,7 +664,9 @@ func test_capture_is_metadata_only_and_keeps_the_result_reason() -> void:
 	assert_eq(captured["run"], flow.run)
 	assert_eq(captured["train_sha"], FileAccess.get_file_as_string(TRAIN).sha256_text())
 	assert_true(SliceSave.write(captured, SLICE))
-	assert_eq(_pick()["result_reason"], "saved_reason")
+	var picked: Dictionary = _pick()
+	assert_false(picked.get("reconciled", true), "capture's own fingerprint makes a whole pair")
+	assert_eq(picked.get("result_reason"), "saved_reason")
 
 
 func test_slice_and_train_each_fall_back_to_one_whole_backup() -> void:
@@ -1125,6 +1155,8 @@ func test_train_slot_round_trip_through_the_s1_loaders() -> void:
 	var loaded: Dictionary = TrainSave.load_slot(flow.train_t, ROUND_TRIP, BROKEN)
 	assert_null(loaded["why"])
 	assert_not_null(loaded["g"])
+	if loaded["g"] is Dictionary:
+		assert_eq(_version_gap(flow.train_g, loaded["g"]), "")
 	assert_eq(_json(loaded["g"]), _json(flow.train_g))
 	assert_eq(_type_gap(flow.train_g, loaded["g"]), "")
 	var alias: Dictionary = TrainSave.load(flow.train_t, ROUND_TRIP, BROKEN)
@@ -1140,6 +1172,7 @@ func test_a_lever_is_saved_before_any_notification() -> void:
 	flow._set_lever("front", "ration", 1 if before == 4 else 4)
 	assert_ne(int(flow.train_g["comms"]["front"]["ration"]), before)
 	var loaded: Dictionary = SliceSave._train(TRAIN, flow.train_t)
+	assert_eq(_version_gap(flow.train_g, loaded), "", "the game's own save writes the slot version")
 	assert_eq(_json(loaded), _json(flow.train_g))
 	assert_eq(_type_gap(flow.train_g, loaded), "")
 	assert_eq(SliceSave.read(SLICE)["train_sha"], FileAccess.get_file_as_string(TRAIN).sha256_text())

@@ -5,6 +5,7 @@ extends RefCounted
 const State = preload("res://game/train/train_state.gd")
 const LawTech = preload("res://game/train/train_lawtech.gd")
 const Stop = preload("res://game/train/train_stop.gd")
+const TrainPipe = preload("res://game/train/train_pipe.gd")
 
 
 static func same_agenda(a: Dictionary, b: Dictionary) -> bool:
@@ -113,8 +114,8 @@ static func agenda_options(g: Dictionary, t: Dictionary) -> Dictionary:
 		if _active(g, law): merged.append({"law": law, "repeal": false, "ratify": true})
 	for law: String in g.get("ratifyRepeal", []):
 		if not _active(g, law): merged.append({"law": law, "repeal": true, "ratify": true})
-	# S1a motionsNow has only the final-station share motions (crisis rank).
-	# 내정 훅 자리: pipe motion source.
+	if TrainPipe.pending(g) != null:
+		merged.append({"kind": "motion", "motion": "pipe"})
 	for proposal: Dictionary in g["proposals"]:
 		if proposal.get("kind") == "motion" or _contains(options, proposal) or (bool(proposal.get("repeal", false)) and bool(proposal.get("promise", false)) and _active(g, str(proposal["law"]))):
 			merged.append(proposal.duplicate(true))

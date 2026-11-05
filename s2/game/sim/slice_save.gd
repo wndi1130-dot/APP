@@ -17,11 +17,13 @@ const FieldReturn = preload("res://game/politics/field_return.gd")
 const STEPS: Array[String] = ["train", "stop_pick", "field", "receipt", "council", "travel", "arrive", "end"]
 
 
+## The train's fingerprint is of the board as write_train writes it (slot_board: a supplies
+## run carries its slot version), so it matches the train file it stands beside.
 static func capture(flow) -> Dictionary:
 	var g: Dictionary = flow.train_g
 	var captured: Dictionary = {
 		"version": VERSION, "kind": KIND, "step": resume_step(g, flow.current()),
-		"run": flow.run, "train_sha": _text(g).sha256_text(),
+		"run": flow.run, "train_sha": _text(TrainSave.slot_board(g)).sha256_text(),
 		"seg": int(g.get("seg", 0)), "applied": applied_ids(g),
 		"contract": flow.contract.duplicate(true), "receipt": flow.receipt.duplicate(true),
 		"passed": flow.passed, "result_reason": String(flow.result.get("reason", "")),
@@ -109,7 +111,10 @@ static func _parse(at: String, source: Dictionary = {}) -> Dictionary:
 	var json := JSON.new()
 	if json.parse(text) != OK or not json.data is Dictionary:
 		return {}
-	var decoded: Dictionary = FieldSave._decode(json.data)
+	# A broken packed run in it is a broken file, as a cut-off one (FieldSave.decode_checked).
+	var decoded: Variant = FieldSave.decode_checked(json.data)
+	if not decoded is Dictionary:
+		return {}
 	source["train_sha"] = text.sha256_text()
 	return decoded
 

@@ -424,18 +424,44 @@ var modal: Control
 var modal_paused_before: bool = false
 var modal_open: bool = false
 var modal_pane: GlassPane
+## The panes as the player sees them: one laid again over itself (a row taken, a
+## thing come out) is the same pane; shut and another opened is a new one. A
+## confirm's late work (hold_confirm.gd) touches only its own pane (_throw, _load_train).
+var pane_era: int = 0
 var closing_modal: Control
 var modal_fingers: Dictionary = {}     # touches stay consumed through their lift, even after closing
 var modal_emulated_blocked: bool = false
 var modal_back_captured: bool = false
 var modal_quit_on_back: bool = false
-## The bag pane keeps its destination while the bag tab is shown (decision 488).
+## The place shown beside the bag (결정 558), kept while the pane is laid again.
 var inv_near: Dictionary = {}
 var inv_sort: String = "weight"
-var inv_view: String = "near"
 var inv_worn_open: bool = false
+## Which weapon named at the bag's top shows its numbers (hand index, -1 none, and
+## the id pressed, so the numbers follow that weapon); a bag opened afresh shows
+## the names only (InventoryPane.open).
+var inv_weapon_open: int = -1
+var inv_weapon_open_id: String = ""
+## The row held open under itself (결정 558: a long press), {"side": "bag" | "near",
+## "id", "i", "at"}; a pane opened afresh opens none (InventoryPane.open).
+var inv_expand: Dictionary = {}
+## The bag folds while things come out of a box (결정 558) and for a second after
+## the last is out (until this tick), unless pressed open while taking.
+var inv_fold_until_ms: int = 0
+var inv_fold_taking: bool = false
+var inv_fold_open: bool = false
+var inv_laid_place: String = ""
+var inv_bag_scroll: int = 0
+## The scrolls waiting to be put back the frame after a laying: a second laying in
+## the same frame (a thing out of a box lays the pane twice) keeps these, not the
+## new pane's tops.
+var inv_scroll_pending: Dictionary = {}
+## The bag pane's scrolls, kept where they were when it is laid again.
+const BAG_SCROLLS: Array[String] = ["BagScroll", "NearScroll", "PlaceScroll", "JournalScroll"]
 ## Optional item art supplied locally; an empty entry falls back to the resource path.
 var item_px_override: Dictionary = {}
+## The field bag key's pack (결정 561 ③: 1.3 times the old 30).
+const BAG_KEY_ICON_PX: int = 39
 ## The places the bag pane listed when it was laid (InventoryPane.place_keys):
 ## changes to nearby places refresh it even though its stick sleeps (532).
 var bag_places: Array = []
@@ -1347,7 +1373,8 @@ func _build_thumbs() -> void:
 	# 시안 .finv: the mark 15, the weight in Barlow 14.
 	bag_button = _button("0.0/8", bag_panel, Vector2(124, 52), UiFonts.size(14))
 	bag_button.tooltip_text = "인벤토리"
-	_dress(bag_button, "pack", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, 30)
+	# The pack 1.3 times its old 30 (결정 561 ③).
+	_dress(bag_button, "pack", Vector2(124, 48), false, HudSkin.Light.LAMP, HudSkin.Light.NONE, BAG_KEY_ICON_PX)
 	# Plain glass like the orders and 모두 열차로: a key that is not lit wears no
 	# brass sweep (user 2026-10-25 on the phone: 「배낭 버튼 유광」).
 	_matte(bag_button)
@@ -2519,6 +2546,8 @@ func _set_radio() -> void:
 ## panel laid on it by the caller. pauses false: the field goes on at
 ## BODY_SLOW under it (the body picture).
 func _open_shade(pauses: bool = true) -> Control:
+	if modal == null:
+		pane_era += 1
 	_close_modal(false)
 	_discard_closing_modal()
 	# Decision 532: opening the bag releases every field finger too.
@@ -2568,6 +2597,8 @@ func _open_pane(title: String, side: String = "", icon: String = "", width_css: 
 
 ## pauses false: the field goes on at BODY_SLOW under the panel (the body picture).
 func _open_modal(width: float = 640.0, pauses: bool = true) -> VBoxContainer:
+	if modal == null:
+		pane_era += 1
 	_close_modal(false)
 	_discard_closing_modal()
 	# Fingers held now will lift under the panel: let go of them first.
@@ -3075,7 +3106,6 @@ func _card_pick(cb: Callable, choice: String) -> void:
 
 
 func loot(id: String) -> void:
-	inv_view = "near"
 	InventoryPane.open(self, {"kind": "box", "id": id})
 
 
@@ -3124,6 +3154,8 @@ func _loot_stop(id: String) -> void:
 	if p.action == "take":
 		p.cancel_action()
 	taking_box = ""
+	inv_fold_until_ms = 0
+	inv_fold_taking = false
 	InventoryPane.open(self, inv_near if not inv_near.is_empty() else {"kind": "box", "id": id})
 
 
@@ -3163,49 +3195,66 @@ func _bag_places_moved() -> void:
 		_lay_bag_again()
 
 
-## Lay the bag pane again where it is; a place shown that is no longer near hands
-## over to the bag tab. A destination no longer in reach falls to the floor, never
-## on its own to the train's hold: a thing loaded there cannot be taken back from
+## Lay the bag pane again where it is. A place shown that is no longer in reach
+## falls to the floor, never on its own to the train's hold: a thing loaded there cannot be taken back from
 ## this pane (coordinator 10-30). The places keep their order and the lists their
 ## scroll; the field goes on without a frame's stop.
 func _lay_bag_again() -> void:
-	var kept: Dictionary = _bag_scrolls()
 	var near: Array = InventoryPane.place_keys(InventoryPane.places(game, game.player))
 	if not near.has(InventoryPane.place_key(inv_near)):
-		if inv_view == "near":
-			inv_view = "bag"
 		inv_near = {"kind": "ground", "id": ""}
 	InventoryPane.open(self, inv_near)
-	_bag_scrolls_back(kept)
 	_bag_pause()
 
 
-## The bag pane's two scrolls as they stand, with the tab and place they show.
+## The bag pane's three scrolls as they stand (the bag's rows, the place's rows,
+## the places rail), with the place they show.
 func _bag_scrolls() -> Dictionary:
-	var kept := {"view": inv_view, "at": InventoryPane.place_key(inv_near)}
+	if not inv_scroll_pending.is_empty():
+		return inv_scroll_pending.duplicate()
+	var kept := {"at": inv_laid_place, "BagScroll": inv_bag_scroll}
 	if _bag_up():
-		for scroll_name: String in ["List", "PlaceScroll"]:
+		for scroll_name: String in BAG_SCROLLS:
 			var list := box_pane.find_child(scroll_name, true, false) as ScrollContainer
 			if list != null:
 				kept[scroll_name] = list.scroll_vertical
+	inv_bag_scroll = int(kept["BagScroll"])
 	return kept
 
 
 ## Back where they were once the new pane is laid out (a scroll set before its
-## rows are sized falls to the top): the places rail always, the item list while
-## it shows the same rows (the bag tab whatever its destination, a place's tab
-## for that place).
+## rows are sized falls to the top): the bag's rows and the places rail always,
+## the place's rows while they are the same place's.
 func _bag_scrolls_back(kept: Dictionary) -> void:
-	var pane: Control = box_pane
-	var same: bool = kept["view"] == inv_view and (inv_view == "bag" or kept["at"] == InventoryPane.place_key(inv_near))
-	var back := func() -> void:
-		if not is_instance_valid(pane) or modal != pane:
+	var aim: Dictionary = kept.duplicate()
+	if kept["at"] != InventoryPane.place_key(inv_near):
+		# Another place: its list starts at the top, and a second laying before the
+		# scrolls are back must not bring the old place's back either.
+		aim["at"] = InventoryPane.place_key(inv_near)
+		aim["NearScroll"] = 0
+	inv_scroll_pending = aim
+	_queue_scroll_restore(weakref(box_pane), aim, 3)
+
+
+## One try at putting the scrolls back, the frame after. Rows sized a frame late
+## clamp a scroll set too soon, so a short one tries again, `tries` frames at most;
+## each try is a new lambda that nothing holds but the signal (no cycle).
+func _queue_scroll_restore(pane_ref: WeakRef, aim: Dictionary, tries: int) -> void:
+	var restore := func() -> void:
+		var pane := pane_ref.get_ref() as Control
+		if pane == null or modal != pane:
 			return
-		for scroll_name: String in ["List", "PlaceScroll"]:
+		var short: bool = false
+		for scroll_name: String in BAG_SCROLLS:
 			var list := pane.find_child(scroll_name, true, false) as ScrollContainer
-			if list != null and kept.has(scroll_name) and (same or scroll_name == "PlaceScroll"):
-				list.scroll_vertical = int(kept[scroll_name])
-	get_tree().process_frame.connect(back, CONNECT_ONE_SHOT)
+			if list != null and aim.has(scroll_name):
+				list.scroll_vertical = int(aim[scroll_name])
+				short = short or list.scroll_vertical < int(aim[scroll_name])
+		if short and tries > 1:
+			_queue_scroll_restore(pane_ref, aim, tries - 1)
+			return
+		inv_scroll_pending = {}
+	get_tree().process_frame.connect(restore, CONNECT_ONE_SHOT)
 
 
 ## The pane now shows box `id` ("" for none): the box it comes to opens with its sound,
@@ -3246,18 +3295,23 @@ func _tick_take() -> void:
 		return
 	if take_bar != null and is_instance_valid(take_bar):
 		take_bar.value = 1.0 - p.action_t / maxf(p.action_total, 0.001)
+	if is_instance_valid(box_pane):
+		var left := box_pane.find_child("TakeLeft", true, false) as Label
+		if left != null:
+			left.text = "%.1f초" % InventoryPane.take_left(game, p)
 
 
-## Open the bag tab afresh, or refresh the current tab with its destination kept.
+## Open the bag pane afresh (beside the first place near), or lay it again with
+## its place kept.
 func bag_panel() -> void:
 	if modal == null or not is_instance_valid(box_pane) or modal != box_pane:
 		inv_near = {}
-		inv_view = "bag"
+		inv_weapon_open = -1
+		inv_weapon_open_id = ""
 	InventoryPane.open(self, inv_near)
 
 
 func sled_panel(sled_id: int) -> void:
-	inv_view = "near"
 	InventoryPane.open(self, {"kind": "sled", "id": sled_id, "name": "썰매"})
 
 
@@ -3293,13 +3347,12 @@ func _inv_pick(i: int) -> void:
 
 func _inv_place(place: Dictionary) -> void:
 	inv_near = place
-	inv_view = "near"
 	bag_panel()
 
 
-func _inv_bag() -> void:
-	inv_view = "bag"
-	bag_panel()
+func _inv_unfold() -> void:
+	inv_fold_open = true
+	_lay_bag_again()
 
 
 func _inv_worn() -> void:
@@ -3307,14 +3360,41 @@ func _inv_worn() -> void:
 	bag_panel()
 
 
+## A weapon's name pressed at the bag's top: its numbers show, or hide again.
+func _inv_weapon(i: int) -> void:
+	var hands: Array = game.player.hands
+	if inv_weapon_open == i or i < 0 or i >= hands.size():
+		inv_weapon_open = -1
+		inv_weapon_open_id = ""
+	else:
+		inv_weapon_open = i
+		inv_weapon_open_id = String((hands[i] as Dictionary).get("id", ""))
+	bag_panel()
+
+
+## A row held (결정 558): it opens under itself with what it can do, or closes
+## again; one at a time. The pane is laid again where it is, its lists unmoved.
+func _inv_expand(side: String, id: String, i: int = -1) -> void:
+	if InventoryPane._expanded(self, side, id, i):
+		inv_expand = {}
+	else:
+		inv_expand = {"side": side, "id": id, "i": i, "at": InventoryPane.place_key(inv_near)}
+	_lay_bag_again()
+
+
 func _inv_sort() -> void:
 	inv_sort = "name" if inv_sort == "weight" else "weight"
 	bag_panel()
 
 
-func _load_train() -> void:
+## `era`: the pane that held the load (pane_era); -1 for any pane up.
+func _load_train(era: int = -1) -> void:
 	game.actions.load_train(game.player)
-	bag_panel()
+	# The load is held to confirm and done as its flash ends (hold_confirm.gd): the
+	# bag is shown again only on the pane that held it, still up — a pane shut in
+	# that flash stays shut, one opened since is left alone.
+	if modal_open and (era < 0 or era == pane_era):
+		bag_panel()
 
 
 ## One thing worn: its picture and name, how worn it is once it shows
@@ -3323,7 +3403,8 @@ func _worn_row(slot: String, id: String) -> Control:
 	var p = game.player
 	var h := HBoxContainer.new()
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.custom_minimum_size = Vector2(0, UiFonts.px(GlassPane.CELL_H))
+	# Every press of the bag pane is 48 dp (결정 558).
+	h.custom_minimum_size = Vector2(0, UiFonts.px(InventoryPane.KEY))
 	h.add_theme_constant_override("separation", GlassPane.px(10.0))
 	var icon: String = game.item_icon(id)
 	if icon != "" and HudIcons.PATHS.has(icon):
@@ -3339,7 +3420,7 @@ func _worn_row(slot: String, id: String) -> Control:
 	var plan: Array = Wear.undress_plan(p, slot)
 	var off := GlassPane.key("벗기" if plan.size() <= 1 else "벗기 %d초" % ceili(Wear.plan_time(plan)), _undress.bind(slot))
 	off.size_flags_horizontal = Control.SIZE_SHRINK_END
-	off.custom_minimum_size.x = UiFonts.px(DROP_W)
+	off.custom_minimum_size = Vector2(UiFonts.px(DROP_W), UiFonts.px(InventoryPane.KEY))
 	h.add_child(off)
 	return h
 
@@ -3486,8 +3567,12 @@ func _eat(id: String) -> void:
 
 
 ## Throw an empty tin where the chief faces (a lure): the bag closes.
-func _throw(id: String) -> void:
-	_close_modal()
+## `era`: the pane that held the throw (pane_era); -1 for any pane up.
+func _throw(id: String, era: int = -1) -> void:
+	# Held to confirm, thrown as its flash ends: only the pane that held it is shut
+	# (one already shut, or another opened since, is left alone).
+	if modal_open and (era < 0 or era == pane_era):
+		_close_modal()
 	game.throw_lure(game.player, id)
 
 
@@ -4167,7 +4252,15 @@ func _modal_input(event: InputEvent) -> bool:
 			var under: Dictionary = _pane_under(modal, pos)
 			var list: ScrollContainer = under["scroll"]
 			var key: Button = under["button"]
-			fingers[index] = {"kind": "button", "button": key, "start": pos, "off": key != null and key.disabled, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false}
+			fingers[index] = {"kind": "button", "button": key, "start": pos, "off": key != null and key.disabled, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false, "hold": key != null and key.has_node("Hold")}
+			# The key feels this finger come down as the first finger's press: a
+			# held row opens under itself, a hold to confirm fills (결정 558·559).
+			if key != null and not key.disabled:
+				fingers[index]["down"] = true
+				# Its face goes down with its marks: this path sets no pressed state
+				# of the button's own (결정 561 ④).
+				fingers[index]["faces"] = _press_face(key)
+				key.button_down.emit()
 			return true
 		return false
 	if not modal_fingers.has(index):
@@ -4226,12 +4319,58 @@ func finger_move(index: int, pos: Vector2) -> bool:
 			_hand_move(pos)
 		"button":
 			# A finger on the bag pane drags its list once it goes past a tap.
+			var held_key: Variant = f.get("button")
+			var key: Button = held_key if is_instance_valid(held_key) else null
+			var start: Vector2 = f.get("start", pos)
+			if bool(f.get("hold", false)):
+				if is_instance_valid(key):
+					var local: Vector2 = key.get_global_transform_with_canvas().affine_inverse() * pos
+					if not InventoryPane.HoldConfirm.holds(local, key.size, UiFonts.px(InventoryPane.HoldConfirm.SLIP_DP * InventoryPane.HoldConfirm.CSS_PER_DP)):
+						f["off"] = true
+						_finger_key_up(f)
+				return true # A finger born on a hold key never scrolls a list.
+			if is_instance_valid(key) and key.has_meta("press_n") and pos.distance_to(start) > UiFonts.px(InventoryPane.DRAG_CSS):
+				key.set_meta("dragged", true)
 			var list: Variant = f.get("scroll")
-			if is_instance_valid(list) and (f["dragged"] or pos.distance_to(f["start"]) >= DRAG_PX):
+			var moved: bool = bool(f.get("dragged", false)) or pos.distance_to(start) >= DRAG_PX
+			if moved:
+				_finger_key_up(f)
+			if is_instance_valid(list) and moved:
 				f["dragged"] = true
 				var scroll: ScrollContainer = list
-				scroll.scroll_vertical = int(f["from"]) - int(pos.y - f["start"].y)
+				scroll.scroll_vertical = int(f.get("from", 0)) - int(pos.y - start.y)
 	return true
+
+
+## A bag pane key a manual finger came down on is let go (lifted, dragged off or
+## taken away), once: a key that sank comes back up, a hold winds back.
+func _finger_key_up(f: Dictionary) -> void:
+	if not bool(f.get("down", false)):
+		return
+	f["down"] = false
+	var key: Variant = f.get("button")
+	if is_instance_valid(key):
+		var b := key as Button
+		if f.has("faces"):
+			var faces: Dictionary = f["faces"]
+			for state: String in ["normal", "hover"]:
+				if faces.has(state):
+					b.add_theme_stylebox_override(state, faces[state])
+				else:
+					b.remove_theme_stylebox_override(state)
+		b.button_up.emit()
+
+
+## The pressed face shown on a key a manual finger holds (on this path the button's
+## own pressed state is never set); returns the faces it covered, to give back.
+func _press_face(key: Button) -> Dictionary:
+	var faces: Dictionary = {}
+	var pressed: StyleBox = key.get_theme_stylebox("pressed")
+	for state: String in ["normal", "hover"]:
+		if key.has_theme_stylebox_override(state):
+			faces[state] = key.get_theme_stylebox(state)
+		key.add_theme_stylebox_override(state, pressed)
+	return faces
 
 
 func finger_up(index: int, pos: Vector2) -> bool:
@@ -4257,15 +4396,18 @@ func finger_up(index: int, pos: Vector2) -> bool:
 		"button":
 			# A bag pane finger may hold no key (a gap in a list), or one laid away
 			# since, or have dragged its list, or have come down on a key still off
-			# (it may wake before the lift): then the lift presses nothing.
-			var held: Variant = f["button"]
+			# (it may wake before the lift): then the lift presses nothing. The key
+			# is let go after its press, as a mouse's lift does.
+			var held: Variant = f.get("button")
 			if not is_instance_valid(held) or f.get("dragged", false) or f.get("off", false):
+				_finger_key_up(f)
 				return true
 			var b: Button = held
 			if not b.disabled and b.is_visible_in_tree() and touch_rect(b).has_point(pos):
 				if b.toggle_mode:
 					b.button_pressed = not b.button_pressed
 				b.pressed.emit()
+			_finger_key_up(f)
 		"hand":
 			_release(pos)
 		"portrait":
@@ -4290,6 +4432,8 @@ func finger_cancel(index: int) -> bool:
 			stick_index = -1
 			stick_dash = false
 			_stick_release()
+		"button":
+			_finger_key_up(f)
 		"pad":
 			if auto_aim:
 				aim_cancel = true
@@ -4796,6 +4940,8 @@ func drop_touch() -> void:
 	for held_index: int in modal_fingers:
 		modal_fingers[held_index] = {"owner": null}
 	for index: int in fingers:
+		if String(fingers[index].get("kind", "")) == "button":
+			_finger_key_up(fingers[index])
 		modal_fingers[index] = {"owner": null}
 	if fingers.has(0):
 		modal_fingers[-1] = {"owner": null}

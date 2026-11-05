@@ -5,6 +5,7 @@ const Research = preload("res://game/train/train_research.gd")
 const Workshop = preload("res://game/train/train_workshop.gd")
 const Dom = preload("res://game/train/train_dom.gd")
 const TV = preload("res://tests/train/train_vectors.gd")
+const RestoreVectors = preload("res://tests/train/restore_vectors.gd")
 const PATH := "res://tests/fixtures/train/tech_vectors.json"
 static var _data: Dictionary = {}
 var _bad: Array[String] = []
@@ -68,7 +69,7 @@ func test_s1_tables_and_start_roster() -> void:
 
 func test_all_read_functions_against_s1() -> void:
 	for row: Dictionary in _data["cases"]:
-		var g: Dictionary = row["state"]
+		var g: Dictionary = RestoreVectors.project(row["state"])
 		var id: String = String(row["id"])
 		var want: Dictionary = row["read"].duplicate(true)
 		var skills: Dictionary = {}
@@ -99,30 +100,30 @@ func test_start_and_finish_against_s1() -> void:
 			# S1 blocks W4 without gear; S2 compares these modes with gear-on answers below.
 			if id == "w4" and not bool(sample["before"].get("gearOn", false)):
 				continue
-			var g: Dictionary = sample["before"].duplicate(true)
+			var g: Dictionary = RestoreVectors.project(sample["before"])
 			var result: bool = Research.start_restore(g, id, String(sample["mode"]), sample["variant"])
 			accepted += int(result)
 			_same(sample["result"], result, _label(row) + " start result")
-			_same(sample["after"], g, _label(row) + " start after")
+			_same(RestoreVectors.project(sample["after"]), g, _label(row) + " start after")
 		var finish: Dictionary = row["finish"]
-		var g: Dictionary = finish["before"].duplicate(true)
+		var g: Dictionary = RestoreVectors.project(finish["before"])
 		_same(finish["result"], Research.start_finish(g, id), _label(row) + " finish result")
-		_same(finish["after"], g, _label(row) + " finish after")
+		_same(RestoreVectors.project(finish["after"]), g, _label(row) + " finish after")
 	assert_gt(accepted, 100)
 	assert_eq(_bad, [] as Array[String])
 
 
 func _cancel(sample: Dictionary, label: String) -> void:
-	var g: Dictionary = sample["before"].duplicate(true)
+	var g: Dictionary = RestoreVectors.project(sample["before"])
 	Research.cancel_restore(g)
-	_same(sample["after"], g, label + " cancel")
+	_same(RestoreVectors.project(sample["after"]), g, label + " cancel")
 
 
 func _run(sample: Dictionary, label: String) -> void:
-	var g: Dictionary = sample["before"].duplicate(true)
+	var g: Dictionary = RestoreVectors.project(sample["before"])
 	var got: Dictionary = Workshop.run(g)
 	_same(sample["result"], {"used": got["used"], "did": got["did"]}, label + " run result")
-	_same(sample["after"], g, label + " run after")
+	_same(RestoreVectors.project(sample["after"]), g, label + " run after")
 
 
 func test_cancel_and_work_allocation_against_s1() -> void:
@@ -141,14 +142,21 @@ func test_cancel_and_work_allocation_against_s1() -> void:
 func test_upkeep_against_s1() -> void:
 	for row: Dictionary in _data["cases"]:
 		var sample: Dictionary = row["upkeep"]
-		var g: Dictionary = sample["before"].duplicate(true)
+		var g: Dictionary = RestoreVectors.project(sample["before"])
 		_same(sample["result"], Research.pay_upkeep(g), _label(row) + " upkeep result")
-		_same(sample["after"], g, _label(row) + " upkeep after")
+		_same(RestoreVectors.project(sample["after"]), g, _label(row) + " upkeep after")
 	assert_eq(_bad, [] as Array[String])
 
 
+func _small_board() -> Dictionary:
+	var comms: Dictionary = {}
+	for comm: String in ["tail", "medtech", "guard", "front", "engine"]:
+		comms[comm] = {"rel": 0}
+	return {"seg": 1, "journal": [], "comms": comms, "dom": Dom.start()}
+
+
 func test_making_stays_between_parts_and_research() -> void:
-	var g: Dictionary = {"dom": Dom.start()}
+	var g: Dictionary = _small_board()
 	g["dom"]["frags"]["craft"] = 1
 	assert_true(Research.start_restore(g, "w1", "full"))
 	assert_true(Workshop.start(g, "bow"))
@@ -184,7 +192,7 @@ func test_workshop_technologies_are_visible_without_scouting() -> void:
 
 
 func test_w4_restores_without_gear_but_r4_stays_blocked() -> void:
-	var g: Dictionary = {"dom": Dom.start()}
+	var g: Dictionary = _small_board()
 	assert_null(Research.restore_block(g, "w4"), "no gear flag")
 	g["gearOn"] = false
 	assert_null(Research.restore_block(g, "w4"), "gear is off")
@@ -204,16 +212,23 @@ func test_w4_without_gear_keeps_s1_restoration_answers() -> void:
 		if row["id"] != "w4" or not bool(row["state"].get("gearOn", false)):
 			continue
 		compared += 1
-		var g: Dictionary = row["state"].duplicate(true)
+		var g: Dictionary = RestoreVectors.project(row["state"])
 		g["gearOn"] = false
 		_same(row["read"]["block"], Research.restore_block(g, "w4"), _label(row) + " S2 block")
 		_same(row["read"]["check"], Research.restore_check(g, "w4"), _label(row) + " S2 check")
 		for sample: Dictionary in row["starts"]:
-			var before: Dictionary = sample["before"].duplicate(true)
-			var after: Dictionary = sample["after"].duplicate(true)
+			var before: Dictionary = RestoreVectors.project(sample["before"])
+			var after: Dictionary = RestoreVectors.project(sample["after"])
 			before["gearOn"] = false
 			after["gearOn"] = false
 			_same(sample["result"], Research.start_restore(before, "w4", String(sample["mode"]), sample["variant"]), _label(row) + " S2 start")
 			_same(after, before, _label(row) + " S2 after")
 	assert_gt(compared, 0)
+	assert_eq(_bad, [] as Array[String])
+
+
+func test_cancel_pipe_council_options_idx_deals_and_result_match_s1() -> void:
+	assert_eq((_data["cancel_cases"] as Array).size(), 7)
+	for row: Dictionary in _data["cancel_cases"]:
+		_cancel(row, String(row["name"]))
 	assert_eq(_bad, [] as Array[String])

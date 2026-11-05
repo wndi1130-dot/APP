@@ -1020,7 +1020,7 @@ func test_d10_pane_moves_counts_immediately_past_capacity() -> void:
 	var start: Dictionary = _counts(game)
 	game.hud.sled_panel(id)
 	assert_false(_buttons(game).has("모두 담기"))
-	game.hud._inv_bag()
+	game.hud.bag_panel()
 	game.hud._inv_put("junk_nails")
 	assert_eq(int(sled["items"]["junk_nails"]), 25)
 	assert_false(p.items.has("junk_nails"))
@@ -1306,18 +1306,19 @@ func test_d7_sled_refuses_body_items_and_dims_bag_rows() -> void:
 	var bag: Dictionary = p.items.duplicate(true)
 	var sled: Dictionary = _sled(game)
 	var id: int = int(sled["id"])
-	var pane: Control = InventoryPane._bag_rows(game.hud, p, {"kind": "sled", "id": id})
+	var pane: Control = InventoryPane._bag_side(game.hud, p, {"kind": "sled", "id": id})
 	add_child(pane)
-	var disabled: Dictionary = {}
+	var dimmed: Dictionary = {}
 	for key: Button in pane.find_children("*", "Button", true, false):
 		if key.has_meta("item_id"):
-			disabled[String(key.get_meta("item_id"))] = key.disabled
+			assert_false(key.disabled, "a long press still opens the row's jobs")
+			dimmed[String(key.get_meta("item_id"))] = (key.get_node("Line") as Control).modulate.a < 1.0
 	for item: String in bag:
-		assert_eq(bool(disabled.get(item, false)), item != "scrap", item)
+		assert_eq(bool(dimmed.get(item, false)), item != "scrap", item)
 		assert_eq(game.actions.goes_to_train(item), item == "scrap", item)
 	pane.free()
 	game.hud.sled_panel(id)
-	game.hud._inv_bag()
+	game.hud.bag_panel()
 	for item: String in bag:
 		if item == "scrap":
 			continue
@@ -1332,6 +1333,18 @@ func test_d7_sled_refuses_body_items_and_dims_bag_rows() -> void:
 	game.hud._inv_sled_take(id, "scrap")
 	assert_eq(sled["items"], {})
 	assert_eq(p.items, bag)
+
+
+## 결정 560: only the bag's weight climbs the carry colour scale.
+func test_the_sled_head_keeps_ink_and_bone_even_over_its_limit() -> void:
+	var game: Variant = _game()
+	var sled: Dictionary = _sled(game, {"wood": 13})
+	game.hud.sled_panel(int(sled["id"]))
+	var number := game.hud.modal.find_child("Side", true, false) as Label
+	var bar := game.hud.modal.find_child("PlaceBar", true, false) as ProgressBar
+	assert_eq(number.get_theme_color("font_color"), InventoryPane.GlassPane.INK)
+	assert_eq((bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color, InventoryPane.BONE)
+	game.hud._close_modal()
 
 
 func test_d8_train_button_and_departure_conserve_sled_stock_and_named_receipts() -> void:

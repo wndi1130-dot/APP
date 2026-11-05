@@ -997,7 +997,7 @@ func vault_window(p, c: Vector2i) -> void:
 	release_sled(p, false, "썰매는 밖에 두었다")
 	var w: Dictionary = game.grid.windows[c]
 	if game.audio != null:
-		game.audio.window_vault(c, WindowRules.can_clear(w))   # the ear's; climbing through is quiet to the rules
+		game.audio.window_vault(c, WindowRules.can_clear(w), p == game.player)   # the ear's; climbing through is quiet to the rules
 	if game.rng.randf() < WindowRules.cross_cut_chance(w, p.gloves):
 		p.body.apply_cut(false, game.clock.elapsed, game.combat.wound_side("leg"))
 		game.telemetry.injury(game.clock.elapsed, p.pid, "glass")

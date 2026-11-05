@@ -107,10 +107,30 @@ static func empty() -> Dictionary:
 	var frags := {}
 	for f: String in FIELDS:
 		frags[f] = 0
-	var d := {"frags": frags, "armory": [], "wardrobe": [], "furnish": {}, "store": {}}
+	var d := {"frags": frags, "armory": [], "wardrobe": [], "furnish": {}, "store": {}, "decor80": []}
 	for key: String in AMOUNTS:
 		d[key] = 0
+	init_log(d)
 	return d
+
+
+## S1's restore history and the counters whose rules are ported to S2.
+static func init_log(d: Dictionary) -> void:
+	if not d.has("log"):
+		d["log"] = {"restores": []}
+	if not d.has("stats"):
+		d["stats"] = {"restored": 0, "tier3": 0, "defective": 0}
+
+
+static func migrate_log(g: Dictionary) -> void:
+	if not g.get("dom") is Dictionary:
+		return
+	var d: Dictionary = g["dom"]
+	init_log(d)
+	var st: Dictionary = d.get("techs", {}).get("e3", {})
+	# S1 state.ts migrate: an E3 still being restored that was never ratified waits for the vote.
+	if st.get("stage") == "restoring" and st.get("variant") != null and not st.has("pending") and not d.has("pipeMoved"):
+		st["pending"] = true
 
 
 ## The stores a new run starts with: S1's starting scrap, wood and parts, the field's first
@@ -118,6 +138,9 @@ static func empty() -> Dictionary:
 ## (START_WARDROBE).
 static func start() -> Dictionary:
 	var d := empty()
+	# This fresh store appends the research fields before log and stats, as S1 does.
+	d.erase("log")
+	d.erase("stats")
 	for key: String in START:
 		d[key] = START[key]
 	for field: String in START_FRAGS:
@@ -131,6 +154,7 @@ static func start() -> Dictionary:
 	d["experts"] = START_EXPERTS.duplicate(true)
 	d["insulated"] = []
 	d["job"] = null
+	init_log(d)
 	return d
 
 
@@ -217,6 +241,26 @@ static func is_store(dom: Variant) -> bool:
 					return false
 		elif key == "restoring":
 			if v != null and (not v is String or not TECH_IDS.has(v)):
+				return false
+		elif key == "log":
+			if not v is Dictionary or v.size() != 1 or not v.get("restores") is Array:
+				return false
+			for row: Variant in v["restores"]:
+				if not row is Dictionary or not _natural(row.get("seg")) or not TECH_IDS.has(row.get("id")):
+					return false
+				for column: Variant in row:
+					if column not in ["seg", "id", "v"]:
+						return false
+				if row.has("v") and row["v"] not in ["a", "b"]:
+					return false
+		elif key == "stats":
+			if not v is Dictionary or v.size() != 3:
+				return false
+			for column: String in ["restored", "tier3", "defective"]:
+				if not _natural(v.get(column)):
+					return false
+		elif key in ["pipeFlip", "pipeMoved"]:
+			if v not in ["a", "b"]:
 				return false
 		elif key == "experts":
 			if not v is Array:
@@ -413,3 +457,7 @@ static func take_extras(g: Dictionary, extras: Variant) -> bool:
 
 static func _amount(v: Variant) -> bool:
 	return (v is float or v is int) and float(v) >= 0.0
+
+
+static func _natural(v: Variant) -> bool:
+	return (v is int or v is float) and is_finite(float(v)) and float(v) >= 0.0 and float(v) == floorf(float(v))
