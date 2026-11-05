@@ -16,6 +16,18 @@ class CountingGame:
 		return super.find_path(from, to, for_dead)
 
 
+class CountingWatchAi:
+	extends FieldAi
+	var watch_starts: int = 0
+
+	func _init(field_game) -> void:
+		super(field_game)
+
+	func _watch_state(p: Variant, base: Vector3, k: int, now: float, camera_way: Vector3 = Vector3.ZERO) -> Dictionary:
+		watch_starts += 1
+		return super._watch_state(p, base, k, now, camera_way)
+
+
 var game
 var mates: Dictionary = {}
 
@@ -110,16 +122,57 @@ func test_idle_watch_stays_outside_the_camera_cone_after_the_sweep() -> void:
 	_start()
 	var p = mates["rear"]
 	var before_rng: int = game.rng.state
-	for camera_way in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
+	for camera_way: Vector3 in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
 		game.camera.global_position = p.global_position + camera_way * 20.0 + Vector3.UP * 50.0
-		for time in [0.0, 1.5, 3.0, 6.0, 12.0]:
-			game.clock.elapsed = time
-			for role in ["point", "side", "rear", "aside"]:
-				var gaze: Vector3 = game.ai._look_out(p, role, Vector3.RIGHT, Vector3.FORWARD)
-				assert_lte(gaze.normalized().dot(camera_way), 0.50001, "at least 60 degrees from the camera")
+		for role: String in ["point", "side", "rear", "aside"]:
+			# 기존 상태를 유지하되 다음 선택 시점에 현재 후보를 확인한다.
+			var previous: Dictionary = p.brain.get("watch_" + role, {})
+			if not previous.is_empty():
+				previous["waiting"] = 0.0
+				previous["until"] = game.clock.elapsed
+			game.ai._look_out(p, role, Vector3.RIGHT, Vector3.FORWARD)
+			var state: Dictionary = p.brain["watch_" + role]
+			var camera_points: int = 0
+			for point: int in range(FieldAi.LOOK_POINTS):
+				var yaw: float = float(state["yaw_" + str(point)])
+				if Vector3(sin(yaw), 0.0, cos(yaw)).dot(camera_way) >= 0.5 - FieldAi.LOOK_ANGLE_EPS:
+					camera_points += 1
+			var camera_picks: int = 0
+			for step: int in range(400):
+				var point: int = game.ai._watch_pick(p, state, step, game.clock.elapsed, camera_way)
+				var yaw: float = float(state["yaw_" + str(point)])
+				if Vector3(sin(yaw), 0.0, cos(yaw)).dot(camera_way) >= 0.5 - FieldAi.LOOK_ANGLE_EPS:
+					camera_picks += 1
+			assert_lte(camera_points, FieldAi.LOOK_CAMERA_MAX_POINTS, "%s camera_points=%d" % [role, camera_points])
+			var expected: float = float(camera_points) * FieldAi.LOOK_CAMERA_WEIGHT / (float(FieldAi.LOOK_POINTS - camera_points) + float(camera_points) * FieldAi.LOOK_CAMERA_WEIGHT)
+			assert_almost_eq(float(camera_picks) / 400.0, expected, 0.09, role + " uses a soft camera preference")
+			if camera_points > 0 and camera_points < FieldAi.LOOK_POINTS:
+				assert_gt(camera_picks, 0)
+				assert_lt(float(camera_picks) / 400.0, float(camera_points) / float(FieldAi.LOOK_POINTS))
 	game.camera.global_position = p.global_position + Vector3.UP * 50.0
 	assert_true(game.ai._look_out(p, "rear", Vector3.RIGHT, Vector3.FORWARD).is_finite())
 	assert_eq(game.rng.state, before_rng)
+
+
+func test_approaching_companion_starts_watch_only_after_settling() -> void:
+	_start()
+	game.ai = CountingWatchAi.new(game)
+	game.ai._chief_still = 2.0
+	var p = mates["point"]
+	for _think: int in range(12):
+		game.ai._keep_formation(p)
+	# moving은 필드 이동 틱이 켜는 값이라 처리가 꺼진 이 시험에선 늘 false다. 접근은 남은 경로로 본다.
+	assert_false(p.path.is_empty(), "접근 경로 path=%d" % p.path.size())
+	assert_eq(game.ai.watch_starts, 0, "접근 중 상태 생성 actual=%d" % game.ai.watch_starts)
+	var fwd: Vector3 = game.ai._follow_forward()
+	var right: Vector3 = Vector3(fwd.z, 0.0, -fwd.x)
+	var spot: Vector3 = game.ai._follow_spot(p, game.ai._follow_mates(), fwd, right)
+	assert_true(spot.is_finite(), "도착 자리 actual=%s" % spot)
+	p.stop()
+	p.position = spot
+	game.ai._keep_formation(p)
+	assert_eq(game.ai.watch_starts, 1, "도착 뒤 상태 생성 actual=%d" % game.ai.watch_starts)
+	assert_false(p.moving, "도착 뒤 moving=%s" % p.moving)
 
 
 func test_door_trail_uses_arc_gap_wait_hysteresis_and_five_metres_to_release() -> void:
