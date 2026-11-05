@@ -60,6 +60,12 @@ const ART_ALIAS: Dictionary = {
 	"jar_cabbage": "jar_jam", "jar_honey": "jar_jam", "fever_pills": "painkillers",
 	"junk_rag": "cloth", "info_timetable": "document", "info_telegraph": "document",
 }
+## A line icon drawn like a thing that has its bake: the things under it share
+## that picture (notes and plan scraps as papers, a coffee sack as the oat sack).
+const ICON_ALIAS: Dictionary = {
+	"papers": "document", "it_cigarettes": "cigarettes", "it_sack": "oats", "med": "medkit",
+	"it_plank": "wood",
+}
 ## The places rail shows five keys at most, then scrolls, fading at its foot while
 ## more lie below (MORE_H); a short screen cuts it sooner.
 const RAIL_MAX: float = PLACE_H * 5.0 + 4.0 * 4.0
@@ -1162,11 +1168,11 @@ static func _item_icon(hud, id: String) -> Control:
 
 
 ## The thing's baked picture (res://assets/icons/items/<id>.png, or the one it
-## shares, ART_ALIAS, or the one baked for its line icon's name — the things
-## drawn with one line picture share one bake), null without one. Its own
-## picture wins over a shared one.
+## shares, ART_ALIAS, or the one baked for its line icon's name or that icon's
+## ICON_ALIAS — the things drawn with one line picture share one bake), null
+## without one. Its own picture wins over a shared one.
 static func art_texture(id: String, icon: String = "") -> Texture2D:
-	for name: String in [id, String(ART_ALIAS.get(id, "")), icon]:
+	for name: String in [id, String(ART_ALIAS.get(id, "")), icon, String(ICON_ALIAS.get(icon, ""))]:
 		var path: String = "res://assets/icons/items/%s.png" % name
 		if name != "" and ResourceLoader.exists(path):
 			return load(path) as Texture2D

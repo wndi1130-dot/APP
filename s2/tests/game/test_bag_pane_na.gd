@@ -215,8 +215,9 @@ func test_the_bag_beside_a_box_sends_its_row_to_the_box() -> void:
 ## the count — the multiple nearest the line icon's size that fits the row.
 func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() -> void:
 	var game = _game()
-	# The can opener has no baked picture: it keeps its line icon.
-	var id: String = _box(game, ["food_pack", "can_opener"])
+	# The luxury bundle has no baked picture: it keeps its line icon. The can opener
+	# has none of its own but takes the one baked for its line icon (it_opener).
+	var id: String = _box(game, ["food_pack", "luxury_pack", "can_opener"])
 	var picture := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	picture.fill(Color("ffc66c"))
 	var texture := ImageTexture.create_from_image(picture)
@@ -245,11 +246,16 @@ func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() 
 	else:
 		assert_almost_eq(icon.size.x, UiFonts.px(InventoryPane.ITEM_ICON), 0.01, "too small a window keeps the line icon's size")
 	assert_almost_eq(icon.size.x, icon.size.y, 0.01)
-	var fallback := _row(game.hud, "Near", "can_opener").find_child("ItemIcon", true, false) as TextureRect
+	var fallback := _row(game.hud, "Near", "luxury_pack").find_child("ItemIcon", true, false) as TextureRect
 	assert_eq(fallback.stretch_mode, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
 	assert_almost_eq(fallback.size.x, UiFonts.px(InventoryPane.ITEM_ICON), 1.0)
 	assert_almost_eq(fallback.size.y, UiFonts.px(InventoryPane.ITEM_ICON), 1.0)
-	assert_eq(fallback.texture, HudIcons.texture(game.item_icon("can_opener"), UiFonts.size(InventoryPane.ITEM_ICON), GlassPane.INK2, 1.0 / HudIcons.LINE), "a missing png uses the existing line icon")
+	assert_eq(fallback.texture, HudIcons.texture(game.item_icon("luxury_pack"), UiFonts.size(InventoryPane.ITEM_ICON), GlassPane.INK2, 1.0 / HudIcons.LINE), "a missing png uses the existing line icon")
+	var opener := _row(game.hud, "Near", "can_opener").find_child("ItemIcon", true, false) as TextureRect
+	assert_null(InventoryPane.art_texture("can_opener"), "no picture of its own")
+	assert_not_null(opener.texture)
+	assert_eq(opener.texture, InventoryPane.art_texture("can_opener", game.item_icon("can_opener")), "its line icon's bake")
+	assert_true(InventoryPane.is_painted(opener.texture))
 	game.hud._close_modal()
 
 
@@ -1465,6 +1471,10 @@ func test_a_thing_without_its_own_picture_takes_its_line_icons_bake() -> void:
 	assert_eq(InventoryPane.art_texture("rusk", "medkit"), InventoryPane.art_texture("hardtack"), "then its alias")
 	assert_null(InventoryPane.art_texture("no_such_thing", "no_such_icon"))
 	assert_null(InventoryPane.art_texture("no_such_thing"))
+	# A line icon drawn like a baked thing (ICON_ALIAS): notes take the document's.
+	assert_eq(InventoryPane.art_texture("note_map", "papers"), InventoryPane.art_texture("document"))
+	for icon: String in InventoryPane.ICON_ALIAS:
+		assert_not_null(InventoryPane.art_texture("no_such_thing", icon), icon)
 
 
 ## 결정 561 ③: the bag's mark 1.3 times — in its column head, on the folded
