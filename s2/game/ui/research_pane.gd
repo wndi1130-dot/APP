@@ -100,6 +100,11 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 	var branch: String = String(def["branch"])
 	var st: Dictionary = (dom.get("techs", {}) as Dictionary).get(id, {})
 	var stage: String = String(st.get("stage", "new"))
+	var picked: Variant = dom["pipeFlip"] if id == "e3" and dom.has("pipeFlip") else st.get("variant")
+	var choices: Dictionary = Research.variants(g0, id)
+	if id == "e3" and dom.has("pipeFlip"):
+		choices = {}
+		choices[picked] = def["variants"][picked]
 	var cost: Dictionary = Research.restore_cost(id)
 	var check: Dictionary = Research.restore_check(g0, id)
 	var r := {
@@ -107,11 +112,12 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 		"active": dom.get("restoring") == id, "finishing": bool(st.get("finishing", false)),
 		"share": float(st.get("progress", 0)) / maxf(1.0, float(st.get("need", 1))),
 		"have": int(float((dom.get("frags", {}) as Dictionary).get(branch, 0))),
-		"variant": String(def["variants"][st["variant"]]["name"]) if st.get("variant") != null and def.has("variants") else "",
-		"effect": _effect(id, st.get("variant")), "ways": [], "word": "", "can": false, "why": "", "cost": [],
-		"law": law_tag(id, st.get("variant")) if LAW_TAGGED.has(id) else "",
-		"law_on": LawTech.law_standing(g0, id, st.get("variant")),
-		"use": UiFonts.josa(LawTech.use_line(g0, id, st.get("variant"))) if LAW_TAGGED.has(id) else "",
+		"variant": String(def["variants"][picked]["name"]) if picked != null and def.has("variants") else "",
+		"effect": _effect(id, picked), "ways": [], "word": "", "can": false, "why": "", "cost": [],
+		"law": law_tag(id, picked) if LAW_TAGGED.has(id) else "",
+		"law_on": LawTech.law_standing(g0, id, picked),
+		"use": UiFonts.josa(LawTech.use_line(g0, id, picked)) if LAW_TAGGED.has(id) else "",
+		"relations": _row_relations(dom, st, id, stage, choices),
 		# What it takes from the stores each stretch while it runs, and whether
 		# they could not pay it last stretch (it ran at half: Research.mult).
 		"upkeep": [], "starved": bool(st.get("starved", false)), "off": false,
@@ -128,11 +134,11 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 			if int(cost[key]) > 0:
 				r["cost"].append({"key": key, "icon": ICON[key], "n": float(cost[key]),
 					"short": float(dom.get("cores" if key == "core" else key, 0)) < float(cost[key])})
-		var choices: Dictionary = Research.variants(g0, id)
 		for v: Variant in (choices.keys() if not choices.is_empty() else [null]):
 			var copy: Dictionary = g0.duplicate(true)
 			r["ways"].append({"mode": mode, "variant": v, "word": String(choices[v]["name"]) if v != null else "",
-				"can": Research.start_restore(copy, id, mode, v)})
+				"can": Research.start_restore(copy, id, mode, v),
+				"relations": [_pipe_line(dom)] if id == "e3" else _rel_words(id, v)})
 		r["word"] = "결함판" if mode == "defect" else "복원"
 		r["why"] = String(check.get(mode, "")) if check.get(mode) != null else ""
 		r["can"] = r["ways"].any(func(w: Dictionary) -> bool: return bool(w["can"]))
@@ -154,6 +160,36 @@ static func _row_model(g0: Dictionary, dom: Dictionary, id: String) -> Dictionar
 		r["why"] = Research.restart_why(g0, id)
 		r["can"] = r["why"] == ""
 	return r
+
+
+## What the row itself says about relations (design 2c-1 6, 10-6). A technology without ways
+## says it beside its name before it starts, and only when relations move. E3's relations move
+## at the council's ratification, so its row says how while a restore of it waits for that vote,
+## and before a start whose result an earlier rejection fixed (one way, no vote).
+static func _row_relations(dom: Dictionary, st: Dictionary, id: String, stage: String, choices: Dictionary) -> Array[String]:
+	if id == "e3":
+		if (stage == "new" and choices.size() <= 1) or bool(st.get("pending", false)):
+			return [_pipe_line(dom)]
+		return []
+	return _rel_words(id, null) if stage == "new" and choices.is_empty() else []
+
+
+## S1 sideLine: every liking car, then every disliking car, with U+2212.
+static func _rel_words(id: String, variant: Variant) -> Array[String]:
+	var words: Array[String] = []
+	var sides: Dictionary = Research.rel_sides(id, variant)
+	for side: String in ["like", "dislike"]:
+		for comm: String in sides[side]:
+			words.append("%s %s%d" % [Research.COMM_NAME[comm], "+" if side == "like" else "−", int(Research.D["techRel"])])
+	return words
+
+
+static func _pipe_line(dom: Dictionary) -> String:
+	if dom.has("pipeFlip"):
+		return "앞 추인 결과로 고정"
+	if dom.has("pipeMoved"):
+		return "앞 추인(변형 %s)과 같은 결과면 관계 그대로, 다른 결과면 그 변형 쪽으로 관계가 움직임" % Research.TECHS["e3"]["variants"][dom["pipeMoved"]]["name"]
+	return "추인 결과 쪽으로 ±5"
 
 
 static func _effect(id: String, variant: Variant) -> String:
@@ -223,7 +259,7 @@ func _draw_all() -> void:
 		var id: String = String(data["id"])
 		ids.append(id)
 		by_id[id] = data
-		if _choosing == id and (String(data["stage"]) != "new" or bool(data["active"])):
+		if _choosing == id and (String(data["stage"]) != "new" or bool(data["active"]) or (data["ways"] as Array).size() <= 1):
 			_choosing = ""
 		if _cancelling == id and not bool(data["active"]):
 			_cancelling = ""
@@ -238,22 +274,29 @@ func _draw_all() -> void:
 	s.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	RowKeep.pass_mouse(s)
 	s.position = Vector2(0.0, ROW_TOP) * k
-	s.size = Vector2(CSS_W, css_size(rows.size()).y - ROW_TOP - 12.0) * k
 	var list: Control = RowKeep.part(s, "Rows", func() -> Control: return Control.new())
 	RowKeep.pass_mouse(list)
-	list.custom_minimum_size = Vector2(CSS_W, ROW_H * rows.size()) * k
+	# The fill runs in list order; the shared dictionary retains the accumulated height.
+	var layout: Dictionary = {"height": 0.0}
 	RowKeep.sync(list, ids, func(_id: String) -> Control:
 		var row := Control.new()
 		RowKeep.pass_mouse(row)
-		row.size = Vector2(CSS_W, ROW_H) * k
 		return row,
-		func(row: Control, id: String, index: int) -> void:
-			row.position = Vector2(0.0, ROW_H * index) * k
+		func(row: Control, id: String, _index: int) -> void:
+			row.position = Vector2(0.0, float(layout["height"])) * k
 			_into = row
 			RowKeep.begin(row)
-			_row(by_id[id], 0.0)
+			var height: float = _row(by_id[id], 0.0)
+			row.size = Vector2(CSS_W, height) * k
+			layout["height"] = float(layout["height"]) + height
 			RowKeep.finish(row)
 			_into = null)
+	list.custom_minimum_size = Vector2(CSS_W, float(layout["height"])) * k
+	# The scroll range is the list's minimum height as the container last read it, and nothing
+	# above this pane asks it again. Size the container after the list, asking afresh, so an
+	# opened row's foot can be scrolled to and folding it gives the range back.
+	s.update_minimum_size()
+	s.size = Vector2(CSS_W, css_size(rows.size()).y - ROW_TOP - 12.0) * k
 	RowKeep.restore_scroll(s, saved)
 	if list.custom_minimum_size.y > s.size.y + 0.5:
 		_more(s)
@@ -333,19 +376,19 @@ func _stores(stores: Array) -> void:
 
 ## A technology: its branch mark and name; what it needs, how far it is, or
 ## what it does; its key, or a key for each way while its ways are open.
-func _row(r: Dictionary, top: float) -> void:
+func _row(r: Dictionary, top: float) -> float:
 	var k: float = UiFonts.K
 	var id: String = String(r["id"])
 	_add(_mark(BRANCH_ICON[String(r["branch"])], 15.0, Vector2(44.0, top + 5.0), INK2, "Branch_" + id))
 	if _choosing == id:
-		_ways(r, top)
+		var way_height: float = _ways(r, top)
 		var back := _key("뒤로", "Key_" + id, true)
 		_add(back)
 		back.position = Vector2(232.0, top + 5.0) * k
 		back.size = Vector2(KEY_W, KEY_H) * k
 		back.tooltip_text = ""
 		_wire_key(back, r)
-		return
+		return way_height
 	# A picked way is the thing itself (S1 techTitle): its name stands for the technology's.
 	var title: String = String(r["variant"]) if String(r["variant"]) != "" else String(r["name"])
 	var word := _label("Name_" + id, title, UiFonts.WORD, 500, 13.0, INK, 2.08)
@@ -374,10 +417,33 @@ func _row(r: Dictionary, top: float) -> void:
 		said.name = "Effect_" + id
 		_text(said, 62.0, top + 40.0)
 		under_x = 62.0 + GlassParts.text_w(said) / k
+	var law_under: bool = false
 	if not tagged:
-		_law(r, top + 40.0, under_x + 8.0, law_x1)
+		law_under = _law(r, top + 40.0, under_x + 8.0, law_x1)
+	var height: float = ROW_H
+	var relations: Array = r["relations"]
+	if not relations.is_empty():
+		var x0: float = maxf(64.0 + GlassParts.text_w(word) / k + 8.0, under_x + 8.0)
+		var x1: float = name_x1
+		var base: float = top + 18.0
+		if String(r["law"]) != "":
+			x0 = under_x + 8.0
+			x1 = law_x1
+			base = top + 40.0
+			# The law tag stands on the line under the name (not beside it): stop short of it.
+			if law_under and _host().has_node("Law_" + id):
+				var tag: Label = _host().get_node("Law_" + id) as Label
+				x1 = minf(x1, tag.position.x / k - 8.0)
+		var widest: float = 0.0
+		for text: String in relations:
+			widest = maxf(widest, _rel_width(text))
+		if x1 - x0 < widest:
+			x0 = 64.0
+			x1 = law_x1
+			base = top + ROW_H + _rel_height()
+		height = maxf(height, _relations(relations, "Rel_" + id + "_", x0, x1, base, true) - top + 5.0)
 	if String(r["word"]) == "":
-		return
+		return height
 	var cancelling: bool = _cancelling == id
 	var key := _key("정말 취소" if cancelling else String(r["word"]), "Key_" + id, bool(r["can"]))
 	_add(key)
@@ -385,6 +451,7 @@ func _row(r: Dictionary, top: float) -> void:
 	key.size = Vector2(KEY_W, KEY_H) * k
 	key.tooltip_text = String(r["why"]) if String(r["why"]) != "" else String(r["use"])
 	_wire_key(key, r)
+	return height
 
 
 ## The law a law technology is for, on the baseline `base`, right-aligned
@@ -440,9 +507,10 @@ func _upkeep(r: Dictionary, top: float) -> float:
 
 ## The ways a restoration can go, a full key each, in the row's place (its
 ## branch mark stays so the row is still the same technology's).
-func _ways(r: Dictionary, top: float) -> void:
+func _ways(r: Dictionary, top: float) -> float:
 	var k: float = UiFonts.K
 	var ways: Array = r["ways"]
+	var height: float = ROW_H
 	for i: int in ways.size():
 		var w: Dictionary = ways[i]
 		var key := _key(String(w["word"]), "Way_%s_%s" % [r["id"], w["variant"]], bool(w["can"]))
@@ -451,16 +519,77 @@ func _ways(r: Dictionary, top: float) -> void:
 		key.tooltip_text = UiFonts.josa(LawTech.use_line(g, String(r["id"]), w["variant"]))
 		key.set_meta("tech_id", String(r["id"]))
 		key.set_meta("way", w)
+		# Each way's own cars under its key (S1 sideLine per way row). E3's ways share one
+		# notice (the ratification decides), said once under both keys below.
+		var relations: Array = w["relations"]
+		if relations.is_empty():
+			relations = ["관계 안 움직임"]
+		if String(r["id"]) != "e3":
+			height = maxf(height, _relations(relations, "Rel_%s_%s_" % [r["id"], w["variant"]],
+				64.0 + (WAY_W + 4.0) * i, 64.0 + (WAY_W + 4.0) * i + WAY_W, top + ROW_H + _rel_height()) - top + 5.0)
 		if key.has_meta("wired"):
 			continue
 		key.set_meta("wired", true)
 		key.pressed.connect(func() -> void:
+			if not key.has_meta("way") or not key.has_meta("tech_id"):
+				return
 			var current: Dictionary = key.get_meta("way")
 			if not Research.start_restore(g, String(key.get_meta("tech_id")), String(current["mode"]), current["variant"]):
 				UiDeny.shake(key)
 				return
 			_choosing = ""
 			_after())
+	if String(r["id"]) == "e3" and not ways.is_empty():
+		height = maxf(height, _relations(ways[0]["relations"], "Rel_e3_ways_",
+			64.0, 64.0 + (WAY_W + 4.0) * ways.size() - 4.0, top + ROW_H + _rel_height()) - top + 5.0)
+	return height
+
+
+static func _rel_width(text: String) -> float:
+	return UiFonts.face(UiFonts.WORD, 400).get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, UiFonts.size(11.0)).x / UiFonts.K
+
+
+static func _rel_height() -> float:
+	return UiFonts.face(UiFonts.WORD, 400).get_height(UiFonts.size(11.0)) / UiFonts.K
+
+
+## Keep each car's name and amount together when it fits; longer notices wrap at spaces.
+static func _rel_lines(words: Array, width: float) -> Array[String]:
+	var lines: Array[String] = []
+	var line: String = ""
+	for word: String in words:
+		var joined: String = word if line == "" else line + " · " + word
+		if _rel_width(joined) <= width:
+			line = joined
+			continue
+		if line != "":
+			lines.append(line)
+		var rest: String = word
+		while rest.length() > 1 and _rel_width(rest) > width:
+			var cut: int = rest.length() - 1
+			while cut > 1 and _rel_width(rest.left(cut)) > width:
+				cut -= 1
+			var space: int = rest.rfind(" ", cut)
+			if space > 0:
+				cut = space
+			lines.append(rest.left(cut).strip_edges())
+			rest = rest.substr(cut).strip_edges()
+		line = rest
+	if line != "":
+		lines.append(line)
+	return lines
+
+
+## One label per measured line makes its ink and its row's bottom explicit.
+func _relations(words: Array, prefix: String, x0: float, x1: float, base: float, right: bool = false) -> float:
+	var lines: Array[String] = _rel_lines(words, x1 - x0)
+	var bottom: float = 0.0
+	for i: int in lines.size():
+		var label: Label = _label(prefix + str(i), lines[i], UiFonts.WORD, 400, 11.0, INK2)
+		var h: float = _rel_height()
+		_text(label, x1 - GlassParts.text_w(label) / UiFonts.K if right else x0, base + (h + 2.0) * i)
+		bottom = maxf(bottom, label.position.y / UiFonts.K + maxf(h, label.size.y / UiFonts.K))
+	return bottom
 
 
 func _press(r: Dictionary, key: Button) -> void:
@@ -627,6 +756,8 @@ func _wire_key(key: Button, data: Dictionary) -> void:
 		return
 	key.set_meta("wired", true)
 	key.pressed.connect(func() -> void:
+		if not key.has_meta("row"):
+			return
 		var current: Dictionary = key.get_meta("row")
 		if _choosing == String(current["id"]):
 			_choosing = ""
