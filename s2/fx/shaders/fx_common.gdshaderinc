@@ -66,10 +66,16 @@ float fx_pool(vec2 xz) {
 	return smoothstep(0.63, 0.71, fx_fbm2(xz * 0.42 + vec2(17.0, 3.0)));
 }
 
-// A pool: open water gives the sky back, ringed when it rains; frozen it is
-// pale, milky ice with dark cracks. ice: fx_cold.y. rain: how hard it falls.
-// sky: what the water gives back (the hour's sky light, with the photo's clouds).
-vec3 fx_pool_color(vec3 base, vec2 xz, float time, float ice, float rain, vec3 sky) {
+// A pool: open water gives the sky back, ringed when it rains; frozen it is a
+// clear sheet over the ground under it, darker than that ground and sheened with
+// the sky, crazed with a few faint cracks. Pale milky ice with dark ringed cracks
+// read as snow patches with puzzle lines on every map (mood 11-05), so the ice
+// keeps the ground's own colour and the cracks stay thin and faint.
+// base: the colour so far (snow mixed in). under: the ground before the snow.
+// ice: fx_cold.y. rain: how hard it falls. sky: what the water gives back (the
+// hour's sky light, with the photo's clouds). px: metres a pixel spans, taken
+// outside any branch so the crack's width is the same on every pixel of a quad.
+vec3 fx_pool_color(vec3 base, vec3 under, vec2 xz, float time, float ice, float rain, vec3 sky, float px) {
 	float rip = 0.0;
 	if (rain > 0.01) {
 		vec2 cell = floor(xz * 2.2);
@@ -78,9 +84,12 @@ vec3 fx_pool_color(vec3 base, vec2 xz, float time, float ice, float rain, vec3 s
 		rip = (1.0 - smoothstep(0.0, 0.06, abs(length(f) - t * 0.5))) * (1.0 - t) * rain;
 	}
 	vec3 water = mix(base * 0.35, sky * 0.62, 0.7) + rip * 0.12;
-	float crack = 1.0 - abs(fx_vnoise(xz * 3.3 + 11.0) * 2.0 - 1.0);
-	vec3 frozen = mix(vec3(0.60, 0.65, 0.70), sky * 0.9, 0.35) * (0.92 + 0.08 * fx_vnoise(xz * 1.7));
-	frozen *= 1.0 - 0.35 * pow(crack, 14.0);
+	// The crack: where the noise crosses its middle, about a pixel and a half wide (no
+	// narrower than 0.04 of the noise), so it neither shimmers nor thickens into a ring.
+	float off = abs(fx_vnoise(xz * 3.3 + 11.0) * 2.0 - 1.0);
+	float crack = 1.0 - smoothstep(0.0, max(0.04, px * 3.3 * 3.0), off);
+	vec3 frozen = mix(under * 0.62, sky * 0.9, 0.25) * (0.94 + 0.06 * fx_vnoise(xz * 1.7));
+	frozen *= 1.0 - 0.12 * crack;
 	return mix(water, frozen, clamp(ice, 0.0, 1.0));
 }
 
