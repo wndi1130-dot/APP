@@ -1102,13 +1102,14 @@ static func _long_press(hud, b: Button, side: String, id: String, i: int) -> voi
 ## smooth at ART; small pixel art (32 px) uses whole multiples in screen pixels;
 ## with neither, the line icon.
 static func _item_icon(hud, id: String) -> Control:
+	var icon: String = String(hud.game.item_icon(id))
 	var texture: Texture2D = hud.item_px_override.get(id) as Texture2D
 	if texture == null:
-		texture = art_texture(id)
+		texture = art_texture(id, icon)
 	if texture == null:
 		var line := TextureRect.new()
 		line.name = "ItemIcon"
-		line.texture = HudIcons.texture(hud.game.item_icon(id), UiFonts.size(ITEM_ICON), GlassPane.INK2, 1.0 / HudIcons.LINE)
+		line.texture = HudIcons.texture(icon, UiFonts.size(ITEM_ICON), GlassPane.INK2, 1.0 / HudIcons.LINE)
 		line.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		line.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		line.custom_minimum_size = Vector2.ONE * UiFonts.px(ITEM_ICON)
@@ -1161,9 +1162,11 @@ static func _item_icon(hud, id: String) -> Control:
 
 
 ## The thing's baked picture (res://assets/icons/items/<id>.png, or the one it
-## shares, ART_ALIAS), null without one.
-static func art_texture(id: String) -> Texture2D:
-	for name: String in [id, String(ART_ALIAS.get(id, ""))]:
+## shares, ART_ALIAS, or the one baked for its line icon's name — the things
+## drawn with one line picture share one bake), null without one. Its own
+## picture wins over a shared one.
+static func art_texture(id: String, icon: String = "") -> Texture2D:
+	for name: String in [id, String(ART_ALIAS.get(id, "")), icon]:
 		var path: String = "res://assets/icons/items/%s.png" % name
 		if name != "" and ResourceLoader.exists(path):
 			return load(path) as Texture2D

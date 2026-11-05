@@ -1455,6 +1455,18 @@ func test_every_baked_picture_is_square_painted_and_mipmapped() -> void:
 		assert_not_null(InventoryPane.art_texture(alias), alias)
 
 
+## A thing with no picture of its own takes the one baked for its line icon's
+## name; its own picture, then its alias, come first.
+func test_a_thing_without_its_own_picture_takes_its_line_icons_bake() -> void:
+	var beans: Texture2D = InventoryPane.art_texture("can_beans")
+	assert_not_null(beans)
+	assert_eq(InventoryPane.art_texture("no_such_thing", "can_beans"), beans, "the line icon's bake")
+	assert_eq(InventoryPane.art_texture("can_beans", "medkit"), beans, "its own picture first")
+	assert_eq(InventoryPane.art_texture("rusk", "medkit"), InventoryPane.art_texture("hardtack"), "then its alias")
+	assert_null(InventoryPane.art_texture("no_such_thing", "no_such_icon"))
+	assert_null(InventoryPane.art_texture("no_such_thing"))
+
+
 ## 결정 561 ③: the bag's mark 1.3 times — in its column head, on the folded
 ## strip, and on the field's bag key.
 func test_the_bag_mark_is_one_point_three_times() -> void:
