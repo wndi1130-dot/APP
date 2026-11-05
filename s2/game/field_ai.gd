@@ -254,6 +254,10 @@ func update(delta: float) -> void:
 	for r in game.raiders:
 		if r.is_alive() and not r.body.downed:
 			_raider(r, delta, think)
+	# 시작 여부는 역할 판단이 정하고, 시작한 머묾의 만료는 매 틱 처리한다.
+	for p in game.people_alive():
+		if p != game.player:
+			_tick_watch_decision(p)
 
 
 # ---------------------------------------------------------------- shared
@@ -832,10 +836,7 @@ func _keep_formation(p) -> void:
 		p.brain["follow_slot"] = spot
 	else:
 		p.brain.erase("follow_slot")   # saved with the brain: never an INF
-	var look := fwd
-	if _chief_still >= LOOK_STILL_S:
-		look = _look_out(p, role, fwd, right)
-	elif p.brain.has("watch_head_yaw"):
+	if _chief_still < LOOK_STILL_S and p.brain.has("watch_head_yaw"):
 		_stop_watch(p)
 	if _follow_queueing(p, spot, fwd):
 		var queue := _follow_queue_mates(mates)
@@ -844,6 +845,7 @@ func _keep_formation(p) -> void:
 		if _follow_wait(p, leader):
 			p.stop()
 			if not walking:
+				var look: Vector3 = _look_out(p, role, fwd, right) if _chief_still >= LOOK_STILL_S else fwd
 				p.face_point(p.position + look)
 			return
 		var gap: float = _follow_projection(leader.position)["back"] + FOLLOW_QUEUE_GAP
@@ -851,12 +853,14 @@ func _keep_formation(p) -> void:
 		route = _follow_leave_room(p, route, leader)
 		_follow_walk(p, route)
 		if not walking and p.path.is_empty():
+			var look: Vector3 = _look_out(p, role, fwd, right) if _chief_still >= LOOK_STILL_S else fwd
 			p.face_point(p.position + look)
 		return
 	if not walking and p.position.distance_to(spot) <= FOLLOW_SETTLE:
 		p.stop()
 		p.running = false
 		p.brain["follow_running"] = false
+		var look: Vector3 = _look_out(p, role, fwd, right) if _chief_still >= LOOK_STILL_S else fwd
 		p.face_point(p.position + look)
 		return
 	var route := _follow_path(p.position, spot)
@@ -1216,6 +1220,34 @@ func _watch_clock(p: Variant) -> void:
 	p.brain["watch_seen_t"] = now
 
 
+## 이미 확정한 정지 상태만 이어 간다. 이동·전투 분기는 먼저 취소할 수 있다.
+func _tick_watch_decision(p: Variant) -> void:
+	var slot: int = int(p.brain.get("watch_slot", -1))
+	if slot < 0 or slot >= LOOK_KEYS.size():
+		return
+	var key: String = LOOK_KEYS[slot]
+	var state: Dictionary = p.brain.get(key, {})
+	if int(state.get("version", 0)) != LOOK_STATE_VERSION:
+		return
+	if p.brain.get("boarded", false):
+		_stop_watch(p)
+		return
+	if p.moving or p.action != "" or p.aim.active or not p.target_zombie.is_empty() or p.target_person != null or not p.can_act():
+		_stop_watch(p)
+		return
+	if key == "watch_escort" and p in game.crew and p.role == "escort":
+		var site_id: String = String(p.brain.get("work_site", "work_site"))
+		if game.work.phase(site_id) in ["retreat", "done"] or p.brain.get("job", "") == "home":
+			_stop_watch(p)
+			return
+		var site: Vector3 = game.work.position_of(site_id)
+		_escort_watch(p, site)
+	elif p in game.squad and p.command == "follow" and not game.player.moving and _chief_still >= LOOK_STILL_S:
+		var fwd: Vector3 = _follow_forward()
+		var look: Vector3 = _look_out(p, key.trim_prefix("watch_"), fwd, Vector3(fwd.z, 0.0, -fwd.x))
+		p.face_point(p.position + look)
+
+
 func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: String) -> Vector3:
 	var now: float = game.clock.elapsed
 	_watch_clock(p)
@@ -1233,32 +1265,51 @@ func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: St
 	p.brain.erase("watch_camera_on")
 	p.brain.erase("watch_camera_yaw")
 	state["seen"] = now
+	p.brain["watch_slot"] = LOOK_KEYS.find(key)
 	if int(state["point"]) < 0 and now < float(state["until"]):
 		p.brain[key] = state
 		p.brain["watch_head_yaw"] = 0.0
 		p.brain.erase("watch_target_yaw")
 		return Vector3(sin(p.facing), 0.0, cos(p.facing))
 	if float(state["waiting"]) == 0.0 and now >= float(state["until"]):
+		var choice_at: float = float(state["until"])
+		if p.brain.has("watch_head_yaw"):
+			_watch_mark_seen(p, state, p.look if p.turn_rate > 0.0 else p.facing, choice_at)
+		_watch_refresh_points(p, state, base, camera_way)
 		state["step"] = int(state["step"]) + 1
 		var pick_index: int = clampi(int(p.brain.get("watch_pick_count", 0)), 0, LOOK_PICK_LIMIT - 1)
 		p.brain["watch_pick_count"] = (pick_index + 1) % LOOK_PICK_LIMIT
 		state["pick_index"] = pick_index
-		var point: int = _watch_pick(p, state, pick_index, now, camera_way)
+		var point: int = _watch_pick(p, state, pick_index, choice_at, camera_way)
 		state["point"] = point
 		state["target"] = float(state["yaw_" + str(point)])
 		state["waiting"] = 1.0
 		state["turning"] = 0.0
 		state["body_turned"] = 0.0
+		state["choice_at"] = choice_at
+		state["arrive_at"] = choice_at
 	var body: float = p.facing
 	var shown: float = p.look if p.turn_rate > 0.0 else body
 	var offset: float = angle_difference(shown, float(state["target"]))
 	var urgent: bool = absf(offset) > deg_to_rad(LOOK_HEAD_MAX_DEG) + LOOK_ANGLE_EPS
-	var last_turn: float = float(p.brain.get("watch_body_turn_t", now - LOOK_BODY_TURN_GAP_S))
-	if float(state["turning"]) == 0.0 and absf(offset) > deg_to_rad(LOOK_BODY_TURN_DEG) + LOOK_ANGLE_EPS and (urgent or now - last_turn >= LOOK_BODY_TURN_GAP_S):
-		state["body_target"] = wrapf(float(state["target"]) - signf(offset) * deg_to_rad(LOOK_HEAD_REST_DEG), -PI, PI)
+	var last_turn: float = float(p.brain.get("watch_body_turn_t", float(state.get("choice_at", now)) - LOOK_BODY_TURN_GAP_S))
+	var outside_camera: bool = not _watch_faces_camera(float(state["target"]), camera_way)
+	var clear_camera: bool = not LOOK_HEAD_DRAWN and float(state["waiting"]) != 0.0 and outside_camera and _watch_faces_camera(shown, camera_way)
+	var turn_at: float = float(state.get("choice_at", now))
+	if not urgent and not clear_camera:
+		turn_at = maxf(turn_at, last_turn + LOOK_BODY_TURN_GAP_S)
+	if float(state["body_turned"]) == 0.0 and (absf(offset) > deg_to_rad(LOOK_BODY_TURN_DEG) + LOOK_ANGLE_EPS or clear_camera) and now >= turn_at:
+		var body_target: float = wrapf(float(state["target"]) - signf(offset) * deg_to_rad(LOOK_HEAD_REST_DEG), -PI, PI)
+		# 머리가 따로 표시되지 않으면 원뿔 밖 목표의 몸을 원뿔 안에 남기지 않는다.
+		if not LOOK_HEAD_DRAWN and outside_camera and (clear_camera or _watch_faces_camera(body_target, camera_way)):
+			body_target = float(state["target"])
+		state["body_target"] = body_target
 		state["turning"] = 1.0
 		state["body_turned"] = 1.0
-		p.brain["watch_body_turn_t"] = now
+		p.brain["watch_body_turn_t"] = turn_at
+		if state.has("choice_at"):
+			var travel: float = maxf(absf(angle_difference(shown, body_target)) - deg_to_rad(LOOK_ARRIVAL_DEG), 0.0)
+			state["arrive_at"] = turn_at + (travel / p.turn_rate if p.turn_rate > 0.0 else 0.0)
 	if float(state["body_turned"]) != 0.0:
 		body = float(state["body_target"])
 	if p.turn_rate <= 0.0:
@@ -1274,8 +1325,8 @@ func _watch_look(p: Variant, base: Vector3, k: int, camera_way: Vector3, key: St
 			arrived = true
 	if float(state["waiting"]) != 0.0 and arrived:
 		state["waiting"] = 0.0
-		state["picked"] = now
-		state["until"] = now + _watch_dwell(p, int(state.get("pick_index", state["step"])), _watch_faces_camera(float(state["target"]), camera_way))
+		state["picked"] = float(state.get("arrive_at", now))
+		state["until"] = float(state["picked"]) + _watch_dwell(p, int(state.get("pick_index", state["step"])), _watch_faces_camera(float(state["target"]), camera_way))
 	p.brain["watch_target_yaw"] = float(state["target"])
 	p.brain["watch_slot"] = LOOK_KEYS.find(key)
 	p.brain["watch_head_yaw"] = _watch_head_yaw(shown, float(state["target"]))
@@ -1288,16 +1339,42 @@ func _watch_state(p: Variant, base: Vector3, k: int, now: float, camera_way: Vec
 	var delay: float = LOOK_START_MIN_S + (float(k % LOOK_START_SLOTS) + p.name_unit("watch_start")) * LOOK_START_SLOT_S
 	var state: Dictionary = {"version": LOOK_STATE_VERSION, "step": -1, "point": -1,
 		"seen": now, "picked": now, "until": now + delay, "waiting": 0.0,
-		"turning": 0.0, "body_turned": 0.0, "body_target": p.facing}
+		"turning": 0.0, "body_turned": 0.0, "body_target": p.facing, "camera_turn": 0.0}
+	_watch_refresh_points(p, state, base, camera_way)
+	state["target"] = float(state["yaw_0"])
+	return state
+
+
+## 세계 목표는 유지하고, 다음 후보만 현재 역할과 카메라로 확인한다.
+func _watch_refresh_points(p: Variant, state: Dictionary, base: Vector3, camera_way: Vector3) -> void:
+	var centre: float = atan2(base.x, base.z)
+	var camera_count: int = 0
+	var valid: bool = true
+	for point: int in range(LOOK_POINTS):
+		var key: String = "yaw_" + str(point)
+		if not state.has(key):
+			valid = false
+			continue
+		var yaw: float = float(state[key])
+		if absf(angle_difference(centre, yaw)) > PI * 0.5 + LOOK_ANGLE_EPS:
+			valid = false
+		if _watch_faces_camera(yaw, camera_way):
+			camera_count += 1
+	if valid and camera_count <= LOOK_CAMERA_MAX_POINTS:
+		return
+	var previous: Dictionary = state.duplicate()
 	for point: int in range(LOOK_POINTS):
 		state["yaw_" + str(point)] = _watch_target(p, base, point)
 	var turn: float = _watch_camera_turn(p, state, base, camera_way)
+	state["camera_turn"] = turn
 	if turn != 0.0:
 		for point: int in range(LOOK_POINTS):
 			state["yaw_" + str(point)] = wrapf(float(state["yaw_" + str(point)]) + turn, -PI, PI)
 	_watch_camera_adjust(state, base, camera_way)
-	state["target"] = float(state["yaw_0"])
-	return state
+	for point: int in range(LOOK_POINTS):
+		var key: String = "yaw_" + str(point)
+		if not previous.has(key) or absf(angle_difference(float(previous[key]), float(state[key]))) > LOOK_ANGLE_EPS:
+			state.erase("viewed_" + str(point))
 
 
 func _watch_camera_turn(p: Variant, state: Dictionary, base: Vector3, camera_way: Vector3) -> float:
@@ -1417,7 +1494,8 @@ func _watch_mark_seen(p: Variant, state: Dictionary, body: float, now: float) ->
 	var offset: float = angle_difference(body, float(state["target"]))
 	var reached: bool = absf(angle_difference(body + float(p.brain["watch_head_yaw"]), float(state["target"]))) <= LOOK_ANGLE_EPS
 	if reached and (LOOK_HEAD_DRAWN or (float(state["body_turned"]) != 0.0 and absf(offset) <= deg_to_rad(LOOK_HEAD_EASY_DEG) + LOOK_ANGLE_EPS)):
-		state["viewed_" + str(point)] = now
+		# 만료를 넘긴 프레임도 마지막 머묾 시각까지만 기록한다.
+		state["viewed_" + str(point)] = minf(now, float(state["until"])) if float(state["waiting"]) == 0.0 else now
 
 
 ## The rules turn the shown body before AI update, including non-think ticks.

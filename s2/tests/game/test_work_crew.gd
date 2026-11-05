@@ -986,7 +986,8 @@ func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 			assert_lte(absf(float(guard.brain["watch_head_yaw"])), deg_to_rad(game.ai.LOOK_HEAD_MAX_DEG))
 			var turned: float = float(guard.brain.get("watch_body_turn_t", last_turn))
 			if turned > last_turn and turned - last_turn < game.ai.LOOK_BODY_TURN_GAP_S:
-				assert_gt(absf(angle_difference(shown, target)), deg_to_rad(game.ai.LOOK_HEAD_MAX_DEG))
+				var clearing_camera: bool = not game.ai.LOOK_HEAD_DRAWN and not game.ai._watch_faces_camera(target, game.cam_back()) and game.ai._watch_faces_camera(shown, game.cam_back())
+				assert_true(absf(angle_difference(shown, target)) > deg_to_rad(game.ai.LOOK_HEAD_MAX_DEG) or clearing_camera, "간격 예외 offset=%.6f camera_clear=%s" % [rad_to_deg(angle_difference(shown, target)), clearing_camera])
 			var seen: Vector3 = _watch_extent(guard)
 			camera_s += seen.x * 0.5
 			worst = Vector2(maxf(worst.x, seen.y), maxf(worst.y, seen.z))
@@ -1001,6 +1002,7 @@ func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 			var delta: float = 1.0 / float(fps)
 			var before: float = guard.rotation.y
 			var drawn_camera_s: float = 0.0
+			var target_camera_s: float = 0.0
 			var drawn_worst := Vector2.ZERO
 			for _tick: int in range(60 * fps):
 				game.clock.elapsed += delta
@@ -1016,10 +1018,31 @@ func test_a_posted_escort_keeps_its_back_to_the_work() -> void:
 				total_turn += turned_now
 				before = guard.rotation.y
 				var drawn_seen: Vector3 = _watch_extent(guard)
-				drawn_camera_s += drawn_seen.x * delta
+				target_camera_s += drawn_seen.x * delta
+				var drawn_yaw: float = guard.rotation.y + guard.head_mesh.rotation.y
+				if game.ai._watch_faces_camera(drawn_yaw, game.cam_back()):
+					drawn_camera_s += delta
 				drawn_worst = Vector2(maxf(drawn_worst.x, drawn_seen.y), maxf(drawn_worst.y, drawn_seen.z))
-			_assert_watch_extent(drawn_worst, drawn_camera_s / 60.0)
+			_assert_watch_extent(drawn_worst, target_camera_s / 60.0)
+			assert_lte(drawn_camera_s / 60.0, 0.15, "표시 시선 fps=%d camera_s=%.6f share=%.9f" % [fps, drawn_camera_s, drawn_camera_s / 60.0])
 	assert_gt(total_turn, deg_to_rad(5.0), "the posted watches move between their points")
+
+
+func test_returning_escort_does_not_resume_an_expired_watch() -> void:
+	_send()
+	var guard: Variant = _role("escort")[0]
+	guard.position = _at() + Vector3(-4.0, 0.0, 1.5)
+	guard.stop()
+	game.ai._escort_watch(guard, _at())
+	var state: Dictionary = guard.brain["watch_escort"]
+	state["until"] = game.clock.elapsed
+	guard.brain["job"] = "home"
+	game.ai.think_t = 100.0
+	var before: int = int(guard.brain.get("watch_pick_count", 0))
+	game.clock.elapsed += 0.1
+	game.ai.update(0.1)
+	assert_eq(int(guard.brain.get("watch_pick_count", 0)), before, "귀환 중 선택 actual=%d expected=%d" % [int(guard.brain.get("watch_pick_count", 0)), before])
+	assert_eq(int(state["version"]), 0, "귀환 중 상태 actual=%d" % int(state["version"]))
 
 
 func _watch_fps_run(saved: Dictionary, guard_pid: String, fps: int) -> Array:
@@ -1082,17 +1105,17 @@ func test_escort_watch_matches_at_30_and_60_fps_from_the_same_save() -> void:
 	assert_gt(int(slow[-1][3]), 1, "the restored watch makes multiple choices")
 
 
-## The watch now: x 1 while it looks at a camera-side point, y the largest turn of its look
-## points off the outward sector (degrees), z how many look points face the camera.
+## x는 선택 목표의 카메라 여부, y는 공통 회전각, z는 최종 카메라 후보 수다.
 func _watch_extent(guard) -> Vector3:
 	var out: Vector3 = guard.position - _at()
 	out.y = 0.0
 	var state: Dictionary = guard.brain["watch_escort"]
-	var turn: float = 0.0
+	var turn: float = absf(float(state.get("camera_turn", 0.0)))
 	var camera_points: int = 0
 	for point: int in range(game.ai.LOOK_POINTS):
 		var yaw: float = float(state["yaw_" + str(point)])
-		turn = maxf(turn, absf(angle_difference(game.ai._watch_target(guard, out, point), yaw)))
+		var role_angle: float = absf(angle_difference(atan2(out.x, out.z), yaw))
+		assert_lte(role_angle, PI * 0.5 + game.ai.LOOK_ANGLE_EPS, "fallback point=%d role_angle=%.9f" % [point, rad_to_deg(role_angle)])
 		if game.ai._watch_faces_camera(yaw, game.cam_back()):
 			camera_points += 1
 	var on_camera: float = 1.0 if game.ai._watch_faces_camera(float(state["target"]), game.cam_back()) else 0.0
@@ -1102,7 +1125,7 @@ func _watch_extent(guard) -> Vector3:
 ## Decision 536: the sector turns at most its cap, few look points face the camera, and the
 ## camera side stays a small share of the watch.
 func _assert_watch_extent(worst: Vector2, camera_share: float) -> void:
-	assert_lte(worst.x, game.ai.LOOK_CAMERA_TURN_MAX_DEG + 0.5, "the sector turns at most its cap")
+	assert_lte(worst.x, game.ai.LOOK_CAMERA_TURN_MAX_DEG + 0.0001, "공통 회전 actual=%.9f" % worst.x)
 	assert_lte(int(worst.y), game.ai.LOOK_CAMERA_MAX_POINTS, "few look points toward the camera")
 	assert_lt(camera_share, 0.08, "the camera side stays a small share of the watch")
 
