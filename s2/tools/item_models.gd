@@ -46,6 +46,57 @@ const RECIPES: Dictionary = {
 	"flare": {"shape": "flare"},
 	"can_empty": {"shape": "tin_open"},
 	"medkit": {"shape": "medkit"},
+	"it_shirt": {"shape": "shirt"},
+	"it_trousers": {"shape": "trousers"},
+	"it_gloves": {"shape": "gloves"},
+	"it_undershirt": {"shape": "undershirt"},
+	"it_drawers": {"shape": "drawers"},
+	"it_sweater": {"shape": "sweater"},
+	"it_overalls": {"shape": "overalls"},
+	"it_socks": {"shape": "socks"},
+	"it_scarf": {"shape": "scarf"},
+	"it_cap": {"shape": "cap"},
+	"it_mask": {"shape": "mask"},
+	"it_dress": {"shape": "dress"},
+	"it_apple": {"shape": "apple"},
+	"it_apple_wilted": {"shape": "apple_wilted"},
+	"it_meat": {"shape": "meat"},
+	"it_meat_bad": {"shape": "meat_bad"},
+	"it_hare": {"shape": "hare"},
+	"it_bread_moldy": {"shape": "bread_moldy"},
+	"food": {"shape": "food_bundle"},
+	"it_tube": {"shape": "tube"},
+	"it_herbs": {"shape": "herbs"},
+	"it_toilet_paper": {"shape": "toilet_paper"},
+	"it_soap": {"shape": "soap"},
+	"it_child_clothes": {"shape": "child_clothes"},
+	"it_old_clothes": {"shape": "old_clothes"},
+	"it_razor": {"shape": "razor"},
+	"gear": {"shape": "gears"},
+	"it_nails": {"shape": "nails"},
+	"it_opener": {"shape": "opener"},
+	"it_fuel": {"shape": "fuel"},
+	"it_spring": {"shape": "spring"},
+	"it_record": {"shape": "record"},
+	"it_violin": {"shape": "violin"},
+	"ammo_pistol": {"shape": "ammo_pistol"},
+	"ammo_shell": {"shape": "ammo_shell"},
+	"it_bottle_broken": {"shape": "bottle_broken"},
+	"it_stake": {"shape": "stake"},
+	"it_coat": {"shape": "coat"},
+	"it_jacket": {"shape": "jacket"},
+	"it_vest": {"shape": "vest"},
+	"it_hat": {"shape": "hat"},
+	"it_hood": {"shape": "hood"},
+	"pack": {"shape": "pack"},
+	"it_wire": {"shape": "wire"},
+	"it_syrup": {"shape": "syrup"},
+	"clock": {"shape": "clock"},
+	"it_pocket_watch": {"shape": "pocket_watch"},
+	"it_sewing_kit": {"shape": "sewing_kit"},
+	"it_needle": {"shape": "needle"},
+	"it_doctor_box": {"shape": "doctor_box"},
+	"book": {"shape": "book"},
 }
 
 
@@ -81,6 +132,108 @@ static func build(id: String) -> Node3D:
 				_medkit(root)
 			"folded_cloth":
 				_folded_cloth(root)
+			"shirt":
+				_shirt(root)
+			"trousers":
+				_trousers(root)
+			"gloves":
+				_gloves(root)
+			"undershirt":
+				_undershirt(root)
+			"drawers":
+				_drawers(root)
+			"sweater":
+				_sweater(root)
+			"overalls":
+				_overalls(root)
+			"socks":
+				_socks(root)
+			"scarf":
+				_scarf(root)
+			"cap":
+				_cap(root)
+			"mask":
+				_mask(root)
+			"dress":
+				_dress(root)
+			"apple":
+				_apple(root)
+			"apple_wilted":
+				_apple_wilted(root)
+			"meat":
+				_meat(root)
+			"meat_bad":
+				_meat_bad(root)
+			"hare":
+				_hare(root)
+			"bread_moldy":
+				_bread_moldy(root)
+			"food_bundle":
+				_food_bundle(root)
+			"tube":
+				_tube(root)
+			"herbs":
+				_herbs(root)
+			"toilet_paper":
+				_toilet_paper(root)
+			"soap":
+				_soap(root)
+			"child_clothes":
+				_child_clothes(root)
+			"old_clothes":
+				_old_clothes(root)
+			"razor":
+				_razor(root)
+			"gears":
+				_gears(root)
+			"nails":
+				_nails(root)
+			"opener":
+				_opener(root)
+			"fuel":
+				_fuel(root)
+			"spring":
+				_spring(root)
+			"record":
+				_record(root)
+			"violin":
+				_violin(root)
+			"ammo_pistol":
+				_ammo_pistol(root)
+			"ammo_shell":
+				_ammo_shell(root)
+			"bottle_broken":
+				_bottle_broken(root)
+			"stake":
+				_stake(root)
+			"coat":
+				_coat(root)
+			"jacket":
+				_jacket(root)
+			"vest":
+				_vest(root)
+			"hat":
+				_hat(root)
+			"hood":
+				_hood(root)
+			"pack":
+				_pack(root)
+			"wire":
+				_wire(root)
+			"syrup":
+				_syrup(root)
+			"clock":
+				_clock(root)
+			"pocket_watch":
+				_pocket_watch(root)
+			"sewing_kit":
+				_sewing_kit(root)
+			"needle":
+				_needle(root)
+			"doctor_box":
+				_doctor_box(root)
+			"book":
+				_book(root)
 		return root
 	var scene: PackedScene = load(String(recipe["glb"])) as PackedScene
 	if scene == null:
@@ -369,3 +522,2198 @@ static func _folded_cloth(root: Node3D) -> void:
 		var thread := BoxMesh.new()
 		thread.size = Vector3(lengths[k], 0.007, 0.007)
 		_part(top, thread, wool[2].lightened(0.06), Vector3(0.17 + lengths[k] * 0.45, -0.004, -0.09 + 0.03 * k), Vector3(0, -6.0 + 2.0 * k, -24.0))
+
+
+## One overlapping T-shaped shirt, a flush 2-by-2 check and two small V collar flaps.
+static func _shirt(root: Node3D) -> void:
+	var body: BoxMesh = BoxMesh.new()
+	body.size = Vector3(0.19, 0.028, 0.18)
+	var shoulder: BoxMesh = BoxMesh.new()
+	shoulder.size = Vector3(0.07, 0.028, 0.09)
+	var sleeve: CapsuleMesh = CapsuleMesh.new()
+	sleeve.radius = 0.04
+	sleeve.height = 0.13
+	sleeve.radial_segments = 12
+	sleeve.rings = 6
+	var hem: CylinderMesh = CylinderMesh.new()
+	hem.top_radius = 0.014
+	hem.bottom_radius = 0.014
+	hem.height = 0.19
+	hem.radial_segments = 12
+	var side_edge: CylinderMesh = CylinderMesh.new()
+	side_edge.top_radius = 0.014
+	side_edge.bottom_radius = 0.014
+	side_edge.height = 0.18
+	side_edge.radial_segments = 12
+	var check_long: BoxMesh = BoxMesh.new()
+	check_long.size = Vector3(0.032, 0.004, 0.171)
+	var check_cross: BoxMesh = BoxMesh.new()
+	check_cross.size = Vector3(0.18, 0.004, 0.032)
+	var placket: BoxMesh = BoxMesh.new()
+	placket.size = Vector3(0.018, 0.012, 0.166)
+	var collar: PrismMesh = PrismMesh.new()
+	collar.size = Vector3(0.043, 0.038, 0.014)
+	var button: CylinderMesh = CylinderMesh.new()
+	button.top_radius = 0.008
+	button.bottom_radius = 0.008
+	button.height = 0.012
+	button.radial_segments = 12
+	_part(root, body, Color("86574d"), Vector3(0, 0.014, 0.06))
+	for side: float in [-1.0, 1.0]:
+		_part(root, shoulder, Color("86574d"), Vector3(side * 0.06, 0.014, -0.072))
+		var sleeve_part: MeshInstance3D = _part(root, sleeve, Color("86574d"), Vector3(side * 0.112, 0.014, -0.073), Vector3(0, 0, 90))
+		sleeve_part.scale = Vector3(0.35, 1, 1)
+		_part(root, side_edge, Color("86574d"), Vector3(side * 0.095, 0.014, 0.06), Vector3(90, 0, 0))
+		_part(root, check_long, Color("604640"), Vector3(side * 0.045, 0.03, 0.06))
+		_part(root, collar, Color("9a7060"), Vector3(side * 0.025, 0.0445, -0.078), Vector3(55, side * 22.0, 0))
+	_part(root, hem, Color("795047"), Vector3(0, 0.014, 0.15), Vector3(0, 0, 90))
+	# The 4 mm cloth-colour patches overlap slightly so their top faces never flicker.
+	_part(root, check_cross, Color("9c725c"), Vector3(0, 0.032, 0.018))
+	_part(root, check_cross, Color("9c725c"), Vector3(0, 0.032, 0.104))
+	_part(root, placket, Color("795047"), Vector3(0, 0.03, 0.06))
+	for index: int in 4:
+		_part(root, button, Color("b9b39b"), Vector3(0, 0.041, -0.009 + 0.044 * index))
+
+
+## Flat denim trousers with two slightly splayed rounded legs and a thick waistband.
+static func _trousers(root: Node3D) -> void:
+	var leg: CapsuleMesh = CapsuleMesh.new()
+	leg.radius = 0.041
+	leg.height = 0.31
+	leg.radial_segments = 12
+	leg.rings = 6
+	var waist: BoxMesh = BoxMesh.new()
+	waist.size = Vector3(0.237, 0.034, 0.06)
+	var waist_edge: CylinderMesh = CylinderMesh.new()
+	waist_edge.top_radius = 0.016
+	waist_edge.bottom_radius = 0.016
+	waist_edge.height = 0.237
+	waist_edge.radial_segments = 12
+	var belt_loop: BoxMesh = BoxMesh.new()
+	belt_loop.size = Vector3(0.014, 0.014, 0.062)
+	var buckle: BoxMesh = BoxMesh.new()
+	buckle.size = Vector3(0.033, 0.018, 0.045)
+
+	var leg_part_1: MeshInstance3D = _part(root, leg, Color("435e76"), Vector3(-0.061, 0.015, 0.035), Vector3(90, -10, 0))
+	leg_part_1.scale = Vector3(1, 1, 0.365854)
+	var leg_part_2: MeshInstance3D = _part(root, leg, Color("4b6880"), Vector3(0.061, 0.015, 0.035), Vector3(90, 10, 0))
+	leg_part_2.scale = Vector3(1, 1, 0.365854)
+	_part(root, waist, Color("3b5267"), Vector3(0, 0.043, -0.132))
+	_part(root, waist_edge, Color("435e76"), Vector3(0, 0.043, -0.161), Vector3(0, 0, 90))
+	_part(root, belt_loop, Color("627e90"), Vector3(-0.085, 0.063, -0.132))
+	_part(root, belt_loop, Color("627e90"), Vector3(-0.04, 0.063, -0.132))
+	_part(root, belt_loop, Color("627e90"), Vector3(0.04, 0.063, -0.132))
+	_part(root, belt_loop, Color("627e90"), Vector3(0.085, 0.063, -0.132))
+	_part(root, buckle, Color("9b8757"), Vector3(0, 0.063, -0.133))
+
+
+## Two slightly overlapping leather gloves, with four separated fingers and a clearly splayed thumb each.
+static func _gloves(root: Node3D) -> void:
+	var glove_0: Node3D = Node3D.new()
+	glove_0.position = Vector3(-0.0525, 0.022, 0)
+	glove_0.rotation_degrees = Vector3(0, 0, 0)
+	root.add_child(glove_0)
+	var glove_1: Node3D = Node3D.new()
+	glove_1.position = Vector3(0.0525, 0.049, 0.061)
+	glove_1.rotation_degrees = Vector3(0, 0, 0)
+	root.add_child(glove_1)
+	var palm: SphereMesh = SphereMesh.new()
+	palm.radius = 0.062
+	palm.height = 0.042
+	palm.radial_segments = 16
+	palm.rings = 8
+	var cuff: CylinderMesh = CylinderMesh.new()
+	cuff.top_radius = 0.044
+	cuff.bottom_radius = 0.044
+	cuff.height = 0.032
+	cuff.radial_segments = 12
+	var finger_0: CapsuleMesh = CapsuleMesh.new()
+	finger_0.radius = 0.01
+	finger_0.height = 0.082
+	finger_0.radial_segments = 12
+	finger_0.rings = 6
+	var finger_1: CapsuleMesh = CapsuleMesh.new()
+	finger_1.radius = 0.01
+	finger_1.height = 0.102
+	finger_1.radial_segments = 12
+	finger_1.rings = 6
+	var finger_2: CapsuleMesh = CapsuleMesh.new()
+	finger_2.radius = 0.01
+	finger_2.height = 0.108
+	finger_2.radial_segments = 12
+	finger_2.rings = 6
+	var finger_3: CapsuleMesh = CapsuleMesh.new()
+	finger_3.radius = 0.01
+	finger_3.height = 0.088
+	finger_3.radial_segments = 12
+	finger_3.rings = 6
+	var thumb: CapsuleMesh = CapsuleMesh.new()
+	thumb.radius = 0.014
+	thumb.height = 0.085
+	thumb.radial_segments = 12
+	thumb.rings = 6
+
+	var palm_part_1: MeshInstance3D = _part(glove_0, palm, Color("73614b"), Vector3(0, 0, 0.025))
+	palm_part_1.scale = Vector3(1, 1, 1.1)
+	_part(glove_0, finger_0, Color("73614b"), Vector3(-0.0495, 0.002, -0.076), Vector3(90, 0, 0))
+	_part(glove_0, finger_1, Color("73614b"), Vector3(-0.0165, 0.002, -0.086), Vector3(90, 0, 0))
+	_part(glove_0, finger_2, Color("73614b"), Vector3(0.0165, 0.002, -0.089), Vector3(90, 0, 0))
+	_part(glove_0, finger_3, Color("73614b"), Vector3(0.0495, 0.002, -0.079), Vector3(90, 0, 0))
+	_part(glove_0, thumb, Color("73614b"), Vector3(-0.075, 0, 0.012), Vector3(90, -55, 0))
+	var cuff_part_1: MeshInstance3D = _part(glove_0, cuff, Color("5d4b39"), Vector3(0, 0, 0.11), Vector3(90, 0, 0))
+	cuff_part_1.scale = Vector3(1, 1, 0.5)
+	var palm_part_2: MeshInstance3D = _part(glove_1, palm, Color("665440"), Vector3(0, 0, 0.025))
+	palm_part_2.scale = Vector3(1, 1, 1.1)
+	_part(glove_1, finger_0, Color("665440"), Vector3(-0.0495, 0.002, -0.076), Vector3(90, 0, 0))
+	_part(glove_1, finger_1, Color("665440"), Vector3(-0.0165, 0.002, -0.086), Vector3(90, 0, 0))
+	_part(glove_1, finger_2, Color("665440"), Vector3(0.0165, 0.002, -0.089), Vector3(90, 0, 0))
+	_part(glove_1, finger_3, Color("665440"), Vector3(0.0495, 0.002, -0.079), Vector3(90, 0, 0))
+	_part(glove_1, thumb, Color("665440"), Vector3(0.075, 0, 0.012), Vector3(90, 55, 0))
+	var cuff_part_2: MeshInstance3D = _part(glove_1, cuff, Color("5d4b39"), Vector3(0, 0, 0.11), Vector3(90, 0, 0))
+	cuff_part_2.scale = Vector3(1, 1, 0.5)
+
+
+## A tapered sleeveless vest: separate side panels leave a real U neck open between straps.
+static func _undershirt(root: Node3D) -> void:
+	var lower_body: BoxMesh = BoxMesh.new()
+	lower_body.size = Vector3(0.13, 0.028, 0.155)
+	var chest_side: BoxMesh = BoxMesh.new()
+	chest_side.size = Vector3(0.035, 0.028, 0.085)
+	var left_panel: PrismMesh = PrismMesh.new()
+	left_panel.size = Vector3(0.04, 0.22, 0.028)
+	left_panel.left_to_right = 1.0
+	var right_panel: PrismMesh = PrismMesh.new()
+	right_panel.size = Vector3(0.04, 0.22, 0.028)
+	right_panel.left_to_right = 0.0
+	var strap: CapsuleMesh = CapsuleMesh.new()
+	strap.radius = 0.014
+	strap.height = 0.115
+	strap.radial_segments = 12
+	strap.rings = 6
+	var hem: BoxMesh = BoxMesh.new()
+	hem.size = Vector3(0.205, 0.03, 0.035)
+	var hem_edge: CylinderMesh = CylinderMesh.new()
+	hem_edge.top_radius = 0.015
+	hem_edge.bottom_radius = 0.015
+	hem_edge.height = 0.205
+	hem_edge.radial_segments = 12
+	var neck_binding: CylinderMesh = CylinderMesh.new()
+	neck_binding.top_radius = 0.018
+	neck_binding.bottom_radius = 0.018
+	neck_binding.height = 0.062
+	neck_binding.radial_segments = 12
+	var side_edge: CylinderMesh = CylinderMesh.new()
+	side_edge.top_radius = 0.014
+	side_edge.bottom_radius = 0.014
+	side_edge.height = 0.223607
+	side_edge.radial_segments = 12
+	_part(root, lower_body, Color("9e9471"), Vector3(0, 0.014, 0.0525))
+	_part(root, left_panel, Color("9e9471"), Vector3(-0.085, 0.014, 0.02), Vector3(-90, 0, 0))
+	_part(root, right_panel, Color("9e9471"), Vector3(0.085, 0.014, 0.02), Vector3(-90, 0, 0))
+	for side: float in [-1.0, 1.0]:
+		_part(root, chest_side, Color("9e9471"), Vector3(side * 0.048, 0.014, -0.0675))
+		_part(root, strap, Color("9e9471"), Vector3(side * 0.057, 0.014, -0.141), Vector3(90, 0, 0))
+		_part(root, side_edge, Color("9e9471"), Vector3(side * 0.085, 0.014, 0.02), Vector3(90, side * 10.304846, 0))
+	_part(root, hem, Color("8f825e"), Vector3(0, 0.016, 0.13))
+	_part(root, hem_edge, Color("8f825e"), Vector3(0, 0.016, 0.1475), Vector3(0, 0, 90))
+	_part(root, neck_binding, Color("9f936e"), Vector3(0, 0.045, -0.025), Vector3(0, 0, 90))
+
+
+## Thin oat-coloured long underwear with two splayed legs and a broad elastic waist.
+static func _drawers(root: Node3D) -> void:
+	var leg: CapsuleMesh = CapsuleMesh.new()
+	leg.radius = 0.035
+	leg.height = 0.3
+	leg.radial_segments = 12
+	leg.rings = 6
+	var waist: BoxMesh = BoxMesh.new()
+	waist.size = Vector3(0.205, 0.032, 0.055)
+	var waist_edge: CylinderMesh = CylinderMesh.new()
+	waist_edge.top_radius = 0.016
+	waist_edge.bottom_radius = 0.016
+	waist_edge.height = 0.205
+	waist_edge.radial_segments = 12
+	var elastic_rib: BoxMesh = BoxMesh.new()
+	elastic_rib.size = Vector3(0.014, 0.014, 0.06)
+
+	var leg_part_1: MeshInstance3D = _part(root, leg, Color("a59771"), Vector3(-0.046, 0.013, 0.029), Vector3(90, -8, 0))
+	leg_part_1.scale = Vector3(1, 1, 0.371429)
+	var leg_part_2: MeshInstance3D = _part(root, leg, Color("9b8c68"), Vector3(0.046, 0.013, 0.029), Vector3(90, 8, 0))
+	leg_part_2.scale = Vector3(1, 1, 0.371429)
+	_part(root, waist, Color("8b7d59"), Vector3(0, 0.043, -0.13))
+	_part(root, waist_edge, Color("9b8c68"), Vector3(0, 0.043, -0.1575), Vector3(0, 0, 90))
+	_part(root, elastic_rib, Color("a59771"), Vector3(-0.087, 0.059, -0.13))
+	_part(root, elastic_rib, Color("a59771"), Vector3(-0.058, 0.059, -0.13))
+	_part(root, elastic_rib, Color("a59771"), Vector3(-0.029, 0.059, -0.13))
+	_part(root, elastic_rib, Color("a59771"), Vector3(0, 0.059, -0.13))
+	_part(root, elastic_rib, Color("a59771"), Vector3(0.029, 0.059, -0.13))
+	_part(root, elastic_rib, Color("a59771"), Vector3(0.058, 0.059, -0.13))
+	_part(root, elastic_rib, Color("a59771"), Vector3(0.087, 0.059, -0.13))
+
+
+## A thick flat wool T with an open neck, round edges and broad cuff and hem ribs.
+static func _sweater(root: Node3D) -> void:
+	var body: BoxMesh = BoxMesh.new()
+	body.size = Vector3(0.21, 0.034, 0.205)
+	var shoulder: BoxMesh = BoxMesh.new()
+	shoulder.size = Vector3(0.077, 0.034, 0.082)
+	var sleeve: CapsuleMesh = CapsuleMesh.new()
+	sleeve.radius = 0.043
+	sleeve.height = 0.17
+	sleeve.radial_segments = 12
+	sleeve.rings = 6
+	var hem: CylinderMesh = CylinderMesh.new()
+	hem.top_radius = 0.017
+	hem.bottom_radius = 0.017
+	hem.height = 0.21
+	hem.radial_segments = 12
+	var cuff: CylinderMesh = CylinderMesh.new()
+	cuff.top_radius = 0.04
+	cuff.bottom_radius = 0.04
+	cuff.height = 0.048
+	cuff.radial_segments = 12
+	var neck: TorusMesh = TorusMesh.new()
+	neck.inner_radius = 0.026
+	neck.outer_radius = 0.045
+	neck.rings = 20
+	neck.ring_segments = 8
+	var knit: BoxMesh = BoxMesh.new()
+	knit.size = Vector3(0.014, 0.012, 0.136)
+	var hem_rib: BoxMesh = BoxMesh.new()
+	hem_rib.size = Vector3(0.014, 0.014, 0.034)
+	var cuff_rib: BoxMesh = BoxMesh.new()
+	cuff_rib.size = Vector3(0.014, 0.014, 0.069)
+	var side_edge: CylinderMesh = CylinderMesh.new()
+	side_edge.top_radius = 0.017
+	side_edge.bottom_radius = 0.017
+	side_edge.height = 0.205
+	side_edge.radial_segments = 12
+
+	_part(root, body, Color("6f7950"), Vector3(0, 0.017, 0.035))
+	_part(root, shoulder, Color("6f7950"), Vector3(-0.064, 0.017, -0.09))
+	_part(root, shoulder, Color("6f7950"), Vector3(0.064, 0.017, -0.09))
+	var sleeve_part_1: MeshInstance3D = _part(root, sleeve, Color("68734a"), Vector3(-0.141, 0.018, -0.067), Vector3(0, -10, 90))
+	sleeve_part_1.scale = Vector3(0.4, 1, 1)
+	var sleeve_part_2: MeshInstance3D = _part(root, sleeve, Color("68734a"), Vector3(0.141, 0.018, -0.067), Vector3(0, 10, 90))
+	sleeve_part_2.scale = Vector3(0.4, 1, 1)
+	_part(root, hem, Color("596344"), Vector3(0, 0.017, 0.138), Vector3(0, 0, 90))
+	var cuff_part_1: MeshInstance3D = _part(root, cuff, Color("596344"), Vector3(-0.196, 0.018, -0.077), Vector3(0, -10, 90))
+	cuff_part_1.scale = Vector3(0.45, 1, 1)
+	var cuff_part_2: MeshInstance3D = _part(root, cuff, Color("596344"), Vector3(0.196, 0.018, -0.077), Vector3(0, 10, 90))
+	cuff_part_2.scale = Vector3(0.45, 1, 1)
+	var neck_part_1: MeshInstance3D = _part(root, neck, Color("899060"), Vector3(0, 0.047, -0.102))
+	neck_part_1.scale = Vector3(1, 1.7, 1)
+	_part(root, knit, Color("8a9166"), Vector3(-0.068, 0.038, 0.04))
+	_part(root, knit, Color("8a9166"), Vector3(-0.034, 0.038, 0.04))
+	_part(root, knit, Color("8a9166"), Vector3(0, 0.038, 0.04))
+	_part(root, knit, Color("8a9166"), Vector3(0.034, 0.038, 0.04))
+	_part(root, knit, Color("8a9166"), Vector3(0.068, 0.038, 0.04))
+	_part(root, hem_rib, Color("899060"), Vector3(-0.09, 0.038, 0.128))
+	_part(root, hem_rib, Color("899060"), Vector3(-0.064, 0.038, 0.128))
+	_part(root, hem_rib, Color("899060"), Vector3(-0.038, 0.038, 0.128))
+	_part(root, hem_rib, Color("899060"), Vector3(-0.012, 0.038, 0.128))
+	_part(root, hem_rib, Color("899060"), Vector3(0.014, 0.038, 0.128))
+	_part(root, hem_rib, Color("899060"), Vector3(0.04, 0.038, 0.128))
+	_part(root, hem_rib, Color("899060"), Vector3(0.066, 0.038, 0.128))
+	_part(root, hem_rib, Color("899060"), Vector3(0.092, 0.038, 0.128))
+	_part(root, cuff_rib, Color("899060"), Vector3(-0.174, 0.039, -0.077))
+	_part(root, cuff_rib, Color("899060"), Vector3(-0.19, 0.039, -0.077))
+	_part(root, cuff_rib, Color("899060"), Vector3(-0.206, 0.039, -0.077))
+	_part(root, cuff_rib, Color("899060"), Vector3(0.174, 0.039, -0.077))
+	_part(root, cuff_rib, Color("899060"), Vector3(0.19, 0.039, -0.077))
+	_part(root, cuff_rib, Color("899060"), Vector3(0.206, 0.039, -0.077))
+	_part(root, side_edge, Color("6f7950"), Vector3(-0.105, 0.017, 0.035), Vector3(90, 0, 0))
+	_part(root, side_edge, Color("6f7950"), Vector3(0.105, 0.017, 0.035), Vector3(90, 0, 0))
+
+
+## Flat olive work overalls with two legs, a bib, straps and brass buttons.
+static func _overalls(root: Node3D) -> void:
+	var leg: CapsuleMesh = CapsuleMesh.new()
+	leg.radius = 0.037
+	leg.height = 0.245
+	leg.radial_segments = 12
+	leg.rings = 6
+	var waist: BoxMesh = BoxMesh.new()
+	waist.size = Vector3(0.21, 0.032, 0.052)
+	var bib: BoxMesh = BoxMesh.new()
+	bib.size = Vector3(0.15, 0.03, 0.105)
+	var bib_edge: CylinderMesh = CylinderMesh.new()
+	bib_edge.top_radius = 0.015
+	bib_edge.bottom_radius = 0.015
+	bib_edge.height = 0.15
+	bib_edge.radial_segments = 12
+	var strap: BoxMesh = BoxMesh.new()
+	strap.size = Vector3(0.027, 0.028, 0.103)
+	var pocket: BoxMesh = BoxMesh.new()
+	pocket.size = Vector3(0.078, 0.012, 0.052)
+	var button: CylinderMesh = CylinderMesh.new()
+	button.top_radius = 0.012
+	button.bottom_radius = 0.012
+	button.height = 0.012
+	button.radial_segments = 12
+	var bib_side: CylinderMesh = CylinderMesh.new()
+	bib_side.top_radius = 0.015
+	bib_side.bottom_radius = 0.015
+	bib_side.height = 0.105
+	bib_side.radial_segments = 12
+
+	var leg_part_1: MeshInstance3D = _part(root, leg, Color("6b6e45"), Vector3(-0.047, 0.0148, 0.071), Vector3(90, -8, 0))
+	leg_part_1.scale = Vector3(1, 1, 0.4)
+	var leg_part_2: MeshInstance3D = _part(root, leg, Color("707349"), Vector3(0.047, 0.0148, 0.071), Vector3(90, 8, 0))
+	leg_part_2.scale = Vector3(1, 1, 0.4)
+	_part(root, waist, Color("6c7047"), Vector3(0, 0.035, -0.043))
+	_part(root, bib, Color("7b7d50"), Vector3(0, 0.016, -0.112))
+	_part(root, bib_edge, Color("6b6e45"), Vector3(0, 0.016, -0.1645), Vector3(0, 0, 90))
+	_part(root, strap, Color("6c7047"), Vector3(-0.054, 0.014, -0.19))
+	_part(root, strap, Color("6c7047"), Vector3(0.054, 0.014, -0.19))
+	_part(root, pocket, Color("686e45"), Vector3(0, 0.037, -0.12))
+	_part(root, button, Color("9c8957"), Vector3(-0.057, 0.055, -0.059))
+	_part(root, button, Color("9c8957"), Vector3(0.057, 0.055, -0.059))
+	_part(root, bib_side, Color("6b6e45"), Vector3(-0.075, 0.016, -0.112), Vector3(90, 0, 0))
+	_part(root, bib_side, Color("6b6e45"), Vector3(0.075, 0.016, -0.112), Vector3(90, 0, 0))
+
+
+## Two soft L-shaped wool socks with rounded toes and raised ankle ribbing.
+static func _socks(root: Node3D) -> void:
+	var ankle: CapsuleMesh = CapsuleMesh.new()
+	ankle.radius = 0.039
+	ankle.height = 0.18
+	ankle.radial_segments = 12
+	ankle.rings = 6
+	var foot: CapsuleMesh = CapsuleMesh.new()
+	foot.radius = 0.041
+	foot.height = 0.14
+	foot.radial_segments = 12
+	foot.rings = 6
+	var rib: BoxMesh = BoxMesh.new()
+	rib.size = Vector3(0.014, 0.014, 0.066)
+
+	_part(root, ankle, Color("7c6b54"), Vector3(-0.07, 0.041, -0.05), Vector3(90, 0, 0))
+	_part(root, foot, Color("7c6b54"), Vector3(-0.035, 0.041, 0.056), Vector3(0, 0, 90))
+	_part(root, rib, Color("845a4e"), Vector3(-0.07, 0.085, -0.115))
+	_part(root, rib, Color("845a4e"), Vector3(-0.07, 0.085, -0.098))
+	_part(root, rib, Color("8d785b"), Vector3(-0.07, 0.085, -0.081))
+	_part(root, rib, Color("8d785b"), Vector3(-0.07, 0.085, -0.064))
+	_part(root, ankle, Color("6f5d4a"), Vector3(0.07, 0.058, -0.031), Vector3(90, 0, 0))
+	_part(root, foot, Color("6f5d4a"), Vector3(0.105, 0.058, 0.075), Vector3(0, 0, 90))
+	_part(root, rib, Color("845a4e"), Vector3(0.07, 0.102, -0.096))
+	_part(root, rib, Color("845a4e"), Vector3(0.07, 0.102, -0.079))
+	_part(root, rib, Color("8d785b"), Vector3(0.07, 0.102, -0.062))
+	_part(root, rib, Color("8d785b"), Vector3(0.07, 0.102, -0.045))
+
+
+## One continuous U-shaped wool ribbon, 70 mm wide and 15 mm thick, with broad stripes.
+static func _scarf(root: Node3D) -> void:
+	var vertices: Array[Vector3] = []
+	var normals: Array[Vector3] = []
+	# Godot front faces wind clockwise; duplicate border vertices for crisp edges.
+	var add_quad: Callable = func(corners: PackedVector3Array, face_normals: PackedVector3Array) -> void:
+		var order: Array[int] = [0, 1, 2, 1, 3, 2]
+		if (corners[1] - corners[0]).cross(corners[2] - corners[0]).dot(face_normals[0]) > 0.0:
+			order = [0, 2, 1, 1, 2, 3]
+		for corner_index: int in order:
+			vertices.append(corners[corner_index])
+			normals.append(face_normals[corner_index])
+	var centers: Array[Vector3] = []
+	var across: Array[Vector3] = []
+	for step: int in 9:
+		centers.append(Vector3(-0.08, 0.0075, -0.13 + 0.16 * float(step) / 8.0))
+		across.append(Vector3.LEFT)
+	for step: int in range(1, 25):
+		var angle: float = PI - PI * float(step) / 24.0
+		var sine: float = sin(angle)
+		centers.append(Vector3(0.08 * cos(angle), 0.0075 + 0.05 * sine * sine, 0.03 + 0.08 * sine))
+		across.append(Vector3(cos(angle), 0, sine))
+	for step: int in range(1, 9):
+		centers.append(Vector3(0.08, 0.0075, 0.03 - 0.16 * float(step) / 8.0))
+		across.append(Vector3.RIGHT)
+	var top_normals: Array[Vector3] = []
+	for row: int in centers.size():
+		var tangent: Vector3 = centers[mini(row + 1, centers.size() - 1)] - centers[maxi(row - 1, 0)]
+		top_normals.append(across[row].cross(tangent).normalized())
+	var half_thickness: Vector3 = Vector3(0, 0.0075, 0)
+	for row: int in centers.size() - 1:
+		var inner_a: Vector3 = centers[row] - across[row] * 0.035
+		var outer_a: Vector3 = centers[row] + across[row] * 0.035
+		var inner_b: Vector3 = centers[row + 1] - across[row + 1] * 0.035
+		var outer_b: Vector3 = centers[row + 1] + across[row + 1] * 0.035
+		var normal_a: Vector3 = top_normals[row]
+		var normal_b: Vector3 = top_normals[row + 1]
+		add_quad.call(PackedVector3Array([inner_a + half_thickness, outer_a + half_thickness, inner_b + half_thickness, outer_b + half_thickness]), PackedVector3Array([normal_a, normal_a, normal_b, normal_b]))
+		add_quad.call(PackedVector3Array([inner_a - half_thickness, outer_a - half_thickness, inner_b - half_thickness, outer_b - half_thickness]), PackedVector3Array([-normal_a, -normal_a, -normal_b, -normal_b]))
+		add_quad.call(PackedVector3Array([outer_a + half_thickness, outer_b + half_thickness, outer_a - half_thickness, outer_b - half_thickness]), PackedVector3Array([across[row], across[row + 1], across[row], across[row + 1]]))
+		add_quad.call(PackedVector3Array([inner_a + half_thickness, inner_b + half_thickness, inner_a - half_thickness, inner_b - half_thickness]), PackedVector3Array([-across[row], -across[row + 1], -across[row], -across[row + 1]]))
+	for end_row: int in [0, centers.size() - 1]:
+		var end_normal: Vector3 = Vector3.FORWARD
+		var inner_end: Vector3 = centers[end_row] - across[end_row] * 0.035
+		var outer_end: Vector3 = centers[end_row] + across[end_row] * 0.035
+		add_quad.call(PackedVector3Array([inner_end + half_thickness, outer_end + half_thickness, inner_end - half_thickness, outer_end - half_thickness]), PackedVector3Array([end_normal, end_normal, end_normal, end_normal]))
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(vertices)
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array(normals)
+	var cloth: ArrayMesh = ArrayMesh.new()
+	cloth.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_part(root, cloth, Color("8b5d4c"), Vector3.ZERO)
+	# These patches sink into the same cloth; they do not join separate band pieces.
+	var stripe: BoxMesh = BoxMesh.new()
+	stripe.size = Vector3(0.07, 0.012, 0.018)
+	_part(root, stripe, Color("783e3b"), Vector3(-0.08, 0.011, -0.09))
+	_part(root, stripe, Color("6e5d49"), Vector3(-0.08, 0.011, -0.045))
+	_part(root, stripe, Color("783e3b"), Vector3(0.08, 0.011, -0.07))
+	var fringe: BoxMesh = BoxMesh.new()
+	fringe.size = Vector3(0.012, 0.015, 0.047)
+	for side: float in [-1.0, 1.0]:
+		for strand: int in 4:
+			_part(root, fringe, Color("8b5d4c"), Vector3(side * 0.08 - 0.024 + 0.016 * strand, 0.0075, -0.1505))
+
+
+## A hemispherical cloth crown, a wide rounded front peak and a raised top button.
+static func _cap(root: Node3D) -> void:
+	var band: CylinderMesh = CylinderMesh.new()
+	band.top_radius = 0.12
+	band.bottom_radius = 0.12
+	band.height = 0.065
+	band.radial_segments = 12
+	var crown: SphereMesh = SphereMesh.new()
+	crown.radius = 0.126
+	crown.height = 0.16
+	crown.radial_segments = 16
+	crown.rings = 8
+	crown.is_hemisphere = true
+	var peak: SphereMesh = SphereMesh.new()
+	peak.radius = 0.128
+	peak.height = 0.028
+	peak.radial_segments = 16
+	peak.rings = 8
+	var button: SphereMesh = SphereMesh.new()
+	button.radius = 0.013
+	button.height = 0.012
+	button.radial_segments = 16
+	button.rings = 8
+
+	_part(root, band, Color("65716f"), Vector3(0, 0.0325, 0))
+	_part(root, crown, Color("7e8a83"), Vector3(0, 0.08, 0))
+	var peak_part_1: MeshInstance3D = _part(root, peak, Color("949c8e"), Vector3(0, 0.021, 0.116))
+	peak_part_1.scale = Vector3(1, 1, 0.68)
+	_part(root, button, Color("a4aa99"), Vector3(0, 0.164, 0))
+
+
+## A single curved blue cloth surface with two shallow folds and open ear loops.
+static func _mask(root: Node3D) -> void:
+	var vertices: Array[Vector3] = []
+	var normals: Array[Vector3] = []
+	# Godot front faces wind clockwise; duplicate border vertices for crisp edges.
+	var add_quad: Callable = func(corners: PackedVector3Array, face_normals: PackedVector3Array) -> void:
+		var order: Array[int] = [0, 1, 2, 1, 3, 2]
+		if (corners[1] - corners[0]).cross(corners[2] - corners[0]).dot(face_normals[0]) > 0.0:
+			order = [0, 2, 1, 1, 2, 3]
+		for corner_index: int in order:
+			vertices.append(corners[corner_index])
+			normals.append(face_normals[corner_index])
+	var elevation: Callable = func(x: float, z: float) -> float:
+		var bow: float = 0.026 * (1.0 - x * x / 0.0081) + 0.008 * (1.0 - z * z / 0.0025)
+		var fold_distance: float = minf(absf(z - 0.02), absf(z + 0.02))
+		return 0.0125 + bow + 0.003 * maxf(0.0, 1.0 - fold_distance / 0.01)
+	var normal_at: Callable = func(x: float, z: float) -> Vector3:
+		var probe: float = 0.0001
+		var slope_x: float = (float(elevation.call(x + probe, z)) - float(elevation.call(x - probe, z))) / (2.0 * probe)
+		var slope_z: float = (float(elevation.call(x, z + probe)) - float(elevation.call(x, z - probe))) / (2.0 * probe)
+		return Vector3(-slope_x, 1, -slope_z).normalized()
+	var half_thickness: Vector3 = Vector3(0, 0.0125, 0)
+	for column: int in 8:
+		var x_a: float = -0.09 + 0.18 * float(column) / 8.0
+		var x_b: float = -0.09 + 0.18 * float(column + 1) / 8.0
+		for row: int in 20:
+			var z_a: float = -0.05 + 0.10 * float(row) / 20.0
+			var z_b: float = -0.05 + 0.10 * float(row + 1) / 20.0
+			var a: Vector3 = Vector3(x_a, float(elevation.call(x_a, z_a)), z_a)
+			var b: Vector3 = Vector3(x_b, float(elevation.call(x_b, z_a)), z_a)
+			var c: Vector3 = Vector3(x_a, float(elevation.call(x_a, z_b)), z_b)
+			var d: Vector3 = Vector3(x_b, float(elevation.call(x_b, z_b)), z_b)
+			var na: Vector3 = normal_at.call(x_a, z_a)
+			var nb: Vector3 = normal_at.call(x_b, z_a)
+			var nc: Vector3 = normal_at.call(x_a, z_b)
+			var nd: Vector3 = normal_at.call(x_b, z_b)
+			add_quad.call(PackedVector3Array([a + half_thickness, b + half_thickness, c + half_thickness, d + half_thickness]), PackedVector3Array([na, nb, nc, nd]))
+			add_quad.call(PackedVector3Array([a - half_thickness, b - half_thickness, c - half_thickness, d - half_thickness]), PackedVector3Array([-na, -nb, -nc, -nd]))
+			if column == 0:
+				add_quad.call(PackedVector3Array([a + half_thickness, c + half_thickness, a - half_thickness, c - half_thickness]), PackedVector3Array([Vector3.LEFT, Vector3.LEFT, Vector3.LEFT, Vector3.LEFT]))
+			if column == 7:
+				add_quad.call(PackedVector3Array([b + half_thickness, d + half_thickness, b - half_thickness, d - half_thickness]), PackedVector3Array([Vector3.RIGHT, Vector3.RIGHT, Vector3.RIGHT, Vector3.RIGHT]))
+			if row == 0:
+				add_quad.call(PackedVector3Array([a + half_thickness, b + half_thickness, a - half_thickness, b - half_thickness]), PackedVector3Array([Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD, Vector3.FORWARD]))
+			if row == 19:
+				add_quad.call(PackedVector3Array([c + half_thickness, d + half_thickness, c - half_thickness, d - half_thickness]), PackedVector3Array([Vector3.BACK, Vector3.BACK, Vector3.BACK, Vector3.BACK]))
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(vertices)
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array(normals)
+	var cloth: ArrayMesh = ArrayMesh.new()
+	cloth.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_part(root, cloth, Color("597e91"), Vector3.ZERO)
+	var ear_loop: TorusMesh = TorusMesh.new()
+	ear_loop.inner_radius = 0.025
+	ear_loop.outer_radius = 0.041
+	ear_loop.rings = 20
+	ear_loop.ring_segments = 8
+	_part(root, ear_loop, Color("597e91"), Vector3(-0.113, 0.014, 0))
+	_part(root, ear_loop, Color("597e91"), Vector3(0.113, 0.014, 0))
+
+
+## A flat wool dress with round short sleeves, a waist seam and a flared A-line skirt.
+static func _dress(root: Node3D) -> void:
+	var bodice: BoxMesh = BoxMesh.new()
+	bodice.size = Vector3(0.145, 0.028, 0.118)
+	var sleeve: CapsuleMesh = CapsuleMesh.new()
+	sleeve.radius = 0.032
+	sleeve.height = 0.12
+	sleeve.radial_segments = 12
+	sleeve.rings = 6
+	var skirt: BoxMesh = BoxMesh.new()
+	skirt.size = Vector3(0.14, 0.028, 0.24)
+	var flare: PrismMesh = PrismMesh.new()
+	flare.size = Vector3(0.15, 0.24, 0.028)
+	var hem: CylinderMesh = CylinderMesh.new()
+	hem.top_radius = 0.014
+	hem.bottom_radius = 0.014
+	hem.height = 0.29
+	hem.radial_segments = 12
+	var skirt_edge: CylinderMesh = CylinderMesh.new()
+	skirt_edge.top_radius = 0.014
+	skirt_edge.bottom_radius = 0.014
+	skirt_edge.height = 0.25145
+	skirt_edge.radial_segments = 12
+	var waist: BoxMesh = BoxMesh.new()
+	waist.size = Vector3(0.162, 0.032, 0.046)
+	var neck: TorusMesh = TorusMesh.new()
+	neck.inner_radius = 0.023
+	neck.outer_radius = 0.039
+	neck.rings = 20
+	neck.ring_segments = 8
+
+	_part(root, bodice, Color("80566c"), Vector3(0, 0.014, -0.125))
+	var sleeve_part_1: MeshInstance3D = _part(root, sleeve, Color("734d61"), Vector3(-0.112, 0.014, -0.15), Vector3(0, -12, 90))
+	sleeve_part_1.scale = Vector3(0.4375, 1, 1)
+	var sleeve_part_2: MeshInstance3D = _part(root, sleeve, Color("734d61"), Vector3(0.112, 0.014, -0.15), Vector3(0, 12, 90))
+	sleeve_part_2.scale = Vector3(0.4375, 1, 1)
+	_part(root, skirt, Color("80566c"), Vector3(0, 0.014, 0.085))
+	_part(root, flare, Color("734d61"), Vector3(-0.07, 0.014, 0.085), Vector3(-90, 0, 0))
+	_part(root, flare, Color("734d61"), Vector3(0.07, 0.014, 0.085), Vector3(-90, 0, 0))
+	_part(root, hem, Color("80566c"), Vector3(0, 0.014, 0.205), Vector3(0, 0, 90))
+	_part(root, skirt_edge, Color("734d61"), Vector3(-0.1075, 0.014, 0.085), Vector3(90, -17.354, 0))
+	_part(root, skirt_edge, Color("734d61"), Vector3(0.1075, 0.014, 0.085), Vector3(90, 17.354, 0))
+	_part(root, waist, Color("9a6f7a"), Vector3(0, 0.04, -0.052))
+	var neck_part_1: MeshInstance3D = _part(root, neck, Color("8c6678"), Vector3(0, 0.045, -0.164))
+	neck_part_1.scale = Vector3(1, 2, 1)
+
+
+## A slightly flattened faded red apple, a short stalk and one broad leaf.
+static func _apple(root: Node3D) -> void:
+	var fruit: SphereMesh = SphereMesh.new()
+	fruit.radius = 0.113
+	fruit.height = 0.195
+	fruit.radial_segments = 16
+	fruit.rings = 8
+	var stalk: CylinderMesh = CylinderMesh.new()
+	stalk.top_radius = 0.011
+	stalk.bottom_radius = 0.011
+	stalk.height = 0.055
+	stalk.radial_segments = 8
+	var leaf: PrismMesh = PrismMesh.new()
+	leaf.size = Vector3(0.079, 0.047, 0.014)
+
+	var fruit_part_1: MeshInstance3D = _part(root, fruit, Color("a3645d"), Vector3(0, 0.0975, 0))
+	fruit_part_1.scale = Vector3(1, 1, 0.94)
+	_part(root, stalk, Color("706349"), Vector3(0.005, 0.211, 0), Vector3(0, 0, -16))
+	_part(root, leaf, Color("7c8b70"), Vector3(0.046, 0.227, -0.012), Vector3(90, -20, -14))
+
+
+## A lopsided shrivelled apple made of uneven lobes, with broad brown bruises.
+static func _apple_wilted(root: Node3D) -> void:
+	var core: SphereMesh = SphereMesh.new()
+	core.radius = 0.091
+	core.height = 0.169
+	core.radial_segments = 16
+	core.rings = 8
+	var lobe: SphereMesh = SphereMesh.new()
+	lobe.radius = 0.044
+	lobe.height = 0.127
+	lobe.radial_segments = 16
+	lobe.rings = 8
+	var bruise: SphereMesh = SphereMesh.new()
+	bruise.radius = 0.029
+	bruise.height = 0.012
+	bruise.radial_segments = 16
+	bruise.rings = 8
+	var stalk: CylinderMesh = CylinderMesh.new()
+	stalk.top_radius = 0.01
+	stalk.bottom_radius = 0.01
+	stalk.height = 0.046
+	stalk.radial_segments = 8
+
+	var core_part_1: MeshInstance3D = _part(root, core, Color("8b5b49"), Vector3(0, 0.09798, 0), Vector3(0, 0, -9))
+	core_part_1.scale = Vector3(1.02, 1, 0.95)
+	_part(root, lobe, Color("805746"), Vector3(-0.062, 0.08248, 0.015), Vector3(0, 0, 8))
+	var lobe_part_1: MeshInstance3D = _part(root, lobe, Color("805746"), Vector3(0.06, 0.09648, -0.017), Vector3(0, 0, 8))
+	lobe_part_1.scale = Vector3(0.9, 1, 0.9)
+	var bruise_part_1: MeshInstance3D = _part(root, bruise, Color("6b4d3e"), Vector3(0.03, 0.17748, 0.018), Vector3(0, 0, -12))
+	bruise_part_1.scale = Vector3(1.1, 1, 0.8)
+	_part(root, bruise, Color("6b4d3e"), Vector3(-0.071, 0.11948, 0.058), Vector3(52, 0, 26))
+	_part(root, stalk, Color("68583f"), Vector3(0.011, 0.19848, -0.01), Vector3(0, 0, 22))
+
+
+## A frozen red cut of meat with thick pale fat seams and a broad frost patch.
+static func _meat(root: Node3D) -> void:
+	var cut: SphereMesh = SphereMesh.new()
+	cut.radius = 0.136
+	cut.height = 0.115
+	cut.radial_segments = 16
+	cut.rings = 8
+	var lobe: SphereMesh = SphereMesh.new()
+	lobe.radius = 0.077
+	lobe.height = 0.097
+	lobe.radial_segments = 16
+	lobe.rings = 8
+	var fat: CapsuleMesh = CapsuleMesh.new()
+	fat.radius = 0.013
+	fat.height = 0.21
+	fat.radial_segments = 12
+	fat.rings = 6
+	var patch: SphereMesh = SphereMesh.new()
+	patch.radius = 0.048
+	patch.height = 0.012
+	patch.radial_segments = 16
+	patch.rings = 8
+
+	var cut_part_1: MeshInstance3D = _part(root, cut, Color("804840"), Vector3(-0.024, 0.068949, 0), Vector3(0, -10, 0))
+	cut_part_1.scale = Vector3(1, 1, 0.78)
+	var lobe_part_1: MeshInstance3D = _part(root, lobe, Color("8b5046"), Vector3(0.096, 0.063449, 0.014), Vector3(0, 0, 12))
+	lobe_part_1.scale = Vector3(1, 1, 0.93)
+	_part(root, fat, Color("c5b696"), Vector3(-0.01, 0.116449, 0.018), Vector3(0, -12, 90))
+	_part(root, fat, Color("c5b696"), Vector3(-0.038, 0.102449, -0.057), Vector3(0, 18, 90))
+	var patch_part_1: MeshInstance3D = _part(root, patch, Color("c4cbc3"), Vector3(-0.048, 0.127449, -0.012))
+	patch_part_1.scale = Vector3(1.25, 1, 0.7)
+	var patch_part_2: MeshInstance3D = _part(root, patch, Color("c4cbc3"), Vector3(0.074, 0.110449, 0.038), Vector3(0, 0, 12))
+	patch_part_2.scale = Vector3(0.7, 1, 0.7)
+
+
+## The same meat silhouette, discoloured grey green with dark red spoilage.
+static func _meat_bad(root: Node3D) -> void:
+	var cut: SphereMesh = SphereMesh.new()
+	cut.radius = 0.136
+	cut.height = 0.115
+	cut.radial_segments = 16
+	cut.rings = 8
+	var lobe: SphereMesh = SphereMesh.new()
+	lobe.radius = 0.077
+	lobe.height = 0.097
+	lobe.radial_segments = 16
+	lobe.rings = 8
+	var fat: CapsuleMesh = CapsuleMesh.new()
+	fat.radius = 0.013
+	fat.height = 0.21
+	fat.radial_segments = 12
+	fat.rings = 6
+	var patch: SphereMesh = SphereMesh.new()
+	patch.radius = 0.048
+	patch.height = 0.012
+	patch.radial_segments = 16
+	patch.rings = 8
+
+	var cut_part_1: MeshInstance3D = _part(root, cut, Color("707755"), Vector3(-0.024, 0.068949, 0), Vector3(0, -10, 0))
+	cut_part_1.scale = Vector3(1, 1, 0.78)
+	var lobe_part_1: MeshInstance3D = _part(root, lobe, Color("666e4d"), Vector3(0.096, 0.063449, 0.014), Vector3(0, 0, 12))
+	lobe_part_1.scale = Vector3(1, 1, 0.93)
+	_part(root, fat, Color("8b9372"), Vector3(-0.01, 0.116449, 0.018), Vector3(0, -12, 90))
+	_part(root, fat, Color("8b9372"), Vector3(-0.038, 0.102449, -0.057), Vector3(0, 18, 90))
+	var patch_part_1: MeshInstance3D = _part(root, patch, Color("633b3d"), Vector3(-0.048, 0.127449, -0.012))
+	patch_part_1.scale = Vector3(1.25, 1, 0.7)
+	var patch_part_2: MeshInstance3D = _part(root, patch, Color("633b3d"), Vector3(0.074, 0.110449, 0.038), Vector3(0, 0, 12))
+	patch_part_2.scale = Vector3(0.7, 1, 0.7)
+
+
+## A side-on hare with long upright ears, a raised head, four visible legs and one faint frost patch.
+static func _hare(root: Node3D) -> void:
+	var body: CapsuleMesh = CapsuleMesh.new()
+	body.radius = 0.06
+	body.height = 0.25
+	body.radial_segments = 12
+	body.rings = 6
+	var head: SphereMesh = SphereMesh.new()
+	head.radius = 0.049
+	head.height = 0.089
+	head.radial_segments = 16
+	head.rings = 8
+	var ear: CapsuleMesh = CapsuleMesh.new()
+	ear.radius = 0.015
+	ear.height = 0.1
+	ear.radial_segments = 12
+	ear.rings = 6
+	var inner_ear: CapsuleMesh = CapsuleMesh.new()
+	inner_ear.radius = 0.006
+	inner_ear.height = 0.078
+	inner_ear.radial_segments = 12
+	inner_ear.rings = 6
+	var haunch: SphereMesh = SphereMesh.new()
+	haunch.radius = 0.064
+	haunch.height = 0.09
+	haunch.radial_segments = 16
+	haunch.rings = 8
+	var rear_leg: CapsuleMesh = CapsuleMesh.new()
+	rear_leg.radius = 0.023
+	rear_leg.height = 0.145
+	rear_leg.radial_segments = 12
+	rear_leg.rings = 6
+	var rear_paw: CapsuleMesh = CapsuleMesh.new()
+	rear_paw.radius = 0.018
+	rear_paw.height = 0.065
+	rear_paw.radial_segments = 12
+	rear_paw.rings = 6
+	var front_leg: CapsuleMesh = CapsuleMesh.new()
+	front_leg.radius = 0.014
+	front_leg.height = 0.1
+	front_leg.radial_segments = 12
+	front_leg.rings = 6
+	var front_paw: SphereMesh = SphereMesh.new()
+	front_paw.radius = 0.018
+	front_paw.height = 0.024
+	front_paw.radial_segments = 16
+	front_paw.rings = 8
+	var tail: SphereMesh = SphereMesh.new()
+	tail.radius = 0.023
+	tail.height = 0.046
+	tail.radial_segments = 16
+	tail.rings = 8
+	var muzzle: SphereMesh = SphereMesh.new()
+	muzzle.radius = 0.02
+	muzzle.height = 0.032
+	muzzle.radial_segments = 16
+	muzzle.rings = 8
+	var nose: SphereMesh = SphereMesh.new()
+	nose.radius = 0.009
+	nose.height = 0.018
+	nose.radial_segments = 16
+	nose.rings = 8
+	var frost_sheet: SphereMesh = SphereMesh.new()
+	frost_sheet.radius = 0.047
+	frost_sheet.height = 0.012
+	frost_sheet.radial_segments = 16
+	frost_sheet.rings = 8
+
+	var body_part_1: MeshInstance3D = _part(root, body, Color("796a53"), Vector3(0, 0.061, -0.025), Vector3(90, 0, 0))
+	body_part_1.scale = Vector3(1.1, 1, 0.85)
+	_part(root, head, Color("89745a"), Vector3(0.005, 0.12, 0.12))
+	_part(root, ear, Color("796b55"), Vector3(0.025, 0.204, 0.103), Vector3(-25, 0, 0))
+	_part(root, ear, Color("796b55"), Vector3(-0.018, 0.192, 0.104), Vector3(-42, 0, 0))
+	_part(root, inner_ear, Color("996b64"), Vector3(0.037, 0.204, 0.103), Vector3(-25, 0, 0))
+	_part(root, inner_ear, Color("996b64"), Vector3(-0.006, 0.192, 0.104), Vector3(-42, 0, 0))
+	_part(root, haunch, Color("826f54"), Vector3(0.012, 0.047, -0.1))
+	_part(root, rear_leg, Color("796a53"), Vector3(-0.035, 0.025, -0.14), Vector3(90, 0, 0))
+	_part(root, rear_paw, Color("8d785b"), Vector3(-0.039, 0.018, -0.215), Vector3(90, 0, 0))
+	_part(root, rear_leg, Color("796a53"), Vector3(0.035, 0.025, -0.14), Vector3(90, 0, 0))
+	_part(root, rear_paw, Color("8d785b"), Vector3(0.039, 0.018, -0.215), Vector3(90, 0, 0))
+	_part(root, front_leg, Color("796a53"), Vector3(0.046, 0.014, 0.13), Vector3(90, 0, 0))
+	_part(root, front_leg, Color("796a53"), Vector3(-0.044, 0.033, 0.112), Vector3(90, 0, 0))
+	_part(root, front_paw, Color("8d785b"), Vector3(0.046, 0.012, 0.177))
+	_part(root, front_paw, Color("8d785b"), Vector3(-0.044, 0.029, 0.159))
+	_part(root, tail, Color("cbc9b7"), Vector3(0.013, 0.084, -0.158))
+	_part(root, muzzle, Color("8d785b"), Vector3(0.008, 0.1, 0.165))
+	_part(root, nose, Color("5e4e3c"), Vector3(0.008, 0.1, 0.185))
+	var frost_sheet_part_1: MeshInstance3D = _part(root, frost_sheet, Color("b4b9ad"), Vector3(0, 0.112, -0.035))
+	frost_sheet_part_1.scale = Vector3(0.8, 1, 1.2)
+
+
+## A round stale loaf with three broad scores and green grey mould patches.
+static func _bread_moldy(root: Node3D) -> void:
+	var loaf: SphereMesh = SphereMesh.new()
+	loaf.radius = 0.139
+	loaf.height = 0.147
+	loaf.radial_segments = 16
+	loaf.rings = 8
+	var score: CapsuleMesh = CapsuleMesh.new()
+	score.radius = 0.009
+	score.height = 0.13
+	score.radial_segments = 12
+	score.rings = 6
+	var mould: SphereMesh = SphereMesh.new()
+	mould.radius = 0.034
+	mould.height = 0.013
+	mould.radial_segments = 16
+	mould.rings = 8
+
+	var loaf_part_1: MeshInstance3D = _part(root, loaf, Color("aa9677"), Vector3(0, 0.0735, 0))
+	loaf_part_1.scale = Vector3(1.1, 1, 0.86)
+	_part(root, score, Color("736f5b"), Vector3(-0.066, 0.144, 0), Vector3(90, 0, 22))
+	_part(root, score, Color("736f5b"), Vector3(0, 0.144, 0), Vector3(90, 0, 22))
+	_part(root, score, Color("736f5b"), Vector3(0.066, 0.144, 0), Vector3(90, 0, 22))
+	var mould_part_1: MeshInstance3D = _part(root, mould, Color("748371"), Vector3(-0.075, 0.127, 0.053), Vector3(0, 0, 18))
+	mould_part_1.scale = Vector3(1, 1, 0.8)
+	var mould_part_2: MeshInstance3D = _part(root, mould, Color("929d87"), Vector3(0.055, 0.139, -0.041), Vector3(0, 0, -14))
+	mould_part_2.scale = Vector3(1.2, 1, 1)
+	var mould_part_3: MeshInstance3D = _part(root, mould, Color("66776d"), Vector3(0.093, 0.108, 0.048), Vector3(0, 0, -28))
+	mould_part_3.scale = Vector3(0.75, 1, 0.75)
+
+
+## A flattened soft brown cloth bundle bound by two rounded cords and one top knot.
+static func _food_bundle(root: Node3D) -> void:
+	var bundle: SphereMesh = SphereMesh.new()
+	bundle.radius = 0.128
+	bundle.height = 0.113
+	bundle.radial_segments = 16
+	bundle.rings = 8
+	var cord: TorusMesh = TorusMesh.new()
+	cord.inner_radius = 0.1
+	cord.outer_radius = 0.132
+	cord.rings = 20
+	cord.ring_segments = 8
+	var tie: CapsuleMesh = CapsuleMesh.new()
+	tie.radius = 0.007
+	tie.height = 0.112
+	tie.radial_segments = 12
+	tie.rings = 6
+	var knot: CapsuleMesh = CapsuleMesh.new()
+	knot.radius = 0.012
+	knot.height = 0.049
+	knot.radial_segments = 12
+	knot.rings = 6
+
+	var bundle_part_1: MeshInstance3D = _part(root, bundle, Color("86694b"), Vector3(0, 0.06072, 0))
+	bundle_part_1.scale = Vector3(1.12, 1, 0.9)
+	var cord_part_1: MeshInstance3D = _part(root, cord, Color("68583f"), Vector3(-0.055, 0.06072, 0), Vector3(0, 0, 90))
+	cord_part_1.scale = Vector3(0.46, 1, 1)
+	var cord_part_2: MeshInstance3D = _part(root, cord, Color("68583f"), Vector3(0.055, 0.06072, 0), Vector3(0, 0, 90))
+	cord_part_2.scale = Vector3(0.46, 1, 1)
+	_part(root, tie, Color("a38d65"), Vector3(0, 0.12272, 0), Vector3(0, 0, 90))
+	_part(root, knot, Color("9c845e"), Vector3(0, 0.13672, 0), Vector3(0, -28, 90))
+
+
+## A flattened ointment tube with a blue band, a crimped tail and a ribbed cap.
+static func _tube(root: Node3D) -> void:
+	var body: CapsuleMesh = CapsuleMesh.new()
+	body.radius = 0.047
+	body.height = 0.238
+	body.radial_segments = 12
+	body.rings = 6
+	var band: CylinderMesh = CylinderMesh.new()
+	band.top_radius = 0.048
+	band.bottom_radius = 0.048
+	band.height = 0.085
+	band.radial_segments = 12
+	var seal: BoxMesh = BoxMesh.new()
+	seal.size = Vector3(0.022, 0.08, 0.073)
+	var crimp: BoxMesh = BoxMesh.new()
+	crimp.size = Vector3(0.008, 0.069, 0.075)
+	var cap: CylinderMesh = CylinderMesh.new()
+	cap.top_radius = 0.034
+	cap.bottom_radius = 0.034
+	cap.height = 0.047
+	cap.radial_segments = 12
+	var cap_rib: CylinderMesh = CylinderMesh.new()
+	cap_rib.top_radius = 0.037
+	cap_rib.bottom_radius = 0.037
+	cap_rib.height = 0.009
+	cap_rib.radial_segments = 12
+
+	var body_part_1: MeshInstance3D = _part(root, body, Color("c5c9bd"), Vector3(-0.013, 0.048, 0), Vector3(0, 0, 90))
+	body_part_1.scale = Vector3(1, 1, 0.76)
+	var band_part_1: MeshInstance3D = _part(root, band, Color("7c989d"), Vector3(0.015, 0.048, 0), Vector3(0, 0, 90))
+	band_part_1.scale = Vector3(1, 1, 0.76)
+	_part(root, seal, Color("a5b0aa"), Vector3(-0.133, 0.043, 0))
+	_part(root, crimp, Color("788c8b"), Vector3(-0.142, 0.043, 0))
+	_part(root, cap, Color("849797"), Vector3(0.13, 0.048, 0), Vector3(0, 0, 90))
+	_part(root, cap_rib, Color("b0bdb5"), Vector3(0.118, 0.048, 0), Vector3(0, 0, 90))
+	_part(root, cap_rib, Color("b0bdb5"), Vector3(0.135, 0.048, 0), Vector3(0, 0, 90))
+	_part(root, cap_rib, Color("b0bdb5"), Vector3(0.151, 0.048, 0), Vector3(0, 0, 90))
+
+
+## Eight thick dry olive stems, a broad leaf bunch and one muted red binding cord.
+static func _herbs(root: Node3D) -> void:
+	var stem: CylinderMesh = CylinderMesh.new()
+	stem.top_radius = 0.006
+	stem.bottom_radius = 0.006
+	stem.height = 0.24
+	stem.radial_segments = 8
+	var leaf: PrismMesh = PrismMesh.new()
+	leaf.size = Vector3(0.075, 0.05, 0.018)
+	var leaf_clump: SphereMesh = SphereMesh.new()
+	leaf_clump.radius = 0.047
+	leaf_clump.height = 0.07
+	leaf_clump.radial_segments = 16
+	leaf_clump.rings = 8
+	var tie: TorusMesh = TorusMesh.new()
+	tie.inner_radius = 0.026
+	tie.outer_radius = 0.041
+	tie.rings = 20
+	tie.ring_segments = 8
+	var knot: CapsuleMesh = CapsuleMesh.new()
+	knot.radius = 0.008
+	knot.height = 0.034
+	knot.radial_segments = 12
+	knot.rings = 6
+
+	_part(root, stem, Color("737443"), Vector3(-0.0385, 0.120117, -0.018), Vector3(0, 0, -9.8))
+	_part(root, leaf, Color("7b8050"), Vector3(-0.0595, 0.177117, -0.039), Vector3(52, 0, -28))
+	_part(root, leaf, Color("7b8050"), Vector3(-0.0145, 0.231117, 0.004), Vector3(52, 0, 28))
+	_part(root, stem, Color("737443"), Vector3(-0.0275, 0.120117, 0), Vector3(0, 0, -7))
+	_part(root, leaf, Color("8f9159"), Vector3(-0.0485, 0.177117, -0.021), Vector3(52, 21, -28))
+	_part(root, leaf, Color("8f9159"), Vector3(-0.0035, 0.231117, 0.022), Vector3(52, 21, 28))
+	_part(root, stem, Color("737443"), Vector3(-0.0165, 0.120117, 0.018), Vector3(0, 0, -4.2))
+	_part(root, leaf, Color("7b8050"), Vector3(-0.0375, 0.177117, -0.003), Vector3(52, 42, -28))
+	_part(root, leaf, Color("7b8050"), Vector3(0.0075, 0.231117, 0.04), Vector3(52, 42, 28))
+	_part(root, stem, Color("737443"), Vector3(-0.0055, 0.120117, -0.018), Vector3(0, 0, -1.4))
+	_part(root, leaf, Color("8f9159"), Vector3(-0.0265, 0.177117, -0.039), Vector3(52, 63, -28))
+	_part(root, leaf, Color("8f9159"), Vector3(0.0185, 0.231117, 0.004), Vector3(52, 63, 28))
+	_part(root, stem, Color("737443"), Vector3(0.0055, 0.120117, 0), Vector3(0, 0, 1.4))
+	_part(root, leaf, Color("7b8050"), Vector3(-0.0155, 0.177117, -0.021), Vector3(52, 84, -28))
+	_part(root, leaf, Color("7b8050"), Vector3(0.0295, 0.231117, 0.022), Vector3(52, 84, 28))
+	_part(root, stem, Color("737443"), Vector3(0.0165, 0.120117, 0.018), Vector3(0, 0, 4.2))
+	_part(root, leaf, Color("8f9159"), Vector3(-0.0045, 0.177117, -0.003), Vector3(52, 105, -28))
+	_part(root, leaf, Color("8f9159"), Vector3(0.0405, 0.231117, 0.04), Vector3(52, 105, 28))
+	_part(root, stem, Color("737443"), Vector3(0.0275, 0.120117, -0.018), Vector3(0, 0, 7))
+	_part(root, leaf, Color("7b8050"), Vector3(0.0065, 0.177117, -0.039), Vector3(52, 126, -28))
+	_part(root, leaf, Color("7b8050"), Vector3(0.0515, 0.231117, 0.004), Vector3(52, 126, 28))
+	_part(root, stem, Color("737443"), Vector3(0.0385, 0.120117, 0), Vector3(0, 0, 9.8))
+	_part(root, leaf, Color("8f9159"), Vector3(0.0175, 0.177117, -0.021), Vector3(52, 147, -28))
+	_part(root, leaf, Color("8f9159"), Vector3(0.0625, 0.231117, 0.022), Vector3(52, 147, 28))
+	var leaf_clump_part_1: MeshInstance3D = _part(root, leaf_clump, Color("6d7748"), Vector3(-0.043, 0.241117, -0.012), Vector3(0, 12, 0))
+	leaf_clump_part_1.scale = Vector3(1.1, 1, 0.85)
+	var leaf_clump_part_2: MeshInstance3D = _part(root, leaf_clump, Color("7b8050"), Vector3(0.038, 0.253117, 0.019), Vector3(0, -18, 0))
+	leaf_clump_part_2.scale = Vector3(1.05, 1, 0.9)
+	_part(root, leaf_clump, Color("8a8b54"), Vector3(0, 0.264117, -0.025))
+	_part(root, tie, Color("8e5145"), Vector3(0, 0.097117, 0))
+	_part(root, knot, Color("a05c4b"), Vector3(0.014, 0.101117, 0.042), Vector3(0, 0, 60))
+
+
+## One aged grey-white paper cylinder on its side, a dark end hole and one loose sheet.
+static func _toilet_paper(root: Node3D) -> void:
+	var roll: CylinderMesh = CylinderMesh.new()
+	roll.top_radius = 0.091
+	roll.bottom_radius = 0.091
+	roll.height = 0.175
+	roll.radial_segments = 24
+	var end_face: CylinderMesh = CylinderMesh.new()
+	end_face.top_radius = 0.087
+	end_face.bottom_radius = 0.087
+	end_face.height = 0.012
+	end_face.radial_segments = 24
+	var core_hole: CylinderMesh = CylinderMesh.new()
+	core_hole.top_radius = 0.029
+	core_hole.bottom_radius = 0.029
+	core_hole.height = 0.014
+	core_hole.radial_segments = 16
+	var loose_sheet: BoxMesh = BoxMesh.new()
+	loose_sheet.size = Vector3(0.17, 0.012, 0.17)
+	var loose_edge: CylinderMesh = CylinderMesh.new()
+	loose_edge.top_radius = 0.012
+	loose_edge.bottom_radius = 0.012
+	loose_edge.height = 0.17
+	loose_edge.radial_segments = 12
+
+	_part(root, roll, Color("a8a47c"), Vector3(0, 0.091, 0), Vector3(0, 0, 90))
+	_part(root, end_face, Color("9c9670"), Vector3(0.0885, 0.091, 0), Vector3(0, 0, 90))
+	_part(root, core_hole, Color("635b42"), Vector3(0.098, 0.091, 0), Vector3(0, 0, 90))
+	_part(root, loose_sheet, Color("bcb89b"), Vector3(-0.005, 0.006, 0.12))
+	_part(root, loose_edge, Color("aaa682"), Vector3(-0.005, 0.012, 0.203), Vector3(0, 0, 90))
+
+
+## A pale blue green soap bar with softly rounded sides and an oval top groove.
+static func _soap(root: Node3D) -> void:
+	var body: BoxMesh = BoxMesh.new()
+	body.size = Vector3(0.2, 0.08, 0.12)
+	var edge: CylinderMesh = CylinderMesh.new()
+	edge.top_radius = 0.04
+	edge.bottom_radius = 0.04
+	edge.height = 0.2
+	edge.radial_segments = 12
+	var end: SphereMesh = SphereMesh.new()
+	end.radius = 0.062
+	end.height = 0.08
+	end.radial_segments = 16
+	end.rings = 8
+	var groove: TorusMesh = TorusMesh.new()
+	groove.inner_radius = 0.024
+	groove.outer_radius = 0.035
+	groove.rings = 20
+	groove.ring_segments = 8
+
+	_part(root, body, Color("a8bdb4"), Vector3(0, 0.04, 0))
+	_part(root, edge, Color("b4c5bb"), Vector3(0, 0.04, -0.06), Vector3(0, 0, 90))
+	_part(root, edge, Color("b4c5bb"), Vector3(0, 0.04, 0.06), Vector3(0, 0, 90))
+	var end_part_1: MeshInstance3D = _part(root, end, Color("b4c5bb"), Vector3(-0.1, 0.04, 0))
+	end_part_1.scale = Vector3(1, 1, 1.15)
+	var end_part_2: MeshInstance3D = _part(root, end, Color("b4c5bb"), Vector3(0.1, 0.04, 0))
+	end_part_2.scale = Vector3(1, 1, 1.15)
+	var groove_part_1: MeshInstance3D = _part(root, groove, Color("7d9b93"), Vector3(0, 0.081, 0))
+	groove_part_1.scale = Vector3(1.6, 0.7, 0.8)
+
+
+## A small flat T-shaped child's shirt with two broad faded red stripes.
+static func _child_clothes(root: Node3D) -> void:
+	var body: BoxMesh = BoxMesh.new()
+	body.size = Vector3(0.15, 0.028, 0.17)
+	var shoulder: BoxMesh = BoxMesh.new()
+	shoulder.size = Vector3(0.054, 0.028, 0.065)
+	var sleeve: CapsuleMesh = CapsuleMesh.new()
+	sleeve.radius = 0.031
+	sleeve.height = 0.132
+	sleeve.radial_segments = 12
+	sleeve.rings = 6
+	var hem: CylinderMesh = CylinderMesh.new()
+	hem.top_radius = 0.014
+	hem.bottom_radius = 0.014
+	hem.height = 0.15
+	hem.radial_segments = 12
+	var stripe: BoxMesh = BoxMesh.new()
+	stripe.size = Vector3(0.146, 0.012, 0.024)
+	var collar: CylinderMesh = CylinderMesh.new()
+	collar.top_radius = 0.019
+	collar.bottom_radius = 0.019
+	collar.height = 0.095
+	collar.radial_segments = 12
+	var side_edge: CylinderMesh = CylinderMesh.new()
+	side_edge.top_radius = 0.014
+	side_edge.bottom_radius = 0.014
+	side_edge.height = 0.17
+	side_edge.radial_segments = 12
+
+	_part(root, body, Color("9c754e"), Vector3(0, 0.014, 0.03))
+	_part(root, shoulder, Color("9c754e"), Vector3(-0.049, 0.014, -0.068))
+	_part(root, shoulder, Color("9c754e"), Vector3(0.049, 0.014, -0.068))
+	var sleeve_part_1: MeshInstance3D = _part(root, sleeve, Color("896342"), Vector3(-0.115, 0.014, -0.07), Vector3(0, 0, 90))
+	sleeve_part_1.scale = Vector3(0.451613, 1, 1)
+	var sleeve_part_2: MeshInstance3D = _part(root, sleeve, Color("896342"), Vector3(0.115, 0.014, -0.07), Vector3(0, 0, 90))
+	sleeve_part_2.scale = Vector3(0.451613, 1, 1)
+	_part(root, hem, Color("896342"), Vector3(0, 0.014, 0.115), Vector3(0, 0, 90))
+	_part(root, stripe, Color("8c5043"), Vector3(0, 0.032, 0.013))
+	_part(root, stripe, Color("8c5043"), Vector3(0, 0.032, 0.066))
+	_part(root, collar, Color("9f8b62"), Vector3(0, 0.044, -0.075), Vector3(0, 0, 90))
+	_part(root, side_edge, Color("9c754e"), Vector3(-0.075, 0.014, 0.03), Vector3(90, 0, 0))
+	_part(root, side_edge, Color("9c754e"), Vector3(0.075, 0.014, 0.03), Vector3(90, 0, 0))
+
+
+## Two crossed soft cloth folds, with a contrasting sewn repair patch.
+static func _old_clothes(root: Node3D) -> void:
+	var lower: BoxMesh = BoxMesh.new()
+	lower.size = Vector3(0.28, 0.046, 0.207)
+	var lower_fold: CylinderMesh = CylinderMesh.new()
+	lower_fold.top_radius = 0.023
+	lower_fold.bottom_radius = 0.023
+	lower_fold.height = 0.28
+	lower_fold.radial_segments = 12
+	var upper: BoxMesh = BoxMesh.new()
+	upper.size = Vector3(0.245, 0.047, 0.198)
+	var upper_fold: CylinderMesh = CylinderMesh.new()
+	upper_fold.top_radius = 0.0235
+	upper_fold.bottom_radius = 0.0235
+	upper_fold.height = 0.245
+	upper_fold.radial_segments = 12
+	var patch: BoxMesh = BoxMesh.new()
+	patch.size = Vector3(0.079, 0.012, 0.069)
+	var stitch: BoxMesh = BoxMesh.new()
+	stitch.size = Vector3(0.012, 0.012, 0.022)
+
+	_part(root, lower, Color("536c7b"), Vector3(0, 0.023, 0), Vector3(0, -9, 0))
+	_part(root, lower_fold, Color("627c87"), Vector3(-0.016, 0.023, 0.102), Vector3(0, -9, 90))
+	_part(root, upper, Color("7b624b"), Vector3(0.015, 0.071, 0.005), Vector3(0, 12, 0))
+	_part(root, upper_fold, Color("8b7256"), Vector3(0.036, 0.071, 0.102), Vector3(0, 12, 90))
+	_part(root, patch, Color("925d4c"), Vector3(0.05, 0.1, 0.021), Vector3(0, 12, 0))
+	_part(root, stitch, Color("9b8061"), Vector3(0.023, 0.109, -0.004), Vector3(0, 12, 0))
+	_part(root, stitch, Color("9b8061"), Vector3(0.023, 0.109, 0.043), Vector3(0, 12, 0))
+	_part(root, stitch, Color("9b8061"), Vector3(0.079, 0.109, -0.004), Vector3(0, 12, 0))
+	_part(root, stitch, Color("9b8061"), Vector3(0.079, 0.109, 0.043), Vector3(0, 12, 0))
+
+
+## A gently curved flat horn handle and a broad silver blade opened 120 degrees about one hinge.
+static func _razor(root: Node3D) -> void:
+	var vertices: Array[Vector3] = []
+	var normals: Array[Vector3] = []
+	var add_quad: Callable = func(corners: PackedVector3Array, face_normal: Vector3) -> void:
+		var order: Array[int] = [0, 1, 2, 1, 3, 2]
+		if (corners[1] - corners[0]).cross(corners[2] - corners[0]).dot(face_normal) > 0.0:
+			order = [0, 2, 1, 1, 2, 3]
+		for corner_index: int in order:
+			vertices.append(corners[corner_index])
+			normals.append(face_normal)
+	var half_thickness: Vector3 = Vector3(0, 0.007, 0)
+	for row: int in 12:
+		var a_ratio: float = float(row) / 12.0
+		var b_ratio: float = float(row + 1) / 12.0
+		var center_a: Vector3 = Vector3(0.19 * a_ratio, 0.007, 0.006 * sin(PI * a_ratio))
+		var center_b: Vector3 = Vector3(0.19 * b_ratio, 0.007, 0.006 * sin(PI * b_ratio))
+		var a: Vector3 = center_a + Vector3(0, 0, -0.01)
+		var b: Vector3 = center_a + Vector3(0, 0, 0.01)
+		var c: Vector3 = center_b + Vector3(0, 0, -0.01)
+		var d: Vector3 = center_b + Vector3(0, 0, 0.01)
+		var outward: Vector3 = (center_b - center_a).cross(Vector3.UP).normalized()
+		add_quad.call(PackedVector3Array([a + half_thickness, b + half_thickness, c + half_thickness, d + half_thickness]), Vector3.UP)
+		add_quad.call(PackedVector3Array([a - half_thickness, b - half_thickness, c - half_thickness, d - half_thickness]), Vector3.DOWN)
+		add_quad.call(PackedVector3Array([b + half_thickness, d + half_thickness, b - half_thickness, d - half_thickness]), outward)
+		add_quad.call(PackedVector3Array([a + half_thickness, c + half_thickness, a - half_thickness, c - half_thickness]), -outward)
+		if row == 0:
+			add_quad.call(PackedVector3Array([a + half_thickness, b + half_thickness, a - half_thickness, b - half_thickness]), Vector3.LEFT)
+		if row == 11:
+			add_quad.call(PackedVector3Array([c + half_thickness, d + half_thickness, c - half_thickness, d - half_thickness]), Vector3.RIGHT)
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(vertices)
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array(normals)
+	var handle: ArrayMesh = ArrayMesh.new()
+	handle.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	# Keep grip and blade coplanar; only the whole open razor leans off the floor.
+	var frame: Node3D = Node3D.new()
+	frame.position = Vector3(0, 0.044869, 0)
+	frame.rotation_degrees = Vector3(0, 0, 15)
+	root.add_child(frame)
+	_part(frame, handle, Color("73533b"), Vector3(-0.08, 0, 0))
+	var grip_end: CylinderMesh = CylinderMesh.new()
+	grip_end.top_radius = 0.01
+	grip_end.bottom_radius = 0.01
+	grip_end.height = 0.014
+	grip_end.radial_segments = 12
+	for end_x: float in [-0.08, 0.11]:
+		_part(frame, grip_end, Color("73533b"), Vector3(end_x, 0.007, 0))
+	var blade: BoxMesh = BoxMesh.new()
+	blade.size = Vector3(0.18, 0.014, 0.025)
+	var spine: BoxMesh = BoxMesh.new()
+	spine.size = Vector3(0.18, 0.012, 0.012)
+	var hinge: CylinderMesh = CylinderMesh.new()
+	hinge.top_radius = 0.009
+	hinge.bottom_radius = 0.009
+	hinge.height = 0.022
+	hinge.radial_segments = 12
+	var hinge_at: Vector3 = Vector3(-0.08, 0.011, 0)
+	var blade_pivot: Vector3 = Vector3(hinge_at.x, 0.009, hinge_at.z)
+	var blade_turn: Vector3 = Vector3(0, -120, 0)
+	var blade_basis: Basis = Basis(Vector3.UP, deg_to_rad(blade_turn.y))
+	_part(frame, blade, Color("b8c2c2"), blade_pivot + blade_basis * Vector3(blade.size.x * 0.5, 0, 0), blade_turn)
+	_part(frame, spine, Color("89979b"), blade_pivot + blade_basis * Vector3(0.09, 0.003, -0.0065), blade_turn)
+	_part(frame, hinge, Color("9ca79f"), hinge_at)
+
+
+## Two overlapping open-centred toothed metal discs, with broad bright steel teeth.
+static func _gears(root: Node3D) -> void:
+	var disc: TorusMesh = TorusMesh.new()
+	disc.inner_radius = 0.025
+	disc.outer_radius = 0.084
+	disc.rings = 20
+	disc.ring_segments = 8
+	var tooth: BoxMesh = BoxMesh.new()
+	tooth.size = Vector3(0.042, 0.035, 0.026)
+
+	var disc_part_1: MeshInstance3D = _part(root, disc, Color("879394"), Vector3(-0.065, 0.0175, 0))
+	disc_part_1.scale = Vector3(1, 0.48, 1)
+	_part(root, tooth, Color("96a2a1"), Vector3(0.027, 0.0175, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(0.014674, 0.0175, 0.046), Vector3(0, -30, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(-0.019, 0.0175, 0.079674), Vector3(0, -60, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(-0.065, 0.0175, 0.092), Vector3(0, -90, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(-0.111, 0.0175, 0.079674), Vector3(0, -120, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(-0.144674, 0.0175, 0.046), Vector3(0, -150, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(-0.157, 0.0175, 0), Vector3(0, -180, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(-0.144674, 0.0175, -0.046), Vector3(0, -210, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(-0.111, 0.0175, -0.079674), Vector3(0, -240, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(-0.065, 0.0175, -0.092), Vector3(0, -270, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(-0.019, 0.0175, -0.079674), Vector3(0, -300, 0))
+	_part(root, tooth, Color("96a2a1"), Vector3(0.014674, 0.0175, -0.046), Vector3(0, -330, 0))
+	var disc_part_2: MeshInstance3D = _part(root, disc, Color("b0b9b2"), Vector3(0.072, 0.0565, 0.044))
+	disc_part_2.scale = Vector3(1, 0.48, 1)
+	_part(root, tooth, Color("bbc4ba"), Vector3(0.160865, 0.0565, 0.067811), Vector3(0, -15, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(0.137054, 0.0565, 0.109054), Vector3(0, -45, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(0.095811, 0.0565, 0.132865), Vector3(0, -75, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(0.048189, 0.0565, 0.132865), Vector3(0, -105, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(0.006946, 0.0565, 0.109054), Vector3(0, -135, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(-0.016865, 0.0565, 0.067811), Vector3(0, -165, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(-0.016865, 0.0565, 0.020189), Vector3(0, -195, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(0.006946, 0.0565, -0.021054), Vector3(0, -225, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(0.048189, 0.0565, -0.044865), Vector3(0, -255, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(0.095811, 0.0565, -0.044865), Vector3(0, -285, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(0.137054, 0.0565, -0.021054), Vector3(0, -315, 0))
+	_part(root, tooth, Color("bbc4ba"), Vector3(0.160865, 0.0565, 0.020189), Vector3(0, -345, 0))
+
+
+## Seven scattered steel nails, with 12 mm shafts, 30 mm heads and broad points.
+static func _nails(root: Node3D) -> void:
+	var shaft: CylinderMesh = CylinderMesh.new()
+	shaft.top_radius = 0.006
+	shaft.bottom_radius = 0.006
+	shaft.height = 0.145
+	shaft.radial_segments = 8
+	var head: CylinderMesh = CylinderMesh.new()
+	head.top_radius = 0.015
+	head.bottom_radius = 0.015
+	head.height = 0.014
+	head.radial_segments = 10
+	var tip: CylinderMesh = CylinderMesh.new()
+	tip.top_radius = 0
+	tip.bottom_radius = 0.006
+	tip.height = 0.028
+	tip.radial_segments = 8
+
+	_part(root, shaft, Color("6f8799"), Vector3(-0.025, 0.015, -0.077), Vector3(0, -34, -90))
+	_part(root, head, Color("8a9caa"), Vector3(-0.088007, 0.015, -0.119499), Vector3(0, -34, -90))
+	_part(root, tip, Color("7f94a2"), Vector3(0.045468, 0.015, -0.029469), Vector3(0, -34, -90))
+	_part(root, shaft, Color("6f8799"), Vector3(0.032, 0.036, -0.052), Vector3(0, 21, -90))
+	_part(root, head, Color("8a9caa"), Vector3(-0.038952, 0.036, -0.024764), Vector3(0, 21, -90))
+	_part(root, tip, Color("7f94a2"), Vector3(0.111354, 0.036, -0.082461), Vector3(0, 21, -90))
+	_part(root, shaft, Color("6f8799"), Vector3(-0.043, 0.057, -0.027), Vector3(0, 66, -90))
+	_part(root, head, Color("8a9caa"), Vector3(-0.073912, 0.057, 0.042429), Vector3(0, 66, -90))
+	_part(root, tip, Color("7f94a2"), Vector3(-0.008427, 0.057, -0.104651), Vector3(0, 66, -90))
+	_part(root, shaft, Color("6f8799"), Vector3(0.025, 0.015, -0.002), Vector3(0, -12, -90))
+	_part(root, head, Color("8a9caa"), Vector3(-0.049339, 0.015, -0.017801), Vector3(0, -12, -90))
+	_part(root, tip, Color("7f94a2"), Vector3(0.108143, 0.015, 0.015672), Vector3(0, -12, -90))
+	_part(root, shaft, Color("6f8799"), Vector3(-0.012, 0.036, 0.023), Vector3(0, 43, -90))
+	_part(root, head, Color("8a9caa"), Vector3(-0.067583, 0.036, 0.074832), Vector3(0, 43, -90))
+	_part(root, tip, Color("7f94a2"), Vector3(0.050165, 0.036, -0.03497), Vector3(0, 43, -90))
+	_part(root, shaft, Color("6f8799"), Vector3(0.043, 0.057, 0.048), Vector3(0, -55, -90))
+	_part(root, head, Color("8a9caa"), Vector3(-0.000592, 0.057, -0.014256), Vector3(0, -55, -90))
+	_part(root, tip, Color("7f94a2"), Vector3(0.091754, 0.057, 0.117628), Vector3(0, -55, -90))
+	_part(root, shaft, Color("6f8799"), Vector3(0, 0.015, 0.073), Vector3(0, 9, -90))
+	_part(root, head, Color("8a9caa"), Vector3(-0.075064, 0.015, 0.084889), Vector3(0, 9, -90))
+	_part(root, tip, Color("7f94a2"), Vector3(0.083954, 0.015, 0.059703), Vector3(0, 9, -90))
+
+
+## A low half-open tin with a ragged raised lid and the slim wooden lever resting diagonally across it.
+static func _opener(root: Node3D) -> void:
+	var lid_frame: Node3D = Node3D.new()
+	lid_frame.position = Vector3(0, 0.114787, -0.099562)
+	lid_frame.rotation_degrees = Vector3(55, 0, 0)
+	root.add_child(lid_frame)
+	var lever: Node3D = Node3D.new()
+	lever.position = Vector3(0.02, 0.075, 0.015)
+	lever.rotation_degrees = Vector3(0, -25, 10)
+	root.add_child(lever)
+	var tin: CylinderMesh = CylinderMesh.new()
+	tin.top_radius = 0.075
+	tin.bottom_radius = 0.075
+	tin.height = 0.06
+	tin.radial_segments = 20
+	var inside: CylinderMesh = CylinderMesh.new()
+	inside.top_radius = 0.066
+	inside.bottom_radius = 0.066
+	inside.height = 0.012
+	inside.radial_segments = 20
+	var rim: TorusMesh = TorusMesh.new()
+	rim.inner_radius = 0.063
+	rim.outer_radius = 0.078
+	rim.rings = 20
+	rim.ring_segments = 8
+	var lid: CylinderMesh = CylinderMesh.new()
+	lid.top_radius = 0.071
+	lid.bottom_radius = 0.071
+	lid.height = 0.014
+	lid.radial_segments = 20
+	var torn_edge: PrismMesh = PrismMesh.new()
+	torn_edge.size = Vector3(0.018, 0.028, 0.014)
+	torn_edge.left_to_right = 0.5
+	var handle: CapsuleMesh = CapsuleMesh.new()
+	handle.radius = 0.012
+	handle.height = 0.12
+	handle.radial_segments = 12
+	handle.rings = 6
+	var shank: BoxMesh = BoxMesh.new()
+	shank.size = Vector3(0.055, 0.014, 0.028)
+	var hook: BoxMesh = BoxMesh.new()
+	hook.size = Vector3(0.028, 0.014, 0.064)
+
+	_part(root, tin, Color("7f8b62"), Vector3(0, 0.03, 0))
+	_part(root, inside, Color("4d5b44"), Vector3(0, 0.062, 0))
+	_part(root, rim, Color("9aa886"), Vector3(0, 0.06, 0))
+	_part(lid_frame, lid, Color("9aa886"), Vector3(0, 0, 0))
+	_part(lid_frame, torn_edge, Color("9aa886"), Vector3(-0.055, 0.002, 0.04), Vector3(90, -35, 0))
+	_part(lid_frame, torn_edge, Color("9aa886"), Vector3(-0.028, 0.002, 0.063), Vector3(90, -16, 0))
+	_part(lid_frame, torn_edge, Color("9aa886"), Vector3(0, 0.002, 0.068), Vector3(90, 0, 0))
+	_part(lid_frame, torn_edge, Color("9aa886"), Vector3(0.028, 0.002, 0.063), Vector3(90, 16, 0))
+	_part(lid_frame, torn_edge, Color("9aa886"), Vector3(0.055, 0.002, 0.04), Vector3(90, 35, 0))
+	_part(lever, handle, Color("785a40"), Vector3(-0.025, 0.0318, 0), Vector3(0, 0, -70))
+	_part(lever, shank, Color("9ba8ad"), Vector3(0.052, 0.058, 0))
+	_part(lever, hook, Color("9ba8ad"), Vector3(0.0795, 0.058, 0.019))
+
+
+## A flat faded green jerrycan with three top grips, a spout and pressed X ribs.
+static func _fuel(root: Node3D) -> void:
+	var body: BoxMesh = BoxMesh.new()
+	body.size = Vector3(0.23, 0.275, 0.128)
+	var shoulder: BoxMesh = BoxMesh.new()
+	shoulder.size = Vector3(0.218, 0.047, 0.12)
+	var base_rim: BoxMesh = BoxMesh.new()
+	base_rim.size = Vector3(0.238, 0.023, 0.136)
+	var grip: BoxMesh = BoxMesh.new()
+	grip.size = Vector3(0.124, 0.018, 0.018)
+	var grip_post: BoxMesh = BoxMesh.new()
+	grip_post.size = Vector3(0.018, 0.049, 0.018)
+	var spout: CylinderMesh = CylinderMesh.new()
+	spout.top_radius = 0.026
+	spout.bottom_radius = 0.026
+	spout.height = 0.046
+	spout.radial_segments = 10
+	var cap: CylinderMesh = CylinderMesh.new()
+	cap.top_radius = 0.031
+	cap.bottom_radius = 0.031
+	cap.height = 0.018
+	cap.radial_segments = 10
+	var pressed_rib: BoxMesh = BoxMesh.new()
+	pressed_rib.size = Vector3(0.017, 0.217, 0.012)
+
+	_part(root, body, Color("788576"), Vector3(0, 0.1375, 0))
+	_part(root, shoulder, Color("8b9783"), Vector3(0, 0.292, 0))
+	_part(root, base_rim, Color("5f7067"), Vector3(0, 0.0115, 0))
+	_part(root, grip, Color("a4ad96"), Vector3(0.025, 0.355, -0.038))
+	_part(root, grip_post, Color("8d9c89"), Vector3(-0.028, 0.329, -0.038))
+	_part(root, grip_post, Color("8d9c89"), Vector3(0.078, 0.329, -0.038))
+	_part(root, grip, Color("a4ad96"), Vector3(0.025, 0.355, 0))
+	_part(root, grip_post, Color("8d9c89"), Vector3(-0.028, 0.329, 0))
+	_part(root, grip_post, Color("8d9c89"), Vector3(0.078, 0.329, 0))
+	_part(root, grip, Color("a4ad96"), Vector3(0.025, 0.355, 0.038))
+	_part(root, grip_post, Color("8d9c89"), Vector3(-0.028, 0.329, 0.038))
+	_part(root, grip_post, Color("8d9c89"), Vector3(0.078, 0.329, 0.038))
+	_part(root, spout, Color("8e9b84"), Vector3(-0.093, 0.323, 0), Vector3(0, 0, 24))
+	_part(root, cap, Color("b0b79e"), Vector3(-0.106, 0.352, 0), Vector3(0, 0, 24))
+	_part(root, pressed_rib, Color("a2af98"), Vector3(0, 0.144, 0.069), Vector3(0, 0, -42))
+	_part(root, pressed_rib, Color("a2af98"), Vector3(0, 0.144, 0.069), Vector3(0, 0, 42))
+
+
+## Two silver coil springs, built from separated thick rings with visible dark gaps.
+static func _spring(root: Node3D) -> void:
+	var coil: TorusMesh = TorusMesh.new()
+	coil.inner_radius = 0.038
+	coil.outer_radius = 0.053
+	coil.rings = 20
+	coil.ring_segments = 8
+	var end: CylinderMesh = CylinderMesh.new()
+	end.top_radius = 0.007
+	end.bottom_radius = 0.007
+	end.height = 0.052
+	end.radial_segments = 8
+
+	_part(root, coil, Color("9ba9ab"), Vector3(-0.0675, 0.0075, 0))
+	_part(root, coil, Color("9ba9ab"), Vector3(-0.0675, 0.0325, 0), Vector3(0, 11, 0))
+	_part(root, coil, Color("9ba9ab"), Vector3(-0.0675, 0.0575, 0), Vector3(0, 22, 0))
+	_part(root, coil, Color("9ba9ab"), Vector3(-0.0675, 0.0825, 0), Vector3(0, 33, 0))
+	_part(root, coil, Color("9ba9ab"), Vector3(-0.0675, 0.1075, 0), Vector3(0, 44, 0))
+	_part(root, coil, Color("9ba9ab"), Vector3(-0.0675, 0.1325, 0), Vector3(0, 55, 0))
+	_part(root, coil, Color("bcc5bf"), Vector3(0.0675, 0.0195, 0.027))
+	_part(root, coil, Color("bcc5bf"), Vector3(0.0675, 0.0445, 0.027), Vector3(0, 11, 0))
+	_part(root, coil, Color("bcc5bf"), Vector3(0.0675, 0.0695, 0.027), Vector3(0, 22, 0))
+	_part(root, coil, Color("bcc5bf"), Vector3(0.0675, 0.0945, 0.027), Vector3(0, 33, 0))
+	_part(root, coil, Color("bcc5bf"), Vector3(0.0675, 0.1195, 0.027), Vector3(0, 44, 0))
+	_part(root, coil, Color("bcc5bf"), Vector3(0.0675, 0.1445, 0.027), Vector3(0, 55, 0))
+	_part(root, end, Color("c6cec6"), Vector3(-0.0435, 0.0095, 0), Vector3(0, 0, 90))
+	_part(root, end, Color("c6cec6"), Vector3(0.0915, 0.0095, 0.027), Vector3(0, 0, 90))
+
+
+## A charcoal record, pale centre label and circular grooves, half outside a paper sleeve.
+static func _record(root: Node3D) -> void:
+	var sleeve: BoxMesh = BoxMesh.new()
+	sleeve.size = Vector3(0.238, 0.064, 0.255)
+	var sleeve_edge: BoxMesh = BoxMesh.new()
+	sleeve_edge.size = Vector3(0.014, 0.008, 0.229)
+	var disc: CylinderMesh = CylinderMesh.new()
+	disc.top_radius = 0.132
+	disc.bottom_radius = 0.132
+	disc.height = 0.014
+	disc.radial_segments = 40
+	var groove: TorusMesh = TorusMesh.new()
+	groove.inner_radius = 0.101
+	groove.outer_radius = 0.109
+	groove.rings = 20
+	groove.ring_segments = 8
+	var outer_groove: TorusMesh = TorusMesh.new()
+	outer_groove.inner_radius = 0.116
+	outer_groove.outer_radius = 0.124
+	outer_groove.rings = 20
+	outer_groove.ring_segments = 8
+	var label: CylinderMesh = CylinderMesh.new()
+	label.top_radius = 0.045
+	label.bottom_radius = 0.045
+	label.height = 0.01
+	label.radial_segments = 20
+	var hole: CylinderMesh = CylinderMesh.new()
+	hole.top_radius = 0.009
+	hole.bottom_radius = 0.009
+	hole.height = 0.008
+	hole.radial_segments = 10
+
+	_part(root, sleeve, Color("b3b0a1"), Vector3(-0.072, 0.032, -0.017), Vector3(0, -5, 0))
+	_part(root, sleeve_edge, Color("d0c8b1"), Vector3(-0.173, 0.068, -0.019), Vector3(0, -5, 0))
+	_part(root, disc, Color("30383d"), Vector3(0.07, 0.078, 0.038))
+	_part(root, groove, Color("4b565a"), Vector3(0.07, 0.086, 0.038))
+	_part(root, outer_groove, Color("465154"), Vector3(0.07, 0.086, 0.038))
+	_part(root, label, Color("aaa68b"), Vector3(0.07, 0.091, 0.038))
+	_part(root, hole, Color("3f4949"), Vector3(0.07, 0.1, 0.038))
+
+
+## A worn brown violin: two overlapping lobes, a long neck, peg head and dark f-hole plates.
+static func _violin(root: Node3D) -> void:
+	var lower_lobe: CylinderMesh = CylinderMesh.new()
+	lower_lobe.top_radius = 0.088
+	lower_lobe.bottom_radius = 0.088
+	lower_lobe.height = 0.055
+	lower_lobe.radial_segments = 20
+	var upper_lobe: CylinderMesh = CylinderMesh.new()
+	upper_lobe.top_radius = 0.069
+	upper_lobe.bottom_radius = 0.069
+	upper_lobe.height = 0.055
+	upper_lobe.radial_segments = 20
+	var neck: BoxMesh = BoxMesh.new()
+	neck.size = Vector3(0.154, 0.032, 0.034)
+	var peg_head: CapsuleMesh = CapsuleMesh.new()
+	peg_head.radius = 0.023
+	peg_head.height = 0.065
+	peg_head.radial_segments = 12
+	peg_head.rings = 6
+	var peg: CylinderMesh = CylinderMesh.new()
+	peg.top_radius = 0.009
+	peg.bottom_radius = 0.009
+	peg.height = 0.065
+	peg.radial_segments = 8
+	var bridge: BoxMesh = BoxMesh.new()
+	bridge.size = Vector3(0.014, 0.027, 0.056)
+	var tailpiece: BoxMesh = BoxMesh.new()
+	tailpiece.size = Vector3(0.056, 0.014, 0.027)
+	var f_plate: CapsuleMesh = CapsuleMesh.new()
+	f_plate.radius = 0.009
+	f_plate.height = 0.044
+	f_plate.radial_segments = 12
+	f_plate.rings = 6
+	var string: BoxMesh = BoxMesh.new()
+	string.size = Vector3(0.278, 0.008, 0.008)
+
+	var lower_lobe_part_1: MeshInstance3D = _part(root, lower_lobe, Color("987655"), Vector3(-0.078, 0.0275, 0))
+	lower_lobe_part_1.scale = Vector3(1, 1, 0.96)
+	var upper_lobe_part_1: MeshInstance3D = _part(root, upper_lobe, Color("a9855f"), Vector3(0.039, 0.0275, 0))
+	upper_lobe_part_1.scale = Vector3(1, 1, 0.94)
+	_part(root, neck, Color("735d49"), Vector3(0.148, 0.0355, 0))
+	_part(root, peg_head, Color("a0835a"), Vector3(0.251, 0.0415, 0), Vector3(0, 0, 90))
+	_part(root, peg, Color("675b4d"), Vector3(0.238, 0.0445, 0), Vector3(90, 0, 0))
+	_part(root, peg, Color("675b4d"), Vector3(0.262, 0.0445, 0), Vector3(90, 0, 0))
+	_part(root, bridge, Color("c4b595"), Vector3(-0.016, 0.0605, 0))
+	_part(root, tailpiece, Color("65594c"), Vector3(-0.113, 0.0605, 0), Vector3(0, 7, 0))
+	_part(root, f_plate, Color("4e4941"), Vector3(-0.031, 0.0595, -0.036), Vector3(0, -10.8, 90))
+	_part(root, f_plate, Color("4e4941"), Vector3(-0.031, 0.0595, 0.036), Vector3(0, 10.8, 90))
+	_part(root, string, Color("c2bba4"), Vector3(0.073, 0.0685, -0.011))
+	_part(root, string, Color("c2bba4"), Vector3(0.073, 0.0685, 0))
+	_part(root, string, Color("c2bba4"), Vector3(0.073, 0.0685, 0.011))
+
+
+## Five upright brass pistol cartridges with rounded pale bullet noses.
+static func _ammo_pistol(root: Node3D) -> void:
+	var case: CylinderMesh = CylinderMesh.new()
+	case.top_radius = 0.018
+	case.bottom_radius = 0.018
+	case.height = 0.111
+	case.radial_segments = 12
+	var bullet: SphereMesh = SphereMesh.new()
+	bullet.radius = 0.018
+	bullet.height = 0.045
+	bullet.radial_segments = 16
+	bullet.rings = 8
+	var rim: CylinderMesh = CylinderMesh.new()
+	rim.top_radius = 0.021
+	rim.bottom_radius = 0.021
+	rim.height = 0.012
+	rim.radial_segments = 12
+
+	_part(root, case, Color("b9a16f"), Vector3(-0.042, 0.065, -0.032))
+	_part(root, bullet, Color("c4b69b"), Vector3(-0.042, 0.128, -0.032))
+	_part(root, rim, Color("d0b987"), Vector3(-0.042, 0.006, -0.032))
+	_part(root, case, Color("b9a16f"), Vector3(0, 0.065, -0.034))
+	_part(root, bullet, Color("c4b69b"), Vector3(0, 0.128, -0.034))
+	_part(root, rim, Color("d0b987"), Vector3(0, 0.006, -0.034))
+	_part(root, case, Color("b9a16f"), Vector3(0.042, 0.065, -0.025))
+	_part(root, bullet, Color("c4b69b"), Vector3(0.042, 0.128, -0.025))
+	_part(root, rim, Color("d0b987"), Vector3(0.042, 0.006, -0.025))
+	_part(root, case, Color("b9a16f"), Vector3(-0.023, 0.065, 0.026))
+	_part(root, bullet, Color("c4b69b"), Vector3(-0.023, 0.128, 0.026))
+	_part(root, rim, Color("d0b987"), Vector3(-0.023, 0.006, 0.026))
+	_part(root, case, Color("b9a16f"), Vector3(0.026, 0.065, 0.028))
+	_part(root, bullet, Color("c4b69b"), Vector3(0.026, 0.128, 0.028))
+	_part(root, rim, Color("d0b987"), Vector3(0.026, 0.006, 0.028))
+
+
+## Four upright muted red shotgun shells with broad brass heads and closed crimps.
+static func _ammo_shell(root: Node3D) -> void:
+	var hull: CylinderMesh = CylinderMesh.new()
+	hull.top_radius = 0.027
+	hull.bottom_radius = 0.027
+	hull.height = 0.126
+	hull.radial_segments = 12
+	var head: CylinderMesh = CylinderMesh.new()
+	head.top_radius = 0.03
+	head.bottom_radius = 0.03
+	head.height = 0.034
+	head.radial_segments = 12
+	var crimp: CylinderMesh = CylinderMesh.new()
+	crimp.top_radius = 0.025
+	crimp.bottom_radius = 0.025
+	crimp.height = 0.009
+	crimp.radial_segments = 12
+
+	_part(root, hull, Color("995f59"), Vector3(-0.037, 0.087, -0.034))
+	_part(root, head, Color("b6a173"), Vector3(-0.037, 0.017, -0.034))
+	_part(root, crimp, Color("b18173"), Vector3(-0.037, 0.151, -0.034))
+	_part(root, hull, Color("995f59"), Vector3(0.034, 0.087, -0.029))
+	_part(root, head, Color("b6a173"), Vector3(0.034, 0.017, -0.029))
+	_part(root, crimp, Color("b18173"), Vector3(0.034, 0.151, -0.029))
+	_part(root, hull, Color("995f59"), Vector3(-0.028, 0.087, 0.031))
+	_part(root, head, Color("b6a173"), Vector3(-0.028, 0.017, 0.031))
+	_part(root, crimp, Color("b18173"), Vector3(-0.028, 0.151, 0.031))
+	_part(root, hull, Color("995f59"), Vector3(0.041, 0.087, 0.037))
+	_part(root, head, Color("b6a173"), Vector3(0.041, 0.017, 0.037))
+	_part(root, crimp, Color("b18173"), Vector3(0.041, 0.151, 0.037))
+
+
+## A dark amber bottle with a large uneven broken neck, dark mouth and one muted highlight.
+static func _bottle_broken(root: Node3D) -> void:
+	var body: CylinderMesh = CylinderMesh.new()
+	body.top_radius = 0.065
+	body.bottom_radius = 0.065
+	body.height = 0.175
+	body.radial_segments = 14
+	var shoulder: CylinderMesh = CylinderMesh.new()
+	shoulder.top_radius = 0.033
+	shoulder.bottom_radius = 0.065
+	shoulder.height = 0.05
+	shoulder.radial_segments = 14
+	var neck: CylinderMesh = CylinderMesh.new()
+	neck.top_radius = 0.032
+	neck.bottom_radius = 0.032
+	neck.height = 0.034
+	neck.radial_segments = 12
+	var mouth: CylinderMesh = CylinderMesh.new()
+	mouth.top_radius = 0.022
+	mouth.bottom_radius = 0.022
+	mouth.height = 0.012
+	mouth.radial_segments = 12
+	var shard: PrismMesh = PrismMesh.new()
+	shard.size = Vector3(0.028, 0.079, 0.026)
+	var reflection: BoxMesh = BoxMesh.new()
+	reflection.size = Vector3(0.012, 0.115, 0.012)
+
+	_part(root, body, Color("6b5135"), Vector3(0, 0.0875, 0))
+	_part(root, shoulder, Color("735838"), Vector3(0, 0.2, 0))
+	_part(root, neck, Color("624a31"), Vector3(0, 0.239, 0))
+	_part(root, mouth, Color("4a402e"), Vector3(0, 0.263, 0))
+	_part(root, shard, Color("7c623c"), Vector3(-0.023, 0.284, 0.007), Vector3(0, -12, -13))
+	_part(root, shard, Color("8a6d43"), Vector3(0.021, 0.309, -0.013), Vector3(0, 24, 16))
+	_part(root, shard, Color("725332"), Vector3(0.003, 0.286, 0.027), Vector3(0, -28, -7))
+	_part(root, reflection, Color("967e54"), Vector3(-0.022, 0.093, 0.063))
+
+
+## A thick wooden stake with a four-sided sharpened point and pale carving marks.
+static func _stake(root: Node3D) -> void:
+	var timber: BoxMesh = BoxMesh.new()
+	timber.size = Vector3(0.314, 0.076, 0.077)
+	var point: CylinderMesh = CylinderMesh.new()
+	point.top_radius = 0
+	point.bottom_radius = 0.049
+	point.height = 0.12
+	point.radial_segments = 4
+	var carving: BoxMesh = BoxMesh.new()
+	carving.size = Vector3(0.073, 0.009, 0.045)
+	var grain: BoxMesh = BoxMesh.new()
+	grain.size = Vector3(0.22, 0.009, 0.01)
+
+	_part(root, timber, Color("9a8668"), Vector3(-0.036, 0.069296, 0))
+	_part(root, point, Color("c1ab82"), Vector3(0.181, 0.069296, 0), Vector3(45, 0, -90))
+	_part(root, carving, Color("c6b38f"), Vector3(0.105, 0.110296, 0), Vector3(0, 0, -5))
+	_part(root, carving, Color("b6a17c"), Vector3(0.083, 0.068296, 0.043), Vector3(90, 0, -12))
+	_part(root, grain, Color("786b55"), Vector3(-0.041, 0.111296, 0.018), Vector3(0, 3, 0))
+
+
+## A long flat wool coat, with two button rows, broad lapels and a waist belt.
+static func _coat(root: Node3D) -> void:
+	var body: BoxMesh = BoxMesh.new()
+	body.size = Vector3(0.2, 0.032, 0.36)
+	var shoulder: BoxMesh = BoxMesh.new()
+	shoulder.size = Vector3(0.075, 0.032, 0.08)
+	var sleeve: CapsuleMesh = CapsuleMesh.new()
+	sleeve.radius = 0.034
+	sleeve.height = 0.21
+	sleeve.radial_segments = 12
+	sleeve.rings = 6
+	var hem: CylinderMesh = CylinderMesh.new()
+	hem.top_radius = 0.016
+	hem.bottom_radius = 0.016
+	hem.height = 0.2
+	hem.radial_segments = 12
+	var side_edge: CylinderMesh = CylinderMesh.new()
+	side_edge.top_radius = 0.016
+	side_edge.bottom_radius = 0.016
+	side_edge.height = 0.36
+	side_edge.radial_segments = 12
+	var lapel: PrismMesh = PrismMesh.new()
+	lapel.size = Vector3(0.06, 0.065, 0.018)
+	lapel.left_to_right = 0.5
+	var belt: BoxMesh = BoxMesh.new()
+	belt.size = Vector3(0.205, 0.014, 0.03)
+	var buckle: BoxMesh = BoxMesh.new()
+	buckle.size = Vector3(0.035, 0.018, 0.032)
+	var button: CylinderMesh = CylinderMesh.new()
+	button.top_radius = 0.007
+	button.bottom_radius = 0.007
+	button.height = 0.012
+	button.radial_segments = 12
+
+	_part(root, body, Color("7a6656"), Vector3(0, 0.016, 0.07))
+	_part(root, shoulder, Color("7a6656"), Vector3(-0.0625, 0.016, -0.145))
+	_part(root, shoulder, Color("7a6656"), Vector3(0.0625, 0.016, -0.145))
+	var sleeve_part_1: MeshInstance3D = _part(root, sleeve, Color("7a6656"), Vector3(-0.155, 0.016, -0.105), Vector3(90, -30, 0))
+	sleeve_part_1.scale = Vector3(1, 1, 0.470588)
+	var sleeve_part_2: MeshInstance3D = _part(root, sleeve, Color("7a6656"), Vector3(0.155, 0.016, -0.105), Vector3(90, 30, 0))
+	sleeve_part_2.scale = Vector3(1, 1, 0.470588)
+	_part(root, hem, Color("7a6656"), Vector3(0, 0.016, 0.25), Vector3(0, 0, 90))
+	_part(root, side_edge, Color("7a6656"), Vector3(-0.1, 0.016, 0.07), Vector3(90, 0, 0))
+	_part(root, side_edge, Color("7a6656"), Vector3(0.1, 0.016, 0.07), Vector3(90, 0, 0))
+	_part(root, lapel, Color("6f5d4d"), Vector3(-0.033, 0.041, -0.14), Vector3(55, -15, 0))
+	_part(root, lapel, Color("6f5d4d"), Vector3(0.033, 0.041, -0.14), Vector3(55, 15, 0))
+	_part(root, belt, Color("6f5d4d"), Vector3(0, 0.036, 0.07))
+	_part(root, buckle, Color("99845a"), Vector3(0, 0.045, 0.07))
+	_part(root, button, Color("99845a"), Vector3(-0.035, 0.04, -0.07))
+	_part(root, button, Color("99845a"), Vector3(-0.035, 0.04, 0))
+	_part(root, button, Color("99845a"), Vector3(-0.035, 0.04, 0.13))
+	_part(root, button, Color("99845a"), Vector3(-0.035, 0.04, 0.2))
+	_part(root, button, Color("99845a"), Vector3(0.035, 0.04, -0.07))
+	_part(root, button, Color("99845a"), Vector3(0.035, 0.04, 0))
+	_part(root, button, Color("99845a"), Vector3(0.035, 0.04, 0.13))
+	_part(root, button, Color("99845a"), Vector3(0.035, 0.04, 0.2))
+
+
+## A short plain blue-grey jacket, half the coat body length, with a raised collar and zipper.
+static func _jacket(root: Node3D) -> void:
+	var body: BoxMesh = BoxMesh.new()
+	body.size = Vector3(0.205, 0.032, 0.17)
+	var shoulder: BoxMesh = BoxMesh.new()
+	shoulder.size = Vector3(0.075, 0.032, 0.07)
+	var sleeve: CapsuleMesh = CapsuleMesh.new()
+	sleeve.radius = 0.035
+	sleeve.height = 0.15
+	sleeve.radial_segments = 12
+	sleeve.rings = 6
+	var hem: CylinderMesh = CylinderMesh.new()
+	hem.top_radius = 0.016
+	hem.bottom_radius = 0.016
+	hem.height = 0.205
+	hem.radial_segments = 12
+	var side_edge: CylinderMesh = CylinderMesh.new()
+	side_edge.top_radius = 0.016
+	side_edge.bottom_radius = 0.016
+	side_edge.height = 0.17
+	side_edge.radial_segments = 12
+	var collar: TorusMesh = TorusMesh.new()
+	collar.inner_radius = 0.022
+	collar.outer_radius = 0.041
+	collar.rings = 20
+	collar.ring_segments = 8
+	var zipper: BoxMesh = BoxMesh.new()
+	zipper.size = Vector3(0.014, 0.012, 0.16)
+	var zipper_pull: CylinderMesh = CylinderMesh.new()
+	zipper_pull.top_radius = 0.008
+	zipper_pull.bottom_radius = 0.008
+	zipper_pull.height = 0.014
+	zipper_pull.radial_segments = 12
+
+	_part(root, body, Color("596180"), Vector3(0, 0.016, 0.035))
+	_part(root, shoulder, Color("596180"), Vector3(-0.065, 0.016, -0.08))
+	_part(root, shoulder, Color("596180"), Vector3(0.065, 0.016, -0.08))
+	var sleeve_part_1: MeshInstance3D = _part(root, sleeve, Color("596180"), Vector3(-0.139, 0.016, -0.063), Vector3(0, 0, 90))
+	sleeve_part_1.scale = Vector3(0.457143, 1, 1)
+	var sleeve_part_2: MeshInstance3D = _part(root, sleeve, Color("596180"), Vector3(0.139, 0.016, -0.063), Vector3(0, 0, 90))
+	sleeve_part_2.scale = Vector3(0.457143, 1, 1)
+	_part(root, hem, Color("596180"), Vector3(0, 0.016, 0.12), Vector3(0, 0, 90))
+	_part(root, side_edge, Color("596180"), Vector3(-0.1025, 0.016, 0.035), Vector3(90, 0, 0))
+	_part(root, side_edge, Color("596180"), Vector3(0.1025, 0.016, 0.035), Vector3(90, 0, 0))
+	var collar_part_1: MeshInstance3D = _part(root, collar, Color("596180"), Vector3(0, 0.047, -0.09))
+	collar_part_1.scale = Vector3(1, 1.75, 1)
+	_part(root, zipper, Color("a1aaa5"), Vector3(0, 0.035, 0.03))
+	_part(root, zipper_pull, Color("b4bfb4"), Vector3(0, 0.049, -0.035))
+
+
+## A flat sleeveless quilted vest with a real V neck and four shallow horizontal ribs.
+static func _vest(root: Node3D) -> void:
+	var body: BoxMesh = BoxMesh.new()
+	body.size = Vector3(0.2, 0.03, 0.15)
+	var shoulder: BoxMesh = BoxMesh.new()
+	shoulder.size = Vector3(0.06, 0.03, 0.1)
+	var left_chest: PrismMesh = PrismMesh.new()
+	left_chest.size = Vector3(0.04, 0.1, 0.03)
+	left_chest.left_to_right = 0
+	var right_chest: PrismMesh = PrismMesh.new()
+	right_chest.size = Vector3(0.04, 0.1, 0.03)
+	right_chest.left_to_right = 1
+	var hem: CylinderMesh = CylinderMesh.new()
+	hem.top_radius = 0.015
+	hem.bottom_radius = 0.015
+	hem.height = 0.2
+	hem.radial_segments = 12
+	var side_edge: CylinderMesh = CylinderMesh.new()
+	side_edge.top_radius = 0.015
+	side_edge.bottom_radius = 0.015
+	side_edge.height = 0.245
+	side_edge.radial_segments = 12
+	var neck_binding: CylinderMesh = CylinderMesh.new()
+	neck_binding.top_radius = 0.016
+	neck_binding.bottom_radius = 0.016
+	neck_binding.height = 0.107703
+	neck_binding.radial_segments = 12
+	var quilt: BoxMesh = BoxMesh.new()
+	quilt.size = Vector3(0.194, 0.012, 0.014)
+
+	_part(root, body, Color("717680"), Vector3(0, 0.015, 0.045))
+	_part(root, shoulder, Color("717680"), Vector3(-0.07, 0.015, -0.075))
+	_part(root, shoulder, Color("717680"), Vector3(0.07, 0.015, -0.075))
+	_part(root, left_chest, Color("717680"), Vector3(-0.02, 0.015, -0.075), Vector3(-90, 0, 0))
+	_part(root, right_chest, Color("717680"), Vector3(0.02, 0.015, -0.075), Vector3(-90, 0, 0))
+	_part(root, hem, Color("717680"), Vector3(0, 0.015, 0.12), Vector3(0, 0, 90))
+	_part(root, side_edge, Color("717680"), Vector3(-0.1, 0.015, -0.0025), Vector3(90, 0, 0))
+	_part(root, side_edge, Color("717680"), Vector3(0.1, 0.015, -0.0025), Vector3(90, 0, 0))
+	_part(root, neck_binding, Color("717680"), Vector3(-0.02, 0.045, -0.075), Vector3(90, 21.801409, 0))
+	_part(root, neck_binding, Color("717680"), Vector3(0.02, 0.045, -0.075), Vector3(90, -21.801409, 0))
+	_part(root, quilt, Color("717680"), Vector3(0, 0.032, 0))
+	_part(root, quilt, Color("717680"), Vector3(0, 0.032, 0.035))
+	_part(root, quilt, Color("717680"), Vector3(0, 0.032, 0.07))
+	_part(root, quilt, Color("717680"), Vector3(0, 0.032, 0.105))
+
+
+## A knitted brown-red beanie with a hemispherical crown, thick ribbed cuff and small pompom.
+static func _hat(root: Node3D) -> void:
+	var crown: SphereMesh = SphereMesh.new()
+	crown.radius = 0.115
+	crown.height = 0.2
+	crown.radial_segments = 16
+	crown.rings = 8
+	crown.is_hemisphere = true
+	var cuff: CylinderMesh = CylinderMesh.new()
+	cuff.top_radius = 0.118
+	cuff.bottom_radius = 0.118
+	cuff.height = 0.11
+	cuff.radial_segments = 20
+	var rib: CylinderMesh = CylinderMesh.new()
+	rib.top_radius = 0.007
+	rib.bottom_radius = 0.007
+	rib.height = 0.085
+	rib.radial_segments = 8
+	var pompom: SphereMesh = SphereMesh.new()
+	pompom.radius = 0.027
+	pompom.height = 0.054
+	pompom.radial_segments = 16
+	pompom.rings = 8
+
+	_part(root, crown, Color("856150"), Vector3(0, 0.1, 0))
+	_part(root, cuff, Color("856150"), Vector3(0, 0.055, 0))
+	_part(root, rib, Color("735343"), Vector3(0.119, 0.054, 0))
+	_part(root, rib, Color("735343"), Vector3(0.109942, 0.054, 0.045539))
+	_part(root, rib, Color("735343"), Vector3(0.084146, 0.054, 0.084146))
+	_part(root, rib, Color("735343"), Vector3(0.045539, 0.054, 0.109942))
+	_part(root, rib, Color("735343"), Vector3(0, 0.054, 0.119))
+	_part(root, rib, Color("735343"), Vector3(-0.045539, 0.054, 0.109942))
+	_part(root, rib, Color("735343"), Vector3(-0.084146, 0.054, 0.084146))
+	_part(root, rib, Color("735343"), Vector3(-0.109942, 0.054, 0.045539))
+	_part(root, rib, Color("735343"), Vector3(-0.119, 0.054, 0))
+	_part(root, rib, Color("735343"), Vector3(-0.109942, 0.054, -0.045539))
+	_part(root, rib, Color("735343"), Vector3(-0.084146, 0.054, -0.084146))
+	_part(root, rib, Color("735343"), Vector3(-0.045539, 0.054, -0.109942))
+	_part(root, rib, Color("735343"), Vector3(0, 0.054, -0.119))
+	_part(root, rib, Color("735343"), Vector3(0.045539, 0.054, -0.109942))
+	_part(root, rib, Color("735343"), Vector3(0.084146, 0.054, -0.084146))
+	_part(root, rib, Color("735343"), Vector3(0.109942, 0.054, -0.045539))
+	_part(root, pompom, Color("c5b89a"), Vector3(0, 0.222, 0))
+
+
+## A round plain cool-grey hood with a dark inset face opening and a flared neck cloth.
+static func _hood(root: Node3D) -> void:
+	var back: SphereMesh = SphereMesh.new()
+	back.radius = 0.108
+	back.height = 0.22
+	back.radial_segments = 16
+	back.rings = 8
+	var neck: CylinderMesh = CylinderMesh.new()
+	neck.top_radius = 0.073
+	neck.bottom_radius = 0.118
+	neck.height = 0.09
+	neck.radial_segments = 16
+	var face_rim: TorusMesh = TorusMesh.new()
+	face_rim.inner_radius = 0.063
+	face_rim.outer_radius = 0.102
+	face_rim.rings = 20
+	face_rim.ring_segments = 8
+	var inside: CylinderMesh = CylinderMesh.new()
+	inside.top_radius = 0.061
+	inside.bottom_radius = 0.061
+	inside.height = 0.014
+	inside.radial_segments = 20
+	var neck_fold: TorusMesh = TorusMesh.new()
+	neck_fold.inner_radius = 0.065
+	neck_fold.outer_radius = 0.09
+	neck_fold.rings = 20
+	neck_fold.ring_segments = 8
+
+	var back_part_1: MeshInstance3D = _part(root, back, Color("717680"), Vector3(0, 0.14, -0.028))
+	back_part_1.scale = Vector3(1, 1, 0.75)
+	_part(root, neck, Color("717680"), Vector3(0, 0.045, 0))
+	_part(root, face_rim, Color("717680"), Vector3(0, 0.14, 0.065), Vector3(90, 0, 0))
+	_part(root, inside, Color("434c58"), Vector3(0, 0.14, 0.058), Vector3(90, 0, 0))
+	_part(root, neck_fold, Color("717680"), Vector3(0, 0.06, 0))
+
+
+## A large plain blue pack with a top flap, front pocket, two side-visible shoulder straps and buckles.
+static func _pack(root: Node3D) -> void:
+	var body: BoxMesh = BoxMesh.new()
+	body.size = Vector3(0.2, 0.25, 0.12)
+	var base: BoxMesh = BoxMesh.new()
+	base.size = Vector3(0.21, 0.02, 0.13)
+	var flap: BoxMesh = BoxMesh.new()
+	flap.size = Vector3(0.218, 0.035, 0.137)
+	var flap_fold: CylinderMesh = CylinderMesh.new()
+	flap_fold.top_radius = 0.0175
+	flap_fold.bottom_radius = 0.0175
+	flap_fold.height = 0.218
+	flap_fold.radial_segments = 12
+	var pocket: BoxMesh = BoxMesh.new()
+	pocket.size = Vector3(0.14, 0.105, 0.045)
+	var pocket_fold: CylinderMesh = CylinderMesh.new()
+	pocket_fold.top_radius = 0.016
+	pocket_fold.bottom_radius = 0.016
+	pocket_fold.height = 0.14
+	pocket_fold.radial_segments = 12
+	var shoulder_strap: TorusMesh = TorusMesh.new()
+	shoulder_strap.inner_radius = 0.047
+	shoulder_strap.outer_radius = 0.063
+	shoulder_strap.rings = 20
+	shoulder_strap.ring_segments = 8
+	var strap_mount: BoxMesh = BoxMesh.new()
+	strap_mount.size = Vector3(0.03, 0.03, 0.04)
+	var buckle: TorusMesh = TorusMesh.new()
+	buckle.inner_radius = 0.007
+	buckle.outer_radius = 0.02
+	buckle.rings = 20
+	buckle.ring_segments = 8
+	var front_strap: BoxMesh = BoxMesh.new()
+	front_strap.size = Vector3(0.016, 0.13, 0.014)
+
+	_part(root, body, Color("4d6080"), Vector3(0, 0.135, 0))
+	_part(root, base, Color("4d6080"), Vector3(0, 0.01, 0))
+	_part(root, flap, Color("4d6080"), Vector3(0, 0.275, 0.005))
+	_part(root, flap_fold, Color("4d6080"), Vector3(0, 0.275, 0.0735), Vector3(0, 0, 90))
+	_part(root, pocket, Color("4d6080"), Vector3(0, 0.1, 0.076))
+	_part(root, pocket_fold, Color("4d6080"), Vector3(0, 0.15, 0.099), Vector3(0, 0, 90))
+	var shoulder_strap_part_1: MeshInstance3D = _part(root, shoulder_strap, Color("4d6080"), Vector3(-0.12, 0.15, -0.02), Vector3(0, 0, 90))
+	shoulder_strap_part_1.scale = Vector3(1.6, 1, 0.8)
+	var shoulder_strap_part_2: MeshInstance3D = _part(root, shoulder_strap, Color("4d6080"), Vector3(0.12, 0.15, -0.02), Vector3(0, 0, 90))
+	shoulder_strap_part_2.scale = Vector3(1.6, 1, 0.8)
+	_part(root, strap_mount, Color("4d6080"), Vector3(-0.105, 0.07, -0.035))
+	_part(root, strap_mount, Color("4d6080"), Vector3(-0.105, 0.23, -0.035))
+	_part(root, strap_mount, Color("4d6080"), Vector3(0.105, 0.07, -0.035))
+	_part(root, strap_mount, Color("4d6080"), Vector3(0.105, 0.23, -0.035))
+	_part(root, buckle, Color("a18b5b"), Vector3(-0.05, 0.175, 0.069), Vector3(90, 0, 0))
+	_part(root, buckle, Color("a18b5b"), Vector3(0.05, 0.175, 0.069), Vector3(90, 0, 0))
+	_part(root, front_strap, Color("4d6080"), Vector3(-0.05, 0.2, 0.068))
+	_part(root, front_strap, Color("4d6080"), Vector3(0.05, 0.2, 0.068))
+
+
+## Four loose copper wire coils and one thick projecting end.
+static func _wire(root: Node3D) -> void:
+	var coil: TorusMesh = TorusMesh.new()
+	coil.inner_radius = 0.084
+	coil.outer_radius = 0.1
+	coil.rings = 20
+	coil.ring_segments = 8
+	var end_wire: CapsuleMesh = CapsuleMesh.new()
+	end_wire.radius = 0.007
+	end_wire.height = 0.14
+	end_wire.radial_segments = 12
+	end_wire.rings = 6
+
+	_part(root, coil, Color("936c48"), Vector3(0, 0.008, 0))
+	_part(root, coil, Color("936c48"), Vector3(0, 0.026, 0))
+	_part(root, coil, Color("936c48"), Vector3(0, 0.044, 0))
+	_part(root, coil, Color("936c48"), Vector3(0, 0.062, 0))
+	_part(root, end_wire, Color("936c48"), Vector3(0.15, 0.044, 0.02), Vector3(0, -20, 90))
+
+
+## A small brown cough-medicine bottle, plain pale label and dark screw cap.
+static func _syrup(root: Node3D) -> void:
+	var body: CylinderMesh = CylinderMesh.new()
+	body.top_radius = 0.058
+	body.bottom_radius = 0.058
+	body.height = 0.15
+	body.radial_segments = 16
+	var shoulder: SphereMesh = SphereMesh.new()
+	shoulder.radius = 0.058
+	shoulder.height = 0.06
+	shoulder.radial_segments = 16
+	shoulder.rings = 8
+	var neck: CylinderMesh = CylinderMesh.new()
+	neck.top_radius = 0.025
+	neck.bottom_radius = 0.025
+	neck.height = 0.04
+	neck.radial_segments = 12
+	var label: CylinderMesh = CylinderMesh.new()
+	label.top_radius = 0.059
+	label.bottom_radius = 0.059
+	label.height = 0.067
+	label.radial_segments = 16
+	var cap: CylinderMesh = CylinderMesh.new()
+	cap.top_radius = 0.034
+	cap.bottom_radius = 0.034
+	cap.height = 0.032
+	cap.radial_segments = 12
+	var cap_rim: CylinderMesh = CylinderMesh.new()
+	cap_rim.top_radius = 0.036
+	cap_rim.bottom_radius = 0.036
+	cap_rim.height = 0.012
+	cap_rim.radial_segments = 12
+
+	_part(root, body, Color("765337"), Vector3(0, 0.075, 0))
+	_part(root, shoulder, Color("765337"), Vector3(0, 0.15, 0))
+	_part(root, neck, Color("765337"), Vector3(0, 0.19, 0))
+	_part(root, label, Color("ccc7ad"), Vector3(0, 0.085, 0))
+	_part(root, cap, Color("383e43"), Vector3(0, 0.218, 0))
+	_part(root, cap_rim, Color("383e43"), Vector3(0, 0.232, 0))
+
+
+## A wristwatch with two hands on a pale round dial and a complete leather strap loop.
+static func _clock(root: Node3D) -> void:
+	var strap: TorusMesh = TorusMesh.new()
+	strap.inner_radius = 0.066
+	strap.outer_radius = 0.084
+	strap.rings = 20
+	strap.ring_segments = 8
+	var mount: BoxMesh = BoxMesh.new()
+	mount.size = Vector3(0.1, 0.026, 0.02)
+	var case_body: CylinderMesh = CylinderMesh.new()
+	case_body.top_radius = 0.052
+	case_body.bottom_radius = 0.052
+	case_body.height = 0.022
+	case_body.radial_segments = 24
+	var dial: CylinderMesh = CylinderMesh.new()
+	dial.top_radius = 0.045
+	dial.bottom_radius = 0.045
+	dial.height = 0.012
+	dial.radial_segments = 24
+	var minute_hand: BoxMesh = BoxMesh.new()
+	minute_hand.size = Vector3(0.012, 0.043, 0.012)
+	var hour_hand: BoxMesh = BoxMesh.new()
+	hour_hand.size = Vector3(0.031, 0.012, 0.012)
+	var pivot: CylinderMesh = CylinderMesh.new()
+	pivot.top_radius = 0.008
+	pivot.bottom_radius = 0.008
+	pivot.height = 0.014
+	pivot.radial_segments = 12
+
+	_part(root, strap, Color("77563e"), Vector3(0, 0.084, 0), Vector3(90, 0, 0))
+	_part(root, mount, Color("77563e"), Vector3(0, 0.151, 0.006))
+	_part(root, case_body, Color("988158"), Vector3(0, 0.151, 0.025), Vector3(90, 0, 0))
+	_part(root, dial, Color("c5c0a6"), Vector3(0, 0.151, 0.038), Vector3(90, 0, 0))
+	_part(root, minute_hand, Color("494f3d"), Vector3(0.008745, 0.170641, 0.05), Vector3(0, 0, -24))
+	_part(root, hour_hand, Color("494f3d"), Vector3(0.014048, 0.144449, 0.05), Vector3(0, 0, -25))
+	_part(root, pivot, Color("494f3d"), Vector3(0, 0.151, 0.052), Vector3(90, 0, 0))
+
+
+## A brass pocket watch with a pale dial, top loop and a loose chain of broad links.
+static func _pocket_watch(root: Node3D) -> void:
+	var case_body: CylinderMesh = CylinderMesh.new()
+	case_body.top_radius = 0.088
+	case_body.bottom_radius = 0.088
+	case_body.height = 0.048
+	case_body.radial_segments = 28
+	var bezel: TorusMesh = TorusMesh.new()
+	bezel.inner_radius = 0.071
+	bezel.outer_radius = 0.09
+	bezel.rings = 20
+	bezel.ring_segments = 8
+	var dial: CylinderMesh = CylinderMesh.new()
+	dial.top_radius = 0.071
+	dial.bottom_radius = 0.071
+	dial.height = 0.012
+	dial.radial_segments = 28
+	var minute_hand: BoxMesh = BoxMesh.new()
+	minute_hand.size = Vector3(0.014, 0.012, 0.057)
+	var hour_hand: BoxMesh = BoxMesh.new()
+	hour_hand.size = Vector3(0.047, 0.012, 0.014)
+	var winder: CylinderMesh = CylinderMesh.new()
+	winder.top_radius = 0.018
+	winder.bottom_radius = 0.018
+	winder.height = 0.042
+	winder.radial_segments = 12
+	var top_loop: TorusMesh = TorusMesh.new()
+	top_loop.inner_radius = 0.017
+	top_loop.outer_radius = 0.031
+	top_loop.rings = 20
+	top_loop.ring_segments = 8
+	var chain_link: TorusMesh = TorusMesh.new()
+	chain_link.inner_radius = 0.006
+	chain_link.outer_radius = 0.019
+	chain_link.rings = 20
+	chain_link.ring_segments = 8
+
+	_part(root, case_body, Color("a18b56"), Vector3(0, 0.024, 0))
+	_part(root, bezel, Color("b09a67"), Vector3(0, 0.047, 0))
+	_part(root, dial, Color("c5c0a6"), Vector3(0, 0.049, 0))
+	_part(root, minute_hand, Color("554e38"), Vector3(-0.009, 0.06, -0.024), Vector3(0, 20, 0))
+	_part(root, hour_hand, Color("554e38"), Vector3(0.019, 0.06, 0.005), Vector3(0, -15, 0))
+	_part(root, winder, Color("927b4d"), Vector3(0, 0.029, -0.105), Vector3(90, 0, 0))
+	_part(root, top_loop, Color("a18b56"), Vector3(0, 0.029, -0.139))
+	_part(root, chain_link, Color("927b4d"), Vector3(0.018, 0.023, -0.169))
+	_part(root, chain_link, Color("927b4d"), Vector3(0.045, 0.032, -0.183))
+	_part(root, chain_link, Color("927b4d"), Vector3(0.07, 0.023, -0.193))
+	_part(root, chain_link, Color("927b4d"), Vector3(0.095, 0.032, -0.19))
+	_part(root, chain_link, Color("927b4d"), Vector3(0.117, 0.023, -0.174))
+	_part(root, chain_link, Color("927b4d"), Vector3(0.129, 0.032, -0.15))
+	_part(root, chain_link, Color("927b4d"), Vector3(0.134, 0.023, -0.124))
+	_part(root, chain_link, Color("927b4d"), Vector3(0.129, 0.032, -0.098))
+
+
+## An open shallow sewing tin, with three coloured spools and two silver scissor handle loops.
+static func _sewing_kit(root: Node3D) -> void:
+	var lid_frame: Node3D = Node3D.new()
+	lid_frame.position = Vector3(0, 0.135505, -0.113809)
+	lid_frame.rotation_degrees = Vector3(65, 0, 0)
+	root.add_child(lid_frame)
+	var tin: BoxMesh = BoxMesh.new()
+	tin.size = Vector3(0.24, 0.06, 0.16)
+	var inside: BoxMesh = BoxMesh.new()
+	inside.size = Vector3(0.216, 0.012, 0.136)
+	var rim_side: BoxMesh = BoxMesh.new()
+	rim_side.size = Vector3(0.012, 0.018, 0.16)
+	var rim_front: BoxMesh = BoxMesh.new()
+	rim_front.size = Vector3(0.24, 0.018, 0.012)
+	var lid: BoxMesh = BoxMesh.new()
+	lid.size = Vector3(0.24, 0.014, 0.16)
+	var hinge: CylinderMesh = CylinderMesh.new()
+	hinge.top_radius = 0.008
+	hinge.bottom_radius = 0.008
+	hinge.height = 0.24
+	hinge.radial_segments = 12
+	var spool: CylinderMesh = CylinderMesh.new()
+	spool.top_radius = 0.027
+	spool.bottom_radius = 0.027
+	spool.height = 0.054
+	spool.radial_segments = 12
+	var spool_end: CylinderMesh = CylinderMesh.new()
+	spool_end.top_radius = 0.032
+	spool_end.bottom_radius = 0.032
+	spool_end.height = 0.012
+	spool_end.radial_segments = 12
+	var scissor_grip: TorusMesh = TorusMesh.new()
+	scissor_grip.inner_radius = 0.012
+	scissor_grip.outer_radius = 0.026
+	scissor_grip.rings = 20
+	scissor_grip.ring_segments = 8
+	var scissor_blade: BoxMesh = BoxMesh.new()
+	scissor_blade.size = Vector3(0.012, 0.012, 0.068)
+
+	_part(root, tin, Color("7e8360"), Vector3(0, 0.03, 0))
+	_part(root, inside, Color("685f45"), Vector3(0, 0.064, 0))
+	_part(root, rim_side, Color("909b76"), Vector3(-0.12, 0.063, 0))
+	_part(root, rim_side, Color("909b76"), Vector3(0.12, 0.063, 0))
+	_part(root, rim_front, Color("909b76"), Vector3(0, 0.063, 0.08))
+	_part(lid_frame, lid, Color("7e8360"), Vector3(0, 0, 0))
+	_part(root, hinge, Color("909b76"), Vector3(0, 0.063, -0.08), Vector3(0, 0, 90))
+	_part(root, spool, Color("507a73"), Vector3(-0.067, 0.095, -0.005))
+	_part(root, spool, Color("965c49"), Vector3(0, 0.095, -0.005))
+	_part(root, spool, Color("a08d55"), Vector3(0.067, 0.095, -0.005))
+	_part(root, spool_end, Color("ac9772"), Vector3(-0.067, 0.07, -0.005))
+	_part(root, spool_end, Color("ac9772"), Vector3(-0.067, 0.128, -0.005))
+	_part(root, spool_end, Color("ac9772"), Vector3(0, 0.07, -0.005))
+	_part(root, spool_end, Color("ac9772"), Vector3(0, 0.128, -0.005))
+	_part(root, spool_end, Color("ac9772"), Vector3(0.067, 0.07, -0.005))
+	_part(root, spool_end, Color("ac9772"), Vector3(0.067, 0.128, -0.005))
+	_part(root, scissor_grip, Color("9baaa7"), Vector3(0.03, 0.079, 0.055))
+	_part(root, scissor_grip, Color("9baaa7"), Vector3(0.088, 0.079, 0.055))
+	_part(root, scissor_blade, Color("9baaa7"), Vector3(0.057, 0.076, 0.011), Vector3(0, 12, 0))
+
+
+## One coloured thread spool, a thick silver needle with an open eye and a loose strand.
+static func _needle(root: Node3D) -> void:
+	var spool: CylinderMesh = CylinderMesh.new()
+	spool.top_radius = 0.046
+	spool.bottom_radius = 0.046
+	spool.height = 0.1
+	spool.radial_segments = 16
+	var spool_end: CylinderMesh = CylinderMesh.new()
+	spool_end.top_radius = 0.052
+	spool_end.bottom_radius = 0.052
+	spool_end.height = 0.015
+	spool_end.radial_segments = 16
+	var needle: CylinderMesh = CylinderMesh.new()
+	needle.top_radius = 0.006
+	needle.bottom_radius = 0.006
+	needle.height = 0.22
+	needle.radial_segments = 10
+	var eye: TorusMesh = TorusMesh.new()
+	eye.inner_radius = 0.005
+	eye.outer_radius = 0.018
+	eye.rings = 20
+	eye.ring_segments = 8
+	var loose_thread: CapsuleMesh = CapsuleMesh.new()
+	loose_thread.radius = 0.007
+	loose_thread.height = 0.16
+	loose_thread.radial_segments = 12
+	loose_thread.rings = 6
+
+	_part(root, spool, Color("925c50"), Vector3(-0.055, 0.065, 0))
+	_part(root, spool_end, Color("a18b61"), Vector3(-0.055, 0.0075, 0))
+	_part(root, spool_end, Color("a18b61"), Vector3(-0.055, 0.1175, 0))
+	_part(root, needle, Color("9baaaa"), Vector3(-0.015, 0.165, 0.012), Vector3(0, 0, -20))
+	_part(root, eye, Color("9baaaa"), Vector3(0.027, 0.283, 0.012), Vector3(90, 0, 0))
+	_part(root, loose_thread, Color("925c50"), Vector3(0.055, 0.014, 0.052), Vector3(0, -10, 90))
+
+
+## A round-topped leather doctor's bag, one handle and brass clasps, with no emblem.
+static func _doctor_box(root: Node3D) -> void:
+	var body: BoxMesh = BoxMesh.new()
+	body.size = Vector3(0.235, 0.16, 0.14)
+	var rounded_top: CylinderMesh = CylinderMesh.new()
+	rounded_top.top_radius = 0.073
+	rounded_top.bottom_radius = 0.073
+	rounded_top.height = 0.235
+	rounded_top.radial_segments = 20
+	var handle: TorusMesh = TorusMesh.new()
+	handle.inner_radius = 0.032
+	handle.outer_radius = 0.049
+	handle.rings = 20
+	handle.ring_segments = 8
+	var clasp: BoxMesh = BoxMesh.new()
+	clasp.size = Vector3(0.025, 0.035, 0.016)
+	var top_seam: BoxMesh = BoxMesh.new()
+	top_seam.size = Vector3(0.235, 0.014, 0.016)
+
+	_part(root, body, Color("73553c"), Vector3(0, 0.08, 0))
+	_part(root, rounded_top, Color("73553c"), Vector3(0, 0.16, 0), Vector3(0, 0, 90))
+	var handle_part_1: MeshInstance3D = _part(root, handle, Color("624a35"), Vector3(0, 0.264, 0), Vector3(90, 0, 0))
+	handle_part_1.scale = Vector3(1.2, 1, 1)
+	_part(root, clasp, Color("a78b56"), Vector3(-0.055, 0.185, 0.075))
+	_part(root, clasp, Color("a78b56"), Vector3(0.055, 0.185, 0.075))
+	_part(root, top_seam, Color("624a35"), Vector3(0, 0.205, 0.045))
+
+
+## A green herb book with a thick paper block and a raised three-leaf cover motif.
+static func _book(root: Node3D) -> void:
+	var cover: BoxMesh = BoxMesh.new()
+	cover.size = Vector3(0.22, 0.016, 0.28)
+	var pages: BoxMesh = BoxMesh.new()
+	pages.size = Vector3(0.204, 0.06, 0.263)
+	var spine: BoxMesh = BoxMesh.new()
+	spine.size = Vector3(0.023, 0.086, 0.285)
+	var plant_stem: CylinderMesh = CylinderMesh.new()
+	plant_stem.top_radius = 0.006
+	plant_stem.bottom_radius = 0.006
+	plant_stem.height = 0.16
+	plant_stem.radial_segments = 10
+	var leaf: SphereMesh = SphereMesh.new()
+	leaf.radius = 0.033
+	leaf.height = 0.014
+	leaf.radial_segments = 16
+	leaf.rings = 8
+
+	_part(root, cover, Color("52734d"), Vector3(0, 0.008, 0))
+	_part(root, cover, Color("52734d"), Vector3(0, 0.084, 0))
+	_part(root, pages, Color("c2b99d"), Vector3(0, 0.046, 0))
+	_part(root, spine, Color("435d3e"), Vector3(-0.105, 0.047, 0))
+	_part(root, plant_stem, Color("91a16b"), Vector3(0, 0.095, 0.02), Vector3(90, 0, 0))
+	var leaf_part_1: MeshInstance3D = _part(root, leaf, Color("91a16b"), Vector3(-0.025, 0.094, -0.018), Vector3(0, -35, 0))
+	leaf_part_1.scale = Vector3(0.65, 1, 1.2)
+	var leaf_part_2: MeshInstance3D = _part(root, leaf, Color("91a16b"), Vector3(0.025, 0.094, 0.035), Vector3(0, 35, 0))
+	leaf_part_2.scale = Vector3(0.65, 1, 1.2)
+	var leaf_part_3: MeshInstance3D = _part(root, leaf, Color("91a16b"), Vector3(-0.018, 0.094, 0.076), Vector3(0, -25, 0))
+	leaf_part_3.scale = Vector3(0.65, 1, 1.2)
