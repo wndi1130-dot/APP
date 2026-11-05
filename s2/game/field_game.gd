@@ -354,7 +354,15 @@ var lure_marks: Array = []
 var body_searches: Array = []
 var cam_focus := Vector3.ZERO
 var cam_push := Vector3.ZERO
-var cam_size: float = 24.0
+## 고른 줌은 저장되는 바탕값이며, 자동 줌은 이 값을 덮어쓰지 않는다.
+var cam_size: float = 20.0
+const CAM_LOOT_SIZE: float = 18.0
+const CAM_THREAT_SIZE: float = 22.0
+const CAM_THREAT_RADIUS: float = 15.0
+const CAM_RETURN_DELAY: float = 3.0
+var _cam_had_threat: bool = false
+var _cam_return_at: float = -INF
+var _cam_zoom_clock: float = -INF
 var zone_now: String = ""
 var auto_paused_once: bool = false
 var flash_t: float = 0.0
@@ -684,6 +692,8 @@ func _ready() -> void:
 	# Coming back to a stop left mid-play (S3 spec 4): only when the start hands a save over.
 	if opts.get("field_resume") is Dictionary:
 		FieldSave.apply(self, opts["field_resume"])
+		# 저장된 바탕 줌은 보존하고, 복원 전 장면의 복귀 대기만 버린다.
+		_reset_camera_zoom()
 		# A version-1 save kept no guard state: the brakes were heard before it was left.
 		if not FieldSave.exact(opts["field_resume"]):
 			train_guard.resumed()
@@ -3331,19 +3341,69 @@ func _open_room() -> Rect2i:
 	return bv.footprints[bv.open_b]
 
 
+## 시계와 장면에 손대지 않는 목표 판정. 뒤지기 창이 먼저다.
+static func camera_zoom_target(base_size: float, loot_open: bool, dead_near: bool, now: float, return_at: float) -> float:
+	if loot_open:
+		return minf(base_size, CAM_LOOT_SIZE)
+	if dead_near or now < return_at:
+		return maxf(base_size, CAM_THREAT_SIZE)
+	return base_size
+
+
+func _reset_camera_zoom() -> void:
+	_cam_had_threat = false
+	_cam_return_at = -INF
+	_cam_zoom_clock = -INF
+
+
+func _camera_loot_open() -> bool:
+	return hud != null and hud.modal_open and is_instance_valid(hud.box_pane) and hud.modal == hud.box_pane
+
+
+## nearest는 층을 거르지 않고 음악 상태는 숨은 망자를 제외한다.
+## 기존 목록에서 거리 제곱만 검사하며 첫 일치에서 끝낸다. 시야는 읽지 않는다.
+func _camera_dead_near() -> bool:
+	if zombies == null or player == null:
+		return false
+	var at := player.position
+	var lv := level_of(at)
+	for z: Dictionary in zombies.list:
+		if not zombies.threat(z):
+			continue
+		var pos: Vector3 = z["pos"]
+		if level_of(pos) == lv and at.distance_squared_to(pos) <= CAM_THREAT_RADIUS * CAM_THREAT_RADIUS:
+			return true
+	return false
+
+
+func _camera_target_size() -> float:
+	var now := clock.elapsed
+	if now < _cam_zoom_clock:
+		_reset_camera_zoom()
+	_cam_zoom_clock = now
+	var dead_near := _camera_dead_near()
+	if _cam_had_threat and not dead_near:
+		_cam_return_at = now + CAM_RETURN_DELAY
+	_cam_had_threat = dead_near
+	return camera_zoom_target(cam_size, _camera_loot_open(), dead_near, now, _cam_return_at)
+
+
 func _update_camera(delta: float) -> void:
+	var target_size := _camera_target_size()
 	var focus := player.position + cam_push
 	# The view ends inside the woods round the map, never past them (edge_band.gd).
 	var screen := get_viewport().get_visible_rect().size
 	var aspect := screen.x / maxf(screen.y, 1.0)
-	focus = EdgeBand.clamp_focus(focus, EdgeBand.view_half(cam_size, aspect, CAM_PITCH, CAM_YAW), grid.width, grid.height)
-	focus = EdgeBand.keep_on_screen(focus, player.position, cam_size, aspect, CAM_PITCH, CAM_YAW)
+	focus = EdgeBand.clamp_focus(focus, EdgeBand.view_half(target_size, aspect, CAM_PITCH, CAM_YAW), grid.width, grid.height)
+	focus = EdgeBand.keep_on_screen(focus, player.position, target_size, aspect, CAM_PITCH, CAM_YAW)
 	cam_focus = cam_focus.lerp(focus, clampf(delta * 4.0, 0.0, 1.0))
 	if map_edge != null:
 		map_edge.set_eye(player.position)
 		map_edge.set_room(_open_room())
 	_set_sight_round()
-	camera.size = lerpf(camera.size, cam_size, clampf(delta * 6.0, 0.0, 1.0))
+	camera.size = lerpf(camera.size, target_size, clampf(delta * 6.0, 0.0, 1.0))
+	# 크기와 초점의 보간 속도가 달라도 현재 화면과 목표 화면 모두에 대장을 둔다.
+	cam_focus = EdgeBand.keep_on_screen(cam_focus, player.position, minf(target_size, camera.size), aspect, CAM_PITCH, CAM_YAW)
 	var back := cam_back() * 60.0
 	# A blow's kick moves the eye, not the place it follows (hit_feel.gd).
 	var kick: Vector3 = feel.camera_offset() * camera.size if feel != null else Vector3.ZERO
