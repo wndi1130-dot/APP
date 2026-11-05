@@ -805,16 +805,29 @@ void fragment() {
 	// bank above is the windward side only): a strip up to most of a metre out, its edge broken
 	// by the drift noise so it is no stencil line, less where this map's snow has melted
 	// (local_snow) and none on a stop with no snow. After the paving is cleared, before the
-	// footprints (weather_fx 17장).
-	float heaped = smoothstep(0.1, 0.5, local_snow) * smoothstep(0.6, 0.9, up);
-	float pile = smoothstep(0.2, 0.65, foot + 0.6 * (drift - 0.5));
-	if (kind == 1 && ground_detail > -0.5) {
+	// footprints (weather_fx 17장). Gated like the snow above: none under a roof (sky) nor on a
+	// saturated thing (chroma), and only along a wall: the noise breaks the strip's edge but
+	// makes none where no wall stands (foot 0).
+	float heaped = smoothstep(0.1, 0.5, local_snow) * smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
+	// A road cell's kerb (its detail code's bits 1-8; 512 marks a narrow footway, kerbless): how
+	// far this point lies from it, read once for the snow strip here and the leaf in the gutter
+	// below, and only when one of them is drawn.
+	bool kerbed = false;
+	float kerb_d = 1.0;
+	if (kind == 1 && ground_detail > -0.5 && (heaped > 0.001 || fx_cold.w > 0.01)) {
 		int kerb_bits = int(ground_detail + 0.5);
-		if ((kerb_bits & 512) == 0) {
-			pile = max(pile, 1.0 - smoothstep(0.15, 0.4, kerb_distance(kerb_bits, fract(world_pos.xz)) + 0.2 * (drift - 0.5)));
+		kerbed = (kerb_bits & 512) == 0;
+		if (kerbed) {
+			kerb_d = kerb_distance(kerb_bits, fract(world_pos.xz));
 		}
 	}
-	cover = max(cover, 0.85 * pile * heaped);
+	if (heaped > 0.001) {
+		float pile = smoothstep(0.2, 0.65, foot + 0.6 * (drift - 0.5)) * smoothstep(0.0, 0.15, foot);
+		if (kerbed) {
+			pile = max(pile, 1.0 - smoothstep(0.15, 0.4, kerb_d + 0.2 * (drift - 0.5)));
+		}
+		cover = max(cover, 0.85 * pile * heaped);
+	}
 	cover *= 1.0 - 0.9 * trodden;
 	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);
 	// The ground before the snow: what a frozen pool shows through its ice.
@@ -855,11 +868,9 @@ void fragment() {
 		float heap = smoothstep(0.5, 0.64, drift) * (0.6 + 0.4 * fx_vnoise(world_pos.xz * 1.1 + 3.0));
 		// A street's wheels sweep its leaf into the gutter (T0-4): on asphalt a drift lies only
 		// along the kerb, so the street reads as one grey and not as leaf blotches.
-		if (kind == 1 && ground_detail > -0.5) {
-			int road_bits = int(ground_detail + 0.5);
-			if ((road_bits & 512) == 0) {
-				heap *= 1.0 - smoothstep(0.2, 0.45, kerb_distance(road_bits, fract(world_pos.xz)));
-			}
+		// (kerb_d above: read whenever fx_cold.w > 0.01, which this branch implies.)
+		if (kerbed) {
+			heap *= 1.0 - smoothstep(0.2, 0.45, kerb_d);
 		}
 		float leaf = fx_cold.w * level_k * heap * (0.55 + 0.45 * smoothstep(0.4, 0.65, grain.g));
 		vec3 leaf_col = mix(vec3(0.24, 0.15, 0.08), vec3(0.55, 0.34, 0.15), clamp((grain.g - 0.3) * 1.8, 0.0, 1.0));
