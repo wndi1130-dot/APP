@@ -487,7 +487,8 @@ func _ready() -> void:
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
 	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script, region) if map_script != null else FieldMaps.build(place, region)
 	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary else fresh_map.call()
-	if not MapBounds.can_reuse(stop_map, int(opts.get("bounds_rule", -1))):
+	var side_path_rule: int = int(opts.get("side_path_rule", SidePath.RULE))
+	if not MapBounds.can_reuse(stop_map, int(opts.get("bounds_rule", -1))) or ((stop_map.has("side_path") or stop_map.has("_side_seed")) and int(stop_map.get("side_path_rule", 0)) != side_path_rule):
 		stop_map = fresh_map.call()
 	var ground_form := String(opts.get("stop_ground", opts.get("stop_form", "")))
 	var ground_m := float(opts.get("stop_form_m", -1.0))
@@ -498,7 +499,7 @@ func _ready() -> void:
 	if opts.has("stop_view_rows") or opts.has("stop_view_cols"):
 		stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)),
 			ground_form, rng.seed, ground_m, fresh_map, end_gap)
-	stop_map = with_side_path(stop_map, rng.seed)
+	stop_map = with_side_path(stop_map, rng.seed, side_path_rule)
 	_take_map(MapBounds.apply(stop_map, int(opts.get("bounds_rule", -1))))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
@@ -1688,8 +1689,8 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 ## and as it can grow the map, shift it and put its store on it, what the loader made
 ## ahead from the map as it was no longer fits: dropped first (a shift would move it
 ## all), made again from the map as it is now.
-static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
-	if map.has("bounds_stamp") and map.has("_side_seed") and int(map["_side_seed"]) == run_seed:
+static func with_side_path(map: Dictionary, run_seed: int, side_path_rule: int = SidePath.RULE) -> Dictionary:
+	if map.has("bounds_stamp") and map.has("_side_seed") and int(map["_side_seed"]) == run_seed and int(map.get("side_path_rule", 0)) == side_path_rule:
 		return map
 	var place_id := String(map.get("place_id", ""))
 	if StoryMaps.is_story(place_id):
@@ -1697,7 +1698,7 @@ static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
 	if not map.has("side_path") and place_id not in ["", SidePath.FIRST_STOP] and SidePath.rolls(place_id, run_seed):
 		for key in AHEAD_KEYS:
 			map.erase(key)
-	return SidePath.add(map, run_seed)
+	return SidePath.add(map, run_seed, side_path_rule)
 
 
 ## A handed view is reusable only on the requested rows and columns.

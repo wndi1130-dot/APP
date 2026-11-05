@@ -12,6 +12,80 @@ const S = Grid.Solid
 const PLACE := "houses_01"
 
 
+## 끝의 두 칸만 열어 빈터 a=40 한 자리만 가능하게 한 손 지도. 문에서 91칸.
+func _entry_gap_map(side: int, entry_u: int) -> Dictionary:
+	var g := Grid.new(96, 96)
+	for u: int in range(96):
+		for edge: int in range(4):
+			g.set_solid(SidePath._at(g, edge, u, 0), S.BLOCK)
+	for u: int in [45, 46]:
+		g.set_solid(SidePath._at(g, side, u, 0), S.NONE)
+	var start := SidePath._at(g, side, 45, 91)
+	return {"grid": g, "train": Rect2i(start, Vector2i.ONE),
+		"spawns": {"train_door": [start]}, "entries": {"horde": [SidePath._at(g, side, entry_u, 0)]}}
+
+
+func test_entry_protection_needs_eight_clear_cells_on_either_side() -> void:
+	# a=40의 보호는 [37,54], 진입 칸 보호는 [u-6,u+6]. 네 방향 모두 같은 판정.
+	for side: int in range(4):
+		for u: int in [23, 68, 45]:  # 빈 칸 7개 또는 보호끼리 겹침
+			var blocked: Dictionary = SidePath.pick(_entry_gap_map(side, u), SidePath._rng("gap-test", 1))
+			assert_true(blocked.is_empty(), "side=%d entry=%d" % [side, u])
+		for u: int in [22, 69, 21, 70]:  # 정확히 8개 및 9개: 경계값을 넓혀 거절하지 않는다.
+			var allowed: Dictionary = SidePath.pick(_entry_gap_map(side, u), SidePath._rng("gap-test", 1))
+			assert_eq(int(allowed.get("side", -1)), side)
+			assert_eq(int(allowed.get("along", -1)), 40)
+
+
+func test_rule_zero_keeps_the_legacy_candidate_and_random_draw() -> void:
+	for side: int in range(4):
+		for u: int in [23, 68, 35, 56]:  # 옛 제외 구간 [36,56) 밖은 여전히 a=40.
+			var rng := SidePath._rng("gap-test", 1)
+			var expected_rng := SidePath._rng("gap-test", 1)
+			expected_rng.randi_range(0, 0)
+			var spot: Dictionary = SidePath.pick(_entry_gap_map(side, u), rng, 0)
+			assert_eq(int(spot.get("side", -1)), side)
+			assert_eq(int(spot.get("along", -1)), 40)
+			assert_almost_eq(float(spot.get("seconds", -1.0)), 43.3, 0.001)
+			assert_eq(rng.state, expected_rng.state, "옛 후보 선택의 난수 한 번")
+		for u: int in [36, 55]:
+			assert_true(SidePath.pick(_entry_gap_map(side, u), SidePath._rng("gap-test", 1), 0).is_empty())
+
+
+## 빈터 a=40(진입 u=23과 빈 칸 7개 — 판 1에선 붙음, 판 0에선 됨)과 a=70(떨어짐) 두 자리.
+func _two_lot_map(side: int) -> Dictionary:
+	var d := _entry_gap_map(side, 23)
+	var g: Grid = d["grid"]
+	for u: int in [75, 76]:
+		g.set_solid(SidePath._at(g, side, u, 0), S.NONE)
+	return d
+
+
+func test_rule_one_keeps_the_old_spot_when_it_is_clear_and_redraws_only_when_it_is_not() -> void:
+	for side: int in range(4):
+		var kept := 0
+		var redrawn := 0
+		for s: int in range(1, 41):
+			var old_rng := SidePath._rng("keep-test", s)
+			var old: Dictionary = SidePath.pick(_two_lot_map(side), old_rng, 0)
+			var rng := SidePath._rng("keep-test", s)
+			var spot: Dictionary = SidePath.pick(_two_lot_map(side), rng, 1)
+			assert_eq(int(old.get("side", -1)), side)
+			if int(old.get("along", -1)) == 70:
+				kept += 1
+				assert_eq(spot, old, "side=%d seed=%d: 떨어진 옛 자리는 그대로" % [side, s])
+				assert_eq(rng.state, old_rng.state, "옛 판과 같은 난수 경로")
+			else:
+				redrawn += 1
+				assert_eq(int(old.get("along", -1)), 40)
+				assert_eq(int(spot.get("side", -1)), side)
+				assert_eq(int(spot.get("along", -1)), 70, "side=%d seed=%d: 붙은 옛 자리만 다시 고름" % [side, s])
+				var expected_rng := SidePath._rng("keep-test", s)
+				expected_rng.randi_range(0, 0)
+				assert_eq(rng.state, expected_rng.state, "되돌린 뒤 걸러진 후보 하나에서 한 번")
+		assert_true(kept > 0 and redrawn > 0, "side=%d: 두 갈래 모두 탐 kept=%d redrawn=%d" % [side, kept, redrawn])
+
+
 ## The first run seed that gives the place a side path.
 func _with_path(place: String = PLACE) -> Array:
 	for s in range(1, 200):

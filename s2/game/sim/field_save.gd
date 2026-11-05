@@ -29,12 +29,13 @@ const FieldWork = preload("res://game/field_work.gd")
 const Sled = preload("res://game/sim/sled.gd")
 const SLED_PERSON_FIELDS: Array[String] = ["sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_rearm_t", "sled_serial", "sled_job"]
 const StopGround = preload("res://game/world/stop_ground.gd")
+const SidePath = preload("res://game/world/side_path.gd")
 
 ## Keys that hold a place in the field: [x, y, z] in the file, Vector3 here.
 const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
 const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap",
-	"stop_view_rows", "stop_view_cols", "stop_view_rule", "bounds_rule"]
+	"stop_view_rows", "stop_view_cols", "stop_view_rule", "bounds_rule", "side_path_rule"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
@@ -112,6 +113,7 @@ static func capture(game) -> Dictionary:
 		"stop_form": game.stop_form, "stop_ground": String(game.data.get("stop_form", "")),
 		"stop_end_gap": int(game.data.get("stop_end_gap", -1)),
 		"bounds_rule": int(game.data.get("bounds_stamp", 0)),
+		"side_path_rule": int(game.data.get("side_path_rule", game.opts.get("side_path_rule", SidePath.RULE))),
 		"stop_view_rows": int(game.data.get("stop_view_rows", 0)),
 		"stop_view_cols": int(game.data.get("stop_view_cols", 0)),
 		"stop_view_rule": int(game.data.get("stop_view_rule", 0)),
@@ -262,6 +264,8 @@ static func _counts(d: Dictionary) -> bool:
 static func _whole(d: Dictionary) -> bool:
 	if d.has("bounds_rule") and not _valid_bounds_rule(d["bounds_rule"]):
 		return false
+	if d.has("side_path_rule") and not _valid_side_path_rule(d["side_path_rule"]):
+		return false
 	if not _fields(d, {"clock": TYPE_DICTIONARY, "coal": TYPE_DICTIONARY}, {
 		"people": TYPE_ARRAY, "zombies": TYPE_ARRAY, "ground_items": TYPE_ARRAY,
 		"containers": TYPE_DICTIONARY, "spots": TYPE_DICTIONARY, "ammo": TYPE_DICTIONARY, "unloaded": TYPE_DICTIONARY,
@@ -305,6 +309,11 @@ static func _whole(d: Dictionary) -> bool:
 	if not _whole_departure(opts.get("departure", {}) if departure.is_empty() else departure):
 		return false
 	return not exact(d) or _whole_runtime(d)
+
+
+static func _valid_side_path_rule(value: Variant) -> bool:
+	# JSON의 정수 float도 허용하되 아직 없는 배치 판은 다른 지도로 복원하지 않는다.
+	return _valid_bounds_rule(value) and value <= SidePath.RULE
 
 
 static func _valid_bounds_rule(value: Variant) -> bool:
@@ -465,6 +474,7 @@ static func resume_opts(save: Dictionary) -> Dictionary:
 	opts["place"] = String(save.get("place", ""))
 	opts["mission"] = String(save.get("mission", ""))
 	opts["bounds_rule"] = int(save.get("bounds_rule", 0))
+	opts["side_path_rule"] = int(save.get("side_path_rule", 0))
 	if save.has("stop_form"):
 		opts["stop_form"] = save["stop_form"]
 	# The ground goes up as the save stood on it (field_game.gd shape_stop). One from before
