@@ -68,6 +68,8 @@ const ICON_ALIAS: Dictionary = {
 	# The herbal's line icon "book" is also the plain book's id (its picture is it_book).
 	"book": "herbal_book",
 }
+## art_texture's answers, misses included: (id + "|" + icon) -> Texture2D or null.
+static var _art_found: Dictionary = {}
 ## The places rail shows five keys at most, then scrolls, fading at its foot while
 ## more lie below (MORE_H); a short screen cuts it sooner.
 const RAIL_MAX: float = PLACE_H * 5.0 + 4.0 * 4.0
@@ -1170,15 +1172,26 @@ static func _item_icon(hud, id: String) -> Control:
 
 
 ## The thing's baked picture (res://assets/icons/items/<id>.png, or the one it
-## shares, ART_ALIAS, or the one baked for its line icon's name or that icon's
-## ICON_ALIAS — the things drawn with one line picture share one bake), null
-## without one. Its own picture wins over a shared one.
+## shares, ART_ALIAS, or its line icon's — ICON_ALIAS first when the icon has
+## one, then the one baked under the icon's own name; the things drawn with one
+## line picture share one bake), null without one. Its own picture wins over a
+## shared one. Each (id, icon) is looked up once (the pane redraws its rows often).
 static func art_texture(id: String, icon: String = "") -> Texture2D:
-	for name: String in [id, String(ART_ALIAS.get(id, "")), icon, String(ICON_ALIAS.get(icon, ""))]:
+	var key: String = id + "|" + icon
+	if _art_found.has(key):
+		return _art_found[key] as Texture2D
+	var found: Texture2D = null
+	var tried: Dictionary = {}
+	for name: String in [id, String(ART_ALIAS.get(id, "")), String(ICON_ALIAS.get(icon, "")), icon]:
+		if name == "" or tried.has(name):
+			continue
+		tried[name] = true
 		var path: String = "res://assets/icons/items/%s.png" % name
-		if name != "" and ResourceLoader.exists(path):
-			return load(path) as Texture2D
-	return null
+		if ResourceLoader.exists(path):
+			found = load(path) as Texture2D
+			break
+	_art_found[key] = found
+	return found
 
 
 ## Painted art, not pixel art: wide enough to be shrunk smooth.

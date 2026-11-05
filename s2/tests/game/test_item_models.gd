@@ -69,7 +69,8 @@ func test_all_new_models_have_grounded_geometry_and_muted_materials() -> void:
 		if have_bounds:
 			for axis: int in 3:
 				assert_between(combined.size[axis], 0.06, 0.6, key + " axis " + str(axis) + " in metres")
-			assert_gte(combined.position.y, -0.01, key + " rests at y = 0")
+			# Foot on y = 0: neither sunk under it nor floating above it.
+			assert_between(combined.position.y, -0.01, 0.01, key + " rests at y = 0")
 		model.free()
 
 
@@ -117,3 +118,15 @@ func _collect_meshes(node: Node, parent_pose: Transform3D, parts: Array[Dictiona
 		parts.append({"instance": node, "pose": pose})
 	for child: Node in node.get_children():
 		_collect_meshes(child, pose, parts)
+
+
+## The bake tool reads a model's vertex colours only when its file defines no
+## materials (it is painted that way); a file with materials keeps them as made.
+func test_bake_reads_vertex_colours_only_for_files_without_materials() -> void:
+	var bake: Script = load("res://tools/icon_bake.gd") as Script
+	assert_true(bake.call("_paints_with_vertex_colours", "res://models/props_field/tin_crate.glb"), "no materials, COLOR_0 only")
+	assert_true(bake.call("_paints_with_vertex_colours", "res://models/train_interior/bell.glb"))
+	assert_false(bake.call("_paints_with_vertex_colours", "res://models/items/kenney_survival/fish.glb"), "its colour map material")
+	assert_false(bake.call("_paints_with_vertex_colours", "res://models/weapons/axe.glb"), "a textured model")
+	assert_false(bake.call("_paints_with_vertex_colours", "res://models/no_such_model.glb"))
+	assert_false(bake.call("_paints_with_vertex_colours", "res://tools/item_models.gd"), "not a glTF file")
