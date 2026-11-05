@@ -5,6 +5,9 @@ import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { cancelRestore, runWorkshop, startRestore, workPower } from '../src/game/domestic/workshop';
 import { pipePending, ratifyPipe } from '../src/game/domestic/pipe';
+import { contentPool } from '../src/game/content';
+import { enableEventPack } from '../src/game/event_pack';
+import { loadContentEvents } from './content_fs';
 import { assertNoSuppliesHooks, projectDom, relations, restorationBoard, restoreStats } from './restore_port_fixture_helpers';
 assertNoSuppliesHooks();
 import { dirname, resolve } from 'node:path';
@@ -19,7 +22,12 @@ import { createS1cGame } from '../src/game/domestic/state';
 import { council } from './law_port_fixtures';
 import { tables } from './turn_port_fixtures';
 
+// S2 always has the content events (content_events.json, made by content_port.ts from the same files);
+// the pipe-settle sequences run on to the next stretch's travel draw, which reads them.
+loadContentEvents();
 const FORMAT = 'lawtech-vectors-v1';
+// mulberry32: each draw adds this to the state (s1/src/core/rng.ts STATE_INCREMENT).
+const RNG_INC = 0x6d2b79f5;
 const SEEDS = ['lawtech-0', 'lawtech-1'];
 const PROFILES = 60;
 const LIMIT = 8 * 1024 * 1024;
@@ -121,7 +129,8 @@ function lawCase(g: Game) {
 }
 
 type Action = { kind: 'enact' | 'repeal'; law: LawId }
-  | { kind: 'cast_vote' | 'cancel_restore' | 'advance' }
+  | { kind: 'cast_vote' | 'cancel_restore' | 'achieved_pool' }
+  | { kind: 'advance'; departRollRewound?: boolean }
   | { kind: 'start_restore'; id: TechId; mode: 'full' | 'defect'; variant?: Variant }
   | { kind: 'open_pipe_vote' | 'ratify_pipe'; passed: boolean }
   | { kind: 'run_workshop'; workDebt?: number };
@@ -171,6 +180,9 @@ function pipeSequences() {
     g.phase = 'council'; g.cards = []; g.proposals = []; g.council = null;
     g.coal = g.food = g.med = 1000;
     g.passed[activeLaw] = 0;
+    // 정산 시퀀스는 다음 구간의 이동 사건 뽑기까지 간다. S2 게임 판은 새 사건 묶음을 켜고(slice_flow.gd
+    // eventPack), 「이룬 뒤」 사건(ev_b01_*, 깃발 ev_achieved)은 그 묶음에만 있다.
+    if (name.startsWith('pipe-settle/')) enableEventPack(g);
     const initial = s2State(g), steps: unknown[] = [];
     const step = (action: Action, f: () => unknown) => {
       assertNoSuppliesHooks(g);
@@ -276,6 +288,28 @@ function pipeSequences() {
           assert.ok(g.lastSettle); assert.equal(g.lastSettle.coal, g.coal - coal); assert.equal(g.lastSettle.food, g.food - food);
           assert.equal(g.coal, coal - forecast.coal); assert.equal(g.food, food - forecast.food);
           assertOnce();
+          // 설계 10-7: 깃발을 실제 사건 뽑기가 읽는 때까지 잇는다 — 다음 구간으로 넘어가(nextSegment) 출발하며
+          // 이동 사건을 뽑는 데(depart → drawTravelEvent)까지. 뽑기 바로 앞의 「이룬 뒤」 사건 풀을 단계로 남기고,
+          // 가결 판엔 그런 사건이 들고 부결 판엔 없는지 여기서 확인한다(양쪽 다 없어 통과하는 표본을 막음).
+          step({ kind: 'advance' }, () => S1.advance(g));
+          assert.equal(g.phase, 'prep'); assert.equal(g.seg, seg + 1);
+          const gated = step({ kind: 'achieved_pool' }, () => contentPool(g)
+            .filter(ev => ev.trigger.some(c => c.type === 'flag' && c.id === 'ev_achieved')).map(ev => ev.id)) as string[];
+          assert.equal(gated.length > 0, passed, passed ? '가결 판인데 「이룬 뒤」 사건이 풀에 없음' : '부결 판인데 「이룬 뒤」 사건이 풀에 있음');
+          assert.equal(S1.primaryAction(g).ok, true, '출발할 수 없는 입력');
+          // 뽑힌 카드까지 S2와 대조하려고(코디 11-1 덧붙임): S1 출발의 내정 훅(domesticDepart)은 기관 고장 판정에
+          // 난수를 한 번 쓰는데 S2엔 그 훅이 아직 없다(turn_travel.gd 「내정 훅 자리」). 생성기에서만 출발 직전
+          // 상태를 증분 하나 되돌려, 그 판정이 되돌린 몫을 쓰고 사건 뽑기는 S2와 같은 상태에서 돌게 한다.
+          // 게임 코드는 그대로이고, 판정이 고장을 내거나 다른 난수가 끼면 멈춘다.
+          const s0 = g.rng.state, breakdowns = g.dom!.stats.breakdowns ?? 0;
+          step({ kind: 'advance', departRollRewound: true }, () => {
+            g.rng = { algorithm: 'mulberry32-v1', state: (s0 - RNG_INC) >>> 0 };
+            S1.advance(g);
+          });
+          assert.equal(g.rng.state, (s0 + RNG_INC) >>> 0, '출발 난수가 고장 판정 하나 + 사건 뽑기 하나가 아님');
+          assert.equal(g.dom!.stats.breakdowns ?? 0, breakdowns, '되돌린 판정이 고장을 냄');
+          assert.equal(g.phase, 'travel'); assert.equal(g.seg, seg + 1);
+          assert.ok(g.cards.length > 0, '출발에서 뽑힌 카드가 없음');
         }, (passed ? variant : variant === 'a' ? 'b' : 'a') === 'a' ? 'common_heating' : 'heat_quota');
       }
   // need - 1e-9는 공방의 실제 작업량을 조절해 만든다(진행 결과를 직접 대입하지 않음).

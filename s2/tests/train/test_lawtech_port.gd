@@ -163,7 +163,8 @@ func _without_shop_receipt(g: Dictionary, at: String) -> Dictionary:
 	if not settle is Dictionary or not (settle as Dictionary).has("workshop"):
 		return g
 	var shop: Variant = settle["workshop"]
-	assert_true(shop is Dictionary and shop.get("events") is Array and int(shop.get("seg", -1)) == int(g["seg"]), at + " shop receipt")
+	# Made at a settle of this stretch, kept through the next stretch's start until the next settle.
+	assert_true(shop is Dictionary and shop.get("events") is Array and int(shop.get("seg", -1)) >= 1 and int(shop.get("seg", -1)) <= int(g["seg"]), at + " shop receipt")
 	var out: Dictionary = g.duplicate(true)
 	out["lastSettle"].erase("workshop")
 	return out
@@ -180,7 +181,7 @@ func test_pipe_restart_matrix_settle_boundary_sequences_match_s1_whole_boards() 
 		for step: Dictionary in row["steps"]:
 			var action: Dictionary = step["action"]
 			var at: String = String(row["name"]) + "/" + String(action["kind"])
-			_same(RestoreVectors.project(step["before"]), g, at + " input")
+			_same(RestoreVectors.project(step["before"]), _without_shop_receipt(g, at + " input"), at + " input")
 			var value: Variant = null
 			match String(action["kind"]):
 				"start_restore": value = Research.start_restore(g, String(action["id"]), String(action["mode"]), action.get("variant"))
@@ -205,6 +206,14 @@ func test_pipe_restart_matrix_settle_boundary_sequences_match_s1_whole_boards() 
 						var worked: Dictionary = Workshop.run(g, t)
 						value = {"used": worked["used"], "did": worked["did"]}
 				"advance": g = Advance.advance(g, t)
+				"achieved_pool":
+					# Design 10-7: the travel events that need the ratification flag, as the next stretch's
+					# departure is about to draw (S1 contentPool, recorded by the generator).
+					var gated: Array = []
+					for ev: Dictionary in Content.content_pool(g, t):
+						if (ev["trigger"] as Array).any(func(c: Dictionary) -> bool: return c.get("type") == "flag" and c.get("id") == "ev_achieved"):
+							gated.append(String(ev["id"]))
+					value = gated
 				_: fail_test("Unknown pipe action: " + str(action))
 			_same(step["result"], value, at + " returned value")
 			if action["kind"] == "advance":
@@ -213,6 +222,14 @@ func test_pipe_restart_matrix_settle_boundary_sequences_match_s1_whole_boards() 
 			_same(RestoreVectors.project(step["after"]), _without_shop_receipt(g, at), at + " whole board")
 			assert_true(Dom.is_store(g["dom"]), at + " store")
 		if String(row["name"]).begins_with("pipe-settle/"):
+			# The sequence reaches the next stretch's departure draw: a card is on the table, and a
+			# passed ratification put the flagged events in the pool where a rejected one did not.
+			assert_eq(g["phase"], "travel", String(row["name"]) + " reaches the next travel draw")
+			assert_false((g["cards"] as Array).is_empty(), String(row["name"]) + " departure drew a card")
+			var pools: Array = (row["steps"] as Array).filter(func(s: Dictionary) -> bool: return s["action"]["kind"] == "achieved_pool")
+			assert_eq(pools.size(), 1, String(row["name"]) + " one pool step")
+			if pools.size() == 1:
+				assert_eq((pools[0]["result"] as Array).is_empty(), not String(row["name"]).contains("passed=true"), String(row["name"]) + " flagged events in the pool only after a passed vote")
 			var expected_achievement: bool = bool(row["steps"][-1]["after"].get("contentFlags", {}).get("ev_achieved", false))
 			var content_probe: Dictionary = g.duplicate(true)
 			assert_eq(Content.holds(content_probe, t, {"type": "flag", "id": "ev_achieved", "value": true}), expected_achievement, "content reads the ratification flag after settlement")
