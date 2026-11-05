@@ -807,10 +807,14 @@ func test_k5_side_path_absent_present_and_north_west_shift() -> void:
 	for side: int in [0, 3]:
 		var probe: Dictionary = _copy_map(cores[1])
 		var pg: Grid = probe["grid"]
+		var steered: Dictionary = {}
 		for other: int in 4:
 			if other == side: continue
 			var length: int = pg.height if other % 2 == 1 else pg.width
-			for along: int in range(length): pg.set_solid(Side._at(pg, other, along, 0), Grid.Solid.BLOCK)
+			for along: int in range(length):
+				var edge_cell: Vector2i = Side._at(pg, other, along, 0)
+				if not steered.has(edge_cell): steered[edge_cell] = pg.solid[pg.index(edge_cell)]
+				pg.set_solid(edge_cell, Grid.Solid.BLOCK)
 		# 열린 통로 100m는 40~60초의 실제 선택 범위 안이다.
 		for along: int in range(34, 54):
 			for depth: int in range(101):
@@ -828,6 +832,13 @@ func test_k5_side_path_absent_present_and_north_west_shift() -> void:
 		var shift: Vector2i = Vector2i(Side.STRIP, 0) if side == 3 else Vector2i(0, Side.STRIP)
 		probe = Side.add(probe, present_seed)
 		assert_eq(int(probe.get("side_path", {}).get("side", -1)), side, "실제 Side.add 방향")
+		# 다른 세 변 끝 줄의 BLOCK은 샛길 자리 고르기만 북/서로 모는 장치다. 경계 풀이에는 실제 지도를 넘긴다
+		# (그대로 두면 동쪽 물가 진입로·철길 사이 걷는 틈 2칸까지 막혀 합친 열린 자리가 이름 없는 자리가 된다).
+		var grown: Grid = probe["grid"]
+		for edge_cell: Vector2i in steered:
+			var at_cell: Vector2i = edge_cell + shift
+			if grown.solid[grown.index(at_cell)] == Grid.Solid.BLOCK: grown.set_solid(at_cell, int(steered[edge_cell]))
+		grown.refresh_paths()
 		var before: Dictionary = _copy_map(probe)
 		var before_reached: PackedByteArray = _flood(before, "walk_people")
 		var protection: PackedByteArray = Bounds.protected_cells(before)
@@ -862,6 +873,24 @@ func test_k5_side_path_absent_present_and_north_west_shift() -> void:
 			if not inside: bad += int(final_grid.walk_people[i] != 0 or final_grid.walk_dead[i] != 0)
 			if before_reached[i] == 1 and final_grid.walk_people[i] == 1: bad += int(after_reached[i] != 1)
 		assert_eq(bad, 0, "북/서 실제 추가의 보호·도달·안팎")
+		# 샛길 걷는 칸(입구·틈·빈터): 띠·성긴 숲은 보호에서 뺐어도 경계가 하나도 덮지 않고 열차에서 그대로 이어진다.
+		var spot: Dictionary = probe["side_path"]
+		var route: Array[Vector2i] = []
+		route.append_array(spot["entrance"])
+		route.append_array(spot["gap"])
+		for u: int in range(int(spot["along"]), int(spot["along"]) + Side.LOT_WIDTH):
+			for v: int in range(Side.DEPTH):
+				route.append(Side._at(final_grid, side, u, v))
+		var path_cells: int = 0
+		var path_bad: int = 0
+		for cell: Vector2i in route:
+			var at: int = final_grid.index(cell)
+			if before["grid"].walk_people[at] != 1 or before_reached[at] != 1: continue
+			path_cells += 1
+			path_bad += int(not _inside_cell(cell, points) or final_grid.solid[at] != before["grid"].solid[at] \
+				or final_grid.walk_people[at] != 1 or after_reached[at] != 1)
+		assert_gt(path_cells, spot["entrance"].size() + spot["gap"].size(), "샛길 걷는 칸이 열차에서 이어져 있었음")
+		assert_eq(path_bad, 0, "경계가 샛길 걷는 칸을 하나도 덮지 않음(샛길 이어짐 그대로)")
 
 
 func test_k6_failed_solver_rebuilds_original_zero() -> void:
