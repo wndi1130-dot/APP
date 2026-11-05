@@ -6,17 +6,19 @@ extends SceneTree
 ##       [--mask] [--dead] [--hud] [--front [--front-zoom=20]] <place>
 ## By default as the first loop shots were taken: no sight mask, no dead drawn, no HUD. The play screen
 ## has all three; turn them on to see it as a player does (the files get _mask, _dead, _hud on the name):
-##   --mask   the sight mask, the squad leader looking up the screen (or at the door, at the dead)
+##   --mask   the sight mask, the squad leader looking up the screen (or at the door, at the dead); each
+##            spot as on first coming there (what earlier spots saw is forgotten)
 ##   --dead   the dead drawn, and one more spot, dead: four cells short of the outdoor dead nearest
-##            where the squad steps off, looking at it
+##            where the squad steps off, looking at it. Without it no dead are shown.
 ##   --hud    the field HUD
 ##   --front  one more spot per kind of building (front_shop, front_home, front_store): the leader 12-14
 ##            cells straight out from an outer door on a south or east wall (the walls the camera sees)
 ##            of the first such building, looking at the door, at --front-zoom; see front_spots. The
-##            field lifts the roof of every building within 10 cells of the middle of the screen
-##            (building_view.gd NEAR_R, the camera's focus), so a building shows its outside only that
-##            far off the middle, as here; pushing the camera onto the door would open it. The metrics
-##            get "fronts" (the building, its door, how many of its outer doors are on seen walls).
+##            field lifts the roof of every building within 10 cells of the camera's focus
+##            (building_view.gd NEAR_R), so a building shows its outside only that far off the middle
+##            of the screen, as here; pushing the camera onto the door would open it. The metrics get
+##            "fronts" (the building, its door, how many of its outer doors are on seen walls).
+## A map name with no map, a zoom not above 0, a shot or the metrics not written: MAP_SHOTS_FAIL, exit 1.
 ## Every run counts, over all buildings, those with an outer door and those with one on a seen wall
 ## (map.outer_doors): a door on a north or west wall never shows from outside.
 ##
@@ -25,7 +27,8 @@ extends SceneTree
 ##   road         a road cell over 15 cells from the train, the one with the most road in the 9x9 round it
 ##   yard         bare ground 2-3 cells out from a small building, the one with the median count of
 ##                things within 6 cells (an ordinary yard)
-##   inside       the middle of the ground-floor building with the most boxes (its walls cut away)
+##   inside       the ground-floor building with the most boxes, at the walkable cell of it nearest its
+##                rect's middle (its walls cut away)
 ##   edge         4 cells in from the middle of the inner side farthest from the train
 ##   items        outside, the thing with the most other things within 6 cells (the busiest ground)
 ##   room_<class> the biggest ground-floor room of each furnished class (bed, kitchen, living, bath, ...)
@@ -45,6 +48,9 @@ const FxState = preload("res://fx/fx_state.gd")
 const RoomFurnish = preload("res://game/world/room_furnish.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
 const BuildingView = preload("res://game/world/building_view.gd")
+const EdgeBand = preload("res://game/world/edge_band.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
+const USAGE: String = "usage: -- --out=<folder> [--zoom=24] [--seed=5] [--mask] [--dead] [--hud] [--front [--front-zoom=20]] <place>"
 const FRONT_USES: Array[String] = ["shop", "home", "store"]
 const OUTDOOR_SPOTS: Array[String] = ["start", "road", "yard", "inside", "edge", "items"]
 const TREE_KINDS: Array[String] = ["bare_tree", "thicket", "fir", "pine", "spruce", "birch", "stump", "street_tree", "bare_willow"]
@@ -61,42 +67,29 @@ func _initialize() -> void:
 
 
 func _run() -> void:
-	var out_dir: String = ""
-	var zoom: float = 24.0
-	var front_zoom: float = 20.0
-	var run_seed: int = 5
-	var place: String = ""
-	var mask: bool = false
-	var dead: bool = false
-	var hud: bool = false
-	var front: bool = false
-	for arg: String in OS.get_cmdline_user_args():
-		if arg.begins_with("--out="):
-			out_dir = arg.trim_prefix("--out=")
-		elif arg.begins_with("--zoom="):
-			zoom = float(arg.trim_prefix("--zoom="))
-		elif arg.begins_with("--front-zoom="):
-			front_zoom = float(arg.trim_prefix("--front-zoom="))
-		elif arg.begins_with("--seed="):
-			run_seed = int(arg.trim_prefix("--seed="))
-		elif arg == "--mask":
-			mask = true
-		elif arg == "--dead":
-			dead = true
-		elif arg == "--hud":
-			hud = true
-		elif arg == "--front":
-			front = true
-		elif not arg.begins_with("--") and place.is_empty():
-			place = arg
-		else:
-			_fail("unknown or repeated argument: " + arg)
-			return
-	if out_dir.is_empty() or place.is_empty():
-		_fail("usage: -- --out=<folder> [--zoom=24] [--seed=5] [--mask] [--dead] [--hud] [--front [--front-zoom=20]] <place>")
+	var args: Dictionary = parse_args(OS.get_cmdline_user_args())
+	if args.has("error"):
+		_fail(String(args["error"]))
+		return
+	var out_dir: String = args["out"]
+	var zoom: float = args["zoom"]
+	var front_zoom: float = args["front_zoom"]
+	var run_seed: int = args["seed"]
+	var place: String = args["place"]
+	var mask: bool = args["mask"]
+	var dead: bool = args["dead"]
+	var hud: bool = args["hud"]
+	var front: bool = args["front"]
+	# The field plays the default stop for a name with no map (FieldMaps.resolve): never shoot that
+	# under the name asked for.
+	if not FieldMaps.has(place):
+		_fail("no map: " + place)
 		return
 	var suffix: String = ("_mask" if mask else "") + ("_dead" if dead else "") + ("_hud" if hud else "")
-	DirAccess.make_dir_recursive_absolute(out_dir)
+	var made: Error = DirAccess.make_dir_recursive_absolute(out_dir)
+	if made != OK:
+		_fail("cannot make %s: %s" % [out_dir, error_string(made)])
+		return
 	var game = FieldGame.new()
 	game.opts = {"seed": run_seed, "raiders": false, "auto_pause": false, "arrive": false, "place": place,
 		"weather": ["clear"], "look": ["overcast"], "look_hour": 12.0}
@@ -112,6 +105,9 @@ func _run() -> void:
 		await process_frame
 	game.paused = false
 	game.set_process(false)
+	# Those four frames drew the dead in sight (field_game.gd _process); without --dead none are shown.
+	if game.zombies != null:
+		game.zombies.visible = dead
 	game.fx_params["fx_fade"] = 0.0
 	FxState.apply({"fx_fade": 0.0})
 	game._update_light()
@@ -138,7 +134,22 @@ func _run() -> void:
 			tags.append("dead")
 			spots["dead"] = near_dead["cell"]
 			looks["dead"] = near_dead["look"]
-	var fronts: Dictionary = front_spots(data, g) if front else {}
+	var fronts: Dictionary = {}
+	if front:
+		# Roofs lift round the camera's focus, which the field pulls in from the map's edge
+		# (field_game.gd _update_camera): judge them from where the camera will stand, at --front-zoom.
+		var screen: Vector2 = root.get_visible_rect().size
+		var aspect: float = screen.x / maxf(screen.y, 1.0)
+		var half: Vector2 = EdgeBand.view_half(front_zoom, aspect, FieldGame.CAM_PITCH, FieldGame.CAM_YAW)
+		var focus_of: Callable = func(c: Vector2i) -> Vector2i:
+			var at: Vector3 = FieldGrid.center(c)
+			var f: Vector3 = EdgeBand.clamp_focus(at, half, g.width, g.height)
+			f = EdgeBand.keep_on_screen(f, at, front_zoom, aspect, FieldGame.CAM_PITCH, FieldGame.CAM_YAW)
+			return Vector2i(floori(f.x), floori(f.z))
+		var footprints: Dictionary = {}
+		if game.view.buildings != null:
+			footprints = game.view.buildings.footprints
+		fronts = front_spots(data, g, footprints, focus_of)
 	var front_rows: Dictionary = {}
 	if front:
 		for use: String in FRONT_USES:
@@ -187,26 +198,29 @@ func _run() -> void:
 			game.player.facing = atan2(ahead.x, ahead.z)
 			game.mask_in = 1.0
 			game.view.set_mask_shade(1.0)
+			_forget_seen(game)
 			game._refresh_vision()
 		# The dead read one body in a frame (zombies.gd render): draw them over a few frames.
 		for _i in range(8 if dead else 2):
 			if dead:
 				game.zombies.render(game.camera, game.seen_now, game.mask_on)
 			await process_frame
-		var img: Image = root.get_viewport().get_texture().get_image()
-		img.save_jpg(out_dir.path_join("%s_%s%s.jpg" % [place, tag, suffix]), 0.9)
+		var shot_path: String = out_dir.path_join("%s_%s%s.jpg" % [place, tag, suffix])
+		var saved: Error = save_shot(root.get_viewport().get_texture().get_image(), shot_path)
+		if saved != OK:
+			_fail("cannot save %s: %s" % [shot_path, error_string(saved)])
+			return
 		var row: Dictionary = spot_counts(data, g, cell)
 		row["cell"] = [cell.x, cell.y]
 		if rooms.has(tag):
 			row.merge(rooms[tag]["counts"])
 		metrics["spots"][tag] = row
 		print("SHOT %s %s %s" % [place, tag, JSON.stringify(row)])
-	var file: FileAccess = FileAccess.open(out_dir.path_join("%s%s_metrics.json" % [place, suffix]), FileAccess.WRITE)
-	if file == null:
-		_fail("cannot write metrics: %d" % FileAccess.get_open_error())
+	var metrics_path: String = out_dir.path_join("%s%s_metrics.json" % [place, suffix])
+	var wrote: Error = write_json(metrics_path, metrics)
+	if wrote != OK:
+		_fail("cannot write %s: %s" % [metrics_path, error_string(wrote)])
 		return
-	file.store_string(JSON.stringify(metrics, "\t", true))
-	file.close()
 	print("MAP_SHOTS_DONE %s spots=%d" % [place, (metrics["spots"] as Dictionary).size()])
 	quit(0)
 
@@ -214,6 +228,75 @@ func _run() -> void:
 func _fail(message: String) -> void:
 	printerr("MAP_SHOTS_FAIL " + message)
 	quit(1)
+
+
+## With the sight mask, each spot is shot as on first coming there: what earlier spots saw is
+## forgotten (the field's seen cells, and the props the map view keeps drawn once seen).
+func _forget_seen(game) -> void:
+	game.seen_memory.fill(0)
+	for batch: Dictionary in game.view.prop_batches.values():
+		for item: Dictionary in batch["items"]:
+			item["remembered"] = false
+
+
+## The command line after "--" as {out, zoom, front_zoom, seed, place, mask, dead, hud, front}, or as
+## {error} for an unknown or repeated argument, a zoom that is not a finite number above 0, a seed that
+## is not a whole number, an empty --out, or no --out or place.
+static func parse_args(args: PackedStringArray) -> Dictionary:
+	var out: Dictionary = {"out": "", "zoom": 24.0, "front_zoom": 20.0, "seed": 5, "place": "",
+		"mask": false, "dead": false, "hud": false, "front": false}
+	var given: Dictionary = {}
+	for arg: String in args:
+		var key: String = arg.get_slice("=", 0) if arg.begins_with("--") else "place"
+		if given.has(key):
+			return {"error": "repeated argument: " + arg}
+		given[key] = true
+		var value: String = arg.substr(key.length() + 1) if arg.begins_with("--") else arg
+		match key:
+			"--out":
+				if value.is_empty():
+					return {"error": "empty --out"}
+				out["out"] = value
+			"--zoom", "--front-zoom":
+				var z: float = float(value) if value.is_valid_float() else NAN
+				if not is_finite(z) or z <= 0.0:
+					return {"error": "zoom must be a number above 0: " + arg}
+				out["zoom" if key == "--zoom" else "front_zoom"] = z
+			"--seed":
+				if not value.is_valid_int():
+					return {"error": "seed must be a whole number: " + arg}
+				out["seed"] = value.to_int()
+			"--mask", "--dead", "--hud", "--front":
+				if arg != key:
+					return {"error": "flag takes no value: " + arg}
+				out[key.trim_prefix("--")] = true
+			"place":
+				out["place"] = value
+			_:
+				return {"error": "unknown argument: " + arg}
+	if String(out["out"]).is_empty() or String(out["place"]).is_empty():
+		return {"error": USAGE}
+	return out
+
+
+## The shot as a jpg at path; an empty image (no frame read back) is an error, not a blank file.
+static func save_shot(img: Image, path: String) -> Error:
+	if img == null or img.is_empty():
+		return ERR_INVALID_DATA
+	return img.save_jpg(path, 0.9)
+
+
+## value as indented JSON at path, every write checked (a full disk or a folder in the way is an error).
+static func write_json(path: String, value: Variant) -> Error:
+	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return FileAccess.get_open_error()
+	var stored: bool = file.store_string(JSON.stringify(value, "\t", true))
+	var err: Error = file.get_error()
+	file.close()
+	if err == OK and not stored:
+		err = ERR_FILE_CANT_WRITE
+	return err
 
 
 static func pick_spots(data: Dictionary, g: FieldGrid) -> Dictionary:
@@ -267,7 +350,7 @@ static func pick_spots(data: Dictionary, g: FieldGrid) -> Dictionary:
 		var n: int = int(count_by.get(int(b["id"]), 0))
 		if n > best_box and (b["rect"] as Rect2i).get_area() <= 900:
 			best_box = n
-			out["inside"] = (b["rect"] as Rect2i).get_center()
+			out["inside"] = inside_cell(g, int(b["id"]), b["rect"])
 	var mids: Array[Vector2i] = [Vector2i(inner.get_center().x, inner.position.y + 4), Vector2i(inner.end.x - 5, inner.get_center().y),
 		Vector2i(inner.get_center().x, inner.end.y - 5), Vector2i(inner.position.x + 4, inner.get_center().y)]
 	var far: float = -1.0
@@ -373,7 +456,7 @@ static func room_counts(data: Dictionary, cells: Array[Vector2i]) -> Dictionary:
 
 
 static func spot_counts(data: Dictionary, g: FieldGrid, c: Vector2i) -> Dictionary:
-	var area := Rect2i(c - Vector2i(BOX / 2, BOX / 2), Vector2i(BOX, BOX))
+	var area := Rect2i(c - Vector2i(BOX >> 1, BOX >> 1), Vector2i(BOX, BOX))
 	var outdoor_cells: int = 0
 	for y: int in range(area.position.y, area.end.y):
 		for x: int in range(area.position.x, area.end.x):
@@ -459,7 +542,7 @@ static func near_things(data: Dictionary, c: Vector2i, radius: int) -> int:
 ## toward the squad: {cell, look}. Empty without one.
 static func dead_spot(dead: Array, data: Dictionary, g: FieldGrid) -> Dictionary:
 	var squad: Array = data.get("spawns", {}).get("squad", [])
-	var start: Vector2i = squad[0] if not squad.is_empty() else Vector2i(g.width / 2, g.height / 2)
+	var start: Vector2i = squad[0] if not squad.is_empty() else Vector2i(g.width >> 1, g.height >> 1)
 	var best: Vector2i = Vector2i(-1, -1)
 	var best_d: int = -1
 	for z: Dictionary in dead:
@@ -484,10 +567,13 @@ static func dead_spot(dead: Array, data: Dictionary, g: FieldGrid) -> Dictionary
 ## an outer door on a wall the camera sees, the leader 12-14 cells straight out from that door, looking
 ## at it. The camera never turns (field_game.gd CAM_YAW, from the south-east), so only south and east
 ## walls face it; a door on a north or west wall never shows from outside and is not shot from.
-## Of the cells 12-14 out, the one with the fewest other buildings within NEAR_R is taken (the field
-## lifts their roofs, building_view.gd). "front_<use>" -> {cell, look, building, doors, doors_seen,
-## near_roofs}; a kind with no such building is left out.
-static func front_spots(data: Dictionary, g: FieldGrid) -> Dictionary:
+## The roofs are judged as the field lifts them (building_view.gd _update_near): round the camera's
+## focus for that cell (focus_of: cell -> focus cell, the field pulls it in from the map's edge), by the
+## buildings' ground-floor footprints (footprints: building -> Rect2i; one without a footprint is never
+## lifted). A cell whose focus would lift the building's own roof is not taken; of the rest 12-14 out,
+## the one with the fewest other roofs lifted, the nearer on a tie. "front_<use>" -> {cell, look,
+## building, doors, doors_seen, near_roofs}; a kind with no such building is left out.
+static func front_spots(data: Dictionary, g: FieldGrid, footprints: Dictionary, focus_of: Callable) -> Dictionary:
 	var rows: Array = data.get("buildings", []).duplicate()
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["id"]) < int(b["id"]))
 	var doors: Array = g.doors.keys()
@@ -502,13 +588,16 @@ static func front_spots(data: Dictionary, g: FieldGrid) -> Dictionary:
 		var outer: Array = outer_doors(g, b, doors)
 		var seen: Array = outer.filter(func(pair: Array) -> bool: return faces_camera(pair[1]))
 		var best: Dictionary = {}
-		var fewest: int = rows.size() + 1
+		var fewest: int = footprints.size() + 1
 		for pair: Array in seen:
 			for far: int in [12, 13, 14]:
 				var at: Vector2i = (pair[0] as Vector2i) + (pair[1] as Vector2i) * far
 				if not (g.inside(at) and g.building_at(at) < 0 and g.people_can_walk(at)):
 					continue
-				var lifted: int = near_roofs(rows, at, b)
+				var focus: Vector2i = focus_of.call(at)
+				if footprints.has(b) and roof_lifted(footprints[b], focus):
+					continue
+				var lifted: int = near_roofs(footprints, focus, b)
 				if lifted < fewest:
 					fewest = lifted
 					best = {"cell": at, "look": pair[0]}
@@ -541,19 +630,41 @@ static func faces_camera(d: Vector2i) -> bool:
 	return Vector2(d).dot(Vector2(sin(yaw), cos(yaw))) > 0.0
 
 
-## How many buildings other than b have their roof lifted with the camera's middle on c: within
-## NEAR_R of their rect, measured as building_view.gd _update_near measures it.
-static func near_roofs(rows: Array, c: Vector2i, b: int) -> int:
+## How many buildings other than b have their roof lifted with the camera's focus on c
+## (footprints: building -> Rect2i, building_view.gd footprints).
+static func near_roofs(footprints: Dictionary, c: Vector2i, b: int) -> int:
 	var n: int = 0
-	for row: Dictionary in rows:
-		if int(row["id"]) == b:
-			continue
-		var r: Rect2i = row["rect"]
-		var dx: int = maxi(maxi(r.position.x - c.x, c.x - (r.end.x - 1)), 0)
-		var dy: int = maxi(maxi(r.position.y - c.y, c.y - (r.end.y - 1)), 0)
-		if Vector2(dx, dy).length() <= BuildingView.NEAR_R:
+	for other: int in footprints:
+		if other != b and roof_lifted(footprints[other], c):
 			n += 1
 	return n
+
+
+## The field lifts the roof of a building whose footprint r is within NEAR_R of the focus cell c,
+## measured as building_view.gd _update_near measures it.
+static func roof_lifted(r: Rect2i, c: Vector2i) -> bool:
+	var dx: int = maxi(maxi(r.position.x - c.x, c.x - (r.end.x - 1)), 0)
+	var dy: int = maxi(maxi(r.position.y - c.y, c.y - (r.end.y - 1)), 0)
+	return Vector2(dx, dy).length() <= BuildingView.NEAR_R
+
+
+## The middle of rect r when it is a walkable cell of building b (not a door), else the walkable cell
+## of b nearest it, the first in rows on a tie: an L-shaped building's middle can lie outside it, and a
+## middle can fall on an inner wall. r's middle when b has no such cell.
+static func inside_cell(g: FieldGrid, b: int, r: Rect2i) -> Vector2i:
+	var mid: Vector2i = r.get_center()
+	var best: Vector2i = mid
+	var best_d: int = -1
+	for y: int in range(r.position.y, r.end.y):
+		for x: int in range(r.position.x, r.end.x):
+			var c := Vector2i(x, y)
+			if not g.inside(c) or g.building_at(c) != b or g.doors.has(c) or not g.people_can_walk(c):
+				continue
+			var d: int = (c - mid).length_squared()
+			if best_d < 0 or d < best_d:
+				best_d = d
+				best = c
+	return best
 
 
 ## Outer doors by the walls they are on, over every building: how many buildings have an outer door at

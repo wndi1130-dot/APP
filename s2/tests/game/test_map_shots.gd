@@ -1,6 +1,7 @@
 extends "res://addons/gut/test.gd"
 ## 결정 562: 지도 촬영 자리를 자료와 규칙으로 고르고 소품을 세는 동작을 지킨다.
-## 작은 격자로 경계, 빠진 자료, 순서와 동률을 확인한다.
+## 작은 격자로 경계, 빠진 자료, 순서와 동률을 확인한다. 정면 자리는 게임처럼 카메라 초점과 1층
+## 바닥(footprint)으로 지붕 걷힘을 재고, 인자·그림·잣대 파일의 실패는 오류로 돌아오는지 본다.
 
 const MapShots = preload("res://tools/map_shots.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
@@ -25,6 +26,23 @@ func _prop(c: Vector2i, kind: String) -> Dictionary:
 	return {"rect": Rect2i(c, Vector2i.ONE), "kind": kind}
 
 
+## Footprints as building_view.gd keeps them (building -> Rect2i), here each row's rect.
+func _prints(rows: Array) -> Dictionary:
+	var out: Dictionary = {}
+	for row: Dictionary in rows:
+		out[int(row["id"])] = row["rect"]
+	return out
+
+
+## The camera's focus where the leader stands (no map edge to pull it in).
+func _same(c: Vector2i) -> Vector2i:
+	return c
+
+
+func _fronts(rows: Array, g: FieldGrid) -> Dictionary:
+	return MapShots.front_spots({"buildings": rows}, g, _prints(rows), _same)
+
+
 func test_camera_sees_south_and_east_walls() -> void:
 	assert_true(MapShots.faces_camera(Vector2i.DOWN), "남쪽 벽")
 	assert_true(MapShots.faces_camera(Vector2i.RIGHT), "동쪽 벽")
@@ -36,17 +54,18 @@ func test_roof_distance_includes_boundary_and_excludes_self() -> void:
 	var radius: int = int(BuildingView.NEAR_R)
 	assert_eq(float(radius), BuildingView.NEAR_R, "반경이 정수인 시험 자료")
 	var c: Vector2i = Vector2i(20, 20)
-	var rows: Array = [
-		{"id": 0, "rect": Rect2i(c, Vector2i.ONE)},
-		{"id": 1, "rect": Rect2i(c + Vector2i(radius, 0), Vector2i(3, 2))},
-		{"id": 2, "rect": Rect2i(c + Vector2i(radius + 1, 0), Vector2i.ONE)},
-	]
-	assert_eq(MapShots.near_roofs(rows, c, 0), 1, "경계 포함, 자신과 바깥 제외")
+	var prints: Dictionary = {
+		0: Rect2i(c, Vector2i.ONE),
+		1: Rect2i(c + Vector2i(radius, 0), Vector2i(3, 2)),
+		2: Rect2i(c + Vector2i(radius + 1, 0), Vector2i.ONE),
+	}
+	assert_eq(MapShots.near_roofs(prints, c, 0), 1, "경계 포함, 자신과 바깥 제외")
+	assert_true(MapShots.roof_lifted(prints[0], c), "자기 칸 위 초점은 지붕을 걷음")
 	assert_eq(BuildingView.NEAR_R, 10.0, "대각 시험 자료의 반경")
-	var diagonal: Array = [
-		{"id": 1, "rect": Rect2i(c + Vector2i(6, 8), Vector2i.ONE)},
-		{"id": 2, "rect": Rect2i(c + Vector2i(7, 8), Vector2i.ONE)},
-	]
+	var diagonal: Dictionary = {
+		1: Rect2i(c + Vector2i(6, 8), Vector2i.ONE),
+		2: Rect2i(c + Vector2i(7, 8), Vector2i.ONE),
+	}
 	assert_eq(MapShots.near_roofs(diagonal, c, -1), 1, "대각선은 직선 거리")
 
 
@@ -96,13 +115,12 @@ func test_front_spots_skip_unseen_and_sort_by_id() -> void:
 	_door(g, Vector2i(22, 7), 2)
 	assert_true(g.people_can_walk(Vector2i(5, 8)) and g.building_at(Vector2i(5, 8)) < 0, "북쪽 문 12칸 밖은 빈 땅")
 	var rows: Array = [{"id": 2, "rect": south, "role": "shop"}, {"id": 1, "rect": north, "role": "shop"}]
-	var data: Dictionary = {"buildings": rows}
 	var expected: Dictionary = {"cell": Vector2i(22, 19), "look": Vector2i(22, 7), "building": 2, "doors": 1, "doors_seen": 1, "near_roofs": 0}
-	var first: Dictionary = MapShots.front_spots(data, g)
+	var first: Dictionary = _fronts(rows, g)
 	assert_eq(first.get("front_shop"), expected, "보이는 다음 가게")
-	assert_eq(MapShots.front_spots(data, g), first, "반복 결과")
+	assert_eq(_fronts(rows, g), first, "반복 결과")
 	rows.reverse()
-	assert_eq(MapShots.front_spots(data, g), first, "건물 행 순서 무관")
+	assert_eq(_fronts(rows, g), first, "건물 행 순서 무관")
 
 
 func test_front_spots_skip_large_building_and_unseen_home() -> void:
@@ -117,7 +135,7 @@ func test_front_spots_skip_large_building_and_unseen_home() -> void:
 	for c: Vector2i in [Vector2i(15, 41), Vector2i(28, 37)]:
 		assert_true(g.people_can_walk(c) and g.building_at(c) < 0, "12칸 밖은 빈 땅")
 	var rows: Array = [{"id": 1, "rect": large, "role": "shop"}, {"id": 2, "rect": home, "role": "home"}]
-	var result: Dictionary = MapShots.front_spots({"buildings": rows}, g)
+	var result: Dictionary = _fronts(rows, g)
 	assert_false(result.has("front_shop"), "900칸 초과 제외")
 	assert_false(result.has("front_home"), "서쪽 문만 있으면 제외")
 
@@ -131,7 +149,7 @@ func test_front_spots_select_smallest_id_among_visible_shops() -> void:
 	_door(g, Vector2i(4, 6), 3)
 	_door(g, Vector2i(30, 6), 8)
 	var rows: Array = [{"id": 8, "rect": b, "role": "shop"}, {"id": 3, "rect": a, "role": "shop"}]
-	var result: Dictionary = MapShots.front_spots({"buildings": rows}, g)
+	var result: Dictionary = _fronts(rows, g)
 	assert_eq(result["front_shop"]["building"], 3, "작은 건물 번호 먼저")
 
 
@@ -143,13 +161,77 @@ func test_front_spots_use_next_walkable_cell_and_fewest_roofs() -> void:
 	_door(g, door, 1)
 	var rows: Array = [{"id": 1, "rect": r, "role": "shop"}]
 	g.set_solid(door + Vector2i.DOWN * 12, FieldGrid.Solid.WALL)
-	var blocked: Dictionary = MapShots.front_spots({"buildings": rows}, g)
+	var blocked: Dictionary = _fronts(rows, g)
 	assert_eq(blocked["front_shop"]["cell"], door + Vector2i.DOWN * 13, "막힌 12칸 다음")
 	g.set_solid(door + Vector2i.DOWN * 12, FieldGrid.Solid.NONE)
-	rows.append({"id": 2, "rect": Rect2i(12, 9, 1, 1), "role": "home"})
-	var fewer: Dictionary = MapShots.front_spots({"buildings": rows}, g)
+	# A neighbour's footprint 10 cells from the 12th cell: its roof would lift there, not from the 13th.
+	var with_neighbour: Dictionary = {1: r, 2: Rect2i(12, 9, 1, 1)}
+	var fewer: Dictionary = MapShots.front_spots({"buildings": rows}, g, with_neighbour, _same)
 	assert_eq(fewer["front_shop"]["cell"], door + Vector2i.DOWN * 13, "지붕이 적은 칸")
 	assert_eq(fewer["front_shop"]["near_roofs"], 0, "지붕 수")
+	# A building row with no footprint (nothing inside, never drawn open) lifts no roof: the 12th again.
+	rows.append({"id": 2, "rect": Rect2i(12, 9, 1, 1), "role": "home"})
+	var no_print: Dictionary = MapShots.front_spots({"buildings": rows}, g, {1: r}, _same)
+	assert_eq(no_print["front_shop"]["cell"], door + Vector2i.DOWN * 12, "바닥 없는 건물은 안 셈")
+
+
+func test_front_spots_judge_the_own_roof_from_the_camera_focus() -> void:
+	var g: FieldGrid = FieldGrid.new(40, 45)
+	var r: Rect2i = Rect2i(10, 3, 5, 5)
+	_building(g, r, 1)
+	var door: Vector2i = Vector2i(12, 7)
+	_door(g, door, 1)
+	var rows: Array = [{"id": 1, "rect": r, "role": "shop"}]
+	# The field pulls the focus two cells back toward the shop (as at a map edge): from the 12th cell it
+	# would sit 10 cells off the shop and lift its own roof, so the 13th is taken.
+	var pulled: Callable = func(c: Vector2i) -> Vector2i: return c + Vector2i.UP * 2
+	var result: Dictionary = MapShots.front_spots({"buildings": rows}, g, _prints(rows), pulled)
+	assert_eq(result["front_shop"]["cell"], door + Vector2i.DOWN * 13, "자기 지붕이 걷히는 칸은 뺌")
+	var on_door: Callable = func(_c: Vector2i) -> Vector2i: return door
+	assert_false(MapShots.front_spots({"buildings": rows}, g, _prints(rows), on_door).has("front_shop"), "모든 칸에서 걷히면 없음")
+
+
+func test_inside_cell_keeps_a_walkable_middle_and_moves_off_walls_and_out_of_an_l() -> void:
+	var g: FieldGrid = FieldGrid.new(30, 30)
+	var r: Rect2i = Rect2i(2, 2, 7, 7)
+	_building(g, r, 1)
+	assert_eq(MapShots.inside_cell(g, 1, r), Vector2i(5, 5), "걸을 수 있는 가운데는 그대로")
+	g.set_solid(Vector2i(5, 5), FieldGrid.Solid.WALL)
+	assert_eq(MapShots.inside_cell(g, 1, r), Vector2i(5, 4), "안벽 위 가운데는 가장 가까운 칸(줄 순서 첫째)")
+	# An L: building 2 only along the top and the left of its rect, so the rect's middle (14, 14) is outside it.
+	var l: Rect2i = Rect2i(10, 10, 8, 8)
+	for y: int in range(l.position.y, l.end.y):
+		for x: int in range(l.position.x, l.end.x):
+			if x < 13 or y < 13:
+				g.building[g.index(Vector2i(x, y))] = 2
+	assert_eq(MapShots.inside_cell(g, 2, l), Vector2i(14, 12), "ㄴ자 건물은 건물 안 칸")
+
+
+func test_parse_args_reads_the_options_and_refuses_bad_ones() -> void:
+	var ok: Dictionary = MapShots.parse_args(PackedStringArray(["--out=D:/x", "--zoom=20", "--seed=7", "--mask", "--front", "houses_01"]))
+	assert_false(ok.has("error"), "바른 인자")
+	assert_eq([ok["out"], ok["zoom"], ok["front_zoom"], ok["seed"], ok["place"], ok["mask"], ok["dead"], ok["front"]],
+		["D:/x", 20.0, 20.0, 7, "houses_01", true, false, true], "값")
+	var bad_lines: Array = [["--out=D:/x"], ["houses_01"], ["--out=", "houses_01"], ["--out=D:/x", "--zoom=0", "houses_01"],
+		["--out=D:/x", "--zoom=-3", "houses_01"], ["--out=D:/x", "--zoom=abc", "houses_01"], ["--out=D:/x", "--zoom=inf", "houses_01"],
+		["--out=D:/x", "--front-zoom=0", "houses_01"], ["--out=D:/x", "--seed=1.5", "houses_01"], ["--out=D:/x", "--mask=1", "houses_01"],
+		["--out=D:/x", "--bogus", "houses_01"], ["--out=D:/x", "houses_01", "lake_01"], ["--out=D:/x", "--mask", "--mask", "houses_01"]]
+	for bad: Array in bad_lines:
+		assert_true(MapShots.parse_args(PackedStringArray(bad)).has("error"), "거부: %s" % [bad])
+
+
+func test_write_json_and_save_shot_report_what_was_not_written() -> void:
+	var tag: String = "%d_%d" % [OS.get_process_id(), Time.get_ticks_usec()]
+	var good: String = "user://map_shots_test_%s.json" % tag
+	assert_eq(MapShots.write_json(good, {"a": 1}), OK, "쓰기")
+	assert_eq(JSON.parse_string(FileAccess.get_file_as_string(good)), {"a": 1.0}, "다시 읽기")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(good))
+	assert_ne(MapShots.write_json("user://map_shots_no_dir_%s/m.json" % tag, {}), OK, "없는 폴더")
+	assert_eq(MapShots.save_shot(Image.new(), "user://map_shots_%s.jpg" % tag), ERR_INVALID_DATA, "빈 그림")
+	var img: Image = Image.create_empty(4, 4, false, Image.FORMAT_RGB8)
+	assert_ne(MapShots.save_shot(img, "user://map_shots_no_dir_%s/s.jpg" % tag), OK, "없는 폴더에 그림")
+	# The engine reports the failed jpg write itself (Image.save_jpg); the tool turns it into MAP_SHOTS_FAIL.
+	assert_engine_error_count(1, "없는 폴더에 그림을 쓰면 엔진 오류 하나")
 
 
 func test_spot_counts_split_indoor_trees_and_made_and_clip_box() -> void:
