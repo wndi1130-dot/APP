@@ -87,6 +87,32 @@ func test_the_line_starts_at_twelve_and_goes_clockwise_round() -> void:
 	assert_eq(HoldConfirm.edge_path(box, 6.0, 1.5, 0.0).size(), 1, "nothing to draw at rest")
 
 
+## 결정 561 ④: two holds owed the same work and both gone mid-flash before the
+## frame ends do it twice, once each — not merged into one.
+func test_two_holds_gone_mid_flash_each_do_their_work() -> void:
+	var worked: Array = [0]
+	var work := func() -> void: worked[0] += 1
+	var keys: Array = []
+	for i: int in 2:
+		var key := Button.new()
+		key.size = Vector2(100, 52)
+		add_child(key)
+		keys.append(key)
+		var hold = HoldConfirm.attach(key, work)
+		key.button_down.emit()
+		hold.set_process(false)
+		hold.advance(HoldConfirm.HOLD_S + STEP)
+		assert_gt(float(hold.flash), 0.0, "full, it flashes")
+	assert_eq(int(worked[0]), 0, "both still flashing")
+	for key: Button in keys:
+		key.free()
+	assert_eq(int(worked[0]), 0, "owed, not yet done")
+	await get_tree().process_frame
+	assert_eq(int(worked[0]), 2, "each owed work done once")
+	await get_tree().process_frame
+	assert_eq(int(worked[0]), 2, "and no more")
+
+
 func test_a_key_given_a_hold_works_only_when_held_full() -> void:
 	var key := Button.new()
 	key.size = Vector2(100, 52)

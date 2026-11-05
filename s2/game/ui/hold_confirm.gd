@@ -181,10 +181,11 @@ func advance(dt: float) -> void:
 				work.call()
 			return
 	if bool(state["fired"]):
-		Input.vibrate_handheld(BUZZ_MS)
-		confirmed.emit()
+		# Owed first: a listener that frees the hold still finds the work owed.
 		flash = FLASH_S
 		_work_pending = true
+		Input.vibrate_handheld(BUZZ_MS)
+		confirmed.emit()
 	queue_redraw()
 	if not _down and float(state["fill"]) <= 0.0 and flash <= 0.0:
 		set_process(false)
@@ -195,16 +196,17 @@ func _process(delta: float) -> void:
 
 
 ## Gone mid-flash (the pane laid again as a thing came out, or shut): the hold was
-## full and buzzed, so its work still runs, once, on the next frame. It waits on the
-## tree's frame signal, which a HUD freed by then leaves with its connections.
+## full and buzzed, so its work still runs, once, at the end of this frame — each
+## hold its own deferred call, so two owed works stay two. The work's owner is the
+## HUD, which outlives its panes; what the work does to a shut pane is its own
+## (field_hud.gd _throw, _load_train).
 func _exit_tree() -> void:
 	if not _work_pending:
 		return
 	_work_pending = false
 	flash = 0.0
-	var tree := get_tree()
-	if tree != null and work.is_valid() and not tree.process_frame.is_connected(work):
-		tree.process_frame.connect(work, CONNECT_ONE_SHOT)
+	if work.is_valid():
+		work.call_deferred()
 
 
 func _draw() -> void:

@@ -820,7 +820,8 @@ static func _bag_more(hud, p, id: String, at: Dictionary, can_move: bool) -> Con
 		word.position = Vector2(UiFonts.px(42.0), UiFonts.px(16.0))
 		word.size = Vector2(UiFonts.px(54.0), UiFonts.px(20.0))
 		GlassPane.sinks(throw, word, PRESS_SINK)
-		HoldConfirm.attach(throw, hud._throw.bind(id))
+		# The hold's line and flash keep to the pressed face (결정 561 ④).
+		GlassPane.sinks(throw, HoldConfirm.attach(throw, hud._throw.bind(id)), PRESS_SINK)
 		keys.add_child(throw)
 	else:
 		# 결정 559: only loading everything is held; this move stays one press.
@@ -1027,8 +1028,11 @@ static func _row(hud, id: String, word: String, n: int, weight: float, cb: Calla
 		b.add_theme_stylebox_override(state, _skin(Color(BONE, 0.07), GlassPane.INK, UiFonts.px(PRESS_SINK)))
 	b.add_theme_stylebox_override("disabled", _skin(Color(0, 0, 0, 0.12), Color(GlassPane.HAIR, 0.5), 0.0))
 	if dim and side == "bag":
-		for state: String in ["normal", "hover", "focus", "pressed", "hover_pressed"]:
+		# Dim, it still opens on a long press: its face sinks with its line.
+		for state: String in ["normal", "hover", "focus"]:
 			b.add_theme_stylebox_override(state, b.get_theme_stylebox("disabled"))
+		for state: String in ["pressed", "hover_pressed"]:
+			b.add_theme_stylebox_override(state, _skin(Color(0, 0, 0, 0.12), Color(GlassPane.HAIR, 0.5), UiFonts.px(PRESS_SINK)))
 	_press_feel(b)
 	var row := GlassPane.row()
 	row.name = "Line"
@@ -1262,10 +1266,15 @@ static func _place_key(hud, icon: String, word: String, on: bool, empty: bool, c
 	b.set_meta("place_kind", place["kind"])
 	b.set_meta("place_id", place["id"])
 	b.set_meta("selected", on)
-	var sb := _skin(Color(BONE, 0.08) if on else GlassPane.CELL, BONE if on else GlassPane.HAIR, 0.0)
-	for state: String in ["normal", "hover", "pressed", "hover_pressed", "focus", "disabled"]:
+	var fill: Color = Color(BONE, 0.08) if on else GlassPane.CELL
+	var sb := _skin(fill, BONE if on else GlassPane.HAIR, 0.0)
+	for state: String in ["normal", "hover", "focus", "disabled"]:
 		b.add_theme_stylebox_override(state, sb)
+	# Pressed, it sinks and its rim lights as the pane's other keys (결정 561 ④).
+	for state: String in ["pressed", "hover_pressed"]:
+		b.add_theme_stylebox_override(state, _skin(fill.darkened(0.25), GlassPane.INK, UiFonts.px(PRESS_SINK)))
 	_hide_text(b)
+	_press_feel(b)
 	var col := _column(1.0)
 	col.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -1280,6 +1289,7 @@ static func _place_key(hud, icon: String, word: String, on: bool, empty: bool, c
 	else:
 		col.add_child(label)
 	b.add_child(col)
+	GlassPane.sinks(b, col, PRESS_SINK)
 	b.pressed.connect(cb)
 	return b
 
@@ -1374,7 +1384,7 @@ static func _main_key(hud, p, at: Dictionary) -> Button:
 		load_key.name = "MainKey"
 		_key_icon(hud, load_key, "train", 24.0, GlassPane.AMBER_L, -9.0)
 		_key_word(load_key, "싣기", 40.0, GlassPane.AMBER_L, 12.0)
-		HoldConfirm.attach(load_key, hud._load_train)
+		GlassPane.sinks(load_key, HoldConfirm.attach(load_key, hud._load_train), PRESS_SINK)
 		return load_key
 	return null
 

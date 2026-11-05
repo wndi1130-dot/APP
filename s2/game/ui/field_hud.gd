@@ -3381,7 +3381,10 @@ func _inv_sort() -> void:
 
 func _load_train() -> void:
 	game.actions.load_train(game.player)
-	bag_panel()
+	# The load is held to confirm and done as its flash ends (hold_confirm.gd): a
+	# pane shut in that flash stays shut.
+	if modal_open:
+		bag_panel()
 
 
 ## One thing worn: its picture and name, how worn it is once it shows
@@ -3555,7 +3558,9 @@ func _eat(id: String) -> void:
 
 ## Throw an empty tin where the chief faces (a lure): the bag closes.
 func _throw(id: String) -> void:
-	_close_modal()
+	# Held to confirm, thrown as its flash ends: a pane already shut is left alone.
+	if modal_open:
+		_close_modal()
 	game.throw_lure(game.player, id)
 
 

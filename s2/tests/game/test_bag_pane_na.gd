@@ -1469,27 +1469,101 @@ func test_the_bag_mark_is_one_point_three_times() -> void:
 ## 결정 561 ④: a pressed key's marks sink with its face and a one-press key
 ## buzzes very short on the way down; a hold key keeps its buzz for the full hold.
 func test_a_pressed_key_sinks_and_a_one_press_key_buzzes() -> void:
+	assert_eq(InventoryPane.PRESS_SINK, 1.5, "결정 561 ④: pressed, 1.5 css")
 	var game = _game()
 	var hud = game.hud
 	game.player.items = {"can_empty": 1, "scrap": 1}
+	# Something on the ground, so the rail has a place key.
+	game.ground_items.append({"pos": game.player.position, "id": "cloth", "n": 1})
 	hud.bag_panel()
 	hud._inv_expand("bag", "can_empty")
 	await _layout()
 	var row: Button = _row(hud, "Bag", "scrap")
-	var line := row.get_node("Line") as Control
-	var y0: float = line.position.y
-	row.button_down.emit()
-	assert_almost_eq(line.position.y - y0, UiFonts.px(InventoryPane.PRESS_SINK), 0.01, "the row's line sinks with its face")
+	_sinks_with_face(row, [row.get_node("Line")], "a row")
 	assert_eq(int(row.get_meta("tap_buzz", 0)), 1, "a one-press row buzzes once")
-	row.button_up.emit()
-	assert_almost_eq(line.position.y, y0, 0.01, "let go, it comes back up")
-	var pressed := row.get_theme_stylebox("pressed") as StyleBoxFlat
-	assert_eq(pressed.border_color, GlassPane.INK, "the pressed rim lights")
+	assert_eq((row.get_theme_stylebox("pressed") as StyleBoxFlat).border_color, GlassPane.INK, "the pressed rim lights")
 	var throw := hud.modal.find_child("Throw", true, false) as Button
-	throw.button_down.emit()
+	# Its mark, its word and its hold's line (and flash) all keep to the face.
+	var parts: Array = throw.get_children().filter(func(c: Node) -> bool: return c is Control)
+	assert_true(parts.has(throw.get_node("Hold")))
+	_sinks_with_face(throw, parts, "the throw key")
 	assert_eq(int(throw.get_meta("tap_buzz", 0)), 0, "a hold key does not buzz on the way down")
-	throw.button_up.emit()
+	var place: Button = null
+	for node: Node in hud.modal.find_children("*", "Button", true, false):
+		if node.has_meta("place_kind"):
+			place = node as Button
+			break
+	assert_not_null(place, "a place key on the rail")
+	if place != null:
+		_sinks_with_face(place, place.get_children().filter(func(c: Node) -> bool: return c is Control), "a place key")
+		assert_eq(int(place.get_meta("tap_buzz", 0)), 1, "a place key buzzes once")
+		assert_eq((place.get_theme_stylebox("pressed") as StyleBoxFlat).border_color, GlassPane.INK, "its pressed rim lights")
 	hud._close_modal()
+
+
+## 결정 561 ④: the pressed face goes down PRESS_SINK (its box's margins) and each
+## part laid on it as far, and all come back up on the way up.
+func _sinks_with_face(b: Button, parts: Array, what: String) -> void:
+	var sink: float = UiFonts.px(InventoryPane.PRESS_SINK)
+	for state: String in ["pressed", "hover_pressed"]:
+		var box := b.get_theme_stylebox(state) as StyleBoxFlat
+		assert_almost_eq(box.expand_margin_bottom, sink, 0.01, "%s: the %s face goes down" % [what, state])
+		assert_almost_eq(box.expand_margin_top, -sink, 0.01, "%s: its top with it" % what)
+	var y0: Array = []
+	for c: Control in parts:
+		y0.append(c.position.y)
+	b.button_down.emit()
+	for k: int in parts.size():
+		assert_almost_eq((parts[k] as Control).position.y - float(y0[k]), sink, 0.01, "%s: %s sinks with the face" % [what, (parts[k] as Node).name])
+	b.button_up.emit()
+	for k: int in parts.size():
+		assert_almost_eq((parts[k] as Control).position.y, float(y0[k]), 0.01, "%s: %s comes back up" % [what, (parts[k] as Node).name])
+
+
+## 결정 561 ④: a bag row dimmed (here it cannot go aboard) still opens on a long
+## press, so its face sinks with its line.
+func test_a_dim_bag_row_sinks_whole() -> void:
+	var game = _game()
+	var p = game.player
+	p.items = {"can_opener": 1, "food_pack": 1}
+	var rect: Rect2i = game.data["unload"]
+	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
+	game.hud.bag_panel()
+	game.hud._inv_place({"kind": "train", "id": "", "name": "열차 짐칸"})
+	await _layout()
+	var row: Button = _row(game.hud, "Bag", "can_opener")
+	assert_false(row.disabled, "a dim bag row still takes a long press")
+	assert_eq(row.get_theme_stylebox("normal"), row.get_theme_stylebox("disabled"), "dim at rest")
+	_sinks_with_face(row, [row.get_node("Line")], "a dim row")
+	game.hud._close_modal()
+
+
+## 결정 561 ④ with the load: shut in the confirm's flash, the pane stays shut and
+## what was held for still goes aboard, once.
+func test_a_load_held_full_then_shut_in_its_flash_loads_and_stays_shut() -> void:
+	var game = _game()
+	var p = game.player
+	p.items = {"food_pack": 1}
+	var rect: Rect2i = game.data["unload"]
+	p.position = game.lift(rect.position + Vector2i(3, 1), 0)
+	game.hud.bag_panel()
+	game.hud._inv_place({"kind": "train", "id": "", "name": "열차 짐칸"})
+	await _layout()
+	var key := game.hud.modal.find_child("MainKey", true, false) as Button
+	assert_not_null(key, "the load key by the train")
+	var hold = key.get_node("Hold")
+	key.button_down.emit()
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S + 0.01)
+	assert_gt(float(hold.get("flash")), 0.0, "full, it flashes")
+	assert_eq(int(game.unloaded.get("food_pack", 0)), 0, "not aboard yet")
+	key.button_up.emit()
+	game.hud._close_modal()
+	await _layout()
+	assert_eq(int(game.unloaded.get("food_pack", 0)), 1, "what was held for goes aboard")
+	assert_false(game.hud.modal_open, "the shut pane stays shut")
+	await _layout()
+	assert_eq(int(game.unloaded.get("food_pack", 0)), 1, "once")
 
 
 ## 결정 561 ②: the weight mark is a weight with a ring, not a box with a handle —
