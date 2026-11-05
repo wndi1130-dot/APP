@@ -53,6 +53,11 @@ const float ROUND_OUT = 1.3;
 varying vec3 world_pos;
 varying vec3 world_nrm;
 varying float bank;
+// How near a wall this ground lies, whichever side it stands (0 open, 1 at the wall's
+// foot): |drift_uv| per corner, so it fades over the one metre to the next corner.
+// Doors give nothing (drift_uv), and the 0.07 % of corners where facing walls cancel
+// (one-cell gaps, counted over all maps 11-05) get no foot snow either.
+varying float foot;
 // The floor kind + 1 the ground carries in UV2.x (map_view, map_edge); 0 on all else.
 varying flat float ground_kind;
 // What is drawn on the cell (UV2.y, map_view.ground_details): a code for roads,
@@ -682,6 +687,9 @@ void vertex() {
 	bank = (max(0.0, UV.x * fx_wind.x) + max(0.0, UV.y * fx_wind.y)) * COLOR.a;
 	bank *= smoothstep(0.2, 0.9, fx_snow) * (0.4 + 0.6 * fx_wind.z);
 	VERTEX.y += 0.35 * bank;
+	// Taken per corner before it is spread over the cell: a cell whose corners point
+	// opposite ways still fades 1 to 0, with no dark seam through its middle.
+	foot = max(abs(UV.x), abs(UV.y)) * COLOR.a;
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_nrm = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 }
@@ -703,6 +711,7 @@ void fragment() {
 	float drift = fx_fbm2(world_pos.xz * 0.35);
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
 	float cover = 0.0;
+	float local_snow = 0.0;
 	// Warped 0.15/m patches leave dark gaps; skip the new noise without snow.
 	if (fx_snow > 0.01) {
 		vec2 patch_p = (world_pos.xz + snow_phase) * 0.15;
@@ -717,7 +726,7 @@ void fragment() {
 		// noise a ground pixel, at the melt field's low frequency, and only on a map that sets
 		// it; multiplied, so a stop with no snow keeps none.
 		float melt = snow_melt > 0.0 ? fx_vnoise((world_pos.xz + 1.7 * snow_phase) / max(snow_melt_m, 4.0)) - 0.5 : 0.0;
-		float local_snow = clamp(fx_snow * (1.0 + snow_shift + 1.4 * snow_melt * melt), 0.0, 1.0);
+		local_snow = clamp(fx_snow * (1.0 + snow_shift + 1.4 * snow_melt * melt), 0.0, 1.0);
 		// Half the noise range at snow 0.5; every patch is filled by 0.95.
 		float snow_t = mix(1.0 + patch_w, -patch_w, smoothstep(0.05, 0.95, local_snow));
 		cover = 0.9 * smoothstep(snow_t - patch_w, snow_t + patch_w, snow_patch);
@@ -792,6 +801,20 @@ void fragment() {
 		base *= 1.0 - 0.2 * clamp(fx_snow, 0.0, 1.0) * bare_k;
 	}
 	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));
+	// Snow gathers at a wall's foot on every side and at a cleared street's kerbs (the wind
+	// bank above is the windward side only): a strip up to most of a metre out, its edge broken
+	// by the drift noise so it is no stencil line, less where this map's snow has melted
+	// (local_snow) and none on a stop with no snow. After the paving is cleared, before the
+	// footprints (weather_fx 17장).
+	float heaped = smoothstep(0.1, 0.5, local_snow) * smoothstep(0.6, 0.9, up);
+	float pile = smoothstep(0.2, 0.65, foot + 0.6 * (drift - 0.5));
+	if (kind == 1 && ground_detail > -0.5) {
+		int kerb_bits = int(ground_detail + 0.5);
+		if ((kerb_bits & 512) == 0) {
+			pile = max(pile, 1.0 - smoothstep(0.15, 0.4, kerb_distance(kerb_bits, fract(world_pos.xz)) + 0.2 * (drift - 0.5)));
+		}
+	}
+	cover = max(cover, 0.85 * pile * heaped);
 	cover *= 1.0 - 0.9 * trodden;
 	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);
 	// The ground before the snow: what a frozen pool shows through its ice.
