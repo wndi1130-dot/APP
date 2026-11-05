@@ -8,10 +8,12 @@ const Order = preload("res://game/train/train_work_order.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 
 
+## The research pane tries each restore on a copy, and a start writes its journal line and the
+## cars' relations as S1 startRestore does, so the board has both.
 func _game() -> Dictionary:
-	var g := {"seg": 1, "dom": Dom.start(), "comms": {}}
+	var g := {"seg": 1, "dom": Dom.start(), "comms": {}, "journal": []}
 	for comm: String in ["tail", "medtech", "guard", "front", "engine"]:
-		g["comms"][comm] = {"pop": 40}
+		g["comms"][comm] = {"pop": 40, "rel": 0}
 	return g
 
 
