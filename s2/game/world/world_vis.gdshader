@@ -779,6 +779,8 @@ void fragment() {
 	cover = max(cover, 0.8 * clamp(bank, 0.0, 1.0));
 	cover *= 1.0 - 0.9 * trodden;
 	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);
+	// The ground before the snow: what a frozen pool shows through its ice.
+	vec3 under_snow = base;
 	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet) * (1.0 + (grain.r - 0.5) * 0.35 * wander), cover);
 	// Rime on upright faces in hard cold: thin and patchy, never a white wall.
 	float rime = (1.0 - smoothstep(0.2, 0.6, up)) * sky * clamp(fx_frost, 0.0, 1.0);
@@ -789,6 +791,10 @@ void fragment() {
 	// wet ground gives a little of the sky back (no specular here); dead leaf on
 	// bare ground in the warm stages. Saturated floor kinds are spared.
 	float level_k = smoothstep(0.9, 0.98, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma)) * (1.0 - smoothstep(0.3, 0.7, cover));
+	// A lake's ice (FieldGrid.Floor.ICE, kind 6) is a sheet already: no pools stand on it.
+	if (kind == 6) {
+		level_k = 0.0;
+	}
 	float water = clamp(max(fx_wet * 1.2, fx_cold.y * 0.85), 0.0, 1.0);
 	float standing = 0.0;
 	// Noise only where a pool could show (phone budget).
@@ -800,7 +806,7 @@ void fragment() {
 			float shape = dot(texture(fx_sky_tex, suv).rgb, vec3(0.3, 0.59, 0.11));
 			float mean_l = max(dot(textureLod(fx_sky_tex, vec2(0.5), 10.0).rgb, vec3(0.3, 0.59, 0.11)), 0.02);
 			vec3 refl = fx_sky.rgb * clamp(shape / mean_l, 0.4, 1.8);
-			base = mix(base, fx_pool_color(base, world_pos.xz, TIME, fx_cold.y, fx_wet * (1.0 - fx_cold.y), refl), standing);
+			base = mix(base, fx_pool_color(base, under_snow, world_pos.xz, TIME, fx_cold.y, fx_wet * (1.0 - fx_cold.y), refl, max(room_px.x, room_px.y)), standing);
 		}
 	}
 	base = mix(base, fx_sky.rgb * 0.5, wet * level_k * (1.0 - standing) * 0.18);
