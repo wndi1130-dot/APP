@@ -16,6 +16,14 @@ const GlassParts = preload("res://game/ui/glass_parts.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const PaneMotion = preload("res://game/ui/pane_motion.gd")
+const RestoreVectors = preload("res://tests/train/restore_vectors.gd")
+const Advance = preload("res://game/train/train_advance.gd")
+const Pipe = preload("res://game/train/train_pipe.gd")
+const LAWTECH_PATH: String = "res://tests/fixtures/train/lawtech_vectors.json"
+## S1 sideLine's literal names and amount; expectations do not call the pane's helpers.
+const REL_NAMES: Dictionary = {"tail": "꼬리칸", "medtech": "기술·의무진", "guard": "경비대", "front": "앞칸", "engine": "기관실"}
+
+var _lawtech: Dictionary = {}
 
 
 ## Let queued frees settle before GUT counts orphans.
@@ -23,8 +31,12 @@ func after_each() -> void:
 	await wait_process_frames(1)
 
 
+## A small board with what a restore start writes to (its journal line, the cars' relations).
 func _game(craft: int = 1) -> Dictionary:
-	var g := {"seg": 1, "gearOn": false, "dom": TrainDom.start()}
+	var comms: Dictionary = {}
+	for comm: String in ["tail", "medtech", "guard", "front", "engine"]:
+		comms[comm] = {"rel": 0}
+	var g := {"seg": 1, "gearOn": false, "journal": [], "comms": comms, "dom": TrainDom.start()}
 	g["dom"]["frags"]["craft"] = craft
 	return g
 
@@ -38,9 +50,9 @@ func _ready_for_w2() -> Dictionary:
 	return g
 
 
-func _pane(g: Dictionary, ids: Array = []) -> Control:
+func _pane(g: Dictionary, ids: Array = [], resolution: Vector2 = Vector2.ZERO) -> Control:
 	var holder := Control.new()
-	holder.size = Vector2(844.0, 390.0) * UiFonts.K
+	holder.size = resolution if resolution != Vector2.ZERO else Vector2(844.0, 390.0) * UiFonts.K
 	add_child_autofree(holder)
 	var p = ResearchPane.new()
 	p.techs = ids
@@ -457,3 +469,432 @@ func _ink_box(c: Control) -> Rect2:
 		var h: float = l.get_theme_font("font").get_height(l.get_theme_font_size("font_size"))
 		return Rect2(l.position, Vector2(GlassParts.text_w(l), h))
 	return Rect2(c.position, c.size)
+
+
+func _pipe_sequence(sequence_name: String) -> Dictionary:
+	if _lawtech.is_empty():
+		assert_true(FileAccess.file_exists(LAWTECH_PATH), "S1 lawtech fixture exists")
+		if not FileAccess.file_exists(LAWTECH_PATH): return {}
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(LAWTECH_PATH))
+		assert_true(parsed is Dictionary, "S1 lawtech fixture parses")
+		if not parsed is Dictionary:
+			return {}
+		_lawtech = parsed
+	for sequence: Dictionary in _lawtech["sequences"]:
+		if String(sequence["name"]) == sequence_name:
+			return sequence
+	fail_test("Missing S1 sequence: " + sequence_name)
+	return {}
+
+
+func _relation_labels(row: Control, prefix: String) -> Array[Label]:
+	var labels: Array[Label] = []
+	for child: Node in row.get_children():
+		if child is Label and child.visible and String(child.name).begins_with(prefix):
+			labels.append(child as Label)
+	labels.sort_custom(func(a: Label, b: Label) -> bool: return a.position.y < b.position.y)
+	return labels
+
+
+func _relation_text(row: Control, prefix: String = "Rel_") -> String:
+	var words: Array[String] = []
+	for label: Label in _relation_labels(row, prefix):
+		words.append(label.text)
+	return " ".join(words).replace(" · ", " ")
+
+
+func _pane_row(p: Control, id: String) -> Control:
+	return p.get_node("Parts/List/Rows/Item_" + id) as Control
+
+
+func _assert_fixture_relations(g: Dictionary, expected: Dictionary, context: String) -> void:
+	for comm: String in REL_NAMES:
+		assert_almost_eq(float(g["comms"][comm]["rel"]), float(expected["comms"][comm]["rel"]), 1e-8, context + " " + comm)
+
+
+## E3's ways share one notice under both keys (the ratification, not the way, moves relations).
+func test_e3_first_ratification_guidance_is_under_the_ways() -> void:
+	var sequence: Dictionary = _pipe_sequence("pipe-restart/approved/revote=true")
+	if sequence.is_empty(): return
+	var g: Dictionary = RestoreVectors.project(sequence["initial"])
+	var p: Control = _pane(g, ["e3"])
+	assert_eq(_relation_text(_pane_row(p, "e3")), "", "a closed two-way row says it under its ways")
+	_key(p, "Key_e3").pressed.emit()
+	var row: Control = _pane_row(p, "e3")
+	assert_eq(_relation_text(row, "Rel_e3_ways_"), "추인 결과 쪽으로 ±5")
+	assert_eq(_relation_text(row, "Rel_e3_a_") + _relation_text(row, "Rel_e3_b_"), "", "said once, not per key")
+	var a: Button = _key(p, "Way_e3_a")
+	var b: Button = _key(p, "Way_e3_b")
+	for line: Label in _relation_labels(row, "Rel_e3_ways_"):
+		assert_gte(line.position.y, a.position.y + a.size.y, "under the keys")
+		assert_gte(line.position.x, a.position.x - 0.5)
+		assert_lte(_ink_box(line).end.x, b.position.x + b.size.x + 0.5, "within the two keys")
+	_assert_relation_boxes(row)
+	assert_eq(g["dom"]["techs"].get("e3"), null, "opening ways does not start a restore")
+	_assert_fixture_relations(g, sequence["initial"], "first offer")
+
+
+func test_e3_revote_sequences_show_previous_result_and_match_s1_relations() -> void:
+	for passed: bool in [true, false]:
+		var sequence: Dictionary = _pipe_sequence("pipe-restart/approved/revote=" + ("true" if passed else "false"))
+		if sequence.is_empty(): return
+		var steps: Array = sequence["steps"]
+		# S1's first approval is unfinished; cancel and restart it through the pane.
+		var g: Dictionary = RestoreVectors.project(steps[3]["before"])
+		var p: Control = _pane(g, ["e3"])
+		_key(p, "Key_e3").pressed.emit()
+		_key(p, "Key_e3").pressed.emit()
+		assert_false((g["dom"]["techs"] as Dictionary).has("e3"))
+		_assert_fixture_relations(g, steps[3]["after"], "cancel keeps first approval relations")
+		_key(p, "Key_e3").pressed.emit()
+		assert_eq(_relation_text(_pane_row(p, "e3"), "Rel_e3_ways_"),
+			"앞 추인(변형 꼬리칸까지)과 같은 결과면 관계 그대로, 다른 결과면 그 변형 쪽으로 관계가 움직임")
+		_key(p, "Way_e3_a").pressed.emit()
+		assert_eq(Pipe.pending(g), "a", "restart waits for a new ratification")
+		_assert_fixture_relations(g, steps[4]["after"], "restart itself does not move relations")
+		assert_eq(_relation_text(_pane_row(p, "e3")),
+			"앞 추인(변형 꼬리칸까지)과 같은 결과면 관계 그대로, 다른 결과면 그 변형 쪽으로 관계가 움직임")
+		# While the vote is ahead the row itself says it: the longest row notice, wrapped in the row.
+		_assert_relation_boxes(_pane_row(p, "e3"))
+		# The last step's before-board includes the S1 vote setup, without recreating it here.
+		g = RestoreVectors.project(steps[6]["before"])
+		var before_tail: float = float(g["comms"]["tail"]["rel"])
+		g = Advance.cast_vote(g, _lawtech["tables"])
+		p.show_state(g)
+		_assert_fixture_relations(g, steps[6]["after"], "second vote")
+		assert_almost_eq(float(g["comms"]["tail"]["rel"]) - before_tail, 0.0 if passed else -5.0, 1e-8)
+		assert_eq(g["dom"]["pipeMoved"], "a" if passed else "b")
+		# The vote is over (no pending ratification): the row no longer says how a vote moves relations.
+		assert_eq(_relation_text(_pane_row(p, "e3")), "")
+		if not passed:
+			assert_eq((_live(p, "Name_e3") as Label).text, "앞칸 직결")
+			assert_eq((_live(p, "Law_e3") as Label).text, "난방 배당 없음")
+
+
+func test_e3_fixed_sequences_use_the_fixed_variant_after_cancellation() -> void:
+	for asked: String in ["a", "b"]:
+		var sequence: Dictionary = _pipe_sequence("pipe-restart/rejected/" + asked)
+		if sequence.is_empty(): return
+		var steps: Array = sequence["steps"]
+		var g: Dictionary = RestoreVectors.project(steps[3]["before"])
+		var fixed: String = "b" if asked == "a" else "a"
+		var title: String = "앞칸 직결" if fixed == "b" else "꼬리칸까지"
+		var law: String = "난방 배당" if fixed == "b" else "공동 난방"
+		var p: Control = _pane(g, ["e3"])
+		assert_eq((_live(p, "Name_e3") as Label).text, title)
+		assert_eq(_relation_text(_pane_row(p, "e3")), "", "a running restore with no vote ahead says nothing of relations")
+		_key(p, "Key_e3").pressed.emit()
+		_key(p, "Key_e3").pressed.emit()
+		assert_false((g["dom"]["techs"] as Dictionary).has("e3"), "cancel removes the technology, not its fixed result")
+		assert_eq(g["dom"]["pipeFlip"], fixed)
+		var row: Dictionary = _row(ResearchPane.model(g, ["e3"]), "e3")
+		assert_eq(row["variant"], title)
+		assert_eq(row["law"], law)
+		assert_eq(row["effect"], "난방 배당: 앞칸 온기 +5" if fixed == "b" else "공동 난방: 석탄 −0.65")
+		assert_eq((row["ways"] as Array).size(), 1)
+		assert_eq(row["ways"][0]["variant"], fixed)
+		assert_eq((_live(p, "Name_e3") as Label).text, title)
+		assert_true((_live(p, "Law_e3") as Label).text.begins_with(law))
+		assert_eq(_relation_text(_pane_row(p, "e3")), "앞 추인 결과로 고정")
+		assert_null(_live(p, "Way_e3_a"))
+		assert_null(_live(p, "Way_e3_b"))
+		_key(p, "Key_e3").pressed.emit()
+		assert_eq(g["dom"]["techs"]["e3"]["variant"], fixed, "the ordinary restore key starts the fixed way")
+		assert_null(Pipe.pending(g))
+		assert_eq(String(p.get("_choosing")), "")
+		_assert_fixture_relations(g, steps[4]["after"], "fixed restart")
+
+
+func test_way_relations_show_disliked_neutral_and_all_multiple_cars() -> void:
+	var p: Control = _pane(_ready_for_w2(), ["w2"])
+	_key(p, "Key_w2").pressed.emit()
+	assert_eq(_relation_text(_pane_row(p, "w2"), "Rel_w2_a_"), "관계 안 움직임")
+	assert_eq(_relation_text(_pane_row(p, "w2"), "Rel_w2_b_"), "꼬리칸 +5 경비대 −5")
+	# r2b is S1's four-car sample; a disabled technology still exercises the shared way layout.
+	p.techs = ["r2"]
+	p.set("_choosing", "r2")
+	p.show_state(_game())
+	assert_eq(_relation_text(_pane_row(p, "r2"), "Rel_r2_b_"), "경비대 +5 기관실 +5 꼬리칸 −5 기술·의무진 −5")
+
+
+func test_single_technology_relations_only_show_when_they_move() -> void:
+	var p: Control = _pane(_game(), ["e1", "e5"])
+	assert_eq(_relation_text(_pane_row(p, "e1")), "")
+	assert_eq(_relation_text(_pane_row(p, "e5")), "꼬리칸 +5 기관실 −5")
+	_assert_relation_boxes(_pane_row(p, "e5"))
+
+
+## Scrolled to the foot of an opened E3 (the lead's 1280×720 shot left a strip of letter tops of
+## the row above under the stores): a row cut to under half its height lies under the top shade.
+func test_a_row_cut_under_the_stores_lies_under_the_shade() -> void:
+	var sequence: Dictionary = _pipe_sequence("pipe-restart/approved/revote=true")
+	if sequence.is_empty(): return
+	var ids: Array = ["w1", "w4", "e1", "w5", "e3"]
+	for resolution: Vector2 in [Vector2(1280, 720), Vector2(1688, 780)]:
+		var p: Control = _pane(RestoreVectors.project(sequence["steps"][4]["before"]), ids, resolution)
+		await wait_process_frames(2)
+		assert_null(_live(p, "Above"), "at the top of the list: no shade")
+		_key(p, "Key_e3").pressed.emit()
+		await wait_seconds(RowKeep.MOVE_S + 0.03)
+		var scroll: ScrollContainer = p.get_node("Parts/List") as ScrollContainer
+		scroll.scroll_vertical = 100000
+		await wait_process_frames(2)
+		var above: Control = _live(p, "Above")
+		assert_not_null(above, "scrolled: the shade is on")
+		if above == null: return
+		assert_almost_eq(above.position.y, scroll.position.y, 0.5, "the shade starts where the list does")
+		# A line of text the list's top edge cuts through (the shot's strip of letter tops):
+		# what is left of it shows inside the shade.
+		var top: float = float(scroll.scroll_vertical)
+		var cut_lines: int = 0
+		for id: String in ids:
+			var row: Control = _pane_row(p, id)
+			for child: Node in row.get_children():
+				if not child is Label or not (child as Label).visible:
+					continue
+				var box: Rect2 = _ink_box(child as Control)
+				var y0: float = row.position.y + box.position.y
+				var y1: float = y0 + box.size.y
+				if y0 < top - 0.5 and y1 > top + 0.5:
+					cut_lines += 1
+					assert_lte(y1 - top, above.size.y + 0.5, "%s/%s: its %.1f px left show inside the shade" % [id, child.name, y1 - top])
+		assert_gt(cut_lines, 0, "this scene cuts a line of text at the top (the shot's strip)")
+		scroll.scroll_vertical = 0
+		await wait_process_frames(2)
+		assert_null(_live(p, "Above"), "back at the top the shade goes")
+
+
+func test_e3_revote_notice_wraps_below_keys_at_two_resolutions() -> void:
+	var sequence: Dictionary = _pipe_sequence("pipe-restart/approved/revote=true")
+	if sequence.is_empty(): return
+	var ids: Array = ["w1", "w4", "e1", "w5", "e3"]
+	for resolution: Vector2 in [Vector2(1280, 720), Vector2(1688, 780)]:
+		var g: Dictionary = RestoreVectors.project(sequence["steps"][4]["before"])
+		var p: Control = _pane(g, ids, resolution)
+		_key(p, "Key_e3").pressed.emit()
+		await wait_seconds(RowKeep.MOVE_S + 0.03)
+		await wait_process_frames(2)
+		var row: Control = _pane_row(p, "e3")
+		assert_eq(_relation_text(row, "Rel_e3_ways_"),
+			"앞 추인(변형 꼬리칸까지)과 같은 결과면 관계 그대로, 다른 결과면 그 변형 쪽으로 관계가 움직임")
+		_assert_list_positions(p, ids)
+		await _assert_last_relation_reachable(p, row)
+
+
+func _expected_relations(id: String, variant: Variant) -> Array[String]:
+	var def: Dictionary = Research.TECHS[id]
+	var sides: Dictionary = def["variants"][variant] if variant != null else def
+	var entries: Array[String] = []
+	if (sides["dislike"] as Array).is_empty(): return entries
+	for comm: String in sides["like"]:
+		entries.append(String(REL_NAMES[comm]) + " +5")
+	for comm: String in sides["dislike"]:
+		entries.append(String(REL_NAMES[comm]) + " −5")
+	return entries
+
+
+## Measure whole car entries with the real face, not array length or pane wrap helpers.
+func _measured_relation_height(entries: Array[String], width: float) -> float:
+	if entries.is_empty(): return 0.0
+	var probe: Label = UiFonts.label("", UiFonts.WORD, 400, 11.0, Color.WHITE)
+	var lines: int = 0
+	var used: String = ""
+	for entry: String in entries:
+		probe.text = entry if used == "" else used + " · " + entry
+		if GlassParts.text_w(probe) <= width * UiFonts.K:
+			used = probe.text
+		else:
+			if used != "": lines += 1
+			probe.text = entry
+			# Notices can exceed one column; Label's own shaper measures those wraps.
+			probe.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			probe.size = Vector2(width * UiFonts.K, 0.0)
+			lines += maxi(0, probe.get_line_count() - 1)
+			probe.autowrap_mode = TextServer.AUTOWRAP_OFF
+			used = entry
+	if used != "": lines += 1
+	var height: float = lines * (probe.get_theme_font("font").get_height(probe.get_theme_font_size("font_size")) + 2.0 * UiFonts.K)
+	probe.free()
+	return height
+
+
+## The ordinary row's actual name, law and cost ink delimit its remaining width.
+func _ordinary_relation_width(p: Control, id: String, entries: Array[String]) -> float:
+	var row: Control = _pane_row(p, id)
+	var name_label: Label = _live(p, "Name_" + id) as Label
+	var need: int = int(Research.restore_cost(id)["frags"])
+	var under: float = 44.0 + (14.0 * need + 10.0 if need > 0 else 0.0)
+	for child: Node in row.get_children():
+		if child is Control and child.visible and String(child.name).begins_with("Cost_" + id + "_"):
+			under = maxf(under, _ink_box(child as Control).end.x / UiFonts.K)
+	var x0: float = maxf(_ink_box(name_label).end.x / UiFonts.K + 8.0, under + 8.0)
+	var x1: float = 226.0
+	var law: Label = _live(p, "Law_" + id) as Label
+	if law != null:
+		x0 = under + 8.0
+		if GlassParts.base_of(law) / UiFonts.K > 30.0:
+			x1 = minf(x1, law.position.x / UiFonts.K - 8.0)
+	var widest: float = 0.0
+	var probe: Label = UiFonts.label("", UiFonts.WORD, 400, 11.0, Color.WHITE)
+	for entry: String in entries:
+		probe.text = entry
+		widest = maxf(widest, GlassParts.text_w(probe) / UiFonts.K)
+	probe.free()
+	return x1 - x0 if x1 - x0 >= widest else 162.0
+
+
+func _largest_wrapped_case(p: Control, choosing: bool) -> Dictionary:
+	var best: Dictionary = {"height": -1.0}
+	var measured: int = 0
+	for id: String in Research.TECHS:
+		var def: Dictionary = Research.TECHS[id]
+		var variants: Dictionary = def.get("variants", {})
+		p.techs = [id]
+		p.set("_choosing", "")
+		p.show_state(_game())
+		for variant: Variant in (variants.keys() if not variants.is_empty() else [null]):
+			var entries: Array[String] = _expected_relations(id, variant)
+			if choosing and entries.is_empty(): entries = ["관계 안 움직임"]
+			var width: float = 80.0 if choosing else _ordinary_relation_width(p, id, entries)
+			var height: float = _measured_relation_height(entries, width)
+			measured += 1
+			# Every TECHS/variant is measured. Chapter 6 only shows ordinary new-row
+			# relations for non-variant technologies; variants compete in the 80px case.
+			# E3's ways share one notice across both keys, not an 80px column; its notices
+			# have their own tests (the revote one is the longest and is wrapped there).
+			var eligible: bool = (not variants.is_empty() and id != "e3") if choosing else variants.is_empty() and not entries.is_empty()
+			if eligible and height > float(best["height"]):
+				best = {"id": id, "variant": variant, "entries": entries, "width": width, "height": height}
+	assert_gt(measured, Research.TECHS.size(), "all variants, including unavailable technologies, were measured")
+	assert_true(best.has("id"), "a measured relation row was selected")
+	return best
+
+
+func _assert_relation_boxes(row: Control) -> void:
+	for relation: Label in _relation_labels(row, "Rel_"):
+		var box: Rect2 = _ink_box(relation)
+		assert_eq(relation.get_theme_font_size("font_size"), UiFonts.size(11.0))
+		assert_eq(relation.get_theme_color("font_color"), ResearchPane.INK2)
+		assert_gte(box.position.x, 0.0, String(relation.name))
+		assert_gte(box.position.y, 0.0, String(relation.name))
+		assert_lte(box.end.x, row.size.x + 0.5, String(relation.name) + " inside row width")
+		assert_lte(box.end.y, row.size.y + 0.5, String(relation.name) + " inside row height")
+		for child: Node in row.get_children():
+			if child is Control and child != relation and child.visible:
+				assert_false(box.intersects(_ink_box(child as Control)), "%s clear of %s" % [relation.name, child.name])
+
+
+func _assert_list_positions(p: Control, ids: Array) -> void:
+	var top: float = 0.0
+	for id: String in ids:
+		var row: Control = _pane_row(p, id)
+		assert_almost_eq(row.position.y, top, 0.5, id + " follows preceding row heights")
+		_assert_relation_boxes(row)
+		top += row.size.y
+	var rows: Control = p.get_node("Parts/List/Rows") as Control
+	assert_almost_eq(rows.custom_minimum_size.y, top, 0.5, "list height is the sum of row heights")
+
+
+func _assert_last_relation_reachable(p: Control, row: Control) -> void:
+	var scroll: ScrollContainer = p.get_node("Parts/List") as ScrollContainer
+	scroll.scroll_vertical = 100000
+	await wait_process_frames(2)
+	var lines: Array[Label] = _relation_labels(row, "Rel_")
+	assert_false(lines.is_empty())
+	if not lines.is_empty():
+		var last: Label = lines[-1]
+		var bottom: float = row.position.y + _ink_box(last).end.y - scroll.scroll_vertical
+		assert_lte(bottom, scroll.size.y + 1.0, "last row's last relation line is reachable")
+		assert_gt(bottom, 0.0, "last line is inside the viewport at the end")
+
+
+func test_actual_font_worst_wraps_fit_both_row_forms_at_two_resolutions() -> void:
+	for resolution: Vector2 in [Vector2(1280, 720), Vector2(1688, 780)]:
+		for choosing: bool in [true, false]:
+			var probe: Control = _pane(_game(), ["w1"], resolution)
+			# Select by real wrapped font height in each row form, rather than by car count.
+			var worst: Dictionary = _largest_wrapped_case(probe, choosing)
+			if not worst.has("id"): return
+			var id: String = String(worst["id"])
+			var ids: Array = ["w1", "w4", "e1", "w5", id]
+			var p: Control = _pane(_game(), ids, resolution)
+			if choosing:
+				p.set("_choosing", id)
+				p.show_state(_game())
+			await wait_seconds(RowKeep.MOVE_S + 0.03)
+			await wait_process_frames(2)
+			var row: Control = _pane_row(p, id)
+			var prefix: String = "Rel_%s_%s_" % [id, worst["variant"]] if choosing else "Rel_" + id + "_"
+			assert_eq(_relation_text(row, prefix), " ".join(worst["entries"]), "all S1 like/dislike names in order")
+			if choosing:
+				var way: Button = _key(p, "Way_%s_%s" % [id, worst["variant"]])
+				for line: Label in _relation_labels(row, prefix):
+					assert_gte(line.position.y, way.position.y + way.size.y, "relation is below its key")
+					assert_gte(line.position.x, way.position.x - 0.5)
+					assert_lte(_ink_box(line).end.x, way.position.x + way.size.x + 0.5, "inside 80px column")
+			_assert_list_positions(p, ids)
+			assert_almost_eq(p.size.y / UiFonts.K, 286.0, 0.5)
+			assert_gte(p.global_position.x, -0.5)
+			assert_lte(p.global_position.x + p.size.x, resolution.x + 0.5)
+			assert_lte(p.global_position.y + p.size.y, resolution.y + 0.5)
+			await _assert_last_relation_reachable(p, row)
+
+
+func _layout_game() -> Dictionary:
+	var g: Dictionary = _ready_for_w2()
+	g["gearOn"] = true
+	g["supOn"] = true
+	g["dom"]["wood"] = 100
+	g["dom"]["scrap"] = 100
+	g["dom"]["parts"] = 100
+	g["dom"]["cores"] = 10
+	for branch: String in ["engine", "med", "craft", "radio", "expedition"]:
+		g["dom"]["frags"][branch] = 50
+		(g["dom"]["experts"] as Array).append({"name": branch, "comm": "engine", "field": branch, "skill": 3})
+	g["dom"]["techs"]["e1"] = {"stage": "done", "defect": false}
+	g["dom"]["techs"]["w6"] = {"stage": "done", "defect": false}
+	return g
+
+
+func test_first_middle_last_expansion_and_fold_restore_layout_and_scroll_at_two_resolutions() -> void:
+	var ids: Array = ["e3", "e5", "w2", "w1", "w7"]
+	for resolution: Vector2 in [Vector2(1280, 720), Vector2(1688, 780)]:
+		var p: Control = _pane(_layout_game(), ids, resolution)
+		await wait_process_frames(2)
+		var scroll: ScrollContainer = p.get_node("Parts/List") as ScrollContainer
+		var rows: Control = scroll.get_node("Rows") as Control
+		var baseline: Dictionary = {}
+		for id: String in ids:
+			var row: Control = _pane_row(p, id)
+			baseline[id] = {"instance": row.get_instance_id(), "position": row.position, "size": row.size}
+		var total: float = rows.custom_minimum_size.y
+		var end: float = scroll.get_v_scroll_bar().max_value - scroll.get_v_scroll_bar().page
+		assert_gt(end, 0.0)
+		for id: String in ["e3", "w2", "w7"]:
+			scroll.scroll_vertical = 100000
+			await wait_process_frames(1)
+			_key(p, "Key_" + id).pressed.emit()
+			await wait_seconds(RowKeep.MOVE_S + 0.03)
+			await wait_process_frames(2)
+			assert_eq(String(p.get("_choosing")), id)
+			assert_gt(_pane_row(p, id).size.y, (baseline[id]["size"] as Vector2).y, "the open row grows")
+			_assert_list_positions(p, ids)
+			assert_almost_eq(scroll.get_v_scroll_bar().max_value, rows.custom_minimum_size.y, 0.5,
+				"the scroll range takes the open row in (its foot can be scrolled to)")
+			# Fold from the expanded end to exercise restore_scroll's smaller-range clamp.
+			scroll.scroll_vertical = 100000
+			await wait_process_frames(1)
+			_key(p, "Key_" + id).pressed.emit()
+			await wait_seconds(RowKeep.MOVE_S + 0.03)
+			await wait_process_frames(2)
+			assert_eq(String(p.get("_choosing")), "")
+			_assert_list_positions(p, ids)
+			for other: String in ids:
+				var row: Control = _pane_row(p, other)
+				assert_eq(row.get_instance_id(), baseline[other]["instance"], "RowKeep reuses " + other)
+				# Heights are sums of measured lines in game px: equal to float rounding.
+				assert_almost_eq(row.size, baseline[other]["size"] as Vector2, Vector2(0.01, 0.01), other + " size restored")
+				assert_almost_eq(row.position, baseline[other]["position"] as Vector2, Vector2(0.01, 0.01), other + " position restored")
+			assert_almost_eq(rows.custom_minimum_size.y, total, 0.5)
+			assert_almost_eq(scroll.get_v_scroll_bar().max_value - scroll.get_v_scroll_bar().page, end, 0.5)
+			assert_almost_eq(float(scroll.scroll_vertical), floorf(end), 1.0, "scroll range and end return after folding")

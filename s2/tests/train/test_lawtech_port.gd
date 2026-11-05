@@ -15,12 +15,14 @@ const Dom = preload("res://game/train/train_dom.gd")
 const Research = preload("res://game/train/train_research.gd")
 const Workshop = preload("res://game/train/train_workshop.gd")
 const TV = preload("res://tests/train/train_vectors.gd")
+const RestoreVectors = preload("res://tests/train/restore_vectors.gd")
+const Pipe = preload("res://game/train/train_pipe.gd")
+const Content = preload("res://game/train/turn/turn_content.gd")
 const PATH: String = "res://tests/fixtures/train/lawtech_vectors.json"
-## What a variant law's enactment, amendment, vote and repeal touch. S1's council
-## log (councilLog, S3 연결 ports it) is not on S2's council yet, so the whole state is
-## not compared.
+## The variant-law checks compare their owned state; the pipe sequences below
+## compare whole boards, including the council result, log and restore state.
 const VARIANT_KEYS: Array[String] = ["passed", "repealedAt", "boughtBy", "onceTaken", "comms", "coal", "food",
-	"med", "trust", "tension", "fear", "journal", "ledger", "cards", "guidedLeft"]
+	"med", "trust", "tension", "fear", "journal", "ledger", "cards", "guidedLeft", "dom", "council", "contentFlags"]
 
 var _data: Dictionary = {}
 var _bad: Array[String] = []
@@ -77,7 +79,7 @@ func test_every_profile_matches_s1() -> void:
 	var t: Dictionary = _data["tables"]
 	var count := 0
 	for row: Dictionary in _data["cases"]:
-		var g: Dictionary = row["state"]
+		var g: Dictionary = RestoreVectors.project(row["state"])
 		var at: String = "%s/%d" % [row["seed"], int(row["profile"])]
 		assert_true(St.is_s1a(g), at + " ported dom")
 		for c: String in t["COMMS"]:
@@ -103,7 +105,7 @@ func test_every_profile_matches_s1() -> void:
 
 
 func _run(row: Dictionary) -> Dictionary:
-	var input: Dictionary = row["before"].duplicate(true)
+	var input: Dictionary = RestoreVectors.project(row["before"])
 	var t: Dictionary = _data["tables"]
 	var action: Dictionary = row["action"]
 	match str(action["kind"]):
@@ -116,9 +118,10 @@ func _run(row: Dictionary) -> Dictionary:
 ## As test_law_port.gd: a ledger delta Godot reads one bit off is compared to 1e-9.
 func _pick(state: Dictionary) -> Dictionary:
 	var out := {}
+	var projected: Dictionary = RestoreVectors.project(state)
 	for key: String in VARIANT_KEYS:
-		if state.has(key):
-			out[key] = state[key].duplicate(true) if state[key] is Dictionary or state[key] is Array else state[key]
+		if projected.has(key):
+			out[key] = projected[key]
 	for row: Dictionary in out.get("ledger", []):
 		row["d"] = snappedf(float(row["d"]), 1e-9)
 	return out
@@ -136,10 +139,13 @@ func test_variant_laws_match_s1() -> void:
 			bad.append("%s: %s" % [at, got["_turn_port_error"]])
 		else:
 			bad.append_array(TV.full_diffs(_pick(row["after"]), _pick(got), at, 8))
+			var returned: Variant = got.get("council", {}).get("result") if row["action"]["kind"] == "cast_vote" else null
+			_same(row["result"], returned, at + " returned value")
 		if bad.size() >= 40: break
 	for kind: String in ["enact", "vote", "amend", "vote-amend", "repeal"]:
 		assert_true(kinds.has(kind), kind)
 	assert_eq(bad, [] as Array[String], "First differences:\n" + "\n".join(bad.slice(0, 40)))
+	assert_eq(_bad, [] as Array[String])
 
 
 ## An amendment's title names both laws (politics.ts agendaTitle).
@@ -150,12 +156,101 @@ func test_amendment_title() -> void:
 	assert_eq(Vote.agenda_title(t, {"law": "child_pack", "repeal": false}), "아동 노동(짐 꾸리기만)")
 
 
+## The settle's workshop receipt (lastSettle.workshop, the train scene's 2c-2 events) is S2's own;
+## S1's boards have none. It is checked here and left out of the whole-board comparison.
+func _without_shop_receipt(g: Dictionary, at: String) -> Dictionary:
+	var settle: Variant = g.get("lastSettle")
+	if not settle is Dictionary or not (settle as Dictionary).has("workshop"):
+		return g
+	var shop: Variant = settle["workshop"]
+	# Made at a settle of this stretch, kept through the next stretch's start until the next settle.
+	assert_true(shop is Dictionary and shop.get("events") is Array and int(shop.get("seg", -1)) >= 1 and int(shop.get("seg", -1)) <= int(g["seg"]), at + " shop receipt")
+	var out: Dictionary = g.duplicate(true)
+	out["lastSettle"].erase("workshop")
+	return out
+
+
+## The pipe sequences, step after step on one board (s1/tools/lawtech_port_fixtures.ts). Their
+## boards have S1's restore offers already made and no greedy workshop chief (restorationBoard):
+## offers (offerRestores) and the chief (delegate.ts) are S1 domestic parts S2 has not ported.
+func test_pipe_restart_matrix_settle_boundary_sequences_match_s1_whole_boards() -> void:
+	assert_eq((_data["sequences"] as Array).size(), 18)
+	var t: Dictionary = _data["tables"]
+	for row: Dictionary in _data["sequences"]:
+		var g: Dictionary = RestoreVectors.project(row["initial"])
+		for step: Dictionary in row["steps"]:
+			var action: Dictionary = step["action"]
+			var at: String = String(row["name"]) + "/" + String(action["kind"])
+			_same(RestoreVectors.project(step["before"]), _without_shop_receipt(g, at + " input"), at + " input")
+			var value: Variant = null
+			match String(action["kind"]):
+				"start_restore": value = Research.start_restore(g, String(action["id"]), String(action["mode"]), action.get("variant"))
+				"cancel_restore": Research.cancel_restore(g)
+				"open_pipe_vote":
+					g["council"] = {"options": [{"kind": "motion", "motion": "pipe"}], "idx": 0, "locked": false, "deals": [], "result": null}
+					g["voteShift"] = []
+					for comm: String in t["COMMS"]:
+						(g["voteShift"] as Array).append({"comm": comm, "n": 1000, "side": "yes" if bool(action["passed"]) else "no"})
+				"cast_vote":
+					g = Advance.cast_vote(g, t)
+					value = g["council"]["result"]
+				"ratify_pipe": Pipe.ratify(g, t, bool(action["passed"]))
+				"run_workshop":
+					if action.has("workDebt"):
+						# Debt itself is not ported: the boundary input is its remaining available work.
+						var restored: Dictionary = Research.advance_restore(g, maxf(0.0, Workshop.work_power(g, t) - float(action["workDebt"])))
+						if restored.has("done"):
+							Workshop.after_restore(g, t, String(restored["done"]), bool(restored["finishing"]))
+						value = {"used": restored["used"], "did": restored["did"]}
+					else:
+						var worked: Dictionary = Workshop.run(g, t)
+						value = {"used": worked["used"], "did": worked["did"]}
+				"advance": g = Advance.advance(g, t)
+				"achieved_pool":
+					# Design 10-7: the travel events that need the ratification flag, as the next stretch's
+					# departure is about to draw (S1 contentPool, recorded by the generator).
+					var gated: Array = []
+					for ev: Dictionary in Content.content_pool(g, t):
+						if (ev["trigger"] as Array).any(func(c: Dictionary) -> bool: return c.get("type") == "flag" and c.get("id") == "ev_achieved"):
+							gated.append(String(ev["id"]))
+					value = gated
+				_: fail_test("Unknown pipe action: " + str(action))
+			_same(step["result"], value, at + " returned value")
+			if action["kind"] == "advance":
+				for resource: String in ["coal", "food", "med"]:
+					_same(step["after"][resource], g[resource], at + " first settlement " + resource)
+			_same(RestoreVectors.project(step["after"]), _without_shop_receipt(g, at), at + " whole board")
+			assert_true(Dom.is_store(g["dom"]), at + " store")
+		if String(row["name"]).begins_with("pipe-settle/"):
+			# The sequence reaches the next stretch's departure draw: a card is on the table, and a
+			# passed ratification put the flagged events in the pool where a rejected one did not.
+			assert_eq(g["phase"], "travel", String(row["name"]) + " reaches the next travel draw")
+			assert_false((g["cards"] as Array).is_empty(), String(row["name"]) + " departure drew a card")
+			var pools: Array = (row["steps"] as Array).filter(func(s: Dictionary) -> bool: return s["action"]["kind"] == "achieved_pool")
+			assert_eq(pools.size(), 1, String(row["name"]) + " one pool step")
+			if pools.size() == 1:
+				assert_eq((pools[0]["result"] as Array).is_empty(), not String(row["name"]).contains("passed=true"), String(row["name"]) + " flagged events in the pool only after a passed vote")
+			var expected_achievement: bool = bool(row["steps"][-1]["after"].get("contentFlags", {}).get("ev_achieved", false))
+			var content_probe: Dictionary = g.duplicate(true)
+			assert_eq(Content.holds(content_probe, t, {"type": "flag", "id": "ev_achieved", "value": true}), expected_achievement, "content reads the ratification flag after settlement")
+	assert_eq(_bad, [] as Array[String])
+
+
+func test_pipe_without_pending_is_readable_and_ratification_has_no_effect() -> void:
+	for g: Dictionary in [{}, {"dom": null}, {"dom": {}}, {"dom": {"techs": {"e3": {"variant": "a", "pending": false}}}}]:
+		var before: String = JSON.stringify(g, "", false)
+		assert_null(Pipe.pending(g))
+		Pipe.ratify(g, {}, true)
+		Pipe.ratify(g, {}, false)
+		assert_eq(JSON.stringify(g, "", false), before)
+
+
 ## A technology restored while the law it bends stands says so in the journal
 ## (S1 completeTech's lawTechNews); the situation share changes at once.
 func test_restoring_a_law_technology_writes_its_news() -> void:
 	if _data.is_empty(): return
 	var t: Dictionary = _data["tables"]
-	var g: Dictionary = (_data["cases"][0]["state"] as Dictionary).duplicate(true)
+	var g: Dictionary = RestoreVectors.project(_data["cases"][0]["state"])
 	g["passed"] = {"snow_duty": 0}
 	g["journal"] = []
 	var d: Dictionary = g["dom"]

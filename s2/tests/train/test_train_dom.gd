@@ -179,3 +179,49 @@ func test_lures_are_a_store_amount() -> void:
 	g["dom"]["lures"] = 3
 	TrainDom.ensure(g)
 	assert_eq(g["dom"]["lures"], 3, "existing stores stay intact")
+
+
+func test_restore_store_shape_accepts_only_exact_log_stats_and_pipe_variants() -> void:
+	var valid: Dictionary = {"log": {"restores": [{"seg": 1, "id": "e3", "v": "a"}, {"seg": 0, "id": "w1"}]},
+		"stats": {"restored": 2, "tier3": 0, "defective": 1}, "pipeFlip": "b", "pipeMoved": "a"}
+	assert_true(TrainDom.is_store(valid))
+	assert_true(TrainDom.is_store(JSON.parse_string(JSON.stringify(valid))), "JSON integer-valued floats")
+	for pair: Array in [["log", {}], ["log", {"restores": [], "apprentices": []}], ["log", {"restores": {}}],
+		["log", {"restores": [{"seg": 0, "id": "w1", "other": 0}]}], ["log", {"restores": [{"seg": 0, "id": "e3", "v": "c"}]}],
+		["log", {"restores": [{"seg": 0, "id": "unknown"}]}], ["log", {"restores": [{"id": "w1"}]}],
+		["stats", {}], ["stats", {"restored": 0, "tier3": 0, "other": 0}],
+		["stats", {"restored": 0, "tier3": 0, "defective": 0, "partsMade": 0}],
+		["pipeFlip", null], ["pipeFlip", "c"], ["pipeMoved", true], ["pipeMoved", 0]]:
+		var bad: Dictionary = valid.duplicate(true)
+		bad[pair[0]] = pair[1]
+		assert_false(TrainDom.is_store(bad), str(pair))
+	for number: Variant in [-1, 0.5, true, "1", null, INF, NAN]:
+		var bad_seg: Dictionary = valid.duplicate(true)
+		bad_seg["log"]["restores"][0]["seg"] = number
+		assert_false(TrainDom.is_store(bad_seg), "seg " + str(number))
+		for key: String in ["restored", "tier3", "defective"]:
+			var bad_stat: Dictionary = valid.duplicate(true)
+			bad_stat["stats"][key] = number
+			assert_false(TrainDom.is_store(bad_stat), key + " " + str(number))
+
+
+func test_restore_log_initialization_is_idempotent_and_keeps_literal_key_order() -> void:
+	var expected_empty: Array = ["frags", "armory", "wardrobe", "furnish", "store", "decor80", "scrap", "wood", "parts", "cores", "cloth", "ammo_pistol", "ammo_shell", "ammo_craft", "lures", "sleds", "stretchers", "carts", "long_sleds", "runners", "log", "stats"]
+	var expected_start: Array = ["frags", "armory", "wardrobe", "furnish", "store", "decor80", "scrap", "wood", "parts", "cores", "cloth", "ammo_pistol", "ammo_shell", "ammo_craft", "lures", "sleds", "stretchers", "carts", "long_sleds", "runners", "techs", "restoring", "experts", "insulated", "job", "log", "stats"]
+	assert_eq(TrainDom.empty().keys(), expected_empty)
+	var first: Dictionary = TrainDom.start()
+	assert_eq(first.keys(), expected_start)
+	assert_eq(first["log"], {"restores": []})
+	assert_eq(first["stats"], {"restored": 0, "tier3": 0, "defective": 0})
+	(first["log"]["restores"] as Array).append({"seg": 1, "id": "w1"})
+	first["stats"]["restored"] = 7
+	var before: String = JSON.stringify(first, "", false)
+	TrainDom.init_log(first)
+	TrainDom.init_log(first)
+	assert_eq(JSON.stringify(first, "", false), before)
+	var legacy: Dictionary = {"wood": 3, "job": null}
+	TrainDom.init_log(legacy)
+	assert_eq(legacy.keys(), ["wood", "job", "log", "stats"])
+	var returned: Dictionary = {}
+	assert_true(TrainDom.take_extras(returned, {"fragments": ["med"], "coreCount": 1}))
+	assert_eq(returned["dom"].keys(), expected_empty, "first return with no old dom")
