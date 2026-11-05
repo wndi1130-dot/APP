@@ -670,6 +670,12 @@ func _ready() -> void:
 		arrive_t = 0.0
 		hud.visible = false
 		view.slide_train(-train_in(0.0, arrive_far()))
+		# While it rolls in no step runs, so the floors are chosen here as a restored
+		# stop chooses them (field_save.gd): else every floor stands at once, the upper
+		# ones on the ground floor of a building near enough to lose its roof.
+		var lv := level_of(player.position)
+		view.show_levels(lv)
+		view.cut_away(grid_at(player.position).building_at(FieldGrid.cell_of(player.position)), lv)
 	cam_focus = player.position
 	_update_camera(1.0)
 	_refresh_vision()

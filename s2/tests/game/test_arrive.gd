@@ -4,6 +4,8 @@ extends "res://addons/gut/test.gd"
 ## brings it straight to where it stands. Stops at a place open as they did.
 
 const FieldGame = preload("res://game/field_game.gd")
+const FieldGrid = preload("res://game/world/field_grid.gd")
+const FieldMaps = preload("res://game/world/field_maps.gd")
 const TinyMap = preload("res://tests/game/fixtures/tiny_map.gd")
 
 
@@ -67,6 +69,27 @@ func test_a_touch_brings_it_straight_to_its_stand() -> void:
 	assert_false(game.audio.played.has("train_brake"), "skipped: no cry after it stands")
 	game._process(0.1)
 	assert_true(game.player.visible)
+
+
+## No step runs while it rolls in, so the floors are chosen as it starts: on a stop
+## with floors above, those over the player's floor stay hidden (the open line has
+## none yet, so a street of houses is told it is one).
+func test_the_floors_above_stay_hidden_while_it_rolls_in() -> void:
+	var data: Dictionary = FieldMaps.build("houses_01")
+	data["place_kind"] = "bare_line"
+	var game = _game({"map_data": data, "place": "houses_01"})
+	assert_eq(game.arrive_t, 0.0, "it rolls in")
+	assert_true(game.levels.has(1), "a stop with a floor above")
+	var lv: int = game.level_of(game.player.position)
+	assert_eq(game.view.shown_level, lv, "chosen before any step")
+	for k in game.view.level_roots:
+		var want: bool = k == -1 if lv < 0 else k >= 0 and k <= lv
+		assert_eq(game.view.level_roots[k].visible, want, "floor %d" % k)
+	var at: Vector2i = FieldGrid.cell_of(game.player.position)
+	assert_eq(game.view.cut_building, game.grid_at(game.player.position).building_at(at), "the walls cut as on a step")
+	game._process(0.1)
+	assert_gte(game.arrive_t, 0.0, "still rolling in")
+	assert_false(game.view.level_roots[1].visible, "and they stay hidden")
 
 
 func test_a_stop_at_a_place_opens_as_it_did() -> void:
