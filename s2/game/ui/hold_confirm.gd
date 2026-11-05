@@ -198,15 +198,22 @@ func _process(delta: float) -> void:
 ## Gone mid-flash (the pane laid again as a thing came out, or shut): the hold was
 ## full and buzzed, so its work still runs, once, at the end of this frame — each
 ## hold its own deferred call, so two owed works stay two. The work's owner is the
-## HUD, which outlives its panes; what the work does to a shut pane is its own
-## (field_hud.gd _throw, _load_train).
+## HUD, which outlives its panes; what the work does to a pane shut or opened since
+## is its own (field_hud.gd _throw, _load_train: only the pane that held it).
 func _exit_tree() -> void:
 	if not _work_pending:
 		return
 	_work_pending = false
 	flash = 0.0
-	if work.is_valid():
-		work.call_deferred()
+	Callable(get_script(), "_run_owed").call_deferred(work)
+
+
+## The owed work at the frame's end, run by the script (the hold itself is gone).
+## Its owner gone first — the HUD freed with its field — it is dropped with it: a
+## field torn down takes its unfinished confirm along, as it does its other work.
+static func _run_owed(owed: Callable) -> void:
+	if owed.is_valid():
+		owed.call()
 
 
 func _draw() -> void:

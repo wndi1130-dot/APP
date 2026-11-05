@@ -821,7 +821,7 @@ static func _bag_more(hud, p, id: String, at: Dictionary, can_move: bool) -> Con
 		word.size = Vector2(UiFonts.px(54.0), UiFonts.px(20.0))
 		GlassPane.sinks(throw, word, PRESS_SINK)
 		# The hold's line and flash keep to the pressed face (결정 561 ④).
-		GlassPane.sinks(throw, HoldConfirm.attach(throw, hud._throw.bind(id)), PRESS_SINK)
+		GlassPane.sinks(throw, HoldConfirm.attach(throw, hud._throw.bind(id, hud.pane_era)), PRESS_SINK)
 		keys.add_child(throw)
 	else:
 		# 결정 559: only loading everything is held; this move stays one press.
@@ -1384,7 +1384,7 @@ static func _main_key(hud, p, at: Dictionary) -> Button:
 		load_key.name = "MainKey"
 		_key_icon(hud, load_key, "train", 24.0, GlassPane.AMBER_L, -9.0)
 		_key_word(load_key, "싣기", 40.0, GlassPane.AMBER_L, 12.0)
-		GlassPane.sinks(load_key, HoldConfirm.attach(load_key, hud._load_train), PRESS_SINK)
+		GlassPane.sinks(load_key, HoldConfirm.attach(load_key, hud._load_train.bind(hud.pane_era)), PRESS_SINK)
 		return load_key
 	return null
 

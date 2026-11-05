@@ -662,7 +662,20 @@ func test_by_touch_a_second_finger_held_on_a_row_opens_it_and_moves_nothing() ->
 	await _layout()
 	var home: Vector2 = hud.stick_home()
 	_touch(hud, home, true)
-	var at: Vector2 = _row(hud, "Bag", "scrap").get_global_rect().get_center()
+	var row: Button = _row(hud, "Bag", "scrap")
+	var rest: StyleBox = row.get_theme_stylebox("normal")
+	var line_y: float = (row.get_node("Line") as Control).position.y
+	var at: Vector2 = row.get_global_rect().get_center()
+	_touch(hud, at, true, 1)
+	# 결정 561 ④ on this path too: the face shown is the pressed one, as far down
+	# as the line (the button's own pressed state is not set here).
+	assert_eq(row.get_theme_stylebox("normal"), row.get_theme_stylebox("pressed"), "a second finger's press shows the pressed face")
+	assert_almost_eq((row.get_node("Line") as Control).position.y - line_y, UiFonts.px(InventoryPane.PRESS_SINK), 0.01, "with the line sunk as far")
+	# Taken away (not a tap, so nothing moves): its own face again, the line up.
+	_touch(hud, at, false, 1, true)
+	assert_eq(row.get_theme_stylebox("normal"), rest, "taken away, its own face again")
+	assert_almost_eq((row.get_node("Line") as Control).position.y, line_y, 0.01, "and its line back up")
+	assert_eq(int(p.items.get("scrap", 0)), 1, "a finger taken away moves nothing")
 	_touch(hud, at, true, 1)
 	await _wait(InventoryPane.LONG_S + 0.2)
 	_touch(hud, at, false, 1)
@@ -1551,7 +1564,14 @@ func test_a_load_held_full_then_shut_in_its_flash_loads_and_stays_shut() -> void
 	await _layout()
 	var key := game.hud.modal.find_child("MainKey", true, false) as Button
 	assert_not_null(key, "the load key by the train")
+	# Its mark, its word and its hold keep to the pressed face too.
+	_sinks_with_face(key, key.get_children().filter(func(c: Node) -> bool: return c is Control), "the load key")
 	var hold = key.get_node("Hold")
+	var held_work: Callable = hold.work
+	var calls: Array = [0]
+	hold.work = func() -> void:
+		calls[0] += 1
+		held_work.call()
 	key.button_down.emit()
 	hold.set_process(false)
 	hold.advance(HoldConfirm.HOLD_S + 0.01)
@@ -1563,7 +1583,70 @@ func test_a_load_held_full_then_shut_in_its_flash_loads_and_stays_shut() -> void
 	assert_eq(int(game.unloaded.get("food_pack", 0)), 1, "what was held for goes aboard")
 	assert_false(game.hud.modal_open, "the shut pane stays shut")
 	await _layout()
-	assert_eq(int(game.unloaded.get("food_pack", 0)), 1, "once")
+	assert_eq(int(calls[0]), 1, "the load's work ran once")
+
+
+## 결정 561 ④: a throw held full, its pane shut and another opened within the
+## flash: the can is thrown, and the pane opened since is left alone.
+func test_a_throw_held_full_then_another_pane_opened_leaves_that_pane() -> void:
+	var game = _game()
+	var hud = game.hud
+	await _layout()
+	game.player.items = {"can_empty": 2}
+	hud.bag_panel()
+	hud._inv_expand("bag", "can_empty")
+	await _layout()
+	var key := hud.modal.find_child("Throw", true, false) as Button
+	var hold = key.get_node("Hold")
+	key.button_down.emit()
+	hold.set_process(false)
+	hold.advance(HoldConfirm.HOLD_S + 0.01)
+	key.button_up.emit()
+	hold.set_process(false)
+	assert_gt(float(hold.get("flash")), 0.0, "full, it flashes")
+	var held_era: int = hud.pane_era
+	hud._close_modal()
+	hud.bag_panel()
+	var era: int = hud.pane_era
+	assert_eq(era, held_era + 1, "shut and opened again: another pane")
+	if is_instance_valid(hold):
+		hold.advance(HoldConfirm.FLASH_S + 0.01)
+	for _i in range(4):
+		await get_tree().process_frame
+	assert_eq(int(game.player.items.get("can_empty", 0)), 1, "the can held for is thrown")
+	assert_true(hud.modal_open, "the pane opened since stays up")
+	assert_eq(hud.pane_era, era, "and is not shut and opened again")
+	hud._close_modal()
+
+
+## 결정 561 ④ by the GUI: a real press keeps the pressed face (its draw mode) and
+## the row's line sunk with it across frames; let go off the row, both come back.
+func test_by_gui_a_held_row_stays_sunk_with_its_face() -> void:
+	var viewport := _input_viewport()
+	var game = _game(viewport)
+	game.player.items = {"scrap": 1}
+	game.hud.bag_panel()
+	await _layout()
+	var row: Button = _row(game.hud, "Bag", "scrap")
+	var line := row.get_node("Line") as Control
+	var y0: float = line.position.y
+	var at: Vector2 = row.get_global_rect().get_center()
+	_mouse(viewport, at, true)
+	for _i in range(3):
+		await get_tree().process_frame
+	assert_eq(row.get_draw_mode(), BaseButton.DRAW_PRESSED, "the face is the pressed one")
+	assert_almost_eq(line.position.y - y0, UiFonts.px(InventoryPane.PRESS_SINK), 0.01, "its line stays sunk with it")
+	# Let go off the row, so it moves nothing and the pane is not laid again.
+	var away: Vector2 = at + (Vector2(0, -260) if at.y > 360.0 else Vector2(0, 260))
+	_motion(viewport, away)
+	_mouse(viewport, away, false)
+	for _i in range(2):
+		await get_tree().process_frame
+	assert_true(is_instance_valid(line), "the row is still the one pressed")
+	if is_instance_valid(line):
+		assert_almost_eq(line.position.y, y0, 0.01, "let go, its line comes back up")
+	if game.hud.modal_open:
+		game.hud._close_modal()
 
 
 ## 결정 561 ②: the weight mark is a weight with a ring, not a box with a handle —

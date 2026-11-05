@@ -113,6 +113,31 @@ func test_two_holds_gone_mid_flash_each_do_their_work() -> void:
 	assert_eq(int(worked[0]), 2, "and no more")
 
 
+## 결정 561 ④: gone mid-flash, the owed work runs at the frame's end — unless its
+## owner went first (the HUD freed with its field), when it is dropped, quietly.
+func test_an_owed_work_runs_unless_its_owner_went_first() -> void:
+	for keeper_goes: bool in [false, true]:
+		var keeper := Node.new()
+		add_child(keeper)
+		var key := Button.new()
+		key.size = Vector2(100, 52)
+		add_child(key)
+		var hold = HoldConfirm.attach(key, keeper.set_meta.bind("worked", true))
+		key.button_down.emit()
+		hold.set_process(false)
+		hold.advance(HoldConfirm.HOLD_S + STEP)
+		assert_gt(float(hold.flash), 0.0, "full, it flashes")
+		key.free()
+		if keeper_goes:
+			keeper.free()
+			await get_tree().process_frame
+			assert_false(is_instance_valid(keeper), "the keeper went first: the work is dropped")
+		else:
+			await get_tree().process_frame
+			assert_true(bool(keeper.get_meta("worked", false)), "the keeper still there: the owed work ran")
+			keeper.free()
+
+
 func test_a_key_given_a_hold_works_only_when_held_full() -> void:
 	var key := Button.new()
 	key.size = Vector2(100, 52)
