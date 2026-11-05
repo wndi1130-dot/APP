@@ -176,10 +176,63 @@ func build_field(parent: Node, opts: Dictionary) -> void:
 	var f: Node = field
 	if not f.is_built:
 		await f.built
-	if generation != _generation or f != field:
+	if not is_instance_valid(f) or generation != _generation or f != field:
 		return
+	var look = f.people_look
+	var prepare_from: int = Time.get_ticks_msec()
+	look.prepare()
+	var prepare_ms: int = 60000
+	if OS.is_debug_build():
+		prepare_ms = clampi(int(get_meta("_test_person_prewarm_timeout_ms", prepare_ms)), 0, prepare_ms)
+	var prepare_until: int = prepare_from + prepare_ms
+	var late: Dictionary = {}
+	stats["person_prewarm_late"] = false
+	stats["person_prewarm_late_log"] = ""
+	while look.is_preparing():
+		await get_tree().process_frame
+		if not is_instance_valid(f) or generation != _generation or f != field:
+			return
+		if not is_instance_valid(look) or look != f.people_look or look.game != f:
+			return
+		if Time.get_ticks_msec() >= prepare_until:
+			# Count unfinished people in the view's visible capacity without assigning or reading.
+			var left := 0
+			for p in look._preparation_people().slice(0, look.MAX_PEOPLE):
+				var d: Dictionary = look.worn.get(look.body_by.get(p, ""), {})
+				if not look.body_by.has(p) or d.is_empty():
+					left += 1
+					continue
+				if d["own_draw"] != null:
+					for garment: Dictionary in look.looks_on(p) + look.bag_on(p):
+						if not d["wear"].has(garment["shell"]):
+							left += 1
+							break
+			late = {"ms": float(Time.get_ticks_msec() - prepare_from), "left": left}
+			look.cancel_preparation()
+			stats["person_prewarm_late"] = true
+			stats["person_prewarm_late_log"] = "PERSON_PREWARM_LATE %s" % JSON.stringify(late)
+			print(stats["person_prewarm_late_log"])
+		else:
+			look.prepare_step()
+		var now: int = Time.get_ticks_usec()
+		stats["longest_frame_ms"] = maxf(float(stats.get("longest_frame_ms", 0.0)), float(now - _last_frame) / 1000.0)
+		stats["frames"] = int(stats.get("frames", 0)) + 1
+		_last_frame = now
+		if not late.is_empty():
+			break
+	if not is_instance_valid(f) or generation != _generation or f != field:
+		return
+	if not is_instance_valid(look) or look != f.people_look or look.game != f:
+		return
+	if look.preparation_cancelled() and late.is_empty():
+		return
+	stats["person_prewarm_ms"] = float(late.get("ms", look.prepare_stats.get("ms", 0.0)))
+	stats["person_prewarm_left"] = int(late.get("left", 0))
+	stats["person_prewarm_work_ms"] = float(look.prepare_stats.get("work_ms", 0.0))
+	stats["person_prewarm_max_frame_ms"] = float(look.prepare_stats.get("max_frame_ms", 0.0))
+	stats["person_prewarm_frames"] = int(look.prepare_stats.get("frames", 0))
 	stats["field_ms"] = float(Time.get_ticks_usec() - _field_from) / 1000.0
-	stats["longest_piece_ms"] = float(f.pace.longest_usec) / 1000.0
+	stats["longest_piece_ms"] = maxf(float(f.pace.longest_usec) / 1000.0, stats["person_prewarm_max_frame_ms"])
 	field_built.emit(f)
 
 
@@ -190,6 +243,7 @@ func abandon() -> void:
 		field = null
 		return
 	var f: Node = field
+	if f.people_look != null: f.people_look.cancel_preparation()
 	field = null
 	if f.is_built:
 		f.queue_free()
