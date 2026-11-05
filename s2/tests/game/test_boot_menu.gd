@@ -2,11 +2,25 @@ extends "res://addons/gut/test.gd"
 ## The start menu keeps one layer however many settings are picked.
 
 const Boot = preload("res://game/boot.gd")
+const FieldGame = preload("res://game/field_game.gd")
 const FieldHoldout = preload("res://game/field_holdout.gd")
 const FieldMaps = preload("res://game/world/field_maps.gd")
 
 
-# The menu runs at the field's cap, 60 unless picked; the pick holds on the menu and after a restart.
+# A phone starts at 30, anything else at 60; the field on a phone keeps the menu's cap, off it the
+# field's options as before.
+func test_a_phone_starts_capped_at_30_and_its_stops_keep_the_menu_cap() -> void:
+	assert_eq(Boot.default_fps_cap(true), 30, "a phone")
+	assert_eq(Boot.default_fps_cap(false), 60, "the PC and the tests")
+	assert_eq(FieldGame.fps_cap_for(30, {}, true), 30, "a phone stop keeps the menu's 30")
+	assert_eq(FieldGame.fps_cap_for(30, {"fps_cap": 60}, true), 30, "an old save's 60 does not lift it")
+	assert_eq(FieldGame.fps_cap_for(60, {}, true), 60, "60 picked in the menu holds")
+	assert_eq(FieldGame.fps_cap_for(0, {}, true), 60, "a field with no cap set yet")
+	assert_eq(FieldGame.fps_cap_for(30, {}, false), 60, "off the phone the field's own 60, as before")
+	assert_eq(FieldGame.fps_cap_for(60, {"fps_cap": 0}, false), 0, "and its options' cap, as before")
+
+
+# The menu runs at the field's cap, 60 on the PC unless picked; the pick holds on the menu and after a restart.
 func test_the_fps_cap_picked_holds_over_the_default() -> void:
 	var was: int = Engine.max_fps
 	var boot = Boot.new()

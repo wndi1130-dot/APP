@@ -250,3 +250,32 @@ func test_the_cars_heating_is_the_forecasts_under_any_stage() -> void:
 		g["comms"]["tail"]["heat"] = 3
 		assert_eq(CarPane.model(g, t, TAIL)["levers"][0]["cost"],
 			"−" + TrainGauges._num(snappedf(TrainTurn.comm_heat(g, "tail") * float(t["P"]["coalHeatPerLever"]) * float(t["CL"]["mult"][stage]) * St.law_mult(g, t, "heatMult"), 0.1)))
+
+
+
+func test_refresh_keeps_the_scrolled_row_and_held_lever_button() -> void:
+	var sample: Array = StopPickCard.sample()
+	var pane: Control = _pane(sample[0], sample[1])
+	var scroll: ScrollContainer = pane.get_node("Parts/List") as ScrollContainer
+	# The two levers fit normally; use a shorter viewport for this check.
+	scroll.size.y = 60.0 * UiFonts.K
+	await wait_process_frames(2)
+	scroll.scroll_vertical = 40
+	await wait_process_frames(1)
+	var saved: int = scroll.scroll_vertical
+	assert_gt(saved, 0)
+	var row: Control = pane.get_node("Parts/List/Rows/Item_tail1_heat") as Control
+	var row_id: int = row.get_instance_id()
+	var button: Button = row.get_node("Slot_heat/Step1") as Button
+	var button_id: int = button.get_instance_id()
+	var head_id: int = pane.get_node("Parts/Name").get_instance_id()
+	button.toggle_mode = true
+	button.set_pressed_no_signal(true)
+	pane.refresh(sample[0], sample[1])
+	assert_eq(scroll.scroll_vertical, saved)
+	await wait_process_frames(2)
+	assert_eq(scroll.scroll_vertical, saved)
+	assert_eq(pane.get_node("Parts/List/Rows/Item_tail1_heat").get_instance_id(), row_id)
+	assert_eq(row.get_node("Slot_heat/Step1").get_instance_id(), button_id)
+	assert_eq(pane.get_node("Parts/Name").get_instance_id(), head_id)
+	assert_true(button.button_pressed)

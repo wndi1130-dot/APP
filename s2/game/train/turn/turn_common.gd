@@ -43,15 +43,17 @@ static func note(g: Dictionary, key: String, delta: float, why: String) -> void:
 	if g["ledger"].size() > 64: g["ledger"] = g["ledger"].slice(g["ledger"].size() - 64)
 
 static func bump(g: Dictionary, key: String, delta: float, why: String, floor_zero: bool = false) -> void:
-	var before: float = float(g[key])
+	if key == "sup" and not bool(g.get("supOn", false)): return
+	var before: float = float(g.get(key, 0)) if key == "sup" else float(g[key])
 	var value: float = before + delta
-	g[key] = clampf(value, 0, 100) if key in ["trust", "tension"] else (maxf(0, value) if floor_zero else value)
+	g[key] = clampf(value, 0, 100) if key in ["trust", "tension"] else (maxf(0, value) if key == "sup" or floor_zero else value)
 	note(g, key, float(g[key]) - before, why)
 
 static func put(g: Dictionary, key: String, value: float, why: String) -> void:
-	var before: float = float(g[key])
-	g[key] = value
-	note(g, key, value - before, why)
+	if key == "sup" and not bool(g.get("supOn", false)): return
+	var before: float = float(g.get(key, 0)) if key == "sup" else float(g[key])
+	g[key] = maxf(0.0, value) if key == "sup" else value
+	note(g, key, float(g[key]) - before, why)
 
 static func bump_rel(g: Dictionary, comm: String, delta: float, why: String) -> void:
 	var s: Dictionary = g["comms"][comm]
@@ -60,9 +62,10 @@ static func bump_rel(g: Dictionary, comm: String, delta: float, why: String) -> 
 	note(g, "rel:" + comm, float(s["rel"]) - before, why)
 
 static func bump_parts(g: Dictionary, key: String, delta: float, parts: Array, floor_zero: bool = false) -> void:
-	var before: float = float(g[key])
+	if key == "sup" and not bool(g.get("supOn", false)): return
+	var before: float = float(g.get(key, 0)) if key == "sup" else float(g[key])
 	var value: float = before + delta
-	g[key] = clampf(value, 0, 100) if key in ["trust", "tension"] else (maxf(0, value) if floor_zero else value)
+	g[key] = clampf(value, 0, 100) if key in ["trust", "tension"] else (maxf(0, value) if key == "sup" or floor_zero else value)
 	var real: float = float(g[key]) - before
 	if real == 0 or parts.is_empty(): return
 	for row: Array in split_parts(real, parts): note(g, key, float(row[1]), str(row[0]))

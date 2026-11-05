@@ -180,7 +180,7 @@ func test_a_narrow_band_packs_the_left_gauges() -> void:
 	assert_almost_eq(trust.size.x, 66.0 * k, 0.01, "narrow bars")
 	var o: Control = strip.find_child("Outside", true, false)
 	assert_null(o.find_child("Stage", true, false), "no stage name on a narrow band")
-	assert_lte(o.position.x + o.size.x, 230.0 * k, "the thermometer ends before the mood")
+	assert_lte(o.position.x + o.size.x, strip.find_child("Standing", true, false).position.x, "the reserved thermometer ends before the mood")
 	strip.size = Vector2(1558, TrainGauges.BAND_H)
 	strip._lay_out()
 	trust = strip.find_child("MeterTrust", true, false)
@@ -306,8 +306,8 @@ func test_the_narrow_line_keeps_the_thermometer_off_the_mood() -> void:
 		assert_lte(o.position.x + o.size.x, mood.position.x, "and so does its key at %d" % css)
 
 
-## A roll to a longer number widens the thermometer and its key with it.
-func test_a_roll_to_a_longer_number_widens_the_thermometer() -> void:
+## A roll reserves the longest reading at creation, keeping the key and standing still.
+func test_a_roll_to_a_longer_number_keeps_the_reserved_thermometer_width() -> void:
 	var s: Array = _start()
 	var strip = TrainGauges.new()
 	strip.g = s[0]
@@ -322,7 +322,7 @@ func test_a_roll_to_a_longer_number_widens_the_thermometer() -> void:
 	var temp: Control = o.find_child("Temp", true, false)
 	assert_eq((temp as Label).text, "−15°")
 	assert_gte(o.size.x, temp.position.x + temp.size.x, "the number stays inside it")
-	assert_gt(o.size.x, before, "−3° grew to −15°")
+	assert_almost_eq(o.size.x, before, 0.01, "−3° to −15° keeps the longest-reading reservation")
 
 
 ## 결정 502: old settles, the newest meter blocks, then choices and small causes.

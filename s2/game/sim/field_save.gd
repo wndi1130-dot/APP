@@ -4,13 +4,17 @@ extends RefCounted
 ## going back: the last whole save is the only one, and a broken file falls
 ## back to the one before it (.bak).
 ##
-## capture() only reads the field; to_json/from_json and write/read are plain
+## capture() snapshots live picks; to_json/from_json and write/read are plain
 ## functions over a Dictionary. Only S2 reads this file (its keys are its own);
 ## the train keeps its own save (user://s1a_game_v2.json). On start the field
 ## save wins while its phase is "field", unless the train already applied its
 ## receipt_id (S3 PR #428).
 
-const VERSION := 2
+## Field save format number (this file's saves only). Not politics/save_slot.gd SAVE_VERSION,
+## which numbers the train's own save. 3 writes byte and int32 runs (the grids, the sight
+## memory) as one base64 line each; 1 and 2 wrote them a typed number at a time and still read.
+const VERSION := 3
+const READ_VERSIONS: Array[int] = [1, 2, 3]
 const KIND := "s2_field"
 const PATH := "user://field_save.json"
 ## The train's own save (politics/save_slot.gd DEFAULT_PATH): read here only for what it applied.
@@ -21,6 +25,7 @@ const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldGrid = preload("res://game/world/field_grid.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const Sled = preload("res://game/sim/sled.gd")
 const SLED_PERSON_FIELDS: Array[String] = ["sled_id", "sled_stowed_for", "sled_weapon_stowed", "sled_rearm_t", "sled_serial", "sled_job"]
 const StopGround = preload("res://game/world/stop_ground.gd")
@@ -29,19 +34,30 @@ const StopGround = preload("res://game/world/stop_ground.gd")
 const VEC_KEYS := ["pos", "home"]
 ## Start options that are not the world: the switch itself and what goes in its own keys.
 const NOT_START := ["field_save", "field_save_path", "field_resume", "departure", "receipt_id", "map_data", "vat", "staged", "stop_ground", "stop_end_gap",
-	"stop_view_rows", "stop_view_cols", "stop_view_rule"]
+	"stop_view_rows", "stop_view_cols", "stop_view_rule", "bounds_rule"]
 ## Version 1 did not store targets or timers; keep its original fallback.
 const RESUME_STATES := ["frozen", "wander", "downed", "dead", "rising"]
 
+## Set by _decode when a base64 run is not one; from_json then takes the save as broken.
+static var _decode_bad: bool = false
+## The whole string (\z: a line end before the end is not one), padding only at the end.
+static var _base64_line: RegEx = RegEx.create_from_string("^[A-Za-z0-9+/]*={0,2}\\z")
 ## Tests only: fail one step of the next write; empty is off, reset on entry.
 static var _test_fail_step: String = ""
+## Tests only: counts actual parses of the previous slot, not new-file validation.
+static var _test_previous_parses: int = 0
+## Tests only: actual file parse attempts in read(), including a broken primary.
+static var _test_reads: int = 0
+## Process-local hashes of exact disk bytes already accepted by from_json().
+static var _known_good: Dictionary = {}
 
 ## Only simulation state, never meshes, services or input widgets.
+## The whole brain includes work_haul_flee and its cached unloading destination.
 const PERSON_FIELDS: Array[String] = [
 	"team", "role", "display_name", "skills", "medical", "hunger_level", "sore_level", "smell", "traits", "lamp", "lamp_on",
 	"path", "running", "crouched", "facing", "turn_rate", "look", "moving", "stick", "drive_speed", "drive_dir",
 	"command", "command_target", "action", "action_label", "action_t", "action_total", "action_done", "action_busy",
-	"action_noise_t", "swing_t", "shove_t", "lunge_t", "strike_t", "strike_total", "strike_at", "strike_kind",
+	"action_noise_t", "swing_t", "shove_t", "lunge_t", "shove_rest_t", "strike_t", "strike_total", "strike_at", "strike_kind",
 	"reload_t", "jam_t", "target_zombie", "target_person", "hold_attack", "grabbers", "grab_left", "grab_front",
 	"climbing", "carrying_wounded", "downed_marked", "dead_marked", "brain", "panic", "ice_t", "fallen_t",
 	"last_hurt_by", "blood_soaked", "close_kills",
@@ -60,11 +76,15 @@ const GAME_FIELDS: Array[String] = [
 ]
 const COMPONENTS: Array[String] = ["director", "ledger", "mission_play", "holdout", "actions", "ai", "combat", "lines", "weather", "telemetry", "train_guard", "work"]
 ## "dead_eaten_seconds" is EatRules.EATEN_META (결정 441 (3)).
-const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow_way", "pose_care", "pose_swing", "dead_eaten_seconds"]
+const PERSON_META: Array[String] = ["dead_regrab_until", "pose_mode", "pose_blow_way", "pose_care", "pose_swing", "pose_recover_wait", "pose_recover_release", "dead_eaten_seconds"]
 
 
 ## What the field is now, as plain data. `game` is a field_game.gd.
 static func capture(game) -> Dictionary:
+	if game.ended:
+		return _capture_ended(game)
+	if game.get("work") != null:
+		game.work.prepare_digs()
 	var people: Array = []
 	for p in game.people:
 		people.append(_person(game, p))
@@ -91,6 +111,7 @@ static func capture(game) -> Dictionary:
 		"stop_id": stop_id, "place": game.place, "mission": game.mission,
 		"stop_form": game.stop_form, "stop_ground": String(game.data.get("stop_form", "")),
 		"stop_end_gap": int(game.data.get("stop_end_gap", -1)),
+		"bounds_rule": int(game.data.get("bounds_stamp", 0)),
 		"stop_view_rows": int(game.data.get("stop_view_rows", 0)),
 		"stop_view_cols": int(game.data.get("stop_view_cols", 0)),
 		"stop_view_rule": int(game.data.get("stop_view_rule", 0)),
@@ -112,6 +133,27 @@ static func capture(game) -> Dictionary:
 	}
 	out["runtime"] = _runtime(game)
 	return out
+
+
+## Ended saves stay small.
+static func _capture_ended(game) -> Dictionary:
+	var said: Dictionary = game.receipt.to_dict() if game.receipt != null else {}
+	var departure: Dictionary = (game.opts.get("departure", {}) as Dictionary).duplicate(true)
+	var stop_id := String(departure.get("stopId", said.get("stopId", game.opts.get("stop_id", ""))))
+	var start_opts: Dictionary = {}
+	for key in ["slice", "slice_run", "visit_id"]:
+		if game.opts.has(key):
+			start_opts[key] = game.opts[key]
+	return {
+		"version": VERSION, "kind": KIND, "phase": "ended",
+		"receipt_id": String(said.get("receiptId", game.opts.get("receipt_id", ""))),
+		"receipt_state": _receipt_state(game.receipt) if game.receipt != null else {},
+		"place": game.place, "departure": departure,
+		"seed": int(game.rng.seed), "stop_id": stop_id,
+		"start_opts": start_opts.duplicate(true),
+		"clock": {"elapsed": game.clock.elapsed, "speed": game.clock.speed},
+		"coal": {"delivered": game.actions.coal_delivered if game.actions != null else 0, "spent": game.actions.coal_spent if game.actions != null else 0},
+	}
 
 
 static func _start_opts(opts: Dictionary) -> Dictionary:
@@ -159,9 +201,9 @@ static func from_json(text: String) -> Dictionary:
 		return {}
 	if not is_finite(float(version)) or float(version) != floorf(float(version)):
 		return {}
-	if parsed.get("kind") != KIND or float(version) not in [1.0, float(VERSION)]:
+	if parsed.get("kind") != KIND or not int(version) in READ_VERSIONS:
 		return {}
-	var decoded: Variant = _decode(parsed)
+	var decoded: Variant = decode_checked(parsed)
 	if not decoded is Dictionary or not _whole(decoded):
 		return {}
 	var d: Dictionary = decoded
@@ -218,6 +260,8 @@ static func _counts(d: Dictionary) -> bool:
 
 
 static func _whole(d: Dictionary) -> bool:
+	if d.has("bounds_rule") and not _valid_bounds_rule(d["bounds_rule"]):
+		return false
 	if not _fields(d, {"clock": TYPE_DICTIONARY, "coal": TYPE_DICTIONARY}, {
 		"people": TYPE_ARRAY, "zombies": TYPE_ARRAY, "ground_items": TYPE_ARRAY,
 		"containers": TYPE_DICTIONARY, "spots": TYPE_DICTIONARY, "ammo": TYPE_DICTIONARY, "unloaded": TYPE_DICTIONARY,
@@ -261,6 +305,13 @@ static func _whole(d: Dictionary) -> bool:
 	if not _whole_departure(opts.get("departure", {}) if departure.is_empty() else departure):
 		return false
 	return not exact(d) or _whole_runtime(d)
+
+
+static func _valid_bounds_rule(value: Variant) -> bool:
+	if value is int:
+		return value >= 0
+	# JSON의 정수도 float로 온다. int 범위를 벗어난 값은 변환 전에 거부한다.
+	return value is float and is_finite(value) and value >= 0.0 and value < 9223372036854775808.0 and floor(value) == value
 
 
 ## Sled rows as the restore reads them: a bad one sends the read to the backup
@@ -383,8 +434,8 @@ static func should_resume(save: Dictionary, applied = {}) -> bool:
 ## Where the app starts (S3 spec 4, user decision 296): the field save and the
 ## train save are read, and a stop still being played whose return the train has
 ## not taken in comes back. Returns the start options for it, or {} to start fresh.
-static func pick_start(field_path: String = PATH, train_path: String = TRAIN_PATH) -> Dictionary:
-	var save := read(field_path)
+static func pick_start(field_path: String = PATH, train_path: String = TRAIN_PATH, read_context: Variant = null) -> Dictionary:
+	var save: Dictionary = read_for_start(field_path, read_context) if read_context is Dictionary else read(field_path)
 	if not should_resume(save, train_applied(train_path)):
 		return {}
 	var opts := resume_opts(save)
@@ -407,10 +458,13 @@ static func train_applied(train_path: String = TRAIN_PATH) -> Dictionary:
 
 ## The options that build the same stop again and then put the save on it.
 static func resume_opts(save: Dictionary) -> Dictionary:
+	if save.get("phase") == "ended":
+		return {}
 	var opts: Dictionary = (save.get("start_opts", {}) as Dictionary).duplicate(true)
 	opts["seed"] = int(save.get("seed", 0))
 	opts["place"] = String(save.get("place", ""))
 	opts["mission"] = String(save.get("mission", ""))
+	opts["bounds_rule"] = int(save.get("bounds_rule", 0))
 	if save.has("stop_form"):
 		opts["stop_form"] = save["stop_form"]
 	# The ground goes up as the save stood on it (field_game.gd shape_stop). One from before
@@ -466,6 +520,8 @@ static func _grid_sizes_match(game, save: Dictionary) -> bool:
 
 ## Version 2 reconnects existing identities before restoring their clocks or callbacks.
 static func apply(game, save: Dictionary) -> void:
+	if save.get("phase") == "ended":
+		return
 	var form := StopForm.resolve(save if save.has("stop_form") else game.opts, String(game.data["place_kind"]))
 	game.skip_arrival()
 	game.begin_resume()
@@ -509,11 +565,102 @@ static func apply(game, save: Dictionary) -> void:
 	_put_zombies(game, save.get("zombies", []))
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
+	if exact(save):
+		_restore_work_fallback(game, save)
 	game.cam_focus = game.player.position
 	game._update_camera(1.0)
 	Sled.reconcile(game)
 	_refresh_restored_view(game)
 	game.set_stop_form(form)
+
+
+## Keep the saved coal pool when grid paths cannot be restored.
+static func _restore_fallback_coal(game, runtime: Dictionary, saved_people: Array) -> bool:
+	var wagons: Array = game.data.get("wagons", [])
+	if not runtime.has("wagon_coal"):
+		var removed: float = maxf(game.actions.coal_delivered, 0.0)
+		for person: Dictionary in saved_people:
+			var brain: Dictionary = person.get("state", {}).get("brain", {})
+			if brain.get("load_kind", "coal") == "coal":
+				removed += maxf(float(brain.get("load", 0.0)), 0.0)
+		if game.work != null:
+			for pile: Dictionary in game.work.dropped:
+				if pile.get("kind", "") == "coal":
+					removed += maxf(float(pile.get("n", 0.0)), 0.0)
+		for wagon: Dictionary in wagons:
+			if wagon.has("work"):
+				var taken: float = minf(maxf(float(wagon.get("coal", 0.0)), 0.0), removed)
+				wagon["coal"] = maxf(float(wagon.get("coal", 0.0)) - taken, 0.0)
+				removed -= taken
+		return false
+	var coal: Array = runtime.get("wagon_coal", [])
+	var ids: Array = runtime.get("wagon_ids", [])
+	var matched: bool = wagons.size() == coal.size()
+	if runtime.has("wagon_ids"):
+		matched = matched and ids.size() == wagons.size()
+		if matched:
+			for i in wagons.size():
+				if String(ids[i]) != String(wagons[i].get("id", "")):
+					matched = false
+					break
+	if matched:
+		for i in wagons.size():
+			wagons[i]["coal"] = maxf(float(coal[i]), 0.0)
+		return true
+	var pool: float = 0.0
+	for amount: Variant in coal:
+		pool += maxf(float(amount), 0.0)
+	for wagon: Dictionary in wagons:
+		wagon["coal"] = 0.0
+	for wagon: Dictionary in wagons:
+		if wagon.has("work"):
+			wagon["coal"] = pool
+			pool = 0.0
+			break
+	if pool > 0.0 and game.work != null:
+		game.work.dropped.append({"pos": game.player.position, "kind": "coal", "n": pool})
+	return false
+
+
+## Rebuild routes on this grid. Interrupted picks keep seconds, never old callbacks.
+static func _restore_work_fallback(game, save: Dictionary) -> void:
+	var runtime: Dictionary = save["runtime"]
+	if game.work != null:
+		_restore_properties(game, game.work, runtime.get("components", {}).get("work", {}))
+	var matched: bool = _restore_fallback_coal(game, runtime, save.get("people", []))
+	for row: Dictionary in save.get("people", []):
+		var p = _person_with_id(game, String(row["pid"]))
+		if p == null:
+			continue
+		var brain: Dictionary = row.get("state", {}).get("brain", {})
+		for key: String in ["work_site", "job", "side", "load", "load_kind", "boarded", "board_at", "work_wait", "work_run", "work_haul_flee",
+				"work_haul_gave_up", "haul_best_at"]:
+			if brain.has(key):
+				p.brain[key] = brain[key]
+		p.brain.erase("coal_drop")
+	if game.work == null:
+		return
+	for id: String in game.work.sites.keys():
+		if not game.data["spots"].has(id):
+			game.work.sites.erase(id)
+			continue
+		var state: Dictionary = game.work.sites[id]
+		state["path"] = PackedVector3Array()
+		state["path_at"] = -INF
+		state["door"] = Vector3.ZERO
+		state["cells"] = -1
+		state["bright"] = false
+		if not matched:
+			state["dig_wagon"] = -1
+			state["dig_parts"] = []
+			state["dig_active"] = {}
+	game.work.restore_digs()
+	game.actions.work_started = false
+	for id: String in game.work.sites:
+		if not matched:
+			game.work.sites[id]["dig_wagon"] = -1
+		if game.work.phase(id) in ["working", "hold", "retreat"]:
+			game.actions.work_started = true
 
 
 ## The old/fallback path also keeps sled work by pid and id, with no replay.
@@ -615,9 +762,12 @@ static func _runtime(game) -> Dictionary:
 	# Coal dug from a wagon (field_ai.gd _dug, field_work.gd) is in the map's own rows, which a
 	# restart builds afresh: each wagon's coal, in the map's order.
 	var wagon_coal: Array = []
+	var wagon_ids: Array = []
 	for wagon: Dictionary in game.data.get("wagons", []):
 		wagon_coal.append(float(wagon.get("coal", 0.0)))
+		wagon_ids.append(String(wagon.get("id", "")))
 	out["wagon_coal"] = wagon_coal
+	out["wagon_ids"] = wagon_ids
 	return out
 
 
@@ -882,6 +1032,8 @@ static func _apply_exact(game, save: Dictionary) -> void:
 	if game.receipt != null:
 		_put_receipt(game.receipt, save.get("receipt_state", {}))
 	_restore_properties(game, game, runtime["game"])
+	if game.work != null:
+		game.work.restore_digs()
 	Sled.reconcile(game)
 	_refresh_restored_view(game)
 	# Sight/view rebuilding must not advance the saved simulation or random streams.
@@ -906,6 +1058,8 @@ static func _apply_exact(game, save: Dictionary) -> void:
 
 
 static func _refresh_restored_view(game) -> void:
+	if game.view == null:
+		return
 	game.view.update_sleds(game.sleds, game.people)
 	# Boxes are drawn in shared chunk meshes (map_view.gd): ask the view, not its nodes.
 	for id in game.view.container_ids():
@@ -919,6 +1073,8 @@ static func _refresh_restored_view(game) -> void:
 	for id in game.data["spots"]:
 		if game.view.spot_nodes.has(id):
 			game.view.update_spot(id)
+	if game.work != null:
+		game.work.paint_digs()
 	for cell in game.grid.doors:
 		if game.view.door_nodes.has(cell) or (game.view.buildings and game.view.buildings.draws_cell(cell)):
 			game.view.update_door(cell)
@@ -1012,6 +1168,21 @@ static func _put_receipt(r, state: Dictionary) -> void:
 			r.set(name, String(v))
 
 
+static func _bytes_hash(bytes: PackedByteArray) -> PackedByteArray:
+	var context: HashingContext = HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK or context.update(bytes) != OK:
+		return PackedByteArray()
+	return context.finish()
+
+
+static func _remember_good(path: String, bytes: PackedByteArray) -> void:
+	var digest: PackedByteArray = _bytes_hash(bytes)
+	if digest.size() == 32:
+		_known_good[path] = digest
+	else:
+		_known_good.erase(path)
+
+
 ## Writes over the slot: the new file goes down whole first, the last one is kept as .bak.
 static func write(d: Dictionary, path: String = PATH) -> bool:
 	var fail_step := _test_fail_step
@@ -1057,8 +1228,13 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 		if error != OK or previous_bytes.size() != previous_length:
 			DirAccess.remove_absolute(tmp)
 			return false
-		var previous := from_json(previous_bytes.get_string_from_utf8())
-		var moved := backup if not previous.is_empty() else path + ".broken"
+		var previous_hash: PackedByteArray = _bytes_hash(previous_bytes)
+		var known_hash: PackedByteArray = _known_good.get(path, PackedByteArray())
+		var previous_good: bool = previous_hash.size() == 32 and previous_hash == known_hash
+		if not previous_good:
+			_test_previous_parses += 1
+			previous_good = not from_json(previous_bytes.get_string_from_utf8()).is_empty()
+		var moved: String = backup if previous_good else path + ".broken"
 		if FileAccess.file_exists(moved) and DirAccess.remove_absolute(moved) != OK:
 			DirAccess.remove_absolute(tmp)
 			return false
@@ -1066,6 +1242,7 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 			DirAccess.remove_absolute(tmp)
 			return false
 	if fail_step != "rename_tmp" and DirAccess.rename_absolute(tmp, path) == OK:
+		_remember_good(path, written)
 		return true
 	if not FileAccess.file_exists(path) and FileAccess.file_exists(backup):
 		DirAccess.rename_absolute(backup, path)
@@ -1077,13 +1254,32 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 static func read(path: String = PATH) -> Dictionary:
 	for at in [path, path + ".bak"]:
 		if FileAccess.file_exists(at):
-			var d := from_json(FileAccess.get_file_as_string(at))
+			var bytes: PackedByteArray = FileAccess.get_file_as_bytes(at)
+			_test_reads += 1
+			var d: Dictionary = from_json(bytes.get_string_from_utf8())
 			if not d.is_empty():
+				if at == path:
+					_remember_good(path, bytes)
 				return d
 	return {}
 
 
+## A caller-owned, short-lived boot read, including an empty result. Hashes stream
+## both candidates: a deferred scene switch can see a write, clear, or backup change.
+## This stores no parsed save globally and does not change the write-validation cache.
+static func read_for_start(path: String, context: Dictionary) -> Dictionary:
+	var files: Array[String] = []
+	for at: String in [path, path + ".bak"]:
+		files.append(FileAccess.get_sha256(at) if FileAccess.file_exists(at) else "")
+	if context.get("path") != path or context.get("files") != files:
+		context["path"] = path
+		context["files"] = files
+		context["saved"] = read(path)
+	return context["saved"]
+
+
 static func clear(path: String = PATH) -> void:
+	_known_good.erase(path)
 	for at in [path, path + ".tmp", path + ".bak", path + ".broken"]:
 		if FileAccess.file_exists(at):
 			DirAccess.remove_absolute(at)
@@ -1104,7 +1300,15 @@ static func _encode(v: Variant) -> Variant:
 		return {"$type": "Rect2i", "value": [v.position.x, v.position.y, v.size.x, v.size.y]}
 	if v is Color:
 		return {"$type": "Color", "value": [v.r, v.g, v.b, v.a]}
-	if v is PackedVector3Array or v is PackedByteArray or v is PackedInt32Array or v is PackedStringArray:
+	# A grid's cells and the sight memory are runs of bytes or int32s, tens of thousands
+	# long: one base64 line, not a typed object a number (about 30 bytes for each byte).
+	# (Marshalls reports an empty run as an error: that one is "".)
+	if v is PackedByteArray:
+		return {"$type": "PackedByteArray", "base64": "" if v.is_empty() else Marshalls.raw_to_base64(v)}
+	if v is PackedInt32Array:
+		# Little-endian, as on every device the game ships to (arm64, x86-64).
+		return {"$type": "PackedInt32Array", "base64": "" if v.is_empty() else Marshalls.raw_to_base64((v as PackedInt32Array).to_byte_array())}
+	if v is PackedVector3Array or v is PackedStringArray:
 		return {"$type": type_string(typeof(v)), "value": _encode(Array(v))}
 	if v is Dictionary:
 		var strings_only: bool = true
@@ -1118,7 +1322,10 @@ static func _encode(v: Variant) -> Variant:
 			return {"$type": "Dictionary", "value": pairs}
 		var out := {}
 		for k in v:
-			out[String(k)] = _encode(v[k])
+			if k == "dig_parts":
+				out[String(k)] = _encode(FieldWork.clean_dig_parts(v[k], int(v.get("dig_wagon", -1))))
+			else:
+				out[String(k)] = _encode(v[k])
 		return out
 	if v is Array:
 		var out: Array = []
@@ -1130,6 +1337,12 @@ static func _encode(v: Variant) -> Variant:
 
 static func _decode(v: Variant) -> Variant:
 	if v is Dictionary:
+		# A packed tag is these two keys and nothing else (no old "value" beside it).
+		if v.has("$type") and v.has("base64"):
+			if v.size() != 2:
+				_decode_bad = true
+				return null
+			return _unpack(String(v["$type"]), v["base64"])
 		if v.has("$type") and v.has("value"):
 			var value: Variant = v["value"]
 			match String(v["$type"]):
@@ -1156,6 +1369,8 @@ static func _decode(v: Variant) -> Variant:
 				out[k] = Vector3(float(e[0]), float(e[1]), float(e[2]))
 			else:
 				out[k] = _decode(e)
+		if out.has("dig_parts"):
+			out["dig_parts"] = FieldWork.clean_dig_parts(out["dig_parts"], int(out.get("dig_wagon", -1)))
 		return out
 	if v is Array:
 		var out: Array = []
@@ -1163,3 +1378,39 @@ static func _decode(v: Variant) -> Variant:
 			out.append(_decode(e))
 		return out
 	return v
+
+
+## A whole parsed save decoded (_decode), or null when a packed run in it is broken: the field
+## slot and the slice and train slots (slice_save.gd) read through here.
+static func decode_checked(v: Variant) -> Variant:
+	_decode_bad = false
+	var decoded: Variant = _decode(v)
+	if _decode_bad:
+		_decode_bad = false
+		return null
+	return decoded
+
+
+## A base64 run back as the packed array it was (_encode); a line that is not base64, or an
+## int32 run cut between numbers, marks the save broken (_decode_bad) rather than guess.
+static func _unpack(kind: String, text: Variant) -> Variant:
+	if not text is String or (text as String).length() % 4 != 0 or _base64_line.search(text) == null:
+		_decode_bad = true
+		return null
+	var line: String = text
+	var raw: PackedByteArray = PackedByteArray() if line.is_empty() else Marshalls.base64_to_raw(line)
+	var padding: int = 2 if line.ends_with("==") else (1 if line.ends_with("=") else 0)
+	# Three bytes a four-letter group, less the padding: what a real base64 line decodes to.
+	if raw.size() != (line.length() >> 2) * 3 - padding:
+		_decode_bad = true
+		return null
+	match kind:
+		"PackedByteArray":
+			return raw
+		"PackedInt32Array":
+			if raw.size() % 4 != 0:
+				_decode_bad = true
+				return null
+			return raw.to_int32_array()
+	_decode_bad = true
+	return null

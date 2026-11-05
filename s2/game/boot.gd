@@ -10,6 +10,9 @@ const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const ScreenLift = preload("res://game/ui/screen_lift.gd")
+const PropModels = preload("res://game/world/prop_models.gd")
+const UiFonts = preload("res://game/ui/ui_fonts.gd")
+const TrainModels = preload("res://game/world/train_model_kit.gd")
 ## Shader gallery (fx library), opened from the menu for a look on the phone.
 const GALLERY_SCENE := "res://fx/gallery.tscn"
 const TRAIN_SCENE := "res://game/train/train.tscn"
@@ -66,6 +69,7 @@ var train_save_path: String = FieldSave.TRAIN_PATH
 var menu_scroll: int = 0
 var menu: Control
 var field: Node3D
+var _retiring_field: WeakRef
 var theme: Theme
 
 
@@ -73,14 +77,18 @@ func _ready() -> void:
 	theme = UiTheme.make(24)
 	for row in CHOICES:
 		settings[row[0]] = row[2][0][0]
+	settings["fps_cap"] = default_fps_cap()
 	_cap_fps()
+	preload("res://game/world/horde_warm.gd").start(self, PerfSwitch.read() if OS.has_feature("android") else {}) # 무리 첫 그림 데우기(메뉴 동안)
 	var board: Array = SliceFlow.start_board()
-	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path)
+	var field_read: Dictionary = {}
+	var slice_resume: Dictionary = SliceSave.pick(slice_save_path, train_save_path, board[1], field_save_path, field_read)
 	if not slice_resume.is_empty():
+		slice_resume["_field_read"] = field_read
 		_start_slice(slice_resume)
 		return
 	# A stop the app was shut in the middle of comes back where it was (user decision 296).
-	var resume := FieldSave.pick_start(field_save_path, train_save_path)
+	var resume: Dictionary = FieldSave.pick_start(field_save_path, train_save_path, field_read)
 	if bool(resume.get("slice", false)):
 		_show_menu()
 		return
@@ -95,6 +103,7 @@ func _ready() -> void:
 
 
 func _show_menu() -> void:
+	_release_menu_caches()
 	if menu != null:
 		menu.get_parent().queue_free()
 	var layer := CanvasLayer.new()
@@ -188,6 +197,27 @@ func _show_menu() -> void:
 	scroll.get_v_scroll_bar().value_changed.connect(func(x: float) -> void: menu_scroll = int(x))
 
 
+## Two process_frame waits cross a frame-end deletion flush even when restart
+## runs before this iteration's process_frame (e.g. during input handling).
+func _release_menu_caches() -> void:
+	var tree: SceneTree = get_tree()
+	await tree.process_frame
+	await tree.process_frame
+	for _extra_frame: int in 4:
+		if _retiring_field == null or _retiring_field.get_ref() == null:
+			break
+		await tree.process_frame
+	# A start or scene change during the wait must not clear the new game's caches.
+	if not is_inside_tree() or is_queued_for_deletion() or not is_instance_valid(menu) or field != null:
+		return
+	# Scene exits join StopLoader/scenery workers; leave caches intact if still live.
+	if _retiring_field != null and _retiring_field.get_ref() != null:
+		return
+	PropModels.release()
+	UiFonts.release()
+	TrainModels.release()
+
+
 func _pick(key: String, value) -> void:
 	settings[key] = value
 	if key == "cold_scheme":
@@ -198,16 +228,27 @@ func _pick(key: String, value) -> void:
 
 
 ## The menu, the train and the stop card run at the field's cap too: the menu's 「FPS 상한」,
-## 60 unless picked. Uncapped they ran at the phone's 120 Hz beat (80 fps on the stop card)
-## and warmed it (phone night run 2026-10-31).
+## the default unless picked. Uncapped they ran at the phone's 120 Hz beat (80 fps on the stop
+## card) and warmed it (phone night run 2026-10-31).
 func _cap_fps() -> void:
-	Engine.max_fps = int(settings.get("fps_cap", 60))
+	Engine.max_fps = int(settings.get("fps_cap", default_fps_cap()))
+
+
+## 30 on a phone, 60 anywhere else (2026-11-02 user's pick): over a 30-minute phone run a cap of
+## 60 heated the phone until its clock was held down (20.1 fps by minute 25) while 30 held 29.84
+## fps all the way. 60 stays in the menu; the PC and the tests keep the 60 they always ran at.
+static func default_fps_cap(mobile: bool = OS.has_feature("mobile")) -> int:
+	return 30 if mobile else 60
 
 
 func _make_slice(resume: Dictionary = {}) -> Node:
 	var flow = SliceFlow.new()
+	var slice_resume: Dictionary = resume.duplicate()
+	var field_read: Dictionary = slice_resume.get("_field_read", {})
+	slice_resume.erase("_field_read")
 	flow.opts = {
-		"save": true, "resume": resume, "slice_save_path": slice_save_path,
+		"save": true, "resume": slice_resume, "slice_save_path": slice_save_path,
+		"_field_read": field_read,
 		"train_save_path": train_save_path, "field_save_path": field_save_path,
 		"intro": resume.is_empty(),
 	}
@@ -266,6 +307,7 @@ func place_picked() -> String:
 
 func _on_restart() -> void:
 	if field != null:
+		_retiring_field = weakref(field)
 		field.queue_free()
 		field = null
 	_cap_fps()

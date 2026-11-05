@@ -155,10 +155,10 @@ func test_imported_mesh_has_one_surface_colours_and_measured_bounds() -> void:
 		root.free()
 
 
-## The living-colour press as weathered.gdshader writes it: its own value and cool-mix defaults, accent_saturation,
+## The living-colour press as weathered.gdshaderinc (weathered.gdshader's body) writes it: its own value and cool-mix defaults, accent_saturation,
 ## and the cool-mix factor of its lively mix (the very expression building.gdshader mixes its accent with).
 func _lively() -> Dictionary:
-	var path := "res://fx/shaders/weathered.gdshader"
+	var path := "res://fx/shaders/weathered.gdshaderinc"
 	var g := FxState.MODEL_GRADE.duplicate()
 	g["grade_saturation"] = _uniform_default(path, "accent_saturation")
 	g["grade_value"] = _uniform_default(path, "grade_value")
@@ -211,7 +211,7 @@ func test_room_kinds_and_only_they_get_the_living_colour_press() -> void:
 
 
 func test_catalog_grade_is_the_shaders_living_colour_press() -> void:
-	var weathered := "res://fx/shaders/weathered.gdshader"
+	var weathered := "res://fx/shaders/weathered.gdshaderinc"
 	var code := FileAccess.get_file_as_string(weathered)
 	assert_almost_eq(_uniform_default(weathered, "lively"), 0.0, EPS, "every other model keeps the default press")
 	var mix := RegEx.new()

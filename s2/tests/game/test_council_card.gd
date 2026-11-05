@@ -88,6 +88,31 @@ func test_a_law_s_lines_split_as_the_mockup_s_bill() -> void:
 	assert_eq(CouncilCard.stance_of(-1), ["n", "반대 쪽"])
 
 
+## A session a group opened with the agenda it took in a deal (S1 openCouncil, the deal
+## vectors' holder cases): the bill opens on the group's pick and keeps it (S1 setAgenda).
+func test_a_picked_agenda_opens_the_bill_and_stays() -> void:
+	var d: Variant = JSON.parse_string(FileAccess.get_file_as_string(DEALS))
+	var row: Dictionary = {}
+	for r: Dictionary in d["cases"]:
+		if String(r["name"]).begins_with("holder/") and int(r["after"]["council"]["idx"]) > 0:
+			row = r
+			break
+	assert_false(row.is_empty(), "a holder case that picks past the first agenda")
+	if row.is_empty():
+		return
+	var picked: int = int(row["after"]["council"]["idx"])
+	var c = _card(row["after"], d["tables"])
+	assert_eq(c.idx, picked, "the bill opens on the group's pick")
+	assert_true(bool(c.m["locked"]))
+	var prev: Button = c.bill.find_child("Prev", true, false)
+	var nxt: Button = c.bill.find_child("Next", true, false)
+	assert_true(prev.disabled and nxt.disabled, "both arrows hold")
+	c.turn(1)
+	c.turn(-1)
+	assert_eq(c.idx, picked)
+	assert_eq(c.m["title"], CouncilVote.agenda_title(c.t, row["after"]["council"]["options"][picked]))
+
+
 func test_the_bill_turns_between_agendas_and_a_group_opens_its_pane() -> void:
 	var c = _card()
 	assert_has(_said(c.bill), "특별", "a special session says so in a word (결정 417)")

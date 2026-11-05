@@ -330,6 +330,8 @@ func _pause(on: bool) -> void:
 
 
 func _process(delta: float) -> void:
+	if beat in ["out", "end"]:
+		_freeze_for_fill()
 	if paused:
 		return
 	_step(minf(delta, 0.1))
@@ -430,8 +432,15 @@ func _begin(b: String) -> void:
 		if not seen and remember:
 			mark_seen()
 		done.emit(how)
+		_freeze_for_fill()
 	elif b == "end":
 		queue_free()
+
+
+func _freeze_for_fill() -> void:
+	# Freeze even at night: the shader owner may publish energy after this tick.
+	if port != null and PerfSwitch.fill_mode() == "shader":
+		port.render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 
 func _view_input(e: InputEvent) -> void:

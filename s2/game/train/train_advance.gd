@@ -1,4 +1,5 @@
 extends RefCounted
+const Supplies = preload("res://game/train/train_supplies.gd")
 ## Partial S1a turn port. Every public action returns a deep copy.
 ## Unported branches return that copy with _turn_port_error = F-NOT-PORTED: ...;
 ## callers must reject that result. No fixture answers are read by these rules.
@@ -88,7 +89,7 @@ static func after_stop(g0: Dictionary, t: Dictionary) -> Dictionary:
 		return _unported(g0, str(settled["_turn_port_error"]).trim_prefix("F-NOT-PORTED: ")) if settled.has("_turn_port_error") else settled
 	g["councilOwed"] = false
 	var opened: Dictionary = open_council(g, t)
-	if opened.has("_turn_port_error"): return _unported(g0, str(opened["_turn_port_error"]))
+	if opened.has("_turn_port_error"): return _unported(g0, str(opened["_turn_port_error"]).trim_prefix("F-NOT-PORTED: "))
 	opened["phase"] = "council"
 	return opened
 
@@ -109,8 +110,20 @@ static func _new_secret(g: Dictionary, t: Dictionary) -> Dictionary:
 	return secret
 
 
+## S1 politics.ts openCouncil. A group that took the agenda in a deal (`agendaHolder`) picks
+## this session's agenda, the one it likes best (its stance without grudge; the first of equal
+## best), and the agenda is locked to it (council_card.gd turn).
+## S1과 다른 점(코디 11-04 9-1, 이식 전 경계 규칙): 선택권 칸은 S2가 표결할 수 있는 후보
+## (votable — 지금 못 하는 것은 비상대권 법·추인·S2 밖 동의) 가운데 최고점을 고른다. S1의 고름이
+## 표결할 수 있는 안건이면 S1과 같고, 아니면 여기서만 갈라진다. 표결할 수 있는 후보가 하나도 없으면
+## 선택권은 쓰이고 회기는 잠금 없이 열린다. 비상대권 법 표결을 옮기면(9-2) 이 경계 규칙을 지운다.
+## 못 하는 후보에는 점수도 세지 않는다(_motion_lean은 S2가 옮긴 동의만 셈 — 재점검 M2).
+## A martial session, whose agenda filter S2 has not ported (S1 drops the pick there), is still
+## refused before anything is spent.
 static func open_council(g0: Dictionary, t: Dictionary, emergency: bool = false) -> Dictionary:
-	if g0.get("agendaHolder") != null: return _unported(g0, "openCouncil: agendaHolder stance")
+	var held: bool = g0.get("agendaHolder") != null
+	if held and not emergency and g0.get("dark") is Dictionary and bool((g0["dark"] as Dictionary).get("martial", false)):
+		return _unported(g0, "openCouncil: agendaHolder in a martial session")
 	var g: Dictionary = g0.duplicate(true)
 	g["session"] = int(g["session"]) + 1
 	for comm: String in t["COMMS"]:
@@ -122,9 +135,28 @@ static func open_council(g0: Dictionary, t: Dictionary, emergency: bool = false)
 	if not emergency and State.law_active(g, "patrol") and _rnd(g) < 0.25:
 		var secret: Dictionary = _new_secret(g, t)
 		Turn._journal(g, "귀환 검사에서 %s 대표의 약점이 드러났다." % t["COMM_NAME"][secret["about"]], "dark")
-	var regular: Dictionary = Agenda.agenda_options(g, t)
-	g["council"] = {"options": regular["options"], "idx": 0, "locked": false, "deals": [], "result": null}
+	var options: Array = Agenda.agenda_options(g, t)["options"]
+	var holder: Variant = g.get("agendaHolder")
+	var idx: int = 0
+	var picked: bool = false
+	if holder != null:
+		# S1 starts its best at -99; scores stay above that (test_deal_port holds it on S1's own
+		# scores), so taking the first votable agenda as the floor picks the same agenda.
+		var best: float = -INF
+		for i: int in options.size():
+			if not votable(options[i]): continue
+			var score: float = float(Vote.stance(g, t, String(holder), options[i], false)["score"])
+			if not picked or score > best:
+				best = score
+				idx = i
+				picked = true
+	# S1 locks a held session even with no agenda; with agendas but none S2 votes on, it opens free.
+	var locked: bool = holder != null and (options.is_empty() or picked)
+	g["council"] = {"options": options, "idx": idx, "locked": locked, "deals": [], "result": null}
 	if emergency: g["council"]["emergency"] = true
+	if picked:
+		g["council"]["holder"] = holder
+		Turn._journal(g, "%s이(가) 안건을 골랐다: %s." % [t["COMM_NAME"][holder], Vote.agenda_title(t, options[idx])])
 	g["agendaHolder"] = null
 	# 내정 훅 자리: COUNCIL_HOOKS.open.
 	return g
@@ -138,11 +170,18 @@ static func cast_vote(g: Dictionary, t: Dictionary) -> Dictionary:
 	if options.is_empty(): return g.duplicate(true)
 	var agenda: Dictionary = options[int(council["idx"])]
 	if bool(council.get("martial", false)): return _unported(g, "castVote: martial")
-	if agenda.get("kind") == "motion":
-		if not Vote.SUPPORTED_MOTIONS.has(agenda.get("motion")): return _unported(g, "castVote: motion " + str(agenda.get("motion")))
-	elif not Vote.supported_law(agenda.get("law")) or bool(agenda.get("ratify", false)):
+	if not votable(agenda):
+		if agenda.get("kind") == "motion": return _unported(g, "castVote: motion " + str(agenda.get("motion")))
 		return _unported(g, "castVote: law " + str(agenda.get("law")))
 	return Vote.cast_vote(g, t)["g"]
+
+
+## Whether S2 casts a vote on `agenda` yet: a motion or law council_vote.gd supports, not a
+## ratification (cast_vote's check; open_council keeps a group's pick to these).
+static func votable(agenda: Dictionary) -> bool:
+	if agenda.get("kind") == "motion":
+		return Vote.SUPPORTED_MOTIONS.has(agenda.get("motion"))
+	return Vote.supported_law(agenda.get("law")) and not bool(agenda.get("ratify", false))
 
 
 static func choose_card(g: Dictionary, t: Dictionary, uid: int, index: int) -> Dictionary:
@@ -310,6 +349,14 @@ static func resolve_stop(g0: Dictionary, t: Dictionary, go: bool = true) -> Dict
 	if chore != "": notes.append(chore)
 	_crew_rest(g, t, comm)
 	g["lastCrew"] = comm
+	if Supplies.asks(g):
+		var mult: float = float(stay["mult"]) * State.law_mult(g, t, "haulMult")
+		var before_sup: float = float(g.get("sup", 0))
+		Supplies.add(g, float(Supplies.YIELD.get(stop["place"], 0)) * mult, "stop.loot")
+		var cut: float = float(State.law_res(t, "emergency_ration", g).get("haulMult", 1)) if State.law_active(g, "emergency_ration") else 1.0
+		Supplies.add(g, float(p["supSearch"]) * cut, "sup.search")
+		var got_sup: int = int(floor(float(g.get("sup", 0)) - before_sup + 0.5))
+		if got_sup > 0: notes.append("생필품 %d을(를) 실어 왔다." % got_sup)
 	# 내정 훅 자리: domesticStop(g, false, 0).
 	stop["result"] = {"passed": false, "gains": gains, "injured": hurt, "dead": dead, "notes": notes}
 	var gained: Array[String] = []

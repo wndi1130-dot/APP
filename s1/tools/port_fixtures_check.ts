@@ -18,6 +18,7 @@ const EPS = 1e-12;
 
 // [도구, 인자, 그 도구가 쓰는 표본(저장소 뿌리 기준)]
 const TOOLS: [string, string[], string[]][] = [
+  ['supplies_port_fixtures', [], [`${TRAIN}/supplies_vectors.json`]],
   ['stranded_port_fixtures', [], [`${TRAIN}/stranded_vectors.json`, `${TRAIN}/stranded_content_vectors.json`]],
   ['content_port', [], ['s2/game/train/content_events.json', `${TRAIN}/turn_vectors_eventpack.json`, `${TRAIN}/content_vectors.json`]],
   ['card_view_fixtures', [], [`${TRAIN}/card_vectors.json`]],
@@ -33,6 +34,7 @@ const TOOLS: [string, string[], string[]][] = [
   ['turn_port_fixtures', [], [`${TRAIN}/turn_vectors.json`]],
   ['turn_port_fixtures', ['--climate'], [`${TRAIN}/turn_vectors_climate.json`]],
   ['field_port_fixtures', [], ['s2/tests/game/fixtures/field_port/field_vectors.json']],
+  ['end_port_fixtures', [], [`${TRAIN}/end_vectors.json`]],
 ];
 
 function text(path: string): string {

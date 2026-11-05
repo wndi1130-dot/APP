@@ -429,11 +429,31 @@ var modal_fingers: Dictionary = {}     # touches stay consumed through their lif
 var modal_emulated_blocked: bool = false
 var modal_back_captured: bool = false
 var modal_quit_on_back: bool = false
-## The bag pane keeps its destination while the bag tab is shown (decision 488).
+## The place shown beside the bag (결정 558), kept while the pane is laid again.
 var inv_near: Dictionary = {}
 var inv_sort: String = "weight"
-var inv_view: String = "near"
 var inv_worn_open: bool = false
+## Which weapon named at the bag's top shows its numbers (hand index, -1 none, and
+## the id pressed, so the numbers follow that weapon); a bag opened afresh shows
+## the names only (InventoryPane.open).
+var inv_weapon_open: int = -1
+var inv_weapon_open_id: String = ""
+## The row held open under itself (결정 558: a long press), {"side": "bag" | "near",
+## "id", "i", "at"}; a pane opened afresh opens none (InventoryPane.open).
+var inv_expand: Dictionary = {}
+## The bag folds while things come out of a box (결정 558) and for a second after
+## the last is out (until this tick), unless pressed open while taking.
+var inv_fold_until_ms: int = 0
+var inv_fold_taking: bool = false
+var inv_fold_open: bool = false
+var inv_laid_place: String = ""
+var inv_bag_scroll: int = 0
+## The scrolls waiting to be put back the frame after a laying: a second laying in
+## the same frame (a thing out of a box lays the pane twice) keeps these, not the
+## new pane's tops.
+var inv_scroll_pending: Dictionary = {}
+## The bag pane's scrolls, kept where they were when it is laid again.
+const BAG_SCROLLS: Array[String] = ["BagScroll", "NearScroll", "PlaceScroll", "JournalScroll"]
 ## Optional item art supplied locally; an empty entry falls back to the resource path.
 var item_px_override: Dictionary = {}
 ## The places the bag pane listed when it was laid (InventoryPane.place_keys):
@@ -441,6 +461,9 @@ var item_px_override: Dictionary = {}
 var bag_places: Array = []
 ## What sleeps under the bag pane, each with the alpha it had: [CanvasItem, a].
 var bag_dimmed: Array = []
+## What is put away under the end card (show_end), to come back when it closes.
+var end_cleared: Array = []
+var end_up: bool = false
 ## How far a key that sleeps under the bag pane fades (its alpha times this).
 const BAG_DIM: float = 0.38
 ## The box shown while the player takes a thing out of it (card R1 가): the field
@@ -580,8 +603,8 @@ func _icon_rect(id: String, px: int, color: Color) -> TextureRect:
 ## Dress a key or pad in the 시안 look: a matte disc (or a pill) `seen` across
 ## inside its touch rect, which stays as it is; an icon over its word. `on` is
 ## how it looks while set or held; `rest` lights it even at rest (lamp pills).
-func _dress(b: Button, icon: String, seen: Vector2, round_key: bool, on: int = HudSkin.Light.LAMP, rest: int = HudSkin.Light.NONE, icon_px: int = 32) -> void:
-	var st: Dictionary = HudSkin.key_styles(seen, round_key, on, rest)
+func _dress(b: Button, icon: String, seen: Vector2, round_key: bool, on: int = HudSkin.Light.LAMP, rest: int = HudSkin.Light.NONE, icon_px: int = 32, motif: String = "") -> void:
+	var st: Dictionary = HudSkin.key_styles(seen, round_key, on, rest, motif)
 	for k in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		b.add_theme_stylebox_override(k, st[k])
 	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
@@ -709,7 +732,7 @@ func _build_top() -> void:
 	# tall as the clock's glass beside it (user 2026-10-18).
 	var pause_mid := Vector2(16.0, 14.0) + Vector2.ONE * TOP_ROW_H * 0.5
 	pause_button = _pad("", pause_mid - Vector2.ONE * PAUSE_TOUCH * 0.5, Vector2.ONE * PAUSE_TOUCH, 22, Control.PRESET_TOP_LEFT)
-	_dress(pause_button, "pause", Vector2.ONE * TOP_ROW_H, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, PAUSE_ICON)
+	_dress(pause_button, "pause", Vector2.ONE * TOP_ROW_H, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, PAUSE_ICON, "stitch")
 	pause_button.tooltip_text = "멈춤"
 	# The clock is one glass line (시안 2차 11절 「12:42 · 1일째 · −14℃」), the
 	# weather beside it; the share of daylight left runs as a hairline under it.
@@ -1177,25 +1200,25 @@ func _build_thumbs() -> void:
 	# the only one, so it takes the big place.
 	var one: bool = bool(game.opts.get("primary_one", false))
 	attack_button = _pad("A", ATTACK_AT, ATTACK_SIZE, 20)
-	_dress(attack_button, "", Vector2.ONE * ATTACK_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON)
+	_dress(attack_button, "", Vector2.ONE * ATTACK_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON, "hammered")
 	_letter(attack_button, ATTACK_LETTER)
 	_nudge(attack_button, LETTER_NUDGE)
 	attack_button.tooltip_text = "공격"
 	# Aim: its mark alone in the middle of its disc (user 2026-10-18: no word).
 	aim_button = _pad("", ATTACK_AT if one else AIM_AT, ATTACK_SIZE if one else AIM_SIZE, 20 if one else 17)
-	_dress(aim_button, "aim", Vector2.ONE * (ATTACK_SEEN if one else 84.0), true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON if one else LONE_ICON)
+	_dress(aim_button, "aim", Vector2.ONE * (ATTACK_SEEN if one else 84.0), true, HudSkin.Light.LAMP, HudSkin.Light.NONE, ATTACK_ICON if one else LONE_ICON, "hammered")
 	aim_button.tooltip_text = "조준"
 	manual_button = _pad("수동", AIM_AT if one else AIM_AT + Vector2(-(MANUAL_SIZE.x + 8.0), 0), MANUAL_SIZE, 18)
 	_dress(manual_button, "", Vector2.ONE * 76.0, true)
 	# The shove mark alone in the middle of its disc (user 2026-10-18: no word).
 	shove_button = _pad("", SHOVE_AT, SHOVE_SIZE, UiFonts.size(11))
-	_dress(shove_button, "shove", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, LONE_ICON)
+	_dress(shove_button, "shove", Vector2.ONE * 84.0, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, LONE_ICON, "rivet")
 	shove_button.tooltip_text = "밀치기"
 	# Crouch: a round key on the right edge over attack (decision 293), a figure
 	# on one knee (user 2026-10-18). It lights brass from inside while on.
 	var key := 11.0 * PX_PER_MM
 	crouch_button = _pad("", Vector2(-16.0 - key, ATTACK_AT.y - 8.0 - key), Vector2(key, key), 20)
-	_dress(crouch_button, "crouch", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.BRASS, HudSkin.Light.NONE, 44)
+	_dress(crouch_button, "crouch", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.BRASS, HudSkin.Light.NONE, 44, "twine")
 	crouch_button.tooltip_text = "웅크림"
 	# The situation pad and leaving burn like lamps with a brass rim (시안 3절,
 	# .fpad--ctx); dark ink on the light. Their touch rects stay as they were.
@@ -1280,7 +1303,7 @@ func _build_thumbs() -> void:
 	# shows RUN (user 2026-10-18); a key that is on lights from inside, running
 	# and the lamp amber, crouching brass.
 	run_button = _pad("RUN", Vector2(run_x, up), Vector2(key, key), 22, Control.PRESET_BOTTOM_LEFT)
-	_dress(run_button, "", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 40)
+	_dress(run_button, "", Vector2.ONE * KEY_SEEN, true, HudSkin.Light.LAMP, HudSkin.Light.NONE, 40, "tape")
 	_letter(run_button, RUN_WORD, 1.5)
 	run_button.tooltip_text = "뛰기"
 	# The lantern key, right of run 3 mm apart; it is there only after sunset.
@@ -1646,6 +1669,7 @@ func tick(delta: float) -> void:
 		_tick_debug()
 	overlay.queue_redraw()
 	touch.queue_redraw()
+	_keep_end_clear()
 
 
 ## The promises the stop goes with: what the train sent (opts promises: [{kind,
@@ -2602,6 +2626,7 @@ func _close_modal(animate: bool = true) -> void:
 	# A thing still coming out goes on in the field (field_actions.gd take).
 	taking_box = ""
 	_wake_under_bag()
+	_bring_back_under_end()
 	if modal != null:
 		var old: Control = modal
 		var pane: GlassPane = modal_pane
@@ -3070,7 +3095,6 @@ func _card_pick(cb: Callable, choice: String) -> void:
 
 
 func loot(id: String) -> void:
-	inv_view = "near"
 	InventoryPane.open(self, {"kind": "box", "id": id})
 
 
@@ -3119,6 +3143,8 @@ func _loot_stop(id: String) -> void:
 	if p.action == "take":
 		p.cancel_action()
 	taking_box = ""
+	inv_fold_until_ms = 0
+	inv_fold_taking = false
 	InventoryPane.open(self, inv_near if not inv_near.is_empty() else {"kind": "box", "id": id})
 
 
@@ -3158,49 +3184,66 @@ func _bag_places_moved() -> void:
 		_lay_bag_again()
 
 
-## Lay the bag pane again where it is; a place shown that is no longer near hands
-## over to the bag tab. A destination no longer in reach falls to the floor, never
-## on its own to the train's hold: a thing loaded there cannot be taken back from
+## Lay the bag pane again where it is. A place shown that is no longer in reach
+## falls to the floor, never on its own to the train's hold: a thing loaded there cannot be taken back from
 ## this pane (coordinator 10-30). The places keep their order and the lists their
 ## scroll; the field goes on without a frame's stop.
 func _lay_bag_again() -> void:
-	var kept: Dictionary = _bag_scrolls()
 	var near: Array = InventoryPane.place_keys(InventoryPane.places(game, game.player))
 	if not near.has(InventoryPane.place_key(inv_near)):
-		if inv_view == "near":
-			inv_view = "bag"
 		inv_near = {"kind": "ground", "id": ""}
 	InventoryPane.open(self, inv_near)
-	_bag_scrolls_back(kept)
 	_bag_pause()
 
 
-## The bag pane's two scrolls as they stand, with the tab and place they show.
+## The bag pane's three scrolls as they stand (the bag's rows, the place's rows,
+## the places rail), with the place they show.
 func _bag_scrolls() -> Dictionary:
-	var kept := {"view": inv_view, "at": InventoryPane.place_key(inv_near)}
+	if not inv_scroll_pending.is_empty():
+		return inv_scroll_pending.duplicate()
+	var kept := {"at": inv_laid_place, "BagScroll": inv_bag_scroll}
 	if _bag_up():
-		for scroll_name: String in ["List", "PlaceScroll"]:
+		for scroll_name: String in BAG_SCROLLS:
 			var list := box_pane.find_child(scroll_name, true, false) as ScrollContainer
 			if list != null:
 				kept[scroll_name] = list.scroll_vertical
+	inv_bag_scroll = int(kept["BagScroll"])
 	return kept
 
 
 ## Back where they were once the new pane is laid out (a scroll set before its
-## rows are sized falls to the top): the places rail always, the item list while
-## it shows the same rows (the bag tab whatever its destination, a place's tab
-## for that place).
+## rows are sized falls to the top): the bag's rows and the places rail always,
+## the place's rows while they are the same place's.
 func _bag_scrolls_back(kept: Dictionary) -> void:
-	var pane: Control = box_pane
-	var same: bool = kept["view"] == inv_view and (inv_view == "bag" or kept["at"] == InventoryPane.place_key(inv_near))
-	var back := func() -> void:
-		if not is_instance_valid(pane) or modal != pane:
+	var aim: Dictionary = kept.duplicate()
+	if kept["at"] != InventoryPane.place_key(inv_near):
+		# Another place: its list starts at the top, and a second laying before the
+		# scrolls are back must not bring the old place's back either.
+		aim["at"] = InventoryPane.place_key(inv_near)
+		aim["NearScroll"] = 0
+	inv_scroll_pending = aim
+	_queue_scroll_restore(weakref(box_pane), aim, 3)
+
+
+## One try at putting the scrolls back, the frame after. Rows sized a frame late
+## clamp a scroll set too soon, so a short one tries again, `tries` frames at most;
+## each try is a new lambda that nothing holds but the signal (no cycle).
+func _queue_scroll_restore(pane_ref: WeakRef, aim: Dictionary, tries: int) -> void:
+	var restore := func() -> void:
+		var pane := pane_ref.get_ref() as Control
+		if pane == null or modal != pane:
 			return
-		for scroll_name: String in ["List", "PlaceScroll"]:
+		var short: bool = false
+		for scroll_name: String in BAG_SCROLLS:
 			var list := pane.find_child(scroll_name, true, false) as ScrollContainer
-			if list != null and kept.has(scroll_name) and (same or scroll_name == "PlaceScroll"):
-				list.scroll_vertical = int(kept[scroll_name])
-	get_tree().process_frame.connect(back, CONNECT_ONE_SHOT)
+			if list != null and aim.has(scroll_name):
+				list.scroll_vertical = int(aim[scroll_name])
+				short = short or list.scroll_vertical < int(aim[scroll_name])
+		if short and tries > 1:
+			_queue_scroll_restore(pane_ref, aim, tries - 1)
+			return
+		inv_scroll_pending = {}
+	get_tree().process_frame.connect(restore, CONNECT_ONE_SHOT)
 
 
 ## The pane now shows box `id` ("" for none): the box it comes to opens with its sound,
@@ -3241,18 +3284,23 @@ func _tick_take() -> void:
 		return
 	if take_bar != null and is_instance_valid(take_bar):
 		take_bar.value = 1.0 - p.action_t / maxf(p.action_total, 0.001)
+	if is_instance_valid(box_pane):
+		var left := box_pane.find_child("TakeLeft", true, false) as Label
+		if left != null:
+			left.text = "%.1f초" % InventoryPane.take_left(game, p)
 
 
-## Open the bag tab afresh, or refresh the current tab with its destination kept.
+## Open the bag pane afresh (beside the first place near), or lay it again with
+## its place kept.
 func bag_panel() -> void:
 	if modal == null or not is_instance_valid(box_pane) or modal != box_pane:
 		inv_near = {}
-		inv_view = "bag"
+		inv_weapon_open = -1
+		inv_weapon_open_id = ""
 	InventoryPane.open(self, inv_near)
 
 
 func sled_panel(sled_id: int) -> void:
-	inv_view = "near"
 	InventoryPane.open(self, {"kind": "sled", "id": sled_id, "name": "썰매"})
 
 
@@ -3288,18 +3336,39 @@ func _inv_pick(i: int) -> void:
 
 func _inv_place(place: Dictionary) -> void:
 	inv_near = place
-	inv_view = "near"
 	bag_panel()
 
 
-func _inv_bag() -> void:
-	inv_view = "bag"
-	bag_panel()
+func _inv_unfold() -> void:
+	inv_fold_open = true
+	_lay_bag_again()
 
 
 func _inv_worn() -> void:
 	inv_worn_open = not inv_worn_open
 	bag_panel()
+
+
+## A weapon's name pressed at the bag's top: its numbers show, or hide again.
+func _inv_weapon(i: int) -> void:
+	var hands: Array = game.player.hands
+	if inv_weapon_open == i or i < 0 or i >= hands.size():
+		inv_weapon_open = -1
+		inv_weapon_open_id = ""
+	else:
+		inv_weapon_open = i
+		inv_weapon_open_id = String((hands[i] as Dictionary).get("id", ""))
+	bag_panel()
+
+
+## A row held (결정 558): it opens under itself with what it can do, or closes
+## again; one at a time. The pane is laid again where it is, its lists unmoved.
+func _inv_expand(side: String, id: String, i: int = -1) -> void:
+	if InventoryPane._expanded(self, side, id, i):
+		inv_expand = {}
+	else:
+		inv_expand = {"side": side, "id": id, "i": i, "at": InventoryPane.place_key(inv_near)}
+	_lay_bag_again()
 
 
 func _inv_sort() -> void:
@@ -3318,7 +3387,8 @@ func _worn_row(slot: String, id: String) -> Control:
 	var p = game.player
 	var h := HBoxContainer.new()
 	h.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	h.custom_minimum_size = Vector2(0, UiFonts.px(GlassPane.CELL_H))
+	# Every press of the bag pane is 48 dp (결정 558).
+	h.custom_minimum_size = Vector2(0, UiFonts.px(InventoryPane.KEY))
 	h.add_theme_constant_override("separation", GlassPane.px(10.0))
 	var icon: String = game.item_icon(id)
 	if icon != "" and HudIcons.PATHS.has(icon):
@@ -3334,7 +3404,7 @@ func _worn_row(slot: String, id: String) -> Control:
 	var plan: Array = Wear.undress_plan(p, slot)
 	var off := GlassPane.key("벗기" if plan.size() <= 1 else "벗기 %d초" % ceili(Wear.plan_time(plan)), _undress.bind(slot))
 	off.size_flags_horizontal = Control.SIZE_SHRINK_END
-	off.custom_minimum_size.x = UiFonts.px(DROP_W)
+	off.custom_minimum_size = Vector2(UiFonts.px(DROP_W), UiFonts.px(InventoryPane.KEY))
 	h.add_child(off)
 	return h
 
@@ -3821,19 +3891,25 @@ func _tick_leave(delta: float) -> void:
 
 
 ## The end of a stop played alone: on the shade, the return receipt on the
-## stop's own sheet at the left, as the slice hands it back (receipt_sheet.gd,
-## its foot bare), and at the right, from under the band to the sheet's foot,
-## what the play came to (the real time and the noise, the holdout's lines) in
-## glass ink over the keys: copy the receipt, copy the record, again. The
-## stop's choices are in the receipt it copies.
+## stop's own sheet at the left, as the slice hands it back (receipt_sheet.gd),
+## its keys on its own foot: copy the receipt, copy the record as small paper
+## keys, again as the main key. At the right, from under the band, what the play
+## came to (the real time and the noise, the holdout's lines) in glass ink. The
+## field's own keys and words are put away under it, so the paper is the end's
+## only face. The stop's choices are in the receipt it copies.
 func show_end(result: Dictionary) -> void:
 	_close_modal(false)
 	context_rows = []
 	var shade := _open_shade()
+	_clear_under_end()
 	var sheet = ReceiptSheet.new()
 	sheet.name = "Receipt"
 	sheet.result = result
 	sheet.seg = 0
+	sheet.go_word = "다시"
+	sheet.side_keys = [["영수증 복사", _copy.bind(result["receipt_json"], "영수증 복사됨")],
+		["기록 복사", _copy.bind(result["telemetry"], "기록 복사됨")]]
+	sheet.went_on.connect(_restart)
 	shade.add_child(sheet)
 	var side := VBoxContainer.new()
 	side.name = "Record"
@@ -3853,18 +3929,35 @@ func show_end(result: Dictionary) -> void:
 		var l := UiFonts.label(UiFonts.keep_all(String(line)), UiFonts.WORD, 400, 13.0, GlassPane.INK2, 0.39)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		side.add_child(l)
-	var room := Control.new()
-	room.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	room.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	side.add_child(room)
-	# On no pane: the keys take the pane's dark for their ground.
-	var ground: Color = GlassPane.BACKING[0][1]
-	var keys := GlassPane.row()
-	keys.name = "Keys"
-	side.add_child(keys)
-	keys.add_child(GlassPane.key("영수증 복사", _copy.bind(result["receipt_json"], "영수증 복사됨"), "", ground))
-	keys.add_child(GlassPane.key("기록 복사", _copy.bind(result["telemetry"], "기록 복사됨"), "", ground))
-	keys.add_child(GlassPane.key("다시", _restart, "", ground))
+
+
+## The field's keys and words under the end card go, all but the notes (a copy's
+## 「복사됨」); tick keeps them gone however it would show them (the lamp key at
+## dusk too), and closing the card brings back what was up.
+func _clear_under_end() -> void:
+	for c: Node in root.get_children():
+		if c is CanvasItem and c != modal and c != toast_box and (c as CanvasItem).visible:
+			end_cleared.append(c)
+	end_up = true
+	_keep_end_clear()
+
+
+func _keep_end_clear() -> void:
+	if not end_up:
+		return
+	for c: Node in root.get_children():
+		if c is CanvasItem and c != modal and c != toast_box:
+			(c as CanvasItem).visible = false
+
+
+func _bring_back_under_end() -> void:
+	if not end_up:
+		return
+	end_up = false
+	for c in end_cleared:
+		if is_instance_valid(c):
+			(c as CanvasItem).visible = true
+	end_cleared = []
 
 
 func _copy(text: String, note: String) -> void:
@@ -4139,7 +4232,12 @@ func _modal_input(event: InputEvent) -> bool:
 			var under: Dictionary = _pane_under(modal, pos)
 			var list: ScrollContainer = under["scroll"]
 			var key: Button = under["button"]
-			fingers[index] = {"kind": "button", "button": key, "start": pos, "off": key != null and key.disabled, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false}
+			fingers[index] = {"kind": "button", "button": key, "start": pos, "off": key != null and key.disabled, "scroll": list, "from": list.scroll_vertical if list != null else 0, "dragged": false, "hold": key != null and key.has_node("Hold")}
+			# The key feels this finger come down as the first finger's press: a
+			# held row opens under itself, a hold to confirm fills (결정 558·559).
+			if key != null and not key.disabled:
+				fingers[index]["down"] = true
+				key.button_down.emit()
 			return true
 		return false
 	if not modal_fingers.has(index):
@@ -4198,12 +4296,38 @@ func finger_move(index: int, pos: Vector2) -> bool:
 			_hand_move(pos)
 		"button":
 			# A finger on the bag pane drags its list once it goes past a tap.
+			var held_key: Variant = f.get("button")
+			var key: Button = held_key if is_instance_valid(held_key) else null
+			var start: Vector2 = f.get("start", pos)
+			if bool(f.get("hold", false)):
+				if is_instance_valid(key):
+					var local: Vector2 = key.get_global_transform_with_canvas().affine_inverse() * pos
+					if not InventoryPane.HoldConfirm.holds(local, key.size, UiFonts.px(InventoryPane.HoldConfirm.SLIP_DP * InventoryPane.HoldConfirm.CSS_PER_DP)):
+						f["off"] = true
+						_finger_key_up(f)
+				return true # A finger born on a hold key never scrolls a list.
+			if is_instance_valid(key) and key.has_meta("press_n") and pos.distance_to(start) > UiFonts.px(InventoryPane.DRAG_CSS):
+				key.set_meta("dragged", true)
 			var list: Variant = f.get("scroll")
-			if is_instance_valid(list) and (f["dragged"] or pos.distance_to(f["start"]) >= DRAG_PX):
+			var moved: bool = bool(f.get("dragged", false)) or pos.distance_to(start) >= DRAG_PX
+			if moved:
+				_finger_key_up(f)
+			if is_instance_valid(list) and moved:
 				f["dragged"] = true
 				var scroll: ScrollContainer = list
-				scroll.scroll_vertical = int(f["from"]) - int(pos.y - f["start"].y)
+				scroll.scroll_vertical = int(f.get("from", 0)) - int(pos.y - start.y)
 	return true
+
+
+## A bag pane key a manual finger came down on is let go (lifted, dragged off or
+## taken away), once: a key that sank comes back up, a hold winds back.
+func _finger_key_up(f: Dictionary) -> void:
+	if not bool(f.get("down", false)):
+		return
+	f["down"] = false
+	var key: Variant = f.get("button")
+	if is_instance_valid(key):
+		(key as Button).button_up.emit()
 
 
 func finger_up(index: int, pos: Vector2) -> bool:
@@ -4229,15 +4353,18 @@ func finger_up(index: int, pos: Vector2) -> bool:
 		"button":
 			# A bag pane finger may hold no key (a gap in a list), or one laid away
 			# since, or have dragged its list, or have come down on a key still off
-			# (it may wake before the lift): then the lift presses nothing.
-			var held: Variant = f["button"]
+			# (it may wake before the lift): then the lift presses nothing. The key
+			# is let go after its press, as a mouse's lift does.
+			var held: Variant = f.get("button")
 			if not is_instance_valid(held) or f.get("dragged", false) or f.get("off", false):
+				_finger_key_up(f)
 				return true
 			var b: Button = held
 			if not b.disabled and b.is_visible_in_tree() and touch_rect(b).has_point(pos):
 				if b.toggle_mode:
 					b.button_pressed = not b.button_pressed
 				b.pressed.emit()
+			_finger_key_up(f)
 		"hand":
 			_release(pos)
 		"portrait":
@@ -4262,6 +4389,8 @@ func finger_cancel(index: int) -> bool:
 			stick_index = -1
 			stick_dash = false
 			_stick_release()
+		"button":
+			_finger_key_up(f)
 		"pad":
 			if auto_aim:
 				aim_cancel = true
@@ -4768,6 +4897,8 @@ func drop_touch() -> void:
 	for held_index: int in modal_fingers:
 		modal_fingers[held_index] = {"owner": null}
 	for index: int in fingers:
+		if String(fingers[index].get("kind", "")) == "button":
+			_finger_key_up(fingers[index])
 		modal_fingers[index] = {"owner": null}
 	if fingers.has(0):
 		modal_fingers[-1] = {"owner": null}
@@ -5037,6 +5168,9 @@ func _tap_thing(p, world: Vector3) -> bool:
 		return false
 	for id in game.data["spots"]:
 		var spot: Dictionary = game.data["spots"][id]
+		# A story map's scene marker only holds a place: nothing is drawn there to walk over and do.
+		if spot.get("kind") == "story":
+			continue
 		if FieldGrid.center(spot["cell"]).distance_to(world) < 1.3:
 			_go_and_do(p, "spot", id, FieldGrid.center(spot["cell"]))
 			return true

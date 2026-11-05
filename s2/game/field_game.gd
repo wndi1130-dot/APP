@@ -27,6 +27,7 @@ const PersonVisual = preload("res://game/actors/person_visual.gd")
 const Zombies = preload("res://game/actors/zombies.gd")
 const FieldClock = preload("res://game/sim/field_clock.gd")
 const StopForm = preload("res://game/sim/stop_form.gd")
+const MapBounds = preload("res://game/world/map_bounds.gd")
 const SimNoise = preload("res://game/sim/noise.gd")
 const Sled = preload("res://game/sim/sled.gd")
 const NoiseLedger = preload("res://game/sim/noise_ledger.gd")
@@ -46,6 +47,7 @@ const Carry = preload("res://game/sim/carry.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const LootDress = preload("res://game/sim/loot_dress.gd")
 const LootRules = preload("res://game/sim/loot_rules.gd")
+const LootTables = preload("res://game/sim/loot_tables.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const Weather = preload("res://game/sim/weather.gd")
 const SmellRules = preload("res://game/sim/smell_rules.gd")
@@ -203,6 +205,7 @@ var levels: Dictionary = {}            # level -> FieldGrid (0 ground, 1-2 upsta
 var stairs: Array = []                 # [{cell, low, high, ladder}]
 var view: MapView
 var map_edge: MapEdge                   # ground and fog past the map's edge (fx/map_edge.gd)
+var horde_view: Node3D = null           # the horde behind the edge walls (null: off or no walls); field_audio hears it
 var night_view: NightLightView          # the hearts of the lights people left (decision 471 B4)
 var zombies: Zombies
 var camera: Camera3D
@@ -211,6 +214,7 @@ var sun: DirectionalLight3D
 ## The light from the camera's side that keeps the walls turned from the sun out
 ## of the black (Atmosphere.VIEW_FILL): no shadow, by day only.
 var view_fill: DirectionalLight3D
+var _view_fill_mode: String = "light"
 var snow: GPUParticles3D
 ## Storm stop (weather_fx 14장, opts["storm"]: before, during, after): its look,
 ## the snow layers with their place relative to the view, and the screen layer
@@ -265,6 +269,7 @@ var resume_announce: bool = false
 var slow: float = 1.0                    # the body picture up: the field runs at this rate (body_injury 4.6)
 var hitstop: bool = false                # a blow's hold this frame (hit_feel.gd): the rules and pictures stand
 var away: bool = false             # the app pushed the field into a pause; say so once on return
+var away_saved: bool = false       # the slot was written as the app went (interrupt), till it is back
 var ended: bool = false
 var leave_t: float = -1.0          # since the train began to roll away (-1: it stands)
 var arrive_t: float = -1.0         # since the train came into sight (-1: it stands)
@@ -453,13 +458,7 @@ func _ready() -> void:
 	# The stop's band (decision 494): a stop's own map shows its own stop's band on any
 	# stretch, any other map the band of the departure's stretch; a bare start the default.
 	var map_id := FieldMaps.resolve(String(opts.get("place", "")))
-	var departure_seg := int((opts["departure"] as Dictionary).get("segment", 0)) if opts.get("departure") is Dictionary else 0
-	if opts.has("region"):
-		region = Atmosphere.region_key(String(opts["region"]))
-	elif opts.get("departure") is Dictionary or not RouteBands.place_stop(map_id).is_empty():
-		region = RouteBands.band_of(map_id, act, departure_seg, float(opts.get("act_progress", 0.0)))
-	else:
-		region = Atmosphere.DEFAULT_REGION
+	region = region_for(opts)
 	look_hour = float(opts.get("look_hour", -1.0))
 	# Lying snow on arrival follows the cold, deeper stop by stop (picture: nothing
 	# in the rules reads it). A storm stop keeps its season's depth.
@@ -481,14 +480,15 @@ func _ready() -> void:
 	snow_cover = SnowCover.new(season, open_ground, float(opts.get("storm_cm", storm.get("storm_cm", 0.0))), old_cm)
 	_apply_fx()
 	cap = int(opts.get("cap", HordeDirector.CONCURRENT_CAP))
-	Engine.max_fps = int(opts.get("fps_cap", 60))
+	Engine.max_fps = fps_cap_for(Engine.max_fps, opts, OS.has_feature("mobile"))
 	place = map_id
 	# Now and then a way through the edge woods to a locked rare store (this run's seed, side_path.gd),
 	# on a map built here or handed over built (the stop loader's): the same seed gives the same way.
-	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary \
-		else (FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place))
 	# A resumed stop's ground is the one its save stood on (field_save.gd resume_opts).
-	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script) if map_script != null else FieldMaps.build(place)
+	var fresh_map: Callable = func() -> Dictionary: return FieldMaps.build_from(map_script, region) if map_script != null else FieldMaps.build(place, region)
+	var stop_map: Dictionary = opts["map_data"] if opts.get("map_data") is Dictionary else fresh_map.call()
+	if not MapBounds.can_reuse(stop_map, int(opts.get("bounds_rule", -1))):
+		stop_map = fresh_map.call()
 	var ground_form := String(opts.get("stop_ground", opts.get("stop_form", "")))
 	var ground_m := float(opts.get("stop_form_m", -1.0))
 	var end_gap := int(opts.get("stop_end_gap", -1))
@@ -498,7 +498,8 @@ func _ready() -> void:
 	if opts.has("stop_view_rows") or opts.has("stop_view_cols"):
 		stop_map = shape_view(stop_map, int(opts.get("stop_view_rows", StopGround.VIEW_ASK)), int(opts.get("stop_view_cols", StopGround.VIEW_ASK)),
 			ground_form, rng.seed, ground_m, fresh_map, end_gap)
-	_take_map(with_side_path(stop_map, rng.seed))
+	stop_map = with_side_path(stop_map, rng.seed)
+	_take_map(MapBounds.apply(stop_map, int(opts.get("bounds_rule", -1))))
 	set_stop_form(StopForm.resolve(opts, String(data["place_kind"])))
 	# What the stop's place on the route forbids, whatever map came to it (route_stops.gd:
 	# no fire at the first leg's fifth stop), before anything is put on the map.
@@ -586,10 +587,22 @@ func _ready() -> void:
 	night_view.name = "NightLights"
 	add_child(night_view)
 	night_view.build(data)
+	_push_fire_weather()
+	PerfSwitch.apply_night_sparks(night_view, _perf_settings)
+	visibility_changed.connect(night_view.refresh_visibility)
+	night_view.refresh_visibility()
 	# Past the map's edge the ground goes on under fog, not a flat slab (결정 448 17).
 	map_edge = MapEdge.new()
 	add_child(map_edge)
 	map_edge.setup(view.grid, view.material)
+	# 경계 무리의 시야/반응 갱신은 자식이 맡는다. 꺼짐 판은 자원 로드 전 반환.
+	var horde_settings: Dictionary = _perf_settings.duplicate()
+	horde_settings.merge(PerfSwitch._valid(opts.get("perf", {})), true)
+	# 소리(field_audio.drawn_walls)는 돌려받은 무리 노드만 읽는다(null이면 무리 꺼짐·벽 없음 — 무음).
+	horde_view = await preload("res://game/world/horde_view.gd").attach(self,
+		preload("res://game/world/horde_view.gd").stop_walls(data, opts, horde_settings, Vector2(view.grid.width, view.grid.height)),
+		{"map_size": Vector2(view.grid.width, view.grid.height), "grid": view.grid, "vis_texture": view.vis_texture,
+			"material": view.material, "field": self, "staged": bool(opts.get("staged", false))}, pace, horde_settings)
 	blood_fx = BloodFx.new()
 	add_child(blood_fx)
 	blood_fx.begin_stop(int(opts.get("seed", 1)))
@@ -667,6 +680,7 @@ func _ready() -> void:
 		# A version-1 save kept no guard state: the brakes were heard before it was left.
 		if not FieldSave.exact(opts["field_resume"]):
 			train_guard.resumed()
+		opts.erase("field_resume")
 	elif data["anchors"].has("whistle") and bool(opts.get("arrival_horde", true)):
 		# The train has just stood: its brakes are heard as the clock starts,
 		# the scene of it rolling in or not (decision 416).
@@ -717,6 +731,13 @@ func _apply_fx() -> void:
 		fx_light["sun_energy"] = float(clear_sky["sun_energy"]) * float(storm["sun"])
 		fx_light["sun_color"] = Color(fx_light["sun_color"]).lerp(storm["sun_color"], 0.6)
 		fx_light["ambient_color"] = Color(fx_light["ambient_color"]).lerp(storm["ambient_color"], 0.6)
+
+
+## The fires' sparks thin out in what is drawn falling (the atmosphere's kinds:
+## warm snow is drawn as rain, cold rain as snow), not the raw weather.
+func _push_fire_weather() -> void:
+	if night_view != null:
+		night_view.set_weather(fx_params, atmo.get("kinds", look_kinds))
 
 
 ## Snow keeps falling through the stop: lying snow deepens with the field clock
@@ -931,6 +952,7 @@ func _update_atmosphere() -> void:
 		sun.shadow_opacity = float(fx_light.get("shadow", 1.0))
 		_set_view_fill()
 		_update_window_light()
+		_push_fire_weather()
 		environment.ambient_light_color = fx_light["ambient_color"]
 		environment.ambient_light_energy = maxf(float(fx_light["ambient_energy"]), NIGHT_AMBIENT_MIN * night)
 		environment.background_color = fx_light["background"]
@@ -947,9 +969,57 @@ func _update_atmosphere() -> void:
 func _set_view_fill() -> void:
 	if view_fill == null:
 		return
-	view_fill.light_energy = float(fx_light.get("fill_energy", 0.0)) if storm.is_empty() else 0.0
+	var fill_energy: float = float(fx_light.get("fill_energy", 0.0)) if storm.is_empty() else 0.0
+	# Keep the diagnostic energy across minute updates without lighting night/storm.
+	var applied: float = float(view_fill.get_meta(PerfSwitch.FILL_ENERGY, fill_energy)) if fill_energy > 0.001 else fill_energy
+	view_fill.light_energy = applied
 	view_fill.light_color = fx_light.get("fill_color", Color.WHITE)
-	view_fill.visible = view_fill.light_energy > 0.001
+	var fill_state: String = _view_fill_state()
+	# Judge on the value set, not the light's stored float32 (0.001 reads back as 0.0010000000475).
+	var lit: bool = applied > 0.001
+	view_fill.visible = fill_state == "light" and lit
+	if PerfSwitch.fill_owner() != get_instance_id():
+		return
+	var fill_dir: Vector3 = Vector3.ZERO
+	var fill_value: Vector4 = Vector4.ZERO
+	if fill_state == "shader" and lit and view_fill.light_cull_mask != 0:
+		fill_dir = view_fill.global_transform.basis.z.normalized()
+		var linear: Color = view_fill.light_color.srgb_to_linear()
+		fill_value = Vector4(linear.r * applied, linear.g * applied, linear.b * applied, 1.0)
+	PerfSwitch.publish_fill(get_instance_id(), fill_dir, fill_value, _view_fill_state(false))
+
+
+func set_view_fill_mode(mode: String) -> void:
+	if mode not in ["light", "shader"]:
+		return
+	_view_fill_mode = mode
+	_set_view_fill()
+
+
+func _view_fill_state(include_lock: bool = true) -> String:
+	if include_lock and view_fill != null and view_fill.visibility_changed.is_connected(view_fill.hide):
+		return "off"
+	var mode: Variant = _perf_settings.get("view_fill_mode")
+	if mode is String and mode in ["light", "shader"]:
+		return String(mode)
+	return _view_fill_mode
+
+
+func _configure_view_fill() -> void:
+	# Desktop tools use opts/setter; this connection stays for the field's life.
+	if not visibility_changed.is_connected(_sync_view_fill_owner):
+		visibility_changed.connect(_sync_view_fill_owner)
+	set_view_fill_mode(String(opts.get("view_fill_mode", _view_fill_mode)))
+
+
+func _sync_view_fill_owner() -> void:
+	if view_fill == null:
+		return
+	if is_visible_in_tree():
+		PerfSwitch.claim_fill(get_instance_id())
+		_set_view_fill()
+	else:
+		PerfSwitch.release_fill(get_instance_id())
 
 
 ## Low sun through the windows (decision 474 B8): from 14:50 the pools on the
@@ -1088,6 +1158,7 @@ func _build_world() -> void:
 	add_child(view_fill)
 	_set_view_fill()
 	_configure_perf_switch()
+	_sync_view_fill_owner()
 	# Real lights stay at two (Mobile: eight a mesh); every other lamp is the mask.
 	lantern = _warm_light(float(Person.LAMP_CHIEF["reach"]), float(Person.LAMP_CHIEF["strength"]))
 	lantern.omni_attenuation = LANTERN_FALLOFF
@@ -1431,6 +1502,15 @@ const VOICE_OF_COMM := {"guard": "rough", "medtech": "quiet", "tail": "fear", "e
 const MEDICAL_OF_SKILL := ["none", "apprentice", "skilled", "master"]
 
 
+## The cap a field runs at. On a phone every stop keeps the cap the start menu set (boot.gd), so a
+## campaign stop, a loaded stop or an old save's start options (60 from before) never lift it; a
+## field with no cap set yet, and every field off the phone, takes its options' cap, 60 if none.
+static func fps_cap_for(current: int, field_opts: Dictionary, mobile: bool) -> int:
+	if mobile and current > 0:
+		return current
+	return int(field_opts.get("fps_cap", 60))
+
+
 ## The field's rows for people of the departure contract (field_departure.gd person): the same
 ## id and name as the train's roll, their body skills, kit, car and how it stands with the chief,
 ## what they know of medicine and how hungry and sore they go out. One of the medical staff with
@@ -1558,6 +1638,17 @@ const AHEAD_KEYS: Array[String] = ["_building_plan", "_ground_details", "_ground
 	"_floor_arrays", "_floor_keys", "_room_finish", "_walk_field", "_walk_key", "fell_groves"]
 
 
+## The field and its loader resolve the same band, including starts without an override.
+static func region_for(options: Dictionary) -> String:
+	if options.has("region"):
+		return Atmosphere.region_key(String(options["region"]))
+	var map_id := FieldMaps.resolve(String(options.get("place", "")))
+	var departure_seg := int((options["departure"] as Dictionary).get("segment", 0)) if options.get("departure") is Dictionary else 0
+	if options.get("departure") is Dictionary or not RouteBands.place_stop(map_id).is_empty():
+		return RouteBands.band_of(map_id, String(options.get("act", "prologue")), departure_seg, float(options.get("act_progress", 0.0)))
+	return Atmosphere.DEFAULT_REGION
+
+
 ## The ground of the stop's form (stop_ground.gd), put on before the side path
 ## (with_side_path). An edge stop grows and shifts the map, so what the loader made
 ## ahead from it is dropped first, and a map handed over with its side path already on
@@ -1592,6 +1683,8 @@ static func shape_stop(map: Dictionary, form: String, run_seed: int, target_m: f
 ## ahead from the map as it was no longer fits: dropped first (a shift would move it
 ## all), made again from the map as it is now.
 static func with_side_path(map: Dictionary, run_seed: int) -> Dictionary:
+	if map.has("bounds_stamp") and map.has("_side_seed") and int(map["_side_seed"]) == run_seed:
+		return map
 	var place_id := String(map.get("place_id", ""))
 	if StoryMaps.is_story(place_id):
 		return map
@@ -1817,8 +1910,12 @@ func interrupt() -> void:
 	if hud != null:
 		hud.drop_touch()
 	# The one save slot, before the app may be shut (S3 spec 4). Off until the train side reads it.
-	if bool(opts.get("field_save", false)):
-		FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
+	# One home press sends focus-out and then pause: with the slot written as the app went, the
+	# second notice does not write it again (seconds for a big stop). The play stands still till
+	# the app is back (paused, or the stop ended); only the picture (camera, sight, the train
+	# rolling in) moves on meanwhile.
+	if bool(opts.get("field_save", false)) and not away_saved:
+		away_saved = FieldSave.write(FieldSave.capture(self), String(opts.get("field_save_path", FieldSave.PATH)))
 	if ended:
 		return
 	if not away:
@@ -1830,12 +1927,14 @@ func interrupt() -> void:
 ## Back from an interrupt: one line, once (ui_states N4). Only when the app
 ## paused the field; a pause the player chose is not announced again.
 func welcome_back() -> void:
+	# Back: the next time the app goes, the slot is written again (an ended stop is never away).
+	away_saved = false
 	if not away:
 		return
 	away = false
 	if not ended:
 		if resume_announce and hud != null:
-			hud.toast("멈춰 둔 자리다.")
+			hud.toast("멈춰 둔 그대로다.")
 		begin_resume()
 
 
@@ -1866,16 +1965,31 @@ func continue_resume() -> bool:
 
 
 func _configure_perf_switch() -> void:
+	_configure_view_fill()
 	# Phone measurements only; desktop fields never read the real user file.
 	if OS.has_feature("android"):
 		_apply_perf_settings(PerfSwitch.read())
 
 
-func _apply_perf_settings(settings: Dictionary) -> void:
+func _apply_perf_settings(settings: Dictionary) -> Dictionary:
+	var mode_before: Variant = _perf_settings.get("view_fill_mode")
+	var fill_was: bool = view_fill != null and view_fill.visible
 	_perf_settings = settings
+	var spark_changed := PerfSwitch.apply_night_sparks(night_view, settings)
+	if not spark_changed.is_empty():
+		print("PERF_SWITCH ", spark_changed)
+	var changed: Dictionary = {}
 	if not settings.is_empty():
 		sun.set_meta(PerfSwitch.CLOUD_SOURCE, fx_params["fx_cloud"])
-		var changed: Dictionary = PerfSwitch.apply(sun, view_fill, settings, false)
+		changed = PerfSwitch.apply(sun, view_fill, settings, false, false)
+		if settings.get("view_fill_mode") is String and settings["view_fill_mode"] in ["light", "shader"] \
+				and settings["view_fill_mode"] != mode_before:
+			changed["view_fill_mode"] = settings["view_fill_mode"]
+	_set_view_fill()
+	# The switch only reports the lock; the fill's own change shows once the field has decided.
+	if not settings.is_empty():
+		if view_fill != null and view_fill.visible != fill_was:
+			changed["view_fill"] = view_fill.visible
 		if not changed.is_empty():
 			print("PERF_SWITCH ", changed)
 	# StopLoader builds with visible=false, even with processing disabled.
@@ -1884,6 +1998,7 @@ func _apply_perf_settings(settings: Dictionary) -> void:
 	if not visibility_changed.is_connected(_apply_perf_renderer):
 		visibility_changed.connect(_apply_perf_renderer)
 	_apply_perf_renderer()
+	return changed
 
 
 func _apply_perf_renderer() -> void:
@@ -1894,11 +2009,16 @@ func _apply_perf_renderer() -> void:
 		_perf_renderer_active = true
 		if not _perf_settings.is_empty() and not changed.is_empty():
 			print("PERF_SWITCH ", changed)
+	# After _ready's own cap, so the file's cap wins for this field.
+	var fps_changed: Dictionary = PerfSwitch.apply_max_fps(_perf_settings)
+	if not fps_changed.is_empty():
+		print("PERF_SWITCH ", fps_changed)
 	if visibility_changed.is_connected(_apply_perf_renderer):
 		visibility_changed.disconnect(_apply_perf_renderer)
 
 
 func _exit_tree() -> void:
+	PerfSwitch.release_fill(get_instance_id())
 	if _perf_renderer_active:
 		PerfSwitch.restore_renderer(get_instance_id())
 
@@ -1911,8 +2031,11 @@ func _process(delta: float) -> void:
 			hud.tick_resume()
 		if not away and resume_ready_at_ms < 0:
 			resume_ready_at_ms = Time.get_ticks_msec() + 1000
+		# The wait is a pause, so the world fades like any pause while the
+		# card is up; the first frame back may be long, so it eases in too.
+		_update_fade(minf(delta, PersonVisual.FRAME_MAX))
 		return
-	delta = minf(delta, 0.1)
+	delta = minf(delta, PersonVisual.FRAME_MAX)
 	if arrive_t >= 0.0:
 		_arrive(delta)
 	elif not ended and not paused:
@@ -1942,6 +2065,7 @@ func _process(delta: float) -> void:
 	zombies.render(camera, seen_now, mask_on)
 	for p in people:
 		p.visible = level_shown(level_of(p.position)) and _person_visible(p) and not rode_off.has(p) and arrive_t < 0.0
+		p.set_meta(PersonVisual.Pose.PICTURE_TIME, float(p.get_meta(PersonVisual.Pose.PICTURE_TIME, 0.0)) + PersonVisual.frame_delta(self, delta))
 		p.refresh_view(p.visible)
 	hud.tick(delta)
 	audio.tick(delta)
@@ -2153,7 +2277,7 @@ func _drive(p: Person, delta: float) -> void:
 		return
 	var push := p.stick.length()
 	# A melee blow holds the feet from part way through it to its end (decision 425).
-	if push > 0.05 and combat.feet_held(p):
+	if combat.feet_held(p):
 		p.drive_speed = 0.0
 		p.moving = false
 		return
@@ -2470,7 +2594,7 @@ func _on_body_event(p: Person, ev: String) -> void:
 				say(p, "%s 열이 오른다." % p.display_name, false, "window_closed")
 		"exhausted_heavy":
 			if p == player:
-				hud.toast("숨참")
+				hud.toast("숨이 찬다.")
 
 
 func on_person_died(p: Person) -> void:
@@ -3822,7 +3946,7 @@ func _ate(p, id: String, plan: Dictionary) -> void:
 	var result: Dictionary = FieldItems.eat_result(id, float(plan["spill"]))
 	if bool(result["bad"]):
 		if p == player and hud != null:
-			hud.toast("상해 있었다.")
+			hud.toast("먹은 것이 상해 있었다.")
 		return
 	p.body.add_fatigue(-float(result["rest"]))
 
@@ -3875,7 +3999,7 @@ func _give_finds() -> void:
 			var boxes: Array = []
 			for id: String in data["containers"]:
 				var c: Dictionary = data["containers"][id]
-				if int(c.get("building", -1)) == b and not bool(c.get("locked", false)) and not c.has("pick"):
+				if int(c.get("building", -1)) == b and not bool(c.get("locked", false)) and not c.has("pick") and not LootTables.as_placed(c):
 					boxes.append(id)
 			if boxes.is_empty():
 				way = "none"

@@ -211,6 +211,11 @@ func test_real_new_board_enables_pack_without_changing_start_asset() -> void:
 	var expected: Dictionary = original["state"].duplicate(true)
 	expected["lateOn"] = true
 	expected["eventPack"] = true
+	# Decision 490: supplies on, with S1's starting stock (train_supplies.gd enable).
+	expected["supOn"] = true
+	expected["sup"] = float(original["tables"]["P"]["sup0"])
+	expected["supCover"] = {}
+	assert_false(original["state"].has("supOn"))
 	_same(expected, board[0], "only real-new-game flags")
 	assert_eq(FileAccess.get_file_as_string("res://game/train/slice_start.json"), raw)
 

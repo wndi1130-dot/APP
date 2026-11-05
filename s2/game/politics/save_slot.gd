@@ -1,8 +1,16 @@
 extends RefCounted
 ## One JSON save slot compatible with the S1a Game object. Invalid text is preserved in a separate
 ## slot; the original is never deleted by load_slot.
+## 열차 판 저장 번호(필드 저장의 field_save.gd VERSION과 다른 수): 생필품이 꺼진 판은 판 안의 번호
+## 그대로(1), 켜진 판은 3으로 저장한다(slot_board). 2는 생필품을 켜는 길이 시험뿐이던 빌드의 켠 판이다.
+## 옛 빌드는 자기 상한까지만 읽어 새 판을 「더 새 빌드」로 거절하므로, 생필품 쓰기·give_sup·give_fine
+## 약속과 본 공방 소식(shopSeen)을 모른 채 정산하지 않는다.
 
-const SAVE_VERSION := 1
+## The newest train slot version this build reads (1 to 3). What a save writes is slot_board's.
+const SAVE_VERSION := 3
+## A run with supplies on is written with this version, so a build from before supplies were on
+## for every new run (it reads at most 2) refuses it.
+const SUPPLIES_VERSION := 3
 const TrainDecor = preload("res://game/train/train_decor.gd")
 const Late = preload("res://game/train/turn/turn_late.gd")
 const RouteState = preload("res://game/train/route_state.gd")
@@ -65,6 +73,14 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 	for key: String in ["coal", "food", "med", "trust", "tension"]:
 		if not _is_number(g.get(key)):
 			return "수치가 이상하다: %s" % key
+	if g.has("supOn") and not g["supOn"] is bool: return "생필품 켜짐 값이 이상하다"
+	for key: String in ["sup", "supFine"]:
+		if g.has(key) and (not _is_number(g[key]) or float(g[key]) < 0.0): return "생필품 수치가 이상하다: " + key
+	if g.has("supCover"):
+		if not g["supCover"] is Dictionary: return "생필품 몫이 이상하다"
+		for comm: Variant in g["supCover"]:
+			var f: Variant = g["supCover"][comm]
+			if comm not in t["COMMS"] or not _is_number(f) or float(f) < 0.0 or float(f) > 1.0: return "생필품 몫이 이상하다: " + str(comm)
 	if not (g.get("comms") is Dictionary):
 		return "공동체 칸이 없다"
 	for comm: String in t["COMMS"]:
@@ -89,6 +105,8 @@ static func shape_problem(g: Dictionary, t: Dictionary) -> Variant:
 		return "미뤄 둔 카드 목록이 이상하다"
 	if g.has("lateOn") and not g["lateOn"] is bool:
 		return "서류 미루기 켜짐 값이 이상하다"
+	if g.has("shopSeen") and (not _is_number(g["shopSeen"]) or float(g["shopSeen"]) < -1.0 or float(g["shopSeen"]) != floorf(float(g["shopSeen"]))):
+		return "본 공방 소식 구간이 이상하다"
 	if g.has("lateCards") and not g["lateCards"] is Array:
 		return "미룬 서류 목록이 이상하다"
 	# Content (event pack) fields: absent or null is none (S1 `??`), anything else must have its shape.
@@ -167,12 +185,25 @@ static func read_save(raw: Variant, t: Dictionary) -> Dictionary:
 		return {"ok": false, "why": "판 번호가 없다"}
 	if int(version) > SAVE_VERSION:
 		return {"ok": false, "why": "더 새 빌드에서 저장한 판이다(판 번호 %d)" % int(version)}
-	# SAVE_VERSION is still 1, so there are no migration steps yet.
+	# No step between versions: a version 1 board has no supplies keys, so supplies read as off;
+	# a version 2 board (supplies on, before shopSeen) reads its last settlement as seen
+	# (slice_flow.gd _seed_shop_settle). The version read stays as it was; the next save writes
+	# slot_board's.
 	var problem: Variant = shape_problem(game, t)
 	if problem != null:
 		return {"ok": false, "why": problem}
 	fill_defaults(game)
 	return {"ok": true, "g": game}
+
+
+## The board as the slot holds it. A run with supplies on carries SUPPLIES_VERSION in a shallow
+## copy (the caller's board is untouched, key order kept); any other board is written as it is.
+static func slot_board(g: Dictionary) -> Dictionary:
+	if not bool(g.get("supOn", false)):
+		return g
+	var out: Dictionary = g.duplicate(false)
+	out["version"] = SUPPLIES_VERSION
+	return out
 
 
 static func save_slot(g: Dictionary, path: String = DEFAULT_PATH) -> bool:
@@ -181,7 +212,7 @@ static func save_slot(g: Dictionary, path: String = DEFAULT_PATH) -> bool:
 		return false
 	# Keys keep their order, as S1's JSON does: ties picked by insertion order
 	# (laws repealed in the same segment) stay the same after a load.
-	file.store_string(JSON.stringify(g, "", false))
+	file.store_string(JSON.stringify(slot_board(g), "", false))
 	file.close()
 	return true
 
@@ -214,7 +245,8 @@ static func load_slot(t: Dictionary, path: String = DEFAULT_PATH, broken_path: S
 	if parser.parse(raw) != OK:
 		read = {"ok": false, "why": "저장 글이 깨졌다"}
 	else:
-		read = read_save(preload("res://game/sim/field_save.gd")._decode(parser.data), t)
+		# A broken packed run in it reads as no board (null), as a broken file does.
+		read = read_save(preload("res://game/sim/field_save.gd").decode_checked(parser.data), t)
 	if bool(read["ok"]):
 		return {"g": read["g"], "why": null}
 	if _preserve_broken(raw, broken_path):

@@ -344,6 +344,8 @@ static func name_keys(data: Dictionary) -> void:
 	var containers: Dictionary = data.get("containers", {})
 	for id in containers:
 		var c: Dictionary = containers[id]
+		if LootTables.as_placed(c):
+			continue
 		if not (c.has("room") and AFFINITY.has(String(c["room"]))):
 			c["room"] = room_of_box(c)
 	for b in data.get("buildings", []):
@@ -447,7 +449,7 @@ static func room_themes(containers: Dictionary, buildings: Array, place_kind: St
 	for id: String in ids:
 		var c: Dictionary = containers[id]
 		var b: int = int(c.get("building", -1))
-		if c.has("pick") or b < 0:
+		if c.has("pick") or LootTables.as_placed(c) or b < 0:
 			continue
 		var room := room_of(c)
 		var bk := _building_kind_of(buildings, c)
@@ -554,7 +556,8 @@ static func dress(data: Dictionary, seed: int, deck: Dictionary = {}, supplies: 
 	var name_rng := _rng(seed, "names")
 	for id: String in containers:
 		var c: Dictionary = containers[id]
-		if c.has("pick"):
+		# as_placed 상자에는 꾸러미를 넣지 않는다(지도 계약).
+		if c.has("pick") or LootTables.as_placed(c):
 			continue
 		var room := room_of(c)
 		var bk := _building_kind_of(buildings, c)
@@ -580,7 +583,7 @@ static func dress(data: Dictionary, seed: int, deck: Dictionary = {}, supplies: 
 
 
 static func _movable_box(id: String, c: Dictionary) -> bool:
-	return not c.has("pick") and not LootTables.FIXED.has(id) and not bool(c.get("locked", false))
+	return not c.has("pick") and not LootTables.as_placed(c) and not LootTables.FIXED.has(id) and not bool(c.get("locked", false))
 
 
 static func _building_kind_of(buildings: Array, c: Dictionary) -> String:
@@ -1055,7 +1058,7 @@ static func place_stash(data: Dictionary, spot: String, seed: int) -> String:
 	var any := ""
 	for id: String in containers:
 		var c: Dictionary = containers[id]
-		if c.has("pick") or LootTables.FIXED.has(id):
+		if c.has("pick") or LootTables.as_placed(c) or LootTables.FIXED.has(id):
 			continue
 		if any == "" and int(c.get("building", -1)) >= 0:
 			any = id
@@ -1111,7 +1114,7 @@ static func _rare(containers: Dictionary, place_kind: String, seed: int, report:
 	var boxes: Array = []
 	for id: String in containers:
 		var c: Dictionary = containers[id]
-		if not c.has("pick") and not LootTables.FIXED.has(id) and int(c.get("building", -1)) >= 0:
+		if not c.has("pick") and not LootTables.as_placed(c) and not LootTables.FIXED.has(id) and int(c.get("building", -1)) >= 0:
 			boxes.append(id)
 	if boxes.is_empty():
 		return
@@ -1136,7 +1139,7 @@ static func _fragment(containers: Dictionary, place_kind: String, seed: int, rep
 	var indoors: Array = []
 	for id: String in containers:
 		var c: Dictionary = containers[id]
-		if c.has("pick") or LootTables.FIXED.has(id) or int(c.get("building", -1)) < 0:
+		if c.has("pick") or LootTables.as_placed(c) or LootTables.FIXED.has(id) or int(c.get("building", -1)) < 0:
 			continue
 		indoors.append(id)
 		if room_of(c) == "office":
@@ -1182,7 +1185,7 @@ static func _rare_store(containers: Dictionary, buildings: Array, place_kind: St
 	var kind: String = RARE_STORE_KIND.get(place_kind, "rail")
 	var ids: Array = []
 	for id: String in containers:
-		if int(containers[id].get("building", -1)) == b and not containers[id].has("pick"):
+		if int(containers[id].get("building", -1)) == b and not containers[id].has("pick") and not LootTables.as_placed(containers[id]):
 			ids.append(id)
 	if ids.is_empty():
 		return

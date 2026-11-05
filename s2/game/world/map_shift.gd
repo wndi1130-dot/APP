@@ -86,7 +86,14 @@ static func _moved(v, rows: int, key: String):
 ## A direction stays a direction; dictionary keys and embedded positions move.
 ## refresh_ground false leaves the ground floor's paths to a caller that builds on it
 ## and refreshes once after (map_ring.gd, side_path.gd), as the other floors are refreshed here.
+static func can_grow(data: Dictionary) -> bool:
+	return not data.has("bounds_stamp")
+
+
 static func grow(data: Dictionary, left: int, top: int, right: int, bottom: int, refresh_ground: bool = true, carry_paths: bool = false) -> Dictionary:
+	if not can_grow(data):
+		push_error("찍힌 경계 뒤에는 지도를 키울 수 없습니다")
+		return data
 	assert(mini(mini(left, top), mini(right, bottom)) >= 0)
 	if left + top + right + bottom == 0:
 		return data
@@ -167,7 +174,7 @@ static func _offset(value, offset: Vector2i, key: String):
 		for k in value:
 			if k is String and (k == "grid" or k == "levels"):
 				continue
-			out[_offset(k, offset, "") if k is Vector2i else k] = _offset(value[k], offset, k if k is String else key)
+			out[_offset(k, offset, "") if k is Vector2i or k is Rect2i or k is Vector3 else k] = _offset(value[k], offset, k if k is String else key)
 		return out
 	if value is Array:
 		var out := []

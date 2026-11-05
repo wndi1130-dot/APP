@@ -17,11 +17,13 @@ const FieldReturn = preload("res://game/politics/field_return.gd")
 const STEPS: Array[String] = ["train", "stop_pick", "field", "receipt", "council", "travel", "arrive", "end"]
 
 
+## The train's fingerprint is of the board as write_train writes it (slot_board: a supplies
+## run carries its slot version), so it matches the train file it stands beside.
 static func capture(flow) -> Dictionary:
 	var g: Dictionary = flow.train_g
 	var captured: Dictionary = {
 		"version": VERSION, "kind": KIND, "step": resume_step(g, flow.current()),
-		"run": flow.run, "train_sha": _text(g).sha256_text(),
+		"run": flow.run, "train_sha": _text(TrainSave.slot_board(g)).sha256_text(),
 		"seg": int(g.get("seg", 0)), "applied": applied_ids(g),
 		"contract": flow.contract.duplicate(true), "receipt": flow.receipt.duplicate(true),
 		"passed": flow.passed, "result_reason": String(flow.result.get("reason", "")),
@@ -109,7 +111,10 @@ static func _parse(at: String, source: Dictionary = {}) -> Dictionary:
 	var json := JSON.new()
 	if json.parse(text) != OK or not json.data is Dictionary:
 		return {}
-	var decoded: Dictionary = FieldSave._decode(json.data)
+	# A broken packed run in it is a broken file, as a cut-off one (FieldSave.decode_checked).
+	var decoded: Variant = FieldSave.decode_checked(json.data)
+	if not decoded is Dictionary:
+		return {}
 	source["train_sha"] = text.sha256_text()
 	return decoded
 
@@ -127,12 +132,13 @@ static func write(d: Dictionary, path: String = PATH) -> bool:
 	return error == OK and _replace(path)
 
 
-## The S1 board as it is, through the same temporary-file boundary as the slice slot.
+## The S1 board as the train slot holds it (save_slot.gd slot_board: a supplies run carries its
+## version), through the same temporary-file boundary as the slice slot.
 static func write_train(g: Dictionary, path: String = TrainSave.DEFAULT_PATH, written: Dictionary = {}) -> bool:
 	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
 	if file == null:
 		return false
-	var text := _text(g)
+	var text := _text(TrainSave.slot_board(g))
 	file.store_string(text)
 	file.flush()
 	var error: Error = file.get_error()
@@ -223,12 +229,12 @@ static func receipt_of_field(saved: Dictionary) -> Dictionary:
 	return ended.to_dict()
 
 
-static func pick(slice_path: String, train_path: String, t: Dictionary, field_path: String = FieldSave.PATH) -> Dictionary:
+static func pick(slice_path: String, train_path: String, t: Dictionary, field_path: String = FieldSave.PATH, read_context: Variant = null) -> Dictionary:
 	var d := read(slice_path)
 	var source: Dictionary = {}
 	var g := _train(train_path, t, source)
 	if RouteState.is_campaign(g):
-		return _pick_campaign(d, g, source, field_path)
+		return _pick_campaign(d, g, source, field_path, read_context)
 	if d.is_empty():
 		return {}
 	if g.is_empty() or String(g.get("phase", "")) == "end":
@@ -245,7 +251,7 @@ static func pick(slice_path: String, train_path: String, t: Dictionary, field_pa
 		if d["receipt"].get("receiptId") == receipt.get("receiptId"):
 			receipt = d["receipt"].duplicate(true)
 		else:
-			var saved: Dictionary = FieldSave.read(field_path)
+			var saved: Dictionary = FieldSave.read_for_start(field_path, read_context) if read_context is Dictionary else FieldSave.read(field_path)
 			if saved.get("phase") == "ended" and saved.get("receipt_id") == receipt.get("receiptId"):
 				receipt = receipt_of_field(saved)
 			# Without either typed copy, the canonical train text loses number types.
@@ -315,7 +321,7 @@ static func field_belongs(g: Dictionary, saved: Dictionary) -> bool:
 	return field_opts_belong(g, options) and saved.get("stop_id") == g["campaign"]["visit"].get("stop_id") and saved.get("receipt_id") == "ret_" + String(g["campaign"]["visit"].get("departure_id", "")).trim_prefix("dep_")
 
 
-static func _pick_campaign(d: Dictionary, g: Dictionary, source: Dictionary, field_path: String) -> Dictionary:
+static func _pick_campaign(d: Dictionary, g: Dictionary, source: Dictionary, field_path: String, read_context: Variant = null) -> Dictionary:
 	if RouteState.problem(g) != "" or step_of_board(g) == "end":
 		return {}
 	var route: Dictionary = g["campaign"]
@@ -323,7 +329,7 @@ static func _pick_campaign(d: Dictionary, g: Dictionary, source: Dictionary, fie
 	var torn: bool = d.is_empty() or d.get("mode") != "campaign" or d.get("run") != route["run"] or d.get("visit_id") != visit.get("id", "") or d.get("train_sha") != source.get("train_sha") or d.get("seg") != g["seg"] or d.get("applied") != applied_ids(g)
 	var at: String = step_of_board(g) if torn else resume_step(g, String(d["step"]))
 	var receipt: Dictionary = receipt_of_board(g)
-	var saved: Dictionary = FieldSave.read(field_path)
+	var saved: Dictionary = FieldSave.read_for_start(field_path, read_context) if read_context is Dictionary else FieldSave.read(field_path)
 	if not receipt.is_empty():
 		var fingerprint: String = FieldReturn.canonical(receipt)
 		if not torn and RouteState.owns_receipt(g, d["receipt"]) and FieldReturn.canonical(d["receipt"]) == fingerprint:

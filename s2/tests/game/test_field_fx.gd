@@ -147,6 +147,31 @@ func test_pause_fades_the_world_and_resume_brings_it_back() -> void:
 	assert_eq(float(game.fx_params["fx_fade"]), 0.0)
 
 
+func test_the_app_return_wait_fades_the_world_like_a_pause() -> void:
+	var game = _stop(["fog", "snow"])
+	assert_eq(float(game.fx_params["fx_fade"]), 0.0)
+	game.begin_resume()
+	game._process(0.05)
+	assert_true(game.resume_pending, "still waiting for the press")
+	assert_almost_eq(float(game.fx_params["fx_fade"]), 0.05 / game.FADE_TIME, 0.0001, "the wait fades in like a pause")
+	var before: float = float(game.fx_params["fx_fade"])
+	game._process(30.0)
+	assert_almost_eq(float(game.fx_params["fx_fade"]), before + game.PersonVisual.FRAME_MAX / game.FADE_TIME, 0.0001,
+			"a long first frame back still eases in")
+	for _frame in 5:
+		game._process(0.05)
+	assert_true(game.resume_pending)
+	assert_eq(float(game.fx_params["fx_fade"]), 1.0, "the world stays faded until play goes on")
+	# Pressing on: the next frames leave the wait branch and ease the fade back out.
+	game.resume_ready_at_ms = Time.get_ticks_msec()
+	assert_true(game.continue_resume())
+	game._process(0.05)
+	assert_almost_eq(float(game.fx_params["fx_fade"]), 1.0 - 0.05 / game.FADE_TIME, 0.0001, "play eases the fade out")
+	for _frame in 4:
+		game._process(0.05)
+	assert_almost_eq(float(game.fx_params["fx_fade"]), 0.0, 0.0001, "back to full colour once play goes on")
+
+
 func test_snowfall_is_drawn_by_the_fx_precip_shader() -> void:
 	var game = _stop(["fog", "snow"])
 	assert_true(game.snow.emitting)

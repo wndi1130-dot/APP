@@ -20,6 +20,7 @@ const CouncilMath = preload("res://game/politics/council_math.gd")
 const Late = preload("res://game/train/turn/turn_late.gd")
 const TurnCommon = preload("res://game/train/turn/turn_common.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
+const Chronicle = preload("res://game/train/train_chronicle.gd")
 
 
 ## S1 heatCost: the communities' heating, by the outside's stage when the
@@ -389,10 +390,9 @@ static func finish(g: Dictionary, t: Dictionary, end: String) -> Dictionary:
 	g["phase"] = "end"
 	_journal(g, end_text(g, end), "good" if end == "complete" else "bad")
 	write_lookback(g, t)
-	# S1 people.raisedLines preserves the record's insertion order and original words.
 	var raised: Dictionary = g["raised"] if g.get("raised") is Dictionary else {}
 	for name: String in raised: _journal(g, "%s은(는) %s에서 컸다." % [name, t["COMM_NAME"][raised[name]]])
-	# darkFinish is a no-op for the S1a states accepted by this port.
+	Chronicle.close_chronicle(g, t)
 	return g
 
 

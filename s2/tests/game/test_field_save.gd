@@ -5,7 +5,12 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const FieldWork = preload("res://game/field_work.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
+const Pose = preload("res://game/actors/person_pose.gd")
+const Visual = preload("res://game/actors/person_visual.gd")
+const Person = preload("res://game/actors/person.gd")
+const Stamina = preload("res://game/sim/stamina.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 
 ## A folder of this run's own: another run of the trials at the same time (another
@@ -62,6 +67,56 @@ func test_a_save_goes_to_json_and_back_whole() -> void:
 	assert_eq(back["departure"], d["departure"], "the departure order passes through untouched")
 
 
+func _dig_save(parts: Array, wagon_index: int = -1) -> Dictionary:
+	var saved: Dictionary = _sample()
+	var site: Dictionary = {"dig_parts": parts}
+	if wagon_index >= 0:
+		site["dig_wagon"] = wagon_index
+	# The other runtime fields an exact save must carry (FieldSave._whole_runtime), empty here.
+	saved["runtime"] = {"spots": {}, "levels": {}, "mission": {}, "holdout_doors": [], "game": {},
+		"components": {"work": {"sites": {"work_site": site}}}}
+	return saved
+
+
+func test_wagon_indices_and_pick_seconds_survive_json() -> void:
+	var parts: Array = [{"wagon": 0, "seconds": 60.0}, {"wagon": 1, "seconds": 30.0}]
+	var saved: Dictionary = _dig_save(parts, 1)
+	var back: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
+	var site: Dictionary = back["runtime"]["components"]["work"]["sites"]["work_site"]
+	assert_eq(site["dig_parts"], parts)
+	assert_eq(int(site["dig_wagon"]), 1)
+	assert_eq(typeof(site["dig_parts"][0]["wagon"]), TYPE_INT)
+	assert_eq(FieldSave.from_json(FieldSave.to_json(back)), back)
+
+
+func test_writing_dig_parts_clamps_finite_seconds_and_discards_nonfinite_seconds() -> void:
+	var saved: Dictionary = _dig_save([135.0, -15.0, NAN, INF, -INF,
+		{"wagon": 1, "seconds": INF}, {"wagon": 1, "seconds": 45.0}], 0)
+	var back: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
+	var parts: Array = back["runtime"]["components"]["work"]["sites"]["work_site"]["dig_parts"]
+	assert_eq(parts, [{"wagon": 0, "seconds": 90.0}, {"wagon": 0, "seconds": 0.0},
+		{"wagon": 1, "seconds": 45.0}])
+
+
+func test_reading_dig_parts_clamps_seconds_before_they_can_be_resumed() -> void:
+	var encoded: Dictionary = JSON.parse_string(FieldSave.to_json(_dig_save([], 0)))
+	encoded["runtime"]["components"]["work"]["sites"]["work_site"]["dig_parts"] = [135.0, -15.0,
+		{"wagon": 1, "seconds": {"$type": "float", "value": "inf"}},
+		{"wagon": 1, "seconds": {"$type": "float", "value": "-inf"}}]
+	var back: Dictionary = FieldSave.from_json(JSON.stringify(encoded))
+	assert_eq(back["runtime"]["components"]["work"]["sites"]["work_site"]["dig_parts"],
+		[{"wagon": 0, "seconds": 90.0}, {"wagon": 0, "seconds": 0.0}])
+
+
+func test_legacy_numeric_dig_parts_wait_for_the_current_map_wagon() -> void:
+	var saved: Dictionary = _dig_save([60.0, 135.0, -15.0, NAN, INF])
+	var back: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
+	var site: Dictionary = back["runtime"]["components"]["work"]["sites"]["work_site"]
+	assert_eq(site["dig_parts"], [60.0, 90.0, 0.0], "no map index invented by JSON conversion")
+	assert_eq(FieldWork.clean_dig_parts(site["dig_parts"], 1),
+		[{"wagon": 1, "seconds": 60.0}, {"wagon": 1, "seconds": 90.0}, {"wagon": 1, "seconds": 0.0}])
+
+
 func test_what_is_not_a_whole_save_of_this_kind_reads_as_none() -> void:
 	assert_eq(FieldSave.from_json("{not json"), {})
 	var other := _sample()
@@ -81,6 +136,36 @@ func test_fractional_or_non_numeric_versions_are_not_whole_saves() -> void:
 	for version in [1.0, 2.0]:
 		data["version"] = version
 		assert_false(FieldSave.from_json(JSON.stringify(data)).is_empty(), "an integral JSON number is allowed")
+
+
+func test_bounds_rule_accepts_only_nonnegative_whole_numbers_or_absence() -> void:
+	var saved: Dictionary = _sample()
+	assert_eq(FieldSave.resume_opts(FieldSave.from_json(FieldSave.to_json(saved)))["bounds_rule"], 0)
+	for rule: Variant in [0, 1, 99, 0.0, 1.0, 99.0]:
+		saved["bounds_rule"] = rule
+		assert_true(FieldSave._whole(saved), str(rule))
+		var restored: Dictionary = FieldSave.from_json(FieldSave.to_json(saved))
+		assert_false(restored.is_empty(), str(rule))
+		assert_eq(FieldSave.resume_opts(restored)["bounds_rule"], int(rule))
+	for rule: Variant in [-1, -1.0, 1.5, "1", true, false, null, [], {}, INF, -INF, NAN, 1.0e30]:
+		saved["bounds_rule"] = rule
+		assert_false(FieldSave._whole(saved), str(rule))
+		assert_eq(FieldSave.from_json(FieldSave.to_json(saved)), {}, str(rule))
+
+
+func test_invalid_bounds_rule_falls_back_to_the_previous_save() -> void:
+	var previous: Dictionary = _sample()
+	previous["bounds_rule"] = 1
+	assert_true(FieldSave.write(previous, AT))
+	var current: Dictionary = _sample()
+	current["clock"]["elapsed"] = 99.0
+	assert_true(FieldSave.write(current, AT))
+	for rule: Variant in [-1, 1.5, "1", true, null, [], {}]:
+		current["bounds_rule"] = rule
+		var file := FileAccess.open(AT, FileAccess.WRITE)
+		file.store_string(FieldSave.to_json(current))
+		file.close()
+		assert_eq(FieldSave.read(AT), previous, str(rule))
 
 
 func test_required_nested_fields_must_have_the_expected_types() -> void:
@@ -610,3 +695,163 @@ func test_the_slice_marker_survives_capture_and_resume_options() -> void:
 	var resumed: Dictionary = FieldSave.resume_opts(saved)
 	assert_true(bool(resumed["slice"]))
 	assert_false(saved["start_opts"].has("field_save_path"))
+
+
+func test_grid_fallback_keeps_coal_totals_loads_and_wagon_progress() -> void:
+	var a = _full_game()
+	a.zombies.list.clear()
+	a.pending_spawn.clear()
+	a.player.position = a.work.position_of("work_site")
+	a.work.update(1.0)
+	assert_true(a.work.start())
+	a.work.update(FieldWork.ESCORT_LEAD)
+	var workers: Array = []
+	for person in a.crew:
+		if person.role == "worker":
+			workers.append(person)
+	var state: Dictionary = a.work._site("work_site")
+	state["dig_parts"] = [{"wagon": 0, "seconds": 60.0}, {"wagon": 1, "seconds": 30.0}]
+	a.work._begin_dig(workers[0], "work_site")
+	workers[0].action_t = 24.0
+	workers[1].brain["load"] = 0.25
+	workers[1].brain["load_kind"] = "coal"
+	workers[1].brain["job"] = "carry"
+	a.work.dropped.append({"pos": a.player.position, "kind": "coal", "n": 0.25})
+	a.data["wagons"][0]["coal"] = 9.5
+	a.data["wagons"][1]["coal"] = 8.0
+	a.actions.coal_delivered = 2.0
+	a.actions.coal_spent = 0.5
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	var b = _full_game(FieldSave.resume_opts(saved))
+	assert_eq(FieldWork.wagon_coal(b.data) + b.actions.coal_delivered, 19.5)
+	assert_eq(b.actions.coal_spent, 0.5)
+	var carrier = b.work._person(workers[1].pid)
+	assert_eq(float(carrier.brain["load"]), 0.25)
+	assert_eq(carrier.brain["job"], "carry")
+	assert_eq(float(b.work.dropped[0]["n"]), 0.25)
+	assert_eq(FieldWork.wagon_coal(b.data) + b.actions.coal_delivered +
+		float(carrier.brain["load"]) + float(b.work.dropped[0]["n"]), 20.0)
+	var back: Dictionary = b.work._site("work_site")
+	assert_eq(back["dig_parts"], [{"wagon": 1, "seconds": 30.0}, {"wagon": 0, "seconds": 66.0}])
+	assert_true(back["dig_active"].is_empty(), "old grid callbacks become saved seconds")
+	assert_eq(b.work.phase(), "working")
+	var digger = b.work._person(workers[0].pid)
+	b.work._begin_dig(digger, "work_site")
+	assert_eq(digger.action_total, 24.0)
+	assert_eq(float(digger.brain["dig_from"]), 66.0)
+
+
+func test_grid_fallback_with_a_different_wagon_count_uses_the_saved_coal_pool() -> void:
+	var a = _full_game()
+	a.data["wagons"][0]["coal"] = 3.0
+	a.data["wagons"][1]["coal"] = 4.0
+	a.actions.coal_delivered = 2.0
+	var state: Dictionary = a.work._site("work_site")
+	state["dig_wagon"] = 0
+	state["dig_parts"] = [{"wagon": 0, "seconds": 60.0}]
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	saved["runtime"]["wagon_coal"].pop_back()
+	saved["runtime"]["wagon_ids"].pop_back()
+	var b = _full_game(FieldSave.resume_opts(saved))
+	assert_eq(FieldWork.wagon_coal(b.data), 7.0)
+	assert_eq(FieldWork.wagon_coal(b.data) + b.actions.coal_delivered, 9.0)
+	assert_true(b.work._site("work_site")["dig_parts"].is_empty())
+	assert_eq(int(b.work._site("work_site")["dig_wagon"]), -1)
+
+
+func test_grid_fallback_rejects_changed_wagon_ids_even_at_the_same_count() -> void:
+	var a = _full_game()
+	a.data["wagons"][0]["coal"] = 3.0
+	a.data["wagons"][1]["coal"] = 4.0
+	var state: Dictionary = a.work._site("work_site")
+	state["dig_wagon"] = 0
+	state["dig_parts"] = [{"wagon": 0, "seconds": 60.0}]
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	saved["runtime"]["wagon_ids"][0] = "changed_wagon"
+	var b = _full_game(FieldSave.resume_opts(saved))
+	assert_eq(FieldWork.wagon_coal(b.data), 7.0)
+	assert_eq(float(b.data["wagons"][0]["coal"]), 7.0)
+	assert_eq(float(b.data["wagons"][1]["coal"]), 0.0)
+	assert_true(b.work._site("work_site")["dig_parts"].is_empty())
+
+
+func test_grid_fallback_without_wagon_counts_deducts_coal_already_removed() -> void:
+	var a = _full_game()
+	a.actions.coal_delivered = 2.0
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	saved["runtime"].erase("wagon_coal")
+	saved["runtime"].erase("wagon_ids")
+	var b = _full_game(FieldSave.resume_opts(saved))
+	assert_eq(FieldWork.wagon_coal(b.data), 18.0)
+	assert_eq(FieldWork.wagon_coal(b.data) + b.actions.coal_delivered, 20.0)
+
+
+func test_grid_fallback_without_work_wagons_keeps_the_saved_coal_as_a_pile() -> void:
+	var a = _full_game()
+	a.data["wagons"][0]["coal"] = 3.0
+	a.data["wagons"][1]["coal"] = 4.0
+	a.actions.coal_delivered = 2.0
+	var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(a)))
+	saved["runtime"]["levels"][0]["width"] += 1
+	var b = _full_game()
+	b.data["wagons"] = []
+	FieldSave.apply(b, saved)
+	assert_eq(FieldWork.wagon_coal(b.data), 0.0)
+	assert_eq(b.work.dropped.size(), 1)
+	assert_eq(b.work.dropped[0]["kind"], "coal")
+	assert_eq(float(b.work.dropped[0]["n"]), 7.0)
+	assert_eq(float(b.work.dropped[0]["n"]) + b.actions.coal_delivered, 9.0)
+
+
+func test_recovery_clocks_round_trip_after_fatigue_and_ally_rest() -> void:
+	for ally: bool in [false, true]:
+		var game: FieldGame = _game()
+		var p: Person = game.player
+		if ally:
+			for other: Person in game.people:
+				if not is_same(other, game.player) and other.team == game.player.team:
+					p = other
+					break
+			assert_false(is_same(p, game.player), "fixture needs a companion")
+		p.hands = [{"id": "axe", "quality": "factory", "condition": 1.0, "loaded": 0}]
+		p.body.exhaustion = Stamina.FATIGUE_LIGHT * p.body._stamina_share() - 0.000001
+		var before_mult: float = float(p.mults()["swing"])
+		var own: Array = [{"name": "p_stand"}, {"name": "p_swing_one"}, {"name": "p_swing_back"}]
+		var note: Dictionary = {}
+		game.combat.start_swing(p, {})
+		assert_gt(p.strike_t, 0.0)
+		Visual.motion_of(p, note, 0.0, [], own)
+		var wind: float = p.strike_t
+		game.clock.elapsed += wind
+		game.combat.update(wind)
+		assert_lt(float(p.mults()["swing"]), before_mult, "the attack crosses a fatigue boundary")
+		Visual.motion_of(p, note, wind, [], own)
+		assert_true(p.has_meta(Pose.RECOVER_WAIT))
+		assert_true(p.has_meta(Pose.RECOVER_RELEASE))
+		if not p.has_meta(Pose.RECOVER_WAIT) or not p.has_meta(Pose.RECOVER_RELEASE):
+			continue
+		var wait: float = float(p.get_meta(Pose.RECOVER_WAIT))
+		var release: float = float(p.get_meta(Pose.RECOVER_RELEASE))
+		if ally:
+			assert_gt(p.swing_t, wait, "random rest remains in the rule wait")
+		var original: Array = Pose.swing_state(p)
+		var duration: float = Pose.recovery_duration(p, float(p.get_meta(Pose.SWING)))
+		var saved: Dictionary = FieldSave.from_json(FieldSave.to_json(FieldSave.capture(game)))
+		p.set_meta(Pose.RECOVER_WAIT, 99.0)
+		p.set_meta(Pose.RECOVER_RELEASE, 99.0)
+		FieldSave.apply(game, saved)
+		assert_almost_eq(float(p.get_meta(Pose.RECOVER_WAIT)), wait, 0.000001)
+		assert_almost_eq(float(p.get_meta(Pose.RECOVER_RELEASE)), release, 0.000001)
+		assert_eq(Pose.swing_state(p), original)
+		assert_almost_eq(Pose.recovery_duration(p, float(p.get_meta(Pose.SWING))), duration, 0.000001)
+		for row: Dictionary in saved["people"]:
+			var metadata: Dictionary = row.get("meta", {})
+			metadata.erase(Pose.RECOVER_WAIT)
+			metadata.erase(Pose.RECOVER_RELEASE)
+		FieldSave.apply(game, saved)
+		assert_false(p.has_meta(Pose.RECOVER_WAIT), "old saves clear existing clocks")
+		assert_false(p.has_meta(Pose.RECOVER_RELEASE), "old saves clear existing clocks")

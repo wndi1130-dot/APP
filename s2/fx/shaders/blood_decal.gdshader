@@ -1,5 +1,6 @@
 shader_type spatial;
 render_mode cull_disabled, depth_draw_never;
+#include "res://fx/shaders/fx_common.gdshaderinc"
 // Attached body/clothing marks. Decal3D uses the matching CPU-generated mask
 // in blood_fx.gd because Decal has texture inputs, not a ShaderMaterial slot.
 uniform float pattern_seed = 1.0;
@@ -30,5 +31,8 @@ void fragment() {
 	// Same sRGB colours as BloodFx.FRESH and DRIED, converted to linear.
 	ALBEDO = pow(mix(vec3(0.23, 0.07, 0.055), vec3(0.17, 0.075, 0.055), dry), vec3(2.2));
 	ROUGHNESS = mix(0.38, 0.96, dry);
+	if (fx_fill.w > 0.5) {
+		EMISSION = fx_fill_term(ALBEDO, 0.0, normalize(mat3(INV_VIEW_MATRIX) * NORMAL));
+	}
 	ALPHA = mask * opacity;
 }

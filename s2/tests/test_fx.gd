@@ -292,7 +292,7 @@ func _uniform_default(code: String, uniform: String) -> PackedFloat64Array:
 
 func test_model_grade_defaults_are_the_user_values() -> void:
 	# Weathered's uniform defaults and FxState.MODEL_GRADE are one set of numbers.
-	var code := FileAccess.get_file_as_string(DIR + "weathered.gdshader")
+	var code := FileAccess.get_file_as_string(DIR + "weathered.gdshaderinc")
 	for key in FxState.MODEL_GRADE:
 		var want = FxState.MODEL_GRADE[key]
 		var got := _uniform_default(code, key)
@@ -318,7 +318,7 @@ func test_model_grade_defaults_are_the_user_values() -> void:
 
 func test_model_grade_runs_before_the_weather_layers() -> void:
 	# Snow and rime are laid after the grade, so they keep their own grey-white.
-	var code := FileAccess.get_file_as_string(DIR + "weathered.gdshader")
+	var code := FileAccess.get_file_as_string(DIR + "weathered.gdshaderinc")
 	var at := code.find("fx_model_grade(")
 	assert_gt(at, 0)
 	assert_lt(at, code.find("float wet ="))

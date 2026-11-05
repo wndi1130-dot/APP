@@ -14,6 +14,8 @@ const TrainModels = preload("res://game/world/train_model_kit.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const EdgeBand = preload("res://game/world/edge_band.gd")
 const TrackView = preload("res://game/world/track_view.gd")
+const StoryLook = preload("res://game/world/story_look.gd")
+const TurntableView = preload("res://game/world/turntable_view.gd")
 const PropFit = preload("res://game/world/prop_fit.gd")
 const RoomDecor = preload("res://game/world/room_decor.gd")
 const BuildingUses = preload("res://game/world/building_uses.gd")
@@ -25,6 +27,8 @@ const F = FieldGrid.Floor
 const WALL_H: float = 2.1
 const LEVEL_H: float = 3.0
 const CUT_H: float = 0.35
+## The 「남은 곡괭이질」 bar's height over the wagon's track: the wagon model is 3 m tall.
+const DIG_BAR_Y: float = 3.5
 ## 카메라가 보는 층 바닥의 중심에서 잰 수평 거리(m). 최대 가로 78칸 이내.
 const PROP_CULL_DISTANCE: float = 39.0
 const PROP_LOD_DISTANCE: float = 18.0
@@ -108,6 +112,7 @@ var _contact_materials: Dictionary = {}   # "rim" / "prop" / "box" -> ShaderMate
 ## Every prop's contact shade (T0-6) in one MultiMesh, filled with the props in refresh_props.
 var prop_shades: MultiMeshInstance3D = null
 var spot_nodes: Dictionary = {}
+var dig_nodes: Dictionary = {}
 var stove_nodes: Array = []
 var manhole_nodes: Dictionary = {}
 var lid_nodes: Dictionary = {}          # manhole key -> its lid (and any planks on it), a node of its own so it can move
@@ -134,10 +139,14 @@ var pace = null
 ## The ground and the floors (by level) were laid from the stop loader's arrays (2a).
 var ground_from_loader: bool = false
 var floor_from_loader: Dictionary = {}
+## 시험과 장면 비교용 표시 스위치. setup 전에 정하며 지도 자료에는 넣지 않는다.
+var story_look_enabled: bool = true
+var story_look: Dictionary = {}
 
 
 func setup(map_data: Dictionary) -> void:
 	data = map_data
+	story_look = StoryLook.for_place(String(data.get("place_id", ""))) if story_look_enabled else {}
 	grid = data["grid"]
 	levels = data.get("levels", {0: grid})
 	for lv in levels:
@@ -173,7 +182,8 @@ func setup(map_data: Dictionary) -> void:
 	# 지도 칸 밖: 숲 띠·눈둑·밖으로 이어지는 길과 선로(edge_band.gd, 결정 448 17번).
 	edge_band = await EdgeBand.build(level_roots[0], grid, data, material, FLOOR_COLORS, pace)
 	# 선로 칸의 침목과 레일, 지도 밖으로 이어지는 것까지, 건널목 판자(track_view.gd, 결정 476·M1).
-	TrackView.build(level_roots[0], grid, material, edge_band.get("rail_runs", []), data.get("rail_crossings", []))
+	TrackView.build(level_roots[0], grid, material, edge_band.get("rail_runs", []), data.get("rail_crossings", []), story_look.get("rail_skip", []))
+	TurntableView.build(level_roots[0], material, story_look.get("turntable", {}), grid, ground_bank_row)
 	_build_walls()
 	await BuildPace.rest(pace)
 	await _build_props()
@@ -928,6 +938,8 @@ func update_spot(id: String) -> void:
 			box(st, Vector3(0.06, 3.2, 0.06), at + Vector3(-0.28, 1.6, -0.3), Color(0.5, 0.42, 0.3))
 			box(st, Vector3(0.06, 3.2, 0.06), at + Vector3(0.28, 1.6, -0.3), Color(0.5, 0.42, 0.3))
 		"work_site":
+			# On the far wagon a coal crew moved on to, once it has (field_work.gd moved_to).
+			at = FieldGrid.center(spot.get("marker_cell", spot["cell"]))
 			var color: Color = Color(0.9, 0.76, 0.4) if spot["state"] == "ready" else Color(0.45, 0.45, 0.45)
 			box(st, Vector3(1.2, 0.05, 1.2), at + Vector3(0, 0.03, 0), color)
 			var filled: int = clampi(roundi(float(spot.get("work_share", 0.0)) * FieldWork.SHARE_CELLS), 0, FieldWork.SHARE_CELLS)
@@ -967,6 +979,38 @@ func update_spot(id: String) -> void:
 				# In the open hatch on top, so the camera sees it from any side.
 				box(st, side * 0.4 + out.abs() * 0.3 + Vector3(0, 0.14, 0), at + out * 0.2 + Vector3(0, 1.07, 0), Color(0.5, 0.43, 0.28))
 	node.mesh = st.commit()
+
+
+## Six cells on a dark plate over the wagon's work cell, above its roof (the wagon model stands
+## 3 m on its track's height) so the wagon's side does not hide it from the diagonal view; the
+## same filled count keeps the same mesh.
+func update_dig(id: String, wagon: Dictionary, filled: int) -> void:
+	var node: MeshInstance3D = dig_nodes.get(id)
+	if filled < 0 or wagon.is_empty():
+		if node != null:
+			node.visible = false
+		return
+	if node == null:
+		node = _mesh_node()
+		dig_nodes[id] = node
+	node.position = dig_bar_at(wagon)
+	node.visible = true
+	if int(node.get_meta("cells", -1)) == filled:
+		return
+	var st := _begin()
+	var pitch: float = 0.4
+	# The cells stand on a dark plate wider than they are, so the empty ones read on snow too.
+	box(st, Vector3(pitch * FieldWork.DIG_CELLS + 0.08, 0.06, 0.26), Vector3(0, -0.06, 0), Color(0.06, 0.07, 0.08))
+	for i in FieldWork.DIG_CELLS:
+		var offset: float = (float(i) - float(FieldWork.DIG_CELLS - 1) * 0.5) * pitch
+		var tint: Color = Color(0.95, 0.6, 0.18) if i < filled else Color(0.24, 0.23, 0.21)
+		box(st, Vector3(0.34, 0.12, 0.16), Vector3(offset, 0.03, 0), tint)
+	node.mesh = st.commit()
+	node.set_meta("cells", filled)
+
+
+func dig_bar_at(wagon: Dictionary) -> Vector3:
+	return FieldGrid.center(wagon["work"]) + Vector3(0, TrackView.height_under(grid, wagon["rect"]) + DIG_BAR_Y, 0)
 
 
 func _mesh_node(lv: int = 0) -> MeshInstance3D:
@@ -1764,6 +1808,8 @@ func _build_props() -> void:
 	var top_props: Array = []
 	var hosts: Dictionary = {}
 	for prop: Dictionary in data.get("props", []):
+		if StoryLook.skips_prop(story_look, prop):
+			continue
 		if String(prop.get("mount", "")) == "top":
 			top_props.append(prop)
 			continue
