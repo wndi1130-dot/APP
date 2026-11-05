@@ -116,7 +116,7 @@ static func depart(g0: Dictionary, t: Dictionary) -> Dictionary:
 		engine["fervor"] = 0
 		C.bump_rel(g, "engine", -10, "strike")
 		g["fear"] = clampf(float(g["fear"]) + 10, 0, 100)
-		C.journal(g, "파업 금지법에 따라 경비대가 기관실 문을 열었다. 화부들이 불 앞으로 끌려갔다.", "dark")
+		C.journal(g, "파업 금지법을 내밀자 화부들이 말없이 불 앞으로 돌아갔다.", "dark")
 	elif striking:
 		if not bool(g["inStrike"]): g["strikes"] += 1
 		g["inStrike"] = true
