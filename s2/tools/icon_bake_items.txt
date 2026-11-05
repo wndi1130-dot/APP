@@ -75,3 +75,20 @@ it_sewing_kit res://tools/item_models.gd 35 48 0 0.08
 it_needle res://tools/item_models.gd 35 28 30 0.06
 it_doctor_box res://tools/item_models.gd 35 28 0 0.10
 book res://tools/item_models.gd 35 58 0 0.08
+# 저장소 모형(결정 424 공개 자산 먼저 — 무기·소품, 꼭짓점 색은 굽기 도구가 sRGB로 읽음)
+shotgun res://models/weapons/shotgun.glb 35 28 30 0.06
+bow res://models/weapons/bow.glb 35 28 -30 0.06
+pipe_shotgun res://models/weapons/pipe_shotgun.glb 35 28 30 0.06
+crowbar res://models/weapons/crowbar.glb 35 28 -30 0.06
+it_knife res://models/props_stop01/kitchen_knife.glb 35 28 30 0.06
+ammo_craft res://models/props_stop01/arrow_set.glb 35 28 30 0.06
+it_crate res://models/props_field/tin_crate.glb
+it_candle res://models/train_interior/stick_candle.glb
+it_book res://models/train_interior/book.glb
+it_painting res://models/train_interior/small_frame.glb
+it_bell res://models/train_interior/bell.glb
+# Kenney CC0(models/items/kenney_*, License.txt)
+it_fish res://models/items/kenney_survival/fish.glb 35 28 30 0.06
+it_toy res://models/items/kenney_furniture/bear.glb
+# 드라이브 공개 자산(CC BY 4.0, 저장소 밖 — docs/design/rights_ledger.md): it_boots·it_shoes·it_pan은 굽기 때만
+# 원본을 s2/_bake_ext/로 복사해 가져온 뒤 따로 굽고 지운다(구운 그림만 저장소에).

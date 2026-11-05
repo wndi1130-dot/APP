@@ -33,7 +33,7 @@ func _begin() -> void:
 		_done()
 		return
 	var pattern := RegEx.new()
-	pattern.compile("^(\\S+)\\s+(res://.+?\\.(?:glb|tscn|scn|res|tres|gd))(?:\\s+(\\S+))?(?:\\s+(\\S+))?(?:\\s+(\\S+))?(?:\\s+(\\S+))?$")
+	pattern.compile("^(\\S+)\\s+(res://.+?\\.(?:glb|gltf|obj|tscn|scn|res|tres|gd))(?:\\s+(\\S+))?(?:\\s+(\\S+))?(?:\\s+(\\S+))?(?:\\s+(\\S+))?$")
 	var names := {}
 	var line_number := 0
 	while file.get_position() < file.get_length():
@@ -193,6 +193,13 @@ func _bake_material(original: Material, mesh: Mesh, surface: int, item_name: Str
 	if original is BaseMaterial3D:
 		var copy := original.duplicate() as BaseMaterial3D
 		copy.next_pass = null
+		# A model painted only in vertex colours (no texture, white albedo) gets the
+		# importer's plain material; read its colours as the game's shaders do (sRGB).
+		if copy.albedo_texture == null and copy.albedo_color == Color.WHITE and _has_colors(mesh, surface):
+			copy.vertex_color_use_as_albedo = true
+			copy.vertex_color_is_srgb = true
+			print("ICON_BAKE_MATERIAL name=", item_name, " surface=", surface,
+				" source=", original.get_class(), " replacement=copy color=vertex_color_srgb")
 		return copy
 	var material := StandardMaterial3D.new()
 	material.roughness = 0.9
@@ -250,6 +257,12 @@ func _bake_material(original: Material, mesh: Mesh, surface: int, item_name: Str
 		" source=", original.get_class() if original != null else "none",
 		" replacement=StandardMaterial3D color=", mode, " missing_textures=", missing)
 	return material
+
+
+func _has_colors(mesh: Mesh, surface: int) -> bool:
+	var arrays := mesh.surface_get_arrays(surface)
+	var colors: Variant = arrays[Mesh.ARRAY_COLOR] if arrays.size() > Mesh.ARRAY_COLOR else null
+	return colors is PackedColorArray and not (colors as PackedColorArray).is_empty()
 
 
 func _is_albedo_name(key: String) -> bool:
