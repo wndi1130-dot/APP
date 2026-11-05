@@ -12,12 +12,12 @@ const NEW_KEYS: Array[String] = [
 	"it_bottle_broken", "it_stake",
 	"it_coat", "it_jacket", "it_vest", "it_hat", "it_hood", "pack", "it_wire",
 	"it_syrup", "clock", "it_pocket_watch", "it_sewing_kit", "it_needle",
-	"it_doctor_box", "book",
+	"it_doctor_box", "book", "it_saline", "it_toy",
 ]
 
 
-func test_ids_include_all_51_new_picture_keys() -> void:
-	assert_eq(NEW_KEYS.size(), 51)
+func test_ids_include_all_53_new_picture_keys() -> void:
+	assert_eq(NEW_KEYS.size(), 53)
 	var available: Array = ItemModels.ids()
 	for key: String in NEW_KEYS:
 		assert_has(available, key, key + " has a recipe")

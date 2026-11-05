@@ -39,6 +39,9 @@ const RECIPES: Dictionary = {
 	"bandage": {"glb": SURVIVAL + "bedroll-packed.glb", "scale": Vector3(0.7, 1.15, 1.15), "tint": [
 		{"h": [0.04, 0.1], "s": [0.3, 1.0], "to_h": 0.08, "to_s": 0.28, "v": 0.82},
 		{"h": [0.92, 0.04], "s": [0.3, 1.0], "to_h": 0.1, "to_s": 0.05, "v": 1.08}]},
+	# The kit's fish is orange; a frozen one is a cold silver-blue.
+	"it_fish": {"glb": SURVIVAL + "fish.glb", "tint": [
+		{"h": [0.0, 0.2], "s": [0.25, 1.0], "to_h": 0.56, "to_s": 0.26, "v": 0.62}]},
 	"document": {"shape": "papers"},
 	# 겉모습 2판 A (11-04): plain shapes for the things with no CC0 model in hand.
 	"wood": {"shape": "planks"},
@@ -97,6 +100,8 @@ const RECIPES: Dictionary = {
 	"it_needle": {"shape": "needle"},
 	"it_doctor_box": {"shape": "doctor_box"},
 	"book": {"shape": "book"},
+	"it_saline": {"shape": "saline"},
+	"it_toy": {"shape": "teddy"},
 }
 
 
@@ -234,6 +239,10 @@ static func build(id: String) -> Node3D:
 				_doctor_box(root)
 			"book":
 				_book(root)
+			"saline":
+				_saline(root)
+			"teddy":
+				_teddy(root)
 		return root
 	var scene: PackedScene = load(String(recipe["glb"])) as PackedScene
 	if scene == null:
@@ -1233,16 +1242,16 @@ static func _meat_bad(root: Node3D) -> void:
 	patch_part_2.scale = Vector3(0.7, 1, 0.7)
 
 
-## A side-on hare with long upright ears, a raised head, four visible legs and one faint frost patch.
+## A crouched side-on hare: flattened round body, raised head, long ears, folded haunch and small forepaws.
 static func _hare(root: Node3D) -> void:
-	var body: CapsuleMesh = CapsuleMesh.new()
-	body.radius = 0.06
-	body.height = 0.25
-	body.radial_segments = 12
-	body.rings = 6
+	var body: SphereMesh = SphereMesh.new()
+	body.radius = 0.1
+	body.height = 0.15
+	body.radial_segments = 16
+	body.rings = 8
 	var head: SphereMesh = SphereMesh.new()
-	head.radius = 0.049
-	head.height = 0.089
+	head.radius = 0.047
+	head.height = 0.09
 	head.radial_segments = 16
 	head.rings = 8
 	var ear: CapsuleMesh = CapsuleMesh.new()
@@ -1256,72 +1265,81 @@ static func _hare(root: Node3D) -> void:
 	inner_ear.radial_segments = 12
 	inner_ear.rings = 6
 	var haunch: SphereMesh = SphereMesh.new()
-	haunch.radius = 0.064
-	haunch.height = 0.09
+	haunch.radius = 0.075
+	haunch.height = 0.11
 	haunch.radial_segments = 16
 	haunch.rings = 8
-	var rear_leg: CapsuleMesh = CapsuleMesh.new()
-	rear_leg.radius = 0.023
-	rear_leg.height = 0.145
-	rear_leg.radial_segments = 12
-	rear_leg.rings = 6
 	var rear_paw: CapsuleMesh = CapsuleMesh.new()
-	rear_paw.radius = 0.018
-	rear_paw.height = 0.065
+	rear_paw.radius = 0.025
+	rear_paw.height = 0.11
 	rear_paw.radial_segments = 12
 	rear_paw.rings = 6
+	var far_rear_paw: CapsuleMesh = CapsuleMesh.new()
+	far_rear_paw.radius = 0.023
+	far_rear_paw.height = 0.095
+	far_rear_paw.radial_segments = 12
+	far_rear_paw.rings = 6
 	var front_leg: CapsuleMesh = CapsuleMesh.new()
-	front_leg.radius = 0.014
-	front_leg.height = 0.1
+	front_leg.radius = 0.015
+	front_leg.height = 0.09
 	front_leg.radial_segments = 12
 	front_leg.rings = 6
-	var front_paw: SphereMesh = SphereMesh.new()
+	var far_front_leg: CapsuleMesh = CapsuleMesh.new()
+	far_front_leg.radius = 0.014
+	far_front_leg.height = 0.08
+	far_front_leg.radial_segments = 12
+	far_front_leg.rings = 6
+	var front_paw: CapsuleMesh = CapsuleMesh.new()
 	front_paw.radius = 0.018
-	front_paw.height = 0.024
-	front_paw.radial_segments = 16
-	front_paw.rings = 8
+	front_paw.height = 0.085
+	front_paw.radial_segments = 12
+	front_paw.rings = 6
+	var far_front_paw: CapsuleMesh = CapsuleMesh.new()
+	far_front_paw.radius = 0.016
+	far_front_paw.height = 0.065
+	far_front_paw.radial_segments = 12
+	far_front_paw.rings = 6
 	var tail: SphereMesh = SphereMesh.new()
-	tail.radius = 0.023
-	tail.height = 0.046
+	tail.radius = 0.024
+	tail.height = 0.048
 	tail.radial_segments = 16
 	tail.rings = 8
 	var muzzle: SphereMesh = SphereMesh.new()
-	muzzle.radius = 0.02
-	muzzle.height = 0.032
+	muzzle.radius = 0.018
+	muzzle.height = 0.03
 	muzzle.radial_segments = 16
 	muzzle.rings = 8
 	var nose: SphereMesh = SphereMesh.new()
-	nose.radius = 0.009
-	nose.height = 0.018
+	nose.radius = 0.008
+	nose.height = 0.016
 	nose.radial_segments = 16
 	nose.rings = 8
 	var frost_sheet: SphereMesh = SphereMesh.new()
-	frost_sheet.radius = 0.047
+	frost_sheet.radius = 0.048
 	frost_sheet.height = 0.012
 	frost_sheet.radial_segments = 16
 	frost_sheet.rings = 8
 
-	var body_part_1: MeshInstance3D = _part(root, body, Color("796a53"), Vector3(0, 0.061, -0.025), Vector3(90, 0, 0))
-	body_part_1.scale = Vector3(1.1, 1, 0.85)
-	_part(root, head, Color("89745a"), Vector3(0.005, 0.12, 0.12))
-	_part(root, ear, Color("796b55"), Vector3(0.025, 0.204, 0.103), Vector3(-25, 0, 0))
-	_part(root, ear, Color("796b55"), Vector3(-0.018, 0.192, 0.104), Vector3(-42, 0, 0))
-	_part(root, inner_ear, Color("996b64"), Vector3(0.037, 0.204, 0.103), Vector3(-25, 0, 0))
-	_part(root, inner_ear, Color("996b64"), Vector3(-0.006, 0.192, 0.104), Vector3(-42, 0, 0))
-	_part(root, haunch, Color("826f54"), Vector3(0.012, 0.047, -0.1))
-	_part(root, rear_leg, Color("796a53"), Vector3(-0.035, 0.025, -0.14), Vector3(90, 0, 0))
-	_part(root, rear_paw, Color("8d785b"), Vector3(-0.039, 0.018, -0.215), Vector3(90, 0, 0))
-	_part(root, rear_leg, Color("796a53"), Vector3(0.035, 0.025, -0.14), Vector3(90, 0, 0))
-	_part(root, rear_paw, Color("8d785b"), Vector3(0.039, 0.018, -0.215), Vector3(90, 0, 0))
-	_part(root, front_leg, Color("796a53"), Vector3(0.046, 0.014, 0.13), Vector3(90, 0, 0))
-	_part(root, front_leg, Color("796a53"), Vector3(-0.044, 0.033, 0.112), Vector3(90, 0, 0))
-	_part(root, front_paw, Color("8d785b"), Vector3(0.046, 0.012, 0.177))
-	_part(root, front_paw, Color("8d785b"), Vector3(-0.044, 0.029, 0.159))
-	_part(root, tail, Color("cbc9b7"), Vector3(0.013, 0.084, -0.158))
-	_part(root, muzzle, Color("8d785b"), Vector3(0.008, 0.1, 0.165))
-	_part(root, nose, Color("5e4e3c"), Vector3(0.008, 0.1, 0.185))
-	var frost_sheet_part_1: MeshInstance3D = _part(root, frost_sheet, Color("b4b9ad"), Vector3(0, 0.112, -0.035))
-	frost_sheet_part_1.scale = Vector3(0.8, 1, 1.2)
+	var body_part_1: MeshInstance3D = _part(root, body, Color("796a53"), Vector3(0, 0.09, -0.025))
+	body_part_1.scale = Vector3(0.78, 1, 1.05)
+	_part(root, head, Color("89745a"), Vector3(0.01, 0.17, 0.095))
+	_part(root, ear, Color("796b55"), Vector3(0.028, 0.245, 0.08), Vector3(-20, 0, 0))
+	_part(root, ear, Color("796b55"), Vector3(-0.02, 0.238, 0.069), Vector3(-35, 0, 0))
+	_part(root, inner_ear, Color("996b64"), Vector3(0.04, 0.245, 0.08), Vector3(-20, 0, 0))
+	_part(root, inner_ear, Color("996b64"), Vector3(-0.008, 0.238, 0.069), Vector3(-35, 0, 0))
+	var haunch_part_1: MeshInstance3D = _part(root, haunch, Color("826f54"), Vector3(0.032, 0.062, -0.06))
+	haunch_part_1.scale = Vector3(1, 1, 0.85)
+	_part(root, rear_paw, Color("796a53"), Vector3(0.05, 0.025, -0.04), Vector3(90, 0, 0))
+	_part(root, far_rear_paw, Color("796a53"), Vector3(-0.045, 0.024, -0.055), Vector3(90, 0, 0))
+	_part(root, front_leg, Color("796a53"), Vector3(0.043, 0.055, 0.06))
+	_part(root, far_front_leg, Color("796a53"), Vector3(-0.04, 0.06, 0.043))
+	_part(root, front_paw, Color("8d785b"), Vector3(0.043, 0.018, 0.09), Vector3(90, 0, 0))
+	_part(root, far_front_paw, Color("8d785b"), Vector3(-0.04, 0.025, 0.08), Vector3(90, 0, 0))
+	_part(root, tail, Color("cbc9b7"), Vector3(0.01, 0.09, -0.145))
+	_part(root, muzzle, Color("8d785b"), Vector3(0.013, 0.156, 0.139))
+	_part(root, nose, Color("5e4e3c"), Vector3(0.013, 0.156, 0.159))
+	var frost_sheet_part_1: MeshInstance3D = _part(root, frost_sheet, Color("b4b9ad"), Vector3(0, 0.164, -0.025))
+	frost_sheet_part_1.scale = Vector3(0.85, 1, 1.1)
 
 
 ## A round stale loaf with three broad scores and green grey mould patches.
@@ -1624,7 +1642,7 @@ static func _old_clothes(root: Node3D) -> void:
 	_part(root, stitch, Color("9b8061"), Vector3(0.079, 0.109, 0.043), Vector3(0, 12, 0))
 
 
-## A gently curved flat horn handle and a broad silver blade opened 120 degrees about one hinge.
+## A 130 mm curved flat horn grip and a 100 mm blade opened 70 degrees about one brass hinge.
 static func _razor(root: Node3D) -> void:
 	var vertices: Array[Vector3] = []
 	var normals: Array[Vector3] = []
@@ -1639,12 +1657,12 @@ static func _razor(root: Node3D) -> void:
 	for row: int in 12:
 		var a_ratio: float = float(row) / 12.0
 		var b_ratio: float = float(row + 1) / 12.0
-		var center_a: Vector3 = Vector3(0.19 * a_ratio, 0.007, 0.006 * sin(PI * a_ratio))
-		var center_b: Vector3 = Vector3(0.19 * b_ratio, 0.007, 0.006 * sin(PI * b_ratio))
-		var a: Vector3 = center_a + Vector3(0, 0, -0.01)
-		var b: Vector3 = center_a + Vector3(0, 0, 0.01)
-		var c: Vector3 = center_b + Vector3(0, 0, -0.01)
-		var d: Vector3 = center_b + Vector3(0, 0, 0.01)
+		var center_a: Vector3 = Vector3(0.108 * a_ratio, 0.007, 0.004 * sin(PI * a_ratio))
+		var center_b: Vector3 = Vector3(0.108 * b_ratio, 0.007, 0.004 * sin(PI * b_ratio))
+		var a: Vector3 = center_a + Vector3(0, 0, -0.011)
+		var b: Vector3 = center_a + Vector3(0, 0, 0.011)
+		var c: Vector3 = center_b + Vector3(0, 0, -0.011)
+		var d: Vector3 = center_b + Vector3(0, 0, 0.011)
 		var outward: Vector3 = (center_b - center_a).cross(Vector3.UP).normalized()
 		add_quad.call(PackedVector3Array([a + half_thickness, b + half_thickness, c + half_thickness, d + half_thickness]), Vector3.UP)
 		add_quad.call(PackedVector3Array([a - half_thickness, b - half_thickness, c - half_thickness, d - half_thickness]), Vector3.DOWN)
@@ -1662,33 +1680,33 @@ static func _razor(root: Node3D) -> void:
 	handle.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	# Keep grip and blade coplanar; only the whole open razor leans off the floor.
 	var frame: Node3D = Node3D.new()
-	frame.position = Vector3(0, 0.044869, 0)
-	frame.rotation_degrees = Vector3(0, 0, 15)
+	frame.position = Vector3(0, 0.004298, 0)
+	frame.rotation_degrees = Vector3(0, 0, 23)
 	root.add_child(frame)
-	_part(frame, handle, Color("73533b"), Vector3(-0.08, 0, 0))
+	_part(frame, handle, Color("73533b"), Vector3.ZERO)
 	var grip_end: CylinderMesh = CylinderMesh.new()
-	grip_end.top_radius = 0.01
-	grip_end.bottom_radius = 0.01
+	grip_end.top_radius = 0.011
+	grip_end.bottom_radius = 0.011
 	grip_end.height = 0.014
 	grip_end.radial_segments = 12
-	for end_x: float in [-0.08, 0.11]:
+	for end_x: float in [0.0, 0.108]:
 		_part(frame, grip_end, Color("73533b"), Vector3(end_x, 0.007, 0))
 	var blade: BoxMesh = BoxMesh.new()
-	blade.size = Vector3(0.18, 0.014, 0.025)
+	blade.size = Vector3(0.1, 0.014, 0.028)
 	var spine: BoxMesh = BoxMesh.new()
-	spine.size = Vector3(0.18, 0.012, 0.012)
+	spine.size = Vector3(0.1, 0.012, 0.012)
 	var hinge: CylinderMesh = CylinderMesh.new()
 	hinge.top_radius = 0.009
 	hinge.bottom_radius = 0.009
-	hinge.height = 0.022
+	hinge.height = 0.012
 	hinge.radial_segments = 12
-	var hinge_at: Vector3 = Vector3(-0.08, 0.011, 0)
+	var hinge_at: Vector3 = Vector3(0, 0.009, 0)
 	var blade_pivot: Vector3 = Vector3(hinge_at.x, 0.009, hinge_at.z)
-	var blade_turn: Vector3 = Vector3(0, -120, 0)
+	var blade_turn: Vector3 = Vector3(0, -70, 0)
 	var blade_basis: Basis = Basis(Vector3.UP, deg_to_rad(blade_turn.y))
 	_part(frame, blade, Color("b8c2c2"), blade_pivot + blade_basis * Vector3(blade.size.x * 0.5, 0, 0), blade_turn)
-	_part(frame, spine, Color("89979b"), blade_pivot + blade_basis * Vector3(0.09, 0.003, -0.0065), blade_turn)
-	_part(frame, hinge, Color("9ca79f"), hinge_at)
+	_part(frame, spine, Color("89979b"), blade_pivot + blade_basis * Vector3(0.05, 0.003, -0.008), blade_turn)
+	_part(frame, hinge, Color("a18b56"), hinge_at)
 
 
 ## Two overlapping open-centred toothed metal discs, with broad bright steel teeth.
@@ -2717,3 +2735,153 @@ static func _book(root: Node3D) -> void:
 	leaf_part_2.scale = Vector3(0.65, 1, 1.2)
 	var leaf_part_3: MeshInstance3D = _part(root, leaf, Color("91a16b"), Vector3(-0.018, 0.094, 0.076), Vector3(0, -25, 0))
 	leaf_part_3.scale = Vector3(0.65, 1, 1.2)
+
+
+## A pale blue-grey saline pouch with a hanging eye, two rubber ports, blank white label and one 12 mm tube.
+static func _saline(root: Node3D) -> void:
+	# Existing opaque flat colours suggest frosted PVC, the liquid level and sealed edges.
+	var assembly: Node3D = Node3D.new()
+	assembly.position = Vector3(0, 0.129311, 0)
+	root.add_child(assembly)
+	var pouch: BoxMesh = BoxMesh.new()
+	pouch.size = Vector3(0.16, 0.21, 0.04)
+	var side_edge: CylinderMesh = CylinderMesh.new()
+	side_edge.top_radius = 0.02
+	side_edge.bottom_radius = 0.02
+	side_edge.height = 0.21
+	side_edge.radial_segments = 12
+	var bottom_fold: CylinderMesh = CylinderMesh.new()
+	bottom_fold.top_radius = 0.02
+	bottom_fold.bottom_radius = 0.02
+	bottom_fold.height = 0.16
+	bottom_fold.radial_segments = 12
+	var top_seal: BoxMesh = BoxMesh.new()
+	top_seal.size = Vector3(0.184, 0.022, 0.048)
+	var hanger_eye: TorusMesh = TorusMesh.new()
+	hanger_eye.inner_radius = 0.012
+	hanger_eye.outer_radius = 0.026
+	hanger_eye.rings = 20
+	hanger_eye.ring_segments = 8
+	var rubber_port: CylinderMesh = CylinderMesh.new()
+	rubber_port.top_radius = 0.012
+	rubber_port.bottom_radius = 0.012
+	rubber_port.height = 0.045
+	rubber_port.radial_segments = 12
+	var liquid: BoxMesh = BoxMesh.new()
+	liquid.size = Vector3(0.13, 0.09, 0.012)
+	var label: BoxMesh = BoxMesh.new()
+	label.size = Vector3(0.112, 0.077, 0.012)
+	_part(assembly, pouch, Color("74979c"), Vector3(0, 0.14, 0))
+	_part(assembly, side_edge, Color("74979c"), Vector3(-0.08, 0.14, 0))
+	_part(assembly, side_edge, Color("74979c"), Vector3(0.08, 0.14, 0))
+	_part(assembly, bottom_fold, Color("74979c"), Vector3(0, 0.035, 0), Vector3(0, 0, 90))
+	_part(assembly, top_seal, Color("98b3b7"), Vector3(0, 0.239, 0))
+	_part(assembly, hanger_eye, Color("98b3b7"), Vector3(0, 0.272, 0), Vector3(90, 0, 0))
+	_part(assembly, rubber_port, Color("626f67"), Vector3(-0.039, 0.0165, 0))
+	_part(assembly, rubber_port, Color("626f67"), Vector3(0.039, 0.0165, 0))
+	_part(assembly, liquid, Color("6f929a"), Vector3(0, 0.095, 0.02))
+	_part(assembly, label, Color("c6cbbf"), Vector3(0, 0.145, 0.023))
+	# One closed 12 mm hose; rings share positions and normals along a smooth path.
+	var vertices: Array[Vector3] = []
+	var normals: Array[Vector3] = []
+	var add_triangle: Callable = func(corners: PackedVector3Array, face_normals: PackedVector3Array) -> void:
+		var order: Array[int] = [0, 1, 2]
+		if (corners[1] - corners[0]).cross(corners[2] - corners[0]).dot(face_normals[0]) > 0.0:
+			order = [0, 2, 1]
+		for corner_index: int in order:
+			vertices.append(corners[corner_index])
+			normals.append(face_normals[corner_index])
+	var centers: Array[Vector3] = []
+	for row: int in 13:
+		var ratio: float = float(row) / 12.0
+		centers.append(Vector3(0.039 + 0.045 * sin(PI * ratio * 0.5), -0.005 - 0.12 * ratio, 0.04 * sin(PI * ratio)))
+	var tangents: Array[Vector3] = []
+	var rings: Array[PackedVector3Array] = []
+	var ring_normals: Array[PackedVector3Array] = []
+	for row: int in centers.size():
+		var tangent: Vector3 = (centers[mini(row + 1, centers.size() - 1)] - centers[maxi(row - 1, 0)]).normalized()
+		tangents.append(tangent)
+		var across: Vector3 = Vector3.BACK.cross(tangent).normalized()
+		var around: Vector3 = tangent.cross(across).normalized()
+		var ring_points: PackedVector3Array = PackedVector3Array()
+		var radial_normals: PackedVector3Array = PackedVector3Array()
+		for side: int in 8:
+			var angle: float = TAU * float(side) / 8.0
+			var radial: Vector3 = across * cos(angle) + around * sin(angle)
+			ring_points.append(centers[row] + radial * 0.006)
+			radial_normals.append(radial)
+		rings.append(ring_points)
+		ring_normals.append(radial_normals)
+	for row: int in centers.size() - 1:
+		for side: int in 8:
+			var next_side: int = (side + 1) % 8
+			var a: Vector3 = rings[row][side]
+			var b: Vector3 = rings[row][next_side]
+			var c: Vector3 = rings[row + 1][side]
+			var d: Vector3 = rings[row + 1][next_side]
+			var na: Vector3 = ring_normals[row][side]
+			var nb: Vector3 = ring_normals[row][next_side]
+			var nc: Vector3 = ring_normals[row + 1][side]
+			var nd: Vector3 = ring_normals[row + 1][next_side]
+			add_triangle.call(PackedVector3Array([a, b, c]), PackedVector3Array([na, nb, nc]))
+			add_triangle.call(PackedVector3Array([b, d, c]), PackedVector3Array([nb, nd, nc]))
+	for cap_row: int in [0, centers.size() - 1]:
+		var cap_normal: Vector3 = -tangents[cap_row] if cap_row == 0 else tangents[cap_row]
+		for side: int in 8:
+			var next_side: int = (side + 1) % 8
+			add_triangle.call(PackedVector3Array([centers[cap_row], rings[cap_row][side], rings[cap_row][next_side]]), PackedVector3Array([cap_normal, cap_normal, cap_normal]))
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = PackedVector3Array(vertices)
+	arrays[Mesh.ARRAY_NORMAL] = PackedVector3Array(normals)
+	var tube: ArrayMesh = ArrayMesh.new()
+	tube.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_part(assembly, tube, Color("77999b"), Vector3.ZERO)
+
+
+## A worn teddy bear sitting up: round body and head, ears, muzzle, arms and
+## legs forward, a faded red bow; warm brown plush, no face paint but two eyes.
+static func _teddy(root: Node3D) -> void:
+	var fur := Color("8a6a4c")
+	var pale := Color("b89c7c")
+	var body := SphereMesh.new()
+	body.radius = 0.075
+	body.height = 0.16
+	_part(root, body, fur, Vector3(0, 0.08, 0))
+	var belly := SphereMesh.new()
+	belly.radius = 0.05
+	belly.height = 0.1
+	_part(root, belly, pale, Vector3(0, 0.08, 0.04)).scale = Vector3(1, 1, 0.6)
+	var head := SphereMesh.new()
+	head.radius = 0.062
+	head.height = 0.12
+	_part(root, head, fur, Vector3(0, 0.2, 0.01))
+	var ear := SphereMesh.new()
+	ear.radius = 0.024
+	ear.height = 0.048
+	for side: float in [-1.0, 1.0]:
+		_part(root, ear, fur, Vector3(0.047 * side, 0.252, 0.0)).scale = Vector3(1, 1, 0.6)
+		var arm := CapsuleMesh.new()
+		arm.radius = 0.022
+		arm.height = 0.09
+		_part(root, arm, fur, Vector3(0.078 * side, 0.115, 0.02), Vector3(0, 0, 38.0 * side))
+		var leg := CapsuleMesh.new()
+		leg.radius = 0.027
+		leg.height = 0.085
+		_part(root, leg, fur, Vector3(0.042 * side, 0.028, 0.055), Vector3(80, 0, 0))
+		var eye := SphereMesh.new()
+		eye.radius = 0.008
+		eye.height = 0.016
+		_part(root, eye, Color("3a332c"), Vector3(0.022 * side, 0.214, 0.064))
+	var muzzle := SphereMesh.new()
+	muzzle.radius = 0.028
+	muzzle.height = 0.04
+	_part(root, muzzle, pale, Vector3(0, 0.188, 0.058))
+	var nose := SphereMesh.new()
+	nose.radius = 0.01
+	nose.height = 0.016
+	_part(root, nose, Color("3a332c"), Vector3(0, 0.196, 0.084))
+	var bow := TorusMesh.new()
+	bow.inner_radius = 0.05
+	bow.outer_radius = 0.064
+	_part(root, bow, Color("8e3328"), Vector3(0, 0.145, 0.005))

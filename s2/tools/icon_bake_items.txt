@@ -40,7 +40,7 @@ it_apple res://tools/item_models.gd 35 28 0 0.12
 it_apple_wilted res://tools/item_models.gd 35 28 0 0.12
 it_meat res://tools/item_models.gd 35 40 0 0.12
 it_meat_bad res://tools/item_models.gd 35 40 0 0.12
-it_hare res://tools/item_models.gd 90 35 0 0.08
+it_hare res://tools/item_models.gd 90 30 0 0.08
 it_bread_moldy res://tools/item_models.gd 35 40 0 0.12
 food res://tools/item_models.gd 35 28 0 0.12
 it_tube res://tools/item_models.gd 35 28 30 0.06
@@ -49,7 +49,7 @@ it_toilet_paper res://tools/item_models.gd 35 28 0 0.12
 it_soap res://tools/item_models.gd 35 40 0 0.12
 it_child_clothes res://tools/item_models.gd 35 58 0 0.08
 it_old_clothes res://tools/item_models.gd 35 28 0 0.12
-it_razor res://tools/item_models.gd 35 28 -30 0.06
+it_razor res://tools/item_models.gd 35 50 0 0.08
 gear res://tools/item_models.gd 35 45 0 0.12
 it_nails res://tools/item_models.gd 35 50 0 0.12
 it_opener res://tools/item_models.gd 35 34 0 0.1
@@ -75,6 +75,7 @@ it_sewing_kit res://tools/item_models.gd 35 48 0 0.08
 it_needle res://tools/item_models.gd 35 28 30 0.06
 it_doctor_box res://tools/item_models.gd 35 28 0 0.10
 book res://tools/item_models.gd 35 58 0 0.08
+it_saline res://tools/item_models.gd 35 28 0 0.08
 # 저장소 모형(결정 424 공개 자산 먼저 — 무기·소품, 꼭짓점 색은 굽기 도구가 sRGB로 읽음)
 shotgun res://models/weapons/shotgun.glb 35 28 30 0.06
 bow res://models/weapons/bow.glb 35 28 -30 0.06
@@ -87,8 +88,8 @@ it_candle res://models/train_interior/stick_candle.glb
 it_book res://models/train_interior/book.glb
 it_painting res://models/train_interior/small_frame.glb
 it_bell res://models/train_interior/bell.glb
-# Kenney CC0(models/items/kenney_*, License.txt)
-it_fish res://models/items/kenney_survival/fish.glb 35 28 30 0.06
-it_toy res://models/items/kenney_furniture/bear.glb
+# Kenney CC0(models/items/kenney_survival, License.txt) — 생선은 item_models.gd에서 색을 바꿔 구움
+it_fish res://tools/item_models.gd 35 28 30 0.06
+it_toy res://tools/item_models.gd 25 20 0 0.08
 # 드라이브 공개 자산(CC BY 4.0, 저장소 밖 — docs/design/rights_ledger.md): it_boots·it_shoes·it_pan은 굽기 때만
 # 원본을 s2/_bake_ext/로 복사해 가져온 뒤 따로 굽고 지운다(구운 그림만 저장소에).
