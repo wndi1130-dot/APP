@@ -13,6 +13,7 @@ const TrainDom = preload("res://game/train/train_dom.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const HudIcons = preload("res://game/ui/hud_icons.gd")
 const GlassParts = preload("res://game/ui/glass_parts.gd")
+const TypeLine = preload("res://game/ui/type_line.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const PaneMotion = preload("res://game/ui/pane_motion.gd")
@@ -334,36 +335,92 @@ func test_a_running_technology_shows_its_upkeep_and_when_it_starves() -> void:
 	assert_null(p3.find_child("UpkeepPer_e5", true, false))
 
 
+const STORE_NAMES: Dictionary = {"scrap": "고철", "wood": "목재", "parts": "부품"}
+
+
+## A label's width as Godot lays its words (its least size), not the pane's GlassParts.text_w, so a
+## width helper that went wrong would not hide an overlap here.
+func _width(l: Label) -> float:
+	return l.get_combined_minimum_size().x
+
+
+## A label's baseline by the shared type line (type_line.gd rise_of, which has its own tests in
+## test_type_line.gd — two faces and sizes on one baseline): a Label centres its line in its face's
+## height, so the plain ascent puts a 12 and a 15 css label apart by a few px.
+func _baseline(l: Label) -> float:
+	return l.position.y + TypeLine.rise_of(l).x
+
+
+## Checks the stores row of `p` for counts shown as `shown`: every mark and count there, each group
+## clear of the one before, nothing past the keys' edge (316 css), names (when shown) between mark
+## and count on the counts' baseline (54 css). Returns how many names are shown.
+func _check_stores_row(p: Control, shown: String, at: String) -> int:
+	var k: float = UiFonts.K
+	var end_before: float = -1.0
+	var names := 0
+	for key: String in STORE_NAMES:
+		var mark := _live(p, "StoreMark_" + key)
+		var n := _live(p, "Store_" + key) as Label
+		assert_not_null(mark, "%s %s mark" % [at, key])
+		assert_not_null(n, "%s %s count" % [at, key])
+		if mark == null or n == null:
+			continue
+		assert_eq(n.text, shown, at)
+		assert_gt(mark.position.x, end_before, "%s %s keeps clear of the store before" % [at, key])
+		assert_lte(mark.position.x + mark.size.x, n.position.x, "%s %s mark before its count" % [at, key])
+		assert_almost_eq(_baseline(n), 54.0 * k, 1.0, "%s %s count on the row's baseline" % [at, key])
+		var word := _live(p, "StoreName_" + key) as Label
+		if word != null:
+			names += 1
+			assert_eq(word.text, STORE_NAMES[key], at)
+			assert_lte(mark.position.x + mark.size.x, word.position.x, "%s %s mark before its name" % [at, key])
+			assert_lte(word.position.x + _width(word), n.position.x, "%s %s name before its count" % [at, key])
+			assert_almost_eq(_baseline(word), _baseline(n), 1.0, "%s %s name and count share a baseline" % [at, key])
+		end_before = n.position.x + _width(n)
+	assert_lte(end_before, 316.0 * k, at + " the last count ends inside the keys' edge")
+	return names
+
+
 ## The stores row names each mark in the workshop's words (player review round 1, item 8): mark,
-## name, count from left to right on one line, each store clear of the one before, and the last
-## count inside the keys' edge (316, as the upkeep line) — for three-digit and four-digit counts,
-## at both resolutions.
+## name, count from left to right on one line, at both resolutions — three and four digits at the
+## fixed steps; a five-digit count with a decimal still inside the keys' edge; a seven-digit count
+## with the names stepped aside rather than past the edge.
 func test_the_stores_row_names_each_mark_before_its_count() -> void:
-	var names: Dictionary = {"scrap": "고철", "wood": "목재", "parts": "부품"}
-	for count: int in [999, 9999]:
+	for case: Array in [[999, "999", 3], [9999, "9999", 3], [10000.4, "10000.4", -1], [1000000, "1000000", 0]]:
 		for res: Vector2 in [Vector2(1280.0, 720.0), Vector2(1688.0, 780.0)]:
 			var g := _game()
-			for key: String in names:
-				g["dom"][key] = count
+			for key: String in STORE_NAMES:
+				g["dom"][key] = case[0]
 			var p := _pane(g, [], res)
 			await wait_process_frames(1)
-			var at: String = "%d at %s" % [count, res]
-			var end_before: float = -1.0
-			for key: String in names:
-				var mark := _live(p, "StoreMark_" + key)
-				var word := _live(p, "StoreName_" + key) as Label
-				var n := _live(p, "Store_" + key) as Label
-				assert_not_null(word, key + " has a name")
-				if mark == null or word == null or n == null:
-					continue
-				assert_eq(word.text, names[key], at)
-				assert_eq(n.text, str(count), at)
-				assert_gt(mark.position.x, end_before, "%s %s keeps clear of the store before" % [at, key])
-				assert_lte(mark.position.x + mark.size.x, word.position.x, "%s %s mark before its name" % [at, key])
-				assert_lte(word.position.x + GlassParts.text_w(word), n.position.x, "%s %s name before its count" % [at, key])
-				assert_almost_eq(_ink_box(word).end.y, _ink_box(n).end.y, 4.0 * UiFonts.K, "%s %s name and count share a line" % [at, key])
-				end_before = n.position.x + GlassParts.text_w(n)
-			assert_lte(end_before, 316.0 * UiFonts.K, at + " the last count ends inside the keys' edge")
+			var at: String = "%s at %s" % [case[1], res]
+			var names: int = _check_stores_row(p, String(case[1]), at)
+			if int(case[2]) >= 0:
+				assert_eq(names, int(case[2]), at + " names shown")
+			else:
+				assert_true(names == 0 or names == 3, at + " all names or none")
+
+
+## Redrawn with other counts, the row keeps one node per part and the same nodes (RowKeep), and the
+## names come back when the counts shrink again.
+func test_the_stores_row_redraws_in_place() -> void:
+	var g := _game()
+	var p := _pane(g)
+	await wait_process_frames(1)
+	var ids: Dictionary = {}
+	for key: String in STORE_NAMES:
+		for part: String in ["StoreMark_", "StoreName_", "Store_"]:
+			ids[part + key] = _live(p, part + key).get_instance_id()
+	for count: float in [1000000.0, 12.0]:
+		for key: String in STORE_NAMES:
+			g["dom"][key] = count
+		p.show_state(g)
+		await wait_process_frames(1)
+		for part_name: String in ids:
+			assert_eq(p.find_children(part_name, "Control", true, false).size(), 1, "%s once after %s" % [part_name, count])
+	assert_eq(_check_stores_row(p, "12", "back to 12"), 3, "names back")
+	for part_name: String in ids:
+		assert_eq(_live(p, part_name).get_instance_id(), ids[part_name], part_name + " kept")
 
 
 ## The upkeep line is redrawn in place: red while starved and back again, the

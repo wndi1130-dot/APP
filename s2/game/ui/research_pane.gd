@@ -48,6 +48,10 @@ const ABOVE_X: float = 40.0
 const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"]]
 ## From one store's mark to the next (mark 18 + name + count + a gap), _stores.
 const STORE_STEP: float = 92.0
+## The least room between one store's count and the next mark when the groups close up.
+const STORE_GAP: float = 6.0
+## The stores row ends where the rows' keys end (as the upkeep line, 316).
+const STORE_END: float = 316.0
 const ICON: Dictionary = {"scrap": "it_nails", "wood": "it_plank", "parts": "gear", "core": "gear"}
 ## S1 ui/domestic.ts BRANCH_ICON.
 const BRANCH_ICON: Dictionary = {"engine": "gear", "med": "med", "craft": "wrench", "radio": "radio", "expedition": "compass"}
@@ -396,22 +400,63 @@ func _head() -> void:
 
 
 ## The stores row: each store's mark, its name in the workshop's own words (STORE_NAME, no new
-## word) and how many, on one line; a step wide enough that a count of three digits stays clear of
-## the next mark and the last count ends inside the keys' edge (316). Player review round 1, item 8:
-## the bare marks were not read as 고철·목재·부품.
+## word) and how many, on one line (player review round 1, item 8: the bare marks were not read as
+## 고철·목재·부품). The groups stand at fixed steps while each ends a gap before the next and the
+## last inside the keys' edge (STORE_END); longer counts (five digits with a decimal) close the
+## groups up from the left; if even closed up they would cross the edge, the names step aside and
+## the row is marks and counts as before.
 func _stores(stores: Array) -> void:
+	if stores.is_empty():
+		return
 	var k: float = UiFonts.K
-	for i in stores.size():
-		var s: Dictionary = stores[i]
+	var words: Array[Label] = []
+	var counts: Array[Label] = []
+	for s: Dictionary in stores:
 		var key: String = String(s["key"])
-		var x: float = 44.0 + STORE_STEP * i
-		_add(_mark(String(s["icon"]), 18.0, Vector2(x, 39.0), INK2, "StoreMark_" + key))
 		var word := _label("StoreName_" + key, String(Workshop.STORE_NAME[key]), UiFonts.WORD, 400, 12.0, INK2, 0.0)
 		word.name = "StoreName_" + key
-		_text(word, x + 22.0, 54.0)
+		words.append(word)
 		var n := _label("Store_" + key, _num(float(s["n"])), UiFonts.NUMBER, 500, 15.0, INK, 0.225)
 		n.name = "Store_" + key
-		_text(n, x + 22.0 + GlassParts.text_w(word) / k + 4.0, 54.0)
+		counts.append(n)
+	var named: Array[float] = []
+	var bare: Array[float] = []
+	for i in stores.size():
+		var count_w: float = GlassParts.text_w(counts[i]) / k
+		named.append(22.0 + GlassParts.text_w(words[i]) / k + 4.0 + count_w)
+		bare.append(22.0 + count_w)
+	var with_names: bool = store_xs(named)[-1] + named[-1] <= STORE_END
+	var widths: Array[float] = named if with_names else bare
+	var xs: Array[float] = store_xs(widths)
+	for i in stores.size():
+		var key: String = String(stores[i]["key"])
+		_add(_mark(String(stores[i]["icon"]), 18.0, Vector2(xs[i], 39.0), INK2, "StoreMark_" + key))
+		if with_names:
+			_text(words[i], xs[i] + 22.0, 54.0)
+		else:
+			words[i].hide()
+		_text(counts[i], xs[i] + widths[i] - GlassParts.text_w(counts[i]) / k, 54.0)
+
+
+## Where each store's group starts, given each group's width (css): the fixed steps when every group
+## ends STORE_GAP before the next step and the last by STORE_END, else closed up from the left.
+static func store_xs(widths: Array[float]) -> Array[float]:
+	var xs: Array[float] = []
+	var fixed: bool = true
+	for i in widths.size():
+		var x: float = 44.0 + STORE_STEP * i
+		var limit: float = 44.0 + STORE_STEP * (i + 1) - STORE_GAP if i + 1 < widths.size() else STORE_END
+		if x + widths[i] > limit:
+			fixed = false
+		xs.append(x)
+	if fixed:
+		return xs
+	xs.clear()
+	var at: float = 44.0
+	for w: float in widths:
+		xs.append(at)
+		at += w + STORE_GAP
+	return xs
 
 
 ## A technology: its branch mark and name; what it needs, how far it is, or
