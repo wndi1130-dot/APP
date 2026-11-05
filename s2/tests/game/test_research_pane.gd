@@ -624,6 +624,46 @@ func test_single_technology_relations_only_show_when_they_move() -> void:
 	_assert_relation_boxes(_pane_row(p, "e5"))
 
 
+## Scrolled to the foot of an opened E3 (the lead's 1280×720 shot left a strip of letter tops of
+## the row above under the stores): a row cut to under half its height lies under the top shade.
+func test_a_row_cut_under_the_stores_lies_under_the_shade() -> void:
+	var sequence: Dictionary = _pipe_sequence("pipe-restart/approved/revote=true")
+	if sequence.is_empty(): return
+	var ids: Array = ["w1", "w4", "e1", "w5", "e3"]
+	for resolution: Vector2 in [Vector2(1280, 720), Vector2(1688, 780)]:
+		var p: Control = _pane(RestoreVectors.project(sequence["steps"][4]["before"]), ids, resolution)
+		await wait_process_frames(2)
+		assert_null(_live(p, "Above"), "at the top of the list: no shade")
+		_key(p, "Key_e3").pressed.emit()
+		await wait_seconds(RowKeep.MOVE_S + 0.03)
+		var scroll: ScrollContainer = p.get_node("Parts/List") as ScrollContainer
+		scroll.scroll_vertical = 100000
+		await wait_process_frames(2)
+		var above: Control = _live(p, "Above")
+		assert_not_null(above, "scrolled: the shade is on")
+		if above == null: return
+		assert_almost_eq(above.position.y, scroll.position.y, 0.5, "the shade starts where the list does")
+		# A line of text the list's top edge cuts through (the shot's strip of letter tops):
+		# what is left of it shows inside the shade.
+		var top: float = float(scroll.scroll_vertical)
+		var cut_lines: int = 0
+		for id: String in ids:
+			var row: Control = _pane_row(p, id)
+			for child: Node in row.get_children():
+				if not child is Label or not (child as Label).visible:
+					continue
+				var box: Rect2 = _ink_box(child as Control)
+				var y0: float = row.position.y + box.position.y
+				var y1: float = y0 + box.size.y
+				if y0 < top - 0.5 and y1 > top + 0.5:
+					cut_lines += 1
+					assert_lte(y1 - top, above.size.y + 0.5, "%s/%s: its %.1f px left show inside the shade" % [id, child.name, y1 - top])
+		assert_gt(cut_lines, 0, "this scene cuts a line of text at the top (the shot's strip)")
+		scroll.scroll_vertical = 0
+		await wait_process_frames(2)
+		assert_null(_live(p, "Above"), "back at the top the shade goes")
+
+
 func test_e3_revote_notice_wraps_below_keys_at_two_resolutions() -> void:
 	var sequence: Dictionary = _pipe_sequence("pipe-restart/approved/revote=true")
 	if sequence.is_empty(): return

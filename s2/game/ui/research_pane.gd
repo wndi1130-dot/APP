@@ -40,6 +40,10 @@ const CSS_H_MIN: float = 286.0
 ## fit are dragged up under the stores (glass_pane.gd scroll), as mods_pane.gd.
 const CSS_H_MAX: float = 286.0
 const SHADE := Color("0b0e12")
+## The shade under the stores while rows are scrolled up: half a row and a little.
+const ABOVE_H: float = 30.0
+## Where that shade starts across: the rows' branch marks stand at 44.
+const ABOVE_X: float = 40.0
 const STORES: Array = [["scrap", "it_nails"], ["wood", "it_plank"], ["parts", "gear"]]
 const ICON: Dictionary = {"scrap": "it_nails", "wood": "it_plank", "parts": "gear", "core": "gear"}
 ## S1 ui/domestic.ts BRANCH_ICON.
@@ -298,6 +302,7 @@ func _draw_all() -> void:
 	s.update_minimum_size()
 	s.size = Vector2(CSS_W, css_size(rows.size()).y - ROW_TOP - 12.0) * k
 	RowKeep.restore_scroll(s, saved)
+	_above(s)
 	if list.custom_minimum_size.y > s.size.y + 0.5:
 		_more(s)
 	RowKeep.finish(_parts)
@@ -320,6 +325,29 @@ func _more(s: ScrollContainer) -> Control:
 				PackedColorArray([Color(SHADE, 0.0), Color(SHADE, 0.0), Color(SHADE, 0.85), Color(SHADE, 0.85)])))
 		bar.value_changed.connect(func(v: float) -> void: fade.visible = v < bar.max_value - bar.page - 1.0)
 	fade.visible = s.scroll_vertical < (s.get_child(0) as Control).custom_minimum_size.y - s.size.y - 1.0
+	return fade
+
+
+## While rows are scrolled up under the stores, the glass darkens there too, half a row deep:
+## a row cut at the top shows as shade, not as a strip of letter tops. The list's scroll cannot
+## stop on row edges (its end is where the last row's foot shows), so the shade covers the cut.
+func _above(s: ScrollContainer) -> Control:
+	var k: float = UiFonts.K
+	var fade: Control = RowKeep.part(_parts, "Above", func() -> Control: return Control.new())
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Over the rows' text column only: across the glass's soft left edge it would show a hard corner.
+	fade.position = Vector2(ABOVE_X * k, s.position.y)
+	fade.size = Vector2(s.size.x - ABOVE_X * k, ABOVE_H * k)
+	var bar: ScrollBar = s.get_v_scroll_bar()
+	if not fade.has_meta("wired"):
+		fade.set_meta("wired", true)
+		fade.draw.connect(func() -> void:
+			var w: float = fade.size.x
+			var h: float = fade.size.y
+			fade.draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(w, 0), Vector2(w, h), Vector2(0, h)]),
+				PackedColorArray([Color(SHADE, 1.0), Color(SHADE, 1.0), Color(SHADE, 0.0), Color(SHADE, 0.0)])))
+		bar.value_changed.connect(func(v: float) -> void: fade.visible = v > 1.0)
+	fade.visible = s.scroll_vertical > 1
 	return fade
 
 
