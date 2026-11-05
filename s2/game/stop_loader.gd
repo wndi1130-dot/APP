@@ -323,7 +323,10 @@ func abandon() -> void:
 		field = null
 		return
 	var f: Node = field
-	if is_instance_valid(f.people_look) and f.people_look.game == f: f.people_look.cancel_preparation()
+	# A field without people (a test's stand-in, a field not built yet) has no
+	# people_look to stop; get() reads it without an error when it is missing.
+	var look = f.get("people_look")
+	if is_instance_valid(look) and look.game == f: look.cancel_preparation()
 	field = null
 	if f.is_built:
 		f.queue_free()
