@@ -1945,6 +1945,217 @@ func test_walk_joint_refinement_moves_a_small_inner_success_and_checks_true_resi
 	assert_gt(float(errors["height_m"]), BodyBake.PERSON_WALK_JOINT_HEIGHT_TOL_M, "small target error cannot hide a mismatched pelvis table")
 
 
+## F(x)=-x alternates the two supports; the full dynamic solution is x=0.
+## The gap variant has no acceptable residual anywhere on the same chord.
+func _walk_support_switch_sample(x: float, gap: bool = false) -> Dictionary:
+	var fit: Dictionary = {"rest": PackedVector3Array([Vector3(-0.04, 0.0, -0.08), Vector3(0.04, 0.0, 0.16), Vector3(-0.1, 0.0, 0.0)]),
+		"bones": PackedInt32Array([0, 1, 2]), "weights": PackedFloat32Array([1, 1, 1]), "per": 1,
+		"soles": [PackedInt32Array([0, 1]), PackedInt32Array([2])]}
+	var probes: Array = BodyBake._person_footlock_probes(fit, [Transform3D(Basis(), Vector3(0.0, x, 0.0)), Transform3D(Basis(), Vector3(0.0, -x, 0.0)), Transform3D.IDENTITY])
+	var residual: float = (0.002 if x <= 0.0 else -0.002) if gap else -2.0 * x
+	return {"reason": "", "evaluated": true, "targets_used": [Vector3(x, 0.0, 0.0), Vector3(-0.1, 0.0, 0.0)],
+		"residual_vector": [Vector3(residual, 0.0, 0.0), Vector3.ZERO], "skin_residual": absf(residual),
+		"height_residual": 0.0, "conditions": _walk_skin_gate(absf(residual)), "probes": probes,
+		"support_signature": str([probes[0]["vertices"], probes[1]["vertices"]])}
+
+
+func test_walk_support_revisit_uses_the_dynamic_bracket_before_stopping() -> void:
+	var a: Dictionary = _walk_support_switch_sample(-0.002)
+	var b: Dictionary = _walk_support_switch_sample(0.002)
+	var again: Dictionary = _walk_support_switch_sample(-0.002)
+	assert_ne(a["support_signature"], b["support_signature"])
+	assert_eq(a["support_signature"], again["support_signature"], "premise: A to B to A")
+	assert_gt(float(a["skin_residual"]), BodyBake.PERSON_WALK_SKIN_TOL_M)
+	assert_gt(float(b["skin_residual"]), BodyBake.PERSON_WALK_SKIN_TOL_M)
+	var bracket: Dictionary = BodyBake._person_walk_support_bracket(a, b)
+	var targets: Array = BodyBake._person_walk_support_midpoint(bracket)
+	assert_eq(targets.size(), 2)
+	if targets.size() != 2:
+		return
+	var middle: Dictionary = _walk_support_switch_sample((targets[0] as Vector3).x)
+	assert_eq(middle["probes"][0]["vertices"], PackedInt32Array([0, 1]))
+	assert_true(BodyBake._person_walk_skin_ready(middle, true), "a repeated support alone is not a failed continuous state")
+	assert_eq(middle["probes"][0]["sole_height_offsets_m"][0], 0.0)
+	assert_eq(middle["probes"][0]["sole_height_offsets_m"][1], 0.0)
+	var orthogonal: Dictionary = middle.duplicate(true)
+	orthogonal["residual_vector"][0] = Vector3(0.0, 0.002, 0.0)
+	orthogonal["skin_residual"] = 0.002
+	orthogonal["conditions"] = _walk_skin_gate(0.002)
+	assert_false(BodyBake._person_walk_skin_ready(orthogonal, true))
+	assert_true(BodyBake._person_walk_support_narrow(bracket, orthogonal).is_empty(), "a scalar root is not a six-dimensional solution")
+
+
+func test_walk_support_gap_remains_failed_after_bounded_dynamic_trials() -> void:
+	var a: Dictionary = _walk_support_switch_sample(-0.002, true)
+	var b: Dictionary = _walk_support_switch_sample(0.002, true)
+	var bracket: Dictionary = BodyBake._person_walk_support_bracket(a, b)
+	var evaluated: int = 2
+	var passed: bool = false
+	while evaluated < BodyBake.PERSON_WALK_SKIN_EVALUATIONS:
+		var targets: Array = BodyBake._person_walk_support_midpoint(bracket)
+		if targets.is_empty():
+			break
+		var trial: Dictionary = _walk_support_switch_sample((targets[0] as Vector3).x, true)
+		evaluated += 1
+		passed = BodyBake._person_walk_skin_ready(trial, true)
+		if passed:
+			break
+		bracket = BodyBake._person_walk_support_narrow(bracket, trial)
+	assert_false(passed, "a discontinuous 2 mm gap cannot be accepted by changing support")
+	assert_eq(evaluated, BodyBake.PERSON_WALK_SKIN_EVALUATIONS, "use the remaining existing cap without adding a new one")
+	var failed: Dictionary = _walk_joint_feedback_case()
+	failed["reason"] = "SKIN_SUPPORT_CYCLE"
+	assert_true(bool(BodyBake._person_walk_joint_feedback(failed)["retry"]), "the shared projection can still change the geometry")
+	assert_false(bool(failed["ok"]), "recoverable is never successful")
+
+
+func test_walk_support_bracket_resume_evaluates_real_paired_ik_once() -> void:
+	var fixture: Dictionary = _walk_fixed_contact_case()
+	var ctx: Dictionary = fixture["ctx"]
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	var baseline: Dictionary = BodyBake._person_walk_skin_snapshot(body, fit)
+	var budget: Dictionary = BodyBake._person_walk_budget()
+	fit["work_budget"] = budget
+	var left: Array = (fixture["known"] as Array).duplicate()
+	var right: Array = left.duplicate()
+	left[0] -= Vector3(0.002, 0.0, 0.0)
+	right[0] += Vector3(0.002, 0.0, 0.0)
+	var a: Dictionary = BodyBake._person_walk_skin_evaluate(ctx, fit, 0.0, fixture["goals"], left, 0.9, baseline)
+	var accepted_pose: Dictionary = BodyBake._person_walk_skin_snapshot(body, fit)
+	var b: Dictionary = BodyBake._person_walk_skin_evaluate(ctx, fit, 0.0, fixture["goals"], right, 0.9, baseline)
+	var bracket: Dictionary = BodyBake._person_walk_support_bracket(a, b)
+	assert_false(bracket.is_empty())
+	if bracket.is_empty():
+		return
+	var continuation: Dictionary = {"baseline": baseline, "goals": fixture["goals"],
+		"targets": BodyBake._person_walk_support_midpoint(bracket), "wanted_h": 0.9, "current": a, "previous": {},
+		"accepted_pose": accepted_pose, "omega": 0.5, "accepted_omega": 1.0, "evaluations": 2, "rejections": 0,
+		"stalled": 0, "passes": [a, b], "support_sets": [], "support_history": [a["support_signature"], b["support_signature"]],
+		"joint_precision": true, "support_states": {}, "support_bracket": bracket, "support_cycle_brackets": 1}
+	var solved: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0, [], 1, true, continuation, true)
+	assert_true(bool(solved["ok"]))
+	assert_true(bool(solved.get("dynamic_verified", false)))
+	assert_eq(int(solved["ik_passes"]), 3)
+	assert_eq(int(budget["used"]["ik"]), 3, "each endpoint and the real midpoint consumes one pair")
+	assert_eq(solved["passes"].back()["search_mode"], "support_bracket")
+	assert_eq(int(solved["support_cycle_brackets"]), 1)
+	assert_false(fit.has("skin_support_sets"), "accepted contact state belongs to the returned frame")
+
+
+func test_walk_height_fit_is_deterministic_across_calls() -> void:
+	var fixture: Dictionary = _walk_fixed_contact_case()
+	var ctx: Dictionary = fixture["ctx"]
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	var walk: Array = BodyBake.PERSON_CLIPS[0]
+	var rest: PackedVector3Array = fit["rest"]
+	var bones: PackedInt32Array = fit["bones"]
+	var weights: PackedFloat32Array = fit["weights"]
+	var known: Array = []
+	var goals: Array = []
+	var hip_bind: int = (ctx["bind_bone"] as Array).find(body.find_bone("hips"))
+	fit["goal_cache"] = {}
+	# At hips y=.96, the half-hip heel and rigid toe meet at y=-.04.
+	# An ankle at -.002 selects the toe; +.002 selects the heel.
+	for side in 2:
+		var ankle: Vector3 = fit["rest_ankles"][side]
+		var foot_bind: int = (ctx["bind_bone"] as Array).find(int(fit["legs"][side][2]))
+		for vertex: int in fit["soles"][side]:
+			var heel: bool = rest[vertex].z < ankle.z
+			var point: Vector3 = rest[vertex]
+			point.y = -0.02 if heel else -0.04
+			rest[vertex] = point
+			for slot in 4:
+				bones[vertex * 4 + slot] = foot_bind if slot == 0 else hip_bind
+				weights[vertex * 4 + slot] = (0.5 if heel else 1.0) if slot == 0 else (0.5 if heel and slot == 1 else 0.0)
+		var goal: Dictionary = {"target": ankle, "base": ankle, "rotation": Basis(), "path": Vector3.ZERO, "age": 0.1}
+		known.append(ankle)
+		goals.append(goal)
+		fit["goal_cache"][side] = {0.0: goal}
+	fit["rest"] = rest
+	fit["bones"] = bones
+	fit["weights"] = weights
+	fit["pelvis"] = {"values": PackedFloat64Array([0.96]), "slopes": PackedFloat64Array([0.0])}
+	fit["walk_specs"] = [{"entry": walk, "shift": 0.0}]
+	# The fixture changed its support schedule after the base context was built.
+	for key: String in ["geometry_cache", "bound_cache"]:
+		fit.erase(key)
+	fit["pose_cache"] = {}
+	var budget: Dictionary = BodyBake._person_walk_budget()
+	fit["work_budget"] = budget
+	var first: Dictionary = BodyBake._fit_person_walk_height(ctx, fit, walk, 0.0)
+	assert_true(bool(first["ok"]), "the byte comparison needs a feasible complete table")
+	if not bool(first["ok"]):
+		return
+	body.reset_bone_poses()
+	var left: Array = known.duplicate()
+	var right: Array = left.duplicate()
+	left[0] -= Vector3(0.0, 0.002, 0.0)
+	right[0] += Vector3(0.0, 0.002, 0.0)
+	var started: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0, left, 1, true, {}, true, true)
+	assert_true(started.has("continuation"))
+	if not started.has("continuation"):
+		return
+	assert_false(fit["walk_solve"].has("continuation"), "the fit must not own the suspended solver")
+	assert_false(fit.has("skin_support_sets"))
+	var continuation: Dictionary = (started["continuation"] as Dictionary).duplicate(true)
+	var other: Dictionary = BodyBake._person_walk_skin_evaluate(ctx, fit, 0.0, goals, right, 0.96, continuation["baseline"])
+	assert_ne(started["support_signature"], other["support_signature"], "the two real support sets must differ")
+	var other_pose: Dictionary = BodyBake._person_walk_skin_snapshot(body, fit)
+	other_pose["support_sets"] = (other["support_sets"] as Array).duplicate(true)
+	var bracket: Dictionary = BodyBake._person_walk_support_bracket(started, other)
+	assert_false(bracket.is_empty(), "real paired IK supplies opposite dynamic residuals")
+	if bracket.is_empty():
+		return
+	other["accepted"] = false
+	other["omega"] = 1.0
+	continuation["passes"].append(other)
+	continuation["evaluations"] = 2
+	continuation["rejections"] = 1
+	continuation["support_sets"] = []
+	continuation["support_history"].append(other["support_signature"])
+	continuation["support_states"] = {
+		str(started["support_signature"]): {"state": started["dynamic"], "pose": continuation["accepted_pose"], "omega": 1.0},
+		str(other["support_signature"]): {"state": other["dynamic"], "pose": other_pose, "omega": 1.0}}
+	continuation["support_bracket"] = bracket
+	continuation["support_cycle_brackets"] = 1
+	continuation["targets"] = BodyBake._person_walk_support_midpoint(bracket)
+	continuation["omega"] = 0.5
+	var solved: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0, [], 1, true, continuation, true)
+	assert_true(bool(solved["ok"]))
+	assert_eq(solved["passes"].back()["search_mode"], "support_bracket", "the production midpoint path must actually run")
+	assert_eq(int(solved["support_cycle_brackets"]), 1)
+	assert_eq(solved["support_sets"][0], fit["soles"][0], "the measured midpoint includes both material patches")
+	assert_eq(int(budget["used"]["ik"]), 3)
+	assert_false(fit.has("skin_support_sets"))
+	assert_false(fit["walk_solve"].has("continuation"))
+	var second: Dictionary = BodyBake._fit_person_walk_height(ctx, fit, walk, 0.0)
+	# Successful publication discards these acceleration caches; reproduce that edge.
+	for key: String in ["pose_cache", "geometry_cache", "bound_cache"]:
+		fit.erase(key)
+	var cold: Dictionary = BodyBake._fit_person_walk_height(ctx, fit, walk, 0.0)
+	for table: Dictionary in [second, cold]:
+		assert_true(bool(table["ok"]))
+		assert_eq((table["values"] as PackedFloat64Array).size(), 256)
+		for key: String in ["values", "slopes", "uppers", "lowers"]:
+			assert_eq((first[key] as PackedFloat64Array).to_byte_array(), (table[key] as PackedFloat64Array).to_byte_array(), "same height input after a resumed midpoint: " + key)
+	print("WALK_HEIGHT_REPEAT midpoint_evaluations=%d warm_ok=%s cold_ok=%s" % [int(solved["ik_passes"]), second["ok"], cold["ok"]])
+
+
+func test_walk_joint_gate_uses_the_evaluated_fixed_point_not_travel_distance() -> void:
+	var solved: Dictionary = {"targets_used": [Vector3.ZERO, Vector3.ZERO],
+		"proposed_targets": [Vector3(0.000097565, 0.0, 0.0), Vector3.ZERO],
+		"final_hips_y": 0.75, "height_residual": 0.00000003}
+	var errors: Dictionary = BodyBake._person_walk_joint_errors(solved, [Vector3(0.001056992, 0.0, 0.0), Vector3.ZERO], 0.75)
+	assert_gt(float(errors["displacement_m"]), BodyBake.PERSON_WALK_JOINT_TARGET_TOL_M)
+	assert_lte(float(errors["target_m"]), BodyBake.PERSON_WALK_JOINT_TARGET_TOL_M)
+	assert_lte(float(errors["height_m"]), BodyBake.PERSON_WALK_JOINT_HEIGHT_TOL_M)
+	solved["proposed_targets"][0] = Vector3(0.0001001, 0.0, 0.0)
+	errors = BodyBake._person_walk_joint_errors(solved, solved["targets_used"], 0.75)
+	assert_gt(float(errors["target_m"]), BodyBake.PERSON_WALK_JOINT_TARGET_TOL_M, "unchanged field still fails the actual fixed-point gate")
+
+
 func test_walk_vector_aitken_uses_both_feet_and_resets_history() -> void:
 	var old: Dictionary = {"signature": "stable", "residual_vector": [Vector3(0.004, 0.0, 0.0), Vector3(0.0, 0.002, 0.0)]}
 	var current: Dictionary = {"signature": "stable", "residual_vector": [Vector3(0.002, 0.0, 0.0), Vector3(0.0, 0.0, 0.0)]}
@@ -2160,7 +2371,7 @@ func _walk_joint_feedback_case() -> Dictionary:
 
 func test_walk_joint_reprojection_keeps_valid_failed_targets_but_never_accepts_them() -> void:
 	var solved: Dictionary = _walk_joint_feedback_case()
-	for reason: String in ["SKIN_STALLED", "SKIN_ITER_LIMIT", "SKIN_CYCLE"]:
+	for reason: String in ["SKIN_STALLED", "SKIN_ITER_LIMIT", "SKIN_CYCLE", "SKIN_SUPPORT_CYCLE"]:
 		solved["reason"] = reason
 		var feedback: Dictionary = BodyBake._person_walk_joint_feedback(solved)
 		assert_true(bool(feedback["retry"]))
@@ -2319,7 +2530,8 @@ func test_walk_dense_continuation_matches_uninterrupted_trials_pose_and_ledger()
 	assert_eq(int(resumed["ik_passes"]), int(direct["ik_passes"]))
 	assert_eq(int(resumed["rejections"]), int(direct["rejections"]))
 	assert_eq(resumed["support_history"], direct["support_history"])
-	assert_eq(fit["skin_support_sets"], direct_pose["support_sets"], "resume restores the accepted contact state with the pose")
+	assert_false(fit.has("skin_support_sets"), "resume leaves no contact selection in the next frame's fit")
+	assert_false(fit["walk_solve"].has("continuation"), "only the returned result may own a continuation")
 	assert_eq(int(split_budget["used"]["ik"]), int(resumed["ik_passes"]))
 	assert_eq(int(split_budget["stages"]["dense_verify"]["ik"]), 1)
 	assert_eq(int(split_budget["stages"].get("dense_refine", {}).get("ik", 0)), int(resumed["ik_passes"]) - 1)

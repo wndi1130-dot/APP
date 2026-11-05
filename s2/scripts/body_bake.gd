@@ -2937,8 +2937,10 @@ static func _person_footlock_probes(fit: Dictionary, skin: Array, support_sets: 
 		var reference := Vector3.ZERO
 		var count := 0
 		var vertices: PackedInt32Array = PackedInt32Array()
+		var sole_height_offsets: Dictionary = {}
 		for index in moved.size():
 			var point: Vector3 = moved[index]
+			sole_height_offsets[int(fit["soles"][side][index])] = point.y - lowest
 			var selected: bool = support_sets[side].has(int(fit["soles"][side][index])) if support_sets.size() == 2 else point.y <= lowest + PERSON_SOLE_EPSILON
 			if selected:
 				centre += point
@@ -2947,7 +2949,8 @@ static func _person_footlock_probes(fit: Dictionary, skin: Array, support_sets: 
 				vertices.append(int(fit["soles"][side][index]))
 		centre /= float(count)
 		centre.y = lowest
-		points.append({"point": centre, "rest": reference / float(count), "vertices": vertices, "lowest_vertex": lowest_vertex})
+		points.append({"point": centre, "rest": reference / float(count), "vertices": vertices, "lowest_vertex": lowest_vertex,
+			"sole_height_offsets_m": sole_height_offsets})
 	return points
 
 
@@ -3861,7 +3864,7 @@ static func _person_walk_joint_feedback(solved: Dictionary) -> Dictionary:
 	for gate: String in ["mid_knee_ok", "stance_knee_ok"]:
 		for passed: bool in conditions.get(gate, []):
 			knee = knee or not passed
-	var recoverable: bool = str(solved.get("reason", "")) in ["SKIN_ITER_LIMIT", "SKIN_STALLED", "SKIN_CYCLE"]
+	var recoverable: bool = str(solved.get("reason", "")) in ["SKIN_ITER_LIMIT", "SKIN_STALLED", "SKIN_CYCLE", "SKIN_SUPPORT_CYCLE"]
 	return {"retry": valid and recoverable, "knee": valid and knee,
 		"targets": targets.duplicate(), "needs_projection": valid and (recoverable or absf(float(solved.get("height_table_delta_m", 0.0))) > PERSON_WALK_JOINT_HEIGHT_TOL_M)}
 
@@ -4086,6 +4089,8 @@ static func _person_walk_joint_candidate(ctx: Dictionary, fit: Dictionary, specs
 			var heights: Dictionary = {}
 			var target_delta: float = 0.0
 			var fixed_point_delta: float = 0.0
+			var field_step_delta: float = 0.0
+			var input_field_verified: bool = true
 			var height_delta: float = 0.0
 			var unresolved: int = 0
 			var knee_feedback: bool = false
@@ -4143,8 +4148,10 @@ static func _person_walk_joint_candidate(ctx: Dictionary, fit: Dictionary, specs
 					for side in 2:
 						correction[side] = (next[u][side] as Vector3) - (rigid[side] as Vector3)
 					var errors: Dictionary = _person_walk_joint_errors(solved, initial, height)
+					input_field_verified = input_field_verified and bool(solved["ok"]) and var_to_bytes(initial) == var_to_bytes(solved["targets_used"])
 					target_delta = maxf(target_delta, float(errors["target_m"]))
 					fixed_point_delta = maxf(fixed_point_delta, float(errors["fixed_point_m"]))
+					field_step_delta = maxf(field_step_delta, float(errors["displacement_m"]))
 					height_delta = maxf(height_delta, float(errors["height_m"]))
 					var score: float = float(solved["normalized_residual"])
 					if score > worst_score:
@@ -4154,12 +4161,14 @@ static func _person_walk_joint_candidate(ctx: Dictionary, fit: Dictionary, specs
 				heights[clip] = clip_heights
 			budget["active_stage"] = stage
 			var note: Dictionary = {"stage": stage, "pass": stage_pass + 1, "unresolved": unresolved,
-				"target_delta_m": target_delta, "fixed_point_delta_m": fixed_point_delta, "height_delta_m": height_delta,
+				"target_delta_m": target_delta, "fixed_point_delta_m": fixed_point_delta,
+				"field_step_delta_m": field_step_delta, "height_delta_m": height_delta,
+				"input_field_verified": input_field_verified,
 				"mean": full.get("mean", 0.0), "saved_mean": full.get("saved_mean", 0.0), "table_ok": full["ok"],
 				"ik_pairs": int(budget.get("used", {}).get("ik", 0)) - ik_before,
 				"worst": _person_walk_skin_witness(worst)}
 			joint["passes"].append(note)
-			var converged: bool = unresolved == 0 and target_delta <= PERSON_WALK_JOINT_TARGET_TOL_M and height_delta <= PERSON_WALK_JOINT_HEIGHT_TOL_M
+			var converged: bool = unresolved == 0 and target_delta <= PERSON_WALK_JOINT_TARGET_TOL_M and height_delta <= PERSON_WALK_JOINT_HEIGHT_TOL_M and (not dense or input_field_verified)
 			if knee_feedback:
 				joint["knee_feedbacks"] = int(joint["knee_feedbacks"]) + 1
 				var center_result: Dictionary = _person_walk_feedback_centers(ctx, fit, specs, next_field, heights)
@@ -4187,7 +4196,8 @@ static func _person_walk_joint_candidate(ctx: Dictionary, fit: Dictionary, specs
 				return {"ok": false, "reason": full["reason"], "table": full}
 			var transition: String = _person_walk_joint_transition(stage, stage_pass + 1, converged, limit)
 			if transition == "saved":
-				# Only a fully solved field/table pair may reach fresh saved-frame checks.
+				# This exact input field produced the table and passed the dense IK gate.
+				# A corrected field must return through projection before publication.
 				fit["target_field"] = field
 				budget["active_stage"] = "saved"
 				joint["stage"] = "saved"
@@ -4400,6 +4410,7 @@ static func _person_walk_skin_witness(failure: Dictionary) -> Dictionary:
 	return {"reason": failure.get("reason", "UNTRIED"), "clip": failure.get("clip", ""), "phase": failure.get("phase", -1.0),
 		"frame_ok": solve.get("ok", false), "frame_evaluated": solve.get("evaluated", false),
 		"dynamic_verified": solve.get("dynamic_verified", false), "support_history": solve.get("support_history", []),
+		"support_cycle_brackets": solve.get("support_cycle_brackets", 0),
 		"projection_sweeps": projection.get("sweeps", 0), "projection_max_violation": projection.get("max_violation", 0.0),
 		"bounds": solve.get("bounds", {}), "targets_used": solve.get("targets_used", []), "ik_passes": solve.get("ik_passes", 0),
 		"conditions": solve.get("conditions", {}), "passes": solve.get("passes", []),
@@ -4681,13 +4692,13 @@ static func _person_walk_skin_conditions(residual: float, height_residual: float
 
 
 ## Snapshot only state mutated by a trial; the budget ledger is never rolled back.
-static func _person_walk_skin_snapshot(body: Skeleton3D, fit: Dictionary) -> Dictionary:
+static func _person_walk_skin_snapshot(body: Skeleton3D, fit: Dictionary, support_sets: Array = []) -> Dictionary:
 	var pose: Array = []
 	for bone in body.get_bone_count():
 		pose.append([body.get_bone_pose_position(bone), body.get_bone_pose_rotation(bone), body.get_bone_pose_scale(bone)])
 	return {"pose": pose, "reach_clamped": (fit["reach_clamped"] as Array).duplicate(),
 		"reach_final_failed": (fit["reach_final_failed"] as Array).duplicate(), "height_frame_failed": fit["height_frame_failed"],
-		"support_sets": (fit.get("skin_support_sets", []) as Array).duplicate(true)}
+		"support_sets": support_sets.duplicate(true)}
 
 
 static func _person_walk_skin_restore(body: Skeleton3D, fit: Dictionary, state: Dictionary) -> void:
@@ -4698,7 +4709,6 @@ static func _person_walk_skin_restore(body: Skeleton3D, fit: Dictionary, state: 
 	fit["reach_clamped"] = (state["reach_clamped"] as Array).duplicate()
 	fit["reach_final_failed"] = (state["reach_final_failed"] as Array).duplicate()
 	fit["height_frame_failed"] = bool(state["height_frame_failed"])
-	fit["skin_support_sets"] = (state.get("support_sets", []) as Array).duplicate(true)
 
 
 ## Evaluate F(t) from the same keyed pose, including both IK solves and new skin.
@@ -4745,7 +4755,6 @@ static func _person_walk_skin_evaluate(ctx: Dictionary, fit: Dictionary, u: floa
 	dynamic["pre_reach"] = pre_reach
 	# Both measurements share this actual paired IK and full-sole minimum y.
 	result["dynamic"] = dynamic
-	fit["skin_support_sets"] = (result["support_sets"] as Array).duplicate(true)
 	return result
 
 
@@ -4876,8 +4885,61 @@ static func _person_walk_joint_errors(solved: Dictionary, initial: Array, table_
 		residual = maxf(residual, (solved["proposed_targets"][side] as Vector3).distance_to(used))
 		displacement = maxf(displacement, (initial[side] as Vector3).distance_to(used))
 	return {"fixed_point_m": residual, "displacement_m": displacement,
-		"target_m": maxf(residual, displacement),
+		"target_m": residual,
 		"height_m": maxf(absf(float(solved["final_hips_y"]) - table_height), float(solved["height_residual"]))}
+
+
+## Opposite dynamic residuals bracket a candidate on the chord between supports.
+## This is only a search direction; full dynamic gates still decide success.
+static func _person_walk_support_bracket(first: Dictionary, second: Dictionary) -> Dictionary:
+	var direction: Array = []
+	var length_squared: float = 0.0
+	for side in 2:
+		var delta: Vector3 = (second["targets_used"][side] as Vector3) - (first["targets_used"][side] as Vector3)
+		direction.append(delta)
+		length_squared += delta.length_squared()
+	if length_squared <= PERSON_WALK_SKIN_CYCLE_M * PERSON_WALK_SKIN_CYCLE_M:
+		return {}
+	var left_value: float = 0.0
+	var right_value: float = 0.0
+	for side in 2:
+		direction[side] /= sqrt(length_squared)
+		left_value += (first["residual_vector"][side] as Vector3).dot(direction[side])
+		right_value += (second["residual_vector"][side] as Vector3).dot(direction[side])
+	if not is_finite(left_value) or not is_finite(right_value) or left_value * right_value >= 0.0:
+		return {}
+	return {"left": (first["targets_used"] as Array).duplicate(), "right": (second["targets_used"] as Array).duplicate(),
+		"direction": direction, "left_value": left_value, "right_value": right_value}
+
+
+static func _person_walk_support_midpoint(bracket: Dictionary) -> Array:
+	if bracket.is_empty():
+		return []
+	var targets: Array = []
+	var at_left: bool = true
+	var at_right: bool = true
+	for side in 2:
+		var target: Vector3 = (bracket["left"][side] as Vector3).lerp(bracket["right"][side], 0.5)
+		targets.append(target)
+		at_left = at_left and target == (bracket["left"][side] as Vector3)
+		at_right = at_right and target == (bracket["right"][side] as Vector3)
+	return [] if at_left or at_right else targets
+
+
+static func _person_walk_support_narrow(bracket: Dictionary, trial: Dictionary) -> Dictionary:
+	if not bool(trial.get("evaluated", false)) or not str(trial.get("reason", "")).is_empty():
+		return {}
+	var value: float = 0.0
+	for side in 2:
+		value += (trial["residual_vector"][side] as Vector3).dot(bracket["direction"][side])
+	# A zero projected residual cannot certify the other five components.
+	if not is_finite(value) or value == 0.0:
+		return {}
+	var narrowed: Dictionary = bracket.duplicate(true)
+	var endpoint: String = "left" if (value > 0.0) == (float(bracket["left_value"]) > 0.0) else "right"
+	narrowed[endpoint] = (trial["targets_used"] as Array).duplicate()
+	narrowed[endpoint + "_value"] = value
+	return narrowed
 
 
 ## Every trial restarts from the keyed pose. Only measured improvements commit.
@@ -4895,7 +4957,7 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 	fit["reach_clamped"] = [false, false]
 	fit["reach_final_failed"] = [false, false]
 	fit["height_frame_failed"] = false
-	fit["skin_support_sets"] = []
+	fit.erase("skin_support_sets")
 	var baseline: Dictionary = _person_walk_skin_snapshot(body, fit)
 	var wanted_h: float = _person_walk_height_at(fit["pelvis"], u, ctx)
 	var current: Dictionary = {"targets_used": [], "proposed_targets": [], "misses": [INF, INF],
@@ -4914,6 +4976,9 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 	var accepted_omega: float = omega
 	var support_sets: Array = []
 	var support_history: Array = []
+	var support_states: Dictionary = {}
+	var support_bracket: Dictionary = {}
+	var support_cycle_brackets: int = 0
 	var reason: String = "SKIN_ITER_LIMIT"
 	var last_trial: Dictionary = {}
 	if not continuation.is_empty():
@@ -4928,6 +4993,9 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 		accepted_omega = float(continuation["accepted_omega"])
 		support_sets = (continuation["support_sets"] as Array).duplicate(true)
 		support_history = (continuation["support_history"] as Array).duplicate()
+		support_states = (continuation.get("support_states", {}) as Dictionary).duplicate(true)
+		support_bracket = (continuation.get("support_bracket", {}) as Dictionary).duplicate(true)
+		support_cycle_brackets = int(continuation.get("support_cycle_brackets", 0))
 		joint_precision = bool(continuation["joint_precision"])
 		evaluations = int(continuation["evaluations"])
 		rejections = int(continuation["rejections"])
@@ -4936,18 +5004,20 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 		limit = mini(PERSON_WALK_SKIN_EVALUATIONS, evaluations + limit)
 		_person_walk_skin_restore(body, fit, accepted_pose)
 	while evaluations < limit:
-		var trial: Dictionary = _person_walk_skin_evaluate(ctx, fit, u, goals, targets, wanted_h, baseline, support_sets)
+		var bracketing: bool = not support_bracket.is_empty()
+		var trial: Dictionary = _person_walk_skin_evaluate(ctx, fit, u, goals, targets, wanted_h, baseline, [] if bracketing else support_sets)
 		if bool(trial["evaluated"]):
 			evaluations += 1
 		var initial: bool = passes.is_empty()
-		var accepted: bool = initial or _person_walk_skin_improves(current, trial)
-		var cycle: bool = not initial and _person_walk_skin_cycle(previous, trial)
+		var accepted: bool = initial or _person_walk_skin_improves(current, trial) or (bracketing and _person_walk_skin_ready(trial, joint_precision))
+		var cycle: bool = not bracketing and not initial and _person_walk_skin_cycle(previous, trial)
 		if cycle:
 			accepted = false
 		if not accepted:
 			rejections += 1
 			stalled += 1
 		trial["omega"] = omega
+		trial["search_mode"] = "support_bracket" if bracketing else "local"
 		trial["accepted"] = accepted
 		trial["rejections"] = rejections
 		trial["ik_passes"] = evaluations
@@ -4959,10 +5029,10 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 			accepted_omega = omega
 			if not previous.is_empty() and str(previous.get("signature", "")) != str(current.get("signature", "")):
 				previous = {}
-			if current.has("support_sets") and support_sets.is_empty():
+			if not bracketing and current.has("support_sets") and support_sets.is_empty():
 				support_sets = (current["support_sets"] as Array).duplicate(true)
 				support_history.append(current["support_signature"])
-			accepted_pose = _person_walk_skin_snapshot(body, fit)
+			accepted_pose = _person_walk_skin_snapshot(body, fit, current.get("support_sets", []))
 			stalled = 0
 		else:
 			_person_walk_skin_restore(body, fit, accepted_pose)
@@ -4981,9 +5051,33 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 				reason = ""
 				break
 			var selected: String = str(dynamic["support_signature"])
+			support_states[str(current["support_signature"])] = {"state": dynamic.duplicate(true), "pose": accepted_pose.duplicate(true), "omega": accepted_omega}
 			if support_history.has(selected):
-				reason = "SKIN_SUPPORT_CYCLE"
-				break
+				var other: Dictionary = support_states.get(selected, {})
+				support_bracket = _person_walk_support_bracket(other["state"], dynamic) if not other.is_empty() else {}
+				support_history.append(selected)
+				if support_bracket.is_empty():
+					reason = "SKIN_SUPPORT_CYCLE"
+					break
+				# Retain the better measured endpoint while spending the remaining cap
+				# on dynamic probes between them. No frozen-set solution is published.
+				support_cycle_brackets += 1
+				current = dynamic.duplicate(true)
+				if float(other["state"]["normalized_residual"]) < float(current["normalized_residual"]):
+					current = (other["state"] as Dictionary).duplicate(true)
+					accepted_pose = (other["pose"] as Dictionary).duplicate(true)
+					accepted_omega = float(other["omega"])
+				current["dynamic"] = current.duplicate(true)
+				_person_walk_skin_restore(body, fit, accepted_pose)
+				support_sets = []
+				previous = {}
+				stalled = 0
+				targets = _person_walk_support_midpoint(support_bracket)
+				omega = 0.5
+				if targets.is_empty():
+					reason = "SKIN_SUPPORT_CYCLE"
+					break
+				continue
 			# Rebase both residuals on the same new set; the paired pose is unchanged.
 			support_history.append(selected)
 			support_sets = (dynamic["support_sets"] as Array).duplicate(true)
@@ -4991,7 +5085,14 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 			current["dynamic"] = dynamic.duplicate(true)
 			previous = {}
 			accepted_pose["support_sets"] = support_sets.duplicate(true)
-			fit["skin_support_sets"] = support_sets.duplicate(true)
+		if bracketing:
+			support_bracket = _person_walk_support_narrow(support_bracket, trial)
+			targets = _person_walk_support_midpoint(support_bracket)
+			if targets.is_empty():
+				reason = "SKIN_SUPPORT_CYCLE"
+				break
+			omega = 0.5
+			continue
 		if cycle or stalled >= PERSON_WALK_SKIN_STALL_TRIALS:
 			reason = "SKIN_CYCLE" if cycle else "SKIN_STALLED"
 			break
@@ -5003,6 +5104,8 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 			omega = maxf(PERSON_WALK_AITKEN_MIN, omega * 0.5)
 		for side in 2:
 			targets[side] = (current["targets_used"][side] as Vector3) + omega * (current["residual_vector"][side] as Vector3)
+	if reason == "SKIN_ITER_LIMIT" and not support_bracket.is_empty() and (not suspend or evaluations >= PERSON_WALK_SKIN_EVALUATIONS):
+		reason = "SKIN_SUPPORT_CYCLE"
 	# Keep failed trial diagnostics, but return only the last accepted pose/state.
 	_person_walk_skin_restore(body, fit, accepted_pose)
 	current = current.duplicate(true)
@@ -5013,6 +5116,7 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 	current.merge({"ik_passes": evaluations, "passes": passes, "rejections": rejections, "last_trial": last_trial.duplicate(true)}, true)
 	current["support_history"] = support_history.duplicate()
 	current["accepted_omega"] = accepted_omega
+	current["support_cycle_brackets"] = support_cycle_brackets
 	if suspend and reason == "SKIN_ITER_LIMIT" and evaluations < PERSON_WALK_SKIN_EVALUATIONS:
 		# This is the next bounded trial, not the untested full F(t) proposal.
 		current["continuation"] = {"baseline": baseline, "goals": goals, "targets": targets.duplicate(),
@@ -5020,6 +5124,8 @@ static func _solve_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float,
 			"accepted_pose": accepted_pose, "omega": omega, "evaluations": evaluations,
 			"accepted_omega": accepted_omega, "support_sets": support_sets.duplicate(true),
 			"support_history": support_history.duplicate(), "joint_precision": joint_precision,
+			"support_states": support_states.duplicate(true), "support_bracket": support_bracket.duplicate(true),
+			"support_cycle_brackets": support_cycle_brackets,
 			"rejections": rejections, "stalled": stalled, "passes": passes.duplicate()}
 	return _finish_person_walk_frame(ctx, fit, u, current, reason)
 
@@ -5046,7 +5152,10 @@ static func _finish_person_walk_frame(ctx: Dictionary, fit: Dictionary, u: float
 		if (result["targets_used"] as Array).size() == 2:
 			result["misses"][side] = ankle.distance_to(result["targets_used"][side])
 	fit["height_frame_failed"] = not reason.is_empty()
-	fit["walk_solve"] = result
+	# A live continuation belongs to the caller, not to the next frame's fit.
+	fit.erase("skin_support_sets")
+	fit["walk_solve"] = result.duplicate()
+	fit["walk_solve"].erase("continuation")
 	if not reason.is_empty():
 		var bounds: Dictionary = result["bounds"]
 		var failure: String = "WALK_SOLVE_FAIL rig=%s clip=%s stage=skin reason=%s ik_pass=%d phase=%.9f lower_m=%.9f upper_m=%.9f gap_mm=%.6f lower_side=%d upper_side=%d target_delta_mm=%.6f height_delta_mm=%.6f" % [
