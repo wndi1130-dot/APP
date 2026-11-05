@@ -37,6 +37,15 @@ uniform float round_floor = 0.95;
 uniform sampler2DArray ground_layers : repeat_enable, filter_linear_mipmap_anisotropic;
 uniform bool ground_layers_on = false;
 uniform int region_band = 1;
+// How this map's snow lies (MapView.snow_look_for, from the place id or the map's own
+// snow_look). The order the snow is worked out in: the stop's physical snow fx_snow →
+// this map's spread of it (multiplied, so no snow stays no snow) → sky and material
+// gates → paving cleared and banks → footprints. The defaults leave the picture as it
+// was before maps differed (11-05): nobody setting them changes nothing.
+uniform float snow_shift = 0.0;       // -0.3..0.3: the whole map whiter (+) or more melted (-)
+uniform float snow_melt = 0.0;        // 0..1: how strongly the wide melt field splits the map
+uniform float snow_melt_m = 28.0;     // the melt field's patch size, metres
+uniform vec2 snow_phase = vec2(0.0);  // shifts the map's noise so two maps' drifts do not line up
 // Where the round falloff starts and ends, in sight radii.
 const float ROUND_IN = 0.4;
 const float ROUND_OUT = 1.3;
@@ -696,15 +705,21 @@ void fragment() {
 	float cover = 0.0;
 	// Warped 0.15/m patches leave dark gaps; skip the new noise without snow.
 	if (fx_snow > 0.01) {
-		vec2 patch_p = world_pos.xz * 0.15;
+		vec2 patch_p = (world_pos.xz + snow_phase) * 0.15;
 		vec2 warp = vec2(fx_vnoise(patch_p * 0.5 + vec2(17.1, 9.2)),
 			fx_vnoise(patch_p * 0.5 + vec2(3.7, 23.6))) - vec2(0.5);
 		// A finer octave breaks the round value-noise blobs into ragged drifts.
 		float snow_patch = 0.72 * fx_vnoise(patch_p + 0.7 * warp) + 0.28 * fx_vnoise(patch_p * 3.1 + 1.4 * warp + vec2(5.3, 11.9));
 		// Pixel width, at least 0.02, keeps the edge firm without shimmer.
 		float patch_w = max(fwidth(snow_patch), 0.02);
+		// This map's spread of the stop's snow: a whiter or more melted map (snow_shift) and,
+		// across it, wide fields where the snow lies whole or has gone (snow_melt). One more
+		// noise a ground pixel, at the melt field's low frequency, and only on a map that sets
+		// it; multiplied, so a stop with no snow keeps none.
+		float melt = snow_melt > 0.0 ? fx_vnoise((world_pos.xz + 1.7 * snow_phase) / max(snow_melt_m, 4.0)) - 0.5 : 0.0;
+		float local_snow = clamp(fx_snow * (1.0 + snow_shift + 1.4 * snow_melt * melt), 0.0, 1.0);
 		// Half the noise range at snow 0.5; every patch is filled by 0.95.
-		float snow_t = mix(1.0 + patch_w, -patch_w, smoothstep(0.05, 0.95, fx_snow));
+		float snow_t = mix(1.0 + patch_w, -patch_w, smoothstep(0.05, 0.95, local_snow));
 		cover = 0.9 * smoothstep(snow_t - patch_w, snow_t + patch_w, snow_patch);
 	}
 	cover *= smoothstep(0.6, 0.9, up) * sky * (1.0 - smoothstep(0.08, 0.3, chroma));
