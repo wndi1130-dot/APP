@@ -245,9 +245,15 @@ func _start_task(script: Script) -> void:
 ## On the worker: the map and what is made ahead from it (make_ready), nothing in
 ## the scene tree.
 static func _build_off_thread(box: Dictionary, script: Script, run_seed: int, form: String, form_m: float, band: String, vat_vertices: int, bounds_rule: int = -1) -> void:
+	var started: int = Time.get_ticks_usec()
 	box["data"] = make_ready(script, run_seed, form, form_m, band, bounds_rule)
+	var times: Dictionary = box["data"].get_or_add("_ms", {})
+	times["worker_make_ready"] = float(Time.get_ticks_usec() - started) / 1000.0
+	var mark: int = Time.get_ticks_usec()
 	if vat_vertices > 0:
 		box["vat"] = VatBaker.build(vat_vertices)
+	times["worker_vat"] = float(Time.get_ticks_usec() - mark) / 1000.0 if vat_vertices > 0 else 0.0
+	times["worker_total"] = float(Time.get_ticks_usec() - started) / 1000.0
 
 
 ## The map script's static build; in the stop's form, its ground (stop_ground.gd: an

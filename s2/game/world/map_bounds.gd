@@ -395,7 +395,7 @@ static func _name_side_path(data: Dictionary, details: Array[Dictionary]) -> voi
 ## 찍기 전에 연결성을 검사한다. 끊길 통로는 원래 걷기 경로를 보호하고 윤곽을 다시 푼다.
 static func _connected_outline(data: Dictionary, mask: PackedByteArray, protection: Array[Dictionary]) -> Dictionary:
 	var times: Dictionary = data.get_or_add("_ms", {})
-	for key: String in ["bounds_outline", "bounds_connect", "bounds_loss", "bounds_shape", "bounds_prepare"]:
+	for key: String in ["bounds_outline", "bounds_connect", "bounds_connect_before", "bounds_connect_local", "bounds_connect_after_global", "bounds_loss", "bounds_shape", "bounds_prepare"]:
 		times[key] = 0.0
 	var mark: int = Time.get_ticks_usec()
 	var g: FieldGrid = data["grid"]
@@ -403,6 +403,7 @@ static func _connected_outline(data: Dictionary, mask: PackedByteArray, protecti
 	var playable_before: int = count_playable(data)
 	var profiles: Array[PackedInt32Array] = Rule.limits(g, mask)
 	var component_roots: Array[int] = []
+	var scan_space: Dictionary = {}
 	var before := PackedInt32Array()
 	var dead_before: Dictionary = {}
 	var preexisting: Array[Vector2i] = []
@@ -463,17 +464,31 @@ static func _connected_outline(data: Dictionary, mask: PackedByteArray, protecti
 		# 모든 변과 면적을 고른 뒤에만 한 번 확인한다. 실패한 통로를 보호한 경우에만 다시 한다.
 		mark = Time.get_ticks_usec()
 		if before.is_empty():
-			before = walk_parents(data)
-			dead_before = _scan_walk(g, g.walk_dead, PackedByteArray(), component_roots, true)
+			var before_mark: int = Time.get_ticks_usec()
+			before = walk_parents(data, PackedByteArray(), false, [], scan_space)
+			dead_before = _scan_walk(g, g.walk_dead, PackedByteArray(), component_roots, true, scan_space)
 			for index: int in range(before.size()):
 				if g.walk_people[index] == 1 and before[index] < 0:
 					preexisting.append(Vector2i(index % g.width, floori(float(index) / g.width)))
-		var after: PackedInt32Array = walk_parents(data, blocked)
-		var dead_after: Dictionary = _scan_walk(g, g.walk_dead, blocked, component_roots, true)
+			times["bounds_connect_before"] += float(Time.get_ticks_usec() - before_mark) / 1000.0
+		var local_mark: int = Time.get_ticks_usec()
+		var root_kept: bool = true
+		for index: int in touched:
+			if before[index] == index: root_kept = false
+		var people_proved: bool = root_kept and _local_removal_safe(g, g.walk_people, touched)
+		var dead_proved: bool = _dead_terminals_kept(data, blocked) and _local_removal_safe(g, g.walk_dead, touched)
+		times["bounds_connect_local"] += float(Time.get_ticks_usec() - local_mark) / 1000.0
+		var global_mark: int = Time.get_ticks_usec()
 		var detached: Array[int] = []
-		for index: int in range(before.size()):
-			if before[index] >= 0 and blocked[index] == 0 and after[index] < 0: detached.append(index)
-		var dead_lost: Array[Dictionary] = _dead_lost(data, dead_before, dead_after)
+		if not people_proved:
+			var after: PackedInt32Array = walk_parents(data, blocked, false, [], scan_space)
+			for index: int in range(before.size()):
+				if before[index] >= 0 and blocked[index] == 0 and after[index] < 0: detached.append(index)
+		var dead_lost: Array[Dictionary] = []
+		if not dead_proved:
+			var dead_after: Dictionary = _scan_walk(g, g.walk_dead, blocked, component_roots, true, scan_space, false)
+			dead_lost = _dead_lost(data, dead_before, dead_after)
+		times["bounds_connect_after_global"] += float(Time.get_ticks_usec() - global_mark) / 1000.0
 		record["connect_checked"] = true
 		record["detached_people"] = detached.size()
 		record["detached_dead_pairs"] = dead_lost.size()
@@ -497,6 +512,60 @@ static func _connected_outline(data: Dictionary, mask: PackedByteArray, protecti
 		profiles = Rule.limits(g, mask)
 		times["bounds_prepare"] += float(Time.get_ticks_usec() - mark) / 1000.0
 	return {}
+
+
+## 합집합을 touched 순서로 한 칸씩 제거한다. 제거할 정점의 남은 이웃이
+## 그 정점을 뺀 3x3 안에서 모두 연결되면 기존 경로의 해당 부분을 치환할 수 있다.
+## 이를 모든 제거에 귀납 적용한다. 증명 실패는 판정 실패가 아니라 전역 검사 요청이다.
+static func _local_removal_safe(g: FieldGrid, walk: PackedByteArray, touched: Array[int]) -> bool:
+	var removed: Dictionary = {}
+	var neighbours: Array[int] = []
+	var queue: Array[int] = []
+	var seen: Dictionary = {}
+	var directions: Array[int] = [-1, 1, -g.width, g.width]
+	for index: int in touched:
+		if walk[index] == 0: continue
+		removed[index] = true
+		neighbours.clear()
+		var x: int = index % g.width
+		var y: int = floori(float(index) / g.width)
+		for direction: int in directions:
+			if (direction == -1 and x == 0) or (direction == 1 and x == g.width - 1): continue
+			var next: int = index + direction
+			if next >= 0 and next < walk.size() and walk[next] != 0 and not removed.has(next): neighbours.append(next)
+		if neighbours.size() < 2: continue
+		queue.clear()
+		seen.clear()
+		queue.append(neighbours[0])
+		seen[neighbours[0]] = true
+		var read: int = 0
+		while read < queue.size():
+			var at: int = queue[read]
+			read += 1
+			var ax: int = at % g.width
+			for direction: int in directions:
+				if (direction == -1 and ax == 0) or (direction == 1 and ax == g.width - 1): continue
+				var next: int = at + direction
+				if next < 0 or next >= walk.size() or removed.has(next) or seen.has(next) or walk[next] == 0: continue
+				if absi(next % g.width - x) > 1 or absi(floori(float(next) / g.width) - y) > 1: continue
+				seen[next] = true
+				queue.append(next)
+		for neighbour: int in neighbours:
+			if not seen.has(neighbour): return false
+	return true
+
+
+static func _dead_terminals_kept(data: Dictionary, blocked: PackedByteArray) -> bool:
+	var g: FieldGrid = data["grid"]
+	for key: String in data.get("entries", {}):
+		if int(data.get("entry_levels", {}).get(key, 0)) != 0 or data.get("manholes", {}).has(key): continue
+		for cell: Vector2i in data["entries"][key]:
+			if g.inside(cell) and blocked[g.index(cell)] != 0: return false
+	for name: String in data.get("anchors", {}):
+		if name.begins_with("horde_home") and data["anchors"][name] is Vector2i:
+			var cell: Vector2i = data["anchors"][name]
+			if g.inside(cell) and blocked[g.index(cell)] != 0: return false
+	return true
 
 
 ## 연결 영역 번호로 각 진입로와 각 둥지의 원래 연결을 함께 대조한다.
@@ -539,7 +608,7 @@ static func _add_routes(g: FieldGrid, parents: PackedInt32Array, detached: Array
 			at = parents[at]
 
 
-static func walk_parents(data: Dictionary, blocked: PackedByteArray = PackedByteArray(), dead: bool = false, roots: Array = []) -> PackedInt32Array:
+static func walk_parents(data: Dictionary, blocked: PackedByteArray = PackedByteArray(), dead: bool = false, roots: Array = [], workspace: Dictionary = {}) -> PackedInt32Array:
 	var g: FieldGrid = data["grid"]
 	var walk: PackedByteArray = g.walk_dead if dead else g.walk_people
 	var starts: Array = data.get("train_doors", {}).values()
@@ -555,16 +624,18 @@ static func walk_parents(data: Dictionary, blocked: PackedByteArray = PackedByte
 			if (dead or seeds.is_empty()) and g.inside(cell):
 				var index: int = g.index(cell)
 				if walk[index] == 1 and (blocked.is_empty() or blocked[index] == 0): seeds.append(index)
-	return _scan_walk(g, walk, blocked, seeds)["parents"]
+	return _scan_walk(g, walk, blocked, seeds, false, workspace)["parents"]
 
 
 ## 정수 큐와 걷기 캐시를 재사용한다. 망자는 전체 연결 영역을 한 번만 돈다.
-static func _scan_walk(g: FieldGrid, walk: PackedByteArray, blocked: PackedByteArray, seeds: Array[int], components: bool = false) -> Dictionary:
+static func _scan_walk(g: FieldGrid, walk: PackedByteArray, blocked: PackedByteArray, seeds: Array[int], components: bool = false, workspace: Dictionary = {}, parents_needed: bool = true) -> Dictionary:
 	var parent := PackedInt32Array()
 	parent.resize(walk.size())
 	parent.fill(-1)
-	var labels: PackedInt32Array = parent.duplicate()
-	var queue := PackedInt32Array()
+	var labels := PackedInt32Array()
+	if components and parents_needed: labels = parent.duplicate()
+	var queue: PackedInt32Array = workspace.get("queue", PackedInt32Array())
+	workspace.erase("queue")
 	queue.resize(walk.size())
 	var read: int = 0
 	var write: int = 0
@@ -573,7 +644,7 @@ static func _scan_walk(g: FieldGrid, walk: PackedByteArray, blocked: PackedByteA
 		var root: int = seed_offset if components else seeds[seed_offset]
 		if walk[root] == 0 or parent[root] >= 0 or (not blocked.is_empty() and blocked[root] != 0): continue
 		parent[root] = root
-		labels[root] = root
+		if components and parents_needed: labels[root] = root
 		queue[write] = root
 		write += 1
 		while read < write:
@@ -585,11 +656,12 @@ static func _scan_walk(g: FieldGrid, walk: PackedByteArray, blocked: PackedByteA
 				var next: int = at + direction
 				if next < 0 or next >= walk.size() or parent[next] >= 0 or walk[next] == 0: continue
 				if not blocked.is_empty() and blocked[next] != 0: continue
-				parent[next] = at
-				labels[next] = root
+				parent[next] = at if parents_needed else root
+				if components and parents_needed: labels[next] = root
 				queue[write] = next
 				write += 1
-	return {"parents": parent, "labels": labels}
+	workspace["queue"] = queue
+	return {"parents": parent, "labels": (labels if parents_needed else parent) if components else PackedInt32Array()}
 
 
 static func _remove_trees(data: Dictionary) -> void:

@@ -4,6 +4,10 @@ const FieldGrid = preload("res://game/world/field_grid.gd")
 const ON := ["lake_01"]
 const RULE: int = 1
 const DEPTH: int = 16
+## 고리 면적 목표와 시험의 놀 땅 잣대는 함께 바꾼다.
+const PLAN_A: bool = true
+const RING_TARGET: float = 1.25 if PLAN_A else 1.55
+const PLAYABLE_RATIO: float = 1.10 if PLAN_A else 1.25
 
 
 static func enabled(place: String, rule: int = -1) -> bool:
@@ -22,7 +26,7 @@ static func sides(data: Dictionary, width: int) -> Array[int]:
 	var deep_x: int = rng.randi_range(0, 1) * 2
 	var deep_y: int = rng.randi_range(0, 1) * 2 + 1
 	var ratio: float = rng.randf_range(2.0, 3.0)
-	var target: float = float((g.width + width * 2) * (g.height + width * 2)) * 1.55
+	var target: float = float((g.width + width * 2) * (g.height + width * 2)) * RING_TARGET
 	var best: Array[int] = [width, width, width, width]
 	var error: float = INF
 	for shallow: int in range(1, 80):
@@ -271,6 +275,32 @@ static func remote_exceptions(points: Array[Vector2i], forest: Array) -> Array[D
 	return out
 
 
+## 이미 실패한 풀이에서만 쓴다. 모서리 창의 실제 cap 0 보호 끝을
+## 모서리까지 잇고, 나머지는 기존 열린 자리/8~16m 걸음 규칙으로 다시 나눈다.
+static func _corner_row(g: FieldGrid, side: int, row: Array[Dictionary], first: int, last: int, rng: RandomNumberGenerator, profile: PackedInt32Array, protection: Array[Dictionary]) -> Array[Dictionary]:
+	if row.is_empty(): return []
+	var start: int = int(row[0]["from"])
+	var finish: int = int(row[-1]["to"])
+	var low: int = start
+	var high: int = finish
+	if first == 0 and int(row[0]["cap"]) > 0:
+		for along: int in range(start, mini(26, finish)):
+			if profile[along] == 0: low = along + 1
+		while low > start and low < finish and profile[low] == 0: low += 1
+	if last == 0 and int(row[-1]["cap"]) > 0:
+		for along: int in range(maxi(start, profile.size() - 26), finish):
+			if profile[along] == 0: high = mini(high, along)
+		while high < finish and high > start and profile[high - 1] == 0: high -= 1
+	if (low == start and high == finish) or low >= high: return []
+	var middle: Array[Dictionary] = _opening_row(g, side, low, high, rng, profile, protection)
+	if middle.is_empty(): return []
+	var out: Array[Dictionary] = []
+	if low > start: out.append({"side": side, "from": start, "to": low, "cap": 0})
+	out.append_array(middle)
+	if high < finish: out.append({"side": side, "from": high, "to": finish, "cap": 0})
+	return out
+
+
 static func outline(data: Dictionary, mask: PackedByteArray, protection: Array[Dictionary] = [], candidate: int = 0, profiles: Array[PackedInt32Array] = []) -> Dictionary:
 	var g: FieldGrid = data["grid"]
 	if profiles.is_empty(): profiles = limits(g, mask)
@@ -315,7 +345,13 @@ static func outline(data: Dictionary, mask: PackedByteArray, protection: Array[D
 				failure.clear()
 				picked = depths(row, rng, corners[side], ending, mini(candidate, DEPTH), failure)
 		if picked.is_empty():
-			# 모서리를 0으로 낮추어 다른 완료 문에서 탈락시키지 않는다.
+			var repaired: Array[Dictionary] = _corner_row(g, side, row, corners[side], ending, rng, profiles[side], protection)
+			if not repaired.is_empty():
+				row = repaired
+				failure.clear()
+				picked = depths(row, rng, corners[side], ending, mini(candidate, DEPTH), failure)
+		if picked.is_empty():
+			# 모서리 깊이·보호·모양 문턱은 그대로 둔다.
 			return {"solver_error": "깊이 전이 해 없음", "failed_side": side, "corners": corners, "steps": row,
 				"corner10_hits": corner_hits, "depth_failure": failure, "boundary_protection": boundary_protection(g, protection),
 				"forced_open_conflicts": forced_open_conflicts(g, protection)}

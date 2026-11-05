@@ -16,7 +16,7 @@ const Work = preload("res://game/world/work_spots.gd")
 const Lake = preload("res://game/world/maps/lake_01.gd")
 const Sweep = preload("res://tools/bounds_ratio_sweep.gd")
 const FORMS: Array[String] = ["", "edge", "remote"]
-const RATIO_SEEDS: Dictionary = {"": [1, 71], "edge": [19, 71], "remote": [48, 71]}
+const RATIO_SEEDS: Dictionary = {"": [1, 19, 48, 71], "edge": [1, 19, 48, 71], "remote": [1, 19, 48, 71]}
 const DIRS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 var cases: Dictionary = {}
 var cores: Dictionary = {}
@@ -654,11 +654,11 @@ func test_i_walkable_area_and_ring_area() -> void:
 		var new_numerator: int = _playable_walk(d)
 		var new_denominator: int = _playable_walk(row["base"])
 		print("잣대 바꿈 — 코디 판정 ② 11-04, 통로 띠 칸 뺌, 옛 셈 %.9f (%d/%d) / 새 셈 %.9f (%d/%d) form=%s" % [float(numerator) / denominator, numerator, denominator, float(new_numerator) / new_denominator, new_numerator, new_denominator, form])
-		assert_gte(float(new_numerator) / new_denominator, 1.25, metrics)
+		assert_gte(float(new_numerator) / new_denominator, Rule.PLAYABLE_RATIO, metrics)
 		var sides: Array = d["map_ring"]["sides"]
 		var area: int = (170 + sides[0] + sides[2]) * (106 + sides[1] + sides[3])
 		print("bounds/ring form=%s sides=%s cells=%d" % [form, str(sides), area])
-		assert_between(float(area) / (210.0 * 146.0), 1.55 * 0.97, 1.55 * 1.03, form)
+		assert_between(float(area) / (210.0 * 146.0), Rule.RING_TARGET * 0.97, Rule.RING_TARGET * 1.03, form)
 
 
 ## 판 0 분모는 시험 소유다. h/i가 같은 표본을 재사용한다.
@@ -1294,3 +1294,71 @@ func test_q_dead_components_preserve_each_entry_not_just_the_union() -> void:
 	var lost: Array[Dictionary] = Bounds._dead_lost(d, before, after)
 	assert_eq(lost.size(), 1, "한 진입로가 살아 있어도 다른 진입로의 단절을 잡음")
 	if lost.size() == 1: assert_eq(lost[0]["entry"], "right")
+
+func test_r9_corner_window_protection_repairs_only_failed_depths() -> void:
+	var g := Grid.new(128, 128)
+	var mask := PackedByteArray()
+	mask.resize(g.width * g.height)
+	var protection: Array[Dictionary] = [
+		{"rect": Rect2i(20, 0, 4, 1), "kind": "entry/north"},
+		{"rect": Rect2i(0, 20, 1, 4), "kind": "entry/west"}]
+	for item: Dictionary in protection:
+		var rect: Rect2i = item["rect"]
+		for y: int in range(rect.position.y, rect.end.y):
+			for x: int in range(rect.position.x, rect.end.x): mask[g.index(Vector2i(x, y))] = 1
+	var profiles: Array[PackedInt32Array] = Rule.limits(g, mask)
+	assert_eq(Rule._cap(profiles[0], 0, 26), 0, "26칸 창 보호가 모서리를 0으로 만듦")
+	var row: Array[Dictionary] = Rule._row(0, 0, 118, Rule.random_of("lake_01"), profiles[0])
+	assert_gt(int(row[0]["cap"]), 0, "첫 걸음에는 보호가 없음")
+	assert_true(Rule.depths(row, Rule.random_of("lake_01"), 0, 10).is_empty(), "기존 깊이 풀이의 실패 입력")
+	var result: Dictionary = Rule.outline({"grid": g, "place_id": "lake_01"}, mask, protection)
+	assert_false(result.has("solver_error"), "실패한 깊이 풀이만 보호 끝에서 재분할")
+	if result.has("solver_error"): return
+	assert_true("이름 없는 열린 자리" in "; ".join(Rule.shape_errors(g, result)), "이름 없는 모서리 틈은 기존 모양 잣대에서 여전히 거절")
+	for tile: Dictionary in result.get("tiles", []):
+		for item: Dictionary in protection:
+			assert_false((tile["rect"] as Rect2i).intersects(item["rect"]), "보호 침범 없음")
+
+func test_s_local_removal_proves_union_or_defers_to_global() -> void:
+	var g := Grid.new(5, 5)
+	g.walk_people.fill(1)
+	var rim: Array[int] = [0, 1, 2, 3, 4]
+	assert_true(Bounds._local_removal_safe(g, g.walk_people, rim), "가장자리 제거는 남은 연결 보존")
+	var cut: Array[int] = [2, 7, 12, 17, 22]
+	assert_false(Bounds._local_removal_safe(g, g.walk_people, cut), "합집합이 둘로 가르면 전역 검사")
+	var blocked := PackedByteArray()
+	blocked.resize(25)
+	for index: int in cut: blocked[index] = 1
+	var roots: Array[int] = []
+	var workspace: Dictionary = {}
+	var full: Dictionary = Bounds._scan_walk(g, g.walk_people, blocked, roots, true, workspace)
+	var labels_only: Dictionary = Bounds._scan_walk(g, g.walk_people, blocked, roots, true, workspace, false)
+	assert_eq(labels_only["labels"], full["labels"], "부모 배열을 생략해도 영역 번호는 같음")
+	var data: Dictionary = {"grid": g, "entries": {"north": [Vector2i(2, 0)]}, "anchors": {}}
+	assert_false(Bounds._dead_terminals_kept(data, blocked), "진입로 자체 삭제는 전역 검사")
+	g.walk_people.fill(0)
+	for x: int in range(5): g.walk_people[10 + x] = 1
+	assert_false(Bounds._local_removal_safe(g, g.walk_people, [12]), "한 칸짜리 유일한 연결은 증명 불가")
+
+
+func test_t_forest_index_keeps_overlap_edges_and_clamped_samples() -> void:
+	var g := Grid.new(32, 24)
+	var forest: Array = [Rect2i(0, 0, 12, 24), Rect2i(8, 4, 16, 9), Rect2i(24, 4, 8, 9)]
+	var index: Dictionary = Edge._forest_index(forest)
+	var borders: Array[Dictionary] = Edge._forest_borders(g, forest, index)
+	for y: int in range(-2, 26):
+		for x: int in range(-2, 34):
+			var cell := Vector2i(x, y)
+			assert_eq(Edge._forest_cell(forest, cell, index), Edge._forest_cell(forest, cell), "합집합 포함 판정")
+			var px: float = float(x) + 0.375
+			var pz: float = float(y) + 0.625
+			assert_eq(Edge.woods_depth(g, forest, px, pz, borders, index), Edge.woods_depth(g, forest, px, pz, borders), "겹침·지도 밖 깊이")
+	var bounds: Dictionary = {"form_forest": [Rect2i(0, 0, 2, 2)], "tiles": [
+		{"rect": Rect2i(0, 0, 8, 8), "kind": "water"},
+		{"rect": Rect2i(4, 4, 8, 8), "kind": "forest"}]}
+	var bounds_index: Dictionary = Edge._bounds_index(bounds)
+	for y: int in range(-1, 25):
+		for x: int in range(-1, 33):
+			var at := Vector2(float(x) + 0.5, float(y) + 0.5)
+			assert_eq(Edge.bounds_skip(g, bounds, at, bounds_index), Edge.bounds_skip(g, bounds, at), "숲 우선·타일 거르기")
+	assert_true(Edge._bounds_index({"outline": []}).is_empty(), "손으로 만든 경계의 tiles 부재 유지")
