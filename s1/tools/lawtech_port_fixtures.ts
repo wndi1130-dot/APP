@@ -130,7 +130,7 @@ function lawCase(g: Game) {
 
 type Action = { kind: 'enact' | 'repeal'; law: LawId }
   | { kind: 'cast_vote' | 'cancel_restore' | 'achieved_pool' }
-  | { kind: 'advance'; departRollRewound?: boolean }
+  | { kind: 'advance' }
   | { kind: 'start_restore'; id: TechId; mode: 'full' | 'defect'; variant?: Variant }
   | { kind: 'open_pipe_vote' | 'ratify_pipe'; passed: boolean }
   | { kind: 'run_workshop'; workDebt?: number };
@@ -297,17 +297,12 @@ function pipeSequences() {
             .filter(ev => ev.trigger.some(c => c.type === 'flag' && c.id === 'ev_achieved')).map(ev => ev.id)) as string[];
           assert.equal(gated.length > 0, passed, passed ? '가결 판인데 「이룬 뒤」 사건이 풀에 없음' : '부결 판인데 「이룬 뒤」 사건이 풀에 있음');
           assert.equal(S1.primaryAction(g).ok, true, '출발할 수 없는 입력');
-          // 뽑힌 카드까지 S2와 대조하려고(코디 11-1 덧붙임): S1 출발의 내정 훅(domesticDepart)은 기관 고장 판정에
-          // 난수를 한 번 쓰는데 S2엔 그 훅이 아직 없다(turn_travel.gd 「내정 훅 자리」). 생성기에서만 출발 직전
-          // 상태를 증분 하나 되돌려, 그 판정이 되돌린 몫을 쓰고 사건 뽑기는 S2와 같은 상태에서 돌게 한다.
-          // 게임 코드는 그대로이고, 판정이 고장을 내거나 다른 난수가 끼면 멈춘다.
+          // 출발: 내정 훅(domesticDepart)의 기관 고장 판정 난수 하나(기본 기관차 c3라 고장은 안 남) + 이동 사건 뽑기
+          // 하나. S2도 같은 자리에서 같은 둘을 뽑아야 뽑힌 카드까지 같다.
           const s0 = g.rng.state, breakdowns = g.dom!.stats.breakdowns ?? 0;
-          step({ kind: 'advance', departRollRewound: true }, () => {
-            g.rng = { algorithm: 'mulberry32-v1', state: (s0 - RNG_INC) >>> 0 };
-            S1.advance(g);
-          });
-          assert.equal(g.rng.state, (s0 + RNG_INC) >>> 0, '출발 난수가 고장 판정 하나 + 사건 뽑기 하나가 아님');
-          assert.equal(g.dom!.stats.breakdowns ?? 0, breakdowns, '되돌린 판정이 고장을 냄');
+          step({ kind: 'advance' }, () => S1.advance(g));
+          assert.equal(g.rng.state, (s0 + 2 * RNG_INC) >>> 0, '출발 난수가 고장 판정 하나 + 사건 뽑기 하나가 아님');
+          assert.equal(g.dom!.stats.breakdowns ?? 0, breakdowns, '기본 기관차인데 고장이 남');
           assert.equal(g.phase, 'travel'); assert.equal(g.seg, seg + 1);
           assert.ok(g.cards.length > 0, '출발에서 뽑힌 카드가 없음');
         }, (passed ? variant : variant === 'a' ? 'b' : 'a') === 'a' ? 'common_heating' : 'heat_quota');

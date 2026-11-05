@@ -5,6 +5,7 @@ const Turn = preload("res://game/train/train_turn.gd")
 const People = preload("res://game/train/turn/turn_people.gd")
 const TrainClimate = preload("res://game/train/train_climate.gd")
 const Content = preload("res://game/train/turn/turn_content.gd")
+const DomDepart = preload("res://game/train/turn/turn_dom_depart.gd")
 const WEATHER_WEIGHT: Array = [["snow", 30], ["fog", 20], ["sleet", 15], ["overcast", 20], ["clear", 15]]
 
 static func event_state_key(g: Dictionary, t: Dictionary) -> String:
@@ -109,7 +110,14 @@ static func depart(g0: Dictionary, t: Dictionary) -> Dictionary:
 		C.journal(g, "추위가 한 단계 깊어졌다. 모든 칸 온기 −5.", "bad")
 	# S1 disasterDepart stands here (no disasters in S2), then freezeDepart.
 	TrainClimate.freeze_depart(g, t, shift)
-	# 내정 훅 자리: domesticDepart / domesticStrikeLine / domesticStrikeRuns.
+	# S1 domesticDepart (turn_dom_depart.gd): no one to drive ends the run, else the breakdown roll.
+	# A state taking an S1 step this port does not carry comes back as it came in.
+	var refused: String = DomDepart.refusal(g, t)
+	if refused != "":
+		return C.unsupported(g0, refused)
+	if not DomDepart.depart(g, t):
+		return Turn.finish(g, t, "stranded")
+	# The strike line is S1 domesticStrikeLine's without an engine manual (S2 has none).
 	var engine: Dictionary = g["comms"]["engine"]
 	var striking: bool = int(engine["fervor"]) >= 1 and float(engine["rel"]) <= float(p["strikeRel"])
 	if striking and St.law_active(g, "strike_ban"):
@@ -118,6 +126,9 @@ static func depart(g0: Dictionary, t: Dictionary) -> Dictionary:
 		g["fear"] = clampf(float(g["fear"]) + 10, 0, 100)
 		C.journal(g, "파업 금지법을 내밀자 화부들이 말없이 불 앞으로 돌아갔다.", "dark")
 	elif striking:
+		refused = DomDepart.strike_refusal(g)
+		if refused != "":
+			return C.unsupported(g0, refused)
 		if not bool(g["inStrike"]): g["strikes"] += 1
 		g["inStrike"] = true
 		g["lostSegments"] += 1
