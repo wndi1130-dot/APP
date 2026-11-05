@@ -176,64 +176,144 @@ func build_field(parent: Node, opts: Dictionary) -> void:
 	var f: Node = field
 	if not f.is_built:
 		await f.built
-	if not is_instance_valid(f) or generation != _generation or f != field:
+	# These callbacks survive frame waits. Only weak references are captured;
+	# resolving a freed Node inside the callback must not be a lambda error.
+	var field_ref: WeakRef = weakref(f) if is_instance_valid(f) else null
+	var loader_ref: WeakRef = weakref(self)
+	var request_current: Callable = func() -> bool:
+		var current_field = field_ref.get_ref() if field_ref != null else null
+		var current_loader = loader_ref.get_ref()
+		return is_instance_valid(current_field) and not current_field.is_queued_for_deletion() and is_instance_valid(current_loader) and generation == current_loader._generation and current_field == current_loader.field
+	if not request_current.call():
 		return
 	var look = f.people_look
-	var prepare_from: int = Time.get_ticks_msec()
-	look.prepare()
+	var look_ref: WeakRef = weakref(look) if is_instance_valid(look) else null
+	var visual_current: Callable = func() -> bool:
+		var current_field = field_ref.get_ref() if field_ref != null else null
+		var current_visual = look_ref.get_ref() if look_ref != null else null
+		return is_instance_valid(current_field) and not current_field.is_queued_for_deletion() and is_instance_valid(current_visual) and not current_visual.is_queued_for_deletion() and current_visual == current_field.people_look and current_visual.game == current_field
+	var clock_ms: Callable = func() -> int: return Time.get_ticks_msec()
 	var prepare_ms: int = 60000
 	if OS.is_debug_build():
 		prepare_ms = clampi(int(get_meta("_test_person_prewarm_timeout_ms", prepare_ms)), 0, prepare_ms)
+		var injected_clock: Variant = get_meta("_test_person_prewarm_clock") if has_meta("_test_person_prewarm_clock") else null
+		if injected_clock is Callable and injected_clock.is_valid():
+			clock_ms = injected_clock
+	var prepare_from: int = int(clock_ms.call())
 	var prepare_until: int = prepare_from + prepare_ms
-	var late: Dictionary = {}
-	stats["person_prewarm_late"] = false
-	stats["person_prewarm_late_log"] = ""
-	while look.is_preparing():
+	var elapsed_ms := 0
+	var reason := ""
+	var prepared: Dictionary = {}
+	var frame_count: int = int(stats.get("frames", 0))
+	var longest_frame: float = float(stats.get("longest_frame_ms", 0.0))
+	var last_frame: int = _last_frame
+	if visual_current.call():
+		look.prepare()
+		if not request_current.call():
+			return
+		if visual_current.call():
+			prepared = look.prepare_stats.duplicate()
+			if look.preparation_cancelled():
+				reason = "visual_cancelled"
+		else:
+			reason = "visual_unavailable"
+	else:
+		reason = "visual_unavailable"
+	while reason == "" and visual_current.call() and look.is_preparing():
 		await get_tree().process_frame
-		if not is_instance_valid(f) or generation != _generation or f != field:
+		if not request_current.call():
 			return
-		if not is_instance_valid(look) or look != f.people_look or look.game != f:
+		if not visual_current.call():
+			reason = "visual_unavailable"
+			break
+		var now_ms: int = int(clock_ms.call())
+		if not request_current.call():
 			return
-		if Time.get_ticks_msec() >= prepare_until:
-			# Count unfinished people in the view's visible capacity without assigning or reading.
-			var left := 0
-			for p in look._preparation_people().slice(0, look.MAX_PEOPLE):
-				var d: Dictionary = look.worn.get(look.body_by.get(p, ""), {})
-				if not look.body_by.has(p) or d.is_empty():
-					left += 1
-					continue
-				if d["own_draw"] != null:
-					for garment: Dictionary in look.looks_on(p) + look.bag_on(p):
-						if not d["wear"].has(garment["shell"]):
-							left += 1
-							break
-			late = {"ms": float(Time.get_ticks_msec() - prepare_from), "left": left}
-			look.cancel_preparation()
-			stats["person_prewarm_late"] = true
-			stats["person_prewarm_late_log"] = "PERSON_PREWARM_LATE %s" % JSON.stringify(late)
-			print(stats["person_prewarm_late_log"])
+		if now_ms >= prepare_until:
+			reason = "deadline"
 		else:
 			look.prepare_step()
+			if not request_current.call():
+				return
+			now_ms = int(clock_ms.call())
+			if not request_current.call():
+				return
+			if not visual_current.call():
+				reason = "visual_unavailable"
+			else:
+				prepared = look.prepare_stats.duplicate()
+				if now_ms >= prepare_until:
+					reason = "deadline"
+				elif look.preparation_cancelled():
+					reason = "visual_cancelled"
+		elapsed_ms = maxi(now_ms - prepare_from, 0)
 		var now: int = Time.get_ticks_usec()
-		stats["longest_frame_ms"] = maxf(float(stats.get("longest_frame_ms", 0.0)), float(now - _last_frame) / 1000.0)
-		stats["frames"] = int(stats.get("frames", 0)) + 1
-		_last_frame = now
-		if not late.is_empty():
-			break
-	if not is_instance_valid(f) or generation != _generation or f != field:
+		longest_frame = maxf(longest_frame, float(now - last_frame) / 1000.0)
+		frame_count += 1
+		last_frame = now
+	if not request_current.call():
 		return
-	if not is_instance_valid(look) or look != f.people_look or look.game != f:
+	if reason == "" and not visual_current.call():
+		reason = "visual_unavailable"
+	var left := 0
+	var line := ""
+	if reason != "":
+		elapsed_ms = maxi(int(clock_ms.call()) - prepare_from, 0)
+		if not request_current.call():
+			return
+		# Only cancel work still owned by this field, never a node reset for another field.
+		if is_instance_valid(look) and look.game == f:
+			prepared = look.prepare_stats.duplicate()
+			if look.is_preparing():
+				look.cancel_preparation()
+		var current_look = f.people_look
+		var shown := 0
+		for p in f.people:
+			if not is_instance_valid(p) or not f.level_shown(f.level_of(p.position)) or not f._person_visible(p) or f.rode_off.has(p):
+				continue
+			if shown >= FieldGame.PersonVisual.MAX_PEOPLE:
+				break
+			shown += 1
+			if not is_instance_valid(current_look) or current_look.game != f or not current_look.body_by.has(p):
+				left += 1
+				continue
+			var d: Dictionary = current_look.worn.get(current_look.body_by[p], {})
+			if d.is_empty():
+				left += 1
+				continue
+			if d["own_draw"] != null:
+				for garment: Dictionary in current_look.looks_on(p) + current_look.bag_on(p):
+					if not d["wear"].has(garment["shell"]):
+						left += 1
+						break
+		var prefix := "PERSON_PREWARM_LATE" if reason == "deadline" else "PERSON_PREWARM_SKIP"
+		line = "%s %s" % [prefix, JSON.stringify({"ms": elapsed_ms, "left": left, "reason": reason})]
+	if not request_current.call():
 		return
-	if look.preparation_cancelled() and late.is_empty():
-		return
-	stats["person_prewarm_ms"] = float(late.get("ms", look.prepare_stats.get("ms", 0.0)))
-	stats["person_prewarm_left"] = int(late.get("left", 0))
-	stats["person_prewarm_work_ms"] = float(look.prepare_stats.get("work_ms", 0.0))
-	stats["person_prewarm_max_frame_ms"] = float(look.prepare_stats.get("max_frame_ms", 0.0))
-	stats["person_prewarm_frames"] = int(look.prepare_stats.get("frames", 0))
+	stats["frames"] = frame_count
+	stats["longest_frame_ms"] = longest_frame
+	_last_frame = last_frame
+	stats["person_prewarm_late"] = reason == "deadline"
+	stats["person_prewarm_skipped"] = reason != "" and reason != "deadline"
+	stats["person_prewarm_skip_reason"] = reason if stats["person_prewarm_skipped"] else ""
+	stats["person_prewarm_late_log"] = line if reason == "deadline" else ""
+	stats["person_prewarm_skip_log"] = line if stats["person_prewarm_skipped"] else ""
+	stats["person_prewarm_log_count"] = 0 if line == "" else 1
+	stats["person_prewarm_ms"] = float(elapsed_ms) if reason != "" else float(prepared.get("ms", 0.0))
+	stats["person_prewarm_left"] = left
+	stats["person_prewarm_work_ms"] = float(prepared.get("work_ms", 0.0))
+	stats["person_prewarm_max_frame_ms"] = float(prepared.get("max_frame_ms", 0.0))
+	stats["person_prewarm_frames"] = int(prepared.get("frames", 0))
 	stats["field_ms"] = float(Time.get_ticks_usec() - _field_from) / 1000.0
 	stats["longest_piece_ms"] = maxf(float(f.pace.longest_usec) / 1000.0, stats["person_prewarm_max_frame_ms"])
-	field_built.emit(f)
+	if line != "":
+		print(line)
+		if OS.is_debug_build():
+			var sink: Variant = get_meta("_test_person_prewarm_log") if has_meta("_test_person_prewarm_log") else null
+			if sink is Callable and sink.is_valid():
+				sink.call(line)
+	if request_current.call():
+		field_built.emit(f)
 
 
 ## The field is not wanted after all: a build under way finishes in one go at
@@ -243,7 +323,7 @@ func abandon() -> void:
 		field = null
 		return
 	var f: Node = field
-	if f.people_look != null: f.people_look.cancel_preparation()
+	if is_instance_valid(f.people_look) and f.people_look.game == f: f.people_look.cancel_preparation()
 	field = null
 	if f.is_built:
 		f.queue_free()

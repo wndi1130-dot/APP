@@ -290,6 +290,9 @@ func setup(field_game) -> void:
 
 ## The loader starts this after restoration and drives one step per real frame.
 ## Direct starts keep their ordinary frame reads; an abandoned build stays cold.
+## Assignment equivalence requires candidates and their order to stay fixed
+## during preparation. Changed targets retain earlier assignments; only their
+## newly needed caches are guaranteed to be prepared.
 func prepare() -> void:
 	if is_preparing() or preparation_cancelled():
 		return
@@ -567,9 +570,30 @@ func _process(delta: float) -> void:
 			continue
 		var had := worn.size()
 		var d := worn_of(p, reads > 0)
-		if worn.size() > had:
+		var read_body := worn.size() > had
+		if read_body:
 			reads -= 1
 		if d.is_empty():
+			continue
+		var layers := looks_on(p) + bag_on(p)
+		# A fresh body and its own shells remain one direct-path bundle.
+		# notes only gains a person below, when their body is actually drawn:
+		# someone already shown must not blink when their outfit changes.
+		var together := read_body or notes.has(p)
+		var dressed := true
+		for layer: Dictionary in layers:
+			var kind: String = layer["shell"]
+			if d["wear"].has(kind):
+				continue
+			if together or reads > 0:
+				garment_of(d, kind)
+				if not together:
+					reads -= 1
+			else:
+				dressed = false
+		# A prewarmed body can outlive a timed-out shell pass. Finish its
+		# missing shells within the remaining budget before its first draw.
+		if not dressed:
 			continue
 		count += 1
 		var b_vat: Dictionary = d["vat"]
@@ -602,7 +626,7 @@ func _process(delta: float) -> void:
 			d["k"] = k + 1
 			# What they wear moves with the body: the same place, the same frame.
 			var worn_n: Dictionary = d["worn_n"]
-			for worn_look: Dictionary in looks_on(p) + bag_on(p):
+			for worn_look: Dictionary in layers:
 				var kind: String = worn_look["shell"]
 				var garment := garment_of(d, kind)
 				if garment != null:

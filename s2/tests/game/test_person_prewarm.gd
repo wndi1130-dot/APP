@@ -7,6 +7,7 @@ const FieldGame = preload("res://game/field_game.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 const Wear = preload("res://game/sim/wear.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const Observer = preload("res://tests/game/fixtures/person_prewarm_observer.gd")
 
 var saved_settings: Dictionary = {}
 
@@ -138,15 +139,29 @@ func _cache(visual: PersonVisual) -> Dictionary:
 	return out
 
 
-func _read_over_frames(visual: PersonVisual, limit: int) -> void:
-	for tick in limit:
+func _read_over_frames(visual: _RecordingVisual, limit: int) -> void:
+	# Each person can need a body and up to three shells, plus a settling frame.
+	for tick in limit * 4:
 		var before: int = visual.worn.size()
+		var bodies_before: Array = visual.worn.keys()
+		var reads: int = visual.dress_calls.size() + visual.garment_calls.size()
 		visual._process(1.0 / 60.0)
 		var added: int = visual.worn.size() - before
+		var read_count: int = visual.dress_calls.size() + visual.garment_calls.size() - reads
+		var body_shells := 0
+		var counted := {}
+		for p in visual.game.people:
+			if not visual.body_by.has(p):
+				continue
+			var body: String = visual.body_by[p]
+			if visual.worn.has(body) and not bodies_before.has(body) and not counted.has(body):
+				counted[body] = true
+				body_shells += (PersonVisual.looks_on(p) + PersonVisual.bag_on(p)).size()
 		assert_lte(added, PersonVisual.READS_PER_FRAME)
-		if added == 0:
+		assert_lte(read_count, PersonVisual.READS_PER_FRAME + body_shells)
+		if added == 0 and read_count == 0:
 			return
-	fail_test("body reads did not settle within the bounded frame count")
+	fail_test("body and shell reads did not settle within the bounded frame count")
 
 
 func _finish_preparation(visual: _RecordingVisual) -> void:
@@ -267,6 +282,77 @@ func test_late_people_keep_the_per_frame_read_budget() -> void:
 	assert_eq(visual.prepare_stats["count"], 0)
 
 
+func test_already_drawn_person_gets_new_bag_when_frame_budget_is_spent() -> void:
+	var field := _Field.new()
+	var people := _people(2)
+	var shown: Person = people[0]
+	shown.bag = "pockets"
+	field.people = [shown]
+	var visual := _visual(field)
+	_read_over_frames(visual, 4)
+	var before: Dictionary = Observer.appearance(visual, field.people)
+	assert_eq(before["drawn"], [String(shown.pid)] as Array[String])
+	assert_true(before["incomplete"].is_empty())
+	# The newcomer spends the only body-read slot before the existing person.
+	field.people = [people[1], shown]
+	shown.bag = "big_pack"
+	var reads: int = visual.dress_calls.size()
+	visual._process(1.0 / 60.0)
+	assert_eq(visual.dress_calls.size() - reads, PersonVisual.READS_PER_FRAME)
+	var sample: Dictionary = Observer.appearance(visual, field.people)
+	assert_eq(sample["ambiguous"], 0)
+	assert_true(sample["drawn"].has(String(shown.pid)), "the existing person stays on show")
+	assert_true(sample["incomplete"].is_empty(), "both bodies have their shells in this frame")
+	var d: Dictionary = visual.worn_of(shown, false)
+	assert_true(d["wear"].has("big_pack"), "the new bag is read despite the spent slot")
+	assert_true(visual.garment_calls.has(String(d["wear_dir"]).path_join("big_pack")))
+	if d["wear"].has("big_pack"):
+		assert_not_null(d["wear"]["big_pack"])
+		if d["wear"]["big_pack"] != null:
+			assert_eq(d["wear"]["big_pack"].multimesh.visible_instance_count, 1)
+
+
+func test_direct_first_visible_frames_match_617baa40_with_mixed_shells() -> void:
+	assert_eq(PersonVisual.READS_PER_FRAME, 1, "the baseline spends one body bundle per frame")
+	var field := _Field.new()
+	field.opts = {"staged": false}
+	field.standing_by = false
+	field.is_built = true
+	field.people = _people(4)
+	field.people[0].bag = "pockets"
+	field.people[0].hat = Wear.make("hat_knit")
+	field.people[1].worn["coat"] = Wear.make("coat_padded")
+	field.people[2].bag = "big_pack"
+	field.people[3].bag = "pockets"
+	var visual := _visual(field)
+	assert_true(visual.notes.is_empty())
+	var visible_counts: Array[int] = []
+	var dressed_counts: Array[int] = []
+	var all_visible_frame := 0
+	var all_dressed_frame := 0
+	# 617baa40: _process 568-574 reads one new body, 603-614 draws its
+	# shells immediately. These four ids select four distinct, uncached bodies.
+	for tick in 4:
+		var reads: int = visual.dress_calls.size()
+		visual._process(1.0 / 60.0)
+		assert_eq(visual.dress_calls.size() - reads, 1)
+		var sample: Dictionary = Observer.appearance(visual, field.people)
+		assert_eq(sample["ambiguous"], 0)
+		assert_eq(sample["missing"], 0, "no body appears before its shells are cached")
+		assert_true(sample["incomplete"].is_empty(), "shells are drawn in the body's first frame")
+		visible_counts.append(sample["drawn"].size())
+		dressed_counts.append(sample["drawn"].size() - sample["incomplete"].size())
+		if visible_counts.back() == 4 and all_visible_frame == 0:
+			all_visible_frame = tick + 1
+		if dressed_counts.back() == 4 and all_dressed_frame == 0:
+			all_dressed_frame = tick + 1
+	assert_eq_deep(visible_counts, [1, 2, 3, 4])
+	assert_eq_deep(dressed_counts, [1, 2, 3, 4])
+	assert_eq(all_visible_frame, 4)
+	assert_eq(all_dressed_frame, 4)
+	assert_eq(all_visible_frame - 4, 0, "no extra frames before direct-path people appear")
+
+
 func test_unavailable_body_keeps_the_fallback_without_reading_again() -> void:
 	var field := _Field.new()
 	field.people = [_person("p_guard_marek")]
@@ -343,9 +429,15 @@ func test_prewarm_matches_incremental_with_mixed_failures() -> void:
 	_assert_equivalent(warm, cold)
 	assert_eq(warm.worn["n5-crew_medic"]["draw"], warm.worn[""]["draw"])
 	assert_eq(warm.worn["n3-body_sheepskin"]["draw"], warm.worn[""]["draw"])
-	var reads: int = warm.dress_calls.size() + warm.garment_calls.size()
-	await _finish_preparation(warm)
-	assert_eq(warm.dress_calls.size() + warm.garment_calls.size(), reads)
+	for visual: _RecordingVisual in [warm, cold]:
+		assert_eq(visual.dress_calls.count(BodyCast.own_folder("n5-crew_medic")), 1)
+		assert_eq(visual.dress_calls.count(BodyCast.own_folder("n3-body_sheepskin")), 1)
+		for d: Dictionary in visual.worn.values():
+			assert_true(d["wear"].has("pack"))
+			assert_null(d["wear"].get("pack"))
+		var reads: int = visual.dress_calls.size() + visual.garment_calls.size()
+		await _finish_preparation(visual)
+		assert_eq(visual.dress_calls.size() + visual.garment_calls.size(), reads)
 
 
 func test_setup_reentry_is_idempotent() -> void:
@@ -394,6 +486,27 @@ func test_targets_and_garments_are_rechecked_before_preparation_finishes() -> vo
 	assert_false(visual.worn_of(late, false).is_empty())
 	assert_true(visual.worn_of(field.people[0], false)["wear"].has("big_pack"))
 	assert_lte(visual.prepare_stats["max_frame_work"], PersonVisual.READS_PER_FRAME)
+
+
+func test_target_replacement_prepares_new_targets_only() -> void:
+	var field := _Field.new()
+	var a := _person("p_swap_a")
+	var b := _person("p_swap_b")
+	field.people = [a, b]
+	field.hidden = [b]
+	field.is_built = true
+	var visual := _visual(field)
+	visual.prepare()
+	await get_tree().process_frame
+	visual.prepare_step()
+	assert_true(visual.body_by.has(a))
+	field.hidden = [a]
+	# Changing candidates retains earlier reservations; this checks new-target caches only.
+	await _finish_preparation(visual)
+	var d: Dictionary = visual.worn_of(b, false)
+	assert_false(d.is_empty())
+	for garment: Dictionary in PersonVisual.looks_on(b) + PersonVisual.bag_on(b):
+		assert_true(d["wear"].has(garment["shell"]))
 
 
 func test_cancelled_preparation_cannot_spend_another_read() -> void:
