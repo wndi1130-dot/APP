@@ -8,10 +8,11 @@ const FieldMaps = preload("res://game/world/field_maps.gd")
 const FieldGame = preload("res://game/field_game.gd")
 
 
+## The ranges a place id gives (narrower than what a map's own snow_look may set).
 func _in_range(look: Dictionary) -> void:
-	assert_between(float(look["shift"]), -0.3, 0.3, "shift")
-	assert_between(float(look["melt"]), 0.0, 1.0, "melt")
-	assert_between(float(look["melt_m"]), 12.0, 48.0, "melt_m")
+	assert_between(float(look["shift"]), -0.25, 0.25, "shift")
+	assert_between(float(look["melt"]), 0.45, 0.95, "melt")
+	assert_between(float(look["melt_m"]), 18.0, 40.0, "melt_m")
 	var phase: Vector2 = look["phase"]
 	assert_between(phase.x, 0.0, 500.0, "phase x")
 	assert_between(phase.y, 0.0, 500.0, "phase y")
@@ -48,6 +49,15 @@ func test_a_map_may_give_its_own_look() -> void:
 	assert_almost_eq(float(own["melt"]), 0.1, 1e-6)
 	assert_almost_eq(float(own["melt_m"]), 20.0, 1e-6)
 	assert_eq(own["phase"], base["phase"], "what it does not give comes from the id")
+
+
+func test_a_wrong_value_falls_back_to_the_place_alone() -> void:
+	var base := MapView.snow_look_for({"place_id": "lake_01"})
+	var own := MapView.snow_look_for({"place_id": "lake_01", "snow_look": {"shift": 0.9, "melt": "deep", "melt_m": 30}})
+	assert_eq(own["shift"], base["shift"], "out of range: the place's own")
+	assert_eq(own["melt"], base["melt"], "not a number: the place's own")
+	assert_almost_eq(float(own["melt_m"]), 30.0, 1e-6, "the right one still counts")
+	assert_eq(MapView.snow_look_for({"place_id": "lake_01", "snow_look": "deep"}), base, "not a dictionary: the place's own")
 
 
 func test_the_map_view_hands_it_to_the_ground_shader() -> void:
