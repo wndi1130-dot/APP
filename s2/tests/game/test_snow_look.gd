@@ -25,15 +25,18 @@ func test_the_same_place_lies_the_same_every_time() -> void:
 
 
 func test_places_differ_and_stay_in_range() -> void:
-	var shifts := {}
+	var lo := 1.0
+	var hi := -1.0
 	var phases := {}
 	for id: String in FieldMaps.ids():
 		var look := MapView.snow_look_for({"place_id": id})
 		_in_range(look)
-		shifts[snappedf(float(look["shift"]), 0.01)] = true
+		lo = minf(lo, float(look["shift"]))
+		hi = maxf(hi, float(look["shift"]))
 		phases[look["phase"]] = true
 	assert_gt(FieldMaps.ids().size(), 10, "enough places to tell")
-	assert_gt(shifts.size(), FieldMaps.ids().size() / 2, "the maps do not all lie alike")
+	assert_lt(lo, -0.15, "some maps lie more melted")
+	assert_gt(hi, 0.15, "some maps lie whiter")
 	assert_eq(phases.size(), FieldMaps.ids().size(), "no two maps' drifts line up")
 	_in_range(MapView.snow_look_for({}))
 
