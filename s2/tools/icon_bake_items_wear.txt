@@ -1,0 +1,53 @@
+# 옷 47종: <id> <res://모형 스크립트> <yaw> <pitch> <roll> <margin>
+# 호출한 세션의 문지기로 굽는다: icon_bake.gd -- <out_dir> res://tools/icon_bake_items_wear.txt
+# 펼친 옷·양말·장갑·두건·목도리·마스크는 0/68/0, 여백 0.06: 목은 위, 앞면과 틈을 크게 보인다.
+# 옆으로 놓인 신발 한 켤레는 0/58/0, 여백 0.06: 낮은 구두와 긴 장화 목의 차이를 보인다.
+# 털모자는 0/38/0, 귀마개 모자는 0/28/0, 챙 모자는 20/34/0, 여백 0.08: 접힌 단·귀덮개·챙을 보인다.
+# <id>_256_muted.png를 assets/icons/items/<id>.png로 넣으면 물건별 그림이 별칭보다 먼저 잡힌다.
+undershirt_cotton res://tools/item_models_wear.gd 0 68 0 0.06
+undershirt_wool res://tools/item_models_wear.gd 0 68 0 0.06
+drawers_cotton res://tools/item_models_wear.gd 0 68 0 0.06
+long_johns res://tools/item_models_wear.gd 0 68 0 0.06
+shirt_cotton res://tools/item_models_wear.gd 0 68 0 0.06
+shirt_flannel res://tools/item_models_wear.gd 0 68 0 0.06
+shirt_work res://tools/item_models_wear.gd 0 68 0 0.06
+shirt_wool res://tools/item_models_wear.gd 0 68 0 0.06
+sweater_wool res://tools/item_models_wear.gd 0 68 0 0.06
+sweater_thick res://tools/item_models_wear.gd 0 68 0 0.06
+vest_knit res://tools/item_models_wear.gd 0 68 0 0.06
+jacket_short res://tools/item_models_wear.gd 0 68 0 0.06
+jacket_plain res://tools/item_models_wear.gd 0 68 0 0.06
+jacket_work res://tools/item_models_wear.gd 0 68 0 0.06
+coat_leather res://tools/item_models_wear.gd 0 68 0 0.06
+vest_quilted res://tools/item_models_wear.gd 0 68 0 0.06
+coat_long res://tools/item_models_wear.gd 0 68 0 0.06
+coat_padded res://tools/item_models_wear.gd 0 68 0 0.06
+coat_wool_long res://tools/item_models_wear.gd 0 68 0 0.06
+raincoat res://tools/item_models_wear.gd 0 68 0 0.06
+fire_suit res://tools/item_models_wear.gd 0 68 0 0.06
+vest_armor res://tools/item_models_wear.gd 0 68 0 0.06
+trousers_cotton res://tools/item_models_wear.gd 0 68 0 0.06
+trousers_work res://tools/item_models_wear.gd 0 68 0 0.06
+trousers_wool res://tools/item_models_wear.gd 0 68 0 0.06
+overtrousers_oil res://tools/item_models_wear.gd 0 68 0 0.06
+bib_work res://tools/item_models_wear.gd 0 68 0 0.06
+socks_cotton res://tools/item_models_wear.gd 0 68 0 0.06
+socks_wool res://tools/item_models_wear.gd 0 68 0 0.06
+shoes_leather res://tools/item_models_wear.gd 0 58 0 0.06
+boots_work res://tools/item_models_wear.gd 0 58 0 0.06
+boots_rubber res://tools/item_models_wear.gd 0 58 0 0.06
+boots_fur res://tools/item_models_wear.gd 0 58 0 0.06
+hat_knit res://tools/item_models_wear.gd 0 38 0 0.08
+hat_earflap res://tools/item_models_wear.gd 0 28 0 0.08
+cap_brim res://tools/item_models_wear.gd 20 34 0 0.08
+hood res://tools/item_models_wear.gd 0 68 0 0.06
+hood_wool res://tools/item_models_wear.gd 0 68 0 0.06
+scarf_wool res://tools/item_models_wear.gd 0 68 0 0.06
+scarf_thick res://tools/item_models_wear.gd 0 68 0 0.06
+mask_cloth res://tools/item_models_wear.gd 0 68 0 0.06
+gloves res://tools/item_models_wear.gd 0 68 0 0.06
+gloves_cotton res://tools/item_models_wear.gd 0 68 0 0.06
+gloves_leather res://tools/item_models_wear.gd 0 68 0 0.06
+mittens res://tools/item_models_wear.gd 0 68 0 0.06
+coverall res://tools/item_models_wear.gd 0 68 0 0.06
+dress_wool res://tools/item_models_wear.gd 0 68 0 0.06
