@@ -2020,11 +2020,13 @@ func _message_span() -> Vector2:
 
 ## The radio's call as a subtitle (결정 569, user 2026-11-06 「옮기는게 낫네
 ## 그러자」): one line in the bottom middle, as wide as RADIO_SHARE of the screen
-## (its words to RADIO_W, then they wrap), its foot over whatever stands highest
-## there — the squad's faces, a face's open card, a row of choices — between the
-## stick's ring and the right thumb's pads. The top of the screen, ahead, stays open.
+## (its words to RADIO_W, then they wrap), its foot over the squad's faces,
+## between the stick's ring and the right thumb's keys. The top of the screen,
+## ahead, stays open. While a row of choices or a face's card is up the call goes
+## to the message column instead (radio_raised, _place_messages): over them it
+## would stand in the screen's middle, on the leader the choice is about.
 func _place_radio() -> void:
-	if not radio_pill.visible:
+	if not radio_pill.visible or radio_raised():
 		return
 	var view: Vector2 = _view_size()
 	var bounds: Vector2 = radio_bounds()
@@ -2036,18 +2038,24 @@ func _place_radio() -> void:
 	if absf(room - radio_room) > 0.5:
 		radio_room = room
 		_fit_radio()
+	# Cards and choices send the call to the column (radio_raised): only the faces are under it here.
 	var floors: Array[float] = [allies_box.get_global_rect().position.y]
-	for row in ally_buttons:
-		var card: Control = row["card"]
-		if card.visible:
-			floors.append(card.get_global_rect().position.y)
-	# The keys are taken out of the row as they go (_offer_pick): every one there stands.
-	for key: Node in offer_box.get_children():
-		floors.append((key as Control).get_global_rect().position.y)
 	# As small as its words are now: a call that wrapped onto fewer lines, or onto
 	# more, stands on the same foot (6 Pro 점검: the size only ever grew before).
 	radio_pill.reset_size()
 	radio_pill.global_position = radio_spot(radio_pill.size, view, floors, left, right, UiFonts.px(MESSAGE_GAP)).position
+
+
+## A row of choices or an open face's card is up: the call stands in the message
+## column, as it did before 결정 569, not in the middle over the leader.
+func radio_raised() -> bool:
+	for key: Node in offer_box.get_children():
+		if (key as Control).visible:
+			return true
+	for row in ally_buttons:
+		if (row["card"] as Control).visible:
+			return true
+	return false
 
 
 ## The radio's subtitle keeps between these (x, screen px): the stick's ring and the
@@ -2099,8 +2107,9 @@ func _note_room() -> float:
 ## The message column (user 2026-10-18), from the state icons' top: the stop's
 ## own lines, then the notes, each right-aligned on the column's right edge. A
 ## note that would reach down onto the right thumb's pads under the column takes
-## the oldest plain note's place. The radio's call is no longer here: it is heard,
-## so it stands as a subtitle in the bottom middle (결정 569, _place_radio).
+## the oldest plain note's place. The radio's call is heard, so it stands as a
+## subtitle in the bottom middle (결정 569, _place_radio) — here, between the
+## stop's lines and the notes, only while choices or a card are up (radio_raised).
 func _place_messages() -> void:
 	var gap: float = UiFonts.px(MESSAGE_GAP)
 	var span: Vector2 = _message_span()
@@ -2114,6 +2123,13 @@ func _place_messages() -> void:
 		var ib: Vector2 = info_box.size.max(info_box.get_combined_minimum_size())
 		info_box.position = Vector2(roundf(span.y - ib.x), top)
 		top += ib.y + gap
+	if radio_pill.visible and radio_raised():
+		if absf(span.y - span.x - radio_room) > 0.5:
+			radio_room = span.y - span.x
+			_fit_radio()
+		radio_pill.reset_size()   # as small as its words, as in _place_radio
+		radio_pill.position = Vector2(roundf(span.y - radio_pill.size.x), top)
+		top += radio_pill.size.y + gap
 	_place_radio()
 	var box: Vector2 = toast_box.size.max(toast_box.get_combined_minimum_size())
 	toast_box.position = Vector2(roundf(span.y - box.x), roundf(top))

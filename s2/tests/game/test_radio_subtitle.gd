@@ -1,6 +1,7 @@
 extends "res://addons/gut/test.gd"
 ## 결정 569(사용자 2026-11-06 「옮기는게 낫네 그러자」): 무전은 영화 자막처럼 아래 가운데, 동료 얼굴 줄
-## 바로 위에 한 줄(화면 폭 46 %까지, 글은 RADIO_W까지). 고르기 줄·열린 동료 카드가 뜨면 그 위로 올라가고,
+## 바로 위에 한 줄(화면 폭 46 %까지, 글은 RADIO_W까지). 고르기 줄·열린 동료 카드가 떠 있는 동안만
+## 예전 자리(오른쪽 위 메시지 칸, 알림 위)로 간다 — 그 위로 올리면 화면 가운데 대장을 덮어서(안 2-4-2).
 ## 알림(토스트)은 지금 자리(오른쪽 메시지 칸), 보이는 시간 8초는 그대로다. 좌우는 막대 고리와 오른쪽
 ## 엄지 단추 사이(상황·출발 단추 열까지), 무전·고르기 줄·카드가 바뀐 그 프레임에 자리를 잡는다(6 Pro 점검).
 
@@ -91,43 +92,51 @@ func _assert_back(calm: Rect2, why: String) -> void:
 	assert_almost_eq(now.size.y, calm.size.y, 0.5, why + " (height)")
 
 
-func test_a_row_of_choices_lifts_the_call_over_it() -> void:
-	_start()
-	var calm: Rect2 = await _call("기관사: 서쪽 둑 쪽에서 옵니다, 한 시간쯤.")
-	hud.offer([{"label": "창 깨기", "call": Callable()}, {"label": "넘어가기", "call": Callable()}])
-	# No tick yet: the call stands over the choices in the frame they come up.
-	var at_once: Rect2 = hud.radio_pill.get_global_rect()
+## The call in the message column: right-aligned on its edge, above the notes,
+## off the screen's middle where the leader stands.
+func _assert_in_column(why: String) -> void:
+	var radio: Rect2 = hud.radio_pill.get_global_rect()
+	var span: Vector2 = hud._message_span()
+	assert_almost_eq(radio.end.x, span.y, 1.0, why + ": on the column's right edge")
+	assert_gte(radio.position.x, span.x - 0.5, why + ": inside the column")
+	assert_false(radio.has_point(hud._view_size() * 0.5), why + ": off the leader in the middle")
+	assert_gte(hud.toast_box.get_global_rect().position.y, radio.end.y, why + ": the notes under it")
+
+
+func _settle() -> void:
 	hud.tick(0.02)
-	assert_almost_eq(at_once.position.y, hud.radio_pill.get_global_rect().position.y, 0.5, "where it stays, in the frame the choices come")
-	var top: float = INF
-	for key: Node in hud.offer_box.get_children():
-		top = minf(top, (key as Control).get_global_rect().position.y)
-	var lifted: Rect2 = hud.radio_pill.get_global_rect()
-	assert_lte(lifted.end.y, top, "over the choices")
-	assert_lt(lifted.position.y, calm.position.y, "higher than without them")
-	for key: Node in hud.offer_box.get_children():
-		assert_false(lifted.intersects((key as Control).get_global_rect()), "never over a choice")
-	hud._offer_pick(Callable())
-	_assert_back(calm, "back down once they go, in that frame")
 	await get_tree().process_frame
 	hud.tick(0.02)
-	_assert_back(calm, "and stays there")
 
 
-func test_an_open_card_lifts_the_call_over_it_and_lets_it_down_when_shut() -> void:
+func test_a_row_of_choices_sends_the_call_to_the_message_column() -> void:
+	_start()
+	hud.toast("가방이 무겁다.")
+	var calm: Rect2 = await _call(LONG)
+	hud.offer([{"label": "창 깨기", "call": Callable()}, {"label": "넘어가기", "call": Callable()}])
+	assert_true(hud.radio_raised())
+	assert_almost_eq(hud.radio_pill.get_global_rect().end.x, hud._message_span().y, 1.0, "in the column in the frame the choices come")
+	await _settle()
+	_assert_in_column("choices up")
+	for key: Node in hud.offer_box.get_children():
+		assert_false(hud.radio_pill.get_global_rect().intersects((key as Control).get_global_rect()), "never over a choice")
+	hud._offer_pick(Callable())
+	assert_false(hud.radio_raised())
+	await _settle()
+	_assert_back(calm, "back to the subtitle once they go, as wide as before")
+
+
+func test_an_open_card_sends_the_call_to_the_message_column() -> void:
 	_start()
 	assert_gt(hud.ally_buttons.size(), 0, "a squad to open a card of")
 	var calm: Rect2 = await _call("기관사: 서쪽 둑 쪽에서 옵니다, 한 시간쯤.")
 	hud._toggle_card(0)
-	hud.tick(0.02)
-	var card: Rect2 = (hud.ally_buttons[0]["card"] as Control).get_global_rect()
-	var radio: Rect2 = hud.radio_pill.get_global_rect()
-	assert_lte(radio.end.y, card.position.y, "over the open card")
-	assert_false(radio.intersects(card))
+	await _settle()
+	_assert_in_column("a card open")
+	assert_false(hud.radio_pill.get_global_rect().intersects((hud.ally_buttons[0]["card"] as Control).get_global_rect()))
 	hud._toggle_card(0)
-	_assert_back(calm, "the card shut: back over the faces in that frame")
-	hud.tick(0.02)
-	_assert_back(calm, "and stays there")
+	await _settle()
+	_assert_back(calm, "back over the faces once it shuts")
 
 
 ## 6 Pro 점검: a new call stood on the old spot with its new size until the next tick.
