@@ -55,17 +55,17 @@ const TAP_BUZZ_MS: int = 10
 ## Painted art (결정 550·561 ①: the baked 3D pictures, 256 px) is at least this
 ## wide: drawn smooth from its mipmaps at ART, not snapped like pixel art.
 const PAINTED_MIN_PX: int = 128
-## Things that share another's picture (the same model would be baked twice).
+## Where the baked pictures are, by name.
+const ART_PATH: String = "res://assets/icons/items/%s.png"
+## Things that share another's picture on purpose: the same thing to the eye (a can
+## that is off looks as the dented one; the note on the side is the same 「쪽지」).
+## Every other thing that can be found has its own (test_item_art.gd).
 const ART_ALIAS: Dictionary = {
-	"rusk": "hardtack", "can_dented_bad": "can_dented", "peas": "oats", "flour": "oats",
-	"jar_cabbage": "jar_jam", "jar_honey": "jar_jam", "fever_pills": "painkillers",
-	"junk_rag": "cloth", "info_timetable": "document", "info_telegraph": "document",
+	"can_dented_bad": "can_dented", "note_side": "note_map",
 }
 ## A line icon drawn like a thing that has its bake: the things under it share
-## that picture (notes and plan scraps as papers, a coffee sack as the oat sack).
+## that picture.
 const ICON_ALIAS: Dictionary = {
-	"papers": "document", "it_cigarettes": "cigarettes", "it_sack": "oats", "med": "medkit",
-	"it_plank": "wood",
 	# The herbal's line icon "book" is also the plain book's id (its picture is it_book).
 	"book": "herbal_book",
 }
@@ -1287,25 +1287,29 @@ static func _item_icon(hud, id: String) -> Control:
 	return slot
 
 
-## The thing's baked picture (res://assets/icons/items/<id>.png, or the one it
-## shares, ART_ALIAS, or its line icon's — ICON_ALIAS first when the icon has
-## one, then the one baked under the icon's own name; the things drawn with one
-## line picture share one bake), null without one. Its own picture wins over a
-## shared one. Each (id, icon) is looked up once (the pane redraws its rows often).
-static func art_texture(id: String, icon: String = "") -> Texture2D:
-	var key: String = id + "|" + icon
-	if _art_found.has(key):
-		return _art_found[key] as Texture2D
-	var found: Texture2D = null
+## The name of the thing's baked picture (ART_PATH): its own id, or the one it
+## shares (ART_ALIAS), or its line icon's — ICON_ALIAS first when the icon has
+## one, then the one baked under the icon's own name; "" without one. Its own
+## picture wins over a shared one.
+static func art_name(id: String, icon: String = "") -> String:
 	var tried: Dictionary = {}
 	for name: String in [id, String(ART_ALIAS.get(id, "")), String(ICON_ALIAS.get(icon, "")), icon]:
 		if name == "" or tried.has(name):
 			continue
 		tried[name] = true
-		var path: String = "res://assets/icons/items/%s.png" % name
-		if ResourceLoader.exists(path):
-			found = load(path) as Texture2D
-			break
+		if ResourceLoader.exists(ART_PATH % name):
+			return name
+	return ""
+
+
+## The thing's baked picture (art_name), null without one. Each (id, icon) is
+## looked up once (the pane redraws its rows often).
+static func art_texture(id: String, icon: String = "") -> Texture2D:
+	var key: String = id + "|" + icon
+	if _art_found.has(key):
+		return _art_found[key] as Texture2D
+	var name: String = art_name(id, icon)
+	var found: Texture2D = load(ART_PATH % name) as Texture2D if name != "" else null
 	_art_found[key] = found
 	return found
 

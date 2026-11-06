@@ -1426,7 +1426,7 @@ func test_a_long_journal_fits_above_the_foot_at_720_high() -> void:
 ## shows the same picture.
 func test_baked_pictures_are_smooth_and_fill_the_art_square() -> void:
 	var game = _game()
-	var id: String = _box(game, ["can_beans", "rusk", "can_opener"])
+	var id: String = _box(game, ["can_beans", "can_dented_bad", "can_opener"])
 	game.hud.loot(id)
 	await _layout()
 	var beans := _row(game.hud, "Near", "can_beans").find_child("ItemIcon", true, false) as TextureRect
@@ -1437,8 +1437,9 @@ func test_baked_pictures_are_smooth_and_fill_the_art_square() -> void:
 	assert_eq(beans.texture_filter, CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS)
 	assert_almost_eq(beans.size.x, UiFonts.px(InventoryPane.ART), 1.0)
 	assert_almost_eq(beans.size.y, UiFonts.px(InventoryPane.ART), 1.0)
-	var rusk := _row(game.hud, "Near", "rusk").find_child("ItemIcon", true, false) as TextureRect
-	assert_eq(rusk.texture, InventoryPane.art_texture("hardtack"), "rusk shares the hardtack's picture")
+	var off := _row(game.hud, "Near", "can_dented_bad").find_child("ItemIcon", true, false) as TextureRect
+	assert_eq(off.texture, InventoryPane.art_texture("can_dented"), "the can that is off looks as the dented one")
+	assert_ne(InventoryPane.art_texture("rusk"), InventoryPane.art_texture("hardtack"), "the rusk has its own now")
 	assert_null(InventoryPane.art_texture("can_opener"))
 	game.hud._close_modal()
 
@@ -1476,8 +1477,10 @@ func test_a_thing_without_its_own_picture_takes_its_line_icons_bake() -> void:
 	assert_eq(InventoryPane.art_texture("rusk", "medkit"), InventoryPane.art_texture("hardtack"), "then its alias")
 	assert_null(InventoryPane.art_texture("no_such_thing", "no_such_icon"))
 	assert_null(InventoryPane.art_texture("no_such_thing"))
-	# A line icon drawn like a baked thing (ICON_ALIAS): notes take the document's.
-	assert_eq(InventoryPane.art_texture("note_map", "papers"), InventoryPane.art_texture("document"))
+	# A thing that shares on purpose (ART_ALIAS) comes before its line icon: the
+	# note on the side shows the note's, not a document's.
+	assert_eq(InventoryPane.art_texture("note_side", "papers"), InventoryPane.art_texture("note_map"))
+	assert_ne(InventoryPane.art_texture("note_map", "papers"), InventoryPane.art_texture("document"), "the note has its own")
 	# The herbal's line icon "book" is the plain book's id: each keeps its own picture.
 	var plain_book: Texture2D = InventoryPane.art_texture("book", "it_book")
 	var herbal: Texture2D = InventoryPane.art_texture("rare_herbal", "book")
