@@ -2,25 +2,32 @@ extends "res://addons/gut/test.gd"
 ## Primitive loot pictures can be checked without a viewport or a rendered frame.
 
 const ItemModels = preload("res://tools/item_models.gd")
+## The clothes' and the food bundle's shared pictures (it_shirt … it_hood, food,
+## it_herbs) gave way to each thing's own (item_models_wear.gd, item_models_goods.gd).
 const NEW_KEYS: Array[String] = [
-	"it_shirt", "it_trousers", "it_gloves", "it_undershirt", "it_drawers",
-	"it_sweater", "it_overalls", "it_socks", "it_scarf", "it_cap", "it_mask", "it_dress",
 	"it_apple", "it_apple_wilted", "it_meat", "it_meat_bad", "it_hare",
-	"it_bread_moldy", "food", "it_tube", "it_herbs", "it_toilet_paper", "it_soap",
+	"it_bread_moldy", "it_tube", "it_toilet_paper", "it_soap",
 	"it_child_clothes", "it_old_clothes", "it_razor", "gear", "it_nails", "it_opener",
 	"it_fuel", "it_spring", "it_record", "it_violin", "ammo_pistol", "ammo_shell",
 	"it_bottle_broken", "it_stake",
-	"it_coat", "it_jacket", "it_vest", "it_hat", "it_hood", "pack", "it_wire",
+	"pack", "it_wire",
 	"it_syrup", "clock", "it_pocket_watch", "it_sewing_kit", "it_needle",
 	"it_doctor_box", "herbal_book", "it_saline", "it_toy",
 ]
+const GONE_KEYS: Array[String] = [
+	"it_shirt", "it_trousers", "it_gloves", "it_undershirt", "it_drawers", "it_sweater",
+	"it_overalls", "it_socks", "it_scarf", "it_cap", "it_mask", "it_dress", "food",
+	"it_herbs", "it_coat", "it_jacket", "it_vest", "it_hat", "it_hood",
+]
 
 
-func test_ids_include_all_53_new_picture_keys() -> void:
-	assert_eq(NEW_KEYS.size(), 53)
+func test_ids_include_all_34_picture_keys_and_none_of_the_shared_clothes() -> void:
+	assert_eq(NEW_KEYS.size(), 34)
 	var available: Array = ItemModels.ids()
 	for key: String in NEW_KEYS:
 		assert_has(available, key, key + " has a recipe")
+	for gone: String in GONE_KEYS:
+		assert_does_not_have(available, gone, gone + " gave way to each thing's own picture")
 
 
 func test_empty_or_unregistered_picture_keys_return_null() -> void:
