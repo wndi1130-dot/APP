@@ -1628,7 +1628,7 @@ func tick(delta: float) -> void:
 		if rim_run != was and p.stick != Vector2.ZERO:
 			_set_running(p)
 	# The attack pad stays lit while the fight goes on (one press, field_unified 10).
-	attack_button.button_pressed = fighting(p)
+	attack_button.button_pressed = _repeating_melee(p)
 	if p.sled_weapon_stowed:
 		auto_aim = false
 		aiming = false
@@ -4142,15 +4142,11 @@ func _on_touch(event: InputEvent) -> void:
 ## first finger, pressed by hand for the others), the stick on the left
 ## half, or the right hand (aim in manual mode, an enemy, a thing to use).
 func finger_down(index: int, pos: Vector2) -> bool:
+	# A reused index lost its old lift: cancel that gesture before reading the new one.
+	if fingers.has(index):
+		finger_cancel(index)
 	if modal_open:
 		return true
-	# The same index again means its lift was lost (the app went away): let the
-	# old stick go before the new finger is read.
-	if fingers.has(index) and fingers[index]["kind"] == "stick":
-		fingers.erase(index)
-		stick_index = -1
-		stick_dash = false
-		_stick_release()
 	if offer_box.get_child_count() > 0:
 		# The last child is drawn on top; its full touch rect wins over every pad.
 		for choice_index: int in range(offer_box.get_child_count() - 1, -1, -1):
@@ -4486,6 +4482,7 @@ func finger_cancel(index: int) -> bool:
 			if aiming and game.player.aim.active:
 				game.player.aim.stop()
 			pressing = false
+			press_ms = 0
 			aiming = false
 			aim_cancel = false
 			aim_armed = false
@@ -4716,7 +4713,7 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 	elif b == attack_button:
 		# One press fights the one in reach until it is down, then the next
 		# within 2 m; a second press stops (field_unified 10, coordinator 18:10).
-		if fighting(p):
+		if _repeating_melee(p):
 			stop_fight(p)
 			return
 		var t = game.combat.melee_pick(p)
@@ -4726,7 +4723,7 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 			return
 		# 결정 564: 공격 패드(주 행동의 근접 패드 포함)도 같은 누름 설정을 따른다.
 		_melee(t, not MeleePress.enabled(game.opts))
-		attack_button.button_pressed = fighting(p)
+		attack_button.button_pressed = _repeating_melee(p)
 	elif b == context_button:
 		context_button.button_pressed = true
 	elif b == depart_button:
@@ -5000,6 +4997,7 @@ func drop_touch() -> void:
 		if b != null:
 			b.button_pressed = false
 	pressing = false
+	press_ms = 0
 	aiming = false
 	aim_cancel = false
 	aim_armed = false
@@ -5047,12 +5045,17 @@ func _tick_primary(p) -> void:
 			_set_icon(aim_button, "aim", ATTACK_ICON)
 			_nudge(aim_button, 0.0)
 	if melee:
-		aim_button.button_pressed = fighting(p)
+		aim_button.button_pressed = _repeating_melee(p)
 
 
-## The player is in a one-press fight: still after someone, swinging on.
+## Still pursuing a melee order, whether it repeats or is waiting for its first blow.
 func fighting(p) -> bool:
 	return game.combat.fighting(p)
+
+
+## Only a repeating order lights the attack pad and makes a second press stop it.
+func _repeating_melee(p) -> bool:
+	return p.hold_attack and fighting(p)
 
 
 func stop_fight(p) -> void:

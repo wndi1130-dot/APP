@@ -23,14 +23,16 @@ static func load_enabled(path: String = "") -> bool:
 
 ## 같은 폴더의 임시 파일을 완성한 뒤 교체한다. 실패하면 기존 파일을 보존하고 오류를 돌려준다.
 ## 프로세스별 이름으로 다른 실행의 임시 파일을 피하며 마지막 성공한 값이 남는다.
-static func save_enabled(on: bool, path: String = "") -> Error:
+static func save_enabled(on: bool, path: String = "", write_config: Callable = Callable(),
+		replace_file: Callable = Callable()) -> Error:
 	var at: String = _at(path)
 	var temp: String = "%s.%d.%d.tmp" % [at, OS.get_process_id(), Time.get_ticks_usec()]
 	var cfg := ConfigFile.new()
 	cfg.set_value(SECTION, KEY, on)
-	var error: Error = cfg.save(temp)
+	# 호출별 파일 동작 주입: 시험도 정상 목적지 파일을 둔 채 실패 경로를 거친다.
+	var error: Error = write_config.call(cfg, temp) if write_config.is_valid() else cfg.save(temp)
 	if error == OK:
-		error = DirAccess.rename_absolute(temp, at)
+		error = replace_file.call(temp, at) if replace_file.is_valid() else DirAccess.rename_absolute(temp, at)
 	if error != OK and FileAccess.file_exists(temp):
 		var cleanup: Error = DirAccess.remove_absolute(temp)
 		if cleanup != OK:

@@ -257,9 +257,9 @@ func melee_person(p, other) -> void:
 ## Orders from the player's hand. The HUD calls these and does not write the
 ## fight state (targets, hold, goal, path) itself.
 
-## In a one-press fight: still after someone, swinging on.
+## A melee order still has a target, including a one-swing order waiting to start.
 func fighting(p) -> bool:
-	return p.hold_attack and (not p.target_zombie.is_empty() or p.target_person != null)
+	return not p.target_zombie.is_empty() or p.target_person != null
 
 
 ## Go for an enemy; hold keeps swinging.
@@ -280,7 +280,10 @@ func fight(p, target, hold: bool) -> void:
 
 ## The finger holding the swing is gone: finish this swing, then stop.
 func stop_holding(p) -> void:
-	p.hold_attack = false
+	# A repeating order ends here, without touching the blow already in strike_at.
+	# A one-swing order (hold=false) still owes its first accepted blow.
+	if p.hold_attack:
+		call_off(p)
 
 
 ## Call the fight off where you stand (a tap on open ground).
@@ -370,11 +373,12 @@ func _pursue_zombie(p, delta: float) -> void:
 		return
 	if p.swing_t > 0.0:
 		return
+	var started: bool
 	if W.is_ranged(wid) and not stomps(p, z):
-		shove(p)
+		started = shove(p)
 	else:
-		start_swing(p, z)
-	if not p.hold_attack:
+		started = start_swing(p, z)
+	if started and not p.hold_attack:
 		p.target_zombie = {}
 
 
@@ -507,9 +511,9 @@ func _pursue_person(p, delta: float) -> void:
 	p.stop()
 	p.face_point(o.position)
 	if p.swing_t <= 0.0:
-		start_swing(p, o)
+		var started: bool = start_swing(p, o)
 		# One press, one swing (decision 564), the same as a zombie target.
-		if not p.hold_attack:
+		if started and not p.hold_attack:
 			p.target_person = null
 
 
@@ -525,14 +529,13 @@ static func behind(z: Dictionary, attacker_pos: Vector3) -> bool:
 ## A melee blow starts: the weapon is drawn back for its weight's time, then
 ## it lands (swing, swing_person). `at` is a zombie's Dictionary or a person.
 ## With no melee weapon in the hand it is the old shove, at once.
-func start_swing(p, at) -> void:
+func start_swing(p, at) -> bool:
 	if p.swing_t > 0.0 or p.strike_t > 0.0 or not _hands_free_for_blow(p):
-		return
+		return false
 	# Running, the blow goes out as a shove (decision 425, as in the reference
 	# game: no swing at a run). Stopped, it is a swing again.
 	if p.is_running_now():
-		_shove_now(p)
-		return
+		return _shove_now(p)
 	var stomp_it: bool = stomps(p, at)
 	p.strike_kind = "stomp" if stomp_it else "swing"
 	if not stomp_it:
@@ -541,7 +544,7 @@ func start_swing(p, at) -> void:
 	var windup: float = (STOMP_WINDUP if stomp_it else W.melee_windup(p.weapon_id())) / float(p.mults()["swing"])
 	if windup <= 0.0:
 		_strike(p, at)
-		return
+		return true
 	p.strike_at = at
 	p.remove_meta(Pose.RECOVER_WAIT)
 	p.remove_meta(Pose.RECOVER_RELEASE)
@@ -550,6 +553,7 @@ func start_swing(p, at) -> void:
 	p.swing_t = windup
 	if not stomp_it:
 		blows[p.get_instance_id()] = {"at": game.clock.elapsed, "row": Motion.swing_row(p.weapon_id()), "mult": float(p.mults()["swing"])}
+	return true
 
 
 ## True while a melee blow or a shove holds the feet (decision 425): the body does
@@ -1017,7 +1021,11 @@ func start_shove(p) -> void:
 			return
 		var was_fighting: bool = fighting(p)
 		if was_fighting:
-			call_off(p)
+			if p.hold_attack:
+				call_off(p)
+			else:
+				# A pending one-swing approach must not resume its old walk after the shove.
+				stop_fight(p)
 		if striking(p) or (p.shove_rest_t > 0.0 and was_fighting):
 			shove_after[p.get_instance_id()] = true
 			return
@@ -1029,13 +1037,14 @@ func start_shove(p) -> void:
 
 
 ## The shove itself, drawn back first (start_shove; a blow at a run).
-func _shove_now(p) -> void:
+func _shove_now(p) -> bool:
 	if striking(p) or (p == game.player and shoving(p)) or not _hands_free_for_blow(p):
-		return
+		return false
 	blows.erase(p.get_instance_id())
 	p.shove_t = SHOVE_WINDUP / float(p.mults()["swing"])
 	p.swing_t = p.shove_t
 	game.feel.swing(p, "")
+	return true
 
 
 ## In a blow or a shove: drawn back, landing, or coming back from it.
@@ -1062,10 +1071,10 @@ func _hands_free_for_blow(p) -> bool:
 	return false
 
 
-func shove(p) -> void:
+func shove(p) -> bool:
 	# One shove per swing time: mashing the button must not stack stuns.
 	if p.swing_t > 0.0 or game.paused or not _hands_free_for_blow(p):
-		return
+		return false
 	var rng: RandomNumberGenerator = game.rng
 	var m: Dictionary = p.mults()
 	# Decision 501: one body read before this shove spends fatigue.
@@ -1104,7 +1113,7 @@ func shove(p) -> void:
 		_struck(p, p.position + forward * SHOVE_REACH, "shove", p.weapon_id(), "", "miss", -1)
 	if hit > 0 and p.grabbers.is_empty():
 		p.grab_left = 0.0
-	return
+	return true
 
 
 ## A grabbed person shoves free (player button or companion reflex).
