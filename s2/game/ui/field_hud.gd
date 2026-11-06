@@ -33,6 +33,7 @@ const LampKey = preload("res://game/ui/lamp_key.gd")
 const InventoryPane = preload("res://game/ui/inventory_pane.gd")
 const SoundRows = preload("res://game/ui/sound_rows.gd")
 const ScreenLift = preload("res://game/ui/screen_lift.gd")
+const FieldPrefs = preload("res://game/ui/field_prefs.gd")
 const TypeLine = preload("res://game/ui/type_line.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
@@ -2534,18 +2535,21 @@ func settings_panel() -> void:
 
 func _set_status_size() -> void:
 	game.opts["status_size"] = STATUS_SIZES[(STATUS_SIZES.find(status_diameter()) + 1) % STATUS_SIZES.size()]
+	FieldPrefs.keep(game, "status_size")
 	_place_status()
 	settings_panel()
 
 
 func _set_stick() -> void:
 	game.opts["stick_float"] = not stick_floats()
+	FieldPrefs.keep(game, "stick_float")
 	settings_panel()
 
 
 func _set_radio() -> void:
 	var modes: Array = game.RADIO_MODES
 	game.opts["radio"] = modes[(modes.find(game.radio_mode()) + 1) % modes.size()]
+	FieldPrefs.keep(game, "radio")
 	settings_panel()
 
 
