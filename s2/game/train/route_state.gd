@@ -8,7 +8,7 @@ const FieldReturn = preload("res://game/politics/field_return.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 ## Rule 1 derives the seed from the run using SHA-256.
 const SEED_RULE: int = 1
-const FURNISH_RULE: int = 0
+const FURNISH_RULE: int = FieldSave.FURNISH_RULE
 
 
 static func is_campaign(g: Dictionary) -> bool:
@@ -58,15 +58,7 @@ static func record_for_visit(g: Dictionary) -> Dictionary:
 
 
 static func _seed_problem(route: Dictionary, max_furnish_rule: int) -> String:
-	if route.has("world_seed") and FieldSave._int_of_text(route["world_seed"]) == null:
-		return "F-CAMPAIGN-ROUTE: world seed"
-	for key: String in ["seed_rule", "furnish_rule"]:
-		var upper: int = SEED_RULE if key == "seed_rule" else max_furnish_rule
-		if route.has(key) and (not route[key] is int or route[key] < 0 or route[key] > upper):
-			return "F-CAMPAIGN-ROUTE: " + key
-	if int(route.get("furnish_rule", 0)) >= 1 and not route.has("world_seed"):
-		return "F-CAMPAIGN-ROUTE: missing world seed"
-	return ""
+	return FieldSave.furnish_seed_problem(route, max_furnish_rule, SEED_RULE)
 
 
 static func problem(g: Dictionary, t: Dictionary = {}) -> String:

@@ -205,6 +205,62 @@ func test_invalid_side_path_rule_falls_back_to_the_previous_save() -> void:
 		assert_eq(FieldSave.read(AT), previous, str(rule))
 
 
+func test_furnish_seed_start_options_validate_whole_save() -> void:
+	var saved: Dictionary = _sample()
+	saved["start_opts"] = {"world_seed": "-9223372036854775808", "furnish_rule": 0}
+	assert_true(FieldSave._whole(saved))
+	assert_eq(FieldSave.from_json(FieldSave.to_json(saved)), saved)
+	for rule: Variant in [-1, 1, 0.5, "0", true, null, INF, NAN]:
+		var bad: Dictionary = saved.duplicate(true)
+		bad["start_opts"]["furnish_rule"] = rule
+		assert_false(FieldSave._whole(bad), "furnish_rule: %s" % str(rule))
+		assert_eq(FieldSave.from_json(FieldSave.to_json(bad)), {}, "furnish_rule: %s" % str(rule))
+	for seed: Variant in ["garbage", "", "+1", "01", "-0", "9223372036854775808", 1, 1.0]:
+		var bad: Dictionary = saved.duplicate(true)
+		bad["start_opts"]["world_seed"] = seed
+		assert_false(FieldSave._whole(bad), "world_seed: %s" % str(seed))
+		assert_eq(FieldSave.from_json(FieldSave.to_json(bad)), {}, "world_seed: %s" % str(seed))
+	var missing: Dictionary = saved.duplicate(true)
+	missing["start_opts"].erase("world_seed")
+	missing["start_opts"]["furnish_rule"] = 1
+	assert_false(FieldSave._whole(missing, 1), "supported rule 1 still requires a seed")
+	missing["start_opts"]["world_seed"] = "0"
+	assert_true(FieldSave._whole(missing, 1), "supported rule 1 with seed")
+	var integral_float: Dictionary = saved.duplicate(true)
+	integral_float["start_opts"]["furnish_rule"] = 0.0
+	assert_true(FieldSave._whole(integral_float), "legacy integral JSON number")
+
+
+func test_broken_furnish_seed_fields_fall_back_to_backup() -> void:
+	var previous: Dictionary = _sample()
+	previous["start_opts"] = {"world_seed": "-1", "furnish_rule": 0}
+	assert_true(FieldSave.write(previous, AT))
+	var current: Dictionary = previous.duplicate(true)
+	current["clock"]["elapsed"] = 99.0
+	assert_true(FieldSave.write(current, AT))
+	for invalid_opts: Dictionary in [{"world_seed": "-1", "furnish_rule": 1},
+			{"world_seed": "garbage", "furnish_rule": 0}]:
+		current["start_opts"] = invalid_opts
+		var file := FileAccess.open(AT, FileAccess.WRITE)
+		assert_not_null(file)
+		if file == null:
+			return
+		file.store_string(FieldSave.to_json(current))
+		file.close()
+		assert_eq(FieldSave.from_json(FieldSave.to_json(current)), {})
+		assert_eq(FieldSave.read(AT), previous)
+
+
+func test_legacy_field_save_without_furnish_seed_options_reads() -> void:
+	var old: Dictionary = _sample()
+	assert_true(FieldSave._whole(old))
+	assert_true(FieldSave.write(old, AT))
+	assert_eq(FieldSave.read(AT), old)
+	old["start_opts"] = {}
+	assert_true(FieldSave._whole(old))
+	assert_eq(FieldSave.from_json(FieldSave.to_json(old)), old)
+
+
 func test_invalid_bounds_rule_falls_back_to_the_previous_save() -> void:
 	var previous: Dictionary = _sample()
 	previous["bounds_rule"] = 1
