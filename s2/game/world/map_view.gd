@@ -1609,7 +1609,14 @@ static func train_heading(d: Dictionary) -> float:
 ## trees in town. The cells and their solids stay as they are; with no model a tree is
 ## the grey trunk and box crown as before. Each model is made on a one-cell footprint,
 ## so its crown is widened by its spread, as the woods past the edge (edge_band.gd).
-const TREE_SPRUCE := "res://models/props_field/spruce.glb"
+const TREE_SPRUCE := "spruce_group"
+const TREE_ROUND := "res://models/props_field/spruce_round.glb"
+const TREE_ROUND_SNOW := "res://models/props_field/spruce_round_snow.glb"
+const TREE_MID := "res://models/props_field/spruce_mid.glb"
+const TREE_MID_SNOW := "res://models/props_field/spruce_mid_snow.glb"
+const TREE_YOUNG := "res://models/props_field/spruce_young.glb"
+const TREE_YOUNG_SNOW := "res://models/props_field/spruce_young_snow.glb"
+const TREE_SPRUCES: Array[String] = [TREE_ROUND, TREE_ROUND_SNOW, TREE_MID, TREE_MID_SNOW, TREE_YOUNG, TREE_YOUNG_SNOW]
 const TREE_BARE := "res://models/props_common/bare_tree.glb"
 const TREE_WILLOW := "res://models/props_field/bare_willow.glb"
 const TREE_STREET := "res://models/props_field/street_tree.glb"
@@ -1624,7 +1631,10 @@ const TREE_MIX: Dictionary = {
 }
 ## Height range (m) and crown spread of each model.
 const TREE_SIZE: Dictionary = {
-	TREE_SPRUCE: [4.0, 6.0, 1.7], TREE_BARE: [4.5, 6.5, 1.8], TREE_WILLOW: [4.0, 5.5, 1.8],
+	TREE_ROUND: [4.8, 6.6, 1.0], TREE_ROUND_SNOW: [4.8, 6.6, 1.0],
+	TREE_MID: [6.0, 8.0, 1.0], TREE_MID_SNOW: [6.0, 8.0, 1.0],
+	TREE_YOUNG: [1.8, 3.4, 1.0], TREE_YOUNG_SNOW: [1.8, 3.4, 1.0],
+	TREE_BARE: [4.5, 6.5, 1.8], TREE_WILLOW: [4.0, 5.5, 1.8],
 	TREE_STREET: [4.5, 6.0, 1.8], TREE_ORCHARD: [2.6, 3.6, 1.8],
 }
 ## Tree models go in pieces this many cells a side, fewer than the ground's tiles.
@@ -1646,6 +1656,9 @@ static func tree_plant(place_id: String, c: Vector2i, force_model: String = "") 
 			break
 	if not force_model.is_empty():
 		model = force_model
+	if model == TREE_SPRUCE:
+		var variant := posmod(hash("%s:tree-variant:%d:%d" % [place_id, c.x, c.y]), TREE_SPRUCES.size())
+		model = TREE_SPRUCES[variant]
 	var size: Array = TREE_SIZE[model]
 	var at := FieldGrid.center(c) + Vector3(rng.randf_range(-0.2, 0.2), 0, rng.randf_range(-0.2, 0.2))
 	return {"model": model, "at": at, "yaw": rng.randf() * TAU, "height": rng.randf_range(size[0], size[1]), "spread": float(size[2])}

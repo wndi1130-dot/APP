@@ -70,7 +70,17 @@ const SHADE_DEPTH: float = 1.2
 ## tall), too thin for a crown: SPREAD widens it across so neighbouring crowns meet
 ## and the woods read as one mass from the tilted camera (user 10-28). Spruce is the
 ## body of the woods; the leafless broadleaf is mixed in (user 10-28).
-const SPRUCE := "res://models/props_field/spruce.glb"
+const SPRUCE_TALL := "res://models/props_field/spruce_tall.glb"
+const SPRUCE_TALL_SNOW := "res://models/props_field/spruce_tall_snow.glb"
+const SPRUCE_MID := "res://models/props_field/spruce_mid.glb"
+const SPRUCE_ROUND := "res://models/props_field/spruce_round.glb"
+const SPRUCE_YOUNG := "res://models/props_field/spruce_young.glb"
+const SPRUCE_YOUNG_SNOW := "res://models/props_field/spruce_young_snow.glb"
+const SPRUCE_FAR := "res://models/props_field/spruce_far.glb"
+const SPRUCE := SPRUCE_TALL
+const BIRCH := "res://models/props_field/birch_bare.glb"
+const SNOW_EDGE: float = 0.3
+const SNOW_INNER: float = 0.6
 const BROADLEAF := "res://models/props_common/bare_tree.glb"
 const ORCHARD := "res://models/props_field/bare_orchard_tree.glb"
 const STREET := "res://models/props_field/street_tree.glb"
@@ -204,7 +214,7 @@ static func look_of(data: Dictionary) -> Dictionary:
 	if profile != "town":
 		var wood := float(band["conifer"]) + float(band["birch"])
 		conifer = maxf(least, float(band["conifer"]) / maxf(wood, 0.01))
-	return {"profile": profile, "conifer": conifer, "forest": float(band["forest"])}
+	return {"profile": profile, "conifer": conifer, "birch": clampf(float(band["birch"]), 0.0, 1.0), "forest": float(band["forest"])}
 
 
 ## Everything plan() reads: of the map only its size and where roads and rails cross
@@ -442,7 +452,7 @@ static func _scatter_forest(g: FieldGrid, rng: RandomNumberGenerator, clear: Arr
 			var d: float = woods_depth(g, forest, px, pz, borders)
 			var start: float = near if near > TRUNK_GAP else _edge_start(px, pz, rng.seed)
 			if _forest_origin(g, forest, px, pz) and d >= start and d < far and not _in_any(clear, px, pz):
-				var item := _pick(layer, look, d, roll, pick, size)
+				var item := _pick(layer, look, d, roll, pick, size, "%s:%s:%s:%s" % [rng.seed, layer, px, pz])
 				if not item.is_empty():
 					if layer == "canopy" and near >= BAND:
 						item["height"] = lerpf(lerpf(CANOPY_TALL.x, CANOPY_TALL.y, 0.75), CANOPY_TALL.y, size)
@@ -556,7 +566,11 @@ static func _far_plan(g: FieldGrid, seed: int, runs: Array, look: Dictionary) ->
 				if String(look["profile"]) == "town":
 					_far_prop(scenery, at, side, FAR_TREES[rng.randi_range(0, FAR_TREES.size() - 1)], rng)
 				else:
-					_far_tree(scenery, at, side, SPRUCE if rng.randf() < float(look["conifer"]) else BROADLEAF, rng)
+					var pick := rng.randf()
+					var model := _wood_model(look, pick)
+					if is_spruce(model):
+						model = _spruce_model(BAND, FAR_WOODS_TALL.y, str(at) + str(rng.seed))
+					_far_tree(scenery, at, side, model, rng)
 		for model: String in [FAR_BUSH, FAR_ROCK, FAR_POLE]:
 			var wanted := rng.randi_range(0, 2) if model == FAR_POLE else rng.randi_range(1, 3)
 			for _piece in wanted:
@@ -630,8 +644,10 @@ static func _far_woods(g: FieldGrid, seed: int, corridors: Array[Rect2], plots: 
 					continue
 				if not _far_empty(g, at, 1.2, corridors) or _near_house(houses, at, 7.0) or _on_plot(plots, at, 1.5):
 					continue
-				var model := SPRUCE if pick < float(look["conifer"]) else BROADLEAF
-				out.append({"at": at, "yaw": yaw, "height": lerpf(FAR_WOODS_TALL.x, FAR_WOODS_TALL.y, size), "spread": SPREAD[model],
+				var model := _wood_model(look, pick)
+				if is_spruce(model):
+					model = _spruce_model(BAND, FAR_WOODS_TALL.y, str(at) + str(rng.seed))
+				out.append({"at": at, "yaw": yaw, "height": lerpf(FAR_WOODS_TALL.x, FAR_WOODS_TALL.y, size), "spread": _spread(model),
 					"model": model, "side": _side_of(g, at)})
 			z += spacing
 	return out
@@ -726,7 +742,7 @@ static func _far_prop(scenery: Array[Dictionary], at: Vector3, side: int, model:
 ## A tree of the woods out there, by height and crown (SPREAD), from two draws like _far_prop.
 static func _far_tree(scenery: Array[Dictionary], at: Vector3, side: int, model: String, rng: RandomNumberGenerator) -> void:
 	var tall := rng.randf_range(FAR_WOODS_TALL.x, FAR_WOODS_TALL.y)
-	scenery.append({"at": at, "yaw": rng.randf_range(0.0, TAU), "height": tall, "spread": SPREAD[model], "model": model, "side": side})
+	scenery.append({"at": at, "yaw": rng.randf_range(0.0, TAU), "height": tall, "spread": _spread(model), "model": model, "side": side})
 
 
 ## Axis-aligned plots and a few low snow banks; leave gaps between the plots.
@@ -890,7 +906,7 @@ static func _scatter(g: FieldGrid, rng: RandomNumberGenerator, clear: Array[Rect
 			var d := outside(g, px, pz)
 			var start := near if near > TRUNK_GAP else _edge_start(px, pz, rng.seed)
 			if d >= start and d < far and not _in_any(clear, px, pz):
-				var item := _pick(layer, look, d, roll, pick, size)
+				var item := _pick(layer, look, d, roll, pick, size, "%s:%s:%s:%s" % [rng.seed, layer, px, pz])
 				if not item.is_empty():
 					item["at"] = Vector3(px, 0, pz)
 					item["yaw"] = yaw
@@ -901,7 +917,7 @@ static func _scatter(g: FieldGrid, rng: RandomNumberGenerator, clear: Array[Rect
 
 ## What a layer grows at `d` metres out: {} (the point stays empty, `roll`), else
 ## {model, height, spread} for a tree or {model, scale} for what grows low.
-static func _pick(layer: String, look: Dictionary, d: float, roll: float, pick: float, size: float) -> Dictionary:
+static func _pick(layer: String, look: Dictionary, d: float, roll: float, pick: float, size: float, key: String = "") -> Dictionary:
 	var name := String(look["profile"])
 	var profile: Dictionary = PROFILES[name]
 	match layer:
@@ -910,7 +926,7 @@ static func _pick(layer: String, look: Dictionary, d: float, roll: float, pick: 
 				return {}
 			var young := float(profile["young"])
 			if pick < young:
-				return _tree(SPRUCE, lerpf(YOUNG_TALL.x, YOUNG_TALL.y, size))
+				return _tree(_spruce_model(0.0, YOUNG_TALL.x, key), lerpf(YOUNG_TALL.x, YOUNG_TALL.y, size))
 			var bush := THICKET if name != "town" or (pick - young) / (1.0 - young) < 0.4 else FAR_BUSH
 			return {"model": bush, "scale": lerpf(0.7, 1.2, size)}
 		"canopy":
@@ -918,10 +934,10 @@ static func _pick(layer: String, look: Dictionary, d: float, roll: float, pick: 
 				return {}
 			var tall := lerpf(CANOPY_TALL.x, CANOPY_TALL.y, clampf((d - INNER_ROW) / CANOPY_RAMP, 0.0, 1.0)) * lerpf(0.7, 1.0, size)
 			var conifer := float(look["conifer"])
-			if pick < conifer:
-				return _tree(SPRUCE, tall)
+			if pick < conifer or conifer >= 1.0:
+				return _tree(_spruce_model(minf(d, BAND - 0.001), tall, key), tall)
 			if name != "town":
-				return _tree(BROADLEAF, tall)
+				return _tree(_wood_model(look, pick), tall)
 			var other := _weighted(TOWN_TREES, (pick - conifer) / (1.0 - conifer))
 			return _tree(other, tall * (0.55 if other == ORCHARD else 0.85))
 	if roll < float(profile["under_skip"]):
@@ -929,8 +945,40 @@ static func _pick(layer: String, look: Dictionary, d: float, roll: float, pick: 
 	return {"model": _weighted(UNDER[name], pick), "scale": lerpf(0.8, 1.3, size)}
 
 
+## Reuse the conifer draw to divide the remaining broadleaf share.
+static func _wood_model(look: Dictionary, pick: float) -> String:
+	var conifer := clampf(float(look["conifer"]), 0.0, 1.0)
+	if pick < conifer or conifer >= 1.0:
+		return SPRUCE_TALL
+	var t := (pick - conifer) / (1.0 - conifer)
+	return BIRCH if t < clampf(float(look.get("birch", 0.0)), 0.0, 1.0) else BROADLEAF
+
+
+static func is_spruce(model: String) -> bool:
+	return model.begins_with("res://models/props_field/spruce_") and model.ends_with(".glb")
+
+
+static func _spread(model: String) -> float:
+	return 1.0 if is_spruce(model) or model == BIRCH else float(SPREAD[model])
+
+
+## Model variation uses a separate hash, never the placement generator.
+static func _spruce_model(depth: float, height: float, key: String) -> String:
+	var model := SPRUCE_TALL
+	if depth < INNER_ROW:
+		model = SPRUCE_YOUNG
+	elif depth >= BAND:
+		model = SPRUCE_FAR
+	elif height <= 5.0:
+		model = SPRUCE_ROUND if posmod(hash(key + ":shape"), 2) == 0 else SPRUCE_MID
+	var snow_share := lerpf(SNOW_EDGE, SNOW_INNER, clampf(depth / (INNER_ROW + CANOPY_RAMP), 0.0, 1.0))
+	if float(posmod(hash(key + ":snow"), 10000)) / 10000.0 < snow_share:
+		model = model.trim_suffix(".glb") + "_snow.glb"
+	return model
+
+
 static func _tree(model: String, tall: float) -> Dictionary:
-	return {"model": model, "height": tall, "spread": SPREAD[model]}
+	return {"model": model, "height": tall, "spread": _spread(model)}
 
 
 ## The model whose share of the weights `t` (0~1) falls in.
@@ -1029,7 +1077,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 		if not meshes.has(model):
 			meshes[model] = _model_mesh(model)
 		var shade := woods_depth(g, forest, at.x, at.z, borders) <= SHADE_DEPTH
-		if meshes[model] != null and not (model == SPRUCE and shade):
+		if meshes[model] != null and not (is_spruce(model) and shade):
 			with_far.append(t)
 			continue
 		if meshes[model] == null and not t.has("height"):
@@ -1067,7 +1115,7 @@ static func build(parent: Node3D, g: FieldGrid, data: Dictionary, material: Mate
 			mi.mesh = st.commit()
 			mi.material_override = material
 			node = mi
-		var label := "Trees" if model == SPRUCE else model.get_file().get_basename()
+		var label := "Trees" if is_spruce(model) else model.get_file().get_basename()
 		node.name = "%s_%s_%s_%s" % [label, parts[1], parts[2], parts[3]]
 		if parts[3] == "1":
 			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

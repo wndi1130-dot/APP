@@ -26,7 +26,8 @@ func test_the_place_picks_its_trees() -> void:
 		var counts := {}
 		for i in 400:
 			var model := String(MapView.tree_plant(place, Vector2i(i % 20, floori(i / 20.0)))["model"])
-			counts[model] = int(counts.get(model, 0)) + 1
+			var group := MapView.TREE_SPRUCE if MapView.TREE_SPRUCES.has(model) else model
+			counts[group] = int(counts.get(group, 0)) + 1
 		shares[place] = counts
 	for place: String in ["bare_line_01", "sawmill_02"]:
 		assert_gt(int((shares[place] as Dictionary).get(MapView.TREE_SPRUCE, 0)), 240, "spruce first in the woods (%s)" % place)
@@ -69,10 +70,10 @@ func test_forced_spruce_keeps_the_cell_seed_and_uses_its_own_size() -> void:
 		var mixed := MapView.tree_plant("houses_01", c)
 		var spruce := MapView.tree_plant("houses_01", c, MapView.TREE_SPRUCE)
 		assert_eq(spruce, MapView.tree_plant("houses_01", c, MapView.TREE_SPRUCE))
-		assert_eq(spruce["model"], MapView.TREE_SPRUCE)
+		assert_true(MapView.TREE_SPRUCES.has(spruce["model"]))
 		assert_eq(spruce["at"], mixed["at"], "the same seed draws still place the tree within its cell")
 		assert_eq(spruce["yaw"], mixed["yaw"])
-		var size: Array = MapView.TREE_SIZE[MapView.TREE_SPRUCE]
+		var size: Array = MapView.TREE_SIZE[spruce["model"]]
 		assert_between(float(spruce["height"]), float(size[0]), float(size[1]))
 		assert_eq(float(spruce["spread"]), float(size[2]))
 
@@ -98,3 +99,29 @@ func test_deep_forest_tree_cells_build_always_visible_spruce_in_a_town() -> void
 	assert_eq(planted, cells.size())
 	for c: Vector2i in cells:
 		assert_false(view.modelled_prop_cells.has(c), "forest rows never enter the prop exclusion set")
+
+
+func test_spruce_group_has_six_existing_models_and_preserves_the_original_pick() -> void:
+	var seen := {}
+	for path: String in MapView.TREE_SPRUCES:
+		assert_true(FileAccess.file_exists(path), path)
+	for place: String in ["bare_line_01", "lake_03", "houses_01", "factory_01"]:
+		var mix: Array = MapView.TREE_MIX.get(MapView.BuildingUses.region_of(place), MapView.TREE_MIX["rail_works"])
+		for i: int in 2000:
+			var cell := Vector2i(i % 100, floori(i / 100.0))
+			var rng := RandomNumberGenerator.new()
+			rng.seed = hash("%s:tree:%d:%d" % [place, cell.x, cell.y])
+			var pick := rng.randf()
+			var old_model: String = mix[-1][0]
+			for row: Array in mix:
+				pick -= float(row[1])
+				if pick < 0.0:
+					old_model = row[0]
+					break
+			var plant := MapView.tree_plant(place, cell)
+			var model := String(plant["model"])
+			assert_eq(MapView.TREE_SPRUCES.has(model), old_model == MapView.TREE_SPRUCE)
+			assert_eq(plant, MapView.tree_plant(place, cell))
+			if MapView.TREE_SPRUCES.has(model):
+				seen[model] = true
+	assert_eq(seen.size(), 6)

@@ -451,10 +451,10 @@ func test_forest_stops_grow_dense_spruce_woods_and_towns_thin_fruit_and_street_t
 			by_model[model] = int(by_model.get(model, 0)) + 1
 			if t.has("height"):
 				tall += 1
-				spruce += 1 if model == EdgeBand.SPRUCE else 0
+				spruce += 1 if EdgeBand.is_spruce(model) else 0
 				if EdgeBand.outside(g, at.x, at.z) < EdgeBand.INNER_ROW:
 					assert_lte(float(t["height"]), EdgeBand.YOUNG_TALL.y, "the first rows stay low (%s)" % place)
-					assert_eq(model, EdgeBand.SPRUCE, "only young spruce among the first rows' trees")
+					assert_true(model in [EdgeBand.SPRUCE_YOUNG, EdgeBand.SPRUCE_YOUNG_SNOW], "only young spruce among the first rows' trees")
 			else:
 				assert_true(t.has("scale"), "what grows low has a scale")
 		counts[place] = (w["plan"]["trees"] as Array).size()
@@ -474,14 +474,14 @@ func test_deep_spruce_crowns_meet_and_the_woods_go_on_past_the_band() -> void:
 	var w := _woods("lodge_01", 9)
 	var g: FieldGrid = w["g"]
 	# The crowns need the model's own width; the rest is the plan's and runs without it.
-	var mesh := EdgeBand._model_mesh(EdgeBand.SPRUCE)
+	var mesh := EdgeBand._model_mesh(EdgeBand.SPRUCE_TALL)
 	if mesh != null:
 		var across := mesh.get_aabb().size.x / mesh.get_aabb().size.y
 		var deep := 0
 		var narrow := 0
 		for t: Dictionary in w["plan"]["trees"]:
 			var at: Vector3 = t["at"]
-			if String(t["model"]) == EdgeBand.SPRUCE and EdgeBand.outside(g, at.x, at.z) > EdgeBand.INNER_ROW + EdgeBand.CANOPY_RAMP:
+			if String(t["model"]) in [EdgeBand.SPRUCE_TALL, EdgeBand.SPRUCE_TALL_SNOW] and EdgeBand.outside(g, at.x, at.z) > EdgeBand.INNER_ROW + EdgeBand.CANOPY_RAMP:
 				deep += 1
 				if float(t["height"]) * float(t["spread"]) * across <= float(EdgeBand.PROFILES["dense"]["canopy"]):
 					narrow += 1
@@ -785,3 +785,69 @@ func test_fell_groves_ignore_skipped_and_inside_forest_trees() -> void:
 				tree["skip"] = true
 			trees.append(tree)
 	assert_eq(EdgeBand.fell_groves(g, {"trees": trees}, {"grid": g}), [], "neither hidden exterior entries nor new interior trees become work spots")
+
+
+func test_spruce_variants_and_birch_shares() -> void:
+	var seen := {}
+	for region: String in ["K1", "K2", "K4", "K6", "K9", "K12"]:
+		var look := EdgeBand.look_of({"place_id": "sawmill_01", "region_band": region})
+		var conifers := 0
+		var birches := 0
+		var others := 0
+		for i: int in 10000:
+			var pick := (float(i) + 0.5) / 10000.0
+			var tree := EdgeBand._pick("canopy", look, 4.0, 0.99, pick, 0.5, str(i))
+			assert_eq(tree, EdgeBand._pick("canopy", look, 4.0, 0.99, pick, 0.5, str(i)))
+			var model := String(tree["model"])
+			if EdgeBand.is_spruce(model):
+				conifers += 1
+			elif model == EdgeBand.BIRCH:
+				birches += 1
+			else:
+				assert_eq(model, EdgeBand.BROADLEAF)
+				others += 1
+			var far := EdgeBand._wood_model(look, pick)
+			assert_eq(far == EdgeBand.BIRCH, model == EdgeBand.BIRCH)
+		assert_almost_eq(float(conifers) / 10000.0, float(look["conifer"]), 0.02)
+		assert_gt(birches, 0)
+		assert_almost_eq(float(birches) / float(birches + others), float(look["birch"]), 0.05)
+	for depth: float in [1.0, 3.0, 7.0, 20.0]:
+		for i: int in 200:
+			var model := EdgeBand._spruce_model(depth, 4.0 if depth < 5.0 else 8.0, str(i))
+			seen[model] = true
+			assert_true(FileAccess.file_exists(model), model)
+	assert_gte(seen.size(), 5)
+	assert_eq(EdgeBand._wood_model({"conifer": 1.0, "birch": 0.4}, 1.0), EdgeBand.SPRUCE_TALL)
+	assert_true(FileAccess.file_exists(EdgeBand.BIRCH))
+
+
+func test_actual_plans_keep_conifer_and_birch_shares() -> void:
+	var look := EdgeBand.look_of({"place_id": "sawmill_01", "region_band": "K6"})
+	var counts := [[0, 0, 0], [0, 0, 0]]
+	for seed: int in range(10):
+		var woods := _woods("sawmill_01", seed, "K6")
+		var grid: FieldGrid = woods["g"]
+		var plan: Dictionary = woods["plan"]
+		if seed == 0:
+			assert_eq(plan, EdgeBand.plan(grid, seed, look))
+		for item: Dictionary in plan["trees"]:
+			var at: Vector3 = item["at"]
+			if item.has("height") and EdgeBand.outside(grid, at.x, at.z) >= EdgeBand.INNER_ROW:
+				_count_wood_model(counts[0], String(item["model"]))
+		for item: Dictionary in plan["far"]:
+			if item.has("height"):
+				_count_wood_model(counts[1], String(item["model"]))
+	for row: Array in counts:
+		var total := int(row[0]) + int(row[1]) + int(row[2])
+		assert_gt(total, 1000)
+		assert_almost_eq(float(row[0]) / float(total), float(look["conifer"]), 0.02)
+		assert_almost_eq(float(row[1]) / float(int(row[1]) + int(row[2])), float(look["birch"]), 0.05)
+
+
+func _count_wood_model(counts: Array, model: String) -> void:
+	if EdgeBand.is_spruce(model):
+		counts[0] += 1
+	elif model == EdgeBand.BIRCH:
+		counts[1] += 1
+	elif model == EdgeBand.BROADLEAF:
+		counts[2] += 1
