@@ -413,14 +413,22 @@ static func tell_k(z: Dictionary) -> float:
 	return clampf(1.0 - float(z["t"]) / LungerRules.TELL, 0.0, 1.0)
 
 
-## Which way a body goes over: struck from behind on its face, otherwise on
-## its back, and half of the dead (by their own number, so always the same)
-## the other way of each when the folder in use has it (decision 412: thrown
-## over stiffly, or slumping limp). Both lie at the end as the first does.
+## The cause picks within the already chosen side (decision 412). Old records
+## have no cause and keep their hash. Both variants end in the same lying pose.
 static func fall_motion(z: Dictionary, front: bool) -> int:
-	var other := FALL_SLUMP if front else FALL_THROWN
-	if other < table.size() and fposmod(float(z["phase"]) * 5.17, 1.0) < 0.5:
-		return other
+	var chosen := fall_variant(String(z.get("fall_by", DeadPose.FALL_OTHER)), front, float(z["phase"]))
+	return chosen if chosen < table.size() else (FALL_FRONT if front else FALL)
+
+
+## Pure choice: no folder, clock or random stream is read here.
+static func fall_variant(by: String, front: bool, phase: float) -> int:
+	match by:
+		DeadPose.FALL_SHOVE, DeadPose.FALL_STAB:
+			return FALL_FRONT if front else FALL_THROWN
+		DeadPose.FALL_AXE_TOP:
+			return FALL_SLUMP if front else FALL
+	if fposmod(phase * 5.17, 1.0) < 0.5:
+		return FALL_SLUMP if front else FALL_THROWN
 	return FALL_FRONT if front else FALL
 
 

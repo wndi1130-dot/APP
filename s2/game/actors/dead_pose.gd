@@ -7,6 +7,11 @@ extends RefCounted
 
 const Motion = preload("res://game/sim/motion.gd")
 
+const FALL_OTHER: String = "other"
+const FALL_SHOVE: String = "shove"
+const FALL_AXE_TOP: String = "axe_top"
+const FALL_STAB: String = "stab"
+
 const SIT: float = 0.55              # getting up: this far down when it has its hands under it
 const STRIKER_REACH: float = 2.6     # someone this close is taken to be the one who struck it
 const STOOP_MAX: float = 0.22        # the most a body leans forward as it stands (radians)
@@ -34,11 +39,13 @@ const CRAWL_BACK: float = 1.3       # a body crawling out of a culvert's mouth s
 ## fall is drawn. A body already on the ground, or one that crawls, has no fall.
 ## It goes over away from whoever is close enough to have struck it: on its
 ## back with them in front of it, on its face with them behind it.
-static func mark_fall(z: Dictionary, people: Array = []) -> void:
+## The caller supplies the cause; restore callers keep the other/hash default.
+static func mark_fall(z: Dictionary, people: Array = [], by: String = FALL_OTHER) -> void:
 	if z["crawl"] or z["state"] in ["dead", "downed", "rising", "frozen", "waking"]:
 		return
 	z["fell_at"] = z["age"]
 	z["fell_fwd"] = struck_from_behind(z, people)
+	z["fall_by"] = by
 
 
 static func struck_from_behind(z: Dictionary, people: Array) -> bool:

@@ -523,7 +523,7 @@ func update(delta: float) -> void:
 			if z["fall_in"] <= 0.0:
 				z.erase("fall_in")
 				if z["state"] == "chase":
-					knock_down(z)
+					_knock_down(z, DeadPose.FALL_SHOVE)
 		if z.has("dash_t"):
 			_run_down(z, delta)
 		match z["state"]:
@@ -1204,7 +1204,7 @@ func release(z: Dictionary, push_from: Vector3, knock: bool) -> void:
 		z["stun"] = maxf(float(z["stun"]), SHOVED_TIME)
 		z["fall_in"] = SHOVED_TIME
 	elif knock:
-		knock_down(z)
+		_knock_down(z, DeadPose.FALL_SHOVE)
 	else:
 		if z["state"] == "tell":
 			z["spent_t"] = LungerRules.SPENT   # shoved out of its tell, it does not run
@@ -1265,12 +1265,30 @@ func draw_pos(z: Dictionary) -> Vector3:
 	return from.lerp(z["pos"], k)
 
 
+## field_combat stamps hit_at with age as melee lands. Older hits must not
+## choose a later gunshot's fall, even while the body still reels from a shove.
+static func fall_by_hit(z: Dictionary) -> String:
+	if not z.has("hit_at") or not z.has("age") or float(z["hit_at"]) != float(z["age"]):
+		return DeadPose.FALL_OTHER
+	match String(z.get("hit_way", "")):
+		"p_swing_axe":
+			return DeadPose.FALL_AXE_TOP
+		"p_stab":
+			return DeadPose.FALL_STAB
+	return DeadPose.FALL_OTHER
+
+
+## Keep the public call's signature; a shove supplies its cause to the same body below.
 func knock_down(z: Dictionary) -> void:
+	_knock_down(z, fall_by_hit(z))
+
+
+func _knock_down(z: Dictionary, by: String) -> void:
 	# Knocked off its victim: the victim is let go, or the grab still bites.
 	if z["state"] == "grab" and z["victim"] != null:
 		z["victim"].release_grab(z)
 		GrabRules.mark_released(z["victim"], game.clock.elapsed)
-	DeadPose.mark_fall(z, _people)
+	DeadPose.mark_fall(z, _people, by)
 	if float(z.get("dash_t", 0.0)) > 0.0:
 		_end_dash(z)
 	z["state"] = "downed"
@@ -1283,7 +1301,7 @@ func kill(z: Dictionary) -> void:
 	if z["state"] == "grab" and z["victim"] != null:
 		z["victim"].release_grab(z)
 		GrabRules.mark_released(z["victim"], game.clock.elapsed)
-	DeadPose.mark_fall(z, _people)
+	DeadPose.mark_fall(z, _people, fall_by_hit(z))
 	z["state"] = "dead"
 	z["victim"] = null
 	_roll_loot(z)
