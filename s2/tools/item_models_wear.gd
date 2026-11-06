@@ -843,33 +843,17 @@ static func _gloves(root: Node3D, colour: Color, recipe: Dictionary) -> void:
 
 static func _hat(root: Node3D, colour: Color, recipe: Dictionary) -> void:
 	const LAYOUT: Dictionary = {
-		"cap_radius": 0.125, "cap_height": 0.24, "cap_bottom": 0.025,
-		"cap_band_size": Vector3(0.25, 0.03, 0.22), "brim_size": Vector3(0.265, 0.026, 0.175), "brim_at": Vector2(0, 0.125), "brim_bottom": 0.005,
-		"check_size": Vector2(0.18, 0.07), "check_top": 0.11, "check_bottom": 0.028, "button_radius": 0.014,
 		"crown_size": Vector3(0.24, 0.16, 0.22), "crown_bottom": 0.015,
 		"fold_radius": 0.1265, "fold_height": 0.06, "fold_z": 0.008, "fold_stretch": 0.91,
 		"rib_radius": 0.007, "rib_height": 0.048, "rib_bottom": 0.006, "rib_count": 16,
 		"pompom_size": Vector3(0.057, 0.057, 0.057), "pompom_at": Vector2(0, -0.012), "pompom_bottom": 0.166,
-		"fur_size": Vector3(0.21, 0.024, 0.045), "fur_at": Vector2(0, 0.092), "fur_bottom": 0.025,
-		"ear_top": Vector2(0.116, 0.015), "ear_end": Vector2(0.13, 0.145), "ear_width": 0.069, "ear_depth": 0.027,
-		"tie_end": Vector2(0.106, 0.235), "tie_bottom": 0.007,
 	}
 	var style: String = String(recipe["style"])
 	if style == "cap":
-		var crown: SphereMesh = SphereMesh.new()
-		crown.radius = float(LAYOUT["cap_radius"])
-		crown.height = float(LAYOUT["cap_height"])
-		crown.is_hemisphere = true
-		crown.radial_segments = RADIAL_SEGMENTS
-		crown.rings = SPHERE_RINGS
-		var crown_bounds: AABB = crown.get_aabb()
-		var crown_y: float = float(LAYOUT["cap_bottom"]) - crown_bounds.position.y
-		Models._part(root, crown, colour, Vector3(0, crown_y, 0))
-		_oval(root, _shade(colour, -0.09), LAYOUT["cap_band_size"], Vector2.ZERO)
-		_oval(root, colour, LAYOUT["brim_size"], LAYOUT["brim_at"], float(LAYOUT["brim_bottom"]))
-		var check_size: Vector2 = LAYOUT["check_size"]
-		_checks(root, colour, check_size.x, check_size.y, float(LAYOUT["check_top"]), float(LAYOUT["check_bottom"]))
-		_disc(root, _shade(colour, 0.13), Vector2.ZERO, float(LAYOUT["cap_bottom"]) + crown_bounds.size.y, float(LAYOUT["button_radius"]))
+		_brim_cap(root, colour)
+		return
+	if style == "earflap":
+		_earflap_hat(root, colour)
 		return
 	_oval(root, colour, LAYOUT["crown_size"], Vector2.ZERO, float(LAYOUT["crown_bottom"]))
 	if style == "knit":
@@ -891,14 +875,143 @@ static func _hat(root: Node3D, colour: Color, recipe: Dictionary) -> void:
 			Models._part(root, rib, _shade(colour, 0.09), Vector3(cos(angle) * fold.top_radius,
 				float(LAYOUT["rib_bottom"]) + rib.height * 0.5, float(LAYOUT["fold_z"]) + sin(angle) * fold.top_radius * float(LAYOUT["fold_stretch"])))
 		_oval(root, _shade(colour, 0.16), LAYOUT["pompom_size"], LAYOUT["pompom_at"], float(LAYOUT["pompom_bottom"]))
-	else:
-		_box(root, FUR_COLOUR, LAYOUT["fur_size"], LAYOUT["fur_at"], float(LAYOUT["fur_bottom"]))
-		var ear_top: Vector2 = LAYOUT["ear_top"]
-		var ear_end: Vector2 = LAYOUT["ear_end"]
-		var tie_end: Vector2 = LAYOUT["tie_end"]
-		for side: float in SIDES:
-			_stroke(root, colour, Vector2(side * ear_top.x, ear_top.y), Vector2(side * ear_end.x, ear_end.y), float(LAYOUT["ear_width"]), float(LAYOUT["ear_depth"]))
-			_stroke(root, _shade(colour, 0.12), Vector2(side * ear_end.x, ear_end.y), Vector2(side * tie_end.x, tie_end.y), DETAIL_WIDTH, DETAIL_DEPTH, float(LAYOUT["tie_bottom"]))
+
+
+## 두 모자의 반구만 실제 AABB에 맞춰 지정한 높이로 누른다.
+## 반구 기본 자원의 높이와 지름을 혼동해 머리 덮개가 길어지지 않게 한다.
+static func _hat_dome(parent: Node3D, colour: Color, size: Vector3, bottom: float) -> void:
+	var mesh: SphereMesh = SphereMesh.new()
+	mesh.radius = 0.5
+	mesh.height = 1.0
+	mesh.is_hemisphere = true
+	mesh.radial_segments = RADIAL_SEGMENTS
+	mesh.rings = SPHERE_RINGS
+	var bounds: AABB = mesh.get_aabb()
+	var instance: MeshInstance3D = Models._part(parent, mesh, colour, Vector3.ZERO)
+	instance.scale = size / bounds.size
+	instance.position.y = bottom - bounds.position.y * instance.scale.y
+
+
+## 세로로 매달린 판. 캡슐의 둥근 아래쪽과 얇은 앞뒷면을 유지한다.
+static func _hat_panel(parent: Node3D, colour: Color, size: Vector3, centre: Vector3) -> void:
+	var mesh: CapsuleMesh = CapsuleMesh.new()
+	mesh.radius = size.x * 0.5
+	mesh.height = size.y
+	mesh.radial_segments = RADIAL_SEGMENTS
+	mesh.rings = CAPSULE_RINGS
+	var instance: MeshInstance3D = Models._part(parent, mesh, colour, centre)
+	instance.scale.z = size.z / size.x
+
+
+## 입체 곡면의 봉제선과 아래로 늘어진 끈을 같은 둥근 선으로 잇는다.
+static func _hat_seam(parent: Node3D, colour: Color, start: Vector3, finish: Vector3, width: float) -> void:
+	var delta: Vector3 = finish - start
+	var mesh: CapsuleMesh = CapsuleMesh.new()
+	mesh.radius = width * 0.5
+	mesh.height = delta.length() + width
+	mesh.radial_segments = RADIAL_SEGMENTS
+	mesh.rings = CAPSULE_RINGS
+	var instance: MeshInstance3D = Models._part(parent, mesh, colour, (start + finish) * 0.5)
+	instance.quaternion = Quaternion(Vector3.UP, delta.normalized())
+
+
+## 밝은 털 단은 이마의 곡선을 따라 감싼다. 바닥의 가로 막대로 놓지 않는다.
+static func _hat_front_fold(parent: Node3D, radii: Vector2, centre_y: float, height: float, depth: float) -> void:
+	const SEGMENTS: int = 7
+	const HALF_ANGLE: float = 70.0
+	const JOINT_OVERLAP: float = 0.004
+	for segment: int in SEGMENTS:
+		var first: float = deg_to_rad(lerpf(-HALF_ANGLE, HALF_ANGLE, float(segment) / float(SEGMENTS)))
+		var last: float = deg_to_rad(lerpf(-HALF_ANGLE, HALF_ANGLE, float(segment + 1) / float(SEGMENTS)))
+		var start: Vector2 = Vector2(sin(first) * radii.x, cos(first) * radii.y)
+		var finish: Vector2 = Vector2(sin(last) * radii.x, cos(last) * radii.y)
+		var delta: Vector2 = finish - start
+		_box(parent, FUR_COLOUR, Vector3(delta.length() + JOINT_OVERLAP, height, depth),
+			(start + finish) * 0.5, centre_y - height * 0.5, rad_to_deg(atan2(-delta.y, delta.x)))
+
+
+static func _earflap_hat(root: Node3D, colour: Color) -> void:
+	const LAYOUT: Dictionary = {
+		"crown_size": Vector3(0.26, 0.16, 0.22), "ear_length_ratio": 0.7,
+		"ear_width": 0.066, "ear_depth": 0.026, "ear_side_ratio": 0.45, "ear_z": 0.035, "mount_overlap": 0.012,
+		"inner_width_ratio": 0.7, "inner_height_ratio": 0.8, "inner_depth": 0.01, "inner_inset": 0.009,
+		"fold_extra": Vector2(0.004, 0.006), "fold_height": 0.044, "fold_depth": 0.03,
+		"tie_length": 0.055, "tie_floor": 0.014, "tie_inset": 0.014, "tie_forward": 0.025, "tie_overlap": 0.004,
+	}
+	var crown_size: Vector3 = LAYOUT["crown_size"]
+	var ear_height: float = crown_size.y * float(LAYOUT["ear_length_ratio"])
+	var ear_bottom: float = float(LAYOUT["tie_floor"]) + float(LAYOUT["tie_length"])
+	var crown_bottom: float = ear_bottom + ear_height - float(LAYOUT["mount_overlap"])
+	_hat_dome(root, colour, crown_size, crown_bottom)
+	var fold_extra: Vector2 = LAYOUT["fold_extra"]
+	var fold_radii: Vector2 = Vector2(crown_size.x, crown_size.z) * 0.5 + fold_extra
+	_hat_front_fold(root, fold_radii, crown_bottom + float(LAYOUT["fold_height"]) * 0.5,
+		float(LAYOUT["fold_height"]), float(LAYOUT["fold_depth"]))
+	var ear_x: float = crown_size.x * float(LAYOUT["ear_side_ratio"])
+	var ear_z: float = float(LAYOUT["ear_z"])
+	var outer_size: Vector3 = Vector3(float(LAYOUT["ear_width"]), ear_height, float(LAYOUT["ear_depth"]))
+	var inner_size: Vector3 = Vector3(outer_size.x * float(LAYOUT["inner_width_ratio"]),
+		ear_height * float(LAYOUT["inner_height_ratio"]), float(LAYOUT["inner_depth"]))
+	for side: float in SIDES:
+		_hat_panel(root, colour, outer_size, Vector3(side * ear_x, ear_bottom + ear_height * 0.5, ear_z))
+		_hat_panel(root, FUR_COLOUR, inner_size, Vector3(side * ear_x,
+			ear_bottom + float(LAYOUT["inner_inset"]) + inner_size.y * 0.5, ear_z + outer_size.z * 0.5 + inner_size.z * 0.25))
+		_hat_seam(root, _shade(colour, 0.12), Vector3(side * ear_x, ear_bottom + float(LAYOUT["tie_overlap"]), ear_z),
+			Vector3(side * (ear_x - float(LAYOUT["tie_inset"])), float(LAYOUT["tie_floor"]), ear_z + float(LAYOUT["tie_forward"])), DETAIL_WIDTH)
+
+
+## 기울어진 챙도 변환한 경계의 최저점이 y=0이 되게 올린다.
+static func _ground_hat_part(instance: MeshInstance3D) -> void:
+	var bounds: AABB = instance.mesh.get_aabb()
+	var lowest: float = INF
+	for corner: int in 8:
+		lowest = minf(lowest, (instance.transform * bounds.get_endpoint(corner)).y)
+	instance.position.y -= lowest
+
+
+static func _cap_seams(parent: Node3D, colour: Color, crown_size: Vector3, bottom: float) -> void:
+	const AZIMUTHS: Array[float] = [-60.0, 0.0, 60.0]
+	const SEGMENTS: int = 12
+	const SURFACE_RISE: float = 0.001
+	var radii: Vector3 = Vector3(crown_size.x * 0.5 + SURFACE_RISE, crown_size.y + SURFACE_RISE, crown_size.z * 0.5 + SURFACE_RISE)
+	for azimuth: float in AZIMUTHS:
+		var heading: float = deg_to_rad(azimuth)
+		for segment: int in SEGMENTS:
+			var first: float = PI * float(segment) / float(SEGMENTS)
+			var last: float = PI * float(segment + 1) / float(SEGMENTS)
+			var start: Vector3 = Vector3(radii.x * cos(first) * sin(heading), bottom + radii.y * sin(first), radii.z * cos(first) * cos(heading))
+			var finish: Vector3 = Vector3(radii.x * cos(last) * sin(heading), bottom + radii.y * sin(last), radii.z * cos(last) * cos(heading))
+			_hat_seam(parent, _shade(colour, 0.12), start, finish, DETAIL_WIDTH)
+
+
+static func _brim_cap(root: Node3D, colour: Color) -> void:
+	const LAYOUT: Dictionary = {
+		"diameter": Vector2(0.27, 0.23), "height_ratio": 0.32, "crown_bottom": 0.018, "band_height": 0.02,
+		"brim_width_ratio": 0.94, "brim_length_ratio": 0.8, "brim_projection_ratio": 0.62, "brim_depth": 0.024, "brim_droop": 7.0,
+		"button_radius": 0.014, "button_sink": 0.002,
+	}
+	var diameter: Vector2 = LAYOUT["diameter"]
+	var crown_height: float = diameter.x * float(LAYOUT["height_ratio"])
+	var crown_bottom: float = float(LAYOUT["crown_bottom"])
+	var crown_size: Vector3 = Vector3(diameter.x, crown_height, diameter.y)
+	_hat_dome(root, colour, crown_size, crown_bottom)
+	var band: CylinderMesh = CylinderMesh.new()
+	band.top_radius = diameter.x * 0.5
+	band.bottom_radius = diameter.x * 0.5
+	band.height = float(LAYOUT["band_height"])
+	band.radial_segments = RADIAL_SEGMENTS
+	var band_instance: MeshInstance3D = Models._part(root, band, _shade(colour, -0.04), Vector3(0, band.height * 0.5, 0))
+	band_instance.scale.z = diameter.y / diameter.x
+	var brim_size: Vector3 = Vector3(diameter.x * float(LAYOUT["brim_width_ratio"]),
+		float(LAYOUT["brim_depth"]), diameter.x * float(LAYOUT["brim_length_ratio"]))
+	var droop: float = deg_to_rad(float(LAYOUT["brim_droop"]))
+	var front_half_extent: float = (brim_size.z * cos(droop) + brim_size.y * sin(droop)) * 0.5
+	var brim_z: float = diameter.y * 0.5 + diameter.x * float(LAYOUT["brim_projection_ratio"]) - front_half_extent
+	var brim: MeshInstance3D = _oval(root, colour, brim_size, Vector2(0, brim_z))
+	brim.rotation_degrees.x = float(LAYOUT["brim_droop"])
+	_ground_hat_part(brim)
+	_cap_seams(root, colour, crown_size, crown_bottom)
+	_disc(root, _shade(colour, 0.13), Vector2.ZERO, crown_bottom + crown_height - float(LAYOUT["button_sink"]), float(LAYOUT["button_radius"]))
 
 
 static func _hood(root: Node3D, colour: Color, recipe: Dictionary) -> void:
