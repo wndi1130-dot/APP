@@ -5,6 +5,7 @@ extends "res://addons/gut/test.gd"
 
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+const RouteState = preload("res://game/train/route_state.gd")
 const FieldWork = preload("res://game/field_work.gd")
 const LungerRules = preload("res://game/sim/lunger_rules.gd")
 const Pose = preload("res://game/actors/person_pose.gd")
@@ -223,12 +224,30 @@ func test_furnish_seed_start_options_validate_whole_save() -> void:
 	var missing: Dictionary = saved.duplicate(true)
 	missing["start_opts"].erase("world_seed")
 	missing["start_opts"]["furnish_rule"] = 1
-	assert_false(FieldSave._whole(missing, 1), "supported rule 1 still requires a seed")
+	assert_false(FieldSave._whole_start(missing["start_opts"], 1), "supported rule 1 still requires a seed")
 	missing["start_opts"]["world_seed"] = "0"
-	assert_true(FieldSave._whole(missing, 1), "supported rule 1 with seed")
+	assert_true(FieldSave._whole_start(missing["start_opts"], 1), "supported rule 1 with seed")
 	var integral_float: Dictionary = saved.duplicate(true)
 	integral_float["start_opts"]["furnish_rule"] = 0.0
 	assert_true(FieldSave._whole(integral_float), "legacy integral JSON number")
+
+
+## The seed check takes text only (_int_of_text): a field that wrote the seed as a number would send
+## every real save to the backup. So the route's own seed text goes through a real field game,
+## capture, the slot and back, and is still text the whole check takes.
+func test_a_real_field_with_the_routes_seed_saves_and_reads_back_whole() -> void:
+	var route_seed: String = RouteState.world_seed_for_run("run_1a")
+	var a = _game({"world_seed": route_seed, "furnish_rule": RouteState.FURNISH_RULE})
+	var saved: Dictionary = FieldSave.capture(a)
+	assert_eq(saved.get("start_opts", {}).get("world_seed"), route_seed)
+	assert_true(FieldSave.write(saved, AT))
+	var back: Dictionary = FieldSave.read(AT)
+	assert_false(back.is_empty(), "the slot reads whole, not nothing")
+	var opts: Dictionary = back.get("start_opts", {})
+	assert_true(opts.get("world_seed") is String)
+	assert_eq(opts.get("world_seed"), route_seed)
+	assert_eq(int(opts.get("furnish_rule", -1)), RouteState.FURNISH_RULE)
+	assert_eq(FieldSave.resume_opts(back).get("world_seed"), route_seed)
 
 
 func test_broken_furnish_seed_fields_fall_back_to_backup() -> void:

@@ -303,7 +303,7 @@ static func _counts(d: Dictionary) -> bool:
 	return true
 
 
-static func _whole(d: Dictionary, max_furnish_rule: int = FURNISH_RULE) -> bool:
+static func _whole(d: Dictionary) -> bool:
 	if d.has("bounds_rule") and not _valid_bounds_rule(d["bounds_rule"]):
 		return false
 	if d.has("side_path_rule") and not _valid_side_path_rule(d["side_path_rule"]):
@@ -345,7 +345,7 @@ static func _whole(d: Dictionary, max_furnish_rule: int = FURNISH_RULE) -> bool:
 		if not _fields(row, {"searched": TYPE_BOOL, "locked": TYPE_BOOL, "items": TYPE_ARRAY}):
 			return false
 	var opts: Dictionary = d.get("start_opts", {})
-	if not _whole_start(opts, max_furnish_rule):
+	if not _whole_start(opts):
 		return false
 	var departure: Dictionary = d.get("departure", {})
 	if not _whole_departure(opts.get("departure", {}) if departure.is_empty() else departure):
