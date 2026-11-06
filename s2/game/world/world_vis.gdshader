@@ -195,7 +195,8 @@ vec3 slabs(vec3 c, vec2 p, vec2 px, int along, float size) {
 	return c * tone * (1.0 - 0.1 * joint);
 }
 
-vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 dx, vec2 dy) {
+vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 dx, vec2 dy, out float grass_share) {
+	grass_share = 0.0;
 	vec2 f = fract(p);
 	vec2 px = abs(dx) + abs(dy);
 	ivec4 layers = GROUND_BAND_LAYERS[clamp(region_band - 1, 0, GROUND_BAND_LAYERS.length() - 1)];
@@ -238,11 +239,13 @@ vec3 bare_ground(int kind, float detail, vec3 colour, vec2 p, vec4 grain, vec2 d
 			edge += (fx_vnoise(p * 0.8 + vec2(19.1, 3.7)) - 0.5) * 0.15 + bias;
 			float aa = 0.08 + min(0.12, max(px.x, px.y) * 0.15);
 			float bare = smoothstep(-aa, aa, edge);
+			grass_share = 1.0 - bare;
 			return mix(grass * grass_detail.rgb, SOIL * soil_detail.rgb, bare);
 		}
 		grass *= 0.92 + 0.16 * fx_vnoise(p * 2.3);
 		float bare = smoothstep(0.52, 0.68, patch) * 0.7;
 		bare = max(bare, smoothstep(0.3, 0.6, clamp(detail, 0.0, 1.0) + (patch - 0.5) * 0.5));
+		grass_share = 1.0 - bare;
 		return mix(grass, SOIL * (0.92 + 0.16 * grain.a), bare);
 	} else if (kind == 1) {
 		int bits = int(detail + 0.5);
@@ -712,12 +715,12 @@ void fragment() {
 	float chroma = max(base.r, max(base.g, base.b)) - min(base.r, min(base.g, base.b));
 	float cover = 0.0;
 	float local_snow = 0.0;
-	// Separate world scales: broad 11 m drifts, 2.2 m detail and an 8 m warp.
+	// Separate world scales: broad 11 m drifts, 0.9 m detail and an 8 m warp.
 	// Skip the extra noise without snow.
 	if (fx_snow > 0.01) {
 		vec2 snow_p = world_pos.xz + snow_phase;
 		vec2 patch_p = snow_p * 0.09;
-		vec2 fine_p = snow_p * 0.45;
+		vec2 fine_p = snow_p * 1.1;
 		vec2 warp_p = snow_p * 0.125;
 		vec2 warp = vec2(fx_vnoise(warp_p + vec2(17.1, 9.2)),
 			fx_vnoise(warp_p + vec2(3.7, 23.6))) - vec2(0.5);
@@ -751,6 +754,9 @@ void fragment() {
 	// The photo grain, one fetch for all four; its strength wanders so the
 	// 2.6 m tile does not read as a grid. Grit on bare ground, wet soil as it wets.
 	vec4 grain = texture(fx_ground, world_pos.xz * (1.0 / 2.6));
+	// Fine soil grain opens small grass holes; take its edge width outside branches.
+	float grass_edge = grain.a - 0.65;
+	float grass_w = max(1.25 * fwidth(grass_edge), 0.002);
 	// Decision 496: the ground layers' gradients, taken here outside the branches (bare_ground
 	// reads the layers inside per-kind branches, where a quad's implicit derivatives are undefined).
 	vec2 ground_dx = dFdx(world_pos.xz);
@@ -760,8 +766,11 @@ void fragment() {
 	// Keep the kind's dark bare look in snow gaps, even in deep winter.
 	float bare_k = sky * smoothstep(0.6, 0.9, up);
 	int kind = int(ground_kind + 0.5) - 1;
+	float grass_share = 0.0;
 	if (ground_kind > 0.5 && bare_k > 0.001) {
-		base = mix(base, bare_ground(kind, ground_detail, base, world_pos.xz, grain, ground_dx, ground_dy), bare_k);
+		base = mix(base, bare_ground(kind, ground_detail, base, world_pos.xz, grain, ground_dx, ground_dy, grass_share), bare_k);
+		// Holes open only as far as the grass look is mixed in (a slope or a part roof keeps the vertex colour).
+		grass_share *= bare_k;
 	}
 	// A furnished room's floor under its roof (room_finish; 0 elsewhere keeps the kind's colour).
 	// The floor itself only, at a storey's height: what lies on it (a coat, a map, the empty mark)
@@ -837,15 +846,22 @@ void fragment() {
 			kerb_d = kerb_distance(kerb_bits, fract(world_pos.xz));
 		}
 	}
+	float pile = 0.0;
 	if (heaped > 0.001) {
-		float pile = smoothstep(0.2, 0.65, foot + 0.6 * (drift - 0.5)) * smoothstep(0.0, 0.15, foot);
+		pile = smoothstep(0.2, 0.65, foot + 0.6 * (drift - 0.5)) * smoothstep(0.0, 0.15, foot);
 		if (kerbed) {
 			pile = max(pile, 1.0 - smoothstep(0.15, 0.4, kerb_d + 0.2 * (drift - 0.5)));
 		}
-		cover = max(cover, 0.85 * pile * heaped);
+		// A full pile covers the ground completely, above the flat-ground cap.
+		cover = max(cover, 1.0 * pile * heaped);
 	}
 	cover *= 1.0 - 0.9 * trodden;
 	base *= 1.0 - 0.3 * trodden * clamp(fx_snow, 0.0, 1.0);
+	// Grass shows only through thin snow, never through soil, paving or a snow bank.
+	float thin_snow = smoothstep(0.25, 0.4, local_snow) * (1.0 - smoothstep(0.5, 0.65, local_snow));
+	float grass_holes = grass_share * thin_snow * smoothstep(-grass_w, grass_w, grass_edge);
+	grass_holes *= 1.0 - smoothstep(0.0, 0.25, max(pile, bank));
+	cover *= 1.0 - grass_holes;
 	// The ground before the snow: what a frozen pool shows through its ice.
 	vec3 under_snow = base;
 	base = mix(base, FX_SNOW * mix(1.0, 0.75, wet) * (1.0 + (grain.r - 0.5) * 0.35 * wander), cover);
