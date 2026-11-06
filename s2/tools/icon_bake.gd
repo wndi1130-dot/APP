@@ -1,6 +1,10 @@
 extends SceneTree
 ## Fixed-light item icons. Run with a rendering window, not headless.
 ## godot --path s2 --resolution 512x512 -s res://tools/icon_bake.gd -- <out_dir> <list_file>
+## Exits 0 only when every listed thing was drawn and saved and the sheet too;
+## otherwise 1. What this run saved, failed and only warned about is written to
+## <out_dir>/baked.txt (RECORD), so a picture left there by an earlier run is
+## not taken for a new one.
 
 const ICON_SIZE := 256
 const CELL_SIZE := 128
@@ -16,13 +20,20 @@ const RIM_ALPHA := 0.3
 ## within this many pixels of filling the square (refit).
 const FIT_TRIES := 3
 const FIT_TOLERANCE := 2.0
+## Free pixels the drawing keeps from each edge of the square: the dark line and
+## the pale rim (_make_muted) take one each. Less and the picture is cut.
+const EDGE_ROOM := 2
 const BACKGROUNDS := [Color("3a3f45"), Color("d9dde0")]
+const RECORD := "baked.txt"
 
 var _entries: Array[Dictionary] = []
 var _out_dir := ""
 var _cursor := 0
 var _saved := 0
 var _directory_error := ""
+## Failures of the run itself (the list, the output folder, the sheet), apart
+## from each thing's own (its entry's "error").
+var _run_failures: Array[String] = []
 
 
 func _initialize() -> void:
@@ -33,12 +44,15 @@ func _begin() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() != 2:
 		print("usage: godot --path s2 --resolution 512x512 -s res://tools/icon_bake.gd -- <out_dir> <list_file>")
+		_run_failures.append("usage")
 		_done()
 		return
 	_out_dir = ProjectSettings.globalize_path(args[0])
 	var file := FileAccess.open(args[1], FileAccess.READ)
 	if file == null:
-		print("ICON_BAKE_SKIP list=", args[1], " reason=", error_string(FileAccess.get_open_error()))
+		var reason := error_string(FileAccess.get_open_error())
+		print("ICON_BAKE_SKIP list=", args[1], " reason=", reason)
+		_run_failures.append("list " + args[1] + ": " + reason)
 		_done()
 		return
 	var pattern := RegEx.new()
@@ -82,9 +96,13 @@ func _begin() -> void:
 	file.close()
 	if read_error != OK and read_error != ERR_FILE_EOF:
 		print("ICON_BAKE_SKIP list=", args[1], " reason=", error_string(read_error))
+		_run_failures.append("list " + args[1] + ": " + error_string(read_error))
+	if _entries.is_empty():
+		_run_failures.append("list " + args[1] + ": no entries")
 	var directory_error := DirAccess.make_dir_recursive_absolute(_out_dir)
 	if directory_error != OK:
 		_directory_error = "output directory: " + error_string(directory_error)
+		_run_failures.append(_directory_error)
 	call_deferred("_bake_next")
 
 
@@ -161,9 +179,20 @@ func _bake_next() -> void:
 		_skip(entry, "viewport readback failed")
 		return
 	image.convert(Image.FORMAT_RGBA8)
-	if not image.get_used_rect().has_area():
+	var drawn: Rect2i = image.get_used_rect()
+	if not drawn.has_area():
 		_skip(entry, "render is fully transparent")
 		return
+	# The last move is drawn but was not measured in the loop: measure it here.
+	var room: int = edge_room(drawn, ICON_SIZE)
+	if room < EDGE_ROOM:
+		_skip(entry, "drawing reaches the edge (%d px free, %d needed)" % [room, EDGE_ROOM])
+		return
+	var settled: Dictionary = refit(drawn, ICON_SIZE, margin)
+	if bool(settled["off"]):
+		entry["warning"] = "fit off after %d tries: size x%.3f, middle off by %s px" % [
+			FIT_TRIES, float(settled["scale"]), str(settled["shift"])]
+		print("ICON_BAKE_FIT_WARN name=", entry["name"], " ", entry["warning"])
 	var muted := _make_muted(image)
 	entry["preview"] = muted
 	var small := _resize_alpha(image, 64)
@@ -178,6 +207,7 @@ func _bake_next() -> void:
 			print("ICON_BAKE_SAVE_FAILED path=", destination, " reason=", error_string(save_error))
 	if saved_all:
 		_saved += 1
+		entry["saved"] = true
 		print("ICON_BAKE_SAVED name=", entry["name"])
 	else:
 		entry["error"] = "one or more PNG writes failed"
@@ -204,6 +234,40 @@ static func refit(used: Rect2i, size: int, margin: float) -> Dictionary:
 	var shift: Vector2 = middle - Vector2(size, size) * 0.5
 	var off: bool = absf(side - target) > FIT_TOLERANCE or shift.length() > FIT_TOLERANCE
 	return {"scale": side / maxf(target, 1.0), "shift": shift, "off": off}
+
+
+## The fewest free pixels between the drawn part (`used`) and an edge of the
+## `size` square; negative when it runs past one.
+static func edge_room(used: Rect2i, size: int) -> int:
+	return mini(mini(used.position.x, used.position.y), mini(size - used.end.x, size - used.end.y))
+
+
+## The run's exit code: 0 only when there was something to draw, the run itself
+## did not fail (`run_failures`) and no entry carries an "error".
+static func exit_code(entries: Array, run_failures: Array) -> int:
+	if entries.is_empty() or not run_failures.is_empty():
+		return 1
+	for entry: Dictionary in entries:
+		if entry.has("error"):
+			return 1
+	return 0
+
+
+## RECORD's lines: one per entry, `saved|failed|warned <name>` and the reason.
+static func record_lines(entries: Array, run_failures: Array) -> PackedStringArray:
+	var lines := PackedStringArray()
+	for failure: String in run_failures:
+		lines.append("run_failed\t" + failure)
+	for entry: Dictionary in entries:
+		if entry.has("error"):
+			lines.append("failed\t%s\t%s" % [entry["name"], entry["error"]])
+		elif entry.has("warning"):
+			lines.append("warned\t%s\t%s" % [entry["name"], entry["warning"]])
+		elif entry.has("saved"):
+			lines.append("saved\t%s" % entry["name"])
+		else:
+			lines.append("failed\t%s\tnot reached" % entry["name"])
+	return lines
 
 
 func _skip(entry: Dictionary, reason: String, view: SubViewport = null) -> void:
@@ -484,6 +548,7 @@ func _finish() -> void:
 	var columns := maxi(1, _entries.size())
 	if columns * CELL_SIZE > 16384:
 		print("ICON_BAKE_SHEET_FAILED reason=sheet exceeds 16384 pixels wide")
+		_run_failures.append("sheet: exceeds 16384 pixels wide")
 		_done()
 		return
 	var sheet := SubViewport.new()
@@ -521,10 +586,12 @@ func _finish() -> void:
 	var image := sheet.get_texture().get_image()
 	if image == null or image.is_empty():
 		print("ICON_BAKE_SHEET_FAILED reason=viewport readback failed")
+		_run_failures.append("sheet: viewport readback failed")
 	else:
 		var save_error := image.save_png(_out_dir.path_join("sheet.png"))
 		if save_error != OK:
 			print("ICON_BAKE_SHEET_FAILED reason=", error_string(save_error))
+			_run_failures.append("sheet: " + error_string(save_error))
 		else:
 			print("ICON_BAKE_SHEET_SAVED path=", _out_dir.path_join("sheet.png"))
 	sheet.queue_free()
@@ -532,5 +599,41 @@ func _finish() -> void:
 
 
 func _done() -> void:
-	print("ICON_BAKE_DONE saved=%d/%d" % [_saved, _entries.size()])
-	quit(0)
+	if not _out_dir.is_empty() and _directory_error.is_empty():
+		_write_record()
+	var failed := 0
+	var warned := 0
+	for entry: Dictionary in _entries:
+		if entry.has("error"):
+			failed += 1
+		elif entry.has("warning"):
+			warned += 1
+	for failure: String in _run_failures:
+		print("ICON_BAKE_RUN_FAILED reason=", failure)
+	var code := exit_code(_entries, _run_failures)
+	print("ICON_BAKE_DONE saved=%d/%d failed=%d warned=%d run_failures=%d exit=%d" % [
+		_saved, _entries.size(), failed, warned, _run_failures.size(), code])
+	quit(code)
+
+
+## RECORD in the output folder, written whole or not at all (a new file, then
+## renamed over the old one), so a reader never sees half of it.
+func _write_record() -> void:
+	var path := _out_dir.path_join(RECORD)
+	var temporary := path + ".tmp"
+	var file := FileAccess.open(temporary, FileAccess.WRITE)
+	if file == null:
+		_run_failures.append("record: " + error_string(FileAccess.get_open_error()))
+		return
+	for line: String in record_lines(_entries, _run_failures):
+		file.store_line(line)
+	var write_error := file.get_error()
+	file.close()
+	if write_error != OK:
+		DirAccess.remove_absolute(temporary)
+		_run_failures.append("record: " + error_string(write_error))
+		return
+	var rename_error := DirAccess.rename_absolute(temporary, path)
+	if rename_error != OK:
+		DirAccess.remove_absolute(temporary)
+		_run_failures.append("record: " + error_string(rename_error))

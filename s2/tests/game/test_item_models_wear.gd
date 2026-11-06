@@ -113,6 +113,8 @@ func test_chromatic_wear_tints_keep_their_srgb_hue() -> void:
 		model.free()
 
 
+## 같은 갈래 안에서 한 모형을 이름만 바꿔 복사하지 않았는지(구조 지문). 그림이 눈에 갈리는지는
+## 구운 그림의 픽셀로 본다(test_item_art의 같은 그림·거의 같은 그림 검사).
 func test_no_two_kinds_in_a_shape_family_share_the_same_signature() -> void:
 	var signatures: Dictionary = {}
 	for key: String in WearModels.ids():
@@ -120,15 +122,38 @@ func test_no_two_kinds_in_a_shape_family_share_the_same_signature() -> void:
 		assert_not_null(model, key + " 갈래 비교 생성")
 		if model == null:
 			continue
-		var signature: Dictionary = _signature(model)
+		var signature: String = _signature(model)
+		assert_ne(signature, "", key + " 보이는 부품이 있음")
 		var family: String = String(WearModels.RECIPES[key]["shape"])
 		for other_key: String in signatures.keys():
 			var other_family: String = String(WearModels.RECIPES[other_key]["shape"])
 			if family == other_family:
-				var other_signature: Dictionary = signatures[other_key]
-				assert_true(_signatures_differ(signature, other_signature), key + " / " + other_key)
+				assert_ne(signature, String(signatures[other_key]), key + " / " + other_key)
 		signatures[key] = signature
 		model.free()
+
+
+func test_hidden_parts_are_not_measured() -> void:
+	var root: Node3D = Node3D.new()
+	var shown_part: MeshInstance3D = MeshInstance3D.new()
+	shown_part.mesh = BoxMesh.new()
+	root.add_child(shown_part)
+	var hidden_frame: Node3D = Node3D.new()
+	hidden_frame.visible = false
+	root.add_child(hidden_frame)
+	var under_hidden: MeshInstance3D = MeshInstance3D.new()
+	under_hidden.mesh = BoxMesh.new()
+	hidden_frame.add_child(under_hidden)
+	var hidden_part: MeshInstance3D = MeshInstance3D.new()
+	hidden_part.mesh = BoxMesh.new()
+	hidden_part.visible = false
+	root.add_child(hidden_part)
+	var parts: Array[Dictionary] = []
+	_collect_meshes(root, Transform3D.IDENTITY, parts)
+	assert_eq(parts.size(), 1, "숨은 부품과 숨은 틀 밑 부품은 굽기처럼 뺌")
+	if parts.size() == 1:
+		assert_eq(parts[0]["instance"], shown_part)
+	root.free()
 
 
 func test_bake_list_has_each_kind_once_and_one_angle_for_flat_clothes() -> void:
@@ -176,15 +201,18 @@ func test_unknown_keys_return_null() -> void:
 
 
 ## 분리된 노드의 중첩 회전·크기·이동을 빠뜨리지 않는다.
-func _collect_meshes(node: Node, parent_pose: Transform3D, parts: Array[Dictionary]) -> void:
+## Only what is drawn: a hidden node hides what is under it, as the bake tool
+## (icon_bake._copy_meshes) leaves it out.
+func _collect_meshes(node: Node, parent_pose: Transform3D, parts: Array[Dictionary], shown: bool = true) -> void:
 	var pose: Transform3D = parent_pose
 	if node is Node3D:
 		var spatial: Node3D = node as Node3D
 		pose = spatial.transform if spatial.top_level else parent_pose * spatial.transform
-	if node is MeshInstance3D:
+		shown = shown and spatial.visible
+	if node is MeshInstance3D and shown:
 		parts.append({"instance": node, "pose": pose})
 	for child: Node in node.get_children():
-		_collect_meshes(child, pose, parts)
+		_collect_meshes(child, pose, parts, shown)
 
 
 func _transformed_box(local_box: AABB, pose: Transform3D) -> AABB:
@@ -214,34 +242,26 @@ func _largest_parts(parts: Array[Dictionary]) -> Array[MeshInstance3D]:
 	return result
 
 
-func _signature(model: Node3D) -> Dictionary:
+## 모형의 구조 지문: 보이는 부품마다 (메시 종류, mm로 반올림한 놓인 경계, 표면마다 색)을 정렬해
+## 이은 것. 같으면 한 모형의 복사다. 다르다고 눈에 갈리는 것은 아니다(가려진 부품 하나로도 달라짐) —
+## 그건 구운 그림의 픽셀 검사가 본다.
+func _signature(model: Node3D) -> String:
 	var parts: Array[Dictionary] = []
 	_collect_meshes(model, Transform3D.IDENTITY, parts)
-	var bounds: AABB = AABB()
-	var have_bounds: bool = false
+	var rows: PackedStringArray = PackedStringArray()
 	for entry: Dictionary in parts:
 		var instance: MeshInstance3D = entry["instance"] as MeshInstance3D
 		if instance.mesh == null:
 			continue
-		var pose: Transform3D = entry["pose"]
-		var part_box: AABB = _transformed_box(instance.mesh.get_aabb(), pose)
-		bounds = bounds.merge(part_box) if have_bounds else part_box
-		have_bounds = true
-	var largest: Array[MeshInstance3D] = _largest_parts(parts)
-	var colour: Color = Color.TRANSPARENT
-	if not largest.is_empty() and largest[0].mesh.get_surface_count() > 0:
-		var material: BaseMaterial3D = largest[0].get_active_material(0) as BaseMaterial3D
-		if material != null:
-			colour = material.albedo_color
-	return {"count": parts.size(), "bounds": bounds, "colour": colour}
+		var box: AABB = _transformed_box(instance.mesh.get_aabb(), entry["pose"])
+		var colours: PackedStringArray = PackedStringArray()
+		for surface: int in instance.mesh.get_surface_count():
+			var material: BaseMaterial3D = instance.get_active_material(surface) as BaseMaterial3D
+			colours.append(material.albedo_color.to_html() if material != null else "none")
+		rows.append("%s %s %s %s" % [instance.mesh.get_class(), _mm(box.position), _mm(box.size), ",".join(colours)])
+	rows.sort()
+	return "\n".join(rows)
 
 
-func _signatures_differ(first: Dictionary, second: Dictionary) -> bool:
-	var first_box: AABB = first["bounds"]
-	var second_box: AABB = second["bounds"]
-	var first_colour: Color = first["colour"]
-	var second_colour: Color = second["colour"]
-	return int(first["count"]) != int(second["count"]) \
-		or not first_box.position.is_equal_approx(second_box.position) \
-		or not first_box.size.is_equal_approx(second_box.size) \
-		or not first_colour.is_equal_approx(second_colour)
+func _mm(value: Vector3) -> String:
+	return "%d,%d,%d" % [roundi(value.x * 1000.0), roundi(value.y * 1000.0), roundi(value.z * 1000.0)]

@@ -198,6 +198,9 @@ static func build(id: String) -> Node3D:
 		(model as Node3D).scale = recipe["scale"]
 	var map_path: String = String(recipe["glb"]).get_base_dir().path_join("Textures/colormap.png")
 	var material := _tinted(map_path, recipe.get("tint", []))
+	if material == null:
+		root.free()
+		return null
 	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
 		for surface: int in mesh.mesh.get_surface_count():
 			mesh.set_surface_override_material(surface, material)
@@ -205,9 +208,18 @@ static func build(id: String) -> Node3D:
 
 
 ## The kit's colour map with each rule's hue range moved to its hue and
-## saturation; value keeps the map's shading, times "v".
+## saturation; value keeps the map's shading, times "v". Null when the map is
+## missing or unreadable: the model that wanted it then fails whole, rather
+## than being baked half painted.
 static func _tinted(map_path: String, rules: Array) -> StandardMaterial3D:
-	var image := Image.load_from_file(ProjectSettings.globalize_path(map_path))
+	var file_path: String = ProjectSettings.globalize_path(map_path)
+	if not FileAccess.file_exists(file_path):
+		printerr("item_models: no colour map at ", map_path)
+		return null
+	var image := Image.load_from_file(file_path)
+	if image == null or image.is_empty():
+		printerr("item_models: colour map not readable: ", map_path)
+		return null
 	image.convert(Image.FORMAT_RGBA8)
 	if not rules.is_empty():
 		for y: int in image.get_height():

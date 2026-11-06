@@ -369,6 +369,9 @@ static func _kenney(root: Node3D, asset_path: String, extent: float, at: Vector3
 	spatial.position -= Vector3(bounds.get_center().x, bounds.position.y, bounds.get_center().z)
 	var tint_rules: Array = [{"h": [0.0, 1.0], "s": [0.0, 1.0], "to_h": tint.h, "to_s": tint.s, "v": KENNEY_TEXTURE_VALUE}]
 	var material: StandardMaterial3D = Models._tinted(asset_path.get_base_dir().path_join("Textures/colormap.png"), tint_rules)
+	if material == null:
+		# 색표를 못 읽음: 이미 root 밑에 붙은 틀은 build()가 root와 함께 푼다.
+		return null
 	material.albedo_color = KENNEY_ALBEDO
 	if glass:
 		material.albedo_color.a = GLASS_ALPHA

@@ -23,6 +23,7 @@ const MIN_AXIS: float = 0.006
 const MAX_AXIS: float = 0.6
 const MIN_LONGEST_AXIS: float = 0.06
 const MIN_FOOT_Y: float = -0.01
+const MAX_FOOT_Y: float = 0.01
 const MAX_SATURATION: float = 0.75
 const MIN_VALUE: float = 0.12
 const MAX_BODY_VALUE: float = 0.8
@@ -105,9 +106,7 @@ func test_house_key_has_open_head_tag_and_distinct_metal_geometry() -> void:
 			continue
 		var other_parts: Array[Dictionary] = []
 		_collect_meshes(other, Transform3D.IDENTITY, other_parts)
-		var other_bounds: AABB = _combined_bounds(other_parts)
-		var same_geometry: bool = parts.size() == other_parts.size() and bounds.size.is_equal_approx(other_bounds.size)
-		assert_false(same_geometry, "열쇠는 " + other_key + "와 다른 모형")
+		assert_ne(_signature(parts), _signature(other_parts), "열쇠는 " + other_key + "와 다른 모형")
 		other.free()
 	model.free()
 
@@ -144,7 +143,7 @@ func test_all_models_have_grounded_geometry_and_muted_opaque_materials() -> void
 			for axis: int in 3:
 				assert_between(combined.size[axis], MIN_AXIS, MAX_AXIS, key + " 축 " + str(axis) + " m")
 			assert_gte(maxf(combined.size.x, maxf(combined.size.y, combined.size.z)), MIN_LONGEST_AXIS, key + " 가장 긴 축")
-			assert_gte(combined.position.y, MIN_FOOT_Y, key + " 바닥 아래로 잠기지 않음")
+			assert_between(combined.position.y, MIN_FOOT_Y, MAX_FOOT_Y, key + " 바닥에 놓임(잠기지도 뜨지도 않음)")
 		model.free()
 
 
@@ -424,23 +423,79 @@ func test_bent_nails_have_flat_heads_points_bends_and_differ_from_it_nails() -> 
 	if original != null:
 		var original_parts: Array[Dictionary] = []
 		_collect_meshes(original, Transform3D.IDENTITY, original_parts)
-		var bounds: AABB = _combined_bounds(parts)
-		var original_bounds: AABB = _combined_bounds(original_parts)
-		var same_geometry: bool = parts.size() == original_parts.size() and bounds.size.is_equal_approx(original_bounds.size)
-		assert_false(same_geometry, "굽은 못은 it_nails와 다른 모형")
+		assert_ne(_signature(parts), _signature(original_parts), "굽은 못은 it_nails와 다른 모형")
 		original.free()
 	model.free()
 
 
-func _collect_meshes(node: Node, parent_pose: Transform3D, parts: Array[Dictionary]) -> void:
+func test_a_kit_model_without_its_colour_map_fails_whole() -> void:
+	const NO_MAP_ASSET: String = "res://models/props_field/alarm_clock.glb"
+	assert_true(ResourceLoader.exists(NO_MAP_ASSET), "색표 없는 폴더의 모형이 있음")
+	var map_path: String = NO_MAP_ASSET.get_base_dir().path_join("Textures/colormap.png")
+	assert_false(FileAccess.file_exists(ProjectSettings.globalize_path(map_path)), "그 폴더에 색표 없음")
+	var root: Node3D = Node3D.new()
+	assert_null(Goods._kenney(root, NO_MAP_ASSET, 0.1, Vector3.ZERO, Color.WHITE), "색표를 못 읽으면 반쯤 칠한 모형 대신 null")
+	root.free()
+
+
+func test_hidden_parts_are_not_measured() -> void:
+	var root: Node3D = Node3D.new()
+	var shown_part: MeshInstance3D = MeshInstance3D.new()
+	shown_part.mesh = BoxMesh.new()
+	root.add_child(shown_part)
+	var hidden_frame: Node3D = Node3D.new()
+	hidden_frame.visible = false
+	root.add_child(hidden_frame)
+	var under_hidden: MeshInstance3D = MeshInstance3D.new()
+	under_hidden.mesh = BoxMesh.new()
+	hidden_frame.add_child(under_hidden)
+	var hidden_part: MeshInstance3D = MeshInstance3D.new()
+	hidden_part.mesh = BoxMesh.new()
+	hidden_part.visible = false
+	root.add_child(hidden_part)
+	var parts: Array[Dictionary] = []
+	_collect_meshes(root, Transform3D.IDENTITY, parts)
+	assert_eq(parts.size(), 1, "숨은 부품과 숨은 틀 밑 부품은 굽기처럼 뺌")
+	if parts.size() == 1:
+		assert_eq(parts[0]["instance"], shown_part)
+	root.free()
+
+
+## 부품들의 구조 지문: 부품마다 (메시 종류, mm로 반올림한 놓인 경계, 표면마다 색)을 정렬해 이은 것.
+## 같으면 한 모형의 복사다. 다르다고 눈에 갈리는 것은 아니다(가려진 부품 하나로도 달라짐) — 그건
+## 구운 그림의 픽셀 검사(test_item_art의 같은 그림·거의 같은 그림)가 본다.
+func _signature(parts: Array[Dictionary]) -> String:
+	var rows: PackedStringArray = PackedStringArray()
+	for entry: Dictionary in parts:
+		var instance: MeshInstance3D = entry["instance"] as MeshInstance3D
+		if instance.mesh == null:
+			continue
+		var box: AABB = _part_bounds(entry)
+		var colours: PackedStringArray = PackedStringArray()
+		for surface: int in instance.mesh.get_surface_count():
+			var material: BaseMaterial3D = instance.get_active_material(surface) as BaseMaterial3D
+			colours.append(material.albedo_color.to_html() if material != null else "none")
+		rows.append("%s %s %s %s" % [instance.mesh.get_class(), _mm(box.position), _mm(box.size), ",".join(colours)])
+	rows.sort()
+	return "\n".join(rows)
+
+
+func _mm(value: Vector3) -> String:
+	return "%d,%d,%d" % [roundi(value.x * 1000.0), roundi(value.y * 1000.0), roundi(value.z * 1000.0)]
+
+
+## Only what is drawn: a hidden node hides what is under it, as the bake tool
+## (icon_bake._copy_meshes) leaves it out.
+func _collect_meshes(node: Node, parent_pose: Transform3D, parts: Array[Dictionary], shown: bool = true) -> void:
 	var pose: Transform3D = parent_pose
 	if node is Node3D:
 		var spatial: Node3D = node as Node3D
 		pose = spatial.transform if spatial.top_level else parent_pose * spatial.transform
-	if node is MeshInstance3D:
+		shown = shown and spatial.visible
+	if node is MeshInstance3D and shown:
 		parts.append({"instance": node, "pose": pose})
 	for child: Node in node.get_children():
-		_collect_meshes(child, pose, parts)
+		_collect_meshes(child, pose, parts, shown)
 
 
 func _part_bounds(entry: Dictionary) -> AABB:

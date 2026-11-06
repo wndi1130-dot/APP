@@ -11,6 +11,28 @@ const HudIcons = preload("res://game/ui/hud_icons.gd")
 const SearchRules = preload("res://game/sim/search_rules.gd")
 const HoldConfirm = preload("res://game/ui/hold_confirm.gd")
 
+## Picture lookups a test blanked (InventoryPane._art_found is shared by every
+## test): key → [whether it was there, its value]. after_each puts them back,
+## also when a test stopped half way.
+var _blanked_art: Dictionary = {}
+
+
+func after_each() -> void:
+	for key: String in _blanked_art:
+		var held: Array = _blanked_art[key]
+		if bool(held[0]):
+			InventoryPane._art_found[key] = held[1]
+		else:
+			InventoryPane._art_found.erase(key)
+	_blanked_art.clear()
+
+
+## The thing (its art_texture key) shows no baked picture until after_each.
+func _blank_art(key: String) -> void:
+	if not _blanked_art.has(key):
+		_blanked_art[key] = [InventoryPane._art_found.has(key), InventoryPane._art_found.get(key)]
+	InventoryPane._art_found[key] = null
+
 
 func _game(viewport: SubViewport = null) -> Node:
 	var game = FieldGame.new()
@@ -220,7 +242,7 @@ func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() 
 	# away here for this test: the lookup's remembered answer is "none". The can
 	# opener has none of its own but takes the one baked for its line icon (it_opener).
 	var unbaked: String = "luxury_pack|" + String(game.item_icon("luxury_pack"))
-	InventoryPane._art_found[unbaked] = null
+	_blank_art(unbaked)
 	var id: String = _box(game, ["food_pack", "luxury_pack", "can_opener"])
 	var picture := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	picture.fill(Color("ffc66c"))
@@ -261,7 +283,6 @@ func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() 
 	assert_eq(opener.texture, InventoryPane.art_texture("can_opener", game.item_icon("can_opener")), "its line icon's bake")
 	assert_true(InventoryPane.is_painted(opener.texture))
 	game.hud._close_modal()
-	InventoryPane._art_found.erase(unbaked)
 
 
 ## Measure each visible key, including folded clothing and row jobs, in screen pixels.

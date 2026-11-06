@@ -115,16 +115,48 @@ func test_largest_mesh_parts_are_not_brighter_than_point_eight() -> void:
 		model.free()
 
 
+func test_a_missing_colour_map_gives_no_material() -> void:
+	const NO_MAP: String = "res://models/props_field/Textures/colormap.png"
+	assert_false(FileAccess.file_exists(ProjectSettings.globalize_path(NO_MAP)), "this folder has no colour map")
+	assert_null(ItemModels._tinted(NO_MAP, []), "no half-painted material from a map that is not there")
+
+
+func test_hidden_parts_are_not_measured() -> void:
+	var root: Node3D = Node3D.new()
+	var shown_part: MeshInstance3D = MeshInstance3D.new()
+	shown_part.mesh = BoxMesh.new()
+	root.add_child(shown_part)
+	var hidden_frame: Node3D = Node3D.new()
+	hidden_frame.visible = false
+	root.add_child(hidden_frame)
+	var under_hidden: MeshInstance3D = MeshInstance3D.new()
+	under_hidden.mesh = BoxMesh.new()
+	hidden_frame.add_child(under_hidden)
+	var hidden_part: MeshInstance3D = MeshInstance3D.new()
+	hidden_part.mesh = BoxMesh.new()
+	hidden_part.visible = false
+	root.add_child(hidden_part)
+	var parts: Array[Dictionary] = []
+	_collect_meshes(root, Transform3D.IDENTITY, parts)
+	assert_eq(parts.size(), 1, "a hidden part and one under a hidden frame are left out, as the bake does")
+	if parts.size() == 1:
+		assert_eq(parts[0]["instance"], shown_part)
+	root.free()
+
+
 ## Local transforms work on detached nodes, including nested rotated/scaled parts.
-func _collect_meshes(node: Node, parent_pose: Transform3D, parts: Array[Dictionary]) -> void:
+## Only what is drawn: a hidden node hides what is under it, as the bake tool
+## (icon_bake._copy_meshes) leaves it out.
+func _collect_meshes(node: Node, parent_pose: Transform3D, parts: Array[Dictionary], shown: bool = true) -> void:
 	var pose: Transform3D = parent_pose
 	if node is Node3D:
 		var spatial: Node3D = node as Node3D
 		pose = spatial.transform if spatial.top_level else parent_pose * spatial.transform
-	if node is MeshInstance3D:
+		shown = shown and spatial.visible
+	if node is MeshInstance3D and shown:
 		parts.append({"instance": node, "pose": pose})
 	for child: Node in node.get_children():
-		_collect_meshes(child, pose, parts)
+		_collect_meshes(child, pose, parts, shown)
 
 
 ## The bake tool reads a model's vertex colours only when its file defines no

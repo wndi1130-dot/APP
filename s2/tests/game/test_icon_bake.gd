@@ -39,6 +39,42 @@ func test_a_drawing_cut_by_the_square_is_zoomed_out() -> void:
 	assert_gt(float(fit["scale"]), 1.0, "the camera stands back to see all of it")
 
 
+func test_the_room_left_to_the_edges_is_the_smallest_gap() -> void:
+	var bake := _bake()
+	assert_eq(bake.call("edge_room", Rect2i(15, 20, 226, 200), SIZE), 15, "left, as 256 - 241 is 15 too")
+	assert_eq(bake.call("edge_room", Rect2i(30, 40, 100, 214), SIZE), 2, "two pixels under it")
+	assert_eq(bake.call("edge_room", Rect2i(0, 40, 100, 100), SIZE), 0, "on the left edge")
+	assert_eq(bake.call("edge_room", Rect2i(200, 40, 60, 100), SIZE), -4, "past the right edge")
+	assert_gte(int(_const("EDGE_ROOM")), 2, "room for the dark line and the pale rim")
+
+
+func test_a_run_succeeds_only_when_every_thing_was_saved() -> void:
+	var bake := _bake()
+	var saved: Dictionary = {"name": "rusk", "saved": true}
+	var warned: Dictionary = {"name": "nails", "saved": true, "warning": "fit off"}
+	var failed: Dictionary = {"name": "hardtack", "error": "one or more PNG writes failed"}
+	assert_eq(bake.call("exit_code", [saved, warned], []), 0, "a fit warning alone does not fail the run")
+	assert_eq(bake.call("exit_code", [saved, failed], []), 1, "one thing not saved fails it")
+	assert_eq(bake.call("exit_code", [saved], ["sheet: viewport readback failed"]), 1, "the sheet failing fails it")
+	assert_eq(bake.call("exit_code", [], []), 1, "a list with nothing on it is a failed run")
+
+
+func test_the_record_says_what_this_run_saved_and_failed() -> void:
+	var lines: PackedStringArray = _bake().call("record_lines", [
+		{"name": "rusk", "saved": true},
+		{"name": "nails", "saved": true, "warning": "fit off"},
+		{"name": "hardtack", "error": "drawing reaches the edge"},
+		{"name": "flour"},
+	], ["sheet: viewport readback failed"])
+	assert_eq(Array(lines), [
+		"run_failed\tsheet: viewport readback failed",
+		"saved\trusk",
+		"warned\tnails\tfit off",
+		"failed\thardtack\tdrawing reaches the edge",
+		"failed\tflour\tnot reached",
+	])
+
+
 func test_the_dark_line_and_the_pale_rim_lie_round_the_thing_behind_it() -> void:
 	var image := Image.create(SIZE, SIZE, false, Image.FORMAT_RGBA8)
 	image.fill(Color(0, 0, 0, 0))
