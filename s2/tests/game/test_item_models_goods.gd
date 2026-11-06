@@ -2,6 +2,7 @@ extends "res://addons/gut/test.gd"
 ## 모형의 구조만 검사한다. Godot·GUT 실행은 호출 세션의 문지기가 맡는다.
 
 const Goods = preload("res://tools/item_models_goods.gd")
+const BaseModels = preload("res://tools/item_models.gd")
 const FieldItems = preload("res://game/sim/field_items.gd")
 const Carry = preload("res://game/sim/carry.gd")
 const EXPECTED_KEYS: Array[String] = [
@@ -305,6 +306,130 @@ func test_bounds_helper_applies_nested_rotation_scale_and_translation() -> void:
 	assert_true(bounds.position.is_equal_approx(Vector3(0, 0.03, -0.01)), "변환한 최소점")
 	assert_true(bounds.size.is_equal_approx(Vector3(0.02, 0.2, 0.04)), "회전·배율을 적용한 크기")
 	fixture.free()
+
+
+func test_medical_models_use_cross_free_marks_and_no_red_materials() -> void:
+	const MEDICAL_KEYS: Array[String] = ["med_box", "frag_med"]
+	for key: String in MEDICAL_KEYS:
+		var model: Node3D = Goods.build(key)
+		assert_not_null(model, key + " 의술 표시 검사")
+		if model == null:
+			continue
+		var parts: Array[Dictionary] = []
+		_collect_meshes(model, Transform3D.IDENTITY, parts)
+		for entry: Dictionary in parts:
+			var instance: MeshInstance3D = entry["instance"] as MeshInstance3D
+			if instance.mesh == null:
+				continue
+			for surface_index: int in instance.mesh.get_surface_count():
+				var material: BaseMaterial3D = instance.get_active_material(surface_index) as BaseMaterial3D
+				assert_not_null(material, key + " 표시의 재질")
+				if material != null:
+					var color: Color = material.albedo_color
+					var red_hue: bool = color.h >= 0.95 or color.h <= 0.05
+					assert_false(red_hue and color.s >= 0.4, key + "에 빨강을 쓰지 않음")
+		if key == "frag_med":
+			var stamp: Node = model.find_child("Stamp", true, false)
+			assert_not_null(stamp, "의술 도장 있음")
+			if stamp != null:
+				var marker_parts: Array[Dictionary] = []
+				_collect_meshes(stamp, Transform3D.IDENTITY, marker_parts)
+				var pill_count: int = 0
+				for entry: Dictionary in marker_parts:
+					var instance: MeshInstance3D = entry["instance"] as MeshInstance3D
+					if instance.name == "Seal":
+						continue
+					pill_count += 1
+					assert_true(instance.mesh is SphereMesh, "의술 문양은 판 십자 대신 둥근 알약")
+				assert_eq(pill_count, 2, "큰 알약 둘로 의술 표시")
+		else:
+			var bandage: Node = model.find_child("Bandage", true, false)
+			assert_not_null(bandage, "약 상자에 붕대 두루마리 있음")
+			if bandage != null:
+				var bandage_parts: Array[Dictionary] = []
+				_collect_meshes(bandage, Transform3D.IDENTITY, bandage_parts)
+				assert_gte(bandage_parts.size(), 3, "붕대 몸과 끝면을 실제 도형으로 만듦")
+				var rounded_parts: int = 0
+				for entry: Dictionary in bandage_parts:
+					var instance: MeshInstance3D = entry["instance"] as MeshInstance3D
+					if instance.mesh is CylinderMesh or instance.mesh is TorusMesh:
+						rounded_parts += 1
+				assert_gte(rounded_parts, 3, "둥근 두루마리가 십자 판을 대신함")
+		model.free()
+
+
+func test_bent_nails_have_flat_heads_points_bends_and_differ_from_it_nails() -> void:
+	const MIN_HEAD_DIAMETER_RATIO: float = 2.5
+	const MAX_HEAD_THICKNESS_RATIO: float = 0.25
+	var model: Node3D = Goods.build("junk_nails")
+	assert_not_null(model, "굽은 쇠못 모형 생성")
+	if model == null:
+		return
+	var nails: Array[Node] = model.find_children("Nail_*", "Node3D", true, false)
+	assert_between(nails.size(), 3, 4, "쇠못 셋에서 넷")
+	var straight_count: int = 0
+	var bent_count: int = 0
+	for nail: Node in nails:
+		var shafts: Array[MeshInstance3D] = []
+		for child: Node in nail.get_children():
+			if child is MeshInstance3D and String(child.name).begins_with("Shaft_"):
+				shafts.append(child as MeshInstance3D)
+		assert_between(shafts.size(), 1, 2, "몸통은 곧거나 한 번만 꺾임")
+		if shafts.is_empty():
+			continue
+		if shafts.size() == 1:
+			straight_count += 1
+		else:
+			bent_count += 1
+			var first_direction: Vector3 = shafts[0].transform.basis.y.normalized()
+			var second_direction: Vector3 = shafts[1].transform.basis.y.normalized()
+			assert_lt(absf(first_direction.dot(second_direction)), 0.9, "몸통 두 토막의 꺾임이 실제로 보임")
+		var head: MeshInstance3D = nail.get_node_or_null("Head") as MeshInstance3D
+		assert_not_null(head, "납작한 못 머리 있음")
+		if head != null:
+			assert_true(head.mesh is CylinderMesh, "둥근 막대 덩어리 대신 납작한 원통 머리")
+			if head.mesh is CylinderMesh and shafts[0].mesh is CylinderMesh:
+				var head_mesh: CylinderMesh = head.mesh as CylinderMesh
+				var shaft_mesh: CylinderMesh = shafts[0].mesh as CylinderMesh
+				var head_radius: float = maxf(head_mesh.top_radius, head_mesh.bottom_radius)
+				var shaft_radius: float = maxf(shaft_mesh.top_radius, shaft_mesh.bottom_radius)
+				assert_gte(head_radius, shaft_radius * MIN_HEAD_DIAMETER_RATIO, "머리 지름이 몸통의 2.5배 이상")
+				assert_lte(head_mesh.height, head_radius * 2.0 * MAX_HEAD_THICKNESS_RATIO, "얇은 못 머리")
+		var tip: MeshInstance3D = nail.get_node_or_null("Tip") as MeshInstance3D
+		assert_not_null(tip, "뾰족한 못 끝 있음")
+		if tip != null:
+			assert_true(tip.mesh is CylinderMesh, "원뿔 끝")
+			if tip.mesh is CylinderMesh:
+				var tip_mesh: CylinderMesh = tip.mesh as CylinderMesh
+				assert_almost_eq(tip_mesh.top_radius, 0.0, 0.00001, "끝 반지름이 영인 뾰족한 원뿔")
+				assert_gt(tip_mesh.bottom_radius, 0.0, "몸통과 이어지는 끝")
+	assert_eq(straight_count, 2, "곧은 몸통 둘")
+	assert_between(bent_count, 1, 2, "한 번 꺾인 몸통 하나에서 둘")
+	var parts: Array[Dictionary] = []
+	_collect_meshes(model, Transform3D.IDENTITY, parts)
+	for entry: Dictionary in parts:
+		var instance: MeshInstance3D = entry["instance"] as MeshInstance3D
+		if instance.mesh == null:
+			continue
+		for surface_index: int in instance.mesh.get_surface_count():
+			var material: BaseMaterial3D = instance.get_active_material(surface_index) as BaseMaterial3D
+			assert_not_null(material, "쇠못 재질 있음")
+			if material != null:
+				assert_between(material.metallic, 0.4, 0.7, "쇠 반사")
+				assert_between(material.roughness, 0.35, 0.5, "쇠 거칠기")
+				assert_lte(material.albedo_color.s, 0.2, "구릿빛 대신 회색")
+				assert_gte(material.albedo_color.v, 0.45, "어두운 바탕에서도 보이는 쇳빛")
+	var original: Node3D = BaseModels.build("it_nails")
+	assert_not_null(original, "기존 곧은 쇠못 무더기 비교")
+	if original != null:
+		var original_parts: Array[Dictionary] = []
+		_collect_meshes(original, Transform3D.IDENTITY, original_parts)
+		var bounds: AABB = _combined_bounds(parts)
+		var original_bounds: AABB = _combined_bounds(original_parts)
+		var same_geometry: bool = parts.size() == original_parts.size() and bounds.size.is_equal_approx(original_bounds.size)
+		assert_false(same_geometry, "굽은 못은 it_nails와 다른 모형")
+		original.free()
+	model.free()
 
 
 func _collect_meshes(node: Node, parent_pose: Transform3D, parts: Array[Dictionary]) -> void:

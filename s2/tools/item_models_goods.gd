@@ -455,8 +455,8 @@ static func _stamp_expedition(root: Node3D) -> void:
 
 static func _stamp_med(root: Node3D) -> void:
 	const PARTS: Array = [
-		["box", Vector3(0.09, 0.012, 0.027), Vector3(0, 0.012, 0), CHALK],
-		["box", Vector3(0.027, 0.012, 0.09), Vector3(0, 0.012, 0), CHALK],
+		["ellipsoid", Vector3(0.034, 0.016, 0.078), Vector3(-0.025, 0.014, -0.006), CHALK, Vector3(0, -20, 0)],
+		["ellipsoid", Vector3(0.034, 0.016, 0.078), Vector3(0.025, 0.014, 0.006), CHALK, Vector3(0, -20, 0)],
 	]
 	_layout(root, PARTS)
 
@@ -636,17 +636,56 @@ static func _auger(root: Node3D) -> void:
 
 static func _bent_nails(root: Node3D) -> void:
 	const NAILS: Array = [
-		[Vector3(-0.035, 0.018, -0.078), -24.0], [Vector3(0.022, 0.026, -0.01), 35.0],
-		[Vector3(-0.028, 0.014, 0.057), -12.0], [Vector3(0.034, 0.03, 0.10), 62.0],
+		[Vector3(-0.035, 0.026, -0.075), -22.0, false],
+		[Vector3(0.028, 0.052, -0.006), 31.0, false],
+		[Vector3(-0.035, 0.027, 0.056), -18.0, true],
+		[Vector3(0.035, 0.051, 0.095), 63.0, true],
 	]
-	const PATH: Array[Vector3] = [Vector3(-0.08, 0, 0), Vector3(0.012, 0, 0), Vector3(0.061, 0, 0.037)]
-	const HEAD: Vector3 = Vector3(0.033, 0.014, 0.032)
-	const SHAFT_DIAMETER: float = 0.014
-	for placement: Array in NAILS:
+	const STRAIGHT_PATH: Array[Vector3] = [Vector3(-0.08, 0, 0), Vector3(0.055, 0, 0)]
+	const BENT_PATH: Array[Vector3] = [Vector3(-0.08, 0, 0), Vector3(-0.006, 0, 0), Vector3(0.047, 0, 0.052)]
+	for index: int in NAILS.size():
+		var placement: Array = NAILS[index]
 		var nail: Node3D = _frame(root, placement[0], Vector3(0, float(placement[1]), 0))
-		for index: int in PATH.size() - 1:
-			_rod(nail, PATH[index], PATH[index + 1], SHAFT_DIAMETER, RUST, true)
-		_metal(_ellipsoid(nail, HEAD, COPPER, PATH[0]))
+		nail.name = "Nail_%d" % index
+		var path: Array[Vector3] = STRAIGHT_PATH
+		if bool(placement[2]):
+			path = BENT_PATH
+		_nail(nail, path)
+
+
+static func _nail(root: Node3D, points: Array[Vector3]) -> void:
+	const SHAFT_RADIUS: float = 0.006
+	const HEAD_RADIUS: float = 0.022
+	const HEAD_THICKNESS: float = 0.008
+	const HEAD_RIM: Vector3 = Vector3(0.016, 0.022, 0.006)
+	const TIP_LENGTH: float = 0.028
+	if points.size() < 2:
+		return
+	for index: int in points.size() - 1:
+		var start: Vector3 = points[index]
+		var finish: Vector3 = points[index + 1]
+		var delta: Vector3 = finish - start
+		var shaft: MeshInstance3D = _cylinder(root, Vector3(SHAFT_RADIUS, delta.length(), SHAFT_RADIUS), STEEL, (start + finish) * HALF)
+		shaft.name = "Shaft_%d" % index
+		shaft.quaternion = Quaternion(Vector3.UP, delta.normalized())
+		_metal(shaft)
+	var first_direction: Vector3 = (points[1] - points[0]).normalized()
+	var head_at: Vector3 = points[0] - first_direction * HEAD_THICKNESS * HALF
+	var head: MeshInstance3D = _cylinder(root, Vector3(HEAD_RADIUS, HEAD_THICKNESS, HEAD_RADIUS), STEEL, head_at)
+	head.name = "Head"
+	head.quaternion = Quaternion(Vector3.UP, first_direction)
+	_metal(head)
+	var rim: MeshInstance3D = _ring(root, HEAD_RIM, STEEL_EDGE, head_at - first_direction * HEAD_THICKNESS * HALF)
+	rim.name = "HeadRim"
+	rim.quaternion = Quaternion(Vector3.UP, first_direction)
+	_metal(rim)
+	var last_index: int = points.size() - 1
+	var last_direction: Vector3 = (points[last_index] - points[last_index - 1]).normalized()
+	var tip_at: Vector3 = points[last_index] + last_direction * TIP_LENGTH * HALF
+	var tip: MeshInstance3D = _cylinder(root, Vector3(0, TIP_LENGTH, SHAFT_RADIUS), STEEL_EDGE, tip_at)
+	tip.name = "Tip"
+	tip.quaternion = Quaternion(Vector3.UP, last_direction)
+	_metal(tip)
 
 
 static func _tweezers(root: Node3D) -> void:
@@ -935,12 +974,21 @@ static func _med_box(root: Node3D) -> void:
 	const LID_TURN: Vector3 = Vector3(-24, 0, 0)
 	const LID: Array = [
 		["box", Vector3(0.255, 0.014, 0.185), Vector3(0, 0, 0.0925), PAPER],
-		["box", Vector3(0.09, 0.009, 0.027), Vector3(0, 0.012, 0.0925), RED],
-		["box", Vector3(0.027, 0.009, 0.09), Vector3(0, 0.012, 0.0925), RED],
+		["box", Vector3(0.032, 0.010, 0.175), Vector3(-0.063, 0.012, 0.0925), SEAL_BLUE],
+	]
+	const BANDAGE: Array = [
+		["cylinder", Vector3(0.028, 0.078, 0.028), Vector3(0.040, 0.035, 0.10), FLOUR_CLOTH, Vector3(0, 0, 90)],
+		["cylinder", Vector3(0.026, 0.010, 0.026), Vector3(-0.001, 0.035, 0.10), CHALK, Vector3(0, 0, 90)],
+		["cylinder", Vector3(0.026, 0.010, 0.026), Vector3(0.081, 0.035, 0.10), CHALK, Vector3(0, 0, 90)],
+		["cylinder", Vector3(0.010, 0.012, 0.010), Vector3(0.086, 0.035, 0.10), INK, Vector3(0, 0, 90)],
+		["ring", Vector3(0.011, 0.025, 0.008), Vector3(0.089, 0.035, 0.10), FLOUR_CLOTH, Vector3(0, 0, 90)],
 	]
 	_case_walls(root, CASE_SIZE, WALL, BURLAP)
 	var lid: Node3D = _frame(root, HINGE_AT, LID_TURN)
 	_layout(lid, LID)
+	var bandage: Node3D = _frame(lid, Vector3.ZERO)
+	bandage.name = "Bandage"
+	_layout(bandage, BANDAGE)
 
 
 static func _plank(root: Node3D) -> void:
