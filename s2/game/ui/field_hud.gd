@@ -2025,9 +2025,9 @@ func _place_radio() -> void:
 	if not radio_pill.visible:
 		return
 	var view: Vector2 = _view_size()
-	var one: bool = bool(game.opts.get("primary_one", false))
-	var left: float = stick_home().x + STICK_RING + UiFonts.px(SQUAD_GAP)
-	var right: float = view.x + AIM_AT.x - (0.0 if one else MANUAL_SIZE.x + 8.0) - 16.0
+	var bounds: Vector2 = radio_bounds()
+	var left: float = bounds.x
+	var right: float = bounds.y
 	var room: float = roundf(minf(view.x * RADIO_SHARE, right - left))
 	if absf(room - radio_room) > 0.5:
 		radio_room = room
@@ -2041,6 +2041,17 @@ func _place_radio() -> void:
 		floors.append((key as Control).get_global_rect().position.y)
 	var rs: Vector2 = radio_pill.size.max(radio_pill.get_combined_minimum_size())
 	radio_pill.global_position = radio_spot(rs, view, floors, left, right, UiFonts.px(MESSAGE_GAP)).position
+
+
+## The radio's subtitle keeps between these (x, screen px): the stick's ring and the
+## right thumb's pads, as an open card does (_place_allies). On a 16:9 screen a
+## wide call stands a little left of the middle rather than reach the pads.
+func radio_bounds() -> Vector2:
+	var view: Vector2 = _view_size()
+	var one: bool = bool(game.opts.get("primary_one", false))
+	var left: float = stick_home().x + STICK_RING + UiFonts.px(SQUAD_GAP)
+	var right: float = view.x + AIM_AT.x - (0.0 if one else MANUAL_SIZE.x + 8.0) - 16.0
+	return Vector2(left, right)
 
 
 ## Where a subtitle `pill` big stands on a `view` screen: centred, kept within

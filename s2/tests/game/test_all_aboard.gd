@@ -180,7 +180,13 @@ func test_a_radio_call_however_long_is_a_subtitle_over_the_faces() -> void:
 			assert_false(radio.intersects(b.get_global_rect()), "clear of the orders: " + words)
 		assert_gt(radio.position.y, view.y * 0.5, "in the lower half, the way ahead left open: " + words)
 		assert_lte(radio.end.y, faces.position.y, "over the faces: " + words)
-		assert_almost_eq(radio.get_center().x, view.x * 0.5, 1.0, "in the middle: " + words)
+		# In the middle, unless that would reach the right thumb's pads (a 16:9 screen).
+		var bounds: Vector2 = hud.radio_bounds()
+		assert_almost_eq(radio.get_center().x, minf(view.x * 0.5, bounds.y - radio.size.x * 0.5), 1.0, "in the middle as far as the pads let it: " + words)
+		assert_lte(radio.end.x, bounds.y + 0.5, "short of the thumb's pads: " + words)
+		for b: Button in hud.pads:
+			if b.is_visible_in_tree():
+				assert_false(radio.intersects(b.get_global_rect()), "clear of %s: %s" % [b.tooltip_text + b.text, words])
 		assert_lte(radio.size.x, view.x * hud.RADIO_SHARE + 1.0, "no wider than its share: " + words)
 		assert_gt(radio.position.x, hud.stick_home().x + hud.STICK_RING, "clear of the stick's ring: " + words)
 		assert_lt(radio.end.x, hud.status_pads[0].get_global_rect().position.x, "left of the state icons: " + words)
