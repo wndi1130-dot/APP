@@ -75,8 +75,9 @@ func test_moving_point_has_a_separate_slot_and_keeps_a_path_ahead() -> void:
 		var offset: Vector3 = slot - game.player.position
 		assert_gte(absf(offset.dot(right)), 1.5)
 		assert_gt(offset.dot(fwd), 0.0, "the point still goes ahead (406)")
-		# Decision 570: the following spacing is the old band times FOLLOW_SPREAD.
-		assert_between(offset.length(), 2.0 * FieldAi.FOLLOW_SPREAD, 4.0 * FieldAi.FOLLOW_SPREAD)
+		# Decision 570: the following spacing is the old band times FOLLOW_SPREAD, give or take
+		# FOLLOW_EPS as the slot search itself allows (field_ai.gd, the ring check of a candidate spot).
+		assert_between(offset.length(), 2.0 * FieldAi.FOLLOW_SPREAD - FieldAi.FOLLOW_EPS, 4.0 * FieldAi.FOLLOW_SPREAD + FieldAi.FOLLOW_EPS)
 		p.position = slot
 		p.stop()
 		var before: Vector3 = p.position
@@ -90,7 +91,7 @@ func test_moving_point_has_a_separate_slot_and_keeps_a_path_ahead() -> void:
 	p.position = p.brain["follow_slot"]
 	game.ai._keep_formation(p)
 	assert_true(p.path.is_empty(), "the chief stopped: settle at the idle slot")
-	assert_between(p.position.distance_to(game.player.position), 1.5 * FieldAi.FOLLOW_SPREAD, 2.5 * FieldAi.FOLLOW_SPREAD)
+	assert_between(p.position.distance_to(game.player.position), 1.5 * FieldAi.FOLLOW_SPREAD - FieldAi.FOLLOW_EPS, 2.5 * FieldAi.FOLLOW_SPREAD + FieldAi.FOLLOW_EPS)
 
 
 func test_follow_running_keeps_its_state_between_three_and_four_metres() -> void:
@@ -268,7 +269,7 @@ func test_slots_avoid_current_bodies_and_prior_role_slots_in_any_think_order() -
 		game.ai._keep_formation(p)
 		var slot: Vector3 = p.brain["follow_slot"]
 		assert_true(slot.is_finite())
-		assert_between(slot.distance_to(game.player.position), 1.5 * FieldAi.FOLLOW_SPREAD, 2.5 * FieldAi.FOLLOW_SPREAD)
+		assert_between(slot.distance_to(game.player.position), 1.5 * FieldAi.FOLLOW_SPREAD - FieldAi.FOLLOW_EPS, 2.5 * FieldAi.FOLLOW_SPREAD + FieldAi.FOLLOW_EPS)
 		for q in mates.values():
 			if q != p:
 				assert_gt(slot.distance_to(q.position), 0.9)
