@@ -200,6 +200,18 @@ func test_fail_a_broken_child_stops_every_kind_of_parent() -> void:
 		assert_null(_decoded({"x": v}), JSON.stringify(v))
 
 
+## A packed run's raw list and elements are checked for their one form before anything is
+## decoded: a map in their place never reaches the plain map path (its dig_parts clean-up
+## would turn the dictionary dig_wagon into an int, an engine error).
+func test_fail_a_packed_run_checks_its_raw_form_before_decoding() -> void:
+	var odd: Dictionary = {"dig_parts": [], "dig_wagon": {}}
+	var cases: Array = [_tag("PackedStringArray", odd)]
+	for type: String in ["PackedStringArray", "PackedVector3Array", "PackedByteArray", "PackedInt32Array"]:
+		cases.append(_tag(type, [odd]))
+	for tag: Dictionary in cases:
+		assert_null(_decoded({"run": tag}), JSON.stringify(tag))
+
+
 ## Proposal E: format 1 wrote a place as a bare [x, y, z] (field_save.gd VEC_KEYS).
 func test_fail_a_format_one_place_that_is_not_three_numbers_breaks_the_file() -> void:
 	assert_null(_decoded({"pos": [1.0, "x", 3.0]}))
@@ -297,7 +309,33 @@ func test_fail_a_train_write_keeps_a_good_backup_over_a_previous_slot_with_a_bad
 	assert_true(FileAccess.file_exists(TRAIN_AT + ".broken"), "the bad slot is set aside")
 
 
+## The writer keeps a hash of the slot bytes it last read or wrote as good; once the bytes on
+## disk change it must parse them again, and a slot broken after that is set aside.
+func test_fail_a_field_write_rechecks_a_slot_changed_after_it_was_written_as_good() -> void:
+	var save: Dictionary = _field_save()
+	assert_true(FieldSave.write(save, FIELD_AT))
+	var first_text: String = FileAccess.get_file_as_string(FIELD_AT)
+	assert_true(FieldSave.write(save, FIELD_AT), "the second write keeps the first as .bak through the cache")
+	assert_eq(FileAccess.get_file_as_string(FIELD_AT + ".bak"), first_text)
+	var broken_text: String = _with(FileAccess.get_file_as_string(FIELD_AT), "seed", _tag("int", "x"))
+	_write_text(FIELD_AT, broken_text)
+	var parses: int = FieldSave._test_previous_parses
+	assert_true(FieldSave.write(save, FIELD_AT))
+	assert_eq(FieldSave._test_previous_parses, parses + 1, "the changed bytes are parsed again")
+	assert_eq(FileAccess.get_file_as_string(FIELD_AT + ".bak"), first_text, "the good backup is kept")
+	assert_eq(FileAccess.get_file_as_string(FIELD_AT + ".broken"), broken_text, "the broken slot is set aside")
+	assert_eq(int(FieldSave.read(FIELD_AT).get("seed", -1)), 1, "the new slot reads")
+
+
 # ---------------------------------------------------------------- kept (pass before and after)
+
+## The encoder writes NaN as "-inf", so a map with both a NaN and a -INF key repeats its own
+## key: that one file still reads, keeping the last value as the old reader did.
+func test_keep_a_map_whose_nan_and_minus_inf_keys_the_encoder_merged() -> void:
+	var back: Variant = _round_trip({NAN: "a", -INF: "b"})
+	assert_true(back is Dictionary)
+	assert_eq((back as Dictionary).size(), 1)
+	assert_eq((back as Dictionary).get(-INF), "b")
 
 func test_keep_every_value_the_encoder_writes_comes_back_the_same_and_typed() -> void:
 	var cases: Array = [

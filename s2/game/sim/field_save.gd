@@ -1359,8 +1359,11 @@ static func _encode(v: Variant) -> Variant:
 
 ## A parsed value back as the encoder had it (_encode). Only what the encoder writes reads: a
 ## value that is not (a typed int that is not its text, a vector a number short, an unknown
-## tag) sets _decode_bad and gives null, and every caller stops at the first such child, so a
-## broken file is never half read into a guessed board. decode_checked is the entrance.
+## tag) sets _decode_bad and gives null, so a broken file is never half read into a guessed
+## board. A typed parent (a packed run, a typed map) checks each raw child's form before it
+## decodes it and stops at the first that fails, before building anything; a plain map or list
+## decodes all its children and then drops itself, before the dig_parts clean-up, if one failed.
+## decode_checked is the entrance.
 static func _decode(v: Variant) -> Variant:
 	if v is Dictionary:
 		# No game state has a "$type" key (saves of format 1 to 3, and the game's data): a map
@@ -1427,25 +1430,59 @@ static func _decode_tag(v: Dictionary) -> Variant:
 		return Rect2i(int(value[0]), int(value[1]), int(value[2]), int(value[3]))
 	if type == "Dictionary":
 		return _decode_pairs(value)
-	if not type in LIST_TAGS:
+	if not type in LIST_TAGS or not value is Array:
 		return _bad()
-	var run: Variant = _decode(value)
-	if _decode_bad or not run is Array:
-		return _bad()
-	for e: Variant in run:
-		var fits: bool = false
-		match type:
-			"PackedVector3Array": fits = e is Vector3
-			"PackedStringArray": fits = e is String
-			"PackedByteArray": fits = e is int and e >= 0 and e <= 255  # format 2's typed list
-			"PackedInt32Array": fits = e is int and e >= INT32_MIN and e <= INT32_MAX
-		if not fits:
+	return _decode_run(type, value)
+
+
+## A packed run written as a list: each raw element is checked for the one form the encoder
+## gives it before anything is decoded or built (never the general map path, whose dig_parts
+## clean-up reads other keys), and goes straight into the packed array in one pass.
+static func _decode_run(type: String, list: Array) -> Variant:
+	var count: int = list.size()
+	if type == "PackedStringArray":
+		for e: Variant in list:
+			if not e is String:
+				return _bad()
+		return PackedStringArray(list)
+	if type == "PackedVector3Array":
+		var places := PackedVector3Array()
+		places.resize(count)
+		for i: int in count:
+			var e: Variant = list[i]
+			if not e is Dictionary or (e as Dictionary).get("$type") != "Vector3":
+				return _bad()
+			var place: Variant = _decode_tag(e)
+			if _decode_bad:
+				return null
+			places[i] = place
+		return places
+	# Format 2 wrote byte and int32 runs as a list of typed ints (one run can hold tens of
+	# thousands): each is read where it lands, no list in between.
+	if type == "PackedByteArray":
+		var bytes := PackedByteArray()
+		bytes.resize(count)
+		for i: int in count:
+			var b: Variant = _typed_int(list[i])
+			if b == null or b < 0 or b > 255:
+				return _bad()
+			bytes[i] = b
+		return bytes
+	var ints := PackedInt32Array()
+	ints.resize(count)
+	for i: int in count:
+		var n: Variant = _typed_int(list[i])
+		if n == null or n < INT32_MIN or n > INT32_MAX:
 			return _bad()
-	match type:
-		"PackedVector3Array": return PackedVector3Array(run)
-		"PackedStringArray": return PackedStringArray(run)
-		"PackedByteArray": return PackedByteArray(run)
-	return PackedInt32Array(run)
+		ints[i] = n
+	return ints
+
+
+## A raw {"$type": "int", "value": text} element as its int, or null when it is not one.
+static func _typed_int(e: Variant) -> Variant:
+	if not e is Dictionary or (e as Dictionary).size() != 2 or (e as Dictionary).get("$type") != "int":
+		return null
+	return _int_of_text((e as Dictionary).get("value"))
 
 
 ## A map with keys that are not all text: [key, value] pairs, each key once.
@@ -1457,8 +1494,12 @@ static func _decode_pairs(value: Variant) -> Variant:
 		if not pair is Array or (pair as Array).size() != 2:
 			return _bad()
 		var key: Variant = _decode(pair[0])
-		if _decode_bad or dictionary.has(key):
-			# The encoder walks a map's keys once: a repeated one would drop the value before it.
+		if _decode_bad:
+			return null
+		# The encoder walks a map's keys once: a repeated key would drop the value before it.
+		# Only an infinite float key can repeat in its own output (it writes NaN as "-inf" too):
+		# that one keeps the last value, as before.
+		if dictionary.has(key) and not (key is float and is_inf(key)):
 			return _bad()
 		var item: Variant = _decode(pair[1])
 		if _decode_bad:
