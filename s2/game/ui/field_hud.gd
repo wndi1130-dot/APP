@@ -140,6 +140,7 @@ const TOAST_WARN_S: float = 6.0
 const TOAST_MAX: int = 4
 const TOAST_W: float = 560.0        # a note wider than this wraps onto a second line
 const RADIO_W: float = 480.0        # so does a radio call, or at the column's own room
+const RADIO_SHARE: float = 0.46     # the radio's subtitle at most this share of the screen wide (결정 569)
 const SAY_S: float = 2.6            # a line over a companion's head stays this long
 const SAY_FONT: int = 20
 # A held train leaves: the field stands still and darkens, two lines come up,
@@ -369,7 +370,7 @@ var follow_button: Button             # 따라와 for every living companion (de
 var wait_button: Button               # 대기 for every living companion
 var order_size: Vector2               # the touch rect of each of those two
 var clock_pill: Control               # the clock's glass line; the squad's orders stand right of it
-var radio_room: float = -1.0          # the column's width the radio's call was last fitted to
+var radio_room: float = -1.0          # the room the radio's call was last fitted to
 var card_row: int = -1                # whose card is open over their face (-1: none)
 var context_button: Button
 var depart_button: Button              # leaving: its own pad, there whenever the leader is by the train
@@ -840,8 +841,9 @@ func _build_top() -> void:
 		feel_label.size_flags_horizontal = Control.SIZE_SHRINK_END
 		info_box.add_child(feel_label)
 		info_box.move_child(feel_label, goal_label.get_parent().get_index() + 1)
-	# The radio: one glass line in the top middle, the set's mark before the
-	# words (시안 .fradio). From dusk it burns amber like 'all aboard'.
+	# The radio: one glass line, a subtitle over the squad's faces (결정 569,
+	# _place_radio), the set's mark before the words (시안 .fradio). From dusk it
+	# burns amber like 'all aboard'.
 	radio_pill = PanelContainer.new()
 	radio_pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var calm: StyleBoxFlat = HudSkin.glass(18.0, 6.0)
@@ -2014,6 +2016,43 @@ func _message_span() -> Vector2:
 	return Vector2(all_aboard_button.position.x + all_aboard_size.x + gap, right)
 
 
+## The radio's call as a subtitle (결정 569, user 2026-11-06 「옮기는게 낫네
+## 그러자」): one line in the bottom middle, as wide as RADIO_SHARE of the screen
+## (its words to RADIO_W, then they wrap), its foot over whatever stands highest
+## there — the squad's faces, a face's open card, a row of choices — between the
+## stick's ring and the right thumb's pads. The top of the screen, ahead, stays open.
+func _place_radio() -> void:
+	if not radio_pill.visible:
+		return
+	var view: Vector2 = _view_size()
+	var one: bool = bool(game.opts.get("primary_one", false))
+	var left: float = stick_home().x + STICK_RING + UiFonts.px(SQUAD_GAP)
+	var right: float = view.x + AIM_AT.x - (0.0 if one else MANUAL_SIZE.x + 8.0) - 16.0
+	var room: float = roundf(minf(view.x * RADIO_SHARE, right - left))
+	if absf(room - radio_room) > 0.5:
+		radio_room = room
+		_fit_radio()
+	var floors: Array[float] = [allies_box.get_global_rect().position.y]
+	for row in ally_buttons:
+		var card: Control = row["card"]
+		if card.visible:
+			floors.append(card.get_global_rect().position.y)
+	for key: Node in offer_box.get_children():
+		floors.append((key as Control).get_global_rect().position.y)
+	var rs: Vector2 = radio_pill.size.max(radio_pill.get_combined_minimum_size())
+	radio_pill.global_position = radio_spot(rs, view, floors, left, right, UiFonts.px(MESSAGE_GAP)).position
+
+
+## Where a subtitle `pill` big stands on a `view` screen: centred, kept within
+## [left, right], its foot `gap` over the highest of `floors` (tops, screen y).
+static func radio_spot(pill: Vector2, view: Vector2, floors: Array[float], left: float, right: float, gap: float) -> Rect2:
+	var foot: float = view.y
+	for y: float in floors:
+		foot = minf(foot, y)
+	var x: float = clampf(view.x * 0.5 - pill.x * 0.5, left, maxf(right - pill.x, left))
+	return Rect2(Vector2(roundf(x), roundf(foot - gap - pill.y)), pill)
+
+
 ## How wide a note may be with its paper: TOAST_W, or the column's room.
 func _note_room() -> float:
 	var span: Vector2 = _message_span()
@@ -2021,9 +2060,10 @@ func _note_room() -> float:
 
 
 ## The message column (user 2026-10-18), from the state icons' top: the stop's
-## own lines, then the radio's call, then the notes, each right-aligned on the
-## column's right edge. A note that would reach down onto the right thumb's
-## pads under the column takes the oldest plain note's place.
+## own lines, then the notes, each right-aligned on the column's right edge. A
+## note that would reach down onto the right thumb's pads under the column takes
+## the oldest plain note's place. The radio's call is no longer here: it is heard,
+## so it stands as a subtitle in the bottom middle (결정 569, _place_radio).
 func _place_messages() -> void:
 	var gap: float = UiFonts.px(MESSAGE_GAP)
 	var span: Vector2 = _message_span()
@@ -2037,13 +2077,7 @@ func _place_messages() -> void:
 		var ib: Vector2 = info_box.size.max(info_box.get_combined_minimum_size())
 		info_box.position = Vector2(roundf(span.y - ib.x), top)
 		top += ib.y + gap
-	if radio_pill.visible:
-		if absf(span.y - span.x - radio_room) > 0.5:
-			radio_room = span.y - span.x
-			_fit_radio()
-		var rs: Vector2 = radio_pill.size.max(radio_pill.get_combined_minimum_size())
-		radio_pill.position = Vector2(roundf(span.y - rs.x), top)
-		top += rs.y + gap
+	_place_radio()
 	var box: Vector2 = toast_box.size.max(toast_box.get_combined_minimum_size())
 	toast_box.position = Vector2(roundf(span.y - box.x), roundf(top))
 	var floor_y: float = _view_size().y
@@ -2406,8 +2440,8 @@ func radio(text: String) -> void:
 	radio_left = 8.0
 
 
-## A call no wider than the message column leaves it (RADIO_W at most): a
-## longer one wraps onto more lines rather than reach over the squad's orders.
+## A call no wider than its subtitle's room (_place_radio, RADIO_W at most): a
+## longer one wraps between words onto more lines rather than reach the thumbs.
 func _fit_radio() -> void:
 	radio_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	radio_label.custom_minimum_size.x = 0.0
