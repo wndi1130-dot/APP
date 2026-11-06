@@ -5,6 +5,10 @@ const FieldSave = preload("res://game/sim/field_save.gd")
 const SliceFlow = preload("res://game/slice_flow.gd")
 const SliceSave = preload("res://game/sim/slice_save.gd")
 const TRAIN_PATH: String = "user://test_world_seed_1a_train.json"
+const STARTS: String = "res://tests/game/fixtures/campaign_starts.json"
+const FIX2_SLICE: String = "user://test_world_seed_1a_fix2_slice.json"
+const FIX2_TRAIN: String = "user://test_world_seed_1a_fix2_train.json"
+const FIX2_FIELD: String = "user://test_world_seed_1a_fix2_field.json"
 
 
 class FlowProbe extends SliceFlow:
@@ -13,6 +17,11 @@ class FlowProbe extends SliceFlow:
 
 	func _guard_ids(_d: Dictionary) -> Array:
 		return []
+
+
+func after_each() -> void:
+	for path: String in [FIX2_SLICE, FIX2_TRAIN, FIX2_FIELD]:
+		SliceSave.clear(path)
 
 
 func _started() -> Dictionary:
@@ -58,6 +67,38 @@ func test_world_seed_for_run_is_deterministic_and_valid() -> void:
 		seen[text] = true
 
 
+func test_new_campaign_saves_seed_for_each_run() -> void:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(STARTS))
+	assert_true(parsed is Array and not parsed.is_empty(), "campaign starting boards")
+	if not parsed is Array or parsed.is_empty():
+		return
+	var seeds: Array[String] = []
+	var runs: Array[String] = ["run_1a", "run_1b", "run_1a"]
+	var expected: Array[String] = ["984539240965475773", "924050262981133378", "984539240965475773"]
+	for i: int in runs.size():
+		for path: String in [FIX2_SLICE, FIX2_TRAIN, FIX2_FIELD]:
+			SliceSave.clear(path)
+		var flow: FlowProbe = FlowProbe.new()
+		flow.opts = {"mode": "campaign", "save": true, "seed": 1, "run": runs[i],
+			"start_board": parsed[0], "cinema": false, "map_threads": false, "still": true,
+			"slice_save_path": FIX2_SLICE, "train_save_path": FIX2_TRAIN, "field_save_path": FIX2_FIELD}
+		add_child(flow)
+		flow.set_process(false)
+		assert_eq(flow.campaign_error, "")
+		assert_eq(flow.save_error, "")
+		var saved: Dictionary = SliceSave._parse(FIX2_TRAIN)
+		var campaign: Dictionary = saved.get("campaign", {})
+		var seed: String = String(campaign.get("world_seed", ""))
+		assert_eq(seed, expected[i])
+		assert_eq(seed, RouteState.world_seed_for_run(runs[i]))
+		seeds.append(seed)
+		flow.free()
+	assert_ne(seeds[0], seeds[1])
+	assert_eq(seeds[0], seeds[2])
+	for path: String in [FIX2_SLICE, FIX2_TRAIN, FIX2_FIELD]:
+		SliceSave.clear(path)
+
+
 func test_problem_accepts_old_and_valid_campaigns() -> void:
 	var g: Dictionary = _started()
 	assert_eq(RouteState.problem(g), "")
@@ -97,10 +138,16 @@ func test_problem_rejects_bad_seed_and_rules() -> void:
 			var bad: Dictionary = _started()
 			bad["campaign"][key] = value
 			assert_ne(RouteState.problem(bad), "", "invalid %s: %s" % [key, str(value)])
+
+
+func test_missing_world_seed_error_for_supported_furnish_rule() -> void:
 	var missing: Dictionary = _started()
 	missing["campaign"].erase("world_seed")
 	missing["campaign"]["furnish_rule"] = 1
-	assert_ne(RouteState.problem(missing), "")
+	assert_eq(RouteState.problem(missing), "F-CAMPAIGN-ROUTE: furnish_rule")
+	assert_eq(RouteState._seed_problem(missing["campaign"], 1), "F-CAMPAIGN-ROUTE: missing world seed")
+	missing["campaign"]["world_seed"] = "0"
+	assert_eq(RouteState._seed_problem(missing["campaign"], 1), "")
 
 
 func test_field_opts_copies_present_campaign_keys_only() -> void:

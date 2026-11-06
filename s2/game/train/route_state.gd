@@ -57,18 +57,25 @@ static func record_for_visit(g: Dictionary) -> Dictionary:
 	return {}
 
 
-static func problem(g: Dictionary, t: Dictionary = {}) -> String:
-	if not is_campaign(g):
-		return "F-CAMPAIGN-ROUTE: mode"
-	var route: Dictionary = g["campaign"]
+static func _seed_problem(route: Dictionary, max_furnish_rule: int) -> String:
 	if route.has("world_seed") and FieldSave._int_of_text(route["world_seed"]) == null:
 		return "F-CAMPAIGN-ROUTE: world seed"
 	for key: String in ["seed_rule", "furnish_rule"]:
-		var upper: int = SEED_RULE if key == "seed_rule" else FURNISH_RULE
+		var upper: int = SEED_RULE if key == "seed_rule" else max_furnish_rule
 		if route.has(key) and (not route[key] is int or route[key] < 0 or route[key] > upper):
 			return "F-CAMPAIGN-ROUTE: " + key
 	if int(route.get("furnish_rule", 0)) >= 1 and not route.has("world_seed"):
 		return "F-CAMPAIGN-ROUTE: missing world seed"
+	return ""
+
+
+static func problem(g: Dictionary, t: Dictionary = {}) -> String:
+	if not is_campaign(g):
+		return "F-CAMPAIGN-ROUTE: mode"
+	var route: Dictionary = g["campaign"]
+	var seed_issue: String = _seed_problem(route, FURNISH_RULE)
+	if seed_issue != "":
+		return seed_issue
 	if route.get("version") != 1 or route.get("catalog") != Catalog.CATALOG or not route.get("run") is String or route["run"].is_empty():
 		return "F-CAMPAIGN-ROUTE: identity"
 	if not _whole(route.get("cursor")) or int(route["cursor"]) > Catalog.size() or not route.get("visit") is Dictionary:
