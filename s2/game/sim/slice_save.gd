@@ -111,7 +111,8 @@ static func _parse(at: String, source: Dictionary = {}) -> Dictionary:
 	var json := JSON.new()
 	if json.parse(text) != OK or not json.data is Dictionary:
 		return {}
-	# A broken packed run in it is a broken file, as a cut-off one (FieldSave.decode_checked).
+	# A value the codec does not read (a broken packed run, a typed int that is not its text, ...)
+	# is a broken file, as a cut-off one (FieldSave.decode_checked).
 	var decoded: Variant = FieldSave.decode_checked(json.data)
 	if not decoded is Dictionary:
 		return {}
