@@ -887,6 +887,239 @@ func test_walk_height_bounds_accept_corrected_targets_for_both_legs() -> void:
 
 
 ## Short legs and mixed sole weights belong only to these regression fixtures.
+func _walk_e_pose(body: Skeleton3D) -> Array:
+	var result: Array = []
+	for bone in body.get_bone_count():
+		result.append([body.get_bone_pose_position(bone), body.get_bone_pose_rotation(bone), body.get_bone_pose_scale(bone)])
+	return result
+
+
+func test_walk_e_dynamic_matches_fixed_phase_legacy_and_preserves_inputs() -> void:
+	var fixture: Dictionary = _walk_fixed_contact_case()
+	var ctx: Dictionary = fixture["ctx"]
+	var fit: Dictionary = ctx["footlock_walk"]
+	var spec: Dictionary = {"clip": "p_walk", "keyed_pose": _walk_e_pose(ctx["body"]), "height_reference_m": 0.9}
+	var solved: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, 0.0, fixture["known"])
+	assert_true(bool(solved.get("ok", false)), "구판 고정 위상 양성 대조")
+	if not bool(solved.get("evaluated", false)):
+		return
+	var physical: Dictionary = ctx["walk_observation"]["last_physical"].duplicate(true)
+	var height: float = float(solved["final_hips_y"])
+	var targets: Array = solved["targets_used"].duplicate()
+	var before: PackedByteArray = var_to_bytes([ctx, fit, spec, height, targets, _walk_e_pose(ctx["body"])])
+	var ledger: Dictionary = BodyBake._person_walk_budget({"ik": 8, "clip_ik": 8})
+	var first: Dictionary = BodyBake._person_walk_evaluate_state(ctx, fit, spec, 0.0, height, targets, "DYNAMIC", [], ledger)
+	assert_true(bool(first["evaluated"]), str(first["reason"]))
+	assert_true(bool(first["residuals_valid"]))
+	assert_eq(first["status"], "VALID")
+	if not bool(first["residuals_valid"]):
+		return
+	assert_eq(var_to_bytes(first["probes"]), var_to_bytes(solved["probes"]), "같은 피부 계산 바이트")
+	assert_eq(var_to_bytes(first["physical_error"]), var_to_bytes(physical), "독립 실제 피부 측정 바이트")
+	assert_almost_eq(float(first["skin_residual"]), float(solved["skin_residual"]), 1e-9)
+	for side in 2:
+		assert_lte((first["residual_vector"][side] as Vector3).distance_to(solved["residual_vector"][side]), 1e-9)
+		assert_lte((first["actual_ankles"][side] as Vector3).distance_to(solved["actual_ankles"][side]), 1e-9)
+		assert_almost_eq(float(first["misses"][side]), float(solved["misses"][side]), 1e-9)
+	var second: Dictionary = BodyBake._person_walk_evaluate_state(ctx, fit, spec, 0.0, height, targets, "DYNAMIC", [], ledger)
+	assert_eq(var_to_bytes(first), var_to_bytes(second), "같은 입력 재호출 바이트")
+	var shifted: Array = targets.duplicate()
+	shifted[0] += Vector3(0.0002, 0.0, 0.0)
+	BodyBake._person_walk_evaluate_state(ctx, fit, spec, 0.0, height, shifted, "DYNAMIC", [], ledger)
+	var after_other: Dictionary = BodyBake._person_walk_evaluate_state(ctx, fit, spec, 0.0, height, targets, "DYNAMIC", [], ledger)
+	assert_eq(var_to_bytes(first), var_to_bytes(after_other), "다른 입력을 사이에 둔 호출 순서")
+	assert_eq(before, var_to_bytes([ctx, fit, spec, height, targets, _walk_e_pose(ctx["body"])]), "입력과 모든 캐시 및 뼈 자세 불변")
+	assert_eq(int(ledger["used"]["ik"]), 4, "실제 양발 IK 네 번")
+	assert_eq(int(first["actual_pairs"]), 1)
+	assert_eq(int(first["skin_passes"]), 1)
+	assert_eq(int(first["cache_hits"]), 0, "평가기 결과 캐시는 사용하지 않음")
+	var fixed: Dictionary = BodyBake._person_walk_evaluate_state(ctx, fit, spec, 0.0, height, targets, "BRANCH_FIXED", first["branch"], ledger)
+	assert_true(bool(fixed["branch_valid"]))
+	assert_eq(var_to_bytes(first["probes"]), var_to_bytes(fixed["probes"]), "같은 분기의 동일 식")
+
+
+func _walk_e_flat_input(gap: float = 0.000099) -> Dictionary:
+	var ctx: Dictionary = _walk_stick_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	body.reset_bone_poses()
+	fit["starts"] = [0.9, 0.9]
+	fit["durations"] = [0.6, 0.6]
+	fit["goal_cache"] = {}
+	var rest: PackedVector3Array = fit["rest"]
+	var targets: Array = []
+	for side in 2:
+		var sole: PackedInt32Array = fit["soles"][side]
+		fit["soles"][side] = PackedInt32Array([sole[0], sole[1]])
+		rest[sole[1]] = rest[sole[0]] + Vector3(0.08, gap, 0.12)
+		var ankle: Vector3 = fit["rest_ankles"][side]
+		targets.append(ankle)
+		fit["goal_cache"][side] = {0.0: {"target": ankle, "base": ankle, "rotation": Basis.IDENTITY, "path": Vector3.ZERO, "age": 0.1}}
+	fit["rest"] = rest
+	ctx["walk_clip"] = "p_walk"
+	return {"ctx": ctx, "fit": fit, "spec": {"clip": "p_walk", "keyed_pose": _walk_e_pose(body)}, "targets": targets, "height": 0.9}
+
+
+func _walk_e_call(input: Dictionary, mode: String = "DYNAMIC", branch: Array = [], ledger: Dictionary = {}) -> Dictionary:
+	return BodyBake._person_walk_evaluate_state(input["ctx"], input["fit"], input["spec"], 0.0, float(input["height"]), input["targets"], mode, branch, ledger)
+
+
+func test_walk_e_reach_boundary_is_signed_and_never_clamped() -> void:
+	var input: Dictionary = _walk_e_flat_input()
+	var body: Skeleton3D = input["ctx"]["body"]
+	var fit: Dictionary = input["fit"]
+	var ledger: Dictionary = BodyBake._person_walk_budget({"ik": 4, "clip_ik": 4})
+	for sign_value: float in [-1.0, 1.0]:
+		var targets: Array = []
+		for side in 2:
+			var leg: Array = fit["legs"][side]
+			var hip: Vector3 = body.get_bone_global_pose(int(leg[0])).origin
+			var a: float = hip.distance_to(body.get_bone_global_pose(int(leg[1])).origin)
+			var b: float = body.get_bone_global_pose(int(leg[1])).origin.distance_to(body.get_bone_global_pose(int(leg[2])).origin)
+			var limit: float = sqrt(a * a + b * b + 2.0 * a * b * cos(BodyBake.PERSON_WALK_KNEE_MIN))
+			hip.y += float(input["height"]) - body.get_bone_global_pose(body.find_bone("hips")).origin.y
+			targets.append(hip + Vector3.DOWN * (limit + sign_value * 0.00001))
+		input["targets"] = targets
+		var before: PackedByteArray = var_to_bytes([input, _walk_e_pose(body)])
+		var result: Dictionary = _walk_e_call(input, "DYNAMIC", [], ledger)
+		assert_eq(before, var_to_bytes([input, _walk_e_pose(body)]), "도달 경계에서도 원본 복원")
+		for reach: Dictionary in result["reach"]:
+			assert_true(bool(reach["valid"]))
+			assert_true(is_finite(float(reach["upper_margin_m"])))
+			assert_gt(-sign_value * float(reach["upper_margin_m"]), 0.0, "경계 양쪽 부호")
+		if sign_value < 0.0:
+			assert_true(bool(result["evaluated"]), "바로 안은 평가 가능")
+		else:
+			assert_eq(result["status"], "IK_OUT_OF_DOMAIN")
+			assert_false(bool(result["evaluated"]))
+			assert_false(bool(result["residuals_valid"]))
+			assert_true((result["residual_vector"] as Array).is_empty())
+	assert_eq(int(ledger["used"]["ik"]), 1, "도달 밖은 양발 IK와 원장 모두 0")
+	var denied: Dictionary = BodyBake._person_walk_budget({"ik": 0})
+	input["targets"] = fit["rest_ankles"].duplicate()
+	var stopped: Dictionary = _walk_e_call(input, "DYNAMIC", [], denied)
+	assert_eq(stopped["reason"], "FOOT_PATH_BUDGET")
+	assert_eq(stopped["status"], null, "예산 거부는 물리 상태 판정이 아님")
+	assert_eq(int(stopped["actual_pairs"]), 0)
+	assert_eq(int(denied["used"].get("ik", 0)), 0)
+	input["height"] = NAN
+	var invalid: Dictionary = _walk_e_call(input)
+	assert_eq(invalid["status"], "DEGENERATE")
+	assert_false(bool(invalid["residuals_valid"]))
+	for reach: Dictionary in invalid["reach"]:
+		assert_true(is_finite(float(reach["signed_m"])))
+		assert_false(bool(reach["valid"]), "측정 불가의 유한 자리값은 유효 잔차가 아님")
+
+
+func test_walk_e_lower_reach_and_degenerate_bones_do_not_spend() -> void:
+	var ctx: Dictionary = _walk_feedback_context()
+	var fit: Dictionary = ctx["footlock_walk"]
+	var body: Skeleton3D = ctx["body"]
+	body.reset_bone_poses()
+	var spec: Dictionary = {"clip": "p_walk", "keyed_pose": _walk_e_pose(body)}
+	var ledger: Dictionary = BodyBake._person_walk_budget({"ik": 4, "clip_ik": 4})
+	for sign_value: float in [1.0, -1.0]:
+		var targets: Array = []
+		for side in 2:
+			var leg: Array = fit["legs"][side]
+			var hip: Vector3 = body.get_bone_global_pose(int(leg[0])).origin
+			var a: float = hip.distance_to(body.get_bone_global_pose(int(leg[1])).origin)
+			var b: float = body.get_bone_global_pose(int(leg[1])).origin.distance_to(body.get_bone_global_pose(int(leg[2])).origin)
+			hip.y += 0.7 - body.get_bone_global_pose(body.find_bone("hips")).origin.y
+			targets.append(hip + Vector3.DOWN * (absf(a - b) + sign_value * 0.00001))
+		var result: Dictionary = BodyBake._person_walk_evaluate_state(ctx, fit, spec, 0.0, 0.7, targets, "DYNAMIC", [], ledger)
+		for reach: Dictionary in result["reach"]:
+			assert_true(bool(reach["valid"]))
+			assert_gt(sign_value * float(reach["lower_margin_m"]), 0.0, "최단 도달 경계 양쪽 부호")
+		if sign_value > 0.0:
+			assert_true(bool(result["evaluated"]), str(result["reason"]))
+		else:
+			assert_eq(result["status"], "IK_OUT_OF_DOMAIN")
+			assert_eq(int(result["actual_pairs"]), 0)
+	assert_eq(int(ledger["used"]["ik"]), 1)
+	var broken_spec: Dictionary = spec.duplicate(true)
+	var broken_poses: Array = broken_spec["keyed_pose"]
+	var knee_pose: Array = broken_poses[int(fit["legs"][0][1])]
+	# 평가기가 복원하는 무릎 위치를 부모 허벅지의 원점에 둔다.
+	knee_pose[0] = Vector3.ZERO
+	var broken: Dictionary = BodyBake._person_walk_evaluate_state(ctx, fit, broken_spec, 0.0, 0.7, fit["rest_ankles"], "DYNAMIC", [], ledger)
+	assert_eq(broken["status"], "DEGENERATE")
+	assert_eq(broken["reason"], "DEGENERATE_REACH")
+	assert_eq(int(broken["actual_pairs"]), 0)
+	assert_eq(int(ledger["used"]["ik"]), 1, "퇴화된 뼈는 차감하지 않음")
+	assert_true(is_finite(float(broken["reach"][0]["signed_m"])))
+	var absent: Dictionary = BodyBake._person_walk_evaluate_state({}, {}, {}, 0.0, 0.0, [], "DYNAMIC", [], ledger)
+	assert_eq(absent["status"], "DEGENERATE")
+	assert_false(bool(absent["residuals_valid"]))
+	assert_eq(int(ledger["used"]["ik"]), 1)
+
+
+func test_walk_e_band_and_minimum_branches_are_fixed_and_validated() -> void:
+	var input: Dictionary = _walk_e_flat_input()
+	var fit: Dictionary = input["fit"]
+	var first: Dictionary = _walk_e_call(input)
+	assert_true(bool(first["residuals_valid"]), str(first["reason"]))
+	if not bool(first["residuals_valid"]):
+		return
+	for side in 2:
+		assert_eq(first["branch"][side]["vertices"].size(), 2, "0.099 mm 띠 안")
+	var rest: PackedVector3Array = fit["rest"]
+	for side in 2:
+		var sole: PackedInt32Array = fit["soles"][side]
+		rest[sole[1]].y = rest[sole[0]].y + 0.000101
+	fit["rest"] = rest
+	var dynamic: Dictionary = _walk_e_call(input)
+	var fixed: Dictionary = _walk_e_call(input, "BRANCH_FIXED", first["branch"])
+	assert_true(bool(fixed["residuals_valid"]), "분기 연장은 계산 가능")
+	assert_false(bool(fixed["branch_valid"]), "띠 조건 이탈")
+	assert_eq(fixed["status"], "CONSTRAINT_VIOLATED")
+	for side in 2:
+		assert_eq(dynamic["branch"][side]["vertices"].size(), 1, "0.101 mm 띠 밖")
+		assert_eq(fixed["branch"][side]["vertices"], first["branch"][side]["vertices"], "넘긴 지지 집합 유지")
+		assert_false(bool(fixed["branch_checks"][side]["band_valid"]))
+		var sole: PackedInt32Array = fit["soles"][side]
+		rest[sole[1]].y = rest[sole[0]].y - 0.0002
+	fit["rest"] = rest
+	var crossed: Dictionary = _walk_e_call(input, "BRANCH_FIXED", first["branch"])
+	for side in 2:
+		assert_false(bool(crossed["branch_checks"][side]["minimum_valid"]))
+		assert_eq(crossed["branch"][side]["lowest_vertex"], first["branch"][side]["lowest_vertex"])
+		assert_almost_eq((crossed["probes"][side]["point"] as Vector3).y - float(crossed["physical_error"]["sides"][side]["lowest_y"]), 0.0002, 1e-7, "고정 최저와 실제 최저를 분리")
+
+
+func test_walk_e_constraint_violation_and_fixed_ik_degeneracy_are_distinct() -> void:
+	var input: Dictionary = _walk_e_flat_input()
+	input["fit"]["rest_hips_y"] = 0.8
+	var constrained: Dictionary = _walk_e_call(input)
+	assert_true(bool(constrained["evaluated"]))
+	assert_eq(constrained["status"], "CONSTRAINT_VIOLATED")
+	assert_lt(float(constrained["standing_margin_m"]), 0.0)
+	assert_almost_eq(float(constrained["command_height"]), 0.9, 0.0, "높이 상한으로 입력을 고치지 않음")
+	var body: Skeleton3D = input["ctx"]["body"]
+	var targets: Array = []
+	for side in 2:
+		var hip: Vector3 = body.get_bone_global_pose(int(input["fit"]["legs"][side][0])).origin
+		hip.y += 0.9 - body.get_bone_global_pose(body.find_bone("hips")).origin.y
+		targets.append(hip + Vector3.BACK * 0.7)
+	input["targets"] = targets
+	var fallback: Dictionary = _walk_e_call(input)
+	assert_true(bool(fallback["evaluated"]))
+	if not bool(fallback["residuals_valid"]):
+		return
+	for side in 2:
+		assert_eq(fallback["branch"][side]["ik_choice"], "RIGHT")
+		targets[side] += (Vector3.RIGHT - Vector3.BACK) * 0.7
+	input["targets"] = targets
+	var fixed: Dictionary = _walk_e_call(input, "BRANCH_FIXED", fallback["branch"])
+	assert_eq(fixed["status"], "DEGENERATE", "고정 IK 선택 퇴화는 다른 분기로 바꾸지 않음")
+	assert_eq(var_to_bytes(fixed["branch"]), var_to_bytes(fallback["branch"]), "실패해도 요청한 IK 분기 정체 유지")
+	assert_false(bool(fixed["branch_valid"]))
+	assert_eq(int(fixed["actual_pairs"]), 0)
+	var dynamic: Dictionary = _walk_e_call(input)
+	assert_true(bool(dynamic["evaluated"]))
+	assert_eq(dynamic["branch"][0]["ik_choice"], "POLE")
+
+
 func _walk_feedback_context(bent: bool = false) -> Dictionary:
 	var ctx: Dictionary = _walk_stick_context()
 	var fit: Dictionary = ctx["footlock_walk"]

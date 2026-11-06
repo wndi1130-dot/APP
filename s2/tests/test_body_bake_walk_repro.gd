@@ -279,3 +279,38 @@ func test_walk_duffel_direct_phase_has_independent_physical_contract() -> void:
 	assert_eq(frozen, var_to_bytes([input["keyed_pose"], fit["path_params"], input["height"], input["seed"], input["shift"], PROBE_PHASE]), "fixed direct input bytes")
 	assert_lte(int(solved["ik_passes"]), FRAME_EVALUATION_LIMIT)
 	print("WALK_DIRECT_INPUT phase=%.9f height=%.12f bytes=%d reason=%s" % [PROBE_PHASE, input["height"], frozen.size(), solved["reason"]])
+
+
+func test_walk_duffel_explicit_evaluator_matches_legacy_direct_phase() -> void:
+	var input: Dictionary = _direct_phase_input()
+	assert_false(input.is_empty(), "DIRECT_INPUT_MISSING")
+	if input.is_empty():
+		return
+	var ctx: Dictionary = input["ctx"]
+	var fit: Dictionary = input["fit"]
+	var spec: Dictionary = {"clip": "p_walk", "keyed_pose": input["keyed_pose"], "height_reference_m": input["height"]}
+	var solved: Dictionary = BodyBake._solve_person_walk_frame(ctx, fit, PROBE_PHASE, input["seed"])
+	_assert_phase_contract(ctx, fit, solved)
+	if not bool(solved.get("evaluated", false)):
+		return
+	var physical: Dictionary = ctx["walk_observation"]["last_physical"].duplicate(true)
+	var ledger: Dictionary = BodyBake._person_walk_budget({"ik": 4, "clip_ik": 4})
+	var before: PackedByteArray = var_to_bytes([ctx, fit, spec, BodyBake._skin_frame(ctx)])
+	var result: Dictionary = BodyBake._person_walk_evaluate_state(ctx, fit, spec, PROBE_PHASE, float(solved["final_hips_y"]), solved["targets_used"], "DYNAMIC", [], ledger)
+	assert_true(bool(result["evaluated"]), str(result["reason"]))
+	assert_true(bool(result["residuals_valid"]))
+	if not bool(result["residuals_valid"]):
+		return
+	assert_eq(before, var_to_bytes([ctx, fit, spec, BodyBake._skin_frame(ctx)]), "명시 평가 뒤 입력·캐시·자세 불변")
+	assert_eq(var_to_bytes(result["probes"]), var_to_bytes(solved["probes"]), "같은 계산의 피부 바이트")
+	assert_eq(var_to_bytes(result["physical_error"]), var_to_bytes(physical), "독립 실제 피부 측정 바이트")
+	assert_almost_eq(float(result["skin_residual"]), float(solved["skin_residual"]), 1e-9)
+	for side in 2:
+		assert_lte((result["residual_vector"][side] as Vector3).distance_to(solved["residual_vector"][side]), 1e-9)
+		assert_lte((result["actual_ankles"][side] as Vector3).distance_to(solved["actual_ankles"][side]), 1e-9)
+		assert_almost_eq(float(result["misses"][side]), float(solved["misses"][side]), 1e-9)
+	var repeat_result: Dictionary = BodyBake._person_walk_evaluate_state(ctx, fit, spec, PROBE_PHASE, float(solved["final_hips_y"]), solved["targets_used"], "DYNAMIC", [], ledger)
+	assert_eq(var_to_bytes(result), var_to_bytes(repeat_result), "직접 위상 재평가 결정성")
+	assert_eq(int(ledger["used"]["ik"]), 2)
+	assert_eq(int(ledger["clips"]["p_walk"]["ik"]), 2)
+	print("WALK_E_DIRECT phase=%.9f status=%s actual_pairs=%d ledger=%d skin_mm=%.12f" % [PROBE_PHASE, result["status"], result["actual_pairs"], ledger["used"]["ik"], float(result["skin_residual"]) * 1000.0])

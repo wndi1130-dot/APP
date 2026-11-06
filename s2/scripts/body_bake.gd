@@ -3030,6 +3030,342 @@ static func _person_walk_observe(ctx: Dictionary, fit: Dictionary, u: float, eve
 				note["max_height_m"] = maxf(float(note.get("max_height_m", 0.0)), float(physical["height_abs_m"]))
 
 
+## Explicit single evaluation. spec.keyed_pose is the frozen pose after the
+## pelvis turn and before IK; no pose generation, height projection or solve.
+## The optional ledger is owned separately from ctx/fit. An omitted ledger is
+## local to this call. No evaluation cache: cache_hits is always zero.
+static func _person_walk_evaluate_state(ctx: Dictionary, fit: Dictionary, spec: Dictionary, phase: float, hips_y: float, targets: Array, mode: String = "DYNAMIC", branch: Array = [], ledger: Dictionary = {}) -> Dictionary:
+	var result: Dictionary = {"status": "DEGENERATE", "reason": "", "evaluated": false, "residuals_valid": false,
+		"mode": mode, "command_height": hips_y, "targets_used": targets.duplicate(), "final_hips_y": null,
+		"actual_pairs": 0, "ledger_delta": 0, "skin_passes": 0, "cache_hits": 0,
+		"reach": [], "branch": [], "branch_checks": [], "branch_valid": false,
+		"probes": [], "actual_ankles": [], "misses": [], "residual_vector": [], "skin_error_m": [],
+		"physical_error": {"valid": false}, "skin_residual": null, "standing_margin_m": null}
+	for _side in 2:
+		result["reach"].append({"valid": false, "lower_margin_m": 0.0, "upper_margin_m": 0.0, "signed_m": 0.0})
+	var error: String = _person_walk_state_input_error(ctx, fit, spec, phase, hips_y, targets, mode, branch)
+	if not error.is_empty():
+		result["reason"] = error
+		return result
+	if not ledger.is_empty() and (is_same(ledger, fit.get("work_budget", {})) or is_same(ledger, ctx.get("walk_work_budget", {}))):
+		result["reason"] = "LEDGER_ALIASES_INPUT"
+		return result
+	if mode == "BRANCH_FIXED":
+		result["branch"] = branch.duplicate(true)
+	var body: Skeleton3D = ctx["body"]
+	var saved: Array = []
+	for bone in body.get_bone_count():
+		saved.append([body.get_bone_pose_position(bone), body.get_bone_pose_rotation(bone), body.get_bone_pose_scale(bone)])
+	_person_walk_state_restore_pose(body, spec["keyed_pose"])
+	_set_person_walk_hips_y(ctx, hips_y)
+	var work: Dictionary = ledger if not ledger.is_empty() else _person_walk_budget()
+	result = _person_walk_state_at_pose(ctx, fit, spec, phase, hips_y, targets, mode, branch, work, result)
+	_person_walk_state_restore_pose(body, saved)
+	return result
+
+
+static func _person_walk_state_restore_pose(body: Skeleton3D, poses: Array) -> void:
+	for bone in body.get_bone_count():
+		body.set_bone_pose_position(bone, poses[bone][0])
+		body.set_bone_pose_rotation(bone, poses[bone][1])
+		body.set_bone_pose_scale(bone, poses[bone][2])
+
+
+## Validate before touching the shared Skeleton3D. Non-measurable reach has
+## finite placeholders plus valid=false; these are never usable derivatives.
+static func _person_walk_state_input_error(ctx: Dictionary, fit: Dictionary, spec: Dictionary, phase: float, hips_y: float, targets: Array, mode: String, branch: Array) -> String:
+	if not is_finite(phase) or not is_finite(hips_y) or not is_finite(float(spec.get("height_reference_m", hips_y))):
+		return "NONFINITE_STATE"
+	if mode != "DYNAMIC" and mode != "BRANCH_FIXED":
+		return "INVALID_MODE"
+	if not ctx.get("body") is Skeleton3D or not ctx.get("skin") is Skin or not ctx.get("to_mesh") is Transform3D:
+		return "INVALID_CONTEXT"
+	var body: Skeleton3D = ctx["body"]
+	var to_mesh: Transform3D = ctx["to_mesh"]
+	var bind_bone: Array = ctx.get("bind_bone", [])
+	if not to_mesh.is_finite() or absf(to_mesh.basis.determinant()) < 1e-12 or _bone(body, "hips") < 0 or _bone(body, "neck") < 0:
+		return "DEGENERATE_TRANSFORM"
+	if bind_bone.is_empty() or bind_bone.size() != (ctx["skin"] as Skin).get_bind_count():
+		return "INVALID_SKIN"
+	for bind in bind_bone.size():
+		if int(bind_bone[bind]) < 0 or int(bind_bone[bind]) >= body.get_bone_count() or not (ctx["skin"] as Skin).get_bind_pose(bind).is_finite():
+			return "INVALID_BIND"
+	var poses: Array = spec.get("keyed_pose", [])
+	if poses.size() != body.get_bone_count():
+		return "KEYED_POSE_REQUIRED"
+	for row: Array in poses:
+		if row.size() != 3 or not row[0] is Vector3 or not row[1] is Quaternion or not row[2] is Vector3:
+			return "INVALID_KEYED_POSE"
+		if not (row[0] as Vector3).is_finite() or not (row[1] as Quaternion).is_finite() or not (row[2] as Vector3).is_finite():
+			return "NONFINITE_KEYED_POSE"
+		var scale: Vector3 = row[2]
+		if (row[1] as Quaternion).length_squared() < 1e-12 or minf(absf(scale.x), minf(absf(scale.y), absf(scale.z))) < 1e-12:
+			return "DEGENERATE_KEYED_POSE"
+	for key: String in ["soles", "legs", "starts", "durations", "anchors", "rest_ankles", "rotations"]:
+		if not fit.get(key) is Array or (fit[key] as Array).size() != 2:
+			return "INVALID_FIT_" + key
+	if targets.size() != 2 or (mode == "BRANCH_FIXED" and branch.size() != 2):
+		return "INVALID_PAIR"
+	var rest: PackedVector3Array = fit.get("rest", PackedVector3Array())
+	var bones: PackedInt32Array = fit.get("bones", PackedInt32Array())
+	var weights: PackedFloat32Array = fit.get("weights", PackedFloat32Array())
+	var per: int = int(fit.get("per", 0))
+	if rest.is_empty() or per <= 0 or bones.size() != rest.size() * per or weights.size() != bones.size():
+		return "INVALID_SOURCE_SKIN"
+	for key: String in ["floor", "rest_hips_y", "round"]:
+		if not is_finite(float(fit.get(key, NAN))):
+			return "NONFINITE_FIT_" + key
+	for side in 2:
+		if not targets[side] is Vector3 or not (targets[side] as Vector3).is_finite():
+			return "NONFINITE_TARGET"
+		var duration: float = float(fit["durations"][side])
+		if not is_finite(float(fit["starts"][side])) or not is_finite(duration) or duration <= 0.0 or duration >= 1.0:
+			return "INVALID_PHASE_SCHEDULE"
+		if not (fit["anchors"][side] as Vector3).is_finite() or not (fit["rest_ankles"][side] as Vector3).is_finite() or not (fit["rotations"][side] as Basis).is_finite():
+			return "NONFINITE_FOOT_REFERENCE"
+		var leg: Array = fit["legs"][side]
+		var suffix: String = ".L" if side == 0 else ".R"
+		if leg.size() != 3:
+			return "INVALID_LEG"
+		for joint in 3:
+			if int(leg[joint]) < 0 or int(leg[joint]) != _bone(body, ["thigh", "shin", "foot"][joint] + suffix):
+				return "INVALID_LEG"
+		var sole: PackedInt32Array = fit["soles"][side]
+		if sole.is_empty():
+			return "EMPTY_SOLE"
+		for vertex: int in sole:
+			if vertex < 0 or vertex >= rest.size() or not rest[vertex].is_finite():
+				return "INVALID_SOLE_VERTEX"
+			for slot in per:
+				var index: int = vertex * per + slot
+				if not is_finite(weights[index]) or weights[index] < 0.0 or (weights[index] > 0.0 and (bones[index] < 0 or bones[index] >= bind_bone.size())):
+					return "INVALID_SOLE_WEIGHT"
+		if mode == "BRANCH_FIXED":
+			var fixed: Dictionary = branch[side]
+			if not sole.has(int(fixed.get("lowest_vertex", -1))) or not ["POLE", "RIGHT", "UP"].has(str(fixed.get("ik_choice", ""))):
+				return "INVALID_BRANCH"
+			var selected: PackedInt32Array = fixed.get("vertices", PackedInt32Array())
+			var seen: Dictionary = {}
+			if selected.is_empty():
+				return "EMPTY_BRANCH_SUPPORT"
+			for vertex: int in selected:
+				if not sole.has(vertex) or seen.has(vertex):
+					return "INVALID_BRANCH_SUPPORT"
+				seen[vertex] = true
+	return ""
+
+
+static func _person_walk_state_at_pose(ctx: Dictionary, fit: Dictionary, spec: Dictionary, phase: float, hips_y: float, targets: Array, mode: String, branch: Array, ledger: Dictionary, result: Dictionary) -> Dictionary:
+	var body: Skeleton3D = ctx["body"]
+	var to_mesh: Transform3D = ctx["to_mesh"]
+	var to_body: Transform3D = to_mesh.affine_inverse()
+	var outside: bool = false
+	var degenerate: bool = false
+	for side in 2:
+		var info: Dictionary = _person_walk_reach_info(body, fit["legs"][side], to_body * (targets[side] as Vector3))
+		var wanted: float = float(info["wanted"])
+		var minimum: float = float(info["minimum"])
+		var limit: float = float(info["limit"])
+		if not is_finite(wanted) or not is_finite(minimum) or not is_finite(limit):
+			degenerate = true
+			continue
+		var lower_margin: float = wanted - minimum
+		var upper_margin: float = limit - wanted
+		result["reach"][side] = {"valid": true, "wanted_m": wanted, "minimum_m": minimum, "limit_m": limit,
+			"lower_margin_m": lower_margin, "upper_margin_m": upper_margin, "signed_m": minf(lower_margin, upper_margin)}
+		degenerate = degenerate or bool(info["invalid"])
+		outside = outside or lower_margin < 0.0 or upper_margin < 0.0
+	if degenerate or outside:
+		result["status"] = "DEGENERATE" if degenerate else "IK_OUT_OF_DOMAIN"
+		result["reason"] = "DEGENERATE_REACH" if degenerate else "IK_DOMAIN"
+		return result
+	var goals: Array = []
+	var choices: Array = []
+	var natural: Array = []
+	var poles: Array = []
+	for side in 2:
+		var cache: Dictionary = fit.get("goal_cache", {}).get(side, {})
+		# Read an existing goal exactly as the legacy path does, without filling it.
+		var goal: Dictionary = cache[phase] if cache.has(phase) else _person_walk_ankle_goal_uncached(fit, side, phase)
+		if not (goal.get("base", Vector3(INF, INF, INF)) as Vector3).is_finite() or not (goal.get("path", Vector3(INF, INF, INF)) as Vector3).is_finite() or not goal.get("rotation") is Basis or not is_finite(float(goal.get("age", NAN))):
+			result["reason"] = "INVALID_GOAL"
+			return result
+		var rotation: Basis = goal["rotation"]
+		if not rotation.is_finite() or absf(rotation.determinant()) < 1e-12:
+			result["reason"] = "DEGENERATE_FOOT_ROTATION"
+			return result
+		goals.append(goal)
+		var delta: Vector3 = to_body * (targets[side] as Vector3) - body.get_bone_global_pose(int(fit["legs"][side][0])).origin
+		var distance: float = delta.length()
+		if distance <= 0.000001:
+			result["reason"] = "DEGENERATE_TARGET_AXIS"
+			return result
+		var axis: Vector3 = delta / distance
+		var pole: Vector3 = to_body.basis * Vector3.BACK
+		var natural_choice: String = "POLE"
+		if (pole - axis * pole.dot(axis)).length_squared() < 0.0000001:
+			natural_choice = "RIGHT" if absf(axis.x) < 0.9 else "UP"
+		var choice: String = str(branch[side]["ik_choice"]) if mode == "BRANCH_FIXED" else natural_choice
+		var selected_pole: Vector3 = pole if choice == "POLE" else (Vector3.RIGHT if choice == "RIGHT" else Vector3.UP)
+		if (selected_pole - axis * selected_pole.dot(axis)).length_squared() < 0.0000001:
+			result["reason"] = "DEGENERATE_FIXED_IK"
+			return result
+		choices.append(choice)
+		natural.append(natural_choice)
+		poles.append(selected_pole)
+	# Exactly one ledger unit immediately before the actual two IK calls.
+	if not _person_walk_spend(ledger, "ik", str(spec.get("clip", ctx.get("walk_clip", "unknown")))):
+		result["status"] = null
+		result["reason"] = "FOOT_PATH_BUDGET"
+		return result
+	result["evaluated"] = true
+	result["actual_pairs"] = 1
+	result["ledger_delta"] = 1
+	var cut: bool = false
+	for side in 2:
+		var side_cut: bool = _solve_person_footlock_leg(body, fit["legs"][side], to_body * (targets[side] as Vector3), poles[side])
+		cut = cut or side_cut
+	if cut:
+		result["status"] = "IK_OUT_OF_DOMAIN"
+		result["reason"] = "IK_CUT"
+		return result
+	for side in 2:
+		var rotation: Quaternion = (to_body.basis * (goals[side]["rotation"] as Basis)).orthonormalized().get_rotation_quaternion()
+		_person_footlock_rotation(body, int(fit["legs"][side][2]), rotation)
+	var skin: Array = _skin_frame(ctx)
+	result["skin_passes"] = 1
+	for matrix: Transform3D in skin:
+		if not matrix.is_finite():
+			result["reason"] = "NONFINITE_SKIN"
+			return result
+	var measured: Dictionary = _person_walk_state_probes(fit, skin, mode, branch, choices, natural)
+	if not bool(measured["valid"]):
+		result["reason"] = "NONFINITE_PROBE"
+		return result
+	result.merge(measured, true)
+	result.erase("valid")
+	var actual_h: float = (to_mesh * body.get_bone_global_pose(_bone(body, "hips"))).origin.y
+	result["final_hips_y"] = actual_h
+	result["height_error_m"] = actual_h - hips_y
+	result["standing_margin_m"] = _person_walk_stand_cap(fit) - hips_y
+	result["physical_error"] = _person_walk_physical_error(fit, skin, goals, actual_h, float(spec.get("height_reference_m", hips_y)))
+	if not bool(result["physical_error"]["valid"]):
+		result["reason"] = "INVALID_PHYSICAL_MEASUREMENT"
+		return result
+	var violated: bool = not bool(result["branch_valid"]) or float(result["standing_margin_m"]) < 0.0 or absf(actual_h - hips_y) > PERSON_WALK_SKIN_HEIGHT_TOL_M
+	var maximum: float = 0.0
+	var knees: Array = []
+	var stances: Array = []
+	var middles: Array = []
+	var knee_lower: Array = []
+	var knee_upper: Array = []
+	var proposals: Array = []
+	for side in 2:
+		var leg: Array = fit["legs"][side]
+		var ankle: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[2])).origin
+		var probe: Dictionary = result["probes"][side]
+		var offset: Vector3 = (probe["point"] as Vector3) - ankle
+		var flat_offset: Vector3 = (probe["rest"] as Vector3) - (fit["rest_ankles"][side] as Vector3)
+		# Same expression/order as _person_walk_skin_measure for the legacy residual.
+		var proposed: Vector3 = (goals[side]["base"] as Vector3) + flat_offset - offset
+		proposed.y = float(fit["floor"]) + (goals[side]["path"] as Vector3).y - offset.y
+		var delta: Vector3 = proposed - (targets[side] as Vector3)
+		var desired: Vector3 = (goals[side]["base"] as Vector3) + flat_offset
+		desired.y = float(fit["floor"]) + (goals[side]["path"] as Vector3).y
+		var skin_error: Vector3 = (probe["point"] as Vector3) - desired
+		var miss: float = ankle.distance_to(targets[side])
+		var thigh: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[0])).origin
+		var knee: Vector3 = to_mesh * body.get_bone_global_pose(int(leg[1])).origin
+		var angle: float = (knee - thigh).angle_to(ankle - knee)
+		if not delta.is_finite() or not skin_error.is_finite() or not is_finite(miss) or not is_finite(angle):
+			result["reason"] = "NONFINITE_RESIDUAL"
+			return result
+		var mid: float = float(goals[side]["age"]) / float(fit["durations"][side])
+		var middle: bool = mid >= 0.40 and mid <= 0.60
+		var stance: bool = float(goals[side]["age"]) <= float(fit["durations"][side])
+		result["actual_ankles"].append(ankle)
+		result["misses"].append(miss)
+		result["residual_vector"].append(delta)
+		result["skin_error_m"].append(skin_error)
+		proposals.append(proposed)
+		knees.append(angle)
+		stances.append(stance)
+		middles.append(middle)
+		knee_lower.append(angle - PERSON_WALK_KNEE_MIN)
+		knee_upper.append(PERSON_WALK_MID_KNEE_MAX - angle)
+		maximum = maxf(maximum, delta.length())
+		violated = violated or skin_error.length() > PERSON_WALK_SKIN_TOL_M or miss > PERSON_WALK_ANKLE_TOL_M
+		violated = violated or (stance and angle < PERSON_WALK_KNEE_MIN) or (middle and angle > PERSON_WALK_MID_KNEE_MAX)
+	violated = violated or float(result["physical_error"]["max_abs_m"]) > PERSON_WALK_SKIN_TOL_M
+	result.merge({"status": "CONSTRAINT_VIOLATED" if violated else "VALID", "reason": "", "residuals_valid": true,
+		"skin_residual": maximum, "proposed_targets": proposals, "knee_rad": knees, "stance": stances, "middle": middles,
+		"stance_knee_margin_rad": knee_lower, "middle_knee_margin_rad": knee_upper}, true)
+	return result
+
+
+## One weighted-vertex pass, same accumulation order as _person_footlock_probes.
+## Fixed branches keep BOTH the minimum vertex and the horizontal support set.
+static func _person_walk_state_probes(fit: Dictionary, skin: Array, mode: String, branch: Array, choices: Array, natural: Array) -> Dictionary:
+	var rest: PackedVector3Array = fit["rest"]
+	var bones: PackedInt32Array = fit["bones"]
+	var weights: PackedFloat32Array = fit["weights"]
+	var per: int = int(fit["per"])
+	var probes: Array = []
+	var identity: Array = []
+	var checks: Array = []
+	var branch_valid: bool = true
+	for side in 2:
+		var sole: PackedInt32Array = fit["soles"][side]
+		var moved: Array = []
+		var lowest: float = INF
+		var lowest_vertex: int = -1
+		for vertex: int in sole:
+			var point: Vector3 = Vector3.ZERO
+			var total: float = 0.0
+			for slot in per:
+				var weight: float = weights[vertex * per + slot]
+				if weight > 0.0:
+					point += ((skin[bones[vertex * per + slot]] as Transform3D) * rest[vertex]) * weight
+					total += weight
+			point = point / total if total > 0.0 else rest[vertex]
+			if not point.is_finite():
+				return {"valid": false}
+			moved.append(point)
+			if point.y < lowest:
+				lowest_vertex = vertex
+			lowest = minf(lowest, point.y)
+		var selected_min: int = int(branch[side]["lowest_vertex"]) if mode == "BRANCH_FIXED" else lowest_vertex
+		var centre: Vector3 = Vector3.ZERO
+		var reference: Vector3 = Vector3.ZERO
+		var count: int = 0
+		var vertices: PackedInt32Array = PackedInt32Array()
+		var dynamic_vertices: PackedInt32Array = PackedInt32Array()
+		var offsets: Dictionary = {}
+		for index in moved.size():
+			var point: Vector3 = moved[index]
+			var vertex: int = sole[index]
+			offsets[vertex] = point.y - lowest
+			if point.y <= lowest + PERSON_SOLE_EPSILON:
+				dynamic_vertices.append(vertex)
+			var selected: bool = branch[side]["vertices"].has(vertex) if mode == "BRANCH_FIXED" else point.y <= lowest + PERSON_SOLE_EPSILON
+			if selected:
+				centre += point
+				reference += rest[vertex]
+				count += 1
+				vertices.append(vertex)
+		centre /= float(count)
+		centre.y = (moved[sole.find(selected_min)] as Vector3).y
+		var minimum_valid: bool = centre.y == lowest
+		var band_valid: bool = vertices == dynamic_vertices
+		var ik_valid: bool = choices[side] == natural[side]
+		branch_valid = branch_valid and minimum_valid and band_valid and ik_valid
+		probes.append({"point": centre, "rest": reference / float(count), "vertices": vertices, "lowest_vertex": selected_min, "sole_height_offsets_m": offsets})
+		identity.append({"lowest_vertex": selected_min, "vertices": vertices, "ik_choice": choices[side]})
+		checks.append({"minimum_valid": minimum_valid, "band_valid": band_valid, "ik_valid": ik_valid,
+			"dynamic_lowest_vertex": lowest_vertex, "dynamic_vertices": dynamic_vertices, "dynamic_ik_choice": natural[side]})
+	return {"valid": true, "probes": probes, "branch": identity, "branch_checks": checks, "branch_valid": branch_valid}
+
+
 static func _person_footlock_points(fit: Dictionary, skin: Array) -> Array:
 	var points := []
 	for probe: Dictionary in _person_footlock_probes(fit, skin):
