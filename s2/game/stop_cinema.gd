@@ -63,11 +63,12 @@ const HOLD_LEFT: float = 1.5
 const D_CARD: float = HOLD_LEFT + HOLD_K * CARD_SPEED
 const D_NEAR: float = D_CARD + (RUN_SPEED + CARD_SPEED) * 0.5 * NEAR_S
 ## The look down ends where the field's own camera begins (field_game.gd
-## CAM_PITCH, CAM_YAW and cam_size 24 m of height): the same pitch and turn, the
-## same height of ground on the screen, a narrow lens standing in for its flat one.
+## CAM_PITCH, CAM_YAW and the cam_size it opens with, 20 m of height since 결정
+## 522): the same pitch and turn, the same height of ground on the screen, a
+## narrow lens standing in for its flat one.
 const FIELD_PITCH_DEG: float = 35.0
 const FIELD_YAW_DEG: float = 45.0
-const FIELD_VIEW_H: float = 24.0
+const FIELD_VIEW_H: float = 20.0
 const DOWN_FOV: float = 24.0
 ## Every map's train (field_maps.gd cars_of; all 81 maps, 2026-10-24): 80 m,
 ## four cars and the engine at the east end. Laid at the origin here; the

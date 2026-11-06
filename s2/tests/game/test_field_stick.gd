@@ -39,6 +39,23 @@ func _tried() -> bool:
 	return int(game.player.weapon()["loaded"]) < 8 or game.player.jam_t > 0.0
 
 
+## The camera follows the player on the real loop; here the loop is off, so the view
+## is put on the player at its own zoom before a thumb is read off the screen. Left at
+## the start spot 10 m away, a closer zoom (decision 522: 24 -> 20) put the enemy
+## dragged to inside the aim pad's edge, and the drag counted as back on the pad.
+func _frame_player() -> void:
+	game._update_camera(1.0)
+
+
+## Where a thumb dragged onto `at` lands: off the aim pad and off the player, or the
+## drag would mean "back on the pad" or "cancel" instead of "that spot".
+func _thumb_on(hud, at: Vector3) -> Vector2:
+	var thumb: Vector2 = hud._project(at)
+	assert_false(hud.aim_button.get_global_rect().grow(hud.AIM_PAD_EDGE).has_point(thumb), "the thumb is off the aim pad")
+	assert_false(hud._over_player(thumb), "and off the player")
+	return thumb
+
+
 func test_stick_gets_going_over_a_fifth_of_a_second() -> void:
 	game.opts["inertia"] = "now"
 	var p = game.player
@@ -1049,14 +1066,16 @@ func test_dragging_off_the_aim_pad_shoots_where_the_thumb_is_even_bare_ground() 
 	var pad: Vector2 = hud.aim_button.get_global_rect().get_center()
 	var spot: Vector3 = p.position + Vector3(0, 0, 6)
 	var f := {"start": pad}
+	_frame_player()
+	var thumb := _thumb_on(hud, spot)
 	hud._auto_aim_start()
-	hud._pad_move(hud.aim_button, hud._project(spot), f)
+	hud._pad_move(hud.aim_button, thumb, f)
 	assert_true(hud.auto_free)
 	assert_null(hud.aim_target, "nobody there")
 	assert_lt(hud.aim_point.distance_to(spot), 1.0, "the aim is on that ground")
 	hud._tick_auto_aim(2.0)
 	assert_null(hud.aim_target, "and the gun picks no one for itself meanwhile")
-	hud._auto_aim_end(hud._project(spot))
+	hud._auto_aim_end(thumb)
 	assert_true(_tried(), "it fires at the ground")
 	assert_false(hud.auto_free)
 
@@ -1067,15 +1086,17 @@ func test_dragging_off_the_aim_pad_onto_an_enemy_takes_that_one() -> void:
 	p.facing = PI * 0.5
 	var ahead: Dictionary = game.zombies.spawn("dead", p.position + Vector3(7, 0, 0))
 	var side: Dictionary = game.zombies.spawn("dead", p.position + Vector3(6, 0, 5))   # further, off to one side
+	_frame_player()
 	game._refresh_vision()
 	assert_true(game.cell_seen(side["pos"]))
 	var hud = game.hud
 	var pad: Vector2 = hud.aim_button.get_global_rect().get_center()
 	var f := {"start": pad}
+	var thumb := _thumb_on(hud, side["pos"])
 	hud._auto_aim_start()
 	hud._tick_auto_aim(1.0)
 	assert_eq(hud.aim_target, ahead)
-	hud._pad_move(hud.aim_button, hud._project(side["pos"]), f)
+	hud._pad_move(hud.aim_button, thumb, f)
 	assert_eq(hud.aim_target, side, "the one under the thumb, not the one ahead")
 	# Back on the pad the gun picks for itself again.
 	hud._pad_move(hud.aim_button, pad, f)

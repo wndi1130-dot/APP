@@ -2455,6 +2455,7 @@ func _start_field() -> void:
 	if is_instance_valid(pending_field):
 		field = pending_field
 		pending_field = null
+		field.start_camera_at(StopCinema.FIELD_VIEW_H)
 		field.visible = true
 		field.finished.connect(_field_done)
 		stage = field

@@ -250,6 +250,13 @@ func test_the_look_down_ends_where_the_field_s_camera_begins() -> void:
 	var height: float = 2.0 * at.distance_to(focus) * tan(deg_to_rad(c.camera.fov * 0.5))
 	assert_almost_eq(height, StopCinema.FIELD_VIEW_H, 0.01, "as much ground on the screen as the field shows")
 	assert_true(c._down_focus().is_equal_approx(focus), "over the first of the crew's places, by the door")
+	# The copies are the field's own: its pitch, its turn and the zoom a new field opens with.
+	var field_script := preload("res://game/field_game.gd")
+	assert_eq(StopCinema.FIELD_PITCH_DEG, field_script.CAM_PITCH, "the field's CAM_PITCH")
+	assert_eq(StopCinema.FIELD_YAW_DEG, field_script.CAM_YAW, "the field's CAM_YAW")
+	var field = field_script.new()
+	assert_eq(StopCinema.FIELD_VIEW_H, float(field.cam_size), "the zoom a new field opens with")
+	field.free()
 
 
 func test_the_way_there_stops_short_of_the_stop_s_place() -> void:
