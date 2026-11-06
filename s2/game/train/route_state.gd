@@ -6,6 +6,7 @@ const Rng = preload("res://game/politics/rng.gd")
 const FieldReceipt = preload("res://game/sim/receipt.gd")
 const FieldReturn = preload("res://game/politics/field_return.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
+## Rule 1 derives the seed from the run using SHA-256.
 const SEED_RULE: int = 1
 const FURNISH_RULE: int = 0
 
@@ -18,6 +19,11 @@ static func world_seed_text(bytes: PackedByteArray) -> String:
 	if bytes.size() != 8:
 		return ""
 	return str(bytes.decode_s64(0))
+
+
+static func world_seed_for_run(run: String) -> String:
+	# An empty run is still deterministic; the new-game path generates one first.
+	return world_seed_text((run + ":world_seed").sha256_buffer().slice(0, 8))
 
 
 static func start(g: Dictionary, run: String, world_seed: String) -> Dictionary:

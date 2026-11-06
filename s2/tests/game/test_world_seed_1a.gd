@@ -45,6 +45,19 @@ func test_world_seed_text_boundaries_and_round_trip() -> void:
 	assert_eq(RouteState.world_seed_text(PackedByteArray([0, 0, 0, 0, 0, 0, 0, 0, 0])), "")
 
 
+func test_world_seed_for_run_is_deterministic_and_valid() -> void:
+	var runs: Array[String] = ["run_1a", "run_1b", "run_1c", ""]
+	var expected: Array[String] = ["984539240965475773", "924050262981133378", "5163729525108465354", "365184263539992657"]
+	var seen: Dictionary = {}
+	for i: int in runs.size():
+		var text: String = RouteState.world_seed_for_run(runs[i])
+		assert_eq(text, expected[i])
+		assert_eq(text, RouteState.world_seed_for_run(runs[i]))
+		assert_not_null(FieldSave._int_of_text(text))
+		assert_false(seen.has(text))
+		seen[text] = true
+
+
 func test_problem_accepts_old_and_valid_campaigns() -> void:
 	var g: Dictionary = _started()
 	assert_eq(RouteState.problem(g), "")
@@ -93,8 +106,9 @@ func test_problem_rejects_bad_seed_and_rules() -> void:
 func test_field_opts_copies_present_campaign_keys_only() -> void:
 	var flow: FlowProbe = FlowProbe.new()
 	flow.step = 2
-	flow.opts = {"mode": "campaign"}
+	flow.opts = {"mode": "campaign", "seed": 1}
 	flow.train_g = _started()
+	flow.train_g["seed"] = "camp-01"
 	flow.train_g["campaign"]["visit"] = {"field_seed": 12, "id": "visit_1a"}
 	var field: Dictionary = flow._field_opts()
 	assert_eq(field.get("world_seed"), "-9223372036854775808")
@@ -104,7 +118,7 @@ func test_field_opts_copies_present_campaign_keys_only() -> void:
 	field = flow._field_opts()
 	assert_false(field.has("world_seed"))
 	assert_false(field.has("furnish_rule"))
-	flow.opts = {}
+	flow.opts = {"seed": 1}
 	flow.train_g = {"passed": {}}
 	field = flow._field_opts()
 	assert_false(field.has("world_seed"))

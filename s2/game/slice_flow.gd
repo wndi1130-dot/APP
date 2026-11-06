@@ -349,7 +349,7 @@ func _ready() -> void:
 			run = String(opts.get("run", run))
 			if run.is_empty():
 				run = Crypto.new().generate_random_bytes(8).hex_encode()
-			train_g = RouteState.start(train_g, run, RouteState.world_seed_text(Crypto.new().generate_random_bytes(8)))
+			train_g = RouteState.start(train_g, run, RouteState.world_seed_for_run(run))
 		if bool(opts.get("save", false)) and not train_g.is_empty():
 			_clear_slice_field()
 		_seed_shop_settle()
