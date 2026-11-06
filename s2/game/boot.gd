@@ -10,6 +10,7 @@ const SliceFlow = preload("res://game/slice_flow.gd")
 const UiTheme = preload("res://game/ui/ui_theme.gd")
 const Atmosphere = preload("res://fx/atmosphere.gd")
 const ScreenLift = preload("res://game/ui/screen_lift.gd")
+const MeleePress = preload("res://game/ui/melee_press.gd")
 const PropModels = preload("res://game/world/prop_models.gd")
 const UiFonts = preload("res://game/ui/ui_fonts.gd")
 const TrainModels = preload("res://game/world/train_model_kit.gd")
@@ -295,8 +296,11 @@ func _start(resume: Dictionary = {}) -> void:
 	# tool's, put on once the field is built.
 	if field.is_built:
 		ScreenLift.apply_saved(field)
+		MeleePress.apply_saved(field)   # 결정 564: 플레이 흐름에서만 저장값을 얹는다.
 	else:
-		field.built.connect(func() -> void: ScreenLift.apply_saved(field), CONNECT_ONE_SHOT)
+		field.built.connect(func() -> void:
+			ScreenLift.apply_saved(field)
+			MeleePress.apply_saved(field), CONNECT_ONE_SHOT)
 
 
 ## The map picked on the start screen ("mine_03"), or "" for the usual stop.

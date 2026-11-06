@@ -33,6 +33,7 @@ const LampKey = preload("res://game/ui/lamp_key.gd")
 const InventoryPane = preload("res://game/ui/inventory_pane.gd")
 const SoundRows = preload("res://game/ui/sound_rows.gd")
 const ScreenLift = preload("res://game/ui/screen_lift.gd")
+const MeleePress = preload("res://game/ui/melee_press.gd")
 const TypeLine = preload("res://game/ui/type_line.gd")
 const Treatment = preload("res://game/sim/treatment.gd")
 const BodyState = preload("res://game/sim/body_state.gd")
@@ -1615,8 +1616,9 @@ func tick(delta: float) -> void:
 		_bag_places_moved()
 	# Hold on an enemy with a melee weapon: keep swinging (field_unified 10).
 	if pressing and melee_pending != null and not melee_holding and Time.get_ticks_msec() - press_ms >= int(HOLD_TIME * 1000.0):
+		# 결정 564: 한 번씩이어도 이 누름은 처리했다. 계속 누르거나 떼면서 다시 치지 않는다.
 		melee_holding = true
-		_melee(melee_pending, true)
+		_melee(melee_pending, not MeleePress.enabled(game.opts))
 	_tick_auto_aim(delta)
 	_drop_stale_person()
 	_tick_context_hold()
@@ -2527,9 +2529,22 @@ func settings_panel() -> void:
 	cells.add_child(GlassPane.cell("스틱", "따라오기" if stick_floats() else "고정", _set_stick))
 	cells.add_child(GlassPane.cell("무전", String(game.RADIO_NAMES[game.radio_mode()]), _set_radio))
 	cells.add_child(GlassPane.cell("상태 아이콘", String(STATUS_SIZE_NAMES[status_diameter()]), _set_status_size))
+	var melee_cell := GlassPane.cell("근접", "한 번씩" if MeleePress.enabled(game.opts) else "연타", _set_melee_press)
+	melee_cell.name = "MeleePress"
+	cells.add_child(melee_cell)
 	pane.body.add_child(cells)
 	pane.body.add_child(SoundRows.make())   # 전체·음악·효과·목소리 (결정 448)
 	pane.body.add_child(ScreenLift.make(game))   # 밝기 (결정 471 B5)
+
+
+## 결정 564: 저장에 성공한 값만 현재 판과 다시 연 창에 함께 반영한다.
+func _set_melee_press() -> void:
+	var on: bool = not MeleePress.enabled(game.opts)
+	if MeleePress.save_enabled(on) != OK:
+		toast("설정을 저장하지 못했다", TOAST_WARN)
+		return
+	game.opts[MeleePress.OPTION] = on
+	settings_panel()
 
 
 func _set_status_size() -> void:
@@ -4709,8 +4724,9 @@ func _pad_down(b: Button, pos: Vector2) -> void:
 			# Nobody in reach: swing at the air all the same (decision 405).
 			game.combat.swing_air(p)
 			return
-		_melee(t, true)
-		attack_button.button_pressed = true
+		# 결정 564: 공격 패드(주 행동의 근접 패드 포함)도 같은 누름 설정을 따른다.
+		_melee(t, not MeleePress.enabled(game.opts))
+		attack_button.button_pressed = fighting(p)
 	elif b == context_button:
 		context_button.button_pressed = true
 	elif b == depart_button:
@@ -4925,7 +4941,8 @@ func _release(pos: Vector2) -> void:
 	if melee_pending != null:
 		if not melee_holding:
 			# A tap keeps swinging until it is down (no tap per swing).
-			_melee(melee_pending, true)
+			# 결정 564: 한 번씩을 켰을 때만 hold=false, 기본 연타는 그대로다.
+			_melee(melee_pending, not MeleePress.enabled(game.opts))
 		melee_pending = null
 		melee_holding = false
 		return

@@ -508,6 +508,9 @@ func _pursue_person(p, delta: float) -> void:
 	p.face_point(o.position)
 	if p.swing_t <= 0.0:
 		start_swing(p, o)
+		# One press, one swing (decision 564), the same as a zombie target.
+		if not p.hold_attack:
+			p.target_person = null
 
 
 static func behind(z: Dictionary, attacker_pos: Vector3) -> bool:

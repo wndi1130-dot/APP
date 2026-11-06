@@ -50,6 +50,7 @@ const FieldArrival = preload("res://game/politics/field_arrival.gd")
 const TurnCard = preload("res://game/ui/turn_card.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const ScreenLift = preload("res://game/ui/screen_lift.gd")
+const MeleePress = preload("res://game/ui/melee_press.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
@@ -2488,6 +2489,7 @@ func _start_field() -> void:
 
 func _field_ready(game) -> void:
 	ScreenLift.apply_saved(game)
+	MeleePress.apply_saved(game)   # 결정 564: 직접 만든 도구·봇 필드는 기본값을 유지한다.
 	# Field notifications cover mobile pause and focus, but not a desktop close.
 	# Let its own interrupt method write once on that window signal too.
 	var on_close := Callable(game, "interrupt")
