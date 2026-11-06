@@ -215,8 +215,12 @@ func test_the_bag_beside_a_box_sends_its_row_to_the_box() -> void:
 ## the count — the multiple nearest the line icon's size that fits the row.
 func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() -> void:
 	var game = _game()
-	# The luxury bundle has no baked picture: it keeps its line icon. The can opener
-	# has none of its own but takes the one baked for its line icon (it_opener).
+	# A thing whose bake is missing keeps its line icon. Every thing found in the
+	# field has a picture now (test_item_art.gd), so the luxury bundle's is taken
+	# away here for this test: the lookup's remembered answer is "none". The can
+	# opener has none of its own but takes the one baked for its line icon (it_opener).
+	var unbaked: String = "luxury_pack|" + String(game.item_icon("luxury_pack"))
+	InventoryPane._art_found[unbaked] = null
 	var id: String = _box(game, ["food_pack", "luxury_pack", "can_opener"])
 	var picture := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	picture.fill(Color("ffc66c"))
@@ -257,6 +261,7 @@ func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() 
 	assert_eq(opener.texture, InventoryPane.art_texture("can_opener", game.item_icon("can_opener")), "its line icon's bake")
 	assert_true(InventoryPane.is_painted(opener.texture))
 	game.hud._close_modal()
+	InventoryPane._art_found.erase(unbaked)
 
 
 ## Measure each visible key, including folded clothing and row jobs, in screen pixels.
@@ -1426,7 +1431,7 @@ func test_a_long_journal_fits_above_the_foot_at_720_high() -> void:
 ## shows the same picture.
 func test_baked_pictures_are_smooth_and_fill_the_art_square() -> void:
 	var game = _game()
-	var id: String = _box(game, ["can_beans", "can_dented_bad", "can_opener"])
+	var id: String = _box(game, ["can_beans", "note_side", "can_opener"])
 	game.hud.loot(id)
 	await _layout()
 	var beans := _row(game.hud, "Near", "can_beans").find_child("ItemIcon", true, false) as TextureRect
@@ -1437,8 +1442,8 @@ func test_baked_pictures_are_smooth_and_fill_the_art_square() -> void:
 	assert_eq(beans.texture_filter, CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS)
 	assert_almost_eq(beans.size.x, UiFonts.px(InventoryPane.ART), 1.0)
 	assert_almost_eq(beans.size.y, UiFonts.px(InventoryPane.ART), 1.0)
-	var off := _row(game.hud, "Near", "can_dented_bad").find_child("ItemIcon", true, false) as TextureRect
-	assert_eq(off.texture, InventoryPane.art_texture("can_dented"), "the can that is off looks as the dented one")
+	var side := _row(game.hud, "Near", "note_side").find_child("ItemIcon", true, false) as TextureRect
+	assert_eq(side.texture, InventoryPane.art_texture("note_map"), "the note on the side shows the note's picture (both 「쪽지」)")
 	assert_ne(InventoryPane.art_texture("rusk"), InventoryPane.art_texture("hardtack"), "the rusk has its own now")
 	assert_null(InventoryPane.art_texture("can_opener"))
 	game.hud._close_modal()
@@ -1474,7 +1479,7 @@ func test_a_thing_without_its_own_picture_takes_its_line_icons_bake() -> void:
 	assert_not_null(beans)
 	assert_eq(InventoryPane.art_texture("no_such_thing", "can_beans"), beans, "the line icon's bake")
 	assert_eq(InventoryPane.art_texture("can_beans", "medkit"), beans, "its own picture first")
-	assert_eq(InventoryPane.art_texture("rusk", "medkit"), InventoryPane.art_texture("hardtack"), "then its alias")
+	assert_eq(InventoryPane.art_texture("note_side", "medkit"), InventoryPane.art_texture("note_map"), "then its alias")
 	assert_null(InventoryPane.art_texture("no_such_thing", "no_such_icon"))
 	assert_null(InventoryPane.art_texture("no_such_thing"))
 	# A thing that shares on purpose (ART_ALIAS) comes before its line icon: the
