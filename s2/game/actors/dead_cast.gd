@@ -24,12 +24,63 @@ const BODIES: Array[String] = ["n3-body_tracksuit", "n10-body_denim-m", "n10-bod
 const SETTING: String = "visuals/dead_bodies_max"
 
 
-## Saved outfit numbers and the common mix: set again from the clean outfit table (lead, 11-07)
-## in the P0 redo. Never renumber or reuse a removed row; leave its number empty.
+## Saved outfit numbers and the common mix from the clean design, 2026-11-07:
+## combat_work/docs/설계_망자차림표_클린_20261107.md, sections 2, 3 and 8.
+## Never renumber or reuse a removed row; leave its number empty.
 ## P0 only transports these numbers; it does not recolour any pixels.
 const LOOK_MAX: int = 511
-const LOOK_OUTFITS: Dictionary = {}
-const COMMON_LOOK_WEIGHTS: Array[int] = []
+const LOOK_OUTFITS: Dictionary[int, Dictionary] = {
+	1: {"id": "flight_wool_long", "kind": "plain", "set": "flight"},
+	2: {"id": "flight_quilted", "kind": "plain", "set": "flight"},
+	3: {"id": "flight_short_coat", "kind": "plain", "set": "flight"},
+	4: {"id": "flight_wrapped", "kind": "plain", "set": "flight"},
+	5: {"id": "flight_layered", "kind": "plain", "set": "flight"},
+	6: {"id": "flight_lined", "kind": "plain", "set": "flight"},
+	7: {"id": "home_cardigan_coat", "kind": "plain", "set": "home"},
+	8: {"id": "home_robe_coat", "kind": "plain", "set": "home"},
+	9: {"id": "town_counter_winter", "kind": "plain", "set": "work"},
+	10: {"id": "town_outdoor_knit", "kind": "plain", "set": "work"},
+	21: {"id": "rail_two_tone_jacket", "kind": "work", "set": "work"},
+	22: {"id": "rail_bib_overalls", "kind": "work", "set": "work"},
+	23: {"id": "workshop_coat", "kind": "work", "set": "work"},
+	24: {"id": "workshop_apron_vest", "kind": "work", "set": "work"},
+	25: {"id": "farm_bib_overalls", "kind": "work", "set": "work"},
+	26: {"id": "farm_work_coat", "kind": "work", "set": "work"},
+	27: {"id": "shed_heavy_vest", "kind": "work", "set": "work"},
+	41: {"id": "police_winter_coat", "kind": "uniform", "set": "work"},
+	42: {"id": "police_duty", "kind": "uniform", "set": "work"},
+	43: {"id": "fire_turnout", "kind": "uniform", "set": "work"},
+	44: {"id": "fire_duty", "kind": "uniform", "set": "work"},
+}
+const COMMON_LOOK_WEIGHTS: Dictionary[int, int] = {
+	1: 89, 2: 89, 3: 88, 4: 88, 5: 88, 6: 88, 7: 90, 8: 90, 9: 80, 10: 80,
+	21: 20, 22: 20, 23: 20, 25: 20, 26: 20, 41: 10, 42: 5, 43: 10, 44: 5,
+}
+## Append only: never change or delete an issued number/id pair, even if retired.
+## Retired outfits stay here, outside LOOK_OUTFITS; unused numbers have no entry.
+const LOOK_OUTFIT_ISSUED: Dictionary[int, String] = {
+	1: "flight_wool_long",
+	2: "flight_quilted",
+	3: "flight_short_coat",
+	4: "flight_wrapped",
+	5: "flight_layered",
+	6: "flight_lined",
+	7: "home_cardigan_coat",
+	8: "home_robe_coat",
+	9: "town_counter_winter",
+	10: "town_outdoor_knit",
+	21: "rail_two_tone_jacket",
+	22: "rail_bib_overalls",
+	23: "workshop_coat",
+	24: "workshop_apron_vest",
+	25: "farm_bib_overalls",
+	26: "farm_work_coat",
+	27: "shed_heavy_vest",
+	41: "police_winter_coat",
+	42: "police_duty",
+	43: "fire_turnout",
+	44: "fire_duty",
+}
 
 
 ## Body/shell custom b: one hold bit and nine code bits. Negative b is the
@@ -54,23 +105,31 @@ static func active_look_code(code: int) -> int:
 	return code if code >= 0 and code <= LOOK_MAX and LOOK_OUTFITS.has(code >> 3) else 0
 
 
-## A pure weighted choice makes all hundred boundary tickets independently testable.
+## A pure weighted choice over 1000 tickets; sort only a copy of the sparse keys.
 static func outfit_for_roll(ticket: int) -> int:
-	assert(ticket >= 0 and ticket < 100, "look ticket must be within 0..99")
-	var left := ticket
-	for index: int in range(COMMON_LOOK_WEIGHTS.size() - 1):
-		if left < COMMON_LOOK_WEIGHTS[index]:
-			return index + 1
-		left -= COMMON_LOOK_WEIGHTS[index]
-	return COMMON_LOOK_WEIGHTS.size()
+	if ticket < 0 or ticket >= 1000:
+		assert(false, "look ticket must be within 0..999")
+		push_error("look ticket must be within 0..999")
+		return 0
+	var numbers: Array = COMMON_LOOK_WEIGHTS.keys()
+	numbers.sort()
+	var cumulative := 0
+	for number: int in numbers:
+		cumulative += COMMON_LOOK_WEIGHTS[number]
+		if ticket < cumulative:
+			return number
+	assert(false, "look weights must cover all 1000 tickets")
+	push_error("look weights must cover all 1000 tickets")
+	return 0
 
 
 ## Its own stream: spawn, restoration and drawing never consume game.rng here.
 static func look_code_for(seed: int, id: int) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = ("%d:look:%d" % [seed, id]).hash()
-	var outfit := outfit_for_roll(rng.randi_range(0, 99))
-	return outfit * 8 + rng.randi_range(0, 7)
+	var outfit := outfit_for_roll(rng.randi_range(0, 999))
+	var variant := rng.randi_range(0, 7)
+	return 0 if outfit == 0 else outfit * 8 + variant
 
 
 static func look_code_migrated(seed: int, id: int, name: String) -> int:

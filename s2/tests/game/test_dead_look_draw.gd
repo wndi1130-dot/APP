@@ -7,6 +7,7 @@ const DeadBody = preload("res://game/actors/dead_body.gd")
 const FieldGame = preload("res://game/field_game.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
 const Wear = preload("res://game/sim/wear.gd")
+var api: GDScript = DeadCast
 var game
 var dead: ObservedLooks
 var camera: Camera3D
@@ -41,6 +42,11 @@ class ObservedLooks extends Zombies:
 		return super._submit_sight_draw(id, record, shown, counts, attachments)
 
 
+func before_each() -> void:
+	for method: String in ["look_code_for", "look_code_migrated", "active_look_code", "pack_still", "unpack_still"]:
+		assert_true(api.has_method(method), "required DeadCast method: " + method)
+
+
 func _field() -> void:
 	game = FieldGame.new()
 	game.opts = {"seed": 11, "raiders": false, "auto_pause": false, "arrive": false}
@@ -53,6 +59,7 @@ func _field() -> void:
 	dead = ObservedLooks.new()
 	game.add_child(dead)
 	dead.setup(game, game.zombies.vat)
+	assert_true(dead.has_method("look_code_of"), "required draw/migration method")
 	dead.bodies_to_read.clear()
 	dead.bodies_planned = 1
 	var viewport := SubViewport.new()
@@ -108,39 +115,79 @@ func test_t5_spawn_keeps_three_game_rng_draws_and_uses_a_private_look_seed() -> 
 	assert_eq(z["stander"], stander)
 	assert_eq(game.rng.state, expected.state)
 	assert_true(z.has("look_code"), "spawn persists the code before drawing")
-	if DeadCast.has_method("look_code_for"):
-		assert_eq(int(z.get("look_code", -1)), int(DeadCast.call("look_code_for", 11, int(z["id"]))))
+	assert_eq(int(z.get("look_code", -1)), int(api.call("look_code_for", 11, int(z["id"]))))
+	assert_gt(int(z.get("look_code", -1)), 7, "spawn chooses an active common outfit")
 
 
 func test_lazy_migration_preserves_saved_codes_and_reserved_rows_draw_as_zero() -> void:
 	_field()
-	assert_true(dead.has_method("look_code_of"))
-	if not dead.has_method("look_code_of"):
-		return
 	var state: int = game.rng.state
 	for named: String in ["", "옛 동료"]:
 		var old := {"id": 73, "name": named}
-		var expected: int = 0 if named != "" else int(DeadCast.call("look_code_for", 11, 73))
+		var expected: int = 0 if named != "" else int(api.call("look_code_for", 11, 73))
 		assert_eq(int(dead.call("look_code_of", old)), expected)
 		assert_eq(int(old["look_code"]), expected)
 		assert_eq(int(dead.call("look_code_of", old)), expected)
-	for code: int in [0, 1, 7, 511]:
+	for code: int in [0, 1, 7, 88, 511]:
 		var saved := {"id": 73, "name": "", "look_code": code}
-		assert_eq(int(dead.call("look_code_of", saved)), 0, "outfit 0 and unassigned rows draw as code 0 (assigned rows: P0 redo)")
+		assert_eq(int(dead.call("look_code_of", saved)), 0, "outfit 0 and unassigned rows draw as code 0")
 		assert_eq(int(saved["look_code"]), code, "reserved save data is not rewritten")
+	for outfit: int in [24, 27]:
+		for variant: int in 8:
+			var code := outfit * 8 + variant
+			var saved := {"id": 73, "name": "", "look_code": code}
+			assert_eq(int(dead.call("look_code_of", saved)), code, "place-only outfits remain active")
+			assert_eq(int(saved["look_code"]), code)
 	assert_eq(game.rng.state, state)
+
+
+func test_clean_draw_boundaries_preserve_saved_codes_and_filter_only_the_draw() -> void:
+	_field()
+	var z := _spawn(origin)
+	var id: int = int(z["id"])
+	var garment: MultiMeshInstance3D = dead._garment_of(0, "coat_long")
+	var active: Array[int] = [8, 87, 168, 359]
+	var codes: Array[int] = active.duplicate()
+	codes.append_array([0, 1, 2, 3, 4, 5, 6, 7, 88, 224, 360, 511])
+	var state: int = game.rng.state
+	for code: int in codes:
+		z["look_code"] = code
+		var expected := code if code in active else 0
+		assert_eq(int(api.call("active_look_code", code)), expected)
+		assert_eq(int(dead.call("look_code_of", z)), expected)
+		var record: Dictionary = dead._sight_draw(z, 0, "dead", {"shell": "coat_long"}, garment, {})
+		var wire_code := expected if DeadBody.can_mix() else 0
+		assert_eq(int(_decode((record["custom"] as Color).b).y), wire_code)
+		record["color"] = Color(0.75, 0.25, 0.9, 1.0)
+		dead._submit_sight_draw(id, record, 1.0, _counts(), Vector2i.ZERO)
+		var receipt: Dictionary = _ledger().get(id, {})
+		assert_true(receipt.has("body"))
+		assert_true(receipt.has("garment"))
+		assert_eq(int(_decode((receipt["body"] as Color).b).y), wire_code)
+		assert_eq(int(_decode((receipt["garment"] as Color).b).y), _shell_code(wire_code, record["color"]))
+		assert_eq(int(z["look_code"]), code, "drawing never rewrites a saved number")
+	assert_eq(game.rng.state, state)
+
+
+func test_private_generation_and_migration_leave_game_rng_unchanged() -> void:
+	_field()
+	var state: int = game.rng.state
+	for id: int in range(1, 257):
+		var expected: int = api.call("look_code_for", 11, id)
+		assert_eq(int(api.call("look_code_migrated", 11, id, "")), expected)
+		assert_eq(int(api.call("look_code_migrated", 11, id, "옛 동료")), 0)
+		var old := {"id": id, "name": ""}
+		assert_eq(int(dead.call("look_code_of", old)), expected)
+		assert_eq(int(old["look_code"]), expected)
+		assert_eq(game.rng.state, state, "private generation and lazy migration consume no simulation dice")
 
 
 func test_spawn_and_migration_use_the_run_seed_when_options_omit_it() -> void:
 	_field()
 	game.opts.erase("seed")
-	assert_true(DeadCast.has_method("look_code_for"))
-	assert_true(dead.has_method("look_code_of"))
-	if not DeadCast.has_method("look_code_for") or not dead.has_method("look_code_of"):
-		return
 	for _i: int in 16:
 		var z: Dictionary = dead.spawn("dead", origin)
-		var expected: int = int(DeadCast.call("look_code_for", int(game.rng.seed), int(z["id"])))
+		var expected: int = int(api.call("look_code_for", int(game.rng.seed), int(z["id"])))
 		assert_eq(int(z.get("look_code", -1)), expected)
 		z.erase("look_code")
 		assert_eq(int(dead.call("look_code_of", z)), expected)
@@ -225,9 +272,8 @@ func test_t8_climbing_body_preserves_the_picked_hold_bit() -> void:
 	dead.start_climb(z)
 	var plain := DeadBody.picked(z, 0.0, 0.0, 1.0, true)
 	assert_eq(plain.b, 1.0, "baked lid climb holds its sampled progress")
-	if DeadCast.has_method("pack_still") and DeadCast.has_method("unpack_still"):
-		var packed: float = DeadCast.call("pack_still", plain.b, 13)
-		assert_eq(_decode(packed), Vector2(1, 13))
+	var packed: float = api.call("pack_still", plain.b, 13)
+	assert_eq(_decode(packed), Vector2(1, 13))
 	var record: Dictionary = dead._sight_draw(z, 0, "dead", {}, null, {})
 	var code: int = 13 if DeadBody.can_mix() else 0
 	assert_eq(_decode((record["custom"] as Color).b), Vector2(1.0 if dead.baked else 0.0, code))

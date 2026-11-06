@@ -4,8 +4,14 @@ extends "res://addons/gut/test.gd"
 const FieldGame = preload("res://game/field_game.gd")
 const FieldSave = preload("res://game/sim/field_save.gd")
 const DeadCast = preload("res://game/actors/dead_cast.gd")
+const DeadBody = preload("res://game/actors/dead_body.gd")
 const BareLine = preload("res://tests/game/fixtures/bare_line_map.gd")
+var api: GDScript = DeadCast
 var fields: Array = []
+
+
+func before_each() -> void:
+	assert_true(api.has_method("look_code_for"), "required DeadCast method")
 
 
 func after_each() -> void:
@@ -23,6 +29,7 @@ func _game():
 	game.map_script = BareLine
 	add_child(game)
 	game.set_process(false)
+	assert_true(game.zombies.has_method("look_code_of"), "required draw/migration method")
 	game.zombies.list.clear()
 	game.pending_spawn.clear()
 	fields.append(game)
@@ -64,10 +71,8 @@ func _assert_restored(game) -> void:
 			continue
 		var expected: int = 95 if id == 7 else (511 if id == 37 else 0)
 		if id == 23:
-			assert_true(DeadCast.has_method("look_code_for"))
-			if not DeadCast.has_method("look_code_for"):
-				continue
-			expected = int(DeadCast.call("look_code_for", 831, id))
+			expected = int(api.call("look_code_for", 831, id))
+			assert_gt(expected, 7, "only the missing unnamed row receives a common outfit")
 		assert_eq(int(z["look_code"]), expected, "saved/migrated code for %d" % id)
 	var again := _saved(game)
 	assert_false(again.is_empty())
@@ -105,6 +110,45 @@ func test_t5_exact_restore_keeps_saved_rng_state_and_next_draw() -> void:
 	assert_eq(game.rng.state, state, "restore/migration/view use no simulation dice")
 	assert_eq(game.rng.randi(), expected.randi())
 	_assert_restored(game)
+
+
+func test_saved_zero_inactive_and_place_only_codes_survive_draw_and_resave() -> void:
+	var source = _game()
+	var codes: Array[int] = [0, 88, 511]
+	for outfit: int in [24, 27]:
+		for variant: int in 8:
+			codes.append(outfit * 8 + variant)
+	var expected_by_id := {}
+	for code: int in codes:
+		var z: Dictionary = source.zombies.spawn("dead", source.player.position + Vector3(4, 0, 0))
+		z["name"] = ""
+		z["look_code"] = code
+		expected_by_id[int(z["id"])] = code
+	var saved := _saved(source)
+	assert_eq(int(saved["version"]), 3)
+	var original: Dictionary = saved.duplicate(true)
+	var game = _game()
+	FieldSave.apply(game, saved)
+	var state: int = game.rng.state
+	assert_eq(state, source.rng.state, "restoring explicit codes keeps saved simulation state")
+	assert_eq(game.zombies.list.size(), codes.size())
+	for id: int in expected_by_id:
+		var z: Dictionary = game.zombies.find(id)
+		var code := int(expected_by_id[id])
+		assert_eq(int(z.get("look_code", -1)), code)
+		var active := code if (code >> 3) in [24, 27] else 0
+		assert_eq(int(game.zombies.call("look_code_of", z)), active)
+		var record: Dictionary = game.zombies._sight_draw(z, 0, "dead", {}, null, {})
+		var custom: Color = record["custom"]
+		assert_eq(int(floorf(custom.b * 0.5 + 0.25)), active if DeadBody.can_mix() else 0)
+		assert_eq(int(z["look_code"]), code, "drawing only filters inactive codes")
+	var again := _saved(game)
+	var rows: Array = again["zombies"]
+	assert_eq(rows.size(), codes.size())
+	for row: Dictionary in rows:
+		assert_eq(int(row.get("look_code", -1)), int(expected_by_id[int(row["id"])]))
+	assert_eq(game.rng.state, state, "drawing and resaving consume no simulation dice")
+	assert_eq(saved, original, "read/draw/resave leaves the input snapshot untouched")
 
 
 func _fallback(reason: String) -> void:
