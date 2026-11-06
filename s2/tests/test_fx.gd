@@ -340,6 +340,26 @@ func test_model_grade_presses_loud_colours() -> void:
 	assert_eq(FxState.grade_color(Color(0, 0, 0, 0.5)), Color(0, 0, 0, 0.5))
 
 
+func test_model_grade_mirror_uses_the_linear_cool_the_shaders_get() -> void:
+	# grade_cool is a `source_color` uniform in every shader that grades, so the shader multiplies by its
+	# linear value; the mirror must too (it multiplied the sRGB numbers: greys came out half as cold).
+	for path in [DIR + "weathered.gdshaderinc", "res://game/world/building.gdshader",
+			"res://game/actors/dead_vat.gdshaderinc"]:
+		var re := RegEx.new()
+		re.compile("uniform\\s+vec3\\s+grade_cool\\s*:\\s*source_color\\b")
+		assert_not_null(re.search(FileAccess.get_file_as_string(path)), path + ": grade_cool is source_color")
+	var k := float(FxState.MODEL_GRADE["grade_cool_mix"])
+	var cool := (FxState.MODEL_GRADE["grade_cool"] as Color).srgb_to_linear()
+	var grey := 0.5
+	var got := FxState.grade_color(Color(grey, grey, grey))
+	var val := float(FxState.MODEL_GRADE["grade_value"])
+	assert_almost_eq(got.r, grey * val * lerpf(1.0, cool.r, k), 1e-5)
+	assert_almost_eq(got.g, grey * val * lerpf(1.0, cool.g, k), 1e-5)
+	assert_almost_eq(got.b, grey * val * lerpf(1.0, cool.b, k), 1e-5)
+	# The sRGB numbers would give r 0.378; the linear cool gives about 0.348.
+	assert_lt(got.r, 0.36)
+
+
 func test_low_cold_sun() -> void:
 	# User, 2026-10-17: a low, cold sun. The day colour leans cold but stays
 	# under the sky-blue line, and every scene uses the one height.
