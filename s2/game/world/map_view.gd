@@ -144,6 +144,44 @@ var story_look_enabled: bool = true
 var story_look: Dictionary = {}
 
 
+## How this map's snow lies (world_vis snow_shift, snow_melt, snow_melt_m, snow_phase),
+## so one street is near white while another has melted to the grass, and the drifts of
+## two maps do not fall in the same places (사용자 11-05 「어느 맵은 싹 덮이고 어느 맵은
+## 좀 녹은」). It only spreads the stop's snow: fx_snow 0 stays bare. Fixed by the place
+## id, so a restored stop lies as it did; a map may set its own in snow_look
+## ({"shift": -0.3..0.3, "melt": 0..1, "melt_m": 12..48 metres}), a wrong value falls back.
+static func snow_look_for(map_data: Dictionary) -> Dictionary:
+	var id := str(map_data.get("place_id", "")).strip_edges().to_lower()
+	# FNV-1a over the id's bytes: the same every run and engine version (String.hash is not promised).
+	var h := 2166136261
+	for b in id.to_utf8_buffer():
+		h = ((h ^ b) * 16777619) & 0xFFFFFFFF
+	var parts: Array[float] = []
+	for i in range(5):
+		h = ((h ^ (i + 1)) * 16777619) & 0xFFFFFFFF
+		parts.append(float((h >> 8) & 0xFFFF) / 65535.0)
+	var look := {
+		"shift": lerpf(-0.25, 0.25, parts[0]),
+		"melt": lerpf(0.45, 0.95, parts[1]),
+		"melt_m": lerpf(18.0, 40.0, parts[2]),
+		"phase": Vector2(parts[3], parts[4]) * 500.0,
+	}
+	var own = map_data.get("snow_look", null)
+	if own is Dictionary:
+		for row: Array in [["shift", -0.3, 0.3], ["melt", 0.0, 1.0], ["melt_m", 12.0, 48.0]]:
+			var key: String = row[0]
+			if not own.has(key):
+				continue
+			var v = own[key]
+			if (v is float or v is int) and float(v) >= float(row[1]) and float(v) <= float(row[2]):
+				look[key] = float(v)
+			else:
+				push_warning("snow_look %s: %s out of %s..%s, kept %s" % [key, str(v), str(row[1]), str(row[2]), str(look[key])])
+	elif own != null:
+		push_warning("snow_look is not a dictionary: %s" % str(own))
+	return look
+
+
 func setup(map_data: Dictionary) -> void:
 	data = map_data
 	story_look = StoryLook.for_place(String(data.get("place_id", ""))) if story_look_enabled else {}
@@ -166,6 +204,9 @@ func setup(map_data: Dictionary) -> void:
 	material.set_shader_parameter("ground_layers", preload("res://fx/textures/ground/ground_layers.png"))
 	material.set_shader_parameter("ground_layers_on", true)
 	material.set_shader_parameter("region_band", int(Atmosphere.region_key(str(data.get("region_band", Atmosphere.DEFAULT_REGION))).substr(1)))
+	var snow_look := snow_look_for(data)
+	for key: String in snow_look:
+		material.set_shader_parameter("snow_" + key, snow_look[key])
 	win_image = Image.create(grid.width * LampLight.WINDOW_TEXELS, grid.height * LampLight.WINDOW_TEXELS, false, Image.FORMAT_R8)
 	win_texture = ImageTexture.create_from_image(win_image)
 	material.set_shader_parameter("win", win_texture)

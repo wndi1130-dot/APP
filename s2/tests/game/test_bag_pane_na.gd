@@ -215,8 +215,9 @@ func test_the_bag_beside_a_box_sends_its_row_to_the_box() -> void:
 ## the count — the multiple nearest the line icon's size that fits the row.
 func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() -> void:
 	var game = _game()
-	# The can opener has no baked picture: it keeps its line icon.
-	var id: String = _box(game, ["food_pack", "can_opener"])
+	# The luxury bundle has no baked picture: it keeps its line icon. The can opener
+	# has none of its own but takes the one baked for its line icon (it_opener).
+	var id: String = _box(game, ["food_pack", "luxury_pack", "can_opener"])
 	var picture := Image.create(32, 32, false, Image.FORMAT_RGBA8)
 	picture.fill(Color("ffc66c"))
 	var texture := ImageTexture.create_from_image(picture)
@@ -245,11 +246,16 @@ func test_pixel_art_is_nearest_at_whole_device_multiples_with_a_line_fallback() 
 	else:
 		assert_almost_eq(icon.size.x, UiFonts.px(InventoryPane.ITEM_ICON), 0.01, "too small a window keeps the line icon's size")
 	assert_almost_eq(icon.size.x, icon.size.y, 0.01)
-	var fallback := _row(game.hud, "Near", "can_opener").find_child("ItemIcon", true, false) as TextureRect
+	var fallback := _row(game.hud, "Near", "luxury_pack").find_child("ItemIcon", true, false) as TextureRect
 	assert_eq(fallback.stretch_mode, TextureRect.STRETCH_KEEP_ASPECT_CENTERED)
 	assert_almost_eq(fallback.size.x, UiFonts.px(InventoryPane.ITEM_ICON), 1.0)
 	assert_almost_eq(fallback.size.y, UiFonts.px(InventoryPane.ITEM_ICON), 1.0)
-	assert_eq(fallback.texture, HudIcons.texture(game.item_icon("can_opener"), UiFonts.size(InventoryPane.ITEM_ICON), GlassPane.INK2, 1.0 / HudIcons.LINE), "a missing png uses the existing line icon")
+	assert_eq(fallback.texture, HudIcons.texture(game.item_icon("luxury_pack"), UiFonts.size(InventoryPane.ITEM_ICON), GlassPane.INK2, 1.0 / HudIcons.LINE), "a missing png uses the existing line icon")
+	var opener := _row(game.hud, "Near", "can_opener").find_child("ItemIcon", true, false) as TextureRect
+	assert_null(InventoryPane.art_texture("can_opener"), "no picture of its own")
+	assert_not_null(opener.texture)
+	assert_eq(opener.texture, InventoryPane.art_texture("can_opener", game.item_icon("can_opener")), "its line icon's bake")
+	assert_true(InventoryPane.is_painted(opener.texture))
 	game.hud._close_modal()
 
 
@@ -1453,6 +1459,72 @@ func test_every_baked_picture_is_square_painted_and_mipmapped() -> void:
 	assert_gte(seen, 22)
 	for alias: String in InventoryPane.ART_ALIAS:
 		assert_not_null(InventoryPane.art_texture(alias), alias)
+
+
+## A thing with no picture of its own takes the one baked for its line icon's
+## name; its own picture, then its alias, come first.
+func test_a_thing_without_its_own_picture_takes_its_line_icons_bake() -> void:
+	var beans: Texture2D = InventoryPane.art_texture("can_beans")
+	assert_not_null(beans)
+	assert_eq(InventoryPane.art_texture("no_such_thing", "can_beans"), beans, "the line icon's bake")
+	assert_eq(InventoryPane.art_texture("can_beans", "medkit"), beans, "its own picture first")
+	assert_eq(InventoryPane.art_texture("rusk", "medkit"), InventoryPane.art_texture("hardtack"), "then its alias")
+	assert_null(InventoryPane.art_texture("no_such_thing", "no_such_icon"))
+	assert_null(InventoryPane.art_texture("no_such_thing"))
+	# A line icon drawn like a baked thing (ICON_ALIAS): notes take the document's.
+	assert_eq(InventoryPane.art_texture("note_map", "papers"), InventoryPane.art_texture("document"))
+	# The herbal's line icon "book" is the plain book's id: each keeps its own picture.
+	var plain_book: Texture2D = InventoryPane.art_texture("book", "it_book")
+	var herbal: Texture2D = InventoryPane.art_texture("rare_herbal", "book")
+	assert_not_null(plain_book)
+	assert_not_null(herbal)
+	assert_eq(plain_book, InventoryPane.art_texture("it_book"), "the book shows the book")
+	assert_eq(herbal, InventoryPane.art_texture("herbal_book"), "the herbal shows the green herbal")
+	assert_ne(plain_book, herbal)
+	for icon: String in InventoryPane.ICON_ALIAS:
+		var named: Texture2D = InventoryPane.art_texture(String(InventoryPane.ICON_ALIAS[icon]))
+		assert_not_null(named, icon)
+		assert_eq(InventoryPane.art_texture("no_such_thing", icon), named, icon + ": its alias, even where a picture of that name exists")
+
+
+## No picture's name means two things: a thing's own id that another thing also
+## uses as its line icon (as the plain book's id "book" was the herbal's line
+## icon) must be settled in ICON_ALIAS, or one of them shows the other's bake.
+func test_no_picture_name_is_both_a_things_id_and_anothers_line_icon() -> void:
+	var game = _game()
+	var item_table: Script = load("res://game/sim/field_items.gd") as Script
+	var wear_table: Script = load("res://game/sim/wear.gd") as Script
+	var ids: Array = []
+	var items_map: Dictionary = item_table.get_script_constant_map()
+	var wear_map: Dictionary = wear_table.get_script_constant_map()
+	for table: Dictionary in [items_map["ITEMS"], items_map["RARE"], wear_map["KINDS"], FieldGame.BUNDLE_ICONS]:
+		for id: String in table:
+			if not ids.has(id):
+				ids.append(id)
+	assert_gt(ids.size(), 100)
+	var icon_of: Dictionary = {}
+	for id: String in ids:
+		icon_of[id] = String(game.item_icon(id))
+	for id: String in ids:
+		if not ResourceLoader.exists("res://assets/icons/items/%s.png" % id) or icon_of[id] == id:
+			continue
+		for other: String in ids:
+			if other != id and icon_of[other] == id:
+				assert_true(InventoryPane.ICON_ALIAS.has(id), "%s.png is %s's own picture and %s's line icon" % [id, id, other])
+
+
+## The plain book and the herbal, as the game names their line icons, each show
+## their own bake in a real row.
+func test_the_book_and_the_herbal_rows_show_their_own_pictures() -> void:
+	var game = _game()
+	var id: String = _box(game, ["book", "rare_herbal"])
+	game.hud.loot(id)
+	await _layout()
+	var plain := _row(game.hud, "Near", "book").find_child("ItemIcon", true, false) as TextureRect
+	var herbal := _row(game.hud, "Near", "rare_herbal").find_child("ItemIcon", true, false) as TextureRect
+	assert_eq(plain.texture, load("res://assets/icons/items/it_book.png"), "the book: " + String(game.item_icon("book")))
+	assert_eq(herbal.texture, load("res://assets/icons/items/herbal_book.png"), "the herbal: " + String(game.item_icon("rare_herbal")))
+	game.hud._close_modal()
 
 
 ## 결정 561 ③: the bag's mark 1.3 times — in its column head, on the folded

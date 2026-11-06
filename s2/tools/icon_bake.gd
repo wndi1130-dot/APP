@@ -33,7 +33,7 @@ func _begin() -> void:
 		_done()
 		return
 	var pattern := RegEx.new()
-	pattern.compile("^(\\S+)\\s+(res://.+?\\.(?:glb|tscn|scn|res|tres|gd))(?:\\s+(\\S+))?(?:\\s+(\\S+))?(?:\\s+(\\S+))?(?:\\s+(\\S+))?$")
+	pattern.compile("^(\\S+)\\s+(res://.+?\\.(?:glb|gltf|obj|tscn|scn|res|tres|gd))(?:\\s+(\\S+))?(?:\\s+(\\S+))?(?:\\s+(\\S+))?(?:\\s+(\\S+))?$")
 	var names := {}
 	var line_number := 0
 	while file.get_position() < file.get_length():
@@ -107,7 +107,7 @@ func _bake_next() -> void:
 		_skip(entry, "could not load a Mesh or PackedScene: " + path)
 		return
 	var stage := Node3D.new()
-	_copy_meshes(source, Transform3D.IDENTITY, true, stage, str(entry["name"]))
+	_copy_meshes(source, Transform3D.IDENTITY, true, stage, str(entry["name"]), _paints_with_vertex_colours(path))
 	source.free()
 	if stage.get_child_count() == 0:
 		stage.free()
@@ -166,7 +166,7 @@ func _skip(entry: Dictionary, reason: String, view: SubViewport = null) -> void:
 
 
 func _copy_meshes(node: Node, parent_pose: Transform3D, shown: bool,
-		stage: Node3D, item_name: String) -> void:
+		stage: Node3D, item_name: String, vertex_coloured: bool = false) -> void:
 	var pose := parent_pose
 	if node is Node3D:
 		var spatial := node as Node3D
@@ -183,16 +183,51 @@ func _copy_meshes(node: Node, parent_pose: Transform3D, shown: bool,
 			for surface in original.mesh.get_surface_count():
 				var material := original.get_active_material(surface)
 				instance.set_surface_override_material(surface,
-					_bake_material(material, original.mesh, surface, item_name))
+					_bake_material(material, original.mesh, surface, item_name, vertex_coloured))
 			stage.add_child(instance)
 	for child in node.get_children():
-		_copy_meshes(child, pose, shown, stage, item_name)
+		_copy_meshes(child, pose, shown, stage, item_name, vertex_coloured)
 
 
-func _bake_material(original: Material, mesh: Mesh, surface: int, item_name: String) -> Material:
+## A glTF file that defines no materials at all is painted only in its vertex
+## colours (COLOR_0): the importer gives it a plain white material that would
+## hide them. A file with materials, even plain white ones, keeps them as made.
+static func _paints_with_vertex_colours(path: String) -> bool:
+	var json_text := ""
+	if not FileAccess.file_exists(path):
+		return false
+	if path.ends_with(".gltf"):
+		json_text = FileAccess.get_file_as_string(path)
+	elif path.ends_with(".glb"):
+		var file := FileAccess.open(path, FileAccess.READ)
+		if file == null or file.get_length() < 20 or file.get_32() != 0x46546C67:
+			return false
+		file.seek(12)
+		var chunk_length := file.get_32()
+		if file.get_32() != 0x4E4F534A or chunk_length > file.get_length() - 20:
+			return false
+		json_text = file.get_buffer(chunk_length).get_string_from_utf8()
+	if json_text.is_empty():
+		return false
+	var gltf: Variant = JSON.parse_string(json_text)
+	if not gltf is Dictionary:
+		return false
+	var materials: Variant = (gltf as Dictionary).get("materials", [])
+	return materials is Array and (materials as Array).is_empty()
+
+
+func _bake_material(original: Material, mesh: Mesh, surface: int, item_name: String,
+		vertex_coloured: bool = false) -> Material:
 	if original is BaseMaterial3D:
 		var copy := original.duplicate() as BaseMaterial3D
 		copy.next_pass = null
+		# A model painted only in vertex colours: read them as the game's shaders
+		# do (sRGB), in place of the importer's plain white.
+		if vertex_coloured and copy.albedo_texture == null and _has_colors(mesh, surface):
+			copy.vertex_color_use_as_albedo = true
+			copy.vertex_color_is_srgb = true
+			print("ICON_BAKE_MATERIAL name=", item_name, " surface=", surface,
+				" source=", original.get_class(), " replacement=copy color=vertex_color_srgb")
 		return copy
 	var material := StandardMaterial3D.new()
 	material.roughness = 0.9
@@ -250,6 +285,12 @@ func _bake_material(original: Material, mesh: Mesh, surface: int, item_name: Str
 		" source=", original.get_class() if original != null else "none",
 		" replacement=StandardMaterial3D color=", mode, " missing_textures=", missing)
 	return material
+
+
+func _has_colors(mesh: Mesh, surface: int) -> bool:
+	var arrays := mesh.surface_get_arrays(surface)
+	var colors: Variant = arrays[Mesh.ARRAY_COLOR] if arrays.size() > Mesh.ARRAY_COLOR else null
+	return colors is PackedColorArray and not (colors as PackedColorArray).is_empty()
 
 
 func _is_albedo_name(key: String) -> bool:

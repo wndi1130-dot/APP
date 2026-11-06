@@ -249,11 +249,28 @@ var worn: Dictionary = {}                # body -> its pictures and what is read
 var body_by: Dictionary = {}             # person -> the body they wear (body_cast.gd)
 var taken: Dictionary = {}               # body -> how many in this scene wear it
 
+enum PrepareState { IDLE, BODIES, GARMENTS, VERIFY, DONE, CANCELLED }
+var prepare_state: PrepareState = PrepareState.IDLE
+var prepare_stats: Dictionary = {}
+var _prepare_people: Array = []
+var _prepare_started: int = 0
+var _prepare_frame: int = -1
+
 
 func setup(field_game) -> void:
+	if game == field_game and draw != null:
+		return
+	cancel_preparation()
+	prepare_state = PrepareState.IDLE
+	prepare_stats = {}
+	_prepare_people.clear()
+	if game != field_game:
+		body_by.clear()
+		taken.clear()
+		notes.clear()
 	game = field_game
 	process_priority = 100               # after field_game has set every person's view
-	if not enabled():
+	if not enabled() or draw != null:
 		return
 	var d := _dress(FOLDER, OWN_FOLDER)
 	if d.is_empty():
@@ -269,6 +286,142 @@ func setup(field_game) -> void:
 	own_frames = d["own_frames"]
 	frames = d["frames"]
 	wear_draws = d["wear"]
+
+
+## The loader starts this after restoration and drives one step per real frame.
+## Direct starts keep their ordinary frame reads; an abandoned build stays cold.
+## Assignment equivalence requires candidates and their order to stay fixed
+## during preparation. Changed targets retain earlier assignments; only their
+## newly needed caches are guaranteed to be prepared.
+func prepare() -> void:
+	if is_preparing() or preparation_cancelled():
+		return
+	prepare_stats = {"count": 0, "garments": 0, "ms": 0.0, "frames": 0,
+		"max_frame_ms": 0.0, "work_ms": 0.0, "max_frame_work": 0,
+		"last_frame_work": 0, "last_frame_id": -1}
+	if not _can_prepare():
+		return
+	_prepare_people = _preparation_people()
+	_prepare_started = Time.get_ticks_usec()
+	prepare_state = PrepareState.BODIES
+
+
+func is_preparing() -> bool:
+	return prepare_state in [PrepareState.BODIES, PrepareState.GARMENTS, PrepareState.VERIFY]
+
+
+func preparation_cancelled() -> bool:
+	return prepare_state == PrepareState.CANCELLED
+
+
+func cancel_preparation() -> void:
+	prepare_state = PrepareState.CANCELLED
+	_prepare_people.clear()
+
+
+func _can_prepare() -> bool:
+	if game == null or draw == null or not enabled():
+		return false
+	if game is Node and game.is_queued_for_deletion():
+		return false
+	return bool(game.opts.get("staged", false)) and game.is_built and game.standing_by and game.pace.on
+
+
+func _preparation_people() -> Array:
+	var people: Array = []
+	for p in game.people:
+		# Arrival temporarily hides everyone; warm the view it will uncover.
+		if is_instance_valid(p) and game.level_shown(game.level_of(p.position)) and game._person_visible(p) and not game.rode_off.has(p):
+			people.append(p)
+	return people
+
+
+## A body cache miss (including fallback) or a garment miss costs one slot.
+## Even a second call in the same engine frame cannot spend another budget.
+func prepare_step() -> void:
+	if not is_preparing():
+		return
+	if not _can_prepare():
+		cancel_preparation()
+		return
+	var frame: int = Engine.get_process_frames()
+	if frame == _prepare_frame:
+		return
+	_prepare_frame = frame
+	var started: int = Time.get_ticks_usec()
+	var bodies := _prepare_bodies() if prepare_state == PrepareState.BODIES else 0
+	var garments := 0
+	if prepare_state == PrepareState.GARMENTS:
+		garments = _prepare_garments(READS_PER_FRAME - bodies)
+	if prepare_state == PrepareState.VERIFY:
+		var latest := _preparation_people()
+		if latest != _prepare_people:
+			_prepare_people = latest
+			prepare_state = PrepareState.BODIES
+		else:
+			prepare_state = PrepareState.DONE
+	var elapsed: float = float(Time.get_ticks_usec() - started) / 1000.0
+	prepare_stats["count"] += bodies
+	prepare_stats["garments"] += garments
+	prepare_stats["frames"] += 1
+	prepare_stats["ms"] = float(Time.get_ticks_usec() - _prepare_started) / 1000.0
+	prepare_stats["work_ms"] += elapsed
+	prepare_stats["max_frame_ms"] = maxf(float(prepare_stats["max_frame_ms"]), elapsed)
+	prepare_stats["last_frame_work"] = bodies + garments
+	prepare_stats["max_frame_work"] = maxi(int(prepare_stats["max_frame_work"]), bodies + garments)
+	prepare_stats["last_frame_id"] = frame
+	if prepare_state == PrepareState.DONE:
+		print("PERSON_PREWARM %s" % JSON.stringify({"count": prepare_stats["count"],
+			"garments": prepare_stats["garments"], "ms": prepare_stats["ms"],
+			"frames": prepare_stats["frames"], "max_frame_ms": prepare_stats["max_frame_ms"]}))
+
+
+## Preserve the cold frame's admission order, including assignments beyond
+## MAX_PEOPLE while unread bodies do not yet occupy a visible slot.
+func _prepare_bodies() -> int:
+	var before: int = worn.size()
+	var count := 0
+	var reads := READS_PER_FRAME
+	for p in _prepare_people:
+		if count >= MAX_PEOPLE:
+			break
+		if not is_instance_valid(p):
+			continue
+		var cached: int = worn.size()
+		var d := worn_of(p, reads > 0)
+		reads -= worn.size() - cached
+		if not d.is_empty():
+			count += 1
+	var added: int = worn.size() - before
+	if added == 0:
+		prepare_state = PrepareState.GARMENTS
+	return added
+
+
+func _prepare_garments(budget: int) -> int:
+	var count := 0
+	var reads := 0
+	for p in _prepare_people:
+		if count >= MAX_PEOPLE:
+			break
+		if not is_instance_valid(p) or not body_by.has(p):
+			continue
+		var d: Dictionary = worn.get(body_by[p], {})
+		if d.is_empty():
+			continue
+		count += 1
+		if d["own_draw"] == null:
+			continue
+		for look: Dictionary in looks_on(p) + bag_on(p):
+			var kind: String = look["shell"]
+			if d["wear"].has(kind):
+				continue
+			if reads >= budget:
+				return reads
+			garment_of(d, kind)
+			reads += 1
+	prepare_state = PrepareState.VERIFY
+	return reads
 
 
 ## One body's two pictures: the dead's folder (the struck pose, and a build
@@ -319,8 +472,8 @@ func garment_of(d: Dictionary, kind: String) -> MultiMeshInstance3D:
 	return wear[kind]
 
 
-## The body one person wears, picked the first time they are drawn and read in
-## the first time anyone wears it; FOLDER / OWN_FOLDER's when theirs is not in
+## The body one person wears, picked when first warmed or drawn and read in
+## the first time anyone needs it; FOLDER / OWN_FOLDER's when theirs is not in
 ## the build. {} when it is not read in yet and `may_read` is false.
 func worn_of(p, may_read: bool = true) -> Dictionary:
 	if not body_by.has(p):
@@ -417,9 +570,30 @@ func _process(delta: float) -> void:
 			continue
 		var had := worn.size()
 		var d := worn_of(p, reads > 0)
-		if worn.size() > had:
+		var read_body := worn.size() > had
+		if read_body:
 			reads -= 1
 		if d.is_empty():
+			continue
+		var layers := looks_on(p) + bag_on(p)
+		# A fresh body and its own shells remain one direct-path bundle.
+		# notes only gains a person below, when their body is actually drawn:
+		# someone already shown must not blink when their outfit changes.
+		var together := read_body or notes.has(p)
+		var dressed := true
+		for layer: Dictionary in layers:
+			var kind: String = layer["shell"]
+			if d["wear"].has(kind):
+				continue
+			if together or reads > 0:
+				garment_of(d, kind)
+				if not together:
+					reads -= 1
+			else:
+				dressed = false
+		# A prewarmed body can outlive a timed-out shell pass. Finish its
+		# missing shells within the remaining budget before its first draw.
+		if not dressed:
 			continue
 		count += 1
 		var b_vat: Dictionary = d["vat"]
@@ -452,7 +626,7 @@ func _process(delta: float) -> void:
 			d["k"] = k + 1
 			# What they wear moves with the body: the same place, the same frame.
 			var worn_n: Dictionary = d["worn_n"]
-			for worn_look: Dictionary in looks_on(p) + bag_on(p):
+			for worn_look: Dictionary in layers:
 				var kind: String = worn_look["shell"]
 				var garment := garment_of(d, kind)
 				if garment != null:
