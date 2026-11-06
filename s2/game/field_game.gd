@@ -3397,10 +3397,12 @@ static func camera_frame_focus(focus: Vector3, at: Vector3, current_size: float,
 	return EdgeBand.keep_on_screen(limited, at, minf(current_size, target_size), aspect, CAM_PITCH, CAM_YAW)
 
 
-## 첫 표시의 실제 크기만 맞춘다. 선택값과 자동 줌의 시계·대기는 건드리지 않는다.
+## 첫 표시의 실제 크기와 배치, 그 크기에 맞는 폭풍 빛만 맞춘다. 선택값과 자동 줌의 시계·대기는 건드리지 않는다.
 func start_camera_at(view_height: float) -> void:
 	camera.size = view_height
 	_place_camera(view_height)
+	# 폭풍 빛의 화면 위치·반경(reach / camera.size)은 바뀐 크기로 다시 계산한다(정확 복원 뒤 재개 안내).
+	_update_storm()
 
 
 func _update_camera(delta: float) -> void:
