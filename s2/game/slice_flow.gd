@@ -50,6 +50,7 @@ const FieldArrival = preload("res://game/politics/field_arrival.gd")
 const TurnCard = preload("res://game/ui/turn_card.gd")
 const UiDeny = preload("res://game/ui/ui_deny.gd")
 const ScreenLift = preload("res://game/ui/screen_lift.gd")
+const FieldPrefs = preload("res://game/ui/field_prefs.gd")
 const StopPickCard = preload("res://game/ui/stop_pick_card.gd")
 const CouncilCard = preload("res://game/ui/council_card.gd")
 const TrainGauges = preload("res://game/ui/train_gauges.gd")
@@ -2536,6 +2537,9 @@ func _field_opts() -> Dictionary:
 	o["field_save"] = bool(opts.get("save", false))
 	o["field_save_path"] = String(opts.get("field_save_path", FieldSave.PATH))
 	o["slice"] = true
+	# The stick, the radio and the state icons as the player last chose them in a stop's
+	# settings, and the mark that keeps a change made in this one (field_prefs.gd).
+	FieldPrefs.fill(o)
 	if run != "":
 		o["slice_run"] = run
 	# When the train comes in (decision 471 B0): the departure contract's, rolled by the train
