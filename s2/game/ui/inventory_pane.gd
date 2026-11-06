@@ -936,25 +936,25 @@ static func _near_rows(hud, p, at: Dictionary) -> Control:
 					list.add_child(_near_more(hud, item, Carry.item_weight(item), count, cb))
 			empty = "빈 썰매"
 		"box":
+			# 결정 550: one row to a kind, its count; a press takes one, found in the
+			# box as pressed (the box may have changed since the pane was laid).
 			var c: Dictionary = game.data["containers"][at["id"]]
-			var items: Array = c["items"]
-			var indices: Array = range(items.size())
-			indices.sort_custom(func(a: int, b: int) -> bool:
-				return _steady(_order_key(hud, String(items[a]), 1), _order_key(hud, String(items[b]), 1), a, b))
+			var stacks: Array = box_stacks(c["items"])
+			stacks.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+				return _steady(_stack_order(hud, a), _stack_order(hud, b), int(a["first"]), int(b["first"])))
 			var now: String = game.actions.taking_item(p) if is_same(p.action_busy, c) else ""
-			var barred: bool = false
-			var opened: bool = false
-			for i: int in indices:
-				var id: String = String(items[i])
-				var cb: Callable = hud._loot_take.bind(String(at["id"]), i)
-				var row := _row(hud, id, game.item_name(id), 1, Carry.item_weight(id), cb, now != "", "near", i)
-				if id == now and not barred:
-					barred = true
+			var now_key: String = Carry.FieldItems.shown_as(now) if now != "" else ""
+			for s: Dictionary in stacks:
+				var key: String = String(s["key"])
+				var n: int = int(s["n"])
+				var cb: Callable = hud._loot_take_kind.bind(String(at["id"]), key)
+				var row := _row(hud, key, game.item_name(key), n, float(s["weight"]), cb, now != "", "near")
+				if key == now_key:
 					row.add_child(_take_bar(hud, p))
 				list.add_child(row)
-				if now == "" and not opened and _expanded(hud, "near", id, i):
-					opened = true
-					list.add_child(_near_more(hud, id, Carry.item_weight(id), 1, cb))
+				if now == "" and _expanded(hud, "near", key):
+					var all_cb: Callable = hud._loot_all_kind.bind(String(at["id"]), key) if n > 1 and not Wear.is_garment(key) else Callable()
+					list.add_child(_near_more(hud, key, float(s["weight"]) / float(n), n, cb, all_cb))
 			empty = "빈 곳"
 		"ground":
 			var indices: Array = game.actions.near_ground(p)
@@ -990,14 +990,59 @@ static func _near_rows(hud, p, at: Dictionary) -> Control:
 
 
 ## A place's row held open: its weight and count, and the amber key that takes it
-## into the bag as a press on the row does.
-static func _near_more(hud, id: String, weight: float, n: int, cb: Callable) -> Control:
+## into the bag as a press on the row does. A box's stack of more than one
+## (`all_cb`) has a key beside it that takes every one of the kind, one after
+## another (field_actions.gd take_kind), its count drawn on it.
+static func _near_more(hud, id: String, weight: float, n: int, cb: Callable, all_cb: Callable = Callable()) -> Control:
 	var more := _more(id, weight, n)
+	var keys: HBoxContainer = more.find_child("Keys", true, false) as HBoxContainer
+	if all_cb.is_valid():
+		var every := _key("모두 ×%d" % n, all_cb)
+		every.name = "TakeKind"
+		_key_icon(hud, every, "pack", 20.0, GlassPane.INK2, -7.0)
+		_key_word(every, "×%d" % n, 31.0, GlassPane.INK2, 11.0, true)
+		keys.add_child(every)
 	var take := _key("담기", cb, true)
 	take.name = "Take"
 	_key_icon(hud, take, "pack", 24.0, GlassPane.AMBER_L)
-	(more.find_child("Keys", true, false) as HBoxContainer).add_child(take)
+	keys.add_child(take)
 	return more
+
+
+## A box's things gathered by what they show as (결정 550): one stack to a kind,
+## in the order the kind first lies in the box — {key, n, weight, first}. Things
+## in another state are other kinds already (상한·얼어붙은 고기, 시든 사과), so
+## they stay apart; a twin with a hidden state gathers with its plain one
+## (FieldItems.shown_as), so the count keeps the secret.
+static func box_stacks(items: Array) -> Array:
+	var at: Dictionary = {}
+	var out: Array = []
+	for i: int in items.size():
+		var id: String = String(items[i])
+		var key: String = Carry.FieldItems.shown_as(id)
+		if not at.has(key):
+			at[key] = out.size()
+			out.append({"key": key, "n": 0, "weight": 0.0, "first": i})
+		var s: Dictionary = out[int(at[key])]
+		s["n"] = int(s["n"]) + 1
+		s["weight"] = float(s["weight"]) + Carry.item_weight(id)
+	return out
+
+
+## Where the first thing showing as `key` lies in the box's `items` (-1: none
+## left): a stack's press takes that one.
+static func stack_index(items: Array, key: String) -> int:
+	for i: int in items.size():
+		if Carry.FieldItems.shown_as(String(items[i])) == key:
+			return i
+	return -1
+
+
+## What a box's stack sorts by: its name, or the heavier stack first.
+static func _stack_order(hud, s: Dictionary) -> Variant:
+	if hud.inv_sort == "name":
+		return hud.game.item_name(String(s["key"]))
+	return -float(s["weight"])
 
 
 ## What a row sorts by: its name, or the heavier first (a negative weight).

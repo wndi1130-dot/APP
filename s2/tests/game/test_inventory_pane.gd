@@ -178,7 +178,8 @@ func test_a_full_pane_stays_inside_the_screen() -> void:
 	var p = game.player
 	var box := _at_a_box(game)
 	var c: Dictionary = game.data["containers"][box]
-	c["items"] = ["food_pack", "scrap", "wood", "cloth", "bandage", "document", "plank", "medkit", "flare", "scrap", "wood", "food_pack"]
+	# Twelve kinds: a box's things of a kind share one row (결정 550), so twelve rows.
+	c["items"] = ["food_pack", "scrap", "wood", "cloth", "bandage", "document", "plank", "medkit", "flare", "can_beans", "tweezers", "can_opener"]
 	for id in ["scrap", "wood", "cloth", "bandage", "plank", "flare", "document", "medkit", "bottle_spirit", "tweezers"]:
 		p.add_item(id, 1)
 	game.hud.loot(box)
@@ -187,7 +188,8 @@ func test_a_full_pane_stays_inside_the_screen() -> void:
 	assert_lte(bottom, pane.get_viewport_rect().size.y, "the foot is on the screen")
 	var keys: Array = game.hud.modal.find_children("*", "Button", true, false).map(func(b) -> String: return String(b.text))
 	assert_has(keys, "모두 담기")
-	assert_eq(_texts(game.hud, "Near").size(), c["items"].size(), "every row still there, to drag to")
+	assert_eq(_texts(game.hud, "Near").size(), InventoryPane.box_stacks(c["items"]).size(), "every row still there, to drag to")
+	assert_eq(InventoryPane.box_stacks(c["items"]).size(), 12)
 	game.hud._close_modal()
 
 

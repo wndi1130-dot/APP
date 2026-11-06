@@ -522,7 +522,9 @@ func _drag(hud, at: Vector2, index: int = 0) -> void:
 	hud._input(e)
 
 
-const LONG_BOX: Array = ["food_pack", "scrap", "wood", "cloth", "bandage", "document", "plank", "medkit", "flare", "scrap", "wood", "food_pack"]
+## Twelve kinds, so twelve rows (a box's things of a kind share one row, 결정 550):
+## a list longer than the pane, to scroll.
+const LONG_BOX: Array = ["food_pack", "scrap", "wood", "cloth", "bandage", "document", "plank", "medkit", "flare", "can_beans", "tweezers", "can_opener"]
 
 
 ## Two searched boxes in reach of the player: a map's boxes stand more than a reach
@@ -1050,27 +1052,30 @@ func test_a_dim_bag_row_still_opens_its_jobs_without_moving() -> void:
 	game.hud._close_modal()
 
 
-func test_the_second_duplicate_box_row_opens_and_keeps_its_source_index() -> void:
+## 결정 550: two of a kind in a box are one row ×2; held, it opens as that kind
+## (no source index), and its take finds the thing in the box as pressed.
+func test_a_box_stack_opens_as_its_kind_and_takes_what_is_there_when_pressed() -> void:
 	var game = _game()
 	var hud = game.hud
 	var id: String = _box(game, ["scrap", "scrap"])
 	hud.loot(id)
 	var near: Node = hud.modal.find_child("Near", true, false)
-	(near.get_child(1) as Button).button_down.emit()
+	assert_eq(near.get_child_count(), 1, "one row for the two")
+	(near.get_child(0) as Button).button_down.emit()
 	await _wait(InventoryPane.LONG_S + 0.15)
 	near = hud.modal.find_child("Near", true, false)
-	assert_eq(int(hud.inv_expand.get("i", -1)), 1)
-	assert_eq(near.get_child_count(), 3)
-	assert_eq(String(near.get_child(2).name), "More")
-	# Distinguish the two source slots after wiring; the callback must still use 1.
-	game.data["containers"][id]["items"][1] = "wood"
+	assert_eq(int(hud.inv_expand.get("i", 0)), -1, "a stack opens by its kind")
+	assert_eq(near.get_child_count(), 2)
+	assert_eq(String(near.get_child(1).name), "More")
+	# The box changes after wiring (a companion takes one): the press takes what is left.
+	game.data["containers"][id]["items"] = ["wood", "scrap"]
 	(hud.modal.find_child("Take", true, false) as Button).pressed.emit()
-	assert_eq(game.actions.taking_item(game.player), "wood")
+	assert_eq(game.actions.taking_item(game.player), "scrap", "the scrap found as pressed, not slot 0")
 	hud._loot_stop(id)
-	hud.inv_expand = {"side": "near", "id": "scrap", "i": 99, "at": InventoryPane.place_key(hud.inv_near)}
+	hud.inv_expand = {"side": "near", "id": "scrap", "i": 0, "at": InventoryPane.place_key(hud.inv_near)}
 	hud.bag_panel()
-	assert_null(hud.modal.find_child("More", true, false), "a stale source index opens nothing")
-	hud.inv_expand = {"side": "near", "id": "scrap", "i": 0, "at": "box:gone"}
+	assert_null(hud.modal.find_child("More", true, false), "an old per-slot key opens nothing")
+	hud.inv_expand = {"side": "near", "id": "scrap", "i": -1, "at": "box:gone"}
 	hud.bag_panel()
 	assert_null(hud.modal.find_child("More", true, false), "a stale place opens nothing")
 	hud._close_modal()

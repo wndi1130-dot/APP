@@ -93,6 +93,8 @@ const MESSAGE_GAP: float = 10.0
 # (status_art.gd), 72 across ('a little smaller' than the 80 first tried), or
 # 64 or 80 from the settings.
 const STATUS_AT := Vector2(-16.0, 84.0)
+## The test keys' widths on the clock's row: zoom out, zoom in, the debug view.
+const TEST_KEY_W: Dictionary = {"−": 64.0, "+": 64.0, "D": 56.0}
 const SETTINGS_KEY: float = 72.0   # the gear's touch square, top right while paused
 const SET_RIM := Color("f4f1ea")   # its white rim, as the state plates wear (시안 .fset)
 const STATUS_SIZES: Array[int] = [72, 64, 80]
@@ -327,7 +329,7 @@ var weather_label: Label
 var top_panel: Control                # the clock's box, top left
 var urgent: bool = false              # dusk has begun: the radio and 'all aboard' burn amber
 var radio_pill: PanelContainer
-var test_keys: HBoxContainer          # − + D (tests only), top right on the clock's row
+var test_keys: HBoxContainer          # − + D (debug builds only), top right on the clock's row
 var radio_styles: Array = []          # [plain, urgent]
 var face: Control                     # the chief's face (portrait_face.gd)
 var cond_label: Label                 # the weapon's state, after its name
@@ -891,12 +893,9 @@ func _build_top() -> void:
 	test_keys.offset_top = 14.0
 	test_keys.add_theme_constant_override("separation", 8)
 	root.add_child(test_keys)
-	# D (the debug view) is a builder's key: a release export leaves it out.
-	var rows: Array = [["−", _zoom.bind(4.0), 64.0], ["+", _zoom.bind(-4.0), 64.0]]
-	if OS.is_debug_build():
-		rows.append(["D", _toggle_debug, 56.0])
-	for row in rows:
-		var k := _button(row[0], row[1], Vector2(row[2], TOP_ROW_H), 22)
+	var does: Dictionary = {"−": _zoom.bind(4.0), "+": _zoom.bind(-4.0), "D": _toggle_debug}
+	for word: String in test_key_words(OS.is_debug_build()):
+		var k := _button(word, does[word], Vector2(TEST_KEY_W[word], TOP_ROW_H), 22)
 		_dress(k, "", Vector2(46, 46), true)
 		# Quieter than the game's own keys (they are not in the 시안): smaller,
 		# no ring, faint glass and faint words.
@@ -2423,6 +2422,14 @@ func _fit_radio() -> void:
 	radio_pill.reset_size()
 
 
+## The test keys on the clock's row, in order (TEST_KEY_W): zoom −/+ and D (the
+## debug view) are builder's keys, not the game's — a debug build shows them, a
+## release export none (player review round 1, 2026-11-05); the PC's mouse wheel
+## still zooms.
+static func test_key_words(debug: bool) -> Array:
+	return ["−", "+", "D"] if debug else []
+
+
 ## A short row of choices in the middle (break a window, how to climb...).
 ## Wrap fixed-size choices before the right pads, then lift the whole group above the faces.
 static func offer_rects(sizes: Array[Vector2], view: Vector2, right_limit: float, bottom_limit: float) -> Array[Rect2]:
@@ -3144,6 +3151,23 @@ func _loot_take(id: String, i: int) -> void:
 
 func _loot_all(id: String) -> void:
 	game.actions.take_all(game.player, id)
+	loot(id)
+
+
+## A box's stack pressed (결정 550): the first of its kind still in the box comes
+## out, found as pressed — a box changed since the pane was laid (a companion took
+## from it) gives what is there now, and nothing when none is left.
+func _loot_take_kind(id: String, key: String) -> void:
+	var c: Dictionary = game.data["containers"].get(id, {})
+	var i: int = InventoryPane.stack_index(c.get("items", []), key)
+	if i >= 0:
+		game.actions.take(game.player, id, i)
+	loot(id)
+
+
+## A box's stack held open, its 「모두 ×n」: every one of the kind, one after another.
+func _loot_all_kind(id: String, key: String) -> void:
+	game.actions.take_kind(game.player, id, key)
 	loot(id)
 
 
