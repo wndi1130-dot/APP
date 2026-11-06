@@ -3,9 +3,9 @@ name: S2 Android field graybox
 on:
   push:
     branches: [main]
-    paths: [s2/**, .github/workflows/s2-android.yml, .github/gut_check.py, .github/test_gut_check.py]
+    paths: [s2/**, .github/workflows/s2-android.yml, .github/gut_check.py, .github/test_gut_check.py, .github/gut-times.json]
   pull_request:
-    paths: [s2/**, .github/workflows/s2-android.yml, .github/gut_check.py, .github/test_gut_check.py]
+    paths: [s2/**, .github/workflows/s2-android.yml, .github/gut_check.py, .github/test_gut_check.py, .github/gut-times.json]
 
 permissions:
   contents: read
@@ -119,6 +119,8 @@ jobs:
           PY
           # The pass check is tested first, so a broken check cannot wave the shard through.
           python3 .github/test_gut_check.py
+          # No report or log from an earlier run may stand in for this one.
+          rm -f s2/build/gut-results.xml s2/build/gut.log
           "$GODOT_BIN" --headless --path s2 --script addons/gut/gut_cmdln.gd \
             -gtest="$(paste -sd, s2/build/gut-shard.txt)" -gexit \
             -gjunit_xml_file=res://build/gut-results.xml 2>&1 | tee s2/build/gut.log
