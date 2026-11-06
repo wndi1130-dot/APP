@@ -283,6 +283,24 @@ func test_train_read_skips_a_slot_with_a_bad_record_row() -> void:
 	assert_true(((read["g"]["fieldReturns"] as Dictionary)["applied"] as Dictionary).has("ret_resume"))
 
 
+func test_train_still_returns_the_board_and_its_hash() -> void:
+	var text: String = _write_train(_board())
+	var source: Dictionary = {}
+	var g: Dictionary = SliceSave._train(train_at, _table(), source)
+	assert_false(g.is_empty())
+	assert_eq(String(source["train_sha"]), text.sha256_text())
+	assert_eq(SliceSave._train(train_at + "_none", _table(), source), {})
+
+
+func test_train_gives_no_board_beside_a_newer_slot() -> void:
+	var text: String = _write_train(_board())
+	_write_text(train_at + ".bak", text)
+	_rewrite_version(train_at, float(TrainSave.SAVE_VERSION + 1))
+	var source: Dictionary = {}
+	assert_eq(SliceSave._train(train_at, _table(), source), {}, "the whole backup is not handed out")
+	assert_false(source.has("train_sha"))
+
+
 # ---------------------------------------------------------------- pick
 
 ## pick is boot_choice's slice part and holds the same way: a newer slot resumes nothing, even

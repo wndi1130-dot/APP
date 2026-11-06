@@ -190,6 +190,16 @@ static func clear(path: String = PATH) -> void:
 			DirAccess.remove_absolute(at)
 
 
+## The board _train_read accepts, and its hash in `source` (round-trip checks read a written
+## board back with it). A newer candidate holds it as it holds the start: {}.
+static func _train(path: String, t: Dictionary, source: Dictionary = {}) -> Dictionary:
+	var result := _train_read(path, t)
+	if String(result["status"]) != "accepted":
+		return {}
+	source["train_sha"] = String(result["sha"])
+	return result["g"]
+
+
 ## The train's slot and its backup read once each, as one decision: what this build can take
 ## (status "accepted", the first accepted board) and whether a candidate is newer than this
 ## build ("newer"), which stops the start before anything is chosen. Read through S1's shape
