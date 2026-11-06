@@ -1,0 +1,41 @@
+# 옷 밖의 파밍 물건 31종: <id> <res://모형 스크립트> <yaw> <pitch> <roll> <margin>
+# 굽기는 호출 세션이 Godot 문지기를 거쳐 실행한다. 이 파일은 실행하지 않는 입력 목록이다.
+# 종이 낱장: pitch 65~68, 여백 0.08로 글줄·찢긴 변·큰 도장을 내려다본다.
+# 긴 판자·핀셋·전신 테이프·굴대: 35 28 ±30 0.06으로 칸 대각선을 쓴다.
+# 열린 자루·블리스터·톱날·꾸러미는 pitch를 높여 입구·내용물·윗면을 드러낸다.
+# Kenney CC0 + 기본 도형: jar_cabbage·jar_honey(honey), food_pack(can-small·chocolate), rare_wine_case·luxury_pack(wine-red).
+# 나머지는 기본 도형이다. bag은 봉지 모양이므로 묶은 목·열린 자루에는 쓰지 않는다.
+# note_side는 note_map 그림을 같이 씀(이름이 같음). RECIPES·굽기 줄에서 제외한다.
+# 현재 inventory_pane.gd에는 note_side -> note_map 별칭이 없다. 그림 연결은 호출 세션에서 확인한다.
+# 넣을 그림은 <out_dir>/<id>_256_muted.png, 목적지는 assets/icons/items/<id>.png다.
+frag_craft res://tools/item_models_goods.gd 35 65 0 0.08
+frag_engine res://tools/item_models_goods.gd 35 65 0 0.08
+frag_expedition res://tools/item_models_goods.gd 35 65 0 0.08
+frag_med res://tools/item_models_goods.gd 35 65 0 0.08
+frag_radio res://tools/item_models_goods.gd 35 65 0 0.08
+junk_paper res://tools/item_models_goods.gd 35 65 0 0.08
+note_map res://tools/item_models_goods.gd 35 68 0 0.08
+info_telegraph res://tools/item_models_goods.gd 35 28 -30 0.06
+info_timetable res://tools/item_models_goods.gd 35 65 0 0.08
+core_electric res://tools/item_models_goods.gd 35 28 0 0.10
+core_engine res://tools/item_models_goods.gd 35 32 0 0.10
+plow_core res://tools/item_models_goods.gd 35 28 30 0.06
+junk_nails res://tools/item_models_goods.gd 35 55 0 0.08
+tweezers res://tools/item_models_goods.gd 35 28 30 0.06
+rare_saw_blades res://tools/item_models_goods.gd 35 55 0 0.08
+rusk res://tools/item_models_goods.gd 35 35 0 0.10
+jar_cabbage res://tools/item_models_goods.gd 35 28 0 0.10
+jar_honey res://tools/item_models_goods.gd 35 28 0 0.08
+flour res://tools/item_models_goods.gd 35 28 0 0.10
+peas res://tools/item_models_goods.gd 35 45 0 0.08
+rare_coffee_sack res://tools/item_models_goods.gd 35 55 0 0.10
+fever_pills res://tools/item_models_goods.gd 35 65 0 0.08
+food_pack res://tools/item_models_goods.gd 35 45 0 0.08
+herbs res://tools/item_models_goods.gd 35 58 0 0.08
+med_box res://tools/item_models_goods.gd 35 38 0 0.10
+plank res://tools/item_models_goods.gd 35 28 -30 0.06
+rare_wine_case res://tools/item_models_goods.gd 35 32 0 0.10
+rare_silver_case res://tools/item_models_goods.gd 35 50 0 0.08
+junk_smokes res://tools/item_models_goods.gd 35 55 0 0.08
+junk_rag res://tools/item_models_goods.gd 35 58 0 0.08
+luxury_pack res://tools/item_models_goods.gd 35 35 0 0.10
