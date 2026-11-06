@@ -730,15 +730,24 @@ func test_reused_hand_index_accepts_a_new_hand_target() -> void:
 		assert_eq(_recorder().landed[0]["target"], next)
 
 
-func test_reused_pad_index_releases_the_old_pressed_face() -> void:
+## shove_button is not toggle_mode, and Godot 4 keeps button_pressed only on toggle
+## buttons, so its face cannot be the witness here (the first run held this at line 737
+## before and after the fix). The old pad finger is witnessed through the finger record
+## and the hand state the new press builds and the cancel clears.
+func test_reused_pad_index_hands_over_to_a_new_hand_and_cancels_cleanly() -> void:
 	_field({"melee_one_swing": true})
 	var target := _target()
 	_pad_press(game.hud.shove_button, 7)
-	assert_true(game.hud.shove_button.button_pressed)
 	_finger_press(target)
-	assert_false(game.hud.shove_button.button_pressed, "새 hand 전에 옛 pad 취소")
+	assert_eq(game.hud.fingers.size(), 1, "옛 pad 기록이 남지 않는다")
+	assert_true(game.hud.pressing, "새 hand 누름")
 	assert_true(game.hud.finger_cancel(7))
-	assert_true(_recorder().holds.is_empty())
+	assert_false(game.hud.pressing)
+	assert_eq(game.hud.press_ms, 0)
+	assert_null(game.hud.melee_pending)
+	assert_false(game.hud.fingers.has(7))
+	_step(4.0)
+	assert_true(_recorder().holds.is_empty(), "취소된 hand는 fight를 내지 않는다")
 
 
 func test_person_ai_repeats_and_stops_for_both_settings_and_directions() -> void:
